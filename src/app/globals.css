@@ -174,6 +174,122 @@
   background: #f5f0dc;
 }
 
+/* ---------- 账号体系：登录 / 绑定 / 注册 ---------- */
+#account_login,
+#account_bind,
+#account_oauth {
+  max-width: 420px;
+  margin: 40px auto;
+  padding: 24px 32px 28px;
+  background: #fff;
+  border: 1px solid #d8d8ce;
+  border-radius: 6px;
+}
+#account_login h1,
+#account_bind h1,
+#account_oauth h1 {
+  font-size: 18px;
+  color: #333;
+  margin: 0 0 14px;
+}
+.auth_tabs {
+  margin-bottom: 18px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+.auth_qr {
+  text-align: center;
+}
+.auth_qr iframe {
+  width: 300px;
+  height: 400px;
+  border: 0;
+  background: #f9f9f4;
+}
+.auth_form table.form {
+  width: 100%;
+  border-collapse: collapse;
+}
+.auth_form table.form td {
+  padding: 6px 4px;
+  font-size: 14px;
+  color: #636359;
+}
+.auth_form table.form td:first-child {
+  width: 64px;
+  text-align: right;
+}
+.auth_form input[type="text"],
+.auth_form input[type="password"] {
+  padding: 6px 8px;
+  border: 1px solid #d8d8ce;
+  border-radius: 3px;
+  font-size: 14px;
+}
+.auth_form input:focus {
+  outline: none;
+  border-color: #fdc61d;
+}
+.auth_button {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 8px 32px;
+  border: 0;
+  border-radius: 4px;
+  background: #fdc61d;
+  color: #333;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  text-decoration: none;
+}
+.auth_button:hover {
+  background: #ffd23e;
+}
+.auth_button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.auth_button.qq {
+  background: #12b7f5;
+  color: #fff;
+}
+.auth_button.qq:hover {
+  background: #3cc5f7;
+}
+.auth_error {
+  color: #d33;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+.auth_form .hint,
+.auth_qr .hint,
+#account_bind .hint,
+#account_oauth .hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #a8a89c;
+}
+.auth_choices {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+.auth_choices a {
+  flex: 1;
+  text-align: center;
+  padding: 10px 0;
+  border: 1px solid #d8d8ce;
+  border-radius: 4px;
+  color: #636359;
+  text-decoration: none;
+}
+.auth_choices a:hover {
+  border-color: #fdc61d;
+  color: #333;
+  background: #f5f0dc;
+}
+
 /* ---------- flop 播放器（移植 2008.css 的 iframe 全屏协议） ---------- */
 .flop-player-overflow-hidden {
   overflow: hidden !important;

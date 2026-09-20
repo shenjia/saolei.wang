@@ -155,6 +155,24 @@ model UserSig {
   @@map("user_sig")
 }
 
+// 第三方登录绑定（微信扫码 / QQ扫码）
+// 老用户账密登录后强制绑定其一；新用户扫码直接注册
+model UserOauth {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  userId     BigInt @map("user_id") @db.BigInt
+  provider   String @db.VarChar(10) // wechat | qq
+  openid     String @db.VarChar(64)
+  unionid    String @default("") @db.VarChar(64) // 微信 unionid，打通后续公众号/小程序
+  nickname   String @default("") @db.VarChar(64) // 需 utf8mb4（微信昵称可能含 emoji）
+  avatar     String @default("") @db.VarChar(255)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@unique([provider, openid])
+  @@index([userId])
+  @@map("user_oauth")
+}
+
 // ---------- 录像 ----------
 
 model Video {

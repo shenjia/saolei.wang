@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { getSession } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "扫雷网 Saolei.wang",
   description: "扫雷网——扫雷玩家的家园，录像排行、成绩认证、雷界动态",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const session = await getSession();
   return (
     <html lang="zh-CN">
       <head>
@@ -33,9 +35,20 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <li>
                   <Link href="/video">录像</Link>
                 </li>
-                <li>
-                  <Link href="/account/login">登录</Link>
-                </li>
+                {session ? (
+                  <>
+                    <li>
+                      <Link href={`/user/${session.uid}`}>{session.username}</Link>
+                    </li>
+                    <li>
+                      <a href="/api/auth/logout">退出</a>
+                    </li>
+                  </>
+                ) : (
+                  <li>
+                    <Link href="/account/login">登录</Link>
+                  </li>
+                )}
               </ul>
             </div>
           </div>
