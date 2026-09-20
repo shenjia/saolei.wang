@@ -7,6 +7,8 @@ import { LEVEL_NAMES, VIDEO_STATUS_NAMES, type VideoLevel } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { AvatarCell } from "@/components/Cells";
 import { Board } from "@/components/Board";
+import { BoardPlay } from "@/components/BoardPlay";
+import { FlopPlayer, PlayButton } from "@/components/FlopPlayer";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,9 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             </span>
           </h2>
           <div className="info">
-            <Board id={video.id} level={level} board={video.board} size={level === "beg" ? 16 : 8} zoomable={level !== "beg"} />
+            <BoardPlay uri={`/videos${video.filepath}`}>
+              <Board id={video.id} level={level} board={video.board} size={16} />
+            </BoardPlay>
             <p>
               {video.author && (
                 <AvatarCell id={video.author.id} name={video.author.chineseName} sex={video.author.sex} className="author" link />
@@ -82,6 +86,10 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
               </span>
             </p>
             <hr />
+            <PlayButton uri={`/videos${video.filepath}`} />
+            <a className="button" href={`/videos${video.filepath}`} download>
+              保存录像
+            </a>
             <p className="counters">
               <span className="clicks">
                 点击<em>{video.clicks}</em>
@@ -107,6 +115,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         )}
       </li>
     </ul>
+    <FlopPlayer />
     </div>
   );
 }
