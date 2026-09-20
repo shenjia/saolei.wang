@@ -1,0 +1,338 @@
+// 扫雷网（saolei.wang）数据库 schema
+// 沿用 2013 年 PHP 新版（saolei.net）的 MySQL 设计，共 20 张表
+// 字段命名与类型保持与原表一致，时间戳统一为 Unix 秒（bigint）
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- 用户 ----------
+
+model User {
+  id          BigInt  @id @default(autoincrement()) @db.BigInt
+  chineseName String  @map("chinese_name") @db.Char(4)
+  englishName String  @map("english_name") @db.Char(32)
+  sex         Int     @default(1) @db.TinyInt
+  avatar      String  @default("") @db.Char(255)
+  area        String  @default("") @db.Char(3)
+  status      Int     @default(0) @db.SmallInt
+  createTime  BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@index([area, sex])
+  @@map("user")
+}
+
+model UserInfo {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  qq         String  @default("") @db.VarChar(20)
+  nickname   String  @default("") @db.VarChar(32)
+  birthday   BigInt  @default(0) @db.BigInt
+  mouse      String  @default("") @db.VarChar(60)
+  pad        String  @default("") @db.VarChar(60)
+  selfIntro  String? @map("self_intro") @db.VarChar(150)
+  interest   String? @db.VarChar(150)
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@map("user_info")
+}
+
+model UserAuth {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  username   String @unique @db.Char(64)
+  password   String @db.Char(32)
+  salt       String @db.Char(32)
+  role       Int    @default(0) @db.SmallInt
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@map("user_auth")
+}
+
+// 用户最好成绩（flag 模式）
+model UserScores {
+  id           BigInt @id @default(autoincrement()) @db.BigInt
+  begTime      Int?   @map("beg_time") @db.Int
+  beg3bvs      Int?   @map("beg_3bvs") @db.Int
+  intTime      Int?   @map("int_time") @db.Int
+  int3bvs      Int?   @map("int_3bvs") @db.Int
+  expTime      Int?   @map("exp_time") @db.Int
+  exp3bvs      Int?   @map("exp_3bvs") @db.Int
+  sumTime      Int?   @map("sum_time") @db.Int
+  sum3bvs      Int?   @map("sum_3bvs") @db.Int
+  begTimeVideo BigInt? @map("beg_time_video") @db.BigInt
+  beg3bvsVideo BigInt? @map("beg_3bvs_video") @db.BigInt
+  intTimeVideo BigInt? @map("int_time_video") @db.BigInt
+  int3bvsVideo BigInt? @map("int_3bvs_video") @db.BigInt
+  expTimeVideo BigInt? @map("exp_time_video") @db.BigInt
+  exp3bvsVideo BigInt? @map("exp_3bvs_video") @db.BigInt
+  begTimeDate  BigInt? @map("beg_time_date") @db.BigInt
+  beg3bvsDate  BigInt? @map("beg_3bvs_date") @db.BigInt
+  intTimeDate  BigInt? @map("int_time_date") @db.BigInt
+  int3bvsDate  BigInt? @map("int_3bvs_date") @db.BigInt
+  expTimeDate  BigInt? @map("exp_time_date") @db.BigInt
+  exp3bvsDate  BigInt? @map("exp_3bvs_date") @db.BigInt
+  createTime   BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime   BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@index([begTime])
+  @@index([beg3bvs])
+  @@index([intTime])
+  @@index([int3bvs])
+  @@index([expTime])
+  @@index([exp3bvs])
+  @@index([sumTime])
+  @@index([sum3bvs])
+  @@map("user_scores")
+}
+
+// 用户最好成绩（NF 无标模式）
+model UserScoresNf {
+  id           BigInt @id @default(autoincrement()) @db.BigInt
+  begTime      Int?   @map("beg_time") @db.Int
+  beg3bvs      Int?   @map("beg_3bvs") @db.Int
+  intTime      Int?   @map("int_time") @db.Int
+  int3bvs      Int?   @map("int_3bvs") @db.Int
+  expTime      Int?   @map("exp_time") @db.Int
+  exp3bvs      Int?   @map("exp_3bvs") @db.Int
+  sumTime      Int?   @map("sum_time") @db.Int
+  sum3bvs      Int?   @map("sum_3bvs") @db.Int
+  begTimeVideo BigInt? @map("beg_time_video") @db.BigInt
+  beg3bvsVideo BigInt? @map("beg_3bvs_video") @db.BigInt
+  intTimeVideo BigInt? @map("int_time_video") @db.BigInt
+  int3bvsVideo BigInt? @map("int_3bvs_video") @db.BigInt
+  expTimeVideo BigInt? @map("exp_time_video") @db.BigInt
+  exp3bvsVideo BigInt? @map("exp_3bvs_video") @db.BigInt
+  begTimeDate  BigInt? @map("beg_time_date") @db.BigInt
+  beg3bvsDate  BigInt? @map("beg_3bvs_date") @db.BigInt
+  intTimeDate  BigInt? @map("int_time_date") @db.BigInt
+  int3bvsDate  BigInt? @map("int_3bvs_date") @db.BigInt
+  expTimeDate  BigInt? @map("exp_time_date") @db.BigInt
+  exp3bvsDate  BigInt? @map("exp_3bvs_date") @db.BigInt
+  createTime   BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime   BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@index([begTime])
+  @@index([beg3bvs])
+  @@index([intTime])
+  @@index([int3bvs])
+  @@index([expTime])
+  @@index([exp3bvs])
+  @@index([sumTime])
+  @@index([sum3bvs])
+  @@map("user_scores_nf")
+}
+
+model UserStat {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  loginTimes BigInt  @default(0) @map("login_times") @db.BigInt
+  loginTime  BigInt  @default(0) @map("login_time") @db.BigInt
+  loginIp    String? @map("login_ip") @db.Char(40)
+  points     Int     @default(0) @db.Int
+  clicks     Int     @default(0) @db.Int
+  begVideos  Int     @default(0) @map("beg_videos") @db.Int
+  intVideos  Int     @default(0) @map("int_videos") @db.Int
+  expVideos  Int     @default(0) @map("exp_videos") @db.Int
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@map("user_stat")
+}
+
+model UserSig {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  signature  String @unique @db.VarChar(50)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@map("user_sig")
+}
+
+// ---------- 录像 ----------
+
+model Video {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  level      String  @db.Char(3)
+  user       BigInt  @db.BigInt
+  hash       String  @db.Char(32)
+  status     Int     @default(0) @db.SmallInt
+  reviewUser BigInt? @map("review_user") @db.BigInt
+  reviewTime BigInt? @map("review_time") @db.BigInt
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@index([user, level])
+  @@index([hash])
+  @@map("video")
+}
+
+model VideoInfo {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  filepath   String @db.VarChar(100)
+  signature  String @db.VarChar(50)
+  software   String @db.VarChar(20)
+  version    String @db.VarChar(20)
+  noflag     Boolean
+  board      String @db.VarChar(500)
+  board3bv   Int    @map("board_3bv") @db.Int
+  realTime   Int    @map("real_time") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@map("video_info")
+}
+
+model VideoStat {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  clicks     Int     @default(0) @db.Int
+  clicker    String? @db.Char(40)
+  downloads  Int     @default(0) @db.Int
+  downloader String? @db.Char(40)
+  comments   Int     @default(0) @db.Int
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@map("video_stat")
+}
+
+// 录像成绩榜（初级/中级/高级 × flag/NF 共 6 张）
+model VideoScoresBeg {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  scoreTime  Int    @map("score_time") @db.Int
+  score3bvs  Int    @map("score_3bvs") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([scoreTime])
+  @@index([score3bvs])
+  @@index([user])
+  @@map("video_scores_beg")
+}
+
+model VideoScoresBegNf {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  scoreTime  Int    @map("score_time") @db.Int
+  score3bvs  Int    @map("score_3bvs") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([scoreTime])
+  @@index([score3bvs])
+  @@index([user])
+  @@map("video_scores_beg_nf")
+}
+
+model VideoScoresInt {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  scoreTime  Int    @map("score_time") @db.Int
+  score3bvs  Int    @map("score_3bvs") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([scoreTime])
+  @@index([score3bvs])
+  @@index([user])
+  @@map("video_scores_int")
+}
+
+model VideoScoresIntNf {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  scoreTime  Int    @map("score_time") @db.Int
+  score3bvs  Int    @map("score_3bvs") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([scoreTime])
+  @@index([score3bvs])
+  @@index([user])
+  @@map("video_scores_int_nf")
+}
+
+model VideoScoresExp {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  scoreTime  Int    @map("score_time") @db.Int
+  score3bvs  Int    @map("score_3bvs") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([scoreTime])
+  @@index([score3bvs])
+  @@index([user])
+  @@map("video_scores_exp")
+}
+
+model VideoScoresExpNf {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  scoreTime  Int    @map("score_time") @db.Int
+  score3bvs  Int    @map("score_3bvs") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([scoreTime])
+  @@index([score3bvs])
+  @@index([user])
+  @@map("video_scores_exp_nf")
+}
+
+// ---------- 其他 ----------
+
+model Donate {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  amount     BigInt @default(0) @db.BigInt
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@map("donate")
+}
+
+model Distribution {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  size       BigInt @db.BigInt
+  title      String @db.VarChar(255)
+  sumTime    String @map("sum_time") @db.VarChar(255)
+  sum3bvs    String @map("sum_3bvs") @db.VarChar(255)
+  begTime    String @map("beg_time") @db.VarChar(255)
+  beg3bvs    String @map("beg_3bvs") @db.VarChar(255)
+  intTime    String @map("int_time") @db.VarChar(255)
+  int3bvs    String @map("int_3bvs") @db.VarChar(255)
+  expTime    String @map("exp_time") @db.VarChar(255)
+  exp3bvs    String @map("exp_3bvs") @db.VarChar(255)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@map("distribution")
+}
+
+model News {
+  id          BigInt @id @default(autoincrement()) @db.BigInt
+  type        Int    @db.SmallInt
+  user        BigInt @db.BigInt
+  userScore   Int    @map("user_score") @db.Int
+  reference   BigInt @default(0) @db.BigInt
+  detailsData String @map("details_data") @db.VarChar(200)
+  createTime  BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([user])
+  @@map("news")
+}
+
+model Comment {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  video      BigInt  @db.BigInt
+  user       BigInt  @db.BigInt
+  userScore  Int     @map("user_score") @db.Int
+  content    String? @db.Text
+  status     Int     @default(0) @db.SmallInt
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@index([video, createTime])
+  @@map("comment")
+}
