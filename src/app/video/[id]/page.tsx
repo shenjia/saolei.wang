@@ -22,6 +22,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
   const level = video.level as VideoLevel;
 
   return (
+    <div id="page" className="two_columns">
     <ul id="video_view">
       <li className="main">
         <div className="video_cell box">
@@ -106,5 +107,6 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         )}
       </li>
     </ul>
+    </div>
   );
 }

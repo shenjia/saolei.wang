@@ -101,7 +101,7 @@ export default async function VideoListPage({
   const { videos, total, pageSize } = await getVideoList({ level, order, author, page });
 
   return (
-    <>
+    <div id="page" className="two_columns">
       <div id="video_list_header" className="box">
         <h1>{author ? `${LEVEL_NAMES[level]}录像` : "录像"}</h1>
         <div className="filters">
@@ -140,6 +140,6 @@ export default async function VideoListPage({
         ))}
       </div>
       <Pager base="/video" params={{ level, order, author }} page={page} total={total} pageSize={pageSize} />
-    </>
+    </div>
   );
 }

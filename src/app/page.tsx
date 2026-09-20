@@ -13,6 +13,7 @@ export default async function HomePage() {
   const [news, newbies, top] = await Promise.all([getHomeNews(), getNewbies(), getTopUsers()]);
 
   return (
+    <div id="page" className="two_columns">
     <ul id="home">
       <li className="main">
         <div id="news" className="box">
@@ -75,5 +76,6 @@ export default async function HomePage() {
         </div>
       </li>
     </ul>
+    </div>
   );
 }

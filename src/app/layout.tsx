@@ -40,9 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </div>
           </div>
         </div>
-        <div id="page" className="main">
-          {children}
-        </div>
+        {children}
         <div id="footer">
           <div className="wrapper">
             <p>Copyright &copy; {new Date().getFullYear()} Saolei.wang</p>

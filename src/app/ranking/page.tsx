@@ -28,7 +28,7 @@ export default async function RankingPage({
   const { users, total, pageSize } = await getRanking(level, order, page);
 
   return (
-    <>
+    <div id="page" className="main">
       <div id="ranking_header" className="box">
         <h1>排行榜</h1>
         <div className="filters">
@@ -82,6 +82,6 @@ export default async function RankingPage({
         })}
         <Pager base="/ranking" params={{ level, order }} page={page} total={total} pageSize={pageSize} />
       </div>
-    </>
+    </div>
   );
 }

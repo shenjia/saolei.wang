@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { getUserDetail, getUserNews } from "@/lib/queries";
 import { LEVELS, LEVEL_NAMES, ORDERS, type Level, type Order } from "@/lib/config";
 import { NewsCell } from "@/components/NewsCell";
+import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime, TitleBadge } from "@/components/Cells";
+import { getRadarData } from "@/lib/radar";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +29,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
   const news = await getUserNews(userId, 10);
 
   const { user, info, scores } = detail;
+  const radar = await getRadarData(scores);
 
   return (
+    <div id="page" className="two_columns">
     <ul id="user_view">
       <li className="main">
         <div className="info box">
@@ -101,6 +105,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         </div>
       </li>
       <li className="sidebar">
+        <div className="radar box">
+          <h2>实力</h2>
+          <RadarChart data={radar} />
+        </div>
         {detail.stat && (
           <div className="box">
             <h2>统计</h2>
@@ -132,5 +140,6 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         )}
       </li>
     </ul>
+    </div>
   );
 }
