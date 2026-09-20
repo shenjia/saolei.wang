@@ -55,6 +55,30 @@ export const TITLE_CLASSES: Record<string, string> = {
 export const TITLE_LEVEL: Level = "sum";
 export const TITLE_ORDER: Order = "time";
 
+// 固定编制军衔（前 6 个按人数，其余按比例，移植 TitleConfig）
+export const FIXED_TITLES = ["大元帅", "元帅", "大将", "上将", "中将", "少将"] as const;
+
+export const TITLE_DISTRIBUTION: Record<string, number> = {
+  大元帅: 1,
+  元帅: 10,
+  大将: 30,
+  上将: 60,
+  中将: 100,
+  少将: 150,
+  大校: 0.03,
+  上校: 0.07,
+  中校: 0.12,
+  少校: 0.18,
+  上尉: 0.25,
+  中尉: 0.33,
+  少尉: 0.42,
+  上士: 0.52,
+  中士: 0.63,
+  下士: 0.75,
+  上等兵: 0.88,
+  列兵: 1.0,
+};
+
 // ---------- 评级（移植 GradeConfig） ----------
 
 export const GRADES = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F"] as const;

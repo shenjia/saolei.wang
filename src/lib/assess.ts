@@ -54,6 +54,27 @@ export async function title(score: number | null | undefined): Promise<string> {
   return TITLES[Math.min(position, TITLES.length - 1)] ?? "";
 }
 
+export interface TitleDistribution {
+  /** 各军衔的总计时间阈值（毫秒，升序） */
+  thresholds: number[];
+  /** 编制总人数 */
+  size: number;
+  /** 颁布时间（Unix 秒） */
+  createTime: number;
+}
+
+/** 军衔体系页的分布数据（对应 Distribution::get('title'/'size'/'create_time')） */
+export async function getTitleDistribution(): Promise<TitleDistribution | null> {
+  const dist = await getDistribution();
+  if (!dist) return null;
+  const raw = dist as unknown as Record<string, unknown>;
+  return {
+    thresholds: parseThresholds(dist["title"]),
+    size: Number(raw["size"] ?? 0),
+    createTime: Number(raw["createTime"] ?? raw["create_time"] ?? 0),
+  };
+}
+
 /** 评级：SSS~F（移植 Assess::grade） */
 export async function grade(level: Level, order: Order, score: number | null | undefined): Promise<string> {
   if (!score) return "?";

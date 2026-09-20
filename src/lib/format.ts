@@ -19,7 +19,8 @@ function pad(n: number): string {
   return n < 10 ? "0" + n : String(n);
 }
 
-function formatDate(time: number, format: string): string {
+/** 绝对日期格式化（移植 PHP date() 的常用占位符） */
+export function formatDate(time: number, format: string): string {
   const d = new Date(time * 1000);
   return format
     .replace("Y", String(d.getFullYear()))
