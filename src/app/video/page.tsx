@@ -1,17 +1,10 @@
 // 录像列表：级别筛选 + 排序 + 分页（移植 views/video/list + _detailCell）
 
 import Link from "next/link";
-import { getVideoList, videoScores, type VideoListItem } from "@/lib/queries";
-import {
-  LEVEL_NAMES,
-  VIDEO_LEVELS,
-  VIDEO_STATUS_NAMES,
-  type VideoLevel,
-} from "@/lib/config";
-import { timeOpposite } from "@/lib/format";
-import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "@/components/Cells";
-import { Board } from "@/components/Board";
+import { getVideoList } from "@/lib/queries";
+import { LEVEL_NAMES, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { Pager, Tabs } from "@/components/Pager";
+import { VideoDetailCell } from "@/components/VideoCell";
 
 export const dynamic = "force-dynamic";
 
@@ -20,71 +13,6 @@ function parseLevel(v?: string): VideoLevel | "all" {
 }
 function parseOrder(v?: string): "id" | "time" | "3bvs" {
   return v === "time" || v === "3bvs" ? v : "id";
-}
-
-function VideoDetailCell({ video }: { video: VideoListItem }) {
-  const scores = videoScores(video.board3bv, video.realTime);
-  return (
-    <div className="video_cell box">
-      <table cellPadding={0} cellSpacing={0}>
-        <tbody>
-          <tr>
-            <td>
-              <p>
-                <span className="level">{LEVEL_NAMES[video.level as VideoLevel] ?? video.level}</span>
-                <ScoreTime score={scores.time} noflag={video.noflag} />
-              </p>
-              <p>
-                <span className="board_3bv">
-                  3BV<em>{video.board3bv}</em>
-                </span>
-                <Score3bvs score={scores["3bvs"]} />
-                <span className="id">
-                  ID.
-                  <Link href={`/video/${video.id}`} target="_blank">
-                    <em>{video.id}</em>
-                  </Link>
-                </span>
-              </p>
-              <br />
-              <p>
-                {video.author && (
-                  <AvatarCell id={video.author.id} name={video.author.chineseName} sex={video.author.sex} className="author" />
-                )}
-                <TitleBadge title={video.authorTitle} />
-                <span className="create_time">
-                  上传于<em>{timeOpposite(video.createTime)}</em>
-                </span>
-              </p>
-              <br />
-              <p>
-                <span className="software">
-                  软件<em>{video.software} {video.version}</em>
-                </span>
-                <span className="clicks">
-                  点击<em>{video.clicks}</em>
-                </span>
-                <span className="comments">
-                  评论<em>{video.comments}</em>
-                </span>
-                <span className={`status st${video.status}`}>
-                  {VIDEO_STATUS_NAMES[video.status] ?? video.status}
-                </span>
-              </p>
-            </td>
-            <td className="right">
-              <Board
-                id={video.id}
-                level={video.level as VideoLevel}
-                board={video.board}
-                size={video.level === "beg" ? 16 : 8}
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 export default async function VideoListPage({

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { getSession } from "@/lib/auth";
+import { isManager } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "扫雷网 Saolei.wang",
@@ -38,7 +39,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 {session ? (
                   <>
                     <li>
-                      <Link href={`/user/${session.uid}`}>{session.username}</Link>
+                      <Link href="/video/upload">上传</Link>
+                    </li>
+                    {isManager(session.role) && (
+                      <li>
+                        <Link href="/video/review">审核</Link>
+                      </li>
+                    )}
+                    <li>
+                      <Link href="/account">{session.username}</Link>
                     </li>
                     <li>
                       <a href="/api/auth/logout">退出</a>

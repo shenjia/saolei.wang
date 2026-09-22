@@ -2,10 +2,11 @@
 
 import { notFound } from "next/navigation";
 import { getUserDetail, getUserNews } from "@/lib/queries";
-import { LEVELS, LEVEL_NAMES, ORDERS, type Level, type Order } from "@/lib/config";
-import { NewsCell } from "@/components/NewsCell";
+import { LEVELS, LEVEL_NAMES, NEWS_PAGESIZE, USER_NEWS_NUMBER, type Level } from "@/lib/config";
+import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime, TitleBadge } from "@/components/Cells";
+import { title as assessTitle } from "@/lib/assess";
 import { getRadarData } from "@/lib/radar";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
 
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
-  const news = await getUserNews(userId, 10);
+  const news = await getUserNews(userId, USER_NEWS_NUMBER);
+  const feed: NewsFeedItem[] = await Promise.all(
+    news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
+  );
 
   const { user, info, scores } = detail;
   const radar = await getRadarData(scores);
@@ -73,13 +77,12 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         {news.length > 0 && (
           <div id="news" className="box">
             <h2>最新动态</h2>
-            <table cellPadding={0} cellSpacing={0} className="table">
-              <tbody>
-                {news.map((item) => (
-                  <NewsCell key={item.id} news={item} />
-                ))}
-              </tbody>
-            </table>
+            <NewsFeed
+              initial={feed}
+              userId={userId}
+              pageSize={NEWS_PAGESIZE}
+              initialHasMore={news.length === USER_NEWS_NUMBER}
+            />
           </div>
         )}
         <div className="profile box">

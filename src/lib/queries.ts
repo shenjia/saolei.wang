@@ -5,6 +5,8 @@
 import { prisma } from "./db";
 import { title } from "./assess";
 import {
+  COMMENT_STATUS,
+  COMMENT_TOP_NUMBER,
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
@@ -13,6 +15,7 @@ import {
   ORDER_DIRECTION,
   RANKING_PAGESIZE,
   VIDEO_PAGESIZE,
+  VIDEO_STATUS,
   type Level,
   type Order,
   type VideoLevel,
@@ -101,11 +104,18 @@ export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]
   return getNews({ type: NEWS_TYPE.NEWBIE, limit });
 }
 
-export async function getNews(opts: { type?: number; userId?: number; limit: number }): Promise<NewsItem[]> {
+export async function getNews(opts: {
+  type?: number;
+  userId?: number;
+  cursor?: number;
+  limit: number;
+}): Promise<NewsItem[]> {
   const rows = await prisma.news.findMany({
     where: {
       ...(opts.type !== undefined ? { type: opts.type } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+      // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
+      ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
     },
     orderBy: { id: "desc" },
     take: opts.limit,
@@ -186,6 +196,32 @@ export async function getRanking(
   return { users, total, pageSize: RANKING_PAGESIZE };
 }
 
+/** 「我在哪里」：计算用户在排行榜的页码（移植 Ranking::getPage，同分时从粗定位逐页扫描找到本人） */
+export async function getRankingPageOfUser(id: number, level: Level, order: Order): Promise<number> {
+  const field = SCORE_FIELD(level, order);
+  const row = await prisma.userScores.findUnique({ where: { id: BigInt(id) } });
+  if (!row) return -1;
+  const score = Number((row as unknown as Record<string, number | null>)[field] ?? 0);
+  if (!score) return -1;
+  const better = await prisma.userScores.count({
+    where:
+      order === "time" ? { [field]: { lt: score, gt: 0 } } : { [field]: { gt: score } },
+  });
+  let offset = better - (better % RANKING_PAGESIZE);
+  for (;;) {
+    const rows = await prisma.userScores.findMany({
+      where: { [field]: { gt: 0 } },
+      select: { id: true },
+      orderBy: { [field]: ORDER_DIRECTION[order] },
+      skip: offset,
+      take: RANKING_PAGESIZE,
+    });
+    if (!rows.length) return -1;
+    if (rows.some((r) => N(r.id) === id)) return Math.floor(offset / RANKING_PAGESIZE) + 1;
+    offset += RANKING_PAGESIZE;
+  }
+}
+
 // ---------- 录像列表 ----------
 
 export async function getVideoList(opts: {
@@ -235,14 +271,26 @@ export async function getVideoList(opts: {
   return { videos, total, pageSize: VIDEO_PAGESIZE };
 }
 
-function scoresTable(level: VideoLevel) {
+// 三张成绩表字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
+interface ScoresDelegate {
+  count(args: { where?: Record<string, unknown> }): Promise<number>;
+  findMany(args: {
+    where?: Record<string, unknown>;
+    select: { id: true };
+    orderBy: Record<string, string>;
+    skip: number;
+    take: number;
+  }): Promise<{ id: bigint }[]>;
+}
+
+function scoresTable(level: VideoLevel): ScoresDelegate {
   switch (level) {
     case "beg":
-      return prisma.videoScoresBeg;
+      return prisma.videoScoresBeg as unknown as ScoresDelegate;
     case "int":
-      return prisma.videoScoresInt;
+      return prisma.videoScoresInt as unknown as ScoresDelegate;
     case "exp":
-      return prisma.videoScoresExp;
+      return prisma.videoScoresExp as unknown as ScoresDelegate;
   }
 }
 
@@ -288,6 +336,24 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     });
   }
   return result;
+}
+
+/** 审核列表（移植 Video::findByStatus：待审按 id 升序先到先审，其余按 id 倒序） */
+export async function getReviewList(
+  status: number,
+  page: number
+): Promise<{ videos: VideoListItem[]; total: number; pageSize: number }> {
+  const where = { status };
+  const total = await prisma.video.count({ where });
+  const rows = await prisma.video.findMany({
+    where,
+    select: { id: true },
+    orderBy: { id: status === VIDEO_STATUS.NORMAL ? "asc" : "desc" },
+    skip: (page - 1) * VIDEO_PAGESIZE,
+    take: VIDEO_PAGESIZE,
+  });
+  const videos = await getVideosByIds(rows.map((r) => N(r.id)));
+  return { videos, total, pageSize: VIDEO_PAGESIZE };
 }
 
 // ---------- 录像详情 ----------
@@ -403,4 +469,60 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
 
 export async function getUserNews(userId: number, limit = 10): Promise<NewsItem[]> {
   return getNews({ userId, limit });
+}
+
+// ---------- 评论（移植 logic/Comment） ----------
+
+export interface CommentItem {
+  id: number;
+  content: string;
+  createTime: number;
+  author: UserBrief | null;
+}
+
+/** 评论列表：cursor=0 取最新，否则取 id<cursor 的更早评论（移植 Comment::getList + actionMore） */
+export async function getComments(
+  videoId: number,
+  cursor = 0,
+  limit = COMMENT_TOP_NUMBER
+): Promise<CommentItem[]> {
+  const rows = await prisma.comment.findMany({
+    where: {
+      video: BigInt(videoId),
+      status: COMMENT_STATUS.NORMAL,
+      ...(cursor > 0 ? { id: { lt: BigInt(cursor) } } : {}),
+    },
+    orderBy: { id: "desc" },
+    take: limit,
+  });
+  const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
+  return rows.map((r) => ({
+    id: N(r.id),
+    content: r.content ?? "",
+    createTime: N(r.createTime),
+    author: authors.get(N(r.user)) ?? null,
+  }));
+}
+
+/** 发表评论并递增录像评论计数（2013 版漏了计数递增，新版补齐） */
+export async function addComment(videoId: number, userId: number, content: string): Promise<number> {
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const [created] = await prisma.$transaction([
+    prisma.comment.create({
+      data: {
+        video: BigInt(videoId),
+        user: BigInt(userId),
+        userScore: 0,
+        content,
+        status: COMMENT_STATUS.NORMAL,
+        createTime: now,
+        updateTime: now,
+      },
+    }),
+    prisma.videoStat.update({
+      where: { id: BigInt(videoId) },
+      data: { comments: { increment: 1 } },
+    }),
+  ]);
+  return N(created.id);
 }

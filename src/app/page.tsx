@@ -1,9 +1,10 @@
 // 首页：雷界动态 + 入伍新兵 + 十大元帅（移植 views/home/index）
 
 import Link from "next/link";
-import { getHomeNews, getNewbies, getTopUsers, type NewsItem } from "@/lib/queries";
+import { getHomeNews, getNewbies, getTopUsers } from "@/lib/queries";
+import { HOME_NEWS_NUMBER, NEWS_PAGESIZE } from "@/lib/config";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
-import { NewsCell } from "@/components/NewsCell";
+import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { title as assessTitle } from "@/lib/assess";
 
@@ -11,6 +12,9 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [news, newbies, top] = await Promise.all([getHomeNews(), getNewbies(), getTopUsers()]);
+  const feed: NewsFeedItem[] = await Promise.all(
+    news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
+  );
 
   return (
     <div id="page" className="two_columns">
@@ -18,13 +22,11 @@ export default async function HomePage() {
       <li className="main">
         <div id="news" className="box">
           <h1>雷界动态</h1>
-          <table cellPadding={0} cellSpacing={0} className="table">
-            <tbody>
-              {news.map((item) => (
-                <NewsCell key={item.id} news={item} />
-              ))}
-            </tbody>
-          </table>
+          <NewsFeed
+            initial={feed}
+            pageSize={NEWS_PAGESIZE}
+            initialHasMore={news.length === HOME_NEWS_NUMBER}
+          />
         </div>
       </li>
       <li className="sidebar">

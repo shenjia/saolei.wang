@@ -1,14 +1,27 @@
 // 录像详情页（移植 views/video/view）
 
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { getVideoDetail, videoScores } from "@/lib/queries";
-import { LEVEL_NAMES, VIDEO_STATUS_NAMES, type VideoLevel } from "@/lib/config";
+import { getComments, getVideoDetail, videoScores } from "@/lib/queries";
+import { getSession } from "@/lib/auth";
+import { clientIp, uniqueVideoAction } from "@/lib/stat";
+import {
+  COMMENT_TOP_NUMBER,
+  isManager,
+  LEVEL_NAMES,
+  USER_ROLE,
+  VIDEO_STATUS,
+  VIDEO_STATUS_NAMES,
+  type VideoLevel,
+} from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { AvatarCell } from "@/components/Cells";
 import { Board } from "@/components/Board";
 import { BoardPlay } from "@/components/BoardPlay";
+import { CommentForm, CommentList } from "@/components/Comments";
 import { FlopPlayer, PlayButton } from "@/components/FlopPlayer";
+import { ReviewButtons } from "@/components/ReviewButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +32,12 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
 
   const video = await getVideoDetail(videoId);
   if (!video) notFound();
+  const [session, comments] = await Promise.all([
+    getSession(),
+    getComments(videoId, 0, COMMENT_TOP_NUMBER),
+    // 点击计数（移植 actionView 的 uniqueAction('click')）
+    (async () => uniqueVideoAction(videoId, "click", clientIp(await headers())))(),
+  ]);
 
   const scores = videoScores(video.board3bv, video.realTime);
   const level = video.level as VideoLevel;
@@ -87,7 +106,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             </p>
             <hr />
             <PlayButton uri={`/videos${video.filepath}`} />
-            <a className="button" href={`/videos${video.filepath}`} download>
+            <a className="button" href={`/video/download/${video.id}`}>
               保存录像
             </a>
             <p className="counters">
@@ -101,8 +120,25 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
                 下载<em>{video.downloads}</em>
               </span>
             </p>
+            {session &&
+              ((isManager(session.role) && video.status === VIDEO_STATUS.NORMAL) ||
+                session.role === USER_ROLE.ADMINISTRATOR) && (
+                <p>
+                  <ReviewButtons videoId={video.id} status={video.status} />
+                </p>
+              )}
           </div>
         </div>
+        {session && (
+          <div className="post box">
+            <CommentForm videoId={video.id} />
+          </div>
+        )}
+        <CommentList
+          videoId={video.id}
+          initial={comments}
+          initialHasMore={comments.length < video.comments && comments.length > 0}
+        />
       </li>
       <li className="sidebar">
         {video.author && (

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { getRanking } from "@/lib/queries";
+import { getSession } from "@/lib/auth";
 import { LEVELS, LEVEL_NAMES, ORDERS, type Level, type Order } from "@/lib/config";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "@/components/Cells";
 import { Pager, Tabs } from "@/components/Pager";
@@ -26,11 +27,20 @@ export default async function RankingPage({
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const { users, total, pageSize } = await getRanking(level, order, page);
+  const session = await getSession();
 
   return (
     <div id="page" className="main">
       <div id="ranking_header" className="box">
         <h1>排行榜</h1>
+        {session && (
+          <Link
+            className="button active"
+            href={`/ranking/whereami?id=${session.uid}&level=${level}&order=${order}`}
+          >
+            我在哪里?
+          </Link>
+        )}
         <div className="filters">
           <Tabs
             base="/ranking"
@@ -61,7 +71,7 @@ export default async function RankingPage({
           // 总计链接到用户主页，单级别链接到对应录像（移植 ranking/index）
           const href = level === "sum" ? `/user/${u.id}` : `/video/${u.videoId}`;
           return (
-            <Link key={u.id} href={href} target="_blank" className="user_cell_link">
+            <Link key={u.id} href={href} target="_blank" className="user_cell_link" id={`id_${u.id}`}>
               <div className="user_cell box">
                 <span className="rank">
                   No.<em>{u.rank}</em>

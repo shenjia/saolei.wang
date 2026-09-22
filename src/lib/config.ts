@@ -31,6 +31,17 @@ export const HOME_TOP_NUMBER = 10;
 export const HOME_NEWBIE_NUMBER = 5;
 export const HOME_NEWS_NUMBER = 30;
 
+// ---------- 评论（移植 CommentConfig） ----------
+export const COMMENT_TOP_NUMBER = 5;
+export const COMMENT_PAGESIZE = 15;
+export const COMMENT_CONTENT_LIMIT = 100;
+export const COMMENT_STATUS = { NORMAL: 0, DELETED: -1 } as const;
+
+// 动态「加载更多」每页条数（移植 NewsConfig::PAGESIZE）
+export const NEWS_PAGESIZE = 20;
+// 用户主页动态初始条数（移植 UserConfig::NEWS_NUMBER）
+export const USER_NEWS_NUMBER = 5;
+
 // ---------- 军衔（移植 TitleConfig） ----------
 
 export const TITLES = [
@@ -111,6 +122,20 @@ export const BOARD_SIZE: Record<VideoLevel, { x: number; y: number }> = {
   int: { x: 16, y: 16 },
   exp: { x: 30, y: 16 },
 };
+
+// ---------- 用户角色（移植 UserConfig::ROLE_*） ----------
+export const USER_ROLE = {
+  PLAYER: 0,
+  MANAGER: 10,
+  ADMINISTRATOR: 100,
+} as const;
+
+export function isManager(role: number): boolean {
+  return role === USER_ROLE.MANAGER || role === USER_ROLE.ADMINISTRATOR;
+}
+
+// 上传录像各级别最小 3BV（移植 VideoConfig::$level_min_3bv）
+export const LEVEL_MIN_3BV: Record<VideoLevel, number> = { beg: 2, int: 30, exp: 100 };
 
 // ---------- 新闻（移植 NewsConfig） ----------
 
