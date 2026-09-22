@@ -39,21 +39,39 @@
 - 图片资源在 `public/images/common|form/`（棋盘格、性别、头像等，URL 已从 `../images/` 改为 `/images/`）
 - 新增样式（分页器、筛选标签）在 `src/app/globals.css`
 
-## 页面（只读先行）
+## 页面
 
 | 路由 | 说明 |
 |---|---|
-| `/` | 雷界动态 + 入伍新兵 + 十大元帅 |
-| `/ranking?level&order&page` | 排行榜（sum/beg/int/exp × time/3bvs），sum 链接到用户页，单级别链接到录像 |
+| `/` | 雷界动态（加载更多）+ 入伍新兵 + 十大元帅 |
+| `/ranking?level&order&page` | 排行榜（sum/beg/int/exp × time/3bvs）；登录后有「我在哪里」定位按钮 |
+| `/ranking/whereami?id&level&order` | 302 定位到该用户所在页 `#id_<uid>`（移植 Ranking::getPage 同分扫描） |
 | `/video?level&order&author&page` | 录像列表（detail 模式，含棋盘缩略） |
-| `/video/[id]` | 录像详情（棋盘、成绩、审核信息、统计） |
-| `/user/[id]` | 用户主页（成绩总表、最新动态、个人资料、统计） |
+| `/video/[id]` | 录像详情（棋盘、flop 播放、评论、计数、管理员审核面板） |
+| `/video/upload` | 录像上传（登录，mvf/avf，500KB 上限） |
+| `/video/review?status` | 录像审核列表（管理员；待审/已通过/已屏蔽） |
+| `/video/download/[id]` | 录像下载（先 uniqueAction('download') 计数再发文件） |
+| `/user/[id]` | 用户主页（成绩总表、雷达图、动态加载更多、资料、统计） |
+| `/account` `/account/profile` `/account/password` | 账号中心：我的资料 / 修改资料 / 修改密码（均需登录） |
+| `/account/login` `/account/bind` `/account/oauth` | 密码登录 / 老用户强制绑定 / 扫码注册（见 2026-09-21 日志） |
+| `/page/titles` `/page/help` | 军衔体系说明 / 新手上路 |
+| API | `/api/comment/post|more`、`/api/news/more`、`/api/account/profile|password`、`/api/video/upload|review` |
+
+## 关键模块（src/lib/）
+
+- `mvf.ts` / `avf.ts`：MVF/AVF 解析器（594/349 行 C 的忠实 TS 移植），输出 RawVF 文本行
+- `rawvf.ts`：Parser::format / renderBoard 移植。**棋盘必须复刻 PHP 7.1+ 字符串负偏移怪癖**
+  （`"$row[-1]"` 取行尾 → 左边界格把同行 x=max 当左邻），否则与库内数据不一致
+- `review.ts`：审核与成绩管线（Review/VideoScores/UserScores/News 全移植，含 NF 榜；
+  文件头记录两处按旧代码意图修正的 bug）
+- `stat.ts`：uniqueAction 点击/下载计数（相邻同 IP 去重）
+- 解析器验证方法：旧项目 `code/videos/**` 抽样，按文件 hash 与 DB `video+video_info` 全字段对比
+  （本地 videos/ 样本文件名≠内容 md5，是改名测试文件，不能当真值）
 
 ## 待实现（后续阶段）
 
-- 账号体系（注册/登录/改密，新版测试.txt 要求改邮箱登录 + 密码找回）
-- 录像上传（MVF 解析）与审核流
-- 评论、新闻管理、捐赠
+- 邮箱注册 + 密码找回（新版测试.txt 新需求，需邮件服务方案）
+- 新闻管理、捐赠（2013 版也无代码，仅 document/donate.xlsx）
 - 旧版 MSSQL 增量数据同步
 - 部署（目前仅本地开发，`pnpm dev`，端口任意）
 
