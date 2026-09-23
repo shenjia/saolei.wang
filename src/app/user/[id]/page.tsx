@@ -148,6 +148,12 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
           </div>
         )}
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
+      </li>
+      <li className="sidebar">
+        <div className="radar box">
+          <h2>实力</h2>
+          <RadarChart data={radar} />
+        </div>
         <div className="profile box">
           <h2>个人资料</h2>
           <span className="id">
@@ -168,12 +174,6 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               })}
             </tbody>
           </table>
-        </div>
-      </li>
-      <li className="sidebar">
-        <div className="radar box">
-          <h2>实力</h2>
-          <RadarChart data={radar} />
         </div>
         {detail.stat && (
           <div className="box">
