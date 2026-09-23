@@ -501,6 +501,107 @@ body #header .nav li a {
   margin-left: 6px;
   font-size: 13px;
 }
+
+/* ---------- 个人信息卡片（2026-09-23 张老师要求，复刻旧版右上角卡片截图） ----------
+   首页登录后替换「每日一星」；BBS 每楼正文右侧显示作者卡片 */
+.user_card {
+  background: #333330;
+  border: 1px solid #555550;
+  padding: 8px;
+  width: 230px;
+  flex: none;
+}
+.user_card .uc_top {
+  display: flex;
+  gap: 8px;
+}
+.user_card .uc_avatar {
+  width: 82px;
+  height: 82px;
+  object-fit: cover;
+  border: 1px solid #555550;
+  flex: none;
+}
+.user_card .uc_info {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #a59f85;
+}
+.user_card .uc_info p {
+  white-space: nowrap;
+}
+.user_card .uc_name {
+  color: #fdc61a;
+  font-weight: bold;
+  white-space: normal !important;
+}
+.user_card .uc_id {
+  color: #75715e;
+  font-weight: normal;
+  font-size: 11px;
+}
+.user_card .uc_title {
+  margin-left: 4px;
+}
+.user_card .uc_sex {
+  color: #66d9ef;
+  margin-left: 2px;
+  font-size: 11px;
+}
+.user_card .uc_rank em {
+  color: #f8f8f2;
+  font-weight: bold;
+}
+.user_card .uc_delta {
+  font-size: 11px;
+}
+.user_card .uc_delta.up {
+  color: #f92672; /* 中国惯例红涨：名次进步 */
+}
+.user_card .uc_delta.down {
+  color: #a6e22e; /* 绿跌：名次退步 */
+}
+.user_card .uc_delta.new {
+  color: #66d9ef;
+}
+.user_card .uc_score em {
+  font-weight: bold;
+}
+.user_card .uc_score .c_beg { color: #999994; }
+.user_card .uc_score .c_int { color: #bbbbaf; }
+.user_card .uc_score .c_exp { color: #ddddcf; }
+.user_card .uc_score .c_sum { color: #fdc61a; }
+.user_card .uc_score span {
+  color: #75715e;
+}
+.user_card .uc_login {
+  color: #75715e;
+}
+.user_card .uc_home {
+  display: block;
+  margin-top: 8px;
+  background: #49483e;
+  border: 1px solid #555550;
+  color: #f8f8f2;
+  text-align: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.user_card .uc_home:hover {
+  background: #555550;
+}
+/* BBS 楼层：正文左 + 作者卡片右 */
+.bbs_floor {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.bbs_floor .bbs_content {
+  flex: 1;
+  min-width: 0;
+}
+
 .reply_form textarea,
 .post_form textarea,
 .send_form textarea,
@@ -720,6 +821,73 @@ body .world_stats .stat_tag em {
   color: #f8f8f2;
   font-style: normal;
   font-weight: bold;
+}
+
+/* ---------- 用户主页照片 + 大军衔标签（2026-09-23 张老师要求） ----------
+   09-23 晚二轮调整：右栏字体整体缩小，内容总高与左侧头像（160px）对齐；
+   军衔徽章改为绝对定位到卡片右上角，与头像顶部齐平（置顶展示）。 */
+/* legacy 已有 #user_view .info .avatar{float:left;margin-right:15px}，这里补尺寸 */
+body #user_view .info {
+  position: relative;
+  padding-right: 170px; /* 给右上角军衔徽章留位，成绩表不与其重叠 */
+}
+body #user_view .info .avatar {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+}
+/* 姓名行缩小：原 h1 26px / h2 20px（行高 39px）过大 */
+body #user_view .info h1 {
+  font-size: 18px;
+  line-height: 26px;
+  margin-bottom: 4px;
+}
+body #user_view .info h2 {
+  font-size: 14px;
+  line-height: 26px;
+  margin-bottom: 4px;
+}
+/* 徽章已绝对定位，info_body 不再需要 flex 布局 */
+body #user_view .info .info_body {
+  display: block;
+}
+/* 成绩表缩小：行高 36→32，标签 16→13px，数字 20→16px，
+   4 行 + 姓名行 ≈ 158px，与 160px 头像高度对齐 */
+body #user_view .info .scores th {
+  height: 32px;
+  font-size: 13px;
+  line-height: 20px;
+}
+body #user_view .info .score_time,
+body #user_view .info .score_3bvs {
+  font-size: 12px;
+  line-height: 20px;
+}
+body #user_view .info .score_time em,
+body #user_view .info .score_3bvs em {
+  font-size: 16px;
+  line-height: 20px;
+}
+body #user_view .info .rank_label {
+  position: absolute;
+  top: 30px; /* 与 .box 内边距一致 = 头像顶部齐平 */
+  right: 30px;
+  display: block;
+  text-align: center;
+  margin: 0;
+}
+body #user_view .info .rank_label .rank_name {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1.2;
+}
+/* 统计表格防折行（侧栏窄，"登录次数"/"最近登录"等曾折行） */
+body #user_view .sidebar .table td {
+  white-space: nowrap;
 }
 
 /* ==================== 排行榜 2008 编排改造（2026-09-23 张老师要求） ====================
@@ -1097,24 +1265,24 @@ body #page.ranking_old .ranking_box {
 .area_table td.best a {
   color: #f8f8f2;
 }
-.area_table td.best .oldtitle {
-  margin-right: 4px;
+.area_table td.best .title {
+  margin-left: 4px;
 }
 .area_table td.num {
   color: #f8f8f2;
   font-weight: bold;
 }
+.area_table td.num .unit {
+  color: #939387;
+  font-weight: normal;
+}
 .area_table td.num.current {
   color: #fdc61d;
 }
-.area_table td.power {
-  width: 32%;
-}
-.area_table td.power .bar {
-  display: inline-block;
-  height: 10px;
-  background: #668cba;
-  vertical-align: middle;
+.area_note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #939387;
 }
 
 /* ---------- 排行页细节修正（2026-09-23 第一轮截图后） ---------- */
@@ -1204,20 +1372,20 @@ body #page.ranking_old.main .ranking_nav {
 }
 #page.ranking_old.main > #world_top table {
   table-layout: auto;
-  font-size: 16px;
+  font-size: 18px;
 }
 #page.ranking_old.main > #world_top th,
 #page.ranking_old.main > #world_top td {
   width: auto !important;
-  padding: 3px 10px;
+  padding: 5px 12px;
 }
 #page.ranking_old.main > #world_top th {
-  font-size: 14px;
+  font-size: 15px;
   color: #75715e;
 }
 #page.ranking_old.main > #world_top td {
   height: auto;
-  line-height: 24px;
+  line-height: 30px;
 }
 #page.ranking_old.main > #world_top td.name {
   text-align: center;
@@ -1227,4 +1395,14 @@ body #page.ranking_old.main .ranking_nav {
 #page.ranking_old.main > #world_top .world_foot,
 #page.ranking_old.main > #world_top .world_head .join {
   font-size: 14px;
+}
+
+/* 高亮逻辑修正（2026-09-23 晚 张老师指正）：时间记录才高亮，3BVS 不高亮；
+   总计列不再常亮黄——与高级同档浅灰，仅当排序命中（.current）时才黄 */
+.ranking_table td.c_sum {
+  color: #e6e6da;
+}
+.ranking_table td.c_sum.current,
+.ranking_table td.c_sum.current a {
+  color: #fdc61d;
 }
