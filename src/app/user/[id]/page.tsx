@@ -119,7 +119,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
                   {detail.title}
                 </span>
               </Link>
-              {/* 所在地区战力名次（地区榜按综合排行指数的全国排名） */}
+              {/* 所在地区战力名次（地区榜按综合排行指数的全国排名）：上军区、下名次两行 */}
               {areaRank && (
                 <Link
                   href={`/area?name=${encodeURIComponent(areaRank.area)}`}
@@ -127,7 +127,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
                   className="area_rank"
                   title="地区榜"
                 >
-                  {areaDisplay(areaRank.area)}军区战力第 <em>{areaRank.pos}</em> 名
+                  <span className="area_name">{areaDisplay(areaRank.area)}军区</span>
+                  <span className="area_pos">
+                    战力第 <em>{areaRank.pos}</em> 名
+                  </span>
                 </Link>
               )}
             </div>
