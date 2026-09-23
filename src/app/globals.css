@@ -904,8 +904,20 @@ body #user_view .info .rank_label .rank_name {
   font-weight: bold;
   line-height: 1.2;
 }
-/* 统计表格防折行（侧栏窄，"登录次数"/"最近登录"等曾折行） */
+/* ---------- 侧栏统计表格（2026-09-23 张老师反馈） ----------
+   原 legacy .table td padding 8px 20px + nowrap：数字视觉偏右，
+   「（今日 +2）」撑破盒子右缘，hover 行背景随之超出板块。
+   改 fixed 布局 + 紧凑内边距，数据紧跟标签左对齐；
+   标签列 nowrap 防折行，数值列允许换行兜底。 */
+body #user_view .sidebar .table {
+  table-layout: fixed;
+}
 body #user_view .sidebar .table td {
+  padding: 8px 0;
+}
+body #user_view .sidebar .table td:first-child {
+  width: 4.5em;
+  padding-right: 8px;
   white-space: nowrap;
 }
 
