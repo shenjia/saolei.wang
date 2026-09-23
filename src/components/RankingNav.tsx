@@ -61,7 +61,8 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
         setUsers(list);
         setActive(0);
         // 唯一候选 → 自动开始查询（张老师要求：确定只有一个选择即触发，无需输完姓名）
-        if (list.length === 1) {
+        // 仅限姓名输入；数字 ID 输入始终展示候选列表（用户可能还要继续输位数）
+        if (list.length === 1 && !/^\d+$/.test(kw)) {
           setUsers(null);
           locate(list[0].id);
         }
