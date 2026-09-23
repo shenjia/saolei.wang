@@ -383,9 +383,43 @@ body #header .nav li a {
 }
 
 /* ---------- BBS 论坛（移植 2008 版） ---------- */
+.bbs_list {
+  table-layout: fixed;
+  width: 100%;
+}
 .bbs_list td {
   padding: 6px 8px;
   border-bottom: 1px solid #3a3a3a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 表头 */
+.bbs_list th {
+  padding: 6px 8px;
+  border-bottom: 1px solid #49483e;
+  color: #939387;
+  font-weight: normal;
+  text-align: left;
+}
+/* 分类标签：与正文同字号（legacy .level 是 20px，不可用） */
+.bbs_list .board_tag {
+  color: #939387;
+}
+/* 标题灰色（旧版 .Text = #BBBBBB） */
+.bbs_list a.bbs_title {
+  color: #bbbbbb;
+}
+.bbs_list a.bbs_title:hover {
+  color: #dddddd;
+}
+/* 作者列：称号+人名+性别图标 */
+.bbs_list td.user a.bbs_oldtitle {
+  color: #75715e;
+}
+.bbs_list td.user .gender {
+  margin: 0 0 0 5px;
+  vertical-align: text-bottom;
 }
 .bbs_flag {
   font-style: normal;
@@ -450,6 +484,9 @@ body #header .nav li a {
   padding: 10px 4px;
   line-height: 1.8;
   word-break: break-all;
+  /* 2026-09-23 张老师：正文颜色加强（基础 #636359 太淡）+ 字号加大 */
+  color: #f8f8f2;
+  font-size: 15px;
 }
 .bbs_content img {
   vertical-align: middle;
@@ -1120,3 +1157,74 @@ body #page.ranking_old .ranking_box {
 #world_top th:nth-child(5), #world_top td:nth-child(5) { width: 36px; }
 #world_top th:nth-child(6), #world_top td:nth-child(6) { width: 26px; }
 #world_top td.rank { white-space: nowrap; }
+
+/* ==================== 排行页二轮调整（2026-09-23 晚 张老师要求） ====================
+   ①通栏显示（去掉右栏/每日一星）；②称号列改回 18 级军衔；③世界榜并入 tabs；
+   ④字体样式/尺寸与首页一致（微软雅黑，单元格 16px/24px 同 legacy .table） */
+
+/* 通栏：ranking_box 恢复标准 box 内边距 */
+body #page.ranking_old.main .ranking_box {
+  padding: 20px;
+}
+body #page.ranking_old.main .ranking_nav {
+  margin: 16px 8px -8px;
+}
+
+/* 排行表字体对齐首页 .table：td 16px/24px、表头 14px（首页表格同款微软雅黑） */
+.ranking_table {
+  font-size: 14px;
+}
+.ranking_table th {
+  font-size: 14px;
+  color: #75715e;
+  padding: 5px 2px;
+}
+.ranking_table td {
+  height: auto;
+  padding: 3px 2px;
+  font-size: 16px;
+  line-height: 24px;
+}
+.ranking_table td.miltitle .title em {
+  font-size: 15px;
+}
+
+/* 老式分页/查找表单字号对齐正文 */
+.old_pager { font-size: 14px; }
+.goto_form input[type="text"],
+.goto_form button { font-size: 14px; }
+.goto_select { font-size: 14px; }
+
+/* 世界榜通栏：表格列宽自适应、字号对齐首页，名字列不再挤 */
+#page.ranking_old.main > #world_top {
+  margin: 16px 0 0;
+}
+#page.ranking_old.main > #world_top .world_head h2 {
+  font-size: 20px;
+}
+#page.ranking_old.main > #world_top table {
+  table-layout: auto;
+  font-size: 16px;
+}
+#page.ranking_old.main > #world_top th,
+#page.ranking_old.main > #world_top td {
+  width: auto !important;
+  padding: 3px 10px;
+}
+#page.ranking_old.main > #world_top th {
+  font-size: 14px;
+  color: #75715e;
+}
+#page.ranking_old.main > #world_top td {
+  height: auto;
+  line-height: 24px;
+}
+#page.ranking_old.main > #world_top td.name {
+  text-align: center;
+  max-width: none;
+  padding-left: 10px;
+}
+#page.ranking_old.main > #world_top .world_foot,
+#page.ranking_old.main > #world_top .world_head .join {
+  font-size: 14px;
+}

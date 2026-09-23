@@ -8,6 +8,7 @@ import { BBS_BOARD_NAMES, getPost, getReplies, ubb } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import { Pager } from "@/components/Pager";
 import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
+import { AvatarCell, TitleBadge } from "@/components/Cells";
 
 export const dynamic = "force-dynamic";
 
@@ -46,10 +47,11 @@ export default async function BbsTitlePage({
         </h1>
         <p className="bbs_meta">
           {post.author && (
-            <Link href={`/user/${post.author.id}`} target="_blank">
-              {post.author.chineseName}
-            </Link>
-          )}{" "}
+            <>
+              <AvatarCell id={post.author.id} name={post.author.chineseName} sex={post.author.sex} link />{" "}
+              <TitleBadge title={post.author.title} link />{" "}
+            </>
+          )}
           发表于 {timeOpposite(post.createTime, TIME_NEVER)}　点击 <em>{post.clicks}</em>　回复{" "}
           <em>{post.replies}</em>
           {session && (
@@ -70,10 +72,11 @@ export default async function BbsTitlePage({
           <p className="bbs_meta">
             <em>{r.floor} 楼</em>{" "}
             {r.author && (
-              <Link href={`/user/${r.author.id}`} target="_blank">
-                {r.author.chineseName}
-              </Link>
-            )}{" "}
+              <>
+                <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} link />{" "}
+                <TitleBadge title={r.author.title} link />{" "}
+              </>
+            )}
             {timeOpposite(r.createTime, TIME_NEVER)}
             {session && (admin || session.uid === r.author?.id || session.uid === post.author?.id) && (
               <span className="bbs_ops">

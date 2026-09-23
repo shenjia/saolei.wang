@@ -2,6 +2,8 @@
 
 import { prisma } from "./db";
 import { usersByIds, type UserBrief } from "./queries";
+import { title as assessTitle } from "./assess";
+import { oldTitle, type OldTitle } from "./oldtitle";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -52,7 +54,13 @@ const MINE_MAP: Record<string, string> = {
 };
 
 export function ubb(raw: string): string {
-  let text = escapeHtml(raw);
+  // 2008 版 UBB 不做 HTML 转义直接输出，MSSQL 老数据里混有字面 <br> 与 &nbsp;（[&nbsp;] 是扫雷空格符号）
+  // 转义前先把这些老遗留标记归一化，否则转义后会在页面上原样显示
+  const normalized = raw
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\[&nbsp;\]/gi, "[ ]")
+    .replace(/&nbsp;/gi, "\u00a0");
+  let text = escapeHtml(normalized);
   // 标题/签名颜色 span（2013 legacy CSS 里有 .Title/.Sign/.Signest）
   text = text
     .replace(/\[Title\]/gi, '<span class="Title">')
@@ -100,6 +108,34 @@ export function ubb(raw: string): string {
 
 // ---------- 查询 ----------
 
+/** 作者信息 + 军衔/旧版称号（2026-09-23 张老师要求：详情页人名旁带性别标记与军衔） */
+export interface BbsAuthor extends UserBrief {
+  /** 18 级军衔（按 sum_time 评定，详情页 TitleBadge 徽章用） */
+  title: string;
+  /** 旧版称号（按高级纪录+性别，列表页 [称号] 用） */
+  old: OldTitle;
+}
+
+/** usersByIds 之上补军衔与旧版称号（distribution 阈值在 assess 内缓存） */
+async function authorsWithTitles(ids: number[]): Promise<Map<number, BbsAuthor>> {
+  const [briefs, scores] = await Promise.all([
+    usersByIds(ids),
+    ids.length
+      ? prisma.userScores.findMany({
+          where: { id: { in: ids.map(BigInt) } },
+          select: { id: true, sumTime: true, expTime: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const sumMap = new Map(scores.map((s) => [N(s.id), { sum: s.sumTime ?? 0, exp: s.expTime ?? 0 }]));
+  const out = new Map<number, BbsAuthor>();
+  for (const [id, b] of briefs) {
+    const sc = sumMap.get(id) ?? { sum: 0, exp: 0 };
+    out.set(id, { ...b, title: await assessTitle(sc.sum), old: oldTitle(sc.exp, b.sex) });
+  }
+  return out;
+}
+
 export interface BbsPostItem {
   id: number;
   board: number;
@@ -111,8 +147,7 @@ export interface BbsPostItem {
   isLocked: boolean;
   createTime: number;
   lastReplyTime: number;
-  author: UserBrief | null;
-  lastReplyAuthor: UserBrief | null;
+  author: BbsAuthor | null;
 }
 
 export async function getPostList(opts: {
@@ -137,9 +172,7 @@ export async function getPostList(opts: {
     skip: (page - 1) * BBS_PAGESIZE,
     take: BBS_PAGESIZE,
   });
-  const authors = await usersByIds([
-    ...new Set([...rows.map((r) => N(r.user)), ...rows.map((r) => N(r.lastReplyUser))].filter((x) => x > 0)),
-  ]);
+  const authors = await authorsWithTitles([...new Set(rows.map((r) => N(r.user)).filter((x) => x > 0))]);
   return {
     posts: rows.map((r) => ({
       id: N(r.id),
@@ -153,7 +186,6 @@ export async function getPostList(opts: {
       createTime: N(r.createTime),
       lastReplyTime: N(r.lastReplyTime),
       author: authors.get(N(r.user)) ?? null,
-      lastReplyAuthor: authors.get(N(r.lastReplyUser)) ?? null,
     })),
     total,
     pageSize: BBS_PAGESIZE,
@@ -171,7 +203,7 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
   if (bump) {
     await prisma.bbsPost.update({ where: { id: row.id }, data: { clicks: { increment: 1 } } });
   }
-  const authors = await usersByIds([N(row.user), N(row.lastReplyUser)].filter((x) => x > 0));
+  const authors = await authorsWithTitles([N(row.user)].filter((x) => x > 0));
   return {
     id: N(row.id),
     board: row.board,
@@ -185,7 +217,6 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
     createTime: N(row.createTime),
     lastReplyTime: N(row.lastReplyTime),
     author: authors.get(N(row.user)) ?? null,
-    lastReplyAuthor: authors.get(N(row.lastReplyUser)) ?? null,
   };
 }
 
@@ -194,7 +225,7 @@ export interface BbsReplyItem {
   floor: number;
   content: string;
   createTime: number;
-  author: UserBrief | null;
+  author: BbsAuthor | null;
 }
 
 export async function getReplies(
@@ -209,7 +240,7 @@ export async function getReplies(
     skip: (page - 1) * BBS_REPLY_PAGESIZE,
     take: BBS_REPLY_PAGESIZE,
   });
-  const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
+  const authors = await authorsWithTitles([...new Set(rows.map((r) => N(r.user)))]);
   return {
     replies: rows.map((r, i) => ({
       id: N(r.id),

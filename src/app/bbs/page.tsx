@@ -81,14 +81,23 @@ export default async function BbsPage({
       </div>
       <div className="box">
         <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
+          <thead>
+            <tr>
+              <th style={{ width: 90 }}>分类</th>
+              <th>主题</th>
+              <th style={{ width: 170 }}>作者</th>
+              <th style={{ width: 110 }}>回复/点击</th>
+              <th style={{ width: 100 }}>最后更新</th>
+            </tr>
+          </thead>
           <tbody>
             {posts.map((p) => (
               <tr key={p.id}>
-                <td style={{ width: 60 }}>
-                  {board === undefined && <span className="level">【{BBS_BOARD_NAMES[p.board]}】</span>}
+                <td>
+                  {board === undefined && <span className="board_tag">【{BBS_BOARD_NAMES[p.board]}】</span>}
                 </td>
                 <td>
-                  <Link href={`/bbs/${p.id}`} target="_blank">
+                  <Link className="bbs_title" href={`/bbs/${p.id}`} target="_blank">
                     {p.title}
                   </Link>
                   {p.isNice && (
@@ -103,25 +112,28 @@ export default async function BbsPage({
                   )}
                   {p.isLocked && <span className="bbs_flag locked">锁</span>}
                 </td>
-                <td className="user" style={{ width: 100 }}>
+                <td className="user">
                   {p.author && (
-                    <Link href={`/user/${p.author.id}`} target="_blank">
-                      {p.author.chineseName}
-                    </Link>
+                    <>
+                      <Link href="/world" target="_blank" title="点击查看称号说明" className="bbs_oldtitle">
+                        [<span style={{ color: p.author.old.color }}>{p.author.old.name}</span>]
+                      </Link>{" "}
+                      <Link href={`/user/${p.author.id}`} target="_blank">
+                        {p.author.chineseName}
+                      </Link>
+                      <span className={`gender ${p.author.sex ? "male" : "female"} small`}></span>
+                    </>
                   )}
                 </td>
-                <td style={{ width: 80 }}>
+                <td>
                   <em>{p.replies}</em>/{p.clicks}
                 </td>
-                <td className="time" style={{ width: 150 }}>
-                  {timeOpposite(p.lastReplyTime, TIME_NEVER)}
-                  {p.lastReplyAuthor && ` by ${p.lastReplyAuthor.chineseName}`}
-                </td>
+                <td className="time">{timeOpposite(p.lastReplyTime, TIME_NEVER)}</td>
               </tr>
             ))}
             {posts.length === 0 && (
               <tr>
-                <td>还没有主题，来发第一帖吧。</td>
+                <td colSpan={5}>还没有主题，来发第一帖吧。</td>
               </tr>
             )}
           </tbody>

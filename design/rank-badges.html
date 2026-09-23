@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>扫雷网 18 级军衔徽章设计稿</title>
+<style>
+  :root {
+    --bg: #272822;
+    --card: #2f3027;
+    --border: #41423a;
+    --text: #f8f8f2;
+    --dim: #939387;
+    --gold: #e6db74;      /* 大元帅 / 元帅 */
+    --general: #f79646;   /* 将官 */
+    --colonel: #e26b0a;   /* 校官 */
+    --captain: #9bbb59;   /* 尉官 */
+    --sergeant: #b1b1a4;  /* 士官 */
+    --private: #939387;   /* 士兵 */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 32px 24px 64px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 28px; line-height: 1.7; }
+  .tier-title {
+    font-size: 14px; font-weight: 600;
+    margin: 30px 0 12px; padding-left: 10px;
+    border-left: 3px solid var(--border);
+    color: var(--dim); letter-spacing: 1px;
+  }
+  .grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 128px;
+    padding: 14px 8px 12px;
+    text-align: center;
+  }
+  .card svg { width: 72px; height: 72px; }
+  .rank-name { font-size: 16px; font-weight: 600; margin-top: 8px; }
+  .rank-meta { font-size: 11px; color: var(--dim); margin-top: 3px; }
+  /* 实际尺寸模拟 */
+  .sim {
+    margin-top: 40px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .sim h2 { font-size: 14px; color: var(--dim); font-weight: 600; margin-bottom: 12px; }
+  .sim-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; line-height: 30px;
+    border-bottom: 1px dashed #3a3b32;
+  }
+  .sim-row:last-child { border-bottom: none; }
+  .sim-row svg { width: 20px; height: 20px; flex: none; }
+  .sim-row .no { color: var(--dim); width: 26px; text-align: right; font-size: 12px; }
+  .sim-row .time { margin-left: auto; color: var(--dim); font-size: 12px; font-family: monospace; }
+  .note {
+    margin-top: 36px; padding: 14px 18px;
+    border: 1px solid var(--border); border-radius: 10px;
+    color: var(--dim); font-size: 12px; line-height: 1.9;
+  }
+  .note b { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ============ 共享图形库 ============ -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- 盾形底板（viewBox 0 0 48 48） -->
+    <path id="shield" d="M24 3 L42 8.5 V25 C42 36.5 34.5 42.5 24 45.5 C13.5 42.5 6 36.5 6 25 V8.5 Z"/>
+    <!-- 五角星（外径 10，中心 0,0） -->
+    <path id="star" d="M0 -10 L2.25 -3.09 L9.51 -3.09 L3.63 1.18 L5.88 8.09 L0 3.82 L-5.88 8.09 L-3.63 1.18 L-9.51 -3.09 L-2.25 -3.09 Z"/>
+    <!-- V 形拐（士官/士兵用，尖朝上） -->
+    <path id="chevron" d="M-8 3.5 L0 -4 L8 3.5" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 地雷（扫雷主题） -->
+    <g id="mine">
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round" transform="rotate(45)"/>
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round" transform="rotate(90)"/>
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round" transform="rotate(135)"/>
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round" transform="rotate(180)"/>
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round" transform="rotate(225)"/>
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round" transform="rotate(270)"/>
+      <line x1="6.6" y1="0" x2="10" y2="0" stroke-width="1.8" stroke-linecap="round" transform="rotate(315)"/>
+      <circle r="5.4" stroke="none"/>
+      <circle cx="-1.7" cy="-1.7" r="1.3" fill="#f8f8f2" opacity="0.45" stroke="none"/>
+    </g>
+    <!-- 月桂枝（盾底装饰，将官以上） -->
+    <g id="laurel">
+      <path d="M24 39.5 C19 38 14.5 34.5 13 29.5" fill="none" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M24 39.5 C29 38 33.5 34.5 35 29.5" fill="none" stroke-width="1.3" stroke-linecap="round"/>
+      <ellipse cx="19.6" cy="37.2" rx="2.4" ry="1.1" transform="rotate(-25 19.6 37.2)" stroke="none"/>
+      <ellipse cx="16.2" cy="34.6" rx="2.4" ry="1.1" transform="rotate(-45 16.2 34.6)" stroke="none"/>
+      <ellipse cx="13.9" cy="31" rx="2.4" ry="1.1" transform="rotate(-65 13.9 31)" stroke="none"/>
+      <ellipse cx="28.4" cy="37.2" rx="2.4" ry="1.1" transform="rotate(25 28.4 37.2)" stroke="none"/>
+      <ellipse cx="31.8" cy="34.6" rx="2.4" ry="1.1" transform="rotate(45 31.8 34.6)" stroke="none"/>
+      <ellipse cx="34.1" cy="31" rx="2.4" ry="1.1" transform="rotate(65 34.1 31)" stroke="none"/>
+    </g>
+    <!-- 皇冠（大元帅专属） -->
+    <g id="crown">
+      <path d="M-9 4 L-9 -2 L-4.5 1.5 L0 -4 L4.5 1.5 L9 -2 L9 4 Z" stroke="none"/>
+      <circle cx="-9" cy="-3.5" r="1.3" stroke="none"/>
+      <circle cx="0" cy="-5.5" r="1.3" stroke="none"/>
+      <circle cx="9" cy="-3.5" r="1.3" stroke="none"/>
+    </g>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <h1>扫雷网 · 18 级军衔徽章设计稿</h1>
+  <div class="sub">
+    统一盾形 + 站内 Monokai 军衔配色；<b style="color:#f8f8f2">全原创图形</b>（盾形/五角星/V 拐/地雷/月桂/皇冠），不仿制真实军衔肩章，规避涉军标识风险。<br>
+    晋升逻辑：兵（地雷）→ 士（V 拐递加）→ 尉（小星递加）→ 校（橙星递加）→ 将（金星 + 月桂）→ 帅（大金星 + 月桂）→ 大元帅（与元帅完全同款，整体反色：金盾深星，全站唯一）。
+  </div>
+
+  <!-- ===== 帅 ===== -->
+  <div class="tier-title">帅 · 全站前 41 名（金 #e6db74）</div>
+  <div class="grid">
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#e6db74" stroke="#2e2e26" stroke-width="2.6"/>
+        <use href="#star" transform="translate(24 21.5) scale(1.02)" fill="#2e2e26"/>
+        <use href="#laurel" fill="#2e2e26" stroke="#2e2e26"/>
+      </svg>
+      <div class="rank-name" style="color:var(--gold)">大元帅</div>
+      <div class="rank-meta">第 1 名 · 全站唯一</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#e6db74" stroke-width="2.6"/>
+        <use href="#star" transform="translate(24 21.5) scale(1.02)" fill="#e6db74"/>
+        <use href="#laurel" fill="#e6db74" stroke="#e6db74"/>
+      </svg>
+      <div class="rank-name" style="color:var(--gold)">元帅</div>
+      <div class="rank-meta">第 2–11 名</div>
+    </div>
+  </div>
+
+  <!-- ===== 将 ===== -->
+  <div class="tier-title">将官 · 金星 + 月桂（橙边 #f79646）</div>
+  <div class="grid">
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#f79646" stroke-width="2.4"/>
+        <use href="#star" transform="translate(18.5 14.5) scale(0.62)" fill="#e6db74"/>
+        <use href="#star" transform="translate(29.5 14.5) scale(0.62)" fill="#e6db74"/>
+        <use href="#star" transform="translate(18.5 23.5) scale(0.62)" fill="#e6db74"/>
+        <use href="#star" transform="translate(29.5 23.5) scale(0.62)" fill="#e6db74"/>
+        <use href="#laurel" fill="#f79646" stroke="#f79646"/>
+      </svg>
+      <div class="rank-name" style="color:var(--general)">大将</div>
+      <div class="rank-meta">第 12–41 名</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#f79646" stroke-width="2.4"/>
+        <use href="#star" transform="translate(14 19.5) scale(0.68)" fill="#e6db74"/>
+        <use href="#star" transform="translate(24 19.5) scale(0.68)" fill="#e6db74"/>
+        <use href="#star" transform="translate(34 19.5) scale(0.68)" fill="#e6db74"/>
+        <use href="#laurel" fill="#f79646" stroke="#f79646"/>
+      </svg>
+      <div class="rank-name" style="color:var(--general)">上将</div>
+      <div class="rank-meta">60 人编制</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#f79646" stroke-width="2.4"/>
+        <use href="#star" transform="translate(18.5 19.5) scale(0.78)" fill="#e6db74"/>
+        <use href="#star" transform="translate(29.5 19.5) scale(0.78)" fill="#e6db74"/>
+        <use href="#laurel" fill="#f79646" stroke="#f79646"/>
+      </svg>
+      <div class="rank-name" style="color:var(--general)">中将</div>
+      <div class="rank-meta">100 人编制</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#f79646" stroke-width="2.4"/>
+        <use href="#star" transform="translate(24 19.5) scale(0.84)" fill="#e6db74"/>
+        <use href="#laurel" fill="#f79646" stroke="#f79646"/>
+      </svg>
+      <div class="rank-name" style="color:var(--general)">少将</div>
+      <div class="rank-meta">150 人编制</div>
+    </div>
+  </div>
+
+  <!-- ===== 校 ===== -->
+  <div class="tier-title">校官 · 橙星递加（#e26b0a）</div>
+  <div class="grid">
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#e26b0a" stroke-width="2.2"/>
+        <use href="#star" transform="translate(18.5 19.5) scale(0.62)" fill="#e26b0a"/>
+        <use href="#star" transform="translate(29.5 19.5) scale(0.62)" fill="#e26b0a"/>
+        <use href="#star" transform="translate(18.5 29) scale(0.62)" fill="#e26b0a"/>
+        <use href="#star" transform="translate(29.5 29) scale(0.62)" fill="#e26b0a"/>
+      </svg>
+      <div class="rank-name" style="color:var(--colonel)">大校</div>
+      <div class="rank-meta">前 3%</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#e26b0a" stroke-width="2.2"/>
+        <use href="#star" transform="translate(14 24) scale(0.66)" fill="#e26b0a"/>
+        <use href="#star" transform="translate(24 24) scale(0.66)" fill="#e26b0a"/>
+        <use href="#star" transform="translate(34 24) scale(0.66)" fill="#e26b0a"/>
+      </svg>
+      <div class="rank-name" style="color:var(--colonel)">上校</div>
+      <div class="rank-meta">前 7%</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#e26b0a" stroke-width="2.2"/>
+        <use href="#star" transform="translate(18.5 24) scale(0.7)" fill="#e26b0a"/>
+        <use href="#star" transform="translate(29.5 24) scale(0.7)" fill="#e26b0a"/>
+      </svg>
+      <div class="rank-name" style="color:var(--colonel)">中校</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#e26b0a" stroke-width="2.2"/>
+        <use href="#star" transform="translate(24 24) scale(0.76)" fill="#e26b0a"/>
+      </svg>
+      <div class="rank-name" style="color:var(--colonel)">少校</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+  </div>
+
+  <!-- ===== 尉 ===== -->
+  <div class="tier-title">尉官 · 绿星递加（#9bbb59）</div>
+  <div class="grid">
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#9bbb59" stroke-width="2.2"/>
+        <use href="#star" transform="translate(14 24) scale(0.56)" fill="#9bbb59"/>
+        <use href="#star" transform="translate(24 24) scale(0.56)" fill="#9bbb59"/>
+        <use href="#star" transform="translate(34 24) scale(0.56)" fill="#9bbb59"/>
+      </svg>
+      <div class="rank-name" style="color:var(--captain)">上尉</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#9bbb59" stroke-width="2.2"/>
+        <use href="#star" transform="translate(18.5 24) scale(0.6)" fill="#9bbb59"/>
+        <use href="#star" transform="translate(29.5 24) scale(0.6)" fill="#9bbb59"/>
+      </svg>
+      <div class="rank-name" style="color:var(--captain)">中尉</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#9bbb59" stroke-width="2.2"/>
+        <use href="#star" transform="translate(24 24) scale(0.66)" fill="#9bbb59"/>
+      </svg>
+      <div class="rank-name" style="color:var(--captain)">少尉</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+  </div>
+
+  <!-- ===== 士 ===== -->
+  <div class="tier-title">士官 · V 拐递加（#b1b1a4）</div>
+  <div class="grid">
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#b1b1a4" stroke-width="2.2"/>
+        <use href="#chevron" transform="translate(24 17) scale(0.9)" stroke="#b1b1a4"/>
+        <use href="#chevron" transform="translate(24 25) scale(0.9)" stroke="#b1b1a4"/>
+        <use href="#chevron" transform="translate(24 33) scale(0.9)" stroke="#b1b1a4"/>
+      </svg>
+      <div class="rank-name" style="color:var(--sergeant)">上士</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#b1b1a4" stroke-width="2.2"/>
+        <use href="#chevron" transform="translate(24 21) scale(0.95)" stroke="#b1b1a4"/>
+        <use href="#chevron" transform="translate(24 30) scale(0.95)" stroke="#b1b1a4"/>
+      </svg>
+      <div class="rank-name" style="color:var(--sergeant)">中士</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#b1b1a4" stroke-width="2.2"/>
+        <use href="#chevron" transform="translate(24 26) scale(1)" stroke="#b1b1a4"/>
+      </svg>
+      <div class="rank-name" style="color:var(--sergeant)">下士</div>
+      <div class="rank-meta">按比例</div>
+    </div>
+  </div>
+
+  <!-- ===== 兵 ===== -->
+  <div class="tier-title">士兵 · 扫雷主题（#939387）</div>
+  <div class="grid">
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#939387" stroke-width="2.2"/>
+        <use href="#chevron" transform="translate(24 15) scale(0.8)" stroke="#939387"/>
+        <use href="#mine" transform="translate(24 28) scale(0.95)" fill="#939387" stroke="#939387"/>
+      </svg>
+      <div class="rank-name" style="color:var(--private)">上等兵</div>
+      <div class="rank-meta">前 88%</div>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 48 48">
+        <use href="#shield" fill="#2e2e26" stroke="#939387" stroke-width="2.2"/>
+        <use href="#mine" transform="translate(24 24) scale(1)" fill="#939387" stroke="#939387"/>
+      </svg>
+      <div class="rank-name" style="color:var(--private)">列兵</div>
+      <div class="rank-meta">初始军衔</div>
+    </div>
+  </div>
+
+  <!-- ===== 实际尺寸模拟 ===== -->
+  <div class="sim">
+    <h2>实际使用效果模拟（排行榜 20px 尺寸）</h2>
+    <div class="sim-row"><span class="no">1</span>
+      <svg viewBox="0 0 48 48"><use href="#shield" fill="#e6db74" stroke="#2e2e26" stroke-width="2.6"/><use href="#star" transform="translate(24 21.5) scale(1.02)" fill="#2e2e26"/><use href="#laurel" fill="#2e2e26" stroke="#2e2e26"/></svg>
+      <span>雷界第一人</span><span style="color:var(--gold)">大元帅</span><span class="time">32.15 s</span>
+    </div>
+    <div class="sim-row"><span class="no">5</span>
+      <svg viewBox="0 0 48 48"><use href="#shield" fill="#2e2e26" stroke="#e6db74" stroke-width="2.6"/><use href="#star" transform="translate(24 21.5) scale(1.02)" fill="#e6db74"/><use href="#laurel" fill="#e6db74" stroke="#e6db74"/></svg>
+      <span>示例玩家甲</span><span style="color:var(--gold)">元帅</span><span class="time">41.03 s</span>
+    </div>
+    <div class="sim-row"><span class="no">30</span>
+      <svg viewBox="0 0 48 48"><use href="#shield" fill="#2e2e26" stroke="#f79646" stroke-width="2.4"/><use href="#star" transform="translate(14 19.5) scale(0.68)" fill="#e6db74"/><use href="#star" transform="translate(24 19.5) scale(0.68)" fill="#e6db74"/><use href="#star" transform="translate(34 19.5) scale(0.68)" fill="#e6db74"/><use href="#laurel" fill="#f79646" stroke="#f79646"/></svg>
+      <span>示例玩家乙</span><span style="color:var(--general)">上将</span><span class="time">58.77 s</span>
+    </div>
+    <div class="sim-row"><span class="no">210</span>
+      <svg viewBox="0 0 48 48"><use href="#shield" fill="#2e2e26" stroke="#e26b0a" stroke-width="2.2"/><use href="#star" transform="translate(18.5 24) scale(0.7)" fill="#e26b0a"/><use href="#star" transform="translate(29.5 24) scale(0.7)" fill="#e26b0a"/></svg>
+      <span>示例玩家丙</span><span style="color:var(--colonel)">中校</span><span class="time">95.20 s</span>
+    </div>
+    <div class="sim-row"><span class="no">1024</span>
+      <svg viewBox="0 0 48 48"><use href="#shield" fill="#2e2e26" stroke="#9bbb59" stroke-width="2.2"/><use href="#star" transform="translate(24 24) scale(0.66)" fill="#9bbb59"/></svg>
+      <span>示例玩家丁</span><span style="color:var(--captain)">少尉</span><span class="time">182.5 s</span>
+    </div>
+    <div class="sim-row"><span class="no">5300</span>
+      <svg viewBox="0 0 48 48"><use href="#shield" fill="#2e2e26" stroke="#b1b1a4" stroke-width="2.2"/><use href="#chevron" transform="translate(24 21) scale(0.95)" stroke="#b1b1a4"/><use href="#chevron" transform="translate(24 30) scale(0.95)" stroke="#b1b1a4"/></svg>
+      <span>示例玩家戊</span><span style="color:var(--sergeant)">中士</span><span class="time">460.8 s</span>
+    </div>
+    <div class="sim-row"><span class="no">9999</span>
+      <svg viewBox="0 0 48 48"><use href="#shield" fill="#2e2e26" stroke="#939387" stroke-width="2.2"/><use href="#mine" transform="translate(24 24) scale(1)" fill="#939387" stroke="#939387"/></svg>
+      <span>新人玩家</span><span style="color:var(--private)">列兵</span><span class="time">——</span>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>设计说明</b><br>
+    1. 所有图形均为原创矢量元素（盾形、五角星、V 拐、地雷、月桂、皇冠），<b>未仿制任何国家真实军衔肩章/军徽样式</b>，符合《军服管理条例》《互联网军事信息传播管理办法》对涉军标识的限制要求。<br>
+    2. 配色与站内军衔文字色完全一致（grand/marshal #e6db74 · general #f79646 · colonel #e26b0a · captain #9bbb59 · sergeant #b1b1a4 · private #939387），深色底板上可直接搭配现有 Monokai 主题。<br>
+    3. 辨识度逻辑：越高级星越大、装饰越多；大元帅与元帅形状完全一致、配色整体反色（金盾深星），全站唯一。<br>
+    4. 确认后可导出为独立 SVG 文件（每级一个）放 <code>public/images/rank/</code>，或直接以内联 SVG 组件接入 Next.js。
+  </div>
+</div>
+</body>
+</html>

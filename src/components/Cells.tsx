@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { TITLE_CLASSES } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite, TIME_NEVER } from "@/lib/format";
+import { RankBadge } from "./RankBadge";
 
 /** 用户名 + 性别图标（移植 _avatarCell） */
 export function AvatarCell({
@@ -34,11 +35,24 @@ export function AvatarCell({
   );
 }
 
-/** 军衔徽章（移植 common/title） */
-export function TitleBadge({ title, link = false }: { title: string; link?: boolean }) {
+/** 军衔徽章（移植 common/title；2026-09-23 起文字前加徽章图标，badgeSize 可放大） */
+export function TitleBadge({
+  title,
+  link = false,
+  badgeSize,
+}: {
+  title: string;
+  link?: boolean;
+  badgeSize?: number;
+}) {
   if (!title) return <span className="title"></span>;
   const cls = TITLE_CLASSES[title] ?? "";
-  const inner = <em className={cls}>{title}</em>;
+  const inner = (
+    <>
+      <RankBadge title={title} size={badgeSize} />
+      <em className={cls}>{title}</em>
+    </>
+  );
   return link ? (
     <Link href="/page/titles" className="title" target="_blank">
       {inner}
