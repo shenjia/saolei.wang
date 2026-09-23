@@ -24,11 +24,12 @@ export const BBS_REPLY_PAGESIZE = 10;
 export const BBS_TITLE_LIMIT = 100;
 export const BBS_CONTENT_LIMIT = 5000;
 
+// 排序文案（2026-09-24 张老师要求：去「按」前缀；「回复时间」改「更新时间」）
 export const BBS_ORDERS = {
-  reply: "按回复时间",
-  post: "按发布时间",
-  clicks: "按点击数",
-  replies: "按回复数",
+  reply: "更新时间",
+  post: "发布时间",
+  clicks: "点击数",
+  replies: "回复数",
 } as const;
 export type BbsOrder = keyof typeof BBS_ORDERS;
 
@@ -258,6 +259,17 @@ export async function getReplies(
 export async function getLatestPosts(limit = 8): Promise<BbsPostItem[]> {
   const { posts } = await getPostList({ order: "post", page: 1 });
   return posts.slice(0, limit);
+}
+
+/** 加载更多（页码语义，BbsFeed 客户端组件 + /api/bbs/more 复用 getPostList） */
+export async function getPostPage(opts: {
+  board?: number;
+  order: BbsOrder;
+  nice?: boolean;
+  page: number;
+}): Promise<{ posts: BbsPostItem[]; total: number; pageSize: number; hasMore: boolean }> {
+  const r = await getPostList(opts);
+  return { ...r, hasMore: opts.page * r.pageSize < r.total };
 }
 
 // ---------- 写操作 ----------

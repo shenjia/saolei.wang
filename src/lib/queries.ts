@@ -2,6 +2,7 @@
 // 注意：user / user_info / user_stat / user_scores 共用同一主键（用户 id）
 //       video / video_info / video_stat / video_scores_* 共用同一主键（录像 id）
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { getTitleDistribution, title } from "./assess";
 import {
@@ -824,26 +825,27 @@ export async function findUserByName(name: string): Promise<number | null> {
 }
 
 /** 排行榜搜索框模糊匹配推荐（2026-09-24 张老师要求）：中文姓名前缀→包含，
- *  英文名前缀兜底；前缀命中优先排序，取前 N 条（user 表 3.4 万行，contains 全扫可接受） */
+ *  英文名前缀兜底；纯数字按 ID 前缀匹配（实时推荐对应玩家）。
+ *  前缀命中优先排序，取前 N 条（user 表 3.4 万行，contains 全扫可接受） */
 export async function searchUsers(q: string, limit = 8): Promise<UserBrief[]> {
   const kw = q.trim();
   if (!kw) return [];
+  const where: Prisma.UserWhereInput = /^\d+$/.test(kw)
+    ? { id: { gte: BigInt(kw), lt: BigInt(kw + "9".repeat(Math.max(0, 12 - kw.length)) + "0") } }
+    : {
+        OR: [
+          { chineseName: { startsWith: kw } },
+          { chineseName: { contains: kw } },
+          { englishName: { startsWith: kw } },
+        ],
+      };
   const rows = await prisma.user.findMany({
-    where: {
-      OR: [
-        { chineseName: { startsWith: kw } },
-        { chineseName: { contains: kw } },
-        { englishName: { startsWith: kw } },
-      ],
-    },
+    where,
     select: { id: true, chineseName: true, englishName: true, sex: true },
-    take: limit * 2, // 多取一些在前缀/包含混排后仍够 limit 条
+    orderBy: { id: "asc" },
+    take: limit,
   });
-  const briefs = rows.map((r) => ({ id: N(r.id), chineseName: r.chineseName, englishName: r.englishName, sex: r.sex }));
-  const score = (u: { chineseName: string; englishName: string }) =>
-    u.chineseName.startsWith(kw) ? 0 : u.englishName.startsWith(kw) ? 1 : 2;
-  briefs.sort((a, b) => score(a) - score(b) || a.id - b.id);
-  return briefs.slice(0, limit);
+  return rows.map((r) => ({ id: N(r.id), chineseName: r.chineseName, englishName: r.englishName, sex: r.sex }));
 }
 
 /** 用户总计时间名次（每日一星卡「第 N 位」） */

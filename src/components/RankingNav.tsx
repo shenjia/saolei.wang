@@ -35,9 +35,8 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
   const boxRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0); // 竞态：仅最后一次请求生效
 
-  // 纯数字（ID 输入）不出推荐——回车直达，避免误触自动定位
+  // 数字输入也出推荐（按 ID 前缀实时匹配玩家）；下拉项的次级文字数字模式显示 ID
   const numeric = /^\d+$/.test(q.trim());
-  const open = !!users?.length && !numeric;
 
   // 事件委托：RankingFeed 在同页监听并执行定位（页内滚动/拉取/跳 whereami）
   function locate(id: number) {
@@ -47,7 +46,7 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
   // 防抖 250ms 模糊推荐（setState 只发生在异步回调里，规避 set-state-in-effect）
   useEffect(() => {
     const kw = q.trim();
-    if (!kw || /^\d+$/.test(kw)) {
+    if (!kw) {
       reqSeq.current++; // 使在途请求失效
       return;
     }
@@ -102,7 +101,7 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (!open || !users?.length) {
+    if (users === null || users.length === 0) {
       if (e.key === "Enter") submit(q);
       return;
     }
@@ -158,7 +157,7 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
               autoComplete="off"
             />
           </span>
-          {open && users && (
+          {users !== null && users.length > 0 && (
             <ul className="goto_suggest">
               {users.map((u, i) => (
                 <li key={u.id} className={i === active ? "active" : ""}>
@@ -172,7 +171,9 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
                     }}
                   >
                     <em>{u.chineseName}</em>
-                    {u.englishName ? <span>{u.englishName}</span> : null}
+                    {/* 数字模式次级文字显示 ID（用户按 ID 找人时姓名才是补充信息），
+                        其余显示英文名 */}
+                    <span>{numeric ? `ID ${u.id}` : u.englishName || null}</span>
                   </button>
                 </li>
               ))}
