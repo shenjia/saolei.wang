@@ -849,6 +849,12 @@ body #user_view .info h2 {
   line-height: 26px;
   margin-bottom: 4px;
 }
+/* 性别图标与拼音（h2 14px）同尺寸：覆盖 .big 的 20px 大图标 */
+body #user_view .info .gender.big {
+  width: 14px;
+  height: 14px;
+  background-image: url(/images/common/gender14x14.png?v=5);
+}
 /* info_body 保持 flex：nowrap 成绩表在头像右侧空间不足时会被整表挤到头像下方
    （鞠泽恩这类长内容实测触发），flex + table-layout:fixed 强制其贴右排列并省略号截断 */
 body #user_view .info .info_body {
@@ -1485,6 +1491,11 @@ body #page.two_columns li.main {
   /* 含表格的盒子一律盒内横滑（BBS 列表固定列宽 470+、排行宽表等），页面本身不横滚 */
   body #page .box:has(.table) {
     overflow-x: auto;
+  }
+  /* BBS 主题表 table-layout:fixed，主题列吃剩余宽——最小宽度给足 700，
+     主题列可得 ~166px，其余盒内横滑 */
+  body #page .bbs_list {
+    min-width: 700px;
   }
   .ranking_box .ranking_table {
     min-width: 640px;
