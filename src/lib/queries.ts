@@ -825,13 +825,13 @@ export async function findUserByName(name: string): Promise<number | null> {
 }
 
 /** 排行榜搜索框模糊匹配推荐（2026-09-24 张老师要求）：中文姓名前缀→包含，
- *  英文名前缀兜底；纯数字按 ID 前缀匹配（实时推荐对应玩家）。
+ *  英文名前缀兜底；纯数字按 ID 精确匹配（输入完整 ID 实时推荐该玩家）。
  *  前缀命中优先排序，取前 N 条（user 表 3.4 万行，contains 全扫可接受） */
 export async function searchUsers(q: string, limit = 8): Promise<UserBrief[]> {
   const kw = q.trim();
   if (!kw) return [];
   const where: Prisma.UserWhereInput = /^\d+$/.test(kw)
-    ? { id: { gte: BigInt(kw), lt: BigInt(kw + "9".repeat(Math.max(0, 12 - kw.length)) + "0") } }
+    ? { id: BigInt(kw) } // ID 精确匹配（张老师要求：不按前缀）
     : {
         OR: [
           { chineseName: { startsWith: kw } },
