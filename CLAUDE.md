@@ -49,8 +49,8 @@
 | 路由 | 说明 |
 |---|---|
 | `/` | 雷界动态（加载更多）+ 每日一星 + 论坛新帖 + 入伍新兵 + 十大元帅 + 雷界统计 |
-| `/ranking?level&order&nf&page` | 排行榜（sum/beg/int/exp × time/3bvs × 普通/NF）；登录后有「我在哪里」定位按钮 |
-| `/ranking/whereami?id&level&order&nf` | 302 定位到该用户所在页 `#id_<uid>`（移植 Ranking::getPage 同分扫描） |
+| `/ranking?view&by&page` | 排行榜（sum/beg/int/exp × time/3bvs × 普通/NF，2026-09-24 改造：盒内 h1 + 圆角搜索框 + 「加载更多」替代分页；登录态底部「我在哪里」按钮定位自己） |
+| `/ranking/whereami?q&id&name&level&order&nf&by&format` | 302 定位到用户所在页 `#id_<uid>`（移植 Ranking::getPage 同分扫描；q 纯数字当 ID 否则姓名；format=json 回页码） |
 | `/grow` | 进步榜（rank_snapshot 每日惰性快照，今 vs 昨名次差） |
 | `/click` | 人气榜（click 表 user+ip+date 去重；访问地盘即计数） |
 | `/world` | 雷界生态：军衔人数分布 + 神界全员（sum_time 前 41） |
@@ -71,7 +71,7 @@
 | `/page/titles` `/page/help` | 军衔体系说明 / 新手上路（如何加入排行） |
 | `/page/help/*` | 11 个帮助子页：why/grow/word/video/upload/freeze/star/clone-faq/bbs/email/avatar |
 | `/page/guide` `/page/about` `/page/donate` `/page/history` `/page/download` `/page/world` | 教程索引 / 关于 / 赞助 / 更新历史 / 软件下载（暂链旧站文件）/ 世界 TOP10 |
-| API | `/api/comment/post|more`、`/api/news/more`、`/api/account/profile|password`、`/api/video/upload|review`、`/api/bbs`、`/api/message`、`/api/history`、`/api/auth/password` |
+| API | `/api/comment/post|more`、`/api/news/more`、`/api/ranking/more`、`/api/account/profile|password`、`/api/video/upload|review`、`/api/bbs`、`/api/message`、`/api/history`、`/api/auth/password` |
 
 ## 关键模块（src/lib/）
 
