@@ -94,7 +94,15 @@ export function UserCardPopover() {
       }
       const a = t.closest('a[href^="/user/"]');
       // Cmd/Ctrl/Shift+点击 = 用户想新标签打开详情页，放行（中键走 auxclick 本就不拦截）
-      if (a && !a.hasAttribute("data-uc-nav") && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+      // 评论区（.comments）的人名不弹卡（2026-09-23 张老师要求），保持普通链接跳转
+      if (
+        a &&
+        !a.closest(".comments") &&
+        !a.hasAttribute("data-uc-nav") &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.shiftKey
+      ) {
         const m = (a.getAttribute("href") ?? "").match(/^\/user\/(\d+)/);
         if (m) {
           e.preventDefault();
