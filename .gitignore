@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /videos/
+
+# 本地工作档案（AI 会话记忆，含内部工作细节，不入公开仓）
+/.workbuddy/

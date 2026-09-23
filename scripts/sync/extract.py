@@ -5,7 +5,10 @@ import sys, time
 import pytds
 import pymysql
 
-MSSQL = dict(server=__import__("os").environ.get("SAOLEI_MSSQL_HOST","REDACTED_SERVER_IP"), port=1433, user=__import__("os").environ.get("SAOLEI_MSSQL_USER","saolei"), password=__import__("os").environ["SAOLEI_MSSQL_PASS"],
+import os
+
+# 连接信息一律走环境变量（SAOLEI_MSSQL_HOST/USER/PASS），无默认值——凭据不得入库
+MSSQL = dict(server=os.environ["SAOLEI_MSSQL_HOST"], port=1433, user=os.environ["SAOLEI_MSSQL_USER"], password=os.environ["SAOLEI_MSSQL_PASS"],
              database="SaoleiNet", login_timeout=15, timeout=300)
 MY = dict(host="127.0.0.1", user="root", database="saolei_mssql",
           charset="utf8mb4", autocommit=False)

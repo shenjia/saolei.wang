@@ -6,9 +6,9 @@
 ## 用法
 
 ```bash
-export SAOLEI_MSSQL_HOST=REDACTED_SERVER_IP   # 可选,默认此值
-export SAOLEI_MSSQL_USER=saolei          # 可选
-export SAOLEI_MSSQL_PASS=***             # 必填,只读账号
+export SAOLEI_MSSQL_HOST=<旧站库地址>   # 必填（原默认值已移除，凭据不入库）
+export SAOLEI_MSSQL_USER=<只读账号>     # 必填
+export SAOLEI_MSSQL_PASS=<密码>         # 必填,只读账号
 PY=/Users/shenjia/.workbuddy/binaries/python/envs/default/bin/python
 $PY extract.py     # MSSQL → staging 库 saolei_mssql(全量,断点续传,重跑先 DROP 表)
 $PY transform.py   # staging → saolei(幂等 upsert;news 段有守卫,已插则跳过)
