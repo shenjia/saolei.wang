@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ page });
       }
       qs.set("page", String(page));
+      qs.set("hl", String(id)); // 定位落地行持续高亮（2026-09-24 张老师要求）
       const query = qs.toString();
       return new NextResponse(null, {
         status: 302,

@@ -66,20 +66,22 @@ export function DeltaArrow({ dir }: { dir: "up" | "down" }) {
   );
 }
 
-/** 一行（含锚点 id_{uid}，供「我在哪里」定位） */
+/** 一行（含锚点 id_{uid}，供「我在哪里」/搜索定位；hl=定位落地行持续高亮） */
 export function RankingRowLine({
   row,
   by,
   delta,
   showDelta,
+  hl,
 }: {
   row: TitledRow;
   by: RankingBy;
   delta?: number | null;
   showDelta: boolean;
+  hl?: boolean;
 }) {
   return (
-    <tr id={`id_${row.id}`}>
+    <tr id={`id_${row.id}`} className={hl ? "hl" : undefined}>
       <td className="rank">
         第&nbsp;<em>{row.rank}</em>&nbsp;位
       </td>

@@ -64,6 +64,9 @@ export default async function RankingPage({
 
   const viewParams = { view: nf ? ("nf" as const) : undefined };
 
+  // 搜索/whereami 定位落地行：SSR 即高亮（无 JS 也可见），客户端接管后持续
+  const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
+
   return (
     <div id="page" className="main ranking_old">
       <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
@@ -78,6 +81,7 @@ export default async function RankingPage({
           total={total}
           pageSize={pageSize}
           myUid={session?.uid}
+          initialHl={hl}
         />
       </div>
     </div>

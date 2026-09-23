@@ -1216,7 +1216,76 @@ body #page.ranking_old .ranking_box {
 }
 .goto_form button:hover {
   background: #656355;
+  color: #a6e22e;
+}
+
+/* ==================== 排行榜四轮调整（2026-09-24 张老师要求） ====================
+   搜索框去按钮化：输入汉字防抖模糊匹配出推荐下拉；唯一候选自动定位；
+   定位落地行持续高亮（底色 + 玩家名黄）。 */
+
+/* 搜索框容器升级为定位上下文（下拉绝对定位挂在其下方） */
+.goto_form {
+  position: relative;
+}
+
+/* 推荐下拉：Monokai 暗底圆角浮层，默认隐藏由 React 控制渲染 */
+.goto_form .goto_suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 150px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #1e1f1c;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.goto_form .goto_suggest li button {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  width: 100%;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #f8f8f2;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.goto_form .goto_suggest li button em {
+  font-style: normal;
+}
+.goto_form .goto_suggest li button span {
+  color: #75715e;
+  font-size: 12px;
+}
+.goto_form .goto_suggest li.active button,
+.goto_form .goto_suggest li button:hover {
+  background: #3e3d32;
   color: #fdc61d;
+}
+.goto_form .goto_suggest li.active button span,
+.goto_form .goto_suggest li button:hover span {
+  color: #939387;
+}
+
+/* 定位落地行：底色持续高亮（压过 tr:hover 半透明层；比 hover 白 5% 更醒目），
+   玩家名变黄（搜索命中即「找到了」的确认信号） */
+.ranking_table tr.hl {
+  background: #3e3d32;
+}
+.ranking_table tr.hl td.name a {
+  color: #fdc61d;
+}
+.ranking_table tr.hl td.name a:hover {
+  color: #a6e22e;
 }
 
 /* ---------- 全级别排行表（2008 紧凑行） ---------- */

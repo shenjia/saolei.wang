@@ -1,8 +1,13 @@
 // 排行导航条（2008 编排：左侧榜别切换 + 右侧查找定位，2026-09-23 张老师要求；
-// 2026-09-24 三轮调整：双输入框合并为单个圆角搜索框——矢量放大镜 + placeholder「姓名或ID」，
-// 提交即定位；「我在哪里」按钮从导航条移除，登录态改由底部加载更多右侧提供）
+// 2026-09-24 三轮调整：双输入框合并为单个圆角搜索框——矢量放大镜 + placeholder「姓名或ID」；
+// 2026-09-24 四轮：去掉「查找」按钮——汉字输入防抖模糊匹配出推荐下拉（键盘上下选、回车确认），
+// 唯一候选自动定位；通过自定义事件 ranking:locate 委托同页的 RankingFeed 执行定位）
 
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export type RankingView = "all" | "nf" | "grow" | "area" | "click" | "world";
 
@@ -15,7 +20,111 @@ const TABS: { key: RankingView; label: string; href: string }[] = [
   { key: "world", label: "世界", href: "/ranking?view=world" },
 ];
 
+interface SuggestUser {
+  id: number;
+  chineseName: string;
+  englishName: string;
+  sex: number;
+}
+
 export function RankingNav({ current, by }: { current: RankingView; by?: string }) {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  const [users, setUsers] = useState<SuggestUser[] | null>(null);
+  const [active, setActive] = useState(0); // 键盘上下键游标
+  const boxRef = useRef<HTMLDivElement>(null);
+  const reqSeq = useRef(0); // 竞态：仅最后一次请求生效
+
+  // 纯数字（ID 输入）不出推荐——回车直达，避免误触自动定位
+  const numeric = /^\d+$/.test(q.trim());
+  const open = !!users?.length && !numeric;
+
+  // 事件委托：RankingFeed 在同页监听并执行定位（页内滚动/拉取/跳 whereami）
+  function locate(id: number) {
+    window.dispatchEvent(new CustomEvent("ranking:locate", { detail: { id } }));
+  }
+
+  // 防抖 250ms 模糊推荐（setState 只发生在异步回调里，规避 set-state-in-effect）
+  useEffect(() => {
+    const kw = q.trim();
+    if (!kw || /^\d+$/.test(kw)) {
+      reqSeq.current++; // 使在途请求失效
+      return;
+    }
+    const seq = ++reqSeq.current;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/ranking/search?q=${encodeURIComponent(kw)}`);
+        if (!res.ok) return;
+        const { users: list } = (await res.json()) as { users: SuggestUser[] };
+        if (seq !== reqSeq.current) return; // 已有更新的输入
+        setUsers(list);
+        setActive(0);
+        // 唯一候选 → 自动开始查询（张老师要求：确定只有一个选择即触发，无需输完姓名）
+        if (list.length === 1) {
+          setUsers(null);
+          locate(list[0].id);
+        }
+      } catch {
+        /* 网络异常静默：回车提交仍可用 */
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  // 点击外部收起下拉
+  useEffect(() => {
+    function onDocMouseDown(e: MouseEvent) {
+      if (!boxRef.current?.contains(e.target as Node)) setUsers(null);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+
+  function submit(kw: string) {
+    const key = kw.trim();
+    if (!key) return;
+    // 纯数字按 ID，其余按姓名——ID 走轻量事件定位，姓名让服务端反查后整页导航
+    if (/^\d+$/.test(key)) {
+      const id = parseInt(key, 10);
+      if (id > 0) locate(id);
+    } else {
+      locateName(key);
+    }
+  }
+
+  async function locateName(name: string) {
+    const qs = new URLSearchParams({ name });
+    if (by) qs.set("by", by);
+    if (current === "nf") qs.set("view", "nf");
+    // 姓名需服务端反查 id（whereami 302 会带 page+hl 回来，落地即高亮），走整页导航
+    router.push(`/ranking/whereami?${qs}`);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!open || !users?.length) {
+      if (e.key === "Enter") submit(q);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive((a) => (a + 1) % users.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((a) => (a - 1 + users.length) % users.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const pick = users[active];
+      if (pick) {
+        setUsers(null);
+        setQ(pick.chineseName);
+        locate(pick.id);
+      }
+    } else if (e.key === "Escape") {
+      setUsers(null);
+    }
+  }
+
   return (
     <div className="ranking_nav">
       <div className="ranking_tabs">
@@ -32,9 +141,7 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
         )}
       </div>
       {(current === "all" || current === "nf") && (
-        <form className="goto_form" action="/ranking/whereami" method="get" role="search">
-          <input type="hidden" name="view" value={current} />
-          {by && <input type="hidden" name="by" value={by} />}
+        <div className="goto_form" ref={boxRef}>
           <span className="goto_search">
             <svg className="goto_icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
               <circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -42,14 +149,36 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
             </svg>
             <input
               type="text"
-              name="q"
+              value={q}
               maxLength={12}
               placeholder="姓名或ID"
               title="输入姓名或用户 ID，定位到排行榜中的位置"
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={onKeyDown}
+              autoComplete="off"
             />
           </span>
-          <button type="submit">查找</button>
-        </form>
+          {open && users && (
+            <ul className="goto_suggest">
+              {users.map((u, i) => (
+                <li key={u.id} className={i === active ? "active" : ""}>
+                  <button
+                    type="button"
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => {
+                      setUsers(null);
+                      setQ(u.chineseName);
+                      locate(u.id);
+                    }}
+                  >
+                    <em>{u.chineseName}</em>
+                    {u.englishName ? <span>{u.englishName}</span> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );
