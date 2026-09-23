@@ -34,12 +34,12 @@ export default async function BbsTitlePage({
         <h1>
           【{BBS_BOARD_NAMES[post.board]}】{post.title}
           {post.isNice && (
-            <span className="bbs_star" title="精华">
+            <span className="bbs_star" data-tip="精华">
               ★
             </span>
           )}
           {post.isTop && (
-            <span className="bbs_top" title="置顶">
+            <span className="bbs_top" data-tip="置顶">
               ▲
             </span>
           )}

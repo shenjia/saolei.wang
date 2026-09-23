@@ -404,6 +404,36 @@ body #header .nav li a {
   font-size: 13px;
   margin-left: 5px;
 }
+/* 自定义 tooltip：悬停立即弹出，替代原生 title 的 1s 延迟 */
+.bbs_star,
+.bbs_top {
+  position: relative;
+  cursor: default;
+}
+.bbs_star::after,
+.bbs_top::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 60;
+}
+.bbs_star:hover::after,
+.bbs_top:hover::after {
+  opacity: 1;
+}
 .bbs_flag.locked {
   color: #75715e;
   font-size: 12px;

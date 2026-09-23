@@ -92,12 +92,12 @@ export default async function BbsPage({
                     {p.title}
                   </Link>
                   {p.isNice && (
-                    <span className="bbs_star" title="精华">
+                    <span className="bbs_star" data-tip="精华">
                       ★
                     </span>
                   )}
                   {p.isTop && (
-                    <span className="bbs_top" title="置顶">
+                    <span className="bbs_top" data-tip="置顶">
                       ▲
                     </span>
                   )}
