@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs>
+<radialGradient id="aball" cx="42%" cy="36%" r="78%">
+  <stop offset="0%" stop-color="#1e1e1e"/>
+  <stop offset="55%" stop-color="#080808"/>
+  <stop offset="100%" stop-color="#000000"/>
+</radialGradient>
+<linearGradient id="abadge" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0%" stop-color="#3d3d3d"/>
+  <stop offset="100%" stop-color="#2b2b2b"/>
+</linearGradient>
+<filter id="asoft" x="-40%" y="-40%" width="180%" height="180%">
+  <feGaussianBlur stdDeviation="1.7"/>
+</filter>
+</defs>
+<rect width="64" height="64" fill="#323232"/>
+<circle cx="32" cy="32" r="25.0" fill="none" stroke="#fff" stroke-width="5" opacity="0.32" filter="url(#asoft)"/><circle cx="32" cy="32" r="25.0" fill="none" stroke="#fff" stroke-width="1.7" opacity="0.96"/>
+<g transform="rotate(0 32 32)">
+<rect x="29.3" y="1.6" width="5.4" height="11.4" rx="2.6" fill="#fff"/>
+<rect x="30.6" y="3.6" width="2.8" height="10.2" rx="1.3" fill="#000"/>
+</g><g transform="rotate(90 32 32)">
+<rect x="29.3" y="1.6" width="5.4" height="11.4" rx="2.6" fill="#fff"/>
+<rect x="30.6" y="3.6" width="2.8" height="10.2" rx="1.3" fill="#000"/>
+</g><g transform="rotate(180 32 32)">
+<rect x="29.3" y="1.6" width="5.4" height="11.4" rx="2.6" fill="#fff"/>
+<rect x="30.6" y="3.6" width="2.8" height="10.2" rx="1.3" fill="#000"/>
+</g><g transform="rotate(270 32 32)">
+<rect x="29.3" y="1.6" width="5.4" height="11.4" rx="2.6" fill="#fff"/>
+<rect x="30.6" y="3.6" width="2.8" height="10.2" rx="1.3" fill="#000"/>
+</g><g transform="rotate(45 32 32)">
+<rect x="29.55" y="4.4" width="4.9" height="8.6" rx="2.4" fill="#fff"/>
+<rect x="30.7" y="6.4" width="2.6" height="7.2" rx="1.2" fill="#000"/>
+</g><g transform="rotate(135 32 32)">
+<rect x="29.55" y="4.4" width="4.9" height="8.6" rx="2.4" fill="#fff"/>
+<rect x="30.7" y="6.4" width="2.6" height="7.2" rx="1.2" fill="#000"/>
+</g><g transform="rotate(225 32 32)">
+<rect x="29.55" y="4.4" width="4.9" height="8.6" rx="2.4" fill="#fff"/>
+<rect x="30.7" y="6.4" width="2.6" height="7.2" rx="1.2" fill="#000"/>
+</g><g transform="rotate(315 32 32)">
+<rect x="29.55" y="4.4" width="4.9" height="8.6" rx="2.4" fill="#fff"/>
+<rect x="30.7" y="6.4" width="2.6" height="7.2" rx="1.2" fill="#000"/>
+</g>
+<circle cx="32" cy="32" r="23.8" fill="url(#aball)"/>
+<circle cx="32" cy="32" r="25" fill="none" stroke="#fff" stroke-width="1.7" opacity="0.96"/>
+<rect x="19.9" y="19.9" width="5.6" height="5.6" rx="1.3" fill="#fff"/>
+</svg>
