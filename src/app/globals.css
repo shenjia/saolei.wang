@@ -629,52 +629,8 @@ body .tabs > a:hover::after {
   font-size: 13px;
 }
 
-/* 全站点人名弹卡片浮层（UserCardPopover） */
-.uc_popover {
-  position: fixed;
-  z-index: 9999;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.55));
-}
-.uc_popover_tip {
-  background: #333330;
-  border: 1px solid #555550;
-  color: #f8f8f2;
-  padding: 12px 20px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-/* 旧版「查看信息」标题栏复刻 */
-.uc_popover .uc_head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #272822;
-  border: 1px solid #555550;
-  border-bottom: none;
-  padding: 5px 10px;
-  color: #fdc61a;
-  font-size: 13px;
-  font-weight: bold;
-}
-.uc_popover .uc_close {
-  background: none;
-  border: none;
-  color: #75715e;
-  font-size: 15px;
-  line-height: 1;
-  padding: 0 2px;
-  cursor: pointer;
-}
-.uc_popover .uc_close:hover {
-  color: #a6e22e;
-}
-.uc_popover .user_card {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-
 /* ---------- 个人信息卡片（2026-09-23 重设计：旧版卡片结构 + 新版首页编排） ----------
-   横排（默认，弹层/BBS）：左头像+按钮，右姓名/名次/纪录表/最近登录
+   横排（默认，BBS 楼层）：左头像+按钮，右姓名/名次/纪录表/最近登录
    竖排（.v，首页右栏窄容器）：头像+按钮居中在上，信息块通栏在下 */
 .user_card {
   background: #333330;

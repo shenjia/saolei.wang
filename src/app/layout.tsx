@@ -6,7 +6,6 @@ import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { MessageBadge } from "@/components/MessageBadge";
 import { ScrollReset } from "@/components/ScrollReset";
-import { UserCardPopover } from "@/components/UserCardPopover";
 import { ToastHost } from "@/components/Toast";
 
 export const metadata: Metadata = {
@@ -83,7 +82,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={null}>
           <ScrollReset />
         </Suspense>
-        <UserCardPopover />
         <div id="footer">
           <div className="wrapper">
             <p>

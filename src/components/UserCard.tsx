@@ -36,8 +36,7 @@ export function UserCard({
       <div className="uc_body">
         <div className="uc_left">
           <img className="uc_avatar" src={card.avatarUrl} alt={card.chineseName} />
-          {/* data-uc-nav：全站人名弹层（UserCardPopover）放行此链接，仅它可跳转玩家详情页 */}
-          <Link className="uc_home" href={`/user/${card.id}`} target="_blank" data-uc-nav>
+          <Link className="uc_home" href={`/user/${card.id}`} target="_blank">
             {own ? "进入我的地盘" : "进入TA的地盘"}
           </Link>
         </div>
