@@ -1,14 +1,17 @@
-// 排行榜（2008 编排改造，2026-09-23 张老师要求；同日晚二轮调整）：
-// 通栏：榜别 tabs（雷界排行/NF/世界/进步/地区/人气）+ 全级别成绩表（列头点击排序，军衔，日升降）+ 老式分页
-// 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）
-// 人界/神界榜、右侧每日一星模块按张老师要求取消；兼容旧 URL 参数 level/order/nf
+// 排行榜（2008 编排改造，2026-09-23 张老师要求；2026-09-24 三轮调整）：
+// 盒内 h1「排行榜」（与首页「雷界动态」同款样式）+ 榜别 tabs + 全级别成绩表
+// + 「加载更多」（替代老式分页）；右上角查找表单合并为单个圆角搜索框；
+// 登录态下「我在哪里」移至底部加载更多右侧（点击定位到自己所在行）。
+// 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
+// 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
 import { getRankingTable } from "@/lib/queries";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy } from "@/lib/config";
+import { title as assessTitle } from "@/lib/assess";
+import { getSession } from "@/lib/auth";
 import { RankingNav } from "@/components/RankingNav";
-import { RankingTable } from "@/components/RankingTable";
-import { OldPager } from "@/components/OldPager";
+import { RankingFeed } from "@/components/RankingFeed";
 import { WorldTop100 } from "@/components/WorldTop100";
 
 export const dynamic = "force-dynamic";
@@ -42,12 +45,22 @@ export default async function RankingPage({
   const rankingBy = parseRankingBy(by);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const { rows, total, pageSize } = await getRankingTable(rankingBy, nf, page);
+  const [{ rows, total, pageSize }, session] = await Promise.all([
+    getRankingTable(rankingBy, nf, page),
+    getSession(),
+  ]);
 
   // 日升降：今日快照（惰性生成）vs 昨日；升降列仅按总计时间排序的普通榜显示
-  await ensureTodaySnapshot();
-  const deltas =
-    rankingBy === "sum_time" && !nf ? await getSumTimeDeltas(rows.map((r) => r.id)) : undefined;
+  let deltas: Map<number, number | null> | undefined;
+  if (rankingBy === "sum_time" && !nf) {
+    await ensureTodaySnapshot();
+    deltas = await getSumTimeDeltas(rows.map((r) => r.id));
+  }
+
+  // 军衔列在服务端预算（Feed 客户端零成本渲染）
+  const titled = await Promise.all(
+    rows.map(async (u) => ({ ...u, title: await assessTitle(u.overallSumTime ?? u.scores.sum_time) }))
+  );
 
   const viewParams = { view: nf ? ("nf" as const) : undefined };
 
@@ -55,13 +68,16 @@ export default async function RankingPage({
     <div id="page" className="main ranking_old">
       <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
       <div className="box ranking_box">
-        <RankingTable rows={rows} by={rankingBy} base="/ranking" params={viewParams} deltas={deltas} />
-        <OldPager
+        <h1>排行榜</h1>
+        <RankingFeed
+          initial={titled}
+          initialDeltas={deltas}
+          by={rankingBy}
           base="/ranking"
-          params={{ ...viewParams, by: rankingBy === "sum_time" ? undefined : rankingBy }}
-          page={page}
+          params={viewParams}
           total={total}
           pageSize={pageSize}
+          myUid={session?.uid}
         />
       </div>
     </div>
