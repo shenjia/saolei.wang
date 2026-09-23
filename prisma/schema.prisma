@@ -15,11 +15,11 @@ datasource db {
 
 model User {
   id          BigInt  @id @default(autoincrement()) @db.BigInt
-  chineseName String  @map("chinese_name") @db.Char(4)
+  chineseName String  @map("chinese_name") @db.VarChar(12)
   englishName String  @map("english_name") @db.Char(32)
   sex         Int     @default(1) @db.TinyInt
   avatar      String  @default("") @db.Char(255)
-  area        String  @default("") @db.Char(3)
+  area        String  @default("") @db.VarChar(12)
   status      Int     @default(0) @db.SmallInt
   createTime  BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
@@ -417,7 +417,7 @@ model BbsPost {
   board         Int     @default(1) @db.TinyInt
   user          BigInt  @db.BigInt
   title         String  @db.VarChar(100)
-  content       String  @db.Text
+  content       String  @db.MediumText
   replies       Int     @default(0) @db.Int
   clicks        Int     @default(0) @db.Int
   isTop         Boolean @default(false) @map("is_top")
@@ -438,7 +438,7 @@ model BbsReply {
   id         BigInt @id @default(autoincrement()) @db.BigInt
   post       BigInt @db.BigInt
   user       BigInt @db.BigInt
-  content    String @db.Text
+  content    String @db.MediumText
   status     Int    @default(0) @db.SmallInt
   createTime BigInt @default(0) @map("create_time") @db.BigInt
   updateTime BigInt @default(0) @map("update_time") @db.BigInt

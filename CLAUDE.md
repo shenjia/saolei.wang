@@ -12,8 +12,13 @@
 
 - `saolei.net/database/saolei_2019-5-18.sql`（2013 版项目已从旧版 MSSQL 全量迁移）：
   11,564 用户、57,728 录像、55,657 动态、4,173 签名
+  **注意：该 dump 数据实际止于 2013-10-23**（迁移完成时点），并非 2019
 - 导入方式：`grep -E "^INSERT INTO" dump.sql | mysql -uroot saolei`
-- **待办**：线上 ASP 旧站 2019-05 之后的增量数据需另写 MSSQL→MySQL 增量同步
+- **旧站增量同步（2026-09-23 首次完成）**：直连线上 MSSQL `SaoleiNet` 库（只读账号），
+  管线与映射规则见 `scripts/sync/README.md`（extract → transform → fixup → validate）。
+  同步后：34,035 用户、308,210 录像、150,479 动态、54,167 评论、BBS 2,833 帖/17,904 回复、
+  历程 4,985、站内信 219。 staging 库 `saolei_mssql` 保留原始快照
+- **待办 Phase B**：~25 万新录像的实体文件（mvf/avf）下载解析，回填 hash/board/signature 等
 
 ## Schema 约定（沿用 2013 版 20 张表）
 
@@ -83,7 +88,7 @@
 
 - 邮箱注册 + 密码找回（新版测试.txt 新需求，需邮件服务方案）
 - 新闻管理、捐赠（2013 版也无代码，仅 document/donate.xlsx）
-- 旧版 MSSQL 增量数据同步
+- 录像实体文件同步（Phase B，见 scripts/sync/README.md）
 - 部署（目前仅本地开发，`pnpm dev`，端口任意）
 
 ## 工程约定
