@@ -124,17 +124,17 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
                   {detail.title}
                 </span>
               </Link>
-              {/* 全国 / 省份排名两行，置于军衔徽章下方（09-23 晚张老师要求） */}
+              {/* 省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求） */}
               {ranks && (
                 <div className="ranks">
-                  <span className="rank_line">
-                    全国第 <em>{ranks.national}</em> 名
-                  </span>
                   {ranks.areaPos !== null && (
                     <span className="rank_line">
                       {areaDisplay(ranks.area)}第 <em>{ranks.areaPos}</em> 名
                     </span>
                   )}
+                  <span className="rank_line">
+                    全国第 <em>{ranks.national}</em> 名
+                  </span>
                 </div>
               )}
             </div>
