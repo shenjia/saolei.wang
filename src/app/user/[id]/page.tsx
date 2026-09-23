@@ -118,25 +118,25 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               </tbody>
             </table>
             <div className="rank_label">
-              {/* 全国 / 省份排名两行，置于军衔徽章上方（09-23 晚张老师要求） */}
-              {ranks && (
-                <div className="ranks">
-                  <span className="rank_line">
-                    全国排行第 <em>{ranks.national}</em> 名
-                  </span>
-                  {ranks.areaPos !== null && (
-                    <span className="rank_line">
-                      {areaDisplay(ranks.area)}排行第 <em>{ranks.areaPos}</em> 名
-                    </span>
-                  )}
-                </div>
-              )}
               <Link href="/world" title="军衔体系">
                 <RankBadge title={detail.title} size={72} />
                 <span className="rank_name" style={{ color: TITLE_COLORS[detail.title] }}>
                   {detail.title}
                 </span>
               </Link>
+              {/* 全国 / 省份排名两行，置于军衔徽章下方（09-23 晚张老师要求） */}
+              {ranks && (
+                <div className="ranks">
+                  <span className="rank_line">
+                    全国第 <em>{ranks.national}</em> 名
+                  </span>
+                  {ranks.areaPos !== null && (
+                    <span className="rank_line">
+                      {areaDisplay(ranks.area)}第 <em>{ranks.areaPos}</em> 名
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

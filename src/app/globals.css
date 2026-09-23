@@ -946,9 +946,8 @@ body .world_stats .stat_tag em {
 }
 
 /* ---------- 用户主页照片 + 大军衔标签（2026-09-23 张老师要求） ----------
-   09-23 晚四轮调整：全国/省份排名两行置于军衔徽章上方居中显示
-   （「全国排行第 N 名 / 省份排行第 N 名」，主榜 sum_time 口径）；
-   底部军区栏取消；姓名/拼音字号微调放大。 */
+   09-23 晚五轮调整：军衔徽章置顶右上，下方两行「全国第 N 名 / 省份第 N 名」
+   （居中 13px）；底部军区栏取消；姓名/拼音字号微调放大。 */
 /* legacy 已有 #user_view .info .avatar{float:left;margin-right:15px}，这里补尺寸 */
 body #user_view .info {
   position: relative;
@@ -1023,17 +1022,17 @@ body #user_view .info .rank_label {
   text-align: center;
   margin: 0;
 }
-/* 全国/省份排名两行（09-23 晚张老师要求）：置于军衔徽章上方，分两行居中 */
+/* 全国/省份排名两行（09-23 晚张老师要求）：置于军衔徽章下方，分两行居中 */
 body #user_view .info .rank_label .ranks {
   display: block;
-  margin-bottom: 8px;
+  margin-top: 8px;
   color: #888;
   line-height: 1.5;
   white-space: nowrap;
 }
 body #user_view .info .rank_label .ranks .rank_line {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
 }
 body #user_view .info .rank_label .ranks em {
   font-style: normal;
