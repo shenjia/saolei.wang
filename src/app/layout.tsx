@@ -5,10 +5,11 @@ import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { MessageBadge } from "@/components/MessageBadge";
 import { UserCardPopover } from "@/components/UserCardPopover";
+import { ToastHost } from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "扫雷网 Saolei.wang",
-  description: "扫雷网——扫雷玩家的家园，录像排行、成绩认证、雷界动态",
+  description: "扫雷网——扫雷玩家的家园，录像排行、成绩认证、雷界快讯",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
@@ -23,6 +24,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <div className="wrapper">
             <div className="logo">
               <Link href="/">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="logo_icon" src="/icon.svg" alt="" width={26} height={26} />
                 <h1>扫雷网</h1>
                 <h2>Saolei.wang</h2>
               </Link>
@@ -42,7 +45,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link href="/bbs">论坛</Link>
                 </li>
                 <li>
-                  <Link href="/world">雷界</Link>
+                  <Link href="/titles">军衔</Link>
                 </li>
                 {session ? (
                   <>
@@ -74,6 +77,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
         {children}
+        <ToastHost />
         <UserCardPopover />
         <div id="footer">
           <div className="wrapper">
