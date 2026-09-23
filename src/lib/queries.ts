@@ -257,7 +257,7 @@ export async function getRankingPageOfUser(id: number, level: Level, order: Orde
 
 export async function getVideoList(opts: {
   level: VideoLevel | "all";
-  order: "id" | "time" | "3bvs" | "comments";
+  order: "id" | "time" | "3bvs" | "comments" | "clicks";
   author?: number;
   page: number;
 }): Promise<{ videos: VideoListItem[]; total: number; pageSize: number }> {
@@ -265,14 +265,15 @@ export async function getVideoList(opts: {
   let ids: number[] = [];
   let total = 0;
 
-  if (order === "comments") {
-    // 热评录像（移植 2008 版 Video_Hot：按评论数降序）
-    const where = { comments: { gt: 0 } };
+  if (order === "comments" || order === "clicks") {
+    // 热评录像（移植 2008 版 Video_Hot：按评论数降序）/ 热门录像（按点击数降序）
+    const field = order === "comments" ? "comments" : "clicks";
+    const where = { [field]: { gt: 0 } };
     total = await prisma.videoStat.count({ where });
     const rows = await prisma.videoStat.findMany({
       where,
       select: { id: true },
-      orderBy: { comments: "desc" },
+      orderBy: { [field]: "desc" },
       skip: (page - 1) * VIDEO_PAGESIZE,
       take: VIDEO_PAGESIZE,
     });

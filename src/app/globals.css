@@ -1909,3 +1909,14 @@ body #video_list_header .filters .tabs {
   clear: none;
   float: none;
 }
+
+/* 二轮（同日）：类别筛选（级别 tabs）与 h1 靠左成组，排序筛选独占右侧 */
+body #video_list_header .header_left {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0 16px;
+}
+body #video_list_header .header_left .tabs {
+  margin-bottom: 0;
+}

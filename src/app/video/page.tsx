@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 function parseLevel(v?: string): VideoLevel | "all" {
   return (VIDEO_LEVELS as readonly string[]).includes(v ?? "") ? (v as VideoLevel) : "all";
 }
-function parseOrder(v?: string): "id" | "time" | "3bvs" | "comments" {
-  return v === "time" || v === "3bvs" || v === "comments" ? v : "id";
+function parseOrder(v?: string): "id" | "time" | "3bvs" | "comments" | "clicks" {
+  return v === "time" || v === "3bvs" || v === "comments" || v === "clicks" ? v : "id";
 }
 
 export default async function VideoListPage({
@@ -30,10 +30,10 @@ export default async function VideoListPage({
 
   return (
     <div id="page" className="two_columns">
-      {/* 2026-09-24 张老师要求：title 与筛选标签移出卡片，h1 左、排序筛选居右同行 */}
+      {/* 2026-09-24 张老师要求：title 与类别筛选靠左组合，排序筛选居右（同卡片外一行） */}
       <div id="video_list_header">
-        <h1>{author ? `${LEVEL_NAMES[level]}录像` : "录像"}</h1>
-        <div className="filters">
+        <div className="header_left">
+          <h1>{author ? `${LEVEL_NAMES[level]}录像` : "录像"}</h1>
           <Tabs
             base="/video"
             params={{ level, order, author }}
@@ -46,6 +46,8 @@ export default async function VideoListPage({
               ["exp", "高级"],
             ]}
           />
+        </div>
+        <div className="filters">
           {level !== "all" && (
             <Tabs
               base="/video"
@@ -67,7 +69,8 @@ export default async function VideoListPage({
               current={order}
               options={[
                 ["id", "按上传时间排列"],
-                ["comments", "热评录像"],
+                ["comments", "按评论数排列"],
+                ["clicks", "按点击数排列"],
               ]}
             />
           )}
