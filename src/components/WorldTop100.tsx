@@ -1,15 +1,15 @@
-// 世界 TOP10（移植 2008 版 Ranking/Top10_World.asp；数据实时抓取 minesweepergame.com，1 天缓存）
-// 中国选手行高亮（2008 版 .Ours 语义：站内雷友）
+// 世界 TOP100（移植 2008 版 Ranking/Top10_World.asp；数据实时抓取 minesweepergame.com，1 天缓存）
+// 2026-09-23 晚从 TOP10 扩充到 TOP100（张老师要求）；中国选手行高亮（2008 版 .Ours 语义：站内雷友）
 
 import Link from "next/link";
-import { getWorldTop10, WORLD_RANKING_PAGE } from "@/lib/worldtop";
+import { getWorldTop100, WORLD_RANKING_PAGE } from "@/lib/worldtop";
 
-export async function WorldTop10() {
-  const data = await getWorldTop10();
+export async function WorldTop100() {
+  const data = await getWorldTop100();
   return (
     <div id="world_top" className="box">
       <div className="world_head">
-        <h2>世界TOP10</h2>
+        <h2>世界TOP100</h2>
         <Link href={WORLD_RANKING_PAGE} target="_blank" className="join" title="在 minesweepergame.com 注册并上传录像即可加入世界排行">
           如何加入
         </Link>

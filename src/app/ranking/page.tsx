@@ -9,7 +9,7 @@ import { parseRankingBy } from "@/lib/config";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingTable } from "@/components/RankingTable";
 import { OldPager } from "@/components/OldPager";
-import { WorldTop10 } from "@/components/WorldTop10";
+import { WorldTop100 } from "@/components/WorldTop100";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "排行榜 | 扫雷网" };
@@ -33,7 +33,7 @@ export default async function RankingPage({
     return (
       <div id="page" className="main ranking_old">
         <RankingNav current="world" />
-        <WorldTop10 />
+        <WorldTop100 />
       </div>
     );
   }
