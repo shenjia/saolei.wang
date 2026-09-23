@@ -516,40 +516,86 @@ body #header .nav li a {
   font-size: 13px;
   white-space: nowrap;
 }
+/* 旧版「查看信息」标题栏复刻 */
+.uc_popover .uc_head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #272822;
+  border: 1px solid #555550;
+  border-bottom: none;
+  padding: 5px 10px;
+  color: #fdc61a;
+  font-size: 13px;
+  font-weight: bold;
+}
+.uc_popover .uc_close {
+  background: none;
+  border: none;
+  color: #75715e;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.uc_popover .uc_close:hover {
+  color: #f8f8f2;
+}
+.uc_popover .user_card {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
 
-/* ---------- 个人信息卡片（2026-09-23 张老师要求，复刻旧版右上角卡片截图） ----------
-   首页登录后替换「每日一星」；BBS 每楼正文右侧显示作者卡片 */
+/* ---------- 个人信息卡片（2026-09-23 重设计：旧版卡片结构 + 新版首页编排） ----------
+   横排（默认，弹层/BBS）：左头像+按钮，右姓名/名次/纪录表/最近登录
+   竖排（.v，首页右栏窄容器）：头像+按钮居中在上，信息块通栏在下 */
 .user_card {
   background: #333330;
   border: 1px solid #555550;
-  padding: 8px;
-  width: 252px;
-  flex: none;
+  padding: 10px;
+  width: 100%;
 }
-.user_card .uc_top {
+.user_card .uc_body {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  align-items: flex-start;
+}
+.user_card .uc_left {
+  flex: none;
+  width: 72px;
 }
 .user_card .uc_avatar {
-  width: 82px;
-  height: 82px;
+  display: block;
+  width: 72px;
+  height: 72px;
   object-fit: cover;
   border: 1px solid #555550;
-  flex: none;
 }
-.user_card .uc_info {
+.user_card .uc_home {
+  display: block;
+  margin-top: 6px;
+  background: #49483e;
+  border: 1px solid #555550;
+  color: #f8f8f2;
+  text-align: center;
+  padding: 4px 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.user_card .uc_home:hover {
+  background: #555550;
+}
+.user_card .uc_right {
+  flex: 1;
   min-width: 0;
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.6;
   color: #a59f85;
-}
-.user_card .uc_info p {
-  white-space: nowrap;
 }
 .user_card .uc_name {
   color: #fdc61a;
   font-weight: bold;
-  white-space: normal !important;
+  line-height: 1.4;
 }
 .user_card .uc_id {
   color: #75715e;
@@ -580,31 +626,59 @@ body #header .nav li a {
 .user_card .uc_delta.new {
   color: #66d9ef;
 }
-.user_card .uc_score em {
+/* 四级纪录表：标签 / 时间(黄) | 3BVS(灰) 列对齐，参照旧版卡片 */
+.user_card .uc_scores {
+  margin-top: 4px;
+  width: 100%;
+  font-size: 12px;
+}
+.user_card .uc_scores th {
+  color: #a59f85;
+  font-weight: normal;
+  text-align: left;
+  padding: 1px 8px 1px 0;
+  white-space: nowrap;
+}
+.user_card .uc_scores td {
+  padding: 1px 0;
+  white-space: nowrap;
+}
+.user_card .uc_scores td.t {
+  color: #fdc61a;
   font-weight: bold;
 }
-.user_card .uc_score .c_beg { color: #999994; }
-.user_card .uc_score .c_int { color: #bbbbaf; }
-.user_card .uc_score .c_exp { color: #ddddcf; }
-.user_card .uc_score .c_sum { color: #fdc61a; }
-.user_card .uc_score span {
+.user_card .uc_scores td.sep {
+  color: #555550;
+  padding: 0 4px;
+}
+.user_card .uc_scores td.b {
   color: #75715e;
 }
 .user_card .uc_login {
+  margin-top: 4px;
   color: #75715e;
 }
-.user_card .uc_home {
-  display: block;
-  margin-top: 8px;
-  background: #49483e;
-  border: 1px solid #555550;
-  color: #f8f8f2;
-  text-align: center;
-  padding: 4px 0;
-  font-size: 13px;
+/* 竖排（窄容器）：头像+按钮居中在上，信息通栏在下 */
+.user_card.v .uc_body {
+  flex-direction: column;
+  align-items: stretch;
 }
-.user_card .uc_home:hover {
-  background: #555550;
+.user_card.v .uc_left {
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.user_card.v .uc_avatar {
+  width: 64px;
+  height: 64px;
+}
+.user_card.v .uc_home {
+  flex: 1;
+  margin-top: 0;
+}
+.user_card.v .uc_right {
+  margin-top: 8px;
 }
 /* BBS 楼层：正文左 + 作者卡片右 */
 .bbs_floor {
@@ -839,8 +913,9 @@ body .world_stats .stat_tag em {
 }
 
 /* ---------- 用户主页照片 + 大军衔标签（2026-09-23 张老师要求） ----------
-   09-23 晚二轮调整：右栏字体整体缩小，内容总高与左侧头像（160px）对齐；
-   军衔徽章改为绝对定位到卡片右上角，与头像顶部齐平（置顶展示）。 */
+   09-23 晚三轮调整：军区/战力排行从军衔徽章下移出，居下显示、与头像下边缘
+   对齐（top:190px 锚定 + translateY(-100%)，不随右栏内容高度浮动）；
+   文案改「战力全国第 N 名」消歧义；姓名/拼音字号微调放大。 */
 /* legacy 已有 #user_view .info .avatar{float:left;margin-right:15px}，这里补尺寸 */
 body #user_view .info {
   position: relative;
@@ -853,22 +928,23 @@ body #user_view .info .avatar {
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.04);
 }
-/* 姓名行缩小：原 h1 26px / h2 20px（行高 39px）过大 */
+/* 姓名行：09-23 晚张老师要求稍放大（18→20 / 14→16） */
 body #user_view .info h1 {
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 20px;
+  line-height: 28px;
   margin-bottom: 4px;
 }
 body #user_view .info h2 {
-  font-size: 14px;
-  line-height: 26px;
+  font-size: 16px;
+  line-height: 28px;
   margin-bottom: 4px;
 }
-/* 性别图标与拼音（h2 14px）同尺寸：覆盖 .big 的 20px 大图标 */
+/* 性别图标与拼音（h2 16px）同尺寸：用 20x20 精灵图缩放为 16px（两帧竖排 16x32） */
 body #user_view .info .gender.big {
-  width: 14px;
-  height: 14px;
-  background-image: url(/images/common/gender14x14.png?v=5);
+  width: 16px;
+  height: 16px;
+  background-image: url(/images/common/gender20x20.png?v=5);
+  background-size: 16px 32px;
 }
 /* info_body 保持 flex：nowrap 成绩表在头像右侧空间不足时会被整表挤到头像下方
    （鞠泽恩这类长内容实测触发），flex + table-layout:fixed 强制其贴右排列并省略号截断 */
@@ -904,6 +980,8 @@ body #user_view .info .score_3bvs em {
   font-size: 16px;
   line-height: 20px;
 }
+/* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示）；
+   下方的军区/战力排行已移出（见下方 .area_rank），此处仅剩徽章+称号 */
 body #user_view .info .rank_label {
   position: absolute;
   top: 30px; /* 与 .box 内边距一致 = 头像顶部齐平 */
@@ -919,29 +997,35 @@ body #user_view .info .rank_label .rank_name {
   font-weight: bold;
   line-height: 1.2;
 }
-/* 军衔下方：所在地区战力全国名次（点击进地区榜内页），上军区、下名次两行 */
-body #user_view .info .rank_label .area_rank {
+/* 军区/战力排行（09-23 晚张老师要求）：居下显示、与头像下边缘对齐——
+   top = .box 内边距 30 + 头像 160 = 190px 锚定，translateY(-100%) 贴齐下缘，
+   不受右侧内容高度变化影响 */
+body #user_view .info .area_rank {
+  position: absolute;
+  top: 190px;
+  right: 30px;
+  transform: translateY(-100%);
   display: block;
-  margin-top: 5px;
+  text-align: right;
   color: #888;
   line-height: 1.3;
   white-space: nowrap;
 }
-body #user_view .info .rank_label .area_rank:hover {
+body #user_view .info .area_rank:hover {
   text-decoration: underline;
   color: #aaa;
 }
-body #user_view .info .rank_label .area_rank .area_name {
+body #user_view .info .area_rank .area_name {
   display: block;
   font-size: 13px;
   font-weight: bold;
 }
-body #user_view .info .rank_label .area_rank .area_pos {
+body #user_view .info .area_rank .area_pos {
   display: block;
   margin-top: 1px;
   font-size: 11px;
 }
-body #user_view .info .rank_label .area_rank em {
+body #user_view .info .area_rank em {
   font-style: normal;
   font-weight: bold;
   color: #e6db74; /* Monokai 字符串色，与 legacy 主题一致 */
@@ -1571,4 +1655,9 @@ body #page.two_columns li.main {
 .ranking_table td.current,
 .ranking_table td.current a {
   color: #fdc61d;
+}
+
+/* 用户主页「进步历程」等级筛选 tabs（复用 ranking_tabs.side 尺寸，只调间距） */
+.ranking_tabs.news_tabs {
+  margin: 0 0 10px;
 }

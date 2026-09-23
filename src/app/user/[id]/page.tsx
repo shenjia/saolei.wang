@@ -1,7 +1,8 @@
 // 用户主页：成绩总表 + 最新动态 + 个人资料（移植 views/user/view）
 // 访问即计人气（移植 2008 版 Player_Info 的 Click 计数）
 // 2026-09-23 首个版块布局（张老师要求）：左侧正方形照片（OAuth 头像 →
-//   /images/player/{id}.jpg → 默认头像），军衔用大徽章标签放在记录信息右侧
+//   /images/player/{id}.jpg → 默认头像），军衔用大徽章标签放在右上角；
+//   军区/战力排行居下显示、与头像下边缘对齐，文案「战力全国第 N 名」消歧义
 
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -12,7 +13,7 @@ import { getSession } from "@/lib/auth";
 import { getUserDetail, getUserNews, getUserAreaRank } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
-import { LEVELS, LEVEL_NAMES, NEWS_PAGESIZE, TITLE_COLORS, USER_NEWS_NUMBER, areaDisplay, type Level } from "@/lib/config";
+import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, areaDisplay, type Level } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { HistoryBox } from "@/components/HistoryBox";
 import { RadarChart } from "@/components/RadarChart";
@@ -59,6 +60,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
 
   const { user, info, scores } = detail;
   const radar = await getRadarData(scores);
+
+  // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
+  const hasProfileFields =
+    !!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info]);
 
   // 照片：新用户 OAuth 头像 URL（http 开头）→ 老用户本地照片墙（avatar 是 0/1 标记位，
   // 照片实体为 /images/player/{id}.jpg，以文件存在为准）→ 默认头像
@@ -119,30 +124,31 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
                   {detail.title}
                 </span>
               </Link>
-              {/* 所在地区战力名次（地区榜按综合排行指数的全国排名）：上军区、下名次两行 */}
-              {areaRank && (
-                <Link
-                  href={`/area?name=${encodeURIComponent(areaRank.area)}`}
-                  target="_blank"
-                  className="area_rank"
-                  title="地区榜"
-                >
-                  <span className="area_name">{areaDisplay(areaRank.area)}军区</span>
-                  <span className="area_pos">
-                    战力第 <em>{areaRank.pos}</em> 名
-                  </span>
-                </Link>
-              )}
             </div>
           </div>
+        {/* 所在军区的全国战力名次（地区榜口径）：居下显示、与头像下边缘对齐（09-23 晚张老师要求）。
+            文案带「全国」消歧义——是军区在全国的排名，不是本人在军区内的排名 */}
+        {areaRank && (
+          <Link
+            href={`/area?name=${encodeURIComponent(areaRank.area)}`}
+            target="_blank"
+            className="area_rank"
+            title="地区榜"
+          >
+            <span className="area_name">{areaDisplay(areaRank.area)}军区</span>
+            <span className="area_pos">
+              战力全国第 <em>{areaRank.pos}</em> 名
+            </span>
+          </Link>
+        )}
         </div>
         {news.length > 0 && (
           <div id="news" className="box">
-            <h2>最新动态</h2>
+            <h2>进步历程</h2>
             <NewsFeed
               initial={feed}
               userId={userId}
-              pageSize={NEWS_PAGESIZE}
+              pageSize={USER_NEWS_NUMBER}
               initialHasMore={news.length === USER_NEWS_NUMBER}
             />
           </div>
@@ -154,7 +160,8 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
           <h2>实力</h2>
           <RadarChart data={radar} />
         </div>
-        <div className="profile box">
+        {hasProfileFields && (
+          <div className="profile box">
           <h2>个人资料</h2>
           <span className="id">
             ID.<em>{user.id}</em>
@@ -174,7 +181,8 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
         {detail.stat && (
           <div className="box">
             <h2>统计</h2>
