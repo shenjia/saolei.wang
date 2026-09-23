@@ -70,6 +70,9 @@ export async function RankingTable({
   deltas?: Map<number, number | null>;
 }) {
   const showDelta = by === "sum_time" && deltas !== undefined;
+  // 高亮列（2026-09-23 张老师指正）：高亮落在「时间记录」上——按 3BV/s 排序时高亮同级别的时间列，
+  // 3BVS 成绩本身永远不高亮（如 by=beg_3bvs → 高亮 beg_time 列）
+  const hlCol: RankingBy = by.endsWith("_3bvs") ? (by.replace("_3bvs", "_time") as RankingBy) : by;
   // 军衔按主榜总计时间评定（NF 榜用 overallSumTime 回填；distribution 阈值首次调用后缓存）
   const titles = await Promise.all(rows.map((u) => assessTitle(u.overallSumTime ?? u.scores.sum_time)));
   return (
@@ -115,7 +118,7 @@ export async function RankingTable({
                 <TitleBadge title={titles[i]} link />
               </td>
               {COLS.map((c) => (
-                <ScoreCell key={c.by} row={u} col={c} current={c.by === by} />
+                <ScoreCell key={c.by} row={u} col={c} current={c.by === hlCol} />
               ))}
               {showDelta && (
                 <td className="delta">
