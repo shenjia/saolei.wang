@@ -85,14 +85,22 @@ export default async function BbsPage({
             {posts.map((p) => (
               <tr key={p.id}>
                 <td style={{ width: 60 }}>
-                  {p.isTop && <em className="bbs_flag">置顶</em>}
-                  {p.isNice && <em className="bbs_flag nice">精华</em>}
                   {board === undefined && <span className="level">【{BBS_BOARD_NAMES[p.board]}】</span>}
                 </td>
                 <td>
                   <Link href={`/bbs/${p.id}`} target="_blank">
                     {p.title}
                   </Link>
+                  {p.isNice && (
+                    <span className="bbs_star" title="精华">
+                      ★
+                    </span>
+                  )}
+                  {p.isTop && (
+                    <span className="bbs_top" title="置顶">
+                      ▲
+                    </span>
+                  )}
                   {p.isLocked && <span className="bbs_flag locked">锁</span>}
                 </td>
                 <td className="user" style={{ width: 100 }}>

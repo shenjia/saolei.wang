@@ -393,8 +393,16 @@ body #header .nav li a {
   font-size: 12px;
   margin-right: 4px;
 }
-.bbs_flag.nice {
-  color: #e6db74;
+/* 精华=黄金星星，置顶=黄色向上箭头（跟在标题后） */
+.bbs_star {
+  color: #f5c518;
+  font-size: 14px;
+  margin-left: 5px;
+}
+.bbs_top {
+  color: #ffee00;
+  font-size: 13px;
+  margin-left: 5px;
 }
 .bbs_flag.locked {
   color: #75715e;

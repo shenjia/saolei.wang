@@ -32,9 +32,17 @@ export default async function BbsTitlePage({
     <div id="page" className="main">
       <div className="box bbs_post">
         <h1>
-          {post.isTop && <em className="bbs_flag">置顶</em>}
-          {post.isNice && <em className="bbs_flag nice">精华</em>}【{BBS_BOARD_NAMES[post.board]}】
-          {post.title}
+          【{BBS_BOARD_NAMES[post.board]}】{post.title}
+          {post.isNice && (
+            <span className="bbs_star" title="精华">
+              ★
+            </span>
+          )}
+          {post.isTop && (
+            <span className="bbs_top" title="置顶">
+              ▲
+            </span>
+          )}
         </h1>
         <p className="bbs_meta">
           {post.author && (

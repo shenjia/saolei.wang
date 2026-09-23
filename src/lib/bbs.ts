@@ -128,12 +128,12 @@ export async function getPostList(opts: {
     ...(nice ? { isNice: true } : {}),
   };
   const total = await prisma.bbsPost.count({ where });
-  // 置顶帖永远在最前（移植 2008 版 High 语义）
+  // 2008 版置顶(IsHigh)不提前排序，只加标记（BBS_All 存储过程仅按时间列排序）
   const orderField =
     order === "post" ? "id" : order === "clicks" ? "clicks" : order === "replies" ? "replies" : "lastReplyTime";
   const rows = await prisma.bbsPost.findMany({
     where,
-    orderBy: [{ isTop: "desc" }, { [orderField]: "desc" }],
+    orderBy: [{ [orderField]: "desc" }],
     skip: (page - 1) * BBS_PAGESIZE,
     take: BBS_PAGESIZE,
   });
