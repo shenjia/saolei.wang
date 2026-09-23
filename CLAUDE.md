@@ -95,4 +95,4 @@
 
 - git 操作用 `xgit-saolei`（/usr/local/bin，规避受保护路径弹窗）
 - Node/构建类命令前置 `env -u NODE_OPTIONS`（规避安全删除护栏）
-- 本地提交原子化；**提交即 push**（网站未上线期间默认，2026-09-24 张老师指令；remote=git@github.com:shenjia/saolei.wang.git 私有仓，上线后如需恢复审批制再改）
+- 本地提交原子化；**提交即 push**（网站未上线期间默认，2026-09-24 张老师指令；remote=git@github.com:shenjia/saolei.wang.git **公开仓**，历史已做敏感信息清洗，凭据一律走 env；上线后如需恢复审批制再改）
