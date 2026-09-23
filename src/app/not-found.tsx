@@ -35,7 +35,7 @@ export default function NotFound() {
               {boardRows().map((row, y) => (
                 <tr key={y}>
                   {[...row].map((c, x) => (
-                    <td key={x} className={c === "*" ? "bm" : "b0"} />
+                    <td key={x} className={c === "*" ? "bu" : "b0"} />
                   ))}
                 </tr>
               ))}

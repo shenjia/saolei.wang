@@ -2216,3 +2216,9 @@ body #video_list_header .header_left .tabs {
 #not_found_box .nf_actions .button {
   margin: 0 8px;
 }
+
+/* 404 页专用：凸起格叠黑雷（block16x16.png 里没有这种组合，由 bm 雷形 + b0 凸起底合成，2026-09-24） */
+.board.size16 td.bu,
+.board.zoom td.bu {
+  background-image: url(/images/common/block16x16-mine-up.png);
+}
