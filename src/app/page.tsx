@@ -55,7 +55,28 @@ export default async function HomePage() {
         ) : (
           <DailyStar />
         )}
-        <BbsLatest />
+        <div id="top" className="box">
+          <Link href="/ranking" target="_blank">
+            <h2>十大元帅</h2>
+          </Link>
+          <table cellPadding={0} cellSpacing={0} className="table full">
+            <tbody>
+              {top.map((u, i) => (
+                <tr key={u.id}>
+                  <td className="rank">
+                    <em>{i + 1}</em>
+                  </td>
+                  <td className="user">
+                    <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
+                  </td>
+                  <td>
+                    <TitleBadge title={u.title} link />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div id="newbie" className="box">
           <h2>入伍新兵</h2>
           <table cellPadding={0} cellSpacing={0} className="table full">
@@ -80,28 +101,7 @@ export default async function HomePage() {
             </tbody>
           </table>
         </div>
-        <div id="top" className="box">
-          <Link href="/ranking" target="_blank">
-            <h2>十大元帅</h2>
-          </Link>
-          <table cellPadding={0} cellSpacing={0} className="table full">
-            <tbody>
-              {top.map((u, i) => (
-                <tr key={u.id}>
-                  <td className="rank">
-                    <em>{i + 1}</em>
-                  </td>
-                  <td className="user">
-                    <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
-                  </td>
-                  <td>
-                    <TitleBadge title={u.title} link />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <BbsLatest />
         <SiteStats />
       </li>
     </ul>
