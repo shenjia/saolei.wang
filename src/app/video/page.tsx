@@ -30,7 +30,8 @@ export default async function VideoListPage({
 
   return (
     <div id="page" className="two_columns">
-      <div id="video_list_header" className="box">
+      {/* 2026-09-24 张老师要求：title 与筛选标签移出卡片，h1 左、排序筛选居右同行 */}
+      <div id="video_list_header">
         <h1>{author ? `${LEVEL_NAMES[level]}录像` : "录像"}</h1>
         <div className="filters">
           <Tabs

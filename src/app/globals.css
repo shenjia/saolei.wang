@@ -1839,3 +1839,37 @@ body #page.two_columns li.main {
 .ranking_tabs.news_tabs {
   margin: 0 0 10px;
 }
+
+/* ---------- 录像列表页头：移出卡片，h1 左 + 筛选 tabs 居右同行（2026-09-24 张老师要求） ----------
+   对齐排行页 ranking_nav 的编排语言（同一天定稿）；
+   body 前缀提权压 legacy：#video_list_header{padding:20px 30px} / h1{float:left;margin-bottom:10px}
+   / .filters{overflow:hidden;clear:both} 与 .filters .tabs{clear:left}（后者会把 tabs 挤到下一行） */
+body #video_list_header {
+  padding: 0;
+  margin: 16px 8px 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+body #video_list_header h1 {
+  float: none;
+  margin: 0;
+  /* 与右侧 tabs（下划线坐在底线上）视觉居中对齐：h1 行高 39px，tabs 文字行 35px，提 2px */
+  line-height: 39px;
+}
+body #video_list_header .filters {
+  float: none;
+  clear: none;
+  overflow: visible;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  column-gap: 24px;
+  row-gap: 8px;
+}
+body #video_list_header .filters .tabs {
+  clear: none;
+  float: none;
+}

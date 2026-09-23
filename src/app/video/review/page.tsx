@@ -31,7 +31,8 @@ export default async function VideoReviewPage({
 
   return (
     <div id="page" className="two_columns">
-      <div id="video_list_header" className="box">
+      {/* 2026-09-24 张老师要求：title 与筛选标签移出卡片、同行排列（h1 左、筛选居右） */}
+      <div id="video_list_header">
         <h1>审核</h1>
         <div className="filters">
           <Tabs
