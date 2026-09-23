@@ -1,5 +1,5 @@
 // 404 页（2026-09-24 张老师要求）：雷区摆出「404」像素字 + Monokai 暗色卡片，
-// 视觉元素全部复用本站雷区图块（block16x16.png：b0 未翻格 / bb 黑雷）与 legacy .button 按钮
+// 视觉元素全部复用本站雷区图块（block16x16.png：b0 未翻格 / bm 黑雷格）与 legacy .button 按钮
 
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -35,7 +35,7 @@ export default function NotFound() {
               {boardRows().map((row, y) => (
                 <tr key={y}>
                   {[...row].map((c, x) => (
-                    <td key={x} className={c === "*" ? "bb" : "b0"} />
+                    <td key={x} className={c === "*" ? "bm" : "b0"} />
                   ))}
                 </tr>
               ))}
