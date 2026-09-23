@@ -11,6 +11,39 @@ function dateStr(d = new Date()): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/**
+ * 排行升降（移植 2008 版 Ranking_All 的 Old_Rank 对比，新版用每日快照）：
+ * 返回 Map<userId, delta>——delta 为正=进步名次数，负=下降，0=持平，null=今日新上榜（昨日无快照）。
+ * 昨日快照整体缺失（新站首日）时全部按 0 持平处理。调用前需先 ensureTodaySnapshot()。
+ */
+export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, number | null>> {
+  const map = new Map<number, number | null>();
+  if (!ids.length) return map;
+  const today = dateStr();
+  const yesterday = dateStr(new Date(Date.now() - 86400_000));
+  const yesterdayCount = await prisma.rankSnapshot.count({ where: { date: yesterday } });
+  if (!yesterdayCount) {
+    for (const id of ids) map.set(id, 0);
+    return map;
+  }
+  const rows = await prisma.rankSnapshot.findMany({
+    where: { user: { in: ids.map(BigInt) }, date: { in: [today, yesterday] } },
+    select: { user: true, date: true, sumTimeRank: true },
+  });
+  const tMap = new Map<number, number>();
+  const yMap = new Map<number, number>();
+  for (const r of rows) {
+    if (r.date === today) tMap.set(N(r.user), r.sumTimeRank);
+    else yMap.set(N(r.user), r.sumTimeRank);
+  }
+  for (const id of ids) {
+    const t = tMap.get(id);
+    const y = yMap.get(id);
+    map.set(id, t && y ? y - t : null);
+  }
+  return map;
+}
+
 /** 惰性快照：当天首次调用时把全量排行写入 rank_snapshot（每日一次） */
 export async function ensureTodaySnapshot(): Promise<void> {
   const today = dateStr();

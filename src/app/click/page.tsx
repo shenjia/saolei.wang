@@ -3,6 +3,7 @@
 import { getClickRanking } from "@/lib/star";
 import { AvatarCell } from "@/components/Cells";
 import { Pager } from "@/components/Pager";
+import { RankingNav } from "@/components/RankingNav";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "人气榜 | 扫雷网" };
@@ -18,6 +19,7 @@ export default async function ClickRankingPage({
 
   return (
     <div id="page" className="main">
+      <RankingNav current="click" />
       <div id="ranking_header" className="box">
         <h1>人气榜</h1>
       </div>

@@ -18,8 +18,11 @@ import {
   USER_ROLE,
   VIDEO_PAGESIZE,
   VIDEO_STATUS,
+  byLevelOrder,
+  RANKING_BYS,
   type Level,
   type Order,
+  type RankingBy,
   type VideoLevel,
 } from "./config";
 
@@ -446,7 +449,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 export interface UserDetail {
   user: UserBrief & { area: string; avatar: string; createTime: number };
   info: { nickname: string; selfIntro: string | null; interest: string | null; qq: string; mouse: string; pad: string } | null;
-  stat: { loginTimes: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
+  stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
   title: string;
 }
@@ -493,6 +496,7 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
     stat: stat
       ? {
           loginTimes: N(stat.loginTimes),
+          loginTime: N(stat.loginTime),
           points: stat.points,
           begVideos: stat.begVideos,
           intVideos: stat.intVideos,
@@ -610,25 +614,60 @@ export async function getSiteStats(): Promise<SiteStats> {
 
 // ---------- 雷界生态（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
-/** 各军衔人数（按 distribution 阈值对 sum_time 分桶） */
+/** 雷界页顶部统计标签（2026-09-23 张老师要求：滚动窗口——新人 30 天内注册、今日录像 24 小时内上传） */
+export interface WorldStats {
+  rankedTotal: number;
+  newbie30d: number;
+  videoTotal: number;
+  video24h: number;
+  bbsTopics: number;
+}
+
+export async function getWorldStats(): Promise<WorldStats> {
+  const now = Math.floor(Date.now() / 1000);
+  const d30 = BigInt(now - 30 * 86400);
+  const h24 = BigInt(now - 24 * 3600);
+  const [rankedTotal, newbie30d, videoTotal, video24h, bbsTopics] = await Promise.all([
+    prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
+    prisma.user.count({ where: { createTime: { gte: d30 } } }),
+    prisma.video.count(),
+    prisma.video.count({ where: { createTime: { gte: h24 } } }),
+    prisma.bbsPost.count({ where: { status: 0 } }),
+  ]);
+  return { rankedTotal, newbie30d, videoTotal, video24h, bbsTopics };
+}
+
+/** 各军衔人数（按 distribution 阈值对 sum_time 分桶：第 i 档 = (thresholds[i-1], thresholds[i]]） */
 export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
   const dist = await getTitleDistribution();
   if (!dist) return [];
   const thresholds = dist.thresholds;
-  const counts: number[] = [];
-  for (let i = 0; i < TITLES.length; i++) {
-    const upper = thresholds[i]; // 该军衔的最好成绩线（含）
-    const lower = thresholds[i + 1]; // 下一军衔线（不含）
-    const where = {
-      sumTime: {
-        gt: 0,
-        ...(upper !== undefined ? { lte: upper } : {}),
-        ...(lower !== undefined ? { gt: lower } : {}),
-      },
-    };
-    counts.push(await prisma.userScores.count({ where }));
-  }
-  return TITLES.map((t, i) => ({ title: t, count: counts[i] ?? 0 }));
+  const counts = await Promise.all(
+    TITLES.map((_, i) => {
+      const lower = i > 0 ? thresholds[i - 1] : undefined; // 上一军衔线（不含）
+      const upper = i < TITLES.length - 1 ? thresholds[i] : undefined; // 本军衔线（含）；末档无上界
+      return prisma.userScores.count({
+        where: {
+          sumTime: {
+            gt: 0,
+            ...(lower !== undefined ? { gt: lower } : {}),
+            ...(upper !== undefined ? { lte: upper } : {}),
+          },
+        },
+      });
+    })
+  );
+  const result: { title: string; count: number }[] = TITLES.map((t, i) => ({
+    title: t,
+    count: counts[i] ?? 0,
+  }));
+  // 预备役：注册但没有任何总成绩的玩家（2026-09-23 新增，张老师要求）
+  const [totalUsers, ranked] = await Promise.all([
+    prisma.user.count(),
+    prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
+  ]);
+  result.push({ title: "预备役", count: Math.max(0, totalUsers - ranked) });
+  return result;
 }
 
 /** 神界全员（移植 2008 版 World/Hero.asp：大元帅/元帅/大将 = 编制前 41 人） */
@@ -687,4 +726,155 @@ export async function getRandomUserId(): Promise<number | null> {
     take: 1,
   });
   return rows.length ? N(rows[0].id) : null;
+}
+
+// ---------- 排行榜（2008 编排：一行展示全部级别成绩，2026-09-23 张老师要求） ----------
+
+export interface RankingRow extends UserBrief {
+  rank: number;
+  /** 8 列成绩原始存储值（时间=ms，3bvs=×1000），0=无成绩 */
+  scores: Record<string, number>;
+  /** 各级别成绩对应录像 id（sum 无录像=0） */
+  videos: Record<string, number>;
+}
+
+/**
+ * 全级别排行表（移植 2008 版 Ranking_All：按 By 列排序，其余列随行带出）
+ * @param by   排序列（beg_time…sum_3bvs）
+ * @param nf   true 走 NF（无标雷）成绩表
+ * @param area 限定地区（地区榜内页用）
+ */
+export async function getRankingTable(
+  by: RankingBy,
+  nf: boolean,
+  page: number,
+  area?: string
+): Promise<{ rows: RankingRow[]; total: number; pageSize: number }> {
+  const { level, order } = byLevelOrder(by);
+  const field = SCORE_FIELD(level, order);
+  const table = userScoresTable(nf);
+  let idsWhere: Record<string, unknown> = { [field]: { gt: 0 } };
+  if (area) {
+    const areaUsers = await prisma.user.findMany({ where: { area }, select: { id: true } });
+    idsWhere = { ...idsWhere, id: { in: areaUsers.map((u) => u.id) } };
+  }
+  const total = await table.count({ where: idsWhere });
+  const rows = await table.findMany({
+    where: idsWhere,
+    orderBy: { [field]: ORDER_DIRECTION[order] },
+    skip: (page - 1) * RANKING_PAGESIZE,
+    take: RANKING_PAGESIZE,
+  });
+  const authors = await usersByIds(rows.map((r) => N(r.id)));
+  const result: RankingRow[] = rows.map((r, i) => {
+    const rec = r as unknown as Record<string, bigint | number | null>;
+    const brief = authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 };
+    const scores: Record<string, number> = {};
+    const videos: Record<string, number> = {};
+    for (const b of RANKING_BYS) {
+      const lo = byLevelOrder(b);
+      scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
+      videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
+    }
+    return { ...brief, rank: (page - 1) * RANKING_PAGESIZE + i + 1, scores, videos };
+  });
+  return { rows: result, total, pageSize: RANKING_PAGESIZE };
+}
+
+/** 雷界排行（总计时间）第一人 id：旧版称号「雷帝」判定用 */
+export async function getFirstRankedUserId(nf = false): Promise<number | null> {
+  const table = userScoresTable(nf);
+  const rows = await table.findMany({
+    where: { sumTime: { gt: 0 } },
+    select: { id: true },
+    orderBy: { sumTime: "asc" },
+    take: 1,
+  });
+  return rows.length ? N(rows[0].id) : null;
+}
+
+/** 按中文姓名精确查找用户 id（「我在哪里」查找定位，移植 2008 版 Goto） */
+export async function findUserByName(name: string): Promise<number | null> {
+  const u = await prisma.user.findFirst({ where: { chineseName: name }, select: { id: true } });
+  return u ? N(u.id) : null;
+}
+
+/** 用户总计时间名次（每日一星卡「第 N 位」） */
+export async function getUserSumRank(id: number): Promise<number> {
+  const row = await prisma.userScores.findUnique({ where: { id: BigInt(id) }, select: { sumTime: true } });
+  if (!row?.sumTime) return 0;
+  const better = await prisma.userScores.count({ where: { sumTime: { lt: row.sumTime, gt: 0 } } });
+  return better + 1;
+}
+
+// ---------- 地区榜（移植 2008 版 Ranking_Area + Ranking_Area_Refresh 公式实时计算） ----------
+// Area_Power = Σ(全国有成绩人数 − 个人名次)；Area_Players = 人数 + 0.0001×平均名次（排序微调）
+
+export type AreaOrder = "power" | "players" | "avg" | "best";
+
+export interface AreaRow {
+  area: string;
+  players: number;
+  avgRank: number;
+  bestRank: number;
+  power: number;
+  bestId: number;
+  bestName: string;
+  bestExpTime: number;
+  bestSex: number;
+}
+
+export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRow[]> {
+  const orderBy =
+    order === "players"
+      ? "players + 0.0001 * avg_rank DESC"
+      : order === "avg"
+        ? "avg_rank ASC"
+        : order === "best"
+          ? "best_rank ASC"
+          : "power DESC";
+  const rows = await prisma.$queryRawUnsafe<
+    {
+      area: string;
+      players: bigint;
+      avg_rank: number;
+      best_rank: bigint;
+      power: bigint;
+      best_id: bigint;
+      best_name: string;
+      best_exp_time: number;
+      best_sex: number;
+    }[]
+  >(
+    `WITH ranked AS (
+        SELECT s.id, u.area,
+              ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) rk,
+              COUNT(*) OVER () total
+       FROM user_scores s JOIN user u ON u.id = s.id
+       WHERE s.sum_time > 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
+     ),
+     agg AS (
+       SELECT area, COUNT(*) players, ROUND(AVG(rk)) avg_rank, MIN(rk) best_rank,
+              SUM(total - rk) power
+       FROM ranked GROUP BY area
+     )
+     SELECT a.area, a.players, a.avg_rank, a.best_rank, a.power,
+            r.id best_id, u.chinese_name best_name, s.exp_time best_exp_time, u.sex best_sex
+     FROM agg a
+     JOIN ranked r ON r.area = a.area AND r.rk = a.best_rank
+     JOIN user u ON u.id = r.id
+     JOIN user_scores s ON s.id = r.id
+     ORDER BY ${orderBy}`,
+  );
+  return rows.map((r) => ({
+    area: r.area,
+    players: N(r.players),
+    avgRank: Number(r.avg_rank), // ROUND(AVG()) 返回 Decimal，React 不能直接渲染
+    bestRank: N(r.best_rank),
+    power: N(r.power),
+    bestId: N(r.best_id),
+    bestName: r.best_name,
+    bestExpTime: r.best_exp_time,
+    bestSex: r.best_sex,
+  }));
 }

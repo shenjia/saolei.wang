@@ -26,6 +26,26 @@ export const ORDER_NAMES: Record<Order, string> = {
 };
 
 export const RANKING_PAGESIZE = 20;
+
+// ---------- 排行榜排序列（2008 版 By 参数：级别×成绩类型合成一列） ----------
+export const RANKING_BYS = [
+  "beg_time", "beg_3bvs",
+  "int_time", "int_3bvs",
+  "exp_time", "exp_3bvs",
+  "sum_time", "sum_3bvs",
+] as const;
+export type RankingBy = (typeof RANKING_BYS)[number];
+
+export function parseRankingBy(v?: string): RankingBy {
+  return (RANKING_BYS as readonly string[]).includes(v ?? "") ? (v as RankingBy) : "sum_time";
+}
+
+/** by 拆成级别 + 成绩类型（复用 SCORE_FIELD 命名规则） */
+export function byLevelOrder(by: RankingBy): { level: Level; order: Order } {
+  const [level, order] = by.split("_") as [Level, Order];
+  return { level, order };
+}
+
 export const VIDEO_PAGESIZE = 20;
 export const HOME_TOP_NUMBER = 10;
 export const HOME_NEWBIE_NUMBER = 5;
@@ -60,7 +80,26 @@ export const TITLE_CLASSES: Record<string, string> = {
   上尉: "captain", 中尉: "captain", 少尉: "captain",
   上士: "sergeant", 中士: "sergeant", 下士: "sergeant",
   上等兵: "private", 列兵: "private",
+  // 预备役：未加入排行的玩家（2026-09-23 新增，用 legacy 的 new 灰色）
+  预备役: "new",
 };
+
+// 军衔配色，与全站文字色一致（用于分布图条形等场景）
+// 注意：grand 按 2026-09-23 张老师要求用元帅同款金黄 #e6db74（globals.css 已覆盖 legacy 深红 #c60d46）
+export const TITLE_CLASS_COLORS: Record<string, string> = {
+  grand: "#e6db74",
+  marshal: "#e6db74",
+  general: "#f79646",
+  colonel: "#e26b0a",
+  captain: "#9bbb59",
+  sergeant: "#b1b1a4",
+  private: "#939387",
+  new: "#636359",
+};
+
+export const TITLE_COLORS: Record<string, string> = Object.fromEntries(
+  Object.entries(TITLE_CLASSES).map(([t, c]) => [t, TITLE_CLASS_COLORS[c] ?? "#668cba"])
+);
 
 // 军衔评定使用 总计时间（sum_time）
 export const TITLE_LEVEL: Level = "sum";
@@ -89,6 +128,25 @@ export const TITLE_DISTRIBUTION: Record<string, number> = {
   上等兵: 0.88,
   列兵: 1.0,
 };
+
+// ---------- 旧版称号（2008 版，按高级纪录评定，军衔页旁列参考） ----------
+// 颜色照搬 saolei.net-2008/asp/Models/Css/2008.css 的同名 class
+
+export const OLD_TITLES: { name: string; color: string; condition: string }[] = [
+  { name: "雷帝", color: "#ffff00", condition: "雷界排行第一人" },
+  { name: "雷圣", color: "#FFCC00", condition: "高级纪录 50 秒以内" },
+  { name: "雷神", color: "#66CC00", condition: "高级纪录 50～60 秒（GG）" },
+  { name: "雷仙", color: "#FFCCCC", condition: "高级纪录 50～60 秒（mm）" },
+  { name: "状元", color: "#ffffff", condition: "高级纪录 60～61 秒" },
+  { name: "榜眼", color: "#ffffff", condition: "高级纪录 61～63 秒" },
+  { name: "探花", color: "#ffffff", condition: "高级纪录 63～66 秒" },
+  { name: "进士", color: "#e0e0e0", condition: "高级纪录 66～70 秒" },
+  { name: "举人", color: "#cccccc", condition: "高级纪录 70～80 秒" },
+  { name: "秀才", color: "#aaaaaa", condition: "高级纪录 80～90 秒" },
+  { name: "书生", color: "#888888", condition: "高级纪录 90～100 秒" },
+  { name: "童生", color: "#777777", condition: "高级纪录 100 秒以上" },
+  { name: "布衣", color: "#666666", condition: "未加入排行" },
+];
 
 // ---------- 评级（移植 GradeConfig） ----------
 

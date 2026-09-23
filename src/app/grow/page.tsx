@@ -3,6 +3,7 @@
 import { getGrowRanking } from "@/lib/ranksnap";
 import { AvatarCell } from "@/components/Cells";
 import { Pager } from "@/components/Pager";
+import { RankingNav } from "@/components/RankingNav";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "进步榜 | 扫雷网" };
@@ -18,6 +19,7 @@ export default async function GrowPage({
 
   return (
     <div id="page" className="main">
+      <RankingNav current="grow" />
       <div id="ranking_header" className="box">
         <h1>进步榜</h1>
         <p className="text">按总计时间排名的日升降幅度排列（每日零点后首个访问生成快照）</p>
