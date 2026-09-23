@@ -1331,10 +1331,13 @@ body #page.ranking_old.main .ranking_nav {
   color: #939387;
 }
 
-/* 定位落地行：底色持续高亮（压过 tr:hover 半透明层；比 hover 白 5% 更醒目），
+/* 定位落地行：与 hover 同款底色（legacy .table tr:hover/#49483e，不再更淡），
    玩家名变黄（搜索命中即「找到了」的确认信号） */
 .ranking_table tr.hl {
-  background: #3e3d32;
+  background: #49483e;
+}
+.ranking_table tr.hl:hover {
+  background: #49483e; /* hover 不叠加变色，保持稳定 */
 }
 .ranking_table tr.hl td.name a {
   color: #fdc61d;
