@@ -12,8 +12,9 @@ export async function GET(req: Request) {
   const boardRaw = parseInt(p.get("board") ?? "", 10);
   const board = BBS_BOARD_NAMES[boardRaw] !== undefined ? boardRaw : undefined;
   const orderRaw = p.get("order") ?? "";
-  const order: BbsOrder = ORDERS.includes(orderRaw as BbsOrder) ? (orderRaw as BbsOrder) : "reply";
-  const nice = p.get("nice") === "1";
+  // order=nice = 只看精华（固定更新时间排序，2026-09-24 四轮）；?nice=1 旧深链兼容
+  const nice = p.get("nice") === "1" || orderRaw === "nice";
+  const order: BbsOrder = !nice && ORDERS.includes(orderRaw as BbsOrder) ? (orderRaw as BbsOrder) : "reply";
 
   const { posts, hasMore } = await getPostPage({ board, order, nice: nice || undefined, page });
   return NextResponse.json({ posts, hasMore });

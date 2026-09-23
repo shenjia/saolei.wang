@@ -4,6 +4,7 @@
 // 2026-09-24 三轮：去掉「全部主题/只看精华」筛选与「点击数/回复数」排序；
 //   BbsFeed 加 key=筛选串——App Router 软导航复用组件实例时 useState(initial) 不重置，
 //   导致筛选 URL 变了但列表不刷新（实测复现），key 变化强制重挂载
+// 2026-09-24 四轮：「只看精华」回归，作为排序组第三项（选中=nice=1+固定更新时间排序，与 order 互斥）
 
 import Link from "next/link";
 import { BBS_BOARDS, BBS_BOARD_NAMES, BBS_ORDERS, getPostPage, type BbsOrder } from "@/lib/bbs";
@@ -27,17 +28,20 @@ export default async function BbsPage({
   const board = sp.board !== undefined && BBS_BOARD_NAMES[parseInt(sp.board, 10)] !== undefined
     ? parseInt(sp.board, 10)
     : undefined;
-  const order = parseOrder(sp.order);
+  // 2026-09-24 四轮：「只看精华」并入右侧排序组为第三项（order=nice），
+  //   选中即按更新时间排序只显示精华贴；?nice=1 旧深链兼容
+  const nice = sp.nice === "1" || sp.order === "nice";
+  const order: BbsOrder = nice ? "reply" : parseOrder(sp.order);
 
   const [{ posts, hasMore }, session] = await Promise.all([
-    getPostPage({ board, order, page: 1 }),
+    getPostPage({ board, order, nice: nice || undefined, page: 1 }),
     getSession(),
   ]);
   const query: Record<string, string> = {
     ...(board !== undefined ? { board: String(board) } : {}),
-    order,
+    order: nice ? "nice" : order,
   };
-  const feedKey = `${board ?? "all"}-${order}`;
+  const feedKey = `${board ?? "all"}-${nice ? "nice" : order}`;
 
   return (
     <div id="page" className="main">
@@ -61,8 +65,12 @@ export default async function BbsPage({
               base="/bbs"
               params={query}
               name="order"
-              current={order}
-              options={Object.entries(BBS_ORDERS) as [string, string][]}
+              current={nice ? "nice" : order}
+              options={[
+                ["reply", "更新时间"],
+                ["post", "发布时间"],
+                ["nice", "只看精华"],
+              ]}
             />
           </div>
           {session && (
