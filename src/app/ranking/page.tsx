@@ -69,8 +69,10 @@ export default async function RankingPage({
 
   return (
     <div id="page" className="main ranking_old">
-      <h1 className="page_title">排行榜</h1>
-      <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
+      <div className="page_head">
+        <h1 className="page_title">排行榜</h1>
+        <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
+      </div>
       <div className="box ranking_box">
         <RankingFeed
           initial={titled}
