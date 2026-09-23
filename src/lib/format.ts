@@ -73,7 +73,7 @@ export function timeOpposite(
   if (dayDis < thisYearDays) yerDis = 0;
 
   if (yerDis) return yerDis + "年" + direction;
-  if (monDis) return monDis + "个月" + direction;
+  if (monDis) return monDis + "月" + direction;
   if (wekDis) return wekDis + "周" + direction;
   if (dayDis) return dayDis + "天" + direction;
   if (horDis) return horDis + "小时" + direction;
@@ -82,3 +82,5 @@ export function timeOpposite(
 }
 
 export const TIME_NEVER = NEVER;
+/** 一年（秒）：动态列表日期口径——一年内显示相对时间，超过一年显示日期（2026-09-23 张老师要求） */
+export const TIME_YEAR = 365 * SECONDS_PER_DAY;
