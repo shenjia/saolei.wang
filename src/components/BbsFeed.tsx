@@ -41,7 +41,7 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
         )}
       </td>
       <td>
-        <em>{p.replies}</em>/{p.clicks}
+        <em>{p.replies}</em> / {p.clicks}
       </td>
       <td className="time">{timeOpposite(p.lastReplyTime, TIME_NEVER)}</td>
     </tr>

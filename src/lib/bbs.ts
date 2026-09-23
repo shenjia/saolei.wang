@@ -24,12 +24,11 @@ export const BBS_REPLY_PAGESIZE = 10;
 export const BBS_TITLE_LIMIT = 100;
 export const BBS_CONTENT_LIMIT = 5000;
 
-// 排序文案（2026-09-24 张老师要求：去「按」前缀；「回复时间」改「更新时间」）
+// 排序文案（2026-09-24 张老师要求：去「按」前缀；「回复时间」改「更新时间」；
+// 同日三轮：去掉「点击数/回复数」两种排序，只留时间类）
 export const BBS_ORDERS = {
   reply: "更新时间",
   post: "发布时间",
-  clicks: "点击数",
-  replies: "回复数",
 } as const;
 export type BbsOrder = keyof typeof BBS_ORDERS;
 
@@ -165,8 +164,7 @@ export async function getPostList(opts: {
   };
   const total = await prisma.bbsPost.count({ where });
   // 2008 版置顶(IsHigh)不提前排序，只加标记（BBS_All 存储过程仅按时间列排序）
-  const orderField =
-    order === "post" ? "id" : order === "clicks" ? "clicks" : order === "replies" ? "replies" : "lastReplyTime";
+  const orderField = order === "post" ? "id" : "lastReplyTime";
   const rows = await prisma.bbsPost.findMany({
     where,
     orderBy: [{ [orderField]: "desc" }],

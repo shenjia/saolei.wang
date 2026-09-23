@@ -453,9 +453,9 @@ body .tabs > a:hover::after {
   table-layout: fixed;
   width: 100%;
 }
-/* 列宽（2026-09-24 张老师二轮反馈）：fixed 布局宽度只认表头行——
-   全部写在 th 上（border-box 含 padding）；分类窄、主题吃满剩余、
-   回复/点击与最后更新收窄（原均分 163px 太宽）。
+/* 列宽（2026-09-24 张老师二轮反馈；三轮：作者定宽收窄、分类列居中）：
+   fixed 布局宽度只认表头行——全部写在 th 上（border-box 含 padding）；
+   分类窄且居中、作者定宽 150px、主题吃满剩余、回复/点击与最后更新收窄。
    不用 td:first-child{width}（fixed 下 tbody 宽度无效，上一版踩坑） */
 .bbs_list th {
   box-sizing: border-box;
@@ -468,13 +468,17 @@ body .tabs > a:hover::after {
 .bbs_list th.cat {
   width: 72px;
   padding-left: 0;
-  padding-right: 8px;
+  padding-right: 0;
+  text-align: center;
 }
 .bbs_list th.topic {
   width: auto;
 }
+.bbs_list th.author {
+  width: 150px;
+}
 .bbs_list th.num {
-  width: 104px;
+  width: 110px;
   padding-left: 8px;
   padding-right: 8px;
 }
@@ -493,14 +497,15 @@ body .tabs > a:hover::after {
   white-space: nowrap;
 }
 .table.bbs_list td:first-child {
-  padding: 8px 8px 8px 0;
+  padding: 8px 0;
+  text-align: center;
 }
 .table.bbs_list td:nth-child(4),
 .table.bbs_list td:nth-child(5) {
   padding: 8px;
 }
-/* legacy em,strong{margin:0 5px} 会给回复数加左 margin——本表内归零，
-   保证数字与表头文字起点严格对齐 */
+/* legacy em,strong{margin:0 5px} 会给回复数加 margin——本表内归零，
+  「回复 / 点击」的空格直接写在标记里，不靠 em margin 撑 */
 .bbs_list td em {
   margin: 0;
 }

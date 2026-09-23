@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server";
 import { BBS_BOARD_NAMES, getPostPage, type BbsOrder } from "@/lib/bbs";
 
-const ORDERS: readonly BbsOrder[] = ["reply", "post", "clicks", "replies"];
+const ORDERS: readonly BbsOrder[] = ["reply", "post"];
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
