@@ -428,8 +428,8 @@ body .tabs > a:hover::after {
 }
 
 /* ---------- BBS 论坛（移植 2008 版） ---------- */
-/* 页头（2026-09-24 张老师：title 与筛选器移出卡片，筛选器放 title 右侧）
-   复用排行页 page_head（h1+导航同行基线对齐）；BBS 导航含两组 tabs + 右侧按钮组 */
+/* 页头（2026-09-24 张老师二轮）：分类 tabs 贴 title 左侧；
+   排序+只看精华两组推到行右侧；管理条例隐藏，发布主题按钮随右侧组 */
 #page .page_head .bbs_head_nav {
   display: flex;
   flex-wrap: wrap;
@@ -438,25 +438,53 @@ body .tabs > a:hover::after {
   flex: 1;
   min-width: 0;
 }
-#page .page_head .bbs_head_nav .actions {
+#page .page_head .bbs_head_nav .side_filters {
   margin-left: auto;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 20px;
 }
-#page .page_head .bbs_head_nav .actions .button {
-  margin: 0;
-}
-/* 板块 tabs 独立一行（列表盒上方，出卡片） */
-#bbs_boards {
-  margin: 0 8px 10px;
+#page .page_head .bbs_head_nav .bbs_post_btn {
+  flex: none;
+  margin: 0 0 0 4px;
 }
 .bbs_list {
   table-layout: fixed;
   width: 100%;
 }
+/* 列宽（2026-09-24 张老师二轮反馈）：fixed 布局宽度只认表头行——
+   全部写在 th 上（border-box 含 padding）；分类窄、主题吃满剩余、
+   回复/点击与最后更新收窄（原均分 163px 太宽）。
+   不用 td:first-child{width}（fixed 下 tbody 宽度无效，上一版踩坑） */
+.bbs_list th {
+  box-sizing: border-box;
+  padding: 6px 20px;
+  border-bottom: 1px solid #49483e;
+  color: #939387;
+  font-weight: normal;
+  text-align: left;
+}
+.bbs_list th.cat {
+  width: 72px;
+  padding-left: 0;
+  padding-right: 8px;
+}
+.bbs_list th.topic {
+  width: auto;
+}
+.bbs_list th.num {
+  width: 104px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.bbs_list th.time {
+  width: 96px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
 /* 正文单元格：.table.bbs_list 双类提权压过 legacy .table td 的 20px（后加载同优先级胜出），
-   列 padding 与 th 逐列严格一致，保证表头左侧与正文对齐（2026-09-24 张老师要求）；
-   首列（分类）窄 padding —— 分类栏窄一些 */
+   列 padding 与 th 逐列严格一致，保证表头左侧与正文对齐 */
 .table.bbs_list td {
   padding: 8px 20px;
   border-bottom: 1px solid #3a3a3a;
@@ -466,7 +494,6 @@ body .tabs > a:hover::after {
 }
 .table.bbs_list td:first-child {
   padding: 8px 8px 8px 0;
-  width: 58px;
 }
 .table.bbs_list td:nth-child(4),
 .table.bbs_list td:nth-child(5) {
@@ -476,23 +503,6 @@ body .tabs > a:hover::after {
    保证数字与表头文字起点严格对齐 */
 .bbs_list td em {
   margin: 0;
-}
-/* 表头与正文同 padding（垂直 6px 略紧，水平必须逐列一致） */
-.bbs_list th {
-  padding: 6px 20px;
-  border-bottom: 1px solid #49483e;
-  color: #939387;
-  font-weight: normal;
-  text-align: left;
-}
-.bbs_list th.board {
-  padding-left: 0;
-  padding-right: 8px;
-}
-.bbs_list th.num,
-.bbs_list th.time {
-  padding-left: 8px;
-  padding-right: 8px;
 }
 /* 分类标签：与正文同字号（legacy .level 是 20px，不可用） */
 .bbs_list .board_tag {
@@ -1394,41 +1404,6 @@ body #page.ranking_old .ranking_box {
 .goto_form .goto_suggest li.active button span,
 .goto_form .goto_suggest li button:hover span {
   color: #939387;
-}
-
-/* ==================== 全局居中气泡消息 Toast（2026-09-24 张老师要求） ====================
-   搜索无成绩玩家等提示不再用页面顶部 hint——全局水平垂直居中、醒目、3 秒消失。
-   组件：components/Toast.tsx（toast() 命令式 / app:toast 事件均可触发）。 */
-.toast_bubble {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 9999;
-  max-width: 80vw;
-  padding: 14px 26px;
-  border: 1px solid #fdc61d;
-  border-radius: 8px;
-  background: #1e1f1c;
-  color: #fdc61d;
-  font-size: 17px;
-  line-height: 26px;
-  font-weight: bold;
-  text-align: center;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.7);
-  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
-  animation: toast_in 0.18s ease-out;
-  pointer-events: none; /* 不挡交互 */
-}
-@keyframes toast_in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
 }
 
 /* ==================== 全局居中气泡消息 Toast（2026-09-24 张老师要求） ====================

@@ -40,57 +40,53 @@ export default async function BbsPage({
 
   return (
     <div id="page" className="main">
-      {/* 页头：title + 排序/精华筛选同行（复用排行页 page_head 模式，2026-09-24 张老师要求） */}
+      {/* 页头（2026-09-24 张老师二轮）：分类 tabs 贴 title 左侧；
+          右侧=排序+只看精华两组；管理条例隐藏 */}
       <div className="page_head">
         <h1 className="page_title">论坛</h1>
-        <div className="filters bbs_head_nav">
+        <div className="bbs_head_nav">
           <Tabs
             base="/bbs"
             params={query}
-            name="order"
-            current={order}
-            options={Object.entries(BBS_ORDERS) as [string, string][]}
-          />
-          <Tabs
-            base="/bbs"
-            params={query}
-            name="nice"
-            current={nice ? "1" : "0"}
+            name="board"
+            current={board === undefined ? "all" : String(board)}
             options={[
-              ["0", "全部主题"],
-              ["1", "只看精华"],
+              ["all", "全部"],
+              ...BBS_BOARDS.map((b) => [String(b.id), b.name] as [string, string]),
             ]}
           />
-          <div className="actions">
-            {session && (
-              <Link className="button active" href="/bbs/post">
-                发布主题
-              </Link>
-            )}
-            <Link className="button" href="/page/help/bbs" target="_blank">
-              管理条例
-            </Link>
+          <div className="side_filters">
+            <Tabs
+              base="/bbs"
+              params={query}
+              name="order"
+              current={order}
+              options={Object.entries(BBS_ORDERS) as [string, string][]}
+            />
+            <Tabs
+              base="/bbs"
+              params={query}
+              name="nice"
+              current={nice ? "1" : "0"}
+              options={[
+                ["0", "全部主题"],
+                ["1", "只看精华"],
+              ]}
+            />
           </div>
+          {session && (
+            <Link className="button active bbs_post_btn" href="/bbs/post">
+              发布主题
+            </Link>
+          )}
         </div>
-      </div>
-      <div id="bbs_boards">
-        <Tabs
-          base="/bbs"
-          params={query}
-          name="board"
-          current={board === undefined ? "all" : String(board)}
-          options={[
-            ["all", "全部"],
-            ...BBS_BOARDS.map((b) => [String(b.id), b.name] as [string, string]),
-          ]}
-        />
       </div>
       <div className="box">
         <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
           <thead>
             <tr>
-              <th className="board">分类</th>
-              <th>主题</th>
+              <th className="cat">分类</th>
+              <th className="topic">主题</th>
               <th>作者</th>
               <th className="num">回复/点击</th>
               <th className="time">最后更新</th>
