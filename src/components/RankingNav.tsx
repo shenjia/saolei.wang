@@ -3,11 +3,12 @@
 
 import Link from "next/link";
 
-export type RankingView = "all" | "nf" | "grow" | "area" | "click";
+export type RankingView = "all" | "nf" | "grow" | "area" | "click" | "world";
 
 const TABS: { key: RankingView; label: string; href: string }[] = [
   { key: "all", label: "雷界排行", href: "/ranking" },
   { key: "nf", label: "NF", href: "/ranking?view=nf" },
+  { key: "world", label: "世界", href: "/ranking?view=world" },
   { key: "grow", label: "进步", href: "/grow" },
   { key: "area", label: "地区", href: "/area" },
   { key: "click", label: "人气", href: "/click" },

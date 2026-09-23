@@ -3,11 +3,12 @@
 
 import Link from "next/link";
 import { getAreaRanking, getRankingTable, type AreaOrder } from "@/lib/queries";
-import { oldTitle } from "@/lib/oldtitle";
+import { title as assessTitle } from "@/lib/assess";
 import { parseRankingBy } from "@/lib/config";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingTable } from "@/components/RankingTable";
 import { OldPager } from "@/components/OldPager";
+import { TitleBadge } from "@/components/Cells";
 import { buildUrl } from "@/components/Pager";
 
 export const dynamic = "force-dynamic";
@@ -46,27 +47,23 @@ export default async function AreaPage({
     const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
     const { rows, total, pageSize } = await getRankingTable(by, false, page, area);
     return (
-      <div id="page" className="two_columns ranking_old">
-        <ul id="home">
-          <li className="main">
-            <RankingNav current="area" />
-            <div className="box ranking_box">
-              <h1 className="area_title">
-                <Link href="/area">地区榜</Link>
-                <span className="sep">›</span>
-                {areaDisplay(area)}
-              </h1>
-              <RankingTable rows={rows} by={by} base="/area" params={{ name: area }} />
-              <OldPager
-                base="/area"
-                params={{ name: area, by: by === "sum_time" ? undefined : by }}
-                page={page}
-                total={total}
-                pageSize={pageSize}
-              />
-            </div>
-          </li>
-        </ul>
+      <div id="page" className="main ranking_old">
+        <RankingNav current="area" />
+        <div className="box ranking_box">
+          <h1 className="area_title">
+            <Link href="/area">地区榜</Link>
+            <span className="sep">›</span>
+            {areaDisplay(area)}
+          </h1>
+          <RankingTable rows={rows} by={by} base="/area" params={{ name: area }} />
+          <OldPager
+            base="/area"
+            params={{ name: area, by: by === "sum_time" ? undefined : by }}
+            page={page}
+            total={total}
+            pageSize={pageSize}
+          />
+        </div>
       </div>
     );
   }
@@ -74,13 +71,13 @@ export default async function AreaPage({
   const order = parseAreaOrder(sp.order);
   const rows = await getAreaRanking(order);
   const maxPower = Math.max(1, ...rows.map((r) => r.power));
+  // 领军人物的军衔按总计时间评定（2026-09-23 晚随排行表一起从旧版称号改回军衔）
+  const titles = await Promise.all(rows.map((r) => assessTitle(r.bestSumTime)));
 
   return (
-    <div id="page" className="two_columns ranking_old">
-      <ul id="home">
-        <li className="main">
-          <RankingNav current="area" />
-          <div className="box ranking_box">
+    <div id="page" className="main ranking_old">
+      <RankingNav current="area" />
+      <div className="box ranking_box">
             <table cellPadding={0} cellSpacing={0} className="ranking_table area_table">
               <thead>
                 <tr>
@@ -101,7 +98,6 @@ export default async function AreaPage({
               </thead>
               <tbody>
                 {rows.map((r, i) => {
-                  const t = oldTitle(r.bestExpTime, r.bestSex, r.bestRank === 1);
                   return (
                     <tr key={r.area}>
                       <td className="rank">
@@ -113,9 +109,7 @@ export default async function AreaPage({
                         </Link>
                       </td>
                       <td className="best">
-                        <span className="oldtitle">
-                          [<span style={{ color: t.color }}>{t.name}</span>]
-                        </span>
+                        <TitleBadge title={titles[i]} link />
                         <Link href={`/user/${r.bestId}`} target="_blank" title="点击查看个人信息">
                           {r.bestName}
                         </Link>
@@ -141,9 +135,7 @@ export default async function AreaPage({
                 )}
               </tbody>
             </table>
-          </div>
-        </li>
-      </ul>
+      </div>
     </div>
   );
 }

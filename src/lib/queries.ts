@@ -736,6 +736,8 @@ export interface RankingRow extends UserBrief {
   scores: Record<string, number>;
   /** 各级别成绩对应录像 id（sum 无录像=0） */
   videos: Record<string, number>;
+  /** 主榜总计时间（军衔评定用；仅 NF 榜时与 scores.sum_time 不同，需额外回填） */
+  overallSumTime?: number;
 }
 
 /**
@@ -766,6 +768,17 @@ export async function getRankingTable(
     take: RANKING_PAGESIZE,
   });
   const authors = await usersByIds(rows.map((r) => N(r.id)));
+  // NF 榜：军衔按主榜总计时间评定（与榜单口径无关），需额外回填主榜 sum_time
+  const overall = nf
+    ? new Map(
+        (
+          await prisma.userScores.findMany({
+            where: { id: { in: rows.map((r) => BigInt(N(r.id))) } },
+            select: { id: true, sumTime: true },
+          })
+        ).map((s) => [N(s.id), N(s.sumTime)])
+      )
+    : null;
   const result: RankingRow[] = rows.map((r, i) => {
     const rec = r as unknown as Record<string, bigint | number | null>;
     const brief = authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 };
@@ -776,7 +789,13 @@ export async function getRankingTable(
       scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
       videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
     }
-    return { ...brief, rank: (page - 1) * RANKING_PAGESIZE + i + 1, scores, videos };
+    return {
+      ...brief,
+      rank: (page - 1) * RANKING_PAGESIZE + i + 1,
+      scores,
+      videos,
+      ...(overall ? { overallSumTime: overall.get(N(r.id)) ?? 0 } : null),
+    };
   });
   return { rows: result, total, pageSize: RANKING_PAGESIZE };
 }
@@ -821,6 +840,7 @@ export interface AreaRow {
   bestId: number;
   bestName: string;
   bestExpTime: number;
+  bestSumTime: number;
   bestSex: number;
 }
 
@@ -843,6 +863,7 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
       best_id: bigint;
       best_name: string;
       best_exp_time: number;
+      best_sum_time: number;
       best_sex: number;
     }[]
   >(
@@ -859,7 +880,7 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
        FROM ranked GROUP BY area
      )
      SELECT a.area, a.players, a.avg_rank, a.best_rank, a.power,
-            r.id best_id, u.chinese_name best_name, s.exp_time best_exp_time, u.sex best_sex
+            r.id best_id, u.chinese_name best_name, s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex
      FROM agg a
      JOIN ranked r ON r.area = a.area AND r.rk = a.best_rank
      JOIN user u ON u.id = r.id
@@ -875,6 +896,7 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
     bestId: N(r.best_id),
     bestName: r.best_name,
     bestExpTime: r.best_exp_time,
+    bestSumTime: r.best_sum_time,
     bestSex: r.best_sex,
   }));
 }
