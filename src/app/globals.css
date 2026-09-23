@@ -508,7 +508,7 @@ body #header .nav li a {
   background: #333330;
   border: 1px solid #555550;
   padding: 8px;
-  width: 230px;
+  width: 252px;
   flex: none;
 }
 .user_card .uc_top {
@@ -849,16 +849,29 @@ body #user_view .info h2 {
   line-height: 26px;
   margin-bottom: 4px;
 }
-/* 徽章已绝对定位，info_body 不再需要 flex 布局 */
+/* info_body 保持 flex：nowrap 成绩表在头像右侧空间不足时会被整表挤到头像下方
+   （鞠泽恩这类长内容实测触发），flex + table-layout:fixed 强制其贴右排列并省略号截断 */
 body #user_view .info .info_body {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+}
+body #user_view .info .scores {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  table-layout: fixed;
 }
 /* 成绩表缩小：行高 36→32，标签 16→13px，数字 20→16px，
    4 行 + 姓名行 ≈ 158px，与 160px 头像高度对齐 */
 body #user_view .info .scores th {
+  width: 2.5em; /* fixed 布局下手动分配列宽：标签窄列 */
   height: 32px;
   font-size: 13px;
   line-height: 20px;
+}
+body #user_view .info .scores td:nth-of-type(1) {
+  width: 38%; /* 时间列；剩余给 3BV/s 列，避免日期被截断 */
+  padding-right: 8px;
 }
 body #user_view .info .score_time,
 body #user_view .info .score_3bvs {
@@ -1405,4 +1418,75 @@ body #page.ranking_old.main .ranking_nav {
 .ranking_table td.c_sum.current,
 .ranking_table td.c_sum.current a {
   color: #fdc61d;
+}
+
+/* ==================== 流式布局 + 移动版单列（2026-09-23 晚 张老师要求） ====================
+   需求：网站流式布局，移动版一行只显示一个栏目。
+   做法：①解除 620px 硬下限（窗口窄于 620 不再强制横向滚动，真正流式）；
+        ②≤768px 进移动版：主栏/侧栏全部去浮动、整行排列（主栏在上、侧栏各模块依次在下）；
+        ③排行页榜别 tabs 允许折行，成绩宽表盒内横向滑动，不撑破页面。
+   注意：布局约束分散在 legacy-2013.css 与本文件两处（首页 li.main 是 calc(100% - 290px)、
+   侧栏 288px、顶栏 wrapper 80%/min620/max960），以下统一用 body 前缀提权逐条覆盖。 */
+
+/* ---------- ① 解除 620px 硬下限（桌面仍是 80%/62% 流式 + 960 上限） ---------- */
+body #header .wrapper {
+  min-width: 0;
+}
+body #page.main,
+body #page.two_columns {
+  min-width: 0;
+}
+body #page.two_columns li.main {
+  min-width: 0;
+}
+
+/* ---------- ② 移动版（≤768px）：一栏一行 ---------- */
+@media (max-width: 768px) {
+  /* 顶栏随视口全宽 */
+  body #header .wrapper {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0 15px;
+  }
+  /* 页面容器全宽（留 4px 外距） */
+  body #page.main,
+  body #page.two_columns {
+    width: auto;
+    max-width: none;
+    margin: 0 4px;
+  }
+  /* 主栏/侧栏去浮动、整行排列——逐条命中 legacy 与本文件的提权规则 */
+  body #page.two_columns li.main,
+  body #page.two_columns li.sidebar,
+  body #page #home > li.main,
+  body #page #home > li.sidebar,
+  body #page.ranking_old #home > li.main,
+  body #page.ranking_old #home > li.sidebar {
+    float: none;
+    width: auto;
+    min-width: 0;
+  }
+  /* 侧栏盒子解除固定宽（192/210/288 三处） */
+  body #page.two_columns li.sidebar .box,
+  body #page #home > li.sidebar .box,
+  body #page.ranking_old #home > li.sidebar .box {
+    width: auto;
+  }
+  /* 盒子内边距收紧（桌面 30px 在手机上太奢侈） */
+  body #page .box {
+    padding: 16px 14px;
+  }
+  /* ---------- ③ 排行页：tabs 折行 + 宽表盒内横滑 ---------- */
+  .ranking_nav {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  /* 含表格的盒子一律盒内横滑（BBS 列表固定列宽 470+、排行宽表等），页面本身不横滚 */
+  body #page .box:has(.table) {
+    overflow-x: auto;
+  }
+  .ranking_box .ranking_table {
+    min-width: 640px;
+  }
 }
