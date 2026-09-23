@@ -36,8 +36,11 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
   const boxRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0); // 竞态：仅最后一次请求生效
 
-  // 数字输入也出推荐（按 ID 前缀实时匹配玩家）；下拉项的次级文字数字模式显示 ID
-  const numeric = /^\d+$/.test(q.trim());
+  // 数字输入也出推荐（按 ID 精确匹配实时推荐玩家）；下拉项的次级文字数字模式显示 ID
+  const kw = q.trim();
+  const numeric = /^\d+$/.test(kw);
+  // 无匹配空态提示（2026-09-24 张老师要求）：ID 精确不中 / 姓名无匹配
+  const emptyMsg = numeric ? `没有找到ID为${kw}的玩家` : "没有找到符合条件的玩家";
 
   // 事件委托：RankingFeed 在同页监听并执行定位（页内滚动/拉取/跳 whereami）
   function locate(id: number) {
@@ -175,26 +178,30 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
               autoComplete="off"
             />
           </span>
-          {users !== null && users.length > 0 && (
+          {users !== null && kw !== "" && (
             <ul className="goto_suggest">
-              {users.map((u, i) => (
-                <li key={u.id} className={i === active ? "active" : ""}>
-                  <button
-                    type="button"
-                    onMouseEnter={() => setActive(i)}
-                    onClick={() => {
-                      setUsers(null);
-                      setQ(u.chineseName);
-                      locate(u.id);
-                    }}
-                  >
-                    <em>{u.chineseName}</em>
-                    {/* 数字模式次级文字显示 ID（用户按 ID 找人时姓名才是补充信息），
-                        其余显示英文名 */}
-                    <span>{numeric ? `ID ${u.id}` : u.englishName || null}</span>
-                  </button>
-                </li>
-              ))}
+              {users.length === 0 ? (
+                <li className="goto_empty">{emptyMsg}</li>
+              ) : (
+                users.map((u, i) => (
+                  <li key={u.id} className={i === active ? "active" : ""}>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => {
+                        setUsers(null);
+                        setQ(u.chineseName);
+                        locate(u.id);
+                      }}
+                    >
+                      <em>{u.chineseName}</em>
+                      {/* 数字模式次级文字显示 ID（用户按 ID 找人时姓名才是补充信息），
+                          其余显示英文名 */}
+                      <span>{numeric ? `ID ${u.id}` : u.englishName || null}</span>
+                    </button>
+                  </li>
+                ))
+              )}
             </ul>
           )}
         </div>

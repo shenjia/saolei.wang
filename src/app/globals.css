@@ -1361,6 +1361,13 @@ body #page.ranking_old .ranking_box {
 .goto_form .goto_suggest li button:hover span {
   color: #939387;
 }
+/* 无匹配空态提示（ID 不存在 / 姓名无结果） */
+.goto_form .goto_suggest li.goto_empty {
+  padding: 6px 10px;
+  color: #75715e;
+  font-size: 13px;
+  white-space: nowrap;
+}
 
 /* ==================== 全局居中气泡消息 Toast（2026-09-24 张老师要求） ====================
    搜索无成绩玩家等提示不再用页面顶部 hint——全局水平垂直居中、醒目、3 秒消失。
