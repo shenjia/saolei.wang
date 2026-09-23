@@ -74,7 +74,10 @@ export default async function RankingPage({
         <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
       </div>
       <div className="box ranking_box">
+        {/* key 含 page/view/by/hl：软导航（whereami 302 回跳）时强制重挂载，
+            否则 Feed 的 useState(initial) 保留旧页数据、表格显示错页 */}
         <RankingFeed
+          key={`${page}-${nf ? "nf" : "all"}-${rankingBy}-${hl ?? 0}`}
           initial={titled}
           initialDeltas={deltas}
           by={rankingBy}
