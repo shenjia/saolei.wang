@@ -112,6 +112,8 @@ export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]
 export async function getNews(opts: {
   type?: number;
   userId?: number;
+  /** 等级筛选（beg/int/exp）：按 details JSON 的 lv 字段匹配（details_data 全为 {"lv":...} 格式） */
+  level?: string;
   cursor?: number;
   limit: number;
 }): Promise<NewsItem[]> {
@@ -119,6 +121,7 @@ export async function getNews(opts: {
     where: {
       ...(opts.type !== undefined ? { type: opts.type } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+      ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
       // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
       ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
     },
@@ -902,33 +905,27 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
   }));
 }
 
-/** 用户所在地区按综合排行指数（Power）的全国名次（用户主页军衔下方展示） */
+/** 用户在本军区内的名次（用户主页军衔下方展示） */
 export interface UserAreaRank {
   area: string;
-  pos: number; // 地区战力全国名次
-  power: number;
-  players: number;
+  pos: number; // 本军区名次（与地区榜内页 /area?name= 同口径：总时间升序）
+  total: number; // 本军区有成绩人数
 }
 
-export async function getUserAreaRank(area: string): Promise<UserAreaRank | null> {
+export async function getUserAreaRank(
+  area: string,
+  userId: number
+): Promise<UserAreaRank | null> {
   // 与地区榜同口径：多地区（含 &）用户不参与地区榜
   if (!area || area.includes("&")) return null;
-  const rows = await prisma.$queryRaw<{ pos: bigint; power: bigint; players: bigint }[]>`
-     WITH ranked AS (
-        SELECT u.area,
-              ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) rk,
+  const rows = await prisma.$queryRaw<{ pos: bigint; total: bigint }[]>`
+     SELECT pos, total FROM (
+        SELECT s.id,
+              ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) pos,
               COUNT(*) OVER () total
        FROM user_scores s JOIN user u ON u.id = s.id
-       WHERE s.sum_time > 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
-     ),
-     agg AS (
-       SELECT area, COUNT(*) players, SUM(total - rk) power
-       FROM ranked GROUP BY area
-     )
-     SELECT pos, power, players FROM (
-       SELECT area, power, players, ROW_NUMBER() OVER (ORDER BY power DESC) pos
-       FROM agg
-     ) t WHERE area = ${area}`;
+       WHERE s.sum_time > 0 AND u.area = ${area}
+     ) t WHERE id = ${userId}`;
   if (!rows.length) return null;
-  return { area, pos: N(rows[0].pos), power: N(rows[0].power), players: N(rows[0].players) };
+  return { area, pos: N(rows[0].pos), total: N(rows[0].total) };
 }

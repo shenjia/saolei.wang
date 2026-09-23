@@ -681,7 +681,8 @@ body #header .nav li a {
 .user_card.v .uc_right {
   margin-top: 8px;
 }
-/* BBS 楼层：正文左 + 作者卡片右 */
+/* BBS 楼层：正文左 + 作者卡片右（2026-09-23 张老师要求：卡片独立成一栏，
+   面板风格与首页各板块 .box 一致；头像居中在最上，数据通栏在下） */
 .bbs_floor {
   display: flex;
   gap: 12px;
@@ -689,10 +690,38 @@ body #header .nav li a {
 }
 .bbs_floor .user_card {
   width: 248px;
+  background: #3b3a32;
+  border: 1px solid #49483e;
+  border-radius: 10px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
+  padding: 12px;
 }
 .bbs_floor .bbs_content {
   flex: 1;
   min-width: 0;
+}
+/* side 变体：头像+按钮竖排居中在上，信息块通栏在下 */
+.user_card.side .uc_body {
+  flex-direction: column;
+  align-items: center;
+}
+.user_card.side .uc_left {
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.user_card.side .uc_avatar {
+  width: 96px;
+  height: 96px;
+}
+.user_card.side .uc_home {
+  width: 100%;
+  margin-top: 6px;
+}
+.user_card.side .uc_right {
+  width: 100%;
+  margin-top: 8px;
 }
 
 .reply_form textarea,
@@ -985,11 +1014,12 @@ body #user_view .info .score_3bvs em {
   line-height: 20px;
 }
 /* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示）；
-   下方的军区/战力排行已移出（见下方 .area_rank），此处仅剩徽章+称号 */
+   与下方军区/战力排行同宽同锚点（right+width），保证两者居中对齐 */
 body #user_view .info .rank_label {
   position: absolute;
   top: 30px; /* 与 .box 内边距一致 = 头像顶部齐平 */
   right: 30px;
+  width: 120px;
   display: block;
   text-align: center;
   margin: 0;
@@ -1001,16 +1031,17 @@ body #user_view .info .rank_label .rank_name {
   font-weight: bold;
   line-height: 1.2;
 }
-/* 军区/战力排行（09-23 晚张老师要求）：居下显示、与头像下边缘对齐——
-   top = .box 内边距 30 + 头像 160 = 190px 锚定，translateY(-100%) 贴齐下缘，
-   不受右侧内容高度变化影响 */
+/* 军区/名次（09-23 晚张老师要求）：显示本人在本军区的名次（地区榜内页同口径
+   sum_time），居下显示、与头像下边缘对齐——top = box 内边距 30 + 头像 160 = 190px
+   锚定 + translateY(-100%) 贴齐下缘；同宽同锚点与徽章居中对齐 */
 body #user_view .info .area_rank {
   position: absolute;
   top: 190px;
   right: 30px;
+  width: 120px;
   transform: translateY(-100%);
   display: block;
-  text-align: right;
+  text-align: center;
   color: #888;
   line-height: 1.3;
   white-space: nowrap;
@@ -1028,6 +1059,9 @@ body #user_view .info .area_rank .area_pos {
   display: block;
   margin-top: 1px;
   font-size: 11px;
+}
+body #user_view .info .area_rank .area_pos .total {
+  color: #666; /* 军区总人数：弱化显示 */
 }
 body #user_view .info .area_rank em {
   font-style: normal;
@@ -1641,6 +1675,13 @@ body #page.two_columns li.main {
   }
   .ranking_box .ranking_table {
     min-width: 640px;
+  }
+  /* BBS 楼层手机端：作者卡片与正文上下堆叠，卡片在上（先见其人） */
+  body #page .bbs_floor {
+    flex-direction: column-reverse;
+  }
+  body #page .bbs_floor .user_card {
+    width: auto;
   }
 }
 

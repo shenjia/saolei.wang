@@ -52,7 +52,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
   const [history, session, areaRank] = await Promise.all([
     getHistory(userId),
     getSession(),
-    getUserAreaRank(detail.user.area),
+    getUserAreaRank(detail.user.area, userId),
   ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
@@ -126,8 +126,8 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               </Link>
             </div>
           </div>
-        {/* 所在军区的全国战力名次（地区榜口径）：居下显示、与头像下边缘对齐（09-23 晚张老师要求）。
-            文案带「全国」消歧义——是军区在全国的排名，不是本人在军区内的排名 */}
+        {/* 本军区内的名次（地区榜内页同口径 sum_time）：居下显示、与头像下边缘对齐，
+            与上方军衔徽章居中对齐（09-23 晚张老师要求） */}
         {areaRank && (
           <Link
             href={`/area?name=${encodeURIComponent(areaRank.area)}`}
@@ -137,7 +137,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
           >
             <span className="area_name">{areaDisplay(areaRank.area)}军区</span>
             <span className="area_pos">
-              战力全国第 <em>{areaRank.pos}</em> 名
+              第 <em>{areaRank.pos}</em> 名 <span className="total">/ {areaRank.total} 人</span>
             </span>
           </Link>
         )}
