@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import "./globals.css";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { MessageBadge } from "@/components/MessageBadge";
+import { ScrollReset } from "@/components/ScrollReset";
 import { UserCardPopover } from "@/components/UserCardPopover";
 import { ToastHost } from "@/components/Toast";
 
@@ -78,6 +80,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </div>
         {children}
         <ToastHost />
+        <Suspense fallback={null}>
+          <ScrollReset />
+        </Suspense>
         <UserCardPopover />
         <div id="footer">
           <div className="wrapper">
