@@ -9,15 +9,25 @@ import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { DailyStar } from "@/components/DailyStar";
 import { BbsLatest } from "@/components/BbsLatest";
 import { SiteStats } from "@/components/SiteStats";
+import { UserCard } from "@/components/UserCard";
 import { title as assessTitle } from "@/lib/assess";
+import { getSession } from "@/lib/auth";
+import { getUserCard } from "@/lib/usercard";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [news, newbies, top] = await Promise.all([getHomeNews(), getNewbies(), getTopUsers()]);
+  const [news, newbies, top, session] = await Promise.all([
+    getHomeNews(),
+    getNewbies(),
+    getTopUsers(),
+    getSession(),
+  ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
   );
+  // 登录后「每日一星」版块替换为自己的信息卡片（2026-09-23 张老师要求）
+  const myCard = session ? await getUserCard(session.uid) : null;
 
   return (
     <div id="page" className="two_columns">
@@ -33,7 +43,14 @@ export default async function HomePage() {
         </div>
       </li>
       <li className="sidebar">
-        <DailyStar />
+        {myCard ? (
+          <div id="my_card" className="box">
+            <h2>我的地盘</h2>
+            <UserCard card={myCard} own vertical />
+          </div>
+        ) : (
+          <DailyStar />
+        )}
         <BbsLatest />
         <div id="newbie" className="box">
           <h2>入伍新兵</h2>

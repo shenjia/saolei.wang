@@ -9,6 +9,8 @@ import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import { Pager } from "@/components/Pager";
 import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { UserCard } from "@/components/UserCard";
+import { getUserCards } from "@/lib/usercard";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,10 @@ export default async function BbsTitlePage({
   if (!post) notFound();
   const { replies, total, pageSize } = await getReplies(postId, page);
   const admin = session ? isManager(session.role) : false;
+  // 每楼正文右侧的作者信息卡片（2026-09-23 张老师要求）
+  const cards = await getUserCards(
+    [post.author?.id ?? 0, ...replies.map((r) => r.author?.id ?? 0)].filter((x) => x > 0)
+  );
 
   return (
     <div id="page" className="main">
@@ -64,7 +70,12 @@ export default async function BbsTitlePage({
           )}
         </p>
         <hr />
-        <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(post.content) }} />
+        <div className="bbs_floor">
+          <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(post.content) }} />
+          {post.author && cards.get(post.author.id) && (
+            <UserCard card={cards.get(post.author.id)!} own={session?.uid === post.author.id} />
+          )}
+        </div>
       </div>
 
       {replies.map((r) => (
@@ -85,7 +96,12 @@ export default async function BbsTitlePage({
               </span>
             )}
           </p>
-          <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(r.content) }} />
+          <div className="bbs_floor">
+            <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(r.content) }} />
+            {r.author && cards.get(r.author.id) && (
+              <UserCard card={cards.get(r.author.id)!} own={session?.uid === r.author.id} />
+            )}
+          </div>
         </div>
       ))}
       <Pager base={`/bbs/${post.id}`} params={{}} page={page} total={total} pageSize={pageSize} />

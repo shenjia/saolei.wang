@@ -4,6 +4,7 @@ import "./globals.css";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { MessageBadge } from "@/components/MessageBadge";
+import { UserCardPopover } from "@/components/UserCardPopover";
 
 export const metadata: Metadata = {
   title: "扫雷网 Saolei.wang",
@@ -73,6 +74,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
         {children}
+        <UserCardPopover />
         <div id="footer">
           <div className="wrapper">
             <p>

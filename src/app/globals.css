@@ -579,7 +579,7 @@ body #header .nav li a {
   color: #f8f8f2;
   text-align: center;
   padding: 4px 0;
-  font-size: 12px;
+  font-size: 11px; /* 6 字按钮须在 72px 头像列内不折行 */
   white-space: nowrap;
 }
 .user_card .uc_home:hover {
@@ -626,10 +626,11 @@ body #header .nav li a {
 .user_card .uc_delta.new {
   color: #66d9ef;
 }
-/* 四级纪录表：标签 / 时间(黄) | 3BVS(灰) 列对齐，参照旧版卡片 */
+/* 四级纪录表：标签 / 时间(黄) | 3BVS(灰) 列对齐，参照旧版卡片；
+   width:auto 紧凑排布，避免 100% 宽把列距拉散 */
 .user_card .uc_scores {
   margin-top: 4px;
-  width: 100%;
+  width: auto;
   font-size: 12px;
 }
 .user_card .uc_scores th {
@@ -685,6 +686,9 @@ body #header .nav li a {
   display: flex;
   gap: 12px;
   align-items: flex-start;
+}
+.bbs_floor .user_card {
+  width: 248px;
 }
 .bbs_floor .bbs_content {
   flex: 1;
