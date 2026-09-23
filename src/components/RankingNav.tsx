@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "./Toast";
 
 export type RankingView = "all" | "nf" | "grow" | "area" | "click" | "world";
 
@@ -93,11 +94,27 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
   }
 
   async function locateName(name: string) {
-    const qs = new URLSearchParams({ name });
+    // 先轻量探测（json）：无成绩/不存在 → 全局居中气泡提示，不跳转
+    const qs = new URLSearchParams({ name, format: "json" });
     if (by) qs.set("by", by);
     if (current === "nf") qs.set("view", "nf");
+    try {
+      const res = await fetch(`/ranking/whereami?${qs}`);
+      if (res.ok && (res.headers.get("content-type") ?? "").includes("json")) {
+        const { page } = (await res.json()) as { page: number };
+        if (page <= 0) {
+          toast("该玩家未加入排行榜（暂无成绩）");
+          return;
+        }
+      }
+    } catch {
+      /* 探测失败走导航兜底 */
+    }
+    const nav = new URLSearchParams({ name });
+    if (by) nav.set("by", by);
+    if (current === "nf") nav.set("view", "nf");
     // 姓名需服务端反查 id（whereami 302 会带 page+hl 回来，落地即高亮），走整页导航
-    router.push(`/ranking/whereami?${qs}`);
+    router.push(`/ranking/whereami?${nav}`);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {

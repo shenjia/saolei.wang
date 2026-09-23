@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import type { RankingRow } from "@/lib/queries";
 import type { RankingBy } from "@/lib/config";
 import { RankingHead, RankingRowLine, RankingEmpty, type TitledRow } from "./RankingRows";
+import { toast } from "./Toast";
 
 export interface RankingFeedProps {
   initial: (RankingRow & { title: string })[];
@@ -122,7 +123,9 @@ export function RankingFeed(props: RankingFeedProps) {
       if (!res.ok) throw new Error();
       const { page } = (await res.json()) as { page: number };
       if (page <= 0) {
-        setHint("该玩家未加入排行榜（暂无成绩）");
+        // 全局居中醒目气泡（2026-09-24 张老师要求：顶部 hint 太不明显）
+        toast("该玩家未加入排行榜（暂无成绩）");
+        setHint("");
         setHlUid(undefined);
         return;
       }
@@ -161,7 +164,7 @@ export function RankingFeed(props: RankingFeedProps) {
       if (lastRank >= total || page >= maxPage) setLoadedAll(true);
       // 等新行上屏后滚动
       requestAnimationFrame(() => {
-        if (!scrollToRow(uid)) setHint("未找到该玩家的位置，请稍后重试");
+        if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
         else setHint("");
       });
     } catch {

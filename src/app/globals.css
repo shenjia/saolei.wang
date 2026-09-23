@@ -1431,6 +1431,41 @@ body #page.ranking_old .ranking_box {
   }
 }
 
+/* ==================== 全局居中气泡消息 Toast（2026-09-24 张老师要求） ====================
+   搜索无成绩玩家等提示不再用页面顶部 hint——全局水平垂直居中、醒目、3 秒消失。
+   组件：components/Toast.tsx（toast() 命令式 / app:toast 事件均可触发）。 */
+.toast_bubble {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  max-width: 80vw;
+  padding: 14px 26px;
+  border: 1px solid #fdc61d;
+  border-radius: 8px;
+  background: #1e1f1c;
+  color: #fdc61d;
+  font-size: 17px;
+  line-height: 26px;
+  font-weight: bold;
+  text-align: center;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  animation: toast_in 0.18s ease-out;
+  pointer-events: none; /* 不挡交互 */
+}
+@keyframes toast_in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* 定位落地行：与 hover 同款底色（legacy .table tr:hover/#49483e，不再更淡），
    玩家名变黄（搜索命中即「找到了」的确认信号） */
 .ranking_table tr.hl {
