@@ -1,4 +1,5 @@
 // 主题详情（移植 2008 版 BBS/Title.asp：点击计数、回复分页、操作按钮）
+// 布局（2026-09-23 张老师要求）：页面级双栏——左列帖子楼层流，右列楼主卡片独立板块
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -8,7 +9,7 @@ import { BBS_BOARD_NAMES, getPost, getReplies, ubb } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import { Pager } from "@/components/Pager";
 import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
-import { TitleBadge } from "@/components/Cells";
+import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { UserCard } from "@/components/UserCard";
 import { getUserCards } from "@/lib/usercard";
 
@@ -30,45 +31,88 @@ export default async function BbsTitlePage({
   if (!post) notFound();
   const { replies, total, pageSize } = await getReplies(postId, page);
   const admin = session ? isManager(session.role) : false;
-  // 每楼正文右侧的作者信息卡片（2026-09-23 张老师要求）
+  // 每楼作者信息卡片（楼层的与右栏楼主的共用一份缓存）
   const cards = await getUserCards(
     [post.author?.id ?? 0, ...replies.map((r) => r.author?.id ?? 0)].filter((x) => x > 0)
   );
 
   return (
-    <div id="page" className="main">
-      <div className="box bbs_post">
-        <h1>
-          【{BBS_BOARD_NAMES[post.board]}】{post.title}
-          {post.isNice && (
-            <span className="bbs_star" data-tip="精华">
-              ★
-            </span>
-          )}
-          {post.isTop && (
-            <span className="bbs_top" data-tip="置顶">
-              ▲
-            </span>
-          )}
-        </h1>
-        <p className="bbs_meta">
-          {post.author && <TitleBadge title={post.author.title} link />}{" "}
-          发表于 {timeOpposite(post.createTime, TIME_NEVER)}　点击 <em>{post.clicks}</em>　回复{" "}
-          <em>{post.replies}</em>
-          {session && (
-            <PostOps
-              postId={post.id}
-              isOwner={session.uid === post.author?.id}
-              isAdmin={admin}
-              flags={{ isTop: post.isTop, isNice: post.isNice, isLocked: post.isLocked }}
-            />
-          )}
-        </p>
-        <hr />
-        <div className="bbs_floor">
-          <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(post.content) }} />
+    <div id="page" className="two_columns">
+      <ul id="home">
+        <li className="main">
+          <div className="box bbs_post">
+            <h1>
+              【{BBS_BOARD_NAMES[post.board]}】{post.title}
+              {post.isNice && (
+                <span className="bbs_star" data-tip="精华">
+                  ★
+                </span>
+              )}
+              {post.isTop && (
+                <span className="bbs_top" data-tip="置顶">
+                  ▲
+                </span>
+              )}
+            </h1>
+            <p className="bbs_meta">
+              {post.author && (
+                <>
+                  <AvatarCell id={post.author.id} name={post.author.chineseName} sex={post.author.sex} link />{" "}
+                  <TitleBadge title={post.author.title} link />{" "}
+                </>
+              )}
+              发表于 {timeOpposite(post.createTime, TIME_NEVER)}　点击 <em>{post.clicks}</em>　回复{" "}
+              <em>{post.replies}</em>
+              {session && (
+                <PostOps
+                  postId={post.id}
+                  isOwner={session.uid === post.author?.id}
+                  isAdmin={admin}
+                  flags={{ isTop: post.isTop, isNice: post.isNice, isLocked: post.isLocked }}
+                />
+              )}
+            </p>
+            <hr />
+            <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(post.content) }} />
+          </div>
+
+          {replies.map((r) => (
+            <div key={r.id} className="box bbs_post">
+              <p className="bbs_meta">
+                <em>{r.floor} 楼</em>{" "}
+                {r.author && (
+                  <>
+                    <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} link />{" "}
+                    <TitleBadge title={r.author.title} link />{" "}
+                  </>
+                )}
+                {timeOpposite(r.createTime, TIME_NEVER)}
+                {session && (admin || session.uid === r.author?.id || session.uid === post.author?.id) && (
+                  <span className="bbs_ops">
+                    {" "}
+                    <ReplyDelete replyId={r.id} />
+                  </span>
+                )}
+              </p>
+              <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(r.content) }} />
+            </div>
+          ))}
+          <Pager base={`/bbs/${post.id}`} params={{}} page={page} total={total} pageSize={pageSize} />
+
+          <div className="box">
+            <h2>回复主题</h2>
+            {session ? (
+              <ReplyForm postId={post.id} locked={post.isLocked && !admin} />
+            ) : (
+              <p className="text">
+                <Link href="/account/login">登录</Link> 后才能回复。
+              </p>
+            )}
+          </div>
+        </li>
+        <li className="sidebar">
           {post.author && cards.get(post.author.id) && (
-            <div className="bbs_side">
+            <div id="bbs_op_card" className="box">
               <UserCard
                 card={cards.get(post.author.id)!}
                 own={session?.uid === post.author.id}
@@ -76,44 +120,8 @@ export default async function BbsTitlePage({
               />
             </div>
           )}
-        </div>
-      </div>
-
-      {replies.map((r) => (
-        <div key={r.id} className="box bbs_post">
-          <p className="bbs_meta">
-            <em>{r.floor} 楼</em>{" "}
-            {r.author && <TitleBadge title={r.author.title} link />}{" "}
-            {timeOpposite(r.createTime, TIME_NEVER)}
-            {session && (admin || session.uid === r.author?.id || session.uid === post.author?.id) && (
-              <span className="bbs_ops">
-                {" "}
-                <ReplyDelete replyId={r.id} />
-              </span>
-            )}
-          </p>
-          <div className="bbs_floor">
-            <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(r.content) }} />
-            {r.author && cards.get(r.author.id) && (
-              <div className="bbs_side">
-                <UserCard card={cards.get(r.author.id)!} own={session?.uid === r.author.id} side />
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
-      <Pager base={`/bbs/${post.id}`} params={{}} page={page} total={total} pageSize={pageSize} />
-
-      <div className="box">
-        <h2>回复主题</h2>
-        {session ? (
-          <ReplyForm postId={post.id} locked={post.isLocked && !admin} />
-        ) : (
-          <p className="text">
-            <Link href="/account/login">登录</Link> 后才能回复。
-          </p>
-        )}
-      </div>
+        </li>
+      </ul>
     </div>
   );
 }

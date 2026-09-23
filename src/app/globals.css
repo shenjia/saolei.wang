@@ -484,8 +484,9 @@ body #header .nav li a {
   padding: 10px 4px;
   line-height: 1.8;
   word-break: break-all;
-  /* 2026-09-23 张老师：正文颜色加强（基础 #636359 太淡）+ 字号加大 */
-  color: #f8f8f2;
+  /* 2026-09-23 张老师：正文颜色先从基础 #636359 提到 #f8f8f2 被反馈太亮，
+     改用 2008 版论坛正文色 #bbbbbb（淡一档）+ 字号加大 */
+  color: #bbbbbb;
   font-size: 15px;
 }
 .bbs_content img {
@@ -681,24 +682,19 @@ body #header .nav li a {
 .user_card.v .uc_right {
   margin-top: 8px;
 }
-/* BBS 楼层：正文左 + 作者卡片右（2026-09-23 张老师要求：卡片独立成一栏，
-   面板风格与首页各板块 .box 一致；头像居中在最上，数据通栏在下） */
-.bbs_floor {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
+/* BBS 主题页：页面级双栏（2026-09-23 张老师要求：楼主卡片是独立右栏板块，
+   不嵌在楼层里；沿用首页 two_columns 版式，右栏盒宽 210） */
+#bbs_op_card {
+  padding: 16px 12px;
 }
-.bbs_floor .user_card {
-  width: 248px;
-  background: #3b3a32;
-  border: 1px solid #49483e;
-  border-radius: 10px;
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
-  padding: 12px;
+#bbs_op_card .user_card {
+  background: none;
+  border: none;
+  padding: 0;
+  box-shadow: none;
 }
-.bbs_floor .bbs_content {
-  flex: 1;
-  min-width: 0;
+.bbs_post .bbs_content {
+  width: 100%;
 }
 /* side 变体：头像+按钮竖排居中在上，信息块通栏在下 */
 .user_card.side .uc_body {
@@ -1653,14 +1649,6 @@ body #page.two_columns li.main {
   }
   .ranking_box .ranking_table {
     min-width: 640px;
-  }
-  /* BBS 楼层手机端：作者卡片与正文上下堆叠，卡片在上（先见其人） */
-  body #page .bbs_floor {
-    flex-direction: column-reverse;
-    align-items: stretch;
-  }
-  body #page .bbs_floor .user_card {
-    width: auto;
   }
 }
 
