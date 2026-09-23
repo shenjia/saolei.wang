@@ -60,7 +60,7 @@ export const COMMENT_STATUS = { NORMAL: 0, DELETED: -1 } as const;
 // 动态「加载更多」每页条数（移植 NewsConfig::PAGESIZE）
 export const NEWS_PAGESIZE = 20;
 // 用户主页动态初始条数（移植 UserConfig::NEWS_NUMBER）
-export const USER_NEWS_NUMBER = 5;
+export const USER_NEWS_NUMBER = 20;
 
 // ---------- 军衔（移植 TitleConfig） ----------
 
@@ -206,3 +206,15 @@ export const NEWS_TYPE = {
   VIDEO: 30,
   ARTICLE: 40,
 } as const;
+
+// ---------- 地区显示名（合规表述；链接/查询仍用数据库原值） ----------
+
+export const AREA_DISPLAY: Record<string, string> = {
+  香港: "中国香港",
+  澳门: "中国澳门",
+  台湾: "中国台湾",
+};
+
+export function areaDisplay(name: string): string {
+  return AREA_DISPLAY[name] ?? name;
+}

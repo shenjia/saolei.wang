@@ -447,7 +447,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 // ---------- 用户主页 ----------
 
 export interface UserDetail {
-  user: UserBrief & { area: string; avatar: string; createTime: number };
+  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number };
   info: { nickname: string; selfIntro: string | null; interest: string | null; qq: string; mouse: string; pad: string } | null;
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
@@ -482,6 +482,7 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
       area: u.area,
       avatar: u.avatar,
       createTime: N(u.createTime),
+      lastLoginTime: N(u.lastLoginTime),
     },
     info: info
       ? {
@@ -899,4 +900,35 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
     bestSumTime: r.best_sum_time,
     bestSex: r.best_sex,
   }));
+}
+
+/** 用户所在地区按综合排行指数（Power）的全国名次（用户主页军衔下方展示） */
+export interface UserAreaRank {
+  area: string;
+  pos: number; // 地区战力全国名次
+  power: number;
+  players: number;
+}
+
+export async function getUserAreaRank(area: string): Promise<UserAreaRank | null> {
+  // 与地区榜同口径：多地区（含 &）用户不参与地区榜
+  if (!area || area.includes("&")) return null;
+  const rows = await prisma.$queryRaw<{ pos: bigint; power: bigint; players: bigint }[]>`
+     WITH ranked AS (
+        SELECT u.area,
+              ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) rk,
+              COUNT(*) OVER () total
+       FROM user_scores s JOIN user u ON u.id = s.id
+       WHERE s.sum_time > 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
+     ),
+     agg AS (
+       SELECT area, COUNT(*) players, SUM(total - rk) power
+       FROM ranked GROUP BY area
+     )
+     SELECT pos, power, players FROM (
+       SELECT area, power, players, ROW_NUMBER() OVER (ORDER BY power DESC) pos
+       FROM agg
+     ) t WHERE area = ${area}`;
+  if (!rows.length) return null;
+  return { area, pos: N(rows[0].pos), power: N(rows[0].power), players: N(rows[0].players) };
 }

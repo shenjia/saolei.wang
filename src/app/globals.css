@@ -904,6 +904,24 @@ body #user_view .info .rank_label .rank_name {
   font-weight: bold;
   line-height: 1.2;
 }
+/* 军衔下方：所在地区战力全国名次（点击进地区榜内页） */
+body #user_view .info .rank_label .area_rank {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #888;
+  white-space: nowrap;
+}
+body #user_view .info .rank_label .area_rank:hover {
+  text-decoration: underline;
+  color: #aaa;
+}
+body #user_view .info .rank_label .area_rank em {
+  font-style: normal;
+  font-weight: bold;
+  color: #e6db74; /* Monokai 字符串色，与 legacy 主题一致 */
+}
 /* ---------- 侧栏统计表格（2026-09-23 张老师反馈） ----------
    原 legacy .table td padding 8px 20px + nowrap：数字视觉偏右，
    「（今日 +2）」撑破盒子右缘，hover 行背景随之超出板块。
@@ -1403,20 +1421,20 @@ body #page.ranking_old.main .ranking_nav {
 }
 #page.ranking_old.main > #world_top table {
   table-layout: auto;
-  font-size: 18px;
+  font-size: 20px;
 }
 #page.ranking_old.main > #world_top th,
 #page.ranking_old.main > #world_top td {
   width: auto !important;
-  padding: 5px 12px;
+  padding: 7px 14px;
 }
 #page.ranking_old.main > #world_top th {
-  font-size: 15px;
+  font-size: 16px;
   color: #75715e;
 }
 #page.ranking_old.main > #world_top td {
   height: auto;
-  line-height: 30px;
+  line-height: 34px;
 }
 #page.ranking_old.main > #world_top td.name {
   text-align: center;
@@ -1512,4 +1530,21 @@ body #page.two_columns li.main {
   .ranking_box .ranking_table {
     min-width: 640px;
   }
+}
+
+/* 成绩默认配色纠正（2026-09-23 21:59 张老师指正）：时间记录默认白色、3BVS 记录默认灰色；
+   排序命中的列整列黄色（.current，已有规则）——上一轮把时间/3BVS 默认色搞反了 */
+.ranking_table td.c_beg,
+.ranking_table td.c_int,
+.ranking_table td.c_exp,
+.ranking_table td.c_sum {
+  color: #f8f8f2;
+}
+.ranking_table td.c_3bvs {
+  color: #939387;
+}
+/* 排序命中列整列黄（覆盖上面的默认色） */
+.ranking_table td.current,
+.ranking_table td.current a {
+  color: #fdc61d;
 }

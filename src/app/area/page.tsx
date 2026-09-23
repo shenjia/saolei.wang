@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { getAreaRanking, getRankingTable, type AreaOrder } from "@/lib/queries";
 import { title as assessTitle } from "@/lib/assess";
-import { parseRankingBy } from "@/lib/config";
+import { parseRankingBy, areaDisplay } from "@/lib/config";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingTable } from "@/components/RankingTable";
 import { OldPager } from "@/components/OldPager";
@@ -21,16 +21,13 @@ const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
   { key: "power", label: "综合排行指数" },
 ];
 
-// 地区显示名映射（合规表述；链接/查询仍用数据库原值）
-const AREA_DISPLAY: Record<string, string> = {
-  香港: "中国香港",
-  澳门: "中国澳门",
-  台湾: "中国台湾",
-};
-const areaDisplay = (name: string) => AREA_DISPLAY[name] ?? name;
-
 function parseAreaOrder(v?: string): AreaOrder {
   return (["power", "players", "avg", "best"] as const).find((o) => o === v) ?? "power";
+}
+
+// 综合排行指数：1 万以上按 xx.xW 显示（精确到一位小数）
+function formatPower(power: number): string {
+  return power >= 10000 ? `${(power / 10000).toFixed(1)}W` : String(power);
 }
 
 export default async function AreaPage({
@@ -70,7 +67,6 @@ export default async function AreaPage({
 
   const order = parseAreaOrder(sp.order);
   const rows = await getAreaRanking(order);
-  const maxPower = Math.max(1, ...rows.map((r) => r.power));
   // 领军人物的军衔按总计时间评定（2026-09-23 晚随排行表一起从旧版称号改回军衔）
   const titles = await Promise.all(rows.map((r) => assessTitle(r.bestSumTime)));
 
@@ -93,7 +89,6 @@ export default async function AreaPage({
                       </Link>
                     </th>
                   ))}
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -109,32 +104,33 @@ export default async function AreaPage({
                         </Link>
                       </td>
                       <td className="best">
-                        <TitleBadge title={titles[i]} link />
                         <Link href={`/user/${r.bestId}`} target="_blank" title="点击查看个人信息">
                           {r.bestName}
                         </Link>
+                        <TitleBadge title={titles[i]} link />
                       </td>
-                      <td className={order === "players" ? "num current" : "num"}>{r.players}&nbsp;人</td>
-                      <td className={order === "avg" ? "num current" : "num"}>{r.avgRank}&nbsp;位</td>
-                      <td className="power">
-                        <span
-                          className="bar"
-                          style={{ width: `${Math.max(1, Math.round((r.power / maxPower) * 100))}%` }}
-                        ></span>
+                      <td className={order === "players" ? "num current" : "num"}>
+                        {r.players}&nbsp;<span className="unit">人</span>
                       </td>
-                      <td className={order === "power" ? "num current" : "num"}>{r.power}</td>
+                      <td className={order === "avg" ? "num current" : "num"}>
+                        {r.avgRank}&nbsp;<span className="unit">位</span>
+                      </td>
+                      <td className={order === "power" ? "num current" : "num"}>{formatPower(r.power)}</td>
                     </tr>
                   );
                 })}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center" }}>
+                    <td colSpan={6} style={{ textAlign: "center" }}>
                       暂无数据
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+            <div className="area_note">
+              综合排行指数计算方式：地区内每位有成绩雷友贡献（全国有成绩总人数 − 个人全国名次），指数 = 地区全体成员贡献值之和。
+            </div>
       </div>
     </div>
   );
