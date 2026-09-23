@@ -26,6 +26,10 @@ export default async function HomePage() {
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
   );
+  // 入伍新兵按动态 user_score 评军衔（移植 home/_newbies.php 的 Assess::title）
+  const newbieRows = await Promise.all(
+    newbies.map(async (n) => ({ ...n, title: await assessTitle(n.userScore) }))
+  );
   // 登录后「每日一星」版块替换为自己的信息卡片（2026-09-23 张老师要求）
   const myCard = session ? await getUserCard(session.uid) : null;
 
@@ -56,7 +60,7 @@ export default async function HomePage() {
           <h2>入伍新兵</h2>
           <table cellPadding={0} cellSpacing={0} className="table full">
             <tbody>
-              {newbies.map((n) => (
+              {newbieRows.map((n) => (
                 <tr key={n.id}>
                   <td className="user">
                     {n.author && (
@@ -68,7 +72,7 @@ export default async function HomePage() {
                         link
                       />
                     )}
-                    <TitleBadge title={""} />
+                    <TitleBadge title={n.title} link />
                   </td>
                   <td className="time">{timeOpposite(n.createTime, TIME_NEVER)}</td>
                 </tr>
