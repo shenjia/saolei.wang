@@ -1253,12 +1253,17 @@ body #page.ranking_old.main .ranking_nav {
     margin: 0; /* 间隔职责已由 page_head 承担 */
   }
 
-  /* 页头内的导航条：横向一行（tabs+搜索框并排）紧跟 title；
-     收掉 nav 自身外距 */
+  /* 页头内的导航条：占满 title 旁剩余宽度——tabs 紧跟 title、
+     搜索框 margin-left:auto 推到行尾右对齐 */
   body #page.ranking_old.main .page_head .ranking_nav {
     margin: 0;
+    flex: 1;
+    min-width: 0;
     align-items: baseline;
     gap: 12px;
+  }
+  body #page.ranking_old.main .page_head .ranking_nav .goto_form {
+    margin-left: auto; /* 与 tabs 拉开：搜索框贴行尾 */
   }
 }
 /* 两种断点通吃：页头顶距（header 吸顶后页面内容自带间隔，16px 与 .box 节奏一致） */
