@@ -1,7 +1,7 @@
-// 排行榜（2008 编排改造，2026-09-23 张老师要求；2026-09-24 三轮调整）：
-// 盒内 h1「排行榜」（与首页「雷界动态」同款样式）+ 榜别 tabs + 全级别成绩表
-// + 「加载更多」（替代老式分页）；右上角查找表单合并为单个圆角搜索框；
-// 登录态下「我在哪里」移至底部加载更多右侧（点击定位到自己所在行）。
+// 排行榜（2008 编排改造，2026-09-23 张老师要求；2026-09-24 多轮调整）：
+// 页面顶部 h1「排行榜」（2026-09-24 五轮：移出卡片，置于最上面）+ 榜别 tabs
+// + 全级别成绩表 + 「加载更多」（替代老式分页）；右上角查找框无按钮化（模糊推荐）；
+// 登录态下「我在哪里」在底部加载更多右侧（点击定位到自己所在行）。
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
@@ -69,9 +69,9 @@ export default async function RankingPage({
 
   return (
     <div id="page" className="main ranking_old">
+      <h1 className="page_title">排行榜</h1>
       <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
       <div className="box ranking_box">
-        <h1>排行榜</h1>
         <RankingFeed
           initial={titled}
           initialDeltas={deltas}
