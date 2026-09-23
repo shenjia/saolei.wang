@@ -14,13 +14,15 @@ export async function GET(req: NextRequest) {
   const order = (
     (ORDERS as readonly string[]).includes(p.get("order") ?? "") ? p.get("order") : "time"
   ) as Order;
+  const nf = p.get("nf") === "1";
 
   const url = new URL("/ranking", req.url);
   url.searchParams.set("level", level);
   url.searchParams.set("order", order);
+  if (nf) url.searchParams.set("nf", "1");
 
   if (id > 0) {
-    const page = await getRankingPageOfUser(id, level, order);
+    const page = await getRankingPageOfUser(id, level, order, nf);
     if (page > 0) {
       url.searchParams.set("page", String(page));
       url.hash = `id_${id}`;

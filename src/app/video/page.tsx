@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 function parseLevel(v?: string): VideoLevel | "all" {
   return (VIDEO_LEVELS as readonly string[]).includes(v ?? "") ? (v as VideoLevel) : "all";
 }
-function parseOrder(v?: string): "id" | "time" | "3bvs" {
-  return v === "time" || v === "3bvs" ? v : "id";
+function parseOrder(v?: string): "id" | "time" | "3bvs" | "comments" {
+  return v === "time" || v === "3bvs" || v === "comments" ? v : "id";
 }
 
 export default async function VideoListPage({
@@ -55,6 +55,18 @@ export default async function VideoListPage({
                 ["id", "按上传时间排列"],
                 ["time", "按成绩排列"],
                 ["3bvs", "按3BV/s排列"],
+              ]}
+            />
+          )}
+          {level === "all" && (
+            <Tabs
+              base="/video"
+              params={{ level, order, author }}
+              name="order"
+              current={order}
+              options={[
+                ["id", "按上传时间排列"],
+                ["comments", "热评录像"],
               ]}
             />
           )}

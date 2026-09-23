@@ -289,3 +289,140 @@
   color: #d33;
   font-size: 13px;
 }
+
+/* ---------- BBS 论坛（移植 2008 版） ---------- */
+.bbs_list td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #3a3a3a;
+}
+.bbs_flag {
+  font-style: normal;
+  color: #f92672;
+  font-size: 12px;
+  margin-right: 4px;
+}
+.bbs_flag.nice {
+  color: #e6db74;
+}
+.bbs_flag.locked {
+  color: #75715e;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.bbs_post h1 {
+  font-size: 18px;
+}
+.bbs_meta {
+  color: #75715e;
+  font-size: 13px;
+}
+.bbs_content {
+  padding: 10px 4px;
+  line-height: 1.8;
+  word-break: break-all;
+}
+.bbs_content img {
+  vertical-align: middle;
+}
+.bbs_content blockquote {
+  border-left: 3px solid #49483e;
+  margin: 6px 0;
+  padding: 4px 10px;
+  color: #a59f85;
+}
+.bbs_ops a {
+  margin-left: 6px;
+  font-size: 13px;
+}
+.reply_form textarea,
+.post_form textarea,
+.send_form textarea,
+.history_add input,
+.history_item textarea {
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  padding: 6px;
+  width: 90%;
+}
+.post_form input[type="text"] {
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  padding: 6px;
+}
+.post_form select {
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  padding: 4px;
+}
+.error {
+  color: #d33;
+  font-size: 13px;
+}
+
+/* 未读消息角标 */
+.badge {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: 8px;
+  background: #f92672;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  text-align: center;
+  line-height: 16px;
+}
+
+/* 收件箱未读行 */
+.table tr.unread td {
+  font-weight: bold;
+}
+
+/* 雷神殿照片墙 */
+#hero_wall {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+#hero_wall .hero_cell {
+  display: block;
+  text-align: center;
+  padding: 8px 4px;
+  border: 1px solid #3a3a3a;
+}
+#hero_wall .hero_cell:hover {
+  border-color: #668cba;
+}
+#hero_wall .hero_cell .name {
+  display: block;
+  font-size: 14px;
+}
+#hero_wall .hero_cell .score {
+  display: block;
+  color: #a6e22e;
+}
+#hero_wall .hero_cell .rank em {
+  color: #75715e;
+}
+
+/* 扫雷历程 */
+.history_item {
+  padding: 6px 0;
+  border-bottom: 1px solid #3a3a3a;
+}
+.history_item em {
+  color: #66d9ef;
+  margin-right: 8px;
+}
+.history_item .ops a {
+  font-size: 12px;
+  color: #75715e;
+}
+.history_add {
+  margin-top: 10px;
+}

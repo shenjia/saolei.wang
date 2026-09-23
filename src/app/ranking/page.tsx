@@ -1,4 +1,5 @@
-// 排行榜：级别（总计/初级/中级/高级）× 排序（时间/3BV/s）（移植 views/ranking/index）
+// 排行榜：级别（总计/初级/中级/高级）× 排序（时间/3BV/s）× 模式（普通/NF）
+// （移植 views/ranking/index + 2008 版 Ranking_NF）
 
 import Link from "next/link";
 import { getRanking } from "@/lib/queries";
@@ -24,27 +25,48 @@ export default async function RankingPage({
   const sp = await searchParams;
   const level = parseLevel(sp.level);
   const order = parseOrder(sp.order);
+  const nf = sp.nf === "1";
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const { users, total, pageSize } = await getRanking(level, order, page);
+  const { users, total, pageSize } = await getRanking(level, order, page, nf);
   const session = await getSession();
+  const params = { level, order, ...(nf ? { nf: "1" } : {}) };
 
   return (
     <div id="page" className="main">
       <div id="ranking_header" className="box">
-        <h1>排行榜</h1>
+        <h1>排行榜{nf && "（NF 无标雷）"}</h1>
         {session && (
           <Link
             className="button active"
-            href={`/ranking/whereami?id=${session.uid}&level=${level}&order=${order}`}
+            href={`/ranking/whereami?id=${session.uid}&level=${level}&order=${order}${nf ? "&nf=1" : ""}`}
           >
             我在哪里?
           </Link>
         )}
+        <Link className="button" href="/user/random" target="_blank">
+          随机串门
+        </Link>
+        <Link className="button" href="/grow">
+          进步榜
+        </Link>
+        <Link className="button" href="/click">
+          人气榜
+        </Link>
         <div className="filters">
           <Tabs
             base="/ranking"
-            params={{ level, order }}
+            params={params}
+            name="nf"
+            current={nf ? "1" : "0"}
+            options={[
+              ["0", "普通榜"],
+              ["1", "NF 无标雷"],
+            ]}
+          />
+          <Tabs
+            base="/ranking"
+            params={params}
             name="level"
             current={level}
             options={[
@@ -56,7 +78,7 @@ export default async function RankingPage({
           />
           <Tabs
             base="/ranking"
-            params={{ level, order }}
+            params={params}
             name="order"
             current={order}
             options={[
@@ -90,7 +112,7 @@ export default async function RankingPage({
             </Link>
           );
         })}
-        <Pager base="/ranking" params={{ level, order }} page={page} total={total} pageSize={pageSize} />
+        <Pager base="/ranking" params={params} page={page} total={total} pageSize={pageSize} />
       </div>
     </div>
   );

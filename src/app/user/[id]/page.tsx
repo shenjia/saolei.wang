@@ -1,9 +1,16 @@
 // 用户主页：成绩总表 + 最新动态 + 个人资料（移植 views/user/view）
+// 访问即计人气（移植 2008 版 Player_Info 的 Click 计数）
 
+import { headers } from "next/headers";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getSession } from "@/lib/auth";
 import { getUserDetail, getUserNews } from "@/lib/queries";
+import { getClicks, recordClick } from "@/lib/star";
+import { getHistory } from "@/lib/history";
 import { LEVELS, LEVEL_NAMES, NEWS_PAGESIZE, USER_NEWS_NUMBER, type Level } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
+import { HistoryBox } from "@/components/HistoryBox";
 import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime, TitleBadge } from "@/components/Cells";
 import { title as assessTitle } from "@/lib/assess";
@@ -27,7 +34,15 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
 
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
+
+  // 计人气：同一 IP 同一天只计一次
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
+  await recordClick(userId, ip);
+  const clicks = await getClicks(userId);
+
   const news = await getUserNews(userId, USER_NEWS_NUMBER);
+  const [history, session] = await Promise.all([getHistory(userId), getSession()]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
   );
@@ -44,6 +59,11 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
           <h2>({user.englishName})</h2>
           <span className={`gender big ${user.sex ? "male" : "female"}`}></span>
           <TitleBadge title={detail.title} link />
+          {session && session.uid !== userId && (
+            <Link href={`/message?to=${userId}`} className="button">
+              发短消息
+            </Link>
+          )}
           <table className="scores" cellPadding={0} cellSpacing={0}>
             <tbody>
               {LEVELS.map((level: Level) => {
@@ -85,6 +105,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
             />
           </div>
         )}
+        <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
         <div className="profile box">
           <h2>个人资料</h2>
           <span className="id">
@@ -117,6 +138,13 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
             <h2>统计</h2>
             <table className="table full">
               <tbody>
+                <tr>
+                  <td>人气</td>
+                  <td>
+                    <em>{clicks.total}</em>
+                    {clicks.today > 0 && `（今日 +${clicks.today}）`}
+                  </td>
+                </tr>
                 <tr>
                   <td>登录次数</td>
                   <td>{detail.stat.loginTimes}</td>

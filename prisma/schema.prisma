@@ -354,3 +354,122 @@ model Comment {
   @@index([video, createTime])
   @@map("comment")
 }
+
+// ---------- 2008 ASP 版功能移植新增表（2026-09-23） ----------
+
+// 人气：看地盘计数（user+ip+date 去重，移植 2008 版 Click 表）
+model Click {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  ip         String @db.VarChar(40)
+  date       String @db.Char(10)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@unique([user, ip, date])
+  @@index([user, date])
+  @@map("click")
+}
+
+// 每日一星（移植 2008 版 Star 表，每日评选一次、月度不重复）
+model Star {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  date       String @db.Char(10)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@unique([date])
+  @@map("star")
+}
+
+// 扫雷历程：按月记事（移植 2008 版 History 表，同年月唯一）
+model History {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  month      String @map("year_month") @db.Char(7)
+  content    String @db.VarChar(500)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@unique([user, month])
+  @@map("history")
+}
+
+// 站内信（移植 2008 版 Message 表）
+model Message {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  fromUser   BigInt  @map("from_user") @db.BigInt
+  toUser     BigInt  @map("to_user") @db.BigInt
+  content    String  @db.VarChar(200)
+  isRead     Boolean @default(false) @map("is_read")
+  isSystem   Boolean @default(false) @map("is_system")
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@index([toUser, isRead])
+  @@map("message")
+}
+
+// 论坛主题（移植 2008 版 BBS Title 表；板块：0 公告 1 技术 2 杂谈 3 问答）
+model BbsPost {
+  id            BigInt  @id @default(autoincrement()) @db.BigInt
+  board         Int     @default(1) @db.TinyInt
+  user          BigInt  @db.BigInt
+  title         String  @db.VarChar(100)
+  content       String  @db.Text
+  replies       Int     @default(0) @db.Int
+  clicks        Int     @default(0) @db.Int
+  isTop         Boolean @default(false) @map("is_top")
+  isNice        Boolean @default(false) @map("is_nice")
+  isLocked      Boolean @default(false) @map("is_locked")
+  status        Int     @default(0) @db.SmallInt
+  lastReplyTime BigInt  @default(0) @map("last_reply_time") @db.BigInt
+  lastReplyUser BigInt  @default(0) @map("last_reply_user") @db.BigInt
+  createTime    BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime    BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@index([board, status, lastReplyTime])
+  @@map("bbs_post")
+}
+
+// 论坛回复（移植 2008 版 BBS Reply 表）
+model BbsReply {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  post       BigInt @db.BigInt
+  user       BigInt @db.BigInt
+  content    String @db.Text
+  status     Int    @default(0) @db.SmallInt
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@index([post, status, id])
+  @@map("bbs_reply")
+}
+
+// 排行每日快照（进步榜数据源，替代 2008 版「刷新排行」时的 Old_Rank）
+model RankSnapshot {
+  id          BigInt @id @default(autoincrement()) @db.BigInt
+  user        BigInt @db.BigInt
+  date        String @db.Char(10)
+  sumTimeRank Int    @default(0) @map("sum_time_rank") @db.Int
+  sum3bvsRank Int    @default(0) @map("sum_3bvs_rank") @db.Int
+  createTime  BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime  BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@unique([user, date])
+  @@map("rank_snapshot")
+}
+
+// 密码重置令牌（邮箱找回，新版测试.txt 需求）
+model PasswordToken {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  user       BigInt  @db.BigInt
+  token      String  @db.Char(64)
+  used       Boolean @default(false)
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@unique([token])
+  @@map("password_token")
+}

@@ -122,7 +122,9 @@ export default function LoginForm() {
           <button type="submit" className="auth_button" disabled={loading}>
             {loading ? "登录中…" : "登录"}
           </button>
-          <p className="hint">老用户首次登录后需绑定微信或 QQ</p>
+          <p className="hint">
+            老用户首次登录后需绑定微信或 QQ　<a href="/account/forgot">忘记密码？</a>
+          </p>
         </form>
       )}
     </div>

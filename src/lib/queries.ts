@@ -3,7 +3,7 @@
 //       video / video_info / video_stat / video_scores_* 共用同一主键（录像 id）
 
 import { prisma } from "./db";
-import { title } from "./assess";
+import { getTitleDistribution, title } from "./assess";
 import {
   COMMENT_STATUS,
   COMMENT_TOP_NUMBER,
@@ -14,6 +14,8 @@ import {
   NEWS_TYPE,
   ORDER_DIRECTION,
   RANKING_PAGESIZE,
+  TITLES,
+  USER_ROLE,
   VIDEO_PAGESIZE,
   VIDEO_STATUS,
   type Level,
@@ -79,7 +81,7 @@ function toBrief(u: {
   return { id: N(u.id), chineseName: u.chineseName, englishName: u.englishName, sex: u.sex };
 }
 
-async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>> {
+export async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>> {
   if (!ids.length) return new Map();
   const rows = await prisma.user.findMany({ where: { id: { in: ids.map(BigInt) } } });
   return new Map(rows.map((r) => [N(r.id), toBrief(r)!]));
@@ -162,15 +164,37 @@ const SCORE_FIELD = (level: Level, order: Order) => `${level}${order === "time" 
 const VIDEO_FIELD = (level: Level, order: Order) => `${level}${order === "time" ? "TimeVideo" : "3bvsVideo"}` as const;
 const DATE_FIELD = (level: Level, order: Order) => `${level}${order === "time" ? "TimeDate" : "3bvsDate"}` as const;
 
+// user_scores 与 user_scores_nf 字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
+interface UserScoresDelegate {
+  count(args: { where?: Record<string, unknown> }): Promise<number>;
+  findMany(args: {
+    where?: Record<string, unknown>;
+    select?: { id: true };
+    orderBy: Record<string, string>;
+    skip?: number;
+    take?: number;
+  }): Promise<Record<string, bigint | number | null>[]>;
+  findUnique(args: {
+    where: { id: bigint };
+  }): Promise<Record<string, bigint | number | null> | null>;
+}
+
+function userScoresTable(nf: boolean): UserScoresDelegate {
+  return (nf ? prisma.userScoresNf : prisma.userScores) as unknown as UserScoresDelegate;
+}
+
 export async function getRanking(
   level: Level,
   order: Order,
-  page: number
+  page: number,
+  nf = false
 ): Promise<{ users: RankingUser[]; total: number; pageSize: number }> {
   const field = SCORE_FIELD(level, order);
+  // NF（无标雷）榜切换数据源（移植 2008 版 Ranking_NF 的 *_Score_NF 语义）
+  const table = userScoresTable(nf);
   const where = { [field]: { gt: 0 } };
-  const total = await prisma.userScores.count({ where });
-  const rows = await prisma.userScores.findMany({
+  const total = await table.count({ where });
+  const rows = await table.findMany({
     where,
     orderBy: { [field]: ORDER_DIRECTION[order] },
     skip: (page - 1) * RANKING_PAGESIZE,
@@ -197,19 +221,20 @@ export async function getRanking(
 }
 
 /** 「我在哪里」：计算用户在排行榜的页码（移植 Ranking::getPage，同分时从粗定位逐页扫描找到本人） */
-export async function getRankingPageOfUser(id: number, level: Level, order: Order): Promise<number> {
+export async function getRankingPageOfUser(id: number, level: Level, order: Order, nf = false): Promise<number> {
   const field = SCORE_FIELD(level, order);
-  const row = await prisma.userScores.findUnique({ where: { id: BigInt(id) } });
+  const table = userScoresTable(nf);
+  const row = await table.findUnique({ where: { id: BigInt(id) } });
   if (!row) return -1;
   const score = Number((row as unknown as Record<string, number | null>)[field] ?? 0);
   if (!score) return -1;
-  const better = await prisma.userScores.count({
+  const better = await table.count({
     where:
       order === "time" ? { [field]: { lt: score, gt: 0 } } : { [field]: { gt: score } },
   });
   let offset = better - (better % RANKING_PAGESIZE);
   for (;;) {
-    const rows = await prisma.userScores.findMany({
+    const rows = await table.findMany({
       where: { [field]: { gt: 0 } },
       select: { id: true },
       orderBy: { [field]: ORDER_DIRECTION[order] },
@@ -226,7 +251,7 @@ export async function getRankingPageOfUser(id: number, level: Level, order: Orde
 
 export async function getVideoList(opts: {
   level: VideoLevel | "all";
-  order: "id" | "time" | "3bvs";
+  order: "id" | "time" | "3bvs" | "comments";
   author?: number;
   page: number;
 }): Promise<{ videos: VideoListItem[]; total: number; pageSize: number }> {
@@ -234,7 +259,19 @@ export async function getVideoList(opts: {
   let ids: number[] = [];
   let total = 0;
 
-  if (level === "all") {
+  if (order === "comments") {
+    // 热评录像（移植 2008 版 Video_Hot：按评论数降序）
+    const where = { comments: { gt: 0 } };
+    total = await prisma.videoStat.count({ where });
+    const rows = await prisma.videoStat.findMany({
+      where,
+      select: { id: true },
+      orderBy: { comments: "desc" },
+      skip: (page - 1) * VIDEO_PAGESIZE,
+      take: VIDEO_PAGESIZE,
+    });
+    ids = rows.map((r) => N(r.id));
+  } else if (level === "all") {
     // 全部：按上传时间（id 倒序）
     const where = author ? { user: BigInt(author) } : {};
     total = await prisma.video.count({ where });
@@ -525,4 +562,129 @@ export async function addComment(videoId: number, userId: number, content: strin
     }),
   ]);
   return N(created.id);
+}
+
+// ---------- 雷界统计（移植 2008 版 Main/Satus.asp 的 SP dbo.Satus） ----------
+
+export interface SiteStats {
+  userTotal: number;
+  rankedTotal: number;
+  videoTotal: number;
+  videoToday: number;
+  commentTotal: number;
+  newbieThisMonth: number;
+  avgBeg: number;
+  avgInt: number;
+  avgExp: number;
+}
+
+export async function getSiteStats(): Promise<SiteStats> {
+  const now = new Date();
+  const monthStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000));
+  const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
+  const [userTotal, rankedTotal, videoTotal, videoToday, commentTotal, newbieThisMonth, avg] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
+      prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
+      prisma.video.count({ where: { createTime: { gte: dayStart } } }),
+      prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL } }),
+      prisma.user.count({ where: { createTime: { gte: monthStart } } }),
+      prisma.userScores.aggregate({
+        _avg: { begTime: true, intTime: true, expTime: true },
+        where: { begTime: { gt: 0 }, intTime: { gt: 0 }, expTime: { gt: 0 } },
+      }),
+    ]);
+  return {
+    userTotal,
+    rankedTotal,
+    videoTotal,
+    videoToday,
+    commentTotal,
+    newbieThisMonth,
+    avgBeg: Math.round(avg._avg.begTime ?? 0),
+    avgInt: Math.round(avg._avg.intTime ?? 0),
+    avgExp: Math.round(avg._avg.expTime ?? 0),
+  };
+}
+
+// ---------- 雷界生态（移植 2008 版 World/World.asp：各军衔人数分布） ----------
+
+/** 各军衔人数（按 distribution 阈值对 sum_time 分桶） */
+export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
+  const dist = await getTitleDistribution();
+  if (!dist) return [];
+  const thresholds = dist.thresholds;
+  const counts: number[] = [];
+  for (let i = 0; i < TITLES.length; i++) {
+    const upper = thresholds[i]; // 该军衔的最好成绩线（含）
+    const lower = thresholds[i + 1]; // 下一军衔线（不含）
+    const where = {
+      sumTime: {
+        gt: 0,
+        ...(upper !== undefined ? { lte: upper } : {}),
+        ...(lower !== undefined ? { gt: lower } : {}),
+      },
+    };
+    counts.push(await prisma.userScores.count({ where }));
+  }
+  return TITLES.map((t, i) => ({ title: t, count: counts[i] ?? 0 }));
+}
+
+/** 神界全员（移植 2008 版 World/Hero.asp：大元帅/元帅/大将 = 编制前 41 人） */
+export async function getHeroList(limit = 41): Promise<(UserBrief & { title: string; sumTime: number })[]> {
+  const rows = await prisma.userScores.findMany({
+    where: { sumTime: { gt: 0 } },
+    orderBy: { sumTime: "asc" },
+    take: limit,
+  });
+  const authors = await usersByIds(rows.map((r) => N(r.id)));
+  return Promise.all(
+    rows.map(async (r) => ({
+      ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
+      title: await title(r.sumTime),
+      sumTime: r.sumTime ?? 0,
+    }))
+  );
+}
+
+// ---------- 管理团队（移植 2008 版 Team/Index.asp：管理员 + 各自审核工作量） ----------
+
+export interface TeamMember extends UserBrief {
+  role: number;
+  reviewCount: number;
+}
+
+export async function getTeam(): Promise<TeamMember[]> {
+  const auths = await prisma.userAuth.findMany({
+    where: { role: { in: [USER_ROLE.MANAGER, USER_ROLE.ADMINISTRATOR] } },
+  });
+  const authors = await usersByIds(auths.map((a) => N(a.id)));
+  const members: TeamMember[] = [];
+  for (const a of auths) {
+    const reviewCount = await prisma.video.count({
+      where: { reviewUser: a.id, status: VIDEO_STATUS.REVIEWED },
+    });
+    members.push({
+      ...(authors.get(N(a.id)) ?? { id: N(a.id), chineseName: "?", englishName: "", sex: 1 }),
+      role: a.role,
+      reviewCount,
+    });
+  }
+  return members.sort((x, y) => y.role - x.role || y.reviewCount - x.reviewCount);
+}
+
+/** 随机串门（移植 2008 版 Player/Random.asp：随机访问一个有成绩用户的地盘） */
+export async function getRandomUserId(): Promise<number | null> {
+  const total = await prisma.userScores.count({ where: { sumTime: { gt: 0 } } });
+  if (!total) return null;
+  const skip = Math.floor(Math.random() * total);
+  const rows = await prisma.userScores.findMany({
+    where: { sumTime: { gt: 0 } },
+    select: { id: true },
+    orderBy: { sumTime: "asc" },
+    skip,
+    take: 1,
+  });
+  return rows.length ? N(rows[0].id) : null;
 }

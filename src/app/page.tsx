@@ -6,6 +6,9 @@ import { HOME_NEWS_NUMBER, NEWS_PAGESIZE } from "@/lib/config";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { DailyStar } from "@/components/DailyStar";
+import { BbsLatest } from "@/components/BbsLatest";
+import { SiteStats } from "@/components/SiteStats";
 import { title as assessTitle } from "@/lib/assess";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +33,8 @@ export default async function HomePage() {
         </div>
       </li>
       <li className="sidebar">
+        <DailyStar />
+        <BbsLatest />
         <div id="newbie" className="box">
           <h2>入伍新兵</h2>
           <table cellPadding={0} cellSpacing={0} className="table full">
@@ -76,6 +81,7 @@ export default async function HomePage() {
             </tbody>
           </table>
         </div>
+        <SiteStats />
       </li>
     </ul>
     </div>

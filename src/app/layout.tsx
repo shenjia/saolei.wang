@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
+import { MessageBadge } from "@/components/MessageBadge";
 
 export const metadata: Metadata = {
   title: "扫雷网 Saolei.wang",
@@ -36,6 +37,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 <li>
                   <Link href="/video">录像</Link>
                 </li>
+                <li>
+                  <Link href="/bbs">论坛</Link>
+                </li>
+                <li>
+                  <Link href="/world">雷界</Link>
+                </li>
                 {session ? (
                   <>
                     <li>
@@ -46,6 +53,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                         <Link href="/video/review">审核</Link>
                       </li>
                     )}
+                    <li>
+                      <MessageBadge />
+                    </li>
                     <li>
                       <Link href="/account">{session.username}</Link>
                     </li>
@@ -65,6 +75,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <div id="footer">
           <div className="wrapper">
+            <p>
+              <Link href="/page/help">新手上路</Link> · <Link href="/page/guide">教程</Link> ·{" "}
+              <Link href="/page/download">软件下载</Link> · <Link href="/page/world">世界排行</Link> ·{" "}
+              <Link href="/hero">雷神殿</Link> · <Link href="/team">管理团队</Link> ·{" "}
+              <Link href="/page/about">关于本站</Link> · <Link href="/page/history">更新历史</Link> ·{" "}
+              <Link href="/page/donate">提供赞助</Link>
+            </p>
             <p>Copyright &copy; {new Date().getFullYear()} Saolei.wang</p>
             <a href="http://www.miibeian.gov.cn" target="_blank">
               陕ICP备08100290号
