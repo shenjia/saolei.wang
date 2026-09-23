@@ -1235,17 +1235,17 @@ body #page.ranking_old.main .ranking_nav {
 
 
 /* ==================== 排行榜五/六轮调整（2026-09-24 张老师要求） ====================
-   h1「排行榜」移出卡片置于页面顶部（五轮）；筛选器挪到 title 右侧同一行（六轮）——
-   title 左、tabs+搜索框右，避免 title 独占一行太空。
+   h1「排行榜」移出卡片置于页面顶部（五轮）；筛选器紧靠 title 右侧同一行（六轮）——
+   title 左、tabs+搜索框紧随其后，避免 title 独占一行太空。
    桌面规则包进 min-width:769——移动端（≤768 媒体查询在前）恢复上下堆叠不被反杀。 */
 @media (min-width: 769px) {
-  /* 页头行：h1 左 + 筛选器右，顶对齐（tabs 高 39 与 h1 行高同——
-     tabs 底线恰落在 h1 底边水平线，视觉基线自然对齐） */
+  /* 页头行：h1 + 筛选器起始排布、基线对齐（筛选器底边贴 h1 底边——
+     tabs 文字 15px/行高 39 与 h1 26px/39 底线齐平） */
   #page .page_head {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: 20px;
     margin: 16px 8px 8px;
   }
   #page .page_head .page_title {
@@ -1253,17 +1253,12 @@ body #page.ranking_old.main .ranking_nav {
     margin: 0; /* 间隔职责已由 page_head 承担 */
   }
 
-  /* 页头内的导航条：纵向堆叠（tabs 一行、搜索框第二行）并靠右；
+  /* 页头内的导航条：横向一行（tabs+搜索框并排）紧跟 title；
      收掉 nav 自身外距 */
   body #page.ranking_old.main .page_head .ranking_nav {
     margin: 0;
-    flex-direction: column;
-    align-items: flex-end;
-    row-gap: 8px;
-  }
-  /* 搜索框在第二行仍与 tabs 右缘对齐（goto_form 自带 padding-bottom:5px 微调基线） */
-  body #page.ranking_old.main .page_head .goto_form {
-    padding-bottom: 0;
+    align-items: baseline;
+    gap: 12px;
   }
 }
 /* 两种断点通吃：页头顶距（header 吸顶后页面内容自带间隔，16px 与 .box 节奏一致） */
