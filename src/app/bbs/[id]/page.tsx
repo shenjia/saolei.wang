@@ -8,7 +8,7 @@ import { BBS_BOARD_NAMES, getPost, getReplies, ubb } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import { Pager } from "@/components/Pager";
 import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
-import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { TitleBadge } from "@/components/Cells";
 import { UserCard } from "@/components/UserCard";
 import { getUserCards } from "@/lib/usercard";
 
@@ -52,12 +52,7 @@ export default async function BbsTitlePage({
           )}
         </h1>
         <p className="bbs_meta">
-          {post.author && (
-            <>
-              <AvatarCell id={post.author.id} name={post.author.chineseName} sex={post.author.sex} link />{" "}
-              <TitleBadge title={post.author.title} link />{" "}
-            </>
-          )}
+          {post.author && <TitleBadge title={post.author.title} link />}{" "}
           发表于 {timeOpposite(post.createTime, TIME_NEVER)}　点击 <em>{post.clicks}</em>　回复{" "}
           <em>{post.replies}</em>
           {session && (
@@ -73,7 +68,13 @@ export default async function BbsTitlePage({
         <div className="bbs_floor">
           <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(post.content) }} />
           {post.author && cards.get(post.author.id) && (
-            <UserCard card={cards.get(post.author.id)!} own={session?.uid === post.author.id} />
+            <div className="bbs_side">
+              <UserCard
+                card={cards.get(post.author.id)!}
+                own={session?.uid === post.author.id}
+                side
+              />
+            </div>
           )}
         </div>
       </div>
@@ -82,12 +83,7 @@ export default async function BbsTitlePage({
         <div key={r.id} className="box bbs_post">
           <p className="bbs_meta">
             <em>{r.floor} 楼</em>{" "}
-            {r.author && (
-              <>
-                <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} link />{" "}
-                <TitleBadge title={r.author.title} link />{" "}
-              </>
-            )}
+            {r.author && <TitleBadge title={r.author.title} link />}{" "}
             {timeOpposite(r.createTime, TIME_NEVER)}
             {session && (admin || session.uid === r.author?.id || session.uid === post.author?.id) && (
               <span className="bbs_ops">
@@ -99,7 +95,9 @@ export default async function BbsTitlePage({
           <div className="bbs_floor">
             <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(r.content) }} />
             {r.author && cards.get(r.author.id) && (
-              <UserCard card={cards.get(r.author.id)!} own={session?.uid === r.author.id} />
+              <div className="bbs_side">
+                <UserCard card={cards.get(r.author.id)!} own={session?.uid === r.author.id} side />
+              </div>
             )}
           </div>
         </div>

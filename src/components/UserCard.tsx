@@ -22,13 +22,17 @@ export function UserCard({
   card,
   own = false,
   vertical = false,
+  side = false,
 }: {
   card: UserCardData;
   own?: boolean;
   vertical?: boolean;
+  /** BBS 楼层右侧独立卡：头像居中在最上，信息块通栏在下（2026-09-23 张老师要求） */
+  side?: boolean;
 }) {
+  const cls = side ? "user_card side" : vertical ? "user_card v" : "user_card";
   return (
-    <div className={vertical ? "user_card v" : "user_card"}>
+    <div className={cls}>
       <div className="uc_body">
         <div className="uc_left">
           <img className="uc_avatar" src={card.avatarUrl} alt={card.chineseName} />

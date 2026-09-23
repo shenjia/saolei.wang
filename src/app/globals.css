@@ -1679,6 +1679,7 @@ body #page.two_columns li.main {
   /* BBS 楼层手机端：作者卡片与正文上下堆叠，卡片在上（先见其人） */
   body #page .bbs_floor {
     flex-direction: column-reverse;
+    align-items: stretch;
   }
   body #page .bbs_floor .user_card {
     width: auto;
