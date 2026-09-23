@@ -43,19 +43,30 @@
 
 | 路由 | 说明 |
 |---|---|
-| `/` | 雷界动态（加载更多）+ 入伍新兵 + 十大元帅 |
-| `/ranking?level&order&page` | 排行榜（sum/beg/int/exp × time/3bvs）；登录后有「我在哪里」定位按钮 |
-| `/ranking/whereami?id&level&order` | 302 定位到该用户所在页 `#id_<uid>`（移植 Ranking::getPage 同分扫描） |
-| `/video?level&order&author&page` | 录像列表（detail 模式，含棋盘缩略） |
+| `/` | 雷界动态（加载更多）+ 每日一星 + 论坛新帖 + 入伍新兵 + 十大元帅 + 雷界统计 |
+| `/ranking?level&order&nf&page` | 排行榜（sum/beg/int/exp × time/3bvs × 普通/NF）；登录后有「我在哪里」定位按钮 |
+| `/ranking/whereami?id&level&order&nf` | 302 定位到该用户所在页 `#id_<uid>`（移植 Ranking::getPage 同分扫描） |
+| `/grow` | 进步榜（rank_snapshot 每日惰性快照，今 vs 昨名次差） |
+| `/click` | 人气榜（click 表 user+ip+date 去重；访问地盘即计数） |
+| `/world` | 雷界生态：军衔人数分布 + 神界全员（sum_time 前 41） |
+| `/hero` | 雷神殿：神界前 30 |
+| `/team` | 管理团队：管理员名单 + 各自审核量 |
+| `/user/random` | 随机串门（302 到随机有成绩用户地盘） |
+| `/video?level&order&author&page` | 录像列表（detail 模式，含棋盘缩略；order 含 comments 热评） |
 | `/video/[id]` | 录像详情（棋盘、flop 播放、评论、计数、管理员审核面板） |
 | `/video/upload` | 录像上传（登录，mvf/avf，500KB 上限） |
 | `/video/review?status` | 录像审核列表（管理员；待审/已通过/已屏蔽） |
 | `/video/download/[id]` | 录像下载（先 uniqueAction('download') 计数再发文件） |
-| `/user/[id]` | 用户主页（成绩总表、雷达图、动态加载更多、资料、统计） |
+| `/user/[id]` | 用户主页（成绩总表、雷达图、动态、历程 CRUD、资料、人气统计、发短消息） |
+| `/bbs` `/bbs/[id]` `/bbs/post` `/bbs/edit/[id]` | 论坛：4 板块（0 公告仅管理员）、置顶/精华/锁定/软删、UBB 渲染、回复分页 |
+| `/message` `/message/[id]` | 站内信：收件箱/读信/发信/清空 + 管理员广播；导航 30s 未读轮询 |
 | `/account` `/account/profile` `/account/password` | 账号中心：我的资料 / 修改资料 / 修改密码（均需登录） |
 | `/account/login` `/account/bind` `/account/oauth` | 密码登录 / 老用户强制绑定 / 扫码注册（见 2026-09-21 日志） |
-| `/page/titles` `/page/help` | 军衔体系说明 / 新手上路 |
-| API | `/api/comment/post|more`、`/api/news/more`、`/api/account/profile|password`、`/api/video/upload|review` |
+| `/account/forgot` `/account/reset?token` | 邮箱找回密码（token sha256 入库、30min 一次性；SMTP_* 未配时链接打日志） |
+| `/page/titles` `/page/help` | 军衔体系说明 / 新手上路（如何加入排行） |
+| `/page/help/*` | 11 个帮助子页：why/grow/word/video/upload/freeze/star/clone-faq/bbs/email/avatar |
+| `/page/guide` `/page/about` `/page/donate` `/page/history` `/page/download` `/page/world` | 教程索引 / 关于 / 赞助 / 更新历史 / 软件下载（暂链旧站文件）/ 世界 TOP10 |
+| API | `/api/comment/post|more`、`/api/news/more`、`/api/account/profile|password`、`/api/video/upload|review`、`/api/bbs`、`/api/message`、`/api/history`、`/api/auth/password` |
 
 ## 关键模块（src/lib/）
 
