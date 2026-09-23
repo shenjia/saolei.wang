@@ -2192,3 +2192,27 @@ body #video_list_header .header_left {
 body #video_list_header .header_left .tabs {
   margin-bottom: 0;
 }
+
+/* ==================== 404 页（2026-09-24 张老师要求） ====================
+   雷区摆「404」像素字（size16 格子 ×15×7=244px 宽），复用 legacy .board 立体边框与
+   block16x16 图块（b0 未翻格 / bb 黑雷）；文案与按钮沿用 Monokai 语言 */
+#not_found_box {
+  text-align: center;
+  padding: 55px 30px 50px;
+}
+#not_found_box .nf_board {
+  width: max-content;
+  margin: 0 auto 35px;
+}
+#not_found_box h1 {
+  margin: 0;
+}
+#not_found_box .nf_desc {
+  color: #939387;
+  font-size: 16px;
+  line-height: 26px;
+  margin: 14px 0 30px;
+}
+#not_found_box .nf_actions .button {
+  margin: 0 8px;
+}
