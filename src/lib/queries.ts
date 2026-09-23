@@ -905,27 +905,34 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
   }));
 }
 
-/** 用户在本军区内的名次（用户主页军衔下方展示） */
-export interface UserAreaRank {
-  area: string;
-  pos: number; // 本军区名次（与地区榜内页 /area?name= 同口径：总时间升序）
-  total: number; // 本军区有成绩人数
+/** 用户全国排名 + 省份排名（用户主页军衔徽章上方展示，09-23 晚张老师要求） */
+export interface UserRanks {
+  national: number; // 全国名次（主榜口径：总时间升序）
+  area: string; // 军区名（用于文案）
+  areaPos: number | null; // 省份名次（无军区/多地区为 null）
 }
 
-export async function getUserAreaRank(
-  area: string,
-  userId: number
-): Promise<UserAreaRank | null> {
-  // 与地区榜同口径：多地区（含 &）用户不参与地区榜
-  if (!area || area.includes("&")) return null;
-  const rows = await prisma.$queryRaw<{ pos: bigint; total: bigint }[]>`
-     SELECT pos, total FROM (
-        SELECT s.id,
-              ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) pos,
-              COUNT(*) OVER () total
+export async function getUserRanks(userId: number): Promise<UserRanks | null> {
+  const rows = await prisma.$queryRaw<{ national: bigint; area: string; areaPos: bigint | null }[]>`
+     WITH allr AS (
+        SELECT s.id, u.area,
+              ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) npos
        FROM user_scores s JOIN user u ON u.id = s.id
-       WHERE s.sum_time > 0 AND u.area = ${area}
-     ) t WHERE id = ${userId}`;
+       WHERE s.sum_time > 0
+     ),
+     arear AS (
+        SELECT id, area,
+              ROW_NUMBER() OVER (PARTITION BY area ORDER BY npos) apos
+       FROM allr
+       WHERE area <> '' AND area NOT LIKE '%&%'
+     )
+     SELECT a.npos national, a.area, b.apos areaPos
+     FROM allr a LEFT JOIN arear b ON b.id = a.id
+     WHERE a.id = ${userId}`;
   if (!rows.length) return null;
-  return { area, pos: N(rows[0].pos), total: N(rows[0].total) };
+  return {
+    national: N(rows[0].national),
+    area: rows[0].area,
+    areaPos: rows[0].areaPos === null ? null : N(rows[0].areaPos),
+  };
 }

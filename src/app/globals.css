@@ -946,9 +946,9 @@ body .world_stats .stat_tag em {
 }
 
 /* ---------- 用户主页照片 + 大军衔标签（2026-09-23 张老师要求） ----------
-   09-23 晚三轮调整：军区/战力排行从军衔徽章下移出，居下显示、与头像下边缘
-   对齐（top:190px 锚定 + translateY(-100%)，不随右栏内容高度浮动）；
-   文案改「战力全国第 N 名」消歧义；姓名/拼音字号微调放大。 */
+   09-23 晚四轮调整：全国/省份排名两行置于军衔徽章上方居中显示
+   （「全国排行第 N 名 / 省份排行第 N 名」，主榜 sum_time 口径）；
+   底部军区栏取消；姓名/拼音字号微调放大。 */
 /* legacy 已有 #user_view .info .avatar{float:left;margin-right:15px}，这里补尺寸 */
 body #user_view .info {
   position: relative;
@@ -1013,8 +1013,7 @@ body #user_view .info .score_3bvs em {
   font-size: 16px;
   line-height: 20px;
 }
-/* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示）；
-   与下方军区/战力排行同宽同锚点（right+width），保证两者居中对齐 */
+/* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示） */
 body #user_view .info .rank_label {
   position: absolute;
   top: 30px; /* 与 .box 内边距一致 = 头像顶部齐平 */
@@ -1024,49 +1023,29 @@ body #user_view .info .rank_label {
   text-align: center;
   margin: 0;
 }
+/* 全国/省份排名两行（09-23 晚张老师要求）：置于军衔徽章上方，分两行居中 */
+body #user_view .info .rank_label .ranks {
+  display: block;
+  margin-bottom: 8px;
+  color: #888;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+body #user_view .info .rank_label .ranks .rank_line {
+  display: block;
+  font-size: 11px;
+}
+body #user_view .info .rank_label .ranks em {
+  font-style: normal;
+  font-weight: bold;
+  color: #e6db74; /* Monokai 字符串色，与 legacy 主题一致 */
+}
 body #user_view .info .rank_label .rank_name {
   display: block;
   margin-top: 6px;
   font-size: 14px;
   font-weight: bold;
   line-height: 1.2;
-}
-/* 军区/名次（09-23 晚张老师要求）：显示本人在本军区的名次（地区榜内页同口径
-   sum_time），居下显示、与头像下边缘对齐——top = box 内边距 30 + 头像 160 = 190px
-   锚定 + translateY(-100%) 贴齐下缘；同宽同锚点与徽章居中对齐 */
-body #user_view .info .area_rank {
-  position: absolute;
-  top: 190px;
-  right: 30px;
-  width: 120px;
-  transform: translateY(-100%);
-  display: block;
-  text-align: center;
-  color: #888;
-  line-height: 1.3;
-  white-space: nowrap;
-}
-body #user_view .info .area_rank:hover {
-  text-decoration: underline;
-  color: #aaa;
-}
-body #user_view .info .area_rank .area_name {
-  display: block;
-  font-size: 13px;
-  font-weight: bold;
-}
-body #user_view .info .area_rank .area_pos {
-  display: block;
-  margin-top: 1px;
-  font-size: 11px;
-}
-body #user_view .info .area_rank .area_pos .total {
-  color: #666; /* 军区总人数：弱化显示 */
-}
-body #user_view .info .area_rank em {
-  font-style: normal;
-  font-weight: bold;
-  color: #e6db74; /* Monokai 字符串色，与 legacy 主题一致 */
 }
 /* ---------- 侧栏统计表格（2026-09-23 张老师反馈） ----------
    原 legacy .table td padding 8px 20px + nowrap：数字视觉偏右，

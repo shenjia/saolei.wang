@@ -1,8 +1,8 @@
 // 用户主页：成绩总表 + 最新动态 + 个人资料（移植 views/user/view）
 // 访问即计人气（移植 2008 版 Player_Info 的 Click 计数）
 // 2026-09-23 首个版块布局（张老师要求）：左侧正方形照片（OAuth 头像 →
-//   /images/player/{id}.jpg → 默认头像），军衔用大徽章标签放在右上角；
-//   军区/战力排行居下显示、与头像下边缘对齐，文案「战力全国第 N 名」消歧义
+//   /images/player/{id}.jpg → 默认头像）；全国/省份排名两行置于右上角
+//   军衔徽章上方，居中显示
 
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -10,7 +10,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { getUserDetail, getUserNews, getUserAreaRank } from "@/lib/queries";
+import { getUserDetail, getUserNews, getUserRanks } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
 import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, areaDisplay, type Level } from "@/lib/config";
@@ -49,10 +49,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
   const clicks = await getClicks(userId);
 
   const news = await getUserNews(userId, USER_NEWS_NUMBER);
-  const [history, session, areaRank] = await Promise.all([
+  const [history, session, ranks] = await Promise.all([
     getHistory(userId),
     getSession(),
-    getUserAreaRank(detail.user.area, userId),
+    getUserRanks(userId),
   ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
@@ -118,6 +118,19 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               </tbody>
             </table>
             <div className="rank_label">
+              {/* 全国 / 省份排名两行，置于军衔徽章上方（09-23 晚张老师要求） */}
+              {ranks && (
+                <div className="ranks">
+                  <span className="rank_line">
+                    全国排行第 <em>{ranks.national}</em> 名
+                  </span>
+                  {ranks.areaPos !== null && (
+                    <span className="rank_line">
+                      {areaDisplay(ranks.area)}排行第 <em>{ranks.areaPos}</em> 名
+                    </span>
+                  )}
+                </div>
+              )}
               <Link href="/world" title="军衔体系">
                 <RankBadge title={detail.title} size={72} />
                 <span className="rank_name" style={{ color: TITLE_COLORS[detail.title] }}>
@@ -126,21 +139,6 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               </Link>
             </div>
           </div>
-        {/* 本军区内的名次（地区榜内页同口径 sum_time）：居下显示、与头像下边缘对齐，
-            与上方军衔徽章居中对齐（09-23 晚张老师要求） */}
-        {areaRank && (
-          <Link
-            href={`/area?name=${encodeURIComponent(areaRank.area)}`}
-            target="_blank"
-            className="area_rank"
-            title="地区榜"
-          >
-            <span className="area_name">{areaDisplay(areaRank.area)}军区</span>
-            <span className="area_pos">
-              第 <em>{areaRank.pos}</em> 名 <span className="total">/ {areaRank.total} 人</span>
-            </span>
-          </Link>
-        )}
         </div>
         {news.length > 0 && (
           <div id="news" className="box">
