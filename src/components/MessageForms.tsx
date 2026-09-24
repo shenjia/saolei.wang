@@ -1,4 +1,4 @@
-// 发信表单（收件箱页与广播共用提交逻辑）
+// 发信表单（消息页与广播共用提交逻辑）
 "use client";
 
 import { useState } from "react";
@@ -59,7 +59,7 @@ export function ClearButton() {
   const [done, setDone] = useState(false);
   const router = useRouter();
   async function onClear() {
-    if (!confirm("确定清空收件箱吗？此操作不可恢复。")) return;
+    if (!confirm("确定清空所有消息吗？此操作不可恢复。")) return;
     const res = await fetch("/api/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -71,13 +71,13 @@ export function ClearButton() {
       return;
     }
     setDone(true); // 按钮随 refresh 后隐藏
-    toast("收件箱已清空", "success");
+    toast("消息已清空", "success");
     router.refresh(); // 整页 location.reload 会丢 toast，改用客户端 refresh
   }
   if (done) return null;
   return (
     <button className="button" onClick={onClear}>
-      清空收件箱
+      清空消息
     </button>
   );
 }

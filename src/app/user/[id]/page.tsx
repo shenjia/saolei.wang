@@ -114,7 +114,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
           <span className={`gender big ${user.sex ? "male" : "female"}`}></span>
           {session && session.uid !== userId && (
             <Link href={`/message?to=${userId}`} className="button">
-              发短消息
+              发消息
             </Link>
           )}
           <div className="info_body">

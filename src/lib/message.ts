@@ -1,7 +1,9 @@
-// 站内信（移植 2008 版 Message/*：收件箱/读信/发信/清空 + 管理员广播）
+// 站内信（移植 2008 版 Message/*：消息列表/读信/发信/清空 + 管理员广播）
+// 2026-09-24 改版（张老师要求）：「收件箱」更名「消息」，作者列带军衔（论坛列表同款）
 
 import { prisma } from "./db";
 import { usersByIds, type UserBrief } from "./queries";
+import { title as assessTitle } from "./assess";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -9,13 +11,35 @@ const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 export const MESSAGE_CONTENT_LIMIT = 200;
 export const MESSAGE_PAGESIZE = 10;
 
+export interface MessageUserBrief extends UserBrief {
+  /** 18 级军衔（按 sum_time 评定，作者列 TitleBadge 用） */
+  title: string;
+}
+
 export interface MessageItem {
   id: number;
   content: string;
   isRead: boolean;
   isSystem: boolean;
   createTime: number;
-  from: UserBrief | null;
+  from: MessageUserBrief | null;
+}
+
+/** usersByIds 之上补军衔（distribution 阈值在 assess 内缓存；模式同 bbs.ts authorsWithTitles） */
+export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<number, MessageUserBrief>> {
+  const briefs = await usersByIds(ids);
+  const scores = ids.length
+    ? await prisma.userScores.findMany({
+        where: { id: { in: ids.map(BigInt) } },
+        select: { id: true, sumTime: true },
+      })
+    : [];
+  const sumMap = new Map(scores.map((s) => [N(s.id), s.sumTime ?? 0]));
+  const out = new Map<number, MessageUserBrief>();
+  for (const [id, b] of briefs) {
+    out.set(id, { ...b, title: await assessTitle(sumMap.get(id) ?? 0) });
+  }
+  return out;
 }
 
 export async function getUnreadCount(userId: number): Promise<number> {
@@ -38,7 +62,7 @@ export async function getMessageList(
     skip: (page - 1) * MESSAGE_PAGESIZE,
     take: MESSAGE_PAGESIZE,
   });
-  const authors = await usersByIds([...new Set(rows.map((r) => N(r.fromUser)))]);
+  const authors = await messageAuthorsWithTitles([...new Set(rows.map((r) => N(r.fromUser)))]);
   return {
     messages: rows.map((r) => ({
       id: N(r.id),
@@ -60,7 +84,7 @@ export async function readMessage(id: number, userId: number): Promise<MessageIt
   if (!row.isRead) {
     await prisma.message.update({ where: { id: row.id }, data: { isRead: true, updateTime: nowSec() } });
   }
-  const authors = await usersByIds([N(row.fromUser)]);
+  const authors = await messageAuthorsWithTitles([N(row.fromUser)]);
   return {
     id: N(row.id),
     content: row.content,
@@ -107,7 +131,7 @@ export async function sendSystemMessage(toUserId: number, content: string): Prom
   });
 }
 
-/** 清空收件箱（移植 Clear_Action） */export async function clearMessages(userId: number): Promise<number> {
+/** 清空消息列表（移植 Clear_Action） */export async function clearMessages(userId: number): Promise<number> {
   const res = await prisma.message.deleteMany({ where: { toUser: BigInt(userId) } });
   return res.count;
 }
