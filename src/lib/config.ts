@@ -22,7 +22,7 @@ export const LEVEL_NAMES: Record<Level | "all", string> = {
 
 export const ORDER_NAMES: Record<Order, string> = {
   time: "时间记录",
-  "3bvs": "3BV/s记录",
+  "3bvs": "3BVS记录", // 2026-09-24 张老师定：写法用 3BVS（不带斜杠），2013 版原文是 3BV/s
 };
 
 export const RANKING_PAGESIZE = 20;
