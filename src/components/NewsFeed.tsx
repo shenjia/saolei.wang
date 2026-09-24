@@ -29,6 +29,7 @@ export function NewsFeed({
   initialHasMore,
   initialTotal,
   title,
+  titleClassName,
 }: {
   initial: NewsFeedItem[];
   userId?: number;
@@ -36,8 +37,10 @@ export function NewsFeed({
   initialHasMore: boolean;
   /** 当前筛选条件下的动态总数（左下角总数行） */
   initialTotal: number;
-  /** 标题节点；传入时筛选 tabs 收进标题行右侧（首页「雷界快讯」同款布局） */
+  /** 标题节点；传入时筛选 tabs 收进标题行右侧（首页版块布局） */
   title?: ReactNode;
+  /** 标题附加类名（首页「录像」版块传 gray 走灰色次级标题，2026-09-24 张老师要求） */
+  titleClassName?: string;
 }) {
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(initial.length ? initial[initial.length - 1].news.id : 0);
@@ -108,7 +111,7 @@ export function NewsFeed({
     <>
       {title ? (
         <div className="news_head">
-          <h1>{title}</h1>
+          <h1 className={titleClassName}>{title}</h1>
           <div className="news_tabs ranking_tabs side head">{tabs}</div>
         </div>
       ) : (

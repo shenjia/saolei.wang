@@ -1,7 +1,8 @@
-// 首页：动态 + 最新录像 + 入伍新兵 + 十大元帅（移植 views/home/index）
-// 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 15 条；其下新增「最新录像」版块
-// （15 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与动态版块同构）；
-// 右栏顶部「每日一星」卡片撤下（登录后仍显示「我的地盘」，游客直接以「十大元帅」起头）。
+// 首页：新闻 + 录像 + 入伍新兵 + 十大元帅（移植 views/home/index）
+// 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 15 条；其下新增录像版块
+// （15 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与新闻版块同构）；
+// 右栏顶部「每日一星」卡片撤下（登录后仍显示「我的地盘」，游客直接以「十大元帅」起头）；
+// 二轮定名：版块标题定为「新闻」「录像」，录像标题走灰色次级样式，两标题字号与右栏 h2 一致。
 
 import Link from "next/link";
 import {
@@ -56,7 +57,7 @@ export default async function HomePage() {
       <li className="main">
         <div id="news" className="box">
           <NewsFeed
-            title="动态"
+            title="新闻"
             initial={feed}
             pageSize={HOME_NEWS_NUMBER}
             initialHasMore={news.length === HOME_NEWS_NUMBER}
@@ -65,7 +66,8 @@ export default async function HomePage() {
         </div>
         <div id="video" className="box">
           <VideoFeed
-            title="最新录像"
+            title="录像"
+            titleClassName="gray"
             initial={videos}
             pageSize={HOME_VIDEO_NUMBER}
             initialHasMore={videos.length === HOME_VIDEO_NUMBER}

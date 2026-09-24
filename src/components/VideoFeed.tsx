@@ -25,6 +25,7 @@ export function VideoFeed({
   initialHasMore,
   initialTotal,
   title,
+  titleClassName,
 }: {
   initial: VideoListItem[];
   pageSize: number;
@@ -33,6 +34,8 @@ export function VideoFeed({
   initialTotal: number;
   /** 标题节点；筛选 tabs 收进标题行右侧（首页版块布局） */
   title?: ReactNode;
+  /** 标题附加类名（首页「录像」版块传 gray 走灰色次级标题，2026-09-24 张老师要求） */
+  titleClassName?: string;
 }) {
   const [items, setItems] = useState(initial);
   // 游标 = 已加载最后一条的录像 id（更早的记录 id 更小）
@@ -106,7 +109,7 @@ export function VideoFeed({
     <>
       {title ? (
         <div className="news_head">
-          <h1>{title}</h1>
+          <h1 className={titleClassName}>{title}</h1>
           <div className="news_tabs ranking_tabs side head">{tabs}</div>
         </div>
       ) : (

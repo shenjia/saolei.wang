@@ -2241,9 +2241,12 @@ body #page.two_columns li.main {
   margin: 0 0 10px;
 }
 
-/* 首页「雷界快讯」标题行：筛选 tabs 紧跟 h1 右侧（2026-09-24 张老师二轮：不居右、挨着标题）。
+/* 首页「新闻 / 录像」标题行：筛选 tabs 紧跟 h1 右侧（2026-09-24 张老师二轮：不居右、挨着标题）。
    h1 清掉 legacy 19.5px 底距（否则 flex-end 会让 tabs 底线下坠），
-   行距由 .news_head 整体接管，保持原 19.5px 节奏；窄屏 wrap 换行 */
+   行距由 .news_head 整体接管，保持原 19.5px 节奏；窄屏 wrap 换行。
+   三轮：标题字号收到 legacy h2 的 20px（与右栏「十大元帅/入伍新兵」同尺寸，张老师要求），
+   但行高仍留 39px —— 与同排 tabs 等高，底线对齐不位移、整行高度不变。
+   .gray 变体＝右栏 h2 同款灰 #b1b1a4（首页「录像」为次级版块，标题走灰色）。 */
 .news_head {
   display: flex;
   align-items: flex-end;
@@ -2253,6 +2256,11 @@ body #page.two_columns li.main {
 }
 .news_head h1 {
   margin: 0;
+  font-size: 20px;
+  line-height: 39px;
+}
+.news_head h1.gray {
+  color: #b1b1a4;
 }
 .news_head .ranking_tabs.news_tabs {
   margin: 0;
