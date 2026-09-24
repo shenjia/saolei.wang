@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import "./globals.css";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
+import { LoginLink } from "@/components/LoginLink";
+import { LoginModal } from "@/components/LoginModal";
 import { MessageBadge } from "@/components/MessageBadge";
 import { ScrollReset } from "@/components/ScrollReset";
 import { ToastHost } from "@/components/Toast";
@@ -73,7 +75,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   </>
                 ) : (
                   <li>
-                    <Link href="/account/login">登录</Link>
+                    <LoginLink>登录</LoginLink>
                   </li>
                 )}
               </ul>
@@ -81,6 +83,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
         {children}
+        {!session && <LoginModal />}
         <ToastHost />
         <Suspense fallback={null}>
           <ScrollReset />

@@ -1,13 +1,13 @@
 // 主题详情（移植 2008 版 BBS/Title.asp：点击计数、回复分页、操作按钮）
 // 布局（2026-09-23 张老师要求）：页面级双栏——左列帖子楼层流，右列楼主卡片独立板块
 
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { BBS_BOARD_NAMES, getPost, getReplies, ubb } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import { Pager } from "@/components/Pager";
+import { LoginLink } from "@/components/LoginLink";
 import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { UserCard } from "@/components/UserCard";
@@ -105,7 +105,7 @@ export default async function BbsTitlePage({
               <ReplyForm postId={post.id} locked={post.isLocked && !admin} />
             ) : (
               <p className="text">
-                <Link href="/account/login">登录</Link> 后才能回复。
+                <LoginLink>登录</LoginLink> 后才能回复。
               </p>
             )}
           </div>

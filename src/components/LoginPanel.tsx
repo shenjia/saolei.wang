@@ -1,10 +1,11 @@
 "use client";
 
-// 登录表单：三个 tab（微信扫码 / QQ 扫码 / 账号密码）
-// 扫码 iframe/跳转统一走 /api/auth/* 路由（state 生成、env、mock 判断都收敛在服务端）
+// 登录面板：三个 tab（微信扫码 / QQ 扫码 / 账号密码）
+// 独立登录页与全局登录浮窗共用（2026-09-24 拆出）
+// 密码登录成功后有 onSuccess 回调走浮窗关窗逻辑，无回调则维持独立页跳转行为
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 type Tab = "wechat" | "qq" | "password";
 
@@ -22,15 +23,21 @@ const ERROR_TEXT: Record<string, string> = {
   broken: "账号数据异常，请联系管理员",
 };
 
-export default function LoginForm() {
+export default function LoginPanel({
+  initialError = "",
+  onSuccess,
+}: {
+  /** OAuth 回调错误码（独立页从 ?error= 读） */
+  initialError?: string;
+  /** 密码登录成功回调：浮窗用来关窗 + refresh；不传则按独立页行为跳转 */
+  onSuccess?: (needBind: boolean) => void;
+}) {
   const [tab, setTab] = useState<Tab>("wechat");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError ? (ERROR_TEXT[initialError] ?? "登录失败，请重试") : "");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const callbackError = useSearchParams().get("error");
-  const shownError = error || (callbackError ? (ERROR_TEXT[callbackError] ?? "登录失败，请重试") : "");
 
   async function submitPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -47,6 +54,10 @@ export default function LoginForm() {
         setError(data.error ?? "登录失败");
         return;
       }
+      if (onSuccess) {
+        onSuccess(data.needBind);
+        return;
+      }
       // 老用户未绑定微信/QQ → 强制绑定
       router.push(data.needBind ? "/account/bind" : "/");
       router.refresh();
@@ -56,7 +67,7 @@ export default function LoginForm() {
   }
 
   return (
-    <div id="account_login" className="box">
+    <>
       <h1>登录扫雷网</h1>
       <div className="tabs auth_tabs">
         {TABS.map(([key, name]) =>
@@ -127,6 +138,6 @@ export default function LoginForm() {
           </p>
         </form>
       )}
-    </div>
+    </>
   );
 }
