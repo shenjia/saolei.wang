@@ -2570,6 +2570,27 @@ body #page.ranking_old.main .ranking_nav {
   font-size: 14px;
 }
 
+/* 世界榜三轮（2026-09-24 张老师要求）：Country/Name 拆两列且左对齐；
+   每级纪录后灰色括号日期；总成绩两位小数 */
+#page.ranking_old.main > #world_top th.country,
+#page.ranking_old.main > #world_top td.country,
+#page.ranking_old.main > #world_top th.name,
+#page.ranking_old.main > #world_top td.name {
+  text-align: left;
+}
+#page.ranking_old.main > #world_top td.country {
+  padding-left: 10px;
+  white-space: nowrap;
+}
+#page.ranking_old.main > #world_top td.name {
+  padding-right: 20px; /* Name 列与成绩列拉开，长名字不顶到 Beg 日期 */
+}
+#page.ranking_old.main > #world_top td .date {
+  font-size: 13px;
+  color: #75715e; /* 灰（与表头同档），括号日期弱化显示 */
+  white-space: nowrap;
+}
+
 /* 高亮逻辑修正（2026-09-23 晚 张老师指正）：时间记录才高亮，3BVS 不高亮；
    总计列不再常亮黄——与高级同档浅灰，仅当排序命中（.current）时才黄 */
 .ranking_table td.c_sum {

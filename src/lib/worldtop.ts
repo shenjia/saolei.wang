@@ -13,8 +13,11 @@ export interface WorldRow {
   flag: string; // 国旗代码（china/poland/...），中国行高亮
   name: string;
   beg: string;
+  begDate: string; // 初级纪录日期（2020-01-31，原站每个纪录后灰色括号显示）
   int: string;
+  intDate: string;
   exp: string;
+  expDate: string;
   sum: string;
 }
 
@@ -33,10 +36,12 @@ function parse(html: string): WorldRow[] {
   let m: RegExpExecArray | null;
   while ((m = trRe.exec(html)) !== null) {
     const [, rank, flag, nameHtml, rest] = m;
-    // 三级成绩各在一个 text-align:right 单元格：新成绩是 <a> 链接，老成绩可能是纯文本（无录像文件）
+    // 三级成绩各在一个 text-align:right 单元格：新成绩是 <a> 链接，老成绩可能是纯文本（无录像文件）；
+    // 纪录日期在成绩右侧灰色格（text-align:center + color:grey），格式 2020-01-31
     const cells = [...rest.matchAll(/<td style='text-align:right;'>([\s\S]*?)<\/td>/g)].map((x) =>
       stripTags(x[1])
     );
+    const dates = [...rest.matchAll(/color:grey[^>]*>([\d-]+)</g)].map((x) => x[1]);
     const sumM = /<td style='text-align:center;'>(\d+(?:\.\d+)?)<\/td>/.exec(rest);
     if (cells.length < 3 || cells.slice(0, 3).some((c) => !/^\d+\.\d+$/.test(c)) || !sumM) continue;
     rows.push({
@@ -44,8 +49,11 @@ function parse(html: string): WorldRow[] {
       flag,
       name: stripTags(nameHtml),
       beg: cells[0],
+      begDate: dates[0] ?? "",
       int: cells[1],
+      intDate: dates[1] ?? "",
       exp: cells[2],
+      expDate: dates[2] ?? "",
       sum: sumM[1],
     });
     if (rows.length >= WORLD_TOP_LIMIT) break;
@@ -72,8 +80,9 @@ async function fetchWorldTop(): Promise<WorldTop | null> {
 }
 
 /** 世界 TOP100（1 天缓存；抓取失败返回 null，由组件降级显示） */
-// 缓存键带版本号：解析逻辑修复（2026-09-23 国旗连字符/纯文本成绩）后需丢弃旧缓存
-export const getWorldTop100 = unstable_cache(fetchWorldTop, ["world-top100-v2"], {
+// 缓存键带版本号：解析逻辑变更后需丢弃旧缓存
+// v2: 国旗连字符/纯文本成绩修复；v3: 新增三级纪录日期（2026-09-24）
+export const getWorldTop100 = unstable_cache(fetchWorldTop, ["world-top100-v3"], {
   revalidate: 86400,
   tags: ["world-top100"],
 });

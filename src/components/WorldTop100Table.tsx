@@ -1,6 +1,7 @@
 // 世界 TOP100 表格 + 「加载更多」（2026-09-24 张老师要求：默认只显示前 15 条，下面可加载更多）
 // 数据由服务端一次性抓全（minesweepergame.com，1 天缓存），加载更多只是本地增量展开，
 // 不再发请求——与首页「录像」feed 同款的 more_loader 版式与交互语言。
+// 2026-09-24 二轮：表头 Country/Name 拆两列左对齐；每级纪录后灰色括号日期；总成绩两位小数。
 
 "use client";
 
@@ -10,6 +11,15 @@ import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
 
 const PAGE = 15;
+
+function Score({ v, date }: { v: string; date: string }) {
+  return (
+    <>
+      {v}
+      {date && <span className="date">（{date}）</span>}
+    </>
+  );
+}
 
 export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
   const [shown, setShown] = useState(PAGE);
@@ -21,7 +31,8 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
         <thead>
           <tr>
             <th>Rank</th>
-            <th>Name</th>
+            <th className="country">Country</th>
+            <th className="name">Name</th>
             <th>Beg</th>
             <th>Int</th>
             <th>Exp</th>
@@ -34,9 +45,7 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
               <td className="rank">
                 No.&nbsp;<em>{r.rank}</em>
               </td>
-              <td className="name">
-                {/* 国旗在名字前（2026-09-24 张老师要求，原排行有国旗图标）；
-                    gif 已从 minesweepergame.com 下载到 public/images/flags/ */}
+              <td className="country">
                 <img
                   className="flag"
                   src={`/images/flags/${r.flag}.gif`}
@@ -45,12 +54,18 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
                   width={20}
                   height={13}
                 />
-                <span>{r.name}</span>
               </td>
-              <td className="t">{r.beg}</td>
-              <td className="t">{r.int}</td>
-              <td className="t">{r.exp}</td>
-              <td className="sum">{Math.round(parseFloat(r.sum))}</td>
+              <td className="name">{r.name}</td>
+              <td className="t">
+                <Score v={r.beg} date={r.begDate} />
+              </td>
+              <td className="t">
+                <Score v={r.int} date={r.intDate} />
+              </td>
+              <td className="t">
+                <Score v={r.exp} date={r.expDate} />
+              </td>
+              <td className="sum">{Number(r.sum).toFixed(2)}</td>
             </tr>
           ))}
         </tbody>
