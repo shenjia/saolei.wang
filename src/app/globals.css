@@ -1774,7 +1774,7 @@ body #page.ranking_old .ranking_box {
   margin-left: 4px;
 }
 .area_table td.num {
-  color: #f8f8f2;
+  color: #bbbbaf; /* 数字淡一档（2026-09-24 张老师要求：太亮眼），排序命中列仍黄 */
   font-weight: bold;
 }
 .area_table td.num .unit {
@@ -2342,7 +2342,7 @@ body #page.video_old .page_head {
    压过 .table td（0,1,1）即可 */
 .table td.time--recent,
 #news .table td.time--recent {
-  color: #cfcfc4;
+  color: #b1b1a4;
 }
 .table td.time--old,
 #news .table td.time--old {
