@@ -34,7 +34,19 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
               <td className="rank">
                 No.&nbsp;<em>{r.rank}</em>
               </td>
-              <td className="name">{r.name}</td>
+              <td className="name">
+                {/* 国旗在名字前（2026-09-24 张老师要求，原排行有国旗图标）；
+                    gif 已从 minesweepergame.com 下载到 public/images/flags/ */}
+                <img
+                  className="flag"
+                  src={`/images/flags/${r.flag}.gif`}
+                  alt={r.flag}
+                  title={r.flag}
+                  width={20}
+                  height={13}
+                />
+                <span>{r.name}</span>
+              </td>
               <td className="t">{r.beg}</td>
               <td className="t">{r.int}</td>
               <td className="t">{r.exp}</td>

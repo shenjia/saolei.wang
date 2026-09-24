@@ -2559,6 +2559,12 @@ body #page.ranking_old.main .ranking_nav {
   max-width: none;
   padding-left: 10px;
 }
+/* 国旗图标（2026-09-24 张老师要求：名字前加国籍图标，原排行有）：名字前 6px 间距、与文字垂直居中 */
+#page.ranking_old.main > #world_top td.name .flag {
+  vertical-align: -2px;
+  margin-right: 6px;
+  image-rendering: pixelated; /* 20x13 gif 放大保持锐利 */
+}
 #page.ranking_old.main > #world_top .world_foot,
 #page.ranking_old.main > #world_top .world_head .join {
   font-size: 14px;
