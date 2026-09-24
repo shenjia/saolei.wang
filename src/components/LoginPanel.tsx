@@ -5,11 +5,38 @@
 // 2026-09-24 玻璃层改版（方案01）：标签置输入框上方 + 渐隐分隔线 + 渐变黄按钮
 // footer 定色（张老师）：忘记密码=灰、注册新账号=绿（/account/register 注册页待移植）
 // 密码登录成功后有 onSuccess 回调走浮窗关窗逻辑，无回调则维持独立页跳转行为
+// 2026-09-24 记住登录（张老师要求）：用户名在每次成功登录后默认记住；
+// 「记住密码」勾选时密码一并存本机（localStorage，明文=浏览器记住密码同级风险），取消勾选即清除
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { OAUTH_ENABLED } from "@/lib/config";
 import { toast } from "./Toast";
+
+// localStorage 键名（lp_ = login panel 前缀）
+const LS_USER = "lp_user";
+const LS_PASS = "lp_pass";
+
+// 用 useSyncExternalStore 读 localStorage：SSR/水合期返回 ""（不产生水合警告），
+// 水合后自动切到客户端快照补上真值；storage 事件天然跨标签页同步。
+// 不在 effect 里 setState（react-hooks/set-state-in-effect 禁止，且会多一次渲染）
+function subscribeStorage(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+function useLSValue(key: string): string {
+  return useSyncExternalStore(
+    subscribeStorage,
+    () => {
+      try {
+        return localStorage.getItem(key) ?? "";
+      } catch {
+        return "";
+      }
+    },
+    () => ""
+  );
+}
 
 type Tab = "wechat" | "qq" | "password";
 
@@ -40,8 +67,16 @@ export default function LoginPanel({
   onSuccess?: (needBind: boolean) => void;
 }) {
   const [tab, setTab] = useState<Tab>(OAUTH_ENABLED ? "wechat" : "password");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const savedUser = useLSValue(LS_USER);
+  const savedPass = useLSValue(LS_PASS);
+  // 用户手动编辑的值；undefined = 未动过 → 显示回填值
+  const [draftUser, setDraftUser] = useState<string | undefined>(undefined);
+  const [draftPass, setDraftPass] = useState<string | undefined>(undefined);
+  // 勾选态：用户手动改过用手动值，否则默认「本机存过密码=勾选」
+  const [manualRemember, setManualRemember] = useState<boolean | null>(null);
+  const rememberChecked = manualRemember ?? !!savedPass;
+  const username = draftUser ?? savedUser;
+  const password = draftPass ?? savedPass;
   const [error, setError] = useState(initialError ? (ERROR_TEXT[initialError] ?? "登录失败，请重试") : "");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -63,6 +98,14 @@ export default function LoginPanel({
       }
       // 登录成功：居中绿色气泡（浮窗/独立页/绑定跳转三种去向都提示）
       toast("登录成功", "success");
+      // 记住登录：用户名必记；密码按勾选（只写 localStorage，异常静默）
+      try {
+        localStorage.setItem(LS_USER, username);
+        if (rememberChecked) localStorage.setItem(LS_PASS, password);
+        else localStorage.removeItem(LS_PASS);
+      } catch {
+        /* 存储不可用则本次不记住 */
+      }
       if (onSuccess) {
         onSuccess(data.needBind);
         return;
@@ -106,7 +149,7 @@ export default function LoginPanel({
               autoComplete="username"
               placeholder="用户名"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => setDraftUser(e.target.value)}
               autoFocus
             />
           </div>
@@ -118,9 +161,17 @@ export default function LoginPanel({
               autoComplete="current-password"
               placeholder="密码"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => setDraftPass(e.target.value)}
             />
           </div>
+          <label className="lp_remember">
+            <input
+              type="checkbox"
+              checked={rememberChecked}
+              onChange={(e) => setManualRemember(e.target.checked)}
+            />
+            记住密码
+          </label>
           {error && (
             <p className="lp_error">
               <i>!</i>
