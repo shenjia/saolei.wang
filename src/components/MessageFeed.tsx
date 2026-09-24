@@ -89,10 +89,11 @@ export function MessageFeed({
           <td colSpan={4}>还没有消息。</td>
         </tr>
       )}
-      {hasMore && (
-        <tr className="bbs_more_row">
-          <td colSpan={4}>
-            <div className="more_loader">
+      <tr className="bbs_more_row">
+        <td colSpan={4}>
+          {/* 按钮右侧跟总数（张老师三轮要求）；加载完全部后按钮消失、总数保留居中 */}
+          <div className="more_loader">
+            {hasMore && (
               <button
                 type="button"
                 className="button small"
@@ -102,14 +103,7 @@ export function MessageFeed({
               >
                 {loading ? "加载中…" : "加载更多"}
               </button>
-            </div>
-          </td>
-        </tr>
-      )}
-      {/* 总条数常驻表格底部（张老师要求：加载完全部后仍显示总数） */}
-      <tr className="bbs_more_row">
-        <td colSpan={4}>
-          <div className="more_loader">
+            )}
             <TotalCount total={total} unit="条" />
           </div>
         </td>
