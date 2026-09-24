@@ -2570,20 +2570,18 @@ body #page.ranking_old.main .ranking_nav {
   font-size: 14px;
 }
 
-/* 世界榜三轮（2026-09-24 张老师要求）：Country/Name 拆两列且左对齐；
+/* 世界榜三轮（2026-09-24）：Country/Name 合并一列左对齐（六轮）；
    每级纪录后灰色括号日期；总成绩两位小数 */
-#page.ranking_old.main > #world_top th.country,
-#page.ranking_old.main > #world_top td.country,
 #page.ranking_old.main > #world_top th.name,
 #page.ranking_old.main > #world_top td.name {
   text-align: left;
 }
-#page.ranking_old.main > #world_top td.country {
-  padding-left: 10px;
-  white-space: nowrap;
-}
 #page.ranking_old.main > #world_top td.name {
   padding-right: 20px; /* Name 列与成绩列拉开，长名字不顶到 Beg 日期 */
+  white-space: nowrap;
+}
+#page.ranking_old.main > #world_top td.name .flag {
+  margin-right: 6px; /* 国旗与名字之间空格之外的兜底间距 */
 }
 #page.ranking_old.main > #world_top td .date {
   font-size: 13px;

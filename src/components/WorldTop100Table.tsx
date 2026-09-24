@@ -1,7 +1,8 @@
 // 世界 TOP100 表格 + 「加载更多」（2026-09-24 张老师要求：默认只显示前 15 条，下面可加载更多）
 // 数据由服务端一次性抓全（minesweepergame.com，1 天缓存），加载更多只是本地增量展开，
 // 不再发请求——与首页「录像」feed 同款的 more_loader 版式与交互语言。
-// 2026-09-24 二轮：表头 Country/Name 拆两列左对齐；每级纪录后灰色括号日期；总成绩两位小数。
+// 2026-09-24 二轮：每级纪录后灰色括号日期；总成绩两位小数。
+// 2026-09-24 六轮：Country/Name 合并一列（表头 Country / Name，国旗+空格+名字，左对齐）。
 // 2026-09-24 五轮：纪录数字加粗 + 分级颜色与主排行榜一致（初 #999994/中 #bbbbaf/高 #ddddcf/总 #e6e6da）；
 // 有录像文件的纪录可点击，经 /api/world/video 代理原站 avf 用站内 flop 播放器播放。
 
@@ -62,8 +63,7 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
         <thead>
           <tr>
             <th>Rank</th>
-            <th className="country">Country</th>
-            <th className="name">Name</th>
+            <th className="name">Country / Name</th>
             <th>Beg</th>
             <th>Int</th>
             <th>Exp</th>
@@ -76,7 +76,7 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
               <td className="rank">
                 No.&nbsp;<em>{r.rank}</em>
               </td>
-              <td className="country">
+              <td className="name">
                 <img
                   className="flag"
                   src={`/images/flags/${r.flag}.gif`}
@@ -84,9 +84,9 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
                   title={r.flag}
                   width={20}
                   height={13}
-                />
+                />{" "}
+                {r.name}
               </td>
-              <td className="name">{r.name}</td>
               <td className="t">
                 <Score v={r.beg} date={r.begDate} vid={r.begVid} pid={r.pid} cls="s_beg" />
               </td>
