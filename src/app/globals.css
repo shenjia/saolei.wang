@@ -271,13 +271,6 @@ body .tabs > a:hover::after {
 .lp_field {
   margin-bottom: 12px;
 }
-.lp_field label {
-  display: block;
-  font-size: 11px;
-  color: #75715e;
-  letter-spacing: 0.4px;
-  margin-bottom: 5px;
-}
 #account_login .lp_field input {
   display: block;
   width: 100%;

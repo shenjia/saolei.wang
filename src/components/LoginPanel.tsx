@@ -94,11 +94,12 @@ export default function LoginPanel({
 
       {tab === "password" && (
         <form className="lp_form" onSubmit={submitPassword}>
+          {/* 2026-09-24 张老师定稿：无标签纯占位字（C 方案），识别靠 placeholder + 位置 */}
           <div className="lp_field">
-            <label htmlFor="login_username">用户名</label>
             <input
               id="login_username"
               type="text"
+              aria-label="用户名"
               autoComplete="username"
               placeholder="用户名"
               value={username}
@@ -107,10 +108,10 @@ export default function LoginPanel({
             />
           </div>
           <div className="lp_field">
-            <label htmlFor="login_password">密码</label>
             <input
               id="login_password"
               type="password"
+              aria-label="密码"
               autoComplete="current-password"
               placeholder="密码"
               value={password}
