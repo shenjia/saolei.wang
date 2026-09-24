@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AvatarUploader } from "./AvatarUploader";
 
 // 字段长度限制（移植 UserConfig::INFO_*_LIMIT）
 const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, selfIntro: 50, interest: 50 } as const;
@@ -20,7 +21,15 @@ export interface ProfileDefaults {
   birthDay: number;
 }
 
-export function ProfileForm({ defaults }: { defaults: ProfileDefaults }) {
+/** 头像槽位数据（2026-09-24：头像上传并入「修改资料」表单第一行） */
+export interface AvatarSlot {
+  currentUrl: string;
+  pendingUrl?: string | null;
+  pendingReason?: string;
+  rejected?: { reason: string } | null;
+}
+
+export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefaults; avatarSlot: AvatarSlot }) {
   const router = useRouter();
   const [form, setForm] = useState(defaults);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -60,6 +69,7 @@ export function ProfileForm({ defaults }: { defaults: ProfileDefaults }) {
     <form id="profile-form" onSubmit={submit}>
       <table className="form" cellPadding={0} cellSpacing={0}>
         <tbody>
+          <AvatarUploader {...avatarSlot} />
           <tr>
             <th>自我介绍</th>
             <td>

@@ -5,6 +5,7 @@
 import { prisma } from "./db";
 import { usersByIds } from "./queries";
 import { oldTitle, type OldTitle } from "./oldtitle";
+import { resolveAvatarUrl } from "./avatar";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -36,9 +37,9 @@ export interface UserCardData {
 }
 
 function avatarUrl(id: number, avatar: string): string {
-  if (avatar.startsWith("http")) return avatar; // 微信/QQ OAuth 外链头像
-  if (avatar === "1") return `/images/player/${id}.jpg`; // 旧站迁移的实体照片
-  return "/images/player/no.jpg";
+  // 新版上传头像（/uploads/avatar/…）与 OAuth 外链由 resolveAvatarUrl 统一识别；
+  // 旧站标记位 "1" 对应照片墙实体，其余用 no.jpg 兜底
+  return resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "/images/player/no.jpg");
 }
 
 /** 批量取卡片数据（BBS 一页多楼层复用；首页单人也走这里） */

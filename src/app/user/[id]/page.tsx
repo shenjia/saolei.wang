@@ -21,6 +21,7 @@ import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankBadge } from "@/components/RankBadge";
 import { title as assessTitle } from "@/lib/assess";
 import { getRadarData } from "@/lib/radar";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -69,13 +70,14 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
   const hasProfileFields =
     !!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info]);
 
-  // 照片：新用户 OAuth 头像 URL（http 开头）→ 老用户本地照片墙（avatar 是 0/1 标记位，
-  // 照片实体为 /images/player/{id}.jpg，以文件存在为准）→ 默认头像
-  const photo = user.avatar.startsWith("http")
-    ? user.avatar
-    : existsSync(path.join(process.cwd(), "public", "images", "player", `${userId}.jpg`))
+  // 照片优先级：新版上传头像（/uploads/avatar/…）→ OAuth 头像外链（http 开头）
+  // → 老用户本地照片墙（头像实体为 /images/player/{id}.jpg，以文件存在为准）→ 默认头像
+  const photo = resolveAvatarUrl(
+    user.avatar,
+    existsSync(path.join(process.cwd(), "public", "images", "player", `${userId}.jpg`))
       ? `/images/player/${userId}.jpg`
-      : "/images/common/avatar.png";
+      : "/images/common/avatar.png",
+  );
 
   return (
     <div id="page" className="two_columns">

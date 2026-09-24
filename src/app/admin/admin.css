@@ -813,3 +813,85 @@ table.admin_table .gray {
     grid-template-columns: 78px 1fr;
   }
 }
+
+/* ---------- 头像审核（2026-09-24）---------- */
+.admin_avatar_table td {
+  vertical-align: middle;
+}
+.admin_avatar_thumb {
+  display: inline-block;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: #2b2a23;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+}
+.admin_avatar_thumb:hover {
+  border-color: #6c6c61;
+}
+.admin_avatar_thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.admin_ai_verdict {
+  line-height: 20px;
+}
+.admin_ai_verdict .admin_hint {
+  margin-top: 2px;
+}
+/* 驳回原因输入：三件套竖排，避免把操作列撑得太宽 */
+.admin_reject_box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 190px;
+  text-align: left;
+}
+.admin_reject_box .admin_btn {
+  align-self: flex-start;
+}
+.admin_reject_box .admin_btn + .admin_btn {
+  margin-left: 0;
+}
+
+/* 点击缩略图放大查看（管理员必须看清脸部才能判断，不能只看小图） */
+.admin_lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.8);
+}
+.admin_lightbox_inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  max-height: 100%;
+  overflow: auto;
+}
+.admin_lightbox_inner img {
+  max-width: min(70vw, 480px);
+  max-height: 62vh;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  background: #2b2a23;
+}
+.admin_lightbox_inner .meta {
+  color: #939387;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+.admin_lightbox_inner .meta b {
+  color: #f8f8f2;
+  font-weight: normal;
+}

@@ -10,6 +10,7 @@ import { title as assessTitle } from "@/lib/assess";
 import { usersByIds, type UserBrief } from "@/lib/queries";
 import { BBS_BOARD_NAMES, BBS_BOARDS, ubb } from "@/lib/bbs";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
+import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -860,3 +861,109 @@ export async function searchUsersBrief(q: string, limit = 10): Promise<{ id: num
 }
 
 export { BBS_BOARDS, VIDEO_STATUS, type VideoLevel, type VideoLevel as VLevel };
+
+// ---------- 头像审核（2026-09-24）----------
+
+export interface AdminAvatarRow {
+  id: number;
+  user: number;
+  author: UserBrief | null;
+  /** 头像文件相对路径（/uploads/avatar/…） */
+  filepath: string;
+  status: number;
+  /** AI 初审结论：pass = 判定合格，review = 存疑转人工 */
+  verdict: string;
+  /** AI 初审来源：ai / disabled / timeout / error（决定后台展示「AI 放行/存疑/超时/异常」） */
+  source: string;
+  /** AI 初审分类：ok / porn / politics / nonreal */
+  category: string;
+  reason: string;
+  /** 上传前的头像值，管理员撤销自动放行时回滚用 */
+  prevAvatar: string;
+  reviewer: number;
+  reviewerName: string;
+  reviewTime: number;
+  createTime: number;
+}
+
+/** 头像审核队列：待审按「最老在前」清理积压，已审按「最新在前」方便回溯 */
+export async function getAvatarListAdmin(f: {
+  status: number;
+  page?: number;
+}): Promise<{ rows: AdminAvatarRow[]; total: number; pageSize: number; page: number }> {
+  const page = Math.max(1, f.page ?? 1);
+  const where = { status: f.status };
+  const [rows, total] = await Promise.all([
+    prisma.avatarReview.findMany({
+      where,
+      orderBy: { id: f.status === AVATAR_REVIEW_STATUS.PENDING ? "asc" : "desc" },
+      skip: (page - 1) * ADMIN_PAGESIZE,
+      take: ADMIN_PAGESIZE,
+    }),
+    prisma.avatarReview.count({ where }),
+  ]);
+
+  const authors = await usersByIds(rows.map((r) => N(r.user)));
+  const reviewerIds = [...new Set(rows.map((r) => N(r.reviewer)).filter((x) => x > 0))];
+  const reviewers = await usersByIds(reviewerIds);
+
+  return {
+    rows: rows.map((r) => ({
+      id: N(r.id),
+      user: N(r.user),
+      author: authors.get(N(r.user)) ?? null,
+      filepath: r.filepath,
+      status: r.status,
+      verdict: r.verdict,
+      source: r.source,
+      category: r.category,
+      reason: r.reason,
+      prevAvatar: r.prevAvatar,
+      reviewer: N(r.reviewer),
+      reviewerName: N(r.reviewer) === 0 ? "" : (reviewers.get(N(r.reviewer))?.chineseName ?? ""),
+      reviewTime: N(r.reviewTime),
+      createTime: N(r.createTime),
+    })),
+    total,
+    pageSize: ADMIN_PAGESIZE,
+    page,
+  };
+}
+
+/** 待审头像数（侧栏红点角标） */
+export async function getAvatarPendingCount(): Promise<number> {
+  return prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.PENDING } });
+}
+
+/** 头像审核概览：各状态计数 + AI 拦截分类分布 */
+export async function getAvatarStats(): Promise<{
+  pending: number;
+  approved: number;
+  rejected: number;
+  /** 其中由 AI 直接放行、无人工参与的 */
+  autoApproved: number;
+  /** AI 判为需要关注的分类计数（porn / politics / nonreal） */
+  categoryCounts: { category: string; count: number }[];
+}> {
+  const [pending, approved, rejected, autoApproved, grouped] = await Promise.all([
+    prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.PENDING } }),
+    prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.APPROVED } }),
+    prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.REJECTED } }),
+    // 只统计「当前仍处于通过状态」的自动放行，被人工驳回的不算
+    prisma.avatarReview.count({
+      where: { status: AVATAR_REVIEW_STATUS.APPROVED, reviewer: BigInt(0) },
+    }),
+    prisma.avatarReview.groupBy({
+      by: ["category"],
+      where: { category: { notIn: ["", "ok"] } },
+      _count: { _all: true },
+    }),
+  ]);
+  return {
+    pending,
+    approved,
+    rejected,
+    autoApproved,
+    categoryCounts: grouped.map((g) => ({ category: g.category, count: g._count._all })),
+  };
+}

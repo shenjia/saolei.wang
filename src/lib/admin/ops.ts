@@ -12,8 +12,9 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
 import { USER_ROLE, VIDEO_STATUS, isManager } from "@/lib/config";
+import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { reviewVideo } from "@/lib/review";
-import { broadcast } from "@/lib/message";
+import { broadcast, sendSystemMessage } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
 import { logAdmin } from "./log";
 import type { AdminLevel } from "./guard";
@@ -37,6 +38,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "message.broadcast": "administrator",
   "rank.snapshot": "manager",
   "star.set": "manager",
+  "avatar.review": "manager",
 };
 
 // ---------- 参数工具 ----------
@@ -316,6 +318,82 @@ async function dispatch(
       return { ok: true, message: `指定 ${date} 每日一星为 ${user.chineseName}（#${userId}）` };
     }
 
+    // ---------- 头像审核（2026-09-24）----------
+    // approve：把待审图写进 user.avatar 生效
+    // reject ：标记驳回；**若这张图正在生效**（AI 自动放行过），一并回滚到上传前的头像
+    case "avatar.review": {
+      const id = toId(p.id);
+      const action = String(p.action ?? "");
+      if (!id) return { ok: false, error: "参数错误：缺少审核记录 ID" };
+      if (action !== "approve" && action !== "reject") {
+        return { ok: false, error: "参数错误：动作只能为 approve 或 reject" };
+      }
+      const row = await prisma.avatarReview.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "审核记录不存在" };
+
+      const target = await prisma.user.findUnique({
+        where: { id: row.user },
+        select: { chineseName: true, avatar: true },
+      });
+      const name = target?.chineseName ?? `#${row.user}`;
+      // 只有「这张图当前正在对外展示」时才允许回滚，否则会把用户后来换上的新头像冲掉
+      const isLive = !!target && target.avatar === row.filepath;
+      const ts = BigInt(now());
+      const reason = toText(p.reason, 100);
+
+      if (action === "approve") {
+        if (row.status === AVATAR_REVIEW_STATUS.APPROVED) {
+          return { ok: false, error: "该头像已是通过状态" };
+        }
+        await prisma.$transaction([
+          prisma.user.update({
+            where: { id: row.user },
+            data: { avatar: row.filepath, updateTime: ts },
+          }),
+          prisma.avatarReview.update({
+            where: { id: row.id },
+            data: {
+              status: AVATAR_REVIEW_STATUS.APPROVED,
+              reviewer: BigInt(actor.uid),
+              reviewTime: ts,
+              // AI 的初审说明保留在 reason 里会给用户看到，人工通过时清掉更干净
+              reason: "管理员已通过",
+            },
+          }),
+        ]);
+        await notifyAvatar(row.user, "你上传的头像已通过审核，已更新。");
+        return { ok: true, message: `通过 ${name}（#${Number(row.user)}）的头像` };
+      }
+
+      // reject
+      const revert = row.status === AVATAR_REVIEW_STATUS.APPROVED && isLive;
+      const data = {
+        status: AVATAR_REVIEW_STATUS.REJECTED,
+        reviewer: BigInt(actor.uid),
+        reviewTime: ts,
+        reason: reason || "不符合头像要求",
+      };
+      await prisma.$transaction([
+        ...(revert
+          ? [
+              prisma.user.update({
+                where: { id: row.user },
+                data: { avatar: row.prevAvatar, updateTime: ts },
+              }),
+            ]
+          : []),
+        prisma.avatarReview.update({ where: { id: row.id }, data }),
+      ]);
+      await notifyAvatar(
+        row.user,
+        `你上传的头像未通过审核（${data.reason}），请重新上传本人真实照片。`,
+      );
+      return {
+        ok: true,
+        message: `驳回 ${name}（#${Number(row.user)}）的头像${revert ? "，并已回滚到上一张" : ""}`,
+      };
+    }
+
     default:
       return { ok: false, error: `未实现的操作：${op}` };
   }
@@ -342,4 +420,13 @@ function randomPassword(len: number): string {
   const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const buf = randomBytes(len);
   return Array.from(buf, (b) => chars[b % chars.length]).join("");
+}
+
+/** 头像审核结果通知用户（站内信）。发信失败不阻断审核——结果已落库，不影响主流程。 */
+async function notifyAvatar(userId: bigint, content: string): Promise<void> {
+  try {
+    await sendSystemMessage(Number(userId), content);
+  } catch (e) {
+    console.warn("[ops] 头像通知发送失败", e);
+  }
 }

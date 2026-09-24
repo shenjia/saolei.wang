@@ -33,6 +33,7 @@ export const OP_LABELS: Record<string, string> = {
   "message.broadcast": "群发站内信",
   "rank.snapshot": "生成排行快照",
   "star.set": "指定每日一星",
+  "avatar.review": "审核玩家头像",
 };
 
 export function opLabel(action: string): string {

@@ -494,3 +494,29 @@ model PasswordToken {
   @@unique([token])
   @@map("password_token")
 }
+
+// 头像审核（2026-09-24 张老师需求：个人资料页点击上传 + AI 初筛 + 人工复核）
+// 旧站流程是「发邮件给站长人工开通照片」（见 /page/help/avatar），本表把它自动化。
+// 状态：10 待审 / 20 已通过 / 0 已驳回。user.avatar 只在通过时才改写，
+// 所以待审期间旧头像照常展示，驳回无需回滚。
+model AvatarReview {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt // 上传者 user.id
+  // 头像文件相对路径，如 /uploads/avatar/1-1758600000.jpg
+  filepath   String @db.VarChar(120)
+  status     Int    @default(10) @db.SmallInt // 10 待审 / 20 通过 / 0 驳回
+  // AI 初审结果：verdict = pass/review，source = ai/disabled/timeout/error
+  verdict    String @default("") @db.VarChar(16)
+  source     String @default("") @db.VarChar(16)
+  category   String @default("") @db.VarChar(16)
+  reason     String @default("") @db.VarChar(200)
+  // 通过前用户原本的 avatar 值（含空串 / OAuth 外链 / "1"），供管理员撤销自动放行时回滚
+  prevAvatar String @default("") @map("prev_avatar") @db.Char(255)
+  reviewer   BigInt @default(0) @db.BigInt // 人工审核人 user.id，0=仅 AI 自动放行
+  reviewTime BigInt @default(0) @map("review_time") @db.BigInt
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([status, createTime])
+  @@index([user, createTime])
+  @@map("avatar_review")
+}

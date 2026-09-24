@@ -10,7 +10,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: string;
-  badgeKey?: "pending";
+  badgeKey?: "pending" | "avatar";
 }
 
 const GROUPS: { title: string; items: NavItem[] }[] = [
@@ -34,7 +34,10 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "玩家",
-    items: [{ href: "/admin/users", label: "玩家管理", icon: "👥" }],
+    items: [
+      { href: "/admin/users", label: "玩家管理", icon: "👥" },
+      { href: "/admin/avatars", label: "头像审核", icon: "🖼", badgeKey: "avatar" },
+    ],
   },
   {
     title: "运营",
@@ -46,7 +49,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-export function AdminSidebar({ badges }: { badges: { pending: number } }) {
+export function AdminSidebar({ badges }: { badges: { pending: number; avatar: number } }) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>

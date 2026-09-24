@@ -2588,3 +2588,86 @@ body #header .nav .popMenu .menu li a {
   font-size: 14px;
   line-height: 32px;
 }
+
+/* ---------- 头像上传（2026-09-24 个人资料页「点击上传头像」+ AI 审核）----------
+   挂在「修改资料」表单第一行，沿用 .form 表格结构；
+   float:none 是为了盖掉 legacy 的 .form td div{float:left}，否则 flex 容器会被压成自适应宽 */
+.avatar_uploader {
+  display: flex;
+  float: none;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.avatar_pick {
+  position: relative;
+  display: block;
+  width: 104px;
+  height: 104px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: #272822;
+  border: 1px solid #555550;
+  border-radius: 2px;
+}
+.avatar_pick img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar_pick .avatar_mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  color: #f8f8f2;
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.66);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.avatar_pick:hover .avatar_mask {
+  opacity: 1;
+}
+.avatar_pick:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.avatar_pick:disabled .avatar_mask {
+  opacity: 1;
+}
+.avatar_pick .avatar_flag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 1px 5px;
+  color: #272822;
+  font-size: 11px;
+  line-height: 16px;
+  background: #fdc61d;
+}
+.avatar_tip {
+  flex: 1;
+  min-width: 260px;
+  max-width: 460px;
+}
+.avatar_tip p {
+  margin: 0 0 5px;
+  color: #75715e;
+  font-size: 13px;
+  line-height: 20px;
+}
+.avatar_tip b {
+  color: #b1b1a4;
+  font-weight: normal;
+}
+.avatar_tip .hint {
+  color: #fdc61d;
+}
+.avatar_tip .error {
+  color: #f92672;
+}

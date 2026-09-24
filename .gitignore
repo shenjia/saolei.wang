@@ -41,5 +41,8 @@ yarn-error.log*
 next-env.d.ts
 /videos/
 
+# 用户上传的头像（运行时产生，不入仓）
+/public/uploads/
+
 # 本地工作档案（AI 会话记忆，含内部工作细节，不入公开仓）
 /.workbuddy/

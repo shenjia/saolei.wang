@@ -88,8 +88,26 @@ export async function sendMessage(fromUserId: number, toUserId: number, content:
   return N(row.id);
 }
 
-/** 清空收件箱（移植 Clear_Action） */
-export async function clearMessages(userId: number): Promise<number> {
+/**
+ * 系统通知（is_system=true，无真实寄件人）。
+ * 2026-09-24 新增：头像审核结果通知用户用（通过/驳回），避免用管理员 uid 当寄件人。
+ */
+export async function sendSystemMessage(toUserId: number, content: string): Promise<void> {
+  const now = nowSec();
+  await prisma.message.create({
+    data: {
+      fromUser: BigInt(0),
+      toUser: BigInt(toUserId),
+      content: content.slice(0, MESSAGE_CONTENT_LIMIT),
+      isRead: false,
+      isSystem: true,
+      createTime: now,
+      updateTime: now,
+    },
+  });
+}
+
+/** 清空收件箱（移植 Clear_Action） */export async function clearMessages(userId: number): Promise<number> {
   const res = await prisma.message.deleteMany({ where: { toUser: BigInt(userId) } });
   return res.count;
 }
