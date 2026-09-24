@@ -49,7 +49,10 @@ export function byLevelOrder(by: RankingBy): { level: Level; order: Order } {
 export const VIDEO_PAGESIZE = 20;
 export const HOME_TOP_NUMBER = 10;
 export const HOME_NEWBIE_NUMBER = 5;
-export const HOME_NEWS_NUMBER = 30;
+// 首页「动态」初始条数（2026-09-24 张老师要求：30 → 20，与每页条数一致，标题由「雷界快讯」改「动态」）
+export const HOME_NEWS_NUMBER = 20;
+// 首页「最新录像」初始条数（2026-09-24 新增版块，与 VIDEO_PAGESIZE 一致便于「加载更多」续接）
+export const HOME_VIDEO_NUMBER = 20;
 
 // ---------- 评论（移植 CommentConfig） ----------
 export const COMMENT_TOP_NUMBER = 5;

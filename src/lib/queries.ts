@@ -11,7 +11,6 @@ import {
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
-  MIN_3BV_FOR_3BVS,
   NEWS_TYPE,
   ORDER_DIRECTION,
   RANKING_PAGESIZE,
@@ -91,14 +90,9 @@ export async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>>
   return new Map(rows.map((r) => [N(r.id), toBrief(r)!]));
 }
 
-/** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time，3BV 过小记负（移植 VideoModel::getScores） */
-export function videoScores(board3bv: number, realTime: number): { time: number; "3bvs": number } {
-  const sign = board3bv >= MIN_3BV_FOR_3BVS ? 1 : -1;
-  return {
-    time: realTime,
-    "3bvs": realTime > 0 ? sign * Math.floor((board3bv * 1000000) / realTime) : 0,
-  };
-}
+/** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time，3BV 过小记负（移植 VideoModel::getScores）
+ *  2026-09-24 实现迁至 lib/format（纯模块，供客户端行渲染件共用），此处 re-export 兼容旧引用。 */
+export { videoScores } from "./format";
 
 // ---------- 首页 ----------
 
@@ -337,6 +331,36 @@ export async function getVideoList(opts: {
 
   const videos = await getVideosByIds(ids);
   return { videos, total, pageSize: VIDEO_PAGESIZE };
+}
+
+/**
+ * 录像流（首页录像版块用）：按上传时间（id 倒序）游标翻页，语义与动态列表一致。
+ * 与 getVideoList 的区别：① 游标而非页码（配合「加载更多」）；② 级别筛选按录像本身的级别过滤，
+ * 始终「最新在前」（getVideoList 在指定级别下会切到成绩表排序，不适用首页「最新录像」）。
+ */
+export async function getVideoFeed(opts: {
+  level: VideoLevel | "all";
+  cursor?: number;
+  limit: number;
+}): Promise<VideoListItem[]> {
+  const rows = await prisma.video.findMany({
+    where: {
+      ...(opts.level !== "all" ? { level: opts.level } : {}),
+      // 游标：取 id 小于 cursor 的更早录像（与动态 getNews 同语义）
+      ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
+    },
+    select: { id: true },
+    orderBy: { id: "desc" },
+    take: opts.limit,
+  });
+  return getVideosByIds(rows.map((r) => N(r.id)));
+}
+
+/** 录像总数（「加载更多」括号内剩余条数口径，过滤条件与 getVideoFeed 严格一致） */
+export async function getVideoCount(opts: { level?: VideoLevel | "all" } = {}): Promise<number> {
+  return prisma.video.count({
+    where: opts.level && opts.level !== "all" ? { level: opts.level } : {},
+  });
 }
 
 // 三张成绩表字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用

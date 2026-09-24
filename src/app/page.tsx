@@ -1,10 +1,20 @@
-// 首页：雷界快讯 + 入伍新兵 + 十大元帅（移植 views/home/index）
+// 首页：动态 + 最新录像 + 入伍新兵 + 十大元帅（移植 views/home/index）
+// 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 20 条；其下新增「最新录像」版块
+// （20 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与动态版块同构）。
 
 import Link from "next/link";
-import { getHomeNews, getNewbies, getNewsCount, getTopUsers } from "@/lib/queries";
-import { HOME_NEWS_NUMBER, NEWS_PAGESIZE } from "@/lib/config";
+import {
+  getHomeNews,
+  getNewbies,
+  getNewsCount,
+  getTopUsers,
+  getVideoFeed,
+  getVideoCount,
+} from "@/lib/queries";
+import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, NEWS_PAGESIZE } from "@/lib/config";
 import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
+import { VideoFeed } from "@/components/VideoFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { DailyStar } from "@/components/DailyStar";
 import { BbsLatest } from "@/components/BbsLatest";
@@ -17,13 +27,15 @@ import { getUserCard } from "@/lib/usercard";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [news, newbies, top, session, newsTotal] = await Promise.all([
+  const [news, newbies, top, session, newsTotal, videos, videoTotal] = await Promise.all([
     getHomeNews(),
     getNewbies(),
     getTopUsers(),
     getSession(),
     // 全站动态总数（「加载更多」括号内剩余条数口径；切等级筛选时由接口回传同口径总数）
     getNewsCount({}),
+    getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
+    getVideoCount({ level: "all" }),
   ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
@@ -41,11 +53,20 @@ export default async function HomePage() {
       <li className="main">
         <div id="news" className="box">
           <NewsFeed
-            title="雷界快讯"
+            title="动态"
             initial={feed}
             pageSize={NEWS_PAGESIZE}
             initialHasMore={news.length === HOME_NEWS_NUMBER}
             initialTotal={newsTotal}
+          />
+        </div>
+        <div id="video" className="box">
+          <VideoFeed
+            title="最新录像"
+            initial={videos}
+            pageSize={HOME_VIDEO_NUMBER}
+            initialHasMore={videos.length === HOME_VIDEO_NUMBER}
+            initialTotal={videoTotal}
           />
         </div>
       </li>
