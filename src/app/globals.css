@@ -1204,13 +1204,20 @@ body #page.message_list > .box:first-child .page_head {
   color: #75715e;
 }
 
-/* 扫雷历程 */
-.history_item {
+/* 扫雷历程（2026-09-24 二轮：日期/正文分两列，长正文折行不再串到日期列） */
+.history_table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.history_table td {
   padding: 6px 0;
   border-bottom: 1px solid #3a3a3a;
+  vertical-align: top;
 }
-.history_item em {
-  margin-right: 8px;
+.history_table .history_month_col {
+  width: 5em;
+  padding-right: 12px;
+  white-space: nowrap;
 }
 /* 2026-09-24 张老师要求：历程日期沿用动态日期口径（一年内亮 #b1b1a4 / 一年以上暗 #6c6c61），
    正文提亮（默认继承 #636359 最暗，提到 #cfcfc2 与高级成绩文字同级） */
@@ -1220,7 +1227,7 @@ body #page.message_list > .box:first-child .page_head {
 #history .history_item em.time--old {
   color: #6c6c61;
 }
-#history .history_item > span:first-of-type {
+#history .history_content_col > span {
   color: #cfcfc2;
 }
 .history_item .ops a {
@@ -2727,6 +2734,16 @@ body #page.two_columns li.main {
   margin: 0;
 }
 .news_head h1.gray {
+  color: #b1b1a4;
+}
+/* 用户页「动态」h2 形态（2026-09-24 张老师要求：与其他板块标题同款 20px 灰，
+   不变大不泛黄；标题文字底边与筛选器底部细线对齐）。
+   legacy #user_view h2 带 10px 底距且 display:inline-block，会让 flex-end 对齐时
+   tabs 细线与文字视觉错位，这里用 #news 前缀（1,2,1）压掉：改 block + 清底距，
+   行高保持 39px 让底边恰落在 tabs 底线上。 */
+#news .news_head h2 {
+  display: block;
+  margin: 0;
   color: #b1b1a4;
 }
 .news_head .ranking_tabs.news_tabs {

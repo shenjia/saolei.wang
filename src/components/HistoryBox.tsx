@@ -2,6 +2,7 @@
 // 2026-09-24 张老师要求：标题「扫雷历程」改「历程」；日期颜色沿用动态口径
 // （一年内亮 / 一年以上暗）；正文提亮；底部行内表单改为标题右上角「+」按钮，
 // 点击弹出浮窗选月份写内容，编辑复用同一浮窗；编辑/删除按钮 hover 才显示。
+// 二轮：日期/正文分两列（表格），长正文折行不再串到日期列。
 
 "use client";
 
@@ -77,31 +78,39 @@ export function HistoryBox({
         )}
       </div>
       {items.length === 0 && <p className="text">还没有记录。</p>}
-      {items.slice(0, visible).map((it) => (
-        <div key={it.id} className="history_item">
-          <em className={isRecent(monthToUnix(it.month)) ? "time--recent" : "time--old"}>
-            {it.month}
-          </em>{" "}
-          <span>{it.content}</span>
-          {editable && (
-            <span className="ops">
-              {" "}
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setDialog({ id: it.id });
-                }}
-              >
-                编辑
-              </a>{" "}
-              <a href="#" onClick={(e) => (e.preventDefault(), onDelete(it.id))}>
-                删除
-              </a>
-            </span>
-          )}
-        </div>
-      ))}
+      <table className="history_table" cellPadding={0} cellSpacing={0}>
+        <tbody>
+          {items.slice(0, visible).map((it) => (
+            <tr key={it.id} className="history_item">
+              <td className="history_month_col">
+                <em className={isRecent(monthToUnix(it.month)) ? "time--recent" : "time--old"}>
+                  {it.month}
+                </em>
+              </td>
+              <td className="history_content_col">
+                <span>{it.content}</span>
+                {editable && (
+                  <span className="ops">
+                    {" "}
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setDialog({ id: it.id });
+                      }}
+                    >
+                      编辑
+                    </a>{" "}
+                    <a href="#" onClick={(e) => (e.preventDefault(), onDelete(it.id))}>
+                      删除
+                    </a>
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       {items.length > visible && (
         <div className="more_loader">
           <button

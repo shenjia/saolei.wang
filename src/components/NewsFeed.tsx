@@ -115,7 +115,13 @@ export function NewsFeed({
     <>
       {title ? (
         <div className="news_head">
-          <h1 className={titleClassName}>{title}</h1>
+          {/* 标题节点直接渲染：首页传字符串保持 h1（26px 定稿），用户页「动态」
+              传 <h2> 与其他板块标题同款（2026-09-24 张老师要求：不要变大、不要黄） */}
+          {typeof title === "string" ? (
+            <h1 className={titleClassName}>{title}</h1>
+          ) : (
+            title
+          )}
           <div className="news_tabs ranking_tabs side head">{tabs}</div>
         </div>
       ) : (

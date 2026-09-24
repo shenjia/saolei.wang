@@ -174,9 +174,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         </div>
         {news.length > 0 && (
           <div id="news" className="box">
-            {/* 2026-09-24 张老师要求：标题「进步历程」改「动态」，筛选器收进标题行右侧 */}
+            {/* 2026-09-24 张老师要求：标题「进步历程」改「动态」，筛选器收进标题行右侧；
+                二轮：用 h2 与其他板块标题同款（20px 灰），不变大不泛黄 */}
             <NewsFeed
-              title="动态"
+              title={<h2>动态</h2>}
               initial={feed}
               userId={userId}
               pageSize={USER_NEWS_NUMBER}
