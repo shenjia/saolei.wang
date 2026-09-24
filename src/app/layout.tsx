@@ -48,6 +48,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 <li>
                   <Link href="/titles">军衔</Link>
                 </li>
+                <li>
+                  <Link href="/page/guide">教程</Link>
+                </li>
                 {session ? (
                   <>
                     <li>
@@ -84,15 +87,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </Suspense>
         <div id="footer">
           <div className="wrapper">
-            <p>
+            <p className="footer-nav">
               <Link href="/page/help">新手上路</Link> · <Link href="/page/guide">教程</Link> ·{" "}
               <Link href="/page/download">软件下载</Link> · <Link href="/page/world">世界排行</Link> ·{" "}
-              <Link href="/hero">雷神殿</Link> · <Link href="/team">管理团队</Link> ·{" "}
+              <Link href="/team">管理团队</Link> ·{" "}
               <Link href="/page/about">关于本站</Link> · <Link href="/page/history">更新历史</Link> ·{" "}
               <Link href="/page/donate">提供赞助</Link>
             </p>
-            <p>Copyright &copy; {new Date().getFullYear()} Saolei.wang</p>
-            <a href="http://www.miibeian.gov.cn" target="_blank">
+            <p className="footer-meta">
+              Copyright &copy; {new Date().getFullYear()} Saolei.wang
+            </p>
+            <a className="footer-meta" href="http://www.miibeian.gov.cn" target="_blank">
               陕ICP备08100290号
             </a>
           </div>
