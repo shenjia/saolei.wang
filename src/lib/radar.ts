@@ -6,7 +6,7 @@ import { GRADES, GRADE_PERCENTS, ORDER_DIRECTION, type Level, type Order } from 
 import { score3bvs, scoreTime } from "@/lib/format";
 
 export interface RadarPoint {
-  /** 维度名，如「总计时间记录」 */
+  /** 维度名，如「总计时间」 */
   name: string;
   /** 格式化后的成绩，如 46.65 / 5.832 */
   score: string;
@@ -25,9 +25,10 @@ const LEVEL_NAMES: Record<Level, string> = {
   exp: "高级",
   sum: "总计",
 };
+// 雷达图维度名从简（张老师 2026-09-23：去掉「记录」二字），与 config.ORDER_NAMES 区分
 const ORDER_NAMES: Record<Order, string> = {
-  time: "时间记录",
-  "3bvs": "3BV/s记录",
+  time: "时间",
+  "3bvs": "3BV/s",
 };
 
 // 分布缓存（对应 PHP 的 Distribution::$distribution 静态缓存）

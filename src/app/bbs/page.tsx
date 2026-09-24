@@ -33,7 +33,7 @@ export default async function BbsPage({
   const nice = sp.nice === "1" || sp.order === "nice";
   const order: BbsOrder = nice ? "reply" : parseOrder(sp.order);
 
-  const [{ posts, hasMore }, session] = await Promise.all([
+  const [{ posts, hasMore, total }, session] = await Promise.all([
     getPostPage({ board, order, nice: nice || undefined, page: 1 }),
     getSession(),
   ]);
@@ -93,7 +93,14 @@ export default async function BbsPage({
             </tr>
           </thead>
           <tbody>
-            <BbsFeed key={feedKey} initial={posts} initialHasMore={hasMore} query={query} showBoard={board === undefined} />
+            <BbsFeed
+              key={feedKey}
+              initial={posts}
+              initialHasMore={hasMore}
+              total={total}
+              query={query}
+              showBoard={board === undefined}
+            />
           </tbody>
         </table>
       </div>

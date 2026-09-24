@@ -11,9 +11,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RankingRow } from "@/lib/queries";
 import type { RankingBy } from "@/lib/config";
+import { moreLabel } from "@/lib/format";
 import { RankingHead, RankingRowLine, RankingEmpty, type TitledRow } from "./RankingRows";
 import { toast } from "./Toast";
 
@@ -26,6 +28,8 @@ export interface RankingFeedProps {
   total: number;
   pageSize: number;
   myUid?: number;
+  /** 登录用户是否已加入当前排行：true→「我在哪里」；false→「如何加入排行？」 */
+  inRanking: boolean;
   /** 初始高亮行（whereami 302 携带 hl=<uid>，SSR 即高亮，无 JS 也可见） */
   initialHl?: number;
 }
@@ -38,7 +42,7 @@ interface MoreJson {
 const NEARBY_PAGES = 30; // 未加载时最多并发拉取的页数（每页 20 行 ×30 = 600 行上限）
 
 export function RankingFeed(props: RankingFeedProps) {
-  const { by, base, params, total, pageSize, myUid } = props;
+  const { by, base, params, total, pageSize, myUid, inRanking } = props;
   const [rows, setRows] = useState(props.initial);
   const [deltas, setDeltas] = useState<Map<number, number | null> | undefined>(props.initialDeltas);
   const nextPage = useRef(Math.floor((props.initial.at(-1)?.rank ?? 0) / pageSize) + 1);
@@ -225,10 +229,10 @@ export function RankingFeed(props: RankingFeedProps) {
             disabled={loading}
             onClick={loadMore}
           >
-            {loading ? "加载中…" : "加载更多"}
+            {loading ? "加载中…" : moreLabel(total - rows.length)}
           </button>
         )}
-        {myUid && (
+        {myUid && inRanking && (
           <button
             type="button"
             className="button small whereami_btn"
@@ -238,6 +242,15 @@ export function RankingFeed(props: RankingFeedProps) {
           >
             {locating ? "定位中…" : "我在哪里"}
           </button>
+        )}
+        {myUid && !inRanking && (
+          <Link
+            href="/page/help"
+            className="button small join_btn"
+            title="了解如何上传录像、加入排行榜"
+          >
+            如何加入排行？
+          </Link>
         )}
         {hint && <span className="loader_hint">{hint}</span>}
       </div>

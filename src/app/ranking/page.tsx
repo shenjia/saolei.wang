@@ -6,9 +6,9 @@
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
-import { getRankingTable } from "@/lib/queries";
+import { getRankingTable, getRankingPageOfUser } from "@/lib/queries";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
-import { parseRankingBy } from "@/lib/config";
+import { parseRankingBy, byLevelOrder } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
 import { getSession } from "@/lib/auth";
 import { RankingNav } from "@/components/RankingNav";
@@ -36,7 +36,6 @@ export default async function RankingPage({
   if (view === "world") {
     return (
       <div id="page" className="main ranking_old">
-        <RankingNav current="world" />
         <WorldTop100 />
       </div>
     );
@@ -56,6 +55,15 @@ export default async function RankingPage({
   if (rankingBy === "sum_time" && !nf) {
     await ensureTodaySnapshot();
     deltas = await getSumTimeDeltas(rows.map((r) => r.id));
+  }
+
+  // 登录态：是否已加入当前排行（决定底部按钮是「我在哪里」还是「如何加入排行」）
+  const myUid = session?.uid;
+  let inRanking = false;
+  if (myUid) {
+    const { level, order } = byLevelOrder(rankingBy);
+    const page = await getRankingPageOfUser(myUid, level, order, nf);
+    inRanking = page > 0;
   }
 
   // 军衔列在服务端预算（Feed 客户端零成本渲染）
@@ -87,6 +95,7 @@ export default async function RankingPage({
           total={total}
           pageSize={pageSize}
           myUid={session?.uid}
+          inRanking={inRanking}
           initialHl={hl}
         />
       </div>

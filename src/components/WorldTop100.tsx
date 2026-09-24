@@ -3,16 +3,15 @@
 
 import Link from "next/link";
 import { getWorldTop100, WORLD_RANKING_PAGE } from "@/lib/worldtop";
+import { RankingNav } from "@/components/RankingNav";
 
 export async function WorldTop100() {
   const data = await getWorldTop100();
   return (
-    <div id="world_top" className="box">
-      <div className="world_head">
-        <h2>世界TOP100</h2>
-        <Link href={WORLD_RANKING_PAGE} target="_blank" className="join" title="在 minesweepergame.com 注册并上传录像即可加入世界排行">
-          如何加入
-        </Link>
+    <div id="world_top" className="box ranking_box">
+      <div className="page_head">
+        <h1 className="page_title">世界排行榜</h1>
+        <RankingNav current="world" />
       </div>
       {data ? (
         <>
@@ -43,9 +42,19 @@ export async function WorldTop100() {
             </tbody>
           </table>
           <div className="world_foot">
-            <Link href={WORLD_RANKING_PAGE} target="_blank">
-              点击查看完整世界排行
-            </Link>
+            <span className="world_foot_links">
+              <Link href={WORLD_RANKING_PAGE} target="_blank">
+                点击查看完整世界排行
+              </Link>
+              <Link
+                href={WORLD_RANKING_PAGE}
+                target="_blank"
+                className="join"
+                title="在 minesweepergame.com 注册并上传录像即可加入世界排行"
+              >
+                如何加入
+              </Link>
+            </span>
             <span>
               更新时间：
               {(() => {

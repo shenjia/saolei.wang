@@ -2,7 +2,8 @@
 // 2008 版靠「刷新排行」时保存 Old_Rank 得升降；新版实时计算、每日快照 rank_snapshot 替代
 
 import { prisma } from "./db";
-import { usersByIds, type UserBrief } from "./queries";
+import { usersByIds, SCORE_FIELD, VIDEO_FIELD, type RankingRow, type UserBrief } from "./queries";
+import { RANKING_BYS, byLevelOrder } from "./config";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -44,11 +45,13 @@ export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, numbe
   return map;
 }
 
-/** 惰性快照：当天首次调用时把全量排行写入 rank_snapshot（每日一次） */
-export async function ensureTodaySnapshot(): Promise<void> {
+/** 惰性快照：当天首次调用时把全量排行写入 rank_snapshot（每日一次）；force=true 强制重算 */
+export async function ensureTodaySnapshot(force = false): Promise<void> {
   const today = dateStr();
-  const existing = await prisma.rankSnapshot.findFirst({ where: { date: today }, select: { id: true } });
-  if (existing) return;
+  if (!force) {
+    const existing = await prisma.rankSnapshot.findFirst({ where: { date: today }, select: { id: true } });
+    if (existing) return;
+  }
   // MySQL 8+ 窗口函数一次算两个榜（sum_time 升序、sum_3bvs 降序），upsert 防并发重复
   await prisma.$executeRawUnsafe(
     `INSERT INTO rank_snapshot (user, date, sum_time_rank, sum_3bvs_rank, create_time, update_time)
@@ -69,11 +72,16 @@ export interface GrowUser extends UserBrief {
   delta: number;
 }
 
-/** 进步榜：今日快照 vs 昨日快照的 sum_time 名次差（移植 Ranking_Grow） */
+/** 进步榜行（RankingRow 同构 + 升降数据），GrowFeed / API 共享 */
+export type GrowRow = RankingRow & GrowUser;
+
+/** 进步榜（2026-09-24 张老师要求改为雷界排行同款表格）：行=RankingRow 同构（8 列成绩+录像），
+ *  rank=今日总计时间名次（对齐 2008 版 Player_Rank 语义），delta=昨日-今日名次差（升为正）；
+ *  表内排序按 delta 降序（进步幅度大在前）。 */
 export async function getGrowRanking(
   page: number,
   pageSize = 20
-): Promise<{ users: GrowUser[]; total: number; pageSize: number }> {
+): Promise<{ rows: GrowRow[]; total: number; pageSize: number }> {
   await ensureTodaySnapshot();
   const today = dateStr();
   const yesterday = dateStr(new Date(Date.now() - 86400_000));
@@ -81,18 +89,19 @@ export async function getGrowRanking(
   const rows = await prisma.$queryRawUnsafe<
     { user: bigint; today_rank: number; yesterday_rank: number; delta: number }[]
   >(
+    // 注意：MySQL 算术表达式返回 BIGINT，delta 实际是 bigint（下方 N() 归一化，防 JSON 序列化炸）
     `SELECT t.user, t.sum_time_rank today_rank, y.sum_time_rank yesterday_rank,
             (y.sum_time_rank - t.sum_time_rank) delta
      FROM rank_snapshot t
      JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
      WHERE t.date = ?
-     ORDER BY delta DESC
+     ORDER BY delta DESC, t.sum_time_rank ASC
      LIMIT ? OFFSET ?`,
     yesterday,
     today,
     pageSize,
     (page - 1) * pageSize
-  );
+  ) as { user: bigint; today_rank: number; yesterday_rank: number; delta: number | bigint }[];
   const countRows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
     `SELECT COUNT(*) c FROM rank_snapshot t
      JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
@@ -100,15 +109,40 @@ export async function getGrowRanking(
     yesterday,
     today
   );
+  // 8 列成绩与录像：user_scores 主表批量取（与排行表同源）
+  const scoreRows = rows.length
+    ? await prisma.userScores.findMany({
+        where: { id: { in: rows.map((r) => r.user) } },
+      })
+    : [];
+  const scoreMap = new Map(scoreRows.map((s) => [s.id, s]));
   const authors = await usersByIds(rows.map((r) => N(r.user)));
   return {
-    users: rows.map((r, i) => ({
-      ...(authors.get(N(r.user)) ?? { id: N(r.user), chineseName: "?", englishName: "", sex: 1 }),
-      rank: (page - 1) * pageSize + i + 1,
-      todayRank: r.today_rank,
-      yesterdayRank: r.yesterday_rank,
-      delta: r.delta,
-    })),
+    rows: rows.map((r) => {
+      const brief: UserBrief = authors.get(N(r.user)) ?? {
+        id: N(r.user),
+        chineseName: "?",
+        englishName: "",
+        sex: 1,
+      };
+      const rec = (scoreMap.get(r.user) ?? {}) as unknown as Record<string, bigint | number | null>;
+      const scores: Record<string, number> = {};
+      const videos: Record<string, number> = {};
+      for (const b of RANKING_BYS) {
+        const lo = byLevelOrder(b);
+        scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
+        videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
+      }
+      return {
+        ...brief,
+        rank: r.today_rank, // 排名列=今日总计时间名次（与主榜同口径）
+        scores,
+        videos,
+        todayRank: r.today_rank,
+        yesterdayRank: r.yesterday_rank,
+        delta: N(r.delta), // BIGINT 算术结果归一化为 number
+      };
+    }),
     total: N(countRows[0]?.c),
     pageSize,
   };

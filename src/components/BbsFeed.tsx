@@ -6,7 +6,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BBS_BOARD_NAMES } from "@/lib/bbs";
-import { timeOpposite, TIME_NEVER } from "@/lib/format";
+import { timeOpposite, TIME_NEVER, moreLabel } from "@/lib/format";
 import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
 
@@ -51,16 +51,20 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
 export function BbsFeed({
   initial,
   initialHasMore,
+  total: initialTotal,
   query,
   showBoard,
 }: {
   initial: BbsPostItem[];
   initialHasMore: boolean;
+  /** 当前筛选条件下的主题总数（「加载更多」括号内显示剩余条数用） */
+  total: number;
   query: Record<string, string>;
   showBoard: boolean;
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initialHasMore);
+  const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
 
   async function loadMore() {
@@ -68,9 +72,10 @@ export function BbsFeed({
     try {
       const qs = new URLSearchParams({ ...query, page: String(Math.floor(items.length / 19) + 1) });
       const res = await fetch(`/api/bbs/more?${qs}`);
-      const data = (await res.json()) as { posts: BbsPostItem[]; hasMore: boolean };
+      const data = (await res.json()) as { posts: BbsPostItem[]; hasMore: boolean; total?: number };
       setItems((prev) => [...prev, ...data.posts]);
       setHasMore(data.hasMore);
+      if (typeof data.total === "number") setTotal(data.total);
     } finally {
       setLoading(false);
     }
@@ -91,7 +96,7 @@ export function BbsFeed({
           <td colSpan={5}>
             <div className="more_loader">
               <button type="button" className="button small" disabled={loading} onClick={loadMore}>
-                {loading ? "加载中…" : "加载更多"}
+                {loading ? "加载中…" : moreLabel(total - items.length)}
               </button>
             </div>
           </td>

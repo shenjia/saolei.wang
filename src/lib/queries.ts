@@ -149,6 +149,24 @@ function safeJson(s: string): Record<string, unknown> {
   }
 }
 
+/**
+ * 动态总数（「加载更多」括号内显示剩余条数用）
+ * 过滤条件与 getNews 严格一致，否则剩余条数会对不上
+ */
+export async function getNewsCount(opts: {
+  type?: number;
+  userId?: number;
+  level?: string;
+}): Promise<number> {
+  return prisma.news.count({
+    where: {
+      ...(opts.type !== undefined ? { type: opts.type } : {}),
+      ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+      ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
+    },
+  });
+}
+
 /** 十大元帅：按总计时间前 10（移植 home/_top） */
 export async function getTopUsers(
   limit = HOME_TOP_NUMBER
@@ -171,8 +189,9 @@ export async function getTopUsers(
 
 // ---------- 排行榜 ----------
 
-const SCORE_FIELD = (level: Level, order: Order) => `${level}${order === "time" ? "Time" : "3bvs"}` as const;
-const VIDEO_FIELD = (level: Level, order: Order) => `${level}${order === "time" ? "TimeVideo" : "3bvsVideo"}` as const;
+// 字段名构造（导出给 ranksnap 进步榜复用，保证 8 列成绩映射一致）
+export const SCORE_FIELD = (level: Level, order: Order) => `${level}${order === "time" ? "Time" : "3bvs"}` as const;
+export const VIDEO_FIELD = (level: Level, order: Order) => `${level}${order === "time" ? "TimeVideo" : "3bvsVideo"}` as const;
 const DATE_FIELD = (level: Level, order: Order) => `${level}${order === "time" ? "TimeDate" : "3bvsDate"}` as const;
 
 // user_scores 与 user_scores_nf 字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
@@ -553,6 +572,13 @@ export async function getComments(
     createTime: N(r.createTime),
     author: authors.get(N(r.user)) ?? null,
   }));
+}
+
+/** 评论总数（「加载更多」括号内显示剩余条数用，过滤条件与 getComments 一致） */
+export async function getCommentsCount(videoId: number): Promise<number> {
+  return prisma.comment.count({
+    where: { video: BigInt(videoId), status: COMMENT_STATUS.NORMAL },
+  });
 }
 
 /** 发表评论并递增录像评论计数（2013 版漏了计数递增，新版补齐） */

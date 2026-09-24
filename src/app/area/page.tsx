@@ -45,13 +45,15 @@ export default async function AreaPage({
     const { rows, total, pageSize } = await getRankingTable(by, false, page, area);
     return (
       <div id="page" className="main ranking_old">
-        <RankingNav current="area" />
         <div className="box ranking_box">
-          <h1 className="area_title">
-            <Link href="/area">地区榜</Link>
-            <span className="sep">›</span>
-            {areaDisplay(area)}
-          </h1>
+          <div className="page_head">
+            <h1 className="page_title">
+              <Link href="/area">地区榜</Link>
+              <span className="sep">›</span>
+              {areaDisplay(area)}
+            </h1>
+            <RankingNav current="area" />
+          </div>
           <RankingTable rows={rows} by={by} base="/area" params={{ name: area }} />
           <OldPager
             base="/area"
@@ -72,8 +74,11 @@ export default async function AreaPage({
 
   return (
     <div id="page" className="main ranking_old">
-      <RankingNav current="area" />
       <div className="box ranking_box">
+        <div className="page_head">
+          <h1 className="page_title">地区榜</h1>
+          <RankingNav current="area" />
+        </div>
             <table cellPadding={0} cellSpacing={0} className="ranking_table area_table">
               <thead>
                 <tr>

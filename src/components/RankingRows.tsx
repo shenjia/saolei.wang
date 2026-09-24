@@ -75,7 +75,8 @@ export function RankingRowLine({
   hl,
 }: {
   row: TitledRow;
-  by: RankingBy;
+  /** 排序命中列；null=无成绩列命中（进步榜等非成绩排序场景） */
+  by: RankingBy | null;
   delta?: number | null;
   showDelta: boolean;
   hl?: boolean;

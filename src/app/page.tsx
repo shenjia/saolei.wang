@@ -1,7 +1,7 @@
 // 首页：雷界快讯 + 入伍新兵 + 十大元帅（移植 views/home/index）
 
 import Link from "next/link";
-import { getHomeNews, getNewbies, getTopUsers } from "@/lib/queries";
+import { getHomeNews, getNewbies, getNewsCount, getTopUsers } from "@/lib/queries";
 import { HOME_NEWS_NUMBER, NEWS_PAGESIZE } from "@/lib/config";
 import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
@@ -17,11 +17,13 @@ import { getUserCard } from "@/lib/usercard";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [news, newbies, top, session] = await Promise.all([
+  const [news, newbies, top, session, newsTotal] = await Promise.all([
     getHomeNews(),
     getNewbies(),
     getTopUsers(),
     getSession(),
+    // 全站动态总数（「加载更多」括号内剩余条数口径；切等级筛选时由接口回传同口径总数）
+    getNewsCount({}),
   ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
@@ -43,6 +45,7 @@ export default async function HomePage() {
             initial={feed}
             pageSize={NEWS_PAGESIZE}
             initialHasMore={news.length === HOME_NEWS_NUMBER}
+            initialTotal={newsTotal}
           />
         </div>
       </li>

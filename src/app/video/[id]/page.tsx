@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { getComments, getVideoDetail, videoScores } from "@/lib/queries";
+import { getComments, getCommentsCount, getVideoDetail, videoScores } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { clientIp, uniqueVideoAction } from "@/lib/stat";
 import {
@@ -32,9 +32,11 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
 
   const video = await getVideoDetail(videoId);
   if (!video) notFound();
-  const [session, comments] = await Promise.all([
+  const [session, comments, commentTotal] = await Promise.all([
     getSession(),
     getComments(videoId, 0, COMMENT_TOP_NUMBER),
+    // 评论总数（「加载更多」括号内剩余条数口径，按实际行数而非 video_stat 冗余计数）
+    getCommentsCount(videoId),
     // 点击计数（移植 actionView 的 uniqueAction('click')）
     (async () => uniqueVideoAction(videoId, "click", clientIp(await headers())))(),
   ]);
@@ -137,7 +139,8 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         <CommentList
           videoId={video.id}
           initial={comments}
-          initialHasMore={comments.length < video.comments && comments.length > 0}
+          initialHasMore={comments.length < commentTotal}
+          initialTotal={commentTotal}
         />
       </li>
       <li className="sidebar">

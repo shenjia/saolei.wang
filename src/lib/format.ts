@@ -89,3 +89,12 @@ export const TIME_YEAR = 365 * SECONDS_PER_DAY;
 export function isRecent(time: number): boolean {
   return Math.abs(Math.floor(Date.now() / 1000) - time) < TIME_YEAR;
 }
+
+/**
+ * 「加载更多」按钮文案：括号内显示剩余未加载条数（2026-09-24 张老师要求，
+ * 全站统一：动态/排行/进步榜/录像评论/论坛/军衔名单/扫雷历程）
+ * @param remaining 剩余条数（已加载条数与总数之差，负值按 0 处理）
+ */
+export function moreLabel(remaining: number): string {
+  return `加载更多（${Math.max(0, remaining).toLocaleString("zh-CN")}）`;
+}

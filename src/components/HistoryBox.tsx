@@ -1,7 +1,10 @@
 // 扫雷历程区块（移植 2008 版 History_List + Add/Edit）：本人可增删改
+// 2026-09-23 张老师要求：初始最多显示 15 条，底部「加载更多」
 "use client";
 
 import { useState } from "react";
+import { USER_HISTORY_NUMBER } from "@/lib/config";
+import { moreLabel } from "@/lib/format";
 import type { HistoryItem } from "@/lib/history";
 
 export function HistoryBox({
@@ -14,6 +17,7 @@ export function HistoryBox({
   editable: boolean;
 }) {
   const [items, setItems] = useState(initial);
+  const [visible, setVisible] = useState(USER_HISTORY_NUMBER);
   const [month, setMonth] = useState("");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -62,7 +66,7 @@ export function HistoryBox({
     <div className="box" id="history">
       <h2>扫雷历程</h2>
       {items.length === 0 && <p className="text">还没有记录。</p>}
-      {items.map((it) => (
+      {items.slice(0, visible).map((it) => (
         <div key={it.id} className="history_item">
           <em>{it.month}</em>{" "}
           {editingId === it.id ? (
@@ -105,6 +109,13 @@ export function HistoryBox({
           )}
         </div>
       ))}
+      {items.length > visible && (
+        <div className="more_loader">
+          <button type="button" className="button small" onClick={() => setVisible((n) => n + USER_HISTORY_NUMBER)}>
+            {moreLabel(items.length - visible)}
+          </button>
+        </div>
+      )}
       {editable && (
         <div className="history_add">
           <input

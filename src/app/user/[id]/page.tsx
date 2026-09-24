@@ -10,7 +10,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { getUserDetail, getUserNews, getUserRanks } from "@/lib/queries";
+import { getUserDetail, getUserNews, getUserRanks, getNewsCount } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
 import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, areaDisplay, type Level } from "@/lib/config";
@@ -48,7 +48,11 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
   await recordClick(userId, ip);
   const clicks = await getClicks(userId);
 
-  const news = await getUserNews(userId, USER_NEWS_NUMBER);
+  const [news, newsTotal] = await Promise.all([
+    getUserNews(userId, USER_NEWS_NUMBER),
+    // 该玩家动态总数（「加载更多」括号内剩余条数口径）
+    getNewsCount({ userId }),
+  ]);
   const [history, session, ranks] = await Promise.all([
     getHistory(userId),
     getSession(),
@@ -118,7 +122,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               </tbody>
             </table>
             <div className="rank_label">
-              <Link href="/world" title="军衔体系">
+              <Link href="/titles" title="军衔体系">
                 <RankBadge title={detail.title} size={72} />
                 <span className="rank_name" style={{ color: TITLE_COLORS[detail.title] }}>
                   {detail.title}
@@ -148,6 +152,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
               userId={userId}
               pageSize={USER_NEWS_NUMBER}
               initialHasMore={news.length === USER_NEWS_NUMBER}
+              initialTotal={newsTotal}
             />
           </div>
         )}

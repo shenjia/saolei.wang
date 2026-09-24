@@ -42,9 +42,9 @@ function getPosition(score: number, distribution: number[], direction: 0 | 1): n
   return i;
 }
 
-/** 军衔：按总计时间成绩评定（移植 Assess::title） */
+/** 军衔：按总计时间成绩评定（移植 Assess::title）；2026-09-23 起无成绩玩家评为「预备役」（张老师要求） */
 export async function title(score: number | null | undefined): Promise<string> {
-  if (!score) return "";
+  if (!score) return "预备役";
   const dist = await getDistribution();
   if (!dist) return "";
   const thresholds = parseThresholds(dist["title"]);

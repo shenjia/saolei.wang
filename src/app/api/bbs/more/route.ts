@@ -16,6 +16,6 @@ export async function GET(req: Request) {
   const nice = p.get("nice") === "1" || orderRaw === "nice";
   const order: BbsOrder = !nice && ORDERS.includes(orderRaw as BbsOrder) ? (orderRaw as BbsOrder) : "reply";
 
-  const { posts, hasMore } = await getPostPage({ board, order, nice: nice || undefined, page });
-  return NextResponse.json({ posts, hasMore });
+  const { posts, hasMore, total } = await getPostPage({ board, order, nice: nice || undefined, page });
+  return NextResponse.json({ posts, hasMore, total });
 }

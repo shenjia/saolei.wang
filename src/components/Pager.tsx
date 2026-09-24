@@ -64,7 +64,7 @@ export function Pager({
   );
 }
 
-/** 筛选项标签组（移植 Tabs 组件） */
+/** 筛选项标签组（移植 Tabs 组件；ul/li 结构对齐 legacy CSS 的 .tabs li 规则） */
 export function Tabs({
   base,
   params,
@@ -79,19 +79,21 @@ export function Tabs({
   current: string;
 }) {
   return (
-    <span className="tabs" data-name={name}>
+    <ul className="tabs" data-name={name}>
       {options.map(([value, label]) =>
         value === current ? (
-          <em key={value} className="active">
-            {label}
-          </em>
+          <li key={value} className="current">
+            <em className="active">{label}</em>
+          </li>
         ) : (
-          <Link key={value} href={buildUrl(base, { ...params, [name]: value, page: undefined })}>
-            {label}
-          </Link>
+          <li key={value}>
+            <Link href={buildUrl(base, { ...params, [name]: value, page: undefined })}>
+              {label}
+            </Link>
+          </li>
         )
       )}
-    </span>
+    </ul>
   );
 }
 

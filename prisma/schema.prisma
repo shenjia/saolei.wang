@@ -23,6 +23,8 @@ model User {
   status      Int     @default(0) @db.SmallInt
   createTime  BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
+  // 最近登录（2026-09-23 个人信息卡片新增，登录时刷新；0=未记录）
+  lastLoginTime BigInt @default(0) @map("last_login_time") @db.BigInt
 
   @@index([area, sex])
   @@map("user")
@@ -459,6 +461,25 @@ model RankSnapshot {
 
   @@unique([user, date])
   @@map("rank_snapshot")
+}
+
+// ---------- 后台（2026-09-24 管理后台新增） ----------
+
+// 后台操作日志：管理端一切写操作留痕（谁、何时、对谁、做了什么、来源 IP）
+model AdminLog {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt // 操作人 user.id
+  action     String @db.VarChar(40) // 动作标识，如 video.review / user.ban
+  target     String @default("") @db.VarChar(20) // 目标类型：user / video / comment / bbs_post …
+  targetId   BigInt @default(0) @map("target_id") @db.BigInt
+  detail     String @default("") @db.VarChar(500) // 人类可读描述（列表直接展示）
+  ip         String @default("") @db.VarChar(40)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([user, createTime])
+  @@index([action, createTime])
+  @@index([createTime])
+  @@map("admin_log")
 }
 
 // 密码重置令牌（邮箱找回，新版测试.txt 需求）

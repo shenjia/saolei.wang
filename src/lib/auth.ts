@@ -5,6 +5,7 @@
 
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { prisma } from "./db";
 
 const SESSION_COOKIE = "saolei_session";
 const TICKET_COOKIE = "saolei_oauth_ticket";
@@ -76,6 +77,15 @@ export async function setSession(user: SessionUser): Promise<void> {
     maxAge: SESSION_TTL,
     secure: process.env.NODE_ENV === "production",
   });
+  // 刷新最近登录时间（个人信息卡片用，2026-09-23）；失败不阻断登录
+  try {
+    await prisma.user.update({
+      where: { id: BigInt(user.uid) },
+      data: { lastLoginTime: BigInt(Math.floor(Date.now() / 1000)) },
+    });
+  } catch {
+    /* 忽略 */
+  }
 }
 
 export async function getSession(): Promise<SessionUser | null> {

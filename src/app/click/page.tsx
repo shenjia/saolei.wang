@@ -18,27 +18,29 @@ export default async function ClickRankingPage({
   const { users, total, pageSize } = await getClickRanking(page);
 
   return (
-    <div id="page" className="main">
-      <RankingNav current="click" />
-      <div id="ranking_header" className="box">
-        <h1>人气榜</h1>
-      </div>
-      <div id="user_list" className="ranking_list">
-        {users.map((u) => (
-          <div key={u.id} className="user_cell box">
-            <span className="rank">
-              No.<em>{u.rank}</em>
-            </span>
-            <span className="user">
-              <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} link />
-            </span>
-            <span className="score">
-              人气 <em>{u.total}</em>
-              {u.today > 0 && <span>（今日 +{u.today}）</span>}
-            </span>
-          </div>
-        ))}
-        <Pager base="/click" params={{}} page={page} total={total} pageSize={pageSize} />
+    <div id="page" className="main ranking_old">
+      <div className="box ranking_box">
+        <div className="page_head">
+          <h1 className="page_title">人气榜</h1>
+          <RankingNav current="click" />
+        </div>
+        <div id="user_list" className="ranking_list">
+          {users.map((u) => (
+            <div key={u.id} className="user_cell box">
+              <span className="rank">
+                No.<em>{u.rank}</em>
+              </span>
+              <span className="user">
+                <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} link />
+              </span>
+              <span className="score">
+                人气 <em>{u.total}</em>
+                {u.today > 0 && <span>（今日 +{u.today}）</span>}
+              </span>
+            </div>
+          ))}
+          <Pager base="/click" params={{}} page={page} total={total} pageSize={pageSize} />
+        </div>
       </div>
     </div>
   );

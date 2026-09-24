@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMENT_CONTENT_LIMIT, COMMENT_PAGESIZE } from "@/lib/config";
-import { timeOpposite } from "@/lib/format";
+import { timeOpposite, moreLabel } from "@/lib/format";
 import type { CommentItem } from "@/lib/queries";
 import { AvatarCell } from "./Cells";
 
@@ -37,23 +37,28 @@ export function CommentList({
   videoId,
   initial,
   initialHasMore,
+  initialTotal,
 }: {
   videoId: number;
   initial: CommentItem[];
   initialHasMore: boolean;
+  /** 本录像评论总数（「加载更多」括号内显示剩余条数用） */
+  initialTotal: number;
 }) {
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(initial.length ? initial[initial.length - 1].id : 0);
   const [hasMore, setHasMore] = useState(initialHasMore);
+  const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
 
   async function loadMore() {
     setLoading(true);
     try {
       const res = await fetch(`/api/comment/more?video=${videoId}&cursor=${cursor}&size=${COMMENT_PAGESIZE}`);
-      const data = (await res.json()) as { items: CommentItem[]; cursor: number; count: number };
+      const data = (await res.json()) as { items: CommentItem[]; cursor: number; count: number; total: number };
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
+      if (typeof data.total === "number") setTotal(data.total);
       if (data.count < COMMENT_PAGESIZE) setHasMore(false);
     } finally {
       setLoading(false);
@@ -68,7 +73,7 @@ export function CommentList({
       {hasMore && (
         <div className="more_loader">
           <button type="button" className="button small" disabled={loading} onClick={loadMore}>
-            {loading ? "加载中…" : "加载更多"}
+            {loading ? "加载中…" : moreLabel(total - items.length)}
           </button>
         </div>
       )}
