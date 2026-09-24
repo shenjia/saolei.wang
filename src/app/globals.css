@@ -2605,6 +2605,12 @@ body #page.ranking_old.main .ranking_nav {
 #page.ranking_old.main > #world_top th:first-child {
   text-align: center; /* Rank 表头保持居中（名次列语义不同） */
 }
+/* 视觉对齐（2026-09-24 张老师指正）：成绩 td 沿用旧世界榜小挂件的 text-align:center，
+   数字在格内居中导致与左对齐表头错位——成绩/总成绩列改为左对齐，与表头文字自然对齐 */
+#page.ranking_old.main > #world_top td.t,
+#page.ranking_old.main > #world_top td.sum {
+  text-align: left;
+}
 #page.ranking_old.main > #world_top td.t b,
 #page.ranking_old.main > #world_top td.sum {
   font-size: 16px;
