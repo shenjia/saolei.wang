@@ -2348,3 +2348,8 @@ body #page.video_old .page_head {
 #news .table td.time--old {
   color: #6c6c61;
 }
+/* 十大元帅日期字号对齐：legacy 只有 #newbie .time/#news .table td 补了 14px，
+   #top 无规则落回 .table td 的 16px，这里补齐与其他板块一致（2026-09-24 张老师要求） */
+#top .time {
+  font-size: 14px;
+}
