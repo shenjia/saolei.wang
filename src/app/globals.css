@@ -1160,6 +1160,12 @@ body #page.message_list > .box:first-child .page_head {
   font-size: 12px;
   margin-left: 5px;
 }
+/* 四轮（张老师要求）：消息页「加载更多」按钮缩小一号（全站 .more_loader .button 不动） */
+#page.message_list .more_loader .button {
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
 
 /* 未读消息角标 */
 .badge {
