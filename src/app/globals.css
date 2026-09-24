@@ -1263,8 +1263,18 @@ body #page.message_list > .box:first-child .page_head {
   border-bottom: 1px solid #3a3a3a;
 }
 .history_item em {
-  color: #66d9ef;
   margin-right: 8px;
+}
+/* 2026-09-24 张老师要求：历程日期沿用动态日期口径（一年内亮 #b1b1a4 / 一年以上暗 #6c6c61），
+   正文提亮（默认继承 #636359 最暗，提到 #cfcfc2 与高级成绩文字同级） */
+#history .history_item em.time--recent {
+  color: #b1b1a4;
+}
+#history .history_item em.time--old {
+  color: #6c6c61;
+}
+#history .history_item > span:first-of-type {
+  color: #cfcfc2;
 }
 .history_item .ops a {
   font-size: 12px;
@@ -1273,8 +1283,130 @@ body #page.message_list > .box:first-child .page_head {
 .history_item .ops a:hover {
   color: #a6e22e;
 }
+/* 编辑/删除按钮默认隐藏，hover 该条时才出现（2026-09-24 张老师要求） */
+#history .history_item .ops {
+  visibility: hidden;
+}
+#history .history_item:hover .ops,
+#history .history_item .ops:focus-within {
+  visibility: visible;
+}
 .history_add {
   margin-top: 10px;
+}
+
+/* ---------- 历程 2026-09-24 改版：标题行 + 右上角加号 + 写/编浮窗 ----------
+   标题「历程」沿用 legacy h2（#b1b1a4/20px）；加号按钮登录态本人可见，
+   复用 legacy .button 的小号变体手感但更轻（无边框、灰字、hover 绿）；
+   浮窗复用登录浮窗的暗玻璃设计（.login_overlay/.login_close 同款视觉）。 */
+.history_head {
+  overflow: hidden;
+}
+.history_head h2 {
+  float: left;
+}
+.history_head .history_add_btn {
+  float: right;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 6px;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #434239;
+  color: #b1b1a4;
+  font-size: 18px;
+  line-height: 1;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  transition: color 0.15s, border-color 0.15s;
+}
+.history_head .history_add_btn:hover {
+  color: #a6e22e;
+  border-color: #a6e22e;
+}
+/* 浮窗：与登录浮窗同款遮罩 + 暗玻璃面板 */
+.history_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.history_dialog {
+  position: relative;
+  box-sizing: border-box;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  margin: 0;
+  padding: 22px 26px 20px;
+  background: rgba(39, 40, 34, 0.92);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+  border: 0;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(248, 248, 242, 0.1),
+    inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+    0 32px 64px -16px rgba(0, 0, 0, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.history_dialog h1 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #f8f8f2;
+  margin: 0;
+}
+.history_form {
+  margin-top: 14px;
+}
+.history_form .history_month {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: #939387;
+  font-size: 14px;
+}
+.history_form .history_month input {
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  padding: 6px 8px;
+  width: 150px;
+}
+.history_form .history_month input:disabled {
+  color: #75715e;
+  background: #2f2e28;
+}
+.history_form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
+}
+.history_form_ops {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.history_form_ops .error {
+  margin-left: 4px;
+}
+
+/* ---------- 用户主页统计（2026-09-24 张老师要求） ----------
+   数字（legacy .table em 本为黄 #fdc61a）默认改亮灰 #b1b1a4；
+   「今日 +N」属于今日数据，用黄 #fdc61a 高亮。 */
+#user_view .sidebar .table em {
+  color: #b1b1a4;
+  font-weight: bold;
+}
+#user_view .sidebar .table .stat_today {
+  color: #fdc61a;
 }
 
 /* ---------- 首页右栏加宽 + 雷界统计防折行（2026-09-23 张老师反馈） ----------

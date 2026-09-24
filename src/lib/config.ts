@@ -62,10 +62,10 @@ export const COMMENT_STATUS = { NORMAL: 0, DELETED: -1 } as const;
 
 // 动态「加载更多」每页条数（移植 NewsConfig::PAGESIZE）
 export const NEWS_PAGESIZE = 20;
-// 用户主页动态初始条数（2026-09-23 张老师要求改为 15，配合「加载更多」）
-export const USER_NEWS_NUMBER = 15;
-// 用户主页扫雷历程初始条数（与动态一致）
-export const USER_HISTORY_NUMBER = 15;
+// 用户主页动态初始条数（2026-09-24 张老师要求 15 → 10）
+export const USER_NEWS_NUMBER = 10;
+// 用户主页历程初始条数（2026-09-24 张老师要求与动态一致改 10）
+export const USER_HISTORY_NUMBER = 10;
 
 // ---------- 军衔（移植 TitleConfig） ----------
 

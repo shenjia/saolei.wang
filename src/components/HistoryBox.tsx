@@ -1,12 +1,15 @@
-// 扫雷历程区块（移植 2008 版 History_List + Add/Edit）：本人可增删改
-// 2026-09-23 张老师要求：初始最多显示 15 条，底部「加载更多」
+// 历程区块（移植 2008 版 History_List + Add/Edit）：本人可增删改
+// 2026-09-24 张老师要求：标题「扫雷历程」改「历程」；日期颜色沿用动态口径
+// （一年内亮 / 一年以上暗）；正文提亮；底部行内表单改为标题右上角「+」按钮，
+// 点击弹出浮窗选月份写内容，编辑复用同一浮窗；编辑/删除按钮 hover 才显示。
+
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { USER_HISTORY_NUMBER } from "@/lib/config";
 import type { HistoryItem } from "@/lib/history";
+import { isRecent } from "@/lib/format";
 import { noFocusJump } from "./useKeepScroll";
-import { toast } from "./Toast";
 import { TotalCount } from "./TotalCount";
 
 export function HistoryBox({
@@ -20,97 +23,82 @@ export function HistoryBox({
 }) {
   const [items, setItems] = useState(initial);
   const [visible, setVisible] = useState(USER_HISTORY_NUMBER);
-  const [month, setMonth] = useState("");
-  const [content, setContent] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingContent, setEditingContent] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  // 浮窗：null=关闭；{id:null}=新增；{id:number}=编辑该条
+  const [dialog, setDialog] = useState<{ id: number | null } | null>(null);
 
   async function call(body: Record<string, unknown>): Promise<boolean> {
-    setBusy(true);
-    setError("");
     const res = await fetch("/api/history", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "操作失败");
-      return false;
-    }
-    return true;
-  }
-
-  async function onAdd() {
-    if (!(await call({ action: "add", month, content }))) return;
-    const item = { id: Date.now(), month, content: content.trim() };
-    setItems((list) => [item, ...list].sort((a, b) => (a.month < b.month ? 1 : -1)));
-    setMonth("");
-    setContent("");
-    toast("历程已添加", "success");
-  }
-
-  async function onUpdate(id: number) {
-    if (!(await call({ action: "update", id, content: editingContent }))) return;
-    setItems((list) => list.map((it) => (it.id === id ? { ...it, content: editingContent.trim() } : it)));
-    setEditingId(null);
-    toast("历程已更新", "success");
+    return res.ok;
   }
 
   async function onDelete(id: number) {
     if (!confirm("确定删除这条历程吗？")) return;
     if (!(await call({ action: "delete", id }))) return;
     setItems((list) => list.filter((it) => it.id !== id));
-    toast("历程已删除", "success");
   }
+
+  // 浮窗打开时：锁页面滚动 + ESC 关闭
+  useEffect(() => {
+    if (!dialog) return;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setDialog(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [dialog]);
+
+  const dialogItem = dialog?.id != null ? items.find((it) => it.id === dialog.id) : undefined;
 
   return (
     <div className="box" id="history">
-      <h2>扫雷历程</h2>
+      <div className="history_head">
+        <h2>历程</h2>
+        {editable && (
+          <a
+            href="#"
+            className="history_add_btn"
+            title="写历程"
+            aria-label="写历程"
+            onClick={(e) => {
+              e.preventDefault();
+              setDialog({ id: null });
+            }}
+          >
+            +
+          </a>
+        )}
+      </div>
       {items.length === 0 && <p className="text">还没有记录。</p>}
       {items.slice(0, visible).map((it) => (
         <div key={it.id} className="history_item">
-          <em>{it.month}</em>{" "}
-          {editingId === it.id ? (
-            <>
-              <textarea
-                value={editingContent}
-                onChange={(e) => setEditingContent(e.target.value)}
-                rows={2}
-                maxLength={500}
-              />
-              <button className="button active" disabled={busy} onClick={() => onUpdate(it.id)}>
-                保存
-              </button>{" "}
-              <button className="button" onClick={() => setEditingId(null)}>
-                取消
-              </button>
-            </>
-          ) : (
-            <>
-              <span>{it.content}</span>
-              {editable && (
-                <span className="ops">
-                  {" "}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setEditingId(it.id);
-                      setEditingContent(it.content);
-                    }}
-                  >
-                    编辑
-                  </a>{" "}
-                  <a href="#" onClick={(e) => (e.preventDefault(), onDelete(it.id))}>
-                    删除
-                  </a>
-                </span>
-              )}
-            </>
+          <em className={isRecent(monthToUnix(it.month)) ? "time--recent" : "time--old"}>
+            {it.month}
+          </em>{" "}
+          <span>{it.content}</span>
+          {editable && (
+            <span className="ops">
+              {" "}
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDialog({ id: it.id });
+                }}
+              >
+                编辑
+              </a>{" "}
+              <a href="#" onClick={(e) => (e.preventDefault(), onDelete(it.id))}>
+                删除
+              </a>
+            </span>
           )}
         </div>
       ))}
@@ -127,29 +115,112 @@ export function HistoryBox({
           <TotalCount total={items.length} unit="条" />
         </div>
       )}
-      {editable && (
-        <div className="history_add">
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            style={{ width: 140 }}
-          />{" "}
-          <input
-            type="text"
-            placeholder="这个月有什么值得记录的？"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={500}
-            style={{ width: "60%" }}
-          />{" "}
-          <button className="button active" disabled={busy || !month || !content.trim()} onClick={onAdd}>
-            添加
-          </button>
-          {error && <p className="error">{error}</p>}
-        </div>
+      {dialog && (
+        <HistoryDialog
+          item={dialogItem}
+          onClose={() => setDialog(null)}
+          onSaved={(saved) => {
+            if (dialog.id == null) {
+              setItems((list) => [saved, ...list].sort((a, b) => (a.month < b.month ? 1 : -1)));
+            } else {
+              setItems((list) => list.map((it) => (it.id === saved.id ? saved : it)));
+            }
+            setDialog(null);
+          }}
+        />
       )}
       <input type="hidden" value={userId} readOnly />
+    </div>
+  );
+}
+
+/** "YYYY-MM" → 该月 15 号的 Unix 秒（仅供 isRecent 判断新鲜度，取月中避免时区偏差） */
+function monthToUnix(month: string): number {
+  const [y, m] = month.split("-").map(Number);
+  return Math.floor(new Date(y, m - 1, 15).getTime() / 1000);
+}
+
+/** 写历程 / 编辑历程浮窗（新增与编辑复用同一设计） */
+function HistoryDialog({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item?: HistoryItem;
+  onClose: () => void;
+  onSaved: (item: HistoryItem) => void;
+}) {
+  const isEdit = !!item;
+  const [month, setMonth] = useState(item?.month ?? "");
+  const [content, setContent] = useState(item?.content ?? "");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(""), 3000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  async function submit() {
+    if (!month) return setError("请选择月份");
+    if (!content.trim()) return setError("内容不能为空");
+    setBusy(true);
+    const res = await fetch("/api/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        isEdit ? { action: "update", id: item!.id, content } : { action: "add", month, content }
+      ),
+    });
+    setBusy(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setError(data.error ?? "操作失败");
+    if (isEdit) onSaved({ ...item!, content: content.trim() });
+    else onSaved({ id: data.id, month, content: content.trim() });
+  }
+
+  return (
+    <div className="history_overlay" onClick={onClose}>
+      <div className="history_dialog box" onClick={(e) => e.stopPropagation()}>
+        <a
+          className="login_close"
+          href="#"
+          aria-label="关闭"
+          onClick={(e) => (e.preventDefault(), onClose())}
+        >
+          ×
+        </a>
+        <h1>{isEdit ? "编辑历程" : "写历程"}</h1>
+        <div className="history_form">
+          <label className="history_month">
+            月份
+            <input
+              type="month"
+              value={month}
+              disabled={isEdit}
+              onChange={(e) => setMonth(e.target.value)}
+            />
+          </label>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={4}
+            maxLength={500}
+            placeholder="这个月有什么值得记录的？"
+            autoFocus
+          />
+          <div className="history_form_ops">
+            <button className="button active" disabled={busy || !month || !content.trim()} onClick={submit}>
+              {busy ? "保存中…" : isEdit ? "保存" : "添加"}
+            </button>
+            <button className="button" onClick={onClose}>
+              取消
+            </button>
+            {error && <span className="error">{error}</span>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

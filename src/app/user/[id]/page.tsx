@@ -3,6 +3,8 @@
 // 2026-09-23 首个版块布局（张老师要求）：左侧正方形照片（OAuth 头像 →
 //   /images/player/{id}.jpg → 默认头像）；全国/省份排名两行置于右上角
 //   军衔徽章上方，居中显示
+// 2026-09-24 二轮（张老师要求）：动态标题改「动态」、筛选器收进标题行右侧；
+//   无上传录像隐藏「实力」雷达；统计数字默认亮灰、今日数据黄色高亮
 
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -172,8 +174,9 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         </div>
         {news.length > 0 && (
           <div id="news" className="box">
-            <h2>进步历程</h2>
+            {/* 2026-09-24 张老师要求：标题「进步历程」改「动态」，筛选器收进标题行右侧 */}
             <NewsFeed
+              title="动态"
               initial={feed}
               userId={userId}
               pageSize={USER_NEWS_NUMBER}
@@ -185,10 +188,14 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
       </li>
       <li className="sidebar">
-        <div className="radar box">
-          <h2>实力</h2>
-          <RadarChart data={radar} />
-        </div>
+        {/* 2026-09-24 张老师要求：没有上传过录像的玩家不显示「实力」雷达板块 */}
+        {detail.stat &&
+          detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
+            <div className="radar box">
+              <h2>实力</h2>
+              <RadarChart data={radar} />
+            </div>
+          )}
         {hasProfileFields && (
           <div className="profile box">
           <h2>个人资料</h2>
@@ -215,13 +222,16 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         {detail.stat && (
           <div className="box">
             <h2>统计</h2>
+            {/* 2026-09-24 张老师要求：数字默认亮灰 #b1b1a4，今日数据用黄 #fdc61a 高亮 */}
             <table className="table full">
               <tbody>
                 <tr>
                   <td>人气</td>
                   <td>
                     <em>{clicks.total}</em>
-                    {clicks.today > 0 && `（今日 +${clicks.today}）`}
+                    {clicks.today > 0 && (
+                      <span className="stat_today">（今日 +{clicks.today}）</span>
+                    )}
                   </td>
                 </tr>
                 <tr>
