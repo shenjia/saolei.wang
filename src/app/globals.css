@@ -1925,7 +1925,7 @@ body #page.two_columns li.main {
     flex-wrap: wrap;
     row-gap: 8px;
   }
-  /* 页头行（六轮 title+筛选器同行）：窄屏恢复上下堆叠，title 独占一行不挤 */
+  /* 页头行（六轮 title+筛选器同行；七轮排行页移入卡片）：窄屏恢复上下堆叠，title 独占一行不挤 */
   #page .page_head {
     flex-direction: column;
     align-items: stretch;
@@ -1934,6 +1934,10 @@ body #page.two_columns li.main {
   }
   body #page.ranking_old.main .page_head .ranking_nav {
     align-items: flex-start;
+    margin: 0; /* 七轮：nav 随 page_head 移入卡片，清掉卡片外的 16px 8px -8px 外距 */
+  }
+  body #page.ranking_old.main .page_head {
+    margin-bottom: 12px; /* 卡片内：与下方表格留出间距 */
   }
   /* 含表格的盒子一律盒内横滑（BBS 列表固定列宽 470+、排行宽表等），页面本身不横滚
      ranking_table 不带 .table 类，须并列（2026-09-24 修：此前排行宽表在手机上撑破页面） */
@@ -2049,13 +2053,23 @@ body .ranking_table td a:not(.current):hover {
    ② 右上角双输入框合并为单个圆角矩形搜索框（放大镜矢量图标 + placeholder 姓名或ID）；
    ③ 老式分页改「加载更多」，登录态其右侧带「我在哪里」定位按钮。 */
 
-/* ==================== 排行榜五/六轮调整（2026-09-24 张老师要求） ====================
-   h1「排行榜」移出卡片置于页面顶部（五轮）；筛选器紧靠 title 右侧同一行（六轮）——
-   title 左、tabs+搜索框紧随其后，避免 title 独占一行太空。
+/* ==================== 排行榜五/六/七轮调整（2026-09-24 张老师要求） ====================
+   五轮 h1 移出卡片置于页面顶部；六轮筛选器紧靠 title 右侧同一行；
+   七轮 title+筛选器+搜索框整体移回主体卡片内（title 左、tabs 紧随、搜索框贴行尾）。
    桌面规则包进 min-width:769——移动端（≤768 媒体查询在前）恢复上下堆叠不被反杀。 */
+/* 两种断点通吃：通用页头外距（header 吸顶后页面内容自带间隔，16px 与 .box 节奏一致）；
+   排行页七轮起 page_head 已在卡片内，清掉外距由 .box 自身 margin:16px 8px 承接页顶间距 */
+#page .page_head {
+  margin-top: 16px;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+body #page.ranking_old .page_head {
+  margin: 0;
+}
 @media (min-width: 769px) {
-  /* 页头行：h1 + 筛选器起始排布、基线对齐（筛选器底边贴 h1 底边——
-     tabs 文字 15px/行高 39 与 h1 26px/39 底线齐平） */
+  /* 页头行（通用，BBS 卡片外页头同样依赖）：h1 + 筛选器起始排布、基线对齐
+     （筛选器底边贴 h1 底边——tabs 文字 15px/行高 39 与 h1 26px/39 底线齐平） */
   #page .page_head {
     display: flex;
     justify-content: flex-start;
@@ -2066,6 +2080,11 @@ body .ranking_table td a:not(.current):hover {
   #page .page_head .page_title {
     flex: none;
     margin: 0; /* 间隔职责已由 page_head 承担 */
+  }
+
+  /* 排行页页头（七轮：在卡片内）：无页头外距，只留与表格的下间距 */
+  body #page.ranking_old .page_head {
+    margin: 0 0 16px;
   }
 
   /* 页头内的导航条：占满 title 旁剩余宽度——tabs 紧跟 title、
@@ -2080,12 +2099,6 @@ body .ranking_table td a:not(.current):hover {
   body #page.ranking_old.main .page_head .ranking_nav .goto_form {
     margin-left: auto; /* 与 tabs 拉开：搜索框贴行尾 */
   }
-}
-/* 两种断点通吃：页头顶距（header 吸顶后页面内容自带间隔，16px 与 .box 节奏一致） */
-#page .page_head {
-  margin-top: 16px;
-  margin-left: 8px;
-  margin-right: 8px;
 }
 
 /* 合并搜索框：圆角矩形外框内嵌放大镜 + 输入框（图标颜色随输入框灰、focus 转黄） */

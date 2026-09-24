@@ -1,5 +1,6 @@
 // 排行榜（2008 编排改造，2026-09-23 张老师要求；2026-09-24 多轮调整）：
-// 页面顶部 h1「排行榜」（2026-09-24 五轮：移出卡片，置于最上面）+ 榜别 tabs
+// 页面主体卡片内：h1「排行榜」+ 榜别 tabs + 右上角查找框（七轮：title/筛选/搜索框
+// 整体移回卡片内，title 左、tabs 紧随、搜索框贴行尾）
 // + 全级别成绩表 + 「加载更多」（替代老式分页）；右上角查找框无按钮化（模糊推荐）；
 // 登录态下「我在哪里」在底部加载更多右侧（点击定位到自己所在行）。
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
@@ -69,11 +70,11 @@ export default async function RankingPage({
 
   return (
     <div id="page" className="main ranking_old">
-      <div className="page_head">
-        <h1 className="page_title">排行榜</h1>
-        <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
-      </div>
       <div className="box ranking_box">
+        <div className="page_head">
+          <h1 className="page_title">排行榜</h1>
+          <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
+        </div>
         {/* key 含 page/view/by/hl：软导航（whereami 302 回跳）时强制重挂载，
             否则 Feed 的 useState(initial) 保留旧页数据、表格显示错页 */}
         <RankingFeed
