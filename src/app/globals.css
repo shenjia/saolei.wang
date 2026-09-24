@@ -2237,7 +2237,11 @@ body #video_list .score_3bvs a:hover em {
   white-space: nowrap;
   padding: 4px 2px;
 }
-/* 时间列（末列）：站内动态同口径——一年内相对时间偏亮、超一年显示日期且偏暗 */
+/* 时间列（上传时间）：站内动态同口径——一年内相对时间偏亮、超一年显示日期且偏暗；
+   字号降一档（2026-09-24 张老师要求） */
+.video_table td.create_time {
+  font-size: 14px;
+}
 .video_table td.create_time.time--recent {
   color: #b1b1a4;
 }
