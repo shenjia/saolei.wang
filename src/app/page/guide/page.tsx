@@ -64,7 +64,7 @@ const GROUPS: [string, [string, string, number | null][]][] = [
 export default function GuidePage() {
   return (
     <div id="page" className="main">
-      <div className="box text">
+      <div id="guide" className="box text">
         <h1>扫雷教程</h1>
         {GROUPS.map(([group, items]) => (
           <div key={group}>

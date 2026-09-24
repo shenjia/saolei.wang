@@ -9,3 +9,8 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #bbs_latest .subject a.t.high{color:#FFFFFF}
 #bbs_latest .nice{color:#ffff00;font-size:12px;flex:0 0 auto}
 #bbs_latest .bbs_new tbody tr:hover td{background:#444444}
+
+/* ===== /page/guide 教程页（2026-09-24）===== */
+#guide h2{margin:36px 0 0}
+#guide hr{margin:6px 0 30px}
+#guide p a{color:#b1b1a4}
