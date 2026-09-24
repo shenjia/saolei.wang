@@ -1,5 +1,5 @@
 // 历程区块（移植 2008 版 History_List + Add/Edit）：本人可增删改
-// 2026-09-24 张老师要求：标题「扫雷历程」改「历程」；日期颜色沿用动态口径
+// 2026-09-24 张老师要求：板块标题「扫雷历程」→「历程」→ 二轮改「纪事」；日期颜色沿用动态口径
 // （一年内亮 / 一年以上暗）；正文提亮；底部行内表单改为标题右上角「+」按钮，
 // 点击弹出浮窗选月份写内容，编辑复用同一浮窗；编辑/删除按钮 hover 才显示。
 // 二轮：日期/正文分两列（表格），长正文折行不再串到日期列。
@@ -37,7 +37,7 @@ export function HistoryBox({
   }
 
   async function onDelete(id: number) {
-    if (!confirm("确定删除这条历程吗？")) return;
+    if (!confirm("确定删除这条纪事吗？")) return;
     if (!(await call({ action: "delete", id }))) return;
     setItems((list) => list.filter((it) => it.id !== id));
   }
@@ -61,13 +61,13 @@ export function HistoryBox({
   return (
     <div className="box" id="history">
       <div className="history_head">
-        <h2>历程</h2>
+        <h2>纪事</h2>
         {editable && (
           <a
             href="#"
             className="history_add_btn"
-            title="写历程"
-            aria-label="写历程"
+            title="写纪事"
+            aria-label="写纪事"
             onClick={(e) => {
               e.preventDefault();
               setDialog({ id: null });
@@ -149,7 +149,7 @@ function monthToUnix(month: string): number {
   return Math.floor(new Date(y, m - 1, 15).getTime() / 1000);
 }
 
-/** 写历程 / 编辑历程浮窗（新增与编辑复用同一设计） */
+/** 写纪事 / 编辑纪事浮窗（新增与编辑复用同一设计） */
 function HistoryDialog({
   item,
   onClose,
@@ -200,7 +200,7 @@ function HistoryDialog({
         >
           ×
         </a>
-        <h1>{isEdit ? "编辑历程" : "写历程"}</h1>
+        <h1>{isEdit ? "编辑纪事" : "写纪事"}</h1>
         <div className="history_form">
           <label className="history_month">
             月份
