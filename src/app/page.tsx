@@ -1,4 +1,4 @@
-// 首页：雷界动态 + 入伍新兵 + 十大元帅（移植 views/home/index）
+// 首页：雷界快讯 + 入伍新兵 + 十大元帅（移植 views/home/index）
 
 import Link from "next/link";
 import { getHomeNews, getNewbies, getTopUsers } from "@/lib/queries";
@@ -38,8 +38,8 @@ export default async function HomePage() {
     <ul id="home">
       <li className="main">
         <div id="news" className="box">
-          <h1>雷界动态</h1>
           <NewsFeed
+            title="雷界快讯"
             initial={feed}
             pageSize={NEWS_PAGESIZE}
             initialHasMore={news.length === HOME_NEWS_NUMBER}
@@ -68,10 +68,9 @@ export default async function HomePage() {
                   </td>
                   <td className="user">
                     <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
-                  </td>
-                  <td>
                     <TitleBadge title={u.title} link />
                   </td>
+                  <td className="time">{timeOpposite(u.titleDate, TIME_NEVER)}</td>
                 </tr>
               ))}
             </tbody>

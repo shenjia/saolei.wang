@@ -150,7 +150,9 @@ function safeJson(s: string): Record<string, unknown> {
 }
 
 /** 十大元帅：按总计时间前 10（移植 home/_top） */
-export async function getTopUsers(limit = HOME_TOP_NUMBER): Promise<(UserBrief & { title: string })[]> {
+export async function getTopUsers(
+  limit = HOME_TOP_NUMBER
+): Promise<(UserBrief & { title: string; titleDate: number })[]> {
   const rows = await prisma.userScores.findMany({
     where: { sumTime: { gt: 0 } },
     orderBy: { sumTime: "asc" },
@@ -161,6 +163,8 @@ export async function getTopUsers(limit = HOME_TOP_NUMBER): Promise<(UserBrief &
     rows.map(async (r) => ({
       ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
       title: await title(r.sumTime),
+      // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
+      titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
     }))
   );
 }
@@ -618,30 +622,7 @@ export async function getSiteStats(): Promise<SiteStats> {
   };
 }
 
-// ---------- 雷界生态（移植 2008 版 World/World.asp：各军衔人数分布） ----------
-
-/** 雷界页顶部统计标签（2026-09-23 张老师要求：滚动窗口——新人 30 天内注册、今日录像 24 小时内上传） */
-export interface WorldStats {
-  rankedTotal: number;
-  newbie30d: number;
-  videoTotal: number;
-  video24h: number;
-  bbsTopics: number;
-}
-
-export async function getWorldStats(): Promise<WorldStats> {
-  const now = Math.floor(Date.now() / 1000);
-  const d30 = BigInt(now - 30 * 86400);
-  const h24 = BigInt(now - 24 * 3600);
-  const [rankedTotal, newbie30d, videoTotal, video24h, bbsTopics] = await Promise.all([
-    prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
-    prisma.user.count({ where: { createTime: { gte: d30 } } }),
-    prisma.video.count(),
-    prisma.video.count({ where: { createTime: { gte: h24 } } }),
-    prisma.bbsPost.count({ where: { status: 0 } }),
-  ]);
-  return { rankedTotal, newbie30d, videoTotal, video24h, bbsTopics };
-}
+// ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
 /** 各军衔人数（按 distribution 阈值对 sum_time 分桶：第 i 档 = (thresholds[i-1], thresholds[i]]） */
 export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
@@ -691,6 +672,180 @@ export async function getHeroList(limit = 41): Promise<(UserBrief & { title: str
       sumTime: r.sumTime ?? 0,
     }))
   );
+}
+
+// ---------- 军衔玩家列表（2026-09-24 张老师要求：徽章墙可点击查看本军衔所有玩家） ----------
+
+export interface TitleMemberRow extends UserBrief {
+  /** 全局总时间名次（1 起；预备役=行序号） */
+  rank: number;
+  sumTime: number;
+  /** 注册时间（Unix 秒；预备役列表显示用） */
+  createTime: number;
+  /** 8 列成绩原始存储值（时间=ms，3bvs=×1000），0=无成绩（与 RankingRow 同构） */
+  scores: Record<string, number>;
+  /** 各级别成绩对应录像 id（sum 无录像=0） */
+  videos: Record<string, number>;
+}
+
+/** 军衔→user_scores 查询条件（与 getTitleCounts 同口径：第 i 档 = (thresholds[i-1], thresholds[i]]）；预备役返回 null（查 user 表） */
+async function titleScoresWhere(t: string): Promise<Record<string, unknown> | null> {
+  const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
+  if (idx < 0) return null;
+  const dist = await getTitleDistribution();
+  if (!dist || !dist.thresholds.length) return null;
+  const lower = idx > 0 ? dist.thresholds[idx - 1] : undefined;
+  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : undefined;
+  return {
+    sumTime: {
+      gt: lower !== undefined ? lower : 0,
+      ...(upper !== undefined ? { lte: upper } : {}),
+    },
+  };
+}
+
+/** 预备役→user 查询条件（id 不在有成绩集合内） */
+async function reserveWhere(): Promise<Record<string, unknown>> {
+  const ranked = await prisma.userScores.findMany({
+    where: { sumTime: { gt: 0 } },
+    select: { id: true },
+  });
+  return { id: { notIn: ranked.map((r) => r.id) } };
+}
+
+/** 本军衔玩家数（列表页头部用；-1=军衔名不合法） */
+export async function getTitleMemberCount(t: string): Promise<number> {
+  if (t === "预备役") return prisma.user.count({ where: await reserveWhere() });
+  const where = await titleScoresWhere(t);
+  if (!where) return -1;
+  return prisma.userScores.count({ where });
+}
+
+/**
+ * 本军衔玩家一页（偏移分页，cursor=已加载条数）——照搬排行表结构（getRankingTable）
+ * 普通军衔：user_scores 按 sum_time 升序 + 区间过滤，行含 8 列成绩与全局名次；
+ * 预备役：user 按注册时间倒序（无成绩列）。
+ * @returns 不合法军衔返回 null
+ */
+export async function getTitleMembers(
+  t: string,
+  cursor: number,
+  take = 20
+): Promise<{ rows: TitleMemberRow[]; hasMore: boolean } | null> {
+  if (t === "预备役") {
+    const rows = await prisma.user.findMany({
+      where: await reserveWhere(),
+      orderBy: [{ createTime: "desc" }, { id: "desc" }],
+      skip: cursor,
+      take: take + 1,
+      select: { id: true, chineseName: true, englishName: true, sex: true, createTime: true },
+    });
+    const hasMore = rows.length > take;
+    return {
+      rows: rows.slice(0, take).map((u) => ({
+        id: N(u.id),
+        chineseName: u.chineseName,
+        englishName: u.englishName,
+        sex: u.sex,
+        createTime: N(u.createTime),
+        rank: cursor + 1, // 预备役序号=行号（1 起）
+        sumTime: 0,
+        scores: {},
+        videos: {},
+      })),
+      hasMore,
+    };
+  }
+  const where = await titleScoresWhere(t);
+  if (!where) return null;
+  const rows = await prisma.userScores.findMany({
+    where,
+    orderBy: [{ sumTime: "asc" }, { id: "asc" }],
+    skip: cursor,
+    take: take + 1,
+  });
+  const hasMore = rows.length > take;
+  const page = rows.slice(0, take);
+  const authors = await usersByIds(page.map((r) => N(r.id)));
+  const ranks = await getUserSumRanksBatch(page.map((r) => r.id));
+  return {
+    rows: page.map((r) => {
+      const rec = r as unknown as Record<string, bigint | number | null>;
+      const scores: Record<string, number> = {};
+      const videos: Record<string, number> = {};
+      for (const b of RANKING_BYS) {
+        const lo = byLevelOrder(b);
+        scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
+        videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
+      }
+      return {
+        ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
+        createTime: 0,
+        rank: ranks.get(N(r.id)) ?? 0,
+        sumTime: N(r.sumTime),
+        scores,
+        videos,
+      };
+    }),
+    hasMore,
+  };
+}
+
+/**
+ * 「我在哪里」：用户在本军衔列表的偏移量（用于定位到自己的位置）
+ * @returns -1=不在此军衔/无成绩；否则返回行偏移（0 起，= 该行前有多少行）
+ */
+export async function getTitleMemberOffset(uid: number, t: string): Promise<number> {
+  if (t === "预备役") {
+    const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) }, select: { sumTime: true } });
+    if (row?.sumTime && row.sumTime > 0) return -1; // 有成绩，不是预备役
+    const me = await prisma.user.findUnique({ where: { id: BigInt(uid) }, select: { createTime: true } });
+    if (!me) return -1;
+    const where = await reserveWhere();
+    // 排序键 (createTime desc, id desc)：数排在自己前面的行数
+    const before = await prisma.user.count({
+      where: {
+        ...where,
+        OR: [
+          { createTime: { gt: me.createTime } },
+          { createTime: me.createTime, id: { gt: BigInt(uid) } },
+        ],
+      },
+    });
+    return before;
+  }
+  const where = await titleScoresWhere(t);
+  if (!where) return -1;
+  const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) } });
+  if (!row?.sumTime || !(row.sumTime > 0)) return -1;
+  // 检验是否真在此军衔区间（同 titleScoresWhere 口径）
+  const dist = await getTitleDistribution();
+  if (!dist || !dist.thresholds.length) return -1;
+  const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
+  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : undefined;
+  const lower = idx > 0 ? dist.thresholds[idx - 1] : 0;
+  if (row.sumTime > (upper ?? Infinity) || row.sumTime <= lower) return -1;
+  // 排序键 (sumTime asc, id asc)：数排在自己前面的行数
+  const before = await prisma.userScores.count({
+    where: {
+      ...where,
+      OR: [{ sumTime: { lt: row.sumTime } }, { sumTime: row.sumTime, id: { lte: BigInt(uid) } }],
+    },
+  });
+  return before;
+}
+
+/** 批量取全局总时间名次（ROW_NUMBER 与排行榜 sum_time 升序同口径；map 缺省 0）
+ *  注意：rank 为 MySQL 保留字，别名须反引号 */
+async function getUserSumRanksBatch(ids: bigint[]): Promise<Map<number, number>> {
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw<
+    { id: bigint; rank: bigint }[]
+  >`SELECT id, \`rank\` FROM (
+      SELECT id, ROW_NUMBER() OVER (ORDER BY sum_time ASC) AS \`rank\`
+      FROM user_scores WHERE sum_time > 0
+    ) r WHERE id IN (${Prisma.join(ids)})`;
+  return new Map(rows.map((r) => [N(r.id), N(r.rank)]));
 }
 
 // ---------- 管理团队（移植 2008 版 Team/Index.asp：管理员 + 各自审核工作量） ----------
