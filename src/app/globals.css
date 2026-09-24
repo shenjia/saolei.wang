@@ -643,7 +643,7 @@ body .tabs > a:hover::after {
 #page .page_head .bbs_head_nav {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-end;
   gap: 12px;
   flex: 1;
   min-width: 0;
@@ -652,7 +652,7 @@ body .tabs > a:hover::after {
   margin-left: auto;
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-end;
   gap: 20px;
 }
 #page .page_head .bbs_head_nav .bbs_post_btn {
@@ -1869,14 +1869,15 @@ body #page.ranking_old .ranking_box {
 }
 
 /* ==================== 全局居中气泡消息 Toast（2026-09-24 张老师要求） ====================
-   搜索无成绩玩家等提示不再用页面顶部 hint——全局水平垂直居中、醒目、3 秒消失。
-   组件：components/Toast.tsx（toast() 命令式 / app:toast 事件均可触发）。 */
+   搜索无成绩玩家等提示不再用页面顶部 hint——全局水平垂直居中、醒目。
+   组件：components/Toast.tsx（toast(msg, type) 命令式 / app:toast 事件均可触发）。
+   2026-09-24 扩展：类型分色（success 绿 / error 红 / info 黄）+ 1 秒后渐变淡出。 */
 .toast_bubble {
   position: fixed;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  z-index: 9999;
+  z-index: 10000; /* 高于登录浮窗 .login_overlay(9999)，登录成功气泡要压在浮窗之上 */
   max-width: 80vw;
   padding: 14px 26px;
   border: 1px solid #fdc61d;
@@ -1891,6 +1892,40 @@ body #page.ranking_old .ranking_box {
   text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
   animation: toast_in 0.18s ease-out;
   pointer-events: none; /* 不挡交互 */
+}
+/* 成功：青柠绿（与 legacy .success / 注册链接 #a6e22e 同色，色板零新色） */
+.toast_bubble.toast_success {
+  border-color: #a6e22e;
+  background: #1b2117;
+  color: #a6e22e;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 10px 40px rgba(0, 0, 0, 0.7),
+    0 0 34px -6px rgba(166, 226, 46, 0.4);
+}
+/* 失败：粉红（legacy .error 同色） */
+.toast_bubble.toast_error {
+  border-color: #f92672;
+  background: #251a1f;
+  color: #f92672;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 10px 40px rgba(0, 0, 0, 0.7),
+    0 0 34px -6px rgba(249, 38, 114, 0.4);
+}
+/* 淡出：1 秒停留后渐变消失（时长与 Toast.tsx 的 FADE 一致） */
+.toast_bubble.toast_leave {
+  animation: toast_out 0.36s ease-in forwards;
+}
+@keyframes toast_out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
 }
 @keyframes toast_in {
   from {
@@ -2322,7 +2357,8 @@ body #page.ranking_old.main .ranking_nav {
 
 /* 世界榜通栏：表格列宽自适应、字号对齐首页，名字列不再挤 */
 #page.ranking_old.main > #world_top {
-  margin: 16px 0 0;
+  /* 与 .box 默认 margin:16px 8px 对齐（此前横向 0 导致世界榜卡片比总榜/NF 榜宽 16px，2026-09-24 修） */
+  margin: 16px 8px;
 }
 #page.ranking_old.main > #world_top .world_head h2 {
   font-size: 20px;
@@ -2581,12 +2617,13 @@ body #page.ranking_old .page_head {
   margin: 0;
 }
 @media (min-width: 769px) {
-  /* 页头行（通用，BBS 卡片外页头同样依赖）：h1 + 筛选器起始排布、基线对齐
-     （筛选器底边贴 h1 底边——tabs 文字 15px/行高 39 与 h1 26px/39 底线齐平） */
+  /* 页头行（通用，BBS 卡片外页头同样依赖）：h1 + 筛选器起始排布、底部对齐
+     （筛选器底部细线与 h1 盒底齐平——2026-09-24 张老师要求：全站与首页 news_head 同款，
+     此前 baseline 对齐细线会下坠 3~4px） */
   #page .page_head {
     display: flex;
     justify-content: flex-start;
-    align-items: baseline;
+    align-items: flex-end;
     gap: 20px;
     margin: 16px 8px 8px;
   }
@@ -2606,7 +2643,7 @@ body #page.ranking_old .page_head {
     margin: 0;
     flex: 1;
     min-width: 0;
-    align-items: baseline;
+    align-items: flex-end;
     gap: 12px;
   }
   body #page.ranking_old.main .page_head .ranking_nav .goto_form {
@@ -2751,7 +2788,7 @@ body #video_list .score_3bvs a:hover em {
 #page .page_head .video_nav {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-end;
   flex: 1;
   min-width: 0;
   gap: 12px;
