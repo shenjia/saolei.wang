@@ -201,10 +201,10 @@ body .tabs > a:hover::after {
 #account_bind,
 #account_oauth {
   position: relative;
-  width: 392px;
+  width: 340px;
   max-width: calc(100vw - 40px);
   margin: 40px auto;
-  padding: 30px 34px 26px;
+  padding: 24px 28px 22px;
   background: rgba(39, 40, 34, 0.82);
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
   backdrop-filter: blur(16px) saturate(1.15);
@@ -255,38 +255,34 @@ body .tabs > a:hover::after {
 #account_login h1,
 #account_bind h1,
 #account_oauth h1 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.3px;
   color: #f8f8f2;
-  margin: 0 0 5px;
-}
-.lp_sub {
-  font-size: 12px;
-  color: #75715e;
+  margin: 0;
 }
 /* 标题下渐隐分隔线 */
 .lp_rule {
   height: 1px;
-  margin: 20px 0 22px;
+  margin: 16px 0 18px;
   background: linear-gradient(90deg, rgba(248, 248, 242, 0.12), rgba(248, 248, 242, 0));
 }
 /* ---------- 登录表单（LoginPanel 专用新结构；bind/oauth 仍走 auth_form） ---------- */
 .lp_field {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .lp_field label {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   color: #75715e;
   letter-spacing: 0.4px;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 #account_login .lp_field input {
   display: block;
   width: 100%;
-  height: 42px;
-  padding: 0 13px;
+  height: 38px;
+  padding: 0 12px;
   border: 1px solid rgba(248, 248, 242, 0.1);
   border-radius: 9px;
   background: rgba(0, 0, 0, 0.3);
@@ -332,8 +328,8 @@ body .tabs > a:hover::after {
 #account_login .lp_submit {
   display: block;
   width: 100%;
-  height: 44px;
-  margin-top: 6px;
+  height: 40px;
+  margin-top: 4px;
   border: 0;
   border-radius: 9px;
   background: linear-gradient(180deg, #ffd23e, #f0b70a);
@@ -381,7 +377,7 @@ body .tabs > a:hover::after {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 16px;
+  margin-top: 14px;
   font-size: 12px;
 }
 .lp_foot a {
@@ -398,6 +394,12 @@ body .tabs > a:hover::after {
 }
 .lp_foot .lp_reg:hover {
   text-decoration: underline;
+}
+/* OAuth 开启时的绑定提示（当前隐藏） */
+.lp_hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #75715e;
 }
 /* ---------- bind/oauth 旧表单结构（暂保留，待后续统一到 lp_*） ---------- */
 .auth_tabs {

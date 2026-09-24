@@ -74,8 +74,7 @@ export default function LoginPanel({
 
   return (
     <>
-      <h1>登录扫雷网</h1>
-      <p className="lp_sub">{OAUTH_ENABLED ? "老用户首次登录后需绑定微信或 QQ" : "使用扫雷网账号继续"}</p>
+      <h1>登录</h1>
       <div className="lp_rule" aria-hidden="true" />
       {OAUTH_ENABLED && (
         <div className="tabs auth_tabs">
@@ -141,6 +140,7 @@ export default function LoginPanel({
               注册新账号 →
             </a>
           </div>
+          {OAUTH_ENABLED && <p className="lp_hint">老用户首次登录后需绑定微信或 QQ</p>}
         </form>
       )}
 
