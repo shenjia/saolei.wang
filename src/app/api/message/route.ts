@@ -1,15 +1,30 @@
-// 站内信 API：发信 / 未读数 / 清空 / 管理员广播
+// 站内信 API：发信 / 未读数 / 列表加载更多 / 全部已读 / 清空 / 管理员广播
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
-import { broadcast, clearMessages, getUnreadCount, sendMessage, MESSAGE_CONTENT_LIMIT } from "@/lib/message";
+import {
+  broadcast,
+  clearMessages,
+  getMessageList,
+  getUnreadCount,
+  markAllRead,
+  sendMessage,
+  MESSAGE_CONTENT_LIMIT,
+} from "@/lib/message";
 import { prisma } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 });
-  if (req.nextUrl.searchParams.get("action") === "unread") {
+  const action = req.nextUrl.searchParams.get("action");
+  if (action === "unread") {
     return NextResponse.json({ unread: await getUnreadCount(session.uid) });
+  }
+  // 消息列表「加载更多」（页码语义，首屏 15 条，模式同 /api/bbs/more）
+  if (action === "more") {
+    const page = Math.max(2, parseInt(req.nextUrl.searchParams.get("page") ?? "2", 10) || 2);
+    const { messages, total, pageSize } = await getMessageList(session.uid, page);
+    return NextResponse.json({ messages, hasMore: page * pageSize < total, total });
   }
   return NextResponse.json({ error: "未知操作" }, { status: 400 });
 }
@@ -35,6 +50,12 @@ export async function POST(req: NextRequest) {
 
   if (action === "clear") {
     const count = await clearMessages(session.uid);
+    return NextResponse.json({ count });
+  }
+
+  // 全部已读（2026-09-24 张老师要求）
+  if (action === "readall") {
+    const count = await markAllRead(session.uid);
     return NextResponse.json({ count });
   }
 

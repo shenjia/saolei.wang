@@ -22,7 +22,15 @@ export function MessageBadge() {
     }
     poll();
     timer = setInterval(poll, 30_000);
-    return () => clearInterval(timer);
+    // 「全部已读」/读信后立即刷新角标（读信页跳转回来 30s 轮询太慢）
+    const refresh = () => poll();
+    window.addEventListener("message:changed", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("message:changed", refresh);
+      window.removeEventListener("focus", refresh);
+    };
   }, []);
 
   return (

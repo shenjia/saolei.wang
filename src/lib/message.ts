@@ -9,7 +9,7 @@ const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 
 export const MESSAGE_CONTENT_LIMIT = 200;
-export const MESSAGE_PAGESIZE = 10;
+export const MESSAGE_PAGESIZE = 15;
 
 export interface MessageUserBrief extends UserBrief {
   /** 18 级军衔（按 sum_time 评定，作者列 TitleBadge 用） */
@@ -133,6 +133,15 @@ export async function sendSystemMessage(toUserId: number, content: string): Prom
 
 /** 清空消息列表（移植 Clear_Action） */export async function clearMessages(userId: number): Promise<number> {
   const res = await prisma.message.deleteMany({ where: { toUser: BigInt(userId) } });
+  return res.count;
+}
+
+/** 全部标记已读（2026-09-24 张老师要求：消息页右上角「全部已读」按钮） */
+export async function markAllRead(userId: number): Promise<number> {
+  const res = await prisma.message.updateMany({
+    where: { toUser: BigInt(userId), isRead: false },
+    data: { isRead: true, updateTime: nowSec() },
+  });
   return res.count;
 }
 

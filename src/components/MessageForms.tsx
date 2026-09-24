@@ -82,6 +82,35 @@ export function ClearButton() {
   );
 }
 
+/** 全部已读（2026-09-24 张老师要求：消息页右上角）；完成后 refresh 推送新列表 */
+export function MarkAllReadButton({ unread }: { unread?: number }) {
+  const [done, setDone] = useState(false);
+  const router = useRouter();
+  async function onMarkAll() {
+    const res = await fetch("/api/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "readall" }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error ?? "操作失败", "error");
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    setDone(true);
+    toast(`已将 ${data.count ?? 0} 条消息标记为已读`, "success");
+    window.dispatchEvent(new Event("message:changed")); // 导航角标立即消失
+    router.refresh();
+  }
+  if (done) return null;
+  return (
+    <button className="button" onClick={onMarkAll} disabled={unread === 0}>
+      全部已读
+    </button>
+  );
+}
+
 export function BroadcastForm() {
   const [content, setContent] = useState("");
   const [msg, setMsg] = useState("");

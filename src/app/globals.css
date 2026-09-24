@@ -1122,7 +1122,7 @@ body #page.bbs_old .page_head {
 }
 
 /* ==================== 消息页（2026-09-24 张老师要求：「收件箱」更名「消息」，版式参考论坛列表） ==================== */
-/* 卡片内页头：同 bbs_old 清外距，标题行右挂「清空消息」 */
+/* 卡片内页头：同 bbs_old 清外距，标题行右挂「全部已读 / 清空消息」按钮组 */
 body #page.message_list > .box:first-child .page_head {
   margin: 0 0 10px;
 }
@@ -1132,14 +1132,33 @@ body #page.message_list > .box:first-child .page_head {
 #page.message_list .page_head .page_title {
   margin: 0;
 }
-#page.message_list .page_head .button {
+#page.message_list .page_head .msg_head_btns {
   margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 /* 消息页版式：复用 .table.bbs_list 列宽（类型 72 居中 / 内容吃满 / 发件人 190 / 时间 96）
    ——本表 4 列，th 上写死宽度即可，无「回复/点击」列 */
 #page.message_list .table.bbs_list td:first-child {
   padding: 8px 0;
   text-align: center;
+}
+/* 二轮（张老师要求）：未读行不加粗改为绿「新」字；已读内容整体变灰 */
+#page.message_list .table tr.unread td {
+  font-weight: normal;
+}
+#page.message_list .table tr.read .bbs_title,
+#page.message_list .table tr.read td.time {
+  color: #75715e;
+}
+#page.message_list .table tr.read td:first-child .board_tag {
+  color: #5d5b52;
+}
+.msg_new {
+  color: #a6e22e;
+  font-size: 12px;
+  margin-left: 5px;
 }
 
 /* 未读消息角标 */
@@ -1171,7 +1190,7 @@ body #page.message_list > .box:first-child .page_head {
   line-height: 14px;
 }
 
-/* 消息未读行 */
+/* 消息未读/已读行（未读标识见 .msg_new） */
 .table tr.unread td {
   font-weight: bold;
 }
