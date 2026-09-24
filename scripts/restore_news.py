@@ -101,7 +101,7 @@ for nid, ntime, nvideo, nplayer, nmodel, nthing, nscore, ngrow in sc.fetchall():
         od, cr = "time", t_ms(nscore)
         org = t_ms(nscore + (ngrow or 0)) if ngrow else 0
     else:
-        od = b_x1000(nscore)
+        od = "3bvs"
         cr = b_x1000(nscore)
         org = b_x1000(nscore - (ngrow or 0)) if ngrow else 0
         if org < 0:
