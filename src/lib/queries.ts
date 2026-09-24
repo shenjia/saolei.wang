@@ -144,7 +144,12 @@ function safeJson(s: string): Record<string, unknown> {
   try {
     return JSON.parse(s) as Record<string, unknown>;
   } catch {
-    return {};
+    // 兜底：历史数据可能带多余转义层（如 2019 转储的 {\"lv\":...}），去一层再试
+    try {
+      return JSON.parse(s.replace(/\\"/g, '"')) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
   }
 }
 

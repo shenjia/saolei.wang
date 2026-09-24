@@ -73,6 +73,8 @@ with open(DUMP, encoding="utf-8") as f:
             text = "".join(buf)
             for m in pat.finditer(text):
                 nid, ntype, u, us, ref, dd, ct = m.groups()
+                # dd 按转储原文带 SQL 转义（{\\\"lv\\\"...}），去转义还原合法 JSON
+                dd = dd.replace('\\"', '"')
                 rows_a.append((int(nid), int(ntype), int(u), int(us), int(ref), dd, int(ct)))
             buf = []
 rows_a.sort(key=lambda r: r[0])
