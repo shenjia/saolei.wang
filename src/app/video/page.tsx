@@ -1,12 +1,14 @@
-// 录像列表：级别筛选 + 排序 + 分页（移植 views/video/list + _detailCell）
+// 录像列表：级别筛选 + 排序 + 分页
+// 2026-09-24 张老师要求：列表参考 2008 版版式（Video_All 紧凑行 → VideoTable），
+// 页头参考排行榜版式——h1 与全部筛选器（级别 tabs + 排序 tabs）都放进主体卡片内部。
 
-import Link from "next/link";
-import { getVideoList } from "@/lib/queries";
+import { getVideoList, getHeroList } from "@/lib/queries";
 import { LEVEL_NAMES, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { Pager, Tabs } from "@/components/Pager";
-import { VideoDetailCell } from "@/components/VideoCell";
+import { VideoTable } from "@/components/VideoTable";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "录像 | 扫雷网" };
 
 function parseLevel(v?: string): VideoLevel | "all" {
   return (VIDEO_LEVELS as readonly string[]).includes(v ?? "") ? (v as VideoLevel) : "all";
@@ -26,64 +28,64 @@ export default async function VideoListPage({
   const author = sp.author ? parseInt(sp.author, 10) || undefined : undefined;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const { videos, total, pageSize } = await getVideoList({ level, order, author, page });
+  const [{ videos, total, pageSize }, heroes] = await Promise.all([
+    getVideoList({ level, order, author, page }),
+    // 神界名单（行内【神界】/【人界】标识，移植 2008 版 Video_Hero 字段）
+    getHeroList(41),
+  ]);
+  const heroIds = new Set(heroes.map((h) => h.id));
 
   return (
-    <div id="page" className="two_columns">
-      {/* 2026-09-24 张老师要求：title 与类别筛选靠左组合，排序筛选居右（同卡片外一行） */}
-      <div id="video_list_header">
-        <div className="header_left">
-          <h1>{author ? `${LEVEL_NAMES[level]}录像` : "录像"}</h1>
-          <Tabs
-            base="/video"
-            params={{ level, order, author }}
-            name="level"
-            current={level}
-            options={[
-              ["all", "全部"],
-              ["beg", "初级"],
-              ["int", "中级"],
-              ["exp", "高级"],
-            ]}
-          />
-        </div>
-        <div className="filters">
-          {level !== "all" && (
+    <div id="page" className="main video_old">
+      <div className="box video_box">
+        {/* 页头（排行页同款 page_head 编排）：h1 左、级别 tabs 紧随、排序 tabs 贴行尾 */}
+        <div className="page_head">
+          <h1 className="page_title">{author ? `${LEVEL_NAMES[level]}录像` : "录像"}</h1>
+          <div className="video_nav">
             <Tabs
               base="/video"
               params={{ level, order, author }}
-              name="order"
-              current={order}
+              name="level"
+              current={level}
               options={[
-                ["id", "按上传时间排列"],
-                ["time", "按成绩排列"],
-                ["3bvs", "按3BV/s排列"],
+                ["all", "全部"],
+                ["beg", "初级"],
+                ["int", "中级"],
+                ["exp", "高级"],
               ]}
             />
-          )}
-          {level === "all" && (
-            <Tabs
-              base="/video"
-              params={{ level, order, author }}
-              name="order"
-              current={order}
-              options={[
-                ["id", "按上传时间排列"],
-                ["comments", "按评论数排列"],
-                ["clicks", "按点击数排列"],
-              ]}
-            />
-          )}
+            <div className="order_filters">
+              {level !== "all" ? (
+                <Tabs
+                  base="/video"
+                  params={{ level, order, author }}
+                  name="order"
+                  current={order}
+                  options={[
+                    ["id", "按上传时间排列"],
+                    ["time", "按成绩排列"],
+                    ["3bvs", "按3BV/s排列"],
+                  ]}
+                />
+              ) : (
+                <Tabs
+                  base="/video"
+                  params={{ level, order, author }}
+                  name="order"
+                  current={order}
+                  options={[
+                    ["id", "按上传时间排列"],
+                    ["comments", "按评论数排列"],
+                    ["clicks", "按点击数排列"],
+                  ]}
+                />
+              )}
+            </div>
+          </div>
         </div>
+        <VideoTable videos={videos} heroIds={heroIds} />
+        <Pager base="/video" params={{ level, order, author }} page={page} total={total} pageSize={pageSize} />
       </div>
-      <div id="video_list" className={`ranking_list order_by_${order} mode_detail`}>
-        {videos.map((v) => (
-          <Link key={v.id} href={`/video/${v.id}`} target="_blank">
-            <VideoDetailCell video={v} />
-          </Link>
-        ))}
-      </div>
-      <Pager base="/video" params={{ level, order, author }} page={page} total={total} pageSize={pageSize} />
     </div>
   );
 }

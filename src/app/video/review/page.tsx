@@ -1,4 +1,5 @@
 // 录像审核列表（移植 VideoController::actionReview 的列表分支 + views/video/reviewList）
+// 2026-09-24 与 /video 同款卡片编排：h1 与筛选 tabs 移入主体卡片内
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
@@ -30,26 +31,27 @@ export default async function VideoReviewPage({
   const { videos, total, pageSize } = await getReviewList(status, page);
 
   return (
-    <div id="page" className="two_columns">
-      {/* 2026-09-24 张老师要求：title 与筛选标签移出卡片、同行排列（h1 左、筛选居右） */}
-      <div id="video_list_header">
-        <h1>审核</h1>
-        <div className="filters">
-          <Tabs
-            base="/video/review"
-            params={{ status }}
-            name="status"
-            current={String(status)}
-            options={[
-              [String(VIDEO_STATUS.NORMAL), "待审核"],
-              [String(VIDEO_STATUS.REVIEWED), "已通过"],
-              [String(VIDEO_STATUS.BANNED), "已屏蔽"],
-            ]}
-          />
+    <div id="page" className="main video_old">
+      <div className="box video_box">
+        <div className="page_head">
+          <h1 className="page_title">审核</h1>
+          <div className="video_nav">
+            <Tabs
+              base="/video/review"
+              params={{ status }}
+              name="status"
+              current={String(status)}
+              options={[
+                [String(VIDEO_STATUS.NORMAL), "待审核"],
+                [String(VIDEO_STATUS.REVIEWED), "已通过"],
+                [String(VIDEO_STATUS.BANNED), "已屏蔽"],
+              ]}
+            />
+          </div>
         </div>
+        <ReviewList key={`${status}_${page}`} initial={videos} />
+        <Pager base="/video/review" params={{ status }} page={page} total={total} pageSize={pageSize} />
       </div>
-      <ReviewList key={`${status}_${page}`} initial={videos} />
-      <Pager base="/video/review" params={{ status }} page={page} total={total} pageSize={pageSize} />
     </div>
   );
 }

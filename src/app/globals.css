@@ -2192,48 +2192,91 @@ body #video_list .score_3bvs a:hover em {
   color: #a6e22e;
 }
 
-/* ---------- 录像列表页头：移出卡片，h1 左 + 筛选 tabs 居右同行（2026-09-24 张老师要求） ----------
-   对齐排行页 ranking_nav 的编排语言（同一天定稿）；
-   body 前缀提权压 legacy：#video_list_header{padding:20px 30px} / h1{float:left;margin-bottom:10px}
-   / .filters{overflow:hidden;clear:both} 与 .filters .tabs{clear:left}（后者会把 tabs 挤到下一行） */
-body #video_list_header {
-  padding: 0;
+/* ---------- 录像列表页（2026-09-24 张老师要求：列表参考 2008 版版式、页头参考排行页卡片编排） ----------
+   页面改通栏 .main.video_old：单一 .video_box 卡片，page_head 内 h1 左 + 级别 tabs 紧随 +
+   排序 tabs 贴行尾（复用排行页 ranking_old 的编排语言与 body 提权手法）；
+   旧 #video_list_header「卡片外页头」规则整体废弃（review 页同步改卡片内）。 */
+
+/* 紧凑行表格（2008 版 Video_All 版式）：左对齐行、时间/作者列白、数字列灰 */
+.video_table td {
+  text-align: left;
+  white-space: nowrap;
+  padding: 4px 2px;
+}
+.video_table td.create_time {
+  color: #939387;
+}
+.video_table td.name .world_tag {
+  margin-right: 6px;
+  font-size: 12px;
+}
+/* 神界/人界标识色（2008 版 .World1/.World2 同值迁移） */
+.video_table .world_tag.world1 { color: #b1b1a4; font-weight: bold; }
+.video_table .world_tag.world2 { color: #75715e; font-weight: bold; }
+/* 级别字配色（2008 版 .Beg/.Int/.Exp 同值迁移） */
+.video_table .lv_beg { color: #999994; font-weight: bold; }
+.video_table .lv_int { color: #bbbbaf; font-weight: bold; }
+.video_table .lv_exp { color: #ddddcf; font-weight: bold; }
+.video_table td.score a {
+  color: #f8f8f2;
+  font-weight: bold;
+}
+.video_table td.score a:hover {
+  color: #a6e22e;
+}
+/* NF 小标（沿用 2008 版 Counter 的黄小字语言） */
+.video_table td.score .nf {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #fdc61d;
+}
+/* 军衔徽章在成绩行内跟随 14px 文字 */
+.video_table td.score .title {
+  margin-left: 8px;
+}
+.video_table td.counters {
+  color: #939387;
+}
+
+/* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、排序贴行尾 */
+#page .page_head .video_nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  flex: 1;
+  min-width: 0;
+  gap: 12px;
+}
+#page .page_head .video_nav .order_filters {
+  margin-left: auto; /* 排序筛选贴行尾（级别 tabs 与 h1 靠左成组） */
+}
+#page.video_old .page_head .video_nav .tabs {
+  clear: none;
+  float: none;
+}
+
+/* 卡片与列表的垂直间距（page_head 在卡片内：清掉通用页头外距，与排行页七轮同法） */
+body #page.video_old .page_head {
+  margin: 0 0 10px;
+}
+#page.video_old > .video_box {
   margin: 16px 8px 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  row-gap: 8px;
 }
-body #video_list_header h1 {
-  float: none;
-  margin: 0;
-  /* 与右侧 tabs（下划线坐在底线上）视觉居中对齐：h1 行高 39px，tabs 文字行 35px，提 2px */
-  line-height: 39px;
+#page.video_old .video_box .pager {
+  margin-top: 10px;
 }
-body #video_list_header .filters {
-  float: none;
-  clear: none;
-  overflow: visible;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  column-gap: 24px;
-  row-gap: 8px;
-}
-body #video_list_header .filters .tabs {
-  clear: none;
-  float: none;
-}
-/* 二轮（同日）：类别筛选（级别 tabs）与 h1 靠左成组，排序筛选独占右侧 */
-body #video_list_header .header_left {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 0 16px;
-}
-body #video_list_header .header_left .tabs {
-  margin-bottom: 0;
+
+/* 窄屏（≤768px）：页头堆叠（title 独占一行），宽表盒内横滑 */
+@media (max-width: 768px) {
+  #page.video_old .page_head .video_nav {
+    align-items: flex-start;
+  }
+  #page .page_head .video_nav .order_filters {
+    margin-left: 0;
+  }
+  .video_table {
+    min-width: 640px;
+  }
 }
 
 /* ==================== 404 页（2026-09-24 张老师要求） ====================
