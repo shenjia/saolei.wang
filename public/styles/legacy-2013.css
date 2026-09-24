@@ -15,8 +15,8 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #guide hr{margin:6px 0 30px}
 #guide p a{color:#b1b1a4}
 /* 摆雷图（BBS UBB 雷图）：连续纯雷图行包 .mine-map 块，行高=图高 16px，行间零缝隙拼成完整地图（同 2008 版 .Mine 机制） */
-.bbs_content .mine-map{line-height:16px}
-.bbs_content .mine-map img{vertical-align:top}
+.mine-map{line-height:16px}
+.mine-map img{vertical-align:top}
 
 /* ===== 动态列表长正文截断（2026-09-24 张老师：正文超长省略号，日期不换行）===== */
 /* 表格固定布局：正文列吃剩余宽度，日期列按内容收缩 */

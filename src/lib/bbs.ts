@@ -105,7 +105,37 @@ export function ubb(raw: string): string {
     text = text.replaceAll(`[${key}]`, `<img src="/images/mine/${name.toLowerCase()}.gif" alt="">`);
   }
   // 换行与制表
-  return text.replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;").replace(/\r?\n/g, "<br>");
+  let out = text.replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;").replace(/\r?\n/g, "<br>");
+  // 摆雷图行（2026-09-24 张老师要求：纯雷图行行距为 0，多行 gif 拼成完整地图）
+  // 连续纯雷图行（含行间的单个 <br>）合并包进 <div class="mine-map">：块内 line-height=16px=图高，行间零缝隙；
+  // 空行（<br><br>）与文字行（含 [Title]/face 等）终止分组，保持正常正文行高
+  const isMineOnly = (line: string) =>
+    line.length > 0 && /^(\s|<img src="\/images\/mine\/[^"]*" alt="[^"]*">)+$/.test(line);
+  const isBr = (p: string) => /^<br\s*\/?>$/.test(p);
+  const parts = out.split(/(<br\s*\/?>)/);
+  let result = "";
+  let buf: string[] = [];
+  const flush = () => {
+    if (buf.length) {
+      result += `<div class="mine-map">${buf.join("")}</div>`;
+      buf = [];
+    }
+  };
+  parts.forEach((p, i) => {
+    if (isMineOnly(p)) {
+      buf.push(p);
+      return;
+    }
+    // 组内行间 <br>：仅当下一段内容仍是纯雷图行时并入组，否则组到此为止
+    if (isBr(p) && buf.length && isMineOnly(parts[i + 1] ?? "")) {
+      buf.push(p);
+      return;
+    }
+    flush();
+    result += p;
+  });
+  flush();
+  return result;
 }
 
 // ---------- 查询 ----------
