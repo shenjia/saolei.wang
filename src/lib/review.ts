@@ -17,6 +17,7 @@ import {
   type VideoLevel,
 } from "./config";
 import { videoScores } from "./queries";
+import { publishNews } from "./news";
 
 type Tx = Prisma.TransactionClient;
 
@@ -215,29 +216,7 @@ async function userScoresOnRemove(tx: Tx, v: ReviewVideo, nf: boolean): Promise<
   });
 }
 
-// ---------- 动态 ----------
-
-/** News::publish（user_score 取成绩更新后的 sum_time，见文件头说明 2） */
-async function publishNews(
-  tx: Tx,
-  type: number,
-  userId: number,
-  userScore: number,
-  reference: number,
-  details: Record<string, unknown>,
-  createTime?: number
-) {
-  await tx.news.create({
-    data: {
-      type,
-      user: BigInt(userId),
-      userScore,
-      reference: BigInt(reference),
-      detailsData: JSON.stringify(details),
-      createTime: BigInt(createTime ?? Math.floor(Date.now() / 1000)),
-    },
-  });
-}
+// ---------- 动态（发布走 lib/news.ts 公共入口；user_score 取成绩更新后的 sum_time，见文件头说明 2） ----------
 
 // ---------- 审核主流程 ----------
 
@@ -319,31 +298,44 @@ export async function reviewVideo(
       const sumTime = updated.sumTime ?? 0;
       if ((original.sumTime ?? 0) === 0 && sumTime > 0) {
         // 入伍新兵动态（时间取审核时间）
-        await publishNews(tx, NEWS_TYPE.NEWBIE, rv.user, sumTime, 0, {}, rv.reviewTime!);
+        await publishNews({ tx, type: NEWS_TYPE.NEWBIE, userId: rv.user, userScore: sumTime, createTime: rv.reviewTime! });
       } else {
         // 个人纪录动态（时间取录像上传时间）
         for (const level of ["beg", "int", "exp"] as VideoLevel[]) {
           for (const order of ORDERS) {
             if (Number(updated[F(level, order, "Video")] ?? 0) === rv.id) {
-              await publishNews(
+              await publishNews({
                 tx,
-                NEWS_TYPE.PERSON_RECORD,
-                rv.user,
-                sumTime,
-                rv.id,
-                {
+                type: NEWS_TYPE.PERSON_RECORD,
+                userId: rv.user,
+                userScore: sumTime,
+                reference: rv.id,
+                details: {
                   lv: level,
                   od: order,
                   or: original[F(level, order)] ?? 0,
                   cr: updated[F(level, order)] ?? 0,
                   nf: 0,
                 },
-                rv.createTime
-              );
+                createTime: rv.createTime,
+              });
             }
           }
         }
       }
+
+      // 上传录像动态（2026-09-24 张老师要求：每盘通过审核的录像都产生动态，
+      // 不再只有传满三级入伍/破纪录才发；时间取录像上传时间，首页新闻流可见）
+      const vs = videoScores(rv.board3bv, rv.realTime);
+      await publishNews({
+        tx,
+        type: NEWS_TYPE.VIDEO,
+        userId: rv.user,
+        userScore: sumTime,
+        reference: rv.id,
+        details: { lv: rv.level, tm: vs.time, bv: Math.max(vs["3bvs"], 0) },
+        createTime: rv.createTime,
+      });
     }
   });
   return { ok: true };

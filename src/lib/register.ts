@@ -8,7 +8,8 @@
 import { randomBytes, createHash } from "crypto";
 import { prisma } from "./db";
 import { hashPassword } from "./auth";
-import { AREA_LIST } from "./config";
+import { AREA_LIST, NEWS_TYPE } from "./config";
+import { publishNews } from "./news";
 
 export interface RegisterInput {
   email: string;
@@ -91,6 +92,14 @@ export async function createRegisteredUser(input: RegisterInput): Promise<number
     });
     await tx.userStat.create({
       data: { id: u.id, loginTimes: 1, loginTime: now, createTime: now, updateTime: now },
+    });
+    // 「加入扫雷网」动态（2026-09-24 张老师要求；仅个人主页可见，不进首页新闻流）
+    await publishNews({
+      tx,
+      type: NEWS_TYPE.JOIN,
+      userId: Number(u.id),
+      userScore: 0,
+      createTime: Number(now),
     });
     return u;
   });

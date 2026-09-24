@@ -213,9 +213,22 @@ export const NEWS_TYPE = {
   PERSON_RECORD: 20,
   AREA_RECORD: 21,
   NATION_RECORD: 22,
-  VIDEO: 30,
-  ARTICLE: 40,
+  VIDEO: 30, // 上传录像（2026-09-24 启用：每盘通过审核的录像一条）
+  ARTICLE: 40, // 论坛文章（2026-09-24 启用）
+  JOIN: 50, // 加入扫雷网（注册）
+  AVATAR: 51, // 更换头像
+  COMMENT: 52, // 评论（录像评论 / BBS 回帖）
 } as const;
+
+/** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻） */
+export const NEWS_HOME_TYPES: number[] = [
+  NEWS_TYPE.NOTICE,
+  NEWS_TYPE.NEWBIE,
+  NEWS_TYPE.PERSON_RECORD,
+  NEWS_TYPE.AREA_RECORD,
+  NEWS_TYPE.NATION_RECORD,
+  NEWS_TYPE.VIDEO,
+];
 
 // ---------- 地区 ----------
 

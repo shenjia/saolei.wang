@@ -11,6 +11,7 @@ import {
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
+  NEWS_HOME_TYPES,
   NEWS_TYPE,
   ORDER_DIRECTION,
   RANKING_PAGESIZE,
@@ -25,6 +26,7 @@ import {
   type RankingBy,
   type VideoLevel,
 } from "./config";
+import { publishNews } from "./news";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -97,7 +99,7 @@ export { videoScores } from "./format";
 // ---------- 首页 ----------
 
 export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
-  return getNews({ limit });
+  return getNews({ limit, home: true });
 }
 
 export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]> {
@@ -110,11 +112,14 @@ export async function getNews(opts: {
   /** 等级筛选（beg/int/exp）：按 details JSON 的 lv 字段匹配（details_data 全为 {"lv":...} 格式） */
   level?: string;
   cursor?: number;
+  /** 首页新闻流口径：仅 NEWS_HOME_TYPES（注册/头像/发帖/评论动态不进首页，2026-09-24） */
+  home?: boolean;
   limit: number;
 }): Promise<NewsItem[]> {
   const rows = await prisma.news.findMany({
     where: {
       ...(opts.type !== undefined ? { type: opts.type } : {}),
+      ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
       ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
       // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
@@ -151,10 +156,13 @@ export async function getNewsCount(opts: {
   type?: number;
   userId?: number;
   level?: string;
+  /** 与 getNews 的 home 口径一致（首页「加载更多」剩余条数） */
+  home?: boolean;
 }): Promise<number> {
   return prisma.news.count({
     where: {
       ...(opts.type !== undefined ? { type: opts.type } : {}),
+      ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
       ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
     },
@@ -605,11 +613,12 @@ export async function getCommentsCount(videoId: number): Promise<number> {
   });
 }
 
-/** 发表评论并递增录像评论计数（2013 版漏了计数递增，新版补齐） */
+/** 发表评论并递增录像评论计数（2013 版漏了计数递增，新版补齐）
+ *  2026-09-24 起事务内同发「评论」动态（仅个人主页可见，不进首页新闻流） */
 export async function addComment(videoId: number, userId: number, content: string): Promise<number> {
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const [created] = await prisma.$transaction([
-    prisma.comment.create({
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.comment.create({
       data: {
         video: BigInt(videoId),
         user: BigInt(userId),
@@ -619,13 +628,21 @@ export async function addComment(videoId: number, userId: number, content: strin
         createTime: now,
         updateTime: now,
       },
-    }),
-    prisma.videoStat.update({
+    });
+    await tx.videoStat.update({
       where: { id: BigInt(videoId) },
       data: { comments: { increment: 1 } },
-    }),
-  ]);
-  return N(created.id);
+    });
+    await publishNews({
+      tx,
+      type: NEWS_TYPE.COMMENT,
+      userId,
+      reference: videoId,
+      details: { kind: "video" },
+      createTime: Number(now),
+    });
+    return N(created.id);
+  });
 }
 
 // ---------- 雷界统计（移植 2008 版 Main/Satus.asp 的 SP dbo.Satus） ----------

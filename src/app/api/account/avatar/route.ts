@@ -16,6 +16,8 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { moderateAvatar } from "@/lib/avatar-moderate";
+import { NEWS_TYPE } from "@/lib/config";
+import { publishNews } from "@/lib/news";
 
 /** 归一化后的头像约 40KB，2MB 留足余量；超过基本是绕过了前端处理 */
 const MAX_SIZE = 2 * 1024 * 1024;
@@ -113,12 +115,12 @@ export async function POST(req: Request) {
 
   if (ai.verdict === "pass") {
     try {
-      await prisma.$transaction([
-        prisma.user.update({
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
           where: { id: BigInt(uid) },
           data: { avatar: relPath, updateTime: nowSec },
-        }),
-        prisma.avatarReview.create({
+        });
+        await tx.avatarReview.create({
           data: {
             user: BigInt(uid),
             filepath: relPath,
@@ -132,8 +134,10 @@ export async function POST(req: Request) {
             reviewTime: nowSec,
             createTime: nowSec,
           },
-        }),
-      ]);
+        });
+        // 「更换头像」动态（2026-09-24 张老师要求；仅个人主页可见，不进首页新闻流）
+        await publishNews({ tx, type: NEWS_TYPE.AVATAR, userId: uid });
+      });
     } catch (e) {
       console.error("[avatar] 写入失败", e);
       discardFile();

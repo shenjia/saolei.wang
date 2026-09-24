@@ -30,6 +30,7 @@ export function NewsFeed({
   initialTotal,
   title,
   titleClassName,
+  homeOnly,
 }: {
   initial: NewsFeedItem[];
   userId?: number;
@@ -41,6 +42,8 @@ export function NewsFeed({
   title?: ReactNode;
   /** 标题附加类名（首页「录像」版块传 gray 走灰色次级标题，2026-09-24 张老师要求） */
   titleClassName?: string;
+  /** 首页新闻流口径：加载更多/等级筛选只取 NEWS_HOME_TYPES（2026-09-24） */
+  homeOnly?: boolean;
 }) {
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(initial.length ? initial[initial.length - 1].news.id : 0);
@@ -54,7 +57,8 @@ export function NewsFeed({
     const url =
       `/api/news/more?cursor=${cur}&size=${pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      (lv ? `&level=${lv}` : "");
+      (lv ? `&level=${lv}` : "") +
+      (homeOnly ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
   }

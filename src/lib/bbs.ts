@@ -4,6 +4,8 @@ import { prisma } from "./db";
 import { usersByIds, type UserBrief } from "./queries";
 import { title as assessTitle } from "./assess";
 import { oldTitle, type OldTitle } from "./oldtitle";
+import { NEWS_TYPE } from "./config";
+import { publishNews } from "./news";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -283,19 +285,30 @@ export async function canPost(userId: number): Promise<boolean> {
 
 export async function createPost(userId: number, board: number, title: string, content: string): Promise<number> {
   const now = nowSec();
-  const row = await prisma.bbsPost.create({
-    data: {
-      board,
-      user: BigInt(userId),
-      title,
-      content,
-      lastReplyTime: now,
-      lastReplyUser: BigInt(userId),
-      createTime: now,
-      updateTime: now,
-    },
+  // 事务内同发「论坛文章」动态（2026-09-24 张老师要求；仅个人主页可见，不进首页新闻流）
+  return prisma.$transaction(async (tx) => {
+    const row = await tx.bbsPost.create({
+      data: {
+        board,
+        user: BigInt(userId),
+        title,
+        content,
+        lastReplyTime: now,
+        lastReplyUser: BigInt(userId),
+        createTime: now,
+        updateTime: now,
+      },
+    });
+    await publishNews({
+      tx,
+      type: NEWS_TYPE.ARTICLE,
+      userId,
+      reference: N(row.id),
+      details: { t: title.slice(0, 50) },
+      createTime: N(now),
+    });
+    return N(row.id);
   });
-  return N(row.id);
 }
 
 export async function updatePost(
@@ -325,16 +338,25 @@ export async function createReply(
   if (!post) return null;
   if (post.isLocked && !isAdmin) return "locked";
   const now = nowSec();
-  const [reply] = await prisma.$transaction([
-    prisma.bbsReply.create({
+  // 事务内同发「评论」动态（BBS 回帖=评论文章，2026-09-24 张老师要求；仅个人主页可见）
+  return prisma.$transaction(async (tx) => {
+    const reply = await tx.bbsReply.create({
       data: { post: BigInt(postId), user: BigInt(userId), content, createTime: now, updateTime: now },
-    }),
-    prisma.bbsPost.update({
+    });
+    await tx.bbsPost.update({
       where: { id: BigInt(postId) },
       data: { replies: { increment: 1 }, lastReplyTime: now, lastReplyUser: BigInt(userId) },
-    }),
-  ]);
-  return N(reply.id);
+    });
+    await publishNews({
+      tx,
+      type: NEWS_TYPE.COMMENT,
+      userId,
+      reference: postId,
+      details: { kind: "bbs", t: post.title.slice(0, 50) },
+      createTime: N(now),
+    });
+    return N(reply.id);
+  });
 }
 
 /** 删主题（软删；本人或管理员，移植 Title_Del / Del_My） */

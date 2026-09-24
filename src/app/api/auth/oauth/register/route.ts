@@ -6,6 +6,8 @@ import { randomBytes, createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { setSession, getOauthTicket, clearOauthTicket } from "@/lib/auth";
+import { NEWS_TYPE } from "@/lib/config";
+import { publishNews } from "@/lib/news";
 
 const USERNAME_RE = /^[A-Za-z0-9_]{2,32}$/;
 
@@ -73,6 +75,14 @@ export async function POST(req: Request) {
         createTime: now,
         updateTime: now,
       },
+    });
+    // 「加入扫雷网」动态（与邮箱注册同口径，仅个人主页可见）
+    await publishNews({
+      tx,
+      type: NEWS_TYPE.JOIN,
+      userId: Number(u.id),
+      userScore: 0,
+      createTime: Number(now),
     });
     return u;
   });

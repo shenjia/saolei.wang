@@ -31,8 +31,8 @@ export default async function HomePage() {
     getHomeNews(),
     getNewbies(),
     getTopUsers(),
-    // 全站动态总数（「加载更多」括号内剩余条数口径；切等级筛选时由接口回传同口径总数）
-    getNewsCount({}),
+    // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
+    getNewsCount({ home: true }),
     getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
     getVideoCount({ level: "all" }),
     // 每日一星卡片已撤下，但评选仍按 2008 版时机（首次访问首页）触发，见 star.ts 注释
@@ -53,6 +53,7 @@ export default async function HomePage() {
         <div id="news" className="box">
           <NewsFeed
             title="新闻"
+            homeOnly
             initial={feed}
             pageSize={HOME_NEWS_NUMBER}
             initialHasMore={news.length === HOME_NEWS_NUMBER}

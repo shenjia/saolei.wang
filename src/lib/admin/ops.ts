@@ -11,8 +11,9 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
-import { USER_ROLE, VIDEO_STATUS, isManager } from "@/lib/config";
+import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
+import { publishNews } from "@/lib/news";
 import { reviewVideo } from "@/lib/review";
 import { broadcast, sendSystemMessage } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
@@ -345,12 +346,12 @@ async function dispatch(
         if (row.status === AVATAR_REVIEW_STATUS.APPROVED) {
           return { ok: false, error: "该头像已是通过状态" };
         }
-        await prisma.$transaction([
-          prisma.user.update({
+        await prisma.$transaction(async (tx) => {
+          await tx.user.update({
             where: { id: row.user },
             data: { avatar: row.filepath, updateTime: ts },
-          }),
-          prisma.avatarReview.update({
+          });
+          await tx.avatarReview.update({
             where: { id: row.id },
             data: {
               status: AVATAR_REVIEW_STATUS.APPROVED,
@@ -359,8 +360,10 @@ async function dispatch(
               // AI 的初审说明保留在 reason 里会给用户看到，人工通过时清掉更干净
               reason: "管理员已通过",
             },
-          }),
-        ]);
+          });
+          // 「更换头像」动态（与 AI 自动放行同口径，仅个人主页可见）
+          await publishNews({ tx, type: NEWS_TYPE.AVATAR, userId: Number(row.user) });
+        });
         await notifyAvatar(row.user, "你上传的头像已通过审核，已更新。");
         return { ok: true, message: `通过 ${name}（#${Number(row.user)}）的头像` };
       }

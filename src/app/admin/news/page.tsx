@@ -21,8 +21,11 @@ const TYPE_NAMES: Record<number, string> = {
   [NEWS_TYPE.PERSON_RECORD]: "个人纪录",
   [NEWS_TYPE.AREA_RECORD]: "地区纪录",
   [NEWS_TYPE.NATION_RECORD]: "全国纪录",
-  [NEWS_TYPE.VIDEO]: "录像",
-  [NEWS_TYPE.ARTICLE]: "文章",
+  [NEWS_TYPE.VIDEO]: "上传录像",
+  [NEWS_TYPE.ARTICLE]: "论坛文章",
+  [NEWS_TYPE.JOIN]: "加入扫雷网",
+  [NEWS_TYPE.AVATAR]: "更换头像",
+  [NEWS_TYPE.COMMENT]: "评论",
 };
 
 const TYPE_OPTIONS: [string, string][] = [
