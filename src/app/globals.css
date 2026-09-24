@@ -2082,9 +2082,9 @@ body #page.ranking_old .page_head {
     margin: 0; /* 间隔职责已由 page_head 承担 */
   }
 
-  /* 排行页页头（七轮：在卡片内）：无页头外距，只留与表格的下间距 */
+  /* 排行页页头（七轮：在卡片内）：无页头外距，与表头拉开 10px 左右（八轮张老师要求） */
   body #page.ranking_old .page_head {
-    margin: 0 0 16px;
+    margin: 0 0 10px;
   }
 
   /* 页头内的导航条：占满 title 旁剩余宽度——tabs 紧跟 title、
