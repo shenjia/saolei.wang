@@ -27,7 +27,7 @@ export function MessageBadge() {
 
   return (
     <Link href="/message">
-      短消息{unread > 0 && <em className="badge">{unread}</em>}
+      短消息{unread > 0 && <sup className="msg_badge">{unread}</sup>}
     </Link>
   );
 }

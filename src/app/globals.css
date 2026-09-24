@@ -1136,6 +1136,20 @@ body #page.bbs_old .page_head {
   line-height: 16px;
 }
 
+/* 导航未读消息角标（2026-09-24 张老师定：上标、黄底黑字） */
+.msg_badge {
+  vertical-align: super;
+  display: inline-block;
+  padding: 0 4px;
+  margin-left: 2px;
+  border-radius: 3px;
+  background: #fdc61a;
+  color: #151515;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 14px;
+}
+
 /* 收件箱未读行 */
 .table tr.unread td {
   font-weight: bold;
