@@ -39,7 +39,8 @@ export function VideoRowLine({ video: v }: { video: VideoListItem }) {
       <td className="name">
         {v.author ? (
           <>
-            <AvatarCell id={v.author.id} name={v.author.chineseName} sex={v.author.sex} />
+            {/* 2026-09-24 张老师要求：性别图标与动态行同尺寸（8x8 small），用户名可点击进个人主页 */}
+            <AvatarCell id={v.author.id} name={v.author.chineseName} sex={v.author.sex} gender="small" link />
             <TitleBadge title={v.authorTitle} link />
           </>
         ) : (
