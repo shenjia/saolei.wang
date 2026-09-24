@@ -66,6 +66,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
   const { user, info, scores } = detail;
   const radar = await getRadarData(scores);
 
+  // 是不是「我自己的主页」——决定头像能不能点（2026-09-24 张老师需求：
+  // hover 提示「点击更换头像」，点击进头像上传处）
+  const isSelf = !!session && session.uid === userId;
+
   // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
   const hasProfileFields =
     !!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info]);
@@ -78,13 +82,23 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
       ? `/images/player/${userId}.jpg`
       : "/images/common/avatar.png",
   );
+  const photoImg = <img className="avatar" src={photo} alt={user.chineseName} />;
 
   return (
     <div id="page" className="two_columns">
     <ul id="user_view">
       <li className="main">
         <div className="info box">
-          <img className="avatar" src={photo} alt={user.chineseName} />
+          {/* 自己的主页：头像可点，hover 出「点击更换头像」蒙层 → 跳到修改资料页头像区。
+              别人的主页保持原样（裸 <img>，无链接无蒙层），不改动既有 DOM 与样式。 */}
+          {isSelf ? (
+            <Link href="/account/profile#avatar" className="avatar_slot" aria-label="点击更换头像">
+              {photoImg}
+              <span className="avatar_change">点击更换头像</span>
+            </Link>
+          ) : (
+            photoImg
+          )}
           <h1>{user.chineseName}</h1>
           <h2>({user.englishName})</h2>
           <span className={`gender big ${user.sex ? "male" : "female"}`}></span>

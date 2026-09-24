@@ -1306,6 +1306,41 @@ body #user_view .info .avatar {
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.04);
 }
+/* ---------- 自己的主页：头像可点击更换（2026-09-24 张老师要求） ----------
+   hover 出头像下方的「点击更换头像」条，点击跳 /account/profile#avatar。
+   legacy 原规则把 float:left + margin-right 加在 .avatar 上，包一层 <a> 后必须
+   把这两条挪到 <a>，并让内部 img 转 display:block——否则 <a> 由 inline 行框撑高，
+   底部会多出 descender 空隙，蒙层 bottom:0 贴不到图片底边。
+   尺寸/边框仍由原 .avatar 规则提供，视觉与原来逐像素一致。 */
+body #user_view .info a.avatar_slot {
+  position: relative;
+  display: block;
+  float: left;
+  margin-right: 15px;
+}
+body #user_view .info a.avatar_slot .avatar {
+  display: block;
+  float: none;
+  margin-right: 0;
+}
+body #user_view .info .avatar_change {
+  position: absolute;
+  right: 1px; /* 避开 .avatar 的 1px 边框，蒙层正好压在照片上 */
+  bottom: 1px;
+  left: 1px;
+  height: 26px;
+  color: #f8f8f2;
+  font-size: 13px;
+  line-height: 26px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.68);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+body #user_view .info a.avatar_slot:hover .avatar_change,
+body #user_view .info a.avatar_slot:focus-visible .avatar_change {
+  opacity: 1;
+}
 /* 姓名行：09-23 晚张老师要求稍放大（18→20 / 14→16） */
 body #user_view .info h1 {
   font-size: 20px;

@@ -128,7 +128,8 @@ export function AvatarUploader({ currentUrl, pendingUrl, pendingReason, rejected
   const shown = preview ?? (pendingUrl || currentUrl);
 
   return (
-    <tr>
+    // id="avatar"：自己主页点头像会跳 /account/profile#avatar 直接定位到这一行
+    <tr id="avatar">
       <th>头像</th>
       <td>
         <div className="avatar_uploader">
