@@ -1499,6 +1499,11 @@ body #page.ranking_old .ranking_box {
 .ranking_table th a.current:hover {
   color: #a6e22e;
 }
+/* 纯文本表头命中（进步榜「升降」列：榜序所在列，非链接不可点击） */
+.ranking_table th.current {
+  color: #fdc61d;
+  font-weight: bold;
+}
 .ranking_table td {
   height: 25px;
   padding: 0 2px;
@@ -2224,13 +2229,20 @@ body #video_list .score_3bvs a:hover em {
    旧 #video_list_header「卡片外页头」规则整体废弃（review 页同步改卡片内）。 */
 
 /* 紧凑行表格（2008 版 Video_All 版式）：左对齐行、时间/作者列白、数字列灰 */
+.video_table th {
+  text-align: left; /* 表头居左，与内容文字左缘对齐（2026-09-24 张老师要求） */
+}
 .video_table td {
   text-align: left;
   white-space: nowrap;
   padding: 4px 2px;
 }
-.video_table td.create_time {
-  color: #939387;
+/* 时间列（末列）：站内动态同口径——一年内相对时间偏亮、超一年显示日期且偏暗 */
+.video_table td.create_time.time--recent {
+  color: #b1b1a4;
+}
+.video_table td.create_time.time--old {
+  color: #6c6c61;
 }
 /* 上传者列：名字+军衔徽章同列（论坛作者列同款间距，2026-09-24 张老师要求） */
 .video_table td.name .title {
