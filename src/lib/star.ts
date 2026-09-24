@@ -80,6 +80,15 @@ export interface StarInfo {
 }
 
 /**
+ * 保证今日之星已评选（首页专用触发点）：首页卡片已于 2026-09-24 按张老师要求移除，
+ * 但评选仍需照常进行——/admin/rank 的每日一星列表与 /page/help/star 说明页都依赖这份数据，
+ * 2008 版的评选时机就是「首次访问首页」。故首页保留一次静默调用，不渲染任何内容。
+ */
+export async function ensureTodayStar(): Promise<void> {
+  await getTodayStar();
+}
+
+/**
  * 取今日之星，没有则评选（移植 2008 版 Star_Read + 评选规则）：
  * 候选 = 神界（sum_time 前 41） ∪ 近 30 天有破纪录动态的人界雷友；
  * 本月已当选者不再参与；按日期哈希确定性随机取一位。
