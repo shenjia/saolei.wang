@@ -1,7 +1,8 @@
 // 首页：新闻 + 录像 + 入伍新兵 + 十大元帅（移植 views/home/index）
 // 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 15 条；其下新增录像版块
 // （15 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与新闻版块同构）；
-// 右栏顶部「每日一星」卡片撤下（登录后仍显示「我的地盘」，游客直接以「十大元帅」起头）；
+// 右栏顶部「每日一星」「我的地盘」卡片均已撤下（后者 2026-09-24 张老师明示永久废弃：
+// 该板块今后不再使用，直接删除，不再因登录态切换），右栏一律以「十大元帅」起头；
 // 二轮定名：版块标题定为「新闻」「录像」，录像标题走灰色次级样式（字号保持 legacy 26px）。
 
 import Link from "next/link";
@@ -20,20 +21,16 @@ import { VideoFeed } from "@/components/VideoFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { BbsLatest } from "@/components/BbsLatest";
 import { SiteStats } from "@/components/SiteStats";
-import { UserCard } from "@/components/UserCard";
 import { title as assessTitle } from "@/lib/assess";
-import { getSession } from "@/lib/auth";
-import { getUserCard } from "@/lib/usercard";
 import { ensureTodayStar } from "@/lib/star";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [news, newbies, top, session, newsTotal, videos, videoTotal] = await Promise.all([
+  const [news, newbies, top, newsTotal, videos, videoTotal] = await Promise.all([
     getHomeNews(),
     getNewbies(),
     getTopUsers(),
-    getSession(),
     // 全站动态总数（「加载更多」括号内剩余条数口径；切等级筛选时由接口回传同口径总数）
     getNewsCount({}),
     getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
@@ -48,8 +45,6 @@ export default async function HomePage() {
   const newbieRows = await Promise.all(
     newbies.map(async (n) => ({ ...n, title: await assessTitle(n.userScore) }))
   );
-  // 登录后右栏顶部显示自己的信息卡片（2026-09-23 张老师要求；原「每日一星」位置）
-  const myCard = session ? await getUserCard(session.uid) : null;
 
   return (
     <div id="page" className="two_columns">
@@ -76,12 +71,6 @@ export default async function HomePage() {
         </div>
       </li>
       <li className="sidebar">
-        {myCard && (
-          <div id="my_card" className="box">
-            <h2>我的地盘</h2>
-            <UserCard card={myCard} own vertical />
-          </div>
-        )}
         <div id="top" className="box">
           <Link href="/ranking" target="_blank">
             <h2>十大元帅</h2>
