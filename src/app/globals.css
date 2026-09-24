@@ -2598,7 +2598,7 @@ body #page.ranking_old.main .ranking_nav {
 }
 
 /* 世界榜七轮（2026-09-24 张老师要求）：三级成绩表头（Beg/Int/Exp/Sum）居左对齐；
-   纪录数字字号加大一档（20→22px，与主排行榜成绩观感对齐） */
+   纪录数字字号调整（20 → 22 偏大，八轮回调 21px） */
 #page.ranking_old.main > #world_top th {
   text-align: left;
 }
@@ -2607,7 +2607,7 @@ body #page.ranking_old.main .ranking_nav {
 }
 #page.ranking_old.main > #world_top td.t b,
 #page.ranking_old.main > #world_top td.sum {
-  font-size: 22px;
+  font-size: 21px;
 }
 
 /* 世界榜五轮（2026-09-24 张老师要求）：纪录数字加粗，配色与主排行榜各级成绩一致
