@@ -57,9 +57,9 @@ export default async function VideoListPage({
                   name="order"
                   current={order}
                   options={[
-                    ["id", "按上传时间排列"],
-                    ["time", "按成绩排列"],
-                    ["3bvs", "按3BV/s排列"],
+                    ["id", "按上传时间"],
+                    ["time", "按成绩"],
+                    ["3bvs", "按3BV/s"],
                   ]}
                 />
               ) : (
@@ -69,9 +69,9 @@ export default async function VideoListPage({
                   name="order"
                   current={order}
                   options={[
-                    ["id", "按上传时间排列"],
-                    ["comments", "按评论数排列"],
-                    ["clicks", "按点击数排列"],
+                    ["id", "按上传时间"],
+                    ["comments", "按评论数"],
+                    ["clicks", "按点击数"],
                   ]}
                 />
               )}
