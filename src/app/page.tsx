@@ -1,6 +1,6 @@
 // 首页：动态 + 最新录像 + 入伍新兵 + 十大元帅（移植 views/home/index）
-// 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 20 条；其下新增「最新录像」版块
-// （20 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与动态版块同构）。
+// 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 15 条；其下新增「最新录像」版块
+// （15 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与动态版块同构）。
 
 import Link from "next/link";
 import {
@@ -11,7 +11,7 @@ import {
   getVideoFeed,
   getVideoCount,
 } from "@/lib/queries";
-import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, NEWS_PAGESIZE } from "@/lib/config";
+import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER } from "@/lib/config";
 import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoFeed } from "@/components/VideoFeed";
@@ -55,7 +55,7 @@ export default async function HomePage() {
           <NewsFeed
             title="动态"
             initial={feed}
-            pageSize={NEWS_PAGESIZE}
+            pageSize={HOME_NEWS_NUMBER}
             initialHasMore={news.length === HOME_NEWS_NUMBER}
             initialTotal={newsTotal}
           />
