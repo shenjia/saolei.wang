@@ -6,7 +6,7 @@ import { Pager } from "@/components/Pager";
 import { RankingNav } from "@/components/RankingNav";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "人气榜 | 扫雷网" };
+export const metadata = { title: "人气排行 | 扫雷网" };
 
 export default async function ClickRankingPage({
   searchParams,
@@ -21,7 +21,7 @@ export default async function ClickRankingPage({
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
-          <h1 className="page_title">人气榜</h1>
+          <h1 className="page_title">人气排行</h1>
           <RankingNav current="click" />
         </div>
         <div id="user_list" className="ranking_list">

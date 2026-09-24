@@ -12,7 +12,7 @@ import { TitleBadge } from "@/components/Cells";
 import { buildUrl } from "@/components/Pager";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "地区榜 | 扫雷网" };
+export const metadata = { title: "地区排行 | 扫雷网" };
 
 const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
   { key: "best", label: "领军人物" },
@@ -48,7 +48,7 @@ export default async function AreaPage({
         <div className="box ranking_box">
           <div className="page_head">
             <h1 className="page_title">
-              <Link href="/area">地区榜</Link>
+              <Link href="/area">地区排行</Link>
               <span className="sep">›</span>
               {areaDisplay(area)}
             </h1>
@@ -76,7 +76,7 @@ export default async function AreaPage({
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
-          <h1 className="page_title">地区榜</h1>
+          <h1 className="page_title">地区排行</h1>
           <RankingNav current="area" />
         </div>
             <table cellPadding={0} cellSpacing={0} className="ranking_table area_table">

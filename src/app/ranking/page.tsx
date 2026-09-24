@@ -16,7 +16,18 @@ import { RankingFeed } from "@/components/RankingFeed";
 import { WorldTop100 } from "@/components/WorldTop100";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "排行榜 | 扫雷网" };
+
+// 页面 title 统一「xx排行」命名（2026-09-24 张老师要求：不再用「xx榜」）
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const view = sp.view === "nf" || sp.nf === "1" ? "nf" : sp.view === "world" ? "world" : "all";
+  const name = view === "world" ? "世界排行" : view === "nf" ? "NF排行" : "雷界排行";
+  return { title: `${name} | 扫雷网` };
+}
 
 export default async function RankingPage({
   searchParams,
@@ -80,7 +91,7 @@ export default async function RankingPage({
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
-          <h1 className="page_title">排行榜</h1>
+          <h1 className="page_title">{view === "nf" ? "NF排行" : "雷界排行"}</h1>
           <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
         </div>
         {/* key 含 page/view/by/hl：软导航（whereami 302 回跳）时强制重挂载，

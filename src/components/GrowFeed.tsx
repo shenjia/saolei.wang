@@ -70,7 +70,7 @@ export function GrowFeed({
           {rows.length === 0 && (
             <tr>
               <td colSpan={12} style={{ textAlign: "center" }}>
-                快照数据积累两天后开始有进步榜。
+                快照数据积累两天后开始有进步排行。
               </td>
             </tr>
           )}

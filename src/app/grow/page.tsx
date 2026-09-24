@@ -8,7 +8,7 @@ import { RankingNav } from "@/components/RankingNav";
 import { GrowFeed } from "@/components/GrowFeed";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "进步榜 | 扫雷网" };
+export const metadata = { title: "进步排行 | 扫雷网" };
 
 export default async function GrowPage({
   searchParams,
@@ -26,7 +26,7 @@ export default async function GrowPage({
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
-          <h1 className="page_title">进步榜</h1>
+          <h1 className="page_title">进步排行</h1>
           <RankingNav current="grow" />
         </div>
         <GrowFeed key={page} initial={titled} total={total} pageSize={pageSize} />
