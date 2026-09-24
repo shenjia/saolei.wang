@@ -1,11 +1,12 @@
-// 录像列表：级别筛选 + 排序 + 分页
+// 录像列表：级别筛选 + 排序 + 加载更多
 // 2026-09-24 张老师要求：列表参考 2008 版版式（Video_All 紧凑行 → VideoTable），
 // 页头参考排行榜版式——h1 与全部筛选器（级别 tabs + 排序 tabs）都放进主体卡片内部。
+// 同日二轮：老式翻页（Pager）改「加载更多」（左右布局：左=总数 右=按钮）。
 
 import { getVideoList } from "@/lib/queries";
 import { LEVEL_NAMES, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
-import { Pager, Tabs } from "@/components/Pager";
-import { VideoTable } from "@/components/VideoTable";
+import { Tabs } from "@/components/Pager";
+import { VideoListFeed } from "@/components/VideoListFeed";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "录像 | 扫雷网" };
@@ -26,9 +27,8 @@ export default async function VideoListPage({
   const level = parseLevel(sp.level);
   const order = parseOrder(sp.order);
   const author = sp.author ? parseInt(sp.author, 10) || undefined : undefined;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const { videos, total, pageSize } = await getVideoList({ level, order, author, page });
+  const { videos, total, pageSize } = await getVideoList({ level, order, author, page: 1 });
 
   return (
     <div id="page" className="main video_old">
@@ -78,8 +78,12 @@ export default async function VideoListPage({
             </div>
           </div>
         </div>
-        <VideoTable videos={videos} />
-        <Pager base="/video" params={{ level, order, author }} page={page} total={total} pageSize={pageSize} />
+        <VideoListFeed
+          initial={videos}
+          total={total}
+          pageSize={pageSize}
+          query={{ level, order, author }}
+        />
       </div>
     </div>
   );

@@ -105,10 +105,12 @@ export function isRecent(time: number): boolean {
 }
 
 /**
- * 「加载更多」按钮文案：括号内显示剩余未加载条数（2026-09-24 张老师要求，
- * 全站统一：动态/排行/进步榜/录像评论/论坛/军衔名单/扫雷历程）
- * @param remaining 剩余条数（已加载条数与总数之差，负值按 0 处理）
+ * 「加载更多」区域文案（2026-09-24 张老师二轮改版）：
+ * 按钮只写「加载更多」（剩余数量放左下角总数行，不进按钮）；
+ * 左下角显示当前筛选下的条目总数，单位词由调用方传入（条/位/条评论…）。
+ * @param total   总条数
+ * @param unit    计数单位（默认「条」）
  */
-export function moreLabel(remaining: number): string {
-  return `加载更多（${Math.max(0, remaining).toLocaleString("zh-CN")}）`;
+export function totalLabel(total: number, unit = "条"): string {
+  return `共 ${Math.max(0, total).toLocaleString("zh-CN")} ${unit}`;
 }

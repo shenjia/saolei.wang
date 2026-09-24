@@ -8,8 +8,9 @@
 
 import { useState, type ReactNode } from "react";
 import type { VideoListItem } from "@/lib/queries";
-import { moreLabel } from "@/lib/format";
+import { totalLabel } from "@/lib/format";
 import { VideoHead, VideoRowLine } from "./VideoRows";
+import { noFocusJump } from "./useKeepScroll";
 
 const LEVEL_TABS: { key: string; label: string }[] = [
   { key: "", label: "全部" },
@@ -28,7 +29,7 @@ export function VideoFeed({
   initial: VideoListItem[];
   pageSize: number;
   initialHasMore: boolean;
-  /** 当前筛选条件下的录像总数（「加载更多」括号内显示剩余条数用） */
+  /** 当前筛选条件下的录像总数（左下角总数行） */
   initialTotal: number;
   /** 标题节点；筛选 tabs 收进标题行右侧（首页版块布局） */
   title?: ReactNode;
@@ -126,19 +127,23 @@ export function VideoFeed({
           )}
         </tbody>
       </table>
-      {hasMore && (
-        <div className="more_loader">
+      <div className="more_loader">
+        {hasMore ? (
           <button
             type="button"
             className="button small"
             data-cursor={cursor}
             disabled={loading}
+            onMouseDown={noFocusJump}
             onClick={loadMore}
           >
-            {loading ? "加载中…" : moreLabel(total - items.length)}
+            {loading ? "加载中…" : "加载更多"}
           </button>
-        </div>
-      )}
+        ) : (
+          items.length > 0 && <span className="all_loaded">已加载全部</span>
+        )}
+        <span className="total_count">{totalLabel(total, "个")}</span>
+      </div>
     </>
   );
 }

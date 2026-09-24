@@ -4,8 +4,9 @@
 
 import { useState } from "react";
 import { USER_HISTORY_NUMBER } from "@/lib/config";
-import { moreLabel } from "@/lib/format";
+import { totalLabel } from "@/lib/format";
 import type { HistoryItem } from "@/lib/history";
+import { noFocusJump } from "./useKeepScroll";
 
 export function HistoryBox({
   userId,
@@ -111,9 +112,15 @@ export function HistoryBox({
       ))}
       {items.length > visible && (
         <div className="more_loader">
-          <button type="button" className="button small" onClick={() => setVisible((n) => n + USER_HISTORY_NUMBER)}>
-            {moreLabel(items.length - visible)}
+          <button
+            type="button"
+            className="button small"
+            onMouseDown={noFocusJump}
+            onClick={() => setVisible((n) => n + USER_HISTORY_NUMBER)}
+          >
+            加载更多
           </button>
+          <span className="total_count">{totalLabel(items.length)}</span>
         </div>
       )}
       {editable && (

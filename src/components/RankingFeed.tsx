@@ -15,8 +15,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RankingRow } from "@/lib/queries";
 import type { RankingBy } from "@/lib/config";
-import { moreLabel } from "@/lib/format";
+import { totalLabel } from "@/lib/format";
 import { RankingHead, RankingRowLine, RankingEmpty, type TitledRow } from "./RankingRows";
+import { noFocusJump } from "./useKeepScroll";
 import { toast } from "./Toast";
 
 export interface RankingFeedProps {
@@ -221,17 +222,19 @@ export function RankingFeed(props: RankingFeedProps) {
       </table>
       <div className="more_loader ranking_loader">
         {loadedAll ? (
-          <span className="all_loaded">已加载全部 {total} 位</span>
+          <span className="all_loaded">已加载全部</span>
         ) : (
           <button
             type="button"
             className="button small"
             disabled={loading}
+            onMouseDown={noFocusJump}
             onClick={loadMore}
           >
-            {loading ? "加载中…" : moreLabel(total - rows.length)}
+            {loading ? "加载中…" : "加载更多"}
           </button>
         )}
+        <span className="total_count">{totalLabel(total, "位")}</span>
         {myUid && inRanking && (
           <button
             type="button"

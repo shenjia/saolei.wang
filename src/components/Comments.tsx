@@ -6,9 +6,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMENT_CONTENT_LIMIT, COMMENT_PAGESIZE } from "@/lib/config";
-import { timeOpposite, moreLabel } from "@/lib/format";
+import { timeOpposite, totalLabel } from "@/lib/format";
 import type { CommentItem } from "@/lib/queries";
 import { AvatarCell } from "./Cells";
+import { noFocusJump } from "./useKeepScroll";
 
 /** 单条评论（移植 comment/_cell 的应有结构） */
 export function CommentCell({ comment }: { comment: CommentItem }) {
@@ -32,7 +33,8 @@ export function CommentCell({ comment }: { comment: CommentItem }) {
   );
 }
 
-/** 评论列表 + 加载更多（移植 CommentController::actionMore 的 cursor 语义） */
+/** 评论列表 + 加载更多（移植 CommentController::actionMore 的 cursor 语义）
+ *  2026-09-24 二轮：底部左右布局（左=评论总数 右=按钮），点击加载保持滚动位置 */
 export function CommentList({
   videoId,
   initial,
@@ -42,7 +44,7 @@ export function CommentList({
   videoId: number;
   initial: CommentItem[];
   initialHasMore: boolean;
-  /** 本录像评论总数（「加载更多」括号内显示剩余条数用） */
+  /** 本录像评论总数（左下角总数行） */
   initialTotal: number;
 }) {
   const [items, setItems] = useState(initial);
@@ -70,13 +72,22 @@ export function CommentList({
       {items.map((c) => (
         <CommentCell key={c.id} comment={c} />
       ))}
-      {hasMore && (
-        <div className="more_loader">
-          <button type="button" className="button small" disabled={loading} onClick={loadMore}>
-            {loading ? "加载中…" : moreLabel(total - items.length)}
+      <div className="more_loader">
+        {hasMore ? (
+          <button
+            type="button"
+            className="button small"
+            disabled={loading}
+            onMouseDown={noFocusJump}
+            onClick={loadMore}
+          >
+            {loading ? "加载中…" : "加载更多"}
           </button>
-        </div>
-      )}
+        ) : (
+          items.length > 0 && <span className="all_loaded">已加载全部</span>
+        )}
+        <span className="total_count">{totalLabel(total, "条评论")}</span>
+      </div>
     </div>
   );
 }

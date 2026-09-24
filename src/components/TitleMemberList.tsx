@@ -11,8 +11,9 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import type { TitleMemberRow } from "@/lib/queries";
-import { scoreTime, formatDate, moreLabel } from "@/lib/format";
+import { scoreTime, formatDate, totalLabel } from "@/lib/format";
 import { TitleBadge } from "./Cells";
+import { noFocusJump } from "./useKeepScroll";
 
 const COLS: { by: string; label: string; cls: string }[] = [
   { by: "beg_time", label: "初级", cls: "c_beg" },
@@ -184,10 +185,17 @@ export function TitleMemberList({
       </table>
       <div className="more_loader title_members_actions">
         {hasMore && (
-          <button type="button" className="button small" disabled={loading} onClick={loadMore}>
-            {loading ? "加载中…" : moreLabel(total - rows.length)}
+          <button
+            type="button"
+            className="button small"
+            disabled={loading}
+            onMouseDown={noFocusJump}
+            onClick={loadMore}
+          >
+            {loading ? "加载中…" : "加载更多"}
           </button>
         )}
+        <span className="total_count">{totalLabel(total, "人")}</span>
         {myId != null && myOffset != null && myOffset >= 0 && !located && (
           <button type="button" className="button small" disabled={locating} onClick={locateMe}>
             {locating ? "定位中…" : "我在哪里?"}

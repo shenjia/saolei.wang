@@ -6,9 +6,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BBS_BOARD_NAMES } from "@/lib/bbs";
-import { timeOpposite, TIME_NEVER, moreLabel } from "@/lib/format";
+import { timeOpposite, TIME_NEVER, totalLabel } from "@/lib/format";
 import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
+import { noFocusJump } from "./useKeepScroll";
 
 export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean }) {
   return (
@@ -57,7 +58,7 @@ export function BbsFeed({
 }: {
   initial: BbsPostItem[];
   initialHasMore: boolean;
-  /** 当前筛选条件下的主题总数（「加载更多」括号内显示剩余条数用） */
+  /** 当前筛选条件下的主题总数（左下角总数行） */
   total: number;
   query: Record<string, string>;
   showBoard: boolean;
@@ -95,9 +96,16 @@ export function BbsFeed({
         <tr className="bbs_more_row">
           <td colSpan={5}>
             <div className="more_loader">
-              <button type="button" className="button small" disabled={loading} onClick={loadMore}>
-                {loading ? "加载中…" : moreLabel(total - items.length)}
+              <button
+                type="button"
+                className="button small"
+                disabled={loading}
+                onMouseDown={noFocusJump}
+                onClick={loadMore}
+              >
+                {loading ? "加载中…" : "加载更多"}
               </button>
+              <span className="total_count">{totalLabel(total, "帖")}</span>
             </div>
           </td>
         </tr>

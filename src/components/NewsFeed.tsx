@@ -1,12 +1,14 @@
 // 动态列表 + 等级筛选 + 「加载更多」（移植 views/common/more 的 cursor 加载逻辑）
 // 初始数据由服务端渲染传入，点更多/切筛选走 /api/news/more 取 JSON 增量渲染
+// 2026-09-24 二轮：底部改左右布局（左=总数 右=按钮），点击加载保持滚动位置
 
 "use client";
 
 import { useState, type ReactNode } from "react";
 import type { NewsItem } from "@/lib/queries";
-import { moreLabel } from "@/lib/format";
+import { totalLabel } from "@/lib/format";
 import { NewsCellView } from "./NewsCellView";
+import { noFocusJump } from "./useKeepScroll";
 
 export interface NewsFeedItem {
   news: NewsItem;
@@ -32,7 +34,7 @@ export function NewsFeed({
   userId?: number;
   pageSize: number;
   initialHasMore: boolean;
-  /** 当前筛选条件下的动态总数（「加载更多」括号内显示剩余条数用） */
+  /** 当前筛选条件下的动态总数（左下角总数行） */
   initialTotal: number;
   /** 标题节点；传入时筛选 tabs 收进标题行右侧（首页「雷界快讯」同款布局） */
   title?: ReactNode;
@@ -125,13 +127,23 @@ export function NewsFeed({
           )}
         </tbody>
       </table>
-      {hasMore && (
-        <div className="more_loader">
-          <button type="button" className="button small" data-cursor={cursor} disabled={loading} onClick={loadMore}>
-            {loading ? "加载中…" : moreLabel(total - items.length)}
+      <div className="more_loader">
+        {hasMore ? (
+          <button
+            type="button"
+            className="button small"
+            data-cursor={cursor}
+            disabled={loading}
+            onMouseDown={noFocusJump}
+            onClick={loadMore}
+          >
+            {loading ? "加载中…" : "加载更多"}
           </button>
-        </div>
-      )}
+        ) : (
+          items.length > 0 && <span className="all_loaded">已加载全部</span>
+        )}
+        <span className="total_count">{totalLabel(total)}</span>
+      </div>
     </>
   );
 }

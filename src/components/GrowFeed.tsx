@@ -6,7 +6,8 @@
 
 import { useState } from "react";
 import type { GrowRow } from "@/lib/ranksnap";
-import { moreLabel } from "@/lib/format";
+import { totalLabel } from "@/lib/format";
+import { noFocusJump } from "./useKeepScroll";
 import { RANKING_COLS, RankingRowLine, type TitledRow } from "./RankingRows";
 
 export function GrowFeed({
@@ -77,12 +78,19 @@ export function GrowFeed({
       </table>
       <div className="more_loader ranking_loader">
         {loadedAll ? (
-          <span className="all_loaded">已加载全部 {total} 位</span>
+          <span className="all_loaded">已加载全部</span>
         ) : (
-          <button type="button" className="button small" disabled={loading} onClick={loadMore}>
-            {loading ? "加载中…" : moreLabel(total - rows.length)}
+          <button
+            type="button"
+            className="button small"
+            disabled={loading}
+            onMouseDown={noFocusJump}
+            onClick={loadMore}
+          >
+            {loading ? "加载中…" : "加载更多"}
           </button>
         )}
+        <span className="total_count">{totalLabel(total, "位")}</span>
         {hint && <span className="loader_hint">{hint}</span>}
       </div>
     </>

@@ -523,11 +523,23 @@ body .tabs > a:hover::after {
   cursor: pointer;
 }
 
-/* ---------- 新增：加载更多按钮 ---------- */
+/* ---------- 新增：加载更多按钮 ----------
+   2026-09-24 三轮（张老师）：左右分布互换——左下角「加载更多」按钮，右下角条目总数 */
 .more_loader {
   clear: both;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 10px 0 4px;
-  text-align: center;
+}
+.more_loader .total_count {
+  font-size: 13px;
+  color: #939387;
+}
+/* 无总数的场景（纯按钮）保持居中 */
+.more_loader:has(> :only-child) {
+  justify-content: center;
 }
 .more_loader .button {
   display: inline-block;
@@ -546,6 +558,11 @@ body .tabs > a:hover::after {
 .more_loader .button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+/* 已加载全部时按钮换成灰字提示（左右布局保留，文字占左位） */
+.more_loader .all_loaded {
+  font-size: 13px;
+  color: #75715e;
 }
 
 /* ---------- 新增：评论区（2013 版 _cell.php 未写完，按 NewsCell 风格补齐） ---------- */
@@ -1261,11 +1278,14 @@ body .title_members_box h1 .count em {
   font-style: normal;
   font-weight: bold;
 }
-/* 底部操作行：加载更多 + 我在哪里 并排 */
+/* 底部操作行：左=加载更多 + 我在哪里 右=总数（2026-09-24 三轮互换） */
 body .title_members_actions {
   display: flex;
   gap: 10px;
-  justify-content: center;
+  justify-content: flex-start;
+}
+body .title_members_actions .total_count {
+  margin-left: auto;
 }
 body .title_members td.name a {
   color: #f8f8f2;
@@ -2356,13 +2376,12 @@ body #page.ranking_old .page_head {
   color: #75715e;
 }
 
-/* 底部加载条：加载更多 / 我在哪里 / 提示文字 同行排布 */
+/* 底部加载条：左=加载更多/我在哪里/提示文字 右=总数（2026-09-24 三轮互换） */
 .more_loader.ranking_loader {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.more_loader.ranking_loader .total_count {
+  margin-left: auto;
 }
 .more_loader.ranking_loader .button.small {
   padding: 4px 16px;
