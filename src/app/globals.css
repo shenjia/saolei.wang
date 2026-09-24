@@ -2232,13 +2232,13 @@ body #video_list .score_3bvs a:hover em {
 .video_table td.create_time {
   color: #939387;
 }
-.video_table td.name .world_tag {
-  margin-right: 6px;
-  font-size: 12px;
+/* 上传者列：名字+军衔徽章同列（论坛作者列同款间距，2026-09-24 张老师要求） */
+.video_table td.name .title {
+  margin-left: 5px;
 }
-/* 神界/人界标识色（2008 版 .World1/.World2 同值迁移） */
-.video_table .world_tag.world1 { color: #b1b1a4; font-weight: bold; }
-.video_table .world_tag.world2 { color: #75715e; font-weight: bold; }
+.video_table td.name .title em {
+  font-size: 14px;
+}
 /* 级别字配色（2008 版 .Beg/.Int/.Exp 同值迁移） */
 .video_table .lv_beg { color: #999994; font-weight: bold; }
 .video_table .lv_int { color: #bbbbaf; font-weight: bold; }
@@ -2256,12 +2256,12 @@ body #video_list .score_3bvs a:hover em {
   font-size: 11px;
   color: #fdc61d;
 }
-/* 军衔徽章在成绩行内跟随 14px 文字 */
-.video_table td.score .title {
-  margin-left: 8px;
-}
+/* 计数列「评论 / 点击」：论坛同款 em 强调回复/评论数（legacy em margin 归零） */
 .video_table td.counters {
   color: #939387;
+}
+.video_table td.counters em {
+  margin: 0;
 }
 
 /* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、排序贴行尾 */

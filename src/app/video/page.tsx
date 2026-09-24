@@ -2,7 +2,7 @@
 // 2026-09-24 张老师要求：列表参考 2008 版版式（Video_All 紧凑行 → VideoTable），
 // 页头参考排行榜版式——h1 与全部筛选器（级别 tabs + 排序 tabs）都放进主体卡片内部。
 
-import { getVideoList, getHeroList } from "@/lib/queries";
+import { getVideoList } from "@/lib/queries";
 import { LEVEL_NAMES, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { Pager, Tabs } from "@/components/Pager";
 import { VideoTable } from "@/components/VideoTable";
@@ -28,12 +28,7 @@ export default async function VideoListPage({
   const author = sp.author ? parseInt(sp.author, 10) || undefined : undefined;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const [{ videos, total, pageSize }, heroes] = await Promise.all([
-    getVideoList({ level, order, author, page }),
-    // 神界名单（行内【神界】/【人界】标识，移植 2008 版 Video_Hero 字段）
-    getHeroList(41),
-  ]);
-  const heroIds = new Set(heroes.map((h) => h.id));
+  const { videos, total, pageSize } = await getVideoList({ level, order, author, page });
 
   return (
     <div id="page" className="main video_old">
@@ -83,7 +78,7 @@ export default async function VideoListPage({
             </div>
           </div>
         </div>
-        <VideoTable videos={videos} heroIds={heroIds} />
+        <VideoTable videos={videos} />
         <Pager base="/video" params={{ level, order, author }} page={page} total={total} pageSize={pageSize} />
       </div>
     </div>
