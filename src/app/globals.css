@@ -1060,6 +1060,62 @@ body #page.bbs_old .page_head {
   font-size: 13px;
 }
 
+/* 注册页（2026-09-24，流程参考 2008 版 / 字段校验移植 2013 版 RegisterForm）
+   表单行行为类（focus/error → hintMessage/errorMessage）由 legacy-2013.css 的 .form 规则驱动 */
+#account_register .rules {
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #33322b;
+  padding: 12px 16px;
+  margin-bottom: 22px;
+}
+#account_register .rules ol {
+  list-style: none;
+}
+#account_register .rules li {
+  font-size: 13px;
+  line-height: 1.9;
+  color: #939387;
+}
+#account_register .rules b {
+  color: #f8f8f2;
+  font-weight: 400;
+}
+#account_register .rules em {
+  color: #f92672;
+  font-style: normal;
+}
+#account_register .rules a {
+  color: #a6e22e;
+}
+#account_register .form input[type="text"],
+#account_register .form input[type="password"] {
+  width: 260px;
+}
+#account_register .reg_login {
+  font-size: 13px;
+  color: #75715e;
+}
+#account_register .reg_login a {
+  color: #a6e22e;
+}
+#account_register .reg_ok .flash {
+  color: #fdc61a;
+  font-size: 22px;
+  line-height: 34px;
+  margin-bottom: 14px;
+}
+#account_register .reg_ok p {
+  color: #939387;
+  font-size: 14px;
+  line-height: 26px;
+  margin-bottom: 20px;
+}
+#account_register .reg_ok p b {
+  color: #a6e22e;
+  font-weight: 400;
+}
+
 /* 未读消息角标 */
 .badge {
   display: inline-block;
