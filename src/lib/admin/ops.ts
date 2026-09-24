@@ -69,7 +69,7 @@ export async function runOp(
       user: actor.uid,
       action: op,
       target: op.split(".")[0],
-      targetId: toId(params.id) ?? 0,
+      targetId: toId(params.id) ?? toId(params.userId) ?? 0,
       detail: res.message,
       ip,
     });

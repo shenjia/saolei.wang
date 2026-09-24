@@ -24,7 +24,7 @@ export const LEVEL_NAMES: Record<AdminLevel, string> = {
 /** 页面守卫：未登录 → 登录页；权限不足 → 首页 */
 export async function requireAdmin(level: AdminLevel = "manager"): Promise<SessionUser> {
   const session = await getSession();
-  if (!session) redirect("/account/login?redirect=/admin");
+  if (!session) redirect("/account/login"); // 登录页暂不支持回跳参数，登录后从导航进后台
   if (!hasLevel(session.role, level)) redirect("/");
   return session;
 }

@@ -8,7 +8,8 @@
 // · 大数据表（video 30 万行、news 15 万行）只做 GROUP BY 聚合，不逐行拉取。
 
 import { prisma } from "@/lib/db";
-import { VIDEO_STATUS, VIDEO_LEVELS } from "@/lib/config";
+import { getTitleCounts } from "@/lib/queries";
+import { TITLES, VIDEO_STATUS, VIDEO_LEVELS } from "@/lib/config";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -31,10 +32,11 @@ export const TREND_METRICS = [
   { key: "users", label: "新增玩家", color: "#a6e22e" },
   { key: "videos", label: "上传录像", color: "#66d9ef" },
   { key: "reviewed", label: "通过录像", color: "#e6db74" },
+  { key: "banned", label: "屏蔽录像", color: "#f92672" },
   { key: "news", label: "成绩动态", color: "#f79646" },
   { key: "comments", label: "评论", color: "#ae81ff" },
-  { key: "bbs", label: "论坛主题", color: "#f92672" },
-  { key: "clicks", label: "人气点击", color: "#b1b1a4" },
+  { key: "bbs", label: "论坛主题", color: "#b1b1a4" },
+  { key: "clicks", label: "人气点击", color: "#7dd3fc" },
 ] as const;
 
 export type TrendKey = (typeof TREND_METRICS)[number]["key"];
@@ -62,10 +64,11 @@ export interface TrendData {
 export async function getTrend(days = 30): Promise<TrendData> {
   const since = dayStart(days - 1);
   const from = Math.floor((since + 28800) / 86400);
-  const [users, videos, reviewed, news, comments, bbs, clicks] = await Promise.all([
+  const [users, videos, reviewed, banned, news, comments, bbs, clicks] = await Promise.all([
     dailyCounts("user", since),
     dailyCounts("video", since),
     dailyCounts("video", since, `AND status = ${VIDEO_STATUS.REVIEWED}`),
+    dailyCounts("video", since, `AND status = ${VIDEO_STATUS.BANNED}`),
     dailyCounts("news", since),
     dailyCounts("comment", since),
     dailyCounts("bbs_post", since),
@@ -74,11 +77,11 @@ export async function getTrend(days = 30): Promise<TrendData> {
 
   const dates: string[] = [];
   const series: Record<TrendKey, number[]> = {
-    users: [], videos: [], reviewed: [], news: [], comments: [], bbs: [], clicks: [],
+    users: [], videos: [], reviewed: [], banned: [], news: [], comments: [], bbs: [], clicks: [],
   };
-  const totals = { ...series } as unknown as Record<TrendKey, number>;
+  const totals = Object.fromEntries(TREND_METRICS.map((m) => [m.key, 0])) as unknown as Record<TrendKey, number>;
   const maps: Record<TrendKey, Map<number, number>> = {
-    users, videos, reviewed, news, comments, bbs, clicks,
+    users, videos, reviewed, banned, news, comments, bbs, clicks,
   };
 
   for (let i = 0; i < days; i++) {
@@ -115,8 +118,12 @@ export interface Overview {
   donateTotal: number;
   activeUploaders7d: number;
   activeUploaders30d: number;
+  /** 数据取数时刻（Unix 秒）——页面展示用，避免在渲染期调 Date.now()（react-hooks/purity） */
+  now: number;
   /** 待审积压：最老一条待审录像的上传时间（0 = 无积压） */
   oldestPendingTime: number;
+  /** 待审积压天数 */
+  oldestPendingDays: number;
   /** 通过率（全部录像口径，%） */
   passRate: number;
   /** 平均审核耗时（秒，仅统计新站留痕的审核；0 = 无样本） */
@@ -124,6 +131,7 @@ export interface Overview {
 }
 
 export async function getOverview(): Promise<Overview> {
+  const now = Math.floor(Date.now() / 1000);
   const today = dayStart(0);
   const week = dayStart(6);
   const d7 = dayStart(7);
@@ -170,6 +178,7 @@ export async function getOverview(): Promise<Overview> {
   const auditCount = N(audit[0]?.c);
 
   return {
+    now,
     userTotal,
     userToday,
     userWeek,
@@ -190,6 +199,10 @@ export async function getOverview(): Promise<Overview> {
     activeUploaders7d: act7,
     activeUploaders30d: act30,
     oldestPendingTime: N(oldest?.createTime),
+    oldestPendingDays:
+      oldest?.createTime && N(oldest.createTime) > 0
+        ? Math.max(0, Math.floor((now - N(oldest.createTime)) / 86400))
+        : 0,
     passRate: videoTotal ? Math.round((videoReviewed / videoTotal) * 1000) / 10 : 0,
     avgAuditSeconds: auditCount && auditGap != null ? Math.round(Number(auditGap)) : 0,
   };
@@ -336,7 +349,8 @@ export async function getRecordCurve(
        FROM video v JOIN video_info vi ON vi.id = v.id
        WHERE v.level = ? AND v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0
          ${order === "3bvs" ? "AND vi.board_3bv >= 4" : ""}
-     ) t WHERE val ${cmp} run ORDER BY ct`
+     ) t WHERE val ${cmp} run ORDER BY ct`,
+    level
   );
   const raw = rows.map((r) => ({ time: N(r.ct), value: N(r.val) }));
   // 点数过多时等距抽样（保留首尾）
@@ -401,3 +415,94 @@ export async function getGrowth(days = 90): Promise<{ dates: string[]; daily: nu
 }
 
 export { dayIndexToDate, dayIndexToSec };
+
+// ---------- 当前纪录 / 快照健康度 ----------
+
+export interface CurrentRecord {
+  level: "beg" | "int" | "exp";
+  levelName: string;
+  time: number;
+  timeVideo: number;
+  timeUser: number;
+  timeDate: number;
+  b3bvs: number;
+  b3bvsVideo: number;
+  b3bvsUser: number;
+  b3bvsDate: number;
+}
+
+/** 三级当前最好成绩（含持有人与被承认录像），数据分析页顶部用 */
+export async function getCurrentRecords(): Promise<CurrentRecord[]> {
+  const names: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
+  const fields: [string, string, string, string, string, string][] = [
+    ["beg", "beg_time", "beg_time_video", "beg_time_date", "beg_3bvs", "beg_3bvs_video"],
+    ["int", "int_time", "int_time_video", "int_time_date", "int_3bvs", "int_3bvs_video"],
+    ["exp", "exp_time", "exp_time_video", "exp_time_date", "exp_3bvs", "exp_3bvs_video"],
+  ];
+  return Promise.all(
+    fields.map(async ([level, tf, tv, td, bf, bv]) => {
+      const rows = await prisma.$queryRawUnsafe<Record<string, bigint | number | null>[]>(
+        `SELECT id, ${tf} t, ${tv} tv, ${td} td, ${bf} b, ${bv} bvid
+         FROM user_scores WHERE ${tf} > 0 ORDER BY ${tf} ASC LIMIT 1`
+      );
+      const r = rows[0] ?? null;
+      const uid = N(r?.id);
+      const bRows = r
+        ? await prisma.$queryRawUnsafe<Record<string, bigint | number | null>[]>(
+            `SELECT id, ${bf} b, ${bv} bvid, update_time ut FROM user_scores WHERE ${bf} > 0 ORDER BY ${bf} DESC LIMIT 1`
+          )
+        : [];
+      const b = bRows[0] ?? null;
+      return {
+        level: level as "beg" | "int" | "exp",
+        levelName: names[level],
+        time: N(r?.t),
+        timeVideo: N(r?.tv),
+        timeUser: uid,
+        timeDate: N(r?.td),
+        b3bvs: N(b?.b),
+        b3bvsVideo: N(b?.bvid),
+        b3bvsUser: N(b?.id),
+        b3bvsDate: 0,
+      };
+    })
+  );
+}
+
+/** 排行快照健康度（今日是否已生成、累计天数、最新日期） */
+export async function getSnapshotHealth(): Promise<{ todayDone: boolean; days: number; latest: string }> {
+  const today = dayIndexToDate(Math.floor((Date.now() / 1000 + 28800) / 86400));
+  const [todayCount, days, latestRow] = await Promise.all([
+    prisma.rankSnapshot.count({ where: { date: today } }),
+    prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(DISTINCT date) c FROM rank_snapshot`),
+    prisma.rankSnapshot.findFirst({ orderBy: { date: "desc" }, select: { date: true } }),
+  ]);
+  return { todayDone: todayCount > 0, days: N(days[0]?.c), latest: latestRow?.date ?? "—" };
+}
+
+/** 军衔阈值表（distribution 最新一行）+ 各军衔人数，军衔页/仪表盘共用 */
+export async function getTitleThresholds(): Promise<{
+  size: number;
+  createTime: number;
+  rows: { title: string; threshold: number; count: number }[];
+} | null> {
+  const [dist, counts] = await Promise.all([
+    prisma.distribution.findFirst({ orderBy: { id: "desc" } }),
+    getTitleCounts(),
+  ]);
+  if (!dist) return null;
+  const raw = dist as unknown as Record<string, unknown>;
+  const thresholds = String(raw["title"] ?? "")
+    .split(",")
+    .map((s) => parseInt(s, 10));
+  const countMap = new Map(counts.map((c) => [c.title, c.count]));
+  return {
+    size: Number(raw["size"] ?? 0),
+    createTime: Number(raw["createTime"] ?? 0),
+    rows: TITLES.map((t, i) => ({
+      title: t,
+      threshold: thresholds[i] ?? 0,
+      count: countMap.get(t) ?? 0,
+    })),
+  };
+}

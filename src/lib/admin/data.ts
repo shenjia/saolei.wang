@@ -214,12 +214,19 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       )
     : [];
 
+  // 名次 = 成绩更好的人数 + 1（同分并列取小）；SQL 里必须用 snake_case 列名（Prisma 字段是 camelCase）
   const [begRank, intRank, expRank] = await Promise.all(
-    (["begTime", "intTime", "expTime"] as const).map(async (field) => {
-      const v = N(score?.[field]);
+    (
+      [
+        ["beg_time", score?.begTime],
+        ["int_time", score?.intTime],
+        ["exp_time", score?.expTime],
+      ] as [string, number | null | undefined][]
+    ).map(async ([col, raw]) => {
+      const v = N(raw);
       if (!v) return 0;
       const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
-        `SELECT COUNT(*) c FROM user_scores WHERE ${field} > 0 AND ${field} < ?`,
+        `SELECT COUNT(*) c FROM user_scores WHERE ${col} > 0 AND ${col} < ?`,
         v
       );
       return N(rows[0]?.c) + 1;
@@ -290,10 +297,13 @@ export interface AdminVideoRow {
   hash: string;
   createTime: number;
   reviewUser: number | null;
+  reviewer: UserBrief | null;
   reviewTime: number | null;
   clicks: number;
   downloads: number;
   comments: number;
+  /** 是否有解析信息（false = 上传中断/解析失败） */
+  hasInfo: boolean;
 }
 
 const VIDEO_ORDERS: Record<string, string> = {
@@ -386,6 +396,7 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
     prisma.videoStat.findMany({ where: { id: { in: bigIds } } }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
+  const reviewers = await usersByIds([...new Set(videos.map((v) => N(v.reviewUser)))].filter((x) => x > 0));
   const vMap = new Map(videos.map((v) => [N(v.id), v]));
   const iMap = new Map(infos.map((i) => [N(i.id), i]));
   const sMap = new Map(stats.map((s) => [N(s.id), s]));
@@ -410,10 +421,12 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       hash: v.hash,
       createTime: N(v.createTime),
       reviewUser: v.reviewUser == null ? null : N(v.reviewUser),
+      reviewer: reviewers.get(N(v.reviewUser)) ?? null,
       reviewTime: v.reviewTime == null ? null : N(v.reviewTime),
       clicks: st?.clicks ?? 0,
       downloads: st?.downloads ?? 0,
       comments: st?.comments ?? 0,
+      hasInfo: Boolean(info),
     });
   }
   return out;
@@ -721,6 +734,129 @@ export async function getAreaOptions(): Promise<string[]> {
     `SELECT DISTINCT area FROM user WHERE area <> '' ORDER BY area`
   );
   return rows.map((r) => r.area);
+}
+
+// ---------- 首页信息流（仪表盘右侧栏） ----------
+
+export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
+  const users = await prisma.user.findMany({ orderBy: { id: "desc" }, take: limit });
+  const ids = users.map((u) => u.id);
+  const [auths, scores] = await Promise.all([
+    prisma.userAuth.findMany({ where: { id: { in: ids } }, select: { id: true, username: true, role: true } }),
+    prisma.userScores.findMany({ where: { id: { in: ids } } }),
+  ]);
+  const aMap = new Map(auths.map((a) => [N(a.id), a]));
+  const sMap = new Map(scores.map((s) => [N(s.id), s]));
+  const rows: AdminUserRow[] = [];
+  for (const u of users) {
+    const id = N(u.id);
+    const sumTime = N(sMap.get(id)?.sumTime);
+    rows.push({
+      id,
+      chineseName: u.chineseName,
+      englishName: u.englishName,
+      sex: u.sex,
+      username: aMap.get(id)?.username ?? "",
+      area: u.area,
+      status: u.status,
+      role: aMap.get(id)?.role ?? 0,
+      createTime: N(u.createTime),
+      lastLoginTime: N(u.lastLoginTime),
+      title: await assessTitle(sumTime),
+      sumTime,
+      videos: 0,
+    });
+  }
+  return rows;
+}
+
+export async function getLatestVideosBrief(limit = 8): Promise<(AdminVideoRow & { authorName: string })[]> {
+  const ids = await prisma.video.findMany({ orderBy: { id: "desc" }, take: limit, select: { id: true } });
+  const rows = await fillVideos(ids.map((r) => N(r.id)));
+  return rows.map((r) => ({ ...r, authorName: r.author?.chineseName ?? `#${r.user}` }));
+}
+
+// ---------- 站内信广播历史 ----------
+
+export interface BroadcastRow {
+  content: string;
+  fromUser: number;
+  author: UserBrief | null;
+  receivers: number;
+  readCount: number;
+  createTime: number;
+}
+
+/** 广播历史：按「发送人 + 内容 + 时间」聚合成一次广播（逐条写入 message 表，故用聚合还原） */
+export async function getBroadcastHistory(limit = 20): Promise<BroadcastRow[]> {
+  const rows = await prisma.$queryRawUnsafe<
+    { content: string; from_user: bigint; c: bigint; read_c: bigint; t: bigint }[]
+  >(
+    `SELECT content, from_user, COUNT(*) c, SUM(is_read = 1) read_c, MIN(create_time) t
+     FROM message WHERE is_system = 1
+     GROUP BY content, from_user, create_time
+     ORDER BY t DESC LIMIT ${limit}`
+  );
+  const authors = await usersByIds(rows.map((r) => N(r.from_user)));
+  return rows.map((r) => ({
+    content: r.content,
+    fromUser: N(r.from_user),
+    author: authors.get(N(r.from_user)) ?? null,
+    receivers: N(r.c),
+    readCount: N(r.read_c),
+    createTime: N(r.t),
+  }));
+}
+
+/** 站内信总览 */
+export async function getMessageStats(): Promise<{ total: number; unread: number; system: number; today: number }> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const since = BigInt(Math.floor(today.getTime() / 1000));
+  const [total, unread, system, todayCount] = await Promise.all([
+    prisma.message.count(),
+    prisma.message.count({ where: { isRead: false } }),
+    prisma.message.count({ where: { isSystem: true } }),
+    prisma.message.count({ where: { createTime: { gte: since } } }),
+  ]);
+  return { total, unread, system, today: todayCount };
+}
+
+// ---------- 每日一星 ----------
+
+export interface StarRow {
+  date: string;
+  user: number;
+  author: UserBrief | null;
+  createTime: number;
+}
+
+export async function getStarHistory(limit = 14): Promise<StarRow[]> {
+  const rows = await prisma.star.findMany({ orderBy: { date: "desc" }, take: limit });
+  const authors = await usersByIds(rows.map((r) => N(r.user)));
+  return rows.map((r) => ({
+    date: r.date,
+    user: N(r.user),
+    author: authors.get(N(r.user)) ?? null,
+    createTime: N(r.createTime),
+  }));
+}
+
+/** 搜索玩家（供「指定每日一星」表单用）：按姓名 / 账号模糊匹配 */
+export async function searchUsersBrief(q: string, limit = 10): Promise<{ id: number; name: string; username: string }[]> {
+  const kw = q.trim();
+  if (!kw) return [];
+  const like = `%${kw}%`;
+  const rows = await prisma.$queryRawUnsafe<{ id: bigint; chinese_name: string; username: string }[]>(
+    `SELECT u.id, u.chinese_name, COALESCE(a.username, '') username
+     FROM user u LEFT JOIN user_auth a ON a.id = u.id
+     WHERE u.chinese_name LIKE ? OR u.english_name LIKE ? OR a.username LIKE ?
+     ORDER BY u.id DESC LIMIT ${limit}`,
+    like,
+    like,
+    like
+  );
+  return rows.map((r) => ({ id: N(r.id), name: r.chinese_name, username: r.username }));
 }
 
 export { BBS_BOARDS, VIDEO_STATUS, type VideoLevel, type VideoLevel as VLevel };

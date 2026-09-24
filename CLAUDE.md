@@ -43,6 +43,9 @@
 - **不要**把 legacy CSS 经 Tailwind/PostCSS `@import` 引入——Tailwind v4 解析器会对 IE filter hack 报 "Unterminated string"
 - 图片资源在 `public/images/common|form/`（棋盘格、性别、头像等，URL 已从 `../images/` 改为 `/images/`）
 - 新增样式（分页器、筛选标签）在 `src/app/globals.css`
+- 后台样式独立在 `src/app/admin/admin.css`（类名全 `admin_` 前缀；用 `body:has(.admin_shell)`
+  隐藏主站 header/footer 实现全屏壳，未拆路由组）；后台图表零依赖纯 SVG（`components/admin/Charts.tsx`），
+  注意客户端组件不能接服务端传的函数 prop（改传字符串/纯数据）
 
 ## 页面
 
@@ -68,6 +71,7 @@
 | `/account` `/account/profile` `/account/password` | 账号中心：我的资料 / 修改资料 / 修改密码（均需登录） |
 | `/account/login` `/account/bind` `/account/oauth` | 密码登录 / 老用户强制绑定 / 扫码注册（见 2026-09-21 日志） |
 | `/account/forgot` `/account/reset?token` | 邮箱找回密码（token sha256 入库、30min 一次性；SMTP_* 未配时链接打日志） |
+| `/admin` | **管理后台（2026-09-24）**：`/admin` 仪表盘、`/admin/stats` 数据分析、`/admin/users(+/[id])` 玩家管理、`/admin/videos` 录像管理、`/admin/review` 审核管理（批量+下载引导）、`/admin/comments` `/admin/bbs` `/admin/news` `/admin/messages` 内容与广播、`/admin/rank` 快照/军衔/一星、`/admin/logs` 操作日志、`/admin/system` 环境自检。写操作统一走 `POST /api/admin/action`（`{op,...}`，权限映射在 `lib/admin/ops.ts` OP_LEVELS），全部落 `admin_log`。管理员(10)可审核+内容管理；超管(100)才能动账号/删录像/广播 |
 | `/page/titles` `/page/help` | 军衔体系说明 / 新手上路（如何加入排行） |
 | `/page/help/*` | 11 个帮助子页：why/grow/word/video/upload/freeze/star/clone-faq/bbs/email/avatar |
 | `/page/guide` `/page/about` `/page/donate` `/page/history` `/page/download` `/page/world` | 教程索引 / 关于 / 赞助 / 更新历史 / 软件下载（暂链旧站文件）/ 世界 TOP10 |
@@ -81,6 +85,11 @@
 - `review.ts`：审核与成绩管线（Review/VideoScores/UserScores/News 全移植，含 NF 榜；
   文件头记录两处按旧代码意图修正的 bug）
 - `stat.ts`：uniqueAction 点击/下载计数（相邻同 IP 去重）
+- `admin/`：后台领域库——`guard.ts` 权限守卫（requireAdmin / requireAdminApi）、`log.ts` 操作日志、
+  `stats.ts` 趋势/分布/异常检测（按天聚合用 `FLOOR((create_time+28800)/86400)` 固定 +08:00 切天，
+  raw SQL 里必须用 snake_case 列名）、`data.ts` 列表查询（raw SQL 取 id 页 + Prisma 批量补数据）、
+  `ops.ts` 全部写操作（op 白名单 + 参数校验 + 日志）、`cache.ts` 重查询 10 分钟缓存（unstable_cache，
+  防 30 万行大表全扫挤爆连接池——踩过 P1017 断连）
 - 解析器验证方法：旧项目 `code/videos/**` 抽样，按文件 hash 与 DB `video+video_info` 全字段对比
   （本地 videos/ 样本文件名≠内容 md5，是改名测试文件，不能当真值）
 
