@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyPassword, setSession } from "@/lib/auth";
+import { OAUTH_ENABLED } from "@/lib/config";
 
 export async function POST(req: Request) {
   let body: { username?: string; password?: string };
@@ -32,6 +33,9 @@ export async function POST(req: Request) {
     where: { id: auth.id },
     data: { loginTimes: { increment: 1 }, loginTime: BigInt(Math.floor(Date.now() / 1000)) },
   });
+
+  // 第三方登录未开放阶段不强制绑定（2026-09-24 张老师要求）
+  if (!OAUTH_ENABLED) return NextResponse.json({ ok: true, needBind: false });
 
   const bindCount = await prisma.userOauth.count({ where: { userId: auth.id } });
   return NextResponse.json({ ok: true, needBind: bindCount === 0 });

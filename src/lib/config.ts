@@ -59,8 +59,10 @@ export const COMMENT_STATUS = { NORMAL: 0, DELETED: -1 } as const;
 
 // 动态「加载更多」每页条数（移植 NewsConfig::PAGESIZE）
 export const NEWS_PAGESIZE = 20;
-// 用户主页动态初始条数（移植 UserConfig::NEWS_NUMBER）
-export const USER_NEWS_NUMBER = 20;
+// 用户主页动态初始条数（2026-09-23 张老师要求改为 15，配合「加载更多」）
+export const USER_NEWS_NUMBER = 15;
+// 用户主页扫雷历程初始条数（与动态一致）
+export const USER_HISTORY_NUMBER = 15;
 
 // ---------- 军衔（移植 TitleConfig） ----------
 
@@ -191,6 +193,11 @@ export const USER_ROLE = {
 export function isManager(role: number): boolean {
   return role === USER_ROLE.MANAGER || role === USER_ROLE.ADMINISTRATOR;
 }
+
+// ---------- 第三方登录（微信/QQ） ----------
+// 本地测试阶段整体隐藏（2026-09-24 张老师）：登录入口只留账号密码，不强制绑定。
+// 两平台申请落地后改回 true，恢复扫码登录 tab 与老用户强制绑定流程。
+export const OAUTH_ENABLED = false;
 
 // 上传录像各级别最小 3BV（移植 VideoConfig::$level_min_3bv）
 export const LEVEL_MIN_3BV: Record<VideoLevel, number> = { beg: 2, int: 30, exp: 100 };

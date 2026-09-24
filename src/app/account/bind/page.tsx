@@ -3,6 +3,7 @@
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { OAUTH_ENABLED } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import BindForm from "./BindForm";
 
@@ -17,6 +18,7 @@ export default async function BindPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/account/login");
+  if (!OAUTH_ENABLED) redirect("/"); // 第三方登录未开放阶段无绑定流程，深链直接回首页
 
   const bindCount = await prisma.userOauth.count({ where: { userId: BigInt(session.uid) } });
   if (bindCount > 0) redirect("/");

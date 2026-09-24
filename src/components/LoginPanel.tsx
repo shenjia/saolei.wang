@@ -6,14 +6,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { OAUTH_ENABLED } from "@/lib/config";
 
 type Tab = "wechat" | "qq" | "password";
 
-const TABS: [Tab, string][] = [
-  ["wechat", "微信扫码"],
-  ["qq", "QQ 扫码"],
-  ["password", "账号密码"],
-];
+// OAUTH_ENABLED=false 时只剩账号密码（本地测试阶段，2026-09-24 张老师要求隐藏微信/QQ）
+const TABS: [Tab, string][] = OAUTH_ENABLED
+  ? [
+      ["wechat", "微信扫码"],
+      ["qq", "QQ 扫码"],
+      ["password", "账号密码"],
+    ]
+  : [["password", "账号密码"]];
 
 // 回调错误码 → 用户可读文案
 const ERROR_TEXT: Record<string, string> = {
@@ -32,7 +36,7 @@ export default function LoginPanel({
   /** 密码登录成功回调：浮窗用来关窗 + refresh；不传则按独立页行为跳转 */
   onSuccess?: (needBind: boolean) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("wechat");
+  const [tab, setTab] = useState<Tab>(OAUTH_ENABLED ? "wechat" : "password");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(initialError ? (ERROR_TEXT[initialError] ?? "登录失败，请重试") : "");
@@ -69,19 +73,21 @@ export default function LoginPanel({
   return (
     <>
       <h1>登录扫雷网</h1>
-      <div className="tabs auth_tabs">
-        {TABS.map(([key, name]) =>
-          tab === key ? (
-            <em key={key} className="active">
-              {name}
-            </em>
-          ) : (
-            <a key={key} href="#" onClick={(e) => (e.preventDefault(), setTab(key), setError(""))}>
-              {name}
-            </a>
-          )
-        )}
-      </div>
+      {OAUTH_ENABLED && (
+        <div className="tabs auth_tabs">
+          {TABS.map(([key, name]) =>
+            tab === key ? (
+              <em key={key} className="active">
+                {name}
+              </em>
+            ) : (
+              <a key={key} href="#" onClick={(e) => (e.preventDefault(), setTab(key), setError(""))}>
+                {name}
+              </a>
+            )
+          )}
+        </div>
+      )}
 
       {tab === "wechat" && (
         <div className="auth_qr">
@@ -134,7 +140,8 @@ export default function LoginPanel({
             {loading ? "登录中…" : "登录"}
           </button>
           <p className="hint">
-            老用户首次登录后需绑定微信或 QQ　<a href="/account/forgot">忘记密码？</a>
+            {OAUTH_ENABLED ? "老用户首次登录后需绑定微信或 QQ　" : ""}
+            <a href="/account/forgot">忘记密码？</a>
           </p>
         </form>
       )}

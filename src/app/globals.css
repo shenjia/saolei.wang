@@ -458,8 +458,8 @@ body .tabs > a:hover::after {
 }
 
 /* ---------- BBS 论坛（移植 2008 版） ---------- */
-/* 页头（2026-09-24 张老师二轮）：分类 tabs 贴 title 左侧；
-   排序+只看精华两组推到行右侧；管理条例隐藏，发布主题按钮随右侧组 */
+/* 页头（2026-09-24 二轮）：分类 tabs 贴 title 左侧；排序+只看精华两组推到行右侧；
+   2026-09-24 五轮：页头随排行/录像页编排移入主体卡片内 */
 #page .page_head .bbs_head_nav {
   display: flex;
   flex-wrap: wrap;
@@ -478,6 +478,14 @@ body .tabs > a:hover::after {
 #page .page_head .bbs_head_nav .bbs_post_btn {
   flex: none;
   margin: 0 0 0 4px;
+}
+/* 五轮：卡片内页头——清通用页头外距（与 ranking_old/video_old 同法），
+   卡片自身 margin:16px 8px 承接页顶间距 */
+body #page.bbs_old .page_head {
+  margin: 0 0 10px;
+}
+#page.bbs_old > .box {
+  margin: 16px 8px 0;
 }
 .bbs_list {
   table-layout: fixed;
@@ -1968,6 +1976,10 @@ body #page.two_columns li.main {
   }
   body #page.ranking_old.main .page_head {
     margin-bottom: 12px; /* 卡片内：与下方表格留出间距 */
+  }
+  /* BBS 五轮：卡片内页头，同样给底部间距（上两行 margin-bottom:0 被 page_head 通用规则清零） */
+  body #page.bbs_old .page_head {
+    margin-bottom: 12px;
   }
   /* 含表格的盒子一律盒内横滑（BBS 列表固定列宽 470+、排行宽表等），页面本身不横滚
      ranking_table 不带 .table 类，须并列（2026-09-24 修：此前排行宽表在手机上撑破页面） */

@@ -44,43 +44,44 @@ export default async function BbsPage({
   const feedKey = `${board ?? "all"}-${nice ? "nice" : order}`;
 
   return (
-    <div id="page" className="main">
-      {/* 页头（2026-09-24 张老师二轮）：分类 tabs 贴 title 左侧；
-          右侧=排序一组；管理条例隐藏 */}
-      <div className="page_head">
-        <h1 className="page_title">论坛</h1>
-        <div className="bbs_head_nav">
-          <Tabs
-            base="/bbs"
-            params={query}
-            name="board"
-            current={board === undefined ? "all" : String(board)}
-            options={[
-              ["all", "全部"],
-              ...BBS_BOARDS.map((b) => [String(b.id), b.name] as [string, string]),
-            ]}
-          />
-          <div className="side_filters">
+    <div id="page" className="main bbs_old">
+      {/* 2026-09-24 五轮（张老师要求）：页头（title+分类 tabs+排序组+发布按钮）
+          整体移入主体卡片内，与排行/录像页同编排——h1 左、分类 tabs 紧随、
+          排序组+发布主题贴行尾 */}
+      <div className="box">
+        <div className="page_head">
+          <h1 className="page_title">论坛</h1>
+          <div className="bbs_head_nav">
             <Tabs
               base="/bbs"
               params={query}
-              name="order"
-              current={nice ? "nice" : order}
+              name="board"
+              current={board === undefined ? "all" : String(board)}
               options={[
-                ["reply", "更新时间"],
-                ["post", "发布时间"],
-                ["nice", "只看精华"],
+                ["all", "全部"],
+                ...BBS_BOARDS.map((b) => [String(b.id), b.name] as [string, string]),
               ]}
             />
+            <div className="side_filters">
+              <Tabs
+                base="/bbs"
+                params={query}
+                name="order"
+                current={nice ? "nice" : order}
+                options={[
+                  ["reply", "更新时间"],
+                  ["post", "发布时间"],
+                  ["nice", "只看精华"],
+                ]}
+              />
+            </div>
+            {session && (
+              <Link className="button active bbs_post_btn" href="/bbs/post">
+                发布主题
+              </Link>
+            )}
           </div>
-          {session && (
-            <Link className="button active bbs_post_btn" href="/bbs/post">
-              发布主题
-            </Link>
-          )}
         </div>
-      </div>
-      <div className="box">
         <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
           <thead>
             <tr>
