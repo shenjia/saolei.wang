@@ -15,9 +15,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RankingRow } from "@/lib/queries";
 import type { RankingBy } from "@/lib/config";
-import { totalLabel } from "@/lib/format";
 import { RankingHead, RankingRowLine, RankingEmpty, type TitledRow } from "./RankingRows";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 import { toast } from "./Toast";
 
 export interface RankingFeedProps {
@@ -234,7 +234,7 @@ export function RankingFeed(props: RankingFeedProps) {
             {loading ? "加载中…" : "加载更多"}
           </button>
         )}
-        <span className="total_count">{totalLabel(total, "位")}</span>
+        <TotalCount total={total} unit="位" />
         {myUid && inRanking && (
           <button
             type="button"

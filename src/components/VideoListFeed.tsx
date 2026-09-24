@@ -7,9 +7,9 @@
 
 import { useState } from "react";
 import type { VideoListItem } from "@/lib/queries";
-import { totalLabel } from "@/lib/format";
 import { VideoHead, VideoRowLine } from "./VideoRows";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 
 export function VideoListFeed({
   initial,
@@ -82,7 +82,7 @@ export function VideoListFeed({
         ) : (
           items.length > 0 && <span className="all_loaded">已加载全部</span>
         )}
-        <span className="total_count">{totalLabel(total, "个")}</span>
+        <TotalCount total={total} unit="个" />
       </div>
     </>
   );

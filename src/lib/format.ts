@@ -103,14 +103,3 @@ export const TIME_YEAR = 365 * SECONDS_PER_DAY;
 export function isRecent(time: number): boolean {
   return Math.abs(Math.floor(Date.now() / 1000) - time) < TIME_YEAR;
 }
-
-/**
- * 「加载更多」区域文案（2026-09-24 张老师二轮改版）：
- * 按钮只写「加载更多」（剩余数量放左下角总数行，不进按钮）；
- * 左下角显示当前筛选下的条目总数，单位词由调用方传入（条/位/条评论…）。
- * @param total   总条数
- * @param unit    计数单位（默认「条」）
- */
-export function totalLabel(total: number, unit = "条"): string {
-  return `共 ${Math.max(0, total).toLocaleString("zh-CN")} ${unit}`;
-}

@@ -11,9 +11,10 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import type { TitleMemberRow } from "@/lib/queries";
-import { scoreTime, formatDate, totalLabel } from "@/lib/format";
+import { scoreTime, formatDate } from "@/lib/format";
 import { TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 
 const COLS: { by: string; label: string; cls: string }[] = [
   { by: "beg_time", label: "初级", cls: "c_beg" },
@@ -195,7 +196,7 @@ export function TitleMemberList({
             {loading ? "加载中…" : "加载更多"}
           </button>
         )}
-        <span className="total_count">{totalLabel(total, "人")}</span>
+        <TotalCount total={total} unit="人" />
         {myId != null && myOffset != null && myOffset >= 0 && !located && (
           <button type="button" className="button small" disabled={locating} onClick={locateMe}>
             {locating ? "定位中…" : "我在哪里?"}

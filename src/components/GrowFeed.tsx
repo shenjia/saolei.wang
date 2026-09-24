@@ -6,8 +6,8 @@
 
 import { useState } from "react";
 import type { GrowRow } from "@/lib/ranksnap";
-import { totalLabel } from "@/lib/format";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 import { RANKING_COLS, RankingRowLine, type TitledRow } from "./RankingRows";
 
 export function GrowFeed({
@@ -90,7 +90,7 @@ export function GrowFeed({
             {loading ? "加载中…" : "加载更多"}
           </button>
         )}
-        <span className="total_count">{totalLabel(total, "位")}</span>
+        <TotalCount total={total} unit="位" />
         {hint && <span className="loader_hint">{hint}</span>}
       </div>
     </>

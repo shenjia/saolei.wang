@@ -6,10 +6,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMENT_CONTENT_LIMIT, COMMENT_PAGESIZE } from "@/lib/config";
-import { timeOpposite, totalLabel } from "@/lib/format";
+import { timeOpposite } from "@/lib/format";
 import type { CommentItem } from "@/lib/queries";
 import { AvatarCell } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 
 /** 单条评论（移植 comment/_cell 的应有结构） */
 export function CommentCell({ comment }: { comment: CommentItem }) {
@@ -86,7 +87,7 @@ export function CommentList({
         ) : (
           items.length > 0 && <span className="all_loaded">已加载全部</span>
         )}
-        <span className="total_count">{totalLabel(total, "条评论")}</span>
+        <TotalCount total={total} unit="条评论" />
       </div>
     </div>
   );

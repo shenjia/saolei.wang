@@ -4,9 +4,9 @@
 
 import { useState } from "react";
 import { USER_HISTORY_NUMBER } from "@/lib/config";
-import { totalLabel } from "@/lib/format";
 import type { HistoryItem } from "@/lib/history";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 
 export function HistoryBox({
   userId,
@@ -120,7 +120,7 @@ export function HistoryBox({
           >
             加载更多
           </button>
-          <span className="total_count">{totalLabel(items.length)}</span>
+          <TotalCount total={items.length} unit="条" />
         </div>
       )}
       {editable && (

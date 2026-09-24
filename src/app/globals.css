@@ -524,22 +524,22 @@ body .tabs > a:hover::after {
 }
 
 /* ---------- 新增：加载更多按钮 ----------
-   2026-09-24 三轮（张老师）：左右分布互换——左下角「加载更多」按钮，右下角条目总数 */
+   2026-09-24 四轮（张老师）：整体居中——「加载更多」按钮 + 右侧灰字总数（数字微亮） */
 .more_loader {
   clear: both;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 10px;
   padding: 10px 0 4px;
 }
 .more_loader .total_count {
   font-size: 13px;
-  color: #939387;
+  color: #75715e;
 }
-/* 无总数的场景（纯按钮）保持居中 */
-.more_loader:has(> :only-child) {
-  justify-content: center;
+.more_loader .total_count em {
+  color: #b1b1a4;
+  font-style: normal;
 }
 .more_loader .button {
   display: inline-block;
@@ -559,7 +559,7 @@ body .tabs > a:hover::after {
   opacity: 0.6;
   cursor: default;
 }
-/* 已加载全部时按钮换成灰字提示（左右布局保留，文字占左位） */
+/* 已加载全部：灰字提示居中（不再占按钮位） */
 .more_loader .all_loaded {
   font-size: 13px;
   color: #75715e;
@@ -1278,14 +1278,11 @@ body .title_members_box h1 .count em {
   font-style: normal;
   font-weight: bold;
 }
-/* 底部操作行：左=加载更多 + 我在哪里 右=总数（2026-09-24 三轮互换） */
+/* 底部操作行：加载更多 + 我在哪里 + 总数 同行居中（2026-09-24 四轮） */
 body .title_members_actions {
   display: flex;
   gap: 10px;
-  justify-content: flex-start;
-}
-body .title_members_actions .total_count {
-  margin-left: auto;
+  justify-content: center;
 }
 body .title_members td.name a {
   color: #f8f8f2;
@@ -2244,9 +2241,8 @@ body #page.two_columns li.main {
 /* 首页「新闻 / 录像」标题行：筛选 tabs 紧跟 h1 右侧（2026-09-24 张老师二轮：不居右、挨着标题）。
    h1 清掉 legacy 19.5px 底距（否则 flex-end 会让 tabs 底线下坠），
    行距由 .news_head 整体接管，保持原 19.5px 节奏；窄屏 wrap 换行。
-   三轮：标题字号收到 legacy h2 的 20px（与右栏「十大元帅/入伍新兵」同尺寸，张老师要求），
-   但行高仍留 39px —— 与同排 tabs 等高，底线对齐不位移、整行高度不变。
-   .gray 变体＝右栏 h2 同款灰 #b1b1a4（首页「录像」为次级版块，标题走灰色）。 */
+   四轮定稿：字号恢复 legacy h1 原样 26px/39px（20px 试过被否），
+   仅「录像」标题走 .gray 灰色次级样式（＝右栏 h2 同款灰 #b1b1a4），「新闻」仍为 legacy 黄 #fdc61a。 */
 .news_head {
   display: flex;
   align-items: flex-end;
@@ -2256,8 +2252,6 @@ body #page.two_columns li.main {
 }
 .news_head h1 {
   margin: 0;
-  font-size: 20px;
-  line-height: 39px;
 }
 .news_head h1.gray {
   color: #b1b1a4;
@@ -2384,13 +2378,7 @@ body #page.ranking_old .page_head {
   color: #75715e;
 }
 
-/* 底部加载条：左=加载更多/我在哪里/提示文字 右=总数（2026-09-24 三轮互换） */
-.more_loader.ranking_loader {
-  justify-content: flex-start;
-}
-.more_loader.ranking_loader .total_count {
-  margin-left: auto;
-}
+/* 底部加载条：加载更多 / 我在哪里 / 提示文字 + 总数 同行居中排布（2026-09-24 四轮） */
 .more_loader.ranking_loader .button.small {
   padding: 4px 16px;
 }

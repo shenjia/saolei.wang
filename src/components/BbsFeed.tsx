@@ -6,10 +6,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BBS_BOARD_NAMES } from "@/lib/bbs";
-import { timeOpposite, TIME_NEVER, totalLabel } from "@/lib/format";
+import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 
 export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean }) {
   return (
@@ -105,7 +106,7 @@ export function BbsFeed({
               >
                 {loading ? "加载中…" : "加载更多"}
               </button>
-              <span className="total_count">{totalLabel(total, "帖")}</span>
+              <TotalCount total={total} unit="帖" />
             </div>
           </td>
         </tr>

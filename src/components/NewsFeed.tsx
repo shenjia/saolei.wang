@@ -6,9 +6,9 @@
 
 import { useState, type ReactNode } from "react";
 import type { NewsItem } from "@/lib/queries";
-import { totalLabel } from "@/lib/format";
 import { NewsCellView } from "./NewsCellView";
 import { noFocusJump } from "./useKeepScroll";
+import { TotalCount } from "./TotalCount";
 
 export interface NewsFeedItem {
   news: NewsItem;
@@ -145,7 +145,7 @@ export function NewsFeed({
         ) : (
           items.length > 0 && <span className="all_loaded">已加载全部</span>
         )}
-        <span className="total_count">{totalLabel(total)}</span>
+        <TotalCount total={total} unit="条" />
       </div>
     </>
   );
