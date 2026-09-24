@@ -2251,14 +2251,27 @@ body #video_list .score_3bvs a:hover em {
 .video_table td.name .title em {
   font-size: 14px;
 }
-/* 级别列（2026-09-24 四轮：字号降一档，与表头同 14px） */
-.video_table td.level {
+/* 级别列（2026-09-24 四轮：字号降一档）：必须 #page 前缀提权——legacy-2013.css 有
+   `#page .level{color:#939387;font-size:20px;line-height:24px}`（1,1,0）且后加载，
+   会压过 `.video_table td.level`（0,2,1），故级别仍显示 20px 灰字（本轮实测踩坑） */
+#page .video_table td.level {
   font-size: 14px;
+  font-weight: bold;
 }
-/* 级别/成绩同色（级别色施于 td，成绩链接 inherit 继承，2026-09-24 张老师要求） */
-.video_table .lv_beg { color: #999994; font-weight: bold; }
-.video_table .lv_int { color: #bbbbaf; font-weight: bold; }
-.video_table .lv_exp { color: #ddddcf; font-weight: bold; }
+/* 级别与成绩同色（2026-09-24 张老师要求）：级别列需 #page 提权（同上），
+   成绩列无 legacy 冲突、颜色由 a{color:inherit} 继承 td */
+#page .video_table td.level.lv_beg,
+.video_table td.score.lv_beg {
+  color: #999994;
+}
+#page .video_table td.level.lv_int,
+.video_table td.score.lv_int {
+  color: #bbbbaf;
+}
+#page .video_table td.level.lv_exp,
+.video_table td.score.lv_exp {
+  color: #ddddcf;
+}
 .video_table td.score a {
   color: inherit;
   font-weight: bold;
