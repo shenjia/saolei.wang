@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AvatarCropper, useAvatarPick, type CropResult } from "./AvatarCropper";
+import { toast } from "./Toast";
 
 interface Props {
   /** 当前生效的头像 URL */
@@ -36,6 +37,7 @@ export function SelfAvatar({ src, alt, pending }: Props) {
   function onDone(r: CropResult) {
     setPickedUrl(null);
     setNote(r.auto ? { kind: "ok", text: "头像已更新" } : { kind: "pending", text: "审核中" });
+    toast(r.auto ? "头像已更新" : "已提交，等待管理员审核", "success");
     router.refresh();
   }
 

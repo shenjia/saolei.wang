@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/components/Toast";
 
 export default function OauthForm({ providerName, nickname }: { providerName: string; nickname: string }) {
   const [mode, setMode] = useState<"claim" | "register">("claim");
@@ -27,6 +28,7 @@ export default function OauthForm({ providerName, nickname }: { providerName: st
         setError(data.error ?? "操作失败");
         return;
       }
+      toast(url.includes("claim") ? "绑定成功" : "注册成功", "success");
       router.push("/");
       router.refresh();
     } finally {

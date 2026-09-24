@@ -3,6 +3,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "./Toast";
 
 const MAX_SIZE = 500 * 1024; // 与服务端一致（旧版 plupload max_file_size: 500kb）
 
@@ -107,17 +108,26 @@ export function UploadForm() {
     const targets = items.filter((i) => i.status === "pending" || i.status === "error");
     setBusy(true);
     let done = 0;
+    let okCount = 0;
     setSeq([done, targets.length]);
     for (const item of targets) {
       update(item.key, { status: "uploading", progress: 0, message: "" });
       const res = await uploadOne(item.file, (pct) => update(item.key, { progress: pct }));
-      if (res.ok) update(item.key, { status: "success", progress: 100, message: "上传成功，等待审核" });
-      else update(item.key, { status: "error", message: res.error ?? "上传失败" });
+      if (res.ok) {
+        update(item.key, { status: "success", progress: 100, message: "上传成功，等待审核" });
+        okCount++;
+      } else update(item.key, { status: "error", message: res.error ?? "上传失败" });
       done++;
       setSeq([done, targets.length]);
     }
     setBusy(false);
     setSeq(null);
+    // 汇总气泡：全成功绿、有失败红（行内逐条状态保留）
+    if (okCount === targets.length) {
+      toast(`成功上传 ${okCount} 个录像，等待审核`, "success");
+    } else {
+      toast(`${okCount} 个上传成功，${targets.length - okCount} 个失败`, "error");
+    }
   }
 
   const plusColor = dragOver ? "#a6e22e" : "#75715e";

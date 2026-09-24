@@ -10,6 +10,7 @@ import { timeOpposite } from "@/lib/format";
 import type { CommentItem } from "@/lib/queries";
 import { AvatarCell } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
+import { toast } from "./Toast";
 import { TotalCount } from "./TotalCount";
 
 /** 单条评论（移植 comment/_cell 的应有结构） */
@@ -116,6 +117,7 @@ export function CommentForm({ videoId }: { videoId: number }) {
         return;
       }
       setContent("");
+      toast("评论发表成功", "success");
       router.refresh();
     } finally {
       setSubmitting(false);

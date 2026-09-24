@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { OAUTH_ENABLED } from "@/lib/config";
+import { toast } from "./Toast";
 
 type Tab = "wechat" | "qq" | "password";
 
@@ -60,6 +61,8 @@ export default function LoginPanel({
         setError(data.error ?? "登录失败");
         return;
       }
+      // 登录成功：居中绿色气泡（浮窗/独立页/绑定跳转三种去向都提示）
+      toast("登录成功", "success");
       if (onSuccess) {
         onSuccess(data.needBind);
         return;

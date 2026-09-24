@@ -2,6 +2,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "./Toast";
 
 export function SendMessageForm({ to, toName }: { to?: number; toName?: string }) {
   const [content, setContent] = useState("");
@@ -25,6 +27,7 @@ export function SendMessageForm({ to, toName }: { to?: number; toName?: string }
       return;
     }
     setOk("已发送");
+    toast("站内信已发送", "success");
     setContent("");
   }
 
@@ -54,14 +57,22 @@ export function SendMessageForm({ to, toName }: { to?: number; toName?: string }
 
 export function ClearButton() {
   const [done, setDone] = useState(false);
+  const router = useRouter();
   async function onClear() {
     if (!confirm("确定清空收件箱吗？此操作不可恢复。")) return;
-    await fetch("/api/message", {
+    const res = await fetch("/api/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "clear" }),
     });
-    location.reload();
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast(data.error ?? "清空失败", "error");
+      return;
+    }
+    setDone(true); // 按钮随 refresh 后隐藏
+    toast("收件箱已清空", "success");
+    router.refresh(); // 整页 location.reload 会丢 toast，改用客户端 refresh
   }
   if (done) return null;
   return (
@@ -87,7 +98,10 @@ export function BroadcastForm() {
     setBusy(false);
     const data = await res.json().catch(() => ({}));
     setMsg(res.ok ? `已广播给 ${data.count} 位用户` : data.error ?? "广播失败");
-    if (res.ok) setContent("");
+    if (res.ok) {
+      setContent("");
+      toast(`已广播给 ${data.count} 位用户`, "success");
+    }
   }
 
   return (

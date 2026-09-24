@@ -47,7 +47,7 @@ export function useOp() {
       setBusy(true);
       const res = await postOp(op, params);
       setBusy(false);
-      toast(res.ok ? res.message ?? "操作成功" : res.error ?? "操作失败");
+      toast(res.ok ? res.message ?? "操作成功" : res.error ?? "操作失败", res.ok ? "success" : "error");
       if (res.ok) startTransition(() => router.refresh());
       return res.ok;
     },

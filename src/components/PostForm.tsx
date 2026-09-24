@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "./Toast";
 
 export function PostForm({
   postId,
@@ -42,6 +43,7 @@ export function PostForm({
       return;
     }
     const data = await res.json();
+    toast(postId ? "帖子已更新" : "发帖成功", "success");
     router.push(`/bbs/${postId ?? data.id}`);
   }
 

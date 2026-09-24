@@ -6,6 +6,7 @@ import { useState } from "react";
 import { USER_HISTORY_NUMBER } from "@/lib/config";
 import type { HistoryItem } from "@/lib/history";
 import { noFocusJump } from "./useKeepScroll";
+import { toast } from "./Toast";
 import { TotalCount } from "./TotalCount";
 
 export function HistoryBox({
@@ -49,18 +50,21 @@ export function HistoryBox({
     setItems((list) => [item, ...list].sort((a, b) => (a.month < b.month ? 1 : -1)));
     setMonth("");
     setContent("");
+    toast("历程已添加", "success");
   }
 
   async function onUpdate(id: number) {
     if (!(await call({ action: "update", id, content: editingContent }))) return;
     setItems((list) => list.map((it) => (it.id === id ? { ...it, content: editingContent.trim() } : it)));
     setEditingId(null);
+    toast("历程已更新", "success");
   }
 
   async function onDelete(id: number) {
     if (!confirm("确定删除这条历程吗？")) return;
     if (!(await call({ action: "delete", id }))) return;
     setItems((list) => list.filter((it) => it.id !== id));
+    toast("历程已删除", "success");
   }
 
   return (

@@ -41,7 +41,7 @@ export function AdminReviewList({ initial, status }: { initial: AdminVideoRow[];
     setBusy(true);
     const res = await postOp("video.batchReview", { ids, status: nextStatus });
     setBusy(false);
-    toast(res.ok ? res.message ?? "批量完成" : res.error ?? "批量失败");
+    toast(res.ok ? res.message ?? "批量完成" : res.error ?? "批量失败", res.ok ? "success" : "error");
     if (res.ok) {
       drop(ids);
       setPicked(new Set());

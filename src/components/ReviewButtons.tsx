@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { VIDEO_STATUS } from "@/lib/config";
+import { toast } from "./Toast";
 
 export function ReviewButtons({
   videoId,
@@ -18,7 +19,6 @@ export function ReviewButtons({
   onDone?: (newStatus: number) => void;
 }) {
   const router = useRouter();
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function review(target: number) {
@@ -27,7 +27,6 @@ export function ReviewButtons({
     if (needConfirm && !window.confirm(target === VIDEO_STATUS.BANNED ? "确定屏蔽该录像？" : "确定恢复该录像？")) {
       return;
     }
-    setError("");
     setBusy(true);
     try {
       const res = await fetch("/api/video/review", {
@@ -37,9 +36,10 @@ export function ReviewButtons({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "审核失败");
+        toast(data.error ?? "审核失败", "error");
         return;
       }
+      toast(target === VIDEO_STATUS.BANNED ? "录像已屏蔽" : "录像已通过", "success");
       onDone?.(target);
       router.refresh();
     } finally {
@@ -59,7 +59,6 @@ export function ReviewButtons({
           屏蔽
         </button>
       )}
-      {error && <span className="error"> {error}</span>}
     </span>
   );
 }

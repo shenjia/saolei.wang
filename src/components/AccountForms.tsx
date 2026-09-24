@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AvatarUploader } from "./AvatarUploader";
+import { toast } from "./Toast";
 
 // 字段长度限制（移植 UserConfig::INFO_*_LIMIT）
 const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, selfIntro: 50, interest: 50 } as const;
@@ -54,6 +55,7 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
         return;
       }
       setMessage({ ok: true, text: "保存成功" });
+      toast("资料已保存", "success");
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -184,6 +186,7 @@ export function PasswordForm() {
         return;
       }
       setMessage({ ok: true, text: "密码修改成功" });
+      toast("密码修改成功", "success");
       setForm({ password: "", newPassword: "", newRepeat: "" });
       router.refresh();
     } finally {

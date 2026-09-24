@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "./Toast";
 
 async function callApi(body: Record<string, unknown>): Promise<string | null> {
   const res = await fetch("/api/bbs", {
@@ -35,6 +36,7 @@ export function ReplyForm({ postId, locked }: { postId: number; locked: boolean 
       return;
     }
     setContent("");
+    toast("回复发表成功", "success");
     router.refresh();
   }
 
@@ -69,15 +71,32 @@ export function PostOps({
   flags: { isTop: boolean; isNice: boolean; isLocked: boolean };
 }) {
   const router = useRouter();
-  const [error, setError] = useState("");
 
   async function op(body: Record<string, unknown>, confirmText?: string) {
     if (confirmText && !confirm(confirmText)) return;
     const err = await callApi(body);
     if (err) {
-      setError(err);
+      toast(err, "error");
       return;
     }
+    // 按操作给出对应的成功气泡（2026-09-24 张老师要求全站复用 toast）
+    const label =
+      body.action === "delete"
+        ? "主题已删除"
+        : body.isTop !== undefined
+          ? body.isTop
+            ? "已置顶"
+            : "已取消置顶"
+          : body.isNice !== undefined
+            ? body.isNice
+              ? "已加精"
+              : "已取消精华"
+            : body.isLocked !== undefined
+              ? body.isLocked
+                ? "已锁定"
+                : "已解锁"
+              : "操作成功";
+    toast(label, "success");
     if (body.action === "delete") router.push("/bbs");
     else router.refresh();
   }
@@ -108,7 +127,6 @@ export function PostOps({
           </a>
         </>
       )}
-      {error && <span className="error"> {error}</span>}
     </span>
   );
 }
@@ -121,7 +139,12 @@ export function ReplyDelete({ replyId }: { replyId: number }) {
       onClick={async (e) => {
         e.preventDefault();
         if (!confirm("确定删除该回复吗？")) return;
-        await callApi({ action: "delete_reply", id: replyId });
+        const err = await callApi({ action: "delete_reply", id: replyId });
+        if (err) {
+          toast(err, "error");
+          return;
+        }
+        toast("回复已删除", "success");
         router.refresh();
       }}
     >
