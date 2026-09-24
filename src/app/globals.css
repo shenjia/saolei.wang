@@ -513,7 +513,16 @@ body #page.bbs_old .page_head {
   width: auto;
 }
 .bbs_list th.author {
-  width: 150px;
+  width: 190px;
+}
+/* 作者列不裁剪：军衔徽章+称号必须完整显示（2026-09-24 张老师：军衔显示不全）；
+   去掉 overflow/ellipsis 省略裁剪，内容超宽自然折行不截断 */
+.table.bbs_list td.user {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 24px;
 }
 .bbs_list th.num {
   width: 110px;
