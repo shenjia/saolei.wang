@@ -86,7 +86,7 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
         {news.type === NEWS_TYPE.ARTICLE && news.author && (
           <>
             {authorCells}
-            发表了论坛文章
+            发表了
             <Link href={`/bbs/${news.reference}`} target="_blank" className="score">
               《{d.t ?? "未命名"}》
             </Link>
