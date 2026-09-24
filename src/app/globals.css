@@ -2336,10 +2336,15 @@ body #page.video_old .page_head {
 }
 
 /* ---------- 日期新鲜度配色：一年内偏亮、一年以上偏暗（2026-09-24 张老师要求） ----------
-   首页「十大元帅 / 入伍新兵」与「雷界快讯」共用同一套 td.time 样式，保持口径一致 */
-.time--recent {
+   首页「十大元帅 / 入伍新兵」与「雷界快讯」共用同一套 td.time 样式，保持口径一致
+   注：legacy-2013.css 后加载，且雷界快讯有 #news .table td{color:#636359}（1,1,1）
+   带 ID 的规则，故这里必须用 #news 前缀（1,2,1）才能压过；侧栏用 .table 前缀（0,2,1）
+   压过 .table td（0,1,1）即可 */
+.table td.time--recent,
+#news .table td.time--recent {
   color: #cfcfc4;
 }
-.time--old {
+.table td.time--old,
+#news .table td.time--old {
   color: #6c6c61;
 }
