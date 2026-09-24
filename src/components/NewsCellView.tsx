@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, type Level, type Order } from "@/lib/config";
-import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { score3bvs, scoreTime, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
 
@@ -29,7 +29,7 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
             <TitleBadge title={title} link />
             {(d.or ?? 0) > 0 ? "刷新了" : "创造了"}
             <span className="record person">
-              个人{LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}
+              {LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}
               {ORDER_NAMES[(d.od ?? "time") as Order] ?? d.od}
             </span>
             {(d.or ?? 0) > 0 ? (
@@ -51,7 +51,9 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>
-      <td>{timeOpposite(news.createTime, 86400, "Y-n-j")}</td>
+      <td className={"time " + (isRecent(news.createTime) ? "time--recent" : "time--old")}>
+        {timeOpposite(news.createTime, TIME_YEAR, "Y-n-j")}
+      </td>
     </tr>
   );
 }

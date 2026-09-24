@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { getHomeNews, getNewbies, getTopUsers } from "@/lib/queries";
 import { HOME_NEWS_NUMBER, NEWS_PAGESIZE } from "@/lib/config";
-import { timeOpposite, TIME_NEVER } from "@/lib/format";
+import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { DailyStar } from "@/components/DailyStar";
@@ -70,7 +70,9 @@ export default async function HomePage() {
                     <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
                     <TitleBadge title={u.title} link />
                   </td>
-                  <td className="time">{timeOpposite(u.titleDate, TIME_NEVER)}</td>
+                  <td className={"time " + (isRecent(u.titleDate) ? "time--recent" : "time--old")}>
+                    {timeOpposite(u.titleDate, TIME_NEVER)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -94,7 +96,9 @@ export default async function HomePage() {
                     )}
                     <TitleBadge title={n.title} link />
                   </td>
-                  <td className="time">{timeOpposite(n.createTime, TIME_NEVER)}</td>
+                  <td className={"time " + (isRecent(n.createTime) ? "time--recent" : "time--old")}>
+                    {timeOpposite(n.createTime, TIME_NEVER)}
+                  </td>
                 </tr>
               ))}
             </tbody>
