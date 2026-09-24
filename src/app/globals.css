@@ -200,11 +200,14 @@ body .tabs > a:hover::after {
 #account_login,
 #account_bind,
 #account_oauth {
+  /* box-sizing 必须显式给：站内无全局 border-box，content-box 下 width 会被 padding 撑大
+     （2026-09-24 实测 340px 卡片渲染成 396px，输入框溢出右贴边） */
+  box-sizing: border-box;
   position: relative;
   width: 340px;
   max-width: calc(100vw - 40px);
   margin: 40px auto;
-  padding: 24px 28px 22px;
+  padding: 24px 30px 22px;
   background: rgba(39, 40, 34, 0.82);
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
   backdrop-filter: blur(16px) saturate(1.15);
@@ -272,6 +275,7 @@ body .tabs > a:hover::after {
   margin-bottom: 12px;
 }
 #account_login .lp_field input {
+  box-sizing: border-box; /* 同上：否则 width:100% + padding/border 会横向溢出、与按钮不对齐 */
   display: block;
   width: 100%;
   height: 38px;
@@ -319,6 +323,7 @@ body .tabs > a:hover::after {
   flex: 0 0 auto;
 }
 #account_login .lp_submit {
+  box-sizing: border-box;
   display: block;
   width: 100%;
   height: 40px;
