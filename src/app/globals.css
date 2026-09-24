@@ -324,10 +324,15 @@ body .tabs > a:hover::after {
 }
 #account_login .lp_submit {
   box-sizing: border-box;
-  display: block;
+  /* flex 居中 + line-height:1：断掉 legacy 给 button 的 line-height（实测算出 30px，
+     超出 40px 按钮高度后文字下偏 2.5px） */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 40px;
   margin-top: 4px;
+  padding: 0;
   border: 0;
   border-radius: 9px;
   background: linear-gradient(180deg, #ffd23e, #f0b70a);
@@ -335,18 +340,18 @@ body .tabs > a:hover::after {
   font-size: 15px;
   font-weight: 700;
   font-family: inherit;
+  line-height: 1;
   letter-spacing: 1px;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
-  transition: transform 0.12s, box-shadow 0.15s, filter 0.15s;
+  /* 过渡只留不改变几何的属性：hover/active 一律不做位移（张老师：不要上下跳） */
+  transition: box-shadow 0.15s, filter 0.15s;
 }
 #account_login .lp_submit:hover:not(:disabled) {
   filter: brightness(1.06);
-  transform: translateY(-1px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
 }
 #account_login .lp_submit:active:not(:disabled) {
-  transform: translateY(0);
   filter: brightness(0.96);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
 }
@@ -356,10 +361,10 @@ body .tabs > a:hover::after {
 }
 .lp_spin {
   display: inline-block;
+  flex: 0 0 auto;
   width: 13px;
   height: 13px;
   margin-left: 8px;
-  vertical-align: -2px;
   border: 2px solid rgba(43, 42, 32, 0.3);
   border-top-color: #2b2a20;
   border-radius: 50%;
