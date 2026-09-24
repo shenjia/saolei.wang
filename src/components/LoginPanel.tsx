@@ -2,6 +2,8 @@
 
 // 登录面板：三个 tab（微信扫码 / QQ 扫码 / 账号密码）
 // 独立登录页与全局登录浮窗共用（2026-09-24 拆出）
+// 2026-09-24 玻璃层改版（方案01）：标签置输入框上方 + 渐隐分隔线 + 渐变黄按钮
+// footer 定色（张老师）：忘记密码=灰、注册新账号=绿（/account/register 注册页待移植）
 // 密码登录成功后有 onSuccess 回调走浮窗关窗逻辑，无回调则维持独立页跳转行为
 
 import { useState } from "react";
@@ -73,6 +75,8 @@ export default function LoginPanel({
   return (
     <>
       <h1>登录扫雷网</h1>
+      <p className="lp_sub">{OAUTH_ENABLED ? "老用户首次登录后需绑定微信或 QQ" : "使用扫雷网账号继续"}</p>
+      <div className="lp_rule" aria-hidden="true" />
       {OAUTH_ENABLED && (
         <div className="tabs auth_tabs">
           {TABS.map(([key, name]) =>
@@ -87,6 +91,57 @@ export default function LoginPanel({
             )
           )}
         </div>
+      )}
+
+      {tab === "password" && (
+        <form className="lp_form" onSubmit={submitPassword}>
+          <div className="lp_field">
+            <label htmlFor="login_username">用户名</label>
+            <input
+              id="login_username"
+              type="text"
+              autoComplete="username"
+              placeholder="用户名"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="lp_field">
+            <label htmlFor="login_password">密码</label>
+            <input
+              id="login_password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          {error && (
+            <p className="lp_error">
+              <i>!</i>
+              {error}
+            </p>
+          )}
+          <button type="submit" className="lp_submit" disabled={loading}>
+            {loading ? (
+              <>
+                登录中…<span className="lp_spin" aria-hidden="true" />
+              </>
+            ) : (
+              "登 录"
+            )}
+          </button>
+          <div className="lp_foot">
+            <a className="lp_forgot" href="/account/forgot">
+              忘记密码？
+            </a>
+            <a className="lp_reg" href="/account/register">
+              注册新账号 →
+            </a>
+          </div>
+        </form>
       )}
 
       {tab === "wechat" && (
@@ -104,46 +159,6 @@ export default function LoginPanel({
             使用 QQ 登录
           </a>
         </div>
-      )}
-
-      {tab === "password" && (
-        <form className="auth_form" onSubmit={submitPassword}>
-          <table className="form" cellPadding={0} cellSpacing={0}>
-            <tbody>
-              <tr>
-                <td>用户名</td>
-                <td>
-                  <input
-                    type="text"
-                    size={25}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoFocus
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td>密码</td>
-                <td>
-                  <input
-                    type="password"
-                    size={25}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          {error && <p className="auth_error">{error}</p>}
-          <button type="submit" className="auth_button" disabled={loading}>
-            {loading ? "登录中…" : "登录"}
-          </button>
-          <p className="hint">
-            {OAUTH_ENABLED ? "老用户首次登录后需绑定微信或 QQ　" : ""}
-            <a href="/account/forgot">忘记密码？</a>
-          </p>
-        </form>
       )}
     </>
   );

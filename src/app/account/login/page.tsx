@@ -21,7 +21,10 @@ export default async function LoginPage({
 
   return (
     <div id="page" className="main">
-      <LoginPanel initialError={sp.error ?? ""} />
+      {/* 玻璃卡容器与浮窗共用 id（globals.css #account_login），2026-09-24 玻璃层改版 */}
+      <div id="account_login">
+        <LoginPanel initialError={sp.error ?? ""} />
+      </div>
     </div>
   );
 }

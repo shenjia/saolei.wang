@@ -193,27 +193,35 @@ body .tabs > a:hover::after {
   border-collapse: collapse;
 }
 
-/* ---------- 账号体系：登录 / 绑定 / 注册 ---------- */
+/* ---------- 账号体系：登录 / 绑定 / 注册 ----------
+   2026-09-24 玻璃层改版（方案01，张老师选定）：
+   半透明暗玻璃 + backdrop blur，让浮窗背后的页面透出来；
+   面板 radius 14 / 输入 radius 9 / 按钮渐变黄，色板零新色 */
 #account_login,
 #account_bind,
 #account_oauth {
-  max-width: 420px;
-  margin: 40px auto;
-  padding: 24px 32px 28px;
-  background: #3b3a32;
-  border: 1px solid #656355;
-  border-radius: 6px;
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
-}
-/* 浮窗形态：居中覆盖在半透明遮罩上，抵消独立页的 margin（globals 与 legacy 色板一致） */
-#account_login.login_modal {
   position: relative;
+  width: 392px;
+  max-width: calc(100vw - 40px);
+  margin: 40px auto;
+  padding: 30px 34px 26px;
+  background: rgba(39, 40, 34, 0.82);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+  border: 0;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(248, 248, 242, 0.1),
+    inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+    0 32px 64px -16px rgba(0, 0, 0, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+  color: #f8f8f2;
+}
+/* 浮窗形态：居中覆盖在半透明遮罩上，抵消独立页的 margin */
+#account_login.login_modal {
   margin: 0;
-  width: calc(100vw - 48px);
-  max-width: 420px;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 }
 .login_overlay {
   position: fixed;
@@ -226,22 +234,172 @@ body .tabs > a:hover::after {
 }
 .login_close {
   position: absolute;
-  top: 10px;
-  right: 12px;
-  font-size: 20px;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 17px;
   line-height: 1;
   color: #75715e;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
 }
 .login_close:hover {
+  background: rgba(248, 248, 242, 0.08);
   color: #f8f8f2;
 }
 #account_login h1,
 #account_bind h1,
 #account_oauth h1 {
-  font-size: 18px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
   color: #f8f8f2;
-  margin: 0 0 14px;
+  margin: 0 0 5px;
 }
+.lp_sub {
+  font-size: 12px;
+  color: #75715e;
+}
+/* 标题下渐隐分隔线 */
+.lp_rule {
+  height: 1px;
+  margin: 20px 0 22px;
+  background: linear-gradient(90deg, rgba(248, 248, 242, 0.12), rgba(248, 248, 242, 0));
+}
+/* ---------- 登录表单（LoginPanel 专用新结构；bind/oauth 仍走 auth_form） ---------- */
+.lp_field {
+  margin-bottom: 16px;
+}
+.lp_field label {
+  display: block;
+  font-size: 12px;
+  color: #75715e;
+  letter-spacing: 0.4px;
+  margin-bottom: 7px;
+}
+#account_login .lp_field input {
+  display: block;
+  width: 100%;
+  height: 42px;
+  padding: 0 13px;
+  border: 1px solid rgba(248, 248, 242, 0.1);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #f8f8f2;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+#account_login .lp_field input::placeholder {
+  color: #66655c;
+}
+#account_login .lp_field input:hover {
+  border-color: rgba(248, 248, 242, 0.18);
+}
+#account_login .lp_field input:focus {
+  border-color: rgba(253, 198, 29, 0.9);
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 3px rgba(253, 198, 29, 0.15);
+}
+#account_login .lp_error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #f92672;
+}
+#account_login .lp_error i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f92672;
+  color: #272822;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+  line-height: 14px;
+  flex: 0 0 auto;
+}
+#account_login .lp_submit {
+  display: block;
+  width: 100%;
+  height: 44px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  color: #2b2a20;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
+  transition: transform 0.12s, box-shadow 0.15s, filter 0.15s;
+}
+#account_login .lp_submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
+}
+#account_login .lp_submit:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.96);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
+}
+#account_login .lp_submit:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
+.lp_spin {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-left: 8px;
+  vertical-align: -2px;
+  border: 2px solid rgba(43, 42, 32, 0.3);
+  border-top-color: #2b2a20;
+  border-radius: 50%;
+  animation: lp_spin 0.7s linear infinite;
+}
+@keyframes lp_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* footer：忘记密码（灰）+ 注册新账号（绿，2026-09-24 张老师定色） */
+.lp_foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  font-size: 12px;
+}
+.lp_foot a {
+  text-decoration: none;
+}
+.lp_foot .lp_forgot {
+  color: #75715e;
+}
+.lp_foot .lp_forgot:hover {
+  color: #b1b1a4;
+}
+.lp_foot .lp_reg {
+  color: #a6e22e;
+}
+.lp_foot .lp_reg:hover {
+  text-decoration: underline;
+}
+/* ---------- bind/oauth 旧表单结构（暂保留，待后续统一到 lp_*） ---------- */
 .auth_tabs {
   margin-bottom: 18px;
 }
@@ -982,7 +1140,9 @@ body #page.bbs_old .page_head {
    再各让 8px（盒子 margin）使 logo/导航与盒子外缘精确对齐。
    overflow:hidden 让 wrapper 自成 BFC，收编 logo/nav 浮动，
    避免浮动泄漏到根 BFC 把首页 main/sidebar 顶歪；
-   选择器加 body 前缀提权，压住 legacy-2013.css 的同选择器（它后加载）。 */
+   选择器加 body 前缀提权，压住 legacy-2013.css 的同选择器（它后加载）。
+   注：2026-09-24 右上角用户菜单下拉需溢出顶栏，overflow:hidden 会把它裁掉，
+   故改用 display:flow-root —— 同样是 BFC（照样收编浮动）但**不裁剪**溢出内容。 */
 body #header .wrapper {
   margin-left: auto;
   margin-right: auto;
@@ -990,7 +1150,7 @@ body #header .wrapper {
   min-width: 620px;
   max-width: 960px;
   padding: 0;
-  overflow: hidden;
+  display: flow-root;
 }
 body #header .logo {
   margin-left: 8px;
@@ -2390,4 +2550,46 @@ body #page.video_old .page_head {
    #top 无规则落回 .table td 的 16px，这里补齐与其他板块一致（2026-09-24 张老师要求） */
 #top .time {
   font-size: 14px;
+}
+
+/* ---------- 顶部导航右侧用户菜单（2026-09-24 张老师要求） ----------
+   登录后最右侧显示「头像 + 姓名」（原名/用户名），悬停展开下拉：
+   上传录像 / 个人主页 / 账户管理 / 退出登录。
+   复用 legacy 原生 .nav .popMenu（2013 原版悬停浮层）——只需把浮层 top 由 32px 提到
+   现顶栏高度 44px，并把菜单项字号/行高重新钉死（避免被 body #header .nav li a 的
+   15px/44px 带偏成高行）。legacy-2013.css 后加载，故这里加 body 前缀提权。 */
+body #header .nav li.user_menu > a.um_trigger {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  font-size: 15px;
+}
+body #header .nav li.user_menu .um_avatar {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 6px;
+  background: #3b3a32;
+}
+body #header .nav li.user_menu .um_name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body #header .nav .popMenu .menu {
+  top: 44px;
+  min-width: 104px;
+}
+body #header .nav .popMenu .menu li {
+  float: none;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px;
+}
+body #header .nav .popMenu .menu li a {
+  font-size: 14px;
+  line-height: 32px;
 }
