@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getWorldTop100, WORLD_RANKING_PAGE } from "@/lib/worldtop";
 import { RankingNav } from "@/components/RankingNav";
 import { WorldTop100Table } from "@/components/WorldTop100Table";
+import { FlopPlayer } from "@/components/FlopPlayer";
 
 export async function WorldTop100() {
   const data = await getWorldTop100();
@@ -40,6 +41,8 @@ export async function WorldTop100() {
               })()}
             </span>
           </div>
+          {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染） */}
+          <FlopPlayer />
         </>
       ) : (
         <p className="world_fail">暂时无法获取世界排行，请稍后再试。</p>

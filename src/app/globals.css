@@ -2599,6 +2599,17 @@ body #page.ranking_old.main .ranking_nav {
   line-height: 29px; /* 原 34px 略收一档 */
 }
 
+/* 世界榜五轮（2026-09-24 张老师要求）：纪录数字加粗，配色与主排行榜各级成绩一致
+   （初 #999994 / 中 #bbbbaf / 高 #ddddcf / 总 #e6e6da——同 .ranking_table td.c_* 色档）；
+   可播放纪录 hover 变绿提示可点 */
+#world_top td b.s_beg { color: #999994; font-weight: bold; }
+#world_top td b.s_int { color: #bbbbaf; font-weight: bold; }
+#world_top td b.s_exp { color: #ddddcf; font-weight: bold; }
+#world_top td b,
+#world_top td.sum { color: #e6e6da; font-weight: bold; }
+#world_top td a { cursor: pointer; }
+#world_top td a:hover b { color: #a6e22e; }
+
 /* 高亮逻辑修正（2026-09-23 晚 张老师指正）：时间记录才高亮，3BVS 不高亮；
    总计列不再常亮黄——与高级同档浅灰，仅当排序命中（.current）时才黄 */
 .ranking_table td.c_sum {
