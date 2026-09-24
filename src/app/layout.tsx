@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import "./globals.css";
 import { getSession } from "@/lib/auth";
-import { isManager } from "@/lib/config";
+import { getHeaderUser } from "@/lib/usercard";
 import { LoginLink } from "@/components/LoginLink";
 import { LoginModal } from "@/components/LoginModal";
 import { MessageBadge } from "@/components/MessageBadge";
@@ -17,6 +17,9 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await getSession();
+  const me = session ? await getHeaderUser(session.uid) : null;
+  const displayName = me?.chineseName || session?.username || "";
+  const avatarUrl = me?.avatarUrl || "/images/player/no.jpg";
   return (
     <html lang="zh-CN">
       <head>
@@ -39,7 +42,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link href="/">首页</Link>
                 </li>
                 <li>
-                  <Link href="/ranking">排行榜</Link>
+                  <Link href="/ranking">排行</Link>
                 </li>
                 <li>
                   <Link href="/video">录像</Link>
@@ -59,21 +62,28 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 {session ? (
                   <>
                     <li>
-                      <Link href="/video/upload">上传</Link>
-                    </li>
-                    {isManager(session.role) && (
-                      <li>
-                        <Link href="/video/review">审核</Link>
-                      </li>
-                    )}
-                    <li>
                       <MessageBadge />
                     </li>
-                    <li>
-                      <Link href="/account">{session.username}</Link>
-                    </li>
-                    <li>
-                      <a href="/api/auth/logout">退出</a>
+                    <li className="popMenu user_menu">
+                      <Link href={`/user/${session.uid}`} className="um_trigger">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img className="um_avatar" src={avatarUrl} alt="" />
+                        <span className="um_name">{displayName}</span>
+                      </Link>
+                      <ul className="menu">
+                        <li>
+                          <Link href={`/user/${session.uid}`}>个人主页</Link>
+                        </li>
+                        <li>
+                          <Link href="/video/upload">上传录像</Link>
+                        </li>
+                        <li>
+                          <Link href="/account">账户管理</Link>
+                        </li>
+                        <li>
+                          <a href="/api/auth/logout">退出登录</a>
+                        </li>
+                      </ul>
                     </li>
                   </>
                 ) : (

@@ -100,6 +100,18 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
   return cards.get(id) ?? null;
 }
 
+/** 顶部导航右侧用户菜单用：只取姓名 + 头像 URL（不拉成绩/名次，避免每页额外开销） */
+export async function getHeaderUser(
+  uid: number,
+): Promise<{ chineseName: string; avatarUrl: string } | null> {
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(uid) },
+    select: { chineseName: true, avatar: true },
+  });
+  if (!u) return null;
+  return { chineseName: u.chineseName, avatarUrl: avatarUrl(uid, u.avatar) };
+}
+
 function yesterdayStr(): string {
   const d = new Date(Date.now() - 86400_000);
   const p = (n: number) => (n < 10 ? "0" + n : String(n));
