@@ -21,7 +21,9 @@ import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankBadge } from "@/components/RankBadge";
 import { title as assessTitle } from "@/lib/assess";
 import { getRadarData } from "@/lib/radar";
-import { resolveAvatarUrl } from "@/lib/avatar";
+import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
+import { prisma } from "@/lib/db";
+import { SelfAvatar } from "@/components/SelfAvatar";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -67,8 +69,19 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
   const radar = await getRadarData(scores);
 
   // 是不是「我自己的主页」——决定头像能不能点（2026-09-24 张老师需求：
-  // hover 提示「点击更换头像」，点击进头像上传处）
+  // 点击直接弹上传窗口 + 方形裁剪预览 + 待审气泡）
   const isSelf = !!session && session.uid === userId;
+
+  // 只有自己的主页才需要查「有没有头像在审」（头像下方的「审核中」气泡），
+  // 别人的主页不多跑这一趟查询
+  const latestAvatarReview = isSelf
+    ? await prisma.avatarReview.findFirst({
+        where: { user: BigInt(userId) },
+        orderBy: { id: "desc" },
+        select: { status: true },
+      })
+    : null;
+  const avatarPending = latestAvatarReview?.status === AVATAR_REVIEW_STATUS.PENDING;
 
   // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
   const hasProfileFields =
@@ -89,13 +102,10 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
     <ul id="user_view">
       <li className="main">
         <div className="info box">
-          {/* 自己的主页：头像可点，hover 出「点击更换头像」蒙层 → 跳到修改资料页头像区。
+          {/* 自己的主页：头像可点，点击直接弹文件选择 + 方形裁剪浮窗（不跳账号中心）。
               别人的主页保持原样（裸 <img>，无链接无蒙层），不改动既有 DOM 与样式。 */}
           {isSelf ? (
-            <Link href="/account/profile#avatar" className="avatar_slot" aria-label="点击更换头像">
-              {photoImg}
-              <span className="avatar_change">点击更换头像</span>
-            </Link>
+            <SelfAvatar src={photo} alt={user.chineseName} pending={avatarPending} />
           ) : (
             photoImg
           )}

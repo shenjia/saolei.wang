@@ -1368,18 +1368,29 @@ body #user_view .info .avatar {
   background: rgba(255, 255, 255, 0.04);
 }
 /* ---------- 自己的主页：头像可点击更换（2026-09-24 张老师要求） ----------
-   hover 出头像下方的「点击更换头像」条，点击跳 /account/profile#avatar。
-   legacy 原规则把 float:left + margin-right 加在 .avatar 上，包一层 <a> 后必须
-   把这两条挪到 <a>，并让内部 img 转 display:block——否则 <a> 由 inline 行框撑高，
-   底部会多出 descender 空隙，蒙层 bottom:0 贴不到图片底边。
+   点击头像 → 直接弹系统文件选择 → 方形裁剪预览浮窗（不再跳账号中心）；
+   有待审头像时，头像下方常显灰色半透明「审核中」气泡。
+   legacy 原规则把 float:left + margin-right 加在 .avatar 上，外层由 <a> 换成 <button>
+   后同样要把这两条挪到按钮上，并让内部 img 转 display:block——否则按钮由 inline
+   行框撑高，底部会多出 descender 空隙，蒙层/气泡贴不到图片底边。
+   legacy 的 button 规则带渐变底、圆角、阴影、20px 字号、margin-right:8px，必须逐条清零。
    尺寸/边框仍由原 .avatar 规则提供，视觉与原来逐像素一致。 */
-body #user_view .info a.avatar_slot {
+body #user_view .info button.avatar_slot {
   position: relative;
   display: block;
   float: left;
   margin-right: 15px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-shadow: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
 }
-body #user_view .info a.avatar_slot .avatar {
+body #user_view .info button.avatar_slot .avatar {
   display: block;
   float: none;
   margin-right: 0;
@@ -1398,9 +1409,172 @@ body #user_view .info .avatar_change {
   opacity: 0;
   transition: opacity 0.15s;
 }
-body #user_view .info a.avatar_slot:hover .avatar_change,
-body #user_view .info a.avatar_slot:focus-visible .avatar_change {
+/* 待审气泡：灰色半透明胶囊，态常显；hover 时上移，把底部让给「点击更换头像」条 */
+body #user_view .info .avatar_status {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  padding: 2px 12px;
+  color: #d5d5cc;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  background: rgba(58, 58, 54, 0.8);
+  border-radius: 10px;
+  transform: translateX(-50%);
+  transition: bottom 0.15s;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+body #user_view .info .avatar_status.ok {
+  color: #a6e22e;
+}
+body #user_view .info button.avatar_slot:hover .avatar_change,
+body #user_view .info button.avatar_slot:focus-visible .avatar_change {
   opacity: 1;
+}
+body #user_view .info button.avatar_slot:hover .avatar_status,
+body #user_view .info button.avatar_slot:focus-visible .avatar_status {
+  bottom: 32px; /* 让位给 hover 提示条（高 26 + 底边 1） */
+}
+
+/* ---------- 头像方形裁剪弹窗（2026-09-24）----------
+   主页点击头像、个人资料页点击缩略图都走这个浮窗；
+   取景框固定 300px 方形，图片短边填满、可拖动可缩放，导出 400x400 JPEG。 */
+.avatar_crop_mask {
+  position: fixed;
+  inset: 0;
+  z-index: 300; /* 高于后台 lightbox(200) 与主站头部 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+}
+.avatar_crop {
+  width: 344px; /* 300 取景框 + 左右各 22 内边距 */
+  padding: 18px 22px 20px;
+  text-align: center;
+  background: #272822;
+  border: 1px solid #49483e;
+  border-radius: 5px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.avatar_crop h3 {
+  margin-bottom: 14px;
+  color: #f8f8f2;
+  font-size: 16px;
+  font-weight: normal;
+  line-height: 24px;
+}
+.avatar_crop_frame {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #1e1e1a;
+  border: 1px solid #55554c;
+  cursor: move;
+  touch-action: none; /* 手机上拖动裁剪不连带滚动页面 */
+  user-select: none;
+}
+.avatar_crop_frame img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none; /* 解除可能存在的全局 max-width:100%，否则放大失效 */
+  max-height: none;
+  pointer-events: none; /* 拖动统一由取景框接管 */
+}
+/* 中心十字：帮助把脸放中间 */
+.avatar_crop_cross {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.avatar_crop_cross::before,
+.avatar_crop_cross::after {
+  position: absolute;
+  content: "";
+  background: rgba(255, 255, 255, 0.14);
+}
+.avatar_crop_cross::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+.avatar_crop_cross::after {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+.avatar_crop_drag {
+  margin-top: 10px;
+  color: #75715e;
+  font-size: 12px;
+  line-height: 18px;
+}
+.avatar_crop_zoom {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 300px;
+  margin: 8px auto 0;
+  color: #939387;
+  font-size: 13px;
+}
+.avatar_crop_zoom > span {
+  flex: none;
+}
+.avatar_crop_zoom input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  background: #49483e;
+  border-radius: 2px;
+  accent-color: #a6e22e;
+}
+.avatar_crop_note {
+  margin-top: 12px;
+  color: #75715e;
+  font-size: 12px;
+  line-height: 19px;
+  text-align: left;
+}
+.avatar_crop_note.sub {
+  margin-top: 4px;
+}
+.avatar_crop_note b {
+  color: #b1b1a4;
+  font-weight: normal;
+}
+.avatar_crop_error {
+  margin-top: 12px;
+  color: #f92672;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+}
+.avatar_crop_actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 18px;
+}
+/* 弹窗内按钮：保留 legacy button 的渐变/圆角/配色，只收敛到浮窗尺度 */
+.avatar_crop_actions .button {
+  margin-right: 0;
+  padding: 5px 22px;
+  font-size: 15px;
+  line-height: 22px;
+}
+.avatar_crop_actions .button:disabled {
+  color: #6b6b60;
+  cursor: default;
 }
 /* 姓名行：09-23 晚张老师要求稍放大（18→20 / 14→16） */
 body #user_view .info h1 {
