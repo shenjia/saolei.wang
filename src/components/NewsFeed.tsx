@@ -31,6 +31,7 @@ export function NewsFeed({
   title,
   titleClassName,
   homeOnly,
+  timeFirst,
 }: {
   initial: NewsFeedItem[];
   userId?: number;
@@ -44,6 +45,8 @@ export function NewsFeed({
   titleClassName?: string;
   /** 首页新闻流口径：加载更多/等级筛选只取 NEWS_HOME_TYPES（2026-09-24） */
   homeOnly?: boolean;
+  /** 时间列放最左（首页试验版式，2026-09-25） */
+  timeFirst?: boolean;
 }) {
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(initial.length ? initial[initial.length - 1].news.id : 0);
@@ -130,12 +133,13 @@ export function NewsFeed({
       <table cellPadding={0} cellSpacing={0} className="table">
         <tbody>
           {items.map(({ news, title: itemTitle }) => (
-            <NewsCellView key={news.id} news={news} title={itemTitle} />
+            <NewsCellView key={news.id} news={news} title={itemTitle} timeFirst={timeFirst} />
           ))}
           {items.length === 0 && (
             <tr>
+              {timeFirst && <td></td>}
               <td className="text">{switching ? "加载中…" : "还没有记录。"}</td>
-              <td></td>
+              {!timeFirst && <td></td>}
             </tr>
           )}
         </tbody>
