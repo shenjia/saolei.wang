@@ -85,7 +85,7 @@ export default async function BbsPage({
               initialHasMore={hasMore}
               total={total}
               query={query}
-              showBoard={board === undefined}
+              showBoard={true}
             />
           </tbody>
         </table>
