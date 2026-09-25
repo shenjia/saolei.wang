@@ -19,9 +19,21 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
         {/* 七轮：分类标签与标题同行同格（未选具体板块时显示），标签在标题前。
             topic_line 用 flex 收缩——超长标题出省略号时星标/置顶/锁标不被挤掉 */}
         <span className="topic_line">
-          {/* 八轮：公告标签醒目黄；九轮：改灰底圆角徽章，去【】括号 */}
+          {/* 八轮：公告标签醒目黄；九轮：改灰底圆角徽章，去【】括号；
+              十三轮：四板块各自配色（公告黄/技术绿/问答蓝/杂谈灰，均取 Monokai 色板） */}
           {showBoard && (
-            <span className={"board_tag" + (p.board === 0 ? " notice" : "")}>
+            <span
+              className={
+                "board_tag" +
+                (p.board === 0
+                  ? " notice"
+                  : p.board === 1
+                    ? " tech"
+                    : p.board === 3
+                      ? " qa"
+                      : "")
+              }
+            >
               {BBS_BOARD_NAMES[p.board]}
             </span>
           )}

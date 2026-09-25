@@ -767,6 +767,15 @@ body #page.bbs_old .page_head {
 .bbs_list .board_tag.notice {
   color: #fdc61a;
 }
+/* 十三轮（2026-09-25 张老师）：四板块各自配色区分——均取 Monokai 色板，
+   与全站主题同源（a6e22e=链接 hover 绿、66d9ef=Monokai 蓝），
+   杂谈保持默认灰 */
+.bbs_list .board_tag.tech {
+  color: #a6e22e;
+}
+.bbs_list .board_tag.qa {
+  color: #66d9ef;
+}
 /* 七轮：主题行 flex 容器——标签/链接/星标同行；bbs_title 收缩出省略号 */
 #page.bbs_old .bbs_list .topic_line {
   display: flex;
@@ -3544,10 +3553,11 @@ body #header .nav .popMenu .menu li a {
   color: #a59f85;
 }
 
-/* 弹层面板（表情 / 摆雷 / 贴图） */
+/* 弹层面板（表情 / 摆雷 / 贴图）：left 由 JS 按触发按钮 offsetLeft 写入 --pop-left，与按钮左对齐 */
 .wpop {
   position: absolute;
   top: 32px;
+  left: var(--pop-left, 0px);
   z-index: 30;
   background: #3b3a32;
   border: 1px solid #636359;
@@ -3555,9 +3565,7 @@ body #header .nav .popMenu .menu li a {
   box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.45);
   padding: 6px;
 }
-.wpop.faces { left: 0; }
-.wpop.mines { left: 46px; }
-.wpop.imgsup { left: 0; width: 300px; }
+.wpop.imgsup { width: 300px; }
 .wpop_grid {
   display: flex;
   flex-wrap: wrap;
@@ -3570,9 +3578,15 @@ body #header .nav .popMenu .menu li a {
   cursor: pointer;
   display: block;
 }
+/* 摆雷：16 个符号排成一行 */
 .wpop.mines img {
   width: 16px;
   height: 16px;
+}
+.wpop.mines .wpop_grid {
+  flex-wrap: nowrap;
+  max-width: none;
+  gap: 2px;
 }
 .wpop img:hover {
   background: #555550;
