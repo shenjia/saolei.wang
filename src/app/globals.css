@@ -740,13 +740,22 @@ body #page.bbs_old .page_head {
 /* 分类标签：与正文同字号（legacy .level 是 20px，不可用）。
    七轮：并入主题列后作为行内标签，flex 不收缩（标题负责收缩出省略号）。
    八轮（2026-09-25 张老师）：公告标签醒目黄（#fdc61a 与消息页系统广播/
-   legacy 面板 highlight 同色，全站高亮语义统一），其余板块保持灰 */
+   legacy 面板 highlight 同色，全站高亮语义统一），其余板块保持灰。
+   九轮（2026-09-25 张老师）：标签改灰底圆角矩形徽章——去掉【】括号
+   （徽章轮廓已承担分隔），灰底深灰字、公告黄字，字号收小与正文区分 */
 .bbs_list .board_tag {
-  color: #939387;
   flex: none;
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: #3b3a35;
+  color: #939387;
+  font-size: 12px;
+  line-height: 18px;
 }
 .bbs_list .board_tag.notice {
   color: #fdc61a;
+  background: #3b3a35;
 }
 /* 七轮：主题行 flex 容器——标签/链接/星标同行；bbs_title 收缩出省略号 */
 #page.bbs_old .bbs_list .topic_line {
@@ -1208,7 +1217,9 @@ body #page.message_list > .box:first-child .page_head {
   color: #75715e;
 }
 #page.message_list .table tr.read td:first-child .board_tag {
-  color: #5d5b52;
+  /* 九轮：board_tag 改灰底徽章后 #5d5b52 在灰底上不可读——已读标签字色
+     与其他已读元素（#75715e）统一，徽章底色已提供「已弱化」视觉 */
+  color: #75715e;
 }
 .msg_new {
   color: #a6e22e;
