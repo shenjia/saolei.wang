@@ -19,11 +19,13 @@ export function MessageRow({ m }: { m: MessageItem }) {
   return (
     <tr className={m.isRead ? "read" : "unread"}>
       <td>
-        <span className="board_tag">{m.isSystem ? "系统" : "私信"}</span>
+        <span className={`board_tag ${m.isSystem ? "msg_sys" : ""}`}>
+          {m.isSystem ? "系统" : "私信"}
+        </span>
       </td>
       <td className="user">
         {m.isSystem ? (
-          <span className="avatar_link">【系统广播】</span>
+          <span className="avatar_link msg_sys">【系统广播】</span>
         ) : m.from ? (
           <>
             <AvatarCell id={m.from.id} name={m.from.chineseName} sex={m.from.sex} gender="small" link />
@@ -34,7 +36,7 @@ export function MessageRow({ m }: { m: MessageItem }) {
         )}
       </td>
       <td>
-        <Link className="bbs_title" href={`/message/${m.id}`}>
+        <Link className={`bbs_title ${m.isSystem ? "msg_sys" : ""}`} href={`/message/${m.id}`}>
           {m.content.length > 40 ? m.content.slice(0, 40) + "…" : m.content}
         </Link>
         {!m.isRead && <span className="msg_new">新</span>}

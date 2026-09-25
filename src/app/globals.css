@@ -1167,6 +1167,25 @@ body #page.message_list > .box:first-child .page_head {
   font-size: 12px;
   line-height: 18px;
 }
+/* 系统消息标黄（2026-09-25 张老师要求）：类型标签 + 内容标题 + 【系统广播】发件人；
+   黄 #fdc61a 与 legacy 面板 highlight / 排行 .current 一致，全站高亮语义统一。
+   双类提权：压过已读变灰（.table tr.read .board_tag 0,3,1）与 legacy a.bbs_title 灰 */
+#page.message_list .table tr.read td .board_tag.msg_sys,
+#page.message_list .table tr.read td a.bbs_title.msg_sys {
+  color: #fdc61a;
+}
+#page.message_list .table td .board_tag.msg_sys,
+#page.message_list .table td a.bbs_title.msg_sys,
+#page.message_list .table td.user .avatar_link.msg_sys,
+#page .bbs_post .bbs_meta .avatar_link.msg_sys {
+  color: #fdc61a;
+}
+/* ID 提权后须单独恢复 hover 绿（全站 2026-09-24 统一规则压不过 ID 选择器；
+   带 tr.read 对齐已读灰规则特异性 (1,5,3)，否则已读系统消息 hover 仍黄） */
+#page.message_list .table tr.read td a.bbs_title.msg_sys:hover,
+#page.message_list .table td a.bbs_title.msg_sys:hover {
+  color: #a6e22e;
+}
 
 /* 未读消息角标 */
 .badge {

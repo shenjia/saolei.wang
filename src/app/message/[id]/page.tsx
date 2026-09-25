@@ -26,7 +26,7 @@ export default async function MessageShowPage({ params }: { params: Promise<{ id
         <h1>{message.isSystem ? "系统消息" : message.content.slice(0, 20)}</h1>
         <p className="bbs_meta">
           {message.isSystem ? (
-            <span className="avatar_link">【系统广播】</span>
+            <span className="avatar_link msg_sys">【系统广播】</span>
           ) : message.from ? (
             <>
               <AvatarCell id={message.from.id} name={message.from.chineseName} sex={message.from.sex} link />{" "}
