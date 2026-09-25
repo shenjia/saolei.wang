@@ -26,6 +26,7 @@ export async function BbsLatest() {
                   >
                     {p.title}
                   </Link>
+                  {p.isPinned && <span className="pin">▲</span>}
                   {p.isNice && <span className="nice">.精</span>}
                 </div>
               </td>

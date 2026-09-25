@@ -47,7 +47,8 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                 prefix: "属性",
                 options: [
                   ["", "全部"],
-                  ["top", "仅置顶"],
+                  ["pinned", "仅置顶"],
+                  ["top", "仅高亮"],
                   ["nice", "仅精华"],
                   ["locked", "仅锁定"],
                 ],
@@ -103,10 +104,11 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                   <td className="num">{p.clicks}</td>
                   <td className="c">
                     <span className="admin_tags">
-                      {p.isTop && <span className="admin_tag bad">置顶</span>}
+                      {p.isPinned && <span className="admin_tag bad">置顶</span>}
+                      {p.isTop && <span className="admin_tag bad">高亮</span>}
                       {p.isNice && <span className="admin_tag warn">精华</span>}
                       {p.isLocked && <span className="admin_tag plain">锁定</span>}
-                      {!p.isTop && !p.isNice && !p.isLocked && <span className="sub">—</span>}
+                      {!p.isPinned && !p.isTop && !p.isNice && !p.isLocked && <span className="sub">—</span>}
                     </span>
                   </td>
                   <td className="sub">{p.lastReplyTime ? timeOpposite(p.lastReplyTime) : "—"}</td>
@@ -117,8 +119,13 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                     </Link>
                     <AdminAction
                       op="bbs.setPost"
+                      params={{ id: p.id, isPinned: !p.isPinned }}
+                      label={p.isPinned ? "取消置顶" : "置顶"}
+                    />
+                    <AdminAction
+                      op="bbs.setPost"
                       params={{ id: p.id, isTop: !p.isTop }}
-                      label={p.isTop ? "取消置顶" : "置顶"}
+                      label={p.isTop ? "取消高亮" : "高亮"}
                     />
                     <AdminAction
                       op="bbs.setPost"

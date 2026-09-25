@@ -414,6 +414,8 @@ model Message {
 }
 
 // 论坛主题（移植 2008 版 BBS Title 表；板块：0 公告 1 技术 2 杂谈 3 问答）
+// isTop=旧版 IsHigh「高亮」（仅标题白显，不参与排序，历史 172 条保留原样）；
+// isPinned=新版「置顶」（2026-09-25 从 isTop 语义中独立，列表排序提前，新站起用）
 model BbsPost {
   id            BigInt  @id @default(autoincrement()) @db.BigInt
   board         Int     @default(1) @db.TinyInt
@@ -423,6 +425,7 @@ model BbsPost {
   replies       Int     @default(0) @db.Int
   clicks        Int     @default(0) @db.Int
   isTop         Boolean @default(false) @map("is_top")
+  isPinned      Boolean @default(false) @map("is_pinned")
   isNice        Boolean @default(false) @map("is_nice")
   isLocked      Boolean @default(false) @map("is_locked")
   status        Int     @default(0) @db.SmallInt

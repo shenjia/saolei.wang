@@ -7,6 +7,7 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #bbs_latest .subject a.t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#BBBBBB;font-size:12px;text-decoration:none}
 #bbs_latest .subject a.t:hover{color:#a6e22e;text-decoration:underline}
 #bbs_latest .subject a.t.high{color:#FFFFFF}
+#bbs_latest .pin{color:#ffff00;font-size:12px;flex:0 0 auto;margin-left:4px}
 #bbs_latest .nice{color:#ffff00;font-size:12px;flex:0 0 auto}
 #bbs_latest .bbs_new tbody tr:hover td{background:#444444}
 

@@ -233,7 +233,8 @@ async function dispatch(
       if (!id) return { ok: false, error: "参数错误：缺少主题 ID" };
       const data: Record<string, unknown> = { updateTime: BigInt(now()) };
       const changed: string[] = [];
-      if ("isTop" in p) { data.isTop = toBool(p.isTop); changed.push(`置顶=${toBool(p.isTop) ? "是" : "否"}`); }
+      if ("isPinned" in p) { data.isPinned = toBool(p.isPinned); changed.push(`置顶=${toBool(p.isPinned) ? "是" : "否"}`); }
+      if ("isTop" in p) { data.isTop = toBool(p.isTop); changed.push(`高亮=${toBool(p.isTop) ? "是" : "否"}`); }
       if ("isNice" in p) { data.isNice = toBool(p.isNice); changed.push(`精华=${toBool(p.isNice) ? "是" : "否"}`); }
       if ("isLocked" in p) { data.isLocked = toBool(p.isLocked); changed.push(`锁定=${toBool(p.isLocked) ? "是" : "否"}`); }
       if ("board" in p) {

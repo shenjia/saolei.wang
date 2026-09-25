@@ -48,9 +48,14 @@ export default async function BbsTitlePage({
                   ★
                 </span>
               )}
-              {post.isTop && (
+              {post.isPinned && (
                 <span className="bbs_top" data-tip="置顶">
                   ▲
+                </span>
+              )}
+              {post.isTop && (
+                <span className="bbs_high_flag" data-tip="高亮">
+                  ◆
                 </span>
               )}
             </h1>
@@ -68,7 +73,7 @@ export default async function BbsTitlePage({
                   postId={post.id}
                   isOwner={session.uid === post.author?.id}
                   isAdmin={admin}
-                  flags={{ isTop: post.isTop, isNice: post.isNice, isLocked: post.isLocked }}
+                  flags={{ isTop: post.isTop, isPinned: post.isPinned, isNice: post.isNice, isLocked: post.isLocked }}
                 />
               )}
             </p>

@@ -509,6 +509,7 @@ export interface AdminPostRow {
   replies: number;
   clicks: number;
   isTop: boolean;
+  isPinned: boolean;
   isNice: boolean;
   isLocked: boolean;
   status: number;
@@ -529,6 +530,7 @@ export async function getPostListAdmin(f: {
   if (f.status === "1") where.status = -1;
   else if (f.status === "0") where.status = 0;
   if (f.flag === "top") where.isTop = true;
+  if (f.flag === "pinned") where.isPinned = true;
   if (f.flag === "nice") where.isNice = true;
   if (f.flag === "locked") where.isLocked = true;
   const q = (f.q ?? "").trim();
@@ -545,7 +547,7 @@ export async function getPostListAdmin(f: {
       take: ADMIN_PAGESIZE,
       select: {
         id: true, board: true, user: true, title: true, replies: true, clicks: true,
-        isTop: true, isNice: true, isLocked: true, status: true, lastReplyTime: true, createTime: true,
+        isTop: true, isPinned: true, isNice: true, isLocked: true, status: true, lastReplyTime: true, createTime: true,
       },
     }),
     prisma.bbsPost.count({ where }),
@@ -563,6 +565,7 @@ export async function getPostListAdmin(f: {
       replies: p.replies,
       clicks: p.clicks,
       isTop: p.isTop,
+      isPinned: p.isPinned,
       isNice: p.isNice,
       isLocked: p.isLocked,
       status: p.status,

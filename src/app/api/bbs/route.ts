@@ -81,7 +81,8 @@ export async function POST(req: NextRequest) {
   if (action === "admin") {
     if (!admin) return NextResponse.json({ error: "无权操作" }, { status: 403 });
     if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
-    const data: { isTop?: boolean; isNice?: boolean; isLocked?: boolean; board?: number } = {};
+    const data: { isPinned?: boolean; isTop?: boolean; isNice?: boolean; isLocked?: boolean; board?: number } = {};
+    if (body.isPinned !== undefined) data.isPinned = !!body.isPinned;
     if (body.isTop !== undefined) data.isTop = !!body.isTop;
     if (body.isNice !== undefined) data.isNice = !!body.isNice;
     if (body.isLocked !== undefined) data.isLocked = !!body.isLocked;

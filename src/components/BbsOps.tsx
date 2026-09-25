@@ -69,7 +69,7 @@ export function PostOps({
   postId: number;
   isOwner: boolean;
   isAdmin: boolean;
-  flags: { isTop: boolean; isNice: boolean; isLocked: boolean };
+  flags: { isTop: boolean; isPinned: boolean; isNice: boolean; isLocked: boolean };
 }) {
   const router = useRouter();
 
@@ -84,19 +84,23 @@ export function PostOps({
     const label =
       body.action === "delete"
         ? "主题已删除"
-        : body.isTop !== undefined
-          ? body.isTop
+        : body.isPinned !== undefined
+          ? body.isPinned
             ? "已置顶"
             : "已取消置顶"
-          : body.isNice !== undefined
-            ? body.isNice
-              ? "已加精"
-              : "已取消精华"
-            : body.isLocked !== undefined
-              ? body.isLocked
-                ? "已锁定"
-                : "已解锁"
-              : "操作成功";
+          : body.isTop !== undefined
+            ? body.isTop
+              ? "已高亮"
+              : "已取消高亮"
+            : body.isNice !== undefined
+              ? body.isNice
+                ? "已加精"
+                : "已取消精华"
+              : body.isLocked !== undefined
+                ? body.isLocked
+                  ? "已锁定"
+                  : "已解锁"
+                : "操作成功";
     toast(label, "success");
     if (body.action === "delete") router.push("/bbs");
     else router.refresh();
@@ -106,8 +110,11 @@ export function PostOps({
     <span className="bbs_ops">
       {isAdmin && (
         <>
+          <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isPinned: !flags.isPinned }))}>
+            {flags.isPinned ? "取消置顶" : "置顶"}
+          </a>{" "}
           <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isTop: !flags.isTop }))}>
-            {flags.isTop ? "取消置顶" : "置顶"}
+            {flags.isTop ? "取消高亮" : "高亮"}
           </a>{" "}
           <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isNice: !flags.isNice }))}>
             {flags.isNice ? "取消精华" : "加精"}

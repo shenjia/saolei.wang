@@ -25,7 +25,11 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
               【{BBS_BOARD_NAMES[p.board]}】
             </span>
           )}
-          <Link className="bbs_title" href={`/bbs/${p.id}`} target="_blank">
+          <Link
+            className={"bbs_title" + (p.isTop ? " highlight" : "")}
+            href={`/bbs/${p.id}`}
+            target="_blank"
+          >
             {p.title}
           </Link>
           {p.isNice && (
@@ -33,7 +37,7 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
               ★
             </span>
           )}
-          {p.isTop && (
+          {p.isPinned && (
             <span className="bbs_top" data-tip="置顶">
               ▲
             </span>

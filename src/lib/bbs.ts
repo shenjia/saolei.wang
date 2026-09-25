@@ -192,7 +192,10 @@ export interface BbsPostItem {
   title: string;
   replies: number;
   clicks: number;
+  /** 高亮（旧版 IsHigh 语义：仅标题白显，不参与排序；历史 172 条保留） */
   isTop: boolean;
+  /** 置顶（新版真置顶：列表排序提前，2026-09-25 独立） */
+  isPinned: boolean;
   isNice: boolean;
   isLocked: boolean;
   createTime: number;
@@ -213,11 +216,12 @@ export async function getPostList(opts: {
     ...(nice ? { isNice: true } : {}),
   };
   const total = await prisma.bbsPost.count({ where });
-  // 2008 版置顶(IsHigh)不提前排序，只加标记（BBS_All 存储过程仅按时间列排序）
+  // 旧版 IsHigh=「高亮」不参与排序（BBS_All/Page_List 仅按时间列），isTop 保持该语义；
+  // 置顶由新列 isPinned 承担：置顶组在前、组内与普通帖同按时间列倒序（2026-09-25 张老师定）
   const orderField = order === "post" ? "id" : "lastReplyTime";
   const rows = await prisma.bbsPost.findMany({
     where,
-    orderBy: [{ [orderField]: "desc" }],
+    orderBy: [{ isPinned: "desc" }, { [orderField]: "desc" }],
     skip: (page - 1) * BBS_PAGESIZE,
     take: BBS_PAGESIZE,
   });
@@ -230,6 +234,7 @@ export async function getPostList(opts: {
       replies: r.replies,
       clicks: r.clicks,
       isTop: r.isTop,
+      isPinned: r.isPinned,
       isNice: r.isNice,
       isLocked: r.isLocked,
       createTime: N(r.createTime),
@@ -261,6 +266,7 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
     replies: row.replies,
     clicks: row.clicks + (bump ? 1 : 0),
     isTop: row.isTop,
+    isPinned: row.isPinned,
     isNice: row.isNice,
     isLocked: row.isLocked,
     createTime: N(row.createTime),
@@ -303,10 +309,10 @@ export async function getReplies(
   };
 }
 
-/** 最新主题（首页右栏用，移植 Title_Index_New） */
+/** 最新主题（首页右栏用，移植 Title_Index_New；按发布时间取最新，置顶帖不掺入） */
 export async function getLatestPosts(limit = 8): Promise<BbsPostItem[]> {
   const { posts } = await getPostList({ order: "post", page: 1 });
-  return posts.slice(0, limit);
+  return posts.filter((p) => !p.isPinned).slice(0, limit);
 }
 
 /** 加载更多（页码语义，BbsFeed 客户端组件 + /api/bbs/more 复用 getPostList） */
@@ -430,10 +436,10 @@ export async function deleteReply(id: number, userId: number, isAdmin: boolean):
   return true;
 }
 
-/** 管理员：置顶/精华/锁定/移动板块（移植 Nice/High/Lock/Move Action） */
+/** 管理员：置顶/高亮/精华/锁定/移动板块（置顶=isPinned 新语义；高亮=isTop 旧版 IsHigh 语义） */
 export async function adminSetPost(
   id: number,
-  data: { isTop?: boolean; isNice?: boolean; isLocked?: boolean; board?: number }
+  data: { isPinned?: boolean; isTop?: boolean; isNice?: boolean; isLocked?: boolean; board?: number }
 ): Promise<void> {
   await prisma.bbsPost.update({ where: { id: BigInt(id) }, data: { ...data, updateTime: nowSec() } });
 }

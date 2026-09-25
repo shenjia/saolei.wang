@@ -5,6 +5,9 @@
 - 录像: IsLive=0->status 0;Check=0->10;else 20;时间同为 (秒-1)*1000
 - 时间戳: MSSQL datetime 视为 +08:00 转 Unix 秒
 - 动态: News_Time > 本地基线 2013-10-23 08:23:46 的插入(type=20);并为新用户补 type=10 入伍动态
+- 论坛: bbs_post.is_top=旧版 Title_IsHigh「高亮」(不参与排序,仅白显);
+  is_pinned=新站「真置顶」(2026-09-25 起)——旧库无此列,INSERT 不写入、
+  ON DUPLICATE KEY 也不更新,重放同步不会清掉新站设置的置顶
 """
 import json, math, time, secrets, hashlib
 from datetime import datetime, timedelta
@@ -350,6 +353,7 @@ for (tid, getid, name, player, text, ptime, etime, rtime, click, reply, high, ni
         board = board_map.get(model or "", 2)
         p_rows.append((tid, board, player, (name or "")[:100], text or "",
                        int(reply or 0), int(click or 0),
+                       # is_top 位置对应 Title_IsHigh=高亮(非置顶);is_pinned 不在此处写入
                        1 if high else 0, 1 if nice else 0, 1 if lock else 0, 0,
                        ux(rtime), last_reply_user.get(tid, 0), ts, ux(etime)))
 flush("""INSERT INTO bbs_post (id,board,user,title,content,replies,clicks,is_top,is_nice,is_locked,status,
