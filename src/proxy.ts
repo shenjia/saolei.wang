@@ -16,8 +16,40 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 export const config = {
-  // 只拦截 .asp 结尾的路径（含大小写混合）。旧站除此以外没有别的动态路径形态
-  matcher: ["/:path*/:file*.asp", "/:file*.asp"],
+  // 拦截旧站路径。三类：
+  // ① .asp/.asa 页面（含任意大小写组合）：
+  //    实测坑：matcher 对扩展名大小写敏感——/bbs/title.ASP 不命中 .asp 小写 matcher
+  //    直接 404（外链存在大写扩展名形态）；path-to-regexp 不支持内联标志 (?i)
+  //    （Invalid group）、不允许捕获组——只能用字符类实现大小写无关；
+  //    .asa 是 ASP 配置文件（Global.asa 等），一并接住防 404
+  // ② 裸目录（/BBS /Video …）：必须用旧站原样 CamelCase——小写 /bbs /video 是
+  //    新站自己的路由，拦了会无限重定向；旧站外链由站内链接生成，均为原样大小写
+  // ③ 旧站静态资源热链（/Models/** /Download/** /Play/**）：论坛外链图片/下载直链，
+  //    新站静态树在 /models /download /play（Linux 生产环境大小写敏感，须改写）
+  matcher: [
+    "/((?:.*\\.[aA][sS][pP]))",
+    "/((?:.*\\.[aA][sS][aA]))",
+    "/BBS",
+    "/Video/:path*",
+    "/Player",
+    "/Ranking",
+    "/News",
+    "/Message",
+    "/About",
+    "/Download/:path*",
+    "/Guide",
+    "/Help",
+    "/Hero",
+    "/Team",
+    "/World",
+    "/Update",
+    "/History",
+    "/Online",
+    "/Main",
+    "/Play/:path*",
+    "/Models/:path*",
+    "/Software/:path*",
+  ],
 };
 
 /** 取查询参数（大小写不敏感，旧站 ASP Request() 即如此）：
@@ -103,6 +135,47 @@ export function proxy(req: NextRequest) {
   const q = (n: string) => param(req, n);
   const id = () => num(q("id"));
   const page = () => num(q("page"));
+
+  // ---------- 裸目录路径（旧站目录浏览形态 /BBS /Video 等，外链与手输常见） ----------
+  // matcher 已按旧站 CamelCase 原样拦截（小写是新站路由不能拦），这里小写后归一分发
+  const bareDirs: Record<string, string> = {
+    "/bbs": "/bbs",
+    "/video": "/video",
+    "/player": "/ranking",
+    "/ranking": "/ranking",
+    "/news": "/",
+    "/message": "/message",
+    "/about": "/page/about",
+    "/download": "/page/download",
+    "/guide": "/page/guide",
+    "/help": "/page/help",
+    "/hero": "/hero",
+    "/team": "/team",
+    "/world": "/titles",
+    "/update": "/page/history",
+    "/history": "/page/history",
+    "/online": "/page/download",
+    "/main": "/",
+  };
+  if (path in bareDirs) return movedTo(req, bareDirs[path]);
+
+  // ---------- 旧站静态资源热链 ----------
+  // /Models/Images/**（论坛帖 [img] 热链）→ /models/images/**（树已全小写化）
+  if (path.startsWith("/models/")) {
+    return movedTo(req, `/models${url.pathname.slice("/models".length)}`.toLowerCase());
+  }
+  // /Download/**（旧下载直链 .zip/.exe）→ /download/**（文件名保持原大小写）
+  if (path.startsWith("/download/")) {
+    return movedTo(req, `/download${url.pathname.slice("/download".length)}`);
+  }
+  // /Software/Download/**（2008 前旧路径）→ /download/**
+  if (path.startsWith("/software/download/")) {
+    return movedTo(req, `/download${url.pathname.slice("/software/download".length)}`);
+  }
+  // /Play/**（flop-player 播放器静态文件）→ /play/**（文件名保持原大小写）
+  if (path.startsWith("/play/")) {
+    return movedTo(req, `/play${url.pathname.slice("/play".length)}`);
+  }
 
   // ---------- BBS 论坛 ----------
   // /BBS/Title.asp?Id=9786 → /bbs/9786（张老师点名的核心案例）
