@@ -135,14 +135,15 @@ export function CommentForm({ videoId }: { videoId: number }) {
                   style={{ width: 420, marginRight: 15 }}
                   rows={4}
                   maxLength={COMMENT_CONTENT_LIMIT}
+                  placeholder="我来说两句…（纯文本）"
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                 />
               </div>
               {error && <div className="error">{error}</div>}
             </td>
-            <td>
-              <button type="submit" className="button" disabled={submitting}>
+            <td style={{ verticalAlign: "top" }}>
+              <button type="submit" className="lp_submit_btn" disabled={submitting}>
                 发表评论
               </button>
             </td>

@@ -1,9 +1,15 @@
 // 发帖/编辑表单（共用）
+// 2026-09-25 张老师确认改版：所见即所得编辑器（RichEditor，存储仍是 UBB）；
+// 板块分类 = 下划线筛选器紧挨标题右侧（站内 .tabs 同款），默认杂谈；
+// 排序分身份：管理员=公告/技术/杂谈/问答，普通用户=杂谈/技术/问答（公告不显示）；
+// 提交按钮 = 登录弹窗 .lp_submit 同款黄色按钮，居中。
+
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
+import { RichEditor } from "./RichEditor";
 
 export function PostForm({
   postId,
@@ -11,14 +17,27 @@ export function PostForm({
   initialBoard,
   initialTitle = "",
   initialContent = "",
+  isAdmin = false,
 }: {
   postId?: number;
   boards: [number, string][];
   initialBoard?: number;
   initialTitle?: string;
   initialContent?: string;
+  /** 管理员：公告排第一；普通用户：杂谈第一且公告不显示 */
+  isAdmin?: boolean;
 }) {
-  const [board, setBoard] = useState(initialBoard ?? boards[0]?.[0] ?? 1);
+  // 展示顺序：管理员=公告在前，普通用户=杂谈在前（公告隐藏）；不在列表里的（如历史板块）追加在尾
+  const order = isAdmin ? [0, 1, 2, 3] : [2, 1, 3];
+  const sorted = [
+    ...order.filter((id) => boards.some((b) => b[0] === id)).map((id) => boards.find((b) => b[0] === id)!),
+    ...boards.filter((b) => !order.includes(b[0])),
+  ];
+  const [board, setBoard] = useState(
+    initialBoard !== undefined && sorted.some((b) => b[0] === initialBoard)
+      ? initialBoard
+      : sorted[0]?.[0] ?? 1
+  );
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [error, setError] = useState("");
@@ -49,38 +68,39 @@ export function PostForm({
 
   return (
     <div className="post_form">
-      <p>
-        板块：
-        <select value={board} onChange={(e) => setBoard(parseInt(e.target.value, 10))}>
-          {boards.map(([id, name]) => (
-            <option key={id} value={id}>
+      <div className="post_head">
+        <h1>{postId ? "编辑主题" : "发布主题"}</h1>
+        <div className="board_tabs">
+          {sorted.map(([id, name]) => (
+            <button
+              key={id}
+              type="button"
+              className={`board_tab${board === id ? " on" : ""}`}
+              onClick={() => setBoard(id)}
+            >
               {name}
-            </option>
+            </button>
           ))}
-        </select>
-      </p>
-      <p>
+        </div>
+      </div>
+      <p className="frow">
         <input
           type="text"
           placeholder="主题标题（100 字以内）"
           maxLength={100}
-          style={{ width: "80%" }}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
       </p>
-      <p>
-        <textarea
-          rows={10}
-          maxLength={5000}
-          style={{ width: "90%" }}
-          placeholder="支持 UBB：[b]粗体[/b] [url 地址]文字[/url] [img]图址[/img] [face]0[/face] [1]-[8][!][?] 扫雷符号"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-        />
-      </p>
-      <p>
-        <button className="button active" disabled={busy || !title.trim() || !content.trim()} onClick={onSubmit}>
+      <RichEditor
+        initialContent={initialContent}
+        minHeight={300}
+        placeholder="直接输入正文，工具栏可插入表情与雷图"
+        onChange={setContent}
+        notify={toast}
+      />
+      <p className="submit_row">
+        <button className="lp_submit_btn" disabled={busy || !title.trim() || !content.trim()} onClick={onSubmit}>
           {postId ? "保存修改" : "发布主题"}
         </button>{" "}
         <span className="error">{error}</span>

@@ -26,10 +26,10 @@ export default async function BbsEditPage({ params }: { params: Promise<{ id: st
   return (
     <div id="page" className="main">
       <div className="box">
-        <h1>编辑主题</h1>
         <PostForm
           postId={post.id}
           boards={boards}
+          isAdmin={admin}
           initialBoard={post.board}
           initialTitle={post.title}
           initialContent={post.content}

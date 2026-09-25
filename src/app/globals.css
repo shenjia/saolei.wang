@@ -669,12 +669,6 @@ body #page.bbs_old .page_head {
   font-weight: normal;
   text-align: left;
 }
-.bbs_list th.cat {
-  width: 72px;
-  padding-left: 0;
-  padding-right: 0;
-  text-align: center;
-}
 .bbs_list th.topic {
   width: auto;
 }
@@ -3268,4 +3262,331 @@ body #header .nav .popMenu .menu li a {
 }
 .avatar_tip .error {
   color: #f92672;
+}
+
+/* ==================== BBS 所见即所得编辑器（2026-09-25 张老师确认方案，设计稿 design/editor-wysiwyg-preview.html V7） ====================
+   存储仍是 UBB：RichEditor 画布真身呈现（表情/雷图/黄字），提交序列化回 UBB，
+   服务端 ubb() 渲染管线零改动、存量帖零迁移。 */
+
+/* 标题行：筛选器紧挨 h1 右侧（同首页 .news_head 布局） */
+.post_head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 19.5px;
+}
+.post_head h1 {
+  margin: 0;
+}
+.post_form .frow {
+  margin: 0 0 12px;
+}
+.post_form .frow input[type="text"] {
+  width: 100%;
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+/* 板块筛选器：站内 .tabs 同款下划线式（灰字 / 选中黄字加粗 + 3px 黄下划线坐底线 / hover 绿） */
+.board_tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid #49483e;
+}
+.board_tab {
+  position: relative;
+  display: inline-block;
+  padding: 7px 14px;
+  font-style: normal;
+  font-size: 14px;
+  line-height: 21px;
+  color: #939387;
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.board_tab:hover {
+  color: #a6e22e;
+}
+.board_tab.on {
+  color: #fdc61a;
+  font-weight: bold;
+  cursor: default;
+}
+.board_tab::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+  transition: background 0.15s;
+}
+.board_tab.on::after {
+  background: #fdc61d;
+}
+.board_tab:hover::after {
+  background: #49483e;
+}
+.board_tab.on:hover::after {
+  background: #fdc61d;
+}
+
+/* 工具栏：独立按钮条（与画布分离） */
+.wys_toolbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px;
+  background: #33332e;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  position: relative;
+  flex-wrap: wrap;
+}
+.wbtn {
+  height: 24px;
+  min-width: 34px;
+  padding: 0 9px;
+  background: #49483e;
+  border: 1px solid #636359;
+  border-radius: 3px;
+  color: #b1b1a4;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 22px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.wbtn:hover {
+  background: #555550;
+  color: #f8f8f2;
+  border-color: #75715e;
+}
+.wbtn:active {
+  background: #272822;
+}
+.wbtn.t-title { color: #f8f8f2; font-weight: bold; }
+.wbtn.t-sign { color: #e6db74; }
+.wbtn.t-signest { color: #e6db74; font-weight: bold; }
+.wbtn.t-b { color: #b1b1a4; font-weight: bold; }
+.wbtn .bico {
+  height: 14px;
+  width: 14px;
+  display: inline-block;
+}
+
+/* 画布：观感沿用站内 textarea；表情/雷图/语义色以真身呈现 */
+.wys {
+  display: block;
+  width: 100%;
+  max-height: 560px;
+  overflow-y: auto;
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.8;
+  word-break: break-all;
+  outline: none;
+  caret-color: #fdc61a;
+}
+.wys:focus {
+  border-color: #8ac21b;
+}
+.wys:empty::before {
+  content: attr(data-ph);
+  color: #75715e;
+}
+.wys .line {
+  min-height: 25px;
+}
+.wys .line.mine-line {
+  line-height: 16px;
+  min-height: 16px;
+}
+.wys img[data-face] {
+  height: 24px;
+  width: 24px;
+  vertical-align: middle;
+}
+.wys img[data-mine] {
+  height: 16px;
+  width: 16px;
+  vertical-align: middle;
+}
+.wys .Title { font-weight: bold; color: #f8f8f2; }
+.wys .Sign { color: #e6db74; }
+.wys .Signest { font-weight: bold; color: #e6db74; }
+.wys blockquote {
+  border-left: 3px solid #49483e;
+  margin: 6px 0;
+  padding: 4px 10px;
+  color: #a59f85;
+}
+
+/* 弹层面板（表情 / 摆雷 / 贴图） */
+.wpop {
+  position: absolute;
+  top: 32px;
+  z-index: 30;
+  background: #3b3a32;
+  border: 1px solid #636359;
+  border-radius: 4px;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+}
+.wpop.faces { left: 0; }
+.wpop.mines { left: 46px; }
+.wpop.imgsup { left: 0; width: 300px; }
+.wpop_grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: 292px;
+}
+.wpop img {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  display: block;
+}
+.wpop.mines img {
+  width: 16px;
+  height: 16px;
+}
+.wpop img:hover {
+  background: #555550;
+  border-radius: 2px;
+}
+.wpop .wpop_tip {
+  font-size: 11px;
+  color: #75715e;
+  padding: 4px 2px 2px;
+  border-top: 1px solid #49483e;
+  margin-top: 5px;
+  line-height: 1.6;
+}
+.wpop .wpop_sw {
+  margin: 0 0 5px;
+  padding: 0;
+}
+.wbtn.wbtn_sw {
+  height: 20px;
+  min-width: 28px;
+  font-size: 11px;
+  padding: 0 7px;
+  line-height: 18px;
+}
+
+/* 贴图弹层：上传区 + 外链行 */
+.wup_area {
+  display: block;
+  width: 100%;
+  border: 1px dashed #636359;
+  border-radius: 4px;
+  background: none;
+  padding: 14px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: #939387;
+  cursor: pointer;
+  line-height: 1.8;
+  font-family: inherit;
+}
+.wup_area:hover {
+  border-color: #8ac21b;
+  color: #a6e22e;
+}
+.wup_area b {
+  color: #f8f8f2;
+  font-weight: 400;
+}
+.wlink_row {
+  display: flex;
+  gap: 5px;
+  margin-top: 6px;
+}
+.wlink_row input {
+  flex: 1;
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+.wlink_row button {
+  background: #49483e;
+  border: 1px solid #636359;
+  border-radius: 3px;
+  color: #b1b1a4;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.wlink_row button:hover {
+  color: #f8f8f2;
+  background: #555550;
+}
+
+/* 提交行：黄色主按钮居中（.lp_submit_btn = 登录弹窗 .lp_submit 同款） */
+.submit_row {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #75715e;
+  text-align: center;
+}
+.lp_submit_btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 32px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  color: #2b2a20;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  line-height: 1;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
+  transition: box-shadow 0.15s, filter 0.15s;
+}
+.lp_submit_btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
+}
+.lp_submit_btn:active:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
+}
+.lp_submit_btn:disabled {
+  opacity: 0.75;
+  cursor: default;
 }

@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
+import { RichEditor } from "./RichEditor";
 
 async function callApi(body: Record<string, unknown>): Promise<string | null> {
   const res = await fetch("/api/bbs", {
@@ -42,15 +43,15 @@ export function ReplyForm({ postId, locked }: { postId: number; locked: boolean 
 
   return (
     <div className="reply_form">
-      <textarea
-        rows={4}
-        maxLength={5000}
-        placeholder="支持 UBB：[b]粗体[/b] [url 地址]文字[/url] [img]图址[/img] [face]0[/face] [1]-[8][!][?] 扫雷符号"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+      <RichEditor
+        initialContent=""
+        minHeight={200}
+        placeholder="直接输入回复内容"
+        onChange={setContent}
+        notify={toast}
       />
-      <p>
-        <button className="button active" disabled={busy || !content.trim()} onClick={onSubmit}>
+      <p className="submit_row">
+        <button className="lp_submit_btn" disabled={busy || !content.trim()} onClick={onSubmit}>
           回复
         </button>{" "}
         <span className="error">{error}</span>

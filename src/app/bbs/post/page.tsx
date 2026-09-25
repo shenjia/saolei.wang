@@ -20,8 +20,7 @@ export default async function BbsPostPage() {
   return (
     <div id="page" className="main">
       <div className="box">
-        <h1>发布主题</h1>
-        <PostForm boards={boards} initialBoard={boards[0]?.[0]} />
+        <PostForm boards={boards} isAdmin={admin} />
       </div>
     </div>
   );
