@@ -46,8 +46,9 @@ export function ubbToEditorHtml(raw: string): string {
   t = t.replace(/\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi, '<a href="$1">$2</a>');
   t = t.replace(/\[face\](\d{1,2})(n?)\[\/face\]/gi, (_, n: string, sfx: string) => {
     const id = Math.min(29, parseInt(n, 10));
-    const dir = sfx ? "face-v2" : "face";
-    return `<img src="/images/${dir}/${id}.gif" data-face="${id}${sfx}">`;
+    const dir = sfx ? "face-wx" : "face";
+    const ext = sfx ? ".png" : ".gif";
+    return `<img src="/images/${dir}/${id}${ext}" data-face="${id}${sfx}">`;
   });
   const keys = ["0", "1", "2", "3", "4", "5", "6", "7", "8", ...Object.keys(MINE_MAP)];
   for (const k of keys) {
@@ -311,7 +312,7 @@ export function RichEditor({
 
   const makeFaceImg = (id: number, ver: "v1" | "v2") => {
     const im = document.createElement("img");
-    im.src = `/images/${ver === "v2" ? "face-v2" : "face"}/${id}.gif`;
+    im.src = ver === "v2" ? `/images/face-wx/${id}.png` : `/images/face/${id}.gif`;
     im.dataset.face = `${id}${ver === "v2" ? "n" : ""}`;
     return im;
   };
@@ -454,20 +455,20 @@ export function RichEditor({
         {pop === "faces" && (
           <div className="wpop faces">
             <div className="wpop_sw">
-              <button type="button" className="wbtn wbtn_sw" data-fv="v1" onClick={() => { faceVerRef.current = "v1"; setFaceVer("v1"); }}>经典</button>{" "}
-              <button type="button" className="wbtn wbtn_sw" data-fv="v2" onClick={() => { faceVerRef.current = "v2"; setFaceVer("v2"); }}>新版</button>
+              <button type="button" className={`wbtn wbtn_sw${faceVer === "v1" ? " on" : ""}`} data-fv="v1" onClick={() => { faceVerRef.current = "v1"; setFaceVer("v1"); }}>经典</button>{" "}
+              <button type="button" className={`wbtn wbtn_sw${faceVer === "v2" ? " on" : ""}`} data-fv="v2" onClick={() => { faceVerRef.current = "v2"; setFaceVer("v2"); }}>新版</button>
             </div>
             <div className="wpop_grid">
               {Array.from({ length: 30 }, (_, i) => i + 1).map((i) => (
                 <img
                   key={i}
-                  src={`/images/${faceVer === "v2" ? "face-v2" : "face"}/${i}.gif`}
+                  src={faceVer === "v2" ? `/images/face-wx/${i}.png` : `/images/face/${i}.gif`}
                   alt=""
                   onClick={() => { insertNodeAtCaret(makeFaceImg(i, faceVerRef.current)); closePop(); }}
                 />
               ))}
             </div>
-            <div className="wpop_tip">点击插入表情</div>
+            <div className="wpop_tip">点击插入表情（新版 = 微信原版）</div>
           </div>
         )}
         {pop === "mines" && (

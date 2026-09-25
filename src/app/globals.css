@@ -918,6 +918,11 @@ body #page.bbs_old .page_head {
 .bbs_content img {
   vertical-align: middle;
 }
+/* 微信新版表情（[face]Nn[/face] → /images/face-wx/N.png，128px 源图）：行内 24px 与旧 QQ gif 协调 */
+.bbs_content img[src^="/images/face-wx/"] {
+  height: 24px;
+  width: 24px;
+}
 .bbs_content blockquote {
   border-left: 3px solid #49483e;
   margin: 6px 0;

@@ -109,11 +109,12 @@ export function ubb(raw: string): string {
   );
   // 引用
   text = text.replace(/\[quote\]/gi, "<blockquote>").replace(/\[\/quote\]/gi, "</blockquote>");
-  // 表情：[face]N[/face]（N=0-29，白名单数字，经典 QQ 系）与 [face]Nn[/face]（新版 Fluent 动画）
+  // 表情：[face]N[/face]（N=0-29，白名单数字，经典 QQ 系）与 [face]Nn[/face]（新版=微信原版）
   text = text.replace(/\[face\](\d{1,2})(n?)\[\/face\]/gi, (_, n, suffix) => {
     const id = Math.min(29, parseInt(n, 10));
-    const dir = suffix ? "face-v2" : "face";
-    return `<img src="/images/${dir}/${id}.gif" alt="">`;
+    const dir = suffix ? "face-wx" : "face";
+    const ext = suffix ? ".png" : ".gif";
+    return `<img src="/images/${dir}/${id}${ext}" alt="">`;
   });
   // 扫雷符号：[1]-[8] 数字格 + 功能格
   for (let i = 0; i <= 8; i++) {
