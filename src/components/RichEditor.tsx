@@ -353,6 +353,8 @@ export function RichEditor({
     if (act === "pop") {
       const kind = btn.dataset.pop as PopState["kind"];
       if (popRef.current.kind === kind) { closePop(); return; }
+      // 弹层与触发按钮左对齐（工具栏可能换行，取按钮实时 offsetLeft）
+      (e.currentTarget as HTMLElement).style.setProperty("--pop-left", `${btn.offsetLeft}px`);
       popRef.current.kind = kind;
       setPop(kind);
       edRef.current?.focus();
@@ -455,8 +457,8 @@ export function RichEditor({
         {pop === "faces" && (
           <div className="wpop faces">
             <div className="wpop_sw">
-              <button type="button" className={`wbtn wbtn_sw${faceVer === "v1" ? " on" : ""}`} data-fv="v1" onClick={() => { faceVerRef.current = "v1"; setFaceVer("v1"); }}>经典</button>{" "}
-              <button type="button" className={`wbtn wbtn_sw${faceVer === "v2" ? " on" : ""}`} data-fv="v2" onClick={() => { faceVerRef.current = "v2"; setFaceVer("v2"); }}>新版</button>
+              <button type="button" className={`wbtn wbtn_sw${faceVer === "v2" ? " on" : ""}`} data-fv="v2" onClick={() => { faceVerRef.current = "v2"; setFaceVer("v2"); }}>新版</button>{" "}
+              <button type="button" className={`wbtn wbtn_sw${faceVer === "v1" ? " on" : ""}`} data-fv="v1" onClick={() => { faceVerRef.current = "v1"; setFaceVer("v1"); }}>旧版</button>
             </div>
             <div className="wpop_grid">
               {Array.from({ length: 30 }, (_, i) => i + 1).map((i) => (
@@ -468,7 +470,7 @@ export function RichEditor({
                 />
               ))}
             </div>
-            <div className="wpop_tip">点击插入表情（新版 = 微信原版）</div>
+            <div className="wpop_tip">点击插入表情（新版 = 微信原版，旧版 = QQ 动态）</div>
           </div>
         )}
         {pop === "mines" && (
