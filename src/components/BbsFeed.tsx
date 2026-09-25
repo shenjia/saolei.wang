@@ -16,23 +16,25 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
   return (
     <tr>
       <td>
-        {showBoard && <span className="board_tag">【{BBS_BOARD_NAMES[p.board]}】</span>}
-      </td>
-      <td>
-        <Link className="bbs_title" href={`/bbs/${p.id}`} target="_blank">
-          {p.title}
-        </Link>
-        {p.isNice && (
-          <span className="bbs_star" data-tip="精华">
-            ★
-          </span>
-        )}
-        {p.isTop && (
-          <span className="bbs_top" data-tip="置顶">
-            ▲
-          </span>
-        )}
-        {p.isLocked && <span className="bbs_flag locked">锁</span>}
+        {/* 七轮：分类标签与标题同行同格（未选具体板块时显示），标签在标题前。
+            topic_line 用 flex 收缩——超长标题出省略号时星标/置顶/锁标不被挤掉 */}
+        <span className="topic_line">
+          {showBoard && <span className="board_tag">【{BBS_BOARD_NAMES[p.board]}】</span>}
+          <Link className="bbs_title" href={`/bbs/${p.id}`} target="_blank">
+            {p.title}
+          </Link>
+          {p.isNice && (
+            <span className="bbs_star" data-tip="精华">
+              ★
+            </span>
+          )}
+          {p.isTop && (
+            <span className="bbs_top" data-tip="置顶">
+              ▲
+            </span>
+          )}
+          {p.isLocked && <span className="bbs_flag locked">锁</span>}
+        </span>
       </td>
       <td className="user">
         {p.author && (
@@ -90,12 +92,12 @@ export function BbsFeed({
       ))}
       {items.length === 0 && (
         <tr>
-          <td colSpan={5}>还没有主题，来发第一帖吧。</td>
+          <td colSpan={4}>还没有主题，来发第一帖吧。</td>
         </tr>
       )}
       {hasMore && (
         <tr className="bbs_more_row">
-          <td colSpan={5}>
+          <td colSpan={4}>
             <div className="more_loader">
               <button
                 type="button"

@@ -659,8 +659,11 @@ body #page.bbs_old .page_head {
 }
 /* 列宽（2026-09-24 张老师二轮反馈；三轮：作者定宽收窄、分类列居中）：
    fixed 布局宽度只认表头行——全部写在 th 上（border-box 含 padding）；
-   分类窄且居中、作者定宽 150px、主题吃满剩余、回复/点击与最后更新收窄。
-   不用 td:first-child{width}（fixed 下 tbody 宽度无效，上一版踩坑） */
+   作者定宽 190px、主题吃满剩余、回复/点击与最后更新收窄。
+   不用 td:first-child{width}（fixed 下 tbody 宽度无效，上一版踩坑）。
+   七轮（2026-09-25 张老师）：分类与主题合并成一列（表头「分类 / 主题」，
+   分类以标题前行内标签呈现）——论坛页 .cat 列删除；消息页仍用 .cat
+   （类型列），选择器加 #page.message_list 前缀只作用于消息页 */
 .bbs_list th {
   box-sizing: border-box;
   padding: 6px 20px;
@@ -668,6 +671,12 @@ body #page.bbs_old .page_head {
   color: #939387;
   font-weight: normal;
   text-align: left;
+}
+#page.message_list .bbs_list th.cat {
+  width: 72px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
 }
 .bbs_list th.topic {
   width: auto;
@@ -695,7 +704,9 @@ body #page.bbs_old .page_head {
   padding-right: 8px;
 }
 /* 正文单元格：.table.bbs_list 双类提权压过 legacy .table td 的 20px（后加载同优先级胜出），
-   列 padding 与 th 逐列严格一致，保证表头左侧与正文对齐 */
+   列 padding 与 th 逐列严格一致，保证表头左侧与正文对齐。
+   七轮：论坛表 4 列——分类已并入首列；td:first-child 居中规则仅保留给消息页（类型列），
+   论坛首列是标题列须左对齐，用 #page.bbs_old 提权反转 */
 .table.bbs_list td {
   padding: 8px 20px;
   border-bottom: 1px solid #3a3a3a;
@@ -703,12 +714,22 @@ body #page.bbs_old .page_head {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.table.bbs_list td:first-child {
+#page.message_list .table.bbs_list td:first-child {
   padding: 8px 0;
   text-align: center;
 }
-.table.bbs_list td:nth-child(4),
-.table.bbs_list td:nth-child(5) {
+#page.bbs_old .table.bbs_list td:first-child {
+  padding: 8px 20px;
+  text-align: left;
+  overflow: visible; /* 七轮：星标/置顶气泡不被裁剪 */
+}
+/* 论坛 4 列序：回复点击(3) / 最后更新(4) 收窄 padding；
+   消息页 4 列序不同（时间在 4），分开写 */
+#page.bbs_old .table.bbs_list td:nth-child(3),
+#page.bbs_old .table.bbs_list td:nth-child(4) {
+  padding: 8px;
+}
+#page.message_list .table.bbs_list td:nth-child(4) {
   padding: 8px;
 }
 /* legacy em,strong{margin:0 5px} 会给回复数加 margin——本表内归零，
@@ -716,9 +737,21 @@ body #page.bbs_old .page_head {
 .bbs_list td em {
   margin: 0;
 }
-/* 分类标签：与正文同字号（legacy .level 是 20px，不可用） */
+/* 分类标签：与正文同字号（legacy .level 是 20px，不可用）。
+   七轮：并入主题列后作为行内标签，flex 不收缩（标题负责收缩出省略号） */
 .bbs_list .board_tag {
   color: #939387;
+  flex: none;
+}
+/* 七轮：主题行 flex 容器——标签/链接/星标同行；bbs_title 收缩出省略号 */
+#page.bbs_old .bbs_list .topic_line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+#page.bbs_old .bbs_list .topic_line .bbs_title {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 /* 标题灰色（旧版 .Text = #BBBBBB）；省略号移到链接上，
    星标/置顶/锁标不被裁剪（2026-09-24 张老师：气泡要顶层显示不被遮挡） */
@@ -731,8 +764,11 @@ body #page.bbs_old .page_head {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.bbs_list td:nth-child(2) {
-  overflow: visible;
+/* 星标/置顶/锁标在 flex 行内不收缩（七轮） */
+.bbs_star,
+.bbs_top,
+.bbs_flag {
+  flex: none;
 }
 .bbs_list a.bbs_title:hover {
   color: #a6e22e;
@@ -764,6 +800,42 @@ body #page.bbs_old .page_head {
   color: #ffee00;
   font-size: 13px;
   margin-left: 5px;
+}
+/* 高亮（旧版 IsHigh 语义，2026-09-25 与置顶分离）：标题白显 + 详情页 ◆ 标记 */
+.bbs_list a.bbs_title.highlight {
+  color: #f8f8f2;
+}
+.bbs_list a.bbs_title.highlight:hover {
+  color: #a6e22e;
+}
+.bbs_high_flag {
+  color: #f8f8f2;
+  font-size: 15px;
+  margin-left: 5px;
+  position: relative;
+  cursor: default;
+}
+.bbs_high_flag::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+.bbs_high_flag:hover::after {
+  opacity: 1;
 }
 /* 自定义 tooltip：悬停立即弹出，替代原生 title 的 1s 延迟 */
 .bbs_star,
@@ -1120,11 +1192,8 @@ body #page.message_list > .box:first-child .page_head {
 }
 /* 消息页版式：复用 .table.bbs_list 列宽（类型 72 居中 / 发件人 190 / 内容吃满 / 时间 96）
    ——本表 4 列，th 上写死宽度即可，无「回复/点击」列
-   （2026-09-25 张老师要求：发件人与内容列对换，发件人在前） */
-#page.message_list .table.bbs_list td:first-child {
-  padding: 8px 0;
-  text-align: center;
-}
+   （2026-09-25 张老师要求：发件人与内容列对换，发件人在前）
+   td:first-child 居中规则已上移至 717 行（七轮改版时与论坛首列左对齐规则并列，避免两处维护） */
 /* 二轮（张老师要求）：未读行不加粗改为绿「新」字；已读内容整体变灰 */
 #page.message_list .table tr.unread td {
   font-weight: normal;
@@ -2746,8 +2815,8 @@ body #page.two_columns li.main {
   body #page .box:has(.ranking_table) {
     overflow-x: auto;
   }
-  /* BBS 主题表 table-layout:fixed，主题列吃剩余宽——最小宽度给足 700，
-     主题列可得 ~166px，其余盒内横滑 */
+  /* BBS 主题表 table-layout:fixed，主题列吃剩余宽——最小宽度给足 700
+     （七轮 4 列后主题列可得 ~300px），其余盒内横滑 */
   body #page .bbs_list {
     min-width: 700px;
   }

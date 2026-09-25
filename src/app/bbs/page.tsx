@@ -7,6 +7,8 @@
 // 2026-09-24 四轮：「只看精华」回归，作为排序组第三项（选中=nice=1+固定更新时间排序，与 order 互斥）
 // 2026-09-25 六轮（张老师）：「精华」并入左侧分类筛选组末位（board=nice，跨板块）；
 //   取消排序筛选器——列表固定按更新时间排序；发布按钮改 small 与「加载更多」同尺寸
+// 2026-09-25 七轮（张老师）：分类与主题合并成一列——表头「分类 / 主题」，
+//   行内分类改为标题前的灰色标签（board_tag），不再单独占一列
 
 import Link from "next/link";
 import { BBS_BOARDS, BBS_BOARD_NAMES, getPostPage } from "@/lib/bbs";
@@ -70,8 +72,7 @@ export default async function BbsPage({
         <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
           <thead>
             <tr>
-              <th className="cat">分类</th>
-              <th className="topic">主题</th>
+              <th className="topic">分类 / 主题</th>
               <th className="author">作者</th>
               <th className="num">回复 / 点击</th>
               <th className="time">最后更新</th>
