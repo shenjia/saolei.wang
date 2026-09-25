@@ -1,12 +1,12 @@
-// 保存个人资料（移植 forms/ProfileForm::saveToDb + 校验规则）
+// 保存个人资料（移植 forms/ProfileForm::saveToDb + 校验规则；2026-09-25 移除自我介绍字段，只保留爱好）
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
-const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, selfIntro: 50, interest: 50 } as const;
+const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, interest: 50 } as const;
 const LABELS: Record<string, string> = {
-  qq: "QQ", nickname: "昵称", mouse: "鼠标", pad: "鼠标垫", selfIntro: "自我介绍", interest: "兴趣爱好",
+  qq: "QQ", nickname: "昵称", mouse: "鼠标", pad: "鼠标垫", interest: "爱好",
 };
 
 export async function POST(req: Request) {
@@ -55,7 +55,6 @@ export async function POST(req: Request) {
       nickname: fields.nickname,
       mouse: fields.mouse,
       pad: fields.pad,
-      selfIntro: fields.selfIntro,
       interest: fields.interest,
       ...(birthday !== undefined ? { birthday } : {}),
       updateTime: BigInt(Math.floor(Date.now() / 1000)),

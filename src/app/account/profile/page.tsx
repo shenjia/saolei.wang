@@ -54,7 +54,6 @@ export default async function AccountProfilePage() {
             <ProfileForm
               avatarSlot={avatarSlot}
               defaults={{
-                selfIntro: info?.selfIntro ?? "",
                 interest: info?.interest ?? "",
                 qq: info?.qq ?? "",
                 nickname: info?.nickname ?? "",

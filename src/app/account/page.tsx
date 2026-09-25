@@ -20,8 +20,7 @@ export default async function AccountCenterPage() {
   const rows: [string, string][] = [
     ["中文名", user.chineseName],
     ["英文名", user.englishName],
-    ["自我介绍", info?.selfIntro ?? ""],
-    ["兴趣爱好", info?.interest ?? ""],
+    ["爱好", info?.interest ?? ""],
     ["QQ", info?.qq ?? ""],
     ["昵称", info?.nickname ?? ""],
     ["鼠标", info?.mouse ?? ""],

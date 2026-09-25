@@ -119,9 +119,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             <dd>{d.mouse || "—"}</dd>
             <dt>鼠标垫</dt>
             <dd>{d.pad || "—"}</dd>
-            <dt>自我介绍</dt>
-            <dd>{d.selfIntro || "—"}</dd>
-            <dt>兴趣爱好</dt>
+            <dt>爱好</dt>
             <dd>{d.interest || "—"}</dd>
           </dl>
         </AdminCard>

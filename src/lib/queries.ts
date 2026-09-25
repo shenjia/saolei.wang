@@ -513,7 +513,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 
 export interface UserDetail {
   user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number };
-  info: { nickname: string; selfIntro: string | null; interest: string | null; qq: string; mouse: string; pad: string } | null;
+  info: { nickname: string; interest: string | null; qq: string; mouse: string; pad: string } | null;
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
   title: string;
@@ -552,7 +552,6 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
     info: info
       ? {
           nickname: info.nickname,
-          selfIntro: info.selfIntro,
           interest: info.interest,
           qq: info.qq,
           mouse: info.mouse,

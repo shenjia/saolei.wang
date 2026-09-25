@@ -157,7 +157,6 @@ export interface AdminUserDetail {
   nickname: string;
   mouse: string;
   pad: string;
-  selfIntro: string;
   interest: string;
   loginTimes: number;
   loginIp: string;
@@ -258,7 +257,6 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     nickname: info?.nickname ?? "",
     mouse: info?.mouse ?? "",
     pad: info?.pad ?? "",
-    selfIntro: info?.selfIntro ?? "",
     interest: info?.interest ?? "",
     loginTimes: N(stat?.loginTimes),
     loginIp: stat?.loginIp ?? "",

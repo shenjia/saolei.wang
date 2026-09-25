@@ -7,15 +7,14 @@ import { useRouter } from "next/navigation";
 import { AvatarUploader } from "./AvatarUploader";
 import { toast } from "./Toast";
 
-// 字段长度限制（移植 UserConfig::INFO_*_LIMIT）
-const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, selfIntro: 50, interest: 50 } as const;
+// 字段长度限制（移植 UserConfig::INFO_*_LIMIT；2026-09-25 移除自我介绍字段，只保留爱好）
+const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, interest: 50 } as const;
 
 export interface ProfileDefaults {
   qq: string;
   nickname: string;
   mouse: string;
   pad: string;
-  selfIntro: string;
   interest: string;
   birthYear: number;
   birthMonth: number;
@@ -73,15 +72,7 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
         <tbody>
           <AvatarUploader {...avatarSlot} />
           <tr>
-            <th>自我介绍</th>
-            <td>
-              <div>
-                <textarea style={{ width: 300 }} rows={4} maxLength={LIMITS.selfIntro} value={form.selfIntro} onChange={set("selfIntro")} />
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <th>兴趣爱好</th>
+            <th>爱好</th>
             <td>
               <div>
                 <textarea style={{ width: 300 }} rows={3} maxLength={LIMITS.interest} value={form.interest} onChange={set("interest")} />

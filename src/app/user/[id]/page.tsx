@@ -32,8 +32,7 @@ export const dynamic = "force-dynamic";
 
 const PROFILE_FIELDS: [string, string][] = [
   ["nickname", "昵称"],
-  ["selfIntro", "自我介绍"],
-  ["interest", "兴趣爱好"],
+  ["interest", "爱好"],
   ["qq", "QQ"],
   ["mouse", "鼠标"],
   ["pad", "鼠标垫"],
