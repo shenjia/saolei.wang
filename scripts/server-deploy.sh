@@ -107,6 +107,16 @@ nice -n 19 ionice -c3 pnpm install --frozen-lockfile
 info "生成 Prisma Client..."
 pnpm exec prisma generate
 
+# ---------- 同步数据库 schema ----------
+# 约定：schema.prisma 的加法改动（加列/加表/加索引）随部署自动应用。
+#   教训（2026-09-25）：并行会话给 bbs_post 加 is_pinned 列并上线代码，生产库没列 →
+#   首页/BBS 全站 500（P2022）。db push 是防线。
+# 破坏性改动（删列/删表/缩类型）会让 db push 要求 --accept-data-loss 而报错退出 →
+#   部署中止，属预期保护：必须人工确认后手动执行，不允许部署链路静默删数据。
+#   注意：库里有 schema 外的表（备份表等）也会触发同样中止——先归档移出。
+info "同步数据库 schema (prisma db push)..."
+pnpm exec prisma db push --skip-generate
+
 # ---------- 构建到备槽（主力不受影响，无 502 窗口） ----------
 info "构建生产版本到备槽 ${S_DIR}（主力 $ACTIVE 继续服务）..."
 # 清理全部槽位的 Next 生成类型缓存（01xue 踩过：路由删除后旧 types 误报编译错误）
