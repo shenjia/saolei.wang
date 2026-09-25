@@ -133,8 +133,15 @@ sudo -n "$NGINX_BIN" -t || fail "nginx 配置校验失败，未 reload（线上�
 sudo -n "$NGINX_BIN" -s reload
 sleep 1
 
-# ---------- 终检（本机直连 443 新主力；失败自动回滚） ----------
-if curl -sf --max-time 10 --resolve "new.saolei.wang:443:127.0.0.1" "https://new.saolei.wang$HEALTH_PATH" >/dev/null 2>&1; then
+# ---------- 终检（本机直连新主力；失败自动回滚） ----------
+# 双协议探测：证书就位前只有 80（HTTP），证书就位后 443（HTTPS）——任一通即过。
+# 正式切 https 后可只留 443 探测。
+final_check() {
+  curl -sf --max-time 10 --resolve "new.saolei.wang:443:127.0.0.1" "https://new.saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
+  curl -sf --max-time 10 --resolve "new.saolei.wang:80:127.0.0.1" "http://new.saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
+  return 1
+}
+if final_check; then
   ok "经 nginx 终检通过 ✓  新主力: $STANDBY"
 else
   warn "终检失败！自动回滚到 $ACTIVE ..."
