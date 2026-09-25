@@ -1,7 +1,6 @@
 // 动态单元格（展示部分，客户端可用）——军衔称号由服务端预算好以 title 传入
 // 移植 views/news/_cell、_newbie、_person_record
 // 2026-09-24 新增类型渲染：上传录像 VIDEO / 加入扫雷网 JOIN / 更换头像 AVATAR / 论坛文章 ARTICLE / 评论 COMMENT
-// 2026-09-25 timeFirst：时间列挪到最左（仅首页试验，/video 与用户页不受影响）
 
 import Link from "next/link";
 import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, type Level } from "@/lib/config";
@@ -13,16 +12,7 @@ function formatScore(order: string, value: number): string {
   return order === "time" ? scoreTime(value) : score3bvs(value);
 }
 
-export function NewsCellView({
-  news,
-  title,
-  timeFirst,
-}: {
-  news: NewsItem;
-  title: string;
-  /** 时间列放最左（首页试验版式） */
-  timeFirst?: boolean;
-}) {
+export function NewsCellView({ news, title }: { news: NewsItem; title: string }) {
   const d = news.details as {
     lv?: string;
     od?: string;
@@ -41,11 +31,6 @@ export function NewsCellView({
   );
   return (
     <tr>
-      {timeFirst && (
-        <td className={"time " + (isRecent(news.createTime) ? "time--recent" : "time--old")}>
-          {timeOpposite(news.createTime, TIME_YEAR, "Y-n-j")}
-        </td>
-      )}
       <td>
         {news.type === NEWS_TYPE.NEWBIE && news.author && (
           <>
@@ -132,11 +117,9 @@ export function NewsCellView({
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>
-      {!timeFirst && (
-        <td className={"time " + (isRecent(news.createTime) ? "time--recent" : "time--old")}>
-          {timeOpposite(news.createTime, TIME_YEAR, "Y-n-j")}
-        </td>
-      )}
+      <td className={"time " + (isRecent(news.createTime) ? "time--recent" : "time--old")}>
+        {timeOpposite(news.createTime, TIME_YEAR, "Y-n-j")}
+      </td>
     </tr>
   );
 }

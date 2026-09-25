@@ -13,47 +13,29 @@ import { AvatarCell, TitleBadge } from "./Cells";
 // 2008 版级别配色（.Beg/.Int/.Exp + a.XXX 亮一档链接变体）
 const LEVEL_CLS: Record<VideoLevel, string> = { beg: "lv_beg", int: "lv_int", exp: "lv_exp" };
 
-/** 表头（列定义唯一来源，两处共用）；timeFirst=时间列放最左（首页试验版式 2026-09-25） */
-export function VideoHead({ timeFirst }: { timeFirst?: boolean }) {
-  const head = timeFirst ? (
-    <>
-      <th>上传时间</th>
-      <th>上传者</th>
-      <th>级别</th>
-      <th>成绩</th>
-      <th className="c">3BV</th>
-      <th className="c">3BV/s</th>
-      <th>评论 / 点击</th>
-    </>
-  ) : (
-    <>
-      <th>上传者</th>
-      <th>上传时间</th>
-      <th>级别</th>
-      <th>成绩</th>
-      <th className="c">3BV</th>
-      <th className="c">3BV/s</th>
-      <th>评论 / 点击</th>
-    </>
+/** 表头（列定义唯一来源，两处共用） */
+export function VideoHead() {
+  return (
+    <thead>
+      <tr>
+        <th>上传者</th>
+        <th>上传时间</th>
+        <th>级别</th>
+        <th>成绩</th>
+        <th className="c">3BV</th>
+        <th className="c">3BV/s</th>
+        <th>评论 / 点击</th>
+      </tr>
+    </thead>
   );
-  return <thead>{head}</thead>;
 }
 
 /** 单行（<tr>），列宽/配色见 globals.css 的 .video_table */
-export function VideoRowLine({ video: v, timeFirst }: { video: VideoListItem; timeFirst?: boolean }) {
+export function VideoRowLine({ video: v }: { video: VideoListItem }) {
   const scores = videoScores(v.board3bv, v.realTime);
   const lvCls = LEVEL_CLS[v.level as VideoLevel] ?? "";
-  const timeCell = (
-    <td
-      className={`create_time ${isRecent(v.createTime) ? "time--recent" : "time--old"}`}
-      title={formatDate(v.createTime, "Y年n月j日 H:i:s")}
-    >
-      {timeOpposite(v.createTime, TIME_YEAR, "Y-n-j")}
-    </td>
-  );
   return (
     <tr>
-      {timeFirst && timeCell}
       <td className="name">
         {v.author ? (
           <>
@@ -65,7 +47,12 @@ export function VideoRowLine({ video: v, timeFirst }: { video: VideoListItem; ti
           <span className="avatar_link">?</span>
         )}
       </td>
-      {!timeFirst && timeCell}
+      <td
+        className={`create_time ${isRecent(v.createTime) ? "time--recent" : "time--old"}`}
+        title={formatDate(v.createTime, "Y年n月j日 H:i:s")}
+      >
+        {timeOpposite(v.createTime, TIME_YEAR, "Y-n-j")}
+      </td>
       <td className={`level ${lvCls}`}>{LEVEL_NAMES[v.level as VideoLevel] ?? v.level}</td>
       <td className={`score ${lvCls}`}>
         <Link href={`/video/${v.id}`} target="_blank" title="点击查看录像">

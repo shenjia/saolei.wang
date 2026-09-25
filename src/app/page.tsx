@@ -54,7 +54,6 @@ export default async function HomePage() {
           <NewsFeed
             title="新闻"
             homeOnly
-            timeFirst
             initial={feed}
             pageSize={HOME_NEWS_NUMBER}
             initialHasMore={news.length === HOME_NEWS_NUMBER}
@@ -65,7 +64,6 @@ export default async function HomePage() {
           <VideoFeed
             title="录像"
             titleClassName="gray"
-            timeFirst
             initial={videos}
             pageSize={HOME_VIDEO_NUMBER}
             initialHasMore={videos.length === HOME_VIDEO_NUMBER}
