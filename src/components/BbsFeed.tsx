@@ -19,7 +19,12 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
         {/* 七轮：分类标签与标题同行同格（未选具体板块时显示），标签在标题前。
             topic_line 用 flex 收缩——超长标题出省略号时星标/置顶/锁标不被挤掉 */}
         <span className="topic_line">
-          {showBoard && <span className="board_tag">【{BBS_BOARD_NAMES[p.board]}】</span>}
+          {/* 八轮：公告标签醒目黄（#fdc61a 全站高亮语义），其余板块保持灰 */}
+          {showBoard && (
+            <span className={"board_tag" + (p.board === 0 ? " notice" : "")}>
+              【{BBS_BOARD_NAMES[p.board]}】
+            </span>
+          )}
           <Link className="bbs_title" href={`/bbs/${p.id}`} target="_blank">
             {p.title}
           </Link>
