@@ -768,13 +768,13 @@ body #page.bbs_old .page_head {
   color: #fdc61a;
 }
 /* 十三轮（2026-09-25 张老师）：四板块各自配色区分——均取 Monokai 色板，
-   与全站主题同源；十四轮：技术橙 #fd971f、问答绿 #a6e22e 对调；
-   杂谈保持默认灰 */
+   与全站主题同源；十四轮：技术橙、问答绿；十五轮定稿：技术绿（鼓励技术贴）、
+   问答橙；杂谈保持默认灰 */
 .bbs_list .board_tag.tech {
-  color: #fd971f;
+  color: #a6e22e;
 }
 .bbs_list .board_tag.qa {
-  color: #a6e22e;
+  color: #fd971f;
 }
 /* 七轮：主题行 flex 容器——标签/链接/星标同行；bbs_title 收缩出省略号 */
 #page.bbs_old .bbs_list .topic_line {
