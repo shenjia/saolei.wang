@@ -1138,8 +1138,9 @@ body #page.message_list > .box:first-child .page_head {
   gap: 8px;
   align-items: center;
 }
-/* 消息页版式：复用 .table.bbs_list 列宽（类型 72 居中 / 内容吃满 / 发件人 190 / 时间 96）
-   ——本表 4 列，th 上写死宽度即可，无「回复/点击」列 */
+/* 消息页版式：复用 .table.bbs_list 列宽（类型 72 居中 / 发件人 190 / 内容吃满 / 时间 96）
+   ——本表 4 列，th 上写死宽度即可，无「回复/点击」列
+   （2026-09-25 张老师要求：发件人与内容列对换，发件人在前） */
 #page.message_list .table.bbs_list td:first-child {
   padding: 8px 0;
   text-align: center;

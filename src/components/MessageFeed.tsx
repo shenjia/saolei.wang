@@ -21,12 +21,6 @@ export function MessageRow({ m }: { m: MessageItem }) {
       <td>
         <span className="board_tag">{m.isSystem ? "系统" : "私信"}</span>
       </td>
-      <td>
-        <Link className="bbs_title" href={`/message/${m.id}`}>
-          {m.content.length > 40 ? m.content.slice(0, 40) + "…" : m.content}
-        </Link>
-        {!m.isRead && <span className="msg_new">新</span>}
-      </td>
       <td className="user">
         {m.isSystem ? (
           <span className="avatar_link">【系统广播】</span>
@@ -38,6 +32,12 @@ export function MessageRow({ m }: { m: MessageItem }) {
         ) : (
           "?"
         )}
+      </td>
+      <td>
+        <Link className="bbs_title" href={`/message/${m.id}`}>
+          {m.content.length > 40 ? m.content.slice(0, 40) + "…" : m.content}
+        </Link>
+        {!m.isRead && <span className="msg_new">新</span>}
       </td>
       <td className="time">{timeOpposite(m.createTime, TIME_NEVER)}</td>
     </tr>

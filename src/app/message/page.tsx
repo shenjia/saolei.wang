@@ -41,8 +41,8 @@ export default async function MessagePage({
           <thead>
             <tr>
               <th className="cat">类型</th>
-              <th className="topic">内容</th>
               <th className="author">发件人</th>
+              <th className="topic">内容</th>
               <th className="time">时间</th>
             </tr>
           </thead>
