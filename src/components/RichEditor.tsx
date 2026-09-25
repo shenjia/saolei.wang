@@ -144,7 +144,11 @@ async function compressToBudget(file: File, budget = 204800): Promise<{ blob: Bl
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(im, 0, 0, w, h);
       for (const q of qs) {
-        const blob = await new Promise<Blob>((r) => c.toBlob(r, "image/jpeg", q));
+        // toBlob 回调是 BlobCallback（Blob | null），不能直接把 Promise<Blob> 的 resolve
+        // 传进去（参数型逆变不兼容）；全新 .next 目录的完整类型检查会拦（缓存复用时被跳过）
+        const blob = await new Promise<Blob>((resolve) =>
+          c.toBlob((b) => resolve(b!), "image/jpeg", q)
+        );
         last = { blob, w, h, q };
         if (blob.size <= budget) return last;
       }
