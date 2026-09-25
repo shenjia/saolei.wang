@@ -681,6 +681,11 @@ body #page.bbs_old .page_head {
 .bbs_list th.topic {
   width: auto;
 }
+/* 十一轮：论坛首列表头贴卡片左缘，与行内首列内容、页头 h1 对齐
+   （scoped 到论坛页——消息页内容列保持 20px 缩进） */
+#page.bbs_old .bbs_list th.topic {
+  padding-left: 0;
+}
 .bbs_list th.author {
   width: 190px;
 }
@@ -719,7 +724,7 @@ body #page.bbs_old .page_head {
   text-align: center;
 }
 #page.bbs_old .table.bbs_list td:first-child {
-  padding: 8px 20px;
+  padding: 8px 20px 8px 0; /* 十一轮：首列贴卡片左缘，与页头 h1 对齐 */
   text-align: left;
   overflow: visible; /* 七轮：星标/置顶气泡不被裁剪 */
 }
@@ -743,17 +748,20 @@ body #page.bbs_old .page_head {
    legacy 面板 highlight 同色，全站高亮语义统一），其余板块保持灰。
    九轮（2026-09-25 张老师）：标签改灰底圆角矩形徽章——去掉【】括号
    （徽章轮廓已承担分隔），灰底深灰字、公告黄字，字号收小与正文区分。
-   十轮（2026-09-25 张老师）：徽章底色与 .box 板块底（#3b3a32）几乎同色
-   ——加 1px 稍亮灰描边（#49483e，.box 边框/表头分隔线同款全站边框灰） */
+   十轮（2026-09-25 张老师）：加 1px 描边勾轮廓。
+   十一轮（2026-09-25 张老师）：徽章太弱——底色提亮一档（#49483e）、
+   描边跟亮（#656355）、字加粗；与标题间空一格（margin-right 8px） */
 .bbs_list .board_tag {
   flex: none;
   display: inline-block;
   padding: 1px 7px;
-  border: 1px solid #49483e;
+  margin-right: 8px;
+  border: 1px solid #656355;
   border-radius: 3px;
-  background: #3b3a35;
+  background: #49483e;
   color: #939387;
   font-size: 12px;
+  font-weight: bold;
   line-height: 18px;
 }
 .bbs_list .board_tag.notice {
