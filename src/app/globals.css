@@ -3704,3 +3704,26 @@ body #header .nav .popMenu .menu li a {
   opacity: 0.75;
   cursor: default;
 }
+/* 返回：次级灰按钮，与黄主按钮同高同行 */
+.submit_row .btn_back {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 24px;
+  margin-left: 4px;
+  background: #49483e;
+  border: 1px solid #636359;
+  border-radius: 9px;
+  color: #b1b1a4;
+  font-size: 14px;
+  text-decoration: none;
+  vertical-align: top;
+  transition: background 0.15s, color 0.15s;
+}
+.submit_row .btn_back:hover {
+  background: #555550;
+  color: #f8f8f2;
+  text-decoration: none;
+}

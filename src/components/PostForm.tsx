@@ -7,6 +7,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
 import { RichEditor } from "./RichEditor";
@@ -103,6 +104,7 @@ export function PostForm({
         <button className="lp_submit_btn" disabled={busy || !title.trim() || !content.trim()} onClick={onSubmit}>
           {postId ? "保存修改" : "发布主题"}
         </button>{" "}
+        <Link className="btn_back" href="/bbs">返回</Link>{" "}
         <span className="error">{error}</span>
       </p>
     </div>
