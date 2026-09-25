@@ -28,6 +28,8 @@ export const BBS_CONTENT_LIMIT = 5000;
 
 // 排序文案（2026-09-24 张老师要求：去「按」前缀；「回复时间」改「更新时间」；
 // 同日三轮：去掉「点击数/回复数」两种排序，只留时间类）
+// 2026-09-25 六轮：排序筛选器已取消，列表固定更新时间排序（order="reply"）；
+//   BBS_ORDERS/BbsOrder 保留供 getPostList 类型签名使用，页面不再暴露 order 参数
 export const BBS_ORDERS = {
   reply: "更新时间",
   post: "发布时间",

@@ -626,8 +626,9 @@ body .tabs > a:hover::after {
 }
 
 /* ---------- BBS 论坛（移植 2008 版） ---------- */
-/* 页头（2026-09-24 二轮）：分类 tabs 贴 title 左侧；排序+只看精华两组推到行右侧；
-   2026-09-24 五轮：页头随排行/录像页编排移入主体卡片内 */
+/* 页头（2026-09-24 二轮）：分类 tabs 贴 title 左侧；
+   2026-09-24 五轮：页头随排行/录像页编排移入主体卡片内；
+   2026-09-25 六轮：排序组取消，「精华」并入分类 tabs；发布按钮推到行尾（small 与加载更多同尺寸） */
 #page .page_head .bbs_head_nav {
   display: flex;
   flex-wrap: wrap;
@@ -636,16 +637,13 @@ body .tabs > a:hover::after {
   flex: 1;
   min-width: 0;
 }
-#page .page_head .bbs_head_nav .side_filters {
-  margin-left: auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 20px;
-}
 #page .page_head .bbs_head_nav .bbs_post_btn {
   flex: none;
-  margin: 0 0 0 4px;
+  margin-left: auto;
+}
+#page .page_head .bbs_head_nav .bbs_post_btn,
+#page .page_head .bbs_head_nav .tabs {
+  margin-bottom: 2px; /* small 按钮 24px 行高与 tabs 文字基线对齐微调 */
 }
 /* 五轮：卡片内页头——清通用页头外距（与 ranking_old/video_old 同法），
    卡片自身 margin:16px 8px 承接页顶间距 */
