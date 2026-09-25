@@ -45,7 +45,7 @@ export function SendMessageForm({ to, toName }: { to?: number; toName?: string }
         onChange={(e) => setContent(e.target.value)}
       />
       <p>
-        <button className="button active" disabled={busy || !content.trim()} onClick={onSend}>
+        <button className="button small active" disabled={busy || !content.trim()} onClick={onSend}>
           发送
         </button>{" "}
         <span className="error">{error}</span>
@@ -76,7 +76,7 @@ export function ClearButton() {
   }
   if (done) return null;
   return (
-    <button className="button" onClick={onClear}>
+    <button className="button small" onClick={onClear}>
       清空消息
     </button>
   );
@@ -105,7 +105,7 @@ export function MarkAllReadButton({ unread }: { unread?: number }) {
   }
   if (done) return null;
   return (
-    <button className="button" onClick={onMarkAll} disabled={unread === 0}>
+    <button className="button small" onClick={onMarkAll} disabled={unread === 0}>
       全部已读
     </button>
   );
@@ -144,7 +144,7 @@ export function BroadcastForm() {
         onChange={(e) => setContent(e.target.value)}
       />
       <p>
-        <button className="button active" disabled={busy || !content.trim()} onClick={onBroadcast}>
+        <button className="button small active" disabled={busy || !content.trim()} onClick={onBroadcast}>
           {busy ? "广播中…" : "开始广播"}
         </button>{" "}
         <span>{msg}</span>

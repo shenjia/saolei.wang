@@ -40,7 +40,7 @@ export default async function MessageShowPage({ params }: { params: Promise<{ id
         <hr />
         <div className="bbs_content">{message.content}</div>
         <hr />
-        <Link href="/message" className="button">
+        <Link href="/message" className="button small">
           返回消息
         </Link>
       </div>
