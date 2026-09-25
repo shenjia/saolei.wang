@@ -1,0 +1,67 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # 支持手动触发
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # 部署排队不并发，避免两次部署互相踩
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production # Secrets 配置在 Settings → Environments → production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check required secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=0
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [[ -z "${!v}" ]]; then
+              echo "::error::缺少 Secret: $v —— 请到 Settings → Secrets and variables → Actions 配置"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync source code
+        run: |
+          rsync -az --delete \
+            --exclude='.git/' \
+            --exclude='node_modules/' \
+            --exclude='.next*/' \
+            --exclude='.workbuddy/' \
+            --exclude='.env*' \
+            --exclude='.DS_Store' \
+            --exclude='videos/' \
+            --exclude='public/uploads/' \
+            --exclude='.deployed-commit' \
+            --filter='protect videos/***' \
+            --filter='protect public/uploads/***' \
+            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
+          # videos/（30 万录像实体文件，gitignore 不入库）exclude + protect 双保险，
+          #   防止 --delete 误删——由 scripts/phaseb-download.py 产出后单独 rsync。
+          # public/uploads/（头像等运行时上传）同理：Next 生产模式 public/ 是构建期
+          #   快照，运行期新增文件由 nginx 直读磁盘（见 nginx conf location /uploads/）。
+
+      - name: Build & Restart on server
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "cd ${{ secrets.DEPLOY_PATH }} && bash scripts/server-deploy.sh && echo -n '${{ github.sha }}' > .deployed-commit"
