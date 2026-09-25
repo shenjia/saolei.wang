@@ -73,6 +73,7 @@ export default async function BbsTitlePage({
                   postId={post.id}
                   isOwner={session.uid === post.author?.id}
                   isAdmin={admin}
+                  notice={post.board === 0}
                   flags={{ isTop: post.isTop, isPinned: post.isPinned, isNice: post.isNice, isLocked: post.isLocked }}
                 />
               )}

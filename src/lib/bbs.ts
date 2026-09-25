@@ -233,7 +233,9 @@ export async function getPostList(opts: {
       title: r.title,
       replies: r.replies,
       clicks: r.clicks,
-      isTop: r.isTop,
+      // 公告板块（board=0）一律强制高亮（2026-09-25 张老师定）——展示层判定，
+      // 不写库：同步重放与旧数据都不受影响；BbsOps 对公告隐藏「高亮」操作
+      isTop: r.isTop || r.board === 0,
       isPinned: r.isPinned,
       isNice: r.isNice,
       isLocked: r.isLocked,
@@ -265,7 +267,8 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
     content: row.content,
     replies: row.replies,
     clicks: row.clicks + (bump ? 1 : 0),
-    isTop: row.isTop,
+    // 公告板块强制高亮（同 getPostList 展示层判定）
+    isTop: row.isTop || row.board === 0,
     isPinned: row.isPinned,
     isNice: row.isNice,
     isLocked: row.isLocked,

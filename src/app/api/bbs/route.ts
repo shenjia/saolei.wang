@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
+import { prisma } from "@/lib/db";
 import {
   adminSetPost,
   BBS_BOARD_NAMES,
@@ -90,6 +91,13 @@ export async function POST(req: NextRequest) {
       const board = parseInt(String(body.board), 10);
       if (!(board in BBS_BOARD_NAMES)) return NextResponse.json({ error: "板块不存在" }, { status: 400 });
       data.board = board;
+    }
+    // 公告板块一律强制高亮（展示层判定）——isTop 写操作对公告无效，防绕过前端直调
+    if (data.isTop === false) {
+      const post = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { board: true } });
+      if (post?.board === 0) {
+        return NextResponse.json({ error: "公告板块主题始终高亮，无需手动设置" }, { status: 400 });
+      }
     }
     await adminSetPost(id, data);
     return NextResponse.json({ ok: true });

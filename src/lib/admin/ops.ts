@@ -234,7 +234,15 @@ async function dispatch(
       const data: Record<string, unknown> = { updateTime: BigInt(now()) };
       const changed: string[] = [];
       if ("isPinned" in p) { data.isPinned = toBool(p.isPinned); changed.push(`置顶=${toBool(p.isPinned) ? "是" : "否"}`); }
-      if ("isTop" in p) { data.isTop = toBool(p.isTop); changed.push(`高亮=${toBool(p.isTop) ? "是" : "否"}`); }
+      if ("isTop" in p) {
+        // 公告板块一律强制高亮（展示层判定）——后台也不允许对公告手动取消/设置高亮
+        if (toBool(p.isTop) === false) {
+          const cur = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { board: true } });
+          if (cur?.board === 0) return { ok: false, error: "公告板块主题始终高亮，无需手动设置" };
+        }
+        data.isTop = toBool(p.isTop);
+        changed.push(`高亮=${toBool(p.isTop) ? "是" : "否"}`);
+      }
       if ("isNice" in p) { data.isNice = toBool(p.isNice); changed.push(`精华=${toBool(p.isNice) ? "是" : "否"}`); }
       if ("isLocked" in p) { data.isLocked = toBool(p.isLocked); changed.push(`锁定=${toBool(p.isLocked) ? "是" : "否"}`); }
       if ("board" in p) {

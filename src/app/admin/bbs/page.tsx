@@ -105,10 +105,10 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                   <td className="c">
                     <span className="admin_tags">
                       {p.isPinned && <span className="admin_tag bad">置顶</span>}
-                      {p.isTop && <span className="admin_tag bad">高亮</span>}
+                      {(p.isTop || p.board === 0) && <span className="admin_tag bad">高亮</span>}
                       {p.isNice && <span className="admin_tag warn">精华</span>}
                       {p.isLocked && <span className="admin_tag plain">锁定</span>}
-                      {!p.isPinned && !p.isTop && !p.isNice && !p.isLocked && <span className="sub">—</span>}
+                      {!p.isPinned && !p.isTop && p.board !== 0 && !p.isNice && !p.isLocked && <span className="sub">—</span>}
                     </span>
                   </td>
                   <td className="sub">{p.lastReplyTime ? timeOpposite(p.lastReplyTime) : "—"}</td>
@@ -122,11 +122,14 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       params={{ id: p.id, isPinned: !p.isPinned }}
                       label={p.isPinned ? "取消置顶" : "置顶"}
                     />
-                    <AdminAction
-                      op="bbs.setPost"
-                      params={{ id: p.id, isTop: !p.isTop }}
-                      label={p.isTop ? "取消高亮" : "高亮"}
-                    />
+                    {/* 公告板块一律强制高亮，不提供手动高亮/取消操作 */}
+                    {p.board !== 0 && (
+                      <AdminAction
+                        op="bbs.setPost"
+                        params={{ id: p.id, isTop: !p.isTop }}
+                        label={p.isTop ? "取消高亮" : "高亮"}
+                      />
+                    )}
                     <AdminAction
                       op="bbs.setPost"
                       params={{ id: p.id, isNice: !p.isNice }}

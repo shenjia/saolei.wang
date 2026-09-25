@@ -64,11 +64,14 @@ export function PostOps({
   postId,
   isOwner,
   isAdmin,
+  notice,
   flags,
 }: {
   postId: number;
   isOwner: boolean;
   isAdmin: boolean;
+  /** notice=true 时隐藏「高亮」——公告板块一律强制高亮（2026-09-25），无需也不可手动切换 */
+  notice?: boolean;
   flags: { isTop: boolean; isPinned: boolean; isNice: boolean; isLocked: boolean };
 }) {
   const router = useRouter();
@@ -113,9 +116,13 @@ export function PostOps({
           <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isPinned: !flags.isPinned }))}>
             {flags.isPinned ? "取消置顶" : "置顶"}
           </a>{" "}
-          <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isTop: !flags.isTop }))}>
-            {flags.isTop ? "取消高亮" : "高亮"}
-          </a>{" "}
+          {!notice && (
+            <>
+              <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isTop: !flags.isTop }))}>
+                {flags.isTop ? "取消高亮" : "高亮"}
+              </a>{" "}
+            </>
+          )}
           <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isNice: !flags.isNice }))}>
             {flags.isNice ? "取消精华" : "加精"}
           </a>{" "}
