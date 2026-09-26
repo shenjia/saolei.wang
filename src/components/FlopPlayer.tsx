@@ -100,34 +100,47 @@ const FIT_PLAYER_SCRIPT = `
 })();
 `;
 
-/* 注入播放器 iframe 的「点击遮罩退出」脚本：
-   播放器的 background 选项只渲染遮罩层（.fullscreen.center，z-index:-9999），
-   自身没有点击退出逻辑。退出入口是右上角 menu-exit 里的 CloseOutlined 图标
-   （a-sub-menu title 插槽内的 X svg）。这里监听遮罩层 click，找到 X 图标
-   （特征 path d 以 M563.8 512 开头）程序化 click，走播放器自己的 setExit
-   退出链路（隐藏 iframe + 回调 listener + 解除 body 滚动锁）。 */
+/* 注入播放器 iframe 的「点击暗区退出」脚本：
+   播放器的 background 选项渲染的遮罩层 z-index:-9999（负值），按 CSS 绘制
+   规则位于普通流内容之下——Vue 根容器（占满视口的无 class DIV）盖在遮罩
+   之上，真实鼠标点击暗区时 target 是 Vue 根 DIV，遮罩层永远收不到事件。
+   故改为判定「点击是否落在玩家窗口子树之外」：
+   - 玩家窗口 = .game-menu 向上至 Vue 根（body 直接子级）下的那个窗口子树
+   - 窗口外（暗区/遮罩任意位置）→ 程序化点击右上角退出菜单（CloseOutlined
+     特征 path d 以 M563.8 512 开头），走播放器自己的 setExit 退出链路
+   - 窗口内（棋盘/菜单/控制条）→ 不拦截，交给播放器自身交互 */
 const MASK_EXIT_SCRIPT = `
 (function () {
   if (window.__flopMaskExit) return;
   window.__flopMaskExit = true;
-  function findExitIcon() {
-    var svgs = document.querySelectorAll("svg[viewBox='64 64 896 896'] path");
-    for (var i = 0; i < svgs.length; i++) {
-      var d = svgs[i].getAttribute("d") || "";
-      if (d.indexOf("M563.8 512") === 0) return svgs[i].closest("svg");
+  function findExitLi() {
+    var paths = document.querySelectorAll("svg path");
+    for (var i = 0; i < paths.length; i++) {
+      var d = paths[i].getAttribute("d") || "";
+      if (d.indexOf("M563.8 512") !== 0) continue;
+      var li = paths[i].closest("svg").closest(".ant-menu-submenu, li");
+      if (li) return li;
     }
     return null;
   }
   document.addEventListener("click", function (e) {
     var t = e.target;
     if (!(t instanceof Element)) return;
-    // 命中遮罩层：.fullscreen.center 自身（无子元素区域），排除其内部内容
-    if (!t.classList.contains("fullscreen") || !t.classList.contains("center")) return;
-    if (t.childElementCount > 0) return;
-    var icon = findExitIcon();
-    if (icon) {
-      var btn = icon.closest("[role=button], .ant-menu-submenu") || icon;
-      btn.click();
+    var menu = document.querySelector(".game-menu");
+    if (!menu) return;
+    // Vue 根 = .game-menu 向上直至 body 的直接子级
+    var root = menu;
+    while (root.parentElement && root.parentElement !== document.body) root = root.parentElement;
+    if (root === menu) return;
+    // 玩家窗口 = 根之下包含菜单的那个子树
+    var win = menu;
+    while (win.parentElement && win.parentElement !== root) win = win.parentElement;
+    if (win === menu || win.contains(t)) return; // 窗口内：交给播放器
+    var li = findExitLi();
+    if (li) {
+      e.preventDefault();
+      e.stopPropagation();
+      li.click();
     }
   }, true);
 })();
