@@ -539,6 +539,47 @@ body .tabs > a:hover::after {
   cursor: pointer;
 }
 
+/* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
+   半透明黑圆 + 白三角，绝对定位在棋盘几何中心。
+   legacy 的 #video_view .board{float:left;margin:5px 20px 20px 0} 外边距
+   会撑大包裹盒使 50% 落点偏移 → 外边距上移到 .play_board（几何不变：
+   float 与 margin 同位），board 清零，wrapper 收缩盒＝棋盘本体 */
+.playable {
+  position: relative;
+}
+.play_board {
+  position: relative;
+  float: left;
+  margin: 5px 20px 20px 0;
+}
+#video_view .play_board .board {
+  margin: 0;
+}
+.play_overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.play_overlay:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+.play_overlay svg {
+  margin-left: 3px; /* 三角形视觉重心偏左，右移一点对中 */
+}
+
 /* ---------- 新增：加载更多按钮 ----------
    2026-09-24 四轮（张老师）：整体居中——「加载更多」按钮 + 右侧灰字总数（数字微亮）
    2026-09-25（张老师）：按钮弃用自绘扁平样式，全站统一吃 legacy .button.small
@@ -3061,11 +3102,14 @@ body #page.two_columns li.main {
     overflow-x: auto;
   }
   /* ---------- ④ 录像详情页（2026-09-26）：棋盘窄屏不压缩、自身横滑 ----------
-     legacy #video_view .board{float:left} 在窄容器里会把空 td 挤压变形，
-     移动端取消浮动，棋盘整块放进 .playable 横向滑动 */
-  body #video_view .board,
+     .info 是 float:left（legacy），窄屏下收缩到内容宽，把里面的棋盘挤压变形；
+     .playable 是 flow-root（BFC 根不得与 h1/h2 浮动重叠），会再被挤进浮层窄缝。
+     移动端取消 .info 浮动并 clear，落到标题行下方拿满整行宽；
+     .board 保持 legacy float（td 有 min-width 下限，收缩到 480 不会再变形），
+     超出部分由 .playable 盒内横向滑动 */
   body #video_view .video_cell .info {
     float: none;
+    clear: both;
   }
   body #video_view .playable {
     overflow-x: auto;
