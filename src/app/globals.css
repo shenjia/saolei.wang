@@ -637,7 +637,11 @@ body #video_view .video_cell .playable {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 10px 0 4px;
+  /* 2026-09-27 张老师要求：按钮与 footer 之间留呼吸空间。
+     ⚠️ 不能给 #footer 加 margin-top——footer 是 clear:both 元素，相邻浮动栏时
+     margin 会被 clearance 计算吞掉（实测 computed 24px 但 border edge 仍贴 float 底）；
+     padding 在浮动栏内部能实际撑高 li.main、把 footer 推下去 */
+  padding: 10px 0 24px;
 }
 .more_loader .total_count {
   font-size: 13px;
