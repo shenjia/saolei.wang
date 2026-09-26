@@ -3497,9 +3497,8 @@ body #header .nav .popMenu .menu li a {
 .wbtn:active {
   background: #272822;
 }
-.wbtn.t-title { color: #f8f8f2; font-weight: bold; }
+.wbtn.t-light { color: #f8f8f2; }
 .wbtn.t-sign { color: #e6db74; }
-.wbtn.t-signest { color: #e6db74; font-weight: bold; }
 .wbtn.t-b { color: #b1b1a4; font-weight: bold; }
 .wbtn .bico {
   height: 14px;
@@ -3507,14 +3506,15 @@ body #header .nav .popMenu .menu li a {
   display: inline-block;
 }
 
-/* 画布：观感沿用站内 textarea；表情/雷图/语义色以真身呈现 */
+/* 画布：观感沿用站内 textarea；表情/雷图/语义色以真身呈现。
+   正文色 #bbbbbb 与论坛实际正文 .bbs_content 一致（2026-09-26 张老师指出编辑器与论坛色不一致） */
 .wys {
   display: block;
   width: 100%;
   max-height: 560px;
   overflow-y: auto;
   background: #272822;
-  color: #f8f8f2;
+  color: #bbbbbb;
   border: 1px solid #49483e;
   border-radius: 4px;
   padding: 8px 10px;
@@ -3548,7 +3548,9 @@ body #header .nav .popMenu .menu li a {
   width: 16px;
   vertical-align: middle;
 }
-.wys .Title { font-weight: bold; color: #f8f8f2; }
+/* 语义样式：2026-09-26 工具重组——加亮=[Title] 只白不加粗（用户可与「加粗」自行组合）；
+   [Signest]（黄+粗）不再由工具产生，保留仅为渲染存量帖 */
+.wys .Title { color: #f8f8f2; }
 .wys .Sign { color: #e6db74; }
 .wys .Signest { font-weight: bold; color: #e6db74; }
 .wys blockquote {
@@ -3583,15 +3585,18 @@ body #header .nav .popMenu .menu li a {
   cursor: pointer;
   display: block;
 }
-/* 摆雷：16 个符号排成一行 */
+/* 摆雷：4x4 方阵（2026-09-26 张老师定）——第一行无按钮黑/空/问/雷、第二三行 1234/5678、
+   第四行有按钮空/问/旗/雷 */
 .wpop.mines img {
   width: 16px;
   height: 16px;
 }
 .wpop.mines .wpop_grid {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   max-width: none;
   gap: 2px;
+  display: grid;
+  grid-template-columns: repeat(4, 16px);
 }
 .wpop img:hover {
   background: #555550;
@@ -3605,9 +3610,14 @@ body #header .nav .popMenu .menu li a {
   margin-top: 5px;
   line-height: 1.6;
 }
-.wpop .wpop_sw {
-  margin: 0 0 5px;
-  padding: 0;
+/* 表情底部 TAB 筛选（2026-09-26 张老师定：默认新版静态，备选旧版动态） */
+.wpop .wpop_tabs {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  padding: 5px 2px 2px;
+  border-top: 1px solid #49483e;
+  margin-top: 5px;
 }
 .wbtn.wbtn_sw {
   height: 20px;
@@ -3615,6 +3625,12 @@ body #header .nav .popMenu .menu li a {
   font-size: 11px;
   padding: 0 7px;
   line-height: 18px;
+}
+.wbtn.wbtn_sw.on {
+  background: #8ac21b;
+  border-color: #a6e22e;
+  color: #272822;
+  font-weight: bold;
 }
 
 /* 贴图弹层：上传区 + 外链行 */

@@ -449,9 +449,11 @@ export function RichEditor({
     <div className="wys_wrap">
       <div className="wys_toolbar" onMouseDown={(e) => { if ((e.target as HTMLElement).closest(".wbtn")) e.preventDefault(); }} onClick={onToolbarClick}>
         {toolbarBtn("clear", "正文", { act: "clear" })}
-        {full && toolbarBtn("title", "标题", { act: "wrap", tag: "Title", cls: "t-title" })}
+        {/* 2026-09-26 张老师定：工具只有三个格式因子，用户自己组合——
+            加亮=[Title]白 / 醒目=[Sign]黄 / 加粗=[b]；[Signest]（黄+粗）按钮已删，
+            UBB 标签渲染端照旧支持存量帖；[Title] 全站同步去 bold（等于只加亮） */}
+        {full && toolbarBtn("light", "加亮", { act: "wrap", tag: "Title", cls: "t-light" })}
         {full && toolbarBtn("sign", "醒目", { act: "wrap", tag: "Sign", cls: "t-sign" })}
-        {full && toolbarBtn("signest", "加亮", { act: "wrap", tag: "Signest", cls: "t-signest" })}
         {full && toolbarBtn("b", "加粗", { act: "wrap", tag: "b", cls: "t-b" })}
         {full && toolbarBtn("link", "🔗 链接", { act: "link" })}
         {toolbarBtn("img", "🖼️ 贴图", { act: "pop", pop: "imgs" })}
@@ -460,10 +462,6 @@ export function RichEditor({
 
         {pop === "faces" && (
           <div className="wpop faces">
-            <div className="wpop_sw">
-              <button type="button" className={`wbtn wbtn_sw${faceVer === "v2" ? " on" : ""}`} data-fv="v2" onClick={() => { faceVerRef.current = "v2"; setFaceVer("v2"); }}>新版</button>{" "}
-              <button type="button" className={`wbtn wbtn_sw${faceVer === "v1" ? " on" : ""}`} data-fv="v1" onClick={() => { faceVerRef.current = "v1"; setFaceVer("v1"); }}>旧版</button>
-            </div>
             <div className="wpop_grid">
               {Array.from({ length: 30 }, (_, i) => i + 1).map((i) => (
                 <img
@@ -474,16 +472,24 @@ export function RichEditor({
                 />
               ))}
             </div>
-            <div className="wpop_tip">点击插入表情（新版 = 微信原版，旧版 = QQ 动态）</div>
+            {/* 底部 TAB 筛选（2026-09-26 张老师定）：默认新版静态（微信），备选旧版动态（QQ） */}
+            <div className="wpop_tabs">
+              <button type="button" className={`wbtn wbtn_sw${faceVer === "v2" ? " on" : ""}`} data-fv="v2" onClick={() => { faceVerRef.current = "v2"; setFaceVer("v2"); }}>新版静态</button>
+              <button type="button" className={`wbtn wbtn_sw${faceVer === "v1" ? " on" : ""}`} data-fv="v1" onClick={() => { faceVerRef.current = "v1"; setFaceVer("v1"); }}>旧版动态</button>
+            </div>
           </div>
         )}
         {pop === "mines" && (
           <div className="wpop mines">
-            <div className="wpop_grid">
+            {/* 4x4 方阵（2026-09-26 张老师定）：
+                第一行「无按钮」：黑 / 空 / 问 / 雷（[-] = 凹陷底问号，[ ] = 凹陷空格）
+                第二三行数字 1-8；第四行「有按钮」：空 / 问 / 旗 / 雷 */}
+            <div className="wpop_grid mine_pad">
               {[
                 [".", "Black", "分割使用"],
                 [" ", "Blank", "小键盘[0]"],
-                ["Q", "Block", "小键盘[.]"],
+                ["-", "Num", "无按钮问号"],
+                ["*", "Mine", "小键盘[*]"],
                 ["1", "1", "小键盘[1]"],
                 ["2", "2", "小键盘[2]"],
                 ["3", "3", "小键盘[3]"],
@@ -492,11 +498,10 @@ export function RichEditor({
                 ["6", "6", "小键盘[6]"],
                 ["7", "7", "小键盘[7]"],
                 ["8", "8", "小键盘[8]"],
-                ["*", "Mine", "小键盘[*]"],
-                ["+", "IsMine", "小键盘[+]"],
-                ["!", "Flag", "小键盘[9]"],
+                ["Q", "Block", "小键盘[.]"],
                 ["?", "Mark", "小键盘[/]"],
-                ["-", "Num", "小键盘[-]"],
+                ["!", "Flag", "小键盘[9]"],
+                ["+", "IsMine", "小键盘[+]"],
               ].map(([sym, name, tip]) => (
                 <img
                   key={sym}

@@ -19,8 +19,10 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 .mine-map{line-height:16px}
 .mine-map img{vertical-align:top}
 /* BBS UBB 语义样式（移植 2008 版 .Title/.Sign/.Signest，配色换算 2013 Monokai：
-   旧 #DDDDDD 加粗章节标题 → #f8f8f2 加粗；旧 #ffff00 标黄 → #e6db74；Signest 再加粗） */
-.Title{font-weight:bold;color:#f8f8f2}
+   旧 #DDDDDD 加粗章节标题 → #f8f8f2；旧 #ffff00 标黄 → #e6db74；Signest 再加粗。
+   2026-09-26 工具重组（张老师定）：Title=「加亮」只白不加粗，可与「加粗」自由组合；
+   Signest（黄+粗）按钮已删，保留渲染仅为存量帖 */
+.Title{color:#f8f8f2}
 .Sign{color:#e6db74}
 .Signest{font-weight:bold;color:#e6db74}
 
