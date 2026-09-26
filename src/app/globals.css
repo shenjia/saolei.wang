@@ -698,8 +698,9 @@ body #page.bbs_old .page_head {
   word-break: break-all;
   line-height: 24px;
 }
+/* 十六轮：计数改「x阅读 x评论」后放宽——历史最大 187684阅读，110px 会截断 */
 .bbs_list th.num {
-  width: 110px;
+  width: 170px;
   padding-left: 8px;
   padding-right: 8px;
 }
@@ -741,6 +742,12 @@ body #page.bbs_old .page_head {
   「回复 / 点击」的空格直接写在标记里，不靠 em margin 撑 */
 .bbs_list td em {
   margin: 0;
+}
+/* 十六轮（2026-09-26 张老师）：计数改「x阅读 x评论」——亮灰加粗（与标题灰 #BBBBBB
+  同源），不再用黄色 em 强调；列表页计数列与文章详情页 meta 行共用 */
+.bbs_count {
+  color: #bbbbbb;
+  font-weight: bold;
 }
 /* 分类标签：与正文同字号（legacy .level 是 20px，不可用）。
    七轮：并入主题列后作为行内标签，flex 不收缩（标题负责收缩出省略号）。
@@ -3514,7 +3521,8 @@ body #header .nav .popMenu .menu li a .um_icon {
 
 /* 画布：所见即所得——字色/字号对齐论坛正文（#bbbbbb/15px）；
    底色与标题输入框一致（#272822，2026-09-26 张老师定：编辑框底色须与标题输入框统一，
-   发布（.post_form）与回复（.reply_form）均如此） */
+   发布（.post_form）与回复（.reply_form）均如此）；
+   左右 padding 8px 对齐标题框（padding 6px 8px），文字与标题 placeholder 左缘对齐 */
 .wys {
   display: block;
   width: 100%;
@@ -3524,7 +3532,7 @@ body #header .nav .popMenu .menu li a .um_icon {
   color: #bbbbbb;
   border: 1px solid #49483e;
   border-radius: 4px;
-  padding: 10px 4px;
+  padding: 10px 8px;
   font-size: 15px;
   line-height: 1.8;
   word-break: break-all;
