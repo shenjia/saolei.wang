@@ -3278,6 +3278,11 @@ body #header .nav li.user_menu .um_name {
 body #header .nav .popMenu .menu {
   top: 44px;
   min-width: 104px;
+  /* 下拉左缘与触发按钮左缘对齐（2026-09-26 张老师要求）：
+     legacy 原版 right:0 是右缘对齐（菜单朝左展开），对最右侧的用户菜单观感
+     是整块偏右——改 left:0 让菜单从按钮左缘向右展开 */
+  left: 0;
+  right: auto;
 }
 body #header .nav .popMenu .menu li {
   float: none;
