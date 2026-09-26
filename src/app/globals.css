@@ -1547,6 +1547,27 @@ body #header .nav ul {
   margin-right: 8px;
 }
 
+/* ---------- footer 与正文同宽（2026-09-26 张老师反馈 footer 比主体宽） ----------
+   legacy 中 #footer .wrapper 只有 max-width:960px——960~1200px 视口下
+   footer 盒子固定 960，比 80% 流式的正文宽。改为与 #page.two_columns
+   同几何（80% / max 960 居中）；文字缩进沿用顶栏做法：wrapper 内容区
+   160..1120 + 两个 p 各让 8px，文字与正文盒子外缘（168/1112）对齐。
+   （legacy 盒子是 content-box，直接加 padding 只会加宽盒子、内容不动。）
+   min-width 解除同「① 解除 620px 硬下限」。 */
+body #footer .wrapper {
+  width: 80%;
+  min-width: 0;
+  max-width: 960px;
+  padding-left: 0;
+  padding-right: 0;
+}
+body #footer .footer-meta {
+  margin-left: 8px;
+}
+body #footer .footer-nav {
+  margin-right: 8px;
+}
+
 /* ---------- .main 版式限宽（2026-09-23 张老师反馈排行榜过宽） ----------
    legacy 中 #page.main 的 max-width:960px 被误写进选择器
    （#page.main max-width:960px .header），实际从未生效，
@@ -2804,6 +2825,13 @@ body #page.two_columns li.main {
     max-width: none;
     margin: 0;
     padding: 0 15px;
+  }
+  /* footer 随视口全宽 */
+  body #footer .wrapper {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 16px 15px;
   }
   /* 页面容器全宽（留 4px 外距） */
   body #page.main,
