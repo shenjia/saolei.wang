@@ -6,6 +6,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { WX_FACES, FACE_BY_KEY, FACE_KEY_BY_SLOT } from "@/lib/faces";
 
 /** 扫雷符号 → 图片名（同 lib/bbs.ts MINE_MAP） */
 const MINE_MAP: Record<string, string> = {
@@ -55,11 +56,25 @@ export function ubbToEditorHtml(raw: string): string {
     .replace(/\[quote\]/gi, "<blockquote>").replace(/\[\/quote\]/gi, "</blockquote>");
   t = t.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi, '<img src="$1">');
   t = t.replace(/\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi, '<a href="$1">$2</a>');
-  t = t.replace(/\[face\](\d{1,2})(n?)\[\/face\]/gi, (_, n: string, sfx: string) => {
-    const id = Math.min(30, Math.max(1, parseInt(n, 10)));
-    const dir = sfx ? "face-wx" : "face";
-    const ext = sfx ? ".png" : ".gif";
-    return `<img src="/images/${dir}/${id}${ext}" data-face="${id}${sfx}">`;
+  // 表情（编码规则见 lib/faces.ts）：旧数字码 / 新语义 key 码 / Nn 过渡码（归一化为 key，round-trip 升级）
+  t = t.replace(/\[face\]([^\[\]]{1,20}?)\[\/face\]/gi, (m, code: string) => {
+    const lower = code.toLowerCase();
+    const byKey = FACE_BY_KEY.get(lower);
+    if (byKey) {
+      return `<img src="/images/face-wx/${byKey.slot}.png" data-face="${byKey.key}">`;
+    }
+    const legacy = lower.match(/^(\d{1,2})n$/);
+    if (legacy) {
+      const slot = Math.min(30, Math.max(1, parseInt(legacy[1], 10)));
+      const key = FACE_KEY_BY_SLOT.get(slot);
+      if (key) return `<img src="/images/face-wx/${slot}.png" data-face="${key}">`;
+      return m;
+    }
+    if (/^\d{1,2}$/.test(lower)) {
+      const id = Math.min(30, Math.max(1, parseInt(lower, 10)));
+      return `<img src="/images/face/${id}.gif" data-face="${id}">`;
+    }
+    return m; // 未知码保留原文（与服务端 ubb() 透传一致）
   });
   const keys = ["0", "1", "2", "3", "4", "5", "6", "7", "8", ...Object.keys(MINE_MAP)];
   for (const k of keys) {
@@ -369,10 +384,11 @@ export function RichEditor({
     onInput();
   };
 
-  const makeFaceImg = (id: number, ver: "v1" | "v2") => {
+  /** 插入表情图节点：新版存语义 key（data-face=key），旧版存数字（data-face=N，存量帖约定） */
+  const makeFaceImg = (f: { slot: number; key: string }, ver: "v1" | "v2") => {
     const im = document.createElement("img");
-    im.src = ver === "v2" ? `/images/face-wx/${id}.png` : `/images/face/${id}.gif`;
-    im.dataset.face = `${id}${ver === "v2" ? "n" : ""}`;
+    im.src = ver === "v2" ? `/images/face-wx/${f.slot}.png` : `/images/face/${f.slot}.gif`;
+    im.dataset.face = ver === "v2" ? f.key : `${f.slot}`;
     return im;
   };
 
@@ -528,12 +544,13 @@ export function RichEditor({
         {pop === "faces" && (
           <div className="wpop faces">
             <div className="wpop_grid">
-              {Array.from({ length: 30 }, (_, i) => i + 1).map((i) => (
+              {WX_FACES.map((f) => (
                 <img
-                  key={i}
-                  src={faceVer === "v2" ? `/images/face-wx/${i}.png` : `/images/face/${i}.gif`}
-                  alt=""
-                  onClick={() => { insertNodeAtCaret(makeFaceImg(i, faceVerRef.current)); closePop(); }}
+                  key={f.slot}
+                  src={faceVer === "v2" ? `/images/face-wx/${f.slot}.png` : `/images/face/${f.slot}.gif`}
+                  alt={f.zh}
+                  title={f.zh}
+                  onClick={() => { insertNodeAtCaret(makeFaceImg(f, faceVerRef.current)); closePop(); }}
                 />
               ))}
             </div>

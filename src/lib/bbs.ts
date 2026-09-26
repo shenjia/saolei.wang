@@ -6,6 +6,7 @@ import { title as assessTitle } from "./assess";
 import { oldTitle, type OldTitle } from "./oldtitle";
 import { NEWS_TYPE } from "./config";
 import { publishNews } from "./news";
+import { WX_FACES, FACE_BY_KEY } from "./faces";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -109,13 +110,28 @@ export function ubb(raw: string): string {
   );
   // 引用
   text = text.replace(/\[quote\]/gi, "<blockquote>").replace(/\[\/quote\]/gi, "</blockquote>");
-  // 表情：[face]N[/face]（N=1-30，白名单数字，旧版 QQ 系）与 [face]Nn[/face]（新版=微信原版）
-  // 两套槽位一一对应（2026-09-26 整合：同一编号同一语义，21/24/25/26/27 无微信对应沿用旧图）
-  text = text.replace(/\[face\](\d{1,2})(n?)\[\/face\]/gi, (_, n, suffix) => {
-    const id = Math.min(30, Math.max(1, parseInt(n, 10)));
-    const dir = suffix ? "face-wx" : "face";
-    const ext = suffix ? ".png" : ".gif";
-    return `<img src="/images/${dir}/${id}${ext}" alt="">`;
+  // 表情（编码规则见 lib/faces.ts）：
+  //   [face]N[/face]   旧版 QQ，纯数字 1-30 白名单 → face/N.gif（2 万存量帖焊死）
+  //   [face]key[/face] 新版微信，语义 key 白名单 → face-wx/{slot}.png（顺序调整只动 faces.ts，不错配）
+  //   [face]Nn[/face]  过渡期数字码（7 条站内测试帖，已迁移），渲染端容忍
+  text = text.replace(/\[face\]([^\[\]]{1,20}?)\[\/face\]/gi, (m, code: string) => {
+    const lower = code.toLowerCase();
+    // 语义 key（新版）
+    const byKey = FACE_BY_KEY.get(lower);
+    if (byKey) return `<img src="/images/face-wx/${byKey.slot}.png" alt="${byKey.zh}" title="${byKey.zh}">`;
+    // 过渡码 Nn → 按槽位归一化渲染（N=1-30）
+    const legacy = lower.match(/^(\d{1,2})n$/);
+    if (legacy) {
+      const slot = Math.min(30, Math.max(1, parseInt(legacy[1], 10)));
+      const f = WX_FACES[slot - 1];
+      return `<img src="/images/face-wx/${slot}.png" alt="${f.zh}" title="${f.zh}">`;
+    }
+    // 旧版纯数字（含 [face]30[/face] 修复语义，c1fd3ce）
+    if (/^\d{1,2}$/.test(lower)) {
+      const id = Math.min(30, Math.max(1, parseInt(lower, 10)));
+      return `<img src="/images/face/${id}.gif" alt="">`;
+    }
+    return m; // 未知码原样透传（如正文里手打的 [face]xx[/face] 文字）
   });
   // 扫雷符号：[1]-[8] 数字格 + 功能格
   for (let i = 0; i <= 8; i++) {
