@@ -35,6 +35,8 @@ export function VideoListFeed({
       const page = Math.floor(items.length / pageSize) + 1;
       const qs = new URLSearchParams({ level: query.level, order: query.order, page: String(page) });
       if (query.author) qs.set("author", String(query.author));
+      // 每页条数与初始页一致（用户主页版块 10 / 列表页 20，2026-09-26）
+      qs.set("size", String(pageSize));
       const res = await fetch(`/api/video/more?${qs}`);
       if (!res.ok) throw new Error("加载失败");
       const data = (await res.json()) as { videos: VideoListItem[]; hasMore: boolean };

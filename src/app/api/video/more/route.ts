@@ -25,7 +25,9 @@ export async function GET(req: Request) {
         ? orderRaw
         : "id";
     const author = parseInt(p.get("author") ?? "", 10) || undefined;
-    const { videos, total, pageSize } = await getVideoList({ level, order, author, page });
+    // 每页条数：调用方自定义（用户主页录像版块传 10），默认 /video 列表的 20
+    const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 50);
+    const { videos, total, pageSize } = await getVideoList({ level, order, author, page, pageSize: size });
     return NextResponse.json({
       videos,
       total,

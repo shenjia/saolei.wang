@@ -66,6 +66,8 @@ export const NEWS_PAGESIZE = 20;
 export const USER_NEWS_NUMBER = 10;
 // 用户主页历程初始条数（2026-09-24 张老师要求与动态一致改 10）
 export const USER_HISTORY_NUMBER = 10;
+// 用户主页录像版块初始条数（2026-09-26 张老师要求默认 10 条，与动态/纪事同口径）
+export const USER_VIDEO_NUMBER = 10;
 
 // ---------- 军衔（移植 TitleConfig） ----------
 

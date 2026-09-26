@@ -23,7 +23,7 @@ import {
 } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
-import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, VIDEO_PAGESIZE, areaDisplay, type Level } from "@/lib/config";
+import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, USER_VIDEO_NUMBER, areaDisplay, type Level } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoListFeed } from "@/components/VideoListFeed";
 import { HistoryBox } from "@/components/HistoryBox";
@@ -70,8 +70,9 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
     getHistory(userId),
     getSession(),
     getUserRanks(userId),
-    // 本人录像：按上传时间倒序第一页（与 /video?author= 同语义）
-    getVideoList({ level: "all", order: "id", author: userId, page: 1 }),
+    // 本人录像：按上传时间倒序第一页（与 /video?author= 同语义）；
+    // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）
+    getVideoList({ level: "all", order: "id", author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
   ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))

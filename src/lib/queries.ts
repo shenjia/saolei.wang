@@ -291,8 +291,11 @@ export async function getVideoList(opts: {
   order: "id" | "time" | "3bvs" | "comments" | "clicks";
   author?: number;
   page: number;
+  /** 每页条数（默认 VIDEO_PAGESIZE；用户主页录像版块传 USER_VIDEO_NUMBER，2026-09-26） */
+  pageSize?: number;
 }): Promise<{ videos: VideoListItem[]; total: number; pageSize: number }> {
   const { level, order, author, page } = opts;
+  const size = opts.pageSize ?? VIDEO_PAGESIZE;
   let ids: number[] = [];
   let total = 0;
 
@@ -305,8 +308,8 @@ export async function getVideoList(opts: {
       where,
       select: { id: true },
       orderBy: { [field]: "desc" },
-      skip: (page - 1) * VIDEO_PAGESIZE,
-      take: VIDEO_PAGESIZE,
+      skip: (page - 1) * size,
+      take: size,
     });
     ids = rows.map((r) => N(r.id));
   } else if (level === "all") {
@@ -317,8 +320,8 @@ export async function getVideoList(opts: {
       where,
       select: { id: true },
       orderBy: { id: "desc" },
-      skip: (page - 1) * VIDEO_PAGESIZE,
-      take: VIDEO_PAGESIZE,
+      skip: (page - 1) * size,
+      take: size,
     });
     ids = rows.map((r) => N(r.id));
   } else {
@@ -336,14 +339,14 @@ export async function getVideoList(opts: {
       where,
       select: { id: true },
       orderBy: { [orderField]: orderDir },
-      skip: (page - 1) * VIDEO_PAGESIZE,
-      take: VIDEO_PAGESIZE,
+      skip: (page - 1) * size,
+      take: size,
     });
     ids = rows.map((r: { id: bigint }) => N(r.id));
   }
 
   const videos = await getVideosByIds(ids);
-  return { videos, total, pageSize: VIDEO_PAGESIZE };
+  return { videos, total, pageSize: size };
 }
 
 /**
