@@ -3541,6 +3541,16 @@ body #header .nav .popMenu .menu li a .um_icon {
 .wys .line {
   min-height: 25px;
 }
+/* 行容器强制继承画布字色/字号（2026-09-26 张老师反馈：插雷图后文字变暗且不可恢复）。
+   根因：legacy 全局 div{color:#636359;font-size:14px} 直接命中画布内的 .line 与
+   contenteditable 自动包裹的 div——纯打字时文本挂在 .wys 下继承 #bbbbbb 正常，
+   一旦插图（Range API）Chrome 把后续输入规范化进 div，文字即落 legacy 灰 */
+.wys div,
+.wys p {
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+}
 .wys .line.mine-line {
   line-height: 16px;
   min-height: 16px;
@@ -3564,6 +3574,10 @@ body #header .nav .popMenu .menu li a .um_icon {
 .wys .Title { color: #f8f8f2; }
 .wys .Sign { color: #e6db74; }
 .wys .Signest { font-weight: bold; color: #e6db74; }
+/* legacy 全局 em,strong{color:#b1b1a4;margin:0 5px} 会污染画布：margin 5px = 加粗后文字前
+   凭空多出空格；自带灰色会盖掉组合样式（Sign/Title）的颜色。画布内归零并继承父色 */
+.wys strong, .wys b { margin: 0; color: inherit; }
+.wys em, .wys i { margin: 0; }
 .wys blockquote {
   border-left: 3px solid #49483e;
   margin: 6px 0;
