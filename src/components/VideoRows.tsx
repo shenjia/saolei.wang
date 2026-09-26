@@ -19,12 +19,13 @@ export function VideoHead() {
     <thead>
       <tr>
         <th>上传者</th>
-        <th>上传时间</th>
         <th>级别</th>
         <th>成绩</th>
         <th className="c">3BV</th>
         <th className="c">3BV/s</th>
         <th>评论 / 点击</th>
+        {/* 2026-09-26 张老师要求：上传时间移到最右列 */}
+        <th>上传时间</th>
       </tr>
     </thead>
   );
@@ -47,12 +48,6 @@ export function VideoRowLine({ video: v }: { video: VideoListItem }) {
           <span className="avatar_link">?</span>
         )}
       </td>
-      <td
-        className={`create_time ${isRecent(v.createTime) ? "time--recent" : "time--old"}`}
-        title={formatDate(v.createTime, "Y年n月j日 H:i:s")}
-      >
-        {timeOpposite(v.createTime, TIME_YEAR, "Y-n-j")}
-      </td>
       <td className={`level ${lvCls}`}>{LEVEL_NAMES[v.level as VideoLevel] ?? v.level}</td>
       <td className={`score ${lvCls}`}>
         <Link href={`/video/${v.id}`} target="_blank" title="点击查看录像">
@@ -74,6 +69,12 @@ export function VideoRowLine({ video: v }: { video: VideoListItem }) {
       </td>
       <td className="counters">
         <em>{v.comments}</em> / {v.clicks}
+      </td>
+      <td
+        className={`create_time ${isRecent(v.createTime) ? "time--recent" : "time--old"}`}
+        title={formatDate(v.createTime, "Y年n月j日 H:i:s")}
+      >
+        {timeOpposite(v.createTime, TIME_YEAR, "Y-n-j")}
       </td>
     </tr>
   );
