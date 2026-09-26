@@ -505,12 +505,15 @@ export function RichEditor({
     closePop();
   };
 
-  /** 点击面板外收起 */
+  /** 点击面板外收起（2026-09-26 张老师定：摆雷面板常驻，仅手动点「摆雷」按钮才关——
+   *  点击画布/页面其他处不收起，方便边敲键盘边看符号表） */
   useEffect(() => {
     if (!pop) return;
     const h = (ev: MouseEvent) => {
       const t = ev.target as HTMLElement;
-      if (!t.closest(".wpop") && !t.closest(".wbtn")) closePop();
+      if (t.closest(".wpop") || t.closest(".wbtn")) return;
+      if (popRef.current.kind === "mines") return;
+      closePop();
     };
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
@@ -565,7 +568,7 @@ export function RichEditor({
           <div className="wpop mines">
             {/* 4x4 方阵（2026-09-26 张老师定）：
                 第一行「无按钮」：黑 / 空 / 问 / 雷（[-] = 凹陷底问号，[ ] = 凹陷空格）
-                第二三行数字 1-8；第四行「有按钮」：空 / 问 / 旗 / 雷 */}
+                第二三行数字 1-8；第四行「有按钮」：空 / 旗 / 问 / 雷（同日张老师：旗、问对换） */}
             <div className="wpop_grid mine_pad">
               {[
                 [".", "Black", "分割使用"],
@@ -581,8 +584,8 @@ export function RichEditor({
                 ["7", "7", "小键盘[7]"],
                 ["8", "8", "小键盘[8]"],
                 ["Q", "Block", "小键盘[.]"],
-                ["?", "Mark", "小键盘[/]"],
                 ["!", "Flag", "小键盘[9]"],
+                ["?", "Mark", "小键盘[/]"],
                 ["+", "IsMine", "小键盘[+]"],
               ].map(([sym, name, tip]) => (
                 <img
@@ -594,7 +597,7 @@ export function RichEditor({
                 />
               ))}
             </div>
-            <div className="wpop_tip">面板开启时可用小键盘或大键盘数字键直接摆雷</div>
+            <div className="wpop_tip">可用数字快捷键</div>
           </div>
         )}
         {pop === "imgs" && (
