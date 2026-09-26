@@ -16,7 +16,7 @@ import {
   type VideoLevel,
 } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
-import { AvatarCell } from "@/components/Cells";
+import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { Board } from "@/components/Board";
 import { BoardPlay } from "@/components/BoardPlay";
 import { CommentForm, CommentList } from "@/components/Comments";
@@ -148,6 +148,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
           <div className="box user_info_cell">
             <h2>
               <Link href={`/user/${video.author.id}`}>{video.author.chineseName}</Link>
+              <TitleBadge title={video.authorTitle} link />
             </h2>
             <p className="title_line">{video.authorTitle}</p>
           </div>
