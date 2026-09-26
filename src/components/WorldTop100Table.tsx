@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 import type { WorldRow } from "@/lib/worldtop";
+import { WORLD_RANKING_PAGE } from "@/lib/worldtop";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
 import { playFlop } from "./FlopPlayer";
@@ -102,6 +103,16 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
         </tbody>
       </table>
       <div className="more_loader">
+        {/* 2026-09-27 张老师要求：原 world_foot 的「点击查看完整世界排行」改为按钮，
+            放在「加载更多」左边（外链 minesweepergame.com 完整榜，新窗口） */}
+        <a
+          className="button small"
+          href={WORLD_RANKING_PAGE}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          查看完整排行
+        </a>
         {hasMore ? (
           <button
             type="button"

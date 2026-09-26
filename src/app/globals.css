@@ -2751,24 +2751,8 @@ body #page.ranking_old .ranking_box {
 #world_top tr.ours td.name {
   color: #fdc61d;
 }
-#world_top .world_foot {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
-  font-size: 12px;
-  color: #939387;
-}
-#world_top .world_foot a {
-  color: #f8f8f2;
-}
-#world_top .world_foot a:hover {
-  color: #a6e22e;
-}
-#world_top .world_foot_links {
-  display: flex;
-  gap: 16px;
-  align-items: baseline;
-}
+/* 2026-09-27：world_foot（如何加入/更新时间/完整排行链接）已删——「查看完整排行」
+   改为按钮并入 more_loader，见 WorldTop100Table.tsx */
 #world_top .world_fail {
   font-size: 13px;
   color: #939387;

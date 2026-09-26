@@ -1,9 +1,10 @@
 // 世界 TOP100（移植 2008 版 Ranking/Top10_World.asp；数据实时抓取 minesweepergame.com，1 天缓存）
-// 2026-09-23 晚从 TOP10 扩充到 TOP100（张老师要求）；中国选手行高亮（2008 版 .Ours 语义：站内雷友）
+// 中国选手行高亮（2008 版 .Ours 语义：站内雷友）
 // 2026-09-24：默认只显示前 15 条，下面「加载更多」增量展开（张老师要求），表格交互在 WorldTop100Table
+// 2026-09-27（张老师要求）：删除底部 world_foot（如何加入/更新时间/完整排行链接）——
+//   「查看完整排行」改为按钮并入 more_loader（在 WorldTop100Table 内）
 
-import Link from "next/link";
-import { getWorldTop100, WORLD_RANKING_PAGE } from "@/lib/worldtop";
+import { getWorldTop100 } from "@/lib/worldtop";
 import { RankingNav } from "@/components/RankingNav";
 import { WorldTop100Table } from "@/components/WorldTop100Table";
 import { FlopPlayer } from "@/components/FlopPlayer";
@@ -19,28 +20,6 @@ export async function WorldTop100() {
       {data ? (
         <>
           <WorldTop100Table rows={data.rows} />
-          <div className="world_foot">
-            <span className="world_foot_links">
-              <Link href={WORLD_RANKING_PAGE} target="_blank">
-                点击查看完整世界排行
-              </Link>
-              <Link
-                href={WORLD_RANKING_PAGE}
-                target="_blank"
-                className="join"
-                title="在 minesweepergame.com 注册并上传录像即可加入世界排行"
-              >
-                如何加入
-              </Link>
-            </span>
-            <span>
-              更新时间：
-              {(() => {
-                const d = new Date(data.fetchedAt);
-                return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
-              })()}
-            </span>
-          </div>
           {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染） */}
           <FlopPlayer />
         </>
