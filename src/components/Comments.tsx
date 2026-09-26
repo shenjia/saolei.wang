@@ -74,23 +74,26 @@ export function CommentList({
       {items.map((c) => (
         <CommentCell key={c.id} comment={c} />
       ))}
-      <div className="more_loader">
-        {hasMore ? (
-          <button
-            type="button"
-            className="button small"
-            disabled={loading}
-            onMouseDown={noFocusJump}
-            onClick={loadMore}
-          >
-            {loading ? "加载中…" : "加载更多"}
-          </button>
-        ) : (
-          items.length > 0 && <span className="all_loaded">已加载全部</span>
-        )}
-        {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-        <TotalCount total={total} loaded={items.length} unit="条评论" />
-      </div>
+      {/* 2026-09-26 张老师要求：无评论时不显示「共 0 条评论」整行隐藏 */}
+      {items.length > 0 && (
+        <div className="more_loader">
+          {hasMore ? (
+            <button
+              type="button"
+              className="button small"
+              disabled={loading}
+              onMouseDown={noFocusJump}
+              onClick={loadMore}
+            >
+              {loading ? "加载中…" : "加载更多"}
+            </button>
+          ) : (
+            <span className="all_loaded">已加载全部</span>
+          )}
+          {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
+          <TotalCount total={total} loaded={items.length} unit="条评论" />
+        </div>
+      )}
     </div>
   );
 }
@@ -127,30 +130,20 @@ export function CommentForm({ videoId }: { videoId: number }) {
 
   return (
     <form id="comment-form" onSubmit={submit}>
-      <table className="form" cellPadding={0} cellSpacing={0}>
-        <tbody>
-          <tr>
-            <td>
-              <div>
-                <textarea
-                  style={{ width: 420, marginRight: 15 }}
-                  rows={4}
-                  maxLength={COMMENT_CONTENT_LIMIT}
-                  placeholder="我来说两句…（纯文本）"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                />
-              </div>
-              {error && <div className="error">{error}</div>}
-            </td>
-            <td style={{ verticalAlign: "top" }}>
-              <button type="submit" className="lp_submit_btn" disabled={submitting}>
-                发表评论
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <textarea
+        style={{ width: "100%", boxSizing: "border-box", display: "block", resize: "vertical" }}
+        rows={4}
+        maxLength={COMMENT_CONTENT_LIMIT}
+        placeholder="我来说两句…（纯文本）"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+      />
+      {error && <div className="error">{error}</div>}
+      <div style={{ marginTop: 8 }}>
+        <button type="submit" className="lp_submit_btn" disabled={submitting}>
+          发表评论
+        </button>
+      </div>
     </form>
   );
 }

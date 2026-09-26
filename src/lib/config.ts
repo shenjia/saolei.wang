@@ -55,7 +55,8 @@ export const HOME_NEWS_NUMBER = 15;
 export const HOME_VIDEO_NUMBER = 15;
 
 // ---------- 评论（移植 CommentConfig） ----------
-export const COMMENT_TOP_NUMBER = 5;
+// 2026-09-26 张老师要求：录像页初始最多显示 10 条，其余走「加载更多」
+export const COMMENT_TOP_NUMBER = 10;
 export const COMMENT_PAGESIZE = 15;
 export const COMMENT_CONTENT_LIMIT = 100;
 export const COMMENT_STATUS = { NORMAL: 0, DELETED: -1 } as const;
