@@ -77,7 +77,10 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             </BoardPlay>
             <p>
               {video.author && (
-                <AvatarCell id={video.author.id} name={video.author.chineseName} sex={video.author.sex} className="author" link />
+                <>
+                  <AvatarCell id={video.author.id} name={video.author.chineseName} sex={video.author.sex} className="author" link />
+                  <TitleBadge title={video.authorTitle} link />
+                </>
               )}
               <span className="create_time">
                 上传于<em>{timeOpposite(video.createTime)}</em>
@@ -148,7 +151,6 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
           <div className="box user_info_cell">
             <h2>
               <Link href={`/user/${video.author.id}`}>{video.author.chineseName}</Link>
-              <TitleBadge title={video.authorTitle} link />
             </h2>
             <p className="title_line">{video.authorTitle}</p>
           </div>
