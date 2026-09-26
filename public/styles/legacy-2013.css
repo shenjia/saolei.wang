@@ -3,7 +3,7 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #bbs_latest .bbs_new td{padding:0;color:#BBBBBB;font-size:12px;line-height:25px;font-family:Arial,Helvetica,sans-serif;text-shadow:none}
 #bbs_latest .subject{overflow:hidden}
 #bbs_latest .subject .wrap{display:flex;align-items:center;overflow:hidden;white-space:nowrap}
-#bbs_latest .bname{margin-right:4px;flex:0 0 auto}
+#bbs_latest .bname{margin-right:4px;flex:0 0 auto;font-size:12px;font-family:Arial,Helvetica,sans-serif}
 #bbs_latest .subject a.t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#BBBBBB;font-size:12px;text-decoration:none}
 #bbs_latest .subject a.t:hover{color:#a6e22e;text-decoration:underline}
 #bbs_latest .subject a.t.high{color:#FFFFFF}
