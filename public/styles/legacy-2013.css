@@ -3,13 +3,19 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #bbs_latest .bbs_new td{padding:0;color:#BBBBBB;font-size:14px;line-height:25px;font-family:Arial,Helvetica,sans-serif;text-shadow:none}
 #bbs_latest .subject{overflow:hidden}
 #bbs_latest .subject .wrap{display:flex;align-items:center;overflow:hidden;white-space:nowrap}
-#bbs_latest .bname{margin-right:4px;flex:0 0 auto;font-size:14px;font-family:Arial,Helvetica,sans-serif}
 #bbs_latest .subject a.t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#BBBBBB;font-size:14px;text-decoration:none}
 #bbs_latest .subject a.t:hover{color:#a6e22e;text-decoration:underline}
 #bbs_latest .subject a.t.high{color:#FFFFFF}
 #bbs_latest .pin{color:#ffff00;font-size:14px;flex:0 0 auto;margin-left:4px}
 #bbs_latest .nice{color:#ffff00;font-size:14px;flex:0 0 auto}
 #bbs_latest .bbs_new tbody tr:hover td{background:#444444}
+/* 分类标签（2026-09-26 张老师）：与论坛列表页 .bbs_list .board_tag 同款徽章渲染
+   （globals.css 九~十一轮定稿：灰底圆角描边徽章、12px 加粗、十三轮四板块配色）。
+   此处按 bbs_latest 语境调行距：徽章 18px 行高落在 25px 行内垂直居中 */
+#bbs_latest .board_tag{flex:0 0 auto;display:inline-block;padding:1px 7px;margin-right:8px;border:1px solid #656355;border-radius:3px;background:#49483e;color:#939387;font-size:12px;font-weight:bold;line-height:18px}
+#bbs_latest .board_tag.notice{color:#fdc61a}
+#bbs_latest .board_tag.tech{color:#a6e22e}
+#bbs_latest .board_tag.qa{color:#fd971f}
 
 /* ===== /page/guide 教程页（2026-09-24）===== */
 #guide h2{margin:36px 0 0}
