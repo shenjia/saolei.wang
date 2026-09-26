@@ -153,14 +153,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </Suspense>
         <div id="footer">
           <div className="wrapper">
+            <p className="footer-meta">
+              Copyright &copy; {new Date().getFullYear()} 扫雷网Saolei.wang
+            </p>
             <p className="footer-nav">
               <Link href="/page/about">关于本站</Link> ·{" "}
               <Link href="/page/history">更新历史</Link> ·{" "}
               <Link href="/team">管理团队</Link> ·{" "}
-              <Link href="/page/donate">提供赞助</Link>
-            </p>
-            <p className="footer-meta">
-              Copyright &copy; {new Date().getFullYear()} Saolei.wang ·{" "}
+              <Link href="/page/donate">提供赞助</Link> ·{" "}
               <a href="http://www.miibeian.gov.cn" target="_blank" rel="noopener noreferrer">
                 陕ICP备08100290号
               </a>
