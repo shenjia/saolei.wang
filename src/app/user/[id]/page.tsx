@@ -5,6 +5,8 @@
 //   军衔徽章上方，居中显示
 // 2026-09-24 二轮（张老师要求）：动态标题改「动态」、筛选器收进标题行右侧；
 //   无上传录像隐藏「实力」雷达；统计数字默认亮灰、今日数据黄色高亮
+// 2026-09-26（张老师要求）：纪事上方新增「录像」版块（加载更多翻页），
+//   标题行右上角绿色「上传录像」按钮（仅本人可见）
 
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -12,11 +14,18 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { getUserDetail, getUserNews, getUserRanks, getNewsCount } from "@/lib/queries";
+import {
+  getUserDetail,
+  getUserNews,
+  getUserRanks,
+  getNewsCount,
+  getVideoList,
+} from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
-import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, areaDisplay, type Level } from "@/lib/config";
+import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, VIDEO_PAGESIZE, areaDisplay, type Level } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
+import { VideoListFeed } from "@/components/VideoListFeed";
 import { HistoryBox } from "@/components/HistoryBox";
 import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime } from "@/components/Cells";
@@ -57,10 +66,12 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, session, ranks] = await Promise.all([
+  const [history, session, ranks, userVideos] = await Promise.all([
     getHistory(userId),
     getSession(),
     getUserRanks(userId),
+    // 本人录像：按上传时间倒序第一页（与 /video?author= 同语义）
+    getVideoList({ level: "all", order: "id", author: userId, page: 1 }),
   ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
@@ -185,6 +196,24 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
             />
           </div>
         )}
+        {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像按上传时间倒序，
+            「加载更多」走列表模式翻页），右上角绿色「上传录像」按钮（仅本人可见） */}
+        <div className="box" id="user_videos">
+          <div className="video_head_box">
+            <h2>录像</h2>
+            {isSelf && (
+              <Link href="/video/upload" className="button small video_upload_btn">
+                上传录像
+              </Link>
+            )}
+          </div>
+          <VideoListFeed
+            initial={userVideos.videos}
+            total={userVideos.total}
+            pageSize={userVideos.pageSize}
+            query={{ level: "all", order: "id", author: userId }}
+          />
+        </div>
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
       </li>
       <li className="sidebar">

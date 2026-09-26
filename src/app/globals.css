@@ -2080,6 +2080,42 @@ body #user_view .sidebar .table td:first-child {
   white-space: nowrap;
 }
 
+/* ---------- 用户主页「录像」版块（2026-09-26 张老师要求） ----------
+   纪事上方：标题行 h2 左 + 右上角「上传录像」按钮（仅本人可见）；
+   列表复用 /video 的 VideoListFeed（紧凑行 video_table + 加载更多）。 */
+#user_videos .video_head_box {
+  overflow: hidden;
+}
+#user_videos .video_head_box h2 {
+  float: left;
+}
+#user_videos .video_head_box .video_upload_btn {
+  float: right;
+  margin: 6px 0 0;
+}
+/* 绿色「上传录像」按钮：沿用 legacy .button.small 的渐变骨架与手感，
+   仅把配色换成 Monokai 主绿（#a6e22e 文字 / #679016 渐变底），
+   hover 提亮、active 压暗，无位移无形变（张老师：不要上下跳）。 */
+#user_videos .video_upload_btn,
+#user_videos .video_upload_btn:hover {
+  border-color: #679016;
+  background-color: #587812;
+  background-image: linear-gradient(180deg, #679016, #4a6410);
+  color: #d8f3a8;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+#user_videos .video_upload_btn:hover {
+  background-color: #679016;
+  background-image: linear-gradient(180deg, #75a319, #587812);
+  color: #e2f7b8;
+}
+#user_videos .video_upload_btn:active {
+  background-color: #4a6410;
+  background-image: linear-gradient(180deg, #556f12, #435a0e);
+  color: #c4e78f;
+}
+/* 版块内表格贴标题：首行与 h2 间距收紧（video_table 行自带紧凑 padding） */
+
 /* ==================== 排行榜 2008 编排改造（2026-09-23 张老师要求） ====================
    左：榜别 tabs + 全级别成绩表 + 老式分页；右：每日一星/雷界统计 + 世界TOP10。
    配色沿用 2013 Monokai 暗色；成绩灰阶/黄色沿用 2008 版 .Beg/.Int/.Exp/.Signest 语义。 */
