@@ -637,11 +637,7 @@ body #video_view .video_cell .playable {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  /* 2026-09-27 张老师要求：按钮与 footer 之间留呼吸空间。
-     ⚠️ 不能给 #footer 加 margin-top——footer 是 clear:both 元素，相邻浮动栏时
-     margin 会被 clearance 计算吞掉（实测 computed 24px 但 border edge 仍贴 float 底）；
-     padding 在浮动栏内部能实际撑高 li.main、把 footer 推下去 */
-  padding: 10px 0 24px;
+  padding: 10px 0 4px;
 }
 .more_loader .total_count {
   font-size: 13px;
@@ -3016,6 +3012,19 @@ body #page.two_columns {
 }
 body #page.two_columns li.main {
   min-width: 0;
+}
+
+/* ---------- footer 全站顶部留白（2026-09-27 张老师要求） ----------
+   footer 不得与任何上方元素紧挨。
+   ⚠️ 布局事实：#page（two_columns/main）两栏 float 溢出、容器高度塌陷；
+   footer 是 clear:both 兄弟，其顶边 = max(float 底, 正常流位置)。
+   因此给 footer 加 margin-top 会被 clearance 吞掉、footer wrapper 的
+   padding-top 只撑高自身、#page 塌陷时 padding-bottom 也推不动 footer。
+   终解：#page 建 flow-root（BFC 包住两栏 float，高度真实）+ padding-bottom。
+   #page 本是 block 塌陷盒，flow-root 只加「包含浮动」不改宽度/居中/边距。 */
+body #page {
+  display: flow-root;
+  padding-bottom: 24px;
 }
 
 /* ---------- 移动版顶栏导航 MobileNav（2026-09-26 张老师要求） ----------
