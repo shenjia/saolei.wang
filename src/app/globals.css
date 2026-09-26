@@ -553,11 +553,22 @@ body .tabs > a:hover::after {
   font-size: 14px;
 }
 
-/* 按钮内前置矢量图标（2026-09-26 张老师要求）：播放/下载按钮文字前的 14px 图形，
-   随按钮文字色变（灰 → hover 绿），与用户菜单图标同款规格 */
+/* 按钮内前置矢量图标（2026-09-26 张老师要求）：播放/下载按钮文字前的图形，
+   随按钮文字色变（灰 → hover 绿）。按钮文字 20px → 图标 18px（svg 属性内联），
+   vertical-align 居中到文字 x-height */
 .btn_icon {
-  vertical-align: -2px;
-  margin-right: 6px;
+  vertical-align: -3px;
+  margin-right: 7px;
+}
+
+/* 录像页计数行与左侧按钮垂直对齐（2026-09-26 张老师要求）：
+   legacy #video_view .video_cell .counters{float:right;margin-top:15px;line-height:39px}
+   按钮高 48px（文字行 30px 居中）：计数行高压回 30、margin 收到 (48-30)/2=9，
+   计数文字行与按钮文字行垂直居中重合。
+   ⚠️ 与 legacy 同特异性会被加载顺序压掉，必须加 body 前缀提权 */
+body #video_view .video_cell .counters {
+  margin-top: 9px;
+  line-height: 30px;
 }
 
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）

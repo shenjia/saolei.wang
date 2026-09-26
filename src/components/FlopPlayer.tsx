@@ -50,8 +50,8 @@ export function playFlop(uri: string) {
 export function PlayButton({ uri }: { uri: string }) {
   return (
     <button type="button" onClick={() => playFlop(uri)}>
-      <svg className="btn_icon" viewBox="0 0 14 14" width="14" height="14" fill="currentColor" aria-hidden="true">
-        <path d="M3.5 2.3v9.4c0 .66.72 1.06 1.28.71l7.16-4.7a.84.84 0 0 0 0-1.42l-7.16-4.7A.84.84 0 0 0 3.5 2.3z" />
+      <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
+        <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
       </svg>
       播放
     </button>
