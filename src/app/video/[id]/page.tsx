@@ -53,7 +53,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             {LEVEL_NAMES[level] ?? video.level}
             <em>{scoreTime(scores.time)}</em>秒{video.noflag && <ins>NF</ins>}
             <span className="id">
-              ID:<em>{video.id}</em>
+              (ID:<em>{video.id}</em>)
             </span>
           </h1>
           <h2>
