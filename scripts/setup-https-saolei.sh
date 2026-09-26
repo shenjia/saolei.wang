@@ -24,8 +24,15 @@ CERT_DIR="/etc/nginx/ssl/saolei"
 [[ -x "$ACME" ]] || { echo "[fail] acme.sh 不存在: $ACME"; exit 1; }
 [[ -f "$CONF" ]] || { echo "[fail] nginx conf 不存在: $CONF"; exit 1; }
 
-echo "[1/3] acme.sh 签发 $DOMAIN（http-01, webroot=$WEBROOT）..."
-"$ACME" --issue -d "$DOMAIN" -w "$WEBROOT" 2>&1 | tail -4
+# nginx worker 以 user nginx 运行，须能穿越 /home/deploy 才能读到 webroot 验证文件；
+# deploy home 默认 700 → acme http-01 验证全 403（2026-09-26 实测踩坑）。
+# o+x 仅允许穿越目录、不开放列目录/读内容，幂等无害
+chmod o+x /home/deploy
+
+echo "[1/3] acme.sh 签发 $DOMAIN（http-01, webroot=$WEBROOT, CA=Let's Encrypt）..."
+# --server letsencrypt：复用 01xue 证书同款 LE 账户（account.conf 已注册），
+# 避开 acme.sh 3.x 默认 ZeroSSL 需要额外注册的不确定性
+"$ACME" --issue -d "$DOMAIN" -w "$WEBROOT" --server letsencrypt 2>&1 | tail -4
 
 echo "[2/3] 安装证书到 $CERT_DIR 并挂续期 reload..."
 mkdir -p "$CERT_DIR"
