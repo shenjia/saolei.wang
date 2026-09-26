@@ -335,13 +335,18 @@ export function RichEditor({
     return document.createElement("strong");
   };
 
-  /** 清掉空格式壳（toggle/正文 操作可能留下无内容的 span/strong） */
+  /** 清掉空格式壳（toggle/正文 操作可能留下无内容的 span/strong）
+   *  及空行 div（extract/insert 往返残留；用户手敲空行是 <div><br></div> 有 BR 不受影响）。
+   *  注意 extract 切割会在残壳里留空文本节点（innerHTML 看着空但 childNodes>0），
+   *  判空必须看「是否所有子节点都是空文本」而非 childNodes.length===0 */
   const pruneEmptyFmt = () => {
     const ed = edRef.current!;
+    const hollow = (el: Element) =>
+      ![...el.childNodes].some((n) => (n.nodeType === 3 ? (n.nodeValue ?? "").length > 0 : true));
     for (;;) {
       const empties = Array.from(
-        ed.querySelectorAll("span.Title, span.Sign, span.Signest, strong, b")
-      ).filter((el) => el.childNodes.length === 0);
+        ed.querySelectorAll("span.Title, span.Sign, span.Signest, strong, b, div")
+      ).filter((el) => el !== ed && hollow(el));
       if (!empties.length) break;
       empties.forEach((el) => el.remove());
     }
@@ -373,14 +378,20 @@ export function RichEditor({
 
   /** 格式原子开关（2026-09-26 张老师定）：加亮/醒目/加粗互相独立，
    *  开 = 套用该样式，并保留选区已有的其他样式（修「点了加粗加亮/醒目就丢」bug）；
-   *  关 = 只摘除该样式，其余不动；再点同按钮 = 关（toggle）。完成后选区保持，可连续操作。 */
+   *  关 = 只摘除该样式，其余不动；再点同按钮 = 关（toggle）。完成后选区保持，可连续操作。
+   *  2026-09-26 四轮修「取消后文本消失」：extract 前先把选区边界向外扩张，圈进被
+   *  完全覆盖的格式壳（同 clearFormat 语义）——否则壳留在原地、内容插回壳内，
+   *  反复开关后层层嵌套（span 包 div 非法结构），内容在 extract/insert 中丢失。 */
   const toggleFormat = (tag: "span" | "strong", cls: string | null) => {
+    try {
+    console.log("[TG] enter", tag, cls);
     const ed = edRef.current!;
     ed.focus();
     pruneEmptyFmt();
     const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return;
+    if (!sel || !sel.rangeCount) { console.log("[TG] RET nosel"); return; }
     const r = sel.getRangeAt(0);
+    console.log("[TG] r collapsed=", r.collapsed);
 
     const match = tag === "strong"
       ? (el: HTMLElement) => /^(STRONG|B)$/.test(el.tagName)
@@ -417,6 +428,28 @@ export function RichEditor({
     const isB = (el: HTMLElement) => /^(STRONG|B)$/.test(el.tagName);
     const wasOn = covers(r, match);
 
+    // 选区边界向外扩张：圈进被完全覆盖的格式壳（start/end 分别处理，只在整壳覆盖时圈进）
+    {
+      let sp = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : (r.startContainer as HTMLElement);
+      while (isFmt(sp, ed)) {
+        const first = sp.firstChild;
+        const okS = (r.startContainer === first && r.startOffset === 0) || (r.startContainer === sp && r.startOffset === 0);
+        if (!okS) break;
+        r.setStart(sp.parentNode!, Array.prototype.indexOf.call(sp.parentNode!.childNodes, sp));
+        sp = sp.parentElement;
+      }
+      let ep = r.endContainer.nodeType === 3 ? r.endContainer.parentElement : (r.endContainer as HTMLElement);
+      while (isFmt(ep, ed)) {
+        const last = ep.lastChild;
+        if (!last) break;
+        const endLen = last.nodeType === 3 ? (last as Text).length : last.childNodes.length;
+        const okE = (r.endContainer === last && r.endOffset === endLen) || (r.endContainer === ep && r.endOffset === ep.childNodes.length);
+        if (!okE) break;
+        r.setEnd(ep.parentNode!, Array.prototype.indexOf.call(ep.parentNode!.childNodes, ep) + 1);
+        ep = ep.parentElement;
+      }
+    }
+
     // extract 会切开所有覆盖选区的祖先 → 记下需保留的其他样式，稍后统一重包（避免嵌套堆积）
     const keep: Array<["span" | "strong", string | null]> = [];
     if (!(tag === "span" && cls === "Title") && covers(r, isTitle)) keep.push(["span", "Title"]);
@@ -424,6 +457,7 @@ export function RichEditor({
     if (tag !== "strong" && covers(r, isB)) keep.push(["strong", null]);
 
     const frag = r.extractContents();
+    console.log("[TG] after-extract ed=", ed.innerHTML.slice(0, 100), " frag-first=", frag.firstChild ? (frag.firstChild as HTMLElement).outerHTML?.slice(0, 80) : "none");
     // 片段内摘除全部同类样式壳（覆盖路径）+ 其他保留样式的壳（统一重包策略，杜绝嵌套堆积）
     const stripSel = tag === "strong" ? "strong,b" : `span.${cls}`;
     frag.querySelectorAll?.(stripSel).forEach((w) => {
@@ -440,40 +474,69 @@ export function RichEditor({
 
     const box = document.createElement("div");
     box.appendChild(frag);
-    if (!box.firstChild) return; // 选区无实际内容
+    console.log("[TG] box=", box.innerHTML.slice(0, 100));
+    if (!box.firstChild) { console.log("[TG] RET empty"); return; } // 选区无实际内容
 
-    // 组装：开 = 新样式元素最内层；keep 从内到外逐层外包（每样式恰好一层）
-    let el: HTMLElement | null = null;
-    if (!wasOn) {
-      el = makeFmtEl(tag, cls);
-      while (box.firstChild) el.appendChild(box.firstChild);
-    }
-    for (const [kt, kc] of keep) {
-      const outer = makeFmtEl(kt, kc);
-      if (el) outer.appendChild(el);
-      else while (box.firstChild) outer.appendChild(box.firstChild);
-      el = outer;
-    }
+    // 组装（2026-09-26 三轮）。铁律：样式元素只包行内内容，不包块级节点；
+    // 不预造 line 包装——插入点通常已在原块级 div 内（extract 切割处），裸节点直接回填，
+    // 落在画布根层的裸节点交给 wrapBareLines 归一化（仅包根层，正好不会双层嵌套）
+    const buildStyled = (): HTMLElement | null => {
+      let el: HTMLElement | null = null;
+      if (!wasOn) el = makeFmtEl(tag, cls);
+      for (const [kt, kc] of keep) {
+        const outer = makeFmtEl(kt, kc);
+        if (el) outer.appendChild(el);
+        el = outer;
+      }
+      return el;
+    };
+    const styleBlockChildren = (blk: HTMLElement) => {
+      const el = buildStyled();
+      if (!el) return; // 关路径且无 keep：剥壳即终态
+      while (blk.firstChild) el.appendChild(blk.firstChild);
+      blk.appendChild(el);
+    };
 
-    // 插回并恢复选区（连续点击工具按钮的关键）
-    let first: ChildNode, last: ChildNode;
-    if (el) {
-      r.insertNode(el);
-      first = el;
-      last = el;
-    } else {
-      const out = document.createDocumentFragment();
-      first = box.firstChild!;
-      last = box.lastChild!;
-      while (box.firstChild) out.appendChild(box.firstChild);
-      r.insertNode(out);
+    const out = document.createDocumentFragment();
+    let run: Node[] = [];
+    const flushRun = () => {
+      if (!run.length) return;
+      const el = buildStyled();
+      if (el) {
+        for (const n of run) el.appendChild(n);
+        out.appendChild(el);
+      } else {
+        for (const n of run) out.appendChild(n);
+      }
+      run = [];
+    };
+    for (const n of Array.from(box.childNodes)) {
+      if (n.nodeType === 1 && /^(DIV|P|BLOCKQUOTE)$/.test((n as HTMLElement).tagName)) {
+        flushRun();
+        styleBlockChildren(n as HTMLElement);
+        out.appendChild(n);
+      } else {
+        run.push(n);
+      }
     }
+    flushRun();
+
+    // 引用先取（insertNode 后 fragment 即被倒空），插入后节点均已入 DOM
+    const first = (out.firstChild ?? out) as ChildNode;
+    const last = (out.lastChild ?? out) as ChildNode;
+    r.insertNode(out);
+    wrapBareLines();
+    pruneEmptyFmt();
     const after = document.createRange();
     after.setStartBefore(first);
     after.setEndAfter(last);
     sel.removeAllRanges();
     sel.addRange(after);
+    console.log("[TG] DONE html=", ed.innerHTML.slice(0, 140));
     onInput();
+    } catch (err) {
+      console.error("[TG] CRASH:", err);
+    }
   };
 
   /** 正文：清除所选全部样式与链接（图片保留）。选区先向外扩张圈进被完全覆盖的格式容器 */
