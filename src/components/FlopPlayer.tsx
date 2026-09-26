@@ -46,11 +46,14 @@ export function playFlop(uri: string) {
   flop.playVideo(uri, PLAY_OPTIONS);
 }
 
-/** 「在线播放」按钮（对应 2008 版 Show.asp 的按钮） */
+/** 「播放」按钮（对应 2008 版 Show.asp 的按钮；2026-09-26 张老师要求精简文案+前置矢量图标） */
 export function PlayButton({ uri }: { uri: string }) {
   return (
     <button type="button" onClick={() => playFlop(uri)}>
-      在线播放
+      <svg className="btn_icon" viewBox="0 0 14 14" width="14" height="14" fill="currentColor" aria-hidden="true">
+        <path d="M3.5 2.3v9.4c0 .66.72 1.06 1.28.71l7.16-4.7a.84.84 0 0 0 0-1.42l-7.16-4.7A.84.84 0 0 0 3.5 2.3z" />
+      </svg>
+      播放
     </button>
   );
 }

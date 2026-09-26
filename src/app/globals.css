@@ -554,6 +554,13 @@ body .tabs > a:hover::after {
   font-size: 14px;
 }
 
+/* 按钮内前置矢量图标（2026-09-26 张老师要求）：播放/下载按钮文字前的 14px 图形，
+   随按钮文字色变（灰 → hover 绿），与用户菜单图标同款规格 */
+.btn_icon {
+  vertical-align: -2px;
+  margin-right: 6px;
+}
+
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
    半透明黑圆 + 白三角，绝对定位在棋盘几何中心。
    legacy 的 #video_view .board{float:left;margin:5px 20px 20px 0} 外边距

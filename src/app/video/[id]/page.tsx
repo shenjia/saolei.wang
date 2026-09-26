@@ -8,10 +8,7 @@ import { getSession } from "@/lib/auth";
 import { clientIp, uniqueVideoAction } from "@/lib/stat";
 import {
   COMMENT_TOP_NUMBER,
-  isManager,
   LEVEL_NAMES,
-  USER_ROLE,
-  VIDEO_STATUS,
   VIDEO_STATUS_NAMES,
   type VideoLevel,
 } from "@/lib/config";
@@ -21,7 +18,6 @@ import { Board } from "@/components/Board";
 import { BoardPlay } from "@/components/BoardPlay";
 import { CommentForm, CommentList } from "@/components/Comments";
 import { FlopPlayer, PlayButton } from "@/components/FlopPlayer";
-import { ReviewButtons } from "@/components/ReviewButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -112,7 +108,12 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             <hr />
             <PlayButton uri={`/videos${video.filepath}`} />
             <a className="button" href={`/video/download/${video.id}`}>
-              下载录像
+              <svg className="btn_icon" viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M7 1.5v7.5" />
+                <path d="M3.8 6.2 7 9.4l3.2-3.2" />
+                <path d="M1.8 11.5h10.4" />
+              </svg>
+              下载
             </a>
             <p className="counters">
               <span className="clicks">
@@ -125,13 +126,6 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
                 下载<em>{video.downloads}</em>
               </span>
             </p>
-            {session &&
-              ((isManager(session.role) && video.status === VIDEO_STATUS.NORMAL) ||
-                session.role === USER_ROLE.ADMINISTRATOR) && (
-                <p>
-                  <ReviewButtons videoId={video.id} status={video.status} />
-                </p>
-              )}
           </div>
         </div>
         {session && (
