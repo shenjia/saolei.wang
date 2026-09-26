@@ -45,7 +45,7 @@ export function ubbToEditorHtml(raw: string): string {
   t = t.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi, '<img src="$1">');
   t = t.replace(/\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi, '<a href="$1">$2</a>');
   t = t.replace(/\[face\](\d{1,2})(n?)\[\/face\]/gi, (_, n: string, sfx: string) => {
-    const id = Math.min(29, parseInt(n, 10));
+    const id = Math.min(30, Math.max(1, parseInt(n, 10)));
     const dir = sfx ? "face-wx" : "face";
     const ext = sfx ? ".png" : ".gif";
     return `<img src="/images/${dir}/${id}${ext}" data-face="${id}${sfx}">`;

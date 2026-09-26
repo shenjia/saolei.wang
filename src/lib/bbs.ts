@@ -109,9 +109,10 @@ export function ubb(raw: string): string {
   );
   // 引用
   text = text.replace(/\[quote\]/gi, "<blockquote>").replace(/\[\/quote\]/gi, "</blockquote>");
-  // 表情：[face]N[/face]（N=0-29，白名单数字，经典 QQ 系）与 [face]Nn[/face]（新版=微信原版）
+  // 表情：[face]N[/face]（N=1-30，白名单数字，旧版 QQ 系）与 [face]Nn[/face]（新版=微信原版）
+  // 两套槽位一一对应（2026-09-26 整合：同一编号同一语义，21/24/25/26/27 无微信对应沿用旧图）
   text = text.replace(/\[face\](\d{1,2})(n?)\[\/face\]/gi, (_, n, suffix) => {
-    const id = Math.min(29, parseInt(n, 10));
+    const id = Math.min(30, Math.max(1, parseInt(n, 10)));
     const dir = suffix ? "face-wx" : "face";
     const ext = suffix ? ".png" : ".gif";
     return `<img src="/images/${dir}/${id}${ext}" alt="">`;
