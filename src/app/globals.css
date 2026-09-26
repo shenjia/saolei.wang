@@ -3544,6 +3544,10 @@ body #header .nav .popMenu .menu li a .um_icon {
   line-height: 16px;
   min-height: 16px;
 }
+/* 纯雷图行内图片顶对齐：16px 行高下 middle 会把图往下顶出行框造成行间缝隙（2026-09-26） */
+.wys .mine-line img {
+  vertical-align: top;
+}
 .wys img[data-face] {
   height: 24px;
   width: 24px;
