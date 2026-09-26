@@ -569,6 +569,11 @@ body .tabs > a:hover::after {
 body #video_view .video_cell .counters {
   margin-top: 9px;
   line-height: 30px;
+  /* 内容字号加大（2026-09-27 张老师反馈 14px 太小）：label 14→16、数字 em 20→22 */
+  font-size: 16px;
+}
+body #video_view .video_cell .counters em {
+  font-size: 22px;
 }
 
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
@@ -670,7 +675,7 @@ body #video_view .video_cell .playable {
 .comment_cell .content {
   margin: 0;
   font-size: 14px;
-  color: #f8f8f2;
+  color: #b1b1a4; /* 2026-09-27 张老师要求：正文不用纯白，用亮灰（与 meta 同色系） */
   word-break: break-all;
   white-space: pre-wrap;
 }
@@ -3536,6 +3541,23 @@ body #video_list .score_3bvs a:hover em {
 }
 .video_table td.counters em {
   margin: 0;
+}
+/* 排序命中列整列黄（2026-09-27 张老师要求：按成绩/按3BV/s 排列时对应列数据黄色渲染）。
+   排行页 .ranking_table td.current 同语言；须压过级别色档
+   （#page .video_table td.score.lv_beg 等 (1,3,1)），故 #page 前缀 + .current 提权。
+   NF 小标与划线成绩一并变黄，hover 仍绿。 */
+#page .video_table td.score.current,
+#page .video_table td.score.current a,
+#page .video_table td.c_3bvs.current,
+#page .video_table td.c_3bvs.current del {
+  color: #fdc61d;
+}
+#page .video_table td.score.current a:hover,
+#page .video_table td.c_3bvs.current:hover {
+  color: #a6e22e;
+}
+#page .video_table td.score.current .nf {
+  color: #fdc61d;
 }
 
 /* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、排序贴行尾 */
