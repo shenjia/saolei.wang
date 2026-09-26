@@ -750,9 +750,10 @@ body #page.bbs_old .page_head {
   word-break: break-all;
   line-height: 24px;
 }
-/* 十六轮：计数改「x阅读 x评论」后放宽——历史最大 187684阅读，110px 会截断 */
+/* 十六轮：计数改「x阅读 x评论」后放宽——历史最大 187684阅读，110px 会截断；
+   十七轮：改「x / y」纯数字——去单位词后收窄回 110px */
 .bbs_list th.num {
-  width: 170px;
+  width: 110px;
   padding-left: 8px;
   padding-right: 8px;
 }
@@ -799,6 +800,13 @@ body #page.bbs_old .page_head {
   同源），不再用黄色 em 强调；列表页计数列与文章详情页 meta 行共用 */
 .bbs_count {
   color: #bbbbbb;
+  font-weight: bold;
+}
+/* 十七轮（2026-09-26 张老师）：计数改「x / y」——x=评论用黄强调（legacy em 黄
+   #fdc61a），y=阅读保持亮灰；与 .bbs_count 同粗细成对。仅作用于列表页计数列
+   （详情页 meta 行仍是「x阅读 x评论」全灰） */
+.bbs_list .bbs_replies {
+  color: #fdc61a;
   font-weight: bold;
 }
 /* 分类标签：与正文同字号（legacy .level 是 20px，不可用）。

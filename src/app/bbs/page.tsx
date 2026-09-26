@@ -74,7 +74,7 @@ export default async function BbsPage({
             <tr>
               <th className="topic">分类 / 主题</th>
               <th className="author">作者</th>
-              <th className="num">回复 / 点击</th>
+              <th className="num">评论 / 阅读</th>
               <th className="time">最后更新</th>
             </tr>
           </thead>

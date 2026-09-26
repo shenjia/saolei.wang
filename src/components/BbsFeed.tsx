@@ -61,8 +61,11 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
           </>
         )}
       </td>
+      {/* 十七轮（2026-09-26 张老师）：计数改「x / y」——x=评论（黄 #fdc61a 强调）、
+          y=阅读（亮灰），斜杠分隔与表头「评论 / 阅读」呼应；不再显示单位词 */}
       <td>
-        <em>{p.replies}</em> / {p.clicks}
+        <em className="bbs_replies">{p.replies}</em>
+        <span className="bbs_count"> / {p.clicks}</span>
       </td>
       <td className="time">{timeOpposite(p.lastReplyTime, TIME_NEVER)}</td>
     </tr>
