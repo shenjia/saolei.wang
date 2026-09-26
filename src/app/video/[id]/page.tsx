@@ -52,6 +52,9 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
           <h1>
             {LEVEL_NAMES[level] ?? video.level}
             <em>{scoreTime(scores.time)}</em>秒{video.noflag && <ins>NF</ins>}
+            <span className="id">
+              (<em>{video.id}</em>)
+            </span>
           </h1>
           <h2>
             <span className="board_3bv">
@@ -66,9 +69,6 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
                   {score3bvs(-scores["3bvs"])}
                 </del>
               )}
-            </span>
-            <span className="id">
-              ID.<em>{video.id}</em>
             </span>
           </h2>
           <div className="info">
