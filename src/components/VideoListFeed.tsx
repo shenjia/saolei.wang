@@ -84,7 +84,8 @@ export function VideoListFeed({
         ) : (
           items.length > 0 && <span className="all_loaded">已加载全部</span>
         )}
-        <TotalCount total={total} unit="个" />
+        {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
+        <TotalCount total={total} loaded={items.length} unit="个" />
       </div>
     </>
   );

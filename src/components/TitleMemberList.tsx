@@ -196,7 +196,8 @@ export function TitleMemberList({
             {loading ? "加载中…" : "加载更多"}
           </button>
         )}
-        <TotalCount total={total} unit="人" />
+        {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
+        <TotalCount total={total} loaded={rows.length} unit="人" />
         {myId != null && myOffset != null && myOffset >= 0 && !located && (
           <button type="button" className="button small" disabled={locating} onClick={locateMe}>
             {locating ? "定位中…" : "我在哪里?"}

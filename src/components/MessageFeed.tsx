@@ -106,7 +106,8 @@ export function MessageFeed({
                 {loading ? "加载中…" : "加载更多"}
               </button>
             )}
-            <TotalCount total={total} unit="条" />
+            {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
+            <TotalCount total={total} loaded={items.length} unit="条" />
           </div>
         </td>
       </tr>
