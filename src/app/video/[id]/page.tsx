@@ -109,7 +109,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             <hr />
             <PlayButton uri={`/videos${video.filepath}`} />
             <a className="button" href={`/video/download/${video.id}`}>
-              保存录像
+              下载录像
             </a>
             <p className="counters">
               <span className="clicks">

@@ -16,7 +16,7 @@ export default function VideoHelpPage() {
           要观看 avf 录像，请先下载 Minesweeper Arbiter；要观看 mvf 录像，请先下载 Minesweeper
           Clone 0.97 并安装（均见<Link href="/page/download">软件下载</Link>页）。
         </p>
-        <p>打开网站上任何一个录像，点击「保存录像」，将录像保存到桌面上。</p>
+        <p>打开网站上任何一个录像，点击「下载录像」，将录像保存到桌面上。</p>
         <p>双击保存下来的录像文件，选择打开方式：</p>
         <p>mvf 录像浏览到 Clone 的安装目录，选择 Minesweeper Clone.exe。</p>
         <p>avf 录像浏览到 Arbiter 的所在目录，选择 ms_arbiter.exe。</p>
