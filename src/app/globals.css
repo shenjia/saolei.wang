@@ -3512,19 +3512,20 @@ body #header .nav .popMenu .menu li a .um_icon {
   display: inline-block;
 }
 
-/* 画布：观感沿用站内 textarea；表情/雷图/语义色以真身呈现。
-   正文色 #bbbbbb 与论坛实际正文 .bbs_content 一致（2026-09-26 张老师指出编辑器与论坛色不一致） */
+/* 画布：所见即所得——完整模拟论坛正文环境（2026-09-26 张老师指出输入框正文色与论坛不同；
+   实测字色本就同为 #bbbbbb，观感差异来自底色与字号：画布原 #272822/14px vs 论坛 .bbs_post #3b3a32/15px，
+   同字色在更深底上显得更亮——底色、字号一并对齐论坛） */
 .wys {
   display: block;
   width: 100%;
   max-height: 560px;
   overflow-y: auto;
-  background: #272822;
+  background: #3b3a32;
   color: #bbbbbb;
   border: 1px solid #49483e;
   border-radius: 4px;
-  padding: 8px 10px;
-  font-size: 14px;
+  padding: 10px 4px;
+  font-size: 15px;
   line-height: 1.8;
   word-break: break-all;
   outline: none;
