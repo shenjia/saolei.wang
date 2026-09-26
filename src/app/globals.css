@@ -1295,6 +1295,16 @@ body #page.message_list > .box:first-child .page_head {
 #page.message_list .table tr.unread td {
   font-weight: normal;
 }
+/* 未读正文高亮（2026-09-26 张老师要求）：白 #f8f8f2（同论坛高亮标题语义），
+   与普通 #bbbbbb / 已读 #75715e 形成三档明暗；与 msg_sys 黄 (1,4,2) 同特异性，
+   靠源码序（msg_sys 规则在后）让未读系统消息保持黄；hover 单独恢复绿
+   （ID 选择器压过 .bbs_list a.bbs_title:hover，同 msg_sys hover 处理模式） */
+#page.message_list .table tr.unread a.bbs_title {
+  color: #f8f8f2;
+}
+#page.message_list .table tr.unread a.bbs_title:hover {
+  color: #a6e22e;
+}
 #page.message_list .table tr.read .bbs_title,
 #page.message_list .table tr.read td.time {
   color: #75715e;
