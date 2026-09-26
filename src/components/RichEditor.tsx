@@ -106,10 +106,12 @@ function serializeInline(nodes: ArrayLike<Node>): string {
     if (tag === "BLOCKQUOTE") { out += `[quote]${inner()}[/quote]`; continue; }
     if (tag === "SPAN") {
       const c = el.className;
-      if (c === "Title") out += `[Title]${inner()}[/Title]`;
-      else if (c === "Sign") out += `[Sign]${inner()}[/Sign]`;
-      else if (c === "Signest") out += `[Signest]${inner()}[/Signest]`;
-      else out += inner();
+      const s = inner();
+      // 空样式壳不产出空标签（折叠光标开样式后未输入即离开的场景；同 STRONG 守卫）
+      if (c === "Title" && s !== "") out += `[Title]${s}[/Title]`;
+      else if (c === "Sign" && s !== "") out += `[Sign]${s}[/Sign]`;
+      else if (c === "Signest" && s !== "") out += `[Signest]${s}[/Signest]`;
+      else if (c !== "Title" && c !== "Sign" && c !== "Signest") out += s;
       continue;
     }
     if (tag === "STRONG" || tag === "B") { const s = inner(); if (s !== "") out += `[b]${s}[/b]`; continue; }
@@ -323,19 +325,152 @@ export function RichEditor({
     onInput();
   };
 
-  const wrapSelection = (tag: string, cls: string | null) => {
+  /** 造格式元素：span.Title / span.Sign / strong（Signest 仅供存量渲染，不再产生） */
+  const makeFmtEl = (tag: "span" | "strong", cls: string | null): HTMLElement => {
+    if (tag === "span") {
+      const s = document.createElement("span");
+      s.className = cls!;
+      return s;
+    }
+    return document.createElement("strong");
+  };
+
+  /** 清掉空格式壳（toggle/正文 操作可能留下无内容的 span/strong） */
+  const pruneEmptyFmt = () => {
+    const ed = edRef.current!;
+    for (;;) {
+      const empties = Array.from(
+        ed.querySelectorAll("span.Title, span.Sign, span.Signest, strong, b")
+      ).filter((el) => el.childNodes.length === 0);
+      if (!empties.length) break;
+      empties.forEach((el) => el.remove());
+    }
+  };
+
+  /** 选区内所有非空文本是否都在某样式的祖先内（判定当前「开/关」，以及 extract 会丢哪些覆盖样式） */
+  const covers = (r: Range, match: (el: HTMLElement) => boolean): boolean => {
+    const ed = edRef.current!;
+    let root: HTMLElement | null = r.commonAncestorContainer as HTMLElement | null;
+    if (root && root.nodeType === 3) root = root.parentElement;
+    if (!root) return false;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let saw = false;
+    while (walker.nextNode()) {
+      const t = walker.currentNode as Text;
+      if (!t.nodeValue) continue;
+      if (!r.intersectsNode(t)) continue;
+      saw = true;
+      let p: HTMLElement | null = t.parentElement;
+      let ok = false;
+      while (p && p !== ed) {
+        if (match(p)) { ok = true; break; }
+        p = p.parentElement;
+      }
+      if (!ok) return false;
+    }
+    return saw;
+  };
+
+  /** 格式原子开关（2026-09-26 张老师定）：加亮/醒目/加粗互相独立，
+   *  开 = 套用该样式，并保留选区已有的其他样式（修「点了加粗加亮/醒目就丢」bug）；
+   *  关 = 只摘除该样式，其余不动；再点同按钮 = 关（toggle）。完成后选区保持，可连续操作。 */
+  const toggleFormat = (tag: "span" | "strong", cls: string | null) => {
     const ed = edRef.current!;
     ed.focus();
+    pruneEmptyFmt();
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
     const r = sel.getRangeAt(0);
+
+    const match = tag === "strong"
+      ? (el: HTMLElement) => /^(STRONG|B)$/.test(el.tagName)
+      : (el: HTMLElement) => el.tagName === "SPAN" && el.className === cls;
+
+    // 光标折叠：在样式内 = 跳出到该样式之后（关）；不在 = 插入空样式节点承接后续输入（开）
+    if (r.collapsed) {
+      let p: HTMLElement | null = r.startContainer.nodeType === 3
+        ? r.startContainer.parentElement
+        : (r.startContainer as HTMLElement);
+      while (p && p !== ed) {
+        if (match(p)) {
+          const after = document.createRange();
+          after.setStartAfter(p);
+          after.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(after);
+          return;
+        }
+        p = p.parentElement;
+      }
+      const el = makeFmtEl(tag, cls);
+      r.insertNode(el);
+      const inner = document.createRange();
+      inner.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(inner);
+      onInput();
+      return;
+    }
+
+    const isTitle = (el: HTMLElement) => el.tagName === "SPAN" && el.className === "Title";
+    const isSign = (el: HTMLElement) => el.tagName === "SPAN" && el.className === "Sign";
+    const isB = (el: HTMLElement) => /^(STRONG|B)$/.test(el.tagName);
+    const wasOn = covers(r, match);
+
+    // extract 会切开所有覆盖选区的祖先 → 记下需保留的其他样式，稍后统一重包（避免嵌套堆积）
+    const keep: Array<["span" | "strong", string | null]> = [];
+    if (!(tag === "span" && cls === "Title") && covers(r, isTitle)) keep.push(["span", "Title"]);
+    if (!(tag === "span" && cls === "Sign") && covers(r, isSign)) keep.push(["span", "Sign"]);
+    if (tag !== "strong" && covers(r, isB)) keep.push(["strong", null]);
+
     const frag = r.extractContents();
-    const el = tag === "span" ? (() => { const s = document.createElement("span"); s.className = cls!; return s; })() : document.createElement(tag);
-    el.appendChild(frag);
-    r.insertNode(el);
+    // 片段内摘除全部同类样式壳（覆盖路径）+ 其他保留样式的壳（统一重包策略，杜绝嵌套堆积）
+    const stripSel = tag === "strong" ? "strong,b" : `span.${cls}`;
+    frag.querySelectorAll?.(stripSel).forEach((w) => {
+      while (w.firstChild) w.parentNode?.insertBefore(w.firstChild, w);
+      w.remove();
+    });
+    const keepSel = keep.map(([kt, kc]) => (kt === "strong" ? "strong,b" : `span.${kc}`)).join(",");
+    if (keepSel) {
+      frag.querySelectorAll?.(keepSel).forEach((w) => {
+        while (w.firstChild) w.parentNode?.insertBefore(w.firstChild, w);
+        w.remove();
+      });
+    }
+
+    const box = document.createElement("div");
+    box.appendChild(frag);
+    if (!box.firstChild) return; // 选区无实际内容
+
+    // 组装：开 = 新样式元素最内层；keep 从内到外逐层外包（每样式恰好一层）
+    let el: HTMLElement | null = null;
+    if (!wasOn) {
+      el = makeFmtEl(tag, cls);
+      while (box.firstChild) el.appendChild(box.firstChild);
+    }
+    for (const [kt, kc] of keep) {
+      const outer = makeFmtEl(kt, kc);
+      if (el) outer.appendChild(el);
+      else while (box.firstChild) outer.appendChild(box.firstChild);
+      el = outer;
+    }
+
+    // 插回并恢复选区（连续点击工具按钮的关键）
+    let first: ChildNode, last: ChildNode;
+    if (el) {
+      r.insertNode(el);
+      first = el;
+      last = el;
+    } else {
+      const out = document.createDocumentFragment();
+      first = box.firstChild!;
+      last = box.lastChild!;
+      while (box.firstChild) out.appendChild(box.firstChild);
+      r.insertNode(out);
+    }
     const after = document.createRange();
-    after.setStartAfter(el);
-    after.collapse(true);
+    after.setStartBefore(first);
+    after.setEndAfter(last);
     sel.removeAllRanges();
     sel.addRange(after);
     onInput();
@@ -407,11 +542,12 @@ export function RichEditor({
     const act = btn.dataset.act;
     if (act === "clear") { clearFormat(); closePop(); return; }
     if (act === "wrap") {
-      const map: Record<string, [string, string | null]> = {
-        Title: ["span", "Title"], Sign: ["span", "Sign"], Signest: ["span", "Signest"], b: ["strong", null],
+      // 原子开关（2026-09-26 张老师定）：三因子各自开/关互不影响；Signest 不再由工具产生
+      const map: Record<string, ["span" | "strong", string | null]> = {
+        Title: ["span", "Title"], Sign: ["span", "Sign"], b: ["strong", null],
       };
       const [tag, cls] = map[btn.dataset.tag!] ?? ["span", null];
-      wrapSelection(tag, cls);
+      toggleFormat(tag, cls);
       closePop();
       return;
     }
