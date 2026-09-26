@@ -539,6 +539,21 @@ body .tabs > a:hover::after {
   cursor: pointer;
 }
 
+/* 录像 ID（h1「秒」后）：前缀与数字同灰同号，不高亮（2026-09-26 张老师要求）
+   —— legacy #video_view .video_cell h1 em 是金色 26px（带 id 选择器），
+   ID 的 em 必须以更高优先级压回小灰字 */
+.video_cell h1 .id {
+  color: #939387;
+  font-size: 14px;
+  font-style: normal;
+  line-height: 39px;
+  margin-left: 8px;
+}
+#video_view .video_cell h1 .id em {
+  color: #939387;
+  font-size: 14px;
+}
+
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
    半透明黑圆 + 白三角，绝对定位在棋盘几何中心。
    legacy 的 #video_view .board{float:left;margin:5px 20px 20px 0} 外边距
@@ -547,10 +562,20 @@ body .tabs > a:hover::after {
 .playable {
   position: relative;
 }
+
+/* 主板块布局调整（2026-09-26 张老师要求）：地图右边不放任何元素，
+   上传/审核/软件/签名等全部落到棋盘下方。
+   .playable 升为 flow-root 包住 .play_board 浮动（原先浮动溢出 playable、
+   后续 <p> 环绕在棋盘右侧），包住后兄弟节点自然整块落到棋盘下方 */
+body #video_view .video_cell .playable {
+  display: flow-root;
+}
 .play_board {
   position: relative;
   float: left;
   margin: 5px 20px 20px 0;
+  /* 点击热区＝棋盘本体（点击播放已移到 .play_board，2026-09-26），给手型光标 */
+  cursor: pointer;
 }
 #video_view .play_board .board {
   margin: 0;
@@ -697,6 +722,54 @@ body .tabs > a:hover::after {
 #page .page_head .bbs_head_nav .tabs {
   margin-bottom: 2px; /* small 按钮 24px 行高与 tabs 文字基线对齐微调 */
 }
+/* 2026-09-26 论坛搜索（张老师要求：右上角搜索框，样式参考排行页）：
+   goto_form/goto_search/goto_suggest 全套复用排行页语言，这里只做行内占位——
+   二轮（张老师）：发布主题按钮移到搜索框左边，与搜索胶囊垂直居中——
+   两者打包进 .bbs_actions 动作组，组内 center 对齐、整组贴行尾
+   （行尾推右职责由动作组承担，顺序：tabs/结果条 … 发布主题 搜索框） */
+#page .page_head .bbs_head_nav .bbs_actions {
+  display: flex;
+  align-items: center; /* 发布按钮与搜索胶囊垂直居中对齐（张老师要求） */
+  gap: 10px;
+  flex: none;
+  margin-left: auto; /* 动作组整体贴行尾 */
+}
+#page .page_head .bbs_head_nav .bbs_actions .bbs_post_btn {
+  flex: none;
+  margin: 0; /* 垂直居中由组内 align-items 承担，清掉此前的基线微调 */
+}
+#page .page_head .bbs_head_nav .bbs_actions .bbs_search {
+  display: flex; /* 三轮修：block 包裹层里 inline-flex 胶囊受行盒基线对齐影响偏上悬浮 */
+  flex: none;
+  margin: 0; /* 同上：组内居中，不再自行贴尾 */
+  /* 三轮续修（真凶）：.goto_form 基础规则带 padding-bottom:5px（为排行页
+     「与 tabs 底线坐底对齐」设计），在论坛动作组里会把包裹层撑成 39px、
+     胶囊顶格——按钮被衬得偏低 2.5px。此处清零，包裹层高度=胶囊实际高 34px，
+     与发布按钮 center 对齐即像素级重合 */
+  padding-bottom: 0;
+}
+/* 搜索态结果条：替换分类 tabs 的位置，「搜索 "kw" 的结果 N帖 + 清除搜索」；
+   flex:1 吃满中间空隙，搜索框仍贴右 */
+#page .page_head .bbs_head_nav .bbs_search_bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 2px;
+}
+#page .page_head .bbs_head_nav .bbs_search_kw {
+  color: #939387;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#page .page_head .bbs_head_nav .bbs_search_kw em {
+  color: #fdc61d;
+  font-style: normal;
+}
 /* 五轮：卡片内页头——清通用页头外距（与 ranking_old/video_old 同法），
    卡片自身 margin:16px 8px 承接页顶间距 */
 body #page.bbs_old .page_head {
@@ -797,7 +870,7 @@ body #page.bbs_old .page_head {
   margin: 0;
 }
 /* 十六轮（2026-09-26 张老师）：计数改「x阅读 x评论」——亮灰加粗（与标题灰 #BBBBBB
-  同源），不再用黄色 em 强调；列表页计数列与文章详情页 meta 行共用 */
+   同源），不再用黄色 em 强调；列表页计数列与文章详情页 meta 行共用 */
 .bbs_count {
   color: #bbbbbb;
   font-weight: bold;
@@ -906,6 +979,18 @@ body #page.bbs_old .page_head {
   color: #f8f8f2;
 }
 .bbs_list a.bbs_title.highlight:hover {
+  color: #a6e22e;
+}
+/* 已读主题（2026-09-26 张老师要求）：点击过的帖子标题+计数变灰 #75715e，
+   与消息页已读同色（三档明暗：未读 #bbbbbb / 置顶高亮白 / 已读暗灰）。
+   read (0,3,1) 与 highlight (0,3,1) 同特异性、源码序在后——已读的置顶帖
+   标题也变灰（点击过即视为已消化，与未读白显形成对比） */
+.bbs_list tr.read .bbs_title,
+.bbs_list tr.read .bbs_replies,
+.bbs_list tr.read .bbs_count {
+  color: #75715e;
+}
+.bbs_list tr.read a.bbs_title:hover {
   color: #a6e22e;
 }
 .bbs_high_flag {
@@ -3478,6 +3563,69 @@ body #page.video_old .page_head {
 }
 #page.video_old .video_box .pager {
   margin-top: 10px;
+}
+
+/* ---------- 录像页双栏右栏（2026-09-26 张老师要求） ----------
+   页面复用首页 #home two_columns 版式（主栏宽度与首页一致，右栏 288/盒 210），
+   右栏两个板块：热门录像（作者+级别+成绩紧凑行）与统计。
+   「热门录像」行比首页侧栏（.table td padding 8px 20px）更紧凑，
+   列间距收紧为 4px 8px，成绩列贴行尾右对齐；级别/成绩色沿用列表页级别色档。 */
+#video_hot .video_hot_table td {
+  padding: 4px 8px 4px 0;
+  white-space: nowrap;
+}
+#video_hot td.level {
+  padding-left: 5px;
+}
+/* 级别/成绩列小一号（侧栏窄列，16px 灰 #page .level 语义在此并不需要提权——
+   下方 #page #video_hot 前缀 (1,2,1) 压过 legacy #page .level (1,1,0)） */
+#page #video_hot td.level {
+  font-size: 14px;
+  font-weight: bold;
+}
+#page #video_hot td.level.lv_beg,
+#video_hot td.score.lv_beg {
+  color: #999994;
+}
+#page #video_hot td.level.lv_int,
+#video_hot td.score.lv_int {
+  color: #bbbbaf;
+}
+#page #video_hot td.level.lv_exp,
+#video_hot td.score.lv_exp {
+  color: #ddddcf;
+}
+/* 成绩贴行尾，链接继承级别色（与 .video_table td.score a 同语义） */
+#video_hot td.score {
+  text-align: right;
+  font-weight: bold;
+}
+#video_hot td.score a {
+  color: inherit;
+}
+#video_hot td.score a:hover {
+  color: #a6e22e;
+}
+#video_hot td.score .nf {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: normal;
+  color: #fdc61d;
+}
+/* 作者列军衔徽章间距（列表页 td.name .title 同款） */
+#video_hot td.user .title {
+  margin-left: 5px;
+}
+#video_hot td.user .title em {
+  font-size: 14px;
+}
+/* 统计盒：沿用雷界统计口径（标签不折行、数值右对齐黄字） */
+#video_stats .table td {
+  font-size: 14px;
+  white-space: nowrap;
+}
+#video_stats .table .num {
+  text-align: right;
 }
 
 /* 窄屏（≤768px）：页头堆叠（title 独占一行），宽表盒内横滑 */
