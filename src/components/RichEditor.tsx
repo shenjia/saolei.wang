@@ -383,15 +383,12 @@ export function RichEditor({
    *  完全覆盖的格式壳（同 clearFormat 语义）——否则壳留在原地、内容插回壳内，
    *  反复开关后层层嵌套（span 包 div 非法结构），内容在 extract/insert 中丢失。 */
   const toggleFormat = (tag: "span" | "strong", cls: string | null) => {
-    try {
-    console.log("[TG] enter", tag, cls);
     const ed = edRef.current!;
     ed.focus();
     pruneEmptyFmt();
     const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) { console.log("[TG] RET nosel"); return; }
+    if (!sel || !sel.rangeCount) return;
     const r = sel.getRangeAt(0);
-    console.log("[TG] r collapsed=", r.collapsed);
 
     const match = tag === "strong"
       ? (el: HTMLElement) => /^(STRONG|B)$/.test(el.tagName)
@@ -457,7 +454,6 @@ export function RichEditor({
     if (tag !== "strong" && covers(r, isB)) keep.push(["strong", null]);
 
     const frag = r.extractContents();
-    console.log("[TG] after-extract ed=", ed.innerHTML.slice(0, 100), " frag-first=", frag.firstChild ? (frag.firstChild as HTMLElement).outerHTML?.slice(0, 80) : "none");
     // 片段内摘除全部同类样式壳（覆盖路径）+ 其他保留样式的壳（统一重包策略，杜绝嵌套堆积）
     const stripSel = tag === "strong" ? "strong,b" : `span.${cls}`;
     frag.querySelectorAll?.(stripSel).forEach((w) => {
@@ -474,37 +470,38 @@ export function RichEditor({
 
     const box = document.createElement("div");
     box.appendChild(frag);
-    console.log("[TG] box=", box.innerHTML.slice(0, 100));
-    if (!box.firstChild) { console.log("[TG] RET empty"); return; } // 选区无实际内容
+    if (!box.firstChild) return; // 选区无实际内容
 
-    // 组装（2026-09-26 三轮）。铁律：样式元素只包行内内容，不包块级节点；
-    // 不预造 line 包装——插入点通常已在原块级 div 内（extract 切割处），裸节点直接回填，
-    // 落在画布根层的裸节点交给 wrapBareLines 归一化（仅包根层，正好不会双层嵌套）
-    const buildStyled = (): HTMLElement | null => {
-      let el: HTMLElement | null = null;
-      if (!wasOn) el = makeFmtEl(tag, cls);
+    // 组装（2026-09-26 五轮：修 keep 空壳 bug）。铁律：样式元素只包行内内容，不包块级节点；
+    // buildStyled 返回 [最外层, 最内层]——填充目标是最内层（新样式），keep 逐层向外包。
+    // 旧版把内容塞进最外层 keep 壳、内层新样式成空壳被 pruneEmptyFmt 删掉 → 「醒目/加粗叠不上」
+    const buildStyled = (): { top: HTMLElement; fill: HTMLElement } | null => {
+      let fill: HTMLElement | null = wasOn ? null : makeFmtEl(tag, cls);
+      let top: HTMLElement | null = fill;
       for (const [kt, kc] of keep) {
         const outer = makeFmtEl(kt, kc);
-        if (el) outer.appendChild(el);
-        el = outer;
+        if (top) outer.appendChild(top);
+        else fill = outer; // 关路径：第一个 keep 壳 = 最内层 = 填充目标
+        top = outer;
       }
-      return el;
+      if (!top) return null; // 关路径且无 keep：剥壳即终态
+      return { top, fill: fill! };
     };
     const styleBlockChildren = (blk: HTMLElement) => {
-      const el = buildStyled();
-      if (!el) return; // 关路径且无 keep：剥壳即终态
-      while (blk.firstChild) el.appendChild(blk.firstChild);
-      blk.appendChild(el);
+      const st = buildStyled();
+      if (!st) return;
+      while (blk.firstChild) st.fill.appendChild(blk.firstChild);
+      blk.appendChild(st.top);
     };
 
     const out = document.createDocumentFragment();
     let run: Node[] = [];
     const flushRun = () => {
       if (!run.length) return;
-      const el = buildStyled();
-      if (el) {
-        for (const n of run) el.appendChild(n);
-        out.appendChild(el);
+      const st = buildStyled();
+      if (st) {
+        for (const n of run) st.fill.appendChild(n);
+        out.appendChild(st.top);
       } else {
         for (const n of run) out.appendChild(n);
       }
@@ -532,11 +529,7 @@ export function RichEditor({
     after.setEndAfter(last);
     sel.removeAllRanges();
     sel.addRange(after);
-    console.log("[TG] DONE html=", ed.innerHTML.slice(0, 140));
     onInput();
-    } catch (err) {
-      console.error("[TG] CRASH:", err);
-    }
   };
 
   /** 正文：清除所选全部样式与链接（图片保留）。选区先向外扩张圈进被完全覆盖的格式容器 */
