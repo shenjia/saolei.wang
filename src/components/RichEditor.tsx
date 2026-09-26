@@ -1,7 +1,7 @@
 // BBS 所见即所得编辑器（2026-09-25 张老师确认方案）
 // 数据层仍是 UBB：载入 ubbToEditorHtml(UBB) → contenteditable 画布真身呈现 → 提交 serializeEditor(ed) 序列化回 UBB。
 // 存量帖零迁移、服务端 ubb() 渲染管线零改动（lib/bbs.ts）。
-// 交互移植 2008 版 BBS/Edit_Box.asp + Face.asp + Mine.asp：工具栏按钮、弹层面板、小键盘摆雷。
+// 交互移植 2008 版 BBS/Edit_Box.asp + Face.asp + Mine.asp：工具栏按钮、弹层面板、摆雷（小键盘 + 大键盘数字行）。
 
 "use client";
 
@@ -23,6 +23,17 @@ const MINE_MAP: Record<string, string> = {
 const KEYPAD: Record<number, string> = {
   96: " ", 110: "Q", 97: "1", 98: "2", 99: "3", 100: "4", 101: "5",
   102: "6", 103: "7", 104: "8", 106: "*", 105: "!", 111: "?", 109: "-", 107: "+",
+};
+/** 大键盘数字行 → 摆雷符号（2026-09-26 张老师要求：大键盘也能触发）。
+ *  规则 = 键帽印什么出什么：0-8 出数字（0=凹陷空格同小键盘）、9 沿用小键盘 9=旗；
+ *  Shift 组合 * ! ? 与 + - 也各自对应（小键盘的 / . 特殊映射仅小键盘有效，大键盘不设） */
+const MAINROW: Record<string, string> = {
+  "0": " ", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "!",
+  "*": "*", "!": "!", "?": "?", "+": "+", "-": "-", "=": "-",
+};
+/** Shift+数字的美式键盘换算（部分环境 e.key 不带 Shift 变体、仍是数字本身，此处统一折算成符号再查表） */
+const SHIFT_DIGITS: Record<string, string> = {
+  "1": "!", "2": "@", "3": "#", "4": "$", "5": "%", "6": "^", "7": "&", "8": "*", "9": "(", "0": ")",
 };
 
 function escapeHtml(s: string): string {
@@ -105,7 +116,18 @@ function serializeInline(nodes: ArrayLike<Node>): string {
 
 /** 画布 DOM → UBB（白名单序列化；未知节点拍平为文本） */
 export function serializeEditor(ed: HTMLElement): string {
-  return serializeInline(ed.childNodes).replace(/\n+$/, "");
+  let out = "";
+  for (const n of Array.from(ed.childNodes)) {
+    const isBlock = n.nodeType === 1 && /^(DIV|P|BLOCKQUOTE)$/.test((n as HTMLElement).tagName);
+    const s = serializeInline([n]);
+    if (s === "") continue;
+    // Chrome contenteditable 首行常为裸节点（不在 div 内），按 Enter 后新行才是 div；
+    // serializeInline 的 DIV 分支只补行尾换行，裸首行 + div 行会被拼进同一行
+    // （2026-09-26 实踩：三行雷图发布变两行）——块级起行前若前文未换行，补一个换行
+    if (isBlock && out !== "" && !out.endsWith("\n")) out += "\n";
+    out += s;
+  }
+  return out.replace(/\n+$/, "");
 }
 
 /** 视觉字数：表情/雷图/图片各计 1，文字按字符（评论等限长场景用） */
@@ -234,6 +256,37 @@ export function RichEditor({
     setPop(null);
   };
 
+  /** 画布根下裸节点段（Chrome 首行默认不在 div 内）包进 <div class="line">，
+      让摆雷首行也能命中 .mine-line 紧行距；仅在摆雷插入后调用，避开 IME 输入期 */
+  const wrapBareLines = (keepAfter?: Node) => {
+    const ed = edRef.current;
+    if (!ed) return;
+    let seg: Node[] = [];
+    let touched = false;
+    const flush = () => {
+      if (!seg.length) return;
+      const div = document.createElement("div");
+      div.className = "line";
+      ed.insertBefore(div, seg[0]);
+      for (const n of seg) div.appendChild(n);
+      seg = [];
+      touched = true;
+    };
+    for (const n of Array.from(ed.childNodes)) {
+      if (n.nodeType === 1 && /^(DIV|P|BLOCKQUOTE)$/.test((n as HTMLElement).tagName)) flush();
+      else seg.push(n);
+    }
+    flush();
+    if (touched && keepAfter && keepAfter.parentNode) {
+      const sel = window.getSelection();
+      const r = document.createRange();
+      r.setStartAfter(keepAfter);
+      r.collapse(true);
+      sel?.removeAllRanges();
+      sel?.addRange(r);
+    }
+  };
+
   const insertNodeAtCaret = (node: Node) => {
     const ed = edRef.current!;
     ed.focus();
@@ -250,6 +303,8 @@ export function RichEditor({
       sel.removeAllRanges();
       sel.addRange(after);
     }
+    // 摆雷插入后归一化裸首行，保证纯雷图行紧贴（正文打字不受影响，IME 安全）
+    if (node instanceof HTMLElement && node.dataset.mine != null) wrapBareLines(node);
     onInput();
   };
 
@@ -366,9 +421,19 @@ export function RichEditor({
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (popRef.current.kind === "mines" && KEYPAD[e.keyCode]) {
+    if (popRef.current.kind !== "mines") return;
+    // 小键盘（keyCode 直接查表）
+    if (KEYPAD[e.keyCode]) {
       e.preventDefault();
       insertNodeAtCaret(makeMineImg(KEYPAD[e.keyCode]));
+      return;
+    }
+    // 大键盘数字行（e.key 字面值查表；Shift+数字在部分环境仍报数字，按美式布局折算成符号）
+    let key = e.key.length === 1 ? e.key : "";
+    if (key && e.shiftKey && SHIFT_DIGITS[key]) key = SHIFT_DIGITS[key];
+    if (key && MAINROW[key]) {
+      e.preventDefault();
+      insertNodeAtCaret(makeMineImg(MAINROW[key]));
     }
   };
 
@@ -512,7 +577,7 @@ export function RichEditor({
                 />
               ))}
             </div>
-            <div className="wpop_tip">面板开启时可用小键盘直接摆雷</div>
+            <div className="wpop_tip">面板开启时可用小键盘或大键盘数字键直接摆雷</div>
           </div>
         )}
         {pop === "imgs" && (
