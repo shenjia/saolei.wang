@@ -188,9 +188,20 @@ body .tabs > a:hover::after {
   scroll-margin-top: 55px;
 }
 
-/* 棋盘格子基础尺寸（图片拼合在 legacy css 的 .board td.b* 中） */
+/* 棋盘格子基础尺寸（图片拼合在 legacy css 的 .board td.b* 中）
+   td 全是空格子（纯背景图、无内容），auto 表格布局下列可被无限压缩——
+   float/窄容器里实测被压成 10×16 甚至 0×16 变形；min-width 锁死列宽下限 */
 .board table {
   border-collapse: collapse;
+}
+.board.size4 td {
+  min-width: 4px;
+}
+.board.size8 td {
+  min-width: 8px;
+}
+.board.size16 td {
+  min-width: 16px;
 }
 
 /* ---------- 账号体系：登录 / 绑定 / 注册 ----------
@@ -2817,8 +2828,148 @@ body #page.two_columns li.main {
   min-width: 0;
 }
 
+/* ---------- 移动版顶栏导航 MobileNav（2026-09-26 张老师要求） ----------
+   桌面（>768px）默认隐藏，移动断点内由下方媒体查询点亮为 flex；
+   组件渲染在 #header .wrapper 内（nav 之后），float:right 与 logo 同行。 */
+#mobile_nav {
+  display: none;
+}
+
 /* ---------- ② 移动版（≤768px）：一栏一行 ---------- */
 @media (max-width: 768px) {
+  /* ===== 移动版顶栏导航（2026-09-26 张老师要求）：三横线菜单 + 登录头像 =====
+     桌面横向导航整体隐藏，改由 MobileNav 组件接管：
+     三横线按钮点击展开站内导航；已登录右侧显示头像，点击展开个人菜单 */
+  body #header .nav {
+    display: none;
+  }
+  #mobile_nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    float: right;
+    height: 44px;
+  }
+  .mn_item {
+    position: relative;
+    height: 44px;
+  }
+  /* 三横线按钮：44px 触控区，内 20px 图形区画三线（span 上中下三伪元素拼线条） */
+  .mn_burger {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .mn_burger span,
+  .mn_burger span::before,
+  .mn_burger span::after {
+    position: relative;
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 1px;
+    background: #939387;
+    transition: background 0.15s, transform 0.15s;
+    content: "";
+  }
+  .mn_burger span::before {
+    position: absolute;
+    top: -6px;
+  }
+  .mn_burger span::after {
+    position: absolute;
+    top: 6px;
+  }
+  .mn_burger:hover span,
+  .mn_burger:hover span::before,
+  .mn_burger:hover span::after {
+    background: #a6e22e;
+  }
+  /* 展开态：三线收成叉（上/下线向中线收拢旋转） */
+  .mn_burger.open span {
+    background: transparent;
+  }
+  .mn_burger.open span::before {
+    transform: translateY(6px) rotate(45deg);
+  }
+  .mn_burger.open span::after {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+  /* 头像按钮：30px 圆头像，垂直居中 */
+  .mn_avatar_btn {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .mn_avatar {
+    display: block;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #3b3a32;
+    border: 2px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .mn_avatar_btn:hover .mn_avatar {
+    border-color: #a6e22e;
+  }
+  /* 下拉菜单：与桌面 popMenu .menu 同款暗底浮层（#3b3a32 + #49483e 边），
+     但改为点击展开（React 控制渲染）而非 hover；右缘对齐触发按钮 */
+  .mn_menu {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    z-index: 950;
+    min-width: 104px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #49483e;
+    border-radius: 0 0 4px 4px;
+    background: #3b3a32;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+    list-style: none;
+  }
+  .mn_menu li {
+    float: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+    height: 36px;
+  }
+  .mn_menu li a {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    height: 36px;
+    padding: 0 14px 0 10px;
+    box-sizing: border-box;
+    color: #b1b1a4;
+    font-size: 14px;
+  }
+  .mn_menu li a:hover {
+    color: #a6e22e;
+  }
+  .mn_menu li a .um_icon {
+    flex: none;
+  }
+
   /* 顶栏随视口全宽 */
   body #header .wrapper {
     width: auto;
@@ -2907,6 +3058,16 @@ body #page.two_columns li.main {
   }
   /* 录像列表单元格：内嵌表格（左信息右雷区图）无 .table 类，盒内横滑兜底（2026-09-24 修） */
   body #page .video_cell {
+    overflow-x: auto;
+  }
+  /* ---------- ④ 录像详情页（2026-09-26）：棋盘窄屏不压缩、自身横滑 ----------
+     legacy #video_view .board{float:left} 在窄容器里会把空 td 挤压变形，
+     移动端取消浮动，棋盘整块放进 .playable 横向滑动 */
+  body #video_view .board,
+  body #video_view .video_cell .info {
+    float: none;
+  }
+  body #video_view .playable {
     overflow-x: auto;
   }
 }
