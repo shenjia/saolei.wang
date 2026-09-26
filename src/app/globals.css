@@ -3294,6 +3294,12 @@ body #header .nav .popMenu .menu li a {
   font-size: 14px;
   line-height: 32px;
 }
+/* 菜单项矢量图标（2026-09-26）：14px 与文字垂直居中，右留 7px 间距；
+   currentColor 继承链接色（灰 → hover 绿） */
+body #header .nav .popMenu .menu li a .um_icon {
+  vertical-align: -2px;
+  margin-right: 7px;
+}
 
 /* ---------- 头像上传（2026-09-24 个人资料页「点击上传头像」+ AI 审核）----------
    挂在「修改资料」表单第一行，沿用 .form 表格结构；
