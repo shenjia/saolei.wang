@@ -32,3 +32,6 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #news .table td.time{white-space:nowrap;width:90px}
 /* 正文里可截断的链接文本（文章标题等）：单行省略，悬停 title 看全文（组件侧） */
 #news .table td a.score{display:inline-block;max-width:60%;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 2026-09-26 footer：左导航右版权同行垂直对齐 */
+#footer .wrapper{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px}
