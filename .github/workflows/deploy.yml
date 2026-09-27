@@ -63,7 +63,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30 # 首次 rsync 产物跨洋可能很慢，给足余量（2026-09-27 首跑 15m 超时实证）
     needs: build
     environment: production # Secrets 配置在 Settings → Environments → production
     steps:
@@ -107,6 +107,7 @@ jobs:
             --exclude='.workbuddy/' \
             --exclude='.env*' \
             --exclude='.DS_Store' \
+            --exclude='design/' \
             --exclude='videos/' \
             --exclude='public/uploads/' \
             --exclude='.deployed-commit' \
@@ -119,8 +120,10 @@ jobs:
           # CI 单次构建的标准 .next 产物同步到服务器 .next-release/
           # （双槽目录由服务器端 server-release.sh 复制生成，不在 CI 构建两次——
           #   Turbopack 二次构建会清掉第一次的产物，见 build job 注释）
+          # ⚠️ 排除 cache/（本地实测占 5.8G/6.0G，生产运行时用不到构建缓存；
+          #   首跑没排除导致跨洋 rsync 15 分钟超时，2026-09-27 实证）
           rsync -az --delete \
-            --filter='protect cache/***' \
+            --exclude='cache/' \
             .next/ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.next-release/
 
       - name: Restart services on server
