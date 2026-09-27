@@ -60,7 +60,6 @@ jobs:
           path: |
             .next-blue
             .next-green
-          retention-days: 3
 
   deploy:
     runs-on: ubuntu-latest
