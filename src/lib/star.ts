@@ -36,42 +36,6 @@ export async function getClicks(userId: number): Promise<{ total: number; today:
   return { total, today };
 }
 
-export interface ClickRankingUser extends UserBrief {
-  rank: number;
-  total: number;
-  today: number;
-}
-
-/** 人气榜（移植 2008 版 Ranking_Click：按总人气排序，附带今日人气） */
-export async function getClickRanking(
-  page: number,
-  pageSize = 20
-): Promise<{ users: ClickRankingUser[]; total: number; pageSize: number }> {
-  const grouped = await prisma.click.groupBy({
-    by: ["user"],
-    _count: { user: true },
-    orderBy: { _count: { user: "desc" } },
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-  });
-  const total = (await prisma.click.groupBy({ by: ["user"] })).length;
-  const todayStrVal = todayStr();
-  const todayGrouped = await prisma.click.groupBy({
-    by: ["user"],
-    where: { date: todayStrVal },
-    _count: { user: true },
-  });
-  const todayMap = new Map(todayGrouped.map((g) => [N(g.user), g._count.user]));
-  const authors = await usersByIds(grouped.map((g) => N(g.user)));
-  const users = grouped.map((g, i) => ({
-    ...(authors.get(N(g.user)) ?? { id: N(g.user), chineseName: "?", englishName: "", sex: 1 }),
-    rank: (page - 1) * pageSize + i + 1,
-    total: g._count.user,
-    today: todayMap.get(N(g.user)) ?? 0,
-  }));
-  return { users, total, pageSize };
-}
-
 // ---------- 每日一星 ----------
 
 export interface StarInfo {

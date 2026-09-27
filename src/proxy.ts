@@ -291,8 +291,13 @@ export function proxy(req: NextRequest) {
   if (path === "/ranking/ranking_grow.asp" || path === "/ranking/top10_grow.asp") {
     return movedTo(req, "/grow");
   }
-  if (path === "/ranking/ranking_click.asp" || path === "/ranking/top10_man.asp") {
-    return movedTo(req, withPage("/click", page()));
+  if (path === "/ranking/ranking_click.asp") {
+    // 人气排行已于 2026-09-27 按张老师要求移除（个人地盘的人气计数仍在），旧链接落主榜
+    return movedTo(req, "/ranking");
+  }
+  if (path === "/ranking/top10_man.asp") {
+    // 旧站十大元帅 Top10（按 Player_Rank 排序，Player_IsHero='0'）→ 主榜
+    return movedTo(req, "/ranking");
   }
   if (path === "/ranking/ranking_area.asp") {
     return movedTo(req, "/area");

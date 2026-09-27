@@ -176,17 +176,6 @@ body .tabs > a:hover::after {
   float: none;
   clear: none;
 }
-#user_list td.rank {
-  white-space: nowrap;
-  color: #75715e;
-}
-#user_list td.score {
-  white-space: nowrap;
-}
-/* 「我在哪里」锚点行：避免被吸顶 header 遮住 */
-#user_list tr[id] {
-  scroll-margin-top: 55px;
-}
 
 /* 棋盘格子基础尺寸（图片拼合在 legacy css 的 .board td.b* 中）
    td 全是空格子（纯背景图、无内容），auto 表格布局下列可被无限压缩——
@@ -3247,13 +3236,6 @@ body #page {
   }
   .ranking_box .ranking_table {
     min-width: 640px;
-  }
-  /* 进步/人气榜：解除 legacy #user_list{min-width:500px}，单元格内容自然折行（2026-09-24 修） */
-  body #user_list {
-    min-width: 0;
-  }
-  body .ranking_list .user_cell {
-    padding: 15px 14px;
   }
   /* 录像列表单元格：内嵌表格（左信息右雷区图）无 .table 类，盒内横滑兜底（2026-09-24 修） */
   body #page .video_cell {
