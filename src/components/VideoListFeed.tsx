@@ -16,6 +16,7 @@ export function VideoListFeed({
   total,
   pageSize,
   query,
+  highlight,
 }: {
   initial: VideoListItem[];
   /** 当前筛选条件下的录像总数 */
@@ -23,6 +24,8 @@ export function VideoListFeed({
   pageSize: number;
   /** 筛选参数（level/order/author，构造增量请求用） */
   query: { level: string; order: string; author?: number };
+  /** 排序命中列高亮（按成绩/按3BV/s 时对应列整列黄，2026-09-27） */
+  highlight?: "time" | "3bvs";
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initial.length < total);
@@ -59,7 +62,7 @@ export function VideoListFeed({
         <VideoHead />
         <tbody>
           {items.map((v) => (
-            <VideoRowLine key={v.id} video={v} />
+            <VideoRowLine key={v.id} video={v} highlight={highlight} />
           ))}
           {items.length === 0 && (
             <tr>

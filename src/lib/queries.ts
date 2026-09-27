@@ -11,6 +11,7 @@ import {
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
+  MIN_3BV_FOR_3BVS,
   NEWS_HOME_TYPES,
   NEWS_TYPE,
   ORDER_DIRECTION,
@@ -324,17 +325,34 @@ export async function getVideoList(opts: {
       take: size,
     });
     ids = rows.map((r) => N(r.id));
+  } else if (order === "3bvs") {
+    // 3BVS 榜排除低 3BV 运气录像（2026-09-27 张老师要求：初级 3BV=2 的录像不进 3BVS 排序）。
+    // 成绩表无 board_3bv 列，须联 video_info 过滤 board_3bv ≥ MIN_3BV_FOR_3BVS（=4，
+    // 与渲染层删除线同阈值；旧站靠入库 max(3bvs,0)+score_3bvs>0 钳制，同步数据未钳制故补此）。
+    const tbl = SCORES_TABLES[level];
+    const authorCond = author ? ` AND s.user = ${BigInt(author)}` : "";
+    const [cnt] = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*) AS c FROM ${tbl} s JOIN video_info vi ON vi.id = s.id
+       WHERE vi.board_3bv >= ${MIN_3BV_FOR_3BVS} AND s.score_3bvs > 0${authorCond}`
+    );
+    total = N(cnt.c);
+    const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
+      `SELECT s.id FROM ${tbl} s JOIN video_info vi ON vi.id = s.id
+       WHERE vi.board_3bv >= ${MIN_3BV_FOR_3BVS} AND s.score_3bvs > 0${authorCond}
+       ORDER BY s.score_3bvs DESC LIMIT ${size} OFFSET ${(page - 1) * size}`
+    );
+    ids = rows.map((r) => N(r.id));
   } else {
-    // 指定级别：从对应成绩表取序（移植 VideoScores::listHighScores，仅 flag 榜）
+    // 指定级别 + 按上传时间/按成绩：从对应成绩表取序（移植 VideoScores::listHighScores，仅 flag 榜）
     const table = scoresTable(level);
-    const condField = order === "id" ? undefined : order === "time" ? "scoreTime" : "score3bvs";
+    const condField = order === "time" ? "scoreTime" : undefined;
     const where = {
       ...(author ? { user: BigInt(author) } : {}),
       ...(condField ? { [condField]: { gt: 0 } } : {}),
     };
     total = await table.count({ where: author ? { user: BigInt(author) } : {} });
-    const orderField = order === "id" ? "id" : condField!;
-    const orderDir = order === "id" ? "desc" : ORDER_DIRECTION[order];
+    const orderField = condField ?? "id";
+    const orderDir: "asc" | "desc" = condField ? ORDER_DIRECTION[order as "time"] : "desc";
     const rows = await table.findMany({
       where,
       select: { id: true },
@@ -379,6 +397,45 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all" } = {}): 
   });
 }
 
+/**
+ * 热门录像（/video 右栏版块，2026-09-26 张老师要求）：
+ * 按上传时间倒序显示「至少两条评论」的录像，只带作者（名称+军衔）/级别/时间成绩。
+ * 口径与 getVideoList 的 order=comments（videoStat.comments>0）一致，此处收紧为 ≥2。
+ */
+export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
+  const rows = await prisma.videoStat.findMany({
+    where: { comments: { gte: 2 } },
+    select: { id: true },
+    orderBy: { id: "desc" },
+    take: limit,
+  });
+  return getVideosByIds(rows.map((r) => N(r.id)));
+}
+
+/** 录像统计（/video 右栏版块）：总数 + 本日/本周/本月新增 */
+export interface VideoBoxStats {
+  total: number;
+  today: number;
+  week: number;
+  month: number;
+}
+
+export async function getVideoBoxStats(): Promise<VideoBoxStats> {
+  const now = new Date();
+  const monthStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000));
+  // 自然周（周一起），与本月（自然月）口径一致
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  const weekStart = BigInt(Math.floor(monday.getTime() / 1000));
+  const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
+  const [total, today, week, month] = await Promise.all([
+    prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
+    prisma.video.count({ where: { createTime: { gte: dayStart } } }),
+    prisma.video.count({ where: { createTime: { gte: weekStart } } }),
+    prisma.video.count({ where: { createTime: { gte: monthStart } } }),
+  ]);
+  return { total, today, week, month };
+}
+
 // 三张成绩表字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
 interface ScoresDelegate {
   count(args: { where?: Record<string, unknown> }): Promise<number>;
@@ -401,6 +458,13 @@ function scoresTable(level: VideoLevel): ScoresDelegate {
       return prisma.videoScoresExp as unknown as ScoresDelegate;
   }
 }
+
+// 成绩表物理表名（raw SQL 用，3BVS 榜联 video_info 过滤低 3BV）
+const SCORES_TABLES: Record<VideoLevel, string> = {
+  beg: "video_scores_beg",
+  int: "video_scores_int",
+  exp: "video_scores_exp",
+};
 
 async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
   if (!ids.length) return [];

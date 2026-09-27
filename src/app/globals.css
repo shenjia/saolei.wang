@@ -3619,21 +3619,31 @@ body #page.video_old .page_head {
 #video_hot td.score.lv_exp {
   color: #ddddcf;
 }
-/* 成绩贴行尾，链接继承级别色（与 .video_table td.score a 同语义） */
+/* 成绩贴行尾，链接继承级别色（与 .video_table td.score a 同语义）。
+   2026-09-27 张老师要求：NF 小标浮动不占空间——链接做定位锚（inline-block），
+   NF 绝对定位悬浮在时间右侧外，各行时间严格右对齐、行宽不被 NF 撑出板块。
+   NF 溢出到 td 右 padding（8px）区，行右缘仍由时间数字决定 */
 #video_hot td.score {
   text-align: right;
   font-weight: bold;
 }
 #video_hot td.score a {
   color: inherit;
+  position: relative;
+  display: inline-block;
 }
 #video_hot td.score a:hover {
   color: #a6e22e;
 }
 #video_hot td.score .nf {
-  margin-left: 6px;
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 5px;
   font-size: 11px;
   font-weight: normal;
+  line-height: 1;
   color: #fdc61d;
 }
 /* 作者列军衔徽章间距（列表页 td.name .title 同款） */

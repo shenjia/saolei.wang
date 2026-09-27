@@ -31,8 +31,15 @@ export function VideoHead() {
   );
 }
 
-/** 单行（<tr>），列宽/配色见 globals.css 的 .video_table */
-export function VideoRowLine({ video: v }: { video: VideoListItem }) {
+/** 单行（<tr>），列宽/配色见 globals.css 的 .video_table
+ *  highlight：排序命中列整列黄（2026-09-27 张老师要求：按成绩/按3BV/s 排列时对应列高亮） */
+export function VideoRowLine({
+  video: v,
+  highlight,
+}: {
+  video: VideoListItem;
+  highlight?: "time" | "3bvs";
+}) {
   const scores = videoScores(v.board3bv, v.realTime);
   const lvCls = LEVEL_CLS[v.level as VideoLevel] ?? "";
   return (
@@ -49,7 +56,7 @@ export function VideoRowLine({ video: v }: { video: VideoListItem }) {
         )}
       </td>
       <td className={`level ${lvCls}`}>{LEVEL_NAMES[v.level as VideoLevel] ?? v.level}</td>
-      <td className={`score ${lvCls}`}>
+      <td className={`score ${lvCls}${highlight === "time" ? " current" : ""}`}>
         <Link href={`/video/${v.id}`} target="_blank" title="点击查看录像">
           {scoreTime(scores.time)}
         </Link>
@@ -60,7 +67,7 @@ export function VideoRowLine({ video: v }: { video: VideoListItem }) {
         )}
       </td>
       <td className="c_3bvs bv c">{v.board3bv}</td>
-      <td className="c_3bvs bvs c">
+      <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>
         {scores["3bvs"] > 0 ? (
           score3bvs(scores["3bvs"])
         ) : (
