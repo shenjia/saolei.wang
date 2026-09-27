@@ -26,13 +26,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # 顺序必须是先装 pnpm 再 setup-node：package.json 声明了 packageManager
+      # (pnpm@10.32.1)，setup-node@v5 检测到后会在解析缓存时调用 pnpm 可执行文件，
+      # 若 pnpm 未装直接报「Unable to locate executable file: pnpm」（2026-09-27 实证）。
+      - name: Setup pnpm
+        run: npm install -g pnpm@10
+
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup pnpm
-        run: npm install -g pnpm@10
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
