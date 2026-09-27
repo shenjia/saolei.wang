@@ -110,7 +110,9 @@ export function VideoFeed({
       {title ? (
         <div className="news_head">
           <h1 className={titleClassName}>{title}</h1>
-          <div className="news_tabs ranking_tabs side head">{tabs}</div>
+          {/* 2026-09-27 张老师要求：筛选器与排行/录像页同款大号版对齐
+              （去 side 小号变体与无定义的死类 head，标题+tabs 成等高标签带） */}
+          <div className="news_tabs ranking_tabs">{tabs}</div>
         </div>
       ) : (
         <div className="news_tabs ranking_tabs side">{tabs}</div>
