@@ -51,6 +51,39 @@ sudo -n "$NGINX_BIN" -t >/dev/null 2>&1 || fail "deploy 用户无 sudo nginx 权
 info "部署目录: $DEPLOY_DIR"
 info "Node $(node -v) / pnpm $(pnpm -v)"
 
+# ---------- 串行锁 + 残留 build 清杀（2026-09-27 事故） ----------
+# 事故链：SSH 断管留下孤儿 pnpm build（2.8G 内存）→ 下次部署又起一个 build →
+# 3.5G 小机双 build 叠跑 → swap 打满 → 整机用户态卡死（内核活着 ping 通但 SSH/HTTP 全无响应）。
+# 三道防线：
+#   1. flock 串行锁：同目录同时只有一个部署在跑（防 Actions 排队 run 与手动执行叠跑）
+#   2. 杀残留 build：起 build 前清杀本项目目录下所有遗留的 pnpm/next build 进程
+#      （它们全是孤儿——正常部署链路里 build 结束前脚本不会走到这里）
+#   3. 内存限流：NODE_OPTIONS 压 build 堆上限，给系统留呼吸空间（默认 V8 会吃到 ~2.8G）
+DEPLOY_LOCK="$DEPLOY_DIR/.deploy.lock"
+exec 9>"$DEPLOY_LOCK"
+if ! flock -n 9; then
+  fail "另一部署正在运行（$DEPLOY_LOCK 被持有），本次退出。Actions 排队会自动重试或稍后手动重跑"
+fi
+
+# 残留 build 清杀：本目录的 pnpm build / next-build 全杀（SIGKILL，孤儿不响应 TERM）
+STALE_BUILDS="$(pgrep -f "pnpm (build)$|next-build" | tr '\n' ' ')"
+if [[ -n "$STALE_BUILDS" ]]; then
+  warn "发现残留 build 进程: $STALE_BUILDS —— 清杀（上次部署异常中断的孤儿）"
+  # 只杀 cwd 在本项目下的（同机 01xue 也在 build，不能误伤）
+  for pid in $STALE_BUILDS; do
+    pid_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+    if [[ "$pid_cwd" == "$DEPLOY_DIR" ]]; then
+      kill -9 "$pid" 2>/dev/null || true
+      echo "  killed $pid"
+    fi
+  done
+  sleep 1
+fi
+
+# build 堆上限 1536M：实测单 build 峰值 ~2.8G 会打爆 3.5G 机器；1.5G 足够完成构建
+# （09-25 起多轮成功部署的实际用量），且给同时运行的 4 个 next-server + mysql 留余量。
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=1536"
+
 # ---------- 读取当前主力槽 ----------
 read_active() { grep -oE 'active: (blue|green)' "$NGINX_UPSTREAM_CONF" | head -1 | awk '{print $2}'; }
 ACTIVE="$(read_active)"
@@ -122,7 +155,14 @@ info "构建生产版本到备槽 ${S_DIR}（主力 $ACTIVE 继续服务）..."
 # 清理全部槽位的 Next 生成类型缓存（01xue 踩过：路由删除后旧 types 误报编译错误）
 rm -rf .next/types .next/dev/types .next-blue/types .next-green/types
 # nice/ionice 让路给 nginx/Next，避免部署窗口 CPU 争抢
-NEXT_DIST_DIR="$S_DIR" nice -n 19 ionice -c3 pnpm build
+if ! NEXT_DIST_DIR="$S_DIR" nice -n 19 ionice -c3 pnpm build; then
+  # 构建失败必须清整个备槽：半成品缓存会让下次 Turbopack 直接 panic
+  # （2026-09-27 实证：Bus error 中断留下的坏缓存 → 下次 build "range start index
+  #   out of range for slice" 内部 panic，清掉 .next-blue 后才恢复）
+  warn "构建失败——清空备槽 ${S_DIR} 防止半成品缓存污染下次构建"
+  rm -rf "$S_DIR"
+  fail "build 失败（备槽已清空，线上不受影响）"
+fi
 
 # ---------- 重启备槽实例 ----------
 if pm2 describe "$S_APP" >/dev/null 2>&1; then

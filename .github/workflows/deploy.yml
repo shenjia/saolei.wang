@@ -9,14 +9,72 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false # 部署排队不并发，避免两次部署互相踩
 
+# 架构（2026-09-27 B1 迁移新机 60.205.137.210 起）：
+#   GitHub Actions 构建（ubuntu runner，7G 内存随便跑）→ rsync 构建产物到服务器 →
+#   服务器只做 pm2 restart，彻底不在服务器上 next build。
+#   背景：旧机（2C3.5G）服务器本地 build 触发 SWC 原生崩溃 + OOM + 内核 hang，
+#   一天假死 4 次的事故，详见 .workbuddy/memory/2026-09-27.md。
+
+env:
+  NODE_VERSION: "22"
+
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        run: npm install -g pnpm@10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm exec prisma generate
+
+      # 双槽都构建：CI 内先构 blue 再构 green，产物分别归档
+      # （NEXT_DIST_DIR 经 next.config.ts 的 distDir 生效，同服务器逻辑）
+      - name: Build blue slot
+        env:
+          NEXT_DIST_DIR: .next-blue
+        run: pnpm build
+
+      - name: Build green slot
+        env:
+          NEXT_DIST_DIR: .next-green
+        run: pnpm build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-builds
+          retention-days: 3
+          path: |
+            .next-blue
+            .next-green
+          retention-days: 3
+
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    needs: build
     environment: production # Secrets 配置在 Settings → Environments → production
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: next-builds
 
       - name: Check required secrets
         env:
@@ -41,7 +99,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Sync source code
+      - name: Sync source code (no build on server)
         run: |
           rsync -az --delete \
             --exclude='.git/' \
@@ -56,12 +114,18 @@ jobs:
             --filter='protect videos/***' \
             --filter='protect public/uploads/***' \
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
-          # videos/（30 万录像实体文件，gitignore 不入库）exclude + protect 双保险，
-          #   防止 --delete 误删——由 scripts/phaseb-download.py 产出后单独 rsync。
-          # public/uploads/（头像等运行时上传）同理：Next 生产模式 public/ 是构建期
-          #   快照，运行期新增文件由 nginx 直读磁盘（见 nginx conf location /uploads/）。
 
-      - name: Build & Restart on server
+      - name: Sync build artifacts
+        run: |
+          # 双槽构建产物分别同步到服务器对应目录（不在服务器上构建）
+          rsync -az --delete \
+            --filter='protect cache/***' \
+            .next-blue/ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.next-blue/
+          rsync -az --delete \
+            --filter='protect cache/***' \
+            .next-green/ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.next-green/
+
+      - name: Restart services on server
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "cd ${{ secrets.DEPLOY_PATH }} && bash scripts/server-deploy.sh && echo -n '${{ github.sha }}' > .deployed-commit"
+            "cd ${{ secrets.DEPLOY_PATH }} && bash scripts/server-release.sh && echo -n '${{ github.sha }}' > .deployed-commit"
