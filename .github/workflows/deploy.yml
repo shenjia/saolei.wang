@@ -74,6 +74,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: next-builds
+          # upload 是单一路径 .next（artifact 根即 .next 内容：BUILD_ID/server/...）。
+          # 必须显式下载到 .next/ 还原目录结构——若解到仓库根，产物文件会散落根目录，
+          # 被下一步源码 rsync 当源码同步上服务器污染部署目录（09-27 实证：
+          # 服务器被污染成 saolei.wang-old-rsync，且产物 rsync 找不到 .next/ 报
+          # change_dir failed）
+          path: .next
 
       - name: Check required secrets
         env:
