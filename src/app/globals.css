@@ -2193,8 +2193,7 @@ body #user_view .sidebar .table td:first-child {
   margin: 0; /* 清 legacy #user_view h1 的 10px 底距（带 margin 参与 flex 居中会抬高 5px） */
 }
 #user_videos .video_head_box .user_video_tabs {
-  align-items: center;
-  border-bottom: 0; /* 居中形态不贴基线，去细线 */
+  align-items: center; /* 底部细线沿用基础 .ranking_tabs 的 border-bottom，与排行页统一 */
 }
 #user_videos .video_head_box .video_upload_btn {
   float: none;
@@ -3338,12 +3337,12 @@ h1.gray {
 }
 /* 用户页动态/录像板块标题行：标题与筛选器垂直居中对齐
    （2026-09-27 二轮张老师要求；首页 news_head 保持 flex-end 底线对齐不动，
-   用 #user_view 前缀隔离） */
+   用 #user_view 前缀隔离）。
+   三轮：tabs 底部细线保留（张老师要求与排行页筛选器样式统一）——
+   居中形态下标题盒 39px、tabs 盒 40px（39+1px 边框），中心对齐后
+   标题文字底部距细线仅 0.5px，视觉上细线仍近似贴标题底，与排行页观感一致 */
 #user_view .news_head {
   align-items: center;
-}
-#user_view #news .news_head .ranking_tabs {
-  border-bottom: 0; /* 居中对齐后 tabs 底线不再与标题基线齐平，去掉细线更干净 */
 }
 .news_head .ranking_tabs.news_tabs {
   margin: 0;

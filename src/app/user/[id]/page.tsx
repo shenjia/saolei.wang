@@ -225,7 +225,9 @@ export default async function UserViewPage({
         <div className="box" id="user_videos">
           <div className="video_head_box">
             <h1 className="gray">录像</h1>
-            {/* 与动态板块筛选同构：div.ranking_tabs > a/span（结构一致保证样式一致） */}
+            {/* 与动态板块筛选同构：div.ranking_tabs > a/span（结构一致保证样式一致）。
+                scroll={false}：筛选切换保持视口原位（2026-09-27 三轮张老师要求：
+                默认软导航滚顶，切换级别后页面跳到最上面） */}
             <div className="ranking_tabs user_video_tabs">
               {VIDEO_LEVEL_TABS.map(([value, label]) =>
                 value === level ? (
@@ -233,7 +235,7 @@ export default async function UserViewPage({
                     {label}
                   </span>
                 ) : (
-                  <Link key={value} href={`/user/${userId}?level=${value}`}>
+                  <Link scroll={false} key={value} href={`/user/${userId}?level=${value}`}>
                     {label}
                   </Link>
                 )
