@@ -51,12 +51,15 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # ⚠️ .next 是点开头的隐藏目录，upload-artifact@v4 默认 include-hidden-files: false
+      # 会整个跳过它（2026-09-27 实证：build 成功但 artifact 为空）——必须显式开启
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: next-builds
           retention-days: 3
           path: .next
+          include-hidden-files: true
 
   deploy:
     runs-on: ubuntu-latest
