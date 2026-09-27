@@ -185,10 +185,11 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
         </div>
         {news.length > 0 && (
           <div id="news" className="box">
-            {/* 2026-09-24 张老师要求：标题「进步历程」改「动态」，筛选器收进标题行右侧；
-                二轮：用 h2 与其他板块标题同款（20px 灰），不变大不泛黄 */}
+            {/* 2026-09-27 张老师要求：动态/录像/纪事板块标题与其他页面同款 26px 大字，
+                走首页「录像」同款 .gray 灰色次级样式（页面唯一黄 h1 是用户名）。
+                此前 09-24 二轮的「h2 20px 灰不变大」已被本要求取代 */}
             <NewsFeed
-              title={<h2>动态</h2>}
+              title={<h1 className="gray">动态</h1>}
               initial={feed}
               userId={userId}
               pageSize={USER_NEWS_NUMBER}
@@ -201,14 +202,16 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
             「加载更多」走列表模式翻页），右上角绿色「上传录像」按钮（仅本人可见） */}
         <div className="box" id="user_videos">
           <div className="video_head_box">
-            <h2>录像</h2>
+            <h1 className="gray">录像</h1>
             {isSelf && (
               <Link href="/video/upload" className="button small video_upload_btn">
                 上传录像
               </Link>
             )}
           </div>
+          {/* key=作者 id：跨用户软导航时强制重挂载（同 /video 筛选串 key 铁律） */}
           <VideoListFeed
+            key={userId}
             initial={userVideos.videos}
             total={userVideos.total}
             pageSize={userVideos.pageSize}

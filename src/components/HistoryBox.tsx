@@ -61,7 +61,8 @@ export function HistoryBox({
   return (
     <div className="box" id="history">
       <div className="history_head">
-        <h2>纪事</h2>
+        {/* 2026-09-27 张老师要求：与其他板块同款 26px 大字（.gray 灰次级样式） */}
+        <h1 className="gray">纪事</h1>
         {editable && (
           <a
             href="#"
