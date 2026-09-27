@@ -43,16 +43,12 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm exec prisma generate
 
-      # 双槽都构建：CI 内先构 blue 再构 green，产物分别归档
-      # （NEXT_DIST_DIR 经 next.config.ts 的 distDir 生效，同服务器逻辑）
-      - name: Build blue slot
-        env:
-          NEXT_DIST_DIR: .next-blue
-        run: pnpm build
-
-      - name: Build green slot
-        env:
-          NEXT_DIST_DIR: .next-green
+      # ⚠️ 只能构建一次（标准 .next 目录）：Turbopack build 的清理动作会波及同项目
+      # 其他 .next* 目录——本地实测连续两次 NEXT_DIST_DIR=.next-blue/.next-green 构建，
+      # 第二次构建把第一次的产物清成空壳（BUILD_ID/manifests 全没了，只剩 types 残留）。
+      # 这也是 09-27 服务器上 blue 槽 BUILD_ID 灵异消失 crash loop 的真因。
+      # 双槽产物在服务器端由 server-release.sh 用 cp 复制 .next 生成（见 scripts/）。
+      - name: Build
         run: pnpm build
 
       - name: Upload build artifacts
@@ -60,9 +56,7 @@ jobs:
         with:
           name: next-builds
           retention-days: 3
-          path: |
-            .next-blue
-            .next-green
+          path: .next
 
   deploy:
     runs-on: ubuntu-latest
@@ -119,13 +113,12 @@ jobs:
 
       - name: Sync build artifacts
         run: |
-          # 双槽构建产物分别同步到服务器对应目录（不在服务器上构建）
+          # CI 单次构建的标准 .next 产物同步到服务器 .next-release/
+          # （双槽目录由服务器端 server-release.sh 复制生成，不在 CI 构建两次——
+          #   Turbopack 二次构建会清掉第一次的产物，见 build job 注释）
           rsync -az --delete \
             --filter='protect cache/***' \
-            .next-blue/ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.next-blue/
-          rsync -az --delete \
-            --filter='protect cache/***' \
-            .next-green/ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.next-green/
+            .next/ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.next-release/
 
       - name: Restart services on server
         run: |

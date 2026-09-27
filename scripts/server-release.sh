@@ -7,7 +7,8 @@
 #   → 健康检查 → 切 nginx 主备 → 终检（失败自动回滚）
 #
 # ⚠️ 本脚本绝不运行 next build（旧机教训：服务器 build 触发 SWC 崩溃 + OOM + 内核 hang）
-# ⚠️ 构建产物由 CI 先行 rsync 到 .next-blue/.next-green，本脚本假定其已就位
+# ⚠️ CI 只构建一次（标准 .next，Turbopack 二次构建会互删产物），rsync 到 .next-release/；
+#    本脚本负责把它复制成本次备槽目录（.next-blue / .next-green）
 #
 # 槽位固定: blue=saolei@3100(.next-blue)  green=saolei-green@3102(.next-green)
 # upstream 配置: ~/nginx-upstream/saolei-upstream.conf
@@ -41,7 +42,7 @@ slot_dir()   { [[ $1 == blue ]] && echo .next-blue || echo .next-green; }
 [[ -f .env ]] || fail "缺少 .env 文件（服务器上应已配置好，rsync 已排除不覆盖）"
 command -v pnpm >/dev/null 2>&1 || fail "pnpm 未安装"
 [[ -f "$NGINX_UPSTREAM_CONF" ]] || fail "缺少 $NGINX_UPSTREAM_CONF（nginx upstream 配置）"
-[[ -d .next-blue/server/app && -d .next-green/server/app ]] || fail "构建产物缺失（.next-blue/.next-green 无 server/app）——CI 构建步骤未完成?"
+[[ -d .next-release/server/app ]] || fail "CI 构建产物缺失（.next-release 无 server/app）——CI 构建或 rsync 步骤未完成?"
 
 # ---------- 读取当前主力槽 ----------
 read_active() { grep -oE 'active: (blue|green)' "$NGINX_UPSTREAM_CONF" | head -1 | awk '{print $2}'; }
@@ -103,6 +104,14 @@ pnpm exec prisma generate
 #   部署中止，属预期保护：必须人工确认后手动执行，不允许部署链路静默删数据。
 info "同步数据库 schema (prisma db push)..."
 pnpm exec prisma db push --skip-generate
+
+# ---------- 生成备槽构建产物 ----------
+# CI 的单一 .next 产物复制成本次备槽目录（rm+cp 原子性足够：备槽此刻不在服务，
+# 主力槽目录不动；Turbopack 产物无绝对路径依赖，cp 即可用）
+info "复制 CI 构建产物 → 备槽 ${S_DIR}..."
+rm -rf "$S_DIR"
+cp -a .next-release "$S_DIR"
+[[ -f "$S_DIR/BUILD_ID" ]] || fail "复制后 $S_DIR/BUILD_ID 缺失（CI 产物不完整）"
 
 # ---------- 重启备槽实例 ----------
 if pm2 describe "$S_APP" >/dev/null 2>&1; then
