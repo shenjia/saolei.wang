@@ -23,7 +23,7 @@ import {
 } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
-import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, USER_VIDEO_NUMBER, areaDisplay, type Level } from "@/lib/config";
+import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, USER_VIDEO_NUMBER, VIDEO_LEVELS, areaDisplay, type Level, type VideoLevel } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoListFeed } from "@/components/VideoListFeed";
 import { HistoryBox } from "@/components/HistoryBox";
@@ -47,10 +47,30 @@ const PROFILE_FIELDS: [string, string][] = [
   ["pad", "鼠标垫"],
 ];
 
-export default async function UserViewPage({ params }: { params: Promise<{ id: string }> }) {
+/** 录像版块级别筛选 tabs（2026-09-27 张老师要求，与动态筛选同款 ranking_tabs 大号版） */
+const VIDEO_LEVEL_TABS: [string, string][] = [
+  ["all", "全部"],
+  ["beg", "初级"],
+  ["int", "中级"],
+  ["exp", "高级"],
+];
+
+export default async function UserViewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const userId = parseInt(id, 10);
   if (!userId) notFound();
+
+  // 录像版块级别筛选（URL 即状态，与 /video 列表页同语义；链接整页刷新）
+  const level = (VIDEO_LEVELS as readonly string[]).includes(sp.level ?? "")
+    ? (sp.level as VideoLevel)
+    : "all";
 
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
@@ -72,7 +92,7 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
     getUserRanks(userId),
     // 本人录像：按上传时间倒序第一页（与 /video?author= 同语义）；
     // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）
-    getVideoList({ level: "all", order: "id", author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
+    getVideoList({ level, order: "id", author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
   ]);
   const feed: NewsFeedItem[] = await Promise.all(
     news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
@@ -199,23 +219,39 @@ export default async function UserViewPage({ params }: { params: Promise<{ id: s
           </div>
         )}
         {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像按上传时间倒序，
-            「加载更多」走列表模式翻页），右上角绿色「上传录像」按钮（仅本人可见） */}
+            「加载更多」走列表模式翻页），右上角绿色「上传录像」按钮（仅本人可见）。
+            2026-09-27 二轮：加 全部/初级/中级/高级 级别筛选（URL 即状态），
+            标题与筛选器居中对齐（与动态版块同款编排） */}
         <div className="box" id="user_videos">
           <div className="video_head_box">
             <h1 className="gray">录像</h1>
+            {/* 与动态板块筛选同构：div.ranking_tabs > a/span（结构一致保证样式一致） */}
+            <div className="ranking_tabs user_video_tabs">
+              {VIDEO_LEVEL_TABS.map(([value, label]) =>
+                value === level ? (
+                  <span key={value} className="current">
+                    {label}
+                  </span>
+                ) : (
+                  <Link key={value} href={`/user/${userId}?level=${value}`}>
+                    {label}
+                  </Link>
+                )
+              )}
+            </div>
             {isSelf && (
               <Link href="/video/upload" className="button small video_upload_btn">
                 上传录像
               </Link>
             )}
           </div>
-          {/* key=作者 id：跨用户软导航时强制重挂载（同 /video 筛选串 key 铁律） */}
+          {/* key=筛选串铁律：切级别必须强制重挂载（useState(initial) 不重置） */}
           <VideoListFeed
-            key={userId}
+            key={`${userId}-${level}`}
             initial={userVideos.videos}
             total={userVideos.total}
             pageSize={userVideos.pageSize}
-            query={{ level: "all", order: "id", author: userId }}
+            query={{ level, order: "id", author: userId }}
           />
         </div>
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />

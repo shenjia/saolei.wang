@@ -2179,15 +2179,26 @@ body #user_view .sidebar .table td:first-child {
 /* ---------- 用户主页「录像」版块（2026-09-26 张老师要求） ----------
    纪事上方：标题行 h2 左 + 右上角「上传录像」按钮（仅本人可见）；
    列表复用 /video 的 VideoListFeed（紧凑行 video_table + 加载更多）。 */
+/* 用户页录像板块标题行（2026-09-27 二轮）：flex 布局——标题左、级别 tabs 紧随、
+   上传按钮贴行尾；标题与 tabs 垂直居中对齐（与动态板块同款）。
+   tabs 自身 align-items 也改 center（基础版 flex-end 会让子项贴底、与标题错位 5px） */
 #user_videos .video_head_box {
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 #user_videos .video_head_box h1 {
-  float: left;
+  float: none;
+  margin: 0; /* 清 legacy #user_view h1 的 10px 底距（带 margin 参与 flex 居中会抬高 5px） */
+}
+#user_videos .video_head_box .user_video_tabs {
+  align-items: center;
+  border-bottom: 0; /* 居中形态不贴基线，去细线 */
 }
 #user_videos .video_head_box .video_upload_btn {
-  float: right;
-  margin: 6px 0 0;
+  float: none;
+  margin: 0 0 0 auto; /* 贴行尾 */
 }
 /* 绿色「上传录像」按钮：沿用 legacy .button.small 的渐变骨架与手感，
    仅把配色换成 Monokai 主绿（#a6e22e 文字 / #679016 渐变底），
@@ -3312,7 +3323,8 @@ body #page {
    26px 大字、.gray 灰次级样式——页面唯一黄 h1 是用户名）。
    legacy #user_view h1 带 10px 底距且 display:inline-block，会让 flex-end 对齐时
    tabs 细线与文字视觉错位（与当年 h2 同一坑），用 #user_view #news 前缀压掉：
-   改 block + 清底距，行高保持 39px 让底边恰落在 tabs 底线上。
+   改 block + 清底距，行高保持 39px。
+   二轮（同日）：标题与筛选器改垂直居中对齐（居中后 39px 行高不再需要贴底线）。
    注意不能写成 #news .news_head h1——首页「新闻」黄 h1 同在 #news 下，会被误伤成灰。 */
 #user_view #news .news_head h1 {
   display: block;
@@ -3323,6 +3335,15 @@ body #page {
    用户页「录像」「纪事」标题不在 .news_head 内，这里给全局兜底 */
 h1.gray {
   color: #b1b1a4;
+}
+/* 用户页动态/录像板块标题行：标题与筛选器垂直居中对齐
+   （2026-09-27 二轮张老师要求；首页 news_head 保持 flex-end 底线对齐不动，
+   用 #user_view 前缀隔离） */
+#user_view .news_head {
+  align-items: center;
+}
+#user_view #news .news_head .ranking_tabs {
+  border-bottom: 0; /* 居中对齐后 tabs 底线不再与标题基线齐平，去掉细线更干净 */
 }
 .news_head .ranking_tabs.news_tabs {
   margin: 0;
