@@ -113,6 +113,29 @@ rm -rf "$S_DIR"
 cp -a .next-release "$S_DIR"
 [[ -f "$S_DIR/BUILD_ID" ]] || fail "复制后 $S_DIR/BUILD_ID 缺失（CI 产物不完整）"
 
+# ---------- 修复 @prisma/client stub（rsync 软链实体化坑，2026-09-28） ----------
+# 本地 .next/node_modules/@prisma/client-<hash> 是指向 pnpm store 的软链，
+# require 链经它解析到 .pnpm/.../node_modules/.prisma/client（prisma generate 产物）。
+# rsync -a 会跟随软链把 stub 传成实体目录——实体 stub 里没有 .prisma，
+# next start 时 "Cannot find module '.prisma/client/default'" 全站 500。
+# 服务器上重新把 stub 换成软链，指向本机 pnpm store 里的真实 client：
+fix_prisma_stub() {
+  local slot_dir=$1
+  local stub_dir="$slot_dir/node_modules/@prisma"
+  local real_client
+  real_client="$(readlink -f /home/deploy/saolei.wang/node_modules/.pnpm/@prisma+client@*/node_modules/@prisma/client)"
+  [[ -d "$real_client" ]] || fail "找不到服务器上的 @prisma/client 实体（pnpm install 未完成？）"
+  local stub_name
+  stub_name="$(ls "$stub_dir" 2>/dev/null | grep -E '^client-' | head -1)"
+  [[ -n "$stub_name" ]] || { info "槽位无 prisma stub（纯静态页？跳过）"; return 0; }
+  if [[ ! -L "$stub_dir/$stub_name" ]]; then
+    rm -rf "$stub_dir/$stub_name"
+    ln -s "$real_client" "$stub_dir/$stub_name"
+    info "已将 $stub_name stub 换回软链 → $real_client"
+  fi
+}
+fix_prisma_stub "$S_DIR"
+
 # ---------- 重启备槽实例 ----------
 if pm2 describe "$S_APP" >/dev/null 2>&1; then
   info "重启 $S_APP ..."
