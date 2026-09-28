@@ -103,7 +103,24 @@
 - 邮箱注册 + 密码找回（新版测试.txt 新需求，需邮件服务方案）
 - 新闻管理、捐赠（2013 版也无代码，仅 document/donate.xlsx）
 - 录像实体文件同步（Phase B，见 scripts/sync/README.md）
-- 部署（目前仅本地开发，`pnpm dev`，端口任意）
+
+## 生产部署（B1 架构，2026-09-28 定型）
+
+**服务器：60.205.137.210（2C3.5G+4G swap），DNS new.saolei.wang**。旧机 123.57.59.12 已退役。
+
+- **链路：GitHub Actions 构建 → artifact → rsync 产物到服务器 → server-release.sh 发布**。
+  CI 单次构建标准 `.next`，服务器端复制成备槽。完整流程见 `.github/workflows/deploy.yml`
+- **⚠️ 服务器上绝对禁止 next build**（铁律，2026-09-27 一天压垮两台机器四次的教训：
+  build 峰值 2.8G，3.5G 小机无论加多大内存限制都会 swap 死锁整机假死）。要构建找 CI
+- **⚠️ rsync 传 .next 产物会实体化软链**：@prisma/client stub 必须在服务器端换回软链
+  （server-release.sh 已内置 fix_prisma_stub，勿删）
+- **pnpm 依赖挪组（dependencies↔devDependencies）必须连 pnpm-lock.yaml 一起提交**，
+  否则 frozen-lockfile --prod 装出残缺 node_modules（09-28 实证）
+- **生产库不放 schema 外的临时表**：db push 遇到会以数据丢失保护中止部署。
+  临时表用完即删（09-28 处理过 news_backup_20260924/news_restore_check 残留）
+- pm2 双槽：blue=saolei@3100(.next-blue) / green=saolei-green@3102(.next-green)，
+  nginx upstream 切换；server-deploy.sh 含 flock 串行锁+孤儿 build 清杀（服务器端兜底）
+- 生产 MySQL 凭据在服务器 .env；DB 备份放 /root/db-backups/
 
 ## 工程约定
 
