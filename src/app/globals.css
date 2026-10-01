@@ -1656,13 +1656,13 @@ body #page.message_list > .box:first-child .page_head {
 
 /* ---------- 用户主页统计（2026-09-24 张老师要求） ----------
    数字（legacy .table em 本为黄 #fdc61a）默认改亮灰 #b1b1a4；
-   「今日 +N」属于今日数据，用黄 #fdc61a 高亮。 */
+   「今日 +N」属于今日数据，用绿 #a6e22e 高亮（2026-09-27 张老师：全站今日增量统一绿色）。 */
 #user_view .sidebar .table em {
   color: #b1b1a4;
   font-weight: bold;
 }
 #user_view .sidebar .table .stat_today {
-  color: #fdc61a;
+  color: #a6e22e;
 }
 
 /* ---------- 首页右栏加宽 + 雷界统计防折行（2026-09-23 张老师反馈） ----------
@@ -1679,13 +1679,25 @@ body #page.message_list > .box:first-child .page_head {
 #page #home > li.sidebar .box {
   width: 210px;
 }
-/* 雷界统计：标签/数值不折行，数值右对齐、略缩字号以容纳平均成绩三连值 */
+/* 雷界统计：标签/数值不折行，数值右对齐 */
 #site_stats .table td {
   font-size: 14px;
   white-space: nowrap;
 }
 #site_stats .table .num {
   text-align: right;
+}
+/* 数字亮灰加粗、「今日 +N」绿色高亮（2026-09-27 张老师要求：全站今日增量统一绿色 #a6e22e） */
+#site_stats .table em {
+  color: #b1b1a4;
+  font-weight: bold;
+}
+#site_stats .table .stat_today {
+  color: #a6e22e;
+}
+/* 全站「（今日 +N）」今日增量统一绿色（2026-09-27 张老师要求）：兜底裸用 .stat_today 的场景 */
+.stat_today {
+  color: #a6e22e;
 }
 
 /* ---------- 顶栏与正文居中对齐（2026-09-23 张老师反馈） ----------

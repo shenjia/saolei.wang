@@ -720,43 +720,49 @@ export async function addComment(videoId: number, userId: number, content: strin
 
 export interface SiteStats {
   userTotal: number;
+  userToday: number;
   rankedTotal: number;
   videoTotal: number;
   videoToday: number;
   commentTotal: number;
-  newbieThisMonth: number;
-  avgBeg: number;
-  avgInt: number;
-  avgExp: number;
+  commentToday: number;
+  bbsTotal: number;
+  bbsToday: number;
 }
 
 export async function getSiteStats(): Promise<SiteStats> {
   const now = new Date();
-  const monthStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000));
   const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
-  const [userTotal, rankedTotal, videoTotal, videoToday, commentTotal, newbieThisMonth, avg] =
-    await Promise.all([
-      prisma.user.count(),
-      prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
-      prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
-      prisma.video.count({ where: { createTime: { gte: dayStart } } }),
-      prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL } }),
-      prisma.user.count({ where: { createTime: { gte: monthStart } } }),
-      prisma.userScores.aggregate({
-        _avg: { begTime: true, intTime: true, expTime: true },
-        where: { begTime: { gt: 0 }, intTime: { gt: 0 }, expTime: { gt: 0 } },
-      }),
-    ]);
+  // 今日增量口径：排行人数不显示增量——user_scores.create_time 是注册时间非上榜时间，
+  // 历史同步行全落在同步日（2019-05-18 / 2026-09-23），无干净数据源；
+  // 录像增量按 review_time（与总数同 status=REVIEWED 口径，审过才算「今日新增」）
+  const [
+    userTotal, userToday,
+    rankedTotal,
+    videoTotal, videoToday,
+    commentTotal, commentToday,
+    bbsTotal, bbsToday,
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { createTime: { gte: dayStart } } }),
+    prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
+    prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
+    prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED, reviewTime: { gte: dayStart } } }),
+    prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL } }),
+    prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL, createTime: { gte: dayStart } } }),
+    prisma.bbsPost.count({ where: { status: 0 } }),
+    prisma.bbsPost.count({ where: { status: 0, createTime: { gte: dayStart } } }),
+  ]);
   return {
     userTotal,
+    userToday,
     rankedTotal,
     videoTotal,
     videoToday,
     commentTotal,
-    newbieThisMonth,
-    avgBeg: Math.round(avg._avg.begTime ?? 0),
-    avgInt: Math.round(avg._avg.intTime ?? 0),
-    avgExp: Math.round(avg._avg.expTime ?? 0),
+    commentToday,
+    bbsTotal,
+    bbsToday,
   };
 }
 
