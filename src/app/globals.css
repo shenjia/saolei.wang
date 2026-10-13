@@ -3049,6 +3049,7 @@ body #page.two_columns li.main {
   body #page.ranking_old.main {
     width: max(62%, 720px);
   }
+}
 
 /* ---------- footer 全站顶部留白（2026-09-27 张老师要求） ----------
    footer 不得与任何上方元素紧挨。
