@@ -4882,3 +4882,44 @@ button.msg_cancel:hover {
 #user_3bv .exp .sq.on {
   background: #e6db74;
 }
+
+/* 3BV 收集方格气泡提示（2026-10-13 张老师要求）：3BV 值 + 首个录像上传日期，纯 CSS :hover 显隐，零 JS */
+#user_3bv .sq {
+  position: relative;
+}
+#user_3bv .tip {
+  display: none;
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 4px 8px;
+  background: #1f201b;
+  border: 1px solid #656355;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-align: center;
+  color: #f8f8f2;
+  text-shadow: none;
+  pointer-events: none;
+}
+#user_3bv .tip span {
+  display: block;
+  color: #b1b1a4;
+}
+#user_3bv .tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #1f201b;
+}
+#user_3bv .sq:hover .tip {
+  display: block;
+}

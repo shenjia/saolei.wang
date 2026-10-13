@@ -1459,17 +1459,23 @@ export async function getLevel3bvRanges(): Promise<
 
 /**
  * 用户已收集的 3BV 集合（按级别分组的不同 board_3bv，仅已通过录像）。
+ * 值 = 该 3BV 首个录像的上传时间（Unix 秒；id 序=上传时间序，MIN(create_time) 即首盘），
+ * 供侧栏方格气泡提示展示（2026-10-13 张老师要求）。
  * 走 video 表 (user, level) 索引 + video_info 主键 join，全站最重用户（5k+ 盘）毫秒级。
  */
 export async function getUser3bvCollection(
   userId: number
-): Promise<Record<VideoLevel, Set<number>>> {
-  const rows = await prisma.$queryRaw<{ level: string; b3bv: number }[]>`
-    SELECT v.level, vi.board_3bv AS b3bv
+): Promise<Record<VideoLevel, Map<number, number>>> {
+  const rows = await prisma.$queryRaw<{ level: string; b3bv: number; first_ct: bigint }[]>`
+    SELECT v.level, vi.board_3bv AS b3bv, MIN(v.create_time) AS first_ct
     FROM video v JOIN video_info vi ON vi.id = v.id
     WHERE v.user = ${BigInt(userId)} AND v.status = ${VIDEO_STATUS.REVIEWED}
     GROUP BY v.level, vi.board_3bv`;
-  const out: Record<VideoLevel, Set<number>> = { beg: new Set(), int: new Set(), exp: new Set() };
-  for (const r of rows) out[r.level as VideoLevel]?.add(r.b3bv);
+  const out: Record<VideoLevel, Map<number, number>> = {
+    beg: new Map(),
+    int: new Map(),
+    exp: new Map(),
+  };
+  for (const r of rows) out[r.level as VideoLevel]?.set(r.b3bv, N(r.first_ct));
   return out;
 }
