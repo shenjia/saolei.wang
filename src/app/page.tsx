@@ -2,8 +2,11 @@
 // 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 15 条；其下新增录像版块
 // （15 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与新闻版块同构）；
 // 右栏顶部「每日一星」「我的地盘」卡片均已撤下（后者 2026-09-24 张老师明示永久废弃：
-// 该板块今后不再使用，直接删除，不再因登录态切换），右栏一律以「十大元帅」起头；
+// 该板块今后不再使用，直接删除，不再因登录态切换）。
+// 2026-10-13 张老师要求：右栏顺序调整为 入伍新兵 → 论坛新帖 → 十大元帅 → 站点统计
+// （十大元帅从栏首移至论坛新帖之下）。
 // 二轮定名：版块标题定为「新闻」「录像」，录像标题走灰色次级样式（字号保持 legacy 26px）。
+// 2026-10-13 张老师要求：每日一星功能整体下线（评选触发一并移除）。
 
 import Link from "next/link";
 import {
@@ -22,7 +25,6 @@ import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { BbsLatest } from "@/components/BbsLatest";
 import { SiteStats } from "@/components/SiteStats";
 import { title as assessTitle } from "@/lib/assess";
-import { ensureTodayStar } from "@/lib/star";
 
 export const dynamic = "force-dynamic";
 
@@ -35,16 +37,10 @@ export default async function HomePage() {
     getNewsCount({ home: true }),
     getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
     getVideoCount({ level: "all" }),
-    // 每日一星卡片已撤下，但评选仍按 2008 版时机（首次访问首页）触发，见 star.ts 注释
-    ensureTodayStar(),
   ]);
-  const feed: NewsFeedItem[] = await Promise.all(
-    news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
-  );
-  // 入伍新兵按动态 user_score 评军衔（移植 home/_newbies.php 的 Assess::title）
-  const newbieRows = await Promise.all(
-    newbies.map(async (n) => ({ ...n, title: await assessTitle(n.userScore) }))
-  );
+  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime) }));
+  // 入伍新兵按发布者实时高级时间评军衔（2026-10-13 SUB 制）
+  const newbieRows = newbies.map((n) => ({ ...n, title: assessTitle(n.expTime) }));
 
   return (
     <div id="page" className="two_columns">
@@ -72,29 +68,6 @@ export default async function HomePage() {
         </div>
       </li>
       <li className="sidebar">
-        <div id="top" className="box">
-          <Link href="/ranking" target="_blank">
-            <h2>十大元帅</h2>
-          </Link>
-          <table cellPadding={0} cellSpacing={0} className="table full">
-            <tbody>
-              {top.map((u, i) => (
-                <tr key={u.id}>
-                  <td className="rank">
-                    <em>{i + 1}</em>
-                  </td>
-                  <td className="user">
-                    <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
-                    <TitleBadge title={u.title} link />
-                  </td>
-                  <td className={"time " + (isRecent(u.titleDate) ? "time--recent" : "time--old")}>
-                    {timeOpposite(u.titleDate, TIME_NEVER)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
         <div id="newbie" className="box">
           <h2>入伍新兵</h2>
           <table cellPadding={0} cellSpacing={0} className="table full">
@@ -122,6 +95,29 @@ export default async function HomePage() {
           </table>
         </div>
         <BbsLatest />
+        <div id="top" className="box">
+          <Link href="/ranking" target="_blank">
+            <h2>十大元帅</h2>
+          </Link>
+          <table cellPadding={0} cellSpacing={0} className="table full">
+            <tbody>
+              {top.map((u, i) => (
+                <tr key={u.id}>
+                  <td className="rank">
+                    <em>{i + 1}</em>
+                  </td>
+                  <td className="user">
+                    <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
+                    <TitleBadge title={u.title} link />
+                  </td>
+                  <td className={"time " + (isRecent(u.titleDate) ? "time--recent" : "time--old")}>
+                    {timeOpposite(u.titleDate, TIME_NEVER)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <SiteStats />
       </li>
     </ul>
