@@ -5366,7 +5366,9 @@ button.msg_cancel:hover {
 }
 
 /* ===== BV 收集榜进度条单元格（2026-10-13 张老师需求，设计稿 design/ranking-bv.html v3） =====
-   暗底槽 + 级别色填充 + 中心叠加 n/den 文字；总计条亮灰。表头小字区间随 th small 通用样式。 */
+   暗底槽 + 填充 + 中心叠加 n/den 文字；填充默认灰，仅当前排序列金黄 #fdc61d
+   （与表头 a.current / 其他榜单命中色一致，2026-10-13 张老师要求）。级别表头区间加括号，
+   总计表头无数字（组件侧控制）。 */
 .ranking_table .pbar {
   position: relative;
   display: inline-block;
@@ -5383,6 +5385,10 @@ button.msg_cancel:hover {
   top: 0;
   bottom: 0;
   border-radius: 3px 0 0 3px;
+  background: #75715e;
+}
+.ranking_table .pbar.current .pfill {
+  background: #fdc61d;
 }
 .ranking_table .pbar .ptext {
   position: absolute;
@@ -5392,16 +5398,4 @@ button.msg_cancel:hover {
   color: #f8f8f2;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
   letter-spacing: 0.5px;
-}
-.ranking_table .pbar.c_beg .pfill {
-  background: #a6e22e;
-}
-.ranking_table .pbar.c_int .pfill {
-  background: #fd971f;
-}
-.ranking_table .pbar.c_exp .pfill {
-  background: #e6db74;
-}
-.ranking_table .pbar.c_sum .pfill {
-  background: #b1b1a4;
 }

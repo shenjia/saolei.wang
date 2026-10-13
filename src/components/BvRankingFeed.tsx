@@ -1,7 +1,8 @@
 // BV 收集榜表格 + 「加载更多」（2026-10-13 张老师需求，设计稿 design/ranking-bv.html v3）。
 // 列：排名 | 姓名 | 军衔 | 初级 | 中级 | 高级 | 总计——基础三列复刻 RankingRowLine 的真实渲染
-// （第 N 位 / 白链+性别图标 / TitleBadge 徽章+气泡），成绩列为 pbar 进度条（级别色，
-// 中心叠加 n/den，总计亮灰）。表头即排序切换（同雷界榜列头 Link 模式，当前列金黄）。
+// （第 N 位 / 白链+性别图标 / TitleBadge 徽章+气泡），成绩列为 pbar 进度条（默认灰，
+// 仅当前排序列金黄 #fdc61d，与其他榜单命中色一致；中心叠加 n/den）。表头即排序切换
+// （同雷界榜列头 Link 模式，当前列金黄）；级别表头区间加括号，总计表头无数字。
 // 无搜索定位/升降列（BV 榜不接入 whereami 体系）；数据 1 小时缓存，页脚注明。
 
 "use client";
@@ -16,19 +17,14 @@ import { TotalCount } from "./TotalCount";
 
 export type BvTitledRow = BvRankingRow & { title: string };
 
-const SORT_COLS: { by: BvRankingBy; cls: string }[] = [
-  { by: "beg", cls: "c_beg" },
-  { by: "int", cls: "c_int" },
-  { by: "exp", cls: "c_exp" },
-  { by: "total", cls: "c_sum" },
-];
+const SORT_COLS: BvRankingBy[] = ["beg", "int", "exp", "total"];
 
-/** 进度条单元格：暗底槽 + 级别色填充 + 中心叠加 n/den 文字 */
-function BvBar({ n, den, cls }: { n: number; den: number; cls: string }) {
+/** 进度条单元格：暗底槽 + 填充（默认灰，当前排序列金黄）+ 中心叠加 n/den 文字 */
+function BvBar({ n, den, active }: { n: number; den: number; active: boolean }) {
   const pct = den > 0 ? (n / den) * 100 : 0;
   return (
     <td>
-      <span className={`pbar ${cls}`} title={`收集进度 ${n}/${den}`}>
+      <span className={`pbar${active ? " current" : ""}`} title={`收集进度 ${n}/${den}`}>
         <span className="pfill" style={{ width: `${pct}%` }} />
         <span className="ptext">
           {n}/{den}
@@ -93,18 +89,21 @@ export function BvRankingFeed({
             <th>姓名</th>
             <th>军衔</th>
             {SORT_COLS.map((c) => {
-              const d = c.by === "total" ? totalDen : den[c.by];
-              const r = c.by === "total" ? undefined : ranges[c.by];
+              const r = c === "total" ? undefined : ranges[c];
               return (
-                <th key={c.by}>
+                <th key={c}>
                   <Link
-                    href={c.by === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${c.by}`}
-                    className={c.by === by ? "current" : ""}
-                    title={`按${c.by === "total" ? "总计" : LEVEL_NAMES[c.by]}收集进度排列`}
+                    href={c === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${c}`}
+                    className={c === by ? "current" : ""}
+                    title={`按${c === "total" ? "总计" : LEVEL_NAMES[c]}收集进度排列`}
                   >
-                    {c.by === "total" ? "总计" : LEVEL_NAMES[c.by]}
+                    {c === "total" ? "总计" : LEVEL_NAMES[c]}
                   </Link>
-                  <small>{r ? `${r.min} – ${r.max}` : d}</small>
+                  {r && (
+                    <small>
+                      ({r.min} – {r.max})
+                    </small>
+                  )}
                 </th>
               );
             })}
@@ -125,10 +124,10 @@ export function BvRankingFeed({
               <td className="miltitle">
                 <TitleBadge title={u.title} link />
               </td>
-              <BvBar n={u.beg} den={den.beg} cls="c_beg" />
-              <BvBar n={u.int} den={den.int} cls="c_int" />
-              <BvBar n={u.exp} den={den.exp} cls="c_exp" />
-              <BvBar n={u.total} den={totalDen} cls="c_sum" />
+              <BvBar n={u.beg} den={den.beg} active={by === "beg"} />
+              <BvBar n={u.int} den={den.int} active={by === "int"} />
+              <BvBar n={u.exp} den={den.exp} active={by === "exp"} />
+              <BvBar n={u.total} den={totalDen} active={by === "total"} />
             </tr>
           ))}
           {rows.length === 0 && (
