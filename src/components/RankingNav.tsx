@@ -58,6 +58,9 @@ export function RankingNav({
   const bvDen = fetchedDen ?? bvDenProp ?? 0;
   const boxRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0); // 竞态：仅最后一次请求生效
+  // 选中推荐项时会把输入框写成该项姓名，q 变化会立刻触发新一轮模糊推荐 → 下拉在跳转/滚动
+  // 后又冒出来盖住表格（2026-10-14 张老师要求：选中即收起）。记下刚选中的关键字，跳过这一轮。
+  const pickedRef = useRef<string | null>(null);
 
   // BV 榜模式：搜索框带 by 查榜内名次——下拉直接给出「第 N 位 · 收集数/分母」
   const bvMode = current === "bv";
@@ -99,8 +102,15 @@ export function RankingNav({
     const kw = q.trim();
     if (!kw) {
       reqSeq.current++; // 使在途请求失效
+      pickedRef.current = null;
       return;
     }
+    // 刚刚选中过推荐项（输入框被写成该项姓名）→ 不为同一关键字重新拉推荐，保持收起
+    if (pickedRef.current === kw) {
+      reqSeq.current++;
+      return;
+    }
+    pickedRef.current = null;
     const seq = ++reqSeq.current;
     const timer = setTimeout(async () => {
       try {
@@ -195,6 +205,7 @@ export function RankingNav({
       e.preventDefault();
       const pick = users[active];
       if (pick) {
+        pickedRef.current = pick.chineseName.trim(); // 抑制随后那轮同名推荐
         setUsers(null);
         setQ(pick.chineseName);
         locate(pick.id);
@@ -262,6 +273,7 @@ export function RankingNav({
                         type="button"
                         onMouseEnter={() => setActive(i)}
                         onClick={() => {
+                          pickedRef.current = u.chineseName.trim(); // 抑制随后那轮同名推荐
                           setUsers(null);
                           setQ(u.chineseName);
                           locate(u.id);
