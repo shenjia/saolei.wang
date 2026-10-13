@@ -109,7 +109,7 @@ export default async function BbsTitlePage({
             {session ? (
               <ReplyForm postId={post.id} locked={post.isLocked && !admin} />
             ) : (
-              <p className="text">
+              <p className="text login_hint">
                 <LoginLink>登录</LoginLink> 后才能回复。
               </p>
             )}

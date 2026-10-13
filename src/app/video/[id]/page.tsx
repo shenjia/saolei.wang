@@ -14,6 +14,7 @@ import {
 } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { LoginLink } from "@/components/LoginLink";
 import { Board } from "@/components/Board";
 import { BoardPlay } from "@/components/BoardPlay";
 import { CommentForm, CommentList } from "@/components/Comments";
@@ -129,17 +130,24 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             </p>
           </div>
         </div>
-        {session && (
-          <div className="post box">
-            <CommentForm videoId={video.id} />
-          </div>
-        )}
         <CommentList
           videoId={video.id}
           initial={comments}
           initialHasMore={comments.length < commentTotal}
           initialTotal={commentTotal}
         />
+        {/* 2026-10-13 张老师要求：底部加「发表评论」板块（参考论坛详情页底部的「回复主题」盒子）——
+            盒子常驻：登录用户见输入框，未登录见「登录 后才能发表评论。」（点击弹全局登录浮窗） */}
+        <div className="post box">
+          <h2>发表评论</h2>
+          {session ? (
+            <CommentForm videoId={video.id} />
+          ) : (
+            <p className="text login_hint">
+              <LoginLink>登录</LoginLink> 后才能发表评论。
+            </p>
+          )}
+        </div>
       </li>
       <li className="sidebar">
         {video.author && (

@@ -98,7 +98,10 @@ export function CommentList({
   );
 }
 
-/** 发表表单（移植 comment/_form，登录可见） */
+/** 发表表单（移植 comment/_form，登录可见）
+ *  2026-10-13 张老师要求：外观与论坛编辑器一致但不支持 UBB——
+ *  输入框直接复用编辑器画布 .wys 的样式类（纯文本 textarea，无工具栏），
+ *  提交按钮改走 .submit_row（居中，同论坛回帖的黄色主按钮布局） */
 export function CommentForm({ videoId }: { videoId: number }) {
   const router = useRouter();
   const [content, setContent] = useState("");
@@ -131,19 +134,20 @@ export function CommentForm({ videoId }: { videoId: number }) {
   return (
     <form id="comment-form" onSubmit={submit}>
       <textarea
+        className="wys"
         style={{ width: "100%", boxSizing: "border-box", display: "block", resize: "vertical" }}
-        rows={4}
+        rows={3}
         maxLength={COMMENT_CONTENT_LIMIT}
         placeholder="我来说两句…（纯文本）"
         value={content}
         onChange={(e) => setContent(e.target.value)}
       />
       {error && <div className="error">{error}</div>}
-      <div style={{ marginTop: 8 }}>
+      <p className="submit_row">
         <button type="submit" className="lp_submit_btn" disabled={submitting}>
           发表评论
         </button>
-      </div>
+      </p>
     </form>
   );
 }

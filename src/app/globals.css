@@ -677,6 +677,26 @@ body #video_view .video_cell .playable {
   font-size: 13px;
   margin-top: 4px;
 }
+/* 录像页「发表评论」输入框（2026-10-13 张老师要求：外观与论坛编辑器一致，但不支持 UBB）
+   直接复用编辑器画布 .wys 的样式类（纯文本 textarea，无工具栏）；
+   这里只补 .wys 未覆盖的 textarea 专属项：3 行高（2026-10-13 张老师：不要太大，2~3 行）/
+   placeholder 灰字。提交行沿用 .submit_row（居中黄按钮，与论坛回帖同款）。 */
+#comment-form textarea.wys {
+  min-height: 100px;
+}
+#comment-form textarea.wys::placeholder {
+  color: #75715e;
+}
+
+/* ---------- 新增：详情页底部登录提示（2026-10-13 张老师要求：「登录」二字金色） ----------
+   论坛帖子详情页 / 录像详情页底部「登录 后才能…」里的「登录」链接——站点默认链接色是
+   #b1b1a4 灰，这里提亮成金色强调，hover 仍走全站绿。 */
+.login_hint a {
+  color: #fdc61a;
+}
+.login_hint a:hover {
+  color: #a6e22e;
+}
 
 /* ---------- 新增：审核 ---------- */
 .review_row {
