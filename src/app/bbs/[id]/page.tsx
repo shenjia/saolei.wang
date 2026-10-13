@@ -66,8 +66,13 @@ export default async function BbsTitlePage({
                   <TitleBadge title={post.author.title} link />{" "}
                 </>
               )}
-              发表于 {timeOpposite(post.createTime, TIME_NEVER)}　点击 <em>{post.clicks}</em>　回复{" "}
-              <em>{post.replies}</em>
+              发表于 {timeOpposite(post.createTime, TIME_NEVER)}　
+              <span className="bbs_count">
+                {post.clicks}{" "}
+                <span className="bbs_count_unit">次浏览</span>{" "}
+                {post.replies}{" "}
+                <span className="bbs_count_unit">条评论</span>
+              </span>
               {session && (
                 <PostOps
                   postId={post.id}

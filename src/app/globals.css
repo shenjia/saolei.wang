@@ -886,6 +886,12 @@ body #page.bbs_old .page_head {
   color: #bbbbbb;
   font-weight: bold;
 }
+/* 十八轮（2026-10-13 张老师）：详情页 meta 行计数改「x 次浏览 y 条评论」，
+   单位词压暗一档（#75715e，与「发表于」同源灰），数字保持亮灰 #bbbbbb 加粗
+   ——单位词退后、数字突出 */
+.bbs_count_unit {
+  color: #75715e;
+}
 /* 十七轮（2026-09-26 张老师）：计数改「x / y」——x=评论用黄强调（legacy em 黄
    #fdc61a），y=阅读保持亮灰；与 .bbs_count 同粗细成对。仅作用于列表页计数列
    （详情页 meta 行仍是「x阅读 x评论」全灰） */
