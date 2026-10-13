@@ -4,6 +4,9 @@
 // 唯一候选自动定位；通过自定义事件 ranking:locate 委托同页的 RankingFeed 执行定位）
 // 2026-10-13 张老师要求：底部「我在哪里」按钮取消——登录态下聚焦/清空搜索框且未输入时，
 // 下拉直接推荐「自己」，回车即定位到自己在榜中的位置。
+// 2026-10-14 BV 榜搜索（C 方案）：搜索框扩到 BV tab；带 bvBy 调搜索接口回带名次与收集数，
+// 下拉次级文字显示「第 N 位 · 250/335」、不在榜显示「未加入 BV 排行」（hint 置灰，选中弹气泡）；
+// 唯一候选自动定位在 BV 模式下仅当候选确实在榜（否则会立刻弹「未加入」气泡，体验突兀）。
 
 "use client";
 
@@ -28,24 +31,49 @@ interface SuggestUser {
   chineseName: string;
   englishName: string;
   sex: number;
+  /** BV 榜名次与已收集数（仅 BV 附加查询回带；缺失＝未加入 BV 排行） */
+  bvRank?: number;
+  bvCollected?: number;
 }
 
 export function RankingNav({
   current,
   by,
   me,
+  bvDen: bvDenProp,
 }: {
   current: RankingView;
   by?: string;
   /** 登录用户信息：搜索框空输入时推荐「自己」（替代原「我在哪里」按钮） */
   me?: SuggestUser;
+  /** BV 榜总计分母（下拉「250/335」的分母）：页面直传打底，搜索接口回带值优先 */
+  bvDen?: number;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [users, setUsers] = useState<SuggestUser[] | null>(null);
   const [active, setActive] = useState(0); // 键盘上下键游标
+  // 「自己」推荐不走搜索接口，分母必须由页面直传，否则显示成 x/0
+  const [fetchedDen, setFetchedDen] = useState<number | null>(null);
+  const bvDen = fetchedDen ?? bvDenProp ?? 0;
   const boxRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0); // 竞态：仅最后一次请求生效
+
+  // BV 榜模式：搜索框带 by 查榜内名次——下拉直接给出「第 N 位 · 收集数/分母」
+  const bvMode = current === "bv";
+  const bvBy = bvMode ? (by ?? "total") : "";
+
+  /** 定位/查询统一带的榜别参数（成绩榜 view=nf、BV 榜 view=bv） */
+  function viewParam(): string | undefined {
+    return current === "nf" ? "nf" : bvMode ? "bv" : undefined;
+  }
+
+  /** BV 下拉次级文字：在榜→名次+收集进度；不在榜→置灰「未加入 BV 排行」 */
+  function suggestMeta(u: SuggestUser, numeric: boolean): { text: string; inBoard: boolean } {
+    if (!bvMode) return { text: numeric ? `ID ${u.id}` : u.englishName, inBoard: true };
+    if (!u.bvRank) return { text: "未加入 BV 排行", inBoard: false };
+    return { text: `第 ${u.bvRank.toLocaleString("zh-CN")} 位 · ${u.bvCollected ?? 0}/${bvDen}`, inBoard: true };
+  }
 
   // 登录态：聚焦/清空输入时下拉推荐自己；回车选中即定位（走既有 pick 流程）
   const meSuggest = me ? [me] : null;
@@ -76,15 +104,24 @@ export function RankingNav({
     const seq = ++reqSeq.current;
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/ranking/search?q=${encodeURIComponent(kw)}`);
+        const qs = new URLSearchParams({ q: kw });
+        // BV 榜：附带名次与收集数（接口从 1 小时缓存的榜数组取，不额外打库）
+        if (bvBy) qs.set("bvBy", bvBy);
+        const res = await fetch(`/api/ranking/search?${qs}`);
         if (!res.ok) return;
-        const { users: list } = (await res.json()) as { users: SuggestUser[] };
+        const { users: list, bvDen: den } = (await res.json()) as {
+          users: SuggestUser[];
+          bvDen?: number;
+        };
         if (seq !== reqSeq.current) return; // 已有更新的输入
+        if (den) setFetchedDen(den);
         setUsers(list);
         setActive(0);
         // 唯一候选 → 自动开始查询（张老师要求：确定只有一个选择即触发，无需输完姓名）
         // 仅限姓名输入；数字 ID 输入始终展示候选列表（用户可能还要继续输位数）
-        if (list.length === 1 && !/^\d+$/.test(kw)) {
+        // BV 榜额外要求候选确实在榜——否则自动定位会立刻弹「未加入」气泡，体验突兀
+        const autoOk = bvMode ? list[0]?.bvRank !== undefined : true;
+        if (list.length === 1 && !/^\d+$/.test(kw) && autoOk) {
           setUsers(null);
           locate(list[0].id);
         }
@@ -93,7 +130,7 @@ export function RankingNav({
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [q]);
+  }, [q, bvBy, bvMode]);
 
   // 点击外部收起下拉
   useEffect(() => {
@@ -117,16 +154,19 @@ export function RankingNav({
   }
 
   async function locateName(name: string) {
+    const view = viewParam();
     // 先轻量探测（json）：无成绩/不存在 → 全局居中气泡提示，不跳转
     const qs = new URLSearchParams({ name, format: "json" });
     if (by) qs.set("by", by);
-    if (current === "nf") qs.set("view", "nf");
+    if (view) qs.set("view", view);
     try {
       const res = await fetch(`/ranking/whereami?${qs}`);
       if (res.ok && (res.headers.get("content-type") ?? "").includes("json")) {
         const { page } = (await res.json()) as { page: number };
         if (page <= 0) {
-          toast("该玩家未加入排行榜（暂无成绩）");
+          toast(
+            bvMode ? "该玩家暂无已通过审核的录像，未加入 BV 排行" : "该玩家未加入排行榜（暂无成绩）"
+          );
           return;
         }
       }
@@ -135,7 +175,7 @@ export function RankingNav({
     }
     const nav = new URLSearchParams({ name });
     if (by) nav.set("by", by);
-    if (current === "nf") nav.set("view", "nf");
+    if (view) nav.set("view", view);
     // 姓名需服务端反查 id（whereami 302 会带 page+hl 回来，落地即高亮），走整页导航
     router.push(`/ranking/whereami?${nav}`);
   }
@@ -179,7 +219,7 @@ export function RankingNav({
           )
         )}
       </div>
-      {(current === "all" || current === "nf") && (
+      {(current === "all" || current === "nf" || bvMode) && (
         <div className="goto_form" ref={boxRef}>
           <span className="goto_search">
             <svg className="goto_icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
@@ -210,24 +250,30 @@ export function RankingNav({
               {users.length === 0 ? (
                 <li className="goto_empty">{emptyMsg}</li>
               ) : (
-                users.map((u, i) => (
-                  <li key={u.id} className={i === active ? "active" : ""}>
-                    <button
-                      type="button"
-                      onMouseEnter={() => setActive(i)}
-                      onClick={() => {
-                        setUsers(null);
-                        setQ(u.chineseName);
-                        locate(u.id);
-                      }}
-                    >
-                      <em>{u.chineseName}</em>
-                      {/* 数字模式次级文字显示 ID（用户按 ID 找人时姓名才是补充信息），
-                          其余显示英文名 */}
-                      <span>{numeric ? `ID ${u.id}` : u.englishName || null}</span>
-                    </button>
-                  </li>
-                ))
+                users.map((u, i) => {
+                  const meta = suggestMeta(u, numeric);
+                  // 不在 BV 榜的候选置灰（hint），active 态优先级更高（CSS 中 hint 规则在前）
+                  const cls = [i === active ? "active" : "", meta.inBoard ? "" : "hint"]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <li key={u.id} className={cls || undefined}>
+                      <button
+                        type="button"
+                        onMouseEnter={() => setActive(i)}
+                        onClick={() => {
+                          setUsers(null);
+                          setQ(u.chineseName);
+                          locate(u.id);
+                        }}
+                      >
+                        <em>{u.chineseName}</em>
+                        {/* BV 榜：名次 + 收集进度；成绩榜数字模式显示 ID、其余显示英文名 */}
+                        <span>{meta.text || null}</span>
+                      </button>
+                    </li>
+                  );
+                })
               )}
             </ul>
           )}

@@ -3,10 +3,20 @@
 //   &format=json → { page }（底部「我在哪里」按钮轻量探测页码用）
 // → 302 到 /ranking?...&page=N#id_<uid>；兼容旧参数 level/order/nf/name/id
 // 2026-09-24：新增合并搜索框参数 q（纯数字按 ID、否则按姓名），原 name/id 仍可用
+// 2026-10-14：新增 view=bv（BV 收集榜）——该榜人口＝有已通过录像（≠成绩榜人口），
+//   名次走 1 小时缓存的全量数组 getBvRankOfUser（零 DB），落地 URL 与成绩榜同构（page+hl）
 
 import { NextRequest, NextResponse } from "next/server";
-import { findUserByName, getRankingPageOfUser } from "@/lib/queries";
-import { byLevelOrder, parseRankingBy, LEVELS, ORDERS, type Level, type Order } from "@/lib/config";
+import { findUserByName, getRankingPageOfUser, getBvRankOfUser } from "@/lib/queries";
+import {
+  byLevelOrder,
+  parseRankingBy,
+  parseBvRankingBy,
+  LEVELS,
+  ORDERS,
+  type Level,
+  type Order,
+} from "@/lib/config";
 
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
@@ -20,6 +30,31 @@ export async function GET(req: NextRequest) {
   if (!id) {
     const name = (p.get("name") ?? "").trim();
     if (name) id = (await findUserByName(name)) ?? 0;
+  }
+
+  // ---- BV 收集榜分支（2026-10-14）：名次不进成绩表体系，改走缓存数组 ----
+  // 榜外（没传过录像 / 无已通过录像）→ json 回 page:0（前端弹气泡），302 则退回榜首
+  if (p.get("view") === "bv") {
+    const bvBy = parseBvRankingBy(p.get("by") ?? "");
+    const bqs = new URLSearchParams({ view: "bv" });
+    if (bvBy !== "total") bqs.set("by", bvBy);
+    if (id > 0) {
+      const hit = await getBvRankOfUser(id, bvBy);
+      if (hit) {
+        if (p.get("format") === "json") return NextResponse.json({ page: hit.page });
+        bqs.set("page", String(hit.page));
+        bqs.set("hl", String(id)); // 定位落地行持续高亮（与成绩榜同款）
+        return new NextResponse(null, {
+          status: 302,
+          headers: { Location: `/ranking?${bqs.toString()}#id_${id}` },
+        });
+      }
+      if (p.get("format") === "json") return NextResponse.json({ page: 0 });
+    }
+    return new NextResponse(null, {
+      status: 302,
+      headers: { Location: `/ranking?${bqs.toString()}` },
+    });
   }
 
   const nf = p.get("view") ? p.get("view") === "nf" : p.get("nf") === "1";

@@ -2599,6 +2599,11 @@ body #page.ranking_old .ranking_box {
   color: #75715e;
   font-size: 12px;
 }
+/* BV 榜下拉（2026-10-14）：未加入 BV 排行的候选整行置灰；active/hover 规则紧随其后，优先级更高 */
+.goto_form .goto_suggest li.hint button,
+.goto_form .goto_suggest li.hint button span {
+  color: #75715e;
+}
 .goto_form .goto_suggest li.active button,
 .goto_form .goto_suggest li button:hover {
   background: #3e3d32;
@@ -2709,6 +2714,34 @@ body #page.ranking_old .ranking_box {
 }
 .ranking_table tr.hl td.name a:hover {
   color: #a6e22e;
+}
+
+/* 定位落地提示条（2026-10-14 BV 榜搜索，设计稿 design/ranking-bv-search.html）：
+   深位目标跳页后必须给出口，否则用户被丢在第几百页出不来 */
+.locate_bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 5px 10px;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  background: #2e2e26;
+  color: #939387;
+  font-size: 13px;
+}
+.locate_bar em {
+  color: #fdc61d;
+  font-style: normal;
+  font-weight: bold;
+}
+.locate_bar .back {
+  margin-left: auto;
+  color: #a6e22e;
+}
+.locate_bar .back:hover {
+  color: #c8f05a;
+  text-decoration: underline;
 }
 
 /* ---------- 全级别排行表（2008 紧凑行） ---------- */
@@ -5375,8 +5408,8 @@ button.msg_cancel:hover {
   vertical-align: middle;
 }
 .ranking_table .pbar .pnum {
-  font-size: 16px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 16px;
   color: #636359;
   letter-spacing: 0.5px;
 }

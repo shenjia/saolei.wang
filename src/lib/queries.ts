@@ -1579,21 +1579,61 @@ const fetchBvCollection = unstable_cache(
   { revalidate: 3600, tags: ["bv-collection"] }
 );
 
-/**
- * BV 收集榜一页。排序：所选列降序，同数用户 ID 小在前（2026-10-13 张老师定）。
- * 分母 = level_3bv_range 站内实际上下限跨度（随新录像突破自动扩展）。
- */
-export async function getBvRanking(by: BvRankingBy, page: number): Promise<BvRankingResult> {
-  const [all, ranges] = await Promise.all([fetchBvCollection(), getLevel3bvRanges()]);
+/** 排序口径（页面 / 名次查询 / 下拉增强三处共用）：所选列降序，同数用户 ID 小在前（2026-10-13 张老师定） */
+function sortBv(all: BvRankingEntry[], by: BvRankingBy): BvRankingEntry[] {
+  return [...all].sort((a, b) => b[by] - a[by] || a.id - b.id);
+}
+
+/** 分母 = level_3bv_range 站内实际上下限跨度（随新录像突破自动扩展） */
+function bvDenoms(ranges: Partial<Record<VideoLevel, { min: number; max: number }>>): {
+  den: Record<VideoLevel, number>;
+  totalDen: number;
+} {
   const den: Record<VideoLevel, number> = { beg: 0, int: 0, exp: 0 };
   for (const l of VIDEO_LEVELS) {
     const r = ranges[l];
     if (r) den[l] = r.max - r.min + 1;
   }
-  const totalDen = den.beg + den.int + den.exp;
-  const sorted = [...all].sort((a, b) => b[by] - a[by] || a.id - b.id);
+  return { den, totalDen: den.beg + den.int + den.exp };
+}
+
+/** BV 收集榜一页。 */
+export async function getBvRanking(by: BvRankingBy, page: number): Promise<BvRankingResult> {
+  const [all, ranges] = await Promise.all([fetchBvCollection(), getLevel3bvRanges()]);
+  const { den, totalDen } = bvDenoms(ranges);
+  const sorted = sortBv(all, by);
   const rows = sorted
     .slice((page - 1) * RANKING_PAGESIZE, page * RANKING_PAGESIZE)
     .map((e, i) => ({ ...e, rank: (page - 1) * RANKING_PAGESIZE + i + 1 }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen, ranges };
+}
+
+/** BV 榜「用户 → 名次 + 总计收集数」索引（2026-10-14 搜索定位/下拉增强）：
+ *  一次内存排序构建 Map，不在 Map 里即「未加入 BV 排行」。零 DB 重活（只有 3 行的 ranges 小表）。 */
+export async function getBvBoardIndex(by: BvRankingBy): Promise<{
+  index: Map<number, { rank: number; collected: number }>;
+  total: number;
+  totalDen: number;
+}> {
+  const [all, ranges] = await Promise.all([fetchBvCollection(), getLevel3bvRanges()]);
+  const { totalDen } = bvDenoms(ranges);
+  const sorted = sortBv(all, by);
+  const index = new Map<number, { rank: number; collected: number }>();
+  sorted.forEach((e, i) => index.set(e.id, { rank: i + 1, collected: e.total }));
+  return { index, total: sorted.length, totalDen };
+}
+
+/**
+ * BV 榜内求某人的名次与页码（2026-10-14 搜索定位，「BV 版我在哪里」）。
+ * 走 1 小时缓存的全量数组做内存查找，零 DB 查询——比雷界榜 getRankingPageOfUser（打库分页循环）轻得多。
+ * 不在榜（没有已通过审核的录像）返回 null。
+ */
+export async function getBvRankOfUser(
+  id: number,
+  by: BvRankingBy
+): Promise<{ rank: number; page: number; collected: number; total: number; totalDen: number } | null> {
+  const { index, total, totalDen } = await getBvBoardIndex(by);
+  const hit = index.get(id);
+  if (!hit) return null;
+  return { rank: hit.rank, page: Math.floor((hit.rank - 1) / RANKING_PAGESIZE) + 1, collected: hit.collected, total, totalDen };
 }

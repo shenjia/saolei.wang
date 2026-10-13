@@ -6,7 +6,7 @@
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
-import { getRankingTable, getRankingPageOfUser, getBvRanking } from "@/lib/queries";
+import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy, byLevelOrder, parseBvRankingBy } from "@/lib/config";
@@ -70,29 +70,71 @@ export default async function RankingPage({
   }
 
   // BV 收集榜（2026-10-13 张老师需求）：独立服务端渲染——列结构（进度条）与成绩榜
-  // 差异大，不进 RankingFeed；无搜索定位/升降列；数据 1 小时缓存（见 queries.getBvRanking）
+  // 差异大，不进 RankingFeed；数据 1 小时缓存（见 queries.getBvRanking）。
+  // 2026-10-14 搜索定位（C 方案）：搜索框与成绩榜同款（`?hl=` 落地高亮 + page 跳页），
+  // 名次从缓存数组现查（getBvRankOfUser，零 DB）。
   if (view === "bv") {
     const bvBy = parseBvRankingBy(sp.by);
     const bvPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-    const { rows, total, pageSize, den, totalDen } = await getBvRanking(bvBy, bvPage);
+    // 搜索/定位落地行：SSR 即高亮（无 JS 也可见），客户端接管后持续
+    const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
+    const [{ rows, total, pageSize, den, totalDen }, session] = await Promise.all([
+      getBvRanking(bvBy, bvPage),
+      getSession(),
+    ]);
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）
     const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime) }));
+
+    // 登录态：搜索框空输入推荐「自己」——对 BV 榜比成绩榜更实用（自己的名次常在几百页外），
+    // 顺带取自己的名次与收集数（缓存数组查询，零 DB）；无录像则下拉显示「未加入 BV 排行」
+    let me:
+      | {
+          id: number;
+          chineseName: string;
+          englishName: string;
+          sex: number;
+          bvRank?: number;
+          bvCollected?: number;
+        }
+      | undefined;
+    if (session?.uid) {
+      const [u, mine] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: BigInt(session.uid) },
+          select: { id: true, chineseName: true, englishName: true, sex: true },
+        }),
+        getBvRankOfUser(session.uid, bvBy),
+      ]);
+      if (u) {
+        me = {
+          id: Number(u.id),
+          chineseName: u.chineseName,
+          englishName: u.englishName,
+          sex: u.sex,
+          bvRank: mine?.rank,
+          bvCollected: mine?.collected,
+        };
+      }
+    }
+
     return (
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           <div className="page_head">
             <h1 className="page_title">BV排行</h1>
-            <RankingNav current="bv" />
+            <RankingNav current="bv" by={bvBy} me={me} bvDen={totalDen} />
           </div>
-          {/* key 含 by/page：软导航切换排序时强制重挂载，避免 useState(initial) 保留旧数据 */}
+          {/* key 含 by/page/hl：软导航（排序切换、whereami 302 回跳）时强制重挂载，
+              否则 useState(initial) 保留旧数据、表格显示错页 */}
           <BvRankingFeed
-            key={`bv-${bvBy}-${bvPage}`}
+            key={`bv-${bvBy}-${bvPage}-${hl ?? 0}`}
             initial={titled}
             by={bvBy}
             total={total}
             pageSize={pageSize}
             den={den}
             totalDen={totalDen}
+            initialHl={hl}
           />
         </div>
       </div>
