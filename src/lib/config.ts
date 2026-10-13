@@ -46,6 +46,14 @@ export function byLevelOrder(by: RankingBy): { level: Level; order: Order } {
   return { level, order };
 }
 
+// ---------- BV 收集榜排序列（2026-10-13 张老师需求：排行榜 NF 后新增 BV 榜） ----------
+export const BV_RANKING_BYS = ["total", "beg", "int", "exp"] as const;
+export type BvRankingBy = (typeof BV_RANKING_BYS)[number];
+
+export function parseBvRankingBy(v?: string): BvRankingBy {
+  return (BV_RANKING_BYS as readonly string[]).includes(v ?? "") ? (v as BvRankingBy) : "total";
+}
+
 export const VIDEO_PAGESIZE = 20;
 export const HOME_TOP_NUMBER = 10;
 export const HOME_NEWBIE_NUMBER = 5;

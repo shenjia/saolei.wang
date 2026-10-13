@@ -3,6 +3,7 @@
 //       video / video_info / video_stat / video_scores_* 共用同一主键（录像 id）
 
 import { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { prisma } from "./db";
 import { getTitleDistribution, title } from "./assess";
 import {
@@ -23,6 +24,7 @@ import {
   VIDEO_LEVELS,
   byLevelOrder,
   RANKING_BYS,
+  type BvRankingBy,
   type Level,
   type Order,
   type RankingBy,
@@ -1478,4 +1480,101 @@ export async function getUser3bvCollection(
   };
   for (const r of rows) out[r.level as VideoLevel]?.set(r.b3bv, { vid: N(r.first_vid), t: N(r.first_ct) });
   return out;
+}
+
+// ---------- BV 收集榜（2026-10-13 张老师需求：排行榜 NF 后新增 BV 榜，设计稿 design/ranking-bv.html v3） ----------
+
+/** BV 榜条目：一名玩家的三级收集数 + 高级时间（军衔评定用） */
+export interface BvRankingEntry {
+  id: number;
+  chineseName: string;
+  sex: number;
+  beg: number;
+  int: number;
+  exp: number;
+  total: number;
+  expTime: number;
+}
+
+export interface BvRankingRow extends BvRankingEntry {
+  rank: number;
+}
+
+export interface BvRankingResult {
+  rows: BvRankingRow[];
+  total: number;
+  pageSize: number;
+  /** 各级别分母（level_3bv_range 实际上下限跨度）与总计分母 */
+  den: Record<VideoLevel, number>;
+  totalDen: number;
+  /** 各级别区间（表头小字「2 – 51」用） */
+  ranges: Partial<Record<VideoLevel, { min: number; max: number }>>;
+}
+
+// 全量收集聚合 1 小时缓存：30 万行级聚合并发会 P1017（铁律），
+// 缓存后页面渲染/加载更多只是对万级小数组排序切片，DB 每小时最多被打一次。
+// 注意改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化，dev 重启不清）。
+const fetchBvCollection = unstable_cache(
+  async (): Promise<BvRankingEntry[]> => {
+    const rows = await prisma.$queryRaw<
+      {
+        id: bigint;
+        chinese_name: string;
+        sex: number;
+        exp_time: number | null;
+        beg: number;
+        inter: number;
+        exp: number;
+      }[]
+    >`
+      SELECT u.id, u.chinese_name, u.sex, us.exp_time,
+        SUM(CASE WHEN t.level = 'beg' THEN t.n ELSE 0 END) AS beg,
+        SUM(CASE WHEN t.level = 'int' THEN t.n ELSE 0 END) AS inter,
+        SUM(CASE WHEN t.level = 'exp' THEN t.n ELSE 0 END) AS exp
+      FROM (
+        SELECT v.user, v.level, COUNT(DISTINCT vi.board_3bv) AS n
+        FROM video v JOIN video_info vi ON vi.id = v.id
+        WHERE v.status = ${VIDEO_STATUS.REVIEWED}
+        GROUP BY v.user, v.level
+      ) t
+      JOIN user u ON u.id = t.user
+      LEFT JOIN user_scores us ON us.id = t.user
+      GROUP BY u.id, u.chinese_name, u.sex, us.exp_time`;
+    return rows.map((r) => {
+      const beg = N(r.beg);
+      const inter = N(r.inter);
+      const exp = N(r.exp);
+      return {
+        id: N(r.id),
+        chineseName: r.chinese_name,
+        sex: r.sex,
+        beg,
+        int: inter,
+        exp,
+        total: beg + inter + exp,
+        expTime: N(r.exp_time),
+      };
+    });
+  },
+  ["bv-collection-v1"],
+  { revalidate: 3600, tags: ["bv-collection"] }
+);
+
+/**
+ * BV 收集榜一页。排序：所选列降序，同数用户 ID 小在前（2026-10-13 张老师定）。
+ * 分母 = level_3bv_range 站内实际上下限跨度（随新录像突破自动扩展）。
+ */
+export async function getBvRanking(by: BvRankingBy, page: number): Promise<BvRankingResult> {
+  const [all, ranges] = await Promise.all([fetchBvCollection(), getLevel3bvRanges()]);
+  const den: Record<VideoLevel, number> = { beg: 0, int: 0, exp: 0 };
+  for (const l of VIDEO_LEVELS) {
+    const r = ranges[l];
+    if (r) den[l] = r.max - r.min + 1;
+  }
+  const totalDen = den.beg + den.int + den.exp;
+  const sorted = [...all].sort((a, b) => b[by] - a[by] || a.id - b.id);
+  const rows = sorted
+    .slice((page - 1) * RANKING_PAGESIZE, page * RANKING_PAGESIZE)
+    .map((e, i) => ({ ...e, rank: (page - 1) * RANKING_PAGESIZE + i + 1 }));
+  return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen, ranges };
 }

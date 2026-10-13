@@ -10,11 +10,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
 
-export type RankingView = "all" | "nf" | "grow" | "area" | "world";
+export type RankingView = "all" | "nf" | "bv" | "grow" | "area" | "world";
 
 const TABS: { key: RankingView; label: string; href: string }[] = [
   { key: "all", label: "雷界排行", href: "/ranking" },
   { key: "nf", label: "NF", href: "/ranking?view=nf" },
+  { key: "bv", label: "BV", href: "/ranking?view=bv" },
   { key: "grow", label: "进步", href: "/grow" },
   { key: "area", label: "地区", href: "/area" },
   { key: "world", label: "世界", href: "/ranking?view=world" },

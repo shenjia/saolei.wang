@@ -6,14 +6,15 @@
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
-import { getRankingTable, getRankingPageOfUser } from "@/lib/queries";
+import { getRankingTable, getRankingPageOfUser, getBvRanking } from "@/lib/queries";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
-import { parseRankingBy, byLevelOrder } from "@/lib/config";
+import { parseRankingBy, byLevelOrder, parseBvRankingBy } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
 import { getSession } from "@/lib/auth";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingFeed } from "@/components/RankingFeed";
 import { WorldTop100 } from "@/components/WorldTop100";
+import { BvRankingFeed } from "@/components/BvRankingFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +25,16 @@ export async function generateMetadata({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const view = sp.view === "nf" || sp.nf === "1" ? "nf" : sp.view === "world" ? "world" : "all";
-  const name = view === "world" ? "世界排行" : view === "nf" ? "NF排行" : "雷界排行";
+  const view =
+    sp.view === "nf" || sp.nf === "1"
+      ? "nf"
+      : sp.view === "world"
+        ? "world"
+        : sp.view === "bv"
+          ? "bv"
+          : "all";
+  const name =
+    view === "world" ? "世界排行" : view === "nf" ? "NF排行" : view === "bv" ? "BV排行" : "雷界排行";
   return { title: `${name} | 扫雷网` };
 }
 
@@ -36,7 +45,14 @@ export default async function RankingPage({
 }) {
   const sp = await searchParams;
   // 新参数 view/by；兼容旧参数（level/order/nf → by/view）
-  let view = sp.view === "nf" ? "nf" : sp.view === "world" ? "world" : "all";
+  let view =
+    sp.view === "nf"
+      ? "nf"
+      : sp.view === "world"
+        ? "world"
+        : sp.view === "bv"
+          ? "bv"
+          : "all";
   let by = sp.by;
   if (!sp.view && !sp.by && (sp.level || sp.order || sp.nf)) {
     view = sp.nf === "1" ? "nf" : "all";
@@ -48,6 +64,37 @@ export default async function RankingPage({
     return (
       <div id="page" className="main ranking_old">
         <WorldTop100 />
+      </div>
+    );
+  }
+
+  // BV 收集榜（2026-10-13 张老师需求）：独立服务端渲染——列结构（进度条）与成绩榜
+  // 差异大，不进 RankingFeed；无搜索定位/升降列；数据 1 小时缓存（见 queries.getBvRanking）
+  if (view === "bv") {
+    const bvBy = parseBvRankingBy(sp.by);
+    const bvPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+    const { rows, total, pageSize, den, totalDen, ranges } = await getBvRanking(bvBy, bvPage);
+    // 军衔 SUB 制按高级时间评定（与成绩榜同口径）
+    const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime) }));
+    return (
+      <div id="page" className="main ranking_old">
+        <div className="box ranking_box">
+          <div className="page_head">
+            <h1 className="page_title">BV排行</h1>
+            <RankingNav current="bv" />
+          </div>
+          {/* key 含 by/page：软导航切换排序时强制重挂载，避免 useState(initial) 保留旧数据 */}
+          <BvRankingFeed
+            key={`bv-${bvBy}-${bvPage}`}
+            initial={titled}
+            by={bvBy}
+            total={total}
+            pageSize={pageSize}
+            den={den}
+            totalDen={totalDen}
+            ranges={ranges}
+          />
+        </div>
       </div>
     );
   }
