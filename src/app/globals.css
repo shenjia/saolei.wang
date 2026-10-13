@@ -5375,8 +5375,8 @@ button.msg_cancel:hover {
   vertical-align: middle;
 }
 .ranking_table .pbar .pnum {
-  font-size: 14px;
-  line-height: 16px;
+  font-size: 16px;
+  line-height: 18px;
   color: #636359;
   letter-spacing: 0.5px;
 }

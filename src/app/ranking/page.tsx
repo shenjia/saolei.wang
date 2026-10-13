@@ -74,7 +74,7 @@ export default async function RankingPage({
   if (view === "bv") {
     const bvBy = parseBvRankingBy(sp.by);
     const bvPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-    const { rows, total, pageSize, den, totalDen, ranges } = await getBvRanking(bvBy, bvPage);
+    const { rows, total, pageSize, den, totalDen } = await getBvRanking(bvBy, bvPage);
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）
     const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime) }));
     return (
@@ -93,7 +93,6 @@ export default async function RankingPage({
             pageSize={pageSize}
             den={den}
             totalDen={totalDen}
-            ranges={ranges}
           />
         </div>
       </div>

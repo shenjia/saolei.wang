@@ -2,7 +2,8 @@
 // 列：排名 | 姓名 | 军衔 | 初级 | 中级 | 高级 | 总计——基础三列复刻 RankingRowLine 的真实渲染
 // （第 N 位 / 白链+性别图标 / TitleBadge 徽章+气泡），成绩列为 pbar 进度条（2026-10-14
 // 起改用个人主页同款：上 n/den 数字、下 3px 细条；默认灰，仅当前排序列金黄 #fdc61d）。
-// 表头即排序切换（同雷界榜列头 Link 模式，当前列金黄）；级别表头区间加括号，总计表头无数字。
+// 表头即排序切换（同雷界榜列头 Link 模式，当前列金黄）；表头纯级别名，不带区间数字
+// （2026-10-14 张老师：不对齐很难看，加过括号又整体去掉）。
 // 无搜索定位/升降列（BV 榜不接入 whereami 体系）；数据 1 小时缓存，页脚注明。
 
 "use client";
@@ -44,7 +45,6 @@ export function BvRankingFeed({
   pageSize,
   den,
   totalDen,
-  ranges,
 }: {
   initial: BvTitledRow[];
   by: BvRankingBy;
@@ -52,7 +52,6 @@ export function BvRankingFeed({
   pageSize: number;
   den: Record<VideoLevel, number>;
   totalDen: number;
-  ranges: Partial<Record<VideoLevel, { min: number; max: number }>>;
 }) {
   const [rows, setRows] = useState(initial);
   const nextPage = useRef(2);
@@ -91,25 +90,17 @@ export function BvRankingFeed({
             <th>排名</th>
             <th>姓名</th>
             <th>军衔</th>
-            {SORT_COLS.map((c) => {
-              const r = c === "total" ? undefined : ranges[c];
-              return (
-                <th key={c}>
-                  <Link
-                    href={c === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${c}`}
-                    className={c === by ? "current" : ""}
-                    title={`按${c === "total" ? "总计" : LEVEL_NAMES[c]}收集进度排列`}
-                  >
-                    {c === "total" ? "总计" : LEVEL_NAMES[c]}
-                  </Link>
-                  {r && (
-                    <small>
-                      ({r.min} – {r.max})
-                    </small>
-                  )}
-                </th>
-              );
-            })}
+            {SORT_COLS.map((c) => (
+              <th key={c}>
+                <Link
+                  href={c === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${c}`}
+                  className={c === by ? "current" : ""}
+                  title={`按${c === "total" ? "总计" : LEVEL_NAMES[c]}收集进度排列`}
+                >
+                  {c === "total" ? "总计" : LEVEL_NAMES[c]}
+                </Link>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
