@@ -6,29 +6,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMENT_CONTENT_LIMIT, COMMENT_PAGESIZE } from "@/lib/config";
-import { timeOpposite } from "@/lib/format";
+import { timeOpposite, TIME_MONTH } from "@/lib/format";
 import type { CommentItem } from "@/lib/queries";
-import { AvatarCell } from "./Cells";
+import { AvatarCell, TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
 import { toast } from "./Toast";
 import { TotalCount } from "./TotalCount";
 
-/** 单条评论（移植 comment/_cell 的应有结构） */
+/** 单条评论（移植 comment/_cell 的应有结构）
+ *  2026-10-13 张老师要求：作者名后显示军衔徽章（与 BBS 楼层 bbs_meta 同款 AvatarCell + TitleBadge） */
 export function CommentCell({ comment }: { comment: CommentItem }) {
   return (
     <div className="comment_cell box">
       <p className="meta">
         {comment.author && (
-          <AvatarCell
-            id={comment.author.id}
-            name={comment.author.chineseName}
-            sex={comment.author.sex}
-            className="author"
-            gender="small"
-            link
-          />
+          <>
+            <AvatarCell
+              id={comment.author.id}
+              name={comment.author.chineseName}
+              sex={comment.author.sex}
+              className="author"
+              gender="small"
+              link
+            />{" "}
+            <TitleBadge title={comment.authorTitle} link />{" "}
+          </>
         )}
-        <span className="create_time">{timeOpposite(comment.createTime)}</span>
+        {/* 2026-10-13 张老师要求：时间前加「评论于」；一个月以内显示相对时间，超过一个月显示具体日期 */}
+        <span className="create_time">评论于 {timeOpposite(comment.createTime, TIME_MONTH)}</span>
       </p>
       <p className="content">{comment.content}</p>
     </div>

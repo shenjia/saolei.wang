@@ -95,6 +95,34 @@ export async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>>
   return new Map(rows.map((r) => [N(r.id), toBrief(r)!]));
 }
 
+/** 作者信息 + 军衔（2026-10-13：评论区人名后显示军衔徽章用；BBS 作者同源复用） */
+export interface UserBriefWithTitle extends UserBrief {
+  /** 18 级军衔（按高级时间绝对阈值评定，distribution 阈值在 assess 内缓存） */
+  title: string;
+  /** 高级时间（秒，0=无成绩）——需要旧版称号（oldTitle）的场景直接复用，免二次查询 */
+  expTime: number;
+}
+
+/** usersByIds 之上补军衔（批量：BBS 楼层作者、录像评论作者共用） */
+export async function usersWithTitles(ids: number[]): Promise<Map<number, UserBriefWithTitle>> {
+  const [briefs, scores] = await Promise.all([
+    usersByIds(ids),
+    ids.length
+      ? prisma.userScores.findMany({
+          where: { id: { in: ids.map(BigInt) } },
+          select: { id: true, expTime: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const expMap = new Map(scores.map((s) => [N(s.id), s.expTime ?? 0]));
+  const out = new Map<number, UserBriefWithTitle>();
+  for (const [id, b] of briefs) {
+    const exp = expMap.get(id) ?? 0;
+    out.set(id, { ...b, title: await title(exp), expTime: exp });
+  }
+  return out;
+}
+
 /** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time，3BV 过小记负（移植 VideoModel::getScores）
  *  2026-09-24 实现迁至 lib/format（纯模块，供客户端行渲染件共用），此处 re-export 兼容旧引用。 */
 export { videoScores } from "./format";
@@ -785,6 +813,8 @@ export interface CommentItem {
   content: string;
   createTime: number;
   author: UserBrief | null;
+  /** 作者军衔（2026-10-13 张老师要求：评论作者也显示军衔，与 BBS 楼层同款徽章） */
+  authorTitle: string;
 }
 
 /** 评论列表：cursor=0 取最新，否则取 id<cursor 的更早评论（移植 Comment::getList + actionMore） */
@@ -802,13 +832,18 @@ export async function getComments(
     orderBy: { id: "desc" },
     take: limit,
   });
-  const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
-  return rows.map((r) => ({
-    id: N(r.id),
-    content: r.content ?? "",
-    createTime: N(r.createTime),
-    author: authors.get(N(r.user)) ?? null,
-  }));
+  // 2026-10-13：作者带军衔（评论人名后显示徽章，与 BBS 楼层同一实现）
+  const authors = await usersWithTitles([...new Set(rows.map((r) => N(r.user)))]);
+  return rows.map((r) => {
+    const a = authors.get(N(r.user)) ?? null;
+    return {
+      id: N(r.id),
+      content: r.content ?? "",
+      createTime: N(r.createTime),
+      author: a,
+      authorTitle: a?.title ?? "",
+    };
+  });
 }
 
 /** 评论总数（「加载更多」括号内显示剩余条数用，过滤条件与 getComments 一致） */

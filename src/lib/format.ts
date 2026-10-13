@@ -98,6 +98,8 @@ export function timeOpposite(
 export const TIME_NEVER = NEVER;
 /** 一年（秒）：动态列表日期口径——一年内显示相对时间，超过一年显示日期（2026-09-23 张老师要求） */
 export const TIME_YEAR = 365 * SECONDS_PER_DAY;
+/** 一个月（30 天，秒）：评论区日期口径——一个月内相对时间，超过则显示日期（2026-10-13 张老师要求） */
+export const TIME_MONTH = 30 * SECONDS_PER_DAY;
 
 /** 距今是否不足一年（用于日期配色：一年内偏亮，一年以上偏暗，2026-09-24 张老师要求） */
 export function isRecent(time: number): boolean {

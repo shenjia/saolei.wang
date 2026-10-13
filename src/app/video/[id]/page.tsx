@@ -14,6 +14,7 @@ import {
 } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { UserPanel } from "@/components/UserCard";
 import { LoginLink } from "@/components/LoginLink";
 import { Board } from "@/components/Board";
 import { BoardPlay } from "@/components/BoardPlay";
@@ -21,6 +22,9 @@ import { CommentForm, CommentList } from "@/components/Comments";
 import { FlopPlayer, PlayButton } from "@/components/FlopPlayer";
 
 export const dynamic = "force-dynamic";
+
+/** 级别 class（与录像列表 VideoRows 的 lv_* 口径一致） */
+const LV_CLS: Record<string, string> = { beg: "lv_beg", int: "lv_int", exp: "lv_exp" };
 
 export default async function VideoViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,6 +44,8 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
 
   const scores = videoScores(video.board3bv, video.realTime);
   const level = video.level as VideoLevel;
+  // 标题成绩按级别配色（2026-10-13 张老师要求：初级绿 / 中级橙 / 高级金，与录像列表 hover 同色阶）
+  const lvCls = LV_CLS[level] ?? "";
 
   return (
     <div id="page" className="two_columns">
@@ -48,11 +54,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         <div className="video_cell box">
           <h1>
             {LEVEL_NAMES[level] ?? video.level}
-            <em>{scoreTime(scores.time)}</em>秒 {video.noflag && <ins>NF</ins>}
-            <span className="id">
-              (ID:<em>{video.id}</em>)
-            </span>
-
+            <em className={lvCls}>{scoreTime(scores.time)}</em>秒 {video.noflag && <ins>NF</ins>}
           </h1>
           <h2>
             <span className="board_3bv">
@@ -150,14 +152,9 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         </div>
       </li>
       <li className="sidebar">
-        {video.author && (
-          <div className="box user_info_cell">
-            <h2>
-              <Link href={`/user/${video.author.id}`}>{video.author.chineseName}</Link>
-            </h2>
-            <p className="title_line">{video.authorTitle}</p>
-          </div>
-        )}
+        {/* 2026-10-13 六轮：右栏由「名字 + 军衔」小盒换成与论坛右栏同款个人卡片 + 实力雷达图
+            （卡片展示录像上传者；审稿人信息仍在正文区不动） */}
+        {video.author && <UserPanel userId={video.author.id} />}
       </li>
     </ul>
     <FlopPlayer />

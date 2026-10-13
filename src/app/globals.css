@@ -528,18 +528,19 @@ body .tabs > a:hover::after {
   cursor: pointer;
 }
 
-/* 录像 ID（h1「秒」后）：前缀与数字同灰同号，不高亮（2026-09-26 张老师要求）
-   —— legacy #video_view .video_cell h1 em 是金色 26px（带 id 选择器），
-   ID 的 em 必须以更高优先级压回小灰字 */
-.video_cell h1 .id {
-  color: #939387;
-  font-size: 14px;
-  font-style: normal;
-  line-height: 39px;
+/* 录像 ID 样式（2026-09-26 加、2026-10-13 张老师要求 h1 不再显示 ID，样式一并删除） */
+
+/* 详情页标题成绩按级别配色（2026-10-13 张老师要求）：初级绿 / 中级橙 / 高级金，
+   与录像列表 hover、排行表同色阶。legacy #video_view .video_cell h1 em 是金色 26px（1,1,2），
+   此处 em.lv_* 提权到 (1,2,2) 压过 */
+#video_view .video_cell h1 em.lv_beg {
+  color: #a6e22e;
 }
-#video_view .video_cell h1 .id em {
-  color: #939387;
-  font-size: 14px;
+#video_view .video_cell h1 em.lv_int {
+  color: #f79646;
+}
+#video_view .video_cell h1 em.lv_exp {
+  color: #fdc61d;
 }
 
 /* 按钮内前置矢量图标（2026-09-26 张老师要求）：播放/下载按钮文字前的图形，
@@ -659,6 +660,10 @@ body #video_view .video_cell .playable {
   margin: 0 0 4px;
   font-size: 13px;
   color: #b1b1a4;
+}
+/* 评论作者军衔（2026-10-13）：BBS 楼层吃 #home .title em 的 14px，评论区不在 #home 内，需显式对齐 */
+.comment_cell .meta .title em {
+  font-size: 14px;
 }
 .comment_cell .create_time {
   margin-left: 10px;
@@ -1172,178 +1177,213 @@ span.title[data-tip]:hover::after {
   font-size: 13px;
 }
 
-/* ---------- 个人信息卡片（2026-09-23 重设计：旧版卡片结构 + 新版首页编排） ----------
-   横排（默认，BBS 楼层）：左头像+按钮，右姓名/名次/纪录表/最近登录
-   竖排（.v，首页右栏窄容器）：头像+按钮居中在上，信息块通栏在下 */
+/* ---------- 侧栏个人卡片（2026-10-13 六轮定稿，设计稿 design/sidebar-panel.html） ----------
+   左列：正方形照片（点击进主页）；
+   右列：姓名 + 性别图标 + 军衔（直接复用首页 AvatarCell + TitleBadge，在 #page 上下文内
+     渲染与首页「入伍新兵 / 国内TOP10」人名行完全一致：姓名 16px 灰、性别 8x8、徽章 1em、
+     军衔条件文案由 TitleBadge 的 data-tip 走 hover 气泡），其下地区 / 全国排行
+     （与用户主页 #user_view .rank_label .ranks 同构：两行 rank_line、13px/#888、
+     名次数字 #e6db74 加粗正体；整块与左侧头像等高 74px 上下顶底对齐）；
+   分隔线以下：四级纪录（照搬用户主页 .scores 的 ScoreTime / Score3bvs 渲染，字号缩小一档）
+     + 最近登录。
+   本轮下线：人气 / 今日人气、「进入TA的地盘」按钮、旧版称号、(id)。
+   盒内容宽 210px；论坛 #bbs_op_card 与录像详情页右栏盒 padding 30px → 外径 272px，与首页右栏一致。 */
 .user_card {
-  background: #333330;
-  border: 1px solid #555550;
-  padding: 10px;
   width: 100%;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #a59f85;
 }
-.user_card .uc_body {
+.user_card .ucd_top {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
 }
-.user_card .uc_left {
+.user_card .ucd_left {
   flex: none;
-  width: 72px;
+  width: 74px; /* 72 内容 + 左右各 1px 边框，供右列对齐 */
 }
-.user_card .uc_avatar {
+.user_card .ucd_avatar {
   display: block;
   width: 72px;
   height: 72px;
   object-fit: cover;
   border: 1px solid #555550;
 }
-.user_card .uc_home {
-  display: block;
-  margin-top: 6px;
-  background: #49483e;
-  border: 1px solid #555550;
-  color: #f8f8f2;
-  text-align: center;
-  padding: 4px 0;
-  font-size: 11px; /* 6 字按钮须在 72px 头像列内不折行 */
-  white-space: nowrap;
-}
-.user_card .uc_home:hover {
-  background: #555550;
-  color: #a6e22e;
-}
-.user_card .uc_right {
+.user_card .ucd_right {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #a59f85;
+  /* 与左侧头像（74px）上下对齐：固定等高 + 两端顶底，名字贴头像顶、排行贴头像底 */
+  align-self: flex-start;
+  height: 74px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
-.user_card .uc_name {
-  color: #fdc61a;
+/* 名字行：字号/颜色/性别图标/军衔徽章一律沿用站点既有样式（与首页人名行同款），此处只清默认外边距并控行高 */
+.user_card .ucd_name {
+  margin: 0;
+  line-height: 1.5;
+}
+/* 名字行军衔：与首页人名行同款（文字 14px、徽章 1em=14px）。
+   论坛页卡片在 #home 内吃到 legacy 的 #home .title em{14px}，录像页卡片不在 #home
+   会回落 16px——两页显式对齐（2026-10-13 张老师反馈军衔偏大） */
+#page .user_card .ucd_name .title em,
+#page .user_card .ucd_name .title .rank-badge {
+  font-size: 14px;
+}
+/* 地区 / 全国排行：与用户主页 #user_view .info .rank_label .ranks 同款
+   （两行、13px、行高 19.5px、文字 #888、名次数字 Monokai 黄 #e6db74 加粗正体） */
+.user_card .ranks {
+  display: block;
+  margin-top: 8px;
+  color: #888;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.user_card .ranks .rank_line {
+  display: block;
+  font-size: 13px;
+}
+.user_card .ranks em {
+  font-style: normal;
   font-weight: bold;
-  line-height: 1.4;
+  color: #e6db74;
 }
-.user_card .uc_id {
-  color: #75715e;
-  font-weight: normal;
+.user_card .ucd_delta {
   font-size: 11px;
-}
-.user_card .uc_title {
   margin-left: 4px;
 }
-.user_card .uc_sex {
-  color: #66d9ef;
-  margin-left: 2px;
-  font-size: 11px;
-}
-.user_card .uc_rank em {
-  color: #f8f8f2;
-  font-weight: bold;
-}
-.user_card .uc_delta {
-  font-size: 11px;
-}
-.user_card .uc_delta.up {
+.user_card .ucd_delta.up {
   color: #f92672; /* 中国惯例红涨：名次进步 */
 }
-.user_card .uc_delta.down {
+.user_card .ucd_delta.down {
   color: #a6e22e; /* 绿跌：名次退步 */
 }
-.user_card .uc_delta.new {
-  color: #66d9ef;
+.user_card .ucd_hr {
+  border: 0;
+  border-top: 1px solid #49483e;
+  margin: 10px 0;
 }
-/* 四级纪录表：标签 / 时间(黄) | 3BVS(灰) 列对齐，参照旧版卡片；
-   width:auto 紧凑排布，避免 100% 宽把列距拉散 */
-.user_card .uc_scores {
-  margin-top: 4px;
-  width: auto;
-  font-size: 12px;
+/* 四级纪录：照搬用户主页 .scores（表头 / 单位「秒」「3BV/s」 / 数字 / 相对日期 / 「?」占位 /
+   hover 变绿），单位与数字各缩一档（详情页 12/16px → 卡片 9.5/12.5px，实测行宽精确贴合 210px）；
+   级别灰阶沿用详情页：初 #939387 → 中 #b1b1a4 → 高 #cfcfc2 → 总计金 #e6db74。
+   ⚠️ 这一段必须带 #page 前缀：legacy 的 #page .score_time / #page .score_time em 是 1 id 特异性
+   （放在 public/styles/legacy-2013.css），裸 .user_card 选择器压不住——2026-10-13 实测被撑到
+   14/20px、表格溢出到 304px。改这里时别把 #page 去掉。 */
+#page .user_card .scores {
+  width: 100%;
+  border-collapse: collapse;
 }
-.user_card .uc_scores th {
-  color: #a59f85;
-  font-weight: normal;
-  text-align: left;
-  padding: 1px 8px 1px 0;
-  white-space: nowrap;
-}
-.user_card .uc_scores td {
-  padding: 1px 0;
-  white-space: nowrap;
-}
-.user_card .uc_scores td.t {
-  color: #fdc61a;
-  font-weight: bold;
-}
-.user_card .uc_scores td.sep {
-  color: #555550;
-  padding: 0 4px;
-}
-.user_card .uc_scores td.b {
-  color: #75715e;
-}
-.user_card .uc_login {
-  margin-top: 4px;
-  color: #75715e;
-}
-/* 竖排（窄容器）：头像+按钮居中在上，信息通栏在下 */
-.user_card.v .uc_body {
-  flex-direction: column;
-  align-items: stretch;
-}
-.user_card.v .uc_left {
-  width: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.user_card.v .uc_avatar {
-  width: 64px;
-  height: 64px;
-}
-.user_card.v .uc_home {
-  flex: 1;
-  margin-top: 0;
-}
-.user_card.v .uc_right {
-  margin-top: 8px;
-}
-/* BBS 主题页：页面级双栏（2026-09-23 张老师要求：楼主卡片是独立右栏板块，
-   不嵌在楼层里；沿用首页 two_columns 版式，右栏盒宽 210） */
-#bbs_op_card {
-  padding: 16px 12px;
-}
-#bbs_op_card .user_card {
-  background: none;
-  border: none;
+#page .user_card .scores th {
+  width: 3em;
+  height: 26px;
   padding: 0;
-  box-shadow: none;
+  color: #75715e;
+  font-size: 10px;
+  font-weight: normal;
+  line-height: 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+#page .user_card .scores td {
+  padding: 0;
+  white-space: nowrap;
+}
+#page .user_card .score_time,
+#page .user_card .score_3bvs {
+  display: inline-block;
+  margin-right: 4px;
+  color: #636359;
+  font-size: 9.5px;
+  line-height: 16px;
+}
+#page .user_card .score_time em,
+#page .user_card .score_3bvs em {
+  font-style: normal;
+  font-weight: bold;
+  font-size: 12.5px;
+  line-height: 16px;
+  color: #b1b1a4;
+}
+#page .user_card .scores .beg em {
+  color: #939387;
+}
+#page .user_card .scores .int em {
+  color: #b1b1a4;
+}
+#page .user_card .scores .exp em {
+  color: #cfcfc2;
+}
+#page .user_card .scores .sum em {
+  color: #e6db74;
+}
+#page .user_card .score_time ins,
+#page .user_card .score_3bvs ins {
+  text-decoration: none;
+  color: #fdc61a;
+  cursor: help;
+}
+#page .user_card .score_time ins.null,
+#page .user_card .score_3bvs ins.null {
+  color: #636359;
+}
+/* 不被承认的 3BV/s（del）：颜色与字号跟同级数字一致，不继承 legacy 的 20px */
+#page .user_card .score_3bvs del {
+  color: #636359;
+  font-size: 12.5px;
+  line-height: 16px;
+}
+#page .user_card .score_time a,
+#page .user_card .score_3bvs a {
+  color: inherit;
+}
+#page .user_card .score_time a:hover em,
+#page .user_card .score_3bvs a:hover em {
+  color: #a6e22e;
+}
+.user_card .ucd_login {
+  margin: 10px 0 0;
+  color: #75715e;
+  font-size: 11px;
+}
+/* 无数据占位（未加入地区排行 / 未加入排行）：压过排行文字色，须写在最后 */
+.user_card .ranks .ucd_null {
+  color: #75715e;
+  font-weight: normal;
+}
+
+/* 侧栏「实力」雷达图板块（论坛 / 录像详情页右栏，与用户主页 .radar 同款图示）——
+   222px 图形在 210px 盒内居中：负 margin 抵掉两侧留白 */
+#page .sidebar .radar .chart {
+  display: block;
+  margin: -15px;
+  width: 222px;
+  height: 222px;
+}
+
+/* BBS 主题页右栏盒子：padding 30px → 盒内容宽 210、外径 272，与首页右栏板块（#newbie 等）一致 */
+#bbs_op_card {
+  padding: 30px;
 }
 .bbs_post .bbs_content {
   width: 100%;
 }
-/* side 变体：头像+按钮竖排居中在上，信息块通栏在下 */
-.user_card.side .uc_body {
-  flex-direction: column;
-  align-items: center;
+
+/* ---------- 录像详情页右栏加宽（2026-10-13 六轮，配合侧栏个人卡片 + 雷达图） ----------
+   legacy 为 #page.two_columns li.sidebar{width:222px} / .box{width:192px}（盒外径 254），
+   比首页 / 论坛右栏窄 34px，卡片放进来会挤。此处以更高特异性统一为 288 / 盒内容 210
+   （外径 272），与首页、论坛右栏完全同几何；主栏相应收 2px（672→670，视觉无感）。
+   ⚠️ 特异性 2 id 会压过 ≤768px 媒体查询里的 body #page.two_columns li.sidebar（1 id）——
+   移动端列表已同步补 #video_view 条目，改这里时别忘一起改。 */
+#page #video_view > li.sidebar {
+  width: 288px;
 }
-.user_card.side .uc_left {
-  width: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+#page #video_view > li.main {
+  width: calc(100% - 290px); /* 留 2px 防子像素舍入导致侧栏掉行 */
+  min-width: 0;
 }
-.user_card.side .uc_avatar {
-  width: 96px;
-  height: 96px;
-}
-.user_card.side .uc_home {
-  width: 100%;
-  margin-top: 6px;
-}
-.user_card.side .uc_right {
-  width: 100%;
-  margin-top: 8px;
+#page #video_view > li.sidebar .box {
+  width: 210px;
 }
 
 .reply_form textarea,
@@ -3269,6 +3309,8 @@ body #page {
   /* 主栏/侧栏去浮动、整行排列——逐条命中 legacy 与本文件的提权规则 */
   body #page.two_columns li.main,
   body #page.two_columns li.sidebar,
+  body #page #video_view > li.main,
+  body #page #video_view > li.sidebar,
   body #page #home > li.main,
   body #page #home > li.sidebar,
   body #page.ranking_old #home > li.main,
@@ -3277,8 +3319,9 @@ body #page {
     width: auto;
     min-width: 0;
   }
-  /* 侧栏盒子解除固定宽（192/210/288 三处） */
+  /* 侧栏盒子解除固定宽（192/210/288 四处） */
   body #page.two_columns li.sidebar .box,
+  body #page #video_view > li.sidebar .box,
   body #page #home > li.sidebar .box,
   body #page.ranking_old #home > li.sidebar .box {
     width: auto;

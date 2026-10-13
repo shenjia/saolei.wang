@@ -1,8 +1,7 @@
 // BBS 论坛（移植 2008 版 BBS/*：板块/主题/回复/置顶/精华/锁定/移动/删除 + UBB 渲染）
 
 import { prisma } from "./db";
-import { usersByIds, type UserBrief } from "./queries";
-import { title as assessTitle } from "./assess";
+import { usersWithTitles, type UserBrief } from "./queries";
 import { oldTitle, type OldTitle } from "./oldtitle";
 import { NEWS_TYPE } from "./config";
 import { publishNews } from "./news";
@@ -184,22 +183,19 @@ export interface BbsAuthor extends UserBrief {
   old: OldTitle;
 }
 
-/** usersByIds 之上补军衔与旧版称号（distribution 阈值在 assess 内缓存） */
+/** 军衔取数复用 queries.usersWithTitles（2026-10-13 提取，评论区同源），此处再补旧版称号 */
 async function authorsWithTitles(ids: number[]): Promise<Map<number, BbsAuthor>> {
-  const [briefs, scores] = await Promise.all([
-    usersByIds(ids),
-    ids.length
-      ? prisma.userScores.findMany({
-          where: { id: { in: ids.map(BigInt) } },
-          select: { id: true, sumTime: true, expTime: true },
-        })
-      : Promise.resolve([]),
-  ]);
-  const sumMap = new Map(scores.map((s) => [N(s.id), { sum: s.sumTime ?? 0, exp: s.expTime ?? 0 }]));
+  const base = await usersWithTitles(ids);
   const out = new Map<number, BbsAuthor>();
-  for (const [id, b] of briefs) {
-    const sc = sumMap.get(id) ?? { sum: 0, exp: 0 };
-    out.set(id, { ...b, title: await assessTitle(sc.exp), old: oldTitle(sc.exp, b.sex) });
+  for (const [id, b] of base) {
+    out.set(id, {
+      id: b.id,
+      chineseName: b.chineseName,
+      englishName: b.englishName,
+      sex: b.sex,
+      title: b.title,
+      old: oldTitle(b.expTime, b.sex),
+    });
   }
   return out;
 }

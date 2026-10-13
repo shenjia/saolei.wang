@@ -10,8 +10,7 @@ import { Pager } from "@/components/Pager";
 import { LoginLink } from "@/components/LoginLink";
 import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
-import { UserCard } from "@/components/UserCard";
-import { getUserCards } from "@/lib/usercard";
+import { UserPanel } from "@/components/UserCard";
 import { BbsReadMark } from "@/components/BbsRead";
 
 export const dynamic = "force-dynamic";
@@ -32,10 +31,6 @@ export default async function BbsTitlePage({
   if (!post) notFound();
   const { replies, total, pageSize } = await getReplies(postId, page);
   const admin = session ? isManager(session.role) : false;
-  // 每楼作者信息卡片（楼层的与右栏楼主的共用一份缓存）
-  const cards = await getUserCards(
-    [post.author?.id ?? 0, ...replies.map((r) => r.author?.id ?? 0)].filter((x) => x > 0)
-  );
 
   return (
     <div id="page" className="two_columns">
@@ -116,15 +111,8 @@ export default async function BbsTitlePage({
           </div>
         </li>
         <li className="sidebar">
-          {post.author && cards.get(post.author.id) && (
-            <div id="bbs_op_card" className="box">
-              <UserCard
-                card={cards.get(post.author.id)!}
-                own={session?.uid === post.author.id}
-                side
-              />
-            </div>
-          )}
+          {/* 右栏楼主个人卡片 + 实力雷达图（2026-10-13 六轮：与录像详情页共用同一面板组件） */}
+          {post.author && <UserPanel userId={post.author.id} cardId="bbs_op_card" />}
         </li>
       </ul>
     </div>

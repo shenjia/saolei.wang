@@ -1,85 +1,132 @@
-// 个人信息卡片（2026-09-23 张老师要求，参照旧版「查看信息」卡片 + 新版个人首页编排重设计）
-// 布局（横排，默认）：左列头像 + 「进入TA的地盘」按钮叠放；右列姓名(Id)称号GG、
-//   全国名次(日升降)、四级纪录表（时间黄 | 3BVS 灰，列对齐）、最近登录
-// 竖排（vertical，窄容器如首页右栏「我的地盘」）：头像+按钮在上居中，信息块通栏在下
+// 侧栏个人面板（2026-10-13 六轮定稿，设计稿 design/sidebar-panel.html）
+// 布局：左列正方形照片（点击进主页）｜ 右列姓名 + 性别图标（首页同款 AvatarCell）
+//   + 军衔（TitleBadge，条件文案走 hover 气泡），其下地区/全国排行
+//   （与用户主页 #user_view .ranks 同构：两行 rank_line、13px / #888 /
+//   名次数字 #e6db74 加粗正体；整块与左侧头像上下等高齐平）；
+//   分隔线以下为四级纪录（直接复用用户主页的 ScoreTime / Score3bvs 渲染，
+//   级别灰阶与 hover 变色同源，数字可点进对应录像）+ 最近登录。
+// 卡片下方可跟一个「实力」雷达图板块（UserPanel 统一组装，与用户主页同款）。
+// 旧版「进入TA的地盘」按钮、人气 / 今日人气、旧版称号、(id) 均已下线。
+// 用于 /bbs/[id] 右栏与 /video/[id] 右栏。
 
 import Link from "next/link";
-import type { UserCardData, UserCardScore } from "@/lib/usercard";
+import type { UserCardData } from "@/lib/usercard";
+import { getUserCard } from "@/lib/usercard";
+import { getRadarData } from "@/lib/radar";
+import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
+import { RadarChart } from "./RadarChart";
 import { formatDate } from "@/lib/format";
+import { areaDisplay, LEVELS, LEVEL_NAMES } from "@/lib/config";
 
-function ScoreRow({ label, s }: { label: string; s: UserCardScore }) {
+export function UserCard({ card }: { card: UserCardData }) {
+  const { rank, delta } = card;
   return (
-    <tr>
-      <th>{label}</th>
-      <td className="t">{s.time > 0 ? (s.time / 1000).toFixed(2) : "?"}</td>
-      <td className="sep">|</td>
-      <td className="b">{s.bvs > 0 ? (s.bvs / 1000).toFixed(2) : "?"}</td>
-    </tr>
+    <div className="user_card">
+      <div className="ucd_top">
+        <div className="ucd_left">
+          <Link
+            className="avatar_link"
+            href={`/user/${card.id}`}
+            target="_blank"
+            title={`进入 ${card.chineseName} 的地盘`}
+          >
+            <img className="ucd_avatar" src={card.avatarUrl} alt={card.chineseName} />
+          </Link>
+        </div>
+        <div className="ucd_right">
+          {/* 姓名 + 性别 + 军衔：与首页「入伍新兵 / 国内TOP10」同一套组件，显示方式天然一致
+              （军衔条件文案由 TitleBadge 的 data-tip 在 hover 时显示） */}
+          <p className="ucd_name">
+            <AvatarCell id={card.id} name={card.chineseName} sex={card.sex} gender="small" link />
+            <TitleBadge title={card.militaryTitle} link />
+          </p>
+          {/* 地区 / 全国排名：与用户主页 #user_view .info .rank_label .ranks 完全同构
+              （两行 rank_line、13px、文字 #888、名次数字 Monokai 黄加粗正体；
+              省份行在前、全国行在后），紧随名字下方，整体与左侧头像上下齐平 */}
+          <div className="ranks">
+            {card.areaPos !== null ? (
+              <span className="rank_line">
+                {areaDisplay(card.area)}第 <em>{card.areaPos}</em> 名
+              </span>
+            ) : (
+              <span className="rank_line ucd_null">未加入地区排行</span>
+            )}
+            {rank !== null ? (
+              <span className="rank_line">
+                全国第 <em>{rank}</em> 名
+                {delta !== null && delta > 0 ? (
+                  <span className="ucd_delta up">↑{delta}</span>
+                ) : delta !== null && delta < 0 ? (
+                  <span className="ucd_delta down">↓{-delta}</span>
+                ) : null}
+              </span>
+            ) : (
+              <span className="rank_line ucd_null">未加入排行</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <hr className="ucd_hr" />
+
+      {/* 四级纪录：照搬用户主页 .scores 的渲染（ScoreTime / Score3bvs），本单位字号缩小一档 */}
+      <table className="scores" cellPadding={0} cellSpacing={0}>
+        <tbody>
+          {LEVELS.map((level) => {
+            const timeRec = card.scores[`${level}_time`];
+            const bvsRec = card.scores[`${level}_3bvs`];
+            return (
+              <tr key={level} className={level}>
+                <th>{LEVEL_NAMES[level]}</th>
+                <td>
+                  <ScoreTime
+                    score={timeRec?.score ?? null}
+                    videoId={timeRec?.videoId ?? null}
+                    date={timeRec?.date ?? null}
+                    className={level}
+                  />
+                </td>
+                <td>
+                  <Score3bvs
+                    score={bvsRec?.score ?? null}
+                    videoId={bvsRec?.videoId ?? null}
+                    date={bvsRec?.date ?? null}
+                    className={level}
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <p className="ucd_login">
+        最近登录：{card.lastLoginTime > 0 ? formatDate(card.lastLoginTime, "Y年n月j日") : "?"}
+      </p>
+    </div>
   );
 }
 
-export function UserCard({
-  card,
-  own = false,
-  vertical = false,
-  side = false,
-}: {
-  card: UserCardData;
-  own?: boolean;
-  vertical?: boolean;
-  /** BBS 楼层右侧独立卡：头像居中在最上，信息块通栏在下（2026-09-23 张老师要求） */
-  side?: boolean;
-}) {
-  const cls = side ? "user_card side" : vertical ? "user_card v" : "user_card";
+/**
+ * 侧栏个人面板（服务端取数 + 组装）：个人卡片盒 + 「实力」雷达图盒。
+ * 论坛主题详情页（cardId="bbs_op_card"）与录像详情页共用。
+ * 没上传过录像的玩家不渲染雷达板块（与用户主页同门槛）。
+ */
+export async function UserPanel({ userId, cardId }: { userId: number; cardId?: string }) {
+  const card = await getUserCard(userId);
+  if (!card) return null;
+  const radar = card.hasVideos ? await getRadarData(card.scores) : [];
   return (
-    <div className={cls}>
-      <div className="uc_body">
-        <div className="uc_left">
-          <img className="uc_avatar" src={card.avatarUrl} alt={card.chineseName} />
-          <Link className="uc_home" href={`/user/${card.id}`} target="_blank">
-            {own ? "进入我的地盘" : "进入TA的地盘"}
-          </Link>
-        </div>
-        <div className="uc_right">
-          <p className="uc_name">
-            {card.chineseName}
-            <span className="uc_id"> (id: {card.id})</span>
-            <span className="uc_title" style={{ color: card.title.color }}>
-              {card.title.name}
-            </span>
-            <span className="uc_sex">{card.sex ? "GG" : "mm"}</span>
-          </p>
-          <p className="uc_rank">
-            {card.rank ? (
-              <>
-                全国第 <em>{card.rank}</em> 位{" "}
-                {card.delta === null ? (
-                  <span className="uc_delta new">新上榜</span>
-                ) : card.delta > 0 ? (
-                  <span className="uc_delta up">↑{card.delta}</span>
-                ) : card.delta < 0 ? (
-                  <span className="uc_delta down">↓{-card.delta}</span>
-                ) : (
-                  <span className="uc_delta">-</span>
-                )}
-              </>
-            ) : (
-              "未加入排行"
-            )}
-          </p>
-          <table className="uc_scores" cellPadding={0} cellSpacing={0}>
-            <tbody>
-              <ScoreRow label="初级" s={card.beg} />
-              <ScoreRow label="中级" s={card.int} />
-              <ScoreRow label="高级" s={card.exp} />
-              <ScoreRow label="总计" s={card.sum} />
-            </tbody>
-          </table>
-          <p className="uc_login">
-            最近登录：{card.lastLoginTime > 0 ? formatDate(card.lastLoginTime, "Y年n月j日") : "?"}
-          </p>
-        </div>
+    <>
+      <div id={cardId} className="box">
+        <UserCard card={card} />
       </div>
-    </div>
+      {card.hasVideos && (
+        <div className="radar box">
+          <h2>实力</h2>
+          <RadarChart data={radar} />
+        </div>
+      )}
+    </>
   );
 }

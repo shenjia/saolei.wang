@@ -1,19 +1,22 @@
-// 个人信息卡片数据（2026-09-23 张老师要求，参照旧版右上角卡片截图）：
-// 头像 + 姓名(Id) + 旧版称号GG/mm + 全国名次(日升降) + 四级纪录 + 最近登录 + 进入我的地盘
-// 首页登录后替换「每日一星」版块；BBS 每楼正文右侧显示作者卡片
+// 侧栏个人卡片数据（2026-10-13 六轮定稿，设计稿 design/sidebar-panel.html）
+// 卡片结构：照片（点击进主页）｜ 右侧姓名 + 性别图标 + 军衔、其下地区/全国排行（与头像齐平）
+//   ｜ 分隔线以下四级纪录（照搬用户主页 ScoreTime / Score3bvs 渲染）+ 最近登录；
+//   卡片下方另有「实力」雷达图板块，由页面按 hasVideos 决定是否渲染（与用户主页同规则）。
+// 数据来源：getUserDetail（用户 + 成绩 + 录像统计，与用户主页完全同一口径）
+//   + getUserRanks（地区/全国名次）+ rank_snapshot（今日升降）。
+// 2026-10-13 六轮起卡片不再显示人气，getClicks 查询一并下线。
 
 import { prisma } from "./db";
-import { usersByIds } from "./queries";
-import { oldTitle, type OldTitle } from "./oldtitle";
+import { getUserDetail, getUserRanks } from "./queries";
 import { resolveAvatarUrl } from "./avatar";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
+/** 单级纪录：成绩原始值（×1000 存储，null=无）、对应录像 id 与日期（sum 级无录像 → null） */
 export interface UserCardScore {
-  /** 毫秒，0=无成绩 */
-  time: number;
-  /** ×1000，0=无成绩 */
-  bvs: number;
+  score: number | null;
+  videoId: number | null;
+  date: number | null;
 }
 
 export interface UserCardData {
@@ -22,16 +25,19 @@ export interface UserCardData {
   sex: number;
   /** 头像 URL（本地 /images/player/{id}.jpg、OAuth 外链或默认 no.jpg） */
   avatarUrl: string;
-  /** 旧版称号（雷帝/雷圣/状元…按高级纪录+性别） */
-  title: OldTitle;
-  /** 全国排名（sum_time 总榜名次，null=未上榜） */
+  /** 军衔（高级时间绝对阈值，与首页/排行榜/军衔页同口径） */
+  militaryTitle: string;
+  /** 全国名次（ROW_NUMBER 口径，与用户主页「全国第 X 名」、rank_snapshot 同源）；null=未上榜 */
   rank: number | null;
-  /** 日升降（正=进步名次数，null=今日新上榜） */
+  /** 日升降（正=进步名次数，负=退步，null=昨日无快照即今日新上榜） */
   delta: number | null;
-  beg: UserCardScore;
-  int: UserCardScore;
-  exp: UserCardScore;
-  sum: UserCardScore;
+  /** 地区（军区）名；areaPos=null 表示未加入地区排行（无地区/多地区） */
+  area: string;
+  areaPos: number | null;
+  /** 四级成绩（键 `${level}_${order}`，与 getUserDetail 同构，直接喂 ScoreTime / Score3bvs） */
+  scores: Record<string, UserCardScore>;
+  /** 是否上传过录像（决定是否显示「实力」雷达板块，与用户主页同门槛） */
+  hasVideos: boolean;
   /** Unix 秒，0=未记录 */
   lastLoginTime: number;
 }
@@ -42,62 +48,46 @@ function avatarUrl(id: number, avatar: string): string {
   return resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "/images/player/no.jpg");
 }
 
-/** 批量取卡片数据（BBS 一页多楼层复用；首页单人也走这里） */
-export async function getUserCards(ids: number[]): Promise<Map<number, UserCardData>> {
-  const out = new Map<number, UserCardData>();
-  const uniq = [...new Set(ids)].filter((x) => x > 0);
-  if (!uniq.length) return out;
-
-  // 全国名次实时算（快照是日粒度，当天新破纪录的玩家快照里还没有）；升降=昨日快照名次−当前名次
-  const [briefs, scores, users, ranks, ySnaps] = await Promise.all([
-    usersByIds(uniq),
-    prisma.userScores.findMany({ where: { id: { in: uniq.map(BigInt) } } }),
-    prisma.user.findMany({
-      where: { id: { in: uniq.map(BigInt) } },
-      select: { id: true, avatar: true, lastLoginTime: true },
-    }),
-    prisma.$queryRawUnsafe<{ id: bigint; r: number }[]>(
-      `SELECT s.id, (SELECT COUNT(*) FROM user_scores t WHERE t.sum_time > 0 AND t.sum_time < s.sum_time) + 1 r
-       FROM user_scores s WHERE s.sum_time > 0 AND s.id IN (${uniq.map(Number).join(",")})`
-    ),
+/**
+ * 侧栏个人卡片数据（单用户，2026-10-13 六轮定稿）。
+ * 论坛右栏（楼主）与录像详情页右栏（录像作者）共用；楼层内的作者信息走 AvatarCell（不拉卡片），
+ * 避免一页 20 楼的额外开销。
+ */
+export async function getUserCard(id: number): Promise<UserCardData | null> {
+  const [detail, ranks, ySnaps] = await Promise.all([
+    getUserDetail(id),
+    // 地区名次（无地区/多地区玩家 areaPos=null）
+    getUserRanks(id),
     prisma.rankSnapshot.findMany({
-      where: { user: { in: uniq.map(BigInt) }, date: yesterdayStr() },
-      select: { user: true, sumTimeRank: true },
+      where: { user: BigInt(id), date: yesterdayStr() },
+      select: { sumTimeRank: true },
     }),
   ]);
-  const scoreMap = new Map(scores.map((s) => [N(s.id), s]));
-  const userMap = new Map(users.map((u) => [N(u.id), u]));
-  // COUNT(*) 在 MySQL 返回 BIGINT：r 运行时实为 BigInt，必须转 number（否则 API JSON 序列化炸）
-  const rankMap = new Map(ranks.map((r) => [N(r.id), N(r.r)]));
-  const yMap = new Map(ySnaps.map((s) => [N(s.user), s.sumTimeRank]));
+  if (!detail) return null;
 
-  for (const [id, b] of briefs) {
-    const sc = scoreMap.get(id);
-    const u = userMap.get(id);
-    const rank = rankMap.get(id) ?? null;
-    const yRank = yMap.get(id);
-    out.set(id, {
-      id,
-      chineseName: b.chineseName,
-      sex: b.sex,
-      avatarUrl: avatarUrl(id, u?.avatar ?? ""),
-      // 雷帝 = 全国第一名（与排行榜称号口径一致）
-      title: oldTitle(N(sc?.expTime), b.sex, rank === 1),
-      rank,
-      delta: rank !== null ? (yRank ? yRank - rank : null) : null,
-      beg: { time: N(sc?.begTime), bvs: N(sc?.beg3bvs) },
-      int: { time: N(sc?.intTime), bvs: N(sc?.int3bvs) },
-      exp: { time: N(sc?.expTime), bvs: N(sc?.exp3bvs) },
-      sum: { time: N(sc?.sumTime), bvs: N(sc?.sum3bvs) },
-      lastLoginTime: N(u?.lastLoginTime),
-    });
+  const { user, stat } = detail;
+  // 名次与升降：全国名次取窗口函数口径（与用户主页一致），升降与 rank_snapshot 同源
+  const national = ranks?.national ?? null;
+  const yRank = ySnaps.length ? N(ySnaps[0].sumTimeRank) : null;
+  const scores: Record<string, UserCardScore> = {};
+  for (const [key, rec] of Object.entries(detail.scores)) {
+    scores[key] = { score: rec.score, videoId: rec.videoId, date: rec.date };
   }
-  return out;
-}
 
-export async function getUserCard(id: number): Promise<UserCardData | null> {
-  const cards = await getUserCards([id]);
-  return cards.get(id) ?? null;
+  return {
+    id,
+    chineseName: user.chineseName,
+    sex: user.sex,
+    avatarUrl: avatarUrl(id, user.avatar),
+    militaryTitle: detail.title,
+    rank: national,
+    delta: national !== null ? (yRank !== null ? yRank - national : null) : null,
+    area: ranks?.area ?? "",
+    areaPos: ranks?.areaPos ?? null,
+    scores,
+    hasVideos: !!stat && stat.begVideos + stat.intVideos + stat.expVideos > 0,
+    lastLoginTime: user.lastLoginTime,
+  };
 }
 
 /** 顶部导航右侧用户菜单用：只取姓名 + 头像 URL（不拉成绩/名次，避免每页额外开销） */
