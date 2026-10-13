@@ -241,28 +241,26 @@ export function UploadForm() {
           </div>
         ))}
       </div>
-      {items.length > 0 && (
-        <p style={{ textAlign: "center" }}>
-          <button
-            type="button"
-            className={`button big ${!busy && uploadable.length > 0 ? "active" : "disabled"}`}
-            disabled={busy || uploadable.length === 0}
-            onClick={startUpload}
-          >
-            {seq ? `上传中（${seq[0]}/${seq[1]}）…` : "开始上传"}
-          </button>
-          {!busy && (
-            <button
-              type="button"
-              className="button small"
-              style={{ marginLeft: 12 }}
-              onClick={() => setItems([])}
-            >
-              清空列表
-            </button>
-          )}
-        </p>
-      )}
+      {/* 按钮常驻：无文件 / 上传中时置灰不可点 */}
+      <p style={{ textAlign: "center" }}>
+        <button
+          type="button"
+          className={`button big ${!busy && uploadable.length > 0 ? "active" : "disabled"}`}
+          disabled={busy || uploadable.length === 0}
+          onClick={startUpload}
+        >
+          {seq ? `上传中（${seq[0]}/${seq[1]}）…` : "开始上传"}
+        </button>
+        <button
+          type="button"
+          className={`button small ${!busy && items.length > 0 ? "" : "disabled"}`}
+          style={{ marginLeft: 12 }}
+          disabled={busy || items.length === 0}
+          onClick={() => setItems([])}
+        >
+          清空列表
+        </button>
+      </p>
     </div>
   );
 }
