@@ -105,7 +105,9 @@
   `TEXT_AI_ENABLED=false` 可关）：AI 判 review → 该条转「待审」（前台 `where status=0` 自动不展示），
   并回退冗余计数、撤下这条内容的动态。原则：**AI 永不自动删除**（review 只转人工）、**失败一律放行**
   （超时/报错保持公开 + 告警——异步链路里 AI 故障若转待审，会让全站内容集体消失）。后台在「评论管理 /
-  论坛管理」按「待审」筛选并「通过」（`comment.setStatus` / `bbs.setPost` / `bbs.setReplyStatus`，均收 0/5/-1）
+  论坛管理」按「待审」筛选并「通过」（`comment.setStatus` / `bbs.setPost` / `bbs.setReplyStatus`，均收 0/5/-1）。
+  转待审时把判定摘要（`类别：理由`）写进三表新增的 `ai_reason` 列（varchar 200 nullable），
+  后台待审行以橙字 `.ai_reason` 展示（2026-10-13）
   - ⚠️ 撤动态必须按 `news.details_data` 里的 `cid`（= 内容 id）精确匹配：`publishNews` 的 details 里都写了 `cid`。
     只按 `createTime` 会误删同一用户在同一目标下**同秒**发的另一条动态（2026-10-13 实测踩到）
   - ⚠️ 状态语义 0 正常 / 5 待审 / -1 删除，`comment`/`bbs_post`/`bbs_reply` 三表通用；冗余计数口径见

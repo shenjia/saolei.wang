@@ -9,12 +9,27 @@
 
 import { prisma } from "./db";
 import { CONTENT_STATUS, NEWS_TYPE } from "./config";
-import { moderateText, textModerationEnabled } from "./text-moderate";
+import { moderateText, textModerationEnabled, TEXT_CATEGORY_NAMES } from "./text-moderate";
+import type { TextModerationResult } from "./text-moderate";
 
 export type ContentKind = "comment" | "bbs_post" | "bbs_reply";
 
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 const B = (v: bigint | number): bigint => BigInt(v);
+
+/**
+ * 存库的判定摘要：`类别：理由`，供管理后台在待审行上直接展示。
+ * 长度对齐 ai_reason 列 varchar(200)。
+ * AI 的 reason 有时直接就是类别名（如「广告推广」），此时不重复拼前缀，避免「广告推广：广告推广」。
+ */
+function pendingNote(result: TextModerationResult): string {
+  const name = TEXT_CATEGORY_NAMES[result.category] ?? "可疑内容";
+  const reason = (result.reason ?? "").trim();
+  const note = !reason || reason === name || reason.startsWith(name)
+    ? reason || name
+    : `${name}：${reason}`;
+  return note.slice(0, 200);
+}
 
 /**
  * 对一条已发布内容做 AI 复审。设计为「发后执行」，调用方不 await 结果即可（用 after 包裹）。
@@ -24,11 +39,10 @@ export async function runContentReview(kind: ContentKind, id: number, text: stri
   try {
     const result = await moderateText(text);
     if (result.verdict !== "review") return;
-    const changed = await markPending(kind, id);
+    const note = pendingNote(result);
+    const changed = await markPending(kind, id, note);
     if (changed) {
-      console.warn(
-        `[content-review] AI 转待审 kind=${kind} id=${id} cat=${result.category} reason=${result.reason}`,
-      );
+      console.warn(`[content-review] AI 转待审 kind=${kind} id=${id} cat=${result.category} note=${note}`);
     }
   } catch (err) {
     // 复审链路自身出错绝不能影响已成功的发布——只记日志
@@ -40,7 +54,7 @@ export async function runContentReview(kind: ContentKind, id: number, text: stri
 }
 
 /** 把内容置为待审，并回退计数、撤下动态。返回是否真的发生了状态变更。 */
-async function markPending(kind: ContentKind, id: number): Promise<boolean> {
+async function markPending(kind: ContentKind, id: number, note: string): Promise<boolean> {
   const now = nowSec();
 
   if (kind === "comment") {
@@ -52,7 +66,7 @@ async function markPending(kind: ContentKind, id: number): Promise<boolean> {
     await prisma.$transaction(async (tx) => {
       await tx.comment.update({
         where: { id: row.id },
-        data: { status: CONTENT_STATUS.PENDING, updateTime: now },
+        data: { status: CONTENT_STATUS.PENDING, aiReason: note, updateTime: now },
       });
       await tx.videoStat.updateMany({
         where: { id: row.video },
@@ -81,7 +95,7 @@ async function markPending(kind: ContentKind, id: number): Promise<boolean> {
     await prisma.$transaction(async (tx) => {
       await tx.bbsPost.update({
         where: { id: row.id },
-        data: { status: CONTENT_STATUS.PENDING, updateTime: now },
+        data: { status: CONTENT_STATUS.PENDING, aiReason: note, updateTime: now },
       });
       await tx.news.deleteMany({
         where: {
@@ -104,7 +118,7 @@ async function markPending(kind: ContentKind, id: number): Promise<boolean> {
   await prisma.$transaction(async (tx) => {
     await tx.bbsReply.update({
       where: { id: row.id },
-      data: { status: CONTENT_STATUS.PENDING, updateTime: now },
+      data: { status: CONTENT_STATUS.PENDING, aiReason: note, updateTime: now },
     });
     await tx.bbsPost.update({
       where: { id: row.post },

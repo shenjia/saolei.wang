@@ -350,6 +350,7 @@ model Comment {
   userScore  Int     @map("user_score") @db.Int
   content    String? @db.Text
   status     Int     @default(0) @db.SmallInt
+  aiReason   String? @map("ai_reason") @db.VarChar(200)
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
@@ -429,6 +430,7 @@ model BbsPost {
   isNice        Boolean @default(false) @map("is_nice")
   isLocked      Boolean @default(false) @map("is_locked")
   status        Int     @default(0) @db.SmallInt
+  aiReason      String? @map("ai_reason") @db.VarChar(200)
   lastReplyTime BigInt  @default(0) @map("last_reply_time") @db.BigInt
   lastReplyUser BigInt  @default(0) @map("last_reply_user") @db.BigInt
   createTime    BigInt  @default(0) @map("create_time") @db.BigInt
@@ -440,13 +442,14 @@ model BbsPost {
 
 // 论坛回复（移植 2008 版 BBS Reply 表）
 model BbsReply {
-  id         BigInt @id @default(autoincrement()) @db.BigInt
-  post       BigInt @db.BigInt
-  user       BigInt @db.BigInt
-  content    String @db.MediumText
-  status     Int    @default(0) @db.SmallInt
-  createTime BigInt @default(0) @map("create_time") @db.BigInt
-  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  post       BigInt  @db.BigInt
+  user       BigInt  @db.BigInt
+  content    String  @db.MediumText
+  status     Int     @default(0) @db.SmallInt
+  aiReason   String? @map("ai_reason") @db.VarChar(200)
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
   @@index([post, status, id])
   @@map("bbs_reply")

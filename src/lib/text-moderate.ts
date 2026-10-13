@@ -16,6 +16,16 @@ export type TextVerdict = "pass" | "review";
 export type TextCategory = "ok" | "ad" | "porn" | "politics" | "abuse" | "illegal";
 export type TextModerationSource = "ai" | "disabled" | "timeout" | "error";
 
+/** 类别中文名（后台展示与日志用；与 sensitive.ts 的 SENSITIVE_CATEGORY_NAMES 保持同一套叫法） */
+export const TEXT_CATEGORY_NAMES: Record<TextCategory, string> = {
+  ok: "正常",
+  ad: "广告推广",
+  abuse: "不当言论",
+  porn: "低俗内容",
+  politics: "政治敏感",
+  illegal: "违规内容",
+};
+
 export interface TextModerationResult {
   /** pass = 放行（保持公开）；review = 拿不准，转人工复核（置为待审） */
   verdict: TextVerdict;

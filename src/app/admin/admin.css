@@ -379,6 +379,14 @@ table.admin_table .strong {
 table.admin_table .gray {
   color: #6c6c61;
 }
+/* AI 复审给出的判定理由（2026-10-13）：只出现在待审行，与「待审」标签同色系 */
+table.admin_table .ai_reason {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #f79646;
+  overflow-wrap: anywhere;
+}
 
 /* ---------- 标签 ---------- */
 .admin_tag {

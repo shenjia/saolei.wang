@@ -444,6 +444,8 @@ export interface AdminCommentRow {
   videoUser: number;
   content: string;
   status: number;
+  /** AI 判可疑时的判定摘要（`类别：理由`），仅待审行有值（2026-10-13） */
+  aiReason: string | null;
   createTime: number;
 }
 
@@ -490,6 +492,7 @@ export async function getCommentListAdmin(f: {
       videoUser: N(vMap.get(N(c.video))?.user),
       content: c.content ?? "",
       status: c.status,
+      aiReason: c.aiReason ?? null,
       createTime: N(c.createTime),
     })),
     total,
@@ -514,6 +517,8 @@ export interface AdminPostRow {
   isNice: boolean;
   isLocked: boolean;
   status: number;
+  /** AI 判可疑时的判定摘要（`类别：理由`），仅待审行有值（2026-10-13） */
+  aiReason: string | null;
   lastReplyTime: number;
   createTime: number;
 }
@@ -549,7 +554,8 @@ export async function getPostListAdmin(f: {
       take: ADMIN_PAGESIZE,
       select: {
         id: true, board: true, user: true, title: true, replies: true, clicks: true,
-        isTop: true, isPinned: true, isNice: true, isLocked: true, status: true, lastReplyTime: true, createTime: true,
+        isTop: true, isPinned: true, isNice: true, isLocked: true, status: true, aiReason: true,
+        lastReplyTime: true, createTime: true,
       },
     }),
     prisma.bbsPost.count({ where }),
@@ -571,6 +577,7 @@ export async function getPostListAdmin(f: {
       isNice: p.isNice,
       isLocked: p.isLocked,
       status: p.status,
+      aiReason: p.aiReason ?? null,
       lastReplyTime: N(p.lastReplyTime),
       createTime: N(p.createTime),
     })),
@@ -587,6 +594,8 @@ export interface AdminReplyRow {
   author: UserBrief | null;
   content: string;
   status: number;
+  /** AI 判可疑时的判定摘要（`类别：理由`），仅待审行有值（2026-10-13） */
+  aiReason: string | null;
   createTime: number;
 }
 
@@ -610,6 +619,7 @@ export async function getReplyListAdmin(postId: number): Promise<{
       author: authors.get(N(r.user)) ?? null,
       content: ubb(r.content ?? ""),
       status: r.status,
+      aiReason: r.aiReason ?? null,
       createTime: N(r.createTime),
     })),
   };

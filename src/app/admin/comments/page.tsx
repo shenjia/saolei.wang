@@ -84,7 +84,10 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
                       </Link>
                     </div>
                   </td>
-                  <td style={{ maxWidth: 420 }}>{c.content || <span className="sub">（空）</span>}</td>
+                  <td style={{ maxWidth: 420 }}>
+                    {c.content || <span className="sub">（空）</span>}
+                    {c.status === 5 && c.aiReason && <div className="ai_reason">AI 判定：{c.aiReason}</div>}
+                  </td>
                   <td className="c">
                     {c.status === 0 ? (
                       <span className="admin_tag ok">正常</span>
@@ -142,7 +145,7 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
       <AdminCard title="口径说明">
         <div className="admin_note">
           · 删除是<b>软删除</b>（<code>comment.status = -1</code>），前台不再展示，可随时恢复；同时会把所在录像的评论计数减 1，恢复则加回。<br />
-          · <b>待审</b>（<code>status = 5</code>）由 AI 后置审核自动标记：内容发布后异步送审，AI 判可疑即转为待审并撤下其动态、回退录像评论计数；管理员点「通过」恢复公开，或直接「删除」。<br />
+          · <b>待审</b>（<code>status = 5</code>）由 AI 后置审核自动标记：内容发布后异步送审，AI 判可疑即转为待审并撤下其动态、回退录像评论计数；管理员点「通过」恢复公开，或直接「删除」。内容下方的橙字是 AI 给出的判定理由，供复核参考。<br />
           · 录像被彻底删除时，其评论会被一并物理清理（见录像管理）。
         </div>
       </AdminCard>

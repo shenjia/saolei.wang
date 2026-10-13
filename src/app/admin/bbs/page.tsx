@@ -96,6 +96,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                     <Link className="link" href={`/bbs/${p.id}`} target="_blank">
                       {p.title}
                     </Link>
+                    {p.status === 5 && p.aiReason && <div className="ai_reason">AI 判定：{p.aiReason}</div>}
                   </td>
                   <td>
                     <Link className="link" href={`/admin/users/${p.user}`}>
@@ -223,7 +224,10 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       </Link>
                     </td>
                     {/* 回复内容为 UBB，这里用已解析的 HTML 展示（服务端已转义） */}
-                    <td style={{ maxWidth: 520 }} dangerouslySetInnerHTML={{ __html: r.content }} />
+                    <td style={{ maxWidth: 520 }}>
+                      <div dangerouslySetInnerHTML={{ __html: r.content }} />
+                      {r.status === 5 && r.aiReason && <div className="ai_reason">AI 判定：{r.aiReason}</div>}
+                    </td>
                     <td className="c">
                       {r.status === 0 ? (
                         <span className="admin_tag ok">正常</span>
@@ -282,7 +286,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
         <div className="admin_note">
           · 板块：{BBS_BOARDS.map((b) => `${b.id} ${b.name}`).join(" / ")}（公告板 0 仅管理员可发）。<br />
           · 删除主题/回复均为软删除（<code>status = -1</code>），前台不再展示；删除回复会同步把主题的回复数减 1。<br />
-          · <b>待审</b>（<code>status = 5</code>）由 AI 后置审核自动标记：主题/回复发布后异步送审，AI 判可疑即转待审、撤下其动态并回退回复计数；管理员点「通过」恢复公开，或直接「删除」。<br />
+          · <b>待审</b>（<code>status = 5</code>）由 AI 后置审核自动标记：主题/回复发布后异步送审，AI 判可疑即转待审、撤下其动态并回退回复计数；管理员点「通过」恢复公开，或直接「删除」。标题/内容下方的橙字是 AI 给出的判定理由，供复核参考。<br />
           · 「移至xx」下拉即把主题挪到目标板块，无需再进前台编辑。
         </div>
       </AdminCard>
