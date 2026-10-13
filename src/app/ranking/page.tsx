@@ -86,7 +86,7 @@ export default async function RankingPage({
     const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime) }));
 
     // 登录态：搜索框空输入推荐「自己」——对 BV 榜比成绩榜更实用（自己的名次常在几百页外），
-    // 顺带取自己的名次与收集数（缓存数组查询，零 DB）；无录像则下拉显示「未加入 BV 排行」
+    // 顺带取自己的名次（缓存数组查询，零 DB）；无录像则下拉显示「未加入 BV 排行」
     let me:
       | {
           id: number;
@@ -94,7 +94,6 @@ export default async function RankingPage({
           englishName: string;
           sex: number;
           bvRank?: number;
-          bvCollected?: number;
         }
       | undefined;
     if (session?.uid) {
@@ -112,7 +111,6 @@ export default async function RankingPage({
           englishName: u.englishName,
           sex: u.sex,
           bvRank: mine?.rank,
-          bvCollected: mine?.collected,
         };
       }
     }
@@ -122,7 +120,7 @@ export default async function RankingPage({
         <div className="box ranking_box">
           <div className="page_head">
             <h1 className="page_title">BV排行</h1>
-            <RankingNav current="bv" by={bvBy} me={me} bvDen={totalDen} />
+            <RankingNav current="bv" by={bvBy} me={me} />
           </div>
           {/* key 含 by/page/hl：软导航（排序切换、whereami 302 回跳）时强制重挂载，
               否则 useState(initial) 保留旧数据、表格显示错页 */}

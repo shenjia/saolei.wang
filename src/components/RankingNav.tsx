@@ -4,8 +4,9 @@
 // 唯一候选自动定位；通过自定义事件 ranking:locate 委托同页的 RankingFeed 执行定位）
 // 2026-10-13 张老师要求：底部「我在哪里」按钮取消——登录态下聚焦/清空搜索框且未输入时，
 // 下拉直接推荐「自己」，回车即定位到自己在榜中的位置。
-// 2026-10-14 BV 榜搜索（C 方案）：搜索框扩到 BV tab；带 bvBy 调搜索接口回带名次与收集数，
-// 下拉次级文字显示「第 N 位 · 250/335」、不在榜显示「未加入 BV 排行」（hint 置灰，选中弹气泡）；
+// 2026-10-14 BV 榜搜索（C 方案）：搜索框扩到 BV tab；带 bvBy 调搜索接口回带名次，
+// 下拉次级文字只显示名次「第 3,168 位」（2026-10-14 张老师：不要带具体数值），
+// 不在榜显示「未加入 BV 排行」（hint 置灰，选中弹气泡）；
 // 唯一候选自动定位在 BV 模式下仅当候选确实在榜（否则会立刻弹「未加入」气泡，体验突兀）。
 
 "use client";
@@ -31,31 +32,24 @@ interface SuggestUser {
   chineseName: string;
   englishName: string;
   sex: number;
-  /** BV 榜名次与已收集数（仅 BV 附加查询回带；缺失＝未加入 BV 排行） */
+  /** BV 榜名次（仅 BV 附加查询回带；缺失＝未加入 BV 排行） */
   bvRank?: number;
-  bvCollected?: number;
 }
 
 export function RankingNav({
   current,
   by,
   me,
-  bvDen: bvDenProp,
 }: {
   current: RankingView;
   by?: string;
   /** 登录用户信息：搜索框空输入时推荐「自己」（替代原「我在哪里」按钮） */
   me?: SuggestUser;
-  /** BV 榜总计分母（下拉「250/335」的分母）：页面直传打底，搜索接口回带值优先 */
-  bvDen?: number;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [users, setUsers] = useState<SuggestUser[] | null>(null);
   const [active, setActive] = useState(0); // 键盘上下键游标
-  // 「自己」推荐不走搜索接口，分母必须由页面直传，否则显示成 x/0
-  const [fetchedDen, setFetchedDen] = useState<number | null>(null);
-  const bvDen = fetchedDen ?? bvDenProp ?? 0;
   const boxRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0); // 竞态：仅最后一次请求生效
   // 选中推荐项时会把输入框写成该项姓名，q 变化会立刻触发新一轮模糊推荐 → 下拉在跳转/滚动
@@ -71,11 +65,11 @@ export function RankingNav({
     return current === "nf" ? "nf" : bvMode ? "bv" : undefined;
   }
 
-  /** BV 下拉次级文字：在榜→名次+收集进度；不在榜→置灰「未加入 BV 排行」 */
+  /** BV 下拉次级文字：在榜→只显示名次；不在榜→置灰「未加入 BV 排行」 */
   function suggestMeta(u: SuggestUser, numeric: boolean): { text: string; inBoard: boolean } {
     if (!bvMode) return { text: numeric ? `ID ${u.id}` : u.englishName, inBoard: true };
     if (!u.bvRank) return { text: "未加入 BV 排行", inBoard: false };
-    return { text: `第 ${u.bvRank.toLocaleString("zh-CN")} 位 · ${u.bvCollected ?? 0}/${bvDen}`, inBoard: true };
+    return { text: `第 ${u.bvRank.toLocaleString("zh-CN")} 位`, inBoard: true };
   }
 
   // 登录态：聚焦/清空输入时下拉推荐自己；回车选中即定位（走既有 pick 流程）
@@ -115,16 +109,12 @@ export function RankingNav({
     const timer = setTimeout(async () => {
       try {
         const qs = new URLSearchParams({ q: kw });
-        // BV 榜：附带名次与收集数（接口从 1 小时缓存的榜数组取，不额外打库）
+        // BV 榜：附带名次（接口从 1 小时缓存的榜数组取，不额外打库）
         if (bvBy) qs.set("bvBy", bvBy);
         const res = await fetch(`/api/ranking/search?${qs}`);
         if (!res.ok) return;
-        const { users: list, bvDen: den } = (await res.json()) as {
-          users: SuggestUser[];
-          bvDen?: number;
-        };
+        const { users: list } = (await res.json()) as { users: SuggestUser[] };
         if (seq !== reqSeq.current) return; // 已有更新的输入
-        if (den) setFetchedDen(den);
         setUsers(list);
         setActive(0);
         // 唯一候选 → 自动开始查询（张老师要求：确定只有一个选择即触发，无需输完姓名）
