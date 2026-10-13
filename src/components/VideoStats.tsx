@@ -2,7 +2,8 @@
 // 共有多少录像 + 今日新增，样式与首页「雷界统计」盒完全统一。
 // 2026-10-13 张老师要求：①标题「统计」→「数据统计」；②增初级/中级/高级录像细分行
 //   （口径与总数一致＝仅已通过）；③去掉「本日/本周/本月新增」三行，改为在四行右侧
-//   统一挂「今日新增」增量列——绿色括号「（+N）」，无新增不显示，排版同首页。
+//   统一挂「今日新增」增量列——绿色括号「（+N）」，无新增不显示，排版同首页；
+//   ④三轮：末行增「评论总数」（口径同首页「发布评论」，增量按评论发布时间）。
 
 import type { VideoBoxStats } from "@/lib/queries";
 
@@ -30,6 +31,7 @@ export function VideoStats({ stats }: { stats: VideoBoxStats }) {
           <StatRow label="中级录像" value={stats.int} today={stats.intToday} />
           <StatRow label="高级录像" value={stats.exp} today={stats.expToday} />
           <StatRow label="录像总数" value={stats.total} today={stats.totalToday} />
+          <StatRow label="评论总数" value={stats.commentTotal} today={stats.commentToday} />
         </tbody>
       </table>
     </div>

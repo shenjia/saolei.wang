@@ -462,8 +462,10 @@ export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
 }
 
 /**
- * 录像统计（/video 右栏版块）：级别细分 + 总数，每行各带「今日新增」增量。
+ * 录像统计（/video 右栏版块）：级别细分 + 总数 + 评论总数，每行各带「今日新增」增量。
  * 2026-10-13 二轮：去掉本日/本周/本月三行，改为四行右侧统一挂今日增量列。
+ * 2026-10-13 三轮（张老师要求）：末行增「评论总数」（口径与首页「发布评论」严格一致：
+ *   comment.status=COMMENT_STATUS.NORMAL，增量按 create_time 落在今日）。
  */
 export interface VideoBoxStats {
   /** 初级录像（仅已通过） */
@@ -479,6 +481,10 @@ export interface VideoBoxStats {
   expToday: number;
   /** 今日新增合计（= 三段之和，不必再查库） */
   totalToday: number;
+  /** 评论总数（仅正常状态，软删/屏蔽不计） */
+  commentTotal: number;
+  /** 评论今日新增（按 create_time；与首页「发布评论」口径一致） */
+  commentToday: number;
 }
 
 export async function getVideoBoxStats(): Promise<VideoBoxStats> {
@@ -486,7 +492,7 @@ export async function getVideoBoxStats(): Promise<VideoBoxStats> {
   const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
   // 两次 GROUP BY 一次取全（video 表无 status/level 索引，逐项 count 会各扫一遍全表）；
   // 今日量按 review_time 而非 create_time——与首页「上传录像（+N）」口径一致（审过才算新增）
-  const [total, levelRows, todayRows] = await Promise.all([
+  const [total, levelRows, todayRows, commentTotal, commentToday] = await Promise.all([
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
     prisma.video.groupBy({
       by: ["level"],
@@ -498,6 +504,8 @@ export async function getVideoBoxStats(): Promise<VideoBoxStats> {
       where: { status: VIDEO_STATUS.REVIEWED, reviewTime: { gte: dayStart } },
       _count: { _all: true },
     }),
+    prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL } }),
+    prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL, createTime: { gte: dayStart } } }),
   ]);
   // 三段口径与「录像总数」严格一致（均只算已通过），故三者之和 = total
   const byLevel = new Map(levelRows.map((r) => [r.level, r._count._all]));
@@ -514,6 +522,8 @@ export async function getVideoBoxStats(): Promise<VideoBoxStats> {
     intToday,
     expToday,
     totalToday: begToday + intToday + expToday,
+    commentTotal,
+    commentToday,
   };
 }
 
