@@ -1,7 +1,7 @@
 // BV 收集榜表格 + 「加载更多」（2026-10-13 张老师需求，设计稿 design/ranking-bv.html v3）。
 // 列：排名 | 姓名 | 军衔 | 初级 | 中级 | 高级 | 总计——基础三列复刻 RankingRowLine 的真实渲染
 // （第 N 位 / 白链+性别图标 / TitleBadge 徽章+气泡），成绩列为 pbar 进度条（2026-10-14
-// 起改用个人主页同款：上 n/den 数字、下 3px 细条；默认灰，仅当前排序列金黄 #fdc61d）。
+// 起改用个人主页同款：上收集数、下 3px 细条；默认灰，仅当前排序列金黄 #fdc61d）。
 // 表头即排序切换（同雷界榜列头 Link 模式，当前列金黄）；表头纯级别名，不带区间数字
 // （2026-10-14 张老师：不对齐很难看，加过括号又整体去掉）。
 //
@@ -31,14 +31,15 @@ export type BvTitledRow = BvRankingRow & { title: string };
 const SORT_COLS: BvRankingBy[] = ["beg", "int", "exp", "total"];
 
 /** 进度条单元格：个人主页 3BV 收集同款形态（2026-10-14 张老师要求试做）——
-    上面 n/den 数字、下面 3px 细进度条；默认灰，当前排序列金黄 #fdc61d */
+    上面收集数 n（2026-10-14 张老师：去掉分母，分母移到 title 气泡）、下面 3px 细进度条；
+    默认灰，当前排序列金黄 #fdc61d */
 function BvBar({ n, den, active }: { n: number; den: number; active: boolean }) {
   const pct = den > 0 ? (n / den) * 100 : 0;
   return (
     <td>
       <span className={`pbar${active ? " current" : ""}`} title={`收集进度 ${n}/${den}`}>
         <span className="pnum">
-          <em>{n}</em>/{den}
+          <em>{n}</em>
         </span>
         <span className="ptrack">
           <span className="pfill" style={{ width: `${pct}%` }} />
