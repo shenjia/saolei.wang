@@ -3554,8 +3554,16 @@ body #video_list .score_3bvs a:hover em {
   color: inherit;
   font-weight: bold;
 }
-.video_table td.score a:hover {
+/* 成绩数字 hover 按级别变色（2026-10-13 张老师要求）：初级绿、中级橙、高级金。
+   #page 前缀提权：排序命中列（.current）成绩默认黄，hover 时同样按级别变色 */
+#page .video_table td.score.lv_beg a:hover {
   color: #a6e22e;
+}
+#page .video_table td.score.lv_int a:hover {
+  color: #f79646;
+}
+#page .video_table td.score.lv_exp a:hover {
+  color: #fdc61d;
 }
 /* 3BV / 3BV/s 数字列居中（表头同步居中，与数据对齐） */
 .video_table th.c,
@@ -3585,7 +3593,8 @@ body #video_list .score_3bvs a:hover em {
 #page .video_table td.c_3bvs.current del {
   color: #fdc61d;
 }
-#page .video_table td.score.current a:hover,
+/* 成绩列 hover 已改为按级别变色（见上方 lv_* hover 规则，(1,4,2) 压过本组 (1,3,2)）；
+   3BV/s 命中列 hover 仍绿 */
 #page .video_table td.c_3bvs.current:hover {
   color: #a6e22e;
 }
@@ -3664,8 +3673,15 @@ body #page.video_old .page_head {
   position: relative;
   display: inline-block;
 }
-#video_hot td.score a:hover {
+/* 成绩数字 hover 按级别变色（与 .video_table 同语言，2026-10-13） */
+#video_hot td.score.lv_beg a:hover {
   color: #a6e22e;
+}
+#video_hot td.score.lv_int a:hover {
+  color: #f79646;
+}
+#video_hot td.score.lv_exp a:hover {
+  color: #fdc61d;
 }
 #video_hot td.score .nf {
   position: absolute;
