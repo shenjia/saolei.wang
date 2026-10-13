@@ -24,10 +24,9 @@ export async function GET(req: Request) {
     deltas = rows.map((r) => [r.id, map.get(r.id) ?? null] as [number, number | null]);
   }
 
-  // 军衔 SUB 制按高级时间评定（2026-10-13）
-  const titled = await Promise.all(
-    rows.map(async (u) => ({ ...u, title: await assessTitle(u.scores.exp_time) }))
-  );
+  // 军衔 SUB 制按高级时间评定（2026-10-13）；NF 榜行数据来自 NF 表，exp_time 是 NF 口径，
+  // 军衔应按主榜评定——与 RankingTable 同口径，优先主榜回填的 overallExpTime（2026-10-14 修复：NF 榜加载更多误评预备役）
+  const titled = rows.map((u) => ({ ...u, title: assessTitle(u.overallExpTime ?? u.scores.exp_time) }));
 
   return NextResponse.json({ rows: titled, deltas, total, pageSize });
 }
