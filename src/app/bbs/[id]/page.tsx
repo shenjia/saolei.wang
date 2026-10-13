@@ -1,35 +1,51 @@
-// 主题详情（移植 2008 版 BBS/Title.asp：点击计数、回复分页、操作按钮）
+// 主题详情（移植 2008 版 BBS/Title.asp：点击计数、回复楼层流、操作按钮）
 // 布局（2026-09-23 张老师要求）：页面级双栏——左列帖子楼层流，右列楼主卡片独立板块
+// 楼层流（2026-10-13 张老师要求）：由「翻页」改「加载更多」——首屏取第一批交 BbsReplySection，
+//   后续批次走 /api/bbs/reply/more（cursor 语义），?page= 深链作废
 
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
-import { BBS_BOARD_NAMES, getPost, getReplies, ubb } from "@/lib/bbs";
+import { BBS_BOARD_NAMES, getPost, getReplyFeed, ubb } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
-import { Pager } from "@/components/Pager";
-import { LoginLink } from "@/components/LoginLink";
-import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
+import { PostOps } from "@/components/BbsOps";
+import { BbsReplySection } from "@/components/BbsReplies";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { UserPanel } from "@/components/UserCard";
 import { BbsReadMark } from "@/components/BbsRead";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function BbsTitlePage({
+/**
+ * 页面标题（2026-10-13 张老师要求）：【分类】主题标题 | 扫雷网，
+ * 与详情页 <h1>【分类】标题 的前缀口径一致。
+ * 只取标题/板块两列（不联作者、不计数），避免与页面 getPost 的浏览计数重复叠加。
+ */
+export async function generateMetadata({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<Record<string, string | undefined>>;
-}) {
+}): Promise<Metadata> {
+  const postId = parseInt((await params).id, 10);
+  if (!postId) return {};
+  const p = await prisma.bbsPost.findFirst({
+    where: { id: BigInt(postId), status: 0 },
+    select: { title: true, board: true },
+  });
+  if (!p) return {};
+  const board = BBS_BOARD_NAMES[p.board];
+  return { title: `${board ? `【${board}】` : ""}${p.title} | 扫雷网` };
+}
+
+export default async function BbsTitlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const sp = await searchParams;
   const postId = parseInt(id, 10) || 0;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const [post, session] = await Promise.all([getPost(postId), getSession()]);
   if (!post) notFound();
-  const { replies, total, pageSize } = await getReplies(postId, page);
+  const { items: replies, total: replyTotal } = await getReplyFeed(postId);
   const admin = session ? isManager(session.role) : false;
 
   return (
@@ -76,39 +92,19 @@ export default async function BbsTitlePage({
             <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(post.content) }} />
           </div>
 
-          {replies.map((r) => (
-            <div key={r.id} className="box bbs_post">
-              <p className="bbs_meta">
-                <em>{r.floor} 楼</em>{" "}
-                {r.author && (
-                  <>
-                    <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} gender="small" link />{" "}
-                    <TitleBadge title={r.author.title} link />{" "}
-                  </>
-                )}
-                {timeOpposite(r.createTime, TIME_NEVER)}
-                {session && (admin || session.uid === r.author?.id || session.uid === post.author?.id) && (
-                  <span className="bbs_ops">
-                    {" "}
-                    <ReplyDelete replyId={r.id} />
-                  </span>
-                )}
-              </p>
-              <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(r.content) }} />
-            </div>
-          ))}
-          <Pager base={`/bbs/${post.id}`} params={{}} page={page} total={total} pageSize={pageSize} />
-
-          <div className="box">
-            <h2>回复主题</h2>
-            {session ? (
-              <ReplyForm postId={post.id} locked={post.isLocked && !admin} />
-            ) : (
-              <p className="text login_hint">
-                <LoginLink>登录</LoginLink> 后才能回复。
-              </p>
-            )}
-          </div>
+          {/* 楼层流 + 「加载更多」+ 回复表单（同一客户端组件：回帖后就地接上新楼层）
+              key=post.id：软导航切主题时强制重挂载，避免沿用上一个主题的已加载楼层 */}
+          <BbsReplySection
+            key={post.id}
+            postId={post.id}
+            initial={replies}
+            initialTotal={replyTotal}
+            canReply={!!session}
+            locked={post.isLocked && !admin}
+            viewerUid={session?.uid ?? null}
+            postAuthorId={post.author?.id ?? null}
+            isAdmin={admin}
+          />
         </li>
         <li className="sidebar">
           {/* 右栏楼主个人卡片 + 实力雷达图（2026-10-13 六轮：与录像详情页共用同一面板组件） */}

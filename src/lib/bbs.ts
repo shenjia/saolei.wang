@@ -315,37 +315,43 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
   };
 }
 
+/** 楼层流条目（详情页首屏 + 「加载更多」共用）
+ *  html 在服务端用 ubb() 预算好——客户端组件只渲染字符串，不引 ubb/Prisma；
+ *  楼层号不入库（bbs_reply 无 floor 列），由展示层按顺序推得（1 楼是主题，见 BbsReplySection） */
 export interface BbsReplyItem {
   id: number;
-  floor: number;
-  content: string;
   createTime: number;
   author: BbsAuthor | null;
+  html: string;
 }
 
-export async function getReplies(
+/** 楼层流取数（cursor 语义，按 id 升序）
+ *  2026-10-13 张老师要求：主题详情底部由「翻页」改「加载更多」，故从 page/skip 改为 id > cursor 取下一批；
+ *  命中 @@index([post, status, id])，翻到底返回空数组即止 */
+export async function getReplyFeed(
   postId: number,
-  page: number
-): Promise<{ replies: BbsReplyItem[]; total: number; pageSize: number }> {
-  const where = { post: BigInt(postId), status: 0 };
-  const total = await prisma.bbsReply.count({ where });
+  cursor = 0,
+  size = BBS_REPLY_PAGESIZE
+): Promise<{ items: BbsReplyItem[]; total: number }> {
+  const total = await prisma.bbsReply.count({ where: { post: BigInt(postId), status: 0 } });
   const rows = await prisma.bbsReply.findMany({
-    where,
+    where: {
+      post: BigInt(postId),
+      status: 0,
+      ...(cursor > 0 ? { id: { gt: BigInt(cursor) } } : {}),
+    },
     orderBy: { id: "asc" },
-    skip: (page - 1) * BBS_REPLY_PAGESIZE,
-    take: BBS_REPLY_PAGESIZE,
+    take: size,
   });
   const authors = await authorsWithTitles([...new Set(rows.map((r) => N(r.user)))]);
   return {
-    replies: rows.map((r, i) => ({
+    items: rows.map((r) => ({
       id: N(r.id),
-      floor: (page - 1) * BBS_REPLY_PAGESIZE + i + 2, // 1 楼是主题
-      content: r.content,
       createTime: N(r.createTime),
       author: authors.get(N(r.user)) ?? null,
+      html: ubb(r.content),
     })),
     total,
-    pageSize: BBS_REPLY_PAGESIZE,
   };
 }
 

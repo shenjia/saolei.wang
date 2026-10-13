@@ -19,7 +19,17 @@ async function callApi(body: Record<string, unknown>): Promise<string | null> {
   return null;
 }
 
-export function ReplyForm({ postId, locked }: { postId: number; locked: boolean }) {
+/** 回复表单（2026-10-13：新增 onPosted —— 详情页楼层流改为客户端「加载更多」后，
+ *  整页刷新已不会自动追加新楼层，由楼层流组件就地接上） */
+export function ReplyForm({
+  postId,
+  locked,
+  onPosted,
+}: {
+  postId: number;
+  locked: boolean;
+  onPosted?: () => void;
+}) {
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,6 +48,8 @@ export function ReplyForm({ postId, locked }: { postId: number; locked: boolean 
     }
     setContent("");
     toast("回复发表成功", "success");
+    onPosted?.();
+    // 仍刷新一次服务端数据（主题抬升、评论计数、右栏等随之更新）
     router.refresh();
   }
 
@@ -146,7 +158,8 @@ export function PostOps({
   );
 }
 
-export function ReplyDelete({ replyId }: { replyId: number }) {
+/** 删楼层（详情页楼层流为客户端状态：传 onDeleted 时先就地摘除，再刷新服务端计数） */
+export function ReplyDelete({ replyId, onDeleted }: { replyId: number; onDeleted?: () => void }) {
   const router = useRouter();
   return (
     <a
@@ -160,6 +173,7 @@ export function ReplyDelete({ replyId }: { replyId: number }) {
           return;
         }
         toast("回复已删除", "success");
+        onDeleted?.();
         router.refresh();
       }}
     >
