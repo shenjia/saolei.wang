@@ -20,9 +20,10 @@ export interface ParsedVideo {
 }
 
 /** Parser::renderBoard —— 把 '* / 0' 棋盘渲染为 '* / 数字'（统计八邻域雷数）
- *  必须复刻的 PHP 怪癖：PHP 7.1+ 字符串负偏移 "$row[-1]" 取该行**最后一格**，
- *  导致旧站生产的棋盘里，左边界格 (x=0) 的雷数会把同行 (x=max) 当作左邻（同行回绕）。
- *  右边界无此回绕（offset=X 越界 isset 为假）。已用库内真实录像逐格验证一致。 */
+ *  历史注记：旧 PHP 站此处有负偏移回绕 bug（"$row[-1]" 取到行尾），导致最左列
+ *  数字把同行最右格误算为邻居。移植初期为与旧库逐格一致曾复刻该怪癖；
+ *  2026-10-13 张老师对照 Arbiter 实局确认数字错误，移除回绕修正为真实雷数，
+ *  历史 board 串已由 scripts/sync/fix-board-numbers.py 按同逻辑无损重算。 */
 export function renderBoard(board: string[]): string {
   const rows = board.map((r) => r.split(""));
   const Y = rows.length;
@@ -30,8 +31,7 @@ export function renderBoard(board: string[]): string {
   const at = (y: number, x: number): string | undefined => {
     const row = rows[y];
     if (row === undefined) return undefined;
-    if (x < 0) return row[X - 1]; // PHP 负字符串偏移回绕到行尾
-    if (x >= X) return undefined;
+    if (x < 0 || x >= X) return undefined;
     return row[x];
   };
   for (let y = 0; y < Y; y++) {

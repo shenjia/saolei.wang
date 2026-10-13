@@ -80,8 +80,9 @@
 ## 关键模块（src/lib/）
 
 - `mvf.ts` / `avf.ts`：MVF/AVF 解析器（594/349 行 C 的忠实 TS 移植），输出 RawVF 文本行
-- `rawvf.ts`：Parser::format / renderBoard 移植。**棋盘必须复刻 PHP 7.1+ 字符串负偏移怪癖**
-  （`"$row[-1]"` 取行尾 → 左边界格把同行 x=max 当左邻），否则与库内数据不一致
+- `rawvf.ts`：Parser::format / renderBoard 移植。renderBoard 曾复刻 PHP 7.1+ 负偏移怪癖
+  （`"$row[-1]"` 取行尾 → 左边界格把同行 x=max 当左邻），2026-10-13 对照 Arbiter 实局确认该怪癖
+  会让左列数字虚高，已移除；历史 board 串由 `scripts/sync/fix-board-numbers.py` 无损重算（雷位不变）
 - `review.ts`：审核与成绩管线（Review/VideoScores/UserScores/News 全移植，含 NF 榜；
   文件头记录两处按旧代码意图修正的 bug）
 - `stat.ts`：uniqueAction 点击/下载计数（相邻同 IP 去重）
