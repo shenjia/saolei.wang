@@ -8,7 +8,7 @@ export default function UploadHelpPage() {
     <div id="page" className="main">
       <div className="box text">
         <h1>上传录像须知</h1>
-        <p>※ 可接受的初级最低 3BV 为 2，中级最低 3BV 为 25，高级最低 3BV 为 100。</p>
+        <p>※ 可接受的初级最低 3BV 为 2，中级最低 3BV 为 30，高级最低 3BV 为 100。</p>
         <p>※ 3BV 小于 4 的初级录像只计算时间成绩，不计算 3BV/S 成绩。</p>
         <p>※ 本站上传时会自动解析录像文件的级别、时间、3BV，数据与录像不符的将无法上传。</p>
         <p>※ 请确保上传录像的标识文字和注册的标识文字相符，否则将无法上传。</p>
