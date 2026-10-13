@@ -12,6 +12,7 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import type { TitleMemberRow } from "@/lib/queries";
 import { scoreTime, formatDate } from "@/lib/format";
+import { INVALID_3BVS_TIP } from "@/lib/config";
 import { TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
@@ -34,11 +35,19 @@ function ScoreCell({ row, col }: { row: TitleMemberRow; col: (typeof COLS)[numbe
   const neg = !isTime && v < 0;
   const text = isTime ? scoreTime(v) : ((neg ? -v : v) / 1000).toFixed(2);
   const videoId = row.videos[col.by];
-  const inner = neg ? <del title="因为3BV太小，运气成分过高，该3BV/s成绩不被承认">{text}</del> : text;
+  // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页文案）；
+  // neg 时不再挂 <a> 的「点击查看录像」原生 title，免得两种提示叠在一起
+  const inner = neg ? (
+    <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
+      {text}
+    </del>
+  ) : (
+    text
+  );
   return (
     <td className={col.cls}>
       {videoId ? (
-        <Link href={`/video/${videoId}`} target="_blank" title="点击查看录像">
+        <Link href={`/video/${videoId}`} target="_blank" title={neg ? undefined : "点击查看录像"}>
           {inner}
         </Link>
       ) : (

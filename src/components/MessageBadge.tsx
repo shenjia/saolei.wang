@@ -1,37 +1,12 @@
 // 导航未读角标（移植 2008 版 Include/Message.asp 的 30 秒轮询）
+// 轮询逻辑与移动版 MobileNav 消息按钮共享 useUnreadMessages（桌面端只在 >768px 轮询）。
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { pollWhenDesktop, useUnreadMessages } from "./useUnreadMessages";
 
 export function MessageBadge() {
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    async function poll() {
-      try {
-        const res = await fetch("/api/message?action=unread");
-        if (res.ok) {
-          const data = await res.json();
-          setUnread(data.unread ?? 0);
-        }
-      } catch {
-        // 网络异常时静默
-      }
-    }
-    poll();
-    timer = setInterval(poll, 30_000);
-    // 「全部已读」/读信后立即刷新角标（读信页跳转回来 30s 轮询太慢）
-    const refresh = () => poll();
-    window.addEventListener("message:changed", refresh);
-    window.addEventListener("focus", refresh);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("message:changed", refresh);
-      window.removeEventListener("focus", refresh);
-    };
-  }, []);
+  const unread = useUnreadMessages(pollWhenDesktop);
 
   return (
     <Link href="/message">

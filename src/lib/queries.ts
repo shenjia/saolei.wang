@@ -24,6 +24,7 @@ import {
   VIDEO_LEVELS,
   byLevelOrder,
   RANKING_BYS,
+  type AreaOrder,
   type BvRankingBy,
   type Level,
   type Order,
@@ -167,8 +168,13 @@ export async function getNews(opts: {
   });
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
   // 军衔按「动态时刻」的高级时间评定（2026-10-13 SUB 制，张老师要求显示当时军衔而非现在的）：
-  // 批量取相关用户的高级成绩流水，按每条动态的 create_time 重放 running best
-  const expMap = await expTimeAtBatch([...new Set(rows.map((r) => r.user))], rows.map((r) => ({ user: N(r.user), ct: N(r.createTime) })));
+  // 批量取相关用户的高级成绩流水，按每条动态的 create_time 重放 running best。
+  // 入伍动态（NEWBIE）含同刻成绩：旧站入伍动态时间=触发成绩的上传时间，严格早于会永远评成预备役
+  // （2026-10-13 张老师指出「入伍新兵怎么可能是预备役」）；破纪录动态仍严格早于（显示破之前旧军衔）
+  const expMap = await expTimeAtBatch(
+    [...new Set(rows.map((r) => r.user))],
+    rows.map((r) => ({ user: N(r.user), ct: N(r.createTime), inclusive: r.type === NEWS_TYPE.NEWBIE }))
+  );
   return rows.map((r) => ({
     id: N(r.id),
     type: r.type,
@@ -187,7 +193,7 @@ export async function getNews(opts: {
  */
 async function expTimeAtBatch(
   users: bigint[],
-  points: { user: number; ct: number }[]
+  points: { user: number; ct: number; inclusive?: boolean }[]
 ): Promise<Map<string, number>> {
   if (!users.length) return new Map();
   const flows = await prisma.videoScoresExp.findMany({
@@ -208,7 +214,9 @@ async function expTimeAtBatch(
     if (!lst || !lst.length) continue;
     let best = 0;
     for (const f of lst) {
-      if (f.ct > p.ct) break;
+      // 默认严格早于动态时刻：同刻的成绩（含触发晋升/破纪录那盘）不改行首军衔——破纪录动态显示
+      // 破之前的旧军衔（张老师 17:19 要求）；入伍动态用 inclusive（含同刻，显示入伍时的军衔）
+      if (p.inclusive ? f.ct > p.ct : f.ct >= p.ct) break;
       if (!best || f.s < best) best = f.s;
     }
     out.set(`${p.user}:${p.ct}`, best);
@@ -949,13 +957,15 @@ export async function getSiteStats(): Promise<SiteStats> {
 // ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
 /** 各军衔人数（2026-10-13 起按高级时间绝对阈值分桶：第 i 档 = (thresholds[i-1], thresholds[i]]） */
+/** 各军衔人数（2026-10-13 SUB 制：TITLE_THRESHOLDS 与 TITLES 按下标对应，升序数组
+ *  第 i 档 = (thresholds[i-1], thresholds[i]]，大元帅 = <= 35s，列兵 = > 150s 无上界） */
 export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
   const thresholds = getTitleDistribution().thresholds;
   if (!thresholds.length) return [];
   const counts = await Promise.all(
     TITLES.map((_, i) => {
-      const lower = i > 0 ? thresholds[i - 1] : undefined; // 上一军衔线（不含）
-      const upper = i < TITLES.length - 1 ? thresholds[i] : undefined; // 本军衔线（含）；末档无上界
+      const lower = i > 0 ? thresholds[i - 1] : undefined; // 上一档线（不含）
+      const upper = i < TITLES.length - 1 ? thresholds[i] : undefined; // 本档线（含）；末档无上界
       return prisma.userScores.count({
         where: {
           expTime: {
@@ -996,7 +1006,7 @@ export interface TitleMemberRow extends UserBrief {
   videos: Record<string, number>;
 }
 
-/** 军衔→user_scores 查询条件（与 getTitleCounts 同口径：第 i 档 = (thresholds[i-1], thresholds[i]]，按 exp_time）；预备役返回 null（查 user 表） */
+/** 军衔→user_scores 查询条件（与 getTitleCounts 同口径，升序 thresholds：第 i 档 = (thresholds[i-1], thresholds[i]]）；预备役返回 null（查 user 表） */
 async function titleScoresWhere(t: string): Promise<Record<string, unknown> | null> {
   const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
   if (idx < 0) return null;
@@ -1126,13 +1136,13 @@ export async function getTitleMemberOffset(uid: number, t: string): Promise<numb
   if (!where) return -1;
   const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) } });
   if (!row?.expTime || !(row.expTime > 0)) return -1;
-  // 检验是否真在此军衔区间（同 titleScoresWhere 口径）
+  // 检验是否真在此军衔区间（同 titleScoresWhere 口径，升序 thresholds）
   const dist = getTitleDistribution();
   if (!dist.thresholds.length) return -1;
   const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
-  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : undefined;
+  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : Infinity;
   const lower = idx > 0 ? dist.thresholds[idx - 1] : 0;
-  if (row.expTime > (upper ?? Infinity) || row.expTime <= lower) return -1;
+  if (row.expTime > upper || row.expTime <= lower) return -1;
   // 排序键 (expTime asc, id asc)：数排在自己前面的行数
   const before = await prisma.userScores.count({
     where: {
@@ -1315,13 +1325,14 @@ export async function searchUsers(q: string, limit = 8): Promise<UserBrief[]> {
 
 // ---------- 地区榜（移植 2008 版 Ranking_Area + Ranking_Area_Refresh 公式实时计算） ----------
 // Area_Power = Σ(全国有成绩人数 − 个人名次)；Area_Players = 人数 + 0.0001×平均名次（排序微调）
-
-export type AreaOrder = "power" | "players" | "avg" | "best";
+// 活跃人数＝该地区近 30 天内登录过的人数（user.last_login_time 为 Unix 秒，2026-10-13 新增）
+// 榜序类型 AreaOrder 与表头定义在 lib/config（服务端与客户端共用），此处只做查询
 
 export interface AreaRow {
   area: string;
   players: number;
-  avgRank: number;
+  /** 近 30 天登录过的人数（含无成绩用户） */
+  active: number;
   bestRank: number;
   power: number;
   bestId: number;
@@ -1334,9 +1345,9 @@ export interface AreaRow {
 export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRow[]> {
   const orderBy =
     order === "players"
-      ? "players + 0.0001 * avg_rank DESC"
-      : order === "avg"
-        ? "avg_rank ASC"
+      ? "players + 0.0001 * a.avg_rank DESC"
+      : order === "active"
+        ? "active DESC, a.power DESC"
         : order === "best"
           ? "best_rank ASC"
           : "power DESC";
@@ -1344,7 +1355,7 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
     {
       area: string;
       players: bigint;
-      avg_rank: number;
+      active: bigint;
       best_rank: bigint;
       power: bigint;
       best_id: bigint;
@@ -1365,19 +1376,27 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
        SELECT area, COUNT(*) players, ROUND(AVG(rk)) avg_rank, MIN(rk) best_rank,
               SUM(total - rk) power
        FROM ranked GROUP BY area
+     ),
+     act AS (
+       SELECT u.area, COUNT(*) active
+       FROM user u
+       WHERE u.last_login_time > UNIX_TIMESTAMP() - 30 * 86400
+         AND u.area <> '' AND u.area NOT LIKE '%&%'
+       GROUP BY u.area
      )
-     SELECT a.area, a.players, a.avg_rank, a.best_rank, a.power,
+     SELECT a.area, a.players, COALESCE(v.active, 0) active, a.best_rank, a.power,
             r.id best_id, u.chinese_name best_name, s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex
      FROM agg a
      JOIN ranked r ON r.area = a.area AND r.rk = a.best_rank
      JOIN user u ON u.id = r.id
      JOIN user_scores s ON s.id = r.id
+     LEFT JOIN act v ON v.area = a.area
      ORDER BY ${orderBy}`,
   );
   return rows.map((r) => ({
     area: r.area,
     players: N(r.players),
-    avgRank: Number(r.avg_rank), // ROUND(AVG()) 返回 Decimal，React 不能直接渲染
+    active: N(r.active),
     bestRank: N(r.best_rank),
     power: N(r.power),
     bestId: N(r.best_id),

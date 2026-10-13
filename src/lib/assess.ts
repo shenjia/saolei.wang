@@ -7,7 +7,6 @@ import {
   GRADE_PERCENTS,
   GRADES,
   ORDER_DIRECTION,
-  TITLE_ORDER,
   TITLE_THRESHOLDS,
   TITLES,
   type Level,
@@ -44,13 +43,14 @@ function getPosition(score: number, distribution: number[], direction: 0 | 1): n
 }
 
 /** 军衔：按高级时间绝对阈值评定（2026-10-13 张老师改版，原按总计时间相对阈值）
- *  区间口径：第 i 档 = (TITLE_THRESHOLDS[i-1], TITLE_THRESHOLDS[i]]，大元帅 = exp_time > 0；
- *  无成绩玩家评为「预备役」 */
+ *  TITLE_THRESHOLDS 与 TITLES 同序（严→宽降序）：取第一个 score <= threshold 的档；
+ *  全部超过（>150s）→ 列兵；无成绩 → 预备役 */
 export function title(score: number | null | undefined): string {
   if (!score) return "预备役";
-  const direction = ORDER_DIRECTION[TITLE_ORDER] === "desc" ? 1 : 0;
-  const position = getPosition(score, TITLE_THRESHOLDS, direction);
-  return TITLES[Math.min(position, TITLES.length - 1)] ?? "";
+  for (let i = 0; i < TITLE_THRESHOLDS.length; i++) {
+    if (score <= TITLE_THRESHOLDS[i]) return TITLES[i] ?? "";
+  }
+  return TITLES[TITLES.length - 1] ?? "";
 }
 
 export interface TitleDistribution {

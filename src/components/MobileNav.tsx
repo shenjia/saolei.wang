@@ -1,7 +1,7 @@
 "use client";
 
 // 移动版顶栏（≤768px）：三横线菜单按钮 → 下拉站内导航；
-// 已登录时右侧显示头像 → 下拉个人菜单（个人主页/上传录像/账户管理/退出登录）。
+// 已登录时右侧依次显示消息按钮（气泡图标 + 未读角标，2026-10-13 补）与头像 → 下拉个人菜单。
 // 桌面横向导航仍在 layout.tsx 渲染，由 CSS 按断点各自显隐（2026-09-26 张老师要求）。
 
 import Link from "next/link";
@@ -9,6 +9,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { LoginLink } from "./LoginLink";
 import { IconGear, IconLogout, IconPerson, IconUpload } from "./MenuIcons";
+import { BubbleIcon } from "./SendMessageButton";
+import { pollWhenMobile, useUnreadMessages } from "./useUnreadMessages";
 
 export interface MobileNavUser {
   uid: number;
@@ -53,6 +55,8 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
   const [userOpen, setUserOpen] = useState(false);
   const siteRef = useOutsideClose(() => setSiteOpen(false));
   const userRef = useOutsideClose(() => setUserOpen(false));
+  // 未读消息角标：与桌面 MessageBadge 共享轮询（移动端只在 ≤768px 轮询）
+  const unread = useUnreadMessages(pollWhenMobile);
   // 路由切换后收起菜单：渲染期对比上次 pathname（软导航即视为已离开菜单，
   // 不用 useEffect——项目 react-hooks/set-state-in-effect 规则禁止 effect 内同步 setState）
   const pathname = usePathname();
@@ -99,6 +103,14 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
           </ul>
         )}
       </div>
+      {user && (
+        <div className="mn_item">
+          <Link href="/message" className="mn_msg_btn" aria-label="消息">
+            <BubbleIcon />
+            {unread > 0 && <sup className="mn_msg_badge">{unread}</sup>}
+          </Link>
+        </div>
+      )}
       {user && (
         <div className="mn_item" ref={userRef}>
           <button

@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth";
 import { clientIp, uniqueVideoAction } from "@/lib/stat";
 import {
   COMMENT_TOP_NUMBER,
+  INVALID_3BVS_TIP,
   LEVEL_NAMES,
   VIDEO_STATUS_NAMES,
   type VideoLevel,
@@ -65,7 +66,9 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
               {scores["3bvs"] > 0 ? (
                 <em>{score3bvs(scores["3bvs"])}</em>
               ) : (
-                <del title="因为3BV太小，运气成分过高，该3BV/s成绩不被承认">
+                // 无效成绩：hover 弹自定义气泡说明原因（2026-10-13 张老师要求，
+                // 原生 title 有 1s 延迟且是系统灰样式，故走 data-tip）
+                <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
                   {score3bvs(-scores["3bvs"])}
                 </del>
               )}

@@ -14,8 +14,9 @@ import { toast } from "./Toast";
  *  （lib/message 依赖 prisma，不能进客户端 bundle，故此处独立声明） */
 const CONTENT_LIMIT = 200;
 
-/** 对话气泡图标：三点 + 尾巴，色随 currentColor（20px 与性别 big 图标等高） */
-function BubbleIcon() {
+/** 对话气泡图标：三点 + 尾巴，色随 currentColor（20px 与性别 big 图标等高）。
+ *  移动版顶栏消息按钮（MobileNav）复用同款，故导出。 */
+export function BubbleIcon() {
   return (
     <svg
       viewBox="0 0 20 20"

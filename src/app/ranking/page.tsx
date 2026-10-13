@@ -2,11 +2,12 @@
 // 页面主体卡片内：h1「排行榜」+ 榜别 tabs + 右上角查找框（七轮：title/筛选/搜索框
 // 整体移回卡片内，title 左、tabs 紧随、搜索框贴行尾）
 // + 全级别成绩表 + 「加载更多」（替代老式分页）；右上角查找框无按钮化（模糊推荐）；
-// 登录态下「我在哪里」在底部加载更多右侧（点击定位到自己所在行）。
+// 登录态下搜索框空输入推荐「自己」，回车定位（2026-10-13 替代原底部「我在哪里」按钮）。
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
 import { getRankingTable, getRankingPageOfUser, getBvRanking } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy, byLevelOrder, parseBvRankingBy } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
@@ -115,13 +116,22 @@ export default async function RankingPage({
     deltas = await getSumTimeDeltas(rows.map((r) => r.id));
   }
 
-  // 登录态：是否已加入当前排行（决定底部按钮是「我在哪里」还是「如何加入排行」）
+  // 登录态：是否已加入当前排行（决定底部是否显示「如何加入排行」）；
+  // 同时取出本人信息传给搜索框——空输入时下拉推荐「自己」（2026-10-13 替代「我在哪里」按钮）
   const myUid = session?.uid;
   let inRanking = false;
+  let me: { id: number; chineseName: string; englishName: string; sex: number } | undefined;
   if (myUid) {
     const { level, order } = byLevelOrder(rankingBy);
-    const page = await getRankingPageOfUser(myUid, level, order, nf);
+    const [page, u] = await Promise.all([
+      getRankingPageOfUser(myUid, level, order, nf),
+      prisma.user.findUnique({
+        where: { id: BigInt(myUid) },
+        select: { id: true, chineseName: true, englishName: true, sex: true },
+      }),
+    ]);
     inRanking = page > 0;
+    if (u) me = { id: Number(u.id), chineseName: u.chineseName, englishName: u.englishName, sex: u.sex };
   }
 
   // 军衔列在服务端预算（Feed 客户端零成本渲染）——SUB 制按高级时间评定（2026-10-13）
@@ -139,7 +149,7 @@ export default async function RankingPage({
       <div className="box ranking_box">
         <div className="page_head">
           <h1 className="page_title">{view === "nf" ? "NF排行" : "雷界排行"}</h1>
-          <RankingNav current={nf ? "nf" : "all"} by={rankingBy} />
+          <RankingNav current={nf ? "nf" : "all"} by={rankingBy} me={me} />
         </div>
         {/* key 含 page/view/by/hl：软导航（whereami 302 回跳）时强制重挂载，
             否则 Feed 的 useState(initial) 保留旧页数据、表格显示错页 */}

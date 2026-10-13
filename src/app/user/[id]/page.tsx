@@ -6,10 +6,11 @@
 // 2026-09-24 二轮（张老师要求）：动态标题改「动态」、筛选器收进标题行右侧；
 //   无上传录像隐藏「实力」雷达；统计数字默认亮灰、今日数据黄色高亮
 // 2026-09-26（张老师要求）：纪事上方新增「录像」版块（加载更多翻页），
-//   标题行右上角绿色「上传录像」按钮（仅本人可见）
+//   标题行右上角「上传录像」按钮（仅本人可见）
 
 import { existsSync } from "node:fs";
 import path from "node:path";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -42,9 +43,28 @@ import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { SendMessageButton } from "@/components/SendMessageButton";
 import { BbvCollection } from "@/components/BbvCollection";
-import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * 页面标题（2026-10-13 张老师要求）：玩家姓名（拼音）| 扫雷网，
+ * 与页面上 <h1>姓名</h1><h2>(拼音)</h2> 的展示口径一致。
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const userId = parseInt((await params).id, 10);
+  if (!userId) return {};
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(userId) },
+    select: { chineseName: true, englishName: true },
+  });
+  if (!u) return {};
+  const pinyin = u.englishName.trim();
+  return { title: `${u.chineseName}${pinyin ? `(${pinyin})` : ""} | 扫雷网` };
+}
 
 const PROFILE_FIELDS: [string, string][] = [
   ["nickname", "昵称"],
@@ -65,27 +85,22 @@ const VIDEO_LEVEL_TABS: [string, string][] = [
 /**
  * 统计盒行（2026-10-13 张老师要求，样式与首页/录像页「数据统计」统一）：
  * 标签 | 数值（右对齐） | 今日增量（绿色括号，左对齐；无新增留空）。
- * span：该行不需要增量列时（如「最近登录」）数值格横跨两列。
  */
 function StatRow({
   label,
   children,
   today,
-  span,
 }: {
   label: string;
   children: ReactNode;
   today?: number;
-  span?: boolean;
 }) {
-  const hasDelta = !span && today !== undefined && today > 0;
+  const hasDelta = today !== undefined && today > 0;
   return (
     <tr>
       <td>{label}</td>
-      <td className="num" colSpan={span ? 2 : undefined}>
-        {children}
-      </td>
-      {!span && <td className="delta">{hasDelta ? `（+${today}）` : ""}</td>}
+      <td className="num">{children}</td>
+      <td className="delta">{hasDelta ? `（+${today}）` : ""}</td>
     </tr>
   );
 }
@@ -243,6 +258,16 @@ export default async function UserViewPage({
             </div>
           </div>
         </div>
+        {/* 2026-10-13 张老师要求：窄屏（≤880 单列化）时「实力」雷达移到玩家面板下、
+            动态上——主栏这份副本桌面端 display:none，≤880 显示并隐藏侧栏原件
+            （globals.css .radar_main 规则）；桌面端仍在侧栏顶部 */}
+        {detail.stat &&
+          detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
+            <div className="radar box radar_main">
+              <h2>实力</h2>
+              <RadarChart data={radar} />
+            </div>
+          )}
         {news.length > 0 && (
           <div id="news" className="box">
             {/* 2026-09-27 张老师要求：动态/录像/纪事板块标题与其他页面同款 26px 大字，
@@ -259,7 +284,9 @@ export default async function UserViewPage({
           </div>
         )}
         {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像按上传时间倒序，
-            「加载更多」走列表模式翻页），右上角绿色「上传录像」按钮（仅本人可见）。
+            「加载更多」走列表模式翻页），右上角「上传录像」按钮（仅本人可见）。
+            2026-10-13 三轮（张老师要求）：按钮改回 button.active 同款深底绿字，
+            与论坛「发布主题」风格统一（删 globals.css 定制绿底覆盖）。
             2026-09-27 二轮：加 全部/初级/中级/高级 级别筛选（URL 即状态），
             标题与筛选器居中对齐（与动态版块同款编排） */}
         <div className="box" id="user_videos">
@@ -282,7 +309,7 @@ export default async function UserViewPage({
               )}
             </div>
             {isSelf && (
-              <Link href="/video/upload" className="button small video_upload_btn">
+              <Link href="/video/upload" className="button active small video_upload_btn">
                 上传录像
               </Link>
             )}
@@ -373,10 +400,6 @@ export default async function UserViewPage({
                 </StatRow>
                 <StatRow label="发表评论" today={activity.commentsToday}>
                   <em>{activity.comments}</em>
-                </StatRow>
-                {/* 最近登录不是「今日新增」类数据，数值格横跨两列 */}
-                <StatRow label="最近登录" span>
-                  {user.lastLoginTime ? formatDate(user.lastLoginTime, "Y-m-d H:i") : "—"}
                 </StatRow>
               </tbody>
             </table>

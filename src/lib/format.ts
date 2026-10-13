@@ -26,6 +26,11 @@ export function score3bvs(score: number | null | undefined, negative = false): s
   return (score / 1000).toFixed(3);
 }
 
+/** 地区榜「综合排行指数」：1 万以上按 xx.xW 显示（精确到一位小数），否则原样输出 */
+export function areaPower(power: number): string {
+  return power >= 10000 ? `${(power / 10000).toFixed(1)}W` : String(power);
+}
+
 const SECONDS_PER_DAY = 86400;
 const NEVER = 3153600000; // 100 年，即「永远显示绝对时间」
 

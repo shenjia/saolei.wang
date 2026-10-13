@@ -3,7 +3,7 @@
 // 2026-09-24 新增类型渲染：上传录像 VIDEO / 加入扫雷网 JOIN / 更换头像 AVATAR / 论坛文章 ARTICLE / 评论 COMMENT
 
 import Link from "next/link";
-import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLE_CLASSES, type Level } from "@/lib/config";
+import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLE_CLASSES, titleConditionText, type Level } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
@@ -131,8 +131,9 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
         {news.type === NEWS_TYPE.PROMOTION && news.author && (
           <>
             {authorCells}
-            晋升
-            <span className="record person">
+            <span className="promoted">晋升了！</span>
+            <span className="increase" aria-hidden="true"></span>
+            <span className="record person" data-tip={d.ti ? titleConditionText(d.ti) : undefined}>
               <RankBadge title={d.ti ?? ""} /> <em className={TITLE_CLASSES[d.ti ?? ""] ?? ""}>{d.ti ?? ""}</em>
             </span>
           </>

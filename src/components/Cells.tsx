@@ -1,7 +1,7 @@
 // 基础展示组件，移植自 2013 版 PHP 的 views/user/_avatarCell、views/common/title、score_*
 
 import Link from "next/link";
-import { TITLE_CLASSES, titleConditionText } from "@/lib/config";
+import { INVALID_3BVS_TIP, TITLE_CLASSES, titleConditionText } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite, TIME_NEVER } from "@/lib/format";
 import { RankBadge } from "./RankBadge";
 
@@ -99,7 +99,8 @@ export function ScoreTime({
         </ins>
       )}
       {noflag && <ins title="仅用左键点击完成游戏，全程不用右键标雷">NF</ins>}
-      {date ? <>({timeOpposite(date, TIME_NEVER)})</> : null}
+      {/* 2026-10-13 张老师要求：日期包 .score_date，用户主页窄屏（≤768）整体隐藏 */}
+      {date ? <span className="score_date">({timeOpposite(date, TIME_NEVER)})</span> : null}
     </span>
   );
 }
@@ -128,7 +129,8 @@ export function Score3bvs({
           <em>{score3bvs(score)}</em>
         )
       ) : score && score < 0 ? (
-        <del title="因为3BV太小，运气成分过高，该3BV/s成绩不被承认">
+        // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页）
+        <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
           {score3bvs(-score)}
         </del>
       ) : (
@@ -136,7 +138,7 @@ export function Score3bvs({
           ?
         </ins>
       )}
-      {date ? <>({timeOpposite(date, TIME_NEVER)})</> : null}
+      {date ? <span className="score_date">({timeOpposite(date, TIME_NEVER)})</span> : null}
     </span>
   );
 }

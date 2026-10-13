@@ -6,7 +6,7 @@
 import Link from "next/link";
 import type { RankingRow } from "@/lib/queries";
 import { scoreTime } from "@/lib/format";
-import { RANKING_BYS, type RankingBy } from "@/lib/config";
+import { INVALID_3BVS_TIP, RANKING_BYS, type RankingBy } from "@/lib/config";
 import { TitleBadge } from "./Cells";
 import { buildUrl } from "./Pager";
 
@@ -35,18 +35,29 @@ function ScoreCell({
 }) {
   const v = row.scores[col.by];
   const isTime = col.by.endsWith("_time");
-  const cls = `${col.cls}${current ? " current" : ""}`;
+  // hover 按级别变色（2026-10-13 张老师要求，与录像列表同逻辑）：初级绿、中级橙、高级金；
+  // 总计列（sum）保持全站 hover 绿
+  const lvCls = col.by.startsWith("beg") ? "hv_beg" : col.by.startsWith("int") ? "hv_int" : col.by.startsWith("exp") ? "hv_exp" : "";
+  const cls = `${col.cls}${current ? " current" : ""}${lvCls ? ` ${lvCls}` : ""}`;
   if (!v) return <td className={cls}>-</td>;
   // 3BV/s 负值 = 3BV 太小不被承认（删除线，对齐 Score3bvs 语义）
   // 排行表内 3BV/s 按 2008 版 FormatNumber(...,2) 显示两位小数
   const neg = !isTime && v < 0;
   const text = isTime ? scoreTime(v) : ((neg ? -v : v) / 1000).toFixed(2);
   const videoId = row.videos[col.by];
-  const inner = neg ? <del title="因为3BV太小，运气成分过高，该3BV/s成绩不被承认">{text}</del> : text;
+  // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页文案）；
+  // 此时不再挂 <a> 的「点击查看录像」原生 title，免得两种提示叠在一起
+  const inner = neg ? (
+    <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
+      {text}
+    </del>
+  ) : (
+    text
+  );
   return (
     <td className={cls}>
       {videoId ? (
-        <Link href={`/video/${videoId}`} target="_blank" title="点击查看录像">
+        <Link href={`/video/${videoId}`} target="_blank" title={neg ? undefined : "点击查看录像"}>
           {inner}
         </Link>
       ) : (

@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import type { VideoListItem } from "@/lib/queries";
-import { LEVEL_NAMES, type VideoLevel } from "@/lib/config";
+import { INVALID_3BVS_TIP, LEVEL_NAMES, type VideoLevel } from "@/lib/config";
 import { score3bvs, scoreTime, videoScores, formatDate, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "./Cells";
 
@@ -71,7 +71,10 @@ export function VideoRowLine({
         {scores["3bvs"] > 0 ? (
           score3bvs(scores["3bvs"])
         ) : (
-          <del title="因为3BV太小，运气成分过高，该3BV/s成绩不被承认">{score3bvs(-scores["3bvs"])}</del>
+          // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页）
+          <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
+            {score3bvs(-scores["3bvs"])}
+          </del>
         )}
       </td>
       <td className="counters">

@@ -1,5 +1,6 @@
 // 排行榜「加载更多」交互（2026-09-24 张老师要求，替代老式分页）：
-// 表格 + 底部 more_loader「加载更多」+（登录态）其右侧「我在哪里」按钮。
+// 表格 + 底部 more_loader「加载更多」（未入榜的登录用户右侧另见「如何加入排行」）。
+// 2026-10-13：底部「我在哪里」按钮取消，改由搜索框空输入推荐「自己」触发同一定位。
 // 定位策略分三档（点击后跳到目标行）：
 //   ① 已加载页内 → scrollIntoView 到 #id_{uid} 行
 //   ② 未加载但在 30 页内 → 从当前页并发拉缺失页，插入后滚动定位
@@ -11,6 +12,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RankingRow } from "@/lib/queries";
@@ -29,7 +31,7 @@ export interface RankingFeedProps {
   total: number;
   pageSize: number;
   myUid?: number;
-  /** 登录用户是否已加入当前排行：true→「我在哪里」；false→「如何加入排行？」 */
+  /** 登录用户是否已加入当前排行：false→底部显示「如何加入排行？」 */
   inRanking: boolean;
   /** 初始高亮行（whereami 302 携带 hl=<uid>，SSR 即高亮，无 JS 也可见） */
   initialHl?: number;
@@ -104,7 +106,7 @@ export function RankingFeed(props: RankingFeedProps) {
     }
   }
 
-  // 定位到任意玩家（2026-09-24 泛化：搜索框/「我在哪里」共用）：
+  // 定位到任意玩家（2026-09-24 泛化：搜索框推荐选中后触发）：
   // ① 已加载 → 滚动；② 30 页内 → 并发拉取后滚动；③ 更远 → 跳 whereami 整页导航
   // 落地后该行持续高亮（hlUid），玩家名变黄
   async function locateRow(uid: number) {
@@ -156,32 +158,29 @@ export function RankingFeed(props: RankingFeedProps) {
         newRows.push(...d.rows);
         if (d.deltas) newDeltas.push(...d.deltas);
       }
-      setRows((prev) => [...prev, ...newRows]);
-      if (newDeltas.length) {
-        setDeltas((prev) => {
-          const m = prev ? new Map(prev) : new Map();
-          for (const [id, d] of newDeltas) m.set(id, d);
-          return m;
-        });
-      }
+      // flushSync 强制同步提交——rAF 可能先于 React commit 触发，导致新行未上屏就滚动失败
+      // （2026-10-13 实证：搜索定位拉取缺失页后报「未找到该玩家的位置」）
+      flushSync(() => {
+        setRows((prev) => [...prev, ...newRows]);
+        if (newDeltas.length) {
+          setDeltas((prev) => {
+            const m = prev ? new Map(prev) : new Map();
+            for (const [id, d] of newDeltas) m.set(id, d);
+            return m;
+          });
+        }
+      });
       const lastRank = newRows.at(-1)?.rank ?? 0;
       if (lastRank) nextPage.current = Math.floor(lastRank / pageSize) + 1;
       if (lastRank >= total || page >= maxPage) setLoadedAll(true);
-      // 等新行上屏后滚动
-      requestAnimationFrame(() => {
-        if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
-        else setHint("");
-      });
+      // 新行已同步上屏，直接滚动
+      if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
+      else setHint("");
     } catch {
       jumpToWhereami(uid);
     } finally {
       setLocating(false);
     }
-  }
-
-  // 「我在哪里」按钮：定位到自己
-  function whereAmI() {
-    if (myUid) void locateRow(myUid);
   }
 
   // 302 接口需要整页导航语义（带 page 与 # 锚点、可分享可回退），用 router.push 走客户端路由
@@ -236,17 +235,6 @@ export function RankingFeed(props: RankingFeedProps) {
         )}
         {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
         <TotalCount total={total} loaded={rows.length} unit="位" />
-        {myUid && inRanking && (
-          <button
-            type="button"
-            className="button small whereami_btn"
-            disabled={locating}
-            onClick={whereAmI}
-            title="定位到我在排行榜中的位置"
-          >
-            {locating ? "定位中…" : "我在哪里"}
-          </button>
-        )}
         {myUid && !inRanking && (
           <Link
             href="/page/help"

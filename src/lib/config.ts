@@ -142,8 +142,8 @@ export const TITLE_COLORS: Record<string, string> = Object.fromEntries(
 export const TITLE_LEVEL: Level = "exp";
 export const TITLE_ORDER: Order = "time";
 
-// 各军衔的高级时间上限（毫秒，升序与 TITLES 对应；末档列兵无上限）
-// 区间口径：第 i 档 = (thresholds[i-1], thresholds[i]]，大元帅 = exp_time > 0
+// 各军衔的高级时间上限（毫秒，与 TITLES 按下标一一对应：
+// 大元帅=35s … 上等兵=150s；列兵无上限（>150s 即列兵））
 export const TITLE_THRESHOLDS: number[] = [
   35000, 40000, 42000, 45000, 48000, 50000, 52000, 55000, 58000, 60000,
   63000, 66000, 70000, 80000, 90000, 100000, 150000,
@@ -249,6 +249,10 @@ export const VIDEO_STATUS_NAMES: Record<number, string> = {
 // 3BV 小于该值时 3BV/s 成绩不被承认（显示删除线）
 export const MIN_3BV_FOR_3BVS = 4;
 
+// 无效 3BV/s 的 hover 气泡文案（2026-10-13 张老师要求：hover 删除线成绩弹气泡说明无效原因）。
+// 录像详情页与排行表共用同一条文案，改文案只改这里。
+export const INVALID_3BVS_TIP = "因为3BV太小，运气成分过高，该3BV/s成绩不被承认";
+
 // 棋盘尺寸（移植 board.js）
 export const BOARD_SIZE: Record<VideoLevel, { x: number; y: number }> = {
   beg: { x: 8, y: 8 },
@@ -325,4 +329,20 @@ export const AREA_DISPLAY: Record<string, string> = {
 
 export function areaDisplay(name: string): string {
   return AREA_DISPLAY[name] ?? name;
+}
+
+// ---------- 地区榜榜序（地区排行页表头 + URL 参数解析；服务端与客户端组件共用） ----------
+// 2026-10-13 张老师要求：去掉「平均排行」（平均全国名次意义不大），换成「活跃人数」（近 30 天登录人数）
+export type AreaOrder = "power" | "players" | "active" | "best";
+
+export const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
+  { key: "best", label: "领军人物" },
+  { key: "players", label: "排行人数" },
+  { key: "active", label: "活跃人数" },
+  { key: "power", label: "综合排行指数" },
+];
+
+/** 榜序参数解析（未知/缺省一律回落到综合排行指数） */
+export function parseAreaOrder(v?: string): AreaOrder {
+  return AREA_ORDERS.find((o) => o.key === v)?.key ?? "power";
 }

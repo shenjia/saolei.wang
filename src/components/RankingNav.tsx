@@ -2,6 +2,8 @@
 // 2026-09-24 三轮调整：双输入框合并为单个圆角搜索框——矢量放大镜 + placeholder「姓名或ID」；
 // 2026-09-24 四轮：去掉「查找」按钮——汉字输入防抖模糊匹配出推荐下拉（键盘上下选、回车确认），
 // 唯一候选自动定位；通过自定义事件 ranking:locate 委托同页的 RankingFeed 执行定位）
+// 2026-10-13 张老师要求：底部「我在哪里」按钮取消——登录态下聚焦/清空搜索框且未输入时，
+// 下拉直接推荐「自己」，回车即定位到自己在榜中的位置。
 
 "use client";
 
@@ -13,7 +15,7 @@ import { toast } from "./Toast";
 export type RankingView = "all" | "nf" | "bv" | "grow" | "area" | "world";
 
 const TABS: { key: RankingView; label: string; href: string }[] = [
-  { key: "all", label: "雷界排行", href: "/ranking" },
+  { key: "all", label: "雷界", href: "/ranking" },
   { key: "nf", label: "NF", href: "/ranking?view=nf" },
   { key: "bv", label: "BV", href: "/ranking?view=bv" },
   { key: "grow", label: "进步", href: "/grow" },
@@ -28,13 +30,30 @@ interface SuggestUser {
   sex: number;
 }
 
-export function RankingNav({ current, by }: { current: RankingView; by?: string }) {
+export function RankingNav({
+  current,
+  by,
+  me,
+}: {
+  current: RankingView;
+  by?: string;
+  /** 登录用户信息：搜索框空输入时推荐「自己」（替代原「我在哪里」按钮） */
+  me?: SuggestUser;
+}) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [users, setUsers] = useState<SuggestUser[] | null>(null);
   const [active, setActive] = useState(0); // 键盘上下键游标
   const boxRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0); // 竞态：仅最后一次请求生效
+
+  // 登录态：聚焦/清空输入时下拉推荐自己；回车选中即定位（走既有 pick 流程）
+  const meSuggest = me ? [me] : null;
+  function suggestMe() {
+    if (!meSuggest) return;
+    setUsers(meSuggest);
+    setActive(0);
+  }
 
   // 数字输入也出推荐（按 ID 精确匹配实时推荐玩家）；下拉项的次级文字数字模式显示 ID
   const kw = q.trim();
@@ -173,12 +192,20 @@ export function RankingNav({ current, by }: { current: RankingView; by?: string 
               maxLength={12}
               placeholder="姓名或ID"
               title="输入姓名或用户 ID，定位到排行榜中的位置"
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                setQ(e.target.value);
+                // 清空输入 → 回到「推荐自己」态（登录时）
+                if (!e.target.value.trim()) suggestMe();
+              }}
+              onFocus={() => {
+                if (!q.trim()) suggestMe();
+              }}
               onKeyDown={onKeyDown}
               autoComplete="off"
             />
           </span>
-          {users !== null && kw !== "" && (
+          {/* 有输入 → 模糊推荐/空态；无输入（登录态）→ 推荐自己（onFocus/onChange 已把 users 置为 [me]） */}
+          {users !== null && (kw !== "" || meSuggest !== null) && (
             <ul className="goto_suggest">
               {users.length === 0 ? (
                 <li className="goto_empty">{emptyMsg}</li>

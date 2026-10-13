@@ -1,34 +1,19 @@
 // 地区榜（移植 2008 版 Ranking_Area + Ranking_Areas：地区综合排行 + 地区内用户榜）
 // 综合实力公式移植 Ranking_Area_Refresh：Power = Σ(全国有成绩人数 − 个人名次)，实时窗口函数计算
+// 2026-10-13 张老师要求：榜单加交互式中国地图（见 components/AreaMap.tsx），地图放在排行最底部；
+//                       并把「平均排行」列换成「活跃人数」（近 30 天登录人数）
 
 import Link from "next/link";
-import { getAreaRanking, getRankingTable, type AreaOrder } from "@/lib/queries";
+import { getAreaRanking, getRankingTable } from "@/lib/queries";
 import { title as assessTitle } from "@/lib/assess";
-import { parseRankingBy, areaDisplay } from "@/lib/config";
+import { parseRankingBy, areaDisplay, parseAreaOrder } from "@/lib/config";
+import { AreaRanking } from "@/components/AreaRanking";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingTable } from "@/components/RankingTable";
 import { OldPager } from "@/components/OldPager";
-import { TitleBadge } from "@/components/Cells";
-import { buildUrl } from "@/components/Pager";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "地区排行 | 扫雷网" };
-
-const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
-  { key: "best", label: "领军人物" },
-  { key: "players", label: "排行人数" },
-  { key: "avg", label: "平均排行" },
-  { key: "power", label: "综合排行指数" },
-];
-
-function parseAreaOrder(v?: string): AreaOrder {
-  return (["power", "players", "avg", "best"] as const).find((o) => o === v) ?? "power";
-}
-
-// 综合排行指数：1 万以上按 xx.xW 显示（精确到一位小数）
-function formatPower(power: number): string {
-  return power >= 10000 ? `${(power / 10000).toFixed(1)}W` : String(power);
-}
 
 export default async function AreaPage({
   searchParams,
@@ -79,64 +64,14 @@ export default async function AreaPage({
           <h1 className="page_title">地区排行</h1>
           <RankingNav current="area" />
         </div>
-            <table cellPadding={0} cellSpacing={0} className="ranking_table area_table">
-              <thead>
-                <tr>
-                  <th>排名</th>
-                  <th>地区</th>
-                  {AREA_ORDERS.map((o) => (
-                    <th key={o.key}>
-                      <Link
-                        href={buildUrl("/area", { order: o.key === "power" ? undefined : o.key })}
-                        className={o.key === order ? "current" : ""}
-                      >
-                        {o.label}
-                      </Link>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => {
-                  return (
-                    <tr key={r.area}>
-                      <td className="rank">
-                        第&nbsp;<em>{i + 1}</em>&nbsp;位
-                      </td>
-                      <td className="name">
-                        <Link href={buildUrl("/area", { name: r.area })} title={`查看${areaDisplay(r.area)}雷友排行`}>
-                          {areaDisplay(r.area)}
-                        </Link>
-                      </td>
-                      <td className="best">
-                        <Link href={`/user/${r.bestId}`} target="_blank" title="点击查看个人信息">
-                          {r.bestName}
-                        </Link>
-                        <TitleBadge title={titles[i]} link />
-                      </td>
-                      <td className={order === "players" ? "num current" : "num"}>
-                        {r.players}&nbsp;<span className="unit">人</span>
-                      </td>
-                      <td className={order === "avg" ? "num current" : "num"}>
-                        {r.avgRank}&nbsp;<span className="unit">位</span>
-                      </td>
-                      <td className={order === "power" ? "num current" : "num"}>{formatPower(r.power)}</td>
-                    </tr>
-                  );
-                })}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: "center" }}>
-                      暂无数据
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <div className="area_note">
-              综合排行指数计算方式：地区内每位有成绩雷友贡献（全国有成绩总人数 − 个人全国名次），指数 = 地区全体成员贡献值之和。
-            </div>
+        <AreaRanking rows={rows} titles={titles} order={order}>
+          <div className="area_note">
+            综合排行指数计算方式：地区内每位有成绩雷友贡献（全国有成绩总人数 − 个人全国名次），指数 = 地区全体成员贡献值之和。
+            活跃人数 = 该地区近 30 天内登录过的雷友人数。
+          </div>
+        </AreaRanking>
       </div>
     </div>
   );
 }
+

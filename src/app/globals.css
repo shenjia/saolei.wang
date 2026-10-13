@@ -1075,11 +1075,13 @@ body #page.bbs_old .page_head {
 }
 /* 军衔徽章条件气泡（2026-10-13 张老师要求：全站 hover 军衔显示「高级记录 < xx秒」） */
 a.title[data-tip],
-span.title[data-tip] {
+span.title[data-tip],
+span.record[data-tip] {
   position: relative;
 }
 a.title[data-tip]::after,
-span.title[data-tip]::after {
+span.title[data-tip]::after,
+span.record[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
   bottom: 150%;
@@ -1099,7 +1101,8 @@ span.title[data-tip]::after {
   z-index: 9999;
 }
 a.title[data-tip]:hover::after,
-span.title[data-tip]:hover::after {
+span.title[data-tip]:hover::after,
+span.record[data-tip]:hover::after {
   opacity: 1;
 }
 .bbs_star::after,
@@ -1126,6 +1129,46 @@ span.title[data-tip]:hover::after {
 .bbs_star:hover::after,
 .bbs_top:hover::after {
   opacity: 1;
+}
+/* 3BV/s 无效成绩气泡（2026-10-13 张老师要求）：hover 带删除线的成绩时弹气泡说明无效原因，
+   替代原生 title（约 1s 延迟 + 系统灰样式），复用餐券气泡配色（2013 暗色系）。
+   定位说明：详情页 .video_cell 带 overflow:hidden，且 del 贴在右侧浮动 h2 的末尾，
+   故默认「向下弹 + 居中」只用于列表/表格；详情页由下方规则改为右对齐向左展开（见 #video_view 段）。 */
+del[data-tip] {
+  position: relative;
+}
+del[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 155%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: normal; /* h2 内继承 bold，气泡须回正 */
+  line-height: 1.6;
+  white-space: nowrap;
+  text-decoration: none; /* 不带 del 的删除线 */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+del[data-tip]:hover::after {
+  opacity: 1;
+}
+/* 详情页：del 贴右缘 → 右对齐向左展开；宽度优先单行（文案约 306px），窄屏自动换行不溢出 */
+#video_view .video_cell .score_3bvs del[data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+  white-space: normal;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 48px));
 }
 .bbs_flag.locked {
   color: #75715e;
@@ -1897,6 +1940,14 @@ body .title .rank-badge {
   margin-right: 0.18em;
   vertical-align: -0.14em;
 }
+/* 兜底：脱离 .title 上下文的徽章（如晋升动态 .record 内）默认也按 1em，
+   防止 SVG 按 viewBox 撑满父容器（2026-10-13 实测 486px） */
+body .rank-badge {
+  width: 1em;
+  height: 1em;
+  margin-right: 0.18em;
+  vertical-align: -0.14em;
+}
 
 /* ---------- 军衔徽章墙（2026-09-23 并入雷界页 /world；同阶段并排，张老师要求） ---------- */
 body .titles_grid {
@@ -2272,22 +2323,30 @@ body #user_view .info .score_3bvs em {
   font-size: 16px;
   line-height: 20px;
 }
-/* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示） */
+/* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示）。
+   2026-10-13 张老师要求：整块定高 160px（= 头像高度）改 flex 列，
+   排名块 margin-top:auto 沉底，使「全国第 N 名」底部与照片底部对齐；
+   个别用户无省份行（单行）时同样贴底。 */
 body #user_view .info .rank_label {
   position: absolute;
   top: 30px; /* 与 .box 内边距一致 = 头像顶部齐平 */
   right: 30px;
   width: 120px;
-  display: block;
+  height: 160px;
+  display: flex;
+  flex-direction: column;
   text-align: center;
   margin: 0;
 }
-/* 全国/省份排名两行（09-23 晚张老师要求）：置于军衔徽章下方，分两行居中 */
+/* 全国/省份排名两行（09-23 晚张老师要求）：置于军衔徽章下方，分两行居中。
+   2026-10-13 三轮张老师要求：字号一律不动（13px），只拉大行间距离填满高度——
+   line-height 1.5→2.2（每行 28.6px，两行 57px + 徽章 72 + 军衔名 ~23 +
+   间距 8 ≈ 160px = 头像高）；margin-top:auto 兜底，单行用户同样贴照片底边 */
 body #user_view .info .rank_label .ranks {
   display: block;
-  margin-top: 8px;
+  margin-top: auto;
   color: #888;
-  line-height: 1.5;
+  line-height: 2.2;
   white-space: nowrap;
 }
 body #user_view .info .rank_label .ranks .rank_line {
@@ -2364,27 +2423,8 @@ body #user_view .sidebar .table .delta {
   float: none;
   margin: 0 0 0 auto; /* 贴行尾 */
 }
-/* 绿色「上传录像」按钮：沿用 legacy .button.small 的渐变骨架与手感，
-   仅把配色换成 Monokai 主绿（#a6e22e 文字 / #679016 渐变底），
-   hover 提亮、active 压暗，无位移无形变（张老师：不要上下跳）。 */
-#user_videos .video_upload_btn,
-#user_videos .video_upload_btn:hover {
-  border-color: #679016;
-  background-color: #587812;
-  background-image: linear-gradient(180deg, #679016, #4a6410);
-  color: #d8f3a8;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
-}
-#user_videos .video_upload_btn:hover {
-  background-color: #679016;
-  background-image: linear-gradient(180deg, #75a319, #587812);
-  color: #e2f7b8;
-}
-#user_videos .video_upload_btn:active {
-  background-color: #4a6410;
-  background-image: linear-gradient(180deg, #556f12, #435a0e);
-  color: #c4e78f;
-}
+/* 2026-10-13 张老师要求：「上传录像」按钮回归 legacy .button.active 深底绿字，
+   与论坛「发布主题」同款（原定制绿底覆盖已删，仅保留上方贴行尾定位）。 */
 /* 版块内表格贴标题：首行与 h2 间距收紧（video_table 行自带紧凑 padding） */
 
 /* ==================== 排行榜 2008 编排改造（2026-09-23 张老师要求） ====================
@@ -2793,6 +2833,27 @@ body #page.ranking_old .ranking_box {
 
 /* （每日一星卡 #daily_star_card 样式已随功能于 2026-10-13 下线移除） */
 
+/* 晋升动态文案（2026-10-13 定稿）：金色「晋升了！」+ 绿色 increase 箭头（与破纪录动态统一）+ 军衔徽章正常分级色 */
+#news .promoted {
+  margin: 0 2px 0 5px;
+  color: #fdc61d;
+  font-weight: bold;
+}
+#news .promoted + .increase {
+  margin-right: 5px;
+}
+#news .record.person em {
+  margin: 0;
+}
+#news .record.person em.grand { color: #e6db74; }
+#news .record.person em.marshal { color: #e6db74; }
+#news .record.person em.general { color: #f79646; }
+#news .record.person em.colonel { color: #e26b0a; }
+#news .record.person em.captain { color: #9bbb59; }
+#news .record.person em.sergeant { color: #b1b1a4; }
+#news .record.person em.private { color: #939387; }
+#news .record.person em.new { color: #636359; }
+
 /* 动态中的文章标题《…》（2026-10-13 张老师要求）：不用金色，改亮灰 #bbbbbb
    ——与论坛列表标题灰同源，动态与论坛两处文章标题配色一致。
    注意 .score 同时被成绩数字复用（legacy #news .score{color:#fdc61a} 为金），
@@ -2910,6 +2971,254 @@ body #page.ranking_old .ranking_box {
   margin-top: 8px;
   font-size: 12px;
   color: #939387;
+}
+
+/* ---------- 地区榜 · 交互式中国地图（2026-10-13 张老师需求） ----------
+   省界为纯静态 SVG（无第三方地图服务 / 无 Key，含台湾省与南海诸岛九段线，标准地图口径），
+   几何数据由 scripts/build-area-map.py 生成到 src/lib/area-map-geo.ts；
+   省份按综合排行指数开方归一填色（越高越黄），悬停高亮 + 气泡，点击跳转该地区排行。 */
+.area_map {
+  margin: 16px 4px 12px;
+  padding: 14px 16px 8px;
+  background: #2c2b24;
+  border: 1px solid #3f3e35;
+  border-radius: 8px;
+}
+.am_head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.am_title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b1b1a4;
+}
+.am_title span {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: normal;
+  color: #75715e;
+}
+.am_legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: #939387;
+}
+.lg_bar {
+  display: inline-block;
+  width: 120px;
+  height: 8px;
+  border-radius: 4px;
+}
+.lg_name {
+  margin-left: 4px;
+  color: #75715e;
+}
+.am_stage {
+  position: relative;
+}
+.am_svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* 空白底：鼠标移到无数据区域时收起气泡（有数据省份叠在其上） */
+.am_bg {
+  fill: transparent;
+}
+.am_hint {
+  padding: 2px 0 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #75715e;
+}
+
+.prov {
+  stroke: rgba(248, 248, 242, 0.15);
+  stroke-width: 0.8;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+.prov:hover,
+.prov.hovering {
+  filter: brightness(1.28) drop-shadow(0 0 7px rgba(253, 198, 29, 0.6));
+  stroke: #f8f8f2;
+  stroke-width: 1.5;
+}
+.prov.nodata {
+  fill: #302f28;
+  stroke: rgba(248, 248, 242, 0.07);
+  cursor: default;
+}
+.prov.nodata:hover {
+  filter: none;
+  stroke: rgba(248, 248, 242, 0.07);
+  stroke-width: 0.8;
+}
+
+.plbl {
+  font-size: 15px;
+  font-weight: 600;
+  text-anchor: middle;
+  pointer-events: none;
+  transition: fill 0.12s;
+}
+.plbl.dark {
+  fill: rgba(43, 42, 35, 0.85);
+}
+.plbl.light {
+  fill: rgba(177, 177, 164, 0.55);
+}
+.plbl.on {
+  fill: #fff;
+}
+
+/* 港澳（图形过小）：圆点常显，引线 + 名称随悬停出现 */
+.mini {
+  cursor: pointer;
+}
+.mini line {
+  opacity: 0;
+  stroke: rgba(248, 248, 242, 0.4);
+  stroke-width: 0.7;
+  transition: opacity 0.12s;
+}
+.mini .mlbl {
+  opacity: 0;
+  font-size: 13px;
+  fill: rgba(248, 248, 242, 0.9);
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 2.4;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.mini:hover line,
+.mini:hover .mlbl,
+.mini.on line,
+.mini.on .mlbl {
+  opacity: 1;
+}
+.mini.on .mlbl {
+  fill: #fff;
+}
+
+/* 南海诸岛附图 */
+.inset-box {
+  fill: rgba(0, 0, 0, 0.22);
+  stroke: #49483e;
+  stroke-width: 1;
+}
+.inset-lbl {
+  font-size: 11px;
+  fill: #75715e;
+}
+.island {
+  fill: #7d7c6e;
+  stroke: rgba(248, 248, 242, 0.14);
+  stroke-width: 0.5;
+}
+.nine {
+  fill: none;
+  stroke: rgba(190, 188, 170, 0.55);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+/* 悬停气泡（跟随鼠标，pointer-events 关掉避免抢 hover） */
+.am_tip {
+  position: absolute;
+  z-index: 5;
+  min-width: 176px;
+  padding: 10px 12px 8px;
+  border: 1px solid #5a594e;
+  border-radius: 8px;
+  background: rgba(21, 21, 21, 0.96);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s, transform 0.12s;
+  pointer-events: none;
+}
+.am_tip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.tp_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #34332b;
+}
+.tp_head b {
+  font-size: 14px;
+  color: #f8f8f2;
+}
+.tp_head span {
+  font-size: 11px;
+  color: #fdc61d;
+}
+.tp_row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 2;
+}
+.tp_row i {
+  font-style: normal;
+  color: #75715e;
+}
+.tp_row b {
+  font-weight: 600;
+  color: #b1b1a4;
+}
+.tp_row b.gold {
+  color: #fdc61d;
+}
+.tp_row em {
+  margin-left: 4px;
+  font-style: normal;
+  font-size: 11px;
+}
+.tp_row em.unit {
+  color: #939387;
+  font-weight: normal;
+}
+.tp_foot {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid #34332b;
+  font-size: 11px;
+  color: #75715e;
+}
+
+@media (max-width: 768px) {
+  /* 小屏地图整体缩小：省份名称标签会糊成一团，直接隐去只留悬停气泡（触屏点击即跳转） */
+  .area_map {
+    margin: 12px 0 10px;
+    padding: 10px 10px 6px;
+  }
+  .am_legend .lg_name {
+    display: none;
+  }
+  .plbl {
+    display: none;
+  }
+  .am_hint_h {
+    display: none;
+  }
+  .am_hint {
+    font-size: 11px;
+  }
 }
 
 /* ---------- 排行页细节修正（2026-09-23 第一轮截图后） ---------- */
@@ -3289,6 +3598,36 @@ body #page.two_columns li.main {
   body #page.two_columns #home:has(.bbs_post) > li.sidebar {
     display: none;
   }
+
+  /* ⑦ 用户主页「实力」雷达换位（2026-10-13 张老师要求）：≤880 单列化后侧栏
+     整组落到页面最底，雷达改在主栏「玩家面板下、动态上」显示——主栏副本
+     .radar_main（桌面 display:none，见下方全局规则）亮起，侧栏原件隐藏。 */
+  body #page.two_columns #user_view > li.main .radar_main {
+    display: block;
+  }
+  /* 主栏够宽时 h2（legacy 是 inline-block）会与行内 svg 挤同一行盒、基线对齐
+     把「实力」标题压到行底——图表转块级落回标题下方；左右 auto 居中，
+     上下保留 legacy -15px 出血（与侧栏形态一致） */
+  body #page.two_columns #user_view > li.main .radar_main .chart {
+    display: block;
+    margin: -15px auto;
+  }
+  body #page.two_columns #user_view > li.sidebar .radar {
+    display: none;
+  }
+
+  /* ⑧ 录像列表页「热门录像」低宽度隐藏（2026-10-13 张老师要求）：≤880 单列带内
+     侧栏落到主栏下方，热门录像不再显示；「统计」板块保留。
+     用 .video_old 与录像详情页（two_columns 无 .video_old）、论坛/首页隔离开。 */
+  body #page.video_old #video_hot {
+    display: none;
+  }
+}
+
+/* 用户主页「实力」雷达主栏副本：桌面端隐藏（≥881 雷达在侧栏顶部）；
+   ≤880 单列化时亮起、侧栏原件隐藏（见上面 ≤880 块 ⑦） */
+#user_view .radar_main {
+  display: none;
 }
 
 /* ③ 顶栏导航防掉行（769~880）：wrapper 下限 656 兜住 logo+导航最坏宽度 625；
@@ -3364,7 +3703,7 @@ body #page {
   #mobile_nav {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 0; /* 原 4px + 双按钮留白显宽（2026-10-13 张老师反馈），归零由按钮内边距控制间距 */
     float: right;
     height: 44px;
   }
@@ -3419,6 +3758,40 @@ body #page {
   }
   .mn_burger.open span::after {
     transform: translateY(-6px) rotate(-45deg);
+  }
+  /* 消息按钮（2026-10-13 张老师定稿，设计稿为真站注入截图 /tmp/nav-mobile-after.png）：
+     用户主页「发消息」同款三点对话气泡图标（BubbleIcon），灰 → hover 绿同汉堡；
+     未读角标沿用桌面 .msg_badge 黄底黑字，钉在图标右上角；36px 宽收紧与汉堡间距 */
+  .mn_msg_btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 44px;
+    color: #939387;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .mn_msg_btn:hover {
+    color: #a6e22e;
+  }
+  .mn_msg_btn svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+  }
+  .mn_msg_badge {
+    position: absolute;
+    top: 5px;
+    right: 0;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: #fdc61a;
+    color: #151515;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 14px;
   }
   /* 头像按钮：30px 圆头像，垂直居中 */
   .mn_avatar_btn {
@@ -3533,6 +3906,23 @@ body #page {
   body #page .box {
     padding: 16px 14px;
   }
+  /* 用户主页 info 盒例外（2026-10-13 张老师反馈窄屏文字重叠 + 顶部错位）：
+     .info 同时带 .box 类，上面的 padding 简写与 2054 行 body #user_view .info
+     特异性相同（0,1,2）且顺序靠后，把 padding-right:170px 和 30px 顶距一起冲掉
+     ——成绩表伸进右上角军衔区（文字重叠），rank_label top:30 相对新 16px 顶距
+     又低了 14px。这里恢复右侧预留位，rank_label 顶/右距跟随移动端 padding。 */
+  body #page #user_view .info {
+    padding-right: 170px;
+  }
+  body #page #user_view .info .rank_label {
+    top: 16px;
+    right: 14px;
+  }
+  /* 窄屏不再显示纪录时间（连括号一起隐藏，2026-10-13 张老师要求）：
+     只限用户主页成绩表，UserCard / 录像列表的日期不受影响 */
+  body #page #user_view .info .scores .score_date {
+    display: none;
+  }
   /* ---------- ③ 排行页：tabs 折行 + 宽表盒内横滑 ---------- */
   .ranking_nav {
     flex-wrap: wrap;
@@ -3544,6 +3934,21 @@ body #page {
     align-items: stretch;
     gap: 8px;
     margin-bottom: 0;
+  }
+  /* 消息页页头例外（2026-10-13 张老师要求）：h1 与「全部已读 / 清空消息」始终同行，
+     不随上方通用规则上下堆叠；h1/按钮组均不收缩、按钮文字不换行，宽度保内容完整可见。
+     ⚠️ display:flex 必须显式给：全站只有 ≥769 块把 .page_head 设为 flex，
+     ≤768 时该盒是 block（flex-direction 声明无效、子级块级堆叠——正是「变形」真凶） */
+  #page.message_list .page_head {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+  }
+  #page.message_list .page_head .page_title,
+  #page.message_list .page_head .msg_head_btns,
+  #page.message_list .page_head .msg_head_btns .button {
+    flex: none;
+    white-space: nowrap;
   }
   body #page.ranking_old.main .page_head .ranking_nav {
     align-items: flex-start;
@@ -3872,6 +4277,17 @@ body #video_list .score_3bvs a:hover em {
 #page .video_table td.score.lv_exp a:hover {
   color: #fdc61d;
 }
+/* 排行表成绩同款（2026-10-13 张老师要求：与录像列表同逻辑）。
+   .current 列默认黄，hover 时按级别变色（#page 前缀压过 current 规则） */
+#page .ranking_table td.hv_beg a:hover {
+  color: #a6e22e;
+}
+#page .ranking_table td.hv_int a:hover {
+  color: #f79646;
+}
+#page .ranking_table td.hv_exp a:hover {
+  color: #fdc61d;
+}
 /* 3BV / 3BV/s 数字列居中（表头同步居中，与数据对齐） */
 .video_table th.c,
 .video_table td.c {
@@ -3924,6 +4340,25 @@ body #video_list .score_3bvs a:hover em {
 #page.video_old .page_head .video_nav .tabs {
   clear: none;
   float: none;
+}
+
+/* 页头折行修正（2026-10-13 张老师要求：筛选器放不下时应整体折行而非错位）：
+   原状——page_head 不换行、video_nav flex:1+min-width:0 被挤窄后内部折行，
+   级别 tabs 独占上行、h1 随 flex-end 坠到下行与排序 tabs 同排（881~1187 视口必现；
+   带 author 参数时 h1「全部录像」更宽，任意宽度都错位）。
+   改法：page_head 允许换行 + video_nav 设 min-width:500（级别 246+gap12+排序 228+余量），
+   行内余量不足 500 时筛选器组整体折到第二行（级别靠左、排序 margin-left:auto 贴右），
+   h1 稳占第一行——与 ≤768 移动版「h1 一行、筛选器一行」的堆叠语言一致。
+   纯宽度驱动、无断点：桌面放得下时（≥~1188）仍一行排开，行为不变。
+   只包 ≥769：≤768 移动版 page_head 本就是块级堆叠，无需干预。 */
+@media (min-width: 769px) {
+  body #page.video_old .page_head {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  body #page.video_old .page_head .video_nav {
+    min-width: 500px;
+  }
 }
 
 /* 卡片与列表的垂直间距（page_head 在卡片内：清掉通用页头外距，与排行页七轮同法） */

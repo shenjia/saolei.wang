@@ -31,13 +31,15 @@ BATCH = 5000
 LEVELS = ("beg", "int", "exp")
 SENTINEL = 998000
 
-# SUB 制军衔（低→高：越靠后门槛越高；score_time 为毫秒）
+# SUB 制军衔（与 src/lib/config.ts TITLES/TITLE_THRESHOLDS 严格一致；score_time 为毫秒）
+# 注意 2026-10-13 17:04 修正：此前士官以下错位一档（80000 曾写成中士，实为上士）；
+# 列兵 = 无上限（首成绩 >150s 也发晋升事件）
 TIERS = [
-    (150000, "列兵"), (100000, "上等兵"), (90000, "下士"), (80000, "中士"),
-    (70000, "少尉"), (66000, "中尉"), (63000, "上尉"), (60000, "少校"),
-    (58000, "中校"), (55000, "上校"), (52000, "大校"), (50000, "少将"),
-    (48000, "中将"), (45000, "上将"), (42000, "大将"), (40000, "元帅"),
-    (35000, "大元帅"),
+    (35000, "大元帅"), (40000, "元帅"), (42000, "大将"), (45000, "上将"),
+    (48000, "中将"), (50000, "少将"), (52000, "大校"), (55000, "上校"),
+    (58000, "中校"), (60000, "少校"), (63000, "上尉"), (66000, "中尉"),
+    (70000, "少尉"), (80000, "上士"), (90000, "中士"), (100000, "下士"),
+    (150000, "上等兵"), (float("inf"), "列兵"),
 ]
 COND_TEXT = {
     "大元帅": "高级记录 < 35秒", "元帅": "高级记录 < 40秒", "大将": "高级记录 < 42秒",
@@ -86,23 +88,27 @@ for u, s, ct in rows:
         continue
     prev = best.get(u)
     if prev is None:
-        # 首盘高级成绩：所有 <= 首成绩的宽档视为已达成（不补发低档动态），
-        # 只发「实际落入的最高档」一条，代表此刻军衔；后续跨越再逐档补发
+        # 首盘高级成绩：落入的档 = TIERS（严→宽）中第一个 s<=threshold 的档，
+        # 所有更宽的档一并视为已达成（不补发低档动态）；只发落入档一条
         best[u] = s
         cur_tier = None
         for threshold, name in TIERS:
             if s <= threshold:
-                covered[u].add(name)
-                cur_tier = name  # TIERS 从宽到严，取最后一个满足的即最严档
+                if cur_tier is None:
+                    cur_tier = name  # 第一个满足 = 最严档 = 该成绩的军衔
+                covered[u].add(name)  # 宽档全部记为已达成
         if cur_tier and (u, cur_tier) not in has_promo:
             promo_events.append(((ct or 0), u, cur_tier))
     elif s < prev:
         best[u] = s
-        for threshold, name in TIERS:
-            if s <= threshold and name not in covered[u]:
-                covered[u].add(name)
-                if (u, name) not in has_promo:
-                    promo_events.append(((ct or 0), u, name))
+        # 一次破纪录跨多个档位时「一步晋升到位」：只发最终（最严）档一条动态，
+        # 中间档视为已达成不再补发（2026-10-13 17:27 张老师要求：同时多条晋升动态不合理）
+        crossed = [name for threshold, name in reversed(TIERS)
+                   if s <= threshold and name not in covered[u]]
+        for name in crossed:
+            covered[u].add(name)
+        if crossed and (u, crossed[-1]) not in has_promo:
+            promo_events.append(((ct or 0), u, crossed[-1]))
     # else: 未破纪录，跳过
 
 promo_events.sort()
