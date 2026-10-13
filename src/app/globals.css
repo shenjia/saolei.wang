@@ -3051,6 +3051,25 @@ body #page.two_columns li.main {
   }
 }
 
+/* ---------- 窄屏整页缩放（2026-10-13 张老师要求：竖屏下主体板块完整显示，全站生效） ----------
+   目的：竖屏手机（≤605px）把 #page 主体整体缩小，让宽内容一屏呈现——排行榜
+   10 列成绩表、BBS 宽表、页头 tabs+搜索框都不再折行/横滑（缩后虚拟可用宽
+   ≈ 561px：tabs 336 + 搜索 162 同行放下，页头回到两行）。
+   系数规律 zoom ≈ 视口宽 / 605（393px 竖屏 → 0.65，张老师选定的折中档），
+   用阶梯断点实现（避开 calc 同单位相除 length/length 的兼容性风险），
+   每档内误差 ≤4%（约 2% 的跳变肉眼无感）。≥606px 不缩放（现状已可容纳）。
+   缩放对象只含 #page：#header（顶栏）/ #mobile_nav / footer 在 #page 之外，
+   保持原尺寸与触控区（顶栏汉堡菜单/头像按钮不被缩小）。
+   兼容性：zoom 属性 Chrome / 安卓 / 微信内核全支持；iOS Safari 17.4+ 支持，
+   旧内核自动忽略该属性、退化为原布局（不会崩）。
+   如需某页不参与缩放：在该页根元素上加 #page.nofit class 并补一条 reset 即可。 */
+@media (max-width: 410px) { body #page { zoom: 0.65; } }
+@media (min-width: 411px) and (max-width: 450px) { body #page { zoom: 0.70; } }
+@media (min-width: 451px) and (max-width: 490px) { body #page { zoom: 0.76; } }
+@media (min-width: 491px) and (max-width: 530px) { body #page { zoom: 0.82; } }
+@media (min-width: 531px) and (max-width: 570px) { body #page { zoom: 0.88; } }
+@media (min-width: 571px) and (max-width: 605px) { body #page { zoom: 0.94; } }
+
 /* ---------- footer 全站顶部留白（2026-09-27 张老师要求） ----------
    footer 不得与任何上方元素紧挨。
    ⚠️ 布局事实：#page（two_columns/main）两栏 float 溢出、容器高度塌陷；
