@@ -95,6 +95,22 @@
   canvas 归一化成 400px JPEG**——智谱视觉接口不吃 GIF/HEIC（实测 400），大图还会逼近超时。
   AI 初审用 `glm-4v-flash`（env：GLM_API_KEY 与 01xue.com 共用、GLM_VISION_MODEL），原则沿用
   01xue ai-moderator：AI 永不自动拒绝，pass 直接生效、review/异常/超时一律转人工（`/admin/avatars`）
+- `sensitive.ts` / `sensitive-words.ts`：UGC **前置**敏感词过滤（2026-10-13）。词库分 ad/abuse/porn/illegal 四类；
+  引擎归一化（全角→半角、去空白与干扰符、英文小写）后走 Trie 扫描，可识别「加 微*信」「ＱＱ群」这类绕写。
+  **接入点三处**：`/api/bbs` 的 post（标题+正文）/ reply / edit、`/api/comment/post`——命中即 400 拒绝，
+  不落库也不发动态；对外只报类别不报具体词（命中词仅进服务端日志）。词库只增不删，收词避开中性词（自由/干部一类勿入）
+- `text-moderate.ts` / `content-review.ts`：UGC **后置** AI 审核（2026-10-13）。内容发表后由 route 里的
+  `after()`（来自 `next/server`，Next 16 已导出）异步送 `glm-4-flash` 复核（`GLM_TEXT_MODEL` 可覆盖，
+  `TEXT_AI_ENABLED=false` 可关）：AI 判 review → 该条转「待审」（前台 `where status=0` 自动不展示），
+  并回退冗余计数、撤下这条内容的动态。原则：**AI 永不自动删除**（review 只转人工）、**失败一律放行**
+  （超时/报错保持公开 + 告警——异步链路里 AI 故障若转待审，会让全站内容集体消失）。后台在「评论管理 /
+  论坛管理」按「待审」筛选并「通过」（`comment.setStatus` / `bbs.setPost` / `bbs.setReplyStatus`，均收 0/5/-1）
+  - ⚠️ 撤动态必须按 `news.details_data` 里的 `cid`（= 内容 id）精确匹配：`publishNews` 的 details 里都写了 `cid`。
+    只按 `createTime` 会误删同一用户在同一目标下**同秒**发的另一条动态（2026-10-13 实测踩到）
+  - ⚠️ 状态语义 0 正常 / 5 待审 / -1 删除，`comment`/`bbs_post`/`bbs_reply` 三表通用；冗余计数口径见
+    `config.countsInTotal`（只有正常态计入），改状态一律走该公式算 delta
+- **UGC 发布入口是双闸门**：今后新增任何发布入口（**含编辑入口**）都要同时挂前置 `checkSensitive*` 与后置
+  `after(() => runContentReview(kind, id, text))`；编辑入口不挂即可「先发正常内容、过审后再改回敏感」绕过
 - 解析器验证方法：旧项目 `code/videos/**` 抽样，按文件 hash 与 DB `video+video_info` 全字段对比
   （本地 videos/ 样本文件名≠内容 md5，是改名测试文件，不能当真值）
 

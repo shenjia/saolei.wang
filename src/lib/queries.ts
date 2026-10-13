@@ -878,7 +878,9 @@ export async function addComment(videoId: number, userId: number, content: strin
       type: NEWS_TYPE.COMMENT,
       userId,
       reference: videoId,
-      details: { kind: "video" },
+      // cid = 本条评论 id：AI 后置复审要按它精确定位并撤下这一条动态
+      // （同秒多条评论 createTime 相同，只靠时间会把别人的动态一并删掉）
+      details: { kind: "video", cid: Number(created.id) },
       createTime: Number(now),
     });
     return N(created.id);

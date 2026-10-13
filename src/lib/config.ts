@@ -61,6 +61,26 @@ export const COMMENT_PAGESIZE = 15;
 export const COMMENT_CONTENT_LIMIT = 100;
 export const COMMENT_STATUS = { NORMAL: 0, DELETED: -1 } as const;
 
+// ---------- UGC 内容审核状态（2026-10-13 引入 AI 后置审核） ----------
+// comment / bbs_post / bbs_reply 三张表共用同一套 status 语义：
+//    0  正常（公开，计入条数）
+//    5  AI 判定可疑 → 转人工复核（对外不公开，不计入条数）
+//   -1  删除 / 屏蔽（软删，不公开）
+// 前台查询一律 where status = 0，因此待审内容自动不展示、无需改各页查询。
+export const CONTENT_STATUS = { NORMAL: 0, PENDING: 5, DELETED: -1 } as const;
+
+/** 该状态是否计入冗余条数（video_stat.comments / bbs_post.replies）——仅正常态计入 */
+export function countsInTotal(status: number): boolean {
+  return status === CONTENT_STATUS.NORMAL;
+}
+
+/** 状态中文名（管理后台展示用） */
+export const CONTENT_STATUS_NAMES: Record<number, string> = {
+  0: "正常",
+  5: "待审",
+  "-1": "已删除",
+};
+
 // 动态「加载更多」每页条数（移植 NewsConfig::PAGESIZE）
 export const NEWS_PAGESIZE = 20;
 // 用户主页动态初始条数（2026-09-24 张老师要求 15 → 10）

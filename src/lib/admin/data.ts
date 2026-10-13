@@ -456,6 +456,7 @@ export async function getCommentListAdmin(f: {
   const where: Record<string, unknown> = {};
   if (f.status === "1") where.status = -1;
   else if (f.status === "0") where.status = 0;
+  else if (f.status === "5") where.status = 5; // AI 待审（2026-10-13）
   const q = (f.q ?? "").trim();
   if (q) {
     if (/^\d+$/.test(q)) where.OR = [{ id: BigInt(q) }, { user: BigInt(q) }, { video: BigInt(q) }];
@@ -529,6 +530,7 @@ export async function getPostListAdmin(f: {
   if (f.board && /^\d+$/.test(f.board)) where.board = parseInt(f.board, 10);
   if (f.status === "1") where.status = -1;
   else if (f.status === "0") where.status = 0;
+  else if (f.status === "5") where.status = 5; // AI 待审（2026-10-13）
   if (f.flag === "top") where.isTop = true;
   if (f.flag === "pinned") where.isPinned = true;
   if (f.flag === "nice") where.isNice = true;

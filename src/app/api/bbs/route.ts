@@ -1,8 +1,9 @@
 // BBS API：发帖/编辑/删除/回帖/删回复/管理操作
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { prisma } from "@/lib/db";
+import { runContentReview } from "@/lib/content-review";
 import {
   adminSetPost,
   BBS_BOARD_NAMES,
@@ -15,6 +16,13 @@ import {
   deleteReply,
   updatePost,
 } from "@/lib/bbs";
+import {
+  checkSensitive,
+  checkSensitiveAll,
+  logSensitiveHit,
+  sensitiveRejectMessage,
+  type SensitiveResult,
+} from "@/lib/sensitive";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -24,6 +32,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "");
   const id = parseInt(String(body.id ?? ""), 10) || 0;
+
+  // 敏感词命中的统一拒绝出口（2026-10-13）：不落库、不发动态，只回提示文案（不暴露具体词）
+  const reject = (result: SensitiveResult, scope: string) => {
+    logSensitiveHit(scope, session.uid, result);
+    return NextResponse.json({ error: sensitiveRejectMessage(result) }, { status: 400 });
+  };
 
   if (action === "post") {
     const board = parseInt(String(body.board ?? ""), 10);
@@ -36,7 +50,11 @@ export async function POST(req: NextRequest) {
     if (!admin && !(await canPost(session.uid))) {
       return NextResponse.json({ error: "加入排行后才能发布主题" }, { status: 403 });
     }
+    const hit = checkSensitiveAll([title, content]);
+    if (!hit.ok) return reject(hit, "bbs.post");
     const postId = await createPost(session.uid, board, title, content);
+    // AI 后置复审（2026-10-13）：标题 + 正文合并送审
+    after(() => runContentReview("bbs_post", postId, `${title}\n${content}`));
     return NextResponse.json({ id: postId });
   }
 
@@ -47,9 +65,12 @@ export async function POST(req: NextRequest) {
     if (!admin && !(await canPost(session.uid))) {
       return NextResponse.json({ error: "加入排行后才能回复" }, { status: 403 });
     }
+    const hit = checkSensitive(content);
+    if (!hit.ok) return reject(hit, "bbs.reply");
     const replyId = await createReply(id, session.uid, content, admin);
     if (replyId === "locked") return NextResponse.json({ error: "主题已锁定" }, { status: 403 });
     if (replyId === null) return NextResponse.json({ error: "主题不存在" }, { status: 404 });
+    after(() => runContentReview("bbs_reply", replyId, content));
     return NextResponse.json({ id: replyId });
   }
 
@@ -60,11 +81,21 @@ export async function POST(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
     if (title !== undefined && !title) return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
     if (content !== undefined && !content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
+    // 编辑同样过滤（否则可用「先发正常内容、再改回敏感内容」绕过发布拦截）
+    const hit = checkSensitiveAll([title, content]);
+    if (!hit.ok) return reject(hit, "bbs.edit");
     // 移动板块是管理员特权
     const data: { title?: string; content?: string; board?: number } = { title, content };
     if (board !== undefined && admin && board in BBS_BOARD_NAMES) data.board = board;
     const ok = await updatePost(id, session.uid, admin, data);
-    return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "无权编辑" }, { status: 403 });
+    if (!ok) return NextResponse.json({ error: "无权编辑" }, { status: 403 });
+    // 编辑同样送 AI 复审（取库内最终标题+正文，防止「先发正常内容、AI 放行后再改回敏感」）
+    const cur = await prisma.bbsPost.findUnique({
+      where: { id: BigInt(id) },
+      select: { title: true, content: true },
+    });
+    if (cur) after(() => runContentReview("bbs_post", id, `${cur.title}\n${cur.content}`));
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "delete") {

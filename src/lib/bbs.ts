@@ -399,7 +399,8 @@ export async function createPost(userId: number, board: number, title: string, c
       type: NEWS_TYPE.ARTICLE,
       userId,
       reference: N(row.id),
-      details: { t: title.slice(0, 50) },
+      // cid = 主题 id：AI 后置复审据此精确撤下这条动态（同秒多条只靠 createTime 会误删）
+      details: { t: title.slice(0, 50), cid: N(row.id) },
       createTime: N(now),
     });
     return N(row.id);
@@ -447,7 +448,8 @@ export async function createReply(
       type: NEWS_TYPE.COMMENT,
       userId,
       reference: postId,
-      details: { kind: "bbs", t: post.title.slice(0, 50) },
+      // cid = 回复 id：AI 后置复审据此精确撤下这条动态
+      details: { kind: "bbs", t: post.title.slice(0, 50), cid: N(reply.id) },
       createTime: N(now),
     });
     return N(reply.id);

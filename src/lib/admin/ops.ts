@@ -11,7 +11,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
-import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE } from "@/lib/config";
+import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE, countsInTotal } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
 import { reviewVideo } from "@/lib/review";
@@ -35,6 +35,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "bbs.setPost": "manager",
   "bbs.deletePost": "manager",
   "bbs.deleteReply": "manager",
+  "bbs.setReplyStatus": "manager",
   "news.delete": "manager",
   "message.broadcast": "administrator",
   "rank.snapshot": "manager",
@@ -210,13 +211,16 @@ async function dispatch(
       const id = toId(p.id);
       const status = parseInt(String(p.status ?? ""), 10);
       if (!id) return { ok: false, error: "参数错误：缺少评论 ID" };
-      if (status !== 0 && status !== -1) return { ok: false, error: "参数错误：状态只能为 0 或 -1" };
+      // 0 正常 / 5 AI 待审 / -1 删除（2026-10-13 引入待审，见 config.CONTENT_STATUS）
+      if (status !== 0 && status !== 5 && status !== -1) {
+        return { ok: false, error: "参数错误：状态只能为 0（正常）/ 5（待审）/ -1（删除）" };
+      }
       const row = await prisma.comment.findUnique({ where: { id: BigInt(id) } });
       if (!row) return { ok: false, error: "评论不存在" };
       await prisma.$transaction(async (tx) => {
         await tx.comment.update({ where: { id: BigInt(id) }, data: { status, updateTime: BigInt(now()) } });
-        // 同步录像评论计数（video_stat.comments）
-        const delta = status === -1 && row.status !== -1 ? -1 : status === 0 && row.status === -1 ? 1 : 0;
+        // 同步录像评论计数：只有「正常」计入，待审与删除都不计入
+        const delta = (countsInTotal(status) ? 1 : 0) - (countsInTotal(row.status) ? 1 : 0);
         if (delta) {
           await tx.videoStat.updateMany({
             where: { id: row.video },
@@ -224,7 +228,10 @@ async function dispatch(
           });
         }
       });
-      return { ok: true, message: `${status === -1 ? "删除" : "恢复"}评论 #${id}` };
+      return {
+        ok: true,
+        message: `${status === -1 ? "删除" : status === 5 ? "标记待审" : "通过"}评论 #${id}`,
+      };
     }
 
     // ---------- 论坛 ----------
@@ -251,6 +258,15 @@ async function dispatch(
         data.board = board;
         changed.push(`板块=${board}`);
       }
+      // 审核状态（2026-10-13）：0 通过 / 5 待审 / -1 删除；主题本身无冗余计数，故只改 status
+      if ("status" in p) {
+        const st = parseInt(String(p.status ?? ""), 10);
+        if (st !== 0 && st !== 5 && st !== -1) {
+          return { ok: false, error: "参数错误：状态只能为 0（正常）/ 5（待审）/ -1（删除）" };
+        }
+        data.status = st;
+        changed.push(`状态=${st === 0 ? "通过" : st === 5 ? "待审" : "删除"}`);
+      }
       if (!changed.length) return { ok: false, error: "没有需要修改的属性" };
       await prisma.bbsPost.update({ where: { id: BigInt(id) }, data });
       return { ok: true, message: `主题 #${id} ${changed.join("，")}` };
@@ -275,7 +291,8 @@ async function dispatch(
       if (!reply) return { ok: false, error: "回复不存在" };
       await prisma.$transaction(async (tx) => {
         await tx.bbsReply.update({ where: { id: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } });
-        if (reply.status !== -1) {
+        // 只有「正常」态计入主题回复数；待审态此前已扣减过，这里不再扣
+        if (countsInTotal(reply.status)) {
           await tx.bbsPost.update({
             where: { id: reply.post },
             data: { replies: { decrement: 1 }, updateTime: BigInt(now()) },
@@ -283,6 +300,32 @@ async function dispatch(
         }
       });
       return { ok: true, message: `删除回复 #${id}` };
+    }
+
+    // 回复审核状态（2026-10-13）：0 通过 / 5 待审 / -1 删除，同步维护主题回复数
+    case "bbs.setReplyStatus": {
+      const id = toId(p.id);
+      const status = parseInt(String(p.status ?? ""), 10);
+      if (!id) return { ok: false, error: "参数错误：缺少回复 ID" };
+      if (status !== 0 && status !== 5 && status !== -1) {
+        return { ok: false, error: "参数错误：状态只能为 0（正常）/ 5（待审）/ -1（删除）" };
+      }
+      const reply = await prisma.bbsReply.findUnique({ where: { id: BigInt(id) } });
+      if (!reply) return { ok: false, error: "回复不存在" };
+      await prisma.$transaction(async (tx) => {
+        await tx.bbsReply.update({ where: { id: BigInt(id) }, data: { status, updateTime: BigInt(now()) } });
+        const delta = (countsInTotal(status) ? 1 : 0) - (countsInTotal(reply.status) ? 1 : 0);
+        if (delta) {
+          await tx.bbsPost.update({
+            where: { id: reply.post },
+            data: { replies: { increment: delta }, updateTime: BigInt(now()) },
+          });
+        }
+      });
+      return {
+        ok: true,
+        message: `${status === -1 ? "删除" : status === 5 ? "标记待审" : "通过"}回复 #${id}`,
+      };
     }
 
     // ---------- 动态 ----------

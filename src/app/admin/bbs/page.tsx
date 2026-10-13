@@ -60,6 +60,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                 options: [
                   ["", "全部状态"],
                   ["0", "正常"],
+                  ["5", "待审"],
                   ["1", "已删除"],
                 ],
               },
@@ -78,6 +79,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                 <th className="num">回复</th>
                 <th className="num">点击</th>
                 <th className="c">属性</th>
+                <th className="c">状态</th>
                 <th>最后回复</th>
                 <th>发布</th>
                 <th>操作</th>
@@ -111,12 +113,30 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       {!p.isPinned && !p.isTop && p.board !== 0 && !p.isNice && !p.isLocked && <span className="sub">—</span>}
                     </span>
                   </td>
+                  <td className="c">
+                    {p.status === 0 ? (
+                      <span className="admin_tag ok">正常</span>
+                    ) : p.status === 5 ? (
+                      <span className="admin_tag warn">待审</span>
+                    ) : (
+                      <span className="admin_tag bad">已删除</span>
+                    )}
+                  </td>
                   <td className="sub">{p.lastReplyTime ? timeOpposite(p.lastReplyTime) : "—"}</td>
                   <td className="sub">{formatDate(p.createTime, "Y-m-d H:i")}</td>
                   <td className="ops">
                     <Link className="admin_btn sm" href={`/admin/bbs?post=${p.id}`}>
                       回复
                     </Link>
+                    {p.status === 5 && (
+                      <AdminAction
+                        op="bbs.setPost"
+                        params={{ id: p.id, status: 0 }}
+                        label="通过"
+                        variant="primary"
+                        confirm={`确认通过主题 #${p.id}「${p.title}」（恢复公开展示）？`}
+                      />
+                    )}
                     <AdminAction
                       op="bbs.setPost"
                       params={{ id: p.id, isPinned: !p.isPinned }}
@@ -162,7 +182,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10}>
+                  <td colSpan={11}>
                     <div className="admin_empty">没有符合条件的主题</div>
                   </td>
                 </tr>
@@ -205,17 +225,41 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                     {/* 回复内容为 UBB，这里用已解析的 HTML 展示（服务端已转义） */}
                     <td style={{ maxWidth: 520 }} dangerouslySetInnerHTML={{ __html: r.content }} />
                     <td className="c">
-                      {r.status === 0 ? <span className="admin_tag ok">正常</span> : <span className="admin_tag bad">已删除</span>}
+                      {r.status === 0 ? (
+                        <span className="admin_tag ok">正常</span>
+                      ) : r.status === 5 ? (
+                        <span className="admin_tag warn">待审</span>
+                      ) : (
+                        <span className="admin_tag bad">已删除</span>
+                      )}
                     </td>
                     <td className="sub">{formatDate(r.createTime, "Y-m-d H:i")}</td>
                     <td className="ops">
-                      {r.status === 0 && (
+                      {r.status === 5 && (
                         <AdminAction
-                          op="bbs.deleteReply"
-                          params={{ id: r.id }}
+                          op="bbs.setReplyStatus"
+                          params={{ id: r.id, status: 0 }}
+                          label="通过"
+                          variant="primary"
+                          confirm={`确认通过回复 #${r.id}（恢复公开展示）？`}
+                        />
+                      )}
+                      {r.status !== -1 && (
+                        <AdminAction
+                          op="bbs.setReplyStatus"
+                          params={{ id: r.id, status: -1 }}
                           label="删除"
                           variant="danger"
                           confirm={`确认删除回复 #${r.id}？`}
+                        />
+                      )}
+                      {r.status === -1 && (
+                        <AdminAction
+                          op="bbs.setReplyStatus"
+                          params={{ id: r.id, status: 0 }}
+                          label="恢复"
+                          variant="primary"
+                          confirm={`确认恢复回复 #${r.id}？`}
                         />
                       )}
                     </td>
@@ -238,6 +282,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
         <div className="admin_note">
           · 板块：{BBS_BOARDS.map((b) => `${b.id} ${b.name}`).join(" / ")}（公告板 0 仅管理员可发）。<br />
           · 删除主题/回复均为软删除（<code>status = -1</code>），前台不再展示；删除回复会同步把主题的回复数减 1。<br />
+          · <b>待审</b>（<code>status = 5</code>）由 AI 后置审核自动标记：主题/回复发布后异步送审，AI 判可疑即转待审、撤下其动态并回退回复计数；管理员点「通过」恢复公开，或直接「删除」。<br />
           · 「移至xx」下拉即把主题挪到目标板块，无需再进前台编辑。
         </div>
       </AdminCard>

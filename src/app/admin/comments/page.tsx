@@ -38,6 +38,7 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
                 options: [
                   ["", "全部状态"],
                   ["0", "正常"],
+                  ["5", "待审"],
                   ["1", "已删除"],
                 ],
               },
@@ -85,11 +86,26 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
                   </td>
                   <td style={{ maxWidth: 420 }}>{c.content || <span className="sub">（空）</span>}</td>
                   <td className="c">
-                    {c.status === 0 ? <span className="admin_tag ok">正常</span> : <span className="admin_tag bad">已删除</span>}
+                    {c.status === 0 ? (
+                      <span className="admin_tag ok">正常</span>
+                    ) : c.status === 5 ? (
+                      <span className="admin_tag warn">待审</span>
+                    ) : (
+                      <span className="admin_tag bad">已删除</span>
+                    )}
                   </td>
                   <td className="sub">{formatDate(c.createTime, "Y-m-d H:i")}</td>
                   <td className="ops">
-                    {c.status === 0 ? (
+                    {c.status === 5 && (
+                      <AdminAction
+                        op="comment.setStatus"
+                        params={{ id: c.id, status: 0 }}
+                        label="通过"
+                        variant="primary"
+                        confirm={`确认通过评论 #${c.id}（恢复公开展示）？`}
+                      />
+                    )}
+                    {c.status !== -1 ? (
                       <AdminAction
                         op="comment.setStatus"
                         params={{ id: c.id, status: -1 }}
@@ -126,6 +142,7 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
       <AdminCard title="口径说明">
         <div className="admin_note">
           · 删除是<b>软删除</b>（<code>comment.status = -1</code>），前台不再展示，可随时恢复；同时会把所在录像的评论计数减 1，恢复则加回。<br />
+          · <b>待审</b>（<code>status = 5</code>）由 AI 后置审核自动标记：内容发布后异步送审，AI 判可疑即转为待审并撤下其动态、回退录像评论计数；管理员点「通过」恢复公开，或直接「删除」。<br />
           · 录像被彻底删除时，其评论会被一并物理清理（见录像管理）。
         </div>
       </AdminCard>
