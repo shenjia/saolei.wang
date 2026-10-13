@@ -2830,6 +2830,10 @@ body #page.ranking_old .ranking_box {
    升降列保留但内容留空、表头文字不可见——visibility:hidden 让「升降」二字
    继续撑住列宽（列宽由表头决定，比箭头数字宽），与总计态逐像素一致，版式零跳动 */
 .ranking_table th.delta_pad { visibility: hidden; }
+/* 升降列占位（2026-10-14 张老师需求）：雷界榜切到总计时间以外的排序列时，
+   升降列保留但内容留空、表头文字不可见——visibility:hidden 让「升降」二字
+   继续撑住列宽（列宽由表头决定，比箭头数字宽），与总计态逐像素一致，版式零跳动 */
+.ranking_table th.delta_pad { visibility: hidden; }
 
 /* 升降矢量小三角：与数字基线对齐 */
 .ranking_table td.delta .up,

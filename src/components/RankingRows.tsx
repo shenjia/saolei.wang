@@ -2,6 +2,8 @@
 // 列定义 / 成绩格 / 升降箭头 / 表头 / 行渲染——客户端（/ranking 加载更多）与
 // 服务端（/area 分页 + RankingTable 薄封装）共用，保证两处渲染完全一致。
 // 本组件不含 <table> 骨架与数据获取，只负责行与列。
+// 2026-10-14 张老师需求：升降列拆出「占位」（deltaCol）与「内容」（showDelta）两个开关——
+// 雷界榜切其它排序列时保留空列（表头文字 visibility:hidden 保宽），切级别版式不跳动。
 
 import Link from "next/link";
 import type { RankingRow } from "@/lib/queries";
@@ -83,13 +85,17 @@ export function RankingRowLine({
   by,
   delta,
   showDelta,
+  deltaCol,
   hl,
 }: {
   row: TitledRow;
   /** 排序命中列；null=无成绩列命中（进步榜等非成绩排序场景） */
   by: RankingBy | null;
   delta?: number | null;
+  /** 升降列是否渲染内容（仅总计时间排序时有日升降数据） */
   showDelta: boolean;
+  /** 升降列是否占位（2026-10-14 张老师需求：雷界榜切其它排序列时保留空列，版式不跳动） */
+  deltaCol?: boolean;
   hl?: boolean;
 }) {
   return (
@@ -109,23 +115,24 @@ export function RankingRowLine({
       {RANKING_COLS.map((c) => (
         <ScoreCell key={c.by} row={row} col={c} current={c.by === by} />
       ))}
-      {showDelta && (
+      {(showDelta || deltaCol) && (
         <td className="delta">
-          {delta === null || delta === undefined ? (
-            <span className="new" title="昨日新上榜">新</span>
-          ) : delta === 0 ? (
-            <span className="flat" title="与昨日持平">→</span>
-          ) : delta > 0 ? (
-            <span className="up" title={`比昨日进步${delta}位`}>
-              <DeltaArrow dir="up" />
-              {delta}
-            </span>
-          ) : (
-            <span className="down" title={`比昨日下降${-delta}位`}>
-              <DeltaArrow dir="down" />
-              {-delta}
-            </span>
-          )}
+          {showDelta &&
+            (delta === null || delta === undefined ? (
+              <span className="new" title="昨日新上榜">新</span>
+            ) : delta === 0 ? (
+              <span className="flat" title="与昨日持平">→</span>
+            ) : delta > 0 ? (
+              <span className="up" title={`比昨日进步${delta}位`}>
+                <DeltaArrow dir="up" />
+                {delta}
+              </span>
+            ) : (
+              <span className="down" title={`比昨日下降${-delta}位`}>
+                <DeltaArrow dir="down" />
+                {-delta}
+              </span>
+            ))}
         </td>
       )}
     </tr>
@@ -138,12 +145,15 @@ export function RankingHead({
   base,
   params,
   showDelta,
+  deltaCol,
 }: {
   by: RankingBy;
   /** 列头排序链接的 base 与固定参数（view/nf、area 等） */
   base: string;
   params: Record<string, string | number | undefined>;
   showDelta: boolean;
+  /** 升降列占位（同 RankingRowLine.deltaCol）：占位时表头文字 visibility:hidden 保宽 */
+  deltaCol?: boolean;
 }) {
   return (
     <thead>
@@ -166,17 +176,19 @@ export function RankingHead({
             </Link>
           </th>
         ))}
-        {showDelta && <th>升降</th>}
+        {(showDelta || deltaCol) && (
+          <th className={showDelta ? undefined : "delta_pad"}>升降</th>
+        )}
       </tr>
     </thead>
   );
 }
 
 /** 空数据占位行（须包在 tbody 内） */
-export function RankingEmpty({ showDelta }: { showDelta: boolean }) {
+export function RankingEmpty({ showDelta, deltaCol }: { showDelta: boolean; deltaCol?: boolean }) {
   return (
     <tr>
-      <td colSpan={showDelta ? 12 : 11} style={{ textAlign: "center" }}>
+      <td colSpan={showDelta || deltaCol ? 12 : 11} style={{ textAlign: "center" }}>
         暂无数据
       </td>
     </tr>

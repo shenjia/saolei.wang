@@ -35,6 +35,9 @@ export interface RankingFeedProps {
   inRanking: boolean;
   /** 初始高亮行（whereami 302 携带 hl=<uid>，SSR 即高亮，无 JS 也可见） */
   initialHl?: number;
+  /** 升降列占位（2026-10-14 张老师需求）：雷界榜切其它排序列时保留空列，版式不跳动；
+      仅 /ranking 雷界榜传 true（NF/BV/进步/地区/世界无升降数据，不占位） */
+  reserveDelta?: boolean;
 }
 
 interface MoreJson {
@@ -45,7 +48,7 @@ interface MoreJson {
 const NEARBY_PAGES = 30; // 未加载时最多并发拉取的页数（每页 20 行 ×30 = 600 行上限）
 
 export function RankingFeed(props: RankingFeedProps) {
-  const { by, base, params, total, pageSize, myUid, inRanking } = props;
+  const { by, base, params, total, pageSize, myUid, inRanking, reserveDelta } = props;
   const [rows, setRows] = useState(props.initial);
   const [deltas, setDeltas] = useState<Map<number, number | null> | undefined>(props.initialDeltas);
   const nextPage = useRef(Math.floor((props.initial.at(-1)?.rank ?? 0) / pageSize) + 1);
@@ -58,6 +61,7 @@ export function RankingFeed(props: RankingFeedProps) {
   const router = useRouter();
 
   const showDelta = by === "sum_time" && deltas !== undefined;
+  const deltaCol = reserveDelta === true;
   const maxPage = Math.max(1, Math.ceil(total / pageSize));
 
   function scrollToRow(id: number) {
@@ -204,7 +208,7 @@ export function RankingFeed(props: RankingFeedProps) {
   return (
     <>
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
-        <RankingHead by={by} base={base} params={params} showDelta={showDelta} />
+        <RankingHead by={by} base={base} params={params} showDelta={showDelta} deltaCol={deltaCol} />
         <tbody>
           {rows.map((u) => (
             <RankingRowLine
@@ -213,10 +217,11 @@ export function RankingFeed(props: RankingFeedProps) {
               by={by}
               delta={deltas?.get(u.id)}
               showDelta={showDelta}
+              deltaCol={deltaCol}
               hl={u.id === hlUid}
             />
           ))}
-          {rows.length === 0 && <RankingEmpty showDelta={showDelta} />}
+          {rows.length === 0 && <RankingEmpty showDelta={showDelta} deltaCol={deltaCol} />}
         </tbody>
       </table>
       <div className="more_loader ranking_loader">

@@ -204,6 +204,7 @@ export default async function RankingPage({
           myUid={session?.uid}
           inRanking={inRanking}
           initialHl={hl}
+          reserveDelta={!nf}
         />
       </div>
     </div>
