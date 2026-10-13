@@ -1395,13 +1395,19 @@ del[data-tip]:hover::after {
   font-weight: normal;
 }
 
-/* 侧栏「实力」雷达图板块（论坛 / 录像详情页右栏，与用户主页 .radar 同款图示）——
-   222px 图形在 210px 盒内居中：负 margin 抵掉两侧留白 */
-#page .sidebar .radar .chart {
+/* 侧栏「实力」雷达图板块（录像 / 论坛 / 用户主页右栏通用）——
+   图形按盒宽自适应：盒内容 210 → 渲染 234（左右各出血 12px，与 legacy
+   222@192 的出血形态同款），svg 走 viewBox 等比缩放（height:auto）。
+   2 id 特异性压过 legacy 的 #user_view .radar .chart（222 定宽 + margin -15，
+   在 210 盒内左右出血不对称）；max-width 234 兜住 ≤880 单列带 auto 宽盒 */
+#page #video_view .radar .chart,
+#page #home .radar .chart,
+#page #user_view .radar .chart {
   display: block;
-  margin: -15px;
-  width: 222px;
-  height: 222px;
+  margin: -12px;
+  width: calc(100% + 24px);
+  max-width: 234px;
+  height: auto;
 }
 
 /* BBS 主题页右栏盒子：padding 30px → 盒内容宽 210、外径 272，与首页右栏板块（#newbie 等）一致 */
@@ -1426,6 +1432,21 @@ del[data-tip]:hover::after {
   min-width: 0;
 }
 #page #video_view > li.sidebar .box {
+  width: 210px;
+}
+
+/* ---------- 用户主页右栏加宽（2026-10-14，与录像 / 论坛详情页右栏同几何） ----------
+   legacy 为 sidebar 222 / 盒内容 192（外径 254），统一为 288 / 盒内容 210（外径 272）；
+   主栏相应收 2px 并放开 legacy li.main 的 min-width:620。≤880 单列化由媒体查询接管
+   （body #page.two_columns #user_view > li.sidebar 特异性更高，不受此处影响）。 */
+#page #user_view > li.sidebar {
+  width: 288px;
+}
+#page #user_view > li.main {
+  width: calc(100% - 290px); /* 留 2px 防子像素舍入导致侧栏掉行 */
+  min-width: 0;
+}
+#page #user_view > li.sidebar .box {
   width: 210px;
 }
 
@@ -3648,7 +3669,9 @@ body #page.two_columns li.main {
      上下保留 legacy -15px 出血（与侧栏形态一致） */
   body #page.two_columns #user_view > li.main .radar_main .chart {
     display: block;
-    margin: -15px auto;
+    margin: -12px auto; /* 上下保留 legacy 出血形态；盒宽 auto 时图形 234 定宽居中 */
+    width: calc(100% + 24px);
+    max-width: 234px;
   }
   body #page.two_columns #user_view > li.sidebar .radar {
     display: none;
