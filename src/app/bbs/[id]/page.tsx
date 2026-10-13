@@ -56,7 +56,7 @@ export default async function BbsTitlePage({
             <p className="bbs_meta">
               {post.author && (
                 <>
-                  <AvatarCell id={post.author.id} name={post.author.chineseName} sex={post.author.sex} link />{" "}
+                  <AvatarCell id={post.author.id} name={post.author.chineseName} sex={post.author.sex} gender="small" link />{" "}
                   <TitleBadge title={post.author.title} link />{" "}
                 </>
               )}
@@ -87,7 +87,7 @@ export default async function BbsTitlePage({
                 <em>{r.floor} 楼</em>{" "}
                 {r.author && (
                   <>
-                    <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} link />{" "}
+                    <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} gender="small" link />{" "}
                     <TitleBadge title={r.author.title} link />{" "}
                   </>
                 )}
