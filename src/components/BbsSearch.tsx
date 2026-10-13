@@ -1,8 +1,8 @@
 // 论坛页头搜索框（2026-09-26 张老师要求：右上角按关键字搜帖子——标题或人名）
 // 样式与交互完全复用排行页 goto_form 语言（圆角胶囊 + 放大镜 + 防抖人名推荐下拉）；
 // 差异在提交语义：排行是「定位到行」，这里是「回车跳 /bbs?q=关键字」过滤主题列表。
-// 输入即出人名推荐（复用 /api/ranking/search）：点选/回车选中某位玩家 = 按该人名精确搜索；
-// 纯标题词直接回车即搜（不打扰，无自动跳转）。
+// 输入即出推荐下拉（复用 /api/ranking/search）：第一条固定为「包含「关键词」的主题」（按标题搜），
+// 其后才是人名推荐；点选/回车选中某位玩家 = 按该人名精确搜索，选中第一条或直接回车 = 按标题搜。
 
 "use client";
 
@@ -66,22 +66,29 @@ export function BbsSearch({ initialQ = "" }: { initialQ?: string }) {
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (users === null || users.length === 0) {
+    if (users === null) {
       if (e.key === "Enter") {
         e.preventDefault();
         search(q);
       }
       return;
     }
+    // 下拉第 0 位固定是「包含「关键词」的主题」，其后才是人名推荐
+    const total = users.length + 1;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((a) => (a + 1) % users.length);
+      setActive((a) => (a + 1) % total);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => (a - 1 + users.length) % users.length);
+      setActive((a) => (a - 1 + total) % total);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const pick = users[active];
+      if (active === 0) {
+        setUsers(null);
+        search(q);
+        return;
+      }
+      const pick = users[active - 1];
       if (pick) {
         setUsers(null);
         setQ(pick.chineseName);
@@ -112,14 +119,27 @@ export function BbsSearch({ initialQ = "" }: { initialQ?: string }) {
       </span>
       {users !== null && kw !== "" && (
         <ul className="goto_suggest">
+          {/* 第一条固定为「包含「关键词」的主题」（按标题搜索） */}
+          <li className={active === 0 ? "active" : ""}>
+            <button
+              type="button"
+              onMouseEnter={() => setActive(0)}
+              onClick={() => {
+                setUsers(null);
+                search(q);
+              }}
+            >
+              <em>包含「{kw}」的主题</em>
+            </button>
+          </li>
           {users.length === 0 ? (
             <li className="goto_empty">没有匹配的玩家，将按标题搜索</li>
           ) : (
             users.map((u, i) => (
-              <li key={u.id} className={i === active ? "active" : ""}>
+              <li key={u.id} className={i + 1 === active ? "active" : ""}>
                 <button
                   type="button"
-                  onMouseEnter={() => setActive(i)}
+                  onMouseEnter={() => setActive(i + 1)}
                   onClick={() => {
                     setUsers(null);
                     setQ(u.chineseName);
