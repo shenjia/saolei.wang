@@ -19,7 +19,6 @@ import { RadarChart } from "./RadarChart";
 import { areaDisplay, LEVELS, LEVEL_NAMES } from "@/lib/config";
 
 export function UserCard({ card }: { card: UserCardData }) {
-  const { rank, delta } = card;
   return (
     <div className="user_card">
       <div className="ucd_top">
@@ -51,14 +50,9 @@ export function UserCard({ card }: { card: UserCardData }) {
             ) : (
               <span className="rank_line ucd_null">未加入地区排行</span>
             )}
-            {rank !== null ? (
+            {card.rank !== null ? (
               <span className="rank_line">
-                全国第 <em>{rank}</em> 名
-                {delta !== null && delta > 0 ? (
-                  <span className="ucd_delta up">↑{delta}</span>
-                ) : delta !== null && delta < 0 ? (
-                  <span className="ucd_delta down">↓{-delta}</span>
-                ) : null}
+                全国第 <em>{card.rank}</em> 名
               </span>
             ) : (
               <span className="rank_line ucd_null">未加入排行</span>

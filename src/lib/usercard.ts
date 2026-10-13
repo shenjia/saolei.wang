@@ -1,17 +1,16 @@
 // 侧栏个人卡片数据（2026-10-13 六轮定稿，设计稿 design/sidebar-panel.html）
 // 卡片结构：照片（点击进主页）｜ 右侧姓名 + 性别图标 + 军衔、其下地区/全国排行（与头像齐平）
 //   ｜ 分隔线以下四级纪录（照搬用户主页 ScoreTime / Score3bvs 渲染）；
-//   2026-10-14 张老师要求：卡片不再显示最近登录时间（lastLoginTime 字段一并下线）。
+//   2026-10-14 张老师要求：卡片不再显示最近登录时间（lastLoginTime 一并下线）、
+//   不再显示排行升降（delta 字段与 rank_snapshot 查询一并下线）。
 //   卡片下方另有「实力」雷达图板块，由页面按 hasVideos 决定是否渲染（与用户主页同规则）。
 // 数据来源：getUserDetail（用户 + 成绩 + 录像统计，与用户主页完全同一口径）
-//   + getUserRanks（地区/全国名次）+ rank_snapshot（今日升降）。
+//   + getUserRanks（地区/全国名次）。
 // 2026-10-13 六轮起卡片不再显示人气，getClicks 查询一并下线。
 
 import { prisma } from "./db";
 import { getUserDetail, getUserRanks } from "./queries";
 import { resolveAvatarUrl } from "./avatar";
-
-const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
 /** 单级纪录：成绩原始值（×1000 存储，null=无）、对应录像 id 与日期（sum 级无录像 → null） */
 export interface UserCardScore {
@@ -28,10 +27,8 @@ export interface UserCardData {
   avatarUrl: string;
   /** 军衔（高级时间绝对阈值，与首页/排行榜/军衔页同口径） */
   militaryTitle: string;
-  /** 全国名次（ROW_NUMBER 口径，与用户主页「全国第 X 名」、rank_snapshot 同源）；null=未上榜 */
+  /** 全国名次（ROW_NUMBER 口径，与用户主页「全国第 X 名」同源）；null=未上榜 */
   rank: number | null;
-  /** 日升降（正=进步名次数，负=退步，null=昨日无快照即今日新上榜） */
-  delta: number | null;
   /** 地区（军区）名；areaPos=null 表示未加入地区排行（无地区/多地区） */
   area: string;
   areaPos: number | null;
@@ -53,21 +50,15 @@ function avatarUrl(id: number, avatar: string): string {
  * 避免一页 20 楼的额外开销。
  */
 export async function getUserCard(id: number): Promise<UserCardData | null> {
-  const [detail, ranks, ySnaps] = await Promise.all([
+  const [detail, ranks] = await Promise.all([
     getUserDetail(id),
     // 地区名次（无地区/多地区玩家 areaPos=null）
     getUserRanks(id),
-    prisma.rankSnapshot.findMany({
-      where: { user: BigInt(id), date: yesterdayStr() },
-      select: { sumTimeRank: true },
-    }),
   ]);
   if (!detail) return null;
 
   const { user, stat } = detail;
-  // 名次与升降：全国名次取窗口函数口径（与用户主页一致），升降与 rank_snapshot 同源
   const national = ranks?.national ?? null;
-  const yRank = ySnaps.length ? N(ySnaps[0].sumTimeRank) : null;
   const scores: Record<string, UserCardScore> = {};
   for (const [key, rec] of Object.entries(detail.scores)) {
     scores[key] = { score: rec.score, videoId: rec.videoId, date: rec.date };
@@ -80,7 +71,6 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     avatarUrl: avatarUrl(id, user.avatar),
     militaryTitle: detail.title,
     rank: national,
-    delta: national !== null ? (yRank !== null ? yRank - national : null) : null,
     area: ranks?.area ?? "",
     areaPos: ranks?.areaPos ?? null,
     scores,
@@ -98,10 +88,4 @@ export async function getHeaderUser(
   });
   if (!u) return null;
   return { chineseName: u.chineseName, avatarUrl: avatarUrl(uid, u.avatar) };
-}
-
-function yesterdayStr(): string {
-  const d = new Date(Date.now() - 86400_000);
-  const p = (n: number) => (n < 10 ? "0" + n : String(n));
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }

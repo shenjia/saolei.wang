@@ -1291,16 +1291,6 @@ del[data-tip]:hover::after {
   font-weight: bold;
   color: #e6db74;
 }
-.user_card .ucd_delta {
-  font-size: 11px;
-  margin-left: 4px;
-}
-.user_card .ucd_delta.up {
-  color: #f92672; /* 中国惯例红涨：名次进步 */
-}
-.user_card .ucd_delta.down {
-  color: #a6e22e; /* 绿跌：名次退步 */
-}
 .user_card .ucd_hr {
   border: 0;
   border-top: 1px solid #49483e;
