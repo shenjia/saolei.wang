@@ -7,7 +7,9 @@
 // 2026-10-14 BV 榜搜索（C 方案）：搜索框扩到 BV tab；带 bvBy 调搜索接口回带名次，
 // 下拉次级文字只显示名次「第 3,168 位」（2026-10-14 张老师：不要带具体数值），
 // 不在榜显示「未加入 BV 排行」（hint 置灰，选中弹气泡）；
-// 唯一候选自动定位在 BV 模式下仅当候选确实在榜（否则会立刻弹「未加入」气泡，体验突兀）。
+// 唯一候选自动定位仅在候选确实在榜时触发（否则会立刻弹「未加入」气泡，体验突兀）。
+// 2026-10-14 各榜统一（张老师要求）：雷界/NF 的搜索也带回名次（带 by，NF 加 nf=1），
+// 下拉次级文字同为「第 N 位」/「未加入排行」，不再显示 ID 与英文名。
 
 "use client";
 
@@ -34,6 +36,8 @@ interface SuggestUser {
   sex: number;
   /** BV 榜名次（仅 BV 附加查询回带；缺失＝未加入 BV 排行） */
   bvRank?: number;
+  /** 成绩榜名次（带 by 附加查询回带；缺失＝未加入排行） */
+  rank?: number;
 }
 
 export function RankingNav({
@@ -56,7 +60,7 @@ export function RankingNav({
   // 后又冒出来盖住表格（2026-10-14 张老师要求：选中即收起）。记下刚选中的关键字，跳过这一轮。
   const pickedRef = useRef<string | null>(null);
 
-  // BV 榜模式：搜索框带 by 查榜内名次——下拉直接给出「第 N 位 · 收集数/分母」
+  // BV 榜模式：搜索框带 by 查榜内名次——下拉直接给出名次或「未加入 BV 排行」
   const bvMode = current === "bv";
   const bvBy = bvMode ? (by ?? "total") : "";
 
@@ -65,11 +69,18 @@ export function RankingNav({
     return current === "nf" ? "nf" : bvMode ? "bv" : undefined;
   }
 
-  /** BV 下拉次级文字：在榜→只显示名次；不在榜→置灰「未加入 BV 排行」 */
-  function suggestMeta(u: SuggestUser, numeric: boolean): { text: string; inBoard: boolean } {
-    if (!bvMode) return { text: numeric ? `ID ${u.id}` : u.englishName, inBoard: true };
-    if (!u.bvRank) return { text: "未加入 BV 排行", inBoard: false };
-    return { text: `第 ${u.bvRank.toLocaleString("zh-CN")} 位`, inBoard: true };
+  /** 该候选是否在榜（BV 看 bvRank、成绩榜看 rank；两者都由搜索接口回带） */
+  function inBoard(u: SuggestUser): boolean {
+    return bvMode ? u.bvRank !== undefined : u.rank !== undefined;
+  }
+
+  /** 下拉次级文字（2026-10-14 张老师要求：各榜统一只显示名次，未在榜显示提示并置灰） */
+  function suggestMeta(u: SuggestUser): { text: string; inBoard: boolean } {
+    if (inBoard(u)) {
+      const rank = bvMode ? u.bvRank! : u.rank!;
+      return { text: `第 ${rank.toLocaleString("zh-CN")} 位`, inBoard: true };
+    }
+    return { text: bvMode ? "未加入 BV 排行" : "未加入排行", inBoard: false };
   }
 
   // 登录态：聚焦/清空输入时下拉推荐自己；回车选中即定位（走既有 pick 流程）
@@ -109,8 +120,12 @@ export function RankingNav({
     const timer = setTimeout(async () => {
       try {
         const qs = new URLSearchParams({ q: kw });
-        // BV 榜：附带名次（接口从 1 小时缓存的榜数组取，不额外打库）
-        if (bvBy) qs.set("bvBy", bvBy);
+        // 榜单名次：BV 带 bvBy（1 小时缓存数组内存查，零 DB）；成绩榜带 by（+nf）走索引区间统计
+        if (bvMode) qs.set("bvBy", bvBy);
+        else if (by) {
+          qs.set("by", by);
+          if (current === "nf") qs.set("nf", "1");
+        }
         const res = await fetch(`/api/ranking/search?${qs}`);
         if (!res.ok) return;
         const { users: list } = (await res.json()) as { users: SuggestUser[] };
@@ -119,18 +134,20 @@ export function RankingNav({
         setActive(0);
         // 唯一候选 → 自动开始查询（张老师要求：确定只有一个选择即触发，无需输完姓名）
         // 仅限姓名输入；数字 ID 输入始终展示候选列表（用户可能还要继续输位数）
-        // BV 榜额外要求候选确实在榜——否则自动定位会立刻弹「未加入」气泡，体验突兀
-        const autoOk = bvMode ? list[0]?.bvRank !== undefined : true;
-        if (list.length === 1 && !/^\d+$/.test(kw) && autoOk) {
+        // 另要求候选确实在榜（接口带回名次信息时才有此判据）——否则自动定位会立刻弹「未加入」气泡
+        // 注：此处内联判据（不调 inBoard()）——外部函数进依赖数组会让 effect 每渲染重跑
+        const first = list[0];
+        const firstInBoard = first ? (bvMode ? first.bvRank !== undefined : first.rank !== undefined) : false;
+        if (list.length === 1 && !numeric && (!(bvMode || by) || firstInBoard)) {
           setUsers(null);
-          locate(list[0].id);
+          locate(first.id);
         }
       } catch {
         /* 网络异常静默：回车提交仍可用 */
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [q, bvBy, bvMode]);
+  }, [q, bvBy, bvMode, by, current, numeric]);
 
   // 点击外部收起下拉
   useEffect(() => {
@@ -252,8 +269,8 @@ export function RankingNav({
                 <li className="goto_empty">{emptyMsg}</li>
               ) : (
                 users.map((u, i) => {
-                  const meta = suggestMeta(u, numeric);
-                  // 不在 BV 榜的候选置灰（hint），active 态优先级更高（CSS 中 hint 规则在前）
+                  const meta = suggestMeta(u);
+                  // 不在榜的候选置灰（hint），active 态优先级更高（CSS 中 hint 规则在前）
                   const cls = [i === active ? "active" : "", meta.inBoard ? "" : "hint"]
                     .filter(Boolean)
                     .join(" ");
@@ -270,7 +287,7 @@ export function RankingNav({
                         }}
                       >
                         <em>{u.chineseName}</em>
-                        {/* BV 榜：名次 + 收集进度；成绩榜数字模式显示 ID、其余显示英文名 */}
+                        {/* 各榜统一：次级文字显示名次（不在榜则显示「未加入…排行」并置灰） */}
                         <span>{meta.text || null}</span>
                       </button>
                     </li>

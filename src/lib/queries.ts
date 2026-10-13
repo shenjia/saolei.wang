@@ -379,6 +379,32 @@ export async function getRankingPageOfUser(id: number, level: Level, order: Orde
   }
 }
 
+/**
+ * 批量求用户在成绩榜中的名次（2026-10-14 张老师要求：搜索下拉也显示名次）。
+ * 口径与榜单表格完全一致：区间 [field > 0] 内按 field 排序，**同分时 id 与主排序同向**
+ * （榜单查询走 (field, id) 二级索引：升序=正向扫描 → 同分 id 升序；降序=反向扫描（EXPLAIN
+ * 的 Backward index scan）→ 同分 id 降序。实测 3bvs 列同分极多，这个方向差会带来几十名偏差）。
+ * 故名次 = 1 + 更好者数 + 同分且 id 更靠前者数（比较符与主排序同向）。
+ * 不在表中或成绩为 0 的 id 不出现在结果里（前端显示「未加入排行」）。
+ * 单条 SQL（候选 id 各做一次索引区间统计，12 个候选约 40ms），不缓存。
+ */
+export async function getRankOfUsers(ids: number[], by: RankingBy, nf = false): Promise<Map<number, number>> {
+  // 只接受正整数 id 后直插 SQL（无注入面；配合下面的 0 值过滤）
+  const uniq = [...new Set(ids.filter((i) => Number.isInteger(i) && i > 0))];
+  if (!uniq.length) return new Map();
+  const { level, order } = byLevelOrder(by);
+  const col = `${level}_${order === "time" ? "time" : "3bvs"}`; // raw SQL 用 snake_case 列名
+  const tbl = nf ? "user_scores_nf" : "user_scores";
+  const cmp = order === "time" ? "<" : ">"; // time 越小越好、3bvs 越大越好（同分时 id 也按此向排）
+  const rows = await prisma.$queryRawUnsafe<{ id: bigint; rk: bigint }[]>(
+    `SELECT a.id, 1 + (SELECT COUNT(*) FROM ${tbl} b
+        WHERE b.${col} > 0 AND (b.${col} ${cmp} a.${col} OR (b.${col} = a.${col} AND b.id ${cmp} a.id))) AS rk
+      FROM ${tbl} a
+      WHERE a.${col} > 0 AND a.id IN (${uniq.join(",")})`
+  );
+  return new Map(rows.map((r) => [N(r.id), N(r.rk)]));
+}
+
 // ---------- 录像列表 ----------
 
 export async function getVideoList(opts: {

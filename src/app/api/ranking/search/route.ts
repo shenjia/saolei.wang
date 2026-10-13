@@ -5,10 +5,12 @@
 // 2026-10-14（BV 榜搜索 C 方案）：带 bvBy=<total|beg|int|exp> 时额外回带 BV 名次
 //   → { users: [{…, bvRank?}] }；缺 bvRank 即「未加入 BV 排行」。
 //   数据取自 1 小时缓存的 BV 全量榜（内存 Map），不额外打库。
+// 2026-10-14（张老师要求：其他排行搜索也显示名次）：带 by=<RankingBy> 时回带成绩榜名次
+//   → { users: [{…, rank?}] }（nf=1 走 user_scores_nf）；缺 rank 即「未加入排行」。
 
 import { NextResponse } from "next/server";
-import { searchUsers, getBvBoardIndex } from "@/lib/queries";
-import { BV_RANKING_BYS, parseBvRankingBy } from "@/lib/config";
+import { searchUsers, getBvBoardIndex, getRankOfUsers } from "@/lib/queries";
+import { BV_RANKING_BYS, RANKING_BYS, parseBvRankingBy, type RankingBy } from "@/lib/config";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -24,6 +26,22 @@ export async function GET(req: Request) {
       users: users.map((u) => {
         const hit = index.get(u.id);
         return hit ? { ...u, bvRank: hit.rank } : u;
+      }),
+    });
+  }
+
+  // 成绩榜（雷界 / NF）：附带名次（下拉「第 N 位」用）
+  const byRaw = p.get("by") ?? "";
+  if ((RANKING_BYS as readonly string[]).includes(byRaw)) {
+    const ranks = await getRankOfUsers(
+      users.map((u) => u.id),
+      byRaw as RankingBy,
+      p.get("nf") === "1"
+    );
+    return NextResponse.json({
+      users: users.map((u) => {
+        const rank = ranks.get(u.id);
+        return rank ? { ...u, rank } : u;
       }),
     });
   }

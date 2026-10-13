@@ -6,7 +6,7 @@
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
-import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser } from "@/lib/queries";
+import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser, getRankOfUsers } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy, byLevelOrder, parseBvRankingBy } from "@/lib/config";
@@ -159,18 +159,30 @@ export default async function RankingPage({
   // 同时取出本人信息传给搜索框——空输入时下拉推荐「自己」（2026-10-13 替代「我在哪里」按钮）
   const myUid = session?.uid;
   let inRanking = false;
-  let me: { id: number; chineseName: string; englishName: string; sex: number } | undefined;
+  let me:
+    | { id: number; chineseName: string; englishName: string; sex: number; rank?: number }
+    | undefined;
   if (myUid) {
     const { level, order } = byLevelOrder(rankingBy);
-    const [page, u] = await Promise.all([
+    const [page, u, myRanks] = await Promise.all([
       getRankingPageOfUser(myUid, level, order, nf),
       prisma.user.findUnique({
         where: { id: BigInt(myUid) },
         select: { id: true, chineseName: true, englishName: true, sex: true },
       }),
+      // 本人榜内名次（下拉「自己」显示「第 N 位」；三查并行，不增加等待）
+      getRankOfUsers([myUid], rankingBy, nf),
     ]);
     inRanking = page > 0;
-    if (u) me = { id: Number(u.id), chineseName: u.chineseName, englishName: u.englishName, sex: u.sex };
+    if (u) {
+      me = {
+        id: Number(u.id),
+        chineseName: u.chineseName,
+        englishName: u.englishName,
+        sex: u.sex,
+        rank: myRanks.get(Number(u.id)),
+      };
+    }
   }
 
   // 军衔列在服务端预算（Feed 客户端零成本渲染）——SUB 制按高级时间评定（2026-10-13）
