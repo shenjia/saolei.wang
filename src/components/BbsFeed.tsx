@@ -1,5 +1,7 @@
 // BBS 主题列表 + 「加载更多」（页码语义；对齐 NewsFeed/Comments 的 more_loader 模式）
 // 初始数据由服务端渲染传入，点更多追加行；筛选切换仍走链接整页刷新
+// 2026-09-26（张老师）：已读主题整行变灰——点击/访问详情页后 localStorage 记 id，
+//   BbsRow 挂 read 类（标题+计数列 #75715e，同消息页已读语义）
 
 "use client";
 
@@ -11,10 +13,13 @@ import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
+import { markBbsRead, useBbsReadSet } from "./BbsRead";
 
 export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean }) {
+  const readIds = useBbsReadSet();
+  const isRead = readIds.has(p.id);
   return (
-    <tr>
+    <tr className={isRead ? "read" : undefined}>
       <td>
         {/* 七轮：分类标签与标题同行同格（未选具体板块时显示），标签在标题前。
             topic_line 用 flex 收缩——超长标题出省略号时星标/置顶/锁标不被挤掉 */}
@@ -37,7 +42,12 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
               {BBS_BOARD_NAMES[p.board]}
             </span>
           )}
-          <Link className="bbs_title" href={`/bbs/${p.id}`} target="_blank">
+          <Link
+            className={"bbs_title" + (p.isTop ? " highlight" : "")}
+            href={`/bbs/${p.id}`}
+            target="_blank"
+            onClick={() => markBbsRead(p.id)}
+          >
             {p.title}
           </Link>
           {p.isNice && (
@@ -45,7 +55,7 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
               ★
             </span>
           )}
-          {p.isTop && (
+          {p.isPinned && (
             <span className="bbs_top" data-tip="置顶">
               ▲
             </span>
@@ -78,6 +88,7 @@ export function BbsFeed({
   total: initialTotal,
   query,
   showBoard,
+  emptyMsg = "还没有主题，来发第一帖吧。",
 }: {
   initial: BbsPostItem[];
   initialHasMore: boolean;
@@ -85,6 +96,8 @@ export function BbsFeed({
   total: number;
   query: Record<string, string>;
   showBoard: boolean;
+  /** 空态文案（搜索态传「没有找到相关主题」） */
+  emptyMsg?: string;
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -112,7 +125,7 @@ export function BbsFeed({
       ))}
       {items.length === 0 && (
         <tr>
-          <td colSpan={4}>还没有主题，来发第一帖吧。</td>
+          <td colSpan={4}>{emptyMsg}</td>
         </tr>
       )}
       {hasMore && (

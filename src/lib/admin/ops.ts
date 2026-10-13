@@ -38,7 +38,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "news.delete": "manager",
   "message.broadcast": "administrator",
   "rank.snapshot": "manager",
-  "star.set": "manager",
+  // （star.set 每日一星指定已随功能于 2026-10-13 移除）
   "avatar.review": "manager",
 };
 
@@ -310,24 +310,6 @@ async function dispatch(
       return { ok: true, message: `已重算今日排行快照（库内累计 ${c} 条）` };
     }
 
-    case "star.set": {
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(p.date ?? "")) ? String(p.date) : todayStr();
-      const userId = toId(p.userId);
-      if (!userId) return { ok: false, error: "参数错误：缺少玩家 ID" };
-      const user = await prisma.user.findUnique({ where: { id: BigInt(userId) } });
-      if (!user) return { ok: false, error: "玩家不存在" };
-      if (toBool(p.clear)) {
-        await prisma.star.deleteMany({ where: { date } });
-        return { ok: true, message: `已清除 ${date} 的每日一星` };
-      }
-      await prisma.star.upsert({
-        where: { date },
-        create: { user: BigInt(userId), date, createTime: BigInt(now()), updateTime: BigInt(now()) },
-        update: { user: BigInt(userId), updateTime: BigInt(now()) },
-      });
-      return { ok: true, message: `指定 ${date} 每日一星为 ${user.chineseName}（#${userId}）` };
-    }
-
     // ---------- 头像审核（2026-09-24）----------
     // approve：把待审图写进 user.avatar 生效
     // reject ：标记驳回；**若这张图正在生效**（AI 自动放行过），一并回滚到上传前的头像
@@ -415,12 +397,6 @@ async function dispatch(
 
 function now(): number {
   return Math.floor(Date.now() / 1000);
-}
-
-function todayStr(): string {
-  const d = new Date();
-  const p = (n: number) => (n < 10 ? "0" + n : String(n));
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 function statusName(status: number): string {

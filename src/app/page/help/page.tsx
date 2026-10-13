@@ -10,7 +10,6 @@ const TOPICS: [string, string][] = [
   ["/page/help/video", "如何观看本网站的录像？"],
   ["/page/help/upload", "上传录像须知与 3BV 查看方法"],
   ["/page/help/freeze", "为什么录像会被冻结？"],
-  ["/page/help/star", "每日一星评选方法"],
   ["/page/help/clone-faq", "Minesweeper Clone 0.97 常见问题"],
   ["/page/help/bbs", "论坛管理条例"],
   ["/page/help/email", "如何给世界排行发邮件（A mail to Damien）"],

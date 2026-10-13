@@ -27,7 +27,7 @@ const TABLES: [string, string][] = [
   ["bbs_reply", "论坛回复"],
   ["message", "站内信"],
   ["click", "人气记录"],
-  ["star", "每日一星"],
+  // （star 每日一星表已随功能于 2026-10-13 下线，历史数据保留但不再列出）
   ["history", "扫雷历程"],
   ["rank_snapshot", "排行快照"],
   ["admin_log", "后台操作日志"],

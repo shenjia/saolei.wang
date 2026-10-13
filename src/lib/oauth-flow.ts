@@ -6,10 +6,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession, setSession, setOauthTicket } from "@/lib/auth";
-import { checkState, exchangeCode, siteUrl } from "@/lib/oauth";
+import { checkState, exchangeCode } from "@/lib/oauth";
 
 function redirect(path: string): NextResponse {
-  return NextResponse.redirect(`${siteUrl()}${path}`, 302);
+  // 手写相对 Location（同 ranking/whereami 的约定）：siteUrl() 拼绝对地址在
+  // SITE_URL 未配时会回退 http://localhost:3000，把浏览器甩到错误 host。
+  // cookies() 的 set/delete 由 Next 自动并入返回的响应，不受此处构造方式影响。
+  return new NextResponse(null, { status: 302, headers: { Location: path } });
 }
 
 export async function handleOauthCallback(

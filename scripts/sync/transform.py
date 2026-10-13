@@ -134,9 +134,12 @@ for p in players:
     pid = p[C["id"]]
     uid_set.add(pid)
     reg = ux(p[C["reg"]])
+    # last_login_time：Player_Login_Time(北京时间) -> unix 秒
+    # 2026-10-13 补：原 SELECT 有该列、INSERT 却漏写，导致旧站 3.4 万用户
+    # 「最近登录」全为 0（仅新站注册/登录过的账号有值）
     u_rows.append((pid, (p[C["cn"]] or "")[:12], (p[C["en"]] or "")[:32],
                    1 if p[C["sex"]] else 0, "1" if p[C["image"]] else "0",
-                   (p[C["area"]] or "")[:12], 0, reg, 0))
+                   (p[C["area"]] or "")[:12], 0, reg, 0, ux(p[C["login"]])))
     y, m = p[C["year"]] or 0, p[C["month"]] or 0
     bday = 0
     if y and m:
@@ -180,10 +183,11 @@ for r in ua_rows:
         continue
     ua_final.append(r)
 
-flush("""INSERT INTO user (id,chinese_name,english_name,sex,avatar,area,status,create_time,update_time)
-       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
+flush("""INSERT INTO user (id,chinese_name,english_name,sex,avatar,area,status,create_time,update_time,last_login_time)
+       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
        chinese_name=VALUES(chinese_name),english_name=VALUES(english_name),sex=VALUES(sex),
-       avatar=VALUES(avatar),area=VALUES(area)""", u_rows, "user")
+       avatar=VALUES(avatar),area=VALUES(area),
+       last_login_time=GREATEST(last_login_time,VALUES(last_login_time))""", u_rows, "user")
 flush("""INSERT INTO user_info (id,qq,nickname,birthday,mouse,pad,self_intro,interest,create_time,update_time)
        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
        qq=VALUES(qq),nickname=VALUES(nickname),birthday=VALUES(birthday),mouse=VALUES(mouse),

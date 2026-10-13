@@ -199,7 +199,7 @@ async function authorsWithTitles(ids: number[]): Promise<Map<number, BbsAuthor>>
   const out = new Map<number, BbsAuthor>();
   for (const [id, b] of briefs) {
     const sc = sumMap.get(id) ?? { sum: 0, exp: 0 };
-    out.set(id, { ...b, title: await assessTitle(sc.sum), old: oldTitle(sc.exp, b.sex) });
+    out.set(id, { ...b, title: await assessTitle(sc.exp), old: oldTitle(sc.exp, b.sex) });
   }
   return out;
 }
@@ -225,11 +225,34 @@ export async function getPostList(opts: {
   board?: number;
   order: BbsOrder;
   nice?: boolean;
+  /** 搜索关键字（2026-09-26 张老师要求）：匹配 主题标题 contains OR 作者人名（中/英 contains） */
+  q?: string;
   page: number;
 }): Promise<{ posts: BbsPostItem[]; total: number; pageSize: number }> {
-  const { board, order, nice, page } = opts;
+  const { board, order, nice, q, page } = opts;
+  // 搜索态：作者 id 预查（人名匹配的用户集，take 100 截断——3.4 万用户下同名/热门词足够覆盖）
+  const kw = (q ?? "").trim().slice(0, 30);
+  let authorIds: bigint[] = [];
+  if (kw) {
+    const matched = await prisma.user.findMany({
+      where: {
+        OR: [{ chineseName: { contains: kw } }, { englishName: { contains: kw } }],
+      },
+      select: { id: true },
+      take: 100,
+    });
+    authorIds = matched.map((u) => u.id);
+  }
   const where = {
     status: 0,
+    ...(kw
+      ? {
+          OR: [
+            { title: { contains: kw } },
+            ...(authorIds.length ? [{ user: { in: authorIds } }] : []),
+          ],
+        }
+      : {}),
     ...(board !== undefined ? { board } : {}),
     ...(nice ? { isNice: true } : {}),
   };
@@ -341,6 +364,7 @@ export async function getPostPage(opts: {
   board?: number;
   order: BbsOrder;
   nice?: boolean;
+  q?: string;
   page: number;
 }): Promise<{ posts: BbsPostItem[]; total: number; pageSize: number; hasMore: boolean }> {
   const r = await getPostList(opts);

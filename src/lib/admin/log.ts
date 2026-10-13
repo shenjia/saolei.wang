@@ -7,7 +7,7 @@ export interface AdminLogInput {
   user: number;
   /** 动作标识，见 OP_LABELS */
   action: string;
-  /** 目标类型：user / video / comment / bbs_post / bbs_reply / news / message / rank / star */
+  /** 目标类型：user / video / comment / bbs_post / bbs_reply / news / message / rank */
   target?: string;
   targetId?: number;
   /** 人类可读描述（日志列表直接展示） */
@@ -32,7 +32,6 @@ export const OP_LABELS: Record<string, string> = {
   "news.delete": "删除动态",
   "message.broadcast": "群发站内信",
   "rank.snapshot": "生成排行快照",
-  "star.set": "指定每日一星",
   "avatar.review": "审核玩家头像",
 };
 

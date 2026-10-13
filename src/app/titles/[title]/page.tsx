@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTitleMemberCount, getTitleMembers, getTitleMemberOffset } from "@/lib/queries";
-import { TITLE_COLORS } from "@/lib/config";
+import { TITLE_COLORS, TITLE_CONDITIONS } from "@/lib/config";
 import { getSession } from "@/lib/auth";
 import { RankBadge } from "@/components/RankBadge";
 import { TitleMemberList } from "@/components/TitleMemberList";
@@ -47,7 +47,12 @@ export default async function TitleMembersPage({ params }: { params: Promise<{ t
             {t}
           </span>
           <span className="count">
-            共 <em>{count.toLocaleString("zh-CN")}</em> 人
+            共 <em>{count.toLocaleString("zh-CN")}</em> 人{" "}
+            {(() => {
+              const c = TITLE_CONDITIONS[t];
+              if (!c) return null;
+              return c[1] ? <>{c[0]}<em>{c[1]}</em></> : <>{c[0]}</>;
+            })()}
           </span>
         </h1>
         <TitleMemberList

@@ -77,9 +77,9 @@ export default async function RankingPage({
     inRanking = page > 0;
   }
 
-  // 军衔列在服务端预算（Feed 客户端零成本渲染）
+  // 军衔列在服务端预算（Feed 客户端零成本渲染）——SUB 制按高级时间评定（2026-10-13）
   const titled = await Promise.all(
-    rows.map(async (u) => ({ ...u, title: await assessTitle(u.overallSumTime ?? u.scores.sum_time) }))
+    rows.map(async (u) => ({ ...u, title: await assessTitle(u.scores.exp_time) }))
   );
 
   const viewParams = { view: nf ? ("nf" as const) : undefined };

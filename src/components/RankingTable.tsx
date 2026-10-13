@@ -24,8 +24,9 @@ export async function RankingTable({
   deltas?: Map<number, number | null>;
 }) {
   const showDelta = by === "sum_time" && deltas !== undefined;
-  // 军衔按主榜总计时间评定（NF 榜用 overallSumTime 回填；distribution 阈值首次调用后缓存）
-  const titles = await Promise.all(rows.map((u) => assessTitle(u.overallSumTime ?? u.scores.sum_time)));
+  // 军衔 SUB 制按高级时间评定（2026-10-13）；NF 榜行数据本身来自 NF 表，exp_time 同样是 NF 口径，
+  // 但军衔应按主榜评定——getRankingTable 已把主榜成绩回填进 overall（NF 时），此处优先主榜值
+  const titles = await Promise.all(rows.map((u) => assessTitle(u.overallExpTime ?? u.scores.exp_time)));
   return (
     <table cellPadding={0} cellSpacing={0} className="ranking_table">
       <RankingHead by={by} base={base} params={params} showDelta={showDelta} />

@@ -69,8 +69,8 @@ export default async function AreaPage({
 
   const order = parseAreaOrder(sp.order);
   const rows = await getAreaRanking(order);
-  // 领军人物的军衔按总计时间评定（2026-09-23 晚随排行表一起从旧版称号改回军衔）
-  const titles = await Promise.all(rows.map((r) => assessTitle(r.bestSumTime)));
+  // 领军人物的军衔按高级时间评定（2026-10-13 SUB 制）
+  const titles = await Promise.all(rows.map((r) => assessTitle(r.bestExpTime)));
 
   return (
     <div id="page" className="main ranking_old">

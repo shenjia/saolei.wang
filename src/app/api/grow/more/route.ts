@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const page = Math.max(1, parseInt(p.get("page") ?? "1", 10) || 1);
   const { rows, total, pageSize } = await getGrowRanking(page);
   const titled = await Promise.all(
-    rows.map(async (u) => ({ ...u, title: await assessTitle(u.scores.sum_time) }))
+    rows.map(async (u) => ({ ...u, title: await assessTitle(u.scores.exp_time) }))
   );
   return NextResponse.json({ rows: titled, total, pageSize });
 }

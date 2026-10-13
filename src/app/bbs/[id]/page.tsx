@@ -12,6 +12,7 @@ import { PostOps, ReplyDelete, ReplyForm } from "@/components/BbsOps";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { UserCard } from "@/components/UserCard";
 import { getUserCards } from "@/lib/usercard";
+import { BbsReadMark } from "@/components/BbsRead";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export default async function BbsTitlePage({
 
   return (
     <div id="page" className="two_columns">
+      {/* 已读标记：进详情页即记录（列表页标题变灰，2026-09-26 张老师要求） */}
+      <BbsReadMark id={post.id} />
       <ul id="home">
         <li className="main">
           <div className="box bbs_post">
@@ -48,16 +51,7 @@ export default async function BbsTitlePage({
                   ★
                 </span>
               )}
-              {post.isPinned && (
-                <span className="bbs_top" data-tip="置顶">
-                  ▲
-                </span>
-              )}
-              {post.isTop && (
-                <span className="bbs_high_flag" data-tip="高亮">
-                  ◆
-                </span>
-              )}
+              {/* 2026-09-26（张老师）：详情页标题后不再显示置顶▲/高亮◆标记，列表页保留 */}
             </h1>
             <p className="bbs_meta">
               {post.author && (

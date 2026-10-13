@@ -1,13 +1,14 @@
 // 军衔与评级计算，移植自 2013 版 PHP 的 logic/Assess.php
-// 阈值缓存于 distribution 表（取最新一行），字段为逗号分隔的分数阈值
+// 评级（grade/percent）阈值仍缓存于 distribution 表（取最新一行），字段为逗号分隔的分数阈值
+// 军衔（title）2026-10-13 起改为高级时间绝对阈值制（TITLE_THRESHOLDS 常量），不再读 distribution.title
 
 import { prisma } from "./db";
 import {
   GRADE_PERCENTS,
   GRADES,
   ORDER_DIRECTION,
-  TITLE_LEVEL,
   TITLE_ORDER,
+  TITLE_THRESHOLDS,
   TITLES,
   type Level,
   type Order,
@@ -42,37 +43,28 @@ function getPosition(score: number, distribution: number[], direction: 0 | 1): n
   return i;
 }
 
-/** 军衔：按总计时间成绩评定（移植 Assess::title）；2026-09-23 起无成绩玩家评为「预备役」（张老师要求） */
-export async function title(score: number | null | undefined): Promise<string> {
+/** 军衔：按高级时间绝对阈值评定（2026-10-13 张老师改版，原按总计时间相对阈值）
+ *  区间口径：第 i 档 = (TITLE_THRESHOLDS[i-1], TITLE_THRESHOLDS[i]]，大元帅 = exp_time > 0；
+ *  无成绩玩家评为「预备役」 */
+export function title(score: number | null | undefined): string {
   if (!score) return "预备役";
-  const dist = await getDistribution();
-  if (!dist) return "";
-  const thresholds = parseThresholds(dist["title"]);
-  if (!thresholds.length) return "";
   const direction = ORDER_DIRECTION[TITLE_ORDER] === "desc" ? 1 : 0;
-  const position = getPosition(score, thresholds, direction);
+  const position = getPosition(score, TITLE_THRESHOLDS, direction);
   return TITLES[Math.min(position, TITLES.length - 1)] ?? "";
 }
 
 export interface TitleDistribution {
-  /** 各军衔的总计时间阈值（毫秒，升序） */
+  /** 各军衔的高级时间上限（毫秒，升序；2026-10-13 起为常量 TITLE_THRESHOLDS） */
   thresholds: number[];
-  /** 编制总人数 */
+  /** 编制总人数（SUB 制下无意义，恒 0） */
   size: number;
-  /** 颁布时间（Unix 秒） */
+  /** 颁布时间（Unix 秒；SUB 制下为 0） */
   createTime: number;
 }
 
-/** 军衔体系页的分布数据（对应 Distribution::get('title'/'size'/'create_time')） */
-export async function getTitleDistribution(): Promise<TitleDistribution | null> {
-  const dist = await getDistribution();
-  if (!dist) return null;
-  const raw = dist as unknown as Record<string, unknown>;
-  return {
-    thresholds: parseThresholds(dist["title"]),
-    size: Number(raw["size"] ?? 0),
-    createTime: Number(raw["createTime"] ?? raw["create_time"] ?? 0),
-  };
+/** 军衔体系页的分布数据（2026-10-13 起数据源为常量；保留接口兼容旧调用方） */
+export function getTitleDistribution(): TitleDistribution {
+  return { thresholds: TITLE_THRESHOLDS, size: 0, createTime: 0 };
 }
 
 /** 评级：SSS~F（移植 Assess::grade） */

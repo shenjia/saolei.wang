@@ -1,16 +1,19 @@
 // 军衔页 /titles（原 /world 雷界生态，2026-09-24 张老师要求改名——页面定位已是军衔体系，world 名不副实）
 // 2026-09-23 合并军衔体系页（张老师要求）：
-//   上：18+1 级徽章墙（按阶段分组并排，徽章 + 军衔名 + 共 X 人）
+//   上：18+1 级徽章墙（按阶段分组并排，徽章 + 军衔名 + 条件 + 人数）
 //   右栏：旧版称号（2008～2013）对比
 //   （神界全员、雷界军衔分布 Bar 图两个板块同日按张老师要求移除）
 // 2026-09-24 张老师要求：顶部统计数字标签移除，页面定位回归「军衔」；
 //   徽章卡片可点击进入 /titles/[军衔名] 查看本军衔所有玩家（每页 20 条懒加载）；
 //   元帅人数数字金色（与军衔文字同色 #e6db74）
+// 2026-10-13 张老师改版：军衔评定由总计时间改为高级时间绝对阈值（SUB 制）；
+//   卡片文案两行居中：SUB 条件在上、人数在下（列兵=150+，预备役=无高级成绩），
+//   均为亮灰普通文字；人数数字统一亮灰，不对元帅做金色特判
 // /page/titles（全站 TitleBadge 链接）302 跳转到本页
 
 import Link from "next/link";
 import { getTitleCounts } from "@/lib/queries";
-import { OLD_TITLES, TITLE_COLORS } from "@/lib/config";
+import { OLD_TITLES, TITLE_COLORS, TITLE_CONDITIONS } from "@/lib/config";
 import { RankBadge } from "@/components/RankBadge";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +52,14 @@ export default async function TitlesPage() {
                         {t}
                       </div>
                       <div className="meta">
-                        共 <em style={t === "元帅" ? { color: "#e6db74" } : undefined}>{countMap.get(t) ?? 0}</em> 人
+                        共 <em>{countMap.get(t) ?? 0}</em> 人
+                      </div>
+                      <div className="meta sub">
+                        {(() => {
+                          const c = TITLE_CONDITIONS[t];
+                          if (!c) return null;
+                          return c[1] ? <>{c[0]}<em>{c[1]}</em></> : <>{c[0]}</>;
+                        })()}
                       </div>
                     </Link>
                   ))}

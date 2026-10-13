@@ -7,6 +7,9 @@
 //           → 落盘 videos/<DB filepath 去前导斜杠>
 // 用法: env -u NODE_OPTIONS node --experimental-transform-types scripts/phasec-restore.ts [concurrency=6] [limit=0]
 // 断点续跑：目标文件已存在且 md5 一致则跳过；失败记 /tmp/phasec-miss.jsonl
+// （重跑自动覆盖旧 miss 日志——每轮重试后 miss 都是最新快照）
+// Ctrl-C 优雅退出：不再消费新任务，等在途任务落盘后退出（半截 .part 不影响，
+//   下轮按「存在但 md5 不符 → 重下覆盖」自愈）
 import { appendFileSync, createReadStream, existsSync, mkdirSync, renameSync, writeFileSync } from "fs";
 import path from "path";
 import { createHash } from "crypto";
@@ -76,11 +79,24 @@ async function main() {
   const t0 = Date.now();
   const queue = LIMIT > 0 ? rows.slice(0, LIMIT) : rows.slice();
 
+  // 断点续跑强化：①重跑前清空旧 miss 日志（每轮快照）②SIGINT 优雅退出
+  const { writeFileSync: wf } = await import("fs");
+  if (existsSync(MISS_LOG)) wf(MISS_LOG, "");
+  let interrupted = false;
+  const onInt = () => {
+    if (interrupted) process.exit(130); // 连按两次强退
+    interrupted = true;
+    console.log("\n收到中断：等在途任务落盘后退出（可随时重跑续传）…");
+  };
+  process.on("SIGINT", onInt);
+  process.on("SIGTERM", onInt);
+
   let ok = 0, skip = 0, fail = 0, done = 0;
   const target = (r: Row) => path.join(VIDEOS, r.filepath);
 
   async function worker() {
     for (;;) {
+      if (interrupted) return; // 优雅退出：不再取新任务
       const r = queue.shift();
       if (!r) return;
       const dst = target(r);
@@ -88,7 +104,7 @@ async function main() {
         if (existsSync(dst)) {
           const cur = await md5Of(dst);
           if (cur === r.hash) { skip++; continue; }
-          // 存在但坏 → 重下覆盖
+          // 存在但坏（含半截 .part 改名前的旧残留）→ 重下覆盖
         }
         const buf = await fetchWithRetry(BASE + encodeURI(r.old_path));
         const md5 = createHash("md5").update(buf).digest("hex");
@@ -114,7 +130,9 @@ async function main() {
     }
   }
   await Promise.all(Array.from({ length: CONC }, worker));
-  console.log(`完成 ok=${ok} skip=${skip} fail=${fail}，用时 ${((Date.now() - t0) / 60000).toFixed(1)}min`);
+  process.off("SIGINT", onInt);
+  process.off("SIGTERM", onInt);
+  console.log(`${interrupted ? "已中断退出（进度已保留）" : "完成"} ok=${ok} skip=${skip} fail=${fail}，用时 ${((Date.now() - t0) / 60000).toFixed(1)}min`);
   await prisma.$disconnect();
 }
 

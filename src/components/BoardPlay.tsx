@@ -8,11 +8,13 @@ import { playFlop } from "./FlopPlayer";
 
 export function BoardPlay({ uri, children }: { uri: string; children: ReactNode }) {
   return (
-    <div className="playable" title="点击播放在线录像" onClick={() => playFlop(uri)}>
+    <div className="playable">
       {/* 内层 float 包裹（.play_board）：legacy 里 .board 是 float:left、
           后续 <p> 文字环绕其右；wrapper 也 float 才能既包住棋盘又不破坏环绕布局，
-          播放图标以 wrapper 为包含块居中＝棋盘几何中心 */}
-      <div className="play_board">
+          播放图标以 wrapper 为包含块居中＝棋盘几何中心。
+          点击热区只放 .play_board（收缩盒＝棋盘本体）——2026-09-26 张老师反馈
+          .playable 拿满整行宽后点右侧空白也会触发播放，不能把 onClick 放外层 */}
+      <div className="play_board" title="点击播放在线录像" onClick={() => playFlop(uri)}>
         {children}
         <button type="button" className="play_overlay" aria-label="播放在线录像" onClick={() => playFlop(uri)}>
           <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">

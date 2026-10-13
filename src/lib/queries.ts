@@ -44,6 +44,8 @@ export interface NewsItem {
   id: number;
   type: number;
   userScore: number;
+  /** 动态时刻该用户的高级时间 running best（军衔按当时值评定，getNews 批量重放） */
+  expTime: number;
   reference: number;
   details: Record<string, unknown>;
   createTime: number;
@@ -130,15 +132,54 @@ export async function getNews(opts: {
     take: opts.limit,
   });
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
+  // 军衔按「动态时刻」的高级时间评定（2026-10-13 SUB 制，张老师要求显示当时军衔而非现在的）：
+  // 批量取相关用户的高级成绩流水，按每条动态的 create_time 重放 running best
+  const expMap = await expTimeAtBatch([...new Set(rows.map((r) => r.user))], rows.map((r) => ({ user: N(r.user), ct: N(r.createTime) })));
   return rows.map((r) => ({
     id: N(r.id),
     type: r.type,
     userScore: r.userScore,
+    expTime: expMap.get(`${N(r.user)}:${N(r.createTime)}`) ?? 0,
     reference: N(r.reference),
     details: safeJson(r.detailsData),
     createTime: N(r.createTime),
     author: authors.get(N(r.user)) ?? null,
   }));
+}
+
+/**
+ * 批量重放「用户在指定时刻的高级时间 running best」（动态军衔显示当时值用）。
+ * 取所有 (user, ct≤流水时间) 的成绩最小值；一次 IN 查询后在内存分组扫描。
+ */
+async function expTimeAtBatch(
+  users: bigint[],
+  points: { user: number; ct: number }[]
+): Promise<Map<string, number>> {
+  if (!users.length) return new Map();
+  const flows = await prisma.videoScoresExp.findMany({
+    where: { user: { in: users }, scoreTime: { gt: 0 } },
+    select: { user: true, scoreTime: true, createTime: true },
+  });
+  // 按用户分组流水
+  const byUser = new Map<number, { ct: number; s: number }[]>();
+  for (const f of flows) {
+    const uid = N(f.user);
+    if (!byUser.has(uid)) byUser.set(uid, []);
+    byUser.get(uid)!.push({ ct: N(f.createTime), s: N(f.scoreTime) });
+  }
+  for (const lst of byUser.values()) lst.sort((a, b) => a.ct - b.ct);
+  const out = new Map<string, number>();
+  for (const p of points) {
+    const lst = byUser.get(p.user);
+    if (!lst || !lst.length) continue;
+    let best = 0;
+    for (const f of lst) {
+      if (f.ct > p.ct) break;
+      if (!best || f.s < best) best = f.s;
+    }
+    out.set(`${p.user}:${p.ct}`, best);
+  }
+  return out;
 }
 
 function safeJson(s: string): Record<string, unknown> {
@@ -175,7 +216,7 @@ export async function getNewsCount(opts: {
   });
 }
 
-/** 国内 TOP10：按总计时间前 10（移植 home/_top；展示序仍按总时间）
+/** 国内 TOP10：按总计时间前 10（移植 home/_top；展示序仍按总时间，军衔列按高级时间评定）
  *  2026-10-13 张老师要求：原「十大元帅」更名「国内TOP10」，右列表由时间改为「所在地区」，
  *  故此处直接查 user（usersByIds 只回 UserBrief，不含 area） */
 export async function getTopUsers(
@@ -188,21 +229,19 @@ export async function getTopUsers(
   });
   const users = await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.id) } } });
   const byId = new Map(users.map((u) => [N(u.id), u]));
-  return Promise.all(
-    rows.map(async (r) => {
-      const u = byId.get(N(r.id));
-      return {
-        id: N(r.id),
-        chineseName: u?.chineseName ?? "?",
-        englishName: u?.englishName ?? "",
-        sex: u?.sex ?? 1,
-        area: u?.area ?? "",
-        title: await title(r.sumTime),
-        // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
-        titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
-      };
-    })
-  );
+  return rows.map((r) => {
+    const u = byId.get(N(r.id));
+    return {
+      id: N(r.id),
+      chineseName: u?.chineseName ?? "?",
+      englishName: u?.englishName ?? "",
+      sex: u?.sex ?? 1,
+      area: u?.area ?? "",
+      title: title(r.expTime),
+      // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
+      titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
+    };
+  });
 }
 
 // ---------- 排行榜 ----------
@@ -261,7 +300,7 @@ export async function getRanking(
         score: N(rec[field] as number),
         videoId: N(rec[vField] as bigint),
         date: N(rec[dField] as bigint),
-        title: await title(rec.sumTime as number | null),
+        title: title(rec.expTime as number | null),
       };
     })
   );
@@ -422,28 +461,79 @@ export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
-/** 录像统计（/video 右栏版块）：总数 + 本日/本周/本月新增 */
+/**
+ * 录像统计（/video 右栏版块）：级别细分 + 总数，每行各带「今日新增」增量。
+ * 2026-10-13 二轮：去掉本日/本周/本月三行，改为四行右侧统一挂今日增量列。
+ */
 export interface VideoBoxStats {
+  /** 初级录像（仅已通过） */
+  beg: number;
+  /** 中级录像（仅已通过） */
+  int: number;
+  /** 高级录像（仅已通过） */
+  exp: number;
   total: number;
-  today: number;
-  week: number;
-  month: number;
+  /** 今日新增（按级别）；口径与首页「上传录像」增量严格一致：status=REVIEWED 且 review_time 落在今日 */
+  begToday: number;
+  intToday: number;
+  expToday: number;
+  /** 今日新增合计（= 三段之和，不必再查库） */
+  totalToday: number;
 }
 
 export async function getVideoBoxStats(): Promise<VideoBoxStats> {
   const now = new Date();
-  const monthStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000));
-  // 自然周（周一起），与本月（自然月）口径一致
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
-  const weekStart = BigInt(Math.floor(monday.getTime() / 1000));
   const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
-  const [total, today, week, month] = await Promise.all([
+  // 两次 GROUP BY 一次取全（video 表无 status/level 索引，逐项 count 会各扫一遍全表）；
+  // 今日量按 review_time 而非 create_time——与首页「上传录像（+N）」口径一致（审过才算新增）
+  const [total, levelRows, todayRows] = await Promise.all([
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
-    prisma.video.count({ where: { createTime: { gte: dayStart } } }),
-    prisma.video.count({ where: { createTime: { gte: weekStart } } }),
-    prisma.video.count({ where: { createTime: { gte: monthStart } } }),
+    prisma.video.groupBy({
+      by: ["level"],
+      where: { status: VIDEO_STATUS.REVIEWED },
+      _count: { _all: true },
+    }),
+    prisma.video.groupBy({
+      by: ["level"],
+      where: { status: VIDEO_STATUS.REVIEWED, reviewTime: { gte: dayStart } },
+      _count: { _all: true },
+    }),
   ]);
-  return { total, today, week, month };
+  // 三段口径与「录像总数」严格一致（均只算已通过），故三者之和 = total
+  const byLevel = new Map(levelRows.map((r) => [r.level, r._count._all]));
+  const todayByLevel = new Map(todayRows.map((r) => [r.level, r._count._all]));
+  const begToday = todayByLevel.get("beg") ?? 0;
+  const intToday = todayByLevel.get("int") ?? 0;
+  const expToday = todayByLevel.get("exp") ?? 0;
+  return {
+    beg: byLevel.get("beg") ?? 0,
+    int: byLevel.get("int") ?? 0,
+    exp: byLevel.get("exp") ?? 0,
+    total,
+    begToday,
+    intToday,
+    expToday,
+    totalToday: begToday + intToday + expToday,
+  };
+}
+
+/** 某用户今日新增录像（按级别 + 合计）；口径与首页「上传录像」增量一致：status=REVIEWED 且 review_time 落在今日 */
+export async function getUserTodayVideos(
+  userId: number
+): Promise<{ beg: number; int: number; exp: number; total: number }> {
+  const now = new Date();
+  const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
+  // 单用户走 (user, level) 索引；一次 GROUP BY 取三段
+  const rows = await prisma.video.groupBy({
+    by: ["level"],
+    where: { user: BigInt(userId), status: VIDEO_STATUS.REVIEWED, reviewTime: { gte: dayStart } },
+    _count: { _all: true },
+  });
+  const m = new Map(rows.map((r) => [r.level, r._count._all]));
+  const beg = m.get("beg") ?? 0;
+  const int = m.get("int") ?? 0;
+  const exp = m.get("exp") ?? 0;
+  return { beg, int, exp, total: beg + int + exp };
 }
 
 // 三张成绩表字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
@@ -514,7 +604,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       clicks: stat?.clicks ?? 0,
       comments: stat?.comments ?? 0,
       author,
-      authorTitle: await title(authorScores?.sumTime),
+      authorTitle: title(authorScores?.expTime),
     });
   }
   return result;
@@ -582,7 +672,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     comments: stat?.comments ?? 0,
     downloads: stat?.downloads ?? 0,
     author: toBrief(author),
-    authorTitle: await title(authorScores?.sumTime),
+    authorTitle: title(authorScores?.expTime),
   };
 }
 
@@ -646,7 +736,7 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
         }
       : null,
     scores: scoreMap,
-    title: await title(scores?.sumTime),
+    title: title(scores?.expTime),
   };
 }
 
@@ -778,18 +868,17 @@ export async function getSiteStats(): Promise<SiteStats> {
 
 // ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
-/** 各军衔人数（按 distribution 阈值对 sum_time 分桶：第 i 档 = (thresholds[i-1], thresholds[i]]） */
+/** 各军衔人数（2026-10-13 起按高级时间绝对阈值分桶：第 i 档 = (thresholds[i-1], thresholds[i]]） */
 export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
-  const dist = await getTitleDistribution();
-  if (!dist) return [];
-  const thresholds = dist.thresholds;
+  const thresholds = getTitleDistribution().thresholds;
+  if (!thresholds.length) return [];
   const counts = await Promise.all(
     TITLES.map((_, i) => {
       const lower = i > 0 ? thresholds[i - 1] : undefined; // 上一军衔线（不含）
       const upper = i < TITLES.length - 1 ? thresholds[i] : undefined; // 本军衔线（含）；末档无上界
       return prisma.userScores.count({
         where: {
-          sumTime: {
+          expTime: {
             gt: 0,
             ...(lower !== undefined ? { gt: lower } : {}),
             ...(upper !== undefined ? { lte: upper } : {}),
@@ -802,31 +891,16 @@ export async function getTitleCounts(): Promise<{ title: string; count: number }
     title: t,
     count: counts[i] ?? 0,
   }));
-  // 预备役：注册但没有任何总成绩的玩家（2026-09-23 新增，张老师要求）
+  // 预备役：注册但没有任何高级成绩的玩家（2026-09-23 新增，2026-10-13 口径改高级）
   const [totalUsers, ranked] = await Promise.all([
     prisma.user.count(),
-    prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
+    prisma.userScores.count({ where: { expTime: { gt: 0 } } }),
   ]);
   result.push({ title: "预备役", count: Math.max(0, totalUsers - ranked) });
   return result;
 }
 
-/** 神界全员（移植 2008 版 World/Hero.asp：大元帅/元帅/大将 = 编制前 41 人） */
-export async function getHeroList(limit = 41): Promise<(UserBrief & { title: string; sumTime: number })[]> {
-  const rows = await prisma.userScores.findMany({
-    where: { sumTime: { gt: 0 } },
-    orderBy: { sumTime: "asc" },
-    take: limit,
-  });
-  const authors = await usersByIds(rows.map((r) => N(r.id)));
-  return Promise.all(
-    rows.map(async (r) => ({
-      ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
-      title: await title(r.sumTime),
-      sumTime: r.sumTime ?? 0,
-    }))
-  );
-}
+// （雷神殿 getHeroList 已于 2026-10-13 随每日一星/神界概念一并移除，张老师要求）
 
 // ---------- 军衔玩家列表（2026-09-24 张老师要求：徽章墙可点击查看本军衔所有玩家） ----------
 
@@ -842,26 +916,26 @@ export interface TitleMemberRow extends UserBrief {
   videos: Record<string, number>;
 }
 
-/** 军衔→user_scores 查询条件（与 getTitleCounts 同口径：第 i 档 = (thresholds[i-1], thresholds[i]]）；预备役返回 null（查 user 表） */
+/** 军衔→user_scores 查询条件（与 getTitleCounts 同口径：第 i 档 = (thresholds[i-1], thresholds[i]]，按 exp_time）；预备役返回 null（查 user 表） */
 async function titleScoresWhere(t: string): Promise<Record<string, unknown> | null> {
   const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
   if (idx < 0) return null;
-  const dist = await getTitleDistribution();
-  if (!dist || !dist.thresholds.length) return null;
+  const dist = getTitleDistribution();
+  if (!dist.thresholds.length) return null;
   const lower = idx > 0 ? dist.thresholds[idx - 1] : undefined;
   const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : undefined;
   return {
-    sumTime: {
+    expTime: {
       gt: lower !== undefined ? lower : 0,
       ...(upper !== undefined ? { lte: upper } : {}),
     },
   };
 }
 
-/** 预备役→user 查询条件（id 不在有成绩集合内） */
+/** 预备役→user 查询条件（id 不在有高级成绩集合内；2026-10-13 口径改高级） */
 async function reserveWhere(): Promise<Record<string, unknown>> {
   const ranked = await prisma.userScores.findMany({
-    where: { sumTime: { gt: 0 } },
+    where: { expTime: { gt: 0 } },
     select: { id: true },
   });
   return { id: { notIn: ranked.map((r) => r.id) } };
@@ -877,7 +951,7 @@ export async function getTitleMemberCount(t: string): Promise<number> {
 
 /**
  * 本军衔玩家一页（偏移分页，cursor=已加载条数）——照搬排行表结构（getRankingTable）
- * 普通军衔：user_scores 按 sum_time 升序 + 区间过滤，行含 8 列成绩与全局名次；
+ * 普通军衔：user_scores 按 exp_time 升序 + 区间过滤，行含 8 列成绩与全局名次（名次=高级时间全局名次）；
  * 预备役：user 按注册时间倒序（无成绩列）。
  * @returns 不合法军衔返回 null
  */
@@ -914,7 +988,7 @@ export async function getTitleMembers(
   if (!where) return null;
   const rows = await prisma.userScores.findMany({
     where,
-    orderBy: [{ sumTime: "asc" }, { id: "asc" }],
+    orderBy: [{ expTime: "asc" }, { id: "asc" }],
     skip: cursor,
     take: take + 1,
   });
@@ -951,8 +1025,8 @@ export async function getTitleMembers(
  */
 export async function getTitleMemberOffset(uid: number, t: string): Promise<number> {
   if (t === "预备役") {
-    const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) }, select: { sumTime: true } });
-    if (row?.sumTime && row.sumTime > 0) return -1; // 有成绩，不是预备役
+    const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) }, select: { expTime: true } });
+    if (row?.expTime && row.expTime > 0) return -1; // 有高级成绩，不是预备役
     const me = await prisma.user.findUnique({ where: { id: BigInt(uid) }, select: { createTime: true } });
     if (!me) return -1;
     const where = await reserveWhere();
@@ -971,33 +1045,33 @@ export async function getTitleMemberOffset(uid: number, t: string): Promise<numb
   const where = await titleScoresWhere(t);
   if (!where) return -1;
   const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) } });
-  if (!row?.sumTime || !(row.sumTime > 0)) return -1;
+  if (!row?.expTime || !(row.expTime > 0)) return -1;
   // 检验是否真在此军衔区间（同 titleScoresWhere 口径）
-  const dist = await getTitleDistribution();
-  if (!dist || !dist.thresholds.length) return -1;
+  const dist = getTitleDistribution();
+  if (!dist.thresholds.length) return -1;
   const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
   const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : undefined;
   const lower = idx > 0 ? dist.thresholds[idx - 1] : 0;
-  if (row.sumTime > (upper ?? Infinity) || row.sumTime <= lower) return -1;
-  // 排序键 (sumTime asc, id asc)：数排在自己前面的行数
+  if (row.expTime > (upper ?? Infinity) || row.expTime <= lower) return -1;
+  // 排序键 (expTime asc, id asc)：数排在自己前面的行数
   const before = await prisma.userScores.count({
     where: {
       ...where,
-      OR: [{ sumTime: { lt: row.sumTime } }, { sumTime: row.sumTime, id: { lte: BigInt(uid) } }],
+      OR: [{ expTime: { lt: row.expTime } }, { expTime: row.expTime, id: { lte: BigInt(uid) } }],
     },
   });
   return before;
 }
 
-/** 批量取全局总时间名次（ROW_NUMBER 与排行榜 sum_time 升序同口径；map 缺省 0）
+/** 批量取全局高级时间名次（ROW_NUMBER 与军衔列表 exp_time 升序同口径；map 缺省 0）
  *  注意：rank 为 MySQL 保留字，别名须反引号 */
 async function getUserSumRanksBatch(ids: bigint[]): Promise<Map<number, number>> {
   if (!ids.length) return new Map();
   const rows = await prisma.$queryRaw<
     { id: bigint; rank: bigint }[]
   >`SELECT id, \`rank\` FROM (
-      SELECT id, ROW_NUMBER() OVER (ORDER BY sum_time ASC) AS \`rank\`
-      FROM user_scores WHERE sum_time > 0
+      SELECT id, ROW_NUMBER() OVER (ORDER BY exp_time ASC) AS \`rank\`
+      FROM user_scores WHERE exp_time > 0
     ) r WHERE id IN (${Prisma.join(ids)})`;
   return new Map(rows.map((r) => [N(r.id), N(r.rank)]));
 }
@@ -1051,8 +1125,8 @@ export interface RankingRow extends UserBrief {
   scores: Record<string, number>;
   /** 各级别成绩对应录像 id（sum 无录像=0） */
   videos: Record<string, number>;
-  /** 主榜总计时间（军衔评定用；仅 NF 榜时与 scores.sum_time 不同，需额外回填） */
-  overallSumTime?: number;
+  /** 主榜高级时间（军衔评定用；仅 NF 榜时与 scores.exp_time 不同，需额外回填） */
+  overallExpTime?: number;
 }
 
 /**
@@ -1083,15 +1157,15 @@ export async function getRankingTable(
     take: RANKING_PAGESIZE,
   });
   const authors = await usersByIds(rows.map((r) => N(r.id)));
-  // NF 榜：军衔按主榜总计时间评定（与榜单口径无关），需额外回填主榜 sum_time
+  // NF 榜：军衔按主榜高级时间评定（与榜单口径无关），需额外回填主榜 exp_time（2026-10-13 SUB 制）
   const overall = nf
     ? new Map(
         (
           await prisma.userScores.findMany({
             where: { id: { in: rows.map((r) => BigInt(N(r.id))) } },
-            select: { id: true, sumTime: true },
+            select: { id: true, expTime: true },
           })
-        ).map((s) => [N(s.id), N(s.sumTime)])
+        ).map((s) => [N(s.id), N(s.expTime)])
       )
     : null;
   const result: RankingRow[] = rows.map((r, i) => {
@@ -1109,7 +1183,7 @@ export async function getRankingTable(
       rank: (page - 1) * RANKING_PAGESIZE + i + 1,
       scores,
       videos,
-      ...(overall ? { overallSumTime: overall.get(N(r.id)) ?? 0 } : null),
+      ...(overall ? { overallExpTime: overall.get(N(r.id)) ?? 0 } : null),
     };
   });
   return { rows: result, total, pageSize: RANKING_PAGESIZE };
@@ -1157,13 +1231,7 @@ export async function searchUsers(q: string, limit = 8): Promise<UserBrief[]> {
   return rows.map((r) => ({ id: N(r.id), chineseName: r.chineseName, englishName: r.englishName, sex: r.sex }));
 }
 
-/** 用户总计时间名次（每日一星卡「第 N 位」） */
-export async function getUserSumRank(id: number): Promise<number> {
-  const row = await prisma.userScores.findUnique({ where: { id: BigInt(id) }, select: { sumTime: true } });
-  if (!row?.sumTime) return 0;
-  const better = await prisma.userScores.count({ where: { sumTime: { lt: row.sumTime, gt: 0 } } });
-  return better + 1;
-}
+// （getUserSumRank 每日一星卡专用，已随每日一星于 2026-10-13 移除）
 
 // ---------- 地区榜（移植 2008 版 Ranking_Area + Ranking_Area_Refresh 公式实时计算） ----------
 // Area_Power = Σ(全国有成绩人数 − 个人名次)；Area_Players = 人数 + 0.0001×平均名次（排序微调）

@@ -5,5 +5,5 @@ import type { NewsItem } from "@/lib/queries";
 import { NewsCellView } from "./NewsCellView";
 
 export async function NewsCell({ news }: { news: NewsItem }) {
-  return <NewsCellView news={news} title={await assessTitle(news.userScore)} />;
+  return <NewsCellView news={news} title={await assessTitle(news.expTime)} />;
 }

@@ -131,6 +131,7 @@ export async function getUserList(
     if (!u) continue;
     const auth = authMap.get(id);
     const sumTime = N(scoreMap.get(id)?.sumTime);
+    const expTime = N(scoreMap.get(id)?.expTime);
     rows.push({
       id,
       chineseName: u.chineseName,
@@ -142,7 +143,7 @@ export async function getUserList(
       role: auth?.role ?? 0,
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
-      title: await assessTitle(sumTime),
+      title: await assessTitle(expTime),
       sumTime,
       videos: vcMap.get(id) ?? 0,
     });
@@ -206,6 +207,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
   const infoMap = new Map(infos.map((i) => [N(i.id), i]));
 
   const sumTime = N(score?.sumTime);
+  const expTime = N(score?.expTime);
   // 名次 = 成绩更好的人数 + 1（同分并列取小）
   const rankRows = sumTime
     ? await prisma.$queryRawUnsafe<{ c: bigint }[]>(
@@ -249,7 +251,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       role: auth?.role ?? 0,
       createTime: N(user.createTime),
       lastLoginTime: N(user.lastLoginTime),
-      title: await assessTitle(sumTime),
+      title: await assessTitle(expTime),
       sumTime,
       videos: await prisma.video.count({ where: { user: uid } }),
     },
@@ -753,6 +755,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
   for (const u of users) {
     const id = N(u.id);
     const sumTime = N(sMap.get(id)?.sumTime);
+    const expTime = N(sMap.get(id)?.expTime);
     rows.push({
       id,
       chineseName: u.chineseName,
@@ -764,7 +767,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
       role: aMap.get(id)?.role ?? 0,
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
-      title: await assessTitle(sumTime),
+      title: await assessTitle(expTime),
       sumTime,
       videos: 0,
     });
@@ -824,27 +827,9 @@ export async function getMessageStats(): Promise<{ total: number; unread: number
   return { total, unread, system, today: todayCount };
 }
 
-// ---------- 每日一星 ----------
+// （每日一星 getStarHistory 已于 2026-10-13 随功能下线移除）
 
-export interface StarRow {
-  date: string;
-  user: number;
-  author: UserBrief | null;
-  createTime: number;
-}
-
-export async function getStarHistory(limit = 14): Promise<StarRow[]> {
-  const rows = await prisma.star.findMany({ orderBy: { date: "desc" }, take: limit });
-  const authors = await usersByIds(rows.map((r) => N(r.user)));
-  return rows.map((r) => ({
-    date: r.date,
-    user: N(r.user),
-    author: authors.get(N(r.user)) ?? null,
-    createTime: N(r.createTime),
-  }));
-}
-
-/** 搜索玩家（供「指定每日一星」表单用）：按姓名 / 账号模糊匹配 */
+/** 搜索玩家（后台通用）：按姓名 / 账号模糊匹配 */
 export async function searchUsersBrief(q: string, limit = 10): Promise<{ id: number; name: string; username: string }[]> {
   const kw = q.trim();
   if (!kw) return [];

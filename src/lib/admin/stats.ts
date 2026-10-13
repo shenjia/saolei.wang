@@ -9,7 +9,7 @@
 
 import { prisma } from "@/lib/db";
 import { getTitleCounts } from "@/lib/queries";
-import { TITLES, VIDEO_STATUS, VIDEO_LEVELS } from "@/lib/config";
+import { TITLES, TITLE_THRESHOLDS, VIDEO_STATUS, VIDEO_LEVELS } from "@/lib/config";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -480,25 +480,19 @@ export async function getSnapshotHealth(): Promise<{ todayDone: boolean; days: n
   return { todayDone: todayCount > 0, days: N(days[0]?.c), latest: latestRow?.date ?? "—" };
 }
 
-/** 军衔阈值表（distribution 最新一行）+ 各军衔人数，军衔页/仪表盘共用 */
+/** 军衔阈值表（2026-10-13 起为常量 TITLE_THRESHOLDS，不再读 distribution）+ 各军衔人数，军衔页/仪表盘共用 */
 export async function getTitleThresholds(): Promise<{
   size: number;
   createTime: number;
   rows: { title: string; threshold: number; count: number }[];
 } | null> {
-  const [dist, counts] = await Promise.all([
-    prisma.distribution.findFirst({ orderBy: { id: "desc" } }),
-    getTitleCounts(),
-  ]);
-  if (!dist) return null;
-  const raw = dist as unknown as Record<string, unknown>;
-  const thresholds = String(raw["title"] ?? "")
-    .split(",")
-    .map((s) => parseInt(s, 10));
+  const [counts] = await Promise.all([getTitleCounts()]);
+  const thresholds = TITLE_THRESHOLDS;
   const countMap = new Map(counts.map((c) => [c.title, c.count]));
   return {
-    size: Number(raw["size"] ?? 0),
-    createTime: Number(raw["createTime"] ?? 0),
+    size: 0,
+    // SUB 制颁布时间（2026-10-13 0 点 +08:00）
+    createTime: 1791254400,
     rows: TITLES.map((t, i) => ({
       title: t,
       threshold: thresholds[i] ?? 0,

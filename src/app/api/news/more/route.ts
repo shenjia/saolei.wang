@@ -21,9 +21,7 @@ export async function GET(req: Request) {
     // 同条件下的动态总数：「加载更多」括号内显示剩余条数用
     getNewsCount({ userId, level, home }),
   ]);
-  const withTitles = await Promise.all(
-    items.map(async (news) => ({ news, title: await assessTitle(news.userScore) }))
-  );
+  const withTitles = items.map((news) => ({ news, title: assessTitle(news.expTime) }));
   return NextResponse.json({
     items: withTitles,
     cursor: items.length ? items[items.length - 1].id : cursor,

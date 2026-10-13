@@ -3,10 +3,11 @@
 // 2026-09-24 新增类型渲染：上传录像 VIDEO / 加入扫雷网 JOIN / 更换头像 AVATAR / 论坛文章 ARTICLE / 评论 COMMENT
 
 import Link from "next/link";
-import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, type Level } from "@/lib/config";
+import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLE_CLASSES, type Level } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
+import { RankBadge } from "./RankBadge";
 
 function formatScore(order: string, value: number): string {
   return order === "time" ? scoreTime(value) : score3bvs(value);
@@ -22,6 +23,10 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
     bv?: number;
     t?: string;
     kind?: string;
+    /** 晋升军衔名（type=53） */
+    ti?: string;
+    /** 晋升条件文案（type=53，如「高级记录 < 40秒」） */
+    cond?: string;
   };
   const authorCells = news.author && (
     <>
@@ -113,7 +118,16 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
             )}
           </>
         )}
-        {![0, 10, 20, 30, 40, 50, 51, 52].includes(news.type) && (
+        {news.type === NEWS_TYPE.PROMOTION && news.author && (
+          <>
+            {authorCells}
+            晋升
+            <span className="record person">
+              <RankBadge title={d.ti ?? ""} /> <em className={TITLE_CLASSES[d.ti ?? ""] ?? ""}>{d.ti ?? ""}</em>
+            </span>
+          </>
+        )}
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 53].includes(news.type) && (
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>

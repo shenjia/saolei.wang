@@ -24,8 +24,9 @@ export async function GET(req: Request) {
     deltas = rows.map((r) => [r.id, map.get(r.id) ?? null] as [number, number | null]);
   }
 
+  // 军衔 SUB 制按高级时间评定（2026-10-13）
   const titled = await Promise.all(
-    rows.map(async (u) => ({ ...u, title: await assessTitle(u.overallSumTime ?? u.scores.sum_time) }))
+    rows.map(async (u) => ({ ...u, title: await assessTitle(u.scores.exp_time) }))
   );
 
   return NextResponse.json({ rows: titled, deltas, total, pageSize });

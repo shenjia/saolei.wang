@@ -109,13 +109,52 @@ export const TITLE_COLORS: Record<string, string> = Object.fromEntries(
   Object.entries(TITLE_CLASSES).map(([t, c]) => [t, TITLE_CLASS_COLORS[c] ?? "#668cba"])
 );
 
-// 军衔评定使用 总计时间（sum_time）
-export const TITLE_LEVEL: Level = "sum";
+// 军衔评定使用 高级时间（exp_time）
+// 2026-10-13 张老师改版：由总计时间相对阈值（distribution 表）改为高级时间绝对阈值（SUB 制）
+export const TITLE_LEVEL: Level = "exp";
 export const TITLE_ORDER: Order = "time";
 
-// 固定编制军衔（前 6 个按人数，其余按比例，移植 TitleConfig）
+// 各军衔的高级时间上限（毫秒，升序与 TITLES 对应；末档列兵无上限）
+// 区间口径：第 i 档 = (thresholds[i-1], thresholds[i]]，大元帅 = exp_time > 0
+export const TITLE_THRESHOLDS: number[] = [
+  35000, 40000, 42000, 45000, 48000, 50000, 52000, 55000, 58000, 60000,
+  63000, 66000, 70000, 80000, 90000, 100000, 150000,
+];
+
+// 军衔卡片/详情页的条件文案（放人数下方一行、暗灰居中，如「高级记录 < 40秒」，数字稍亮）
+// 值为 [前缀, 数字] 二元组；数字部分渲染时用 <em> 提亮（预备役无数字，第二段为整段文案）
+export const TITLE_CONDITIONS: Record<string, [string, string]> = {
+  大元帅: ["高级记录 < ", "35秒"],
+  元帅: ["高级记录 < ", "40秒"],
+  大将: ["高级记录 < ", "42秒"],
+  上将: ["高级记录 < ", "45秒"],
+  中将: ["高级记录 < ", "48秒"],
+  少将: ["高级记录 < ", "50秒"],
+  大校: ["高级记录 < ", "52秒"],
+  上校: ["高级记录 < ", "55秒"],
+  中校: ["高级记录 < ", "58秒"],
+  少校: ["高级记录 < ", "60秒"],
+  上尉: ["高级记录 < ", "63秒"],
+  中尉: ["高级记录 < ", "66秒"],
+  少尉: ["高级记录 < ", "70秒"],
+  上士: ["高级记录 < ", "80秒"],
+  中士: ["高级记录 < ", "90秒"],
+  下士: ["高级记录 < ", "100秒"],
+  上等兵: ["高级记录 < ", "150秒"],
+  列兵: ["高级记录 ≥ ", "150秒"],
+  预备役: ["未加入排行", ""],
+};
+
+/** 军衔条件文案 → 纯文本（气泡 tooltip 用，如「高级记录 < 40秒」） */
+export function titleConditionText(t: string): string {
+  const c = TITLE_CONDITIONS[t];
+  return c ? c[0] + c[1] : "";
+}
+
+// 固定编制军衔（2013 版按人数编制，2026-10-13 改 SUB 绝对阈值制后仅作历史参考，不再参与评定）
 export const FIXED_TITLES = ["大元帅", "元帅", "大将", "上将", "中将", "少将"] as const;
 
+// 2013 版按比例编制（历史参考，SUB 制下不再使用）
 export const TITLE_DISTRIBUTION: Record<string, number> = {
   大元帅: 1,
   元帅: 10,
@@ -221,6 +260,7 @@ export const NEWS_TYPE = {
   JOIN: 50, // 加入扫雷网（注册）
   AVATAR: 51, // 更换头像
   COMMENT: 52, // 评论（录像评论 / BBS 回帖）
+  PROMOTION: 53, // 晋升军衔（2026-10-13 SUB 制回填：首次达到新军衔阈值）
 } as const;
 
 /** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻） */
@@ -231,6 +271,7 @@ export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
   NEWS_TYPE.VIDEO,
+  NEWS_TYPE.PROMOTION,
 ];
 
 // ---------- 地区 ----------

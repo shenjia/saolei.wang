@@ -81,8 +81,8 @@ c.execute("""SELECT u.id, u.chinese_name, s.sum_time FROM user_scores s JOIN use
           WHERE s.sum_time>0 ORDER BY s.sum_time LIMIT 5""")
 for r in c.fetchall():
     print(f"  {r[0]} {r[1]} {r[2]/1000:.2f}s")
-s.execute("""SELECT TOP 5 Player_Id, Player_Name_Chinese, Player_Sum_Time_Score FROM Player
-          WHERE Player_IsLive=1 AND Player_Sum_Time_Score<999 ORDER BY Player_Sum_Time_Score""")
+s.execute("""SELECT Player_Id, Player_Name_Chinese, Player_Sum_Time_Score FROM player
+          WHERE Player_IsLive=1 AND Player_Sum_Time_Score<999 ORDER BY Player_Sum_Time_Score LIMIT 5""")
 for r in s.fetchall():
     print(f"  MSSQL {r[0]} {r[1]} {r[2]:.2f}s(含+3s规则)")
 

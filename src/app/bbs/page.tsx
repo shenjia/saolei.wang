@@ -9,12 +9,17 @@
 //   取消排序筛选器——列表固定按更新时间排序；发布按钮改 small 与「加载更多」同尺寸
 // 2026-09-25 七轮（张老师）：分类与主题合并成一列——表头「分类 / 主题」，
 //   行内分类改为标题前的灰色标签（board_tag），不再单独占一列
+// 2026-09-26（张老师）：右上角加搜索框（样式参考排行页 goto_form）——
+//   ?q=关键字 按标题或作者人名过滤主题；搜索态下分类 tabs 收起，
+//   换成「搜索 "xx" 的结果 N 帖 + 清除搜索」返回常规列表
 
 import Link from "next/link";
 import { BBS_BOARDS, BBS_BOARD_NAMES, getPostPage } from "@/lib/bbs";
 import { getSession } from "@/lib/auth";
 import { Tabs } from "@/components/Pager";
 import { BbsFeed } from "@/components/BbsFeed";
+import { BbsSearch } from "@/components/BbsSearch";
+import { TotalCount } from "@/components/TotalCount";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "论坛 | 扫雷网" };
@@ -30,17 +35,21 @@ export default async function BbsPage({
   const nice = sp.nice === "1" || sp.order === "nice" || sp.board === "nice";
   const boardRaw = parseInt(sp.board ?? "", 10);
   const board = !nice && BBS_BOARD_NAMES[boardRaw] !== undefined ? boardRaw : undefined;
+  // 搜索关键字（2026-09-26）：搜索态优先于板块/精华筛选（列表只按 q 过滤，board/nice 忽略）
+  const q = (sp.q ?? "").trim().slice(0, 30);
 
   const [{ posts, hasMore, total }, session] = await Promise.all([
-    getPostPage({ board, order: "reply", nice: nice || undefined, page: 1 }),
+    getPostPage({ board: q ? undefined : board, order: "reply", nice: q ? undefined : nice || undefined, q: q || undefined, page: 1 }),
     getSession(),
   ]);
-  const query: Record<string, string> = nice
-    ? { board: "nice" }
-    : board !== undefined
-      ? { board: String(board) }
-      : {};
-  const feedKey = nice ? "nice" : (board ?? "all");
+  const query: Record<string, string> = q
+    ? { q }
+    : nice
+      ? { board: "nice" }
+      : board !== undefined
+        ? { board: String(board) }
+        : {};
+  const feedKey = q ? `q-${q}` : nice ? "nice" : (board ?? "all");
 
   return (
     <div id="page" className="main bbs_old">
@@ -51,22 +60,40 @@ export default async function BbsPage({
         <div className="page_head">
           <h1 className="page_title">论坛</h1>
           <div className="bbs_head_nav">
-            <Tabs
-              base="/bbs"
-              params={query}
-              name="board"
-              current={nice ? "nice" : board === undefined ? "all" : String(board)}
-              options={[
-                ["all", "全部"],
-                ...BBS_BOARDS.map((b) => [String(b.id), b.name] as [string, string]),
-                ["nice", "精华"],
-              ]}
-            />
-            {session && (
-              <Link className="button active small bbs_post_btn" href="/bbs/post">
-                发布主题
-              </Link>
+            {q ? (
+              /* 搜索态：tabs 收起，显示结果条 + 清除返回（筛选与搜索互斥，q 优先） */
+              <div className="bbs_search_bar">
+                <span className="bbs_search_kw">
+                  搜索 <em>“{q}”</em> 的结果
+                </span>
+                <TotalCount total={total} unit="帖" />
+                <Link className="button small" href="/bbs">
+                  清除搜索
+                </Link>
+              </div>
+            ) : (
+              <Tabs
+                base="/bbs"
+                params={query}
+                name="board"
+                current={nice ? "nice" : board === undefined ? "all" : String(board)}
+                options={[
+                  ["all", "全部"],
+                  ...BBS_BOARDS.map((b) => [String(b.id), b.name] as [string, string]),
+                  ["nice", "精华"],
+                ]}
+              />
             )}
+            {/* 动作组（2026-09-26 二轮张老师：发布按钮移到搜索框左边、垂直居中对齐）：
+                组内 align-items:center——按钮随搜索胶囊居中，整体贴行尾 */}
+            <div className="bbs_actions">
+              {session && (
+                <Link className="button active small bbs_post_btn" href="/bbs/post">
+                  发布主题
+                </Link>
+              )}
+              <BbsSearch initialQ={q} />
+            </div>
           </div>
         </div>
         <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
@@ -86,6 +113,7 @@ export default async function BbsPage({
               total={total}
               query={query}
               showBoard={true}
+              emptyMsg={q ? `没有找到与“${q}”相关的主题` : undefined}
             />
           </tbody>
         </table>

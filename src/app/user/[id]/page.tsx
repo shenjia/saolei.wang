@@ -10,6 +10,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
+import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -19,6 +20,7 @@ import {
   getUserNews,
   getUserRanks,
   getNewsCount,
+  getUserTodayVideos,
   getVideoList,
 } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
@@ -55,6 +57,34 @@ const VIDEO_LEVEL_TABS: [string, string][] = [
   ["exp", "高级"],
 ];
 
+/**
+ * 统计盒行（2026-10-13 张老师要求，样式与首页/录像页「数据统计」统一）：
+ * 标签 | 数值（右对齐） | 今日增量（绿色括号，左对齐；无新增留空）。
+ * span：该行不需要增量列时（如「最近登录」）数值格横跨两列。
+ */
+function StatRow({
+  label,
+  children,
+  today,
+  span,
+}: {
+  label: string;
+  children: ReactNode;
+  today?: number;
+  span?: boolean;
+}) {
+  const hasDelta = !span && today !== undefined && today > 0;
+  return (
+    <tr>
+      <td>{label}</td>
+      <td className="num" colSpan={span ? 2 : undefined}>
+        {children}
+      </td>
+      {!span && <td className="delta">{hasDelta ? `（+${today}）` : ""}</td>}
+    </tr>
+  );
+}
+
 export default async function UserViewPage({
   params,
   searchParams,
@@ -86,17 +116,17 @@ export default async function UserViewPage({
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, session, ranks, userVideos] = await Promise.all([
+  const [history, session, ranks, userVideos, todayVideos] = await Promise.all([
     getHistory(userId),
     getSession(),
     getUserRanks(userId),
     // 本人录像：按上传时间倒序第一页（与 /video?author= 同语义）；
     // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）
     getVideoList({ level, order: "id", author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
+    // 今日新增录像（按级别），统计盒增量列用（2026-10-13 张老师要求）
+    getUserTodayVideos(userId),
   ]);
-  const feed: NewsFeedItem[] = await Promise.all(
-    news.map(async (n) => ({ news: n, title: await assessTitle(n.userScore) }))
-  );
+  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime) }));
 
   const { user, info, scores } = detail;
   const radar = await getRadarData(scores);
@@ -292,57 +322,38 @@ export default async function UserViewPage({
         )}
         {detail.stat && (
           <div className="box">
-            <h2>统计</h2>
-            {/* 2026-09-24 张老师要求：数字默认亮灰 #b1b1a4，今日数据用黄 #fdc61a 高亮 */}
+            <h2>数据统计</h2>
+            {/* 2026-10-13 张老师要求：与首页/录像页「数据统计」统一——数字亮灰加粗右对齐，
+                今日新增独立成列（绿色括号，左对齐），无新增不显示 */}
             <table className="table full">
               <tbody>
-                <tr>
-                  <td>人气</td>
-                  <td>
-                    <em>{clicks.total}</em>
-                    {clicks.today > 0 && (
-                      <span className="stat_today">（今日 +{clicks.today}）</span>
-                    )}
-                  </td>
-                </tr>
-                <tr>
-                  <td>初级录像</td>
-                  <td>
-                    <Link href={`/video?author=${userId}&level=beg`} target="_blank">
-                      <em>{detail.stat.begVideos}</em>
-                    </Link>
-                  </td>
-                </tr>
-                <tr>
-                  <td>中级录像</td>
-                  <td>
-                    <Link href={`/video?author=${userId}&level=int`} target="_blank">
-                      <em>{detail.stat.intVideos}</em>
-                    </Link>
-                  </td>
-                </tr>
-                <tr>
-                  <td>高级录像</td>
-                  <td>
-                    <Link href={`/video?author=${userId}&level=exp`} target="_blank">
-                      <em>{detail.stat.expVideos}</em>
-                    </Link>
-                  </td>
-                </tr>
-                <tr>
-                  <td>录像总数</td>
-                  <td>
-                    <Link href={`/video?author=${userId}`} target="_blank">
-                      <em>{detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos}</em>
-                    </Link>
-                  </td>
-                </tr>
-                <tr>
-                  <td>最近登录</td>
-                  <td>
-                    {user.lastLoginTime ? formatDate(user.lastLoginTime, "Y-m-d H:i") : "—"}
-                  </td>
-                </tr>
+                <StatRow label="人气" today={clicks.today}>
+                  <em>{clicks.total}</em>
+                </StatRow>
+                <StatRow label="初级录像" today={todayVideos.beg}>
+                  <Link href={`/video?author=${userId}&level=beg`} target="_blank">
+                    <em>{detail.stat.begVideos}</em>
+                  </Link>
+                </StatRow>
+                <StatRow label="中级录像" today={todayVideos.int}>
+                  <Link href={`/video?author=${userId}&level=int`} target="_blank">
+                    <em>{detail.stat.intVideos}</em>
+                  </Link>
+                </StatRow>
+                <StatRow label="高级录像" today={todayVideos.exp}>
+                  <Link href={`/video?author=${userId}&level=exp`} target="_blank">
+                    <em>{detail.stat.expVideos}</em>
+                  </Link>
+                </StatRow>
+                <StatRow label="录像总数" today={todayVideos.total}>
+                  <Link href={`/video?author=${userId}`} target="_blank">
+                    <em>{detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos}</em>
+                  </Link>
+                </StatRow>
+                {/* 最近登录不是「今日新增」类数据，数值格横跨两列 */}
+                <StatRow label="最近登录" span>
+                  {user.lastLoginTime ? formatDate(user.lastLoginTime, "Y-m-d H:i") : "—"}
+                </StatRow>
               </tbody>
             </table>
           </div>

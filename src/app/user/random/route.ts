@@ -4,7 +4,12 @@ import { getRandomUserId } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export async function GET() {
   const id = await getRandomUserId();
-  return NextResponse.redirect(new URL(id ? `/user/${id}` : "/ranking", req.url));
+  // 相对 Location：req.url 在 nginx 反代下是内部地址（localhost:3100），
+  // 用 new URL(path, req.url) 会把内网 host 泄给浏览器
+  return new NextResponse(null, {
+    status: 302,
+    headers: { Location: id ? `/user/${id}` : "/ranking" },
+  });
 }

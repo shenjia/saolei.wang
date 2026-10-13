@@ -149,8 +149,8 @@ export function proxy(req: NextRequest) {
     "/download": "/page/download",
     "/guide": "/page/guide",
     "/help": "/page/help",
-    "/hero": "/hero",
     "/team": "/team",
+    "/hero": "/titles",
     "/world": "/titles",
     "/update": "/page/history",
     "/history": "/page/history",
@@ -251,7 +251,7 @@ export function proxy(req: NextRequest) {
     return movedTo(req, n ? `/user/${n}` : "/ranking");
   }
   if (path === "/player/star.asp") {
-    // 每日一星（数据未迁移）→ 军衔页无意义；跳玩家详情或首页
+    // 每日一星已下线（2026-10-13）→ 跳玩家详情或首页
     const n = id();
     return movedTo(req, n ? `/user/${n}` : "/");
   }
@@ -284,9 +284,9 @@ export function proxy(req: NextRequest) {
   if (path === "/ranking/ranking_hero.asp") {
     // 神界榜已并入主榜（编制 41 人）→ 主榜按总计时间
     return movedTo(req, withPage("/ranking", page(), { by: "sum_time" }));
-  }
-  if (path === "/ranking/ranking_man.asp") {
-    return movedTo(req, "/hero");
+  }  if (path === "/ranking/ranking_man.asp" || path === "/ranking/top10_hero.asp") {
+    // 雷神殿已于 2026-10-13 下线 → 落军衔体系页
+    return movedTo(req, "/titles");
   }
   if (path === "/ranking/ranking_grow.asp" || path === "/ranking/top10_grow.asp") {
     return movedTo(req, "/grow");
@@ -308,9 +308,6 @@ export function proxy(req: NextRequest) {
   }
   if (path === "/ranking/top10_world.asp" || path === "/ranking/top10_world_help.asp") {
     return movedTo(req, "/ranking?view=world");
-  }
-  if (path === "/ranking/top10_hero.asp") {
-    return movedTo(req, "/hero");
   }
   if (path === "/ranking/goto.asp" || path === "/ranking/goto_list.asp") {
     // 名次直达（跳到对应玩家/页）——新站无此交互，落主榜
@@ -354,8 +351,8 @@ export function proxy(req: NextRequest) {
   }
   if (path === "/world/index.asp" || path === "/world/world.asp" || path === "/world/hero.asp") return movedTo(req, "/titles");
 
-  // Hero 雷神殿
-  if (path === "/hero/index.asp") return movedTo(req, "/hero");
+  // Hero 雷神殿（已于 2026-10-13 下线）→ 军衔体系页
+  if (path === "/hero/index.asp") return movedTo(req, "/titles");
 
   // Team 管理团队
   if (path === "/team/index.asp") return movedTo(req, "/team");
@@ -369,7 +366,7 @@ export function proxy(req: NextRequest) {
     "/help/upload_rule.asp": "/page/help/upload",
     "/help/upload_3bv.asp": "/page/help/upload",
     "/help/freeze.asp": "/page/help/freeze",
-    "/help/star.asp": "/page/help/star",
+    "/help/star.asp": "/page/help",
     "/help/question.asp": "/page/help/clone-faq",
     "/help/email.asp": "/page/help/email",
     "/help/bbs.asp": "/page/help/bbs",

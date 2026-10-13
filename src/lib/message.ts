@@ -31,13 +31,13 @@ export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<numbe
   const scores = ids.length
     ? await prisma.userScores.findMany({
         where: { id: { in: ids.map(BigInt) } },
-        select: { id: true, sumTime: true },
+        select: { id: true, expTime: true },
       })
     : [];
-  const sumMap = new Map(scores.map((s) => [N(s.id), s.sumTime ?? 0]));
+  const expMap = new Map(scores.map((s) => [N(s.id), s.expTime ?? 0]));
   const out = new Map<number, MessageUserBrief>();
   for (const [id, b] of briefs) {
-    out.set(id, { ...b, title: await assessTitle(sumMap.get(id) ?? 0) });
+    out.set(id, { ...b, title: await assessTitle(expMap.get(id) ?? 0) });
   }
   return out;
 }

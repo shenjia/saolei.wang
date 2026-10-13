@@ -564,6 +564,10 @@ body #video_view .video_cell .counters {
 body #video_view .video_cell .counters em {
   font-size: 22px;
 }
+/* label 被 .video_cell span{font-size:14px} 压住，须 body 前缀提权 */
+body #video_view .video_cell .counters span {
+  font-size: 16px;
+}
 
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
    半透明黑圆 + 白三角，绝对定位在棋盘几何中心。
@@ -886,9 +890,8 @@ body #page.bbs_old .page_head {
   color: #bbbbbb;
   font-weight: bold;
 }
-/* 十八轮（2026-10-13 张老师）：详情页 meta 行计数改「x 次浏览 y 条评论」，
-   单位词压暗一档（#75715e，与「发表于」同源灰），数字保持亮灰 #bbbbbb 加粗
-   ——单位词退后、数字突出 */
+/* 十八轮（2026-10-13 张老师）：详情页 meta 行「阅读 / 评论」单位词压暗一档
+   （#75715e，与「发表于」同源灰），数字保持亮灰 #bbbbbb——单位词退后、数字突出 */
 .bbs_count_unit {
   color: #75715e;
 }
@@ -1044,6 +1047,35 @@ body #page.bbs_old .page_head {
 .bbs_top {
   position: relative;
   cursor: default;
+}
+/* 军衔徽章条件气泡（2026-10-13 张老师要求：全站 hover 军衔显示「高级记录 < xx秒」） */
+a.title[data-tip],
+span.title[data-tip] {
+  position: relative;
+}
+a.title[data-tip]::after,
+span.title[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+a.title[data-tip]:hover::after,
+span.title[data-tip]:hover::after {
+  opacity: 1;
 }
 .bbs_star::after,
 .bbs_top::after {
@@ -1484,33 +1516,7 @@ body #page.message_list > .box:first-child .page_head {
   font-weight: bold;
 }
 
-/* 雷神殿照片墙 */
-#hero_wall {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
-  margin-top: 10px;
-}
-#hero_wall .hero_cell {
-  display: block;
-  text-align: center;
-  padding: 8px 4px;
-  border: 1px solid #3a3a3a;
-}
-#hero_wall .hero_cell:hover {
-  border-color: #668cba;
-}
-#hero_wall .hero_cell .name {
-  display: block;
-  font-size: 14px;
-}
-#hero_wall .hero_cell .score {
-  display: block;
-  color: #a6e22e;
-}
-#hero_wall .hero_cell .rank em {
-  color: #75715e;
-}
+/* （雷神殿照片墙 #hero_wall 样式已随页面于 2026-10-13 下线移除） */
 
 /* 扫雷历程（2026-09-24 二轮：日期/正文分两列，长正文折行不再串到日期列） */
 .history_table {
@@ -1692,11 +1698,30 @@ body #page.message_list > .box:first-child .page_head {
 }
 #site_stats .table .num {
   text-align: right;
+  padding-right: 0;
 }
-/* 数字亮灰加粗、「今日 +N」绿色高亮（2026-09-27 张老师要求：全站今日增量统一绿色 #a6e22e） */
+/* 增量独立一列（2026-10-13 张老师要求：①数字对齐不好看，括号增量单独成列；②带括号；
+   ③贴紧左侧数值并整体靠右——width:1px 让该列按内容收缩（auto 布局否则会把富余宽度塞进来、
+   右对齐时表现为数值与括号之间的空档），数值列右对齐后其右缘即括号起点，整体贴住表格右缘；
+   无增量的行保留该格占位，列宽各行一致；
+   ④三轮：本列文字改左对齐——数值右缘＝本列左缘已统一，左对齐后各行括号左缘才真正对齐
+   （右对齐时「（+9）」比「（+37）」右缩进 8px，不成列）） */
+#site_stats .table .delta {
+  width: 1px;
+  white-space: nowrap;
+  text-align: left;
+  padding-left: 0;
+  padding-right: 0;
+  color: #a6e22e;
+}
+/* 数字亮灰加粗、增量绿色高亮（2026-09-27 张老师要求：全站今日增量统一绿色 #a6e22e）
+   2026-10-13：legacy 的 `em` 带 `padding:0 5px`（部分作用域还有 `margin:0 8px`），
+   会在数值右缘留出 5px 幽灵间距——本盒内归零，数值才能与增量括号紧贴 */
 #site_stats .table em {
   color: #b1b1a4;
   font-weight: bold;
+  margin: 0;
+  padding: 0;
 }
 #site_stats .table .stat_today {
   color: #a6e22e;
@@ -1704,6 +1729,40 @@ body #page.message_list > .box:first-child .page_head {
 /* 全站「（今日 +N）」今日增量统一绿色（2026-09-27 张老师要求）：兜底裸用 .stat_today 的场景 */
 .stat_today {
   color: #a6e22e;
+}
+
+/* ---------- 录像页右栏「数据统计」（2026-10-13 张老师要求） ----------
+   ①标题「统计」→「数据统计」；②增初级/中级/高级录像细分行（口径＝仅已通过）；
+   ③去掉本日/本周/本月三行，改为四行右侧统一挂「今日新增」增量列；
+   样式与排版与首页「雷界统计」完全一致（数值亮灰加粗、增量绿色「（+N）」右对齐、无新增不显示）。
+   侧栏盒宽仅 210px：标签/数值/增量一律不折行。 */
+#video_stats .table td {
+  font-size: 14px;
+  white-space: nowrap;
+}
+#video_stats .table .num {
+  text-align: right;
+  padding-right: 0;
+}
+/* 增量列：与 #site_stats .table .delta 同款——width:1px 让该列按内容收缩
+   （auto 布局否则会把富余宽度塞进来、右对齐时表现为数值与括号之间的空档），
+   数值列右对齐后其右缘即括号起点，整体贴住表格右缘；无增量的行保留该格占位；
+   本列文字左对齐（与首页一致），各行括号左缘对齐成列 */
+#video_stats .table .delta {
+  width: 1px;
+  white-space: nowrap;
+  text-align: left;
+  padding-left: 0;
+  padding-right: 0;
+  color: #a6e22e;
+}
+/* 数值亮灰加粗，与首页雷界统计一致；legacy 的 `em` 自带左右内距，
+   会在右对齐时留出幽灵间距，本盒内归零（同 #site_stats .table em 的处理） */
+#video_stats .table em {
+  color: #b1b1a4;
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
 }
 
 /* ---------- 顶栏与正文居中对齐（2026-09-23 张老师反馈） ----------
@@ -1809,6 +1868,16 @@ body .titles_grid .title_card .meta {
 }
 body .titles_grid .title_card .meta em {
   color: #b8b8ad;
+  font-style: normal;
+}
+/* 条件行（2026-10-13 张老师要求：独立一行放人数下方，居中、更暗一档；数字部分 em 稍亮） */
+body .titles_grid .title_card .meta.sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #75715e;
+}
+body .titles_grid .title_card .meta.sub em {
+  color: #939387;
   font-style: normal;
 }
 /* 卡片整体为链接（2026-09-24 张老师要求可点击）：继承块级布局 + hover 提亮 */
@@ -2180,18 +2249,36 @@ body #user_view .info .rank_label .rank_name {
 /* ---------- 侧栏统计表格（2026-09-23 张老师反馈） ----------
    原 legacy .table td padding 8px 20px + nowrap：数字视觉偏右，
    「（今日 +2）」撑破盒子右缘，hover 行背景随之超出板块。
-   改 fixed 布局 + 紧凑内边距，数据紧跟标签左对齐；
-   标签列 nowrap 防折行，数值列允许换行兜底。 */
+   改 fixed 布局 + 紧凑内边距；标签列 nowrap 防折行。
+   2026-10-13 张老师要求：与首页/录像页「数据统计」统一——字号 14px（16px 时
+   标签 80px + 数值 55px + 增量 59px 会超过表格 192px 硬宽），数值列右对齐，
+   今日新增独立成列（绿色括号、左对齐、无新增留空）；delta 列显式给 4em，
+   余量全留给数值列。
+   2026-10-13 二轮：行距也与首页对齐——原 padding 8px 0（行高 40px），
+   首页/录像页走 legacy `.table td{padding:3px}`（行高 30px），故改 3px 0。 */
 body #user_view .sidebar .table {
   table-layout: fixed;
 }
 body #user_view .sidebar .table td {
-  padding: 8px 0;
+  padding: 3px 0;
+  font-size: 14px;
 }
 body #user_view .sidebar .table td:first-child {
-  width: 4.5em;
+  width: 4.8em;
   padding-right: 8px;
   white-space: nowrap;
+}
+body #user_view .sidebar .table .num {
+  text-align: right;
+}
+/* 今日增量列：与 #site_stats / #video_stats 的 .delta 同款（绿色、左对齐、不折行） */
+body #user_view .sidebar .table .delta {
+  width: 4em;
+  padding-left: 0;
+  padding-right: 0;
+  white-space: nowrap;
+  text-align: left;
+  color: #a6e22e;
 }
 
 /* ---------- 用户主页「录像」版块（2026-09-26 张老师要求） ----------
@@ -2592,12 +2679,9 @@ body #page.ranking_old .ranking_box {
 .ranking_table td del { color: #939387; }
 
 /* 升降列（2008：↑黄 / ↓灰；2026-09-24 张老师要求：新上榜用绿色「新」，下降改灰不用白） */
-.ranking_table td.delta .up,
-#daily_star_card .up { color: #fdc61d; }
+.ranking_table td.delta .up { color: #fdc61d; }
 .ranking_table td.delta .down { color: #939387; }
-#daily_star_card .down { color: #f8f8f2; }
-.ranking_table td.delta .flat,
-#daily_star_card .flat { color: #939387; }
+.ranking_table td.delta .flat { color: #939387; }
 .ranking_table td.delta .new { color: #a6e22e; font-weight: bold; }
 
 /* 升降矢量小三角：与数字基线对齐 */
@@ -2637,84 +2721,7 @@ body #page.ranking_old .ranking_box {
   font-size: 12px;
 }
 
-/* ---------- 每日一星卡（2008 版 Star.asp 编排） ---------- */
-#daily_star_card table {
-  border-collapse: collapse;
-}
-#daily_star_card td {
-  vertical-align: top;
-}
-#daily_star_card .photo_col {
-  width: 104px;
-  padding-right: 12px;
-  text-align: center;
-}
-#daily_star_card .photo {
-  width: 100px;
-  height: 100px;
-  border: 1px solid #656355;
-  display: block;
-}
-#daily_star_card .photo.empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #49483e;
-  color: #939387;
-  font-size: 56px;
-  font-weight: bold;
-}
-#daily_star_card .star_btn {
-  display: block;
-  width: 100px;
-  height: 22px;
-  line-height: 22px;
-  margin-top: 6px;
-  background: #49483e;
-  color: #f8f8f2;
-  font-size: 12px;
-  text-align: center;
-}
-#daily_star_card .star_btn:hover {
-  background: #656355;
-  color: #a6e22e;
-}
-#daily_star_card .info_col {
-  font-size: 13px;
-  line-height: 1.9;
-  color: #b1b1a4;
-}
-#daily_star_card .info_col .name {
-  color: #fdc61d;
-  font-weight: bold;
-}
-#daily_star_card .info_col .oldtitle {
-  font-weight: bold;
-}
-#daily_star_card .info_col .sex {
-  margin-left: 4px;
-  color: #939387;
-  font-size: 11px;
-}
-#daily_star_card .rank_line em.hl,
-#daily_star_card .score_line em.hl {
-  color: #fdc61d;
-  font-weight: bold;
-}
-#daily_star_card .score_line a,
-#daily_star_card .score_line em {
-  color: #f8f8f2;
-}
-#daily_star_card .score_line a:hover {
-  color: #a6e22e;
-}
-#daily_star_card .score_line.sum em {
-  color: #fdc61d;
-}
-#daily_star_card .login_line {
-  color: #939387;
-  font-size: 12px;
-}
+/* （每日一星卡 #daily_star_card 样式已随功能于 2026-10-13 下线移除） */
 
 /* ---------- 世界 TOP10（2008 版 Top10_World；中国选手行高亮） ---------- */
 #world_top .world_head {
@@ -2823,23 +2830,6 @@ body #page.ranking_old .ranking_box {
 }
 
 /* ---------- 排行页细节修正（2026-09-23 第一轮截图后） ---------- */
-/* 一星卡：照片列收窄、信息列不折行（称号/纪录挤两行的问题） */
-#daily_star_card .photo_col {
-  width: 92px;
-  padding-right: 10px;
-}
-#daily_star_card .photo {
-  width: 90px;
-  height: 90px;
-}
-#daily_star_card .star_btn {
-  width: 90px;
-}
-#daily_star_card .info_col {
-  font-size: 12px;
-  line-height: 1.8;
-  white-space: nowrap;
-}
 /* 世界TOP10：固定列宽防数字粘连 */
 #world_top table {
   table-layout: fixed;
@@ -3375,9 +3365,6 @@ body a.title:hover,
 body a.title:hover em,
 body a.avatar_link:hover,
 body a.name_link:hover,
-body .hero_cell:hover .name,
-body .hero_cell:hover .score,
-body .hero_cell:hover .title em,
 body .user_info_cell .name:hover {
   color: #a6e22e;
 }
