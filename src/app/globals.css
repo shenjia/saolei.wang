@@ -3191,6 +3191,15 @@ body #page.two_columns li.main {
   body #page.two_columns #video_view > li.sidebar {
     display: none;
   }
+
+  /* ⑥ 论坛主题页侧栏低宽度隐藏（2026-10-13 张老师要求）：单列带内不再显示楼主的
+     「玩家卡片 + 实力图」，正文与楼层流独占整行（与 ⑤ 录像页同思路——低宽度整组
+     不显示，作者信息楼层里已有头像 + 名字 + 军衔）。≥881 双栏形态照旧。
+     用 #home:has(.bbs_post) 与同样带 ul#home 的首页 / 录像列表 / 名人堂隔离开：
+     只有主题详情页的 #home 里才有 .bbs_post（列表页 .bbs_post_btn 不是该类名）。 */
+  body #page.two_columns #home:has(.bbs_post) > li.sidebar {
+    display: none;
+  }
 }
 
 /* ③ 顶栏导航防掉行（769~880）：wrapper 下限 656 兜住 logo+导航最坏宽度 625；
