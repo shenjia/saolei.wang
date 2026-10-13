@@ -4,7 +4,8 @@
 //   （与用户主页 #user_view .ranks 同构：两行 rank_line、13px / #888 /
 //   名次数字 #e6db74 加粗正体；整块与左侧头像上下等高齐平）；
 //   分隔线以下为四级纪录（直接复用用户主页的 ScoreTime / Score3bvs 渲染，
-//   级别灰阶与 hover 变色同源，数字可点进对应录像）+ 最近登录。
+//   级别灰阶与 hover 变色同源，数字可点进对应录像）。
+//   2026-10-14 张老师要求：卡片不再显示最近登录时间。
 // 卡片下方可跟一个「实力」雷达图板块（UserPanel 统一组装，与用户主页同款）。
 // 旧版「进入TA的地盘」按钮、人气 / 今日人气、旧版称号、(id) 均已下线。
 // 用于 /bbs/[id] 右栏与 /video/[id] 右栏。
@@ -15,7 +16,6 @@ import { getUserCard } from "@/lib/usercard";
 import { getRadarData } from "@/lib/radar";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { RadarChart } from "./RadarChart";
-import { formatDate } from "@/lib/format";
 import { areaDisplay, LEVELS, LEVEL_NAMES } from "@/lib/config";
 
 export function UserCard({ card }: { card: UserCardData }) {
@@ -99,10 +99,6 @@ export function UserCard({ card }: { card: UserCardData }) {
           })}
         </tbody>
       </table>
-
-      <p className="ucd_login">
-        最近登录：{card.lastLoginTime > 0 ? formatDate(card.lastLoginTime, "Y年n月j日") : "?"}
-      </p>
     </div>
   );
 }

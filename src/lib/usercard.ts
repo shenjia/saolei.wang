@@ -1,6 +1,7 @@
 // 侧栏个人卡片数据（2026-10-13 六轮定稿，设计稿 design/sidebar-panel.html）
 // 卡片结构：照片（点击进主页）｜ 右侧姓名 + 性别图标 + 军衔、其下地区/全国排行（与头像齐平）
-//   ｜ 分隔线以下四级纪录（照搬用户主页 ScoreTime / Score3bvs 渲染）+ 最近登录；
+//   ｜ 分隔线以下四级纪录（照搬用户主页 ScoreTime / Score3bvs 渲染）；
+//   2026-10-14 张老师要求：卡片不再显示最近登录时间（lastLoginTime 字段一并下线）。
 //   卡片下方另有「实力」雷达图板块，由页面按 hasVideos 决定是否渲染（与用户主页同规则）。
 // 数据来源：getUserDetail（用户 + 成绩 + 录像统计，与用户主页完全同一口径）
 //   + getUserRanks（地区/全国名次）+ rank_snapshot（今日升降）。
@@ -38,8 +39,6 @@ export interface UserCardData {
   scores: Record<string, UserCardScore>;
   /** 是否上传过录像（决定是否显示「实力」雷达板块，与用户主页同门槛） */
   hasVideos: boolean;
-  /** Unix 秒，0=未记录 */
-  lastLoginTime: number;
 }
 
 function avatarUrl(id: number, avatar: string): string {
@@ -86,7 +85,6 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     areaPos: ranks?.areaPos ?? null,
     scores,
     hasVideos: !!stat && stat.begVideos + stat.intVideos + stat.expVideos > 0,
-    lastLoginTime: user.lastLoginTime,
   };
 }
 

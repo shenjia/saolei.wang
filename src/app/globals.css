@@ -1227,9 +1227,8 @@ del[data-tip]:hover::after {
      军衔条件文案由 TitleBadge 的 data-tip 走 hover 气泡），其下地区 / 全国排行
      （与用户主页 #user_view .rank_label .ranks 同构：两行 rank_line、13px/#888、
      名次数字 #e6db74 加粗正体；整块与左侧头像等高 74px 上下顶底对齐）；
-   分隔线以下：四级纪录（照搬用户主页 .scores 的 ScoreTime / Score3bvs 渲染，字号缩小一档）
-     + 最近登录。
-   本轮下线：人气 / 今日人气、「进入TA的地盘」按钮、旧版称号、(id)。
+   分隔线以下：四级纪录（照搬用户主页 .scores 的 ScoreTime / Score3bvs 渲染，字号缩小一档）。
+   本轮下线：最近登录时间（2026-10-14）、人气 / 今日人气、「进入TA的地盘」按钮、旧版称号、(id)。
    盒内容宽 210px；论坛 #bbs_op_card 与录像详情页右栏盒 padding 30px → 外径 272px，与首页右栏一致。 */
 .user_card {
   width: 100%;
@@ -1383,11 +1382,6 @@ del[data-tip]:hover::after {
 #page .user_card .score_time a:hover em,
 #page .user_card .score_3bvs a:hover em {
   color: #a6e22e;
-}
-.user_card .ucd_login {
-  margin: 10px 0 0;
-  color: #75715e;
-  font-size: 11px;
 }
 /* 无数据占位（未加入地区排行 / 未加入排行）：压过排行文字色，须写在最后 */
 .user_card .ranks .ucd_null {
