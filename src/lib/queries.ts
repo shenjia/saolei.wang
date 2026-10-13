@@ -175,23 +175,33 @@ export async function getNewsCount(opts: {
   });
 }
 
-/** 十大元帅：按总计时间前 10（移植 home/_top） */
+/** 国内 TOP10：按总计时间前 10（移植 home/_top；展示序仍按总时间）
+ *  2026-10-13 张老师要求：原「十大元帅」更名「国内TOP10」，右列表由时间改为「所在地区」，
+ *  故此处直接查 user（usersByIds 只回 UserBrief，不含 area） */
 export async function getTopUsers(
   limit = HOME_TOP_NUMBER
-): Promise<(UserBrief & { title: string; titleDate: number })[]> {
+): Promise<(UserBrief & { area: string; title: string; titleDate: number })[]> {
   const rows = await prisma.userScores.findMany({
     where: { sumTime: { gt: 0 } },
     orderBy: { sumTime: "asc" },
     take: limit,
   });
-  const authors = await usersByIds(rows.map((r) => N(r.id)));
+  const users = await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.id) } } });
+  const byId = new Map(users.map((u) => [N(u.id), u]));
   return Promise.all(
-    rows.map(async (r) => ({
-      ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
-      title: await title(r.sumTime),
-      // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
-      titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
-    }))
+    rows.map(async (r) => {
+      const u = byId.get(N(r.id));
+      return {
+        id: N(r.id),
+        chineseName: u?.chineseName ?? "?",
+        englishName: u?.englishName ?? "",
+        sex: u?.sex ?? 1,
+        area: u?.area ?? "",
+        title: await title(r.sumTime),
+        // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
+        titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
+      };
+    })
   );
 }
 

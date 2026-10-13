@@ -3751,7 +3751,8 @@ body #page.video_old .page_head {
 }
 
 /* ---------- 日期新鲜度配色：一年内偏亮、一年以上偏暗（2026-09-24 张老师要求） ----------
-   首页「十大元帅 / 入伍新兵」与「雷界快讯」共用同一套 td.time 样式，保持口径一致
+   首页「入伍新兵」与「新闻」共用同一套 td.time 样式，保持口径一致
+   （2026-10-13 国内 TOP10 的日期列已换成「所在地区」，不再参与此配色）
    注：legacy-2013.css 后加载，且雷界快讯有 #news .table td{color:#636359}（1,1,1）
    带 ID 的规则，故这里必须用 #news 前缀（1,2,1）才能压过；侧栏用 .table 前缀（0,2,1）
    压过 .table td（0,1,1）即可 */
@@ -3763,9 +3764,10 @@ body #page.video_old .page_head {
 #news .table td.time--old {
   color: #6c6c61;
 }
-/* 十大元帅日期字号对齐：legacy 只有 #newbie .time/#news .table td 补了 14px，
-   #top 无规则落回 .table td 的 16px，这里补齐与其他板块一致（2026-09-24 张老师要求） */
-#top .time {
+/* 国内 TOP10 地区列字号对齐：legacy 只有 #newbie .time/#news .table td 补了 14px，
+   #top 无规则落回 .table td 的 16px，这里补齐与其他板块一致
+   （2026-09-24 张老师要求；2026-10-13 原日期列改为「所在地区」后规则同步改名） */
+#top .area {
   font-size: 14px;
 }
 
