@@ -2826,6 +2826,10 @@ body #page.ranking_old .ranking_box {
 .ranking_table td.delta .down { color: #939387; }
 .ranking_table td.delta .flat { color: #939387; }
 .ranking_table td.delta .new { color: #a6e22e; font-weight: bold; }
+/* 升降列占位（2026-10-14 张老师需求）：雷界榜切到总计时间以外的排序列时，
+   升降列保留但内容留空、表头文字不可见——visibility:hidden 让「升降」二字
+   继续撑住列宽（列宽由表头决定，比箭头数字宽），与总计态逐像素一致，版式零跳动 */
+.ranking_table th.delta_pad { visibility: hidden; }
 
 /* 升降矢量小三角：与数字基线对齐 */
 .ranking_table td.delta .up,
@@ -5436,4 +5440,33 @@ button.msg_cancel:hover {
 }
 .ranking_table .pbar.current .pfill {
   background: #fdc61d;
+}
+
+/* BV 排行规则说明（2026-10-14 张老师要求：榜末详细介绍，分 1/2/3/4 条）；
+   面板语言与 .locate_bar 一致（同色边/底/字） */
+.bv_rules {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  background: #2e2e26;
+  color: #939387;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.bv_rules h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #f8f8f2;
+}
+.bv_rules ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.bv_rules li {
+  margin: 2px 0;
+}
+.bv_rules b {
+  color: #e6db74;
 }
