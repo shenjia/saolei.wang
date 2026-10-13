@@ -4923,3 +4923,9 @@ button.msg_cancel:hover {
 #user_3bv .sq:hover .tip {
   display: block;
 }
+
+/* 方格 hover 边框高亮（2026-10-13 张老师要求）：outline 不占布局，格子不位移 */
+#user_3bv .sq:hover {
+  outline: 1px solid #f8f8f2;
+  z-index: 61;
+}
