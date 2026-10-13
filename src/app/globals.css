@@ -3183,6 +3183,34 @@ body #page.two_columns li.main {
   body #page.two_columns #video_view .playable {
     overflow-x: auto;
   }
+
+  /* ⑤ 低宽度置顶并排（2026-10-13 张老师要求）：单列带内「玩家卡片 + 实力图」
+     不再落到主栏下方，而是整组提到页面最上方、两盒并排。≥881 双栏形态不受
+     影响；论坛页同款 UserPanel 不在 #video_view 内，不同步动。
+     实现要点：.box 自带 margin:16px 8px（外径膨胀 32px）是并排失败的根因，
+     先清零由 gap 统一管间距；:has 判定双盒才开两列（作者无录像无雷达时单盒
+     占满整行，不留空列）；雷达图 222 定宽改 margin auto 在宽盒里居中。 */
+  body #page.two_columns #video_view {
+    display: flex;
+    flex-direction: column;
+  }
+  body #page.two_columns #video_view > li.sidebar {
+    order: -1;
+  }
+  body #page.two_columns #video_view > li.sidebar > .box {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+  }
+  body #page.two_columns #video_view > li.sidebar:has(> .box + .box) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 16px;
+  }
+  body #page.two_columns #video_view > li.sidebar .radar .chart {
+    margin: -15px auto;
+  }
 }
 
 /* ③ 顶栏导航防掉行（769~880）：wrapper 下限 656 兜住 logo+导航最坏宽度 625；
