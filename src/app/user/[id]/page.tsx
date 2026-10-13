@@ -38,6 +38,7 @@ import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
+import { SendMessageButton } from "@/components/SendMessageButton";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -178,10 +179,10 @@ export default async function UserViewPage({
           <h1>{user.chineseName}</h1>
           <h2>({user.englishName})</h2>
           <span className={`gender big ${user.sex ? "male" : "female"}`}></span>
+          {/* 2026-10-13 张老师定稿：原「发消息」灰色大按钮改为性别图标右侧的对话气泡小按钮，
+              点击弹带遮罩的发信浮窗（输入框同录像评论），成功后屏中弹「发送成功」气泡 */}
           {session && session.uid !== userId && (
-            <Link href={`/message?to=${userId}`} className="button">
-              发消息
-            </Link>
+            <SendMessageButton to={userId} name={user.chineseName} />
           )}
           <div className="info_body">
             <table className="scores" cellPadding={0} cellSpacing={0}>
