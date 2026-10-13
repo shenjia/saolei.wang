@@ -160,14 +160,20 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                   : `确认取消「${u.chineseName}」的管理权限？`
               }
             />
-            <AdminAction
-              op="user.delete"
-              params={{ id: u.id }}
-              label="注销账号"
-              variant="danger"
-              sm={false}
-              confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（成绩与录像保留，操作不可撤销）。`}
-            />
+            {u.videos === 0 && d.postTotal === 0 ? (
+              <AdminAction
+                op="user.delete"
+                params={{ id: u.id }}
+                label="注销账号"
+                variant="danger"
+                sm={false}
+                confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（操作不可撤销）。`}
+              />
+            ) : (
+              <span className="admin_hint" style={{ alignSelf: "center" }}>
+                该玩家已有 {u.videos} 部录像、{d.postTotal} 篇论坛主题，不能注销账号（如需禁止登录请用「封禁账号」）
+              </span>
+            )}
           </div>
 
           <AdminForm

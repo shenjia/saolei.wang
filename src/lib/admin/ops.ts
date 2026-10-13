@@ -140,6 +140,17 @@ async function dispatch(
       if (id === actor.uid) return { ok: false, error: "不能删除自己的账号" };
       const auth = await prisma.userAuth.findUnique({ where: { id: BigInt(id) } });
       if (!auth) return { ok: false, error: "该玩家没有账号记录" };
+      // 只有没有任何录像和论坛主题的玩家才能注销（2026-10-13 张老师定）；有内容的请改用封禁
+      const [videoCount, postCount] = await Promise.all([
+        prisma.video.count({ where: { user: BigInt(id) } }),
+        prisma.bbsPost.count({ where: { user: BigInt(id) } }),
+      ]);
+      if (videoCount > 0 || postCount > 0) {
+        return {
+          ok: false,
+          error: `不能注销：该玩家已有 ${videoCount} 部录像、${postCount} 篇论坛主题；请改用「封禁账号」`,
+        };
+      }
       // 仅注销登录凭据（保留 user/成绩/录像，避免破坏排行与历史引用），并封禁
       await prisma.$transaction([
         prisma.userAuth.delete({ where: { id: BigInt(id) } }),

@@ -165,6 +165,8 @@ export interface AdminUserDetail {
   newsCount: number;
   commentCount: number;
   bbsCount: number;
+  /** 论坛主题总数（含已删除/待审，注销账号闸门口径） */
+  postTotal: number;
   messageCount: number;
   /** 总计时间名次（0 = 未上榜） */
   sumRank: number;
@@ -185,10 +187,11 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
   ]);
   if (!user) return null;
 
-  const [newsCount, commentCount, bbsCount, messageCount, clicks, videos, oauth, logs] = await Promise.all([
+  const [newsCount, commentCount, bbsCount, postTotal, messageCount, clicks, videos, oauth, logs] = await Promise.all([
     prisma.news.count({ where: { user: uid } }),
     prisma.comment.count({ where: { user: uid, status: 0 } }),
     prisma.bbsPost.count({ where: { user: uid, status: 0 } }),
+    prisma.bbsPost.count({ where: { user: uid } }),
     prisma.message.count({ where: { toUser: uid } }),
     prisma.click.count({ where: { user: uid } }),
     prisma.video.findMany({
@@ -266,6 +269,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     newsCount,
     commentCount,
     bbsCount,
+    postTotal,
     messageCount,
     sumRank: sumTime ? N(rankRows[0]?.c) + 1 : 0,
     ranks: { beg: begRank, int: intRank, exp: expRank },
