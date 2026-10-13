@@ -233,24 +233,66 @@ for vid, v in videos.items():
         if nf:
             vs_rows[level + "_nf"].append((vid, player, real_ms, s3, ct))
 
-flush("""INSERT INTO video (id,level,user,hash,status,review_user,review_time,create_time,update_time)
+# video_info: 新行全量插入;已存在行仅校准 board_3bv/real_time
+# 注意:新行元组为 11 元(与 INSERT 列数一致),已存在行为 3 元(校准用)
+vi_new = [r for r in vi_rows if len(r) == 11]
+vi_upd = [r for r in vi_rows if len(r) == 3]
+
+# 2026-10-13 张老师要求:录像域改「同事务写」。
+# 原实现 4 张表各自 flush(各自 commit)——video 先落库、video_info 后落库之间存在窗口;
+# 落在窗口里时 /video 按时间排序(取 video 最新 20 条再补 video_info,缺 info 的静默丢弃)
+# 会整页渲染「暂无数据」而左下角总数照常(2026-10-13 14:04 实测踩到)。
+# 现按 id 分批(每批 BATCH 个 id),同批的 video / video_info / video_stat / video_scores_*
+# 在**同一事务**内提交:对外任意时刻只有「整批可见」或「整批不可见」,不存在半截状态。
+SQL_VIDEO = """INSERT INTO video (id,level,user,hash,status,review_user,review_time,create_time,update_time)
        VALUES (%s,%s,%s,'',%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
        level=VALUES(level),user=VALUES(user),status=VALUES(status),
-       review_user=VALUES(review_user),review_time=VALUES(review_time),create_time=VALUES(create_time)""",
-      v_rows, "video")
-# video_info: 新行全量插入;已存在行仅校准 board_3bv/real_time
-vi_new = [r for r in vi_rows if len(r) == 10]
-vi_upd = [r for r in vi_rows if len(r) == 3]
-flush("""INSERT INTO video_info (id,filepath,signature,software,version,noflag,board,board_3bv,real_time,create_time,update_time)
-       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", vi_new, "video_info(new)")
-flush("UPDATE video_info SET board_3bv=%s, real_time=%s WHERE id=%s", vi_upd, "video_info(upd)")
-flush("""INSERT INTO video_stat (id,clicks,create_time) VALUES (%s,%s,%s)
-       ON DUPLICATE KEY UPDATE clicks=VALUES(clicks)""", vst_rows, "video_stat")
-for key, rows in vs_rows.items():
-    flush(f"""INSERT INTO video_scores_{key} (id,user,score_time,score_3bvs,create_time)
-           VALUES (%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
-           user=VALUES(user),score_time=VALUES(score_time),score_3bvs=VALUES(score_3bvs)""",
-          rows, f"video_scores_{key}")
+       review_user=VALUES(review_user),review_time=VALUES(review_time),create_time=VALUES(create_time)"""
+SQL_VI_NEW = """INSERT INTO video_info (id,filepath,signature,software,version,noflag,board,board_3bv,real_time,create_time,update_time)
+       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"""
+SQL_VI_UPD = "UPDATE video_info SET board_3bv=%s, real_time=%s WHERE id=%s"
+SQL_VST = """INSERT INTO video_stat (id,clicks,create_time) VALUES (%s,%s,%s)
+       ON DUPLICATE KEY UPDATE clicks=VALUES(clicks)"""
+SQL_VS = {key: f"""INSERT INTO video_scores_{key} (id,user,score_time,score_3bvs,create_time)
+       VALUES (%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
+       user=VALUES(user),score_time=VALUES(score_time),score_3bvs=VALUES(score_3bvs)"""
+          for key in vs_rows}
+
+
+def index_by(rows, idx):
+    """行列表按 idx 列建索引(同 id 可能多行,保持原顺序)"""
+    d = {}
+    for r in rows:
+        d.setdefault(r[idx], []).append(r)
+    return d
+
+
+v_idx = index_by(v_rows, 0)
+vin_idx = index_by(vi_new, 0)
+viu_idx = index_by(vi_upd, 2)
+vst_idx = index_by(vst_rows, 0)
+vs_idx = {k: index_by(rows, 0) for k, rows in vs_rows.items()}
+
+n_txn = 0
+for i in range(0, len(v_rows), BATCH):
+    chunk_ids = [r[0] for r in v_rows[i:i + BATCH]]  # 本批 id(v_rows 与其余表 id 同源)
+    cur.executemany(SQL_VIDEO, [r for cid in chunk_ids for r in v_idx[cid]])
+    rows = [r for cid in chunk_ids for r in vin_idx.get(cid, [])]
+    if rows:
+        cur.executemany(SQL_VI_NEW, rows)
+    rows = [r for cid in chunk_ids for r in viu_idx.get(cid, [])]
+    if rows:
+        cur.executemany(SQL_VI_UPD, rows)
+    rows = [r for cid in chunk_ids for r in vst_idx.get(cid, [])]
+    if rows:
+        cur.executemany(SQL_VST, rows)
+    for key in vs_rows:
+        rows = [r for cid in chunk_ids for r in vs_idx[key].get(cid, [])]
+        if rows:
+            cur.executemany(SQL_VS[key], rows)
+    my.commit()  # 一批 id 的全部表一次提交(同事务)
+    n_txn += 1
+print(f"  [video/info/stat/scores 同事务] {len(v_rows)} ids / {n_txn} 事务", flush=True)
 print(f"videos done {time.time()-t0:.0f}s", flush=True)
 
 # ---------- 3. 评论(全量,表原为空) ----------
