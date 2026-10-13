@@ -2990,7 +2990,10 @@ body #page.ranking_old .ranking_box {
 }
 /* 2026-09-27：world_foot（如何加入/更新时间/完整排行链接）已删——「查看完整排行」
    改为按钮并入 more_loader，见 WorldTop100Table.tsx */
-#world_top .world_fail {
+/* 2026-10-14：升为榜页通用降级文案（.ranking_fail 供 BV 榜使用——BV 全量聚合失败时
+   不整页 500，见 ranking/page.tsx） */
+#world_top .world_fail,
+.ranking_box .ranking_fail {
   font-size: 13px;
   color: #939387;
 }

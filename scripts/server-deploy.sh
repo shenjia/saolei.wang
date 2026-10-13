@@ -176,6 +176,13 @@ fi
 # ---------- 备槽健康检查 ----------
 wait_healthy "$S_PORT" "$STANDBY 槽"
 
+# ---------- 预热一级页面（切流前，直连备槽端口） ----------
+# 新槽的 .next/cache 是冷的，切流后并发首访会各自做冷缓存重建——最重的 BV 全量聚合
+# （30 万行，约 1s）叠并发即打满 5 条 Prisma 连接池（P1017）。这里在切流**之前**串行
+# 预热一遍：此时线上仍由旧槽服务，对访客零影响；切流时缓存已热。失败只告警不阻断发布。
+# 清单见 scripts/preheat.sh（与 server-release.sh 共用同一份）。
+bash "$DEPLOY_DIR/scripts/preheat.sh" "$S_PORT" || warn "预热脚本异常（不阻断发布）"
+
 # ---------- 切换 nginx 主备（平滑 reload，不断连接） ----------
 info "切换 nginx 主力: $ACTIVE → $STANDBY ..."
 write_upstream "$STANDBY"

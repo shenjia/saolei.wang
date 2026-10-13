@@ -12,7 +12,16 @@ export async function GET(req: Request) {
   const by = parseBvRankingBy(p.get("by") ?? "");
   const page = Math.max(1, parseInt(p.get("page") ?? "1", 10) || 1);
 
-  const { rows, total, pageSize } = await getBvRanking(by, page);
+  // 降级（2026-10-14）：BV 全量聚合失败时（冷缓存重建 + DB 抖动）返回 503 而非 500，
+  // 客户端对 !res.ok 已有处理（BvRankingFeed 显示「加载失败，请重试」）
+  let data;
+  try {
+    data = await getBvRanking(by, page);
+  } catch (e) {
+    console.error("[api/ranking/bv/more] BV 榜数据获取失败", e);
+    return NextResponse.json({ error: "bv_unavailable" }, { status: 503 });
+  }
+  const { rows, total, pageSize } = data;
   // 军衔 SUB 制按高级时间评定（与成绩榜同口径）
   const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime) }));
 

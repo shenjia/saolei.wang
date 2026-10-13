@@ -122,10 +122,33 @@ export default async function RankingPage({
     const bvPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
     // 搜索/定位落地行：SSR 即高亮（无 JS 也可见），客户端接管后持续
     const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
-    const [{ rows, total, pageSize, den, totalDen }, session] = await Promise.all([
-      getBvRanking(bvBy, bvPage),
+    const [bvData, session] = await Promise.all([
+      // 降级兜底（2026-10-14 张老师要求）：BV 榜数据源是站内最重的查询——30 万行
+      // video⋈video_info 全量聚合（queries.fetchBvCollection，1 小时缓存）。冷缓存重建时
+      // 若 DB 抖动（P1017 / P2024 连接池打满，生产池仅 5 条），异常冒到页面就是整页 500。
+      // 这里兜住改为降级文案（与世界榜 world_fail 同语言）。
+      getBvRanking(bvBy, bvPage).catch((e: unknown) => {
+        console.error("[ranking] BV 榜数据获取失败，降级显示", e);
+        return null;
+      }),
       getSession(),
     ]);
+
+    if (!bvData) {
+      return (
+        <div id="page" className="main ranking_old">
+          <div className="box ranking_box">
+            <div className="page_head">
+              <h1 className="page_title">BV排行</h1>
+              <RankingNav current="bv" by={bvBy} />
+            </div>
+            <p className="ranking_fail">BV 排行数据暂时不可用，请稍后再试。</p>
+          </div>
+        </div>
+      );
+    }
+
+    const { rows, total, pageSize, den, totalDen } = bvData;
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）
     const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime) }));
 

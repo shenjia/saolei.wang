@@ -83,6 +83,10 @@ async function fetchWorldTop(): Promise<WorldTop | null> {
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
         Referer: "https://minesweepergame.com/",
       },
+      // 2026-10-14 加超时：原来无 signal，原站不响应时这次请求会一直挂着
+      // （缓存为空或过期后由本次访问承担抓取，挂死即拖住一个请求）。8s 足够正常抓取，
+      // 超时抛 TimeoutError → 被下面 catch 吞掉 → 返回 null → 组件显示降级文案。
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const rows = parse(await res.text());
