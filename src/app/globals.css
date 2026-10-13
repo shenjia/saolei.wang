@@ -2723,6 +2723,19 @@ body #page.ranking_old .ranking_box {
 
 /* （每日一星卡 #daily_star_card 样式已随功能于 2026-10-13 下线移除） */
 
+/* 动态中的文章标题《…》（2026-10-13 张老师要求）：不用金色，改亮灰 #bbbbbb
+   ——与论坛列表标题灰同源，动态与论坛两处文章标题配色一致。
+   注意 .score 同时被成绩数字复用（legacy #news .score{color:#fdc61a} 为金），
+   故只给文章标题链接额外挂 .news_article，不动 .score 本身。
+   legacy 后加载且带 :hover 绿（#news .score:hover，同为 (1,2,0)），
+   这里用 (1,3,1)/(1,3,2) 提权：底色灰、hover 仍绿，不受加载顺序影响。 */
+#news .table td a.score.news_article {
+  color: #bbbbbb;
+}
+#news .table td a.score.news_article:hover {
+  color: #a6e22e;
+}
+
 /* ---------- 世界 TOP10（2008 版 Top10_World；中国选手行高亮） ---------- */
 #world_top .world_head {
   display: flex;

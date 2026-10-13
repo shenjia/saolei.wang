@@ -93,7 +93,12 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
           <>
             {authorCells}
             发表了
-            <Link href={`/bbs/${news.reference}`} target="_blank" className="score" title={d.t ?? undefined}>
+            <Link
+              href={`/bbs/${news.reference}`}
+              target="_blank"
+              className="score news_article"
+              title={d.t ?? undefined}
+            >
               《{d.t ?? "未命名"}》
             </Link>
           </>
@@ -104,7 +109,12 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
             {d.kind === "bbs" ? (
               <>
                 评论了文章
-                <Link href={`/bbs/${news.reference}`} target="_blank" className="score" title={d.t ?? undefined}>
+                <Link
+                  href={`/bbs/${news.reference}`}
+                  target="_blank"
+                  className="score news_article"
+                  title={d.t ?? undefined}
+                >
                   《{d.t ?? "未命名"}》
                 </Link>
               </>
