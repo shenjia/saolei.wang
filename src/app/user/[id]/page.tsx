@@ -21,6 +21,7 @@ import {
   getUserRanks,
   getNewsCount,
   getUserTodayVideos,
+  getUserActivity,
   getVideoList,
 } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
@@ -116,7 +117,7 @@ export default async function UserViewPage({
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, session, ranks, userVideos, todayVideos] = await Promise.all([
+  const [history, session, ranks, userVideos, todayVideos, activity] = await Promise.all([
     getHistory(userId),
     getSession(),
     getUserRanks(userId),
@@ -125,6 +126,8 @@ export default async function UserViewPage({
     getVideoList({ level, order: "id", author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
     // 今日新增录像（按级别），统计盒增量列用（2026-10-13 张老师要求）
     getUserTodayVideos(userId),
+    // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
+    getUserActivity(userId),
   ]);
   const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime) }));
 
@@ -349,6 +352,14 @@ export default async function UserViewPage({
                   <Link href={`/video?author=${userId}`} target="_blank">
                     <em>{detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos}</em>
                   </Link>
+                </StatRow>
+                {/* 2026-10-13 张老师要求：新增发表文章（论坛主题）/ 发表评论两行，
+                    口径与首页「数据统计」的发布主题/发布评论一致 */}
+                <StatRow label="发表文章" today={activity.postsToday}>
+                  <em>{activity.posts}</em>
+                </StatRow>
+                <StatRow label="发表评论" today={activity.commentsToday}>
+                  <em>{activity.comments}</em>
                 </StatRow>
                 {/* 最近登录不是「今日新增」类数据，数值格横跨两列 */}
                 <StatRow label="最近登录" span>

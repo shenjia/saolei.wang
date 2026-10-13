@@ -536,6 +536,30 @@ export async function getUserTodayVideos(
   return { beg, int, exp, total: beg + int + exp };
 }
 
+/**
+ * 某用户「发表文章」（论坛主题）与「发表评论」（录像评论）数量 + 今日增量
+ * （2026-10-13 张老师要求，用户主页右栏「数据统计」新增两行）。
+ * 口径与首页「数据统计」的发布主题/发布评论严格一致：
+ *   文章 = bbs_post.status=0（软删 -1 不计）；评论 = comment.status=COMMENT_STATUS.NORMAL；
+ *   今日增量按 create_time 落在今天（站点自然日，与首页增量同一算法）。
+ */
+export async function getUserActivity(
+  userId: number
+): Promise<{ posts: number; postsToday: number; comments: number; commentsToday: number }> {
+  const now = new Date();
+  const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
+  const uid = BigInt(userId);
+  const [posts, postsToday, comments, commentsToday] = await Promise.all([
+    prisma.bbsPost.count({ where: { user: uid, status: 0 } }),
+    prisma.bbsPost.count({ where: { user: uid, status: 0, createTime: { gte: dayStart } } }),
+    prisma.comment.count({ where: { user: uid, status: COMMENT_STATUS.NORMAL } }),
+    prisma.comment.count({
+      where: { user: uid, status: COMMENT_STATUS.NORMAL, createTime: { gte: dayStart } },
+    }),
+  ]);
+  return { posts, postsToday, comments, commentsToday };
+}
+
 // 三张成绩表字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
 interface ScoresDelegate {
   count(args: { where?: Record<string, unknown> }): Promise<number>;
