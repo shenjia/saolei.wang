@@ -1532,6 +1532,12 @@ body #page.message_list > .box:first-child .page_head {
   gap: 8px;
   align-items: center;
 }
+/* 类型筛选 tabs（2026-10-14）：复用论坛页 .tabs 链接形态，贴标题右侧与按钮组同行；
+   margin-bottom 2px 同 bbs_head_nav 的基线微调（tabs 文字与右侧 small 按钮坐底对齐） */
+#page.message_list .page_head .tabs {
+  margin-left: 16px;
+  margin-bottom: 2px;
+}
 /* 消息页版式：复用 .table.bbs_list 列宽（类型 72 居中 / 发件人 190 / 内容吃满 / 时间 96）
    ——本表 4 列，th 上写死宽度即可，无「回复/点击」列
    （2026-09-25 张老师要求：发件人与内容列对换，发件人在前）
@@ -2599,7 +2605,7 @@ body #page.ranking_old .ranking_box {
   color: #75715e;
   font-size: 12px;
 }
-/* BV 榜下拉（2026-10-14）：未加入 BV 排行的候选整行置灰；active/hover 规则紧随其后，优先级更高 */
+/* 排行下拉（2026-10-14）：未加入该排行的候选整行置灰（BV 及成绩榜通用）；active/hover 规则紧随其后，优先级更高 */
 .goto_form .goto_suggest li.hint button,
 .goto_form .goto_suggest li.hint button span {
   color: #75715e;
@@ -2826,10 +2832,6 @@ body #page.ranking_old .ranking_box {
 .ranking_table td.delta .down { color: #939387; }
 .ranking_table td.delta .flat { color: #939387; }
 .ranking_table td.delta .new { color: #a6e22e; font-weight: bold; }
-/* 升降列占位（2026-10-14 张老师需求）：雷界榜切到总计时间以外的排序列时，
-   升降列保留但内容留空、表头文字不可见——visibility:hidden 让「升降」二字
-   继续撑住列宽（列宽由表头决定，比箭头数字宽），与总计态逐像素一致，版式零跳动 */
-.ranking_table th.delta_pad { visibility: hidden; }
 /* 升降列占位（2026-10-14 张老师需求）：雷界榜切到总计时间以外的排序列时，
    升降列保留但内容留空、表头文字不可见——visibility:hidden 让「升降」二字
    继续撑住列宽（列宽由表头决定，比箭头数字宽），与总计态逐像素一致，版式零跳动 */
@@ -5446,23 +5448,12 @@ button.msg_cancel:hover {
   background: #fdc61d;
 }
 
-/* BV 排行规则说明（2026-10-14 张老师要求：榜末详细介绍，分 1/2/3/4 条）；
-   面板语言与 .locate_bar 一致（同色边/底/字） */
+/* BV 排行规则说明（2026-10-14 张老师要求：榜末独立标准板块 .box + h2，外观随全站板块）；
+   这里只定列表与文字的局部排版 */
 .bv_rules {
-  margin-top: 14px;
-  padding: 10px 14px;
-  border: 1px solid #49483e;
-  border-radius: 4px;
-  background: #2e2e26;
-  color: #939387;
   font-size: 13px;
   line-height: 1.9;
-}
-.bv_rules h3 {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: bold;
-  color: #f8f8f2;
+  color: #939387;
 }
 .bv_rules ol {
   margin: 0;

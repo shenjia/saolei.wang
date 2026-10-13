@@ -251,8 +251,8 @@ export function BvRankingFeed({
         <TotalCount total={total} loaded={rows.length} unit="位" />
         {hint && <span className="loader_hint">{hint}</span>}
       </div>
-      <div className="bv_rules">
-        <h3>BV 排行规则</h3>
+      <div className="box bv_rules">
+        <h2>BV 排行规则</h2>
         <ol>
           <li>
             <b>统计口径</b>：统计每位玩家<b>已通过审核</b>的录像中出现过的不同 3BV
