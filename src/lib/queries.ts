@@ -140,6 +140,8 @@ export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]
 
 export async function getNews(opts: {
   type?: number;
+  /** 多类型筛选（2026-10-13 用户主页「论坛」tab：发表主题 ARTICLE + 评论 COMMENT） */
+  types?: number[];
   userId?: number;
   /** 等级筛选（beg/int/exp）：按 details JSON 的 lv 字段匹配（details_data 全为 {"lv":...} 格式） */
   level?: string;
@@ -151,6 +153,7 @@ export async function getNews(opts: {
   const rows = await prisma.news.findMany({
     where: {
       ...(opts.type !== undefined ? { type: opts.type } : {}),
+      ...(opts.types ? { type: { in: opts.types } } : {}),
       ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
       ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
@@ -230,6 +233,8 @@ function safeJson(s: string): Record<string, unknown> {
  */
 export async function getNewsCount(opts: {
   type?: number;
+  /** 与 getNews 的多类型口径一致（用户主页「论坛」tab 剩余条数） */
+  types?: number[];
   userId?: number;
   level?: string;
   /** 与 getNews 的 home 口径一致（首页「加载更多」剩余条数） */
@@ -238,6 +243,7 @@ export async function getNewsCount(opts: {
   return prisma.news.count({
     where: {
       ...(opts.type !== undefined ? { type: opts.type } : {}),
+      ...(opts.types ? { type: { in: opts.types } } : {}),
       ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
       ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),

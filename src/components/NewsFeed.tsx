@@ -15,14 +15,14 @@ export interface NewsFeedItem {
   title: string;
 }
 
-// 2026-10-13 张老师要求：加「文章」tab，筛出所有发表文章（论坛主题，NEWS_TYPE.ARTICLE=40）的动态。
-// 文章筛选与等级筛选互斥：选中文章时按 type=40 过滤，不再匹配 details.lv
+// 2026-10-13 张老师要求：加「论坛」tab，发表主题（NEWS_TYPE.ARTICLE=40）和评论（COMMENT=52）都算。
+// 论坛筛选与等级筛选互斥：选中论坛时按 type in (40,52) 过滤，不再匹配 details.lv
 const LEVEL_TABS: { key: string; label: string }[] = [
   { key: "", label: "全部" },
   { key: "beg", label: "初级" },
   { key: "int", label: "中级" },
   { key: "exp", label: "高级" },
-  { key: "article", label: "文章" },
+  { key: "forum", label: "论坛" },
 ];
 
 export function NewsFeed({
@@ -60,8 +60,8 @@ export function NewsFeed({
     const url =
       `/api/news/more?cursor=${cur}&size=${pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      (lv && lv !== "article" ? `&level=${lv}` : "") +
-      (lv === "article" ? "&type=article" : "") +
+      (lv && lv !== "forum" ? `&level=${lv}` : "") +
+      (lv === "forum" ? "&type=forum" : "") +
       (homeOnly ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
@@ -96,8 +96,8 @@ export function NewsFeed({
     }
   }
 
-  // 「文章」tab 只在用户主页出现：首页新闻流口径（NEWS_HOME_TYPES）本来就不含发帖动态
-  const tabs = (userId ? LEVEL_TABS : LEVEL_TABS.filter((t) => t.key !== "article")).map((t) =>
+  // 「论坛」tab 只在用户主页出现：首页新闻流口径（NEWS_HOME_TYPES）本来就不含发帖/评论动态
+  const tabs = (userId ? LEVEL_TABS : LEVEL_TABS.filter((t) => t.key !== "forum")).map((t) =>
     t.key === level ? (
       <span key={t.key || "all"} className="current">
         {t.label}
