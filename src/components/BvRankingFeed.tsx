@@ -24,6 +24,7 @@ import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
 import { TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
+import { RankingRules } from "./RankingRules";
 import { toast } from "./Toast";
 
 export type BvTitledRow = BvRankingRow & { title: string };
@@ -251,27 +252,27 @@ export function BvRankingFeed({
         <TotalCount total={total} loaded={rows.length} unit="位" />
         {hint && <span className="loader_hint">{hint}</span>}
       </div>
-      <div className="box bv_rules">
-        <h2>BV 排行规则</h2>
-        <ol>
-          <li>
+      <RankingRules
+        title="BV 排行规则"
+        items={[
+          <>
             <b>统计口径</b>：统计每位玩家<b>已通过审核</b>的录像中出现过的不同 3BV
             数量——同一个 3BV 值只要有一盘过审录像即算「已收集」，按初级 / 中级 / 高级分别统计。
-          </li>
-          <li>
+          </>,
+          <>
             <b>进度条</b>：进度条分母为站内各难度 3BV 的实际上下限区间跨度（当前初级{" "}
             {den.beg}、中级 {den.int}、高级 {den.exp}，总计 {totalDen}
             ）；有新录像突破上下限时，区间自动扩展。
-          </li>
-          <li>
+          </>,
+          <>
             <b>排名规则</b>：按所选列的收集数降序排列；收集数相同时，注册较早（用户 ID
             较小）的玩家排在前面。点击表头可在初级 / 中级 / 高级 / 总计之间切换排序。
-          </li>
-          <li>
+          </>,
+          <>
             <b>更新频率</b>：统计数据每小时更新一次，新过审的录像最迟 1 小时后计入榜单。
-          </li>
-        </ol>
-      </div>
+          </>,
+        ]}
+      />
     </>
   );
 }

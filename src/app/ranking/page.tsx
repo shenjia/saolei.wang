@@ -16,8 +16,52 @@ import { RankingNav } from "@/components/RankingNav";
 import { RankingFeed } from "@/components/RankingFeed";
 import { WorldTop100 } from "@/components/WorldTop100";
 import { BvRankingFeed } from "@/components/BvRankingFeed";
+import { RankingRules } from "@/components/RankingRules";
 
 export const dynamic = "force-dynamic";
+
+// 雷界/NF 页底规则板块（2026-10-14 张老师要求：所有排行独立标准板块，口径见
+// queries.getRankingTable / review.ts / ranksnap.ts 注释）
+const ALL_RULES = [
+  <>
+    <b>统计口径</b>：取每位玩家各项目的历史最好成绩（时间取最短、3BV/s 取最高）；录像
+    <b>审核通过</b>即计入成绩，3BV &lt; 4 的运气盘不计 3BV/s。
+  </>,
+  <>
+    <b>总计成绩</b>：初级、中级、高级都有成绩才计算总计，否则不上总计榜。
+  </>,
+  <>
+    <b>排序规则</b>：点击表头在 8 个维度间切换（初级 / 中级 / 高级 / 总计 × 时间 /
+    3BV/s）；时间按升序、3BV/s 按降序；成绩相同时按用户 ID 排序（时间榜注册较早者在前）。
+  </>,
+  <>
+    <b>升降列</b>：仅在按总计时间排序时显示，为今日名次与昨日名次之差；昨日不在榜的显示
+    「新上榜」。名次快照于每天首次访问时生成。
+  </>,
+  <>
+    <b>上榜条件</b>：对应项目成绩大于 0 即在榜；榜单实时更新，录像过审即上榜。
+  </>,
+];
+
+const NF_RULES = [
+  <>
+    <b>统计口径</b>：NF（无标）模式录像的历史最好成绩；一盘 NF 录像<b>审核通过</b>
+    时同时计入雷界排行与 NF 排行两套成绩，普通（flag）录像不计入 NF 排行。
+  </>,
+  <>
+    <b>总计成绩</b>：初级、中级、高级都有 NF 成绩才计算总计，否则不上总计榜。
+  </>,
+  <>
+    <b>排序规则</b>：与雷界排行相同（8 个排序维度；时间升序、3BV/s 降序；成绩相同时按用户 ID
+    排序）。
+  </>,
+  <>
+    <b>军衔列</b>：按雷界（flag）高级时间评定；NF 成绩更新不产生破纪录动态。
+  </>,
+  <>
+    <b>上榜条件</b>：对应项目 NF 成绩大于 0 即在榜；榜单实时更新，录像过审即上榜。
+  </>,
+];
 
 // 页面 title 统一「xx排行」命名（2026-09-24 张老师要求：不再用「xx榜」）
 export async function generateMetadata({
@@ -218,6 +262,7 @@ export default async function RankingPage({
           initialHl={hl}
           reserveDelta={!nf}
         />
+        <RankingRules title={nf ? "NF 排行规则" : "雷界排行规则"} items={nf ? NF_RULES : ALL_RULES} />
       </div>
     </div>
   );

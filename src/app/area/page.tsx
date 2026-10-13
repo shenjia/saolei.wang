@@ -11,8 +11,43 @@ import { AreaRanking } from "@/components/AreaRanking";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingTable } from "@/components/RankingTable";
 import { OldPager } from "@/components/OldPager";
+import { RankingRules } from "@/components/RankingRules";
 
 export const dynamic = "force-dynamic";
+
+// 地区榜页底规则板块（2026-10-14 张老师要求；口径见 queries.getAreaRanking）
+const AREA_RULES = [
+  <>
+    <b>地区归属</b>：按注册资料中的地区统计；未填写地区或填写了多个地区的玩家不计入地区榜。
+  </>,
+  <>
+    <b>综合排行指数</b>：地区内每位有成绩雷友贡献（全国有成绩总人数 −
+    个人全国名次），指数为全体成员贡献值之和。默认按指数降序，点击表头可切换排行人数 /
+    活跃人数 / 领军人物排序。
+  </>,
+  <>
+    <b>全国名次</b>：与雷界排行的总计时间榜同口径（初 / 中 / 高级都有成绩且已过审）。
+  </>,
+  <>
+    <b>活跃人数</b>：该地区近 30 天内登录过的雷友人数（含无成绩玩家）。
+  </>,
+  <>
+    <b>更新频率</b>：数据实时计算；点击地区名可进入地区内页，查看该地区玩家的全级别成绩。
+  </>,
+];
+
+// 地区内页规则（2026-10-14）：口径同雷界排行，仅限定地区
+const AREA_INNER_RULES = [
+  <>
+    <b>统计口径</b>：与雷界排行相同（历史最好成绩、审核通过即计入），仅统计该地区玩家。
+  </>,
+  <>
+    <b>排序规则</b>：与雷界排行相同（8 个排序维度，点击表头切换；时间升序、3BV/s 降序）。
+  </>,
+  <>
+    <b>地区归属</b>：按注册资料中的地区统计；修改地区资料后实时生效。
+  </>,
+];
 export const metadata = { title: "地区排行 | 扫雷网" };
 
 export default async function AreaPage({
@@ -47,6 +82,7 @@ export default async function AreaPage({
             total={total}
             pageSize={pageSize}
           />
+          <RankingRules title={`${areaDisplay(area)}地区排行规则`} items={AREA_INNER_RULES} />
         </div>
       </div>
     );
@@ -65,10 +101,7 @@ export default async function AreaPage({
           <RankingNav current="area" />
         </div>
         <AreaRanking rows={rows} titles={titles} order={order}>
-          <div className="area_note">
-            综合排行指数计算方式：地区内每位有成绩雷友贡献（全国有成绩总人数 − 个人全国名次），指数 = 地区全体成员贡献值之和。
-            活跃人数 = 该地区近 30 天内登录过的雷友人数。
-          </div>
+          <RankingRules title="地区排行规则" items={AREA_RULES} />
         </AreaRanking>
       </div>
     </div>

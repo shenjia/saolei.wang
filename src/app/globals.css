@@ -3010,11 +3010,6 @@ body #page.ranking_old .ranking_box {
 .area_table td.num.current {
   color: #fdc61d;
 }
-.area_note {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #939387;
-}
 
 /* ---------- 地区榜 · 交互式中国地图（2026-10-13 张老师需求） ----------
    省界为纯静态 SVG（无第三方地图服务 / 无 Key，含台湾省与南海诸岛九段线，标准地图口径），
@@ -5448,20 +5443,20 @@ button.msg_cancel:hover {
   background: #fdc61d;
 }
 
-/* BV 排行规则说明（2026-10-14 张老师要求：榜末独立标准板块 .box + h2，外观随全站板块）；
-   这里只定列表与文字的局部排版 */
-.bv_rules {
+/* 各排行榜页底规则说明（2026-10-14 张老师要求：所有排行独立标准板块 .box + h2，外观随全站
+   板块；组件 components/RankingRules.tsx）。这里只定列表与文字的局部排版 */
+.rank_rules {
   font-size: 13px;
   line-height: 1.9;
   color: #939387;
 }
-.bv_rules ol {
+.rank_rules ol {
   margin: 0;
   padding-left: 20px;
 }
-.bv_rules li {
+.rank_rules li {
   margin: 2px 0;
 }
-.bv_rules b {
+.rank_rules b {
   color: #e6db74;
 }
