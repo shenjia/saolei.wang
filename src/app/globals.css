@@ -3120,6 +3120,95 @@ body #page.two_columns li.main {
     width: max(62%, 720px);
   }
 }
+
+/* ---------- 论坛页中段死区修复（2026-10-13 张老师要求，参照排行页方案 A 统一调整） ----------
+   死区根因（769~1188 视口表格挤烂 + 页头折行错乱，张老师截图即此）：
+   legacy #page.main width:62% 在该区间卡片内容仅 420~660——
+   ① .bbs_list table-layout:fixed 三列定宽 396（作者190/计数110/时间96），
+      主题列被压到 <50px：表头「分类/主题」逐字竖排、行内只剩分类徽章、标题全没；
+   ② 页头一行需 712（实测：h1 52 + gap20 + tabs 366 + gap12 + 发布90+gap10+搜索162），
+      撑不下时 tabs 逐个折行（精华掉行）、h1 随 flex-end 坠到动作组一行。
+   改法（与排行页同构，两段断点互相咬合）：
+   ① width:max(62%,736px)：769~1187 视口卡片固定 736 外径（内容 658＝外径-边16-框2- padding60），
+      主题列 262 与 1200px 桌面观感一致；736 上限保证 769 视口（含 15px 滚动条）
+      不出现整页横滚（排行页 720 同法理，论坛页头更宽故下限抬高）；
+   ② ≤1289 视口页头改两行式：「论坛」独占第一行、筛选 tabs + 发布主题 + 搜索框
+      一起折到第二行（2026-10-13 四轮张老师要求：折行时发布主题和搜索栏
+      都应该一起折行——动作组随筛选器折下、贴第二行行尾，两者永不拆行；
+      取代二轮的「动作组随 title 同行」）；
+      ≥1290（62% 流式内容 721 ≥ 712，实测 1271 仍差 2px 折行，故再留 9px 余量）
+      恢复一行式。
+      两行式实现：.bbs_head_nav display:contents 拆散，tabs/动作组提升为 page_head
+      直接 flex 子项——h1 flex-basis:100% 独占第一行；tabs/搜索结果条 order:3
+      居左（不拉伸，底线只铺在 tab 下，与桌面一行式一致）、动作组 order:4
+      + margin-left:auto 贴行尾；行宽不够（<约 640 内容）时动作组整组再折一行。
+      同时覆盖 ≤768 移动版（特异性压过 ≤768 块的 column 堆叠）。
+   已知副作用同排行页：787~950 视口卡片比 80% 顶栏宽（卡片居中浮于通栏，不显眼）。
+   ⚠️ ①同样必须包进 ≥769：不限定会把 ≤768 移动版 #page 顶到 736 出现横滚。 */
+@media (min-width: 769px) {
+  body #page.bbs_old.main {
+    width: max(62%, 736px);
+  }
+}
+@media (max-width: 1289px) {
+  body #page.bbs_old .page_head {
+    display: flex; /* ≤768 无 ≥769 的 flex 规则，page_head 是 block——本段两行式全靠 flex，必须补上 */
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    row-gap: 8px;
+  }
+  /* 四轮：h1 独占第一行（basis:100% 强制后续项换行），清掉 legacy h1 底距 */
+  body #page.bbs_old .page_head .page_title {
+    margin: 0;
+    flex: 1 1 100%;
+  }
+  body #page.bbs_old .page_head .bbs_head_nav {
+    display: contents;
+  }
+  /* 第二行：筛选 tabs/搜索结果条居左（tabs 不拉伸，底线只铺在 tab 下，与桌面一行式一致） */
+  body #page.bbs_old .page_head .bbs_head_nav .tabs {
+    order: 3;
+    flex: 0 1 auto;
+  }
+  body #page.bbs_old .page_head .bbs_head_nav .bbs_search_bar {
+    order: 3;
+    flex: 1 1 auto;
+  }
+  /* 动作组随筛选器一起折到第二行、贴行尾（margin-left:auto 是基础规则）；
+     行宽不够时整组再折一行——发布主题与搜索永不拆行 */
+  body #page.bbs_old .page_head .bbs_head_nav .bbs_actions {
+    order: 4;
+  }
+  /* 三轮（2026-10-13 张老师要求）：筛选 tabs 折到第二行后，首项去左内距——
+     tabs 容器底线贯穿整行，首项 14px 左内距会在行左缘露出一截无字短线、
+     首项文字与 title 左缘错位；去掉后文字与 title 左缘对齐
+     （选中黄下划线 ::after 的 left 同步归零；桌面一行式不动，
+     首项左内距在桌面是与 h1 之间的间距） */
+  body #page.bbs_old .page_head .tabs li:first-child a,
+  body #page.bbs_old .page_head .tabs li:first-child em {
+    padding-left: 0;
+  }
+  body #page.bbs_old .page_head .tabs li:first-child a::after,
+  body #page.bbs_old .page_head .tabs li:first-child em::after {
+    left: 0;
+  }
+}
+
+/* 录像页同款（「所有筛选器」）：≤768 移动版 page_head 堆叠后 tabs 独占一行，
+   同样的左缘短线——首项去左内距与 title 对齐。
+   （排行页 .ranking_tabs 是另一组件、无贯穿底线，不涉及。） */
+@media (max-width: 768px) {
+  body #page.video_old .page_head .tabs li:first-child a,
+  body #page.video_old .page_head .tabs li:first-child em {
+    padding-left: 0;
+  }
+  body #page.video_old .page_head .tabs li:first-child a::after,
+  body #page.video_old .page_head .tabs li:first-child em::after {
+    left: 0;
+  }
+}
+
 /* ==================== 录像页中段死区修复（2026-10-13 张老师要求，参照排行榜方案 A） ====================
    病灶一（录像详情页棋盘被裁，张老师截图即此）：two_columns 容器 80% 流式
    （max 960），主栏 calc(100% - 290px)、卡片 padding 60，高级棋盘 30×16 固定
