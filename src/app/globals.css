@@ -3110,6 +3110,93 @@ body #page.two_columns li.main {
     width: max(62%, 720px);
   }
 }
+/* ==================== 录像页中段死区修复（2026-10-13 张老师要求，参照排行榜方案 A） ====================
+   病灶一（录像详情页棋盘被裁，张老师截图即此）：two_columns 容器 80% 流式
+   （max 960），主栏 calc(100% - 290px)、卡片 padding 60，高级棋盘 30×16 固定
+   484 + 右距 20 = 504 → 需容器 854、视口 ≥1068；881~1067 视口主栏内容不足
+   506，棋盘被 .video_cell overflow:hidden 齐边裁掉（769~1044 实测全裁），
+   「上传于/签名」等正文行同被裁切。
+   病灶二（顶栏导航整排掉落）：logo 盒 200 + 导航 409 + 两侧让位 16 = 625，
+   wrapper 80% 要视口 ≥782 才放得下，769~781 整个导航 float 掉到 logo 下方
+   压住正文（出现更宽内容时掉行带右移，实测 769 即掉）。
+   病灶三（宽表溢出）：首页新闻/录像列表/用户成绩表自然宽 592~594，主栏内容
+   506（下限后）~644（80% 流式）都放不下，表格溢出卡片压向侧栏。
+   改法四段，断点互相咬合：≥881 容器下限 856；≤880 单列化（两栏在此段根本
+   放不下 854 最小需求）；769~880 顶栏 wrapper 下限防掉行；≤1188 宽表盒内横滑。 */
+
+/* ⓪ 主栏几何全族对齐：legacy 70% 主栏在容器 <960（视口 <1200）时
+   0.7c+288>c，用户主页/账户管理侧栏必然掉行；对齐为与其余 two_columns 页
+   相同的 calc(100% - 290px)（满宽 672→670 无感，窄段侧栏保持右位）。
+   ⚠️ 必须写在 ② 之前：② 同选择器去浮动靠源码顺序压过本条。 */
+body #page.two_columns li.main {
+  width: calc(100% - 290px);
+  min-width: 0;
+}
+
+/* ① 容器下限（≥881）：881~1068 视口容器固定 856（主栏 566、内容 506 ≥ 504）；
+   ≥1069 恢复 80% 流式，960 上限不变。856 外径必须 ≤881 视口（留出滚动条余量），
+   769~880 由 ② 单列带接管，否则出现整页横滚。 */
+@media (min-width: 881px) {
+  body #page.two_columns {
+    width: max(80%, 856px);
+  }
+}
+
+/* ② 单列带（≤880）：主栏 564 + 侧栏 288 = 854 在该段视口放不下，
+   把 ≤768 的单列断点外扩到 880——主栏独占整行（769 视口内容 555 ≥ 504），
+   侧栏各模块依次落到主栏下方。只列布局规则；汉堡导航/整页缩放仍归 ≤768 块，
+   769~880 保持桌面顶栏形态。 */
+@media (max-width: 880px) {
+  body #page.two_columns li.main,
+  body #page.two_columns li.sidebar,
+  body #page.two_columns #video_view > li.main,
+  body #page.two_columns #video_view > li.sidebar,
+  body #page.two_columns #home > li.main,
+  body #page.two_columns #home > li.sidebar,
+  body #page.two_columns #user_view > li.main,
+  body #page.two_columns #user_view > li.sidebar {
+    float: none;
+    width: auto;
+    min-width: 0;
+  }
+  body #page.two_columns li.sidebar .box,
+  body #page.two_columns #video_view > li.sidebar .box,
+  body #page.two_columns #home > li.sidebar .box,
+  body #page.two_columns #user_view > li.sidebar .box {
+    width: auto;
+  }
+  /* 录像详情：.info 取消浮动落满整行，棋盘超出由 .playable 盒内横滑（同 ≤768 块） */
+  body #page.two_columns #video_view .video_cell .info {
+    float: none;
+    clear: both;
+  }
+  body #page.two_columns #video_view .playable {
+    overflow-x: auto;
+  }
+}
+
+/* ③ 顶栏导航防掉行（769~880）：wrapper 下限 656 兜住 logo+导航最坏宽度 625；
+   ≤768 移动版桌面导航整体隐藏，不受影响。 */
+@media (min-width: 769px) and (max-width: 880px) {
+  body #header .wrapper {
+    width: max(80%, 656px);
+  }
+}
+
+/* ④ 宽表盒内横滑（≤1188）：下限后主栏内容 506、80% 流式内容 644 都放不下
+   592~594 自然宽的表格，一律盒内横滑、页面本身不横滚（≤768 块同款规则外扩；
+   排行卡片 720/内容 664 本就放得下 562 宽表，规则加上无害）。
+   .video_cell 由 overflow:hidden 改 auto：棋盘万一超出可滑，不再静默裁切。 */
+@media (max-width: 1188px) {
+  body #page .box:has(.table),
+  body #page .box:has(.ranking_table),
+  body #page .box:has(.scores) {
+    overflow-x: auto;
+  }
+  body #page .video_cell {
+    overflow-x: auto;
+  }
+}
 
 /* ---------- 窄屏整页缩放（2026-10-13 张老师要求：竖屏下主体板块完整显示，全站生效） ----------
    目的：竖屏手机（≤605px）把 #page 主体整体缩小，让宽内容一屏呈现——排行榜
