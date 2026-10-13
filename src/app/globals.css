@@ -4721,3 +4721,75 @@ button.msg_cancel:hover {
     padding-right: 18px;
   }
 }
+
+/* ===== 个人主页侧栏「3BV 收集」（2026-10-13 张老师方案，设计稿 design/3bv-collection.html v3） ===== */
+#user_3bv .bbv_level {
+  margin-top: 16px;
+}
+#user_3bv .bbv_level:first-of-type {
+  margin-top: 4px;
+}
+#user_3bv .bbv_head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+#user_3bv .bbv_name {
+  font-size: 14px;
+}
+#user_3bv .bbv_stat {
+  color: #636359;
+  font-size: 12px;
+}
+#user_3bv .bbv_stat em {
+  font-weight: bold;
+}
+/* 进度条 3px，与筛选器当前标签高亮线同粗（.ranking_tabs .current::after） */
+#user_3bv .bbv_bar {
+  height: 3px;
+  margin-bottom: 8px;
+  background: #272822;
+  border-radius: 2px;
+  overflow: hidden;
+}
+#user_3bv .bbv_fill {
+  height: 100%;
+  border-radius: 2px;
+}
+#user_3bv .bbv_grid {
+  line-height: 0;
+}
+#user_3bv .sq {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0 2px 2px 0;
+  background: #49483e;
+  border-radius: 2px;
+}
+/* 级别标准配色：初绿 / 中橙 / 高黄——级别名、数字、已收集方格、进度条一并变色 */
+#user_3bv .beg .bbv_name,
+#user_3bv .beg .bbv_stat em {
+  color: #a6e22e;
+}
+#user_3bv .beg .bbv_fill,
+#user_3bv .beg .sq.on {
+  background: #a6e22e;
+}
+#user_3bv .int .bbv_name,
+#user_3bv .int .bbv_stat em {
+  color: #fd971f;
+}
+#user_3bv .int .bbv_fill,
+#user_3bv .int .sq.on {
+  background: #fd971f;
+}
+#user_3bv .exp .bbv_name,
+#user_3bv .exp .bbv_stat em {
+  color: #e6db74;
+}
+#user_3bv .exp .bbv_fill,
+#user_3bv .exp .sq.on {
+  background: #e6db74;
+}

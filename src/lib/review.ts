@@ -336,6 +336,18 @@ export async function reviewVideo(
         details: { lv: rv.level, tm: vs.time, bv: Math.max(vs["3bvs"], 0) },
         createTime: rv.createTime,
       });
+
+      // 3BV 收集区间扩展（2026-10-13 张老师方案）：新通过录像的 board_3bv 突破
+      // level_3bv_range 上下限时扩边，只扩不缩（屏蔽不回缩）；
+      // INSERT ... ON DUPLICATE KEY UPDATE 幂等——行不存在时顺便播种
+      await tx.$executeRaw`
+        INSERT INTO level_3bv_range (level, min_3bv, max_3bv, create_time, update_time)
+        VALUES (${rv.level}, ${rv.board3bv}, ${rv.board3bv}, ${now}, ${now})
+        ON DUPLICATE KEY UPDATE
+          min_3bv = LEAST(min_3bv, VALUES(min_3bv)),
+          max_3bv = GREATEST(max_3bv, VALUES(max_3bv)),
+          update_time = VALUES(update_time)
+      `;
     }
   });
   return { ok: true };

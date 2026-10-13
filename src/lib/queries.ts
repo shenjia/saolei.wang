@@ -20,6 +20,7 @@ import {
   USER_ROLE,
   VIDEO_PAGESIZE,
   VIDEO_STATUS,
+  VIDEO_LEVELS,
   byLevelOrder,
   RANKING_BYS,
   type Level,
@@ -1409,4 +1410,60 @@ export async function getUserRanks(userId: number): Promise<UserRanks | null> {
     area: rows[0].area,
     areaPos: rows[0].areaPos === null ? null : N(rows[0].areaPos),
   };
+}
+
+// ---------- 3BV 收集（2026-10-13 张老师方案：个人主页侧栏「3BV 收集」版块） ----------
+
+/**
+ * 各级别 3BV 收集区间（level_3bv_range 表，3 行小表，读取亚毫秒）。
+ * 区间 = 站内已通过（status=REVIEWED）录像的 board_3bv 实际上下限，只扩不缩
+ * （审核通过时在 lib/review.ts 同事务扩边）。
+ * 缺行时从已通过录像现算并补种（自愈：兼容生产首次部署空表；主键幂等，
+ * 并发补种最坏只是多跑一次现算）。
+ */
+export async function getLevel3bvRanges(): Promise<
+  Partial<Record<VideoLevel, { min: number; max: number }>>
+> {
+  const rows = await prisma.level3bvRange.findMany();
+  const out: Partial<Record<VideoLevel, { min: number; max: number }>> = {};
+  for (const r of rows) out[r.level as VideoLevel] = { min: r.min3bv, max: r.max3bv };
+
+  const missing = VIDEO_LEVELS.filter((l) => !out[l]);
+  if (missing.length) {
+    // 现算全站已通过录像的实际上下限（仅首次/缺行时跑一次）
+    const agg = await prisma.$queryRaw<{ level: string; mn: number; mx: number }[]>`
+      SELECT v.level, MIN(vi.board_3bv) AS mn, MAX(vi.board_3bv) AS mx
+      FROM video v JOIN video_info vi ON vi.id = v.id
+      WHERE v.status = ${VIDEO_STATUS.REVIEWED}
+      GROUP BY v.level`;
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    for (const a of agg) {
+      const level = a.level as VideoLevel;
+      if (!missing.includes(level)) continue;
+      await prisma.level3bvRange.upsert({
+        where: { level },
+        create: { level, min3bv: N(a.mn), max3bv: N(a.mx), createTime: now, updateTime: now },
+        update: {},
+      });
+      out[level] = { min: N(a.mn), max: N(a.mx) };
+    }
+  }
+  return out;
+}
+
+/**
+ * 用户已收集的 3BV 集合（按级别分组的不同 board_3bv，仅已通过录像）。
+ * 走 video 表 (user, level) 索引 + video_info 主键 join，全站最重用户（5k+ 盘）毫秒级。
+ */
+export async function getUser3bvCollection(
+  userId: number
+): Promise<Record<VideoLevel, Set<number>>> {
+  const rows = await prisma.$queryRaw<{ level: string; b3bv: number }[]>`
+    SELECT v.level, vi.board_3bv AS b3bv
+    FROM video v JOIN video_info vi ON vi.id = v.id
+    WHERE v.user = ${BigInt(userId)} AND v.status = ${VIDEO_STATUS.REVIEWED}
+    GROUP BY v.level, vi.board_3bv`;
+  const out: Record<VideoLevel, Set<number>> = { beg: new Set(), int: new Set(), exp: new Set() };
+  for (const r of rows) out[r.level as VideoLevel]?.add(r.b3bv);
+  return out;
 }

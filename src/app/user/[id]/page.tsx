@@ -23,6 +23,8 @@ import {
   getUserTodayVideos,
   getUserActivity,
   getVideoList,
+  getLevel3bvRanges,
+  getUser3bvCollection,
 } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
@@ -39,6 +41,7 @@ import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { SendMessageButton } from "@/components/SendMessageButton";
+import { BbvCollection } from "@/components/BbvCollection";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -118,7 +121,7 @@ export default async function UserViewPage({
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, session, ranks, userVideos, todayVideos, activity] = await Promise.all([
+  const [history, session, ranks, userVideos, todayVideos, activity, bbvRanges, bbvCollection] = await Promise.all([
     getHistory(userId),
     getSession(),
     getUserRanks(userId),
@@ -129,6 +132,9 @@ export default async function UserViewPage({
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
     getUserActivity(userId),
+    // 「3BV 收集」版块：全站区间（level_3bv_range 小表）+ 本人已收集集合（走索引，毫秒级）
+    getLevel3bvRanges(),
+    getUser3bvCollection(userId),
   ]);
   const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime) }));
 
@@ -300,6 +306,12 @@ export default async function UserViewPage({
               <h2>实力</h2>
               <RadarChart data={radar} />
             </div>
+          )}
+        {/* 2026-10-13 张老师方案：侧栏「3BV 收集」版块（设计稿 v3 已确认），
+            位置在实力雷达之下、个人资料之上；显示条件与雷达一致（有上传过录像才显示） */}
+        {detail.stat &&
+          detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
+            <BbvCollection ranges={bbvRanges} collected={bbvCollection} />
           )}
         {hasProfileFields && (
           <div className="profile box">
