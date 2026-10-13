@@ -5,6 +5,7 @@
 // 2026-09-24：新增合并搜索框参数 q（纯数字按 ID、否则按姓名），原 name/id 仍可用
 // 2026-10-14：新增 view=bv（BV 收集榜）——该榜人口＝有已通过录像（≠成绩榜人口），
 //   名次走 1 小时缓存的全量数组 getBvRankOfUser（零 DB），落地 URL 与成绩榜同构（page+hl）
+// 2026-10-14：新增 area=<地区>（地区内页搜索定位）——页码限定该地区人口，302 回 /area（page+hl）
 
 import { NextRequest, NextResponse } from "next/server";
 import { findUserByName, getRankingPageOfUser, getBvRankOfUser } from "@/lib/queries";
@@ -66,6 +67,31 @@ export async function GET(req: NextRequest) {
   }
   const rankingBy = parseRankingBy(by);
   const { level, order } = byLevelOrder(rankingBy);
+
+  // ---- 地区内页分支（2026-10-14 张老师要求：地区排行也支持搜索）----
+  // 页码/名次限定该地区人口（getRankingPageOfUser 的 area 参数）；地区内页只有雷界口径（无 NF）
+  const area = (p.get("area") ?? "").trim().slice(0, 12);
+  if (area) {
+    const aqs = new URLSearchParams({ name: area });
+    if (rankingBy !== "sum_time") aqs.set("by", rankingBy);
+    if (id > 0) {
+      const page = await getRankingPageOfUser(id, level, order, false, area);
+      if (page > 0) {
+        if (p.get("format") === "json") return NextResponse.json({ page });
+        aqs.set("page", String(page));
+        aqs.set("hl", String(id)); // 定位落地行持续高亮（与成绩榜同款）
+        return new NextResponse(null, {
+          status: 302,
+          headers: { Location: `/area?${aqs.toString()}#id_${id}` },
+        });
+      }
+      if (p.get("format") === "json") return NextResponse.json({ page: 0 });
+    }
+    return new NextResponse(null, {
+      status: 302,
+      headers: { Location: `/area?${aqs.toString()}` },
+    });
+  }
 
   // 手动拼相对 Location：nginx 反代下 req.url 是内部地址（localhost:3100），
   // NextResponse.redirect(absolute) 会把内网 host 泄给浏览器

@@ -31,12 +31,15 @@ export async function GET(req: Request) {
   }
 
   // 成绩榜（雷界 / NF）：附带名次（下拉「第 N 位」用）
+  // 2026-10-14 地区内页搜索：带 area 时名次限定该地区人口（缺失＝未加入地区排行）
   const byRaw = p.get("by") ?? "";
   if ((RANKING_BYS as readonly string[]).includes(byRaw)) {
+    const area = (p.get("area") ?? "").trim().slice(0, 12) || undefined;
     const ranks = await getRankOfUsers(
       users.map((u) => u.id),
       byRaw as RankingBy,
-      p.get("nf") === "1"
+      p.get("nf") === "1",
+      area
     );
     return NextResponse.json({
       users: users.map((u) => {

@@ -14,6 +14,7 @@ export async function RankingTable({
   base,
   params,
   deltas,
+  hlUid,
 }: {
   rows: RankingRow[];
   by: RankingBy;
@@ -22,6 +23,8 @@ export async function RankingTable({
   params: Record<string, string | number | undefined>;
   /** 日升降（仅 by=sum_time 时传入并显示升降列） */
   deltas?: Map<number, number | null>;
+  /** 搜索定位落地行 id（whereami 302 携带 hl=<uid>，SSR 即高亮，2026-10-14 地区内页搜索） */
+  hlUid?: number;
 }) {
   const showDelta = by === "sum_time" && deltas !== undefined;
   // 军衔 SUB 制按高级时间评定（2026-10-13）；NF 榜行数据本身来自 NF 表，exp_time 同样是 NF 口径，
@@ -38,6 +41,7 @@ export async function RankingTable({
             by={by}
             delta={deltas?.get(u.id)}
             showDelta={showDelta}
+            hl={u.id === hlUid}
           />
         ))}
         {rows.length === 0 && <RankingEmpty showDelta={showDelta} />}

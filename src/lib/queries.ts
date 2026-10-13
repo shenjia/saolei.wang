@@ -352,22 +352,38 @@ export async function getRanking(
   return { users, total, pageSize: RANKING_PAGESIZE };
 }
 
-/** 「我在哪里」：计算用户在排行榜的页码（移植 Ranking::getPage，同分时从粗定位逐页扫描找到本人） */
-export async function getRankingPageOfUser(id: number, level: Level, order: Order, nf = false): Promise<number> {
+/** 「我在哪里」：计算用户在排行榜的页码（移植 Ranking::getPage，同分时从粗定位逐页扫描找到本人）。
+ *  带 area 时限定该地区人口（2026-10-14 地区内页搜索定位；本人不在该地区返回 -1） */
+export async function getRankingPageOfUser(
+  id: number,
+  level: Level,
+  order: Order,
+  nf = false,
+  area?: string
+): Promise<number> {
   const field = SCORE_FIELD(level, order);
   const table = userScoresTable(nf);
   const row = await table.findUnique({ where: { id: BigInt(id) } });
   if (!row) return -1;
   const score = Number((row as unknown as Record<string, number | null>)[field] ?? 0);
   if (!score) return -1;
+  // 地区内页：人口限定该地区注册用户（与 getRankingTable 的 area 过滤同口径）
+  let idIn: Record<string, unknown> | undefined;
+  if (area) {
+    const areaUsers = await prisma.user.findMany({ where: { area }, select: { id: true } });
+    if (!areaUsers.some((u) => N(u.id) === id)) return -1;
+    idIn = { id: { in: areaUsers.map((u) => u.id) } };
+  }
   const better = await table.count({
-    where:
-      order === "time" ? { [field]: { lt: score, gt: 0 } } : { [field]: { gt: score } },
+    where: {
+      ...(order === "time" ? { [field]: { lt: score, gt: 0 } } : { [field]: { gt: score } }),
+      ...idIn,
+    },
   });
   let offset = better - (better % RANKING_PAGESIZE);
   for (;;) {
     const rows = await table.findMany({
-      where: { [field]: { gt: 0 } },
+      where: { [field]: { gt: 0 }, ...idIn },
       select: { id: true },
       orderBy: { [field]: ORDER_DIRECTION[order] },
       skip: offset,
@@ -388,7 +404,12 @@ export async function getRankingPageOfUser(id: number, level: Level, order: Orde
  * 不在表中或成绩为 0 的 id 不出现在结果里（前端显示「未加入排行」）。
  * 单条 SQL（候选 id 各做一次索引区间统计，12 个候选约 40ms），不缓存。
  */
-export async function getRankOfUsers(ids: number[], by: RankingBy, nf = false): Promise<Map<number, number>> {
+export async function getRankOfUsers(
+  ids: number[],
+  by: RankingBy,
+  nf = false,
+  area?: string
+): Promise<Map<number, number>> {
   // 只接受正整数 id 后直插 SQL（无注入面；配合下面的 0 值过滤）
   const uniq = [...new Set(ids.filter((i) => Number.isInteger(i) && i > 0))];
   if (!uniq.length) return new Map();
@@ -396,6 +417,20 @@ export async function getRankOfUsers(ids: number[], by: RankingBy, nf = false): 
   const col = `${level}_${order === "time" ? "time" : "3bvs"}`; // raw SQL 用 snake_case 列名
   const tbl = nf ? "user_scores_nf" : "user_scores";
   const cmp = order === "time" ? "<" : ">"; // time 越小越好、3bvs 越大越好（同分时 id 也按此向排）
+  // 地区内页搜索（2026-10-14）：名次限定该地区人口（join `user` 过滤 area），
+  // 本人不在该地区的 id 不出现在结果里（前端显示「未加入地区排行」）；area 一律 ? 传参
+  if (area) {
+    const rows = await prisma.$queryRawUnsafe<{ id: bigint; rk: bigint }[]>(
+      `SELECT a.id, 1 + (SELECT COUNT(*) FROM ${tbl} b JOIN \`user\` ub ON ub.id = b.id AND ub.area = ?
+          WHERE b.${col} > 0 AND (b.${col} ${cmp} a.${col} OR (b.${col} = a.${col} AND b.id ${cmp} a.id))) AS rk
+        FROM ${tbl} a
+        WHERE a.${col} > 0 AND a.id IN (${uniq.join(",")})
+          AND a.id IN (SELECT id FROM \`user\` WHERE area = ?)`,
+      area,
+      area
+    );
+    return new Map(rows.map((r) => [N(r.id), N(r.rk)]));
+  }
   const rows = await prisma.$queryRawUnsafe<{ id: bigint; rk: bigint }[]>(
     `SELECT a.id, 1 + (SELECT COUNT(*) FROM ${tbl} b
         WHERE b.${col} > 0 AND (b.${col} ${cmp} a.${col} OR (b.${col} = a.${col} AND b.id ${cmp} a.id))) AS rk

@@ -10,6 +10,9 @@
 // 唯一候选自动定位仅在候选确实在榜时触发（否则会立刻弹「未加入」气泡，体验突兀）。
 // 2026-10-14 各榜统一（张老师要求）：雷界/NF 的搜索也带回名次（带 by，NF 加 nf=1），
 // 下拉次级文字同为「第 N 位」/「未加入排行」，不再显示 ID 与英文名。
+// 2026-10-14 地区内页搜索（张老师要求）：传 area 时搜索框出现在地区内页——推荐/「自己」
+// 的名次均为地区内名次（搜索接口带 area），定位不走 ranking:locate 事件（地区内页是
+// 服务端分页、无 RankingFeed 监听），改为轻量探测后整页导航 whereami（302 回 /area 带 page+hl）。
 
 "use client";
 
@@ -44,11 +47,14 @@ export function RankingNav({
   current,
   by,
   me,
+  area,
 }: {
   current: RankingView;
   by?: string;
   /** 登录用户信息：搜索框空输入时推荐「自己」（替代原「我在哪里」按钮） */
   me?: SuggestUser;
+  /** 地区内页搜索：地区名（仅 /area?name=xx 传入；传入即启用地区模式搜索框） */
+  area?: string;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -63,6 +69,8 @@ export function RankingNav({
   // BV 榜模式：搜索框带 by 查榜内名次——下拉直接给出名次或「未加入 BV 排行」
   const bvMode = current === "bv";
   const bvBy = bvMode ? (by ?? "total") : "";
+  // 地区内页模式：搜索框带 by+area 查地区内名次（2026-10-14）
+  const areaMode = current === "area" && !!area;
 
   /** 定位/查询统一带的榜别参数（成绩榜 view=nf、BV 榜 view=bv） */
   function viewParam(): string | undefined {
@@ -80,7 +88,10 @@ export function RankingNav({
       const rank = bvMode ? u.bvRank! : u.rank!;
       return { text: `第 ${rank.toLocaleString("zh-CN")} 位`, inBoard: true };
     }
-    return { text: bvMode ? "未加入 BV 排行" : "未加入排行", inBoard: false };
+    return {
+      text: bvMode ? "未加入 BV 排行" : areaMode ? "未加入地区排行" : "未加入排行",
+      inBoard: false,
+    };
   }
 
   // 登录态：聚焦/清空输入时下拉推荐自己；回车选中即定位（走既有 pick 流程）
@@ -97,8 +108,34 @@ export function RankingNav({
   // 无匹配空态提示（2026-09-24 张老师要求）：ID 精确不中 / 姓名无匹配
   const emptyMsg = numeric ? `没有找到ID为${kw}的玩家` : "没有找到符合条件的玩家";
 
+  // 地区内页定位（2026-10-14）：本页无 RankingFeed 监听 ranking:locate，
+  // 直接轻量探测（未在榜弹气泡）后整页导航 whereami（302 回 /area 带 page+hl）
+  async function locateArea(id: number) {
+    const qs = new URLSearchParams({ id: String(id), area: area!, format: "json" });
+    if (by) qs.set("by", by);
+    try {
+      const res = await fetch(`/ranking/whereami?${qs}`);
+      if (res.ok && (res.headers.get("content-type") ?? "").includes("json")) {
+        const { page } = (await res.json()) as { page: number };
+        if (page <= 0) {
+          toast("该玩家未加入该地区排行（暂无成绩）");
+          return;
+        }
+      }
+    } catch {
+      /* 探测失败走导航兜底 */
+    }
+    const nav = new URLSearchParams({ id: String(id), area: area! });
+    if (by) nav.set("by", by);
+    router.push(`/ranking/whereami?${nav}`);
+  }
+
   // 事件委托：RankingFeed 在同页监听并执行定位（页内滚动/拉取/跳 whereami）
   function locate(id: number) {
+    if (areaMode) {
+      void locateArea(id);
+      return;
+    }
     window.dispatchEvent(new CustomEvent("ranking:locate", { detail: { id } }));
   }
 
@@ -120,11 +157,13 @@ export function RankingNav({
     const timer = setTimeout(async () => {
       try {
         const qs = new URLSearchParams({ q: kw });
-        // 榜单名次：BV 带 bvBy（1 小时缓存数组内存查，零 DB）；成绩榜带 by（+nf）走索引区间统计
+        // 榜单名次：BV 带 bvBy（1 小时缓存数组内存查，零 DB）；成绩榜带 by（+nf）走索引区间统计；
+        // 地区内页另带 area（名次限定该地区人口）
         if (bvMode) qs.set("bvBy", bvBy);
         else if (by) {
           qs.set("by", by);
           if (current === "nf") qs.set("nf", "1");
+          if (areaMode) qs.set("area", area!);
         }
         const res = await fetch(`/api/ranking/search?${qs}`);
         if (!res.ok) return;
@@ -147,7 +186,7 @@ export function RankingNav({
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [q, bvBy, bvMode, by, current, numeric]);
+  }, [q, bvBy, bvMode, by, current, numeric, areaMode, area]);
 
   // 点击外部收起下拉
   useEffect(() => {
@@ -176,13 +215,18 @@ export function RankingNav({
     const qs = new URLSearchParams({ name, format: "json" });
     if (by) qs.set("by", by);
     if (view) qs.set("view", view);
+    if (areaMode) qs.set("area", area!);
     try {
       const res = await fetch(`/ranking/whereami?${qs}`);
       if (res.ok && (res.headers.get("content-type") ?? "").includes("json")) {
         const { page } = (await res.json()) as { page: number };
         if (page <= 0) {
           toast(
-            bvMode ? "该玩家暂无已通过审核的录像，未加入 BV 排行" : "该玩家未加入排行榜（暂无成绩）"
+            bvMode
+              ? "该玩家暂无已通过审核的录像，未加入 BV 排行"
+              : areaMode
+                ? "该玩家未加入该地区排行（暂无成绩）"
+                : "该玩家未加入排行榜（暂无成绩）"
           );
           return;
         }
@@ -193,6 +237,7 @@ export function RankingNav({
     const nav = new URLSearchParams({ name });
     if (by) nav.set("by", by);
     if (view) nav.set("view", view);
+    if (areaMode) nav.set("area", area!);
     // 姓名需服务端反查 id（whereami 302 会带 page+hl 回来，落地即高亮），走整页导航
     router.push(`/ranking/whereami?${nav}`);
   }
@@ -237,7 +282,7 @@ export function RankingNav({
           )
         )}
       </div>
-      {(current === "all" || current === "nf" || bvMode) && (
+      {(current === "all" || current === "nf" || bvMode || areaMode) && (
         <div className="goto_form" ref={boxRef}>
           <span className="goto_search">
             <svg className="goto_icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">

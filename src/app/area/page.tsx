@@ -4,9 +4,11 @@
 //                       并把「平均排行」列换成「活跃人数」（近 30 天登录人数）
 
 import Link from "next/link";
-import { getAreaRanking, getRankingTable } from "@/lib/queries";
+import { getAreaRanking, getRankingTable, getRankOfUsers } from "@/lib/queries";
 import { title as assessTitle } from "@/lib/assess";
 import { parseRankingBy, areaDisplay, parseAreaOrder } from "@/lib/config";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { AreaRanking } from "@/components/AreaRanking";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingTable } from "@/components/RankingTable";
@@ -62,7 +64,34 @@ export default async function AreaPage({
   if (area) {
     const by = parseRankingBy(sp.by);
     const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-    const { rows, total, pageSize } = await getRankingTable(by, false, page, area);
+    // 搜索定位落地行（whereami 302 携带 hl=<uid>，SSR 即高亮；2026-10-14 张老师要求地区排行支持搜索）
+    const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
+    const [{ rows, total, pageSize }, session] = await Promise.all([
+      getRankingTable(by, false, page, area),
+      getSession(),
+    ]);
+    // 登录态：搜索框空输入推荐「自己」，名次为该地区内名次（与成绩榜同款的 SuggestUser 形态）
+    let me:
+      | { id: number; chineseName: string; englishName: string; sex: number; rank?: number }
+      | undefined;
+    if (session?.uid) {
+      const [u, myRanks] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: BigInt(session.uid) },
+          select: { id: true, chineseName: true, englishName: true, sex: true },
+        }),
+        getRankOfUsers([session.uid], by, false, area),
+      ]);
+      if (u) {
+        me = {
+          id: Number(u.id),
+          chineseName: u.chineseName,
+          englishName: u.englishName,
+          sex: u.sex,
+          rank: myRanks.get(Number(u.id)),
+        };
+      }
+    }
     return (
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
@@ -72,9 +101,9 @@ export default async function AreaPage({
               <span className="sep">›</span>
               {areaDisplay(area)}
             </h1>
-            <RankingNav current="area" />
+            <RankingNav current="area" by={by} area={area} me={me} />
           </div>
-          <RankingTable rows={rows} by={by} base="/area" params={{ name: area }} />
+          <RankingTable rows={rows} by={by} base="/area" params={{ name: area }} hlUid={hl} />
           <OldPager
             base="/area"
             params={{ name: area, by: by === "sum_time" ? undefined : by }}
