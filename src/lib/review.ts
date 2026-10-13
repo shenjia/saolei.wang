@@ -10,6 +10,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import {
   isManager,
+  LEVEL_MIN_3BV,
   NEWS_TYPE,
   USER_ROLE,
   VIDEO_STATUS,
@@ -339,10 +340,13 @@ export async function reviewVideo(
 
       // 3BV 收集区间扩展（2026-10-13 张老师方案）：新通过录像的 board_3bv 突破
       // level_3bv_range 上下限时扩边，只扩不缩（屏蔽不回缩）；
-      // INSERT ... ON DUPLICATE KEY UPDATE 幂等——行不存在时顺便播种
+      // INSERT ... ON DUPLICATE KEY UPDATE 幂等——行不存在时顺便播种。
+      // 2026-10-14 张老师：下限按现行排行规则钳到 LEVEL_MIN_3BV（初 2 / 中 30 / 高 100），
+      // 低于下限的 3BV 不拉低统计区间（新上传已被上传校验拦住，此处防旧数据路径）
+      const bv = Math.max(rv.board3bv, LEVEL_MIN_3BV[rv.level as VideoLevel]);
       await tx.$executeRaw`
         INSERT INTO level_3bv_range (level, min_3bv, max_3bv, create_time, update_time)
-        VALUES (${rv.level}, ${rv.board3bv}, ${rv.board3bv}, ${now}, ${now})
+        VALUES (${rv.level}, ${bv}, ${bv}, ${now}, ${now})
         ON DUPLICATE KEY UPDATE
           min_3bv = LEAST(min_3bv, VALUES(min_3bv)),
           max_3bv = GREATEST(max_3bv, VALUES(max_3bv)),

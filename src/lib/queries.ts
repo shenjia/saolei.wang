@@ -12,6 +12,7 @@ import {
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
+  LEVEL_MIN_3BV,
   MIN_3BV_FOR_3BVS,
   NEWS_HOME_TYPES,
   NEWS_TYPE,
@@ -1506,6 +1507,9 @@ export async function getUserRanks(userId: number): Promise<UserRanks | null> {
  * 各级别 3BV 收集区间（level_3bv_range 表，3 行小表，读取亚毫秒）。
  * 区间 = 站内已通过（status=REVIEWED）录像的 board_3bv 实际上下限，只扩不缩
  * （审核通过时在 lib/review.ts 同事务扩边）。
+ * 2026-10-14 张老师：按现行排行规则收敛统计区间——下限钳到 LEVEL_MIN_3BV
+ * （初 2 / 中 30 / 高 100），中级 <30、高级 <100 不再统计完成度；
+ * 库里的行「只扩不缩」可能留着更低的下限，读取时钳（self-heal 补种同样钳）。
  * 缺行时从已通过录像现算并补种（自愈：兼容生产首次部署空表；主键幂等，
  * 并发补种最坏只是多跑一次现算）。
  */
@@ -1514,7 +1518,11 @@ export async function getLevel3bvRanges(): Promise<
 > {
   const rows = await prisma.level3bvRange.findMany();
   const out: Partial<Record<VideoLevel, { min: number; max: number }>> = {};
-  for (const r of rows) out[r.level as VideoLevel] = { min: r.min3bv, max: r.max3bv };
+  for (const r of rows) {
+    const level = r.level as VideoLevel;
+    const min = Math.max(r.min3bv, LEVEL_MIN_3BV[level]);
+    if (min <= r.max3bv) out[level] = { min, max: r.max3bv };
+  }
 
   const missing = VIDEO_LEVELS.filter((l) => !out[l]);
   if (missing.length) {
@@ -1528,12 +1536,15 @@ export async function getLevel3bvRanges(): Promise<
     for (const a of agg) {
       const level = a.level as VideoLevel;
       if (!missing.includes(level)) continue;
+      const min = Math.max(N(a.mn), LEVEL_MIN_3BV[level]);
+      const max = N(a.mx);
+      if (min > max) continue; // 该级别全部低于统计下限，不出区间（侧栏该级整行隐藏）
       await prisma.level3bvRange.upsert({
         where: { level },
-        create: { level, min3bv: N(a.mn), max3bv: N(a.mx), createTime: now, updateTime: now },
+        create: { level, min3bv: min, max3bv: max, createTime: now, updateTime: now },
         update: {},
       });
-      out[level] = { min: N(a.mn), max: N(a.mx) };
+      out[level] = { min, max };
     }
   }
   return out;
@@ -1543,6 +1554,8 @@ export async function getLevel3bvRanges(): Promise<
  * 用户已收集的 3BV 集合（按级别分组的不同 board_3bv，仅已通过录像）。
  * 值 = { vid: 该 3BV 首个录像 id, t: 其上传时间 Unix 秒 }（id 序=上传时间序，
  * MIN(id)/MIN(create_time) 同盘），供侧栏方格气泡展示 + 点击跳首盘（2026-10-13 张老师要求）。
+ * 2026-10-14 张老师：按现行排行规则收敛——低于 LEVEL_MIN_3BV（初 2 / 中 30 / 高 100）
+ * 的 3BV 不计入收集（CASE 按级别取下限，与 BV 榜 fetchBvCollection 同口径）。
  * 走 video 表 (user, level) 索引 + video_info 主键 join，全站最重用户（5k+ 盘）毫秒级。
  */
 export async function getUser3bvCollection(
@@ -1552,6 +1565,10 @@ export async function getUser3bvCollection(
     SELECT v.level, vi.board_3bv AS b3bv, MIN(v.id) AS first_vid, MIN(v.create_time) AS first_ct
     FROM video v JOIN video_info vi ON vi.id = v.id
     WHERE v.user = ${BigInt(userId)} AND v.status = ${VIDEO_STATUS.REVIEWED}
+      AND vi.board_3bv >= CASE v.level
+        WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
+        WHEN 'int' THEN ${LEVEL_MIN_3BV.int}
+        ELSE ${LEVEL_MIN_3BV.exp} END
     GROUP BY v.level, vi.board_3bv`;
   const out: Record<VideoLevel, Map<number, { vid: number; t: number }>> = {
     beg: new Map(),
@@ -1615,6 +1632,10 @@ const fetchBvCollection = unstable_cache(
         SELECT v.user, v.level, COUNT(DISTINCT vi.board_3bv) AS n
         FROM video v JOIN video_info vi ON vi.id = v.id
         WHERE v.status = ${VIDEO_STATUS.REVIEWED}
+          AND vi.board_3bv >= CASE v.level
+            WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
+            WHEN 'int' THEN ${LEVEL_MIN_3BV.int}
+            ELSE ${LEVEL_MIN_3BV.exp} END
         GROUP BY v.user, v.level
       ) t
       JOIN user u ON u.id = t.user
@@ -1636,7 +1657,7 @@ const fetchBvCollection = unstable_cache(
       };
     });
   },
-  ["bv-collection-v1"],
+  ["bv-collection-v2"],
   { revalidate: 3600, tags: ["bv-collection"] }
 );
 
@@ -1645,7 +1666,7 @@ function sortBv(all: BvRankingEntry[], by: BvRankingBy): BvRankingEntry[] {
   return [...all].sort((a, b) => b[by] - a[by] || a.id - b.id);
 }
 
-/** 分母 = level_3bv_range 站内实际上下限跨度（随新录像突破自动扩展） */
+/** 分母 = level_3bv_range 统计区间跨度（下限已按 LEVEL_MIN_3BV 钳制，上限随新录像突破自动扩展） */
 function bvDenoms(ranges: Partial<Record<VideoLevel, { min: number; max: number }>>): {
   den: Record<VideoLevel, number>;
   totalDen: number;
