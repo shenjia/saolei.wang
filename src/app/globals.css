@@ -3535,18 +3535,17 @@ body #video_list .score_3bvs a:hover em {
 #page .video_table td.level {
   font-size: 14px;
   font-weight: bold;
+  /* 级别名统一初级样式（2026-10-13 张老师要求：初中高级不再区分）；
+     成绩列仍按级别分灰阶（见下 lv_* 规则） */
+  color: #999994;
 }
-/* 级别与成绩同色（2026-09-24 张老师要求）：级别列需 #page 提权（同上），
-   成绩列无 legacy 冲突、颜色由 a{color:inherit} 继承 td */
-#page .video_table td.level.lv_beg,
+/* 成绩列级别灰阶（无 legacy 冲突、颜色由 a{color:inherit} 继承 td） */
 .video_table td.score.lv_beg {
   color: #999994;
 }
-#page .video_table td.level.lv_int,
 .video_table td.score.lv_int {
   color: #bbbbaf;
 }
-#page .video_table td.level.lv_exp,
 .video_table td.score.lv_exp {
   color: #ddddcf;
 }
@@ -3647,16 +3646,14 @@ body #page.video_old .page_head {
 #page #video_hot td.level {
   font-size: 14px;
   font-weight: bold;
+  color: #999994; /* 级别名统一初级样式（同 .video_table，2026-10-13） */
 }
-#page #video_hot td.level.lv_beg,
 #video_hot td.score.lv_beg {
   color: #999994;
 }
-#page #video_hot td.level.lv_int,
 #video_hot td.score.lv_int {
   color: #bbbbaf;
 }
-#page #video_hot td.level.lv_exp,
 #video_hot td.score.lv_exp {
   color: #ddddcf;
 }
