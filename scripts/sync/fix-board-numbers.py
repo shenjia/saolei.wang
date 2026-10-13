@@ -41,13 +41,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="实际写库（默认干跑）")
     ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=3306)
     ap.add_argument("--user", default="root")
     ap.add_argument("--password", default="")
     ap.add_argument("--database", default="saolei")
     ap.add_argument("--batch", type=int, default=5000)
     args = ap.parse_args()
 
-    my = pymysql.connect(host=args.host, user=args.user, password=args.password,
+    my = pymysql.connect(host=args.host, port=args.port, user=args.user, password=args.password,
                          database=args.database, charset="utf8mb4", autocommit=False)
     cur = my.cursor()
 
