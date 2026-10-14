@@ -951,6 +951,24 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         }
       }, CUS_APPLY_MS);
     }
+    /* 弹窗锚定（张老师 18:41 定）：贴「自定义」tab 正下方、与之水平居中对齐。
+       原先锚 .news_head 左缘（left:0），看着像挂在标题左端、离 tab 老远。
+       量法用 offset 系（CSS px，与页级 zoom 无关）：tab 与弹窗的 offsetParent 同为
+       .news_head，所以 tab.offsetLeft/offsetWidth 可直接与弹窗 offsetWidth 相减；
+       若走 rect 反算则须除以 pageZoom（窄屏 #page 有页级缩放），offset 系免这一层。
+       越界（窄屏弹窗比容器宽）钳进容器，左右各留 4px */
+    function positionCusDialog() {
+      const tab = $("level_tabs").querySelector('[data-lv="cus"]') as HTMLElement | null;
+      if (!tab) return;
+      const head = cusDlg.offsetParent as HTMLElement | null; // display:none（未开窗）时为 null，跳过
+      if (!head || tab.offsetParent !== head) return; // 锚系不一致（结构变动）时保持不动，不瞎摆
+      const pad = 4;
+      const center = tab.offsetLeft + tab.offsetWidth / 2;
+      const maxLeft = Math.max(head.clientWidth - cusDlg.offsetWidth - pad, pad);
+      cusDlg.style.left =
+        Math.round(Math.min(Math.max(center - cusDlg.offsetWidth / 2, pad), maxLeft)) + "px";
+      cusDlg.style.top = Math.round(tab.offsetTop + tab.offsetHeight + 10) + "px";
+    }
     function openCusDialog() {
       /* 滑杆值只在窗原本关着时按记忆规格回填；已开着（连点 tab）不回填，
          免得把玩家正拖到一半的值弹回去 */
@@ -963,6 +981,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       }
       cusDlg.classList.add("open");
       if (lv !== "cus") reset("cus"); // 点自定义＝选定级别立即切盘（同点初级/高级语义）
+      positionCusDialog(); // 须在 reset 之后：tab 由 a 变 span.current 字重变了，宽度要重算
     }
     function closeCusDialog() { cusDlg.classList.remove("open"); }
     on(cusW, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
@@ -1031,6 +1050,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches && zoomBeforeLs !== null) fitZoomForLandscape();
       else applyZoom(zoomCur, false);
+      positionCusDialog(); // 窗口尺寸/换行变化后重新对准「自定义」tab（未开窗时内部直接跳过）
     }, { signal });
 
     const faceBtn = $("face_btn");
