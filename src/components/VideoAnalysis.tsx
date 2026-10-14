@@ -57,7 +57,16 @@ function polygonPoints(n: number, r: number): string {
   return Array.from({ length: n }, (_, i) => polar(i, n, r).join(",")).join(" ");
 }
 
-export function VideoAnalysisRadar({ data }: { data: VideoAnalysisPoint[] }) {
+/**
+ * 录像分析雷达 —— 录像详情页与在线玩结算面板**共用同一个组件**
+ * （2026-10-14 张老师定：练习里不许再维护第二份绘制，否则文案/字号/气泡必分叉）。
+ *
+ * @param size 渲染边长，默认 222（录像详情页既有尺寸，出血布局交给页面 CSS）。
+ *   在线玩结算面板传 160：走「紧凑」分支，尺寸与定位上下文由内联样式直接给死，
+ *   不依赖 `#page #video_view .radar.box .vr_wrap` 那套页面专属 CSS。
+ *   SVG 内部坐标恒按 222 视图绘制、靠 viewBox 等比缩放，标签字号随尺寸一起等比。
+ */
+export function VideoAnalysisRadar({ data, size = SIZE }: { data: VideoAnalysisPoint[]; size?: number }) {
   const [hover, setHover] = useState<number | null>(null);
   // 气泡定位：宽度随内容变化，挂载时先隐藏 → effect 实测气泡/容器宽后写入 left/top 并显示。
   // 用 key={hover} 让每次换轴都重新走一遍「隐藏→定位→显示」，避免换轴瞬间闪现在旧位置。
@@ -83,11 +92,16 @@ export function VideoAnalysisRadar({ data }: { data: VideoAnalysisPoint[] }) {
   const tip = hover === null ? null : data[hover];
 
   return (
-    <div className="vr_wrap" ref={wrapRef}>
+    <div
+      className="vr_wrap"
+      ref={wrapRef}
+      /* 紧凑模式（练习结算面板）自带定位上下文与固定边长；录像页沿用页面 CSS 的出血布局 */
+      style={size === SIZE ? undefined : { position: "relative", width: size, height: size }}
+    >
       <svg
         className="chart"
-        width={SIZE}
-        height={SIZE}
+        width={size}
+        height={size}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         role="img"
         aria-label="录像分析雷达图"
@@ -163,12 +177,13 @@ export function VideoAnalysisRadar({ data }: { data: VideoAnalysisPoint[] }) {
           className="vr_tip"
           style={{ visibility: "hidden" }}
         >
-          {/* 2026-10-14 张老师定：与「实力」雷达气泡统一口径用「超过」；满分显示「全网第一」 */}
+          {/* 2026-10-14 张老师定：与「实力」雷达气泡统一口径用「超过」；满分显示「全网第一」。
+              数值（实际数据）单独包 span 上金色（.vr_tip_val），百分比 em 维持原色不变 */}
           {tip.percent >= 100 ? (
             "全网第一"
           ) : (
             <>
-              {tip.disp}，超过 <em>{tip.percent}%</em> 的玩家
+              <span className="vr_tip_val">{tip.disp}</span>，超过 <em>{tip.percent}%</em> 的玩家
             </>
           )}
         </div>
