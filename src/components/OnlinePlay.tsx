@@ -93,6 +93,11 @@ const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
    同日二定「严格占满 100% 高度」把 #page 的 margin/padding 与 .box 的
    margin/padding 全部清零（CSS 横屏块），横向只余 box 左右各 1px 边框 → 预留 2 */
 const LS_RESERVE_W = 2;
+/* 全屏拉满的亚像素余量（布局 px）：Chrome 的 zoom 渲染取整会让「渲染高」与
+   「布局高 × zoom」差 ~1px（实测同一窗在 1.71x 反算 207.61、3.82x 反算 207.86），
+   卡到 0 余量时宿主 scrollHeight 会多出 1px → 平白冒出一条竖滚动条。
+   两个方向各留 2px（同横屏 LS_RESERVE_W 的取舍：宁小 2px，不裁内容/不出滚动条） */
+const FS_RESERVE = 2;
 
 /* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
@@ -2205,25 +2210,56 @@ export function OnlinePlay({
       gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
       gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
     }
-    /* 全屏自动拉满（2026-10-14 张老师定，主要面向手机）：取宽/高两个方向较小的倍率。
-       量纲事实（Chrome 实测）：offsetWidth/Height 不含 zoom（含自身 zoom 也不含），
-       即基准尺寸；getBoundingClientRect 是渲染尺寸（含 zoom 与页级 zoom）。
-       zoom 挂 .gwrap 后基准取整个银框窗（计数条/棋盘/状态栏同比例缩放）。
-       绝对式：倍率 = 目标渲染尺寸 ÷ 基准尺寸 ÷ 页级 zoom，与 zoomCur 无关。
-       max 放到 5：手机上页级 0.65 会把游戏倍率缩回去，拉满常需 3+（不进 localStorage） */
+    /* 全屏自动拉满（2026-10-14 张老师定）：取宽/高两个方向较小的倍率，让游戏窗尽可能大
+       且**不触发滚动条**。量纲（Chrome 实测）：getBoundingClientRect 是渲染尺寸
+       （含 zoomCur 与页级 zoom pz）；offset* 是布局尺寸但**取整**——棋盘整格是小数
+       （实测 offsetH 208 vs 真值 208.27），拿它当基准会把倍率算大 1px 高，拉满时
+       正好顶出一条滚动条，故基准一律 rect ÷ zoomCur ÷ pz「绝对式」反算（与 zoomCur
+       是否同步无关），目标尺寸统一归一到布局 px（同 fitZoomForLandscape 口径）。
+       max 放到 5：手机上页级 0.65 会把渲染尺寸缩回去，拉满常需 3+（不进 localStorage）。
+
+       📌 2026-10-15 PC 全屏修复：此前竖向预算直接按 `innerHeight − 48`（:fullscreen 的
+       24px 上下 padding）算，把**宿主内、游戏窗之外**的占位全漏了——PC 全屏时页头行
+       （标题 + 级别 tabs + 齿轮/全屏按钮，实测 59.5px）就压在游戏窗上方，于是游戏窗底
+       越出视口 36px，宿主 `overflow:auto` 立刻出竖滚动条（1440×900 实测窗底 936.6）。
+       现改按**宿主实际几何**算预算：竖向 = 宿主内容区底 − 游戏窗顶 − 游戏窗下方流内内容；
+       横向 = #game_area 内容宽（gwrap 在里面 inline-block 居中，撑过就溢出）。
+       页头占高是「量差值」，不随游戏倍率变化，所以每次 fit 都是一次干净重算 */
     function fitZoomForFullscreen() {
       gwrap.style.minHeight = ""; // 撤掉横屏的银框兜底拉伸（横屏中进全屏时残留会撑歪）
-      const baseW = gwrap.offsetWidth, baseH = gwrap.offsetHeight;
-      if (baseW < 8 || baseH < 8) return;
       const pz = pageZoom();
-      const gaR = gameAreaEl.getBoundingClientRect();
       const gwR = gwrap.getBoundingClientRect();
-      /* 银框之外占掉的高度（game_area 内的其他流内内容）用 rect 差值量；
-         不能用 root.scrollHeight——全屏时它会被视口高度撑大 */
-      const othersH = Math.max(0, (gwR.top - gaR.top) + (gaR.bottom - gwR.bottom));
-      const targetW = window.innerWidth - 24;             // :fullscreen 左右 padding 12px
-      const targetH = window.innerHeight - 48 - othersH;  // :fullscreen 上下 padding 24px
-      applyZoom(Math.min(targetW / baseW, targetH / baseH) / pz, false, 5);
+      const baseW = gwR.width / (zoomCur * pz), baseH = gwR.height / (zoomCur * pz);
+      if (baseW < 8 || baseH < 8) return;
+      /* 宿主＝全屏根容器（#online_play > div）；无全屏（伪全屏/横屏）时退回站点根容器 */
+      const host = document.fullscreenElement instanceof HTMLElement ? document.fullscreenElement : container;
+      const hostR = host.getBoundingClientRect();
+      /* 下 padding 的渲染值 = 计算值 × 宿主自身缩放（实测宿主缩放 = pz，移动端 0.65 对齐） */
+      const padB = (parseFloat(getComputedStyle(host).paddingBottom) || 0) * pz;
+      /* 游戏窗下方的流内内容（当前结构里 #game_area 是宿主最后一个流内子元素＝0；
+         留这个扫描是给将来加页脚兜底）——绝不能用 host.scrollHeight：全屏溢出时
+         它已被撑大，会把缺口算成 0 */
+      let belowH = 0;
+      const ga = gwrap.parentElement;
+      if (ga && ga.parentElement === host) {
+        const kids = Array.from(host.children);
+        for (const k of kids.slice(kids.indexOf(ga) + 1)) {
+          const kcs = getComputedStyle(k);
+          if (kcs.display === "none" || kcs.position === "absolute" || kcs.position === "fixed") continue;
+          const r = k.getBoundingClientRect();
+          if (r.height <= 0) continue;
+          belowH += r.height / pz + (parseFloat(kcs.marginTop) || 0) + (parseFloat(kcs.marginBottom) || 0);
+        }
+      }
+      const availH = (hostR.bottom - padB - gwR.top) / pz - belowH - FS_RESERVE; // 布局 px
+      /* 横向：#game_area 无 padding，gwrap 是其中 inline-block（text-align:center）——
+         可用宽即其内容宽；窄到放不下时 inline-block 不收缩，靠这条封顶防横向滚动条 */
+      const gaCs = ga ? getComputedStyle(ga) : null;
+      const availW = ga
+        ? ga.clientWidth - (parseFloat(gaCs!.paddingLeft) || 0) - (parseFloat(gaCs!.paddingRight) || 0) - FS_RESERVE
+        : hostR.width / pz - 24 - FS_RESERVE;
+      if (availH <= 8 || availW <= 8) return;
+      applyZoom(Math.min(availW / baseW, availH / baseH), false, 5);
     }
     /* 设置浮窗这张比例滑杆与自定义弹窗那张同源（v7）：共用 zoomDragInput/zoomDragEnd，
        拖动中不重算页宽、松手后一次到位（理由见 zoomDragInput 注释） */
