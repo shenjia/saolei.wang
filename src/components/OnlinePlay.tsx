@@ -198,8 +198,8 @@ export function OnlinePlay({
        transition 不触发（气泡就「闪」一下没了） */
     const tipRaf = requestAnimationFrame(() => tipsEl.classList.add("show"));
     const tipFade = window.setTimeout(() => tipsEl.classList.remove("show"), TIP_HOLD_MS);
-    /* 渐隐走完再摘元素：留着会是个 pointer-events:none 的空盒子，
-       虽不可见但占位（脱流不占位，纯粹为清洁 DOM 与后续可能的重复挂载） */
+    /* 渐隐走完再摘元素：留着会是个不可见的空盒子（脱流虽不占位，但 DOM 里
+       挂个废元素不干净，重复挂载时还会撞 #op_tips 这个 id） */
     const tipDrop = window.setTimeout(() => tipsEl.remove(), TIP_HOLD_MS + TIP_FADE_MS);
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
