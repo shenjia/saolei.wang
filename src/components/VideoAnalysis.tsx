@@ -197,7 +197,7 @@ export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysis
               2026-10-15 张老师定：无基准分布（grade="?"）时改提示语，
               不再显示「0.00，超过 0% 的玩家」这种无意义内容 */}
           {tip.grade === "?" ? (
-            "数据不足，无法评级"
+            "参考数据不足，无法评级"
           ) : tip.percent >= 100 ? (
             "全网第一"
           ) : (

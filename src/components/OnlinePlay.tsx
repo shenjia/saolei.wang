@@ -988,7 +988,8 @@ export function OnlinePlay({
       const est = hasBv ? t * (board3bv / solvedBv) : 0;
       const qg = hasBv ? Math.pow(t, 1.7) / solvedBv : 0;
       const ln = lv === "beg" ? 1 : lv === "int" ? 2 : 3;
-      const stnb = hasBv && lv !== "cus"
+      /* 自定义盘参照高级标准评级（2026-10-15 张老师定）：ln 已落 3（高级难度系数），STNB 照算 */
+      const stnb = hasBv
         ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
       /* 玩家实际插的旗数（胜利结算前会先抓这个值，自动补旗不算） */
@@ -1014,7 +1015,7 @@ export function OnlinePlay({
         ["Flags", String(playerFlags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
         ["RQP", hasBv ? f3((est * (est + 1)) / board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
         ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
-        ["STNB", hasBv && lv !== "cus" ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
+        ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好；自定义盘按高级难度计）"],
       ];
       /* 无猜模式专属行（2026-10-15 十期张老师定）：绿色数值，hover＝触雷被救回次数 */
       if (ng) rows.push(["无猜重排", String(ngSaves), "触雷但通过重排挽救的次数", "gv_ng"]);
@@ -1054,7 +1055,8 @@ export function OnlinePlay({
       const hasBv = solvedBv > 0 && t > 0;
       const qg = hasBv ? Math.pow(t, 1.7) / solvedBv : 0;
       const ln = lv === "beg" ? 1 : lv === "int" ? 2 : 3;
-      const stnb = hasBv && lv !== "cus"
+      /* 自定义盘参照高级标准（ln=3）：STNB 照算，评级走高级基准（2026-10-15 张老师定） */
+      const stnb = hasBv
         ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
       snapshot = {
@@ -1090,11 +1092,13 @@ export function OnlinePlay({
          八期追补：**踩雷局左侧显示灰色「未完成」**（失败的用时没有展示意义）。
          右＝「评级：S+」——五围图各轴组内分位的加权新评级（STNB 占一半、四分项各 1/8，
          权值见 lib/videoscore.ts PERFORMANCE_WEIGHTS）。
-         雷达不可用（自定义盘 / 缺基准 / 完成度过低）时评级显示「—」 */
+         无法评级（缺基准 / 完成度过低 / 无点击）时评级显示「—」 */
       const pts = computeRadarPoints(s);
       const percents: Partial<Record<MetricKey, number>> = {};
-      for (const p of pts ?? []) percents[p.key] = p.percent;
-      const perfGrade = pts ? gradeFromPercent(performanceOf(percents)) : "?";
+      for (const p of pts) percents[p.key] = p.percent;
+      const perfGrade = pts.some((p) => p.grade !== "?")
+        ? gradeFromPercent(performanceOf(percents))
+        : "?";
       const lvName = (LEVEL_NAMES as Record<string, string>)[s.level] ?? "自定义";
       const lvSpan = s.won
         ? '<span class="gr_lv">' +
@@ -1140,21 +1144,18 @@ export function OnlinePlay({
       /* 桌面：右侧浮窗显形（left/top/zoom 由 syncReportZoom 定位）；移动：弹遮罩浮层 */
       gresult.classList.toggle("show", mqPanelDesktop.matches);
       grModal.hidden = mqPanelDesktop.matches;
-      /* 雷达图：标准级别才有基准分布；cus 盘/失败局/无基准 → 只显示数值不评级 */
+      /* 雷达图恒显示（2026-10-15 张老师定）：自定义盘参照高级基准评级；
+         缺基准 / 完成度过低 → 空雷达（全轴 ?、收缩到圆心），hover 提示「参考数据不足，无法评级」 */
       const radarHost = host.querySelector("#gr_radar") as HTMLElement | null;
       if (radarHost) {
-        if (pts) {
-          radarHost.style.display = "block";
-          /* 复用录像详情页的 VideoAnalysisRadar 组件（张老师 2026-10-14 定：不该再维护第二份
-             绘制）。面板是 innerHTML 注入流、JSX 挂不进去，所以用 createRoot 把 React 组件挂到
-             占位 div —— 文案/字号/气泡样式与录像页**由同一个组件保证同源**，不会再分叉。
-             fill 模式（八期 2026-10-15 张老师定）：宽度顶满面板内容宽，不再给固定边长 */
-          const root = createRoot(radarHost);
-          root.render(<VideoAnalysisRadar data={pts} fill />);
-          radarRootRef.current = root;
-        } else {
-          radarHost.style.display = "none";
-        }
+        radarHost.style.display = "block";
+        /* 复用录像详情页的 VideoAnalysisRadar 组件（张老师 2026-10-14 定：不该再维护第二份
+           绘制）。面板是 innerHTML 注入流、JSX 挂不进去，所以用 createRoot 把 React 组件挂到
+           占位 div —— 文案/字号/气泡样式与录像页**由同一个组件保证同源**，不会再分叉。
+           fill 模式（八期 2026-10-15 张老师定）：宽度顶满面板内容宽，不再给固定边长 */
+        const root = createRoot(radarHost);
+        root.render(<VideoAnalysisRadar data={pts} fill />);
+        radarRootRef.current = root;
       }
       /* 显形后立刻定位缩放：数据面板关着时 syncReportZoom 不再被 paintStatPanel 带动
          （那是「面板小、叠棋盘左上」bug 的另一半——游戏结束这刻也无人调用）。
@@ -1184,21 +1185,23 @@ export function OnlinePlay({
     }
     /* 雷达分位计算：基准由服务端注入（video_metric_dist 全表），分组只按「级别 × 模式」——
        全站恒 6 行，bucket 一律 DIST_BUCKET_ALL（张老师 2026-10-14 定：不细分 3BV、
-       不同级别不通比）。缺组 → 返回 null（不显示雷达，只显示按钮）。
-       完成度 < 10%（solvedBv/bbbv）不评级（2026-10-14 张老师定）：全部维度 grade="?"、
-       percent=0，雷达图收缩成中心点——开局即死的局没有评价意义。
-       ⚠️ 口径与录像详情页**完全同源**：五围 + 综合=四轴百分位加权，全部走 lib/videoscore.ts，
+       不同级别不通比）。
+       自定义盘参照高级（exp）基准评级（2026-10-15 张老师定）：级别键映射后查同一份分布，
+       STNB 也按高级难度系数（ln=3）照算。
+       无法评级（缺基准 / 无点击 / 完成度 < 10%，2026-10-14 张老师定）→ **不再隐藏雷达**，
+       显示空雷达：全轴 grade="?"、percent=0（多边形收缩到圆心），hover 提示
+       「参考数据不足，无法评级」——开局即死的局没有评价意义，但图本身要一直在。
+       ⚠️ 口径与录像详情页**完全同源**：五围 + 综合=STNB 组内分位，全部走 lib/videoscore.ts，
           不要在这里再写一份（2026-10-14 之前这里有本地副本，主模块改了副本没跟上，两边评级分叉） */
-    function computeRadarPoints(s: GameSnapshot): VideoAnalysisPoint[] | null {
-      if (s.level === "cus" || !s.stats.cl) return null;
-      const dists = metricDists[s.level + (s.nf ? "_nf" : "")];
-      const group = dists?.[String(DIST_BUCKET_ALL)];
-      if (!group) return null;
+    function computeRadarPoints(s: GameSnapshot): VideoAnalysisPoint[] {
+      const distLevel = s.level === "cus" ? "exp" : s.level;
+      const group = metricDists[distLevel + (s.nf ? "_nf" : "")]?.[String(DIST_BUCKET_ALL)];
       const lowCompletion = s.bbbv <= 0 || s.stats.solvedBv / s.bbbv < 0.1;
+      const rateable = !!group && !!s.stats.cl && !lowCompletion;
       /* ① 四根分项轴 */
       const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
         const value = s.stats[def.key];
-        const dist = group[def.key] ?? [];
+        const dist = group?.[def.key] ?? [];
         const percent = dist.length ? percentOf(value, dist, def.highIsBetter) : 0;
         return {
           key: def.key,
@@ -1211,7 +1214,7 @@ export function OnlinePlay({
       });
       /* ② 综合轴置顶：STNB 原值 + 组内分位（与录像详情页同源，张老师 2026-10-14 晚定） */
       const stnbValue = s.stats.stnb;
-      const stnbDist = group["stnb"] ?? [];
+      const stnbDist = group?.["stnb"] ?? [];
       const composite: VideoAnalysisPoint = {
         key: "stnb",
         name: "综合",
@@ -1220,10 +1223,9 @@ export function OnlinePlay({
         percent: stnbDist.length ? percentOf(stnbValue, stnbDist, true) : 0,
         grade: stnbDist.length ? gradeOf(stnbValue, stnbDist, true) : "?",
       };
-      if (lowCompletion) {
-        return [composite, ...subs].map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
-      }
-      return [composite, ...subs];
+      return rateable
+        ? [composite, ...subs]
+        : [composite, ...subs].map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
     }
     /* AVF 时间戳格式（Arbiter 惯例）：M.D.YYYY.HH:MM:SS:mmmm */
     function formatAvfTimestamp(d: Date): string {
