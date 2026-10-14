@@ -6958,55 +6958,39 @@ html.op-fakefs #header {
     margin-bottom: 0;
     margin-right: 9px;
   }
-  /* ---- 极简模式（2026-10-15 张老师四定）----
-     前版「去外框 + 计数列紧凑」默认生效被张老师否决：默认仍显示边框（经典外观），
-     由设置浮窗「极简模式」开关（LS_KEY.min ↔ html.op-min 类）切换。开启后：
-     ① box 镶边/银框/棋盘凹陷镶边全去，格子直接顶屏幕物理边缘（省 ~46 布局 px：
-        SE 高级盘格子 18.7→20.5px、16 Pro 22.7→25px 满高上限）；
-     ② 计数列紧凑（LED 28×17、笑脸 22、gbar 框收紧）且**隐藏计时 LED**——
-        「不显示时间和边框，最大化游戏区」（tip 文案张老师定）；
-     ③ 横向居中 + 棋盘在窗内垂直居中（宽度/格间离散余量均分，落页面深灰背景）。
-     关闭（默认）时以下规则全部不命中，回到带框经典形态。开关切换会改 gwrap
-     基准尺寸，JS sw_min.change 里同步触发 fitZoomForLandscape 重拉。
-     背景知识（原三定注释保留）：横向原开销 ~87 布局 px = 银框 24 + 棋盘镶边 4 +
-     计数列 53 + 间距 9，高级盘 30 列在窄横屏宽度约束先到时最吃亏 */
-  html.op-min body:has(#online_play) #page .box {
-    border: none;
+  /* ---- 高级/自定义横屏最大化（2026-10-15 张老师五定）----
+     「去掉极简模式开关，改为移动端高级和自定义横屏时直接不显示时间笑脸区，
+     同时游戏边框尽可能收细，让格子完全显示」。初级/中级不带 .op-lsmax，
+     保持带框经典形态（含完整竖排计数列）。
+     类由 JS syncLsMax() 挂在组件根 div（lv ∈ {exp,cus} 且横屏；随组件卸载
+     自动消失），调用点在 reset/syncLandscape 的 fit 之前——gbar 显隐会改
+     gwrap 基准尺寸，必须先落位再量测。开启后：
+     ① gbar 整列（时间/笑脸/雷数）display:none——省 ~53 布局 px；
+     ② 边框尽可能收细：银框 padding 9→0、border 3→1，棋盘凹陷镶边 2→1，
+        box 镶边保持默认 1px（已是最细）。横向总开销 ~87→6 布局 px：
+        SE 高级盘格子 18.7→21.9px（+17%）；16 Pro 25px（400/16 满高物理上限）；
+     ③ 横向居中 + 棋盘在窗内垂直居中：宽度约束/格间离散的余量均分，
+        落页面深灰背景（gbar 隐去后 min-height 兜底补的拉伸同此处理）。
+     物理边界：SE 窄横屏高级盘不可能既满宽又满高（30×16 格 aspect 1.875 >
+     屏 1.788），本形态已是极限 */
+  #online_play .op-lsmax .gbar {
+    display: none;
   }
-  html.op-min #online_play .gwrap {
+  #online_play .op-lsmax .gwrap {
     padding: 0;
-    background: none;
-    border: none;
+    border-width: 1px;
   }
-  html.op-min #online_play .board.game {
-    border-width: 0;
+  #online_play .op-lsmax .board.game {
+    border-width: 1px;
   }
   /* 横向居中：宽横屏（16 Pro 874×402）上高级盘高度约束先到、宽度用不完
      （左右各剩 ~35px），居中让余量均分两侧，与上下留白同色，视觉对称 */
-  html.op-min #online_play > div {
+  #online_play > div.op-lsmax {
     justify-content: center;
   }
-  html.op-min #online_play .gframe {
+  #online_play .op-lsmax .gframe {
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-  html.op-min #online_play .gbar {
-    padding: 2px;
-    border-width: 1px;
-    margin-right: 4px;
-  }
-  html.op-min #online_play .ledc {
-    width: 28px;
-    height: 17px;
-  }
-  /* 极简模式不显示时间（张老师四定 tip 文案「不显示时间和边框」）：
-     竖排列只剩 雷数 / 笑脸，空间让给棋盘 */
-  html.op-min #online_play #led_time {
-    display: none;
-  }
-  html.op-min #online_play .face {
-    width: 22px;
-    height: 22px;
   }
 }
