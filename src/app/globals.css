@@ -6917,9 +6917,35 @@ html.op-fakefs #header {
    ② 状态栏（.gname）隐藏；
    ③ 计数条竖排进银框左侧：时间上 / 笑脸中 / 雷数下（桌面头部逆时针转 90°）。
       DOM 顺序 雷数/笑脸/计时（桌面横排左→右）+ column-reverse 反转即得。
+   ④ 禁掉页面滚动（2026-10-15 张老师定）：内容已由 fitZoomForLandscape 按视口
+      拉满，页面本无需滚动；一旦能滚，触屏拖棋盘/边缘回弹都会让整块游戏区
+      跟着位移（观感上是「飘」），且页面滚动后 fit 量出的 rect 基准全偏。
    ⚠️ 须在竖屏块之后：小屏手机横屏（宽 ≤768）两块同时命中，需本块覆盖。
    同优先级时后定义者胜出 */
 @media (orientation: landscape) and (max-height: 520px) {
+  /* ---- 横屏禁滚动：三道锁 ----
+     ① html 与 body 同时 overflow:hidden，并给 body position:fixed + inset:0
+        ——iOS Safari 只认 position:fixed 这一招，单给 overflow 仍能橡皮筋回弹，
+        且 fixed 后文档不再参与滚动（滚动坐标恒为 0）；
+     ② overscroll-behavior:none 断掉回弹链（Android Chrome 滚动越界回弹）；
+     ③ touch-action:none 拦触摸滚动手势本身（棋盘自身仍是 manipulation，
+        点按/长按插旗/自动 chord 不受影响）。
+     高度：body 撑满视口即可，内部 #online_play > div 的 min-height 100vh-26px
+     自会铺满；内容按视口拉满，不会出现够不到的裁切区 */
+  html:has(#online_play) {
+    overflow: hidden;
+    height: 100%;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+  body:has(#online_play) {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
   #online_play .news_head {
     display: none;
   }
