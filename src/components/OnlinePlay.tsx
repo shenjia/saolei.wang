@@ -7,7 +7,8 @@
 // 三期（2026-10-14）：级别筛选加「自定义」——弹窗设置宽/高/雷数，确认后按规格开局，
 // 显示比例自动适配（超宽/超高自动缩小到完整可见），规格入 localStorage。
 // 五期（2026-10-14 结算增强）：对局全程记录事件流（AVF 口径），结束出右侧结算面板
-// （六维雷达 + 重玩本局 / 查看回放 / 下载录像）；雷达复用录像详情页 VideoAnalysisRadar；
+// （五围雷达 + 重玩本局 / 查看回放 / 下载录像）；雷达轴定义 / 评级 / 配色与录像详情页
+// 同源（lib/videoscore.ts），只是渲染走字符串拼 SVG（面板是 innerHTML 注入流，挂不了 React）；
 // 回放自研（不调 flopplayer）；下载为标准 AVF（lib/avfwrite.ts），Program 带
 // saolei.wang Online 标记，上传路由据此拒绝入排行。
 
@@ -16,6 +17,17 @@ import { FlopSprites } from "./FlopSprites";
 import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
 import { paintRangeFill } from "@/lib/paintRange";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
+import {
+  AXIS_METRICS,
+  compositeOf,
+  DIST_BUCKET_ALL,
+  formatMetric,
+  gradeColor,
+  gradeFromPercent,
+  gradeOf,
+  percentOf,
+} from "@/lib/videoscore";
+import type { MetricKey } from "@/lib/videoscore";
 
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
 export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
@@ -46,8 +58,14 @@ const PAGE_PAD = 100;   // 盘面之外需给 #page 留的总宽（盒装 78 + �
 const GA_OFFSET = 78;   // #page 宽 → #game_area 内容宽的固定损耗
 const PAGE_MIN_W = 480; // 下限：标题行 + 4 个级别 tab 一行放得下、弹窗（320）不出盒
 const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
+/* 手机横屏固定横向开销（布局 px）：页面边距 8 + 盒装边框/内距 ~46 + 左栏 150
+   + 列间距 16 + 余量 → fitZoom* 与 normalMaxZoom 共用。用固定值而非 rect 实测：
+   超宽盘会把布局视口撑爆、rect 全失真。zoom 挂 .gwrap 后银框（含竖排计数列）
+   整体随盘缩放，拉满基准即整个银框窗，预留不再含框/计数列 */
+const LS_RESERVE_W = 240;
 
-/* 雷达基准分布（服务端注入）：key = `${level}${nf?"_nf":""}:${bucket}` → 六指标各自的 9 档边界 */
+/* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
+   bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
 export type MetricDists = Record<string, Record<string, Record<string, number[]>>>;
 
 export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges; metricDists?: MetricDists }) {
@@ -176,12 +194,13 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       const x = (i % W) * 16 + 8, y = ((i / W) | 0) * 16 + 8;
       evStream.push({ mouse, x, y, sec, hun });
     }
-    /* 鼠标移动事件（mv）：节流——与上次记录点距离 ≥1 格（16px）才记，避免事件流爆炸；
+    /* 鼠标移动事件（mv）：节流——与上次记录点距离 ≥4px 才记（2026-10-14 张老师定
+       回放要顺滑：16px 降到 4px，密度×4；avf 事件流本来就走像素坐标，量级无压力）；
        坐标取实时鼠标位置换算的格中心（与点击事件对齐） */
     function recordMv(px: number, py: number) {
       if (!started || over || !evStream.length) return;
       const last = evStream[evStream.length - 1];
-      if (Math.hypot(px - last.x, py - last.y) < 16) return;
+      if (Math.hypot(px - last.x, py - last.y) < 4) return;
       const { sec, hun } = evNow();
       evStream.push({ mouse: 1, x: px, y: py, sec, hun });
     }
@@ -210,12 +229,10 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       smile: "face-normal", ooh: "face-press-cell", dead: "face-lose",
       win: "face-win", press: "face-press-normal",
     };
-    const flagBtn = $("flagmode_btn");
     const gname = $("gname");
     const gnameText = $("gname_text");
     const greport = $("greport");
     const gresult = $("gresult"); // 右侧结算面板（五期：雷达图 + 三按钮）
-    let flagMode = false;
 
     /* ---- 结算快照（五期）：结束瞬间的完整对局状态，供重玩/回放/下载使用 ---- */
     interface GameSnapshot {
@@ -948,8 +965,12 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     function renderResultPanel() {
       if (!snapshot) return;
       const s = snapshot;
-      const title = s.won ? "胜利" : "踩雷";
-      const timeText = (s.csec / 100).toFixed(2) + " 秒";
+      const timeNum = (s.csec / 100).toFixed(2);
+      /* 首行大字（2026-10-14 张老师定）：胜利＝绿色「完成！」+ 金色大字成绩；
+         踩雷＝灰色「踩雷」+ 常规色成绩 */
+      const headLine = s.won
+        ? '<div class="gr_head win"><span class="gr_state">完成！</span><span class="gr_time gold">' + timeNum + "</span><span class=\"gr_unit\">秒</span></div>"
+        : '<div class="gr_head lose"><span class="gr_state">踩雷</span><span class="gr_time">' + timeNum + "</span><span class=\"gr_unit\">秒</span></div>";
       /* 按钮矢量图形（16px stroke 线性图标，与齿轮/全屏按钮同风格） */
       const IC = {
         replaySame:
@@ -960,7 +981,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 15V3"/></svg>',
       };
       gresult.innerHTML =
-        '<div class="gr_title">' + title + " · " + timeText + "</div>" +
+        headLine +
         '<div class="gr_radar" id="gr_radar"></div>' +
         '<div class="gr_btns">' +
         '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + "重玩本局</button>" +
@@ -990,38 +1011,49 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       bind("grb_review", startInPlaceReplay);
       bind("grb_download", downloadAvf);
     }
-    /* 雷达分位计算：优先服务端注入的基准（level × noflag × 3BV 段），缺行回退全组行；
-       两处都无 → 返回 null（不显示雷达，只显示按钮）。
+    /* 雷达分位计算：基准由服务端注入（video_metric_dist 全表），分组只按「级别 × 模式」——
+       全站恒 6 行，bucket 一律 DIST_BUCKET_ALL（张老师 2026-10-14 定：不细分 3BV、
+       不同级别不通比）。缺组 → 返回 null（不显示雷达，只显示按钮）。
        完成度 < 10%（solvedBv/bbbv）不评级（2026-10-14 张老师定）：全部维度 grade="?"、
-       percent=0，雷达图收缩成中心点——开局即死的局没有评价意义 */
+       percent=0，雷达图收缩成中心点——开局即死的局没有评价意义。
+       ⚠️ 口径与录像详情页**完全同源**：五围 + 综合=四轴百分位加权，全部走 lib/videoscore.ts，
+          不要在这里再写一份（2026-10-14 之前这里有本地副本，主模块改了副本没跟上，两边评级分叉） */
     function computeRadarPoints(s: GameSnapshot): VideoAnalysisPoint[] | null {
       if (s.level === "cus" || !s.stats.cl) return null;
       const dists = metricDists[s.level + (s.nf ? "_nf" : "")];
-      if (!dists) return null;
-      const pickDist = (key: string): number[] => dists[key]?.[key] ?? dists["-1"]?.[key] ?? [];
+      const group = dists?.[String(DIST_BUCKET_ALL)];
+      if (!group) return null;
       const lowCompletion = s.bbbv <= 0 || s.stats.solvedBv / s.bbbv < 0.1;
-      const defs: { key: VideoAnalysisPoint["key"]; name: string; value: number; high: boolean; disp: string }[] = [
-        { key: "stnb", name: "综合", value: s.stats.stnb, high: true, disp: "STNB " + s.stats.stnb.toFixed(1) },
-        { key: "bvs", name: "速度", value: s.stats.bvs, high: true, disp: s.stats.bvs.toFixed(3) + " 3BV/s" },
-        { key: "ioe", name: "效率", value: s.stats.ioe, high: true, disp: "IOE " + s.stats.ioe.toFixed(3) },
-        { key: "corr", name: "精准", value: s.stats.corr, high: true, disp: "Corr " + s.stats.corr.toFixed(3) },
-        { key: "cls", name: "手速", value: s.stats.cls, high: true, disp: s.stats.cls.toFixed(2) + " 次/秒" },
-        { key: "ppc", name: "移动", value: s.stats.ppc, high: false, disp: s.stats.ppc.toFixed(2) + " 格/次" },
-      ];
-      return defs.map((d) => {
-        if (lowCompletion) {
-          return { key: d.key, name: d.name, value: d.value, disp: "—", percent: 0, grade: "?" };
-        }
-        const dist = pickDist(d.key);
+      /* ① 四根分项轴 */
+      const percents: Partial<Record<MetricKey, number>> = {};
+      const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
+        const value = s.stats[def.key];
+        const dist = group[def.key] ?? [];
+        const percent = dist.length ? percentOf(value, dist, def.highIsBetter) : 0;
+        percents[def.key] = percent;
         return {
-          key: d.key,
-          name: d.name,
-          value: d.value,
-          disp: d.disp,
-          percent: dist.length ? percentOfLocal(d.value, dist, d.high) : 0,
-          grade: dist.length ? gradeOfLocal(d.value, dist, d.high) : "?",
+          key: def.key,
+          name: def.name,
+          value,
+          disp: formatMetric(def.key, value),
+          percent,
+          grade: dist.length ? gradeOf(value, dist, def.highIsBetter) : "?",
         };
       });
+      /* ② 综合轴置顶：四轴百分位的加权平均，本身就是百分位量纲，等级由档位表反推 */
+      const cmp = compositeOf(percents);
+      const composite: VideoAnalysisPoint = {
+        key: "cmp",
+        name: "综合",
+        value: cmp,
+        disp: `综合 ${cmp.toFixed(1)} 分`,
+        percent: cmp,
+        grade: gradeFromPercent(cmp),
+      };
+      if (lowCompletion) {
+        return [composite, ...subs].map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
+      }
+      return [composite, ...subs];
     }
     /* AVF 时间戳格式（Arbiter 惯例）：M.D.YYYY.HH:MM:SS:mmmm */
     function formatAvfTimestamp(d: Date): string {
@@ -1034,10 +1066,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     function renderRadarInto(host: HTMLElement, data: VideoAnalysisPoint[], size = 222) {
       const SIZE = size, C = SIZE / 2, R = SIZE * (68 / 222), LR = R + size * (20 / 222);
       const RINGS = [15, 35, 50, 60, 70, 80, 90, 100];
-      const COLORS: Record<string, string> = {
-        SSS: "#E6DB74", SS: "#E6DB74", S: "#E6DB74", A: "#ff0080", B: "#df00a6",
-        C: "#bf00cc", D: "#a000e5", E: "#8000ff", F: "#6600cc",
-      };
       const fs = size < 200 ? { grade: 11, name: 7 } : { grade: 13, name: 8 };
       const f = (v: number) => Math.round(v * 100) / 100;
       const polar = (i: number, n: number, r: number): [number, number] => {
@@ -1046,7 +1074,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       };
       const n = data.length;
       const poly = (r: number) => Array.from({ length: n }, (_, i) => polar(i, n, r).join(",")).join(" ");
-      const gradeColor = (g: string) => COLORS[g.replace(/[+-]$/, "")] ?? "#636359";
       let s = `<svg viewBox="0 0 ${SIZE} ${SIZE}" width="${SIZE}" height="${SIZE}" role="img" aria-label="本局分析雷达图">`;
       for (const p of RINGS) {
         s += `<polygon points="${poly((p / 100) * R)}" fill="none" stroke="${p === 100 ? "#6a685c" : "#565549"}" stroke-width="${p === 100 ? 1.2 : 0.7}"/>`;
@@ -1175,13 +1202,24 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       const curEl = document.createElement("div");
       curEl.className = "replay_cursor";
       curEl.innerHTML = '<svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>';
-      gboard.appendChild(curEl);
+      /* 挂 .gwrap（不是 gboard）：gwrap 的 zoom 让光标随整窗缩放；z-index 压过
+       计数条/笑脸（2026-10-14 张老师报：光标被笑脸层挡住）。
+       坐标换算：事件像素是 gboard 1x 坐标 → gwrap 局部坐标需加 gboard 相对
+       gwrap 的静态偏移（gwrap padding 9 + border 3 + gbar 高 + margin 9——
+       运行时一次量取，zoom 体系内 gboard 原点即偏移值，不随倍率变） */
+      gwrap.appendChild(curEl);
+      const gboardOff = (() => {
+        const gb = gboard.getBoundingClientRect();
+        const gw = gwrap.getBoundingClientRect();
+        const z = (parseFloat(gwrap.style.zoom) || 1) * pageZoom();
+        return { x: (gb.left - gw.left) / z, y: (gb.top - gw.top) / z };
+      })();
       /* 尖端锚点：箭头 (5,12) 对准事件坐标——left/top 直接写偏移后的值
          （1x 像素坐标系内偏移固定；CSS margin 在 zoom 下的缩放语义不可靠，弃用） */
       const TIP_X = 5, TIP_Y = 12;
       function moveCursor(px: number, py: number) {
-        curEl.style.left = px - TIP_X + "px";
-        curEl.style.top = py - TIP_Y + "px";
+        curEl.style.left = px + gboardOff.x - TIP_X + "px";
+        curEl.style.top = py + gboardOff.y - TIP_Y + "px";
       }
       function applyEv(k: number) {
         const e = evs[k];
@@ -1267,6 +1305,20 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         range.value = String(Math.round((target / s.csec) * 1000));
         paintRangeFill(range);
         timeEl.textContent = fmt(target) + " / " + fmt(s.csec);
+        interpCursor(target);
+      }
+      /* 光标插值（2026-10-14 张老师报回放一顿一顿）：时间轴推进的每帧，光标在
+         「最近已应用事件」与「下一事件」之间按时间线性补间——即使两个 mv 间隔
+         较长（或点击后停顿），光标也连续滑动而非跳变。棋盘事件照旧离散应用。 */
+      function interpCursor(csec: number) {
+        const prev = evIdx > 0 ? evs[evIdx - 1] : null;
+        const next = evIdx < evs.length ? evs[evIdx] : null;
+        if (!prev) { if (next) moveCursor(next.x, next.y); return; }
+        const pT = prev.sec * 100 + prev.hun;
+        if (!next) { moveCursor(prev.x, prev.y); return; }
+        const nT = next.sec * 100 + next.hun;
+        const t = nT > pT ? Math.max(0, Math.min(1, (csec - pT) / (nT - pT))) : 1;
+        moveCursor(prev.x + (next.x - prev.x) * t, prev.y + (next.y - prev.y) * t);
       }
       function tick(ts: number) {
         if (!playing) return;
@@ -1284,6 +1336,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         range.value = String(Math.round((target / s.csec) * 1000));
         paintRangeFill(range);
         timeEl.textContent = fmt(target) + " / " + fmt(s.csec);
+        interpCursor(target);
         if (target >= s.csec) { setPlaying(false); return; }
         rafId = requestAnimationFrame(tick);
       }
@@ -1319,36 +1372,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       document.addEventListener("keydown", escR);
       resetReplay();
       setPlaying(true); // 进入即自动播放
-    }
-    /* 分位/等级：与 lib/videoradar.ts 的 percentOf/gradeOf 同式（浏览器端无依赖副本） */
-    function percentOfLocal(value: number, dist: number[], highIsBetter: boolean): number {
-      if (!value || !dist.length) return 0;
-      const pos = positionLocal(value, dist, highIsBetter);
-      if (pos === 0) return GRADE_PERCENTS_LOCAL[0];
-      const maxP = GRADE_PERCENTS_LOCAL[pos - 1] - 1, minP = GRADE_PERCENTS_LOCAL[pos];
-      const maxS = dist[pos - 1] - 1, minS = dist[pos];
-      const rs = Math.abs(maxS - minS);
-      if (rs === 0) return minP;
-      const fix = Math.floor((Math.abs(maxS - value) * (maxP - minP)) / rs);
-      return Math.max(maxP - fix, 0);
-    }
-    function gradeOfLocal(value: number, dist: number[], highIsBetter: boolean): string {
-      if (!value || !dist.length) return "?";
-      const pos = positionLocal(value, dist, highIsBetter);
-      if (pos === 0 || pos >= 9) return GRADES_LOCAL[Math.min(pos, 8)];
-      const maxS = dist[pos - 1] - 1, minS = dist[pos];
-      const range = Math.abs(maxS - minS);
-      if (range === 0) return GRADES_LOCAL[pos];
-      const rate = Math.abs(maxS - value) / range;
-      if (rate > 0.6666) return GRADES_LOCAL[pos] + "-";
-      if (rate < 0.3333) return GRADES_LOCAL[pos] + "+";
-      return GRADES_LOCAL[pos];
-    }
-    function positionLocal(value: number, dist: number[], highIsBetter: boolean): number {
-      for (let i = 0; i < dist.length; i++) {
-        if (highIsBetter ? value >= dist[i] : value <= dist[i]) return i;
-      }
-      return Math.min(dist.length, 8);
     }
     function lose(hit: number) {
       over = true;
@@ -1429,8 +1452,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
             : '<a data-lv="' + l + '">' + el.textContent + "</a>";
         });
       }
-      /* NF 开启时触屏「插旗模式」按钮无意义，隐藏 */
-      flagBtn.classList.toggle("hidden", nf);
       /* 级别切换后浮窗 3BV 滑杆范围联动（浮窗开着时立即刷新） */
       syncBvSlider();
       /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式：
@@ -1692,7 +1713,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     const swBv = $("sw_bv") as HTMLInputElement;
     on(swNf, "change", () => {
       nf = swNf.checked;
-      if (nf && flagMode) flagBtn.click(); // 开 NF 前退出触屏插旗模式
       saveSettings();
       reset();
     });
@@ -1908,36 +1928,56 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       }
     });
 
-    /* ---- 触屏交互：点按开格 / 长按插旗 / 插旗模式 ---- */
+    /* ---- 触屏交互（2026-10-14 张老师定）：点按开格 / 长按 ≥150ms 插旗 /
+       插旗后自动对邻近所有已开数字格执行双击（chord）。「插旗模式」按钮已废——
+       移动端插旗只走长按 ---- */
     let touchTimer: number | null = null, touchCell = -1, longFired = false;
+    let touchX = 0, touchY = 0; // 起点坐标：滑动容差判定用
     on(gboard, "touchend", (e: TouchEvent) => {
       if (touchTimer) clearTimeout(touchTimer);
       if (touchCell >= 0 && !over && !longFired) {
-        if (flagMode) { recordEv(9, touchCell); recordEv(17, touchCell); action("right", () => toggleFlag(touchCell)); }
-        else if (state[touchCell] === 1) { recordEv(3, touchCell); action("left", () => chord(touchCell)); }
+        if (state[touchCell] === 1) { recordEv(3, touchCell); action("left", () => chord(touchCell)); }
         else { recordEv(3, touchCell); action("left", () => openCell(touchCell)); recordEv(5, touchCell); }
       }
       touchCell = -1;
       e.preventDefault();
     }, { passive: false });
-    on(gboard, "touchmove", () => { if (touchTimer) clearTimeout(touchTimer); touchCell = -1; });
+    /* 滑动取消带 12px 容差：手指微颤（1-2px）不再吞掉点按——「有时点击无效」
+       的主因就是原实现 touchmove 一动即取消（2026-10-14 张老师报） */
+    on(gboard, "touchmove", (e: TouchEvent) => {
+      if (touchCell < 0) return;
+      const t = e.changedTouches[0];
+      if (t && Math.hypot(t.clientX - touchX, t.clientY - touchY) > 12) {
+        if (touchTimer) clearTimeout(touchTimer);
+        touchCell = -1;
+      }
+    }, { passive: true });
     on(gboard, "touchstart", (e: TouchEvent) => {
-      const i = eventCell(e.touches[0]); if (i < 0 || over) return;
+      const t = e.changedTouches[0]; if (!t) return;
+      const i = eventCell(t); if (i < 0 || over) return;
       touchCell = i; longFired = false;
+      touchX = t.clientX; touchY = t.clientY;
       touchTimer = window.setTimeout(() => {
-        longFired = true; recordEv(9, i); recordEv(17, i); action("right", () => toggleFlag(i));
+        longFired = true;
+        if (state[i] === 1) return; // 已开格长按无意义
+        recordEv(9, i); recordEv(17, i); action("right", () => toggleFlag(i));
         if (navigator.vibrate) navigator.vibrate(30);
-      }, 350);
+        /* 插旗后自动对邻近所有已开数字格执行双击（张老师定）：移动端没有
+           右键/双击，靠这一步补齐「标完旗顺手开满足格」的操作链。
+           chord 内部自会校验旗数是否满足，不满足时天然空操作 */
+        for (const a of neighbors(i)) {
+          if (over || state[a] !== 1 || !nums || nums[a] === 0) continue;
+          recordEv(11, a); action("double", () => chord(a));
+        }
+      }, 150);
       e.preventDefault();
     }, { passive: false });
-    on(flagBtn, "click", () => {
-      flagMode = !flagMode;
-      flagBtn.classList.toggle("on", flagMode);
-      flagBtn.textContent = flagMode ? "插旗中…" : "插旗模式";
-    });
 
     /* ---- 缩放控制条（复刻 flop player 1.00x 滑杆） ---- */
     const gframe = $("gframe");
+    /* 游戏窗容器（计数条+棋盘+状态栏的银灰外框）——zoom 挂这一层（2026-10-14 张老师定：
+       整窗同比例缩放）。greport/gresult 已挪出 gwrap（挂 #game_area），不受 zoom 连带 */
+    const gwrap = root.querySelector<HTMLElement>(".gwrap")!;
     const zoomRange = $("zoom_range") as HTMLInputElement;
     const zoomVal = $("zoom_val");
     let zoomCur = 1; // 当前游戏倍率（不含整页窄屏缩放）
@@ -1956,7 +1996,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           会被视口下方内容推出去——按「视口底到游戏区顶的可用高」反算倍率，
           与宽度方向取小，保证整个盘面完整可见不裁切 */
     function normalMaxZoom() {
-      if (document.fullscreenElement === root || lsQuery.matches) return 5;
+      if (document.fullscreenElement === root) return 5;
       const gfR = gframe.getBoundingClientRect();
       const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
       if (gfR.width <= 0 || gaR.width <= 0) return 2.5;
@@ -1974,8 +2014,22 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
            可用高 = 视口底 − game_area 顶 − 底部余量 12px（页脚仍可滚动，正常） */
         const availH = window.innerHeight - gaR.top - 12;
         if (gfR.height > 0 && availH > 0) cap = Math.min(cap, (zoomCur * availH) / gfR.height);
+      } else if (lsQuery.matches) {
+        /* 横屏拉满由 fitZoomForLandscape 负责；这里兜底防「首帧超宽盘把移动端
+           布局视口撑爆」——高级盘默认 1.71x = 830px > 屏宽，一旦撑爆
+           innerWidth/innerHeight 被浏览器放大、媒体查询与 rect 全部失真
+           （2026-10-14 张老师报：高级盘横屏高度不对的根因）。
+           目标宽按可视视口（visualViewport，不受撑爆影响）减固定预留估算：
+           页面边距 8 + 盒装 ~46 + 左栏 150 + 间距 16 + 余量 */
+        const vv = window.visualViewport;
+        const vw = (vv ? vv.width : window.innerWidth) / pageZoom();
+        cap = (vw - LS_RESERVE_W) / gwrap.offsetWidth;
       } else {
-        cap = (zoomCur * (gaR.width - 16)) / gfR.width; // 左右各留 8px
+        /* 容器可用宽 = game_area 内容宽 − 16px 余量；基准宽用整个银框窗
+           （gwrap，含竖排计数列——zoom 挂 gwrap 后计数列随盘同缩，一起封顶）。
+           offsetWidth 不含 zoom（实测），与 zoomCur 是否同步无关 */
+        const gaW = gaR.width / pageZoom() - 16;
+        cap = gaW / gwrap.offsetWidth;
       }
       return Math.max(zMin, Math.min(2.5, cap));
     }
@@ -1988,9 +2042,12 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     }
     /* 只改渲染与两处滑杆的显示，不封顶、不写盘——供「比例滑杆拖动中」使用：
        拖动中若走 applyZoom 的封顶，页宽与倍数互相压制会把盘面卡在容器宽
-       （用户感觉比例调不大）；松手（pointerup/change）再由 applyZoom 正式定值 */
+       （用户感觉比例调不大）；松手（pointerup/change）再由 applyZoom 正式定值。
+       zoom 挂 .gwrap（2026-10-14 张老师定：计数条/笑脸/棋盘/状态栏同比例缩放，
+       原先只缩 gframe 会导致 LED 与棋盘比例脱节）；greport/gresult 已挪出 gwrap
+       不受连带，由 syncReportZoom 独立缩放 */
     function setZoomVisual(v: number) {
-      gframe.style.zoom = String(v);
+      gwrap.style.zoom = String(v);
       zoomCur = v;
       zoomRange.value = String(v);
       paintRangeFill(zoomRange);
@@ -2029,11 +2086,11 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       return z > 0 ? z : 1;
     }
     /* 结算统计面板跟随游戏倍率缩放（2026-10-14 张老师：不缩放面板字太小看不清）。
-       面板是 gframe 的兄弟节点（不继承游戏 zoom），故显式同步。
-       上限：面板放大后不得越出视口——用 rect 实测反算基准宽/高（rect =
-       基准尺寸 × 面板 zoom × 页级 zoom，当前 style.zoom 已知，一次除法解出），
-       可用宽取 gframe 渲染左缘（已含游戏 zoom 与页级 zoom）减页面边距与贴边间隙，
-       可用高取视口底到面板顶（面板 top 与 gframe 顶对齐）。
+       五期三改：zoom 移到 .gwrap 后，面板挂在 #game_area（gwrap 外）不吃游戏倍率，
+       自身 zoom 显式同步；left/top 按 gwrap 渲染矩形直译（页面坐标 → game_area
+       局部坐标），顶端与 gwrap 银框顶缘对齐、左/右各留 14px 间隙。
+       上限：面板放大后不得越出视口——rect 实测反算基准宽/高（rect =
+       基准尺寸 × 面板 zoom × 页级 zoom，当前 style.zoom 已知，一次除法解出）。
        低倍率下不放大过游戏倍率本身（跟手感），高倍率下按空间封顶防裁切 */
     function syncReportZoom() {
       if (!greport.classList.contains("show")) return;
@@ -2043,43 +2100,41 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       const rawW = rect.width / (curZ * pz); // 面板基准尺寸（未缩放布局尺寸）
       const rawH = rect.height / (curZ * pz);
       if (!rawW || rawW < 1 || !rawH || rawH < 1) return;
-      const gfR = gframe.getBoundingClientRect();
-      const availW = gfR.left - 12 - 14; // 视口左缘 12px + CSS 贴边间隙 14px
-      const availH = window.innerHeight - gfR.top - 12;
+      const gwR = gwrap.getBoundingClientRect();
+      const availW = gwR.left - 12 - 14; // 视口左缘 12px + 贴边间隙 14px
+      const availH = window.innerHeight - gwR.top - 12;
       const cap = Math.max(0.5, Math.min(2.5,
         Math.min(availW / (rawW * pz), availH / (rawH * pz))));
       const z = Math.max(0.5, Math.min(zoomCur, cap));
       greport.style.zoom = String(z);
       gresult.style.zoom = String(z);
-      /* 面板顶端与主版块（.gwrap 银框）顶缘对齐（2026-10-14 张老师定）：
-         CSS zoom 会把绝对定位的 top 偏移一并缩放，按 zoom 反算补偿。
-         常数 -3：zoom 渲染含 Chrome 亚像素取整误差，实测 1440 视口/zoom1.489 下
-         -12 补偿仍高 9px，-3 恰好贴齐银框顶缘（border 外缘）。 */
-      greport.style.top = -3 / z + "px";
-      gresult.style.top = -3 / z + "px";
+      /* 定位：面板 zoom 会缩放 left/top 偏移 → 先除回；game_area 局部坐标 =
+       (gwrap 渲染坐标 − game_area 渲染坐标) ÷ 页级 zoom（game_area 无 zoom） */
+      const gaR = gameAreaEl.getBoundingClientRect();
+      const toLocal = (v: number) => v / pz / z;
+      greport.style.top = toLocal(gwR.top - gaR.top) + "px";
+      greport.style.left = toLocal(gwR.left - gaR.left - 14) - rawW + "px";
+      gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
+      gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
     }
     /* 全屏自动拉满（2026-10-14 张老师定，主要面向手机）：取宽/高两个方向较小的倍率。
-       已验证的量纲事实（Chrome）：gframe.offsetWidth/Height 不含 zoom，即基准尺寸；
-       getBoundingClientRect 是渲染尺寸（含游戏 zoom 与页级 zoom），
-       标题行/缩放条等未跟随游戏缩放的部分用 rect 差值量（任何状态下都成立，
-       不能用 root.scrollHeight——全屏时它会被视口高度撑大）。
+       量纲事实（Chrome 实测）：offsetWidth/Height 不含 zoom（含自身 zoom 也不含），
+       即基准尺寸；getBoundingClientRect 是渲染尺寸（含 zoom 与页级 zoom）。
+       zoom 挂 .gwrap 后基准取整个银框窗（计数条/棋盘/状态栏同比例缩放）。
+       绝对式：倍率 = 目标渲染尺寸 ÷ 基准尺寸 ÷ 页级 zoom，与 zoomCur 无关。
        max 放到 5：手机上页级 0.65 会把游戏倍率缩回去，拉满常需 3+（不进 localStorage） */
     function fitZoomForFullscreen() {
-      /* 手机全屏时横屏布局仍生效（:fullscreen 改了容器内边距），计数条 top 与
-         game_area 右让位都同步重算；桌面全屏不命中横屏媒体查询，内部清 inline */
-      layoutLandscapeBits();
+      const baseW = gwrap.offsetWidth, baseH = gwrap.offsetHeight;
+      if (baseW < 8 || baseH < 8) return;
       const pz = pageZoom();
-      const baseW = gframe.offsetWidth;
-      const baseH = gframe.offsetHeight;
-      const headR = container.querySelector(".news_head")!.getBoundingClientRect();
-      const gfR = gframe.getBoundingClientRect();
       const gaR = gameAreaEl.getBoundingClientRect();
-      const othersH = (gfR.top - headR.top) + (gaR.bottom - gfR.bottom);
-      /* 手机全屏时横屏媒体查询仍命中，状态栏依旧在右侧竖排——按让位后的
-         game_area 宽取可用宽（桌面全屏状态栏在银条内原位，走视口宽） */
-      const availW = lsQuery.matches ? gaR.width - 16 : window.innerWidth - 24; // :fullscreen 左右 padding 12px
-      const availH = window.innerHeight - 48 - othersH; // :fullscreen 上下 padding 24px
-      applyZoom(Math.min(availW / baseW, availH / baseH) / pz, false, 5);
+      const gwR = gwrap.getBoundingClientRect();
+      /* 银框之外占掉的高度（game_area 内的其他流内内容）用 rect 差值量；
+         不能用 root.scrollHeight——全屏时它会被视口高度撑大 */
+      const othersH = Math.max(0, (gwR.top - gaR.top) + (gaR.bottom - gwR.bottom));
+      const targetW = window.innerWidth - 24;             // :fullscreen 左右 padding 12px
+      const targetH = window.innerHeight - 48 - othersH;  // :fullscreen 上下 padding 24px
+      applyZoom(Math.min(targetW / baseW, targetH / baseH) / pz, false, 5);
     }
     /* 设置浮窗这张比例滑杆与自定义弹窗那张同源（v7）：共用 zoomDragInput/zoomDragEnd，
        拖动中不重算页宽、松手后一次到位（理由见 zoomDragInput 注释） */
@@ -2149,40 +2204,35 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
        gframe 只有边框宽，此时量不出真实盘面尺寸（见 defaultZoom） */
 
     /* ---- 移动端横屏自动拉满高度（2026-10-14 张老师定）：横屏且视口高 ≤520px 时，
-       CSS 已把标题/筛选器/开关移到侧面竖排，这里把游戏按视口高度拉满（页面无需滚动）。
-       量纲与 fitZoomForFullscreen 相同：rect 实测渲染尺寸（含游戏 zoom 与页级 zoom），
-       倍率与渲染尺寸成线性；手动拖滑杆后以手动为准，退出横屏恢复进前倍率 */
-    let zoomBeforeLs: number | null = null; // 进横屏前的倍率；横屏中手动调过则置 null 不再恢复
-    const gbarEl = container.querySelector<HTMLElement>(".gbar")!;
+       CSS 已把标题/筛选器移到侧面竖排，这里把游戏按视口高度拉满（页面无需滚动）。
+       绝对式量纲（与 fitZoomForFullscreen 同源）：目标渲染尺寸 ÷ 基准尺寸，
+       与当前 zoomCur 无关（此前乘法式在 zoomCur 与实际渲染脱钩——StrictMode
+       双挂载 / applyModeZoom 覆写时——会把倍率算飞，高级盘横屏拉满失效的根因）。
+       目标一律取 visualViewport（真实屏宽高）：超宽盘曾把布局视口撑爆，
+       innerWidth/innerHeight 被浏览器放大后 rect 全失真，visualViewport 不受影响。
+       手动拖滑杆后以手动为准，退出横屏恢复进前倍率 */
+    /* 游戏区容器（面板锚 & 横屏测量共用；声明提前避免 syncReportZoom 的暂时性死区） */
     const gameAreaEl = $("game_area") as HTMLElement;
-    /* 横屏布局的两个 JS 对位（CSS 管不了动态尺寸）：
-       ① 计数条 top 对齐到左栏内容底（左栏高度随标题/筛选器排布变化）；
-       ② game_area 右侧让出状态栏宽——否则居中的棋盘右缘会压到右侧竖排状态栏。
-       非横屏布局时清 inline，计数条回框内文档流、棋盘居中不受限 */
-    function layoutLandscapeBits() {
-      if (lsQuery.matches) {
-        const rootR = container.getBoundingClientRect();
-        const headEl = container.querySelector(".news_head")!;
-        gbarEl.style.top = Math.round(headEl.getBoundingClientRect().bottom - rootR.top + 10) + "px";
-        const gnameR = gname.getBoundingClientRect();
-        gameAreaEl.style.marginRight = Math.round(gnameR.width + 12) + "px";
-      } else {
-        gbarEl.style.top = "";
-        gameAreaEl.style.marginRight = "";
-      }
-    }
+    let zoomBeforeLs: number | null = null; // 进横屏前的倍率；横屏中手动调过则置 null 不再恢复
     function fitZoomForLandscape() {
       if (document.fullscreenElement === root) return; // 全屏拉满优先
-      layoutLandscapeBits();
-      const gfR = gframe.getBoundingClientRect();
-      if (gfR.height <= 0 || gfR.width <= 0) return;
+      /* zoom 挂 .gwrap：基准取整个银框窗（竖排计数列随盘同缩），offsetWidth/Height
+         实测不含 zoom（Chrome，含自身 zoom 也不含） */
+      const baseW = gwrap.offsetWidth, baseH = gwrap.offsetHeight;
+      if (baseW < 8 || baseH < 8) return;
+      const pz = pageZoom();
+      const vv = window.visualViewport;
+      const vw = (vv ? vv.width : window.innerWidth) / pz;
+      const vh = (vv ? vv.height : window.innerHeight) / pz;
       const gaR = gameAreaEl.getBoundingClientRect();
-      /* 高度：视口高 − game_area 顶端（站头）− 底部余量 − 比例条等未缩放部分（rect 差值法）；
-         宽度：让位后的 game_area 宽（已扣除右侧状态栏）再留 16px 余量 */
-      const othersH = gaR.height - gfR.height;
-      const targetH = window.innerHeight - gaR.top - 8 - othersH;
-      const targetW = gaR.width - 16;
-      applyZoom(Math.min(zoomCur * (targetH / gfR.height), zoomCur * (targetW / gfR.width)), false, 5);
+      const gwR = gwrap.getBoundingClientRect();
+      /* 高度目标 = 屏高 − game_area 顶 − 底部余量 − 银框之外占高（rect 差值法）；
+         宽度目标 = 屏宽 − 固定横向开销（左栏/盒装，LS_RESERVE_W）。
+         vw/vh 已除 pz 归一成布局 px，rect 量出的部分同样除 pz，倍率不再另除 */
+      const othersH = Math.max(0, (gaR.height - gwR.height) / pz);
+      const targetH = vh - gaR.top / pz - 8 - othersH;
+      const targetW = vw - LS_RESERVE_W;
+      applyZoom(Math.min(targetW / baseW, targetH / baseH), false, 5);
     }
     function syncLandscape() {
       if (lsQuery.matches) {
@@ -2192,7 +2242,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       } else if (zoomBeforeLs !== null) {
         applyZoom(zoomBeforeLs, false);
         zoomBeforeLs = null;
-        layoutLandscapeBits(); // 退出横屏：计数条回框内文档流、game_area 取消右让位
       }
     }
     lsQuery.addEventListener("change", syncLandscape, { signal });
@@ -2220,9 +2269,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
        started 分支，但 placeMines 检测到锁定盘直接注入、跳过所有随机生成 ---- */
     let replayBoardLocked = false;
     let pendingBoard: Uint8Array | null = null;
-    /* 评级分位表（与 lib/config.ts 的 GRADES / GRADE_PERCENTS 同值，浏览器端无依赖副本） */
-    const GRADES_LOCAL = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F"];
-    const GRADE_PERCENTS_LOCAL = [100, 90, 80, 70, 60, 50, 35, 15, 5];
     /* dev 环境测试钩子（生产构建不含）：供 playwright 读取内部状态验证无猜重排等逻辑 */
     const win = window as unknown as { __op?: Record<string, unknown> };
     if (process.env.NODE_ENV === "development") {
@@ -2382,8 +2428,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         <div className="gwrap">
           {/* 计数条（雷数/笑脸/计时）与状态栏在 .gwrap 内、gframe 外：
               桌面端银灰外框在 .gwrap 上、视觉与旧结构完全一致；
-              移动端横屏两者要脱流移到左右两侧（globals.css 横屏块），
-              放在 gframe 外才不会被游戏缩放连带放大（2026-10-14 张老师） */}
+              zoom 挂 .gwrap——整窗（计数条+棋盘+状态栏）同比例缩放（2026-10-14 张老师定） */}
           <div className="gbar">
             <svg className="ledc" id="led_mines" viewBox="0 0 410 250" role="img" aria-label="剩余雷数">
               <use href="#top-counters" />
@@ -2417,18 +2462,15 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
             <span className="gname_text" id="gname_text">初级 8×8 · 10 雷</span>
             <span className="gstatus hidden" id="gstatus" />
           </div>
-          {/* 结算报告浮窗：游戏结束在桌面版左侧显示，再开局隐藏；内容由 JS 注入 */}
-          <div className="greport" id="greport" />
-          {/* 右侧结算面板（五期）：雷达图 + 重玩本局 / 查看回放 / 下载录像；内容由 JS 注入 */}
-          <div className="gresult" id="gresult" />
         </div>
+        {/* 结算报告浮窗 / 右侧结算面板：挂在 #game_area（gwrap 之外）——
+            zoom 移到 gwrap 后，面板不再被游戏倍率连带（自身 zoom 由 syncReportZoom
+            独立设置），定位改为跟随 gwrap 渲染矩形（JS syncReportZoom 内换算） */}
+        <div className="greport" id="greport" />
+        <div className="gresult" id="gresult" />
 
-        {/* 比例控制条已移入设置浮窗（2026-10-14 二期张老师定：页面只留游戏本体） */}
-        {/* 注：早期定过「底部不显示 3BV 等文字」，四期起改为按开关/模式在状态栏显示
-            （显示3BV 开关默认关；NF / 无猜模式自动显示） */}
-        <div className="gtools">
-          <button className="flagmode_btn" id="flagmode_btn" type="button">插旗模式</button>
-        </div>
+        {/* 比例控制条已移入设置浮窗（2026-10-14 二期张老师定：页面只留游戏本体）；
+            触屏「插旗模式」按钮已废（同日张老师定）——移动端插旗一律长按 ≥150ms */}
       </div>
     </div>
   );

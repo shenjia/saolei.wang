@@ -294,13 +294,14 @@ export function FlopSprites() {
         <path d="M80 20v20H60v10H50V40H40v10h10v10H40v20H20v10h20v20h10v10H40v10h10v-10h10v10h20v20h10v-20h20v-10h10v10h10v-10h-10v-10h10V90h20V80h-20V60h-10V50h10V40h-10v10h-10V40H90V20H80z" />
         <path d="M60 60v20h20V60H60z" fill="white" />
       </symbol>
-      {/* 鼠标箭头（flop-player SkinSprites.vue 的 cursor-arrow，1:1 取路径）：
+      {/* 鼠标箭头（flop-player SkinSprites.vue 的 cursor-arrow，路径 1:1；配色改为
+          亮白灰填充 #F0F0EA + 深灰描边——2026-10-14 张老师两轮定色：蓝→亮灰→再亮）：
           在线玩自研回放的光标贴图。坐标域 0-120 x 0-190，尖端在 (5,12) */}
       <symbol id="cursor-arrow" viewBox="0 0 120 190">
         <polygon
           points="119.72,127.46 70.38,127.46 90.64,168.68 61.19,183.61 38.59,137.28 5.00,170.04 5.00,12.12"
           strokeWidth="10"
-          style={{ fill: "#7BCEF7", stroke: "#424A52" }}
+          style={{ fill: "#F0F0EA", stroke: "#424A52" }}
         />
       </symbol>
 

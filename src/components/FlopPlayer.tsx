@@ -103,6 +103,19 @@ const FIT_PLAYER_SCRIPT = `
 })();
 `;
 
+/* 注入播放器 iframe 的「光标换色」样式（2026-10-14 张老师定：蓝色不好看，改亮灰）：
+   cursor-arrow 箭头的 fill 是内联 style，普通 CSS 盖不住，须 !important；
+   颜色与在线玩自研回放一致（#D6D6CE 填充、原深灰描边保留）。 */
+const CURSOR_COLOR_SCRIPT = `
+(function () {
+  if (window.__flopCursorColor) return;
+  window.__flopCursorColor = true;
+  var style = document.createElement("style");
+  style.textContent = 'symbol#cursor-arrow polygon { fill: #F0F0EA !important; }';
+  document.head.appendChild(style);
+})();
+`;
+
 /* 注入播放器 iframe 的「点击暗区退出」脚本：
    播放器的 background 选项渲染的遮罩层 z-index:-9999（负值），按 CSS 绘制
    规则位于普通流内容之下——Vue 根容器（占满视口的无 class DIV）盖在遮罩
@@ -167,14 +180,14 @@ const MASK_EXIT_SCRIPT = `
       }
     };
 
-    // 注入窄屏适配 + 点遮罩退出脚本。
+    // 注入窄屏适配 + 点遮罩退出 + 光标换色脚本。
     // ⚠️ iframe 是 SSR 直出的，load 事件往往在 React 水合前就已发完——
     // React 的 onLoad 此时收不到；必须主动查 readyState 补注入
     const inject = () => {
       const doc = frame.contentDocument;
       if (!doc || !doc.body || !doc.defaultView || "__flopFit" in doc.defaultView) return;
       const script = doc.createElement("script");
-      script.textContent = FIT_PLAYER_SCRIPT + MASK_EXIT_SCRIPT;
+      script.textContent = FIT_PLAYER_SCRIPT + MASK_EXIT_SCRIPT + CURSOR_COLOR_SCRIPT;
       doc.body.appendChild(script);
     };
     if (frame.contentDocument?.readyState === "complete") inject();

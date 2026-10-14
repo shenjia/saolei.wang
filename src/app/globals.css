@@ -683,13 +683,6 @@ body #video_view .video_cell .playable {
   padding: 0;
   justify-content: center;
 }
-.page_slider .ps_more:hover:not(:disabled) {
-  background: #5b584a;
-}
-.page_slider .ps_more:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 .page_slider .ps_more::after {
   content: attr(data-tip);
   position: absolute;
@@ -710,6 +703,13 @@ body #video_view .video_cell .playable {
 }
 .page_slider .ps_more:hover::after {
   opacity: 1;
+}
+.page_slider .ps_more:hover:not(:disabled) {
+  background: #5b584a;
+}
+.page_slider .ps_more:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .page_slider .ps_more i {
   width: 4px;
@@ -6220,12 +6220,15 @@ button.msg_cancel:hover {
   padding: 24px 12px;
   box-sizing: border-box;
 }
-/* ---- 移动端横屏规则块已移到本区块末尾（约 .flagmode_btn 之后）——
+/* ---- 移动端横屏规则块在本区块靠后位置——
    媒体查询不加优先级，放前面会被后面的基础规则（如 .gzoom{display:flex}）同优先级覆盖 */
 #online_play #game_area {
   text-align: center;
   user-select: none;
   -webkit-user-select: none;
+  /* 面板锚（2026-10-14 zoom 移 gwrap 后）：greport/gresult 挂在这里（gwrap 外），
+     不吃游戏倍率；具体 left/top 由 JS 按 gwrap 渲染矩形定位 */
+  position: relative;
 }
 /* 外框（银灰凸起边框）挂在 .gwrap 上——计数条/状态栏/棋盘都在框内；
    2026-10-14 移动版改版把 .gbar/.gname 挪到 .gframe 外（横屏脱流不被游戏缩放
@@ -6252,6 +6255,11 @@ button.msg_cancel:hover {
    td 位图背景永久禁用（覆盖层不透明，防任何透出） */
 #online_play #gboard {
   position: relative;
+  /* 触屏三件套（2026-10-14 张老师报「有时点击无效」）：
+     manipulation 去掉双击缩放的 300ms 等待（第二击不再被吞）；
+     touch-callout:none 防长按插旗时弹系统菜单/放大镜 */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
   /* 深灰底（#808080 = cell-press 边框灰）：flop 贴图的 cell-press 右/下 8 单位透明条
      透出它 → 开格区间成均匀深灰细线，替代原先透出银白底的亮缝（2026-10-14 张老师定）；
      同时覆盖 legacy .board 的网格 gif 背景（全程矢量后已无用） */
@@ -6356,14 +6364,14 @@ button.msg_cancel:hover {
   overflow-x: auto;
 }
 /* ---- 结算报告浮窗（2026-10-14 张老师定）：游戏结束显示在游戏界面左侧，再开局隐藏；
-   只有桌面版显示（<960px 一律不渲染，移动端无浮窗） ---- */
+   只有桌面版显示（<960px 一律不渲染，移动端无浮窗）。
+   2026-10-14 五期三改：zoom 移到 .gwrap 后，面板挂 #game_area（gwrap 外），left/top
+   全部由 JS 按 gwrap 渲染矩形定位（CSS 值仅作初值兜底），不吃游戏倍率 ---- */
 #online_play .greport {
   display: none;
   position: absolute;
-  /* 与游戏区上边框对齐（2026-10-14 张老师定：面板顶端对齐主版块而非内部游戏区——
-     gframe 有 9px padding + 3px border，原先 top:0 相对 .gwrap，面板低 12px） */
-  top: -12px;
-  right: calc(100% + 14px);
+  top: 0;
+  left: 0;
   width: max-content;
   background: #49483e;
   border: 1px solid #656355;
@@ -6477,12 +6485,12 @@ button.msg_cancel:hover {
 }
 /* ---- 右侧结算面板（五期二版，2026-10-14 张老师：缩小，与高级游戏区高度一致量级） ----
    与 greport 同风格（深底/圆角/阴影），雷达 168 紧凑版 + 三按钮（带矢量图标）；
-   顶端与主版块对齐（JS 按 zoom 反算补偿，基准 -3px）；桌面 ≥960px 显示 */
+   2026-10-14 五期三改：挂 #game_area（gwrap 外），left/top 由 JS 定位（CSS 值仅兜底） */
 #online_play .gresult {
   display: none;
   position: absolute;
-  top: -3px;
-  left: calc(100% + 14px);
+  top: 0;
+  left: 0;
   width: 196px;
   background: #49483e;
   border: 1px solid #656355;
@@ -6492,13 +6500,43 @@ button.msg_cancel:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: center;
 }
-#online_play .gresult .gr_title {
-  font-size: 11px;
-  font-weight: bold;
-  color: #e8e8e0;
-  padding-bottom: 3px;
-  margin-bottom: 3px;
+/* 首行大字（2026-10-14 张老师定）：胜利＝绿色「完成！」+ 金色大字成绩；
+   踩雷＝灰色「踩雷」+ 常规色成绩。flex 基线对齐，成绩是视觉主角 */
+#online_play .gresult .gr_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
   border-bottom: 1px solid #656355;
+}
+#online_play .gresult .gr_head .gr_state {
+  font-size: 15px;
+  font-weight: bold;
+}
+#online_play .gresult .gr_head.win .gr_state {
+  color: #7ed957; /* 胜利绿 */
+}
+#online_play .gresult .gr_head.lose .gr_state {
+  color: #9a998d;
+}
+#online_play .gresult .gr_head .gr_time {
+  font-size: 22px;
+  font-weight: bold;
+  font-family: "Courier New", Courier, monospace;
+  line-height: 1;
+}
+#online_play .gresult .gr_head .gr_time.gold {
+  color: #fdc61d; /* 成绩金 */
+}
+#online_play .gresult .gr_head.lose .gr_time {
+  color: #d6d6c8;
+  font-size: 18px;
+}
+#online_play .gresult .gr_head .gr_unit {
+  font-size: 11px;
+  color: #9a998d;
 }
 #online_play .gresult .gr_radar {
   display: flex;
@@ -6628,8 +6666,8 @@ button.msg_cancel:hover {
   border-color: #a33;
   color: #ffd9d9;
 }
-/* 回放光标：flopplayer 同款鼠标箭头（#cursor-arrow 贴图）。尖端锚点由 JS 偏移
-   （left/top 已含 -5,-12），此处只定容器尺寸与层级 */
+/* 回放光标：flopplayer 同款鼠标箭头（#cursor-arrow 贴图）。挂 .gwrap 顶层
+   （2026-10-14 张老师报被笑脸挡），z-index 压过计数条/状态栏；尖端锚点由 JS 偏移 */
 .replay_cursor {
   position: absolute;
   left: 0;
@@ -6637,7 +6675,7 @@ button.msg_cancel:hover {
   width: 12px;
   height: 19px;
   pointer-events: none;
-  z-index: 2;
+  z-index: 30;
 }
 .replay_cursor svg {
   display: block;
@@ -6650,47 +6688,15 @@ button.msg_cancel:hover {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
 /* 缩放控制条已移入设置浮窗（2026-10-14 二期）——.gzoom 样式段删除 */
-#online_play .gtools {
-  margin-top: 14px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: #939387;
-}
-#online_play .gtools .flagmode_btn {
-  display: none;
-  padding: 5px 14px;
-  border: 1px #656355 solid;
-  border-radius: 5px;
-  background: #49483e;
-  color: #b1b1a4;
-  font-size: 14px;
-  cursor: pointer;
-}
-#online_play .gtools .flagmode_btn.on {
-  background: #fdc61d;
-  border-color: #fdc61d;
-  color: #333;
-  font-weight: bold;
-}
-/* NF 模式下插旗按钮无意义，强制隐藏（优先级压过 coarse 媒体查询） */
-#online_play .gtools .flagmode_btn.hidden {
-  display: none !important;
-}
-@media (pointer: coarse) {
-  #online_play .gtools .flagmode_btn:not(.hidden) {
-    display: inline-block;
-  }
-}
+/* 底部工具条（.gtools / 插旗模式按钮）已整体移除（2026-10-14 张老师定）：
+   移动端插旗一律长按 ≥150ms，按钮无存在必要 */
 /* ---- 移动端横屏（2026-10-14 张老师定）：标题/级别筛选/按钮移到左侧竖排，游戏区顶满视口高度
    （顶满的倍率由 JS fitZoomForLandscape 算，这里只做布局）。
    判定与 JS matchMedia 严格一致：横屏且视口高 ≤520px
    （手机横屏典型 360-430px；平板横屏 700+ 不命中，保持常规布局）。
-   横屏下设置浮窗宽度收窄到 260px（150px 侧栏 + 320px 浮窗会盖掉大半游戏区）；
-   插旗钮（触屏必需）绝对定位到侧栏底部，不占游戏列高度。
+   横屏下设置浮窗宽度收窄到 260px（150px 侧栏 + 320px 浮窗会盖掉大半游戏区）。
+   计数条/状态栏的位置规则已上移到「移动端游戏区改版」组合块（本文件末尾）——
+   计数条随棋盘竖排在银框内，状态栏移动端一律不显示。
    本块必须留在 #online_play 全部基础规则之后：媒体查询不加优先级，
    同优先级时后定义者胜出（display:none 曾被后面的 .gzoom{display:flex} 覆盖） */
 @media (orientation: landscape) and (max-height: 520px) {
@@ -6710,8 +6716,7 @@ button.msg_cancel:hover {
     flex-direction: row;
     align-items: flex-start;
     gap: 16px;
-    /* 最小高度撑到满屏：小盘（初级 8×8）游戏列比左栏矮时，
-       底部锚定的插旗钮（bottom:0）不至于缩进左栏中部与筛选器相撞。
+    /* 最小高度撑到满屏，保持游戏列视觉满幅（fitZoom 会把棋盘拉满高度）。
        40 = 盒装 margin 16 + border 2 + padding 20 */
     min-height: calc(100vh - 40px);
     box-sizing: border-box;
@@ -6722,6 +6727,10 @@ button.msg_cancel:hover {
     padding-top: 0;
   }
   body:has(#online_play) #header {
+    display: none;
+  }
+  /* footer 同样隐藏（2026-10-14 张老师）：横屏游戏页不该出现页脚 */
+  body:has(#online_play) #footer {
     display: none;
   }
   #online_play .news_head {
@@ -6762,58 +6771,8 @@ button.msg_cancel:hover {
     flex: 1 1 auto;
     min-width: 0;
   }
-  /* 计数条（雷数/笑脸/计时）脱流到左栏（插旗钮上方），保持经典横排一行
-     （竖排 116px 会把左栏顶到与插旗钮相撞，横排仅 ~38px 高）。
-     绝对定位须锚到根容器——.gwrap 要去掉 relative，否则 anchor 到 gwrap；
-     top 由 JS 对齐到左栏内容底（fitZoomForLandscape，左栏高度随内容变化） */
-  #online_play .gwrap {
-    position: static;
-  }
-  #online_play .gbar {
-    position: absolute;
-    left: 0;
-    width: 150px;
-    min-width: 0;
-    justify-content: center;
-    gap: 6px;
-    margin-bottom: 0;
-    padding: 6px 4px;
-  }
-  /* 状态栏脱流到右侧竖排、一行一项（级别名 / NF / 无猜 / 3BV / 重排次数），
-     「・」分隔符隐藏；列宽自适应内容，棋盘拉满时由 JS 让位（fitZoomForLandscape） */
-  #online_play .gname {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: auto;
-    min-width: 0;
-    margin-top: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 3px 0;
-    padding: 8px 10px;
-  }
-  #online_play .gname .gname_text {
-    margin: 0;
-  }
-  #online_play .gname .gstatus {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 3px 0;
-  }
-  #online_play .gstatus .sep {
-    display: none;
-  }
   #online_play .gsettings {
     width: 260px;
-  }
-  #online_play .gtools {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    width: 150px;
-    margin-top: 0;
-    justify-content: flex-start;
   }
 }
 /* 伪全屏（2026-10-14）：iPhone Safari 无元素全屏 API，全屏按钮在该环境下的
@@ -6960,5 +6919,32 @@ html.op-fakefs #header {
   }
   body:has(#online_play) #header {
     position: static;
+  }
+}
+
+/* ---- /online 移动端游戏区改版（2026-10-14 张老师）----
+   适用窄屏（≤768 竖屏）与手机横屏断点两个环境：
+   ① 状态栏（级别名/3BV 银条）移动端一律不显示；
+   ② 计数条（雷数/笑脸/计时）移到棋盘左侧竖排，仍在银灰框内——
+      时间上 / 笑脸中 / 雷数下，即桌面版头部逆时针旋转 90°。
+      DOM 顺序是 雷数/笑脸/计时（桌面横排从左到右），column-reverse
+      反转后恰好 时间上/笑脸中/雷数下，桌面端不受影响。
+   须放在横屏块之后：同优先级后定义者胜出 */
+@media (max-width: 768px), (orientation: landscape) and (max-height: 520px) {
+  #online_play .gname {
+    display: none;
+  }
+  #online_play .gwrap {
+    display: inline-flex;
+    align-items: stretch;
+  }
+  #online_play .gbar {
+    flex-direction: column-reverse;
+    justify-content: space-between;
+    align-items: center;
+    width: auto;
+    min-width: 0;
+    margin-bottom: 0;
+    margin-right: 9px;
   }
 }

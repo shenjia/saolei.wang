@@ -7,20 +7,9 @@
 
 import { useState } from "react";
 import type { RadarPoint } from "@/lib/radar";
-
-// 移植 _radar.php 的 initScript 配色（+/- 后缀共用基础色）
-const GRADE_COLORS: Record<string, string> = {
-  SSS: "#E6DB74",
-  SS: "#E6DB74",
-  S: "#E6DB74",
-  A: "#ff0080",
-  B: "#df00a6",
-  C: "#bf00cc",
-  D: "#a000e5",
-  E: "#8000ff",
-  F: "#6600cc",
-};
-const UNKNOWN_COLOR = "#636359";
+// 等级配色（移植 _radar.php 的 initScript，+/- 后缀共用基础色）：
+// 与录像分析 VideoAnalysis.tsx、在线玩 OnlinePlay.tsx 同一份，统一在 lib/videoscore.ts 维护
+import { gradeColor } from "@/lib/videoscore";
 
 const SIZE = 222;
 const CENTER = SIZE / 2;
@@ -43,11 +32,6 @@ const LABEL_GRADE_FS = 15;
 const LABEL_NAME_FS = 10;
 // 轴名基线相对等级基线的下移量（≈ 等级字号，视觉行距与旧版 13/13 一致）
 const LABEL_NAME_DY = 15;
-
-function gradeColor(grade: string): string {
-  const base = grade.replace(/[+-]$/, "");
-  return GRADE_COLORS[base] ?? UNKNOWN_COLOR;
-}
 
 // 坐标保留两位小数：Math.cos 在 Node(SSR) 与 Chrome(水合) 下末位浮点可能不同，
 // 不一致的属性值会触发 React hydration mismatch 警告
