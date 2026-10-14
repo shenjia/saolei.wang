@@ -6010,46 +6010,43 @@ button.msg_cancel:hover {
   color: #7b7b7b;
   font-size: 12px;
   line-height: 20px;
-  text-align: center;
-  width: 0;
-  min-width: 100%;
-  box-sizing: border-box;
-}
-/* ---- 状态栏（2026-10-14 四期）：棋盘下方第二条银条，排版与 .gname 同源；
-       NF / 无猜标签 + 3BV + 无猜重排次数。无任何内容时 .hidden 整条不占高度 ---- */
-#online_play .gstatus {
-  margin-top: 5px;
-  padding: 2px 6px;
-  background: silver;
-  border: 2px solid;
-  border-color: #7b7b7b #fff #fff #7b7b7b;
-  color: #7b7b7b;
-  font-size: 12px;
-  line-height: 20px;
   width: 0;
   min-width: 100%;
   box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
   align-items: center;
-  gap: 6px 12px;
+  gap: 0 10px;
+  overflow: hidden; /* 窄盘 + 状态全开也不许折行/撑高（张老师定：状态栏恒一行） */
 }
-#online_play .gstatus.hidden {
+/* 级别名 margin auto 居中：右侧无状态时正中；有状态时在剩余空间内居中、
+   状态内容贴右。初级盘内宽仅 132px，全开状态时级别名省略号收缩让位 */
+#online_play .gname .gname_text {
+  margin: 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* ---- 状态（2026-10-14 四期五改）：并入级别名银条右侧，恒单行；
+       NF / 无猜标签 + 3BV + 无猜重排次数。无任何内容时 .hidden 整体不占位 ---- */
+#online_play .gname .gstatus {
+  display: flex;
+  align-items: center;
+  gap: 0 8px;
+  white-space: nowrap;
+}
+#online_play .gname .gstatus.hidden {
   display: none;
 }
+/* 状态项纯文本（初级盘内宽仅 132px，带框标签四个塞不下）；
+   NF / 无猜加粗区分，重排用略深色提示「本局盘面被动过」 */
 #online_play .gstatus .st {
   white-space: nowrap;
 }
 #online_play .gstatus .st_nf,
 #online_play .gstatus .st_ng {
-  padding: 0 7px;
-  border: 1px solid #7b7b7b;
-  border-radius: 3px;
-  background: #cfcfcf;
-  line-height: 17px;
+  font-weight: 700;
 }
-/* 重排次数用略深的前景色提示「本局盘面被动过」 */
 #online_play .gstatus .st_re {
   color: #5a5a52;
 }

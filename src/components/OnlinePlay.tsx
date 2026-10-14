@@ -167,6 +167,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     };
     const flagBtn = $("flagmode_btn");
     const gname = $("gname");
+    const gnameText = $("gname_text");
     const greport = $("greport");
     let flagMode = false;
 
@@ -195,9 +196,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       if (kind !== "press") faceKind = kind;
       faceUse.setAttribute("href", "#" + FACE_MAP[kind]);
     }
-    /* ---- 状态栏（2026-10-14 四期张老师定）：棋盘下方银条，默认完全不出现。
-       显示条件：①「显示3BV」开关开 → 显示 3BV；②NF / 无猜任一开启 → 强制显示
-       模式标签 + 3BV（这两种模式玩家必看 3BV）；③无猜模式下发生过重排 → 追加重排次数。
+    /* ---- 状态栏（2026-10-14 四期，五改同日）：并入级别名同一条银条右侧
+       （张老师定：状态栏只显示一行，模式/3BV 等放状态栏右侧）。
+       显示条件：①「显示3BV」开关开 → 显示 3BV（五改：与 NF/无猜解绑，
+       不再自动强制显示）；②NF / 无猜任一开启 → 显示模式标签；
+       ③无猜模式下发生过重排 → 追加重排次数。无内容时右侧整体不占位。
        开局前没有盘面，3BV 显示占位「—」。
        一次「重排」＝一次点击触发的无猜重排生效（内部平移/重排重试不算）——
        见 openCell 里的 ++ngRedeals。 */
@@ -206,7 +209,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       const p: string[] = [];
       if (nf) p.push('<span class="st st_nf">NF</span>');
       if (ng) p.push('<span class="st st_ng">无猜</span>');
-      if (showBv || nf || ng) {
+      if (showBv) {
         p.push('<span class="st st_bv">3BV ' + (started ? board3bv : "—") + "</span>");
       }
       if (ng && ngRedeals > 0) p.push('<span class="st st_re">重排 ' + ngRedeals + "</span>");
@@ -866,7 +869,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         beg: "初级 8×8 · 10 雷", int: "中级 16×16 · 40 雷", exp: "高级 30×16 · 99 雷",
         cus: "自定义 " + W + "×" + H + " · " + M + " 雷",
       };
-      gname.textContent = names[lv];
+      gnameText.textContent = names[lv];
       ngRedeals = 0;
       updateStatus();
       /* 同盘面重开（点笑脸/F2）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
@@ -1663,24 +1666,24 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
           <div className="gs_head">设置<button className="gs_close" id="gs_close" type="button" aria-label="关闭">✕</button></div>
           {/* 开关名 ≤4 字（2026-10-14 张老师定），完整解释放 hover 气泡（.tip） */}
           <div className="gs_row">
-            <span className="gs_name">NF</span>
+            <span className="gs_name">NF模式</span>
             <label className="gsw"><input type="checkbox" id="sw_nf" /><span className="track" /></label>
             <span className="tip">禁旗模式：不能插旗，全程只靠开格决胜</span>
           </div>
           <div className="gs_row">
-            <span className="gs_name">无猜</span>
+            <span className="gs_name">无猜模式</span>
             <label className="gsw"><input type="checkbox" id="sw_ng" /><span className="track" /></label>
             <span className="tip">踩雷自动重排本局，盲点必开出空域，永远不用猜</span>
           </div>
           <div className="gs_row">
-            <span className="gs_name">问号</span>
+            <span className="gs_name">问号标记</span>
             <label className="gsw"><input type="checkbox" id="sw_qm" /><span className="track" /></label>
             <span className="tip">右键按 标雷 → 问号 → 取消 三态循环</span>
           </div>
           <div className="gs_row">
             <span className="gs_name">显示3BV</span>
             <label className="gsw"><input type="checkbox" id="sw_bv" /><span className="track" /></label>
-            <span className="tip">棋盘下方状态栏显示本局 3BV；开 NF 或无猜时自动显示</span>
+            <span className="tip">棋盘下方状态栏显示本局 3BV</span>
           </div>
           <div className="gs_divider" />
           <div className="gs_zoom">
@@ -1764,10 +1767,13 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
               <svg className="vecboard" id="vec_board" aria-hidden="true" />
             </div>
           </div>
-          <div className="gname" id="gname">初级 8×8 · 10 雷</div>
-          {/* 状态栏（四期）：默认不出现。NF / 无猜自动显示模式标签与 3BV，
-              无猜模式下追加重排次数；内容由 updateStatus() 注入 */}
-          <div className="gstatus hidden" id="gstatus" />
+          {/* 状态栏（四期五改）：级别名与状态并入同一条银条——整条恒一行，
+              左侧级别名（尽量居中），右侧模式/3BV/重排（updateStatus 注入，
+              无内容时右侧整体不占位，级别名回到正中） */}
+          <div className="gname" id="gname">
+            <span className="gname_text" id="gname_text">初级 8×8 · 10 雷</span>
+            <span className="gstatus hidden" id="gstatus" />
+          </div>
           </div>
           {/* 结算报告浮窗：游戏结束在桌面版左侧显示，再开局隐藏；内容由 JS 注入 */}
           <div className="greport" id="greport" />
