@@ -125,7 +125,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 )}
               </ul>
             </div>
-            {/* 移动版（≤768px）导航：三横线菜单 + 登录头像；桌面由 CSS 隐藏 */}
+            {/* 半移动/移动版（≤960px）导航：三横线菜单 + 登录头像；桌面由 CSS 隐藏 */}
             <MobileNav
               user={
                 session ? { uid: session.uid, displayName, avatarUrl } : null

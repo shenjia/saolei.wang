@@ -1,18 +1,19 @@
 // 未读消息数共享轮询（2026-10-13）：桌面 MessageBadge 与移动版 MobileNav 消息按钮共用。
 // 两个组件常年同时挂载（另一端仅被 CSS 按断点隐藏），各自轮询会对 /api/message 双倍请求，
-// 故传入模块级 shouldPoll 谓词按断点互斥：桌面端只在 >768 轮询，移动端只在 ≤768 轮询。
+// 故传入模块级 shouldPoll 谓词按断点互斥：桌面端只在 >960 轮询，移动端只在 ≤960 轮询
+// （2026-10-15 随汉堡导航断点 768→960 同步：769~960 半移动带顶栏也是 MobileNav）。
 "use client";
 
 import { useEffect, useState } from "react";
 
-/** 桌面端轮询谓词（>768px 桌面横向导航可见时；模块级定义保证引用稳定、effect 不重跑） */
+/** 桌面端轮询谓词（>960px 桌面横向导航可见时；模块级定义保证引用稳定、effect 不重跑） */
 export function pollWhenDesktop() {
-  return window.innerWidth > 768;
+  return window.innerWidth > 960;
 }
 
-/** 移动端轮询谓词（≤768px MobileNav 可见时） */
+/** 移动端轮询谓词（≤960px MobileNav 可见时） */
 export function pollWhenMobile() {
-  return window.innerWidth <= 768;
+  return window.innerWidth <= 960;
 }
 
 export function useUnreadMessages(shouldPoll: () => boolean): number {
