@@ -53,12 +53,18 @@ export async function ensureTodaySnapshot(force = false): Promise<void> {
     if (existing) return;
   }
   // MySQL 8+ 窗口函数一次算两个榜（sum_time 升序、sum_3bvs 降序），upsert 防并发重复
+  // 封禁账号不进快照（旧站 Player_IsLive=1 口径；与排行榜/进步榜一致）
   await prisma.$executeRawUnsafe(
     `INSERT INTO rank_snapshot (user, date, sum_time_rank, sum_3bvs_rank, create_time, update_time)
      SELECT s.id, ?, tr.r, COALESCE(br.r, 0), UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
      FROM user_scores s
-     JOIN (SELECT id, ROW_NUMBER() OVER (ORDER BY sum_time ASC) r FROM user_scores WHERE sum_time > 0) tr ON tr.id = s.id
-     LEFT JOIN (SELECT id, ROW_NUMBER() OVER (ORDER BY sum_3bvs DESC) r FROM user_scores WHERE sum_3bvs > 0) br ON br.id = s.id
+     JOIN \`user\` u ON u.id = s.id AND u.status = 0
+     JOIN (SELECT s2.id, ROW_NUMBER() OVER (ORDER BY s2.sum_time ASC) r
+             FROM user_scores s2 JOIN \`user\` u2 ON u2.id = s2.id AND u2.status = 0
+            WHERE s2.sum_time > 0) tr ON tr.id = s.id
+     LEFT JOIN (SELECT s3.id, ROW_NUMBER() OVER (ORDER BY s3.sum_3bvs DESC) r
+                  FROM user_scores s3 JOIN \`user\` u3 ON u3.id = s3.id AND u3.status = 0
+                 WHERE s3.sum_3bvs > 0) br ON br.id = s.id
      WHERE s.sum_time > 0
      ON DUPLICATE KEY UPDATE sum_time_rank = VALUES(sum_time_rank), sum_3bvs_rank = VALUES(sum_3bvs_rank)`,
     today
@@ -91,10 +97,12 @@ export async function getGrowRanking(
     { user: bigint; today_rank: number; yesterday_rank: number; delta: number }[]
   >(
     // 注意：MySQL 算术表达式返回 BIGINT，delta 实际是 bigint（下方 N() 归一化，防 JSON 序列化炸）
+    // 封禁账号不上榜（旧站 Player_IsLive=1 口径）：快照里若留有旧行，读时一并滤掉
     `SELECT t.user, t.sum_time_rank today_rank, y.sum_time_rank yesterday_rank,
             (y.sum_time_rank - t.sum_time_rank) delta
      FROM rank_snapshot t
      JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
+     JOIN \`user\` u ON u.id = t.user AND u.status = 0
      WHERE t.date = ?
      ORDER BY delta DESC, t.sum_time_rank ASC
      LIMIT ? OFFSET ?`,
@@ -106,6 +114,7 @@ export async function getGrowRanking(
   const countRows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
     `SELECT COUNT(*) c FROM rank_snapshot t
      JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
+     JOIN \`user\` u ON u.id = t.user AND u.status = 0
      WHERE t.date = ?`,
     yesterday,
     today

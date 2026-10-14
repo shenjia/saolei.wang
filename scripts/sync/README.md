@@ -14,15 +14,28 @@ $PY extract.py     # MSSQL → staging 库 saolei_mssql(全量,断点续传,重�
 $PY transform.py   # staging → saolei(幂等 upsert;news 段有守卫,已插则跳过)
 $PY fixup.py       # 修复:补 video_info、删孤儿录像、清 video_scores 残留
 $PY validate.py    # 行数对账 + 抽样字段比对 + 排行对照
+$PY backfill-banned-users.py --dry-run   # 只统计不写库
+$PY backfill-banned-users.py             # 补导旧站「停用」账号(见下)
 ```
+
+`backfill-banned-users.py` 是补丁脚本，只在需要时跑：把旧站 `Player_IsLive=0` 的账号
+补进新站用户域（`user.status=-1`）。**唯一权威口径是旧站停用状态**，幂等，可反复跑；
+它只做单向「封禁」，不会把新站的解封刷回去。
 
 依赖：`pip install python-tds pymysql`（已装入 managed venv `envs/default`）。
 
 ## 关键映射规则（与 2013 版迁移逐字段验证一致）
 
+- **用户全量导入**（2026-10-14 起，原为 `WHERE Player_IsLive=1`）：`Player_IsLive=0` 是旧站
+  **「停用」开关**（`Player/Action/Live_Action.asp` 可逆切换，≠删号），这些账号必须导——
+  否则其录像/评论/帖子在新站成无主引用（曾致 2844 条录像详情页显示不出上传者）。
+  新站映射为 `user.status = -1`（封禁语义＝仅禁止登录，成绩/录像/名字全保留）。
+  **已存在行的 status 不被 transform 覆盖**——免得旧站 `IsLive=1` 把新站后台手动封禁的账号刷回正常；
+  旧站新停用的老账号靠重跑 `backfill-banned-users.py` 回填
 - **时间成绩 = (MSSQL 秒值 - 1) × 1000**（mvf/avf 均如此，计时器从 1 起跳）；3BVS = 值 × 1000
-- 用户筛选 `Player_IsLive=1`；成绩 `999.99` 为无成绩哨兵 → NULL，sum 由三级别加总（缺一级 = 0）
+- 成绩 `999.99` 为无成绩哨兵 → NULL，sum 由三级别加总（缺一级 = 0）
 - 录像状态：`IsLive=0 → 0 屏蔽`；`Check=0 → 10 待审`；否则 `20 通过`
+
 - 时间戳：MSSQL datetime 视为 +08:00 转 Unix 秒
 - `_nf` 表归属以**文件解析的 `video_info.noflag` 为准**（老录像 MSSQL `IsNoFrag` 位不可靠，差 ~1.9k 条）
 - news 插入必须保持 **id 序 = create_time 序**（前端游标分页按 id）；非幂等，重插需先删 `create_time > 1382487826`

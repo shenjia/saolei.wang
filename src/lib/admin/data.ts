@@ -211,10 +211,11 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
 
   const sumTime = N(score?.sumTime);
   const expTime = N(score?.expTime);
-  // 名次 = 成绩更好的人数 + 1（同分并列取小）
+  // 名次 = 成绩更好的人数 + 1（同分并列取小）；封禁账号不上榜，故 join user.status = 0
   const rankRows = sumTime
     ? await prisma.$queryRawUnsafe<{ c: bigint }[]>(
-        `SELECT COUNT(*) c FROM user_scores WHERE sum_time > 0 AND sum_time < ?`,
+        `SELECT COUNT(*) c FROM user_scores s JOIN \`user\` u ON u.id = s.id AND u.status = 0
+          WHERE s.sum_time > 0 AND s.sum_time < ?`,
         sumTime
       )
     : [];
@@ -231,7 +232,8 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       const v = N(raw);
       if (!v) return 0;
       const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
-        `SELECT COUNT(*) c FROM user_scores WHERE ${col} > 0 AND ${col} < ?`,
+        `SELECT COUNT(*) c FROM user_scores s JOIN \`user\` u ON u.id = s.id AND u.status = 0
+          WHERE s.${col} > 0 AND s.${col} < ?`,
         v
       );
       return N(rows[0]?.c) + 1;

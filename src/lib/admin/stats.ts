@@ -8,7 +8,7 @@
 // · 大数据表（video 30 万行、news 15 万行）只做 GROUP BY 聚合，不逐行拉取。
 
 import { prisma } from "@/lib/db";
-import { getTitleCounts } from "@/lib/queries";
+import { getTitleCounts, rankedOnly } from "@/lib/queries";
 import { TITLES, TITLE_THRESHOLDS, VIDEO_STATUS, VIDEO_LEVELS } from "@/lib/config";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
@@ -143,10 +143,11 @@ export async function getOverview(): Promise<Overview> {
     newsTotal, newsToday, commentTotal, bbsPostTotal, bbsReplyTotal,
     clickTotal, messageTotal, donateAgg, act7, act30,
   ] = await Promise.all([
-    prisma.user.count(),
+    // 2026-10-14：人数口径与前台上榜口径统一——封禁账号（旧站「停用」）不计入
+    prisma.user.count({ where: { status: 0 } }),
     prisma.user.count({ where: { createTime: { gte: BigInt(today) } } }),
     prisma.user.count({ where: { createTime: { gte: BigInt(week) } } }),
-    prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
+    prisma.userScores.count({ where: { sumTime: { gt: 0 }, ...(await rankedOnly()) } }),
     prisma.video.count(),
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
     prisma.video.count({ where: { status: VIDEO_STATUS.NORMAL } }),
@@ -442,14 +443,17 @@ export async function getCurrentRecords(): Promise<CurrentRecord[]> {
   return Promise.all(
     fields.map(async ([level, tf, tv, td, bf, bv]) => {
       const rows = await prisma.$queryRawUnsafe<Record<string, bigint | number | null>[]>(
-        `SELECT id, ${tf} t, ${tv} tv, ${td} td, ${bf} b, ${bv} bvid
-         FROM user_scores WHERE ${tf} > 0 ORDER BY ${tf} ASC LIMIT 1`
+        `SELECT s.id, s.${tf} t, s.${tv} tv, s.${td} td, s.${bf} b, s.${bv} bvid
+         FROM user_scores s JOIN \`user\` u ON u.id = s.id AND u.status = 0
+         WHERE s.${tf} > 0 ORDER BY s.${tf} ASC LIMIT 1`
       );
       const r = rows[0] ?? null;
       const uid = N(r?.id);
       const bRows = r
         ? await prisma.$queryRawUnsafe<Record<string, bigint | number | null>[]>(
-            `SELECT id, ${bf} b, ${bv} bvid, update_time ut FROM user_scores WHERE ${bf} > 0 ORDER BY ${bf} DESC LIMIT 1`
+            `SELECT s.id, s.${bf} b, s.${bv} bvid, s.update_time ut
+             FROM user_scores s JOIN \`user\` u ON u.id = s.id AND u.status = 0
+             WHERE s.${bf} > 0 ORDER BY s.${bf} DESC LIMIT 1`
           )
         : [];
       const b = bRows[0] ?? null;

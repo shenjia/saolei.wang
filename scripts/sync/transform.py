@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """staging (saolei_mssql) -> saolei 转换入库
 映射规则(与 2013 版迁移口径逐字段验证一致):
-- 用户: Player_IsLive=1;时间成绩 = (秒-1)*1000;3BVS = 值*1000;999.99/NULL=无成绩
+- 用户: 全量导入（**不再只导 Player_IsLive=1**）；status = 0（正常）/ -1（旧站「停用」，
+  可逆，2026-10-14 张老师定：封禁≠删号）。已存在行的 status 不被覆盖（见 user INSERT 注释）
+- 成绩: 时间 = (秒-1)*1000；3BVS = 值*1000；999.99/NULL = 无成绩
 - 录像: IsLive=0->status 0;Check=0->10;else 20;时间同为 (秒-1)*1000
 - 时间戳: MSSQL datetime 视为 +08:00 转 Unix 秒
 - 动态: News_Time > 本地基线 2013-10-23 08:23:46 的插入(type=20);并为新用户补 type=10 入伍动态
@@ -68,10 +70,10 @@ sc.execute("SELECT Player_Id, Player_Name, Player_Password, Player_Name_Chinese,
            " Player_Int_Time_Score_NF, Player_Int_Time_Video_NF, Player_Int_3BVS_Score_NF, Player_Int_3BVS_Video_NF,"
            " Player_Exp_Time_Score_NF, Player_Exp_Time_Video_NF, Player_Exp_3BVS_Score_NF, Player_Exp_3BVS_Video_NF,"
            " Player_Click, Player_QQ, Player_Mouse, Player_Pad, Player_Interest, Player_Year, Player_Month,"
-           " Player_Image, Player_Login_Time"
-           " FROM Player WHERE Player_IsLive=1")
+           " Player_Image, Player_Login_Time, Player_IsLive"
+           " FROM Player")
 players = sc.fetchall()
-print(f"  players(live): {len(players)}", flush=True)
+print(f"  players(全部): {len(players)}", flush=True)
 
 sc.execute("SELECT Video_Id, Video_Model, Video_Player, Video_Path, Video_IsLive, Video_Check,"
            " Video_Time, Video_Score, Video_3BV, Video_3BVS, Video_CheckBy, Video_CheckTime,"
@@ -108,7 +110,7 @@ C = {name: i for i, name in enumerate([
     "beg_t_nf", "beg_tv_nf", "beg_b_nf", "beg_bv_nf",
     "int_t_nf", "int_tv_nf", "int_b_nf", "int_bv_nf",
     "exp_t_nf", "exp_tv_nf", "exp_b_nf", "exp_bv_nf",
-    "click", "qq", "mouse", "pad", "interest", "year", "month", "image", "login"])}
+    "click", "qq", "mouse", "pad", "interest", "year", "month", "image", "login", "live"])}
 
 
 def score_fields(p, lv, nf):
@@ -137,9 +139,12 @@ for p in players:
     # last_login_time：Player_Login_Time(北京时间) -> unix 秒
     # 2026-10-13 补：原 SELECT 有该列、INSERT 却漏写，导致旧站 3.4 万用户
     # 「最近登录」全为 0（仅新站注册/登录过的账号有值）
+    # 2026-10-14 补：status 按旧站 Player_IsLive 映射（0=正常 / -1=停用）——
+    # 「停用」≠ 删号（Live_Action.asp 是可逆开关），这些账号必须在 user 表里有行，
+    # 否则其录像/评论/帖子在新站变成无主引用（曾致 2844 条录像显示不出上传者）
     u_rows.append((pid, (p[C["cn"]] or "")[:12], (p[C["en"]] or "")[:32],
                    1 if p[C["sex"]] else 0, "1" if p[C["image"]] else "0",
-                   (p[C["area"]] or "")[:12], 0, reg, 0, ux(p[C["login"]])))
+                   (p[C["area"]] or "")[:12], 0 if p[C["live"]] else -1, reg, 0, ux(p[C["login"]])))
     y, m = p[C["year"]] or 0, p[C["month"]] or 0
     bday = 0
     if y and m:
@@ -183,6 +188,9 @@ for r in ua_rows:
         continue
     ua_final.append(r)
 
+# 注意：ON DUPLICATE 刻意**不含 status** —— 已存在行的封禁状态由新站自己管
+# （否则旧站 IsLive=1 会把新站后台手动封禁的账号刷回正常）。旧站「新停用」的老账号
+# 用 scripts/sync/backfill-banned-users.py 重跑即可回填 status=-1（单向：只封不解）。
 flush("""INSERT INTO user (id,chinese_name,english_name,sex,avatar,area,status,create_time,update_time,last_login_time)
        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
        chinese_name=VALUES(chinese_name),english_name=VALUES(english_name),sex=VALUES(sex),

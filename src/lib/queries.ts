@@ -301,6 +301,40 @@ export async function getNewsCount(opts: {
   });
 }
 
+// ---------- 封禁用户（旧站「停用」）与「上榜」口径 ----------
+// 移植 2008 口径：旧站**所有「上榜」查询都带 `Player_IsLive=1`**（database/mssql/procedures.sql
+// 数十处：排行榜 / 军衔人数 / 英雄榜 / 地区榜 / 随机串门），即停用账号**不上榜、不计入人数统计**；
+// 而个人主页、录像/评论/帖子的归属照常显示（旧站 Player/Show.asp 也只是隐藏名次块）。
+//
+// 2026-10-14：旧站停用账号已全量导入新站（user.status=-1，见 scripts/sync/backfill-banned-users.py），
+// 需要在新站复刻这条口径。user_scores 与 user 同主键，故用「封禁 id 黑名单」表达——
+// 不动 schema；封禁量级仅数百，对 3.4 万行的 user_scores 代价可忽略。
+// 原始 SQL 处直接 `JOIN \`user\` u ON u.id = s.id AND u.status = 0`（同义，且更省）。
+// 缓存 60 秒：后台封禁/解封最多 1 分钟内体现在榜单。
+const fetchBannedUserIds = unstable_cache(
+  async (): Promise<number[]> => {
+    const rows = await prisma.user.findMany({ where: { status: { not: 0 } }, select: { id: true } });
+    return rows.map((r) => N(r.id));
+  },
+  ["banned-user-ids-v1"],
+  { revalidate: 60 }
+);
+
+/** 「上榜」口径通用排除条件（无封禁用户时返回空对象，可直接展开进 where） */
+export async function rankedOnly(): Promise<{ id?: { notIn: number[] } }> {
+  const ids = await fetchBannedUserIds();
+  return ids.length ? { id: { notIn: ids } } : {};
+}
+
+/** 「上榜」口径的 user 表条件（人数统计用）：只要正常账号 */
+const ACTIVE_USER = { status: 0 } as const;
+
+/** 该用户是否在榜（封禁用户一律不在榜；「我在哪里」/定位用） */
+export async function isRankedUser(id: number): Promise<boolean> {
+  const u = await prisma.user.findUnique({ where: { id: BigInt(id) }, select: { status: true } });
+  return !!u && u.status === 0;
+}
+
 /** 国内 TOP10：按总计时间前 10（移植 home/_top；展示序仍按总时间，军衔列按高级时间评定）
  *  2026-10-13 张老师要求：原「十大元帅」更名「国内TOP10」，右列表由时间改为「所在地区」，
  *  故此处直接查 user（usersByIds 只回 UserBrief，不含 area） */
@@ -308,7 +342,7 @@ export async function getTopUsers(
   limit = HOME_TOP_NUMBER
 ): Promise<(UserBrief & { area: string; title: string; titleDate: number })[]> {
   const rows = await prisma.userScores.findMany({
-    where: { sumTime: { gt: 0 } },
+    where: { sumTime: { gt: 0 }, ...(await rankedOnly()) },
     orderBy: { sumTime: "asc" },
     take: limit,
   });
@@ -364,7 +398,7 @@ export async function getRanking(
   const field = SCORE_FIELD(level, order);
   // NF（无标雷）榜切换数据源（移植 2008 版 Ranking_NF 的 *_Score_NF 语义）
   const table = userScoresTable(nf);
-  const where = { [field]: { gt: 0 } };
+  const where: Record<string, unknown> = { [field]: { gt: 0 }, ...(await rankedOnly()) };
   const total = await table.count({ where });
   const rows = await table.findMany({
     where,
@@ -403,6 +437,7 @@ export async function getRankingPageOfUser(
 ): Promise<number> {
   const field = SCORE_FIELD(level, order);
   const table = userScoresTable(nf);
+  if (!(await isRankedUser(id))) return -1; // 封禁用户不在榜
   const row = await table.findUnique({ where: { id: BigInt(id) } });
   if (!row) return -1;
   const score = Number((row as unknown as Record<string, number | null>)[field] ?? 0);
@@ -410,20 +445,22 @@ export async function getRankingPageOfUser(
   // 地区内页：人口限定该地区注册用户（与 getRankingTable 的 area 过滤同口径）
   let idIn: Record<string, unknown> | undefined;
   if (area) {
-    const areaUsers = await prisma.user.findMany({ where: { area }, select: { id: true } });
+    const areaUsers = await prisma.user.findMany({ where: { area, ...ACTIVE_USER }, select: { id: true } });
     if (!areaUsers.some((u) => N(u.id) === id)) return -1;
     idIn = { id: { in: areaUsers.map((u) => u.id) } };
   }
+  const ranked = await rankedOnly();
   const better = await table.count({
     where: {
       ...(order === "time" ? { [field]: { lt: score, gt: 0 } } : { [field]: { gt: score } }),
       ...idIn,
+      ...ranked,
     },
   });
   let offset = better - (better % RANKING_PAGESIZE);
   for (;;) {
     const rows = await table.findMany({
-      where: { [field]: { gt: 0 }, ...idIn },
+      where: { [field]: { gt: 0 }, ...idIn, ...ranked },
       select: { id: true },
       orderBy: { [field]: ORDER_DIRECTION[order] },
       skip: offset,
@@ -461,20 +498,24 @@ export async function getRankOfUsers(
   // 本人不在该地区的 id 不出现在结果里（前端显示「未加入地区排行」）；area 一律 ? 传参
   if (area) {
     const rows = await prisma.$queryRawUnsafe<{ id: bigint; rk: bigint }[]>(
-      `SELECT a.id, 1 + (SELECT COUNT(*) FROM ${tbl} b JOIN \`user\` ub ON ub.id = b.id AND ub.area = ?
+      `SELECT a.id, 1 + (SELECT COUNT(*) FROM ${tbl} b
+            JOIN \`user\` ub ON ub.id = b.id AND ub.area = ? AND ub.status = 0
           WHERE b.${col} > 0 AND (b.${col} ${cmp} a.${col} OR (b.${col} = a.${col} AND b.id ${cmp} a.id))) AS rk
         FROM ${tbl} a
         WHERE a.${col} > 0 AND a.id IN (${uniq.join(",")})
-          AND a.id IN (SELECT id FROM \`user\` WHERE area = ?)`,
+          AND a.id IN (SELECT id FROM \`user\` WHERE area = ? AND status = 0)`,
       area,
       area
     );
     return new Map(rows.map((r) => [N(r.id), N(r.rk)]));
   }
+  // 封禁用户不上榜：候选人自身与计数子查询都 join user.status = 0
   const rows = await prisma.$queryRawUnsafe<{ id: bigint; rk: bigint }[]>(
     `SELECT a.id, 1 + (SELECT COUNT(*) FROM ${tbl} b
+          JOIN \`user\` ub ON ub.id = b.id AND ub.status = 0
         WHERE b.${col} > 0 AND (b.${col} ${cmp} a.${col} OR (b.${col} = a.${col} AND b.id ${cmp} a.id))) AS rk
       FROM ${tbl} a
+      JOIN \`user\` ua ON ua.id = a.id AND ua.status = 0
       WHERE a.${col} > 0 AND a.id IN (${uniq.join(",")})`
   );
   return new Map(rows.map((r) => [N(r.id), N(r.rk)]));
@@ -1032,9 +1073,10 @@ export async function getSiteStats(): Promise<SiteStats> {
     commentTotal, commentToday,
     bbsTotal, bbsToday,
   ] = await Promise.all([
-    prisma.user.count(),
+    // 2026-10-14：注册人数按旧站口径排除封禁账号（旧站 @All_Number = count(...Player_IsLive='1')）
+    prisma.user.count({ where: ACTIVE_USER }),
     prisma.user.count({ where: { createTime: { gte: dayStart } } }),
-    prisma.userScores.count({ where: { sumTime: { gt: 0 } } }),
+    prisma.userScores.count({ where: { sumTime: { gt: 0 }, ...(await rankedOnly()) } }),
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED, reviewTime: { gte: dayStart } } }),
     prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL } }),
@@ -1063,6 +1105,8 @@ export async function getSiteStats(): Promise<SiteStats> {
 export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
   const thresholds = getTitleDistribution().thresholds;
   if (!thresholds.length) return [];
+  // 封禁账号不计入军衔人数（旧站数据库口径一律 Player_IsLive=1）
+  const ranked = await rankedOnly();
   const counts = await Promise.all(
     TITLES.map((_, i) => {
       const lower = i > 0 ? thresholds[i - 1] : undefined; // 上一档线（不含）
@@ -1074,6 +1118,7 @@ export async function getTitleCounts(): Promise<{ title: string; count: number }
             ...(lower !== undefined ? { gt: lower } : {}),
             ...(upper !== undefined ? { lte: upper } : {}),
           },
+          ...ranked,
         },
       });
     })
@@ -1083,11 +1128,11 @@ export async function getTitleCounts(): Promise<{ title: string; count: number }
     count: counts[i] ?? 0,
   }));
   // 预备役：注册但没有任何高级成绩的玩家（2026-09-23 新增，2026-10-13 口径改高级）
-  const [totalUsers, ranked] = await Promise.all([
-    prisma.user.count(),
-    prisma.userScores.count({ where: { expTime: { gt: 0 } } }),
+  const [totalUsers, rankedTotal] = await Promise.all([
+    prisma.user.count({ where: ACTIVE_USER }),
+    prisma.userScores.count({ where: { expTime: { gt: 0 }, ...ranked } }),
   ]);
-  result.push({ title: "预备役", count: Math.max(0, totalUsers - ranked) });
+  result.push({ title: "预备役", count: Math.max(0, totalUsers - rankedTotal) });
   return result;
 }
 
@@ -1120,16 +1165,17 @@ async function titleScoresWhere(t: string): Promise<Record<string, unknown> | nu
       gt: lower !== undefined ? lower : 0,
       ...(upper !== undefined ? { lte: upper } : {}),
     },
+    ...(await rankedOnly()),
   };
 }
 
-/** 预备役→user 查询条件（id 不在有高级成绩集合内；2026-10-13 口径改高级） */
+/** 预备役→user 查询条件（正常账号 + id 不在有高级成绩集合内；2026-10-13 口径改高级） */
 async function reserveWhere(): Promise<Record<string, unknown>> {
   const ranked = await prisma.userScores.findMany({
     where: { expTime: { gt: 0 } },
     select: { id: true },
   });
-  return { id: { notIn: ranked.map((r) => r.id) } };
+  return { ...ACTIVE_USER, id: { notIn: ranked.map((r) => r.id) } };
 }
 
 /** 本军衔玩家数（列表页头部用；-1=军衔名不合法） */
@@ -1215,6 +1261,7 @@ export async function getTitleMembers(
  * @returns -1=不在此军衔/无成绩；否则返回行偏移（0 起，= 该行前有多少行）
  */
 export async function getTitleMemberOffset(uid: number, t: string): Promise<number> {
+  if (!(await isRankedUser(uid))) return -1; // 封禁用户不在任何军衔列表
   if (t === "预备役") {
     const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) }, select: { expTime: true } });
     if (row?.expTime && row.expTime > 0) return -1; // 有高级成绩，不是预备役
@@ -1258,11 +1305,13 @@ export async function getTitleMemberOffset(uid: number, t: string): Promise<numb
  *  注意：rank 为 MySQL 保留字，别名须反引号 */
 async function getUserSumRanksBatch(ids: bigint[]): Promise<Map<number, number>> {
   if (!ids.length) return new Map();
+  // 名次口径与排行榜一致：封禁用户不参与（旧站 `Player_IsLive=1 and Player_Rank<>0`）
   const rows = await prisma.$queryRaw<
     { id: bigint; rank: bigint }[]
   >`SELECT id, \`rank\` FROM (
-      SELECT id, ROW_NUMBER() OVER (ORDER BY exp_time ASC) AS \`rank\`
-      FROM user_scores WHERE exp_time > 0
+      SELECT s.id, ROW_NUMBER() OVER (ORDER BY s.exp_time ASC) AS \`rank\`
+      FROM user_scores s JOIN \`user\` u ON u.id = s.id AND u.status = 0
+      WHERE s.exp_time > 0
     ) r WHERE id IN (${Prisma.join(ids)})`;
   return new Map(rows.map((r) => [N(r.id), N(r.rank)]));
 }
@@ -1295,11 +1344,12 @@ export async function getTeam(): Promise<TeamMember[]> {
 
 /** 随机串门（移植 2008 版 Player/Random.asp：随机访问一个有成绩用户的地盘） */
 export async function getRandomUserId(): Promise<number | null> {
-  const total = await prisma.userScores.count({ where: { sumTime: { gt: 0 } } });
+  const where = { sumTime: { gt: 0 }, ...(await rankedOnly()) }; // 不串到封禁账号的地盘
+  const total = await prisma.userScores.count({ where });
   if (!total) return null;
   const skip = Math.floor(Math.random() * total);
   const rows = await prisma.userScores.findMany({
-    where: { sumTime: { gt: 0 } },
+    where,
     select: { id: true },
     orderBy: { sumTime: "asc" },
     skip,
@@ -1338,9 +1388,9 @@ export async function getRankingTable(
   const size = take ?? RANKING_PAGESIZE;
   const field = SCORE_FIELD(level, order);
   const table = userScoresTable(nf);
-  let idsWhere: Record<string, unknown> = { [field]: { gt: 0 } };
+  let idsWhere: Record<string, unknown> = { [field]: { gt: 0 }, ...(await rankedOnly()) };
   if (area) {
-    const areaUsers = await prisma.user.findMany({ where: { area }, select: { id: true } });
+    const areaUsers = await prisma.user.findMany({ where: { area, ...ACTIVE_USER }, select: { id: true } });
     idsWhere = { ...idsWhere, id: { in: areaUsers.map((u) => u.id) } };
   }
   const total = await table.count({ where: idsWhere });
@@ -1387,7 +1437,7 @@ export async function getRankingTable(
 export async function getFirstRankedUserId(nf = false): Promise<number | null> {
   const table = userScoresTable(nf);
   const rows = await table.findMany({
-    where: { sumTime: { gt: 0 } },
+    where: { sumTime: { gt: 0 }, ...(await rankedOnly()) },
     select: { id: true },
     orderBy: { sumTime: "asc" },
     take: 1,
@@ -1417,7 +1467,7 @@ export async function searchUsers(q: string, limit = 8): Promise<UserBrief[]> {
         ],
       };
   const rows = await prisma.user.findMany({
-    where,
+    where: { ...where, ...ACTIVE_USER }, // 榜单搜索：封禁账号不在榜，不出现在推荐里
     select: { id: true, chineseName: true, englishName: true, sex: true },
     orderBy: { id: "asc" },
     take: limit,
@@ -1474,7 +1524,7 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
               ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) rk,
               COUNT(*) OVER () total
        FROM user_scores s JOIN user u ON u.id = s.id
-       WHERE s.sum_time > 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
+       WHERE s.sum_time > 0 AND u.status = 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
      ),
      agg AS (
        SELECT area, COUNT(*) players, ROUND(AVG(rk)) avg_rank, MIN(rk) best_rank,
@@ -1484,7 +1534,8 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
      act AS (
        SELECT u.area, COUNT(*) active
        FROM user u
-       WHERE u.last_login_time > UNIX_TIMESTAMP() - 30 * 86400
+       WHERE u.status = 0
+         AND u.last_login_time > UNIX_TIMESTAMP() - 30 * 86400
          AND u.area <> '' AND u.area NOT LIKE '%&%'
        GROUP BY u.area
      )
@@ -1524,7 +1575,7 @@ export async function getUserRanks(userId: number): Promise<UserRanks | null> {
         SELECT s.id, u.area,
               ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) npos
        FROM user_scores s JOIN user u ON u.id = s.id
-       WHERE s.sum_time > 0
+       WHERE s.sum_time > 0 AND u.status = 0
      ),
      arear AS (
         SELECT id, area,
@@ -1680,7 +1731,7 @@ const fetchBvCollection = unstable_cache(
             ELSE ${LEVEL_MIN_3BV.exp} END
         GROUP BY v.user, v.level
       ) t
-      JOIN user u ON u.id = t.user
+      JOIN user u ON u.id = t.user AND u.status = 0
       LEFT JOIN user_scores us ON us.id = t.user
       GROUP BY u.id, u.chinese_name, u.sex, us.exp_time`;
     return rows.map((r) => {
@@ -1699,7 +1750,7 @@ const fetchBvCollection = unstable_cache(
       };
     });
   },
-  ["bv-collection-v2"],
+  ["bv-collection-v3"],
   { revalidate: 3600, tags: ["bv-collection"] }
 );
 
