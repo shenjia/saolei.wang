@@ -463,6 +463,7 @@ export function OnlinePlay() {
         rows.map((r) => "<tr><td>" + r[0] + "</td><td>" + r[1] + "</td></tr>").join("") +
         "</table>";
       greport.classList.add("show");
+      syncReportZoom(); // 面板尺寸随当前游戏倍率（可能已被放大）
     }
     function lose(hit: number) {
       over = true;
@@ -743,6 +744,7 @@ export function OnlinePlay() {
       zoomCur = v;
       zoomRange.value = String(v);
       zoomVal.textContent = v.toFixed(2) + "x";
+      syncReportZoom(); // 结算面板同步缩放（显示中才生效）
       if (persist) {
         try { localStorage.setItem("online_play_zoom", String(v)); } catch { /* 隐私模式 */ }
       }
@@ -754,6 +756,28 @@ export function OnlinePlay() {
       if (!pageEl) return 1;
       const z = parseFloat(getComputedStyle(pageEl as HTMLElement).zoom);
       return z > 0 ? z : 1;
+    }
+    /* 结算统计面板跟随游戏倍率缩放（2026-10-14 张老师：不缩放面板字太小看不清）。
+       面板是 gframe 的兄弟节点（不继承游戏 zoom），故显式同步。
+       上限：面板放大后不得越出视口——用 rect 实测反算基准宽/高（rect =
+       基准尺寸 × 面板 zoom × 页级 zoom，当前 style.zoom 已知，一次除法解出），
+       可用宽取 gframe 渲染左缘（已含游戏 zoom 与页级 zoom）减页面边距与贴边间隙，
+       可用高取视口底到面板顶（面板 top 与 gframe 顶对齐）。
+       低倍率下不放大过游戏倍率本身（跟手感），高倍率下按空间封顶防裁切 */
+    function syncReportZoom() {
+      if (!greport.classList.contains("show")) return;
+      const rect = greport.getBoundingClientRect();
+      const pz = pageZoom();
+      const curZ = parseFloat(greport.style.zoom || "1") || 1;
+      const rawW = rect.width / (curZ * pz); // 面板基准尺寸（未缩放布局尺寸）
+      const rawH = rect.height / (curZ * pz);
+      if (!rawW || rawW < 1 || !rawH || rawH < 1) return;
+      const gfR = gframe.getBoundingClientRect();
+      const availW = gfR.left - 12 - 14; // 视口左缘 12px + CSS 贴边间隙 14px
+      const availH = window.innerHeight - gfR.top - 12;
+      const cap = Math.max(0.5, Math.min(2.5,
+        Math.min(availW / (rawW * pz), availH / (rawH * pz))));
+      greport.style.zoom = String(Math.max(0.5, Math.min(zoomCur, cap)));
     }
     /* 全屏自动拉满（2026-10-14 张老师定，主要面向手机）：取宽/高两个方向较小的倍率。
        已验证的量纲事实（Chrome）：gframe.offsetWidth/Height 不含 zoom，即基准尺寸；
