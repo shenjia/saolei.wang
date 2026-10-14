@@ -987,8 +987,9 @@ export function OnlinePlay({
       const hasBv = solvedBv > 0 && t > 0;
       const est = hasBv ? t * (board3bv / solvedBv) : 0;
       const qg = hasBv ? Math.pow(t, 1.7) / solvedBv : 0;
-      const ln = lv === "beg" ? 1 : lv === "int" ? 2 : 3;
-      /* 自定义盘参照高级标准评级（2026-10-15 张老师定）：ln 已落 3（高级难度系数），STNB 照算 */
+      /* 评级难度档：自定义盘按雷密度映射（张老师 2026-10-15 定，见 ratingLevel 注释） */
+      const rl = ratingLevel(lv, W, H, M);
+      const ln = rl === "beg" ? 1 : rl === "int" ? 2 : 3;
       const stnb = hasBv
         ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
@@ -1015,7 +1016,7 @@ export function OnlinePlay({
         ["Flags", String(playerFlags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
         ["RQP", hasBv ? f3((est * (est + 1)) / board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
         ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
-        ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好；自定义盘按高级难度计）"],
+        ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好；自定义盘按雷密度折算难度）"],
       ];
       /* 无猜模式专属行（2026-10-15 十期张老师定）：绿色数值，hover＝触雷被救回次数 */
       if (ng) rows.push(["无猜重排", String(ngSaves), "触雷但通过重排挽救的次数", "gv_ng"]);
@@ -1054,8 +1055,9 @@ export function OnlinePlay({
       const cl = stLeft + stRight + stDouble, ce = stCe;
       const hasBv = solvedBv > 0 && t > 0;
       const qg = hasBv ? Math.pow(t, 1.7) / solvedBv : 0;
-      const ln = lv === "beg" ? 1 : lv === "int" ? 2 : 3;
-      /* 自定义盘参照高级标准（ln=3）：STNB 照算，评级走高级基准（2026-10-15 张老师定） */
+      /* 评级难度档：自定义盘按雷密度映射（与 statsReport / computeRadarPoints 同一口径） */
+      const rl = ratingLevel(lv, W, H, M);
+      const ln = rl === "beg" ? 1 : rl === "int" ? 2 : 3;
       const stnb = hasBv
         ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
@@ -1186,15 +1188,29 @@ export function OnlinePlay({
     /* 雷达分位计算：基准由服务端注入（video_metric_dist 全表），分组只按「级别 × 模式」——
        全站恒 6 行，bucket 一律 DIST_BUCKET_ALL（张老师 2026-10-14 定：不细分 3BV、
        不同级别不通比）。
-       自定义盘参照高级（exp）基准评级（2026-10-15 张老师定）：级别键映射后查同一份分布，
-       STNB 也按高级难度系数（ln=3）照算。
+       自定义盘先经 ratingLevel 按雷密度折算难度档（2026-10-15 十四期张老师定，见下），
+       再按折算后的级别查基准分布——STNB 难度系数与基准组同步切换。
        无法评级（缺基准 / 无点击 / 完成度 < 10%，2026-10-14 张老师定）→ **不再隐藏雷达**，
        显示空雷达：全轴 grade="?"、percent=0（多边形收缩到圆心），hover 提示
        「参考数据不足，无法评级」——开局即死的局没有评价意义，但图本身要一直在。
        ⚠️ 口径与录像详情页**完全同源**：五围 + 综合=STNB 组内分位，全部走 lib/videoscore.ts，
           不要在这里再写一份（2026-10-14 之前这里有本地副本，主模块改了副本没跟上，两边评级分叉） */
+    /* 自定义盘的评级难度档（2026-10-15 十四期张老师定）：上一版 cus 一律按高级（ln=3），
+       雷密度稀疏的盘（如 9×9·4）3BV/用时比天然华丽，STNB 轻松破高级满档 252.7 → 满屏 SSS。
+       改为按**雷密度** m/(w·h) 映射到最接近的标准级别，STNB 难度系数与基准组同步切换：
+       锚点＝标准级别雷密度 beg/int 15.6%、exp 20.6%；
+       ≥18% 按高级、13–18% 按中级、<13% 按初级（9×9 小盘同密度仍按初级——盘小操作量小）。
+       实证（本地基准）：3BV=7/4.19s 稀疏局 ln=3→STNB 266（exp SSS 爆表），
+       ln=1→STNB 28.9（beg C 档，符合直觉）。阈值要调直接改 0.18 / 0.13 */
+    function ratingLevel(lv: string, w: number, h: number, m: number): string {
+      if (lv !== "cus") return lv;
+      const d = m / (w * h);
+      if (d >= 0.18) return "exp";
+      if (d >= 0.13 && w * h > 81) return "int";
+      return "beg";
+    }
     function computeRadarPoints(s: GameSnapshot): VideoAnalysisPoint[] {
-      const distLevel = s.level === "cus" ? "exp" : s.level;
+      const distLevel = ratingLevel(s.level, s.w, s.h, s.m);
       const group = metricDists[distLevel + (s.nf ? "_nf" : "")]?.[String(DIST_BUCKET_ALL)];
       const lowCompletion = s.bbbv <= 0 || s.stats.solvedBv / s.bbbv < 0.1;
       const rateable = !!group && !!s.stats.cl && !lowCompletion;
