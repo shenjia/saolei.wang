@@ -96,12 +96,8 @@ export function OnlinePlay() {
       faceUse.setAttribute("href", "#" + FACE_MAP[kind]);
     }
     function cellTd(i: number) { return tbody.rows[(i / W) | 0].cells[i % W]; }
-    /* ---- 双渲染管线（2026-10-14 张老师定）----
-       小倍率（<1.5x）：legacy 位图精灵（td 背景图，模糊插值——像素图放大必然糊，
-       pixelated 锯齿方案已被否决回退）。
-       大倍率（≥1.5x，含全屏拉满/横屏顶满）：flop 矢量贴图，无限放大边缘平滑。
-       VEC_MAP 把引擎态类名映射到 symbol id。 */
-    let useVector = false;
+    /* ---- 渲染：全程矢量（2026-10-14 张老师定：矢量版对齐修好后弃用像素版）----
+       flop 矢量贴图，任意倍率边缘平滑。VEC_MAP 把引擎态类名映射到 symbol id。 */
     const VEC_MAP: Record<string, string> = {
       bb: "cell-normal", bf: "cell-flag", bq: "cell-question",
       b0: "cell-number-0", b1: "cell-number-1", b2: "cell-number-2", b3: "cell-number-3",
@@ -113,11 +109,11 @@ export function OnlinePlay() {
        33.594px、格坐标 .625/.219/.813…），每格独立光栅化 → 格缘反锯齿深浅不一＝错位。
        flop 原版同构方案：整盘一张 <svg> 覆盖层，所有格子共用同一坐标系、一次光栅化，
        任意倍率网格完全均匀。table 只承担布局与命中（覆盖层 pointer-events:none）；
-       td 语义类（bb/b1/bm…）恒保持——败局 bm/bn 补绘检测两种管线共用，不再置 "bv"。 */
+       td 语义类（bb/b1/bm…）恒保持——败局 bm/bn 补绘检测用。 */
     let vecUse: SVGUseElement[] = [];
     function buildVecBoard() {
       const cw = gboard.clientWidth, ch = gboard.clientHeight;
-      if (!cw || !ch) return; // tbody 未建（init 时 savedZoom 先于 reset），reset 里会再建
+      if (!cw || !ch) return; // tbody 未建时测不到尺寸，reset 里会再调
       const svg = $("vec_board") as unknown as SVGSVGElement;
       svg.setAttribute("viewBox", "0 0 " + cw + " " + ch);
       svg.setAttribute("preserveAspectRatio", "none");
@@ -135,11 +131,9 @@ export function OnlinePlay() {
     function paintCell(td: HTMLTableCellElement, cls: string) {
       td.className = cls;
       td.innerHTML = "";
-      if (useVector && vecUse.length) {
-        const i = (td.parentElement as HTMLTableRowElement).rowIndex * W + td.cellIndex;
-        const sym = VEC_MAP[cls];
-        vecUse[i]?.setAttribute("href", sym ? "#" + sym : "");
-      }
+      const i = (td.parentElement as HTMLTableRowElement).rowIndex * W + td.cellIndex;
+      const sym = VEC_MAP[cls];
+      if (vecUse.length) vecUse[i]?.setAttribute("href", sym ? "#" + sym : "");
     }
     function paint(i: number) {
       const td = cellTd(i), s = state[i];
@@ -153,11 +147,9 @@ export function OnlinePlay() {
       const td = cellTd(i);
       td.className = "";
       td.innerHTML = "";
-      if (useVector) vecUse[i]?.setAttribute("href", "#cell-mine-bomb");
-      /* 位图管线注入内嵌 svg（symbol 以 168 为基准坐标系，viewBox 必须一致，160 会放大 5% 错位） */
-      else td.innerHTML = '<svg viewBox="0 0 168 168" width="16" height="16" style="display:block"><use href="#cell-mine-bomb"/></svg>';
+      vecUse[i]?.setAttribute("href", "#cell-mine-bomb");
     }
-    /* 全盘重绘（渲染管线切换 / 重开） */
+    /* 全盘重绘（重开 / 盘面重建） */
     function repaintAll() {
       for (let i = 0; i < state.length; i++) {
         const td = cellTd(i), s = state[i];
@@ -496,6 +488,7 @@ export function OnlinePlay() {
       /* 胜利同样不再有任何文字提醒（数据都在左侧报告浮窗里） */
     }
     function reset(level?: string) {
+      const prevLv = lv, prevW = W, prevH = H;
       lv = level || lv;
       const L = LEVELS[lv]; W = L.x; H = L.y; M = L.m;
       mines = null; nums = null; state = new Uint8Array(W * H);
@@ -510,30 +503,39 @@ export function OnlinePlay() {
         beg: "初级 8×8 · 10 雷", int: "中级 16×16 · 40 雷", exp: "高级 30×16 · 99 雷",
       };
       gname.textContent = names[lv];
-      let html = "";
-      for (let y = 0; y < H; y++) {
-        html += "<tr>";
-        for (let x = 0; x < W; x++) html += '<td class="bb"></td>';
-        html += "</tr>";
+      /* 同盘面重开（点笑脸/F2）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
+         只重置格子贴图；盘面尺寸变化（切难度/首建）才重建 tbody 与矢量覆盖层 */
+      const gridChanged = W !== prevW || H !== prevH || !vecUse.length;
+      if (gridChanged) {
+        let html = "";
+        for (let y = 0; y < H; y++) {
+          html += "<tr>";
+          for (let x = 0; x < W; x++) html += '<td class="bb"></td>';
+          html += "</tr>";
+        }
+        tbody.innerHTML = html;
+        buildVecBoard();
       }
-      tbody.innerHTML = html;
       hitIdx = null;
-      if (useVector) { buildVecBoard(); repaintAll(); } // 矢量覆盖层按新盘面尺寸重建
+      repaintAll();
       /* 级别筛选器：激活项重建为 span.current，其余为 a（ranking_tabs 结构）；
-         NF / 无猜开关是原生 checkbox，状态自持、跨局保持，无需重绘 */
-      container.querySelectorAll("#level_tabs [data-lv]").forEach((el) => {
-        const l = el.getAttribute("data-lv")!;
-        el.outerHTML = l === lv
-          ? '<span class="current" data-lv="' + l + '">' + el.textContent + "</span>"
-          : '<a data-lv="' + l + '">' + el.textContent + "</a>";
-      });
+         NF / 无猜开关是原生 checkbox，状态自持、跨局保持，无需重绘。
+         级别没变（点笑脸重开）不动它——outerHTML 重建会丢焦点且白排一版 */
+      if (lv !== prevLv) {
+        container.querySelectorAll("#level_tabs [data-lv]").forEach((el) => {
+          const l = el.getAttribute("data-lv")!;
+          el.outerHTML = l === lv
+            ? '<span class="current" data-lv="' + l + '">' + el.textContent + "</span>"
+            : '<a data-lv="' + l + '">' + el.textContent + "</a>";
+        });
+      }
       /* NF 开启时触屏「插旗模式」按钮无意义，隐藏 */
       flagBtn.classList.toggle("hidden", nf);
-      /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式刷新封顶
-         （切到小盘后上限应回到 2.5，大盘则按容器宽收紧） */
+      /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式仅盘面尺寸
+         变化时刷新封顶（同盘面重开不动 zoom，杜绝重排跳动） */
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches) fitZoomForLandscape();
-      else applyZoom(zoomCur, false);
+      else if (gridChanged) applyZoom(zoomCur, false);
     }
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
@@ -611,19 +613,26 @@ export function OnlinePlay() {
         chordCells = null;
       }
     }
-    /* 单格按下态跟随：从旧格挪到 i 格（按下态两种管线统一用位图 b0——浅灰凸起，
-       flop 矢量体系里没有独立「未开格按下」贴图，cell-press 是已开格底不适用） */
+    /* 按下态贴图：平面下沉底（VEC_MAP.b0 = cell-number-0 ≡ cell-press，
+       与 legacy 位图 b0 精灵同一外观） */
+    function pressPaint(c: number) {
+      const td = cellTd(c);
+      td.className = "b0";
+      td.innerHTML = "";
+      vecUse[c]?.setAttribute("href", "#" + VEC_MAP["b0"]);
+    }
+    /* 单格按下态跟随：从旧格挪到 i 格 */
     function pressSingle(i: number) {
       if (pressCell === i) return;
       if (pressCell !== null && state[pressCell] === 0) paint(pressCell);
       pressCell = i;
-      if (state[i] === 0) { cellTd(i).className = "b0"; cellTd(i).innerHTML = ""; }
+      if (state[i] === 0) pressPaint(i);
     }
     /* 左右同按 3×3 按下态跟随：高亮挪到 i 格邻域 */
     function pressAround(i: number) {
       if (chordCells) chordCells.forEach((c) => { if (state[c] === 0) paint(c); });
       chordCells = neighbors(i).concat([i]).filter((c) => state[c] === 0);
-      chordCells.forEach((c) => { cellTd(c).className = "b0"; cellTd(c).innerHTML = ""; });
+      chordCells.forEach(pressPaint);
     }
     on(gboard, "mousedown", (e: MouseEvent) => {
       if (over) return;
@@ -735,19 +744,6 @@ export function OnlinePlay() {
       zoomVal.textContent = v.toFixed(2) + "x";
       if (persist) {
         try { localStorage.setItem("online_play_zoom", String(v)); } catch { /* 隐私模式 */ }
-      }
-      syncRenderMode();
-    }
-    /* 渲染管线切换阈值：≥1.5x 矢量（大尺寸平滑），<1.5x 位图（原版像素图）。
-       横屏/全屏自动拉满常在 0.8-3.4x 之间游走，切换在 applyZoom 里统一驱动 */
-    const VEC_THRESHOLD = 1.5;
-    function syncRenderMode() {
-      const want = zoomCur >= VEC_THRESHOLD;
-      if (want !== useVector) {
-        useVector = want;
-        gboard.classList.toggle("vector", useVector);
-        if (useVector) buildVecBoard();
-        repaintAll();
       }
     }
     /* 整页窄屏缩放系数（globals.css 阶梯断点 body #page{zoom:0.65..0.94}，≤605px 生效）：

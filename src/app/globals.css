@@ -5622,16 +5622,17 @@ button.msg_cancel:hover {
   /* 位图管线（<1.5x）保持浏览器默认平滑插值（2026-10-14 张老师定：
      pixelated 像素感方案锯齿过强已回退）；≥1.5x 由 JS 切换到 flop 矢量整盘 SVG 覆盖层 */
 }
-/* 矢量管线（≥1.5x）：整盘一张 <svg> 覆盖层画全部格子。
-   2026-10-14 二次返工：每格各自内嵌 <svg> 会被独立光栅化，分数倍率下各格亚像素相位
+/* 渲染：全程矢量（2026-10-14 张老师定，弃用像素版）——整盘一张 <svg> 覆盖层画全部格子。
+   2026-10-14 返工史：每格各自内嵌 <svg> 会被独立光栅化，分数倍率下各格亚像素相位
    不同（zoom2.1 格宽 33.594px）→ 格缘反锯齿深浅不匀＝像素级错位；位图版没这问题
    是因为浏览器按 td 统一平铺。flop 原版同构：所有格子共用一张 SVG 坐标系一次光栅化。
-   覆盖层 pointer-events:none，table 只承担布局与命中；td 语义类恒保持（败局补绘共用） */
+   覆盖层 pointer-events:none，table 只承担布局与命中；td 语义类恒保持（败局补绘用），
+   td 位图背景永久禁用（覆盖层不透明，防任何透出） */
 #online_play #gboard {
   position: relative;
 }
 #online_play #gboard .vecboard {
-  display: none;
+  display: block;
   position: absolute;
   left: 0;
   top: 0;
@@ -5639,17 +5640,8 @@ button.msg_cancel:hover {
   height: 100%;
   pointer-events: none;
 }
-#online_play #gboard.vector .vecboard {
-  display: block;
-}
-#online_play #gboard.vector td {
+#online_play #gboard td {
   background: none;
-}
-/* 按下态（pressSingle/pressAround 直接置 b0）两管线统一用位图凸起贴图：
-   覆盖层对未开格画的也是 cell-normal 凸起，视觉一致，无需矢量对应 */
-#online_play #gboard.vector td.b0 {
-  background-image: url(/images/common/block16x16.png?v=5);
-  background-position: 0 0;
 }
 #online_play .gbar {
   display: flex;
