@@ -193,8 +193,12 @@ export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysis
           style={{ visibility: "hidden" }}
         >
           {/* 2026-10-14 张老师定：与「实力」雷达气泡统一口径用「超过」；满分显示「全网第一」。
-              数值（实际数据）单独包 span 上金色（.vr_tip_val），百分比 em 维持原色不变 */}
-          {tip.percent >= 100 ? (
+              数值（实际数据）单独包 span 上金色（.vr_tip_val），百分比 em 维持原色不变。
+              2026-10-15 张老师定：无基准分布（grade="?"）时改提示语，
+              不再显示「0.00，超过 0% 的玩家」这种无意义内容 */}
+          {tip.grade === "?" ? (
+            "数据不足，无法评级"
+          ) : tip.percent >= 100 ? (
             "全网第一"
           ) : (
             <>
