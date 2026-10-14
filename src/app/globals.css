@@ -1692,9 +1692,11 @@ del[data-tip]:hover::after {
   overflow: visible;
 }
 /* ⚠️ 录像详情页与在线玩结算面板**共用同一个组件**（VideoAnalysisRadar，
-   OnlinePlay 用 createRoot 挂载 size=160 的紧凑版），所以气泡/数值规则两边都要给 */
+   OnlinePlay 用 createRoot 挂载 size=160 的紧凑版），所以气泡/数值规则三处都要给
+   （第三处是移动端结算浮层 #gr_modal，挂在 body 直下、不在 #page 里） */
 #page #video_view .vr_tip,
-#page #online_play .vr_tip {
+#page #online_play .vr_tip,
+#gr_modal .vr_tip {
   position: absolute;
   z-index: 20;
   /* left 存的是「气泡中心」（effect 里按标签中心钳位），由 translateX 收回半宽 */
@@ -1714,7 +1716,8 @@ del[data-tip]:hover::after {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 #page #video_view .vr_tip em,
-#page #online_play .vr_tip em {
+#page #online_play .vr_tip em,
+#gr_modal .vr_tip em {
   padding: 0 1px;
   font-style: normal;
   font-weight: bold;
@@ -1723,13 +1726,20 @@ del[data-tip]:hover::after {
 /* 「实际数据」金色（2026-10-14 张老师定）：与雷达最高等级 SSS 同色 #E6DB74，
    百分比 em 与「超过/的玩家」等文字维持原色不变 */
 #page #video_view .vr_tip_val,
-#page #online_play .vr_tip_val {
+#page #online_play .vr_tip_val,
+#gr_modal .vr_tip_val {
   color: #E6DB74;
 }
-/* 紧凑版（练习结算面板）：SVG 走 width/height 属性，消掉行内基线空隙 */
-#page #online_play .vr_wrap .chart {
+/* 紧凑版（练习结算面板，八期起顶满面板宽）：SVG 撑满 .vr_wrap（JS 侧 width:100%），
+   viewBox 222 等比缩放；hover 放大标签会略越出视口，不裁 */
+#page #online_play .vr_wrap .chart,
+#gr_modal .vr_wrap .chart {
   display: block;
   margin: 0;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  overflow: visible;
 }
 
 /* BBS 主题页右栏盒子：padding 30px → 盒内容宽 210、外径 272，与首页右栏板块（#newbie 等）一致 */
@@ -6322,52 +6332,9 @@ button.msg_cancel:hover {
 #online_play .face svg {
   pointer-events: none;
 }
-#online_play .gname {
-  margin-top: 9px;
-  padding: 2px 6px;
-  background: silver;
-  border: 2px solid;
-  border-color: #7b7b7b #fff #fff #7b7b7b;
-  color: #7b7b7b;
-  font-size: 12px;
-  line-height: 20px;
-  width: 0;
-  min-width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 0 10px;
-  overflow: hidden; /* 窄盘 + 状态全开也不许折行/撑高（张老师定：状态栏恒一行） */
-}
-/* 级别名 margin auto 居中：右侧无状态时正中；有状态时在剩余空间内居中、
-   状态内容贴右。初级盘内宽仅 132px，全开状态时级别名省略号收缩让位 */
-#online_play .gname .gname_text {
-  margin: 0 auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-/* ---- 状态（2026-10-14 四期五改）：并入级别名银条右侧，恒单行；
-       NF / 无猜标签 + 3BV + 无猜重排次数。无任何内容时 .hidden 整体不占位 ---- */
-#online_play .gname .gstatus {
-  display: flex;
-  align-items: center;
-  gap: 0; /* 「・」紧贴前后项（六改追补：中间不留空隙） */
-  white-space: nowrap;
-}
-#online_play .gname .gstatus.hidden {
-  display: none;
-}
-/* 状态项纯文本（初级盘内宽仅 132px，带框标签四个塞不下）；
-   全部同色同粗细（六改追补张老师定）——不靠样式区分，只靠文字本身 */
-#online_play .gstatus .st,
-#online_play .gstatus .st_nf,
-#online_play .gstatus .st_ng,
-#online_play .gstatus .st_re,
-#online_play .gstatus .sep {
-  white-space: nowrap;
-}
+/* 状态栏（原 .gname 级别名银条 + .gstatus）已整个取消——2026-10-15 八期张老师定
+   「没有意义」：级别名与筛选 tabs 重复、3BV 归数据统计面板、NF/无猜是玩家自己开的
+   开关。DOM 与这里的一组规则一并删除；竖屏/横屏媒体查询里的 display:none 同步清理 */
 #online_play .gboard_wrap {
   max-width: 100%;
   overflow-x: auto;
@@ -6512,59 +6479,92 @@ button.msg_cancel:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: center;
 }
-/* 首行大字（2026-10-14 张老师定）：胜利＝绿色「完成！」+ 金色大字成绩；
-   踩雷＝灰色「踩雷」+ 常规色成绩。flex 基线对齐，成绩是视觉主角 */
-#online_play .gresult .gr_head {
+/* 标题行（2026-10-15 七期张老师定）：**不再报「完成！/ 踩雷」**（笑脸状态已足够），
+   左＝本局成绩（与录像详情页 h1 同格式同配色：级别名 + 级别色成绩 + NF），
+   右＝五围图各轴组内分位加权出的新评级「评级：S+」。两端对齐、不折行。
+   ⚠️ 移动端浮层卡片（#gr_modal）不在 #online_play 里，下面这一组规则两处都要给 */
+#online_play .gresult .gr_title,
+#gr_modal .gr_title {
   display: flex;
   align-items: baseline;
-  justify-content: center;
+  justify-content: space-between;
   gap: 6px;
-  padding-bottom: 4px;
-  margin-bottom: 4px;
+  padding-bottom: 5px;
+  margin-bottom: 5px;
   border-bottom: 1px solid #656355;
+  font-size: 12px;
+  color: #b1b1a4;
+  white-space: nowrap;
 }
-#online_play .gresult .gr_head .gr_state {
-  font-size: 15px;
-  font-weight: bold;
+#online_play .gresult .gr_title .gr_lv,
+#gr_modal .gr_title .gr_lv {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
 }
-#online_play .gresult .gr_head.win .gr_state {
-  color: #7ed957; /* 胜利绿 */
-}
-#online_play .gresult .gr_head.lose .gr_state {
-  color: #9a998d;
-}
-#online_play .gresult .gr_head .gr_time {
-  font-size: 22px;
-  font-weight: bold;
+/* 成绩：等宽字体 + 级别配色（与录像详情页 h1 em.lv_* 同一色阶：初级绿 / 中级橙 / 高级金） */
+#online_play .gresult .gr_title .gr_lv em,
+#gr_modal .gr_title .gr_lv em {
   font-family: "Courier New", Courier, monospace;
-  line-height: 1;
-}
-#online_play .gresult .gr_head .gr_time.gold {
-  color: #fdc61d; /* 成绩金 */
-}
-#online_play .gresult .gr_head.lose .gr_time {
+  font-size: 14px;
+  font-weight: bold;
+  font-style: normal;
   color: #d6d6c8;
-  font-size: 18px;
 }
-#online_play .gresult .gr_head .gr_unit {
+#online_play .gresult .gr_title .gr_lv em.lv_beg,
+#gr_modal .gr_title .gr_lv em.lv_beg {
+  color: #a6e22e;
+}
+#online_play .gresult .gr_title .gr_lv em.lv_int,
+#gr_modal .gr_title .gr_lv em.lv_int {
+  color: #f79646;
+}
+#online_play .gresult .gr_title .gr_lv em.lv_exp,
+#gr_modal .gr_title .gr_lv em.lv_exp {
+  color: #fdc61d;
+}
+/* NF 标记（无猜）：与录像详情页 h1 ins 同为金色、去下划线 */
+#online_play .gresult .gr_title .gr_lv ins,
+#gr_modal .gr_title .gr_lv ins {
   font-size: 11px;
+  text-decoration: none;
+  color: #fdc61a;
+}
+/* 踩雷局（八期 2026-10-15 张老师定）：左侧不显示用时，只给灰色「未完成」 */
+#online_play .gresult .gr_title .gr_lv.fail,
+#gr_modal .gr_title .gr_lv.fail {
   color: #9a998d;
 }
-#online_play .gresult .gr_radar {
+/* 评级：等级字母的颜色由 JS 按 gradeColor() 内联（SSS/SS/S 金 → A~F 紫），
+   未评级（自定义盘 / 缺基准 / 完成度过低）显示「—」+ 灰底 */
+#online_play .gresult .gr_title .gr_rate,
+#gr_modal .gr_title .gr_rate {
+  color: #9a998d;
+}
+#online_play .gresult .gr_title .gr_rate b,
+#gr_modal .gr_title .gr_rate b {
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+#online_play .gresult .gr_radar,
+#gr_modal .gr_radar {
   display: flex;
   justify-content: center;
 }
 /* 四按钮分两行（六期）：2 列 grid——DOM 顺序即「左上→右上→左下→右下」，
    「再来一局/重玩本局」在上排，「查看回放/下载录像」在下排。
    桌面面板宽 196 − 左右 padding 20 = 174，两列各 84.5px：图标 14 + 间距 6 + 四字 48 = 68，
-   放得下不折行 */
-#online_play .gresult .gr_btns {
+   放得下不折行；移动浮层卡片更宽，同样两列 */
+#online_play .gresult .gr_btns,
+#gr_modal .gr_btns {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 5px;
   margin-top: 4px;
 }
-#online_play .gresult .grb {
+#online_play .gresult .grb,
+#gr_modal .grb {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6578,12 +6578,14 @@ button.msg_cancel:hover {
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-#online_play .gresult .grb svg {
+#online_play .gresult .grb svg,
+#gr_modal .grb svg {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
 }
-#online_play .gresult .grb:hover {
+#online_play .gresult .grb:hover,
+#gr_modal .grb:hover {
   background: #4a4940;
   border-color: #8a8878;
   color: #f8f8f2;
@@ -6592,6 +6594,36 @@ button.msg_cancel:hover {
   #online_play .gresult.show {
     display: block;
   }
+}
+/* ---- 移动端结算浮层（2026-10-15 七期张老师定）----
+   <960px 时桌面右侧面板不显示（.gresult.show 只在 ≥960px 生效），完成一局改弹本浮层：
+   全屏遮罩 + 屏幕居中卡片，**点遮罩关闭**。元素由 OnlinePlay.tsx 动态挂到 body 直下
+   （同 #fs_tip）——#page 在 ≤605px 有整页 zoom，做在里面 fixed 遮罩会随缩放失真、
+   铺不满屏。卡片内部沿用上面那组 .gr_*（与桌面面板同一份样式，只是换宿主） */
+#gr_modal {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(0, 0, 0, 0.55);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  text-shadow: none;
+}
+#gr_modal:not([hidden]) {
+  display: flex;
+}
+#gr_modal .grm_card {
+  width: 100%;
+  max-width: 248px;
+  box-sizing: border-box;
+  background: #49483e;
+  border: 1px solid #656355;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  padding: 10px 12px;
+  text-align: center;
 }
 /* 游戏界面内回放控制栏（五期二版的三~五期产物）已于 2026-10-15 六期整条撤除
    （张老师定：看回放时不再出现控制条）——回放改为进即自动播完，重播/退出走右侧面板
@@ -6815,12 +6847,9 @@ html.op-fakefs #header {
     position: static;
   }
   /* 竖屏计数条保持桌面形态：时间/笑脸/雷数在棋盘上方横排一行（.gbar 基础样式，
-     不覆盖）；只隐藏状态栏（级别名/3BV 银条）——移动端不显示。
+     不覆盖）。（状态栏已整个取消，八期——原此处 display:none 规则删除）
      ⚠️ 计数条竖排进银框左侧只属横屏沉浸布局，竖屏切勿命中
      （2026-10-15 张老师报：竖屏也被竖排了） */
-  #online_play .gname {
-    display: none;
-  }
 }
 
 /* ---- /online 横屏沉浸模式（2026-10-15 张老师定）----
@@ -6829,7 +6858,7 @@ html.op-fakefs #header {
    ① .news_head 整块隐藏——含 h1 标题、级别 tabs、.gicons（齿轮/全屏）、
       设置浮窗与自定义盘弹窗（后两者锚在 news_head 内，一并隐去，符合张老师
       「包括标题、级别、设置、全屏」的要求）；
-   ② 状态栏（.gname）隐藏；
+   ② 状态栏已整个取消（八期）；
    ③ 计数条竖排进银框左侧：时间上 / 笑脸中 / 雷数下（桌面头部逆时针转 90°）。
       DOM 顺序 雷数/笑脸/计时（桌面横排左→右）+ column-reverse 反转即得。
    ④ 禁掉页面滚动（2026-10-15 张老师定）：内容已由 fitZoomForLandscape 按视口
@@ -6864,9 +6893,7 @@ html.op-fakefs #header {
   #online_play .news_head {
     display: none;
   }
-  #online_play .gname {
-    display: none;
-  }
+  /* （状态栏已整个取消，八期——原此处 display:none 规则删除） */
   #online_play .gwrap {
     display: inline-flex;
     align-items: stretch;

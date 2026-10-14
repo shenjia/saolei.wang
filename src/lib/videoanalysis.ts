@@ -6,16 +6,15 @@
 // 口径（张老师 2026-10-14 定）：
 //   · 分组只按 **级别 × 模式（标雷/无猜）**，不细分 3BV，也不同级别之间比；
 //   · 雷达 **五轴**：综合（置顶）/ 速度 / 效率 / 精准 / 手速 —— 原「移动」轴已去掉；
-//   · 综合 = 其余四轴在组内百分位的加权平均（见 videoradar.ts compositeOf），
-//     不再用 STNB（STNB 只由用时+3BV 构成，与「速度」是同一份信息，跨 3BV 不可比）。
+//   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
+//     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
+//     video_metrics.composite 的口径同步见 scripts/video-metrics.ts。
 
 import { prisma } from "./db";
 import {
   AXIS_METRICS,
-  compositeOf,
   DIST_BUCKET_ALL,
   formatMetric,
-  gradeFromPercent,
   gradeOf,
   MIN_DIST_SIZE,
   percentOf,
@@ -109,12 +108,10 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     if (!baseline) return null;
 
     // ① 四根分项轴
-    const percents: Partial<Record<MetricKey, number>> = {};
     const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
       const value = Number(row[def.key]);
       const dist = distFor(baseline, def.key);
       const percent = dist.length ? percentOf(value, dist, def.highIsBetter) : 0;
-      percents[def.key] = percent;
       return {
         key: def.key,
         name: def.name,
@@ -125,16 +122,19 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       };
     });
 
-    // ② 综合轴置顶：四轴百分位的加权平均。它本身就是百分位量纲，
-    //    所以半径、气泡里的「超过 xx%」读数都用同一个值，等级由档位表反推。
-    const cmp = compositeOf(percents);
+    // ② 综合轴置顶：**STNB 原值**（张老师 2026-10-14 晚定：数值与评级都回到 STNB 口径，
+    //    弃用中途的「四轴百分位加权平均」）。半径与气泡「超过 xx%」用 STNB 在组内的分位，
+    //    等级走同一份分布 + gradeOf —— 与其余四轴同一套算法，口径自洽。
+    //    STNB 分布列（video_metric_dist.stnb）本来就随跑批一起产出，无需额外数据。
+    const stnbValue = Number(row.stnb);
+    const stnbDist = distFor(baseline, "stnb");
     const composite: VideoAnalysisPoint = {
-      key: "cmp",
+      key: "stnb",
       name: "综合",
-      value: cmp,
-      disp: `综合 ${cmp.toFixed(1)} 分`,
-      percent: cmp,
-      grade: gradeFromPercent(cmp),
+      value: stnbValue,
+      disp: formatMetric("stnb", stnbValue),
+      percent: stnbDist.length ? percentOf(stnbValue, stnbDist, true) : 0,
+      grade: stnbDist.length ? gradeOf(stnbValue, stnbDist, true) : "?",
     };
 
     return [composite, ...subs];

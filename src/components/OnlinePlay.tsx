@@ -20,15 +20,41 @@
 //   ③ 右侧面板四个按钮分两行：上「再来一局」「重玩本局」，下「查看回放」「下载录像」；
 //   ④ 下载文件名对齐录像页规则（见 lib/avfwrite 的 onlineAvfFilename）：登录玩家带
 //      `# 用户ID 英文名` 段，未登录省略。
+// 七期（2026-10-15 张老师定）：
+//   ① 结算面板首行不再报「完成！/ 踩雷」（笑脸状态已足够），改标题行：
+//      左＝本局成绩（与录像详情页 h1 同格式同配色：级别名 + 级别色成绩 + NF），
+//      右＝「评级：S+」——五围图（综合 STNB + 速度/效率/精准/手速）各轴组内分位加权出的
+//      新评级（权重见 lib/videoscore.ts PERFORMANCE_WEIGHTS：STNB 占一半，四分项各 1/8）；
+//   ② 移动端（<960px，桌面右侧面板的媒体查询不生效）完成一局改弹**屏幕居中浮层**：
+//      全屏遮罩 + 居中卡片，点遮罩关闭；元素挂 body 直下（同 #fs_tip，避开 #page 页级 zoom）；
+//   ③ 看过回放后把浮层重新弹出来（播完自动退出回放 / 手动退出都会回到本局表现浮层）。
+// 八期（2026-10-15 张老师定）：
+//   ① 踩雷局标题左侧显示灰色「未完成」（失败的用时没有展示意义）；
+//   ② F 级配色 #6600cc → 暗灰 #8a8878（lib/videoscore.ts GRADE_COLORS 唯一来源，
+//      实力/录像分析/结算评级所有雷达图同步）；
+//   ③ 结算面板雷达宽度顶满面板内容宽（VideoAnalysisRadar fill 模式，原固定 160 废）；
+//   ④ 状态栏（级别名+3BV/模式银条）整个取消——「没有意义」；「显示3BV」设置开关随之删除；
+//   ⑤ 「显示统计」改口径：打开后也只在**游戏结束**时弹出数据面板（对局中不再常驻刷新）。
 
 import { useEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { FlopSprites } from "./FlopSprites";
 import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
+import { LEVEL_NAMES } from "@/lib/config";
 import { paintRangeFill } from "@/lib/paintRange";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
-import { AXIS_METRICS, DIST_BUCKET_ALL, formatMetric, gradeOf, percentOf } from "@/lib/videoscore";
+import {
+  AXIS_METRICS,
+  DIST_BUCKET_ALL,
+  formatMetric,
+  gradeColor,
+  gradeFromPercent,
+  gradeOf,
+  percentOf,
+  performanceOf,
+} from "@/lib/videoscore";
+import type { MetricKey } from "@/lib/videoscore";
 
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
 export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
@@ -133,16 +159,15 @@ export function OnlinePlay({
     }
     /* NF / 无猜为独立开关（可叠加，2026-10-14 张老师定）；全屏开关只控制显示、不影响对局；
        问号开关（默认关）只影响右键循环是否经过问号态，切换不重开。
-       二期起这些开关收进设置浮窗，初始值从 localStorage 恢复 */
+       二期起这些开关收进设置浮窗，初始值从 localStorage 恢复。
+       「显示3BV」开关已废（2026-10-15 八期张老师定：状态栏整个取消，见 gname 注释） */
     let nf = false, ng = false, qmark = false;
-    /* 「显示3BV」开关（2026-10-14 四期张老师定，默认关）：打开后状态栏显示本局 3BV；
-       NF / 无猜模式下不看这个开关也强制显示（这两种模式玩家必看 3BV）。
-       重排次数＝本局无猜重排生效次数（踩一次雷/一个盲点算一次，内部重试不算）。 */
-    let showBv = false;
     /* 「显示统计」开关（2026-10-15 六期张老师定，默认关）：左侧「数据统计」面板的**唯一**
-       显示开关。关＝任何时刻都不显示（含结算时刻，此前是结算时自动弹出）；开＝常驻显示，
-       对局中随计时器每 100ms 实时刷新，对局结束后定格最终值。 */
+       显示开关。八期改口径：开＝也只在**游戏结束**时随结算弹出（对局中不再常驻实时刷新
+       ——张老师定「只有游戏结束才出现数据面板」）；关＝任何时刻都不显示。再开局撤下。 */
     let showStats = false;
+    /* 无猜重排生效次数（踩一次雷/一个盲点算一次，内部重试不算）。
+       状态栏取消后无 UI 消费，仅保留给 dev 测试钩子（__op.ngRedeals）验证重排逻辑 */
     let ngRedeals = 0;
     /* 3BV 范围（按级别独立记忆）：默认＝该级别完整统计区间；
        布雷时拒绝范围外盘面重掷（见 placeMines），最小差 10 由浮窗交互保证 */
@@ -158,14 +183,13 @@ export function OnlinePlay({
         if (!raw) return;
         const s = JSON.parse(raw) as {
           nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
-          showBv?: boolean; showStats?: boolean;
+          showStats?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
         if (typeof s.nf === "boolean") nf = s.nf;
         if (typeof s.ng === "boolean") ng = s.ng;
         if (typeof s.qmark === "boolean") qmark = s.qmark;
-        if (typeof s.showBv === "boolean") showBv = s.showBv;
         if (typeof s.showStats === "boolean") showStats = s.showStats;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
@@ -185,7 +209,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showBv, showStats, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showStats, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -253,9 +277,29 @@ export function OnlinePlay({
       smile: "face-normal", ooh: "face-press-cell", dead: "face-lose",
       win: "face-win", press: "face-press-normal",
     };
-    const gnameText = $("gname_text");
     const greport = $("greport");
     const gresult = $("gresult"); // 右侧结算面板（六期：雷达图 + 四按钮两行）
+    /* ---- 七期（2026-10-15 张老师定）：移动端结算浮层 ----------------------------------
+       <960px 时 CSS 里 .gresult.show 不生效（桌面右侧栏位放不下），完成一局改弹本浮层：
+       全屏遮罩 + 屏幕居中卡片，点遮罩关闭。
+       ⚠️ 必须挂 body 直下（同 #fs_tip）：#page 在 ≤605px 有整页 zoom，做在 #page 里的
+          fixed 遮罩会随缩放失真、铺不满屏（本项目的既有教训）。
+       断点与 CSS 的 (min-width: 960px) 必须同值——JS 按它决定把面板渲染到哪个宿主。 */
+    const mqPanelDesktop = window.matchMedia("(min-width: 960px)");
+    const grModal = document.createElement("div");
+    grModal.id = "gr_modal";
+    grModal.hidden = true;
+    /* 卡片是个空壳：内容由 renderResultPanel 按当前断点填（另一端同步清空，
+       保证 #gr_radar / 按钮 id 全文档只有一份） */
+    grModal.innerHTML = '<div class="grm_card" id="grm_card"></div>';
+    document.body.appendChild(grModal);
+    const grmCard = grModal.querySelector("#grm_card") as HTMLElement;
+    /* 记录面板当前在哪个宿主（resize 跨断点时用来判断要不要搬家） */
+    let panelOnDesktop = mqPanelDesktop.matches;
+    /* 点遮罩关闭（卡片内部点击的 e.target 是卡片或其子节点，不会命中） */
+    on(grModal, "click", (e) => {
+      if (e.target === grModal) hideResultModal();
+    });
 
     /* ---- 结算快照（五期）：结束瞬间的完整对局状态，供重玩/回放/下载使用 ---- */
     interface GameSnapshot {
@@ -300,30 +344,10 @@ export function OnlinePlay({
       if (kind !== "press") faceKind = kind;
       faceUse.setAttribute("href", "#" + FACE_MAP[kind]);
     }
-    /* ---- 状态栏（2026-10-14 四期，五改同日）：并入级别名同一条银条右侧
-       （张老师定：状态栏只显示一行，模式/3BV 等放状态栏右侧）。
-       显示条件：①「显示3BV」开关开 → 显示 3BV（五改：与 NF/无猜解绑，
-       不再自动强制显示）；②NF / 无猜任一开启 → 显示模式标签；
-       ③无猜模式下发生过重排 → 追加重排次数（六改：文案「重排N次」）。
-       顺序（六改追补张老师定）：3BV 紧跟级别名的雷数之后，其后才是模式与重排，
-       整条用「・」连成一串（含级别名与 3BV 之间）。无内容时右侧整体不占位。
-       开局前没有盘面，3BV 显示占位「—」。
-       一次「重排」＝一次点击触发的无猜重排生效（内部平移/重排重试不算）——
-       见 openCell 里的 ++ngRedeals。 */
-    const gstatus = $("gstatus");
-    type St = { t: string; c: string };
-    function updateStatus() {
-      const p: St[] = [];
-      if (showBv) p.push({ t: "3BV " + (started ? board3bv : "—"), c: "st_bv" });
-      if (nf) p.push({ t: "NF", c: "st_nf" });
-      if (ng) p.push({ t: "无猜", c: "st_ng" });
-      if (ng && ngRedeals > 0) p.push({ t: "重排" + ngRedeals + "次", c: "st_re" });
-      gstatus.innerHTML = (p.length ? '<span class="sep">・</span>' : "")
-        + p
-          .map((s) => '<span class="st ' + s.c + '">' + s.t + "</span>")
-          .join('<span class="sep">・</span>');
-      gstatus.classList.toggle("hidden", p.length === 0);
-    }
+    /* 状态栏已整个取消（2026-10-15 八期张老师定：「没有意义」）——级别名与筛选 tabs 重复、
+       3BV 有数据统计面板、NF/无猜是玩家自己开的开关。原 gname/gstatus 结构与
+       updateStatus() 一并删除（对应 CSS 同步清理）。无猜重排计数（ngRedeals）保留给
+       dev 测试钩子，见 openCell 里的 ++ngRedeals */
     function cellTd(i: number) { return tbody.rows[(i / W) | 0].cells[i % W]; }
     /* ---- 渲染：全程矢量（2026-10-14 张老师定：矢量版对齐修好后弃用像素版）----
        flop 矢量贴图，任意倍率边缘平滑。VEC_MAP 把引擎态类名映射到 symbol id。 */
@@ -543,15 +567,10 @@ export function OnlinePlay({
       }
       board3bv = regions + bvSingles.length;
     }
-    /* 当前对局用时（秒；未开局为 0）——数据面板实时刷新用，口径与 stopTimer 返回值一致 */
-    function elapsedSec(): number {
-      return started && startTs ? (performance.now() - startTs) / 1000 : 0;
-    }
     function startTimer() {
       startTs = performance.now();
       timerId = window.setInterval(() => {
         led(ledTime, Math.floor((performance.now() - startTs) / 1000));
-        refreshStatPanel(); // 六期：面板常驻时随计时器刷新（内部自带开关/悬停/开局判断）
       }, 100);
     }
     function stopTimer() {
@@ -847,7 +866,7 @@ export function OnlinePlay({
     }
     function openCell(i: number) {
       if (over || state[i] === 1 || state[i] === 2) return;
-      if (!started) { started = true; placeMines(i); startTimer(); updateStatus(); }
+      if (!started) { started = true; placeMines(i); startTimer(); }
       if (mines![i]) {
         /* 必雷格（被已开数字 100% 锁死）：直接判负，绝不重排、盘面与 3BV 零变化
            （2026-10-14 张老师定）。其余踩雷才走无猜救回。重排不弹任何提醒
@@ -855,10 +874,10 @@ export function OnlinePlay({
         if (!ng || isForcedMine(i)) { lose(i); return; }
         const saved = (isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false);
         if (!saved) { lose(i); return; }
-        ngRedeals++; updateStatus(); // 一次点击触发的无猜重排＝计数 1（内部重试不计）
+        ngRedeals++; // 一次点击触发的无猜重排＝计数 1（内部重试不计）
       } else if (ng && nums![i] !== 0 && isBlind(i)) {
         const changed = tryNoGuess(i, true); // 安全盲点（数字格）：同样尽量换成 opening，盲点必开空
-        if (changed) { ngRedeals++; updateStatus(); }
+        if (changed) ngRedeals++;
       }
       const stack = [i];
       while (stack.length) {
@@ -900,8 +919,8 @@ export function OnlinePlay({
        RQP=Est×(Est+1)/3BV；QG=RT^1.7/solved；
        STNB=(87.420L²−155.829L+115.708)/QG×(solved/3BV)^0.5（L: beg=1/int=2/exp=3）；
        RTime 后缀 (n)=floor(RT)+1（录像秒数口径） */
-    /* 表格 HTML + 完成 3BV（六期从 report 抽出：开关打开时对局中每 100ms 也要刷这张表，
-       与结算共用同一份构造，口径永不分叉） */
+    /* 表格 HTML + 完成 3BV（六期从 report 抽出：与结算共用同一份构造，口径永不分叉。
+       八期起只在游戏结束这一刻渲染一次，不再有对局中刷新路径） */
     function statsReport(t: number): { solvedBv: number; html: string } {
       let solvedBv = 0, solvedOps = 0;
       for (const reg of bvRegions) {
@@ -968,18 +987,10 @@ export function OnlinePlay({
       greport.classList.add("show");
       syncReportZoom();
     }
-    /* 对局中实时刷新（计时器每 100ms 调一次；未开局无意义，直接跳过）。
-       鼠标悬停在面板上时跳过——innerHTML 重建会把正在悬停的那行换掉，术语气泡会闪 */
-    function refreshStatPanel() {
-      if (!started || over) return;
-      if (!showStats || !greport.classList.contains("show")) return;
-      if (greport.matches(":hover")) return;
-      paintStatPanel(statsReport(elapsedSec()).html);
-    }
     function report(t: number, won: boolean) {
       const { solvedBv, html } = statsReport(t);
-      /* 数据面板只在「显示统计」开着时出现（六期张老师定：默认任何时刻都不显示，
-         设置里的开关是唯一入口） */
+      /* 数据面板只在「显示统计」开着时、且只在**游戏结束**这一刻出现
+         （2026-10-15 八期张老师定：对局中不再常驻实时刷新）；再开局由 reset 撤下 */
       if (showStats) paintStatPanel(html);
       buildResultPanel(t, solvedBv, won);
     }
@@ -1020,12 +1031,31 @@ export function OnlinePlay({
          否则旧 root 的 DOM 会被 innerHTML 抽走、留下悬空引用 */
       radarRootRef.current?.unmount();
       radarRootRef.current = null;
-      const timeNum = (s.csec / 100).toFixed(2);
-      /* 首行大字（2026-10-14 张老师定）：胜利＝绿色「完成！」+ 金色大字成绩；
-         踩雷＝灰色「踩雷」+ 常规色成绩。flex 基线对齐，成绩是视觉主角 */
-      const headLine = s.won
-        ? '<div class="gr_head win"><span class="gr_state">完成！</span><span class="gr_time gold">' + timeNum + "</span><span class=\"gr_unit\">秒</span></div>"
-        : '<div class="gr_head lose"><span class="gr_state">踩雷</span><span class="gr_time">' + timeNum + "</span><span class=\"gr_unit\">秒</span></div>";
+      /* 标题行（七期 2026-10-15 张老师定）：**不再报「完成！/ 踩雷」**（笑脸状态已足够），
+         左＝本局成绩（与录像详情页 h1 同格式同配色：级别名 + 级别色成绩 + NF）；
+         八期追补：**踩雷局左侧显示灰色「未完成」**（失败的用时没有展示意义）。
+         右＝「评级：S+」——五围图各轴组内分位的加权新评级（STNB 占一半、四分项各 1/8，
+         权值见 lib/videoscore.ts PERFORMANCE_WEIGHTS）。
+         雷达不可用（自定义盘 / 缺基准 / 完成度过低）时评级显示「—」 */
+      const pts = computeRadarPoints(s);
+      const percents: Partial<Record<MetricKey, number>> = {};
+      for (const p of pts ?? []) percents[p.key] = p.percent;
+      const perfGrade = pts ? gradeFromPercent(performanceOf(percents)) : "?";
+      const lvName = (LEVEL_NAMES as Record<string, string>)[s.level] ?? "自定义";
+      const lvSpan = s.won
+        ? '<span class="gr_lv">' +
+          lvName +
+          '<em class="lv_' + s.level + '">' + (s.csec / 100).toFixed(2) + "</em>秒" +
+          (s.nf ? "<ins>NF</ins>" : "") +
+          "</span>"
+        : '<span class="gr_lv fail">未完成</span>';
+      const titleLine =
+        '<div class="gr_title">' +
+        lvSpan +
+        '<span class="gr_rate">评级：<b style="color:' + gradeColor(perfGrade) + '">' +
+        (perfGrade === "?" ? "—" : perfGrade) +
+        "</b></span>" +
+        "</div>";
       /* 按钮矢量图形（16px stroke 线性图标，与齿轮/全屏按钮同风格） */
       const IC = {
         /* 再来一局＝掷骰子（随机新盘面），与「重玩本局」的回转箭头形成对照 */
@@ -1038,10 +1068,14 @@ export function OnlinePlay({
         download:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 15V3"/></svg>',
       };
+      /* 宿主按当前断点选（七期）：桌面＝右侧浮窗 gresult，移动＝居中浮层卡片 grmCard。
+         非活动端同步清空——#gr_radar 与按钮 id 全文档只能存在一份 */
+      const host = mqPanelDesktop.matches ? gresult : grmCard;
+      (mqPanelDesktop.matches ? grmCard : gresult).innerHTML = "";
       /* 四个按钮分两行（2026-10-15 六期张老师定）：上排＝开局类（再来一局 / 重玩本局），
          下排＝本局录像类（查看回放 / 下载录像）。.gr_btns 走 2 列 grid，DOM 顺序即行列顺序 */
-      gresult.innerHTML =
-        headLine +
+      host.innerHTML =
+        titleLine +
         '<div class="gr_radar" id="gr_radar"></div>' +
         '<div class="gr_btns">' +
         '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + "再来一局</button>" +
@@ -1049,33 +1083,44 @@ export function OnlinePlay({
         '<button type="button" class="grb" id="grb_review">' + IC.review + "查看回放</button>" +
         '<button type="button" class="grb" id="grb_download">' + IC.download + "下载录像</button>" +
         "</div>";
-      /* 桌面：右侧浮窗显形（left/top/zoom 由 syncReportZoom 定位） */
-      gresult.classList.add("show");
+      /* 桌面：右侧浮窗显形（left/top/zoom 由 syncReportZoom 定位）；移动：弹遮罩浮层 */
+      gresult.classList.toggle("show", mqPanelDesktop.matches);
+      grModal.hidden = mqPanelDesktop.matches;
       /* 雷达图：标准级别才有基准分布；cus 盘/失败局/无基准 → 只显示数值不评级 */
-      const radarHost = gresult.querySelector("#gr_radar") as HTMLElement | null;
+      const radarHost = host.querySelector("#gr_radar") as HTMLElement | null;
       if (radarHost) {
-        const pts = computeRadarPoints(s);
         if (pts) {
           radarHost.style.display = "block";
           /* 复用录像详情页的 VideoAnalysisRadar 组件（张老师 2026-10-14 定：不该再维护第二份
              绘制）。面板是 innerHTML 注入流、JSX 挂不进去，所以用 createRoot 把 React 组件挂到
              占位 div —— 文案/字号/气泡样式与录像页**由同一个组件保证同源**，不会再分叉。
-             紧凑尺寸 160（2026-10-14 张老师：右侧板块太大，缩到与高级游戏区高度一致量级） */
+             fill 模式（八期 2026-10-15 张老师定）：宽度顶满面板内容宽，不再给固定边长 */
           const root = createRoot(radarHost);
-          root.render(<VideoAnalysisRadar data={pts} size={160} />);
+          root.render(<VideoAnalysisRadar data={pts} fill />);
           radarRootRef.current = root;
         } else {
           radarHost.style.display = "none";
         }
       }
       const bind = (id: string, fn: () => void) => {
-        const el = gresult.querySelector("#" + id) as HTMLElement | null;
+        const el = host.querySelector("#" + id) as HTMLElement | null;
         if (el) on(el, "click", fn);
       };
       bind("grb_new_game", newGame);
       bind("grb_replay_same", replaySameBoard);
       bind("grb_review", startInPlaceReplay);
       bind("grb_download", downloadAvf);
+    }
+    /* 移动端结算浮层收起 / 再弹（七期 2026-10-15 张老师定）。
+       收起**不清内容**——只是 hidden，再弹不必重建（雷达 React root 留在卡片里，
+       hidden 期间不响应 hover，无副作用；真正清空发生在 renderResultPanel 换宿主时） */
+    function hideResultModal() {
+      grModal.hidden = true;
+    }
+    function showResultModal() {
+      /* 桌面端右侧浮窗常驻可见，没有「再弹」这回事；浮层只在移动端存在 */
+      if (mqPanelDesktop.matches || !snapshot) return;
+      grModal.hidden = false;
     }
     /* 雷达分位计算：基准由服务端注入（video_metric_dist 全表），分组只按「级别 × 模式」——
        全站恒 6 行，bucket 一律 DIST_BUCKET_ALL（张老师 2026-10-14 定：不细分 3BV、
@@ -1187,7 +1232,7 @@ export function OnlinePlay({
     let replaying = false;
     /* 强制退出钩子：exitReplay 是闭包内的，reset（外层）够不着——由 startInPlaceReplay
        每次进入时注册，退出时自清；repaint 参数控制是否重画结算盘面（reset 路径不需要） */
-    let forceExitReplay: (repaint?: boolean) => void = () => {};
+    let forceExitReplay: (repaint?: boolean, restorePanel?: boolean) => void = () => {};
     /* 重播钩子（六期）：同一局回放中再点「查看回放」＝从头放。与 forceExitReplay 同理——
        restartReplay 也是闭包内的，由 startInPlaceReplay 注册、exitReplay 自清 */
     let restartReplay: (() => void) | null = null;
@@ -1195,6 +1240,9 @@ export function OnlinePlay({
       if (!snapshot) return;
       /* 已在回放中（六期张老师定）：不忽略点击，从头重播 */
       if (replaying) { restartReplay?.(); return; }
+      /* 移动端（七期）：回放在游戏盘面上演，结算浮层（带遮罩）挡着盘面——点「查看回放」
+         即收起浮层，播完再弹回来（见 exitReplay / tick 的收尾） */
+      hideResultModal();
       const s = snapshot;
       replaying = true;
       const N = s.w * s.h;
@@ -1354,11 +1402,18 @@ export function OnlinePlay({
         interpCursor(target);
         if (target >= s.csec) {
           setPlaying(false);
+          /* 移动端（七期 2026-10-15 张老师定：回放播放完后再次显示浮层）：
+             浮层是带遮罩的全屏层，回放停在原地会被它盖住、连退出入口都摸不到——
+             播完直接退出回放（恢复结算盘面）并重新弹出「本局表现」浮层。
+             桌面端浮窗本来就在盘面旁常驻，保持原样（回放停在终局画面）。 */
+          if (!mqPanelDesktop.matches) exitReplay();
           return;
         }
         rafId = requestAnimationFrame(tick);
       }
-      function exitReplay(repaint = true) {
+      /* restorePanel（七期）：退出回放后是否把「本局表现」浮层弹回来。
+         reset 路径（新开一局 / 再来一局 / 重玩本局）传 false——那时浮层必须收着 */
+      function exitReplay(repaint = true, restorePanel = true) {
         setPlaying(false);
         replaying = false;
         restartReplay = null;
@@ -1367,6 +1422,7 @@ export function OnlinePlay({
            reset 路径传 false（后面自会全盘重画） */
         if (repaint) repaintAll();
         document.removeEventListener("keydown", escR);
+        if (restorePanel) showResultModal();
       }
       /* 注册给外层用（进回放时更新引用，退出时自清）：
          forceExitReplay 供 reset 强制退出；restartReplay 供回放中再点「查看回放」从头重播 */
@@ -1406,8 +1462,9 @@ export function OnlinePlay({
     function reset(level?: string) {
       /* 回放中重开（笑脸/F2/切级别）：先强制退出回放，清掉光标/拦截标志
          （2026-10-14 张老师报：播放回放后点笑脸不能再玩——回放元素残留锁死游戏）。
-         exitReplay 的 repaintAll 在这里跳过：reset 后面自会全盘重画 */
-      if (replaying) forceExitReplay(false);
+         exitReplay 的 repaintAll 在这里跳过：reset 后面自会全盘重画。
+         第二个参数 false（七期）：新开一局不许把「本局表现」浮层弹回来 */
+      if (replaying) forceExitReplay(false, false);
       const prevLv = lv, prevW = W, prevH = H;
       lv = level || lv;
       const L = levelSize(lv); W = L.x; H = L.y; M = L.m;
@@ -1417,23 +1474,17 @@ export function OnlinePlay({
          （五期）；重玩锁定标记保留——placeMines 在首击时消费它 */
       flagToggles = 0; stLeft = 0; stRight = 0; stDouble = 0; stCe = 0; stPath = 0; lastPX = null;
       evStream = [];
-      /* 数据面板（六期）：开关开着 → 重开即显形（第 0 秒基线，之后随计时器实时刷新）；
-         关着 → 任何时刻都不出现。statsReport 只读 state/统计量、不读 snapshot，
+      /* 数据面板（八期）：任何时刻都不因开局而显示——只有游戏结束且开关开着才弹出
+         （见 report）。statsReport 只读 state/统计量、不读 snapshot，
          故与下面 snapshot = null 的先后无依赖 */
-      if (showStats) paintStatPanel(statsReport(0).html);
-      else greport.classList.remove("show");
+      greport.classList.remove("show");
       gresult.classList.remove("show");
+      hideResultModal(); // 移动端浮层（七期）随新局一并收起
       snapshot = null;
       stopTimer();
       led(ledMines, M); led(ledTime, 0);
       setFace("smile");
-      const names: Record<string, string> = {
-        beg: "初级 8×8 · 10 雷", int: "中级 16×16 · 40 雷", exp: "高级 30×16 · 99 雷",
-        cus: "自定义 " + W + "×" + H + " · " + M + " 雷",
-      };
-      gnameText.textContent = names[lv];
       ngRedeals = 0;
-      updateStatus();
       /* 同盘面重开（点笑脸/F2）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
          只重置格子贴图；盘面尺寸变化（切难度/首建）才重建 tbody 与矢量覆盖层 */
       const gridChanged = W !== prevW || H !== prevH || !vecUse.length;
@@ -1722,7 +1773,6 @@ export function OnlinePlay({
     const swNf = $("sw_nf") as HTMLInputElement;
     const swNg = $("sw_ng") as HTMLInputElement;
     const swQm = $("sw_qm") as HTMLInputElement;
-    const swBv = $("sw_bv") as HTMLInputElement;
     const swStats = $("sw_stats") as HTMLInputElement;
     on(swNf, "change", () => {
       nf = swNf.checked;
@@ -1735,15 +1785,12 @@ export function OnlinePlay({
       reset();
     });
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
-    /* 「显示3BV」只影响状态栏文字，不重开当前局 */
-    on(swBv, "change", () => { showBv = swBv.checked; saveSettings(); updateStatus(); });
-    /* 「显示统计」（六期）：只切左侧数据面板的显隐，不重开当前局。
-       打开＝立即显形（按当前已进行的秒数），此后随计时器 100ms 实时刷新；关闭＝立刻撤下 */
+    /* 「显示统计」（八期改口径）：只影响**游戏结束**时是否弹出数据面板，不重开当前局。
+       打开时对局中不提前出现；关闭时若上一局定格的面板还挂着，立刻撤下 */
     on(swStats, "change", () => {
       showStats = swStats.checked;
       saveSettings();
-      if (showStats) paintStatPanel(statsReport(elapsedSec()).html);
-      else greport.classList.remove("show");
+      if (!showStats) greport.classList.remove("show");
     });
 
     /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ----
@@ -1840,6 +1887,12 @@ export function OnlinePlay({
       syncPageFit(); // 自定义盘的页宽按新视口重算（非 cus 级别内部直接清 inline）
       /* 数据面板常驻时（六期）：跟随 gwrap 重新贴合（内部对未显示的面板直接早退） */
       syncReportZoom();
+      /* 断点跨越（七期）：宽屏 ↔ 窄屏互切后，已结束那局的结算面板搬到对应宿主
+         （桌面右侧浮窗 / 移动居中浮层）——否则窄屏下面板会留在看不见的 gresult 里 */
+      if (snapshot && mqPanelDesktop.matches !== panelOnDesktop) {
+        panelOnDesktop = mqPanelDesktop.matches;
+        renderResultPanel();
+      }
       positionCusDialog(); // 窗口尺寸/换行变化后重新对准「自定义」tab（未开窗时内部直接跳过）
     }, { signal });
 
@@ -2304,7 +2357,6 @@ export function OnlinePlay({
         bv3: () => board3bv,
         bvSel: () => ({ ...bvSel[lv] }),
         lv: () => lv,
-        showBv: () => showBv,
         ngRedeals: () => ngRedeals,
         size: () => ({ w: W, h: H, m: M }),
         /* 诊断：单次重排的 bv（测分布用，不动盘面之外的任何状态） */
@@ -2319,7 +2371,6 @@ export function OnlinePlay({
     swNf.checked = nf;
     swNg.checked = ng;
     swQm.checked = qmark;
-    swBv.checked = showBv;
     swStats.checked = showStats;
     syncBvSlider();
 
@@ -2335,6 +2386,10 @@ export function OnlinePlay({
     return () => {
       ac.abort(); // 摘除全部事件监听
       fsTip.remove(); // iOS 引导浮层挂在 body 上，随组件卸载一起收走
+      /* 移动端结算浮层（七期）同样挂在 body 上：卸载时先卸雷达 React root 再摘元素 */
+      radarRootRef.current?.unmount();
+      radarRootRef.current = null;
+      grModal.remove();
       document.documentElement.classList.remove("op-fakefs"); // 伪全屏态不跨页残留
       if (timerId) clearInterval(timerId);
       if (touchTimer) clearTimeout(touchTimer);
@@ -2376,7 +2431,8 @@ export function OnlinePlay({
         </div>
 
         {/* 设置浮窗：齿轮点开（无头部栏/关闭按钮——外点、Esc、再点齿轮均可关）；
-            含 NF/无猜/问号/显示3BV/显示统计 开关、显示比例滑杆、3BV 范围双端点滑杆。
+            含 NF/无猜/问号/显示统计 开关、显示比例滑杆、3BV 范围双端点滑杆。
+            （「显示3BV」开关已随状态栏一并取消，八期。）
             全部状态入 localStorage（online_play_settings），比例仍走原 online_play_zoom 键 */}
         <div className="gsettings" id="gsettings">
           {/* 开关名 ≤4 字（2026-10-14 张老师定），完整解释放 hover 气泡（.tip） */}
@@ -2395,16 +2451,12 @@ export function OnlinePlay({
             <label className="gsw"><input type="checkbox" id="sw_qm" /><span className="track" /></label>
             <span className="tip">右键按 标雷 → 问号 → 取消 三态循环</span>
           </div>
-          <div className="gs_row">
-            <span className="gs_name">显示3BV</span>
-            <label className="gsw"><input type="checkbox" id="sw_bv" /><span className="track" /></label>
-            <span className="tip">棋盘下方状态栏显示本局 3BV</span>
-          </div>
-          {/* 「显示统计」（2026-10-15 六期张老师定，默认关）：左侧数据统计面板的唯一入口 */}
+          {/* 「显示统计」（2026-10-15 六期张老师定，默认关）：左侧数据统计面板的唯一入口。
+              八期改口径：只在游戏结束时出现（对局中不再常驻实时刷新） */}
           <div className="gs_row">
             <span className="gs_name">显示统计</span>
             <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
-            <span className="tip">左侧数据统计面板常驻显示（对局中随计时实时刷新，结束后定格）</span>
+            <span className="tip">游戏结束后在游戏界面左侧弹出数据统计面板</span>
           </div>
           <div className="gs_divider" />
           <div className="gs_zoom">
@@ -2485,13 +2537,8 @@ export function OnlinePlay({
               </div>
             </div>
           </div>
-          {/* 状态栏（四期五改）：级别名与状态并入同一条银条——整条恒一行，
-              左侧级别名（尽量居中），右侧模式/3BV/重排（updateStatus 注入，
-              无内容时右侧整体不占位，级别名回到正中） */}
-          <div className="gname" id="gname">
-            <span className="gname_text" id="gname_text">初级 8×8 · 10 雷</span>
-            <span className="gstatus hidden" id="gstatus" />
-          </div>
+          {/* 状态栏已取消（八期张老师定「没有意义」）：级别名与筛选 tabs 重复，
+              3BV 归数据统计面板、NF/无猜是玩家自己开的开关——整条银条删除 */}
         </div>
         {/* 结算报告浮窗 / 右侧结算面板：挂在 #game_area（gwrap 之外）——
             zoom 移到 gwrap 后，面板不再被游戏倍率连带（自身 zoom 由 syncReportZoom

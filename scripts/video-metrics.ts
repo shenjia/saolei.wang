@@ -27,18 +27,16 @@ import path from "path";
 import { prisma } from "../src/lib/db";
 import { VIDEO_STATUS } from "../src/lib/config";
 import {
-  AXIS_METRICS,
   analyzeVideo,
   BASE_METRIC_KEYS,
   BASE_METRICS,
-  compositeOf,
   DIST_BUCKET_ALL,
   buildDist,
   MIN_DIST_SIZE,
   percentOf,
   stnbOf,
 } from "../src/lib/videoradar";
-import type { BaseMetricKey, MetricKey } from "../src/lib/videoradar";
+import type { BaseMetricKey } from "../src/lib/videoradar";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 
@@ -60,12 +58,15 @@ function readVideoFile(filepath: string): Uint8Array | null {
 }
 
 /**
- * 全站综合分重算（雷达「综合」轴的落库版本）。
+ * 全站「综合分」重算（雷达「综合」轴的落库版本）。
  *
- * 综合 = 四轴（速度/效率/精准/手速）在「级别 × 模式」组内百分位的加权平均
- * （videoradar.ts compositeOf，权重表 COMPOSITE_WEIGHTS）。它依赖分位基准，
- * 所以必须在 dist 重建之后跑；基准一变，全站综合分都要跟着变。
+ * ⚠️ **口径变更（2026-10-14 晚张老师定）**：综合轴回归 **STNB 原值** —— 雷达的半径与等级
+ * 用 STNB 在「级别 × 模式」组内的分位。composite 列**改存该分位**（0-100），与 beat_pct
+ * 同量纲，也与雷达气泡「STNB x，超过 x% 的玩家」读数天然一致。
+ * 历史：该列曾存「四轴百分位加权平均」，已弃（compositeOf / COMPOSITE_WEIGHTS 仍留在
+ * lib/videoscore.ts 以免动到别处在途引用，但已无生产调用方）。
  *
+ * 依赖分位基准，所以必须在 dist 重建之后跑；基准一变，全站综合分都要跟着变。
  * 30 万行逐条 update 太慢（一次 round trip 一盘），这里按 500 一组拼
  * `UPDATE ... CASE id WHEN ... THEN ...` 批量写。
  */
@@ -76,24 +77,18 @@ async function rebuildComposite() {
   for (const d of dists) byGroup.set(`${d.level}|${d.noflag ? 1 : 0}|${d.bucket}`, d);
 
   const rows = await prisma.videoMetrics.findMany({
-    select: { id: true, level: true, noflag: true, bvs: true, ioe: true, corr: true, cls: true },
+    select: { id: true, level: true, noflag: true, stnb: true },
   });
 
   const vals: Array<[string, number]> = [];
   for (const r of rows) {
     const d = byGroup.get(`${r.level}|${r.noflag ? 1 : 0}|${DIST_BUCKET_ALL}`);
     if (!d) continue;
-    const percents: Partial<Record<MetricKey, number>> = {};
-    for (const def of AXIS_METRICS) {
-      const raw = String((d as unknown as Record<string, unknown>)[def.key] ?? "");
-      const dist = raw
-        .split(",")
-        .filter((s) => s !== "")
-        .map(Number);
-      const v = Number((r as unknown as Record<string, unknown>)[def.key]);
-      percents[def.key] = dist.length ? percentOf(v, dist, def.highIsBetter) : 0;
-    }
-    vals.push([r.id.toString(), compositeOf(percents)]);
+    const dist = String(d.stnb ?? "")
+      .split(",")
+      .filter((s) => s !== "")
+      .map(Number);
+    vals.push([r.id.toString(), dist.length ? percentOf(r.stnb, dist, true) : 0]);
   }
 
   const CHUNK = 500;
@@ -105,7 +100,7 @@ async function rebuildComposite() {
       `UPDATE video_metrics SET composite = CASE id ${whens} END WHERE id IN (${ids})`,
     );
   }
-  console.log(`综合分重算：${vals.length} 盘（基准组 ${dists.length} 个）`);
+  console.log(`综合分（STNB 组内分位）重算：${vals.length} 盘（基准组 ${dists.length} 个）`);
 }
 
 /**
@@ -117,7 +112,7 @@ async function rebuildComposite() {
  *
  * 口径（张老师 2026-10-14 定）：**只排「级别 × 模式」组内**，不排全站——
  * 不同级别放一起比没有意义。rank_all 列保留但不再维护（恒 0）。
- * beat_pct 直接取 composite，与雷达气泡「综合 x 分，超过 x% 的玩家」读数一致。
+ * beat_pct 直接取 composite（= STNB 组内分位），与雷达气泡「STNB x，超过 x% 的玩家」读数一致。
  */
 async function rebuildRank() {
   // ① 先全部清零：屏蔽（status=0）/撤销通过后不该再占榜上的名次，否则 TOP 榜会出现

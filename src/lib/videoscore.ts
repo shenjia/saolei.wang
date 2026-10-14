@@ -40,11 +40,14 @@ export interface MetricDef<K extends MetricKey = MetricKey> {
  * （重放结果是确定性事实，留着不占成本，将来想恢复随时可用）。
  */
 export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
+  // 2026-10-14 晚张老师定：气泡里的「3BV/s」与手速单位都放到数值前/整词化 ——
+  // 速度轴 3BV/s 由后缀改前缀（气泡读「3BV/s 4.065」），手速由「次/秒」改「次点击/秒」。
+  // ⚠️ BASE_METRICS 与 AXIS_METRICS 两处定义必须同步改（录像页与练习页都走 formatMetric）。
   { key: "stnb", name: "综合", desc: "综合评分 STNB", prefix: "STNB", unit: "", digits: 1, highIsBetter: true },
-  { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "", unit: "3BV/s", digits: 3, highIsBetter: true },
+  { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
   { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
   { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
-  { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次/秒", digits: 2, highIsBetter: true },
+  { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   { key: "ppc", name: "移动", desc: "每击鼠标行程", prefix: "", unit: "格/次", digits: 2, highIsBetter: false },
 ];
 
@@ -53,16 +56,16 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
  * 综合分就是这四项在（级别 × 模式）组内百分位的加权平均，见 compositeOf。
  */
 export const AXIS_METRICS: MetricDef<AxisMetricKey>[] = [
-  { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "", unit: "3BV/s", digits: 3, highIsBetter: true },
+  { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
   { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
   { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
-  { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次/秒", digits: 2, highIsBetter: true },
+  { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
 ];
 
 export const BASE_METRIC_KEYS: BaseMetricKey[] = BASE_METRICS.map((m) => m.key);
 export const AXIS_METRIC_KEYS: AxisMetricKey[] = AXIS_METRICS.map((m) => m.key);
 
-/** 指标值格式化（气泡展示），如 `STNB 87.0` / `4.065 3BV/s` */
+/** 指标值格式化（气泡展示），如 `STNB 87.0` / `3BV/s 4.065` / `8.50 次点击/秒` */
 export function formatMetric(key: MetricKey, value: number): string {
   const def = BASE_METRICS.find((m) => m.key === key);
   if (!def) return String(value);
@@ -117,6 +120,43 @@ export function compositeOf(percents: Partial<Record<MetricKey, number>>): numbe
     const w = COMPOSITE_WEIGHTS[def.key] ?? 0;
     if (w <= 0) continue;
     sum += (percents[def.key] ?? 0) * w;
+    wsum += w;
+  }
+  return wsum > 0 ? Math.round((sum / wsum) * 10) / 10 : 0;
+}
+
+/**
+ * 「本局表现」评级（在线玩结算面板标题右侧「评级：S+」）的权重 —— 2026-10-15 张老师定：
+ * **综合(STNB) 占一半，速度 / 效率 / 精准 / 手速 各 1/8**。
+ *
+ * 与 COMPOSITE_WEIGHTS 是两回事：后者是雷达「综合」轴的历史口径（已被 STNB 原值取代），
+ * 这里用的是五围图**全部五根轴**的组内分位加权，只在结算面板标题上用，不落库。
+ * 要偏重某项直接改数字（不必改逻辑）。
+ */
+export const PERFORMANCE_KEYS: MetricKey[] = ["stnb", "bvs", "ioe", "corr", "cls"];
+
+/** 权重（4:1:1:1:1 = 50% + 12.5%×4）；未参与的两项恒 0 */
+export const PERFORMANCE_WEIGHTS: Record<MetricKey, number> = {
+  stnb: 4,
+  bvs: 1,
+  ioe: 1,
+  corr: 1,
+  cls: 1,
+  ppc: 0,
+  cmp: 0,
+};
+
+/**
+ * 本局表现分 = 五围图各轴组内分位的加权平均（0-100）。
+ * 它本身就是百分位量纲，可直接过 GRADE_PERCENTS 九档表出等级（gradeFromPercent）。
+ */
+export function performanceOf(percents: Partial<Record<MetricKey, number>>): number {
+  let sum = 0;
+  let wsum = 0;
+  for (const key of PERFORMANCE_KEYS) {
+    const w = PERFORMANCE_WEIGHTS[key] ?? 0;
+    if (w <= 0) continue;
+    sum += (percents[key] ?? 0) * w;
     wsum += w;
   }
   return wsum > 0 ? Math.round((sum / wsum) * 10) / 10 : 0;
@@ -236,7 +276,10 @@ export const GRADE_COLORS: Record<string, string> = {
   C: "#bf00cc",
   D: "#a000e5",
   E: "#8000ff",
-  F: "#6600cc",
+  // F 改暗灰（2026-10-15 八期张老师定）：原 #6600cc 深紫在深色底上几乎看不见；
+  // 用站内常规弱化灰 #8a8878（与雷达轴名同色阶）。「所有雷达图同步」= 本表是
+  // 唯一来源（实力雷达 RadarChart / 录像分析 / 结算面板评级都走 gradeColor）
+  F: "#8a8878",
 };
 /** 无成绩 / 未评级（?）的兜底色 */
 export const UNKNOWN_COLOR = "#636359";
