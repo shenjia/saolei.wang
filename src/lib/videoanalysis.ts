@@ -110,53 +110,60 @@ function computeOnDemand(input: VideoAnalysisInput) {
 /**
  * 计算某盘录像的六维分析数据。
  * 返回 null 表示「没有可用基准」（跑批未产出该组），此时页面不渲染雷达盒。
+ *
+ * ⚠️ 全流程包 try/catch：这两张表是本功能新加的，只要线上还没跑过 db push（或表被误删、
+ *    连接抖动），查询会抛错；宁可少显示一个雷达盒，也绝不能把录像详情页打成 500。
  */
 export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<VideoAnalysisPoint[] | null> {
-  let row = await prisma.videoMetrics.findUnique({ where: { id: BigInt(input.id) } });
-  if (!row) {
-    const m = computeOnDemand(input);
-    if (!m) return null;
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    row = await prisma.videoMetrics.upsert({
-      where: { id: BigInt(input.id) },
-      create: {
-        id: BigInt(input.id),
-        level: m.level,
-        noflag: m.noflag,
-        realTime: m.timeMs,
-        bbbv: m.bbbv,
-        cl: m.cl,
-        clLeft: m.clLeft,
-        clRight: m.clRight,
-        clDouble: m.clDouble,
-        ce: m.ce,
-        unflag: m.unflag,
-        path: m.path,
-        bvs: m.bvs,
-        ioe: m.ioe,
-        corr: m.corr,
-        cls: m.cls,
-        ppc: m.ppc,
-        stnb: m.stnb,
-        createTime: now,
-      },
-      update: {},
+  try {
+    let row = await prisma.videoMetrics.findUnique({ where: { id: BigInt(input.id) } });
+    if (!row) {
+      const m = computeOnDemand(input);
+      if (!m) return null;
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      row = await prisma.videoMetrics.upsert({
+        where: { id: BigInt(input.id) },
+        create: {
+          id: BigInt(input.id),
+          level: m.level,
+          noflag: m.noflag,
+          realTime: m.timeMs,
+          bbbv: m.bbbv,
+          cl: m.cl,
+          clLeft: m.clLeft,
+          clRight: m.clRight,
+          clDouble: m.clDouble,
+          ce: m.ce,
+          unflag: m.unflag,
+          path: m.path,
+          bvs: m.bvs,
+          ioe: m.ioe,
+          corr: m.corr,
+          cls: m.cls,
+          ppc: m.ppc,
+          stnb: m.stnb,
+          createTime: now,
+        },
+        update: {},
+      });
+    }
+
+    const { row: baseline } = await getBaseline(input.level, input.noflag, row.bbbv || input.bbbv);
+    if (!baseline) return null;
+
+    return METRICS.map((def) => {
+      const value = Number(row[def.key]);
+      const dist = distFor(baseline, def.key);
+      return {
+        key: def.key,
+        name: def.name,
+        value,
+        disp: formatMetric(def.key, value),
+        percent: dist.length ? percentOf(value, dist, def.highIsBetter) : 0,
+        grade: dist.length ? gradeOf(value, dist, def.highIsBetter) : "?",
+      };
     });
+  } catch {
+    return null;
   }
-
-  const { row: baseline } = await getBaseline(input.level, input.noflag, row.bbbv || input.bbbv);
-  if (!baseline) return null;
-
-  return METRICS.map((def) => {
-    const value = Number(row[def.key]);
-    const dist = distFor(baseline, def.key);
-    return {
-      key: def.key,
-      name: def.name,
-      value,
-      disp: formatMetric(def.key, value),
-      percent: dist.length ? percentOf(value, dist, def.highIsBetter) : 0,
-      grade: dist.length ? gradeOf(value, dist, def.highIsBetter) : "?",
-    };
-  });
 }

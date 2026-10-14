@@ -74,10 +74,16 @@ export interface VideoMetrics {
 const CELL_PX = 16; // 扫雷标准格边长，用于把像素行程折成「格」（跨软件无量纲）
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
-/** 二进制 → ParsedVideo（按扩展名选解析器） */
+/**
+ * 二进制 → ParsedVideo（按扩展名选解析器）。
+ * ⚠️ 解析器的入参类型在 Buffer ↔ Uint8Array 之间重构过（2026-10-14 别线在途），
+ *    这里统一转成 Buffer 再传：Buffer 是 Uint8Array 的子类，两种签名都收得下，
+ *    免得随解析器签名一变就构建报 TS2345。readFileSync 本就返回 Buffer，正常零拷贝。
+ */
 export function parseVideoBinary(buf: Uint8Array, ext: string): ParsedVideo | null {
   try {
-    const lines = ext === "avf" ? avfToRawvf(buf) : ext === "mvf" ? mvfToRawvf(buf) : null;
+    const b: Buffer = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+    const lines = ext === "avf" ? avfToRawvf(b) : ext === "mvf" ? mvfToRawvf(b) : null;
     return lines ? formatRawvf(lines) : null;
   } catch {
     // 少数历史文件残缺（实测跑批每千余盘遇到一两个 mvf 提前 EOF），直接算无指标，不中断跑批
