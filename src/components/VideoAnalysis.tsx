@@ -13,7 +13,7 @@
 // 宽度随内容变化，先隐藏渲染 → 实测宽后钳位定位再显示。
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
 // 等级配色与「实力」雷达（RadarChart.tsx）同源：统一在 lib/videoscore.ts 维护，勿单独改
 import { gradeColor } from "@/lib/videoscore";
@@ -40,7 +40,12 @@ function polar(index: number, total: number, r: number): [number, number] {
   return [f(CENTER + r * Math.cos(angle)), f(CENTER + r * Math.sin(angle))];
 }
 
-// 顶点 i 的扇形热区：覆盖整个视口的楔块，进入该角度范围即 hover
+// 顶点 i 的扇形热区：覆盖整个视口的楔块，进入该角度范围即 hover。
+// ⚠️ 几何按 r=SIZE 画、故意越出视口（角方向最远 333px）：渲染会被视口裁掉，
+//    但 .chart 是 overflow:visible（2026-10-15 起标签放大不裁边），越出部分的
+//    **命中区不会被裁**——实测缩放后（面板 174/222）五楔块拼成半径 ~174px 的
+//    大圆盘盖住结算面板四颗按钮：hover 永远挂着、按钮点不了。
+//    所以每块楔块必须 clipPath 钳回 222 视口（见下方 <defs>），只裁命中、不改渲染。
 function wedgePath(index: number, total: number): string {
   const step = (Math.PI * 2) / total;
   const a0 = (Math.PI * 2 * index) / total - Math.PI / 2 - step / 2;
@@ -74,6 +79,8 @@ export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysis
   // 直接写 DOM 而非 setState：定位是纯外部系统同步（react-hooks/set-state-in-effect）
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
+  /* 楔块热区裁剪 id（useId 去掉 «» 等非 URL 安全字符；同文档多实例也不会撞） */
+  const clipId = "vr_hit_" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
 
   useEffect(() => {
     if (hover === null) return;
@@ -108,6 +115,12 @@ export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysis
         role="img"
         aria-label="录像分析雷达图"
       >
+        <defs>
+          {/* 楔块热区命中裁剪：只影响 hit-testing，不影响 overflow:visible 的标签渲染出血 */}
+          <clipPath id={clipId}>
+            <rect x="0" y="0" width={SIZE} height={SIZE} />
+          </clipPath>
+        </defs>
         {GRID_RINGS.map((p) => (
           <polygon
             key={p}
@@ -139,7 +152,7 @@ export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysis
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
             >
-              <path d={wedgePath(i, n)} fill="transparent" pointerEvents="all" />
+              <path d={wedgePath(i, n)} fill="transparent" pointerEvents="all" clipPath={`url(#${clipId})`} />
               <circle
                 cx={x}
                 cy={y}
