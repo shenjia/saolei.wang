@@ -2948,35 +2948,6 @@ body #page.ranking_old .ranking_box {
   color: #a6e22e;
 }
 
-/* 纪录动态新成绩按级别变色（2026-10-14 张老师要求）：初级绿/中级橙/高级金，
-   与录像列表 hover、LevelTag 同色阶。两种形态：
-   刷新纪录的新成绩 a.score.lv_*；首创纪录（创造了）的新成绩 a.original.lv_*。
-   旧成绩 span.original（划线灰）不动；总计等非三级 lv 不挂类，走 legacy 金/灰。
-   legacy 后加载且有 #news .score{color:#fdc61a} (1,1,0) / #news .score:hover (1,2,0)，
-   沿用 news_article 的 #news .table td 前缀 (1,3,2) 提权。 */
-#news .table td a.score.lv_beg,
-#news .table td a.original.lv_beg {
-  color: #a6e22e;
-}
-#news .table td a.score.lv_int,
-#news .table td a.original.lv_int {
-  color: #f79646;
-}
-#news .table td a.score.lv_exp,
-#news .table td a.original.lv_exp {
-  color: #fdc61d;
-}
-/* hover 沿用 #news 区全站惯例变绿（legacy #news .score:hover 同款；
-   初级本身就是绿，悬停无变化，无碍） */
-#news .table td a.score.lv_beg:hover,
-#news .table td a.original.lv_beg:hover,
-#news .table td a.score.lv_int:hover,
-#news .table td a.original.lv_int:hover,
-#news .table td a.score.lv_exp:hover,
-#news .table td a.original.lv_exp:hover {
-  color: #a6e22e;
-}
-
 /* ---------- 世界 TOP10（2008 版 Top10_World；中国选手行高亮） ---------- */
 #world_top .world_head {
   display: flex;
