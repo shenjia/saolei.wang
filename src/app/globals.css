@@ -6705,6 +6705,9 @@ html:has(#online_play) body {
   gap: 5px;
   margin-top: 4px;
 }
+/* .grb 复用录像详情页「播放/下载」按钮（legacy .button）的立体感基因：
+   上下渐变背景 + box-shadow 投影 + text-shadow 文字阴影，hover 变绿 #a6e22e、
+   active 深绿 #8ac21b——与 .button 同一套配色（2026-10-15 十一期张老师定） */
 #online_play .gresult .grb,
 #gr_modal .grb {
   display: flex;
@@ -6712,13 +6715,16 @@ html:has(#online_play) body {
   justify-content: center;
   gap: 6px;
   padding: 4px 0;
-  border: 1px solid #656355;
-  border-radius: 4px;
-  background: #3b3a34;
-  color: #d6d6c8;
+  border: 1px solid #49483e;
+  border-radius: 5px;
+  background-color: #434239;
+  background-image: linear-gradient(to bottom, #49483e, #3b3a32);
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  color: #b1b1a4;
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background-image 0.15s ease, color 0.15s ease;
 }
 #online_play .gresult .grb svg,
 #gr_modal .grb svg {
@@ -6728,9 +6734,12 @@ html:has(#online_play) body {
 }
 #online_play .gresult .grb:hover,
 #gr_modal .grb:hover {
-  background: #4a4940;
-  border-color: #8a8878;
-  color: #f8f8f2;
+  background-image: linear-gradient(to bottom, #4c4b40, #3e3d34);
+  color: #a6e22e;
+}
+#online_play .gresult .grb:active,
+#gr_modal .grb:active {
+  color: #8ac21b;
 }
 @media (min-width: 960px) {
   #online_play .gresult.show {
