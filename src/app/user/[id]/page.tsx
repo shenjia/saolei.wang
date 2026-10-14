@@ -314,13 +314,15 @@ export default async function UserViewPage({
               </Link>
             )}
           </div>
-          {/* key=筛选串铁律：切级别必须强制重挂载（useState(initial) 不重置） */}
+          {/* key=筛选串铁律：切级别必须强制重挂载（useState(initial) 不重置）；
+              pager=false（2026-10-14）：用户主页版块不显示滑条，只享受递增批量 */}
           <VideoListFeed
             key={`${userId}-${level}`}
             initial={userVideos.videos}
             total={userVideos.total}
             pageSize={userVideos.pageSize}
             query={{ level, order: "id", author: userId }}
+            pager={false}
           />
         </div>
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />

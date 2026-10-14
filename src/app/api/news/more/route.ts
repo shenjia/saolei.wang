@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const cursor = parseInt(p.get("cursor") ?? "0", 10) || 0;
   const userId = parseInt(p.get("user") ?? "", 10) || undefined;
-  const size = Math.min(parseInt(p.get("size") ?? "", 10) || NEWS_PAGESIZE, 50);
+  const size = Math.min(parseInt(p.get("size") ?? "", 10) || NEWS_PAGESIZE, 100); // 2026-10-14 递增批量上限放宽（原 50）
   const lv = p.get("level") ?? "";
   const level = lv === "beg" || lv === "int" || lv === "exp" ? lv : undefined;
   // 论坛筛选（2026-10-13 张老师要求）：发表主题（ARTICLE）+ 评论（COMMENT）都算，与等级筛选互斥

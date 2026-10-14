@@ -225,6 +225,8 @@ export async function getPostList(opts: {
   /** 搜索关键字（2026-09-26 张老师要求）：匹配 主题标题 contains OR 作者人名（中/英 contains） */
   q?: string;
   page: number;
+  /** 本批行数（2026-10-14「加载更多」递增批量）：skip 恒按 BBS_PAGESIZE 页锚点，take 才是行数 */
+  take?: number;
 }): Promise<{ posts: BbsPostItem[]; total: number; pageSize: number }> {
   const { board, order, nice, q, page } = opts;
   // 搜索态：作者 id 预查（人名匹配的用户集，take 100 截断——3.4 万用户下同名/热门词足够覆盖）
@@ -257,11 +259,12 @@ export async function getPostList(opts: {
   // 旧版 IsHigh=「高亮」不参与排序（BBS_All/Page_List 仅按时间列），isTop 保持该语义；
   // 置顶由新列 isPinned 承担：置顶组在前、组内与普通帖同按时间列倒序（2026-09-25 张老师定）
   const orderField = order === "post" ? "id" : "lastReplyTime";
+  const size = opts.take ?? BBS_PAGESIZE;
   const rows = await prisma.bbsPost.findMany({
     where,
     orderBy: [{ isPinned: "desc" }, { [orderField]: "desc" }],
-    skip: (page - 1) * BBS_PAGESIZE,
-    take: BBS_PAGESIZE,
+    skip: (page - 1) * BBS_PAGESIZE, // 页锚点恒按 base 19（页码语义不变）
+    take: size, // 本批行数（「加载更多」递增批量可 > 19）
   });
   const authors = await authorsWithTitles([...new Set(rows.map((r) => N(r.user)).filter((x) => x > 0))]);
   return {
@@ -369,6 +372,8 @@ export async function getPostPage(opts: {
   nice?: boolean;
   q?: string;
   page: number;
+  /** 本批行数（透传 getPostList；skip 恒按 BBS_PAGESIZE 页锚点） */
+  take?: number;
 }): Promise<{ posts: BbsPostItem[]; total: number; pageSize: number; hasMore: boolean }> {
   const r = await getPostList(opts);
   return { ...r, hasMore: opts.page * r.pageSize < r.total };

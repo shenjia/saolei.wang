@@ -17,6 +17,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { BvRankingRow } from "@/lib/queries";
@@ -24,6 +25,7 @@ import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
 import { TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
+import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { RankingRules } from "./RankingRules";
 import { toast } from "./Toast";
 
@@ -78,6 +80,22 @@ export function BvRankingFeed({
   const [hint, setHint] = useState("");
   const [hlUid, setHlUid] = useState<number | undefined>(initialHl);
 
+  // ---- 滑条窗口状态（2026-10-14，同 RankingFeed 语义）----
+  const tableRef = useRef<HTMLTableElement>(null);
+  const winStart = Math.floor(((rows[0]?.rank ?? 1) - 1) / pageSize) + 1;
+  const winEnd = rows.length ? Math.floor((rows.at(-1)!.rank - 1) / pageSize) + 1 : winStart;
+  const [curPage, setCurPage] = useState(Math.floor(((initial[0]?.rank ?? 1) - 1) / pageSize) + 1);
+  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，换页重置）
+  const pageCache = useRef(new PageCache<BvTitledRow[]>());
+  const reqSeq = useRef(0);
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    const pg = Math.floor(((initial[0]?.rank ?? 1) - 1) / pageSize) + 1;
+    pageCache.current.set(pg, initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const hlRow = hlUid === undefined ? undefined : rows.find((r) => r.id === hlUid);
   // 已加载窗口的首位名次：>1 说明当前不在榜首（落地深页或往下翻过），需要「回到榜首」出口
   const startRank = rows[0]?.rank ?? 1;
@@ -93,22 +111,88 @@ export function BvRankingFeed({
     if (loading || loadedAll) return;
     setLoading(true);
     setHint("");
+    const seq = ++reqSeq.current;
     try {
-      const res = await fetch(`/api/ranking/bv/more?by=${by}&page=${nextPage.current}`);
+      const size = nextBatchSize(batchStep, pageSize);
+      const res = await fetch(
+        `/api/ranking/bv/more?by=${by}&page=${nextPage.current}&size=${size}`
+      );
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { rows: BvTitledRow[] };
+      if (seq !== reqSeq.current) return;
       if (!data.rows.length) {
         setLoadedAll(true);
         return;
       }
       setRows((prev) => [...prev, ...data.rows]);
-      nextPage.current += 1;
+      // 新覆盖的整页入缓存
+      const firstPage = nextPage.current;
+      for (let pg = firstPage; pg <= Math.floor(data.rows.at(-1)!.rank / pageSize); pg++) {
+        const off = (pg - firstPage) * pageSize;
+        if (off + pageSize <= data.rows.length) {
+          pageCache.current.set(pg, data.rows.slice(off, off + pageSize));
+        }
+      }
+      setBatchStep((s) => s + 1);
+      nextPage.current += Math.ceil(data.rows.length / pageSize);
       const lastRank = data.rows.at(-1)!.rank;
       if (lastRank >= total) setLoadedAll(true);
     } catch {
       setHint("加载失败，请重试");
     } finally {
-      setLoading(false);
+      if (seq === reqSeq.current) setLoading(false);
+    }
+  }
+
+  /** 滑条换页（严格一页语义，2026-10-14 张老师定）：窗口内滚动定位 / 缓存零请求 / 拉一页替换 */
+  async function gotoPage(p: number) {
+    if (loading) return;
+    p = Math.min(maxPage, Math.max(1, p));
+    if (p === curPage) return;
+    if (p >= winStart && p <= winEnd) {
+      const first = (p - winStart) * pageSize;
+      const row = rows[first];
+      if (row) {
+        setCurPage(p);
+        scrollToRow(row.id);
+        return;
+      }
+    }
+    setCurPage(p);
+    const cached = pageCache.current.get(p);
+    if (cached) {
+      flushSync(() => setRows(cached));
+      setBatchStep(0);
+      nextPage.current = p + 1;
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHint(`已翻到第 ${p} 页（缓存）`);
+      setTimeout(() => setHint(""), 1600);
+      return;
+    }
+    const seq = ++reqSeq.current;
+    setLoading(true);
+    setHint("");
+    try {
+      const res = await fetch(`/api/ranking/bv/more?by=${by}&page=${p}`);
+      if (!res.ok) throw new Error();
+      const data = (await res.json()) as { rows: BvTitledRow[] };
+      if (seq !== reqSeq.current) return;
+      if (!data.rows.length) {
+        setLoadedAll(true);
+        return;
+      }
+      pageCache.current.set(p, data.rows);
+      flushSync(() => setRows(data.rows));
+      setBatchStep(0);
+      nextPage.current = p + 1;
+      setLoadedAll(data.rows.at(-1)!.rank >= total);
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHint(`已翻到第 ${p} 页`);
+      setTimeout(() => setHint(""), 1600);
+    } catch {
+      setHint("加载失败，请重试");
+    } finally {
+      if (seq === reqSeq.current) setLoading(false);
     }
   }
 
@@ -186,7 +270,7 @@ export function BvRankingFeed({
           )}
         </div>
       )}
-      <table cellPadding={0} cellSpacing={0} className="ranking_table">
+      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
         <thead>
           <tr>
             <th>排名</th>
@@ -235,22 +319,32 @@ export function BvRankingFeed({
           )}
         </tbody>
       </table>
-      <div className="more_loader ranking_loader">
-        {loadedAll ? (
-          <span className="all_loaded">已加载全部</span>
-        ) : (
-          <button
-            type="button"
-            className="button small"
-            disabled={loading}
-            onMouseDown={noFocusJump}
-            onClick={loadMore}
-          >
-            {loading ? "加载中…" : "加载更多"}
-          </button>
-        )}
-        <TotalCount total={total} loaded={rows.length} unit="位" />
-        {hint && <span className="loader_hint">{hint}</span>}
+      <div className="list_footer">
+        <PageSlider
+          page={curPage}
+          pages={maxPage}
+          winStart={winStart}
+          winEnd={Math.min(winEnd, maxPage)}
+          loading={loading}
+          onGoto={gotoPage}
+        />
+        <div className="more_loader ranking_loader">
+          {loadedAll ? (
+            <span className="all_loaded">已加载全部</span>
+          ) : (
+            <button
+              type="button"
+              className="button small"
+              disabled={loading}
+              onMouseDown={noFocusJump}
+              onClick={loadMore}
+            >
+              {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
+            </button>
+          )}
+          <TotalCount total={total} loaded={rows.length} unit="位" />
+          {hint && <span className="loader_hint">{hint}</span>}
+        </div>
       </div>
       <RankingRules
         title="BV 排行规则"

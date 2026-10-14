@@ -651,6 +651,149 @@ body #video_view .video_cell .playable {
   color: #75715e;
 }
 
+/* ---------- 新增：列表页码滑条（2026-10-14，设计稿 design/page-slider-v1.html v1.4） ----------
+   排行 / BV 榜 / 进步榜 / 录像 / 论坛共用。拇指金黄=当前浏览页，暗绿填充=已加载窗口；
+   拖拽松手立即加载；无 JS 时不渲染（组件侧 pages<=1 也返回 null） */
+.list_footer {
+  clear: both;
+}
+.page_slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 10px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.page_slider .ps_btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  line-height: 22px;
+  background: #49483e;
+  color: #cfcdc0;
+  border: 0;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  padding: 0;
+}
+.page_slider .ps_btn:hover:not(:disabled) {
+  background: #5b584a;
+  color: #f8f8f2;
+}
+.page_slider .ps_btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.page_slider .ps_btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.page_slider .ps_rail {
+  flex: 1 1 auto;
+  position: relative;
+  height: 24px;
+  cursor: pointer;
+  touch-action: none;
+}
+.page_slider .ps_track {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 9px;
+  height: 6px;
+  background: #3e3d32;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.page_slider .ps_fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #5b7a2e; /* 已加载窗口（暗一档的绿，避免喧宾夺主） */
+  border-radius: 3px;
+  transition: left 0.18s ease, width 0.18s ease;
+}
+.page_slider .ps_thumb {
+  position: absolute;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  background: #fdc61a;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(253, 198, 26, 0.18);
+  transition: left 0.15s ease, transform 0.12s ease;
+}
+.page_slider.dragging .ps_thumb {
+  transform: scale(1.25);
+  transition: none;
+}
+.page_slider.dragging .ps_fill {
+  transition: none;
+}
+.page_slider .ps_label {
+  flex: 0 0 auto;
+  min-width: 96px;
+  text-align: right;
+  font-size: 12px;
+  color: #939387;
+  font-family: Consolas, "微软雅黑", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.page_slider .ps_label b {
+  color: #fdc61a;
+  font-weight: normal;
+}
+.page_slider .ps_bubble {
+  position: absolute;
+  bottom: 26px;
+  transform: translateX(-50%);
+  background: #3e3d32;
+  border: 1px solid #fdc61a;
+  border-radius: 5px;
+  color: #fdc61a;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 2px 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  font-family: Consolas, "微软雅黑", monospace;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.12s;
+  z-index: 5;
+}
+.page_slider .ps_bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  margin-left: -3px;
+  border: 3px solid transparent;
+  border-top-color: #fdc61a;
+}
+.page_slider.dragging .ps_bubble {
+  opacity: 1;
+}
+.page_slider .ps_pending {
+  position: absolute;
+  right: 0;
+  top: -14px;
+  font-size: 11px;
+  color: #75715e;
+  display: none;
+}
+.page_slider.pending .ps_pending {
+  display: block;
+}
+/* 键盘可达性：焦点环走站内暗色描边 */
+.page_slider:focus-visible {
+  outline: 1px solid #75715e;
+  border-radius: 4px;
+}
+
 /* ---------- 新增：评论区（2013 版 _cell.php 未写完，按 NewsCell 风格补齐） ---------- */
 .comments .comment_cell {
   margin-bottom: 8px;

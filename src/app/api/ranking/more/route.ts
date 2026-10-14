@@ -1,7 +1,8 @@
 // 排行榜「加载更多」增量接口（2026-09-24 张老师要求，替代分页）：
-// GET /api/ranking/more?by=<排序列>&view=nf&page=N → { rows, deltas }
+// GET /api/ranking/more?by=<排序列>&view=nf&page=N[&size=M] → { rows, deltas }
 // 军衔与日升降在服务端预算好随 JSON 返回（对齐 /api/news/more 的模式），
 // 客户端直接渲染、零额外请求。
+// size（2026-10-14 递增批量）：本批行数，skip 恒按 20/页锚点；不传=一页 20。
 
 import { NextResponse } from "next/server";
 import { getRankingTable } from "@/lib/queries";
@@ -14,8 +15,10 @@ export async function GET(req: Request) {
   const by = parseRankingBy(p.get("by") ?? "");
   const nf = p.get("view") === "nf";
   const page = Math.max(1, parseInt(p.get("page") ?? "1", 10) || 1);
+  const sizeRaw = parseInt(p.get("size") ?? "", 10);
+  const size = Math.min(Math.max(sizeRaw || 20, 20), 100);
 
-  const { rows, total, pageSize } = await getRankingTable(by, nf, page);
+  const { rows, total, pageSize } = await getRankingTable(by, nf, page, undefined, sizeRaw ? size : undefined);
 
   let deltas: [number, number | null][] | undefined;
   if (by === "sum_time" && !nf) {

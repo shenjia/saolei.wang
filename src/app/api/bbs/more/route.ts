@@ -3,6 +3,7 @@
 // 2026-09-25 六轮：与 /bbs 页对齐——「精华」= board=nice（跨板块），排序固定更新时间；
 //   ?nice=1 / ?order=nice 旧深链兼容；order 参数作废
 // 2026-09-26：透传 q 搜索关键字（标题或人名过滤，与 /bbs 页同语义）
+// size（2026-10-14 递增批量）：本批行数，skip 恒按 19/页锚点；不传=一页 19。
 
 import { NextResponse } from "next/server";
 import { BBS_BOARD_NAMES, getPostPage } from "@/lib/bbs";
@@ -14,6 +15,8 @@ export async function GET(req: Request) {
   const nice = !q && (p.get("nice") === "1" || p.get("order") === "nice" || p.get("board") === "nice");
   const boardRaw = parseInt(p.get("board") ?? "", 10);
   const board = !nice && BBS_BOARD_NAMES[boardRaw] !== undefined ? boardRaw : undefined;
+  const sizeRaw = parseInt(p.get("size") ?? "", 10);
+  const size = Math.min(Math.max(sizeRaw || 19, 19), 100);
 
   const { posts, hasMore, total } = await getPostPage({
     board: q ? undefined : board,
@@ -21,6 +24,7 @@ export async function GET(req: Request) {
     nice: q ? undefined : nice || undefined,
     q: q || undefined,
     page,
+    take: sizeRaw ? size : undefined,
   });
   return NextResponse.json({ posts, hasMore, total });
 }

@@ -1291,9 +1291,12 @@ export async function getRankingTable(
   by: RankingBy,
   nf: boolean,
   page: number,
-  area?: string
+  area?: string,
+  /** 本批行数（2026-10-14「加载更多」递增批量）：skip 恒按 RANKING_PAGESIZE 页锚点，take 才是行数 */
+  take?: number
 ): Promise<{ rows: RankingRow[]; total: number; pageSize: number }> {
   const { level, order } = byLevelOrder(by);
+  const size = take ?? RANKING_PAGESIZE;
   const field = SCORE_FIELD(level, order);
   const table = userScoresTable(nf);
   let idsWhere: Record<string, unknown> = { [field]: { gt: 0 } };
@@ -1305,8 +1308,8 @@ export async function getRankingTable(
   const rows = await table.findMany({
     where: idsWhere,
     orderBy: { [field]: ORDER_DIRECTION[order] },
-    skip: (page - 1) * RANKING_PAGESIZE,
-    take: RANKING_PAGESIZE,
+    skip: (page - 1) * RANKING_PAGESIZE, // 页锚点恒按 base 20（页码语义不变）
+    take: size, // 本批行数（「加载更多」递增批量可 > 20）
   });
   const authors = await usersByIds(rows.map((r) => N(r.id)));
   // NF 榜：军衔按主榜高级时间评定（与榜单口径无关），需额外回填主榜 exp_time（2026-10-13 SUB 制）
@@ -1680,12 +1683,13 @@ function bvDenoms(ranges: Partial<Record<VideoLevel, { min: number; max: number 
 }
 
 /** BV 收集榜一页。 */
-export async function getBvRanking(by: BvRankingBy, page: number): Promise<BvRankingResult> {
+export async function getBvRanking(by: BvRankingBy, page: number, take?: number): Promise<BvRankingResult> {
   const [all, ranges] = await Promise.all([fetchBvCollection(), getLevel3bvRanges()]);
   const { den, totalDen } = bvDenoms(ranges);
   const sorted = sortBv(all, by);
+  const size = take ?? RANKING_PAGESIZE;
   const rows = sorted
-    .slice((page - 1) * RANKING_PAGESIZE, page * RANKING_PAGESIZE)
+    .slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size)
     .map((e, i) => ({ ...e, rank: (page - 1) * RANKING_PAGESIZE + i + 1 }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen, ranges };
 }

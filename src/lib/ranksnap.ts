@@ -80,7 +80,8 @@ export type GrowRow = RankingRow & GrowUser;
  *  表内排序按 delta 降序（进步幅度大在前）。 */
 export async function getGrowRanking(
   page: number,
-  pageSize = 20
+  /** 返回条数（「加载更多」递增批量用；skip 恒按 base=20 的页锚点，take 才是行数） */
+  take = 20
 ): Promise<{ rows: GrowRow[]; total: number; pageSize: number }> {
   await ensureTodaySnapshot();
   const today = dateStr();
@@ -99,8 +100,8 @@ export async function getGrowRanking(
      LIMIT ? OFFSET ?`,
     yesterday,
     today,
-    pageSize,
-    (page - 1) * pageSize
+    take, // 「加载更多」递增批量（take 可以 > 20，多拉本批行）
+    (page - 1) * 20 // skip 恒按 base 20 的页锚点（页码语义不变）
   ) as { user: bigint; today_rank: number; yesterday_rank: number; delta: number | bigint }[];
   const countRows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
     `SELECT COUNT(*) c FROM rank_snapshot t
@@ -144,6 +145,6 @@ export async function getGrowRanking(
       };
     }),
     total: N(countRows[0]?.c),
-    pageSize,
+    pageSize: 20, // 返回值口径恒为 base 页大小（页码语义），take 只是本批行数
   };
 }

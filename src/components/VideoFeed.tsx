@@ -11,6 +11,7 @@ import type { VideoListItem } from "@/lib/queries";
 import { VideoHead, VideoRowLine } from "./VideoRows";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
+import { nextBatchSize } from "./PageSlider";
 
 const LEVEL_TABS: { key: string; label: string }[] = [
   { key: "", label: "全部" },
@@ -45,9 +46,11 @@ export function VideoFeed({
   const [loading, setLoading] = useState(false);
   const [level, setLevel] = useState("");
   const [switching, setSwitching] = useState(false);
+  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14；切级别重置）
 
-  async function fetchPage(lv: string, cur: number) {
-    const url = `/api/video/more?cursor=${cur}&size=${pageSize}` + (lv ? `&level=${lv}` : "");
+  async function fetchPage(lv: string, cur: number, size?: number) {
+    const url =
+      `/api/video/more?cursor=${cur}&size=${size ?? pageSize}` + (lv ? `&level=${lv}` : "");
     const res = await fetch(url);
     return (await res.json()) as {
       items: VideoListItem[];
@@ -60,21 +63,24 @@ export function VideoFeed({
   async function loadMore() {
     setLoading(true);
     try {
-      const data = await fetchPage(level, cursor);
+      const size = nextBatchSize(batchStep, pageSize);
+      const data = await fetchPage(level, cursor, size);
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
+      setBatchStep((s) => s + 1);
       if (typeof data.total === "number") setTotal(data.total);
-      if (data.count < pageSize) setHasMore(false);
+      if (data.count < size) setHasMore(false);
     } finally {
       setLoading(false);
     }
   }
 
-  // 切换级别：重置列表并取该级别第一页
+  // 切换级别：重置列表并取该级别第一页（批量序列同步重置）
   async function switchLevel(lv: string) {
     if (lv === level || switching) return;
     setSwitching(true);
     setLevel(lv);
+    setBatchStep(0);
     try {
       const data = await fetchPage(lv, 0);
       setItems(data.items);
@@ -142,7 +148,7 @@ export function VideoFeed({
             onMouseDown={noFocusJump}
             onClick={loadMore}
           >
-            {loading ? "加载中…" : "加载更多"}
+            {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
           </button>
         ) : (
           items.length > 0 && <span className="all_loaded">已加载全部</span>

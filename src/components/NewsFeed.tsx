@@ -9,6 +9,7 @@ import type { NewsItem } from "@/lib/queries";
 import { NewsCellView } from "./NewsCellView";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
+import { nextBatchSize } from "./PageSlider";
 
 export interface NewsFeedItem {
   news: NewsItem;
@@ -55,10 +56,11 @@ export function NewsFeed({
   const [loading, setLoading] = useState(false);
   const [level, setLevel] = useState("");
   const [switching, setSwitching] = useState(false);
+  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14；切筛选重置）
 
-  async function fetchPage(lv: string, cur: number) {
+  async function fetchPage(lv: string, cur: number, size?: number) {
     const url =
-      `/api/news/more?cursor=${cur}&size=${pageSize}` +
+      `/api/news/more?cursor=${cur}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
       (lv && lv !== "forum" ? `&level=${lv}` : "") +
       (lv === "forum" ? "&type=forum" : "") +
@@ -70,21 +72,24 @@ export function NewsFeed({
   async function loadMore() {
     setLoading(true);
     try {
-      const data = await fetchPage(level, cursor);
+      const size = nextBatchSize(batchStep, pageSize);
+      const data = await fetchPage(level, cursor, size);
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
+      setBatchStep((s) => s + 1);
       if (typeof data.total === "number") setTotal(data.total);
-      if (data.count < pageSize) setHasMore(false);
+      if (data.count < size) setHasMore(false);
     } finally {
       setLoading(false);
     }
   }
 
-  // 切换等级筛选：重置列表并取该等级第一页
+  // 切换等级筛选：重置列表并取该等级第一页（批量序列同步重置）
   async function switchLevel(lv: string) {
     if (lv === level || switching) return;
     setSwitching(true);
     setLevel(lv);
+    setBatchStep(0);
     try {
       const data = await fetchPage(lv, 0);
       setItems(data.items);
@@ -157,7 +162,7 @@ export function NewsFeed({
             onMouseDown={noFocusJump}
             onClick={loadMore}
           >
-            {loading ? "加载中…" : "加载更多"}
+            {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
           </button>
         ) : (
           items.length > 0 && <span className="all_loaded">已加载全部</span>

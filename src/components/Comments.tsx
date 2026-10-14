@@ -12,6 +12,7 @@ import { AvatarCell, TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
 import { toast } from "./Toast";
 import { TotalCount } from "./TotalCount";
+import { nextBatchSize } from "./PageSlider";
 
 /** 单条评论（移植 comment/_cell 的应有结构）
  *  2026-10-13 张老师要求：作者名后显示军衔徽章（与 BBS 楼层 bbs_meta 同款 AvatarCell + TitleBadge） */
@@ -59,16 +60,19 @@ export function CommentList({
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
+  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14）
 
   async function loadMore() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/comment/more?video=${videoId}&cursor=${cursor}&size=${COMMENT_PAGESIZE}`);
+      const size = nextBatchSize(batchStep, COMMENT_PAGESIZE);
+      const res = await fetch(`/api/comment/more?video=${videoId}&cursor=${cursor}&size=${size}`);
       const data = (await res.json()) as { items: CommentItem[]; cursor: number; count: number; total: number };
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
+      setBatchStep((s) => s + 1);
       if (typeof data.total === "number") setTotal(data.total);
-      if (data.count < COMMENT_PAGESIZE) setHasMore(false);
+      if (data.count < size) setHasMore(false);
     } finally {
       setLoading(false);
     }
@@ -90,7 +94,7 @@ export function CommentList({
               onMouseDown={noFocusJump}
               onClick={loadMore}
             >
-              {loading ? "加载中…" : "加载更多"}
+              {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, COMMENT_PAGESIZE)}`}
             </button>
           ) : (
             <span className="all_loaded">已加载全部</span>
