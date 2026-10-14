@@ -626,6 +626,24 @@ export async function getVideoFeed(opts: {
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
+/** 录像流页码模式（2026-10-14 四轮，首页录像版块翻页条）：id 倒序第 page 页起 limit 条。
+ *  页锚点按 base（=HOME_VIDEO_NUMBER 15）计；skip 恒按 base 锚点，take 才是本批行数。 */
+export async function getVideoFeedPage(opts: {
+  level: VideoLevel | "all";
+  page: number;
+  base: number;
+  limit: number;
+}): Promise<VideoListItem[]> {
+  const rows = await prisma.video.findMany({
+    where: opts.level !== "all" ? { level: opts.level } : {},
+    select: { id: true },
+    orderBy: { id: "desc" },
+    skip: (opts.page - 1) * opts.base,
+    take: opts.limit,
+  });
+  return getVideosByIds(rows.map((r) => N(r.id)));
+}
+
 /** 录像总数（「加载更多」括号内剩余条数口径，过滤条件与 getVideoFeed 严格一致） */
 export async function getVideoCount(opts: { level?: VideoLevel | "all" } = {}): Promise<number> {
   return prisma.video.count({
@@ -1817,8 +1835,8 @@ export async function getBvRankOfUser(
 /**
  * 在线玩结算雷达的分位基准（2026-10-14 五期）：读取 video_metric_dist 全表，
  * 组织成 OnlinePlay 需要的 { `${level}${nf?"_nf":""}`: { bucket: { 指标: number[] } } }。
- * 表很小（级别×模式×3BV 段 + 全组行，几百行），整表读出内存分组；
- * 表不存在/空表时返回空对象（前端不显示雷达，只显示按钮）。
+ * 表很小 —— 2026-10-14 起分组只按「级别 × 模式」、不细分 3BV，**恒 6 行**（bucket 一律 -1），
+ * 整表读出内存分组；表不存在/空表时返回空对象（前端不显示雷达，只显示按钮）。
  */
 export async function getOnlineMetricDists(): Promise<
   Record<string, Record<string, Record<string, number[]>>>

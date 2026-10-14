@@ -1,17 +1,17 @@
 // 首页「最新录像」版块（2026-09-24 张老师要求）：
-// 顶部标题行右侧级别选择器（全部/初级/中级/高级），底部「加载更多」——
-// 交互与首页「动态」版块（NewsFeed）完全同构：初始数据由服务端渲染传入，
-// 翻页与切级别走 /api/video/more 取 JSON 增量渲染。
+// 顶部标题行右侧级别选择器（全部/初级/中级/高级），底部翻页条（2026-10-14 四轮，
+// 与首页「新闻」版块同款：··· + 滑轨 + 页码；页码模式 ?feedPage=N&base=15，
+// 松手/停顿 500ms 即加载、视口零跳动、零提示——与全站列表交互统一）。
 // 行/表头渲染复用 VideoRows（与 /video 列表同源，保证两处版式一致）。
 
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import type { VideoListItem } from "@/lib/queries";
 import { VideoHead, VideoRowLine } from "./VideoRows";
-import { noFocusJump } from "./useKeepScroll";
-import { TotalCount } from "./TotalCount";
-import { nextBatchSize } from "./PageSlider";
+import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 
 const LEVEL_TABS: { key: string; label: string }[] = [
   { key: "", label: "全部" },
@@ -31,7 +31,7 @@ export function VideoFeed({
   initial: VideoListItem[];
   pageSize: number;
   initialHasMore: boolean;
-  /** 当前筛选条件下的录像总数（左下角总数行） */
+  /** 当前筛选条件下的录像总数 */
   initialTotal: number;
   /** 标题节点；筛选 tabs 收进标题行右侧（首页版块布局） */
   title?: ReactNode;
@@ -39,18 +39,30 @@ export function VideoFeed({
   titleClassName?: string;
 }) {
   const [items, setItems] = useState(initial);
-  // 游标 = 已加载最后一条的录像 id（更早的记录 id 更小）
-  const [cursor, setCursor] = useState(initial.length ? initial[initial.length - 1].id : 0);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
   const [level, setLevel] = useState("");
   const [switching, setSwitching] = useState(false);
-  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14；切级别重置）
+  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（切级别重置）
 
-  async function fetchPage(lv: string, cur: number, size?: number) {
+  // ---- 翻页条状态（2026-10-14 四轮）----
+  const [curPage, setPage] = useState(1);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const pageCache = useRef(new PageCache<VideoListItem[]>());
+  const reqSeq = useRef(0);
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    pageCache.current.set(1, initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** 页码模式请求：?feedPage=N&base=pageSize（id 倒序按页取） */
+  async function fetchByPage(lv: string, page: number, size?: number) {
     const url =
-      `/api/video/more?cursor=${cur}&size=${size ?? pageSize}` + (lv ? `&level=${lv}` : "");
+      `/api/video/more?feedPage=${page}&base=${pageSize}&size=${size ?? pageSize}` +
+      (lv ? `&level=${lv}` : "");
     const res = await fetch(url);
     return (await res.json()) as {
       items: VideoListItem[];
@@ -61,30 +73,91 @@ export function VideoFeed({
   }
 
   async function loadMore() {
+    if (loading) return;
     setLoading(true);
+    const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = await fetchPage(level, cursor, size);
+      const data = await fetchByPage(level, Math.floor(items.length / pageSize) + 1, size);
+      if (seq !== reqSeq.current) return;
+      const prevCount = items.length;
       setItems((prev) => [...prev, ...data.items]);
-      setCursor(data.cursor);
+      // 新覆盖的整页入缓存
+      const totalNow = prevCount + data.items.length;
+      for (let pg = Math.floor(prevCount / pageSize); pg < Math.ceil(totalNow / pageSize); pg++) {
+        const from = pg * pageSize;
+        const to = from + pageSize;
+        if (from >= prevCount && to <= totalNow) {
+          pageCache.current.set(pg + 1, data.items.slice(from - prevCount, to - prevCount));
+        }
+      }
       setBatchStep((s) => s + 1);
       if (typeof data.total === "number") setTotal(data.total);
       if (data.count < size) setHasMore(false);
     } finally {
-      setLoading(false);
+      if (seq === reqSeq.current) setLoading(false);
     }
   }
 
-  // 切换级别：重置列表并取该级别第一页（批量序列同步重置）
+  /** 滑条换页（严格一页语义）：窗口内滚动定位 / 缓存零请求 / 拉一页替换（零跳动） */
+  async function gotoPage(p: number) {
+    if (loading) return;
+    p = Math.min(maxPage, Math.max(1, p));
+    if (p === curPage) return;
+    const winEnd = Math.max(1, Math.ceil(items.length / pageSize));
+    if (p <= winEnd) {
+      const first = (p - 1) * pageSize;
+      if (items[first]) {
+        setPage(p);
+        const tr = tableRef.current?.tBodies[0]?.children[first] as HTMLElement | undefined;
+        tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+        return;
+      }
+    }
+    setPage(p);
+    const cached = pageCache.current.get(p);
+    if (cached) {
+      const anchor = captureViewportAnchor(tableRef.current);
+      flushSync(() => setItems(cached));
+      restoreViewportAnchor(tableRef.current, anchor);
+      setBatchStep(0);
+      setHasMore(cached.length < total);
+      return;
+    }
+    const seq = ++reqSeq.current;
+    setLoading(true);
+    try {
+      const data = await fetchByPage(level, p);
+      if (seq !== reqSeq.current) return;
+      if (!data.items.length) {
+        setHasMore(false);
+        return;
+      }
+      pageCache.current.set(p, data.items);
+      const anchor = captureViewportAnchor(tableRef.current);
+      flushSync(() => setItems(data.items));
+      restoreViewportAnchor(tableRef.current, anchor);
+      setBatchStep(0);
+      setHasMore(p * pageSize < total);
+      if (typeof data.total === "number") setTotal(data.total);
+    } catch {
+      /* 失败静默，重试可再拖 */
+    } finally {
+      if (seq === reqSeq.current) setLoading(false);
+    }
+  }
+
+  // 切换级别：重置列表并取该级别第一页（批量序列/翻页状态同步重置）
   async function switchLevel(lv: string) {
     if (lv === level || switching) return;
     setSwitching(true);
     setLevel(lv);
     setBatchStep(0);
+    setPage(1);
     try {
-      const data = await fetchPage(lv, 0);
+      const data = await fetchByPage(lv, 1);
       setItems(data.items);
-      setCursor(data.cursor);
+      pageCache.current.set(1, data.items);
       if (typeof data.total === "number") setTotal(data.total);
       setHasMore(data.count >= pageSize);
     } finally {
@@ -123,7 +196,7 @@ export function VideoFeed({
       ) : (
         <div className="news_tabs ranking_tabs side">{tabs}</div>
       )}
-      <table cellPadding={0} cellSpacing={0} className="ranking_table video_table">
+      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
         <VideoHead />
         <tbody>
           {items.map((v) => (
@@ -138,24 +211,18 @@ export function VideoFeed({
           )}
         </tbody>
       </table>
-      <div className="more_loader">
-        {hasMore ? (
-          <button
-            type="button"
-            className="button small"
-            data-cursor={cursor}
-            disabled={loading}
-            onMouseDown={noFocusJump}
-            onClick={loadMore}
-          >
-            {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
-          </button>
-        ) : (
-          items.length > 0 && <span className="all_loaded">已加载全部</span>
-        )}
-        {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-        <TotalCount total={total} loaded={items.length} unit="个" />
-      </div>
+      {maxPage > 1 && (
+        <div className="list_footer">
+          <PageSlider
+            page={curPage}
+            pages={maxPage}
+            loading={loading || switching}
+            onGoto={gotoPage}
+            hasMore={hasMore}
+            onMore={loadMore}
+          />
+        </div>
+      )}
     </>
   );
 }

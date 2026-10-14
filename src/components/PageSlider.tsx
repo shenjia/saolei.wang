@@ -152,7 +152,7 @@ export function PageSlider({
           onMouseDown={noFocus}
           onClick={onMore}
           aria-label="加载更多"
-          title="加载更多"
+          data-tip="加载更多"
         >
           <i />
           <i />

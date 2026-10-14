@@ -1,12 +1,19 @@
 // 录像「加载更多」增量接口：
 // ① 默认（游标 cursor+size+level）——首页「最新录像」版块（2026-09-24，与 /api/news/more 同构）
-// ② 列表模式（page+level+order+author）——/video 列表页老式翻页改加载更多（同日张老师要求），
+// ② 列表模式（page+level+order+author）——/video 列表页 + 用户主页录像版块，
 //    与 getVideoList 的页码/筛选语义完全一致（复用同一查询，含成绩表排序切换）
+// ③ 首页页码模式（feedPage+base+level，2026-10-14 四轮）——首页录像版块翻页条，
+//    id 倒序按页取（getVideoFeedPage）；feedPage 与 ② 的 page 互不干扰
 // 军衔称号在服务端预算好随 JSON 返回，客户端直接渲染。
 
 import { NextResponse } from "next/server";
-import { getVideoFeed, getVideoCount, getVideoList } from "@/lib/queries";
+import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoList } from "@/lib/queries";
 import { VIDEO_PAGESIZE, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
+
+function parseLevel(p: URLSearchParams): VideoLevel | "all" {
+  const lv = p.get("level") ?? "";
+  return (VIDEO_LEVELS as readonly string[]).includes(lv) ? (lv as VideoLevel) : "all";
+}
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -15,10 +22,7 @@ export async function GET(req: Request) {
   const pageRaw = p.get("page");
   if (pageRaw) {
     const page = Math.max(2, parseInt(pageRaw, 10) || 2);
-    const lv = p.get("level") ?? "";
-    const level: VideoLevel | "all" = (VIDEO_LEVELS as readonly string[]).includes(lv)
-      ? (lv as VideoLevel)
-      : "all";
+    const level = parseLevel(p);
     const orderRaw = p.get("order") ?? "id";
     const order =
       orderRaw === "time" || orderRaw === "3bvs" || orderRaw === "comments" || orderRaw === "clicks"
@@ -36,13 +40,28 @@ export async function GET(req: Request) {
     });
   }
 
+  // ③ 首页页码模式（feedPage）：id 倒序第 N 页起 size 条
+  const feedPage = parseInt(p.get("feedPage") ?? "", 10);
+  if (feedPage >= 1) {
+    const level = parseLevel(p);
+    const base = parseInt(p.get("base") ?? "", 10) || VIDEO_PAGESIZE;
+    const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
+    const [items, total] = await Promise.all([
+      getVideoFeedPage({ level, page: feedPage, base, limit: size }),
+      getVideoCount({ level }),
+    ]);
+    return NextResponse.json({
+      items,
+      cursor: items.length ? items[items.length - 1].id : 0,
+      count: items.length,
+      total,
+    });
+  }
+
   // ① 首页游标模式
   const cursor = parseInt(p.get("cursor") ?? "0", 10) || 0;
-  const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 50);
-  const lv = p.get("level") ?? "";
-  const level: VideoLevel | "all" = (VIDEO_LEVELS as readonly string[]).includes(lv)
-    ? (lv as VideoLevel)
-    : "all";
+  const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
+  const level = parseLevel(p);
 
   const [items, total] = await Promise.all([
     getVideoFeed({ level, cursor: cursor || undefined, limit: size }),

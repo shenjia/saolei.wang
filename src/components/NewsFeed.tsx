@@ -10,10 +10,8 @@ import { useRef, useState, useEffect, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { NewsItem } from "@/lib/queries";
 import { NewsCellView } from "./NewsCellView";
-import { noFocusJump } from "./useKeepScroll";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-import { TotalCount } from "./TotalCount";
 
 export interface NewsFeedItem {
   news: NewsItem;
@@ -62,8 +60,7 @@ export function NewsFeed({
   const [switching, setSwitching] = useState(false);
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14；切筛选重置）
 
-  // ---- 翻页条状态（2026-10-14 二轮，仅用户主页 userId 场景）----
-  const pager = !!userId;
+  // ---- 翻页条状态（2026-10-14 四轮：首页+用户主页统一带翻页条，全走页码模式）----
   const [curPage, setPage] = useState(1);
   const tableRef = useRef<HTMLTableElement>(null);
   const pageCache = useRef(new PageCache<NewsFeedItem[]>());
@@ -86,13 +83,14 @@ export function NewsFeed({
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
   }
 
-  /** 页码模式请求（用户主页翻页条）：?page=N&base=pageSize */
+  /** 页码模式请求（翻页条；home 口径透传）：?page=N&base=pageSize */
   async function fetchByPage(lv: string, page: number, size?: number) {
     const url =
       `/api/news/more?page=${page}&base=${pageSize}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
       (lv && lv !== "forum" ? `&level=${lv}` : "") +
-      (lv === "forum" ? "&type=forum" : "");
+      (lv === "forum" ? "&type=forum" : "") +
+      (homeOnly ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
   }
@@ -103,9 +101,7 @@ export function NewsFeed({
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = pager
-        ? await fetchByPage(level, Math.floor(items.length / pageSize) + 1, size)
-        : await fetchPage(level, cursor, size);
+      const data = await fetchByPage(level, Math.floor(items.length / pageSize) + 1, size);
       if (seq !== reqSeq.current) return;
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
@@ -236,39 +232,17 @@ export function NewsFeed({
           )}
         </tbody>
       </table>
-      {pager ? (
-        /* 用户主页：翻页条一行合一（··· + 滑轨 + 页码；不再显示总条数） */
-        maxPage > 1 && (
-          <div className="list_footer">
-            <PageSlider
-              page={curPage}
-              pages={maxPage}
-              loading={loading || switching}
-              onGoto={gotoPage}
-              hasMore={hasMore}
-              onMore={loadMore}
-            />
-          </div>
-        )
-      ) : (
-        /* 首页新闻流：保持纯加载更多 + 总数 */
-        <div className="more_loader">
-          {hasMore ? (
-            <button
-              type="button"
-              className="button small"
-              data-cursor={cursor}
-              disabled={loading}
-              onMouseDown={noFocusJump}
-              onClick={loadMore}
-            >
-              {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
-            </button>
-          ) : (
-            items.length > 0 && <span className="all_loaded">已加载全部</span>
-          )}
-          {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-          <TotalCount total={total} loaded={items.length} unit="条" />
+      {/* 翻页条一行合一（2026-10-14 四轮：首页+用户主页统一；··· + 滑轨 + 页码） */}
+      {maxPage > 1 && (
+        <div className="list_footer">
+          <PageSlider
+            page={curPage}
+            pages={maxPage}
+            loading={loading || switching}
+            onGoto={gotoPage}
+            hasMore={hasMore}
+            onMore={loadMore}
+          />
         </div>
       )}
     </>

@@ -666,8 +666,10 @@ body #video_view .video_cell .playable {
   user-select: none;
   -webkit-user-select: none;
 }
-/* ··· 加载更多（三圆点，滑条左侧；loading 时旋转脉动） */
+/* ··· 加载更多（三圆点，滑条左侧；loading 时旋转脉动）；
+   hover 立即出「加载更多」气泡（data-tip，替代浏览器 title 的延迟，2026-10-14 四轮） */
 .page_slider .ps_more {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -687,6 +689,27 @@ body #video_view .video_cell .playable {
 .page_slider .ps_more:disabled {
   opacity: 0.5;
   cursor: default;
+}
+.page_slider .ps_more::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 155%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.page_slider .ps_more:hover::after {
+  opacity: 1;
 }
 .page_slider .ps_more i {
   width: 4px;
@@ -826,6 +849,10 @@ body #video_view .video_cell .playable {
   border-top-color: #fdc61a;
 }
 .page_slider.dragging .ps_bubble {
+  opacity: 1;
+}
+/* hover 轨道/滑块立刻显示页码气泡（2026-10-14 四轮张老师要求，不等拖动） */
+.page_slider .ps_rail:hover .ps_bubble {
   opacity: 1;
 }
 /* 键盘可达性：焦点环走站内暗色描边 */
