@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { GrowRow } from "@/lib/ranksnap";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { RANKING_COLS, RankingRowLine, type TitledRow } from "./RankingRows";
 
 type GrowTitledRow = GrowRow & { title: string };
@@ -28,7 +29,6 @@ export function GrowFeed({
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，换页重置）
   const [loadedAll, setLoadedAll] = useState(initial.length >= total);
   const [loading, setLoading] = useState(false);
-  const [hint, setHint] = useState("");
 
   // ---- 滑条窗口状态（2026-10-14）----
   const tableRef = useRef<HTMLTableElement>(null);
@@ -46,7 +46,6 @@ export function GrowFeed({
   async function loadMore() {
     if (loading || loadedAll) return;
     setLoading(true);
-    setHint("");
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
@@ -74,7 +73,6 @@ export function GrowFeed({
       setNextPage((p) => p + Math.ceil(added.length / pageSize));
       if (totalNow >= total) setLoadedAll(true);
     } catch {
-      setHint("加载失败，请重试");
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
@@ -92,25 +90,23 @@ export function GrowFeed({
       const row = rows[first];
       const el = row ? document.getElementById(`id_${row.id}`) : null;
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
         return;
       }
     }
     setCurPage(p);
     const cached = pageCache.current.get(p);
     if (cached) {
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => setRows(cached));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setNextPage(p + 1);
       setLoadedAll(cached.length >= total || p >= maxPage);
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      setHint(`已翻到第 ${p} 页（缓存）`);
-      setTimeout(() => setHint(""), 1600);
       return;
     }
     const seq = ++reqSeq.current;
     setLoading(true);
-    setHint("");
     try {
       const res = await fetch(`/api/grow/more?page=${p}`);
       if (!res.ok) throw new Error();
@@ -122,15 +118,14 @@ export function GrowFeed({
       }
       const added = data.rows as GrowTitledRow[];
       pageCache.current.set(p, added);
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => setRows(added));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setNextPage(p + 1);
       setLoadedAll(added.at(-1) !== undefined && p * pageSize >= total);
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      setHint(`已翻到第 ${p} 页`);
-      setTimeout(() => setHint(""), 1600);
     } catch {
-      setHint("加载失败，请重试");
+      /* 失败静默，重试可再拖 */
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
@@ -174,7 +169,6 @@ export function GrowFeed({
           hasMore={!loadedAll}
           onMore={loadMore}
         />
-        {hint && <span className="loader_hint">{hint}</span>}
       </div>
     </>
   );

@@ -24,6 +24,7 @@ import type { BvRankingRow } from "@/lib/queries";
 import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
 import { TitleBadge } from "./Cells";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { RankingRules } from "./RankingRules";
 import { toast } from "./Toast";
 
@@ -75,7 +76,6 @@ export function BvRankingFeed({
   const [loadedAll, setLoadedAll] = useState(initial.length >= total);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [hint, setHint] = useState("");
   const [hlUid, setHlUid] = useState<number | undefined>(initialHl);
 
   // ---- 滑条窗口状态（2026-10-14，同 RankingFeed 语义）----
@@ -108,7 +108,6 @@ export function BvRankingFeed({
   async function loadMore() {
     if (loading || loadedAll) return;
     setLoading(true);
-    setHint("");
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
@@ -136,7 +135,6 @@ export function BvRankingFeed({
       const lastRank = data.rows.at(-1)!.rank;
       if (lastRank >= total) setLoadedAll(true);
     } catch {
-      setHint("加载失败，请重试");
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
@@ -159,17 +157,15 @@ export function BvRankingFeed({
     setCurPage(p);
     const cached = pageCache.current.get(p);
     if (cached) {
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => setRows(cached));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       nextPage.current = p + 1;
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      setHint(`已翻到第 ${p} 页（缓存）`);
-      setTimeout(() => setHint(""), 1600);
       return;
     }
     const seq = ++reqSeq.current;
     setLoading(true);
-    setHint("");
     try {
       const res = await fetch(`/api/ranking/bv/more?by=${by}&page=${p}`);
       if (!res.ok) throw new Error();
@@ -180,15 +176,14 @@ export function BvRankingFeed({
         return;
       }
       pageCache.current.set(p, data.rows);
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => setRows(data.rows));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       nextPage.current = p + 1;
       setLoadedAll(data.rows.at(-1)!.rank >= total);
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      setHint(`已翻到第 ${p} 页`);
-      setTimeout(() => setHint(""), 1600);
     } catch {
-      setHint("加载失败，请重试");
+      /* 失败静默，重试可再拖 */
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
@@ -206,11 +201,9 @@ export function BvRankingFeed({
     if (locating) return;
     setHlUid(uid);
     if (scrollToRow(uid)) {
-      setHint("");
-      return;
+        return;
     }
     setLocating(true);
-    setHint("正在定位…");
     try {
       const qs = new URLSearchParams({ id: String(uid), view: "bv", format: "json" });
       if (by !== "total") qs.set("by", by);
@@ -220,8 +213,7 @@ export function BvRankingFeed({
       if (page <= 0) {
         // 全局居中气泡（与成绩榜「暂无成绩」同款交互），不跳转
         toast("该玩家暂无已通过审核的录像，未加入 BV 排行");
-        setHint("");
-        setHlUid(undefined);
+            setHlUid(undefined);
         return;
       }
       jumpToWhereami(uid);
@@ -326,7 +318,6 @@ export function BvRankingFeed({
           hasMore={!loadedAll}
           onMore={loadMore}
         />
-        {hint && <span className="loader_hint">{hint}</span>}
       </div>
       <RankingRules
         title="BV 排行规则"

@@ -828,17 +828,6 @@ body #video_view .video_cell .playable {
 .page_slider.dragging .ps_bubble {
   opacity: 1;
 }
-.page_slider .ps_pending {
-  position: absolute;
-  right: 0;
-  top: -14px;
-  font-size: 11px;
-  color: #75715e;
-  display: none;
-}
-.page_slider.pending .ps_pending {
-  display: block;
-}
 /* 键盘可达性：焦点环走站内暗色描边 */
 .page_slider:focus-visible {
   outline: 1px solid #75715e;

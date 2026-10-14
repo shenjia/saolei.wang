@@ -24,6 +24,7 @@ import type { RankingRow } from "@/lib/queries";
 import type { RankingBy } from "@/lib/config";
 import { RankingHead, RankingRowLine, RankingEmpty, type TitledRow } from "./RankingRows";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { toast } from "./Toast";
 
 export interface RankingFeedProps {
@@ -59,7 +60,6 @@ export function RankingFeed(props: RankingFeedProps) {
   const [loadedAll, setLoadedAll] = useState(props.initial.length >= total);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [hint, setHint] = useState("");
   const [hlUid, setHlUid] = useState<number | undefined>(props.initialHl);
   const tableRef = useRef<HTMLTableElement>(null);
   const router = useRouter();
@@ -96,10 +96,6 @@ export function RankingFeed(props: RankingFeedProps) {
     return false;
   }
 
-  function scrollToTableTop() {
-    tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   async function fetchPage(p: number, size?: number): Promise<MoreJson> {
     const qs = new URLSearchParams({ by, page: String(p) });
     if (params.view) qs.set("view", String(params.view));
@@ -126,20 +122,18 @@ export function RankingFeed(props: RankingFeedProps) {
       }
     }
     setCurPage(p);
-    // 缓存命中：零请求整表替换
+    // 缓存命中：零请求整表替换（视口零跳动）
     const cached = pageCache.current.get(p);
     if (cached) {
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => setRows(cached));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
-      scrollToTableTop();
-      setHint(`已翻到第 ${p} 页（缓存）`);
-      setTimeout(() => setHint(""), 1600);
       return;
     }
     // 窗口外：严格拉固定一页整表替换
     const seq = ++reqSeq.current;
     setLoading(true);
-    setHint("");
     try {
       const data = await fetchPage(p);
       if (seq !== reqSeq.current) return; // 已有更新的请求，丢弃本次响应
@@ -148,6 +142,7 @@ export function RankingFeed(props: RankingFeedProps) {
         return;
       }
       pageCache.current.set(p, data.rows);
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => {
         setRows(data.rows);
         if (data.deltas) {
@@ -160,14 +155,12 @@ export function RankingFeed(props: RankingFeedProps) {
           setDeltas(new Map()); // 换页无升降数据时清空（保持 showDelta 结构一致）
         }
       });
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0); // 窗口重置，批量序列从头计
       nextPage.current = p + 1;
       setLoadedAll(data.rows.at(-1)!.rank >= total);
-      scrollToTableTop();
-      setHint(`已翻到第 ${p} 页`);
-      setTimeout(() => setHint(""), 1600);
     } catch {
-      setHint("加载失败，请重试");
+      /* 失败静默，重试可再拖 */
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
@@ -176,7 +169,6 @@ export function RankingFeed(props: RankingFeedProps) {
   async function loadMore() {
     if (loading || loadedAll) return;
     setLoading(true);
-    setHint("");
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
@@ -207,7 +199,6 @@ export function RankingFeed(props: RankingFeedProps) {
       nextPage.current = Math.floor(lastRank / pageSize) + 1;
       if (lastRank >= total) setLoadedAll(true);
     } catch {
-      setHint("加载失败，请重试");
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
@@ -223,7 +214,6 @@ export function RankingFeed(props: RankingFeedProps) {
     const targetPage = Math.ceil(((rowRankById(rows, uid) as number | undefined) ?? 0) / pageSize);
     void targetPage; // 行 rank 未知时按页数并发探测
     setLocating(true);
-    setHint("正在定位…");
     try {
       const nextPageNum = nextPage.current;
       if (nextPageNum > maxPage) {
@@ -239,16 +229,14 @@ export function RankingFeed(props: RankingFeedProps) {
       if (page <= 0) {
         // 全局居中醒目气泡（2026-09-24 张老师要求：顶部 hint 太不明显）
         toast("该玩家未加入排行榜（暂无成绩）");
-        setHint("");
-        setHlUid(undefined);
+            setHlUid(undefined);
         return;
       }
       const lastLoadedRank = rows.at(-1)?.rank ?? 0;
       const targetRank = (page - 1) * pageSize + 1;
       if (targetRank <= lastLoadedRank) {
         scrollToRow(uid);
-        setHint("");
-        return;
+            return;
       }
       if (page - Math.floor(lastLoadedRank / pageSize) > NEARBY_PAGES) {
         jumpToWhereami(uid);
@@ -282,7 +270,7 @@ export function RankingFeed(props: RankingFeedProps) {
       if (lastRank >= total || page >= maxPage) setLoadedAll(true);
       // 新行已同步上屏，直接滚动
       if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
-      else setHint("");
+      else void 0;
     } catch {
       jumpToWhereami(uid);
     } finally {
@@ -345,7 +333,6 @@ export function RankingFeed(props: RankingFeedProps) {
             如何加入排行？
           </Link>
         )}
-        {hint && <span className="loader_hint">{hint}</span>}
       </div>
     </>
   );

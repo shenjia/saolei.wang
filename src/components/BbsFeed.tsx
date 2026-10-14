@@ -14,6 +14,7 @@ import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { markBbsRead, useBbsReadSet } from "./BbsRead";
 
 export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean }) {
@@ -167,17 +168,18 @@ export function BbsFeed({
       if (items[first]) {
         setCurPage(p);
         const tr = getTable()?.tBodies[0]?.children[first] as HTMLElement | undefined;
-        tr?.scrollIntoView({ behavior: "smooth", block: "center" });
+        tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
         return;
       }
     }
     setCurPage(p);
     const cached = pageCache.current.get(p);
     if (cached) {
+      const anchor = captureViewportAnchor(getTable());
       flushSync(() => setItems(cached));
+      restoreViewportAnchor(getTable(), anchor);
       setBatchStep(0);
       setHasMore(p * pageSize < total);
-      getTable()?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     const seq = ++reqSeq.current;
@@ -191,11 +193,12 @@ export function BbsFeed({
         return;
       }
       pageCache.current.set(p, data.posts);
+      const anchor = captureViewportAnchor(getTable());
       flushSync(() => setItems(data.posts));
+      restoreViewportAnchor(getTable(), anchor);
       setBatchStep(0);
       setHasMore(p * pageSize < total);
       if (typeof data.total === "number") setTotal(data.total);
-      getTable()?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch {
       /* 失败静默，重试可再拖 */
     } finally {

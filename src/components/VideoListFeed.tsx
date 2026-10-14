@@ -12,6 +12,7 @@ import { flushSync } from "react-dom";
 import type { VideoListItem } from "@/lib/queries";
 import { VideoHead, VideoRowLine } from "./VideoRows";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 
 export function VideoListFeed({
   initial,
@@ -102,17 +103,18 @@ export function VideoListFeed({
         setCurPage(p);
         // 滚到该页首行（录像行无 id_ 锚点，用表格行定位）
         const tr = tableRef.current?.tBodies[0]?.children[first] as HTMLElement | undefined;
-        tr?.scrollIntoView({ behavior: "smooth", block: "center" });
+        tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
         return;
       }
     }
     setCurPage(p);
     const cached = pageCache.current.get(p);
     if (cached) {
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => setItems(cached));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setHasMore(cached.length < total);
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     const seq = ++reqSeq.current;
@@ -127,11 +129,12 @@ export function VideoListFeed({
         return;
       }
       pageCache.current.set(p, data.videos);
+      const anchor = captureViewportAnchor(tableRef.current);
       flushSync(() => setItems(data.videos));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       // 整表替换后窗口=1 页；还有更多可由滑条或「加载更多」继续（序列已重置为首击=一页）
       setHasMore(p * pageSize < total);
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch {
       /* 失败静默，重试可再拖 */
     } finally {

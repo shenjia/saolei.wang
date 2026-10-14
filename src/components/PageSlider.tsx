@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 export function PageSlider({
   page,
@@ -34,6 +34,44 @@ export function PageSlider({
   const railRef = useRef<HTMLDivElement>(null);
   const [dragPage, setDragPage] = useState<number | null>(null); // 拖动中的预览页码
 
+  // 拖动中停顿即加载（2026-10-14 三轮，张老师要求）：滑块停留在某页 ≥500ms 触发加载，
+  // 不必等松手；停顿期间继续拖动（页码变化）则重置计时。全部走 ref（事件回调用），
+  // 不在渲染期读写（react-hooks/refs）。
+  const dwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastDwellPage = useRef<number | null>(null);
+  const dragPageRef = useRef<number | null>(null);
+  const onGotoRef = useRef(onGoto);
+  const pageRef = useRef(page);
+  const loadingRef = useRef(loading);
+  useEffect(() => {
+    onGotoRef.current = onGoto;
+    pageRef.current = page;
+    loadingRef.current = loading;
+  });
+
+  function armDwell(p: number) {
+    if (dwellTimer.current) clearTimeout(dwellTimer.current);
+    if (loadingRef.current) return; // 加载中不排队 dwell（松手/停止后再说）
+    if (p !== lastDwellPage.current) {
+      lastDwellPage.current = p;
+      dwellTimer.current = setTimeout(() => {
+        dwellTimer.current = null;
+        if (dragPageRef.current === p && p !== pageRef.current && !loadingRef.current) {
+          onGotoRef.current(p);
+        }
+      }, 500);
+    }
+  }
+  function disarmDwell() {
+    if (dwellTimer.current) {
+      clearTimeout(dwellTimer.current);
+      dwellTimer.current = null;
+    }
+    lastDwellPage.current = null;
+  }
+  // 卸载清计时器
+  useEffect(() => () => disarmDwell(), []);
+
   if (pages <= 1) return null;
 
   const pct = (p: number) => (pages <= 1 ? 0 : ((p - 1) / (pages - 1)) * 100);
@@ -46,19 +84,36 @@ export function PageSlider({
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (loading) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDragPage(pageFromX(e.clientX));
+    const p = pageFromX(e.clientX);
+    dragPageRef.current = p;
+    setDragPage(p);
+    armDwell(p);
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (dragPage === null) return;
-    setDragPage(pageFromX(e.clientX));
+    const p = pageFromX(e.clientX);
+    if (p !== dragPage) {
+      dragPageRef.current = p;
+      setDragPage(p);
+      armDwell(p); // 页码变了 → 重置 500ms 计时
+    }
   };
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (dragPage === null) return;
-    const target = pageFromX(e.clientX);
+    // 目标 = 拖动中最后预览的页码（dragPageRef）。不用 pageFromX(e.clientX) 重算——
+    // 停顿加载后 ps_label 文字变宽（「第 1」→「第 185」）会挤窄轨道，同一 clientX
+    // 会映射到偏后的页（2026-10-14 三轮实测 185→189 误跳）
+    const target = dragPageRef.current ?? pageFromX(e.clientX);
+    disarmDwell();
+    dragPageRef.current = null;
     setDragPage(null);
-    if (target !== page) onGoto(target); // 松手立即加载（无防抖）
+    if (target !== page && !loading) onGoto(target); // 松手立即加载（无防抖）
   };
-  const onPointerCancel = () => setDragPage(null);
+  const onPointerCancel = () => {
+    disarmDwell();
+    dragPageRef.current = null;
+    setDragPage(null);
+  };
 
   const showPage = dragPage ?? page;
   const dragging = dragPage !== null;
@@ -130,7 +185,6 @@ export function PageSlider({
         <div className="ps_bubble" style={{ left: `calc(7px + (100% - 14px) * ${pct(showPage) / 100})` }}>
           第 {showPage} 页
         </div>
-        <div className="ps_pending">加载中…</div>
       </div>
       <button
         type="button"

@@ -7,10 +7,12 @@
 "use client";
 
 import { useRef, useState, useEffect, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import type { NewsItem } from "@/lib/queries";
 import { NewsCellView } from "./NewsCellView";
 import { noFocusJump } from "./useKeepScroll";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { TotalCount } from "./TotalCount";
 
 export interface NewsFeedItem {
@@ -126,17 +128,18 @@ export function NewsFeed({
       if (items[first]) {
         setPage(p);
         const tr = tableRef.current?.tBodies[0]?.children[first] as HTMLElement | undefined;
-        tr?.scrollIntoView({ behavior: "smooth", block: "center" });
+        tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
         return;
       }
     }
     setPage(p);
     const cached = pageCache.current.get(p);
     if (cached) {
-      setItems(cached);
+      const anchor = captureViewportAnchor(tableRef.current);
+      flushSync(() => setItems(cached));
+      restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setHasMore(cached.length < total);
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     const seq = ++reqSeq.current;
@@ -149,12 +152,13 @@ export function NewsFeed({
         return;
       }
       pageCache.current.set(p, data.items);
-      setItems(data.items);
+      const anchor = captureViewportAnchor(tableRef.current);
+      flushSync(() => setItems(data.items));
+      restoreViewportAnchor(tableRef.current, anchor);
       setCursor(data.cursor);
       setBatchStep(0);
       setHasMore(p * pageSize < total);
       if (typeof data.total === "number") setTotal(data.total);
-      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch {
       /* 失败静默，重试可再拖 */
     } finally {
