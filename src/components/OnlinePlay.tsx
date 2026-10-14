@@ -2264,7 +2264,7 @@ export function OnlinePlay({
         gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
       } else if (gresult.classList.contains("show")) {
         /* 📌 数据面板关着时结算面板**独立**定位缩放（2026-10-15 张老师截图报的 bug）：
-           此前整个函数被 greport.show 门控——数据面板一关（gr_close × /「显示统计」off），
+           此前整个函数被 greport.show 门控——数据面板一关（设置浮窗「显示统计」off），
            gresult 就永远拿不到 left/top/zoom，回退 CSS 兜底 top:0;left:0 + zoom:1，
            面板缩小叠在棋盘左上。同一套几何口径，改量 gresult 自己的 rect、
            看右侧空间（gwR.right 之外到视口右缘）；两端面板同显时仍走上面分支共用 z */
