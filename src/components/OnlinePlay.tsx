@@ -2285,10 +2285,25 @@ export function OnlinePlay({
         if (rawW < 1 || rawH < 1) return;
         const availW = gwR.left - 12 - 14; // 视口左缘 12px + 贴边间隙 14px
         const availH = window.innerHeight - gwR.top - 12;
+        /* 右侧结算面板共享同一个 z，cap 还须保证它不越出右缘（2026-10-15 张老师
+           截图报：z 曾只按左侧空间封顶，右侧面板按该 z 放大会整块出屏）。
+           右侧空间放不下面板自然宽 → 先切窄形态（四按钮 2 列改 4 行单列）再量；
+           gresult 可能带着上局残留的 inline zoom，量前先归 1 保口径一致 */
+        const availRW = window.innerWidth - gwR.right - 12 - 14;
+        gresult.style.zoom = "1";
+        gresult.classList.remove("gr_narrow");
+        let grect = gresult.getBoundingClientRect();
+        let grawW = grect.width / pz;
+        if (grawW > 1 && grawW * pz > availRW) {
+          gresult.classList.add("gr_narrow");
+          grect = gresult.getBoundingClientRect();
+          grawW = grect.width / pz;
+        }
+        const rightCap = grawW > 1 ? availRW / (grawW * pz) : 2.5;
         /* 下限 0.3（2026-10-15 张老师定「面板尺寸自适应，无论如何不出滚动条」）：
            空间极小时允许面板缩得比游戏更小，宁可小也不越界 */
         const cap = Math.max(0.3, Math.min(2.5,
-          Math.min(availW / (rawW * pz), availH / (rawH * pz))));
+          Math.min(availW / (rawW * pz), availH / (rawH * pz), rightCap)));
         const z = Math.max(0.3, Math.min(zoomCur, cap));
         greport.style.zoom = String(z);
         gresult.style.zoom = String(z);
@@ -2307,11 +2322,18 @@ export function OnlinePlay({
            改量 gresult 自己的 rect、看右侧空间（gwR.right 之外到视口右缘）；
            两端面板同显时仍走上面分支共用 z */
         gresult.style.zoom = "1";
-        const rect = gresult.getBoundingClientRect();
-        const rawW = rect.width / pz;
+        gresult.classList.remove("gr_narrow");
+        let rect = gresult.getBoundingClientRect();
+        let rawW = rect.width / pz;
+        const availW = window.innerWidth - gwR.right - 12 - 14; // 视口右缘 12px + 间隙 14px
+        /* 空间不够先切窄形态（四按钮 2 列改 4 行单列）再量，量完仍超则交给下方 cap 缩 */
+        if (rawW > 1 && rawW * pz > availW) {
+          gresult.classList.add("gr_narrow");
+          rect = gresult.getBoundingClientRect();
+          rawW = rect.width / pz;
+        }
         const rawH = rect.height / pz;
         if (rawW < 1 || rawH < 1) return; // display:none 中量不出尺寸（换宿主/收起瞬间）
-        const availW = window.innerWidth - gwR.right - 12 - 14; // 视口右缘 12px + 间隙 14px
         const availH = window.innerHeight - gwR.top - 12;
         const cap = Math.max(0.3, Math.min(2.5,
           Math.min(availW / (rawW * pz), availH / (rawH * pz))));
