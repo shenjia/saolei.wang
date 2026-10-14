@@ -27,6 +27,19 @@ const CUS_MIN = 8, CUS_MAX = 99;
    张老师 2026-10-14 18:19 定：拖动时盘面变化允许 250ms 一次（leading 立即 + trailing 终值） */
 const CUS_APPLY_MS = 250;
 
+/* ---- 自定义盘「主体板块自适应宽度」（三期 v7，2026-10-14 19:07 张老师定）----
+   原先 cus 盘固定走 960 版式（宽 >40 才放宽），小盘（如默认 20×15 = 324px 盘面）
+   在 960 板块里左右各留一大片空档。现改为按盘面渲染宽精算 #page 宽度：
+     pageW = 盘面渲染宽 + PAGE_PAD，clamp 到 [PAGE_MIN_W, 视口可用, PAGE_MAX_W]
+   宽度链实测（CSS px，1280 视口）：ga 宽 = pageW − GA_OFFSET
+   （GA_OFFSET = box margin 8×2 + border 1×2 + padding 30×2 = 78），
+   PAGE_PAD = GA_OFFSET + 22 使 normalMaxZoom 的宽度封顶恒略大于期望倍率（≥1），
+   保证「页宽跟随盘面」与「盘面按容器自动缩」两个公式联立后一次收敛、不来回缩。 */
+const PAGE_PAD = 100;   // 盘面之外需给 #page 留的总宽（盒装 78 + 视觉余量 22）
+const GA_OFFSET = 78;   // #page 宽 → #game_area 内容宽的固定损耗
+const PAGE_MIN_W = 480; // 下限：标题行 + 4 个级别 tab 一行放得下、弹窗（320）不出盒
+const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
+
 export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -888,10 +901,6 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       flagBtn.classList.toggle("hidden", nf);
       /* 级别切换后浮窗 3BV 滑杆范围联动（浮窗开着时立即刷新） */
       syncBvSlider();
-      /* 自定义宽盘扩版（张老师 17:48）：宽 >40 给 #page.main 挂 .cus_wide
-         （globals.css：≥1280 视口 max-width 放到 min(85vw,1400px)）。
-         拖动中冻结版式不切（见 syncCusWide），松手/切级时才切 */
-      syncCusWide();
       /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式：
          级别实际切换（beg/int/exp↔cus）→ 按模式分离记忆应用（三期 v3）；
          同级别内规格变化（滑杆拖动）→ 保持当前倍率只重算封顶（拖杆跟手，
@@ -902,6 +911,9 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         if (lv !== prevLv) applyModeZoom();
         else applyZoom(zoomCur, false);
       }
+      /* 主体板块宽度自适应（v7）：必须放在上面 zoom 之后——applyModeZoom/applyZoom
+         已把 zoomWant 更新成目标模式的记忆值，页宽按它算才准；拖动中函数自冻结 */
+      syncPageFit();
     }
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
@@ -982,6 +994,10 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     const cusWv = $("cus_w_val");
     const cusHv = $("cus_h_val");
     const cusMv = $("cus_m_val");
+    /* 弹窗内的显示比例滑杆（v7 张老师 19:07：比例并入自定义弹窗，省得两个浮窗来回切）
+       ——与设置浮窗的 #zoom_range 是同一份状态的两个视图，applyZoom 内统一同步 */
+    const cusZoom = $("cus_zoom") as HTMLInputElement;
+    const cusZoomVal = $("cus_zoom_val");
     /* 读滑杆当前值（滑杆 min/max 恒合法，parseInt 必成功；防御 NaN 兜底） */
     const cusVal = (el: HTMLInputElement) => {
       const v = parseInt(el.value, 10);
@@ -1019,17 +1035,33 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         }
       }, CUS_APPLY_MS);
     }
-    /* 版式挂/摘（cus_wide）与拖动冻结（张老师 18:52 报「宽调回小值板块不缩」的根因）：
-       板块扩/缩会让居中的 #page 左缘平移（960↔1152 版式差 96px），弹窗滑轨跟着横移；
-       range input 拖动中 pointer capture 按轨道「当前位置」把同一点点位换算成值——
-       拖回 40 以下 → 板块缩 → 轨道右移 → 值跳回大值 → 板块又扩，来回振荡，
-       表现即「调回来了板块却不缩」。故拖动期间（cusDragging）冻结版式，
-       松手（change）时一次切换；点 tab 切级别 / F2 等非拖动 reset 照常即切。
-       拖动中盘面超出未扩版式由 normalMaxZoom 自动缩兜底，松手后扩版回弹 */
+    /* 版式拖动冻结（张老师 18:52 报「宽调回小值板块不缩」的根因）：
+       页宽变化会让居中的 #page 左缘平移，弹窗滑轨跟着横移；range input 拖动中
+       pointer capture 按轨道「当前位置」把同一点点位换算成值——值跳回大值 → 板块又扩，
+       来回振荡，表现即「调回来了板块却不缩」。故拖动期间（cusDragging）冻结版式，
+       松手（pointerup/change）时一次到位；点 tab 切级别 / F2 等非拖动 reset 照常即切。
+       拖动中盘面超出当前页宽由 normalMaxZoom 自动缩兜底，松手后页宽跟上再回弹 */
     let cusDragging = false;
-    function syncCusWide() {
-      if (cusDragging) return;
-      pageEl?.classList.toggle("cus_wide", lv === "cus" && W > 40);
+    /* 主体板块宽度自适应（三期 v7，2026-10-14 19:07 张老师定）：
+       自定义盘按盘面渲染宽精算 #page 宽度（公式与量纲见文首 PAGE_PAD 注释），
+       小盘不再在 960 板块里留一大片空档；标准级别清掉 inline 交回常规 80%/960 版式。
+       仅桌面断点生效：≤768 的移动版 #page 有自己的整页 zoom + 固定布局宽体系，
+       本函数直接让位（清 inline），不破坏移动版式。 */
+    const mqDesktop = window.matchMedia("(min-width: 769px)");
+    function syncPageFit() {
+      const pe = pageEl as HTMLElement | null;
+      if (!pe) return;
+      if (lv !== "cus" || !mqDesktop.matches) { pe.style.width = ""; pe.style.maxWidth = ""; return; }
+      if (cusDragging) return; // 拖动中冻结（见上）
+      const baseW = gframe.offsetWidth; // 布局宽＝基准宽（不含游戏 zoom，Chrome 实测）
+      if (baseW < 8) return;
+      const avail = window.innerWidth / pageZoom() - 16; // 可用视口宽（CSS px，左右各留 8）
+      /* 页宽 = 盘面期望渲染宽 + PAGE_PAD。PAGE_PAD 比实际盒装损耗 GA_OFFSET 多 22px，
+         故 normalMaxZoom 的宽度封顶恒 ≥ 期望倍率——「页宽跟随盘面」与「盘面按上限
+         封顶」互相解耦，不会来回缩（封顶本身按视口算，不读页宽，见 normalMaxZoom） */
+      const wantW = Math.max(PAGE_MIN_W, Math.min(baseW * zoomWant + PAGE_PAD, avail, PAGE_MAX_W));
+      pe.style.width = Math.round(wantW) + "px";
+      pe.style.maxWidth = Math.round(wantW) + "px";
     }
     /* 弹窗锚定（张老师 18:41 定）：贴「自定义」tab 正下方、与之水平居中对齐。
        原先锚 .news_head 左缘（left:0），看着像挂在标题左端、离 tab 老远。
@@ -1061,21 +1093,50 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       }
       cusDlg.classList.add("open");
       if (lv !== "cus") reset("cus"); // 点自定义＝选定级别立即切盘（同点初级/高级语义）
+      /* 比例滑杆回填当前倍率（v7）：与设置浮窗那张同源，开窗即显示实际值 */
+      cusZoom.max = zoomRange.max;
+      cusZoom.value = String(zoomCur);
+      cusZoomVal.textContent = zoomCur.toFixed(2) + "x";
       positionCusDialog(); // 须在 reset 之后：tab 由 a 变 span.current 字重变了，宽度要重算
     }
     function closeCusDialog() { cusDlg.classList.remove("open"); }
     on(cusW, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
     on(cusH, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
     on(cusM, "input", () => { syncCusVals(); applyCusLive(); });
-    /* 宽/高拖动期间冻结版式（cusDragging，见 syncCusWide 注释）。
+    /* 宽/高拖动期间冻结版式（cusDragging，见 syncPageFit 注释）。
        pointerup 与 change 双保险解冻：原地点击 thumb 值没变时 change 不触发，
-       只靠 change 会把标志卡在 true、版式永远冻结 */
+       只靠 change 会把标志卡在 true、版式永远冻结。
+       松手时页宽一次到位 + 弹窗重新对准（页宽变了 tab 位置也变） */
+    function afterCusDrag() {
+      cusDragging = false;
+      syncPageFit();
+      positionCusDialog();
+    }
     on(cusW, "pointerdown", () => { cusDragging = true; });
     on(cusH, "pointerdown", () => { cusDragging = true; });
-    on(cusW, "pointerup", () => { cusDragging = false; syncCusWide(); });
-    on(cusH, "pointerup", () => { cusDragging = false; syncCusWide(); });
-    on(cusW, "change", () => { cusDragging = false; syncCusWide(); });
-    on(cusH, "change", () => { cusDragging = false; syncCusWide(); });
+    on(cusW, "pointerup", afterCusDrag);
+    on(cusH, "pointerup", afterCusDrag);
+    on(cusW, "change", afterCusDrag);
+    on(cusH, "change", afterCusDrag);
+    /* 比例滑杆交互（弹窗内 v7 张老师 19:07 / 设置浮窗二期那张同源）：
+       拖动中只改渲染倍率（setZoomVisual，不封顶不写盘）——页宽一变，居中板块里的
+       滑轨就横移，range 会把同一点点位换算成别的值（v6 振荡同源），故拖动中页宽冻结；
+       松手（pointerup/change，双保险：拖到端点值不变时 change 不触发）再由 applyZoom
+       按视口上限正式定值 + 写记忆，随后页宽与弹窗锚位一次到位 */
+    function zoomDragInput(v: number) {
+      zoomBeforeFs = null; // 手动调比例 → 以手动为准，退出全屏/横屏不再自动恢复
+      zoomBeforeLs = null;
+      zoomWant = v;
+      setZoomVisual(v);
+    }
+    function zoomDragEnd() {
+      syncPageFit(); // 页宽按最终倍率到位
+      applyZoom(zoomWant); // 按视口上限封顶 + 落盘
+      positionCusDialog(); // 页宽变了 → 弹窗重新对准 tab
+    }
+    on(cusZoom, "input", () => zoomDragInput(parseFloat(cusZoom.value)));
+    on(cusZoom, "pointerup", zoomDragEnd);
+    on(cusZoom, "change", zoomDragEnd);
     on(cusDlg, "click", (e: Event) => e.stopPropagation()); // 窗内点击不冒泡到外点关闭
     on(document, "click", (e: Event) => {
       if (!cusDlg.classList.contains("open")) return;
@@ -1142,6 +1203,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches && zoomBeforeLs !== null) fitZoomForLandscape();
       else applyZoom(zoomCur, false);
+      syncPageFit(); // 自定义盘的页宽按新视口重算（非 cus 级别内部直接清 inline）
       positionCusDialog(); // 窗口尺寸/换行变化后重新对准「自定义」tab（未开窗时内部直接跳过）
     }, { signal });
 
@@ -1274,36 +1336,43 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     const zoomRange = $("zoom_range") as HTMLInputElement;
     const zoomVal = $("zoom_val");
     let zoomCur = 1; // 当前游戏倍率（不含整页窄屏缩放）
+    let zoomWant = 1; // 玩家期望倍率（applyZoom 入参、clamp 前）——自适应页宽按它算（v7）
     const lsQuery = window.matchMedia("(orientation: landscape) and (max-height: 520px)"); // 横屏拉满断点（声明须在 applyZoom 之前，normalMaxZoom 会读它）
     let zoomBeforeFs: number | null = null; // 进全屏前的倍率；全屏中手动调过则置 null 不再恢复
-    /* 普通模式倍率上限：游戏渲染宽不得超过 #game_area 内容宽，否则冲出 #page 版块。
+    /* 普通模式倍率上限：游戏渲染宽不得超过容器宽，否则冲出 #page 版块。
        用 getBoundingClientRect 实测自校准：gfR.width = 基准宽 × zoomCur × 所有祖先
        zoom，gaR.width = 容器宽 × 同一祖先 zoom——比值里 zoom 全部抵消，任意页级
        缩放/窄屏断点下都成立。全屏/横屏由 fitZoom* 拉满（max=5），不走此封顶。
-       自定义盘（三期）加高度封顶：常规三级盘高度有限（≤16 行）从不需要，自定义
-       最高 50 行会被视口下方内容推出去——按「视口底到游戏区顶的可用高」反算
-       宽/高两个方向的倍率取小，保证整个盘面完整可见不裁切（宽度仍按容器） */
+       自定义盘（三期 v7）两处不同：
+       ① 宽度封顶按「视口 / 扩版上限」算，**不按当前容器**——自定义盘的页宽本身
+          跟着盘面走（syncPageFit），若再按当前容器封顶，两个公式会互相压制：
+          盘面永远只能填满当前页宽 → 比例调不大、松手后板块比盘面宽留空档；
+       ② 额外加高度封顶：常规三级盘高度有限（≤16 行）从不需要，自定义最高 99 行
+          会被视口下方内容推出去——按「视口底到游戏区顶的可用高」反算倍率，
+          与宽度方向取小，保证整个盘面完整可见不裁切 */
     function normalMaxZoom() {
       if (document.fullscreenElement === root || lsQuery.matches) return 5;
       const gfR = gframe.getBoundingClientRect();
       const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
       if (gfR.width <= 0 || gaR.width <= 0) return 2.5;
       /* 下限 0.5（=滑杆 min）：窄窗连 1x 都放不下时按容器宽自动缩，保证不溢出。
-         自定义大盘（cus）额外放宽到 0.3——99 宽盘即使扩版（.cus_wide）后
+         自定义大盘（cus）额外放宽到 0.3——99 宽盘即使页宽已按视口放宽
          仍可能超容器，需要更小的自动缩下限才能完整可见 */
       const zMin = lv === "cus" ? 0.3 : 0.5;
-      let cap = Math.max(zMin, Math.min(2.5, (zoomCur * (gaR.width - 16)) / gfR.width)); // 左右各留 8px
+      let cap: number;
       if (lv === "cus") {
+        const baseW = gframe.offsetWidth || gfR.width / zoomCur; // 基准宽（不含游戏 zoom）
+        const limitW = Math.min(window.innerWidth / pageZoom(), PAGE_MAX_W) - GA_OFFSET - 16;
+        cap = limitW / baseW;
         /* 高度方向：gfR.height 是渲染高（含 zoomCur×pz），约束
            base_h × zoom × pz ≤ 可用高（视口像素）→ hCap = zoomCur×可用高/gfR.height。
            可用高 = 视口底 − game_area 顶 − 底部余量 12px（页脚仍可滚动，正常） */
         const availH = window.innerHeight - gaR.top - 12;
-        if (gfR.height > 0 && availH > 0) {
-          const hCap = (zoomCur * availH) / gfR.height;
-          cap = Math.max(zMin, Math.min(cap, hCap));
-        }
+        if (gfR.height > 0 && availH > 0) cap = Math.min(cap, (zoomCur * availH) / gfR.height);
+      } else {
+        cap = (zoomCur * (gaR.width - 16)) / gfR.width; // 左右各留 8px
       }
-      return cap;
+      return Math.max(zMin, Math.min(2.5, cap));
     }
     /* 首次进入（localStorage 无记忆）的默认比例（2026-10-14 张老师二定：固定 1.71）：
        此前按「高级盘刚好填满版块」动态计算，宽视口下会算到 2.1x+，观感偏大。
@@ -1312,18 +1381,30 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     function defaultZoom() {
       return 1.71;
     }
-    function applyZoom(v: number, persist = true, max?: number) {
-      const cap = max ?? normalMaxZoom();
-      /* 大盘自动缩可低于滑杆 min（0.5）：cus 盘封顶 <0.5 时直接用封顶值
-         （滑杆拖不到但自动适配到位——99 宽盘在 960 版式下需 ~0.55x 以下） */
-      const floor = lv === "cus" ? Math.min(0.5, cap) : 0.5;
-      v = Math.max(floor, Math.min(cap, v));
-      zoomRange.max = String(cap); // 滑杆行程同步封顶，拖杆手感与实际一致
+    /* 只改渲染与两处滑杆的显示，不封顶、不写盘——供「比例滑杆拖动中」使用：
+       拖动中若走 applyZoom 的封顶，页宽与倍数互相压制会把盘面卡在容器宽
+       （用户感觉比例调不大）；松手（pointerup/change）再由 applyZoom 正式定值 */
+    function setZoomVisual(v: number) {
       gframe.style.zoom = String(v);
       zoomCur = v;
       zoomRange.value = String(v);
       zoomVal.textContent = v.toFixed(2) + "x";
+      /* 自定义弹窗内的比例滑杆同步（v7 张老师 19:07：比例并入自定义弹窗，
+         免得两个浮窗来回切）——与设置浮窗那张是同一份状态的两个视图 */
+      cusZoom.value = String(v);
+      cusZoomVal.textContent = v.toFixed(2) + "x";
       syncReportZoom(); // 结算面板同步缩放（显示中才生效）
+    }
+    function applyZoom(v: number, persist = true, max?: number) {
+      zoomWant = v; // 玩家期望倍率（clamp 前）：syncPageFit 按它算页宽
+      const cap = max ?? normalMaxZoom();
+      /* 大盘自动缩可低于滑杆 min（0.5）：cus 盘封顶 <0.5 时直接用封顶值
+         （滑杆拖不到但自动适配到位——99 宽盘在扩展版式下仍可能需 <0.9x） */
+      const floor = lv === "cus" ? Math.min(0.5, cap) : 0.5;
+      v = Math.max(floor, Math.min(cap, v));
+      zoomRange.max = String(cap); // 滑杆行程同步封顶，拖杆手感与实际一致
+      cusZoom.max = String(cap);
+      setZoomVisual(v);
       if (persist) {
         /* 缩放率按模式分离记忆（2026-10-14 三期 v3 张老师定）：自定义盘与标准级别
            各记各的（大盘常需 <1x、标准盘常 >1x，互窜体验差）；旧单键迁移见 loadZoom */
@@ -1379,12 +1460,16 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       const availH = window.innerHeight - 48 - othersH; // :fullscreen 上下 padding 24px
       applyZoom(Math.min(availW / baseW, availH / baseH) / pz, false, 5);
     }
-    on(zoomRange, "input", () => {
-      zoomBeforeFs = null; // 全屏中手动调比例 → 以手动为准，退出不再恢复
-      zoomBeforeLs = null; // 横屏自动拉满同理
-      applyZoom(parseFloat(zoomRange.value));
+    /* 设置浮窗这张比例滑杆与自定义弹窗那张同源（v7）：共用 zoomDragInput/zoomDragEnd，
+       拖动中不重算页宽、松手后一次到位（理由见 zoomDragInput 注释） */
+    on(zoomRange, "input", () => zoomDragInput(parseFloat(zoomRange.value)));
+    on(zoomRange, "pointerup", zoomDragEnd);
+    on(zoomRange, "change", zoomDragEnd);
+    on($("zoom_reset"), "click", () => {
+      zoomBeforeFs = null; zoomBeforeLs = null;
+      applyZoom(1);
+      syncPageFit(); positionCusDialog();
     });
-    on($("zoom_reset"), "click", () => { zoomBeforeFs = null; zoomBeforeLs = null; applyZoom(1); });
 
     /* ---- 3BV 范围双端点滑杆（2026-10-14 二期）----
        两条原生 range 叠放：轨道/填充条只负责视觉（CSS 变量 --lo/--hi 定位），
@@ -1641,6 +1726,13 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
             <span className="cname">雷数</span>
             <input type="range" id="cus_m" min={1} max={291} step={1} defaultValue="40" />
             <span className="cval" id="cus_m_val">40</span>
+          </div>
+          {/* 显示比例（v7 张老师 19:07）：与设置浮窗的 #zoom_range 是同一状态的
+              两个视图（applyZoom 内统一同步），自定义盘原地调大小不用另开浮窗 */}
+          <div className="cus_row cus_row_zoom">
+            <span className="cname">比例</span>
+            <input type="range" id="cus_zoom" min="0.5" max="2.5" step="0.05" defaultValue="1" />
+            <span className="cval" id="cus_zoom_val">1.00x</span>
           </div>
         </div>
       </div>

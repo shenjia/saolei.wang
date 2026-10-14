@@ -1981,17 +1981,12 @@ body #page.main {
   }
 }
 
-/* ---------- 在线玩自定义大盘扩版（2026-10-14 三期 v2 张老师 17:48 定：
-   宽/高可到 99，必要时扩大主体版图） ----------
-   .main 版式 max 960 对 99 宽盘太小——游戏区按内容自动扩宽：1280 上放到
-   85%（与顶栏 80% 的错位可接受——是游戏盘而非版式），1600+ 视口放到
-   1400 封顶；只在「游戏盒加 .cus_wide 时」生效（切回标准级别恢复 960 版式），
-   不影响排行/BBS 等其他 .main 页面。 */
-@media (min-width: 1280px) {
-  body #page.main.cus_wide {
-    max-width: min(85vw, 1400px);
-  }
-}
+/* ---------- 在线玩自定义盘「主体板块宽度自适应」（2026-10-14 三期 v7 张老师 19:07 定）----------
+   v2 的 .cus_wide 类（≥1280 视口放宽 max-width）只解决「大盘要更宽」，小盘仍固定
+   960 版式、左右留一大片空档。v7 起改由 JS 精算（OnlinePlay.syncPageFit）：按盘面
+   渲染宽给 #page 设 inline width/max-width（盘面宽 + PAGE_PAD，clamp 到 [480, 视口可用, 1400]），
+   切回标准级别清掉 inline 交回下面 80%/960 的常规版式；仅桌面断点（≥769px）生效，
+   ≤768 移动版 #page 的整页 zoom + 固定布局宽体系不受影响。 */
 
 /* ---------- 大元帅改金黄色（2026-09-23 张老师要求：跟元帅一样） ----------
    2013 原版 .title em.grand 为深红 #c60d46；现改为元帅同款 #e6db74。
@@ -5864,7 +5859,8 @@ button.msg_cancel:hover {
   opacity: 0.45;
   pointer-events: none;
 }
-/* ---- 自定义难度弹窗（2026-10-14 三期 v5，张老师 18:41 定）：无任何按钮，三滑杆拖动即改地图；
+/* ---- 自定义难度弹窗（2026-10-14 三期 v7，张老师 19:07 定）：无任何按钮，
+   四条滑杆（宽/高/雷数 + 显示比例）拖动即改地图与缩放；
    锚定「自定义」tab 正下方并水平居中（left/top 由 OnlinePlay.positionCusDialog 用 offset 系
    实时算出——tab 与弹窗的 offsetParent 同为 .news_head，offset 是 CSS px 与页级 zoom 无关，
    免去 rect÷pageZoom 换算；下面的 top/left 只是未定位前的兜底值）；
@@ -5913,6 +5909,12 @@ button.msg_cancel:hover {
   min-width: 3ch;
   text-align: right;
   flex: 0 0 auto;
+}
+/* 比例行（v7）：宽/高/雷数是「盘面尺寸」，比例是「视图缩放」，用一条细线分开 */
+#online_play .cus_dialog .cus_row_zoom {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #5a594e;
 }
 /* 全屏开关：根容器全屏时补深色底（全屏默认背底为纯黑）、内容超高可滚 */
 #online_play > div:fullscreen {
