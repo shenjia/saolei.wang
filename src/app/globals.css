@@ -4065,6 +4065,35 @@ body #page.two_columns li.main {
   body #page.video_old #video_hot {
     display: none;
   }
+
+  /* ⑨ 首页侧栏单列形态放大（2026-10-15 张老师要求）：侧栏并排为一列时标题与新闻
+     一样大（h2 20→26px，行高 39 对齐新闻 h1），内容字体适当加大利用界面空间、
+     方便阅读（td 16→17px、人名 16→18px、时间/地区/统计 14→17px、徽章 14→15px、
+     论坛新帖 14→17px）。特异性 2id+类压过 legacy 的 #newbie .time / #top .area /
+     #site_stats .table td 等 1id 规则，无需逐条覆盖。 */
+  body #page #home > li.sidebar h2 {
+    font-size: 26px;
+    line-height: 39px;
+  }
+  body #page #home > li.sidebar .table td {
+    font-size: 17px;
+    line-height: 26px;
+  }
+  body #page #home > li.sidebar .avatar_link {
+    font-size: 18px;
+  }
+  body #page #home > li.sidebar .title {
+    font-size: 15px;
+  }
+  /* 论坛新帖行（.bbs_new 非 .table）：14→17px，行高 25→28px；板块徽章 12→13px */
+  body #page #home > li.sidebar #bbs_latest .bbs_new td {
+    font-size: 17px;
+    line-height: 28px;
+  }
+  body #page #home > li.sidebar #bbs_latest .board_tag {
+    font-size: 13px;
+    line-height: 20px;
+  }
 }
 
 /* 用户主页「实力」雷达主栏副本：桌面端隐藏（≥881 雷达在侧栏顶部）；
@@ -7032,6 +7061,42 @@ html.op-fakefs #header {
   /* 移动端侧栏盒子解除固定宽，按钮同步铺满 */
   #play_entry {
     width: auto;
+  }
+}
+/* 移动端置顶「开始练习」大按钮（2026-10-15 张老师要求）：桌面（≥881）隐藏，
+   ≤880 单列带内显示在页面顶部（新闻上方）；总高 100 CSS px＝旧侧栏按钮（50px）
+   的整 2 倍（padding 29px、字号 26px、笑脸图标 36px，图标尺寸在 page.tsx 的 svg 上）。
+   注意 ≤605 有整页 zoom（如 390px 宽 → 0.65），渲染高度≈65px，同比例缩放 */
+#play_entry_top {
+  display: none;
+}
+@media (max-width: 880px) {
+  #play_entry_top {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    width: auto;
+    margin: 16px 8px;
+    padding: 29px 0; /* 29+36(图标)+29+6(边框) = 100px＝旧按钮 50px 的 2 倍 */
+    background: silver;
+    border: 3px solid;
+    border-color: #fff #7b7b7b #7b7b7b #fff;
+    box-sizing: border-box;
+    color: #333;
+    font-size: 26px;
+    font-weight: bold;
+    text-shadow: none;
+  }
+  #play_entry_top:hover {
+    color: #000;
+  }
+  #play_entry_top:active {
+    border-color: #7b7b7b #fff #fff #7b7b7b;
+  }
+  /* 侧栏小按钮在单列带内退役：置顶大按钮接管入口（避免重复出现两个） */
+  #play_entry {
+    display: none;
   }
 }
 /* ---- /online 移动端站头不吸顶（2026-10-14 张老师）：header 改随文档流滚动，
