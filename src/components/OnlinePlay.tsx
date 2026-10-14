@@ -326,8 +326,12 @@ export function OnlinePlay({
     const grmCard = grModal.querySelector("#grm_card") as HTMLElement;
     /* 记录面板当前在哪个宿主（resize 跨断点时用来判断要不要搬家） */
     let panelOnDesktop = mqPanelDesktop.matches;
-    /* 点遮罩关闭（卡片内部点击的 e.target 是卡片或其子节点，不会命中） */
+    /* 点遮罩关闭（卡片内部点击的 e.target 是卡片或其子节点，不会命中）。
+       lsmax（高级/自定义横屏）除外：计数列整个隐藏＝笑脸开局钮不存在，点遮罩误关
+       浮层后没有任何开新局入口（2026-10-15 张老师定）——收浮层只能走卡片上的
+       「再来一局 / 重玩本局 / 查看回放」按钮 */
     on(grModal, "click", (e) => {
+      if (container.classList.contains("op-lsmax")) return;
       if (e.target === grModal) hideResultModal();
     });
 
