@@ -13,6 +13,11 @@ function formatScore(order: string, value: number): string {
   return order === "time" ? scoreTime(value) : score3bvs(value);
 }
 
+/** 级别色类名（beg/int/exp 才挂，其余返回空串） */
+function levelClass(lv?: string): string {
+  return lv === "beg" || lv === "int" || lv === "exp" ? ` lv_${lv}` : "";
+}
+
 export function NewsCellView({ news, title }: { news: NewsItem; title: string }) {
   const d = news.details as {
     lv?: string;
@@ -52,16 +57,27 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
               {/* od 非法时按 3bvs 兜底显示（历史脏数据防御） */}
               {(d.od ?? "") === "time" ? ORDER_NAMES.time : ORDER_NAMES["3bvs"]}
             </span>
+            {/* 新成绩按级别变色（2026-10-14 张老师要求）：初级绿/中级橙/高级金，
+                规则见 globals.css #news 区 .score.lv_* / .original.lv_*；
+                lv 非 beg/int/exp（如总计）不挂类，保持 legacy 金/灰 */}
             {(d.or ?? 0) > 0 ? (
               <>
                 <span className="original">{formatScore(d.od ?? "time", d.or!)}</span>
                 <span className="increase"></span>
-                <Link href={`/video/${news.reference}`} target="_blank" className="score">
+                <Link
+                  href={`/video/${news.reference}`}
+                  target="_blank"
+                  className={"score" + levelClass(d.lv)}
+                >
                   {formatScore(d.od ?? "time", d.cr!)}
                 </Link>
               </>
             ) : (
-              <Link href={`/video/${news.reference}`} target="_blank" className="original">
+              <Link
+                href={`/video/${news.reference}`}
+                target="_blank"
+                className={"original" + levelClass(d.lv)}
+              >
                 {formatScore(d.od ?? "time", d.cr!)}
               </Link>
             )}
