@@ -29,6 +29,7 @@
 - 与 migrations SQL 的唯一差异：`user_stat` 无 `clicker` 列（以 2019 dump 为准）
 - `user_sig.signature` 必须 `utf8 COLLATE utf8_bin`（大小写敏感签名，db push 后需手动 ALTER）
 - 成绩存储：时间=毫秒；3BV/s=实际值×1000；时间戳=Unix 秒（bigint）
+- **人气口径（2026-10-14 方案 B 修正）**：总量 = `user_stat.clicks`（旧站 `Player.Player_Click` 累计值镜像，含 2017 年 Click 表重建前的早期历史，由 `scripts/sync/transform.py` 刷入）；`click` 明细表只承担「今日人气」与「同 IP 同日只计一次」去重闸门，**不可再用它的 count 当人气总数**（明细仅含新站上线后记录）。后台「地盘人气」本来就读 `user_stat.clicks`，前台用户主页曾读错表
 
 ## 关键领域逻辑（src/lib/）
 

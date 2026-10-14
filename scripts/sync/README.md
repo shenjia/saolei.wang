@@ -33,4 +33,5 @@ $PY validate.py    # 行数对账 + 抽样字段比对 + 排行对照
 
 - 从旧站 HTTP 下载 ~25 万个新录像实体文件（`/Video/Mvf/{uid}/{name}.{mvf,avf}`，平均 ~1KB）
   → 按 `videos/YYYY/MM/DD/<md5>.<ext>` 落盘，回填 `video.hash`、`video_info.filepath/board/software/version/signature`、`user_sig`
-- `click` 表 800 万行历史人气未同步（仅总量已入 `user_stat.clicks`）；`star` 每日一星无历史（MSSQL 仅存当日）
+- `click` 表 819 万行历史人气明细**确认不补**（2026-10-14 方案 B 定案）：旧站 `Click` 明细最早仅到 2017-02-07（表曾重建），早期历史只存在于 `Player.Player_Click` 累计值里，补明细也拼不出完整历史；且旧站 9-23 新站上线后仍在记（+9.5 万条，绝大多数是 Googlebot/百度蜘蛛）。故人气**总量**以 `user_stat.clicks` 为准（由本管线第 202 行从 `Player_Click` 刷入），`click` 明细表在新站仅承担「今日人气」与「同 IP 同日去重」职责。`Player_Click` 是 float 且带脏小数尾巴（小数恰为 `Player_Id×1e-9`），取整即可
+- `star` 每日一星无历史（MSSQL 仅存当日）
