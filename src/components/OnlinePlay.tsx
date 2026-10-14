@@ -4,11 +4,24 @@
 // 引擎为自有实现（布雷 / 首击 3×3 保护 / flood 展开 / chord / 标准 3BV / 0.01s 计时），
 // 行为经 design/online-play.html 多轮 playwright 自验；外观复刻 flop player 经典银灰。
 // 二期预留：JS 端编码标准 AVF → 走现有上传/审核管线上榜。
+// 三期（2026-10-14）：级别筛选加「自定义」——弹窗设置宽/高/雷数，确认后按规格开局，
+// 显示比例自动适配（超宽/超高自动缩小到完整可见），规格入 localStorage。
 
 import { useEffect, useRef } from "react";
 import { FlopSprites } from "./FlopSprites";
 
-export function OnlinePlay() {
+/* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
+export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
+
+/* localStorage 设置键（2026-10-14 二期：全部设置入 localStorage 记住） */
+const LS_KEY = "online_play_settings";
+
+/* 自定义规格上限（三期）：格子太多 flood 展开与败局重绘会卡，50×50 封顶（娱乐局够用）。
+   ⚠️ 必须放模块顶层——JSX 渲染作用域够不着 useEffect 闭包内的常量
+   （2026-10-14 别线会话曾放闭包内导致 CUS_MIN is not defined 整页崩溃） */
+const CUS_MIN = 5, CUS_MAX = 50;
+
+export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,16 +39,71 @@ export function OnlinePlay() {
       opts?: AddEventListenerOptions,
     ) => el.addEventListener(type, fn as EventListener, { ...opts, signal });
 
-    /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正） */
+    /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
+       cus＝自定义盘（三期）：规格来自设置弹窗，范围宽/高 5–50、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
     const LEVELS: Record<string, { x: number; y: number; m: number }> = {
       beg: { x: 8, y: 8, m: 10 },
       int: { x: 16, y: 16, m: 40 },
       exp: { x: 30, y: 16, m: 99 },
     };
     let lv = "beg", W = 8, H = 8, M = 10;
+    /* 自定义规格（默认 20×15·40 雷起步）；lv==="cus" 时 LEVELS 里无行，规格全靠它 */
+    let cusSpec = { w: 20, h: 15, m: 40 };
+    function levelSize(l: string): { x: number; y: number; m: number } {
+      if (l === "cus") return { x: cusSpec.w, y: cusSpec.h, m: cusSpec.m };
+      return LEVELS[l];
+    }
+    /* 自定义规格校验：通过返回 null，不通过返回原因（弹窗行内提示） */
+    function cusError(w: number, h: number, m: number): string | null {
+      if (!Number.isFinite(w) || !Number.isFinite(h) || !Number.isFinite(m)) return "请填写数字";
+      if (w < CUS_MIN || h < CUS_MIN) return "宽、高不能小于 " + CUS_MIN;
+      if (w > CUS_MAX || h > CUS_MAX) return "宽、高不能大于 " + CUS_MAX;
+      if (m < 1) return "雷数至少为 1";
+      if (m > w * h - 9) return "雷数过多（需留出首击 3×3 保护区）";
+      return null;
+    }
     /* NF / 无猜为独立开关（可叠加，2026-10-14 张老师定）；全屏开关只控制显示、不影响对局；
-       问号开关（默认关）只影响右键循环是否经过问号态，切换不重开 */
+       问号开关（默认关）只影响右键循环是否经过问号态，切换不重开。
+       二期起这些开关收进设置浮窗，初始值从 localStorage 恢复 */
     let nf = false, ng = false, qmark = false;
+    /* 3BV 范围（按级别独立记忆）：默认＝该级别完整统计区间；
+       布雷时拒绝范围外盘面重掷（见 placeMines），最小差 10 由浮窗交互保证 */
+    const bvSel: Record<string, { lo: number; hi: number }> = {};
+    for (const k of Object.keys(bvRanges) as (keyof BvRanges)[]) {
+      const r = bvRanges[k];
+      bvSel[k] = { lo: r.min, hi: r.max };
+    }
+    /* localStorage 读取：解析失败/缺字段时静默用默认值（隐私模式同） */
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw) as {
+          nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
+          cus?: { w: number; h: number; m: number };
+        };
+        if (typeof s.nf === "boolean") nf = s.nf;
+        if (typeof s.ng === "boolean") ng = s.ng;
+        if (typeof s.qmark === "boolean") qmark = s.qmark;
+        if (s.cus && !cusError(s.cus.w, s.cus.h, s.cus.m)) cusSpec = { ...s.cus };
+        if (s.bv) {
+          for (const k of Object.keys(bvSel)) {
+            const r = bvRanges[k as keyof BvRanges], b = s.bv[k];
+            if (b && Number.isFinite(b.lo) && Number.isFinite(b.hi)) {
+              const lo = Math.max(r.min, Math.min(r.max, Math.round(b.lo)));
+              const hi = Math.max(r.min, Math.min(r.max, Math.round(b.hi)));
+              if (hi - lo >= 10) bvSel[k] = { lo, hi };
+            }
+          }
+        }
+      } catch { /* 隐私模式 / 脏数据：用默认 */ }
+    }
+    function saveSettings() {
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, bv: bvSel, cus: cusSpec }));
+      } catch { /* 隐私模式 */ }
+    }
+    loadSettings();
     let mines: Uint8Array | null = null, nums: Uint8Array | null = null;
     let state: Uint8Array = new Uint8Array(0); // 0=block 1=open 2=flag 3=question
     let started = false, over = false, startTs = 0, timerId: number | null = null;
@@ -171,7 +239,7 @@ export function OnlinePlay() {
       for (let i = 0; i < state.length; i++) if (state[i] === 2) f++;
       return M - f;
     }
-    function placeMines(first: number) {
+    function placeMinesOnce(first: number) {
       const n = W * H;
       let excl: Record<number, number> = { [first]: 1 };
       const nb = neighbors(first);
@@ -194,6 +262,33 @@ export function OnlinePlay() {
         nums[c] = cnt;
       }
       compute3BV();
+    }
+    /* 3BV 范围约束（2026-10-14 二期）：完整范围（=统计区间原样）时跳过校验（零成本，
+       与旧行为完全一致）；收窄过的范围重掷直到 3BV 落在 [lo, hi] 且离两边留 ≥3 余量
+       （中心偏置——无猜重排会让 3BV 小幅漂移，贴边生成的盘一漂就出界）；
+       300 次内没找到带余量的就接受首个落在范围内的，再没有接受最接近中心的
+       （极窄范围物理上难以命中的兜底，娱乐局可接受）。
+       定稿的盘同时存 origMines——无猜重排的「贴原盘」锚点（见 noGuessOnce）。 */
+    let origMines: Uint8Array | null = null;
+    function placeMines(first: number) {
+      placeMinesOnce(first);
+      if (!bvRangeFull()) {
+        const sel = bvSel[lv];
+        const mid = (sel.lo + sel.hi) / 2;
+        const margin = 3;
+        let best = board3bv, bestDist = Math.abs(best - mid), seenInRange = false;
+        for (let tries = 0; tries < 300; tries++) {
+          const ok = board3bv >= sel.lo && board3bv <= sel.hi;
+          if (ok) {
+            if (!seenInRange) { seenInRange = true; best = board3bv; bestDist = Math.abs(best - mid); }
+            if (board3bv >= sel.lo + margin && board3bv <= sel.hi - margin) break; // 带余量，收工
+          } else if (Math.abs(board3bv - mid) < bestDist && !seenInRange) {
+            best = board3bv; bestDist = Math.abs(best - mid);
+          }
+          if (tries < 299) placeMinesOnce(first);
+        }
+      }
+      origMines = mines!.slice();
     }
     function compute3BV() {
       const n = W * H, region = new Int32Array(n).fill(-1);
@@ -262,8 +357,162 @@ export function OnlinePlay() {
       /* 盲点=8 邻域内没有任何已揭示格（已揭示格必带数字；空格域的邻居早已被 flood 打开） */
       return !neighbors(i).some((a) => state[a] === 1);
     }
+    /* 3BV 范围是否完整（=该级别统计区间原样）：完整时重排也无需校验（零成本）。
+       自定义盘（cus）无统计区间，视为完整（跳过范围校验，重排全速） */
+    function bvRangeFull(): boolean {
+      if (lv === "cus") return true;
+      const r = bvRanges[lv as keyof BvRanges], s = bvSel[lv];
+      return s.lo === r.min && s.hi === r.max;
+    }
+    /* 极小平移救回（2026-10-14 修复 3BV 范围失效的治本方案）：
+       把 click（及其 opening 3×3）里的雷平移到「与源格相邻已开格集合完全相同」的
+       隐藏空位——每个已开数字：挪出 -1 与挪入 +1 恰好抵消，数字零变化；
+       盘面其余格不动，3BV 漂移极小。目标位按签名匹配随机选 → 出范围可换位重试。 */
+    function minimalSave(click: number, makeOpening: boolean): boolean | null {
+      const n = W * H;
+      const clearSet = [click];
+      if (makeOpening) for (const a of neighbors(click)) if (state[a] !== 1) clearSet.push(a);
+      const inClear = new Uint8Array(n);
+      for (const c of clearSet) inClear[c] = 1;
+      const moving: number[] = [];
+      for (const c of clearSet) if (mines![c]) moving.push(c);
+      if (!moving.length) return true; // 本就无雷（安全盲点直接开）
+      /* 源格的相邻已开格签名（排序 id 串）；目标位签名必须与对应源格完全一致 */
+      const sigOf = (c: number) => neighbors(c).filter((a) => state[a] === 1).sort((x, y) => x - y).join(",");
+      /* 候选目标位按签名分桶：隐藏、非雷、不在清空区 */
+      const bySig = new Map<string, number[]>();
+      for (let i = 0; i < n; i++) {
+        if (state[i] === 1 || mines![i] || inClear[i]) continue;
+        const s = sigOf(i);
+        if (!bySig.has(s)) bySig.set(s, []);
+        bySig.get(s)!.push(i);
+      }
+      const newMines = mines!.slice();
+      for (const src of moving) {
+        const s = sigOf(src);
+        const pool = bySig.get(s);
+        if (!pool || !pool.length) return null; // 该源格无同签名空位 → 不适用
+        const p = (Math.random() * pool.length) | 0;
+        const tgt = pool[p];
+        pool.splice(p, 1); // 占用
+        newMines[src] = 0;
+        newMines[tgt] = 1;
+        /* 目标位被占雷后，其它签名的桶里若有格子与它互为邻居也不受影响（隐藏格数字会重算） */
+      }
+      mines = newMines;
+      const nn = new Uint8Array(n);
+      for (let c = 0; c < n; c++) {
+        if (mines[c]) continue;
+        let cnt = 0;
+        for (const a of neighbors(c)) if (mines[a]) cnt++;
+        nn[c] = cnt;
+      }
+      nums = nn;
+      compute3BV();
+      return true;
+    }
+    /* 无猜重排带随机性（后方雷随机撒 + dfs 取解顺序随机）：出范围时原状回滚再试。
+       mines/nums 是 tryNoGuess 的输入（解约束要用数字），先备份后恢复即可；
+       bvRegions/bvSingles/bvIslands/board3bv 由 compute3BV 随 nums 重算，同步回滚 */
     function tryNoGuess(click: number, makeOpening: boolean): boolean {
       const n = W * H;
+      /* 3BV 范围收窄时（2026-10-14 修复，防「连锁漂移」）：
+         ① 极小平移优先——只挪 click 3×3 的雷到同签名空位（已开数字零变化，
+            3BV 漂移 ≤2，原盘在范围内则新盘几乎必在）；
+         ② 平移不适用再整盘重排（锚定 origMines 取解，不锚当前盘——当前盘可能
+            已被历次重排漂移过，越锚越偏；origMines 恒满足已开数字约束）；
+         ③ 全失败时重掷兜底；最后才「最小漂移接受」：出范围时宁可不换 opening。
+         接受纪律：前 30 次要求 [lo+2, hi-2]（留余量防贴边），后 20 次放宽。 */
+      const sel = lv === "cus" ? { lo: 0, hi: 1e9 } : bvSel[lv];
+      const checkBv = !bvRangeFull();
+      const hasMargin = sel.lo + 2 <= sel.hi - 2;
+      const bvOk = (strict: boolean) => {
+        const lo = strict && hasMargin ? sel.lo + 2 : sel.lo;
+        const hi = strict && hasMargin ? sel.hi - 2 : sel.hi;
+        return board3bv >= lo && board3bv <= hi;
+      };
+      if (checkBv) {
+        const bakMines = mines ? mines.slice() : null;
+        const bakNums = nums ? nums.slice() : null;
+        const bakBvR = bvRegions, bakBvS = bvSingles, bakBvI = bvIslands, bakBv = board3bv;
+        let applicable = true;
+        for (let t = 0; t < 50; t++) {
+          const r = minimalSave(click, makeOpening);
+          if (r === null) { applicable = false; break; }
+          if (bvOk(t < 30)) return true;
+          mines = bakMines!; nums = bakNums!;
+          bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+        }
+        mines = bakMines!; nums = bakNums!;
+        bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+        /* ② 整盘重排（锚原盘） */
+        let rearranged = false;
+        for (let t = 0; t < 50; t++) {
+          const ok = noGuessOnce(click, makeOpening, n);
+          if (!ok) break; // 无解：重排路径终结
+          if (bvOk(t < 30)) { rearranged = true; break; }
+          mines = bakMines!; nums = bakNums!;
+          bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+        }
+        if (rearranged) return true;
+        /* ③ 重掷兜底 */
+        mines = bakMines!; nums = bakNums!;
+        bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+        if (regenFallback(click, bakMines!)) return true;
+        /* ④ 最后兜底：退化为「仅救本格」的平移（约束最弱、漂移最小）。
+           若 click 本来无雷（安全盲点换空域场景）则直接放弃转换，原盘照常开数字格——
+           无猜承诺不受影响（没踩雷），只是这格不开空域。 */
+        if (!bakMines![click]) return false; // 安全场景：不换，直接按原盘开
+        for (let t = 0; t < 30; t++) {
+          const r = minimalSave(click, false);
+          if (r === null) break;
+          if (bvOk(false)) return true;
+          mines = bakMines!; nums = bakNums!;
+          bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+        }
+        /* 平移也无解（签名全无）：结构化回退——锚原盘重排仅救本格（不再追求范围，
+           漂移通常最小；仍无解则如实判负）。 */
+        const finalOk = noGuessOnce(click, false, n);
+        if (finalOk) return true; // 接受（救回优先；范围极端冲突的残余场景）
+        mines = bakMines!; nums = bakNums!;
+        bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+        return false;
+      }
+      /* 完整范围：原语义整盘重排 */
+      return noGuessOnce(click, makeOpening, n);
+    }
+    /* 重掷兜底：带范围约束重新布雷，要求①3BV 在范围内②所有已开格数字与原盘一致
+       ③click 及 opening 邻域无雷。重新随机布雷天然无相关性，数十次内可命中
+       （初级 64 格 10 雷概率空间足够；已开格多时成功率下降，与重排路径互补）。 */
+    function regenFallback(click: number, oldMines: Uint8Array): boolean {
+      const opened: number[] = [];
+      for (let i = 0; i < state.length; i++) if (state[i] === 1) opened.push(i);
+      for (let t = 0; t < 120; t++) {
+        placeMines(click); // 带范围约束 + 3×3 保护（placeMinesOnce 内含首击保护）
+        /* 校验：已开格数字不变 + click 无雷（placeMines 已保护 click 3×3，天然满足） */
+        let ok = true;
+        for (const c of opened) {
+          if (mines![c]) { ok = false; break; }
+          let cnt = 0;
+          for (const a of neighbors(c)) if (mines![a]) cnt++;
+          if (cnt !== nums![c]) { ok = false; break; }
+        }
+        if (ok) return true;
+        /* 未命中：恢复原盘再掷 */
+        mines = oldMines.slice();
+        const nn = new Uint8Array(W * H);
+        for (let c = 0; c < nn.length; c++) {
+          if (mines[c]) continue;
+          let cnt = 0;
+          for (const a of neighbors(c)) if (mines[a]) cnt++;
+          nn[c] = cnt;
+        }
+        nums = nn;
+        compute3BV();
+      }
+      return false;
+    }
+    function noGuessOnce(click: number, makeOpening: boolean, n: number): boolean {
       const clues: { need: number; vars: number[] }[] = [];
       const inFrontier = new Uint8Array(n);
       for (let i = 0; i < n; i++) {
@@ -309,6 +558,13 @@ export function OnlinePlay() {
       const order = Array.from({ length: F }, (_, k) => k)
         .filter((k) => assign[k] === -1)
         .sort((a, b) => varClues[b].length - varClues[a].length);
+      /* 贴「开局原盘」取解（2026-10-14 修复）：已开数字从未变过，开局原盘恒满足
+         frontier 约束——锚它取解每次重排都从同一起点出发，杜绝「锚当前盘」的
+         连锁漂移（当前盘可能已被历次重排换过）。15% 反转保留随机探索。
+         完整范围（无 origMines 约束需求）或无 origMines 时锚当前盘（旧行为）。 */
+      const oldForBias = origMines ?? mines!;
+      const origVal = new Int8Array(F);
+      frontier.forEach((cell, k) => { origVal[k] = oldForBias[cell] ? 1 : 0; });
       let nodes = 0;
       function backFeasible(): boolean {
         let fMines = 0;
@@ -320,7 +576,8 @@ export function OnlinePlay() {
         if (t === order.length) return backFeasible();
         if (++nodes > 1000000) return false;
         const k = order[t];
-        const vals = Math.random() < 0.5 ? [0, 1] : [1, 0];
+        const a = origVal[k], b = 1 - a;
+        const vals = Math.random() < 0.85 ? [a, b] : [b, a];
         for (const v of vals) {
           let ok = true;
           for (const ci of varClues[k]) {
@@ -337,16 +594,39 @@ export function OnlinePlay() {
         return false;
       }
       if (!dfs(0)) return false;
-      /* 应用新雷分布：前沿按解、后方随机补齐，数字与 3BV 全量重算 */
+      /* 应用新雷分布：前沿按解；后方「保原盘」补齐（2026-10-14 修复）——
+         优先保留锚定盘（origMines，缺省当前盘）已在后方的雷位（开局盘在范围内，
+         保得越多越不会跑），差额（新解 frontier 雷数 ≠ 原盘时）才随机补。
+         范围收窄时启用；完整范围下走原随机撒（与旧行为一致，重排更「洗得开」） */
+      const oldMines = origMines ?? mines!;
+      const keepOld = !bvRangeFull();
       const newMines = new Uint8Array(n);
       frontier.forEach((cell, k) => { if (assign[k] === 1) newMines[cell] = 1; });
       let fMines = 0;
       for (let k = 0; k < F; k++) if (assign[k] === 1) fMines++;
       const needBack = M - fMines;
-      for (let j = 0; j < needBack; j++) {
-        const p = (Math.random() * (back.length - j)) | 0;
-        newMines[back[p]] = 1;
-        back[p] = back[back.length - 1 - j];
+      let pool = back;
+      if (keepOld) {
+        /* 保原盘：后方已雷位先尽量保留（超出的按序丢弃），剩余缺口从干净位随机补 */
+        let kept = 0;
+        const keptSet: number[] = [], free: number[] = [];
+        for (const b of back) {
+          if (oldMines[b] && kept < needBack) { keptSet.push(b); kept++; }
+          else free.push(b);
+        }
+        for (const b of keptSet) newMines[b] = 1;
+        pool = free;
+        for (let j = 0; j < needBack - kept; j++) {
+          const p = (Math.random() * (pool.length - j)) | 0;
+          newMines[pool[p]] = 1;
+          pool[p] = pool[pool.length - 1 - j];
+        }
+      } else {
+        for (let j = 0; j < needBack; j++) {
+          const p = (Math.random() * (pool.length - j)) | 0;
+          newMines[pool[p]] = 1;
+          pool[p] = pool[pool.length - 1 - j];
+        }
       }
       mines = newMines;
       const nn = new Uint8Array(n);
@@ -431,7 +711,7 @@ export function OnlinePlay() {
       const est = hasBv ? t * (board3bv / solvedBv) : 0;
       const qg = hasBv ? Math.pow(t, 1.7) / solvedBv : 0;
       const ln = lv === "beg" ? 1 : lv === "int" ? 2 : 3;
-      const stnb = hasBv
+      const stnb = hasBv && lv !== "cus"
         ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
       /* 玩家实际插的旗数（胜利结算前会先抓这个值，自动补旗不算） */
@@ -456,7 +736,7 @@ export function OnlinePlay() {
         ["Flags", String(playerFlags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
         ["RQP", hasBv ? f3((est * (est + 1)) / board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
         ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
-        ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
+        ["STNB", hasBv && lv !== "cus" ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
       ];
       greport.innerHTML =
         '<div class="gr_title">数据统计</div>' +
@@ -498,7 +778,7 @@ export function OnlinePlay() {
     function reset(level?: string) {
       const prevLv = lv, prevW = W, prevH = H;
       lv = level || lv;
-      const L = LEVELS[lv]; W = L.x; H = L.y; M = L.m;
+      const L = levelSize(lv); W = L.x; H = L.y; M = L.m;
       mines = null; nums = null; state = new Uint8Array(W * H);
       started = false; over = false; openedSafe = 0; totalSafe = W * H - M; board3bv = 0;
       /* 统计清零 + 隐藏结算报告（张老师：游戏再次开始时隐藏） */
@@ -509,6 +789,7 @@ export function OnlinePlay() {
       setFace("smile");
       const names: Record<string, string> = {
         beg: "初级 8×8 · 10 雷", int: "中级 16×16 · 40 雷", exp: "高级 30×16 · 99 雷",
+        cus: "自定义 " + W + "×" + H + " · " + M + " 雷",
       };
       gname.textContent = names[lv];
       /* 同盘面重开（点笑脸/F2）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
@@ -539,6 +820,8 @@ export function OnlinePlay() {
       }
       /* NF 开启时触屏「插旗模式」按钮无意义，隐藏 */
       flagBtn.classList.toggle("hidden", nf);
+      /* 级别切换后浮窗 3BV 滑杆范围联动（浮窗开着时立即刷新） */
+      syncBvSlider();
       /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式仅盘面尺寸
          变化时刷新封顶（同盘面重开不动 zoom，杜绝重排跳动） */
       if (document.fullscreenElement === root) fitZoomForFullscreen();
@@ -548,38 +831,129 @@ export function OnlinePlay() {
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
       const t = (e.target as HTMLElement).closest("[data-lv]");
-      if (t && t.getAttribute("data-lv") !== lv) reset(t.getAttribute("data-lv")!);
+      if (!t) return;
+      const to = t.getAttribute("data-lv")!;
+      if (to === "cus") {
+        /* 自定义：不是直接切盘，先弹设置窗（已在自定义时也弹——可改规格再应用） */
+        openCusDialog();
+        return;
+      }
+      if (to !== lv) reset(to);
     });
 
-    /* ---- 右上三开关：NF / 无猜 切换即重开一局；全屏只切显示 ---- */
+    /* ---- 右上两图标按钮（2026-10-14 二期）：齿轮＝设置浮窗开合；全屏＝切换 ---- */
+    const gearBtn = $("btn_settings");
+    const fsBtn = $("btn_fs");
+    const gsettings = $("gsettings");
+    on(gearBtn, "click", (e: MouseEvent) => {
+      e.stopPropagation();
+      const open = gsettings.classList.toggle("open");
+      gearBtn.classList.toggle("active", open);
+      if (open) syncBvSlider();
+    });
+    on(gsettings, "click", (e: Event) => e.stopPropagation()); // 浮窗内点击不触发外点关闭
+    on($("gs_close"), "click", () => {
+      gsettings.classList.remove("open");
+      gearBtn.classList.remove("active");
+    });
+    on(document, "click", (e: Event) => {
+      if (!gsettings.classList.contains("open")) return;
+      if (e.target === gearBtn || gsettings.contains(e.target as Node)) return;
+      gsettings.classList.remove("open");
+      gearBtn.classList.remove("active");
+    });
+    /* Esc 优先关浮窗（全屏中的 Esc 由浏览器处理退出全屏，两者不冲突） */
+    on(document, "keydown", (e: KeyboardEvent) => {
+      if (e.key === "Escape" && gsettings.classList.contains("open")) {
+        gsettings.classList.remove("open");
+        gearBtn.classList.remove("active");
+      }
+    });
+
+    /* ---- 自定义难度弹窗（2026-10-14 三期）：点「自定义」tab 弹出，设置宽/高/雷数 ----
+       确认才应用（校验失败行内提示原因，不关窗）；取消/外点/Esc 关窗不动盘。
+       应用后规格写 localStorage（LS_KEY.cus），重开/回自定义 tab 都用记忆规格。 */
+    const cusDlg = $("cus_dialog");
+    const cusW = $("cus_w") as HTMLInputElement;
+    const cusH = $("cus_h") as HTMLInputElement;
+    const cusM = $("cus_m") as HTMLInputElement;
+    const cusErr = $("cus_err");
+    function openCusDialog() {
+      cusW.value = String(cusSpec.w);
+      cusH.value = String(cusSpec.h);
+      cusM.value = String(cusSpec.m);
+      cusErr.textContent = "";
+      cusDlg.classList.add("open");
+      cusW.focus();
+      cusW.select();
+    }
+    function closeCusDialog() { cusDlg.classList.remove("open"); }
+    function applyCus() {
+      const w = parseInt(cusW.value.trim(), 10);
+      const h = parseInt(cusH.value.trim(), 10);
+      const m = parseInt(cusM.value.trim(), 10);
+      const err = cusError(w, h, m);
+      if (err) { cusErr.textContent = err; return; }
+      cusSpec = { w, h, m };
+      saveSettings();
+      closeCusDialog();
+      reset("cus");
+    }
+    on($("cus_ok"), "click", applyCus);
+    on($("cus_cancel"), "click", closeCusDialog);
+    on($("cus_close"), "click", closeCusDialog);
+    on(cusDlg, "click", (e: Event) => e.stopPropagation()); // 窗内点击不冒泡到外点关闭
+    on(cusDlg, "keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter") { e.preventDefault(); applyCus(); }
+      if (e.key === "Escape") { e.preventDefault(); closeCusDialog(); }
+    });
+    on(document, "click", (e: Event) => {
+      if (!cusDlg.classList.contains("open")) return;
+      if (cusDlg.contains(e.target as Node)) return;
+      /* 点「自定义」tab 本身不关窗（tabs 自己的 click 里正要 openCusDialog，
+         冒泡到这里若关闭会抵消开窗——排除） */
+      const tab = (e.target as HTMLElement).closest('[data-lv="cus"]');
+      if (tab && $("level_tabs").contains(tab)) return;
+      closeCusDialog();
+    });
+    on(document, "keydown", (e: KeyboardEvent) => {
+      if (e.key === "Escape" && cusDlg.classList.contains("open")) closeCusDialog();
+    });
+    /* 输入时清除错误提示（改了就重算，应用时再校验） */
+    [cusW, cusH, cusM].forEach((el) =>
+      on(el, "input", () => { if (cusErr.textContent) cusErr.textContent = ""; }));
+
+    /* ---- 设置浮窗内开关：NF / 无猜 切换即重开一局；问号只改右键循环 ---- */
     const swNf = $("sw_nf") as HTMLInputElement;
     const swNg = $("sw_ng") as HTMLInputElement;
-    const swFs = $("sw_fs") as HTMLInputElement;
+    const swQm = $("sw_qm") as HTMLInputElement;
     on(swNf, "change", () => {
       nf = swNf.checked;
       if (nf && flagMode) flagBtn.click(); // 开 NF 前退出触屏插旗模式
+      saveSettings();
       reset();
     });
     on(swNg, "change", () => {
       ng = swNg.checked;
+      saveSettings();
       reset();
     });
-    /* 问号开关只改右键循环行为，不打断当前对局（已有问号格仍可正常循环消掉） */
-    const swQm = $("sw_qm") as HTMLInputElement;
-    on(swQm, "change", () => { qmark = swQm.checked; });
-    on(swFs, "change", () => {
-      if (swFs.checked) {
+    on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
+
+    /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ---- */
+    on(fsBtn, "click", () => {
+      if (document.fullscreenElement === root) document.exitFullscreen();
+      else {
         const p = root.requestFullscreen ? root.requestFullscreen() : null;
-        if (p && p.catch) p.catch(() => { swFs.checked = false; }); // 被拒时回弹开关
-      } else if (document.fullscreenElement) {
-        document.exitFullscreen();
+        if (p && p.catch) p.catch(() => { /* 无手势被拒等：静默 */ });
       }
     });
     /* 全屏状态切换：进入时自动把游戏区比例拉满（记住原比例），
-       退出（含 Esc）时恢复原比例并同步开关 */
+       退出（含 Esc）时恢复原比例并高亮全屏按钮 */
     on(document, "fullscreenchange", () => {
       const entered = document.fullscreenElement === root;
-      swFs.checked = entered;
+      fsBtn.classList.toggle("active", entered);
+      fsBtn.title = entered ? "退出全屏" : "全屏";
       if (entered) {
         zoomBeforeFs = zoomCur;
         // 等全屏渲染稳定（innerWidth 更新为屏幕尺寸）后再测量计算
@@ -733,33 +1107,35 @@ export function OnlinePlay() {
     /* 普通模式倍率上限：游戏渲染宽不得超过 #game_area 内容宽，否则冲出 #page 版块。
        用 getBoundingClientRect 实测自校准：gfR.width = 基准宽 × zoomCur × 所有祖先
        zoom，gaR.width = 容器宽 × 同一祖先 zoom——比值里 zoom 全部抵消，任意页级
-       缩放/窄屏断点下都成立。全屏/横屏由 fitZoom* 拉满（max=5），不走此封顶 */
+       缩放/窄屏断点下都成立。全屏/横屏由 fitZoom* 拉满（max=5），不走此封顶。
+       自定义盘（三期）加高度封顶：常规三级盘高度有限（≤16 行）从不需要，自定义
+       最高 50 行会被视口下方内容推出去——按「视口底到游戏区顶的可用高」反算
+       宽/高两个方向的倍率取小，保证整个盘面完整可见不裁切（宽度仍按容器） */
     function normalMaxZoom() {
       if (document.fullscreenElement === root || lsQuery.matches) return 5;
       const gfR = gframe.getBoundingClientRect();
       const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
       if (gfR.width <= 0 || gaR.width <= 0) return 2.5;
       /* 下限 0.5（=滑杆 min）：窄窗连 1x 都放不下时按容器宽自动缩，保证不溢出 */
-      return Math.max(0.5, Math.min(2.5, (zoomCur * (gaR.width - 16)) / gfR.width)); // 左右各留 8px
+      let cap = Math.max(0.5, Math.min(2.5, (zoomCur * (gaR.width - 16)) / gfR.width)); // 左右各留 8px
+      if (lv === "cus") {
+        /* 高度方向：gfR.height 是渲染高（含 zoomCur×pz），约束
+           base_h × zoom × pz ≤ 可用高（视口像素）→ hCap = zoomCur×可用高/gfR.height。
+           可用高 = 视口底 − game_area 顶 − 底部余量 12px（页脚仍可滚动，正常） */
+        const availH = window.innerHeight - gaR.top - 12;
+        if (gfR.height > 0 && availH > 0) {
+          const hCap = (zoomCur * availH) / gfR.height;
+          cap = Math.max(0.5, Math.min(cap, hCap));
+        }
+      }
+      return cap;
     }
-    /* 首次进入（localStorage 无记忆）的默认比例（2026-10-14 张老师定）：
-       取「高级盘（30×16）刚好能在 #game_area 主题板块内显示」的最大倍率——
-       以最宽的盘定基准，之后切到任何难度都不会溢出。
-       量纲同 normalMaxZoom（rect 自校准），只把 gframe 基准宽换成高级盘：
-       chrome = gframe 固定开销（内边距 9×2 + 边框 3×2，由当前盘实测反解），
-       cap = zoomCur × (容器渲染宽 − 16) ÷ (当前渲染宽 × 高级基准宽 ÷ 当前基准宽)。
-       下限 1：初级仍是 1x 起步不至于比原版更小（窄屏下切到高级时
-       reset→applyZoom 会再按容器封顶兜住） */
+    /* 首次进入（localStorage 无记忆）的默认比例（2026-10-14 张老师二定：固定 1.71）：
+       此前按「高级盘刚好填满版块」动态计算，宽视口下会算到 2.1x+，观感偏大。
+       现固定 1.71；窄屏放不下时由 applyZoom→normalMaxZoom 按容器宽自动封顶
+       （≥0.5），手动调整仍写 localStorage 记忆（默认值 persist=false 不写盘） */
     function defaultZoom() {
-      const gfR = gframe.getBoundingClientRect();
-      const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
-      const baseW = gframe.offsetWidth;
-      if (gfR.width <= 0 || gaR.width <= 0 || baseW <= 0) return 1;
-      const chrome = baseW - W * 16; // gframe 固定开销
-      const expW = LEVELS.exp.x * 16 + chrome; // 高级盘基准宽
-      if (expW <= 0) return 1;
-      const cap = zoomCur * ((gaR.width - 16) / gfR.width) * (baseW / expW);
-      return Math.max(1, Math.min(2.5, cap));
+      return 1.71;
     }
     function applyZoom(v: number, persist = true, max?: number) {
       const cap = max ?? normalMaxZoom();
@@ -827,6 +1203,63 @@ export function OnlinePlay() {
       applyZoom(parseFloat(zoomRange.value));
     });
     on($("zoom_reset"), "click", () => { zoomBeforeFs = null; zoomBeforeLs = null; applyZoom(1); });
+
+    /* ---- 3BV 范围双端点滑杆（2026-10-14 二期）----
+       两条原生 range 叠放：轨道/填充条只负责视觉（CSS 变量 --lo/--hi 定位），
+       thumb 透明轨道 pointer-events:none + thumb 自身 auto——两条滑杆互不挡命中。
+       交互约束：上/下界最小差 10（拖过头自动钳回）；范围外拖不动。
+       当前级别范围存 bvSel[lv]，改完立即写 localStorage；
+       只影响之后生成的盘（进行中对局不重开——重开按钮/切级别才用新范围）。 */
+    const bvLo = $("bv_lo") as HTMLInputElement;
+    const bvHi = $("bv_hi") as HTMLInputElement;
+    const bvDual = $("bv_dual") as HTMLElement;
+    const bvHint = $("bv_range_hint");
+    const bvCur = $("bv_cur");
+    const LV_NAMES: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
+    function syncBvSlider() {
+      /* 自定义盘无统计区间：整个 3BV 区禁用（半透明 + 滑杆不可拖 + 提示文案） */
+      const cus = lv === "cus";
+      bvDual.parentElement!.classList.toggle("cus", cus);
+      [bvLo, bvHi, $("bv_reset")].forEach((el) => {
+        (el as HTMLInputElement).disabled = cus;
+      });
+      if (cus) {
+        bvHint.textContent = "自定义盘面不支持 3BV 筛选";
+        bvCur.textContent = "—";
+        return;
+      }
+      const r = bvRanges[lv as keyof BvRanges], s = bvSel[lv];
+      bvLo.min = bvHi.min = String(r.min);
+      bvLo.max = bvHi.max = String(r.max);
+      bvLo.value = String(s.lo); bvHi.value = String(s.hi);
+      bvDual.style.setProperty("--lo", ((s.lo - r.min) / (r.max - r.min)) * 100 + "%");
+      bvDual.style.setProperty("--hi", ((s.hi - r.min) / (r.max - r.min)) * 100 + "%");
+      bvHint.textContent = LV_NAMES[lv] + "统计区间 " + r.min + "–" + r.max;
+      bvCur.textContent = s.lo + " – " + s.hi;
+    }
+    on(bvLo, "input", () => {
+      const r = bvRanges[lv as keyof BvRanges];
+      let lo = Math.min(parseInt(bvLo.value, 10), bvSel[lv].hi - 10);
+      lo = Math.max(r.min, Math.min(r.max, lo));
+      bvSel[lv].lo = lo;
+      saveSettings();
+      syncBvSlider();
+    });
+    on(bvHi, "input", () => {
+      const r = bvRanges[lv as keyof BvRanges];
+      let hi = Math.max(parseInt(bvHi.value, 10), bvSel[lv].lo + 10);
+      hi = Math.max(r.min, Math.min(r.max, hi));
+      bvSel[lv].hi = hi;
+      saveSettings();
+      syncBvSlider();
+    });
+    /* 双端点滑杆恢复初始范围（与统计区间对齐） */
+    on($("bv_reset"), "click", () => {
+      const r = bvRanges[lv as keyof BvRanges];
+      bvSel[lv] = { lo: r.min, hi: r.max };
+      saveSettings();
+      syncBvSlider();
+    });
     /* 数据统计术语气泡越界翻转（2026-10-14 二版：气泡改在数值右侧、整行高亮）：
        面板整体常贴到视口底缘，靠底几行的气泡（行垂直居中）会出屏，
        故按实测空间改为向上弹（CSS 里 tr.tip-up 把气泡翻到行上方、三角朝下）。
@@ -870,6 +1303,10 @@ export function OnlinePlay() {
     lsQuery.addEventListener("change", syncLandscape, { signal });
 
     on(document, "keydown", (e: KeyboardEvent) => {
+      /* 弹窗开着（尤其输入框里打字）不响应重开快捷键 */
+      if (cusDlg.classList.contains("open")) return;
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if (e.key === "F2" || e.key === "r" || e.key === "R") reset();
     });
 
@@ -882,8 +1319,23 @@ export function OnlinePlay() {
         state: () => Array.from(state),
         nf: () => nf,
         ng: () => ng,
+        bv3: () => board3bv,
+        bvSel: () => ({ ...bvSel[lv] }),
+        lv: () => lv,
+        size: () => ({ w: W, h: H, m: M }),
+        /* 诊断：单次重排的 bv（测分布用，不动盘面之外的任何状态） */
+        ngOnce: (i: number, opening: boolean) => {
+          const ok = noGuessOnce(i, opening, W * H);
+          return ok ? board3bv : -1;
+        },
       };
     }
+
+    /* 设置浮窗控件初始状态（从 localStorage 恢复的开关勾选态 + 3BV 滑杆初值） */
+    swNf.checked = nf;
+    swNg.checked = ng;
+    swQm.checked = qmark;
+    syncBvSlider();
 
     reset("beg");
     /* 比例：有 localStorage 记忆直接应用；首次进入（无记忆）用 defaultZoom()
@@ -918,32 +1370,94 @@ export function OnlinePlay() {
           <span className="current" data-lv="beg">初级</span>
           <a data-lv="int">中级</a>
           <a data-lv="exp">高级</a>
+          <a data-lv="cus">自定义</a>
         </div>
-        <div className="gswitches">
-          <label className="gsw">
-            <input type="checkbox" id="sw_nf" />
-            <span className="track" />
-            <span className="sw_name">NF</span>
+        {/* 右上角两个图标按钮（2026-10-14 二期张老师定）：齿轮＝设置浮窗；⛶＝全屏切换。
+            news_head 需要相对定位给浮窗做锚（gsettings absolute top:100% right:0） */}
+        <div className="gicons">
+          <button className="gicon" id="btn_settings" title="设置" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="2" />
+              <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" />
+            </svg>
+          </button>
+          <button className="gicon" id="btn_fs" title="全屏" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 设置浮窗：齿轮点开；含 NF/无猜/问号开关、显示比例滑杆、3BV 范围双端点滑杆。
+            全部状态入 localStorage（online_play_settings），比例仍走原 online_play_zoom 键 */}
+        <div className="gsettings" id="gsettings">
+          <div className="gs_head">设置<button className="gs_close" id="gs_close" type="button" aria-label="关闭">✕</button></div>
+          {/* 开关名 ≤4 字（2026-10-14 张老师定），完整解释放 hover 气泡（.tip） */}
+          <div className="gs_row">
+            <span className="gs_name">NF</span>
+            <label className="gsw"><input type="checkbox" id="sw_nf" /><span className="track" /></label>
             <span className="tip">禁旗模式：不能插旗，全程只靠开格决胜</span>
-          </label>
-          <label className="gsw">
-            <input type="checkbox" id="sw_ng" />
-            <span className="track" />
-            <span className="sw_name">无猜</span>
+          </div>
+          <div className="gs_row">
+            <span className="gs_name">无猜</span>
+            <label className="gsw"><input type="checkbox" id="sw_ng" /><span className="track" /></label>
             <span className="tip">踩雷自动重排本局，盲点必开出空域，永远不用猜</span>
-          </label>
-          <label className="gsw">
-            <input type="checkbox" id="sw_qm" />
-            <span className="track" />
-            <span className="sw_name">问号</span>
-            <span className="tip">开启后右键按 标雷 → 问号 → 取消 三态循环</span>
-          </label>
-          <label className="gsw">
-            <input type="checkbox" id="sw_fs" />
-            <span className="track" />
-            <span className="sw_name">全屏</span>
-            <span className="tip">游戏区域自动拉满整个屏幕，按 Esc 退出</span>
-          </label>
+          </div>
+          <div className="gs_row">
+            <span className="gs_name">问号</span>
+            <label className="gsw"><input type="checkbox" id="sw_qm" /><span className="track" /></label>
+            <span className="tip">右键按 标雷 → 问号 → 取消 三态循环</span>
+          </div>
+          <div className="gs_divider" />
+          <div className="gs_zoom">
+            <span className="zlabel">显示比例</span>
+            <input type="range" id="zoom_range" min="0.5" max="2.5" step="0.05" defaultValue="1" />
+            <span className="zval" id="zoom_val">1.00x</span>
+            <button className="zreset" id="zoom_reset" type="button">重置</button>
+          </div>
+          <div className="gs_divider" />
+          <div className="gs_bv">
+            <div className="gs_bv_label">
+              <span className="bname">3BV 范围</span>
+              <span className="brange" id="bv_range_hint">初级统计区间 2–51</span>
+              <span className="bcur" id="bv_cur">2 – 51</span>
+            </div>
+            <div className="dual" id="bv_dual">
+              <div className="rail" /><div className="fill" />
+              <input type="range" id="bv_lo" min="2" max="51" step="1" defaultValue="2" />
+              <input type="range" id="bv_hi" min="2" max="51" step="1" defaultValue="51" />
+            </div>
+            <div className="gs_bv_vals">
+              <span>下界</span>
+              <button className="bv_reset" id="bv_reset" type="button">恢复全范围</button>
+              <span>上界</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 自定义难度弹窗（2026-10-14 三期）：点「自定义」tab 弹出；宽/高/雷数三项 + 行内错误提示。
+            确认（或 Enter）应用并开局，取消/Esc/外点关闭。锚在标题行下缘（与设置浮窗同构） */}
+        <div className="cus_dialog" id="cus_dialog">
+          <div className="gs_head">自定义盘面<button className="gs_close" id="cus_close" type="button" aria-label="关闭">✕</button></div>
+          <div className="cus_row">
+            <label htmlFor="cus_w">宽度（格）</label>
+            <input type="number" id="cus_w" min={CUS_MIN} max={CUS_MAX} step={1} inputMode="numeric" defaultValue="20" />
+          </div>
+          <div className="cus_row">
+            <label htmlFor="cus_h">高度（格）</label>
+            <input type="number" id="cus_h" min={CUS_MIN} max={CUS_MAX} step={1} inputMode="numeric" defaultValue="15" />
+          </div>
+          <div className="cus_row">
+            <label htmlFor="cus_m">雷数</label>
+            <input type="number" id="cus_m" min={1} step={1} inputMode="numeric" defaultValue="40" />
+          </div>
+          <div className="cus_err" id="cus_err" />
+          <div className="cus_btns">
+            <button className="cus_cancel" id="cus_cancel" type="button">取消</button>
+            <button className="cus_ok" id="cus_ok" type="button">开始游戏</button>
+          </div>
         </div>
       </div>
 
@@ -979,13 +1493,8 @@ export function OnlinePlay() {
           {/* 结算报告浮窗：游戏结束在桌面版左侧显示，再开局隐藏；内容由 JS 注入 */}
           <div className="greport" id="greport" />
         </div>
-        <div className="gzoom">
-          <span className="gz_label">比例</span>
-          <input type="range" id="zoom_range" min="0.5" max="2.5" step="0.05" defaultValue="1" />
-          <span className="gz_val" id="zoom_val">1.00x</span>
-          <button className="gz_reset" id="zoom_reset" type="button">重置</button>
-        </div>
 
+        {/* 比例控制条已移入设置浮窗（2026-10-14 二期张老师定：页面只留游戏本体） */}
         {/* 底部不再显示进度/剩余/3BV 等任何文字信息（2026-10-14 张老师定） */}
         <div className="gtools">
           <button className="flagmode_btn" id="flagmode_btn" type="button">插旗模式</button>
