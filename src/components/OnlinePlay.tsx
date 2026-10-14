@@ -1128,6 +1128,12 @@ export function OnlinePlay({
           radarHost.style.display = "none";
         }
       }
+      /* 显形后立刻定位缩放：数据面板关着时 syncReportZoom 不再被 paintStatPanel 带动
+         （那是「面板小、叠棋盘左上」bug 的另一半——游戏结束这刻也无人调用）。
+         雷达是 createRoot 异步渲染、首帧量不到高度，再排一帧复核；数据面板开着时
+         重复算一遍值相同，无害 */
+      syncReportZoom();
+      requestAnimationFrame(syncReportZoom);
       const bind = (id: string, fn: () => void) => {
         const el = host.querySelector("#" + id) as HTMLElement | null;
         if (el) on(el, "click", fn);
@@ -2205,29 +2211,50 @@ export function OnlinePlay({
        基准尺寸 × 面板 zoom × 页级 zoom，当前 style.zoom 已知，一次除法解出）。
        低倍率下不放大过游戏倍率本身（跟手感），高倍率下按空间封顶防裁切 */
     function syncReportZoom() {
-      if (!greport.classList.contains("show")) return;
-      const rect = greport.getBoundingClientRect();
       const pz = pageZoom();
-      const curZ = parseFloat(greport.style.zoom || "1") || 1;
-      const rawW = rect.width / (curZ * pz); // 面板基准尺寸（未缩放布局尺寸）
-      const rawH = rect.height / (curZ * pz);
-      if (!rawW || rawW < 1 || !rawH || rawH < 1) return;
       const gwR = gwrap.getBoundingClientRect();
-      const availW = gwR.left - 12 - 14; // 视口左缘 12px + 贴边间隙 14px
-      const availH = window.innerHeight - gwR.top - 12;
-      const cap = Math.max(0.5, Math.min(2.5,
-        Math.min(availW / (rawW * pz), availH / (rawH * pz))));
-      const z = Math.max(0.5, Math.min(zoomCur, cap));
-      greport.style.zoom = String(z);
-      gresult.style.zoom = String(z);
-      /* 定位：面板 zoom 会缩放 left/top 偏移 → 先除回；game_area 局部坐标 =
-       (gwrap 渲染坐标 − game_area 渲染坐标) ÷ 页级 zoom（game_area 无 zoom） */
       const gaR = gameAreaEl.getBoundingClientRect();
-      const toLocal = (v: number) => v / pz / z;
-      greport.style.top = toLocal(gwR.top - gaR.top) + "px";
-      greport.style.left = toLocal(gwR.left - gaR.left - 14) - rawW + "px";
-      gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
-      gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
+      if (greport.classList.contains("show")) {
+        const rect = greport.getBoundingClientRect();
+        const curZ = parseFloat(greport.style.zoom || "1") || 1;
+        const rawW = rect.width / (curZ * pz); // 面板基准尺寸（未缩放布局尺寸）
+        const rawH = rect.height / (curZ * pz);
+        if (rawW < 1 || rawH < 1) return;
+        const availW = gwR.left - 12 - 14; // 视口左缘 12px + 贴边间隙 14px
+        const availH = window.innerHeight - gwR.top - 12;
+        const cap = Math.max(0.5, Math.min(2.5,
+          Math.min(availW / (rawW * pz), availH / (rawH * pz))));
+        const z = Math.max(0.5, Math.min(zoomCur, cap));
+        greport.style.zoom = String(z);
+        gresult.style.zoom = String(z);
+        /* 定位：面板 zoom 会缩放 left/top 偏移 → 先除回；game_area 局部坐标 =
+         (gwrap 渲染坐标 − game_area 渲染坐标) ÷ 页级 zoom（game_area 无 zoom） */
+        const toLocal = (v: number) => v / pz / z;
+        greport.style.top = toLocal(gwR.top - gaR.top) + "px";
+        greport.style.left = toLocal(gwR.left - gaR.left - 14) - rawW + "px";
+        gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
+        gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
+      } else if (gresult.classList.contains("show")) {
+        /* 📌 数据面板关着时结算面板**独立**定位缩放（2026-10-15 张老师截图报的 bug）：
+           此前整个函数被 greport.show 门控——数据面板一关（gr_close × /「显示统计」off），
+           gresult 就永远拿不到 left/top/zoom，回退 CSS 兜底 top:0;left:0 + zoom:1，
+           面板缩小叠在棋盘左上。同一套几何口径，改量 gresult 自己的 rect、
+           看右侧空间（gwR.right 之外到视口右缘）；两端面板同显时仍走上面分支共用 z */
+        const rect = gresult.getBoundingClientRect();
+        const curZ = parseFloat(gresult.style.zoom || "1") || 1;
+        const rawW = rect.width / (curZ * pz);
+        const rawH = rect.height / (curZ * pz);
+        if (rawW < 1 || rawH < 1) return; // display:none 中量不出尺寸（换宿主/收起瞬间）
+        const availW = window.innerWidth - gwR.right - 12 - 14; // 视口右缘 12px + 间隙 14px
+        const availH = window.innerHeight - gwR.top - 12;
+        const cap = Math.max(0.5, Math.min(2.5,
+          Math.min(availW / (rawW * pz), availH / (rawH * pz))));
+        const z = Math.max(0.5, Math.min(zoomCur, cap));
+        gresult.style.zoom = String(z);
+        const toLocal = (v: number) => v / pz / z;
+        gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
+        gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
+      }
     }
     /* 全屏自动拉满——**只服务移动端**（2026-10-15 张老师定：PC 端进全屏保持比例不变，
        只是视口变大、游戏多大还是多大；移动端才需要按屏幕重算比例拉满）。
