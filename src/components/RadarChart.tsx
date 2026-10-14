@@ -78,19 +78,18 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
   const n = data.length;
   const points = data.map((d, i) => polar(i, n, (d.percent / 100) * RADIUS));
   const tip = hover === null ? null : data[hover];
-  // 气泡定位：锚在外侧标签（等级+维度名两行整体）——标签在上半区弹下方，
-  // 下半区自动翻上方（否则出盒）；横向钳位避免左右贴边出盒。
-  // 与 VideoAnalysisRadar 的 vr_tip 同套路，锚点从顶点换成标签（张老师要求「标签下面」）
+  // 气泡定位：锚在外侧标签（等级+维度名两行整体），**恒在标签下方**（2026-10-14 张老师定：
+  // 所有气泡固定在标签下面，不再翻上方；底部标签气泡会略出盒，见 globals.css 说明）。
+  // 横向与标签中心严格居中对齐（张老师要求）。锚点=标签，与录像分析 vr_tip 恒下方形态一致。
   const tipStyle =
     hover === null
       ? undefined
       : (() => {
           const [lx, ly] = polar(hover, n, LABEL_RADIUS);
-          const below = ly < SIZE * 0.55;
           return {
-            left: `${Math.min(Math.max((lx / SIZE) * 100, 24), 76)}%`,
+            left: `${(lx / SIZE) * 100}%`,
             top: `${(ly / SIZE) * 100}%`,
-            transform: below ? "translate(-50%, 24px)" : "translate(-50%, calc(-100% - 22px))",
+            transform: "translate(-50%, 24px)",
           } as const;
         })();
 
