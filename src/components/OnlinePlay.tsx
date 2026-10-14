@@ -89,8 +89,10 @@ const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
    + 视口滚动条/余量 → fitZoom* 与 normalMaxZoom 共用。用固定值而非 rect 实测：
    超宽盘会把布局视口撑爆、rect 全失真。zoom 挂 .gwrap 后银框（含竖排计数列）
    整体随盘缩放，拉满基准即整个银框窗，预留不再含框/计数列。
-   ⚠️ 2026-10-15 横屏改沉浸模式后左栏（150px）已隐藏，预留从 240 大幅降到 40 */
-const LS_RESERVE_W = 40;
+   ⚠️ 2026-10-15 横屏改沉浸模式后左栏（150px）已隐藏，预留从 240 大幅降到 40；
+   同日二定「严格占满 100% 高度」把 #page 的 margin/padding 与 .box 的
+   margin/padding 全部清零（CSS 横屏块），横向只余 box 左右各 1px 边框 → 预留 2 */
+const LS_RESERVE_W = 2;
 
 /* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
@@ -1661,12 +1663,19 @@ export function OnlinePlay({
        自定义盘按盘面渲染宽精算 #page 宽度（公式与量纲见文首 PAGE_PAD 注释），
        小盘不再在 960 板块里留一大片空档；标准级别清掉 inline 交回常规 80%/960 版式。
        仅桌面断点生效：≤768 的移动版 #page 有自己的整页 zoom + 固定布局宽体系，
-       本函数直接让位（清 inline），不破坏移动版式。 */
+       本函数直接让位（清 inline），不破坏移动版式。
+       ⚠️ 2026-10-15：横屏沉浸模式也让位——横屏 #page 由 CSS 固定铺满视口
+       （margin/padding 全清），页宽不再跟随盘面；否则 844 视口下宽 ≤828 的
+       内联宽会在右侧留下一条露背景的空档，且与「严格占满 100%」冲突 */
     const mqDesktop = window.matchMedia("(min-width: 769px)");
     function syncPageFit() {
       const pe = pageEl as HTMLElement | null;
       if (!pe) return;
-      if (lv !== "cus" || !mqDesktop.matches) { pe.style.width = ""; pe.style.maxWidth = ""; return; }
+      if (lv !== "cus" || !mqDesktop.matches || lsQuery.matches) {
+        pe.style.width = "";
+        pe.style.maxWidth = "";
+        return;
+      }
       if (cusDragging) return; // 拖动中冻结（见上）
       const baseW = gframe.offsetWidth; // 布局宽＝基准宽（不含游戏 zoom，Chrome 实测）
       if (baseW < 8) return;
@@ -2081,7 +2090,19 @@ export function OnlinePlay({
          仍可能超容器，需要更小的自动缩下限才能完整可见 */
       const zMin = lv === "cus" ? 0.3 : 0.5;
       let cap: number;
-      if (lv === "cus") {
+      if (lsQuery.matches) {
+        /* 横屏沉浸（判定提到最前，2026-10-15 二定「严格占满 100%」）：
+           横屏一律按可视视口封顶，**不再区分 cus/标准**——cus 分支的基准是
+           window.innerWidth（超宽盘撑爆布局视口时会被放大到 1047 之类），
+           会允许盘面宽过真实屏宽 → 被 body overflow:hidden 裁掉。走这里也顺带
+           兜底「首帧超宽盘撑爆」：高级盘默认 1.71x = 830px > 屏宽，一旦撑爆
+           innerWidth/innerHeight 与 rect 全部失真（2026-10-14 张老师报：高级盘
+           横屏高度不对的根因），visualViewport 不受影响。
+           扣除量只剩 box 左右边框（LS_RESERVE_W=2） */
+        const vv = window.visualViewport;
+        const vw = (vv ? vv.width : window.innerWidth) / pageZoom();
+        cap = (vw - LS_RESERVE_W) / gwrap.offsetWidth;
+      } else if (lv === "cus") {
         const baseW = gframe.offsetWidth || gfR.width / zoomCur; // 基准宽（不含游戏 zoom）
         const limitW = Math.min(window.innerWidth / pageZoom(), PAGE_MAX_W) - GA_OFFSET - 16;
         cap = limitW / baseW;
@@ -2090,16 +2111,6 @@ export function OnlinePlay({
            可用高 = 视口底 − game_area 顶 − 底部余量 12px（页脚仍可滚动，正常） */
         const availH = window.innerHeight - gaR.top - 12;
         if (gfR.height > 0 && availH > 0) cap = Math.min(cap, (zoomCur * availH) / gfR.height);
-      } else if (lsQuery.matches) {
-        /* 横屏拉满由 fitZoomForLandscape 负责；这里兜底防「首帧超宽盘把移动端
-           布局视口撑爆」——高级盘默认 1.71x = 830px > 屏宽，一旦撑爆
-           innerWidth/innerHeight 被浏览器放大、媒体查询与 rect 全部失真
-           （2026-10-14 张老师报：高级盘横屏高度不对的根因）。
-           目标宽按可视视口（visualViewport，不受撑爆影响）减固定预留估算
-           （沉浸模式下只剩页面边距 + 盒装内距，无左栏） */
-        const vv = window.visualViewport;
-        const vw = (vv ? vv.width : window.innerWidth) / pageZoom();
-        cap = (vw - LS_RESERVE_W) / gwrap.offsetWidth;
       } else {
         /* 容器可用宽 = game_area 内容宽 − 16px 余量；基准宽用整个银框窗
            （gwrap，含竖排计数列——zoom 挂 gwrap 后计数列随盘同缩，一起封顶）。
@@ -2200,6 +2211,7 @@ export function OnlinePlay({
        绝对式：倍率 = 目标渲染尺寸 ÷ 基准尺寸 ÷ 页级 zoom，与 zoomCur 无关。
        max 放到 5：手机上页级 0.65 会把游戏倍率缩回去，拉满常需 3+（不进 localStorage） */
     function fitZoomForFullscreen() {
+      gwrap.style.minHeight = ""; // 撤掉横屏的银框兜底拉伸（横屏中进全屏时残留会撑歪）
       const baseW = gwrap.offsetWidth, baseH = gwrap.offsetHeight;
       if (baseW < 8 || baseH < 8) return;
       const pz = pageZoom();
@@ -2292,6 +2304,9 @@ export function OnlinePlay({
     let zoomBeforeLs: number | null = null; // 进横屏前的倍率；横屏中手动调过则置 null 不再恢复
     function fitZoomForLandscape() {
       if (document.fullscreenElement === root) return; // 全屏拉满优先
+      /* 基准量测前先撤掉上一次的「银框兜底拉伸」（见本函数末尾）——否则拉伸会被
+         当成自然基准、越拉越高（每次 fit 都是一次干净重算） */
+      gwrap.style.minHeight = "";
       /* zoom 挂 .gwrap：基准取整个银框窗（竖排计数列随盘同缩），offsetWidth/Height
          实测不含 zoom（Chrome，含自身 zoom 也不含） */
       const baseW = gwrap.offsetWidth, baseH = gwrap.offsetHeight;
@@ -2303,12 +2318,50 @@ export function OnlinePlay({
       const gaR = gameAreaEl.getBoundingClientRect();
       const gwR = gwrap.getBoundingClientRect();
       /* 高度目标 = 屏高 − game_area 顶 − 底部余量 − 银框之外占高（rect 差值法）；
-         宽度目标 = 屏宽 − 固定横向开销（页面边距/盒装，LS_RESERVE_W；沉浸模式无左栏）。
-         vw/vh 已除 pz 归一成布局 px，rect 量出的部分同样除 pz，倍率不再另除 */
+         宽度目标 = 屏宽 − 固定横向开销（只剩 box 左右边框，LS_RESERVE_W）。
+         vw/vh 已除 pz 归一成布局 px，rect 量出的部分同样除 pz，倍率不再另除。
+         底部余量 8 → 1（2026-10-15 二定「严格占满 100% 高度」）：页级 margin/padding
+         与 .box 的 margin/padding 已在 CSS 横屏块清零，视口底只剩 box 那 1px 边框，
+         再留 8px 会在棋盘下方露出一条板块背景色 */
       const othersH = Math.max(0, (gaR.height - gwR.height) / pz);
-      const targetH = vh - gaR.top / pz - 8 - othersH;
+      const targetH = vh - gaR.top / pz - 1 - othersH;
       const targetW = vw - LS_RESERVE_W;
       applyZoom(Math.min(targetW / baseW, targetH / baseH), false, 5);
+      /* 试探性补差（2026-10-15 二定「严格占满 100%」）：首算用的是 offset* 基准
+         （取整值，实测 155 vs 真值 154.79）且首帧布局未落位，常低 2-3px。
+         补差用**棋盘窗自身实测 rect** 反算（rect 与 zoom 同步缩放，比值自洽，
+         不依赖 zoomCur 与渲染是否同步，也不必管 flex-start 下 game_area 与盘面的
+         高度差）。⚠️ 只试一次且**过则回退**：棋盘窗高度是离散的（整格 × zoom，
+         实测 zoom 2.4995→2.5 之间高度从 386.8 跳到 389），补差可能一脚跳过头，
+         宁可小 2px 也不能让棋盘下缘被视口裁掉 */
+      const z0 = zoomCur;
+      const gw1 = gwrap.getBoundingClientRect();
+      if (gw1.height > 8 && gw1.width > 8) {
+        const grow = Math.min(
+          (vh - gw1.top / pz - 1) / (gw1.height / pz),
+          (vw - gw1.left / pz - 1) / (gw1.width / pz),
+        );
+        if (grow > 1.002) {
+          applyZoom(z0 * grow, false, 5);
+          const gw2 = gwrap.getBoundingClientRect();
+          if (gw2.bottom / pz > vh - 1 || gw2.right / pz > vw - 1) applyZoom(z0, false, 5); // 跳过头 → 回退
+        }
+      }
+      /* 银框窗兜底拉满：棋盘高度离散化后总差几 px 踩不到视口底，落在窗外就是张老师
+         看到的「底部露板块背景色」。这里不追棋盘，改把**窗**（gwrap，银底 + 凸起边框）
+         用 min-height 补到视口底——补出的空间落在银框内部（银底/棋格内衬），肉眼不可见，
+         棋盘尺寸与手感分毫不动。
+         量纲：窗显示高 = 布局高 × zoom（zoom 挂 gwrap 自身），故 min-height 按
+         「当前布局高 + 缺口 ÷ zoom」递增；两轮实测逼近（Chrome 的 zoom 取整会让
+         显示高与布局高×zoom 差 ~1px，一次算不准）。每次 fit 开头先撤旧值，
+         免得下一次把上次的拉伸计入基准 */
+      for (let i = 0; i < 2; i++) {
+        const r = gwrap.getBoundingClientRect();
+        const deficit = vh - 1 - r.bottom / pz; // 距视口底还差多少（显示 px，扣 box 1px 边框）
+        if (deficit <= 0.5) break;
+        const cur = parseFloat(gwrap.style.minHeight) || 0;
+        gwrap.style.minHeight = Math.ceil(Math.max(cur, baseH) + deficit / zoomCur) + "px";
+      }
     }
     function syncLandscape() {
       if (lsQuery.matches) {
@@ -2316,6 +2369,7 @@ export function OnlinePlay({
         window.scrollTo(0, 0); // 顶满高度以页面顶为基准，先回顶再量
         window.setTimeout(fitZoomForLandscape, 60); // 等媒体查询布局生效后测量
       } else if (zoomBeforeLs !== null) {
+        gwrap.style.minHeight = ""; // 退出横屏撤掉银框兜底拉伸（竖屏窗口不该被撑高）
         applyZoom(zoomBeforeLs, false);
         zoomBeforeLs = null;
       }

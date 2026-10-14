@@ -6661,15 +6661,24 @@ button.msg_cancel:hover {
    本块必须留在 #online_play 全部基础规则之后：媒体查询不加优先级，
    同优先级时后定义者胜出（display:none 曾被后面的 .gzoom{display:flex} 覆盖） */
 @media (orientation: landscape) and (max-height: 520px) {
-  /* 主体板块铺满：≥769 断点的 body #page.main width:80% 在横屏只给 675px，
-     左右白白浪费；盒装内距同步收紧到极小（沉浸模式版块内无其他内容） */
+  /* 主体板块铺满（2026-10-15 张老师二定：横屏去掉全部 margin/padding，
+     游戏界面严格占满 100% 高度——此前上下仍能看到主题板块背景色）：
+     ① #page.main：删 margin 0 4px（左右各 4px 露背景）+ 清 legacy 的
+        padding-bottom 24px（body 已 overflow:hidden，这 24px 纯粹把内容顶出视口）；
+     ② .box（#online_play 自己）：删 margin 16px 8px（**顶距 16px 就是张老师看到的
+        「上方空隙」**）+ padding 4px 8px → 上下左右全归零；
+     留下的只有 box 自身 1px 边框（面板经典镶边，保留）——故垂直/水平占用各 2px，
+     JS fitZoomForLandscape 的 LS_RESERVE_W / 底部余量按此同步改小。
+     ⚠️ 与「横屏禁滚动」三道锁配套：页面不再有任何可滚动余量 */
   body:has(#online_play) #page.main {
     width: auto;
     max-width: none;
-    margin: 0 4px;
+    margin: 0;
+    padding: 0;
   }
   body:has(#online_play) #page .box {
-    padding: 4px 8px;
+    margin: 0;
+    padding: 0;
   }
   #online_play > div {
     position: relative;
@@ -6680,8 +6689,8 @@ button.msg_cancel:hover {
     align-items: flex-start;
     gap: 0;
     /* 最小高度撑到满屏，保持游戏列视觉满幅（fitZoom 会把棋盘拉满高度）。
-       26 = 盒装 margin 16 + border 2 + padding 8 */
-    min-height: calc(100vh - 26px);
+       2 = box 上下各 1px 边框（margin/padding 已于 2026-10-15 全清） */
+    min-height: calc(100vh - 2px);
     box-sizing: border-box;
   }
   /* 站头彻底隐藏：横屏页无需滚动，静态头也会常驻吃掉 44px 高度
