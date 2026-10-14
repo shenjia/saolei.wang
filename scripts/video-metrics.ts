@@ -27,15 +27,18 @@ import path from "path";
 import { prisma } from "../src/lib/db";
 import { VIDEO_STATUS } from "../src/lib/config";
 import {
+  AXIS_METRICS,
   analyzeVideo,
-  bbbvBucket,
+  BASE_METRIC_KEYS,
+  BASE_METRICS,
+  compositeOf,
+  DIST_BUCKET_ALL,
   buildDist,
   MIN_DIST_SIZE,
-  METRIC_KEYS,
-  METRICS,
+  percentOf,
   stnbOf,
 } from "../src/lib/videoradar";
-import type { MetricKey } from "../src/lib/videoradar";
+import type { BaseMetricKey, MetricKey } from "../src/lib/videoradar";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 
@@ -57,37 +60,85 @@ function readVideoFile(filepath: string): Uint8Array | null {
 }
 
 /**
- * 全站综合榜排名重排。
+ * 全站综合分重算（雷达「综合」轴的落库版本）。
+ *
+ * 综合 = 四轴（速度/效率/精准/手速）在「级别 × 模式」组内百分位的加权平均
+ * （videoradar.ts compositeOf，权重表 COMPOSITE_WEIGHTS）。它依赖分位基准，
+ * 所以必须在 dist 重建之后跑；基准一变，全站综合分都要跟着变。
+ *
+ * 30 万行逐条 update 太慢（一次 round trip 一盘），这里按 500 一组拼
+ * `UPDATE ... CASE id WHEN ... THEN ...` 批量写。
+ */
+async function rebuildComposite() {
+  await prisma.$executeRawUnsafe(`UPDATE video_metrics SET composite = 0`);
+  const dists = await prisma.videoMetricDist.findMany();
+  const byGroup = new Map<string, (typeof dists)[number]>();
+  for (const d of dists) byGroup.set(`${d.level}|${d.noflag ? 1 : 0}|${d.bucket}`, d);
+
+  const rows = await prisma.videoMetrics.findMany({
+    select: { id: true, level: true, noflag: true, bvs: true, ioe: true, corr: true, cls: true },
+  });
+
+  const vals: Array<[string, number]> = [];
+  for (const r of rows) {
+    const d = byGroup.get(`${r.level}|${r.noflag ? 1 : 0}|${DIST_BUCKET_ALL}`);
+    if (!d) continue;
+    const percents: Partial<Record<MetricKey, number>> = {};
+    for (const def of AXIS_METRICS) {
+      const raw = String((d as unknown as Record<string, unknown>)[def.key] ?? "");
+      const dist = raw
+        .split(",")
+        .filter((s) => s !== "")
+        .map(Number);
+      const v = Number((r as unknown as Record<string, unknown>)[def.key]);
+      percents[def.key] = dist.length ? percentOf(v, dist, def.highIsBetter) : 0;
+    }
+    vals.push([r.id.toString(), compositeOf(percents)]);
+  }
+
+  const CHUNK = 500;
+  for (let i = 0; i < vals.length; i += CHUNK) {
+    const part = vals.slice(i, i + CHUNK);
+    const ids = part.map((p) => p[0]).join(",");
+    const whens = part.map((p) => `WHEN ${p[0]} THEN ${p[1]}`).join(" ");
+    await prisma.$executeRawUnsafe(
+      `UPDATE video_metrics SET composite = CASE id ${whens} END WHERE id IN (${ids})`,
+    );
+  }
+  console.log(`综合分重算：${vals.length} 盘（基准组 ${dists.length} 个）`);
+}
+
+/**
+ * 组内排名重排。
  *
  * 为什么不在插入时算：排名是**相对值**，来一条新录像会把后面所有人的名次往后挤。
- * 但它只依赖 video_metrics 自身的 stnb 分布，用窗口函数 30 万行几秒就刷完了，
+ * 它只依赖 video_metrics 自身的 composite 分布，窗口函数 30 万行几秒刷完，
  * 不必为此重放进录像文件，所以放在跑批末尾单独做。
  *
- * 口径：RANK() OVER (ORDER BY stnb DESC) 全站；再按 (level, noflag) 来一份组内榜；
- * beat_pct 是全站超越百分比（与雷达气泡里的「超越 xx% 的玩家」同向读数）。
+ * 口径（张老师 2026-10-14 定）：**只排「级别 × 模式」组内**，不排全站——
+ * 不同级别放一起比没有意义。rank_all 列保留但不再维护（恒 0）。
+ * beat_pct 直接取 composite，与雷达气泡「综合 x 分，超过 x% 的玩家」读数一致。
  */
 async function rebuildRank() {
-  // ① 先全部清零：屏蔽（status=0）/撤销通过后不该再占榜上的名次，否则TOP榜会出现
+  // ① 先全部清零：屏蔽（status=0）/撤销通过后不该再占榜上的名次，否则 TOP 榜会出现
   //    点不开的录像。先清后写比「只更新有效集合」安全——后者会留下失效行的旧名次。
   await prisma.$executeRawUnsafe(`UPDATE video_metrics SET rank_all = 0, rank_group = 0, beat_pct = 0`);
-  // ② 只对「已通过 + 有 STNB」的集合排名
+  // ② 只对「已通过 + 有综合分」的集合排名
   await prisma.$executeRawUnsafe(`
     UPDATE video_metrics m
       JOIN (
         SELECT t.id,
-               RANK() OVER (ORDER BY t.stnb DESC) AS r_all,
-               RANK() OVER (PARTITION BY t.level, t.noflag ORDER BY t.stnb DESC) AS r_grp,
-               ROUND(100 * (1 - PERCENT_RANK() OVER (ORDER BY t.stnb DESC)), 2) AS bp
+               t.composite,
+               RANK() OVER (PARTITION BY t.level, t.noflag ORDER BY t.composite DESC) AS r_grp
         FROM video_metrics t
           JOIN video v ON v.id = t.id
-        WHERE t.stnb > 0 AND v.status = ${VIDEO_STATUS.REVIEWED}
+        WHERE t.composite > 0 AND v.status = ${VIDEO_STATUS.REVIEWED}
       ) x ON x.id = m.id
-    SET m.rank_all = x.r_all,
-        m.rank_group = x.r_grp,
-        m.beat_pct = x.bp
+    SET m.rank_group = x.r_grp,
+        m.beat_pct = x.composite
   `);
-  const n = await prisma.videoMetrics.count({ where: { stnb: { gt: 0 }, rankAll: { gt: 0 } } });
-  console.log(`排名重排完成：${n} 盘入榜（已屏蔽/待审/无 STNB 的不占名次）`);
+  const n = await prisma.videoMetrics.count({ where: { composite: { gt: 0 }, rankGroup: { gt: 0 } } });
+  console.log(`组内排名重排完成：${n} 盘入榜（已屏蔽/待审/无综合分的不占名次；全站榜已停用）`);
 }
 
 async function main() {
@@ -97,7 +148,7 @@ async function main() {
   const missingOnly = has("missing-only");
   const distOnly = has("dist-only");
   const rankOnly = has("rank-only");
-  const rows = METRIC_KEYS as MetricKey[];
+  const rows = BASE_METRIC_KEYS as BaseMetricKey[];
 
   if (rankOnly) {
     await rebuildRank();
@@ -239,7 +290,7 @@ async function main() {
   });
   console.log(`分位样本总量：${all.length}`);
 
-  type Group = { size: number; vals: Record<MetricKey, number[]> };
+  type Group = { size: number; vals: Record<BaseMetricKey, number[]> };
   const groups = new Map<string, Group>();
   const groupKey = (level: string, noflag: boolean, bucket: number) => `${level}|${noflag ? 1 : 0}|${bucket}`;
   const push = (key: string, row: (typeof all)[number]) => {
@@ -252,9 +303,8 @@ async function main() {
     for (const k of rows) g.vals[k].push(row[k]);
   };
   for (const row of all) {
-    // -1 行＝全组兜底；细分段样本不足时用
-    push(groupKey(row.level, row.noflag, -1), row);
-    push(groupKey(row.level, row.noflag, bbbvBucket(row.level, row.bbbv)), row);
+    // 分组只有「级别 × 模式」一档：bucket 恒为 -1（张老师 2026-10-14 定，不细分 3BV）
+    push(groupKey(row.level, row.noflag, DIST_BUCKET_ALL), row);
   }
 
   let written = 0;
@@ -262,7 +312,7 @@ async function main() {
     if (g.size < MIN_DIST_SIZE) continue;
     const [level, nf, bucket] = key.split("|");
     const data: Record<string, string | number | boolean> = { level, noflag: nf === "1", bucket: Number(bucket), size: g.size };
-    for (const def of METRICS) {
+    for (const def of BASE_METRICS) {
       data[def.key] = buildDist(g.vals[def.key], def.highIsBetter)
         .map((v) => String(Math.round(v * 1000) / 1000))
         .join(",");
@@ -276,6 +326,9 @@ async function main() {
     written++;
   }
   console.log(`分位行写入：${written}`);
+
+  // ---- 综合分（依赖上面的分位基准） ----
+  await rebuildComposite();
 
   if (!has("no-rank")) await rebuildRank();
 }

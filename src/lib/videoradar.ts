@@ -382,24 +382,31 @@ export function analyzeVideo(
   };
 }
 
-/** 分位基准的最小样本量：不足则回退到「全组」行（bucket = -1） */
+/** 分位基准的最小样本量：不足则不产出该组（页面退化为不出雷达盒） */
 export const MIN_DIST_SIZE = 30;
 
 /**
- * 分位分组的 bucket 取值 = **该盘的 3BV 原值**（张老师要求「本级别同等 3BV 下」比较）。
- * 实测按单 3BV 分组的样本量足以支撑：beg 81/95、int 165/201、exp 255/331 个
- * (级别, 模式, 3BV) 组合样本 ≥ 30；稀疏组合由 video_metric_dist 的 -1 全组行兜底。
+ * 分位分组 = **级别 × 模式（标雷/无猜）**，不细分 3BV（张老师 2026-10-14 定）。
+ *
+ * 历史：初版按「级别 × 模式 × 精确 3BV」分组（bucket = 该盘 3BV 原值，507 行基准）。
+ * 后改为只按级别 × 模式：① 不同 3BV 的盘没法横向比（3BV 越小越容易刷高 3BV/s）；
+ * ② 细分后稀疏组合样本不足、要回退，口径反而不一致。现在全站只有 6 个组
+ * （beg/int/exp × 标雷/无猜），每组样本万级，足够稳。
+ *
+ * video_metric_dist 的 bucket 列保留（唯一键的一部分），**恒写 -1**。
  */
-export function bbbvBucket(_level: string, bbbv: number): number {
-  return bbbv;
-}
+export const DIST_BUCKET_ALL = -1;
 
-// ---------- 六维定义与评级（移植 Assess::grade/percent 语义，纯函数便于跑批脚本复用） ----------
+// ---------- 指标定义与评级（移植 Assess::grade/percent 语义，纯函数便于跑批脚本复用） ----------
 
-export type MetricKey = "stnb" | "bvs" | "ioe" | "corr" | "cls" | "ppc";
+export type MetricKey = "stnb" | "bvs" | "ioe" | "corr" | "cls" | "ppc" | "cmp";
+/** 重放得出、逐盘落库并建分位基准的六项客观事实（cmp 是合成的，不在内） */
+export type BaseMetricKey = Exclude<MetricKey, "cmp">;
+/** 参与综合加权的四根分项轴 */
+export type AxisMetricKey = "bvs" | "ioe" | "corr" | "cls";
 
-export interface MetricDef {
-  key: MetricKey;
+export interface MetricDef<K extends MetricKey = MetricKey> {
+  key: K;
   /** 雷达轴名 */
   name: string;
   /** hover 气泡里的完整说明 */
@@ -414,8 +421,12 @@ export interface MetricDef {
   highIsBetter: boolean;
 }
 
-/** 六轴顺序：自顶部起顺时针（张老师 2026-10-14 定：综合置顶） */
-export const METRICS: MetricDef[] = [
+/**
+ * 六项落库事实：重放得出的客观指标，逐盘存进 video_metrics，每一项都建分位基准。
+ * 注意「移动 ppc」已按张老师 2026-10-14 要求移出雷达图，但值照旧落库留存
+ * （重放结果是确定性事实，留着不占成本，将来想恢复随时可用）。
+ */
+export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   { key: "stnb", name: "综合", desc: "综合评分 STNB", prefix: "STNB", unit: "", digits: 1, highIsBetter: true },
   { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "", unit: "3BV/s", digits: 3, highIsBetter: true },
   { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
@@ -424,11 +435,80 @@ export const METRICS: MetricDef[] = [
   { key: "ppc", name: "移动", desc: "每击鼠标行程", prefix: "", unit: "格/次", digits: 2, highIsBetter: false },
 ];
 
-export const METRIC_KEYS: MetricKey[] = METRICS.map((m) => m.key);
+/**
+ * 雷达的四根分项轴 —— 自顶部「综合」起顺时针：速度 / 效率 / 精准 / 手速。
+ * 综合分就是这四项在（级别 × 模式）组内百分位的加权平均，见 compositeOf。
+ */
+export const AXIS_METRICS: MetricDef<AxisMetricKey>[] = [
+  { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "", unit: "3BV/s", digits: 3, highIsBetter: true },
+  { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
+  { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
+  { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次/秒", digits: 2, highIsBetter: true },
+];
+
+export const BASE_METRIC_KEYS: BaseMetricKey[] = BASE_METRICS.map((m) => m.key);
+export const AXIS_METRIC_KEYS: AxisMetricKey[] = AXIS_METRICS.map((m) => m.key);
+
+/**
+ * 综合分的权重（张老师 2026-10-14 定：只在「级别 × 模式」组内做百分位加权，
+ * 不考虑 3BV，且不同级别不能放一起比较）。
+ *
+ * 现为**等权** —— 四项各占 1/4。要偏重某几项直接改这里的数字即可（不必改逻辑），
+ * 改完跑一次批就会重算全站 composite 与组内排名。
+ *
+ * 为什么不用 STNB 当综合：STNB 只由「用时 + 3BV + 级别」构成，与「速度」轴是同一份
+ * 信息的两种折算，用它排榜会被初级小局面垄断（实测 beg 3BV=2/0.09s 得 5671，
+ * 而 exp 3BV=123/25.1s 的世界纪录只有 223）。百分位加权才跨 3BV 可比。
+ */
+export const COMPOSITE_WEIGHTS: Record<MetricKey, number> = {
+  bvs: 1,
+  ioe: 1,
+  corr: 1,
+  cls: 1,
+  // 不参与加权：stnb 已被本分取代；ppc 已移出雷达；cmp 是本分自身
+  stnb: 0,
+  ppc: 0,
+  cmp: 0,
+};
+
+/** 综合分 = 四轴组内百分位的加权平均（0-100，本身就是百分位量纲，可直接当综合轴的半径） */
+export function compositeOf(percents: Partial<Record<MetricKey, number>>): number {
+  let sum = 0;
+  let wsum = 0;
+  for (const def of AXIS_METRICS) {
+    const w = COMPOSITE_WEIGHTS[def.key] ?? 0;
+    if (w <= 0) continue;
+    sum += (percents[def.key] ?? 0) * w;
+    wsum += w;
+  }
+  return wsum > 0 ? Math.round((sum / wsum) * 10) / 10 : 0;
+}
+
+/**
+ * 由百分位反推等级 —— 综合分本身就是百分位，没有独立的分布可建，
+ * 所以走 GRADE_PERCENTS 档位表而不是 gradeOf（后者需要 dist 边界）。
+ */
+export function gradeFromPercent(p: number): string {
+  if (!p) return "?";
+  if (p >= GRADE_PERCENTS[0]) return GRADES[0];
+  for (let i = 1; i < GRADE_PERCENTS.length; i++) {
+    if (p > GRADE_PERCENTS[i]) {
+      const upper = GRADE_PERCENTS[i - 1] - 1;
+      const lower = GRADE_PERCENTS[i];
+      const range = Math.abs(upper - lower);
+      if (range === 0) return GRADES[i];
+      const rate = Math.abs(upper - p) / range;
+      if (rate > 0.6666) return GRADES[i] + "-";
+      if (rate < 0.3333) return GRADES[i] + "+";
+      return GRADES[i];
+    }
+  }
+  return GRADES[GRADES.length - 1];
+}
 
 /** 指标值格式化（气泡展示），如 `STNB 87.0` / `4.065 3BV/s` */
 export function formatMetric(key: MetricKey, value: number): string {
-  const def = METRICS.find((m) => m.key === key);
+  const def = BASE_METRICS.find((m) => m.key === key);
   if (!def) return String(value);
   const num = value.toFixed(def.digits);
   return [def.prefix, num, def.unit].filter((s) => s !== "").join(" ");
@@ -469,12 +549,25 @@ function getPosition(value: number, dist: number[], highIsBetter: boolean): numb
   return Math.min(dist.length, GRADES.length - 1);
 }
 
+/**
+ * 档位内的插值上界。
+ *
+ * ⚠️ 原版 Assess::percent 这里是 `distribution[position-1] - 1` —— 那是**整数分**场景的
+ * 产物（旧站 Distribution 阈值都是整数，减 1 表示「上一档的最高分」）。本站 IOE / Corr
+ * 是 0~1 的比率，减 1 会把上界变成负数：实测 Corr=0.752 落在 [0.73, 0.77] 档内、
+ * 真实约 55 分位，带 -1 的版本算出 49，**比本档下界 50 还低**，明显越界。
+ * 连续量直接用上一档阈值当上界即可。
+ */
+function upperBound(dist: number[], position: number): number {
+  return dist[position - 1];
+}
+
 /** 等级（SSS~F，含 +/-） */
 export function gradeOf(value: number, dist: number[], highIsBetter: boolean): string {
   if (!value || dist.length === 0) return "?";
   const position = getPosition(value, dist, highIsBetter);
   if (position === 0 || position >= GRADES.length - 1) return GRADES[Math.min(position, GRADES.length - 1)];
-  const maxScore = dist[position - 1] - 1;
+  const maxScore = upperBound(dist, position);
   const minScore = dist[position];
   const range = Math.abs(maxScore - minScore);
   if (range === 0) return GRADES[position];
@@ -489,9 +582,9 @@ export function percentOf(value: number, dist: number[], highIsBetter: boolean):
   if (!value || dist.length === 0) return 0;
   const position = getPosition(value, dist, highIsBetter);
   if (position === 0) return GRADE_PERCENTS[0];
-  const maxPercent = GRADE_PERCENTS[position - 1] - 1;
+  const maxPercent = GRADE_PERCENTS[position - 1] - 1; // 百分位档是整数档，减 1 正确（沿用原版）
   const minPercent = GRADE_PERCENTS[position];
-  const maxScore = dist[position - 1] - 1;
+  const maxScore = upperBound(dist, position); // 分数上界是连续量，不能减 1 —— 见 upperBound 注释
   const minScore = dist[position];
   const rangeScore = Math.abs(maxScore - minScore);
   if (rangeScore === 0) return minPercent;

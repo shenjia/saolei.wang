@@ -245,9 +245,15 @@ model VideoMetrics {
   cls        Float  @db.Float
   ppc        Float  @db.Float
   stnb       Float  @db.Float
-  // 全站综合榜排名 / 同「级别×模式」组内排名 / 全站超越百分比（0-100）。
-  // 这三项是**相对值**：新录像进来会挤动别人的名次，所以不像上面那些事实字段那样一算永逸，
-  // 由跑批 scripts/video-metrics.ts 每次用窗口函数全量重刷（30 万行几秒，不必重放进文件）。
+  // 综合分（0-100）= 速度/效率/精准/手速四轴在「级别×模式」组内百分位的加权平均
+  // （videoradar.ts compositeOf，权重表 COMPOSITE_WEIGHTS，现为等权）。
+  // 它依赖分位基准，所以不是一算永逸：基准或权重一变就要全量重算（跑批里几十秒）。
+  composite   Float  @default(0) @db.Float
+  // 排名类**相对值**：新录像进来会挤动别人的名次，不能像事实字段那样一算永逸，
+  // 由跑批每次用窗口函数全量重刷（30 万行几秒，不必重放进文件）。
+  // rankAll 已停用：张老师 2026-10-14 定「不同级别不能放一起比较」，全站榜无意义，
+  // 列保留（避免动生产表），跑批恒写 0。现只维护 rankGroup（级别×模式组内名次）
+  // 与 beatPct（组内超越百分比，直接取 composite，与雷达气泡读数一致）。
   rankAll    Int    @default(0) @map("rank_all") @db.Int
   rankGroup  Int    @default(0) @map("rank_group") @db.Int
   beatPct    Float  @default(0) @map("beat_pct") @db.Float
@@ -255,6 +261,7 @@ model VideoMetrics {
 
   @@index([rankAll])
   @@index([level, noflag, rankGroup])
+  @@index([level, noflag, composite])
   @@map("video_metrics")
 }
 
