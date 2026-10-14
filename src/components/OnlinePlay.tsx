@@ -110,6 +110,31 @@ const WHEEL_STEP_Z = 0.1;
    封顶时把累计清零（而不是继续留余量），免得下一格又跳一次 */
 const WHEEL_MAX_STEPS = 5;
 
+/* ---- 进入练习页的一次性 tips（2026-10-15 张老师定）----
+   挂载时随机取一条，在主板块底部以气泡浮现（正文前一枚金色灯泡），
+   3 秒后渐隐并卸载，本次进入不再出现；条数随意加，随机池即本数组。
+   ⚠️ 文案一律只写**已上线**的既有行为（口径与设置浮窗 .tip / 各按钮 title 一致），
+      别把计划中或已废弃的功能（如「显示3BV」「极简模式」）写进来 */
+const TIPS: string[] = [
+  "手机上把屏幕横过来，棋盘会自动拉满整屏，视野更开阔。",
+  "点右上角全屏按钮进入沉浸模式，页面其他内容全部让位。",
+  "无猜模式下需要靠猜的局面会自动重排，全程都能靠推理解决。",
+  "鼠标滚轮可直接调显示比例：上滑放大，下滑缩小。",
+  "设置里能限定 3BV 范围，只练你想要的开局难度。",
+  "练习局的录像只能自己回看，不能上传参与排行。",
+  "手机上长按格子可以标雷，标完会自动展开周围已满足的数字格。",
+  "按 F2（或点笑脸）随时重开一局，不必等这局走完。",
+  "禁旗模式（NF）下不能插旗，全程只靠开格决胜。",
+  "左右键同按（或单击已满足的数字格）可一次展开一圈，比逐格点快。",
+  "自定义盘可以自由设定宽、高、雷数（8 – 99），想练什么规格都行。",
+  "每局结束会给出 STNB 与五维雷达评级，口径与录像详情页一致。",
+];
+/* tips 生命周期（ms）：fade-in 由挂载后下一帧加 .show 触发；
+   TIP_HOLD_MS 后撤 .show 走 transition 渐隐，TIP_FADE_MS 后整块卸载。
+   「3 秒后渐隐」＝ 从浮现到开始消失共 3 秒，渐隐本身 0.7s 不占额度 */
+const TIP_HOLD_MS = 3000;
+const TIP_FADE_MS = 700;
+
 /* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
 export type MetricDists = Record<string, Record<string, Record<string, number[]>>>;
@@ -127,7 +152,6 @@ export function OnlinePlay({
   const rootRef = useRef<HTMLDivElement>(null);
   /* 结算面板里雷达组件的 React root（面板走 innerHTML 注入，只能这样挂 React 组件） */
   const radarRootRef = useRef<Root | null>(null);
-
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -157,6 +181,26 @@ export function OnlinePlay({
       const t = e.target as HTMLElement;
       if (t instanceof HTMLInputElement && t.type === "range") paintRangeFill(t);
     });
+
+    /* ---- 底部气泡 tips（2026-10-15 张老师定）----
+       进入本页随机显示一条（文案池 TIPS），3 秒后渐隐、再 0.7 秒整块摘除，
+       本次进入不再出现。走**命令式 DOM**而不是 React state：
+       ① 随机值只能在客户端取——渲染期取会撞 react-hooks/purity，且 SSR 与客户端
+          两条随机值不同即 hydration mismatch（故 JSX 里 .txt 恒为空，文字在这里填）；
+       ② 主 useEffect 本就是本组件的「外部系统同步区」，
+          react-hooks/set-state-in-effect 规则禁止在 effect 体里同步 setState。
+       ⚠️ 元素脱流绝对定位（CSS 里写死），出现/消失都不改版面高度——
+          页面锁滚 + 棋盘按视口 fit，任何高度变化都会让 fit 基准偏移、棋盘跳动 */
+    const tipsEl = root.querySelector<HTMLElement>("#op_tips")!;
+    tipsEl.querySelector(".txt")!.textContent =
+      TIPS[Math.floor(Math.random() * TIPS.length)];
+    /* 下一帧再挂 .show：插入帧已是 opacity:0 初始态，同帧加类会被合并、
+       transition 不触发（气泡就「闪」一下没了） */
+    const tipRaf = requestAnimationFrame(() => tipsEl.classList.add("show"));
+    const tipFade = window.setTimeout(() => tipsEl.classList.remove("show"), TIP_HOLD_MS);
+    /* 渐隐走完再摘元素：留着会是个 pointer-events:none 的空盒子，
+       虽不可见但占位（脱流不占位，纯粹为清洁 DOM 与后续可能的重复挂载） */
+    const tipDrop = window.setTimeout(() => tipsEl.remove(), TIP_HOLD_MS + TIP_FADE_MS);
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
        cus＝自定义盘（三期）：规格来自弹窗滑杆，宽/高 8–99、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
@@ -2787,12 +2831,19 @@ export function OnlinePlay({
       if (touchTimer) clearTimeout(touchTimer);
       if (cusTimer !== null) clearTimeout(cusTimer); // 拖杆节流残留的 trailing 定时器
       if (wheelTimer !== null) clearTimeout(wheelTimer); // 滚轮落盘的 trailing 定时器
+      /* 气泡 tips 的三段定时（卸载早于 3 秒时不留残余定时器/回调） */
+      cancelAnimationFrame(tipRaf);
+      clearTimeout(tipFade);
+      clearTimeout(tipDrop);
       if (win.__op) delete win.__op;
     };
   }, []);
 
   return (
-    <div ref={rootRef}>
+    /* op_root：根容器相对定位锚——底部气泡 tips 按它定位（横屏块里的
+       #online_play > div 已有 position:relative，此处补上竖屏/桌面态）。
+       ⚠️ op-lsmax 等运行时类由 JS classList 追加，与静态类互不干扰 */
+    <div ref={rootRef} className="op_root">
       <FlopSprites />
       {/* 标题行：与首页「新闻」同款 .news_head（黄 h1 + 级别筛选 tabs 紧跟右侧）；
           右侧三个独立开关（NF / 无猜 / 全屏）margin-left:auto 推到行右，悬停出气泡说明
@@ -2958,6 +3009,23 @@ export function OnlinePlay({
 
         {/* 比例控制条已移入设置浮窗（2026-10-14 二期张老师定：页面只留游戏本体）；
             触屏「插旗模式」按钮已废（同日张老师定）——移动端插旗一律长按 ≥150ms */}
+      </div>
+
+      {/* 进入练习页的一次性气泡 tips（2026-10-15 张老师定）：主板块底部随机一条，
+          正文前一枚金色灯泡，3 秒后渐隐卸载、本次进入不再出现。
+          挂组件根（#game_area 之外）→ 不吃游戏倍率，也不参与任何 fit 量测
+          （绝对定位脱流，出现/消失都不会让版面跳动） */}
+      {/* ⚠️ .txt 在 SSR 阶段恒为空（文案由 useEffect 随机填，见上文 tips 块）——
+          随机值若进渲染期会 hydration mismatch，故结构先渲染、文字后填 */}
+      <div className="optips" id="op_tips" role="note">
+        {/* 金色灯泡（Monokai 黄 #E6DB74，与录像雷达数值金同色）；灯口两道螺纹略深 */}
+        <svg className="bulb" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#E6DB74"
+            d="M12 2.6C8.2 2.6 5.2 5.6 5.2 9.4c0 2.7 1.7 4.5 2.6 5.7.4.6.7 1.1.9 1.7h6.6c.2-.6.5-1.1.9-1.7.9-1.2 2.6-3 2.6-5.7 0-3.8-3-6.8-6.8-6.8z" />
+          <rect x="9.4" y="17.2" width="5.2" height="1.5" rx="0.75" fill="#C9BD5E" />
+          <rect x="10.1" y="19.2" width="3.8" height="1.4" rx="0.7" fill="#C9BD5E" />
+        </svg>
+        <span className="txt" />
       </div>
     </div>
   );

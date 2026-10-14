@@ -7212,3 +7212,76 @@ html.op-fakefs #header {
     justify-content: center;
   }
 }
+/* ===== 练习页进入时的气泡 tips（2026-10-15 张老师定）=====
+   挂载时随机一条（文案池见 OnlinePlay.tsx 的 TIPS），3 秒后渐隐卸载。
+   ① 锚在组件根 .op_root（#game_area 之外、不吃游戏倍率），绝对定位到主板块底部
+      —— 脱流是关键：出现/消失都不改版面高度，页面锁滚下也不会顶动棋盘；
+      ⚠️ bottom 取负：盘面矮时「根容器内容底」紧贴棋盘底，正值会把气泡压在底排
+      格子上；负 12px 落进 .box 的底衬（桌面 30px / 移动 16px）里，默认形态完整不
+      遮格子，只有盘面拉满时才退化成压住底缘的 toast（横屏则直接不显示，见⑤）；
+   ② 观感沿用站内气泡（.gs_row .tip 同款：深底 #272822 + #656355 描边 + 投影），
+      正文前一枚金色灯泡（#E6DB74，与录像雷达数值金同色）；
+   ③ pointer-events:none —— 3 秒内绝不能挡住格子点击；
+   ④ 浮现/渐隐都走 transition（挂载下一帧加 .show，见组件内 useEffect）：
+      CSS animation 会在元素插入瞬间定格，transition 才有「浮上来」的手感。
+   ⑤ 横屏沉浸模式不显示：棋盘已拉满整屏，气泡会盖住底排格子
+      （本块须在所有 .optips 规则之后——媒体查询不加优先级，后定义者胜）
+   ⑥ 居中**不用** left:50% + translateX(-50%)：绝对定位元素的收缩适配可用宽 =
+      「包含块宽 − left」，移动端 339 容器会被砍到 170px（气泡凭空窄一半、文字
+      多折一行）。改 left/right:0 + 自动边距，可用宽还原为整个包含块，
+      max-width 的 92% 也才真正按容器算 */
+#online_play .op_root {
+  position: relative;
+}
+#online_play .optips {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -12px;
+  /* fit-content + max-width：窄屏单行放不下才折行，最宽 92% 容器 / 460px */
+  width: fit-content;
+  max-width: min(92%, 460px);
+  margin-left: auto;
+  margin-right: auto;
+  /* 浮现只做纵向位移：横向已由自动边距居中，transform 里再写 -50% 会把自己推偏 */
+  transform: translateY(6px);
+  z-index: 40; /* 压过棋盘矢量层与回放光标（.replay_cursor 用 30） */
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: min(92%, 460px);
+  box-sizing: border-box;
+  padding: 8px 14px;
+  background: #272822;
+  border: 1px solid #656355;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  color: #f8f8f2;
+  font-size: 13px;
+  line-height: 19px;
+  text-align: left;
+  text-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease-out, transform 0.45s ease-out;
+}
+#online_play .optips.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* 灯泡：不随文字换行压缩（flex 子项默认可缩），与首行文字顶端对齐 */
+#online_play .optips .bulb {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+#online_play .optips .txt {
+  min-width: 0;
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  #online_play .optips {
+    display: none;
+  }
+}
+
