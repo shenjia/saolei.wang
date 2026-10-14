@@ -920,12 +920,16 @@ body #page.bbs_old .page_head {
 .bbs_count_unit {
   color: #75715e;
 }
-/* 十七轮（2026-09-26 张老师）：计数改「x / y」——x=评论用黄强调（legacy em 黄
-   #fdc61a），y=阅读保持亮灰；与 .bbs_count 同粗细成对。仅作用于列表页计数列
+/* 计数配色（2026-10-14 张老师）：x=评论用亮灰 #bbbbbb（与标题灰同源），
+   y=阅读用暗灰 #75715e 退后一档——评论是互动核心稍突出，阅读仅参考。
+   与 .bbs_count 同粗细成对。仅作用于列表页计数列
    （详情页 meta 行仍是「x阅读 x评论」全灰） */
 .bbs_list .bbs_replies {
-  color: #fdc61a;
+  color: #bbbbbb;
   font-weight: bold;
+}
+.bbs_list .bbs_count {
+  color: #75715e;
 }
 /* 分类标签：与正文同字号（legacy .level 是 20px，不可用）。
    七轮：并入主题列后作为行内标签，flex 不收缩（标题负责收缩出省略号）。
@@ -1026,13 +1030,13 @@ body #page.bbs_old .page_head {
 .bbs_list a.bbs_title.highlight:hover {
   color: #a6e22e;
 }
-/* 已读主题（2026-09-26 张老师要求）：点击过的帖子标题+计数变灰 #75715e，
-   与消息页已读同色（三档明暗：未读 #bbbbbb / 置顶高亮白 / 已读暗灰）。
+/* 已读主题：点击过的帖子标题变灰 #75715e（三档明暗：未读 #bbbbbb /
+   置顶高亮白 / 已读暗灰）。2026-10-14 张老师：统计数字（评论/阅读）
+   不再随已读变色——计数是客观数据，明暗只表达评论>阅读的层级，
+   故 read 规则只作用于标题。
    read (0,3,1) 与 highlight (0,3,1) 同特异性、源码序在后——已读的置顶帖
    标题也变灰（点击过即视为已消化，与未读白显形成对比） */
-.bbs_list tr.read .bbs_title,
-.bbs_list tr.read .bbs_replies,
-.bbs_list tr.read .bbs_count {
+.bbs_list tr.read .bbs_title {
   color: #75715e;
 }
 .bbs_list tr.read a.bbs_title:hover {

@@ -71,8 +71,9 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
           </>
         )}
       </td>
-      {/* 十七轮（2026-09-26 张老师）：计数改「x / y」——x=评论（黄 #fdc61a 强调）、
-          y=阅读（亮灰），斜杠分隔与表头「评论 / 阅读」呼应；不再显示单位词 */}
+      {/* 计数「x / y」：x=评论（亮灰 #bbbbbb）、y=阅读（暗灰 #75715e），
+          斜杠分隔与表头「评论 / 阅读」呼应；配色规则在 globals.css .bbs_list 作用域，
+          已读帖不再改变计数颜色（2026-10-14 张老师） */}
       <td>
         <em className="bbs_replies">{p.replies}</em>
         <span className="bbs_count"> / {p.clicks}</span>

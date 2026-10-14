@@ -89,7 +89,23 @@ export default async function BbsPage({
             <div className="bbs_actions">
               {session && (
                 <Link className="button active small bbs_post_btn" href="/bbs/post">
-                  发布主题
+                  {/* 书写图标（2026-10-14 张老师：「发布主题」改「写文章」+ 前置笔形矢量图） */}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ verticalAlign: "-2px", marginRight: 4 }}
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  写文章
                 </Link>
               )}
               <BbsSearch initialQ={q} />
