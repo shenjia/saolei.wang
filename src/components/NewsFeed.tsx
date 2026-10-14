@@ -1,15 +1,17 @@
-// 动态列表 + 等级筛选 + 「加载更多」（移植 views/common/more 的 cursor 加载逻辑）
+// 动态列表 + 等级筛选 + 「加载更多/页码滑条」（移植 views/common/more 的 cursor 加载逻辑）
 // 初始数据由服务端渲染传入，点更多/切筛选走 /api/news/more 取 JSON 增量渲染
 // 2026-09-24 二轮：底部改左右布局（左=总数 右=按钮），点击加载保持滚动位置
+// 2026-10-14 二轮：用户主页场景（userId 存在）加 PageSlider 翻页条
+//   （页码模式 ?page=N&base=15；首页新闻流保持纯加载更多——无翻页诉求）
 
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, useEffect, type ReactNode } from "react";
 import type { NewsItem } from "@/lib/queries";
 import { NewsCellView } from "./NewsCellView";
 import { noFocusJump } from "./useKeepScroll";
+import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { TotalCount } from "./TotalCount";
-import { nextBatchSize } from "./PageSlider";
 
 export interface NewsFeedItem {
   news: NewsItem;
@@ -58,6 +60,19 @@ export function NewsFeed({
   const [switching, setSwitching] = useState(false);
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14；切筛选重置）
 
+  // ---- 翻页条状态（2026-10-14 二轮，仅用户主页 userId 场景）----
+  const pager = !!userId;
+  const [curPage, setPage] = useState(1);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const pageCache = useRef(new PageCache<NewsFeedItem[]>());
+  const reqSeq = useRef(0);
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    pageCache.current.set(1, initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function fetchPage(lv: string, cur: number, size?: number) {
     const url =
       `/api/news/more?cursor=${cur}&size=${size ?? pageSize}` +
@@ -69,31 +84,96 @@ export function NewsFeed({
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
   }
 
+  /** 页码模式请求（用户主页翻页条）：?page=N&base=pageSize */
+  async function fetchByPage(lv: string, page: number, size?: number) {
+    const url =
+      `/api/news/more?page=${page}&base=${pageSize}&size=${size ?? pageSize}` +
+      (userId ? `&user=${userId}` : "") +
+      (lv && lv !== "forum" ? `&level=${lv}` : "") +
+      (lv === "forum" ? "&type=forum" : "");
+    const res = await fetch(url);
+    return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
+  }
+
   async function loadMore() {
+    if (loading) return;
     setLoading(true);
+    const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = await fetchPage(level, cursor, size);
+      const data = pager
+        ? await fetchByPage(level, Math.floor(items.length / pageSize) + 1, size)
+        : await fetchPage(level, cursor, size);
+      if (seq !== reqSeq.current) return;
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
       setBatchStep((s) => s + 1);
       if (typeof data.total === "number") setTotal(data.total);
       if (data.count < size) setHasMore(false);
     } finally {
-      setLoading(false);
+      if (seq === reqSeq.current) setLoading(false);
     }
   }
 
-  // 切换等级筛选：重置列表并取该等级第一页（批量序列同步重置）
+  /** 滑条换页（严格一页语义）：已加载窗口内滚动定位 / 缓存零请求 / 拉一页替换 */
+  async function gotoPage(p: number) {
+    if (loading) return;
+    p = Math.min(maxPage, Math.max(1, p));
+    if (p === curPage) return;
+    const winEnd = Math.max(1, Math.ceil(items.length / pageSize));
+    if (p <= winEnd) {
+      const first = (p - 1) * pageSize;
+      if (items[first]) {
+        setPage(p);
+        const tr = tableRef.current?.tBodies[0]?.children[first] as HTMLElement | undefined;
+        tr?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+    }
+    setPage(p);
+    const cached = pageCache.current.get(p);
+    if (cached) {
+      setItems(cached);
+      setBatchStep(0);
+      setHasMore(cached.length < total);
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const seq = ++reqSeq.current;
+    setLoading(true);
+    try {
+      const data = await fetchByPage(level, p);
+      if (seq !== reqSeq.current) return;
+      if (!data.items.length) {
+        setHasMore(false);
+        return;
+      }
+      pageCache.current.set(p, data.items);
+      setItems(data.items);
+      setCursor(data.cursor);
+      setBatchStep(0);
+      setHasMore(p * pageSize < total);
+      if (typeof data.total === "number") setTotal(data.total);
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      /* 失败静默，重试可再拖 */
+    } finally {
+      if (seq === reqSeq.current) setLoading(false);
+    }
+  }
+
+  // 切换等级筛选：重置列表并取该等级第一页（批量序列/翻页状态同步重置）
   async function switchLevel(lv: string) {
     if (lv === level || switching) return;
     setSwitching(true);
     setLevel(lv);
     setBatchStep(0);
+    setPage(1);
     try {
       const data = await fetchPage(lv, 0);
       setItems(data.items);
       setCursor(data.cursor);
+      pageCache.current.set(1, data.items);
       if (typeof data.total === "number") setTotal(data.total);
       setHasMore(data.count >= pageSize);
     } finally {
@@ -139,7 +219,7 @@ export function NewsFeed({
       ) : (
         <div className="news_tabs ranking_tabs side">{tabs}</div>
       )}
-      <table cellPadding={0} cellSpacing={0} className="table">
+      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="table">
         <tbody>
           {items.map(({ news, title: itemTitle }) => (
             <NewsCellView key={news.id} news={news} title={itemTitle} />
@@ -152,24 +232,41 @@ export function NewsFeed({
           )}
         </tbody>
       </table>
-      <div className="more_loader">
-        {hasMore ? (
-          <button
-            type="button"
-            className="button small"
-            data-cursor={cursor}
-            disabled={loading}
-            onMouseDown={noFocusJump}
-            onClick={loadMore}
-          >
-            {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
-          </button>
-        ) : (
-          items.length > 0 && <span className="all_loaded">已加载全部</span>
-        )}
-        {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-        <TotalCount total={total} loaded={items.length} unit="条" />
-      </div>
+      {pager ? (
+        /* 用户主页：翻页条一行合一（··· + 滑轨 + 页码；不再显示总条数） */
+        maxPage > 1 && (
+          <div className="list_footer">
+            <PageSlider
+              page={curPage}
+              pages={maxPage}
+              loading={loading || switching}
+              onGoto={gotoPage}
+              hasMore={hasMore}
+              onMore={loadMore}
+            />
+          </div>
+        )
+      ) : (
+        /* 首页新闻流：保持纯加载更多 + 总数 */
+        <div className="more_loader">
+          {hasMore ? (
+            <button
+              type="button"
+              className="button small"
+              data-cursor={cursor}
+              disabled={loading}
+              onMouseDown={noFocusJump}
+              onClick={loadMore}
+            >
+              {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
+            </button>
+          ) : (
+            items.length > 0 && <span className="all_loaded">已加载全部</span>
+          )}
+          {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
+          <TotalCount total={total} loaded={items.length} unit="条" />
+        </div>
+      )}
     </>
   );
 }

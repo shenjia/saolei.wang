@@ -23,8 +23,6 @@ import { useRouter } from "next/navigation";
 import type { RankingRow } from "@/lib/queries";
 import type { RankingBy } from "@/lib/config";
 import { RankingHead, RankingRowLine, RankingEmpty, type TitledRow } from "./RankingRows";
-import { noFocusJump } from "./useKeepScroll";
-import { TotalCount } from "./TotalCount";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { toast } from "./Toast";
 
@@ -310,8 +308,6 @@ export function RankingFeed(props: RankingFeedProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, locating, by, params.view]);
 
-  const nextBatch = loadedAll ? 0 : nextBatchSize(batchStep, pageSize);
-
   return (
     <>
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
@@ -335,38 +331,21 @@ export function RankingFeed(props: RankingFeedProps) {
         <PageSlider
           page={curPage}
           pages={maxPage}
-          winStart={winStart}
-          winEnd={Math.min(winEnd, maxPage)}
-          loading={loading}
+          loading={loading || locating}
           onGoto={gotoPage}
+          hasMore={!loadedAll}
+          onMore={loadMore}
         />
-        <div className="more_loader ranking_loader">
-          {loadedAll ? (
-            <span className="all_loaded">已加载全部</span>
-          ) : (
-            <button
-              type="button"
-              className="button small"
-              disabled={loading}
-              onMouseDown={noFocusJump}
-              onClick={loadMore}
-            >
-              {loading ? "加载中…" : nextBatch > 0 ? `加载更多 +${nextBatch}` : "加载更多"}
-            </button>
-          )}
-          {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-          <TotalCount total={total} loaded={rows.length} unit="位" />
-          {myUid && !inRanking && (
-            <Link
-              href="/page/help"
-              className="button small join_btn"
-              title="了解如何上传录像、加入排行榜"
-            >
-              如何加入排行？
-            </Link>
-          )}
-          {hint && <span className="loader_hint">{hint}</span>}
-        </div>
+        {myUid && !inRanking && (
+          <Link
+            href="/page/help"
+            className="button small join_btn"
+            title="了解如何上传录像、加入排行榜"
+          >
+            如何加入排行？
+          </Link>
+        )}
+        {hint && <span className="loader_hint">{hint}</span>}
       </div>
     </>
   );

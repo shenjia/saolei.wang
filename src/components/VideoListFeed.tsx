@@ -11,8 +11,6 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { VideoListItem } from "@/lib/queries";
 import { VideoHead, VideoRowLine } from "./VideoRows";
-import { noFocusJump } from "./useKeepScroll";
-import { TotalCount } from "./TotalCount";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 
 export function VideoListFeed({
@@ -21,7 +19,6 @@ export function VideoListFeed({
   pageSize,
   query,
   highlight,
-  pager = true,
 }: {
   initial: VideoListItem[];
   /** 当前筛选条件下的录像总数 */
@@ -31,8 +28,6 @@ export function VideoListFeed({
   query: { level: string; order: string; author?: number };
   /** 排序命中列高亮（按成绩/按3BV/s 时对应列整列黄，2026-09-27） */
   highlight?: "time" | "3bvs";
-  /** 是否显示页码滑条（/video 列表页 true；用户主页录像版块 false——只享受递增批量，不翻页） */
-  pager?: boolean;
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initial.length < total);
@@ -41,8 +36,7 @@ export function VideoListFeed({
 
   // ---- 滑条窗口状态（2026-10-14）----
   const tableRef = useRef<HTMLTableElement>(null);
-  const winStart = 1; // 列表从第 1 页顺序加载（无 ?page= 深链）
-  const winEnd = Math.max(1, Math.ceil(items.length / pageSize));
+  const winEnd = Math.max(1, Math.ceil(items.length / pageSize)); // 已加载窗口末页（滚动定位判定用）
   const [curPage, setCurPage] = useState(1);
   const pageCache = useRef(new PageCache<VideoListItem[]>());
   const reqSeq = useRef(0);
@@ -145,8 +139,6 @@ export function VideoListFeed({
     }
   }
 
-  const nextBatch = hasMore ? nextBatchSize(batchStep, pageSize) : 0;
-
   return (
     <>
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
@@ -165,33 +157,14 @@ export function VideoListFeed({
         </tbody>
       </table>
       <div className="list_footer">
-        {pager && (
-          <PageSlider
-            page={curPage}
-            pages={maxPage}
-            winStart={winStart}
-            winEnd={winEnd}
-            loading={loading}
-            onGoto={gotoPage}
-          />
-        )}
-        <div className="more_loader">
-          {hasMore ? (
-            <button
-              type="button"
-              className="button small"
-              disabled={loading}
-              onMouseDown={noFocusJump}
-              onClick={loadMore}
-            >
-              {loading ? "加载中…" : nextBatch > 0 ? `加载更多 +${nextBatch}` : "加载更多"}
-            </button>
-          ) : (
-            items.length > 0 && <span className="all_loaded">已加载全部</span>
-          )}
-          {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-          <TotalCount total={total} loaded={items.length} unit="个" />
-        </div>
+        <PageSlider
+          page={curPage}
+          pages={maxPage}
+          loading={loading}
+          onGoto={gotoPage}
+          hasMore={hasMore}
+          onMore={loadMore}
+        />
       </div>
     </>
   );

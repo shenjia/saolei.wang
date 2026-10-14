@@ -153,19 +153,22 @@ export async function getNews(opts: {
   /** 首页新闻流口径：仅 NEWS_HOME_TYPES（注册/头像/发帖/评论动态不进首页，2026-09-24） */
   home?: boolean;
   limit: number;
+  /** 内部：直接指定 id 列表（getNewsPage 页码模式用；与 cursor 互斥） */
+  ids?: bigint[];
 }): Promise<NewsItem[]> {
+  const where = {
+    ...(opts.type !== undefined ? { type: opts.type } : {}),
+    ...(opts.types ? { type: { in: opts.types } } : {}),
+    ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
+    ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+    ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
+    // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
+    ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
+  };
   const rows = await prisma.news.findMany({
-    where: {
-      ...(opts.type !== undefined ? { type: opts.type } : {}),
-      ...(opts.types ? { type: { in: opts.types } } : {}),
-      ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
-      ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-      ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
-      // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
-      ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
-    },
+    where: opts.ids ? { id: { in: opts.ids } } : where,
     orderBy: { id: "desc" },
-    take: opts.limit,
+    ...(opts.ids ? {} : { take: opts.limit }),
   });
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
   // 军衔按「动态时刻」的高级时间评定（2026-10-13 SUB 制，张老师要求显示当时军衔而非现在的）：
@@ -186,6 +189,42 @@ export async function getNews(opts: {
     createTime: N(r.createTime),
     author: authors.get(N(r.user)) ?? null,
   }));
+}
+
+/** 动态页码模式（2026-10-14 用户主页动态翻页条）：id 倒序第 page 页起 limit 条。
+ *  页锚点按 base（=USER_NEWS_NUMBER 15）计；skip 恒按 base 锚点，take 才是本批行数
+ *  （与列表类 more 接口同语义）。两段查询：先 id 列表（带筛选条件）再复用 getNews 组装军衔。 */
+export async function getNewsPage(opts: {
+  types?: number[];
+  userId?: number;
+  level?: string;
+  home?: boolean;
+  page: number;
+  base: number;
+  limit: number;
+}): Promise<NewsItem[]> {
+  const where = {
+    ...(opts.types ? { type: { in: opts.types } } : {}),
+    ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
+    ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+    ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
+  };
+  const idRows = await prisma.news.findMany({
+    where,
+    select: { id: true },
+    orderBy: { id: "desc" },
+    skip: (opts.page - 1) * opts.base,
+    take: opts.limit,
+  });
+  if (!idRows.length) return [];
+  return getNews({
+    types: opts.types,
+    userId: opts.userId,
+    level: opts.level,
+    home: opts.home,
+    limit: opts.limit,
+    ids: idRows.map((r) => r.id),
+  });
 }
 
 /**

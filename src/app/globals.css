@@ -651,9 +651,10 @@ body #video_view .video_cell .playable {
   color: #75715e;
 }
 
-/* ---------- 新增：列表页码滑条（2026-10-14，设计稿 design/page-slider-v1.html v1.4） ----------
-   排行 / BV 榜 / 进步榜 / 录像 / 论坛共用。拇指金黄=当前浏览页，暗绿填充=已加载窗口；
-   拖拽松手立即加载；无 JS 时不渲染（组件侧 pages<=1 也返回 null） */
+/* ---------- 新增：列表页码滑条（2026-10-14，设计稿 design/page-slider-v1.html；当晚二轮改版） ----------
+   排行 / BV 榜 / 进步榜 / 录像 / 论坛 / 用户主页动态·录像 共用。整行合一：
+   [···加载更多(三圆点)] [◀] [━━滑轨━━] [▶] [第 n / N 页]
+   滑块前方=暗金粗条（已浏览进度）；加载更多只显示三圆点（全部加载后隐藏）；不再显示总条数 */
 .list_footer {
   clear: both;
 }
@@ -661,9 +662,57 @@ body #video_view .video_cell .playable {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 0 10px;
+  padding: 8px 0;
   user-select: none;
   -webkit-user-select: none;
+}
+/* ··· 加载更多（三圆点，滑条左侧；loading 时旋转脉动） */
+.page_slider .ps_more {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: 28px;
+  height: 24px;
+  background: #49483e;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  justify-content: center;
+}
+.page_slider .ps_more:hover:not(:disabled) {
+  background: #5b584a;
+}
+.page_slider .ps_more:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.page_slider .ps_more i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #cfcdc0;
+}
+.page_slider.pending .ps_more i {
+  animation: ps_dots 1s infinite ease-in-out;
+}
+.page_slider.pending .ps_more i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.page_slider.pending .ps_more i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes ps_dots {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
 .page_slider .ps_btn {
   flex: 0 0 auto;
@@ -701,26 +750,28 @@ body #video_view .video_cell .playable {
   position: absolute;
   left: 7px;
   right: 7px;
-  top: 9px;
-  height: 6px;
-  background: #3e3d32;
+  top: 10px;
+  height: 5px;
+  background: #3e3d32; /* 后方轨道：暗灰 */
   border-radius: 3px;
   overflow: hidden;
 }
 .page_slider .ps_fill {
   position: absolute;
+  left: 0;
   top: 0;
   bottom: 0;
-  background: #5b7a2e; /* 已加载窗口（暗一档的绿，避免喧宾夺主） */
+  width: 0;
+  background: #8f7430; /* 滑块前方：暗金粗条（已浏览进度） */
   border-radius: 3px;
-  transition: left 0.18s ease, width 0.18s ease;
+  transition: width 0.15s ease;
 }
 .page_slider .ps_thumb {
   position: absolute;
-  top: 4px;
-  width: 16px;
-  height: 16px;
-  margin-left: -8px;
+  top: 5px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
   background: #fdc61a;
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(253, 198, 26, 0.18);
@@ -735,7 +786,7 @@ body #video_view .video_cell .playable {
 }
 .page_slider .ps_label {
   flex: 0 0 auto;
-  min-width: 96px;
+  min-width: 88px;
   text-align: right;
   font-size: 12px;
   color: #939387;
@@ -2513,15 +2564,12 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 .avatar_crop_zoom > span {
   flex: none;
 }
-/* 头像裁剪缩放滑条：2026-10-14 张老师定——全站滑条统一青柠绿 #a6e22e
-   （与 legacy 站内绿同色；滑条不随板块高亮金走，避免刺眼） */
+/* 头像裁剪缩放滑条：2026-10-14 张老师定——全站滑条统一自绘
+   （填充 #8ac21b + 滑块 #a6e22e，样式在「全站滑条自绘」公共块） */
 .avatar_crop_zoom input[type="range"] {
   flex: 1;
   min-width: 0;
-  height: 4px;
-  background: #49483e;
-  border-radius: 2px;
-  accent-color: #a6e22e;
+  height: 18px;
 }
 .avatar_crop_note {
   margin-top: 12px;
@@ -5942,9 +5990,9 @@ button.msg_cancel:hover {
 #online_play .gsw input:checked + .track::after {
   left: 16px;
 }
-/* ---- 浮窗内比例滑杆（视觉沿用原 gzoom：浅色条+绿滑块，只是搬进浮窗；
-   2026-10-14 张老师定：滑条统一青柠绿 #a6e22e——原蓝 #1890ff 曾试改金 #fdc61d，
-   因金色在深底上刺眼而回绿；绿与 legacy 站内绿（今日增量 / hover）同色） ---- */
+/* ---- 浮窗内比例滑杆（视觉沿用原 gzoom，只是搬进浮窗；
+   2026-10-14 张老师定稿：全站滑条自绘——填充 #8ac21b + 滑块 #a6e22e，
+   见下方「全站滑条自绘」公共块） ---- */
 #online_play .gs_zoom {
   display: flex;
   align-items: center;
@@ -5959,7 +6007,6 @@ button.msg_cancel:hover {
 }
 #online_play .gs_zoom input[type="range"] {
   flex: 1 1 auto;
-  accent-color: #a6e22e;
   cursor: pointer;
   height: 18px;
   margin: 0;
@@ -5982,6 +6029,67 @@ button.msg_cancel:hover {
 #online_play .gs_zoom .zreset:hover {
   color: #e8e8e0;
   border-color: #939387;
+}
+/* ===== 全站滑条自绘（2026-10-14 张老师定稿）=====
+   填充 #8ac21b（legacy 按钮活跃绿，比 hover 亮绿压暗一档，大面积不刺眼）
+   + 滑块 #a6e22e（站内 hover 活跃绿）+ 轨道底 #49483e。
+   原生 accent-color 无法拆分「填充/滑块」两色，故自绘轨道：
+   Chrome/Safari 的填充比例由 JS 写入 --pct（0-100，见 lib/paintRange.ts），
+   Firefox 走原生 ::-moz-range-progress，无需 JS */
+#online_play .gs_zoom input[type="range"],
+#online_play .cus_dialog .cus_row input[type="range"],
+#online_play .replay_ctrl input[type="range"],
+.avatar_crop_zoom input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+}
+#online_play .gs_zoom input[type="range"]::-webkit-slider-runnable-track,
+#online_play .cus_dialog .cus_row input[type="range"]::-webkit-slider-runnable-track,
+#online_play .replay_ctrl input[type="range"]::-webkit-slider-runnable-track,
+.avatar_crop_zoom input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  /* 轨道底用 #3b3a32（比浮窗 #49483e 深一档），否则轨道与浮窗背景融为一体 */
+  background: linear-gradient(to right, #8ac21b calc(var(--pct, 0) * 1%), #3b3a32 0);
+}
+#online_play .gs_zoom input[type="range"]::-webkit-slider-thumb,
+#online_play .cus_dialog .cus_row input[type="range"]::-webkit-slider-thumb,
+#online_play .replay_ctrl input[type="range"]::-webkit-slider-thumb,
+.avatar_crop_zoom input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #a6e22e;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+#online_play .gs_zoom input[type="range"]::-moz-range-track,
+#online_play .cus_dialog .cus_row input[type="range"]::-moz-range-track,
+#online_play .replay_ctrl input[type="range"]::-moz-range-track,
+.avatar_crop_zoom input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #3b3a32;
+}
+#online_play .gs_zoom input[type="range"]::-moz-range-progress,
+#online_play .cus_dialog .cus_row input[type="range"]::-moz-range-progress,
+#online_play .replay_ctrl input[type="range"]::-moz-range-progress,
+.avatar_crop_zoom input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: #8ac21b;
+}
+#online_play .gs_zoom input[type="range"]::-moz-range-thumb,
+#online_play .cus_dialog .cus_row input[type="range"]::-moz-range-thumb,
+#online_play .replay_ctrl input[type="range"]::-moz-range-thumb,
+.avatar_crop_zoom input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #a6e22e;
+  border: 0;
 }
 /* ---- 浮窗内 3BV 范围双端点滑杆（2026-10-14 二期）----
    两条原生 range 完全叠放（inset:0），轨道透明且 pointer-events:none、
@@ -6027,7 +6135,7 @@ button.msg_cancel:hover {
   right: calc(100% - var(--hi, 100%));
   top: 11px;
   height: 4px;
-  background: #a6e22e;
+  background: #8ac21b;
   border-radius: 2px;
 }
 #online_play .dual input[type="range"] {
@@ -6125,7 +6233,6 @@ button.msg_cancel:hover {
 }
 #online_play .cus_dialog .cus_row input[type="range"] {
   flex: 1 1 auto;
-  accent-color: #a6e22e;
   cursor: pointer;
   height: 18px;
   margin: 0;
@@ -6527,7 +6634,6 @@ button.msg_cancel:hover {
 #online_play .replay_ctrl .rc_speed {
   width: 80px;
   flex: 0 0 auto;
-  accent-color: #a6e22e;
 }
 #online_play .replay_ctrl .rc_rate {
   border: 1px solid #7b7b7b;
@@ -6547,7 +6653,6 @@ button.msg_cancel:hover {
 #online_play .replay_ctrl .rc_range {
   flex: 1 1 auto;
   min-width: 100px;
-  accent-color: #a6e22e;
 }
 #online_play .replay_ctrl .rc_time {
   font: 11px/1 Arial, Helvetica, sans-serif;

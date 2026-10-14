@@ -9,8 +9,6 @@
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { GrowRow } from "@/lib/ranksnap";
-import { noFocusJump } from "./useKeepScroll";
-import { TotalCount } from "./TotalCount";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { RANKING_COLS, RankingRowLine, type TitledRow } from "./RankingRows";
 
@@ -34,7 +32,6 @@ export function GrowFeed({
 
   // ---- 滑条窗口状态（2026-10-14）----
   const tableRef = useRef<HTMLTableElement>(null);
-  const winStart = 1; // 进步榜行没有全局 rank 字段，窗口起点恒为已加载首行页=1（从首页顺序加载）
   const winEnd = Math.max(1, Math.ceil(rows.length / pageSize));
   const [curPage, setCurPage] = useState(1);
   const pageCache = useRef(new PageCache<GrowTitledRow[]>());
@@ -172,29 +169,12 @@ export function GrowFeed({
         <PageSlider
           page={curPage}
           pages={maxPage}
-          winStart={winStart}
-          winEnd={winEnd}
           loading={loading}
           onGoto={gotoPage}
+          hasMore={!loadedAll}
+          onMore={loadMore}
         />
-        <div className="more_loader ranking_loader">
-          {loadedAll ? (
-            <span className="all_loaded">已加载全部</span>
-          ) : (
-            <button
-              type="button"
-              className="button small"
-              disabled={loading}
-              onMouseDown={noFocusJump}
-              onClick={loadMore}
-            >
-              {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
-            </button>
-          )}
-          {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-          <TotalCount total={total} loaded={rows.length} unit="位" />
-          {hint && <span className="loader_hint">{hint}</span>}
-        </div>
+        {hint && <span className="loader_hint">{hint}</span>}
       </div>
     </>
   );

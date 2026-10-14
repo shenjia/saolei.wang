@@ -13,8 +13,6 @@ import { BBS_BOARD_NAMES } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
-import { noFocusJump } from "./useKeepScroll";
-import { TotalCount } from "./TotalCount";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { markBbsRead, useBbsReadSet } from "./BbsRead";
 
@@ -113,7 +111,6 @@ export function BbsFeed({
   const pageSize = 19;
   // 外层 table 在服务端页面（bbs/page.tsx）里，客户端组件够不着 ref——用类名查询定位
   const getTable = () => document.querySelector<HTMLTableElement>("table.bbs_list");
-  const winStart = 1;
   const winEnd = Math.max(1, Math.ceil(items.length / pageSize));
   const [curPage, setCurPage] = useState(1);
   const pageCache = useRef(new PageCache<BbsPostItem[]>());
@@ -206,8 +203,6 @@ export function BbsFeed({
     }
   }
 
-  const nextBatch = hasMore ? nextBatchSize(batchStep, pageSize) : 0;
-
   return (
     <>
       {items.map((p) => (
@@ -225,24 +220,11 @@ export function BbsFeed({
               <PageSlider
                 page={curPage}
                 pages={maxPage}
-                winStart={winStart}
-                winEnd={winEnd}
                 loading={loading}
                 onGoto={gotoPage}
+                hasMore={hasMore}
+                onMore={loadMore}
               />
-              <div className="more_loader">
-                <button
-                  type="button"
-                  className="button small"
-                  disabled={loading}
-                  onMouseDown={noFocusJump}
-                  onClick={loadMore}
-                >
-                  {loading ? "加载中…" : nextBatch > 0 ? `加载更多 +${nextBatch}` : "加载更多"}
-                </button>
-                {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-                <TotalCount total={total} loaded={items.length} unit="帖" />
-              </div>
             </div>
           </td>
         </tr>

@@ -23,8 +23,6 @@ import { useRouter } from "next/navigation";
 import type { BvRankingRow } from "@/lib/queries";
 import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
 import { TitleBadge } from "./Cells";
-import { noFocusJump } from "./useKeepScroll";
-import { TotalCount } from "./TotalCount";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { RankingRules } from "./RankingRules";
 import { toast } from "./Toast";
@@ -323,28 +321,12 @@ export function BvRankingFeed({
         <PageSlider
           page={curPage}
           pages={maxPage}
-          winStart={winStart}
-          winEnd={Math.min(winEnd, maxPage)}
           loading={loading}
           onGoto={gotoPage}
+          hasMore={!loadedAll}
+          onMore={loadMore}
         />
-        <div className="more_loader ranking_loader">
-          {loadedAll ? (
-            <span className="all_loaded">已加载全部</span>
-          ) : (
-            <button
-              type="button"
-              className="button small"
-              disabled={loading}
-              onMouseDown={noFocusJump}
-              onClick={loadMore}
-            >
-              {loading ? "加载中…" : `加载更多 +${nextBatchSize(batchStep, pageSize)}`}
-            </button>
-          )}
-          <TotalCount total={total} loaded={rows.length} unit="位" />
-          {hint && <span className="loader_hint">{hint}</span>}
-        </div>
+        {hint && <span className="loader_hint">{hint}</span>}
       </div>
       <RankingRules
         title="BV 排行规则"
