@@ -6032,25 +6032,18 @@ button.msg_cancel:hover {
 #online_play .gname .gstatus {
   display: flex;
   align-items: center;
-  gap: 0 3px; /* 分隔由「・」承担，这里只给两侧留点呼吸 */
+  gap: 0; /* 「・」紧贴前后项（六改追补：中间不留空隙） */
   white-space: nowrap;
 }
 #online_play .gname .gstatus.hidden {
   display: none;
 }
 /* 状态项纯文本（初级盘内宽仅 132px，带框标签四个塞不下）；
-   NF / 无猜加粗区分，重排用略深色提示「本局盘面被动过」 */
-#online_play .gstatus .st {
-  white-space: nowrap;
-}
+   全部同色同粗细（六改追补张老师定）——不靠样式区分，只靠文字本身 */
+#online_play .gstatus .st,
 #online_play .gstatus .st_nf,
-#online_play .gstatus .st_ng {
-  font-weight: 700;
-}
-#online_play .gstatus .st_re {
-  color: #5a5a52;
-}
-/* 状态项之间的「・」分隔（六改张老师定） */
+#online_play .gstatus .st_ng,
+#online_play .gstatus .st_re,
 #online_play .gstatus .sep {
   white-space: nowrap;
 }
