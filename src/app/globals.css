@@ -1691,7 +1691,10 @@ del[data-tip]:hover::after {
   /* 标签加大（13/8→15/10）后 hover 放大会略越出 222 视口（~7px，盒 padding 内），不裁 */
   overflow: visible;
 }
-#page #video_view .vr_tip {
+/* ⚠️ 录像详情页与在线玩结算面板**共用同一个组件**（VideoAnalysisRadar，
+   OnlinePlay 用 createRoot 挂载 size=160 的紧凑版），所以气泡/数值规则两边都要给 */
+#page #video_view .vr_tip,
+#page #online_play .vr_tip {
   position: absolute;
   z-index: 20;
   /* left 存的是「气泡中心」（effect 里按标签中心钳位），由 translateX 收回半宽 */
@@ -1710,11 +1713,23 @@ del[data-tip]:hover::after {
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
-#page #video_view .vr_tip em {
+#page #video_view .vr_tip em,
+#page #online_play .vr_tip em {
   padding: 0 1px;
   font-style: normal;
   font-weight: bold;
   color: #f8f8f2;
+}
+/* 「实际数据」金色（2026-10-14 张老师定）：与雷达最高等级 SSS 同色 #E6DB74，
+   百分比 em 与「超过/的玩家」等文字维持原色不变 */
+#page #video_view .vr_tip_val,
+#page #online_play .vr_tip_val {
+  color: #E6DB74;
+}
+/* 紧凑版（练习结算面板）：SVG 走 width/height 属性，消掉行内基线空隙 */
+#page #online_play .vr_wrap .chart {
+  display: block;
+  margin: 0;
 }
 
 /* BBS 主题页右栏盒子：padding 30px → 盒内容宽 210、外径 272，与首页右栏板块（#newbie 等）一致 */
@@ -6690,35 +6705,36 @@ button.msg_cancel:hover {
 /* 缩放控制条已移入设置浮窗（2026-10-14 二期）——.gzoom 样式段删除 */
 /* 底部工具条（.gtools / 插旗模式按钮）已整体移除（2026-10-14 张老师定）：
    移动端插旗一律长按 ≥150ms，按钮无存在必要 */
-/* ---- 移动端横屏（2026-10-14 张老师定）：标题/级别筛选/按钮移到左侧竖排，游戏区顶满视口高度
+/* ---- 移动端横屏（2026-10-14 张老师定 / 10-15 改沉浸模式）：游戏区顶满视口高度
    （顶满的倍率由 JS fitZoomForLandscape 算，这里只做布局）。
    判定与 JS matchMedia 严格一致：横屏且视口高 ≤520px
    （手机横屏典型 360-430px；平板横屏 700+ 不命中，保持常规布局）。
-   横屏下设置浮窗宽度收窄到 260px（150px 侧栏 + 320px 浮窗会盖掉大半游戏区）。
-   计数条/状态栏的位置规则已上移到「移动端游戏区改版」组合块（本文件末尾）——
-   计数条随棋盘竖排在银框内，状态栏移动端一律不显示。
+   2026-10-15 起横屏为「沉浸模式」：左栏（标题/级别/齿轮/全屏）整块隐藏，
+   版块内只剩游戏本体，故 .news_head 相关的竖排规则已删除（见文件末尾横屏块）。
    本块必须留在 #online_play 全部基础规则之后：媒体查询不加优先级，
    同优先级时后定义者胜出（display:none 曾被后面的 .gzoom{display:flex} 覆盖） */
 @media (orientation: landscape) and (max-height: 520px) {
   /* 主体板块铺满：≥769 断点的 body #page.main width:80% 在横屏只给 675px，
-     左右白白浪费；盒装内距同步收紧（30→10/14）给高度让空间 */
+     左右白白浪费；盒装内距同步收紧到极小（沉浸模式版块内无其他内容） */
   body:has(#online_play) #page.main {
     width: auto;
     max-width: none;
     margin: 0 4px;
   }
   body:has(#online_play) #page .box {
-    padding: 10px 14px;
+    padding: 4px 8px;
   }
   #online_play > div {
     position: relative;
     display: flex;
     flex-direction: row;
+    /* 顶端对齐：game_area 顶部即游戏区顶部，fitZoom 的「视口高 − game_area 顶」
+       才能把棋盘拉到真正满高（居中会让 gaR.top 变大、算出偏小的倍率） */
     align-items: flex-start;
-    gap: 16px;
+    gap: 0;
     /* 最小高度撑到满屏，保持游戏列视觉满幅（fitZoom 会把棋盘拉满高度）。
-       40 = 盒装 margin 16 + border 2 + padding 20 */
-    min-height: calc(100vh - 40px);
+       26 = 盒装 margin 16 + border 2 + padding 8 */
+    min-height: calc(100vh - 26px);
     box-sizing: border-box;
   }
   /* 站头彻底隐藏：横屏页无需滚动，静态头也会常驻吃掉 44px 高度
@@ -6733,46 +6749,9 @@ button.msg_cancel:hover {
   body:has(#online_play) #footer {
     display: none;
   }
-  #online_play .news_head {
-    flex: 0 0 150px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 0;
-  }
-  /* 左栏紧凑化：横屏高度只有 360-430，大标题与标准 tab 内距会把左栏顶到
-     与底部锚定的计数条相撞 */
-  #online_play .news_head h1 {
-    font-size: 18px;
-    line-height: 24px;
-  }
-  /* 级别筛选器一行一个级别（2026-10-14 张老师） */
-  #online_play .news_head .ranking_tabs {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-    border-bottom: 0;
-  }
-  #online_play .news_head .ranking_tabs a,
-  #online_play .news_head .ranking_tabs span {
-    padding: 4px 10px;
-    font-size: 14px;
-  }
-  #online_play .news_head .ranking_tabs a::after,
-  #online_play .news_head .ranking_tabs span::after {
-    left: 10px;
-    right: 10px;
-  }
-  #online_play .gicons {
-    margin-left: 0;
-    align-self: flex-start;
-  }
   #online_play #game_area {
     flex: 1 1 auto;
     min-width: 0;
-  }
-  #online_play .gsettings {
-    width: 260px;
   }
 }
 /* 伪全屏（2026-10-14）：iPhone Safari 无元素全屏 API，全屏按钮在该环境下的
@@ -6909,28 +6888,41 @@ html.op-fakefs #header {
   }
 }
 /* ---- /online 移动端站头不吸顶（2026-10-14 张老师）：header 改随文档流滚动，
-   往下滚即让出 45px 顶高，游戏区第一屏更完整。两个条件并列：
-   ① 窄屏（竖屏手机）；② 横屏拉满断点（手机横屏宽度常 >768，必须单列）。
+   往下滚即让出 45px 顶高，游戏区第一屏更完整。仅竖屏/窄屏需要——横屏由
+   下方「横屏沉浸块」直接 display:none（页面不滚，静态头也会常驻吃高度）。
    :has 只命中本页（#online_play 仅 /online 渲染），iOS 15.4+/主流安卓均支持；
    不支持 :has 的老浏览器回落为原吸顶形态，无副作用 ---- */
-@media (max-width: 768px), (orientation: landscape) and (max-height: 520px) {
+@media (max-width: 768px) {
   body:has(#online_play) {
     padding-top: 0;
   }
   body:has(#online_play) #header {
     position: static;
   }
+  /* 竖屏计数条保持桌面形态：时间/笑脸/雷数在棋盘上方横排一行（.gbar 基础样式，
+     不覆盖）；只隐藏状态栏（级别名/3BV 银条）——移动端不显示。
+     ⚠️ 计数条竖排进银框左侧只属横屏沉浸布局，竖屏切勿命中
+     （2026-10-15 张老师报：竖屏也被竖排了） */
+  #online_play .gname {
+    display: none;
+  }
 }
 
-/* ---- /online 移动端游戏区改版（2026-10-14 张老师）----
-   适用窄屏（≤768 竖屏）与手机横屏断点两个环境：
-   ① 状态栏（级别名/3BV 银条）移动端一律不显示；
-   ② 计数条（雷数/笑脸/计时）移到棋盘左侧竖排，仍在银灰框内——
-      时间上 / 笑脸中 / 雷数下，即桌面版头部逆时针旋转 90°。
-      DOM 顺序是 雷数/笑脸/计时（桌面横排从左到右），column-reverse
-      反转后恰好 时间上/笑脸中/雷数下，桌面端不受影响。
-   须放在横屏块之后：同优先级后定义者胜出 */
-@media (max-width: 768px), (orientation: landscape) and (max-height: 520px) {
+/* ---- /online 横屏沉浸模式（2026-10-15 张老师定）----
+   横屏时只留游戏本体：标题、级别筛选、齿轮设置、全屏按钮、状态栏全部隐藏，
+   游戏窗口高度最大化（外围占高由 JS fitZoomForLandscape 拉到满）。
+   ① .news_head 整块隐藏——含 h1 标题、级别 tabs、.gicons（齿轮/全屏）、
+      设置浮窗与自定义盘弹窗（后两者锚在 news_head 内，一并隐去，符合张老师
+      「包括标题、级别、设置、全屏」的要求）；
+   ② 状态栏（.gname）隐藏；
+   ③ 计数条竖排进银框左侧：时间上 / 笑脸中 / 雷数下（桌面头部逆时针转 90°）。
+      DOM 顺序 雷数/笑脸/计时（桌面横排左→右）+ column-reverse 反转即得。
+   ⚠️ 须在竖屏块之后：小屏手机横屏（宽 ≤768）两块同时命中，需本块覆盖。
+   同优先级时后定义者胜出 */
+@media (orientation: landscape) and (max-height: 520px) {
+  #online_play .news_head {
+    display: none;
+  }
   #online_play .gname {
     display: none;
   }

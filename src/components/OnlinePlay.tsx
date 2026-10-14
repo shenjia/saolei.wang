@@ -13,21 +13,13 @@
 // saolei.wang Online 标记，上传路由据此拒绝入排行。
 
 import { useEffect, useRef } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { FlopSprites } from "./FlopSprites";
+import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
 import { paintRangeFill } from "@/lib/paintRange";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
-import {
-  AXIS_METRICS,
-  compositeOf,
-  DIST_BUCKET_ALL,
-  formatMetric,
-  gradeColor,
-  gradeFromPercent,
-  gradeOf,
-  percentOf,
-} from "@/lib/videoscore";
-import type { MetricKey } from "@/lib/videoscore";
+import { AXIS_METRICS, DIST_BUCKET_ALL, formatMetric, gradeOf, percentOf } from "@/lib/videoscore";
 
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
 export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
@@ -58,11 +50,12 @@ const PAGE_PAD = 100;   // 盘面之外需给 #page 留的总宽（盒装 78 + �
 const GA_OFFSET = 78;   // #page 宽 → #game_area 内容宽的固定损耗
 const PAGE_MIN_W = 480; // 下限：标题行 + 4 个级别 tab 一行放得下、弹窗（320）不出盒
 const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
-/* 手机横屏固定横向开销（布局 px）：页面边距 8 + 盒装边框/内距 ~46 + 左栏 150
-   + 列间距 16 + 余量 → fitZoom* 与 normalMaxZoom 共用。用固定值而非 rect 实测：
+/* 手机横屏固定横向开销（布局 px）：页面边距 8 + 盒装 border/padding ~18
+   + 视口滚动条/余量 → fitZoom* 与 normalMaxZoom 共用。用固定值而非 rect 实测：
    超宽盘会把布局视口撑爆、rect 全失真。zoom 挂 .gwrap 后银框（含竖排计数列）
-   整体随盘缩放，拉满基准即整个银框窗，预留不再含框/计数列 */
-const LS_RESERVE_W = 240;
+   整体随盘缩放，拉满基准即整个银框窗，预留不再含框/计数列。
+   ⚠️ 2026-10-15 横屏改沉浸模式后左栏（150px）已隐藏，预留从 240 大幅降到 40 */
+const LS_RESERVE_W = 40;
 
 /* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
@@ -70,6 +63,8 @@ export type MetricDists = Record<string, Record<string, Record<string, number[]>
 
 export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges; metricDists?: MetricDists }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  /* 结算面板里雷达组件的 React root（面板走 innerHTML 注入，只能这样挂 React 组件） */
+  const radarRootRef = useRef<Root | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -965,6 +960,10 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     function renderResultPanel() {
       if (!snapshot) return;
       const s = snapshot;
+      /* 面板是 innerHTML 流：重设前先卸掉上一次挂载的雷达 React root，
+         否则旧 root 的 DOM 会被 innerHTML 抽走、留下悬空引用 */
+      radarRootRef.current?.unmount();
+      radarRootRef.current = null;
       const timeNum = (s.csec / 100).toFixed(2);
       /* 首行大字（2026-10-14 张老师定）：胜利＝绿色「完成！」+ 金色大字成绩；
          踩雷＝灰色「踩雷」+ 常规色成绩 */
@@ -995,10 +994,13 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         const pts = computeRadarPoints(s);
         if (pts) {
           radarHost.style.display = "block";
-          /* React 组件挂不进 innerHTML 流——雷达用函数式渲染（下述 renderRadarInto 已
-             与 VideoAnalysisRadar 同构：同一份 polygon/label 绘制，无 hover 依赖）。
-             紧凑版尺寸 168（2026-10-14 张老师：右侧板块太大，缩小到与高级游戏区高度一致量级） */
-          renderRadarInto(radarHost, pts, 160);
+          /* 复用录像详情页的 VideoAnalysisRadar 组件（张老师 2026-10-14 定：不该再维护第二份
+             绘制）。面板是 innerHTML 注入流、JSX 挂不进去，所以用 createRoot 把 React 组件挂到
+             占位 div —— 文案/字号/气泡样式与录像页**由同一个组件保证同源**，不会再分叉。
+             紧凑尺寸 160（2026-10-14 张老师：右侧板块太大，缩到与高级游戏区高度一致量级） */
+          const root = createRoot(radarHost);
+          root.render(<VideoAnalysisRadar data={pts} size={160} />);
+          radarRootRef.current = root;
         } else {
           radarHost.style.display = "none";
         }
@@ -1025,12 +1027,10 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       if (!group) return null;
       const lowCompletion = s.bbbv <= 0 || s.stats.solvedBv / s.bbbv < 0.1;
       /* ① 四根分项轴 */
-      const percents: Partial<Record<MetricKey, number>> = {};
       const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
         const value = s.stats[def.key];
         const dist = group[def.key] ?? [];
         const percent = dist.length ? percentOf(value, dist, def.highIsBetter) : 0;
-        percents[def.key] = percent;
         return {
           key: def.key,
           name: def.name,
@@ -1040,15 +1040,16 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           grade: dist.length ? gradeOf(value, dist, def.highIsBetter) : "?",
         };
       });
-      /* ② 综合轴置顶：四轴百分位的加权平均，本身就是百分位量纲，等级由档位表反推 */
-      const cmp = compositeOf(percents);
+      /* ② 综合轴置顶：STNB 原值 + 组内分位（与录像详情页同源，张老师 2026-10-14 晚定） */
+      const stnbValue = s.stats.stnb;
+      const stnbDist = group["stnb"] ?? [];
       const composite: VideoAnalysisPoint = {
-        key: "cmp",
+        key: "stnb",
         name: "综合",
-        value: cmp,
-        disp: `综合 ${cmp.toFixed(1)} 分`,
-        percent: cmp,
-        grade: gradeFromPercent(cmp),
+        value: stnbValue,
+        disp: formatMetric("stnb", stnbValue),
+        percent: stnbDist.length ? percentOf(stnbValue, stnbDist, true) : 0,
+        grade: stnbDist.length ? gradeOf(stnbValue, stnbDist, true) : "?",
       };
       if (lowCompletion) {
         return [composite, ...subs].map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
@@ -1059,39 +1060,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     function formatAvfTimestamp(d: Date): string {
       const p2 = (n: number) => String(n).padStart(2, "0");
       return `${d.getMonth() + 1}.${d.getDate()}.${d.getFullYear()}.${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}:${String(d.getMilliseconds()).padStart(4, "0")}`;
-    }
-    /* 雷达 SVG：与 VideoAnalysisRadar 同构的静态绘制（默认 222 视口 / 68 半径 / 8 环 /
-       等级配色；size 参数支持紧凑版——所有量按 size/222 等比缩放，标签字号微收）。
-       面板是 innerHTML 注入流，React 组件挂不进去，直接拼 SVG 字符串 */
-    function renderRadarInto(host: HTMLElement, data: VideoAnalysisPoint[], size = 222) {
-      const SIZE = size, C = SIZE / 2, R = SIZE * (68 / 222), LR = R + size * (20 / 222);
-      const RINGS = [15, 35, 50, 60, 70, 80, 90, 100];
-      const fs = size < 200 ? { grade: 11, name: 7 } : { grade: 13, name: 8 };
-      const f = (v: number) => Math.round(v * 100) / 100;
-      const polar = (i: number, n: number, r: number): [number, number] => {
-        const a = (Math.PI * 2 * i) / n - Math.PI / 2;
-        return [f(C + r * Math.cos(a)), f(C + r * Math.sin(a))];
-      };
-      const n = data.length;
-      const poly = (r: number) => Array.from({ length: n }, (_, i) => polar(i, n, r).join(",")).join(" ");
-      let s = `<svg viewBox="0 0 ${SIZE} ${SIZE}" width="${SIZE}" height="${SIZE}" role="img" aria-label="本局分析雷达图">`;
-      for (const p of RINGS) {
-        s += `<polygon points="${poly((p / 100) * R)}" fill="none" stroke="${p === 100 ? "#6a685c" : "#565549"}" stroke-width="${p === 100 ? 1.2 : 0.7}"/>`;
-      }
-      data.forEach((_, i) => {
-        const [x, y] = polar(i, n, R);
-        s += `<line x1="${C}" y1="${C}" x2="${x}" y2="${y}" stroke="#565549" stroke-width="0.7"/>`;
-      });
-      const pts = data.map((d, i) => polar(i, n, (Math.max(0, Math.min(100, d.percent)) / 100) * R));
-      s += `<polygon points="${pts.map((p) => p.join(",")).join(" ")}" fill="rgba(102,217,239,0.18)" stroke="#66d9ef" stroke-width="1.5" stroke-linejoin="round"/>`;
-      data.forEach((d, i) => {
-        const [x, y] = pts[i];
-        const [lx, ly] = polar(i, n, LR);
-        s += `<circle cx="${x}" cy="${y}" r="2.5" fill="#66d9ef"><title>${d.name}：${d.disp}（超越 ${d.percent}% 的玩家）</title></circle>`;
-        s += `<text x="${lx}" y="${ly - 2}" text-anchor="middle"><tspan fill="${gradeColor(d.grade)}" font-size="${fs.grade}" font-weight="bold">${d.grade}</tspan><tspan x="${lx}" dy="${fs.grade}" fill="#8a8878" font-size="${fs.name}">${d.name}</tspan></text>`;
-      });
-      s += "</svg>";
-      host.innerHTML = s;
     }
     /* ---- 重玩本局：完全复刻结束时的地图，强制关闭无猜（张老师定：重玩盘面必须原样） ---- */
     function replaySameBoard() {
@@ -2019,8 +1987,8 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
            布局视口撑爆」——高级盘默认 1.71x = 830px > 屏宽，一旦撑爆
            innerWidth/innerHeight 被浏览器放大、媒体查询与 rect 全部失真
            （2026-10-14 张老师报：高级盘横屏高度不对的根因）。
-           目标宽按可视视口（visualViewport，不受撑爆影响）减固定预留估算：
-           页面边距 8 + 盒装 ~46 + 左栏 150 + 间距 16 + 余量 */
+           目标宽按可视视口（visualViewport，不受撑爆影响）减固定预留估算
+           （沉浸模式下只剩页面边距 + 盒装内距，无左栏） */
         const vv = window.visualViewport;
         const vw = (vv ? vv.width : window.innerWidth) / pageZoom();
         cap = (vw - LS_RESERVE_W) / gwrap.offsetWidth;
@@ -2227,7 +2195,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       const gaR = gameAreaEl.getBoundingClientRect();
       const gwR = gwrap.getBoundingClientRect();
       /* 高度目标 = 屏高 − game_area 顶 − 底部余量 − 银框之外占高（rect 差值法）；
-         宽度目标 = 屏宽 − 固定横向开销（左栏/盒装，LS_RESERVE_W）。
+         宽度目标 = 屏宽 − 固定横向开销（页面边距/盒装，LS_RESERVE_W；沉浸模式无左栏）。
          vw/vh 已除 pz 归一成布局 px，rect 量出的部分同样除 pz，倍率不再另除 */
       const othersH = Math.max(0, (gaR.height - gwR.height) / pz);
       const targetH = vh - gaR.top / pz - 8 - othersH;
