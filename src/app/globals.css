@@ -4710,15 +4710,18 @@ body #video_list .score_3bvs a:hover em {
   color: inherit;
   font-weight: bold;
 }
-/* 成绩数字 hover 按级别变色（2026-10-13 张老师要求）：初级绿、中级橙、高级金。
-   #page 前缀提权：排序命中列（.current）成绩默认黄，hover 时同样按级别变色 */
-#page .video_table td.score.lv_beg a:hover {
+/* 成绩数字随行 hover 按级别变色（2026-10-15 张老师要求：hover 行内任意位置即高亮，
+   不再要求悬停在链接上）：初级绿、中级橙、高级金。
+   tr:hover 提权（(1,4,4)）：压过排序命中列（.current）成绩默认黄
+   （#page .video_table td.score.current a 等 (1,3,2)），行 hover 时同样按级别变色。
+   适用 /video 列表、首页录像版块、个人主页录像列表（共用 video_table 行渲染） */
+#page .video_table tbody tr:hover td.score.lv_beg a {
   color: #a6e22e;
 }
-#page .video_table td.score.lv_int a:hover {
+#page .video_table tbody tr:hover td.score.lv_int a {
   color: #f79646;
 }
-#page .video_table td.score.lv_exp a:hover {
+#page .video_table tbody tr:hover td.score.lv_exp a {
   color: #fdc61d;
 }
 /* 排行表成绩同款（2026-10-13 张老师要求：与录像列表同逻辑）。
@@ -4857,14 +4860,14 @@ body #page.video_old .page_head {
   position: relative;
   display: inline-block;
 }
-/* 成绩数字 hover 按级别变色（与 .video_table 同语言，2026-10-13） */
-#video_hot td.score.lv_beg a:hover {
+/* 成绩数字随行 hover 按级别变色（与 .video_table 同语言；2026-10-15 改行触发） */
+#video_hot tbody tr:hover td.score.lv_beg a {
   color: #a6e22e;
 }
-#video_hot td.score.lv_int a:hover {
+#video_hot tbody tr:hover td.score.lv_int a {
   color: #f79646;
 }
-#video_hot td.score.lv_exp a:hover {
+#video_hot tbody tr:hover td.score.lv_exp a {
   color: #fdc61d;
 }
 #video_hot td.score .nf {
