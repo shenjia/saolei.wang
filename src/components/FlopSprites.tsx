@@ -213,53 +213,53 @@ export function FlopSprites() {
         <path d="M150 10v10h-10v120H20v10H10v17.89h157.89V10h-10z" fill="gray" />
       </symbol>
       <symbol id="cell-press" viewBox="0 0 168 168">
-        <use  />
+        <use href="#base-cell-border-press" />
         <path d="M10 10v150h150V10H10z" fill="silver" />
       </symbol>
       <symbol id="cell-number-0" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
       </symbol>
       <symbol id="cell-number-1" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M80 30v10H70v10H60v10H50v10h20v40H50v20h70v-20h-20V30H80z" fill="#00f" />
       </symbol>
       <symbol id="cell-number-2" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M40 30v10H30v20h30V50h40v20H80v10H60v10H40v10H30v30h100v-20H70v-10h20V90h20V80h10V70h10V40h-10V30H40z" fill="green" />
       </symbol>
       <symbol id="cell-number-3" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M30 30v20h70v20H60v20h40v20H30v20h90v-10h10V90h-10V70h10V40h-10V30H30z" fill="red" />
       </symbol>
       <symbol id="cell-number-4" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M50 30v20H40v20H30v20h60v40h30V90h10V70h-10V30H90v40H70V50h10V30H50z" fill="navy" />
       </symbol>
       <symbol id="cell-number-5" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M30 30v60h70v20H30v20h90v-10h10V80h-10V70H60V50h70V30H30z" fill="maroon" />
       </symbol>
       <symbol id="cell-number-6" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M40 30v10H30v80h10v10h80v-10h10V80h-10V70H60V50h60V30H40z" fill="teal" />
         <path d="M60 90v20h40V90H60z" fill="silver" />
       </symbol>
       <symbol id="cell-number-7" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M30 30v20h70v20H90v20H80v20H70v20h30v-20h10V90h10V70h10V30H30z" />
       </symbol>
       <symbol id="cell-number-8" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M40 30v10H30v30h10v20H30v30h10v10h80v-10h10V90h-10V70h10V40h-10V30H40z" fill="gray" />
         <path d="M60 50v20h40V50H60m0 40v20h40V90H60z" fill="silver" />
       </symbol>
       <symbol id="cell-flag" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-normal" />
         <path d="M70 30v10H50v10H40v10h10v10h20v10h20V30H70z" fill="red" />
         <path d="M80 80v20H60v10H40v20h80v-20h-20v-10H90V80H80z" />
       </symbol>
       <symbol id="cell-flag-wrong" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M80 20v20H60v20h20v20h10V70h10V60h10V40H90V20H80z" />
         <path d="M20 30v10h10v10h10v10h10v10h10v10h10v20H60v10H50v10H40v10H30v10H20v10h20v-10h10v-10h10v-10h10v-10h10v-10h10v10h10v10h10v10h10v10h10v10h20v-10h-10v-10h-10v-10h-10v-10h-10v-10h-10V80h10V70h10V60h10V50h10V40h10V30h-20v10h-10v10h-10v10h-10v10H90v10H80V70H70V60H60V50H50V40H40V30H20z" fill="red" />
         <path d="M40 60v20H20v10h20v20h20v-10h10V80H60V70H50V60H40z" />
@@ -267,15 +267,15 @@ export function FlopSprites() {
         <path d="M120 60v10h-10v10h-10v20h10v10h20V90h20V80h-20V60h-10m-40 40v10H70v10H60v10h20v20h10v-20h20v-10h-10v-10H90v-10H80z" />
       </symbol>
       <symbol id="cell-question" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-normal" />
         <path d="M60 30v10H50v20h20V40h20v30H80v10H70v20h20V80h10V70h10V40h-10V30H60m10 80v20h20v-20H70z" />
       </symbol>
       <symbol id="cell-question-press" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M70 40v10H60v20h20V50h20v30H90v10H80v20h20V90h10V80h10V50h-10V40H70m10 80v20h20v-20H80z" />
       </symbol>
       <symbol id="cell-mine" viewBox="0 0 168 168">
-        <use  />
+        <use href="#cell-press" />
         <path d="M80 20v20H60v10H50V40H40v10h10v10H40v20H20v10h20v20h10v10H40v10h10v-10h10v10h20v20h10v-20h20v-10h10v10h10v-10h-10v-10h10V90h20V80h-20V60h-10V50h10V40h-10v10h-10V40H90V20H80z" />
         <path d="M60 60v20h20V60H60z" fill="white" />
       </symbol>
