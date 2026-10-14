@@ -888,10 +888,10 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       flagBtn.classList.toggle("hidden", nf);
       /* 级别切换后浮窗 3BV 滑杆范围联动（浮窗开着时立即刷新） */
       syncBvSlider();
-      /* 自定义宽盘扩版（张老师 17:48）：宽 >40 切盘时给 #page.main 加 .cus_wide
-         （globals.css：≥1280 视口 max-width 放到 min(85vw,1400px)），
-         1280 视口下 960→1088px（约 +128px）。标准级别/窄盘恢复常规版式 */
-      pageEl?.classList.toggle("cus_wide", lv === "cus" && W > 40);
+      /* 自定义宽盘扩版（张老师 17:48）：宽 >40 给 #page.main 挂 .cus_wide
+         （globals.css：≥1280 视口 max-width 放到 min(85vw,1400px)）。
+         拖动中冻结版式不切（见 syncCusWide），松手/切级时才切 */
+      syncCusWide();
       /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式：
          级别实际切换（beg/int/exp↔cus）→ 按模式分离记忆应用（三期 v3）；
          同级别内规格变化（滑杆拖动）→ 保持当前倍率只重算封顶（拖杆跟手，
@@ -1019,6 +1019,18 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         }
       }, CUS_APPLY_MS);
     }
+    /* 版式挂/摘（cus_wide）与拖动冻结（张老师 18:52 报「宽调回小值板块不缩」的根因）：
+       板块扩/缩会让居中的 #page 左缘平移（960↔1152 版式差 96px），弹窗滑轨跟着横移；
+       range input 拖动中 pointer capture 按轨道「当前位置」把同一点点位换算成值——
+       拖回 40 以下 → 板块缩 → 轨道右移 → 值跳回大值 → 板块又扩，来回振荡，
+       表现即「调回来了板块却不缩」。故拖动期间（cusDragging）冻结版式，
+       松手（change）时一次切换；点 tab 切级别 / F2 等非拖动 reset 照常即切。
+       拖动中盘面超出未扩版式由 normalMaxZoom 自动缩兜底，松手后扩版回弹 */
+    let cusDragging = false;
+    function syncCusWide() {
+      if (cusDragging) return;
+      pageEl?.classList.toggle("cus_wide", lv === "cus" && W > 40);
+    }
     /* 弹窗锚定（张老师 18:41 定）：贴「自定义」tab 正下方、与之水平居中对齐。
        原先锚 .news_head 左缘（left:0），看着像挂在标题左端、离 tab 老远。
        量法用 offset 系（CSS px，与页级 zoom 无关）：tab 与弹窗的 offsetParent 同为
@@ -1055,6 +1067,15 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     on(cusW, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
     on(cusH, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
     on(cusM, "input", () => { syncCusVals(); applyCusLive(); });
+    /* 宽/高拖动期间冻结版式（cusDragging，见 syncCusWide 注释）。
+       pointerup 与 change 双保险解冻：原地点击 thumb 值没变时 change 不触发，
+       只靠 change 会把标志卡在 true、版式永远冻结 */
+    on(cusW, "pointerdown", () => { cusDragging = true; });
+    on(cusH, "pointerdown", () => { cusDragging = true; });
+    on(cusW, "pointerup", () => { cusDragging = false; syncCusWide(); });
+    on(cusH, "pointerup", () => { cusDragging = false; syncCusWide(); });
+    on(cusW, "change", () => { cusDragging = false; syncCusWide(); });
+    on(cusH, "change", () => { cusDragging = false; syncCusWide(); });
     on(cusDlg, "click", (e: Event) => e.stopPropagation()); // 窗内点击不冒泡到外点关闭
     on(document, "click", (e: Event) => {
       if (!cusDlg.classList.contains("open")) return;
