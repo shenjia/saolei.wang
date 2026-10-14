@@ -436,31 +436,37 @@ export function OnlinePlay() {
         : 0;
       /* 玩家实际插的旗数（胜利结算前会先抓这个值，自动补旗不算） */
       const playerFlags = M - flagsLeft();
-      const rows: [string, string][] = [
-        ["RTime", f3(t) + " (" + (Math.floor(t) + 1) + ")"],
-        ["Est RTime", hasBv ? f3(est) + " (" + (Math.floor(est) + 1) + ")" : "* (*)"],
-        ["3BV", solvedBv + "/" + board3bv],
-        ["3BV/s", hasBv ? f3(solvedBv / t) : "*"],
-        ["Ops", solvedOps + "/" + bvRegions.length],
-        ["Isls", solvedIsls + "/" + bvIslands.length],
-        ["Left", stLeft + "@" + (t > 0 ? f3(stLeft / t) : "0.000")],
-        ["Right", stRight + "@" + (t > 0 ? f3(stRight / t) : "0.000")],
-        ["Double", stDouble + "@" + (t > 0 ? f3(stDouble / t) : "0.000")],
-        ["Ce", ce + "@" + (t > 0 ? f3(ce / t) : "0.000")],
-        ["Cl", cl + "@" + (t > 0 ? f3(cl / t) : "0.000")],
-        ["IOE", cl > 0 ? f3(solvedBv / cl) : "*"],
-        ["ThrP", ce > 0 ? f3(solvedBv / ce) : "*"],
-        ["Corr", cl > 0 ? f3(ce / cl) : "*"],
-        ["Path", String(Math.round(stPath))],
-        ["Flags", String(playerFlags)],
-        ["RQP", hasBv ? f3((est * (est + 1)) / board3bv) : "*"],
-        ["QG", hasBv ? f3(qg) : "*"],
-        ["STNB", hasBv ? f3(stnb) : "*"],
+      /* 每项第三列是 hover 气泡的解释（沿用 flop 原版 title 语义，中文一句话；含公式） */
+      const rows: [string, string, string][] = [
+        ["RTime", f3(t) + " (" + (Math.floor(t) + 1) + ")", "本局实际用时（秒），括号内为按秒进位的录像计分时间"],
+        ["Est RTime", hasBv ? f3(est) + " (" + (Math.floor(est) + 1) + ")" : "* (*)", "按完成度折算的估算用时 = 实际用时 × 3BV ÷ 已完成 3BV"],
+        ["3BV", solvedBv + "/" + board3bv, "盘面理论最少点击次数（Bechtel 基准值），显示为 已完成 / 全盘总量"],
+        ["3BV/s", hasBv ? f3(solvedBv / t) : "*", "每秒完成的 3BV 数 = 已完成 3BV ÷ 实际用时，衡量操作效率"],
+        ["Ops", solvedOps + "/" + bvRegions.length, "开空区域（opening）的完成数 / 全盘总数"],
+        ["Isls", solvedIsls + "/" + bvIslands.length, "孤立数字块（island）的完成数 / 全盘总数"],
+        ["Left", stLeft + "@" + (t > 0 ? f3(stLeft / t) : "0.000"), "左键点击次数 @ 每秒点击频率"],
+        ["Right", stRight + "@" + (t > 0 ? f3(stRight / t) : "0.000"), "右键点击次数 @ 每秒点击频率"],
+        ["Double", stDouble + "@" + (t > 0 ? f3(stDouble / t) : "0.000"), "左右同按（和弦双击）次数 @ 每秒频率"],
+        ["Ce", ce + "@" + (t > 0 ? f3(ce / t) : "0.000"), "有效点击次数（真正开出新格或完成 3BV 的点击）@ 每秒频率"],
+        ["Cl", cl + "@" + (t > 0 ? f3(cl / t) : "0.000"), "总点击次数（左键 + 右键 + 双击）@ 每秒频率"],
+        ["IOE", cl > 0 ? f3(solvedBv / cl) : "*", "效率指数 = 已完成 3BV ÷ 总点击次数"],
+        ["ThrP", ce > 0 ? f3(solvedBv / ce) : "*", "吞吐效率 = 已完成 3BV ÷ 有效点击次数"],
+        ["Corr", cl > 0 ? f3(ce / cl) : "*", "准确率 = 有效点击 ÷ 总点击次数"],
+        ["Path", String(Math.round(stPath)), "鼠标移动路径的欧氏距离总和（像素）"],
+        ["Flags", String(playerFlags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
+        ["RQP", hasBv ? f3((est * (est + 1)) / board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
+        ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
+        ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
       ];
       greport.innerHTML =
         '<div class="gr_title">数据统计</div>' +
         "<table>" +
-        rows.map((r) => "<tr><td>" + r[0] + "</td><td>" + r[1] + "</td></tr>").join("") +
+        rows
+          .map(
+            (r) =>
+              '<tr><td class="gt">' + r[0] + '<span class="tip">' + r[2] + "</span></td><td>" + r[1] + "</td></tr>"
+          )
+          .join("") +
         "</table>";
       greport.classList.add("show");
       syncReportZoom(); // 面板尺寸随当前游戏倍率（可能已被放大）
@@ -802,6 +808,13 @@ export function OnlinePlay() {
       applyZoom(parseFloat(zoomRange.value));
     });
     on($("zoom_reset"), "click", () => { zoomBeforeFs = null; zoomBeforeLs = null; applyZoom(1); });
+    /* 数据统计术语气泡越界翻转：面板整体常贴到视口底缘，底部几行的气泡向下会出屏，
+       故按实测空间改为向上弹（CSS 里 .tip-up 把气泡翻到单元格上方） */
+    on(greport, "mouseover", (e: MouseEvent) => {
+      const td = (e.target as HTMLElement).closest("td.gt") as HTMLElement | null;
+      if (!td) return;
+      td.classList.toggle("tip-up", td.getBoundingClientRect().bottom + 64 > window.innerHeight);
+    });
     try {
       const savedZoom = parseFloat(localStorage.getItem("online_play_zoom") || "1");
       if (savedZoom > 0) applyZoom(savedZoom);

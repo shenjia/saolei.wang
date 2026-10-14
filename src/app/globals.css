@@ -5744,6 +5744,41 @@ button.msg_cancel:hover {
   text-align: right;
   color: #e8e8e0;
 }
+/* 术语 hover 气泡（2026-10-14 张老师定）：逐项一句话中文解释，含公式。
+   气泡绝对定位于术语单元格内（td 需 position:relative），默认向下；
+   底部行由 JS 按视口空间追加 .tip-up 翻到上方 */
+#online_play .greport td.gt {
+  position: relative;
+  cursor: help;
+}
+#online_play .greport td.gt:hover {
+  z-index: 9;
+}
+#online_play .greport td.gt .tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 5px);
+  z-index: 10;
+  width: max-content;
+  max-width: 220px;
+  white-space: normal;
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #656355;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font: 12px/17px Arial, Helvetica, sans-serif;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+#online_play .greport td.gt:hover .tip {
+  display: block;
+}
+#online_play .greport td.gt.tip-up .tip {
+  top: auto;
+  bottom: calc(100% + 5px);
+}
 @media (min-width: 960px) {
   #online_play .greport.show {
     display: block;
