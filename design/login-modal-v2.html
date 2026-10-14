@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录浮窗 · 设计方案 v2（4 个设计语言）</title>
+<style>
+  /* ============================================================
+     色板：严格沿用 2013 Monokai（零新色）
+     #171714 页底 / #272822 深面 / #3b3a32 面板 / #49483e 分隔 / #656355 描边
+     #b1b1a4 次文 / #75715e 弱文 / #f8f8f2 主文
+     #fdc61d 主黄 / #a6e22e 绿 / #f92672 红 / #12b7f5 QQ蓝
+     ============================================================ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #171714;
+    color: #f8f8f2;
+    padding: 40px 28px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  /* ---------- 页头 ---------- */
+  .phead { border-bottom: 1px solid #33322b; padding-bottom: 24px; margin-bottom: 32px; }
+  .phead h1 { font-size: 22px; font-weight: 600; letter-spacing: .3px; }
+  .phead h1 b { color: #fdc61d; font-weight: 600; }
+  .phead p { font-size: 13px; color: #75715e; margin-top: 8px; line-height: 1.8; }
+
+  /* ---------- 1. 诊断 ---------- */
+  .diag { background: #23231d; border: 1px solid #33322b; border-radius: 10px; padding: 20px 24px; margin-bottom: 32px; }
+  .diag h2 { font-size: 14px; color: #fdc61d; font-weight: 600; margin-bottom: 14px; letter-spacing: .5px; }
+  .diag ol { list-style: none; counter-reset: d; }
+  .diag li {
+    counter-increment: d; position: relative; padding-left: 26px;
+    font-size: 13px; line-height: 1.9; color: #b1b1a4; margin-bottom: 4px;
+  }
+  .diag li::before {
+    content: counter(d); position: absolute; left: 0; top: 3px;
+    width: 16px; height: 16px; border-radius: 4px; background: #33322b; color: #fdc61d;
+    font-size: 11px; font-weight: 700; text-align: center; line-height: 16px;
+  }
+  .diag li code {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+    background: #1c1c17; border: 1px solid #33322b; border-radius: 3px; padding: 1px 5px; color: #a6e22e;
+  }
+
+  /* ---------- 2. 统一规范 ---------- */
+  .specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 44px; }
+  .spec { background: #23231d; border: 1px solid #33322b; border-radius: 10px; padding: 16px 18px; }
+  .spec h3 { font-size: 12px; color: #75715e; letter-spacing: 1.5px; font-weight: 400; margin-bottom: 12px; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sw { width: 34px; height: 34px; border-radius: 6px; position: relative; }
+  .sw span { position: absolute; bottom: -16px; left: 0; font-size: 9px; color: #75715e; letter-spacing: .3px; }
+  .spec ul { list-style: none; font-size: 12px; color: #b1b1a4; line-height: 2; }
+  .spec ul b { color: #f8f8f2; font-weight: 400; }
+  .spec ul i { font-style: normal; color: #75715e; }
+  .ruler { display: flex; align-items: flex-end; gap: 6px; height: 40px; }
+  .ruler i { display: block; background: linear-gradient(180deg, #fdc61d, #b78d00); border-radius: 2px 2px 0 0; }
+
+  /* ---------- 方案卡片 ---------- */
+  .plan { margin-bottom: 52px; }
+  .plan .bar { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .plan .no {
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 700;
+    color: #272822; background: #fdc61d; border-radius: 4px; padding: 2px 8px;
+  }
+  .plan h2 { font-size: 17px; font-weight: 600; }
+  .plan .idea { font-size: 13px; color: #75715e; margin: 0 0 16px 4px; line-height: 1.8; }
+  .plan .cols { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .plan .cols { grid-template-columns: 1fr; } }
+  .notes { background: #23231d; border: 1px solid #33322b; border-radius: 10px; padding: 16px 18px; }
+  .notes h4 { font-size: 12px; color: #75715e; letter-spacing: 1.2px; font-weight: 400; margin: 0 0 10px; }
+  .notes table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .notes td { padding: 4px 0; vertical-align: top; color: #b1b1a4; line-height: 1.65; }
+  .notes td:first-child { width: 76px; color: #75715e; white-space: nowrap; }
+  .notes code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #fdc61d; }
+  .notes .why { margin-top: 12px; padding-top: 12px; border-top: 1px solid #33322b; font-size: 12px; color: #75715e; line-height: 1.8; }
+  .notes .why em { color: #a6e22e; font-style: normal; }
+
+  /* ---------- 舞台：模拟站内背景 + 遮罩 + 浮窗 ---------- */
+  .stage {
+    position: relative; overflow: hidden; border-radius: 10px;
+    border: 1px solid #33322b; min-height: 470px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sitebg { position: absolute; inset: 0; background: #272822; }
+  .snav {
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 18px; height: 44px; background: #23231d; border-bottom: 1px solid #33322b;
+    font-size: 13px; color: #75715e;
+  }
+  .snav .slogo { color: #fdc61d; font-weight: 700; font-size: 15px; }
+  .snav .slinks { flex: 1; display: flex; gap: 16px; }
+  .snav .slinks span.on { color: #fdc61d; font-weight: 700; }
+  .srow {
+    display: grid; grid-template-columns: 44px 54px 1fr 68px 68px 68px 76px;
+    align-items: center; height: 26px; padding: 0 18px;
+    font-size: 13px; color: #75715e; border-bottom: 1px solid #2f2f28;
+  }
+  .srow .nm { color: #f8f8f2; }
+  .srow .rk { color: #b1b1a4; }
+  .srow .tt { color: #b1b1a4; font-variant-numeric: tabular-nums; }
+  .srow.hd { background: #2c2c25; color: #75715e; font-size: 12px; height: 28px; }
+  .shade { position: absolute; inset: 0; background: rgba(0,0,0,.46); }
+
+  /* ============================================================
+     方案 1 · 玻璃层（Monokai Glass）
+     ============================================================ */
+  .m1 {
+    position: relative; z-index: 2; width: 392px; padding: 30px 34px 26px;
+    border-radius: 14px;
+    background: rgba(39,40,34,.82);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    backdrop-filter: blur(16px) saturate(1.15);
+    box-shadow:
+      inset 0 1px 0 rgba(248,248,242,.10),
+      inset 0 0 0 1px rgba(248,248,242,.07),
+      0 32px 64px -16px rgba(0,0,0,.8),
+      0 2px 8px rgba(0,0,0,.4);
+    color: #f8f8f2;
+  }
+  .m1 .ttl { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+  .m1 .sub { font-size: 12px; color: #75715e; margin-top: 5px; }
+  .m1 .rule {
+    height: 1px; margin: 20px 0 22px;
+    background: linear-gradient(90deg, rgba(248,248,242,.12), rgba(248,248,242,0));
+  }
+  .m1 .field { margin-bottom: 16px; }
+  .m1 .field label { display: block; font-size: 12px; color: #75715e; margin-bottom: 7px; letter-spacing: .4px; }
+  .m1 input {
+    width: 100%; height: 42px; padding: 0 13px;
+    border: 1px solid rgba(248,248,242,.10); border-radius: 9px;
+    background: rgba(0,0,0,.30); color: #f8f8f2; font-size: 14px;
+    font-family: inherit; outline: none;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.45);
+    transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  .m1 input::placeholder { color: #66655c; }
+  .m1 input:hover { border-color: rgba(248,248,242,.18); }
+  .m1 input:focus {
+    border-color: rgba(253,198,29,.9);
+    background: rgba(0,0,0,.42);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.45), 0 0 0 3px rgba(253,198,29,.15);
+  }
+  .m1 .btn {
+    width: 100%; height: 44px; margin-top: 6px; border: 0; border-radius: 9px;
+    background: linear-gradient(180deg, #ffd23e, #f0b70a);
+    color: #2b2a20; font-size: 15px; font-weight: 700; font-family: inherit;
+    letter-spacing: 1px; cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 18px -8px rgba(253,198,29,.55);
+    transition: transform .12s, box-shadow .15s, filter .15s;
+  }
+  .m1 .btn:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 10px 22px -8px rgba(253,198,29,.6); }
+  .m1 .btn:active { transform: translateY(0); filter: brightness(.96); box-shadow: inset 0 2px 4px rgba(0,0,0,.28); }
+  .m1 .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+  .m1 .foot a { font-size: 12px; color: #a6e22e; text-decoration: none; }
+  .m1 .foot a:hover { color: #b8f04a; text-decoration: underline; }
+  .m1 .x {
+    position: absolute; top: 14px; right: 14px; width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; color: #75715e; font-size: 17px; line-height: 1; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .m1 .x:hover { background: rgba(248,248,242,.08); color: #f8f8f2; }
+  /* 错误态 */
+  .m1.err input { border-color: rgba(249,38,114,.75); box-shadow: inset 0 1px 2px rgba(0,0,0,.45), 0 0 0 3px rgba(249,38,114,.13); }
+  .m1 .msg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #f92672; margin-top: 12px; }
+  .m1 .msg i { width: 14px; height: 14px; border-radius: 50%; background: #f92672; color: #272822; font-size: 10px; font-style: normal; font-weight: 700; text-align: center; line-height: 14px; flex: 0 0 auto; }
+
+  /* ============================================================
+     方案 2 · 经典凹陷（Classic Bevel）
+     ============================================================ */
+  .m2 {
+    position: relative; z-index: 2; width: 384px; padding: 0 0 22px;
+    border-radius: 3px; background: #3b3a32; color: #f8f8f2;
+    box-shadow:
+      inset 1px 1px 0 #5d5b4e, inset -1px -1px 0 #191913,
+      0 14px 40px rgba(0,0,0,.7);
+  }
+  .m2 .head {
+    position: relative; height: 34px; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; letter-spacing: 3px; color: #f8f8f2;
+    background: linear-gradient(180deg, #4b4940, #3b3a32);
+    box-shadow: inset 0 1px 0 #615f52, inset 0 -1px 0 #24241c;
+  }
+  .m2 .head::before, .m2 .head::after {
+    content: ""; position: absolute; top: 14px; width: 6px; height: 6px; background: #fdc61d; border-radius: 1px;
+  }
+  .m2 .head::before { left: 14px; }
+  .m2 .head::after { right: 14px; }
+  .m2 .body { padding: 20px 26px 0; }
+  .m2 .x {
+    position: absolute; top: 8px; right: 8px; width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    background: #3b3a32; border-radius: 2px; color: #b1b1a4; font-size: 12px; cursor: pointer;
+    box-shadow: inset 1px 1px 0 #5d5b4e, inset -1px -1px 0 #191913;
+  }
+  .m2 .x:hover { color: #f8f8f2; background: #45443a; }
+  .m2 table { width: 100%; border-collapse: collapse; }
+  .m2 td { padding: 7px 0; font-size: 13px; color: #b1b1a4; }
+  .m2 td:first-child { width: 62px; white-space: nowrap; }
+  .m2 input {
+    width: 100%; height: 30px; padding: 0 8px; border: 0; border-radius: 2px;
+    background: #212118; color: #f8f8f2; outline: none;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; letter-spacing: .5px;
+    box-shadow: inset 1px 1px 0 #14140f, inset -1px -1px 0 #4a483c, inset 2px 2px 5px rgba(0,0,0,.55);
+    transition: box-shadow .12s;
+  }
+  .m2 input:focus { box-shadow: inset 1px 1px 0 #14140f, inset -1px -1px 0 #4a483c, 0 0 0 1px #fdc61d; }
+  .m2 .btn {
+    display: block; width: 100%; height: 34px; margin-top: 20px;
+    border: 0; border-radius: 2px; cursor: pointer;
+    background: #fdc61d; color: #2b2a20; font-size: 14px; font-weight: 700; font-family: inherit; letter-spacing: 4px;
+    box-shadow: inset 2px 2px 0 #ffe58a, inset -2px -2px 0 #b78d00, 0 1px 0 #000;
+  }
+  .m2 .btn:hover { background: #ffd23e; }
+  .m2 .btn:active { box-shadow: inset 2px 2px 0 #b78d00, inset -2px -2px 0 #ffe58a; transform: translateY(1px); }
+  .m2 .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 12px; color: #75715e; }
+  .m2 .foot a { color: #a6e22e; text-decoration: none; }
+  .m2 .foot a:hover { text-decoration: underline; }
+
+  /* ============================================================
+     方案 3 · 仪表派（Instrument）
+     ============================================================ */
+  .m3 {
+    position: relative; z-index: 2; width: 376px; padding: 0 0 24px;
+    border-radius: 8px; background: #2c2c25; color: #f8f8f2;
+    box-shadow: inset 0 0 0 1px #3b3a32, inset 0 1px 0 rgba(248,248,242,.06), 0 26px 56px -14px rgba(0,0,0,.78);
+  }
+  .m3 .strip {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; height: 38px; border-bottom: 1px solid #3b3a32;
+    background: #26261f; border-radius: 8px 8px 0 0;
+  }
+  .m3 .strip .lbl {
+    font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 3px; color: #75715e;
+  }
+  .m3 .strip .lbl b { color: #fdc61d; font-weight: 700; }
+  .m3 .leds { display: flex; gap: 5px; align-items: center; }
+  .m3 .leds i { width: 6px; height: 6px; border-radius: 50%; background: #3b3a32; box-shadow: inset 0 0 0 1px #47463b; }
+  .m3 .leds i.on { background: #a6e22e; box-shadow: 0 0 6px rgba(166,226,46,.7); }
+  .m3 .leds i.y { background: #fdc61d; box-shadow: 0 0 6px rgba(253,198,29,.7); }
+  .m3 .body { padding: 22px 26px 0; }
+  .m3 h3 { font-size: 16px; font-weight: 600; letter-spacing: .3px; }
+  .m3 .sub { font-size: 12px; color: #75715e; margin: 5px 0 22px; }
+  .m3 .slot {
+    display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 12px; margin-bottom: 12px;
+    background: #1f1f19; border: 1px solid #35342c; border-radius: 7px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,.5);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .m3 .slot:focus-within { border-color: #fdc61d; box-shadow: inset 0 1px 3px rgba(0,0,0,.5), 0 0 0 3px rgba(253,198,29,.12); }
+  .m3 .slot svg { flex: 0 0 auto; stroke: #75715e; transition: stroke .15s; }
+  .m3 .slot:focus-within svg { stroke: #fdc61d; }
+  .m3 .slot input {
+    flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+    color: #f8f8f2; font-size: 13px; font-family: ui-monospace, Menlo, monospace; letter-spacing: .4px;
+  }
+  .m3 .slot input::placeholder { color: #5d5c53; font-family: inherit; letter-spacing: 2px; }
+  .m3 .btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; height: 42px; margin-top: 14px; border: 0; border-radius: 7px; cursor: pointer;
+    background: #fdc61d; color: #2b2a20; font-size: 14px; font-weight: 700; font-family: inherit; letter-spacing: 2px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
+    transition: background .15s, transform .12s;
+  }
+  .m3 .btn span.ar { transition: transform .15s; }
+  .m3 .btn:hover { background: #ffd23e; }
+  .m3 .btn:hover span.ar { transform: translateX(3px); }
+  .m3 .btn:active { transform: translateY(1px); }
+  .m3 .foot { display: flex; justify-content: space-between; margin-top: 16px; font-size: 11px; color: #75715e; font-family: ui-monospace, Menlo, monospace; letter-spacing: .5px; }
+  .m3 .foot a { color: #a6e22e; text-decoration: none; }
+  .m3 .foot a:hover { text-decoration: underline; }
+  .m3 .x {
+    position: absolute; top: 9px; right: 12px; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    color: #75715e; font-size: 15px; cursor: pointer; border-radius: 5px;
+  }
+  .m3 .x:hover { color: #f8f8f2; background: rgba(248,248,242,.07); }
+
+  /* ============================================================
+     方案 4 · 分栏站标（Split）
+     ============================================================ */
+  .m4 {
+    position: relative; z-index: 2; width: 500px; display: flex; overflow: hidden;
+    border-radius: 12px; background: #34332c; color: #f8f8f2;
+    box-shadow: inset 0 1px 0 rgba(248,248,242,.08), 0 28px 60px -16px rgba(0,0,0,.8);
+  }
+  .m4 .side {
+    flex: 0 0 148px; padding: 30px 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: #23231d; border-right: 1px solid #2c2c25;
+    position: relative;
+  }
+  .m4 .side::after {
+    content: ""; position: absolute; top: 0; right: -1px; bottom: 0; width: 1px;
+    background: linear-gradient(180deg, transparent, #fdc61d 35%, #fdc61d 65%, transparent);
+    opacity: .35;
+  }
+  .m4 .side .brand { font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+  .m4 .side .en {
+    font-family: ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 2.4px;
+    color: #5d5c53; text-align: center; line-height: 2;
+  }
+  .m4 .main { flex: 1; padding: 30px 32px 26px; }
+  .m4 .kicker {
+    font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 3px; color: #75715e;
+  }
+  .m4 h3 { font-size: 18px; font-weight: 600; margin: 8px 0 20px; }
+  .m4 table { width: 100%; border-collapse: collapse; }
+  .m4 td { padding: 6px 0; font-size: 13px; color: #b1b1a4; }
+  .m4 td:first-child { width: 58px; white-space: nowrap; }
+  .m4 input {
+    width: 100%; height: 38px; padding: 0 11px;
+    border: 1px solid #4a483e; border-radius: 7px; background: #26261f; color: #f8f8f2;
+    font-size: 14px; font-family: inherit; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .m4 input:focus { border-color: #fdc61d; box-shadow: 0 0 0 3px rgba(253,198,29,.12); }
+  .m4 .btn {
+    display: block; width: 100%; height: 42px; margin-top: 18px; border: 0; border-radius: 7px; cursor: pointer;
+    background: #fdc61d; color: #2b2a20; font-size: 15px; font-weight: 700; font-family: inherit; letter-spacing: 2px;
+    transition: background .15s, transform .12s;
+  }
+  .m4 .btn:hover { background: #ffd23e; transform: translateY(-1px); }
+  .m4 .foot { display: flex; justify-content: space-between; margin-top: 16px; font-size: 12px; }
+  .m4 .foot a { color: #a6e22e; text-decoration: none; }
+  .m4 .foot a.reg { color: #fdc61d; }
+  .m4 .foot a:hover { text-decoration: underline; }
+  .m4 .x {
+    position: absolute; top: 12px; right: 14px; width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center; border-radius: 7px;
+    color: #75715e; font-size: 16px; cursor: pointer; transition: background .15s, color .15s;
+  }
+  .m4 .x:hover { background: rgba(248,248,242,.08); color: #f8f8f2; }
+
+  /* ---------- 状态规范区 ---------- */
+  .states { background: #23231d; border: 1px solid #33322b; border-radius: 10px; padding: 24px 28px; }
+  .states h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .states p.intro { font-size: 12px; color: #75715e; margin-bottom: 22px; }
+  .sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 22px 26px; }
+  .sitem .lbl { font-size: 11px; color: #75715e; letter-spacing: 1px; margin-bottom: 9px; font-family: ui-monospace, Menlo, monospace; }
+  .sitem .demo {
+    height: 42px; display: flex; align-items: center; justify-content: center;
+    background: #2c2c25; border: 1px solid #33322b; border-radius: 8px;
+    font-size: 13px; color: #f8f8f2; padding: 0 14px;
+  }
+  .d-btn { width: 100%; border: 0; border-radius: 9px; font-size: 14px; font-weight: 700; letter-spacing: 1px; color: #2b2a20; cursor: pointer; font-family: inherit; }
+  .b-def { background: linear-gradient(180deg,#ffd23e,#f0b70a); box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 18px -8px rgba(253,198,29,.55); }
+  .b-hov { background: linear-gradient(180deg,#ffe066,#f7c223); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 10px 22px -8px rgba(253,198,29,.6); transform: translateY(-1px); }
+  .b-act { background: linear-gradient(180deg,#eab206,#dda400); box-shadow: inset 0 2px 4px rgba(0,0,0,.3); transform: translateY(1px); }
+  .b-dis { background: #3b3a32; color: #6f6e64; cursor: default; box-shadow: none; }
+  .spin { width: 13px; height: 13px; border: 2px solid rgba(43,42,32,.3); border-top-color: #2b2a20; border-radius: 50%; display: inline-block; margin-left: 8px; vertical-align: -2px; }
+  .i-def input, .i-foc input, .i-err input { width: 100%; height: 40px; }
+  .i-def input { border: 1px solid rgba(248,248,242,.10); border-radius: 9px; background: rgba(0,0,0,.30); color: #f8f8f2; padding: 0 13px; font-size: 14px; font-family: inherit; outline: none; box-shadow: inset 0 1px 2px rgba(0,0,0,.45); }
+  .i-foc input { border: 1px solid rgba(253,198,29,.9); border-radius: 9px; background: rgba(0,0,0,.42); color: #f8f8f2; padding: 0 13px; font-size: 14px; font-family: inherit; outline: none; box-shadow: inset 0 1px 2px rgba(0,0,0,.45), 0 0 0 3px rgba(253,198,29,.15); }
+  .i-err input { border: 1px solid rgba(249,38,114,.75); border-radius: 9px; background: rgba(0,0,0,.30); color: #f8f8f2; padding: 0 13px; font-size: 14px; font-family: inherit; outline: none; box-shadow: inset 0 1px 2px rgba(0,0,0,.45), 0 0 0 3px rgba(249,38,114,.13); }
+  .sitem .cap { font-size: 11px; color: #5d5c53; margin-top: 8px; line-height: 1.6; }
+
+  .final { margin-top: 36px; padding: 22px 26px; border-left: 3px solid #fdc61d; background: #23231d; border-radius: 0 10px 10px 0; }
+  .final h2 { font-size: 15px; margin-bottom: 10px; }
+  .final p { font-size: 13px; color: #b1b1a4; line-height: 1.9; }
+  .final p em { color: #fdc61d; font-style: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="phead">
+    <h1>登录浮窗 · 设计方案 <b>v2</b>（四个设计语言，非排列变体）</h1>
+    <p>色板仍严格沿用 2013 Monokai，零新色；差异在材质、层次、栅格与状态。所有浮窗都放在真实排行榜背景上评估。<br>背景为站内排行榜示意排版，数字非真实数据。</p>
+  </div>
+
+  <!-- 1 诊断 -->
+  <div class="diag">
+    <h2>为什么现版丑 —— 6 个具体原因</h2>
+    <ol>
+      <li>面板 <code>#3b3a32</code> 纯色大平面 + <code>1px #656355</code> 描边 + 6px 圆角 = 毛坯盒子，没有材质</li>
+      <li>输入框 <code>#656355</code> 边框压在面板上，与深底形成「框套框」双层噪音</li>
+      <li>全哑光平面，无高光 / 内阴影 / 微渐变，屏幕上读不出层次</li>
+      <li>焦点态只换边框色，没有焦点环，切换生硬；无 hover 反馈</li>
+      <li>黄按钮纯色 + 4px 圆角，既非直角也非胶囊；无按下 / 禁用 / 加载态</li>
+      <li>间距 6/12/18 随手取，无栅格节奏；关闭按钮是 20px 灰字贴角，热区不足</li>
+    </ol>
+  </div>
+
+  <!-- 2 规范 -->
+  <div class="specs">
+    <div class="spec">
+      <h3>色板 · 零新色</h3>
+      <div class="swatches">
+        <div class="sw" style="background:#fdc61d"><span>#fdc61d</span></div>
+        <div class="sw" style="background:#f8f8f2"><span>#f8f8f2</span></div>
+        <div class="sw" style="background:#b1b1a4"><span>#b1b1a4</span></div>
+        <div class="sw" style="background:#75715e"><span>#75715e</span></div>
+        <div class="sw" style="background:#49483e"><span>#49483e</span></div>
+        <div class="sw" style="background:#3b3a32"><span>#3b3a32</span></div>
+        <div class="sw" style="background:#272822"><span>#272822</span></div>
+        <div class="sw" style="background:#a6e22e"><span>#a6e22e</span></div>
+        <div class="sw" style="background:#f92672"><span>#f92672</span></div>
+      </div>
+      <ul style="margin-top:26px">
+        <li><b>黄 #fdc61d</b> <i>仅用于：主按钮 / 焦点 / 当前项</i></li>
+        <li><b>绿 #a6e22e</b> <i>仅用于：可点文字链（忘记密码）</i></li>
+        <li><b>红 #f92672</b> <i>仅用于：错误</i></li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h3>间距 · 4px 基准栅格</h3>
+      <div class="ruler">
+        <i style="width:6px;height:4px"></i><i style="width:9px;height:8px"></i><i style="width:12px;height:12px"></i>
+        <i style="width:15px;height:16px"></i><i style="width:18px;height:20px"></i><i style="width:21px;height:24px"></i>
+        <i style="width:27px;height:32px"></i><i style="width:39px;height:40px"></i>
+      </div>
+      <ul style="margin-top:14px">
+        <li>4 / 8 / 12 / <b>16</b> / 20 / 24 / 32 / 40</li>
+        <li>标签→输入 <b>7px</b>（12 圆角视觉居中）</li>
+        <li>输入→输入 <b>16px</b>　输入→按钮 <b>22px</b></li>
+        <li>面板内边距 <b>30 / 34</b>（上左右）</li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h3>字号 · 5 级</h3>
+      <ul>
+        <li>17px <b>600</b> 标题　<i>letter-spacing .3px</i></li>
+        <li>14px 400 输入文字</li>
+        <li>15px 700 按钮</li>
+        <li>12px 400 标签 / 辅助　<i>#75715e</i></li>
+        <li>10px 400 英文 kicker　<i>mono, 字距 3px</i></li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h3>圆角与阴影层级</h3>
+      <ul>
+        <li>标题栏端 <b>8px</b>　输入 <b>9px</b>　按钮 <b>9px</b>　关闭热区 <b>8px</b></li>
+        <li>面板圆角 = 输入圆角 + 5px（同心）</li>
+        <li>阴影三层：<b>内高光</b> + <b>近距 2px</b> + <b>远景 32px</b></li>
+        <li>输入内阴影 <i>inset 0 1px 2px rgba(0,0,0,.45)</i></li>
+        <li>按钮投影 <i>0 6px 18px -8px rgba(253,198,29,.55)</i></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ 方案 1 ============ -->
+  <div class="plan">
+    <div class="bar"><span class="no">01</span><h2>玻璃层 · Monokai Glass</h2></div>
+    <p class="idea">面板做成暗玻璃：半透明 + 背景虚化，让背后的排行榜透出来，浮窗「浮」在页面上而不是「贴」在页面上。大圆角 14px、顶部 1px 内高光做玻璃棱边，黄按钮带渐变与光晕。</p>
+    <div class="cols">
+      <div class="stage">
+        <div class="shade" style="background:rgba(0,0,0,.34)"></div>
+        <div class="m1">
+          <div class="x">✕</div>
+          <div class="ttl">登录扫雷网</div>
+          <div class="sub">使用扫雷网账号继续</div>
+          <div class="rule"></div>
+          <div class="field">
+            <label>用户名</label>
+            <input type="text" placeholder="用户名或邮箱" value="wfkwfn">
+          </div>
+          <div class="field">
+            <label>密码</label>
+            <input type="password" placeholder="••••••••" value="12345678">
+          </div>
+          <button class="btn">登 录</button>
+          <div class="foot">
+            <a href="#">忘记密码？</a>
+            <a href="#" style="color:#75715e">注册新账号 →</a>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <h4>关键规格</h4>
+        <table>
+          <tr><td>面板</td><td>width 392 · radius 14 · padding 30/34</td></tr>
+          <tr><td>材质</td><td><code>backdrop-filter: blur(16px) saturate(1.15)</code>，底 <code>rgba(39,40,34,.82)</code></td></tr>
+          <tr><td>棱边</td><td>内高光 <code>inset 0 1px 0 rgba(248,248,242,.10)</code> + 内描边 <code>.07</code></td></tr>
+          <tr><td>阴影</td><td><code>0 32px 64px -16px rgba(0,0,0,.8)</code></td></tr>
+          <tr><td>输入</td><td>h 42 · radius 9 · 底 <code>rgba(0,0,0,.30)</code> · 描边 <code>.10</code></td></tr>
+          <tr><td>聚焦</td><td>描边黄 .9 + 焦点环 <code>0 0 0 3px rgba(253,198,29,.15)</code></td></tr>
+          <tr><td>按钮</td><td>h 44 · 渐变 <code>#ffd23e→#f0b70a</code> · 字距 1px · hover 上浮 1px</td></tr>
+          <tr><td>关闭</td><td>30×30 热区 · radius 8 · hover 浅底</td></tr>
+        </table>
+        <div class="why">理由：<em>玻璃是本方案唯一"高级感"的来源</em>——背景透出立刻消除"贴盒子"感；标签改小字置顶是为了在 392px 里给输入框更大呼吸空间；忘记密码与注册分列两侧，把低频操作移出视觉主线。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 方案 2 ============ -->
+  <div class="plan">
+    <div class="bar"><span class="no">02</span><h2>经典凹陷 · Classic Bevel</h2></div>
+    <p class="idea">从 MS 扫雷的经典窗口里偷语汇，用暗色复刻 90 年代 3D 凸凹边框：面板外凸、输入凹槽、按钮可按下。等宽字体，方角，站标两侧黄色针脚。最"老派"、最像 2008 版的血统。</p>
+    <div class="cols">
+      <div class="stage">
+        <div class="shade"></div>
+        <div class="m2">
+          <div class="head">登录扫雷网</div>
+          <div class="x">✕</div>
+          <div class="body">
+            <table>
+              <tr><td>用户名</td><td><input type="text" value="wfkwfn"></td></tr>
+              <tr><td>密码</td><td><input type="password" value="12345678"></td></tr>
+            </table>
+            <button class="btn">登 录</button>
+            <div class="foot">
+              <a href="#">忘记密码？</a>
+              <span>老用户首登需绑定微信 / QQ</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <h4>关键规格</h4>
+        <table>
+          <tr><td>面板</td><td>width 384 · radius 3 · 外凸双线 bevel</td></tr>
+          <tr><td>凸起</td><td><code>inset 1px 1px 0 #5d5b4e</code> / <code>inset -1px -1px 0 #191913</code></td></tr>
+          <tr><td>标题带</td><td>h 34 · 上浅下深渐变 · 字距 3px · 左右 6px 黄针脚</td></tr>
+          <tr><td>输入</td><td>h 30 · 方角 2 · 凹槽三层阴影 + 等宽字 13px</td></tr>
+          <tr><td>聚焦</td><td>凹槽外补 <code>0 0 0 1px #fdc61d</code>（不破坏凹陷感）</td></tr>
+          <tr><td>按钮</td><td>h 34 · 亮边左上 / 暗边右下 · 按下 bevel 反转 + 下沉 1px</td></tr>
+          <tr><td>关闭</td><td>18×18 方块按钮，同凸起语汇</td></tr>
+        </table>
+        <div class="why">理由：<em>与站点血统最一致</em>。凹陷面板天然解决"平面无层次"问题——立体感来自 bevel 而不是模糊。代价是小尺寸下 bevel 线条必须精确到 1px，且不适合移动端（触屏没有"按下"的物理隐喻）。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 方案 3 ============ -->
+  <div class="plan">
+    <div class="bar"><span class="no">03</span><h2>仪表派 · Instrument</h2></div>
+    <p class="idea">把扫雷的「计时器／仪表」符号搬进来：顶部一条状态条（等宽字母 + LED 指示灯），输入框做成仪表凹槽、带线性图标，聚焦时图标与描边同时变黄。整体像一台控制台，精确、冷静。</p>
+    <div class="cols">
+      <div class="stage">
+        <div class="shade"></div>
+        <div class="m3">
+          <div class="strip">
+            <span class="lbl">SAOLEI<b>·</b>WANG</span>
+            <span class="leds"><i class="on"></i><i class="y"></i><i></i></span>
+          </div>
+          <div class="x">✕</div>
+          <div class="body">
+            <h3>登录扫雷网</h3>
+            <div class="sub">MEMBER ACCESS</div>
+            <div class="slot">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke-width="1.6" stroke-linecap="round">
+                <circle cx="7" cy="4.6" r="2.6"/><path d="M2 12.4c0-2.6 2.2-4.2 5-4.2s5 1.6 5 4.2"/>
+              </svg>
+              <input type="text" value="wfkwfn">
+            </div>
+            <div class="slot">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke-width="1.6" stroke-linecap="round">
+                <rect x="2.6" y="6.2" width="8.8" height="6.2" rx="1.4"/><path d="M4.8 6.2V4.4a2.2 2.2 0 0 1 4.4 0v1.8"/>
+              </svg>
+              <input type="password" value="12345678">
+            </div>
+            <button class="btn">登 录 <span class="ar">▸</span></button>
+            <div class="foot">
+              <a href="#">忘记密码？</a>
+              <span>v2013 · MONOKAI</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <h4>关键规格</h4>
+        <table>
+          <tr><td>面板</td><td>width 376 · radius 8 · 底 #2c2c25（比现版深一档）</td></tr>
+          <tr><td>状态条</td><td>h 38 · 底 #26261f · 左下角圆角对齐面板 · LED 6px ×3</td></tr>
+          <tr><td>凹槽</td><td>h 40 · 底 #1f1f19 · 描边 #35342c · <code>inset 0 1px 3px</code></td></tr>
+          <tr><td>图标</td><td>14px 线性 · 默认 #75715e → 聚焦 #fdc61d（<code>:focus-within</code> 联动）</td></tr>
+          <tr><td>按钮</td><td>h 42 · hover 箭头右移 3px · 字距 2px</td></tr>
+          <tr><td>字号</td><td>输入 13px 等宽 / kicker 10px 字距 3px</td></tr>
+        </table>
+        <div class="why">理由：<em>图标 + 等宽字把"账号密码"变成"仪表读数"</em>，和扫雷的计时/计数气质同源。注意：等宽字在中文环境只影响英文数字，用户名若为中文需回退（用 <code>font-family: ui-monospace, "Microsoft YaHei"</code> 兜底）。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 方案 4 ============ -->
+  <div class="plan">
+    <div class="bar"><span class="no">04</span><h2>分栏站标 · Split</h2></div>
+    <p class="idea">上次这版丑在左栏太空、emoji 乱用。这版重做：左栏放几何雷标（八向爆射线 + 高光球，纯 SVG），右侧 1px 黄色渐隐竖线收边，表单区用「ACCOUNT LOGIN」小字 kicker 起手，宽度 500px。</p>
+    <div class="cols">
+      <div class="stage">
+        <div class="shade"></div>
+        <div class="m4">
+          <div class="x">✕</div>
+          <div class="side">
+            <svg width="46" height="46" viewBox="0 0 46 46">
+              <g stroke="#fdc61d" stroke-width="3.2" stroke-linecap="round" opacity=".9">
+                <line x1="23" y1="2.5" x2="23" y2="11"/><line x1="23" y1="35" x2="23" y2="43.5"/>
+                <line x1="2.5" y1="23" x2="11" y2="23"/><line x1="35" y1="23" x2="43.5" y2="23"/>
+                <line x1="8.5" y1="8.5" x2="14.5" y2="14.5"/><line x1="31.5" y1="31.5" x2="37.5" y2="37.5"/>
+                <line x1="37.5" y1="8.5" x2="31.5" y2="14.5"/><line x1="14.5" y1="31.5" x2="8.5" y2="37.5"/>
+              </g>
+              <circle cx="23" cy="23" r="9.6" fill="#fdc61d"/>
+              <circle cx="19.8" cy="19.8" r="2.6" fill="#fff6cf" opacity=".85"/>
+            </svg>
+            <div class="brand">扫雷网</div>
+            <div class="en">SPEED IS<br>EVERYTHING</div>
+          </div>
+          <div class="main">
+            <div class="kicker">ACCOUNT LOGIN</div>
+            <h3>登录扫雷网</h3>
+            <table>
+              <tr><td>用户名</td><td><input type="text" value="wfkwfn"></td></tr>
+              <tr><td>密码</td><td><input type="password" value="12345678"></td></tr>
+            </table>
+            <button class="btn">登 录</button>
+            <div class="foot">
+              <a href="#">忘记密码？</a>
+              <a href="#" class="reg">注册新账号 →</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <h4>关键规格</h4>
+        <table>
+          <tr><td>面板</td><td>width 500 · radius 12 · 左栏 148</td></tr>
+          <tr><td>左栏</td><td>底 #23231d · 雷标 46px SVG · 英文 9px 字距 2.4px</td></tr>
+          <tr><td>收边</td><td>1px 黄色上下渐隐线，<code>opacity .35</code></td></tr>
+          <tr><td>输入</td><td>h 38 · radius 7 · 描边 #4a483e（比现版提亮一档）</td></tr>
+          <tr><td>层级</td><td>kicker → 标题 → 表单 → 按钮，四段递进</td></tr>
+          <tr><td>关闭</td><td>28×28 热区，置于右栏上方留白区</td></tr>
+        </table>
+        <div class="why">理由：<em>把"登录"变成"入场"</em>，品牌感最强；但浮窗体积比其它三个大 30%，且是唯一改变浮窗形态的方案。<span style="color:#f92672">不涉及任何编造数据</span>——左栏只放站标与标语，不写纪录数字。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态规范 -->
+  <div class="states">
+    <h2>状态规范（以方案 01 的语汇为准，其余方案按各自材质平移）</h2>
+    <p class="intro">组件的"精致感"90% 来自状态齐全，而不是静态那一帧。</p>
+    <div class="sgrid">
+      <div class="sitem">
+        <div class="lbl">按钮 · 默认</div>
+        <div class="demo" style="background:none;border:0;padding:0"><button class="d-btn b-def" style="height:42px">登 录</button></div>
+        <div class="cap">渐变 + 内高光 + 黄光晕</div>
+      </div>
+      <div class="sitem">
+        <div class="lbl">按钮 · 悬停</div>
+        <div class="demo" style="background:none;border:0;padding:0"><button class="d-btn b-hov" style="height:42px">登 录</button></div>
+        <div class="cap">提亮 6% + 上浮 1px + 光晕加强</div>
+      </div>
+      <div class="sitem">
+        <div class="lbl">按钮 · 按下</div>
+        <div class="demo" style="background:none;border:0;padding:0"><button class="d-btn b-act" style="height:42px">登 录</button></div>
+        <div class="cap">压暗 + 下沉 1px + 内阴影</div>
+      </div>
+      <div class="sitem">
+        <div class="lbl">按钮 · 加载 / 禁用</div>
+        <div class="demo" style="background:none;border:0;padding:0">
+          <button class="d-btn b-def" style="height:42px;opacity:.75">登录中<span class="spin"></span></button>
+        </div>
+        <div class="cap">文案改「登录中…」+ 13px 转圈，宽度不变避免抖动</div>
+      </div>
+      <div class="sitem i-def">
+        <div class="lbl">输入 · 默认</div>
+        <input type="text" placeholder="用户名或邮箱">
+        <div class="cap">底 rgba(0,0,0,.30) · 描边 .10</div>
+      </div>
+      <div class="sitem i-foc">
+        <div class="lbl">输入 · 聚焦</div>
+        <input type="text" value="wfkwfn">
+        <div class="cap">描边黄 + 3px 焦点环（可访问性）</div>
+      </div>
+      <div class="sitem i-err">
+        <div class="lbl">输入 · 错误</div>
+        <input type="text" value="wfkwfn">
+        <div class="cap">红描边 + 红环 + 下方 12px 红字说明</div>
+      </div>
+      <div class="sitem">
+        <div class="lbl">错误提示行</div>
+        <div class="demo" style="justify-content:flex-start;background:#2c2c25;border-color:#3a2a2e">
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#f92672">
+            <i style="width:14px;height:14px;border-radius:50%;background:#f92672;color:#272822;font-size:10px;font-style:normal;font-weight:700;text-align:center;line-height:14px">!</i>
+            用户名或密码不正确
+          </span>
+        </div>
+        <div class="cap">图标 + 文字；不用红底块，避免噪音</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="final">
+    <h2>我的建议</h2>
+    <p>
+      首选 <em>方案 01 玻璃层</em>：它是唯一从根上解决"浮窗像贴上去的盒子"的方案，且改动成本低（只改 CSS，DOM 结构基本不动）。<br>
+      如果希望更贴站点血统，选 <em>方案 02 经典凹陷</em>，但建议按钮沿用 01 的渐变黄（bevel 黄按钮在暗色下偏脏）。<br>
+      <em>方案 03</em> 适合作为独立登录页（/account/login）的版本，浮窗里图标略挤。<br>
+      <em>方案 04</em> 适合放在首页首次进入的场景，日常登录略重。<br>
+      也可以混搭，例如「01 的材质 + 03 的输入图标」或「01 的输入 + 02 的标题带」，告诉我组合方式即可。
+    </p>
+  </div>
+
+</div>
+
+<template id="sitebg-template">
+  <div class="sitebg">
+    <div class="snav">
+      <span class="slogo">扫雷网</span>
+      <span class="slinks"><span class="on">排行榜</span><span>录像</span><span>论坛</span><span>统计</span><span>历程</span></span>
+      <span>登录 / 注册</span>
+    </div>
+    <div class="srow hd"><span>名次</span><span>军衔</span><span>用户名</span><span>初级</span><span>中级</span><span>高级</span><span>总和</span></div>
+    <div class="srow"><span class="rk">1</span><span>大元帅</span><span class="nm">Alpha</span><span class="tt">0.99</span><span class="tt">4.80</span><span class="tt">19.63</span><span class="tt">25.42</span></div>
+    <div class="srow"><span class="rk">2</span><span>大元帅</span><span class="nm">Bravo</span><span class="tt">1.12</span><span class="tt">5.31</span><span class="tt">21.08</span><span class="tt">27.51</span></div>
+    <div class="srow"><span class="rk">3</span><span>大元帅</span><span class="nm">Charlie</span><span class="tt">1.25</span><span class="tt">5.94</span><span class="tt">22.77</span><span class="tt">29.96</span></div>
+    <div class="srow"><span class="rk">4</span><span>元帅</span><span class="nm">Delta</span><span class="tt">1.38</span><span class="tt">6.42</span><span class="tt">24.15</span><span class="tt">31.95</span></div>
+    <div class="srow"><span class="rk">5</span><span>元帅</span><span class="nm">Echo</span><span class="tt">1.44</span><span class="tt">6.88</span><span class="tt">25.60</span><span class="tt">33.92</span></div>
+    <div class="srow"><span class="rk">6</span><span>元帅</span><span class="nm">Foxtrot</span><span class="tt">1.57</span><span class="tt">7.21</span><span class="tt">26.84</span><span class="tt">35.62</span></div>
+    <div class="srow"><span class="rk">7</span><span>大将</span><span class="nm">Golf</span><span class="tt">1.63</span><span class="tt">7.95</span><span class="tt">28.30</span><span class="tt">37.88</span></div>
+    <div class="srow"><span class="rk">8</span><span>大将</span><span class="nm">Hotel</span><span class="tt">1.78</span><span class="tt">8.44</span><span class="tt">29.71</span><span class="tt">39.93</span></div>
+    <div class="srow"><span class="rk">9</span><span>大将</span><span class="nm">India</span><span class="tt">1.86</span><span class="tt">9.02</span><span class="tt">31.46</span><span class="tt">42.34</span></div>
+    <div class="srow"><span class="rk">10</span><span>大将</span><span class="nm">Juliett</span><span class="tt">1.94</span><span class="tt">9.58</span><span class="tt">33.12</span><span class="tt">44.64</span></div>
+    <div class="srow"><span class="rk">11</span><span>大将</span><span class="nm">Kilo</span><span class="tt">2.06</span><span class="tt">10.31</span><span class="tt">34.88</span><span class="tt">47.25</span></div>
+    <div class="srow"><span class="rk">12</span><span>中将</span><span class="nm">Lima</span><span class="tt">2.19</span><span class="tt">11.07</span><span class="tt">36.52</span><span class="tt">49.78</span></div>
+  </div>
+</template>
+
+<script>
+  var tpl = document.getElementById('sitebg-template').innerHTML;
+  document.querySelectorAll('.stage').forEach(function (s) {
+    s.insertAdjacentHTML('afterbegin', tpl);
+  });
+</script>
+</body>
+</html>

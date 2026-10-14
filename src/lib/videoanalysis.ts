@@ -1,12 +1,10 @@
 // 录像详情页「录像分析」雷达取数：指标 → 分位/等级
 // 数据源 video_metrics（逐盘）+ video_metric_dist（分位基准），均由 scripts/video-metrics.ts 跑批产出。
-// 缺行兜底：指标缺 → 即时重放录像文件入库；基准段缺 → 回退到同级别同模式的全组行（bucket=-1）。
+// 缺行兜底：指标缺 → 补算（videometrics.ts，与审核后置钩子同一个幂等入口）；
+//           基准段缺 → 回退到同级别同模式的全组行（bucket=-1）。
 
-import { readFileSync } from "fs";
-import path from "path";
 import { prisma } from "./db";
 import {
-  analyzeVideo,
   bbbvBucket,
   formatMetric,
   gradeOf,
@@ -15,8 +13,7 @@ import {
   percentOf,
 } from "./videoradar";
 import type { MetricKey } from "./videoradar";
-
-const VIDEOS_ROOT = path.join(process.cwd(), "videos");
+import { ensureVideoMetrics } from "./videometrics";
 
 export interface VideoAnalysisPoint {
   key: MetricKey;
@@ -88,25 +85,6 @@ async function getBaseline(level: string, noflag: boolean, bbbv: number): Promis
   return { row: wide ?? null, fallback: true };
 }
 
-/** 指标缺行时即时重放（不到货号的历史录像、跑批未覆盖到的） */
-function computeOnDemand(input: VideoAnalysisInput) {
-  try {
-    const full = path.resolve(VIDEOS_ROOT, "." + input.filepath);
-    if (!full.startsWith(VIDEOS_ROOT + path.sep)) return null;
-    const buf = new Uint8Array(readFileSync(full));
-    const ext = input.filepath.split(".").pop()?.toLowerCase() ?? "";
-    return analyzeVideo(buf, ext, {
-      level: input.level,
-      noflag: input.noflag,
-      bbbvFallback: input.bbbv,
-      timeMs: input.realTime,
-      bbbv: input.bbbv,
-    });
-  } catch {
-    return null;
-  }
-}
-
 /**
  * 计算某盘录像的六维分析数据。
  * 返回 null 表示「没有可用基准」（跑批未产出该组），此时页面不渲染雷达盒。
@@ -118,35 +96,11 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
   try {
     let row = await prisma.videoMetrics.findUnique({ where: { id: BigInt(input.id) } });
     if (!row) {
-      const m = computeOnDemand(input);
-      if (!m) return null;
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      row = await prisma.videoMetrics.upsert({
-        where: { id: BigInt(input.id) },
-        create: {
-          id: BigInt(input.id),
-          level: m.level,
-          noflag: m.noflag,
-          realTime: m.timeMs,
-          bbbv: m.bbbv,
-          cl: m.cl,
-          clLeft: m.clLeft,
-          clRight: m.clRight,
-          clDouble: m.clDouble,
-          ce: m.ce,
-          unflag: m.unflag,
-          path: m.path,
-          bvs: m.bvs,
-          ioe: m.ioe,
-          corr: m.corr,
-          cls: m.cls,
-          ppc: m.ppc,
-          stnb: m.stnb,
-          createTime: now,
-        },
-        update: {},
-      });
+      // 缺行自愈：与审核后置钩子共用同一个幂等写入口，补完再读一遍
+      await ensureVideoMetrics(input.id);
+      row = await prisma.videoMetrics.findUnique({ where: { id: BigInt(input.id) } });
     }
+    if (!row) return null;
 
     const { row: baseline } = await getBaseline(input.level, input.noflag, row.bbbv || input.bbbv);
     if (!baseline) return null;

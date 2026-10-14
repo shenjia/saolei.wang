@@ -20,7 +20,8 @@ interface MvfEvent {
 
 class Reader {
   pos = 0;
-  constructor(private buf: Buffer) {}
+  // Uint8Array 即可（Buffer 是其子类）：上传页浏览器端复用本解析器做级别预判
+  constructor(private buf: Uint8Array) {}
   u8(): number {
     if (this.pos >= this.buf.length) throw new MvfParseError("Unexpected end of file");
     return this.buf[this.pos++];
@@ -80,7 +81,7 @@ class MvfParser {
   private version = "";
   private video: MvfEvent[] = [];
 
-  constructor(buf: Buffer) {
+  constructor(buf: Uint8Array) {
     this.r = new Reader(buf);
   }
 
@@ -448,7 +449,7 @@ class MvfParser {
 }
 
 /** 解析 MVF 文件为 RawVF 文本行；失败抛 MvfParseError，无法识别版本返回 null */
-export function mvfToRawvf(buf: Buffer): string[] | null {
+export function mvfToRawvf(buf: Uint8Array): string[] | null {
   const parser = new MvfParser(buf);
   if (!parser.parse()) return null;
   return parser.toRawvfLines();

@@ -47,10 +47,13 @@ export function MessageRow({ m }: { m: MessageItem }) {
 }
 
 export function MessageFeed({
+  type = "all",
   initial,
   initialHasMore,
   total: initialTotal,
 }: {
+  /** 类型筛选（2026-10-14）：加载更多按同一口径翻页；key=筛选串由页面侧强制重挂载 */
+  type?: "all" | "system" | "private";
   initial: MessageItem[];
   initialHasMore: boolean;
   total: number;
@@ -71,6 +74,7 @@ export function MessageFeed({
     setLoading(true);
     try {
       const qs = new URLSearchParams({ action: "more", page: String(Math.floor(items.length / PAGE_SIZE) + 1) });
+      if (type !== "all") qs.set("type", type);
       const res = await fetch(`/api/message?${qs}`);
       const data = (await res.json()) as { messages: MessageItem[]; hasMore: boolean; total: number };
       setItems((prev) => [...prev, ...data.messages]);

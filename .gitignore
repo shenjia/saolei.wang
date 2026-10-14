@@ -16,6 +16,12 @@
 # next.js
 /.next/
 /out/
+# 蓝绿部署双槽构建产物（next.config.ts distDir 走 NEXT_DIST_DIR，各 6G 级）
+/.next-blue/
+/.next-green/
+
+# python 缓存（scripts/sync 等）
+__pycache__/
 
 # production
 /build

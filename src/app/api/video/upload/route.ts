@@ -11,6 +11,7 @@ import { getSession } from "@/lib/auth";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvf } from "@/lib/mvf";
 import { formatRawvf } from "@/lib/rawvf";
+import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
@@ -55,6 +56,11 @@ export async function POST(req: Request) {
   const parsed = formatRawvf(lines);
 
   if (parsed.version === "<=0.96") return fail("软件版本过低");
+  /* 在线玩生成的录像拒绝上传（2026-10-14 五期）：avfwrite 在 Program 字段写入
+     ONLINE_PROGRAM_MARKER 标识，命中即拒——在线玩是纯前端娱乐局，成绩不入排行 */
+  if (parsed.program.includes(ONLINE_PROGRAM_MARKER)) {
+    return fail("在线玩的录像不能上传（成绩不计入排行）");
+  }
   if (!(parsed.level in LEVEL_MIN_3BV)) return fail("只支持初级/中级/高级录像");
   if (parsed.mode !== "classic") return fail("只支持经典模式录像");
   if (parsed.solved3bv !== null && parsed.solved3bv < (parsed.bbbv ?? 0)) {

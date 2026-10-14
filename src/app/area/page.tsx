@@ -3,7 +3,6 @@
 // 2026-10-13 张老师要求：榜单加交互式中国地图（见 components/AreaMap.tsx），地图放在排行最底部；
 //                       并把「平均排行」列换成「活跃人数」（近 30 天登录人数）
 
-import Link from "next/link";
 import { getAreaRanking, getRankingTable, getRankOfUsers } from "@/lib/queries";
 import { title as assessTitle } from "@/lib/assess";
 import { parseRankingBy, areaDisplay, parseAreaOrder } from "@/lib/config";
@@ -12,8 +11,8 @@ import { prisma } from "@/lib/db";
 import { AreaRanking } from "@/components/AreaRanking";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingTable } from "@/components/RankingTable";
-import { OldPager } from "@/components/OldPager";
 import { RankingRules } from "@/components/RankingRules";
+import { OldPager } from "@/components/OldPager";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +49,18 @@ const AREA_INNER_RULES = [
     <b>地区归属</b>：按注册资料中的地区统计；修改地区资料后实时生效。
   </>,
 ];
-export const metadata = { title: "地区排行 | 扫雷网" };
+
+// 2026-10-14 张老师要求：带地区参数时 title 为「xx地区排行」（如「福建地区排行」）
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const area = (sp.name ?? "").trim();
+  const name = area ? `${areaDisplay(area)}地区排行` : "地区排行";
+  return { title: `${name} | 扫雷网` };
+}
 
 export default async function AreaPage({
   searchParams,
@@ -96,11 +106,7 @@ export default async function AreaPage({
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           <div className="page_head">
-            <h1 className="page_title">
-              <Link href="/area">地区排行</Link>
-              <span className="sep">›</span>
-              {areaDisplay(area)}
-            </h1>
+            <h1 className="page_title">{areaDisplay(area)}地区排行</h1>
             <RankingNav current="area" by={by} area={area} me={me} />
           </div>
           <RankingTable rows={rows} by={by} base="/area" params={{ name: area }} hlUid={hl} />

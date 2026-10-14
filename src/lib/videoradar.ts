@@ -198,65 +198,127 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
     });
   }
 
-  for (let k = 0; k < evs.length; k++) {
-    const e = evs[k];
+  // ⚠️ 2026-10-14 修正（张老师查 328090 这条世界纪录录像时揪出来的）：
+  // 一次「点击」在**松开**时才判定命中格，按下(lc/rc)与松开(lr/rr)常常落在不同格——
+  // 甩鼠标是高手常态（实测这条录像前 12 个操作里有 8 次按下/松开不同格）。
+  // 旧版以按下坐标为准，等于把一次点击记到隔壁格，最典型的症状是「已过审的胜局里还原出左键踩雷」
+  // 这种不可能事件：体检 400 条有 278 条中招（avf 62%、mvf 50%），Ce / Corr / Path 三项全面失真。
+  // 改成 press↔release 配对后同口径体检「踩雷=0」占比由 38% 升到 92%（见 topics/sync.md）。
+  type Ev = { ts: number; ev: string; x: number; y: number; px: number; py: number };
+  const inb = (e: Ev) => e.x >= 0 && e.y >= 0 && e.x < W && e.y < H;
+  const idx = (e: Ev) => e.y * W + e.x;
+
+  // 左键落在某格：已开→单键 chord（计 Double）／旗格→无效 Double／未开→开格
+  const leftClick = (r: Ev) => {
+    if (!inb(r)) return;
+    const i = idx(r);
+    if (state[i] === 1) {
+      counted(() => {
+        clDouble++;
+        chord(i);
+      });
+    } else if (state[i] === 2) {
+      clDouble++; // 左键落在旗格：无效果，Clone 同样计 Double
+    } else {
+      clLeft++;
+      counted(() => flood(i));
+    }
+  };
+  // 右键落在某格：未开→插旗／已旗→拔旗（拔旗另记 unflag）／已开→无事
+  const rightClick = (r: Ev) => {
+    if (!inb(r)) return;
+    const i = idx(r);
+    if (state[i] === 0) {
+      clRight++;
+      counted(() => {
+        state[i] = 2;
+        flagToggles++;
+      });
+    } else if (state[i] === 2) {
+      unflag++;
+      counted(() => {
+        state[i] = 0;
+        flagToggles++;
+      });
+    }
+  };
+  const chordAt = (e: Ev) => {
+    if (!inb(e)) return;
+    counted(() => {
+      clDouble++;
+      chord(idx(e));
+    });
+  };
+
+  let pendL: Ev | null = null;
+  let pendR: Ev | null = null;
+  for (const e of evs) {
     // 鼠标行程：所有带像素坐标的事件按时间序累加欧氏距离
     if (e.px !== 0 || e.py !== 0) {
       if (lastX !== null && lastY !== null) pathPx += Math.hypot(e.px - lastX, e.py - lastY);
       lastX = e.px;
       lastY = e.py;
     }
-    if (e.x < 0 || e.y < 0 || e.x >= W || e.y >= H) continue;
-    const i = e.y * W + e.x;
     if (e.ev === "lc") {
-      const nxt = evs[k + 1];
-      const twinRc =
-        nxt && nxt.ev === "rc" && nxt.x === e.x && nxt.y === e.y && nxt.ts - e.ts <= 0.05;
-      if (twinRc && state[i] === 0) {
-        // 双键 chord：配对的 rc 不插旗（Clone 的手势层判定）
-        counted(() => {
-          clDouble++;
-          chord(i);
-        });
-        k++;
-        continue;
-      }
-      if (state[i] === 1) {
-        counted(() => {
-          clDouble++;
-          chord(i);
-        });
-      } else if (state[i] === 2) {
-        clDouble++; // 左键落在旗格：无效果，Clone 同样计 Double
-      } else {
-        clLeft++;
-        counted(() => flood(i));
+      // 残缺录像：上一次按下没记录到松开就又要按下，先按按下坐标补记，免得整次操作丢失
+      if (pendL) leftClick(pendL);
+      pendL = e;
+    } else if (e.ev === "lr") {
+      if (pendL) {
+        leftClick(e); // ← 命中格取「松开」位置
+        pendL = null;
       }
     } else if (e.ev === "rc") {
-      if (state[i] === 0) {
-        clRight++;
-        counted(() => {
-          state[i] = 2;
-          flagToggles++;
-        });
-      } else if (state[i] === 2) {
-        unflag++;
-        counted(() => {
-          state[i] = 0;
-          flagToggles++;
-        });
+      if (pendL) {
+        // 双键 chord：左右键同时按下即刻生效（不等松开），这次 rc 不插旗
+        chordAt(e);
+        pendL = null;
+        pendR = null; // 随后的 lr/rr 属同一次手势，不再单独成操作
+      } else {
+        if (pendR) rightClick(pendR);
+        pendR = e;
+      }
+    } else if (e.ev === "rr") {
+      if (pendR) {
+        rightClick(e); // ← 命中格取「松开」位置
+        pendR = null;
       }
     } else if (e.ev === "sc" || e.ev === "mc") {
-      counted(() => {
-        clDouble++;
-        chord(i);
-      });
+      chordAt(e);
     }
   }
+  // 尾部兜底：录像在按下后直接结束（没记录松开）——按按下坐标补记，避免丢操作
+  if (pendL) leftClick(pendL);
+  if (pendR) rightClick(pendR);
 
   let flags = 0;
   for (let i = 0; i < N; i++) if (state[i] === 2) flags++;
   return { width: W, height: H, mines: v.mines, clLeft, clRight, clDouble, ce, unflag, pathPx, flags };
+}
+
+/**
+ * 综合评分 STNB —— **纯函数，只需要 level / 3BV / 用时，不需要录像文件**。
+ *
+ * 这是它有别于其余五维的关键：服务端只需要 video_info 的 board_3bv、real_time 就能算，
+ * 用于两种场景：
+ *   ① 录像实体文件缺失的历史录像（跑批实测全站约 286/305,759 条）也能拿到综合排名；
+ *   ② 将来若要脱离重放做「纯 SQL 全站榜」，可以直接在 SQL 里实现这个公式。
+ *
+ * 注意：虽然名叫「综合」，但它只由时间与 3BV 构成（CL / Ce / 鼠标路径一概不参与），
+ * 与「速度」轴是同一份信息的两种折算。要真正融合六维需在此之上另行加权。
+ *
+ * @param solved 已解 3BV（胜局恒等于该盘 3BV，见上方「胜局口径」注记）
+ */
+export function stnbOf(level: string, solved: number, timeMs: number): number {
+  if (!Number.isFinite(solved) || !Number.isFinite(timeMs)) return 0;
+  if (solved <= 0) return 0;
+  const t = timeMs / 1000;
+  // 用时有下界才计算速度类指标（qg 在 t→0 时爆掉）。
+  // 下界取 0.01s 而非更保守的值：站内确实有 1534 盘 3BV=2 的极短局（最快 0.09s），是有效成绩
+  if (t < 0.01) return 0;
+  const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
+  const qg = Math.pow(t, 1.7) / solved;
+  return Math.round(((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * 10) / 10;
 }
 
 /**
@@ -288,13 +350,11 @@ export function analyzeVideo(
   // 胜局口径：solved3bv = 3BV（见文件头注记）
   const solved = bbbv;
   const level = opts?.level ?? v.level;
-  const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
   const path = Math.round(c.pathPx / CELL_PX);
   // 用时有下界才计算速度类指标（qg 在 t→0 时爆掉）。
   // 下界取 0.01s 而非更保守的值：站内确实有 1534 盘 3BV=2 的极短局（最快 0.09s），是有效成绩
   const valid = solved > 0 && t >= 0.01;
-  const qg = valid ? Math.pow(t, 1.7) / solved : 0;
-  const stnb = valid ? (((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * Math.sqrt(solved / bbbv)) : 0;
+  const stnb = stnbOf(level, solved, timeMs);
   return {
     level,
     noflag: opts?.noflag ?? v.noflag,

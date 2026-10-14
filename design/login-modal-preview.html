@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录浮窗版式选型 · 5 方案</title>
+<style>
+  /* 仅用 2013 Monokai 现有色板，零新色：
+     #272822 输入底 / #3b3a32 面板底 / #49483e 分隔线 / #656355 边框
+     #b1b1a4 标签 / #75715e 弱文字 / #f8f8f2 主文字 / #fdc61d 黄 / #a6e22e 绿 / #f92672 红 */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #e8e8e2;
+    padding: 32px 24px 64px;
+    color: #333;
+  }
+  h1.page { font-size: 22px; margin-bottom: 6px; }
+  p.page-note { font-size: 13px; color: #777; margin-bottom: 32px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+    gap: 36px 28px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .cell { display: flex; flex-direction: column; gap: 10px; }
+  .cell.wide { grid-column: 1 / -1; }
+  .meta { padding: 0 4px; }
+  .meta .tag {
+    display: inline-block;
+    background: #333;
+    color: #fdc61d;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 3px 10px;
+    border-radius: 3px;
+    margin-right: 8px;
+  }
+  .meta .name { font-size: 15px; font-weight: bold; margin-right: 10px; }
+  .meta .desc { font-size: 13px; color: #666; margin-top: 4px; line-height: 1.6; }
+  /* 模拟浮窗环境：暗色遮罩上摆面板 */
+  .stage {
+    background:
+      linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)),
+      repeating-linear-gradient(0deg, #3e3e36 0 27px, #35352e 27px 28px);
+    border-radius: 6px;
+    padding: 34px 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 320px;
+  }
+  .stage.wide-stage { min-height: 300px; }
+
+  /* ============ 通用面板要素（与线上 globals.css 同源） ============ */
+  .modal {
+    position: relative;
+    background: #3b3a32;
+    border: 1px solid #656355;
+    border-radius: 6px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.6);
+    color: #f8f8f2;
+    font-size: 14px;
+  }
+  .modal .close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 20px;
+    line-height: 1;
+    color: #75715e;
+    cursor: pointer;
+  }
+  .modal .close:hover { color: #f8f8f2; }
+  .modal input[type="text"],
+  .modal input[type="password"] {
+    padding: 7px 9px;
+    border: 1px solid #656355;
+    border-radius: 3px;
+    font-size: 14px;
+    background: #272822;
+    color: #f8f8f2;
+    outline: none;
+    width: 100%;
+  }
+  .modal input:focus { border-color: #fdc61d; }
+  .btn {
+    display: inline-block;
+    border: 0;
+    border-radius: 4px;
+    background: #fdc61d;
+    color: #333;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    font-family: inherit;
+  }
+  .btn:hover { background: #ffd23e; }
+  .hint { font-size: 12px; color: #75715e; }
+  .hint a { color: #a6e22e; text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+
+  /* ============ 方案 A：现版精修 ============ */
+  .va { width: 420px; padding: 24px 32px 26px; }
+  .va h3 {
+    font-size: 18px;
+    margin-bottom: 6px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #49483e;
+  }
+  .va h3 i {
+    display: inline-block;
+    width: 4px; height: 16px;
+    background: #fdc61d;
+    border-radius: 2px;
+    margin-right: 9px;
+    vertical-align: -2px;
+  }
+  .va table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .va td { padding: 7px 4px; font-size: 14px; color: #b1b1a4; }
+  .va td:first-child { width: 64px; text-align: right; padding-right: 12px; white-space: nowrap; }
+  .va .btn { width: 100%; padding: 9px 0; margin-top: 18px; }
+  .va .foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+  /* ============ 方案 B：居中纵排 ============ */
+  .vb { width: 360px; padding: 28px 40px 26px; text-align: center; }
+  .vb h3 { font-size: 18px; margin-bottom: 22px; }
+  .vb .field { margin-bottom: 16px; text-align: left; }
+  .vb .field label {
+    display: block;
+    font-size: 12px;
+    color: #75715e;
+    margin-bottom: 5px;
+    letter-spacing: 1px;
+  }
+  .vb .btn { width: 100%; padding: 9px 0; margin-top: 8px; }
+  .vb .foot { margin-top: 14px; }
+
+  /* ============ 方案 C：黄色顶带 ============ */
+  .vc { width: 420px; overflow: hidden; }
+  .vc .head {
+    background: #fdc61d;
+    color: #333;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 11px 32px;
+  }
+  .vc .body { padding: 20px 32px 24px; }
+  .vc table { width: 100%; border-collapse: collapse; }
+  .vc td { padding: 7px 4px; font-size: 14px; color: #b1b1a4; }
+  .vc td:first-child { width: 64px; text-align: right; padding-right: 12px; white-space: nowrap; }
+  .vc .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 18px;
+  }
+  .vc .btn { padding: 9px 44px; }
+
+  /* ============ 方案 D：下划线极简 ============ */
+  .vd { width: 400px; padding: 26px 36px 24px; background: #32312a; }
+  .vd h3 { font-size: 18px; margin-bottom: 4px; }
+  .vd .sub { font-size: 12px; color: #75715e; margin-bottom: 24px; }
+  .vd .field { margin-bottom: 20px; }
+  .vd .field label {
+    display: block;
+    font-size: 12px;
+    color: #75715e;
+    margin-bottom: 2px;
+  }
+  .vd input[type="text"], .vd input[type="password"] {
+    border: 0;
+    border-bottom: 1px solid #656355;
+    border-radius: 0;
+    background: transparent;
+    padding: 6px 1px;
+  }
+  .vd input:focus { border-bottom-color: #fdc61d; }
+  .vd .row { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
+  .vd .btn { padding: 9px 42px; }
+
+  /* ============ 方案 E：左侧品牌竖栏（宽版） ============ */
+  .ve { width: 560px; display: flex; overflow: hidden; }
+  .ve .side {
+    flex: 0 0 150px;
+    background: #272822;
+    border-right: 1px solid #49483e;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    padding: 24px 12px;
+    text-align: center;
+  }
+  .ve .side .logo {
+    width: 52px; height: 52px;
+    background: #fdc61d;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px;
+    color: #333;
+  }
+  .ve .side .site { font-size: 15px; font-weight: bold; color: #f8f8f2; }
+  .ve .side .slogan { font-size: 11px; color: #75715e; line-height: 1.7; }
+  .ve .main { flex: 1; padding: 26px 34px 24px; position: relative; }
+  .ve h3 { font-size: 18px; margin-bottom: 14px; }
+  .ve table { width: 100%; border-collapse: collapse; }
+  .ve td { padding: 7px 4px; font-size: 14px; color: #b1b1a4; }
+  .ve td:first-child { width: 56px; text-align: right; padding-right: 12px; white-space: nowrap; }
+  .ve .btn { width: 100%; padding: 9px 0; margin-top: 16px; }
+  .ve .foot { display: flex; justify-content: space-between; margin-top: 12px; }
+  .ve .foot .hint a { color: #a6e22e; }
+  .ve .foot .reg a { color: #fdc61d; font-size: 12px; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<h1 class="page">登录浮窗版式选型</h1>
+<p class="page-note">全部沿用 2013 Monokai 现有色板（零新色），仅排版差异。浮窗宽度 / 圆角 / 阴影与线上一致。选好后告诉我方案字母即可。</p>
+
+<div class="grid">
+
+  <!-- 方案 A -->
+  <div class="cell">
+    <div class="meta">
+      <span class="tag">方案 A</span><span class="name">现版精修</span>
+      <div class="desc">保持现有「左标签右输入」结构，只做精修：标题下加黄色装饰短杠 + 分隔线，按钮拉通全宽，「忘记密码」右对齐收尾。改动最小，与旧版页面气质最接近。</div>
+    </div>
+    <div class="stage">
+      <div class="modal va">
+        <span class="close">×</span>
+        <h3><i></i>登录扫雷网</h3>
+        <table>
+          <tr><td>用户名</td><td><input type="text"></td></tr>
+          <tr><td>密码</td><td><input type="password"></td></tr>
+        </table>
+        <button class="btn">登录</button>
+        <div class="foot hint"><a href="#">忘记密码？</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 B -->
+  <div class="cell">
+    <div class="meta">
+      <span class="tag">方案 B</span><span class="name">居中纵排</span>
+      <div class="desc">标题与表单全部居中收窄（360px），标签改到输入框上方小字灰，层次更清爽；全宽黄色大按钮，重点突出。与扫码 tab 的居中排版天然统一。</div>
+    </div>
+    <div class="stage">
+      <div class="modal vb">
+        <span class="close">×</span>
+        <h3>登录扫雷网</h3>
+        <div class="field">
+          <label>用户名</label>
+          <input type="text">
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input type="password">
+        </div>
+        <button class="btn">登录</button>
+        <div class="foot hint"><a href="#">忘记密码？</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 C -->
+  <div class="cell">
+    <div class="meta">
+      <span class="tag">方案 C</span><span class="name">黄色顶带</span>
+      <div class="desc">标题做成通栏黄色标题带（深色字），最有老式论坛/软件面板的味道，和 2008/2013 老站的标题条一脉相承；底部「登录」与「忘记密码」同行左右分布。</div>
+    </div>
+    <div class="stage">
+      <div class="modal vc">
+        <span class="close">×</span>
+        <div class="head">登录扫雷网</div>
+        <div class="body">
+          <table>
+            <tr><td>用户名</td><td><input type="text"></td></tr>
+            <tr><td>密码</td><td><input type="password"></td></tr>
+          </table>
+          <div class="row">
+            <button class="btn">登录</button>
+            <span class="hint"><a href="#">忘记密码？</a></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 D -->
+  <div class="cell">
+    <div class="meta">
+      <span class="tag">方案 D</span><span class="name">下划线极简</span>
+      <div class="desc">去掉输入框边框，改用下划线式输入（聚焦变黄），面板底色压深一档、标签改小字置顶。整体最轻盈、最「现代 Monokai」，但离老站样式稍远一点。</div>
+    </div>
+    <div class="stage">
+      <div class="modal vd">
+        <span class="close">×</span>
+        <h3>登录扫雷网</h3>
+        <div class="sub">使用扫雷网账号登录</div>
+        <div class="field">
+          <label>用户名</label>
+          <input type="text">
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input type="password">
+        </div>
+        <div class="row">
+          <button class="btn">登录</button>
+          <span class="hint"><a href="#">忘记密码？</a></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 E（宽版） -->
+  <div class="cell wide">
+    <div class="meta">
+      <span class="tag">方案 E</span><span class="name">左侧品牌竖栏</span>
+      <div class="desc">加宽到 560px，左侧深色竖栏放站标 + 「SPEED IS EVERYTHING」标语，右侧表单；底部补「注册新账号」入口。信息最全、品牌感最强，但浮窗变大，且是五个方案里唯一改变浮窗形态的。</div>
+    </div>
+    <div class="stage wide-stage">
+      <div class="modal ve">
+        <span class="close" style="color:#f8f8f2;opacity:.6">×</span>
+        <div class="side">
+          <div class="logo">💣</div>
+          <div class="site">扫雷网</div>
+          <div class="slogan">SAOLEI.WANG<br>SPEED IS<br>EVERYTHING</div>
+        </div>
+        <div class="main">
+          <h3>登录扫雷网</h3>
+          <table>
+            <tr><td>用户名</td><td><input type="text"></td></tr>
+            <tr><td>密码</td><td><input type="password"></td></tr>
+          </table>
+          <button class="btn">登录</button>
+          <div class="foot">
+            <span class="hint"><a href="#">忘记密码？</a></span>
+            <span class="reg"><a href="#">注册新账号 →</a></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

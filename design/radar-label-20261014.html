@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>雷达图标签字号 · 档位高保真稿（2026-10-14）</title>
+<style>
+  body { background:#272822; margin:0; padding:28px 32px 60px; font-family:"微软雅黑",Arial,"宋体",sans-serif; color:#b1b1a4; }
+  h1 { font-size:19px; color:#f8f8f2; margin:0 0 6px; font-weight:normal; }
+  .note { font-size:13px; line-height:23px; color:#75715e; margin:0 0 22px; }
+  .note b { color:#b1b1a4; font-weight:normal; }
+  .note em { color:#a6e22e; font-style:normal; }
+  h3 { font-size:15px; color:#a6e22e; font-weight:normal; margin:26px 0 12px; border-bottom:1px solid #49483e; padding-bottom:6px; }
+  .row { display:flex; flex-wrap:wrap; gap:26px; }
+  .col { width:272px; }
+  /* 与线上盒几何一致：盒内容 210（padding 30），雷达 234 出血（margin -12），overflow visible */
+  .box { box-sizing:content-box; width:210px; padding:16px 30px 26px; background:#33322b; border-radius:8px; }
+  .box h2 { margin:0 0 15px; color:#b1b1a4; font-size:20px; line-height:30px; text-shadow:0 2px 2px rgba(0,0,0,.25); font-weight:bold; }
+  .radar_wrap { position:relative; width:234px; margin:0 -12px; }
+  .radar_wrap svg { display:block; width:100%; height:auto; overflow:visible; }
+  .cap { color:#939387; font-size:12.5px; line-height:20px; margin-top:12px; }
+  .cap b { color:#f8f8f2; font-weight:normal; }
+  .cap em { color:#a6e22e; font-style:normal; }
+  /* hover 气泡（新形态：单行 / 字号 = 标签名） */
+  .vr_tip { position:absolute; z-index:20; padding:4px 9px; background:#1e1f1c; border:1px solid #49483e;
+            border-radius:3px; color:#b1b1a4; line-height:1.5; text-align:center; white-space:nowrap;
+            pointer-events:none; box-shadow:0 2px 8px rgba(0,0,0,.45); }
+  .vr_tip em { color:#f8f8f2; font-weight:bold; font-style:normal; }
+  #measure { font-size:12px; color:#75715e; white-space:pre; line-height:19px; margin-top:30px; }
+</style>
+</head>
+<body>
+  <h1>雷达图标签字号 · 档位对比（2026-10-14）</h1>
+  <p class="note">
+    A = 现状（等级 13 / 名称 8）；B/C/D 为加大档（等级 +2/+3/+4，名称 +2/+3/+4）。<br>
+    左「实力」8 维＝用户卡片/用户主页右栏；右「录像分析」6 维＝录像详情页右栏，并演示新 hover 气泡：<b>锚在标签名下方、只显示一行、字号与标签名一致</b>。<br>
+    盒几何与线上一致（盒内容 210、雷达 234 出血），标签略微出血已放开（<b>overflow:visible</b>），出血量见页脚测量表。
+  </p>
+  <div id="root"></div>
+  <div id="measure"></div>
+
+<script>
+const SIZE=222, CENTER=111, RADIUS=68, RINGS=[15,35,50,60,70,80,90,100];
+const GC={SSS:"#E6DB74",SS:"#E6DB74",S:"#E6DB74",A:"#ff0080",B:"#df00a6",C:"#bf00cc",D:"#a000e5",E:"#8000ff",F:"#6600cc"};
+const UNK="#636359";
+const gradeColor = g => GC[g.replace(/[+-]$/,"")] ?? UNK;
+const f = v => Math.round(v*100)/100;
+const polar=(i,n,r)=>{const a=Math.PI*2*i/n-Math.PI/2;return [f(CENTER+r*Math.cos(a)),f(CENTER+r*Math.sin(a))];};
+const poly=(n,r)=>Array.from({length:n},(_,i)=>polar(i,n,r).join(",")).join(" ");
+function wedge(i,n){const st=Math.PI*2/n,a0=Math.PI*2*i/n-Math.PI/2-st/2,a1=a0+st,r=SIZE;
+  return `M ${CENTER} ${CENTER} L ${f(CENTER+r*Math.cos(a0))} ${f(CENTER+r*Math.sin(a0))} A ${r} ${r} 0 0 1 ${f(CENTER+r*Math.cos(a1))} ${f(CENTER+r*Math.sin(a1))} Z`;}
+
+// 样本数据 [名称, 等级, 百分位]
+const D8=[["总计时间","A+",82],["高级时间","A",75],["中级时间","S-",79],["初级时间","A+",86],
+          ["总计3BV/s","S-",78],["高级3BV/s","A",71],["中级3BV/s","S-",77],["初级3BV/s","SS-",89]];
+const D6=[["综合","A+",78],["速度","A",75],["效率","S-",79],["精准","A+",86],["手速","A",71],["移动","S-",77]];
+const TIP6=["STNB 87.0","4.065 3BV/s","IOE 1.013","Corr 0.842","3.77 次/秒","2.31 格/次"];
+const D8_SCORE=["55.42","44.21","10.50","0.71","14.432","3.770","4.397","6.265"];
+
+const VARIANTS=[
+  {id:"A",label:"A 现状",gradeFs:13,nameFs:8,labelRadius:88,nameDy:13},
+  {id:"B",label:"B 加大一档（推荐）",gradeFs:15,nameFs:10,labelRadius:88,nameDy:15},
+  {id:"C",label:"C 加大两档",gradeFs:16,nameFs:11,labelRadius:88,nameDy:16},
+  {id:"D",label:"D 加大三档",gradeFs:17,nameFs:12,labelRadius:88,nameDy:17},
+];
+
+function svgRadar(data,hover,v){
+  const n=data.length;
+  const pts=data.map((d,i)=>polar(i,n,d[2]/100*RADIUS));
+  let s=`<svg viewBox="0 0 ${SIZE} ${SIZE}" data-variant="${v.id}" role="img">`;
+  for(const p of RINGS) s+=`<polygon points="${poly(n,p/100*RADIUS)}" fill="none" stroke="${p===100?"#6a685c":"#565549"}" stroke-width="${p===100?1.2:0.7}"/>`;
+  data.forEach((_,i)=>{const [x,y]=polar(i,n,RADIUS); s+=`<line x1="${CENTER}" y1="${CENTER}" x2="${x}" y2="${y}" stroke="#565549" stroke-width="0.7"/>`;});
+  s+=`<polygon points="${pts.map(p=>p.join(",")).join(" ")}" fill="rgba(102,217,239,0.18)" stroke="#66d9ef" stroke-width="1.5" stroke-linejoin="round"/>`;
+  data.forEach((d,i)=>{
+    const active=i===hover, [x,y]=pts[i], [lx,ly]=polar(i,n,v.labelRadius);
+    s+=`<g style="cursor:pointer">`;
+    s+=`<path d="${wedge(i,n)}" fill="transparent" pointer-events="all"/>`;
+    s+=`<circle cx="${x}" cy="${y}" r="${active?4:2.5}" fill="${active?"#9cecff":"#66d9ef"}" ${active?'style="filter:drop-shadow(0 0 4px #66d9ef)"':""}/>`;
+    s+=`<text data-label-i="${i}" x="${lx}" y="${ly-3}" text-anchor="middle" style="${active?"transform-box:fill-box;transform-origin:center;transform:scale(1.25);":""}">`+
+       `<tspan fill="${gradeColor(d[1])}" font-size="${v.gradeFs}" font-weight="bold">${d[1]}</tspan>`+
+       `<tspan x="${lx}" dy="${v.nameDy}" fill="${active?"#a6e22e":"#8a8878"}" font-size="${v.nameFs}">${d[0]}</tspan></text>`;
+    s+=`</g>`;
+  });
+  return s+"</svg>";
+}
+
+function render(v, kind){
+  const data = kind==="8" ? D8 : D6;
+  const hover = kind==="8" ? 2 : 0;                 // 8 维演示「中级时间」（右侧水平轴）；6 维演示顶部「综合」
+  const tipText = kind==="8" ? `1.23 秒，超越 ${data[hover][2]}% 的玩家` : `${TIP6[hover]}，超越 ${data[hover][2]}% 的玩家`;
+  const n=data.length;
+  const col=document.createElement("div"); col.className="col";
+  col.innerHTML = `<div class="box"><h2>${kind==="8"?"实力":"录像分析"}</h2><div class="radar_wrap">`
+    + svgRadar(data,hover,v)
+    + `<div class="vr_tip" style="font-size:${v.nameFs}px">${tipText.replace(/超越 (\d+)%/, '超越 <em>$1%</em>')}</div>`
+    + `</div></div>`;
+  const cap=document.createElement("div"); cap.className="cap";
+  const score = kind==="8" ? `成绩 ${D8_SCORE[hover]}` : TIP6[hover];
+  cap.innerHTML = `<b>${v.label}</b> ｜ 等级 ${v.gradeFs}px / 名称 ${v.nameFs}px<br>气泡锚在标签名下方 · 单行 · ${v.nameFs}px`
+    + `<br><span style="color:#75715e">（hover「${data[hover][0]}」，气泡＝${score}＋超越 xx% 的玩家）</span>`;
+  col.appendChild(cap);
+  return {col, wrap: col.querySelector(".radar_wrap"), tip: col.querySelector(".vr_tip")};
+}
+
+const root=document.getElementById("root");
+const placed=[];
+for(const kind of ["8","6"]){
+  const h=document.createElement("h3");
+  h.textContent = kind==="8" ? "① 用户卡片「实力」雷达（8 维 · 名称最长 5 字符「中级3BV/s」）"
+                             : "② 录像详情页「录像分析」雷达（6 维 · 新 hover 气泡）";
+  root.appendChild(h);
+  const row=document.createElement("div"); row.className="row"; root.appendChild(row);
+  for(const v of VARIANTS){
+    const r=render(v,kind); row.appendChild(r.col); placed.push({v,kind,...r});
+  }
+}
+
+// 气泡定位：与实装同算法（锚在标签名下方，左右按实测宽高钳位不出 wrap）
+for(const p of placed){
+  const data = p.kind==="8" ? D8 : D6;
+  const n=data.length, hover = p.kind==="8" ? 2 : 0;
+  const [lx,ly]=polar(hover,n,p.v.labelRadius);
+  const W=p.wrap.offsetWidth||234, tw=p.tip.offsetWidth, th=p.tip.offsetHeight;
+  const left=Math.min(Math.max((lx/SIZE)*W, tw/2+2), W-tw/2-2);
+  p.tip.style.left=left+"px";
+  p.tip.style.top=((ly+p.v.nameDy+5)/SIZE)*W+"px";
+  p.tip.style.transform="translate(-50%, 0)";
+}
+
+// 越界测量（用户单位）：标签 bbox 相对 222 视口的出血 / 相对最外环的内缩
+const out=[];
+document.querySelectorAll("svg[data-variant]").forEach(svg=>{
+  const v=VARIANTS.find(x=>x.id===svg.dataset.variant);
+  const kind = svg.closest(".row").previousElementSibling.textContent.startsWith("①") ? "8" : "6";
+  const ring = svg.querySelector('polygon[stroke="#6a685c"]');
+  let L=0,R=0,T=0,B=0,gap=1e9,inside=0,deep=0;
+  svg.querySelectorAll("text").forEach(t=>{
+    const b=t.getBBox();
+    L=Math.max(L,-b.x); R=Math.max(R,b.x+b.width-SIZE);
+    T=Math.max(T,-b.y); B=Math.max(B,b.y+b.height-SIZE);
+    // 圆心到标签矩形的最短距离 − 最外环半径（保守：环按外接圆 68 算）
+    const dx=CENTER-Math.min(Math.max(CENTER,b.x),b.x+b.width), dy=CENTER-Math.min(Math.max(CENTER,b.y),b.y+b.height);
+    const dist=Math.hypot(dx,dy); gap=Math.min(gap, dist-RADIUS);
+    // 真·压线判定：标签四角有落在最外环多边形内部的
+    const corners=[[b.x,b.y],[b.x+b.width,b.y],[b.x,b.y+b.height],[b.x+b.width,b.y+b.height]];
+    const hit=corners.some(([x,y])=>ring.isPointInFill(new DOMPoint(x,y)));
+    if(hit){ inside++; deep=Math.max(deep, 68-dist); }
+  });
+  const px=(u)=>(u*(234/222)).toFixed(1);   // 线上渲染宽 234（这里盒内容同为 210）
+  out.push(`${v.label}   ${kind==="8"?"实力8维":"录像6维"}   出血 左${L.toFixed(1)} 右${R.toFixed(1)} 上${T.toFixed(1)} 下${B.toFixed(1)} (用户单位)`
+    +`  ≈ 左右 ${px(Math.max(L,R))}px  ｜ 压到网格区的标签 ${inside} 个（最深 ${deep.toFixed(1)} 单位 ≈ ${px(deep)}px）`);
+});
+document.getElementById("measure").textContent =
+  "【测量】标签 bbox 越出 222 视口的量（盒内左右各余 18px 可出血，overflow:visible 已放开）\n" + out.join("\n");
+</script>
+</body>
+</html>

@@ -1723,3 +1723,35 @@ export async function getBvRankOfUser(
   if (!hit) return null;
   return { rank: hit.rank, page: Math.floor((hit.rank - 1) / RANKING_PAGESIZE) + 1, collected: hit.collected, total, totalDen };
 }
+
+/**
+ * 在线玩结算雷达的分位基准（2026-10-14 五期）：读取 video_metric_dist 全表，
+ * 组织成 OnlinePlay 需要的 { `${level}${nf?"_nf":""}`: { bucket: { 指标: number[] } } }。
+ * 表很小（级别×模式×3BV 段 + 全组行，几百行），整表读出内存分组；
+ * 表不存在/空表时返回空对象（前端不显示雷达，只显示按钮）。
+ */
+export async function getOnlineMetricDists(): Promise<
+  Record<string, Record<string, Record<string, number[]>>>
+> {
+  try {
+    const rows = await prisma.videoMetricDist.findMany();
+    const parse = (raw: string | null | undefined): number[] =>
+      raw ? raw.split(",").filter((s) => s !== "").map(Number) : [];
+    const out: Record<string, Record<string, Record<string, number[]>>> = {};
+    for (const r of rows) {
+      const key = r.level + (r.noflag ? "_nf" : "");
+      if (!out[key]) out[key] = {};
+      out[key][String(r.bucket)] = {
+        bvs: parse(r.bvs),
+        ioe: parse(r.ioe),
+        corr: parse(r.corr),
+        cls: parse(r.cls),
+        ppc: parse(r.ppc),
+        stnb: parse(r.stnb),
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}

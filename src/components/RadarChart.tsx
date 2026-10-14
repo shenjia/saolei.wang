@@ -1,5 +1,8 @@
 // 实力雷达图：纯 SVG 实现，替代 2013 版的 Highcharts polar area
-// 顶点标注等级（按原版配色），hover 顶点/标签时该维度高亮放大
+// 顶点标注等级（按原版配色），hover 顶点/标签时该维度高亮放大，
+// 并在标签处弹「超过 xx% 的玩家」气泡（2026-10-14 张老师要求，视觉与录像分析 vr_tip 同款）。
+// ⚠️ 气泡是 HTML 绝对定位 div：SVG 内部元素不支持 CSS 伪元素（同 VideoAnalysis 的约束），
+//    出血尺寸因此挪到 .radar_tip_wrap 上（globals.css），svg 本体 width:100%。
 "use client";
 
 import { useState } from "react";
@@ -34,6 +37,13 @@ const GRID_OUTER_COLOR = "#6a685c";
 // 标签块中心到圆心的径向距离（等级 + 名称两行作为一个整体，避免相互重叠）
 const LABEL_RADIUS = RADIUS + 20;
 
+// 标签字号（2026-10-14 张老师要求加大，13/8 → 15/10；与 VideoAnalysis.tsx 同源勿单独改）
+// 名称 10px 时左右水平轴标签恰好贴住 222 视口边缘（hover 放大后出血 ~7px），配套 .chart overflow:visible
+const LABEL_GRADE_FS = 15;
+const LABEL_NAME_FS = 10;
+// 轴名基线相对等级基线的下移量（≈ 等级字号，视觉行距与旧版 13/13 一致）
+const LABEL_NAME_DY = 15;
+
 function gradeColor(grade: string): string {
   const base = grade.replace(/[+-]$/, "");
   return GRADE_COLORS[base] ?? UNKNOWN_COLOR;
@@ -67,16 +77,33 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const n = data.length;
   const points = data.map((d, i) => polar(i, n, (d.percent / 100) * RADIUS));
+  const tip = hover === null ? null : data[hover];
+  // 气泡定位：锚在外侧标签（等级+维度名两行整体）——标签在上半区弹下方，
+  // 下半区自动翻上方（否则出盒）；横向钳位避免左右贴边出盒。
+  // 与 VideoAnalysisRadar 的 vr_tip 同套路，锚点从顶点换成标签（张老师要求「标签下面」）
+  const tipStyle =
+    hover === null
+      ? undefined
+      : (() => {
+          const [lx, ly] = polar(hover, n, LABEL_RADIUS);
+          const below = ly < SIZE * 0.55;
+          return {
+            left: `${Math.min(Math.max((lx / SIZE) * 100, 24), 76)}%`,
+            top: `${(ly / SIZE) * 100}%`,
+            transform: below ? "translate(-50%, 24px)" : "translate(-50%, calc(-100% - 22px))",
+          } as const;
+        })();
 
   return (
-    <svg
-      className="chart"
-      width={SIZE}
-      height={SIZE}
-      viewBox={`0 0 ${SIZE} ${SIZE}`}
-      role="img"
-      aria-label="实力雷达图"
-    >
+    <div className="radar_tip_wrap">
+      <svg
+        className="chart"
+        width={SIZE}
+        height={SIZE}
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        role="img"
+        aria-label="实力雷达图"
+      >
       {/* 网格环（八边形） */}
       {GRID_RINGS.map((p) => (
         <polygon
@@ -112,7 +139,7 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
             onMouseEnter={() => setHover(i)}
             onMouseLeave={() => setHover(null)}
           >
-            <title>{`${d.name}：${d.score}`}</title>
+            {/* 原生 <title> 已删（2026-10-14）：hover 信息改由气泡承担，避免双重提示 */}
             {/* 扇形热区：进入该维度对应角度范围即触发，不必精确对准点或标签 */}
             <path d={wedgePath(i, n)} fill="transparent" pointerEvents="all" />
             <circle
@@ -127,7 +154,7 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
             />
             <text
               x={lx}
-              y={ly - 2}
+              y={ly - 3}
               textAnchor="middle"
               style={{
                 transformBox: "fill-box",
@@ -136,16 +163,30 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
                 transition: "transform .15s ease",
               }}
             >
-              <tspan fill={gradeColor(d.grade)} fontSize={13} fontWeight="bold">
+              <tspan fill={gradeColor(d.grade)} fontSize={LABEL_GRADE_FS} fontWeight="bold">
                 {d.grade}
               </tspan>
-              <tspan x={lx} dy={13} fill={active ? "#a6e22e" : "#8a8878"} fontSize={8}>
+              <tspan x={lx} dy={LABEL_NAME_DY} fill={active ? "#a6e22e" : "#8a8878"} fontSize={LABEL_NAME_FS}>
                 {d.name}
               </tspan>
             </text>
           </g>
         );
       })}
-    </svg>
+      </svg>
+      {tip && (
+        <div className="radar_tip" style={tipStyle}>
+          {tip.grade === "?" ? (
+            "暂无成绩"
+          ) : tip.percent >= 100 ? (
+            "全网第一"
+          ) : (
+            <>
+              超过 <em>{tip.percent}%</em> 的玩家
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

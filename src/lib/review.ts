@@ -7,7 +7,9 @@
 // 2. News::publish 的 user_score 旧版用的是审核前加载的（过期）sum_time，这里用成绩更新后的最新值。
 
 import { Prisma } from "@prisma/client";
+import { after } from "next/server";
 import { prisma } from "./db";
+import { ensureVideoMetrics } from "./videometrics";
 import {
   isManager,
   LEVEL_MIN_3BV,
@@ -354,5 +356,19 @@ export async function reviewVideo(
       `;
     }
   });
+
+  // 录像指标后置补算（2026-10-14 张老师需求：新录像不必等跑批）
+  // 必须排在事务提交「之后」—— ensureVideoMetrics 自己开连接读 video/video_info，
+  // 在事务内会读到未提交的中间态（而且事务回滚时白写一行）。
+  // caveat：上传入口只能拿到 status=10（待审），所以在线路径只有这里能触发；
+  //         同步管线（scripts/sync/transform.py）是直接灌表的，越过这里，靠跑批兜。
+  if (status === VIDEO_STATUS.REVIEWED) {
+    try {
+      after(() => ensureVideoMetrics(videoId));
+    } catch {
+      // 不在请求上下文（脚本/单测直调 reviewVideo）时 after() 不可用，退化为即时异步执行
+      void ensureVideoMetrics(videoId);
+    }
+  }
   return { ok: true };
 }

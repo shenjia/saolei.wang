@@ -15,6 +15,13 @@ import { ToastHost } from "@/components/Toast";
 export const metadata: Metadata = {
   title: "扫雷网 Saolei.wang",
   description: "扫雷网——扫雷玩家的家园，录像排行、成绩认证、雷界快讯",
+  /* iOS 无元素全屏 API（/online 全屏按钮在该环境走伪全屏退化）——
+     唯一真隐藏 Safari 地址栏的途径：添加到主屏幕后以 standalone 打开 */
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "扫雷网",
+  },
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
@@ -50,13 +57,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link href="/video">录像</Link>
                 </li>
                 <li>
-                  <Link href="/online">在线玩</Link>
-                </li>
-                <li>
                   <Link href="/bbs">论坛</Link>
                 </li>
                 <li>
                   <Link href="/page/guide">教程</Link>
+                </li>
+                <li>
+                  <Link href="/online">练习</Link>
                 </li>
                 <li>
                   <Link href="/titles">军衔</Link>

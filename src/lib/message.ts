@@ -50,11 +50,23 @@ export async function getMessageCount(userId: number): Promise<number> {
   return prisma.message.count({ where: { toUser: BigInt(userId) } });
 }
 
+/**
+ * 消息列表（2026-10-14 加类型筛选：all=全部 / system=系统 / private=私信）。
+ * total 随筛选联动——「加载更多」的剩余条数按当前筛选口径计算。
+ */
+export type MessageTypeFilter = "all" | "system" | "private";
+
 export async function getMessageList(
   userId: number,
-  page: number
+  page: number,
+  type: MessageTypeFilter = "all"
 ): Promise<{ messages: MessageItem[]; total: number; pageSize: number }> {
-  const where = { toUser: BigInt(userId) };
+  const where =
+    type === "system"
+      ? { toUser: BigInt(userId), isSystem: true }
+      : type === "private"
+        ? { toUser: BigInt(userId), isSystem: false }
+        : { toUser: BigInt(userId) };
   const total = await prisma.message.count({ where });
   const rows = await prisma.message.findMany({
     where,

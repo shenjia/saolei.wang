@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>上传录像按钮风格统一对照（2026-10-13）</title>
+<style>
+  body { background: #272822; color: #b1b1a4; font: 16px/1.6 "Helvetica Neue", Arial, sans-serif; padding: 40px; }
+  h1 { color: #f8f8f2; font-size: 20px; margin: 0 0 8px; }
+  .note { color: #75715e; font-size: 14px; margin-bottom: 24px; }
+  .row { margin-bottom: 28px; }
+  .label { display: inline-block; width: 220px; color: #90907f; font-size: 14px; vertical-align: middle; }
+  .headbox {
+    display: inline-flex; align-items: center; gap: 12px; vertical-align: middle;
+    background: #1f201b; border: 1px solid #49483e; border-radius: 6px; padding: 14px 18px;
+  }
+  .headbox .h1 { color: #90907f; font-size: 18px; font-weight: bold; }
+  .spacer { width: 200px; }
+
+  /* ==== legacy .button 全套（与 public/styles/legacy-2013.css 一致） ==== */
+  .button{display:inline-block;border:1px #49483e solid;border-radius:5px;
+    background-color:#434239;background-image:linear-gradient(180deg,#49483e,#3b3a32);
+    color:#b1b1a4;text-shadow:0 2px 2px rgba(0,0,0,0.25);
+    box-shadow:2px 2px 5px rgba(0,0,0,0.25);text-decoration:none;
+    font-size:20px;line-height:30px;padding:8px 24px}
+  .button:hover{color:#a6e22e;background-color:#46453c;background-image:linear-gradient(180deg,#4c4b40,#3e3d34)}
+  .button:active{color:#8ac21b}
+  .button.active{color:#8ac21b}
+  .button.active:hover{color:#a6e22e}
+  .button.small{font-size:16px;line-height:24px;padding:4px 12px}
+
+  /* ==== 现状：上传录像定制绿（globals.css #user_videos .video_upload_btn） ==== */
+  .upload-current, .upload-current:hover {
+    border-color:#679016; background-color:#587812;
+    background-image:linear-gradient(180deg,#679016,#4a6410);
+    color:#d8f3a8; text-shadow:0 1px 1px rgba(0,0,0,0.35);
+  }
+  .upload-current:hover { background-color:#679016; background-image:linear-gradient(180deg,#75a319,#587812); color:#e2f7b8; }
+
+  .diff { color:#e6db74; font-size:13px; margin-left:12px; }
+</style>
+</head>
+<body>
+  <h1>「上传录像」按钮风格统一对照</h1>
+  <p class="note">张老师要求：用户主页录像版块的「上传录像」按钮与论坛「发布主题」按钮同款。改法：类名加 <code>active</code>，删掉 globals.css 里的定制绿色覆盖（保留贴行尾定位规则）。</p>
+
+  <div class="row">
+    <span class="label">① 参照 · 论坛「发布主题」</span>
+    <span class="headbox"><span class="h1">论坛</span><span class="spacer"></span>
+      <a class="button active small" href="#">发布主题</a>
+    </span>
+  </div>
+
+  <div class="row">
+    <span class="label">② 现状 · 用户页「上传录像」</span>
+    <span class="headbox"><span class="h1">录像</span><span class="spacer"></span>
+      <a class="button small upload-current" href="#">上传录像</a>
+    </span>
+    <span class="diff">绿底浅绿字，与论坛不一致</span>
+  </div>
+
+  <div class="row">
+    <span class="label">③ 改后 · 与论坛同款</span>
+    <span class="headbox"><span class="h1">录像</span><span class="spacer"></span>
+      <a class="button active small" href="#">上传录像</a>
+    </span>
+    <span class="diff">深灰渐变底 + 绿字 #8ac21b，hover 亮绿 #a6e22e</span>
+  </div>
+
+  <p class="note">代码改动点（确认后执行）：<br>
+  1. <code>src/app/user/[id]/page.tsx</code> 第 304 行：<code>button small video_upload_btn</code> → <code>button active small video_upload_btn</code><br>
+  2. <code>src/app/globals.css</code>：删除 <code>#user_videos .video_upload_btn</code> 的三段定制绿色覆盖（2429–2446 行），保留 2422 行贴行尾定位</p>
+</body>
+</html>

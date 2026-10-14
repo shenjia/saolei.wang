@@ -17,7 +17,8 @@ interface AvfEvent {
 
 class Reader {
   pos = 0;
-  constructor(private buf: Buffer) {}
+  // Uint8Array 即可（Buffer 是其子类）：上传页浏览器端复用本解析器做级别预判
+  constructor(private buf: Uint8Array) {}
   u8(): number {
     if (this.pos >= this.buf.length) throw new AvfParseError("Unexpected end of file");
     return this.buf[this.pos++];
@@ -55,7 +56,7 @@ class AvfParser {
   private timestamp = "";
   private video: AvfEvent[] = [];
 
-  constructor(buf: Buffer) {
+  constructor(buf: Uint8Array) {
     this.r = new Reader(buf);
   }
 
@@ -316,7 +317,7 @@ class AvfParser {
 }
 
 /** 解析 AVF 文件为 RawVF 文本行；无法识别返回 null，损坏抛 AvfParseError */
-export function avfToRawvf(buf: Buffer): string[] | null {
+export function avfToRawvf(buf: Uint8Array): string[] | null {
   const parser = new AvfParser(buf);
   if (!parser.parse()) return null;
   return parser.toRawvfLines();

@@ -2,12 +2,16 @@
 // 2026-09-24 改版（张老师要求）：「收件箱」改名「消息」，版式参考论坛文章列表
 // 2026-09-24 二轮：未读绿「新」字、已读内容变灰、右上角「全部已读」、
 //   底部加载更多+总条数（首屏 15 条，Pager 移除）
+// 2026-10-14（张老师要求）：类型筛选 tabs（全部/系统/私信）——复用论坛页 Tabs
+//   链接形态（?type= 承载状态，可分享可后退）；筛选值走服务端过滤，
+//   MessageFeed 加 key=筛选串（软导航下 useState(initial) 不重置的老坑，见 BbsFeed）
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
-import { getMessageList, messageAuthorsWithTitles, MESSAGE_PAGESIZE } from "@/lib/message";
+import { getMessageList, messageAuthorsWithTitles, MESSAGE_PAGESIZE, type MessageTypeFilter } from "@/lib/message";
 import { MessageFeed } from "@/components/MessageFeed";
+import { Tabs } from "@/components/Pager";
 import { BroadcastForm, ClearButton, MarkAllReadButton, SendMessageForm } from "@/components/MessageForms";
 
 export const dynamic = "force-dynamic";
@@ -25,13 +29,27 @@ export default async function MessagePage({
   const to = parseInt(sp.to ?? "", 10) || undefined;
   const toName = to ? (await messageAuthorsWithTitles([to])).get(to)?.chineseName : undefined;
 
-  const { messages, total } = await getMessageList(session.uid, 1);
+  // 类型筛选（非法值视作全部；params 只透传 type，不给 Tabs 带 to 等无关参数）
+  const type: MessageTypeFilter = sp.type === "system" || sp.type === "private" ? sp.type : "all";
+
+  const { messages, total } = await getMessageList(session.uid, 1, type);
 
   return (
     <div id="page" className="main message_list">
       <div className="box">
         <div className="page_head">
           <h1 className="page_title">消息</h1>
+          <Tabs
+            base="/message"
+            params={{}}
+            name="type"
+            current={type}
+            options={[
+              ["all", "全部"],
+              ["system", "系统"],
+              ["private", "私信"],
+            ]}
+          />
           <div className="msg_head_btns">
             <MarkAllReadButton />
             <ClearButton />
@@ -48,6 +66,8 @@ export default async function MessagePage({
           </thead>
           <tbody>
             <MessageFeed
+              key={type}
+              type={type}
               initial={messages}
               initialHasMore={total > MESSAGE_PAGESIZE}
               total={total}

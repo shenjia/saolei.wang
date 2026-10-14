@@ -4,10 +4,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "./Toast";
+import { avfToRawvf } from "@/lib/avf";
+import { mvfToRawvf } from "@/lib/mvf";
+import { formatRawvf } from "@/lib/rawvf";
+import { scoreTime } from "@/lib/format";
 
 const MAX_SIZE = 500 * 1024; // 与服务端一致（旧版 plupload max_file_size: 500kb）
 
 type ItemStatus = "invalid" | "pending" | "uploading" | "success" | "error";
+
+// 浏览器端解析出的录像信息（解析失败则无，卡片退回显示文件名）
+type Meta = { level: "beg" | "int" | "exp"; timeMs: number; bbbv: number | null; noflag: boolean };
 
 type Item = {
   key: string;
@@ -15,11 +22,15 @@ type Item = {
   status: ItemStatus;
   progress: number; // 0-100
   message: string;
+  meta?: Meta;
 };
 
-function formatSize(bytes: number): string {
-  return bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-}
+// 级别标签（配色与详情页标题/录像列表 hover 同级：初级绿 / 中级橙 / 高级金）
+const LEVEL_TAG: Record<Meta["level"], { label: string; color: string }> = {
+  beg: { label: "初级", color: "#a6e22e" },
+  int: { label: "中级", color: "#f79646" },
+  exp: { label: "高级", color: "#fdc61d" },
+};
 
 // fetch 不带上传进度，用 XHR 拿 progress 事件驱动 .progress 宽度
 function uploadOne(file: File, onProgress: (pct: number) => void): Promise<{ ok: boolean; error?: string }> {
@@ -50,14 +61,42 @@ export function UploadForm() {
   const inputRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
   const [items, setItems] = useState<Item[]>([]);
+  const itemsRef = useRef<Item[]>([]); // items 的同步镜像：addFiles 去重/追加需要立即可读的最新值
   const [busy, setBusy] = useState(false);
   const [seq, setSeq] = useState<[number, number] | null>(null); // [已完成, 总数]
   const [dragOver, setDragOver] = useState(false);
 
-  const addFiles = useCallback((files: FileList | File[]) => {
-    setItems((prev) => {
-      const seen = new Set(prev.map((i) => `${i.file.name}|${i.file.size}|${i.file.lastModified}`));
-      const next = [...prev];
+  // 所有 items 变更统一走这里，保持 ref 镜像同步
+  const applyItems = useCallback((next: Item[]) => {
+    itemsRef.current = next;
+    setItems(next);
+  }, []);
+
+  // 浏览器端复用服务端同款解析器，选入即解析出级别/成绩/3BV（仅作展示，不影响服务端权威校验）
+  const parseMeta = useCallback(
+    (key: string, file: File, ext: string) => {
+      file
+        .arrayBuffer()
+        .then((ab) => {
+          const lines = ext === "avf" ? avfToRawvf(new Uint8Array(ab)) : mvfToRawvf(new Uint8Array(ab));
+          if (!lines) return;
+          const { level, timeMs, bbbv, noflag } = formatRawvf(lines);
+          if (level === "beg" || level === "int" || level === "exp") {
+            const meta: Meta = { level, timeMs, bbbv, noflag };
+            applyItems(itemsRef.current.map((i) => (i.key === key ? { ...i, meta } : i)));
+          }
+        })
+        .catch(() => {
+          // 解析失败不显示成绩，交由服务端上传时给出具体错误
+        });
+    },
+    [applyItems]
+  );
+
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      const seen = new Set(itemsRef.current.map((i) => `${i.file.name}|${i.file.size}|${i.file.lastModified}`));
+      const added: Item[] = [];
       for (const file of Array.from(files)) {
         const id = `${file.name}|${file.size}|${file.lastModified}`;
         if (seen.has(id)) continue; // 拖拽/重复选择去重
@@ -72,15 +111,25 @@ export function UploadForm() {
           status = "invalid";
           message = "文件大小不能超过 500KB";
         }
-        next.push({ key: `${Date.now()}-${seqRef.current++}`, file, status, progress: 0, message });
+        added.push({ key: `${Date.now()}-${seqRef.current++}`, file, status, progress: 0, message });
       }
-      return next;
-    });
-  }, []);
+      if (added.length === 0) return;
+      applyItems([...itemsRef.current, ...added]);
+      for (const item of added) {
+        if (item.status !== "pending") continue;
+        const ext = item.file.name.slice(item.file.name.lastIndexOf(".") + 1).toLowerCase();
+        parseMeta(item.key, item.file, ext);
+      }
+    },
+    [applyItems, parseMeta]
+  );
 
-  const update = useCallback((key: string, patch: Partial<Item>) => {
-    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
-  }, []);
+  const update = useCallback(
+    (key: string, patch: Partial<Item>) => {
+      applyItems(itemsRef.current.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+    },
+    [applyItems]
+  );
 
   // 全页拖拽：dragover 阻止默认行为后，落到页面任意位置的文件都会进列表
   useEffect(() => {
@@ -220,10 +269,33 @@ export function UploadForm() {
           >
             <div className="title">
               <span className="name">
-                {item.file.name}（{formatSize(item.file.size)}）
+                {item.meta ? (
+                  <>
+                    <span
+                      style={{
+                        color: LEVEL_TAG[item.meta.level].color,
+                        border: `1px solid ${LEVEL_TAG[item.meta.level].color}`,
+                        borderRadius: 3,
+                        fontSize: 12,
+                        lineHeight: "16px",
+                        padding: "0 4px",
+                      }}
+                    >
+                      {LEVEL_TAG[item.meta.level].label}
+                    </span>
+                    <b>{scoreTime(item.meta.timeMs) || "—"}</b>
+                    {item.meta.noflag && <span style={{ color: "#75715e", fontSize: 12 }}>NF</span>}
+                    <span style={{ color: "#939387" }}>
+                      3BV <b style={{ color: "#b1b1a4" }}>{item.meta.bbbv ?? "—"}</b>
+                    </span>
+                  </>
+                ) : (
+                  // 未解析出信息（非法文件 / 解析失败）才退回显示文件名
+                  <span style={{ fontSize: 12 }}>{item.file.name}</span>
+                )}
               </span>
               <span className="message">
-                {item.message || (item.status === "uploading" ? `${item.progress}%` : "")}
+                {item.message || (item.status === "uploading" ? `上传中 ${item.progress}%` : "")}
               </span>
             </div>
             <span
@@ -235,13 +307,13 @@ export function UploadForm() {
               style={{ cursor: "pointer" }}
               onClick={(e) => {
                 e.preventDefault();
-                if (item.status !== "uploading") setItems((prev) => prev.filter((i) => i.key !== item.key));
+                if (item.status !== "uploading") applyItems(itemsRef.current.filter((i) => i.key !== item.key));
               }}
             />
           </div>
         ))}
       </div>
-      {/* 按钮常驻：无文件 / 上传中时置灰不可点 */}
+      {/* 开始上传常驻（无文件 / 上传中置灰）；清空列表仅在列表有文件时出现 */}
       <p style={{ textAlign: "center" }}>
         <button
           type="button"
@@ -249,17 +321,36 @@ export function UploadForm() {
           disabled={busy || uploadable.length === 0}
           onClick={startUpload}
         >
+          {/* 上传图标：currentColor 跟随按钮文字色（可点绿 / 置灰暗） */}
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ verticalAlign: "-4px", marginRight: 8 }}
+            aria-hidden="true"
+          >
+            <path d="M12 16V4" />
+            <path d="M6 10l6-6 6 6" />
+            <path d="M4 20h16" />
+          </svg>
           {seq ? `上传中（${seq[0]}/${seq[1]}）…` : "开始上传"}
         </button>
-        <button
-          type="button"
-          className={`button small ${!busy && items.length > 0 ? "" : "disabled"}`}
-          style={{ marginLeft: 12 }}
-          disabled={busy || items.length === 0}
-          onClick={() => setItems([])}
-        >
-          清空列表
-        </button>
+        {items.length > 0 && (
+          <button
+            type="button"
+            className={`button big ${busy ? "disabled" : ""}`}
+            style={{ marginLeft: 12 }}
+            disabled={busy}
+            onClick={() => applyItems([])}
+          >
+            清空列表
+          </button>
+        )}
       </p>
     </div>
   );

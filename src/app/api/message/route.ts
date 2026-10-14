@@ -21,9 +21,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ unread: await getUnreadCount(session.uid) });
   }
   // 消息列表「加载更多」（页码语义，首屏 15 条，模式同 /api/bbs/more）
+  // 2026-10-14 加 type 类型筛选（all/system/private），与列表页 tabs 同口径
   if (action === "more") {
     const page = Math.max(2, parseInt(req.nextUrl.searchParams.get("page") ?? "2", 10) || 2);
-    const { messages, total, pageSize } = await getMessageList(session.uid, page);
+    const typeRaw = req.nextUrl.searchParams.get("type");
+    const type = typeRaw === "system" || typeRaw === "private" ? typeRaw : "all";
+    const { messages, total, pageSize } = await getMessageList(session.uid, page, type);
     return NextResponse.json({ messages, hasMore: page * pageSize < total, total });
   }
   return NextResponse.json({ error: "未知操作" }, { status: 400 });

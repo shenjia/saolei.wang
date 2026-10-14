@@ -245,8 +245,16 @@ model VideoMetrics {
   cls        Float  @db.Float
   ppc        Float  @db.Float
   stnb       Float  @db.Float
+  // 全站综合榜排名 / 同「级别×模式」组内排名 / 全站超越百分比（0-100）。
+  // 这三项是**相对值**：新录像进来会挤动别人的名次，所以不像上面那些事实字段那样一算永逸，
+  // 由跑批 scripts/video-metrics.ts 每次用窗口函数全量重刷（30 万行几秒，不必重放进文件）。
+  rankAll    Int    @default(0) @map("rank_all") @db.Int
+  rankGroup  Int    @default(0) @map("rank_group") @db.Int
+  beatPct    Float  @default(0) @map("beat_pct") @db.Float
   createTime BigInt @default(0) @map("create_time") @db.BigInt
 
+  @@index([rankAll])
+  @@index([level, noflag, rankGroup])
   @@map("video_metrics")
 }
 

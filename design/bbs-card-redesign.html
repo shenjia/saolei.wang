@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>论坛右栏个人卡片重设计 · 高保真稿 v2（2026-10-13）</title>
+<style>
+  :root {
+    --bg: #1e1f1b;
+    --box: #333330;
+    --border: #49483e;
+    --border-light: #555550;
+    --text: #f8f8f2;
+    --dim: #a59f85;
+    --faint: #75715e;
+    --gold: #fdc61a;
+    --green: #a6e22e;
+    --red: #f92672;
+    --cyan: #66d9ef;
+    --orange: #f79646;
+    --marshal: #e6db74;
+    --colonel: #e26b0a;
+    --reserve: #636359;
+    --shield-dark: #2e2e26;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 32px 24px 64px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 30px; line-height: 1.8; }
+  .sub b { color: var(--gold); font-weight: 600; }
+  h2.sec {
+    font-size: 14px; font-weight: 600; color: var(--dim); letter-spacing: 1px;
+    margin: 36px 0 14px; padding-left: 10px; border-left: 3px solid var(--border);
+  }
+  .stage { display: flex; gap: 46px; flex-wrap: wrap; align-items: flex-start; }
+  .stage-note { flex: 1; min-width: 300px; max-width: 430px; }
+  .stage-note ul { margin-left: 18px; }
+  .stage-note li { color: var(--dim); font-size: 13px; line-height: 2.1; }
+  .stage-note .k { color: var(--gold); }
+
+  /* ===== 真实尺寸模拟：右栏 box 与首页同款（外径 272px，内容宽 210px） ===== */
+  .box {
+    width: 272px; background: var(--box);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 30px; flex: none;
+  }
+  .state-tag { font-size: 12px; color: var(--faint); text-align: center; margin-top: 10px; }
+  .user_card { width: 210px; font-size: 12px; line-height: 1.6; color: var(--dim); }
+
+  /* ---- 顶区：左列（头像 + 照片下方人气）｜右列（名字+性别+军衔 → 地区 → 全国） ---- */
+  .ucd_top { display: flex; gap: 10px; }
+  .ucd_left { flex: none; width: 72px; }
+  .ucd_avatar {
+    display: block; width: 72px; height: 72px;
+    object-fit: cover; border: 1px solid var(--border-light); background: #2a2a26;
+  }
+  .ucd_pop { margin-top: 6px; }
+  .ucd_pop_line { white-space: nowrap; }
+  .ucd_pop_line + .ucd_pop_line { margin-top: 1px; }
+  .ucd_pop_label { color: var(--faint); font-size: 11px; }
+  .ucd_pop_val { color: var(--gold); font-weight: bold; font-size: 12px; }
+  .ucd_pop_today { color: var(--green); font-size: 11px; }
+  .ucd_right {
+    flex: 1; min-width: 0;
+    /* 与左侧头像上下对齐：等高 + 两端顶底（名字贴头像顶、排行贴头像底） */
+    align-self: flex-start; height: 72px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+
+  /* 名字行：与首页人名行完全同款（AvatarCell + TitleBadge 原生渲染，不做卡片级覆盖）
+     姓名 16px #b1b1a4（hover 变绿）、性别图标 8×8 紧跟其后、徽章 1em、军衔名 14px */
+  .ucd_name { margin: 0; color: #b1b1a4; font-size: 16px; line-height: 1.5; }
+  .ucd_name a { color: #b1b1a4; }
+  /* 性别图标：尺寸与首页一致（gender="small" = gender8x8 雪碧图），紧跟姓名无间距 */
+  .gender {
+    display: inline-block; width: 8px; height: 8px; margin-left: 4px;
+    vertical-align: text-bottom;
+    background: url(https://dev.saolei.wang/images/common/gender8x8.png?v=5) no-repeat left top;
+  }
+  .gender.male { background-position: top; }
+  .gender.female { background-position: bottom; }
+  .title { display: inline-block; white-space: nowrap; }
+  .title svg { width: 16px; height: 16px; vertical-align: -2.2px; margin-right: 2.9px; }
+  .title em { font-style: normal; font-size: 14px; }
+
+  /* 排行两行：与用户主页 #user_view .info .rank_label .ranks 完全同款
+     （两行 rank_line、13px、行高 19.5px、文字 #888、名次数字 #e6db74 加粗正体） */
+  .ranks { display: block; margin-top: 8px; color: #888; line-height: 1.5; white-space: nowrap; }
+  .ranks .rank_line { display: block; font-size: 13px; }
+  .ranks em { font-style: normal; font-weight: bold; color: #e6db74; }
+  .ucd_delta { font-size: 11px; margin-left: 4px; }
+  .ucd_delta.up { color: var(--red); }
+  .ucd_delta.down { color: var(--green); }
+  .ucd_delta.new { color: var(--cyan); }
+  .ucd_none { color: var(--faint); }
+
+  .ucd_hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+
+  /* ---- 各级别记录（配色与首页录像列表同逻辑） ----
+     初级 #999994 最暗 → 中级 #bbbbaf → 高级 #ddddcf 最亮；
+     数字加粗、链接继承级别色；hover 按级别变色（初绿 / 中橙 / 高金）；
+     总计行金色 #fdc61a（时/3BVS 均金），链接到该玩家录像列表 */
+  .ucd_scores { width: auto; border-collapse: collapse; font-size: 12px; }
+  .ucd_scores th {
+    color: var(--dim); font-weight: normal; text-align: left;
+    padding: 2px 8px 2px 0; white-space: nowrap;
+  }
+  .ucd_scores td { padding: 2px 0; white-space: nowrap; font-weight: bold; }
+  .ucd_scores tr.lv_beg td { color: #999994; }
+  .ucd_scores tr.lv_int td { color: #bbbbaf; }
+  .ucd_scores tr.lv_exp td { color: #ddddcf; }
+  .ucd_scores tr.lv_sum td { color: var(--gold); }
+  .ucd_scores td.sep { color: var(--border-light); font-weight: normal; padding: 0 4px; }
+  .ucd_scores a { color: inherit; text-decoration: none; }
+  .ucd_scores tr.lv_beg a:hover { color: #a6e22e; }
+  .ucd_scores tr.lv_int a:hover { color: #f79646; }
+  .ucd_scores tr.lv_exp a:hover { color: #fdc61d; }
+  .ucd_scores tr.lv_sum a:hover { color: #e6db74; }
+  .ucd_scores td.null { color: var(--faint); font-weight: normal; }
+  .ucd_login { margin-top: 8px; color: var(--faint); font-size: 11px; }
+
+  /* ===== 标注大图 ===== */
+  .anno { position: relative; width: 274px; flex: none; }
+  .anno .box { width: 272px; }
+  .tag {
+    position: absolute; font-size: 11px; line-height: 1.5; color: #1e1f1b;
+    background: var(--green); padding: 2px 7px; border-radius: 3px;
+    font-weight: 600; white-space: nowrap; z-index: 2;
+  }
+  .tag.cyan { background: var(--cyan); }
+  .tag.orange { background: var(--orange); }
+  .tag.pink { background: var(--red); color: #fff; }
+  .tag.gold { background: var(--gold); }
+
+  table.src { border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  table.src th, table.src td { border: 1px solid var(--border); padding: 7px 14px; text-align: left; line-height: 1.7; }
+  table.src th { color: var(--gold); font-weight: 600; background: #2c2d27; }
+  table.src td { color: var(--dim); }
+  table.src td code { color: var(--green); font-family: Menlo, monospace; font-size: 12px; }
+  .note { color: var(--faint); font-size: 12px; margin-top: 18px; line-height: 2; }
+</style>
+</head>
+<body>
+
+<!-- 军衔徽章图形（与 RankBadge.tsx 同源矢量） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <path id="shield" d="M24 3 L42 8.5 V25 C42 36.5 34.5 42.5 24 45.5 C13.5 42.5 6 36.5 6 25 V8.5 Z"/>
+    <path id="star" d="M0 -10 L2.25 -3.09 L9.51 -3.09 L3.63 1.18 L5.88 8.09 L0 3.82 L-5.88 8.09 L-3.63 1.18 L-9.51 -3.09 L-2.25 -3.09 Z"/>
+    <path id="laurel-l" d="M24 39.5 C19 38 14.5 34.5 13 29.5"/>
+    <path id="laurel-r" d="M24 39.5 C29 38 33.5 34.5 35 29.5"/>
+
+    <symbol id="b-marshal" viewBox="0 0 48 48">
+      <use href="#shield" fill="#2e2e26" stroke="#e6db74" stroke-width="2.6"/>
+      <use href="#star" transform="translate(24 21.5) scale(1.02)" fill="#e6db74"/>
+      <g fill="none" stroke="#e6db74" stroke-width="1.3" stroke-linecap="round">
+        <use href="#laurel-l"/><use href="#laurel-r"/>
+      </g>
+    </symbol>
+
+    <symbol id="b-colonel" viewBox="0 0 48 48">
+      <use href="#shield" fill="#2e2e26" stroke="#e26b0a" stroke-width="2.4"/>
+      <use href="#star" transform="translate(14 24) scale(0.66)" fill="#e26b0a"/>
+      <use href="#star" transform="translate(24 24) scale(0.66)" fill="#e26b0a"/>
+      <use href="#star" transform="translate(34 24) scale(0.66)" fill="#e26b0a"/>
+    </symbol>
+
+    <symbol id="b-reserve" viewBox="0 0 48 48">
+      <use href="#shield" fill="#2e2e26" stroke="#636359" stroke-width="2.2"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <h1>论坛右栏个人卡片 · 高保真稿 v2</h1>
+  <p class="sub">
+    2026-10-13 四轮修订：<b>各级别记录数字改灰阶</b>（初级最暗 → 中级 → 高级最亮，与首页录像列表同逻辑；仅总计金色）；<b>数字可点击进对应录像</b>。<br>
+    2026-10-13 五轮修订（实装口径）：<b>地区 / 全国排行改用户主页同款</b>——去掉「地区 / 全国」标签列，改
+    <span style="color:#888">省份第 <em style="color:#e6db74;font-weight:bold;font-style:normal">X</em> 名</span> /
+    <span style="color:#888">全国第 <em style="color:#e6db74;font-weight:bold;font-style:normal">X</em> 名</span>
+    两行（13px、#888、名次数字 #e6db74 加粗正体）；<b>名字 + 排行整块与左侧头像等高、上下顶底对齐</b>。<br>
+    三轮已落实：性别图标改首页同款尺寸（8×8）、排行数字去斜体、去掉「新上榜」。<br>
+    二轮已落实：去掉「高级记录 ≤ xx秒」文字（改 hover 气泡）、名字后跟性别图标（不再显示 id）、军衔与首页人名/军衔同款、地区/全国排名移到名字下方与头像齐平。<br>
+    真实尺寸：右栏盒外径 <b>272px</b>（与首页右栏板块一致）、内容宽 210px，配色 Monokai。
+  </p>
+
+  <h2 class="sec">一、真实尺寸预览</h2>
+  <div class="stage">
+
+    <!-- ===== 状态 A ===== -->
+    <div>
+      <div class="box">
+        <div class="user_card">
+          <div class="ucd_top">
+            <div class="ucd_left">
+              <img class="ucd_avatar" src="https://dev.saolei.wang/images/player/9672.jpg" alt="郭锦洋"
+                   onerror="this.src='https://dev.saolei.wang/images/player/no.jpg'">
+              <div class="ucd_pop">
+                <div class="ucd_pop_line"><span class="ucd_pop_label">人气 </span><span class="ucd_pop_val">12,345</span></div>
+                <div class="ucd_pop_line"><span class="ucd_pop_label">今日 </span><span class="ucd_pop_today">+37</span></div>
+              </div>
+            </div>
+            <div class="ucd_right">
+              <p class="ucd_name"><a href="#">郭锦洋</a><span class="gender male"></span><span class="title"><svg><use href="#b-marshal"/></svg><em style="color:#e6db74">元帅</em></span></p>
+              <div class="ranks">
+                <span class="rank_line">陕西第 <em>2</em> 名</span>
+                <span class="rank_line">全国第 <em>32</em> 名</span>
+              </div>
+            </div>
+          </div>
+          <hr class="ucd_hr">
+          <table class="ucd_scores" cellpadding="0" cellspacing="0">
+            <tbody>
+              <tr class="lv_beg"><th>初级</th><td><a href="#">0.24</a></td><td class="sep">|</td><td><a href="#">9.76</a></td></tr>
+              <tr class="lv_int"><th>中级</th><td><a href="#">8.46</a></td><td class="sep">|</td><td><a href="#">5.56</a></td></tr>
+              <tr class="lv_exp"><th>高级</th><td><a href="#">37.54</a></td><td class="sep">|</td><td><a href="#">4.44</a></td></tr>
+              <tr class="lv_sum"><th>总计</th><td><a href="#">46.24</a></td><td class="sep">|</td><td><a href="#">19.76</a></td></tr>
+            </tbody>
+          </table>
+          <p class="ucd_login">最近登录：2026年10月12日</p>
+        </div>
+      </div>
+      <p class="state-tag">A · 资料齐全（今日人气 +37）</p>
+    </div>
+
+    <!-- ===== 状态 B：名次升降 ===== -->
+    <div>
+      <div class="box">
+        <div class="user_card">
+          <div class="ucd_top">
+            <div class="ucd_left">
+              <img class="ucd_avatar" src="https://dev.saolei.wang/images/player/no.jpg" alt="闪电侠">
+              <div class="ucd_pop">
+                <div class="ucd_pop_line"><span class="ucd_pop_label">人气 </span><span class="ucd_pop_val">866</span></div>
+                <div class="ucd_pop_line"><span class="ucd_pop_label">今日 </span><span class="ucd_pop_label">—</span></div>
+              </div>
+            </div>
+            <div class="ucd_right">
+              <p class="ucd_name"><a href="#">闪电侠</a><span class="gender male"></span><span class="title"><svg><use href="#b-colonel"/></svg><em style="color:#e26b0a">上校</em></span></p>
+              <div class="ranks">
+                <span class="rank_line">广东第 <em>15</em> 名</span>
+                <span class="rank_line">全国第 <em>1024</em> 名<span class="ucd_delta up">↑3</span></span>
+              </div>
+            </div>
+          </div>
+          <hr class="ucd_hr">
+          <table class="ucd_scores" cellpadding="0" cellspacing="0">
+            <tbody>
+              <tr class="lv_beg"><th>初级</th><td><a href="#">1.86</a></td><td class="sep">|</td><td><a href="#">7.92</a></td></tr>
+              <tr class="lv_int"><th>中级</th><td><a href="#">31.02</a></td><td class="sep">|</td><td><a href="#">3.15</a></td></tr>
+              <tr class="lv_exp"><th>高级</th><td><a href="#">98.77</a></td><td class="sep">|</td><td><a href="#">1.98</a></td></tr>
+              <tr class="lv_sum"><th>总计</th><td><a href="#">131.65</a></td><td class="sep">|</td><td><a href="#">2.04</a></td></tr>
+            </tbody>
+          </table>
+          <p class="ucd_login">最近登录：2026年10月9日</p>
+        </div>
+      </div>
+      <p class="state-tag">B · 今日无人气增量（—）、全国名次 ↑3（红涨）</p>
+    </div>
+
+    <!-- ===== 状态 C：新玩家 + 长名字换行 ===== -->
+    <div>
+      <div class="box">
+        <div class="user_card">
+          <div class="ucd_top">
+            <div class="ucd_left">
+              <img class="ucd_avatar" src="https://dev.saolei.wang/images/player/no.jpg" alt="小雷">
+              <div class="ucd_pop">
+                <div class="ucd_pop_line"><span class="ucd_pop_label">人气 </span><span class="ucd_pop_val">3</span></div>
+                <div class="ucd_pop_line"><span class="ucd_pop_label">今日 </span><span class="ucd_pop_today">+2</span></div>
+              </div>
+            </div>
+            <div class="ucd_right">
+              <p class="ucd_name"><a href="#">深藏功与名的老雷友</a><span class="gender female"></span><span class="title"><svg><use href="#b-reserve"/></svg><em style="color:#636359">预备役</em></span></p>
+              <div class="ranks">
+                <span class="rank_line ucd_none">未加入地区排行</span>
+                <span class="rank_line ucd_none">未加入排行</span>
+              </div>
+            </div>
+          </div>
+          <hr class="ucd_hr">
+          <table class="ucd_scores" cellpadding="0" cellspacing="0">
+            <tbody>
+              <tr class="lv_beg"><th>初级</th><td class="null">?</td><td class="sep">|</td><td class="null">?</td></tr>
+              <tr class="lv_int"><th>中级</th><td class="null">?</td><td class="sep">|</td><td class="null">?</td></tr>
+              <tr class="lv_exp"><th>高级</th><td class="null">?</td><td class="sep">|</td><td class="null">?</td></tr>
+              <tr class="lv_sum"><th>总计</th><td class="null">?</td><td class="sep">|</td><td class="null">?</td></tr>
+            </tbody>
+          </table>
+          <p class="ucd_login">最近登录：2026年10月13日</p>
+        </div>
+      </div>
+      <p class="state-tag">C · 新玩家未上榜 + 长名字（军衔整组换行）</p>
+    </div>
+
+    <!-- ===== 标注 ===== -->
+    <div class="anno">
+      <div class="box">
+        <div class="user_card">
+          <div class="ucd_top">
+            <div class="ucd_left">
+              <img class="ucd_avatar" src="https://dev.saolei.wang/images/player/9672.jpg" alt="郭锦洋"
+                   onerror="this.src='https://dev.saolei.wang/images/player/no.jpg'">
+              <div class="ucd_pop">
+                <div class="ucd_pop_line"><span class="ucd_pop_label">人气 </span><span class="ucd_pop_val">12,345</span></div>
+                <div class="ucd_pop_line"><span class="ucd_pop_label">今日 </span><span class="ucd_pop_today">+37</span></div>
+              </div>
+            </div>
+            <div class="ucd_right">
+              <p class="ucd_name"><a href="#">郭锦洋</a><span class="gender male"></span><span class="title"><svg><use href="#b-marshal"/></svg><em style="color:#e6db74">元帅</em></span></p>
+              <div class="ranks">
+                <span class="rank_line">陕西第 <em>2</em> 名</span>
+                <span class="rank_line">全国第 <em>32</em> 名</span>
+              </div>
+            </div>
+          </div>
+          <hr class="ucd_hr">
+          <table class="ucd_scores" cellpadding="0" cellspacing="0">
+            <tbody>
+              <tr class="lv_beg"><th>初级</th><td><a href="#">0.24</a></td><td class="sep">|</td><td><a href="#">9.76</a></td></tr>
+              <tr class="lv_int"><th>中级</th><td><a href="#">8.46</a></td><td class="sep">|</td><td><a href="#">5.56</a></td></tr>
+              <tr class="lv_exp"><th>高级</th><td><a href="#">37.54</a></td><td class="sep">|</td><td><a href="#">4.44</a></td></tr>
+              <tr class="lv_sum"><th>总计</th><td><a href="#">46.24</a></td><td class="sep">|</td><td><a href="#">19.76</a></td></tr>
+            </tbody>
+          </table>
+          <p class="ucd_login">最近登录：2026年10月12日</p>
+        </div>
+      </div>
+      <span class="tag cyan" style="top:-14px; right:-96px;">① 名字 + 性别 + 军衔（首页同款）</span>
+      <span class="tag orange" style="top:36px; right:-96px;">② 地区 / 全国排行（用户主页同款）</span>
+      <span class="tag gold" style="top:150px; right:-96px;">③ 人气 + 今日新增（照片正下方）</span>
+      <span class="tag pink" style="bottom:-14px; right:-96px;">④ 各级别记录（灰阶同首页，数字可点）</span>
+    </div>
+  </div>
+
+  <h2 class="sec">二、本轮改动点</h2>
+  <div class="stage">
+    <div class="stage-note">
+      <ul>
+        <li><span class="k">军衔条件文案下线</span>：卡片里不再出现「高级记录 ≤ 40秒」；该文案改为<b>鼠标悬停军衔气泡</b>显示（首页 <code>TitleBadge</code> 的 data-tip 行为本来就带）。</li>
+        <li><span class="k">名字 → 性别 → 军衔</span>：姓名（金粗）后跟站点性别图标（<b>8×8 雪碧图</b>，与首页 <code>gender="small"</code> 同尺寸），再跟军衔徽章 + 军衔名，与首页「入伍新兵 / 国内TOP10」的人名行结构完全一致。</li>
+        <li><span class="k">不再显示 (id: xxxxx)</span>：如需保留 ID，可挪到卡片底部小字，说一声即可。</li>
+        <li><span class="k">排行上移</span>：地区、全国两行紧接名字下方，落在头像同高区域里（右列文字块高度 ≈ 头像 72px，视觉齐平）；<b>名次数字不用斜体</b>（正体加粗）；日升降保留 ↑/↓（红涨 / 绿跌），<b>「新上榜」标记不再显示</b>。</li>
+        <li><span class="k">各级别记录配色</span>：初级 <code>#999994</code>（最暗）→ 中级 <code>#bbbbaf</code> → 高级 <code>#ddddcf</code>（最亮），与首页录像列表/排行榜的成绩列<b>完全同一套灰阶</b>；数字加粗；hover 按级别变色（初绿 / 中橙 / 高金）。<b>仅「总计」行金色</b>（时间与 3BVS 均金）。</li>
+        <li><span class="k">数字可点击</span>：初级/中级/高级的时间与 3BVS 分别链接到<b>产生该纪录的那条录像</b>（<code>/video/{id}</code>，与用户主页成绩总表、录像列表同语义）；<b>总计</b>无单一录像可指，链接到该玩家的录像列表（<code>/video?author={id}</code>）；无成绩（?）不可点。</li>
+        <li><span class="k">人气位置不变</span>：仍在照片正下方——人气（金）+ 今日新增（绿，无则 —）。</li>
+        <li><span class="k">各级别记录 + 最近登录</span>：位置不变，分隔线以下。</li>
+      </ul>
+      <p style="color:#a59f85;font-size:13px;line-height:2;margin-top:10px;">
+        <b>待确认</b>：「进入TA的地盘」按钮是否保留（当前方案：点名字/头像进地盘）。
+      </p>
+    </div>
+  </div>
+
+  <h2 class="sec">三、数据结构（落码范围）</h2>
+  <table class="src">
+    <tr><th>区块</th><th>数据来源</th><th>说明</th></tr>
+    <tr><td>人气 / 今日新增</td><td><code>getClicks()</code>（click 表）</td><td>现有函数；同 IP 同一天对同一地盘只计一次</td></tr>
+    <tr><td>姓名 + 性别 + 军衔</td><td><code>AvatarCell</code> + <code>TitleBadge</code></td><td>直接复用首页组件，显示方式天然一致</td></tr>
+    <tr><td>地区 / 全国排行</td><td><code>getUserRanks()</code></td><td>现有函数（用户主页同款窗口函数查询）</td></tr>
+    <tr><td>各级别记录</td><td><code>getUserCards()</code></td><td>现有数据，不动</td></tr>
+  </table>
+  <p class="note">
+    宽度修正：<code>#bbs_op_card</code> 的 padding 由 <code>16px 12px</code> 改为 <code>30px</code>，盒子外径 236px → 272px，与首页右栏板块一致（卡片内容宽仍 210px）。<br>
+    性能：新增查询只针对右栏楼主 1 人（人气 2 次 count + 排行 1 次窗口函数）；楼层内作者小卡维持原样，不影响一页 20 楼的批量取数。
+  </p>
+</div>
+</body>
+</html>

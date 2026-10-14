@@ -10,7 +10,6 @@ import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { buildUrl } from "@/components/Pager";
 import { areaDisplay, TITLE_COLORS } from "@/lib/config";
-import { areaPower } from "@/lib/format";
 import {
   GEO_INSET_ISLAND,
   GEO_INSET_NINE,
@@ -203,7 +202,10 @@ export function AreaMap({
               </div>
               <div className="tp_row">
                 <i>综合排行指数</i>
-                <b className="gold">{areaPower(hot.power)}</b>
+                <b className="gold">
+                  {hot.power >= 10000 ? (hot.power / 10000).toFixed(1) : hot.power}
+                  {hot.power >= 10000 && <em className="unit">万</em>}
+                </b>
               </div>
               <div className="tp_row">
                 <i>领军人物</i>

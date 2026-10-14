@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标签选择器重设计 · 方案对比</title>
+<style>
+/* ================= 基础：模拟 2013 暗色站体 ================= */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1e1f1c;
+  font-family: "微软雅黑", Arial, "宋体";
+  color: #f8f8f2;
+  font-size: 14px;
+  line-height: 21px;
+  padding: 30px 20px 60px;
+}
+.wrap { max-width: 1000px; margin: 0 auto; }
+h1 { color: #fdc61a; font-size: 26px; line-height: 39px; text-shadow: 0 2px 2px rgba(0,0,0,.25); margin-bottom: 6px; }
+.sub { color: #75715e; margin-bottom: 28px; }
+h2.stage { color: #a6e22e; font-size: 16px; margin: 34px 0 14px; border-left: 3px solid #a6e22e; padding-left: 10px; }
+h2.stage .en { color: #75715e; font-size: 12px; font-weight: normal; margin-left: 8px; }
+.note { color: #939387; font-size: 12px; margin: 4px 0 12px; }
+a { text-decoration: none; cursor: pointer; }
+
+/* 模拟页面盒子（legacy .box） */
+.box {
+  background: #272822;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  padding: 20px;
+  max-width: 760px;
+}
+.box h3.title { color: #f8f8f2; font-size: 18px; margin-bottom: 14px; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 24px; }
+
+/* ================================================================
+   方案 A · 下划线式（编辑器 Tab 风格）
+   ================================================================ */
+.tabs-a { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; }
+.tabs-a a, .tabs-a em {
+  position: relative;
+  display: inline-block;
+  padding: 7px 14px;
+  font-style: normal;
+  font-size: 14px;
+  color: #939387;
+  border-radius: 4px 4px 0 0;
+  transition: color .15s;
+}
+.tabs-a em.active { color: #fdc61a; font-weight: bold; cursor: default; }
+.tabs-a a:hover { color: #a6e22e; }
+.tabs-a a::after, .tabs-a em::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: 0;
+  height: 3px; border-radius: 3px;
+  background: transparent; transition: background .15s;
+}
+.tabs-a em.active::after { background: #fdc61a; }
+.tabs-a a:hover::after { background: #49483e; }
+/* 容器底线 */
+.tabs-a { border-bottom: 1px solid #49483e; }
+/* 榜别（大 tab）变体：字号大一点 */
+.tabs-a.big a, .tabs-a.big em { font-size: 15px; padding: 9px 18px; }
+/* 侧栏小变体 */
+.tabs-a.small a, .tabs-a.small em { font-size: 13px; padding: 5px 12px; }
+
+/* ================================================================
+   方案 B · 胶囊分组式（分段控件）
+   ================================================================ */
+.tabs-b { display: inline-flex; flex-wrap: wrap; background: #1b1c18; border: 1px solid #49483e; border-radius: 6px; padding: 3px; gap: 2px; }
+.tabs-b a, .tabs-b em {
+  display: inline-block;
+  padding: 5px 16px;
+  font-style: normal;
+  font-size: 14px;
+  color: #939387;
+  border-radius: 4px;
+  transition: all .15s;
+}
+.tabs-b em.active { background: #fdc61d; color: #333; font-weight: bold; }
+.tabs-b a:hover { color: #a6e22e; background: #3b3a32; }
+/* 榜别（大 tab）变体 */
+.tabs-b.big a, .tabs-b.big em { font-size: 15px; padding: 7px 20px; }
+/* 侧栏小变体 */
+.tabs-b.small a, .tabs-b.small em { font-size: 13px; padding: 4px 12px; }
+
+/* ================================================================
+   方案 C · 深灰块 + 黄字当前项（2008 深块延续）
+   ================================================================ */
+.tabs-c { display: flex; flex-wrap: wrap; }
+.tabs-c a, .tabs-c span {
+  display: block;
+  padding: 6px 18px;
+  margin-right: 1px;
+  font-size: 14px;
+  color: #f8f8f2;
+  background: #49483e;
+  border-radius: 4px 4px 0 0;
+  transition: all .15s;
+}
+.tabs-c span.current { background: #3b3a32; color: #fdc61a; font-weight: bold; cursor: default; }
+.tabs-c a:hover { background: #656355; color: #a6e22e; }
+/* 榜别大变体 */
+.tabs-c.big a, .tabs-c.big span { font-size: 15px; padding: 8px 20px; }
+/* 侧栏小变体 */
+.tabs-c.small a, .tabs-c.small span { font-size: 13px; padding: 4px 14px; }
+
+/* ================= 现状还原（对照用） ================= */
+.tabs-old { display: flex; flex-wrap: wrap; }
+.tabs-old a, .tabs-old span {
+  display: block; padding: 5px 18px; margin-right: 1px;
+  background: #49483e; color: #f8f8f2; font-size: 14px;
+}
+.tabs-old span.current { background: #3b3a32; color: #fdc61a; font-weight: bold; }
+.tabs-old.f-a { display: inline-flex; gap: 4px; background: none; border: 0; padding: 0; border-radius: 0; }
+.tabs-old.f-a a, .tabs-old.f-a em { display: inline-block; padding: 2px 10px; border-radius: 3px; background: none; color: #b1b1a4; margin: 0; }
+.tabs-old.f-a em.active { background: #fdc61d; color: #333; font-weight: bold; }
+
+/* 方案注解 */
+.tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 3px; margin-left: 10px; vertical-align: middle; }
+.tag.rec { background: #a6e22e; color: #1e1f1c; font-weight: bold; }
+.tag.plain { background: #3b3a32; color: #939387; }
+
+/* 模拟表格 */
+table.demo { width: 100%; border-collapse: collapse; margin-top: 14px; }
+table.demo th { text-align: left; color: #939387; font-weight: normal; font-size: 13px; padding: 6px 8px; border-bottom: 1px solid #49483e; }
+table.demo td { padding: 6px 8px; color: #b1b1a4; font-size: 14px; }
+table.demo tr:hover td { background: #3b3a32; }
+
+/* 侧栏模拟 */
+.sidebar { width: 300px; }
+.sidebar .sbox { background: #272822; border: 1px solid #49483e; border-radius: 4px; padding: 14px 10px; }
+.sidebar .sbox h4 { color: #f8f8f2; font-size: 14px; margin-bottom: 10px; }
+
+/* 登录框模拟 */
+#login-demo .qr { text-align: center; color: #75715e; padding: 40px 0; }
+.form-row { margin: 10px 0; }
+.form-row label { display: inline-block; width: 64px; text-align: right; color: #b1b1a4; margin-right: 6px; }
+.form-row input { padding: 6px 8px; border: 1px solid #656355; border-radius: 3px; background: #1b1c18; color: #f8f8f2; font-size: 14px; }
+
+/* 页脚 */
+.foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid #49483e; color: #75715e; font-size: 12px; line-height: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>标签选择器重设计</h1>
+  <p class="sub">覆盖站内全部 4 类场景 × 3 个方案 —— 配色沿用 2013 Monokai 暗色体系（#272822 底 / #49483e 边 / #fdc61d 黄 / #a6e22e 绿 / #939387 灰）</p>
+
+  <h2 class="stage">场景 ① · 录像列表筛选 <span class="en">/video · level + order 两组筛选</span></h2>
+  <p class="note">现状：黄底黑字小胶囊（padding 2px 10px），视觉碎、与整站「块式」语言不搭 →</p>
+
+  <div class="box" style="margin-bottom:16px">
+    <h3 class="title">现状还原（对照）</h3>
+    <div class="filters">
+      <div class="tabs-old f-a"><em class="active">全部</em><a>初级</a><a>中级</a><a>高级</a></div>
+      <div class="tabs-old f-a"><a>按上传时间排列</a><em class="active">按成绩排列</em><a>按3BV/s排列</a></div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-bottom:16px">
+    <h3 class="title">方案 A · 下划线式 <span class="tag rec">推荐</span></h3>
+    <div class="filters">
+      <div class="tabs-a">
+        <em class="active">全部</em><a>初级</a><a>中级</a><a>高级</a>
+      </div>
+      <div class="tabs-a">
+        <a>按上传时间排列</a><em class="active">按成绩排列</em><a>按3BV/s排列</a>
+      </div>
+    </div>
+    <table class="demo"><tr><th>级别筛选与排序共用同一套「下划线 + 黄字」语言，编辑器 tab 血统纯正，信息密度高</th></tr></table>
+  </div>
+
+  <div class="box" style="margin-bottom:16px">
+    <h3 class="title">方案 B · 胶囊分组（分段控件）</h3>
+    <div class="filters">
+      <div class="tabs-b">
+        <em class="active">全部</em><a>初级</a><a>中级</a><a>高级</a>
+      </div>
+      <div class="tabs-b">
+        <a>按上传时间排列</a><em class="active">按成绩排列</em><a>按3BV/s排列</a>
+      </div>
+    </div>
+    <table class="demo"><tr><th>整组包进一个深色凹槽（#1b1c18），当前项黄块凸出，选择状态一目了然</th></tr></table>
+  </div>
+
+  <div class="box">
+    <h3 class="title">方案 C · 深灰块 + 黄字当前项</h3>
+    <div class="filters">
+      <div class="tabs-c">
+        <span class="current">全部</span><a>初级</a><a>中级</a><a>高级</a>
+      </div>
+      <div class="tabs-c">
+        <a>按上传时间排列</a><span class="current">按成绩排列</span><a>按3BV/s排列</a>
+      </div>
+    </div>
+    <table class="demo"><tr><th>延续 2008 深块基因（现状 ranking_tabs 的精细版）：圆角、过渡、hover 提亮</th></tr></table>
+  </div>
+
+  <h2 class="stage">场景 ② · 排行榜榜别切换 <span class="en">/ranking · 雷界排行/NF/进步/地区/人气/世界</span></h2>
+  <p class="note">现状即方案 C 雏形（#49483e 深块无圆角无过渡）→ 三个方案对应给出大 tab 变体</p>
+
+  <div class="box" style="margin-bottom:16px">
+    <h3 class="title">方案 A · 下划线式（大）</h3>
+    <div class="tabs-a big">
+      <em class="active">雷界排行</em><a>NF</a><a>进步</a><a>地区</a><a>人气</a><a>世界</a>
+    </div>
+    <table class="demo"><tr><th>当前项带 3px 黄色下划线 + 黄字加粗，其余项灰色；整组坐在一条 #49483e 底线上</th></tr></table>
+  </div>
+
+  <div class="box" style="margin-bottom:16px">
+    <h3 class="title">方案 B · 胶囊分组（大）</h3>
+    <div class="tabs-b big">
+      <em class="active">雷界排行</em><a>NF</a><a>进步</a><a>地区</a><a>人气</a><a>世界</a>
+    </div>
+    <table class="demo"><tr><th>大 tab 同样装进凹槽；「世界」这类外链榜也能并排摆放统一</th></tr></table>
+  </div>
+
+  <div class="box">
+    <h3 class="title">方案 C · 深灰块（大）</h3>
+    <div class="tabs-c big">
+      <span class="current">雷界排行</span><a>NF</a><a>进步</a><a>地区</a><a>人气</a><a>世界</a>
+    </div>
+    <table class="demo"><tr><th>现状的精修：只加圆角、过渡动画、hover 提亮，结构不动</th></tr></table>
+  </div>
+
+  <h2 class="stage">场景 ③ · 登录/绑定方式切换 <span class="en">/account/login · 微信扫码 / QQ 扫码 / 账号密码</span></h2>
+  <p class="note">现状：与录像筛选同款小胶囊，但语义不同（这里是「面板切换」不是「筛选」）→</p>
+
+  <div class="box" style="margin-bottom:16px">
+    <h3 class="title">方案 A · 下划线式</h3>
+    <div class="tabs-a" style="margin-bottom:18px">
+      <em class="active">微信扫码</em><a>QQ 扫码</a><a>账号密码</a>
+    </div>
+    <div class="qr">[ 微信二维码 300×400 ]</div>
+  </div>
+
+  <div class="box" style="margin-bottom:16px">
+    <h3 class="title">方案 B · 胶囊分组</h3>
+    <div class="tabs-b" style="margin-bottom:18px">
+      <em class="active">微信扫码</em><a>QQ 扫码</a><a>账号密码</a>
+    </div>
+    <div class="qr">[ QQ 授权按钮 ]</div>
+  </div>
+
+  <div class="box">
+    <h3 class="title">方案 C · 深灰块</h3>
+    <div class="tabs-c" style="margin-bottom:18px">
+      <span class="current">账号密码</span><a>微信扫码</a><a>QQ 扫码</a>
+    </div>
+    <div class="form-row"><label>用户名</label><input type="text" size="25"></div>
+    <div class="form-row"><label>密码</label><input type="password" size="25"></div>
+  </div>
+
+  <h2 class="stage">场景 ④ · 侧栏动态筛选 <span class="en">首页/用户页 · 全部/初级/中级/高级（小尺寸）</span></h2>
+  <p class="note">现状：复用 ranking_tabs.side（深灰块小号）→</p>
+
+  <div style="display:flex; gap:16px; flex-wrap:wrap">
+    <div class="sidebar">
+      <div class="sbox">
+        <h4>方案 A（小）</h4>
+        <div class="tabs-a small" style="margin-bottom:12px">
+          <em class="active">全部</em><a>初级</a><a>中级</a><a>高级</a>
+        </div>
+        <table class="demo" style="margin-top:0"><tr><td>雷界动态 · 全部</td></tr><tr><td>初级 · 张三完成了…</td></tr></table>
+      </div>
+    </div>
+    <div class="sidebar">
+      <div class="sbox">
+        <h4>方案 B（小）</h4>
+        <div class="tabs-b small" style="margin-bottom:12px">
+          <em class="active">全部</em><a>初级</a><a>中级</a><a>高级</a>
+        </div>
+        <table class="demo" style="margin-top:0"><tr><td>雷界动态 · 全部</td></tr><tr><td>初级 · 张三完成了…</td></tr></table>
+      </div>
+    </div>
+    <div class="sidebar">
+      <div class="sbox">
+        <h4>方案 C（小）</h4>
+        <div class="tabs-c small" style="margin-bottom:12px">
+          <span class="current">全部</span><a>初级</a><a>中级</a><a>高级</a>
+        </div>
+        <table class="demo" style="margin-top:0"><tr><td>雷界动态 · 全部</td></tr><tr><td>初级 · 张三完成了…</td></tr></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b style="color:#fdc61a">设计说明</b><br>
+    · 三方案共用 2013 Monokai 既有色板，不引入新颜色；区别在「形」不在「色」：<br>
+    · <b>A 下划线式</b>——当前项黄字+3px 黄下划线，整组坐在底线上；最贴合「编辑器 tab」血统，安静、信息密度高，筛选/榜别/登录三场景通吃（推荐）；<br>
+    · <b>B 胶囊分组</b>——iOS 分段控件式凹槽，当前项黄块；选择感最强，适合筛选语义；<br>
+    · <b>C 深灰块</b>——2008 深块基因精修版（加圆角/hover/过渡）；改动最小，榜别切换最像旧站。<br>
+    · 实施范围（任选方案后统一替换）：Pager.tsx Tabs、RankingNav、LoginForm/BindForm/OauthForm auth_tabs、NewsFeed 侧栏筛选 + globals.css 对应规则。
+  </div>
+</div>
+</body>
+</html>

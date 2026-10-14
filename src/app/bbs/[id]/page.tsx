@@ -55,8 +55,24 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
       <ul id="home">
         <li className="main">
           <div className="box bbs_post">
+            {/* 2026-10-14（张老师）：分类由【文字】改为 board_tag 徽章渲染，
+                与论坛列表页/首页论坛新帖同款四板块配色（公告黄/技术绿/问答橙/杂谈灰） */}
             <h1>
-              【{BBS_BOARD_NAMES[post.board]}】{post.title}
+              <span
+                className={
+                  "board_tag" +
+                  (post.board === 0
+                    ? " notice"
+                    : post.board === 1
+                      ? " tech"
+                      : post.board === 3
+                        ? " qa"
+                        : "")
+                }
+              >
+                {BBS_BOARD_NAMES[post.board]}
+              </span>
+              {post.title}
               {post.isNice && (
                 <span className="bbs_star" data-tip="精华">
                   ★
