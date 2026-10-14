@@ -200,20 +200,22 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
        （张老师定：状态栏只显示一行，模式/3BV 等放状态栏右侧）。
        显示条件：①「显示3BV」开关开 → 显示 3BV（五改：与 NF/无猜解绑，
        不再自动强制显示）；②NF / 无猜任一开启 → 显示模式标签；
-       ③无猜模式下发生过重排 → 追加重排次数。无内容时右侧整体不占位。
+       ③无猜模式下发生过重排 → 追加重排次数（六改：文案「重排N次」）。
+       所有状态项用「・」分隔连成一行。无内容时右侧整体不占位。
        开局前没有盘面，3BV 显示占位「—」。
        一次「重排」＝一次点击触发的无猜重排生效（内部平移/重排重试不算）——
        见 openCell 里的 ++ngRedeals。 */
     const gstatus = $("gstatus");
+    type St = { t: string; c: string };
     function updateStatus() {
-      const p: string[] = [];
-      if (nf) p.push('<span class="st st_nf">NF</span>');
-      if (ng) p.push('<span class="st st_ng">无猜</span>');
-      if (showBv) {
-        p.push('<span class="st st_bv">3BV ' + (started ? board3bv : "—") + "</span>");
-      }
-      if (ng && ngRedeals > 0) p.push('<span class="st st_re">重排 ' + ngRedeals + "</span>");
-      gstatus.innerHTML = p.join("");
+      const p: St[] = [];
+      if (nf) p.push({ t: "NF", c: "st_nf" });
+      if (ng) p.push({ t: "无猜", c: "st_ng" });
+      if (showBv) p.push({ t: "3BV " + (started ? board3bv : "—"), c: "st_bv" });
+      if (ng && ngRedeals > 0) p.push({ t: "重排" + ngRedeals + "次", c: "st_re" });
+      gstatus.innerHTML = p
+        .map((s) => '<span class="st ' + s.c + '">' + s.t + "</span>")
+        .join('<span class="sep">・</span>');
       gstatus.classList.toggle("hidden", p.length === 0);
     }
     function cellTd(i: number) { return tbody.rows[(i / W) | 0].cells[i % W]; }

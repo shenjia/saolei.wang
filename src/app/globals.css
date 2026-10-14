@@ -6032,7 +6032,7 @@ button.msg_cancel:hover {
 #online_play .gname .gstatus {
   display: flex;
   align-items: center;
-  gap: 0 8px;
+  gap: 0 3px; /* 分隔由「・」承担，这里只给两侧留点呼吸 */
   white-space: nowrap;
 }
 #online_play .gname .gstatus.hidden {
@@ -6049,6 +6049,10 @@ button.msg_cancel:hover {
 }
 #online_play .gstatus .st_re {
   color: #5a5a52;
+}
+/* 状态项之间的「・」分隔（六改张老师定） */
+#online_play .gstatus .sep {
+  white-space: nowrap;
 }
 #online_play .gboard_wrap {
   max-width: 100%;
