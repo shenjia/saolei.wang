@@ -2392,7 +2392,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
               <use className="d" href="#count-1" x="150" y="20" />
               <use className="d" href="#count-0" x="280" y="20" />
             </svg>
-            <button className="face" id="face_btn" title="重新开始" type="button">
+            <button className="face" id="face_btn" title="重新开始 (F2)" type="button">
               <svg viewBox="0 0 260 260" width="26" height="26"><use id="face_use" href="#face-normal" /></svg>
             </button>
             <svg className="ledc" id="led_time" viewBox="0 0 410 250" role="img" aria-label="计时">
