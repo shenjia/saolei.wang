@@ -61,12 +61,13 @@ function polygonPoints(n: number, r: number): string {
  * 录像分析雷达 —— 录像详情页与在线玩结算面板**共用同一个组件**
  * （2026-10-14 张老师定：练习里不许再维护第二份绘制，否则文案/字号/气泡必分叉）。
  *
- * @param size 渲染边长，默认 222（录像详情页既有尺寸，出血布局交给页面 CSS）。
- *   在线玩结算面板传 160：走「紧凑」分支，尺寸与定位上下文由内联样式直接给死，
- *   不依赖 `#page #video_view .radar.box .vr_wrap` 那套页面专属 CSS。
+ * @param fill 紧凑填充模式（在线玩结算面板用，2026-10-15 八期张老师定：
+ *   「雷达图的宽度应该顶满面板」）：.vr_wrap 撑满宿主宽、SVG width:100% 等比缩放，
+ *   尺寸完全交给宿主（桌面面板内容宽 174 / 移动浮层卡片内容宽 222），不再传固定边长。
+ *   默认 false＝录像详情页既有出血布局（尺寸交给 `#page #video_view …` 页面 CSS）。
  *   SVG 内部坐标恒按 222 视图绘制、靠 viewBox 等比缩放，标签字号随尺寸一起等比。
  */
-export function VideoAnalysisRadar({ data, size = SIZE }: { data: VideoAnalysisPoint[]; size?: number }) {
+export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysisPoint[]; fill?: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
   // 气泡定位：宽度随内容变化，挂载时先隐藏 → effect 实测气泡/容器宽后写入 left/top 并显示。
   // 用 key={hover} 让每次换轴都重新走一遍「隐藏→定位→显示」，避免换轴瞬间闪现在旧位置。
@@ -95,13 +96,14 @@ export function VideoAnalysisRadar({ data, size = SIZE }: { data: VideoAnalysisP
     <div
       className="vr_wrap"
       ref={wrapRef}
-      /* 紧凑模式（练习结算面板）自带定位上下文与固定边长；录像页沿用页面 CSS 的出血布局 */
-      style={size === SIZE ? undefined : { position: "relative", width: size, height: size }}
+      /* fill 模式（练习结算面板）：宽度交给宿主、SVG width:100%（CSS 见 globals
+         「紧凑版（练习结算面板…）」块）；录像页沿用页面 CSS 的出血布局 */
+      style={fill ? { position: "relative", width: "100%" } : undefined}
     >
       <svg
         className="chart"
-        width={size}
-        height={size}
+        width={SIZE}
+        height={SIZE}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         role="img"
         aria-label="录像分析雷达图"
