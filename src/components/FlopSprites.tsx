@@ -109,7 +109,7 @@ export function FlopSprites() {
         <symbol id="base-cell-border-press">
           <path d="M0 0v167.89h10V10h157.89V0H0z" fill="gray" />
         </symbol>
-        <symbol id="cell-mine-bomb">
+        <symbol id="cell-mine-bomb" viewBox="0 0 168 168">
           <use href="#base-cell-border-press" />
           <path d="M10 10v150h150V10H10z" fill="red" />
           <path d="M80 20v20H60v10H50V40H40v10h10v10H40v20H20v10h20v20h10v10H40v10h10v-10h10v10h20v20h10v-20h20v-10h10v10h10v-10h-10v-10h10V90h20V80h-20V60h-10V50h10V40h-10v10h-10V40H90V20H80z" />

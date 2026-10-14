@@ -99,8 +99,8 @@ export function OnlinePlay() {
     /* ---- 双渲染管线（2026-10-14 张老师定）----
        小倍率（<1.5x）：legacy 位图精灵（td 背景图，模糊插值——像素图放大必然糊，
        pixelated 锯齿方案已被否决回退）。
-       大倍率（≥1.5x，含全屏拉满/横屏顶满）：flop 矢量贴图（td 内嵌 <svg><use>），
-       无限放大边缘平滑。VEC_MAP 把引擎态映射到 symbol id。 */
+       大倍率（≥1.5x，含全屏拉满/横屏顶满）：flop 矢量贴图，无限放大边缘平滑。
+       VEC_MAP 把引擎态类名映射到 symbol id。 */
     let useVector = false;
     const VEC_MAP: Record<string, string> = {
       bb: "cell-normal", bf: "cell-flag", bq: "cell-question",
@@ -108,20 +108,38 @@ export function OnlinePlay() {
       b4: "cell-number-4", b5: "cell-number-5", b6: "cell-number-6", b7: "cell-number-7",
       b8: "cell-number-8", bm: "cell-mine", bn: "cell-flag-wrong",
     };
-    function paintCell(td: HTMLTableCellElement, cls: string) {
-      if (useVector) {
-        const sym = VEC_MAP[cls];
-        if (sym) {
-          td.className = "bv";
-          td.innerHTML = '<svg viewBox="0 0 168 168"><use href="#' + sym + '"/></svg>';
-          return;
-        }
-        td.className = cls; // 兜底：未映射态（如炸弹格）退回位图
-        td.innerHTML = "";
-        return;
+    /* 整盘单 SVG 渲染面（2026-10-14 二次返工，治「像素级错位」）：
+       上一版每格各自内嵌 <svg>，分数倍率下各格落在不同亚像素相位（zoom2.1 实测格宽
+       33.594px、格坐标 .625/.219/.813…），每格独立光栅化 → 格缘反锯齿深浅不一＝错位。
+       flop 原版同构方案：整盘一张 <svg> 覆盖层，所有格子共用同一坐标系、一次光栅化，
+       任意倍率网格完全均匀。table 只承担布局与命中（覆盖层 pointer-events:none）；
+       td 语义类（bb/b1/bm…）恒保持——败局 bm/bn 补绘检测两种管线共用，不再置 "bv"。 */
+    let vecUse: SVGUseElement[] = [];
+    function buildVecBoard() {
+      const cw = gboard.clientWidth, ch = gboard.clientHeight;
+      if (!cw || !ch) return; // tbody 未建（init 时 savedZoom 先于 reset），reset 里会再建
+      const svg = $("vec_board") as unknown as SVGSVGElement;
+      svg.setAttribute("viewBox", "0 0 " + cw + " " + ch);
+      svg.setAttribute("preserveAspectRatio", "none");
+      /* 底铺一层 cell-normal 平铺 pattern（board 内容盒与 table 等大，正常被格子盖满，
+         仅作尺寸舍入兜底）；每格一个 <use>，x/y 取 16 的整数倍 → 与 table 格严格对齐 */
+      let s = '<defs><pattern id="vec_tile" width="16" height="16" patternUnits="userSpaceOnUse">'
+        + '<use href="#cell-normal" width="16" height="16"/></pattern></defs>'
+        + '<rect width="100%" height="100%" fill="url(#vec_tile)"/>';
+      for (let i = 0; i < W * H; i++) {
+        s += '<use href="#cell-normal" x="' + (i % W) * 16 + '" y="' + ((i / W) | 0) * 16 + '" width="16" height="16"/>';
       }
+      svg.innerHTML = s;
+      vecUse = Array.from(svg.querySelectorAll(":scope > use")) as SVGUseElement[];
+    }
+    function paintCell(td: HTMLTableCellElement, cls: string) {
       td.className = cls;
       td.innerHTML = "";
+      if (useVector && vecUse.length) {
+        const i = (td.parentElement as HTMLTableRowElement).rowIndex * W + td.cellIndex;
+        const sym = VEC_MAP[cls];
+        vecUse[i]?.setAttribute("href", sym ? "#" + sym : "");
+      }
     }
     function paint(i: number) {
       const td = cellTd(i), s = state[i];
@@ -129,6 +147,15 @@ export function OnlinePlay() {
       else if (s === 2) paintCell(td, "bf");
       else if (s === 3) paintCell(td, "bq");
       else paintCell(td, "bb");
+    }
+    let hitIdx: number | null = null; // 敗局踩中格（红底炸弹），重开清空
+    function paintBomb(i: number) {
+      const td = cellTd(i);
+      td.className = "";
+      td.innerHTML = "";
+      if (useVector) vecUse[i]?.setAttribute("href", "#cell-mine-bomb");
+      /* 位图管线注入内嵌 svg（symbol 以 168 为基准坐标系，viewBox 必须一致，160 会放大 5% 错位） */
+      else td.innerHTML = '<svg viewBox="0 0 168 168" width="16" height="16" style="display:block"><use href="#cell-mine-bomb"/></svg>';
     }
     /* 全盘重绘（渲染管线切换 / 重开） */
     function repaintAll() {
@@ -138,12 +165,13 @@ export function OnlinePlay() {
         if (s === 1) cls = over ? (mines![i] ? "bm" : "b" + nums![i]) : "b" + nums![i];
         else if (s === 2) cls = "bf";
         else if (s === 3) cls = "bq";
-        /* 敗局雷区揭示：引擎只在 lose 时改 className 不改 state，这里按标记补齐 */
+        /* 敗局雷区揭示：引擎只在 lose 时改 DOM 不改 state，这里按类名标记补齐
+           （语义类恒在 td 上，矢量切换往返都不会丢） */
         if (over && s === 1 && td.classList.contains("bm")) cls = "bm";
         if (over && td.classList.contains("bn")) cls = "bn";
         paintCell(td, cls);
       }
-      /* 敗局命中格（cell-mine-bomb 内嵌 svg）与按下态保持不动——切换管线时它们本来就没有矢量对应 */
+      if (over && hitIdx !== null) paintBomb(hitIdx);
     }
     function flagsLeft() {
       let f = 0;
@@ -452,10 +480,8 @@ export function OnlinePlay() {
         if (!mines![i] && state[i] === 2) paintCell(cellTd(i), "bn");
       }
       /* 炸掉的那颗雷：flop 原版红底标志（cell-mine-bomb），站内精灵图 bc 不是红底 */
-      const hitTd = cellTd(hit);
-      hitTd.className = "";
-      hitTd.innerHTML =
-        '<svg viewBox="0 0 160 160" width="16" height="16" style="display:block"><use href="#cell-mine-bomb"/></svg>';
+      hitIdx = hit;
+      paintBomb(hit);
       setFace("dead");
       /* 踩雷不再有任何文字提醒（张老师定：笑脸状态已经够了） */
     }
@@ -491,7 +517,8 @@ export function OnlinePlay() {
         html += "</tr>";
       }
       tbody.innerHTML = html;
-      if (useVector) repaintAll(); // 矢量管线下初始格也用 <svg> 贴图
+      hitIdx = null;
+      if (useVector) { buildVecBoard(); repaintAll(); } // 矢量覆盖层按新盘面尺寸重建
       /* 级别筛选器：激活项重建为 span.current，其余为 a（ranking_tabs 结构）；
          NF / 无猜开关是原生 checkbox，状态自持、跨局保持，无需重绘 */
       container.querySelectorAll("#level_tabs [data-lv]").forEach((el) => {
@@ -700,6 +727,7 @@ export function OnlinePlay() {
       if (want !== useVector) {
         useVector = want;
         gboard.classList.toggle("vector", useVector);
+        if (useVector) buildVecBoard();
         repaintAll();
       }
     }
@@ -861,6 +889,8 @@ export function OnlinePlay() {
           <div className="gboard_wrap">
             <div className="board size16 game" id="gboard">
               <table cellPadding="0" cellSpacing="0"><tbody id="gtbody" /></table>
+              {/* 矢量管线整盘渲染面（≥1.5x 才显示）：table 管布局与命中，视觉由这张 SVG 画 */}
+              <svg className="vecboard" id="vec_board" aria-hidden="true" />
             </div>
           </div>
           <div className="gname" id="gname">初级 8×8 · 10 雷</div>
