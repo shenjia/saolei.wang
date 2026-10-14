@@ -18,6 +18,7 @@ const MINE_MAP: Record<string, string> = {
   "-": "Num",
   "+": "IsMine",
   "*": "Mine",
+  X: "NoMine",
 };
 
 /** 小键盘 keyCode → 摆雷符号（2008 版 KeyDown 映射） */
@@ -760,7 +761,8 @@ export function RichEditor({
           <div className="wpop mines">
             {/* 4x4 方阵（2026-09-26 张老师定）：
                 第一行「无按钮」：黑 / 空 / 问 / 雷（[-] = 凹陷底问号，[ ] = 凹陷空格）
-                第二三行数字 1-8；第四行「有按钮」：空 / 旗 / 问 / 雷（同日张老师：旗、问对换） */}
+                第二三行数字 1-8；第四行「有按钮」：空 / 旗 / 问 / 雷（同日张老师：旗、问对换）
+                第五行追加 [X] 炸开的红底雷（2026-10-14 补，2008 版图在但从未接线），钉在第 4 列黑雷正下方 */}
             <div className="wpop_grid mine_pad">
               {[
                 [".", "Black", "分割使用"],
@@ -788,6 +790,14 @@ export function RichEditor({
                   onClick={() => insertNodeAtCaret(makeMineImg(sym))}
                 />
               ))}
+              {/* 炸开的红底雷：固定在第 4 列（黑雷正下方），不挤乱既有 4×4 分组；无快捷键（同 2008 版） */}
+              <img
+                src="/images/mine/nomine.gif"
+                alt=""
+                title="炸开的雷"
+                style={{ gridColumn: 4 }}
+                onClick={() => insertNodeAtCaret(makeMineImg("X"))}
+              />
             </div>
             <div className="wpop_tip">可用数字快捷键</div>
           </div>

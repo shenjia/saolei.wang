@@ -50,6 +50,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link href="/video">录像</Link>
                 </li>
                 <li>
+                  <Link href="/online">在线玩</Link>
+                </li>
+                <li>
                   <Link href="/bbs">论坛</Link>
                 </li>
                 <li>

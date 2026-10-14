@@ -18,11 +18,12 @@ export interface MobileNavUser {
   avatarUrl: string;
 }
 
-/** 站内主导航（与桌面 #header_nav 前七项一致） */
+/** 站内主导航（与桌面 #header_nav 前八项一致） */
 const SITE_LINKS: { href: string; label: string }[] = [
   { href: "/", label: "首页" },
   { href: "/ranking", label: "排行" },
   { href: "/video", label: "录像" },
+  { href: "/online", label: "在线玩" },
   { href: "/bbs", label: "论坛" },
   { href: "/page/guide", label: "教程" },
   { href: "/titles", label: "军衔" },

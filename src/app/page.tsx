@@ -24,6 +24,7 @@ import { VideoFeed } from "@/components/VideoFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { BbsLatest } from "@/components/BbsLatest";
 import { SiteStats } from "@/components/SiteStats";
+import { FlopSprites } from "@/components/FlopSprites";
 import { title as assessTitle } from "@/lib/assess";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,15 @@ export default async function HomePage() {
         </div>
       </li>
       <li className="sidebar">
+        {/* 「开一局」大按钮（2026-10-14 张老师定）：扁平笑脸银灰样式、与侧栏板块同宽，
+            位于入伍新兵之上；为腾出其高度，论坛新帖由 8 条减为 6 条，保持左右栏底部基本对齐 */}
+        <FlopSprites />
+        <Link id="play_entry" href="/online">
+          <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
+            <use href="#face-flat" />
+          </svg>
+          <span>开一局</span>
+        </Link>
         <div id="newbie" className="box">
           <h2>入伍新兵</h2>
           <table cellPadding={0} cellSpacing={0} className="table full">

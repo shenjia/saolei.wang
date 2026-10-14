@@ -5507,14 +5507,106 @@ button.msg_cancel:hover {
 /* ===== 在线玩 /online（2026-10-14 一期：纯前端娱乐局）=====
    外框/计数条/底部条复刻 flop player 经典银灰；LED 数码管与笑脸贴图见 components/FlopSprites.tsx。
    计数条/底部条 width:0 + min-width:100% —— 保证严格与棋盘同宽，不参与外框撑宽 */
-/* 标题行：复用全站 .news_head（同首页「新闻」：黄 h1 + ranking_tabs 筛选器紧跟右侧，2026-10-14 张老师定）。
-   模式筛选器（标准/NF/无猜）margin-left:auto 推到行右；窄屏 flex-wrap 自然换行 */
-#online_play #mode_tabs {
-  margin-left: auto;
-}
+/* 标题行：复用全站 .news_head（同首页「新闻」：黄 h1 + ranking_tabs 级别筛选紧跟右侧，2026-10-14 张老师定）。
+   右侧三个独立开关（NF / 无猜 / 全屏）margin-left:auto 推到行右；窄屏 flex-wrap 自然换行 */
 #online_play .ranking_tabs a {
   cursor: pointer;
 }
+/* ---- 右上开关组：滑块式开关 + 悬停气泡说明（2026-10-14 张老师定） ---- */
+#online_play .gswitches {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  /* news_head 整体是 flex-end（贴底线），开关组单独改为与 title 垂直居中（2026-10-14 张老师定） */
+  align-self: center;
+}
+#online_play .gsw {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #939387;
+  user-select: none;
+  -webkit-user-select: none;
+  /* 压过 legacy-2013.css 全局 label{overflow:hidden; line-height:38.4px; ...}：
+     overflow:hidden 会把悬停气泡裁掉，38.4px 行高会撑坏开关与气泡 */
+  overflow: visible;
+  line-height: normal;
+  white-space: normal;
+  padding-right: 0;
+}
+#online_play .gsw input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+#online_play .gsw .track {
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: #555550;
+  position: relative;
+  flex: 0 0 auto;
+  transition: background 0.15s;
+}
+#online_play .gsw .track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e8e8e0;
+  transition: left 0.15s;
+}
+#online_play .gsw input:checked + .track {
+  background: #34c759;
+}
+#online_play .gsw input:checked + .track::after {
+  left: 16px;
+}
+/* 悬停气泡：右对齐防止最右开关的气泡溢出页面；纯 CSS 实现 */
+#online_play .gsw .tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  white-space: nowrap;
+  background: #49483e;
+  border: 1px solid #656355;
+  border-radius: 5px;
+  color: #e8e8e0;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 5px 10px;
+  z-index: 20;
+  pointer-events: none;
+}
+#online_play .gsw .tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  right: 18px;
+  border: 5px solid transparent;
+  border-top-color: #656355;
+}
+#online_play .gsw:hover .tip {
+  display: block;
+}
+/* 全屏开关：根容器全屏时补深色底（全屏默认背底为纯黑）、内容超高可滚 */
+#online_play > div:fullscreen {
+  background: #272822;
+  overflow: auto;
+  padding: 24px 12px;
+  box-sizing: border-box;
+}
+/* ---- 移动端横屏规则块已移到本区块末尾（约 .flagmode_btn 之后）——
+   媒体查询不加优先级，放前面会被后面的基础规则（如 .gzoom{display:flex}）同优先级覆盖 */
 #online_play #game_area {
   text-align: center;
   user-select: none;
@@ -5527,6 +5619,19 @@ button.msg_cancel:hover {
   border: 3px solid;
   border-color: #fff #7b7b7b #7b7b7b #fff;
   text-shadow: none;
+  /* 位图管线（<1.5x）保持浏览器默认平滑插值（2026-10-14 张老师定：
+     pixelated 像素感方案锯齿过强已回退）；≥1.5x 由 JS 切换到 flop 矢量贴图（.bv） */
+}
+/* 矢量管线（≥1.5x）：td 内嵌 <svg><use>，底板/边框由 symbol 自带（cell-normal 含凸起高光） */
+#online_play #gboard.vector td.bv {
+  background: none;
+  padding: 0;
+  line-height: 0;
+}
+#online_play #gboard.vector td.bv svg {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 #online_play .gbar {
   display: flex;
@@ -5550,6 +5655,8 @@ button.msg_cancel:hover {
 #online_play .face {
   width: 26px;
   height: 26px;
+  /* 压过 legacy-2013.css button 的 margin-right:8px——否则笑脸在计数条里偏左 4px 不居中 */
+  margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -5580,6 +5687,54 @@ button.msg_cancel:hover {
   max-width: 100%;
   overflow-x: auto;
 }
+/* ---- 结算报告浮窗（2026-10-14 张老师定）：游戏结束显示在游戏界面左侧，再开局隐藏；
+   只有桌面版显示（<960px 一律不渲染，移动端无浮窗） ---- */
+#online_play .gwrap {
+  position: relative;
+  display: inline-block;
+}
+#online_play .greport {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: calc(100% + 14px);
+  width: max-content;
+  background: #49483e;
+  border: 1px solid #656355;
+  border-radius: 6px;
+  padding: 10px 14px;
+  z-index: 5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  text-align: left;
+}
+#online_play .greport .gr_title {
+  font-size: 13px;
+  font-weight: bold;
+  color: #e8e8e0;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #656355;
+}
+#online_play .greport table {
+  border-collapse: collapse;
+}
+#online_play .greport td {
+  font: 12px/19px Arial, Helvetica, sans-serif;
+  color: #939387;
+  padding: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+#online_play .greport td + td {
+  padding-left: 14px;
+  text-align: right;
+  color: #e8e8e0;
+}
+@media (min-width: 960px) {
+  #online_play .greport.show {
+    display: block;
+  }
+}
 #online_play .board.game {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
@@ -5598,6 +5753,10 @@ button.msg_cancel:hover {
   max-width: 100%;
   box-sizing: border-box;
   text-shadow: none;
+}
+#online_play .gzoom .gz_label {
+  font: 14px/1 Arial, Helvetica, sans-serif;
+  color: #555;
 }
 #online_play .gzoom input[type="range"] {
   width: 180px;
@@ -5622,21 +5781,6 @@ button.msg_cancel:hover {
 #online_play .gzoom .gz_reset:hover {
   color: #1890ff;
   border-color: #1890ff;
-}
-#online_play .gstats {
-  margin-top: 12px;
-  font-size: 14px;
-  color: #939387;
-}
-#online_play .gstats b {
-  color: #eee;
-  font-weight: bold;
-}
-#online_play .gstats .win {
-  color: #a6e22e;
-}
-#online_play .gstats .lose {
-  color: #f92672;
 }
 #online_play .gtools {
   margin-top: 14px;
@@ -5673,12 +5817,52 @@ button.msg_cancel:hover {
     display: inline-block;
   }
 }
-#online_play .ghelp {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #75715e;
+/* ---- 移动端横屏（2026-10-14 张老师定）：标题/级别筛选/开关移到左侧竖排，游戏区顶满视口高度
+   （顶满的倍率由 JS fitZoomForLandscape 算，这里只做布局）。
+   判定与 JS matchMedia 严格一致：横屏且视口高 ≤520px
+   （手机横屏典型 360-430px；平板横屏 700+ 不命中，保持常规布局）。
+   比例条在横屏自动拉满下是冗余控件，且 290px 垂直预算放不下——隐藏；
+   插旗钮（触屏必需）绝对定位到侧栏底部，不占游戏列高度。
+   本块必须留在 #online_play 全部基础规则之后：媒体查询不加优先级，
+   同优先级时后定义者胜出（display:none 曾被后面的 .gzoom{display:flex} 覆盖） */
+@media (orientation: landscape) and (max-height: 520px) {
+  #online_play > div {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  #online_play .news_head {
+    flex: 0 0 150px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 0;
+  }
+  #online_play .gswitches {
+    margin-left: 0;
+    align-self: flex-start;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  #online_play #game_area {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #online_play .gzoom {
+    display: none;
+  }
+  #online_play .gtools {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 150px;
+    margin-top: 0;
+    justify-content: flex-start;
+  }
 }
-
 /* 首页右栏「开一局」大按钮（2026-10-14 张老师定）：扁平、与侧栏板块同宽（桌面盒外径 272px），
    样式复用游戏笑脸按钮的经典银灰凸起边框，笑脸图标在前、文字在后 */
 #play_entry {
@@ -5687,7 +5871,8 @@ button.msg_cancel:hover {
   justify-content: center;
   gap: 10px;
   width: 272px;
-  margin: 0 8px 16px;
+  /* 顶距 16px：上边缘与左栏新闻板块上边缘对齐（2026-10-14 张老师，新闻盒比栏顶低 16px） */
+  margin: 16px 8px 16px;
   padding: 10px 0;
   background: silver;
   border: 3px solid;

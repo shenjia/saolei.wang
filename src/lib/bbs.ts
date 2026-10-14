@@ -55,6 +55,7 @@ const MINE_MAP: Record<string, string> = {
   "-": "Num",
   "+": "IsMine",
   "*": "Mine",
+  X: "NoMine",
 };
 
 export function ubb(raw: string): string {
