@@ -2352,16 +2352,22 @@ export function OnlinePlay({
          看到的「底部露板块背景色」。这里不追棋盘，改把**窗**（gwrap，银底 + 凸起边框）
          用 min-height 补到视口底——补出的空间落在银框内部（银底/棋格内衬），肉眼不可见，
          棋盘尺寸与手感分毫不动。
-         量纲：窗显示高 = 布局高 × zoom（zoom 挂 gwrap 自身），故 min-height 按
-         「当前布局高 + 缺口 ÷ zoom」递增；两轮实测逼近（Chrome 的 zoom 取整会让
-         显示高与布局高×zoom 差 ~1px，一次算不准）。每次 fit 开头先撤旧值，
-         免得下一次把上次的拉伸计入基准 */
-      for (let i = 0; i < 2; i++) {
-        const r = gwrap.getBoundingClientRect();
-        const deficit = vh - 1 - r.bottom / pz; // 距视口底还差多少（显示 px，扣 box 1px 边框）
-        if (deficit <= 0.5) break;
-        const cur = parseFloat(gwrap.style.minHeight) || 0;
-        gwrap.style.minHeight = Math.ceil(Math.max(cur, baseH) + deficit / zoomCur) + "px";
+         量纲：窗显示高 = 布局高 × zoom（zoom 挂 gwrap 自身），故 min-height 取
+         「当前布局高 + 缺口 ÷ zoom」，写小数（1 布局 px ≈ 2.5 显示 px，取整会跨过视口底）。
+         gwrap 在横屏块里是 border-box（见 globals.css），布局高口径与 offsetHeight 一致。
+         ⚠️ 一次性补差、过则回退：min-height 有明显硬地板（实测自然高 154.8 → 一给
+         min-height 就直接落到 157.2 布局 px），因为横排计数列三件套（时间/笑脸/雷数）
+         的最小高把 flex 行撑住，中间那几 px 根本踩不到。容忍 ≤3px 过冲——溢出的只是
+         窗口最底部 3px 的 padding/边框（计数列 space-between，内容都在其上方），
+         肉眼不可见；超过就回退，宁留几 px 背景也不裁内容。
+         每次 fit 开头先撤旧值，免得下一次把上次的拉伸计入基准 */
+      const rFill = gwrap.getBoundingClientRect();
+      const deficit = vh - 1 - rFill.bottom / pz; // 距视口底还差多少（显示 px，扣 box 1px 边框）
+      if (deficit > 0.4) {
+        const prev = gwrap.style.minHeight;
+        const cur = parseFloat(prev) || 0;
+        gwrap.style.minHeight = (Math.max(cur, baseH) + deficit / zoomCur).toFixed(2) + "px";
+        if (gwrap.getBoundingClientRect().bottom / pz > vh - 1 + 3) gwrap.style.minHeight = prev;
       }
     }
     function syncLandscape() {

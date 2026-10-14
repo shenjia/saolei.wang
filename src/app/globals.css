@@ -6924,6 +6924,10 @@ html.op-fakefs #header {
   #online_play .gwrap {
     display: inline-flex;
     align-items: stretch;
+    /* 银框兜底拉伸（JS 设 min-height 补到视口底）必须按 border-box 释义：
+       gwrap 有 padding 9 + border 3，content-box 下 156px 的 min-height 会撑出
+       180px 实际高度（越补越大），border-box 才等于「窗总高」 */
+    box-sizing: border-box;
   }
   #online_play .gbar {
     flex-direction: column-reverse;
