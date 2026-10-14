@@ -192,7 +192,7 @@ export async function getNews(opts: {
 }
 
 /** 动态页码模式（2026-10-14 用户主页动态翻页条）：id 倒序第 page 页起 limit 条。
- *  页锚点按 base（=USER_NEWS_NUMBER 15）计；skip 恒按 base 锚点，take 才是本批行数
+ *  页锚点按 base（=调用方传入的页大小）计；skip 恒按 base 锚点，take 才是本批行数
  *  （与列表类 more 接口同语义）。两段查询：先 id 列表（带筛选条件）再复用 getNews 组装军衔。 */
 export async function getNewsPage(opts: {
   types?: number[];
@@ -627,7 +627,7 @@ export async function getVideoFeed(opts: {
 }
 
 /** 录像流页码模式（2026-10-14 四轮，首页录像版块翻页条）：id 倒序第 page 页起 limit 条。
- *  页锚点按 base（=HOME_VIDEO_NUMBER 15）计；skip 恒按 base 锚点，take 才是本批行数。 */
+ *  页锚点按 base（=调用方传入的页大小）计；skip 恒按 base 锚点，take 才是本批行数。 */
 export async function getVideoFeedPage(opts: {
   level: VideoLevel | "all";
   page: number;

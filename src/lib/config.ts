@@ -57,10 +57,11 @@ export function parseBvRankingBy(v?: string): BvRankingBy {
 export const VIDEO_PAGESIZE = 20;
 export const HOME_TOP_NUMBER = 10;
 export const HOME_NEWBIE_NUMBER = 5;
-// 首页「动态」初始条数（2026-09-24 张老师要求：30 → 20 → 15，标题由「雷界快讯」改「动态」）
-export const HOME_NEWS_NUMBER = 15;
-// 首页「最新录像」初始条数（2026-09-24 新增版块，初值 20 → 15）
-export const HOME_VIDEO_NUMBER = 15;
+// 首页「动态」初始条数（2026-09-24 张老师要求：30 → 20 → 15，标题由「雷界快讯」改「动态」；
+// 2026-10-15 张老师要求 15 → 17，与录像每页各 +2）
+export const HOME_NEWS_NUMBER = 17;
+// 首页「最新录像」初始条数（2026-09-24 新增版块，初值 20 → 15；2026-10-15 张老师要求 15 → 17）
+export const HOME_VIDEO_NUMBER = 17;
 
 // ---------- 评论（移植 CommentConfig） ----------
 // 2026-09-26 张老师要求：录像页初始最多显示 10 条，其余走「加载更多」
@@ -91,12 +92,12 @@ export const CONTENT_STATUS_NAMES: Record<number, string> = {
 
 // 动态「加载更多」每页条数（移植 NewsConfig::PAGESIZE）
 export const NEWS_PAGESIZE = 20;
-// 用户主页动态初始条数（2026-09-24 张老师要求 15 → 10）
-export const USER_NEWS_NUMBER = 10;
-// 用户主页历程初始条数（2026-09-24 张老师要求与动态一致改 10）
-export const USER_HISTORY_NUMBER = 10;
-// 用户主页录像版块初始条数（2026-09-26 张老师要求默认 10 条，与动态/纪事同口径）
-export const USER_VIDEO_NUMBER = 10;
+// 用户主页动态初始条数（2026-09-24 张老师要求 15 → 10；2026-10-15 张老师要求 10 → 12）
+export const USER_NEWS_NUMBER = 12;
+// 用户主页历程初始条数（2026-09-24 张老师要求与动态一致改 10；2026-10-15 张老师要求 10 → 12）
+export const USER_HISTORY_NUMBER = 12;
+// 用户主页录像版块初始条数（2026-09-26 张老师要求默认 10 条，与动态/纪事同口径；2026-10-15 张老师要求 10 → 12）
+export const USER_VIDEO_NUMBER = 12;
 
 // ---------- 军衔（移植 TitleConfig） ----------
 

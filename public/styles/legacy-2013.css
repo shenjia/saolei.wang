@@ -58,3 +58,9 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #filelist .progressBar .title .message:empty{display:none}
 /* 2026-10-14 张老师要求：录像卡片外边框改虚线（含成功绿/失败红两个状态色） */
 #filelist .progressBar,#filelist .progressBar.error,#filelist .progressBar.success{border-style:dashed}
+
+/* 2026-10-15 张老师要求：列表板块底部翻页条/加载更多下的 30px 空隙去掉——
+   这些版块列表顶到底即翻页控件，.box 的 30px 底衬破坏收尾节奏，收紧到 10px。
+   范围（选择器即清单，加版块须同步）：首页 #news（新闻/动态）#video（录像）；
+   用户主页 #user_view 下 #news（动态）#user_videos（录像）#history（纪事）。 */
+#news.box,#video.box,#user_view #news.box,#user_videos.box,#history.box{padding-bottom:10px}
