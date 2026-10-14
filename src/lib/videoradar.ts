@@ -307,9 +307,12 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
  * 注意：虽然名叫「综合」，但它只由时间与 3BV 构成（CL / Ce / 鼠标路径一概不参与），
  * 与「速度」轴是同一份信息的两种折算。要真正融合六维需在此之上另行加权。
  *
- * @param solved 已解 3BV（胜局恒等于该盘 3BV，见上方「胜局口径」注记）
+ * @param solved 已解 3BV。原始公式末尾还有个完成度因子 √(solved/3BV)：
+ *   本站只留已通过胜局，solved 恒等于全盘 3BV，该因子恒为 1，故一般传 solved 即可；
+ *   将来若要评非胜局/半成品局，必须把该盘真实 3BV 也传进来，否则会系统性高估。
+ * @param bbbv 全盘 3BV，默认等于 solved（胜局）
  */
-export function stnbOf(level: string, solved: number, timeMs: number): number {
+export function stnbOf(level: string, solved: number, timeMs: number, bbbv: number = solved): number {
   if (!Number.isFinite(solved) || !Number.isFinite(timeMs)) return 0;
   if (solved <= 0) return 0;
   const t = timeMs / 1000;
@@ -318,7 +321,10 @@ export function stnbOf(level: string, solved: number, timeMs: number): number {
   if (t < 0.01) return 0;
   const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
   const qg = Math.pow(t, 1.7) / solved;
-  return Math.round(((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * 10) / 10;
+  // 完成度因子：作弊式「只开一小片就收工」的半成品局会被按比例打折。
+  // 胜局 solved === bbbv，恒为 1 —— 已入库的三十万盘数值不受影响，不必重算。
+  const completion = bbbv > 0 ? Math.sqrt(solved / bbbv) : 0;
+  return Math.round(((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * completion * 10) / 10;
 }
 
 /**
