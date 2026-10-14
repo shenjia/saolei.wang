@@ -6725,6 +6725,10 @@ html.op-noscroll body {
     /* 顶端对齐：game_area 顶部即游戏区顶部，fitZoom 的「视口高 − game_area 顶」
        才能把棋盘拉到真正满高（居中会让 gaR.top 变大、算出偏小的倍率） */
     align-items: flex-start;
+    /* 横向居中（2026-10-15 三定去外框后）：宽横屏（16 Pro 874×402）上高级盘
+       高度约束先到、宽度用不完（左右各剩 ~35px），居中让余量均分两侧，
+       与上下留白同色（页面深灰背景），视觉对称 */
+    justify-content: center;
     gap: 0;
     /* 最小高度撑到满屏，保持游戏列视觉满幅（fitZoom 会把棋盘拉满高度）。
        2 = box 上下各 1px 边框（margin/padding 已于 2026-10-15 全清） */
@@ -6957,5 +6961,45 @@ html.op-fakefs #header {
     min-width: 0;
     margin-bottom: 0;
     margin-right: 9px;
+  }
+  /* ---- 去外框 + 计数列紧凑（2026-10-15 张老师三定，初级/中级/高级统一）----
+     横向开销（银框 padding9+border3 ×2 = 24、棋盘凹陷镶边 2×2 = 4、计数列
+     框+LED ≈ 53、gbar 间距 9，共 ~87 布局 px）挤占棋盘宽度：高级盘 30 列在
+     窄横屏（SE 667×375）宽度约束先到，格子被压到 18.7px、上下露大片空白；
+     16 Pro 宽横屏虽高度约束，左右也各剩 ~35px 用不上。张老师两案合并：
+     ① 格子直接顶屏幕物理边缘（box 镶边/银框/棋盘镶边全去）；
+     ② 计数列保留但紧凑化（LED 41×25→28×17、笑脸 26→22、gbar 框与间距收紧）。
+     去框后省 ~46 布局 px：SE 格子 18.7→20.5px，16 Pro 22.7→25px（满高上限）。
+     留白处理：横向由 #online_play > div 居中均分；纵向由 .gframe flex 居中
+     （min-height 兜底拉满 gwrap 后，格间离散残差/宽度约束的上下余量均分上下，
+     与左右留白同为页面深灰背景，无框无违和） */
+  body:has(#online_play) #page .box {
+    border: none;
+  }
+  #online_play .gwrap {
+    padding: 0;
+    background: none;
+    border: none;
+  }
+  #online_play .board.game {
+    border-width: 0;
+  }
+  #online_play .gframe {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #online_play .gbar {
+    padding: 2px;
+    border-width: 1px;
+    margin-right: 4px;
+  }
+  #online_play .ledc {
+    width: 28px;
+    height: 17px;
+  }
+  #online_play .face {
+    width: 22px;
+    height: 22px;
   }
 }

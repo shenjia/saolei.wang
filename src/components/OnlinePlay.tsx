@@ -85,13 +85,12 @@ const PAGE_PAD = 100;   // 盘面之外需给 #page 留的总宽（盒装 78 + �
 const GA_OFFSET = 78;   // #page 宽 → #game_area 内容宽的固定损耗
 const PAGE_MIN_W = 480; // 下限：标题行 + 4 个级别 tab 一行放得下、弹窗（320）不出盒
 const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
-/* 手机横屏固定横向开销（布局 px）：页面边距 8 + 盒装 border/padding ~18
-   + 视口滚动条/余量 → fitZoom* 与 normalMaxZoom 共用。用固定值而非 rect 实测：
-   超宽盘会把布局视口撑爆、rect 全失真。zoom 挂 .gwrap 后银框（含竖排计数列）
-   整体随盘缩放，拉满基准即整个银框窗，预留不再含框/计数列。
-   ⚠️ 2026-10-15 横屏改沉浸模式后左栏（150px）已隐藏，预留从 240 大幅降到 40；
-   同日二定「严格占满 100% 高度」把 #page 的 margin/padding 与 .box 的
-   margin/padding 全部清零（CSS 横屏块），横向只余 box 左右各 1px 边框 → 预留 2 */
+/* 手机横屏固定横向开销（布局 px）→ fitZoom* 与 normalMaxZoom 共用。用固定值而非
+   rect 实测：超宽盘会把布局视口撑爆、rect 全失真。zoom 挂 .gwrap 后银框（含竖排
+   计数列）整体随盘缩放，拉满基准即整个银框窗，预留不再含框/计数列。
+   ⚠️ 2026-10-15 演进：沉浸模式砍掉左栏 240→40；二定「严格占满」清掉 #page/.box
+   的 margin/padding → 40→2；三定「去外框」连 .box 的 1px 镶边也去（CSS 横屏块
+   border:none）→ 现在是纯亚像素防溢出余量（zoom 渲染取整有 ±0.3px 抖动） */
 const LS_RESERVE_W = 2;
 /* 移动端全屏拉满的亚像素余量（布局 px）：Chrome 的 zoom 渲染取整会让「渲染高」与
    「布局高 × zoom」差 ~1px（实测同一窗在 1.71x 反算 207.61、3.82x 反算 207.86），
@@ -2456,17 +2455,12 @@ export function OnlinePlay({
       const vv = window.visualViewport;
       const vw = (vv ? vv.width : window.innerWidth) / pz;
       const vh = (vv ? vv.height : window.innerHeight) / pz;
-      const gaR = gameAreaEl.getBoundingClientRect();
-      const gwR = gwrap.getBoundingClientRect();
-      /* 高度目标 = 屏高 − game_area 顶 − 底部余量 − 银框之外占高（rect 差值法）；
-         宽度目标 = 屏宽 − 固定横向开销（只剩 box 左右边框，LS_RESERVE_W）。
-         vw/vh 已除 pz 归一成布局 px，rect 量出的部分同样除 pz，倍率不再另除。
-         底部余量 8 → 1（2026-10-15 二定「严格占满 100% 高度」）：页级 margin/padding
-         与 .box 的 margin/padding 已在 CSS 横屏块清零，视口底只剩 box 那 1px 边框，
-         再留 8px 会在棋盘下方露出一条板块背景色 */
-      const othersH = Math.max(0, (gaR.height - gwR.height) / pz);
-      const targetH = vh - gaR.top / pz - 1 - othersH;
-      const targetW = vw - LS_RESERVE_W;
+      /* 目标 = 视口 − 固定 2px 亚像素余量（2026-10-15 三定去外框后：box 镶边/
+         银框/棋盘镶边全无，游戏区上/左开销恒 0）。不再量 gaR.top + othersH——
+         横屏块已改居中布局（横向 justify-content:center、棋盘在窗内垂直居中），
+         量 top 会把居中留白当成开销，fit 重跑时越算越小（抖动源） */
+      const targetH = vh - 2;
+      const targetW = vw - 2;
       applyZoom(Math.min(targetW / baseW, targetH / baseH), false, 5);
       /* 试探性补差（2026-10-15 二定「严格占满 100%」）：首算用的是 offset* 基准
          （取整值，实测 155 vs 真值 154.79）且首帧布局未落位，常低 2-3px。
@@ -2478,9 +2472,11 @@ export function OnlinePlay({
       const z0 = zoomCur;
       const gw1 = gwrap.getBoundingClientRect();
       if (gw1.height > 8 && gw1.width > 8) {
+        /* 居中布局下 top/left 会随缩放移动（留白均分），不能用它们做目标基准；
+           rect 高宽除 pz 即「布局高×当前 zoom」，比值直接是 zoom 增益 */
         const grow = Math.min(
-          (vh - gw1.top / pz - 1) / (gw1.height / pz),
-          (vw - gw1.left / pz - 1) / (gw1.width / pz),
+          (vh - 2) / (gw1.height / pz),
+          (vw - 2) / (gw1.width / pz),
         );
         if (grow > 1.002) {
           applyZoom(z0 * grow, false, 5);
@@ -2502,12 +2498,12 @@ export function OnlinePlay({
          肉眼不可见；超过就回退，宁留几 px 背景也不裁内容。
          每次 fit 开头先撤旧值，免得下一次把上次的拉伸计入基准 */
       const rFill = gwrap.getBoundingClientRect();
-      const deficit = vh - 1 - rFill.bottom / pz; // 距视口底还差多少（显示 px，扣 box 1px 边框）
+      const deficit = vh - 2 - rFill.bottom / pz; // 距视口底还差多少（显示 px，扣 2px 余量）
       if (deficit > 0.4) {
         const prev = gwrap.style.minHeight;
         const cur = parseFloat(prev) || 0;
         gwrap.style.minHeight = (Math.max(cur, baseH) + deficit / zoomCur).toFixed(2) + "px";
-        if (gwrap.getBoundingClientRect().bottom / pz > vh - 1 + 3) gwrap.style.minHeight = prev;
+        if (gwrap.getBoundingClientRect().bottom / pz > vh - 2 + 3) gwrap.style.minHeight = prev;
       }
       /* 延迟复核拍（2026-10-15 三修高级盘没拉满）：真机 Safari 旋转/进出横屏时
          工具栏有 ~300-500ms 动画，fit 跑完 vh 还会变（dev 模拟瞬时切换复现不了，
