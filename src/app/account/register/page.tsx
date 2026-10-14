@@ -8,7 +8,7 @@ import RegisterForm from "@/components/RegisterForm";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "注册 - 扫雷网" };
+export const metadata = { title: "注册" };
 
 export default async function RegisterPage() {
   const session = await getSession();

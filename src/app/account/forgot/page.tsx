@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { ForgotForm } from "@/components/PasswordForms";
 
-export const metadata = { title: "忘记密码 | 扫雷网" };
+export const metadata = { title: "忘记密码" };
 
 export default function ForgotPage() {
   return (

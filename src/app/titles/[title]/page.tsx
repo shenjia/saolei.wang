@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
 
 export async function generateMetadata({ params }: { params: Promise<{ title: string }> }) {
   const { title } = await params;
-  return { title: `${decodeURIComponent(title)} | 扫雷网` };
+  return { title: decodeURIComponent(title) };
 }
 
 export default async function TitleMembersPage({ params }: { params: Promise<{ title: string }> }) {

@@ -1,7 +1,7 @@
 // 世界 TOP10 + 加入世界排行说明（移植 2008 版 Ranking/Top10_World.asp + Top10_World_Help.asp）
 // 原站为手工维护的静态数据（更新于 2021.5.25）
 
-export const metadata = { title: "世界排行 | 扫雷网" };
+export const metadata = { title: "世界排行" };
 
 const TOP10: [number, string, string, string, string, number][] = [
   [1, "Ze-En Ju", "0.49", "7.30", "28.84", 37],

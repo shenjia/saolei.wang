@@ -5,7 +5,7 @@ import { USER_ROLE } from "@/lib/config";
 import { AvatarCell } from "@/components/Cells";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "管理团队 | 扫雷网" };
+export const metadata = { title: "管理团队" };
 
 export default async function TeamPage() {
   const team = await getTeam();

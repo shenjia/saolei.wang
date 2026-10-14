@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "404 页面不存在 | 扫雷网",
+  title: "404 页面不存在",
 };
 
 // 「404」像素字（* = 雷，. = 未翻格），外圈再包一圈未翻格 → 15×7 格

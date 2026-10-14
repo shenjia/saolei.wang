@@ -10,7 +10,7 @@ import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { SendMessageForm } from "@/components/MessageForms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "读信 | 扫雷网" };
+export const metadata = { title: "读信" };
 
 export default async function MessageShowPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();

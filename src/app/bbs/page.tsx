@@ -22,7 +22,7 @@ import { BbsSearch } from "@/components/BbsSearch";
 import { TotalCount } from "@/components/TotalCount";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "论坛 | 扫雷网" };
+export const metadata = { title: "论坛" };
 
 export default async function BbsPage({
   searchParams,

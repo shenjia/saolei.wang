@@ -59,7 +59,7 @@ export async function generateMetadata({
   const sp = await searchParams;
   const area = (sp.name ?? "").trim();
   const name = area ? `${areaDisplay(area)}地区排行` : "地区排行";
-  return { title: `${name} | 扫雷网` };
+  return { title: name };
 }
 
 export default async function AreaPage({

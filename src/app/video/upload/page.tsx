@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth";
 import { UploadForm } from "@/components/UploadForm";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "上传录像 | 扫雷网" };
+export const metadata = { title: "上传录像" };
 
 export default async function VideoUploadPage() {
   const session = await getSession();

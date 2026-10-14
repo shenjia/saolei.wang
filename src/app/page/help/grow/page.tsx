@@ -1,7 +1,7 @@
 // 怎样提高扫雷水平（移植 2008 版 Help/Grow.asp）
 import Link from "next/link";
 
-export const metadata = { title: "怎样提高扫雷水平 | 扫雷网" };
+export const metadata = { title: "怎样提高扫雷水平" };
 
 export default function GrowPage() {
   return (

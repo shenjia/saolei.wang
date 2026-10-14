@@ -7,7 +7,7 @@ import { BBS_BOARDS } from "@/lib/bbs";
 import { PostForm } from "@/components/PostForm";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "发布主题 | 扫雷网" };
+export const metadata = { title: "发布主题" };
 
 export default async function BbsPostPage() {
   const session = await getSession();

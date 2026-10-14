@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { ResetForm } from "@/components/PasswordForms";
 
-export const metadata = { title: "重置密码 | 扫雷网" };
+export const metadata = { title: "重置密码" };
 
 export default async function ResetPage({
   searchParams,

@@ -12,7 +12,7 @@ import { getLevel3bvRanges, getOnlineMetricDists } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-export const metadata: Metadata = { title: "练习 | 扫雷网" };
+export const metadata: Metadata = { title: "练习" };
 /* 需要读 session（下载录像的文件名要带登录玩家署名）→ 声明动态渲染 */
 export const dynamic = "force-dynamic";
 

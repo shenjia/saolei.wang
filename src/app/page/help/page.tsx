@@ -1,7 +1,7 @@
 // 新手上路 · 如何加入排行（移植 2008 版 Help/Ranking.asp）
 import Link from "next/link";
 
-export const metadata = { title: "新手上路 | 扫雷网" };
+export const metadata = { title: "新手上路" };
 
 const TOPICS: [string, string][] = [
   ["/page/help/why", "我们为什么玩扫雷？"],

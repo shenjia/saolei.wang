@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 
-export const metadata = { title: "怎样上传我的照片 | 扫雷网" };
+export const metadata = { title: "怎样上传我的照片" };
 
 export default function AvatarHelpPage() {
   return (

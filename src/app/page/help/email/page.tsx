@@ -1,7 +1,7 @@
 // A mail to Damien（移植 2008 版 Help/Email.asp）
 import Link from "next/link";
 
-export const metadata = { title: "给世界排行发邮件 | 扫雷网" };
+export const metadata = { title: "给世界排行发邮件" };
 
 export default function EmailHelpPage() {
   return (

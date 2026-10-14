@@ -1,7 +1,7 @@
 // 我们为什么玩扫雷（移植 2008 版 Help/Why.asp）
 import Link from "next/link";
 
-export const metadata = { title: "我们为什么玩扫雷 | 扫雷网" };
+export const metadata = { title: "我们为什么玩扫雷" };
 
 export default function WhyPage() {
   return (

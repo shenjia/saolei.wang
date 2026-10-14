@@ -8,7 +8,7 @@ import { AccountHeader } from "@/components/AccountHeader";
 import { PasswordForm } from "@/components/AccountForms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "修改密码 | 扫雷网" };
+export const metadata = { title: "修改密码" };
 
 export default async function AccountPasswordPage() {
   const session = await getSession();

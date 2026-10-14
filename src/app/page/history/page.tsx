@@ -1,7 +1,7 @@
 // 更新历史（移植 2008 版 History/2006-2008.asp）
 // 约定：① 年份从新到旧排列；② 每年内部按日期倒序（最新在前）；
 //       ③ 今后任何重大新功能上线，都必须在此登记一条，保持历史完整。
-export const metadata = { title: "更新历史 | 扫雷网" };
+export const metadata = { title: "更新历史" };
 
 const YEARS: [string, [string, string][]][] = [
   ["2026", [

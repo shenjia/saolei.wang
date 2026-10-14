@@ -1,7 +1,7 @@
 // 论坛管理条例（移植 2008 版 Help/BBS.asp）
 import Link from "next/link";
 
-export const metadata = { title: "论坛管理条例 | 扫雷网" };
+export const metadata = { title: "论坛管理条例" };
 
 export default function BbsRulePage() {
   return (

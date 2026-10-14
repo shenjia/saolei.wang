@@ -13,7 +13,11 @@ import { ScrollReset } from "@/components/ScrollReset";
 import { ToastHost } from "@/components/Toast";
 
 export const metadata: Metadata = {
-  title: "扫雷网 Saolei.wang",
+  /* 站点标题模板（2026-10-15 张老师要求）：所有子页面统一「XXX | 扫雷网 Saolei.wang」 */
+  title: {
+    default: "扫雷网 Saolei.wang",
+    template: "%s | 扫雷网 Saolei.wang",
+  },
   description: "扫雷网——扫雷玩家的家园，录像排行、成绩认证、雷界快讯",
   /* iOS 无元素全屏 API（/online 全屏按钮在该环境走伪全屏退化）——
      唯一真隐藏 Safari 地址栏的途径：添加到主屏幕后以 standalone 打开 */

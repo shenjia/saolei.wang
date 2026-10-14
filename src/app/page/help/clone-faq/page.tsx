@@ -1,7 +1,7 @@
 // Minesweeper Clone 0.97 常见问题（移植 2008 版 Help/Question.asp）
 import Link from "next/link";
 
-export const metadata = { title: "Clone 0.97 常见问题 | 扫雷网" };
+export const metadata = { title: "Clone 0.97 常见问题" };
 
 const QA: [string, string[]][] = [
   [

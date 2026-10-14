@@ -9,7 +9,7 @@ import { Pager, Tabs } from "@/components/Pager";
 import { ReviewList } from "@/components/ReviewList";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "录像审核 | 扫雷网" };
+export const metadata = { title: "录像审核" };
 
 const STATUSES = [VIDEO_STATUS.NORMAL, VIDEO_STATUS.REVIEWED, VIDEO_STATUS.BANNED] as number[];
 

@@ -7,7 +7,7 @@ import { getUserDetail } from "@/lib/queries";
 import { AccountHeader } from "@/components/AccountHeader";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "账号中心 | 扫雷网" };
+export const metadata = { title: "账号中心" };
 
 export default async function AccountCenterPage() {
   const session = await getSession();

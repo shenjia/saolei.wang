@@ -1,7 +1,7 @@
 // 扫雷术语介绍（移植 2008 版 Help/Word.asp）
 import Link from "next/link";
 
-export const metadata = { title: "扫雷术语介绍 | 扫雷网" };
+export const metadata = { title: "扫雷术语介绍" };
 
 const TERMS: [string, string][] = [
   [

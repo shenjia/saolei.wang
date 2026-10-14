@@ -1,7 +1,7 @@
 // 关于本站（移植 2008 版 About/Index.asp）
 import Link from "next/link";
 
-export const metadata = { title: "关于本站 | 扫雷网" };
+export const metadata = { title: "关于本站" };
 
 export default function AboutPage() {
   return (

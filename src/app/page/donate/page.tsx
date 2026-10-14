@@ -1,5 +1,5 @@
 // 提供赞助（移植 2008 版 About/Donate.asp）
-export const metadata = { title: "提供赞助 | 扫雷网" };
+export const metadata = { title: "提供赞助" };
 
 export default function DonatePage() {
   return (

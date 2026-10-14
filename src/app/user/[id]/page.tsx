@@ -63,7 +63,7 @@ export async function generateMetadata({
   });
   if (!u) return {};
   const pinyin = u.englishName.trim();
-  return { title: `${u.chineseName}${pinyin ? `(${pinyin})` : ""} | 扫雷网` };
+  return { title: `${u.chineseName}${pinyin ? `(${pinyin})` : ""}` };
 }
 
 const PROFILE_FIELDS: [string, string][] = [

@@ -7,7 +7,7 @@ import LoginPanel from "@/components/LoginPanel";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "登录 - 扫雷网" };
+export const metadata = { title: "登录" };
 
 export default async function LoginPage({
   searchParams,

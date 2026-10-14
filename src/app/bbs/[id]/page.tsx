@@ -36,7 +36,7 @@ export async function generateMetadata({
   });
   if (!p) return {};
   const board = BBS_BOARD_NAMES[p.board];
-  return { title: `${board ? `【${board}】` : ""}${p.title} | 扫雷网` };
+  return { title: `${board ? `【${board}】` : ""}${p.title}` };
 }
 
 export default async function BbsTitlePage({ params }: { params: Promise<{ id: string }> }) {

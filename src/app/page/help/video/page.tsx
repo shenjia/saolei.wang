@@ -1,7 +1,7 @@
 // 怎么看录像（移植 2008 版 Help/Video.asp）
 import Link from "next/link";
 
-export const metadata = { title: "怎么看录像 | 扫雷网" };
+export const metadata = { title: "怎么看录像" };
 
 export default function VideoHelpPage() {
   return (

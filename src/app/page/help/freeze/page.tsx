@@ -1,7 +1,7 @@
 // 为什么录像会被冻结（移植 2008 版 Help/Freeze.asp，适配新版「屏蔽」语义）
 import Link from "next/link";
 
-export const metadata = { title: "为什么录像会被屏蔽 | 扫雷网" };
+export const metadata = { title: "为什么录像会被屏蔽" };
 
 export default function FreezeHelpPage() {
   return (

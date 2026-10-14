@@ -80,7 +80,7 @@ export async function generateMetadata({
           : "all";
   const name =
     view === "world" ? "世界排行" : view === "nf" ? "NF排行" : view === "bv" ? "BV排行" : "雷界排行";
-  return { title: `${name} | 扫雷网` };
+  return { title: name };
 }
 
 export default async function RankingPage({

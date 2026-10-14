@@ -15,7 +15,7 @@ import "./admin.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "管理后台 | 扫雷网",
+  title: "管理后台",
   robots: { index: false, follow: false },
 };
 

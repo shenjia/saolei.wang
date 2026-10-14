@@ -7,7 +7,7 @@ import OauthForm from "./OauthForm";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "完成登录 - 扫雷网" };
+export const metadata = { title: "完成登录" };
 
 export default async function OauthPage() {
   if (await getSession()) redirect("/");

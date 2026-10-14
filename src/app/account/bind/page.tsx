@@ -9,7 +9,7 @@ import BindForm from "./BindForm";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "绑定账号 - 扫雷网" };
+export const metadata = { title: "绑定账号" };
 
 export default async function BindPage({
   searchParams,

@@ -17,7 +17,7 @@ import { OLD_TITLES, TITLE_COLORS, TITLE_CONDITIONS } from "@/lib/config";
 import { RankBadge } from "@/components/RankBadge";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "军衔 | 扫雷网" };
+export const metadata = { title: "军衔" };
 
 // 按阶段分组（同阶段并排显示）
 const TITLE_TIERS: string[][] = [

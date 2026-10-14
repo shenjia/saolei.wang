@@ -1,7 +1,7 @@
 // 软件下载（移植 2008 版 Download/Index.asp，安装包已从线上旧站迁入 public/download/）
 import Link from "next/link";
 
-export const metadata = { title: "软件下载 | 扫雷网" };
+export const metadata = { title: "软件下载" };
 
 const SOFTWARE: [string, string, [string, string][]?][] = [
   ["Minesweeper Arbiter 0.52.3", "Arbiter_0.52.3.zip", [["教程", "/page/guide"], ["中文插件", "/download/Arbiter_cn.zip"]]],

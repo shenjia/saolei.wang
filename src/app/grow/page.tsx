@@ -9,7 +9,7 @@ import { GrowFeed } from "@/components/GrowFeed";
 import { RankingRules } from "@/components/RankingRules";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "进步排行 | 扫雷网" };
+export const metadata = { title: "进步排行" };
 
 // 进步榜页底规则板块（2026-10-14 张老师要求；口径见 ranksnap.getGrowRanking）
 const GROW_RULES = [

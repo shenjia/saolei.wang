@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 
-export const metadata = { title: "扫雷教程 | 扫雷网" };
+export const metadata = { title: "扫雷教程" };
 
 // [分类, [标题, 作者, 论坛帖子id | null]]
 const GROUPS: [string, [string, string, number | null][]][] = [

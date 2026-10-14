@@ -1,7 +1,7 @@
 // 上传录像须知 + 3BV 查看方法（移植 2008 版 Help/Upload_Rule.asp + Upload_3BV.asp）
 import Link from "next/link";
 
-export const metadata = { title: "上传录像须知 | 扫雷网" };
+export const metadata = { title: "上传录像须知" };
 
 export default function UploadHelpPage() {
   return (

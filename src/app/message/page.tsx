@@ -15,7 +15,7 @@ import { Tabs } from "@/components/Pager";
 import { BroadcastForm, ClearButton, MarkAllReadButton, SendMessageForm } from "@/components/MessageForms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "消息 | 扫雷网" };
+export const metadata = { title: "消息" };
 
 export default async function MessagePage({
   searchParams,

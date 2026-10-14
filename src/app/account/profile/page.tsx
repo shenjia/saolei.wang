@@ -10,7 +10,7 @@ import { ProfileForm, type AvatarSlot } from "@/components/AccountForms";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "修改资料 | 扫雷网" };
+export const metadata = { title: "修改资料" };
 
 export default async function AccountProfilePage() {
   const session = await getSession();

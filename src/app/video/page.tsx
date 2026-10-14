@@ -13,7 +13,7 @@ import { VideoHot } from "@/components/VideoHot";
 import { VideoStats } from "@/components/VideoStats";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "录像 | 扫雷网" };
+export const metadata = { title: "录像" };
 
 function parseLevel(v?: string): VideoLevel | "all" {
   return (VIDEO_LEVELS as readonly string[]).includes(v ?? "") ? (v as VideoLevel) : "all";
