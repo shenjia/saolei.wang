@@ -93,7 +93,7 @@ const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
    同日二定「严格占满 100% 高度」把 #page 的 margin/padding 与 .box 的
    margin/padding 全部清零（CSS 横屏块），横向只余 box 左右各 1px 边框 → 预留 2 */
 const LS_RESERVE_W = 2;
-/* 全屏拉满的亚像素余量（布局 px）：Chrome 的 zoom 渲染取整会让「渲染高」与
+/* 移动端全屏拉满的亚像素余量（布局 px）：Chrome 的 zoom 渲染取整会让「渲染高」与
    「布局高 × zoom」差 ~1px（实测同一窗在 1.71x 反算 207.61、3.82x 反算 207.86），
    卡到 0 余量时宿主 scrollHeight 会多出 1px → 平白冒出一条竖滚动条。
    两个方向各留 2px（同横屏 LS_RESERVE_W 的取舍：宁小 2px，不裁内容/不出滚动条） */
@@ -2210,22 +2210,40 @@ export function OnlinePlay({
       gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
       gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
     }
-    /* 全屏自动拉满（2026-10-14 张老师定）：取宽/高两个方向较小的倍率，让游戏窗尽可能大
-       且**不触发滚动条**。量纲（Chrome 实测）：getBoundingClientRect 是渲染尺寸
-       （含 zoomCur 与页级 zoom pz）；offset* 是布局尺寸但**取整**——棋盘整格是小数
-       （实测 offsetH 208 vs 真值 208.27），拿它当基准会把倍率算大 1px 高，拉满时
-       正好顶出一条滚动条，故基准一律 rect ÷ zoomCur ÷ pz「绝对式」反算（与 zoomCur
-       是否同步无关），目标尺寸统一归一到布局 px（同 fitZoomForLandscape 口径）。
-       max 放到 5：手机上页级 0.65 会把渲染尺寸缩回去，拉满常需 3+（不进 localStorage）。
+    /* 全屏自动拉满——**只服务移动端**（2026-10-15 张老师定：PC 端进全屏保持比例不变，
+       只是视口变大、游戏多大还是多大；移动端才需要按屏幕重算比例拉满）。
+       移动端口径＝站内既有「移动版」定义：≤768 断点（同 globals.css 移动版规则）
+       ＋ 横屏沉浸查询（orientation:landscape 且 max-height:520px，覆盖手机横屏——
+       手机横屏宽 844 会超出 768 断点；PC 屏高不满足该查询不会误命中）。
+       触屏平板（宽 >768）暂按 PC 处理，张老师反馈了再调。
+       拉满量纲（Chrome 实测）：getBoundingClientRect 是渲染尺寸（含 zoomCur 与页级
+       zoom pz）；offset* 是布局尺寸但**取整**——棋盘整格是小数（实测 offsetH 208 vs
+       真值 208.27），拿它当基准会把倍率算大 1px 高，拉满时正好顶出一条滚动条，故基准
+       一律 rect ÷ zoomCur ÷ pz「绝对式」反算（与 zoomCur 是否同步无关），目标尺寸统一
+       归一到布局 px（同 fitZoomForLandscape 口径）。max 放到 5：手机上页级 0.65 会把
+       渲染尺寸缩回去，拉满常需 3+（不进 localStorage）。
 
-       📌 2026-10-15 PC 全屏修复：此前竖向预算直接按 `innerHeight − 48`（:fullscreen 的
-       24px 上下 padding）算，把**宿主内、游戏窗之外**的占位全漏了——PC 全屏时页头行
-       （标题 + 级别 tabs + 齿轮/全屏按钮，实测 59.5px）就压在游戏窗上方，于是游戏窗底
-       越出视口 36px，宿主 `overflow:auto` 立刻出竖滚动条（1440×900 实测窗底 936.6）。
-       现改按**宿主实际几何**算预算：竖向 = 宿主内容区底 − 游戏窗顶 − 游戏窗下方流内内容；
-       横向 = #game_area 内容宽（gwrap 在里面 inline-block 居中，撑过就溢出）。
-       页头占高是「量差值」，不随游戏倍率变化，所以每次 fit 都是一次干净重算 */
+       📌 移动端拉满的竖向预算须按**宿主实际几何**算：此前直接按 `innerHeight − 48`
+       （:fullscreen 的 24px 上下 padding）算，把宿主内、游戏窗之外的占位全漏了——
+       页头行（标题 + 级别 tabs + 齿轮/全屏按钮，实测 59.5px）压在游戏窗上方，游戏窗底
+       会越出视口 36px，宿主 `overflow:auto` 立刻出竖滚动条（1440×900 实测窗底 936.6）。
+       现在：竖向 = 宿主内容区底 − 游戏窗顶 − 游戏窗下方流内内容；横向 = #game_area
+       内容宽（gwrap 在里面 inline-block 居中，撑过就溢出）。页头占高是「量差值」，
+       不随游戏倍率变化，所以每次 fit 都是一次干净重算 */
+    const mqNarrow = window.matchMedia("(max-width: 768px)"); // 站内「移动版」断点
+    function fsAutoFit() {
+      return mqNarrow.matches || lsQuery.matches;
+    }
     function fitZoomForFullscreen() {
+      if (!fsAutoFit()) {
+        /* PC 端：比例原样不动，只把滑杆行程放宽到全屏口径（normalMaxZoom 全屏恒 5，
+           玩家在全屏里想手动放大不受普通模式的容器宽限制）。
+           ⚠️ 不能走 applyZoom(zoomCur)：cus 大盘 0.3~0.5x 会被 floor 0.5 抬升小幅放大 */
+        const capFs = String(normalMaxZoom());
+        zoomRange.max = capFs;
+        cusZoom.max = capFs;
+        return;
+      }
       gwrap.style.minHeight = ""; // 撤掉横屏的银框兜底拉伸（横屏中进全屏时残留会撑歪）
       const pz = pageZoom();
       const gwR = gwrap.getBoundingClientRect();
