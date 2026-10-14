@@ -1,4 +1,4 @@
-// 录像详情页「录像分析」雷达取数：指标 → 分位/等级
+// 录像详情页「录像评级」雷达取数：指标 → 分位/等级 + 本局综合评级
 // 数据源 video_metrics（逐盘）+ video_metric_dist（分位基准），均由 scripts/video-metrics.ts 跑批产出。
 // 缺行兜底：指标缺 → 补算（videometrics.ts，与审核后置钩子同一个幂等入口）；
 //           基准组缺 → 不出雷达盒。
@@ -9,14 +9,19 @@
 //   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
 //     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
 //     video_metrics.composite 的口径同步见 scripts/video-metrics.ts。
+//   · 盒标题右侧的**综合评级**（2026-10-15 张老师定）走 PERFORMANCE_WEIGHTS 五轴加权
+//     （STNB 占一半、四分项各 1/8）——**与练习页结算面板「评级：S+」同一个算法**
+//     （lib/videoscore.ts performanceOf + gradeFromPercent），两处不许各写一份。
 
 import { prisma } from "./db";
 import {
   AXIS_METRICS,
   DIST_BUCKET_ALL,
   formatMetric,
+  gradeFromPercent,
   gradeOf,
   MIN_DIST_SIZE,
+  performanceOf,
   percentOf,
 } from "./videoradar";
 import type { MetricKey } from "./videoradar";
@@ -34,6 +39,16 @@ export interface VideoAnalysisPoint {
   percent: number;
   /** 等级（SSS~F，含 +/-） */
   grade: string;
+}
+
+/** 录像评级盒的取数结果 */
+export interface VideoAnalysisResult {
+  /** 五根轴：综合（STNB）置顶 + 速度 / 效率 / 精准 / 手速 */
+  points: VideoAnalysisPoint[];
+  /** 综合评级（S+/A-…）：五轴组内分位加权，与练习页结算面板同算法 */
+  overall: string;
+  /** 综合评级对应的表现分（0-100，百分位量纲，调试/对账用） */
+  overallScore: number;
 }
 
 export interface VideoAnalysisInput {
@@ -94,7 +109,7 @@ async function getBaseline(level: string, noflag: boolean): Promise<DistRow | nu
  * ⚠️ 全流程包 try/catch：这两张表是本功能新加的，只要线上还没跑过 db push（或表被误删、
  *    连接抖动），查询会抛错；宁可少显示一个雷达盒，也绝不能把录像详情页打成 500。
  */
-export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<VideoAnalysisPoint[] | null> {
+export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<VideoAnalysisResult | null> {
   try {
     let row = await prisma.videoMetrics.findUnique({ where: { id: BigInt(input.id) } });
     if (!row) {
@@ -107,11 +122,13 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     const baseline = await getBaseline(input.level, input.noflag);
     if (!baseline) return null;
 
-    // ① 四根分项轴
+    // ① 四根分项轴（顺带攒下各轴组内分位，供综合评级加权）
+    const percents: Partial<Record<MetricKey, number>> = {};
     const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
       const value = Number(row[def.key]);
       const dist = distFor(baseline, def.key);
       const percent = dist.length ? percentOf(value, dist, def.highIsBetter) : 0;
+      percents[def.key] = percent;
       return {
         key: def.key,
         name: def.name,
@@ -128,16 +145,26 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     //    STNB 分布列（video_metric_dist.stnb）本来就随跑批一起产出，无需额外数据。
     const stnbValue = Number(row.stnb);
     const stnbDist = distFor(baseline, "stnb");
+    const stnbPercent = stnbDist.length ? percentOf(stnbValue, stnbDist, true) : 0;
     const composite: VideoAnalysisPoint = {
       key: "stnb",
       name: "综合",
       value: stnbValue,
       disp: formatMetric("stnb", stnbValue),
-      percent: stnbDist.length ? percentOf(stnbValue, stnbDist, true) : 0,
+      percent: stnbPercent,
       grade: stnbDist.length ? gradeOf(stnbValue, stnbDist, true) : "?",
     };
 
-    return [composite, ...subs];
+    // ③ 盒标题右侧的「综合评级」：五轴组内分位加权（STNB 占一半）—— 与练习页同算法。
+    //    它本身就是百分位量纲，过 GRADE_PERCENTS 九档表反推等级即可。
+    percents.stnb = stnbPercent;
+    const overallScore = performanceOf(percents);
+
+    return {
+      points: [composite, ...subs],
+      overall: overallScore > 0 ? gradeFromPercent(overallScore) : "?",
+      overallScore,
+    };
   } catch {
     return null;
   }

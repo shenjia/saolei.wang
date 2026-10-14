@@ -1691,6 +1691,24 @@ del[data-tip]:hover::after {
   /* 标签加大（13/8→15/10）后 hover 放大会略越出 222 视口（~7px，盒 padding 内），不裁 */
   overflow: visible;
 }
+/* 录像评级盒标题行（2026-10-15 张老师定）：左＝「录像评级」，右＝本局综合评级
+   （与练习页结算面板「评级：S+」同一个算法）—— 同字号、向右对齐；
+   下面一条分割线与雷达图分开。等级配色走行内 style（videoscore.gradeColor），这里只管排布 */
+#page #video_view .radar.box h2.vr_h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 10px;
+}
+#page #video_view .radar.box .vr_rate {
+  font-weight: bold;
+}
+#page #video_view .radar.box .vr_line {
+  height: 0;
+  margin: 0 0 14px;
+  border: 0;
+  border-top: 1px solid #49483e;
+}
 /* ⚠️ 录像详情页与在线玩结算面板**共用同一个组件**（VideoAnalysisRadar，
    OnlinePlay 用 createRoot 挂载 size=160 的紧凑版），所以气泡/数值规则三处都要给
    （第三处是移动端结算浮层 #gr_modal，挂在 body 直下、不在 #page 里） */

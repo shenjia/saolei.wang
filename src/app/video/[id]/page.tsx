@@ -23,6 +23,8 @@ import { CommentForm, CommentList } from "@/components/Comments";
 import { FlopPlayer, PlayButton } from "@/components/FlopPlayer";
 import { VideoAnalysisRadar } from "@/components/VideoAnalysis";
 import { getVideoAnalysis } from "@/lib/videoanalysis";
+// 综合评级的等级配色（与雷达图同一份，统一在 videoscore.ts 维护）
+import { gradeColor } from "@/lib/videoscore";
 import { VIDEO_STATUS } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -176,8 +178,17 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         {video.author && <UserPanel userId={video.author.id} hideRadar />}
         {analysis && (
           <div className="radar box">
-            <h2>录像分析</h2>
-            <VideoAnalysisRadar data={analysis} />
+            {/* 标题行（2026-10-15 张老师定）：左＝「录像评级」，右＝本局**综合评级**
+                （五轴组内分位加权，STNB 占一半 —— 与练习页结算面板「评级：S+」同一个算法，
+                见 lib/videoscore.ts performanceOf）；标题下一条分割线与雷达图分开 */}
+            <h2 className="vr_h">
+              录像评级
+              <span className="vr_rate" style={{ color: gradeColor(analysis.overall) }}>
+                {analysis.overall}
+              </span>
+            </h2>
+            <div className="vr_line" />
+            <VideoAnalysisRadar data={analysis.points} />
           </div>
         )}
       </li>
