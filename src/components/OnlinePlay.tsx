@@ -529,9 +529,11 @@ export function OnlinePlay() {
       });
       /* NF 开启时触屏「插旗模式」按钮无意义，隐藏 */
       flagBtn.classList.toggle("hidden", nf);
-      /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满 */
+      /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式刷新封顶
+         （切到小盘后上限应回到 2.5，大盘则按容器宽收紧） */
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches) fitZoomForLandscape();
+      else applyZoom(zoomCur, false);
     }
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
@@ -579,10 +581,12 @@ export function OnlinePlay() {
         if (lsQuery.matches && zoomBeforeLs !== null) fitZoomForLandscape();
       }
     });
-    /* 全屏中旋转屏幕等尺寸变化时重新拉满；横屏自动模式下浏览器栏显隐同理 */
+    /* 全屏中旋转屏幕等尺寸变化时重新拉满；横屏自动模式下浏览器栏显隐同理；
+       普通模式下窗口变窄也重新封顶，避免游戏区冲出 #page 版块 */
     window.addEventListener("resize", () => {
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches && zoomBeforeLs !== null) fitZoomForLandscape();
+      else applyZoom(zoomCur, false);
     }, { signal });
 
     const faceBtn = $("face_btn");
@@ -707,9 +711,24 @@ export function OnlinePlay() {
     const zoomRange = $("zoom_range") as HTMLInputElement;
     const zoomVal = $("zoom_val");
     let zoomCur = 1; // 当前游戏倍率（不含整页窄屏缩放）
+    const lsQuery = window.matchMedia("(orientation: landscape) and (max-height: 520px)"); // 横屏拉满断点（声明须在 applyZoom 之前，normalMaxZoom 会读它）
     let zoomBeforeFs: number | null = null; // 进全屏前的倍率；全屏中手动调过则置 null 不再恢复
-    function applyZoom(v: number, persist = true, max = 2.5) {
-      v = Math.max(0.5, Math.min(max, v));
+    /* 普通模式倍率上限：游戏渲染宽不得超过 #game_area 内容宽，否则冲出 #page 版块。
+       用 getBoundingClientRect 实测自校准：gfR.width = 基准宽 × zoomCur × 所有祖先
+       zoom，gaR.width = 容器宽 × 同一祖先 zoom——比值里 zoom 全部抵消，任意页级
+       缩放/窄屏断点下都成立。全屏/横屏由 fitZoom* 拉满（max=5），不走此封顶 */
+    function normalMaxZoom() {
+      if (document.fullscreenElement === root || lsQuery.matches) return 5;
+      const gfR = gframe.getBoundingClientRect();
+      const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
+      if (gfR.width <= 0 || gaR.width <= 0) return 2.5;
+      /* 下限 0.5（=滑杆 min）：窄窗连 1x 都放不下时按容器宽自动缩，保证不溢出 */
+      return Math.max(0.5, Math.min(2.5, (zoomCur * (gaR.width - 16)) / gfR.width)); // 左右各留 8px
+    }
+    function applyZoom(v: number, persist = true, max?: number) {
+      const cap = max ?? normalMaxZoom();
+      v = Math.max(0.5, Math.min(cap, v));
+      zoomRange.max = String(cap); // 滑杆行程同步封顶，拖杆手感与实际一致
       gframe.style.zoom = String(v);
       zoomCur = v;
       zoomRange.value = String(v);
@@ -771,7 +790,6 @@ export function OnlinePlay() {
        CSS 已把标题/筛选器/开关移到侧面竖排，这里把游戏按视口高度拉满（页面无需滚动）。
        量纲与 fitZoomForFullscreen 相同：rect 实测渲染尺寸（含游戏 zoom 与页级 zoom），
        倍率与渲染尺寸成线性；手动拖滑杆后以手动为准，退出横屏恢复进前倍率 */
-    const lsQuery = window.matchMedia("(orientation: landscape) and (max-height: 520px)");
     let zoomBeforeLs: number | null = null; // 进横屏前的倍率；横屏中手动调过则置 null 不再恢复
     function fitZoomForLandscape() {
       if (document.fullscreenElement === root) return; // 全屏拉满优先
