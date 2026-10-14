@@ -5915,6 +5915,82 @@ button.msg_cancel:hover {
   width: 17px;
   height: 17px;
 }
+/* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／无猜两颗 ----
+   「外套边框」即 .gicon 自带的底框；未激活沿用灰 #b1b1a4，激活显色：
+   NF=黄（.gicon.active 的 #fdc61d 正好是站内黄），无猜=站内绿 #a6e22e（单列覆盖） */
+#online_play .gicon.gmode {
+  font: bold 12px/1 Arial, Helvetica, sans-serif;
+  letter-spacing: 0.5px;
+}
+#online_play .gicon.gmode_ng.active {
+  color: #a6e22e;
+  border-color: #a6e22e;
+}
+/* 雨伞两态图标（2026-10-15 九期五改，张老师定：合伞＝关、张伞＝开）：
+   两颗 SVG 叠放（.ic_closed / .ic_open），按 .active 切换显示、纯 CSS 无 JS；
+   渲染 20×20（glyph 占 24 盒 ~18/24，视觉≈齿轮 17px 略大） */
+#online_play .gicon.gmode_ng svg {
+  width: 20px;
+  height: 20px;
+}
+#online_play .gicon.gmode_ng svg.ic_open {
+  display: none;
+}
+#online_play .gicon.gmode_ng.active svg.ic_closed {
+  display: none;
+}
+#online_play .gicon.gmode_ng.active svg.ic_open {
+  display: block;
+}
+/* 模式快捷钮抖动提示（2026-10-15 十期张老师定）：绕按钮底部中心左右摆动
+   像甩水珠——NF 下右键抖 NF 钮（不然像右键坏了）、无猜触雷被重排救回抖雨伞钮；
+   .gshake 由 JS 挂上（shakeModeBtn：先摘类强制 reflow 再挂回，连续触发可重放） */
+#online_play .gicon.gmode_ng.gshake,
+#online_play .gicon.gmode.gshake {
+  animation: op_shake 0.45s ease-in-out;
+  transform-origin: 50% 85%;
+}
+@keyframes op_shake {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-14deg); }
+  45% { transform: rotate(11deg); }
+  70% { transform: rotate(-6deg); }
+  100% { transform: rotate(0deg); }
+}
+/* 模式快捷钮 hover 气泡（2026-10-15 九期张老师定）：文案与设置浮窗对应开关一致，
+   观感同 .gs_row .tip（暗底/描边/小三角）；按钮贴视口右侧 → 气泡右对齐、
+   弹在按钮下方（设置行是弹在行下方，这里同理），4px 间隙够小不致 hover 闪烁 */
+#online_play .gicon.gmode {
+  position: relative;
+}
+#online_play .gicon.gmode .tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  white-space: nowrap;
+  background: #272822;
+  border: 1px solid #656355;
+  border-radius: 5px;
+  color: #f8f8f2;
+  font: 12px/18px Arial, Helvetica, sans-serif;
+  letter-spacing: normal; /* 抵消按钮 .gmode 的 0.5px（会被 span 继承） */
+  padding: 5px 10px;
+  z-index: 5;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+#online_play .gicon.gmode .tip::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  right: 11px;
+  border: 5px solid transparent;
+  border-bottom-color: #656355;
+}
+#online_play .gicon.gmode:hover .tip {
+  display: block;
+}
 /* ---- 设置浮窗（2026-10-14 二期）：齿轮点开，绝对定位挂在标题行下缘右侧 ---- */
 #online_play .gsettings {
   display: none;
@@ -6465,6 +6541,14 @@ html:has(#online_play) body {
 }
 #online_play .greport td.gv {
   position: relative;
+}
+/* 「无猜重排」行数值（2026-10-15 十期张老师定）：绿色呼应雨伞激活态；
+   行 hover 高亮会把 td 文字刷白，绿色需再压一层保持 */
+#online_play .greport td.gv.gv_ng {
+  color: #a6e22e;
+}
+#online_play .greport tr:hover td.gv.gv_ng {
+  color: #a6e22e;
 }
 #online_play .greport td.gv .tip {
   display: none;

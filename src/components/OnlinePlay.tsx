@@ -199,6 +199,9 @@ export function OnlinePlay({
     /* 无猜重排生效次数（踩一次雷/一个盲点算一次，内部重试不算）。
        状态栏取消后无 UI 消费，仅保留给 dev 测试钩子（__op.ngRedeals）验证重排逻辑 */
     let ngRedeals = 0;
+    /* 触雷被重排救回的次数（不计安全盲点换空域的重排）——数据面板「无猜重排」行
+       （2026-10-15 十期张老师定）与小雨伞抖动共用这一口径 */
+    let ngSaves = 0;
     /* 3BV 范围（按级别独立记忆）：默认＝该级别完整统计区间；
        布雷时拒绝范围外盘面重掷（见 placeMines），最小差 10 由浮窗交互保证 */
     const bvSel: Record<string, { lo: number; hi: number }> = {};
@@ -909,6 +912,8 @@ export function OnlinePlay({
         const saved = (isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false);
         if (!saved) { lose(i); return; }
         ngRedeals++; // 一次点击触发的无猜重排＝计数 1（内部重试不计）
+        ngSaves++; // 触雷被救回＝1 次（面板「无猜重排」行）
+        shakeModeBtn(btnNg); // 小雨伞抖一下（2026-10-15 十期张老师定）
       } else if (ng && nums![i] !== 0 && isBlind(i)) {
         const changed = tryNoGuess(i, true); // 安全盲点（数字格）：同样尽量换成 opening，盲点必开空
         if (changed) ngRedeals++;
@@ -934,10 +939,18 @@ export function OnlinePlay({
         if (state[a] === 0) { openCell(a); if (over) return; }
       }
     }
+    /* 模式快捷钮抖动提示（2026-10-15 十期张老师定）：NF 下右键抖 NF 钮
+       （否则有人以为右键坏了）、无猜触雷救回抖雨伞钮。先摘类强制 reflow
+       再挂回，连续触发也能重放；动画本体见 globals.css 的 op_shake */
+    function shakeModeBtn(btn: HTMLElement) {
+      btn.classList.remove("gshake");
+      void btn.offsetWidth;
+      btn.classList.add("gshake");
+    }
     function toggleFlag(i: number) {
       if (over) return;
       if (state[i] === 1) return;
-      if (nf) return;
+      if (nf) { shakeModeBtn(btnNf); return; } // NF 禁旗：右键只给个抖动反馈
       /* 问号开关关：空白 ↔ 标雷 两态；开：空白 → 标雷 → 问号 三态循环 */
       if (state[i] === 0) state[i] = 2;
       else if (state[i] === 2) state[i] = qmark ? 3 : 0;
@@ -980,8 +993,9 @@ export function OnlinePlay({
         : 0;
       /* 玩家实际插的旗数（胜利结算前会先抓这个值，自动补旗不算） */
       const playerFlags = M - flagsLeft();
-      /* 每项第三列是 hover 气泡的解释（沿用 flop 原版 title 语义，中文一句话；含公式） */
-      const rows: [string, string, string][] = [
+      /* 每项第三列是 hover 气泡的解释（沿用 flop 原版 title 语义，中文一句话；含公式）。
+         第四列可选＝数值格附加 class（「无猜重排」行用绿色） */
+      const rows: [string, string, string, string?][] = [
         ["RTime", f3(t) + " (" + (Math.floor(t) + 1) + ")", "本局实际用时（秒），括号内为按秒进位的录像计分时间"],
         ["Est RTime", hasBv ? f3(est) + " (" + (Math.floor(est) + 1) + ")" : "* (*)", "按完成度折算的估算用时 = 实际用时 × 3BV ÷ 已完成 3BV"],
         ["3BV", solvedBv + "/" + board3bv, "盘面理论最少点击次数（Bechtel 基准值），显示为 已完成 / 全盘总量"],
@@ -1002,13 +1016,17 @@ export function OnlinePlay({
         ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
         ["STNB", hasBv && lv !== "cus" ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
       ];
+      /* 无猜模式专属行（2026-10-15 十期张老师定）：绿色数值，hover＝触雷被救回次数 */
+      if (ng) rows.push(["无猜重排", String(ngSaves), "触雷但通过重排挽救的次数", "gv_ng"]);
       const html =
+        /* 关闭按钮已废（2026-10-15 张老师定）：面板收起只由设置浮窗「显示统计」开关
+           或新局 reset 决定，面板右上角不放按钮 */
         '<div class="gr_title">数据统计</div>' +
         "<table>" +
         rows
           .map(
             (r) =>
-              '<tr><td class="gt">' + r[0] + '</td><td class="gv">' + r[1] + '<span class="tip">' + r[2] + "</span></td></tr>"
+              '<tr><td class="gt">' + r[0] + '</td><td class="gv' + (r[3] ? " " + r[3] : "") + '">' + r[1] + '<span class="tip">' + r[2] + "</span></td></tr>"
           )
           .join("") +
         "</table>";
@@ -1215,10 +1233,10 @@ export function OnlinePlay({
     /* ---- 重玩本局：完全复刻结束时的地图，强制关闭无猜（张老师定：重玩盘面必须原样） ---- */
     function replaySameBoard() {
       if (!snapshot) return;
-      /* 无猜开关强制关闭（不影响设置浮窗的持久记忆——但本局内 ng 生效即关闭） */
+      /* 无猜开关强制关闭（本局内 ng 生效即关闭；快捷钮同步熄灭） */
       if (ng) {
         ng = false;
-        swNg.checked = false;
+        syncModeButtons();
         /* 不调 saveSettings：用户设置里的无猜偏好不被重玩按钮破坏？——但下一局 reset 用的是
            内存变量 ng（已 false），重玩期间无猜确实关闭；下次刷新恢复 localStorage 原值。
            张老师定的是「强制关闭无猜」，故本会话内从重玩起无猜关闭，直到用户再开 */
@@ -1536,6 +1554,7 @@ export function OnlinePlay({
       led(ledMines, M); led(ledTime, 0);
       setFace("smile");
       ngRedeals = 0;
+      ngSaves = 0;
       /* 同盘面重开（点笑脸/F2）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
          只重置格子贴图；盘面尺寸变化（切难度/首建）才重建 tbody 与矢量覆盖层 */
       const gridChanged = W !== prevW || H !== prevH || !vecUse.length;
@@ -1831,21 +1850,10 @@ export function OnlinePlay({
       if (e.key === "Escape" && cusDlg.classList.contains("open")) closeCusDialog();
     });
 
-    /* ---- 设置浮窗内开关：NF / 无猜 切换即重开一局；问号只改右键循环 ---- */
-    const swNf = $("sw_nf") as HTMLInputElement;
-    const swNg = $("sw_ng") as HTMLInputElement;
+    /* ---- 设置浮窗内开关：问号只改右键循环。NF/无猜两项已于十期撤出设置
+       （入口收敛到模式快捷钮 btnNf/btnNg，见下方九期块） ---- */
     const swQm = $("sw_qm") as HTMLInputElement;
     const swStats = $("sw_stats") as HTMLInputElement;
-    on(swNf, "change", () => {
-      nf = swNf.checked;
-      saveSettings();
-      reset();
-    });
-    on(swNg, "change", () => {
-      ng = swNg.checked;
-      saveSettings();
-      reset();
-    });
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
     /* 「显示统计」（八期改口径）：只影响**游戏结束**时是否弹出数据面板，不重开当前局。
        打开时对局中不提前出现；关闭时若上一局定格的面板还挂着，立刻撤下。
@@ -1859,6 +1867,29 @@ export function OnlinePlay({
         return;
       }
       if (over && lastReportHtml) paintStatPanel(lastReportHtml);
+    });
+
+    /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／无猜两颗 ----
+       激活显色（NF=黄 #fdc61d / 无猜=绿 #a6e22e，见 .gmode/.gmode_ng）、未激活灰。
+       点击＝把内存开关取反 → saveSettings → 重开一局。
+       十期起设置浮窗里不再有这两项（行已删），快捷钮是唯一入口 */
+    const btnNf = $("btn_nf") as HTMLButtonElement;
+    const btnNg = $("btn_ng") as HTMLButtonElement;
+    function syncModeButtons() {
+      btnNf.classList.toggle("active", nf);
+      btnNg.classList.toggle("active", ng);
+    }
+    on(btnNf, "click", () => {
+      nf = !nf;
+      saveSettings();
+      syncModeButtons();
+      reset();
+    });
+    on(btnNg, "click", () => {
+      ng = !ng;
+      saveSettings();
+      syncModeButtons();
+      reset();
     });
 
     /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ----
@@ -2235,18 +2266,22 @@ export function OnlinePlay({
        五期三改：zoom 移到 .gwrap 后，面板挂在 #game_area（gwrap 外）不吃游戏倍率，
        自身 zoom 显式同步；left/top 按 gwrap 渲染矩形直译（页面坐标 → game_area
        局部坐标），顶端与 gwrap 银框顶缘对齐、左/右各留 14px 间隙。
-       上限：面板放大后不得越出视口——rect 实测反算基准宽/高（rect =
-       基准尺寸 × 面板 zoom × 页级 zoom，当前 style.zoom 已知，一次除法解出）。
-       低倍率下不放大过游戏倍率本身（跟手感），高倍率下按空间封顶防裁切 */
+       上限：面板放大后不得越出视口——超了按空间封顶。低倍率下不放大过游戏倍率
+       本身（跟手感），高倍率下按空间封顶防裁切。
+       十期修（2026-10-15 张老师截图报「无猜重排行显示不全」）：基准尺寸改为
+       **先把自身 zoom 复位 1 再量 rect**——旧法「rect ÷ 当前 zoom」依赖引擎对
+       getBoundingClientRect 是否含自身 zoom 的口径一致，WebKit/Safari 下 rect
+       不含自身 zoom → rawH 被低估 → cap 偏大 → 面板底部越出视口被裁。
+       zoom:1 下量基准尺寸全引擎口径一致；量完即设目标 zoom，中间无绘制 */
     function syncReportZoom() {
       const pz = pageZoom();
       const gwR = gwrap.getBoundingClientRect();
       const gaR = gameAreaEl.getBoundingClientRect();
       if (greport.classList.contains("show")) {
+        greport.style.zoom = "1";
         const rect = greport.getBoundingClientRect();
-        const curZ = parseFloat(greport.style.zoom || "1") || 1;
-        const rawW = rect.width / (curZ * pz); // 面板基准尺寸（未缩放布局尺寸）
-        const rawH = rect.height / (curZ * pz);
+        const rawW = rect.width / pz; // 面板基准尺寸（未缩放布局尺寸）
+        const rawH = rect.height / pz;
         if (rawW < 1 || rawH < 1) return;
         const availW = gwR.left - 12 - 14; // 视口左缘 12px + 贴边间隙 14px
         const availH = window.innerHeight - gwR.top - 12;
@@ -2268,12 +2303,13 @@ export function OnlinePlay({
         /* 📌 数据面板关着时结算面板**独立**定位缩放（2026-10-15 张老师截图报的 bug）：
            此前整个函数被 greport.show 门控——数据面板一关（设置浮窗「显示统计」off），
            gresult 就永远拿不到 left/top/zoom，回退 CSS 兜底 top:0;left:0 + zoom:1，
-           面板缩小叠在棋盘左上。同一套几何口径，改量 gresult 自己的 rect、
-           看右侧空间（gwR.right 之外到视口右缘）；两端面板同显时仍走上面分支共用 z */
+           面板缩小叠在棋盘左上。同一套几何口径（含十期「zoom 复位 1 再量」修正），
+           改量 gresult 自己的 rect、看右侧空间（gwR.right 之外到视口右缘）；
+           两端面板同显时仍走上面分支共用 z */
+        gresult.style.zoom = "1";
         const rect = gresult.getBoundingClientRect();
-        const curZ = parseFloat(gresult.style.zoom || "1") || 1;
-        const rawW = rect.width / (curZ * pz);
-        const rawH = rect.height / (curZ * pz);
+        const rawW = rect.width / pz;
+        const rawH = rect.height / pz;
         if (rawW < 1 || rawH < 1) return; // display:none 中量不出尺寸（换宿主/收起瞬间）
         const availW = window.innerWidth - gwR.right - 12 - 14; // 视口右缘 12px + 间隙 14px
         const availH = window.innerHeight - gwR.top - 12;
@@ -2373,22 +2409,33 @@ export function OnlinePlay({
        localStorage——免得连续滚动的每一格都写一次盘 */
     let wheelAcc = 0;
     let wheelTimer: number | null = null;
-    /* 当前「流内容溢出量」＝html/body/全屏宿主三者的 scrollHeight−clientHeight 取大。
+    /* 当前「流内容溢出量」＝html/body/全屏宿主三者的溢出像素，横纵两轴分开量。
        ⚠️ 本页 body 是固定高（=视口）+overflow:hidden，棋盘放大的超高**留在 body 内部**
        被裁剪，不传导到 documentElement（1280×320 实测 de.scrollHeight 恒=320、
        body.scrollHeight 391）——所以 html、body 必须都量，只量 html 永远得 0。
-       ⚠️ documentElement 上没有 .body 属性（body 在 document 上），写 de.body 恒 undefined。
+       ⚠️ 横向同样要量（2026-10-15 张老师全屏截图报「右侧结算面板出屏」）：全屏宿主
+       overflow:auto（滚动条已隐藏但仍可滚），棋盘放大常「高度装得下、宽度已超宿主」——
+       只量纵向则回滚不触发，gwrap 越出屏幕右缘，锚在 gwR.right+14 的结算面板整块出屏。
        ⚠️ 文档基线也可能本来就有溢出，所以不能判「>0」，要判**本次放大是否让溢出
-       变大**（见 onWheelZoom 里的差值判定） */
+       变大**（见 onWheelZoom 里的差值判定，横纵两轴分别比） */
     function flowOverflowPx() {
       const de = document.documentElement;
-      let ov = Math.max(
-        de.scrollHeight - de.clientHeight,
-        document.body ? document.body.scrollHeight - document.body.clientHeight : 0,
-      );
+      const measure = (el: HTMLElement) => ({
+        x: el.scrollWidth - el.clientWidth,
+        y: el.scrollHeight - el.clientHeight,
+      });
+      const ov = measure(de);
+      if (document.body) {
+        const b = measure(document.body);
+        ov.x = Math.max(ov.x, b.x);
+        ov.y = Math.max(ov.y, b.y);
+      }
       const fsHost = document.fullscreenElement;
-      if (fsHost instanceof HTMLElement)
-        ov = Math.max(ov, fsHost.scrollHeight - fsHost.clientHeight);
+      if (fsHost instanceof HTMLElement) {
+        const f = measure(fsHost);
+        ov.x = Math.max(ov.x, f.x);
+        ov.y = Math.max(ov.y, f.y);
+      }
       return ov;
     }
     function onWheelZoom(e: WheelEvent) {
@@ -2410,11 +2457,14 @@ export function OnlinePlay({
       zoomBeforeLs = null;
       applyZoom(zoomCur - steps * WHEEL_STEP_Z, false); // 上滑（deltaY<0）→ 放大
       syncPageFit(); // 自定义盘的页宽跟随（标准级别内部直接清 inline）
-      /* 放大步若让内容超高（出现滚动条/内容被裁）→ 回滚本步放大（2026-10-15
-         张老师定「无论如何不应该让页面出现滚动条」）。只在放大方向回滚（缩小
+      /* 放大步若让内容超高/超宽（出现滚动条/内容被裁/右侧面板被顶出屏）→ 回滚本步
+         放大（2026-10-15 张老师定「无论如何不应该让页面出现滚动条」；同日全屏截图
+         报「右侧结算面板出屏」补充：横向溢出同样回滚）。只在放大方向回滚（缩小
          不会产生溢出）；容差 2px 吸收页宽联动时的亚像素抖动。回滚后 zoomCur /
-         zoomWant 均已由 applyZoom 复原，320ms 后 zoomDragEnd 落盘的是回滚值 */
-      if (steps < 0 && flowOverflowPx() > baseOv + 2) {
+         zoomWant 均已由 applyZoom 复原（setZoomVisual 内 syncReportZoom 面板归位），
+         320ms 后 zoomDragEnd 落盘的是回滚值 */
+      const nowOv = flowOverflowPx();
+      if (steps < 0 && (nowOv.y > baseOv.y + 2 || nowOv.x > baseOv.x + 2)) {
         applyZoom(prevZ, false);
         syncPageFit();
       }
@@ -2644,10 +2694,9 @@ export function OnlinePlay({
     }
 
     /* 设置浮窗控件初始状态（从 localStorage 恢复的开关勾选态 + 3BV 滑杆初值） */
-    swNf.checked = nf;
-    swNg.checked = ng;
     swQm.checked = qmark;
     swStats.checked = showStats;
+    syncModeButtons(); // 模式快捷钮按存档初值点亮（NF/无猜）
     syncBvSlider();
 
     /* 开局恢复上次级别（四期张老师报：刷新/热更后回初级，3BV 范围浮窗也跟着变初级
@@ -2690,9 +2739,35 @@ export function OnlinePlay({
           <a data-lv="exp">高级</a>
           <a data-lv="cus">自定义</a>
         </div>
-        {/* 右上角两个图标按钮（2026-10-14 二期张老师定）：齿轮＝设置浮窗；⛶＝全屏切换。
-            news_head 需要相对定位给浮窗做锚（gsettings absolute top:100% right:0） */}
+        {/* 右上角图标按钮排（2026-10-14 二期张老师定，九期追补模式快捷钮）：
+            NF／无猜两颗模式钮在齿轮左侧——激活显色（NF=黄 / 无猜=绿）、未激活灰，
+            点击＝拨设置浮窗同名开关（双向同步），切换按既有口径重开一局 */
+        }
         <div className="gicons">
+          {/* 模式快捷钮 hover 出气泡（2026-10-15 九期张老师定）：文案与设置浮窗
+              对应开关的 .tip 一致；不用原生 title（会跟气泡双份弹） */}
+          <button className="gicon gmode" id="btn_nf" type="button">
+            NF
+            <span className="tip">禁旗模式：不能插旗，全程只靠开格决胜</span>
+          </button>
+          <button className="gicon gmode gmode_ng" id="btn_ng" type="button">
+            {/* 雨伞图标（2026-10-15 九期五改，张老师定）：合伞＝未激活态、
+                张伞＝激活态，两颗 SVG 叠放、CSS 按 .active 切换显示（无 JS 参与）；
+                fill=none stroke=currentColor 随激活态变色，与齿轮/全屏线稿风格一致 */}
+            <svg className="ic_closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {/* 合着的伞：收拢伞面 + 束带 + 弯柄 */}
+              <path d="M12 1.9 V2.8 C10.3 4.6 9.6 7.4 9.6 10.6 C9.6 13.4 10.3 15.6 12 17.2 C13.7 15.6 14.4 13.4 14.4 10.6 C14.4 7.4 13.7 4.6 12 2.8 Z" />
+              <path d="M9.8 12.8 C10.5 13.3 13.5 13.3 14.2 12.8" />
+              <path d="M12 17.2 V19 C12 20.2 10.4 20.5 9.8 19.7" />
+            </svg>
+            <svg className="ic_open" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {/* 张开的伞：波浪下缘伞面 + 中肋 + 直柄弯钩 */}
+              <path d="M12 2.6 C7.2 2.6 3.4 6.2 3.4 10.9 C5.5 9.9 9.9 9.9 12 10.9 C14.1 9.9 18.5 9.9 20.6 10.9 C20.6 6.2 16.8 2.6 12 2.6 Z" />
+              <path d="M12 2.6 V10.9" />
+              <path d="M12 10.9 V18.4 C12 19.9 10.3 20.2 9.7 19.3" />
+            </svg>
+            <span className="tip">无猜模式：踩雷时在不改变已开数字的前提下尝试重排局面</span>
+          </button>
           <button className="gicon" id="btn_settings" title="设置" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -2709,30 +2784,21 @@ export function OnlinePlay({
         </div>
 
         {/* 设置浮窗：齿轮点开（无头部栏/关闭按钮——外点、Esc、再点齿轮均可关）；
-            含 NF/无猜/问号/显示统计 开关、显示比例滑杆、3BV 范围双端点滑杆。
-            （「显示3BV」开关已随状态栏一并取消，八期。）
+            含 问号/数据统计 开关、显示比例滑杆、3BV 范围双端点滑杆。
+            （NF/无猜两项已于十期撤出设置——入口收敛到两颗模式快捷钮；「显示3BV」
+            开关已随状态栏一并取消，八期。）
             全部状态入 localStorage（online_play_settings），比例仍走原 online_play_zoom 键 */}
         <div className="gsettings" id="gsettings">
           {/* 开关名 ≤4 字（2026-10-14 张老师定），完整解释放 hover 气泡（.tip） */}
-          <div className="gs_row">
-            <span className="gs_name">NF模式</span>
-            <label className="gsw"><input type="checkbox" id="sw_nf" /><span className="track" /></label>
-            <span className="tip">禁旗模式：不能插旗，全程只靠开格决胜</span>
-          </div>
-          <div className="gs_row">
-            <span className="gs_name">无猜模式</span>
-            <label className="gsw"><input type="checkbox" id="sw_ng" /><span className="track" /></label>
-            <span className="tip">踩雷自动重排本局，盲点必开出空域，永远不用猜</span>
-          </div>
           <div className="gs_row">
             <span className="gs_name">问号标记</span>
             <label className="gsw"><input type="checkbox" id="sw_qm" /><span className="track" /></label>
             <span className="tip">右键按 标雷 → 问号 → 取消 三态循环</span>
           </div>
-          {/* 「显示统计」（2026-10-15 六期张老师定，默认关）：左侧数据统计面板的唯一入口。
-              八期改口径：只在游戏结束时出现（对局中不再常驻实时刷新） */}
+          {/* 「数据统计」（原「显示统计」，2026-10-15 十期张老师定改名，默认关）：
+              左侧数据统计面板的唯一入口。八期口径：只在游戏结束时出现（对局中不再常驻实时刷新） */}
           <div className="gs_row">
-            <span className="gs_name">显示统计</span>
+            <span className="gs_name">数据统计</span>
             <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
             <span className="tip">游戏结束后在游戏界面左侧弹出数据统计面板</span>
           </div>
