@@ -191,6 +191,11 @@ export function OnlinePlay({
        显示开关。八期改口径：开＝也只在**游戏结束**时随结算弹出（对局中不再常驻实时刷新
        ——张老师定「只有游戏结束才出现数据面板」）；关＝任何时刻都不显示。再开局撤下。 */
     let showStats = false;
+    /* 局末定格的统计面板 HTML（2026-10-15 十期张老师定）：report 时无论开关与否都存
+       一份——局后补开「显示统计」时直接复用，不再重算（胜利自动补旗/败局揭雷之后
+       重算会把 Flags 等口径算歪），保证与当时应弹出的面板逐字一致。
+       仅 over（局末定格状态）时消费，reset 开新局后 over=false 自然失效 */
+    let lastReportHtml: string | null = null;
     /* 无猜重排生效次数（踩一次雷/一个盲点算一次，内部重试不算）。
        状态栏取消后无 UI 消费，仅保留给 dev 测试钩子（__op.ngRedeals）验证重排逻辑 */
     let ngRedeals = 0;
@@ -1015,7 +1020,9 @@ export function OnlinePlay({
     function report(t: number, won: boolean) {
       const { solvedBv, html } = statsReport(t);
       /* 数据面板只在「显示统计」开着时、且只在**游戏结束**这一刻出现
-         （2026-10-15 八期张老师定：对局中不再常驻实时刷新）；再开局由 reset 撤下 */
+         （2026-10-15 八期张老师定：对局中不再常驻实时刷新）；再开局由 reset 撤下。
+         十期补：无论开关与否都定格一份 HTML，供局后补开开关时立即补弹本局面板 */
+      lastReportHtml = html;
       if (showStats) paintStatPanel(html);
       buildResultPanel(t, solvedBv, won);
     }
@@ -1837,11 +1844,17 @@ export function OnlinePlay({
     });
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
     /* 「显示统计」（八期改口径）：只影响**游戏结束**时是否弹出数据面板，不重开当前局。
-       打开时对局中不提前出现；关闭时若上一局定格的面板还挂着，立刻撤下 */
+       打开时对局中不提前出现；关闭时若上一局定格的面板还挂着，立刻撤下。
+       十期补（2026-10-15 张老师定）：游戏已结束（面板当时没弹）再打开开关 →
+       用 report 定格的 HTML **立即补弹当前这局的面板**；对局中打开则等本局结束再弹 */
     on(swStats, "change", () => {
       showStats = swStats.checked;
       saveSettings();
-      if (!showStats) greport.classList.remove("show");
+      if (!showStats) {
+        greport.classList.remove("show");
+        return;
+      }
+      if (over && lastReportHtml) paintStatPanel(lastReportHtml);
     });
 
     /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ----
