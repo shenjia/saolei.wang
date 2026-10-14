@@ -21,6 +21,9 @@ import { Board } from "@/components/Board";
 import { BoardPlay } from "@/components/BoardPlay";
 import { CommentForm, CommentList } from "@/components/Comments";
 import { FlopPlayer, PlayButton } from "@/components/FlopPlayer";
+import { VideoAnalysisRadar } from "@/components/VideoAnalysis";
+import { getVideoAnalysis } from "@/lib/videoanalysis";
+import { VIDEO_STATUS } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +50,18 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
   const level = video.level as VideoLevel;
   // 标题成绩按级别配色（2026-10-13 张老师要求：初级绿 / 中级橙 / 高级金，与录像列表 hover 同色阶）
   const lvCls = LV_CLS[level] ?? "";
+  // 2026-10-14 张老师需求：本局六维表现雷达（过早pending/非过审录像没有意义，跳过）
+  const analysis =
+    video.status === VIDEO_STATUS.REVIEWED
+      ? await getVideoAnalysis({
+          id: video.id,
+          level,
+          noflag: video.noflag,
+          bbbv: video.board3bv,
+          realTime: video.realTime,
+          filepath: video.filepath,
+        })
+      : null;
 
   return (
     <div id="page" className="two_columns">
@@ -156,8 +171,15 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
       </li>
       <li className="sidebar">
         {/* 2026-10-13 六轮：右栏由「名字 + 军衔」小盒换成与论坛右栏同款个人卡片 + 实力雷达图
-            （卡片展示录像上传者；审稿人信息仍在正文区不动） */}
-        {video.author && <UserPanel userId={video.author.id} />}
+            （卡片展示录像上传者；审稿人信息仍在正文区不动）
+            2026-10-14：实力雷达下线（hideRadar），下方改挂本局的「录像分析」六维雷达 */}
+        {video.author && <UserPanel userId={video.author.id} hideRadar />}
+        {analysis && (
+          <div className="radar box">
+            <h2>录像分析</h2>
+            <VideoAnalysisRadar data={analysis} />
+          </div>
+        )}
       </li>
     </ul>
     <FlopPlayer />

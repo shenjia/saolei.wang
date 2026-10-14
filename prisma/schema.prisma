@@ -222,6 +222,56 @@ model VideoStat {
   @@map("video_stat")
 }
 
+// 录像「本局表现」六维指标（2026-10-14 张老师需求：录像分析雷达图）
+// 由离线重放引擎 src/lib/videoradar.ts 算得（mvf/avf 头部没有这些字段，只能重放事件流）。
+// id 直接用 video.id（不自增），跑批幂等 upsert；详情页缺行时即时重放补写。
+// 六维：速度 bvs / 效率 ioe / 精准 corr / 手速 cls / 移动 ppc（越小越好）/ 综合 stnb。
+model VideoMetrics {
+  id         BigInt @id @db.BigInt
+  level      String @db.Char(3)
+  noflag     Boolean
+  realTime   Int    @map("real_time") @db.Int
+  bbbv       Int    @db.Int
+  cl         Int    @db.Int
+  clLeft     Int    @map("cl_left") @db.Int
+  clRight    Int    @map("cl_right") @db.Int
+  clDouble   Int    @map("cl_double") @db.Int
+  ce         Int    @db.Int
+  unflag     Int    @db.Int
+  path       Int    @db.Int
+  bvs        Float  @db.Float
+  ioe        Float  @db.Float
+  corr       Float  @db.Float
+  cls        Float  @db.Float
+  ppc        Float  @db.Float
+  stnb       Float  @db.Float
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@map("video_metrics")
+}
+
+// 分位基准：video_metrics 按「级别 × NF/FL × 3BV」分组后的 9 档分位边界
+// （与 distribution 表同构：每列是 GRADES 对应的 9 个阈值，逗号分隔）。
+// bucket 存该组盘的 3BV 原值；bucket=-1 是「该级别该模式全组」兜底行，
+// 单 3BV 样本不足 30 时回退用它。ppc（移动）是反向指标，边界按升序存（越小越好）。
+model VideoMetricDist {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  level      String @db.Char(3)
+  noflag     Boolean
+  bucket     Int    @db.Int
+  size       Int    @db.Int
+  bvs        String @db.VarChar(255)
+  ioe        String @db.VarChar(255)
+  corr       String @db.VarChar(255)
+  cls        String @db.VarChar(255)
+  ppc        String @db.VarChar(255)
+  stnb       String @db.VarChar(255)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@unique([level, noflag, bucket])
+  @@map("video_metric_dist")
+}
+
 // 各级别 3BV 收集区间（2026-10-13）：站内已通过（status=20）录像的 board_3bv 实际上下限，
 // 个人主页侧栏「3BV 收集」方格区间用。审核通过新录像突破区间时扩展
 // （lib/review.ts reviewVideo，INSERT ... ON DUPLICATE KEY UPDATE），只扩不缩；

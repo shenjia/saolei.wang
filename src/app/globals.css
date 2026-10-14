@@ -1427,6 +1427,65 @@ del[data-tip]:hover::after {
   height: auto;
 }
 
+/* 录像详情页「录像分析」六维雷达（2026-10-14）
+   气泡走 HTML 绝对定位（SVG 内元素不支持 ::after，用不了 data-tip 那套 content: attr()），
+   视觉与站内 data-tip 保持一致：#1e1f1c 底 / #49483e 边 / 圆角 3px / 12px 正文。
+   ⚠️ 出血尺寸必须挪到 .vr_wrap 上（而不是留在 .chart 的负 margin）：气泡按 SVG 视口百分比
+   定位，定位父级必须和 SVG 等宽同起点，否则左右各差 12px 会整体偏位。 */
+#page #video_view .radar.box .vr_wrap {
+  position: relative;
+  margin: -12px;
+  width: calc(100% + 24px);
+  max-width: 234px;
+}
+#page #video_view .radar.box .vr_wrap .chart {
+  display: block;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  height: auto;
+}
+#page #video_view .vr_tip {
+  position: absolute;
+  z-index: 20;
+  min-width: 118px;
+  padding: 5px 8px;
+  background: #1e1f1c;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  color: #f8f8f2;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+#page #video_view .vr_tip p {
+  margin: 0;
+}
+#page #video_view .vr_tip_grade {
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 1.3;
+}
+#page #video_view .vr_tip_grade span {
+  margin-left: 5px;
+  font-size: 12px;
+  font-weight: normal;
+  color: #8a8878;
+}
+#page #video_view .vr_tip_val {
+  color: #b1b1a4;
+}
+#page #video_view .vr_tip_pct {
+  color: #8a8878;
+}
+#page #video_view .vr_tip_pct em {
+  color: #b1b1a4;
+  font-style: normal;
+}
+
 /* BBS 主题页右栏盒子：padding 30px → 盒内容宽 210、外径 272，与首页右栏板块（#newbie 等）一致 */
 #bbs_op_card {
   padding: 30px;

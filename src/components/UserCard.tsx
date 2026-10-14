@@ -101,17 +101,27 @@ export function UserCard({ card }: { card: UserCardData }) {
  * 侧栏个人面板（服务端取数 + 组装）：个人卡片盒 + 「实力」雷达图盒。
  * 论坛主题详情页（cardId="bbs_op_card"）与录像详情页共用。
  * 没上传过录像的玩家不渲染雷达板块（与用户主页同门槛）。
+ * 录像详情页传 hideRadar：右栏只留个人卡片，雷达位置让给「录像分析」（本局六维，
+ * 2026-10-14 张老师定）。
  */
-export async function UserPanel({ userId, cardId }: { userId: number; cardId?: string }) {
+export async function UserPanel({
+  userId,
+  cardId,
+  hideRadar,
+}: {
+  userId: number;
+  cardId?: string;
+  hideRadar?: boolean;
+}) {
   const card = await getUserCard(userId);
   if (!card) return null;
-  const radar = card.hasVideos ? await getRadarData(card.scores) : [];
+  const radar = card.hasVideos && !hideRadar ? await getRadarData(card.scores) : [];
   return (
     <>
       <div id={cardId} className="box">
         <UserCard card={card} />
       </div>
-      {card.hasVideos && (
+      {card.hasVideos && !hideRadar && (
         <div className="radar box">
           <h2>实力</h2>
           <RadarChart data={radar} />
