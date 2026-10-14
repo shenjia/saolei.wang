@@ -98,6 +98,18 @@ const LS_RESERVE_W = 2;
    卡到 0 余量时宿主 scrollHeight 会多出 1px → 平白冒出一条竖滚动条。
    两个方向各留 2px（同横屏 LS_RESERVE_W 的取舍：宁小 2px，不裁内容/不出滚动条） */
 const FS_RESERVE = 2;
+/* 滚轮调显示比例（2026-10-15 张老师定「练习页禁滚动，滑动鼠标滚轮可调整显示比例」）：
+   累计滚动量（归一化到像素）每满 WHEEL_STEP_PX 迈一格 WHEEL_STEP_Z。
+   按**累计**而非「每个 wheel 事件迈一格」——触控板惯性连滚一次能出十几个事件，
+   逐个迈格会瞬间飞到上限；鼠标滚轮一格在 Chrome 恰好报 100px，正好一格。
+   步进 0.1x（滑杆 step 0.05 的两档）：0.5→5 全程约 45 格滚动，既不粘滞也不失手。
+   ⚠️ 方向约定：deltaY<0（上滑/远离自己）＝放大，同浏览器 Ctrl+滚轮与地图类应用 */
+const WHEEL_STEP_PX = 100;
+const WHEEL_STEP_Z = 0.1;
+/* 单个 wheel 事件最多迈几格：有些鼠标/驱动一格就报 deltaY 300~500（Windows 的
+   120 或系统「一次滚多行」设置），不封顶会一次跳 0.5x 以上、手感失控。
+   封顶时把累计清零（而不是继续留余量），免得下一格又跳一次 */
+const WHEEL_MAX_STEPS = 5;
 
 /* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
@@ -123,6 +135,12 @@ export function OnlinePlay({
     const container: HTMLDivElement = root; // 函数声明内闭包丢失空值收窄，取非空别名
     const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
       root.querySelector<T>("#" + id)!;
+    /* 练习页禁滚动（2026-10-15 张老师定）：整页锁死滚动，滚轮改由 onWheelZoom
+       调整显示比例（见文末）。类挂在 <html> 上、随组件挂载/卸载增删，不污染站内
+       其他页面（同 op-fakefs 的做法）。⚠️ 必须在任何 fit 之前加：页面滚动条消失
+       会让视口宽 +15px，后面的 normalMaxZoom / syncPageFit 都按新宽度算才准；
+       副作用是内容超一屏时页面下方（页脚）不再可滚达——本页即一屏棋盘，可接受 */
+    document.documentElement.classList.add("op-noscroll");
     const ac = new AbortController();
     const signal = ac.signal;
     const on = <E extends Event>(
@@ -2285,6 +2303,40 @@ export function OnlinePlay({
     on(zoomRange, "pointerup", zoomDragEnd);
     on(zoomRange, "change", zoomDragEnd);
 
+    /* ---- 滚轮调显示比例（2026-10-15 张老师定）----
+       练习页禁滚动，整页锁死由 <html>.op-noscroll 兜住（见 useEffect 开头），
+       这里再 preventDefault 一层：overflow:hidden 对滚轮的抑制在各浏览器/宿主上
+       并不完全一致（macOS 橡胶带、全屏宿主 overflow:auto 的滚动链仍可能被推动）。
+       监听挂 document（整页任意处，含站头/页脚/浮窗）：本页滚轮已无其他用途，
+       挂 root 会留下死角——鼠标停在标题行上方空白处滚轮就没反应（playwright
+       实证：挂 root 时鼠标在 (0,0) 滚轮完全无效，全屏下才碰巧命中）。
+       落盘沿用滑杆口径：滚动中 applyZoom(…, false) 即时生效（按视口封顶 + 走
+       syncPageFit 让页宽跟随），停滚 320ms 后 zoomDragEnd 一次正式定值 + 写
+       localStorage——免得连续滚动的每一格都写一次盘 */
+    let wheelAcc = 0;
+    let wheelTimer: number | null = null;
+    function onWheelZoom(e: WheelEvent) {
+      e.preventDefault();
+      /* deltaMode 三态归一化到像素：0=像素（Chrome/Safari）、1=行（Firefox 常报行，
+         按 16px 行高估）、2=页（罕用，按 100px 估） */
+      wheelAcc += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+      let steps = Math.trunc(wheelAcc / WHEEL_STEP_PX);
+      if (steps === 0) return;
+      if (Math.abs(steps) > WHEEL_MAX_STEPS) {
+        steps = Math.sign(steps) * WHEEL_MAX_STEPS; // 一步跨太多：封顶并清掉余量
+        wheelAcc = 0;
+      } else {
+        wheelAcc -= steps * WHEEL_STEP_PX;
+      }
+      zoomBeforeFs = null; // 手动调过比例 → 退出全屏/横屏不再自动恢复（同滑杆）
+      zoomBeforeLs = null;
+      applyZoom(zoomCur - steps * WHEEL_STEP_Z, false); // 上滑（deltaY<0）→ 放大
+      syncPageFit(); // 自定义盘的页宽跟随（标准级别内部直接清 inline）
+      if (wheelTimer !== null) clearTimeout(wheelTimer);
+      wheelTimer = window.setTimeout(() => { wheelTimer = null; zoomDragEnd(); }, 320);
+    }
+    on(document, "wheel", onWheelZoom, { passive: false });
+
     /* ---- 3BV 范围双端点滑杆（2026-10-14 二期）----
        两条原生 range 叠放：轨道/填充条只负责视觉（CSS 变量 --lo/--hi 定位），
        thumb 透明轨道 pointer-events:none + thumb 自身 auto——两条滑杆互不挡命中。
@@ -2506,9 +2558,11 @@ export function OnlinePlay({
       radarRootRef.current = null;
       grModal.remove();
       document.documentElement.classList.remove("op-fakefs"); // 伪全屏态不跨页残留
+      document.documentElement.classList.remove("op-noscroll"); // 整页锁滚随本页一起摘掉
       if (timerId) clearInterval(timerId);
       if (touchTimer) clearTimeout(touchTimer);
       if (cusTimer !== null) clearTimeout(cusTimer); // 拖杆节流残留的 trailing 定时器
+      if (wheelTimer !== null) clearTimeout(wheelTimer); // 滚轮落盘的 trailing 定时器
       if (win.__op) delete win.__op;
     };
   }, []);

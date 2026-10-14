@@ -6260,6 +6260,16 @@ button.msg_cancel:hover {
   padding-top: 10px;
   border-top: 1px solid #5a594e;
 }
+/* 练习页禁滚动（2026-10-15 张老师定：「练习页禁滚动，滑动鼠标滚轮可调整显示比例」）：
+   整页锁死滚动，滚轮改由 OnlinePlay 的 onWheelZoom 劫持为调整显示比例。
+   类由组件挂载时加到 <html>、卸载时摘除，不污染站内其他页面。
+   body 一并写上：部分浏览器把 body 自身的滚动算独立一层，只锁 html 压不住。
+   副作用：滚动条消失后视口宽 +15px（各 fit 都按新宽度重算，无碍），且内容超一屏时
+   页面下方（页脚）不再可滚达——本页内容即一屏棋盘，锁滚是张老师要的效果 */
+html.op-noscroll,
+html.op-noscroll body {
+  overflow: hidden;
+}
 /* 全屏开关：根容器全屏时补深色底（全屏默认背底为纯黑）、内容超高可滚 */
 #online_play > div:fullscreen {
   background: #272822;
