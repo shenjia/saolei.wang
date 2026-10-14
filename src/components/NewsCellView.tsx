@@ -132,7 +132,7 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
           <>
             {authorCells}
             <span className="promoted">晋升了！</span>
-            <span className="increase" aria-hidden="true"></span>
+            <span className="increase increase--gold" aria-hidden="true"></span>
             <span className="record person" data-tip={d.ti ? titleConditionText(d.ti) : undefined}>
               <RankBadge title={d.ti ?? ""} /> <em className={TITLE_CLASSES[d.ti ?? ""] ?? ""}>{d.ti ?? ""}</em>
             </span>

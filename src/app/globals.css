@@ -1192,6 +1192,35 @@ del[data-tip]:hover::after {
 .bbs_post h1 {
   font-size: 18px;
 }
+/* 分类标签（2026-10-14 张老师）：详情页 h1 由【文字】改 board_tag 徽章，
+   与列表页/首页新帖同款配色；字号随标题（18px 一档配 15px）、
+   徽章高度贴合标题字形高度（22px 行高 + 1px 描边×2 = 24px ≈ 18px 字形 20px）、
+   与标题垂直居中（middle 对齐后实测中心偏差 ≤1px） */
+.bbs_post h1 .board_tag {
+  display: inline-block;
+  padding: 0 9px;
+  margin-right: 10px;
+  border: 1px solid #656355;
+  border-radius: 3px;
+  background: #49483e;
+  color: #939387;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 22px;
+  vertical-align: middle;
+  /* middle 基线对齐后实测仍低 1.3px（字形 descender 影响），相对上提 1px 补偿 */
+  position: relative;
+  top: -1px;
+}
+.bbs_post h1 .board_tag.notice {
+  color: #fdc61a;
+}
+.bbs_post h1 .board_tag.tech {
+  color: #a6e22e;
+}
+.bbs_post h1 .board_tag.qa {
+  color: #fd971f;
+}
 .bbs_meta {
   color: #75715e;
   font-size: 13px;
@@ -2885,7 +2914,7 @@ body #page.ranking_old .ranking_box {
 
 /* （每日一星卡 #daily_star_card 样式已随功能于 2026-10-13 下线移除） */
 
-/* 晋升动态文案（2026-10-13 定稿）：金色「晋升了！」+ 绿色 increase 箭头（与破纪录动态统一）+ 军衔徽章正常分级色 */
+/* 晋升动态文案（2026-10-14 调整）：金色「晋升了！」+ 金色 increase--gold 箭头（图标 public/images/common/increase-gold.png，规则在 legacy-2013.css）+ 军衔徽章正常分级色；破纪录动态仍用绿色 increase.png */
 #news .promoted {
   margin: 0 2px 0 5px;
   color: #fdc61d;
@@ -5473,4 +5502,211 @@ button.msg_cancel:hover {
 }
 .rank_rules b {
   color: #e6db74;
+}
+
+/* ===== 在线玩 /online（2026-10-14 一期：纯前端娱乐局）=====
+   外框/计数条/底部条复刻 flop player 经典银灰；LED 数码管与笑脸贴图见 components/FlopSprites.tsx。
+   计数条/底部条 width:0 + min-width:100% —— 保证严格与棋盘同宽，不参与外框撑宽 */
+/* 标题行：复用全站 .news_head（同首页「新闻」：黄 h1 + ranking_tabs 筛选器紧跟右侧，2026-10-14 张老师定）。
+   模式筛选器（标准/NF/无猜）margin-left:auto 推到行右；窄屏 flex-wrap 自然换行 */
+#online_play #mode_tabs {
+  margin-left: auto;
+}
+#online_play .ranking_tabs a {
+  cursor: pointer;
+}
+#online_play #game_area {
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#online_play .gframe {
+  display: inline-block;
+  padding: 9px;
+  background: silver;
+  border: 3px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+  text-shadow: none;
+}
+#online_play .gbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px;
+  margin-bottom: 9px;
+  background: silver;
+  border: 2px solid;
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+#online_play .ledc {
+  display: block;
+  width: 41px;
+  height: 25px;
+  flex: 0 0 auto;
+}
+#online_play .face {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  flex: 0 0 auto;
+}
+/* 关键：让 click 的命中目标恒为 BUTTON 本身——否则 mousedown 改变 use href 后
+   Chrome 认为按下/抬起目标不一致，click 丢失、笑脸无法重开 */
+#online_play .face svg {
+  pointer-events: none;
+}
+#online_play .gname {
+  margin-top: 9px;
+  padding: 2px 6px;
+  background: silver;
+  border: 2px solid;
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+  color: #7b7b7b;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+#online_play .gboard_wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+#online_play .board.game {
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+}
+/* 缩放控制条：复刻 flop player 控制条（浅色条 + 蓝色滑块 + 倍率读数），倍率经 localStorage 记忆 */
+#online_play .gzoom {
+  margin: 10px auto 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  width: max-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-shadow: none;
+}
+#online_play .gzoom input[type="range"] {
+  width: 180px;
+  accent-color: #1890ff;
+  cursor: pointer;
+}
+#online_play .gzoom .gz_val {
+  font: 14px/1 Arial, Helvetica, sans-serif;
+  color: #555;
+  min-width: 4.5ch;
+  text-align: right;
+}
+#online_play .gzoom .gz_reset {
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #555;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+#online_play .gzoom .gz_reset:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+}
+#online_play .gstats {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #939387;
+}
+#online_play .gstats b {
+  color: #eee;
+  font-weight: bold;
+}
+#online_play .gstats .win {
+  color: #a6e22e;
+}
+#online_play .gstats .lose {
+  color: #f92672;
+}
+#online_play .gtools {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #939387;
+}
+#online_play .gtools .flagmode_btn {
+  display: none;
+  padding: 5px 14px;
+  border: 1px #656355 solid;
+  border-radius: 5px;
+  background: #49483e;
+  color: #b1b1a4;
+  font-size: 14px;
+  cursor: pointer;
+}
+#online_play .gtools .flagmode_btn.on {
+  background: #fdc61d;
+  border-color: #fdc61d;
+  color: #333;
+  font-weight: bold;
+}
+/* NF 模式下插旗按钮无意义，强制隐藏（优先级压过 coarse 媒体查询） */
+#online_play .gtools .flagmode_btn.hidden {
+  display: none !important;
+}
+@media (pointer: coarse) {
+  #online_play .gtools .flagmode_btn:not(.hidden) {
+    display: inline-block;
+  }
+}
+#online_play .ghelp {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #75715e;
+}
+
+/* 首页右栏「开一局」大按钮（2026-10-14 张老师定）：扁平、与侧栏板块同宽（桌面盒外径 272px），
+   样式复用游戏笑脸按钮的经典银灰凸起边框，笑脸图标在前、文字在后 */
+#play_entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 272px;
+  margin: 0 8px 16px;
+  padding: 10px 0;
+  background: silver;
+  border: 3px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+  box-sizing: border-box;
+  color: #333;
+  font-size: 18px;
+  font-weight: bold;
+  text-shadow: none;
+}
+#play_entry:hover {
+  color: #000;
+}
+#play_entry:active {
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+}
+@media (max-width: 880px) {
+  /* 移动端侧栏盒子解除固定宽，按钮同步铺满 */
+  #play_entry {
+    width: auto;
+  }
 }
