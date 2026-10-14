@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>在线扫雷 · 设置浮窗设计稿</title>
+<style>
+/* ===== 站内 Monokai 基调（globals.css 同源配色） ===== */
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 20px;
+  background: #1b1c18;
+  font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #f8f8f2;
+}
+.design-note {
+  max-width: 980px; margin: 0 auto 18px;
+  background: #272822; border: 1px solid #49483e; border-radius: 8px;
+  padding: 12px 18px; color: #939387; font-size: 13px;
+}
+.design-note b { color: #e6db74; }
+
+/* ===== 模拟 .box #online_play 版块 ===== */
+.box {
+  max-width: 980px; margin: 0 auto;
+  background: #272822; border: 1px solid #49483e;
+  padding: 14px 18px 22px;
+}
+.news_head {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 12px;
+}
+.news_head h1 {
+  font-size: 18px; margin: 0; color: #fdc61d; font-weight: bold;
+}
+.ranking_tabs { display: inline-flex; gap: 2px; margin-left: 10px; }
+.ranking_tabs span, .ranking_tabs a {
+  padding: 2px 10px; font-size: 13px; border-radius: 3px 3px 0 0;
+}
+.ranking_tabs .current { background: #49483e; color: #e8e8e0; }
+.ranking_tabs a { color: #939387; cursor: pointer; text-decoration: none; }
+.ranking_tabs a:hover { color: #e8e8e0; }
+
+/* ===== 右上角两个图标按钮（取代原四开关） =====
+   布局位与原 .gswitches 相同：margin-left:auto 推到行右 */
+.gicons {
+  margin-left: auto; align-self: center;
+  display: flex; align-items: center; gap: 8px;
+}
+.gicon {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #49483e; border: 1px solid #656355; border-radius: 5px;
+  color: #b1b1a4; cursor: pointer; padding: 0;
+}
+.gicon:hover { color: #e8e8e0; border-color: #939387; }
+.gicon.active { color: #fdc61d; border-color: #fdc61d; }
+.gicon svg { display: block; width: 17px; height: 17px; }
+
+/* ===== 设置浮窗 ===== */
+.gsettings {
+  display: none;
+  position: absolute; top: calc(100% + 10px); right: 0;
+  width: 320px; max-width: calc(100vw - 32px);
+  background: #49483e; border: 1px solid #656355; border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  padding: 12px 16px 14px; z-index: 30;
+  text-align: left;
+}
+.gsettings.open { display: block; }
+.gs_row { display: flex; align-items: center; gap: 10px; padding: 7px 0; position: relative; }
+.gs_head {
+  display: flex; align-items: center;
+  font-size: 13px; font-weight: bold; color: #e8e8e0;
+  padding-bottom: 6px; margin-bottom: 2px;
+  border-bottom: 1px solid #656355;
+}
+.gs_close {
+  margin-left: auto; width: 22px; height: 22px; padding: 0;
+  background: none; border: 0; color: #939387; font-size: 16px; line-height: 1;
+  cursor: pointer; border-radius: 4px;
+}
+.gs_close:hover { color: #e8e8e0; background: #5c5b4e; }
+.gs_divider { height: 1px; background: #656355; margin: 8px -16px; }
+.gs_name { font-size: 13px; color: #e8e8e0; flex: 1 1 auto; }
+.gs_row .tip {
+  display: none; position: absolute; top: calc(100% + 2px); right: 0;
+  white-space: nowrap; background: #272822; border: 1px solid #656355; border-radius: 5px;
+  color: #f8f8f2; font-size: 12px; line-height: 18px; padding: 5px 10px;
+  z-index: 5; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+}
+.gs_row .tip::after {
+  content: ""; position: absolute; bottom: 100%; right: 18px;
+  border: 5px solid transparent; border-bottom-color: #656355;
+}
+.gs_row:hover .tip { display: block; }
+
+/* 开关（沿用线上 .gsw 滑块） */
+.gsw { position: relative; display: inline-flex; align-items: center; cursor: pointer; user-select: none; flex: 0 0 auto; }
+.gsw input { position: absolute; opacity: 0; width: 0; height: 0; }
+.gsw .track {
+  width: 32px; height: 18px; border-radius: 9px; background: #555550;
+  position: relative; transition: background .15s;
+}
+.gsw .track::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; border-radius: 50%; background: #e8e8e0;
+  transition: left .15s;
+}
+.gsw input:checked + .track { background: #34c759; }
+.gsw input:checked + .track::after { left: 16px; }
+
+/* 比例滑杆（沿用 .gzoom 视觉：浅色条 + 蓝滑块） */
+.gs_zoom { display: flex; align-items: center; gap: 10px; padding: 6px 0 2px; }
+.gs_zoom .zlabel { font-size: 13px; color: #e8e8e0; width: 60px; flex: 0 0 auto; }
+.gs_zoom input[type="range"].zrange {
+  flex: 1 1 auto; accent-color: #1890ff; cursor: pointer; height: 18px; margin: 0;
+}
+.gs_zoom .zval { font: 13px/1 Arial, sans-serif; color: #e8e8e0; min-width: 4.5ch; text-align: right; }
+.gs_zoom .zreset {
+  border: 1px solid #656355; background: #272822; color: #b1b1a4;
+  border-radius: 4px; padding: 2px 8px; font-size: 12px; cursor: pointer;
+}
+.gs_zoom .zreset:hover { color: #e8e8e0; border-color: #939387; }
+
+/* ===== 3BV 双端点范围滑杆 ===== */
+.gs_bv_label { display: flex; align-items: baseline; gap: 8px; padding-top: 4px; }
+.gs_bv_label .bname { font-size: 13px; color: #e8e8e0; }
+.gs_bv_label .brange { font-size: 12px; color: #939387; }
+.gs_bv_label .bcur { margin-left: auto; font-size: 13px; color: #fdc61d; font-weight: bold; }
+.dual {
+  position: relative; height: 26px; margin: 2px 1px 0;
+  --lo: 0%; --hi: 100%;
+}
+.dual .rail {
+  position: absolute; left: 0; right: 0; top: 11px; height: 4px;
+  background: #272822; border-radius: 2px;
+}
+.dual .fill {
+  position: absolute; left: var(--lo); right: calc(100% - var(--hi));
+  top: 11px; height: 4px; background: #1890ff; border-radius: 2px;
+}
+.dual input[type="range"] {
+  position: absolute; inset: 0; width: 100%; margin: 0;
+  -webkit-appearance: none; appearance: none; background: none; pointer-events: none;
+  height: 26px;
+}
+.dual input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; pointer-events: auto;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 2px solid #1890ff; cursor: grab;
+  margin-top: 0;
+}
+.dual input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #fff; border: 2px solid #1890ff; cursor: grab;
+}
+.gs_bv_vals { display: flex; justify-content: space-between; font-size: 12px; color: #939387; padding: 0 1px; }
+
+/* ===== 游戏区示意（非重点，简化） ===== */
+#game_area { text-align: center; }
+.gframe {
+  display: inline-block; padding: 9px; background: silver;
+  border: 3px solid; border-color: #fff #7b7b7b #7b7b7b #fff;
+}
+.gbar {
+  display: flex; justify-content: space-between; padding: 4px; margin-bottom: 9px;
+  background: silver; border: 2px solid; border-color: #7b7b7b #fff #fff #7b7b7b;
+}
+.ledbox { width: 41px; height: 25px; background: #111; color: #f00;
+  font: bold 17px/25px "Courier New", monospace; text-align: center; letter-spacing: 2px; }
+.facebox { width: 26px; height: 26px; background: silver; border: 2px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff; font-size: 15px; line-height: 22px; cursor: pointer; }
+.board-demo { display: grid; grid-template-columns: repeat(16, 18px); gap: 1px; background: #808080; width: max-content; margin: 0 auto; }
+.board-demo i { width: 18px; height: 18px; background: #c0c0c0; border: 2px solid; border-color: #fff #7b7b7b #7b7b7b #fff; }
+.board-demo i.o { background: #b0b0b0; border: 1px solid #808080; }
+.gname { margin-top: 9px; padding: 2px 6px; background: silver; border: 2px solid;
+  border-color: #7b7b7b #fff #fff #7b7b7b; color: #7b7b7b; font-size: 12px; line-height: 20px; }
+/* 比例条已移入设置浮窗——页面底部不再显示（示意留白说明） */
+.removed-note { margin-top: 12px; font-size: 12px; color: #75715e; }
+del { color: #75715e; }
+</style></head><body>
+
+<div class="design-note">
+  <b>设计稿（2026-10-14）</b>：/online 右上角只保留两个图标按钮——<b>齿轮＝设置</b>（点开弹出浮窗）、<b>⛶＝全屏</b>（点击切换）。
+  原 NF / 无猜 / 问号 / 全屏四个开关收进设置浮窗；底部「比例」控制条也移入浮窗（页面更干净）。
+  浮窗内新增 <b>3BV 范围</b>双端点滑杆：上下界取主站 3BV 统计区间（初 2–51 / 中 30–133 / 高 100–271），最小差 10，默认全范围；布雷时保证 3BV 落在区间内。全部设置存 localStorage。
+  <b>浮窗可交互演示</b>：点齿轮开合、拖比例滑杆、拖 3BV 双端点、切换级别看范围联动。
+</div>
+
+<div class="box" id="online_play">
+  <div style="position:relative"> <!-- 浮窗定位锚 -->
+    <div class="news_head">
+      <h1>在线扫雷</h1>
+      <div class="ranking_tabs">
+        <span class="current" data-lv="beg">初级</span>
+        <a data-lv="int">中级</a>
+        <a data-lv="exp">高级</a>
+      </div>
+      <!-- 右上角两个图标按钮 -->
+      <div class="gicons">
+        <button class="gicon" id="btn_settings" title="设置" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3.2"/>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z"/>
+          </svg>
+        </button>
+        <button class="gicon" id="btn_fs" title="全屏" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- 设置浮窗 -->
+      <div class="gsettings" id="gsettings">
+        <div class="gs_head">设置<button class="gs_close" id="gs_close" type="button" aria-label="关闭">✕</button></div>
+
+        <div class="gs_row">
+          <span class="gs_name">NF</span>
+          <label class="gsw"><input type="checkbox" id="sw_nf"><span class="track"></span></label>
+          <span class="tip">禁旗模式：不能插旗，全程只靠开格决胜</span>
+        </div>
+        <div class="gs_row">
+          <span class="gs_name">无猜</span>
+          <label class="gsw"><input type="checkbox" id="sw_ng"><span class="track"></span></label>
+          <span class="tip">踩雷自动重排本局，盲点必开出空域，永远不用猜</span>
+        </div>
+        <div class="gs_row">
+          <span class="gs_name">问号</span>
+          <label class="gsw"><input type="checkbox" id="sw_qm"><span class="track"></span></label>
+          <span class="tip">开启后右键按 标雷 → 问号 → 取消 三态循环</span>
+        </div>
+
+        <div class="gs_divider"></div>
+
+        <div class="gs_zoom">
+          <span class="zlabel">显示比例</span>
+          <input type="range" class="zrange" id="zoom_range" min="0.5" max="2.5" step="0.05" value="1">
+          <span class="zval" id="zoom_val">1.00x</span>
+          <button class="zreset" id="zoom_reset" type="button">重置</button>
+        </div>
+
+        <div class="gs_divider"></div>
+
+        <div class="gs_bv_label">
+          <span class="bname">3BV 范围</span>
+          <span class="brange" id="bv_range_hint">初级统计区间 2–51</span>
+          <span class="bcur" id="bv_cur">2 – 51</span>
+        </div>
+        <div class="dual" id="bv_dual">
+          <div class="rail"></div><div class="fill"></div>
+          <input type="range" id="bv_lo" min="2" max="51" step="1" value="2">
+          <input type="range" id="bv_hi" min="2" max="51" step="1" value="51">
+        </div>
+        <div class="gs_bv_vals"><span>下界</span><span>上界</span></div>
+      </div>
+    </div>
+
+    <div id="game_area">
+      <div class="gframe">
+        <div class="gbar">
+          <div class="ledbox">010</div>
+          <div class="facebox">🙂</div>
+          <div class="ledbox">000</div>
+        </div>
+        <div class="board-demo" id="board_demo"></div>
+        <div class="gname" id="gname">初级 8×8 · 10 雷</div>
+      </div>
+      <div class="removed-note">
+        （原底部「比例 1.00x [滑杆] 重置」控制条与右上四开关已收进设置浮窗——<del>比例 <input disabled type="range" style="vertical-align:middle"> 1.00x 重置</del>）
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 演示交互（与线上行为一致） ===== */
+const $ = (id) => document.getElementById(id);
+/* 棋盘示意 */
+const bd = $("board_demo");
+for (let i = 0; i < 16 * 9; i++) { const c = document.createElement("i"); if (Math.random() < 0.06) c.className = "o"; bd.appendChild(c); }
+
+/* 齿轮开合浮窗 */
+const panel = $("gsettings"), gear = $("btn_settings");
+gear.addEventListener("click", (e) => { e.stopPropagation(); panel.classList.toggle("open"); gear.classList.toggle("active"); });
+$("gs_close").addEventListener("click", () => { panel.classList.remove("open"); gear.classList.remove("active"); });
+document.addEventListener("click", (e) => {
+  if (panel.classList.contains("open") && !panel.contains(e.target) && e.target !== gear) {
+    panel.classList.remove("open"); gear.classList.remove("active");
+  }
+});
+/* 全屏按钮演示：图标切换 */
+const fsBtn = $("btn_fs");
+fsBtn.addEventListener("click", () => {
+  const on = fsBtn.classList.toggle("active");
+  fsBtn.innerHTML = on
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+});
+
+/* 比例滑杆 */
+$("zoom_range").addEventListener("input", (e) => { $("zoom_val").textContent = parseFloat(e.target.value).toFixed(2) + "x"; });
+$("zoom_reset").addEventListener("click", () => { $("zoom_range").value = 1; $("zoom_val").textContent = "1.00x"; });
+
+/* ===== 3BV 双端点滑杆 ===== */
+const RANGES = { beg: [2, 51], int: [30, 133], exp: [100, 271] };
+const NAMES = { beg: "初级", int: "中级", exp: "高级" };
+let cur = { beg: [2, 51], int: [30, 133], exp: [100, 271] }; // 演示默认＝全范围
+const MIN_GAP = 10;
+const loEl = $("bv_lo"), hiEl = $("bv_hi"), dual = $("bv_dual");
+
+function paintDual() {
+  const [mn, mx] = RANGES[lvDemo];
+  const [lo, hi] = cur[lvDemo];
+  dual.style.setProperty("--lo", ((lo - mn) / (mx - mn) * 100) + "%");
+  dual.style.setProperty("--hi", ((hi - mn) / (mx - mn) * 100) + "%");
+  loEl.value = lo; hiEl.value = hi;
+  $("bv_cur").textContent = lo + " – " + hi;
+}
+let lvDemo = "beg";
+function switchLv(lv) {
+  lvDemo = lv;
+  const [mn, mx] = RANGES[lv];
+  loEl.min = hiEl.min = mn; loEl.max = hiEl.max = mx;
+  $("bv_range_hint").textContent = NAMES[lv] + "统计区间 " + mn + "–" + mx;
+  $("gname").textContent = { beg: "初级 8×8 · 10 雷", int: "中级 16×16 · 40 雷", exp: "高级 30×16 · 99 雷" }[lv];
+  paintDual();
+}
+loEl.addEventListener("input", () => {
+  const [mn, mx] = RANGES[lvDemo];
+  let lo = Math.min(parseInt(loEl.value), cur[lvDemo][1] - MIN_GAP);
+  lo = Math.max(mn, lo);
+  cur[lvDemo][0] = lo; paintDual();
+});
+hiEl.addEventListener("input", () => {
+  const [mn, mx] = RANGES[lvDemo];
+  let hi = Math.max(parseInt(hiEl.value), cur[lvDemo][0] + MIN_GAP);
+  hi = Math.min(mx, hi);
+  cur[lvDemo][1] = hi; paintDual();
+});
+document.querySelectorAll(".ranking_tabs [data-lv]").forEach((el) => {
+  el.addEventListener("click", () => {
+    document.querySelector(".ranking_tabs .current").className = "";
+    el.className = "current";
+    switchLv(el.dataset.lv);
+  });
+});
+switchLv("beg");
+</script>
+</body></html>

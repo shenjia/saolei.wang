@@ -6013,6 +6013,44 @@ button.msg_cancel:hover {
   min-width: 100%;
   box-sizing: border-box;
 }
+/* ---- 状态栏（2026-10-14 四期）：棋盘下方第二条银条，排版与 .gname 同源；
+       NF / 无猜标签 + 3BV + 无猜重排次数。无任何内容时 .hidden 整条不占高度 ---- */
+#online_play .gstatus {
+  margin-top: 5px;
+  padding: 2px 6px;
+  background: silver;
+  border: 2px solid;
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+  color: #7b7b7b;
+  font-size: 12px;
+  line-height: 20px;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px 12px;
+}
+#online_play .gstatus.hidden {
+  display: none;
+}
+#online_play .gstatus .st {
+  white-space: nowrap;
+}
+#online_play .gstatus .st_nf,
+#online_play .gstatus .st_ng {
+  padding: 0 7px;
+  border: 1px solid #7b7b7b;
+  border-radius: 3px;
+  background: #cfcfcf;
+  line-height: 17px;
+}
+/* 重排次数用略深的前景色提示「本局盘面被动过」 */
+#online_play .gstatus .st_re {
+  color: #5a5a52;
+}
 #online_play .gboard_wrap {
   max-width: 100%;
   overflow-x: auto;

@@ -72,6 +72,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
        问号开关（默认关）只影响右键循环是否经过问号态，切换不重开。
        二期起这些开关收进设置浮窗，初始值从 localStorage 恢复 */
     let nf = false, ng = false, qmark = false;
+    /* 「显示3BV」开关（2026-10-14 四期张老师定，默认关）：打开后状态栏显示本局 3BV；
+       NF / 无猜模式下不看这个开关也强制显示（这两种模式玩家必看 3BV）。
+       重排次数＝本局无猜重排生效次数（踩一次雷/一个盲点算一次，内部重试不算）。 */
+    let showBv = false;
+    let ngRedeals = 0;
     /* 3BV 范围（按级别独立记忆）：默认＝该级别完整统计区间；
        布雷时拒绝范围外盘面重掷（见 placeMines），最小差 10 由浮窗交互保证 */
     const bvSel: Record<string, { lo: number; hi: number }> = {};
@@ -86,11 +91,13 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         if (!raw) return;
         const s = JSON.parse(raw) as {
           nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
+          showBv?: boolean;
           cus?: { w: number; h: number; m: number };
         };
         if (typeof s.nf === "boolean") nf = s.nf;
         if (typeof s.ng === "boolean") ng = s.ng;
         if (typeof s.qmark === "boolean") qmark = s.qmark;
+        if (typeof s.showBv === "boolean") showBv = s.showBv;
         if (s.cus && !cusError(s.cus.w, s.cus.h, s.cus.m)) cusSpec = { ...s.cus };
         if (s.bv) {
           for (const k of Object.keys(bvSel)) {
@@ -106,7 +113,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showBv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     loadSettings();
@@ -168,6 +175,24 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     function setFace(kind: string) {
       if (kind !== "press") faceKind = kind;
       faceUse.setAttribute("href", "#" + FACE_MAP[kind]);
+    }
+    /* ---- 状态栏（2026-10-14 四期张老师定）：棋盘下方银条，默认完全不出现。
+       显示条件：①「显示3BV」开关开 → 显示 3BV；②NF / 无猜任一开启 → 强制显示
+       模式标签 + 3BV（这两种模式玩家必看 3BV）；③无猜模式下发生过重排 → 追加重排次数。
+       开局前没有盘面，3BV 显示占位「—」。
+       一次「重排」＝一次点击触发的无猜重排生效（内部平移/重排重试不算）——
+       见 openCell 里的 ++ngRedeals。 */
+    const gstatus = $("gstatus");
+    function updateStatus() {
+      const p: string[] = [];
+      if (nf) p.push('<span class="st st_nf">NF</span>');
+      if (ng) p.push('<span class="st st_ng">无猜</span>');
+      if (showBv || nf || ng) {
+        p.push('<span class="st st_bv">3BV ' + (started ? board3bv : "—") + "</span>");
+      }
+      if (ng && ngRedeals > 0) p.push('<span class="st st_re">重排 ' + ngRedeals + "</span>");
+      gstatus.innerHTML = p.join("");
+      gstatus.classList.toggle("hidden", p.length === 0);
     }
     function cellTd(i: number) { return tbody.rows[(i / W) | 0].cells[i % W]; }
     /* ---- 渲染：全程矢量（2026-10-14 张老师定：矢量版对齐修好后弃用像素版）----
@@ -245,54 +270,85 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       for (let i = 0; i < state.length; i++) if (state[i] === 2) f++;
       return M - f;
     }
-    function placeMinesOnce(first: number) {
+    /* 首击保护区：first 恒非雷；格子够多（除去 3×3 后仍放得下 M 颗雷）时连邻域一起保护 */
+    function mineExclude(first: number): Uint8Array {
       const n = W * H;
-      let excl: Record<number, number> = { [first]: 1 };
+      const ex = new Uint8Array(n);
+      ex[first] = 1;
       const nb = neighbors(first);
-      if (n - 1 - nb.length >= M) {
-        excl = { [first]: 1 };
-        for (const c of nb) excl[c] = 1;
+      if (n - 1 - nb.length >= M) for (const c of nb) ex[c] = 1;
+      return ex;
+    }
+    /* 全盘重算数字 + 3BV（爬山每次挪雷后都要跑一遍） */
+    function recalcAll() {
+      const n = W * H;
+      const nn = new Uint8Array(n);
+      for (let c = 0; c < n; c++) {
+        if (mines![c]) continue;
+        let cnt = 0;
+        for (const a of neighbors(c)) if (mines![a]) cnt++;
+        nn[c] = cnt;
       }
+      nums = nn;
+      compute3BV();
+    }
+    function placeMinesOnce(first: number, ex?: Uint8Array) {
+      const e = ex || mineExclude(first);
+      const n = W * H;
       const cand: number[] = [];
-      for (let i = 0; i < n; i++) if (!excl[i]) cand.push(i);
+      for (let i = 0; i < n; i++) if (!e[i]) cand.push(i);
       mines = new Uint8Array(n); nums = new Uint8Array(n);
       for (let j = 0; j < M; j++) {
         const p = (Math.random() * (cand.length - j)) | 0;
         mines[cand[p]] = 1; cand[p] = cand[cand.length - 1 - j];
       }
-      for (let c = 0; c < n; c++) {
-        if (mines[c]) continue;
-        const around = neighbors(c);
-        let cnt = 0;
-        for (const a of around) if (mines[a]) cnt++;
-        nums[c] = cnt;
-      }
-      compute3BV();
+      recalcAll();
     }
-    /* 3BV 范围约束（2026-10-14 二期）：完整范围（=统计区间原样）时跳过校验（零成本，
-       与旧行为完全一致）；收窄过的范围重掷直到 3BV 落在 [lo, hi] 且离两边留 ≥3 余量
-       （中心偏置——无猜重排会让 3BV 小幅漂移，贴边生成的盘一漂就出界）；
-       300 次内没找到带余量的就接受首个落在范围内的，再没有接受最接近中心的
-       （极窄范围物理上难以命中的兜底，娱乐局可接受）。
+    /* 3BV 范围约束（2026-10-14 三修：随机重掷 → 单雷爬山）：
+       ❗此前「重掷 300 次」对极窄范围近乎无效——初级 8×8·10 雷蒙特卡洛 10 万盘实测
+       3BV≥40 的概率仅 0.036%，300 次重掷的命中率约 10%，玩家设 [40,51] 开局必出范围。
+       现改为「一次随机撒雷 + 单雷爬山」：每轮随机挑一颗雷挪到随机空位，罚分下降即保留、
+       否则回滚；长时间无进展就换一个随机盘重来。挪一颗雷只让 3BV 小幅漂移，
+       靠几百步累积累计可达任意合法范围（实测 beg[40,51]、beg[2,12] 均稳定命中）。
+       罚分＝区间外 1000+距离；区间内＝离区间中心的偏差×0.001（恒 <1），
+       既保证「区间内永远优于区间外」，又留了向中心靠拢的余量
+       （无猜重排会让 3BV 小幅漂移，贴边生成的盘一漂就出界）。
+       完整统计区间（=原样）时完全跳过（零成本，与旧行为一致）。
        定稿的盘同时存 origMines——无猜重排的「贴原盘」锚点（见 noGuessOnce）。 */
     let origMines: Uint8Array | null = null;
     function placeMines(first: number) {
-      placeMinesOnce(first);
+      const ex = mineExclude(first);
+      placeMinesOnce(first, ex);
       if (!bvRangeFull()) {
-        const sel = bvSel[lv];
+        const sel = bvSel[lv], n = W * H;
         const mid = (sel.lo + sel.hi) / 2;
-        const margin = 3;
-        let best = board3bv, bestDist = Math.abs(best - mid), seenInRange = false;
-        for (let tries = 0; tries < 300; tries++) {
-          const ok = board3bv >= sel.lo && board3bv <= sel.hi;
-          if (ok) {
-            if (!seenInRange) { seenInRange = true; best = board3bv; bestDist = Math.abs(best - mid); }
-            if (board3bv >= sel.lo + margin && board3bv <= sel.hi - margin) break; // 带余量，收工
-          } else if (Math.abs(board3bv - mid) < bestDist && !seenInRange) {
-            best = board3bv; bestDist = Math.abs(best - mid);
+        const score = (v: number) =>
+          (v < sel.lo ? 1000 + sel.lo - v : v > sel.hi ? 1000 + v - sel.hi : Math.abs(v - mid) * 0.001);
+        const budget = Math.max(1000, Math.min(5000, Math.round(400000 / n)));
+        let best = mines!.slice(), bestS = score(board3bv);
+        let cur = bestS, stall = 0;
+        for (let it = 0; it < budget && bestS >= 1000; it++) {
+          const srcs: number[] = [], dsts: number[] = [];
+          for (let i = 0; i < n; i++) {
+            if (mines![i]) srcs.push(i);
+            else if (!ex[i]) dsts.push(i);
           }
-          if (tries < 299) placeMinesOnce(first);
+          const s = srcs[(Math.random() * srcs.length) | 0];
+          const d = dsts[(Math.random() * dsts.length) | 0];
+          mines![s] = 0; mines![d] = 1;
+          recalcAll();
+          const sc = score(board3bv);
+          if (sc <= cur) {
+            cur = sc;
+            if (sc < bestS) { bestS = sc; best = mines!.slice(); stall = 0; }
+            else if (++stall > 150) { placeMinesOnce(first, ex); cur = score(board3bv); stall = 0; }
+          } else {
+            mines![s] = 1; mines![d] = 0;
+            recalcAll();
+            if (++stall > 150) { placeMinesOnce(first, ex); cur = score(board3bv); stall = 0; }
+          }
         }
+        if (bestS < score(board3bv)) { mines = best; recalcAll(); }
       }
       origMines = mines!.slice();
     }
@@ -639,7 +695,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     }
     function openCell(i: number) {
       if (over || state[i] === 1 || state[i] === 2) return;
-      if (!started) { started = true; placeMines(i); startTimer(); }
+      if (!started) { started = true; placeMines(i); startTimer(); updateStatus(); }
       if (mines![i]) {
         /* 必雷格（被已开数字 100% 锁死）：直接判负，绝不重排、盘面与 3BV 零变化
            （2026-10-14 张老师定）。其余踩雷才走无猜救回。重排不弹任何提醒
@@ -647,8 +703,10 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         if (!ng || isForcedMine(i)) { lose(i); return; }
         const saved = (isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false);
         if (!saved) { lose(i); return; }
+        ngRedeals++; updateStatus(); // 一次点击触发的无猜重排＝计数 1（内部重试不计）
       } else if (ng && nums![i] !== 0 && isBlind(i)) {
-        tryNoGuess(i, true); // 安全盲点（数字格）：同样尽量换成 opening，盲点必开空
+        const changed = tryNoGuess(i, true); // 安全盲点（数字格）：同样尽量换成 opening，盲点必开空
+        if (changed) { ngRedeals++; updateStatus(); }
       }
       const stack = [i];
       while (stack.length) {
@@ -790,6 +848,8 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         cus: "自定义 " + W + "×" + H + " · " + M + " 雷",
       };
       gname.textContent = names[lv];
+      ngRedeals = 0;
+      updateStatus();
       /* 同盘面重开（点笑脸/F2）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
          只重置格子贴图；盘面尺寸变化（切难度/首建）才重建 tbody 与矢量覆盖层 */
       const gridChanged = W !== prevW || H !== prevH || !vecUse.length;
@@ -1006,6 +1066,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     const swNf = $("sw_nf") as HTMLInputElement;
     const swNg = $("sw_ng") as HTMLInputElement;
     const swQm = $("sw_qm") as HTMLInputElement;
+    const swBv = $("sw_bv") as HTMLInputElement;
     on(swNf, "change", () => {
       nf = swNf.checked;
       if (nf && flagMode) flagBtn.click(); // 开 NF 前退出触屏插旗模式
@@ -1018,6 +1079,8 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       reset();
     });
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
+    /* 「显示3BV」只影响状态栏文字，不重开当前局 */
+    on(swBv, "change", () => { showBv = swBv.checked; saveSettings(); updateStatus(); });
 
     /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ---- */
     on(fsBtn, "click", () => {
@@ -1412,6 +1475,8 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         bv3: () => board3bv,
         bvSel: () => ({ ...bvSel[lv] }),
         lv: () => lv,
+        showBv: () => showBv,
+        ngRedeals: () => ngRedeals,
         size: () => ({ w: W, h: H, m: M }),
         /* 诊断：单次重排的 bv（测分布用，不动盘面之外的任何状态） */
         ngOnce: (i: number, opening: boolean) => {
@@ -1425,6 +1490,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     swNf.checked = nf;
     swNg.checked = ng;
     swQm.checked = qmark;
+    swBv.checked = showBv;
     syncBvSlider();
 
     reset("beg");
@@ -1503,6 +1569,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
             <label className="gsw"><input type="checkbox" id="sw_qm" /><span className="track" /></label>
             <span className="tip">右键按 标雷 → 问号 → 取消 三态循环</span>
           </div>
+          <div className="gs_row">
+            <span className="gs_name">显示3BV</span>
+            <label className="gsw"><input type="checkbox" id="sw_bv" /><span className="track" /></label>
+            <span className="tip">棋盘下方状态栏显示本局 3BV；开 NF 或无猜时自动显示</span>
+          </div>
           <div className="gs_divider" />
           <div className="gs_zoom">
             <span className="zlabel">显示比例</span>
@@ -1579,13 +1650,17 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
             </div>
           </div>
           <div className="gname" id="gname">初级 8×8 · 10 雷</div>
+          {/* 状态栏（四期）：默认不出现。NF / 无猜自动显示模式标签与 3BV，
+              无猜模式下追加重排次数；内容由 updateStatus() 注入 */}
+          <div className="gstatus hidden" id="gstatus" />
           </div>
           {/* 结算报告浮窗：游戏结束在桌面版左侧显示，再开局隐藏；内容由 JS 注入 */}
           <div className="greport" id="greport" />
         </div>
 
         {/* 比例控制条已移入设置浮窗（2026-10-14 二期张老师定：页面只留游戏本体） */}
-        {/* 底部不再显示进度/剩余/3BV 等任何文字信息（2026-10-14 张老师定） */}
+        {/* 注：早期定过「底部不显示 3BV 等文字」，四期起改为按开关/模式在状态栏显示
+            （显示3BV 开关默认关；NF / 无猜模式自动显示） */}
         <div className="gtools">
           <button className="flagmode_btn" id="flagmode_btn" type="button">插旗模式</button>
         </div>

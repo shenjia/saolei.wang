@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>在线玩（设计稿 · 纯前端不存录像）| 扫雷网</title>
+<style>
+/* ===== 站点基础样式（摘自 globals.css / legacy-2013.css，设计稿内联） ===== */
+body{margin:0;padding:45px 0 0;background:#2e2e26;color:#b1b1a4;font:14px/1.6 Arial,Helvetica,sans-serif}
+a{color:#b1b1a4;text-decoration:none}
+a:hover{color:#a6e22e}
+ul{margin:0;padding:0}
+#header{z-index:900;position:fixed;top:0;left:0;right:0;background:#151515;border-bottom:1px #49483e solid}
+#header .wrapper{max-width:960px;height:44px;margin:0 auto;padding:0 15px}
+#header .logo{float:left}
+#header .logo a{display:block}
+#header .logo a h1{float:left;margin:0;color:#eee;font-size:22px;line-height:44px;font-weight:bold}
+#header .logo a h1:hover{color:#a6e22e}
+#header .logo a h2{float:left;margin:0 0 0 5px;color:#b1b1a4;font-size:15px;line-height:44px;font-weight:normal}
+#header .logo a img.logo_icon{float:left;border-radius:6px;width:26px;height:26px;margin:9px 8px 0 0;display:block}
+#header .nav{float:right}
+#header .nav ul{list-style:none}
+#header .nav li{float:left}
+#header .nav li a{display:block;padding:0 12px;color:#b1b1a4;font-size:15px;line-height:44px}
+#header .nav li a:hover{color:#a6e22e}
+#header .nav li a.current{color:#fdc61a;font-weight:bold}
+#page.main{margin-left:auto;margin-right:auto;width:62%;min-width:620px;max-width:960px}
+.box{background:#3b3a32;border:1px #656355 solid;box-shadow:2px 2px 5px rgba(0,0,0,0.25);border-radius:10px;padding:30px;margin:16px 8px;text-shadow:0 2px 2px rgba(0,0,0,0.25)}
+.box h2{color:#b1b1a4;font-size:20px;margin:0 0 12px}
+.tabs{float:none;border-bottom:1px solid #49483e;flex-wrap:wrap;align-items:flex-end;gap:4px;margin:0;padding:0;display:flex}
+.tabs li{float:none;padding:0;list-style:none;flex:0 0 auto}
+.tabs li a,.tabs li em{color:#939387;padding:7px 14px;font-size:14px;font-style:normal;line-height:21px;transition:color .15s;display:inline-block;position:relative;cursor:pointer;white-space:nowrap}
+.tabs li a:hover{color:#a6e22e}
+.tabs li em.active{color:#fdc61a;cursor:default;font-weight:bold}
+.tabs li a:after,.tabs li em:after{content:"";background:none;border-radius:3px 3px 0 0;height:3px;transition:background .15s;position:absolute;bottom:0;left:14px;right:14px}
+.tabs li em.active:after{background:#fdc61d}
+.tabs li a:hover:after{background:#49483e}
+
+/* ===== 棋盘样式（size16 规则原样移植，素材地址绝对化到 dev） ===== */
+.board{display:inline-block;border:1px #49483e solid;border-top-color:#7f7f7f;border-left-color:#7f7f7f;border-right-color:#fff;border-bottom-color:#fff}
+.board.size16{border-width:2px;background:url(https://dev.saolei.wang/images/common/board16x16.gif?v=5) repeat}
+.board table{border-collapse:collapse}
+.board.size16 td{width:16px;height:16px;min-width:16px;background:url(https://dev.saolei.wang/images/common/block16x16.png?v=5) no-repeat left top}
+.board.size16 td.b0{background-position:0 0}
+.board.size16 td.b1{background-position:0 -16px}
+.board.size16 td.b2{background-position:0 -32px}
+.board.size16 td.b3{background-position:0 -48px}
+.board.size16 td.b4{background-position:0 -64px}
+.board.size16 td.b5{background-position:0 -80px}
+.board.size16 td.b6{background-position:0 -96px}
+.board.size16 td.b7{background-position:0 -112px}
+.board.size16 td.b8{background-position:0 -128px}
+.board.size16 td.bb{background-position:0 -144px}
+.board.size16 td.bf{background-position:0 -160px}
+.board.size16 td.bc{background-position:0 -176px}
+.board.size16 td.bq{background-position:0 -192px}
+.board.size16 td.bm{background-position:0 -208px}
+.board.size16 td.bn{background-position:0 -224px}
+
+/* ===== 在线玩专属（新增，集成时进 globals.css）—— 外框沿用 flop player 经典银灰 ===== */
+#online_play .page_head{overflow:hidden;margin-bottom:18px}
+#online_play .page_head h1{float:left;margin:0 20px 0 0;font-size:24px;color:#eee}
+#online_play .page_head .tabs{float:left;border-bottom:0;margin-top:4px}
+#game_area{text-align:center;user-select:none;-webkit-user-select:none}
+.gframe{display:inline-block;padding:9px;background:silver;border:3px solid;border-color:#fff #7b7b7b #7b7b7b #fff;text-shadow:none}
+/* 计数条/底部条：width:0+min-width:100% 保证严格与棋盘同宽，不参与外框撑宽 */
+.gbar{display:flex;justify-content:space-between;align-items:center;padding:4px;margin-bottom:9px;background:silver;border:2px solid;border-color:#7b7b7b #fff #fff #7b7b7b;width:0;min-width:100%;box-sizing:border-box}
+.ledc{display:block;width:41px;height:25px;flex:0 0 auto}
+.face{width:26px;height:26px;padding:0;border:0;background:transparent;cursor:pointer;line-height:0;flex:0 0 auto}
+/* 关键：让 click 的命中目标恒为 BUTTON 本身——否则 mousedown 改变 use href 后 Chrome 认为按下/抬起目标不一致，click 丢失、笑脸无法重开 */
+.face svg{pointer-events:none}
+.gname{margin-top:9px;padding:2px 6px;background:silver;border:2px solid;border-color:#7b7b7b #fff #fff #7b7b7b;color:#7b7b7b;font-size:12px;line-height:20px;text-align:center;width:0;min-width:100%;box-sizing:border-box}
+.gboard_wrap{max-width:100%;overflow-x:auto}
+.board.game{border-color:#7b7b7b #fff #fff #7b7b7b}
+/* 缩放控制条：复刻 flop player 控制条（浅色条 + 蓝色滑块 + 倍率读数） */
+.gzoom{margin:10px auto 0;display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 14px;background:#f5f5f5;border:1px solid #d9d9d9;border-radius:6px;width:max-content;max-width:100%;box-sizing:border-box;text-shadow:none}
+.gzoom input[type=range]{width:180px;accent-color:#1890ff;cursor:pointer}
+.gzoom .gz_val{font:14px/1 Arial,Helvetica,sans-serif;color:#555;min-width:4.5ch;text-align:right}
+.gzoom .gz_reset{border:1px solid #d9d9d9;background:#fff;color:#555;border-radius:4px;padding:2px 10px;font-size:13px;cursor:pointer}
+.gzoom .gz_reset:hover{color:#1890ff;border-color:#1890ff}
+.gstats{margin-top:12px;font-size:14px;color:#939387}
+.gstats b{color:#eee;font-weight:bold}
+.gstats .win{color:#a6e22e}
+.gstats .lose{color:#f92672}
+.gtools{margin-top:14px;display:flex;justify-content:center;align-items:center;gap:18px;flex-wrap:wrap;font-size:13px;color:#939387}
+.gtools label{cursor:pointer;display:flex;align-items:center;gap:6px}
+.gtools input[type=checkbox]{accent-color:#fdc61d;width:15px;height:15px}
+.gtools .flagmode_btn{display:none;padding:5px 14px;border:1px #656355 solid;border-radius:5px;background:#49483e;color:#b1b1a4;font-size:14px;cursor:pointer}
+.gtools .flagmode_btn.on{background:#fdc61d;border-color:#fdc61d;color:#333;font-weight:bold}
+@media (pointer:coarse){.gtools .flagmode_btn{display:inline-block}}
+.ghelp{margin-top:10px;font-size:12px;color:#75715e}
+.note_box{font-size:13px;color:#939387;line-height:1.9}
+.note_box b{color:#fdc61a}
+.note_box ol{margin:6px 0 0;padding-left:22px}
+@media (max-width:880px){
+  body{padding-top:0}
+  #header{position:static}
+  #header .nav{display:none}
+  #page.main{width:auto;min-width:0;margin:0}
+  .box{margin:8px;padding:18px 14px}
+  #online_play .page_head h1{float:none;margin-bottom:8px}
+  #online_play .page_head .tabs{float:none}
+}
+</style>
+</head>
+<body>
+<!-- LED 数码管 / 计数器底板 / 笑脸：1:1 复刻 flop-player SkinSprites.vue 的 SVG 矢量贴图（flop-player 为 GPL-3.0，集成上线前需注意许可证） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="count-0">
+    <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0m100 0v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+    <path d="M30 90v10H20v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10H80V90H70v10H60V90H50v10H40V90H30z" fill="maroon" />
+    <path d="M30 100v10h10v-10H30m20 0v10h10v-10H50m20 0v10h10v-10H70z" />
+    <path d="M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0m100 0v10H90v10H80v50h10v10h10v10h10v-90h-10m-70 70v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+  </symbol>
+  <symbol id="count-1">
+    <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0H90v10H80V0H70v10H60V0H50v10H40V0H30v10H20V0H0z" />
+    <path d="M20 0v10h10V0H20m20 0v10h10V0H40m20 0v10h10V0H60m20 0v10h10V0H80M0 10v10h10V10H0m30 0v10h10v10h10V20h10v10h10V20h10V10H70v10H60V10H50v10H40V10H30z" fill="maroon" />
+    <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+    <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0m30 0v10H20v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10H80V90H70v10H60V90H50v10H40V90H30z" fill="maroon" />
+    <path d="M30 100v10h10v-10H30m20 0v10h10v-10H50m20 0v10h10v-10H70z" />
+    <path d="M0 110v10h10v-10H0z" fill="maroon" />
+    <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+    <path d="M10 120v10h10v10H10v10h10v10H10v10h10v10H10v10h10v-10h10v-10H20v-10h10v-10H20v-10h10v-10H20v-10H10M0 130v10h10v-10H0m0 20v10h10v-10H0m0 20v10h10v-10H0m40 10v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40M0 190v10h10v-10H0m20 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+  </symbol>
+  <symbol id="count-2">
+    <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10z" fill="red" />
+    <path d="M0 10v10h10V10H0z" fill="maroon" />
+    <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+    <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0z" fill="maroon" />
+    <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0z" fill="red" />
+    <path d="M100 110v10h10v-10h-10m-10 10v10h10v-10H90m-10 10v10h10v-10H80m20 0v10h10v-10h-10m-10 10v10h10v-10H90m-10 10v10h10v-10H80m20 0v10h10v-10h-10m-10 10v10h10v-10H90m-10 10v10h10v-10H80m20 0v10h10v-10h-10z" fill="maroon" />
+    <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+    <path d="M90 180v10h10v-10H90m10 10v10h10v-10h-10z" fill="maroon" />
+  </symbol>
+  <symbol id="count-3">
+    <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10z" fill="red" />
+    <path d="M0 10v10h10V10H0z" fill="maroon" />
+    <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+    <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0z" fill="maroon" />
+    <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+    <path d="M0 110v10h10v-10H0z" fill="maroon" />
+    <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+    <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10z" fill="maroon" />
+    <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+    <path d="M0 190v10h10v-10H0z" fill="maroon" />
+  </symbol>
+  <symbol id="count-4">
+    <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0H90v10H80V0H70v10H60V0H50v10H40V0H30v10H20V0H0z" />
+    <path d="M20 0v10h10V0H20m20 0v10h10V0H40m20 0v10h10V0H60m20 0v10h10V0H80z" fill="maroon" />
+    <path d="M0 10v90h10V90h10V80h10V30H20V20H10V10H0z" fill="red" />
+    <path d="M30 10v10h10v10h10V20h10v10h10V20h10V10H70v10H60V10H50v10H40V10H30z" fill="maroon" />
+    <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+    <path d="M0 110v10h10v-10H0z" fill="maroon" />
+    <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+    <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10m30 0v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40M0 190v10h10v-10H0m20 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+  </symbol>
+  <symbol id="count-5">
+    <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90h10V80h-10V70h10V60h-10V50h10V40h-10V30h10V20h-10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0z" fill="red" />
+    <path d="M100 10v10h10V10h-10M90 20v10H80v10h10v10H80v10h10v10H80v10h10v10h10V80H90V70h10V60H90V50h10V40H90V30h10V20H90m10 10v10h10V30h-10m0 20v10h10V50h-10m0 20v10h10V70h-10z" fill="maroon" />
+    <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+    <path d="M100 90v10h10V90h-10M0 110v10h10v-10H0z" fill="maroon" />
+    <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+    <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10z" fill="maroon" />
+    <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+    <path d="M0 190v10h10v-10H0z" fill="maroon" />
+  </symbol>
+  <symbol id="count-6">
+    <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90h10V80h-10V70h10V60h-10V50h10V40h-10V30h10V20h-10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0z" fill="red" />
+    <path d="M100 10v10h10V10h-10M90 20v10H80v10h10v10H80v10h10v10H80v10h10v10h10V80H90V70h10V60H90V50h10V40H90V30h10V20H90m10 10v10h10V30h-10m0 20v10h10V50h-10m0 20v10h10V70h-10z" fill="maroon" />
+    <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+    <path d="M100 90v10h10V90h-10z" fill="maroon" />
+    <path d="M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0m100 0v10H90v10H80v50h10v10h10v10h10v-90h-10m-70 70v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+  </symbol>
+  <symbol id="count-7">
+    <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10z" fill="red" />
+    <path d="M0 10v10h10V10H0z" fill="maroon" />
+    <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+    <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0m30 0v10H20v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10H80V90H70v10H60V90H50v10H40V90H30z" fill="maroon" />
+    <path d="M30 100v10h10v-10H30m20 0v10h10v-10H50m20 0v10h10v-10H70z" />
+    <path d="M0 110v10h10v-10H0z" fill="maroon" />
+    <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+    <path d="M10 120v10h10v10H10v10h10v10H10v10h10v10H10v10h10v-10h10v-10H20v-10h10v-10H20v-10h10v-10H20v-10H10M0 130v10h10v-10H0m0 20v10h10v-10H0m0 20v10h10v-10H0m40 10v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40M0 190v10h10v-10H0m20 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+  </symbol>
+  <symbol id="count-8">
+    <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0m100 0v10H90v10H80v50h10v10h10v10h10V10h-10M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0m100 0v10H90v10H80v50h10v10h10v10h10v-90h-10m-70 70v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+  </symbol>
+  <symbol id="count-9">
+    <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+    <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0m100 0v10H90v10H80v50h10v10h10v10h10V10h-10M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+    <path d="M0 110v10h10v-10H0z" fill="maroon" />
+    <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+    <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10z" fill="maroon" />
+    <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+    <path d="M0 190v10h10v-10H0z" fill="maroon" />
+  </symbol>
+  <symbol id="count-minus">
+    <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10V90h10V80h-10V70h10V60h-10V50h10V40h-10V30h10V20h-10V10h10V0H90v10H80V0H70v10H60V0H50v10H40V0H30v10H20V0H0z" />
+    <path d="M20 0v10h10V0H20m20 0v10h10V0H40m20 0v10h10V0H60m20 0v10h10V0H80M0 10v10h10V10H0m30 0v10h10v10h10V20h10v10h10V20h10V10H70v10H60V10H50v10H40V10H30m70 0v10h10V10h-10M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10m80 0v10h10V20H90M0 30v10h10V30H0m80 0v10h10V30H80m20 0v10h10V30h-10M90 40v10h10V40H90M0 50v10h10V50H0m80 0v10h10V50H80m20 0v10h10V50h-10M90 60v10h10V60H90M0 70v10h10V70H0m80 0v10h10V70H80m20 0v10h10V70h-10M90 80v10h10V80H90M0 90v10h10V90H0z" fill="maroon" />
+    <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+    <path d="M100 90v10h10V90h-10M0 110v10h10v-10H0m100 0v10h10v-10h-10m-90 10v10h10v-10H10m80 0v10h10v-10H90M0 130v10h10v-10H0m20 0v10h10v-10H20m60 0v10h10v-10H80m20 0v10h10v-10h-10m-90 10v10h10v-10H10m80 0v10h10v-10H90M0 150v10h10v-10H0m20 0v10h10v-10H20m60 0v10h10v-10H80m20 0v10h10v-10h-10m-90 10v10h10v-10H10m80 0v10h10v-10H90M0 170v10h10v-10H0m20 0v10h10v-10H20m60 0v10h10v-10H80m20 0v10h10v-10h-10m-90 10v10h10v-10H10m30 0v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40m50 0v10h10v-10H90M0 190v10h10v-10H0m100 0v10h10v-10h-10m-80 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+  </symbol>
+  <symbol id="base-cell-border-press">
+    <path d="M0 0v167.89h10V10h157.89V0H0z" fill="gray" />
+  </symbol>
+  <symbol id="cell-mine-bomb">
+    <use href="#base-cell-border-press" />
+    <path d="M10 10v150h150V10H10z" fill="red" />
+    <path d="M80 20v20H60v10H50V40H40v10h10v10H40v20H20v10h20v20h10v10H40v10h10v-10h10v10h20v20h10v-20h20v-10h10v10h10v-10h-10v-10h10V90h20V80h-20V60h-10V50h10V40h-10v10h-10V40H90V20H80z" />
+    <path d="M60 60v20h20V60H60z" fill="white" />
+  </symbol>
+  <symbol id="face-normal">
+    <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+    <path d="M250 0v10h10V0h-10z" fill="silver" />
+    <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+    <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+    <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+    <path d="M110 60v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+    <path d="M100 100v20h20v-20h-20m50 0v20h20v-20h-20m-60 50v10h10v10h10v10h50v-10h10v-10h10v-10h-10v10h-10v10h-50v-10h-10v-10H90z" />
+    <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+  </symbol>
+  <symbol id="face-press-cell">
+    <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+    <path d="M250 0v10h10V0h-10z" fill="silver" />
+    <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+    <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+    <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+    <path d="M110 60v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+    <path d="M90 90v10h10V90H90z" fill="olive" />
+    <path d="M100 90v10H90v10h10v10h10v-10h10v-10h-10V90h-10z" />
+    <path d="M110 90v10h10V90h-10m40 0v10h10V90h-10z" fill="olive" />
+    <path d="M160 90v10h-10v10h10v10h10v-10h10v-10h-10V90h-10z" />
+    <path d="M170 90v10h10V90h-10m-80 20v10h10v-10H90m20 0v10h10v-10h-10m40 0v10h10v-10h-10m20 0v10h10v-10h-10z" fill="olive" />
+    <path d="M120 140v20h-10v10h10v20h30v-20h10v-10h-10v-20h-30z" />
+    <path d="M110 150v10h10v-10h-10z" fill="olive" />
+    <path d="M130 150v10h-10v10h10v10h10v-10h10v-10h-10v-10h-10z" fill="#ff0" />
+    <path d="M150 150v10h10v-10h-10m-40 20v10h10v-10h-10m40 0v10h10v-10h-10z" fill="olive" />
+    <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+  </symbol>
+  <symbol id="face-press-normal">
+    <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+    <path d="M250 0v10h10V0h-10M20 20v230h230V20H20z" fill="silver" />
+    <path d="M120 60v10h-20v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10v-20h-10V90h-10V80h-10V70h-20V60h-50z" />
+    <path d="M120 70v10h-20v10H90v10H80v20H70v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10v-20h-10V90h-10V80h-20V70h-50z" fill="#ff0" />
+    <path d="M110 110v20h20v-20h-20m50 0v20h20v-20h-20m-60 50v10h10v10h10v10h50v-10h10v-10h10v-10h-10v10h-10v10h-50v-10h-10v-10h-10z" />
+    <path d="M0 250v10h10v-10H0z" fill="silver" />
+  </symbol>
+  <symbol id="face-lose">
+    <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+    <path d="M250 0v10h10V0h-10z" fill="silver" />
+    <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+    <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+    <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+    <path d="M110 60v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+    <path d="M90 90v10h10v10H90v10h10v-10h10v10h10v-10h-10v-10h10V90h-10v10h-10V90H90m60 0v10h10v10h-10v10h10v-10h10v10h10v-10h-10v-10h10V90h-10v10h-10V90h-10m-40 60v10h-10v10H90v10h10v-10h10v-10h50v10h10v10h10v-10h-10v-10h-10v-10h-50z" />
+    <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+  </symbol>
+  <symbol id="face-win">
+    <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+    <path d="M250 0v10h10V0h-10z" fill="silver" />
+    <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+    <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+    <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+    <path d="M110 60v10H90v10H80v10H70v20H60v20h10v10H60v20h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-20h-10v-10h10v-20h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+    <path d="M90 100v10H80v10H70v10h10v-10h10v10h10v10h20v-10h10v-20h10v20h10v10h20v-10h10v-10h10v10h10v-10h-10v-10h-10v-10H90z" />
+    <path d="M90 130v10h10v-10H90m80 0v10h10v-10h-10z" fill="olive" />
+    <path d="M100 160v10h10v10h50v-10h10v-10h-10v10h-50v-10h-10z" />
+    <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+  </symbol>
+  <symbol id="top-counters">
+    <path d="M0 0v240h10V10h390V0H0z" fill="gray" />
+    <path d="M400 0v10h10V0h-10z" fill="silver" />
+    <path d="M10 10v230h390V10H10z" />
+    <path d="M400 10v230H10v10h400V10h-10z" fill="white" />
+    <path d="M40 20v10h10v10h10v10h10V40h10v10h10V40h10V30h10V20h-10v10H90V20H80v10H70V20H60v10H50V20H40m130 0v10h10v10h10v10h10V40h10v10h10V40h10V30h10V20h-10v10h-10V20h-10v10h-10V20h-10v10h-10V20h-10m130 0v10h10v10h10v10h10V40h10v10h10V40h10V30h10V20h-10v10h-10V20h-10v10h-10V20h-10v10h-10V20h-10M20 30v10h10v10H20v10h10v10H20v10h10v10H20v10h10v10H20v10h10v-10h10v-10h10V90H40V80h10V70H40V60h10V50H40V40H30V30H20z" fill="maroon" />
+    <path d="M60 30v10h10V30H60m20 0v10h10V30H80z" />
+    <path d="M120 30v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h10V30h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h-10V30h-10z" fill="maroon" />
+    <path d="M190 30v10h10V30h-10m20 0v10h10V30h-10z" />
+    <path d="M250 30v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h10V30h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h-10V30h-10z" fill="maroon" />
+    <path d="M320 30v10h10V30h-10m20 0v10h10V30h-10z" />
+    <path d="M380 30v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h10V30h-10z" fill="maroon" />
+    <path d="M30 50v10h10V50H30m80 0v10h10V50h-10m50 0v10h10V50h-10m80 0v10h10V50h-10m50 0v10h10V50h-10m80 0v10h10V50h-10M30 70v10h10V70H30m80 0v10h10V70h-10m50 0v10h10V70h-10m80 0v10h10V70h-10m50 0v10h10V70h-10m80 0v10h10V70h-10M30 90v10h10V90H30m80 0v10h10V90h-10m50 0v10h10V90h-10m80 0v10h10V90h-10m50 0v10h10V90h-10m80 0v10h10V90h-10z" />
+    <path d="M50 110v10H40v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10h-10v-10H90v10H80v-10H70v10H60v-10H50m130 0v10h-10v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10h-10v-10h-10v10h-10v-10h-10v10h-10v-10h-10m130 0v10h-10v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10h-10v-10h-10v10h-10v-10h-10v10h-10v-10h-10z" fill="maroon" />
+    <path d="M50 120v10h10v-10H50m20 0v10h10v-10H70m20 0v10h10v-10H90m90 0v10h10v-10h-10m20 0v10h10v-10h-10m20 0v10h10v-10h-10m90 0v10h10v-10h-10m20 0v10h10v-10h-10m20 0v10h10v-10h-10z" />
+    <path d="M20 130v10h10v10H20v10h10v10H20v10h10v10H20v10h10v10H20v10h10v-10h10v-10h10v-10H40v-10h10v-10H40v-10h10v-10H40v-10H30v-10H20m100 0v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h-10v-10h-10m100 0v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h-10v-10h-10m100 0v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10z" fill="maroon" />
+    <path d="M30 150v10h10v-10H30m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10M30 170v10h10v-10H30m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10M30 190v10h10v-10H30m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10z" />
+    <path d="M60 200v10H50v10H40v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h-10v-10H90v-10H80v10H70v-10H60m130 0v10h-10v10h-10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h-10v-10h-10v-10h-10v10h-10v-10h-10m130 0v10h-10v10h-10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h-10v-10h-10v-10h-10v10h-10v-10h-10z" fill="maroon" />
+    <path d="M60 210v10h10v-10H60m20 0v10h10v-10H80m110 0v10h10v-10h-10m20 0v10h10v-10h-10m110 0v10h10v-10h-10m20 0v10h10v-10h-10z" />
+    <path d="M0 240v10h10v-10H0z" fill="silver" />
+  </symbol>
+</svg>
+<div id="header"><div class="wrapper">
+  <div class="logo"><a href="/"><img class="logo_icon" src="https://dev.saolei.wang/icon.svg" alt="" width="26" height="26"><h1>扫雷网</h1><h2>Saolei.wang</h2></a></div>
+  <div class="nav"><ul id="header_nav">
+    <li><a href="/">首页</a></li>
+    <li><a href="/ranking">排行</a></li>
+    <li><a href="/video">录像</a></li>
+    <li><a href="/play" class="current">在线玩</a></li>
+    <li><a href="/bbs">论坛</a></li>
+    <li><a href="/page/guide">教程</a></li>
+    <li><a href="/titles">军衔</a></li>
+    <li><a href="/page/download">下载</a></li>
+    <li><a href="/account/login">登录</a></li>
+  </ul></div>
+</div></div>
+
+<div id="page" class="main">
+<div class="box" id="online_play">
+  <div class="page_head">
+    <h1>在线玩</h1>
+    <ul class="tabs" id="level_tabs">
+      <li><em class="active" data-lv="beg">初级 9×9 / 10 雷</em></li>
+      <li><a data-lv="int">中级 16×16 / 40 雷</a></li>
+      <li><a data-lv="exp">高级 30×16 / 99 雷</a></li>
+    </ul>
+  </div>
+
+  <div id="game_area">
+    <div class="gframe" id="gframe">
+      <div class="gbar">
+        <svg class="ledc" id="led_mines" viewBox="0 0 410 250" role="img" aria-label="剩余雷数">
+          <use href="#top-counters"/>
+          <use class="d" href="#count-0" x="20" y="20"/>
+          <use class="d" href="#count-1" x="150" y="20"/>
+          <use class="d" href="#count-0" x="280" y="20"/>
+        </svg>
+        <button class="face" id="face_btn" title="重新开始">
+          <svg viewBox="0 0 260 260" width="26" height="26"><use id="face_use" href="#face-normal"/></svg>
+        </button>
+        <svg class="ledc" id="led_time" viewBox="0 0 410 250" role="img" aria-label="计时">
+          <use href="#top-counters"/>
+          <use class="d" href="#count-0" x="20" y="20"/>
+          <use class="d" href="#count-0" x="150" y="20"/>
+          <use class="d" href="#count-0" x="280" y="20"/>
+        </svg>
+      </div>
+      <div class="gboard_wrap">
+        <div class="board size16 game" id="gboard"><table cellpadding="0" cellspacing="0"><tbody id="gtbody"></tbody></table></div>
+      </div>
+      <div class="gname" id="gname">初级 9×9 · 10 雷 · 演示模式</div>
+    </div>
+    <div class="gzoom">
+      <input type="range" id="zoom_range" min="0.5" max="2.5" step="0.05" value="1">
+      <span class="gz_val" id="zoom_val">1.00x</span>
+      <button class="gz_reset" id="zoom_reset" type="button">重置</button>
+    </div>
+
+    <div class="gstats" id="gstats">演示模式，成绩不入排行 · 左键开格，右键插旗</div>
+
+    <div class="gtools">
+      <label><input type="checkbox" id="nf_mode"> NF 练习（禁插旗）</label>
+      <button class="flagmode_btn" id="flagmode_btn" type="button">插旗模式</button>
+      <span id="deal_info"></span>
+    </div>
+    <div class="ghelp">左键开格 · 右键插旗（再点出问号）· 数字上左右同按 / 单击已满足的数字 = 快速开周围 · 手机长按插旗 · 首击必开空</div>
+  </div>
+</div>
+
+<div class="box note_box">
+  <h2>设计稿说明（确认后集成，不动现网）</h2>
+  <ol>
+    <li><b>纯前端演示</b>：不登录可玩，开局、计时、结算全部在浏览器内完成，<b>不产生/不上传任何录像</b>，成绩不进排行。</li>
+    <li>棋盘素材直接复用站内 size16 贴图（block16x16.png / board16x16.gif）；<b>外框沿用 flop player 经典银灰样式</b>（白色高光 + #7b7b7b 阴影的凸起边框、凹陷计数条、底部名称条）；<b>LED 数码管、计数器底板、笑脸四态 1:1 复刻 flop-player 的 SVG 矢量贴图</b>（路径数据逐字节取自其 SkinSprites.vue；flop-player 为 GPL-3.0，集成上线前需评估许可证）。</li>
+    <li>计数条与底部提示条严格与棋盘同宽（width:0 + min-width:100%，不被长文本撑宽）；鼠标左/右键按下笑脸均变为吃惊脸，松开恢复；点笑脸本身呈按下态。</li>
+    <li>级别沿用排行口径：初级 9×9/10、中级 16×16/40、高级 30×16/99；首击必开空（3×3 保护区）。</li>
+    <li>结算口径与排行一致：时间精确到 0.01 秒，3BV 按标准算法（连通空区 + 残余数字格），3BV/s = 3BV ÷ 时间；NF 模式单独标记。</li>
+    <li><b>缩放滑杆</b>：复刻 flop player 控制条（0.50x–2.50x，步进 0.05，读数实时显示，「重置」回 1.00x，选择经 localStorage 记忆）；用 CSS zoom 整体缩放游戏窗，矢量贴图无损，小屏可缩小免横滚、大屏可放大。</li>
+    <li>导航「在线玩」位置（录像与论坛之间）仅为示意，确认后再定。</li>
+    <li>二期预留：录像生成（JS 端编码标准 AVF）→ 走现有上传/审核管线上榜，本期不含。</li>
+  </ol>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LEVELS = {
+  beg: {x: 9,  y: 9,  m: 10},
+  int: {x: 16, y: 16, m: 40},
+  exp: {x: 30, y: 16, m: 99}
+};
+var lv = "beg", W = 9, H = 9, M = 10;
+var mines, nums, state; // state: 0=block 1=open 2=flag 3=question
+var started = false, over = false, startTs = 0, timerId = null;
+var openedSafe = 0, totalSafe = 0, board3bv = 0;
+var pressCell = null, chordCells = null, bothButtons = false;
+
+var tbody = document.getElementById("gtbody");
+var ledMines = document.getElementById("led_mines");
+var ledTime = document.getElementById("led_time");
+var stats = document.getElementById("gstats");
+var faceUse = document.getElementById("face_use");
+var faceKind = "smile"; // 当前笑脸状态（press 为瞬时按下态，不记）
+var FACE_MAP = {smile:"face-normal", ooh:"face-press-cell", dead:"face-lose", win:"face-win", press:"face-press-normal"};
+var nfMode = document.getElementById("nf_mode");
+var flagBtn = document.getElementById("flagmode_btn");
+var flagMode = false;
+
+function idx(x,y){ return y*W+x; }
+function inBoard(x,y){ return x>=0 && x<W && y>=0 && y<H; }
+function neighbors(i){
+  var x=i%W, y=(i/W)|0, r=[];
+  for(var dy=-1;dy<=1;dy++)for(var dx=-1;dx<=1;dx++){
+    if(!dx&&!dy)continue;
+    var nx=x+dx, ny=y+dy;
+    if(inBoard(nx,ny)) r.push(idx(nx,ny));
+  }
+  return r;
+}
+/* LED 数码管：与 flop SkinCounterTop 同规则——负数时百位显负号、只显两位，范围 -99~999 */
+function led(el, v){
+  v = Math.max(-99, Math.min(999, Math.round(v)));
+  var a = Math.abs(v), ds;
+  if(v < 0) ds = ["minus", ((a/10)|0) % 10, a % 10];
+  else ds = [((a/100)|0) % 10, ((a/10)|0) % 10, a % 10];
+  var uses = el.querySelectorAll("use.d");
+  for(var k = 0; k < 3; k++) uses[k].setAttribute("href", "#count-" + ds[k]);
+}
+function setFace(kind){
+  if(kind !== "press") faceKind = kind;
+  faceUse.setAttribute("href", "#" + FACE_MAP[kind]);
+}
+function cellTd(i){ return tbody.rows[(i/W)|0].cells[i%W]; }
+function paint(i){
+  var td = cellTd(i), s = state[i];
+  if(s===1) td.className = "b"+nums[i];
+  else if(s===2) td.className = "bf";
+  else if(s===3) td.className = "bq";
+  else td.className = "bb";
+}
+function flagsLeft(){
+  var f=0; for(var i=0;i<state.length;i++) if(state[i]===2) f++;
+  return M - f;
+}
+function placeMines(first){
+  var n = W*H, excl = {};
+  excl[first] = 1;
+  var nb = neighbors(first);
+  if(n - 1 - nb.length >= M){ excl = {}; excl[first]=1; for(var k=0;k<nb.length;k++) excl[nb[k]]=1; }
+  var cand = [];
+  for(var i=0;i<n;i++) if(!excl[i]) cand.push(i);
+  mines = new Uint8Array(n); nums = new Uint8Array(n);
+  for(var j=0;j<M;j++){
+    var p = (Math.random()*(cand.length-j))|0;
+    mines[cand[p]] = 1; cand[p] = cand[cand.length-1-j];
+  }
+  for(var c=0;c<n;c++){
+    if(mines[c]) continue;
+    var around = neighbors(c), cnt=0;
+    for(var q=0;q<around.length;q++) if(mines[around[q]]) cnt++;
+    nums[c] = cnt;
+  }
+  compute3BV();
+}
+function compute3BV(){
+  var n = W*H, region = new Int32Array(n).fill(-1), regions = 0;
+  for(var i=0;i<n;i++){
+    if(mines[i] || nums[i]!==0 || region[i]!==-1) continue;
+    var stack=[i]; region[i]=regions;
+    while(stack.length){
+      var c=stack.pop(), around=neighbors(c);
+      for(var k=0;k<around.length;k++){
+        var a=around[k];
+        if(mines[a]||region[a]===regions) continue;
+        region[a]=regions;
+        if(nums[a]===0) stack.push(a);
+      }
+    }
+    regions++;
+  }
+  var rest=0;
+  for(var j=0;j<n;j++) if(!mines[j] && region[j]===-1) rest++;
+  board3bv = regions + rest;
+  document.getElementById("deal_info").textContent = "本局 3BV = " + board3bv;
+}
+function startTimer(){
+  startTs = performance.now();
+  timerId = setInterval(function(){ led(ledTime, Math.floor((performance.now()-startTs)/1000)); }, 100);
+}
+function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } return (performance.now()-startTs)/1000; }
+function progressText(){
+  return "进度 " + openedSafe + "/" + totalSafe + " 格 · 剩余 " + flagsLeft() + " 雷";
+}
+function openCell(i){
+  if(over || state[i]===1 || state[i]===2) return;
+  if(!started){ started=true; placeMines(i); startTimer(); }
+  if(mines[i]){ lose(i); return; }
+  var stack=[i];
+  while(stack.length){
+    var c=stack.pop();
+    if(state[c]===1 || state[c]===2 || mines[c]) continue;
+    state[c]=1; openedSafe++; paint(c);
+    if(nums[c]===0){
+      var around=neighbors(c);
+      for(var k=0;k<around.length;k++){
+        var a=around[k];
+        if(state[a]===0) stack.push(a);
+      }
+    }
+  }
+  checkWin();
+  if(!over) stats.textContent = progressText();
+}
+function chord(i){
+  if(over || state[i]!==1 || nums[i]===0) return;
+  var around=neighbors(i), f=0;
+  for(var k=0;k<around.length;k++) if(state[around[k]]===2) f++;
+  if(f!==nums[i]) return;
+  for(var j=0;j<around.length;j++){
+    var a=around[j];
+    if(state[a]===0){ openCell(a); if(over) return; }
+  }
+}
+function toggleFlag(i){
+  if(over || !started && false) return;
+  if(state[i]===1) return;
+  if(nfMode.checked) return;
+  if(state[i]===0){ state[i]=2; }
+  else if(state[i]===2){ state[i]=3; }
+  else { state[i]=0; }
+  paint(i);
+  led(ledMines, flagsLeft());
+  if(started && !over) stats.textContent = progressText();
+}
+function lose(hit){
+  over = true;
+  var t = stopTimer();
+  for(var i=0;i<mines.length;i++){
+    if(mines[i] && state[i]!==2) state[i]=1, cellTd(i).className="bm";
+    if(!mines[i] && state[i]===2) cellTd(i).className="bn";
+  }
+  /* 炸掉的那颗雷：flop 原版红底标志（cell-mine-bomb），站内精灵图 bc 不是红底 */
+  var hitTd = cellTd(hit);
+  hitTd.className = "";
+  hitTd.innerHTML = '<svg viewBox="0 0 160 160" width="16" height="16" style="display:block"><use href="#cell-mine-bomb"/></svg>';
+  setFace("dead");
+  stats.innerHTML = '<span class="lose">踩雷了（' + t.toFixed(2) + ' 秒）· 点笑脸重新开始</span>';
+}
+function checkWin(){
+  if(openedSafe !== totalSafe) return;
+  over = true;
+  var t = stopTimer();
+  for(var i=0;i<mines.length;i++) if(mines[i] && state[i]!==2){ state[i]=2; paint(i); }
+  led(ledMines, 0);
+  setFace("win");
+  var nf = nfMode.checked ? " · NF" : "";
+  stats.innerHTML = '<span class="win">完成！用时 <b>' + t.toFixed(2) + '</b> 秒 · 3BV <b>' + board3bv +
+    '</b> · 3BV/s <b>' + (board3bv/t).toFixed(2) + '</b>' + nf + '</span>（演示成绩，不入排行）';
+}
+function reset(level){
+  lv = level || lv;
+  var L = LEVELS[lv]; W=L.x; H=L.y; M=L.m;
+  mines=null; nums=null; state=new Uint8Array(W*H);
+  started=false; over=false; openedSafe=0; totalSafe=W*H-M; board3bv=0;
+  stopTimer();
+  led(ledMines, M); led(ledTime, 0);
+  setFace("smile");
+  stats.textContent = "演示模式，成绩不入排行 · 左键开格，右键插旗";
+  document.getElementById("deal_info").textContent = "";
+  var names = {beg:"初级 9×9 · 10 雷", int:"中级 16×16 · 40 雷", exp:"高级 30×16 · 99 雷"};
+  document.getElementById("gname").textContent = names[lv];
+  var html = "";
+  for(var y=0;y<H;y++){ html += "<tr>"; for(var x=0;x<W;x++) html += '<td class="bb"></td>'; html += "</tr>"; }
+  tbody.innerHTML = html;
+  var tabs = document.querySelectorAll("#level_tabs li");
+  tabs.forEach(function(li){
+    var el = li.firstElementChild, on = el.getAttribute("data-lv")===lv;
+    if(on){ li.innerHTML = '<em class="active" data-lv="'+lv+'">'+el.textContent+"</em>"; }
+    else { li.innerHTML = "<a data-lv=\""+el.getAttribute("data-lv")+"\">"+el.textContent+"</a>"; }
+  });
+}
+document.getElementById("level_tabs").addEventListener("click", function(e){
+  var t = e.target.closest("[data-lv]");
+  if(t && !t.classList.contains("active")) reset(t.getAttribute("data-lv"));
+});
+var faceBtn = document.getElementById("face_btn");
+faceBtn.addEventListener("click", function(){ reset(); });
+faceBtn.addEventListener("mousedown", function(){ setFace("press"); });
+faceBtn.addEventListener("mouseup", function(){ setFace(faceKind); });
+faceBtn.addEventListener("mouseleave", function(){ setFace(faceKind); });
+
+/* ---- 鼠标交互 ----
+   右键按下即插旗；左键抬起开格；左右同按在数字上 = 双击开周围 */
+var gboard = document.getElementById("gboard");
+gboard.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+function eventCell(e){
+  var td = e.target.closest("td");
+  if(!td || !tbody.contains(td)) return -1;
+  return idx(td.cellIndex, td.parentNode.rowIndex);
+}
+function clearPress(){
+  if(pressCell!==null && state && state[pressCell]===0){ paint(pressCell); }
+  pressCell = null;
+  if(chordCells){ chordCells.forEach(function(c){ if(state[c]===0) paint(c); }); chordCells=null; }
+}
+/* 单格按下态跟随：从旧格挪到 i 格 */
+function pressSingle(i){
+  if(pressCell === i) return;
+  if(pressCell !== null && state[pressCell] === 0) paint(pressCell);
+  pressCell = i;
+  if(state[i] === 0) cellTd(i).className = "b0";
+}
+/* 左右同按 3×3 按下态跟随：高亮挪到 i 格邻域 */
+function pressAround(i){
+  if(chordCells) chordCells.forEach(function(c){ if(state[c]===0) paint(c); });
+  var around = neighbors(i).concat([i]);
+  chordCells = around.filter(function(c){ return state[c]===0; });
+  chordCells.forEach(function(c){ cellTd(c).className="b0"; });
+}
+gboard.addEventListener("mousedown", function(e){
+  if(over) return;
+  var i = eventCell(e); if(i<0) return;
+  if(e.buttons===3){ // 左右同按 = 双击
+    bothButtons = true; clearPress();
+    pressAround(i);
+    setFace("ooh");
+  } else if(e.button===0){
+    bothButtons = false;
+    pressSingle(i);
+    setFace("ooh");
+  } else if(e.button===2){
+    setFace("ooh"); // 右键按下笑脸同样变
+    toggleFlag(i);
+  }
+});
+/* 按住滑动：按下态实时跟随鼠标经过的格子（出盘后再进盘按 e.buttons 自愈） */
+gboard.addEventListener("mouseover", function(e){
+  if(over) return;
+  var i = eventCell(e); if(i<0) return;
+  if(e.buttons===3){
+    if(pressCell!==null){ if(state[pressCell]===0) paint(pressCell); pressCell=null; }
+    bothButtons = true;
+    pressAround(i);
+    setFace("ooh");
+  } else if(e.buttons===1){
+    if(chordCells){ chordCells.forEach(function(c){ if(state[c]===0) paint(c); }); chordCells=null; }
+    bothButtons = false;
+    pressSingle(i);
+    setFace("ooh");
+  }
+});
+gboard.addEventListener("mouseup", function(e){
+  if(over){ clearPress(); return; }
+  var i = eventCell(e); clearPress(); setFace("smile");
+  if(i<0){ bothButtons=false; return; }
+  if(e.button===0){
+    if(bothButtons){ bothButtons=false; chord(i); }
+    else if(state[i]===1){ chord(i); } // 单击已满足的数字同效
+    else openCell(i);
+  }
+});
+gboard.addEventListener("mouseleave", function(){ clearPress(); if(!over) setFace("smile"); });
+
+/* ---- 触屏交互：点按开格 / 长按插旗 / 插旗模式 ---- */
+var touchTimer = null, touchCell = -1, longFired = false;
+gboard.addEventListener("touchstart", function(e){
+  var i = eventCell(e.touches[0]); if(i<0 || over) return;
+  touchCell = i; longFired = false;
+  touchTimer = setTimeout(function(){
+    longFired = true; toggleFlag(i);
+    if(navigator.vibrate) navigator.vibrate(30);
+  }, 350);
+  e.preventDefault();
+}, {passive:false});
+gboard.addEventListener("touchend", function(e){
+  clearTimeout(touchTimer);
+  if(touchCell>=0 && !over && !longFired){
+    if(flagMode) toggleFlag(touchCell);
+    else if(state[touchCell]===1) chord(touchCell);
+    else openCell(touchCell);
+  }
+  touchCell = -1;
+  e.preventDefault();
+}, {passive:false});
+gboard.addEventListener("touchmove", function(){ clearTimeout(touchTimer); touchCell=-1; });
+flagBtn.addEventListener("click", function(){
+  flagMode = !flagMode;
+  flagBtn.classList.toggle("on", flagMode);
+  flagBtn.textContent = flagMode ? "插旗中…" : "插旗模式";
+});
+nfMode.addEventListener("change", function(){
+  if(nfMode.checked && flagMode) flagBtn.click();
+});
+
+/* ---- 缩放控制条（复刻 flop player 1.00x 滑杆） ---- */
+var gframe = document.getElementById("gframe");
+var zoomRange = document.getElementById("zoom_range");
+var zoomVal = document.getElementById("zoom_val");
+function applyZoom(v){
+  v = Math.max(0.5, Math.min(2.5, v));
+  gframe.style.zoom = String(v);
+  zoomRange.value = String(v);
+  zoomVal.textContent = v.toFixed(2) + "x";
+  try { localStorage.setItem("online_play_zoom", String(v)); } catch(e) {}
+}
+zoomRange.addEventListener("input", function(){ applyZoom(parseFloat(zoomRange.value)); });
+document.getElementById("zoom_reset").addEventListener("click", function(){ applyZoom(1); });
+try {
+  var savedZoom = parseFloat(localStorage.getItem("online_play_zoom") || "1");
+  if(savedZoom > 0) applyZoom(savedZoom);
+} catch(e) {}
+
+document.addEventListener("keydown", function(e){
+  if(e.key==="F2" || e.key==="r" || e.key==="R"){ reset(); }
+});
+
+/* ---- 设计稿演示钩子（截图自验用，集成时删除） ---- */
+window.__demo = {
+  open: function(x,y){ openCell(idx(x,y)); },
+  flag: function(x,y){ toggleFlag(idx(x,y)); },
+  win: function(){
+    if(!started){ openCell(0); }
+    for(var i=0;i<state.length;i++) if(!mines[i] && state[i]!==1){ state[i]=1; openedSafe++; paint(i); }
+    checkWin();
+  },
+  lose: function(){ if(!started) openCell(0); var m=-1; for(var i=0;i<mines.length;i++) if(mines[i] && state[i]!==1){ m=i; break; } if(m>=0) lose(m); }
+};
+
+reset("beg");
+})();
+</script>
+</body>
+</html>
