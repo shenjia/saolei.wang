@@ -92,12 +92,16 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         const s = JSON.parse(raw) as {
           nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
           showBv?: boolean;
+          lv?: string;
           cus?: { w: number; h: number; m: number };
         };
         if (typeof s.nf === "boolean") nf = s.nf;
         if (typeof s.ng === "boolean") ng = s.ng;
         if (typeof s.qmark === "boolean") qmark = s.qmark;
         if (typeof s.showBv === "boolean") showBv = s.showBv;
+        /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
+           范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
+        if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
         if (s.cus && !cusError(s.cus.w, s.cus.h, s.cus.m)) cusSpec = { ...s.cus };
         if (s.bv) {
           for (const k of Object.keys(bvSel)) {
@@ -113,9 +117,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showBv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showBv, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
+    /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
+    let savedLv = "";
     loadSettings();
     let mines: Uint8Array | null = null, nums: Uint8Array | null = null;
     let state: Uint8Array = new Uint8Array(0); // 0=block 1=open 2=flag 3=question
@@ -865,6 +871,8 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       }
       hitIdx = null;
       repaintAll();
+      /* 级别变更即持久化（四期）：否则切级别后不碰其他设置就刷新，仍会回旧级别 */
+      if (lv !== prevLv) saveSettings();
       /* 级别筛选器：激活项重建为 span.current，其余为 a（ranking_tabs 结构）；
          NF / 无猜开关是原生 checkbox，状态自持、跨局保持，无需重绘。
          级别没变（点笑脸重开）不动它——outerHTML 重建会丢焦点且白排一版 */
@@ -1493,19 +1501,13 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     swBv.checked = showBv;
     syncBvSlider();
 
-    reset("beg");
-    /* 比例：有 localStorage 记忆直接应用；首次进入（无记忆）用 defaultZoom()
-       按高级盘算出的最大比例起步（张老师定）。默认值不写盘——只有玩家
-       手动拖滑杆/重置才记忆；全屏与横屏的自动拉满同样不入记忆。
-       初始恒为标准级别（reset("beg")），只读标准键；cus 键在切自定义时读
-       （见 level_tabs 处理器），两模式各自独立记忆（三期 v3 张老师定） */
-    try {
-      const raw = localStorage.getItem("online_play_zoom");
-      const saved = raw === null ? NaN : parseFloat(raw);
-      applyZoom(saved > 0 ? saved : defaultZoom(), false);
-    } catch {
-      applyZoom(defaultZoom(), false); // 隐私模式：读不到就用默认
-    }
+    /* 开局恢复上次级别（四期张老师报：刷新/热更后回初级，3BV 范围浮窗也跟着变初级
+       区间与玩家脱节）——无记忆/脏数据回落 beg；级别入 localStorage（saveSettings） */
+    reset(savedLv || "beg");
+    /* 比例：统一走 applyModeZoom（标准级别读 online_play_zoom、cus 读 online_play_zoom_cus，
+       与切级别路径同一套记忆逻辑）。默认值不写盘——只有玩家手动拖滑杆/重置才记忆；
+       全屏与横屏的自动拉满同样不入记忆（三期 v3 张老师定） */
+    applyModeZoom();
     if (lsQuery.matches) syncLandscape(); // 初始即横屏：记住倍率并拉满
 
     return () => {
