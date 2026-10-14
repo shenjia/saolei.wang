@@ -99,7 +99,8 @@ export function OnlinePlay() {
     /* ---- 渲染：全程矢量（2026-10-14 张老师定：矢量版对齐修好后弃用像素版）----
        flop 矢量贴图，任意倍率边缘平滑。VEC_MAP 把引擎态类名映射到 symbol id。 */
     const VEC_MAP: Record<string, string> = {
-      bb: "cell-normal", bf: "cell-flag", bq: "cell-question",
+      /* 未开格类用 solid 实心面变体（棋盘垫深灰底后，透明面会透灰——见 FlopSprites 注释） */
+      bb: "cell-normal-solid", bf: "cell-flag-solid", bq: "cell-question-solid",
       b0: "cell-number-0", b1: "cell-number-1", b2: "cell-number-2", b3: "cell-number-3",
       b4: "cell-number-4", b5: "cell-number-5", b6: "cell-number-6", b7: "cell-number-7",
       b8: "cell-number-8", bm: "cell-mine", bn: "cell-flag-wrong",
@@ -117,13 +118,13 @@ export function OnlinePlay() {
       const svg = $("vec_board") as unknown as SVGSVGElement;
       svg.setAttribute("viewBox", "0 0 " + cw + " " + ch);
       svg.setAttribute("preserveAspectRatio", "none");
-      /* 底铺一层 cell-normal 平铺 pattern（board 内容盒与 table 等大，正常被格子盖满，
-         仅作尺寸舍入兜底）；每格一个 <use>，x/y 取 16 的整数倍 → 与 table 格严格对齐 */
-      let s = '<defs><pattern id="vec_tile" width="16" height="16" patternUnits="userSpaceOnUse">'
-        + '<use href="#cell-normal" width="16" height="16"/></pattern></defs>'
-        + '<rect width="100%" height="100%" fill="url(#vec_tile)"/>';
+      /* 底铺一层深灰（与 gboard CSS 背景同色，#808080 = cell-press 边框灰）：
+         cell-press 右/下 8 单位透明条 + 亚像素舍入缝都透出它 → 格间成均匀深灰细线
+         （2026-10-14 张老师定，替代原先透出的银白亮缝）；每格一个 <use>，
+         x/y 取 16 的整数倍 → 与 table 格严格对齐 */
+      let s = '<rect width="100%" height="100%" fill="#808080"/>';
       for (let i = 0; i < W * H; i++) {
-        s += '<use href="#cell-normal" x="' + (i % W) * 16 + '" y="' + ((i / W) | 0) * 16 + '" width="16" height="16"/>';
+        s += '<use href="#cell-normal-solid" x="' + (i % W) * 16 + '" y="' + ((i / W) | 0) * 16 + '" width="16" height="16"/>';
       }
       svg.innerHTML = s;
       vecUse = Array.from(svg.querySelectorAll(":scope > use")) as SVGUseElement[];

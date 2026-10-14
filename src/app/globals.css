@@ -5630,6 +5630,10 @@ button.msg_cancel:hover {
    td 位图背景永久禁用（覆盖层不透明，防任何透出） */
 #online_play #gboard {
   position: relative;
+  /* 深灰底（#808080 = cell-press 边框灰）：flop 贴图的 cell-press 右/下 8 单位透明条
+     透出它 → 开格区间成均匀深灰细线，替代原先透出银白底的亮缝（2026-10-14 张老师定）；
+     同时覆盖 legacy .board 的网格 gif 背景（全程矢量后已无用） */
+  background: #808080;
 }
 #online_play #gboard .vecboard {
   display: block;

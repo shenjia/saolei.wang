@@ -274,6 +274,21 @@ export function FlopSprites() {
         <use href="#cell-press" />
         <path d="M70 40v10H60v20h20V50h20v30H90v10H80v20h20V90h10V80h10V50h-10V40H70m10 80v20h20v-20H80z" />
       </symbol>
+      {/* 站内扩展（2026-10-14 张老师定：棋盘垫深灰底填格缝）：cell-normal/flag/question
+          的面区中央透明（flop 原版靠页面底色透出银面），垫深灰后未开格面会跟着变灰——
+          这三个实心变体用 cell-press 银面垫底 + 原贴图叠印，面恒为银色不透底 */}
+      <symbol id="cell-normal-solid" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <use href="#cell-normal" />
+      </symbol>
+      <symbol id="cell-flag-solid" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <use href="#cell-flag" />
+      </symbol>
+      <symbol id="cell-question-solid" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <use href="#cell-question" />
+      </symbol>
       <symbol id="cell-mine" viewBox="0 0 168 168">
         <use href="#cell-press" />
         <path d="M80 20v20H60v10H50V40H40v10h10v10H40v20H20v10h20v20h10v10H40v10h10v-10h10v10h20v20h10v-20h20v-10h10v10h10v-10h-10v-10h10V90h20V80h-20V60h-10V50h10V40h-10v10h-10V40H90V20H80z" />
