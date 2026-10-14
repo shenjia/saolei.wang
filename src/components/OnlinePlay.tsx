@@ -1776,6 +1776,7 @@ export function OnlinePlay({
     function zoomDragInput(v: number) {
       zoomBeforeFs = null; // 手动调比例 → 以手动为准，退出全屏/横屏不再自动恢复
       zoomBeforeLs = null;
+      if (lsQuery.matches) lsManual = true; // 横屏中手动调过 → resize/复核兜底不再覆盖手动值
       zoomWant = v;
       setZoomVisual(v);
     }
@@ -1908,14 +1909,14 @@ export function OnlinePlay({
         applyZoom(zoomBeforeFs, false);
         zoomBeforeFs = null;
         /* 退出全屏后仍在横屏自动模式：按视口高度重新拉满 */
-        if (lsQuery.matches && zoomBeforeLs !== null) fitZoomForLandscape();
+        if (lsQuery.matches && !lsManual) fitZoomForLandscape();
       }
     });
     /* 全屏中旋转屏幕等尺寸变化时重新拉满；横屏自动模式下浏览器栏显隐同理；
        普通模式下窗口变窄也重新封顶，避免游戏区冲出 #page 版块 */
     window.addEventListener("resize", () => {
       if (document.fullscreenElement === root) fitZoomForFullscreen();
-      else if (lsQuery.matches && zoomBeforeLs !== null) fitZoomForLandscape();
+      else if (lsQuery.matches && !lsManual) fitZoomForLandscape(); // 首帧横屏（zoomBeforeLs 恒 null）也要兜底，故只看 lsManual
       else applyZoom(zoomCur, false);
       syncPageFit(); // 自定义盘的页宽按新视口重算（非 cus 级别内部直接清 inline）
       /* 数据面板常驻时（六期）：跟随 gwrap 重新贴合（内部对未显示的面板直接早退） */
@@ -2409,7 +2410,13 @@ export function OnlinePlay({
     /* 游戏区容器（面板锚 & 横屏测量共用；声明提前避免 syncReportZoom 的暂时性死区） */
     const gameAreaEl = $("game_area") as HTMLElement;
     let zoomBeforeLs: number | null = null; // 进横屏前的倍率；横屏中手动调过则置 null 不再恢复
-    function fitZoomForLandscape() {
+    /* 横屏自动拉满是否被手动接管（zoomBeforeLs 管退出恢复、lsManual 管兜底重拉，
+       二者分开：首帧就是横屏时 zoomBeforeLs 恒 null，但兜底必须照常生效——
+       2026-10-15 张老师 iPhone 实测高级盘横屏没拉满，就是 vh 在 fit 之后
+       变了而兜底没接住） */
+    let lsManual = false;
+    let lsRefitTimer = 0; // 延迟复核拍句柄（防重入堆积）
+    function fitZoomForLandscape(once?: boolean) {
       if (document.fullscreenElement === root) return; // 全屏拉满优先
       /* 基准量测前先撤掉上一次的「银框兜底拉伸」（见本函数末尾）——否则拉伸会被
          当成自然基准、越拉越高（每次 fit 都是一次干净重算） */
@@ -2475,12 +2482,25 @@ export function OnlinePlay({
         gwrap.style.minHeight = (Math.max(cur, baseH) + deficit / zoomCur).toFixed(2) + "px";
         if (gwrap.getBoundingClientRect().bottom / pz > vh - 1 + 3) gwrap.style.minHeight = prev;
       }
+      /* 延迟复核拍（2026-10-15 三修高级盘没拉满）：真机 Safari 旋转/进出横屏时
+         工具栏有 ~300-500ms 动画，fit 跑完 vh 还会变（dev 模拟瞬时切换复现不了，
+         iPhone 实测高级盘停在偏小 ~4% 的 zoom、上下露页面背景）。这里收尾后
+         再拉一次：动画结束、vh 稳定后自动纠偏。幂等（vh 不变则结果不变）；
+         once=true（复核拍自调）不再续拍，链条到此终止，不会死循环 */
+      if (once) return;
+      if (lsRefitTimer) window.clearTimeout(lsRefitTimer);
+      lsRefitTimer = window.setTimeout(() => {
+        lsRefitTimer = 0;
+        if (lsQuery.matches && !lsManual && document.fullscreenElement !== root && !document.hidden)
+          fitZoomForLandscape(true);
+      }, 500);
     }
     function syncLandscape() {
       if (lsQuery.matches) {
+        lsManual = false; // 重新进入横屏自动模式（上次横屏中的手动调整不跨旋转保留）
         if (zoomBeforeLs === null) zoomBeforeLs = zoomCur;
         window.scrollTo(0, 0); // 顶满高度以页面顶为基准，先回顶再量
-        window.setTimeout(fitZoomForLandscape, 60); // 等媒体查询布局生效后测量
+        window.setTimeout(fitZoomForLandscape, 60); // 等媒体查询布局生效后测量（fit 内自带 500ms 复核拍）
       } else if (zoomBeforeLs !== null) {
         gwrap.style.minHeight = ""; // 退出横屏撤掉银框兜底拉伸（竖屏窗口不该被撑高）
         applyZoom(zoomBeforeLs, false);
@@ -2488,6 +2508,12 @@ export function OnlinePlay({
       }
     }
     lsQuery.addEventListener("change", syncLandscape, { signal });
+    /* iOS Safari 工具栏显隐/旋转动画常常只触发 visualViewport 的 resize、
+       不触发 window resize（2026-10-15 高级盘横屏没拉满的兜底之一）：
+       vh 稳定后按新视口重拉。手动接管（lsManual）时不覆盖 */
+    window.visualViewport?.addEventListener("resize", () => {
+      if (lsQuery.matches && !lsManual && document.fullscreenElement !== root) fitZoomForLandscape();
+    }, { signal });
 
     on(document, "keydown", (e: KeyboardEvent) => {
       /* F2 ≡ 点笑脸重开（2026-10-14 张老师定）：必须与鼠标点笑脸完全同路——
