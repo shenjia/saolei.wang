@@ -16,10 +16,16 @@ export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number 
 /* localStorage 设置键（2026-10-14 二期：全部设置入 localStorage 记住） */
 const LS_KEY = "online_play_settings";
 
-/* 自定义规格上限（三期）：99 封顶（2026-10-14 17:48 张老师定）。
+/* 自定义规格范围（三期，2026-10-14 18:2x 张老师定）：
+   下限 8——8×8 以下盘面撑不住 #page 版式（格子太少时 gframe 过窄、页脚版块会被挤变形）；
+   上限 99。
    ⚠️ 必须放模块顶层——JSX 渲染作用域够不着 useEffect 闭包内的常量
    （2026-10-14 别线会话曾放闭包内导致 CUS_MIN is not defined 整页崩溃） */
-const CUS_MIN = 5, CUS_MAX = 99;
+const CUS_MIN = 8, CUS_MAX = 99;
+
+/* 自定义滑杆拖动时盘面重建的节流间隔（ms）。99×99 全量重建 + 重绘每帧都做会卡手，
+   张老师 2026-10-14 18:19 定：拖动时盘面变化允许 250ms 一次（leading 立即 + trailing 终值） */
+const CUS_APPLY_MS = 250;
 
 export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -40,7 +46,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     ) => el.addEventListener(type, fn as EventListener, { ...opts, signal });
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
-       cus＝自定义盘（三期）：规格来自弹窗滑杆，宽/高 5–99、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
+       cus＝自定义盘（三期）：规格来自弹窗滑杆，宽/高 8–99、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
     const LEVELS: Record<string, { x: number; y: number; m: number }> = {
       beg: { x: 8, y: 8, m: 10 },
       int: { x: 16, y: 16, m: 40 },
@@ -835,14 +841,15 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       if (!t) return;
       const to = t.getAttribute("data-lv")!;
       if (to === "cus") {
-        /* 自定义（v3）：tab＝toggle 开窗（开→关，关→选定级别立即切盘并开窗）；
-           滑杆在窗内即改即生效。
+        /* 自定义（v4 张老师 18:19 定）：点 tab 恒开窗——不做 toggle。
+           原先「开→关」的 toggle 语义有两个坑：①连点/双击第二击把自己关掉，
+           表现为「点了自定义却没弹窗」；②触屏设备 touch 后补发 click 同样双触发。
+           关窗只走「外点 / Esc」（见文末 document 监听）。
            ⚠️ 必须 stopPropagation：reset("cus") 会重建 level_tabs DOM（outerHTML），
            本轮点击的原 tab 元素已脱离文档——冒泡到 document 的外点关闭判定里
            contains(tab) 必为 false，刚开的窗会被立刻关掉（playwright 实证过） */
         e.stopPropagation();
-        if (cusDlg.classList.contains("open")) closeCusDialog();
-        else openCusDialog();
+        openCusDialog();
         return;
       }
       if (to !== lv) reset(to);
@@ -894,10 +901,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       }
     });
 
-    /* ---- 自定义难度弹窗（2026-10-14 三期 v3，张老师 17:59：滑杆即改即生效）----
-       无任何按钮——三个滑杆拖动立刻改变地图（rAF 合帧：拖动中的连续 input
-       只按最新值应用，99×99 重建也不卡手）；点「自定义」tab＝选定该级别，
-       立即按记忆规格切盘并开窗（窗开着再点 tab＝关窗 toggle）；外点/Esc 关窗。
+    /* ---- 自定义难度弹窗（2026-10-14 三期 v4，张老师 18:19 两连改）----
+       无任何按钮——三个滑杆拖动即改变地图；点「自定义」tab 恒开窗（不 toggle），
+       窗原本关着时按记忆规格回填滑杆；关窗只走外点/Esc。
+       应用节流 CUS_APPLY_MS：连拖时不再每帧重建（99×99 每帧重建会卡手），
+       leading 立即响应、trailing 保证终值落定。
        规格随手写 localStorage（LS_KEY.cus），重开 tab 恢复记忆值。 */
     const cusDlg = $("cus_dialog");
     const cusW = $("cus_w") as HTMLInputElement;
@@ -909,7 +917,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     /* 读滑杆当前值（滑杆 min/max 恒合法，parseInt 必成功；防御 NaN 兜底） */
     const cusVal = (el: HTMLInputElement) => {
       const v = parseInt(el.value, 10);
-      return Number.isFinite(v) ? v : parseInt(el.min || "5", 10);
+      return Number.isFinite(v) ? v : parseInt(el.min || String(CUS_MIN), 10);
     };
     function syncCusVals() {
       cusWv.textContent = String(cusVal(cusW));
@@ -921,24 +929,38 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       cusM.max = String(cap);
       if (cusVal(cusM) > cap) cusM.value = String(cap);
     }
-    /* 即时应用：rAF 合帧（同一帧内多次 input 只应用最后一次拖到的值） */
-    let cusPending = false;
+    /* 应用节流（250ms）：连续拖动时每个节流窗口只重建一次盘面，窗口内只标记
+       dirty，窗口结束若有新值立刻再应用一次（终值一定落定）；首次拖动立即生效。
+       ⚠️ trailing 回补前必须确认仍在自定义级别：拖完 250ms 内点「初级/中级」时
+       定时器还挂着，若无脑 reset("cus") 会把用户刚切走的盘面强拉回自定义 */
+    let cusTimer: ReturnType<typeof setTimeout> | null = null;
+    let cusDirty = false;
+    function applyCusNow() {
+      cusSpec = { w: cusVal(cusW), h: cusVal(cusH), m: cusVal(cusM) };
+      saveSettings();
+      reset("cus");
+    }
     function applyCusLive() {
-      if (cusPending) return;
-      cusPending = true;
-      requestAnimationFrame(() => {
-        cusPending = false;
-        cusSpec = { w: cusVal(cusW), h: cusVal(cusH), m: cusVal(cusM) };
-        saveSettings();
-        reset("cus");
-      });
+      if (cusTimer !== null) { cusDirty = true; return; }
+      applyCusNow();
+      cusTimer = setTimeout(() => {
+        cusTimer = null;
+        if (cusDirty) {
+          cusDirty = false;
+          if (lv === "cus") applyCusLive(); // 已切走则丢弃（规格仍留在滑杆上，下次进来自会回填）
+        }
+      }, CUS_APPLY_MS);
     }
     function openCusDialog() {
-      cusW.value = String(cusSpec.w);
-      cusH.value = String(cusSpec.h);
-      clampCusMines(); // 先按新宽高收缩雷数上限
-      cusM.value = String(Math.min(cusSpec.m, parseInt(cusM.max, 10)));
-      syncCusVals();
+      /* 滑杆值只在窗原本关着时按记忆规格回填；已开着（连点 tab）不回填，
+         免得把玩家正拖到一半的值弹回去 */
+      if (!cusDlg.classList.contains("open")) {
+        cusW.value = String(cusSpec.w);
+        cusH.value = String(cusSpec.h);
+        clampCusMines(); // 先按新宽高收缩雷数上限
+        cusM.value = String(Math.min(cusSpec.m, parseInt(cusM.max, 10)));
+        syncCusVals();
+      }
       cusDlg.classList.add("open");
       if (lv !== "cus") reset("cus"); // 点自定义＝选定级别立即切盘（同点初级/高级语义）
     }
@@ -950,8 +972,9 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     on(document, "click", (e: Event) => {
       if (!cusDlg.classList.contains("open")) return;
       if (cusDlg.contains(e.target as Node)) return;
-      /* 点「自定义」tab 本身不在这里关（tabs 自己的 click 做 toggle：
-         开→关在 tabs 处理器完成、关→开时这里须放行，冒泡到此处若关窗会抵消开窗） */
+      /* 点「自定义」tab 的 click 已在 tabs 处理器里 stopPropagation，正常到不了这里；
+         此处留兜底（若哪天去掉那个 stopPropagation，reset 重建 tabs 会让点击的原元素
+         脱离文档、contains 判 false → 刚开的窗会秒关，故用 closest 定位 target） */
       const tab = (e.target as HTMLElement).closest('[data-lv="cus"]');
       if (tab && $("level_tabs").contains(tab)) return;
       closeCusDialog();
@@ -1403,6 +1426,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       ac.abort(); // 摘除全部事件监听
       if (timerId) clearInterval(timerId);
       if (touchTimer) clearTimeout(touchTimer);
+      if (cusTimer !== null) clearTimeout(cusTimer); // 拖杆节流残留的 trailing 定时器
       if (win.__op) delete win.__op;
     };
   }, []);
@@ -1486,8 +1510,8 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
           </div>
         </div>
 
-        {/* 自定义难度弹窗（三期 v3，张老师 17:59 定）：无任何按钮——
-            三滑杆即改即生效（rAF 合帧），拖动立刻改变地图；tab 点＝toggle 开窗 */}
+        {/* 自定义难度弹窗（三期 v4，张老师 18:19 定）：无任何按钮——
+            三滑杆拖动即改变地图（节流 250ms，拖动中不再每帧重建）；点 tab 恒开窗 */}
         <div className="cus_dialog" id="cus_dialog">
           <div className="cus_row">
             <span className="cname">宽度</span>
