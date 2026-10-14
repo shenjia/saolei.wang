@@ -57,11 +57,15 @@ export function parseBvRankingBy(v?: string): BvRankingBy {
 export const VIDEO_PAGESIZE = 20;
 export const HOME_TOP_NUMBER = 10;
 export const HOME_NEWBIE_NUMBER = 5;
-// 首页「动态」初始条数（2026-09-24 张老师要求：30 → 20 → 15，标题由「雷界快讯」改「动态」；
-// 2026-10-15 张老师要求 15 → 17，与录像每页各 +2）
-export const HOME_NEWS_NUMBER = 17;
-// 首页「最新录像」初始条数（2026-09-24 新增版块，初值 20 → 15；2026-10-15 张老师要求 15 → 17）
-export const HOME_VIDEO_NUMBER = 17;
+// 首页「新闻」初始条数（2026-09-24 张老师要求：30 → 20 → 15，标题由「雷界快讯」改「动态」；
+// 2026-10-15 张老师要求 15 → 17 → 16，与录像同为 16 条（左右栏底部对齐口径））
+export const HOME_NEWS_NUMBER = 16;
+// 首页「最新录像」初始条数（2026-09-24 新增版块，初值 20 → 15；
+// 2026-10-15 张老师要求 15 → 17 → 16）
+export const HOME_VIDEO_NUMBER = 16;
+// 首页侧栏「论坛新帖」条数（2026-10-14 为「开一局」按钮 8 → 6；
+// 2026-10-15 首页两版块各减 1 条后实测：6 条时左右栏底部仅差 6px，7 条则右栏长出 24px，故维持 6）
+export const HOME_BBS_NUMBER = 6;
 
 // ---------- 评论（移植 CommentConfig） ----------
 // 2026-09-26 张老师要求：录像页初始最多显示 10 条，其余走「加载更多」

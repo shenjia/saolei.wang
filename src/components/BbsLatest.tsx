@@ -4,10 +4,13 @@
 
 import Link from "next/link";
 import { BBS_BOARD_NAMES, getLatestPosts } from "@/lib/bbs";
+import { HOME_BBS_NUMBER } from "@/lib/config";
 
 export async function BbsLatest() {
   // 2026-10-14：8 → 6 条，为右栏顶部「开一局」大按钮腾出高度，保持首页左右栏底部基本对齐
-  const posts = await getLatestPosts(6);
+  // 2026-10-15：首页新闻/录像各减 1 条（17→16）后，实测 bbs 6 条时两栏底差 +6px（7 条则右栏长 24px），
+  // 故维持 6 条为最优对齐（条数移入 config 统一管理）
+  const posts = await getLatestPosts(HOME_BBS_NUMBER);
   if (!posts.length) return null;
   return (
     <div id="bbs_latest" className="box">
