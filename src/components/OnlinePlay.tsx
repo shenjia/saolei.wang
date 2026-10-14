@@ -187,6 +187,9 @@ export function OnlinePlay({
        二期起这些开关收进设置浮窗，初始值从 localStorage 恢复。
        「显示3BV」开关已废（2026-10-15 八期张老师定：状态栏整个取消，见 gname 注释） */
     let nf = false, ng = true, qmark = false;
+    /* 极简模式（2026-10-15 张老师四定，默认关）：横屏沉浸下的进一步简化——
+       不显示时间和边框，游戏区最大化（CSS 横屏块 html.op-min 门控） */
+    let opMin = false;
     /* 「显示统计」开关（2026-10-15 六期张老师定，默认关）：左侧「数据统计」面板的**唯一**
        显示开关。八期改口径：开＝也只在**游戏结束**时随结算弹出（对局中不再常驻实时刷新
        ——张老师定「只有游戏结束才出现数据面板」）；关＝任何时刻都不显示。再开局撤下。 */
@@ -209,6 +212,7 @@ export function OnlinePlay({
         const s = JSON.parse(raw) as {
           nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
           showStats?: boolean;
+          min?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -216,6 +220,7 @@ export function OnlinePlay({
         if (typeof s.ng === "boolean") ng = s.ng;
         if (typeof s.qmark === "boolean") qmark = s.qmark;
         if (typeof s.showStats === "boolean") showStats = s.showStats;
+        if (typeof s.min === "boolean") opMin = s.min;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -234,7 +239,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showStats, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showStats, min: opMin, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -1824,6 +1829,20 @@ export function OnlinePlay({
       reset();
     });
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
+    /* 「极简模式」（2026-10-15 张老师四定）：横屏沉浸的去框/紧凑/隐计时全由
+       html.op-min 类门控（见 globals.css 横屏块），这里只切类 + 记忆。
+       开关改变 gwrap 基准尺寸（框/计数列显隐），横屏中需立即重拉比例；
+       竖屏/桌面不受该类影响，无需处理 */
+    const swMin = $("sw_min") as HTMLInputElement;
+    on(swMin, "change", () => {
+      opMin = swMin.checked;
+      saveSettings();
+      document.documentElement.classList.toggle("op-min", opMin);
+      if (lsQuery.matches && !lsManual) {
+        window.scrollTo(0, 0); // fit 以页面顶为基准，先回顶再量（与 syncLandscape 同口径）
+        requestAnimationFrame(() => fitZoomForLandscape()); // 等类切换的样式重算落位
+      }
+    });
     /* 「显示统计」（八期改口径）：只影响**游戏结束**时是否弹出数据面板，不重开当前局。
        打开时对局中不提前出现；关闭时若上一局定格的面板还挂着，立刻撤下 */
     on(swStats, "change", () => {
@@ -2588,6 +2607,8 @@ export function OnlinePlay({
     swNg.checked = ng;
     swQm.checked = qmark;
     swStats.checked = showStats;
+    swMin.checked = opMin;
+    document.documentElement.classList.toggle("op-min", opMin); // 极简模式按存档初值生效
     syncBvSlider();
 
     /* 开局恢复上次级别（四期张老师报：刷新/热更后回初级，3BV 范围浮窗也跟着变初级
@@ -2608,6 +2629,7 @@ export function OnlinePlay({
       grModal.remove();
       document.documentElement.classList.remove("op-fakefs"); // 伪全屏态不跨页残留
       document.documentElement.classList.remove("op-noscroll"); // 整页锁滚随本页一起摘掉
+      document.documentElement.classList.remove("op-min"); // 极简模式类不跨页残留
       if (timerId) clearInterval(timerId);
       if (touchTimer) clearTimeout(touchTimer);
       if (cusTimer !== null) clearTimeout(cusTimer); // 拖杆节流残留的 trailing 定时器
@@ -2675,6 +2697,12 @@ export function OnlinePlay({
             <span className="gs_name">显示统计</span>
             <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
             <span className="tip">游戏结束后在游戏界面左侧弹出数据统计面板</span>
+          </div>
+          {/* 「极简模式」（2026-10-15 张老师四定，默认关）：横屏沉浸的去框/紧凑/隐计时 */}
+          <div className="gs_row">
+            <span className="gs_name">极简模式</span>
+            <label className="gsw"><input type="checkbox" id="sw_min" /><span className="track" /></label>
+            <span className="tip">不显示时间和边框，最大化游戏区，适合手机使用</span>
           </div>
           <div className="gs_divider" />
           <div className="gs_zoom">
