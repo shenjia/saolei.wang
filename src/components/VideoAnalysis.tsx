@@ -199,7 +199,8 @@ export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysis
           {tip.grade === "?" ? (
             "参考数据不足，无法评级"
           ) : tip.percent >= 100 ? (
-            "全网第一"
+            // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 radar_tip 统一）
+            <span className="tip_first">全网第一</span>
           ) : (
             <>
               <span className="vr_tip_val">{tip.disp}</span>，超过 <em>{tip.percent}%</em> 的玩家

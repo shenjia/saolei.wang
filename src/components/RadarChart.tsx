@@ -162,7 +162,8 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
           {tip.grade === "?" ? (
             "暂无成绩"
           ) : tip.percent >= 100 ? (
-            "全网第一"
+            // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 vr_tip 统一）
+            <span className="tip_first">全网第一</span>
           ) : (
             <>
               超过 <em>{tip.percent}%</em> 的玩家

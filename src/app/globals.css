@@ -1670,6 +1670,15 @@ del[data-tip]:hover::after {
   font-weight: bold;
   color: #f8f8f2;
 }
+/* 「全网第一」整条金色（2026-10-15 张老师定）：与 .vr_tip_val / 雷达最高等级 SSS 同色 #E6DB74，
+   实力雷达与录像分析（vr_tip）两处统一，加粗与 em 口径一致 */
+#page .radar .radar_tip .tip_first,
+#page #video_view .vr_tip .tip_first,
+#page #online_play .vr_tip .tip_first,
+#gr_modal .vr_tip .tip_first {
+  font-weight: bold;
+  color: #E6DB74;
+}
 
 /* 录像详情页「录像分析」六维雷达（2026-10-14）
    气泡走 HTML 绝对定位（SVG 内元素不支持 ::after，用不了 data-tip 那套 content: attr()），
