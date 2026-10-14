@@ -14,6 +14,7 @@
 import { useEffect, useRef } from "react";
 import { FlopSprites } from "./FlopSprites";
 import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
+import { paintRangeFill } from "@/lib/paintRange";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
 
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
@@ -66,6 +67,15 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       fn: (e: E) => void,
       opts?: AddEventListenerOptions,
     ) => el.addEventListener(type, fn as EventListener, { ...opts, signal });
+
+    /* ---- 滑条填充自绘（张老师定稿：填充 #8ac21b + 滑块 #a6e22e）----
+       初始写一遍 --pct；用户拖动走 input 委托（含回放控制条等动态插入的滑条），
+       程序赋值（applyZoom / 回放进度等）在各赋值处单独补调 paintRangeFill */
+    root.querySelectorAll<HTMLInputElement>('input[type="range"]').forEach(paintRangeFill);
+    on(root, "input", (e) => {
+      const t = e.target as HTMLElement;
+      if (t instanceof HTMLInputElement && t.type === "range") paintRangeFill(t);
+    });
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
        cus＝自定义盘（三期）：规格来自弹窗滑杆，宽/高 8–99、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
@@ -1211,6 +1221,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       const restartBtn = bar.querySelector("#rc_restart") as HTMLButtonElement;
       const exitBtn = bar.querySelector("#rc_exit") as HTMLButtonElement;
       const speedRange = bar.querySelector("#rc_speed") as HTMLInputElement;
+      paintRangeFill(speedRange); // 动态插入的滑条补一次填充比例（HTML 初值不走委托）
       const rateBtn = bar.querySelector("#rc_rate") as HTMLButtonElement;
       const range = bar.querySelector("#rc_range") as HTMLInputElement;
       const timeEl = bar.querySelector("#rc_time") as HTMLElement;
@@ -1239,6 +1250,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         for (let i = 0; i < N; i++) paintR(i);
         evIdx = 0; curCsec = 0;
         range.value = "0";
+        paintRangeFill(range);
         timeEl.textContent = "0.00 / " + fmt(s.csec);
         moveCursor(0, 0);
       }
@@ -1253,6 +1265,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         }
         curCsec = target;
         range.value = String(Math.round((target / s.csec) * 1000));
+        paintRangeFill(range);
         timeEl.textContent = fmt(target) + " / " + fmt(s.csec);
       }
       function tick(ts: number) {
@@ -1269,6 +1282,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         }
         curCsec = target;
         range.value = String(Math.round((target / s.csec) * 1000));
+        paintRangeFill(range);
         timeEl.textContent = fmt(target) + " / " + fmt(s.csec);
         if (target >= s.csec) { setPlaying(false); return; }
         rafId = requestAnimationFrame(tick);
@@ -1293,6 +1307,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       });
       rateBtn.addEventListener("click", () => {
         speedRange.value = "1";
+        paintRangeFill(speedRange);
         rateBtn.textContent = "1.00x";
       });
       range.addEventListener("input", () => {
@@ -1480,10 +1495,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       if (open) syncBvSlider();
     });
     on(gsettings, "click", (e: Event) => e.stopPropagation()); // 浮窗内点击不触发外点关闭
-    on($("gs_close"), "click", () => {
-      gsettings.classList.remove("open");
-      gearBtn.classList.remove("active");
-    });
     on(document, "click", (e: Event) => {
       if (!gsettings.classList.contains("open")) return;
       if (e.target === gearBtn || gsettings.contains(e.target as Node)) return;
@@ -1528,7 +1539,10 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     function clampCusMines() {
       const cap = cusVal(cusW) * cusVal(cusH) - 9;
       cusM.max = String(cap);
-      if (cusVal(cusM) > cap) cusM.value = String(cap);
+      if (cusVal(cusM) > cap) {
+        cusM.value = String(cap);
+        paintRangeFill(cusM); // 程序钳制雷数后同步填充比例
+      }
     }
     /* 应用节流（250ms）：连续拖动时每个节流窗口只重建一次盘面，窗口内只标记
        dirty，窗口结束若有新值立刻再应用一次（终值一定落定）；首次拖动立即生效。
@@ -1606,6 +1620,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         cusH.value = String(cusSpec.h);
         clampCusMines(); // 先按新宽高收缩雷数上限
         cusM.value = String(Math.min(cusSpec.m, parseInt(cusM.max, 10)));
+        [cusW, cusH, cusM].forEach(paintRangeFill); // 程序回填后同步填充比例
         syncCusVals();
       }
       cusDlg.classList.add("open");
@@ -1613,6 +1628,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       /* 比例滑杆回填当前倍率（v7）：与设置浮窗那张同源，开窗即显示实际值 */
       cusZoom.max = zoomRange.max;
       cusZoom.value = String(zoomCur);
+      paintRangeFill(cusZoom);
       cusZoomVal.textContent = zoomCur.toFixed(2) + "x";
       positionCusDialog(); // 须在 reset 之后：tab 由 a 变 span.current 字重变了，宽度要重算
     }
@@ -1977,10 +1993,12 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       gframe.style.zoom = String(v);
       zoomCur = v;
       zoomRange.value = String(v);
+      paintRangeFill(zoomRange);
       zoomVal.textContent = v.toFixed(2) + "x";
       /* 自定义弹窗内的比例滑杆同步（v7 张老师 19:07：比例并入自定义弹窗，
          免得两个浮窗来回切）——与设置浮窗那张是同一份状态的两个视图 */
       cusZoom.value = String(v);
+      paintRangeFill(cusZoom);
       cusZoomVal.textContent = v.toFixed(2) + "x";
       syncReportZoom(); // 结算面板同步缩放（显示中才生效）
     }
@@ -2068,11 +2086,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     on(zoomRange, "input", () => zoomDragInput(parseFloat(zoomRange.value)));
     on(zoomRange, "pointerup", zoomDragEnd);
     on(zoomRange, "change", zoomDragEnd);
-    on($("zoom_reset"), "click", () => {
-      zoomBeforeFs = null; zoomBeforeLs = null;
-      applyZoom(1);
-      syncPageFit(); positionCusDialog();
-    });
 
     /* ---- 3BV 范围双端点滑杆（2026-10-14 二期）----
        两条原生 range 叠放：轨道/填充条只负责视觉（CSS 变量 --lo/--hi 定位），
@@ -2083,18 +2096,18 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     const bvLo = $("bv_lo") as HTMLInputElement;
     const bvHi = $("bv_hi") as HTMLInputElement;
     const bvDual = $("bv_dual") as HTMLElement;
-    const bvHint = $("bv_range_hint");
+    const bvRow = bvDual.parentElement as HTMLElement; // .gs_bv 整行：title 承载级别统计区间提示
     const bvCur = $("bv_cur");
     const LV_NAMES: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
     function syncBvSlider() {
-      /* 自定义盘无统计区间：整个 3BV 区禁用（半透明 + 滑杆不可拖 + 提示文案） */
+      /* 自定义盘无统计区间：整个 3BV 区禁用（半透明 + 滑杆不可拖 + title 说明） */
       const cus = lv === "cus";
-      bvDual.parentElement!.classList.toggle("cus", cus);
-      [bvLo, bvHi, $("bv_reset")].forEach((el) => {
-        (el as HTMLInputElement).disabled = cus;
+      bvRow.classList.toggle("cus", cus);
+      [bvLo, bvHi].forEach((el) => {
+        el.disabled = cus;
       });
       if (cus) {
-        bvHint.textContent = "自定义盘面不支持 3BV 筛选";
+        bvRow.title = "自定义盘面不支持 3BV 筛选";
         bvCur.textContent = "—";
         return;
       }
@@ -2104,7 +2117,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       bvLo.value = String(s.lo); bvHi.value = String(s.hi);
       bvDual.style.setProperty("--lo", ((s.lo - r.min) / (r.max - r.min)) * 100 + "%");
       bvDual.style.setProperty("--hi", ((s.hi - r.min) / (r.max - r.min)) * 100 + "%");
-      bvHint.textContent = LV_NAMES[lv] + "统计区间 " + r.min + "–" + r.max;
+      bvRow.title = LV_NAMES[lv] + "统计区间 " + r.min + "–" + r.max;
       bvCur.textContent = s.lo + " – " + s.hi;
     }
     on(bvLo, "input", () => {
@@ -2120,13 +2133,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       let hi = Math.max(parseInt(bvHi.value, 10), bvSel[lv].lo + 10);
       hi = Math.max(r.min, Math.min(r.max, hi));
       bvSel[lv].hi = hi;
-      saveSettings();
-      syncBvSlider();
-    });
-    /* 双端点滑杆恢复初始范围（与统计区间对齐） */
-    on($("bv_reset"), "click", () => {
-      const r = bvRanges[lv as keyof BvRanges];
-      bvSel[lv] = { lo: r.min, hi: r.max };
       saveSettings();
       syncBvSlider();
     });
@@ -2299,10 +2305,10 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           </button>
         </div>
 
-        {/* 设置浮窗：齿轮点开；含 NF/无猜/问号开关、显示比例滑杆、3BV 范围双端点滑杆。
+        {/* 设置浮窗：齿轮点开（无头部栏/关闭按钮——外点、Esc、再点齿轮均可关）；
+            含 NF/无猜/问号开关、显示比例滑杆、3BV 范围双端点滑杆。
             全部状态入 localStorage（online_play_settings），比例仍走原 online_play_zoom 键 */}
         <div className="gsettings" id="gsettings">
-          <div className="gs_head">设置<button className="gs_close" id="gs_close" type="button" aria-label="关闭">✕</button></div>
           {/* 开关名 ≤4 字（2026-10-14 张老师定），完整解释放 hover 气泡（.tip） */}
           <div className="gs_row">
             <span className="gs_name">NF模式</span>
@@ -2329,25 +2335,18 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
             <span className="zlabel">显示比例</span>
             <input type="range" id="zoom_range" min="0.5" max="2.5" step="0.05" defaultValue="1" />
             <span className="zval" id="zoom_val">1.00x</span>
-            <button className="zreset" id="zoom_reset" type="button">重置</button>
           </div>
           <div className="gs_divider" />
+          {/* 3BV 范围：单行——标签 + 双端点滑杆 + 当前选中区间数字（2026-10-14 张老师定）。
+              级别统计区间提示收进整行 hover title（自定义盘时是"不支持筛选"说明） */}
           <div className="gs_bv">
-            <div className="gs_bv_label">
-              <span className="bname">3BV 范围</span>
-              <span className="brange" id="bv_range_hint">初级统计区间 2–51</span>
-              <span className="bcur" id="bv_cur">2 – 51</span>
-            </div>
+            <span className="bname">3BV 范围</span>
             <div className="dual" id="bv_dual">
               <div className="rail" /><div className="fill" />
               <input type="range" id="bv_lo" min="2" max="51" step="1" defaultValue="2" />
               <input type="range" id="bv_hi" min="2" max="51" step="1" defaultValue="51" />
             </div>
-            <div className="gs_bv_vals">
-              <span>下界</span>
-              <button className="bv_reset" id="bv_reset" type="button">恢复全范围</button>
-              <span>上界</span>
-            </div>
+            <span className="bcur" id="bv_cur">2 – 51</span>
           </div>
         </div>
 

@@ -5866,33 +5866,6 @@ button.msg_cancel:hover {
 #online_play .gsettings.open {
   display: block;
 }
-#online_play .gsettings .gs_head {
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  font-weight: bold;
-  color: #e8e8e0;
-  padding-bottom: 6px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid #656355;
-}
-#online_play .gsettings .gs_close {
-  margin-left: auto;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  background: none;
-  border: 0;
-  color: #939387;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 4px;
-}
-#online_play .gsettings .gs_close:hover {
-  color: #e8e8e0;
-  background: #5c5b4e;
-}
 #online_play .gsettings .gs_row {
   position: relative;
   display: flex;
@@ -6017,19 +5990,6 @@ button.msg_cancel:hover {
   min-width: 4.5ch;
   text-align: right;
 }
-#online_play .gs_zoom .zreset {
-  border: 1px solid #656355;
-  background: #272822;
-  color: #b1b1a4;
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-#online_play .gs_zoom .zreset:hover {
-  color: #e8e8e0;
-  border-color: #939387;
-}
 /* ===== 全站滑条自绘（2026-10-14 张老师定稿）=====
    填充 #8ac21b（legacy 按钮活跃绿，比 hover 亮绿压暗一档，大面积不刺眼）
    + 滑块 #a6e22e（站内 hover 活跃绿）+ 轨道底 #49483e。
@@ -6091,34 +6051,36 @@ button.msg_cancel:hover {
   background: #a6e22e;
   border: 0;
 }
-/* ---- 浮窗内 3BV 范围双端点滑杆（2026-10-14 二期）----
+/* ---- 浮窗内 3BV 范围双端点滑杆（2026-10-14 二期；同日三改：单行布局，
+   标签 + 滑杆 + 当前区间数字同行，级别统计区间提示收进整行 title）----
    两条原生 range 完全叠放（inset:0），轨道透明且 pointer-events:none、
    仅 thumb 可命中——上下界互不遮挡；轨道/填充条由 .rail/.fill 按
    CSS 变量 --lo/--hi 画出（JS 同步百分比） */
-#online_play .gs_bv_label {
+#online_play .gs_bv {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding-top: 4px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 4px;
 }
-#online_play .gs_bv_label .bname {
+#online_play .gs_bv .bname {
   font-size: 13px;
   color: #e8e8e0;
+  width: 60px; /* 与 .zlabel 同宽，两行标签左对齐 */
+  flex: 0 0 auto;
 }
-#online_play .gs_bv_label .brange {
-  font-size: 12px;
-  color: #939387;
-}
-#online_play .gs_bv_label .bcur {
-  margin-left: auto;
-  font-size: 13px;
+#online_play .gs_bv .bcur {
+  flex: 0 0 auto;
+  min-width: 6ch; /* "2 – 51" ↔ "—" 切换时滑条宽度不跳 */
+  text-align: right;
+  font: bold 13px/1 Arial, Helvetica, sans-serif;
   color: #fdc61d;
-  font-weight: bold;
 }
 #online_play .dual {
   position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
   height: 26px;
-  margin: 2px 1px 0;
+  margin: 0 1px;
 }
 #online_play .dual .rail {
   position: absolute;
@@ -6168,30 +6130,15 @@ button.msg_cancel:hover {
   border: 2px solid #a6e22e;
   cursor: grab;
 }
-#online_play .gs_bv_vals {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: #939387;
-  padding: 0 1px;
-}
-#online_play .gs_bv_vals .bv_reset {
-  border: 1px solid #656355;
-  background: #272822;
-  color: #b1b1a4;
-  border-radius: 4px;
-  padding: 1px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-#online_play .gs_bv_vals .bv_reset:hover {
-  color: #e8e8e0;
-  border-color: #939387;
-}
-/* 自定义盘时 3BV 区整体禁用（syncBvSlider 切 .cus）：半透明 + 不可点 */
+/* 自定义盘时 3BV 区整体禁用（syncBvSlider 切 .cus）：半透明；
+   滑杆不可点（行本身保留 pointer-events 以便 hover 显示 title 说明） */
 #online_play .gs_bv.cus {
   opacity: 0.45;
+}
+#online_play .gs_bv.cus .dual,
+#online_play .gs_bv.cus .dual input[type="range"],
+#online_play .gs_bv.cus .dual input[type="range"]::-webkit-slider-thumb,
+#online_play .gs_bv.cus .dual input[type="range"]::-moz-range-thumb {
   pointer-events: none;
 }
 /* ---- 自定义难度弹窗（2026-10-14 三期 v7，张老师 19:07 定）：无任何按钮，

@@ -12,6 +12,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { paintRangeFill } from "@/lib/paintRange";
 
 /** 取景框显示边长（CSS 像素） */
 const VIEW = 300;
@@ -71,6 +72,12 @@ export function AvatarCropper({ previewUrl, onCancel, onDone }: Props) {
   const [decodeFailed, setDecodeFailed] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const zoomRangeRef = useRef<HTMLInputElement>(null);
+
+  /* 滑条填充自绘（全站统一：填充 #8ac21b + 滑块 #a6e22e）：zoom 变化即同步 --pct */
+  useEffect(() => {
+    if (zoomRangeRef.current) paintRangeFill(zoomRangeRef.current);
+  }, [zoom]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -252,6 +259,7 @@ export function AvatarCropper({ previewUrl, onCancel, onDone }: Props) {
             <div className="avatar_crop_zoom">
               <span>缩放</span>
               <input
+                ref={zoomRangeRef}
                 type="range"
                 min={MIN_ZOOM}
                 max={MAX_ZOOM}
