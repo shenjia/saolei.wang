@@ -357,6 +357,18 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       /* 盲点=8 邻域内没有任何已揭示格（已揭示格必带数字；空格域的邻居早已被 flood 打开） */
       return !neighbors(i).some((a) => state[a] === 1);
     }
+    /* 必雷判定（2026-10-14 张老师定）：click 被某个已开数字 100% 锁死（该数字的
+       隐藏邻居数恰等于数字值且 click 是其中之一）→ 直接判负，不进任何重排路径，
+       盘面与 3BV 零变化。子集约束（如 1-2-1 模式的推理雷）不在此列——那些仍由
+       求解器兜底（重排无解同样判负）。 */
+    function isForcedMine(i: number): boolean {
+      for (const a of neighbors(i)) {
+        if (state[a] !== 1 || nums![a] === 0) continue;
+        const hid = neighbors(a).filter((c) => state[c] !== 1);
+        if (hid.length === nums![a]) return true; // 邻居数字锁死全部隐藏格
+      }
+      return false;
+    }
     /* 3BV 范围是否完整（=该级别统计区间原样）：完整时重排也无需校验（零成本）。
        自定义盘（cus）无统计区间，视为完整（跳过范围校验，重排全速） */
     function bvRangeFull(): boolean {
@@ -623,10 +635,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       if (over || state[i] === 1 || state[i] === 2) return;
       if (!started) { started = true; placeMines(i); startTimer(); }
       if (mines![i]) {
-        /* 盲点踩雷：优先重排成 opening（3×3 全非雷，点开即空域，如同开局）；
-           opening 无解再退化为仅救回本格；都无解才判负。
-           重排不弹任何提醒（2026-10-14 张老师定：笑脸/盘面状态已够） */
-        const saved = ng && ((isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false));
+        /* 必雷格（被已开数字 100% 锁死）：直接判负，绝不重排、盘面与 3BV 零变化
+           （2026-10-14 张老师定）。其余踩雷才走无猜救回。重排不弹任何提醒
+           （张老师定：笑脸/盘面状态已够） */
+        if (!ng || isForcedMine(i)) { lose(i); return; }
+        const saved = (isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false);
         if (!saved) { lose(i); return; }
       } else if (ng && nums![i] !== 0 && isBlind(i)) {
         tryNoGuess(i, true); // 安全盲点（数字格）：同样尽量换成 opening，盲点必开空
@@ -805,11 +818,16 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
          （globals.css：≥1280 视口 max-width 放到 min(85vw,1400px)），
          1280 视口下 960→1088px（约 +128px）。标准级别/窄盘恢复常规版式 */
       pageEl?.classList.toggle("cus_wide", lv === "cus" && W > 40);
-      /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式仅盘面尺寸
-         变化时刷新封顶（同盘面重开不动 zoom，杜绝重排跳动） */
+      /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式：
+         级别实际切换（beg/int/exp↔cus）→ 按模式分离记忆应用（三期 v3）；
+         同级别内规格变化（滑杆拖动）→ 保持当前倍率只重算封顶（拖杆跟手，
+         不因记忆切换跳变）；同盘面重开不动 zoom，杜绝重排跳动 */
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches) fitZoomForLandscape();
-      else if (gridChanged) applyZoom(zoomCur, false);
+      else if (gridChanged) {
+        if (lv !== prevLv) applyModeZoom();
+        else applyZoom(zoomCur, false);
+      }
     }
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
@@ -817,12 +835,35 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       if (!t) return;
       const to = t.getAttribute("data-lv")!;
       if (to === "cus") {
-        /* 自定义：不是直接切盘，先弹设置窗（已在自定义时也弹——可改规格再应用） */
-        openCusDialog();
+        /* 自定义（v3）：tab＝toggle 开窗（开→关，关→选定级别立即切盘并开窗）；
+           滑杆在窗内即改即生效。
+           ⚠️ 必须 stopPropagation：reset("cus") 会重建 level_tabs DOM（outerHTML），
+           本轮点击的原 tab 元素已脱离文档——冒泡到 document 的外点关闭判定里
+           contains(tab) 必为 false，刚开的窗会被立刻关掉（playwright 实证过） */
+        e.stopPropagation();
+        if (cusDlg.classList.contains("open")) closeCusDialog();
+        else openCusDialog();
         return;
       }
       if (to !== lv) reset(to);
     });
+    /* 缩放率按模式分离记忆的切换钩子（三期 v3 张老师定）：
+       进入自定义读 online_play_zoom_cus（无记忆用 1x——大盘默认原尺寸起步，
+       超版式由 normalMaxZoom 自动缩），返回标准级别读 online_play_zoom
+       （无记忆用 defaultZoom）。reset 内 applyZoom(false) 不写盘，
+       记忆只在用户手动拖滑杆/重置时更新 */
+    function applyModeZoom() {
+      try {
+        const raw = lv === "cus"
+          ? localStorage.getItem("online_play_zoom_cus")
+          : localStorage.getItem("online_play_zoom");
+        const saved = raw === null ? NaN : parseFloat(raw);
+        const base = saved > 0 ? saved : (lv === "cus" ? 1 : defaultZoom());
+        applyZoom(base, false);
+      } catch {
+        applyZoom(lv === "cus" ? 1 : defaultZoom(), false);
+      }
+    }
 
     /* ---- 右上两图标按钮（2026-10-14 二期）：齿轮＝设置浮窗开合；全屏＝切换 ---- */
     const gearBtn = $("btn_settings");
@@ -853,11 +894,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       }
     });
 
-    /* ---- 自定义难度弹窗（2026-10-14 三期 v2，张老师 17:48 简化定稿）----
-       无标题/无关闭/无取消——只有三个滑杆 + 一个「开始游戏」；外点/Esc 关窗不动盘。
-       宽/高滑杆 5–99；雷数滑杆 max 随宽×高动态收缩（≤格数-9，拖不到非法区，
-       滑杆交互天然免校验——到达的每个组合都合法）。
-       应用后规格写 localStorage（LS_KEY.cus），重开/回自定义 tab 都用记忆规格。 */
+    /* ---- 自定义难度弹窗（2026-10-14 三期 v3，张老师 17:59：滑杆即改即生效）----
+       无任何按钮——三个滑杆拖动立刻改变地图（rAF 合帧：拖动中的连续 input
+       只按最新值应用，99×99 重建也不卡手）；点「自定义」tab＝选定该级别，
+       立即按记忆规格切盘并开窗（窗开着再点 tab＝关窗 toggle）；外点/Esc 关窗。
+       规格随手写 localStorage（LS_KEY.cus），重开 tab 恢复记忆值。 */
     const cusDlg = $("cus_dialog");
     const cusW = $("cus_w") as HTMLInputElement;
     const cusH = $("cus_h") as HTMLInputElement;
@@ -880,6 +921,18 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       cusM.max = String(cap);
       if (cusVal(cusM) > cap) cusM.value = String(cap);
     }
+    /* 即时应用：rAF 合帧（同一帧内多次 input 只应用最后一次拖到的值） */
+    let cusPending = false;
+    function applyCusLive() {
+      if (cusPending) return;
+      cusPending = true;
+      requestAnimationFrame(() => {
+        cusPending = false;
+        cusSpec = { w: cusVal(cusW), h: cusVal(cusH), m: cusVal(cusM) };
+        saveSettings();
+        reset("cus");
+      });
+    }
     function openCusDialog() {
       cusW.value = String(cusSpec.w);
       cusH.value = String(cusSpec.h);
@@ -887,24 +940,18 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       cusM.value = String(Math.min(cusSpec.m, parseInt(cusM.max, 10)));
       syncCusVals();
       cusDlg.classList.add("open");
+      if (lv !== "cus") reset("cus"); // 点自定义＝选定级别立即切盘（同点初级/高级语义）
     }
     function closeCusDialog() { cusDlg.classList.remove("open"); }
-    function applyCus() {
-      cusSpec = { w: cusVal(cusW), h: cusVal(cusH), m: cusVal(cusM) };
-      saveSettings();
-      closeCusDialog();
-      reset("cus");
-    }
-    on(cusW, "input", () => { clampCusMines(); syncCusVals(); });
-    on(cusH, "input", () => { clampCusMines(); syncCusVals(); });
-    on(cusM, "input", syncCusVals);
-    on($("cus_ok"), "click", applyCus);
+    on(cusW, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
+    on(cusH, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
+    on(cusM, "input", () => { syncCusVals(); applyCusLive(); });
     on(cusDlg, "click", (e: Event) => e.stopPropagation()); // 窗内点击不冒泡到外点关闭
     on(document, "click", (e: Event) => {
       if (!cusDlg.classList.contains("open")) return;
       if (cusDlg.contains(e.target as Node)) return;
-      /* 点「自定义」tab 本身不关窗（tabs 自己的 click 里正要 openCusDialog，
-         冒泡到这里若关闭会抵消开窗——排除） */
+      /* 点「自定义」tab 本身不在这里关（tabs 自己的 click 做 toggle：
+         开→关在 tabs 处理器完成、关→开时这里须放行，冒泡到此处若关窗会抵消开窗） */
       const tab = (e.target as HTMLElement).closest('[data-lv="cus"]');
       if (tab && $("level_tabs").contains(tab)) return;
       closeCusDialog();
@@ -1143,7 +1190,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       zoomVal.textContent = v.toFixed(2) + "x";
       syncReportZoom(); // 结算面板同步缩放（显示中才生效）
       if (persist) {
-        try { localStorage.setItem("online_play_zoom", String(v)); } catch { /* 隐私模式 */ }
+        /* 缩放率按模式分离记忆（2026-10-14 三期 v3 张老师定）：自定义盘与标准级别
+           各记各的（大盘常需 <1x、标准盘常 >1x，互窜体验差）；旧单键迁移见 loadZoom */
+        try {
+          localStorage.setItem(lv === "cus" ? "online_play_zoom_cus" : "online_play_zoom", String(v));
+        } catch { /* 隐私模式 */ }
       }
     }
     /* 整页窄屏缩放系数（globals.css 阶梯断点 body #page{zoom:0.65..0.94}，≤605px 生效）：
@@ -1336,7 +1387,9 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     reset("beg");
     /* 比例：有 localStorage 记忆直接应用；首次进入（无记忆）用 defaultZoom()
        按高级盘算出的最大比例起步（张老师定）。默认值不写盘——只有玩家
-       手动拖滑杆/重置才记忆；全屏与横屏的自动拉满同样不入记忆 */
+       手动拖滑杆/重置才记忆；全屏与横屏的自动拉满同样不入记忆。
+       初始恒为标准级别（reset("beg")），只读标准键；cus 键在切自定义时读
+       （见 level_tabs 处理器），两模式各自独立记忆（三期 v3 张老师定） */
     try {
       const raw = localStorage.getItem("online_play_zoom");
       const saved = raw === null ? NaN : parseFloat(raw);
@@ -1433,8 +1486,8 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
           </div>
         </div>
 
-        {/* 自定义难度弹窗（三期 v2，张老师 17:48 定）：无标题无关闭无取消——
-            三个滑杆 + 一个「开始游戏」；雷数上限随宽×高动态收缩，滑杆到不了非法区 */}
+        {/* 自定义难度弹窗（三期 v3，张老师 17:59 定）：无任何按钮——
+            三滑杆即改即生效（rAF 合帧），拖动立刻改变地图；tab 点＝toggle 开窗 */}
         <div className="cus_dialog" id="cus_dialog">
           <div className="cus_row">
             <span className="cname">宽度</span>
@@ -1450,9 +1503,6 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
             <span className="cname">雷数</span>
             <input type="range" id="cus_m" min={1} max={291} step={1} defaultValue="40" />
             <span className="cval" id="cus_m_val">40</span>
-          </div>
-          <div className="cus_btns">
-            <button className="cus_ok" id="cus_ok" type="button">开始游戏</button>
           </div>
         </div>
       </div>
