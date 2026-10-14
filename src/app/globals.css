@@ -6352,6 +6352,21 @@ html.op-noscroll body,
 html:has(#online_play) body {
   overflow: hidden;
 }
+/* 练习页 footer 钉底（2026-10-15 张老师定「footer 最小高度应让它固定显示在屏幕
+   底部」）：锁滚后页面高＝视口，但内容（棋盘区）矮时 footer 上浮、下面留一段
+   空白——body 拉通 flex 列布局 + footer margin-top:auto 推到视口底缘。
+   只作用练习页（:has 限定），不影响站内其他页面的常规文档流 */
+html:has(#online_play) body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* body 有 padding-top:45px（给 fixed 站头让位）：content-box 下 min-height:100vh
+     会变成 100vh+45，footer 底被顶出视口 45px——border-box 让 100vh 含 padding */
+  box-sizing: border-box;
+}
+html:has(#online_play) #footer {
+  margin-top: auto;
+}
 /* 全屏开关：根容器全屏时补深色底（全屏默认背底为纯黑）、内容超高可滚 */
 #online_play > div:fullscreen {
   background: #272822;

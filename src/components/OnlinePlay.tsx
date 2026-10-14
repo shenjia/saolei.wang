@@ -2316,6 +2316,22 @@ export function OnlinePlay({
         greport.style.left = toLocal(gwR.left - gaR.left - 14) - rawW + "px";
         gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
         gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
+        /* 设后实测闭环（2026-10-15 张老师窗口截图报两面板底被视口截断）：上面的
+           cap 是「先量基准÷zoom」的推算，量纲/时序有漏网可能——设完 zoom 实量
+           rect，底部仍超视口就按高度比再压一次（高∝z 线性，一步收敛），压完重定位 */
+        const grNow = greport.getBoundingClientRect();
+        const grTop = grNow.top;
+        const grBtm = Math.max(grNow.bottom, gresult.getBoundingClientRect().bottom);
+        if (grBtm > window.innerHeight - 8 && grBtm - grTop > 1) {
+          const z2 = Math.max(0.3, z * ((window.innerHeight - 8 - grTop) / (grBtm - grTop)));
+          greport.style.zoom = String(z2);
+          gresult.style.zoom = String(z2);
+          const toLocal2 = (v: number) => v / pz / z2;
+          greport.style.top = toLocal2(gwR.top - gaR.top) + "px";
+          greport.style.left = toLocal2(gwR.left - gaR.left - 14) - rawW + "px";
+          gresult.style.top = toLocal2(gwR.top - gaR.top) + "px";
+          gresult.style.left = toLocal2(gwR.right - gaR.left + 14) + "px";
+        }
       } else if (gresult.classList.contains("show")) {
         /* 📌 数据面板关着时结算面板**独立**定位缩放（2026-10-15 张老师截图报的 bug）：
            此前整个函数被 greport.show 门控——数据面板一关（设置浮窗「显示统计」off），
@@ -2344,6 +2360,16 @@ export function OnlinePlay({
         const toLocal = (v: number) => v / pz / z;
         gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
         gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
+        /* 设后实测闭环（同上分支）：底部仍超视口就按高度比再压一次 zoom */
+        const grNow = gresult.getBoundingClientRect();
+        if (grNow.bottom > window.innerHeight - 8 && grNow.height > 1) {
+          const z2 = Math.max(0.3,
+            z * ((window.innerHeight - 8 - grNow.top) / grNow.height));
+          gresult.style.zoom = String(z2);
+          const toLocal2 = (v: number) => v / pz / z2;
+          gresult.style.top = toLocal2(gwR.top - gaR.top) + "px";
+          gresult.style.left = toLocal2(gwR.right - gaR.left + 14) + "px";
+        }
       }
     }
     /* 全屏自动拉满——**只服务移动端**（2026-10-15 张老师定：PC 端进全屏保持比例不变，
