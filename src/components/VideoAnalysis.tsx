@@ -15,20 +15,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
-
-// 等级配色（与 RadarChart.tsx 同源，勿单独维护）
-const GRADE_COLORS: Record<string, string> = {
-  SSS: "#E6DB74",
-  SS: "#E6DB74",
-  S: "#E6DB74",
-  A: "#ff0080",
-  B: "#df00a6",
-  C: "#bf00cc",
-  D: "#a000e5",
-  E: "#8000ff",
-  F: "#6600cc",
-};
-const UNKNOWN_COLOR = "#636359";
+// 等级配色与「实力」雷达（RadarChart.tsx）同源：统一在 lib/videoscore.ts 维护，勿单独改
+import { gradeColor } from "@/lib/videoscore";
 
 const SIZE = 222;
 const CENTER = SIZE / 2;
@@ -43,10 +31,6 @@ const LABEL_GRADE_FS = 15;
 const LABEL_NAME_FS = 10;
 // 轴名基线相对等级基线的下移量（≈ 等级字号，视觉行距与旧版 13/13 一致）
 const LABEL_NAME_DY = 15;
-
-function gradeColor(grade: string): string {
-  return GRADE_COLORS[grade.replace(/[+-]$/, "")] ?? UNKNOWN_COLOR;
-}
 
 // 坐标保留两位：Node(SSR) 与 Chrome(水合) 的三角函数末位可能不同，不一致会触发 hydration mismatch
 const f = (v: number) => Math.round(v * 100) / 100;
