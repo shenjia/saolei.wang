@@ -1981,6 +1981,18 @@ body #page.main {
   }
 }
 
+/* ---------- 在线玩自定义大盘扩版（2026-10-14 三期 v2 张老师 17:48 定：
+   宽/高可到 99，必要时扩大主体版图） ----------
+   .main 版式 max 960 对 99 宽盘太小——游戏区按内容自动扩宽：1280 上放到
+   85%（与顶栏 80% 的错位可接受——是游戏盘而非版式），1600+ 视口放到
+   1400 封顶；只在「游戏盒加 .cus_wide 时」生效（切回标准级别恢复 960 版式），
+   不影响排行/BBS 等其他 .main 页面。 */
+@media (min-width: 1280px) {
+  body #page.main.cus_wide {
+    max-width: min(85vw, 1400px);
+  }
+}
+
 /* ---------- 大元帅改金黄色（2026-09-23 张老师要求：跟元帅一样） ----------
    2013 原版 .title em.grand 为深红 #c60d46；现改为元帅同款 #e6db74。
    legacy-2013.css 后加载，选择器加 body 前缀提权。 */
@@ -5852,21 +5864,21 @@ button.msg_cancel:hover {
   opacity: 0.45;
   pointer-events: none;
 }
-/* ---- 自定义难度弹窗（2026-10-14 三期）：锚在标题行下缘的 popover（与设置浮窗同构，
-   左对齐——「自定义」tab 在行左侧；不用 fixed 模态：#page 有页级 zoom 的祖先下
-   fixed 定位会随缩放失真，popover 无此问题） ---- */
+/* ---- 自定义难度弹窗（2026-10-14 三期 v2，张老师 17:48 简化）：无标题无关闭无取消，
+   三滑杆 + 「开始游戏」；锚在标题行下缘的 popover（与设置浮窗同构，左对齐——「自定义」tab 在行左侧；
+   不用 fixed 模态：#page 有页级 zoom 的祖先下 fixed 定位会随缩放失真，popover 无此问题） ---- */
 #online_play .cus_dialog {
   display: none;
   position: absolute;
   top: calc(100% + 10px);
   left: 0;
-  width: 300px;
+  width: 320px;
   max-width: calc(100vw - 32px);
   background: #49483e;
   border: 1px solid #656355;
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
-  padding: 12px 16px 16px;
+  padding: 12px 16px 14px;
   z-index: 40;
   text-align: left;
   text-shadow: none;
@@ -5878,52 +5890,32 @@ button.msg_cancel:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 0 0;
+  padding: 6px 0;
 }
-#online_play .cus_dialog .cus_row label {
+#online_play .cus_dialog .cus_row .cname {
   font-size: 13px;
   color: #e8e8e0;
-  width: 92px;
+  width: 34px;
   flex: 0 0 auto;
 }
-#online_play .cus_dialog input[type="number"] {
-  width: 110px;
-  background: #272822;
-  border: 1px solid #656355;
-  border-radius: 4px;
-  color: #e8e8e0;
-  font: 14px/20px Arial, Helvetica, sans-serif;
-  padding: 5px 8px;
-  outline: 0;
+#online_play .cus_dialog .cus_row input[type="range"] {
+  flex: 1 1 auto;
+  accent-color: #1890ff;
+  cursor: pointer;
+  height: 18px;
+  margin: 0;
 }
-#online_play .cus_dialog input[type="number"]:focus {
-  border-color: #1890ff;
-}
-#online_play .cus_dialog .cus_err {
-  min-height: 20px;
-  font-size: 12px;
-  line-height: 20px;
-  color: #ff8a7a;
-  padding-top: 4px;
+#online_play .cus_dialog .cus_row .cval {
+  font: 13px/1 Arial, Helvetica, sans-serif;
+  color: #fdc61d;
+  min-width: 3ch;
+  text-align: right;
+  flex: 0 0 auto;
 }
 #online_play .cus_dialog .cus_btns {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 2px;
-}
-#online_play .cus_dialog .cus_cancel {
-  border: 1px solid #656355;
-  background: #272822;
-  color: #b1b1a4;
-  border-radius: 4px;
-  padding: 5px 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-#online_play .cus_dialog .cus_cancel:hover {
-  color: #e8e8e0;
-  border-color: #939387;
+  margin-top: 6px;
 }
 #online_play .cus_dialog .cus_ok {
   border: 1px solid #fdc61d;

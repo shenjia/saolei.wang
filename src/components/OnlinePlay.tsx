@@ -16,10 +16,10 @@ export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number 
 /* localStorage 设置键（2026-10-14 二期：全部设置入 localStorage 记住） */
 const LS_KEY = "online_play_settings";
 
-/* 自定义规格上限（三期）：格子太多 flood 展开与败局重绘会卡，50×50 封顶（娱乐局够用）。
+/* 自定义规格上限（三期）：99 封顶（2026-10-14 17:48 张老师定）。
    ⚠️ 必须放模块顶层——JSX 渲染作用域够不着 useEffect 闭包内的常量
    （2026-10-14 别线会话曾放闭包内导致 CUS_MIN is not defined 整页崩溃） */
-const CUS_MIN = 5, CUS_MAX = 50;
+const CUS_MIN = 5, CUS_MAX = 99;
 
 export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -40,7 +40,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     ) => el.addEventListener(type, fn as EventListener, { ...opts, signal });
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
-       cus＝自定义盘（三期）：规格来自设置弹窗，范围宽/高 5–50、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
+       cus＝自定义盘（三期）：规格来自弹窗滑杆，宽/高 5–99、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
     const LEVELS: Record<string, { x: number; y: number; m: number }> = {
       beg: { x: 8, y: 8, m: 10 },
       int: { x: 16, y: 16, m: 40 },
@@ -411,18 +411,14 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       compute3BV();
       return true;
     }
-    /* 无猜重排带随机性（后方雷随机撒 + dfs 取解顺序随机）：出范围时原状回滚再试。
-       mines/nums 是 tryNoGuess 的输入（解约束要用数字），先备份后恢复即可；
-       bvRegions/bvSingles/bvIslands/board3bv 由 compute3BV 随 nums 重算，同步回滚 */
+    /* 无猜重排（2026-10-14 三修，张老师报：重排后界面数字变化 + 触发无猜明显卡顿）：
+       铁律＝重排绝不允许改变任何已显示数字（verifyConsistency 在每个接受点终检，
+       不满足即回滚不生效）；3BV 范围是软约束（尽力满足，冲突时让位给数字一致性）。
+       性能预算＝平移 ≤8 + 重排 ≤4 + 降级平移 ≤8 + 终局重排 1（此前 50+50+
+       regenFallback(120×300 重掷) 是卡顿主源，且 regenFallback 的数字校验
+       是恒真式（比较的是换过的 nums），曾放行换数字的盘——已整体删除）。 */
     function tryNoGuess(click: number, makeOpening: boolean): boolean {
       const n = W * H;
-      /* 3BV 范围收窄时（2026-10-14 修复，防「连锁漂移」）：
-         ① 极小平移优先——只挪 click 3×3 的雷到同签名空位（已开数字零变化，
-            3BV 漂移 ≤2，原盘在范围内则新盘几乎必在）；
-         ② 平移不适用再整盘重排（锚定 origMines 取解，不锚当前盘——当前盘可能
-            已被历次重排漂移过，越锚越偏；origMines 恒满足已开数字约束）；
-         ③ 全失败时重掷兜底；最后才「最小漂移接受」：出范围时宁可不换 opening。
-         接受纪律：前 30 次要求 [lo+2, hi-2]（留余量防贴边），后 20 次放宽。 */
       const sel = lv === "cus" ? { lo: 0, hi: 1e9 } : bvSel[lv];
       const checkBv = !bvRangeFull();
       const hasMargin = sel.lo + 2 <= sel.hi - 2;
@@ -431,85 +427,68 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         const hi = strict && hasMargin ? sel.hi - 2 : sel.hi;
         return board3bv >= lo && board3bv <= hi;
       };
-      if (checkBv) {
-        const bakMines = mines ? mines.slice() : null;
-        const bakNums = nums ? nums.slice() : null;
-        const bakBvR = bvRegions, bakBvS = bvSingles, bakBvI = bvIslands, bakBv = board3bv;
-        let applicable = true;
-        for (let t = 0; t < 50; t++) {
-          const r = minimalSave(click, makeOpening);
-          if (r === null) { applicable = false; break; }
-          if (bvOk(t < 30)) return true;
-          mines = bakMines!; nums = bakNums!;
-          bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+      /* 数字一致性终检：每个已开格的雷邻数必须仍等于备份值（玩家所见） */
+      function verifyConsistency(oldNums: Uint8Array): boolean {
+        for (let i = 0; i < n; i++) {
+          if (state[i] !== 1) continue;
+          let cnt = 0;
+          for (const a of neighbors(i)) if (mines![a]) cnt++;
+          if (cnt !== oldNums[i]) return false;
         }
-        mines = bakMines!; nums = bakNums!;
-        bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
-        /* ② 整盘重排（锚原盘） */
-        let rearranged = false;
-        for (let t = 0; t < 50; t++) {
-          const ok = noGuessOnce(click, makeOpening, n);
-          if (!ok) break; // 无解：重排路径终结
-          if (bvOk(t < 30)) { rearranged = true; break; }
-          mines = bakMines!; nums = bakNums!;
-          bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+        return true;
+      }
+      /* 完整范围（含 cus 自定义盘）：单次重排 + 终检保险（DFS 锚线索约束，
+         理论上恒一致；终检是防御深度——失败即回滚按未救处理） */
+      if (!checkBv) {
+        const bakM = mines ? mines.slice() : null;
+        const bakN = nums ? nums.slice() : null;
+        const bakR = bvRegions, bakS = bvSingles, bakI = bvIslands, bakB = board3bv;
+        const ok = noGuessOnce(click, makeOpening, n);
+        if (ok && bakN && verifyConsistency(bakN)) return true;
+        if (ok) {
+          mines = bakM!; nums = bakN!;
+          bvRegions = bakR; bvSingles = bakS; bvIslands = bakI; board3bv = bakB;
         }
-        if (rearranged) return true;
-        /* ③ 重掷兜底 */
-        mines = bakMines!; nums = bakNums!;
-        bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
-        if (regenFallback(click, bakMines!)) return true;
-        /* ④ 最后兜底：退化为「仅救本格」的平移（约束最弱、漂移最小）。
-           若 click 本来无雷（安全盲点换空域场景）则直接放弃转换，原盘照常开数字格——
-           无猜承诺不受影响（没踩雷），只是这格不开空域。 */
-        if (!bakMines![click]) return false; // 安全场景：不换，直接按原盘开
-        for (let t = 0; t < 30; t++) {
-          const r = minimalSave(click, false);
-          if (r === null) break;
-          if (bvOk(false)) return true;
-          mines = bakMines!; nums = bakNums!;
-          bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
-        }
-        /* 平移也无解（签名全无）：结构化回退——锚原盘重排仅救本格（不再追求范围，
-           漂移通常最小；仍无解则如实判负）。 */
-        const finalOk = noGuessOnce(click, false, n);
-        if (finalOk) return true; // 接受（救回优先；范围极端冲突的残余场景）
-        mines = bakMines!; nums = bakNums!;
-        bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
         return false;
       }
-      /* 完整范围：原语义整盘重排 */
-      return noGuessOnce(click, makeOpening, n);
-    }
-    /* 重掷兜底：带范围约束重新布雷，要求①3BV 在范围内②所有已开格数字与原盘一致
-       ③click 及 opening 邻域无雷。重新随机布雷天然无相关性，数十次内可命中
-       （初级 64 格 10 雷概率空间足够；已开格多时成功率下降，与重排路径互补）。 */
-    function regenFallback(click: number, oldMines: Uint8Array): boolean {
-      const opened: number[] = [];
-      for (let i = 0; i < state.length; i++) if (state[i] === 1) opened.push(i);
-      for (let t = 0; t < 120; t++) {
-        placeMines(click); // 带范围约束 + 3×3 保护（placeMinesOnce 内含首击保护）
-        /* 校验：已开格数字不变 + click 无雷（placeMines 已保护 click 3×3，天然满足） */
-        let ok = true;
-        for (const c of opened) {
-          if (mines![c]) { ok = false; break; }
-          let cnt = 0;
-          for (const a of neighbors(c)) if (mines![a]) cnt++;
-          if (cnt !== nums![c]) { ok = false; break; }
-        }
-        if (ok) return true;
-        /* 未命中：恢复原盘再掷 */
-        mines = oldMines.slice();
-        const nn = new Uint8Array(W * H);
-        for (let c = 0; c < nn.length; c++) {
-          if (mines[c]) continue;
-          let cnt = 0;
-          for (const a of neighbors(c)) if (mines[a]) cnt++;
-          nn[c] = cnt;
-        }
-        nums = nn;
-        compute3BV();
+      /* 范围收窄：分层降级，每层都过终检 */
+      const bakMines = mines ? mines.slice() : null;
+      const bakNums = nums ? nums.slice() : null;
+      const bakBvR = bvRegions, bakBvS = bvSingles, bakBvI = bvIslands, bakBv = board3bv;
+      const restore = () => {
+        mines = bakMines!; nums = bakNums!;
+        bvRegions = bakBvR; bvSingles = bakBvS; bvIslands = bakBvI; board3bv = bakBv;
+      };
+      /* ① 极小平移：同签名抵消 → 数字零变化，3BV 漂移小；先严后宽 */
+      for (let t = 0; t < 8; t++) {
+        const r = minimalSave(click, makeOpening);
+        if (r === null) break; // 无同签名空位，平移不适用
+        if (bvOk(t < 5) && verifyConsistency(bakNums!)) return true;
+        restore();
       }
+      restore();
+      /* ② 整盘重排（锚开局原盘）：DFS 锚线索约束 → 数字一致 */
+      for (let t = 0; t < 4; t++) {
+        const ok = noGuessOnce(click, makeOpening, n);
+        if (!ok) break; // 无解（该格被线索锁死/超时）：重排路径终结
+        if (bvOk(t < 2) && verifyConsistency(bakNums!)) return true;
+        restore();
+      }
+      restore();
+      /* ③ 降级「仅救本格」平移（约束最弱）。安全盲点（click 本无雷）到此为止：
+         放弃换空域、原盘照常开数字格（没踩雷，无猜承诺不受影响）——省掉重排开销 */
+      if (!bakMines![click]) return false;
+      for (let t = 0; t < 8; t++) {
+        const r = minimalSave(click, false);
+        if (r === null) break;
+        if (verifyConsistency(bakNums!)) return true; // 范围已尽力，数字一致即接受
+        restore();
+      }
+      restore();
+      /* ④ 终局：仅救本格重排一次（数字一致即接受，范围让位） */
+      const finalOk = noGuessOnce(click, false, n);
+      if (finalOk && verifyConsistency(bakNums!)) return true;
+      restore();
       return false;
     }
     function noGuessOnce(click: number, makeOpening: boolean, n: number): boolean {
@@ -574,7 +553,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       }
       function dfs(t: number): boolean {
         if (t === order.length) return backFeasible();
-        if (++nodes > 1000000) return false;
+        if (++nodes > 200000) return false; // 中高级盘超时兜底（原 100 万卡顿主源之一）
         const k = order[t];
         const a = origVal[k], b = 1 - a;
         const vals = Math.random() < 0.85 ? [a, b] : [b, a];
@@ -822,6 +801,10 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       flagBtn.classList.toggle("hidden", nf);
       /* 级别切换后浮窗 3BV 滑杆范围联动（浮窗开着时立即刷新） */
       syncBvSlider();
+      /* 自定义宽盘扩版（张老师 17:48）：宽 >40 切盘时给 #page.main 加 .cus_wide
+         （globals.css：≥1280 视口 max-width 放到 min(85vw,1400px)），
+         1280 视口下 960→1088px（约 +128px）。标准级别/窄盘恢复常规版式 */
+      pageEl?.classList.toggle("cus_wide", lv === "cus" && W > 40);
       /* 全屏/横屏中切换级别或重开后，按新盘面尺寸重新拉满；普通模式仅盘面尺寸
          变化时刷新封顶（同盘面重开不动 zoom，杜绝重排跳动） */
       if (document.fullscreenElement === root) fitZoomForFullscreen();
@@ -870,43 +853,53 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       }
     });
 
-    /* ---- 自定义难度弹窗（2026-10-14 三期）：点「自定义」tab 弹出，设置宽/高/雷数 ----
-       确认才应用（校验失败行内提示原因，不关窗）；取消/外点/Esc 关窗不动盘。
+    /* ---- 自定义难度弹窗（2026-10-14 三期 v2，张老师 17:48 简化定稿）----
+       无标题/无关闭/无取消——只有三个滑杆 + 一个「开始游戏」；外点/Esc 关窗不动盘。
+       宽/高滑杆 5–99；雷数滑杆 max 随宽×高动态收缩（≤格数-9，拖不到非法区，
+       滑杆交互天然免校验——到达的每个组合都合法）。
        应用后规格写 localStorage（LS_KEY.cus），重开/回自定义 tab 都用记忆规格。 */
     const cusDlg = $("cus_dialog");
     const cusW = $("cus_w") as HTMLInputElement;
     const cusH = $("cus_h") as HTMLInputElement;
     const cusM = $("cus_m") as HTMLInputElement;
-    const cusErr = $("cus_err");
+    const cusWv = $("cus_w_val");
+    const cusHv = $("cus_h_val");
+    const cusMv = $("cus_m_val");
+    /* 读滑杆当前值（滑杆 min/max 恒合法，parseInt 必成功；防御 NaN 兜底） */
+    const cusVal = (el: HTMLInputElement) => {
+      const v = parseInt(el.value, 10);
+      return Number.isFinite(v) ? v : parseInt(el.min || "5", 10);
+    };
+    function syncCusVals() {
+      cusWv.textContent = String(cusVal(cusW));
+      cusHv.textContent = String(cusVal(cusH));
+      cusMv.textContent = String(cusVal(cusM));
+    }
+    function clampCusMines() {
+      const cap = cusVal(cusW) * cusVal(cusH) - 9;
+      cusM.max = String(cap);
+      if (cusVal(cusM) > cap) cusM.value = String(cap);
+    }
     function openCusDialog() {
       cusW.value = String(cusSpec.w);
       cusH.value = String(cusSpec.h);
-      cusM.value = String(cusSpec.m);
-      cusErr.textContent = "";
+      clampCusMines(); // 先按新宽高收缩雷数上限
+      cusM.value = String(Math.min(cusSpec.m, parseInt(cusM.max, 10)));
+      syncCusVals();
       cusDlg.classList.add("open");
-      cusW.focus();
-      cusW.select();
     }
     function closeCusDialog() { cusDlg.classList.remove("open"); }
     function applyCus() {
-      const w = parseInt(cusW.value.trim(), 10);
-      const h = parseInt(cusH.value.trim(), 10);
-      const m = parseInt(cusM.value.trim(), 10);
-      const err = cusError(w, h, m);
-      if (err) { cusErr.textContent = err; return; }
-      cusSpec = { w, h, m };
+      cusSpec = { w: cusVal(cusW), h: cusVal(cusH), m: cusVal(cusM) };
       saveSettings();
       closeCusDialog();
       reset("cus");
     }
+    on(cusW, "input", () => { clampCusMines(); syncCusVals(); });
+    on(cusH, "input", () => { clampCusMines(); syncCusVals(); });
+    on(cusM, "input", syncCusVals);
     on($("cus_ok"), "click", applyCus);
-    on($("cus_cancel"), "click", closeCusDialog);
-    on($("cus_close"), "click", closeCusDialog);
     on(cusDlg, "click", (e: Event) => e.stopPropagation()); // 窗内点击不冒泡到外点关闭
-    on(cusDlg, "keydown", (e: KeyboardEvent) => {
-      if (e.key === "Enter") { e.preventDefault(); applyCus(); }
-      if (e.key === "Escape") { e.preventDefault(); closeCusDialog(); }
-    });
     on(document, "click", (e: Event) => {
       if (!cusDlg.classList.contains("open")) return;
       if (cusDlg.contains(e.target as Node)) return;
@@ -919,9 +912,6 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     on(document, "keydown", (e: KeyboardEvent) => {
       if (e.key === "Escape" && cusDlg.classList.contains("open")) closeCusDialog();
     });
-    /* 输入时清除错误提示（改了就重算，应用时再校验） */
-    [cusW, cusH, cusM].forEach((el) =>
-      on(el, "input", () => { if (cusErr.textContent) cusErr.textContent = ""; }));
 
     /* ---- 设置浮窗内开关：NF / 无猜 切换即重开一局；问号只改右键循环 ---- */
     const swNf = $("sw_nf") as HTMLInputElement;
@@ -1116,8 +1106,11 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
       const gfR = gframe.getBoundingClientRect();
       const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
       if (gfR.width <= 0 || gaR.width <= 0) return 2.5;
-      /* 下限 0.5（=滑杆 min）：窄窗连 1x 都放不下时按容器宽自动缩，保证不溢出 */
-      let cap = Math.max(0.5, Math.min(2.5, (zoomCur * (gaR.width - 16)) / gfR.width)); // 左右各留 8px
+      /* 下限 0.5（=滑杆 min）：窄窗连 1x 都放不下时按容器宽自动缩，保证不溢出。
+         自定义大盘（cus）额外放宽到 0.3——99 宽盘即使扩版（.cus_wide）后
+         仍可能超容器，需要更小的自动缩下限才能完整可见 */
+      const zMin = lv === "cus" ? 0.3 : 0.5;
+      let cap = Math.max(zMin, Math.min(2.5, (zoomCur * (gaR.width - 16)) / gfR.width)); // 左右各留 8px
       if (lv === "cus") {
         /* 高度方向：gfR.height 是渲染高（含 zoomCur×pz），约束
            base_h × zoom × pz ≤ 可用高（视口像素）→ hCap = zoomCur×可用高/gfR.height。
@@ -1125,7 +1118,7 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
         const availH = window.innerHeight - gaR.top - 12;
         if (gfR.height > 0 && availH > 0) {
           const hCap = (zoomCur * availH) / gfR.height;
-          cap = Math.max(0.5, Math.min(cap, hCap));
+          cap = Math.max(zMin, Math.min(cap, hCap));
         }
       }
       return cap;
@@ -1139,7 +1132,10 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
     }
     function applyZoom(v: number, persist = true, max?: number) {
       const cap = max ?? normalMaxZoom();
-      v = Math.max(0.5, Math.min(cap, v));
+      /* 大盘自动缩可低于滑杆 min（0.5）：cus 盘封顶 <0.5 时直接用封顶值
+         （滑杆拖不到但自动适配到位——99 宽盘在 960 版式下需 ~0.55x 以下） */
+      const floor = lv === "cus" ? Math.min(0.5, cap) : 0.5;
+      v = Math.max(floor, Math.min(cap, v));
       zoomRange.max = String(cap); // 滑杆行程同步封顶，拖杆手感与实际一致
       gframe.style.zoom = String(v);
       zoomCur = v;
@@ -1437,25 +1433,25 @@ export function OnlinePlay({ bvRanges }: { bvRanges: BvRanges }) {
           </div>
         </div>
 
-        {/* 自定义难度弹窗（2026-10-14 三期）：点「自定义」tab 弹出；宽/高/雷数三项 + 行内错误提示。
-            确认（或 Enter）应用并开局，取消/Esc/外点关闭。锚在标题行下缘（与设置浮窗同构） */}
+        {/* 自定义难度弹窗（三期 v2，张老师 17:48 定）：无标题无关闭无取消——
+            三个滑杆 + 一个「开始游戏」；雷数上限随宽×高动态收缩，滑杆到不了非法区 */}
         <div className="cus_dialog" id="cus_dialog">
-          <div className="gs_head">自定义盘面<button className="gs_close" id="cus_close" type="button" aria-label="关闭">✕</button></div>
           <div className="cus_row">
-            <label htmlFor="cus_w">宽度（格）</label>
-            <input type="number" id="cus_w" min={CUS_MIN} max={CUS_MAX} step={1} inputMode="numeric" defaultValue="20" />
+            <span className="cname">宽度</span>
+            <input type="range" id="cus_w" min={CUS_MIN} max={CUS_MAX} step={1} defaultValue="20" />
+            <span className="cval" id="cus_w_val">20</span>
           </div>
           <div className="cus_row">
-            <label htmlFor="cus_h">高度（格）</label>
-            <input type="number" id="cus_h" min={CUS_MIN} max={CUS_MAX} step={1} inputMode="numeric" defaultValue="15" />
+            <span className="cname">高度</span>
+            <input type="range" id="cus_h" min={CUS_MIN} max={CUS_MAX} step={1} defaultValue="15" />
+            <span className="cval" id="cus_h_val">15</span>
           </div>
           <div className="cus_row">
-            <label htmlFor="cus_m">雷数</label>
-            <input type="number" id="cus_m" min={1} step={1} inputMode="numeric" defaultValue="40" />
+            <span className="cname">雷数</span>
+            <input type="range" id="cus_m" min={1} max={291} step={1} defaultValue="40" />
+            <span className="cval" id="cus_m_val">40</span>
           </div>
-          <div className="cus_err" id="cus_err" />
           <div className="cus_btns">
-            <button className="cus_cancel" id="cus_cancel" type="button">取消</button>
             <button className="cus_ok" id="cus_ok" type="button">开始游戏</button>
           </div>
         </div>
