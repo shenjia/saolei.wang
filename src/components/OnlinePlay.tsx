@@ -2250,9 +2250,11 @@ export function OnlinePlay({
         if (rawW < 1 || rawH < 1) return;
         const availW = gwR.left - 12 - 14; // 视口左缘 12px + 贴边间隙 14px
         const availH = window.innerHeight - gwR.top - 12;
-        const cap = Math.max(0.5, Math.min(2.5,
+        /* 下限 0.3（2026-10-15 张老师定「面板尺寸自适应，无论如何不出滚动条」）：
+           空间极小时允许面板缩得比游戏更小，宁可小也不越界 */
+        const cap = Math.max(0.3, Math.min(2.5,
           Math.min(availW / (rawW * pz), availH / (rawH * pz))));
-        const z = Math.max(0.5, Math.min(zoomCur, cap));
+        const z = Math.max(0.3, Math.min(zoomCur, cap));
         greport.style.zoom = String(z);
         gresult.style.zoom = String(z);
         /* 定位：面板 zoom 会缩放 left/top 偏移 → 先除回；game_area 局部坐标 =
@@ -2275,9 +2277,9 @@ export function OnlinePlay({
         if (rawW < 1 || rawH < 1) return; // display:none 中量不出尺寸（换宿主/收起瞬间）
         const availW = window.innerWidth - gwR.right - 12 - 14; // 视口右缘 12px + 间隙 14px
         const availH = window.innerHeight - gwR.top - 12;
-        const cap = Math.max(0.5, Math.min(2.5,
+        const cap = Math.max(0.3, Math.min(2.5,
           Math.min(availW / (rawW * pz), availH / (rawH * pz))));
-        const z = Math.max(0.5, Math.min(zoomCur, cap));
+        const z = Math.max(0.3, Math.min(zoomCur, cap));
         gresult.style.zoom = String(z);
         const toLocal = (v: number) => v / pz / z;
         gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
@@ -2371,6 +2373,24 @@ export function OnlinePlay({
        localStorage——免得连续滚动的每一格都写一次盘 */
     let wheelAcc = 0;
     let wheelTimer: number | null = null;
+    /* 当前「流内容溢出量」＝html/body/全屏宿主三者的 scrollHeight−clientHeight 取大。
+       ⚠️ 本页 body 是固定高（=视口）+overflow:hidden，棋盘放大的超高**留在 body 内部**
+       被裁剪，不传导到 documentElement（1280×320 实测 de.scrollHeight 恒=320、
+       body.scrollHeight 391）——所以 html、body 必须都量，只量 html 永远得 0。
+       ⚠️ documentElement 上没有 .body 属性（body 在 document 上），写 de.body 恒 undefined。
+       ⚠️ 文档基线也可能本来就有溢出，所以不能判「>0」，要判**本次放大是否让溢出
+       变大**（见 onWheelZoom 里的差值判定） */
+    function flowOverflowPx() {
+      const de = document.documentElement;
+      let ov = Math.max(
+        de.scrollHeight - de.clientHeight,
+        document.body ? document.body.scrollHeight - document.body.clientHeight : 0,
+      );
+      const fsHost = document.fullscreenElement;
+      if (fsHost instanceof HTMLElement)
+        ov = Math.max(ov, fsHost.scrollHeight - fsHost.clientHeight);
+      return ov;
+    }
     function onWheelZoom(e: WheelEvent) {
       e.preventDefault();
       /* deltaMode 三态归一化到像素：0=像素（Chrome/Safari）、1=行（Firefox 常报行，
@@ -2384,10 +2404,20 @@ export function OnlinePlay({
       } else {
         wheelAcc -= steps * WHEEL_STEP_PX;
       }
+      const prevZ = zoomCur;
+      const baseOv = flowOverflowPx();
       zoomBeforeFs = null; // 手动调过比例 → 退出全屏/横屏不再自动恢复（同滑杆）
       zoomBeforeLs = null;
       applyZoom(zoomCur - steps * WHEEL_STEP_Z, false); // 上滑（deltaY<0）→ 放大
       syncPageFit(); // 自定义盘的页宽跟随（标准级别内部直接清 inline）
+      /* 放大步若让内容超高（出现滚动条/内容被裁）→ 回滚本步放大（2026-10-15
+         张老师定「无论如何不应该让页面出现滚动条」）。只在放大方向回滚（缩小
+         不会产生溢出）；容差 2px 吸收页宽联动时的亚像素抖动。回滚后 zoomCur /
+         zoomWant 均已由 applyZoom 复原，320ms 后 zoomDragEnd 落盘的是回滚值 */
+      if (steps < 0 && flowOverflowPx() > baseOv + 2) {
+        applyZoom(prevZ, false);
+        syncPageFit();
+      }
       if (wheelTimer !== null) clearTimeout(wheelTimer);
       wheelTimer = window.setTimeout(() => { wheelTimer = null; zoomDragEnd(); }, 320);
     }

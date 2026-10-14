@@ -6409,23 +6409,26 @@ html:has(#online_play) body {
   background: #49483e;
   border: 1px solid #656355;
   border-radius: 6px;
-  padding: 10px 14px;
+  /* 字号/内距整体收小一档（2026-10-15 张老师定）：20 行级的统计表太高，
+     会越出游戏区一大截；行高 15px 后整表约矮 90px，syncReportZoom 的封顶
+     余量也更宽裕 */
+  padding: 8px 12px;
   z-index: 5;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: left;
 }
 #online_play .greport .gr_title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: bold;
   color: #e8e8e0;
-  padding-bottom: 6px;
-  margin-bottom: 6px;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
   border-bottom: 1px solid #656355;
 }
 #online_play .greport td {
-  font: 12px/19px Arial, Helvetica, sans-serif;
+  font: 11px/15px Arial, Helvetica, sans-serif;
   color: #939387;
-  padding: 1px 6px;
+  padding: 1px 5px;
   text-align: left;
   white-space: nowrap;
 }
@@ -6478,7 +6481,7 @@ html:has(#online_play) body {
   border: 1px solid #656355;
   border-radius: 4px;
   padding: 5px 8px;
-  font: 12px/17px Arial, Helvetica, sans-serif;
+  font: 11px/15px Arial, Helvetica, sans-serif;
   text-align: left;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
