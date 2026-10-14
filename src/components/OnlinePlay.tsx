@@ -742,6 +742,25 @@ export function OnlinePlay() {
       /* 下限 0.5（=滑杆 min）：窄窗连 1x 都放不下时按容器宽自动缩，保证不溢出 */
       return Math.max(0.5, Math.min(2.5, (zoomCur * (gaR.width - 16)) / gfR.width)); // 左右各留 8px
     }
+    /* 首次进入（localStorage 无记忆）的默认比例（2026-10-14 张老师定）：
+       取「高级盘（30×16）刚好能在 #game_area 主题板块内显示」的最大倍率——
+       以最宽的盘定基准，之后切到任何难度都不会溢出。
+       量纲同 normalMaxZoom（rect 自校准），只把 gframe 基准宽换成高级盘：
+       chrome = gframe 固定开销（内边距 9×2 + 边框 3×2，由当前盘实测反解），
+       cap = zoomCur × (容器渲染宽 − 16) ÷ (当前渲染宽 × 高级基准宽 ÷ 当前基准宽)。
+       下限 1：初级仍是 1x 起步不至于比原版更小（窄屏下切到高级时
+       reset→applyZoom 会再按容器封顶兜住） */
+    function defaultZoom() {
+      const gfR = gframe.getBoundingClientRect();
+      const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
+      const baseW = gframe.offsetWidth;
+      if (gfR.width <= 0 || gaR.width <= 0 || baseW <= 0) return 1;
+      const chrome = baseW - W * 16; // gframe 固定开销
+      const expW = LEVELS.exp.x * 16 + chrome; // 高级盘基准宽
+      if (expW <= 0) return 1;
+      const cap = zoomCur * ((gaR.width - 16) / gfR.width) * (baseW / expW);
+      return Math.max(1, Math.min(2.5, cap));
+    }
     function applyZoom(v: number, persist = true, max?: number) {
       const cap = max ?? normalMaxZoom();
       v = Math.max(0.5, Math.min(cap, v));
@@ -815,10 +834,8 @@ export function OnlinePlay() {
       if (!td) return;
       td.classList.toggle("tip-up", td.getBoundingClientRect().bottom + 64 > window.innerHeight);
     });
-    try {
-      const savedZoom = parseFloat(localStorage.getItem("online_play_zoom") || "1");
-      if (savedZoom > 0) applyZoom(savedZoom);
-    } catch { /* 隐私模式 */ }
+    /* 比例的恢复/默认在文件末尾 reset("beg") 之后统一处理——tbody 未建时
+       gframe 只有边框宽，此时量不出真实盘面尺寸（见 defaultZoom） */
 
     /* ---- 移动端横屏自动拉满高度（2026-10-14 张老师定）：横屏且视口高 ≤520px 时，
        CSS 已把标题/筛选器/开关移到侧面竖排，这里把游戏按视口高度拉满（页面无需滚动）。
@@ -867,6 +884,16 @@ export function OnlinePlay() {
     }
 
     reset("beg");
+    /* 比例：有 localStorage 记忆直接应用；首次进入（无记忆）用 defaultZoom()
+       按高级盘算出的最大比例起步（张老师定）。默认值不写盘——只有玩家
+       手动拖滑杆/重置才记忆；全屏与横屏的自动拉满同样不入记忆 */
+    try {
+      const raw = localStorage.getItem("online_play_zoom");
+      const saved = raw === null ? NaN : parseFloat(raw);
+      applyZoom(saved > 0 ? saved : defaultZoom(), false);
+    } catch {
+      applyZoom(defaultZoom(), false); // 隐私模式：读不到就用默认
+    }
     if (lsQuery.matches) syncLandscape(); // 初始即横屏：记住倍率并拉满
 
     return () => {
