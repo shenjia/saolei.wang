@@ -32,9 +32,21 @@ MSSQL datetime 视为 +08:00；改口径时两处必须同步改。
   PY=/Users/shenjia/.workbuddy/binaries/python/envs/default/bin/python
   $PY scripts/sync/backfill-banned-users.py --dry-run   # 只统计不写库
   $PY scripts/sync/backfill-banned-users.py             # 实际写入
+
+连接参数（默认本地 root 免密；生产/远程用环境变量覆盖）
+------------------------------------------------------
+  目标库（新站）  SAOLEI_DB_HOST/PORT/USER/PASSWORD/NAME   （默认 127.0.0.1/3306/root//saolei）
+  源库（staging） SAOLEI_STG_HOST/PORT/USER/PASSWORD/NAME  （默认 127.0.0.1/3306/root//saolei_mssql）
+
+  写生产（生产无 staging 快照，故本地读 staging、走 SSH 隧道写生产）：
+    ssh -N -L 3307:127.0.0.1:3306 deploy@60.205.137.210 &
+    SAOLEI_DB_PORT=3307 SAOLEI_DB_USER=saolei SAOLEI_DB_PASSWORD=*** \
+      $PY scripts/sync/backfill-banned-users.py --allow-nonlocal --dry-run
+  ⚠️ 目标库非「本地 3306」时，**必须显式加 --allow-nonlocal** 才允许写入（防手滑写错库）。
 """
 import argparse
 import hashlib
+import os
 import secrets
 import time
 from datetime import datetime, timedelta
@@ -45,14 +57,45 @@ EPOCH = datetime(1970, 1, 1)
 TZ8 = timedelta(hours=8)
 BATCH = 2000
 
+
+def env(name, default=""):
+    return os.environ.get(name) or default
+
+
+TARGET = {
+    "host": env("SAOLEI_DB_HOST", "127.0.0.1"),
+    "port": int(env("SAOLEI_DB_PORT", "3306")),
+    "user": env("SAOLEI_DB_USER", "root"),
+    "password": env("SAOLEI_DB_PASSWORD", ""),
+    "database": env("SAOLEI_DB_NAME", "saolei"),
+}
+STAGING = {
+    "host": env("SAOLEI_STG_HOST", "127.0.0.1"),
+    "port": int(env("SAOLEI_STG_PORT", "3306")),
+    "user": env("SAOLEI_STG_USER", "root"),
+    "password": env("SAOLEI_STG_PASSWORD", ""),
+    "database": env("SAOLEI_STG_NAME", "saolei_mssql"),
+}
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--dry-run", action="store_true", help="只统计不写库")
+ap.add_argument("--allow-nonlocal", action="store_true",
+                help="目标库非 127.0.0.1:3306 时写入所需的安全开关")
 args = ap.parse_args()
 
-my = pymysql.connect(host="127.0.0.1", user="root", database="saolei",
-                     charset="utf8mb4", autocommit=False)
-stg = pymysql.connect(host="127.0.0.1", user="root", database="saolei_mssql",
-                      charset="utf8mb4", autocommit=True)
+# 目标库不是「本地 3306」时，写入必须显式声明意图（防误写生产/测试库）
+NONLOCAL = not (TARGET["host"] in ("127.0.0.1", "localhost") and TARGET["port"] == 3306)
+if NONLOCAL and not args.allow_nonlocal and not args.dry_run:
+    raise SystemExit(
+        f"目标库是 {TARGET['host']}:{TARGET['port']}/{TARGET['database']}（非本地 3306）——"
+        "确认无误请加 --allow-nonlocal"
+    )
+
+print(f"目标库 {TARGET['host']}:{TARGET['port']}/{TARGET['database']}"
+      f"  源库 {STAGING['host']}:{STAGING['port']}/{STAGING['database']}", flush=True)
+
+my = pymysql.connect(charset="utf8mb4", autocommit=False, **TARGET)
+stg = pymysql.connect(charset="utf8mb4", autocommit=True, **STAGING)
 cur = my.cursor()
 sc = stg.cursor()
 

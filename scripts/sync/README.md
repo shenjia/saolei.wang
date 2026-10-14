@@ -22,7 +22,27 @@ $PY backfill-banned-users.py             # 补导旧站「停用」账号(见下
 补进新站用户域（`user.status=-1`）。**唯一权威口径是旧站停用状态**，幂等，可反复跑；
 它只做单向「封禁」，不会把新站的解封刷回去。
 
-依赖：`pip install python-tds pymysql`（已装入 managed venv `envs/default`）。
+依赖：`pip install python-tds pymysql`（已装入 managed venv `envs/default`），
+以及 `cryptography`（pymysql 连 MySQL 8 的 `caching_sha2_password` 必需，2026-10-14 补装）。
+
+### 补导到生产（2026-10-14 实证）
+
+**生产只有 `saolei` 库，没有 staging 快照**，且严禁往生产建 schema 外的表——
+所以正确姿势是「本地读 staging + SSH 隧道写生产」（staging 在本地）：
+
+```sh
+# ① 隧道（用非默认端口，避开别的会话可能已占用的 3307；必须加 ExitOnForwardFailure，
+#    否则端口被占时 -L 会静默失败、连到别的库上去——2026-10-14 踩过）
+ssh -i ~/.ssh/shenjia.pem -o ExitOnForwardFailure=yes -N -L 3316:127.0.0.1:3306 deploy@60.205.137.210 &
+# ② 先 dry-run 看漂移，确认后再实跑（非本地端口必须显式 --allow-nonlocal）
+export SAOLEI_DB_PORT=3316 SAOLEI_DB_USER=saolei SAOLEI_DB_PASSWORD='<生产密码>'
+$PY backfill-banned-users.py --allow-nonlocal --dry-run
+$PY backfill-banned-users.py --allow-nonlocal
+```
+
+连接参数全部走环境变量（默认本地 root 免密）：
+目标库 `SAOLEI_DB_HOST/PORT/USER/PASSWORD/NAME`、源库 `SAOLEI_STG_*`。
+目标库不是 `127.0.0.1:3306` 时**写入必须加 `--allow-nonlocal`**（防手滑写错库）。
 
 ## 关键映射规则（与 2013 版迁移逐字段验证一致）
 
