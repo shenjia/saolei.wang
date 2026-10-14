@@ -464,7 +464,7 @@ export function OnlinePlay() {
         rows
           .map(
             (r) =>
-              '<tr><td class="gt">' + r[0] + '<span class="tip">' + r[2] + "</span></td><td>" + r[1] + "</td></tr>"
+              '<tr><td class="gt">' + r[0] + '</td><td class="gv">' + r[1] + '<span class="tip">' + r[2] + "</span></td></tr>"
           )
           .join("") +
         "</table>";
@@ -827,12 +827,14 @@ export function OnlinePlay() {
       applyZoom(parseFloat(zoomRange.value));
     });
     on($("zoom_reset"), "click", () => { zoomBeforeFs = null; zoomBeforeLs = null; applyZoom(1); });
-    /* 数据统计术语气泡越界翻转：面板整体常贴到视口底缘，底部几行的气泡向下会出屏，
-       故按实测空间改为向上弹（CSS 里 .tip-up 把气泡翻到单元格上方） */
+    /* 数据统计术语气泡越界翻转（2026-10-14 二版：气泡改在数值右侧、整行高亮）：
+       面板整体常贴到视口底缘，靠底几行的气泡（行垂直居中）会出屏，
+       故按实测空间改为向上弹（CSS 里 tr.tip-up 把气泡翻到行上方、三角朝下）。
+       ⚠️ 判定用整行（鼠标多落在术语格 td.gt 上，closest("td.gv") 会取不到） */
     on(greport, "mouseover", (e: MouseEvent) => {
-      const td = (e.target as HTMLElement).closest("td.gt") as HTMLElement | null;
-      if (!td) return;
-      td.classList.toggle("tip-up", td.getBoundingClientRect().bottom + 64 > window.innerHeight);
+      const tr = (e.target as HTMLElement).closest("tr") as HTMLTableRowElement | null;
+      if (!tr || !tr.querySelector("td.gv .tip")) return;
+      tr.classList.toggle("tip-up", tr.getBoundingClientRect().bottom + 34 > window.innerHeight);
     });
     /* 比例的恢复/默认在文件末尾 reset("beg") 之后统一处理——tbody 未建时
        gframe 只有边框宽，此时量不出真实盘面尺寸（见 defaultZoom） */

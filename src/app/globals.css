@@ -5743,36 +5743,53 @@ button.msg_cancel:hover {
   margin-bottom: 6px;
   border-bottom: 1px solid #656355;
 }
-#online_play .greport table {
-  border-collapse: collapse;
-}
 #online_play .greport td {
   font: 12px/19px Arial, Helvetica, sans-serif;
   color: #939387;
-  padding: 0;
+  padding: 1px 6px;
   text-align: left;
   white-space: nowrap;
 }
 #online_play .greport td + td {
-  padding-left: 14px;
+  padding-left: 8px;
   text-align: right;
   color: #e8e8e0;
 }
-/* 术语 hover 气泡（2026-10-14 张老师定）：逐项一句话中文解释，含公式。
-   气泡绝对定位于术语单元格内（td 需 position:relative），默认向下；
-   底部行由 JS 按视口空间追加 .tip-up 翻到上方 */
-#online_play .greport td.gt {
-  position: relative;
+/* 术语 hover（2026-10-14 张老师定二版）：悬停整行高亮，气泡出现在数值右侧、
+   左侧带小三角（对话气泡观感）。气泡锚在数值单元格（td.gv，position:relative），
+   left:calc(100% + 11px) 贴到数值右侧；行垂直居中，底部行由 JS 追加 .tip-up
+   翻到行上方、三角朝下防出屏。行内左右各留 6px 内距 + 表格 -6px 负外边距，
+   文字仍落在面板 14px 内缘、高亮底可铺满整行 */
+#online_play .greport table {
+  border-collapse: collapse;
+  margin: 0 -6px;
+}
+#online_play .greport tr {
   cursor: help;
 }
-#online_play .greport td.gt:hover {
-  z-index: 9;
+#online_play .greport tr:hover {
+  position: relative;
+  z-index: 9; /* 高亮行与气泡压过后面的行 */
 }
-#online_play .greport td.gt .tip {
+#online_play .greport tr:hover td {
+  background: #5c5b4e;
+  color: #f8f8f2;
+}
+#online_play .greport tr:hover td:first-child {
+  border-radius: 3px 0 0 3px;
+}
+#online_play .greport tr:hover td:last-child {
+  border-radius: 0 3px 3px 0;
+}
+#online_play .greport td.gv {
+  position: relative;
+}
+#online_play .greport td.gv .tip {
   display: none;
   position: absolute;
-  left: 0;
-  top: calc(100% + 5px);
+  left: calc(100% + 11px);
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 10;
   width: max-content;
   max-width: 220px;
@@ -5786,12 +5803,34 @@ button.msg_cancel:hover {
   text-align: left;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
-#online_play .greport td.gt:hover .tip {
+/* 对话气泡小三角：默认在气泡左侧、尖端朝左指着数值 */
+#online_play .greport td.gv .tip::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  margin-top: -5px;
+  border: 5px solid transparent;
+  border-right-color: #272822;
+}
+#online_play .greport tr:hover td.gv .tip {
   display: block;
 }
-#online_play .greport td.gt.tip-up .tip {
+/* 贴视口底缘的行：气泡翻到行上方，三角移到底部、尖端朝下（类挂在 tr 上：
+   鼠标常落在术语格，判定必须按整行，见 OnlinePlay 的 mouseover 委托） */
+#online_play .greport tr.tip-up .tip {
   top: auto;
-  bottom: calc(100% + 5px);
+  bottom: calc(100% + 6px);
+  transform: none;
+}
+#online_play .greport tr.tip-up .tip::before {
+  top: auto;
+  bottom: -5px;
+  left: 12px;
+  right: auto;
+  margin-top: 0;
+  border-right-color: transparent;
+  border-top-color: #272822;
 }
 @media (min-width: 960px) {
   #online_play .greport.show {
