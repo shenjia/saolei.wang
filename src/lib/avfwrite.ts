@@ -96,7 +96,32 @@ export function buildOnlineAvf(input: OnlineAvfInput): Uint8Array {
   return new Uint8Array(out);
 }
 
-/** 生成下载文件名：saolei_级别_用时.avf */
-export function onlineAvfFilename(level: string, seconds: number): string {
-  return `saolei_${level}_${seconds}s.avf`;
+/** 生成下载文件名——与录像页 /video/download/[id]（VideoModel::getFilename）**同款规则**：
+ *    {级别} {秒}.{两位百分秒}s[ NF] - 3BV {3BV}[ - # {用户id} {英文名}] ({YYYY-MM-DD}).avf
+ *  例：Exp 12.34s NF - 3BV 123 - # 456 ZhangSan (2013-01-01).mvf
+ *  练习局匿名（未登录）时整段 `- # 用户id 英文名` 省略，其余段位逐字对齐录像页。
+ *  ⚠️ 级别名走 level[0].toUpperCase() + slice(1)（beg→Beg），与录像页同式；
+ *     cus（自定义）无对应录像级别，照样输出 Cus。 */
+export function onlineAvfFilename(input: {
+  level: string;
+  /** 对局用时（百分之一秒）——与 snapshot.csec 同量纲 */
+  csec: number;
+  nf: boolean;
+  bbbv: number;
+  /** 登录玩家（未登录传 null/省略）；下载文件名里的署名段 */
+  user?: { id: number; name: string } | null;
+  /** 文件名里的日期，默认当下（本地时区） */
+  date?: Date;
+}): string {
+  const { level, csec, nf, bbbv, user, date = new Date() } = input;
+  const lv = level[0].toUpperCase() + level.slice(1);
+  /* 用时口径与 lib/format 的 scoreTime 一致：毫秒 ÷ 1000 → 两位小数 */
+  const secs = (csec / 100).toFixed(2);
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const day = `${date.getFullYear()}-${p2(date.getMonth() + 1)}-${p2(date.getDate())}`;
+  return (
+    `${lv} ${secs}s${nf ? " NF" : ""} - 3BV ${bbbv}` +
+    (user ? ` - # ${user.id} ${user.name}` : "") +
+    ` (${day}).avf`
+  );
 }

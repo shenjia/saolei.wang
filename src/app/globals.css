@@ -6029,7 +6029,6 @@ button.msg_cancel:hover {
    Firefox 走原生 ::-moz-range-progress，无需 JS */
 #online_play .gs_zoom input[type="range"],
 #online_play .cus_dialog .cus_row input[type="range"],
-#online_play .replay_ctrl input[type="range"],
 .avatar_crop_zoom input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -6037,7 +6036,6 @@ button.msg_cancel:hover {
 }
 #online_play .gs_zoom input[type="range"]::-webkit-slider-runnable-track,
 #online_play .cus_dialog .cus_row input[type="range"]::-webkit-slider-runnable-track,
-#online_play .replay_ctrl input[type="range"]::-webkit-slider-runnable-track,
 .avatar_crop_zoom input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 2px;
@@ -6046,7 +6044,6 @@ button.msg_cancel:hover {
 }
 #online_play .gs_zoom input[type="range"]::-webkit-slider-thumb,
 #online_play .cus_dialog .cus_row input[type="range"]::-webkit-slider-thumb,
-#online_play .replay_ctrl input[type="range"]::-webkit-slider-thumb,
 .avatar_crop_zoom input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
@@ -6058,7 +6055,6 @@ button.msg_cancel:hover {
 }
 #online_play .gs_zoom input[type="range"]::-moz-range-track,
 #online_play .cus_dialog .cus_row input[type="range"]::-moz-range-track,
-#online_play .replay_ctrl input[type="range"]::-moz-range-track,
 .avatar_crop_zoom input[type="range"]::-moz-range-track {
   height: 4px;
   border-radius: 2px;
@@ -6066,7 +6062,6 @@ button.msg_cancel:hover {
 }
 #online_play .gs_zoom input[type="range"]::-moz-range-progress,
 #online_play .cus_dialog .cus_row input[type="range"]::-moz-range-progress,
-#online_play .replay_ctrl input[type="range"]::-moz-range-progress,
 .avatar_crop_zoom input[type="range"]::-moz-range-progress {
   height: 4px;
   border-radius: 2px;
@@ -6074,7 +6069,6 @@ button.msg_cancel:hover {
 }
 #online_play .gs_zoom input[type="range"]::-moz-range-thumb,
 #online_play .cus_dialog .cus_row input[type="range"]::-moz-range-thumb,
-#online_play .replay_ctrl input[type="range"]::-moz-range-thumb,
 .avatar_crop_zoom input[type="range"]::-moz-range-thumb {
   width: 14px;
   height: 14px;
@@ -6381,7 +6375,9 @@ button.msg_cancel:hover {
 /* ---- 结算报告浮窗（2026-10-14 张老师定）：游戏结束显示在游戏界面左侧，再开局隐藏；
    只有桌面版显示（<960px 一律不渲染，移动端无浮窗）。
    2026-10-14 五期三改：zoom 移到 .gwrap 后，面板挂 #game_area（gwrap 外），left/top
-   全部由 JS 按 gwrap 渲染矩形定位（CSS 值仅作初值兜底），不吃游戏倍率 ---- */
+   全部由 JS 按 gwrap 渲染矩形定位（CSS 值仅作初值兜底），不吃游戏倍率。
+   2026-10-15 六期：显隐改由设置项「显示统计」唯一决定（默认关＝任何时刻都不出现；
+   开＝常驻，对局中随计时实时刷新）---- */
 #online_play .greport {
   display: none;
   position: absolute;
@@ -6499,8 +6495,9 @@ button.msg_cancel:hover {
   }
 }
 /* ---- 右侧结算面板（五期二版，2026-10-14 张老师：缩小，与高级游戏区高度一致量级） ----
-   与 greport 同风格（深底/圆角/阴影），雷达 168 紧凑版 + 三按钮（带矢量图标）；
-   2026-10-14 五期三改：挂 #game_area（gwrap 外），left/top 由 JS 定位（CSS 值仅兜底） */
+   与 greport 同风格（深底/圆角/阴影），雷达 160 紧凑版 + 四按钮（带矢量图标）；
+   2026-10-14 五期三改：挂 #game_area（gwrap 外），left/top 由 JS 定位（CSS 值仅兜底）
+   2026-10-15 六期：按钮由三改四、分两行（2 列 grid）——上排开局类、下排本局录像类 */
 #online_play .gresult {
   display: none;
   position: absolute;
@@ -6557,9 +6554,13 @@ button.msg_cancel:hover {
   display: flex;
   justify-content: center;
 }
+/* 四按钮分两行（六期）：2 列 grid——DOM 顺序即「左上→右上→左下→右下」，
+   「再来一局/重玩本局」在上排，「查看回放/下载录像」在下排。
+   桌面面板宽 196 − 左右 padding 20 = 174，两列各 84.5px：图标 14 + 间距 6 + 四字 48 = 68，
+   放得下不折行 */
 #online_play .gresult .gr_btns {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 5px;
   margin-top: 4px;
 }
@@ -6592,95 +6593,9 @@ button.msg_cancel:hover {
     display: block;
   }
 }
-/* ---- 游戏界面内回放控制栏（五期二版，2026-10-14 张老师定：不弹窗，游戏区下方；
-   参考 flopplayer 控制栏结构：重放 | 播放/暂停 | 速度滑条+倍速 | 进度滑条 | 时间 | 退出） ---- */
-#online_play .replay_ctrl {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 9px;
-  padding: 5px 10px;
-  background: silver;
-  border: 2px solid;
-  border-color: #7b7b7b #fff #fff #7b7b7b;
-  width: 0;
-  min-width: 100%;
-  box-sizing: border-box;
-  user-select: none;
-  -webkit-user-select: none;
-}
-#online_play .replay_ctrl .rc_btn {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1px solid #7b7b7b;
-  border-radius: 4px;
-  background: #3b3a34;
-  color: #d6d6c8;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-#online_play .replay_ctrl .rc_btn:hover {
-  background: #4a4940;
-  color: #f8f8f2;
-}
-#online_play .replay_ctrl .rc_btn svg {
-  width: 14px;
-  height: 14px;
-  pointer-events: none;
-}
-/* 播放/暂停双图标切换（默认显示播放三角，.on 显示暂停双杠） */
-#online_play .replay_ctrl #rc_play .ic_pause { display: none; }
-#online_play .replay_ctrl #rc_play.on .ic_play { display: none; }
-#online_play .replay_ctrl #rc_play.on .ic_pause { display: block; }
-#online_play .replay_ctrl #rc_play.on {
-  background: #fdc61d;
-  border-color: #fdc61d;
-  color: #333;
-}
-#online_play .replay_ctrl .rc_sep {
-  width: 1px;
-  height: 18px;
-  background: #9a9a9a;
-  flex: 0 0 auto;
-}
-#online_play .replay_ctrl .rc_speed {
-  width: 80px;
-  flex: 0 0 auto;
-}
-#online_play .replay_ctrl .rc_rate {
-  border: 1px solid #7b7b7b;
-  border-radius: 4px;
-  background: #3b3a34;
-  color: #d6d6c8;
-  font: 11px/1 Arial, Helvetica, sans-serif;
-  padding: 4px 6px;
-  cursor: pointer;
-  flex: 0 0 auto;
-  min-width: 44px;
-}
-#online_play .replay_ctrl .rc_rate:hover {
-  background: #4a4940;
-  color: #f8f8f2;
-}
-#online_play .replay_ctrl .rc_range {
-  flex: 1 1 auto;
-  min-width: 100px;
-}
-#online_play .replay_ctrl .rc_time {
-  font: 11px/1 Arial, Helvetica, sans-serif;
-  color: #4a4a4a;
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-#online_play .replay_ctrl .rc_exit:hover {
-  background: #8a2f2f;
-  border-color: #a33;
-  color: #ffd9d9;
-}
+/* 游戏界面内回放控制栏（五期二版的三~五期产物）已于 2026-10-15 六期整条撤除
+   （张老师定：看回放时不再出现控制条）——回放改为进即自动播完，重播/退出走右侧面板
+   的「查看回放」与 Esc / 笑脸 /「再来一局」。相关 .rc_* 样式已随之下线。 */
 /* 回放光标：flopplayer 同款鼠标箭头（#cursor-arrow 贴图）。挂 .gwrap 顶层
    （2026-10-14 张老师报被笑脸挡），z-index 压过计数条/状态栏；尖端锚点由 JS 偏移 */
 .replay_cursor {

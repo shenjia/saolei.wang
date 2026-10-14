@@ -11,6 +11,15 @@
 // 同源（lib/videoscore.ts），只是渲染走字符串拼 SVG（面板是 innerHTML 注入流，挂不了 React）；
 // 回放自研（不调 flopplayer）；下载为标准 AVF（lib/avfwrite.ts），Program 带
 // saolei.wang Online 标记，上传路由据此拒绝入排行。
+// 六期（2026-10-15 张老师定）：
+//   ① 左侧「数据统计」面板默认**不显示**——新增设置开关「显示统计」，开启后**常驻**显示
+//      （对局中每 100ms 随计时器实时刷新，结束后定格），关闭则任何时刻都不出现；
+//   ② 回放不再插控制条（原「重放/播放暂停/速度/进度/退出」整条撤掉）：进入即自动播完，
+//      回放中点「查看回放」＝从头重播（原实现是 early-return 无反应），退出走 Esc / 笑脸 /
+//      「再来一局」（reset 内的 forceExitReplay）；
+//   ③ 右侧面板四个按钮分两行：上「再来一局」「重玩本局」，下「查看回放」「下载录像」；
+//   ④ 下载文件名对齐录像页规则（见 lib/avfwrite 的 onlineAvfFilename）：登录玩家带
+//      `# 用户ID 英文名` 段，未登录省略。
 
 import { useEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -61,7 +70,16 @@ const LS_RESERVE_W = 40;
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
 export type MetricDists = Record<string, Record<string, Record<string, number[]>>>;
 
-export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges; metricDists?: MetricDists }) {
+export function OnlinePlay({
+  bvRanges,
+  metricDists = {},
+  player = null,
+}: {
+  bvRanges: BvRanges;
+  metricDists?: MetricDists;
+  /** 登录玩家（服务端注入）：仅用于「下载录像」文件名里的署名段；未登录为 null */
+  player?: { id: number; name: string } | null;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
   /* 结算面板里雷达组件的 React root（面板走 innerHTML 注入，只能这样挂 React 组件） */
   const radarRootRef = useRef<Root | null>(null);
@@ -82,8 +100,8 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     ) => el.addEventListener(type, fn as EventListener, { ...opts, signal });
 
     /* ---- 滑条填充自绘（张老师定稿：填充 #8ac21b + 滑块 #a6e22e）----
-       初始写一遍 --pct；用户拖动走 input 委托（含回放控制条等动态插入的滑条），
-       程序赋值（applyZoom / 回放进度等）在各赋值处单独补调 paintRangeFill */
+       初始写一遍 --pct；用户拖动走 input 委托（覆盖动态插入的滑条），
+       程序赋值（applyZoom 等）在各赋值处单独补调 paintRangeFill */
     root.querySelectorAll<HTMLInputElement>('input[type="range"]').forEach(paintRangeFill);
     on(root, "input", (e) => {
       const t = e.target as HTMLElement;
@@ -121,6 +139,10 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
        NF / 无猜模式下不看这个开关也强制显示（这两种模式玩家必看 3BV）。
        重排次数＝本局无猜重排生效次数（踩一次雷/一个盲点算一次，内部重试不算）。 */
     let showBv = false;
+    /* 「显示统计」开关（2026-10-15 六期张老师定，默认关）：左侧「数据统计」面板的**唯一**
+       显示开关。关＝任何时刻都不显示（含结算时刻，此前是结算时自动弹出）；开＝常驻显示，
+       对局中随计时器每 100ms 实时刷新，对局结束后定格最终值。 */
+    let showStats = false;
     let ngRedeals = 0;
     /* 3BV 范围（按级别独立记忆）：默认＝该级别完整统计区间；
        布雷时拒绝范围外盘面重掷（见 placeMines），最小差 10 由浮窗交互保证 */
@@ -136,7 +158,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         if (!raw) return;
         const s = JSON.parse(raw) as {
           nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
-          showBv?: boolean;
+          showBv?: boolean; showStats?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -144,6 +166,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         if (typeof s.ng === "boolean") ng = s.ng;
         if (typeof s.qmark === "boolean") qmark = s.qmark;
         if (typeof s.showBv === "boolean") showBv = s.showBv;
+        if (typeof s.showStats === "boolean") showStats = s.showStats;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -162,7 +185,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showBv, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showBv, showStats, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -176,7 +199,8 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     /* ---- 对局事件流（五期：回放/下载录像的数据源，AVF 口径）----
        mouse 码与 avf.ts 约定一致：1=mv 3=lc 5=lr 9=rc 17=rr 11=sc。
        像素坐标 = 格中心（x*16+8），与 rawvf 的 (px py) 同量纲；
-       时间 = startTs 起的 (秒, 百分秒)，与计时器同源。首击前不记录（录像从首击开始）。 */
+       时间 = startTs 起的 (秒, 百分秒)，与计时器同源；首击（lc/lr）也在流里，
+       且时间戳为 (0,0)——录像/回放从首击那一刻开始。 */
     let evStream: OnlineEvent[] = [];
     function evNow(): { sec: number; hun: number } {
       if (!started || !startTs) return { sec: 0, hun: 0 };
@@ -184,7 +208,12 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       return { sec: Math.floor(cs / 100), hun: cs % 100 };
     }
     function recordEv(mouse: number, i: number) {
-      if (!started || over) return;
+      /* ⚠️ 这里**只**拦 over，不拦 !started（2026-10-15 六期修）：首击的 lc/lr 是在
+         openCell 之前记录的（openCell 内部才把 started 置真、才布雷开表），
+         若照旧要求 started，首击会被整条丢掉——回放进到从头那一刻会「什么都不开」，
+         直到第二击才动（开局那一大片展开永远复现不出来）。
+         started 为假时 evNow() 返回 (0,0)，正好就是首击该有的 t=0 时刻。 */
+      if (over) return;
       const { sec, hun } = evNow();
       const x = (i % W) * 16 + 8, y = ((i / W) | 0) * 16 + 8;
       evStream.push({ mouse, x, y, sec, hun });
@@ -224,10 +253,9 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       smile: "face-normal", ooh: "face-press-cell", dead: "face-lose",
       win: "face-win", press: "face-press-normal",
     };
-    const gname = $("gname");
     const gnameText = $("gname_text");
     const greport = $("greport");
-    const gresult = $("gresult"); // 右侧结算面板（五期：雷达图 + 三按钮）
+    const gresult = $("gresult"); // 右侧结算面板（六期：雷达图 + 四按钮两行）
 
     /* ---- 结算快照（五期）：结束瞬间的完整对局状态，供重玩/回放/下载使用 ---- */
     interface GameSnapshot {
@@ -515,10 +543,15 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       }
       board3bv = regions + bvSingles.length;
     }
+    /* 当前对局用时（秒；未开局为 0）——数据面板实时刷新用，口径与 stopTimer 返回值一致 */
+    function elapsedSec(): number {
+      return started && startTs ? (performance.now() - startTs) / 1000 : 0;
+    }
     function startTimer() {
       startTs = performance.now();
       timerId = window.setInterval(() => {
         led(ledTime, Math.floor((performance.now() - startTs) / 1000));
+        refreshStatPanel(); // 六期：面板常驻时随计时器刷新（内部自带开关/悬停/开局判断）
       }, 100);
     }
     function stopTimer() {
@@ -860,13 +893,16 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       paint(i);
       led(ledMines, flagsLeft());
     }
-    /* ---- 结算报告（2026-10-14 张老师定：游戏结束时桌面版左侧浮窗，再开局隐藏）。
+    /* ---- 结算报告（2026-10-14 张老师定：游戏结束时桌面版左侧浮窗，再开局隐藏；
+       2026-10-15 六期改：显示时机交给设置开关「显示统计」，见 showStats）。
        公式与 flop player counters 逐项对齐（摘自其打包源码注释）：
        Est=RT×(3BV/solved)；IOE=solved/Cl；ThrP=solved/Ce；Corr=Ce/Cl；
        RQP=Est×(Est+1)/3BV；QG=RT^1.7/solved；
        STNB=(87.420L²−155.829L+115.708)/QG×(solved/3BV)^0.5（L: beg=1/int=2/exp=3）；
        RTime 后缀 (n)=floor(RT)+1（录像秒数口径） */
-    function report(t: number, won: boolean) {
+    /* 表格 HTML + 完成 3BV（六期从 report 抽出：开关打开时对局中每 100ms 也要刷这张表，
+       与结算共用同一份构造，口径永不分叉） */
+    function statsReport(t: number): { solvedBv: number; html: string } {
       let solvedBv = 0, solvedOps = 0;
       for (const reg of bvRegions) {
         let ok = true;
@@ -913,7 +949,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
         ["STNB", hasBv && lv !== "cus" ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
       ];
-      greport.innerHTML =
+      const html =
         '<div class="gr_title">数据统计</div>' +
         "<table>" +
         rows
@@ -923,11 +959,31 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           )
           .join("") +
         "</table>";
+      return { solvedBv, html };
+    }
+    /* 写内容 → 显形 → 同步缩放/定位。顺序不可颠倒：display:none 期间量出的 rect 为 0，
+       syncReportZoom 会因 rawW < 1 直接早退（面板位置/缩放就定格在旧值上） */
+    function paintStatPanel(html: string) {
+      greport.innerHTML = html;
       greport.classList.add("show");
-      syncReportZoom(); // 面板尺寸随当前游戏倍率（可能已被放大）
+      syncReportZoom();
+    }
+    /* 对局中实时刷新（计时器每 100ms 调一次；未开局无意义，直接跳过）。
+       鼠标悬停在面板上时跳过——innerHTML 重建会把正在悬停的那行换掉，术语气泡会闪 */
+    function refreshStatPanel() {
+      if (!started || over) return;
+      if (!showStats || !greport.classList.contains("show")) return;
+      if (greport.matches(":hover")) return;
+      paintStatPanel(statsReport(elapsedSec()).html);
+    }
+    function report(t: number, won: boolean) {
+      const { solvedBv, html } = statsReport(t);
+      /* 数据面板只在「显示统计」开着时出现（六期张老师定：默认任何时刻都不显示，
+         设置里的开关是唯一入口） */
+      if (showStats) paintStatPanel(html);
       buildResultPanel(t, solvedBv, won);
     }
-    /* ---- 右侧结算面板（五期）：雷达图 + 重玩本局 / 查看回放 / 下载录像 ---- */
+    /* ---- 右侧结算面板（五期）：雷达图 + 再来一局 / 重玩本局 / 查看回放 / 下载录像 ---- */
     function buildResultPanel(t: number, solvedBv: number, won: boolean) {
       const cl = stLeft + stRight + stDouble, ce = stCe;
       const hasBv = solvedBv > 0 && t > 0;
@@ -966,12 +1022,15 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       radarRootRef.current = null;
       const timeNum = (s.csec / 100).toFixed(2);
       /* 首行大字（2026-10-14 张老师定）：胜利＝绿色「完成！」+ 金色大字成绩；
-         踩雷＝灰色「踩雷」+ 常规色成绩 */
+         踩雷＝灰色「踩雷」+ 常规色成绩。flex 基线对齐，成绩是视觉主角 */
       const headLine = s.won
         ? '<div class="gr_head win"><span class="gr_state">完成！</span><span class="gr_time gold">' + timeNum + "</span><span class=\"gr_unit\">秒</span></div>"
         : '<div class="gr_head lose"><span class="gr_state">踩雷</span><span class="gr_time">' + timeNum + "</span><span class=\"gr_unit\">秒</span></div>";
       /* 按钮矢量图形（16px stroke 线性图标，与齿轮/全屏按钮同风格） */
       const IC = {
+        /* 再来一局＝掷骰子（随机新盘面），与「重玩本局」的回转箭头形成对照 */
+        newGame:
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><rect fill="none" stroke="currentColor" stroke-width="2" x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.4" fill="currentColor"/></svg>',
         replaySame:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 2.6-6.4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 4v5h5"/></svg>',
         review:
@@ -979,14 +1038,18 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         download:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 15V3"/></svg>',
       };
+      /* 四个按钮分两行（2026-10-15 六期张老师定）：上排＝开局类（再来一局 / 重玩本局），
+         下排＝本局录像类（查看回放 / 下载录像）。.gr_btns 走 2 列 grid，DOM 顺序即行列顺序 */
       gresult.innerHTML =
         headLine +
         '<div class="gr_radar" id="gr_radar"></div>' +
         '<div class="gr_btns">' +
+        '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + "再来一局</button>" +
         '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + "重玩本局</button>" +
         '<button type="button" class="grb" id="grb_review">' + IC.review + "查看回放</button>" +
         '<button type="button" class="grb" id="grb_download">' + IC.download + "下载录像</button>" +
         "</div>";
+      /* 桌面：右侧浮窗显形（left/top/zoom 由 syncReportZoom 定位） */
       gresult.classList.add("show");
       /* 雷达图：标准级别才有基准分布；cus 盘/失败局/无基准 → 只显示数值不评级 */
       const radarHost = gresult.querySelector("#gr_radar") as HTMLElement | null;
@@ -1009,6 +1072,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         const el = gresult.querySelector("#" + id) as HTMLElement | null;
         if (el) on(el, "click", fn);
       };
+      bind("grb_new_game", newGame);
       bind("grb_replay_same", replaySameBoard);
       bind("grb_review", startInPlaceReplay);
       bind("grb_download", downloadAvf);
@@ -1076,6 +1140,13 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       pendingBoard = snapshot.mines.slice();
       reset(lv === "cus" ? "cus" : lv);
     }
+    /* ---- 再来一局（六期）：与「重玩本局」相对——全新随机盘面。必须显式清掉锁定标记，
+       否则重玩本局之后再点再来一局，placeMines 仍会注入上一局的 pendingBoard ---- */
+    function newGame() {
+      replayBoardLocked = false;
+      pendingBoard = null;
+      reset(lv === "cus" ? "cus" : lv);
+    }
     /* ---- 下载录像：标准 AVF 字节流 → Blob 下载 ---- */
     function downloadAvf() {
       if (!snapshot) return;
@@ -1094,24 +1165,36 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = onlineAvfFilename(snapshot.level, Math.ceil(snapshot.csec / 100));
+      a.download = onlineAvfFilename({
+        level: snapshot.level,
+        csec: snapshot.csec,
+        nf: snapshot.nf,
+        bbbv: snapshot.bbbv,
+        user: player, // 未登录为 null → 文件名省略 `# 用户ID 英文名` 段
+      });
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     }
-    /* ---- 自研回放（五期二版，2026-10-14 张老师定：不弹窗，就在游戏界面进行）----
-       复用游戏本体盘面（VEC 管线 + vecUse），回放引擎重演事件流；
-       游戏界面下方出现控制栏（参考 flopplayer）：重放 | 播放/暂停 | 速度滑条+倍速钮 |
-       进度滑条 | 时间文本。退出回放恢复结算盘面。
+    /* ---- 自研回放（五期二版，2026-10-14 张老师定：不弹窗，就在游戏界面进行；
+       六期 2026-10-15 撤掉控制栏）----
+       复用游戏本体盘面（VEC 管线 + vecUse），回放引擎重演事件流，进回放即自动播完。
+       六期：回放中再点「查看回放」＝从头重播（此前是 early-return 点不动）；
+       退出回放走 Esc / 笑脸 /「再来一局」/「重玩本局」，退出后恢复结算盘面。
        ⚠️ 回放期间必须屏蔽游戏交互（gboard 命中由 replaying 标志拦截），
        且不动引擎 state/mines——回放用自己的 rstate 副本驱动贴图。 */
     let replaying = false;
     /* 强制退出钩子：exitReplay 是闭包内的，reset（外层）够不着——由 startInPlaceReplay
        每次进入时注册，退出时自清；repaint 参数控制是否重画结算盘面（reset 路径不需要） */
     let forceExitReplay: (repaint?: boolean) => void = () => {};
+    /* 重播钩子（六期）：同一局回放中再点「查看回放」＝从头放。与 forceExitReplay 同理——
+       restartReplay 也是闭包内的，由 startInPlaceReplay 注册、exitReplay 自清 */
+    let restartReplay: (() => void) | null = null;
     function startInPlaceReplay() {
-      if (!snapshot || replaying) return;
+      if (!snapshot) return;
+      /* 已在回放中（六期张老师定）：不忽略点击，从头重播 */
+      if (replaying) { restartReplay?.(); return; }
       const s = snapshot;
       replaying = true;
       const N = s.w * s.h;
@@ -1204,45 +1287,18 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           else if (rstate[ci] === 2) { rstate[ci] = 0; paintR(ci); }
         }
       }
-      /* 控制栏（flopplayer 式）：插在 gname 之后（游戏区下） */
-      const bar = document.createElement("div");
-      bar.className = "replay_ctrl";
-      bar.innerHTML =
-        '<button type="button" class="rc_btn" id="rc_restart" title="重放">' +
-        '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 2.6-6.4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 4v5h5"/></svg></button>' +
-        '<button type="button" class="rc_btn" id="rc_play" title="播放">' +
-        '<svg class="ic_play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>' +
-        '<svg class="ic_pause" viewBox="0 0 24 24"><path fill="currentColor" d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>' +
-        '<div class="rc_sep"></div>' +
-        '<input type="range" class="rc_speed" id="rc_speed" min="0.25" max="4" step="0.25" value="1" title="速度" />' +
-        '<button type="button" class="rc_rate" id="rc_rate" title="重置速度">1.00x</button>' +
-        '<div class="rc_sep"></div>' +
-        '<input type="range" class="rc_range" id="rc_range" min="0" max="1000" step="1" value="0" />' +
-        '<span class="rc_time" id="rc_time">0.00 / ' + (s.csec / 100).toFixed(2) + "</span>" +
-        '<div class="rc_sep"></div>' +
-        '<button type="button" class="rc_btn rc_exit" id="rc_exit" title="退出回放">' +
-        '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18 6 6 18M6 6l12 12"/></svg></button>';
-      gname.insertAdjacentElement("afterend", bar);
-      const playBtn = bar.querySelector("#rc_play") as HTMLButtonElement;
-      const restartBtn = bar.querySelector("#rc_restart") as HTMLButtonElement;
-      const exitBtn = bar.querySelector("#rc_exit") as HTMLButtonElement;
-      const speedRange = bar.querySelector("#rc_speed") as HTMLInputElement;
-      paintRangeFill(speedRange); // 动态插入的滑条补一次填充比例（HTML 初值不走委托）
-      const rateBtn = bar.querySelector("#rc_rate") as HTMLButtonElement;
-      const range = bar.querySelector("#rc_range") as HTMLInputElement;
-      const timeEl = bar.querySelector("#rc_time") as HTMLElement;
-
+      /* 六期（2026-10-15 张老师定）：**不再插控制条**——原 rc_* 控制栏（重放/播放暂停/
+         速度/进度/退出）整条撤掉；进回放即自动播完（固定 1x），回放中再点「查看回放」
+         ＝从头重播，退出走 Esc / 笑脸 /「再来一局」/「重玩本局」（后两者经 reset 的
+         forceExitReplay）。 */
       let evIdx = 0;
       let curCsec = 0;
       let playing = false;
       let rafId: number | null = null;
       let lastFrame = 0;
-      const fmt = (cs: number) => (cs / 100).toFixed(2);
 
       function setPlaying(v: boolean) {
         playing = v;
-        playBtn.classList.toggle("on", v);
-        playBtn.title = v ? "暂停" : "播放";
         if (playing) {
           if (curCsec >= s.csec) seekTo(0);
           lastFrame = 0;
@@ -1255,9 +1311,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         rstate.fill(0);
         for (let i = 0; i < N; i++) paintR(i);
         evIdx = 0; curCsec = 0;
-        range.value = "0";
-        paintRangeFill(range);
-        timeEl.textContent = "0.00 / " + fmt(s.csec);
         moveCursor(0, 0);
       }
       function seekTo(csec: number) {
@@ -1270,9 +1323,6 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           evIdx++;
         }
         curCsec = target;
-        range.value = String(Math.round((target / s.csec) * 1000));
-        paintRangeFill(range);
-        timeEl.textContent = fmt(target) + " / " + fmt(s.csec);
         interpCursor(target);
       }
       /* 光标插值（2026-10-14 张老师报回放一顿一顿）：时间轴推进的每帧，光标在
@@ -1290,8 +1340,8 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       }
       function tick(ts: number) {
         if (!playing) return;
-        const speed = parseFloat(speedRange.value);
-        const dt = lastFrame ? ((ts - lastFrame) / 10) * speed : 0;
+        /* 速度恒 1x（六期撤掉控制条后已无倍速入口） */
+        const dt = lastFrame ? (ts - lastFrame) / 10 : 0;
         lastFrame = ts;
         const target = Math.min(s.csec, curCsec + dt);
         while (evIdx < evs.length) {
@@ -1301,45 +1351,33 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
           evIdx++;
         }
         curCsec = target;
-        range.value = String(Math.round((target / s.csec) * 1000));
-        paintRangeFill(range);
-        timeEl.textContent = fmt(target) + " / " + fmt(s.csec);
         interpCursor(target);
-        if (target >= s.csec) { setPlaying(false); return; }
+        if (target >= s.csec) {
+          setPlaying(false);
+          return;
+        }
         rafId = requestAnimationFrame(tick);
       }
       function exitReplay(repaint = true) {
         setPlaying(false);
         replaying = false;
-        bar.remove();
+        restartReplay = null;
         curEl.remove();
         /* 恢复结算盘面（repaintAll 按引擎 state 重画，含败局雷区揭示）；
            reset 路径传 false（后面自会全盘重画） */
         if (repaint) repaintAll();
         document.removeEventListener("keydown", escR);
       }
-      /* 注册给外层 reset 用（进回放时更新引用，退出时复位） */
+      /* 注册给外层用（进回放时更新引用，退出时自清）：
+         forceExitReplay 供 reset 强制退出；restartReplay 供回放中再点「查看回放」从头重播 */
       forceExitReplay = exitReplay;
-      playBtn.addEventListener("click", () => setPlaying(!playing));
-      restartBtn.addEventListener("click", () => { seekTo(0); setPlaying(true); });
-      exitBtn.addEventListener("click", () => exitReplay());
-      speedRange.addEventListener("input", () => {
-        rateBtn.textContent = parseFloat(speedRange.value).toFixed(2) + "x";
-      });
-      rateBtn.addEventListener("click", () => {
-        speedRange.value = "1";
-        paintRangeFill(speedRange);
-        rateBtn.textContent = "1.00x";
-      });
-      range.addEventListener("input", () => {
-        seekTo((parseFloat(range.value) / 1000) * s.csec);
-      });
+      restartReplay = () => { setPlaying(false); resetReplay(); setPlaying(true); };
       function escR(e: KeyboardEvent) {
         if (e.key === "Escape" && replaying) exitReplay();
       }
       document.addEventListener("keydown", escR);
       resetReplay();
-      setPlaying(true); // 进入即自动播放
+      setPlaying(true); // 进入即自动播放（复位到 0 起播）
     }
     function lose(hit: number) {
       over = true;
@@ -1366,7 +1404,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       /* 胜利同样不再有任何文字提醒（数据都在左侧报告浮窗里） */
     }
     function reset(level?: string) {
-      /* 回放中重开（笑脸/F2/切级别）：先强制退出回放，清掉控制栏/光标/拦截标志
+      /* 回放中重开（笑脸/F2/切级别）：先强制退出回放，清掉光标/拦截标志
          （2026-10-14 张老师报：播放回放后点笑脸不能再玩——回放元素残留锁死游戏）。
          exitReplay 的 repaintAll 在这里跳过：reset 后面自会全盘重画 */
       if (replaying) forceExitReplay(false);
@@ -1379,7 +1417,11 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
          （五期）；重玩锁定标记保留——placeMines 在首击时消费它 */
       flagToggles = 0; stLeft = 0; stRight = 0; stDouble = 0; stCe = 0; stPath = 0; lastPX = null;
       evStream = [];
-      greport.classList.remove("show");
+      /* 数据面板（六期）：开关开着 → 重开即显形（第 0 秒基线，之后随计时器实时刷新）；
+         关着 → 任何时刻都不出现。statsReport 只读 state/统计量、不读 snapshot，
+         故与下面 snapshot = null 的先后无依赖 */
+      if (showStats) paintStatPanel(statsReport(0).html);
+      else greport.classList.remove("show");
       gresult.classList.remove("show");
       snapshot = null;
       stopTimer();
@@ -1435,6 +1477,8 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       /* 主体板块宽度自适应（v7）：必须放在上面 zoom 之后——applyModeZoom/applyZoom
          已把 zoomWant 更新成目标模式的记忆值，页宽按它算才准；拖动中函数自冻结 */
       syncPageFit();
+      /* 数据面板常驻时（六期）重开后盘面尺寸/倍率可能已变，重新对齐+缩放 */
+      if (showStats) syncReportZoom();
     }
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
@@ -1679,6 +1723,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     const swNg = $("sw_ng") as HTMLInputElement;
     const swQm = $("sw_qm") as HTMLInputElement;
     const swBv = $("sw_bv") as HTMLInputElement;
+    const swStats = $("sw_stats") as HTMLInputElement;
     on(swNf, "change", () => {
       nf = swNf.checked;
       saveSettings();
@@ -1692,6 +1737,14 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
     /* 「显示3BV」只影响状态栏文字，不重开当前局 */
     on(swBv, "change", () => { showBv = swBv.checked; saveSettings(); updateStatus(); });
+    /* 「显示统计」（六期）：只切左侧数据面板的显隐，不重开当前局。
+       打开＝立即显形（按当前已进行的秒数），此后随计时器 100ms 实时刷新；关闭＝立刻撤下 */
+    on(swStats, "change", () => {
+      showStats = swStats.checked;
+      saveSettings();
+      if (showStats) paintStatPanel(statsReport(elapsedSec()).html);
+      else greport.classList.remove("show");
+    });
 
     /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ----
        兼容退化（2026-10-14 张老师报：iPhone 上点了没反应）：
@@ -1785,6 +1838,8 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
       else if (lsQuery.matches && zoomBeforeLs !== null) fitZoomForLandscape();
       else applyZoom(zoomCur, false);
       syncPageFit(); // 自定义盘的页宽按新视口重算（非 cus 级别内部直接清 inline）
+      /* 数据面板常驻时（六期）：跟随 gwrap 重新贴合（内部对未显示的面板直接早退） */
+      syncReportZoom();
       positionCusDialog(); // 窗口尺寸/换行变化后重新对准「自定义」tab（未开窗时内部直接跳过）
     }, { signal });
 
@@ -2265,6 +2320,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
     swNg.checked = ng;
     swQm.checked = qmark;
     swBv.checked = showBv;
+    swStats.checked = showStats;
     syncBvSlider();
 
     /* 开局恢复上次级别（四期张老师报：刷新/热更后回初级，3BV 范围浮窗也跟着变初级
@@ -2320,7 +2376,7 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
         </div>
 
         {/* 设置浮窗：齿轮点开（无头部栏/关闭按钮——外点、Esc、再点齿轮均可关）；
-            含 NF/无猜/问号开关、显示比例滑杆、3BV 范围双端点滑杆。
+            含 NF/无猜/问号/显示3BV/显示统计 开关、显示比例滑杆、3BV 范围双端点滑杆。
             全部状态入 localStorage（online_play_settings），比例仍走原 online_play_zoom 键 */}
         <div className="gsettings" id="gsettings">
           {/* 开关名 ≤4 字（2026-10-14 张老师定），完整解释放 hover 气泡（.tip） */}
@@ -2343,6 +2399,12 @@ export function OnlinePlay({ bvRanges, metricDists = {} }: { bvRanges: BvRanges;
             <span className="gs_name">显示3BV</span>
             <label className="gsw"><input type="checkbox" id="sw_bv" /><span className="track" /></label>
             <span className="tip">棋盘下方状态栏显示本局 3BV</span>
+          </div>
+          {/* 「显示统计」（2026-10-15 六期张老师定，默认关）：左侧数据统计面板的唯一入口 */}
+          <div className="gs_row">
+            <span className="gs_name">显示统计</span>
+            <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
+            <span className="tip">左侧数据统计面板常驻显示（对局中随计时实时刷新，结束后定格）</span>
           </div>
           <div className="gs_divider" />
           <div className="gs_zoom">

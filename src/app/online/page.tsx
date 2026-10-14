@@ -9,11 +9,23 @@
 import type { Metadata } from "next";
 import { OnlinePlay } from "@/components/OnlinePlay";
 import { getLevel3bvRanges, getOnlineMetricDists } from "@/lib/queries";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export const metadata: Metadata = { title: "练习 | 扫雷网" };
+/* 需要读 session（下载录像的文件名要带登录玩家署名）→ 声明动态渲染 */
+export const dynamic = "force-dynamic";
 
 export default async function OnlinePage() {
   const [ranges, metricDists] = await Promise.all([getLevel3bvRanges(), getOnlineMetricDists()]);
+  /* 登录态**只**用于「下载录像」文件名（与录像页同款命名规则里要带 `# 用户ID 英文名`，
+     见 lib/avfwrite 的 onlineAvfFilename）。练习页本身不要求登录，未登录保持匿名，
+     不重定向——与站内其他需登录页不同 */
+  const session = await getSession();
+  const me = session
+    ? await prisma.user.findUnique({ where: { id: BigInt(session.uid) }, select: { englishName: true } })
+    : null;
+  const player = session && me ? { id: session.uid, name: me.englishName.trim() } : null;
   /* 服务端注入各级别统计区间（getLevel3bvRanges 已按现行排行规则钳下限）；
      缺行（极端空库）时按理论完整范围兜底，保证浮窗滑杆始终可用 */
   const bvRanges = {
@@ -24,7 +36,7 @@ export default async function OnlinePage() {
   return (
     <div id="page" className="main">
       <div className="box" id="online_play">
-        <OnlinePlay bvRanges={bvRanges} metricDists={metricDists} />
+        <OnlinePlay bvRanges={bvRanges} metricDists={metricDists} player={player} />
       </div>
     </div>
   );
