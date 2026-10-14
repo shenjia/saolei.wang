@@ -22,6 +22,14 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "扫雷网",
   },
+  /* Next 16 对 appleWebApp.capable 只生成标准化的 mobile-web-app-capable
+     （2026-10-14 生产 HTML 实证），不生成 iOS legacy 的 apple- 版本；
+     iOS 16.4–18 的 Safari 判「从主屏幕图标打开是否全屏」只认 legacy meta
+     或 manifest 的 display:standalone——不补这颗，用户照引导添加主屏幕后
+     依旧带地址栏（iOS 26 起系统默认即以 web app 打开，无需此条） */
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
