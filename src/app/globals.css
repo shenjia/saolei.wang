@@ -1986,13 +1986,19 @@ body #page.message_list > .box:first-child .page_head {
   line-height: 16px;
 }
 
-/* 导航未读消息角标（2026-09-24 张老师定：上标、黄底黑字） */
+/* 导航未读消息角标（2026-09-24 张老师定：上标、黄底黑字；
+   2026-10-15 改胶囊式自适应：一位数被 min-width 撑成正圆，多位数成圆角矩形。
+   ⚠️ 站内无全局 border-box，min-width 必须配 box-sizing 才能把 padding 算进 14px 圆径） */
 .msg_badge {
   vertical-align: super;
   display: inline-block;
-  padding: 0 4px;
+  box-sizing: border-box;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
   margin-left: 2px;
-  border-radius: 3px;
+  border-radius: 999px;
+  text-align: center;
   background: #fdc61a;
   color: #151515;
   font-size: 11px;
@@ -4264,8 +4270,12 @@ body #page {
     position: absolute;
     top: 5px;
     right: 0;
-    padding: 0 4px;
-    border-radius: 3px;
+    box-sizing: border-box;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 999px;
+    text-align: center;
     background: #fdc61a;
     color: #151515;
     font-size: 11px;
@@ -5050,6 +5060,31 @@ body #header .nav .popMenu .menu li a {
 body #header .nav .popMenu .menu li a .um_icon {
   vertical-align: -2px;
   margin-right: 7px;
+}
+
+/* ---------- 桌面导航消息图标按钮（2026-10-15 张老师定：PC 端固定图标显示） ----------
+   移动版 MobileNav 同款 BubbleIcon 三点对话气泡（20px），替换原「消息」文字；
+   灰 #939387 → hover 绿 #a6e22e 沿用导航链接配色；
+   未读角标沿用 .msg_badge 黄底黑字，absolute 钉在图标右上角（同移动版口径）。
+   height:44px 与 um_trigger 同款撑满顶栏；图标居中免受 line-height:44px 撑行影响。 */
+body #header .nav li a.msg_icon_btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 44px;
+  padding: 0;
+}
+body #header .nav li a.msg_icon_btn svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+body #header .nav li a.msg_icon_btn .msg_badge {
+  position: absolute;
+  top: 5px;
+  right: -4px;
 }
 
 /* ---------- 头像上传（2026-09-24 个人资料页「点击上传头像」+ AI 审核）----------
