@@ -154,7 +154,7 @@ export function proxy(req: NextRequest) {
     "/world": "/titles",
     "/update": "/page/history",
     "/history": "/page/history",
-    "/online": "/page/download",
+    "/online": "/online",
     "/main": "/",
   };
   if (path in bareDirs) return movedTo(req, bareDirs[path]);
@@ -204,10 +204,20 @@ export function proxy(req: NextRequest) {
     return movedTo(req, withPage("/bbs", page(), b ? { board: b } : undefined));
   }
   if (path === "/bbs/post.asp") return movedTo(req, "/bbs/post");
-  if (path === "/bbs/edit.asp") {
+  if (path === "/bbs/edit.asp" || path === "/bbs/edit_box.asp") {
     const n = id();
     return movedTo(req, n ? `/bbs/edit/${n}` : "/bbs");
   }
+  // 回复/删帖/移动等操作半页与「我的主题/精华」列表 → 主题详情或版块列表
+  if (path === "/bbs/reply.asp" || path === "/bbs/reply_box.asp") {
+    const n = id();
+    return movedTo(req, n ? `/bbs/${n}` : "/bbs");
+  }
+  if (path === "/bbs/del.asp" || path === "/bbs/move.asp" || path === "/bbs/my_new.asp" || path === "/bbs/my_nice.asp") {
+    const n = id();
+    return movedTo(req, n ? `/bbs/${n}` : "/bbs");
+  }
+  if (path === "/bbs/index_nice_new.asp") return movedTo(req, withPage("/bbs", undefined, { order: "nice" }));
 
   // ---------- Video 录像 ----------
   if (path === "/video/show.asp") {
@@ -238,6 +248,15 @@ export function proxy(req: NextRequest) {
   }
   if (path === "/video/upload.asp" || path === "/video/upload_input.asp" || path === "/video/upload_select.asp" || path === "/video/upload_select_list.asp" || path === "/video/upload_ok.asp") {
     return movedTo(req, "/video/upload");
+  }
+  // 审核/冻结半页（Check/Freeze/Satus/UnFreeze）→ 录像详情或列表；New_Hero/New_Index=新版录像频道首页
+  if (path === "/video/check.asp" || path === "/video/freeze.asp" || path === "/video/satus.asp") {
+    const n = id();
+    return movedTo(req, n ? `/video/${n}` : "/video");
+  }
+  if (path === "/video/comment_list.asp") {
+    const n = id();
+    return movedTo(req, n ? `/video/${n}` : "/video");
   }
   // 旧录像文件直链（2013 版起的 hash 路径）：/videos/... 已有 catch-all 路由，不在此处理；
   // 2008 早期路径 /Video/Mvf/70/xxx.mvf → /videos/Mvf/70/xxx.mvf
@@ -383,7 +402,7 @@ export function proxy(req: NextRequest) {
   }
   if (path === "/title.asp") return movedTo(req, "/"); // 根目录 Title.asp=2008 录像迁移工具页
   if (path === "/online/game.asp" || path === "/online/game" || path === "/online/index.asp") {
-    return movedTo(req, "/page/download"); // 在线 Java 扫雷已过时 → 下载页
+    return movedTo(req, "/online"); // 旧在线 Java 扫雷 → 新练习页（2026-10-15 练习页已上线）
   }
   if (path === "/error.asp" || path === "/error(source).asp") return movedTo(req, "/");
   if (path === "/try.asp") return movedTo(req, "/");
