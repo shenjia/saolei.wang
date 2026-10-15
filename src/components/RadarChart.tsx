@@ -1,6 +1,9 @@
 // 实力雷达图：纯 SVG 实现，替代 2013 版的 Highcharts polar area
 // 顶点标注等级（按原版配色），hover 顶点/标签时该维度高亮放大，
 // 并在标签处弹「超过 xx% 的玩家」气泡（2026-10-14 张老师要求，视觉与录像分析 vr_tip 同款）。
+// ⚠️ 2026-10-15 气泡改用 beatPct（真实排位百分位）：percent 是等级档位插值
+//    （A 档恒 69~79% 区间），只作绘图半径——档位值配上「超过 xx% 的玩家」文案
+//    会把全国前 30 名显示成 79%，逻辑漏洞已修。
 // ⚠️ 气泡是 HTML 绝对定位 div：SVG 内部元素不支持 CSS 伪元素（同 VideoAnalysis 的约束），
 //    出血尺寸因此挪到 .radar_tip_wrap 上（globals.css），svg 本体 width:100%。
 "use client";
@@ -161,12 +164,13 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
         <div className="radar_tip" style={tipStyle}>
           {tip.grade === "?" ? (
             "暂无成绩"
-          ) : tip.percent >= 100 ? (
-            // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 vr_tip 统一）
+          ) : tip.beatPct >= 100 ? (
+            // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 vr_tip 统一）；
+            // 判定用真实排位（beatPct：无人更优），非绘图用的档位插值 percent
             <span className="tip_first">全网第一</span>
           ) : (
             <>
-              超过 <em>{tip.percent}%</em> 的玩家
+              超过 <em>{tip.beatPct}%</em> 的玩家
             </>
           )}
         </div>
