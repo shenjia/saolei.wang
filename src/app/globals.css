@@ -2776,6 +2776,96 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   line-height: 21px;
 }
 
+/* ---------- 账户管理页二轮（2026-10-15 张老师反馈） ----------
+   ① 操作按钮右对齐、小号（legacy .button.small：16px/24px、4px 12px）、亮灰字；
+   ② 头像/登录名/绑定邮箱挪进主栏「账号信息」表（SelfAvatar 100px 适配表单行）；
+   ③ 侧栏改标准 UserCard（UserPanel 复用，样式零新增）。 */
+#account_manage .manage_actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+#account_manage .manage_actions .button {
+  margin: 0;
+}
+#account_manage .manage_actions .button.small {
+  color: #b1b1a4;
+}
+/* 主栏账号信息表里的头像：100px 版 avatar_slot（同构 09-24 那套清零规则） */
+#account_manage .account_avatar_cell .avatar_slot {
+  position: relative;
+  display: block;
+  width: 100px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-shadow: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+#account_manage .account_avatar_cell .avatar_slot .avatar {
+  display: block;
+  float: none;
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+}
+#account_manage .account_avatar_cell .avatar_change {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  height: 24px;
+  color: #f8f8f2;
+  font-size: 12px;
+  line-height: 24px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.68);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#account_manage .account_avatar_cell .avatar_status {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  padding: 2px 10px;
+  color: #d5d5cc;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  background: rgba(58, 58, 54, 0.8);
+  border-radius: 9px;
+  transform: translateX(-50%);
+  transition: bottom 0.15s;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+#account_manage .account_avatar_cell .avatar_status.ok {
+  color: #a6e22e;
+}
+#account_manage .account_avatar_cell .avatar_slot:hover .avatar_change,
+#account_manage .account_avatar_cell .avatar_slot:focus-visible .avatar_change {
+  opacity: 1;
+}
+#account_manage .account_avatar_cell .avatar_slot:hover .avatar_status,
+#account_manage .account_avatar_cell .avatar_slot:focus-visible .avatar_status {
+  bottom: 30px;
+}
+/* 登录名 + 绑定邮箱按钮同行 */
+#account_manage .login_name_text {
+  color: #b1b1a4;
+}
+#account_manage .bind_email_btn {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 /* ---------- 头像方形裁剪弹窗（2026-09-24）----------
    主页点击头像、个人资料页点击缩略图都走这个浮窗；
    取景框固定 300px 方形，图片短边填满、可拖动可缩放，导出 400x400 JPEG。 */
@@ -7925,4 +8015,40 @@ html.op-fakefs #header {
   margin: 4px 0 0;
   color: #a6e22e;
   font-size: 12px;
+}
+
+/* ===== 绑定邮箱页改版（2026-10-15 张老师）：标题右只放「返回」、介绍文字沉底 ===== */
+#account_email .nav ul.email_back {
+  float: right;
+}
+#account_email .nav ul.email_back a {
+  color: #939387;
+  font-size: 14px;
+  line-height: 32px;
+}
+#account_email .nav ul.email_back a:hover {
+  color: #a6e22e;
+}
+/* 邮箱输入框：参考注册表单美化（legacy input 深色基样式 + 暖色 hover/focus） */
+#account_email .form .email_input {
+  width: 260px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#account_email .form .email_input:hover {
+  border-color: #75715e;
+}
+#account_email .form .email_input:focus {
+  border-color: #fdc61d;
+  outline: none;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25), 0 0 0 3px rgba(253, 198, 29, 0.12);
+}
+/* 介绍文字沉到板块最底部（表单下方、细分隔线隔开） */
+#account_email .email_intro {
+  margin: 22px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #636359;
+  border-bottom: 1px solid #2d2d29;
+  color: #75715e;
+  font-size: 13px;
+  line-height: 20px;
 }

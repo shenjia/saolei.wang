@@ -232,8 +232,11 @@ export function PasswordForm() {
 
 // 绑定邮箱（2026-10-15）：老用户登录名非邮箱，忘记密码时唯一自助找回途径。
 // 提交后发送验证链接；未验证草稿可随时覆盖重发。
+// 2026-10-15 张老师改版：输入框参考注册表单美化（focus 行 hint / error 行红字 +
+// 暖色 hover/focus 边框），绑定邮箱介绍文字移到板块最底部。
 export function EmailBindForm({ currentEmail, verified }: { currentEmail: string; verified: boolean }) {
   const [email, setEmail] = useState("");
+  const [focus, setFocus] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -265,28 +268,29 @@ export function EmailBindForm({ currentEmail, verified }: { currentEmail: string
 
   return (
     <form id="email-bind-form" onSubmit={submit}>
-      <p style={{ margin: "10px 0 0", color: "#75715e", lineHeight: "20px" }}>
-        绑定邮箱后，忘记密码可直接通过邮箱自助找回。绑定需点击邮件中的验证链接确认归属。
-      </p>
       <table className="form" cellPadding={0} cellSpacing={0}>
         <tbody>
           <tr>
             <th>当前绑定</th>
             <td>{current}</td>
           </tr>
-          <tr>
+          <tr className={focus ? "focus" : ""}>
             <th>邮箱</th>
             <td>
               <div>
                 <input
-                  type="email"
+                  type="text"
+                  className="email_input"
                   size={30}
                   maxLength={64}
                   placeholder="填写您常用的邮箱"
                   value={email}
+                  onFocus={() => setFocus(true)}
+                  onBlur={() => setFocus(false)}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
+              <span className="hintMessage">请输入常用邮箱，点击验证邮件中的链接完成绑定</span>
             </td>
           </tr>
           <tr>
@@ -304,6 +308,7 @@ export function EmailBindForm({ currentEmail, verified }: { currentEmail: string
           </tr>
         </tbody>
       </table>
+      <p className="email_intro">绑定邮箱后，忘记密码可直接通过邮箱自助找回。绑定需点击邮件中的验证链接确认归属。</p>
     </form>
   );
 }
