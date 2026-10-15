@@ -35,6 +35,7 @@ import {
   parseVideoTimeWindow,
 } from "./config";
 import { publishNews } from "./news";
+import { decodeLegacyEntities } from "./format";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -267,16 +268,22 @@ async function expTimeAtBatch(
 }
 
 function safeJson(s: string): Record<string, unknown> {
+  let obj: Record<string, unknown>;
   try {
-    return JSON.parse(s) as Record<string, unknown>;
+    obj = JSON.parse(s) as Record<string, unknown>;
   } catch {
     // 兜底：历史数据可能带多余转义层（如 2019 转储的 {\"lv\":...}），去一层再试
     try {
-      return JSON.parse(s.replace(/\\"/g, '"')) as Record<string, unknown>;
+      obj = JSON.parse(s.replace(/\\"/g, '"')) as Record<string, unknown>;
     } catch {
       return {};
     }
   }
+  // 论坛动态的标题快照（t 字段）带老 ASP 转义实体，出口统一解码（2026-10-15，同 bbs 标题口径）
+  if (typeof obj.t === "string") {
+    obj = { ...obj, t: decodeLegacyEntities(obj.t) };
+  }
+  return obj;
 }
 
 /**

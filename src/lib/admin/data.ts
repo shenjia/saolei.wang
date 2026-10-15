@@ -11,6 +11,7 @@ import { usersByIds, type UserBrief } from "@/lib/queries";
 import { BBS_BOARD_NAMES, BBS_BOARDS, ubb } from "@/lib/bbs";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
+import { decodeLegacyEntities } from "@/lib/format";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -575,7 +576,8 @@ export async function getPostListAdmin(f: {
       boardName: BBS_BOARD_NAMES[p.board] ?? String(p.board),
       user: N(p.user),
       author: authors.get(N(p.user)) ?? null,
-      title: p.title,
+      // 老 ASP 实体出口统一解码（2026-10-15，同前台 getPostList 口径）
+      title: decodeLegacyEntities(p.title),
       replies: p.replies,
       clicks: p.clicks,
       isTop: p.isTop,
@@ -617,7 +619,7 @@ export async function getReplyListAdmin(postId: number): Promise<{
   const replies = await prisma.bbsReply.findMany({ where: { post: post.id }, orderBy: { id: "asc" }, take: 200 });
   const authors = await usersByIds(replies.map((r) => N(r.user)));
   return {
-    post: { id: N(post.id), title: post.title, board: post.board },
+    post: { id: N(post.id), title: decodeLegacyEntities(post.title), board: post.board },
     rows: replies.map((r) => ({
       id: N(r.id),
       post: N(r.post),

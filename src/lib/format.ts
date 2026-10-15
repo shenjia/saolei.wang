@@ -31,6 +31,32 @@ export function areaPower(power: number): string {
   return power >= 10000 ? `${(power / 10000).toFixed(1)}万` : String(power);
 }
 
+/** 老 ASP 站入库时做的一次 HTML 转义解码（2026-10-15：修 bbs/5264 评论显示 &gt;.&lt; 字面量）。
+ *  旧站把用户输入（如颜文字 >.<、emoji &#10060;、空格 &nbsp;）转义后直接落库，旧站渲染不转义
+ *  所以显示正常；新站按文本渲染会再次转义，字面实体就漏出来了。渲染前统一解掉：
+ *  · &nbsp; → 不换行空格、&lt;/&gt;/&quot;/&#39; → 原字符
+ *  · &amp;#N; / &#N; 数字实体（GBK 时代存不进库的 emoji，库里实测全是 &amp;# 前缀双重形态）
+ *  · &amp; 最后解（避免 &amp;gt; 提前展开成 >；旧站语义本就是「&」字符，
+ *    文本渲染链路随后会再转义回去，正常显示「&」） */
+export function decodeLegacyEntities(s: string): string {
+  if (!s.includes("&")) return s;
+  return s
+    .replace(/&nbsp;/gi, "\u00a0")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/g, "'")
+    .replace(/(?:&amp;|&)#(\d+);/g, (m, d: string) => {
+      const cp = parseInt(d, 10);
+      // 仅解可显示字符：ASCII 可见区 32-126 + BMP 主体（避开控制区与代理区 55296-57343）
+      if ((cp >= 32 && cp <= 126) || (cp >= 160 && cp <= 55295) || (cp >= 57344 && cp <= 65533)) {
+        return String.fromCodePoint(cp);
+      }
+      return m;
+    })
+    .replace(/&amp;/gi, "&");
+}
+
 const SECONDS_PER_DAY = 86400;
 const NEVER = 3153600000; // 100 年，即「永远显示绝对时间」
 

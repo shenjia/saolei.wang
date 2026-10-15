@@ -6,6 +6,7 @@ import { oldTitle, type OldTitle } from "./oldtitle";
 import { NEWS_TYPE } from "./config";
 import { publishNews } from "./news";
 import { WX_FACES, FACE_BY_KEY } from "./faces";
+import { decodeLegacyEntities } from "./format";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -61,6 +62,8 @@ const MINE_MAP: Record<string, string> = {
 export function ubb(raw: string): string {
   // 2008 版 UBB 不做 HTML 转义直接输出，MSSQL 老数据里混有字面 <br> 与 &nbsp;（[&nbsp;] 是扫雷空格符号）
   // 转义前先把这些老遗留标记归一化，否则转义后会在页面上原样显示
+  // 2026-10-15：老 ASP 入库转义的 &gt;/&lt;/&quot;/&amp;#N;（emoji）等实体同样在此统一解码
+  // （decodeLegacyEntities），否则新站二次转义后页面显示 &gt;.&lt; 字面量（bbs/5264 实证）
   // 旧站链接重写（2026-09-25）：
   // ① 静态图热链：历史帖子里 36 处 [img]http://(www.)saolei.(net|wang)/Models/Images/…
   //    旧域名（net 已被抢注跳垃圾站、wang 未来下线）不可依赖 → 重写为新站本地路径
@@ -68,18 +71,19 @@ export function ubb(raw: string): string {
   // ② 页面绝对链接：274 处 [url http://www.saolei.net/BBS/Title.asp?Id=1970/] 形态——
   //    域名改写成相对路径后交由 src/proxy.ts 的旧站 301 规则接管（.asp 请求全量拦截），
   //    Id/Page 等查询串原样保留，落在正确的帖子/玩家/录像页
-  const normalized = raw
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/\[&nbsp;\]/gi, "[ ]")
-    .replace(/&nbsp;/gi, "\u00a0")
-    .replace(
-      /https?:\/\/(?:www\.)?saolei\.(?:net|wang)(\/models\/images\/[^\s\[\]"]+)/gi,
-      (_m, p: string) => p.toLowerCase()
-    )
-    .replace(
-      /https?:\/\/(?:www\.)?saolei\.(?:net|wang)(\/(?:player|bbs|video|ranking|news|message|about|download|guide|help|hero|team|world|update|history|online|main|index)[^\s\[\]"]*)/gi,
-      (_m, p: string) => p
-    );
+  const normalized = decodeLegacyEntities(
+    raw
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/\[&nbsp;\]/gi, "[ ]")
+      .replace(
+        /https?:\/\/(?:www\.)?saolei\.(?:net|wang)(\/models\/images\/[^\s\[\]"]+)/gi,
+        (_m, p: string) => p.toLowerCase()
+      )
+      .replace(
+        /https?:\/\/(?:www\.)?saolei\.(?:net|wang)(\/(?:player|bbs|video|ranking|news|message|about|download|guide|help|hero|team|world|update|history|online|main|index)[^\s\[\]"]*)/gi,
+        (_m, p: string) => p
+      )
+  );
   let text = escapeHtml(normalized);
   // 标题/签名颜色 span（2013 legacy CSS 里有 .Title/.Sign/.Signest）
   text = text
@@ -271,7 +275,8 @@ export async function getPostList(opts: {
     posts: rows.map((r) => ({
       id: N(r.id),
       board: r.board,
-      title: r.title,
+      // 老 ASP 入库转义的实体（&nbsp; 等）出口统一解码（2026-10-15，详见 format.ts decodeLegacyEntities）
+      title: decodeLegacyEntities(r.title),
       replies: r.replies,
       clicks: r.clicks,
       // 公告板块（board=0）一律强制高亮（2026-09-25 张老师定）——展示层判定，
@@ -304,7 +309,7 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
   return {
     id: N(row.id),
     board: row.board,
-    title: row.title,
+    title: decodeLegacyEntities(row.title),
     content: row.content,
     replies: row.replies,
     clicks: row.clicks + (bump ? 1 : 0),

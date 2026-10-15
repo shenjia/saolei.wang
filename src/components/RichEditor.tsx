@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { WX_FACES, FACE_BY_KEY, FACE_KEY_BY_SLOT } from "@/lib/faces";
+import { decodeLegacyEntities } from "@/lib/format";
 
 /** 扫雷符号 → 图片名（同 lib/bbs.ts MINE_MAP） */
 const MINE_MAP: Record<string, string> = {
@@ -42,12 +43,14 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** UBB → 画布 HTML（规则同服务端 ubb()；带 data-face/data-mine 便于回序列化） */
+/** UBB → 画布 HTML（规则同服务端 ubb()；带 data-face/data-mine 便于回序列化）
+ *  2026-10-15：老 ASP 实体（&gt; 等）在此统一解码（同服务端 ubb()），编辑存量帖回存即净化 */
 export function ubbToEditorHtml(raw: string): string {
-  let t = raw
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/\[&nbsp;\]/gi, "[ ]")
-    .replace(/&nbsp;/gi, "\u00a0");
+  let t = decodeLegacyEntities(
+    raw
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/\[&nbsp;\]/gi, "[ ]")
+  );
   t = escapeHtml(t);
   t = t
     .replace(/\[Title\]/gi, '<span class="Title">').replace(/\[\/Title\]/gi, "</span>")

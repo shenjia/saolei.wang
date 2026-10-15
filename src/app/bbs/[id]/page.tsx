@@ -8,7 +8,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { BBS_BOARD_NAMES, getPost, getReplyFeed, ubb } from "@/lib/bbs";
-import { timeOpposite, TIME_NEVER } from "@/lib/format";
+import { timeOpposite, TIME_NEVER, decodeLegacyEntities } from "@/lib/format";
 import { PostOps } from "@/components/BbsOps";
 import { BbsReplySection } from "@/components/BbsReplies";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
@@ -36,7 +36,8 @@ export async function generateMetadata({
   });
   if (!p) return {};
   const board = BBS_BOARD_NAMES[p.board];
-  return { title: `${board ? `【${board}】` : ""}${p.title}` };
+  // 老 ASP 实体解码（2026-10-15，同页面 h1 口径；此处独立直查不走 getPost）
+  return { title: `${board ? `【${board}】` : ""}${decodeLegacyEntities(p.title)}` };
 }
 
 export default async function BbsTitlePage({ params }: { params: Promise<{ id: string }> }) {

@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
 import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE, countsInTotal } from "@/lib/config";
+import { decodeLegacyEntities } from "@/lib/format";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
 import { reviewVideo } from "@/lib/review";
@@ -292,7 +293,7 @@ async function dispatch(
         prisma.bbsPost.update({ where: { id: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } }),
         prisma.bbsReply.updateMany({ where: { post: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } }),
       ]);
-      return { ok: true, message: `删除主题 #${id}「${post.title}」及其全部回复` };
+      return { ok: true, message: `删除主题 #${id}「${decodeLegacyEntities(post.title)}」及其全部回复` };
     }
 
     case "bbs.deleteReply": {
