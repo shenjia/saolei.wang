@@ -64,7 +64,9 @@ function pad(n: number): string {
   return n < 10 ? "0" + n : String(n);
 }
 
-/** 绝对日期格式化（移植 PHP date() 的常用占位符） */
+/** 绝对日期格式化（移植 PHP date() 的常用占位符）
+ *  2026-10-15 补 s（秒）占位符：此前未实现，"H:i:s" 末尾的字面 s 会原样漏出
+ *  （录像列表 tooltip「18:08:s」），全站格式串均不含字母 s 作字面量，追加替换无副作用 */
 export function formatDate(time: number, format: string): string {
   const d = new Date(time * 1000);
   return format
@@ -74,7 +76,8 @@ export function formatDate(time: number, format: string): string {
     .replace("j", String(d.getDate()))
     .replace("d", pad(d.getDate()))
     .replace("H", pad(d.getHours()))
-    .replace("i", pad(d.getMinutes()));
+    .replace("i", pad(d.getMinutes()))
+    .replace("s", pad(d.getSeconds()));
 }
 
 /**
