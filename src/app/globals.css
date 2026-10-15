@@ -2910,6 +2910,288 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   vertical-align: middle;
 }
 
+/* ---------- 账户管理页（2026-10-15 张老师改版，设计稿 design/account-manage-20261015.html） ----------
+   /account：标题「账户管理」+ 操作按钮行（修改资料 / 修改密码 / 绑定邮箱）。
+   侧栏竖版玩家卡片：头像（SelfAvatar，点击直接上传，交互同个人主页）→
+   登录名（user_auth.username，灰 13px 超长省略）→ 中文名（链接进个人主页）→ 军衔。 */
+#account_manage .manage_actions {
+  margin: 5px 0;
+}
+#account_manage .manage_actions .button {
+  margin: 0 12px 10px 0;
+}
+.account_card {
+  text-align: center;
+}
+/* 头像槽：与个人主页 #user_view .info 的 avatar_slot 同构（见上 09-24 注释：
+   legacy 裸 button 规则的渐变底/圆角/阴影/字号必须逐条清零），尺寸 150px 适配
+   侧栏内容宽（222 - 2×边框 - 2×20 padding = 150px），图片自带 1px 边框共 152px。 */
+.account_card button.avatar_slot {
+  position: relative;
+  display: block;
+  width: 150px;
+  margin: 4px auto 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-shadow: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+.account_card button.avatar_slot .avatar {
+  display: block;
+  float: none;
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+}
+.account_card .avatar_change {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  height: 26px;
+  color: #f8f8f2;
+  font-size: 13px;
+  line-height: 26px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.68);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.account_card .avatar_status {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  padding: 2px 12px;
+  color: #d5d5cc;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  background: rgba(58, 58, 54, 0.8);
+  border-radius: 10px;
+  transform: translateX(-50%);
+  transition: bottom 0.15s;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.account_card .avatar_status.ok {
+  color: #a6e22e;
+}
+.account_card button.avatar_slot:hover .avatar_change,
+.account_card button.avatar_slot:focus-visible .avatar_change {
+  opacity: 1;
+}
+.account_card button.avatar_slot:hover .avatar_status,
+.account_card button.avatar_slot:focus-visible .avatar_status {
+  bottom: 32px;
+}
+/* 登录名 → 中文名 → 军衔（竖排） */
+.account_card .login_name {
+  margin: 10px 0 0;
+  color: #75715e;
+  font-size: 13px;
+  line-height: 19.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account_card h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  line-height: 27px;
+}
+.account_card h2 a {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account_card .title_line {
+  margin: 6px 0 0;
+  color: #939387;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+/* ---------- 账户管理页二轮/三轮（2026-10-15 张老师反馈） ----------
+   ① 标题行：左「账户管理」h1 + 右「修改资料/修改密码」小按钮（legacy .button.small：
+     16px/24px、4px 12px）同行底线对齐，文字亮灰（hover 变绿）；
+   ② 账户卡：头像（可点更换，100px）左、账户名（+绑定邮箱按钮）/中文名(英文名)右；
+   ③ 侧栏：标准 UserCard + 「数据统计」盒（个人主页右栏同款，替代实力雷达）。 */
+#account_manage .manage_head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+#account_manage .manage_head h1 {
+  margin: 0;
+}
+#account_manage .manage_actions {
+  display: flex;
+  gap: 10px;
+  /* 与 h1（26px/39px）底线对齐：行高差补偿，避免按钮贴着标题下沿 */
+  margin-bottom: 5px;
+}
+#account_manage .manage_actions .button {
+  margin: 0;
+}
+#account_manage .manage_actions .button.small {
+  color: #b1b1a4;
+}
+/* 头像左列 + 资料表右（五轮张老师定稿：头像单独一列居左贴顶，账户信息表在其右侧） */
+#account_manage .account_identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 6px 0;
+}
+#account_manage .account_avatar_cell {
+  flex: none;
+  margin: 0;
+}
+/* 资料值统一论坛正文色（2026-10-16 张老师）。⚠️ 必须打到 td 内的 div 上：
+   legacy 全局 `body,div,td,…{color:#636359}` 直接命中 div 元素，任何特异性下
+   直接命中都优先于从 td 继承——只给 td 上色时文字所在的 div 仍是 #636359
+   （一轮实测踩坑：td computedStyle 是 #bbbbbb 但页面文字暗，吸管吸到的就是 div 的色） */
+#account_manage table.form td,
+#account_manage table.form td div {
+  color: #bbbbbb;
+}
+/* 侧栏「数据统计」表（2026-10-16 张老师：与用户主页右栏同款）——结构抄过来时
+   样式全挂在 #user_view 作用域没跟过来，回落全局 #636359 显暗。此处补齐同款规则 */
+#account_manage > li.sidebar .table {
+  table-layout: fixed;
+}
+#account_manage > li.sidebar .table td {
+  padding: 3px 0;
+  font-size: 14px;
+}
+#account_manage > li.sidebar .table td:first-child {
+  width: 4.8em;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+#account_manage > li.sidebar .table .num {
+  text-align: right;
+}
+#account_manage > li.sidebar .table .delta {
+  width: 4em;
+  padding-left: 0;
+  padding-right: 0;
+  white-space: nowrap;
+  text-align: left;
+  color: #a6e22e;
+}
+/* 统计数字：亮灰加粗（与 #user_view .sidebar 同款，压过 legacy .table em 的金色） */
+#account_manage > li.sidebar .table em {
+  color: #b1b1a4;
+  font-weight: bold;
+}
+/* 头像：100px 版 avatar_slot（同构 09-24 那套清零规则） */
+#account_manage .account_avatar_cell .avatar_slot {
+  position: relative;
+  display: block;
+  width: 100px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-shadow: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+#account_manage .account_avatar_cell .avatar_slot .avatar {
+  display: block;
+  float: none;
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+}
+#account_manage .account_avatar_cell .avatar_change {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  height: 24px;
+  color: #f8f8f2;
+  font-size: 12px;
+  line-height: 24px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.68);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#account_manage .account_avatar_cell .avatar_status {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  padding: 2px 10px;
+  color: #d5d5cc;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  background: rgba(58, 58, 54, 0.8);
+  border-radius: 9px;
+  transform: translateX(-50%);
+  transition: bottom 0.15s;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+#account_manage .account_avatar_cell .avatar_status.ok {
+  color: #a6e22e;
+}
+#account_manage .account_avatar_cell .avatar_slot:hover .avatar_change,
+#account_manage .account_avatar_cell .avatar_slot:focus-visible .avatar_change {
+  opacity: 1;
+}
+#account_manage .account_avatar_cell .avatar_slot:hover .avatar_status,
+#account_manage .account_avatar_cell .avatar_slot:focus-visible .avatar_status {
+  bottom: 30px;
+}
+/* 绑定邮箱：金色链接带括号（六轮张老师定稿，不再用按钮形态） */
+#account_manage .bind_email_btn {
+  color: #fdc61a;
+  font-size: 14px;
+  line-height: 24px;
+  white-space: nowrap;
+}
+#account_manage .bind_email_btn::before {
+  content: "（";
+}
+#account_manage .bind_email_btn::after {
+  content: "）";
+}
+#account_manage .bind_email_btn:hover {
+  color: #a6e22e;
+}
+/* 侧栏几何与首页/录像详情页统一（五轮张老师要求）：legacy 默认 sidebar 222 / 盒 192，
+   统一为 288 / 盒内容 210（外径 272，与 #home、#video_view 右栏完全一致）；
+   main 相应收窄并留 2px 防子像素舍入掉行（同 2296 行 #home 注释口径）。 */
+#page #account_manage > li.sidebar {
+  width: 288px;
+}
+#page #account_manage > li.main {
+  width: calc(100% - 290px);
+  min-width: 0;
+}
+#page #account_manage > li.sidebar .box {
+  width: 210px;
+}
+
+
 /* ---------- 头像方形裁剪弹窗（2026-09-24）----------
    主页点击头像、个人资料页点击缩略图都走这个浮窗；
    取景框固定 300px 方形，图片短边填满、可拖动可缩放，导出 400x400 JPEG。 */
