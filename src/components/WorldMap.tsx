@@ -3,14 +3,15 @@
 // 世界榜 · 交互式世界地图（2026-10-15 张老师需求，地区榜 AreaMap 同款交互）
 // 放在排行规则下方单列全宽展示（当日两定：右栏双栏版地图被压窄看不清，改终版），
 // 按「综合排行指数」给各国填色（开方归一：越高越黄、越低越灰）；悬停国家高亮 +
-// 气泡（领军人物置顶，下接名次 / 排行人数 / 综合排行指数；点击定位已按张老师
-// 要求去除——滚动定位在 TOP100 表前不生效）。表行悬停反向高亮地图国家（双向联动）。
+// 气泡（领军人物置顶 + 排行人数；综合排行指数行已按张老师要求去除——对玩家
+// 无意义；点击定位已去除——滚动定位在 TOP100 表前不生效）。表行悬停反向高亮
+// 地图国家（双向联动）。气泡用 wm_tip 修饰类放大字号（单列全宽版式下看小字费劲），
+// 地区榜右栏小地图仍用原 am_tip 小字。
 // 国界几何是静态数据（src/lib/world-map-geo.ts，由 scripts/build-world-map.py 生成）：
 // 无第三方地图服务、无 Key、可离线；中国国界按我国标准口径（含台湾省与南海诸岛九段线），
 // chinese-taipei 旗帜选手并入中国统计（lib/worldtop.ts FLAG_ISO）。
 
 import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { areaPower } from "@/lib/format";
 import type { WorldCountryDatum } from "@/lib/worldtop";
 import { GEO_COUNTRIES, GEO_MINI, GEO_NINE, MAP_H, MAP_W } from "@/lib/world-map-geo";
 
@@ -130,7 +131,7 @@ export function WorldMap({
             );
           })}
         </svg>
-        <div className={`am_tip${hot ? " show" : ""}`} ref={tipRef}>
+        <div className={`am_tip wm_tip${hot ? " show" : ""}`} ref={tipRef}>
           {hot && (
             <>
               <div className="tp_head">
@@ -148,10 +149,6 @@ export function WorldMap({
                 <b>
                   {hot.players} <em className="unit">人</em>
                 </b>
-              </div>
-              <div className="tp_row">
-                <i>综合排行指数</i>
-                <b className="gold">{areaPower(hot.power)}</b>
               </div>
             </>
           )}

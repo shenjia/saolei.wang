@@ -4139,6 +4139,31 @@ body #page.two_columns {
   color: #75715e;
 }
 
+/* 世界榜地图气泡放大版（2026-10-15 张老师：单列全宽地图配小气泡字太小）——
+   wm_tip 修饰类叠加在 am_tip 之上，只作用世界榜；地区榜右栏小地图仍用原尺寸 */
+.wm_tip {
+  min-width: 230px;
+  padding: 12px 16px 10px;
+}
+.wm_tip .tp_head {
+  gap: 18px;
+  margin-bottom: 7px;
+  padding-bottom: 7px;
+}
+.wm_tip .tp_head b {
+  font-size: 17px;
+}
+.wm_tip .tp_head span {
+  font-size: 13px;
+}
+.wm_tip .tp_row {
+  font-size: 14px;
+  line-height: 2.1;
+}
+.wm_tip .tp_row em {
+  font-size: 13px;
+}
+
 @media (max-width: 768px) {
   /* 小屏地图整体缩小：省份名称标签会糊成一团，直接隐去只留悬停气泡（触屏点击即跳转） */
   .area_map {
