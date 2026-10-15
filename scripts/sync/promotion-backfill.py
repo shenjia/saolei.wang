@@ -16,15 +16,32 @@ user_score：历史口径为 sum_time 快照；晋升动效按重放 sum（三�
 与 backfill_news_score.py 同算法。
 
 用法: python3 scripts/sync/promotion-backfill.py [--apply]   默认 dry-run
+
+连接（2026-10-15 支持生产重放）：默认本地 root@127.0.0.1:3306/saolei；
+SAOLEI_DB_HOST/PORT/USER/PASSWORD 环境变量覆盖（写生产走 3316 隧道 + --allow-nonlocal）。
+⚠️ 生产禁建 schema 外表：--apply 时不再建 news_backup_* 表，改为提示——
+生产侧备份用 mysqldump 到服务器文件（news-backup-before-promo-20261015.sql.gz）。
 """
 import json
+import os
 import sys
 from collections import defaultdict
 
 import pymysql
 
-my = pymysql.connect(host="127.0.0.1", user="root", database="saolei",
-                     charset="utf8mb4", autocommit=False)
+DRY = "--apply" not in sys.argv
+NONLOCAL = bool(os.environ.get("SAOLEI_DB_PORT")) and os.environ["SAOLEI_DB_PORT"] != "3306"
+if NONLOCAL and "--allow-nonlocal" not in sys.argv and not DRY:
+    print("目标库非本地 3306，写入需显式 --allow-nonlocal")
+    sys.exit(2)
+
+my = pymysql.connect(
+    host=os.environ.get("SAOLEI_DB_HOST", "127.0.0.1"),
+    port=int(os.environ.get("SAOLEI_DB_PORT", "3306")),
+    user=os.environ.get("SAOLEI_DB_USER", "root"),
+    password=os.environ.get("SAOLEI_DB_PASSWORD", ""),
+    database=os.environ.get("SAOLEI_DB_NAME", "saolei"),
+    charset="utf8mb4", autocommit=False)
 cur = my.cursor()
 
 BATCH = 5000
@@ -200,11 +217,14 @@ if "--apply" not in sys.argv:
     print("\n[dry-run] 未写库。确认后加 --apply 执行。")
     sys.exit(0)
 
-# ---------- 4. 备份 + 尾部替换 ----------
-backup = "news_backup_promo_" + datetime.now().strftime("%Y%m%d")
-cur.execute(f"DROP TABLE IF EXISTS {backup}")
-cur.execute(f"CREATE TABLE {backup} AS SELECT * FROM news")
-print(f"已备份 news -> {backup}")
+# ---------- 4. 尾部替换（生产不建备份表——schema 外表会阻塞全部部署） ----------
+if NONLOCAL:
+    print("[生产] 不建 schema 外备份表；回滚靠服务器侧 mysqldump 备份文件。")
+else:
+    backup = "news_backup_promo_" + datetime.now().strftime("%Y%m%d")
+    cur.execute(f"DROP TABLE IF EXISTS {backup}")
+    cur.execute(f"CREATE TABLE {backup} AS SELECT * FROM news")
+    print(f"已备份 news -> {backup}")
 
 cur.execute("DELETE FROM news WHERE create_time >= %s", (cut,))
 print(f"已删尾部 {cur.rowcount} 行")

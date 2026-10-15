@@ -17,8 +17,15 @@
      尾部原行的 user_score 原样保留
 
 用法: python3 scripts/sync/news-delta.py [--apply]   默认 dry-run
+
+连接（2026-10-15 支持生产）：源库 staging 走 SAOLEI_STG_*；目标库（新站）走
+SAOLEI_DB_*（写生产走 3316 隧道 + --allow-nonlocal）。
+⚠️ 生产禁建 schema 外表：--apply 时不再建 news_backup_* 表——生产侧备份用
+mysqldump 到服务器文件。--include-soft：旧站派生事件（30/40/50）早于上次同步的
+也并入（本次生产补 10-13 增量时需要：295 条事件全部早于生产 max create_time）。
 """
 import json
+import os
 import sys
 from collections import defaultdict
 
@@ -29,10 +36,27 @@ NEWS_BASELINE = "2013-10-23 08:23:46"
 LEVELS = ("beg", "int", "exp")
 BATCH = 5000
 
-my = pymysql.connect(host="127.0.0.1", user="root", database="saolei",
-                     charset="utf8mb4", autocommit=False)
-stg = pymysql.connect(host="127.0.0.1", user="root", database="saolei_mssql",
-                      charset="utf8mb4", autocommit=True)
+DRY = "--apply" not in sys.argv
+NONLOCAL = bool(os.environ.get("SAOLEI_DB_PORT")) and os.environ["SAOLEI_DB_PORT"] != "3306"
+if NONLOCAL and "--allow-nonlocal" not in sys.argv and not DRY:
+    print("目标库非本地 3306，写入需显式 --allow-nonlocal")
+    sys.exit(2)
+INCLUDE_SOFT = "--include-soft" in sys.argv
+
+my = pymysql.connect(
+    host=os.environ.get("SAOLEI_DB_HOST", "127.0.0.1"),
+    port=int(os.environ.get("SAOLEI_DB_PORT", "3306")),
+    user=os.environ.get("SAOLEI_DB_USER", "root"),
+    password=os.environ.get("SAOLEI_DB_PASSWORD", ""),
+    database=os.environ.get("SAOLEI_DB_NAME", "saolei"),
+    charset="utf8mb4", autocommit=False)
+stg = pymysql.connect(
+    host=os.environ.get("SAOLEI_STG_HOST", "127.0.0.1"),
+    port=int(os.environ.get("SAOLEI_STG_PORT", "3306")),
+    user=os.environ.get("SAOLEI_STG_USER", "root"),
+    password=os.environ.get("SAOLEI_STG_PASSWORD", ""),
+    database=os.environ.get("SAOLEI_STG_NAME", "saolei_mssql"),
+    charset="utf8mb4", autocommit=True)
 cur, sc = my.cursor(), stg.cursor()
 
 TZ_OFFSET = 8 * 3600
@@ -200,11 +224,14 @@ hard = [e for e in events if e[0] < local_max_ct and e[2] in (10, 20) and e[0] >
 ancient = [e for e in events if e[0] < ancient_cut and e[2] in (10, 20)]
 soft = [e for e in events if e[0] < local_max_ct and e[2] in (30, 40, 50)]
 if soft:
-    print(f"\n[跳过] {len(soft)} 条派生事件时间早于上次同步（不补插，避免整表重编号）：")
-    for e in sorted(soft, key=lambda x: x[0])[:15]:
-        print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[5]} {e[6][:50]}")
-    drop = {id(e) for e in soft}
-    events = [e for e in events if id(e) not in drop]
+    if INCLUDE_SOFT:
+        print(f"\n[并入] {len(soft)} 条派生事件时间早于上次同步（--include-soft 强制并入）：")
+    else:
+        print(f"\n[跳过] {len(soft)} 条派生事件时间早于上次同步（不补插，避免整表重编号）：")
+        for e in sorted(soft, key=lambda x: x[0])[:15]:
+            print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[5]} {e[6][:50]}")
+        drop = {id(e) for e in soft}
+        events = [e for e in events if id(e) not in drop]
 if ancient:
     print(f"\n[跳过·远古] {len(ancient)} 条事件早于上次同步 {ANCIENT_DAYS} 天以上（仅报告；--force 可强制并入）：")
     for e in sorted(ancient, key=lambda x: x[0])[:20]:
@@ -293,11 +320,14 @@ if "--apply" not in sys.argv:
     print("\n[dry-run] 未写库。确认后加 --apply 执行。")
     sys.exit(0)
 
-# ---------- 4. 备份 + 尾部替换 ----------
-backup = "news_backup_" + __import__("datetime").datetime.now().strftime("%Y%m%d")
-cur.execute(f"DROP TABLE IF EXISTS {backup}")
-cur.execute(f"CREATE TABLE {backup} AS SELECT * FROM news")
-print(f"已备份 news -> {backup}")
+# ---------- 4. 尾部替换（生产不建备份表——schema 外表会阻塞全部部署） ----------
+if NONLOCAL:
+    print("[生产] 不建 schema 外备份表；回滚靠服务器侧 mysqldump 备份文件。")
+else:
+    backup = "news_backup_" + __import__("datetime").datetime.now().strftime("%Y%m%d")
+    cur.execute(f"DROP TABLE IF EXISTS {backup}")
+    cur.execute(f"CREATE TABLE {backup} AS SELECT * FROM news")
+    print(f"已备份 news -> {backup}")
 
 cur.execute("DELETE FROM news WHERE create_time >= %s", (cut,))
 print(f"已删尾部 {cur.rowcount} 行")
