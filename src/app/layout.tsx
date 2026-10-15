@@ -7,10 +7,11 @@ import { getHeaderUser } from "@/lib/usercard";
 import { LoginLink } from "@/components/LoginLink";
 import { LoginModal } from "@/components/LoginModal";
 import { MessageBadge } from "@/components/MessageBadge";
-import { IconGear, IconLogout, IconPerson, IconUpload } from "@/components/MenuIcons";
+import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "@/components/MenuIcons";
 import { MobileNav } from "@/components/MobileNav";
 import { ScrollReset } from "@/components/ScrollReset";
 import { ToastHost } from "@/components/Toast";
+import { isManager } from "@/lib/config";
 
 export const metadata: Metadata = {
   /* 站点标题模板（2026-10-15 张老师要求）：所有子页面统一「XXX | 扫雷网 Saolei.wang」 */
@@ -113,6 +114,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                             账户管理
                           </Link>
                         </li>
+                        {isManager(session.role) && (
+                          <li>
+                            <Link href="/admin">
+                              <IconAdmin />
+                              管理后台
+                            </Link>
+                          </li>
+                        )}
                         <li>
                           <a href="/api/auth/logout">
                             <IconLogout />
@@ -132,7 +141,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             {/* 半移动/移动版（≤960px）导航：三横线菜单 + 登录头像；桌面由 CSS 隐藏 */}
             <MobileNav
               user={
-                session ? { uid: session.uid, displayName, avatarUrl } : null
+                session
+                  ? { uid: session.uid, displayName, avatarUrl, role: session.role }
+                  : null
               }
             />
           </div>

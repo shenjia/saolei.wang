@@ -52,6 +52,16 @@ export function IconGear() {
   );
 }
 
+/** 管理后台：盾牌 + 对勾（2026-10-15 张老师选定的方案 B） */
+export function IconAdmin() {
+  return (
+    <IconSvg>
+      <path d="M7 1.8l4.2 1.6v3.4c0 2.8-1.8 4.4-4.2 5.4-2.4-1-4.2-2.6-4.2-5.4V3.4z" />
+      <path d="M5 6.9l1.5 1.5 2.6-2.8" />
+    </IconSvg>
+  );
+}
+
 /** 退出登录：门框 + 出口箭头 */
 export function IconLogout() {
   return (

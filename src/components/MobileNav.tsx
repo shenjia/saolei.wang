@@ -8,14 +8,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { LoginLink } from "./LoginLink";
-import { IconGear, IconLogout, IconPerson, IconUpload } from "./MenuIcons";
+import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "./MenuIcons";
 import { BubbleIcon } from "./SendMessageButton";
 import { pollWhenMobile, useUnreadMessages } from "./useUnreadMessages";
+import { isManager } from "@/lib/config";
 
 export interface MobileNavUser {
   uid: number;
   displayName: string;
   avatarUrl: string;
+  /** 用户角色（USER_ROLE）：isManager 才显示管理后台入口 */
+  role: number;
 }
 
 /** 站内主导航（与桌面 #header_nav 前八项一致） */
@@ -144,6 +147,14 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
                   账户管理
                 </Link>
               </li>
+              {isManager(user.role) && (
+                <li>
+                  <Link href="/admin">
+                    <IconAdmin />
+                    管理后台
+                  </Link>
+                </li>
+              )}
               <li>
                 <a href="/api/auth/logout">
                   <IconLogout />
