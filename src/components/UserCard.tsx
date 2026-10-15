@@ -16,7 +16,7 @@ import { getUserCard } from "@/lib/usercard";
 import { getRadarData } from "@/lib/radar";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { RadarChart } from "./RadarChart";
-import { areaDisplay, LEVELS, LEVEL_NAMES } from "@/lib/config";
+import { areaDisplay, AREA_OVERSEAS, LEVELS, LEVEL_NAMES } from "@/lib/config";
 
 export function UserCard({ card }: { card: UserCardData }) {
   return (
@@ -41,21 +41,28 @@ export function UserCard({ card }: { card: UserCardData }) {
           </p>
           {/* 地区 / 全国排名：与用户主页 #user_view .info .rank_label .ranks 完全同构
               （两行 rank_line、13px、文字 #888、名次数字 Monokai 黄加粗正体；
-              省份行在前、全国行在后），紧随名字下方，整体与左侧头像上下齐平 */}
+              省份行在前、全国行在后），紧随名字下方，整体与左侧头像上下齐平。
+              海外玩家（外国人）不显示地区/全国排名，只标「海外玩家」（2026-10-15 张老师要求） */}
           <div className="ranks">
-            {card.areaPos !== null ? (
-              <span className="rank_line">
-                {areaDisplay(card.area)}第 <em>{card.areaPos}</em> 名
-              </span>
+            {card.area === AREA_OVERSEAS ? (
+              <span className="rank_line ranks_overseas">海外玩家</span>
             ) : (
-              <span className="rank_line ucd_null">未加入地区排行</span>
-            )}
-            {card.rank !== null ? (
-              <span className="rank_line">
-                全国第 <em>{card.rank}</em> 名
-              </span>
-            ) : (
-              <span className="rank_line ucd_null">未加入排行</span>
+              <>
+                {card.areaPos !== null ? (
+                  <span className="rank_line">
+                    {areaDisplay(card.area)}第 <em>{card.areaPos}</em> 名
+                  </span>
+                ) : (
+                  <span className="rank_line ucd_null">未加入地区排行</span>
+                )}
+                {card.rank !== null ? (
+                  <span className="rank_line">
+                    全国第 <em>{card.rank}</em> 名
+                  </span>
+                ) : (
+                  <span className="rank_line ucd_null">未加入排行</span>
+                )}
+              </>
             )}
           </div>
         </div>

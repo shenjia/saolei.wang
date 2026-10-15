@@ -324,6 +324,10 @@ export const AREA_LIST = [
   "香港", "澳门", "台湾", "海外",
 ] as const;
 
+// 「海外」用户（外国人，名字为外文中译）不参与地区排行、主页/玩家卡片不显示全国名
+// （2026-10-15 张老师要求）；仍保留全国主榜名次本身
+export const AREA_OVERSEAS = "海外";
+
 // ---------- 地区显示名（合规表述；链接/查询仍用数据库原值） ----------
 
 export const AREA_DISPLAY: Record<string, string> = {

@@ -1615,6 +1615,7 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
               COUNT(*) OVER () total
        FROM user_scores s JOIN user u ON u.id = s.id
        WHERE s.sum_time > 0 AND u.status = 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
+         AND u.area <> '海外'
      ),
      agg AS (
        SELECT area, COUNT(*) players, ROUND(AVG(rk)) avg_rank, MIN(rk) best_rank,
@@ -1627,6 +1628,7 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
        WHERE u.status = 0
          AND u.last_login_time > UNIX_TIMESTAMP() - 30 * 86400
          AND u.area <> '' AND u.area NOT LIKE '%&%'
+         AND u.area <> '海外'
        GROUP BY u.area
      )
      SELECT a.area, a.players, COALESCE(v.active, 0) active, a.best_rank, a.power,
@@ -1654,7 +1656,8 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
 
 // 2026-10-15 性能审计：/area 每次请求跑全量窗口聚合（user_scores 3.5 万行 × JOIN user
 // × 30 天活跃子查询），地区榜一天变不了几次，缓存 5 分钟（按 order 参数分键）
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v1"], {
+// 2026-10-15 海外排除：查询逻辑变更，缓存键升 v2
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v2"], {
   revalidate: 300,
 });
 
@@ -1681,7 +1684,7 @@ async function getUserRanksImpl(userId: number): Promise<UserRanks | null> {
         SELECT id, area,
               ROW_NUMBER() OVER (PARTITION BY area ORDER BY npos) apos
        FROM allr
-       WHERE area <> '' AND area NOT LIKE '%&%'
+       WHERE area <> '' AND area NOT LIKE '%&%' AND area <> '海外'
      )
      SELECT a.npos national, a.area, b.apos areaPos
      FROM allr a LEFT JOIN arear b ON b.id = a.id
@@ -1696,7 +1699,8 @@ async function getUserRanksImpl(userId: number): Promise<UserRanks | null> {
 
 // 2026-10-15 性能审计：用户主页每次浏览都跑一次全量 ROW_NUMBER 窗口（3.5 万行 ×2 CTE），
 // 而名次只在有人出成绩时变化——按用户 id 分键缓存 10 分钟（userId 自动并入缓存键）
-const fetchUserRanks = unstable_cache(getUserRanksImpl, ["user-ranks-v1"], { revalidate: 600 });
+// 2026-10-15 海外排除：arear CTE 排除「海外」，缓存键升 v2
+const fetchUserRanks = unstable_cache(getUserRanksImpl, ["user-ranks-v2"], { revalidate: 600 });
 
 export async function getUserRanks(userId: number): Promise<UserRanks | null> {
   return fetchUserRanks(userId);

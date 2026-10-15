@@ -29,7 +29,7 @@ import {
 } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
-import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, USER_VIDEO_NUMBER, VIDEO_LEVELS, areaDisplay, type Level, type VideoLevel } from "@/lib/config";
+import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, USER_VIDEO_NUMBER, VIDEO_LEVELS, AREA_OVERSEAS, areaDisplay, type Level, type VideoLevel } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoListFeed } from "@/components/VideoListFeed";
 import { HistoryBox } from "@/components/HistoryBox";
@@ -242,8 +242,13 @@ export default async function UserViewPage({
                   {detail.title}
                 </span>
               </Link>
-              {/* 省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求） */}
-              {ranks && (
+              {/* 省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求）；
+                  海外玩家（外国人）不参与地区排行、也不显示全国名（2026-10-15 张老师要求） */}
+              {ranks && (ranks.area === AREA_OVERSEAS ? (
+                <div className="ranks">
+                  <span className="rank_line ranks_overseas">海外玩家</span>
+                </div>
+              ) : (
                 <div className="ranks">
                   {ranks.areaPos !== null && (
                     <span className="rank_line">
@@ -254,7 +259,7 @@ export default async function UserViewPage({
                     全国第 <em>{ranks.national}</em> 名
                   </span>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         </div>

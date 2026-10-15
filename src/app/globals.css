@@ -1690,6 +1690,11 @@ del[data-tip]:hover::after {
   color: #75715e;
   font-weight: normal;
 }
+/* 海外玩家（外国人，2026-10-15）：不参与地区排行、不显示全国名——灰色一行，
+   用户主页 #user_view .ranks 与侧栏玩家卡片 .user_card .ranks 共用 */
+.ranks .ranks_overseas {
+  color: #75715e;
+}
 
 /* 侧栏「实力」雷达图板块（论坛 / 用户主页右栏通用；录像页让位给「录像分析」六维雷达）——
    2026-10-14 起 RadarChart 自带 .radar_tip_wrap 包裹层（hover 气泡的定位父级），

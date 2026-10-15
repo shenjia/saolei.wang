@@ -20,6 +20,26 @@ TZ8 = timedelta(hours=8)
 BATCH = 2000
 NEWS_BASELINE = 1382487826  # 本地 news 最大 create_time
 
+# 外国人（名字为外文中译、纪事/发帖均为英文）强制 area=「海外」：
+# 不参与地区排行、主页/玩家卡片不显示全国名（2026-10-15 张老师要求）。
+# 全量 upsert 会按旧库 Player_Area 覆盖 user.area，必须在转换层写死，
+# 否则手工 UPDATE 会被下一次同步冲回（如 Michal Szoplik 旧库登记为「北京」）。
+OVERSEAS_USER_IDS = frozenset({
+    4841,   # 卡米尔 Kamil Muranski（旧库「澳门」）
+    5045,   # 奥利弗 Oliver
+    6234,   # 罗根 Rogen（旧库「澳门」）
+    24189,  # 迈克尔 Michal Szoplik（旧库「北京」）
+    24743,  # 托马斯 Thomas Kolar（旧库「北京」）
+    27167,  # 舒尔茨 Shu Er Ci（旧库「Peking」）
+    27631,  # 德米特里 Dmitry Lidyaev（旧库「北京」）
+    27924,  # 塔纳托恩 Thanathorn（泰国人，旧库「台湾」）
+    30320,  # 敖睿弼 Ruben Ibarra（旧库「Beijing」）
+    30986,  # 马尔特 Malte Schulz（旧库「Macau」）
+    34212,  # 傑西 Jesse（论坛自述来自美国，旧库「北京」）
+    34214,  # 马尔特舒尔茨（Malte Schulz 重复注册，旧库「Beijing」）
+    35260,  # 阿扎罗夫 Aleksandr Azarov（旧库「北京」）
+})
+
 my = pymysql.connect(host="127.0.0.1", user="root", database="saolei",
                      charset="utf8mb4", autocommit=False)
 stg = pymysql.connect(host="127.0.0.1", user="root", database="saolei_mssql",
@@ -144,7 +164,8 @@ for p in players:
     # 否则其录像/评论/帖子在新站变成无主引用（曾致 2844 条录像显示不出上传者）
     u_rows.append((pid, (p[C["cn"]] or "")[:12], (p[C["en"]] or "")[:32],
                    1 if p[C["sex"]] else 0, "1" if p[C["image"]] else "0",
-                   (p[C["area"]] or "")[:12], 0 if p[C["live"]] else -1, reg, 0, ux(p[C["login"]])))
+                   "海外" if pid in OVERSEAS_USER_IDS else (p[C["area"]] or "")[:12],
+                   0 if p[C["live"]] else -1, reg, 0, ux(p[C["login"]])))
     y, m = p[C["year"]] or 0, p[C["month"]] or 0
     bday = 0
     if y and m:
