@@ -1428,7 +1428,9 @@ export function OnlinePlay({
       const evs = s.events;
       /* 回放光标：flopplayer 同款鼠标箭头（cursor-arrow 贴图，FlopSprites 已内置）。
          箭头坐标域 0-120 × 0-190、尖端在 (5,12)——事件像素坐标 (e.x,e.y) 对准尖端：
-         容器左上角偏移 (-5,-12)，渲染尺寸 12×19（一格量级，flop 原版视觉） */
+         渲染尺寸 12×19 = viewBox 的 1/10，尖端显示像素 ≈ (0.5,1.21)
+         （此前误按 viewBox 坐标整像素减，尖端扎在格子左上角——2026-10-15 张老师报）。
+         容器左上角偏移 (-0.5,-1.21)，渲染尺寸 12×19（一格量级，flop 原版视觉） */
       const curEl = document.createElement("div");
       curEl.className = "replay_cursor";
       curEl.innerHTML = '<svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>';
@@ -1444,9 +1446,9 @@ export function OnlinePlay({
         const z = (parseFloat(gwrap.style.zoom) || 1) * pageZoom();
         return { x: (gb.left - gw.left) / z, y: (gb.top - gw.top) / z };
       })();
-      /* 尖端锚点：箭头 (5,12) 对准事件坐标——left/top 直接写偏移后的值
+      /* 尖端锚点：箭头尖端显示像素 (0.5,1.21) 对准事件坐标——left/top 直接写偏移后的值
          （1x 像素坐标系内偏移固定；CSS margin 在 zoom 下的缩放语义不可靠，弃用） */
-      const TIP_X = 5, TIP_Y = 12;
+      const TIP_X = 0.5, TIP_Y = 1.21;
       function moveCursor(px: number, py: number) {
         curEl.style.left = px + gboardOff.x - TIP_X + "px";
         curEl.style.top = py + gboardOff.y - TIP_Y + "px";

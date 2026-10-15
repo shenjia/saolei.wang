@@ -163,6 +163,8 @@ function runReplay(opts: {
   }
   /* 回放光标：flop 同款箭头（#cursor-arrow，FlopSprites 已内置；练习页同款 .replay_cursor）。
      箭头坐标域 0-120 × 0-190、尖端 (5,12)——事件像素坐标对准尖端。
+     渲染尺寸 12×19 = viewBox 的 1/10，尖端显示像素 = (5,12.12)×0.1 ≈ (0.5,1.21)
+     （此前误按 viewBox 坐标 (5,12) 整像素减，偏移放大 10 倍，尖端扎在格子左上角——2026-10-15 张老师报）。
      坐标换算：事件像素是棋盘 1x 坐标 → 宿主 .play_board 局部坐标需加 table 相对
      wrap 的静态偏移（.board 有 2px 边框，运行时一次量取） */
   const curEl = document.createElement("div");
@@ -176,8 +178,8 @@ function runReplay(opts: {
     const wr = wrap.getBoundingClientRect();
     return { x: tr.left - wr.left, y: tr.top - wr.top };
   })();
-  const TIP_X = 5,
-    TIP_Y = 12;
+  const TIP_X = 0.5,
+    TIP_Y = 1.21;
   function moveCursor(px: number, py: number) {
     curEl.style.left = px + off.x - TIP_X + "px";
     curEl.style.top = py + off.y - TIP_Y + "px";
