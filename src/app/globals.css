@@ -7027,10 +7027,18 @@ html:has(#online_play) #footer {
   text-decoration: none;
   color: #fdc61a;
 }
-/* 踩雷局（八期 2026-10-15 张老师定）：左侧不显示用时，只给灰色「未完成」 */
+/* 踩雷局（八期 2026-10-15 张老师定）：左侧不显示用时，只给灰色「未完成」
+   十一期追补：「未完成」后附括号预计完成用时——小一号（12→11px）+ 亮灰 #b1b1a4
+   （比未完成的 #9a998d 亮一档、弱于胜局成绩 #d6d6c8，示意估算值而非成绩） */
 #online_play .gresult .gr_title .gr_lv.fail,
 #gr_modal .gr_title .gr_lv.fail {
   color: #9a998d;
+}
+#online_play .gresult .gr_title .gr_lv.fail .est,
+#gr_modal .gr_title .gr_lv.fail .est {
+  margin-left: 2px;
+  font-size: 11px;
+  color: #b1b1a4;
 }
 /* 评级：等级字母的颜色由 JS 按 gradeColor() 内联（SSS/SS/S 金 → A~F 紫），
    未评级（自定义盘 / 缺基准 / 完成度过低）显示「—」+ 灰底 */

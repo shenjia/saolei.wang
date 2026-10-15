@@ -1136,6 +1136,9 @@ export function OnlinePlay({
       /* 标题行（七期 2026-10-15 张老师定）：**不再报「完成！/ 踩雷」**（笑脸状态已足够），
          左＝本局成绩（与录像详情页 h1 同格式同配色：级别名 + 级别色成绩 + NF）；
          八期追补：**踩雷局左侧显示灰色「未完成」**（失败的用时没有展示意义）。
+         十一期追补（2026-10-15 张老师定）：「未完成」后附**预计完成用时**——
+         括号 + 小一号字号 + 亮灰（#b1b1a4），口径与数据面板 Est RTime 一致
+         （实际用时 × 3BV ÷ 已完成 3BV）；无完成量（首击即雷）时不显示。
          右＝「评级：S+」——五围图各轴组内分位的加权新评级（STNB 占一半、四分项各 1/8，
          权值见 lib/videoscore.ts PERFORMANCE_WEIGHTS）。
          无法评级（缺基准 / 完成度过低 / 无点击）时评级显示「—」 */
@@ -1146,13 +1149,19 @@ export function OnlinePlay({
         ? gradeFromPercent(performanceOf(percents))
         : "?";
       const lvName = (LEVEL_NAMES as Record<string, string>)[s.level] ?? "自定义";
+      /* 预计完成用时（十一期）：Est RTime 同口径，半角括号整体小号亮灰 */
+      const estSec = s.stats.solvedBv > 0 ? (s.csec / 100) * (s.bbbv / s.stats.solvedBv) : 0;
       const lvSpan = s.won
         ? '<span class="gr_lv">' +
           lvName +
           '<em class="lv_' + s.level + '">' + (s.csec / 100).toFixed(2) + "</em>秒" +
           (s.nf ? "<ins>NF</ins>" : "") +
           "</span>"
-        : '<span class="gr_lv fail">未完成</span>';
+        : '<span class="gr_lv fail">未完成' +
+          (estSec > 0
+            ? '<span class="est">(预计 ' + estSec.toFixed(2) + "秒)</span>"
+            : "") +
+          "</span>";
       const titleLine =
         '<div class="gr_title">' +
         lvSpan +
