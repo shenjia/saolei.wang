@@ -1,7 +1,10 @@
 // 世界 TOP100 表格 + 底部标准翻页滑条（2026-10-15 张老师要求：替代原「加载更多」
 // more_loader 版式，改用与排行/录像等列表同款 PageSlider；最右侧加「查看完整排行」
 // 外链按钮，新窗口打开 minesweepergame.com 完整榜。数据由服务端一次性抓全（1 天缓存），
-// 翻页纯本地切片，零请求）
+// 全程零请求）
+// 2026-10-15 二轮（张老师要求）：滑条左侧保留标准「···加载更多」按钮——窗口语义与
+// RankingFeed 对齐（本地数据版）：··· 按递增批量追加（15→+30→+60→封顶 100），
+// 滑条窗口内滚动定位、窗口外严格一页整表替换。
 // 2026-09-24 二轮：每级纪录后灰色括号日期；总成绩两位小数。
 // 2026-09-24 六轮：Country/Name 合并一列（表头 Country / Name，国旗+空格+名字，左对齐）。
 // 2026-09-24 五轮：纪录数字加粗 + 分级颜色与主排行榜一致（初 #999994/中 #bbbbaf/高 #ddddcf/总 #e6e6da）；
@@ -9,10 +12,12 @@
 
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { WorldRow } from "@/lib/worldtop";
 import { WORLD_RANKING_PAGE } from "@/lib/worldtop";
-import { PageSlider } from "./PageSlider";
+import { PageSlider, nextBatchSize } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { playFlop } from "./FlopPlayer";
 
 const PAGE = 15;
@@ -55,15 +60,55 @@ function Score({
 }
 
 export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
-  const [page, setPage] = useState(1);
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
-  // 换页纯本地切片（数据已全量在内存，零请求；越界自动钳回）
-  const cur = Math.min(page, pages);
-  const start = (cur - 1) * PAGE;
+  const tableRef = useRef<HTMLTableElement>(null);
+  const maxPage = Math.max(1, Math.ceil(rows.length / PAGE));
+  // 窗口语义与 RankingFeed 对齐（本地数据版，全程零请求）：
+  // ··· 加载更多 = 窗口末尾按递增批量追加（15 → +30 → +60 → 封顶 100）；
+  // 滑条换页 = 窗口内滚动定位（不换表），窗口外严格一页整表替换（批量序列重置）
+  const [winStart, setWinStart] = useState(1);
+  const [winEnd, setWinEnd] = useState(1);
+  const [curPage, setCurPage] = useState(1);
+  const [batchStep, setBatchStep] = useState(0);
+
+  const startRow = (winStart - 1) * PAGE;
+  const endRow = Math.min(rows.length, winEnd * PAGE);
+
+  function scrollToRowIdx(idx: number) {
+    const tr = tableRef.current?.querySelectorAll("tbody tr")[idx];
+    tr?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function loadMore() {
+    const lastLoaded = Math.min(rows.length, winEnd * PAGE);
+    const appended = Math.min(nextBatchSize(batchStep, PAGE), rows.length - lastLoaded);
+    if (appended <= 0) return;
+    setWinEnd(Math.min(maxPage, Math.ceil((lastLoaded + appended) / PAGE)));
+    setBatchStep((s) => s + 1);
+  }
+
+  function gotoPage(p: number) {
+    p = Math.min(maxPage, Math.max(1, p));
+    if (p === curPage) return;
+    // 窗口内：滚动定位（不换表）
+    if (p >= winStart && p <= winEnd) {
+      setCurPage(p);
+      scrollToRowIdx(p - winStart);
+      return;
+    }
+    // 窗口外：严格一页整表替换（flushSync 保视口锚点还原有效），批量序列重置
+    const anchor = captureViewportAnchor(tableRef.current);
+    flushSync(() => {
+      setWinStart(p);
+      setWinEnd(p);
+      setCurPage(p);
+    });
+    restoreViewportAnchor(tableRef.current, anchor);
+    setBatchStep(0);
+  }
 
   return (
     <>
-      <table cellPadding={0} cellSpacing={0}>
+      <table ref={tableRef} cellPadding={0} cellSpacing={0}>
         <thead>
           <tr>
             <th>Rank</th>
@@ -75,7 +120,7 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.slice(start, start + PAGE).map((r) => (
+          {rows.slice(startRow, endRow).map((r) => (
             <tr key={r.rank} className={r.flag === "china" ? "ours" : ""}>
               <td className="rank">
                 No.&nbsp;<em>{r.rank}</em>
@@ -107,12 +152,12 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
       </table>
       <div className="list_footer world_pager">
         <PageSlider
-          page={cur}
-          pages={pages}
+          page={curPage}
+          pages={maxPage}
           loading={false}
-          onGoto={setPage}
-          hasMore={false}
-          onMore={() => {}}
+          onGoto={gotoPage}
+          hasMore={winEnd < maxPage}
+          onMore={loadMore}
         />
         {/* 2026-10-15 张老师要求：最右侧「查看完整排行」外链（minesweepergame.com，新窗口） */}
         <a

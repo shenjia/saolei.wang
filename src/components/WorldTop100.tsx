@@ -4,7 +4,7 @@
 // 2026-09-27（张老师要求）：删除底部 world_foot（如何加入/更新时间/完整排行链接）——
 //   「查看完整排行」改为按钮并入页脚（在 WorldTop100Table 内）
 // 2026-10-15（张老师要求）：页脚改用标准翻页滑条 PageSlider（分页展示 15 条/页），
-//   最右侧保留「查看完整排行」外链按钮
+//   最右侧保留「查看完整排行」外链按钮；滑条左侧保留标准「···加载更多」
 
 import { getWorldTop100 } from "@/lib/worldtop";
 import { RankingNav } from "@/components/RankingNav";
