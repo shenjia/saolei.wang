@@ -28,15 +28,31 @@ export function RankingRules({
   title,
   items,
   footer,
+  smallSuffix,
 }: {
   title: string;
   items: ReactNode[];
   /** 板块内底部扩展位（如「如何加入排行？」按钮） */
   footer?: ReactNode;
+  /** 标题尾部「（xx）」缩小一档（2026-10-15 地区内页：地区名放括号内，与页头同款） */
+  smallSuffix?: boolean;
 }) {
+  // smallSuffix：把标题里最后一个「（…）」段拆出来降档显示（地区名括号）
+  let head = title;
+  let suffix = "";
+  if (smallSuffix) {
+    const m = title.match(/（[^（）]*）$/);
+    if (m) {
+      suffix = m[0];
+      head = title.slice(0, title.length - suffix.length);
+    }
+  }
   return (
     <div className="box rank_rules">
-      <h2>{title}</h2>
+      <h2>
+        {head}
+        {suffix && <span className="page_title_sub">{suffix}</span>}
+      </h2>
       <ol>
         {items.map((item, i) => (
           <li key={i}>{item}</li>

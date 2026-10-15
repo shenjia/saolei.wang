@@ -3519,6 +3519,24 @@ body #page.two_columns {
      （张老师：「当空间不够变成单列时，排行板块在页面第一位」）——放弃双栏，
      按 DOM 顺序单列整宽：排行表 → 排行规则 → 地图。
    - ≤768 移动端：块级自然堆叠，同为表 → 规则 → 地图（五轮后与降级同序）。 */
+
+/* 地区内页标题「地区排行（xx）」：地区名带括号小一档（2026-10-15 张老师要求，
+   地区名从标题头移到尾部括号内）——黄标题降档为 20px/30px 行高，
+   与 h1 39px 行高底对齐时贴基线（page_head 是 flex align-items:flex-end）；
+   同款灰 #b1b1a4（比标题黄弱一级，与板块 h2 同灰），不随父级文字阴影放大 */
+.page_title .page_title_sub {
+  font-size: 20px;
+  line-height: 30px;
+  color: #b1b1a4;
+}
+/* 排行规则板块 h2 同款括号（「地区排行规则（xx）」，仅地区内页用到） */
+.rank_rules h2 .page_title_sub {
+  font-size: 14px;
+  font-weight: normal;
+  line-height: inherit;
+  margin-left: 2px;
+}
+
 @media (min-width: 1188px) {
   .area_top {
     display: grid;

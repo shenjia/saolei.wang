@@ -50,6 +50,8 @@ const AREA_INNER_RULES = [
 ];
 
 // 2026-10-14 张老师要求：带地区参数时 title 为「xx地区排行」（如「福建地区排行」）
+// 2026-10-15 张老师要求：地区名移到「地区排行」后括号内（如「地区排行（福建）」），
+//   括号内字号小一档（page_title_sub）
 export async function generateMetadata({
   searchParams,
 }: {
@@ -57,7 +59,7 @@ export async function generateMetadata({
 }) {
   const sp = await searchParams;
   const area = (sp.name ?? "").trim();
-  const name = area ? `${areaDisplay(area)}地区排行` : "地区排行";
+  const name = area ? `地区排行（${areaDisplay(area)}）` : "地区排行";
   return { title: name };
 }
 
@@ -110,7 +112,10 @@ export default async function AreaPage({
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           <div className="page_head">
-            <h1 className="page_title">{areaDisplay(area)}地区排行</h1>
+            {/* 2026-10-15 张老师要求：地区名移到「地区排行」后括号内、字号小一档 */}
+            <h1 className="page_title">
+              地区排行<span className="page_title_sub">（{areaDisplay(area)}）</span>
+            </h1>
             <RankingNav current="area" by={by} area={area} me={me} />
           </div>
           {/* 2026-10-15 张老师要求：老式分页（首页/上一页/末页）换成全站统一的
@@ -137,9 +142,10 @@ export default async function AreaPage({
         {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求，与各排行页同口径）。
             footer：登录未加入该地区排行时板块内底部「如何加入排行？」（2026-10-15 移入规则板块） */}
         <RankingRules
-          title={`${areaDisplay(area)}地区排行规则`}
+          title={`地区排行规则（${areaDisplay(area)}）`}
           items={AREA_INNER_RULES}
           footer={session?.uid && me?.rank === undefined ? <JoinRankingHelp /> : undefined}
+          smallSuffix
         />
       </div>
     );
