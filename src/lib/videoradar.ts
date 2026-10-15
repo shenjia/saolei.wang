@@ -11,8 +11,9 @@
 //     且 NF 盘结束时的自动展开不进事件流，实测 openedSafe 常比总安全格少 1-9，不是失败局。
 //  2) 双键 chord 判定：lc 后 50ms 内出现**同格** rc 且落点未开未旗 → 双键手势（rc 不插旗，
 //     记 Double）；rc 后接 lc（旗已插）→ lc 落在旗上，无效，Clone 同样记 Double。
-//     Clone 的 LeftClicks = 左键落在未开格、RightClicks = rc 总数（含拔旗）、
-//     DoubleClicks = 左键落在已开格 + 双键 chord —— 与 MVF 头部计数逐盘对齐。
+//     Clone 的 LeftClicks = 左键落在未开格、RightClicks = rc 总数（含拔旗，2026-10-16
+//     修齐：落在已开格的 rc 也计，与 Clone/练习页一致）、DoubleClicks = 左键落在已开格
+//     + 双键 chord —— 与 MVF 头部计数逐盘对齐。
 
 import { mvfToRawvf } from "./mvf";
 import { avfToRawvf } from "./avf";
@@ -228,7 +229,12 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
       counted(() => flood(i));
     }
   };
-  // 右键落在某格：未开→插旗／已旗→拔旗（拔旗另记 unflag）／已开→无事
+  // 右键落在某格：未开→插旗／已旗→拔旗（拔旗另记 unflag）／已开→无事。
+  // ⚠️ 2026-10-16 修：三种落点一律 clRight++（此前仅插旗计）。Clone 头部 RightClicks
+  //   = rc 总数（含拔旗），练习页实时口径 stRight 同样在动作前计数、不看落点——
+  //   旧版拔旗只进 Ce 不进 Cl，重放 corr 可 >1（库里实测 1269 行，最高 1.988），
+  //   污染分位基准后标雷局 corr=1 永远到不了 100 分位。修复后重放 Cl 与两方口径一致，
+  //   corr 恒 ≤1。
   const rightClick = (r: Ev) => {
     if (!inb(r)) return;
     const i = idx(r);
@@ -239,11 +245,14 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
         flagToggles++;
       });
     } else if (state[i] === 2) {
+      clRight++; // 拔旗也是一次右键点击
       unflag++;
       counted(() => {
         state[i] = 0;
         flagToggles++;
       });
+    } else {
+      clRight++; // 落在已开格：无效果但仍是点击（与练习页 stRight 口径一致）
     }
   };
   const chordAt = (e: Ev) => {
