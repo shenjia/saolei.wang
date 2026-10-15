@@ -1359,6 +1359,12 @@ body #page.bbs_old .page_head {
 .bbs_list tr.read a.bbs_title:hover {
   color: #a6e22e;
 }
+/* 搜索态结果标题关键字高亮（2026-10-15 张老师）：命中片段绿显（同页头搜索词
+   #a6e22e）。规则直接命中 span 元素——未读灰/已读灰染在 a 上属继承，被直接规则
+   压过；已读行的关键字同样保持绿（命中即「找到了」的确认信号，优先于已读变灰） */
+.bbs_list a.bbs_title .search_kw {
+  color: #a6e22e;
+}
 .bbs_high_flag {
   color: #f8f8f2;
   font-size: 15px;

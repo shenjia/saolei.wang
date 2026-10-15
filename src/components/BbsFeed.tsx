@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import { BBS_BOARD_NAMES } from "@/lib/bbs";
@@ -17,7 +17,36 @@ import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { markBbsRead, useBbsReadSet } from "./BbsRead";
 
-export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean }) {
+/** 搜索态标题关键字高亮（2026-10-15 张老师）：标题中命中的关键字（大小写不敏感子串，
+    与后端 contains 匹配口径一致）包 search_kw 绿显。q 为空或标题未命中时原样返回；
+    行是「作者名命中」进结果时标题无关键字，不高亮属正常 */
+function hlTitle(title: string, kw?: string): ReactNode {
+  const k = (kw ?? "").trim();
+  if (!k) return title;
+  const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = title.split(new RegExp(`(${escaped})`, "gi"));
+  if (parts.length === 1) return title;
+  return parts.map((seg, i) =>
+    i % 2 === 1 ? (
+      <span key={i} className="search_kw">
+        {seg}
+      </span>
+    ) : (
+      seg
+    ),
+  );
+}
+
+export function BbsRow({
+  p,
+  showBoard,
+  hlKw,
+}: {
+  p: BbsPostItem;
+  showBoard: boolean;
+  /** 搜索关键字：命中片段在标题中绿显（非搜索态不传） */
+  hlKw?: string;
+}) {
   const readIds = useBbsReadSet();
   const isRead = readIds.has(p.id);
   return (
@@ -50,7 +79,7 @@ export function BbsRow({ p, showBoard }: { p: BbsPostItem; showBoard: boolean })
             target="_blank"
             onClick={() => markBbsRead(p.id)}
           >
-            {p.title}
+            {hlTitle(p.title, hlKw)}
           </Link>
           {p.isNice && (
             <span className="bbs_star" data-tip="精华">
@@ -209,7 +238,7 @@ export function BbsFeed({
   return (
     <>
       {items.map((p) => (
-        <BbsRow key={p.id} p={p} showBoard={showBoard} />
+        <BbsRow key={p.id} p={p} showBoard={showBoard} hlKw={query.q} />
       ))}
       {items.length === 0 && (
         <tr>
