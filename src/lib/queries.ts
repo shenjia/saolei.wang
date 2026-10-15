@@ -281,7 +281,7 @@ function safeJson(s: string): Record<string, unknown> {
  * 动态总数（「加载更多」括号内显示剩余条数用）
  * 过滤条件与 getNews 严格一致，否则剩余条数会对不上
  */
-export async function getNewsCount(opts: {
+async function getNewsCountImpl(opts: {
   type?: number;
   /** 与 getNews 的多类型口径一致（用户主页「论坛」tab 剩余条数） */
   types?: number[];
@@ -299,6 +299,20 @@ export async function getNewsCount(opts: {
       ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
     },
   });
+}
+
+// 2026-10-15 上线前性能审计：news 23 万行无 type 索引时该 count 是全表扫描。
+// 键空间有界的组合（首页 home / 版块 type(s) / 级别 level）缓存 60s；
+// 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
+const fetchNewsCountNoUser = unstable_cache(
+  async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  ["news-count-v1"],
+  { revalidate: 60 }
+);
+
+export async function getNewsCount(opts: Parameters<typeof getNewsCountImpl>[0]): Promise<number> {
+  if (opts.userId) return getNewsCountImpl(opts);
+  return fetchNewsCountNoUser(opts);
 }
 
 // ---------- 封禁用户（旧站「停用」）与「上榜」口径 ----------
@@ -338,7 +352,7 @@ export async function isRankedUser(id: number): Promise<boolean> {
 /** 国内 TOP10：按总计时间前 10（移植 home/_top；展示序仍按总时间，军衔列按高级时间评定）
  *  2026-10-13 张老师要求：原「十大元帅」更名「国内TOP10」，右列表由时间改为「所在地区」，
  *  故此处直接查 user（usersByIds 只回 UserBrief，不含 area） */
-export async function getTopUsers(
+async function getTopUsersImpl(
   limit = HOME_TOP_NUMBER
 ): Promise<(UserBrief & { area: string; title: string; titleDate: number })[]> {
   const rows = await prisma.userScores.findMany({
@@ -361,6 +375,15 @@ export async function getTopUsers(
       titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
     };
   });
+}
+
+// 2026-10-15 性能审计：首页右栏排行前十，榜内成员极少变动，缓存 60s
+const fetchTopUsers = unstable_cache(getTopUsersImpl, ["top-users-v1"], { revalidate: 60 });
+
+export async function getTopUsers(
+  limit = HOME_TOP_NUMBER
+): Promise<(UserBrief & { area: string; title: string; titleDate: number })[]> {
+  return fetchTopUsers(limit);
 }
 
 // ---------- 排行榜 ----------
@@ -644,11 +667,19 @@ export async function getVideoFeedPage(opts: {
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
-/** 录像总数（「加载更多」括号内剩余条数口径，过滤条件与 getVideoFeed 严格一致） */
+/** 录像总数（「加载更多」括号内剩余条数口径，过滤条件与 getVideoFeed 严格一致）
+ *  2026-10-15 性能审计：键空间仅 all/beg/int/exp 四档，缓存 60s（video 30 万行 count 走主键扫描） */
+const fetchVideoCount = unstable_cache(
+  async (opts: { level?: VideoLevel | "all" } = {}) =>
+    prisma.video.count({
+      where: opts.level && opts.level !== "all" ? { level: opts.level } : {},
+    }),
+  ["video-count-v1"],
+  { revalidate: 60 }
+);
+
 export async function getVideoCount(opts: { level?: VideoLevel | "all" } = {}): Promise<number> {
-  return prisma.video.count({
-    where: opts.level && opts.level !== "all" ? { level: opts.level } : {},
-  });
+  return fetchVideoCount(opts);
 }
 
 /**
@@ -656,7 +687,7 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all" } = {}): 
  * 按上传时间倒序显示「至少两条评论」的录像，只带作者（名称+军衔）/级别/时间成绩。
  * 口径与 getVideoList 的 order=comments（videoStat.comments>0）一致，此处收紧为 ≥2。
  */
-export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
+async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
   const rows = await prisma.videoStat.findMany({
     where: { comments: { gte: 2 } },
     select: { id: true },
@@ -664,6 +695,14 @@ export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
     take: limit,
   });
   return getVideosByIds(rows.map((r) => N(r.id)));
+}
+
+// 2026-10-15 性能审计：热评录像全是老录像，反向主键扫描实际近乎全表（30 万行），
+// 且结果几乎不变，缓存 60s
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v1"], { revalidate: 60 });
+
+export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
+  return fetchHotVideos(limit);
 }
 
 /**
@@ -692,7 +731,7 @@ export interface VideoBoxStats {
   commentToday: number;
 }
 
-export async function getVideoBoxStats(): Promise<VideoBoxStats> {
+async function getVideoBoxStatsImpl(): Promise<VideoBoxStats> {
   const now = new Date();
   const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
   // 两次 GROUP BY 一次取全（video 表无 status/level 索引，逐项 count 会各扫一遍全表）；
@@ -730,6 +769,16 @@ export async function getVideoBoxStats(): Promise<VideoBoxStats> {
     commentTotal,
     commentToday,
   };
+}
+
+// 2026-10-15 性能审计：/video 页每次请求 2 个 GROUP BY 全扫 video 30 万行 + comment 计数，
+// 统计数字允许分钟级延迟，缓存 60s
+const fetchVideoBoxStats = unstable_cache(getVideoBoxStatsImpl, ["video-box-stats-v1"], {
+  revalidate: 60,
+});
+
+export async function getVideoBoxStats(): Promise<VideoBoxStats> {
+  return fetchVideoBoxStats();
 }
 
 /** 某用户今日新增录像（按级别 + 合计）；口径与首页「上传录像」增量一致：status=REVIEWED 且 review_time 落在今日 */
@@ -814,6 +863,13 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     prisma.videoStat.findMany({ where: { id: { in: bigIds } } }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
+  // 作者最好成绩批量取（2026-10-15 上线前性能审计修 N+1：原循环内逐条 findUnique，
+  // 一页 17 条录像就是 17 次额外往返，首页/录像列表/用户页每个列表页都中招）
+  const authorScoreRows = await prisma.userScores.findMany({
+    where: { id: { in: videos.map((v) => v.user) } },
+    select: { id: true, expTime: true },
+  });
+  const authorScoreMap = new Map(authorScoreRows.map((s) => [N(s.id), s]));
   const infoMap = new Map(infos.map((i) => [N(i.id), i]));
   const statMap = new Map(stats.map((s) => [N(s.id), s]));
 
@@ -825,9 +881,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     const info = infoMap.get(id);
     if (!v || !info) continue;
     const author = authors.get(N(v.user)) ?? null;
-    const authorScores = author
-      ? await prisma.userScores.findUnique({ where: { id: BigInt(author.id) } })
-      : null;
+    const authorScores = author ? (authorScoreMap.get(N(author.id)) ?? null) : null;
     const stat = statMap.get(id);
     result.push({
       id,
@@ -1078,7 +1132,7 @@ export interface SiteStats {
   bbsToday: number;
 }
 
-export async function getSiteStats(): Promise<SiteStats> {
+async function getSiteStatsImpl(): Promise<SiteStats> {
   const now = new Date();
   const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
   // 今日增量口径：排行人数不显示增量——user_scores.create_time 是注册时间非上榜时间，
@@ -1115,12 +1169,20 @@ export async function getSiteStats(): Promise<SiteStats> {
   };
 }
 
+// 2026-10-15 性能审计：首页右栏「站点统计」9 个 count，其中 video/news/comment 三项
+// 在 20 万级表上全表扫描（EXPLAIN 证实 ALL），是全站最重的单点。缓存 60s
+const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v1"], { revalidate: 60 });
+
+export async function getSiteStats(): Promise<SiteStats> {
+  return fetchSiteStats();
+}
+
 // ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
 /** 各军衔人数（2026-10-13 起按高级时间绝对阈值分桶：第 i 档 = (thresholds[i-1], thresholds[i]]） */
 /** 各军衔人数（2026-10-13 SUB 制：TITLE_THRESHOLDS 与 TITLES 按下标对应，升序数组
  *  第 i 档 = (thresholds[i-1], thresholds[i]]，大元帅 = <= 35s，列兵 = > 150s 无上界） */
-export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
+async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]> {
   const thresholds = getTitleDistribution().thresholds;
   if (!thresholds.length) return [];
   // 封禁账号不计入军衔人数（旧站数据库口径一律 Player_IsLive=1）
@@ -1152,6 +1214,16 @@ export async function getTitleCounts(): Promise<{ title: string; count: number }
   ]);
   result.push({ title: "预备役", count: Math.max(0, totalUsers - rankedTotal) });
   return result;
+}
+
+// 2026-10-15 性能审计：军衔页每次请求 18 次 user_scores count（合计≈全索引扫一遍），
+// 军衔人数变化极慢，缓存 60s
+const fetchTitleCounts = unstable_cache(getTitleCountsImpl, ["title-counts-v1"], {
+  revalidate: 60,
+});
+
+export async function getTitleCounts(): Promise<{ title: string; count: number }[]> {
+  return fetchTitleCounts();
 }
 
 // （雷神殿 getHeroList 已于 2026-10-13 随每日一星/神界概念一并移除，张老师要求）
@@ -1514,7 +1586,7 @@ export interface AreaRow {
   bestSex: number;
 }
 
-export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRow[]> {
+async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]> {
   const orderBy =
     order === "players"
       ? "players + 0.0001 * a.avg_rank DESC"
@@ -1580,6 +1652,16 @@ export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRo
   }));
 }
 
+// 2026-10-15 性能审计：/area 每次请求跑全量窗口聚合（user_scores 3.5 万行 × JOIN user
+// × 30 天活跃子查询），地区榜一天变不了几次，缓存 5 分钟（按 order 参数分键）
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v1"], {
+  revalidate: 300,
+});
+
+export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRow[]> {
+  return fetchAreaRanking(order);
+}
+
 /** 用户全国排名 + 省份排名（用户主页军衔徽章上方展示，09-23 晚张老师要求） */
 export interface UserRanks {
   national: number; // 全国名次（主榜口径：总时间升序）
@@ -1587,7 +1669,7 @@ export interface UserRanks {
   areaPos: number | null; // 省份名次（无军区/多地区为 null）
 }
 
-export async function getUserRanks(userId: number): Promise<UserRanks | null> {
+async function getUserRanksImpl(userId: number): Promise<UserRanks | null> {
   const rows = await prisma.$queryRaw<{ national: bigint; area: string; areaPos: bigint | null }[]>`
      WITH allr AS (
         SELECT s.id, u.area,
@@ -1610,6 +1692,14 @@ export async function getUserRanks(userId: number): Promise<UserRanks | null> {
     area: rows[0].area,
     areaPos: rows[0].areaPos === null ? null : N(rows[0].areaPos),
   };
+}
+
+// 2026-10-15 性能审计：用户主页每次浏览都跑一次全量 ROW_NUMBER 窗口（3.5 万行 ×2 CTE），
+// 而名次只在有人出成绩时变化——按用户 id 分键缓存 10 分钟（userId 自动并入缓存键）
+const fetchUserRanks = unstable_cache(getUserRanksImpl, ["user-ranks-v1"], { revalidate: 600 });
+
+export async function getUserRanks(userId: number): Promise<UserRanks | null> {
+  return fetchUserRanks(userId);
 }
 
 // ---------- 3BV 收集（2026-10-13 张老师方案：个人主页侧栏「3BV 收集」版块） ----------

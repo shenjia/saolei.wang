@@ -26,6 +26,11 @@ model User {
   // 最近登录（2026-09-23 个人信息卡片新增，登录时刷新；0=未记录）
   lastLoginTime BigInt @default(0) @map("last_login_time") @db.BigInt
 
+  // 2026-10-15 上线前性能审计新增：
+  // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；
+  // (status) 服务首页注册人数 count（ACTIVE_USER 口径）
+  @@index([area, status])
+  @@index([status])
   @@index([area, sex])
   @@map("user")
 }
@@ -188,6 +193,12 @@ model Video {
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
+  // 2026-10-15 上线前性能审计新增：
+  // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计
+  // （count status / GROUP BY level / 今日按 review_time），原为 30 万行全表扫描；
+  // (level, id) 服务首页与录像列表的级别筛选 feed（原走主键反扫+过滤）
+  @@index([status, level, reviewTime])
+  @@index([level, id])
   @@index([user, level])
   @@index([hash])
   @@map("video")
@@ -219,6 +230,10 @@ model VideoStat {
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
+  // 2026-10-15 上线前性能审计新增：热评/热门录像列表按 comments/clicks 过滤排序，
+  // 原为 30 万行全表或长程主键扫描
+  @@index([comments])
+  @@index([clicks])
   @@map("video_stat")
 }
 
@@ -418,7 +433,10 @@ model News {
   detailsData String @map("details_data") @db.VarChar(200)
   createTime  BigInt @default(0) @map("create_time") @db.BigInt
 
+  // 2026-10-15 上线前性能审计新增：首页动态 feed 与 count 按 type 过滤、id 倒序，
+  // 原为 23 万行全表扫描
   @@index([user])
+  @@index([type, id])
   @@map("news")
 }
 
@@ -433,7 +451,12 @@ model Comment {
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
+  // 2026-10-15 上线前性能审计新增：
+  // (status, create_time) 服务全站评论总数/今日新增（首页+录像页每请求 2 次，原 5.4 万行全扫）；
+  // (user, status) 服务用户主页「发表评论」统计
   @@index([video, createTime])
+  @@index([status, createTime])
+  @@index([user, status])
   @@map("comment")
 }
 
@@ -544,7 +567,10 @@ model RankSnapshot {
   createTime  BigInt @default(0) @map("create_time") @db.BigInt
   updateTime  BigInt @default(0) @map("update_time") @db.BigInt
 
+  // 2026-10-15 上线前性能审计新增：进步榜按 date 取今日快照（原 (user,date) 前导列不对，
+  // date-only 过滤只能覆盖索引扫全表 5 万行）
   @@unique([user, date])
+  @@index([date])
   @@map("rank_snapshot")
 }
 
