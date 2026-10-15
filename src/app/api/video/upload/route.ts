@@ -11,6 +11,7 @@ import { getSession } from "@/lib/auth";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvf } from "@/lib/mvf";
 import { formatRawvf } from "@/lib/rawvf";
+import { judgeVideoOutcome } from "@/lib/videowin";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 
@@ -63,8 +64,15 @@ export async function POST(req: Request) {
   }
   if (!(parsed.level in LEVEL_MIN_3BV)) return fail("只支持初级/中级/高级录像");
   if (parsed.mode !== "classic") return fail("只支持经典模式录像");
-  if (parsed.solved3bv !== null && parsed.solved3bv < (parsed.bbbv ?? 0)) {
-    return fail("该录像尚未完成");
+  /* 完成度校验（2026-10-15 张老师要求：只有完成的录像才能上传，堵败局/半截局漏网）：
+     MVF 头部自带 Solved3BV，沿用旧版比较；AVF 无该字段（parsed.solved3bv 为 null，
+     旧版此分支直接放行——败局正是从这里漏进来的），改为事件流模拟判定胜负 */
+  if (parsed.solved3bv !== null) {
+    if (parsed.solved3bv < (parsed.bbbv ?? 0)) return fail("该录像尚未完成");
+  } else {
+    const outcome = judgeVideoOutcome(parsed);
+    if (outcome === "loss") return fail("该录像未完成（踩雷败局不能上传）");
+    if (outcome === "incomplete") return fail("该录像未完成");
   }
   const level = parsed.level as VideoLevel;
   const minBbbv = LEVEL_MIN_3BV[level];
