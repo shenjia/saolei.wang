@@ -42,9 +42,11 @@ class Reader {
   }
 }
 
-/** C 的 sprintf("%08d", (int)lrint(x)) */
-function fmt8(x: number): string {
-  return String(Math.round(x)).padStart(8, "0");
+/** flop MVFVideo 的 8 位数字串：("00000000"+n).slice(-8)——n 舍入到 100000000（9 位）时
+ *  截掉首位，与 padStart 不同会少一位数字、整个置换表随之不同（0.97/2007 部分 leading
+ *  值命中 |cos|≈1 或 |sin|≈1，2026-10-16 gold 对照实证，20 个假 LOSS/INCOMPLETE 根因） */
+function trunc8(n: number): string {
+  return ("00000000" + String(Math.round(n))).slice(-8);
 }
 
 /** gb2312 玩家名解码（对应 PHP mb_convert_encoding(..., 'gb2312')；gb18030 是其超集） */
@@ -112,11 +114,11 @@ class MvfParser {
     const num3 = Math.sqrt(num1 + 1000.0);
     const mult = 100000000;
     const s =
-      fmt8(Math.abs(Math.cos(num3 + 1000.0) * mult)) +
-      fmt8(Math.abs(Math.sin(Math.sqrt(num2)) * mult)) +
-      fmt8(Math.abs(Math.cos(num3) * mult)) +
-      fmt8(Math.abs(Math.sin(Math.sqrt(num1) + 1000.0) * mult)) +
-      fmt8(Math.abs(Math.cos(Math.sqrt(num2 + 1000.0)) * mult));
+      trunc8(Math.abs(Math.cos(num3 + 1000.0) * mult)) +
+      trunc8(Math.abs(Math.sin(Math.sqrt(num2)) * mult)) +
+      trunc8(Math.abs(Math.cos(num3) * mult)) +
+      trunc8(Math.abs(Math.sin(Math.sqrt(num1) + 1000.0) * mult)) +
+      trunc8(Math.abs(Math.cos(Math.sqrt(num2 + 1000.0)) * mult));
     const byte: number[] = [];
     const bit: number[] = [];
     for (let ch = 48; ch <= 57; ch++) {
@@ -138,12 +140,12 @@ class MvfParser {
     const num4 = Math.sqrt(num2 + 1000.0);
     const mult = 100000000;
     const s =
-      fmt8(Math.abs(Math.cos(num3 + 1000.0) * mult)) +
-      fmt8(Math.abs(Math.sin(Math.sqrt(num2)) * mult)) +
-      fmt8(Math.abs(Math.cos(num3) * mult)) +
-      fmt8(Math.abs(Math.sin(Math.sqrt(num1) + 1000.0) * mult)) +
-      fmt8(Math.abs(Math.cos(num4) * mult)) +
-      fmt8(Math.abs(Math.sin(num4) * mult));
+      trunc8(Math.abs(Math.cos(num3 + 1000.0) * mult)) +
+      trunc8(Math.abs(Math.sin(Math.sqrt(num2)) * mult)) +
+      trunc8(Math.abs(Math.cos(num3) * mult)) +
+      trunc8(Math.abs(Math.sin(Math.sqrt(num1) + 1000.0) * mult)) +
+      trunc8(Math.abs(Math.cos(num4) * mult)) +
+      trunc8(Math.abs(Math.sin(num4) * mult));
     const byte: number[] = [];
     const bit: number[] = [];
     for (let ch = 48; ch <= 57; ch++) {
