@@ -2507,6 +2507,15 @@ body .title:hover em.grand {
   color: #e6db74;
 }
 
+/* ---------- 总司令（2026-10-16 新增第 19 级军衔，SUB30 档） ----------
+   张老师定：首页标题金 #fdc61a（legacy h1 真值），与大元帅暗金 #e6db74 构成
+   金色家族明暗两档。设计稿 design/supreme-commander-20261016.html R2 定稿（候选 1 亮金盾深冠）。
+   legacy-2013.css 无 .supreme 规则，此处同 grand 的写法双写 hover 态防 legacy 通配覆盖。 */
+body .title em.supreme,
+body .title:hover em.supreme {
+  color: #fdc61a;
+}
+
 /* ---------- 军衔徽章图标（2026-09-23 接入 18 级徽章，design/rank-badges.html 定稿） ----------
    尺寸 1em 跟随军衔文字（排行榜 16px / 其他 20px 场景自动匹配），
    vertical-align 微调与 CJK 文字视觉居中对齐。用户主页等大图场景由组件传 size 覆盖。 */
@@ -3940,6 +3949,7 @@ body #page.ranking_old .ranking_box {
 #news .record.person em {
   margin: 0;
 }
+#news .record.person em.supreme { color: #fdc61a; }
 #news .record.person em.grand { color: #e6db74; }
 #news .record.person em.marshal { color: #e6db74; }
 #news .record.person em.general { color: #f79646; }
@@ -5448,6 +5458,7 @@ body .user_info_cell .name:hover {
 }
 /* 军衔 em 分级色（legacy .title:hover em.marshal 特异性 (0,3,1)，
    须同级枚举压制，否则排行表里军衔 hover 仍是分级色） */
+body a.title:hover em.supreme,
 body a.title:hover em.grand,
 body a.title:hover em.marshal,
 body a.title:hover em.general,

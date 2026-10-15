@@ -189,7 +189,7 @@ export function ubb(raw: string): string {
 
 /** 作者信息 + 军衔/旧版称号（2026-09-23 张老师要求：详情页人名旁带性别标记与军衔） */
 export interface BbsAuthor extends UserBrief {
-  /** 18 级军衔（按 sum_time 评定，详情页 TitleBadge 徽章用） */
+  /** 19 级军衔（按 sum_time 评定，详情页 TitleBadge 徽章用） */
   title: string;
   /** 旧版称号（按高级纪录+性别，列表页 [称号] 用） */
   old: OldTitle;

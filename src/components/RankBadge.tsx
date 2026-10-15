@@ -1,5 +1,6 @@
-// 18 级军衔徽章（原创矢量，设计稿 design/rank-badges.html 定稿）
-// 全部图形为自绘盾形/五角星/V拐/地雷/月桂，不仿制真实军衔肩章。
+// 19 级军衔徽章（原创矢量，设计稿 design/rank-badges.html 定稿；
+// 总司令 2026-10-16 新增，定稿 design/supreme-commander-20261016.html）
+// 全部图形为自绘盾形/五角星/V拐/地雷/月桂/皇冠，不仿制真实军衔肩章。
 // 默认 1em 尺寸跟随军衔文字（globals.css .title .rank-badge），
 // 用户主页等场景可传 size（px）放大。
 
@@ -8,9 +9,12 @@ const SHIELD_D =
 const STAR_D =
   "M0 -10 L2.25 -3.09 L9.51 -3.09 L3.63 1.18 L5.88 8.09 L0 3.82 L-5.88 8.09 L-3.63 1.18 L-9.51 -3.09 L-2.25 -3.09 Z";
 const CHEVRON_D = "M-8 3.5 L0 -4 L8 3.5";
+const CROWN_D =
+  "M-9 4 L-9 -2 L-4.5 1.5 L0 -4 L4.5 1.5 L9 -2 L9 4 Z";
 
 // Monokai 军衔配色（与 legacy-2013.css 军衔文字色一致）
 const GOLD = "#e6db74"; // 大元帅/元帅、将官星
+const GOLD_HI = "#fdc61a"; // 总司令（首页标题金，2026-10-16）
 const GENERAL = "#f79646"; // 将官
 const COLONEL = "#e26b0a"; // 校官
 const CAPTAIN = "#9bbb59"; // 尉官
@@ -73,9 +77,31 @@ function Mine({ x, y, s, color }: { x: number; y: number; s: number; color: stri
   );
 }
 
+/** 皇冠（总司令专属；图形取自 rank-badges.html 定义未启用的 crown） */
+function Crown({ x, y, s, fill }: { x: number; y: number; s: number; fill: string }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`} fill={fill}>
+      <path d={CROWN_D} />
+      <circle cx={-9} cy={-3.5} r={1.3} />
+      <circle cx={0} cy={-5.5} r={1.3} />
+      <circle cx={9} cy={-3.5} r={1.3} />
+    </g>
+  );
+}
+
 /** 每级徽章的盾形内图案（盾形底板统一在此渲染） */
 function RankArt({ title }: { title: string }) {
   switch (title) {
+    // ---- 最高统帅：总司令（2026-10-16 新增，SUB30 档）----
+    // 与大元帅同款「金盾反色」公式，金色提亮一档（首页标题金）+ 主图形星→皇冠
+    case "总司令":
+      return (
+        <>
+          <path d={SHIELD_D} fill={GOLD_HI} stroke={DARK} strokeWidth={2.6} />
+          <Crown x={24} y={21} s={1.15} fill={DARK} />
+          <Laurel color={DARK} />
+        </>
+      );
     // ---- 帅：大元帅与元帅完全同款、整体反色 ----
     case "大元帅":
       return (

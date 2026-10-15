@@ -106,7 +106,7 @@ export const USER_VIDEO_NUMBER = 12;
 // ---------- 军衔（移植 TitleConfig） ----------
 
 export const TITLES = [
-  "大元帅", "元帅", "大将", "上将", "中将", "少将",
+  "总司令", "大元帅", "元帅", "大将", "上将", "中将", "少将",
   "大校", "上校", "中校", "少校",
   "上尉", "中尉", "少尉",
   "上士", "中士", "下士",
@@ -114,6 +114,7 @@ export const TITLES = [
 ] as const;
 
 export const TITLE_CLASSES: Record<string, string> = {
+  总司令: "supreme",
   大元帅: "grand",
   元帅: "marshal",
   大将: "general", 上将: "general", 中将: "general", 少将: "general",
@@ -127,7 +128,9 @@ export const TITLE_CLASSES: Record<string, string> = {
 
 // 军衔配色，与全站文字色一致（用于分布图条形等场景）
 // 注意：grand 按 2026-09-23 张老师要求用元帅同款金黄 #e6db74（globals.css 已覆盖 legacy 深红 #c60d46）
+// 2026-10-16 新增 supreme（总司令，第 19 级 SUB30）：首页标题金 #fdc61a（张老师定，与暗金区分一档）
 export const TITLE_CLASS_COLORS: Record<string, string> = {
+  supreme: "#fdc61a",
   grand: "#e6db74",
   marshal: "#e6db74",
   general: "#f79646",
@@ -148,15 +151,17 @@ export const TITLE_LEVEL: Level = "exp";
 export const TITLE_ORDER: Order = "time";
 
 // 各军衔的高级时间上限（毫秒，与 TITLES 按下标一一对应：
-// 大元帅=35s … 上等兵=150s；列兵无上限（>150s 即列兵））
+// 总司令=30s、大元帅=35s … 上等兵=150s；列兵无上限（>150s 即列兵））
+// 2026-10-16 张老师新增总司令档（SUB30）：现役仅 1 人（鞠泽恩 25.10s），原大元帅 19 人拆为 1+18
 export const TITLE_THRESHOLDS: number[] = [
-  35000, 40000, 42000, 45000, 48000, 50000, 52000, 55000, 58000, 60000,
+  30000, 35000, 40000, 42000, 45000, 48000, 50000, 52000, 55000, 58000, 60000,
   63000, 66000, 70000, 80000, 90000, 100000, 150000,
 ];
 
 // 军衔卡片/详情页的条件文案（放人数下方一行、暗灰居中，如「高级记录 < 40秒」，数字稍亮）
 // 值为 [前缀, 数字] 二元组；数字部分渲染时用 <em> 提亮（预备役无数字，第二段为整段文案）
 export const TITLE_CONDITIONS: Record<string, [string, string]> = {
+  总司令: ["高级记录 < ", "30秒"],
   大元帅: ["高级记录 < ", "35秒"],
   元帅: ["高级记录 < ", "40秒"],
   大将: ["高级记录 < ", "42秒"],
@@ -184,10 +189,11 @@ export function titleConditionText(t: string): string {
   return c ? c[0] + c[1] : "";
 }
 
-// 固定编制军衔（2013 版按人数编制，2026-10-13 改 SUB 绝对阈值制后仅作历史参考，不再参与评定）
+// 固定编制军衔（2013 版按人数编制，2026-10-13 改 SUB 绝对阈值制后仅作历史参考，不再参与评定；
+// 总司令 2026-10-16 新增，不属 2013 编制体系，不列入）
 export const FIXED_TITLES = ["大元帅", "元帅", "大将", "上将", "中将", "少将"] as const;
 
-// 2013 版按比例编制（历史参考，SUB 制下不再使用）
+// 2013 版按比例编制（历史参考，SUB 制下不再使用；总司令同理不列入）
 export const TITLE_DISTRIBUTION: Record<string, number> = {
   大元帅: 1,
   元帅: 10,

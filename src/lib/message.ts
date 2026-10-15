@@ -12,7 +12,7 @@ export const MESSAGE_CONTENT_LIMIT = 200;
 export const MESSAGE_PAGESIZE = 15;
 
 export interface MessageUserBrief extends UserBrief {
-  /** 18 级军衔（按 sum_time 评定，作者列 TitleBadge 用） */
+  /** 19 级军衔（按 sum_time 评定，作者列 TitleBadge 用） */
   title: string;
 }
 

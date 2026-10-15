@@ -105,7 +105,7 @@ export async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>>
 
 /** 作者信息 + 军衔（2026-10-13：评论区人名后显示军衔徽章用；BBS 作者同源复用） */
 export interface UserBriefWithTitle extends UserBrief {
-  /** 18 级军衔（按高级时间绝对阈值评定，distribution 阈值在 assess 内缓存） */
+  /** 19 级军衔（按高级时间绝对阈值评定，distribution 阈值在 assess 内缓存） */
   title: string;
   /** 高级时间（秒，0=无成绩）——需要旧版称号（oldTitle）的场景直接复用，免二次查询 */
   expTime: number;
