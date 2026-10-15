@@ -1615,7 +1615,6 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
               COUNT(*) OVER () total
        FROM user_scores s JOIN user u ON u.id = s.id
        WHERE s.sum_time > 0 AND u.status = 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
-         AND u.area <> '海外'
      ),
      agg AS (
        SELECT area, COUNT(*) players, ROUND(AVG(rk)) avg_rank, MIN(rk) best_rank,
@@ -1628,7 +1627,6 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
        WHERE u.status = 0
          AND u.last_login_time > UNIX_TIMESTAMP() - 30 * 86400
          AND u.area <> '' AND u.area NOT LIKE '%&%'
-         AND u.area <> '海外'
        GROUP BY u.area
      )
      SELECT a.area, a.players, COALESCE(v.active, 0) active, a.best_rank, a.power,
@@ -1656,8 +1654,9 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
 
 // 2026-10-15 性能审计：/area 每次请求跑全量窗口聚合（user_scores 3.5 万行 × JOIN user
 // × 30 天活跃子查询），地区榜一天变不了几次，缓存 5 分钟（按 order 参数分键）
-// 2026-10-15 海外排除：查询逻辑变更，缓存键升 v2
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v2"], {
+// 2026-10-15 海外条目：地区榜含「海外」（张老师同日改主意——海外也进地区榜表），
+// 查询恢复不含排除；缓存键升 v3
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v3"], {
   revalidate: 300,
 });
 
