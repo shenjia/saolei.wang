@@ -3733,6 +3733,13 @@ body #page.ranking_old.main .ranking_nav {
 #page.ranking_old.main > #world_top {
   /* 与 .box 默认 margin:16px 8px 对齐（此前横向 0 导致世界榜卡片比总榜/NF 榜宽 16px，2026-09-24 修） */
   margin: 16px 8px;
+  /* 盒内横滑（2026-10-15 溢出修复）：世界表是裸 <table>（自然宽 ~763px），不带
+     .table/.ranking_table/.scores 任一类，.box:has(...) 横滑规则（≤1188 / ≤768 块）
+     永远不命中它——卡片 769~1161 视口定宽 720（内容 664）、62% 流式段要视口 ≥~1300
+     才装得下 763，其间表格整体从卡片右缘溢出（891 视口实测溢 100px，Sum 列甩出卡外）。
+     卡片自身 overflow-x:auto：放得下时不出现滚动条，放不下时盒内横滑（表格与页脚
+     一起滚、右缘贴齐，同排行宽表既有模式）；世界榜页无搜索下拉浮层，无裁切顾虑。 */
+  overflow-x: auto;
 }
 #page.ranking_old.main > #world_top .world_head h2 {
   font-size: 20px;
