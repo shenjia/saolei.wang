@@ -216,7 +216,9 @@ export function BbsFeed({
           <td colSpan={4}>{emptyMsg}</td>
         </tr>
       )}
-      {hasMore && (
+      {/* 2026-10-15 张老师要求：单页也显示翻页行（PageSlider single 态全灰不可点）。
+          空列表（还没有帖子）仍整行隐藏——空态没有翻页语义 */}
+      {(hasMore || items.length > 0) && (
         <tr className="bbs_more_row">
           <td colSpan={4}>
             <div className="list_footer">

@@ -232,19 +232,18 @@ export function NewsFeed({
           )}
         </tbody>
       </table>
-      {/* 翻页条一行合一（2026-10-14 四轮：首页+用户主页统一；··· + 滑轨 + 页码） */}
-      {maxPage > 1 && (
-        <div className="list_footer">
-          <PageSlider
-            page={curPage}
-            pages={maxPage}
-            loading={loading || switching}
-            onGoto={gotoPage}
-            hasMore={hasMore}
-            onMore={loadMore}
-          />
-        </div>
-      )}
+      {/* 翻页条一行合一（2026-10-14 四轮：首页+用户主页统一；··· + 滑轨 + 页码）
+          2026-10-15 张老师要求：单页也显示（PageSlider single 态全灰不可点） */}
+      <div className="list_footer">
+        <PageSlider
+          page={curPage}
+          pages={maxPage}
+          loading={loading || switching}
+          onGoto={gotoPage}
+          hasMore={hasMore}
+          onMore={loadMore}
+        />
+      </div>
     </>
   );
 }

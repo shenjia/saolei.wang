@@ -24,7 +24,8 @@ export function Pager({
   pageSize: number;
 }) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  if (pageCount <= 1) return null;
+  // 2026-10-15 张老师要求：只有一页时也显示翻页控件，但按钮全灰不可点
+  const single = pageCount <= 1;
   const links: (number | "...")[] = [];
   const push = (v: number | "...") => {
     if (links[links.length - 1] !== v) links.push(v);
@@ -34,11 +35,13 @@ export function Pager({
     else push("...");
   }
   return (
-    <div className="pager">
-      {page > 1 && (
+    <div className={"pager" + (single ? " single" : "")}>
+      {page > 1 && !single ? (
         <Link href={buildUrl(base, { ...params, page: page - 1 })} className="prev">
           上一页
         </Link>
+      ) : (
+        single && <span className="prev off">上一页</span>
       )}
       {links.map((p, i) =>
         p === "..." ? (
@@ -55,10 +58,12 @@ export function Pager({
           </Link>
         )
       )}
-      {page < pageCount && (
+      {page < pageCount && !single ? (
         <Link href={buildUrl(base, { ...params, page: page + 1 })} className="next">
           下一页
         </Link>
+      ) : (
+        single && <span className="next off">下一页</span>
       )}
     </div>
   );

@@ -42,6 +42,20 @@
   background: none;
   color: #75715e;
 }
+/* 单页态（2026-10-15 张老师要求：只有一页时也显示、按钮全灰不可点）：
+   「上一页/下一页」灰字无边框交互感、页码 current 去金黄改灰 */
+.pager.single .off {
+  border-color: #3e3d32;
+  background: #26261f;
+  color: #5d5c4f;
+  cursor: default;
+}
+.pager.single .current {
+  background: #3e3d32;
+  border-color: #3e3d32;
+  color: #75715e;
+  font-weight: normal;
+}
 
 /* ---------- 顶部导航：加高 + 吸顶固定 ----------
    注意：legacy-2013.css 后加载，同优先级会被它盖掉，
@@ -927,6 +941,30 @@ body #video_view .video_cell .playable {
 .page_slider:focus-visible {
   outline: 1px solid #75715e;
   border-radius: 4px;
+}
+/* 单页态（2026-10-15 张老师要求：只有一页时翻页控件也显示、全灰不可点）：
+   滑轨静态满格（JS pct 恒 100%），滑块/进度条/页码数字转灰，无焦点 */
+.page_slider.single {
+  cursor: default;
+}
+.page_slider.single .ps_rail {
+  cursor: default;
+  pointer-events: none; /* 拖拽/点按/悬停气泡一并关闭（JS 也拦，双保险） */
+}
+.page_slider.single .ps_fill {
+  background: #5d5c4f; /* 满格但灰（原暗金 #8f7430 的去饱和版本） */
+  transition: none;
+}
+.page_slider.single .ps_thumb {
+  background: #75715e;
+  box-shadow: 0 0 0 3px rgba(117, 113, 94, 0.14);
+  transition: none;
+}
+.page_slider.single .ps_label b {
+  color: #75715e; /* 页码数字与文字同灰（原金黄取消） */
+}
+.page_slider.single:focus-visible {
+  outline: none; /* 不可操作，不给焦点环 */
 }
 
 /* ---------- 新增：评论区（2013 版 _cell.php 未写完，按 NewsCell 风格补齐） ---------- */

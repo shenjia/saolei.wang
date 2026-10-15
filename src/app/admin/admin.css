@@ -734,6 +734,19 @@ table.admin_table .ai_reason {
   color: #272822;
   font-weight: bold;
 }
+/* 单页态（2026-10-15 张老师要求：只有一页时也显示、按钮全灰不可点） */
+.admin_pager.single .off {
+  border-color: #33322b;
+  background: #26261f;
+  color: #5d5c4f;
+  cursor: default;
+}
+.admin_pager.single .current {
+  background: #33322b;
+  border-color: #33322b;
+  color: #75715e;
+  font-weight: normal;
+}
 .admin_progress {
   width: 116px;
   height: 8px;

@@ -211,18 +211,17 @@ export function VideoFeed({
           )}
         </tbody>
       </table>
-      {maxPage > 1 && (
-        <div className="list_footer">
-          <PageSlider
-            page={curPage}
-            pages={maxPage}
-            loading={loading || switching}
-            onGoto={gotoPage}
-            hasMore={hasMore}
-            onMore={loadMore}
-          />
-        </div>
-      )}
+      {/* 2026-10-15 张老师要求：单页也显示翻页条（PageSlider single 态全灰不可点） */}
+      <div className="list_footer">
+        <PageSlider
+          page={curPage}
+          pages={maxPage}
+          loading={loading || switching}
+          onGoto={gotoPage}
+          hasMore={hasMore}
+          onMore={loadMore}
+        />
+      </div>
     </>
   );
 }

@@ -104,7 +104,8 @@ export function RoleTag({ role }: { role: number }) {
   return <span className="admin_tag plain">玩家</span>;
 }
 
-/** 后台分页（与主站 Pager 同交互，样式走 admin_ 前缀） */
+/** 后台分页（与主站 Pager 同交互，样式走 admin_ 前缀）
+ *  2026-10-15 张老师要求：只有一页时也显示翻页控件，按钮全灰不可点 */
 export function AdminPager({
   base,
   params,
@@ -119,13 +120,8 @@ export function AdminPager({
   pageSize: number;
 }) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  if (pageCount <= 1) {
-    return (
-      <div className="admin_pager">
-        共 {total.toLocaleString("zh-CN")} 条
-      </div>
-    );
-  }
+  // 单页：渲染完整控件行（灰色禁用态）+ 总数，不提前返回
+  const single = pageCount <= 1;
   const url = (p: number) => {
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") q.set(k, String(v));
@@ -139,11 +135,13 @@ export function AdminPager({
     } else if (links[links.length - 1] !== "...") links.push("...");
   }
   return (
-    <div className="admin_pager">
-      {page > 1 && (
+    <div className={"admin_pager" + (single ? " single" : "")}>
+      {page > 1 && !single ? (
         <Link href={url(page - 1)}>
           上一页
         </Link>
+      ) : (
+        single && <span className="off">上一页</span>
       )}
       {links.map((p, i) =>
         p === "..." ? (
@@ -160,10 +158,12 @@ export function AdminPager({
           </Link>
         )
       )}
-      {page < pageCount && (
+      {page < pageCount && !single ? (
         <Link href={url(page + 1)}>
           下一页
         </Link>
+      ) : (
+        single && <span className="off">下一页</span>
       )}
       <span style={{ border: 0, marginLeft: 14, color: "#75715e" }}>
         共 {total.toLocaleString("zh-CN")} 条 / {pageCount} 页

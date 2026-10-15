@@ -72,9 +72,11 @@ export function PageSlider({
   // 卸载清计时器
   useEffect(() => () => disarmDwell(), []);
 
-  if (pages <= 1) return null;
+  // 单页也渲染整行（2026-10-15 张老师要求：翻页控件只有一页时显示但全部灰色不可点）——
+  // single 态：无 ··· 按钮、◀▶ 禁用、滑轨静态满格金色（pct 恒 100%）、页码「第 1 / 1 页」
+  const single = pages <= 1;
 
-  const pct = (p: number) => (pages <= 1 ? 0 : ((p - 1) / (pages - 1)) * 100);
+  const pct = (p: number) => (single ? 100 : ((p - 1) / (pages - 1)) * 100);
   const pageFromX = (clientX: number) => {
     const rect = railRef.current!.getBoundingClientRect();
     const x = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
@@ -82,7 +84,7 @@ export function PageSlider({
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (loading) return;
+    if (loading || single) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = pageFromX(e.clientX);
     dragPageRef.current = p;
@@ -120,15 +122,15 @@ export function PageSlider({
 
   return (
     <div
-      className={"page_slider" + (dragging ? " dragging" : "") + (loading ? " pending" : "")}
+      className={"page_slider" + (dragging ? " dragging" : "") + (loading ? " pending" : "") + (single ? " single" : "")}
       role="slider"
-      tabIndex={0}
+      tabIndex={single ? -1 : 0}
       aria-label="页码"
       aria-valuemin={1}
       aria-valuemax={pages}
       aria-valuenow={showPage}
       onKeyDown={(e) => {
-        if (loading) return;
+        if (loading || single) return;
         if (e.key === "ArrowLeft") {
           e.preventDefault();
           if (page > 1) onGoto(page - 1);
@@ -162,7 +164,7 @@ export function PageSlider({
       <button
         type="button"
         className="ps_btn prev"
-        disabled={loading || page <= 1}
+        disabled={loading || single || page <= 1}
         onMouseDown={noFocus}
         onClick={() => onGoto(page - 1)}
         aria-label="上一页"
@@ -189,7 +191,7 @@ export function PageSlider({
       <button
         type="button"
         className="ps_btn next"
-        disabled={loading || page >= pages}
+        disabled={loading || single || page >= pages}
         onMouseDown={noFocus}
         onClick={() => onGoto(page + 1)}
         aria-label="下一页"
