@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { addHistory, deleteHistory, updateHistory } from "@/lib/history";
+import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -12,6 +13,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "");
   const content = String(body.content ?? "").trim().slice(0, 500);
+
+  // 前置敏感词闸门（2026-10-16 补挂：纪事是公开展示的 UGC 入口，此前漏挂）
+  if (action === "add" || action === "update") {
+    const hit = checkSensitive(content);
+    if (!hit.ok) {
+      logSensitiveHit("history." + action, session.uid, hit);
+      return NextResponse.json({ error: sensitiveRejectMessage(hit) }, { status: 400 });
+    }
+  }
 
   if (action === "add") {
     const month = String(body.month ?? "");

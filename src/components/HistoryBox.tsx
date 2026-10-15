@@ -89,7 +89,9 @@ export function HistoryBox({
                 </em>
               </td>
               <td className="history_content_col">
-                <span>{it.content}</span>
+                {/* 2026-10-16 修复：纪事正文支持换行分段（对齐老站 NoHtml 的 CRLF→<br> 语义），
+                    归一化后交给 CSS pre-wrap 渲染；纯文本节点无 XSS 面 */}
+                <span className="history_text">{normalizeHistoryText(it.content)}</span>
                 {editable && (
                   <span className="ops">
                     {" "}
@@ -149,6 +151,12 @@ export function HistoryBox({
 function monthToUnix(month: string): number {
   const [y, m] = month.split("-").map(Number);
   return Math.floor(new Date(y, m - 1, 15).getTime() / 1000);
+}
+
+/** 纪事正文换行归一化：CRLF/CR → LF；老站个别条目存的字面 <br> 也视为换行（如 id=1353）。
+ *  渲染端做（而非入库端清洗），存量 5005 条无需回洗，编辑回显时同一函数反向一致。 */
+export function normalizeHistoryText(text: string): string {
+  return text.replace(/\r\n?/g, "\n").replace(/<br\s*\/?>/gi, "\n");
 }
 
 /** 写纪事 / 编辑纪事浮窗（新增与编辑复用同一设计） */

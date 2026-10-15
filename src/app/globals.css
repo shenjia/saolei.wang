@@ -2202,6 +2202,12 @@ body #page.message_list > .box:first-child .page_head {
 #history .history_content_col > span {
   color: #cfcfc2;
 }
+
+/* 2026-10-16 修复：纪事正文保留换行分段（对齐老站 NoHtml 的 CRLF→<br> 口径）；
+   pre-wrap = 换行生效 + 长行仍自动折行，不横向撑破表格 */
+#history .history_content_col > span.history_text {
+  white-space: pre-wrap;
+}
 .history_item .ops a {
   font-size: 12px;
   color: #75715e;
