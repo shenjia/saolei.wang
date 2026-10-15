@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { timeOpposite, TIME_NEVER } from "@/lib/format";
+import { timeOpposite, TIME_NEVER, parseMessageParts } from "@/lib/format";
 import type { MessageItem } from "@/lib/message";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
@@ -14,6 +14,14 @@ import { TotalCount } from "./TotalCount";
 
 /** 首屏/每页条数（与 lib/message.ts MESSAGE_PAGESIZE 一致；不 import 值防 prisma 进 bundle） */
 const PAGE_SIZE = 15;
+
+/** 列表摘要：链接段只留文字（整行已是 <Link>，内嵌 <a> 会造成嵌套交互；详情页才可点） */
+function contentPreview(content: string): string {
+  const plain = parseMessageParts(content)
+    .map((p) => (typeof p === "string" ? p : p.text))
+    .join("");
+  return plain.length > 40 ? plain.slice(0, 40) + "…" : plain;
+}
 
 export function MessageRow({ m }: { m: MessageItem }) {
   return (
@@ -37,7 +45,7 @@ export function MessageRow({ m }: { m: MessageItem }) {
       </td>
       <td>
         <Link className={`bbs_title ${m.isSystem ? "msg_sys" : ""}`} href={`/message/${m.id}`}>
-          {m.content.length > 40 ? m.content.slice(0, 40) + "…" : m.content}
+          {contentPreview(m.content)}
         </Link>
         {!m.isRead && <span className="msg_new">新</span>}
       </td>

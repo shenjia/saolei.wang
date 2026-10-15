@@ -1570,10 +1570,45 @@ del[data-tip]:hover::after {
   margin: 6px 0;
   padding: 4px 10px;
   color: #a59f85;
+  /* 2026-10-15 评论回复：引用部分小字体（正文 15px → 13px） */
+  font-size: 13px;
 }
 .bbs_ops a {
   margin-left: 6px;
   font-size: 13px;
+}
+/* 回复表单引用框（2026-10-15 评论回复）：不可编辑小字体引用块，与正文 blockquote 同系配色 */
+.reply_quote_box {
+  position: relative;
+  border-left: 3px solid #49483e;
+  background: #282822;
+  margin: 6px 0 10px;
+  padding: 6px 30px 6px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #a59f85;
+}
+.reply_quote_author {
+  color: #888;
+}
+.reply_quote_remove {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  border: none;
+  background: none;
+  color: #888;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}
+.reply_quote_remove:hover {
+  color: #f8f8f2;
+}
+/* 读信页通知里的《文章标题》链接（2026-10-15）：与论坛标题同系黄色 */
+.msg_title_link {
+  color: #e6db74;
 }
 
 /* ---------- 侧栏个人卡片（2026-10-13 六轮定稿，设计稿 design/sidebar-panel.html） ----------

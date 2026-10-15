@@ -6,7 +6,10 @@ import { oldTitle, type OldTitle } from "./oldtitle";
 import { NEWS_TYPE } from "./config";
 import { publishNews } from "./news";
 import { WX_FACES, FACE_BY_KEY } from "./faces";
-import { decodeLegacyEntities } from "./format";
+import { decodeLegacyEntities, ubbExcerpt } from "./format";
+
+/** 楼层引用摘要长度（2026-10-15 张老师定）：前 50 字，超出省略 */
+export const REPLY_QUOTE_LIMIT = 50;
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -332,6 +335,8 @@ export interface BbsReplyItem {
   createTime: number;
   author: BbsAuthor | null;
   html: string;
+  /** UBB 剥标签纯文本摘要（≤50 字超出省略）——「回复」链接引用框预填用（2026-10-15） */
+  excerpt: string;
 }
 
 /** 楼层流取数（cursor 语义，按 id 升序）
@@ -359,6 +364,7 @@ export async function getReplyFeed(
       createTime: N(r.createTime),
       author: authors.get(N(r.user)) ?? null,
       html: ubb(r.content),
+      excerpt: ubbExcerpt(r.content, REPLY_QUOTE_LIMIT),
     })),
     total,
   };
@@ -440,21 +446,44 @@ export async function updatePost(
   return true;
 }
 
-/** 回帖（锁定帖仅管理员可回；事务更新计数与最后回复，移植 Title_Reply） */
+/** 回帖（锁定帖仅管理员可回；事务更新计数与最后回复，移植 Title_Reply）
+ *  2026-10-15 评论回复（张老师要求）：
+ *  · quoteOf = 被回复楼层 id：内容前自动预拼 [quote]用户名：摘要[/quote] 引用头，
+ *    客户端只传回复文字（引用框不可编辑），发布后成功给被回复者发通知
+ *  · 返回被回复者 id（无引用或自回复时 null）——通知由 API 层落库后发 */
 export async function createReply(
   postId: number,
   userId: number,
   content: string,
-  isAdmin = false
-): Promise<number | "locked" | null> {
+  isAdmin = false,
+  quoteOf = 0
+): Promise<{ id: number; quotedUserId: number | null } | "locked" | null> {
   const post = await prisma.bbsPost.findFirst({ where: { id: BigInt(postId), status: 0 } });
   if (!post) return null;
   if (post.isLocked && !isAdmin) return "locked";
+  let full = content;
+  let quotedUserId: number | null = null;
+  let quotedName = "";
+  let quotedExcerpt = "";
+  if (quoteOf) {
+    const q = await prisma.bbsReply.findFirst({
+      where: { id: BigInt(quoteOf), post: BigInt(postId), status: 0 },
+      select: { user: true, content: true },
+    });
+    if (q) {
+      quotedUserId = N(q.user);
+      const u = await prisma.user.findUnique({ where: { id: q.user }, select: { chineseName: true } });
+      quotedName = u?.chineseName ?? "";
+      quotedExcerpt = ubbExcerpt(q.content, REPLY_QUOTE_LIMIT);
+      // 引用头格式与「回复」链接预填一致：用户名：前50字（超出省略号）
+      full = `[quote]${quotedName}：${quotedExcerpt}[/quote]\n${content}`;
+    }
+  }
   const now = nowSec();
   // 事务内同发「评论」动态（BBS 回帖=评论文章，2026-09-24 张老师要求；仅个人主页可见）
-  return prisma.$transaction(async (tx) => {
+  const replyId = await prisma.$transaction(async (tx) => {
     const reply = await tx.bbsReply.create({
-      data: { post: BigInt(postId), user: BigInt(userId), content, createTime: now, updateTime: now },
+      data: { post: BigInt(postId), user: BigInt(userId), content: full, createTime: now, updateTime: now },
     });
     await tx.bbsPost.update({
       where: { id: BigInt(postId) },
@@ -471,6 +500,7 @@ export async function createReply(
     });
     return N(reply.id);
   });
+  return { id: replyId, quotedUserId: quotedUserId === userId ? null : quotedUserId };
 }
 
 /** 删主题（软删；本人或管理员，移植 Title_Del / Del_My） */

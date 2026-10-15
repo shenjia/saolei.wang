@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { runContentReview } from "@/lib/content-review";
+import { sendMessage } from "@/lib/message";
+import { decodeLegacyEntities } from "@/lib/format";
 import {
   adminSetPost,
   BBS_BOARD_NAMES,
@@ -60,6 +62,8 @@ export async function POST(req: NextRequest) {
 
   if (action === "reply") {
     const content = String(body.content ?? "").trim().slice(0, BBS_CONTENT_LIMIT);
+    // 被回复楼层 id（2026-10-15 评论回复）：「回复」链接带入，引用头由服务端拼装
+    const replyTo = parseInt(String(body.replyTo ?? ""), 10) || 0;
     if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
     if (!content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
     if (!admin && !(await canPost(session.uid))) {
@@ -67,9 +71,29 @@ export async function POST(req: NextRequest) {
     }
     const hit = checkSensitive(content);
     if (!hit.ok) return reject(hit, "bbs.reply");
-    const replyId = await createReply(id, session.uid, content, admin);
-    if (replyId === "locked") return NextResponse.json({ error: "主题已锁定" }, { status: 403 });
-    if (replyId === null) return NextResponse.json({ error: "主题不存在" }, { status: 404 });
+    const r = await createReply(id, session.uid, content, admin, replyTo);
+    if (r === "locked") return NextResponse.json({ error: "主题已锁定" }, { status: 403 });
+    if (r === null) return NextResponse.json({ error: "主题不存在" }, { status: 404 });
+    const replyId = r.id;
+    // 评论通知（2026-10-15 张老师要求，落库成功后才发；消息 200 字限长在 sendMessage 内天然截断风险：
+    // 标题最长 100 + 模板约 30，标记占位 <40，总长可控）：《标题》内嵌 [url /bbs/N]…[/url] 可点击跳文章页
+    const post = await prisma.bbsPost.findUnique({
+      where: { id: BigInt(id) },
+      select: { title: true, user: true },
+    });
+    if (post) {
+      const postTitle = decodeLegacyEntities(post.title);
+      const titleLink = `[url /bbs/${id}]《${postTitle}》[/url]`;
+      // ① 回复了别人的评论 → 通知被回复者
+      if (r.quotedUserId) {
+        await sendMessage(session.uid, r.quotedUserId, `我回复了你在${titleLink}文章中的评论`);
+      }
+      // ② 任何评论 → 通知楼主（自评不发）
+      const postOwnerId = Number(post.user);
+      if (postOwnerId !== session.uid) {
+        await sendMessage(session.uid, postOwnerId, `我评论了你的文章${titleLink}`);
+      }
+    }
     after(() => runContentReview("bbs_reply", replyId, content));
     return NextResponse.json({ id: replyId });
   }

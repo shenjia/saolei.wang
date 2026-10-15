@@ -3,6 +3,8 @@
 //   · 楼层号不落库：1 楼是主题，回复按序号 i+2 推得（与旧版分页码语义一致）
 //   · 回复成功后就地接上新楼层（原本靠整页刷新，客户端列表不会自动更新）
 //   · 删楼层后按序号重排楼层号（服务端同样是按位置推得的派生值）
+// 2026-10-15 评论回复（张老师要求）：已登录用户每楼带「回复」链接（位于删除链接之前），
+//   点击后跳到底部表单并预填不可编辑引用框（用户名 + 评论前50字超出省略），随提交发送通知
 
 "use client";
 
@@ -44,6 +46,8 @@ export function BbsReplySection({
   const [hasMore, setHasMore] = useState(initial.length < initialTotal);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
+  /** 引用目标楼层（2026-10-15）：null = 普通回复 */
+  const [quote, setQuote] = useState<BbsReplyItem | null>(null);
 
   /** 取下一批楼层；返回本批条数 */
   async function loadMore(): Promise<number> {
@@ -87,6 +91,12 @@ export function BbsReplySection({
     return isAdmin || viewerUid === r.author?.id || viewerUid === postAuthorId;
   }
 
+  /** 点击「回复」：设引用目标并滚到底部表单（表单容器带 id 锚点；游客不渲染该链接） */
+  function onQuoteReply(r: BbsReplyItem) {
+    setQuote(r);
+    document.getElementById("reply_form_anchor")?.scrollIntoView({ behavior: "smooth" });
+  }
+
   return (
     <>
       {items.map((r, i) => (
@@ -100,6 +110,20 @@ export function BbsReplySection({
               </>
             )}
             {timeOpposite(r.createTime, TIME_NEVER)}
+            {viewerUid && !locked && (
+              <span className="bbs_ops">
+                {" "}
+                <a
+                  href="#reply_form_anchor"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onQuoteReply(r);
+                  }}
+                >
+                  回复
+                </a>
+              </span>
+            )}
             {canDelete(r) && (
               <span className="bbs_ops">
                 {" "}
@@ -131,10 +155,24 @@ export function BbsReplySection({
         </div>
       )}
 
-      <div className="box">
+      <div className="box" id="reply_form_anchor">
         <h2>回复主题</h2>
         {canReply ? (
-          <ReplyForm postId={postId} locked={locked} onPosted={onPosted} />
+          <ReplyForm
+            postId={postId}
+            locked={locked}
+            onPosted={onPosted}
+            quote={
+              quote
+                ? {
+                    replyId: quote.id,
+                    authorName: quote.author?.chineseName ?? "?",
+                    excerpt: quote.excerpt,
+                  }
+                : null
+            }
+            onQuoteCleared={() => setQuote(null)}
+          />
         ) : (
           <p className="text login_hint">
             <LoginLink>登录</LoginLink> 后才能回复。

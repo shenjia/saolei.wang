@@ -20,15 +20,22 @@ async function callApi(body: Record<string, unknown>): Promise<string | null> {
 }
 
 /** 回复表单（2026-10-13：新增 onPosted —— 详情页楼层流改为客户端「加载更多」后，
- *  整页刷新已不会自动追加新楼层，由楼层流组件就地接上） */
+ *  整页刷新已不会自动追加新楼层，由楼层流组件就地接上）
+ *  2026-10-15 评论回复（张老师要求）：quote 传入时表单顶部渲染不可编辑引用框
+ *  （用户名 + 评论前50字超出省略），提交时带 replyTo=楼层 id，引用头由服务端拼装 */
 export function ReplyForm({
   postId,
   locked,
   onPosted,
+  quote,
+  onQuoteCleared,
 }: {
   postId: number;
   locked: boolean;
   onPosted?: () => void;
+  /** 引用目标（楼层）：null = 普通回复 */
+  quote: { replyId: number; authorName: string; excerpt: string } | null;
+  onQuoteCleared?: () => void;
 }) {
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
@@ -40,7 +47,12 @@ export function ReplyForm({
   async function onSubmit() {
     setBusy(true);
     setError("");
-    const err = await callApi({ action: "reply", id: postId, content });
+    const err = await callApi({
+      action: "reply",
+      id: postId,
+      content,
+      ...(quote ? { replyTo: quote.replyId } : {}),
+    });
     setBusy(false);
     if (err) {
       setError(err);
@@ -48,6 +60,7 @@ export function ReplyForm({
     }
     setContent("");
     toast("回复发表成功", "success");
+    onQuoteCleared?.();
     onPosted?.();
     // 仍刷新一次服务端数据（主题抬升、评论计数、右栏等随之更新）
     router.refresh();
@@ -55,6 +68,20 @@ export function ReplyForm({
 
   return (
     <div className="reply_form">
+      {quote && (
+        <div className="reply_quote_box">
+          <span className="reply_quote_author">{quote.authorName}：</span>
+          {quote.excerpt}
+          <button
+            type="button"
+            className="reply_quote_remove"
+            title="取消引用"
+            onClick={onQuoteCleared}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <RichEditor
         initialContent=""
         minHeight={200}

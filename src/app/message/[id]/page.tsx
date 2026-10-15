@@ -5,12 +5,20 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { readMessage } from "@/lib/message";
-import { timeOpposite, TIME_NEVER } from "@/lib/format";
+import { timeOpposite, TIME_NEVER, parseMessageParts } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { SendMessageForm } from "@/components/MessageForms";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "读信" };
+
+/** h1 标题：链接标记剥为纯文字（正文内才是可点的） */
+function contentPreviewTitle(content: string): string {
+  return parseMessageParts(content)
+    .map((p) => (typeof p === "string" ? p : p.text))
+    .join("")
+    .slice(0, 20);
+}
 
 export default async function MessageShowPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -23,7 +31,7 @@ export default async function MessageShowPage({ params }: { params: Promise<{ id
   return (
     <div id="page" className="main">
       <div className="box text bbs_post">
-        <h1>{message.isSystem ? "系统消息" : message.content.slice(0, 20)}</h1>
+        <h1>{message.isSystem ? "系统消息" : contentPreviewTitle(message.content)}</h1>
         <p className="bbs_meta">
           {message.isSystem ? (
             <span className="avatar_link msg_sys">【系统广播】</span>
@@ -38,7 +46,18 @@ export default async function MessageShowPage({ params }: { params: Promise<{ id
           发送于 {timeOpposite(message.createTime, TIME_NEVER)}
         </p>
         <hr />
-        <div className="bbs_content">{message.content}</div>
+        <div className="bbs_content">
+          {/* 评论通知里的《文章标题》内嵌链接（2026-10-15）：解析标记渲染为可点击跳文章页 */}
+          {parseMessageParts(message.content).map((p, i) =>
+            typeof p === "string" ? (
+              <span key={i}>{p}</span>
+            ) : (
+              <Link key={i} href={p.href} className="msg_title_link">
+                {p.text}
+              </Link>
+            )
+          )}
+        </div>
         <hr />
         <Link href="/message" className="button small">
           返回消息
