@@ -60,11 +60,14 @@ const ERROR_TEXT: Record<string, string> = {
 export default function LoginPanel({
   initialError = "",
   onSuccess,
+  nextPath = "",
 }: {
   /** OAuth 回调错误码（独立页从 ?error= 读） */
   initialError?: string;
   /** 密码登录成功回调：浮窗用来关窗 + refresh；不传则按独立页行为跳转 */
   onSuccess?: (needBind: boolean) => void;
+  /** 登录成功后回跳的站内路径（独立页 ?next=，2026-10-15：邮箱验证链接依赖） */
+  nextPath?: string;
 }) {
   const [tab, setTab] = useState<Tab>(OAUTH_ENABLED ? "wechat" : "password");
   const savedUser = useLSValue(LS_USER);
@@ -104,8 +107,8 @@ export default function LoginPanel({
         onSuccess(data.needBind);
         return;
       }
-      // 老用户未绑定微信/QQ → 强制绑定
-      router.push(data.needBind ? "/account/bind" : "/");
+      // 老用户未绑定微信/QQ → 强制绑定；否则优先 ?next= 回跳（无则回首页）
+      router.push(data.needBind ? "/account/bind" : nextPath || "/");
       router.refresh();
     } finally {
       setLoading(false);
