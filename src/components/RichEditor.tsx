@@ -135,8 +135,11 @@ function serializeInline(nodes: ArrayLike<Node>): string {
   return out;
 }
 
-/** 画布 DOM → UBB（白名单序列化；未知节点拍平为文本） */
+/** 画布 DOM → UBB（白名单序列化；未知节点拍平为文本）
+ *  跳过引用装饰块（data-quote-deco）：仅预览展示，引用头由服务端按 replyTo 拼装 */
 export function serializeEditor(ed: HTMLElement): string {
+  const deco = ed.querySelector("blockquote[data-quote-deco]");
+  deco?.remove();
   let out = "";
   for (const n of Array.from(ed.childNodes)) {
     const isBlock = n.nodeType === 1 && /^(DIV|P|BLOCKQUOTE)$/.test((n as HTMLElement).tagName);
@@ -148,13 +151,18 @@ export function serializeEditor(ed: HTMLElement): string {
     if (isBlock && out !== "" && !out.endsWith("\n")) out += "\n";
     out += s;
   }
-  return out.replace(/\n+$/, "");
+  const result = out.replace(/\n+$/, "");
+  if (deco) ed.prepend(deco); // 摘除只限序列化瞬间，装饰块回位
+  return result;
 }
 
-/** 视觉字数：表情/雷图/图片各计 1，文字按字符（评论等限长场景用） */
+/** 视觉字数：表情/雷图/图片各计 1，文字按字符（评论等限长场景用）；引用装饰块不计入 */
 export function visualLength(ed: HTMLElement): number {
+  const deco = ed.querySelector("blockquote[data-quote-deco]");
+  deco?.remove();
   let n = ed.querySelectorAll("img").length;
   n += (ed.textContent ?? "").replace(/\s/g, "").length;
+  if (deco) ed.prepend(deco);
   return n;
 }
 
@@ -202,6 +210,15 @@ async function compressToBudget(file: File, budget = 204800): Promise<{ blob: Bl
   }
 }
 
+export interface RichEditorQuote {
+  /** 被回复用户名（引用头显示） */
+  authorName: string;
+  /** 评论摘要（前50字超出省略，服务端预算） */
+  excerpt: string;
+  /** 取消引用回调（装饰块 × 按钮） */
+  onRemove?: () => void;
+}
+
 export interface RichEditorProps {
   /** 初始 UBB（编辑旧帖传入） */
   initialContent?: string;
@@ -211,6 +228,9 @@ export interface RichEditorProps {
   placeholder?: string;
   /** 是否显示标题/醒目/加亮/加粗/链接全套（回帖与发帖一致；评论已不用富文本） */
   full?: boolean;
+  /** 引用装饰块（2026-10-15 张老师二定）：画布顶部不可编辑引用框——亮灰左粗框线+暗灰底；
+   *  仅预览展示，序列化时跳过（引用头由服务端按 replyTo 拼装，防双引用） */
+  quote?: RichEditorQuote | null;
   /** 内容变化回调（UBB） */
   onChange?: (ubb: string) => void;
   /** toast 通知（复用站内 Toast） */
@@ -222,6 +242,7 @@ export function RichEditor({
   minHeight = 300,
   placeholder = "",
   full = true,
+  quote,
   onChange,
   notify,
 }: RichEditorProps) {
@@ -266,6 +287,60 @@ export function RichEditor({
     emitChange();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** 引用装饰块（2026-10-15 张老师二定）：quote 变化时在画布顶部注入/移除不可编辑 blockquote。
+   *  contenteditable=false 整块锁定；× 按钮回调 onRemove（由父组件清 quote 态）；
+   *  序列化/字数统计均跳过（data-quote-deco）。注入后画布尾补空行并置光标——
+   *  直接把光标放 root 末尾会被 Chrome 锚进不可编辑块（击键被吞），必须落进真实文本节点 */
+  useEffect(() => {
+    const ed = edRef.current;
+    if (!ed) return;
+    ed.querySelector("blockquote[data-quote-deco]")?.remove();
+    if (!quote) return;
+    const bq = document.createElement("blockquote");
+    bq.setAttribute("data-quote-deco", "");
+    bq.contentEditable = "false";
+    const author = document.createElement("span");
+    author.className = "quote_deco_author";
+    author.textContent = `${quote.authorName}：`;
+    bq.appendChild(author);
+    bq.appendChild(document.createTextNode(quote.excerpt));
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "quote_deco_remove";
+    btn.title = "取消引用";
+    btn.textContent = "×";
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      bq.remove();
+      quote.onRemove?.();
+    });
+    bq.appendChild(btn);
+    ed.prepend(bq);
+    // 光标就绪：画布无正文（不算装饰块）时补一个空行承接输入，否则光标到末行末尾。
+    // 直接把光标放 root 末尾会被 Chrome 锚进不可编辑块（击键被吞），必须落进真实文本节点
+    const contentNodes = [...ed.childNodes].filter((n) => n !== bq);
+    const hasContent = contentNodes.some(
+      (n) => (n.textContent ?? "").trim() !== "" || (n as Element).querySelector?.("img")
+    );
+    let caretNode: Node;
+    if (!hasContent) {
+      const line = document.createElement("div");
+      line.className = "line";
+      ed.appendChild(line);
+      caretNode = line;
+    } else {
+      caretNode = contentNodes[contentNodes.length - 1];
+    }
+    ed.focus();
+    const sel = window.getSelection();
+    const r = document.createRange();
+    if (caretNode.nodeType === 3) r.setStart(caretNode, (caretNode as Text).length);
+    else r.setStart(caretNode, 0);
+    r.collapse(true);
+    sel?.removeAllRanges();
+    sel?.addRange(r);
+  }, [quote]);
 
   const onInput = () => {
     retagMineLines();

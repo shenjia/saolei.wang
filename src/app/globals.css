@@ -1566,32 +1566,37 @@ del[data-tip]:hover::after {
   width: 24px;
 }
 .bbs_content blockquote {
-  border-left: 3px solid #49483e;
+  border-left: 4px solid #a59f85;
+  background: #1e1f1c;
   margin: 6px 0;
   padding: 4px 10px;
   color: #a59f85;
-  /* 2026-10-15 评论回复：引用部分小字体（正文 15px → 13px） */
+  /* 2026-10-15 评论回复：引用部分小字体（正文 15px → 13px）；
+     2026-10-15 二定：与编辑器装饰块同款——亮灰左粗框线+暗灰底 */
   font-size: 13px;
 }
 .bbs_ops a {
   margin-left: 6px;
   font-size: 13px;
 }
-/* 回复表单引用框（2026-10-15 评论回复）：不可编辑小字体引用块，与正文 blockquote 同系配色 */
-.reply_quote_box {
+/* 回复表单引用装饰块（2026-10-15 张老师二定：引用进输入框内）：
+   画布顶部不可编辑 blockquote——亮灰色左粗框线 + 右侧暗灰底色背景，
+   与楼层渲染的 .bbs_content blockquote 同款观感（所见即所得） */
+.wys blockquote[data-quote-deco] {
   position: relative;
-  border-left: 3px solid #49483e;
-  background: #282822;
-  margin: 6px 0 10px;
+  border-left: 4px solid #a59f85;
+  background: #1e1f1c;
+  margin: 0 0 10px;
   padding: 6px 30px 6px 10px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: #a59f85;
+  user-select: none;
 }
-.reply_quote_author {
+.wys blockquote[data-quote-deco] .quote_deco_author {
   color: #888;
 }
-.reply_quote_remove {
+.wys blockquote[data-quote-deco] .quote_deco_remove {
   position: absolute;
   top: 2px;
   right: 4px;
@@ -1603,7 +1608,7 @@ del[data-tip]:hover::after {
   cursor: pointer;
   padding: 4px;
 }
-.reply_quote_remove:hover {
+.wys blockquote[data-quote-deco] .quote_deco_remove:hover {
   color: #f8f8f2;
 }
 /* 读信页通知里的《文章标题》链接（2026-10-15）：与论坛标题同系黄色 */

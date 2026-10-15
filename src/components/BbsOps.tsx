@@ -21,8 +21,9 @@ async function callApi(body: Record<string, unknown>): Promise<string | null> {
 
 /** 回复表单（2026-10-13：新增 onPosted —— 详情页楼层流改为客户端「加载更多」后，
  *  整页刷新已不会自动追加新楼层，由楼层流组件就地接上）
- *  2026-10-15 评论回复（张老师要求）：quote 传入时表单顶部渲染不可编辑引用框
- *  （用户名 + 评论前50字超出省略），提交时带 replyTo=楼层 id，引用头由服务端拼装 */
+ *  2026-10-15 评论回复（张老师要求）：quote 传入时编辑器画布顶部渲染不可编辑引用块
+ *  （用户名 + 评论前50字超出省略，2026-10-15 二定：引用进输入框内，亮灰左粗框线+暗灰底），
+ *  提交时带 replyTo=楼层 id，引用头由服务端拼装 */
 export function ReplyForm({
   postId,
   locked,
@@ -68,26 +69,21 @@ export function ReplyForm({
 
   return (
     <div className="reply_form">
-      {quote && (
-        <div className="reply_quote_box">
-          <span className="reply_quote_author">{quote.authorName}：</span>
-          {quote.excerpt}
-          <button
-            type="button"
-            className="reply_quote_remove"
-            title="取消引用"
-            onClick={onQuoteCleared}
-          >
-            ×
-          </button>
-        </div>
-      )}
       <RichEditor
         initialContent=""
         minHeight={200}
         placeholder="直接输入回复内容"
         onChange={setContent}
         notify={toast}
+        quote={
+          quote
+            ? {
+                authorName: quote.authorName,
+                excerpt: quote.excerpt,
+                onRemove: onQuoteCleared,
+              }
+            : null
+        }
       />
       <p className="submit_row">
         <button className="lp_submit_btn" disabled={busy || !content.trim()} onClick={onSubmit}>
