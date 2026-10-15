@@ -1,22 +1,39 @@
 #!/usr/bin/env bash
 #
-# setup-https-saolei.sh — saolei HTTPS 一次性配置（root 执行）
+# setup-https-saolei.sh — saolei HTTPS 配置（root 执行）
 #
 # 用法: sudo bash /home/deploy/setup-https-saolei.sh
 #
 # 动作:
-#   1. acme.sh http-01 签发 new.saolei.wang（webroot=/home/deploy/acme-www，
-#      与 nginx conf 的 /.well-known/acme-challenge/ location 对应；已签发则等价于续期检查）
+#   1. acme.sh http-01 签发三域名 SAN 证书（new / www / 裸域 saolei.wang；
+#      webroot=/home/deploy/acme-www，与 nginx conf 的 /.well-known/acme-challenge/
+#      location 对应；已签发则等价于续期检查）
 #   2. install-cert 到 /etc/nginx/ssl/saolei/（与 acme 目录解耦，续期后自动 reload nginx）
 #   3. 重写 ~/nginx-conf/saolei.conf：80 留 acme 验证 + 301 到 https；新增 443 server 块
+#      （三个域名同一 server_name 列表，共用上游）
 #   4. nginx -t && nginx -s reload
 #
-# 正式切换 www.saolei.wang 时：DNS 改指本机后重跑本脚本变体（加 -d www.saolei.wang -d saolei.wang
-# 重新签发并改 server_name），或用 DNS-01（aliyun API token）提前签好双域名证书。
+# ============ 正式切换 www.saolei.wang 操作手册（2026-10-15） ============
+# 前置（张老师在控制台/后台操作，缺一不可）：
+#   a. DNS：www.saolei.wang 与 saolei.wang 的 A 记录 → 60.205.137.210
+#      （旧站 123.56.177.46 已 502，直接切；TTL 建议提前调短到 600）
+#   b. QQ互联控制台：回调域名白名单加 www.saolei.wang（回调路径 /api/auth/qq/callback）
+#   c. 微信开放平台「网站应用」：授权回调域改为 www.saolei.wang（/api/auth/wechat/callback）
+#   d. SMTP_* 五个环境变量补进 .env（邮箱找回密码）
+# 切换顺序：
+#   1. 先跑本脚本（DNS 生效后 http-01 才能验证 www/裸域；new 已在服、即时通过）
+#   2. 改 /home/deploy/saolei.wang/.env 的 SITE_URL=https://www.saolei.wang
+#   3. 蓝绿重启（两槽都要吃到新 env）：pm2 restart saolei saolei-green --update-env
+#   4. 核验：https://www.saolei.wang 200、QQ/微信扫码登录走通、找回密码邮件到信、
+#      sitemap.xml 域名已是 www、/Online/game.asp 等旧 URL 301 正常
+#   5. /page/history 登记一条「正式启用 www.saolei.wang 域名」
+# 回滚：DNS 切回 123.56.177.46 即恢复旧域名口径（新站不受影响，new.* 始终可用）
+# ========================================================================
+
 set -euo pipefail
 
 ACME="/root/.acme.sh/acme.sh"
-DOMAIN="new.saolei.wang"
+DOMAINS=(new.saolei.wang www.saolei.wang saolei.wang)
 WEBROOT="/home/deploy/acme-www"
 CONF="/home/deploy/nginx-conf/saolei.conf"
 CERT_DIR="/etc/nginx/ssl/saolei"
@@ -29,14 +46,28 @@ CERT_DIR="/etc/nginx/ssl/saolei"
 # o+x 仅允许穿越目录、不开放列目录/读内容，幂等无害
 chmod o+x /home/deploy
 
-echo "[1/3] acme.sh 签发 $DOMAIN（http-01, webroot=$WEBROOT, CA=Let's Encrypt）..."
+# 预检：三个域名都必须解析到本机公网 IP，否则 http-01 必挂（DNS 没切就先别跑）
+echo "[0/3] DNS 预检（须全部指向本机）..."
+HOST_IP=$(curl -s --max-time 5 ifconfig.me || true)
+for D in "${DOMAINS[@]}"; do
+  RESOLVED=$(dig +short "$D" @223.5.5.5 2>/dev/null | grep -E '^[0-9.]+$' | tail -1)
+  [[ -n "$RESOLVED" ]] || RESOLVED=$(getent hosts "$D" 2>/dev/null | awk '{print $1}' | tail -1)
+  echo "  $D -> ${RESOLVED:-未解析}"
+  if [[ -n "$HOST_IP" && "$RESOLVED" != "$HOST_IP" ]]; then
+    echo "[fail] $D 未指向本机（$HOST_IP），先完成 DNS 切换再跑本脚本"
+    exit 1
+  fi
+done
+
+echo "[1/3] acme.sh 签发 SAN 证书：${DOMAINS[*]}（http-01, webroot=$WEBROOT, CA=Let's Encrypt）..."
 # --server letsencrypt：复用 01xue 证书同款 LE 账户（account.conf 已注册），
 # 避开 acme.sh 3.x 默认 ZeroSSL 需要额外注册的不确定性
-"$ACME" --issue -d "$DOMAIN" -w "$WEBROOT" --server letsencrypt 2>&1 | tail -4
+ISSUE_ARGS=(); for D in "${DOMAINS[@]}"; do ISSUE_ARGS+=(-d "$D"); done
+"$ACME" --issue -w "$WEBROOT" --server letsencrypt "${ISSUE_ARGS[@]}" 2>&1 | tail -4
 
 echo "[2/3] 安装证书到 $CERT_DIR 并挂续期 reload..."
 mkdir -p "$CERT_DIR"
-"$ACME" --install-cert -d "$DOMAIN" \
+"$ACME" --install-cert -d "${DOMAINS[0]}" \
   --fullchain-file "$CERT_DIR/fullchain.pem" \
   --key-file "$CERT_DIR/key.pem" \
   --reloadcmd "nginx -s reload" >/dev/null
@@ -44,18 +75,18 @@ chmod 644 "$CERT_DIR/fullchain.pem"
 chmod 600 "$CERT_DIR/key.pem"
 
 echo "[3/3] 重写 nginx conf（80 跳转 + 443）并 reload..."
-cp "$CONF" "$CONF.pre-https.bak"
+cp "$CONF" "$CONF.pre-san.bak"
 cat > "$CONF" <<'NGINXEOF'
-# new.saolei.wang — 新版扫雷网（Next.js 蓝绿双槽 @ saolei_upstream）
-# 由 scripts/setup-https-saolei.sh 生成（2026-09-25）。手工改动会被脚本覆盖。
-# 正式切换 www.saolei.wang 时：DNS 切换 + 本脚本加 SAN 重签 + server_name 更新。
+# saolei.wang 三域名（new / www / 裸域）— 新版扫雷网（Next.js 蓝绿双槽 @ saolei_upstream）
+# 由 scripts/setup-https-saolei.sh 生成。手工改动会被脚本覆盖。
+# 站点主域名 = www.saolei.wang（SITE_URL 与 OAuth 回调同口径）；new.* 为过渡期别名。
 
 log_format spider_saolei '$http_x_forwarded_for - $time_iso8601 "$request" $status $body_bytes_sent '
                   '"$http_referer" rt=$request_time "$http_user_agent"';
 
 server {
     listen 80;
-    server_name new.saolei.wang;
+    server_name new.saolei.wang www.saolei.wang saolei.wang;
     access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
     client_max_body_size 30m;
 
@@ -71,7 +102,7 @@ server {
 
 server {
     listen 443 ssl;
-    server_name new.saolei.wang;
+    server_name new.saolei.wang www.saolei.wang saolei.wang;
     access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
     client_max_body_size 30m;
 
