@@ -1,18 +1,20 @@
-// 世界 TOP100（移植 2008 版 Ranking/Top10_World.asp；数据实时抓取 minesweepergame.com，1 天缓存）
+// 世界 TOP100 页面主体（移植 2008 版 Ranking/Top10_World.asp；数据实时抓取
+// minesweepergame.com，1 天缓存）
 // 中国选手行高亮（2008 版 .Ours 语义：站内雷友）
 // 2026-09-24：默认只显示前 15 条，下面「加载更多」增量展开（张老师要求），表格交互在 WorldTop100Table
 // 2026-09-27（张老师要求）：删除底部 world_foot（如何加入/更新时间/完整排行链接）——
 //   「查看完整排行」改为按钮并入页脚（在 WorldTop100Table 内）
-// 2026-10-15（张老师要求）：页脚改用标准翻页滑条 PageSlider（分页展示 15 条/页），
-//   最右侧保留「查看完整排行」外链按钮；滑条左侧保留标准「···加载更多」
+// 2026-10-15（张老师要求）：页脚改用标准翻页滑条 PageSlider（分页展示 15 条/页）；
+//   世界排行像地区排行一样加交互式世界地图（三块 Grid 落位见 WorldRankingBody）——
+//   全量榜单按国籍聚合（综合排行指数 = Σ（世界总人数 − 个人名次），一天抓取一次），
+//   抓取失败时地图整块隐藏、页面回落纯 TOP100 形态
 
-import { getWorldTop100, WORLD_RANKING_PAGE } from "@/lib/worldtop";
+import { getWorldTop100, getWorldCountryStats, WORLD_RANKING_PAGE } from "@/lib/worldtop";
 import { RankingNav } from "@/components/RankingNav";
-import { WorldTop100Table } from "@/components/WorldTop100Table";
+import { WorldRankingBody } from "@/components/WorldRankingBody";
 import { RankingRules } from "@/components/RankingRules";
-import { FlopPlayer } from "@/components/FlopPlayer";
 
-// 世界榜页底规则板块（2026-10-14 张老师要求；口径见 lib/worldtop.ts）。
+// 世界榜规则板块（2026-10-14 张老师要求；口径见 lib/worldtop.ts）。
 // 配色（2026-10-15 张老师定）：金只留小标题，正文数字 <i> 亮灰
 const WORLD_RULES = [
   <>
@@ -30,26 +32,20 @@ const WORLD_RULES = [
 ];
 
 export async function WorldTop100() {
-  const data = await getWorldTop100();
+  // TOP100 表与全量国家聚合同源（minesweepergame.com 同一接口分页），各挂 1 天缓存
+  const [data, stats] = await Promise.all([getWorldTop100(), getWorldCountryStats()]);
   return (
-    <>
-      <div id="world_top" className="box ranking_box">
-        <div className="page_head">
+    // head/rules 跨 RSC 边界进客户端组件多孩子数组，无 key 会触发 dev key 警告，显式 key 豁免
+    <WorldRankingBody
+      rows={data?.rows ?? []}
+      stats={stats?.countries ?? null}
+      head={
+        <div key="head" className="page_head">
           <h1 className="page_title">世界排行</h1>
           <RankingNav current="world" />
         </div>
-        {data ? (
-          <>
-            <WorldTop100Table rows={data.rows} />
-            {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染） */}
-            <FlopPlayer />
-          </>
-        ) : (
-          <p className="world_fail">暂时无法获取世界排行，请稍后再试。</p>
-        )}
-      </div>
-      {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求） */}
-      <RankingRules title="世界排行规则" items={WORLD_RULES} />
-    </>
+      }
+      rules={<RankingRules key="rules" title="世界排行规则" items={WORLD_RULES} />}
+    />
   );
 }

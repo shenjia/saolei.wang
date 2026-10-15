@@ -130,10 +130,12 @@ export default async function RankingPage({
     by = `${sp.level ?? "sum"}_${sp.order ?? "time"}`;
   }
 
-  // 世界榜：作为一个排行种类并入 tabs（抓取数据有 1 天缓存，见 lib/worldtop.ts）
+  // 世界榜：作为一个排行种类并入 tabs（抓取数据有 1 天缓存，见 lib/worldtop.ts）。
+  // 2026-10-15 张老师要求：加交互式世界地图——two_columns 双栏页宽口径（同地区总榜，
+  // 三块 Grid 落位在 WorldRankingBody 内）
   if (view === "world") {
     return (
-      <div id="page" className="main ranking_old">
+      <div id="page" className="main ranking_old two_columns">
         <WorldTop100 />
       </div>
     );
