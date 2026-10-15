@@ -59,6 +59,9 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
 
   const { user, stat } = detail;
   const national = ranks?.national ?? null;
+  // area 兜底 user 表：无成绩玩家 getUserRanks 返回 null（allr 只含有成绩者），
+  // 海外识别不能只依赖 ranks.area，否则无成绩外国人会漏标（2026-10-15）
+  const area = ranks?.area ?? user.area;
   const scores: Record<string, UserCardScore> = {};
   for (const [key, rec] of Object.entries(detail.scores)) {
     scores[key] = { score: rec.score, videoId: rec.videoId, date: rec.date };
@@ -71,7 +74,7 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     avatarUrl: avatarUrl(id, user.avatar),
     militaryTitle: detail.title,
     rank: national,
-    area: ranks?.area ?? "",
+    area,
     areaPos: ranks?.areaPos ?? null,
     scores,
     hasVideos: !!stat && stat.begVideos + stat.intVideos + stat.expVideos > 0,

@@ -1672,6 +1672,8 @@ export interface UserRanks {
 }
 
 async function getUserRanksImpl(userId: number): Promise<UserRanks | null> {
+  // 2026-10-15 海外名次：arear 不再排除「海外」——海外玩家的地区名次即「海外第 X 名」，
+  // 与地区榜 getAreaRanking v3（恢复含海外）口径对齐，组内 ROW_NUMBER 完全同构
   const rows = await prisma.$queryRaw<{ national: bigint; area: string; areaPos: bigint | null }[]>`
      WITH allr AS (
         SELECT s.id, u.area,
@@ -1683,7 +1685,7 @@ async function getUserRanksImpl(userId: number): Promise<UserRanks | null> {
         SELECT id, area,
               ROW_NUMBER() OVER (PARTITION BY area ORDER BY npos) apos
        FROM allr
-       WHERE area <> '' AND area NOT LIKE '%&%' AND area <> '海外'
+       WHERE area <> '' AND area NOT LIKE '%&%'
      )
      SELECT a.npos national, a.area, b.apos areaPos
      FROM allr a LEFT JOIN arear b ON b.id = a.id
@@ -1698,8 +1700,8 @@ async function getUserRanksImpl(userId: number): Promise<UserRanks | null> {
 
 // 2026-10-15 性能审计：用户主页每次浏览都跑一次全量 ROW_NUMBER 窗口（3.5 万行 ×2 CTE），
 // 而名次只在有人出成绩时变化——按用户 id 分键缓存 10 分钟（userId 自动并入缓存键）
-// 2026-10-15 海外排除：arear CTE 排除「海外」，缓存键升 v2
-const fetchUserRanks = unstable_cache(getUserRanksImpl, ["user-ranks-v2"], { revalidate: 600 });
+// 2026-10-15 海外名次：arear 恢复含「海外」，缓存键升 v3
+const fetchUserRanks = unstable_cache(getUserRanksImpl, ["user-ranks-v3"], { revalidate: 600 });
 
 export async function getUserRanks(userId: number): Promise<UserRanks | null> {
   return fetchUserRanks(userId);

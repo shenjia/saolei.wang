@@ -42,10 +42,17 @@ export function UserCard({ card }: { card: UserCardData }) {
           {/* 地区 / 全国排名：与用户主页 #user_view .info .rank_label .ranks 完全同构
               （两行 rank_line、13px、文字 #888、名次数字 Monokai 黄加粗正体；
               省份行在前、全国行在后），紧随名字下方，整体与左侧头像上下齐平。
-              海外玩家（外国人）不显示地区/全国排名，只标「海外玩家」（2026-10-15 张老师要求） */}
+              海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
+              口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」 */}
           <div className="ranks">
             {card.area === AREA_OVERSEAS ? (
-              <span className="rank_line ranks_overseas">海外玩家</span>
+              card.areaPos !== null ? (
+                <span className="rank_line">
+                  海外第 <em>{card.areaPos}</em> 名
+                </span>
+              ) : (
+                <span className="rank_line ranks_overseas">海外玩家</span>
+              )
             ) : (
               <>
                 {card.areaPos !== null ? (

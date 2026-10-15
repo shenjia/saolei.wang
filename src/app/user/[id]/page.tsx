@@ -243,10 +243,17 @@ export default async function UserViewPage({
                 </span>
               </Link>
               {/* 省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求）；
-                  海外玩家（外国人）不参与地区排行、也不显示全国名（2026-10-15 张老师要求） */}
+                  海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
+                  口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」 */}
               {ranks && (ranks.area === AREA_OVERSEAS ? (
                 <div className="ranks">
-                  <span className="rank_line ranks_overseas">海外玩家</span>
+                  {ranks.areaPos !== null ? (
+                    <span className="rank_line">
+                      海外第 <em>{ranks.areaPos}</em> 名
+                    </span>
+                  ) : (
+                    <span className="rank_line ranks_overseas">海外玩家</span>
+                  )}
                 </div>
               ) : (
                 <div className="ranks">
