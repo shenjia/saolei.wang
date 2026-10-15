@@ -1,6 +1,9 @@
 // AVF 解析器：忠实移植 vendors/RawVF/avf_parser.c（349 行 C，avf2rawvf 0.4）
 // 输入 AVF 二进制，输出 RawVF 文本行（再经 rawvf.ts 的 formatRawvf 结构化）
-// 与 C 版的唯一刻意差异：玩家名在输出前已从 gb2312 解码为 utf-8
+// 与 C 版的两处刻意差异：
+//   1. 玩家名在输出前已从 gb2312 解码为 utf-8
+//   2. 成绩小数分隔符同时接受 '.' 与 ','——Arbiter 按系统 locale 写分隔符
+//      （德/俄等 locale 是逗号），只认 '.' 会冲进事件流导致事件全丢（2026-10-15 /video/338255 实锤）
 
 const MAXNAME = 1000;
 
@@ -175,11 +178,11 @@ class AvfParser {
     }
     this.bbbv = parseInt(decodeName(digits), 10) || 0;
 
-    // 成绩：sec '.' ths ']'（real time = time - 1）
+    // 成绩：sec '.' 或 ',' ths ']'（real time = time - 1；分隔符随录制机 locale）
     digits = [];
     for (;;) {
       c = r.u8();
-      if (c === 0x2e || c === 0) break; // '.'
+      if (c === 0x2e || c === 0x2c || c === 0) break; // '.' ','
       digits.push(c);
     }
     this.scoreSec = (parseInt(decodeName(digits), 10) || 0) - 1;
