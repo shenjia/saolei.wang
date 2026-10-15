@@ -6,7 +6,7 @@
 // 2026-10-15（张老师要求）：页脚改用标准翻页滑条 PageSlider（分页展示 15 条/页），
 //   最右侧保留「查看完整排行」外链按钮；滑条左侧保留标准「···加载更多」
 
-import { getWorldTop100 } from "@/lib/worldtop";
+import { getWorldTop100, WORLD_RANKING_PAGE } from "@/lib/worldtop";
 import { RankingNav } from "@/components/RankingNav";
 import { WorldTop100Table } from "@/components/WorldTop100Table";
 import { RankingRules } from "@/components/RankingRules";
@@ -16,7 +16,7 @@ import { FlopPlayer } from "@/components/FlopPlayer";
 // 配色（2026-10-15 张老师定）：金只留小标题，正文数字 <i> 亮灰
 const WORLD_RULES = [
   <>
-    <b>数据来源</b>：minesweepergame.com 的世界时间排行前 <i>100</i> 名，与本站成绩无关。
+    <b>数据来源</b>：<a href={WORLD_RANKING_PAGE} target="_blank" rel="noopener noreferrer">minesweepergame.com</a> 的世界时间排行前 <i>100</i> 名，与本站成绩无关。
   </>,
   <>
     <b>排序规则</b>：沿用原站名次（世界总计时间升序），本站不做重排；中国玩家行高亮显示。
