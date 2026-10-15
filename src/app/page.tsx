@@ -20,6 +20,9 @@ import {
   getVideoFeed,
   getVideoCount,
 } from "@/lib/queries";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { EmailBindNotice } from "@/components/EmailBindNotice";
 import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, areaDisplay } from "@/lib/config";
 import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
@@ -33,6 +36,17 @@ import { title as assessTitle } from "@/lib/assess";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  // 邮箱绑定提醒（2026-10-15）：登录且未绑定已验证邮箱 → 内容区顶部提醒条
+  const session = await getSession();
+  let showEmailNotice = false;
+  if (session) {
+    const auth = await prisma.userAuth.findUnique({
+      where: { id: BigInt(session.uid) },
+      select: { emailVerified: true },
+    });
+    showEmailNotice = !auth || Number(auth.emailVerified) === 0;
+  }
+
   const [news, newbies, top, newsTotal, videos, videoTotal] = await Promise.all([
     getHomeNews(),
     getNewbies(),
@@ -50,6 +64,7 @@ export default async function HomePage() {
     <div id="page" className="two_columns">
     <ul id="home">
       <li className="main">
+        {showEmailNotice && <EmailBindNotice />}
         {/* 移动端（≤880 单列带）置顶「开始练习」大按钮：高度翻倍（总高 100 CSS px）、
             字号 26px、图标 36px；桌面隐藏（display:none），侧栏小按钮照旧（2026-10-15 张老师要求）。
             注：≤605 视口有整页 zoom（0.65~0.94 档），渲染尺寸同比例缩放 */}

@@ -229,3 +229,81 @@ export function PasswordForm() {
     </form>
   );
 }
+
+// 绑定邮箱（2026-10-15）：老用户登录名非邮箱，忘记密码时唯一自助找回途径。
+// 提交后发送验证链接；未验证草稿可随时覆盖重发。
+export function EmailBindForm({ currentEmail, verified }: { currentEmail: string; verified: boolean }) {
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/account/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage({ ok: false, text: data.error ?? "发送失败" });
+        return;
+      }
+      setMessage({ ok: true, text: `验证邮件已发送到 ${email}，请在 30 分钟内点击邮件中的链接完成验证` });
+      toast("验证邮件已发送", "success");
+      setEmail("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const current =
+    !currentEmail ? "未绑定（忘记密码时无法自助找回）" : verified ? `${currentEmail}（已验证）` : `${currentEmail}（待验证：邮件已发送，点击邮件内链接生效）`;
+
+  return (
+    <form id="email-bind-form" onSubmit={submit}>
+      <p style={{ margin: "10px 0 0", color: "#75715e", lineHeight: "20px" }}>
+        绑定邮箱后，忘记密码可直接通过邮箱自助找回。绑定需点击邮件中的验证链接确认归属。
+      </p>
+      <table className="form" cellPadding={0} cellSpacing={0}>
+        <tbody>
+          <tr>
+            <th>当前绑定</th>
+            <td>{current}</td>
+          </tr>
+          <tr>
+            <th>邮箱</th>
+            <td>
+              <div>
+                <input
+                  type="email"
+                  size={30}
+                  maxLength={64}
+                  placeholder="填写您常用的邮箱"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <th></th>
+            <td>
+              <button type="submit" className="button active" disabled={submitting || !email}>
+                {currentEmail && !verified ? "重发验证邮件" : "发送验证邮件"}
+              </button>
+              {message && (
+                <div className={message.ok ? "hint" : "error"} style={{ marginTop: 8 }}>
+                  {message.text}
+                </div>
+              )}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </form>
+  );
+}

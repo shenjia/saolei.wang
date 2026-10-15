@@ -2666,6 +2666,116 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   bottom: 32px; /* 让位给 hover 提示条（高 26 + 底边 1） */
 }
 
+/* ---------- 账户管理页（2026-10-15 张老师改版，设计稿 design/account-manage-20261015.html） ----------
+   /account：标题「账户管理」+ 操作按钮行（修改资料 / 修改密码 / 绑定邮箱）。
+   侧栏竖版玩家卡片：头像（SelfAvatar，点击直接上传，交互同个人主页）→
+   登录名（user_auth.username，灰 13px 超长省略）→ 中文名（链接进个人主页）→ 军衔。 */
+#account_manage .manage_actions {
+  margin: 5px 0;
+}
+#account_manage .manage_actions .button {
+  margin: 0 12px 10px 0;
+}
+.account_card {
+  text-align: center;
+}
+/* 头像槽：与个人主页 #user_view .info 的 avatar_slot 同构（见上 09-24 注释：
+   legacy 裸 button 规则的渐变底/圆角/阴影/字号必须逐条清零），尺寸 150px 适配
+   侧栏内容宽（222 - 2×边框 - 2×20 padding = 150px），图片自带 1px 边框共 152px。 */
+.account_card button.avatar_slot {
+  position: relative;
+  display: block;
+  width: 150px;
+  margin: 4px auto 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-shadow: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+.account_card button.avatar_slot .avatar {
+  display: block;
+  float: none;
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+}
+.account_card .avatar_change {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  height: 26px;
+  color: #f8f8f2;
+  font-size: 13px;
+  line-height: 26px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.68);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.account_card .avatar_status {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  padding: 2px 12px;
+  color: #d5d5cc;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  background: rgba(58, 58, 54, 0.8);
+  border-radius: 10px;
+  transform: translateX(-50%);
+  transition: bottom 0.15s;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.account_card .avatar_status.ok {
+  color: #a6e22e;
+}
+.account_card button.avatar_slot:hover .avatar_change,
+.account_card button.avatar_slot:focus-visible .avatar_change {
+  opacity: 1;
+}
+.account_card button.avatar_slot:hover .avatar_status,
+.account_card button.avatar_slot:focus-visible .avatar_status {
+  bottom: 32px;
+}
+/* 登录名 → 中文名 → 军衔（竖排） */
+.account_card .login_name {
+  margin: 10px 0 0;
+  color: #75715e;
+  font-size: 13px;
+  line-height: 19.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account_card h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  line-height: 27px;
+}
+.account_card h2 a {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account_card .title_line {
+  margin: 6px 0 0;
+  color: #939387;
+  font-size: 14px;
+  line-height: 21px;
+}
+
 /* ---------- 头像方形裁剪弹窗（2026-09-24）----------
    主页点击头像、个人资料页点击缩略图都走这个浮窗；
    取景框固定 300px 方形，图片短边填满、可拖动可缩放，导出 400x400 JPEG。 */
@@ -3726,6 +3836,29 @@ body #page.two_columns {
   stroke: rgba(248, 248, 242, 0.07);
   stroke-width: 0.8;
 }
+/* 世界地图国家路径（2026-10-15 世界排行地图 WorldMap.tsx）：与 .prov（省份）同款交互 */
+.ctr {
+  stroke: rgba(248, 248, 242, 0.15);
+  stroke-width: 0.8;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+.ctr:hover,
+.ctr.hovering {
+  filter: brightness(1.28) drop-shadow(0 0 7px rgba(253, 198, 29, 0.6));
+  stroke: #f8f8f2;
+  stroke-width: 1.5;
+}
+.ctr.nodata {
+  fill: #302f28;
+  stroke: rgba(248, 248, 242, 0.07);
+  cursor: default;
+}
+.ctr.nodata:hover {
+  filter: none;
+  stroke: rgba(248, 248, 242, 0.07);
+  stroke-width: 0.8;
+}
 
 .plbl {
   /* 2026-10-15 张老师要求：省份名永不显示——显示出来字太小看不见（悬停气泡已
@@ -3787,7 +3920,8 @@ body #page.two_columns {
   stroke: rgba(248, 248, 242, 0.14);
   stroke-width: 0.5;
 }
-.nine {
+.nine,
+.wnine {
   fill: none;
   stroke: rgba(190, 188, 170, 0.55);
   stroke-width: 1.4;
@@ -7750,4 +7884,40 @@ html.op-fakefs #header {
 }
 .donate_back {
   margin-top: 24px;
+}
+
+/* ===== 首页邮箱绑定提醒条（2026-10-15）：登录且未验证邮箱时显示 ===== */
+.email_bind_notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #403f33;
+  border: 1px solid #6e6c52;
+  border-radius: 6px;
+  padding: 9px 14px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 20px;
+}
+.email_bind_notice .text {
+  color: #f8f8f2;
+}
+.email_bind_notice .text b {
+  color: #e6c07b;
+}
+.email_bind_notice .go {
+  color: #66d9ef;
+  white-space: nowrap;
+  font-weight: bold;
+}
+
+/* 账户管理卡片：登录名后面的绑定邮箱入口（2026-10-15 张老师指定） */
+.account_card .bind_email_btn {
+  margin-left: 8px;
+}
+.account_card .email_bound_ok {
+  margin: 4px 0 0;
+  color: #a6e22e;
+  font-size: 12px;
 }

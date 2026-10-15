@@ -59,6 +59,12 @@ model UserAuth {
   createTime BigInt @default(0) @map("create_time") @db.BigInt
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
+  // 邮箱绑定（2026-10-15）：老用户登录名非邮箱，忘记密码无法自助找回。
+  // email 未验证前只存草稿（email_verified=0）；找回密码只认已验证邮箱或本身是邮箱的登录名。
+  email         String?  @db.VarChar(64) @unique
+  emailVerified BigInt   @default(0) @map("email_verified")
+  emailToken    String?  @unique @db.Char(32) @map("email_token")
+
   @@map("user_auth")
 }
 

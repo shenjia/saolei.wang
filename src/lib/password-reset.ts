@@ -2,16 +2,19 @@
 // token 30 分钟有效、一次性；邮件走 SMTP_* 环境变量，未配置时链接打到服务端日志（开发用）
 
 import { createHash, randomBytes } from "crypto";
-import nodemailer from "nodemailer";
 import { prisma } from "./db";
+import { sendMail, smtpConfigured } from "./mailer";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 export const RESET_TOKEN_TTL = 30 * 60; // 30 分钟
 
-/** 生成重置令牌（库中只存 sha256，不存明文 token） */
+/** 生成重置令牌（库中只存 sha256，不存明文 token）
+ *  查找口径：登录名本身是邮箱，或已验证的绑定邮箱（email_verified>0，未验证草稿不算数） */
 export async function createResetToken(email: string): Promise<{ token: string; userId: number } | null> {
-  const auth = await prisma.userAuth.findUnique({ where: { username: email } });
+  const auth = await prisma.userAuth.findFirst({
+    where: { OR: [{ username: email }, { email, emailVerified: { not: 0 } }] },
+  });
   if (!auth) return null;
   const token = randomBytes(32).toString("hex");
   const hashed = createHash("sha256").update(token).digest("hex");
@@ -37,22 +40,14 @@ export async function consumeResetToken(token: string): Promise<number | null> {
 
 /** 发送重置邮件；未配置 SMTP 时打印链接到日志并返回 false */
 export async function sendResetEmail(email: string, resetUrl: string): Promise<boolean> {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+  if (!smtpConfigured()) {
     console.log(`[password-reset] SMTP 未配置，重置链接（仅开发可见）: ${resetUrl}`);
     return false;
   }
-  const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: parseInt(SMTP_PORT ?? "465", 10),
-    secure: (SMTP_PORT ?? "465") === "465",
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
-  await transporter.sendMail({
-    from: SMTP_FROM ?? SMTP_USER,
-    to: email,
-    subject: "扫雷网密码重置",
-    text: `您申请了扫雷网密码重置，请点击以下链接（30 分钟内有效）：\n\n${resetUrl}\n\n如果这不是您的操作，请忽略本邮件。`,
-  });
+  await sendMail(
+    email,
+    "扫雷网密码重置",
+    `您申请了扫雷网密码重置，请点击以下链接（30 分钟内有效）：\n\n${resetUrl}\n\n如果这不是您的操作，请忽略本邮件。`,
+  );
   return true;
 }

@@ -7,11 +7,14 @@ export function AccountHeader() {
     <>
       <div className="nav">
         <Link href="/account">
-          <h1>账号中心</h1>
+          <h1>账户管理</h1>
         </Link>
         <ul id="box_nav">
           <li>
             <Link href="/account/profile">修改资料</Link>
+          </li>
+          <li>
+            <Link href="/account/email">绑定邮箱</Link>
           </li>
           <li>
             <Link href="/account/password">修改密码</Link>
