@@ -111,7 +111,10 @@ export default async function AreaPage({
     return (
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
-          <div className="page_head">
+          {/* head_dense：地区内页标记——页头容器查询空间不足时收紧 tabs 间距的
+              最深档（标题带「（地区名）」比其他排行页长 ~80px，2026-10-15 张老师
+              「空间不够时缩小筛选项间距」二轮方案） */}
+          <div className="page_head head_dense">
             {/* 2026-10-15 张老师要求：地区名移到「地区排行」后括号内、字号小一档 */}
             <h1 className="page_title">
               地区排行<span className="page_title_sub">（{areaDisplay(area)}）</span>

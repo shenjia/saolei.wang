@@ -3758,10 +3758,10 @@ body #page.two_columns {
    - ≥1188 双栏：左表一列一行 + 右列 .area_side（DOM＝规则、地图，flex column-reverse
      呈现为地图上、规则下，间隔恒 16px）——右列是独立包装，**规则上边缘与地图板块的
      间隔不受左表行数影响**（六轮张老师要求：一页 18 条时保持正常间隔；此前三块平铺
-     Grid 跨两行，行高均摊把间隔撑到 55px）。左轨下限 578 保住「标题+筛选 tabs 同行」
-     （tabs 396 + 标题 104 + 间距 20 + 盒边距 42 + 余量 16，原 562 漏算盒边距被
-     padding 吃掉、可用恰等于 need 零余量必折行——2026-10-15 修），右轨 minmax(300,440)：
-     空间紧张时先收地图（SVG viewBox 等比缩放）。
+     Grid 跨两行，行高均摊把间隔撑到 55px）。左轨下限 562 保住「标题+筛选 tabs 同行」
+     ——空间临界时由页头容器查询收紧 tab 内距补足（见 .page_head 容器查询段，
+     2026-10-15 二轮：张老师定「空间不够时缩小筛选项间距」优先于收窄地图），
+     右轨 minmax(300,440)：空间紧张时先收地图（SVG viewBox 等比缩放）。
    - 769~1187 单列降级：右列 <330 装不下地图、规则换行长度必超排行表高度
      （张老师：「当空间不够变成单列时，排行板块在页面第一位」）——.area_side
      display:contents 展开，按 DOM 顺序单列整宽：排行表 → 排行规则 → 地图。
@@ -3787,11 +3787,10 @@ body #page.two_columns {
 @media (min-width: 1188px) {
   .area_top {
     display: grid;
-    /* 左轨下限 578（2026-10-15 修折行）：原 562 按「tabs 396+标题 104+间距 20+盒边距 42」
-       算的 42 实为卡片 padding 40+border 2，可用内容宽 520＝need 恰好零余量——
-       flex-wrap 下必折行（nav 整体掉到标题下方，1188~∞ 全区间复现）。
-       现 578 留 16px 余量：tabs+标题同行稳健，右轨由内容自然宽 366 收至 ~350（仍≥300） */
-    grid-template-columns: minmax(578px, 1fr) minmax(300px, 440px);
+    /* 左轨 562（二轮回原值）：空间临界（本轨下限卡死时 headW=520 恰等于
+       tabs+标题需求）不再靠加宽轨道解决，改由页头容器查询收紧 tab 内距——
+       张老师 2026-10-15 定「空间不够时缩小筛选项间距」，地图保持 366 内容自然宽 */
+    grid-template-columns: minmax(562px, 1fr) minmax(300px, 440px);
     align-items: start;
     gap: 16px;
     margin: 16px 8px; /* 承接两盒原有的页级外距 */
@@ -5175,6 +5174,80 @@ body #page.ranking_old .page_head {
   body #page.ranking_old.main .page_head .ranking_nav .goto_form {
     margin-left: auto; /* 与 tabs 拉开：搜索框贴行尾 */
   }
+
+  /* 十轮（2026-10-15 张老师要求「空间不够时缩小筛选项间距」）：nav 折行前先自救——
+     主体卡片作为查询容器，页头宽度不足时收紧 tab 内距（18 → 8，6 tab 省 120px），
+     把「nav 整体折到标题下」的九轮兜底尽量往后推。容器挂在 .ranking_box（页头
+     的父盒）：容器查询只作用于容器后代，page_head 自身的选择器（:has/head_dense）
+     必须也是后代才能命中——挂在 page_head 自身上则 page_head 永不匹配。
+     阈值按页面结构区分（:has 搜索框与否），各页实测（tab 内距 18 时 need）：
+       · 带搜索框（:has(.goto_form)，雷界/NF/BV/地区内页）：need 694~814（内页标题
+         带地区名最长）→ ≤829 收 8px 后 need 574~694，662~686 窄带基本全覆盖；
+         地区内页（head_dense）缺口残余再收 title↔nav 间距补足
+       · 无搜索框（世界/进步/地区总榜）：need 520 → ≤535 收 8px 一档解决；
+         世界/进步正常最窄 662 不触发
+     ⚠️ 下划线 ::after 的 left/right 同步 8px，当前项黄线随内距收紧变短（与移动端
+     tabs 同语言）；搜索下拉挂在 .goto_form 内（position:relative 锚），卡片变查询
+     容器不影响其定位 */
+  /* ⚠️ 排除 #world_top（世界榜卡）：它自带 overflow-x:auto 横滑兜底 + 原有
+     container-type（日期按需隐藏）——再挂容器会与横滑裁切冲突（10-15 实测：
+     挂上后日期不隐藏、表格溢出页级 19px）；且世界榜页头无搜索框（卡 664>535
+     永不触发收紧），容器纯属多余 */
+  body #page.ranking_old.main .ranking_box:not(#world_top) {
+    container-type: inline-size;
+  }
+  /* 带搜索框的页：页头 ≤829 收紧（雷界/NF/BV/地区内页的 62% 窄带 662~686）。
+     ⚠️ 容器查询尺寸 = 容器 content-box 宽＝卡宽−padding 40−border 2＝页头宽，
+     阈值直接用页头口径（首轮按 border-box 算 +42 全偏，实测纠正） */
+  @container (max-width: 829px) {
+    body #page.ranking_old.main .page_head:has(.goto_form) .ranking_tabs a,
+    body #page.ranking_old.main .page_head:has(.goto_form) .ranking_tabs span {
+      padding: 9px 8px;
+    }
+    body #page.ranking_old.main .page_head:has(.goto_form) .ranking_tabs a::after,
+    body #page.ranking_old.main .page_head:has(.goto_form) .ranking_tabs span::after {
+      left: 8px;
+      right: 8px;
+    }
+    /* 收紧档配合放宽 nav 收缩（十轮辅助）：收紧内距后 nav 内容变窄，正常宽度
+       已能同行；极端窄容器仍不够时保留九轮整体折行兜底（⚠️ flex 换行判定用
+       flex-basis 内容理想宽，min-width:0 不参与防换行——真防线是上面的内容收紧） */
+    body #page.ranking_old.main .page_head .ranking_nav {
+      min-width: 0;
+    }
+    /* 地区内页 head_dense 深档：标题带「（地区名）」比其他榜多 ~120px（最长
+       「中国香港」need 682 vs 62% 版式最窄 headW 662，缺 20px）——tab 内距再收
+       8→6（省 24）+ 搜索框输入宽 120→106（省 14），共省 38px、留 18px 富余 */
+    body #page.ranking_old.main .page_head.head_dense .ranking_tabs a,
+    body #page.ranking_old.main .page_head.head_dense .ranking_tabs span {
+      padding: 9px 6px;
+    }
+    body #page.ranking_old.main .page_head.head_dense .ranking_tabs a::after,
+    body #page.ranking_old.main .page_head.head_dense .ranking_tabs span::after {
+      left: 6px;
+      right: 6px;
+    }
+    body #page.ranking_old.main .page_head.head_dense .ranking_nav {
+      gap: 8px;
+    }
+    body #page.ranking_old.main .page_head.head_dense .goto_form .goto_search input {
+      width: 106px;
+    }
+  }
+  /* 无搜索框的页：仅极窄才收紧（地区总榜双栏左轨页头 520）；
+     世界/进步正常最窄 662 不触发 */
+  @container (max-width: 535px) {
+    body #page.ranking_old.main .page_head:not(:has(.goto_form)) .ranking_tabs a,
+    body #page.ranking_old.main .page_head:not(:has(.goto_form)) .ranking_tabs span {
+      padding: 9px 8px;
+    }
+    body #page.ranking_old.main .page_head:not(:has(.goto_form)) .ranking_tabs a::after,
+    body #page.ranking_old.main .page_head:not(:has(.goto_form)) .ranking_tabs span::after {
+      left: 8px;
+      right: 8px;
+    }
+  }
+  /* 兜底：收尽间距仍不够（更窄容器）→ 九轮 flex-wrap 整体折行照旧 */
 }
 
 /* 合并搜索框：圆角矩形外框内嵌放大镜 + 输入框（图标颜色随输入框灰、focus 转黄） */
