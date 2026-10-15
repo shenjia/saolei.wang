@@ -117,6 +117,10 @@ export function ubb(raw: string): string {
   );
   // 引用
   text = text.replace(/\[quote\]/gi, "<blockquote>").replace(/\[\/quote\]/gi, "</blockquote>");
+  // 引用块作者名高亮（2026-10-16 张老师三定）：回复引用头「用户名：」前缀亮灰（比正文亮一档）。
+  // 只匹配块首短前缀（≤24 字符 + 全角冒号）；无冒号的手写引用不受影响。
+  // 此时机内层仍是 UBB 文本（face/雷图在后面才转），[^<] 不会切进真实标签
+  text = text.replace(/<blockquote>([^<]{1,24}?)：/g, '<blockquote><span class="quote_author">$1：</span>');
   // 表情（编码规则见 lib/faces.ts）：
   //   [face]N[/face]   旧版 QQ，纯数字 1-30 白名单 → face/N.gif（2 万存量帖焊死）
   //   [face]key[/face] 新版微信，语义 key 白名单 → face-wx/{slot}.png（顺序调整只动 faces.ts，不错配）

@@ -1567,13 +1567,17 @@ del[data-tip]:hover::after {
 }
 .bbs_content blockquote {
   border-left: 4px solid #a59f85;
-  background: #1e1f1c;
+  background: #33332e;
   margin: 6px 0;
   padding: 4px 10px;
   color: #a59f85;
   /* 2026-10-15 评论回复：引用部分小字体（正文 15px → 13px）；
-     2026-10-15 二定：与编辑器装饰块同款——亮灰左粗框线+暗灰底 */
+     2026-10-15 二定：与编辑器装饰块同款——亮灰左粗框线+暗灰底（#33332E，2026-10-16 三定） */
   font-size: 13px;
+}
+.bbs_content blockquote .quote_author {
+  /* 引用作者名亮灰（比引用正文 #a59f85 亮一档，2026-10-16 张老师三定） */
+  color: #cccccc;
 }
 .bbs_ops a {
   margin-left: 6px;
@@ -1585,7 +1589,7 @@ del[data-tip]:hover::after {
 .wys blockquote[data-quote-deco] {
   position: relative;
   border-left: 4px solid #a59f85;
-  background: #1e1f1c;
+  background: #33332e;
   margin: 0 0 10px;
   padding: 6px 30px 6px 10px;
   font-size: 13px;
@@ -1594,7 +1598,7 @@ del[data-tip]:hover::after {
   user-select: none;
 }
 .wys blockquote[data-quote-deco] .quote_deco_author {
-  color: #888;
+  color: #cccccc;
 }
 .wys blockquote[data-quote-deco] .quote_deco_remove {
   position: absolute;

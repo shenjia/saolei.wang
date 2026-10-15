@@ -41,6 +41,9 @@ export function ReplyForm({
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  /** 提交成功后 +1 强制重挂编辑器（画布是非受控 contenteditable，setContent("") 清不掉
+   *  DOM 内容；重挂即清空画布、placeholder 复现——引用态已由 onQuoteCleared 先清） */
+  const [formKey, setFormKey] = useState(0);
   const router = useRouter();
 
   if (locked) return <p className="text">主题已锁定，无法回复。</p>;
@@ -62,6 +65,7 @@ export function ReplyForm({
     setContent("");
     toast("回复发表成功", "success");
     onQuoteCleared?.();
+    setFormKey((k) => k + 1); // 清空输入框（2026-10-16 张老师要求）
     onPosted?.();
     // 仍刷新一次服务端数据（主题抬升、评论计数、右栏等随之更新）
     router.refresh();
@@ -70,6 +74,7 @@ export function ReplyForm({
   return (
     <div className="reply_form">
       <RichEditor
+        key={formKey}
         initialContent=""
         minHeight={200}
         placeholder="直接输入回复内容"
