@@ -64,8 +64,10 @@ export default function HistoryPage() {
       <div className="box text">
         <h1>更新历史</h1>
         {YEARS.map(([year, items]) => (
-          <div key={year}>
-            <h2>{year}</h2>
+          <div className="hist_year_block" key={year}>
+            {/* 2026-10-15 张老师要求：每个年度做成筛选器样式（金色 + 下方细线），
+                用 h2 保留文档层级，样式由 globals.css 的 .hist_year 接管 */}
+            <h2 className="hist_year">{year}年</h2>
             {items.map(([date, event]) => (
               <p key={date}>
                 <em>{date}</em>　{event}

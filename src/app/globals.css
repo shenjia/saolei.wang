@@ -7285,3 +7285,26 @@ html.op-fakefs #header {
   }
 }
 
+/* ===== 更新历史页 /page/history（2026-10-15 张老师定）=====
+   ① 每个年度做成筛选器样式：金色 #fdc61a 加粗 + 文字下方一条细线——
+      display:table 收缩到文字宽，细线只压在「2026年」底下，不满宽（二轮反馈）；
+   ② 所有日期变亮灰 #b1b1a4（原为 legacy 的 p em 金色 #fdc61a）。
+   亮阶三层：年度金 > 日期亮灰 > 正文 #939387。 */
+#page .hist_year {
+  display: table;
+  margin: 0 0 8px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid #fdc61a;
+  color: #fdc61a;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 22px;
+  text-shadow: none;
+}
+/* 首个年度贴着 h1（h1 自带下间距），其余年度与上一年条目组拉开 */
+#page .hist_year_block + .hist_year_block .hist_year {
+  margin-top: 18px;
+}
+#page .box.text p em {
+  color: #b1b1a4;
+}
