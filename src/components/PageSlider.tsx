@@ -4,7 +4,9 @@
 // · 加载更多按钮只显示三个圆点（···），放滑条左侧（有更多才显示；全部加载后隐藏）
 // · 滑块前方 = 暗金色粗条（已浏览进度），其余轨道暗灰
 // · 拖拽松手立即加载（无防抖，张老师 2026-10-14 定），在途请求由 Feed 侧序号门槛作废
-// · 交互：拖轨道 / 点轨道直达 / ◀▶ ±1 页 / 键盘 ←→ Home End；请求在途锁定操作
+// · 交互：拖轨道 / 点轨道直达 / ◀▶ ±1 页 / 键盘 ←→ Home End。
+//   在途请求期间拖拽仍可预览（2026-10-15 修复）：松手目标页暂存，请求落地自动补发，
+//   不再吞手势（原实现在途按下整段手势被吞，「拖回第 1 页没反应」的根因）
 // · 无 JS 降级：整行隐藏（列表仍可浏览首屏）
 
 "use client";
@@ -43,11 +45,22 @@ export function PageSlider({
   const onGotoRef = useRef(onGoto);
   const pageRef = useRef(page);
   const loadingRef = useRef(loading);
+  // 松手/停顿目标页暂存（2026-10-15 修复「拖回第 1 页没反应」）：在途请求（loading）期间
+  // 松手的翻页意图不再被丢弃——暂存目标页，等 loading 变 false 的瞬间自动补发。
+  const queuedGoto = useRef<number | null>(null);
   useEffect(() => {
     onGotoRef.current = onGoto;
     pageRef.current = page;
     loadingRef.current = loading;
   });
+  // loading 一落地立即补发暂存的翻页意图（onGoto 内部自带 if (loading) return 兜底）
+  useEffect(() => {
+    if (!loading && queuedGoto.current !== null) {
+      const p = queuedGoto.current;
+      queuedGoto.current = null;
+      if (p !== pageRef.current) onGotoRef.current(p);
+    }
+  }, [loading]);
 
   function armDwell(p: number) {
     if (dwellTimer.current) clearTimeout(dwellTimer.current);
@@ -80,12 +93,19 @@ export function PageSlider({
   const pct = (p: number) => (single ? 0 : ((p - 1) / (pages - 1)) * 100);
   const pageFromX = (clientX: number) => {
     const rect = railRef.current!.getBoundingClientRect();
-    const x = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    return Math.min(pages, Math.max(1, Math.round(x * (pages - 1)) + 1));
+    // 像素→页码映射必须对齐滑块的视觉行程 [7px, W-7px]（14px 滑块两端各缩 7px，
+    // 与 ps_track left/right:7px 一致）：拖到视觉最左端=第 1 页、最右端=第 N 页。
+    // （2026-10-15 修复：原实现按全宽 [0,W] 映射，拖到左端只能到约第 7/W×N+1 页，
+    // 榜单页数多时永远拖不回第 1 页——369 页差 6 页、2 万页差两百多页）
+    const t = Math.min(1, Math.max(0, (clientX - rect.left - 7) / Math.max(1, rect.width - 14)));
+    return Math.min(pages, Math.max(1, Math.round(t * (pages - 1)) + 1));
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (loading || single) return;
+    // 在途请求（loading）也允许拖拽预览（2026-10-15 修复）：原实现在途时按下直接 return，
+    // 整段手势被吞——拖到后面触发加载后的几百 ms~几秒内再拖（典型：立刻拖回第 1 页）
+    // 完全无响应，松手意图也被丢弃。现在按下始终建立拖拽，松手时若仍在途则暂存目标页。
+    if (single) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = pageFromX(e.clientX);
     dragPageRef.current = p;
@@ -110,7 +130,10 @@ export function PageSlider({
     disarmDwell();
     dragPageRef.current = null;
     setDragPage(null);
-    if (target !== page && !loading) onGoto(target); // 松手立即加载（无防抖）
+    if (target !== page) {
+      if (loading) queuedGoto.current = target; // 在途：暂存，loading 落地自动补发
+      else onGoto(target); // 松手立即加载（无防抖）
+    }
   };
   const onPointerCancel = () => {
     disarmDwell();
