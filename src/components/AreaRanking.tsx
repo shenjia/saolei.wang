@@ -26,7 +26,7 @@ import { AREA_ORDERS, areaDisplay, type AreaOrder } from "@/lib/config";
 import { areaPower } from "@/lib/format";
 import type { AreaRow } from "@/lib/queries";
 
-const PAGE = 20;
+const PAGE = 18;
 
 export function AreaRanking({
   rows,
@@ -181,12 +181,14 @@ export function AreaRanking({
             </div>
           </div>
         </div>
-        {/* 排行规则（2026-10-15 五轮，张老师要求）：DOM 顺序＝表格 → 规则 → 地图——
-            单列形态（769~1187 降级 / ≤768 移动端）自然保证「排行板块在页面第一位，
-            规则紧随其后，地图殿后」；≥1188 双栏落位不受 DOM 顺序影响（Grid areas
-            把地图放右列上格、规则右列下格），hover 联动不变 */}
-        {rules}
-        <AreaMap data={mapData} hover={hover} onHover={setHover} />
+        {/* 右列（2026-10-15 六轮）：DOM 顺序＝规则在前、地图在后；双栏由 CSS
+            flex column-reverse 呈现为「地图上、规则下」（间隔恒 16，不受左表
+            行数/跨行分布影响）；单列形态该包装 display:contents 展开为 DOM 顺序
+            「表 → 规则 → 地图」（五轮要求：排行板块第一位）。hover 联动不变 */}
+        <div className="area_side">
+          {rules}
+          <AreaMap data={mapData} hover={hover} onHover={setHover} />
+        </div>
       </div>
     </>
   );

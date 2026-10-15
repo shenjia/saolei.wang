@@ -3508,17 +3508,17 @@ body #page.two_columns {
   min-width: 620px;
   max-width: 960px;
 }
-/* ---------- 地区总榜布局（2026-10-15 张老师多轮要求）：三块为 .area_top 直接子节点， ----------
-   DOM 顺序＝表格卡 → 排行规则 → 地图；Grid 模板按视口切换落位：
-   - ≥1188 双栏：左表（1 列跨 2 行）+ 右列上＝地图、下＝规则（grid-area 重排，
-     与 DOM 顺序无关）——左轨下限 562 保住「标题+筛选 tabs 同行」（tabs 396 +
-     标题 104 + 间距 20 + 盒边距 42），右轨 minmax(300,440)：空间紧张时先收地图
-     （SVG viewBox 等比缩放）。
-   - 769~1187 单列降级：该区间右列 <330 装不下地图（1000:870 等比 → 地图本体
-     ≥277 高 + 图例/hint/内边距 ≈ 365），规则文字换行后长度必超出排行表高度
-     （张老师：「当空间不够变成单列时，排行板块在页面第一位」）——放弃双栏，
-     按 DOM 顺序单列整宽：排行表 → 排行规则 → 地图。
-   - ≤768 移动端：块级自然堆叠，同为表 → 规则 → 地图（五轮后与降级同序）。 */
+/* ---------- 地区总榜布局（2026-10-15 张老师多轮要求）：表格卡 + 右列（规则+地图） ----------
+   - ≥1188 双栏：左表一列一行 + 右列 .area_side（DOM＝规则、地图，flex column-reverse
+     呈现为地图上、规则下，间隔恒 16px）——右列是独立包装，**规则上边缘与地图板块的
+     间隔不受左表行数影响**（六轮张老师要求：一页 18 条时保持正常间隔；此前三块平铺
+     Grid 跨两行，行高均摊把间隔撑到 55px）。左轨下限 562 保住「标题+筛选 tabs 同行」
+     （tabs 396 + 标题 104 + 间距 20 + 盒边距 42），右轨 minmax(300,440)：空间紧张时
+     先收地图（SVG viewBox 等比缩放）。
+   - 769~1187 单列降级：右列 <330 装不下地图、规则换行长度必超排行表高度
+     （张老师：「当空间不够变成单列时，排行板块在页面第一位」）——.area_side
+     display:contents 展开，按 DOM 顺序单列整宽：排行表 → 排行规则 → 地图。
+   - ≤768 移动端：同为 contents 展开（表 → 规则 → 地图）。 */
 
 /* 地区内页标题「地区排行（xx）」：地区名带括号小一档（2026-10-15 张老师要求，
    地区名从标题头移到尾部括号内）——黄标题降档为 20px/30px 行高，
@@ -3541,24 +3541,24 @@ body #page.two_columns {
   .area_top {
     display: grid;
     grid-template-columns: minmax(562px, 1fr) minmax(300px, 440px);
-    grid-template-areas:
-      "table map"
-      "table rules";
     align-items: start;
     gap: 16px;
     margin: 16px 8px; /* 承接两盒原有的页级外距 */
   }
   .area_top .ranking_box {
-    grid-area: table;
     margin: 0;
     min-width: 0; /* 列宽下限由轨道 minmax(562px,…) 承担 */
   }
-  .area_top .area_map {
-    grid-area: map;
-    margin: 0;
+  /* 右列：column-reverse 呈现「地图上、规则下」（DOM 是规则在前——单列展开时
+     规则在上、地图殿后，保住五轮顺序）；独立包装＝间隔恒 16 与左表行数无关 */
+  .area_top .area_side {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 16px;
+    min-width: 0;
   }
-  .area_top .rank_rules {
-    grid-area: rules;
+  .area_top .area_side .rank_rules,
+  .area_top .area_side .area_map {
     margin: 0;
   }
   /* 表格铺满收窄后的卡片（默认 shrink-to-fit 会右留白） */
@@ -3566,11 +3566,22 @@ body #page.two_columns {
     width: 100%;
   }
 }
+/* 单列形态：右列包装展开为 DOM 顺序（规则在前、地图在后）；
+   ≤1187 全区间统一（769~1187 降级 + ≤768 移动端） */
+@media (max-width: 1187px) {
+  .area_top .area_side {
+    display: contents;
+  }
+  .area_top .rank_rules,
+  .area_top .area_map {
+    margin: 16px 8px; /* 展开后恢复页级板块外距（.box / .area_map 原口径） */
+  }
+}
+/* 769~1187：整宽单列 grid（统一 gap 间距，覆盖上面的 16px 8px 外距） */
 @media (min-width: 769px) and (max-width: 1187px) {
   .area_top {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    /* 单列按 DOM 顺序自然落位（表 → 规则 → 地图），无需 areas 重排 */
     align-items: start;
     gap: 16px;
     margin: 16px 8px;
@@ -3581,7 +3592,7 @@ body #page.two_columns {
   }
   .area_top .rank_rules,
   .area_top .area_map {
-    margin: 0;
+    margin: 0; /* 间距由容器 gap 统一承担 */
   }
   .area_top .area_table {
     width: 100%;
@@ -7607,4 +7618,61 @@ html.op-fakefs #header {
 }
 #page .box.text p em {
   color: #b1b1a4;
+}
+
+/* ===== 赞助页 /page/donate（2026-10-15 重设计：双收款码卡片）===== */
+/* 窄版式：内容页收窄到 720px，双卡并排更聚焦 */
+#page.narrow {
+  max-width: 720px;
+}
+.pay_row {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 18px 0 6px;
+}
+.pay_card {
+  flex: 1 1 240px;
+  max-width: 300px;
+  background: #33322a;
+  border: 1px solid #49483e;
+  border-radius: 10px;
+  padding: 18px 16px 16px;
+  text-align: center;
+}
+.pay_card .pay_name {
+  color: #f8f8f2;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 24px;
+}
+.pay_card.wechat .pay_name {
+  color: #7dc94b;
+}
+.pay_card.alipay .pay_name {
+  color: #5aa7d6;
+}
+.pay_card img {
+  display: block;
+  width: 210px;
+  height: 210px;
+  object-fit: contain;
+  margin: 12px auto 0;
+  border-radius: 10px;
+  background: #fff;
+}
+.pay_card .pay_hint {
+  margin-top: 10px;
+  color: #75715e;
+  font-size: 13px;
+  line-height: 20px;
+}
+.pay_alone {
+  margin: 12px 0 0;
+  text-align: center;
+  color: #75715e;
+  font-size: 13px;
+}
+.donate_back {
+  margin-top: 24px;
 }
