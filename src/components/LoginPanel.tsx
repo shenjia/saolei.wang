@@ -7,8 +7,10 @@
 // 密码登录成功后有 onSuccess 回调走浮窗关窗逻辑，无回调则维持独立页跳转行为
 // 2026-09-24 记住用户名：成功登录后默认记住，下次打开自动回填（张老师要求）
 // 2026-09-24「记住密码」复选框已按张老师要求撤下（不好看），只保留用户名回填
+// 2026-10-16 张老师要求：已保存用户名时自动聚焦密码框（跳过用户名框）；
+// 无记忆时维持 autoFocus 用户名框不变（独立页/浮窗/切 tab 重挂载三种场景一致）
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { OAUTH_ENABLED } from "@/lib/config";
 import { toast } from "./Toast";
@@ -78,6 +80,20 @@ export default function LoginPanel({
   const [error, setError] = useState(initialError ? (ERROR_TEXT[initialError] ?? "登录失败，请重试") : "");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  // 密码框 ref：已保存用户名时挂载后把焦点从用户名框（autoFocus）接到密码框
+  const passRef = useRef<HTMLInputElement>(null);
+
+  // 聚焦决策须在水合后一次性读 localStorage（savedUser 渲染期还是 SSR 空串，
+  // 等它变真值再判会闪一下用户名框）；聚焦是合法副作用，无 setState
+  useEffect(() => {
+    let saved = "";
+    try {
+      saved = localStorage.getItem(LS_USER) ?? "";
+    } catch {
+      /* 存储不可用则当无记忆处理 */
+    }
+    if (saved) passRef.current?.focus();
+  }, [tab]);
 
   async function submitPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -159,6 +175,7 @@ export default function LoginPanel({
               placeholder="密码"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              ref={passRef}
             />
           </div>
           {error && (
