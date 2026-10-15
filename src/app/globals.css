@@ -1123,7 +1123,7 @@ body #video_view .video_cell .playable {
   text-overflow: ellipsis;
 }
 #page .page_head .bbs_head_nav .bbs_search_kw em {
-  color: #fdc61d;
+  color: #a6e22e;
   font-style: normal;
 }
 /* 五轮：卡片内页头——清通用页头外距（与 ranking_old/video_old 同法），
@@ -3226,7 +3226,8 @@ body #page.ranking_old .ranking_box {
 }
 
 /* 定位落地行：与 hover 同款底色（legacy .table tr:hover/#49483e，不再更淡），
-   玩家名变黄（搜索命中即「找到了」的确认信号） */
+   玩家名变绿（搜索命中即「找到了」的确认信号；2026-10-15 张老师：论坛/排行搜索
+   成功后的关键字高亮统一绿色，录像页搜索不算） */
 .ranking_table tr.hl {
   background: #49483e;
 }
@@ -3234,10 +3235,10 @@ body #page.ranking_old .ranking_box {
   background: #49483e; /* hover 不叠加变色，保持稳定 */
 }
 .ranking_table tr.hl td.name a {
-  color: #fdc61d;
+  color: #a6e22e;
 }
 .ranking_table tr.hl td.name a:hover {
-  color: #a6e22e;
+  color: #c8f05a;
 }
 
 /* 定位落地提示条（2026-10-14 BV 榜搜索，设计稿 design/ranking-bv-search.html）：
@@ -3255,7 +3256,7 @@ body #page.ranking_old .ranking_box {
   font-size: 13px;
 }
 .locate_bar em {
-  color: #fdc61d;
+  color: #a6e22e;
   font-style: normal;
   font-weight: bold;
 }
