@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoList } from "@/lib/queries";
-import { VIDEO_PAGESIZE, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
+import { VIDEO_PAGESIZE, VIDEO_LEVELS, parseVideoListOrder, type VideoLevel } from "@/lib/config";
 
 function parseLevel(p: URLSearchParams): VideoLevel | "all" {
   const lv = p.get("level") ?? "";
@@ -23,16 +23,14 @@ export async function GET(req: Request) {
   if (pageRaw) {
     const page = Math.max(2, parseInt(pageRaw, 10) || 2);
     const level = parseLevel(p);
-    const orderRaw = p.get("order") ?? "id";
-    const order =
-      orderRaw === "time" || orderRaw === "3bvs" || orderRaw === "comments" || orderRaw === "clicks"
-        ? orderRaw
-        : "id";
+    // 2026-10-15：排序列扩为表头点击全集（parseVideoListOrder），并透传时间成绩搜索
+    const order = parseVideoListOrder(p.get("order") ?? undefined);
     const author = parseInt(p.get("author") ?? "", 10) || undefined;
+    const time = p.get("time")?.trim() || undefined;
     // 每页条数：调用方自定义（用户主页录像版块传 10），默认 /video 列表的 20；
     // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
-    const { videos, total, pageSize } = await getVideoList({ level, order, author, page, pageSize: size });
+    const { videos, total, pageSize } = await getVideoList({ level, order, author, time, page, pageSize: size });
     return NextResponse.json({
       videos,
       total,

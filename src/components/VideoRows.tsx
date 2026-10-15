@@ -3,42 +3,86 @@
 // 保证两处列定义/配色/字号完全一致。
 // 本组件不含 <table> 骨架与数据获取，只负责表头与行；依赖仅限纯模块
 // （lib/format / lib/config），可安全进入客户端 bundle。
+// 2026-10-15 张老师需求：表头点击排序（成绩/3BV/3BV/s/评论/点击/上传时间）+ 排序命中
+// 高亮——sort 缺省时（首页/用户主页/审核页）保持纯文本表头，行为不变。
 
 import Link from "next/link";
 import type { VideoListItem } from "@/lib/queries";
-import { INVALID_3BVS_TIP, LEVEL_NAMES, type VideoLevel } from "@/lib/config";
+import {
+  INVALID_3BVS_TIP,
+  LEVEL_NAMES,
+  type VideoLevel,
+  type VideoListOrder,
+} from "@/lib/config";
 import { score3bvs, scoreTime, videoScores, formatDate, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "./Cells";
+import { buildUrl } from "./Pager";
 
 // 2008 版级别配色（.Beg/.Int/.Exp + a.XXX 亮一档链接变体）
 const LEVEL_CLS: Record<VideoLevel, string> = { beg: "lv_beg", int: "lv_int", exp: "lv_exp" };
 
-/** 表头（列定义唯一来源，两处共用） */
-export function VideoHead() {
+/** 行高亮列（2026-10-15 扩展：排序命中列；id=上传时间为默认排序，不高亮） */
+export type VideoHighlight = Exclude<VideoListOrder, "id">;
+
+/** 表头排序链接参数（base + 固定筛选参数，order/page 由表头自组） */
+export interface VideoSortSpec {
+  base: string;
+  params: Record<string, string | number | undefined>;
+  order: VideoListOrder;
+}
+
+/** 表头（列定义唯一来源，两处共用）。有 sort 时可排序列渲染为链接（排行表头同语言） */
+export function VideoHead({ sort }: { sort?: VideoSortSpec }) {
+  // 各列排序链接（id=默认排序：URL 省略 order 参数）
+  function col(order: VideoListOrder, label: string, title: string) {
+    if (!sort) return label;
+    const href = buildUrl(sort.base, {
+      ...sort.params,
+      order: order === "id" ? undefined : order,
+      page: undefined,
+    });
+    return (
+      <Link href={href} className={sort.order === order ? "current" : ""} title={title}>
+        {label}
+      </Link>
+    );
+  }
   return (
     <thead>
       <tr>
         <th>上传者</th>
         <th>级别</th>
-        <th>成绩</th>
-        <th className="c">3BV</th>
-        <th className="c">3BV/s</th>
-        <th>评论 / 点击</th>
-        {/* 2026-09-26 张老师要求：上传时间移到最右列 */}
-        <th>上传时间</th>
+        <th>{col("time", "成绩", "按成绩排列（快在前）")}</th>
+        <th className="c">{col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
+        <th className="c">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
+        <th>
+          {/* 评论/点击同列两个独立排序入口（张老师要求均可触发排序） */}
+          {sort ? (
+            <>
+              {col("comments", "评论", "按评论数排列（多在前）")}
+              {" / "}
+              {col("clicks", "点击", "按点击数排列（多在前）")}
+            </>
+          ) : (
+            "评论 / 点击"
+          )}
+        </th>
+        {/* 2026-09-26 张老师要求：上传时间移到最右列；2026-10-15 可点击（回到默认排序，无高亮） */}
+        <th>{col("id", "上传时间", "按上传时间排列（默认）")}</th>
       </tr>
     </thead>
   );
 }
 
 /** 单行（<tr>），列宽/配色见 globals.css 的 .video_table
- *  highlight：排序命中列整列黄（2026-09-27 张老师要求：按成绩/按3BV/s 排列时对应列高亮） */
+ *  highlight：排序命中列整列黄（2026-09-27 起按成绩/按3BV/s，2026-10-15 扩展全部排序列；
+ *  默认排序（上传时间）不高亮——张老师要求） */
 export function VideoRowLine({
   video: v,
   highlight,
 }: {
   video: VideoListItem;
-  highlight?: "time" | "3bvs";
+  highlight?: VideoHighlight;
 }) {
   const scores = videoScores(v.board3bv, v.realTime);
   const lvCls = LEVEL_CLS[v.level as VideoLevel] ?? "";
@@ -66,7 +110,7 @@ export function VideoRowLine({
           </span>
         )}
       </td>
-      <td className="c_3bvs bv c">{v.board3bv}</td>
+      <td className={`c_3bvs bv c${highlight === "3bv" ? " current" : ""}`}>{v.board3bv}</td>
       <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>
         {scores["3bvs"] > 0 ? (
           score3bvs(scores["3bvs"])
@@ -78,7 +122,10 @@ export function VideoRowLine({
         )}
       </td>
       <td className="counters">
-        <em>{v.comments}</em> / {v.clicks}
+        {/* 评论/点击分别包一层，排序命中时只黄对应数字（2026-10-15） */}
+        <em className={highlight === "comments" ? "current" : undefined}>{v.comments}</em>
+        {" / "}
+        <span className={highlight === "clicks" ? "current" : undefined}>{v.clicks}</span>
       </td>
       <td
         className={`create_time ${isRecent(v.createTime) ? "time--recent" : "time--old"}`}

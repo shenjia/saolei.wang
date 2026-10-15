@@ -239,6 +239,30 @@ export const GRADE_PERCENTS = [100, 90, 80, 70, 60, 50, 35, 15, 5];
 export const VIDEO_LEVELS = ["beg", "int", "exp"] as const;
 export type VideoLevel = (typeof VIDEO_LEVELS)[number];
 
+// 录像列表排序列（2026-10-15 张老师需求：表头点击排序，去掉右侧排序 tabs）。
+// id=上传时间（默认，倒序）；time=成绩（升序，快在前）；3bv=3BV（降序，大在前）；
+// 3bvs=3BV/s（降序，快在前，排除 3BV<4 运气盘）；comments/clicks=评论/点击（降序，多在前）
+export const VIDEO_LIST_ORDERS = ["id", "time", "3bv", "3bvs", "comments", "clicks"] as const;
+export type VideoListOrder = (typeof VIDEO_LIST_ORDERS)[number];
+
+export function parseVideoListOrder(v?: string): VideoListOrder {
+  return (VIDEO_LIST_ORDERS as readonly string[]).includes(v ?? "") ? (v as VideoListOrder) : "id";
+}
+
+/** 时间成绩搜索输入（秒）：1-3 位整数，最多 3 位小数（如 37 / 37.2 / 37.29） */
+export const VIDEO_TIME_INPUT_RE = /^\d{1,3}(?:\.\d{1,3})?$/;
+
+/**
+ * 时间成绩搜索输入 → 匹配窗口 [lo, hi)（毫秒）。
+ * 「匹配所有时间相同的成绩」= 显示值相同（scoreTime 按 2 位小数四舍五入），
+ * 故窗口取显示舍入半径 ±5ms：输入 37.29 → [37285, 37295)，覆盖所有显示为 37.29 的成绩。
+ */
+export function parseVideoTimeWindow(t?: string): [number, number] | null {
+  if (!t || !VIDEO_TIME_INPUT_RE.test(t)) return null;
+  const ms = Math.round(parseFloat(t) * 1000);
+  return [ms - 5, ms + 5];
+}
+
 export const VIDEO_STATUS = {
   BANNED: 0,
   NORMAL: 10,

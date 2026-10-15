@@ -217,6 +217,12 @@ model VideoInfo {
   createTime BigInt @default(0) @map("create_time") @db.BigInt
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
+  // 2026-10-15 录像页表头排序/时间成绩搜索（张老师需求）：
+  // real_time 支撑按成绩排序（索引序扫描免 30 万行 filesort）与时间搜索窗口过滤；
+  // (board_3bv, real_time) 复合覆盖索引支撑按 3BV 排序（索引序扫描）与按 3BV/s 的
+  // 计算排序（比值在索引内算得，filesort 免回表，306k 行 0.48s→0.17s 实测）
+  @@index([realTime])
+  @@index([board3bv, realTime])
   @@map("video_info")
 }
 

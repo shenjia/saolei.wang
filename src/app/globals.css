@@ -5111,7 +5111,7 @@ body #video_list .score_3bvs a:hover em {
   color: #fdc61d;
 }
 
-/* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、排序贴行尾 */
+/* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、搜索框贴行尾 */
 #page .page_head .video_nav {
   display: flex;
   flex-wrap: wrap;
@@ -5120,22 +5120,43 @@ body #video_list .score_3bvs a:hover em {
   min-width: 0;
   gap: 12px;
 }
-#page .page_head .video_nav .order_filters {
-  margin-left: auto; /* 排序筛选贴行尾（级别 tabs 与 h1 靠左成组） */
+/* 2026-10-15 张老师要求：右侧排序 tabs 去掉换搜索框（贴行尾，goto 语言与排行页一致） */
+#page .page_head .video_nav .video_search {
+  margin-left: auto;
 }
 #page.video_old .page_head .video_nav .tabs {
   clear: none;
   float: none;
 }
 
+/* 表头排序链接（排行表头同语言：灰字、hover 绿、命中黄；2026-10-15 张老师需求） */
+.video_table th a {
+  color: #b1b1a4;
+}
+.video_table th a:hover {
+  color: #a6e22e;
+}
+.video_table th a.current {
+  color: #fdc61d;
+  font-weight: bold;
+}
+.video_table th a.current:hover {
+  color: #a6e22e;
+}
+/* 评论/点击计数命中（td.counters 内 em=评论、span=点击，各自独立变黄） */
+#page .video_table td.counters em.current,
+#page .video_table td.counters span.current {
+  color: #fdc61d;
+}
+
 /* 页头折行修正（2026-10-13 张老师要求：筛选器放不下时应整体折行而非错位）：
    原状——page_head 不换行、video_nav flex:1+min-width:0 被挤窄后内部折行，
    级别 tabs 独占上行、h1 随 flex-end 坠到下行与排序 tabs 同排（881~1187 视口必现；
    带 author 参数时 h1「全部录像」更宽，任意宽度都错位）。
-   改法：page_head 允许换行 + video_nav 设 min-width:500（级别 246+gap12+排序 228+余量），
-   行内余量不足 500 时筛选器组整体折到第二行（级别靠左、排序 margin-left:auto 贴右），
-   h1 稳占第一行——与 ≤768 移动版「h1 一行、筛选器一行」的堆叠语言一致。
-   纯宽度驱动、无断点：桌面放得下时（≥~1188）仍一行排开，行为不变。
+   改法：page_head 允许换行 + video_nav 设 min-width（级别 246+gap12+搜索框 ~170+余量，
+   2026-10-15 排序 tabs 换搜索框后由 500 收窄至 450），行内余量不足时筛选器组整体折到第二行
+   （级别靠左、搜索框 margin-left:auto 贴右），h1 稳占第一行。
+   纯宽度驱动、无断点：桌面放得下时仍一行排开。
    只包 ≥769：≤768 移动版 page_head 本就是块级堆叠，无需干预。 */
 @media (min-width: 769px) {
   body #page.video_old .page_head {
@@ -5143,7 +5164,7 @@ body #video_list .score_3bvs a:hover em {
     row-gap: 10px;
   }
   body #page.video_old .page_head .video_nav {
-    min-width: 500px;
+    min-width: 450px;
   }
 }
 
@@ -5241,7 +5262,7 @@ body #page.video_old .page_head {
   #page.video_old .page_head .video_nav {
     align-items: flex-start;
   }
-  #page .page_head .video_nav .order_filters {
+  #page .page_head .video_nav .video_search {
     margin-left: 0;
   }
   .video_table {

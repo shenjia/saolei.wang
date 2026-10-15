@@ -1,16 +1,18 @@
 // 录像列表页「加载更多 + 页码滑条」交互（2026-09-24 张老师要求：/video 老式翻页改加载更多；
 // 2026-10-14 加滑条翻页 + 递增批量，同 RankingFeed 语义，设计稿 design/page-slider-v1.html v1.4）：
-// 页码语义（与 getVideoList 一致：level/order/author 全筛选组合），复用 VideoRows 行渲染；
+// 页码语义（与 getVideoList 一致：level/order/author/time 全筛选组合），复用 VideoRows 行渲染；
 // 底部两行（上=PageSlider 滑条，下=按钮+总数），滑条换页严格一页、缓存回跳零请求、
 // 松手立即加载（在途请求序号作废）；加载更多按整页批量 +20→+40→+80→+100 封顶。
 // 筛选切换仍走链接整页刷新（URL 即状态，保留分享语义）。
+// 2026-10-15：query 增 time（时间成绩搜索）；headSort 有值时表头渲染排序链接（仅 /video 列表页）。
 
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { VideoListItem } from "@/lib/queries";
-import { VideoHead, VideoRowLine } from "./VideoRows";
+import type { VideoListOrder } from "@/lib/config";
+import { VideoHead, VideoRowLine, type VideoHighlight } from "./VideoRows";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 
@@ -20,15 +22,18 @@ export function VideoListFeed({
   pageSize,
   query,
   highlight,
+  headSort,
 }: {
   initial: VideoListItem[];
   /** 当前筛选条件下的录像总数 */
   total: number;
   pageSize: number;
-  /** 筛选参数（level/order/author，构造增量请求用） */
-  query: { level: string; order: string; author?: number };
-  /** 排序命中列高亮（按成绩/按3BV/s 时对应列整列黄，2026-09-27） */
-  highlight?: "time" | "3bvs";
+  /** 筛选参数（level/order/author/time，构造增量请求用） */
+  query: { level: string; order: string; author?: number; time?: string };
+  /** 排序命中列高亮（默认排序=上传时间不高亮，2026-10-15 扩展全部排序列） */
+  highlight?: VideoHighlight;
+  /** 表头排序链接（仅 /video 列表页传入；缺省=纯文本表头，首页/用户主页不变） */
+  headSort?: { base: string; order: VideoListOrder };
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initial.length < total);
@@ -52,6 +57,7 @@ export function VideoListFeed({
   function moreUrl(page: number, size?: number) {
     const qs = new URLSearchParams({ level: query.level, order: query.order, page: String(page) });
     if (query.author) qs.set("author", String(query.author));
+    if (query.time) qs.set("time", query.time);
     // 每页条数：递增批量（首击=一页 base），默认与初始页一致（列表页 20 / 用户主页 10）
     qs.set("size", String(size ?? pageSize));
     return `/api/video/more?${qs}`;
@@ -145,7 +151,17 @@ export function VideoListFeed({
   return (
     <>
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
-        <VideoHead />
+        <VideoHead
+          sort={
+            headSort
+              ? {
+                  base: headSort.base,
+                  params: { level: query.level, author: query.author, time: query.time },
+                  order: headSort.order,
+                }
+              : undefined
+          }
+        />
         <tbody>
           {items.map((v) => (
             <VideoRowLine key={v.id} video={v} highlight={highlight} />
