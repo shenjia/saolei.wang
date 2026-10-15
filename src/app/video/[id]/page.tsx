@@ -17,10 +17,10 @@ import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { UserPanel } from "@/components/UserCard";
 import { LoginLink } from "@/components/LoginLink";
-import { Board } from "@/components/Board";
-import { BoardPlay } from "@/components/BoardPlay";
 import { CommentForm, CommentList } from "@/components/Comments";
-import { FlopPlayer, PlayButton } from "@/components/FlopPlayer";
+// 原地回放（2026-10-15 张老师需求：点播放后棋盘原地重演，复用练习页回放引擎；
+// rmv/解析失败自动兜底 flop 全屏播放器——FlopPlayer 由 VideoReplayProvider 按需挂）
+import { VideoReplayProvider, VideoReplayBoard, VideoReplayButton } from "@/components/VideoReplay";
 import { VideoAnalysisRadar } from "@/components/VideoAnalysis";
 import { getVideoAnalysis } from "@/lib/videoanalysis";
 // 综合评级的等级配色（与雷达图同一份，统一在 videoscore.ts 维护）
@@ -66,6 +66,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
       : null;
 
   return (
+    <VideoReplayProvider boardId={video.id} filepath={video.filepath}>
     <div id="page" className="two_columns">
     <ul id="video_view">
       <li className="main">
@@ -92,9 +93,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             </span>
           </h2>
           <div className="info">
-            <BoardPlay uri={`/videos${video.filepath}`}>
-              <Board id={video.id} level={level} board={video.board} size={16} />
-            </BoardPlay>
+            <VideoReplayBoard id={video.id} level={level} board={video.board} />
             <p>
               {video.author && (
                 <>
@@ -130,7 +129,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
               </span>
             </p>
             <hr />
-            <PlayButton uri={`/videos${video.filepath}`} />
+            <VideoReplayButton />
             <a className="button" href={`/video/download/${video.id}`}>
               <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M9 2v9.6" />
@@ -193,7 +192,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         )}
       </li>
     </ul>
-    <FlopPlayer />
     </div>
+    </VideoReplayProvider>
   );
 }

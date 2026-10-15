@@ -46,18 +46,6 @@ export function playFlop(uri: string) {
   flop.playVideo(uri, PLAY_OPTIONS);
 }
 
-/** 「播放」按钮（对应 2008 版 Show.asp 的按钮；2026-09-26 张老师要求精简文案+前置矢量图标） */
-export function PlayButton({ uri }: { uri: string }) {
-  return (
-    <button type="button" onClick={() => playFlop(uri)}>
-      <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
-        <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
-      </svg>
-      播放
-    </button>
-  );
-}
-
 /* 注入播放器 iframe 的窄屏适配脚本：
    播放器窗口（统计表 + 游戏窗 + 控制条）按桌面宽度排布（高级 ~582px），
    手机视口装不下会被裁掉。iframe 同源，注入脚本在内容超出视口时把窗口整体
