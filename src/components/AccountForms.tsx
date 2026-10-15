@@ -310,25 +310,19 @@ export function EmailBindForm({ currentEmail, verified }: { currentEmail: string
         <button type="button" className="button active" style={{ marginTop: 20 }} disabled={busy} onClick={() => send(sentEmail)}>
           {busy ? "发送中…" : "重发验证邮件"}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setSentEmail(null);
-            setError("");
-          }}
-          style={{
-            display: "block",
-            margin: "14px auto 0",
-            border: "none",
-            background: "none",
-            color: "#75715e",
-            fontSize: 13,
-            textDecoration: "underline",
-            cursor: "pointer",
-          }}
-        >
-          填错了？更换邮箱
-        </button>
+        <div style={{ marginTop: 14 }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setSentEmail(null);
+              setError("");
+            }}
+            style={{ color: "#75715e", fontSize: 13 }}
+          >
+            填错了？更换邮箱
+          </a>
+        </div>
         {error && (
           <p className="error" style={{ marginTop: 12 }}>
             {error}
