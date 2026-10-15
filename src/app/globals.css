@@ -3740,6 +3740,18 @@ body #page.ranking_old.main .ranking_nav {
      卡片自身 overflow-x:auto：放得下时不出现滚动条，放不下时盒内横滑（表格与页脚
      一起滚、右缘贴齐，同排行宽表既有模式）；世界榜页无搜索下拉浮层，无裁切顾虑。 */
   overflow-x: auto;
+  /* 容器查询锚点（与上面横滑兜底配套）：卡片作为查询容器，内容宽装不下带日期的
+     表格自然宽 763px 时隐藏纪录日期（见下）——2026-10-15 张老师定「优先显示成绩，
+     宽度不足可隐藏日期」。比视口断点精确且与卡片宽度策略解耦；不支持容器查询的
+     老浏览器整条规则丢弃，退化为纯横滑兜底。 */
+  container-type: inline-size;
+}
+/* 纪录日期按需隐藏：隐藏后表格自然宽 763→505（playwright 实测），769+ 视口全放得下、
+   横滑条消失；606~686 极窄带（505 仍放不下）与老浏览器由 overflow-x:auto 兜底横滑 */
+@container (max-width: 763px) {
+  #page.ranking_old.main > #world_top td .date {
+    display: none;
+  }
 }
 #page.ranking_old.main > #world_top .world_head h2 {
   font-size: 20px;
