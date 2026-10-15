@@ -1,8 +1,9 @@
 // 邮箱验证落地页：用户点击邮件链接回到站内，校验 token 并置 email_verified。
 // token 24 小时有效、一次性（验证成功即清空）；须当前登录账号与 token 归属一致。
 // 2026-10-15 修复：未登录点击链接时 token 会随 307 丢失、登录页又不认 ?next=，
-// 导致「点了邮件链接却永远验证不成功」——现在 token 随 next 带进登录回跳；
-// 失败页区分「已过期」与「无效」，过期提示直接引导重发。
+// 导致「点了邮件链接却永远验证不成功」——现在 token 随 next 带进登录回跳。
+// 2026-10-15 二轮（潘逸轩实测反馈）：失败页细分为四态——成功 / 已完成验证（幂等，
+// 重复点击旧链接不再报失败）/ 链接属于其他账号（明确指认邮箱并引导换登录）/ 过期 / 无效。
 // 2026-10-15 张老师拍板：验证成功 → 登录名同步换成邮箱（唯一性冲突则保旧名并提示）。
 
 import Link from "next/link";
@@ -33,33 +34,53 @@ export default async function EmailVerifyPage({
   let expired = false;
   let usernameNowEmail = false;
   let usernameTaken = false;
+  let wrongAccount = false; // token 存在但归属其他账号（2026-10-15：潘逸轩用 B 账号点 A 账号的链接只看到「验证失败」，不明就里）
+  let alreadyVerified = false; // 本账号已完成验证却再点旧链接（邮件/webview 二次加载同款困惑）
+  let ownerEmail = "";
   let email = "";
 
   if (token && token.length === 32) {
     const auth = await prisma.userAuth.findUnique({ where: { emailToken: token } });
-    if (auth && auth.id === BigInt(session.uid) && auth.email) {
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      if (now - auth.updateTime <= TOKEN_TTL) {
-        // 登录名同步换成邮箱：占坑检查在验证时刻重做（发信与点击之间可能有人新注册占坑）
-        const taken = await prisma.userAuth.findUnique({ where: { username: auth.email } });
-        if (!taken || taken.id === auth.id) {
-          await prisma.userAuth.update({
-            where: { id: auth.id },
-            data: { username: auth.email, emailVerified: now, emailToken: null, updateTime: now },
-          });
-          usernameNowEmail = true;
+    if (auth) {
+      if (auth.id === BigInt(session.uid) && auth.email) {
+        const now = BigInt(Math.floor(Date.now() / 1000));
+        if (now - auth.updateTime <= TOKEN_TTL) {
+          // 登录名同步换成邮箱：占坑检查在验证时刻重做（发信与点击之间可能有人新注册占坑）
+          const taken = await prisma.userAuth.findUnique({ where: { username: auth.email } });
+          if (!taken || taken.id === auth.id) {
+            await prisma.userAuth.update({
+              where: { id: auth.id },
+              data: { username: auth.email, emailVerified: now, emailToken: null, updateTime: now },
+            });
+            usernameNowEmail = true;
+          } else {
+            await prisma.userAuth.update({
+              where: { id: auth.id },
+              data: { emailVerified: now, emailToken: null, updateTime: now },
+            });
+            usernameTaken = true;
+          }
+          ok = true;
+          email = auth.email;
         } else {
-          await prisma.userAuth.update({
-            where: { id: auth.id },
-            data: { emailVerified: now, emailToken: null, updateTime: now },
-          });
-          usernameTaken = true;
+          expired = true;
         }
-        ok = true;
-        email = auth.email;
       } else {
-        expired = true;
+        wrongAccount = true;
+        ownerEmail = auth.email ?? "";
       }
+    }
+  }
+
+  // 非成功且非归属错误时，看本账号是否其实已验证过（重复点击旧链接 / 邮件客户端二次加载）
+  if (!ok && !expired && !wrongAccount) {
+    const me = await prisma.userAuth.findUnique({
+      where: { id: BigInt(session.uid) },
+      select: { email: true, emailVerified: true },
+    });
+    if (me && Number(me.emailVerified) > 0) {
+      alreadyVerified = true;
+      email = me.email ?? "";
     }
   }
 
@@ -85,6 +106,30 @@ export default async function EmailVerifyPage({
             <p style={{ marginTop: 16 }}>
               <Link href="/account" className="button active">
                 返回账号中心
+              </Link>
+            </p>
+          </>
+        ) : alreadyVerified ? (
+          <>
+            <h1 style={{ marginBottom: 10 }}>邮箱已完成验证</h1>
+            <p style={{ color: "#75715e", lineHeight: "22px" }}>
+              账号邮箱 <b style={{ color: "#f8f8f2" }}>{email}</b> 已验证过，本链接无需重复点击。
+            </p>
+            <p style={{ marginTop: 16 }}>
+              <Link href="/account" className="button active">
+                返回账号中心
+              </Link>
+            </p>
+          </>
+        ) : wrongAccount ? (
+          <>
+            <h1 style={{ marginBottom: 10 }}>验证链接与当前账号不符</h1>
+            <p style={{ color: "#75715e", lineHeight: "22px" }}>
+              此验证链接属于绑定邮箱 <b style={{ color: "#f8f8f2" }}>{ownerEmail}</b> 的其他账号。请先退出并用该账号登录，再点击邮件中的链接。
+            </p>
+            <p style={{ marginTop: 16 }}>
+              <Link href="/account/login" className="button active">
+                去登录
               </Link>
             </p>
           </>
