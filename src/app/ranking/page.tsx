@@ -135,7 +135,7 @@ export default async function RankingPage({
   // 三块 Grid 落位在 WorldRankingBody 内）
   if (view === "world") {
     return (
-      <div id="page" className="main ranking_old two_columns">
+      <div id="page" className="main ranking_old">
         <WorldTop100 />
       </div>
     );
