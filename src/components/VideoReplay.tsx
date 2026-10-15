@@ -6,17 +6,16 @@
 // 数据：avf/mvf 解析器（与上传页浏览器端同一套，Uint8Array 入参，不碰 Buffer）；
 // rmv / 解析失败 / 尺寸不符 → 兜底懒挂 flop 播放器（playFlop 全屏播放）。
 //
-// 事件应用口径（2026-10-15 二轮修正：以终态盘 ground truth 网格搜索锁定，
-// 22 盘胜局全开 + 338799 判死验证；此前照抄 videoradar 配对导致 344834 大量格子不开；
-// 三轮修正 2026-10-15 晚：chord 作用域改 3x3 邻域（Arbiter 滑键 chord），338721 单格口径
-// 中途大量 mc 点缝无效、359/381 误判未完成，3x3 口径下与 flop 全程逐刻吻合、终局 151/151 全开）：
-//   左击 → 挂起，lr 松开时以**松开坐标**开格/chord（首击按下坐标失真，一律取松开）；
-//   右键 → rc 按下即刻以**按下坐标**插旗/拔旗（按下即落子，非松开）；
-//   双键 chord（任一键在另一键按住时按下）→ 上膛，**后松开时**以该次松开坐标生效；
-//   中键/双击 chord（mc/sc）→ 按下即刻生效；chord 作用域一律＝鼠标点 3x3 邻域内
-//   所有满足旗数的已开数字格（点在未开格/缝隙上也能 chord 到邻近数字格）；
-//   孤 lr ＝ 首击（Arbiter 有时首击只记松开，按下在流外）；
-//   尾部未松开的 lc 按按下坐标补记（fatal click 无松开，踩雷局靠此判死即时揭示）。
+// 事件应用口径（2026-10-16 四轮修正：flop 官方引擎源码 1:1 移植——已在 Node 原真运行
+// flop webpack 模块作 gold standard 逐事件对照，26 判例全对齐；此前二/三轮的
+// 「3x3 邻域 chord / 孤 lr＝首击 / 尾部 lc 补记」均为错误补偿——337484 误杀、
+// 335360/335652 假败局皆由补丁制造——全部移除）：
+//   lc → 仅置位（视觉按压，无游戏效果）；lr → 右/shift 按住＝单格 chord（仅光标下那格
+//   opened 且 数字=0或=周围旗数 才开 3x3），否则以松开坐标开单格；复位 lp/lv/rv/sv 不动 rp；
+//   rc → 左键按住仅视觉（不插旗）；否则 toggleLabel（旗→问号(marks)/摘旗、问号→清、未标→旗）；
+//   rr → 左键按住＝单格 chord；复位 rp/lv/rv/sv 不动 lp；mc/mr 中键（mr 松开时单格 chord）；
+//   sc → 置位 shift，chord 在其后的 lr 生效；mt → 切问号开关；
+//   开格：opened/flagged 跳过、questioned 可开、0 号泛洪、踩雷 Blast 即时揭示。
 
 import {
   createContext,
@@ -50,6 +49,8 @@ interface ReplayData {
   board: string;
   evs: ReplayEv[];
   totalCsec: number;
+  /** 问号开关（toggleLabel 的旗→问号分支依赖） */
+  marks: boolean;
 }
 
 /** avf/mvf 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底） */
@@ -83,6 +84,7 @@ function parseReplayData(buf: Uint8Array, ext: string): ReplayData | null {
     // 终点取「最后事件」与「库内用时」的较大者：最后开格后计时器还走着，
     // 停在 timeMs 与真实对局节奏一致（练习页引擎用 s.csec 同理）
     totalCsec: Math.max(lastCsec, Math.round(v.timeMs / 10)),
+    marks: v.marks,
   };
 }
 
@@ -127,16 +129,18 @@ function runReplay(opts: {
     nb[i] = r;
     return r;
   };
-  /* 回放状态机（0 未开 / 1 开 / 2 旗）+ 原图类名备份（stop 恢复静态地图） */
+  /* 回放状态机（0 未开 / 1 开 / 2 旗 / 3 问号）+ 原图类名备份（stop 恢复静态地图） */
   const rstate = new Uint8Array(N);
   const saved = new Array<string>(N);
   const cellTd = (i: number) => tbody.rows[(i / cols) | 0].cells[i % cols];
   for (let i = 0; i < N; i++) saved[i] = cellTd(i).className;
+  let marks = data.marks;
   function paintR(i: number) {
     const td = cellTd(i);
     let cls = "bb";
     if (rstate[i] === 1) cls = "b" + nums[i];
     else if (rstate[i] === 2) cls = "bf";
+    else if (rstate[i] === 3) cls = "bq";
     td.className = cls;
   }
   function floodR(i: number) {
@@ -147,22 +151,6 @@ function runReplay(opts: {
       rstate[c] = 1;
       paintR(c);
       if (nums[c] === 0) for (const a of nbR(c)) if (rstate[a] === 0) stack.push(a);
-    }
-  }
-  function chordR(i: number) {
-    if (rstate[i] !== 1 || nums[i] === 0) return;
-    const around = nbR(i);
-    let fc = 0;
-    for (const a of around) if (rstate[a] === 2) fc++;
-    if (fc !== nums[i]) return;
-    for (const a of around) if (rstate[a] === 0) {
-      if (mines[a]) {
-        hitIdx = a;
-        dead = true;
-        revealLoss();
-        return;
-      }
-      floodR(a);
     }
   }
   /* 回放光标：flop 同款箭头（#cursor-arrow，FlopSprites 已内置；练习页同款 .replay_cursor）。
@@ -188,123 +176,111 @@ function runReplay(opts: {
     curEl.style.left = px + off.x - TIP_X + "px";
     curEl.style.top = py + off.y - TIP_Y + "px";
   }
-  /* 事件应用：双键状态机（2026-10-15 二轮修正口径，见文件头注释） */
+  /* 事件应用：flop 状态机（2026-10-16 四轮修正口径，见文件头注释） */
   const evs = data.evs;
-  let lDown = false;
-  let rDown = false;
-  let armed = false; // 双键 chord 已上膛（armedX/Y＝第二键按下坐标）
-  let armedX = 0;
-  let armedY = 0;
-  let gestureL = false; // 本次按入属双键手势（松开时吞掉，不触发孤 lr 首击）
-  let pendL = -1; // 挂起左击（按下事件下标），松开时以松开坐标生效
+  let lp = false; // leftPressed
+  let lv = false; // leftValid
+  let rp = false; // rightPressed
+  let rv = false; // rightValid
+  let sv = false; // shiftValid
   let dead = false; // 踩雷：对局即时结束（雷区已揭示），后续事件只动光标
   let hitIdx = -1;
   const inb = (px: number, py: number) => px >= 0 && py >= 0 && px < cols * 16 && py < rows * 16;
   const idxOf = (px: number, py: number) => ((py / 16) | 0) * cols + ((px / 16) | 0);
-  /* chord 作用域＝3x3 邻域（Arbiter 滑键 chord 口径，2026-10-15 三轮修正 338721 实证）：
-     点在未开格/缝隙上也能 chord 到邻域内满足旗数的已开数字格（flop 62.24s 3BV=91 终局 151/151 对表吻合） */
-  function chordAt(px: number, py: number) {
+  /* flop open()：开单格（questioned 可开、flagged 跳过、0 号泛洪、踩雷 Blast） */
+  function openR(px: number, py: number) {
+    if (dead || !inb(px, py)) return;
+    const i = idxOf(px, py);
+    if (rstate[i] === 1 || rstate[i] === 2) return;
+    if (mines[i]) {
+      hitIdx = i;
+      dead = true;
+      revealLoss(); // Blast：先于落子展示（flop 同样不把雷格画成数字格）
+      return;
+    }
+    rstate[i] = 1;
+    paintR(i);
+    if (nums[i] === 0)
+      for (const a of nbR(i)) {
+        if (dead) return;
+        if (rstate[a] === 0) floodR(a);
+      }
+  }
+  /* flop openAround()：单格 chord——仅光标下那格 opened 且 数字=0 或 =周围旗数 时开 3x3 */
+  function openAroundR(px: number, py: number) {
     if (!inb(px, py)) return;
     const i = idxOf(px, py);
-    const x = i % cols;
-    const y = (i / cols) | 0;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-        if (dead) return;
-        chordR(ny * cols + nx);
-      }
+    if (rstate[i] !== 1) return;
+    let fc = 0;
+    for (const a of nbR(i)) if (rstate[a] === 2) fc++;
+    if (!(nums[i] === 0 || nums[i] === fc)) return;
+    for (const a of nbR(i)) {
+      if (dead) return;
+      const x = a % cols;
+      const y = (a / cols) | 0;
+      if (rstate[a] === 0) openR(x * 16, y * 16);
     }
+  }
+  /* flop toggleLabel()：旗→问号(marks)/摘旗、问号→清除、未标→旗；返回是否可操作 */
+  function toggleLabelR(px: number, py: number): boolean {
+    if (!inb(px, py)) return false;
+    const i = idxOf(px, py);
+    if (rstate[i] === 1) return false;
+    if (marks && rstate[i] === 2) rstate[i] = 3;
+    else if (rstate[i] === 2 || rstate[i] === 3) rstate[i] = 0;
+    else rstate[i] = 2;
+    paintR(i);
+    return true;
   }
   /* 败局雷区揭示（踩雷瞬间；位图类：bc=踩中红叉雷 / bm=雷 / bn=错旗） */
   function revealLoss() {
     for (let i = 0; i < N; i++) {
       if (mines[i]) {
-        if (rstate[i] !== 2) cellTd(i).className = i === hitIdx ? "bc" : "bm";
+        if (rstate[i] !== 2 && rstate[i] !== 3) cellTd(i).className = i === hitIdx ? "bc" : "bm";
       } else if (rstate[i] === 2) {
         cellTd(i).className = "bn";
       }
-    }
-  }
-  function leftAt(px: number, py: number) {
-    if (!inb(px, py)) return;
-    const i = idxOf(px, py);
-    if (rstate[i] === 1) chordR(i);
-    else if (rstate[i] === 0) {
-      if (mines[i]) {
-        hitIdx = i;
-        dead = true;
-        revealLoss();
-        return;
-      }
-      floodR(i);
-    }
-    // 落在旗格：无效果（与引擎/Clone 一致）
-  }
-  function rightAt(px: number, py: number) {
-    if (!inb(px, py)) return;
-    const i = idxOf(px, py);
-    if (rstate[i] === 0) {
-      rstate[i] = 2;
-      paintR(i);
-    } else if (rstate[i] === 2) {
-      rstate[i] = 0;
-      paintR(i);
     }
   }
   function applyEv(k: number) {
     const e = evs[k];
     moveCursor(e.px, e.py);
     if (dead) return;
-    if (e.ev === "lc") {
-      if (rDown) {
-        // 双键 chord：左键按入时右键已按住 → 上膛（后松开时以松开坐标生效）
-        armed = true;
-        armedX = e.px;
-        armedY = e.py;
-        lDown = true;
-        gestureL = true;
-      } else {
-        // 残缺保险：上次按下没等到松开又按下——先按按下坐标补记，免得整次操作丢失
-        if (pendL >= 0) leftAt(evs[pendL].px, evs[pendL].py);
-        lDown = true;
-        pendL = k;
-      }
-    } else if (e.ev === "lr") {
-      lDown = false;
-      if (armed) {
-        chordAt(e.px, e.py); // 双键 chord：后松开时生效，作用格＝该次松开坐标
-        armed = false;
-        pendL = -1;
-      } else if (pendL >= 0) {
-        leftAt(e.px, e.py); // 命中格取松开位置（首击按下坐标失真，同理）
-        pendL = -1;
-      } else if (!gestureL) {
-        leftAt(e.px, e.py); // 孤 lr＝首击（Arbiter 有时首击只记松开，按下在流外）
-      }
-      gestureL = false;
-    } else if (e.ev === "rc") {
-      if (lDown) {
-        // 双键 chord：右键按入时左键已按住 → 上膛（不插旗，手势一体）
-        armed = true;
-        armedX = e.px;
-        armedY = e.py;
-        rDown = true;
-      } else {
-        rDown = true;
-        rightAt(e.px, e.py); // 旗：按下即刻生效（按下坐标）
-      }
-    } else if (e.ev === "rr") {
-      rDown = false;
-      if (armed) {
-        chordAt(e.px, e.py); // 双键 chord：后松开时生效
-        armed = false;
-        pendL = -1;
-      }
-    } else if (e.ev === "sc" || e.ev === "mc") {
-      chordAt(e.px, e.py);
+    const col = (e.px / 16) | 0;
+    const row = (e.py / 16) | 0;
+    switch (e.ev) {
+      case "lc":
+        lp = lv = true;
+        break;
+      case "lr":
+        if (rp || sv) openAroundR(e.px, e.py);
+        else if (lv) openR(e.px, e.py);
+        lp = lv = rv = sv = false; // 不动 rp（flop 原样）
+        break;
+      case "rc":
+        if (!lp) {
+          if (toggleLabelR(e.px, e.py)) rv = false;
+          else rv = true;
+        } // lp 时仅 pressAround 视觉，不插旗
+        rp = true;
+        break;
+      case "rr":
+        if (lp) openAroundR(e.px, e.py);
+        rp = lv = rv = sv = false; // 不动 lp（flop 原样）
+        break;
+      case "mc":
+        // mp = true（仅视觉按压）
+        break;
+      case "mr":
+        openAroundR(e.px, e.py);
+        // mp = false
+        break;
+      case "sc":
+        lp = lv = sv = true; // chord 在其后的 lr 生效
+        break;
+      case "mt":
+        marks = !marks;
+        break;
     }
   }
   /* rAF 驱动（进即自动播完、固定 1x——练习页六期口径；回放中再触发＝从头重播） */
@@ -326,10 +302,8 @@ function runReplay(opts: {
   }
   function resetReplay() {
     rstate.fill(0);
-    lDown = rDown = armed = false;
-    gestureL = false;
-    armedX = armedY = 0;
-    pendL = -1;
+    lp = lv = rp = rv = sv = false;
+    marks = data.marks;
     dead = false;
     hitIdx = -1;
     for (let i = 0; i < N; i++) paintR(i);
@@ -367,13 +341,6 @@ function runReplay(opts: {
     interpCursor(target);
     if (target >= data.totalCsec) {
       setPlaying(false);
-      /* 尾部补记：录像在按下后直接结束（没记录松开）——按按下坐标补记。
-         fatal click（踩雷）正是这种形态，踩雷局靠此判死即时揭示；
-         双键 chord 手势截尾则按第二键按下坐标补 chord（videoradar 尾部兜底同款） */
-      if (!dead) {
-        if (pendL >= 0) leftAt(evs[pendL].px, evs[pendL].py);
-        else if (armed) chordAt(armedX, armedY);
-      }
       onEnd(); // 定格终局画面（练习页桌面口径）；退出由棋盘点击 / Esc / stop 负责
       return;
     }

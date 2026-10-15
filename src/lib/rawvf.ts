@@ -15,6 +15,8 @@ export interface ParsedVideo {
   bbbv: number | null; // 3BV（pre-0.97 录像没有该信息时为 null）
   solved3bv: number | null;
   noflag: boolean;
+  /** 问号开关（AVF 头 QuestionMarks / MVF 头 Marks 行；回放引擎 toggleLabel 旗→问号分支依赖） */
+  marks: boolean;
   board: string; // renderBoard 后的整盘字符串：'*' 或数字字符
   events: string[]; // RawVF 事件行（调试用，不入库）
 }
@@ -89,6 +91,7 @@ export function formatRawvf(result: string[]): ParsedVideo {
     solved3bv: formatted["solved3bv"] !== undefined ? Number(formatted["solved3bv"]) : null,
     // 任一事件行含 'rc'（右键按下）即非 NF（strpos > 0，排除行首）
     noflag: !events.some((e) => e.indexOf("rc") > 0),
+    marks: formatted.questionmarks === "on" || formatted.marks === "on",
     board: renderBoard(boardLines),
     events,
   };

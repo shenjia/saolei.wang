@@ -1,12 +1,20 @@
-// 录像完整度判定（2026-10-15）：AVF 无「已完成 3BV」字段，必须靠事件流模拟判定胜负。
-// 语义与 VideoReplay 回放引擎同源（以终态盘 ground truth 网格搜索锁定，22 盘胜局全开验证）：
-//   左击 → 挂起，lr 松开时以松开坐标开格/chord（首击按下坐标失真，一律取松开）；
-//   右键 → rc 按下即刻以按下坐标插旗/拔旗；
-//   双键 chord（任一键在另一键按住时按下）→ 上膛，后松开时以该次松开坐标生效；
-//   chord 作用域＝3x3 邻域（Arbiter 滑键 chord，mc 点在未开格/缝隙上也能 chord 邻近数字格——
-//   2026-10-15 三轮修正：338721 用单格口径误判 incomplete，3x3 口径下 62.24s 3BV=91/flags=53/终局 151/151 与 flop 全程吻合）；
-//   孤 lr ＝ 首击（Arbiter 有时首击只记松开，按下在流外）；
-//   尾部未松开的 lc 按按下坐标补记（fatal click 无松开，踩雷局靠此判死）。
+// 录像完整度判定：flop 引擎语义 1:1 移植（2026-10-16 四轮修正）
+//
+// 权威依据＝flop 官方引擎源码逐字移植（app~b07b7304.8c5b5bcd.js 模块 5fd3 VideoParser），
+// 并已在 Node 中原真运行该 webpack 模块作为 gold standard 逐事件对照（26 判例 + 20 抽样全对齐）。
+// 此前三轮及以前的「3x3 邻域 chord / 孤 lr＝首击 / 尾部 lc 补记」均为对 flop 的错误补偿
+// （337484 误杀、335360/335652 及 20 个抽样「假败局」皆由补丁制造），本轮全部移除。
+//
+// flop 语义（与源码一一对应）：
+//   lc → leftPressed=leftValid=true（无游戏效果，视觉按压）；
+//   lr → 右键/shift 按住时＝chord（单格：仅光标下那格 opened 且 数字=0或=周围旗数 才开 3x3），
+//        否则 leftValid 时以松开坐标开单格；复位 lp/lv/rv/sv（不动 rp）；
+//   rc → 左键按住时仅视觉按压（不插旗！）；否则 toggleLabel（旗→问号/摘旗，问号/未标→插旗）；
+//   rr → 左键按住时＝chord（单格，同上）；复位 rp/lv/rv/sv（不动 lp）；
+//   mc → 仅视觉；mr → 单格 chord；sc → leftPressed/shiftValid 置位（chord 在其后的 lr 生效）；
+//   mt → 切换问号开关（toggleLabel 的旗→问号分支依赖 marks）；
+//   开格：opened/flagged 跳过，questioned 可开，0 号泛洪，踩雷 Blast；
+//   胜利＝全部安全格开启（与 flop solvedBBBV===mBBBV 等价）；无任何事件＝Begin→incomplete。
 // 用途：上传校验（只有完整胜局可上传——2026-10-15 张老师要求，堵 AVF 败局漏网）。
 
 export type VideoOutcome = "win" | "loss" | "incomplete";
@@ -16,6 +24,8 @@ export function judgeVideoOutcome(v: {
   height: number;
   board: string;
   events: string[];
+  /** 问号开关（RawVF 头 QuestionMarks/Marks 行）；缺省 off */
+  marks?: boolean;
 }): VideoOutcome {
   const rows = v.height;
   const cols = v.width;
@@ -34,151 +44,120 @@ export function judgeVideoOutcome(v: {
   }
   const evs: { ev: string; px: number; py: number }[] = [];
   for (const line of v.events) {
-    const m = /^([\d.]+) (lc|lr|rc|rr|mc|mr|sc) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+    const m = /^([\d.]+) (lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (m) evs.push({ ev: m[2], px: +m[5], py: +m[6] });
   }
-  if (!evs.length) return "incomplete";
+  if (!evs.length) return "incomplete"; // flop：无事件 gameState 停在 Begin
 
-  const nb: number[][] = new Array(N);
-  const nbR = (i: number): number[] => {
-    if (nb[i]) return nb[i];
-    const x = i % cols,
-      y = (i / cols) | 0,
-      r: number[] = [];
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const nx = x + dx,
-          ny = y + dy;
-        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) r.push(ny * cols + nx);
-      }
-    nb[i] = r;
-    return r;
-  };
-  const rstate = new Uint8Array(N);
+  const inside = (c: number, r: number) => c >= 0 && c < cols && r >= 0 && r < rows;
+  const opened = new Uint8Array(N);
+  const flagged = new Uint8Array(N);
+  const questioned = new Uint8Array(N);
   let dead = false;
-  let opened = 0;
-  const floodR = (i: number) => {
-    const stack = [i];
-    while (stack.length) {
-      const c = stack.pop()!;
-      if (rstate[c] !== 0 || mines[c]) continue;
-      rstate[c] = 1;
-      opened++;
-      if (nums[c] === 0) for (const a of nbR(c)) if (rstate[a] === 0) stack.push(a);
-    }
-  };
-  const chordR = (i: number) => {
-    if (i < 0 || rstate[i] !== 1 || nums[i] === 0) return;
-    const around = nbR(i);
-    let fc = 0;
-    for (const a of around) if (rstate[a] === 2) fc++;
-    if (fc !== nums[i]) return;
-    for (const a of around) if (rstate[a] === 0) {
-      if (mines[a]) {
-        dead = true;
-        return;
-      }
-      floodR(a);
-    }
-  };
-  const inb = (px: number, py: number) => px >= 0 && py >= 0 && px < cols * 16 && py < rows * 16;
-  const idxOf = (px: number, py: number) => ((py / 16) | 0) * cols + ((px / 16) | 0);
-  const leftAt = (px: number, py: number) => {
-    if (!inb(px, py)) return;
-    const i = idxOf(px, py);
-    if (rstate[i] === 1) chordR(i);
-    else if (rstate[i] === 0) {
-      if (mines[i]) {
-        dead = true;
-        return;
-      }
-      floodR(i);
-    }
-  };
-  const rightAt = (px: number, py: number) => {
-    if (!inb(px, py)) return;
-    const i = idxOf(px, py);
-    if (rstate[i] === 0) rstate[i] = 2;
-    else if (rstate[i] === 2) rstate[i] = 0;
-  };
-  const chordAt = (px: number, py: number) => {
-    if (!inb(px, py)) return;
-    /* chord 作用域＝3x3 邻域（Arbiter 滑键 chord 口径，2026-10-15 三轮修正 338721 实证：
-       点在未开格/缝隙上也能 chord 到邻域内满足旗数的已开数字格；flop 62.24s 3BV=91 终局 151/151 对表吻合） */
-    const i = idxOf(px, py);
-    const x = i % cols;
-    const y = (i / cols) | 0;
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-        if (dead) return;
-        chordR(ny * cols + nx);
-      }
+  let openedCount = 0;
+  let marks = v.marks ?? false;
+
+  const flagsAround = (c: number, r: number) => {
+    let n = 0;
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++)
+        if (inside(c + dc, r + dr) && flagged[(r + dr) * cols + c + dc]) n++;
+    return n;
   };
 
-  let lDown = false,
-    rDown = false,
-    armed = false,
-    armedX = 0,
-    armedY = 0,
-    gestureL = false,
-    pendL = -1;
-  for (let k = 0; k < evs.length; k++) {
-    const e = evs[k];
-    if (dead) break;
-    if (e.ev === "lc") {
-      if (rDown) {
-        armed = true;
-        armedX = e.px;
-        armedY = e.py;
-        lDown = true;
-        gestureL = true;
-      } else {
-        if (pendL >= 0) leftAt(evs[pendL].px, evs[pendL].py); // 残缺保险
-        lDown = true;
-        pendL = k;
-      }
-    } else if (e.ev === "lr") {
-      lDown = false;
-      if (armed) {
-        chordAt(e.px, e.py);
-        armed = false;
-        pendL = -1;
-      } else if (pendL >= 0) {
-        leftAt(e.px, e.py);
-        pendL = -1;
-      } else if (!gestureL) {
-        leftAt(e.px, e.py); // 孤 lr＝首击
-      }
-      gestureL = false;
-    } else if (e.ev === "rc") {
-      if (lDown) {
-        armed = true;
-        armedX = e.px;
-        armedY = e.py;
-        rDown = true;
-      } else {
-        rDown = true;
-        rightAt(e.px, e.py);
-      }
-    } else if (e.ev === "rr") {
-      rDown = false;
-      if (armed) {
-        chordAt(e.px, e.py);
-        armed = false;
-        pendL = -1;
-      }
-    } else if (e.ev === "mc" || e.ev === "sc") {
-      chordAt(e.px, e.py);
+  /** flop open()：开单格（0 号递归 chord 泛洪）；返回是否开格 */
+  const open = (c: number, r: number): boolean => {
+    if (!inside(c, r)) return false;
+    const i = r * cols + c;
+    if (opened[i] || flagged[i]) return false;
+    opened[i] = 1;
+    openedCount++;
+    if (mines[i]) {
+      dead = true; // Blast
+      return true;
     }
-  }
-  if (!dead) {
-    if (pendL >= 0) leftAt(evs[pendL].px, evs[pendL].py); // 尾部补记（fatal click 无松开）
-    else if (armed) chordAt(armedX, armedY);
+    if (nums[i] === 0) openAround(c, r); // 0 号泛洪（flop: 0===number && openAround）
+    return true;
+  };
+
+  /** flop openAround()：单格 chord——仅光标下那格 opened 且满足旗数时开 3x3 邻域 */
+  const openAround = (c: number, r: number): boolean => {
+    if (!inside(c, r)) return false;
+    const i = r * cols + c;
+    if (!opened[i] || !(nums[i] === 0 || nums[i] === flagsAround(c, r))) return false;
+    let any = false;
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) any = open(c + dc, r + dr) || any;
+    return any;
+  };
+
+  /** flop toggleLabel()：旗→问号(marks)/摘旗、问号→清除、未标→插旗；返回是否可操作 */
+  const toggleLabel = (c: number, r: number): boolean => {
+    if (!inside(c, r)) return false;
+    const i = r * cols + c;
+    if (opened[i]) return false;
+    if (marks && flagged[i]) {
+      flagged[i] = 0;
+      questioned[i] = 1;
+    } else if (flagged[i]) {
+      flagged[i] = 0;
+      questioned[i] = 0;
+    } else if (questioned[i]) {
+      flagged[i] = 0;
+      questioned[i] = 0;
+    } else {
+      flagged[i] = 1;
+      questioned[i] = 0;
+    }
+    return true;
+  };
+
+  /* flop 状态机：lp/lv/rp/rv/mp/sv + marks（mt 切换） */
+  let lp = false,
+    lv = false,
+    rp = false,
+    rv = false,
+    sv = false;
+  for (const e of evs) {
+    if (dead) break;
+    if (openedCount === safeCount) break; // Win：后续事件无效（flop performEvent 守卫）
+    const col = (e.px / 16) | 0;
+    const row = (e.py / 16) | 0;
+    switch (e.ev) {
+      case "lc":
+        lp = lv = true;
+        break;
+      case "lr":
+        if (rp || sv) openAround(col, row);
+        else if (lv) open(col, row);
+        lp = lv = rv = sv = false; // 不动 rp（flop 原样）
+        break;
+      case "rc":
+        if (!lp) {
+          if (toggleLabel(col, row)) rv = false;
+          else rv = true;
+        } // lp 时仅 pressAround 视觉，不插旗
+        rp = true;
+        break;
+      case "rr":
+        if (lp) openAround(col, row);
+        rp = lv = rv = sv = false; // 不动 lp（flop 原样）
+        break;
+      case "mc":
+        // mp = true（仅视觉）
+        break;
+      case "mr":
+        openAround(col, row);
+        // mp = false
+        break;
+      case "sc":
+        lp = lv = sv = true; // chord 在其后的 lr 生效
+        break;
+      case "mt":
+        marks = !marks;
+        break;
+    }
   }
   if (dead) return "loss";
-  return opened === safeCount ? "win" : "incomplete";
+  return openedCount === safeCount ? "win" : "incomplete";
 }
