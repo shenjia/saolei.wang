@@ -1609,7 +1609,7 @@ del[data-tip]:hover::after {
 }
 /* 四级纪录：照搬用户主页 .scores（表头 / 单位「秒」「3BV/s」 / 数字 / 「?」占位 /
    hover 变绿）。2026-10-15 张老师要求：卡片不再显示纪录日期（组件侧不传 date），
-   腾出行宽后字号整体加大一档：单位 9.5→11px、数字 12.5→14px（行高 16→18px）。
+   腾出行宽后字号加大两轮：单位 9.5→11→12px、数字 12.5→14→15px（行高 18→20px）。
    级别灰阶沿用详情页：初 #939387 → 中 #b1b1a4 → 高 #cfcfc2 → 总计金 #e6db74。
    ⚠️ 这一段必须带 #page 前缀：legacy 的 #page .score_time / #page .score_time em 是 1 id 特异性
    （放在 public/styles/legacy-2013.css），裸 .user_card 选择器压不住——2026-10-13 实测被撑到
@@ -1620,12 +1620,12 @@ del[data-tip]:hover::after {
 }
 #page .user_card .scores th {
   width: 3em;
-  height: 28px;
+  height: 30px;
   padding: 0;
   color: #75715e;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: normal;
-  line-height: 18px;
+  line-height: 20px;
   text-align: left;
   white-space: nowrap;
 }
@@ -1638,15 +1638,15 @@ del[data-tip]:hover::after {
   display: inline-block;
   margin-right: 4px;
   color: #636359;
-  font-size: 11px;
-  line-height: 18px;
+  font-size: 12px;
+  line-height: 20px;
 }
 #page .user_card .score_time em,
 #page .user_card .score_3bvs em {
   font-style: normal;
   font-weight: bold;
-  font-size: 14px;
-  line-height: 18px;
+  font-size: 15px;
+  line-height: 20px;
   color: #b1b1a4;
 }
 #page .user_card .scores .beg em {
@@ -1674,8 +1674,8 @@ del[data-tip]:hover::after {
 /* 不被承认的 3BV/s（del）：颜色与字号跟同级数字一致，不继承 legacy 的 20px */
 #page .user_card .score_3bvs del {
   color: #636359;
-  font-size: 14px;
-  line-height: 18px;
+  font-size: 15px;
+  line-height: 20px;
 }
 #page .user_card .score_time a,
 #page .user_card .score_3bvs a {
