@@ -7295,7 +7295,7 @@ html.op-fakefs #header {
   transform: translateY(6px);
   z-index: 40; /* 压过棋盘矢量层与回放光标（.replay_cursor 用 30） */
   display: flex;
-  align-items: flex-start;
+  align-items: center; /* 图标与文字垂直居中对齐（2026-10-15 张老师定） */
   gap: 8px;
   max-width: min(92%, 460px);
   box-sizing: border-box;
@@ -7317,12 +7317,11 @@ html.op-fakefs #header {
   opacity: 1;
   transform: translateY(0);
 }
-/* 灯泡：不随文字换行压缩（flex 子项默认可缩），与首行文字顶端对齐 */
+/* 灯泡：不随文字换行压缩（flex 子项默认可缩），随 flex 容器垂直居中 */
 #online_play .optips .bulb {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
-  margin-top: 1px;
 }
 #online_play .optips .txt {
   min-width: 0;
