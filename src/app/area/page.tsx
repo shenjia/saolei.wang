@@ -156,8 +156,8 @@ export default async function AreaPage({
           同日二轮：地图升到主卡片右侧（AreaRanking 渲染 .area_top 双栏）——
           two_columns 是 legacy 现成的双栏页宽口径（80% / max 960），否则 62% 竖版装不下两栏。
           表格与地图共用 hover 双向联动，须留在同一 client 组件里；页头与规则为服务端内容，以 props 传入。 */}
-      {/* 规则板块由 AreaRanking 插入右列（.area_side）地图下方（2026-10-15 三轮：
-          左表 20 条/页 + 翻页，右列＝地图+规则，左右高度齐平） */}
+      {/* 规则板块由 AreaRanking 排布（2026-10-15 四轮：三块平铺 Grid 模板——
+          ≥1188 双栏右列地图下方；769~1187 地图置顶降级、规则在排行板块下方） */}
       <AreaRanking
         rows={rows}
         titles={titles}

@@ -92,11 +92,11 @@ export function AreaMap({
     <div className="area_map">
       <div className="am_head">
         <div className="am_title">地图</div>
+        {/* 图例（2026-10-15 张老师要求）：去掉「综合排行指数」名称，低/高改弱/强 */}
         <div className="am_legend">
-          <span>低</span>
+          <span>弱</span>
           <span className="lg_bar" style={{ background: LEGEND }}></span>
-          <span>高</span>
-          <span className="lg_name">综合排行指数</span>
+          <span>强</span>
         </div>
       </div>
       <div
@@ -124,21 +124,6 @@ export function AreaMap({
                   onClick={d ? go(p.n) : undefined}
                   aria-label={`${areaDisplay(p.n)}${d ? `：第 ${d.rank} 位 · ${d.players} 人` : "：暂无成绩数据"}`}
                 />
-              );
-            })}
-          </g>
-          <g>
-            {GEO_PROVINCES.filter((p) => p.l).map((p) => {
-              const d = byName.get(p.n);
-              return (
-                <text
-                  key={p.n}
-                  className={`plbl${d && Math.sqrt(d.power / maxPower) > 0.55 ? " dark" : " light"}${hover === p.n ? " on" : ""}`}
-                  x={p.x}
-                  y={p.y}
-                >
-                  {p.n}
-                </text>
               );
             })}
           </g>

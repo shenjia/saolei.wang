@@ -106,7 +106,11 @@ export function AreaRanking({
     <>
       {/* 双栏顶部区（2026-10-15 张老师要求）：表格卡居左收窄、地图居右顶部对齐——
           连续切换排序时地图位置稳定不跳；排行人数 / 活跃人数两列撤下（悬停地图
-          气泡中仍可查看），规则板块移入右列地图下方（2026-10-15 三轮，左右高度齐平） */}
+          气泡中仍可查看），规则板块移入右列地图下方（2026-10-15 三轮，左右高度齐平）。
+          2026-10-15 四轮（张老师要求）：三块平铺为 .area_top 直接子节点（表格 / 地图 /
+          规则），双栏与「地图置顶降级」全由 CSS Grid 模板切换——769~1187 视口右列
+          装不下地图+规则（规则换行长度会超出表格高度）时降级为地图置顶通栏、
+          规则移到排行板块下方 */}
       <div className="area_top">
         <div className="box ranking_box">
           {head}
@@ -177,12 +181,10 @@ export function AreaRanking({
             </div>
           </div>
         </div>
-        {/* 右列（2026-10-15 张老师要求）：地图 + 排行规则纵排——左表 20 条/页 + 翻页后，
-            右列（地图+规则）总高与左表基本齐平 */}
-        <div className="area_side">
-          <AreaMap data={mapData} hover={hover} onHover={setHover} />
-          {rules}
-        </div>
+        {/* 地图（2026-10-15 四轮）：三块平铺，落位由 .area_top 的 Grid 模板决定
+            （双栏＝右列上格；降级＝置顶通栏），hover 联动不变 */}
+        <AreaMap data={mapData} hover={hover} onHover={setHover} />
+        {rules}
       </div>
     </>
   );

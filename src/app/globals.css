@@ -3508,59 +3508,71 @@ body #page.two_columns {
   min-width: 620px;
   max-width: 960px;
 }
-@media (min-width: 769px) {
+/* ---------- 地区总榜布局（2026-10-15 张老师多轮要求）：三块（表格卡 / 地图 / ----------
+   排行规则）为 .area_top 直接子节点，Grid 模板按视口切换形态：
+   - ≥1188 双栏：左表（1 列跨 2 行）+ 右列上＝地图、下＝规则——左轨下限 562
+     保住「标题+筛选 tabs 同行」（tabs 396 + 标题 104 + 间距 20 + 盒边距 42），
+     右轨 minmax(300,440)：空间紧张时先收地图（SVG viewBox 等比缩放）。
+   - 769~1187 地图置顶降级：该区间右列 <330 装不下地图（1000:870 等比 → 地图本体
+     ≥277 高 + 图例/hint/内边距 ≈ 365），规则文字换行后长度必超出排行表高度
+     （张老师：「当尺寸会导致排行规则长度超出排行的高度时，就将地图移动到最上方，
+     排行规则移动到排行板块下方」）——地图置顶通栏、表格整宽居中、规则（第三块，
+     无 grid-area 自动落第三行）在排行板块下方整宽。
+   - ≤768 移动端：块级自然堆叠（表 → 地图 → 规则），不在此两个区间内。 */
+@media (min-width: 1188px) {
   .area_top {
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(562px, 1fr) minmax(300px, 440px);
+    grid-template-areas:
+      "table map"
+      "table rules";
+    align-items: start;
     gap: 16px;
     margin: 16px 8px; /* 承接两盒原有的页级外距 */
   }
   .area_top .ranking_box {
-    flex: 1 1 auto;
+    grid-area: table;
     margin: 0;
-    /* 2026-10-15 张老师要求：排行页主体板块自适应宽度做一个下限，保证每一列数据
-       都能显示出来。此处原为 min-width:0（卡片可压到表格最小宽以下，769~1100 视口
-       「综合排行指数」列被切掉）。改显式下限 394＝地区表自然全宽 352（逐列 nowrap
-       实测）+ 盒内边距 40 + 边框 2，取整 400 留余量；空间不足时由地图
-       （flex 0 1 440，SVG viewBox 等比缩放）先收缩。注：不能省成 min-width:auto——
-       卡片在 ≤1188 挂 overflow-x:auto，滚动容器的 automatic minimum size 恒为 0。 */
-    min-width: 400px;
+    min-width: 0; /* 列宽下限由轨道 minmax(562px,…) 承担 */
   }
-  /* 2026-10-15 张老师要求：「调整左右边栏的比例，让筛选器尽量不要遮行」——
-     实测病灶：总榜 RankingNav 无搜索框，但 tabs 六项 396px；左卡 522px（内容 480）
-     放不下「标题 104 + gap 20 + tabs 396 = 520」，RankingNav 自带 min-width:fit-content
-     被整体挤到标题下方第二行、紧贴表头（gap 仅 10px）＝筛选器遮行。
-     大视口（≥1188，#page 满 960、内容约 928）左卡下限加到 562（520 内容 + 盒内边距
-     40 + 边框 2），tabs 回标题同行；让渡的 40px 由右列 flex-shrink 承担（440 基准
-     → 约 350，地图 SVG viewBox 等比缩小，规则板块文字略窄多一两行）。
-     ≤1187 视口不加（#page 内容 <926，右列会被压到 280 以下），维持 400 下限。 */
-  @media (min-width: 1188px) {
-    .area_top .ranking_box {
-      min-width: 562px;
-    }
+  .area_top .area_map {
+    grid-area: map;
+    margin: 0;
+  }
+  .area_top .rank_rules {
+    grid-area: rules;
+    margin: 0;
   }
   /* 表格铺满收窄后的卡片（默认 shrink-to-fit 会右留白） */
   .area_top .area_table {
     width: 100%;
   }
-  /* 右列（2026-10-15 张老师要求）：地图 + 排行规则纵排（.area_side），替代规则
-     整宽横铺——左表改 20 条/页 + 标准翻页后，右列总高与左表基本齐平 */
-  .area_side {
-    flex: 0 1 440px;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
+}
+@media (min-width: 769px) and (max-width: 1187px) {
+  .area_top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "map"
+      "table";
+    align-items: start;
     gap: 16px;
-  }
-  /* 板块进右列后页级外距由容器接管（与 .area_top .ranking_box / .area_map 同口径） */
-  .area_top .rank_rules {
-    margin: 0;
+    margin: 16px 8px;
   }
   .area_top .area_map {
-    /* 地图已移入 .area_side 纵列（主轴为纵向）——宽度由 .area_side 基准 440 决定，
-       高度按 SVG viewBox 等比自然伸展，不再吃 flex 基准 */
-    flex: 0 0 auto;
+    grid-area: map;
     margin: 0;
+  }
+  .area_top .ranking_box {
+    grid-area: table;
+    margin: 0;
+    min-width: 0; /* 整宽布局，无并排挤压（原 400 下限是双栏防切列用的） */
+  }
+  .area_top .rank_rules {
+    margin: 0; /* 无 grid-area：自动落入第三行整宽，与表格的间距由容器 gap 承担 */
+  }
+  .area_top .area_table {
+    width: 100%;
   }
 }
 .area_map {
@@ -3647,11 +3659,9 @@ body #page.two_columns {
 }
 
 .plbl {
-  font-size: 15px;
-  font-weight: 600;
-  text-anchor: middle;
-  pointer-events: none;
-  transition: fill 0.12s;
+  /* 2026-10-15 张老师要求：省份名永不显示——显示出来字太小看不见（悬停气泡已
+     覆盖识别需求）。样式保留仅作历史参考，标签元素已在 AreaMap.tsx 中移除。 */
+  display: none;
 }
 .plbl.dark {
   fill: rgba(43, 42, 35, 0.85);
