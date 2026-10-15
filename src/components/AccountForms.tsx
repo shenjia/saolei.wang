@@ -252,7 +252,7 @@ export function EmailBindForm({ currentEmail, verified }: { currentEmail: string
         setMessage({ ok: false, text: data.error ?? "发送失败" });
         return;
       }
-      setMessage({ ok: true, text: `验证邮件已发送到 ${email}，请在 30 分钟内点击邮件中的链接完成验证` });
+      setMessage({ ok: true, text: `验证邮件已发送到 ${email}，请在 24 小时内点击邮件中的链接完成验证` });
       toast("验证邮件已发送", "success");
       setEmail("");
     } finally {

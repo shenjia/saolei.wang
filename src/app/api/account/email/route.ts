@@ -1,6 +1,6 @@
 // 绑定邮箱（2026-10-15）：老用户登录名非邮箱，忘记密码无法自助找回。
-// 流程：提交邮箱 → 发验证链接（token 落 user_auth.email_token，30 分钟有效）→
-// 点击链接回站验证 → email_verified 置时间戳。重绑=再次提交覆盖草稿。
+// 流程：提交邮箱 → 发验证链接（token 落 user_auth.email_token，24 小时有效）→
+// 点击链接回站验证 → email_verified 置时间戳 + 登录名同步换成邮箱。重绑=再次提交覆盖草稿。
 
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
@@ -10,7 +10,7 @@ import { siteUrl } from "@/lib/oauth";
 import { sendMail, smtpConfigured } from "@/lib/mailer";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const TOKEN_TTL = 30 * 60; // 验证链接 30 分钟有效
+const TOKEN_TTL = 24 * 60 * 60; // 验证链接 24 小时有效（2026-10-15 张老师拍板：30 分钟太紧）
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -37,7 +37,11 @@ export async function POST(req: Request) {
     prisma.userAuth.findFirst({ where: { email, emailVerified: { not: 0 } } }),
   ]);
   if (asUsername && asUsername.id !== BigInt(session.uid)) {
-    return NextResponse.json({ error: "该邮箱已被用作登录名" }, { status: 400 });
+    // 2026-10-15 张老师拍板：点明占坑来源（新站注册 = 邮箱即登录名）
+    return NextResponse.json(
+      { error: "该邮箱已被注册为另一个账号的登录名，无法绑定；请换用其他邮箱" },
+      { status: 400 },
+    );
   }
   if (asVerifiedEmail && asVerifiedEmail.id !== BigInt(session.uid)) {
     return NextResponse.json({ error: "该邮箱已被其他账号绑定" }, { status: 400 });
@@ -58,7 +62,7 @@ export async function POST(req: Request) {
   await sendMail(
     email,
     "扫雷网邮箱绑定验证",
-    `您正在为扫雷网账号绑定邮箱：${email}\n\n请点击以下链接完成验证（30 分钟内有效）：\n\n${url}\n\n如果这不是您的操作，请忽略本邮件。`,
+    `您正在为扫雷网账号绑定邮箱：${email}\n\n请点击以下链接完成验证（24 小时内有效）：\n\n${url}\n\n如果这不是您的操作，请忽略本邮件。`,
   );
 
   return NextResponse.json({ ok: true });
