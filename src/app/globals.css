@@ -3668,9 +3668,10 @@ body #page.two_columns {
    - ≥1188 双栏：左表一列一行 + 右列 .area_side（DOM＝规则、地图，flex column-reverse
      呈现为地图上、规则下，间隔恒 16px）——右列是独立包装，**规则上边缘与地图板块的
      间隔不受左表行数影响**（六轮张老师要求：一页 18 条时保持正常间隔；此前三块平铺
-     Grid 跨两行，行高均摊把间隔撑到 55px）。左轨下限 562 保住「标题+筛选 tabs 同行」
-     （tabs 396 + 标题 104 + 间距 20 + 盒边距 42），右轨 minmax(300,440)：空间紧张时
-     先收地图（SVG viewBox 等比缩放）。
+     Grid 跨两行，行高均摊把间隔撑到 55px）。左轨下限 578 保住「标题+筛选 tabs 同行」
+     （tabs 396 + 标题 104 + 间距 20 + 盒边距 42 + 余量 16，原 562 漏算盒边距被
+     padding 吃掉、可用恰等于 need 零余量必折行——2026-10-15 修），右轨 minmax(300,440)：
+     空间紧张时先收地图（SVG viewBox 等比缩放）。
    - 769~1187 单列降级：右列 <330 装不下地图、规则换行长度必超排行表高度
      （张老师：「当空间不够变成单列时，排行板块在页面第一位」）——.area_side
      display:contents 展开，按 DOM 顺序单列整宽：排行表 → 排行规则 → 地图。
@@ -3696,7 +3697,11 @@ body #page.two_columns {
 @media (min-width: 1188px) {
   .area_top {
     display: grid;
-    grid-template-columns: minmax(562px, 1fr) minmax(300px, 440px);
+    /* 左轨下限 578（2026-10-15 修折行）：原 562 按「tabs 396+标题 104+间距 20+盒边距 42」
+       算的 42 实为卡片 padding 40+border 2，可用内容宽 520＝need 恰好零余量——
+       flex-wrap 下必折行（nav 整体掉到标题下方，1188~∞ 全区间复现）。
+       现 578 留 16px 余量：tabs+标题同行稳健，右轨由内容自然宽 366 收至 ~350（仍≥300） */
+    grid-template-columns: minmax(578px, 1fr) minmax(300px, 440px);
     align-items: start;
     gap: 16px;
     margin: 16px 8px; /* 承接两盒原有的页级外距 */
