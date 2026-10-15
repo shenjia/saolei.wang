@@ -231,49 +231,123 @@ export function PasswordForm() {
 }
 
 // 绑定邮箱（2026-10-15）：老用户登录名非邮箱，忘记密码时唯一自助找回途径。
-// 提交后发送验证链接；未验证草稿可随时覆盖重发。
-// 2026-10-15 张老师改版：输入框参考注册表单美化（focus 行 hint / error 行红字 +
-// 暖色 hover/focus 边框），绑定邮箱介绍文字移到板块最底部。
+// 2026-10-15 张老师改版（提交后不再显示表单）：三态——
+//   已验证 → 绿对勾确认态；已发信未验证（刷新回来或刚提交）→ 大绿对勾 + 「一封邮件
+//   已发送到 xxx，请登录邮箱进行验证」+ 重发按钮（附「更换邮箱」退回表单）；无草稿 → 表单。
+// 重发 = 再次 POST 覆盖草稿并生成新 token（24 小时有效）。
+
+// 发送成功态的大对勾图标（绿圈 + 对勾）
+function EmailBindCheck() {
+  return (
+    <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden="true" style={{ display: "block" }}>
+      <circle cx="36" cy="36" r="35" fill="#4caf50" opacity="0.14" />
+      <circle cx="36" cy="36" r="27" fill="none" stroke="#4caf50" strokeWidth="3" />
+      <path
+        d="M24 37.5 L32.5 46 L48 28"
+        fill="none"
+        stroke="#4caf50"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function EmailBindForm({ currentEmail, verified }: { currentEmail: string; verified: boolean }) {
+  // 已发过验证邮件（页面刷新回来）或刚提交成功 → 直接进「已发送」态
+  const [sentEmail, setSentEmail] = useState<string | null>(currentEmail !== "" && !verified ? currentEmail : null);
   const [email, setEmail] = useState("");
   const [focus, setFocus] = useState(false);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setMessage(null);
-    setSubmitting(true);
+  async function send(mail: string) {
+    setError("");
+    setBusy(true);
     try {
       const res = await fetch("/api/account/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: mail }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ ok: false, text: data.error ?? "发送失败" });
+        setError(data.error ?? "发送失败");
         return;
       }
-      setMessage({ ok: true, text: `验证邮件已发送到 ${email}，请在 24 小时内点击邮件中的链接完成验证` });
+      setSentEmail(mail);
       toast("验证邮件已发送", "success");
-      setEmail("");
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   }
 
-  const current =
-    !currentEmail ? "未绑定（忘记密码时无法自助找回）" : verified ? `${currentEmail}（已验证）` : `${currentEmail}（待验证：邮件已发送，点击邮件内链接生效）`;
+  if (verified) {
+    return (
+      <div style={{ padding: "36px 20px", textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <EmailBindCheck />
+        </div>
+        <p style={{ margin: "18px 0 0", lineHeight: "24px" }}>
+          邮箱 <b>{currentEmail}</b> 已验证，忘记密码时可通过邮箱自助找回
+        </p>
+      </div>
+    );
+  }
+
+  if (sentEmail) {
+    return (
+      <div style={{ padding: "36px 20px", textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <EmailBindCheck />
+        </div>
+        <p style={{ margin: "18px 0 0", lineHeight: "24px" }}>
+          一封邮件已发送到 <b>{sentEmail}</b>
+          <br />
+          请登录邮箱进行验证（24 小时内有效）
+        </p>
+        <button type="button" className="button active" style={{ marginTop: 20 }} disabled={busy} onClick={() => send(sentEmail)}>
+          {busy ? "发送中…" : "重发验证邮件"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSentEmail(null);
+            setError("");
+          }}
+          style={{
+            display: "block",
+            margin: "14px auto 0",
+            border: "none",
+            background: "none",
+            color: "#75715e",
+            fontSize: 13,
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          填错了？更换邮箱
+        </button>
+        {error && (
+          <p className="error" style={{ marginTop: 12 }}>
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <form id="email-bind-form" onSubmit={submit}>
+    <form
+      id="email-bind-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send(email);
+      }}
+    >
       <table className="form" cellPadding={0} cellSpacing={0}>
         <tbody>
-          <tr>
-            <th>当前绑定</th>
-            <td>{current}</td>
-          </tr>
           <tr className={focus ? "focus" : ""}>
             <th>邮箱</th>
             <td>
@@ -296,12 +370,12 @@ export function EmailBindForm({ currentEmail, verified }: { currentEmail: string
           <tr>
             <th></th>
             <td>
-              <button type="submit" className="button active" disabled={submitting || !email}>
-                {currentEmail && !verified ? "重发验证邮件" : "发送验证邮件"}
+              <button type="submit" className="button active" disabled={busy || !email}>
+                {busy ? "发送中…" : "发送验证邮件"}
               </button>
-              {message && (
-                <div className={message.ok ? "hint" : "error"} style={{ marginTop: 8 }}>
-                  {message.text}
+              {error && (
+                <div className="error" style={{ marginTop: 8 }}>
+                  {error}
                 </div>
               )}
             </td>
