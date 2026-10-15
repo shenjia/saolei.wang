@@ -7,10 +7,14 @@
 // rmv / 解析失败 / 尺寸不符 → 兜底懒挂 flop 播放器（playFlop 全屏播放）。
 //
 // 事件应用口径（2026-10-15 二轮修正：以终态盘 ground truth 网格搜索锁定，
-// 22 盘胜局全开 + 338799 判死验证；此前照抄 videoradar 配对导致 344834 大量格子不开）：
+// 22 盘胜局全开 + 338799 判死验证；此前照抄 videoradar 配对导致 344834 大量格子不开；
+// 三轮修正 2026-10-15 晚：chord 作用域改 3x3 邻域（Arbiter 滑键 chord），338721 单格口径
+// 中途大量 mc 点缝无效、359/381 误判未完成，3x3 口径下与 flop 全程逐刻吻合、终局 151/151 全开）：
 //   左击 → 挂起，lr 松开时以**松开坐标**开格/chord（首击按下坐标失真，一律取松开）；
 //   右键 → rc 按下即刻以**按下坐标**插旗/拔旗（按下即落子，非松开）；
 //   双键 chord（任一键在另一键按住时按下）→ 上膛，**后松开时**以该次松开坐标生效；
+//   中键/双击 chord（mc/sc）→ 按下即刻生效；chord 作用域一律＝鼠标点 3x3 邻域内
+//   所有满足旗数的已开数字格（点在未开格/缝隙上也能 chord 到邻近数字格）；
 //   孤 lr ＝ 首击（Arbiter 有时首击只记松开，按下在流外）；
 //   尾部未松开的 lc 按按下坐标补记（fatal click 无松开，踩雷局靠此判死即时揭示）。
 
@@ -197,8 +201,22 @@ function runReplay(opts: {
   let hitIdx = -1;
   const inb = (px: number, py: number) => px >= 0 && py >= 0 && px < cols * 16 && py < rows * 16;
   const idxOf = (px: number, py: number) => ((py / 16) | 0) * cols + ((px / 16) | 0);
+  /* chord 作用域＝3x3 邻域（Arbiter 滑键 chord 口径，2026-10-15 三轮修正 338721 实证）：
+     点在未开格/缝隙上也能 chord 到邻域内满足旗数的已开数字格（flop 62.24s 3BV=91 终局 151/151 对表吻合） */
   function chordAt(px: number, py: number) {
-    if (inb(px, py)) chordR(idxOf(px, py));
+    if (!inb(px, py)) return;
+    const i = idxOf(px, py);
+    const x = i % cols;
+    const y = (i / cols) | 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+        if (dead) return;
+        chordR(ny * cols + nx);
+      }
+    }
   }
   /* 败局雷区揭示（踩雷瞬间；位图类：bc=踩中红叉雷 / bm=雷 / bn=错旗） */
   function revealLoss() {
