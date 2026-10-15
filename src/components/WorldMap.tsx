@@ -3,8 +3,8 @@
 // 世界榜 · 交互式世界地图（2026-10-15 张老师需求，地区榜 AreaMap 同款交互）
 // 放在排行规则下方单列全宽展示（当日两定：右栏双栏版地图被压窄看不清，改终版），
 // 按「综合排行指数」给各国填色（开方归一：越高越黄、越低越灰）；悬停国家高亮 +
-// 气泡（名次 / 排行人数 / 综合排行指数 / 领军人物 + 世界排名 + 总成绩）；点击国家
-// 在上方 TOP100 表中滚动定位该国领军人物的行；表行悬停反向高亮地图国家（双向联动）。
+// 气泡（领军人物置顶，下接名次 / 排行人数 / 综合排行指数；点击定位已按张老师
+// 要求去除——滚动定位在 TOP100 表前不生效）。表行悬停反向高亮地图国家（双向联动）。
 // 国界几何是静态数据（src/lib/world-map-geo.ts，由 scripts/build-world-map.py 生成）：
 // 无第三方地图服务、无 Key、可离线；中国国界按我国标准口径（含台湾省与南海诸岛九段线），
 // chinese-taipei 旗帜选手并入中国统计（lib/worldtop.ts FLAG_ISO）。
@@ -30,14 +30,11 @@ export function WorldMap({
   data,
   hover,
   onHover,
-  onLocate,
 }: {
   data: WorldCountryDatum[];
   /** 当前高亮的国家 ISO（地图与表格双向联动共用） */
   hover: string | null;
   onHover: (iso: string | null) => void;
-  /** 点击国家：由父组件在 TOP100 表中定位该国领军人物（无 TOP100 选手时不动作） */
-  onLocate: (iso: string) => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -101,7 +98,6 @@ export function WorldMap({
                   d={c.d}
                   fill={d ? ramp(Math.sqrt(d.power / maxPower)) : undefined}
                   onMouseEnter={enter(d ? c.k : null)}
-                  onClick={d ? () => onLocate(c.k) : undefined}
                   aria-label={d ? `${d.name}：第 ${d.rank} 位 · ${d.players} 人` : "暂无数据"}
                 />
               );
@@ -109,7 +105,7 @@ export function WorldMap({
           </g>
           {/* 南海诸岛九段线（我国标准地图口径，常显） */}
           <path className="wnine" d={GEO_NINE} />
-          {/* 小国引线圆点（国土过小或 110m 未收录，保证可悬停可点击） */}
+          {/* 小国引线圆点（国土过小或 110m 未收录，保证可悬停） */}
           {GEO_MINI.map((m) => {
             const d = byIso.get(m.k);
             return (
@@ -117,7 +113,6 @@ export function WorldMap({
                 key={m.k}
                 className={`mini${hover === m.k ? " on" : ""}`}
                 onMouseEnter={enter(d ? m.k : null)}
-                onClick={d ? () => onLocate(m.k) : undefined}
               >
                 <circle
                   cx={m.x}
@@ -145,6 +140,10 @@ export function WorldMap({
                 </span>
               </div>
               <div className="tp_row">
+                <i>领军人物</i>
+                <b>{hot.bestName}</b>
+              </div>
+              <div className="tp_row">
                 <i>排行人数</i>
                 <b>
                   {hot.players} <em className="unit">人</em>
@@ -154,24 +153,12 @@ export function WorldMap({
                 <i>综合排行指数</i>
                 <b className="gold">{areaPower(hot.power)}</b>
               </div>
-              <div className="tp_row">
-                <i>领军人物</i>
-                <b>{hot.bestName}</b>
-              </div>
-              <div className="tp_row">
-                <i>世界排名</i>
-                <b>
-                  No.<em>{hot.bestRank}</em>
-                  <em className="unit">总计 {hot.bestSum}</em>
-                </b>
-              </div>
-              <div className="tp_foot">点击在左侧定位该国领军人物 →</div>
             </>
           )}
         </div>
       </div>
       <div className="am_hint">
-        <span className="am_hint_h">鼠标悬停查看国家详情 · </span>点击国家定位该国领军人物
+        <span className="am_hint_h">鼠标悬停查看国家详情</span>
       </div>
     </div>
   );

@@ -63,34 +63,13 @@ export function WorldTop100Table({
   rows,
   hoverIso,
   onHoverIso,
-  locateRef,
 }: {
   rows: WorldRow[];
   /** 地图双向联动：当前高亮国家 ISO（行悬停只高亮地图国家，不弹气泡） */
   hoverIso?: string | null;
   onHoverIso?: (iso: string | null) => void;
-  /** 地图点击国家 → 表内定位该国领军人物行（由父组件挂回调；ref 暴露定位方法） */
-  locateRef?: { current: ((iso: string) => void) | null };
 }) {
   const tableRef = useRef<HTMLTableElement>(null);
-
-  /** 地图点击国家：表内找该国（含并入中国口径的旗帜）第一名定位滚动 + 高亮 1.2s */
-  const locate = (iso: string) => {
-    const trs = tableRef.current?.querySelectorAll<HTMLTableRowElement>("tbody tr");
-    if (!trs) return;
-    let hit: HTMLTableRowElement | null = null;
-    for (const tr of trs) {
-      if (hit) break;
-      if (FLAG_ISO[tr.dataset.flag ?? ""] === iso) hit = tr;
-    }
-    if (hit) {
-      hit.classList.add("hl");
-      hit.scrollIntoView({ behavior: "smooth", block: "center" });
-      window.setTimeout(() => hit?.classList.remove("hl"), 1200);
-    }
-  };
-  if (locateRef) locateRef.current = locate;
-
   const maxPage = Math.max(1, Math.ceil(rows.length / PAGE));
   // 窗口语义与 RankingFeed 对齐（本地数据版，全程零请求）：
   // ··· 加载更多 = 窗口末尾按递增批量追加（15 → +30 → +60 → 封顶 100，张老师 2026-10-15

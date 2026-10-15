@@ -1,8 +1,8 @@
 "use client";
 
 // 世界榜主体（TOP100 表卡 + 规则 + 交互式世界地图，单列堆叠）
-// 2026-10-15 张老师需求：世界排行加世界地图——悬停国家显示参与排行人数 /
-// 领军人物，数据从世界排行全量抓取（一天一次）。
+// 2026-10-15 张老师需求：世界排行加世界地图——悬停国家显示领军人物（气泡置顶）/
+// 排行人数，数据从世界排行全量抓取（一天一次）。
 // 版式当日两定：先试地区榜同款双栏（地图右列），张老师反馈「地图太宽放右栏
 // 压缩后看不清」，终版改「地图放排行规则下面」——三块按 DOM 顺序平级堆叠
 // （表卡 → 规则 → 地图）。#world_top 必须是 #page 直接子元素（globals.css 的
@@ -11,8 +11,9 @@
 // 表格与地图共用 hover 态（双向联动），二者必须留在同一 client 组件里，
 // 故由本组件渲染三块；页头与规则是服务端内容，以 props 传入（RSC 序列化，
 // 正规用法）。地图数据抓取失败（stats=null）时整块隐藏，页面回落到纯 TOP100 形态。
+// 点击定位功能已按张老师要求去除（滚动定位在 TOP100 表前不生效）。
 
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { WorldTop100Table } from "./WorldTop100Table";
 import { WorldMap } from "./WorldMap";
 import { FlopPlayer } from "./FlopPlayer";
@@ -33,8 +34,6 @@ export function WorldRankingBody({
   rules?: ReactNode;
 }) {
   const [hover, setHover] = useState<string | null>(null);
-  // 地图点击国家 → TOP100 表内定位领军人物（表组件挂 locate 实现到 ref）
-  const locateRef = useRef<((iso: string) => void) | null>(null);
 
   return (
     <>
@@ -48,7 +47,6 @@ export function WorldRankingBody({
               rows={rows}
               hoverIso={stats ? hover : undefined}
               onHoverIso={stats ? setHover : undefined}
-              locateRef={locateRef}
             />
             {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染） */}
             <FlopPlayer />
@@ -58,9 +56,7 @@ export function WorldRankingBody({
         )}
       </div>
       {rules}
-      {stats && stats.length > 0 && (
-        <WorldMap data={stats} hover={hover} onHover={setHover} onLocate={(iso) => locateRef.current?.(iso)} />
-      )}
+      {stats && stats.length > 0 && <WorldMap data={stats} hover={hover} onHover={setHover} />}
     </>
   );
 }
