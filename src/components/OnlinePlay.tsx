@@ -1657,8 +1657,15 @@ export function OnlinePlay({
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches) fitZoomForLandscape();
       else if (gridChanged) {
-        if (lv !== prevLv) applyModeZoom();
-        else applyZoom(zoomCur, false);
+        if (lv !== prevLv) {
+          /* 切标准级别（beg/int/exp，2026-10-15 张老师定）：自动适配「可显示的
+             最大尺寸比例」——宽×高都装得下的最大倍率，不再原样套用上一级别
+             留下的 online_play_zoom 记忆（初级拉满切中级溢出屏幕底的根因）。
+             persist=false 不写盘：记忆键保留给手动拖滑杆，刷新/再次进页仍按它恢复
+             （加载时同样会被高度封顶钳住，不会溢出）。cus 维持记忆/1x 起步 */
+          if (lv === "cus") applyModeZoom();
+          else applyZoom(normalMaxZoom(), false);
+        } else applyZoom(zoomCur, false);
       }
       /* 主体板块宽度自适应（v7）：必须放在上面 zoom 之后——applyModeZoom/applyZoom
          已把 zoomWant 更新成目标模式的记忆值，页宽按它算才准；拖动中函数自冻结 */
@@ -1689,7 +1696,10 @@ export function OnlinePlay({
        进入自定义读 online_play_zoom_cus（无记忆用 1x——大盘默认原尺寸起步，
        超版式由 normalMaxZoom 自动缩），返回标准级别读 online_play_zoom
        （无记忆用 defaultZoom）。reset 内 applyZoom(false) 不写盘，
-       记忆只在用户手动拖滑杆/重置时更新 */
+       记忆只在用户手动拖滑杆/重置时更新。
+       ⚠️ 2026-10-15 起 reset 里标准级别切换不再走本函数（改为直接
+       applyZoom(normalMaxZoom()) 自动适配最大可显示，见 reset 注释）；
+       本函数只剩两处调用：首次加载（2828 附近）与切入 cus */
     function applyModeZoom() {
       try {
         const raw = lv === "cus"
@@ -2241,6 +2251,16 @@ export function OnlinePlay({
          自定义大盘（cus）额外放宽到 0.3——99 宽盘即使页宽已按视口放宽
          仍可能超容器，需要更小的自动缩下限才能完整可见 */
       const zMin = lv === "cus" ? 0.3 : 0.5;
+      /* 高度封顶（2026-10-15 张老师报：初级拉满切中级，盘冲出屏幕底部）：
+         标准级别与 cus 一律不许超出视口底——练习页已整页禁滚动（op-noscroll），
+         超出即不可达。⚠️ 必须量整个银框窗 gwrap（计数条+棋盘+状态栏）的高——
+         zoom 挂 gwrap，只量 gframe 会漏掉计数条/状态栏（首版量 gframe 实测
+         切中级仍溢出 150px 的根因）。hCap = zoomCur×可用高/渲染高，
+         rect 比值里当前倍率抵消，与 zoomCur 是否同步无关；
+         可用高 = 视口底 − gwrap 顶 − 底部余量 12px（gwrap 顶=容器顶，不随倍率变） */
+      const gwR = gwrap.getBoundingClientRect();
+      const availH = window.innerHeight - gwR.top - 12;
+      const hCap = gwR.height > 0 && availH > 0 ? (zoomCur * availH) / gwR.height : Infinity;
       let cap: number;
       if (lsQuery.matches) {
         /* 横屏沉浸（判定提到最前，2026-10-15 二定「严格占满 100%」）：
@@ -2249,26 +2269,21 @@ export function OnlinePlay({
            会允许盘面宽过真实屏宽 → 被 body overflow:hidden 裁掉。走这里也顺带
            兜底「首帧超宽盘撑爆」：高级盘默认 1.71x = 830px > 屏宽，一旦撑爆
            innerWidth/innerHeight 与 rect 全部失真（2026-10-14 张老师报：高级盘
-           横屏高度不对的根因），visualViewport 不受影响。
-           扣除量只剩 box 左右边框（LS_RESERVE_W=2） */
+           横屏高度不对的根因），visualViewport 不受影响。高度由 fitZoomForLandscape
+           独立拉满，本分支维持只封宽 */
         const vv = window.visualViewport;
         const vw = (vv ? vv.width : window.innerWidth) / pageZoom();
         cap = (vw - LS_RESERVE_W) / gwrap.offsetWidth;
       } else if (lv === "cus") {
         const baseW = gframe.offsetWidth || gfR.width / zoomCur; // 基准宽（不含游戏 zoom）
         const limitW = Math.min(window.innerWidth / pageZoom(), PAGE_MAX_W) - GA_OFFSET - 16;
-        cap = limitW / baseW;
-        /* 高度方向：gfR.height 是渲染高（含 zoomCur×pz），约束
-           base_h × zoom × pz ≤ 可用高（视口像素）→ hCap = zoomCur×可用高/gfR.height。
-           可用高 = 视口底 − game_area 顶 − 底部余量 12px（页脚仍可滚动，正常） */
-        const availH = window.innerHeight - gaR.top - 12;
-        if (gfR.height > 0 && availH > 0) cap = Math.min(cap, (zoomCur * availH) / gfR.height);
+        cap = Math.min(limitW / baseW, hCap);
       } else {
         /* 容器可用宽 = game_area 内容宽 − 16px 余量；基准宽用整个银框窗
            （gwrap，含竖排计数列——zoom 挂 gwrap 后计数列随盘同缩，一起封顶）。
            offsetWidth 不含 zoom（实测），与 zoomCur 是否同步无关 */
         const gaW = gaR.width / pageZoom() - 16;
-        cap = gaW / gwrap.offsetWidth;
+        cap = Math.min(gaW / gwrap.offsetWidth, hCap);
       }
       return Math.max(zMin, Math.min(2.5, cap));
     }
