@@ -1,6 +1,7 @@
 // 找回密码：申请 / 重置 两个表单
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 export function ForgotForm() {
@@ -42,6 +43,9 @@ export function ForgotForm() {
         <button className="button active" disabled={busy || !email.trim()} onClick={onSubmit}>
           发送重置邮件
         </button>
+        <Link href="/account/login" className="button">
+          返回
+        </Link>
       </p>
       {error && <p className="error">{error}</p>}
       {msg && <p>{msg}</p>}
