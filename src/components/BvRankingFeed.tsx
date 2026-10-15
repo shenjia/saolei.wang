@@ -25,7 +25,6 @@ import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
 import { TitleBadge } from "./Cells";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-import { RankingRules } from "./RankingRules";
 import { toast } from "./Toast";
 
 export type BvTitledRow = BvRankingRow & { title: string };
@@ -260,88 +259,69 @@ export function BvRankingFeed({
           )}
         </div>
       )}
-      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
-        <thead>
-          <tr>
-            <th>排名</th>
-            <th>姓名</th>
-            <th>军衔</th>
-            {SORT_COLS.map((c) => (
-              <th key={c}>
-                <Link
-                  href={c === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${c}`}
-                  className={c === by ? "current" : ""}
-                  title={`按${c === "total" ? "总计" : LEVEL_NAMES[c]}收集进度排列`}
-                >
-                  {c === "total" ? "总计" : LEVEL_NAMES[c]}
-                </Link>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((u) => (
-            <tr key={u.id} id={`id_${u.id}`} className={u.id === hlUid ? "hl" : undefined}>
-              <td className="rank">
-                第&nbsp;<em>{u.rank}</em>&nbsp;位
-              </td>
-              <td className="name">
-                <Link href={`/user/${u.id}`} title="点击查看个人信息">
-                  {u.chineseName}
-                </Link>
-                <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
-              </td>
-              <td className="miltitle">
-                <TitleBadge title={u.title} link />
-              </td>
-              <BvBar n={u.beg} den={den.beg} active={by === "beg"} />
-              <BvBar n={u.int} den={den.int} active={by === "int"} />
-              <BvBar n={u.exp} den={den.exp} active={by === "exp"} />
-              <BvBar n={u.total} den={totalDen} active={by === "total"} />
-            </tr>
-          ))}
-          {rows.length === 0 && (
+      {/* rank_scroll：同 RankingFeed——表格与翻页控件同宽，窄屏盒内横滑时一起滚 */}
+      <div className="rank_scroll">
+        <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
+          <thead>
             <tr>
-              <td colSpan={7} style={{ textAlign: "center" }}>
-                暂无数据
-              </td>
+              <th>排名</th>
+              <th>姓名</th>
+              <th>军衔</th>
+              {SORT_COLS.map((c) => (
+                <th key={c}>
+                  <Link
+                    href={c === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${c}`}
+                    className={c === by ? "current" : ""}
+                    title={`按${c === "total" ? "总计" : LEVEL_NAMES[c]}收集进度排列`}
+                  >
+                    {c === "total" ? "总计" : LEVEL_NAMES[c]}
+                  </Link>
+                </th>
+              ))}
             </tr>
-          )}
-        </tbody>
-      </table>
-      <div className="list_footer">
-        <PageSlider
-          page={curPage}
-          pages={maxPage}
-          loading={loading}
-          onGoto={gotoPage}
-          hasMore={!loadedAll}
-          onMore={loadMore}
-        />
+          </thead>
+          <tbody>
+            {rows.map((u) => (
+              <tr key={u.id} id={`id_${u.id}`} className={u.id === hlUid ? "hl" : undefined}>
+                <td className="rank">
+                  第&nbsp;<em>{u.rank}</em>&nbsp;位
+                </td>
+                <td className="name">
+                  <Link href={`/user/${u.id}`} title="点击查看个人信息">
+                    {u.chineseName}
+                  </Link>
+                  <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
+                </td>
+                <td className="miltitle">
+                  <TitleBadge title={u.title} link />
+                </td>
+                <BvBar n={u.beg} den={den.beg} active={by === "beg"} />
+                <BvBar n={u.int} den={den.int} active={by === "int"} />
+                <BvBar n={u.exp} den={den.exp} active={by === "exp"} />
+                <BvBar n={u.total} den={totalDen} active={by === "total"} />
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ textAlign: "center" }}>
+                  暂无数据
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <div className="list_footer">
+          <PageSlider
+            page={curPage}
+            pages={maxPage}
+            loading={loading}
+            onGoto={gotoPage}
+            hasMore={!loadedAll}
+            onMore={loadMore}
+          />
+        </div>
       </div>
-      <RankingRules
-        title="BV 排行规则"
-        items={[
-          <>
-            <b>统计口径</b>：统计每位玩家<b>已通过审核</b>的录像中出现过的不同 3BV
-            数量——同一个 3BV 值只要有一盘过审录像即算「已收集」，按初级 / 中级 / 高级分别统计。
-            统计区间按现行排行规则收敛：初级 3BV ≥ 2、中级 ≥ 30、高级 ≥
-            100，低于下限的录像不计入收集。
-          </>,
-          <>
-            <b>进度条</b>：进度条分母为站内各难度 3BV 的统计区间跨度（当前初级{" "}
-            {den.beg}、中级 {den.int}、高级 {den.exp}，总计 {totalDen}
-            ）；区间下限按排行规则固定（2 / 30 / 100），上限随新录像突破自动扩展。
-          </>,
-          <>
-            <b>排名规则</b>：按所选列的收集数降序排列；收集数相同时，注册较早（用户 ID
-            较小）的玩家排在前面。点击表头可在初级 / 中级 / 高级 / 总计之间切换排序。
-          </>,
-          <>
-            <b>更新频率</b>：统计数据每小时更新一次，新过审的录像最迟 1 小时后计入榜单。
-          </>,
-        ]}
-      />
+      {/* 排行规则板块已移至页面层独立 box（2026-10-15 张老师要求），不再由本组件渲染 */}
     </>
   );
 }

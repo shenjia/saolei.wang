@@ -132,7 +132,8 @@ export function GrowFeed({
   }
 
   return (
-    <>
+    // rank_scroll：同 RankingFeed——表格与翻页控件同宽，窄屏盒内横滑时一起滚
+    <div className="rank_scroll">
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
         <thead>
           <tr>
@@ -170,6 +171,6 @@ export function GrowFeed({
           onMore={loadMore}
         />
       </div>
-    </>
+    </div>
   );
 }

@@ -9,29 +9,31 @@
 import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser, getRankOfUsers } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
-import { parseRankingBy, byLevelOrder, parseBvRankingBy } from "@/lib/config";
+import { parseRankingBy, byLevelOrder, parseBvRankingBy, type VideoLevel } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
 import { getSession } from "@/lib/auth";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingFeed } from "@/components/RankingFeed";
 import { WorldTop100 } from "@/components/WorldTop100";
 import { BvRankingFeed } from "@/components/BvRankingFeed";
-import { RankingRules } from "@/components/RankingRules";
+import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
 
 export const dynamic = "force-dynamic";
 
 // 雷界/NF 页底规则板块（2026-10-14 张老师要求：所有排行独立标准板块，口径见
-// queries.getRankingTable / review.ts / ranksnap.ts 注释）
+// queries.getRankingTable / review.ts / ranksnap.ts 注释）。
+// 配色（2026-10-15 张老师定）：金只留小标题「XX：」，正文强调不再用 <b>（金），
+// 数字一律 <i>（亮灰）
 const ALL_RULES = [
   <>
     <b>统计口径</b>：取每位玩家各项目的历史最好成绩（时间取最短、3BV/s 取最高）；录像
-    <b>审核通过</b>即计入成绩，3BV &lt; 4 的运气盘不计 3BV/s。
+    <i>审核通过</i>即计入成绩，3BV &lt; <i>4</i> 的运气盘不计 3BV/s。
   </>,
   <>
     <b>总计成绩</b>：初级、中级、高级都有成绩才计算总计，否则不上总计榜。
   </>,
   <>
-    <b>排序规则</b>：点击表头在 8 个维度间切换（初级 / 中级 / 高级 / 总计 × 时间 /
+    <b>排序规则</b>：点击表头在 <i>8</i> 个维度间切换（初级 / 中级 / 高级 / 总计 × 时间 /
     3BV/s）；时间按升序、3BV/s 按降序；成绩相同时按用户 ID 排序（时间榜注册较早者在前）。
   </>,
   <>
@@ -39,29 +41,53 @@ const ALL_RULES = [
     「新上榜」。名次快照于每天首次访问时生成。
   </>,
   <>
-    <b>上榜条件</b>：对应项目成绩大于 0 即在榜；榜单实时更新，录像过审即上榜。
+    <b>上榜条件</b>：对应项目成绩大于 <i>0</i> 即在榜；榜单实时更新，录像过审即上榜。
   </>,
 ];
 
 const NF_RULES = [
   <>
-    <b>统计口径</b>：NF（无标）模式录像的历史最好成绩；一盘 NF 录像<b>审核通过</b>
+    <b>统计口径</b>：NF（无标）模式录像的历史最好成绩；一盘 NF 录像<i>审核通过</i>
     时同时计入雷界排行与 NF 排行两套成绩，普通（flag）录像不计入 NF 排行。
   </>,
   <>
     <b>总计成绩</b>：初级、中级、高级都有 NF 成绩才计算总计，否则不上总计榜。
   </>,
   <>
-    <b>排序规则</b>：与雷界排行相同（8 个排序维度；时间升序、3BV/s 降序；成绩相同时按用户 ID
-    排序）。
+    <b>排序规则</b>：与雷界排行相同（<i>8</i> 个排序维度；时间升序、3BV/s 降序；成绩相同时按用户
+    ID 排序）。
   </>,
   <>
     <b>军衔列</b>：按雷界（flag）高级时间评定；NF 成绩更新不产生破纪录动态。
   </>,
   <>
-    <b>上榜条件</b>：对应项目 NF 成绩大于 0 即在榜；榜单实时更新，录像过审即上榜。
+    <b>上榜条件</b>：对应项目 NF 成绩大于 <i>0</i> 即在榜；榜单实时更新，录像过审即上榜。
   </>,
 ];
+
+// BV 榜规则条目（分母随统计区间动态变化，故为函数；口径见 queries.fetchBvCollection）
+function bvRules(den: Record<VideoLevel, number>, totalDen: number) {
+  return [
+    <>
+      <b>统计口径</b>：统计每位玩家<i>已通过审核</i>的录像中出现过的不同 3BV
+      数量——同一个 3BV 值只要有一盘过审录像即算「已收集」，按初级 / 中级 / 高级分别统计。
+      统计区间按现行排行规则收敛：初级 3BV ≥ <i>2</i>、中级 ≥ <i>30</i>、高级 ≥
+      <i>100</i>，低于下限的录像不计入收集。
+    </>,
+    <>
+      <b>进度条</b>：进度条分母为站内各难度 3BV 的统计区间跨度（当前初级<i>{den.beg}</i>、
+      中级 <i>{den.int}</i>、高级 <i>{den.exp}</i>，总计 <i>{totalDen}</i>）；区间下限按排行规则固定（<i>2</i> / <i>30</i> /
+      <i>100</i>），上限随新录像突破自动扩展。
+    </>,
+    <>
+      <b>排名规则</b>：按所选列的收集数降序排列；收集数相同时，注册较早（用户 ID
+      较小）的玩家排在前面。点击表头可在初级 / 中级 / 高级 / 总计之间切换排序。
+    </>,
+    <>
+      <b>更新频率</b>：统计数据每小时更新一次，新过审的录像最迟 <i>1</i> 小时后计入榜单。
+    </>,
+  ];
+}
 
 // 页面 title 统一「xx排行」命名（2026-09-24 张老师要求：不再用「xx榜」）
 export async function generateMetadata({
@@ -202,6 +228,14 @@ export default async function RankingPage({
             initialHl={hl}
           />
         </div>
+        {/* BV 规则板块：独立 box（2026-10-15 张老师要求；从 Feed 移回页面层——
+            Feed 是客户端组件，规则无需水合参与，服务端直出）。
+            footer：登录未加入 BV 排行时板块内底部「如何加入排行？」（2026-10-15 移入规则板块） */}
+        <RankingRules
+          title="BV 排行规则"
+          items={bvRules(den, totalDen)}
+          footer={session?.uid && me?.bvRank === undefined ? <JoinRankingHelp /> : undefined}
+        />
       </div>
     );
   }
@@ -280,13 +314,18 @@ export default async function RankingPage({
           params={viewParams}
           total={total}
           pageSize={pageSize}
-          myUid={session?.uid}
-          inRanking={inRanking}
           initialHl={hl}
           reserveDelta={!nf}
         />
-        <RankingRules title={nf ? "NF 排行规则" : "雷界排行规则"} items={nf ? NF_RULES : ALL_RULES} />
       </div>
+      {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求：所有排行的
+          规则各自成板块，不再嵌在数据卡片内）。
+          footer：登录未入榜时板块内底部「如何加入排行？」（2026-10-15 从翻页控件右侧移入） */}
+      <RankingRules
+        title={nf ? "NF 排行规则" : "雷界排行规则"}
+        items={nf ? NF_RULES : ALL_RULES}
+        footer={myUid && !inRanking ? <JoinRankingHelp /> : undefined}
+      />
     </div>
   );
 }

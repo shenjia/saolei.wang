@@ -37,7 +37,7 @@ export default async function TitleMembersPage({ params }: { params: Promise<{ t
   }
 
   return (
-    <div id="page" className="main">
+    <div id="page" className="main rank_fit">
       <div className="box title_members_box">
         <h1 className="badge_header">
           <Link href="/titles" title="返回军衔体系">

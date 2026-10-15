@@ -63,8 +63,9 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
   const tableRef = useRef<HTMLTableElement>(null);
   const maxPage = Math.max(1, Math.ceil(rows.length / PAGE));
   // 窗口语义与 RankingFeed 对齐（本地数据版，全程零请求）：
-  // ··· 加载更多 = 窗口末尾按递增批量追加（15 → +30 → +60 → 封顶 100）；
-  // 滑条换页 = 窗口内滚动定位（不换表），窗口外严格一页整表替换（批量序列重置）
+  // ··· 加载更多 = 窗口末尾按递增批量追加（15 → +30 → +60 → 封顶 100，张老师 2026-10-15
+  //     要求滑条左侧保留 ··· 按钮）；滑条换页 = 窗口内滚动定位（不换表），窗口外严格
+  //     一页整表替换（批量序列重置，视口零跳动）
   const [winStart, setWinStart] = useState(1);
   const [winEnd, setWinEnd] = useState(1);
   const [curPage, setCurPage] = useState(1);
@@ -107,68 +108,69 @@ export function WorldTop100Table({ rows }: { rows: WorldRow[] }) {
   }
 
   return (
-    <>
-      <table ref={tableRef} cellPadding={0} cellSpacing={0}>
-        <thead>
-          <tr>
-            <th>Rank</th>
-            <th className="name">Country / Name</th>
-            <th>Beg</th>
-            <th>Int</th>
-            <th>Exp</th>
-            <th>Sum</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.slice(startRow, endRow).map((r) => (
-            <tr key={r.rank} className={r.flag === "china" ? "ours" : ""}>
-              <td className="rank">
-                No.&nbsp;<em>{r.rank}</em>
-              </td>
-              <td className="name">
-                <img
-                  className="flag"
-                  src={`/images/flags/${r.flag}.gif`}
-                  alt={r.flag}
-                  title={r.flag}
-                  width={20}
-                  height={13}
-                />{" "}
-                {r.name}
-              </td>
-              <td className="t">
-                <Score v={r.beg} date={r.begDate} vid={r.begVid} pid={r.pid} cls="s_beg" />
-              </td>
-              <td className="t">
-                <Score v={r.int} date={r.intDate} vid={r.intVid} pid={r.pid} cls="s_int" />
-              </td>
-              <td className="t">
-                <Score v={r.exp} date={r.expDate} vid={r.expVid} pid={r.pid} cls="s_exp" />
-              </td>
-              <td className="sum">{Number(r.sum).toFixed(2)}</td>
+    // rank_scroll：表格与页脚（翻页滑条/查看完整排行）同宽，窄屏盒内横滑时一起滚
+    <div className="rank_scroll">
+        <table ref={tableRef} cellPadding={0} cellSpacing={0}>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th className="name">Country / Name</th>
+              <th>Beg</th>
+              <th>Int</th>
+              <th>Exp</th>
+              <th>Sum</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="list_footer world_pager">
-        <PageSlider
-          page={curPage}
-          pages={maxPage}
-          loading={false}
-          onGoto={gotoPage}
-          hasMore={winEnd < maxPage}
-          onMore={loadMore}
-        />
-        {/* 2026-10-15 张老师要求：最右侧「查看完整排行」外链（minesweepergame.com，新窗口） */}
-        <a
-          className="button small pager_full_btn"
-          href={WORLD_RANKING_PAGE}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          查看完整排行
-        </a>
-      </div>
-    </>
+          </thead>
+          <tbody>
+            {rows.slice(startRow, endRow).map((r) => (
+              <tr key={r.rank} className={r.flag === "china" ? "ours" : ""}>
+                <td className="rank">
+                  No.&nbsp;<em>{r.rank}</em>
+                </td>
+                <td className="name">
+                  <img
+                    className="flag"
+                    src={`/images/flags/${r.flag}.gif`}
+                    alt={r.flag}
+                    title={r.flag}
+                    width={20}
+                    height={13}
+                  />{" "}
+                  {r.name}
+                </td>
+                <td className="t">
+                  <Score v={r.beg} date={r.begDate} vid={r.begVid} pid={r.pid} cls="s_beg" />
+                </td>
+                <td className="t">
+                  <Score v={r.int} date={r.intDate} vid={r.intVid} pid={r.pid} cls="s_int" />
+                </td>
+                <td className="t">
+                  <Score v={r.exp} date={r.expDate} vid={r.expVid} pid={r.pid} cls="s_exp" />
+                </td>
+                <td className="sum">{Number(r.sum).toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="list_footer world_pager">
+          <PageSlider
+            page={curPage}
+            pages={maxPage}
+            loading={false}
+            onGoto={gotoPage}
+            hasMore={winEnd < maxPage}
+            onMore={loadMore}
+          />
+          {/* 2026-10-15 张老师要求：最右侧「查看完整排行」外链（minesweepergame.com，新窗口） */}
+          <a
+            className="button small pager_full_btn"
+            href={WORLD_RANKING_PAGE}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            查看完整排行
+          </a>
+        </div>
+    </div>
   );
 }

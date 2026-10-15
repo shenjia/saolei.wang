@@ -5,7 +5,8 @@
 //     （窗口/批量序列重置）；窗口内 → 滚动定位零请求；缓存命中（LRU≤30 页）→ 零请求替换。
 //     松手立即加载（无防抖），在途请求 reqSeq 序号作废（只认最后一次）。
 //   · 加载更多：窗口末尾按递增批量追加（+20→+40→+80→+100 封顶，整页倍数）。
-// 未入榜的登录用户右侧另见「如何加入排行」。
+//   （2026-10-15 张老师要求：页脚右侧「如何加入排行？」按钮撤下，移入各排行规则板块底部——
+//    见 RankingRules.footer，由页面层判登录/入榜条件）
 // 定位策略分三档（点击后跳到目标行）：
 //   ① 已加载页内 → scrollIntoView 到 #id_{uid} 行
 //   ② 未加载但在 30 页内 → 从当前页并发拉缺失页，插入后滚动定位
@@ -16,9 +17,8 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RankingRow } from "@/lib/queries";
 import type { RankingBy } from "@/lib/config";
@@ -35,14 +35,14 @@ export interface RankingFeedProps {
   params: Record<string, string | number | undefined>;
   total: number;
   pageSize: number;
-  myUid?: number;
-  /** 登录用户是否已加入当前排行：false→底部显示「如何加入排行？」 */
-  inRanking: boolean;
   /** 初始高亮行（whereami 302 携带 hl=<uid>，SSR 即高亮，无 JS 也可见） */
   initialHl?: number;
   /** 升降列占位（2026-10-14 张老师需求）：雷界榜切其它排序列时保留空列，版式不跳动；
       仅 /ranking 雷界榜传 true（NF/BV/进步/地区/世界无升降数据，不占位） */
   reserveDelta?: boolean;
+  /** 页脚右侧扩展按钮（2026-10-15 地区内页「返回地区排行」）：有值时页脚转 flex 行，
+      滑条吃余量、按钮贴右缘（同世界榜 world_pager 口径，CSS 见 globals.css pager_extra） */
+  footerExtra?: ReactNode;
 }
 
 interface MoreJson {
@@ -53,7 +53,7 @@ interface MoreJson {
 const NEARBY_PAGES = 30; // 未加载时最多并发拉取的页数（每页 20 行 ×30 = 600 行上限）
 
 export function RankingFeed(props: RankingFeedProps) {
-  const { by, base, params, total, pageSize, myUid, inRanking, reserveDelta } = props;
+  const { by, base, params, total, pageSize, reserveDelta } = props;
   const [rows, setRows] = useState(props.initial);
   const [deltas, setDeltas] = useState<Map<number, number | null> | undefined>(props.initialDeltas);
   const nextPage = useRef(Math.floor((props.initial.at(-1)?.rank ?? 0) / pageSize) + 1);
@@ -99,6 +99,8 @@ export function RankingFeed(props: RankingFeedProps) {
   async function fetchPage(p: number, size?: number): Promise<MoreJson> {
     const qs = new URLSearchParams({ by, page: String(p) });
     if (params.view) qs.set("view", String(params.view));
+    // 地区内页（params.name=地区名）：增量接口同样限定地区人口（2026-10-15）
+    if (params.name) qs.set("area", String(params.name));
     if (size && size > pageSize) qs.set("size", String(size));
     const res = await fetch(`/api/ranking/more?${qs}`);
     if (!res.ok) throw new Error("加载失败");
@@ -297,7 +299,9 @@ export function RankingFeed(props: RankingFeedProps) {
   }, [rows, locating, by, params.view]);
 
   return (
-    <>
+    // rank_scroll：表格与页脚同宽容器（2026-10-15 张老师要求：翻页控件与最后一行
+    // 数据左右对齐；窄屏盒内横滑时两者一起滚，右缘贴齐）。CSS 见 globals.css
+    <div className="rank_scroll">
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
         <RankingHead by={by} base={base} params={params} showDelta={showDelta} deltaCol={deltaCol} />
         <tbody>
@@ -315,7 +319,7 @@ export function RankingFeed(props: RankingFeedProps) {
           {rows.length === 0 && <RankingEmpty showDelta={showDelta} deltaCol={deltaCol} />}
         </tbody>
       </table>
-      <div className="list_footer">
+      <div className={"list_footer" + (props.footerExtra ? " pager_extra" : "")}>
         <PageSlider
           page={curPage}
           pages={maxPage}
@@ -324,17 +328,9 @@ export function RankingFeed(props: RankingFeedProps) {
           hasMore={!loadedAll}
           onMore={loadMore}
         />
-        {myUid && !inRanking && (
-          <Link
-            href="/page/help"
-            className="button small join_btn"
-            title="了解如何上传录像、加入排行榜"
-          >
-            如何加入排行？
-          </Link>
-        )}
+        {props.footerExtra}
       </div>
-    </>
+    </div>
   );
 }
 

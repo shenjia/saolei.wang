@@ -12,10 +12,11 @@ import { WorldTop100Table } from "@/components/WorldTop100Table";
 import { RankingRules } from "@/components/RankingRules";
 import { FlopPlayer } from "@/components/FlopPlayer";
 
-// 世界榜页底规则板块（2026-10-14 张老师要求；口径见 lib/worldtop.ts）
+// 世界榜页底规则板块（2026-10-14 张老师要求；口径见 lib/worldtop.ts）。
+// 配色（2026-10-15 张老师定）：金只留小标题，正文数字 <i> 亮灰
 const WORLD_RULES = [
   <>
-    <b>数据来源</b>：minesweepergame.com 的世界时间排行前 100 名，与本站成绩无关。
+    <b>数据来源</b>：minesweepergame.com 的世界时间排行前 <i>100</i> 名，与本站成绩无关。
   </>,
   <>
     <b>排序规则</b>：沿用原站名次（世界总计时间升序），本站不做重排；中国玩家行高亮显示。
@@ -24,28 +25,31 @@ const WORLD_RULES = [
     <b>成绩列</b>：初级 / 中级 / 高级世界纪录及纪录日期；带录像的纪录可点击，用站内播放器观看。
   </>,
   <>
-    <b>更新频率</b>：数据缓存 1 天，每天更新一次。
+    <b>更新频率</b>：数据缓存 <i>1</i> 天，每天更新一次。
   </>,
 ];
 
 export async function WorldTop100() {
   const data = await getWorldTop100();
   return (
-    <div id="world_top" className="box ranking_box">
-      <div className="page_head">
-        <h1 className="page_title">世界排行</h1>
-        <RankingNav current="world" />
+    <>
+      <div id="world_top" className="box ranking_box">
+        <div className="page_head">
+          <h1 className="page_title">世界排行</h1>
+          <RankingNav current="world" />
+        </div>
+        {data ? (
+          <>
+            <WorldTop100Table rows={data.rows} />
+            {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染） */}
+            <FlopPlayer />
+          </>
+        ) : (
+          <p className="world_fail">暂时无法获取世界排行，请稍后再试。</p>
+        )}
       </div>
-      {data ? (
-        <>
-          <WorldTop100Table rows={data.rows} />
-          {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染） */}
-          <FlopPlayer />
-        </>
-      ) : (
-        <p className="world_fail">暂时无法获取世界排行，请稍后再试。</p>
-      )}
+      {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求） */}
       <RankingRules title="世界排行规则" items={WORLD_RULES} />
-    </div>
+    </>
   );
 }

@@ -2,7 +2,7 @@
 
 // 地区榜 · 交互式中国地图（2026-10-13 张老师需求）
 // 位于排行表下方，按「综合排行指数」给各省填色（开方归一：越高越黄、越低越灰）；
-// 悬停省份高亮 + 气泡（名次 / 排行人数 / 活跃人数 / 综合排行指数 / 领军人物），点击跳转该地区排行。
+// 悬停省份高亮 + 气泡（头部右侧综合排行名次 / 活跃人数 / 排行人数 / 综合排行指数 / 领军人物），点击跳转该地区排行。
 // 省界几何是静态数据（src/lib/area-map-geo.ts，由 scripts/build-area-map.py 生成）：
 // 无第三方地图服务、无 Key、可离线；含台湾省与南海诸岛九段线（标准地图口径）。
 
@@ -91,13 +91,11 @@ export function AreaMap({
   return (
     <div className="area_map">
       <div className="am_head">
-        <div className="am_title">
-          地区分布<span>颜色越黄 · 综合排行指数越高</span>
-        </div>
+        <div className="am_title">地图</div>
         <div className="am_legend">
-          <span>灰</span>
+          <span>低</span>
           <span className="lg_bar" style={{ background: LEGEND }}></span>
-          <span>黄</span>
+          <span>高</span>
           <span className="lg_name">综合排行指数</span>
         </div>
       </div>
@@ -186,18 +184,20 @@ export function AreaMap({
             <>
               <div className="tp_head">
                 <b>{areaDisplay(hot.area)}</b>
-                <span>第 {hot.rank} 位</span>
+                <span>
+                  综合排行第&nbsp;<em>{hot.rank}</em>&nbsp;位
+                </span>
+              </div>
+              <div className="tp_row">
+                <i>活跃人数</i>
+                <b className="green">
+                  {hot.active} <em className="unit">人</em>
+                </b>
               </div>
               <div className="tp_row">
                 <i>排行人数</i>
                 <b>
                   {hot.players} <em className="unit">人</em>
-                </b>
-              </div>
-              <div className="tp_row">
-                <i>活跃人数</i>
-                <b>
-                  {hot.active} <em className="unit">人</em>
                 </b>
               </div>
               <div className="tp_row">

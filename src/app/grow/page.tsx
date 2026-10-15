@@ -3,18 +3,21 @@
 // 榜内排序按日升降幅度降序；底部「加载更多」替代翻页。
 
 import { getGrowRanking } from "@/lib/ranksnap";
+import { getRankingPageOfUser } from "@/lib/queries";
+import { getSession } from "@/lib/auth";
 import { title as assessTitle } from "@/lib/assess";
 import { RankingNav } from "@/components/RankingNav";
 import { GrowFeed } from "@/components/GrowFeed";
-import { RankingRules } from "@/components/RankingRules";
+import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "进步排行" };
 
-// 进步榜页底规则板块（2026-10-14 张老师要求；口径见 ranksnap.getGrowRanking）
+// 进步榜页底规则板块（2026-10-14 张老师要求；口径见 ranksnap.getGrowRanking）。
+// 配色（2026-10-15 张老师定）：金只留小标题，正文数字 <i> 亮灰
 const GROW_RULES = [
   <>
-    <b>统计口径</b>：比较今日与昨日的<b>总计时间榜</b>名次（日对日），不设周 / 月榜。
+    <b>统计口径</b>：比较今日与昨日的总计时间榜名次（日对日），不设周 / 月榜。
   </>,
   <>
     <b>排序规则</b>：按进步幅度（昨日名次 − 今日名次）降序；幅度相同时今日名次较高者在前。
@@ -42,6 +45,13 @@ export default async function GrowPage({
     rows.map(async (u) => ({ ...u, title: await assessTitle(u.scores.exp_time) }))
   );
 
+  // 登录未入榜 → 规则板块底部「如何加入排行？」（2026-10-15 从翻页控件右侧移入）。
+  // 入榜判定与雷界总计时间榜同口径（进步榜排名列 = 今日总计时间榜名次）
+  const session = await getSession();
+  const joined = session?.uid
+    ? (await getRankingPageOfUser(session.uid, "sum", "time", false)) > 0
+    : true;
+
   return (
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
@@ -50,8 +60,13 @@ export default async function GrowPage({
           <RankingNav current="grow" />
         </div>
         <GrowFeed key={page} initial={titled} total={total} pageSize={pageSize} />
-        <RankingRules title="进步排行规则" items={GROW_RULES} />
       </div>
+      {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求） */}
+      <RankingRules
+        title="进步排行规则"
+        items={GROW_RULES}
+        footer={session?.uid && !joined ? <JoinRankingHelp /> : undefined}
+      />
     </div>
   );
 }

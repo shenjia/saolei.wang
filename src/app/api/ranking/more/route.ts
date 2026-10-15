@@ -1,5 +1,7 @@
 // 排行榜「加载更多」增量接口（2026-09-24 张老师要求，替代分页）：
-// GET /api/ranking/more?by=<排序列>&view=nf&page=N[&size=M] → { rows, deltas }
+// GET /api/ranking/more?by=<排序列>&view=nf&page=N[&size=M][&area=地区名] → { rows, deltas }
+// area（2026-10-15 地区内页换加载更多）：限定地区人口；带 area 时跳过日升降计算
+// （地区内页不显示升降列，与 /area SSR 口径一致）
 // 军衔与日升降在服务端预算好随 JSON 返回（对齐 /api/news/more 的模式），
 // 客户端直接渲染、零额外请求。
 // size（2026-10-14 递增批量）：本批行数，skip 恒按 20/页锚点；不传=一页 20。
@@ -17,11 +19,12 @@ export async function GET(req: Request) {
   const page = Math.max(1, parseInt(p.get("page") ?? "1", 10) || 1);
   const sizeRaw = parseInt(p.get("size") ?? "", 10);
   const size = Math.min(Math.max(sizeRaw || 20, 20), 100);
+  const area = p.get("area")?.trim() || undefined;
 
-  const { rows, total, pageSize } = await getRankingTable(by, nf, page, undefined, sizeRaw ? size : undefined);
+  const { rows, total, pageSize } = await getRankingTable(by, nf, page, area, sizeRaw ? size : undefined);
 
   let deltas: [number, number | null][] | undefined;
-  if (by === "sum_time" && !nf) {
+  if (by === "sum_time" && !nf && !area) {
     await ensureTodaySnapshot();
     const map = await getSumTimeDeltas(rows.map((r) => r.id));
     deltas = rows.map((r) => [r.id, map.get(r.id) ?? null] as [number, number | null]);

@@ -658,23 +658,70 @@ body #video_view .video_cell .playable {
 .list_footer {
   clear: both;
 }
-
-/* 世界榜页脚（2026-10-15 张老师要求）：标准翻页滑条 + 最右侧「查看完整排行」外链。
-   页脚占满盒宽、补 14px 与世界榜单元格 legacy 内边距对齐；滑条吃掉剩余宽、外链贴右缘 */
-.list_footer.world_pager {
+/* 排行表 + 页脚同宽容器（2026-10-15 张老师要求：翻页控件与最后一行数据左右对齐）。
+   表格与页脚同置本容器，容器宽随表格走：fit-content = min(max-content, max(min-content,
+   可用宽))——表格能放下时铺满（min-width:100%），放不下时取表格自身宽（不额外撑宽，
+   世界榜表格宽度保持原样），页脚随之同宽；窄屏 .box 盒内横滑时两者一起滚，右缘始终贴齐。
+   用于 RankingFeed / BvRankingFeed / GrowFeed / WorldTop100Table。
+   注：不能只给页脚加 min-width——滑条是 flex 行，其 min-content 会让轨道压到 0；
+   也不能用 max-content——世界榜表格会被撑到 782px（比原 763px 多溢 20px） */
+.rank_scroll {
+  width: fit-content;
+  min-width: 100%;
+}
+/* 滑条整行占满容器（容器宽即表格宽）：ps_rail flex:1 吃掉余量，右端页码贴表右缘 */
+.rank_scroll > .list_footer,
+.rank_scroll > .more_loader {
   width: 100%;
+  /* 站内无全局 border-box：width:100% + padding 必须显式 border-box，否则溢出 4px */
   box-sizing: border-box;
+  /* 与数据文字缘精确对齐：首末列被钳成内容宽（见下），单元格只剩 2px 内边距，
+     页脚补同样 2px，「···」按钮左缘＝「第 X 位」文字左缘、页码右缘＝末列文字右缘 */
+  padding-left: 2px;
+  padding-right: 2px;
+}
+/* 首末列钳成内容宽（2026-10-15 张老师要求：页脚与数据文字缘对齐）。
+   表格被 .rank_scroll 拉满时多余宽摊给所有列，居中文字随之缩进且随视口/榜单浮动
+   （实测桌面 10-14px、移动 5-7px），页脚无法静态对齐；钳住首末列（width:1px 经典
+   技巧，自动布局下取 min-content）后缩进恒等于 2px 内边距，多余宽由中间列吸收
+   （BV 榜进度条 pfill 按百分比填充，轨道伸缩不失真）。 */
+.ranking_table th:first-child,
+.ranking_table td.rank,
+.ranking_table th:last-child,
+.ranking_table tbody td:last-child,
+#world_top th:first-child,
+#world_top td.rank,
+#world_top th:last-child,
+#world_top td.sum {
+  width: 1px;
+}
+/* 世界榜表格无 .ranking_table 类，单元格内边距是 legacy 的 7px 14px——钳列后文字
+   缩进=14px，页脚补同值对齐（覆盖上面共享规则里的 2px）。
+   2026-10-15 世界榜页脚由 more_loader 换成 list_footer 翻页滑条，补上同款覆盖 */
+.rank_scroll > .more_loader,
+.rank_scroll > .list_footer.world_pager {
   padding-left: 14px;
   padding-right: 14px;
+}
+/* 世界榜页脚（2026-10-15 张老师要求）：标准翻页滑条 + 最右侧「查看完整排行」外链。
+   滑条吃掉剩余宽、外链贴右缘（与末列数据右缘对齐，见 .rank_scroll 对齐口径）。
+   pager_extra（2026-10-15 地区内页）：同款 flex 行 + 最右「返回地区排行」按钮；
+   地区内页表格仍是 .ranking_table（2px 内边距），页脚沿用共享规则的 2px 不覆盖；
+   滑条隐藏（单页）时 justify-content 让按钮仍贴右缘 */
+.list_footer.world_pager,
+.list_footer.pager_extra {
   display: flex;
   align-items: center;
   gap: 10px;
+  justify-content: flex-end;
 }
-.list_footer.world_pager .page_slider {
+.list_footer.world_pager .page_slider,
+.list_footer.pager_extra .page_slider {
   flex: 1 1 auto;
   min-width: 0; /* 允许滑条收窄（rail flex:1 吸收），不把外链挤出容器 */
 }
-.list_footer.world_pager .pager_full_btn {
+.list_footer.world_pager .pager_full_btn,
+.list_footer.pager_extra .pager_full_btn {
   flex: 0 0 auto;
   /* legacy .button 自带 margin-right:8px（行内多按钮间距用），页脚单按钮贴右缘须归零 */
   margin-right: 0;
@@ -3445,8 +3492,62 @@ body #page.ranking_old .ranking_box {
    省界为纯静态 SVG（无第三方地图服务 / 无 Key，含台湾省与南海诸岛九段线，标准地图口径），
    几何数据由 scripts/build-area-map.py 生成到 src/lib/area-map-geo.ts；
    省份按综合排行指数开方归一填色（越高越黄），悬停高亮 + 气泡，点击跳转该地区排行。 */
+/* 双栏顶部区（2026-10-15 张老师要求）：地区表卡片居左收窄、中国地图居右顶部对齐——
+   连续切换排序时地图位置稳定不跳动。仅桌面生效；≤768 恢复上下堆叠（各盒自带外距）。
+   容器放宽：62% 竖版装不下「表格卡+地图」两栏，地区总榜挂 legacy 的 two_columns 类
+   （80% / min 620 / max 960）；legacy 内 #page.main 排序在 .two_columns 之后把 80%
+   反杀，这里重申（globals 加载靠后 + body 前缀抬特异性） */
+body #page.two_columns {
+  width: 80%;
+  min-width: 620px;
+  max-width: 960px;
+}
+@media (min-width: 769px) {
+  .area_top {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin: 16px 8px; /* 承接两盒原有的页级外距 */
+  }
+  .area_top .ranking_box {
+    flex: 1 1 auto;
+    margin: 0;
+    /* 2026-10-15 张老师要求：排行页主体板块自适应宽度做一个下限，保证每一列数据
+       都能显示出来。此处原为 min-width:0（卡片可压到表格最小宽以下，769~1100 视口
+       「综合排行指数」列被切掉）。改显式下限 394＝地区表自然全宽 352（逐列 nowrap
+       实测）+ 盒内边距 40 + 边框 2，取整 400 留余量；空间不足时由地图
+       （flex 0 1 440，SVG viewBox 等比缩放）先收缩。注：不能省成 min-width:auto——
+       卡片在 ≤1188 挂 overflow-x:auto，滚动容器的 automatic minimum size 恒为 0。 */
+    min-width: 400px;
+  }
+  /* 表格铺满收窄后的卡片（默认 shrink-to-fit 会右留白） */
+  .area_top .area_table {
+    width: 100%;
+  }
+  /* 右列（2026-10-15 张老师要求）：地图 + 排行规则纵排（.area_side），替代规则
+     整宽横铺——左表改 20 条/页 + 标准翻页后，右列总高与左表基本齐平 */
+  .area_side {
+    flex: 0 1 440px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  /* 板块进右列后页级外距由容器接管（与 .area_top .ranking_box / .area_map 同口径） */
+  .area_top .rank_rules {
+    margin: 0;
+  }
+  .area_top .area_map {
+    /* 地图已移入 .area_side 纵列（主轴为纵向）——宽度由 .area_side 基准 440 决定，
+       高度按 SVG viewBox 等比自然伸展，不再吃 flex 基准 */
+    flex: 0 0 auto;
+    margin: 0;
+  }
+}
 .area_map {
-  margin: 16px 4px 12px;
+  /* 2026-10-15 张老师要求：地图独立板块——边距对齐 .box 节奏（16px 8px，移动端/
+     双栏区外沿用），自带深色面板外观不变；桌面在 .area_top 内由容器接管外距 */
+  margin: 16px 8px;
   padding: 14px 16px 8px;
   background: #2c2b24;
   border: 1px solid #3f3e35;
@@ -3458,16 +3559,14 @@ body #page.ranking_old .ranking_box {
   justify-content: space-between;
   margin-bottom: 2px;
 }
+/* 标题与排行规则板块 h2 同款（20px #b1b1a4 加粗 + 同款投影，2026-10-15 张老师定） */
 .am_title {
-  font-size: 14px;
-  font-weight: 600;
+  margin: 0;
   color: #b1b1a4;
-}
-.am_title span {
-  margin-left: 10px;
-  font-size: 12px;
-  font-weight: normal;
-  color: #75715e;
+  font-size: 20px;
+  line-height: 30px;
+  font-weight: bold;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
 }
 .am_legend {
   display: flex;
@@ -3629,8 +3728,14 @@ body #page.ranking_old .ranking_box {
   font-size: 14px;
   color: #f8f8f2;
 }
+/* 「第 x 位」与排行列表同款：文字灰加粗、数字金（em，2026-10-15 张老师要求） */
 .tp_head span {
   font-size: 11px;
+  color: #939387;
+  font-weight: bold;
+}
+.tp_head span em {
+  font-style: normal;
   color: #fdc61d;
 }
 .tp_row {
@@ -3652,6 +3757,10 @@ body #page.ranking_old .ranking_box {
 .tp_row b.gold {
   color: #fdc61d;
 }
+/* 活跃人数数字绿色（2026-10-15 张老师要求）——沿用站内活跃绿 #a6e22e */
+.tp_row b.green {
+  color: #a6e22e;
+}
 .tp_row em {
   margin-left: 4px;
   font-style: normal;
@@ -3672,7 +3781,6 @@ body #page.ranking_old .ranking_box {
 @media (max-width: 768px) {
   /* 小屏地图整体缩小：省份名称标签会糊成一团，直接隐去只留悬停气泡（触屏点击即跳转） */
   .area_map {
-    margin: 12px 0 10px;
     padding: 10px 10px 6px;
   }
   .am_legend .lg_name {
@@ -3758,8 +3866,9 @@ body #page.ranking_old.main .ranking_nav {
      .table/.ranking_table/.scores 任一类，.box:has(...) 横滑规则（≤1188 / ≤768 块）
      永远不命中它——卡片 769~1161 视口定宽 720（内容 664）、62% 流式段要视口 ≥~1300
      才装得下 763，其间表格整体从卡片右缘溢出（891 视口实测溢 100px，Sum 列甩出卡外）。
-     卡片自身 overflow-x:auto：放得下时不出现滚动条，放不下时盒内横滑（表格与页脚
-     一起滚、右缘贴齐，同排行宽表既有模式）；世界榜页无搜索下拉浮层，无裁切顾虑。 */
+     卡片自身 overflow-x:auto：放得下时不出现滚动条，放不下时盒内横滑——表格与
+     more_loader 经 .rank_scroll 同宽，一起滚、右缘贴齐（同排行宽表既有模式）；
+     世界榜页无搜索下拉，不存在浮层被滚动容器裁切的问题。 */
   overflow-x: auto;
   /* 容器查询锚点（与上面横滑兜底配套）：卡片作为查询容器，内容宽装不下带日期的
      表格自然宽 763px 时隐藏纪录日期（见下）——2026-10-15 张老师定「优先显示成绩，
@@ -3912,10 +4021,50 @@ body #page.two_columns li.main {
    ⚠️ 必须包进 ≥769 媒体查询：不限定会把 ≤768 移动版 #page 也顶到 720，
    窄于 720 的视口出现横向滚动（2026-10-13 实测踩过）。 */
 @media (min-width: 769px) {
-  body #page.ranking_old.main {
+  /* :not(.two_columns)——地区总榜 2026-10-15 起挂 two_columns（地图上右侧双栏，
+     宽度走 80%/max 960 口径，见 .area_top 处），不再吃 62% 竖版宽度 */
+  body #page.ranking_old.main:not(.two_columns) {
     width: max(62%, 720px);
   }
 }
+
+/* ---------- 排行页主体板块宽度下限 + 不足整体缩放（2026-10-15 张老师两定：
+   「所有排行页主体板块自适应宽度做一个下限，保证每一列数据都能显示出来」；
+   随后纠偏：「宽度降到一定程度之后出现了水平滚动条。如果空间不够，就整体缩放。
+   主板块的比例无论如何，不应该出现水平滚动条」） ----------
+   各榜表格逐列实测自然全宽（nowrap）：雷界 562 / BV·进步 601 / 世界 610 / 地区 352。
+   布局：#page 钳 700 虚拟宽下限（.box 外距 8×2 + padding 16 14 + 边框 2 →
+   卡片内容区 = 700 − 46 ＝ 654 ≥ 652：表格 min-width 640 + .rank_scroll 页脚
+   实测再吃 12px）。min-width 只定「按多宽排版」，不产生页面级横滑——
+   视口 <708（700 + #page 左右外距 8）时由下面的 zoom 阶梯整体缩放 #page，
+   渲染宽 700×zoom + 8 恒 ≤ 视口，任何宽度都不出水平滚动条；
+   缩放对象只含 #page（顶栏/移动导航/footer 在外，保持原尺寸）。
+   军衔成员榜 /titles/[title] 根元素无 ranking_old，挂 rank_fit 类加入同一体系
+   （徽章页头自然宽约 702 实际主导，表格本身 ≈540 放得下）。
+   zoom 阶梯口径：700×zoom ≤ 视口 − 8，步距 5%（阶梯内最多富余 33px，
+   空档不至于显眼；窄端 322px 以下继续降档覆盖小屏）。
+   特异性 body #page.ranking_old.main / body #page.rank_fit 高于 ≤605 整页
+   zoom 阶梯的 body #page，排行页在窄屏用自己的更大虚拟宽系数（vw/708 而非 vw/605）。 */
+@media (max-width: 768px) {
+  body #page.ranking_old.main,
+  body #page.rank_fit {
+    min-width: 700px;
+  }
+  /* ⚠️ 下限只挂 #page（虚拟排版宽）；.title_members_box 等盒不挂——
+     盒自带 margin 8×2，再挂 700 会变 710 顶破 #page（10-15 实测 5~25px 间歇溢出） */
+}
+@media (max-width: 707px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.95; } }
+@media (max-width: 672px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.90; } }
+@media (max-width: 637px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.85; } }
+@media (max-width: 602px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.80; } }
+@media (max-width: 567px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.75; } }
+@media (max-width: 532px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.70; } }
+@media (max-width: 497px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.65; } }
+@media (max-width: 462px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.60; } }
+@media (max-width: 427px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.55; } }
+@media (max-width: 392px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.50; } }
+@media (max-width: 357px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.45; } }
+@media (max-width: 322px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.40; } }
 
 /* ---------- 论坛页中段死区修复（2026-10-13 张老师要求，参照排行页方案 A 统一调整） ----------
    死区根因（769~1188 视口表格挤烂 + 页头折行错乱，张老师截图即此）：
@@ -4677,13 +4826,24 @@ body #page.ranking_old .page_head {
   }
 
   /* 页头内的导航条：占满 title 旁剩余宽度——tabs 紧跟 title、
-     搜索框 margin-left:auto 推到行尾右对齐 */
+     搜索框 margin-left:auto 推到行尾右对齐。
+     九轮（2026-10-15 张老师要求）：筛选器永不内部折行——空间不够时 nav 整体
+     （tabs+搜索框）折到 title 下一行，不许行内挤压把 tabs 拆成两层：
+     min-width:fit-content 让 nav 拒绝收缩，配合 page_head 的 flex-wrap 整体换行；
+     折行后 nav flex-grow:1 独占一行，搜索框仍贴行尾 */
+  body #page.ranking_old.main .page_head {
+    flex-wrap: wrap;
+    row-gap: 4px; /* 换行后 title 与第二行的间距（title↔tabs 列间距仍 20px） */
+  }
   body #page.ranking_old.main .page_head .ranking_nav {
     margin: 0;
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 auto; /* basis=内容宽：够放就与 title 同行占满余量，不够放整体下移 */
+    min-width: fit-content;
     align-items: flex-end;
     gap: 12px;
+  }
+  body #page.ranking_old.main .page_head .ranking_nav .ranking_tabs {
+    flex-wrap: nowrap; /* 筛选器一行排齐（base 的 wrap 只留给移动端 ≤768 堆叠态） */
   }
   body #page.ranking_old.main .page_head .ranking_nav .goto_form {
     margin-left: auto; /* 与 tabs 拉开：搜索框贴行尾 */
@@ -5980,7 +6140,19 @@ button.msg_cancel:hover {
   margin: 2px 0;
 }
 .rank_rules b {
+  /* 金色只给小标题（2026-10-15 张老师定）；正文里强调用 <i>（亮灰）不是 <b> */
   color: #e6db74;
+}
+/* 规则正文里的数字：亮灰（2026-10-15 张老师定：所有数字全用亮灰，金色只留小标题） */
+.rank_rules i {
+  color: #b1b1a4;
+  font-style: normal;
+}
+/* 「如何加入排行？」按钮（2026-10-15 张老师要求：从翻页控件右侧移入各排行规则板块
+   底部，登录未入榜时显示； RankingRules.footer 插槽，挂在 ol 之后） */
+.rank_rules .join_btn {
+  margin-top: 10px;
+  margin-right: 0; /* legacy .button 自带 margin-right:8px（行内间距用），独占一行归零 */
 }
 
 /* ===== 在线玩 /online（2026-10-14 一期：纯前端娱乐局）=====
@@ -7287,6 +7459,7 @@ html.op-fakefs #header {
     justify-content: center;
   }
 }
+
 /* ===== 练习页进入时的气泡 tips（2026-10-15 张老师定）=====
    挂载时随机一条（文案池见 OnlinePlay.tsx 的 TIPS），3 秒后渐隐卸载。
    ① 锚在组件根 .op_root（#game_area 之外、不吃游戏倍率），显示在主体板块
