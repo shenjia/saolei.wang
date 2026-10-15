@@ -3526,6 +3526,19 @@ body #page.two_columns {
        卡片在 ≤1188 挂 overflow-x:auto，滚动容器的 automatic minimum size 恒为 0。 */
     min-width: 400px;
   }
+  /* 2026-10-15 张老师要求：「调整左右边栏的比例，让筛选器尽量不要遮行」——
+     实测病灶：总榜 RankingNav 无搜索框，但 tabs 六项 396px；左卡 522px（内容 480）
+     放不下「标题 104 + gap 20 + tabs 396 = 520」，RankingNav 自带 min-width:fit-content
+     被整体挤到标题下方第二行、紧贴表头（gap 仅 10px）＝筛选器遮行。
+     大视口（≥1188，#page 满 960、内容约 928）左卡下限加到 562（520 内容 + 盒内边距
+     40 + 边框 2），tabs 回标题同行；让渡的 40px 由右列 flex-shrink 承担（440 基准
+     → 约 350，地图 SVG viewBox 等比缩小，规则板块文字略窄多一两行）。
+     ≤1187 视口不加（#page 内容 <926，右列会被压到 280 以下），维持 400 下限。 */
+  @media (min-width: 1188px) {
+    .area_top .ranking_box {
+      min-width: 562px;
+    }
+  }
   /* 表格铺满收窄后的卡片（默认 shrink-to-fit 会右留白） */
   .area_top .area_table {
     width: 100%;
