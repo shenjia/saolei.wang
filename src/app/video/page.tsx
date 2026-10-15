@@ -12,7 +12,6 @@
 import { getHotVideos, getVideoBoxStats, getVideoList } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import {
-  LEVEL_NAMES,
   VIDEO_LEVELS,
   parseVideoListOrder,
   type VideoLevel,
@@ -62,7 +61,8 @@ export default async function VideoListPage({
         <div className="box video_box">
           {/* 页头（排行页同款 page_head 编排）：h1 左、级别 tabs 紧随、搜索框贴行尾 */}
           <div className="page_head">
-            <h1 className="page_title">{author ? `${LEVEL_NAMES[level]}录像` : "录像"}</h1>
+            {/* 标题恒为「录像」（张老师 2026-10-15：搜索后标题不变，级别状态由 tabs 表达） */}
+            <h1 className="page_title">录像</h1>
             <div className="video_nav">
               <Tabs
                 base="/video"
