@@ -136,12 +136,16 @@ function serializeInline(nodes: ArrayLike<Node>): string {
 }
 
 /** 画布 DOM → UBB（白名单序列化；未知节点拍平为文本）
- *  跳过引用装饰块（data-quote-deco）：仅预览展示，引用头由服务端按 replyTo 拼装 */
+ *  跳过引用装饰块（data-quote-deco）：仅预览展示，引用头由服务端按 replyTo 拼装。
+ *  2026-10-16 修输入光标跳行首：改为遍历跳过（旧实现每序列化一次就 remove/prepend
+ *  装饰块，onInput 高频触发带 DOM 副作用）；本函数现在只读不写 */
 export function serializeEditor(ed: HTMLElement): string {
-  const deco = ed.querySelector("blockquote[data-quote-deco]");
-  deco?.remove();
+  const isDeco = (n: Node) =>
+    n.nodeType === 1 && (n as HTMLElement).tagName === "BLOCKQUOTE" &&
+    (n as HTMLElement).dataset.quoteDeco !== undefined;
   let out = "";
   for (const n of Array.from(ed.childNodes)) {
+    if (isDeco(n)) continue;
     const isBlock = n.nodeType === 1 && /^(DIV|P|BLOCKQUOTE)$/.test((n as HTMLElement).tagName);
     const s = serializeInline([n]);
     if (s === "") continue;
@@ -151,18 +155,16 @@ export function serializeEditor(ed: HTMLElement): string {
     if (isBlock && out !== "" && !out.endsWith("\n")) out += "\n";
     out += s;
   }
-  const result = out.replace(/\n+$/, "");
-  if (deco) ed.prepend(deco); // 摘除只限序列化瞬间，装饰块回位
-  return result;
+  return out.replace(/\n+$/, "");
 }
 
-/** 视觉字数：表情/雷图/图片各计 1，文字按字符（评论等限长场景用）；引用装饰块不计入 */
+/** 视觉字数：表情/雷图/图片各计 1，文字按字符（评论等限长场景用）；引用装饰块不计入（只读实现） */
 export function visualLength(ed: HTMLElement): number {
   const deco = ed.querySelector("blockquote[data-quote-deco]");
-  deco?.remove();
   let n = ed.querySelectorAll("img").length;
-  n += (ed.textContent ?? "").replace(/\s/g, "").length;
-  if (deco) ed.prepend(deco);
+  const text = (ed.textContent ?? "").replace(/\s/g, "");
+  const decoText = (deco?.textContent ?? "").replace(/\s/g, "");
+  n += text.length - decoText.length;
   return n;
 }
 
@@ -291,8 +293,18 @@ export function RichEditor({
   /** 引用装饰块（2026-10-15 张老师二定）：quote 变化时在画布顶部注入/移除不可编辑 blockquote。
    *  contenteditable=false 整块锁定；× 按钮回调 onRemove（由父组件清 quote 态）；
    *  序列化/字数统计均跳过（data-quote-deco）。注入后画布尾补空行并置光标——
-   *  直接把光标放 root 末尾会被 Chrome 锚进不可编辑块（击键被吞），必须落进真实文本节点 */
+   *  直接把光标放 root 末尾会被 Chrome 锚进不可编辑块（击键被吞），必须落进真实文本节点。
+   *  2026-10-16 修「每敲一字光标跳行首」：父组件重渲染时 quote 对象引用必变
+   *  （ReplyForm 每次内联构造），effect 若按对象依赖会每键重跑→摘除重挂装饰块+重置光标。
+   *  改按引用内容键（作者+摘要）触发，仅真变化（点回复/取消引用）时重挂 */
+  const quoteRef = useRef(quote);
+  quoteRef.current = quote;
+  const quoteKey = quote ? `${quote.authorName}\u0000${quote.excerpt}` : "";
+  const quoteKeyRef = useRef<string | null>(null);
   useEffect(() => {
+    if (quoteKeyRef.current === quoteKey) return; // 引用对象变了但内容没变：跳过，不动光标
+    quoteKeyRef.current = quoteKey;
+    const quote = quoteRef.current;
     const ed = edRef.current;
     if (!ed) return;
     ed.querySelector("blockquote[data-quote-deco]")?.remove();
@@ -340,7 +352,7 @@ export function RichEditor({
     r.collapse(true);
     sel?.removeAllRanges();
     sel?.addRange(r);
-  }, [quote]);
+  }, [quoteKey]);
 
   const onInput = () => {
     retagMineLines();
