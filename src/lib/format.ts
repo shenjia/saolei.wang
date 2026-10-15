@@ -10,7 +10,7 @@ export function videoScores(board3bv: number, realTime: number): { time: number;
   const sign = board3bv >= MIN_3BV_FOR_3BVS ? 1 : -1;
   return {
     time: realTime,
-    "3bvs": realTime > 0 ? sign * Math.floor((board3bv * 1000000) / realTime) : 0,
+    "3bvs": realTime > 0 ? sign * Math.round((board3bv * 1000000) / realTime) : 0,
   };
 }
 
