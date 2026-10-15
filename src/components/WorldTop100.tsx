@@ -2,7 +2,9 @@
 // 中国选手行高亮（2008 版 .Ours 语义：站内雷友）
 // 2026-09-24：默认只显示前 15 条，下面「加载更多」增量展开（张老师要求），表格交互在 WorldTop100Table
 // 2026-09-27（张老师要求）：删除底部 world_foot（如何加入/更新时间/完整排行链接）——
-//   「查看完整排行」改为按钮并入 more_loader（在 WorldTop100Table 内）
+//   「查看完整排行」改为按钮并入页脚（在 WorldTop100Table 内）
+// 2026-10-15（张老师要求）：页脚改用标准翻页滑条 PageSlider（分页展示 15 条/页），
+//   最右侧保留「查看完整排行」外链按钮
 
 import { getWorldTop100 } from "@/lib/worldtop";
 import { RankingNav } from "@/components/RankingNav";

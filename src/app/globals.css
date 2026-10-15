@@ -658,6 +658,27 @@ body #video_view .video_cell .playable {
 .list_footer {
   clear: both;
 }
+
+/* 世界榜页脚（2026-10-15 张老师要求）：标准翻页滑条 + 最右侧「查看完整排行」外链。
+   页脚占满盒宽、补 14px 与世界榜单元格 legacy 内边距对齐；滑条吃掉剩余宽、外链贴右缘 */
+.list_footer.world_pager {
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: 14px;
+  padding-right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.list_footer.world_pager .page_slider {
+  flex: 1 1 auto;
+  min-width: 0; /* 允许滑条收窄（rail flex:1 吸收），不把外链挤出容器 */
+}
+.list_footer.world_pager .pager_full_btn {
+  flex: 0 0 auto;
+  /* legacy .button 自带 margin-right:8px（行内多按钮间距用），页脚单按钮贴右缘须归零 */
+  margin-right: 0;
+}
 .page_slider {
   display: flex;
   align-items: center;
