@@ -943,7 +943,8 @@ body #video_view .video_cell .playable {
   border-radius: 4px;
 }
 /* 单页态（2026-10-15 张老师要求：只有一页时翻页控件也显示、全灰不可点）：
-   滑轨静态满格（JS pct 恒 100%），滑块/进度条/页码数字转灰，无焦点 */
+   滑块停左端（JS pct 恒 0%，与正常态第 1 页同位；同日二轮改为左侧，原满格右侧取消）、
+   进度条空，滑块/页码数字转灰，无焦点 */
 .page_slider.single {
   cursor: default;
 }

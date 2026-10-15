@@ -73,10 +73,11 @@ export function PageSlider({
   useEffect(() => () => disarmDwell(), []);
 
   // 单页也渲染整行（2026-10-15 张老师要求：翻页控件只有一页时显示但全部灰色不可点）——
-  // single 态：无 ··· 按钮、◀▶ 禁用、滑轨静态满格金色（pct 恒 100%）、页码「第 1 / 1 页」
+  // single 态：无 ··· 按钮、◀▶ 禁用、滑块停左端（pct 恒 0%，与正常态第 1 页同位）、
+  // 进度条空、页码「第 1 / 1 页」（同日二轮：张老师要求滑块在左侧而非右侧）
   const single = pages <= 1;
 
-  const pct = (p: number) => (single ? 100 : ((p - 1) / (pages - 1)) * 100);
+  const pct = (p: number) => (single ? 0 : ((p - 1) / (pages - 1)) * 100);
   const pageFromX = (clientX: number) => {
     const rect = railRef.current!.getBoundingClientRect();
     const x = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
