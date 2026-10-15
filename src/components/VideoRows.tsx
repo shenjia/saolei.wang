@@ -41,8 +41,9 @@ export function VideoHead({ sort }: { sort?: VideoSortSpec }) {
       order: order === "id" ? undefined : order,
       page: undefined,
     });
+    // id=默认排序（上传时间）不高亮表头（张老师 2026-10-15：保持亮灰即可）
     return (
-      <Link href={href} className={sort.order === order ? "current" : ""} title={title}>
+      <Link href={href} className={sort.order === order && order !== "id" ? "current" : ""} title={title}>
         {label}
       </Link>
     );
