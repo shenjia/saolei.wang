@@ -63,7 +63,8 @@ export function UserCard({ card }: { card: UserCardData }) {
 
       <hr className="ucd_hr" />
 
-      {/* 四级纪录：照搬用户主页 .scores 的渲染（ScoreTime / Score3bvs），本单位字号缩小一档 */}
+      {/* 四级纪录：照搬用户主页 .scores 的渲染（ScoreTime / Score3bvs）；
+          2026-10-15 张老师要求：卡片不再传 date（不显示纪录达成日期），用户主页不受影响 */}
       <table className="scores" cellPadding={0} cellSpacing={0}>
         <tbody>
           {LEVELS.map((level) => {
@@ -76,7 +77,6 @@ export function UserCard({ card }: { card: UserCardData }) {
                   <ScoreTime
                     score={timeRec?.score ?? null}
                     videoId={timeRec?.videoId ?? null}
-                    date={timeRec?.date ?? null}
                     className={level}
                   />
                 </td>
@@ -84,7 +84,6 @@ export function UserCard({ card }: { card: UserCardData }) {
                   <Score3bvs
                     score={bvsRec?.score ?? null}
                     videoId={bvsRec?.videoId ?? null}
-                    date={bvsRec?.date ?? null}
                     className={level}
                   />
                 </td>
