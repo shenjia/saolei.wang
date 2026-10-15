@@ -7214,11 +7214,15 @@ html.op-fakefs #header {
 }
 /* ===== 练习页进入时的气泡 tips（2026-10-15 张老师定）=====
    挂载时随机一条（文案池见 OnlinePlay.tsx 的 TIPS），3 秒后渐隐卸载。
-   ① 锚在组件根 .op_root（#game_area 之外、不吃游戏倍率），绝对定位到主板块底部
-      —— 脱流是关键：出现/消失都不改版面高度，页面锁滚下也不会顶动棋盘；
-      ⚠️ bottom 取负：盘面矮时「根容器内容底」紧贴棋盘底，正值会把气泡压在底排
-      格子上；负 12px 落进 .box 的底衬（桌面 30px / 移动 16px）里，默认形态完整不
-      遮格子，只有盘面拉满时才退化成压住底缘的 toast（横屏则直接不显示，见⑤）；
+   ① 锚在组件根 .op_root（#game_area 之外、不吃游戏倍率），显示在主体板块
+      **下方**、与板块隔一条缝隙（2026-10-15 张老师定：不压板块底衬）
+      —— 脱流是关键：出现/消失都不改版面高度，页面锁滚下也不会顶动棋盘。
+      ⚠️ 用 top 锚定（= op_root 高 + 板块底衬 + 1px 边框 + 缝隙 8px）：top 的参照是
+      组件根 padding box 底缘，它比板块外底缘高「底衬 + 边框」，补上即得「整条气泡
+      悬在板块下方、顶缘与板块隔 8px」——bottom 锚做不到（气泡高度不定，只能钉死
+      底缘，气泡主体仍压在板块上）；桌面底衬 30px → top 偏移 39px，移动端
+      （≤768px）底衬 16px → 25px（见下方媒体查询）。横屏沉浸模式 .box padding
+      已清零且气泡直接不显示（见⑤）；
    ② 观感沿用站内气泡（.gs_row .tip 同款：深底 #272822 + #656355 描边 + 投影），
       正文前一枚金色灯泡（#E6DB74，与录像雷达数值金同色）；
    ③ pointer-events:none —— 3 秒内绝不能挡住格子点击；
@@ -7237,7 +7241,9 @@ html.op-fakefs #header {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -12px;
+  /* 板块下方隔缝悬浮：op_root 高 + 板块底衬 30px + 1px 边框 + 8px 缝隙
+     （桌面；移动端见下方媒体查询） */
+  top: calc(100% + 30px + 1px + 8px);
   /* fit-content + max-width：窄屏单行放不下才折行，最宽 92% 容器 / 460px */
   width: fit-content;
   max-width: min(92%, 460px);
@@ -7278,6 +7284,12 @@ html.op-fakefs #header {
 }
 #online_play .optips .txt {
   min-width: 0;
+}
+/* 移动端 .box 底衬收紧为 16px（globals「盒子内边距收紧」块），缝隙保持 8px */
+@media (max-width: 768px) {
+  #online_play .optips {
+    top: calc(100% + 16px + 1px + 8px);
+  }
 }
 @media (orientation: landscape) and (max-height: 520px) {
   #online_play .optips {
