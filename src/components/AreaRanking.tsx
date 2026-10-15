@@ -181,10 +181,12 @@ export function AreaRanking({
             </div>
           </div>
         </div>
-        {/* 地图（2026-10-15 四轮）：三块平铺，落位由 .area_top 的 Grid 模板决定
-            （双栏＝右列上格；降级＝置顶通栏），hover 联动不变 */}
-        <AreaMap data={mapData} hover={hover} onHover={setHover} />
+        {/* 排行规则（2026-10-15 五轮，张老师要求）：DOM 顺序＝表格 → 规则 → 地图——
+            单列形态（769~1187 降级 / ≤768 移动端）自然保证「排行板块在页面第一位，
+            规则紧随其后，地图殿后」；≥1188 双栏落位不受 DOM 顺序影响（Grid areas
+            把地图放右列上格、规则右列下格），hover 联动不变 */}
         {rules}
+        <AreaMap data={mapData} hover={hover} onHover={setHover} />
       </div>
     </>
   );

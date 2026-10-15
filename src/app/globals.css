@@ -3508,17 +3508,17 @@ body #page.two_columns {
   min-width: 620px;
   max-width: 960px;
 }
-/* ---------- 地区总榜布局（2026-10-15 张老师多轮要求）：三块（表格卡 / 地图 / ----------
-   排行规则）为 .area_top 直接子节点，Grid 模板按视口切换形态：
-   - ≥1188 双栏：左表（1 列跨 2 行）+ 右列上＝地图、下＝规则——左轨下限 562
-     保住「标题+筛选 tabs 同行」（tabs 396 + 标题 104 + 间距 20 + 盒边距 42），
-     右轨 minmax(300,440)：空间紧张时先收地图（SVG viewBox 等比缩放）。
-   - 769~1187 地图置顶降级：该区间右列 <330 装不下地图（1000:870 等比 → 地图本体
+/* ---------- 地区总榜布局（2026-10-15 张老师多轮要求）：三块为 .area_top 直接子节点， ----------
+   DOM 顺序＝表格卡 → 排行规则 → 地图；Grid 模板按视口切换落位：
+   - ≥1188 双栏：左表（1 列跨 2 行）+ 右列上＝地图、下＝规则（grid-area 重排，
+     与 DOM 顺序无关）——左轨下限 562 保住「标题+筛选 tabs 同行」（tabs 396 +
+     标题 104 + 间距 20 + 盒边距 42），右轨 minmax(300,440)：空间紧张时先收地图
+     （SVG viewBox 等比缩放）。
+   - 769~1187 单列降级：该区间右列 <330 装不下地图（1000:870 等比 → 地图本体
      ≥277 高 + 图例/hint/内边距 ≈ 365），规则文字换行后长度必超出排行表高度
-     （张老师：「当尺寸会导致排行规则长度超出排行的高度时，就将地图移动到最上方，
-     排行规则移动到排行板块下方」）——地图置顶通栏、表格整宽居中、规则（第三块，
-     无 grid-area 自动落第三行）在排行板块下方整宽。
-   - ≤768 移动端：块级自然堆叠（表 → 地图 → 规则），不在此两个区间内。 */
+     （张老师：「当空间不够变成单列时，排行板块在页面第一位」）——放弃双栏，
+     按 DOM 顺序单列整宽：排行表 → 排行规则 → 地图。
+   - ≤768 移动端：块级自然堆叠，同为表 → 规则 → 地图（五轮后与降级同序）。 */
 @media (min-width: 1188px) {
   .area_top {
     display: grid;
@@ -3552,24 +3552,18 @@ body #page.two_columns {
   .area_top {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "map"
-      "table";
+    /* 单列按 DOM 顺序自然落位（表 → 规则 → 地图），无需 areas 重排 */
     align-items: start;
     gap: 16px;
     margin: 16px 8px;
   }
-  .area_top .area_map {
-    grid-area: map;
-    margin: 0;
-  }
   .area_top .ranking_box {
-    grid-area: table;
     margin: 0;
     min-width: 0; /* 整宽布局，无并排挤压（原 400 下限是双栏防切列用的） */
   }
-  .area_top .rank_rules {
-    margin: 0; /* 无 grid-area：自动落入第三行整宽，与表格的间距由容器 gap 承担 */
+  .area_top .rank_rules,
+  .area_top .area_map {
+    margin: 0;
   }
   .area_top .area_table {
     width: 100%;
