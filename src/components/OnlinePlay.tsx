@@ -2334,7 +2334,11 @@ export function OnlinePlay({
        **先把自身 zoom 复位 1 再量 rect**——旧法「rect ÷ 当前 zoom」依赖引擎对
        getBoundingClientRect 是否含自身 zoom 的口径一致，WebKit/Safari 下 rect
        不含自身 zoom → rawH 被低估 → cap 偏大 → 面板底部越出视口被裁。
-       zoom:1 下量基准尺寸全引擎口径一致；量完即设目标 zoom，中间无绘制 */
+       zoom:1 下量基准尺寸全引擎口径一致；量完即设目标 zoom，中间无绘制。
+       十一期（2026-10-15 张老师定「显示比例 >1.5 时，右侧版图尺寸不得超过
+       游戏区域的高度」）：高倍率下右侧结算面板不再按视口、改按 **gwrap 渲染高**
+       封顶——面板顶本就与 gwrap 顶对齐，压到等高即底边齐平；≤1.5 不启用
+       （低倍率面板跟游戏走，压它反而破跟手感） */
     function syncReportZoom() {
       const pz = pageZoom();
       const gwR = gwrap.getBoundingClientRect();
@@ -2361,11 +2365,15 @@ export function OnlinePlay({
           grect = gresult.getBoundingClientRect();
           grawW = grect.width / pz;
         }
+        const grawH = grect.height / pz; // 窄形态按钮 4 行更高，切完窄再量高
         const rightCap = grawW > 1 ? availRW / (grawW * pz) : 2.5;
+        /* 十一期：>1.5 时面板不得高于游戏区（gwrap 渲染高 ÷ 面板基准高 ÷ 页级系数）。
+           共享 z 会顺带把左侧数据面板压进同一高度——面板底与游戏窗底齐平，观感一致 */
+        const gameCapH = zoomCur > 1.5 && grawH > 1 ? gwR.height / (grawH * pz) : 2.5;
         /* 下限 0.3（2026-10-15 张老师定「面板尺寸自适应，无论如何不出滚动条」）：
            空间极小时允许面板缩得比游戏更小，宁可小也不越界 */
         const cap = Math.max(0.3, Math.min(2.5,
-          Math.min(availW / (rawW * pz), availH / (rawH * pz), rightCap)));
+          Math.min(availW / (rawW * pz), availH / (rawH * pz), rightCap, gameCapH)));
         const z = Math.max(0.3, Math.min(zoomCur, cap));
         greport.style.zoom = String(z);
         gresult.style.zoom = String(z);
@@ -2413,8 +2421,10 @@ export function OnlinePlay({
         const rawH = rect.height / pz;
         if (rawW < 1 || rawH < 1) return; // display:none 中量不出尺寸（换宿主/收起瞬间）
         const availH = window.innerHeight - gwR.top - 12;
+        /* 十一期（同上分支）：>1.5 时面板不得高于游戏区，压到与 gwrap 等高（底边齐平） */
+        const gameCapH = zoomCur > 1.5 && gwR.height > 1 ? gwR.height / (rawH * pz) : 2.5;
         const cap = Math.max(0.3, Math.min(2.5,
-          Math.min(availW / (rawW * pz), availH / (rawH * pz))));
+          Math.min(availW / (rawW * pz), availH / (rawH * pz), gameCapH)));
         const z = Math.max(0.3, Math.min(zoomCur, cap));
         gresult.style.zoom = String(z);
         const toLocal = (v: number) => v / pz / z;
