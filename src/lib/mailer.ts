@@ -21,5 +21,12 @@ export async function sendMail(to: string, subject: string, text: string): Promi
     secure: (SMTP_PORT ?? "80") === "465",
     auth: { user: SMTP_USER, pass: SMTP_PASS },
   });
-  await transporter.sendMail({ from: SMTP_FROM ?? SMTP_USER, to, subject, text });
+  // From 带显示名「扫雷网」：裸地址时 Apple Mail 等客户端会拿 local part 取首字母
+  // 显示「No」头像（2026-10-15 张老师截图反馈），带显示名后显示「扫」
+  await transporter.sendMail({
+    from: { name: "扫雷网", address: SMTP_FROM ?? SMTP_USER },
+    to,
+    subject,
+    text,
+  });
 }
