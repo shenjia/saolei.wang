@@ -32,7 +32,9 @@ export function GrowFeed({
 
   // ---- 滑条窗口状态（2026-10-14）----
   const tableRef = useRef<HTMLTableElement>(null);
-  const winEnd = Math.max(1, Math.ceil(rows.length / pageSize));
+  // 窗口起点显式跟踪（2026-10-16 修复「跳远页后拖不回第 1 页」，同 VideoListFeed）
+  const [winStart, setWinStart] = useState(1);
+  const winEnd = Math.max(winStart, Math.ceil(rows.length / pageSize));
   const [curPage, setCurPage] = useState(1);
   const pageCache = useRef(new PageCache<GrowTitledRow[]>());
   const reqSeq = useRef(0);
@@ -66,7 +68,7 @@ export function GrowFeed({
         const from = pg * pageSize;
         const to = from + pageSize;
         if (from >= prevCount && to <= totalNow) {
-          pageCache.current.set(pg + 1, added.slice(from - prevCount, to - prevCount));
+          pageCache.current.set(winStart + pg, added.slice(from - prevCount, to - prevCount));
         }
       }
       setBatchStep((s) => s + 1);
@@ -83,10 +85,10 @@ export function GrowFeed({
     if (loading) return;
     p = Math.min(maxPage, Math.max(1, p));
     if (p === curPage) return;
-    // 已加载窗口内（<=winEnd）：滚动定位到该页首行
-    if (p <= winEnd) {
+    // 已加载窗口内（winStart..winEnd）：滚动定位到该页首行
+    if (p >= winStart && p <= winEnd) {
       setCurPage(p);
-      const first = (p - 1) * pageSize;
+      const first = (p - winStart) * pageSize;
       const row = rows[first];
       const el = row ? document.getElementById(`id_${row.id}`) : null;
       if (el) {
@@ -98,7 +100,10 @@ export function GrowFeed({
     const cached = pageCache.current.get(p);
     if (cached) {
       const anchor = captureViewportAnchor(tableRef.current);
-      flushSync(() => setRows(cached));
+      flushSync(() => {
+        setRows(cached);
+        setWinStart(p);
+      });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setNextPage(p + 1);
@@ -119,7 +124,10 @@ export function GrowFeed({
       const added = data.rows as GrowTitledRow[];
       pageCache.current.set(p, added);
       const anchor = captureViewportAnchor(tableRef.current);
-      flushSync(() => setRows(added));
+      flushSync(() => {
+        setRows(added);
+        setWinStart(p);
+      });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setNextPage(p + 1);

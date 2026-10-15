@@ -42,7 +42,11 @@ export function VideoListFeed({
 
   // ---- 滑条窗口状态（2026-10-14）----
   const tableRef = useRef<HTMLTableElement>(null);
-  const winEnd = Math.max(1, Math.ceil(items.length / pageSize)); // 已加载窗口末页（滚动定位判定用）
+  // 窗口起点必须显式跟踪（2026-10-16 修复「跳远页后拖不回第 1 页」）：滑条跳远页后
+  // items 整表替换成第 p 页，若仍按「winStart=1、winEnd=items.length/pageSize」推窗口，
+  // 拖回第 1 页会被误判为「窗口内滚动」只滚不换，表格停在远页数据。
+  const [winStart, setWinStart] = useState(1);
+  const winEnd = Math.max(winStart, Math.ceil(items.length / pageSize)); // 已加载窗口末页
   const [curPage, setCurPage] = useState(1);
   const pageCache = useRef(new PageCache<VideoListItem[]>());
   const reqSeq = useRef(0);
@@ -68,7 +72,7 @@ export function VideoListFeed({
     setLoading(true);
     const seq = ++reqSeq.current;
     try {
-      const page = Math.floor(items.length / pageSize) + 1;
+      const page = winStart + Math.floor(items.length / pageSize);
       const size = nextBatchSize(batchStep, pageSize);
       const res = await fetch(moreUrl(page, size));
       if (!res.ok) throw new Error("加载失败");
@@ -86,7 +90,7 @@ export function VideoListFeed({
         const from = pg * pageSize;
         const to = from + pageSize;
         if (from >= prevCount && to <= totalNow) {
-          pageCache.current.set(pg + 1, data.videos.slice(from - prevCount, to - prevCount));
+          pageCache.current.set(winStart + pg, data.videos.slice(from - prevCount, to - prevCount));
         }
       }
       setBatchStep((s) => s + 1);
@@ -103,8 +107,8 @@ export function VideoListFeed({
     if (loading) return;
     p = Math.min(maxPage, Math.max(1, p));
     if (p === curPage) return;
-    if (p <= winEnd) {
-      const first = (p - 1) * pageSize;
+    if (p >= winStart && p <= winEnd) {
+      const first = (p - winStart) * pageSize;
       if (items[first]) {
         setCurPage(p);
         // 滚到该页首行（录像行无 id_ 锚点，用表格行定位）
@@ -117,7 +121,10 @@ export function VideoListFeed({
     const cached = pageCache.current.get(p);
     if (cached) {
       const anchor = captureViewportAnchor(tableRef.current);
-      flushSync(() => setItems(cached));
+      flushSync(() => {
+        setItems(cached);
+        setWinStart(p);
+      });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setHasMore(cached.length < total);
@@ -136,7 +143,10 @@ export function VideoListFeed({
       }
       pageCache.current.set(p, data.videos);
       const anchor = captureViewportAnchor(tableRef.current);
-      flushSync(() => setItems(data.videos));
+      flushSync(() => {
+        setItems(data.videos);
+        setWinStart(p);
+      });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       // 整表替换后窗口=1 页；还有更多可由滑条或「加载更多」继续（序列已重置为首击=一页）

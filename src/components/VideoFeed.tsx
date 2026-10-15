@@ -49,6 +49,8 @@ export function VideoFeed({
   // ---- 翻页条状态（2026-10-14 四轮）----
   const [curPage, setPage] = useState(1);
   const tableRef = useRef<HTMLTableElement>(null);
+  // 窗口起点显式跟踪（2026-10-16 修复「跳远页后拖不回第 1 页」，同 VideoListFeed）
+  const [winStart, setWinStart] = useState(1);
   const pageCache = useRef(new PageCache<VideoListItem[]>());
   const reqSeq = useRef(0);
   const maxPage = Math.max(1, Math.ceil(total / pageSize));
@@ -78,7 +80,7 @@ export function VideoFeed({
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = await fetchByPage(level, Math.floor(items.length / pageSize) + 1, size);
+      const data = await fetchByPage(level, winStart + Math.floor(items.length / pageSize), size);
       if (seq !== reqSeq.current) return;
       const prevCount = items.length;
       setItems((prev) => [...prev, ...data.items]);
@@ -88,7 +90,7 @@ export function VideoFeed({
         const from = pg * pageSize;
         const to = from + pageSize;
         if (from >= prevCount && to <= totalNow) {
-          pageCache.current.set(pg + 1, data.items.slice(from - prevCount, to - prevCount));
+          pageCache.current.set(winStart + pg, data.items.slice(from - prevCount, to - prevCount));
         }
       }
       setBatchStep((s) => s + 1);
@@ -104,9 +106,9 @@ export function VideoFeed({
     if (loading) return;
     p = Math.min(maxPage, Math.max(1, p));
     if (p === curPage) return;
-    const winEnd = Math.max(1, Math.ceil(items.length / pageSize));
-    if (p <= winEnd) {
-      const first = (p - 1) * pageSize;
+    const winEnd = Math.max(winStart, Math.ceil(items.length / pageSize));
+    if (p >= winStart && p <= winEnd) {
+      const first = (p - winStart) * pageSize;
       if (items[first]) {
         setPage(p);
         const tr = tableRef.current?.tBodies[0]?.children[first] as HTMLElement | undefined;
@@ -118,7 +120,10 @@ export function VideoFeed({
     const cached = pageCache.current.get(p);
     if (cached) {
       const anchor = captureViewportAnchor(tableRef.current);
-      flushSync(() => setItems(cached));
+      flushSync(() => {
+        setItems(cached);
+        setWinStart(p);
+      });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setHasMore(cached.length < total);
@@ -135,7 +140,10 @@ export function VideoFeed({
       }
       pageCache.current.set(p, data.items);
       const anchor = captureViewportAnchor(tableRef.current);
-      flushSync(() => setItems(data.items));
+      flushSync(() => {
+        setItems(data.items);
+        setWinStart(p);
+      });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
       setHasMore(p * pageSize < total);
@@ -154,9 +162,11 @@ export function VideoFeed({
     setLevel(lv);
     setBatchStep(0);
     setPage(1);
+    setWinStart(1);
     try {
       const data = await fetchByPage(lv, 1);
       setItems(data.items);
+      pageCache.current = new PageCache();
       pageCache.current.set(1, data.items);
       if (typeof data.total === "number") setTotal(data.total);
       setHasMore(data.count >= pageSize);

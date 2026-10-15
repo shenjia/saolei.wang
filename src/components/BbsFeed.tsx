@@ -141,7 +141,9 @@ export function BbsFeed({
   const pageSize = 19;
   // 外层 table 在服务端页面（bbs/page.tsx）里，客户端组件够不着 ref——用类名查询定位
   const getTable = () => document.querySelector<HTMLTableElement>("table.bbs_list");
-  const winEnd = Math.max(1, Math.ceil(items.length / pageSize));
+  // 窗口起点显式跟踪（2026-10-16 修复「跳远页后拖不回第 1 页」，同 VideoListFeed）
+  const [winStart, setWinStart] = useState(1);
+  const winEnd = Math.max(winStart, Math.ceil(items.length / pageSize));
   const [curPage, setCurPage] = useState(1);
   const pageCache = useRef(new PageCache<BbsPostItem[]>());
   const reqSeq = useRef(0);
@@ -163,7 +165,7 @@ export function BbsFeed({
     setLoading(true);
     const seq = ++reqSeq.current;
     try {
-      const page = Math.floor(items.length / pageSize) + 1;
+      const page = winStart + Math.floor(items.length / pageSize);
       const size = nextBatchSize(batchStep, pageSize);
       const res = await fetch(moreUrl(page, size));
       if (seq !== reqSeq.current) return;
@@ -176,7 +178,7 @@ export function BbsFeed({
         const from = pg * pageSize;
         const to = from + pageSize;
         if (from >= prevCount && to <= totalNow) {
-          pageCache.current.set(pg + 1, data.posts.slice(from - prevCount, to - prevCount));
+          pageCache.current.set(winStart + pg, data.posts.slice(from - prevCount, to - prevCount));
         }
       }
       setBatchStep((s) => s + 1);
@@ -192,8 +194,8 @@ export function BbsFeed({
     if (loading) return;
     p = Math.min(maxPage, Math.max(1, p));
     if (p === curPage) return;
-    if (p <= winEnd) {
-      const first = (p - 1) * pageSize;
+    if (p >= winStart && p <= winEnd) {
+      const first = (p - winStart) * pageSize;
       if (items[first]) {
         setCurPage(p);
         const tr = getTable()?.tBodies[0]?.children[first] as HTMLElement | undefined;
@@ -205,7 +207,10 @@ export function BbsFeed({
     const cached = pageCache.current.get(p);
     if (cached) {
       const anchor = captureViewportAnchor(getTable());
-      flushSync(() => setItems(cached));
+      flushSync(() => {
+        setItems(cached);
+        setWinStart(p);
+      });
       restoreViewportAnchor(getTable(), anchor);
       setBatchStep(0);
       setHasMore(p * pageSize < total);
@@ -223,7 +228,10 @@ export function BbsFeed({
       }
       pageCache.current.set(p, data.posts);
       const anchor = captureViewportAnchor(getTable());
-      flushSync(() => setItems(data.posts));
+      flushSync(() => {
+        setItems(data.posts);
+        setWinStart(p);
+      });
       restoreViewportAnchor(getTable(), anchor);
       setBatchStep(0);
       setHasMore(p * pageSize < total);
