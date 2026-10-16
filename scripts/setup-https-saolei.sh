@@ -119,6 +119,13 @@ server {
         access_log off;
     }
 
+    # 旧站迁移用户照片（/images/player/{id}.jpg，gitignore 不入库，运行期补文件同样需要直读）
+    location /images/player/ {
+        alias /home/deploy/saolei.wang/public/images/player/;
+        expires 7d;
+        access_log off;
+    }
+
     # 录像实体文件（/videos/** gitignore 不入库，单独 rsync，部署 --delete 不碰）
     location /videos/ {
         alias /home/deploy/saolei.wang/videos/;
