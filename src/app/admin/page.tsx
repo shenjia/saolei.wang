@@ -30,12 +30,19 @@ export default async function AdminDashboard() {
   ]);
   const { titles, areas, softwares } = dist;
 
-  const series: Series[] = TREND_METRICS.map((m) => ({
-    key: m.key,
-    label: m.label,
-    color: m.color,
-    values: trend.series[m.key],
-  }));
+  const series: Series[] = [
+    // 流量两序列排最前（2026-10-16 张老师定：与业务趋势合并为一张图，默认只亮 UV/PV/新玩家/新录像）
+    { key: "uv", label: "UV", color: "#ae81ff", values: traffic.trend.uv },
+    { key: "pv", label: "PV", color: "#f8f8f2", values: traffic.trend.pv },
+    ...TREND_METRICS.map((m) => ({
+      key: m.key,
+      label: m.label,
+      color: m.color,
+      values: trend.series[m.key],
+    })),
+  ];
+  // 默认只激活 UV / PV / 新增玩家 / 上传录像，其余序列图例可手动点亮
+  const defaultHidden = ["reviewed", "banned", "news", "comments", "bbs", "clicks"];
 
   const rankedRate = ov.userTotal ? Math.round((ov.rankedTotal / ov.userTotal) * 100) : 0;
   const { oldestPendingDays: pendingDays } = ov;
@@ -234,24 +241,17 @@ export default async function AdminDashboard() {
         />
       </div>
 
-      {/* ---------- 趋势 ---------- */}
+      {/* ---------- 趋势（2026-10-16 合并业务趋势与 PV/UV 访问趋势，x 轴同为 +08:00 切天） ---------- */}
       <AdminCard
         title="近 30 天趋势"
-        more={<Link href="/admin/stats">深入分析 →</Link>}
+        more={
+          <>
+            <span className="sub">PV/UV 为 page_view 埋点 · 已剔除管理员浏览</span>
+            <Link href="/admin/stats">深入分析 →</Link>
+          </>
+        }
       >
-        <TrendChart dates={trend.dates} series={series} unit="" />
-      </AdminCard>
-
-      {/* ---------- 访问趋势（2026-10-16 流量统计） ---------- */}
-      <AdminCard title="近 30 天访问" more="page_view 埋点 · 已剔除管理员浏览 · 缓存 5 分钟">
-        <TrendChart
-          dates={traffic.trend.dates}
-          series={[
-            { key: "pv", label: "PV", color: "#66d9ef", values: traffic.trend.pv },
-            { key: "uv", label: "UV", color: "#ae81ff", values: traffic.trend.uv },
-          ]}
-          unit=""
-        />
+        <TrendChart dates={trend.dates} series={series} unit="" defaultHidden={defaultHidden} />
       </AdminCard>
 
       {/* ---------- 待办 + 军衔分布 ---------- */}
