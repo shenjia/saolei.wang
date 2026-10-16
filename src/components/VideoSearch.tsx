@@ -29,6 +29,8 @@ interface SuggestUser {
 interface SuggestVideo {
   id: number;
   level: string;
+  /** 成绩（毫秒，老录像可能缺失） */
+  realTime: number | null;
   chineseName: string;
 }
 
@@ -339,7 +341,13 @@ export function VideoSearch({
                     >
                       <em>录像 #{item.video.id}</em>
                       <span>
-                        {LEVEL_NAMES[item.video.level as Level] ?? item.video.level} · {item.video.chineseName}
+                        {[
+                          item.video.chineseName,
+                          LEVEL_NAMES[item.video.level as Level] ?? item.video.level,
+                          item.video.realTime != null ? `${scoreTime(item.video.realTime)}秒` : null,
+                        ]
+                          .filter(Boolean)
+                          .join("・")}
                       </span>
                     </button>
                   </li>
