@@ -1585,7 +1585,8 @@ del[data-tip]:hover::after {
 }
 /* 回复表单引用装饰块（2026-10-15 张老师二定：引用进输入框内）：
    画布顶部不可编辑 blockquote——亮灰色左粗框线 + 右侧暗灰底色背景，
-   与楼层渲染的 .bbs_content blockquote 同款观感（所见即所得） */
+   与楼层渲染的 .bbs_content blockquote 同款观感（所见即所得）。
+   2026-10-16 张老师三定：底色 #33332E；作者名比引用正文（#a59f85）亮一档（#cccccc） */
 .wys blockquote[data-quote-deco] {
   position: relative;
   border-left: 4px solid #a59f85;
@@ -2202,7 +2203,6 @@ body #page.message_list > .box:first-child .page_head {
 #history .history_content_col > span {
   color: #cfcfc2;
 }
-
 /* 2026-10-16 修复：纪事正文保留换行分段（对齐老站 NoHtml 的 CRLF→<br> 口径）；
    pre-wrap = 换行生效 + 长行仍自动折行，不横向撑破表格 */
 #history .history_content_col > span.history_text {
@@ -2835,206 +2835,6 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   line-height: 21px;
 }
 
-/* ---------- 账户管理页二轮（2026-10-15 张老师反馈） ----------
-   ① 操作按钮右对齐、小号（legacy .button.small：16px/24px、4px 12px）、亮灰字；
-   ② 头像/登录名/绑定邮箱挪进主栏「账号信息」表（SelfAvatar 100px 适配表单行）；
-   ③ 侧栏改标准 UserCard（UserPanel 复用，样式零新增）。 */
-#account_manage .manage_actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-#account_manage .manage_actions .button {
-  margin: 0;
-}
-#account_manage .manage_actions .button.small {
-  color: #b1b1a4;
-}
-/* 主栏账号信息表里的头像：100px 版 avatar_slot（同构 09-24 那套清零规则） */
-#account_manage .account_avatar_cell .avatar_slot {
-  position: relative;
-  display: block;
-  width: 100px;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-shadow: none;
-  background: none;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  cursor: pointer;
-}
-#account_manage .account_avatar_cell .avatar_slot .avatar {
-  display: block;
-  float: none;
-  width: 100px;
-  height: 100px;
-  object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.04);
-}
-#account_manage .account_avatar_cell .avatar_change {
-  position: absolute;
-  right: 1px;
-  bottom: 1px;
-  left: 1px;
-  height: 24px;
-  color: #f8f8f2;
-  font-size: 12px;
-  line-height: 24px;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.68);
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-#account_manage .account_avatar_cell .avatar_status {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  padding: 2px 10px;
-  color: #d5d5cc;
-  font-size: 12px;
-  line-height: 18px;
-  white-space: nowrap;
-  background: rgba(58, 58, 54, 0.8);
-  border-radius: 9px;
-  transform: translateX(-50%);
-  transition: bottom 0.15s;
-  pointer-events: none;
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-}
-#account_manage .account_avatar_cell .avatar_status.ok {
-  color: #a6e22e;
-}
-#account_manage .account_avatar_cell .avatar_slot:hover .avatar_change,
-#account_manage .account_avatar_cell .avatar_slot:focus-visible .avatar_change {
-  opacity: 1;
-}
-#account_manage .account_avatar_cell .avatar_slot:hover .avatar_status,
-#account_manage .account_avatar_cell .avatar_slot:focus-visible .avatar_status {
-  bottom: 30px;
-}
-/* 登录名 + 绑定邮箱按钮同行 */
-#account_manage .login_name_text {
-  color: #b1b1a4;
-}
-#account_manage .bind_email_btn {
-  margin-left: 8px;
-  vertical-align: middle;
-}
-
-/* ---------- 账户管理页（2026-10-15 张老师改版，设计稿 design/account-manage-20261015.html） ----------
-   /account：标题「账户管理」+ 操作按钮行（修改资料 / 修改密码 / 绑定邮箱）。
-   侧栏竖版玩家卡片：头像（SelfAvatar，点击直接上传，交互同个人主页）→
-   登录名（user_auth.username，灰 13px 超长省略）→ 中文名（链接进个人主页）→ 军衔。 */
-#account_manage .manage_actions {
-  margin: 5px 0;
-}
-#account_manage .manage_actions .button {
-  margin: 0 12px 10px 0;
-}
-.account_card {
-  text-align: center;
-}
-/* 头像槽：与个人主页 #user_view .info 的 avatar_slot 同构（见上 09-24 注释：
-   legacy 裸 button 规则的渐变底/圆角/阴影/字号必须逐条清零），尺寸 150px 适配
-   侧栏内容宽（222 - 2×边框 - 2×20 padding = 150px），图片自带 1px 边框共 152px。 */
-.account_card button.avatar_slot {
-  position: relative;
-  display: block;
-  width: 150px;
-  margin: 4px auto 0;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-shadow: none;
-  background: none;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  cursor: pointer;
-}
-.account_card button.avatar_slot .avatar {
-  display: block;
-  float: none;
-  width: 150px;
-  height: 150px;
-  object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.04);
-}
-.account_card .avatar_change {
-  position: absolute;
-  right: 1px;
-  bottom: 1px;
-  left: 1px;
-  height: 26px;
-  color: #f8f8f2;
-  font-size: 13px;
-  line-height: 26px;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.68);
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.account_card .avatar_status {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  padding: 2px 12px;
-  color: #d5d5cc;
-  font-size: 12px;
-  line-height: 18px;
-  white-space: nowrap;
-  background: rgba(58, 58, 54, 0.8);
-  border-radius: 10px;
-  transform: translateX(-50%);
-  transition: bottom 0.15s;
-  pointer-events: none;
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-}
-.account_card .avatar_status.ok {
-  color: #a6e22e;
-}
-.account_card button.avatar_slot:hover .avatar_change,
-.account_card button.avatar_slot:focus-visible .avatar_change {
-  opacity: 1;
-}
-.account_card button.avatar_slot:hover .avatar_status,
-.account_card button.avatar_slot:focus-visible .avatar_status {
-  bottom: 32px;
-}
-/* 登录名 → 中文名 → 军衔（竖排） */
-.account_card .login_name {
-  margin: 10px 0 0;
-  color: #75715e;
-  font-size: 13px;
-  line-height: 19.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.account_card h2 {
-  margin: 2px 0 0;
-  font-size: 18px;
-  line-height: 27px;
-}
-.account_card h2 a {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.account_card .title_line {
-  margin: 6px 0 0;
-  color: #939387;
-  font-size: 14px;
-  line-height: 21px;
-}
-
 /* ---------- 账户管理页二轮/三轮（2026-10-15 张老师反馈） ----------
    ① 标题行：左「账户管理」h1 + 右「修改资料/修改密码」小按钮（legacy .button.small：
      16px/24px、4px 12px）同行底线对齐，文字亮灰（hover 变绿）；
@@ -3068,53 +2868,17 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   gap: 18px;
   padding: 6px 0;
 }
+/* 头像列占板块内容 1/4（2026-10-16 张老师：放大到板块 1/4），资料表吃剩余 */
 #account_manage .account_avatar_cell {
-  flex: none;
+  flex: 0 0 25%;
+  max-width: 25%;
   margin: 0;
 }
-/* 资料值统一论坛正文色（2026-10-16 张老师）。⚠️ 必须打到 td 内的 div 上：
-   legacy 全局 `body,div,td,…{color:#636359}` 直接命中 div 元素，任何特异性下
-   直接命中都优先于从 td 继承——只给 td 上色时文字所在的 div 仍是 #636359
-   （一轮实测踩坑：td computedStyle 是 #bbbbbb 但页面文字暗，吸管吸到的就是 div 的色） */
-#account_manage table.form td,
-#account_manage table.form td div {
-  color: #bbbbbb;
-}
-/* 侧栏「数据统计」表（2026-10-16 张老师：与用户主页右栏同款）——结构抄过来时
-   样式全挂在 #user_view 作用域没跟过来，回落全局 #636359 显暗。此处补齐同款规则 */
-#account_manage > li.sidebar .table {
-  table-layout: fixed;
-}
-#account_manage > li.sidebar .table td {
-  padding: 3px 0;
-  font-size: 14px;
-}
-#account_manage > li.sidebar .table td:first-child {
-  width: 4.8em;
-  padding-right: 8px;
-  white-space: nowrap;
-}
-#account_manage > li.sidebar .table .num {
-  text-align: right;
-}
-#account_manage > li.sidebar .table .delta {
-  width: 4em;
-  padding-left: 0;
-  padding-right: 0;
-  white-space: nowrap;
-  text-align: left;
-  color: #a6e22e;
-}
-/* 统计数字：亮灰加粗（与 #user_view .sidebar 同款，压过 legacy .table em 的金色） */
-#account_manage > li.sidebar .table em {
-  color: #b1b1a4;
-  font-weight: bold;
-}
-/* 头像：100px 版 avatar_slot（同构 09-24 那套清零规则） */
+/* 头像槽自适应列宽（宽度不再写死，aspect-ratio 保持正方形） */
 #account_manage .account_avatar_cell .avatar_slot {
   position: relative;
   display: block;
-  width: 100px;
+  width: 100%;
   padding: 0;
   font: inherit;
   color: inherit;
@@ -3128,12 +2892,21 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 #account_manage .account_avatar_cell .avatar_slot .avatar {
   display: block;
   float: none;
-  width: 100px;
-  height: 100px;
+  width: 100%;
+  aspect-ratio: 1;
   object-fit: cover;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.04);
 }
+/* 资料值统一论坛正文色（2026-10-16 张老师）。⚠️ 必须打到 td 内的 div 上：
+   legacy 全局 `body,div,td,…{color:#636359}` 直接命中 div 元素，任何特异性下
+   直接命中都优先于从 td 继承——只给 td 上色时文字所在的 div 仍是 #636359
+   （一轮实测踩坑：td computedStyle 是 #bbbbbb 但页面文字暗，吸管吸到的就是 div 的色） */
+#account_manage table.form td,
+#account_manage table.form td div {
+  color: #bbbbbb;
+}
+/* 侧栏「数据统计」盒已整体移除（2026-10-16 张老师），同款样式仍在 #user_view 作用域 */
 #account_manage .account_avatar_cell .avatar_change {
   position: absolute;
   right: 1px;
@@ -3205,7 +2978,6 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 #page #account_manage > li.sidebar .box {
   width: 210px;
 }
-
 
 /* ---------- 头像方形裁剪弹窗（2026-09-24）----------
    主页点击头像、个人资料页点击缩略图都走这个浮窗；
@@ -5462,6 +5234,12 @@ body a.name_link:hover,
 body .user_info_cell .name:hover {
   color: #a6e22e;
 }
+/* 邮箱绑定浮层「马上绑定」豁免：黄底深字按钮 hover 保持深字（2026-10-16 张老师报，
+   绿字压在黄底上难看）——此规则 (2,2,0) 压过上面的站级 hover 链 */
+body .email_bind_overlay a.btn_primary:hover,
+body .email_bind_overlay a.btn_primary:active {
+  color: #2b2a20;
+}
 /* 军衔 em 分级色（legacy .title:hover em.marshal 特异性 (0,3,1)，
    须同级枚举压制，否则排行表里军衔 hover 仍是分级色） */
 body a.title:hover em.supreme,
@@ -5701,6 +5479,11 @@ body #video_list .score_3bvs a:hover em {
 }
 .video_table td.name .title em {
   font-size: 14px;
+}
+/* 上传者列右侧留白（2026-10-16 张老师要求：与级别列至少隔开一截——基础右内边距
+   仅 2px，名字/军衔与级别几乎贴死；成绩列余量充足，加宽不影响折行） */
+.video_table td.name {
+  padding-right: 12px;
 }
 /* 级别列（2026-09-24 四轮：字号降一档）：必须 #page 前缀提权——legacy-2013.css 有
    `#page .level{color:#939387;font-size:20px;line-height:24px}`（1,1,0）且后加载，
@@ -7910,6 +7693,199 @@ html:has(#online_play) #footer {
   overflow: visible; /* symbol 描边 10 单位粗，贴图边缘略出血 */
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
+
+/* ---- 录像详情页原地回放：左侧数据面板 + 控制条（2026-10-16 九期张老师需求；
+   设计稿 design/video-replay-panel-20261016.html）。
+   面板规则与 #online_play .greport 一组同源（深底/圆角/阴影/hover 气泡），
+   拆开写是因为详情页没有 #online_play 宿主——改样式两处同步 ---- */
+.replay_panel {
+  position: absolute;
+  right: calc(100% + 14px); /* 贴 .playable 左缘外 14px（棋盘左缘），zoom 不影响 */
+  top: 5px; /* 与 .play_board 上外边距对齐（margin: 5px 20px 20px 0） */
+  width: 192px;
+  background: #49483e;
+  border: 1px solid #656355;
+  border-radius: 6px;
+  padding: 8px 12px;
+  z-index: 5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  text-align: left;
+  /* 宽高封顶由组件 fit() 以 inline zoom 落实（练习页 syncReportZoom 同思路）：
+     左侧空间不足或面板高于「棋盘+控制条」整块时整体缩小，宁可小也不越界 */
+}
+.replay_panel .gr_title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #e8e8e0;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #656355;
+}
+.replay_panel table {
+  border-collapse: collapse;
+  margin: 0 -6px;
+}
+.replay_panel td {
+  font: 11px/15px Arial, Helvetica, sans-serif;
+  color: #939387;
+  padding: 1px 5px;
+  text-align: left;
+  white-space: nowrap;
+}
+.replay_panel td + td {
+  padding-left: 8px;
+  text-align: right;
+  color: #e8e8e0;
+}
+.replay_panel tr {
+  cursor: help;
+}
+.replay_panel tr:hover {
+  position: relative;
+  z-index: 9;
+}
+.replay_panel tr:hover td {
+  background: #5c5b4e;
+  color: #f8f8f2;
+}
+.replay_panel tr:hover td:first-child {
+  border-radius: 3px 0 0 3px;
+}
+.replay_panel tr:hover td:last-child {
+  border-radius: 0 3px 3px 0;
+}
+.replay_panel td.gv {
+  position: relative;
+}
+.replay_panel td.gv .tip {
+  display: none;
+  position: absolute;
+  left: calc(100% + 11px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: max-content;
+  max-width: 220px;
+  white-space: normal;
+  background: #272822;
+  color: #f8f8f2;
+  border: 1px solid #656355;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font: 11px/15px Arial, Helvetica, sans-serif;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+.replay_panel td.gv .tip::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  margin-top: -5px;
+  border: 5px solid transparent;
+  border-right-color: #272822;
+}
+.replay_panel tr:hover td.gv .tip {
+  display: block;
+}
+/* ---- 回放控制条：暂停/播放按钮 + 可拖拽进度条（翻页控件卡片风格） ---- */
+.replay_bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px; /* 棋盘下缘与条之间留一线间隙 */
+  clear: both;
+  /* 窄盘（初级 130px）装不下「按钮 34 + 时间 44×2 + 间距 24 + 轨道」：条按最小宽
+     向右延展（.play_board 收缩包随最宽子元素撑开，棋盘仍在左侧原位）；
+     移动端按视口收敛防溢出 */
+  min-width: min(320px, calc(100vw - 72px));
+}
+/* 数据面板仅桌面（复用练习页 greport 的桌面专属口径：<960 一律不显示）。
+   移动端断点按 #page 整页 zoom 后的等效视口算：410px 档 zoom 0.65 → CSS 断点
+   410÷0.65≈631px，同理 605 档→643px——605~959 之间无整页 zoom，断点取 631。
+   ⚠️ 门槛挂 body 级（面板挂在详情页 #page 之下，须越过页级 zoom 直接按视口判） */
+@media (max-width: 631px) {
+  body .replay_panel {
+    display: none;
+  }
+}
+.rb_btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #33322b;
+  color: #b1b1a4;
+  cursor: pointer;
+}
+.rb_btn:hover {
+  border-color: #a6e22e;
+  color: #a6e22e;
+  background: #3b3a32;
+}
+.rb_btn svg {
+  display: block;
+}
+.rb_time {
+  flex: 0 0 auto;
+  min-width: 44px;
+  font: 12px "Courier New", Courier, monospace;
+  color: #939387;
+  text-align: center;
+}
+.rb_track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 34px;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #33322b;
+  cursor: pointer;
+  touch-action: none; /* 拖拽吃掉触摸滚动 */
+}
+.rb_track:hover {
+  border-color: #656355;
+}
+.rb_rail {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 50%;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 4px;
+  background: #26261f;
+}
+.rb_fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 8px;
+  border-radius: 4px;
+  background: #fdc61d; /* 页码 current 金黄（翻页控件同源） */
+}
+.rb_thumb {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 1px solid #8a6d1a;
+  border-radius: 4px;
+  background: #fdc61d;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+}
+.rb_thumb:active {
+  cursor: grabbing;
+}
+
 #online_play .board.game {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
@@ -8422,30 +8398,95 @@ html.op-fakefs #header {
   margin-top: 24px;
 }
 
-/* ===== 首页邮箱绑定提醒条（2026-10-15）：登录且未验证邮箱时显示 ===== */
-.email_bind_notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: #403f33;
-  border: 1px solid #6e6c52;
-  border-radius: 6px;
-  padding: 9px 14px;
-  margin: 0 0 14px;
-  font-size: 13px;
-  line-height: 20px;
+/* ===== 首页邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层） =====
+   遮罩复用 .login_overlay（fixed 9999 半透明黑）；卡片复用登录浮窗暗玻璃视觉
+   （色板零新色）；「以后再说」写 localStorage 24 小时免打扰。 */
+.email_bind_modal {
+  box-sizing: border-box;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  padding: 30px 30px 26px;
+  border-radius: 14px;
+  background: rgba(39, 40, 34, 0.82);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+  box-shadow:
+    inset 0 1px 0 rgba(248, 248, 242, 0.1),
+    inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+    0 32px 64px -16px rgba(0, 0, 0, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+  text-align: center;
 }
-.email_bind_notice .text {
+.email_bind_modal .text {
+  margin: 0;
   color: #f8f8f2;
+  font-size: 15px;
+  line-height: 26px;
 }
-.email_bind_notice .text b {
+.email_bind_modal .text b {
   color: #e6c07b;
 }
-.email_bind_notice .go {
-  color: #66d9ef;
-  white-space: nowrap;
-  font-weight: bold;
+.email_bind_modal .btns {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+.email_bind_modal .btn_primary,
+.email_bind_modal .btn_later {
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  line-height: 1;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-decoration: none;
+  /* 过渡只留不改变几何的属性：hover/active 不做位移 */
+  transition: box-shadow 0.15s, filter 0.15s, border-color 0.15s, color 0.15s;
+}
+/* 马上绑定：登录按钮同款渐变黄（#account_login .lp_submit） */
+.email_bind_modal .btn_primary {
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  color: #2b2a20;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
+}
+/* 必须 :hover/:active 显式锁色：btn_primary 是 <a>，站级 hover 链与 legacy a:hover
+   都会把黄底深字染成绿色（张老师 2026-10-16 报）——锁色豁免规则已挂到站级链
+   （body .email_bind_overlay a.btn_primary:hover）旁边就近压制。
+   hover/active 完整口径与登录按钮 #account_login .lp_submit 一致（仅多锁 color） */
+.email_bind_modal .btn_primary:hover {
+  color: #2b2a20;
+  filter: brightness(1.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
+}
+.email_bind_modal .btn_primary:active {
+  color: #2b2a20;
+  filter: brightness(0.96);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
+}
+/* 以后再说：legacy a.button 同款（录像页下载按钮）——灰渐变底 + 亮灰字，hover 变绿 */
+.email_bind_modal .btn_later {
+  background: linear-gradient(180deg, #49483e, #3b3a32);
+  border: 1px solid #49483e;
+  border-radius: 5px;
+  color: #b1b1a4;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
+}
+.email_bind_modal .btn_later:hover {
+  color: #a6e22e;
+  background: linear-gradient(180deg, #4c4b40, #3e3d34);
+}
+.email_bind_modal .btn_later:active {
+  color: #8ac21b;
 }
 
 /* 账户管理卡片：登录名后面的绑定邮箱入口（2026-10-15 张老师指定） */

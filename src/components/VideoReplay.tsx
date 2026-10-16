@@ -17,6 +17,12 @@
 //   rr → 左键按住＝单格 chord；复位 rp/lv/rv/sv 不动 lp；mc/mr 中键（mr 松开时单格 chord）；
 //   sc → 置位 shift，chord 在其后的 lr 生效；mt → 切问号开关；
 //   开格：opened/flagged 跳过、questioned 可开、0 号泛洪、踩雷 Blast 即时揭示。
+//
+// 九期（2026-10-16 张老师需求）：回放时左侧弹「数据统计」面板（复用练习页 greport
+// 形态与口径，随回放实时刷新）+ 棋盘下方控制条（暂停/播放按钮 + 可拖拽进度条，
+// 翻页控件卡片风格）。统计计数与 lib/videoradar.ts replayEvents 同一 flop 口径
+// （Left/Right/Double/wasted 细项、Ce=Cl−wasted、Path 按事件像素欧氏累加）；
+// solvedBv/Ops/Isls 与练习页 compute3BV/statsReport 同法（regions/singles/islands）。
 
 import {
   createContext,
@@ -55,8 +61,10 @@ interface ReplayData {
   marks: boolean;
 }
 
-/** avf/mvf/rmv 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底） */
-function parseReplayData(buf: Uint8Array, ext: string): ReplayData | null {
+/** avf/mvf/rmv 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底）。
+ *  timeCsecOverride：库内权威用时（video_info.real_time，百分秒）——进度条总长与
+ *  播放终点以库为准（页面标题成绩同一来源），缺省退回文件内 Time。 */
+function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?: number): ReplayData | null {
   let lines: string[] | null = null;
   try {
     lines =
@@ -77,7 +85,7 @@ function parseReplayData(buf: Uint8Array, ext: string): ReplayData | null {
   let lastCsec = 0;
   for (const line of v.events) {
     // 行形态：`ts ev col row (px py)`（与 videoradar replayEvents 同一正则）
-    const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+    const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (!m) continue;
     const csec = Math.round(parseFloat(m[1]) * 100);
     evs.push({ csec, ev: m[2], px: +m[5], py: +m[6] });
@@ -90,11 +98,32 @@ function parseReplayData(buf: Uint8Array, ext: string): ReplayData | null {
     h: v.height,
     board: v.board,
     evs,
-    // 终点取「最后事件」与「库内用时」的较大者：最后开格后计时器还走着，
-    // 停在 timeMs 与真实对局节奏一致（练习页引擎用 s.csec 同理）
-    totalCsec: Math.max(lastCsec, Math.round(v.timeMs / 10)),
+    // 终点取「最后事件」与「权威用时」的较大者：最后开格后计时器还走着，
+    // 停在 totalCsec 与真实对局节奏一致（练习页引擎用 s.csec 同理）
+    totalCsec: Math.max(lastCsec, timeCsecOverride ?? Math.round(v.timeMs / 10)),
     marks: v.marks,
   };
+}
+
+/* ---- 实时统计快照（九期：数据面板行值，口径＝练习页 statsReport 的输入面） ---- */
+export interface ReplayStats {
+  /** 当前回放时钟（百分秒） */
+  csec: number;
+  totalCsec: number;
+  board3bv: number;
+  solvedBv: number;
+  solvedOps: number;
+  totalOps: number;
+  solvedIsls: number;
+  totalIsls: number;
+  clLeft: number;
+  clRight: number;
+  clDouble: number;
+  ce: number;
+  /** 鼠标行程（像素） */
+  path: number;
+  /** 当前盘面旗数 */
+  flags: number;
 }
 
 /* ---- 回放引擎（结构对齐练习页 OnlinePlay.startInPlaceReplay）---- */
@@ -102,6 +131,12 @@ function parseReplayData(buf: Uint8Array, ext: string): ReplayData | null {
 interface Engine {
   restart: () => void;
   stop: () => void;
+  /** 暂停（定格当前盘面与统计） */
+  pause: () => void;
+  /** 继续播放（已在终点则从头重播） */
+  resume: () => void;
+  /** 跳转：重置盘面后快进到目标时刻（counters 随 applyEv 重建） */
+  seek: (csec: number) => void;
 }
 
 function runReplay(opts: {
@@ -111,8 +146,9 @@ function runReplay(opts: {
   cols: number;
   data: ReplayData;
   onEnd: () => void;
+  onStats: (s: ReplayStats) => void;
 }): Engine {
-  const { wrap, tbody, rows, cols, data, onEnd } = opts;
+  const { wrap, tbody, rows, cols, data, onEnd, onStats } = opts;
   const N = rows * cols;
   const mines = new Uint8Array(N);
   const nums = new Uint8Array(N);
@@ -138,6 +174,53 @@ function runReplay(opts: {
     nb[i] = r;
     return r;
   };
+  /* ---- 3BV 结构（练习页 compute3BV 同法）：空格连通域 regions（含边界数字格）、
+     其余非雷格 singles、singles 八连连通域 islands —— solvedBv/Ops/Isls 的分母 ---- */
+  const region = new Int32Array(N).fill(-1);
+  let regions = 0;
+  for (let i = 0; i < N; i++) {
+    if (mines[i] || nums[i] !== 0 || region[i] !== -1) continue;
+    const stack = [i];
+    region[i] = regions;
+    while (stack.length) {
+      const c = stack.pop()!;
+      for (const a of nbR(c)) {
+        if (mines[a] || region[a] === regions) continue;
+        region[a] = regions;
+        if (nums[a] === 0) stack.push(a);
+      }
+    }
+    regions++;
+  }
+  const bvRegions: number[][] = Array.from({ length: regions }, () => []);
+  const bvSingles: number[] = [];
+  for (let c = 0; c < N; c++) {
+    if (mines[c]) continue;
+    if (region[c] >= 0) bvRegions[region[c]].push(c);
+    else bvSingles.push(c);
+  }
+  const singleSet = new Uint8Array(N);
+  const seenIsl = new Uint8Array(N);
+  for (const c of bvSingles) singleSet[c] = 1;
+  const bvIslands: number[][] = [];
+  for (const s of bvSingles) {
+    if (seenIsl[s]) continue;
+    const isl: number[] = [];
+    const stack = [s];
+    seenIsl[s] = 1;
+    while (stack.length) {
+      const c = stack.pop()!;
+      isl.push(c);
+      for (const a of nbR(c)) {
+        if (singleSet[a] && !seenIsl[a]) {
+          seenIsl[a] = 1;
+          stack.push(a);
+        }
+      }
+    }
+    bvIslands.push(isl);
+  }
+  const board3bv = regions + bvSingles.length;
   /* 回放状态机（0 未开 / 1 开 / 2 旗 / 3 问号）+ 原图类名备份（stop 恢复静态地图） */
   const rstate = new Uint8Array(N);
   const saved = new Array<string>(N);
@@ -162,6 +245,16 @@ function runReplay(opts: {
       if (nums[c] === 0) for (const a of nbR(c)) if (rstate[a] === 0) stack.push(a);
     }
   }
+  /* ---- flop 口径计数（与 lib/videoradar.ts replayEvents 同一状态机计数分支）---- */
+  let cLeft = 0;
+  let cRight = 0;
+  let cDouble = 0;
+  let wastedLeft = 0;
+  let wastedRight = 0;
+  let wastedDouble = 0;
+  let pathPx = 0;
+  let lastPX: number | null = null;
+  let lastPY = 0;
   /* 回放光标：flop 同款箭头（#cursor-arrow，FlopSprites 已内置；练习页同款 .replay_cursor）。
      箭头坐标域 0-120 × 0-190、尖端 (5,12)——事件像素坐标对准尖端。
      渲染尺寸 12×19 = viewBox 的 1/10，尖端显示像素 = (5,12.12)×0.1 ≈ (0.5,1.21)
@@ -196,39 +289,44 @@ function runReplay(opts: {
   let hitIdx = -1;
   const inb = (px: number, py: number) => px >= 0 && py >= 0 && px < cols * 16 && py < rows * 16;
   const idxOf = (px: number, py: number) => ((py / 16) | 0) * cols + ((px / 16) | 0);
-  /* flop open()：开单格（questioned 可开、flagged 跳过、0 号泛洪、踩雷 Blast） */
-  function openR(px: number, py: number) {
-    if (dead || !inb(px, py)) return;
+  /* flop open()：开单格（questioned 可开、flagged 跳过、0 号泛洪、踩雷 Blast）；
+     返回是否真的开了（wasted 计数依据，flop openCell 同语义） */
+  function openR(px: number, py: number): boolean {
+    if (dead || !inb(px, py)) return false;
     const i = idxOf(px, py);
-    if (rstate[i] === 1 || rstate[i] === 2) return;
+    if (rstate[i] === 1 || rstate[i] === 2) return false;
     if (mines[i]) {
       hitIdx = i;
       dead = true;
       revealLoss(); // Blast：先于落子展示（flop 同样不把雷格画成数字格）
-      return;
+      return true;
     }
     rstate[i] = 1;
     paintR(i);
     if (nums[i] === 0)
       for (const a of nbR(i)) {
-        if (dead) return;
+        if (dead) return true;
         if (rstate[a] === 0) floodR(a);
       }
+    return true;
   }
-  /* flop openAround()：单格 chord——仅光标下那格 opened 且 数字=0 或 =周围旗数 时开 3x3 */
-  function openAroundR(px: number, py: number) {
-    if (!inb(px, py)) return;
+  /* flop openAround()：单格 chord——仅光标下那格 opened 且 数字=0 或 =周围旗数 时开 3x3；
+     返回是否开出了格（wastedDouble 依据） */
+  function openAroundR(px: number, py: number): boolean {
+    if (!inb(px, py)) return false;
     const i = idxOf(px, py);
-    if (rstate[i] !== 1) return;
+    if (rstate[i] !== 1) return false;
     let fc = 0;
     for (const a of nbR(i)) if (rstate[a] === 2) fc++;
-    if (!(nums[i] === 0 || nums[i] === fc)) return;
+    if (!(nums[i] === 0 || nums[i] === fc)) return false;
+    let any = false;
     for (const a of nbR(i)) {
-      if (dead) return;
+      if (dead) return any;
       const x = a % cols;
       const y = (a / cols) | 0;
-      if (rstate[a] === 0) openR(x * 16, y * 16);
+      if (rstate[a] === 0) any = openR(x * 16, y * 16) || any;
     }
+    return any;
   }
   /* flop toggleLabel()：旗→问号(marks)/摘旗、问号→清除、未标→旗；返回是否可操作 */
   function toggleLabelR(px: number, py: number): boolean {
@@ -255,49 +353,122 @@ function runReplay(opts: {
     const e = evs[k];
     moveCursor(e.px, e.py);
     if (dead) return;
-    const col = (e.px / 16) | 0;
-    const row = (e.py / 16) | 0;
+    /* 鼠标行程（flop mouseMove 口径，videoradar 同法）：所有带坐标事件按时间序累加 */
+    if (e.px !== 0 || e.py !== 0) {
+      if (lastPX !== null) pathPx += Math.hypot(e.px - lastPX, e.py - lastPY);
+      lastPX = e.px;
+      lastPY = e.py;
+    }
+    if (e.ev === "mt") {
+      marks = !marks;
+      return;
+    }
+    if (e.ev === "mv") return;
     switch (e.ev) {
       case "lc":
         lp = lv = true;
         break;
       case "lr":
-        if (rp || sv) openAroundR(e.px, e.py);
-        else if (lv) openR(e.px, e.py);
+        // flop leftRelease：rp||sv → 双击；否则 lv → 左键开格（松开坐标）
+        if (rp || sv) {
+          cDouble++;
+          if (!openAroundR(e.px, e.py)) wastedDouble++;
+        } else if (lv) {
+          cLeft++;
+          if (!openR(e.px, e.py)) wastedLeft++;
+        }
         lp = lv = rv = sv = false; // 不动 rp（flop 原样）
         break;
       case "rc":
+        // flop rightPress：lp 按住时仅视觉；否则按下即刻 toggleLabel（计数同 videoradar）
         if (!lp) {
-          if (toggleLabelR(e.px, e.py)) rv = false;
-          else rv = true;
-        } // lp 时仅 pressAround 视觉，不插旗
+          if (toggleLabelR(e.px, e.py)) {
+            cRight++;
+            rv = false;
+          } else {
+            rv = true;
+          }
+        }
         rp = true;
         break;
       case "rr":
-        if (lp) openAroundR(e.px, e.py);
+        // flop rightRelease：lp 按住时＝双击；否则 rv 挂起补记一次 wasted 右键
+        if (lp) {
+          cDouble++;
+          if (!openAroundR(e.px, e.py)) wastedDouble++;
+        } else if (rv) {
+          cRight++;
+          wastedRight++;
+        }
         rp = lv = rv = sv = false; // 不动 lp（flop 原样）
         break;
       case "mc":
         // mp = true（仅视觉按压）
         break;
       case "mr":
-        openAroundR(e.px, e.py);
-        // mp = false
+        cDouble++;
+        if (!openAroundR(e.px, e.py)) wastedDouble++;
         break;
       case "sc":
         lp = lv = sv = true; // chord 在其后的 lr 生效
         break;
-      case "mt":
-        marks = !marks;
-        break;
     }
   }
-  /* rAF 驱动（进即自动播完、固定 1x——练习页六期口径；回放中再触发＝从头重播） */
+  /* 统计快照（solved 系按 rstate 现算，≤480 格零开销；派生值 Est/QG/STNB 由面板组件算） */
+  function buildStats(): ReplayStats {
+    let solvedBv = 0;
+    let solvedOps = 0;
+    for (const reg of bvRegions) {
+      let ok = true;
+      for (const c of reg)
+        if (rstate[c] !== 1) {
+          ok = false;
+          break;
+        }
+      if (ok) {
+        solvedBv++;
+        solvedOps++;
+      }
+    }
+    for (const c of bvSingles) if (rstate[c] === 1) solvedBv++;
+    let solvedIsls = 0;
+    for (const isl of bvIslands) {
+      let ok = true;
+      for (const c of isl)
+        if (rstate[c] !== 1) {
+          ok = false;
+          break;
+        }
+      if (ok) solvedIsls++;
+    }
+    let flags = 0;
+    for (let i = 0; i < N; i++) if (rstate[i] === 2) flags++;
+    const cl = cLeft + cRight + cDouble;
+    const ce = cl - (wastedLeft + wastedRight + wastedDouble);
+    return {
+      csec: curCsec,
+      totalCsec: data.totalCsec,
+      board3bv,
+      solvedBv,
+      solvedOps,
+      totalOps: bvRegions.length,
+      solvedIsls,
+      totalIsls: bvIslands.length,
+      clLeft: cLeft,
+      clRight: cRight,
+      clDouble: cDouble,
+      ce,
+      path: pathPx,
+      flags,
+    };
+  }
+  /* rAF 驱动（九期起支持暂停/继续/拖拽；统计按 ~100ms 节流回传） */
   let evIdx = 0;
   let curCsec = 0;
   let playing = false;
   let rafId: number | null = null;
   let lastFrame = 0;
+  let lastStatTs = 0;
   function setPlaying(v: boolean) {
     playing = v;
     if (v) {
@@ -315,6 +486,9 @@ function runReplay(opts: {
     marks = data.marks;
     dead = false;
     hitIdx = -1;
+    cLeft = cRight = cDouble = wastedLeft = wastedRight = wastedDouble = 0;
+    pathPx = 0;
+    lastPX = null;
     for (let i = 0; i < N; i++) paintR(i);
     evIdx = 0;
     curCsec = 0;
@@ -350,35 +524,71 @@ function runReplay(opts: {
     interpCursor(target);
     if (target >= data.totalCsec) {
       setPlaying(false);
+      onStats(buildStats()); // 终值先于 ended 状态落地（面板/进度条一步到位）
       onEnd(); // 定格终局画面（练习页桌面口径）；退出由棋盘点击 / Esc / stop 负责
       return;
+    }
+    if (ts - lastStatTs >= 100) {
+      lastStatTs = ts;
+      onStats(buildStats());
     }
     rafId = requestAnimationFrame(tick);
   }
   resetReplay();
   setPlaying(true);
+  onStats(buildStats()); // 起播即出面板（全 0 值），不等首帧
   return {
     restart() {
       setPlaying(false);
       resetReplay();
       setPlaying(true);
+      onStats(buildStats());
     },
     stop() {
       setPlaying(false);
       curEl.remove();
       for (let i = 0; i < N; i++) cellTd(i).className = saved[i];
     },
+    pause() {
+      if (!playing) return;
+      setPlaying(false);
+      onStats(buildStats());
+    },
+    resume() {
+      if (playing) return;
+      setPlaying(true);
+    },
+    seek(csec: number) {
+      setPlaying(false);
+      resetReplay();
+      const target = Math.max(0, Math.min(data.totalCsec, Math.round(csec)));
+      while (evIdx < evs.length) {
+        if (evs[evIdx].csec > target) break;
+        applyEv(evIdx);
+        evIdx++;
+      }
+      curCsec = target;
+      interpCursor(target);
+      onStats(buildStats());
+    },
   };
 }
 
-/* ---- React 外壳：Provider（引擎/缓存/flop 兜底）+ Board + Button ---- */
+/* ---- React 外壳：Provider（引擎/缓存/flop 兜底）+ Board + Panel + Bar + Button ---- */
 
-type Status = "idle" | "loading" | "playing" | "ended";
+type Status = "idle" | "loading" | "playing" | "paused" | "ended";
 
 interface ReplayCtxValue {
   status: Status;
+  stats: ReplayStats | null;
   play: () => void;
   stop: () => void;
+  pause: () => void;
+  resume: () => void;
+  /** 播放/暂停切换（控制条按钮）；ended 态＝从头重播 */
+  togglePlay: () => void;
+  /** 跳转到指定百分秒（引擎重置盘面后快进，统计随发） */
+  seek: (csec: number) => void;
 }
 
 const ReplayCtx = createContext<ReplayCtxValue | null>(null);
@@ -386,14 +596,18 @@ const ReplayCtx = createContext<ReplayCtxValue | null>(null);
 export function VideoReplayProvider({
   boardId,
   filepath,
+  realTimeMs,
   children,
 }: {
   /** Board 组件渲染的 id="board_{boardId}"，play() 时据此定位棋盘 DOM */
   boardId: number;
   filepath: string;
+  /** 库内权威用时（毫秒，video_info.real_time）：进度条总长与播放终点以库为准 */
+  realTimeMs?: number;
   children: ReactNode;
 }) {
   const [status, setStatus] = useState<Status>("idle");
+  const [stats, setStats] = useState<ReplayStats | null>(null);
   /* flop 兜底（rmv / 解析失败）：FlopPlayer 懒挂，挂上后再 playFlop。
      子组件 effect 先于本组件 effect 执行 → 届时 window.flop 已建好；
      播放器 iframe 未就绪时 playFlop 的 pendingUri 队列自动兜底 */
@@ -434,7 +648,11 @@ export function VideoReplayProvider({
         if (dataRef.current === undefined) {
           const res = await fetch(uri);
           if (!res.ok) throw new Error(String(res.status));
-          dataRef.current = parseReplayData(new Uint8Array(await res.arrayBuffer()), ext);
+          dataRef.current = parseReplayData(
+            new Uint8Array(await res.arrayBuffer()),
+            ext,
+            realTimeMs ? Math.round(realTimeMs / 10) : undefined
+          );
         }
         const data = dataRef.current;
         /* 尺寸不符（盘面与文件对不上，理论不至）或解析失败 → flop 兜底 */
@@ -457,6 +675,7 @@ export function VideoReplayProvider({
           cols,
           data,
           onEnd: () => setStatus("ended"),
+          onStats: setStats,
         });
         setStatus("playing");
       } catch {
@@ -465,12 +684,33 @@ export function VideoReplayProvider({
         setFlopUri(uri);
       }
     })();
-  }, [boardId, filepath, uri]);
+  }, [boardId, filepath, realTimeMs, uri]);
 
   const stop = useCallback(() => {
     engineRef.current?.stop();
     engineRef.current = null;
+    setStats(null);
     setStatus("idle");
+  }, []);
+
+  const pause = useCallback(() => {
+    engineRef.current?.pause();
+    setStatus("paused");
+  }, []);
+
+  const resume = useCallback(() => {
+    if (!engineRef.current) return;
+    engineRef.current.resume();
+    setStatus("playing");
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    if (status === "playing") pause();
+    else if (status === "paused" || status === "ended") resume();
+  }, [status, pause, resume]);
+
+  const seek = useCallback((csec: number) => {
+    engineRef.current?.seek(csec);
   }, []);
 
   /* Esc 退出回放（练习页同款出口之一） */
@@ -493,12 +733,204 @@ export function VideoReplayProvider({
   );
 
   return (
-    <ReplayCtx.Provider value={{ status, play, stop }}>
+    <ReplayCtx.Provider value={{ status, stats, play, stop, pause, resume, togglePlay, seek }}>
       {children}
       {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
       <FlopSprites />
       {flopUri && <FlopPlayer />}
     </ReplayCtx.Provider>
+  );
+}
+
+/** 左侧数据面板（九期）：练习页「数据统计」同款行集/口径/气泡，随 stats 实时刷新。
+ *  行值派生（Est/QG/RQP/STNB）与练习页 statsReport 同式——不要在这里改公式 */
+function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
+  const ref = useRef<HTMLDivElement>(null);
+  /* 宽高自适应（练习页 syncReportZoom 同思路）：面板锚在 .playable 左缘外 14px，
+     可用宽＝棋盘左缘绝对坐标 − 12（视口余量）− 14（间隙）；面板高于「棋盘+控制条」
+     整块时按整块高封顶；下限 0.3（练习页同款「宁可小也不越界」） */
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const host = el.closest(".playable");
+      if (!host) return;
+      el.style.zoom = "1";
+      const pr = el.getBoundingClientRect();
+      const hr = host.getBoundingClientRect();
+      if (pr.width < 1 || pr.height < 1) return;
+      const zW = (hr.left - 12 - 14) / pr.width;
+      const zH = hr.height > 1 ? hr.height / pr.height : 1;
+      el.style.zoom = String(Math.max(0.3, Math.min(1, zW, zH)));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+  const t = s.csec / 100;
+  const f3 = (v: number) => v.toFixed(3);
+  const hasBv = s.solvedBv > 0 && t > 0;
+  const est = hasBv ? t * (s.board3bv / s.solvedBv) : 0;
+  const qg = hasBv ? Math.pow(t, 1.7) / s.solvedBv : 0;
+  /* STNB 难度系数（标准级别；公式与练习页 statsReport / lib/videoradar stnbOf 同式） */
+  const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
+  const stnb = hasBv
+    ? ((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * Math.sqrt(s.solvedBv / s.board3bv)
+    : 0;
+  const cl = s.clLeft + s.clRight + s.clDouble;
+  const rows: [string, string, string][] = [
+    ["RTime", f3(t) + " (" + (Math.floor(t) + 1) + ")", "本局实际用时（秒），括号内为按秒进位的录像计分时间"],
+    ["Est RTime", hasBv ? f3(est) + " (" + (Math.floor(est) + 1) + ")" : "* (*)", "按完成度折算的估算用时 = 实际用时 × 3BV ÷ 已完成 3BV"],
+    ["3BV", s.solvedBv + "/" + s.board3bv, "盘面理论最少点击次数（Bechtel 基准值），显示为 已完成 / 全盘总量"],
+    ["3BV/s", hasBv ? f3(s.solvedBv / t) : "*", "每秒完成的 3BV 数 = 已完成 3BV ÷ 实际用时，衡量操作效率"],
+    ["Ops", s.solvedOps + "/" + s.totalOps, "开空区域（opening）的完成数 / 全盘总数"],
+    ["Isls", s.solvedIsls + "/" + s.totalIsls, "孤立数字块（island）的完成数 / 全盘总数"],
+    ["Left", s.clLeft + "@" + (t > 0 ? f3(s.clLeft / t) : "0.000"), "左键点击次数 @ 每秒点击频率"],
+    ["Right", s.clRight + "@" + (t > 0 ? f3(s.clRight / t) : "0.000"), "右键点击次数 @ 每秒点击频率"],
+    ["Double", s.clDouble + "@" + (t > 0 ? f3(s.clDouble / t) : "0.000"), "左右同按（和弦双击）次数 @ 每秒频率"],
+    ["Ce", s.ce + "@" + (t > 0 ? f3(s.ce / t) : "0.000"), "有效点击次数（真正开出新格或完成 3BV 的点击）@ 每秒频率"],
+    ["Cl", cl + "@" + (t > 0 ? f3(cl / t) : "0.000"), "总点击次数（左键 + 右键 + 双击）@ 每秒频率"],
+    ["IOE", cl > 0 ? f3(s.solvedBv / cl) : "*", "效率指数 = 已完成 3BV ÷ 总点击次数"],
+    ["ThrP", s.ce > 0 ? f3(s.solvedBv / s.ce) : "*", "吞吐效率 = 已完成 3BV ÷ 有效点击次数"],
+    ["Corr", cl > 0 ? f3(s.ce / cl) : "*", "准确率 = 有效点击 ÷ 总点击次数"],
+    ["Path", String(Math.round(s.path)), "鼠标移动路径的欧氏距离总和（像素）"],
+    ["Flags", String(s.flags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
+    ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
+    ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
+    ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
+  ];
+  return (
+    <div className="replay_panel" ref={ref}>
+      <div className="gr_title">数据统计</div>
+      <table>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r[0]}>
+              <td className="gt">{r[0]}</td>
+              <td className="gv">
+                {r[1]}
+                <span className="tip">{r[2]}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** 控制条（九期）：暂停/播放按钮 + 可拖拽进度条，翻页控件卡片风格。
+ *  拖拽：按住即暂停（记住原播放态），拖动中按帧 seek 实时预览，松手定位——
+ *  拖前在播则松手续播；点轨道任意位置＝单次跳转（同语义）。 */
+function ReplayBar({
+  status,
+  stats,
+  onToggle,
+  onPause,
+  onSeek,
+  onResume,
+}: {
+  status: Status;
+  stats: ReplayStats;
+  onToggle: () => void;
+  onPause: () => void;
+  onSeek: (csec: number) => void;
+  onResume: () => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef({ active: false, wasPlaying: false, raf: 0, lastCsec: 0 });
+  const total = stats.totalCsec;
+  const pct = total > 0 ? Math.max(0, Math.min(1, stats.csec / total)) : 0;
+  const posToCsec = (clientX: number) => {
+    const track = trackRef.current;
+    if (!track || total <= 0) return 0;
+    const r = track.getBoundingClientRect();
+    /* 轨道内衬 10px（.rb_rail 的 left/right），落点按内衬范围折算 */
+    const inner = 10;
+    const x = clientX - r.left - inner;
+    const w = r.width - inner * 2;
+    const ratio = w > 0 ? Math.max(0, Math.min(1, x / w)) : 0;
+    return Math.round(ratio * total);
+  };
+  /* 按帧合并拖动 seek（pointermove 频率高于帧率，逐事件重放会白费） */
+  const seekFrame = (clientX: number) => {
+    const d = dragRef.current;
+    d.lastCsec = posToCsec(clientX);
+    if (!d.raf) {
+      d.raf = requestAnimationFrame(() => {
+        d.raf = 0;
+        onSeek(d.lastCsec);
+      });
+    }
+  };
+  const cancelFrame = () => {
+    const d = dragRef.current;
+    if (d.raf) {
+      cancelAnimationFrame(d.raf);
+      d.raf = 0;
+    }
+  };
+  useEffect(() => cancelFrame, []);
+  const playing = status === "playing";
+  return (
+    <div className="replay_bar" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className="rb_btn"
+        title={playing ? "暂停" : "播放"}
+        aria-label={playing ? "暂停" : "播放"}
+        onClick={onToggle}
+      >
+        {playing ? (
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z" />
+          </svg>
+        )}
+      </button>
+      <span className="rb_time">{(stats.csec / 100).toFixed(2)}</span>
+      <div
+        className="rb_track"
+        ref={trackRef}
+        title="拖动跳转进度"
+        onPointerDown={(e) => {
+          const d = dragRef.current;
+          d.active = true;
+          d.wasPlaying = status === "playing";
+          if (d.wasPlaying) onPause();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          seekFrame(e.clientX);
+        }}
+        onPointerMove={(e) => {
+          if (dragRef.current.active) seekFrame(e.clientX);
+        }}
+        onPointerUp={(e) => {
+          const d = dragRef.current;
+          if (!d.active) return;
+          d.active = false;
+          cancelFrame();
+          onSeek(posToCsec(e.clientX));
+          if (d.wasPlaying) onResume();
+        }}
+        onPointerCancel={() => {
+          const d = dragRef.current;
+          if (!d.active) return;
+          d.active = false;
+          cancelFrame();
+          if (d.wasPlaying) onResume();
+        }}
+      >
+        <div className="rb_rail">
+          <div className="rb_fill" style={{ width: (pct * 100).toFixed(2) + "%" }} />
+        </div>
+        <div className="rb_thumb" style={{ left: (pct * 100).toFixed(2) + "%" }} />
+      </div>
+      <span className="rb_time">{(total / 100).toFixed(2)}</span>
+    </div>
   );
 }
 
@@ -519,6 +951,8 @@ export function VideoReplayBoard({
     <div className="playable">
       {/* 结构沿用原 BoardPlay：.play_board 浮动收缩盒＝棋盘本体，回放光标挂这里。
           引擎定位走 board_{id}（Provider 传 boardId），此处无需 ref */}
+      {/* 九期：回放中在棋盘左侧弹数据面板（.playable 锚定，绝对定位不挤版式） */}
+      {replaying && ctx.stats && <ReplayStatsPanel level={level} s={ctx.stats} />}
       <div
         className="play_board"
         title={replaying ? "点击退出回放" : "点击播放在线录像"}
@@ -542,6 +976,17 @@ export function VideoReplayBoard({
               <path d="M8 5.14v13.72c0 .96 1.05 1.54 1.86 1.03l10.44-6.86a1.22 1.22 0 0 0 0-2.06L9.86 4.11C9.05 3.6 8 4.18 8 5.14z" />
             </svg>
           </button>
+        )}
+        {/* 九期：回放控制条（棋盘正下方同宽；点击不冒泡到棋盘退出） */}
+        {replaying && ctx.stats && (
+          <ReplayBar
+            status={ctx.status}
+            stats={ctx.stats}
+            onToggle={ctx.togglePlay}
+            onPause={ctx.pause}
+            onSeek={ctx.seek}
+            onResume={ctx.resume}
+          />
         )}
       </div>
     </div>
