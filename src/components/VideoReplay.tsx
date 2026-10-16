@@ -271,7 +271,7 @@ function runReplay(opts: {
     '<svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>';
   wrap.appendChild(curEl);
   const table = tbody.parentElement as HTMLTableElement;
-  /* 十期：.play_board 有版图 zoom（exp/int 1.22、beg 2.4）——rect 是视觉坐标，
+  /* 十期：.play_board 有版图 zoom（exp/int 1.22、beg 1.5）——rect 是视觉坐标，
      写 style.left/top 是布局坐标（会被外层 zoom 再乘），须除回 wrap 的 zoom */
   const wrapZoom = (() => {
     const z = parseFloat(getComputedStyle(wrap).zoom);
@@ -1150,21 +1150,35 @@ function ReplayFullscreen({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  /* 自适应基准：按视口算「棋盘能放下的最大倍率」，作为滚轮的起点与 clamp 上限 */
+  /* 自适应基准（十二期改）：按视口算「棋盘能放下的最大倍率」。
+     ⚠️ 面板/评级也吃 --vfz-panel（=max(1.349, z)），宽度随 zoom 线性涨——
+     预算必须按**渲染宽**算而非固定值（十一期固定 194/252 低估，放大即超屏）。
+     循环依赖（z↔panelZoom）用 2~3 轮迭代收敛（两侧都线性，收敛极快）。
+     基准宽 248/252 与 CSS（.replay_panel/.vprfs_side 的 width+padding+border）联动。 */
   const fitZoom = useCallback((): number => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const pad = 16 * 2; // 内衬
-    const gap = 14 * 2; // 中栏与两侧间隙
-    const sideW = vw >= 1180 ? 252 : 0; // 窄屏藏右栏（CSS 同步）
-    const panelW = vw >= 900 ? 194 : 0; // 极窄藏左面板
+    const gap = 18 * 2 + 2; // 中栏与两侧间隙（CSS gap 18）
+    const showSide = vw >= 1180; // 窄屏藏右栏（CSS 断点同步）
+    const showPanel = vw >= 900; // 极窄藏左面板
     const dim = { beg: [8, 8], int: [16, 16], exp: [30, 16] }[level] ?? [30, 16];
     const bw = dim[0] * 16 + 4;
     const bh = dim[1] * 16 + 4;
-    const availW = vw - pad - gap - sideW - panelW;
-    const availH = vh - pad - 42 - 10; // 控制条高 + 间隙
-    if (availW < 50 || availH < 50) return 1;
-    return Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, Math.min(availW / bw, availH / bh)));
+    const availH = vh - pad - 24 - 42 - 10; // 顶部呼吸 24 + 控制条 42 + 间隙 10
+    const clamp = (v: number) => Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, v));
+    if (vw - pad - gap < 50 || availH < 50) return 1;
+    let z = clamp(Math.min((vw - pad - gap) / bw, availH / bh));
+    for (let i = 0; i < 3; i++) {
+      const pz = Math.max(1.349, z);
+      const side = showSide ? 252 * pz : 0;
+      const panel = showPanel ? 248 * pz : 0;
+      const availW = vw - pad - gap - side - panel;
+      const nz = clamp(Math.min(availW / bw, availH / bh));
+      if (Math.abs(nz - z) < 0.001) return nz;
+      z = nz;
+    }
+    return z;
   }, [level]);
 
   /* 初始倍率：记住的滚轮值（clamp 到当前 fit 上限）→ 没有则 fit */
@@ -1202,7 +1216,10 @@ function ReplayFullscreen({
       wheelAcc.current = 0;
       const dir = wheelAcc2Dir(e.deltaY);
       const cur = zoomRef.current ?? 1;
-      const next = Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, cur + dir * VFS_WHEEL_STEP_Z * Math.floor(steps)));
+      /* 上限＝fitZoom()（含面板/评级实时宽预算）——十二期张老师定：
+         无论如何缩放，三栏都不得超出屏幕（绝对上限 3 仅兜底） */
+      const cap = Math.min(VFS_MAX_ZOOM, fitZoom());
+      const next = Math.max(VFS_MIN_ZOOM, Math.min(cap, cur + dir * VFS_WHEEL_STEP_Z * Math.floor(steps)));
       if (next === cur) return;
       applyZoom(next);
       window.clearTimeout(dropT);
@@ -1214,7 +1231,7 @@ function ReplayFullscreen({
       el.removeEventListener("wheel", wheel);
       window.clearTimeout(dropT);
     };
-  }, []);
+  }, [fitZoom]);
 
   /* 窗口缩放：按新视口 refit（保留用户手动倍率的话上限可能越界，统一回 fit 起点稳） */
   useEffect(() => {
@@ -1361,8 +1378,9 @@ export function VideoReplayBoard({
   const ctx = useContext(ReplayCtx);
   if (!ctx) return null;
   const replaying = ctx.status !== "idle";
-  /* 十期（2026-10-16 张老师需求）：高级盘充分使用左栏版图宽度、中级复用同比例、
-     初级双倍比例——三级别视觉高度一致（都≈318px）。比例口径与依据见 globals.css .zoom_* 注释 */
+  /* 十期（2026-10-16 张老师需求）：高级盘充分使用左栏版图宽度、中级复用同比例；
+     初级默认 1.5 倍（同日十三期张老师改定，原 beg 2.4 对齐高度口径作废）。
+     比例口径与依据见 globals.css .zoom_* 注释 */
   const zoomCls = level === "exp" ? "zoom_exp" : level === "int" ? "zoom_int" : "zoom_beg";
   return (
     <div className="playable">
@@ -1390,8 +1408,11 @@ export function VideoReplayBoard({
               ctx.play();
             }}
           >
+            {/* 三角路径包围盒精确居中（2026-10-16 十三期：bbox x∈[5.85,18.15]、
+                y∈[4.11,19.89]，中心 (12,12)＝viewBox 中心）——旧路径 bbox 偏右 2.15
+                再叠 CSS margin 补偿，初级高倍 zoom 下明显偏右（张老师报） */}
             <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">
-              <path d="M8 5.14v13.72c0 .96 1.05 1.54 1.86 1.03l10.44-6.86a1.22 1.22 0 0 0 0-2.06L9.86 4.11C9.05 3.6 8 4.18 8 5.14z" />
+              <path d="M5.85 5.14v13.72c0 .96 1.05 1.54 1.86 1.03l10.44-6.86a1.22 1.22 0 0 0 0-2.06L7.71 4.11C6.9 3.6 5.85 4.18 5.85 5.14z" />
             </svg>
           </button>
         )}

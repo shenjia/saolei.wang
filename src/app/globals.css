@@ -610,12 +610,14 @@ body #video_view .video_cell .playable {
 #video_view .play_board .board {
   margin: 0;
 }
-/* 版图放大（2026-10-16 十期张老师需求）：高级盘充分使用左栏版图空间，
-   中级复用同比例、初级双倍比例——三级别视觉高度一致（都≈318px）。
+/* 版图放大（2026-10-16 十期张老师需求）：高级盘充分使用左栏版图空间、
+   中级复用同比例（exp/int 1.22）；初级默认 1.5 倍（同日十三期张老师改定，
+   原「双倍比例对齐高度≈318px」口径作废）。
    #page 封顶 960px 时 .main 宽 672px，cell 内边距 30×2、棋盘右 margin 20px
    → 棋盘可用宽 592px；高级盘 484px → zoom 1.22 恰好占满。
    ⚠️ zoom 挂 .play_board（棋盘 DOM 不动，回放引擎像素坐标系零影响——
-   off 量取、光标/进度条均在缩放盒内自然随动）；移动端断点（≤631/≤768）
+   off 量取、光标/进度条均在缩放盒内自然随动；播放按钮/控制条按 --pbz
+   反向折算保持视觉尺寸恒定）；移动端断点（≤631/≤768）
    有整页 zoom + 横滑兜底，此处不设上限，溢出由 .playable 盒内滑动。 */
 #video_view .play_board.zoom_exp {
   zoom: 1.22;
@@ -626,10 +628,10 @@ body #video_view .video_cell .playable {
   --pbz: 1.22;
 }
 #video_view .play_board.zoom_beg {
-  /* 初级自然高 132px（128+4 边框），高级 260px——「双倍比例」精确值
-     1.22×260÷132=2.403，取 2.4 与高级渲染高度对齐（316~317px） */
-  zoom: 2.4;
-  --pbz: 2.4;
+  /* 初级默认 1.5 倍（2026-10-16 张老师定）：自然高 132px（128+4 边框）
+     → 渲染高 198px，不再与高级渲染高度对齐 */
+  zoom: 1.5;
+  --pbz: 1.5;
 }
 .play_overlay {
   position: absolute;
@@ -639,8 +641,11 @@ body #video_view .video_cell .playable {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  /* 尺寸固定不随版图 zoom 缩放（2026-10-16 十三期张老师定）：按 --pbz 反向
+     折算，三级别渲染尺寸恒 52px；translate(-50%) 相对自身盒取值，缩放域内
+     自洽（盒 52/z CSS px × 外层 zoom z = 52px，半值偏移同步缩放，居中精确） */
+  width: calc(52px / var(--pbz, 1));
+  height: calc(52px / var(--pbz, 1));
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -653,7 +658,11 @@ body #video_view .video_cell .playable {
   background: rgba(0, 0, 0, 0.65);
 }
 .play_overlay svg {
-  margin-left: 3px; /* 三角形视觉重心偏左，右移一点对中 */
+  /* 随按钮同步反缩放（视觉恒 26px）；三角路径已按包围盒精确居中
+     （VideoReplay.tsx 内路径 bbox 中心＝viewBox 中心），不再要 margin 补偿——
+     旧 margin-left:3px 在版图 zoom 下被放大（初级 2.4x 时偏右 7.2px） */
+  width: calc(26px / var(--pbz, 1));
+  height: calc(26px / var(--pbz, 1));
 }
 
 /* ---------- 新增：加载更多按钮 ----------
@@ -7732,13 +7741,11 @@ html:has(#online_play) #footer {
   position: fixed;
   left: 0;
   top: 0;
-  width: max-content; /* 十一期：宽度自适应内容（RTime 长值不折行不留空） */
-  min-width: 220px;
-  max-width: 300px;
+  width: max-content; /* 十一期：宽度自适应内容；十二期去 min/max——数值右贴边缘 */
   background: #49483e;
   border: 1px solid #656355;
   border-radius: 6px;
-  padding: 9px 13px;
+  padding: 9px 10px;
   z-index: 5;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: left;
@@ -7760,7 +7767,7 @@ html:has(#online_play) #footer {
 .replay_panel td {
   font: 15px/21px Arial, Helvetica, sans-serif; /* 十一期张老师定：字体太小→11→15 */
   color: #939387;
-  padding: 1px 6px;
+  padding: 1px 6px 1px 0; /* 十二期：label 右距交给 td+td 的 8px 分隔 */
   text-align: left;
   white-space: nowrap;
 }
@@ -7851,10 +7858,14 @@ html:has(#online_play) #footer {
   /* 窄盘（初级 130px）装不下按钮组+时间+轨道：条按最小宽向右延展；
      移动端按视口收敛防溢出 */
   min-width: min(320px, calc(100vw - 72px));
-  /* 十期：.play_board 的版图 zoom 会连带放大控制条（初级 2.4x 时按钮 82px 巨物），
+  /* 十期：.play_board 的版图 zoom 会连带放大控制条（初级高倍 zoom 时按钮成巨物），
      反向 zoom 抵消，保持条本体视觉尺寸恒定。条仍受外层 zoom 的布局放大影响
      （占位宽随棋盘走），但内容（按钮/文字/轨道）回到 1x 视觉。
-     ⚠️ width:min(320px, calc(100vw-72px)) 的 100vw 也随之回到真实视口 ✓ */
+     ⚠️ width:min(320px, calc(100vw-72px)) 的 100vw 也随之回到真实视口 ✓
+     十二期张老师定「控制条与棋盘同宽」：100%＝.play_board content 宽（棋盘宽），
+     外层 zoom 渲染时同步放大——渲染宽即棋盘渲染宽；min-width 保窄盘右延兜底 */
+  width: 100%;
+  box-sizing: border-box;
   zoom: calc(1 / var(--pbz, 1));
 }
 /* 按钮＝翻页卡片 1:1（.pager a 同款几何与色板，尺寸 34×34 正方） */
@@ -7912,7 +7923,8 @@ body .replay_bar .rb_time {
    填充/滑块＝页码 current 金黄 #fdc61d；thumb 用圆角 3px 方块（页码卡微缩版） */
 .rb_track {
   position: relative;
-  flex: 1 1 auto;
+  flex: 1 1 0; /* 十二期：basis 0——条定宽时轨道精确吃满剩余（同宽关键） */
+  min-width: 0;
   height: 34px;
   margin: 0 3px;
   border: 1px solid #49483e;
@@ -8663,20 +8675,22 @@ html.op-fakefs #header {
   zoom: var(--vfz-panel, 1.35);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
-/* 中栏：棋盘 + 控制条整块按 --vfz 缩放 */
+/* 中栏：棋盘 + 控制条整块按 --vfz 缩放；stretch 使控制条 100% 宽＝棋盘宽
+   （十二期张老师定「无论如何缩放，控制条与游戏同宽」） */
 .vprfs_center {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  width: max-content; /* 收紧＝最宽子元素（棋盘），控制条随填 */
   zoom: var(--vfz, 1);
 }
 .vprfs_board_wrap {
   position: relative;
 }
 .vprfs_center .replay_bar {
-  /* 全屏层：条不挤棋盘（棋盘宽即布局宽），保底 320 防轨道消失 */
-  width: max-content;
-  min-width: 320px;
+  /* 十二期张老师定：控制条与棋盘同宽（中栏收紧＝棋盘宽，条 100% 随填） */
+  width: 100%;
+  min-width: 0;
 }
 .vprfs_center .rb_track {
   min-width: 120px;
@@ -8733,4 +8747,100 @@ html.op-fakefs #header {
   .vprfs_panel {
     display: none;
   }
+}
+
+/* ---------- 后台封禁账号弹窗（2026-10-16 限时封禁） ----------
+   复用登录浮窗同款暗玻璃视觉（.history_overlay/.history_dialog 一脉） */
+.ban_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.ban_dialog {
+  box-sizing: border-box;
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  padding: 22px 26px 20px;
+  background: rgba(39, 40, 34, 0.92);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(248, 248, 242, 0.1),
+    inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+    0 32px 64px -16px rgba(0, 0, 0, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.ban_dialog h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f8f8f2;
+  margin: 0 0 10px;
+}
+.ban_desc {
+  font-size: 13px;
+  color: #939387;
+  line-height: 1.7;
+  margin: 0 0 16px;
+}
+.ban_label {
+  font-size: 13px;
+  color: #c2c2b8;
+  margin-bottom: 8px;
+}
+.ban_dur {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.ban_dur_opt {
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid #49483e;
+  background: transparent;
+  color: #939387;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ban_dur_opt:hover {
+  color: #f8f8f2;
+  border-color: #75715e;
+}
+.ban_dur_opt.on {
+  color: #f92672;
+  border-color: #f92672;
+  background: rgba(249, 38, 114, 0.08);
+}
+.ban_check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: #c2c2b8;
+  line-height: 1.7;
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.ban_check input {
+  margin-top: 4px;
+  accent-color: #f92672;
+}
+.ban_check b {
+  color: #f8f8f2;
+}
+.ban_hint {
+  font-size: 12px;
+  color: #75715e;
+  line-height: 1.6;
+  margin: 0 0 18px 23px;
+}
+.ban_ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
