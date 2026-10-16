@@ -6354,7 +6354,12 @@ body #header .nav li a.msg_icon_btn .msg_badge {
   filter: brightness(0.96);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
 }
+/* 禁用态同样锁底色与字色（含被 hover/active 时）：标题/正文没填完按钮即 disabled，
+   而本类 hover 锁色规则带 :not(:disabled) 不生效，legacy button:hover(0,1,1) 会把
+   禁用按钮也染成暗底绿字（张老师 2026-10-16 二报）；本规则 (0,2,0) 可压过之 */
 .lp_submit_btn:disabled {
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  color: #2b2a20;
   opacity: 0.75;
   cursor: default;
 }
