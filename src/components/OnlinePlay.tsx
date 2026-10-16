@@ -69,18 +69,11 @@ const CUS_MIN = 8, CUS_MAX = 99;
    张老师 2026-10-14 18:19 定：拖动时盘面变化允许 250ms 一次（leading 立即 + trailing 终值） */
 const CUS_APPLY_MS = 250;
 
-/* ---- 自定义盘「主体板块自适应宽度」（三期 v7，2026-10-14 19:07 张老师定）----
-   原先 cus 盘固定走 960 版式（宽 >40 才放宽），小盘（如默认 20×15 = 324px 盘面）
-   在 960 板块里左右各留一大片空档。现改为按盘面渲染宽精算 #page 宽度：
-     pageW = 盘面渲染宽 + PAGE_PAD，clamp 到 [PAGE_MIN_W, 视口可用, PAGE_MAX_W]
-   宽度链实测（CSS px，1280 视口）：ga 宽 = pageW − GA_OFFSET
-   （GA_OFFSET = box margin 8×2 + border 1×2 + padding 30×2 = 78），
-   PAGE_PAD = GA_OFFSET + 22 使 normalMaxZoom 的宽度封顶恒略大于期望倍率（≥1），
-   保证「页宽跟随盘面」与「盘面按容器自动缩」两个公式联立后一次收敛、不来回缩。 */
-const PAGE_PAD = 100;   // 盘面之外需给 #page 留的总宽（盒装 78 + 视觉余量 22）
-const GA_OFFSET = 78;   // #page 宽 → #game_area 内容宽的固定损耗
-const PAGE_MIN_W = 480; // 下限：标题行 + 4 个级别 tab 一行放得下、弹窗（320）不出盒
-const PAGE_MAX_W = 1400; // 上限：与旧 cus_wide 一致的扩版封顶
+/* ---- 自定义盘版式（v8，2026-10-16 张老师定）----
+   v7 曾让 #page 宽度跟随盘面精算（小盘收窄、大盘扩宽），实践下来切入自定义
+   主版块会突然变小、与页头宽度脱节。张老师定：**版块宽度始终与 header 一致**——
+   #page 恒走常规 62%/min620/max960 版式，不再按盘面改写页宽；
+   大自定义盘超宽时由 normalMaxZoom 按容器自动缩（下限放宽到 0.3）保证完整可见 */
 /* 手机横屏固定横向开销（布局 px）→ fitZoom* 与 normalMaxZoom 共用。用固定值而非
    rect 实测：超宽盘会把布局视口撑爆、rect 全失真。zoom 挂 .gwrap 后银框（含竖排
    计数列）整体随盘缩放，拉满基准即整个银框窗，预留不再含框/计数列。
@@ -157,7 +150,7 @@ export function OnlinePlay({
     /* 练习页禁滚动（2026-10-15 张老师定）：整页锁死滚动，滚轮改由 onWheelZoom
        调整显示比例（见文末）。类挂在 <html> 上、随组件挂载/卸载增删，不污染站内
        其他页面（同 op-fakefs 的做法）。⚠️ 必须在任何 fit 之前加：页面滚动条消失
-       会让视口宽 +15px，后面的 normalMaxZoom / syncPageFit 都按新宽度算才准；
+       会让视口宽 +15px，后面的 normalMaxZoom 按新宽度算才准；
        副作用是内容超一屏时页面下方（页脚）不再可滚达——本页即一屏棋盘，可接受 */
     document.documentElement.classList.add("op-noscroll");
     const ac = new AbortController();
@@ -1726,9 +1719,6 @@ export function OnlinePlay({
           else applyZoom(normalMaxZoom(), false);
         } else applyZoom(zoomCur, false);
       }
-      /* 主体板块宽度自适应（v7）：必须放在上面 zoom 之后——applyModeZoom/applyZoom
-         已把 zoomWant 更新成目标模式的记忆值，页宽按它算才准；拖动中函数自冻结 */
-      syncPageFit();
       /* 数据面板常驻时（六期）重开后盘面尺寸/倍率可能已变，重新对齐+缩放 */
       if (showStats) syncReportZoom();
     }
@@ -1854,41 +1844,10 @@ export function OnlinePlay({
         }
       }, CUS_APPLY_MS);
     }
-    /* 版式拖动冻结（张老师 18:52 报「宽调回小值板块不缩」的根因）：
-       页宽变化会让居中的 #page 左缘平移，弹窗滑轨跟着横移；range input 拖动中
-       pointer capture 按轨道「当前位置」把同一点点位换算成值——值跳回大值 → 板块又扩，
-       来回振荡，表现即「调回来了板块却不缩」。故拖动期间（cusDragging）冻结版式，
-       松手（pointerup/change）时一次到位；点 tab 切级别 / F2 等非拖动 reset 照常即切。
-       拖动中盘面超出当前页宽由 normalMaxZoom 自动缩兜底，松手后页宽跟上再回弹 */
-    let cusDragging = false;
-    /* 主体板块宽度自适应（三期 v7，2026-10-14 19:07 张老师定）：
-       自定义盘按盘面渲染宽精算 #page 宽度（公式与量纲见文首 PAGE_PAD 注释），
-       小盘不再在 960 板块里留一大片空档；标准级别清掉 inline 交回常规 80%/960 版式。
-       仅桌面断点生效：≤768 的移动版 #page 有自己的整页 zoom + 固定布局宽体系，
-       本函数直接让位（清 inline），不破坏移动版式。
-       ⚠️ 2026-10-15：横屏沉浸模式也让位——横屏 #page 由 CSS 固定铺满视口
-       （margin/padding 全清），页宽不再跟随盘面；否则 844 视口下宽 ≤828 的
-       内联宽会在右侧留下一条露背景的空档，且与「严格占满 100%」冲突 */
-    const mqDesktop = window.matchMedia("(min-width: 769px)");
-    function syncPageFit() {
-      const pe = pageEl as HTMLElement | null;
-      if (!pe) return;
-      if (lv !== "cus" || !mqDesktop.matches || lsQuery.matches) {
-        pe.style.width = "";
-        pe.style.maxWidth = "";
-        return;
-      }
-      if (cusDragging) return; // 拖动中冻结（见上）
-      const baseW = gframe.offsetWidth; // 布局宽＝基准宽（不含游戏 zoom，Chrome 实测）
-      if (baseW < 8) return;
-      const avail = window.innerWidth / pageZoom() - 16; // 可用视口宽（CSS px，左右各留 8）
-      /* 页宽 = 盘面期望渲染宽 + PAGE_PAD。PAGE_PAD 比实际盒装损耗 GA_OFFSET 多 22px，
-         故 normalMaxZoom 的宽度封顶恒 ≥ 期望倍率——「页宽跟随盘面」与「盘面按上限
-         封顶」互相解耦，不会来回缩（封顶本身按视口算，不读页宽，见 normalMaxZoom） */
-      const wantW = Math.max(PAGE_MIN_W, Math.min(baseW * zoomWant + PAGE_PAD, avail, PAGE_MAX_W));
-      pe.style.width = Math.round(wantW) + "px";
-      pe.style.maxWidth = Math.round(wantW) + "px";
-    }
+    /* 版式恒定（v8）：#page 宽度始终与 header 一致（62%/min620/max960），不再随
+       自定义盘面伸缩——v7 的「页宽跟随盘面」（syncPageFit）及其配套的拖动冻结
+       （cusDragging）、拖动中 range 滑轨横移振荡问题整体废除。规格滑杆拖动期间
+       页宽不动，弹窗锚位也不会变，无需任何重对准钩子 */
     /* 弹窗锚定（张老师 18:41 定）：贴「自定义」tab 正下方、与之水平居中对齐。
        原先锚 .news_head 左缘（left:0），看着像挂在标题左端、离 tab 老远。
        量法用 offset 系（CSS px，与页级 zoom 无关）：tab 与弹窗的 offsetParent 同为
@@ -1931,26 +1890,14 @@ export function OnlinePlay({
     on(cusW, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
     on(cusH, "input", () => { clampCusMines(); syncCusVals(); applyCusLive(); });
     on(cusM, "input", () => { syncCusVals(); applyCusLive(); });
-    /* 宽/高拖动期间冻结版式（cusDragging，见 syncPageFit 注释）。
-       pointerup 与 change 双保险解冻：原地点击 thumb 值没变时 change 不触发，
-       只靠 change 会把标志卡在 true、版式永远冻结。
-       松手时页宽一次到位 + 弹窗重新对准（页宽变了 tab 位置也变） */
-    function afterCusDrag() {
-      cusDragging = false;
-      syncPageFit();
-      positionCusDialog();
-    }
-    on(cusW, "pointerdown", () => { cusDragging = true; });
-    on(cusH, "pointerdown", () => { cusDragging = true; });
-    on(cusW, "pointerup", afterCusDrag);
-    on(cusH, "pointerup", afterCusDrag);
-    on(cusW, "change", afterCusDrag);
-    on(cusH, "change", afterCusDrag);
+    /* 宽/高滑杆拖动（v8）：页宽恒定后拖动中无版式联动，input 即时重建盘面即可，
+       无需冻结/松手钩子（v7 的 cusDragging 机制已废） */
     /* 比例滑杆交互（弹窗内 v7 张老师 19:07 / 设置浮窗二期那张同源）：
        拖动中只改渲染倍率（setZoomVisual，不封顶不写盘）——页宽一变，居中板块里的
        滑轨就横移，range 会把同一点点位换算成别的值（v6 振荡同源），故拖动中页宽冻结；
        松手（pointerup/change，双保险：拖到端点值不变时 change 不触发）再由 applyZoom
-       按视口上限正式定值 + 写记忆，随后页宽与弹窗锚位一次到位 */
+       按视口上限正式定值 + 写记忆（v8：页宽恒定，滑轨不再横移，此顾虑仅存于
+       拖动中不封顶的既有语义） */
     function zoomDragInput(v: number) {
       zoomBeforeFs = null; // 手动调比例 → 以手动为准，退出全屏/横屏不再自动恢复
       zoomBeforeLs = null;
@@ -1959,9 +1906,7 @@ export function OnlinePlay({
       setZoomVisual(v);
     }
     function zoomDragEnd() {
-      syncPageFit(); // 页宽按最终倍率到位
       applyZoom(zoomWant); // 按视口上限封顶 + 落盘
-      positionCusDialog(); // 页宽变了 → 弹窗重新对准 tab
     }
     on(cusZoom, "input", () => zoomDragInput(parseFloat(cusZoom.value)));
     on(cusZoom, "pointerup", zoomDragEnd);
@@ -2117,7 +2062,6 @@ export function OnlinePlay({
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches && !lsManual) fitZoomForLandscape(); // 首帧横屏（zoomBeforeLs 恒 null）也要兜底，故只看 lsManual
       else applyZoom(zoomCur, false);
-      syncPageFit(); // 自定义盘的页宽按新视口重算（非 cus 级别内部直接清 inline）
       /* 数据面板常驻时（六期）：跟随 gwrap 重新贴合（内部对未显示的面板直接早退） */
       syncReportZoom();
       /* 断点跨越（七期）：宽屏 ↔ 窄屏互切后，已结束那局的结算面板搬到对应宿主
@@ -2334,28 +2278,26 @@ export function OnlinePlay({
     const zoomRange = $("zoom_range") as HTMLInputElement;
     const zoomVal = $("zoom_val");
     let zoomCur = 1; // 当前游戏倍率（不含整页窄屏缩放）
-    let zoomWant = 1; // 玩家期望倍率（applyZoom 入参、clamp 前）——自适应页宽按它算（v7）
+    let zoomWant = 1; // 期望倍率：滑杆/滚轮拖动中的暂存值，松手由 zoomDragEnd→applyZoom 正式定值
     const lsQuery = window.matchMedia("(orientation: landscape) and (max-height: 520px)"); // 横屏拉满断点（声明须在 applyZoom 之前，normalMaxZoom 会读它）
     let zoomBeforeFs: number | null = null; // 进全屏前的倍率；全屏中手动调过则置 null 不再恢复
     /* 普通模式倍率上限：游戏渲染宽不得超过容器宽，否则冲出 #page 版块。
        用 getBoundingClientRect 实测自校准：gfR.width = 基准宽 × zoomCur × 所有祖先
        zoom，gaR.width = 容器宽 × 同一祖先 zoom——比值里 zoom 全部抵消，任意页级
        缩放/窄屏断点下都成立。全屏/横屏由 fitZoom* 拉满（max=5），不走此封顶。
-       自定义盘（三期 v7）两处不同：
-       ① 宽度封顶按「视口 / 扩版上限」算，**不按当前容器**——自定义盘的页宽本身
-          跟着盘面走（syncPageFit），若再按当前容器封顶，两个公式会互相压制：
-          盘面永远只能填满当前页宽 → 比例调不大、松手后板块比盘面宽留空档；
-       ② 额外加高度封顶：常规三级盘高度有限（≤16 行）从不需要，自定义最高 99 行
-          会被视口下方内容推出去——按「视口底到游戏区顶的可用高」反算倍率，
-          与宽度方向取小，保证整个盘面完整可见不裁切 */
+       （v8：#page 版式恒定，标准级别与 cus 统一按当前容器封顶——v7 时代 cus
+       「宽度按视口/扩版上限算、不按容器」的前提是页宽跟着盘面走，已废）
+       cus 额外加高度封顶：常规三级盘高度有限（≤16 行）从不需要，自定义最高
+       99 行会被视口下方内容推出去——按「视口底到游戏区顶的可用高」反算倍率，
+       与宽度方向取小，保证整个盘面完整可见不裁切 */
     function normalMaxZoom() {
       if (document.fullscreenElement === root) return 5;
       const gfR = gframe.getBoundingClientRect();
       const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
       if (gfR.width <= 0 || gaR.width <= 0) return 2.5;
       /* 下限 0.5（=滑杆 min）：窄窗连 1x 都放不下时按容器宽自动缩，保证不溢出。
-         自定义大盘（cus）额外放宽到 0.3——99 宽盘即使页宽已按视口放宽
-         仍可能超容器，需要更小的自动缩下限才能完整可见 */
+         自定义大盘（cus）额外放宽到 0.3——99 宽盘在固定 960 版式里即使 1x 也
+         远超容器宽，需要更小的自动缩下限才能完整可见 */
       const zMin = lv === "cus" ? 0.3 : 0.5;
       /* 高度封顶（2026-10-15 张老师报：初级拉满切中级，盘冲出屏幕底部）：
          标准级别与 cus 一律不许超出视口底——练习页已整页禁滚动（op-noscroll），
@@ -2380,10 +2322,6 @@ export function OnlinePlay({
         const vv = window.visualViewport;
         const vw = (vv ? vv.width : window.innerWidth) / pageZoom();
         cap = (vw - LS_RESERVE_W) / gwrap.offsetWidth;
-      } else if (lv === "cus") {
-        const baseW = gframe.offsetWidth || gfR.width / zoomCur; // 基准宽（不含游戏 zoom）
-        const limitW = Math.min(window.innerWidth / pageZoom(), PAGE_MAX_W) - GA_OFFSET - 16;
-        cap = Math.min(limitW / baseW, hCap);
       } else {
         /* 容器可用宽 = game_area 内容宽 − 16px 余量；基准宽用整个银框窗
            （gwrap，含竖排计数列——zoom 挂 gwrap 后计数列随盘同缩，一起封顶）。
@@ -2420,7 +2358,7 @@ export function OnlinePlay({
       syncReportZoom(); // 结算面板同步缩放（显示中才生效）
     }
     function applyZoom(v: number, persist = true, max?: number) {
-      zoomWant = v; // 玩家期望倍率（clamp 前）：syncPageFit 按它算页宽
+      zoomWant = v; // 期望倍率暂存（v8 起页宽恒定，仅供 zoomDragEnd 定值用）
       const cap = max ?? normalMaxZoom();
       /* 大盘自动缩可低于滑杆 min（0.5）：cus 盘封顶 <0.5 时直接用封顶值
          （滑杆拖不到但自动适配到位——99 宽盘在扩展版式下仍可能需 <0.9x） */
@@ -2645,8 +2583,8 @@ export function OnlinePlay({
        监听挂 document（整页任意处，含站头/页脚/浮窗）：本页滚轮已无其他用途，
        挂 root 会留下死角——鼠标停在标题行上方空白处滚轮就没反应（playwright
        实证：挂 root 时鼠标在 (0,0) 滚轮完全无效，全屏下才碰巧命中）。
-       落盘沿用滑杆口径：滚动中 applyZoom(…, false) 即时生效（按视口封顶 + 走
-       syncPageFit 让页宽跟随），停滚 320ms 后 zoomDragEnd 一次正式定值 + 写
+       落盘沿用滑杆口径：滚动中 applyZoom(…, false) 即时生效（按视口封顶），
+       停滚 320ms 后 zoomDragEnd 一次正式定值 + 写
        localStorage——免得连续滚动的每一格都写一次盘 */
     let wheelAcc = 0;
     let wheelTimer: number | null = null;
@@ -2697,17 +2635,15 @@ export function OnlinePlay({
       zoomBeforeFs = null; // 手动调过比例 → 退出全屏/横屏不再自动恢复（同滑杆）
       zoomBeforeLs = null;
       applyZoom(zoomCur - steps * WHEEL_STEP_Z, false); // 上滑（deltaY<0）→ 放大
-      syncPageFit(); // 自定义盘的页宽跟随（标准级别内部直接清 inline）
       /* 放大步若让内容超高/超宽（出现滚动条/内容被裁/右侧面板被顶出屏）→ 回滚本步
          放大（2026-10-15 张老师定「无论如何不应该让页面出现滚动条」；同日全屏截图
          报「右侧结算面板出屏」补充：横向溢出同样回滚）。只在放大方向回滚（缩小
-         不会产生溢出）；容差 2px 吸收页宽联动时的亚像素抖动。回滚后 zoomCur /
+         不会产生溢出）；容差 2px 吸收亚像素抖动。回滚后 zoomCur /
          zoomWant 均已由 applyZoom 复原（setZoomVisual 内 syncReportZoom 面板归位），
          320ms 后 zoomDragEnd 落盘的是回滚值 */
       const nowOv = flowOverflowPx();
       if (steps < 0 && (nowOv.y > baseOv.y + 2 || nowOv.x > baseOv.x + 2)) {
         applyZoom(prevZ, false);
-        syncPageFit();
       }
       if (wheelTimer !== null) clearTimeout(wheelTimer);
       wheelTimer = window.setTimeout(() => { wheelTimer = null; zoomDragEnd(); }, 320);
