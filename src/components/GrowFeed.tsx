@@ -1,6 +1,7 @@
 // 进步榜「加载更多 + 页码滑条」交互（2026-09-24 张老师要求：玩家展示样式与雷界排行一致；
 // 2026-10-14 加滑条翻页 + 递增批量，同 RankingFeed 语义）：
 // 表格复用 RankingRows 行渲染（排名=本进步榜内名次、姓名+军衔+8 列成绩、尾列=日升降），
+// 榜内只列名次上升者（2026-10-16 张老师定）；.grow_table 标记类供升降列金色渲染区分雷界榜，
 // 底部两行：PageSlider 滑条（严格一页换页/缓存回跳/松手立即加载）+ 递增批量加载更多。
 // 无搜索框/「我在哪里」（榜序按升降幅度，不走定位）。
 
@@ -142,7 +143,7 @@ export function GrowFeed({
   return (
     // rank_scroll：同 RankingFeed——表格与翻页控件同宽，窄屏盒内横滑时一起滚
     <div className="rank_scroll">
-      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
+      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table grow_table">
         <thead>
           <tr>
             <th>排名</th>
@@ -163,7 +164,7 @@ export function GrowFeed({
           {rows.length === 0 && (
             <tr>
               <td colSpan={12} style={{ textAlign: "center" }}>
-                快照数据积累两天后开始有进步排行。
+                今日暂无名次上升的玩家（快照数据积累两天后开始有进步排行）。
               </td>
             </tr>
           )}

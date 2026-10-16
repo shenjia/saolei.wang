@@ -3713,6 +3713,8 @@ body #page.ranking_old .ranking_box {
 
 /* 升降列（2008：↑黄；2026-10-16 张老师要求：上升箭头+数字改绿色，下降/持平灰，新上榜绿色「新」） */
 .ranking_table td.delta .up { color: #a6e22e; }
+/* 进步榜升降列（2026-10-16 张老师定）：恢复金色——进步榜只列名次上升者，尾列即「进步幅度」 */
+.ranking_table.grow_table td.delta .up { color: #fdc61d; }
 .ranking_table td.delta .down { color: #939387; }
 .ranking_table td.delta .flat { color: #939387; }
 .ranking_table td.delta .new { color: #a6e22e; font-weight: bold; }

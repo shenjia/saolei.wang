@@ -86,6 +86,7 @@ export type GrowRow = RankingRow & GrowUser;
 /** 进步榜（2026-09-24 张老师要求改为雷界排行同款表格）：行=RankingRow 同构（8 列成绩+录像），
  *  rank=本进步榜内名次（2026-10-16 张老师定：按进步幅度排序后的榜序位次，非全国总计时间名次），
  *  delta=昨日-今日名次差（升为正）；表内排序按 delta 降序（进步幅度大在前）。
+ *  上榜条件（2026-10-16 张老师定）：昨日到今日名次必须上升（delta > 0）——持平/下降/新上榜一律不出现。
  *  注意排序三元组 delta DESC, sum_time_rank ASC 中 sum_time_rank 唯一 → 全表全序，榜序位次稳定。 */
 export async function getGrowRanking(
   page: number,
@@ -106,7 +107,7 @@ export async function getGrowRanking(
      FROM rank_snapshot t
      JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
      JOIN \`user\` u ON u.id = t.user AND u.status = 0
-     WHERE t.date = ?
+     WHERE t.date = ? AND y.sum_time_rank > t.sum_time_rank
      ORDER BY delta DESC, t.sum_time_rank ASC
      LIMIT ? OFFSET ?`,
     yesterday,
@@ -118,7 +119,7 @@ export async function getGrowRanking(
     `SELECT COUNT(*) c FROM rank_snapshot t
      JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
      JOIN \`user\` u ON u.id = t.user AND u.status = 0
-     WHERE t.date = ?`,
+     WHERE t.date = ? AND y.sum_time_rank > t.sum_time_rank`,
     yesterday,
     today
   );
