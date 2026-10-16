@@ -9,7 +9,9 @@
 // 就地拉 /api/video/more 第 1 页整表替换，不导航不跳顶（与首页切换筛选同体验）；
 // URL 用 history.replaceState 同步（不产生历史记录、不触发 RSC、不计主页人气），
 // head 渲染位随内部筛选状态实时重渲染（tabs 高亮/链接实时更新）。
-// 非 client 模式（/video 列表页）行为不变：仍走链接导航，highlight 由内部 curOrder 推导。
+// 2026-10-16 晚：/video 列表页也切换 client 模式（张老师拍板「切换」）——级别 tabs 收进
+// 客户端壳 VideoListSection（页头+搜索框一起就地重渲染）；搜索框（author/time 筛选）
+// 仍走软导航，由 key=author-time 强制重挂载换入服务端新数据（client 内部状态随之归位）。
 
 "use client";
 
@@ -45,8 +47,10 @@ export function VideoListFeed({
   pageSize: number;
   /** 筛选参数（level/order/author/time；client 模式下仅作初始值） */
   query: { level: string; order: string; author?: number; time?: string };
-  /** 表头排序（/video：Link 导航；client 模式：href 仅作中键/新标签兜底，左键就地排序） */
-  headSort?: { base: string; order: VideoListOrder };
+  /** 表头排序（/video：Link 导航；client 模式：href 仅作中键/新标签兜底，左键就地排序）。
+   *  authorInLinks：client 模式兜底链接是否携带 author（/video 的 author 是真实筛选必须带；
+   *  用户主页 author 隐含在路径 /user/{id}，默认剥掉） */
+  headSort?: { base: string; order: VideoListOrder; authorInLinks?: boolean };
   /** 客户端筛选/排序模式（2026-10-16 用户主页）：切级别与表头排序就地生效不导航 */
   client?: boolean;
   /** head 渲染位（client 模式）：渲染在表格上方，随内部筛选状态实时重渲染 */
@@ -258,9 +262,13 @@ export function VideoListFeed({
             headSort
               ? {
                   base: headSort.base,
-                  // client 模式仅用户主页使用：author 已隐含在路径 /user/{id}，链接不重复携带
+                  // client 模式兜底链接：author 按 authorInLinks 决定（用户主页剥掉，/video 保留）
                   params: client
-                    ? { level: curLevel, time: query.time }
+                    ? {
+                        level: curLevel,
+                        author: headSort.authorInLinks ? query.author : undefined,
+                        time: query.time,
+                      }
                     : { level: curLevel, author: query.author, time: query.time },
                   order: curOrder,
                 }

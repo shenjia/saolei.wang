@@ -9,6 +9,9 @@
 // 排序改表头点击（成绩/3BV/3BV/s/评论/点击/上传时间），默认上传时间且不高亮，
 // 其余排序列高亮表头与对应数据。
 
+// 2026-10-16 晚（张老师拍板「切换」）：主栏换客户端壳 VideoListSection——切级别筛选、
+// 点表头排序就地生效不导航不跳顶；搜索框仍软导航（key=author-time 重挂载换数据）。
+
 import { getHotVideos, getVideoBoxStats, getVideoList } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import {
@@ -17,9 +20,7 @@ import {
   type VideoLevel,
   type VideoListOrder,
 } from "@/lib/config";
-import { Tabs } from "@/components/Pager";
-import { VideoListFeed } from "@/components/VideoListFeed";
-import { VideoSearch } from "@/components/VideoSearch";
+import { VideoListSection } from "@/components/VideoListSection";
 import { VideoHot } from "@/components/VideoHot";
 import { VideoStats } from "@/components/VideoStats";
 
@@ -58,41 +59,18 @@ export default async function VideoListPage({
     <div id="page" className="two_columns video_old">
     <ul id="home">
       <li className="main">
-        <div className="box video_box">
-          {/* 页头（排行页同款 page_head 编排）：h1 左、级别 tabs 紧随、搜索框贴行尾 */}
-          <div className="page_head">
-            {/* 标题恒为「录像」（张老师 2026-10-15：搜索后标题不变，级别状态由 tabs 表达） */}
-            <h1 className="page_title">录像</h1>
-            <div className="video_nav">
-              <Tabs
-                base="/video"
-                params={{ level, order, author, time }}
-                name="level"
-                current={level}
-                options={[
-                  ["all", "全部"],
-                  ["beg", "初级"],
-                  ["int", "中级"],
-                  ["exp", "高级"],
-                ]}
-              />
-              <div className="video_search">
-                <VideoSearch level={level} order={order} author={author} authorName={authorName} time={time} />
-              </div>
-            </div>
-          </div>
-          {/* key=筛选串：Tabs 软导航下服务端数据已变但客户端 useState(initial) 不重置，
-              必须强制重挂载（铁律：筛选 tab 驱动的列表必须 key={筛选串}） */}
-          <VideoListFeed
-            key={`${level}-${order}-${author ?? ""}-${time ?? ""}`}
-            initial={videos}
-            total={total}
-            pageSize={pageSize}
-            query={{ level, order, author, time }}
-            // 高亮已内化（VideoListFeed 由 order 推导：默认排序不高亮，其余高亮表头+数据列）
-            headSort={{ base: "/video", order }}
-          />
-        </div>
+        {/* 页头（h1+级别 tabs+搜索框）与表格都在壳组件内：级别/排序就地切换，
+            搜索走软导航（author/time 变化由壳内 key 重挂载换入新数据） */}
+        <VideoListSection
+          initial={videos}
+          total={total}
+          pageSize={pageSize}
+          level={level}
+          order={order}
+          author={author}
+          authorName={authorName}
+          time={time}
+        />
       </li>
       <li className="sidebar">
         <VideoHot videos={hot} />
