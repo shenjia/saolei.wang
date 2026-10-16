@@ -19,6 +19,9 @@
   同步后：34,035 用户、308,210 录像、150,479 动态、54,167 评论、BBS 2,833 帖/17,904 回复、
   历程 4,985、站内信 219。 staging 库 `saolei_mssql` 保留原始快照
 - **待办 Phase B**：~25 万新录像的实体文件（mvf/avf）下载解析，回填 hash/board/signature 等
+- **开发种子库（2026-10-16）**：`database/dev-seed.sql.gz`（1.3MB）＝TOP100 用户（密码随机化、邮箱清空）
+  + 测试管理员 admin/admin（role=100，中文名「管理员」/ Guan Li Yun）+ 每人最近 50 部通过录像与最好成绩录像；
+  生成脚本 `scripts/make-dev-dump.py`，口径见 README「种子库说明」，schema 变更后需重跑
 
 ## Schema 约定（沿用 2013 版 20 张表）
 
@@ -81,6 +84,9 @@
 ## 关键模块（src/lib/）
 
 - `mvf.ts` / `avf.ts`：MVF/AVF 解析器（594/349 行 C 的忠实 TS 移植），输出 RawVF 文本行
+- `videofile.ts`：录像文件统一读取（2026-10-16）——本地 `videos/` 命中回流，未命中按 `VIDEO_FALLBACK_ORIGIN`
+  （.env，现 https://new.saolei.wang，切主域后改 saolei.wang）**服务端反代**主站同名文件；
+  `/videos/[...path]` 与 `/video/download/[id]` 都走它。必须反代而非 302：客户端 fetch 跨域重定向被 CORS 拦
 - `rawvf.ts`：Parser::format / renderBoard 移植。renderBoard 曾复刻 PHP 7.1+ 负偏移怪癖
   （`"$row[-1]"` 取行尾 → 左边界格把同行 x=max 当左邻），2026-10-13 对照 Arbiter 实局确认该怪癖
   会让左列数字虚高，已移除；历史 board 串由 `scripts/sync/fix-board-numbers.py` 无损重算（雷位不变）

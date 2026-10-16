@@ -1,16 +1,14 @@
 // 录像下载（移植 VideoController::actionDownload：先 uniqueAction('download') 再发文件）
 // 文件名规则移植 VideoModel::getFilename：
 //   Exp 12.34s NF - 3BV 123 - # 456 EnglishName (2013-01-01).mvf
+// 本地文件缺失时按 VIDEO_FALLBACK_ORIGIN 反代主站同名文件（见 lib/videofile.ts）
 
-import { createReadStream, existsSync, statSync } from "fs";
 import path from "path";
-import { Readable } from "stream";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { scoreTime } from "@/lib/format";
 import { clientIp, uniqueVideoAction } from "@/lib/stat";
-
-const VIDEOS_ROOT = path.join(process.cwd(), "videos");
+import { openVideoStream } from "@/lib/videofile";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,8 +23,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   ]);
   if (!info) return new Response("Not Found", { status: 404 });
 
-  const filePath = path.resolve(VIDEOS_ROOT, "." + info.filepath);
-  if (!filePath.startsWith(VIDEOS_ROOT + path.sep) || !existsSync(filePath)) {
+  const file = await openVideoStream(info.filepath);
+  if (!file) {
     return new Response("Not Found", { status: 404 });
   }
 
@@ -39,12 +37,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     `${info.noflag ? " NF" : ""} - 3BV ${info.board3bv}` +
     ` - # ${Number(video.user)} ${author?.englishName ?? ""} (${date}).${ext}`;
 
-  const stream = Readable.toWeb(createReadStream(filePath)) as ReadableStream;
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "application/octet-stream",
-      "Content-Length": String(statSync(filePath).size),
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
-    },
-  });
+  const resHeaders: Record<string, string> = {
+    "Content-Type": "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+  };
+  if (file.size !== null) resHeaders["Content-Length"] = String(file.size);
+  return new Response(file.stream, { headers: resHeaders });
 }
