@@ -36,7 +36,7 @@ import { title as assessTitle } from "@/lib/assess";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  // 邮箱绑定提醒（2026-10-15）：登录且未绑定已验证邮箱 → 内容区顶部提醒条
+  // 邮箱绑定提醒（2026-10-15）：登录且未绑定已验证邮箱 → 遮罩浮层（2026-10-16 改版）
   const session = await getSession();
   let showEmailNotice = false;
   if (session) {
@@ -61,10 +61,13 @@ export default async function HomePage() {
   const newbieRows = newbies.map((n) => ({ ...n, title: assessTitle(n.expTime) }));
 
   return (
+    <>
+    {/* 邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层 + 以后再说 24h）。
+        渲染在 #page 之外：≤605px #page 有整页 zoom，fixed 遮罩做在里面会缩放失真 */}
+    {showEmailNotice && <EmailBindNotice />}
     <div id="page" className="two_columns">
     <ul id="home">
       <li className="main">
-        {showEmailNotice && <EmailBindNotice />}
         {/* 移动端（≤880 单列带）置顶「开始练习」大按钮：高度翻倍（总高 100 CSS px）、
             字号 26px、图标 36px；桌面隐藏（display:none），侧栏小按钮照旧（2026-10-15 张老师要求）。
             注：≤605 视口有整页 zoom（0.65~0.94 档），渲染尺寸同比例缩放 */}
@@ -158,5 +161,6 @@ export default async function HomePage() {
       </li>
     </ul>
     </div>
+    </>
   );
 }

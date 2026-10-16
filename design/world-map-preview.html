@@ -41,6 +41,26 @@
   .ranking_tabs .current { color: var(--gold); font-weight: bold; cursor: default; }
   .ranking_tabs .current::after { background: var(--gold); }
 
+
+  /* ================= 双栏布局（2026-10-15 二轮：地区榜同款，地图居右） ================= */
+  .area_top { display: flex; align-items: flex-start; gap: 16px; margin: 22px auto 0; width: 1108px; max-width: 100%; }
+  .area_top .box { width: auto; flex: 1 1 auto; margin: 0; min-width: 560px; }
+  .area_side { flex: 0 1 400px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .area_side .area_map { margin: 0; }
+  .area_side .rank_rules { margin: 0; }
+  /* 规则板块（地区榜同款观感） */
+  .rank_rules { background: var(--box); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px 10px; }
+  .rank_rules h2 { font-size: 16px; color: var(--dim); font-weight: 600; margin-bottom: 8px; }
+  .rank_rules ol { margin: 0 0 0 20px; }
+  .rank_rules li { color: var(--faint); font-size: 12.5px; line-height: 1.95; }
+  .rank_rules li b { color: var(--gold); font-weight: 600; }
+  .rank_rules li i { font-style: normal; color: var(--dim); }
+  @media (max-width: 1140px) {
+    .area_top { flex-direction: column; }
+    .area_top .box { min-width: 0; width: 778px; max-width: 100%; }
+    .area_side { flex: none; width: 778px; max-width: 100%; }
+  }
+
   /* ================= 地图卡片 ================= */
   .area_map { margin: 16px 4px 4px; background: var(--panel); border: 1px solid #3f3e35; border-radius: 8px; padding: 14px 16px 8px; }
   .am_head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
@@ -106,10 +126,10 @@
 <div class="wrap">
   <h1>世界排行 · 交互式世界地图</h1>
   <div class="sub">
-    与世界排行列表同页，在列表上方新增一张<b>可交互的世界地图</b>：各国按<b>综合排行指数</b>填色，指数越高越黄、越低越灰；
-    悬停国家<b>高亮 + 气泡</b>显示名次 / 排行人数 / 综合排行指数 / 领军人物；点击国家在下方 TOP100 中定位该国领军人物。
+    <b>二轮改稿（2026-10-15）</b>：版式对齐当天定稿的地区榜——<b>左表格卡 + 右地图</b>双栏，地图不再压在表格上方；
+    悬停国家<b>高亮 + 气泡</b>显示名次 / 排行人数 / 综合排行指数 / 领军人物（世界排名 + 总成绩）；点击国家在左侧 TOP100 中定位该国领军人物。
     <br>数据为 minesweepergame.com 世界排行<b>全量 4,411 位玩家</b>按国籍聚合（92 个国家/地区，2026-10-13 抓取），
-    国界含<b>台湾省与南海诸岛九段线</b>（我国标准地图口径）。
+    <b>一天抓取一次</b>；国界含<b>台湾省与南海诸岛九段线</b>（我国标准地图口径）。
   </div>
 
   <h2 class="sec">页面效果（鼠标放到国家上试试）</h2>
@@ -118,15 +138,51 @@
       <span class="logo">◎ 扫雷网 <i>Saolei.wang</i></span>
       <nav><a>首页</a><a class="cur">排行</a><a>录像</a><a>论坛</a><a>教程</a><a>军衔</a><a>下载</a><a>登录</a></nav>
     </div>
-    <div class="box">
-      <div class="page_head">
+    <div class="area_top">
+      <div class="box ranking_box">
+        <div class="page_head">
         <h1 class="page_title">世界排行</h1>
         <div class="ranking_tabs">
           <a>雷界</a><a>NF</a><a>进步</a><a>地区</a><span class="current">世界</span>
         </div>
       </div>
-
-      <div class="area_map">
+        <div id="world_top">
+        <table cellpadding="0" cellspacing="0">
+          <thead>
+            <tr><th>Rank</th><th class="name">Country / Name</th><th>Beg</th><th>Int</th><th>Exp</th><th>Sum</th></tr>
+          </thead>
+          <tbody>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>1</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Ze-En JU</td><td class="t"><b class="s_beg">0.49</b><span class="date">（2020-01-31）</span></td><td class="t"><b class="s_int">5.80</b><span class="date">（2022-03-31）</span></td><td class="t"><b class="s_exp">26.59</b><span class="date">（2022-08-23）</span></td><td class="sum">32.88</td></tr>
+          <tr data-flag="poland" class=""><td class="rank">No.&nbsp;<em>2</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/poland.gif" width="20" height="13" alt="poland"> Kamil Murański</td><td class="t"><b class="s_beg">0.49</b><span class="date">（2008-03-12）</span></td><td class="t"><b class="s_int">7.03</b><span class="date">（2012-10-11）</span></td><td class="t"><b class="s_exp">31.13</b><span class="date">（2010-07-03）</span></td><td class="sum">38.65</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>3</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> PKU扫雷</td><td class="t"><b class="s_beg">0.63</b><span class="date">（2026-04-19）</span></td><td class="t"><b class="s_int">7.70</b><span class="date">（2023-04-13）</span></td><td class="t"><b class="s_exp">30.68</b><span class="date">（2025-10-16）</span></td><td class="sum">39.01</td></tr>
+          <tr data-flag="philippines" class=""><td class="rank">No.&nbsp;<em>4</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/philippines.gif" width="20" height="13" alt="philippines"> jabajop</td><td class="t"><b class="s_beg">0.60</b><span class="date">（2025-10-14）</span></td><td class="t"><b class="s_int">8.31</b><span class="date">（2025-06-21）</span></td><td class="t"><b class="s_exp">30.37</b><span class="date">（2026-09-10）</span></td><td class="sum">39.28</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>5</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Arya</td><td class="t"><b class="s_beg">0.59</b><span class="date">（2022-01-29）</span></td><td class="t"><b class="s_int">7.54</b><span class="date">（2026-09-03）</span></td><td class="t"><b class="s_exp">31.72</b><span class="date">（2025-01-28）</span></td><td class="sum">39.85</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>6</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Ming-Xuan LI</td><td class="t"><b class="s_beg">0.87</b><span class="date">（2020-04-18）</span></td><td class="t"><b class="s_int">8.85</b><span class="date">（2020-08-25）</span></td><td class="t"><b class="s_exp">30.17</b><span class="date">（2021-10-14）</span></td><td class="sum">39.89</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>7</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Wei-Jia GUO</td><td class="t"><b class="s_beg">0.54</b><span class="date">（2015-05-22）</span></td><td class="t"><b class="s_int">7.51</b><span class="date">（2017-01-19）</span></td><td class="t"><b class="s_exp">32.02</b><span class="date">（2020-03-14）</span></td><td class="sum">40.07</td></tr>
+          <tr data-flag="poland" class=""><td class="rank">No.&nbsp;<em>8</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/poland.gif" width="20" height="13" alt="poland"> Kiraa96</td><td class="t"><b class="s_beg">0.45</b><span class="date">（2021-01-03）</span></td><td class="t"><b class="s_int">7.17</b><span class="date">（2025-12-04）</span></td><td class="t"><b class="s_exp">32.51</b><span class="date">（2026-04-06）</span></td><td class="sum">40.13</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>9</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Shao-Wu ZHANG</td><td class="t"><b class="s_beg">0.53</b><span class="date">（2019-09-21）</span></td><td class="t"><b class="s_int">8.26</b><span class="date">（2018-06-30）</span></td><td class="t"><b class="s_exp">31.74</b><span class="date">（2023-08-02）</span></td><td class="sum">40.53</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>10</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> D0ggy</td><td class="t"><b class="s_beg">0.58</b><span class="date">（2025-07-12）</span></td><td class="t"><b class="s_int">7.72</b><span class="date">（2024-12-22）</span></td><td class="t"><b class="s_exp">32.32</b><span class="date">（2026-08-11）</span></td><td class="sum">40.62</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>11</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Jun-Lin PAN</td><td class="t"><b class="s_beg">0.65</b><span class="date">（2024-05-19）</span></td><td class="t"><b class="s_int">7.79</b><span class="date">（2023-09-04）</span></td><td class="t"><b class="s_exp">32.68</b><span class="date">（2024-01-08）</span></td><td class="sum">41.12</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>12</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Xian-Yao ZHANG</td><td class="t"><b class="s_beg">0.65</b><span class="date">（2015-02-07）</span></td><td class="t"><b class="s_int">8.01</b><span class="date">（2025-10-07）</span></td><td class="t"><b class="s_exp">32.62</b><span class="date">（2020-03-02）</span></td><td class="sum">41.28</td></tr>
+          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>13</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Dan ZHOU</td><td class="t"><b class="s_beg">0.54</b><span class="date">（2013-09-18）</span></td><td class="t"><b class="s_int">9.19</b><span class="date">（2017-07-02）</span></td><td class="t"><b class="s_exp">31.90</b><span class="date">（2018-06-16）</span></td><td class="sum">41.63</td></tr>
+          <tr data-flag="austria" class=""><td class="rank">No.&nbsp;<em>14</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/austria.gif" width="20" height="13" alt="austria"> Thomas Kolar</td><td class="t"><b class="s_beg">0.51</b><span class="date">（2012-12-08）</span></td><td class="t"><b class="s_int">9.07</b><span class="date">（2012-04-20）</span></td><td class="t"><b class="s_exp">32.31</b><span class="date">（2026-05-06）</span></td><td class="sum">41.89</td></tr>
+          <tr data-flag="japan" class=""><td class="rank">No.&nbsp;<em>15</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/japan.gif" width="20" height="13" alt="japan"> Mao Igarashi</td><td class="t"><b class="s_beg">0.58</b><span class="date">（2015-12-19）</span></td><td class="t"><b class="s_int">9.06</b><span class="date">（2018-03-10）</span></td><td class="t"><b class="s_exp">32.59</b><span class="date">（2016-02-19）</span></td><td class="sum">42.23</td></tr>
+          </tbody>
+        </table>
+        <div class="more_loader">
+          <span class="button">查看完整排行</span>
+          <span class="button">加载更多</span>
+          <span class="all_loaded">已加载 15 / 100 位</span>
+        </div>
+      </div>
+        <div class="more_loader">
+          <span class="button">查看完整排行</span>
+          <span class="button">加载更多</span>
+          <span class="all_loaded">已加载 15 / 100 位</span>
+        </div>
+      </div>
+      <div class="area_side">
+        <div class="area_map">
         <div class="am_head">
           <div class="am_title">世界分布<span>颜色越黄 · 综合排行指数越高</span></div>
           <div class="am_legend">
@@ -357,37 +413,17 @@
           </svg>
           <div id="tip" class="am_tip"></div>
         </div>
-        <div class="am_hint">鼠标悬停查看国家详情 · 点击国家在下方定位该国领军人物</div>
+        <div class="am_hint">鼠标悬停查看国家详情 · 点击国家在左侧定位该国领军人物</div>
       </div>
-
-      <div id="world_top">
-        <table cellpadding="0" cellspacing="0">
-          <thead>
-            <tr><th>Rank</th><th class="name">Country / Name</th><th>Beg</th><th>Int</th><th>Exp</th><th>Sum</th></tr>
-          </thead>
-          <tbody>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>1</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Ze-En JU</td><td class="t"><b class="s_beg">0.49</b><span class="date">（2020-01-31）</span></td><td class="t"><b class="s_int">5.80</b><span class="date">（2022-03-31）</span></td><td class="t"><b class="s_exp">26.59</b><span class="date">（2022-08-23）</span></td><td class="sum">32.88</td></tr>
-          <tr data-flag="poland" class=""><td class="rank">No.&nbsp;<em>2</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/poland.gif" width="20" height="13" alt="poland"> Kamil Murański</td><td class="t"><b class="s_beg">0.49</b><span class="date">（2008-03-12）</span></td><td class="t"><b class="s_int">7.03</b><span class="date">（2012-10-11）</span></td><td class="t"><b class="s_exp">31.13</b><span class="date">（2010-07-03）</span></td><td class="sum">38.65</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>3</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> PKU扫雷</td><td class="t"><b class="s_beg">0.63</b><span class="date">（2026-04-19）</span></td><td class="t"><b class="s_int">7.70</b><span class="date">（2023-04-13）</span></td><td class="t"><b class="s_exp">30.68</b><span class="date">（2025-10-16）</span></td><td class="sum">39.01</td></tr>
-          <tr data-flag="philippines" class=""><td class="rank">No.&nbsp;<em>4</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/philippines.gif" width="20" height="13" alt="philippines"> jabajop</td><td class="t"><b class="s_beg">0.60</b><span class="date">（2025-10-14）</span></td><td class="t"><b class="s_int">8.31</b><span class="date">（2025-06-21）</span></td><td class="t"><b class="s_exp">30.37</b><span class="date">（2026-09-10）</span></td><td class="sum">39.28</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>5</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Arya</td><td class="t"><b class="s_beg">0.59</b><span class="date">（2022-01-29）</span></td><td class="t"><b class="s_int">7.54</b><span class="date">（2026-09-03）</span></td><td class="t"><b class="s_exp">31.72</b><span class="date">（2025-01-28）</span></td><td class="sum">39.85</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>6</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Ming-Xuan LI</td><td class="t"><b class="s_beg">0.87</b><span class="date">（2020-04-18）</span></td><td class="t"><b class="s_int">8.85</b><span class="date">（2020-08-25）</span></td><td class="t"><b class="s_exp">30.17</b><span class="date">（2021-10-14）</span></td><td class="sum">39.89</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>7</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Wei-Jia GUO</td><td class="t"><b class="s_beg">0.54</b><span class="date">（2015-05-22）</span></td><td class="t"><b class="s_int">7.51</b><span class="date">（2017-01-19）</span></td><td class="t"><b class="s_exp">32.02</b><span class="date">（2020-03-14）</span></td><td class="sum">40.07</td></tr>
-          <tr data-flag="poland" class=""><td class="rank">No.&nbsp;<em>8</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/poland.gif" width="20" height="13" alt="poland"> Kiraa96</td><td class="t"><b class="s_beg">0.45</b><span class="date">（2021-01-03）</span></td><td class="t"><b class="s_int">7.17</b><span class="date">（2025-12-04）</span></td><td class="t"><b class="s_exp">32.51</b><span class="date">（2026-04-06）</span></td><td class="sum">40.13</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>9</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Shao-Wu ZHANG</td><td class="t"><b class="s_beg">0.53</b><span class="date">（2019-09-21）</span></td><td class="t"><b class="s_int">8.26</b><span class="date">（2018-06-30）</span></td><td class="t"><b class="s_exp">31.74</b><span class="date">（2023-08-02）</span></td><td class="sum">40.53</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>10</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> D0ggy</td><td class="t"><b class="s_beg">0.58</b><span class="date">（2025-07-12）</span></td><td class="t"><b class="s_int">7.72</b><span class="date">（2024-12-22）</span></td><td class="t"><b class="s_exp">32.32</b><span class="date">（2026-08-11）</span></td><td class="sum">40.62</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>11</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Jun-Lin PAN</td><td class="t"><b class="s_beg">0.65</b><span class="date">（2024-05-19）</span></td><td class="t"><b class="s_int">7.79</b><span class="date">（2023-09-04）</span></td><td class="t"><b class="s_exp">32.68</b><span class="date">（2024-01-08）</span></td><td class="sum">41.12</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>12</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Xian-Yao ZHANG</td><td class="t"><b class="s_beg">0.65</b><span class="date">（2015-02-07）</span></td><td class="t"><b class="s_int">8.01</b><span class="date">（2025-10-07）</span></td><td class="t"><b class="s_exp">32.62</b><span class="date">（2020-03-02）</span></td><td class="sum">41.28</td></tr>
-          <tr data-flag="china" class="ours"><td class="rank">No.&nbsp;<em>13</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/china.gif" width="20" height="13" alt="china"> Dan ZHOU</td><td class="t"><b class="s_beg">0.54</b><span class="date">（2013-09-18）</span></td><td class="t"><b class="s_int">9.19</b><span class="date">（2017-07-02）</span></td><td class="t"><b class="s_exp">31.90</b><span class="date">（2018-06-16）</span></td><td class="sum">41.63</td></tr>
-          <tr data-flag="austria" class=""><td class="rank">No.&nbsp;<em>14</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/austria.gif" width="20" height="13" alt="austria"> Thomas Kolar</td><td class="t"><b class="s_beg">0.51</b><span class="date">（2012-12-08）</span></td><td class="t"><b class="s_int">9.07</b><span class="date">（2012-04-20）</span></td><td class="t"><b class="s_exp">32.31</b><span class="date">（2026-05-06）</span></td><td class="sum">41.89</td></tr>
-          <tr data-flag="japan" class=""><td class="rank">No.&nbsp;<em>15</em></td><td class="name"><img class="flag" src="https://dev.saolei.wang/images/flags/japan.gif" width="20" height="13" alt="japan"> Mao Igarashi</td><td class="t"><b class="s_beg">0.58</b><span class="date">（2015-12-19）</span></td><td class="t"><b class="s_int">9.06</b><span class="date">（2018-03-10）</span></td><td class="t"><b class="s_exp">32.59</b><span class="date">（2016-02-19）</span></td><td class="sum">42.23</td></tr>
-          </tbody>
-        </table>
-        <div class="more_loader">
-          <span class="button">查看完整排行</span>
-          <span class="button">加载更多</span>
-          <span class="all_loaded">已加载 15 / 100 位</span>
-        </div>
+        <div class="rank_rules">
+        <h2>世界排行规则</h2>
+        <ol>
+          <li><b>数据来源</b>：minesweepergame.com 的世界时间排行，与本站成绩无关。</li>
+          <li><b>统计口径</b>：地图按国籍聚合全部上榜选手——综合排行指数 = 该国每位上榜选手贡献（世界总人数 − 个人世界名次）之和。</li>
+          <li><b>更新频率</b>：数据缓存 <i>1</i> 天，每天更新一次。</li>
+          <li><b>地图</b>：纯静态 SVG（Natural Earth 110m + 我国标准口径中国国界），无第三方地图服务、无 Key。</li>
+        </ol>
+      </div>
       </div>
     </div>
   </div>
@@ -395,14 +431,15 @@
   <h2 class="sec">设计说明</h2>
   <ul class="notes">
     <li><b>口径</b>：与地区榜同一公式——国家综合排行指数 = 该国每位上榜选手贡献（世界总人数 − 个人世界名次）之和；颜色为指数开方归一后从灰 <span style="color:#4b4a41">#4B4A41</span> 过渡到站点金 <span style="color:#fdc61d">#FDC61D</span>（跨度 124 ~ 243.5W，开方让中游国家也有层次）。</li>
-    <li><b>数据源</b>：minesweepergame.com 世界排行全量榜单按国籍聚合（原站「世界排行」只给前 100，本图取全量 4,411 人，才能反映各国真实体量）。</li>
+    <li><b>数据源</b>：minesweepergame.com 世界排行全量榜单按国籍聚合（原站「世界排行」只给前 100，本图取全量 4,411 人，才能反映各国真实体量）；<b>一天抓取一次</b>（45 页请求分摊全天）。</li>
     <li><b>中国</b>：按我国口径合并统计（含原站旗帜为 Chinese Taipei 的选手），地图上不单列台湾。</li>
     <li><b>悬停</b>：国家提亮 + 金色光晕 + 白描边；气泡跟随鼠标，显示 国家 / 名次 / 排行人数 / 占比 / 综合排行指数 / 领军人物（世界排名 + 姓名 + 总成绩）。</li>
-    <li><b>点击</b>：在下方 TOP100 中滚动定位并高亮该国领军人物的行（该国无 TOP100 选手时不动作）。</li>
+    <li><b>点击</b>：在左侧 TOP100 中滚动定位并高亮该国领军人物的行（该国无 TOP100 选手时不动作）。</li>
     <li><b>地图底稿</b>：Miller 圆柱投影、中央经线 150°E（我国标准世界地图的太平洋居中排布：欧洲非洲在左、亚洲居中、美洲在右）；国界为 Natural Earth 110m 静态几何 + 我国标准口径中国国界（含台湾省、九段线）；<b>无第三方地图服务、无 Key、纯静态 SVG</b>，可离线、首屏快。</li>
     <li><b>小国</b>：国土在本比例尺下仅数像素的国家（新加坡、马耳他、毛里求斯、卢森堡、黎巴嫩等）加<b>引线圆点</b>保证可悬停。</li>
     <li><b>名称标签</b>：只给「有数据且国土够大」的 16 个国家常驻显示（90+ 国全标会糊成一片），其余悬停看气泡。</li>
-    <li><span class="q">待你确认</span>：① 只做地图（下方仍是个人 TOP100），还是同时加一张「国家排行」表？② 常驻名称标签保留这 16 个还是全去掉？③ 地图高度（当前整幅 ≈ 400px）是否合适？④ 点击行为按「定位领军人物」可以吗？</li>
+    <li><b>版式（二轮）</b>：对齐地区榜 2026-10-15 定稿——左卡 TOP100 表 + 右列地图/规则纵排；世界榜 #page 挂 two_columns（80% / max 960）。</li>
+    <li><span class="q">待你确认</span>：① 只做地图（左侧仍是个人 TOP100），还是同时加一张「国家排行」表？② 常驻名称标签保留这 16 个还是全去掉？③ 点击行为按「定位领军人物」可以吗？</li>
   </ul>
 </div>
 
@@ -422,7 +459,7 @@ function show(iso, evt){
     '<div class="tp_row"><i>综合排行指数</i><b class="gold">' + d.power + '</b></div>' +
     '<div class="tp_row"><i>领军人物</i><b>' + d.bestName + '</b></div>' +
     '<div class="tp_row"><i>世界排名</i><b>No.' + d.bestRank + '<em>总计 ' + d.bestSum + '</em></b></div>' +
-    '<div class="tp_foot">点击在下方定位该国领军人物 →</div>';
+    '<div class="tp_foot">点击在左侧定位该国领军人物 →</div>';
   tip.classList.add('show');
   move(evt);
   const p = findPath(iso); if (p) p.classList.add('hovering');
@@ -455,7 +492,7 @@ function bind(el){
 }
 document.querySelectorAll('.ctr[data-iso], .mini[data-iso]').forEach(bind);
 
-/* 点击国家 → 在下方 TOP100 中定位该国领军人物 */
+/* 点击国家 → 在左侧 TOP100 中定位该国领军人物 */
 const FLAG_OF = {"albania": "ALB", "algeria": "DZA", "argentina": "ARG", "armenia": "ARM", "australia": "AUS", "austria": "AUT", "bangladesh": "BGD", "belarus": "BLR", "belgium": "BEL", "bolivia": "BOL", "bosnia-herzegovina": "BIH", "brazil": "BRA", "bulgaria": "BGR", "canada": "CAN", "chile": "CHL", "china": "CHN", "chinese-taipei": "CHN", "colombia": "COL", "costa-rica": "CRI", "croatia": "HRV", "cuba": "CUB", "cyprus": "CYP", "czech-republic": "CZE", "denmark": "DNK", "dominican-republic": "DOM", "ecuador": "ECU", "egypt": "EGY", "estonia": "EST", "fiji": "FJI", "finland": "FIN", "france": "FRA", "germany": "DEU", "greece": "GRC", "guatemala": "GTM", "hungary": "HUN", "iceland": "ISL", "india": "IND", "indonesia": "IDN", "iran": "IRN", "iraq": "IRQ", "ireland": "IRL", "israel": "ISR", "italy": "ITA", "japan": "JPN", "jordan": "JOR", "kazakhstan": "KAZ", "korea-north": "PRK", "korea-south": "KOR", "lebanon": "LBN", "lithuania": "LTU", "luxembourg": "LUX", "macedonia": "MKD", "madagascar": "MDG", "malaysia": "MYS", "malta": "MLT", "mauritius": "MUS", "mexico": "MEX", "mongolia": "MNG", "montenegro": "MNE", "morocco": "MAR", "nepal": "NPL", "netherlands": "NLD", "new-zealand": "NZL", "norway": "NOR", "pakistan": "PAK", "palestine": "PSE", "peru": "PER", "philippines": "PHL", "poland": "POL", "portugal": "PRT", "romania": "ROU", "russia": "RUS", "serbia": "SRB", "singapore": "SGP", "slovakia": "SVK", "slovenia": "SVN", "south-africa": "ZAF", "spain": "ESP", "sri-lanka": "LKA", "sweden": "SWE", "switzerland": "CHE", "syria": "SYR", "thailand": "THA", "tunisia": "TUN", "turkey": "TUR", "ukraine": "UKR", "united-arab-emirates": "ARE", "united-kingdom": "GBR", "united-states": "USA", "uruguay": "URY", "uzbekistan": "UZB", "venezuela": "VEN", "vietnam": "VNM"};
 function locate(iso){
   const d = DATA[iso]; if (!d) return;
@@ -466,7 +503,7 @@ function locate(iso){
     const f = r.getAttribute('data-flag');
     if (!hit && FLAG_OF[f] === iso) hit = r;
   });
-  if (hit) hit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (hit) { hit.classList.add('hl'); hit.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   tip.classList.add('on');
   setTimeout(() => tip.classList.remove('on'), 1200);
 }
