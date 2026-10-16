@@ -31,8 +31,16 @@ export interface VideoSortSpec {
   order: VideoListOrder;
 }
 
-/** 表头（列定义唯一来源，两处共用）。有 sort 时可排序列渲染为链接（排行表头同语言） */
-export function VideoHead({ sort }: { sort?: VideoSortSpec }) {
+/** 表头（列定义唯一来源，两处共用）。有 sort 时可排序列渲染为链接（排行表头同语言）。
+ *  onSort（2026-10-16）：提供时普通左键点击就地客户端排序（preventDefault 不导航），
+ *  修饰键点击/中键仍走真实链接（新标签打开该排序的 URL，URL 即状态兜底） */
+export function VideoHead({
+  sort,
+  onSort,
+}: {
+  sort?: VideoSortSpec;
+  onSort?: (order: VideoListOrder) => void;
+}) {
   // 各列排序链接（id=默认排序：URL 省略 order 参数）
   function col(order: VideoListOrder, label: string, title: string) {
     if (!sort) return label;
@@ -43,7 +51,20 @@ export function VideoHead({ sort }: { sort?: VideoSortSpec }) {
     });
     // id=默认排序（上传时间）不高亮表头（张老师 2026-10-15：保持亮灰即可）
     return (
-      <Link href={href} className={sort.order === order && order !== "id" ? "current" : ""} title={title}>
+      <Link
+        href={href}
+        className={sort.order === order && order !== "id" ? "current" : ""}
+        title={title}
+        onClick={
+          onSort
+            ? (e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                onSort(order);
+              }
+            : undefined
+        }
+      >
         {label}
       </Link>
     );

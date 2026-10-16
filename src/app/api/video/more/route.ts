@@ -21,7 +21,10 @@ export async function GET(req: Request) {
   // ② 列表模式：带 page 参数即走 getVideoList 页码语义
   const pageRaw = p.get("page");
   if (pageRaw) {
-    const page = Math.max(2, parseInt(pageRaw, 10) || 2);
+    // 2026-10-16：page 放行 1（原钳 ≥2——「加载更多」首页恒来自服务端渲染；
+    // 用户主页录像版块 client 模式切筛选/排序需就地拉第 1 页整表替换。
+    // 既有调用方（加载更多/滑条）只传 ≥2，行为不变）
+    const page = Math.max(1, parseInt(pageRaw, 10) || 1);
     const level = parseLevel(p);
     // 2026-10-15：排序列扩为表头点击全集（parseVideoListOrder），并透传时间成绩搜索
     const order = parseVideoListOrder(p.get("order") ?? undefined);

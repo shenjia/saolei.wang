@@ -44,7 +44,7 @@ import {
   type VideoListOrder,
 } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
-import { VideoListFeed } from "@/components/VideoListFeed";
+import { UserVideoSection } from "@/components/UserVideoSection";
 import { HistoryBox } from "@/components/HistoryBox";
 import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime } from "@/components/Cells";
@@ -87,13 +87,8 @@ const PROFILE_FIELDS: [string, string][] = [
   ["pad", "鼠标垫"],
 ];
 
-/** 录像版块级别筛选 tabs（2026-09-27 张老师要求，与动态筛选同款 ranking_tabs 大号版） */
-const VIDEO_LEVEL_TABS: [string, string][] = [
-  ["all", "全部"],
-  ["beg", "初级"],
-  ["int", "中级"],
-  ["exp", "高级"],
-];
+/** 录像版块级别筛选 tabs（2026-09-27 张老师要求，与动态筛选同款 ranking_tabs 大号版）；
+ *  2026-10-16 移入客户端壳 UserVideoSection（就地切换不导航），此处不再需要 */
 
 /**
  * 统计盒行（2026-10-13 张老师要求，样式与首页/录像页「数据统计」统一）：
@@ -317,53 +312,19 @@ export default async function UserViewPage({
             />
           </div>
         )}
-        {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像按上传时间倒序，
-            「加载更多」走列表模式翻页），右上角「上传录像」按钮（仅本人可见）。
-            2026-10-13 三轮（张老师要求）：按钮改回 button.active 同款深底绿字，
-            与论坛「发布主题」风格统一（删 globals.css 定制绿底覆盖）。
-            2026-09-27 二轮：加 全部/初级/中级/高级 级别筛选（URL 即状态），
-            标题与筛选器居中对齐（与动态版块同款编排） */}
-        <div className="box" id="user_videos">
-          <div className="video_head_box">
-            <h1 className="gray">录像</h1>
-            {/* 与动态板块筛选同构：div.ranking_tabs > a/span（结构一致保证样式一致）。
-                scroll={false}：筛选切换保持视口原位（2026-09-27 三轮张老师要求：
-                默认软导航滚顶，切换级别后页面跳到最上面） */}
-            <div className="ranking_tabs user_video_tabs">
-              {VIDEO_LEVEL_TABS.map(([value, label]) => {
-                // 切级别保留当前排序（与 /video 列表页 Tabs 同语义）；默认排序省略 order 参数
-                const qs = new URLSearchParams({ level: value });
-                if (order !== "id") qs.set("order", order);
-                return value === level ? (
-                  <span key={value} className="current">
-                    {label}
-                  </span>
-                ) : (
-                  <Link scroll={false} key={value} href={`/user/${userId}?${qs}`}>
-                    {label}
-                  </Link>
-                );
-              })}
-            </div>
-            {isSelf && (
-              <Link href="/video/upload" className="button active small video_upload_btn">
-                上传录像
-              </Link>
-            )}
-          </div>
-          {/* key=筛选串铁律：切级别/排序必须强制重挂载（useState(initial) 不重置）。
-              highlight：默认排序（上传时间）不高亮，其余排序列高亮表头与数据列；
-              headSort：表头点击排序，base=用户主页（级别/author 由参数携带） */}
-          <VideoListFeed
-            key={`${userId}-${level}-${order}`}
-            initial={userVideos.videos}
-            total={userVideos.total}
-            pageSize={userVideos.pageSize}
-            query={{ level, order, author: userId }}
-            highlight={order === "id" ? undefined : order}
-            headSort={{ base: `/user/${userId}`, order }}
-          />
-        </div>
+        {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像，「加载更多」走列表模式翻页），
+            右上角「上传录像」按钮（仅本人可见）。2026-09-27 二轮：加 全部/初级/中级/高级 级别筛选；
+            标题与筛选器居中对齐（与动态版块同款编排）。2026-10-16 张老师要求：切级别/点表头排序
+            就地生效不导航不跳顶（UserVideoSection 客户端壳，与首页切换筛选同体验），URL 仍即状态 */}
+        <UserVideoSection
+          userId={userId}
+          isSelf={isSelf}
+          initial={userVideos.videos}
+          total={userVideos.total}
+          pageSize={userVideos.pageSize}
+          level={level}
+          order={order}
+        />
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
       </li>
       <li className="sidebar">

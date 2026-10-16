@@ -89,8 +89,7 @@ export default async function VideoListPage({
             total={total}
             pageSize={pageSize}
             query={{ level, order, author, time }}
-            // 默认排序（上传时间）不高亮表头与时间列；其余排序列高亮（张老师要求）
-            highlight={order === "id" ? undefined : order}
+            // 高亮已内化（VideoListFeed 由 order 推导：默认排序不高亮，其余高亮表头+数据列）
             headSort={{ base: "/video", order }}
           />
         </div>
