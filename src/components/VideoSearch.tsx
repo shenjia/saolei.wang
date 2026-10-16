@@ -2,6 +2,8 @@
 // 可搜索「玩家」或「时间成绩」——输中文出模糊推荐下拉（与排行搜索体验一致，复用
 // /api/ranking/search），选中即筛该玩家上传的录像；输数字（秒）出「时间成绩」项，
 // 匹配所有显示相同（±5ms 舍入窗）的成绩；纯整数同时探测同 ID 玩家（排行同款）。
+// 2026-10-16 张老师需求：纯整数额外探测同 ID 录像（/api/video/lookup），命中出
+// 「录像 #ID（级别 · 上传者）」项，回车/点击直达 /video/<id>；屏蔽录像视同不存在。
 // 交互语言对齐 RankingNav：防抖 250ms、键盘上下选、回车确认、唯一中文候选自动筛选、
 // 选中即收起（pickedRef 抑制随后那轮同名推荐）、点击外部收起。
 // 已有筛选（玩家/时间）时聚焦或清空输入 → 下拉出「清除搜索」。
@@ -11,7 +13,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { parseVideoTimeWindow, VIDEO_TIME_INPUT_RE } from "@/lib/config";
+import { LEVEL_NAMES, parseVideoTimeWindow, VIDEO_TIME_INPUT_RE, type Level } from "@/lib/config";
 import { scoreTime } from "@/lib/format";
 import { buildUrl } from "./Pager";
 import { toast } from "./Toast";
@@ -23,9 +25,17 @@ interface SuggestUser {
   sex: number;
 }
 
-/** 下拉项：玩家候选 / 时间成绩搜索 / 清除搜索（空数组=无匹配，渲染空态文案） */
+/** ID 探测命中的录像摘要（/api/video/lookup） */
+interface SuggestVideo {
+  id: number;
+  level: string;
+  chineseName: string;
+}
+
+/** 下拉项：玩家候选 / 录像 ID 直达 / 时间成绩搜索 / 清除搜索（空数组=无匹配，渲染空态文案） */
 type Item =
   | { kind: "user"; user: SuggestUser }
+  | { kind: "video"; video: SuggestVideo }
   | { kind: "time"; value: string }
   | { kind: "clear" };
 
@@ -70,7 +80,7 @@ export function VideoSearch({
     return { kind: "time", value: scoreTime(win[0] + 5) };
   }
 
-  // 防抖 250ms：时间项 / 数字输入的 ID 玩家 / 中文模糊玩家（setState 只发生在异步回调里）
+  // 防抖 250ms：时间项 / 数字输入的 ID 玩家+ID 录像 / 中文模糊玩家（setState 只发生在异步回调里）
   useEffect(() => {
     if (!dirtyRef.current) return; // 回显值不触发推荐（仅用户输入过才出下拉）
     if (!kw) {
@@ -85,10 +95,35 @@ export function VideoSearch({
     pickedRef.current = null;
     const seq = ++reqSeq.current;
     const timer = setTimeout(async () => {
-      // 时间格式输入：小数无玩家候选，直接给时间项；纯整数另探测同 ID 玩家
+      // 时间格式输入：小数无玩家候选，直接给时间项；纯整数另探测同 ID 玩家/录像
       if (isTimeInput && !isPureInt) {
         setItems([timeItem()]);
         setActive(0);
+        return;
+      }
+      // 纯整数：并行探测同 ID 玩家（排行同款）与同 ID 录像（2026-10-16 新增）
+      if (isPureInt) {
+        const [usersRes, videoRes] = await Promise.allSettled([
+          fetch(`/api/ranking/search?q=${encodeURIComponent(kw)}&limit=8`),
+          fetch(`/api/video/lookup?id=${kw}`),
+        ]);
+        if (seq !== reqSeq.current) return;
+        const users =
+          usersRes.status === "fulfilled" && usersRes.value.ok
+            ? ((await usersRes.value.json()) as { users: SuggestUser[] }).users
+            : [];
+        const video =
+          videoRes.status === "fulfilled" && videoRes.value.ok
+            ? ((await videoRes.value.json()) as { video: SuggestVideo | null }).video
+            : null;
+        // ID 录像置顶（整数输入时它是最高意图），同 ID 玩家与时间项随后
+        const list: Item[] = [];
+        if (video) list.push({ kind: "video", video });
+        list.push(...users.map((u) => ({ kind: "user" as const, user: u })));
+        if (isTimeInput) list.push(timeItem());
+        setItems(list);
+        setActive(0);
+        // 数字输入始终展示候选（用户可能还要继续输位数/小数），不自动筛选
         return;
       }
       try {
@@ -97,12 +132,10 @@ export function VideoSearch({
         const { users } = (await res.json()) as { users: SuggestUser[] };
         if (seq !== reqSeq.current) return;
         const list: Item[] = users.map((u) => ({ kind: "user" as const, user: u }));
-        if (isTimeInput) list.push(timeItem());
         setItems(list);
         setActive(0);
-        // 唯一中文候选 → 自动筛选（排行同款：确定只有一个选择即触发）；
-        // 数字输入始终展示候选（用户可能还要继续输位数/小数）
-        if (users.length === 1 && !isTimeInput) {
+        // 唯一中文候选 → 自动筛选（排行同款：确定只有一个选择即触发）
+        if (users.length === 1) {
           pickUser(users[0]);
         }
       } catch {
@@ -142,6 +175,14 @@ export function VideoSearch({
     nav({ author: u.id });
   }
 
+  /** 录像 ID 直达：跳详情页（不参与列表筛选，pickedRef 记选中后的 #id 防回弹） */
+  function pickVideo(v: SuggestVideo) {
+    pickedRef.current = `#${v.id}`;
+    setItems(null);
+    setQ(`#${v.id}`);
+    router.push(`/video/${v.id}`);
+  }
+
   function pickTime(value: string) {
     pickedRef.current = value;
     setItems(null);
@@ -156,29 +197,56 @@ export function VideoSearch({
     nav({});
   }
 
-  /** 回车无候选时提交：时间格式→时间搜索；文本→玩家精确反查（找不到弹气泡） */
+  /** 回车无候选时提交：时间格式→时间搜索；纯整数→ID 录像直达；#前缀强制走 ID，否则玩家精确反查 */
   async function submit(text: string) {
-    const key = text.trim();
+    const raw = text.trim();
+    const hash = raw.startsWith("#"); // # 前缀=用户明确指定录像/玩家 ID，跳过时间语义
+    const key = raw.replace(/^#/, "");
     if (!key) return;
-    if (VIDEO_TIME_INPUT_RE.test(key)) {
+    if (!hash && VIDEO_TIME_INPUT_RE.test(key)) {
       const win = parseVideoTimeWindow(key);
       if (win) pickTime(scoreTime(win[0] + 5));
       return;
     }
+    if (hash || /^\d+$/.test(key)) {
+      // 纯整数：探测 ID 录像，命中直达；未命中回落玩家精确反查（同 ID 玩家）
+      try {
+        const res = await fetch(`/api/video/lookup?id=${key}`);
+        if (res.ok) {
+          const { video } = (await res.json()) as { video: SuggestVideo | null };
+          if (video) {
+            pickedRef.current = `#${video.id}`;
+            setItems(null);
+            setQ(`#${video.id}`);
+            router.push(`/video/${video.id}`);
+            return;
+          }
+        }
+      } catch {
+        /* 网络异常继续走玩家反查 */
+      }
+      const u = await findUser(key);
+      if (u) pickUser(u);
+      else toast(`没有找到 ID 为 ${key} 的录像或玩家`);
+      return;
+    }
+    const u = await findUser(key);
+    if (u) pickUser(u);
+    else toast("没有找到符合条件的玩家");
+  }
+
+  /** 玩家精确反查：中文名精确命中优先，否则取第一个候选 */
+  async function findUser(key: string): Promise<SuggestUser | null> {
     try {
       const res = await fetch(`/api/ranking/search?q=${encodeURIComponent(key)}&limit=8`);
       if (res.ok) {
         const { users } = (await res.json()) as { users: SuggestUser[] };
-        const hit = users.find((u) => u.chineseName === key) ?? users[0];
-        if (hit) {
-          pickUser(hit);
-          return;
-        }
+        return users.find((u) => u.chineseName === key) ?? users[0] ?? null;
       }
     } catch {
-      /* 网络异常走下方气泡 */
+      /* 网络异常走上方气泡 */
     }
-    toast("没有找到符合条件的玩家");
+    return null;
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -200,6 +268,7 @@ export function VideoSearch({
       const item = items[active];
       if (!item) return;
       if (item.kind === "user") pickUser(item.user);
+      else if (item.kind === "video") pickVideo(item.video);
       else if (item.kind === "time") pickTime(item.value);
       else if (item.kind === "clear") pickClear();
     } else if (e.key === "Escape") {
@@ -218,8 +287,8 @@ export function VideoSearch({
           type="text"
           value={q}
           maxLength={12}
-          placeholder="玩家或成绩"
-          title="输入玩家姓名筛选其上传的录像，或输入时间成绩（秒，如 37.29）查找相同成绩的所有录像"
+          placeholder="玩家/成绩/ID"
+          title="输入玩家姓名筛选其上传的录像，输入时间成绩（秒，如 37.29）查找相同成绩的所有录像，或输入录像 ID（如 345155）直达该录像"
           onChange={(e) => {
             dirtyRef.current = true;
             setQ(e.target.value);
@@ -242,7 +311,7 @@ export function VideoSearch({
       {items !== null && (
         <ul className="goto_suggest">
           {items.length === 0 ? (
-            <li className="goto_empty">没有找到符合条件的玩家</li>
+            <li className="goto_empty">没有找到符合条件的玩家或录像</li>
           ) : (
             items.map((item, i) => {
               const cls = i === active ? "active" : "";
@@ -256,6 +325,22 @@ export function VideoSearch({
                     >
                       <em>{item.user.chineseName}</em>
                       <span>{item.user.englishName || `ID ${item.user.id}`}</span>
+                    </button>
+                  </li>
+                );
+              }
+              if (item.kind === "video") {
+                return (
+                  <li key={`v${item.video.id}`} className={cls || undefined}>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => pickVideo(item.video)}
+                    >
+                      <em>录像 #{item.video.id}</em>
+                      <span>
+                        {LEVEL_NAMES[item.video.level as Level] ?? item.video.level} · {item.video.chineseName}
+                      </span>
                     </button>
                   </li>
                 );
