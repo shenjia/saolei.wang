@@ -12,18 +12,18 @@ import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLE_CLASSES, titleConditionText,
 import { score3bvs, scoreTime, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
+import { DeltaArrow } from "./RankingRows";
 import { RankBadge } from "./RankBadge";
 
 function formatScore(order: string, value: number): string {
   return order === "time" ? scoreTime(value) : score3bvs(value);
 }
 
-/** 绝对提升值（2026-10-16 破纪录动态改版，张老师定方案 B）：新-旧。
-    时间记负=更快（2 位小数，与 scoreTime 同精度）；3BV/s 记 +=更高（3 位小数，站点口径） */
+/** 提升值（2026-10-16 破纪录动态改版，张老师定）：|新-旧| 绝对量，正负号由箭头方向表达
+    （五轮：去括号去+-，值前放小三角箭头）；时间 2 位小数、3BV/s 3 位小数（站点口径） */
 function formatDelta(order: string, oldScore: number, newScore: number): string {
-  const dv = (newScore - oldScore) / 1000;
-  const sign = dv > 0 ? "+" : "";
-  return order === "time" ? `${sign}${dv.toFixed(2)}` : `${sign}${dv.toFixed(3)}`;
+  const dv = Math.abs(newScore - oldScore) / 1000;
+  return order === "time" ? dv.toFixed(2) : dv.toFixed(3);
 }
 
 export function NewsCellView({ news, title }: { news: NewsItem; title: string }) {
@@ -114,9 +114,14 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
                 <Link href={`/video/${news.reference}`} target="_blank" className="score record_score">
                   {formatScore(d.od ?? "time", d.cr!)}
                 </Link>
-                {/* record_extra：宽度不够时整段隐藏（提升值），只留新成绩避免换行 */}
+                {/* record_extra：宽度不够时整段隐藏（提升值），只留新成绩避免换行。
+                    五轮张老师定：去括号去+-，值前放箭头小三角（时间▼=数值下降即更快、3BV/s ▲=更高），
+                    颜色继承 .delta 金色，与排行页升降列同款箭头件 */}
                 <span className="record_extra" ref={extraRef}>
-                  <span className="delta">（{formatDelta(d.od ?? "time", d.or!, d.cr!)}）</span>
+                  <span className="delta">
+                    <DeltaArrow dir={(d.od ?? "time") === "time" ? "down" : "up"} />
+                    {formatDelta(d.od ?? "time", d.or!, d.cr!)}
+                  </span>
                 </span>
               </>
             ) : (

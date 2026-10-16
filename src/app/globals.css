@@ -3784,11 +3784,10 @@ body #page.ranking_old .ranking_box {
 #news .record.person em.private { color: #939387; }
 #news .record.person em.new { color: #636359; }
 
-/* 破纪录动态改版（2026-10-16 张老师定）：新成绩在前可点，后放「绝对提升值」：
-   全角括号包带符号数字（时间负=更快、3BV/s +=更高）、不加单位；三轮去掉绿色箭头、字号缩小底对齐。
-   四轮试色：新成绩亮灰 #b1b1a4 加粗、提升值金 #fdc61a（与 legacy 金同源），对调前两轮的灰/绿。
-   提权写法同 .news_article 模式：压过 legacy #news .score 基础金，hover 仍绿；
-   record_extra（提升值）在行宽不足时仍走 NewsCellView 既有自适应隐藏逻辑。 */
+/* 破纪录动态改版（2026-10-16 张老师定）：新成绩在前可点，后放「绝对提升值」；
+   三轮去绿色箭头、字号缩小底对齐；四轮试色新成绩亮灰、提升值金；
+   五轮：去括号去+-，值前放排行页升降列同款小三角（DeltaArrow，时间▼=更快、3BV/s ▲=更高，
+   颜色继承金色）。record_extra（提升值）在行宽不足时仍走 NewsCellView 既有自适应隐藏逻辑。 */
 #news a.score.record_score {
   color: #b1b1a4;
 }
@@ -3799,6 +3798,12 @@ body #page.ranking_old .ranking_box {
   color: #fdc61a;
   font-size: 13px;
   vertical-align: bottom;
+  margin-left: 4px;
+}
+#news .delta svg.d_arrow {
+  display: inline-block;
+  vertical-align: -1px;
+  margin-right: 2px;
 }
 
 /* 动态中的文章标题《…》（2026-10-13 张老师要求）：不用金色，改亮灰 #bbbbbb
