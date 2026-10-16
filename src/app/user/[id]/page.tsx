@@ -29,7 +29,20 @@ import {
 } from "@/lib/queries";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
-import { LEVELS, LEVEL_NAMES, TITLE_COLORS, USER_NEWS_NUMBER, USER_VIDEO_NUMBER, VIDEO_LEVELS, AREA_OVERSEAS, areaDisplay, type Level, type VideoLevel } from "@/lib/config";
+import {
+  VIDEO_LEVELS,
+  parseVideoListOrder,
+  LEVELS,
+  LEVEL_NAMES,
+  TITLE_COLORS,
+  USER_NEWS_NUMBER,
+  USER_VIDEO_NUMBER,
+  AREA_OVERSEAS,
+  areaDisplay,
+  type Level,
+  type VideoLevel,
+  type VideoListOrder,
+} from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoListFeed } from "@/components/VideoListFeed";
 import { HistoryBox } from "@/components/HistoryBox";
@@ -121,6 +134,9 @@ export default async function UserViewPage({
   const level = (VIDEO_LEVELS as readonly string[]).includes(sp.level ?? "")
     ? (sp.level as VideoLevel)
     : "all";
+  // 录像版块排序（2026-10-16 张老师要求）：与 /video 列表页同语义——表头点击排序
+  // （成绩/3BV/3BV/s/评论/点击/上传时间），默认上传时间（id）且不高亮
+  const order: VideoListOrder = parseVideoListOrder(sp.order);
 
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
@@ -140,9 +156,9 @@ export default async function UserViewPage({
     getHistory(userId),
     getSession(),
     getUserRanks(userId),
-    // 本人录像：按上传时间倒序第一页（与 /video?author= 同语义）；
+    // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
     // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）
-    getVideoList({ level, order: "id", author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
+    getVideoList({ level, order, author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
     // 今日新增录像（按级别），统计盒增量列用（2026-10-13 张老师要求）
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
@@ -314,17 +330,20 @@ export default async function UserViewPage({
                 scroll={false}：筛选切换保持视口原位（2026-09-27 三轮张老师要求：
                 默认软导航滚顶，切换级别后页面跳到最上面） */}
             <div className="ranking_tabs user_video_tabs">
-              {VIDEO_LEVEL_TABS.map(([value, label]) =>
-                value === level ? (
+              {VIDEO_LEVEL_TABS.map(([value, label]) => {
+                // 切级别保留当前排序（与 /video 列表页 Tabs 同语义）；默认排序省略 order 参数
+                const qs = new URLSearchParams({ level: value });
+                if (order !== "id") qs.set("order", order);
+                return value === level ? (
                   <span key={value} className="current">
                     {label}
                   </span>
                 ) : (
-                  <Link scroll={false} key={value} href={`/user/${userId}?level=${value}`}>
+                  <Link scroll={false} key={value} href={`/user/${userId}?${qs}`}>
                     {label}
                   </Link>
-                )
-              )}
+                );
+              })}
             </div>
             {isSelf && (
               <Link href="/video/upload" className="button active small video_upload_btn">
@@ -332,13 +351,17 @@ export default async function UserViewPage({
               </Link>
             )}
           </div>
-          {/* key=筛选串铁律：切级别必须强制重挂载（useState(initial) 不重置） */}
+          {/* key=筛选串铁律：切级别/排序必须强制重挂载（useState(initial) 不重置）。
+              highlight：默认排序（上传时间）不高亮，其余排序列高亮表头与数据列；
+              headSort：表头点击排序，base=用户主页（级别/author 由参数携带） */}
           <VideoListFeed
-            key={`${userId}-${level}`}
+            key={`${userId}-${level}-${order}`}
             initial={userVideos.videos}
             total={userVideos.total}
             pageSize={userVideos.pageSize}
-            query={{ level, order: "id", author: userId }}
+            query={{ level, order, author: userId }}
+            highlight={order === "id" ? undefined : order}
+            headSort={{ base: `/user/${userId}`, order }}
           />
         </div>
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
