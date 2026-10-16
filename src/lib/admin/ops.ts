@@ -12,10 +12,11 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
 import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE, countsInTotal } from "@/lib/config";
-import { decodeLegacyEntities } from "@/lib/format";
+import { decodeLegacyEntities, formatDate } from "@/lib/format";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
 import { reviewVideo } from "@/lib/review";
+import { banUntilFromKey, unbanUser } from "@/lib/ban";
 import { broadcast, sendSystemMessage } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
 import { logAdmin } from "./log";
@@ -97,8 +98,38 @@ async function dispatch(
       if (id === actor.uid) return { ok: false, error: "不能封禁自己" };
       const user = await prisma.user.findUnique({ where: { id: BigInt(id) } });
       if (!user) return { ok: false, error: "玩家不存在" };
-      await prisma.user.update({ where: { id: BigInt(id) }, data: { status, updateTime: BigInt(now()) } });
-      return { ok: true, message: `${status === -1 ? "封禁" : "解封"}玩家 ${user.chineseName}（#${id}）` };
+
+      if (status === 0) {
+        // 解封：连坐封禁的录像按 status_bak 精确恢复（2026-10-16 张老师拍板）
+        const restored = await unbanUser(id);
+        return {
+          ok: true,
+          message: `解封玩家 ${user.chineseName}（#${id}）${restored > 0 ? `，恢复连坐录像 ${restored} 部` : ""}`,
+        };
+      }
+
+      // 封禁：时长（duration key，缺省永久）+ 可选连坐录像（banVideos）
+      const duration = toText(p.duration ?? "0", 8) || "0";
+      const banUntil = banUntilFromKey(duration);
+      if (banUntil === null) return { ok: false, error: "参数错误：非法封禁时长" };
+      const ts = BigInt(now());
+      let bannedVideos = 0;
+      if (toBool(p.banVideos)) {
+        // 连坐：待审(10)/已通过(20) → 0，status_bak 记原值供解禁恢复；单独屏蔽(0) 的不动
+        const r = await prisma.$executeRaw`
+          UPDATE video SET status_bak = status, status = ${VIDEO_STATUS.BANNED}, update_time = ${ts}
+          WHERE user = ${BigInt(id)} AND status IN (${VIDEO_STATUS.NORMAL}, ${VIDEO_STATUS.REVIEWED})`;
+        bannedVideos = Number(r);
+      }
+      await prisma.user.update({
+        where: { id: BigInt(id) },
+        data: { status: -1, banUntil: BigInt(banUntil), updateTime: ts },
+      });
+      const durLabel = banUntil === 0 ? "永久" : `至 ${formatDate(banUntil, "Y-m-d H:i")}`;
+      return {
+        ok: true,
+        message: `封禁玩家 ${user.chineseName}（#${id}），时长${durLabel}${bannedVideos > 0 ? `，同步封禁录像 ${bannedVideos} 部` : "，录像不动"}`,
+      };
     }
 
     case "user.setRole": {

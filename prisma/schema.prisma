@@ -25,6 +25,8 @@ model User {
   updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
   // 最近登录（2026-09-23 个人信息卡片新增，登录时刷新；0=未记录）
   lastLoginTime BigInt @default(0) @map("last_login_time") @db.BigInt
+  // 封禁截止 Unix 秒（2026-10-16 限时封禁）：仅 status=-1 时有意义；0=永久封禁；到期自动解禁
+  banUntil BigInt @default(0) @map("ban_until") @db.BigInt
 
   // 2026-10-15 上线前性能审计新增：
   // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；
@@ -198,6 +200,9 @@ model Video {
   reviewTime BigInt? @map("review_time") @db.BigInt
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+  // 连坐封禁前的 status（2026-10-16 限时封禁）：账号封禁勾选「同步封禁录像」时记录原值（10/20），
+  // 解禁时据此精确恢复并清零；0=非连坐（单独屏蔽），解禁时不动
+  statusBak  Int     @default(0) @map("status_bak") @db.TinyInt
 
   // 2026-10-15 上线前性能审计新增：
   // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计

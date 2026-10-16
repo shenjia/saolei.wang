@@ -7,10 +7,11 @@ import { getSession } from "@/lib/auth";
 import { USER_ROLE } from "@/lib/config";
 import { getUserList, getAreaOptions } from "@/lib/admin/data";
 import { AdminAction, AdminSelect } from "@/components/admin/AdminAction";
+import { BanUserDialog } from "@/components/admin/BanUserDialog";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager, RoleTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
-import { scoreTime, timeOpposite } from "@/lib/format";
+import { formatDate, scoreTime, timeOpposite } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "玩家管理 | 管理后台" };
@@ -142,7 +143,12 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                     {u.status === 0 ? (
                       <span className="admin_tag ok">正常</span>
                     ) : (
-                      <span className="admin_tag bad">已封禁</span>
+                      <span
+                        className="admin_tag bad"
+                        title={u.banUntil > 0 ? `至 ${formatDate(u.banUntil, "Y-m-d H:i")} 自动解禁` : "永久封禁"}
+                      >
+                        已封禁{u.banUntil > 0 ? `·至 ${formatDate(u.banUntil, "m-d H:i")}` : "·永久"}
+                      </span>
                     )}
                   </td>
                   <td className="sub">{u.createTime ? timeOpposite(u.createTime, 0, "Y-m-d") : "—"}</td>
@@ -154,20 +160,14 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                     {isSuper && u.id !== session?.uid && (
                       <>
                         {u.status === 0 ? (
-                          <AdminAction
-                            op="user.setStatus"
-                            params={{ id: u.id, status: -1 }}
-                            label="封禁"
-                            variant="danger"
-                            confirm={`确认封禁「${u.chineseName}」？封禁后无法登录。`}
-                          />
+                          <BanUserDialog userId={u.id} name={u.chineseName} />
                         ) : (
                           <AdminAction
                             op="user.setStatus"
                             params={{ id: u.id, status: 0 }}
                             label="解封"
                             variant="primary"
-                            confirm={`确认解封「${u.chineseName}」？`}
+                            confirm={`确认解封「${u.chineseName}」？连坐封禁的录像将自动恢复。`}
                           />
                         )}
                       </>
@@ -207,7 +207,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       <AdminCard title="权限说明">
         <div className="admin_note">
           · <b>管理员（10）</b>可审核录像、处理评论 / 论坛 / 动态；<b>超级管理员（100）</b>额外可封禁玩家、改角色、重置密码、注销账号、群发站内信。<br />
-          · 封禁依靠 <code>user.status</code>：0 = 正常、-1 = 封禁；登录接口会直接拒绝被封禁账号。<br />
+          · 封禁依靠 <code>user.status</code>：0 = 正常、-1 = 封禁；登录接口会直接拒绝被封禁账号。封禁可选时长（一天/一周/一月/一年/永久），到期自动解禁；可选同步封禁该玩家录像，解禁时自动恢复。<br />
           · 注销账号（玩家详情页）只删除登录凭据（user_auth / oauth），保留成绩与录像，避免破坏排行榜与历史引用；仅对没有任何录像和论坛主题的玩家开放，有内容的玩家请改用封禁。<br />
           · 后台所有写操作都会记入<Link href="/admin/logs"> 操作日志 </Link>。
         </div>

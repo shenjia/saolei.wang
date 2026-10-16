@@ -6,6 +6,7 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
+import { ensureBansLifted } from "./ban";
 
 const SESSION_COOKIE = "saolei_session";
 const TICKET_COOKIE = "saolei_oauth_ticket";
@@ -89,6 +90,8 @@ export async function setSession(user: SessionUser): Promise<void> {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
+  // 到期限时封禁的节流清扫兜底（60s 一次，2026-10-16）；读会话每页必经，顺便带动全站自动解禁
+  await ensureBansLifted();
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   return token ? verify<SessionUser>(token) : null;

@@ -8,6 +8,7 @@ import { USER_ROLE } from "@/lib/config";
 import { getUserDetailAdmin } from "@/lib/admin/data";
 import { opLabel } from "@/lib/admin/log";
 import { AdminAction, AdminForm } from "@/components/admin/AdminAction";
+import { BanUserDialog } from "@/components/admin/BanUserDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, score3bvs, scoreTime, timeOpposite } from "@/lib/format";
@@ -36,7 +37,13 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         </h1>
         <div className="right">
           <RoleTag role={u.role} />
-          {u.status === 0 ? <span className="admin_tag ok">正常</span> : <span className="admin_tag bad">已封禁</span>}
+          {u.status === 0 ? (
+            <span className="admin_tag ok">正常</span>
+          ) : (
+            <span className="admin_tag bad">
+              已封禁{u.banUntil > 0 ? `·至 ${formatDate(u.banUntil, "Y-m-d H:i")}` : "·永久"}
+            </span>
+          )}
           <Link className="admin_btn" href={`/user/${u.id}`} target="_blank">
             前台主页
           </Link>
@@ -130,14 +137,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <AdminCard title="账号处置" more="仅超级管理员可见，全部操作记入日志">
           <div className="admin_ops" style={{ marginBottom: 14 }}>
             {u.status === 0 ? (
-              <AdminAction
-                op="user.setStatus"
-                params={{ id: u.id, status: -1 }}
-                label="封禁账号"
-                variant="danger"
-                sm={false}
-                confirm={`确认封禁「${u.chineseName}」？封禁后该账号无法登录，已有成绩保留。`}
-              />
+              <BanUserDialog userId={u.id} name={u.chineseName} sm={false} />
             ) : (
               <AdminAction
                 op="user.setStatus"
@@ -145,7 +145,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                 label="解除封禁"
                 variant="primary"
                 sm={false}
-                confirm={`确认解封「${u.chineseName}」？`}
+                confirm={`确认解封「${u.chineseName}」？连坐封禁的录像将自动恢复。`}
               />
             )}
             <AdminAction

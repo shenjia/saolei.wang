@@ -26,6 +26,8 @@ export interface AdminUserRow extends UserBrief {
   role: number;
   createTime: number;
   lastLoginTime: number;
+  /** 封禁截止 Unix 秒（仅 status=-1 时有意义；0=永久） */
+  banUntil: number;
   title: string;
   sumTime: number;
   /** 录像总数 */
@@ -144,6 +146,7 @@ export async function getUserList(
       role: auth?.role ?? 0,
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
+      banUntil: N(u.banUntil),
       title: await assessTitle(expTime),
       sumTime,
       videos: vcMap.get(id) ?? 0,
@@ -257,6 +260,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       role: auth?.role ?? 0,
       createTime: N(user.createTime),
       lastLoginTime: N(user.lastLoginTime),
+      banUntil: N(user.banUntil),
       title: await assessTitle(expTime),
       sumTime,
       videos: await prisma.video.count({ where: { user: uid } }),
@@ -787,6 +791,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
       role: aMap.get(id)?.role ?? 0,
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
+      banUntil: N(u.banUntil),
       title: await assessTitle(expTime),
       sumTime,
       videos: 0,

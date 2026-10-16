@@ -275,6 +275,18 @@ export const VIDEO_STATUS = {
   REVIEWED: 20,
 } as const;
 
+/**
+ * 封禁时长选项（2026-10-16 限时封禁）：[key, 文案, 秒]（0 = 永久）。
+ * 放在纯常量模块：后台弹窗（客户端组件）与 lib/ban.ts（服务端）共用。
+ */
+export const BAN_DURATIONS: [string, string, number][] = [
+  ["1d", "一天", 24 * 3600],
+  ["7d", "一周", 7 * 24 * 3600],
+  ["30d", "一月", 30 * 24 * 3600],
+  ["365d", "一年", 365 * 24 * 3600],
+  ["0", "永久", 0],
+];
+
 export const VIDEO_STATUS_NAMES: Record<number, string> = {
   0: "已屏蔽",
   10: "待审核",

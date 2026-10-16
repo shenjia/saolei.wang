@@ -8848,3 +8848,17 @@ html.op-fakefs #header {
   justify-content: flex-end;
   gap: 10px;
 }
+/* flex 子项默认 min-width:auto 不换行，长文案会顶出对话框（2026-10-16 实证） */
+.ban_check span {
+  flex: 1;
+  min-width: 0;
+}
+/* 弹窗渲染在 td.ops（nowrap）内会继承不换行导致文案顶出（2026-10-16 实证），强制恢复 */
+.ban_dialog,
+.ban_dialog * {
+  white-space: normal;
+  text-align: left;
+}
+.ban_dur_opt {
+  white-space: nowrap;
+}

@@ -36,6 +36,7 @@ import {
 } from "./config";
 import { publishNews } from "./news";
 import { decodeLegacyEntities } from "./format";
+import { liftExpiredBans } from "./ban";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -334,8 +335,11 @@ export async function getNewsCount(opts: Parameters<typeof getNewsCountImpl>[0])
 // 不动 schema；封禁量级仅数百，对 3.4 万行的 user_scores 代价可忽略。
 // 原始 SQL 处直接 `JOIN \`user\` u ON u.id = s.id AND u.status = 0`（同义，且更省）。
 // 缓存 60 秒：后台封禁/解封最多 1 分钟内体现在榜单。
+// 2026-10-16 限时封禁：缓存重建前先清扫到期限时封禁（解禁+连坐录像恢复），
+// 保证黑名单不含「已到期」账号。
 const fetchBannedUserIds = unstable_cache(
   async (): Promise<number[]> => {
+    await liftExpiredBans();
     const rows = await prisma.user.findMany({ where: { status: { not: 0 } }, select: { id: true } });
     return rows.map((r) => N(r.id));
   },

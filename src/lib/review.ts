@@ -274,6 +274,8 @@ export async function reviewVideo(
         reviewUser: BigInt(reviewerId),
         reviewTime: now,
         updateTime: now,
+        // 人工审核动作重置连坐标记（2026-10-16 限时封禁）：防止残留 status_bak 在账号解禁时误恢复
+        statusBak: 0,
       },
     });
 
