@@ -168,7 +168,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/team">管理团队</Link> ·{" "}
               <Link href="/page/donate">提供赞助</Link> ·{" "}
               <a href="http://www.miibeian.gov.cn" target="_blank" rel="noopener noreferrer">
-                陕ICP备08100290号
+                陕ICP备19026089号-1
               </a>
             </p>
           </div>
