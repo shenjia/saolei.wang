@@ -192,11 +192,17 @@ export async function getNews(opts: {
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
   // 军衔按「动态时刻」的高级时间评定（2026-10-13 SUB 制，张老师要求显示当时军衔而非现在的）：
   // 批量取相关用户的高级成绩流水，按每条动态的 create_time 重放 running best。
-  // 入伍动态（NEWBIE）含同刻成绩：旧站入伍动态时间=触发成绩的上传时间，严格早于会永远评成预备役
-  // （2026-10-13 张老师指出「入伍新兵怎么可能是预备役」）；破纪录动态仍严格早于（显示破之前旧军衔）
+  // 入伍（NEWBIE）与晋升（PROMOTION）动态含同刻成绩：老站这两类动态的时间=触发成绩的那盘上传时间，
+  // 严格早于会让「入伍新兵/晋升少尉」行首永远停在晋升前军衔（2026-10-13 张老师指出「入伍新兵怎么可能是预备役」；
+  // 2026-10-16 同理修晋升动态——行首「预备役」配文案「晋升为少尉」自相矛盾）。
+  // 破纪录动态仍严格早于（显示破之前旧军衔）
   const expMap = await expTimeAtBatch(
     [...new Set(rows.map((r) => r.user))],
-    rows.map((r) => ({ user: N(r.user), ct: N(r.createTime), inclusive: r.type === NEWS_TYPE.NEWBIE }))
+    rows.map((r) => ({
+      user: N(r.user),
+      ct: N(r.createTime),
+      inclusive: r.type === NEWS_TYPE.NEWBIE || r.type === NEWS_TYPE.PROMOTION,
+    }))
   );
   return rows.map((r) => ({
     id: N(r.id),
