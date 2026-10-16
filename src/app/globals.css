@@ -3799,8 +3799,24 @@ body #page.ranking_old .ranking_box {
 }
 #news .delta svg.d_arrow {
   display: inline-block;
-  vertical-align: -1px;
-  margin-right: 2px;
+  vertical-align: -1px;  margin-right: 2px;
+}
+/* SUB 大关标签（2026-10-16 张老师定）：高级时间破纪录跨过 10s 整数大关（SUB30~SUB100）时，
+   提升值后加「SUB xx」徽章——形态取首页论坛新帖分类标签 board_tag（灰底圆角描边加粗），
+   字色 inline 由组件按「该秒数对应军衔档文字色」传入（TITLE_CLASS_COLORS 单一数据源：
+   SUB30 总司令金 / SUB40 元帅金 / SUB50 少将亮橙 / SUB60 少校暗橙 / SUB70 少尉绿 / SUB80+ 士官亮灰）；
+   置于 record_extra 内，窄屏自适应隐藏时与提升值一起收起 */
+#news .record_extra .sub_tag {
+  display: inline-block;
+  padding: 0 6px;
+  margin-left: 6px;
+  border: 1px solid #656355;
+  border-radius: 3px;
+  background: #49483e;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 18px;
+  vertical-align: bottom;
 }
 
 /* 动态中的文章标题《…》（2026-10-13 张老师要求）：不用金色，改亮灰 #bbbbbb

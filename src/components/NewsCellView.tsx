@@ -8,7 +8,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLE_CLASSES, titleConditionText, type Level } from "@/lib/config";
+import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLES, TITLE_CLASSES, TITLE_CLASS_COLORS, TITLE_THRESHOLDS, titleConditionText, type Level } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
@@ -24,6 +24,26 @@ function formatScore(order: string, value: number): string {
 function formatDelta(order: string, oldScore: number, newScore: number): string {
   const dv = Math.abs(newScore - oldScore) / 1000;
   return order === "time" ? dv.toFixed(2) : dv.toFixed(3);
+}
+
+/** 高级时间破纪录突破整数大关（SUB30~SUB100，2026-10-16 张老师定）：
+    旧成绩所在 10s 大关下界，且新成绩已跨入关内（< 大关）才算突破。
+    只认高级时间记录（军衔口径只看高级时间）；首创行旧成绩为 0，天然不出标签 */
+function subMilestone(od: string | undefined, lv: string | undefined, oldMs: number, newMs: number): number | null {
+  if (od !== "time" || lv !== "exp") return null;
+  const gate = Math.floor(oldMs / 10000) * 10;
+  if (gate < 30 || gate > 100) return null;
+  if (newMs >= gate * 1000) return null;
+  return gate;
+}
+
+/** SUB 大关标签颜色 = 该秒数对应军衔档的文字色（SUB40→元帅金、SUB50→少将亮橙、SUB60→少校暗橙…）。
+    从 TITLE_THRESHOLDS 找第一个 ≥ 大关值的军衔，经 TITLE_CLASSES → TITLE_CLASS_COLORS 取色
+    （与军衔体系单一数据源，改阈值/配色自动跟走） */
+function subGateColor(gateSec: number): string {
+  const i = TITLE_THRESHOLDS.findIndex((t) => t >= gateSec * 1000);
+  const title = TITLES[i >= 0 ? i : TITLES.length - 1];
+  return TITLE_CLASS_COLORS[TITLE_CLASSES[title] ?? ""] ?? "#b1b1a4";
 }
 
 export function NewsCellView({ news, title }: { news: NewsItem; title: string }) {
@@ -47,6 +67,8 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
       <TitleBadge title={title} link />
     </>
   );
+  // SUB 大关（null = 本条不显示标签）：刷新纪录才判（首创行 or=0 旧成绩为大关外，天然 null）
+  const subGate = subMilestone(d.od, d.lv, d.or ?? 0, d.cr ?? 0);
 
   // 破纪录行按行自适应（2026-10-15）：离屏克隆整格内容量单行宽度，放不下则隐藏箭头+提升值。
   // 克隆用 absolute+nowrap，不参与表格布局（table-layout:auto 改真节点会牵动整表列宽抖动）；
@@ -122,6 +144,14 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
                     <DeltaArrow dir={(d.od ?? "time") === "time" ? "down" : "up"} />
                     {formatDelta(d.od ?? "time", d.or!, d.cr!)}
                   </span>
+                  {/* SUB 大关标签（2026-10-16 张老师定）：高级时间破纪录跨过 10s 整数大关时显示，
+                      形态同首页论坛新帖 board_tag 徽章，字色 inline 按军衔档色传入；
+                      置于 record_extra 内，窄屏自适应隐藏时与提升值一起收起 */}
+                  {subGate && (
+                    <span className="sub_tag" style={{ color: subGateColor(subGate) }}>
+                      SUB {subGate}
+                    </span>
+                  )}
                 </span>
               </>
             ) : (
