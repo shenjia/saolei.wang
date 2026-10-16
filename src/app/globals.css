@@ -1807,6 +1807,12 @@ del[data-tip]:hover::after {
   color: #75715e;
 }
 
+/* 封禁用户（2026-10-16 张老师要求）：不参与排行，主页原排名位置红字提示 */
+.ranks .ranks_banned {
+  color: #c00;
+  font-weight: bold;
+}
+
 /* 侧栏「实力」雷达图板块（论坛 / 用户主页右栏通用；录像页让位给「录像分析」六维雷达）——
    2026-10-14 起 RadarChart 自带 .radar_tip_wrap 包裹层（hover 气泡的定位父级），
    出血尺寸挂在包裹层上（同 .vr_wrap 道理：气泡按 SVG 视口百分比定位，

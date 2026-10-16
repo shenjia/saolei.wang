@@ -1031,7 +1031,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 // ---------- 用户主页 ----------
 
 export interface UserDetail {
-  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number };
+  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number };
   info: { nickname: string; interest: string | null; qq: string; mouse: string; pad: string } | null;
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
@@ -1067,6 +1067,8 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
       avatar: u.avatar,
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
+      // 账号状态（0 正常 / -1 封禁）：主页排名区对封禁用户显示红字提示用（2026-10-16 张老师要求）
+      status: u.status,
     },
     info: info
       ? {
@@ -1821,7 +1823,11 @@ export async function getLevel3bvRanges(): Promise<
  * MIN(id)/MIN(create_time) 同盘），供侧栏方格气泡展示 + 点击跳首盘（2026-10-13 张老师要求）。
  * 2026-10-14 张老师：按现行排行规则收敛——低于 LEVEL_MIN_3BV（初 2 / 中 30 / 高 100）
  * 的 3BV 不计入收集（CASE 按级别取下限，与 BV 榜 fetchBvCollection 同口径）。
- * 走 video 表 (user, level) 索引 + video_info 主键 join，全站最重用户（5k+ 盘）毫秒级。
+ * 2026-10-16 张老师：封禁用户的录像计入本人收集——旧站封禁会把账号全部录像连坐
+ * IsLive=0（实证：正常用户 0 部 status=0，3038 部 status=0 全属封禁账号），
+ * 这些是审核通过的合法成绩，封禁只剥夺上榜资格、不抹除历史数据；
+ * 正常用户被管理员单独屏蔽的录像（owner 未封禁）仍不计入。
+ * 走 video 表 (user, level) 索引 + video_info/user 主键 join，全站最重用户（5k+ 盘）毫秒级。
  */
 export async function getUser3bvCollection(
   userId: number
@@ -1829,7 +1835,9 @@ export async function getUser3bvCollection(
   const rows = await prisma.$queryRaw<{ level: string; b3bv: number; first_vid: bigint; first_ct: bigint }[]>`
     SELECT v.level, vi.board_3bv AS b3bv, MIN(v.id) AS first_vid, MIN(v.create_time) AS first_ct
     FROM video v JOIN video_info vi ON vi.id = v.id
-    WHERE v.user = ${BigInt(userId)} AND v.status = ${VIDEO_STATUS.REVIEWED}
+      JOIN \`user\` u ON u.id = v.user
+    WHERE v.user = ${BigInt(userId)}
+      AND (v.status = ${VIDEO_STATUS.REVIEWED} OR (v.status = ${VIDEO_STATUS.BANNED} AND u.status <> 0))
       AND vi.board_3bv >= CASE v.level
         WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
         WHEN 'int' THEN ${LEVEL_MIN_3BV.int}

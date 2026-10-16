@@ -242,10 +242,16 @@ export default async function UserViewPage({
                   {detail.title}
                 </span>
               </Link>
-              {/* 省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求）；
+              {/* 封禁用户（2026-10-16 张老师要求）：不参与排行，原排名位置显示红色
+                  「此用户已被封禁」；军衔徽章照常认定保留（上方 RankBadge 不受影响）；
                   海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
-                  口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」 */}
-              {ranks && (ranks.area === AREA_OVERSEAS ? (
+                  口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」；
+                  省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求） */}
+              {user.status !== 0 ? (
+                <div className="ranks">
+                  <span className="rank_line ranks_banned">此用户已被封禁</span>
+                </div>
+              ) : ranks && (ranks.area === AREA_OVERSEAS ? (
                 <div className="ranks">
                   {ranks.areaPos !== null ? (
                     <span className="rank_line">

@@ -5,6 +5,8 @@
   可逆，2026-10-14 张老师定：封禁≠删号）。已存在行的 status 不被覆盖（见 user INSERT 注释）
 - 成绩: 时间 = (秒-1)*1000；3BVS = 值*1000；999.99/NULL = 无成绩
 - 录像: IsLive=0->status 0;Check=0->10;else 20;时间同为 (秒-1)*1000
+  （成绩流水 video_scores_* 按 Check=1 写入，不看 IsLive——封禁连坐隐藏的旧录像
+  也是合法成绩，2026-10-16 张老师定：封禁只不上榜，历史数据全保留）
 - 时间戳: MSSQL datetime 视为 +08:00 转 Unix 秒
 - 动态: News_Time > 本地基线 2013-10-23 08:23:46 的插入(type=20);并为新用户补 type=10 入伍动态
 - 论坛: bbs_post.is_top=旧版 Title_IsHigh「高亮」(不参与排序,仅白显);
@@ -260,7 +262,11 @@ for vid, v in videos.items():
     else:
         vi_rows.append((vid, (path or "")[:100], "", "", "", 1 if nf else 0, "", b3bv, real_ms, ct, 0))
     vst_rows.append((vid, int(click or 0), ct))
-    if status == 20 and score is not None:
+    # 流水条件按 Check（审核通过）而非 status==20（2026-10-16 张老师定）：
+    # 旧站封禁账号会连坐把全部录像 IsLive=0（实证：正常用户 0 部 IsLive=0，
+    # 3038 部 IsLive=0 全属停用账号）——这些是审核通过的合法成绩，
+    # 封禁只剥夺上榜资格，动态军衔重放/晋升回填/3BV 收集都要用到它们的流水。
+    if check and score is not None:
         s3 = b_x1000(b3bvs) if b3bvs is not None else 0
         vs_rows[level].append((vid, player, real_ms, s3, ct))
         if nf:
