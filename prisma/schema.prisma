@@ -667,6 +667,7 @@ model PageView {
   isEntry       Boolean @default(false) @map("is_entry") // 会话首条 PV（落地页统计）
   sessionId     String? @map("session_id") @db.VarChar(64)
   isAdmin       Boolean @default(false) @map("is_admin")
+  userId        BigInt? @map("user_id") @db.BigInt // 登录态访问的用户 id（活跃玩家趋势用；未登录为 NULL）
   clientId      String? @map("client_id") @db.VarChar(24) // 页面实例 id（前端生成），dwell 回写关联键
   dwellMs       Int?    @map("dwell_ms") // 前台可见停留毫秒（切后台不计）
   scrollPct     Int?    @map("scroll_pct") // 最大滚动深度 0-100

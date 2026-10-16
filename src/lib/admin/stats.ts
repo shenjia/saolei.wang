@@ -9,7 +9,7 @@
 
 import { prisma } from "@/lib/db";
 import { getTitleCounts, rankedOnly } from "@/lib/queries";
-import { TITLES, TITLE_THRESHOLDS, VIDEO_STATUS, VIDEO_LEVELS, MIN_3BV_FOR_3BVS } from "@/lib/config";
+import { TITLES, TITLE_THRESHOLDS, VIDEO_STATUS, VIDEO_LEVELS, MIN_3BV_FOR_3BVS, CONTENT_STATUS } from "@/lib/config";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -118,6 +118,11 @@ export interface Overview {
   clickTotal: number;
   messageTotal: number;
   donateTotal: number;
+  /** 待人工复核队列（CONTENT_STATUS.PENDING=5：AI 后置审核存疑的评论/论坛帖） */
+  commentPending: number;
+  bbsPending: number;
+  /** 头像待审（avatar_review status=10：AI 判 review 或未过自动闸的） */
+  avatarPending: number;
   activeUploaders7d: number;
   activeUploaders30d: number;
   /** 数据取数时刻（Unix 秒）——页面展示用，避免在渲染期调 Date.now()（react-hooks/purity） */
@@ -144,6 +149,7 @@ export async function getOverview(): Promise<Overview> {
     videoTotal, videoReviewed, videoPending, videoBanned, videoToday,
     newsTotal, newsToday, commentTotal, commentToday, bbsPostTotal, bbsPostToday, bbsReplyTotal,
     clickTotal, messageTotal, donateAgg, act7, act30,
+    commentPending, bbsPending, avatarPending,
   ] = await Promise.all([
     // 2026-10-14：人数口径与前台上榜口径统一——封禁账号（旧站「停用」）不计入
     prisma.user.count({ where: { status: 0 } }),
@@ -167,6 +173,10 @@ export async function getOverview(): Promise<Overview> {
     prisma.donate.aggregate({ _sum: { amount: true } }),
     activeUploaders(d7),
     activeUploaders(d30),
+    // 待人工复核队列（AI 后置审核存疑 → status=5）
+    prisma.comment.count({ where: { status: CONTENT_STATUS.PENDING } }),
+    prisma.bbsPost.count({ where: { status: CONTENT_STATUS.PENDING } }),
+    prisma.avatarReview.count({ where: { status: 10 } }),
   ]);
 
   // 待审积压最老一条 + 平均审核耗时（新站才写 review_time）
@@ -203,6 +213,9 @@ export async function getOverview(): Promise<Overview> {
     clickTotal,
     messageTotal,
     donateTotal: N(donateAgg._sum.amount),
+    commentPending,
+    bbsPending,
+    avatarPending,
     activeUploaders7d: act7,
     activeUploaders30d: act30,
     oldestPendingTime: N(oldest?.createTime),

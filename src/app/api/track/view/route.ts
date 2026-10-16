@@ -83,9 +83,10 @@ export async function POST(request: NextRequest) {
       ? body.clientId
       : null;
 
-  // 管理员登录态检测（结果随 PV 落库为 isAdmin 标记）
+  // 管理员登录态检测（结果随 PV 落库：isAdmin 标记 + userId，活跃玩家趋势用）
   const session = await getSession().catch(() => null);
   const isAdmin = !!session;
+  const userId = session ? BigInt(session.uid) : null;
 
   const probe = NextResponse.json({});
   const { visitorId, response } = await ensureVisitorId(request, probe);
@@ -130,6 +131,7 @@ export async function POST(request: NextRequest) {
       isEntry,
       sessionId,
       isAdmin,
+      userId,
       clientId,
       createTime: Math.floor(nowMs / 1000),
     },

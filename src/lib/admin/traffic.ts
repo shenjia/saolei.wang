@@ -66,6 +66,10 @@ export interface TrafficOverview {
   entryPages: { today: { path: string; entries: number }[]; d7: { path: string; entries: number }[]; d30: { path: string; entries: number }[] };
   /** 近 30 天设备分布 */
   devices: { uaClass: string; pv: number }[];
+  /** 活跃玩家：登录态访问去重用户（trend 为分日去重数，与 trend.dates 对齐） */
+  active: { today: number; yesterday: number; d7: number; d30: number; trend: number[] };
+  /** 练习页（/online）访问：练习结果不落库，暂以页面 PV 口径（trend 为分日 PV） */
+  practice: { today: number; yesterday: number; d30: number; trend: number[] };
   /** 高流失页（会话末页占该页 PV 比；录像详情页看完即走正常，排除；三档） */
   exits: { today: ExitPage[]; d7: ExitPage[]; d30: ExitPage[] };
   /** 热门录像页（/video/:id 三档 Top 10，带玩家名/级别） */
@@ -117,6 +121,7 @@ async function aggregate(): Promise<TrafficOverview> {
       isEntry: true,
       sessionId: true,
       uaClass: true,
+      userId: true,
       dwellMs: true,
       scrollPct: true,
       clicked: true,
@@ -141,6 +146,16 @@ async function aggregate(): Promise<TrafficOverview> {
   const videoPvToday = new Map<string, { pv: number; uv: Set<string> }>();
   const videoPvD7 = new Map<string, { pv: number; uv: Set<string> }>();
   const videoPvD30 = new Map<string, { pv: number; uv: Set<string> }>();
+  // 活跃玩家（登录态访问用户）：分日去重 + 各档期去重
+  const activeMap = new Map<number, Set<string>>();
+  const todayActive = new Set<string>();
+  const yesterdayActive = new Set<string>();
+  const d7Active = new Set<string>();
+  const d30Active = new Set<string>();
+  // 练习页 /online 分日 PV
+  const onlineMap = new Map<number, number>();
+  let onlineToday = 0;
+  let onlineYesterday = 0;
 
   // 按时间序处理（流失统计取会话末页依赖顺序）
   const sorted = [...rows].sort((a, b) => N(a.createTime) - N(b.createTime));
@@ -156,6 +171,25 @@ async function aggregate(): Promise<TrafficOverview> {
     d30Uv.add(r.visitorId);
     if (t >= today0) todayUv.add(r.visitorId);
     else if (t >= yesterday0) yesterdayUv.add(r.visitorId);
+
+    if (r.userId) {
+      const uid = String(N(r.userId));
+      let set = activeMap.get(idx);
+      if (!set) {
+        set = new Set();
+        activeMap.set(idx, set);
+      }
+      set.add(uid);
+      d30Active.add(uid);
+      if (t >= d7) d7Active.add(uid);
+      if (t >= today0) todayActive.add(uid);
+      else if (t >= yesterday0) yesterdayActive.add(uid);
+    }
+    if (r.path === "/online") {
+      onlineMap.set(idx, (onlineMap.get(idx) ?? 0) + 1);
+      if (t >= today0) onlineToday += 1;
+      else if (t >= yesterday0) onlineYesterday += 1;
+    }
 
     if (r.referrer && r.referrer !== "internal") {
       refMap.set(r.referrer, (refMap.get(r.referrer) ?? 0) + 1);
@@ -190,11 +224,15 @@ async function aggregate(): Promise<TrafficOverview> {
   const dates: string[] = [];
   const pvSeries: number[] = [];
   const uvSeries: number[] = [];
+  const activeSeries: number[] = [];
+  const onlineSeries: number[] = [];
   for (let i = 0; i < 30; i++) {
     const b = trendMap.get(fromIdx + i)!;
     dates.push(new Date((fromIdx + i) * 86400000).toISOString().slice(0, 10));
     pvSeries.push(b.pv);
     uvSeries.push(b.uv.size);
+    activeSeries.push(activeMap.get(fromIdx + i)?.size ?? 0);
+    onlineSeries.push(onlineMap.get(fromIdx + i) ?? 0);
   }
 
   const entryTop = (map: Map<string, number>) =>
@@ -358,13 +396,26 @@ async function aggregate(): Promise<TrafficOverview> {
       .sort((a, b) => b.pv - a.pv),
     exits: { today: exitPagesFor(today0), d7: exitPagesFor(d7), d30: exitPagesFor(d30) },
     topVideos: { today: topToday, d7: topD7, d30: topD30 },
+    active: {
+      today: todayActive.size,
+      yesterday: yesterdayActive.size,
+      d7: d7Active.size,
+      d30: d30Active.size,
+      trend: activeSeries,
+    },
+    practice: {
+      today: onlineToday,
+      yesterday: onlineYesterday,
+      d30: onlineSeries.reduce((a, b) => a + b, 0),
+      trend: onlineSeries,
+    },
   };
 }
 
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v2"],
+  ["admin-traffic", "v3"],
   { revalidate: 300 }
 );
 

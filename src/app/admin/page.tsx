@@ -44,7 +44,6 @@ export default async function AdminDashboard() {
   // 默认只激活 UV / PV / 新增玩家 / 上传录像，其余序列图例可手动点亮
   const defaultHidden = ["reviewed", "banned", "news", "comments", "bbs", "clicks"];
 
-  const rankedRate = ov.userTotal ? Math.round((ov.rankedTotal / ov.userTotal) * 100) : 0;
   const { oldestPendingDays: pendingDays } = ov;
 
   // 流量对比 foot：涨绿跌红（.down）
@@ -119,98 +118,8 @@ export default async function AdminDashboard() {
         </span>
       </div>
 
-      {/* ---------- 规模指标 ---------- */}
+      {/* ---------- 规模指标（2026-10-16 张老师定：第一行七卡全带走势线） ---------- */}
       <div className="admin_kpis">
-        <Kpi
-          label="注册玩家"
-          value={ov.userTotal}
-          tone="green"
-          trend={trend.series.users}
-          href="/admin/users"
-          foot={
-            <>
-              今日 <b>+{ov.userToday}</b> · 近 7 天 +{ov.userWeek}
-            </>
-          }
-        />
-        <Kpi
-          label="上榜玩家"
-          value={ov.rankedTotal}
-          unit={`/ ${rankedRate}%`}
-          tone="yellow"
-          href="/admin/users?ranked=1"
-          foot="三级成绩齐全"
-        />
-        <Kpi
-          label="录像总数"
-          value={ov.videoTotal}
-          tone="cyan"
-          trend={trend.series.videos}
-          href="/admin/videos"
-          foot={
-            <>
-              今日 <b>+{ov.videoToday}</b> · 通过率 <b>{ov.passRate}%</b>
-            </>
-          }
-        />
-        <Kpi
-          label="待审核"
-          value={ov.videoPending}
-          tone="red"
-          href="/admin/review"
-          foot={ov.videoPending ? (pendingDays ? `最老积压 ${pendingDays} 天` : "均已下载") : "队列已清空"}
-        />
-        <Kpi
-          label="近 7 天活跃上传"
-          value={ov.activeUploaders7d}
-          unit="人"
-          tone="orange"
-          foot={`近 30 天 ${ov.activeUploaders30d} 人`}
-        />
-        <Kpi
-          label="成绩动态"
-          value={ov.newsTotal}
-          tone="purple"
-          trend={trend.series.news}
-          href="/admin/news"
-          foot={
-            <>
-              今日 <b>+{ov.newsToday}</b>
-            </>
-          }
-        />
-        <Kpi
-          label="评论"
-          value={ov.commentTotal}
-          tone="yellow"
-          trend={trend.series.comments}
-          href="/admin/comments"
-          foot={
-            <>
-              今日 <b>+{ov.commentToday}</b> · 未删除合计
-            </>
-          }
-        />
-        <Kpi
-          label="论坛主题"
-          value={ov.bbsPostTotal}
-          tone="cyan"
-          trend={trend.series.bbs}
-          href="/admin/bbs"
-          foot={
-            <>
-              今日 <b>+{ov.bbsPostToday}</b> · 回复 {ov.bbsReplyTotal.toLocaleString("zh-CN")} 条
-            </>
-          }
-        />
-        <Kpi
-          label="人气点击"
-          value={ov.clickTotal}
-          tone="green"
-          trend={trend.series.clicks}
-          foot="看地盘去重计数"
-        />
-        {/* 流量 KPI（2026-10-16）：page_view 埋点，管理员浏览已剔除 */}
         <Kpi
           label="今日 PV"
           value={traffic.today.pv}
@@ -225,21 +134,89 @@ export default async function AdminDashboard() {
           trend={traffic.trend.uv}
           foot={cmpFoot(traffic.today.uv, traffic.yesterday.uv)}
         />
-        <Kpi label="站内信" value={ov.messageTotal} tone="grey" href="/admin/messages" foot="含系统广播" />
         <Kpi
-          label="赞助累计"
-          value={`¥${(ov.donateTotal / 100).toFixed(2)}`}
-          tone="orange"
-          foot={ov.avgAuditSeconds ? `平均审核耗时 ${Math.round(ov.avgAuditSeconds / 60)} 分钟` : "审核耗时暂无样本"}
+          label="注册玩家"
+          value={ov.userTotal}
+          tone="green"
+          trend={trend.series.users}
+          href="/admin/users"
+          foot={
+            <>
+              今日 <b>+{ov.userToday}</b> · 近 7 天 +{ov.userWeek}
+            </>
+          }
         />
         <Kpi
-          label="已屏蔽录像"
-          value={ov.videoBanned}
-          tone="grey"
-          href="/admin/videos?status=0"
-          foot="含历史封禁"
+          label="活跃玩家"
+          value={traffic.active.d7}
+          unit="人"
+          tone="orange"
+          trend={traffic.active.trend}
+          foot={
+            <>
+              近 7 日登录态访问 · 今日 <b>{traffic.active.today}</b>
+            </>
+          }
+        />
+        <Kpi
+          label="录像总数"
+          value={ov.videoTotal}
+          tone="yellow"
+          trend={trend.series.videos}
+          href="/admin/videos"
+          foot={
+            <>
+              今日 <b>+{ov.videoToday}</b> · 通过率 <b>{ov.passRate}%</b>
+            </>
+          }
+        />
+        <Kpi
+          label="练习数量"
+          value={traffic.practice.today}
+          tone="cyan"
+          trend={traffic.practice.trend}
+          foot={
+            <>
+              近 30 天 {traffic.practice.d30.toLocaleString("zh-CN")} 次 · 练习页 PV 口径
+            </>
+          }
+        />
+        <Kpi
+          label="论坛主题"
+          value={ov.bbsPostTotal}
+          tone="purple"
+          trend={trend.series.bbs}
+          href="/admin/bbs"
+          foot={
+            <>
+              今日 <b>+{ov.bbsPostToday}</b> · 回复 {ov.bbsReplyTotal.toLocaleString("zh-CN")} 条
+            </>
+          }
         />
       </div>
+
+      {/* ---------- 待人工审核（2026-10-16 张老师定：第二行只放需人工处理的队列，无则整行不显示） ---------- */}
+      {(() => {
+        const reviewItems = [
+          {
+            label: "录像待审",
+            value: ov.videoPending,
+            href: "/admin/review",
+            foot: ov.videoPending ? (pendingDays ? `最老积压 ${pendingDays} 天` : "均已下载") : "",
+          },
+          { label: "评论待审", value: ov.commentPending, href: "/admin/comments?status=5", foot: "AI 复核存疑" },
+          { label: "论坛待审", value: ov.bbsPending, href: "/admin/bbs?status=5", foot: "AI 复核存疑" },
+          { label: "头像待审", value: ov.avatarPending, href: "/admin/avatars", foot: "AI 判 review" },
+        ].filter((p) => p.value > 0);
+        if (reviewItems.length === 0) return null;
+        return (
+          <div className="admin_kpis">
+            {reviewItems.map((p) => (
+              <Kpi key={p.label} label={p.label} value={p.value} tone="red" href={p.href} foot={p.foot || "待处理"} />
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ---------- 趋势（2026-10-16 合并业务趋势与 PV/UV 访问趋势，x 轴同为 +08:00 切天） ---------- */}
       <AdminCard
