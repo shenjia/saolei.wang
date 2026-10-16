@@ -767,9 +767,16 @@ export function VideoReplayProvider({
     else if (status === "paused" || status === "ended") resume();
   }, [status, pause, resume]);
 
-  const seek = useCallback((csec: number) => {
-    engineRef.current?.seek(csec);
-  }, []);
+  const seek = useCallback(
+    (csec: number) => {
+      const engine = engineRef.current;
+      if (!engine || !stats) return;
+      engine.seek(csec);
+      /* 拖到终点＝ended 态（定格终局，播放按钮语义与自然播完一致＝重播） */
+      setStatus(csec >= stats.totalCsec ? "ended" : "paused");
+    },
+    [stats]
+  );
 
   /* Esc（练习页同款出口之一）：全屏态 Esc＝只退出全屏（回放继续）；
      页面态 Esc＝退出回放。fullscreenRef 供 stop 前读取最新值（回调闭包新鲜化） */
@@ -1075,15 +1082,20 @@ function ReplayBar({
           if (!d.active) return;
           d.active = false;
           cancelFrame();
-          onSeek(posToCsec(e.clientX));
-          if (d.wasPlaying) onResume();
+          const csec = posToCsec(e.clientX);
+          onSeek(csec);
+          /* 拖到最右＝停在结束那一刻（十三期张老师定）：不 resume——
+             resume 在引擎里命中「curCsec≥total → 从头重播」分支，
+             语义留给「播放按钮在 ended 态」专属（重播） */
+          if (d.wasPlaying && csec < total) onResume();
         }}
         onPointerCancel={() => {
           const d = dragRef.current;
           if (!d.active) return;
           d.active = false;
           cancelFrame();
-          if (d.wasPlaying) onResume();
+          /* cancel 时无松手坐标：按最后帧位置判定（d.lastCsec） */
+          if (d.wasPlaying && d.lastCsec < total) onResume();
         }}
       >
         {/* thumb 挂 rail 内：left 百分比锚 rail 宽（=轨道宽−左右内衬 10px），
