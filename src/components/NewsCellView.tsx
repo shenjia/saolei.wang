@@ -1,7 +1,8 @@
 // 动态单元格（展示部分，客户端可用）——军衔称号由服务端预算好以 title 传入
 // 移植 views/news/_cell、_newbie、_person_record
 // 2026-09-24 新增类型渲染：上传录像 VIDEO / 加入扫雷网 JOIN / 更换头像 AVATAR / 论坛文章 ARTICLE / 评论 COMMENT
-// 2026-10-15 破纪录动态按行自适应：显示宽度不够放下一行时隐藏「原记录+箭头」避免换行（张老师要求）
+// 2026-10-15 破纪录动态按行自适应：显示宽度不够放下一行时隐藏尾部段避免换行（张老师要求）
+// 2026-10-16 破纪录动态改版（张老师定）：新成绩提到箭头前（金粗可点不变），箭头后改放绝对提升值（方案 B）
 
 "use client";
 
@@ -15,6 +16,14 @@ import { RankBadge } from "./RankBadge";
 
 function formatScore(order: string, value: number): string {
   return order === "time" ? scoreTime(value) : score3bvs(value);
+}
+
+/** 绝对提升值（2026-10-16 破纪录动态改版，张老师定方案 B）：新-旧。
+    时间记负=更快（2 位小数，与 scoreTime 同精度）；3BV/s 记 +=更高（3 位小数，站点口径） */
+function formatDelta(order: string, oldScore: number, newScore: number): string {
+  const dv = (newScore - oldScore) / 1000;
+  const sign = dv > 0 ? "+" : "";
+  return order === "time" ? `${sign}${dv.toFixed(2)}` : `${sign}${dv.toFixed(3)}`;
 }
 
 export function NewsCellView({ news, title }: { news: NewsItem; title: string }) {
@@ -39,7 +48,7 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
     </>
   );
 
-  // 破纪录行按行自适应（2026-10-15）：离屏克隆整格内容量单行宽度，放不下则隐藏原记录。
+  // 破纪录行按行自适应（2026-10-15）：离屏克隆整格内容量单行宽度，放不下则隐藏箭头+提升值。
   // 克隆用 absolute+nowrap，不参与表格布局（table-layout:auto 改真节点会牵动整表列宽抖动）；
   // 行宽变化（窗口缩放/翻页换列宽）由 ResizeObserver 兜底重测
   const cellRef = useRef<HTMLTableCellElement>(null);
@@ -55,7 +64,7 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
       ghost.style.visibility = "hidden";
       ghost.style.whiteSpace = "nowrap";
       for (const node of Array.from(cell.childNodes)) ghost.appendChild(node.cloneNode(true));
-      // 始终按完整内容（含原记录）量宽：克隆会带上隐藏时的 inline display:none
+      // 始终按完整内容（含箭头+提升值）量宽：克隆会带上隐藏时的 inline display:none
       const ghostExtra = ghost.querySelector(".record_extra") as HTMLElement | null;
       if (ghostExtra) ghostExtra.style.display = "";
       cell.appendChild(ghost);
@@ -100,14 +109,19 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
                 金色由 legacy #news .score{color:#fdc61a} 提供，无需自定义规则 */}
             {(d.or ?? 0) > 0 ? (
               <>
-                {/* record_extra：宽度不够时整段隐藏（含绿色箭头），只留新成绩避免换行 */}
-                <span className="record_extra" ref={extraRef}>
-                  <span className="original">{formatScore(d.od ?? "time", d.or!)}</span>
-                  <span className="increase"></span>
-                </span>
+                {/* 2026-10-16 张老师定：新成绩提到箭头前（金粗可点，样式沿用 #news .score），
+                    箭头后改放绝对提升值（formatDelta：时间负=更快、3BV/s +=更高） */}
                 <Link href={`/video/${news.reference}`} target="_blank" className="score">
                   {formatScore(d.od ?? "time", d.cr!)}
                 </Link>
+                {/* record_extra：宽度不够时整段隐藏（箭头+提升值），只留新成绩避免换行 */}
+                <span className="record_extra" ref={extraRef}>
+                  <span className="increase"></span>
+                  <span className="delta">
+                    {formatDelta(d.od ?? "time", d.or!, d.cr!)}
+                    {(d.od ?? "time") === "time" && <small>秒</small>}
+                  </span>
+                </span>
               </>
             ) : (
               <Link href={`/video/${news.reference}`} target="_blank" className="score">

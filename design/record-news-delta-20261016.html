@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>破纪录动态改版稿 2026-10-16</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1e1f1c;
+    font-family: Arial, Helvetica, sans-serif, "Microsoft YaHei";
+    padding: 30px 20px 60px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { color: #e6db74; font-size: 20px; margin-bottom: 6px; }
+  .sub { color: #75715e; font-size: 13px; line-height: 22px; margin-bottom: 24px; }
+
+  .box {
+    background: #272822;
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    padding: 18px 22px;
+    margin-bottom: 26px;
+  }
+  .box h2 { color: #a6e22e; font-size: 15px; margin-bottom: 4px; font-weight: bold; }
+  .box .desc { color: #75715e; font-size: 12px; line-height: 20px; margin-bottom: 12px; }
+
+  /* ---- 复刻 #news .table ---- */
+  #news .table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+  #news .table td { padding: 0 8px 0 0; color: #636359; font-size: 14px; line-height: 30px; white-space: nowrap; }
+  #news a.author { color: #b1b1a4; text-decoration: none; font-size: 16px; }
+  #news a.author:hover { color: #a6e22e; }
+  #news .rank { color: #e6db74; font-size: 13px; margin: 0 4px 0 6px; }
+  #news .record { margin: 0 5px; color: #939387; font-size: 14px; line-height: 24px; }
+  #news .original { color: #b1b1a4; font-size: 16px; line-height: 24px; }
+  #news .score { color: #fdc61a; font-size: 16px; line-height: 24px; font-weight: bold; text-decoration: none; }
+  #news .score:hover { color: #a6e22e; }
+  #news .increase {
+    display: inline-block; width: 16px; height: 16px; margin: 0 5px;
+    background: url(../public/images/common/increase.png?v=5) no-repeat left top;
+    vertical-align: middle;
+  }
+  /* 新：提升值 */
+  #news .delta { color: #b1b1a4; font-size: 16px; line-height: 24px; }
+  #news .delta small { font-size: 12px; color: #75715e; margin-left: 2px; }
+
+  .tag {
+    display: inline-block; background: #49483e; color: #e6db74;
+    font-size: 11px; border-radius: 3px; padding: 2px 8px; margin-left: 10px; vertical-align: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>破纪录动态改版稿（2026-10-16）</h1>
+  <div class="sub">
+    现状：原记录(灰) ↗ 新成绩(金)。改版：新成绩提到箭头前（加粗金色、可点击不变），箭头后改放「相对提升值」。<br>
+    「提升值」有三种口径，本页并列三个方案供确认；「创造了」行（首创，无箭头）维持现状不动。
+  </div>
+
+  <!-- 现状 -->
+  <div class="box">
+    <h2>现状（对照）</h2>
+    <div class="desc">原记录 → 箭头 → 新成绩</div>
+    <div id="news">
+      <table class="table"><tbody>
+        <tr><td><a class="author" href="#">周科</a><span class="rank">少校</span>刷新了<span class="record person">高级记录</span><span class="original">59.50</span><span class="increase"></span><a class="score" href="#">44.87</a></td></tr>
+        <tr><td><a class="author" href="#">卡米尔</a><span class="rank">上尉</span>刷新了<span class="record person">中级3BV/s</span><span class="original">4.82</span><span class="increase"></span><a class="score" href="#">5.12</a></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+  <!-- 方案 A -->
+  <div class="box">
+    <h2>方案 A：相对提升百分比<span class="tag">推荐</span></h2>
+    <div class="desc">新成绩 ↗ 相对原记录的百分比变化。时间负=更快、3BV/s 正=更高；一眼看出「破得多狠」。</div>
+    <div id="news">
+      <table class="table"><tbody>
+        <tr><td><a class="author" href="#">周科</a><span class="rank">少校</span>刷新了<span class="record person">高级记录</span><a class="score" href="#">44.87</a><span class="increase"></span><span class="delta">-24.6%</span></td></tr>
+        <tr><td><a class="author" href="#">卡米尔</a><span class="rank">上尉</span>刷新了<span class="record person">中级3BV/s</span><a class="score" href="#">5.12</a><span class="increase"></span><span class="delta">+6.2%</span></td></tr>
+        <tr><td><a class="author" href="#">郭伟</a><span class="rank">中士</span>创造了<span class="record person">初级记录</span><a class="score" href="#">21.35</a></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+  <!-- 方案 B -->
+  <div class="box">
+    <h2>方案 B：绝对提升值</h2>
+    <div class="desc">新成绩 ↗ 提升的绝对量（秒数 / 3BV/s 值）。直观但不同级别之间没有可比性。</div>
+    <div id="news">
+      <table class="table"><tbody>
+        <tr><td><a class="author" href="#">周科</a><span class="rank">少校</span>刷新了<span class="record person">高级记录</span><a class="score" href="#">44.87</a><span class="increase"></span><span class="delta">-14.63<small>秒</small></span></td></tr>
+        <tr><td><a class="author" href="#">卡米尔</a><span class="rank">上尉</span>刷新了<span class="record person">中级3BV/s</span><a class="score" href="#">5.12</a><span class="increase"></span><span class="delta">+0.30</span></td></tr>
+        <tr><td><a class="author" href="#">郭伟</a><span class="rank">中士</span>创造了<span class="record person">初级记录</span><a class="score" href="#">21.35</a></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+  <!-- 方案 C -->
+  <div class="box">
+    <h2>方案 C：绝对 + 相对并列</h2>
+    <div class="desc">两者都要，信息最全，但行最长——窄屏触发「隐藏尾部」自适应的概率最高。</div>
+    <div id="news">
+      <table class="table"><tbody>
+        <tr><td><a class="author" href="#">周科</a><span class="rank">少校</span>刷新了<span class="record person">高级记录</span><a class="score" href="#">44.87</a><span class="increase"></span><span class="delta">-14.63<small>秒</small> (-24.6%)</span></td></tr>
+        <tr><td><a class="author" href="#">卡米尔</a><span class="rank">上尉</span>刷新了<span class="record person">中级3BV/s</span><a class="score" href="#">5.12</a><span class="increase"></span><span class="delta">+0.30 (+6.2%)</span></td></tr>
+        <tr><td><a class="author" href="#">郭伟</a><span class="rank">中士</span>创造了<span class="record person">初级记录</span><a class="score" href="#">21.35</a></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+  <div class="sub">
+    待确认：① 选哪个方案；② 提升值颜色（现为原记录同款灰 #b1b1a4，也可改绿 #a6e22e）；<br>
+    ③ 符号方向（时间记负数表示更快）是否可接受。确认后我再动代码。
+  </div>
+</div>
+</body>
+</html>
