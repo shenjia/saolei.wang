@@ -6338,11 +6338,13 @@ body #header .nav li a.msg_icon_btn .msg_badge {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
   transition: box-shadow 0.15s, filter 0.15s;
 }
-/* 必须 :hover/:active 显式锁背景与字色：本类是 <button> 且无 ID 前缀，
+/* hover/active 显式锁背景与字色并提亮：本类是 <button> 且无 ID 前缀，
    legacy button:hover(0,1,1) 会压过基础规则(0,1,0)把黄底深字染成暗底绿字
    （张老师 2026-10-16 报）；登录页不受影响因 #account_login 带 ID。
-   hover/active 完整口径与登录按钮 #account_login .lp_submit 一致（仅多锁 background/color） */
-.lp_submit_btn:hover:not(:disabled) {
+   hover 不带 :not(:disabled)——表单没填完时按钮是 disabled，禁用态 hover
+   也要变亮（张老师 2026-10-16 三报「完全没变化」根因即此）；底色字色在
+   disabled 下由下方 :disabled 规则（源码序靠后，同特异性 tie 后者胜）锁住 */
+.lp_submit_btn:hover {
   background: linear-gradient(180deg, #ffd23e, #f0b70a);
   color: #2b2a20;
   filter: brightness(1.06);
@@ -6354,9 +6356,9 @@ body #header .nav li a.msg_icon_btn .msg_badge {
   filter: brightness(0.96);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
 }
-/* 禁用态同样锁底色与字色（含被 hover/active 时）：标题/正文没填完按钮即 disabled，
-   而本类 hover 锁色规则带 :not(:disabled) 不生效，legacy button:hover(0,1,1) 会把
-   禁用按钮也染成暗底绿字（张老师 2026-10-16 二报）；本规则 (0,2,0) 可压过之 */
+/* 禁用态锁底色与字色：标题/正文没填完按钮即 disabled，legacy button:hover(0,1,1)
+   曾把禁用按钮也染成暗底绿字（二报）；本规则 (0,2,0) 压过之。
+   提亮/光晕交给上面的 :hover（本规则未声明 filter/box-shadow，不拦） */
 .lp_submit_btn:disabled {
   background: linear-gradient(180deg, #ffd23e, #f0b70a);
   color: #2b2a20;
