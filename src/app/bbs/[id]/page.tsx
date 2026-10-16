@@ -79,7 +79,13 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
                   ★
                 </span>
               )}
-              {/* 2026-09-26（张老师）：详情页标题后不再显示置顶▲/高亮◆标记，列表页保留 */}
+              {/* 2026-10-16（张老师）：恢复详情页置顶标记（09-26「详情页不显示」口径作废），
+                  同列表页 .bbs_top ▲ + data-tip「置顶」hover 气泡，样式全局复用零新增 CSS */}
+              {post.isPinned && (
+                <span className="bbs_top" data-tip="置顶">
+                  ▲
+                </span>
+              )}
             </h1>
             <p className="bbs_meta">
               {post.author && (
