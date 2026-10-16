@@ -72,7 +72,9 @@ export async function ensureTodaySnapshot(force = false): Promise<void> {
 }
 
 export interface GrowUser extends UserBrief {
+  /** 本进步榜内的名次（按进步幅度排序后的榜序位次，第 1 页即 1—20 位） */
   rank: number;
+  /** 今日全国总计时间榜名次（榜单口径备用，不再用于排名列展示） */
   todayRank: number;
   yesterdayRank: number;
   delta: number;
@@ -82,8 +84,9 @@ export interface GrowUser extends UserBrief {
 export type GrowRow = RankingRow & GrowUser;
 
 /** 进步榜（2026-09-24 张老师要求改为雷界排行同款表格）：行=RankingRow 同构（8 列成绩+录像），
- *  rank=今日总计时间名次（对齐 2008 版 Player_Rank 语义），delta=昨日-今日名次差（升为正）；
- *  表内排序按 delta 降序（进步幅度大在前）。 */
+ *  rank=本进步榜内名次（2026-10-16 张老师定：按进步幅度排序后的榜序位次，非全国总计时间名次），
+ *  delta=昨日-今日名次差（升为正）；表内排序按 delta 降序（进步幅度大在前）。
+ *  注意排序三元组 delta DESC, sum_time_rank ASC 中 sum_time_rank 唯一 → 全表全序，榜序位次稳定。 */
 export async function getGrowRanking(
   page: number,
   /** 返回条数（「加载更多」递增批量用；skip 恒按 base=20 的页锚点，take 才是行数） */
@@ -128,7 +131,7 @@ export async function getGrowRanking(
   const scoreMap = new Map(scoreRows.map((s) => [s.id, s]));
   const authors = await usersByIds(rows.map((r) => N(r.user)));
   return {
-    rows: rows.map((r) => {
+    rows: rows.map((r, i) => {
       const brief: UserBrief = authors.get(N(r.user)) ?? {
         id: N(r.user),
         chineseName: "?",
@@ -145,10 +148,10 @@ export async function getGrowRanking(
       }
       return {
         ...brief,
-        rank: r.today_rank, // 排名列=今日总计时间名次（与主榜同口径）
+        rank: (page - 1) * 20 + i + 1, // 排名列=本榜内名次（2026-10-16 张老师定，第 1 页即 1—20 位）
         scores,
         videos,
-        todayRank: r.today_rank,
+        todayRank: r.today_rank, // 全国总计时间名次保留在字段里备用
         yesterdayRank: r.yesterday_rank,
         delta: N(r.delta), // BIGINT 算术结果归一化为 number
       };
