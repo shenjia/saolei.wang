@@ -267,10 +267,16 @@ function runReplay(opts: {
     '<svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>';
   wrap.appendChild(curEl);
   const table = tbody.parentElement as HTMLTableElement;
+  /* 十期：.play_board 有版图 zoom（exp/int 1.22、beg 2.4）——rect 是视觉坐标，
+     写 style.left/top 是布局坐标（会被外层 zoom 再乘），须除回 wrap 的 zoom */
+  const wrapZoom = (() => {
+    const z = parseFloat(getComputedStyle(wrap).zoom);
+    return Number.isFinite(z) && z > 0 ? z : 1;
+  })();
   const off = (() => {
     const tr = table.getBoundingClientRect();
     const wr = wrap.getBoundingClientRect();
-    return { x: tr.left - wr.left, y: tr.top - wr.top };
+    return { x: (tr.left - wr.left) / wrapZoom, y: (tr.top - wr.top) / wrapZoom };
   })();
   const TIP_X = 0.5,
     TIP_Y = 1.21;
@@ -947,6 +953,9 @@ export function VideoReplayBoard({
   const ctx = useContext(ReplayCtx);
   if (!ctx) return null;
   const replaying = ctx.status !== "idle";
+  /* 十期（2026-10-16 张老师需求）：高级盘充分使用左栏版图宽度、中级复用同比例、
+     初级双倍比例——三级别视觉高度一致（都≈316px）。比例口径与依据见 globals.css .zoom_* 注释 */
+  const zoomCls = level === "exp" ? "zoom_exp" : level === "int" ? "zoom_int" : "zoom_beg";
   return (
     <div className="playable">
       {/* 结构沿用原 BoardPlay：.play_board 浮动收缩盒＝棋盘本体，回放光标挂这里。
@@ -954,7 +963,7 @@ export function VideoReplayBoard({
       {/* 九期：回放中在棋盘左侧弹数据面板（.playable 锚定，绝对定位不挤版式） */}
       {replaying && ctx.stats && <ReplayStatsPanel level={level} s={ctx.stats} />}
       <div
-        className="play_board"
+        className={`play_board ${zoomCls}`}
         title={replaying ? "点击退出回放" : "点击播放在线录像"}
         onClick={() => {
           if (ctx.status === "idle") ctx.play();

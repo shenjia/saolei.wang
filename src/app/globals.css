@@ -610,6 +610,27 @@ body #video_view .video_cell .playable {
 #video_view .play_board .board {
   margin: 0;
 }
+/* 版图放大（2026-10-16 十期张老师需求）：高级盘充分使用左栏版图空间，
+   中级复用同比例、初级双倍比例——三级别视觉高度一致（都≈316px）。
+   #page 封顶 960px 时 .main 宽 672px，cell 内边距 30×2、棋盘右 margin 20px
+   → 棋盘可用宽 592px；高级盘 484px → zoom 1.22 恰好占满。
+   ⚠️ zoom 挂 .play_board（棋盘 DOM 不动，回放引擎像素坐标系不受影响——
+   off 量取按 wrapZoom 除回、光标/控制条自适应；--pbz 供控制条反向抵消）；
+   移动端断点有整页 zoom + .playable 横滑兜底，溢出盒内滑动。 */
+#video_view .play_board.zoom_exp {
+  zoom: 1.22;
+  --pbz: 1.22;
+}
+#video_view .play_board.zoom_int {
+  zoom: 1.22;
+  --pbz: 1.22;
+}
+#video_view .play_board.zoom_beg {
+  /* 初级自然高 132px（128+4 边框），高级 260px——「双倍比例」精确值
+     1.22×260÷132=2.403，取 2.4 与高级渲染高度对齐（316~317px） */
+  zoom: 2.4;
+  --pbz: 2.4;
+}
 .play_overlay {
   position: absolute;
   top: 50%;
@@ -7800,6 +7821,11 @@ html:has(#online_play) #footer {
      向右延展（.play_board 收缩包随最宽子元素撑开，棋盘仍在左侧原位）；
      移动端按视口收敛防溢出 */
   min-width: min(320px, calc(100vw - 72px));
+  /* 十期：.play_board 的版图 zoom 会连带放大控制条（初级 2.4x 时按钮 82px 巨物），
+     反向 zoom 抵消，保持条本体视觉尺寸恒定。条仍受外层 zoom 的布局放大影响
+     （占位宽随棋盘走），但内容（按钮/文字/轨道）回到 1x 视觉。
+     ⚠️ width:min(320px, calc(100vw-72px)) 的 100vw 也随之回到真实视口 ✓ */
+  zoom: calc(1 / var(--pbz, 1));
 }
 /* 数据面板仅桌面（复用练习页 greport 的桌面专属口径：<960 一律不显示）。
    移动端断点按 #page 整页 zoom 后的等效视口算：410px 档 zoom 0.65 → CSS 断点
