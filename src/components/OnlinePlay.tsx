@@ -41,6 +41,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { FlopSprites } from "./FlopSprites";
 import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
+import { replayCounts, MOUSE_CODE_TO_EV, type ReplayCounts } from "@/lib/replay-core";
 import { LEVEL_NAMES } from "@/lib/config";
 import { paintRangeFill } from "@/lib/paintRange";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
@@ -167,7 +168,7 @@ export function OnlinePlay({
     const ac = new AbortController();
     const signal = ac.signal;
     const on = <E extends Event>(
-      el: HTMLElement | Document,
+      el: HTMLElement | Document | Window,
       type: string,
       fn: (e: E) => void,
       opts?: AddEventListenerOptions,
@@ -231,6 +232,10 @@ export function OnlinePlay({
        二期起这些开关收进设置浮窗，初始值从 localStorage 恢复。
        「显示3BV」开关已废（2026-10-15 八期张老师定：状态栏整个取消，见 gname 注释） */
     let nf = false, ng = true, qmark = false;
+    /* 「自动双击」开关（2026-10-16 张老师定，默认关）：标旗（右键/长按插上旗）后
+       自动对周围已开数字格做 chord——预检「旗数满足且有未开非旗邻格」才执行并录
+       mr 事件（计一次 Double）；开不出格的空 chord 不执行也不计数。 */
+    let autoChord = false;
     /* 「显示统计」开关（2026-10-15 六期张老师定；2026-10-16 张老师定默认开）：左侧「数据统计」
        面板的**唯一**显示开关。八期改口径：开＝也只在**游戏结束**时随结算弹出（对局中不再
        常驻实时刷新——张老师定「只有游戏结束才出现数据面板」）；关＝任何时刻都不显示。
@@ -261,7 +266,7 @@ export function OnlinePlay({
         if (!raw) return;
         const s = JSON.parse(raw) as {
           nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
-          showStats?: boolean;
+          showStats?: boolean; autoChord?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -269,6 +274,7 @@ export function OnlinePlay({
         if (typeof s.ng === "boolean") ng = s.ng;
         if (typeof s.qmark === "boolean") qmark = s.qmark;
         if (typeof s.showStats === "boolean") showStats = s.showStats;
+        if (typeof s.autoChord === "boolean") autoChord = s.autoChord;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -287,7 +293,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showStats, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showStats, autoChord, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -297,7 +303,7 @@ export function OnlinePlay({
     let state: Uint8Array = new Uint8Array(0); // 0=block 1=open 2=flag 3=question
     let started = false, over = false, startTs = 0, timerId: number | null = null;
     let openedSafe = 0, totalSafe = 0, board3bv = 0;
-    let pressCell: number | null = null, chordCells: number[] | null = null, bothButtons = false;
+    let pressCell: number | null = null, chordCells: number[] | null = null;
     /* ---- 对局事件流（五期：回放/下载录像的数据源，AVF 口径）----
        mouse 码与 avf.ts 约定一致：1=mv 3=lc 5=lr 9=rc 17=rr 11=sc。
        像素坐标 = 格中心（x*16+8），与 rawvf 的 (px py) 同量纲；
@@ -330,21 +336,36 @@ export function OnlinePlay({
       const { sec, hun } = evNow();
       evStream.push({ mouse: 1, x: px, y: py, sec, hun });
     }
-    /* ---- 对局统计（结算报告用，口径与 flop player counters 一致，公式见其打包源码注释） ---- */
-    let flagToggles = 0; // 插旗状态变化次数（配合 openedSafe 判断点击是否有效 Ce）
-    let stLeft = 0, stRight = 0, stDouble = 0, stCe = 0, stPath = 0;
-    let lastPX: number | null = null, lastPY = 0;
+    /* ---- 对局统计（2026-10-16 重构）----
+       废掉实时计数器（stLeft/stRight/stDouble/stCe/stPath + action() 包装）：
+       结算统计改为对当局事件流跑共享重放引擎（lib/replay-core.ts replayCounts），
+       与录像详情页/跑批同一事实源，口径永不分叉。
+       事件录制按 flop/AVF 完整配对语义：lc/rc 按下即录（按下位坐标）、lr/rr 松开录
+       （松开位坐标）、chord 首次松开生效、单击已开数字格录 sc+lr（计 Double）、
+       自动双击录 mr。下载的 AVF 因此与站内引擎/Arbiter 全兼容。
+       鼠标行程也走事件流口径（pathPx），与录像页一致。 */
+    /** 把当局事件流转规范化事件，跑共享引擎得原始计数（结算时调一次） */
+    function gameCounts(): ReplayCounts {
+      const N = W * H;
+      return replayCounts(
+        { width: W, height: H, mines: M, board: mines ?? new Uint8Array(N) },
+        evStream.map((e) => ({
+          ev: MOUSE_CODE_TO_EV[e.mouse] ?? "mv",
+          x: (e.x / 16) | 0,
+          y: (e.y / 16) | 0,
+          px: e.x,
+          py: e.y,
+        })),
+        { marks: qmark, noflag: nf }
+      );
+    }
     let bvRegions: number[][] = []; // 空格连通域（含边界数字格）
     let bvSingles: number[] = []; // 非空格区的数字格（3BV 单击格）
     let bvIslands: number[][] = []; // singles 的八连连通域（岛屿）
-    /* 计一次点击并按「棋盘是否有变化」累计有效点击 Ce（=Cl-浪费点击，flop 口径）；
-       五期：同步写入事件流（lc/rc 双击语义按最终动作计） */
-    function action(kind: "left" | "right" | "double", fn: () => void) {
-      const s0 = openedSafe * 1024 + flagToggles;
-      if (kind === "left") stLeft++; else if (kind === "right") stRight++; else stDouble++;
-      fn();
-      if (openedSafe * 1024 + flagToggles !== s0) stCe++;
-    }
+    /* 手势状态（2026-10-16 重构）：chord 按 flop 口径在**首次松开**生效——
+       双键都按下后，先松开的那一键触发 chord 并录对应松开事件（lr 或 rr），
+       另一键的松开只补录事件不再触发 */
+    let leftDown = false, rightDown = false, chordDone = false;
 
     const tbody = $("gtbody") as unknown as HTMLTableSectionElement;
     const ledMines = $("led_mines") as unknown as SVGElement;
@@ -1000,9 +1021,29 @@ export function OnlinePlay({
       if (state[i] === 0) state[i] = 2;
       else if (state[i] === 2) state[i] = qmark ? 3 : 0;
       else state[i] = 0;
-      flagToggles++;
       paint(i);
       led(ledMines, flagsLeft());
+    }
+    /* 「自动双击」（2026-10-16 张老师定，设置开关默认关）：插上旗后对周围已开数字格
+       逐个预检——旗数恰好满足**且**有未开非旗邻格才执行 chord 并录 mr 事件
+       （计一次 Double、开出格即有效）；空 chord 不执行不录制不计数 */
+    function autoChordAround(i: number) {
+      for (const a of neighbors(i)) {
+        if (over || state[a] !== 1 || !nums || nums[a] === 0) continue;
+        const around = neighbors(a);
+        let f = 0;
+        for (const c of around) if (state[c] === 2) f++;
+        if (f !== nums[a]) continue;
+        if (!around.some((c) => state[c] === 0)) continue;
+        recordEv(65, a); // mr：程序触发的双击，引擎无条件计 Double（与手动 chord 同价）
+        chord(a);
+      }
+    }
+    /* 插旗入口（右键按下 / 移动端长按）：toggleFlag 之后按开关触发自动双击；
+       仅「插上旗」（态→2）触发，摘旗/切问号不触发 */
+    function flagWithAutoChord(i: number) {
+      toggleFlag(i);
+      if (autoChord && state[i] === 2) autoChordAround(i);
     }
     /* ---- 结算报告（2026-10-14 张老师定：游戏结束时桌面版左侧浮窗，再开局隐藏；
        2026-10-15 六期改：显示时机交给设置开关「显示统计」，见 showStats）。
@@ -1013,7 +1054,7 @@ export function OnlinePlay({
        RTime 后缀 (n)=floor(RT)+1（录像秒数口径） */
     /* 表格 HTML + 完成 3BV（六期从 report 抽出：与结算共用同一份构造，口径永不分叉。
        八期起只在游戏结束这一刻渲染一次，不再有对局中刷新路径） */
-    function statsReport(t: number): { solvedBv: number; html: string } {
+    function statsReport(t: number, cnt: ReplayCounts): { solvedBv: number; html: string } {
       let solvedBv = 0, solvedOps = 0;
       for (const reg of bvRegions) {
         let ok = true;
@@ -1027,7 +1068,8 @@ export function OnlinePlay({
         for (const c of isl) if (state[c] !== 1) { ok = false; break; }
         if (ok) solvedIsls++;
       }
-      const cl = stLeft + stRight + stDouble, ce = stCe;
+      /* Cl/Ce/左右双/行程/旗数全部来自共享重放引擎（与录像详情页同一事实源） */
+      const cl = cnt.clLeft + cnt.clRight + cnt.clDouble, ce = cnt.ce;
       const f3 = (v: number) => v.toFixed(3);
       const hasBv = solvedBv > 0 && t > 0;
       const est = hasBv ? t * (board3bv / solvedBv) : 0;
@@ -1038,8 +1080,8 @@ export function OnlinePlay({
       const stnb = hasBv
         ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
-      /* 玩家实际插的旗数（胜利结算前会先抓这个值，自动补旗不算） */
-      const playerFlags = M - flagsLeft();
+      /* 玩家实际插的旗数＝重放终盘旗数（胜利自动补旗不进事件流，天然不含） */
+      const playerFlags = cnt.flags;
       /* 每项第三列是 hover 气泡的解释（沿用 flop 原版 title 语义，中文一句话；含公式）。
          第四列可选＝数值格附加 class（「无猜重排」行用绿色） */
       const rows: [string, string, string, string?][] = [
@@ -1049,15 +1091,15 @@ export function OnlinePlay({
         ["3BV/s", hasBv ? f3(solvedBv / t) : "*", "每秒完成的 3BV 数 = 已完成 3BV ÷ 实际用时，衡量操作效率"],
         ["Ops", solvedOps + "/" + bvRegions.length, "开空区域（opening）的完成数 / 全盘总数"],
         ["Isls", solvedIsls + "/" + bvIslands.length, "孤立数字块（island）的完成数 / 全盘总数"],
-        ["Left", stLeft + "@" + (t > 0 ? f3(stLeft / t) : "0.000"), "左键点击次数 @ 每秒点击频率"],
-        ["Right", stRight + "@" + (t > 0 ? f3(stRight / t) : "0.000"), "右键点击次数 @ 每秒点击频率"],
-        ["Double", stDouble + "@" + (t > 0 ? f3(stDouble / t) : "0.000"), "左右同按（和弦双击）次数 @ 每秒频率"],
+        ["Left", cnt.clLeft + "@" + (t > 0 ? f3(cnt.clLeft / t) : "0.000"), "左键点击次数 @ 每秒点击频率"],
+        ["Right", cnt.clRight + "@" + (t > 0 ? f3(cnt.clRight / t) : "0.000"), "右键点击次数 @ 每秒点击频率"],
+        ["Double", cnt.clDouble + "@" + (t > 0 ? f3(cnt.clDouble / t) : "0.000"), "双击（左右同按/单击数字/自动双击）次数 @ 每秒频率"],
         ["Ce", ce + "@" + (t > 0 ? f3(ce / t) : "0.000"), "有效点击次数（真正开出新格或完成 3BV 的点击）@ 每秒频率"],
         ["Cl", cl + "@" + (t > 0 ? f3(cl / t) : "0.000"), "总点击次数（左键 + 右键 + 双击）@ 每秒频率"],
         ["IOE", cl > 0 ? f3(solvedBv / cl) : "*", "效率指数 = 已完成 3BV ÷ 总点击次数"],
         ["ThrP", ce > 0 ? f3(solvedBv / ce) : "*", "吞吐效率 = 已完成 3BV ÷ 有效点击次数"],
         ["Corr", cl > 0 ? f3(ce / cl) : "*", "准确率 = 有效点击 ÷ 总点击次数"],
-        ["Path", String(Math.round(stPath)), "鼠标移动路径的欧氏距离总和（像素）"],
+        ["Path", String(Math.round(cnt.pathPx / 16)), "鼠标移动路径总长（按 16px/格折算的格数，与录像页口径一致）"],
         ["Flags", String(playerFlags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
         ["RQP", hasBv ? f3((est * (est + 1)) / board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
         ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
@@ -1087,17 +1129,21 @@ export function OnlinePlay({
       syncReportZoom();
     }
     function report(t: number, won: boolean) {
-      const { solvedBv, html } = statsReport(t);
+      /* 结算统计＝对当局事件流跑共享重放引擎（2026-10-16 重构）：面板/雷达/快照
+         与「下载的 AVF 在录像页跑出的指标」同源，不再有两份计数实现 */
+      const cnt = gameCounts();
+      const { solvedBv, html } = statsReport(t, cnt);
       /* 数据面板只在「显示统计」开着时、且只在**游戏结束**这一刻出现
          （2026-10-15 八期张老师定：对局中不再常驻实时刷新）；再开局由 reset 撤下。
          十期补：无论开关与否都定格一份 HTML，供局后补开开关时立即补弹本局面板 */
       lastReportHtml = html;
       if (showStats) paintStatPanel(html);
-      buildResultPanel(t, solvedBv, won);
+      buildResultPanel(t, solvedBv, won, cnt);
     }
     /* ---- 右侧结算面板（五期）：雷达图 + 再来一局 / 重玩本局 / 查看回放 / 下载录像 ---- */
-    function buildResultPanel(t: number, solvedBv: number, won: boolean) {
-      const cl = stLeft + stRight + stDouble, ce = stCe;
+    function buildResultPanel(t: number, solvedBv: number, won: boolean, cnt: ReplayCounts) {
+      const cl = cnt.clLeft + cnt.clRight + cnt.clDouble, ce = cnt.ce;
+      const path = Math.round(cnt.pathPx / 16); // 行程折「格」（16px/格），与录像页同量纲
       const hasBv = solvedBv > 0 && t > 0;
       const qg = hasBv ? Math.pow(t, 1.7) / solvedBv : 0;
       /* 评级难度档：自定义盘按雷密度映射（与 statsReport / computeRadarPoints 同一口径） */
@@ -1122,7 +1168,9 @@ export function OnlinePlay({
           ioe: cl > 0 ? solvedBv / cl : 0,
           corr: cl > 0 ? ce / cl : 0,
           cls: t > 0 ? cl / t : 0,
-          ppc: cl > 0 ? Math.round(stPath) / cl : 0,
+          /* ppc 单位＝格/击（2026-10-16 修：此前误用 px/击，比录像页口径大 16 倍，
+             雷达「移动」轴分位一直按错单位评） */
+          ppc: cl > 0 ? path / cl : 0,
         },
       };
       renderResultPanel();
@@ -1397,14 +1445,15 @@ export function OnlinePlay({
         for (const a of nbR(c)) if (s.mines[a]) cnt++;
         nums[c] = cnt;
       }
-      /* 回放状态机（0=未开 1=开 2=旗），直接写游戏盘面贴图：
-         td 类名走 VEC_MAP 语义（bb/b1…/bf），vecUse 同步切换——与引擎 paint 同管线 */
+      /* 回放状态机（0=未开 1=开 2=旗 3=问号），直接写游戏盘面贴图：
+         td 类名走 VEC_MAP 语义（bb/b1…/bf/bq），vecUse 同步切换——与引擎 paint 同管线 */
       const rstate = new Uint8Array(N);
       function paintR(i: number) {
         const td = tbody.rows[(i / s.w) | 0].cells[i % s.w];
         let cls = "bb";
         if (rstate[i] === 1) cls = "b" + nums[i];
         else if (rstate[i] === 2) cls = "bf";
+        else if (rstate[i] === 3) cls = "bq";
         td.className = cls;
         td.innerHTML = "";
         vecUse[i]?.setAttribute("href", "#" + (VEC_MAP[cls] ?? ""));
@@ -1454,19 +1503,37 @@ export function OnlinePlay({
         curEl.style.left = px + gboardOff.x - TIP_X + "px";
         curEl.style.top = py + gboardOff.y - TIP_Y + "px";
       }
+      /* 回放事件应用（2026-10-16 重写）：与新录制方言 / flop 状态机同语义——
+         lc/rc 只记按下（rc 按下即刻切旗，lp 按住下仅视觉；NF 局不切旗），
+         lr/rr 松开生效（rp||sv 下＝双击），sc 等后续 lr，mr（自动双击）无条件 chord */
+      let rLp = false, rRp = false, rSv = false;
       function applyEv(k: number) {
         const e = evs[k];
         moveCursor(e.x, e.y);
-        const ci = ((e.y / 16) | 0) * s.w + ((e.x / 16) | 0);
-        if (ci < 0 || ci >= N) return;
-        if (e.mouse === 3) {
-          if (rstate[ci] === 0) floodR(ci);
-          else if (rstate[ci] === 1) chordR(ci);
-        } else if (e.mouse === 11) {
-          chordR(ci);
-        } else if (e.mouse === 9) {
-          if (rstate[ci] === 0) { rstate[ci] = 2; paintR(ci); }
-          else if (rstate[ci] === 2) { rstate[ci] = 0; paintR(ci); }
+        const cx = (e.x / 16) | 0, cy = (e.y / 16) | 0;
+        const inside = cx >= 0 && cx < s.w && cy >= 0 && cy < s.h;
+        const ci = cy * s.w + cx;
+        switch (e.mouse) {
+          case 3: rLp = true; break; // lc
+          case 5: // lr
+            if (inside) { if (rRp || rSv) chordR(ci); else floodR(ci); }
+            rLp = false; rSv = false;
+            break;
+          case 9: // rc
+            if (!rLp && !s.nf && inside) {
+              if (rstate[ci] === 0) { rstate[ci] = 2; paintR(ci); }
+              else if (rstate[ci] === 2) { rstate[ci] = s.qmark ? 3 : 0; paintR(ci); }
+              else if (rstate[ci] === 3) { rstate[ci] = 0; paintR(ci); }
+            }
+            rRp = true;
+            break;
+          case 17: // rr：lp 按住＝双击
+            if (rLp && inside) chordR(ci);
+            rRp = false;
+            break;
+          case 11: rLp = true; rSv = true; break; // sc：单击数字格 chord，等 lr
+          case 65: if (inside) chordR(ci); break; // mr：自动双击
+          default: break; // mv
         }
       }
       /* 六期（2026-10-15 张老师定）：**不再插控制条**——原 rc_* 控制栏（重放/播放暂停/
@@ -1491,6 +1558,7 @@ export function OnlinePlay({
       }
       function resetReplay() {
         rstate.fill(0);
+        rLp = rRp = rSv = false; // 手势状态机一并归零（重播/拖动进度时）
         for (let i = 0; i < N; i++) paintR(i);
         evIdx = 0; curCsec = 0;
         moveCursor(0, 0);
@@ -1613,9 +1681,9 @@ export function OnlinePlay({
       const L = levelSize(lv); W = L.x; H = L.y; M = L.m;
       mines = null; nums = null; state = new Uint8Array(W * H);
       started = false; over = false; openedSafe = 0; totalSafe = W * H - M; board3bv = 0;
-      /* 统计清零 + 隐藏结算报告（张老师：游戏再次开始时隐藏）；事件流同步清空
+      /* 手势状态清零 + 隐藏结算报告（张老师：游戏再次开始时隐藏）；事件流同步清空
          （五期）；重玩锁定标记保留——placeMines 在首击时消费它 */
-      flagToggles = 0; stLeft = 0; stRight = 0; stDouble = 0; stCe = 0; stPath = 0; lastPX = null;
+      leftDown = rightDown = chordDone = false;
       evStream = [];
       /* 数据面板（八期）：任何时刻都不因开局而显示——只有游戏结束且开关开着才弹出
          （见 report）。statsReport 只读 state/统计量、不读 snapshot，
@@ -1952,6 +2020,9 @@ export function OnlinePlay({
       }
       if (over && lastReportHtml) paintStatPanel(lastReportHtml);
     });
+    /* 「自动双击」（2026-10-16 张老师定，默认关）：只影响之后的插旗行为，不重开当前局 */
+    const swAc = $("sw_ac") as HTMLInputElement;
+    on(swAc, "change", () => { autoChord = swAc.checked; saveSettings(); });
 
     /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／无猜两颗 ----
        激活显色（NF=黄 #fdc61d / 无猜=绿 #a6e22e，见 .gmode/.gmode_ng）、未激活灰。
@@ -2127,58 +2198,95 @@ export function OnlinePlay({
     on(gboard, "mousedown", (e: MouseEvent) => {
       if (over || gameBusy()) return;
       const i = eventCell(e); if (i < 0) return;
-      if (e.buttons === 3) { // 左右同按 = 双击
-        bothButtons = true; clearPress();
+      if (e.buttons === 3) { // 左右同按 = 双击手势（第二键并入，只录按下事件不动作）
+        clearPress();
         pressAround(i);
         setFace("ooh");
+        if (e.button === 2) { rightDown = true; recordEv(9, i); } // rc：lp 按住下仅视觉（引擎不插旗）
+        else { leftDown = true; recordEv(3, i); } // lc：rp 按住下等松开判双击
       } else if (e.button === 0) {
-        bothButtons = false;
+        leftDown = true; rightDown = false; chordDone = false; // e.buttons=1：顺带自愈旧手势残留
+        recordEv(3, i); // lc 按下即录（按下位坐标，flop/AVF 口径）
         pressSingle(i);
         setFace("ooh");
       } else if (e.button === 2) {
-        setFace("ooh"); // 右键按下笑脸同样变
-        action("right", () => toggleFlag(i));
+        rightDown = true; leftDown = false; chordDone = false; // e.buttons=2：同上自愈
+        recordEv(9, i); // rc 按下即录——flop 插旗在按下位即刻生效
+        flagWithAutoChord(i); // 插旗（NF 下内部只抖动）+「自动双击」开关联动
       }
     });
     /* 按住滑动：按下态实时跟随鼠标经过的格子（出盘后再进盘按 e.buttons 自愈） */
     on(gboard, "mouseover", (e: MouseEvent) => {
       if (over || gameBusy()) return;
+      /* 手势残留自愈：松开发生在浏览器窗口外时 window mouseup 捕不到，
+         空手（buttons=0）划回棋盘说明手势早已结束 */
+      if (e.buttons === 0 && (leftDown || rightDown)) { leftDown = rightDown = chordDone = false; }
       const i = eventCell(e); if (i < 0) return;
       if (e.buttons === 3) {
         if (pressCell !== null) { if (state[pressCell] === 0) paint(pressCell); pressCell = null; }
-        bothButtons = true;
         pressAround(i);
         setFace("ooh");
       } else if (e.buttons === 1) {
         if (chordCells) { chordCells.forEach((c) => { if (state[c] === 0) paint(c); }); chordCells = null; }
-        bothButtons = false;
         pressSingle(i);
         setFace("ooh");
       }
     });
-    on(gboard, "mouseup", (e: MouseEvent) => {
-      if (over || gameBusy()) { clearPress(); return; }
+    /* 盘外松开的补录：坐标钳到「棋盘正下方一排外」的规范点——
+       ① 引擎按越界判 wasted（flop 同款），不能塞回棋盘格（会误判开格）；
+       ② 不能用原始负坐标：AVF 坐标是无符号字节，负值回绕成 65xxx 会让
+          下载录像的 path 行程爆炸（2026-10-16 实证）。钳制在录制时做，
+       保证 evStream 与下载 AVF 字节逐比特一致 */
+    function recordEvPx(mouse: number, px: number) {
+      if (over) return;
+      const { sec, hun } = evNow();
+      const cx = Math.min(Math.max(Math.round(px), 0), W * 16 - 16) + 8;
+      evStream.push({ mouse, x: cx, y: H * 16 + 8, sec, hun });
+    }
+    /* mouseup 挂 window（2026-10-16）：按下后拖出棋盘松开也要捕获——否则事件流里
+       留下不配对的 lc，引擎状态机卡住（后续 rc 被吞、lr 误判 Double）。
+       非棋盘手势（点笑脸/齿轮/滑杆后的松开）由 leftDown/rightDown 门控忽略。 */
+    on(window, "mouseup", (e: MouseEvent) => {
+      if (!leftDown && !rightDown) return; // 无棋盘手势：笑脸/设置等点击不进场
+      if (over || gameBusy()) { clearPress(); leftDown = rightDown = chordDone = false; return; }
       const i = eventCell(e); clearPress(); setFace("smile");
-      if (i < 0) { bothButtons = false; return; }
+      /* 盘外松开的原始像素坐标（1x 棋盘坐标系，可为负） */
+      const gbR = i < 0 ? gboard.getBoundingClientRect() : null;
+      const rawPx = gbR ? (e.clientX - gbR.left) / (zoomCur * pageZoom()) : 0;
+      const rel = (mouse: number) => { if (i >= 0) recordEv(mouse, i); else recordEvPx(mouse, rawPx); };
       if (e.button === 0) {
-        if (bothButtons) { bothButtons = false; recordEv(11, i); action("double", () => chord(i)); }
-        else if (state[i] === 1) { recordEv(3, i); action("left", () => chord(i)); } // 单击已满足的数字同效
-        else { recordEv(3, i); action("left", () => openCell(i)); recordEv(5, i); }
+        if (rightDown && !chordDone) {
+          /* 双击：flop 口径在**首次松开**生效（松开位坐标），lr 在 rp 下引擎计 Double */
+          chordDone = true;
+          rel(5); if (i >= 0) chord(i);
+        } else if (chordDone) {
+          rel(5); // chord 后另一键的松开：只补录闭合配对，不再触发动作
+        } else if (i >= 0 && state[i] === 1) {
+          /* 单击已开数字格＝双击（练习页独有玩法）：录 sc+lr，统计计 Double（2026-10-16 张老师定） */
+          recordEv(11, i); recordEv(5, i);
+          chord(i);
+        } else {
+          rel(5);
+          if (i >= 0) openCell(i); // 盘外松开＝取消（引擎按越界计 wasted，flop 同款）
+        }
+        leftDown = false;
       } else if (e.button === 2) {
-        /* 右键释放也进事件流（rr）——rc/rr 配对与 avf 口径一致 */
-        recordEv(9, i); recordEv(17, i);
+        if (leftDown && !chordDone) {
+          /* 右键先松开的 chord：rr 在 lp 下＝双击（flop 口径） */
+          chordDone = true;
+          rel(17); if (i >= 0) chord(i);
+        } else {
+          rel(17); // rr：与按下时的 rc 配对闭合（AVF 口径）
+        }
+        rightDown = false;
       }
+      if (!leftDown && !rightDown) chordDone = false;
     });
-    on(gboard, "mouseleave", () => { clearPress(); if (!over) setFace("smile"); lastPX = null; });
-    /* Path：对局中鼠标在棋盘上的欧氏行程，归一化到 1x 棋盘像素（除以游戏倍率与页级缩放）；
-       五期：同一路径上记录 mv 事件（节流 ≥16px，recordMv 内控） */
+    on(gboard, "mouseleave", () => { clearPress(); if (!over) setFace("smile"); });
+    /* mv 事件流（回放光标 + 引擎行程 pathPx 的数据源）：屏幕坐标 → 棋盘 1x 像素
+       （除以倍率与页级缩放，再减棋盘原点）；节流 ≥4px 在 recordMv 内控 */
     on(gboard, "mousemove", (e: MouseEvent) => {
       if (started && !over) {
-        if (lastPX !== null) {
-          stPath += Math.hypot(e.clientX - lastPX, e.clientY - lastPY) / (zoomCur * pageZoom());
-        }
-        lastPX = e.clientX; lastPY = e.clientY;
-        /* mv 像素坐标：屏幕坐标 → 棋盘 1x 像素（除以倍率与页级缩放，再减棋盘原点） */
         const gbR = gboard.getBoundingClientRect();
         recordMv(
           Math.max(0, (e.clientX - gbR.left) / (zoomCur * pageZoom())),
@@ -2194,9 +2302,18 @@ export function OnlinePlay({
     let touchX = 0, touchY = 0; // 起点坐标：滑动容差判定用
     on(gboard, "touchend", (e: TouchEvent) => {
       if (touchTimer) clearTimeout(touchTimer);
-      if (touchCell >= 0 && !over && !longFired) {
-        if (state[touchCell] === 1) { recordEv(3, touchCell); action("left", () => chord(touchCell)); }
-        else { recordEv(3, touchCell); action("left", () => openCell(touchCell)); recordEv(5, touchCell); }
+      if (longFired) {
+        /* 长按插旗的 rr 闭合（rc 在长按触发时已录） */
+        if (touchCell >= 0 && !over) recordEv(17, touchCell);
+      } else if (touchCell >= 0 && !over) {
+        if (state[touchCell] === 1) {
+          /* 单击已开数字格＝双击：录 sc+lr，统计计 Double（与桌面端同口径） */
+          recordEv(11, touchCell); recordEv(5, touchCell);
+          chord(touchCell);
+        } else {
+          recordEv(3, touchCell); recordEv(5, touchCell);
+          openCell(touchCell);
+        }
       }
       touchCell = -1;
       e.preventDefault();
@@ -2219,15 +2336,13 @@ export function OnlinePlay({
       touchTimer = window.setTimeout(() => {
         longFired = true;
         if (state[i] === 1) return; // 已开格长按无意义
-        recordEv(9, i); recordEv(17, i); action("right", () => toggleFlag(i));
+        recordEv(9, i); // rc 按下即录（flop 插旗按下生效口径）；rr 在 touchend 补录
+        toggleFlag(i);
+        /* 「自动双击」开关开时：插旗成功（态→2）后对周围已开数字格预检 chord，
+           空 chord 不录不计（2026-10-16 张老师定；此前移动端无条件自动 chord，
+           未满足的数字格也计入 Double——移动端 Corr 被系统性拉低的根因） */
+        if (autoChord && state[i] === 2) autoChordAround(i);
         if (navigator.vibrate) navigator.vibrate(30);
-        /* 插旗后自动对邻近所有已开数字格执行双击（张老师定）：移动端没有
-           右键/双击，靠这一步补齐「标完旗顺手开满足格」的操作链。
-           chord 内部自会校验旗数是否满足，不满足时天然空操作 */
-        for (const a of neighbors(i)) {
-          if (over || state[a] !== 1 || !nums || nums[a] === 0) continue;
-          recordEv(11, a); action("double", () => chord(a));
-        }
       }, 150);
       e.preventDefault();
     }, { passive: false });
@@ -2831,6 +2946,9 @@ export function OnlinePlay({
         bvSel: () => ({ ...bvSel[lv] }),
         lv: () => lv,
         ngRedeals: () => ngRedeals,
+        /* 统计一致性验证（2026-10-16）：当局事件流 + 共享引擎重算结果 */
+        events: () => evStream.slice(),
+        counts: () => gameCounts(),
         size: () => ({ w: W, h: H, m: M }),
         /* 诊断：单次重排的 bv（测分布用，不动盘面之外的任何状态） */
         ngOnce: (i: number, opening: boolean) => {
@@ -2843,6 +2961,7 @@ export function OnlinePlay({
     /* 设置浮窗控件初始状态（从 localStorage 恢复的开关勾选态 + 3BV 滑杆初值） */
     swQm.checked = qmark;
     swStats.checked = showStats;
+    swAc.checked = autoChord;
     syncModeButtons(); // 模式快捷钮按存档初值点亮（NF/无猜）
     syncBvSlider();
 
@@ -2956,6 +3075,13 @@ export function OnlinePlay({
             <span className="gs_name">数据统计</span>
             <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
             <span className="tip">游戏结束后在游戏界面左侧弹出数据统计面板</span>
+          </div>
+          {/* 「自动双击」（2026-10-16 张老师定，默认关）：插旗后自动 chord 周围满足条件的
+              数字格；实际开出新格的计一次 Double，开不出的不计 */}
+          <div className="gs_row">
+            <span className="gs_name">自动双击</span>
+            <label className="gsw"><input type="checkbox" id="sw_ac" /><span className="track" /></label>
+            <span className="tip">标旗后自动对周围的数字进行双击</span>
           </div>
           <div className="gs_divider" />
           <div className="gs_zoom">

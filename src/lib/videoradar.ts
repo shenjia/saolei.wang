@@ -24,38 +24,15 @@ import { mvfToRawvfBest } from "./mvf-best";
 import { avfToRawvf } from "./avf";
 import { rmvToRawvf } from "./rmv";
 import { formatRawvf, type ParsedVideo } from "./rawvf";
+import { replayCounts, type NormEvent, type ReplayCounts } from "./replay-core";
 
 /* 指标定义 / 分位评级 / 等级配色已拆到 lib/videoscore.ts（纯函数，客户端可直接引）。
    这里原样再导出一份，scripts/video-metrics.ts、lib/videoanalysis.ts 等老调用方的
    import 路径不必改动。改评级口径请改 videoscore.ts —— 录像页与在线玩结算面板共用。 */
 export * from "./videoscore";
-
-/** 单盘原始计数（重放直出，flop 口径） */
-export interface ReplayCounts {
-  width: number;
-  height: number;
-  mines: number;
-  /** 左键有效开格数（flop LeftClicks） */
-  clLeft: number;
-  /** 右键点击数（flop RightClicks：按下即盘面变化 + 挂起补记） */
-  clRight: number;
-  /** 双击数（flop DoubleClicks：chord 手势 + 中键） */
-  clDouble: number;
-  /** 有效点击：Cl − wasted（flop Ce） */
-  ce: number;
-  /** 无效左键（flop wastedLeftClicks：open 落旗/已开格） */
-  wastedLeft: number;
-  /** 无效右键（flop wastedRightClicks） */
-  wastedRight: number;
-  /** 无效双击（flop wastedDoubleClicks：chord 没开出格） */
-  wastedDouble: number;
-  /** 拔旗次数（rc 落在旗格；仅参考，不参与 flop 计数） */
-  unflag: number;
-  /** 鼠标行程（像素） */
-  pathPx: number;
-  /** 终盘插旗数 */
-  flags: number;
-}
+/* 重放状态机已拆到 lib/replay-core.ts（2026-10-16）：录像侧与在线练习结算共用同一
+   事实源。ReplayCounts 在这里再导出，老调用方 import 路径不变。 */
+export type { ReplayCounts } from "./replay-core";
 
 /** 单盘六维指标 */
 export interface VideoMetrics {
@@ -116,242 +93,32 @@ export function parseVideoBinary(buf: Uint8Array, ext: string): ParsedVideo | nu
 }
 
 /**
- * 重放事件流，产出原始计数 —— **flop 官方引擎 1:1 移植**（2026-10-16 五轮修正）。
- * 网格状态：0 未开 / 1 已开 / 2 旗；questioned 单独一维（flop Cell.questioned）。
- * 状态机 lp/lv/rp/rv/mp/sv 与 videowin.ts / VideoReplay.tsx 完全同源。
+ * 重放事件流，产出原始计数 —— 状态机在 lib/replay-core.ts（全站唯一事实源），
+ * 这里只负责把 rawvf 文本行解析成规范化事件。坐标为 1-based → 0-based。
+ * 真实录像一律按 flop 原样口径（不传 noflag；NF 录像里的 rc 事件 flop 照样 toggleLabel）。
  */
 export function replayEvents(v: ParsedVideo): ReplayCounts {
-  const W = v.width;
-  const H = v.height;
-  const N = W * H;
-  const mines = new Uint8Array(N);
-  for (let i = 0; i < N; i++) mines[i] = v.board[i] === "*" ? 1 : 0;
-  const nums = new Int8Array(N);
-  for (let i = 0; i < N; i++) {
-    if (mines[i]) {
-      nums[i] = -1;
-      continue;
-    }
-    let c = 0;
-    const x = i % W;
-    const y = (i / W) | 0;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
-        if (mines[ny * W + nx]) c++;
-      }
-    }
-    nums[i] = c;
-  }
+  const mines = new Uint8Array(v.width * v.height);
+  for (let i = 0; i < mines.length; i++) mines[i] = v.board[i] === "*" ? 1 : 0;
 
-  const state = new Uint8Array(N); // 0 未开 / 1 已开
-  const flagged = new Uint8Array(N);
-  const questioned = new Uint8Array(N);
-  let dead = false; // chord/lc 展开遇雷（flop Blast）——胜局录像不该出现，保真用
-  const flagsAround = (i: number): number => {
-    const x = i % W;
-    const y = (i / W) | 0;
-    let f = 0;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
-        if (flagged[ny * W + nx]) f++;
-      }
-    }
-    return f;
-  };
-  /** flop open(i)：开单格（含踩雷 Blast、0 号泛洪）；返回是否真的开了 */
-  const openCell = (i: number): boolean => {
-    if (i < 0 || i >= N || state[i] !== 0 || flagged[i]) return false;
-    state[i] = 1;
-    if (mines[i]) {
-      dead = true;
-      return true;
-    }
-    openedSafe++;
-    if (nums[i] === 0) openAroundIdx(i);
-    return true;
-  };
-  /** flop openAround(i)：仅该格已开且（0 号或旗数齐）才开 3x3 邻域（可开雷→dead） */
-  const openAroundIdx = (i: number): boolean => {
-    if (i < 0 || i >= N || state[i] !== 1) return false;
-    if (!(nums[i] === 0 || nums[i] === flagsAround(i))) return false;
-    const x = i % W;
-    const y = (i / W) | 0;
-    let any = false;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
-        any = openCell(ny * W + nx) || any;
-      }
-    }
-    return any;
-  };
-
-  // flop toggleLabel：旗→问号(marks)/摘旗、问号→清、未标→旗；返回是否动了格子
-  let unflag = 0; // 摘旗/清问号计数（站内参考字段）
-  const toggleLabel = (i: number, marks: boolean): boolean => {
-    if (state[i] === 1) return false;
-    if (marks && flagged[i]) {
-      flagged[i] = 0;
-      questioned[i] = 1;
-    } else if (flagged[i]) {
-      flagged[i] = 0;
-      questioned[i] = 0;
-      unflag++;
-    } else if (questioned[i]) {
-      flagged[i] = 0;
-      questioned[i] = 0;
-      unflag++;
-    } else {
-      flagged[i] = 1;
-      questioned[i] = 0;
-    }
-    return true;
-  };
-
-  let clLeft = 0;
-  let clRight = 0;
-  let clDouble = 0;
-  let wastedLeft = 0;
-  let wastedRight = 0;
-  let wastedDouble = 0;
-  let pathPx = 0;
-  let lastX: number | null = null;
-  let lastY: number | null = null;
-
-  // 事件行形态：`ts ev x y (px py)`，坐标为 1-based（mt＝切换问号开关，不占格子）
-  type Ev = { ts: number; ev: string; x: number; y: number; px: number; py: number };
-  const evs: Ev[] = [];
+  // 事件行形态：`ts ev x y (px py)`（mt＝切换问号开关，不占格子）
+  const evs: NormEvent[] = [];
   for (const line of v.events) {
     const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (!m) continue;
     evs.push({
-      ts: parseFloat(m[1]),
-      ev: m[2],
+      ev: m[2] as NormEvent["ev"],
       x: +m[3] - 1,
       y: +m[4] - 1,
       px: +m[5],
       py: +m[6],
     });
   }
-
-  // flop 状态机（与 videowin.ts 同源；本函数额外产出计数）。
-  // 越界点击（i<0）：flop open/openAround 返回 false → 照样计数、计 wasted，不落地。
-  let lp = false,
-    lv = false,
-    rp = false,
-    rv = false,
-    sv = false;
-  let marks = v.marks ?? false;
-  let over = false; // Win/Lose 后事件无效（flop performEvent 守卫）
-  let openedSafe = 0;
-  const safeTotal = N - v.mines;
-
-  const idx = (e: Ev) => e.y * W + e.x;
-
-  for (const e of evs) {
-    if (over) break;
-    // 鼠标行程：所有带像素坐标的事件按时间序累加欧氏距离（flop mouseMove 同款）
-    if (e.px !== 0 || e.py !== 0) {
-      if (lastX !== null && lastY !== null) pathPx += Math.hypot(e.px - lastX, e.py - lastY);
-      lastX = e.px;
-      lastY = e.py;
-    }
-    if (e.ev === "mt") {
-      marks = !marks;
-      continue;
-    }
-    if (e.ev === "mv") continue;
-    const i = idx(e);
-    const inside = i >= 0 && i < N;
-    switch (e.ev) {
-      case "lc":
-        lp = lv = true;
-        break;
-      case "lr": {
-        // flop leftRelease：rp||sv → 双击；否则 lv → 左键开格（松开坐标）
-        if (rp || sv) {
-          clDouble++;
-          if (!openAroundIdx(inside ? i : -1)) wastedDouble++;
-        } else if (lv) {
-          clLeft++;
-          if (!openCell(inside ? i : -1)) wastedLeft++;
-        }
-        lp = lv = rv = sv = false; // 不动 rp（flop 原样）
-        break;
-      }
-      case "rc": {
-        // flop rightPress：lp 按住时仅视觉（1.5 击里尾随 lc 的 rc 不插旗）；否则按下即刻 toggleLabel
-        if (!lp) {
-          if (inside && toggleLabel(i, marks)) {
-            clRight++;
-            rv = false;
-          } else {
-            rv = true;
-          }
-        }
-        rp = true;
-        break;
-      }
-      case "rr": {
-        // flop rightRelease：lp 按住时＝双击（松开坐标）；否则 rv 挂起补记一次 wasted 右键
-        if (lp) {
-          clDouble++;
-          if (!openAroundIdx(inside ? i : -1)) wastedDouble++;
-        } else if (rv) {
-          clRight++;
-          wastedRight++;
-        }
-        rp = lv = rv = sv = false; // 不动 lp（flop 原样）
-        break;
-      }
-      case "mc":
-        // mp = true（flop 中键按住仅视觉，计数在 mr；状态位不影响任何分支，无需维护）
-        break;
-      case "mr": {
-        // flop middleRelease：无条件双击
-        clDouble++;
-        if (!openAroundIdx(inside ? i : -1)) wastedDouble++;
-        break;
-      }
-      case "sc":
-        // flop leftPressWithShift：chord 在其后的 lr 生效
-        lp = lv = sv = true;
-        break;
-    }
-    if (openedSafe >= safeTotal) over = true; // Win
-    if (dead) over = true; // Blast → Lose
-  }
-
-  let flags = 0;
-  for (let i = 0; i < N; i++) if (flagged[i]) flags++;
-  const cl = clLeft + clRight + clDouble;
-  const ce = cl - (wastedLeft + wastedRight + wastedDouble);
-  return {
-    width: W,
-    height: H,
-    mines: v.mines,
-    clLeft,
-    clRight,
-    clDouble,
-    ce,
-    wastedLeft,
-    wastedRight,
-    wastedDouble,
-    unflag,
-    pathPx,
-    flags,
-  };
+  return replayCounts(
+    { width: v.width, height: v.height, mines: v.mines, board: mines },
+    evs,
+    { marks: v.marks ?? false }
+  );
 }
 
 /**

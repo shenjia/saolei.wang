@@ -17,7 +17,7 @@ export const ONLINE_PLAYER_NAME = "saolei.online";
 
 /** 单条对局事件（引擎记录；mouse 码与 avf 解析器约定一致） */
 export interface OnlineEvent {
-  /** 鼠标码：1=mv 3=lc 5=lr 9=rc 17=rr 11=sc */
+  /** 鼠标码：1=mv 3=lc 5=lr 9=rc 17=rr 11=sc 65=mr（自动双击） */
   mouse: number;
   /** 像素 x（1-based 格坐标 ×16 + 偏移；回放光标定位用） */
   x: number;
