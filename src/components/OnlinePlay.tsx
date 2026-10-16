@@ -1882,8 +1882,6 @@ export function OnlinePlay({
       }
       /* 数据面板常驻时（六期）重开后盘面尺寸/倍率可能已变，重新对齐+缩放 */
       if (showStats) syncReportZoom();
-      /* 大地图全屏建议气泡（v8c）：盘面尺寸/级别变化后重估（含初始 reset） */
-      syncFsSuggest();
     }
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
@@ -2163,21 +2161,9 @@ export function OnlinePlay({
       fakeFs = on;
       document.documentElement.classList.toggle("op-fakefs", fakeFs);
       fsBtn.classList.toggle("active", fakeFs);
-      syncFsSuggest();
       if (fakeFs) window.scrollTo(0, 0); // 回顶：第一屏即游戏区
       if (lsQuery.matches) fitZoomForLandscape(); // 顶高变了按新视口重拉
       else applyZoom(zoomCur, false);
-    }
-    /* 大地图全屏建议气泡（v8c，2026-10-16 张老师定）：自定义盘比高级（30×16）还大
-       （宽>30 或高>16）且未进全屏（真/伪均算已全屏）时，hover 全屏钮出
-       「大地图建议开启全屏模式」；此时清掉原生 title 免得双层提示打架，
-       进全屏/切回小盘自动消失。类与 title 统一在此收口（reset / 全屏切换 /
-       伪全屏切换三处调用），标题常态仍走「全屏/退出全屏」 */
-    function syncFsSuggest() {
-      const inFs = document.fullscreenElement === root || fakeFs;
-      const suggest = lv === "cus" && (W > 30 || H > 16) && !inFs;
-      fsBtn.classList.toggle("fs_suggest", suggest);
-      fsBtn.title = inFs ? "退出全屏" : suggest ? "" : "全屏";
     }
     /* iOS 引导浮层（2026-10-14 张老师定）：挂 body 直下——放在 #page 里会被
        移动版的页级 zoom 连带缩放，fixed 遮罩铺不满屏 */
@@ -2232,7 +2218,6 @@ export function OnlinePlay({
     on(document, "fullscreenchange", () => {
       const entered = document.fullscreenElement === root;
       fsBtn.classList.toggle("active", entered);
-      syncFsSuggest(); // 含 title 收口（v8c：大地图建议态下清原生 title）
       if (entered) {
         zoomBeforeFs = zoomCur;
         // 等全屏渲染稳定（innerWidth 更新为屏幕尺寸）后再测量计算
@@ -3168,21 +3153,22 @@ export function OnlinePlay({
             </svg>
             <span className="tip">无猜模式：踩雷时在不改变已开数字的前提下尝试重排局面</span>
           </button>
-          <button className="gicon" id="btn_settings" title="设置" type="button">
+          <button className="gicon" id="btn_settings" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="2" />
               <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" />
             </svg>
+            <span className="tip">设置</span>
           </button>
-          <button className="gicon" id="btn_fs" title="全屏" type="button">
+          <button className="gicon" id="btn_fs" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
             </svg>
-            {/* 大地图全屏建议气泡（v8c 2026-10-16 张老师定）：仅 fs_suggest 类在时显示，
-                类由 syncFsSuggest 按盘面/全屏态增删；形态复用 .gicon.gmode .tip */}
-            <span className="tip">大地图建议开启全屏模式</span>
+            {/* 常驻 hover 气泡（2026-10-16 v8d 张老师定）：形态与模式快捷钮同款；
+                不用原生 title（会跟气泡双份弹），全屏中/退出后文案不变 */}
+            <span className="tip">全屏沉浸式体验</span>
           </button>
         </div>
 

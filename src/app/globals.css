@@ -6877,17 +6877,15 @@ button.msg_cancel:hover {
   70% { transform: rotate(-6deg); }
   100% { transform: rotate(0deg); }
 }
-/* 模式快捷钮 hover 气泡（2026-10-15 九期张老师定）：文案与设置浮窗对应开关一致，
+/* 右上图标按钮 hover 气泡（2026-10-15 九期张老师定）：文案与设置浮窗对应开关一致，
    观感同 .gs_row .tip（暗底/描边/小三角）；按钮贴视口右侧 → 气泡右对齐、
    弹在按钮下方（设置行是弹在行下方，这里同理），4px 间隙够小不致 hover 闪烁。
-   2026-10-16 v8c 起全屏钮（.fs_suggest）共用同款：自定义盘大于高级且未全屏时
-   hover 出「大地图建议开启全屏模式」，类由 JS 按盘面/全屏态增删 */
-#online_play .gicon.gmode,
-#online_play .gicon.fs_suggest {
+   2026-10-16 v8c 建议气泡（.fs_suggest 按需挂类）已废；v8d 起五颗钮全体常驻：
+   设置＝「设置」、全屏＝「全屏沉浸式体验」+ 三颗模式钮原有说明 */
+#online_play .gicon {
   position: relative;
 }
-#online_play .gicon.gmode .tip,
-#online_play .gicon.fs_suggest .tip {
+#online_play .gicon .tip {
   display: none;
   position: absolute;
   top: calc(100% + 4px);
@@ -6904,8 +6902,7 @@ button.msg_cancel:hover {
   pointer-events: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
-#online_play .gicon.gmode .tip::after,
-#online_play .gicon.fs_suggest .tip::after {
+#online_play .gicon .tip::after {
   content: "";
   position: absolute;
   bottom: 100%;
@@ -6913,8 +6910,7 @@ button.msg_cancel:hover {
   border: 5px solid transparent;
   border-bottom-color: #656355;
 }
-#online_play .gicon.gmode:hover .tip,
-#online_play .gicon.fs_suggest:hover .tip {
+#online_play .gicon:hover .tip {
   display: block;
 }
 /* ---- 设置浮窗（2026-10-14 二期）：齿轮点开，绝对定位挂在标题行下缘右侧 ---- */
