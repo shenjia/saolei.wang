@@ -3793,7 +3793,7 @@ body #page.ranking_old .ranking_box {
 }
 #news .delta {
   color: #fdc61a;
-  font-size: 16px;
+  font-size: 13px;
   vertical-align: bottom;
   margin-left: 4px;
 }
@@ -3816,7 +3816,11 @@ body #page.ranking_old .ranking_box {
   font-size: 12px;
   font-weight: bold;
   line-height: 18px;
-  vertical-align: bottom;
+  /* 与整行文字垂直居中（middle 以 x-height 中线对齐，徽章偏高，相对上提 1px 补偿，
+     同论坛详情页 h1 board_tag 的 middle+top 补偿手法） */
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
 }
 
 /* 动态中的文章标题《…》（2026-10-13 张老师要求）：不用金色，改亮灰 #bbbbbb
