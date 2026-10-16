@@ -3,6 +3,8 @@
 // 板块分类 = 下划线筛选器紧挨标题右侧（站内 .tabs 同款），默认杂谈；
 // 排序分身份：管理员=公告/技术/杂谈/问答，普通用户=杂谈/技术/问答（公告不显示）；
 // 提交按钮 = 登录弹窗 .lp_submit 同款黄色按钮，居中。
+// 2026-10-16 张老师要求：空标题/空正文不再禁用按钮——点了弹红色气泡；
+// 敏感词前置过滤未通过（服务端 400 文案）同样红色气泡提示。
 
 "use client";
 
@@ -46,6 +48,15 @@ export function PostForm({
   const router = useRouter();
 
   async function onSubmit() {
+    // 空标题/空正文不再禁用按钮，点了给红色气泡（2026-10-16 张老师要求）
+    if (!title.trim()) {
+      toast("标题不能为空", "error");
+      return;
+    }
+    if (!content.trim()) {
+      toast("内容不能为空", "error");
+      return;
+    }
     setBusy(true);
     setError("");
     const body = postId
@@ -59,7 +70,10 @@ export function PostForm({
     setBusy(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "提交失败");
+      // 敏感词前置过滤未通过等，服务端文案同步红色气泡（2026-10-16 张老师要求）
+      const msg = data.error ?? "提交失败";
+      setError(msg);
+      toast(msg, "error");
       return;
     }
     const data = await res.json();
@@ -101,7 +115,7 @@ export function PostForm({
         notify={toast}
       />
       <p className="submit_row">
-        <button className="lp_submit_btn" disabled={busy || !title.trim() || !content.trim()} onClick={onSubmit}>
+        <button className="lp_submit_btn" disabled={busy} onClick={onSubmit}>
           {postId ? "保存修改" : "发布主题"}
         </button>{" "}
         <Link className="btn_back" href="/bbs">返回</Link>{" "}

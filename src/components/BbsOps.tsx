@@ -49,6 +49,12 @@ export function ReplyForm({
   if (locked) return <p className="text">主题已锁定，无法回复。</p>;
 
   async function onSubmit() {
+    // 空内容不再禁用按钮，点了给红色气泡；服务端错误（含敏感词前置过滤）同样气泡
+    // （2026-10-16 张老师要求，与发帖表单同口径）
+    if (!content.trim()) {
+      toast("内容不能为空", "error");
+      return;
+    }
     setBusy(true);
     setError("");
     const err = await callApi({
@@ -60,6 +66,7 @@ export function ReplyForm({
     setBusy(false);
     if (err) {
       setError(err);
+      toast(err, "error");
       return;
     }
     setContent("");
@@ -91,7 +98,7 @@ export function ReplyForm({
         }
       />
       <p className="submit_row">
-        <button className="lp_submit_btn" disabled={busy || !content.trim()} onClick={onSubmit}>
+        <button className="lp_submit_btn" disabled={busy} onClick={onSubmit}>
           回复
         </button>{" "}
         <span className="error">{error}</span>
