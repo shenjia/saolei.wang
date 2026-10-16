@@ -149,7 +149,7 @@ async function main() {
   const idsArg = arg("ids");
   const idsFile = arg("ids-file");
   const onlyIds: bigint[] | null = idsArg
-    ? idsArg.split(",").map((s) => BigInt(s.trim())).filter((n) => n > 0n)
+    ? idsArg.split(",").map((s) => BigInt(s.trim())).filter((n) => n > BigInt(0))
     : idsFile
       ? readFileSync(idsFile, "utf8").split(/\r?\n/).map((s) => s.trim()).filter((s) => s !== "").map((s) => BigInt(s))
       : null;
