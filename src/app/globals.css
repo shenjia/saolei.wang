@@ -611,12 +611,12 @@ body #video_view .video_cell .playable {
   margin: 0;
 }
 /* 版图放大（2026-10-16 十期张老师需求）：高级盘充分使用左栏版图空间，
-   中级复用同比例、初级双倍比例——三级别视觉高度一致（都≈316px）。
+   中级复用同比例、初级双倍比例——三级别视觉高度一致（都≈318px）。
    #page 封顶 960px 时 .main 宽 672px，cell 内边距 30×2、棋盘右 margin 20px
    → 棋盘可用宽 592px；高级盘 484px → zoom 1.22 恰好占满。
-   ⚠️ zoom 挂 .play_board（棋盘 DOM 不动，回放引擎像素坐标系不受影响——
-   off 量取按 wrapZoom 除回、光标/控制条自适应；--pbz 供控制条反向抵消）；
-   移动端断点有整页 zoom + .playable 横滑兜底，溢出盒内滑动。 */
+   ⚠️ zoom 挂 .play_board（棋盘 DOM 不动，回放引擎像素坐标系零影响——
+   off 量取、光标/进度条均在缩放盒内自然随动）；移动端断点（≤631/≤768）
+   有整页 zoom + 横滑兜底，此处不设上限，溢出由 .playable 盒内滑动。 */
 #video_view .play_board.zoom_exp {
   zoom: 1.22;
   --pbz: 1.22;
@@ -7719,10 +7719,13 @@ html:has(#online_play) #footer {
    设计稿 design/video-replay-panel-20261016.html）。
    面板规则与 #online_play .greport 一组同源（深底/圆角/阴影/hover 气泡），
    拆开写是因为详情页没有 #online_play 宿主——改样式两处同步 ---- */
+/* 十期：页面态面板 portal 挂 body（.video_cell overflow:hidden 裁剪教训），
+   fixed 定位 + JS 写 left/top（fit() 内按棋盘 rect 计算）。
+   全屏层内的面板（.vprfs_panel）在下方改 absolute 脱离 fixed 语义 */
 .replay_panel {
-  position: absolute;
-  right: calc(100% + 14px); /* 贴 .playable 左缘外 14px（棋盘左缘），zoom 不影响 */
-  top: 5px; /* 与 .play_board 上外边距对齐（margin: 5px 20px 20px 0） */
+  position: fixed;
+  left: 0;
+  top: 0;
   width: 192px;
   background: #49483e;
   border: 1px solid #656355;
@@ -7809,16 +7812,16 @@ html:has(#online_play) #footer {
 .replay_panel tr:hover td.gv .tip {
   display: block;
 }
-/* ---- 回放控制条：暂停/播放按钮 + 可拖拽进度条（翻页控件卡片风格） ---- */
+/* ---- 回放控制条：暂停/播放 + 全屏按钮 + 可拖拽进度条。
+   十期张老师定：进度条像素级复刻翻页组件（.pager 卡片），当前时间站绿、总时间去掉 ---- */
 .replay_bar {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0; /* 翻页控件相邻项 margin 0 3px 间隔，这里用 .rb_* 自带 margin 对齐 */
   margin-top: 8px; /* 棋盘下缘与条之间留一线间隙 */
   clear: both;
-  /* 窄盘（初级 130px）装不下「按钮 34 + 时间 44×2 + 间距 24 + 轨道」：条按最小宽
-     向右延展（.play_board 收缩包随最宽子元素撑开，棋盘仍在左侧原位）；
+  /* 窄盘（初级 130px）装不下按钮组+时间+轨道：条按最小宽向右延展；
      移动端按视口收敛防溢出 */
   min-width: min(320px, calc(100vw - 72px));
   /* 十期：.play_board 的版图 zoom 会连带放大控制条（初级 2.4x 时按钮 82px 巨物），
@@ -7827,15 +7830,7 @@ html:has(#online_play) #footer {
      ⚠️ width:min(320px, calc(100vw-72px)) 的 100vw 也随之回到真实视口 ✓ */
   zoom: calc(1 / var(--pbz, 1));
 }
-/* 数据面板仅桌面（复用练习页 greport 的桌面专属口径：<960 一律不显示）。
-   移动端断点按 #page 整页 zoom 后的等效视口算：410px 档 zoom 0.65 → CSS 断点
-   410÷0.65≈631px，同理 605 档→643px——605~959 之间无整页 zoom，断点取 631。
-   ⚠️ 门槛挂 body 级（面板挂在详情页 #page 之下，须越过页级 zoom 直接按视口判） */
-@media (max-width: 631px) {
-  body .replay_panel {
-    display: none;
-  }
-}
+/* 按钮＝翻页卡片 1:1（.pager a 同款几何与色板，尺寸 34×34 正方） */
 .rb_btn {
   flex: 0 0 auto;
   display: flex;
@@ -7844,10 +7839,14 @@ html:has(#online_play) #footer {
   width: 34px;
   height: 34px;
   padding: 0;
+  margin: 0 3px 0 0;
   border: 1px solid #49483e;
   border-radius: 6px;
   background: #33322b;
   color: #b1b1a4;
+  font-size: 14px;
+  text-align: center;
+  vertical-align: middle;
   cursor: pointer;
 }
 .rb_btn:hover {
@@ -7858,17 +7857,30 @@ html:has(#online_play) #footer {
 .rb_btn svg {
   display: block;
 }
-.rb_time {
+/* 当前时间：站绿（2026-10-16 十期张老师定）；总时间已去（标题上有）。
+   ⚠️ (0,2,1) 提权：legacy .video_cell span (0,1,1) 且 legacy 后加载，平级必输 */
+body .replay_bar .rb_time {
   flex: 0 0 auto;
-  min-width: 44px;
-  font: 12px "Courier New", Courier, monospace;
-  color: #939387;
-  text-align: center;
+  margin: 0 3px;
+  min-width: 48px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #33322b;
+  padding: 0 10px;
+  font: 14px/1 "Courier New", Courier, monospace;
+  color: #a6e22e;
 }
+/* 轨道＝翻页卡片同款：34 高、#33322b 底、#49483e 边、6px 圆角；
+   填充/滑块＝页码 current 金黄 #fdc61d；thumb 用圆角 3px 方块（页码卡微缩版） */
 .rb_track {
   position: relative;
   flex: 1 1 auto;
   height: 34px;
+  margin: 0 3px;
   border: 1px solid #49483e;
   border-radius: 6px;
   background: #33322b;
@@ -7876,40 +7888,50 @@ html:has(#online_play) #footer {
   touch-action: none; /* 拖拽吃掉触摸滚动 */
 }
 .rb_track:hover {
-  border-color: #656355;
+  border-color: #a6e22e; /* 翻页 a:hover 同款绿描边 */
 }
 .rb_rail {
   position: absolute;
   left: 10px;
   right: 10px;
   top: 50%;
-  height: 8px;
-  margin-top: -4px;
-  border-radius: 4px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
   background: #26261f;
 }
 .rb_fill {
   position: absolute;
   left: 0;
   top: 0;
-  height: 8px;
-  border-radius: 4px;
-  background: #fdc61d; /* 页码 current 金黄（翻页控件同源） */
+  height: 6px;
+  border-radius: 3px;
+  background: #fdc61d;
 }
 .rb_thumb {
   position: absolute;
   top: 50%;
-  width: 16px;
-  height: 16px;
-  margin: -8px 0 0 -8px;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
   border: 1px solid #8a6d1a;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #fdc61d;
+  color: #333;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
   cursor: grab;
 }
 .rb_thumb:active {
   cursor: grabbing;
+}
+/* 数据面板仅桌面（复用练习页 greport 的桌面专属口径：<960 一律不显示）。
+   移动端断点按 #page 整页 zoom 后的等效视口算：410px 档 zoom 0.65 → CSS 断点
+   410÷0.65≈631px，同理 605 档→643px——605~959 之间无整页 zoom，断点取 631。
+   ⚠️ 门槛挂 body 级（面板挂在详情页 #page 之下，须越过页级 zoom 直接按视口判） */
+@media (max-width: 631px) {
+  body .replay_panel {
+    display: none;
+  }
 }
 
 #online_play .board.game {
@@ -8559,4 +8581,120 @@ html.op-fakefs #header {
   color: #75715e;
   font-size: 13px;
   line-height: 20px;
+}
+
+/* ---- 全屏回放层（十期张老师需求）：遮罩 + 左面板/中棋盘/右评级三栏，
+   自适应吃满屏幕，滚轮调比例（--vfz 由 JS 写在 .vprfs 上） ---- */
+.vprfs {
+  position: fixed;
+  inset: 0;
+  z-index: 1200; /* 压过页头（900）与 #gr_modal */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.vprfs.show {
+  opacity: 1;
+}
+/* legacy .show{display:block} 后加载会压掉层上的 flex（(0,2,0)>(0,1,0) 恢复） */
+.vprfs.show {
+  display: flex;
+}
+/* 遮罩铺满整层（点任意空白处退出全屏）；vprfs_center 内容在其上（z-index:1）。
+   面板/评级贴屏缘时点不到遮罩属布局边界——退出路径仍有 Esc 与棋盘外空白 */
+.vprfs_mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: pointer; /* 点遮罩退出全屏 */
+}
+.vprfs_inner {
+  position: relative;
+  z-index: 1; /* 三栏内容整体压过遮罩；遮罩四周仍可点退出 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+}
+/* 左面板：自然尺寸，不吃滚轮 zoom（深底浮在遮罩上，阴影加深一档）。
+   ⚠️ 必须覆盖 .replay_panel 的 fixed 定位（fixed 会脱离层布局、盖住遮罩左侧） */
+.vprfs_panel.replay_panel {
+  position: absolute; /* 层内绝对——但为保持 flex 三栏布局改用 static 重置 */
+  position: static;
+  left: auto;
+  top: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+/* 中栏：棋盘 + 控制条整块按 --vfz 缩放 */
+.vprfs_center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  zoom: var(--vfz, 1);
+}
+.vprfs_board_wrap {
+  position: relative;
+}
+.vprfs_center .replay_bar {
+  /* 全屏层：条不挤棋盘（棋盘宽即布局宽），保底 320 防轨道消失 */
+  width: max-content;
+  min-width: 320px;
+}
+.vprfs_center .rb_track {
+  min-width: 120px;
+}
+/* 右栏：评级卡（雷达与右栏同源）；窄屏隐藏 */
+.vprfs_side {
+  width: 222px;
+  background: #3b3a32;
+  border: 1px solid #656355;
+  border-radius: 10px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.45), 0 8px 32px rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  padding: 18px 14px;
+  text-align: center;
+}
+.vprfs_side .vr_h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  color: #b1b1a4;
+  font-size: 16px;
+}
+.vprfs_side .vr_rate {
+  font-weight: bold;
+}
+.vprfs_side .vr_line {
+  height: 0;
+  margin: 0 0 14px;
+  border: 0;
+  border-top: 1px solid #49483e;
+}
+.vprfs_side .vr_wrap {
+  position: relative;
+  margin: -12px;
+  width: calc(100% + 24px);
+  max-width: 234px;
+}
+.vprfs_side .vr_wrap .chart {
+  display: block;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  height: auto;
+}
+@media (max-width: 1179px) {
+  .vprfs_side {
+    display: none;
+  }
+}
+@media (max-width: 899px) {
+  .vprfs_panel {
+    display: none;
+  }
 }

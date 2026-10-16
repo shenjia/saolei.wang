@@ -33,14 +33,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Board } from "./Board";
 import { FlopSprites } from "./FlopSprites";
 import { FlopPlayer, playFlop } from "./FlopPlayer";
+import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { rmvToRawvf } from "@/lib/rmv";
 import { formatRawvf } from "@/lib/rawvf";
 import type { VideoLevel } from "@/lib/config";
+import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
+import { gradeColor } from "@/lib/videoscore";
 
 /* RawVF 事件行 → 紧凑事件（csec 统一百分秒；px/py 为 16px/格 像素坐标） */
 interface ReplayEv {
@@ -587,6 +591,7 @@ type Status = "idle" | "loading" | "playing" | "paused" | "ended";
 interface ReplayCtxValue {
   status: Status;
   stats: ReplayStats | null;
+  fullscreen: boolean;
   play: () => void;
   stop: () => void;
   pause: () => void;
@@ -595,6 +600,8 @@ interface ReplayCtxValue {
   togglePlay: () => void;
   /** 跳转到指定百分秒（引擎重置盘面后快进，统计随发） */
   seek: (csec: number) => void;
+  /** 进入/退出全屏回放层 */
+  setFullscreen: (v: boolean) => void;
 }
 
 const ReplayCtx = createContext<ReplayCtxValue | null>(null);
@@ -603,6 +610,10 @@ export function VideoReplayProvider({
   boardId,
   filepath,
   realTimeMs,
+  radarPoints,
+  radarOverall,
+  level,
+  boardStr,
   children,
 }: {
   /** Board 组件渲染的 id="board_{boardId}"，play() 时据此定位棋盘 DOM */
@@ -610,10 +621,18 @@ export function VideoReplayProvider({
   filepath: string;
   /** 库内权威用时（毫秒，video_info.real_time）：进度条总长与播放终点以库为准 */
   realTimeMs?: number;
+  /** 服务端算好的本局五轴雷达数据（详情页右栏同源）——全屏层右侧「录像评级」用 */
+  radarPoints?: VideoAnalysisPoint[];
+  /** 综合评级字母（analysis.overall，同右栏口径） */
+  radarOverall?: string;
+  /** 级别与整盘串（renderBoard 后 '*'/数字）——全屏层重画 Board 用 */
+  level?: VideoLevel;
+  boardStr?: string;
   children: ReactNode;
 }) {
   const [status, setStatus] = useState<Status>("idle");
   const [stats, setStats] = useState<ReplayStats | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   /* flop 兜底（rmv / 解析失败）：FlopPlayer 懒挂，挂上后再 playFlop。
      子组件 effect 先于本组件 effect 执行 → 届时 window.flop 已建好；
      播放器 iframe 未就绪时 playFlop 的 pendingUri 队列自动兜底 */
@@ -719,15 +738,28 @@ export function VideoReplayProvider({
     engineRef.current?.seek(csec);
   }, []);
 
-  /* Esc 退出回放（练习页同款出口之一） */
+  /* Esc（练习页同款出口之一）：全屏态 Esc＝只退出全屏（回放继续）；
+     页面态 Esc＝退出回放。fullscreenRef 供 stop 前读取最新值（回调闭包新鲜化） */
+  const fullscreenRef = useRef(false);
+  useEffect(() => {
+    fullscreenRef.current = fullscreen;
+  }, [fullscreen]);
   useEffect(() => {
     if (status === "idle") return;
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") stop();
+      if (e.key !== "Escape") return;
+      if (fullscreenRef.current) setFullscreen(false);
+      else stop();
     };
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [status, stop]);
+
+  /* 退出回放时同步收起全屏层（stop 全路径出口：Esc/点棋盘/重播按钮均安全） */
+  const stopAll = useCallback(() => {
+    setFullscreen(false);
+    stop();
+  }, [stop]);
 
   /* 卸载清理（软导航离开页面时停引擎、恢复/释放 DOM） */
   useEffect(
@@ -739,40 +771,37 @@ export function VideoReplayProvider({
   );
 
   return (
-    <ReplayCtx.Provider value={{ status, stats, play, stop, pause, resume, togglePlay, seek }}>
+    <ReplayCtx.Provider
+      value={{ status, stats, fullscreen, play, stop: stopAll, pause, resume, togglePlay, seek, setFullscreen }}
+    >
       {children}
       {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
       <FlopSprites />
       {flopUri && <FlopPlayer />}
+      {/* 全屏回放层（十期）：遮罩 + 自适应布局，点遮罩退出 */}
+      {fullscreen && level && boardStr && (
+        <ReplayFullscreen
+          level={level}
+          boardId={boardId}
+          boardStr={boardStr}
+          stats={stats}
+          status={status}
+          radarPoints={radarPoints}
+          radarOverall={radarOverall}
+          onToggle={togglePlay}
+          onPause={pause}
+          onSeek={seek}
+          onResume={resume}
+          onExit={() => setFullscreen(false)}
+        />
+      )}
     </ReplayCtx.Provider>
   );
 }
 
-/** 左侧数据面板（九期）：练习页「数据统计」同款行集/口径/气泡，随 stats 实时刷新。
- *  行值派生（Est/QG/RQP/STNB）与练习页 statsReport 同式——不要在这里改公式 */
-function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
-  const ref = useRef<HTMLDivElement>(null);
-  /* 宽高自适应（练习页 syncReportZoom 同思路）：面板锚在 .playable 左缘外 14px，
-     可用宽＝棋盘左缘绝对坐标 − 12（视口余量）− 14（间隙）；面板高于「棋盘+控制条」
-     整块时按整块高封顶；下限 0.3（练习页同款「宁可小也不越界」） */
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      const host = el.closest(".playable");
-      if (!host) return;
-      el.style.zoom = "1";
-      const pr = el.getBoundingClientRect();
-      const hr = host.getBoundingClientRect();
-      if (pr.width < 1 || pr.height < 1) return;
-      const zW = (hr.left - 12 - 14) / pr.width;
-      const zH = hr.height > 1 ? hr.height / pr.height : 1;
-      el.style.zoom = String(Math.max(0.3, Math.min(1, zW, zH)));
-    };
-    fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, []);
+/** 数据统计面板内容（十期拆出）：行集/口径/气泡＝练习页 statsReport 同款，
+ *  行值派生公式勿改。页面模式与全屏层共用。 */
+function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
   const t = s.csec / 100;
   const f3 = (v: number) => v.toFixed(3);
   const hasBv = s.solvedBv > 0 && t > 0;
@@ -806,7 +835,7 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
     ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
   ];
   return (
-    <div className="replay_panel" ref={ref}>
+    <>
       <div className="gr_title">数据统计</div>
       <table>
         <tbody>
@@ -821,13 +850,66 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </>
   );
 }
 
-/** 控制条（九期）：暂停/播放按钮 + 可拖拽进度条，翻页控件卡片风格。
+/** 左侧数据面板（九期；十期 portal 化）：挂 body 直下（.video_cell 的 legacy
+ *  overflow:hidden 会把盒内绝对定位子元素整块裁掉——面板伸到盒外必被裁，
+ *  实测 elementFromPoint 落在 BODY 上，与 #gr_modal 挂 body 的既有教训同源）。
+ *  JS 定位：right 锚 .play_board 左缘外 14px、top 与棋盘顶对齐；
+ *  宽高自适应（练习页 syncReportZoom 同思路）inline zoom 封顶，下限 0.3 */
+function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const wrap = document.querySelector<HTMLElement>("#video_view .play_board");
+      if (!wrap) return;
+      const wr = wrap.getBoundingClientRect();
+      el.style.zoom = "1";
+      el.style.display = "";
+      const pr = el.getBoundingClientRect();
+      if (pr.width < 1 || pr.height < 1) return;
+      /* 定位：面板右缘（渲染值）贴棋盘左缘 −14px、顶边对齐棋盘顶。
+         zoom 语义：CSS left/top 会随 zoom 同步缩放 → 换算成 CSS 值要除回 z；
+         宽度在 CSS 域是自然宽 pr.width（不随 left 换算走）——
+         即 CSS left = (wr.left − gap)/z − pr.width（首版把自然宽也除了 z，
+         z<1 时面板向左飞出屏，1920 因 z=1 蒙混过关） */
+      const hostRect = wrap.closest(".playable")?.getBoundingClientRect();
+      const hostH = hostRect ? hostRect.height : wr.height;
+      const gap = 14;
+      const zW = (wr.left - gap - 12) / pr.width;
+      const zH = hostH > 1 ? hostH / pr.height : 1;
+      const z = Math.max(0.3, Math.min(1, zW, zH));
+      /* 左侧空间放到 0.5x 以下（字号 11px×0.5≈5.5px 不可读；视口 ≈1024 时
+         #page 固定 960 居中、左空间只够 0.44x）→ 面板隐藏，宁缺毋滥 */
+      if (zW < 0.5) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.zoom = String(z);
+      el.style.left = (wr.left - gap) / z - pr.width + "px";
+      el.style.top = wr.top / z + "px";
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="replay_panel" ref={ref}>
+      <ReplayStatsTable level={level} s={s} />
+    </div>,
+    document.body
+  );
+}
+
+/** 控制条（九期；十期改版）：暂停/播放 + 全屏按钮 + 可拖拽进度条，
  *  拖拽：按住即暂停（记住原播放态），拖动中按帧 seek 实时预览，松手定位——
- *  拖前在播则松手续播；点轨道任意位置＝单次跳转（同语义）。 */
+ *  拖前在播则松手续播；点轨道任意位置＝单次跳转（同语义）。
+ *  当前时间＝站绿 #a6e22e（十期张老师定）；总时间已去（标题上有）。 */
 function ReplayBar({
   status,
   stats,
@@ -835,6 +917,8 @@ function ReplayBar({
   onPause,
   onSeek,
   onResume,
+  onFullscreen,
+  compact = false,
 }: {
   status: Status;
   stats: ReplayStats;
@@ -842,6 +926,9 @@ function ReplayBar({
   onPause: () => void;
   onSeek: (csec: number) => void;
   onResume: () => void;
+  onFullscreen?: () => void;
+  /** 全屏层内嵌形态：不显示全屏按钮（已在全屏中，Esc/遮罩退出） */
+  compact?: boolean;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, wasPlaying: false, raf: 0, lastCsec: 0 });
@@ -885,7 +972,10 @@ function ReplayBar({
         className="rb_btn"
         title={playing ? "暂停" : "播放"}
         aria-label={playing ? "暂停" : "播放"}
-        onClick={onToggle}
+        onClick={(e) => {
+          e.stopPropagation(); /* 按钮在 .play_board 内，不冒泡到「点棋盘退出」 */
+          onToggle();
+        }}
       >
         {playing ? (
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
@@ -898,6 +988,25 @@ function ReplayBar({
           </svg>
         )}
       </button>
+      {!compact && onFullscreen && (
+        <button
+          type="button"
+          className="rb_btn"
+          title="全屏播放"
+          aria-label="全屏播放"
+          onClick={(e) => {
+            e.stopPropagation(); /* 同上：不冒泡到棋盘退出 */
+            onFullscreen?.();
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+            <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+            <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+            <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+          </svg>
+        </button>
+      )}
       <span className="rb_time">{(stats.csec / 100).toFixed(2)}</span>
       <div
         className="rb_track"
@@ -935,8 +1044,218 @@ function ReplayBar({
         </div>
         <div className="rb_thumb" style={{ left: (pct * 100).toFixed(2) + "%" }} />
       </div>
-      <span className="rb_time">{(total / 100).toFixed(2)}</span>
     </div>
+  );
+}
+
+/* ---- 全屏回放层（十期张老师需求） ----
+   复用在线练习的全屏口径：遮罩点击退出、自适应尺寸尽量吃满屏幕、滚轮调比例
+   （上滑放大 0.1x/格、单事件封顶 5 格，练习页 onWheelZoom 同参数）。
+   布局三栏：左＝数据统计（同款面板自然尺寸）、中＝棋盘（portal 外的独立 Board，
+   逐帧镜像页面回放引擎的格子类名——引擎只画页面 DOM，不重跑第二份）、右＝录像评级
+   （服务端注入的雷达数据，与右栏同源）。
+   ⚠️ FS 层的 Board id 用 fs_{boardId}：与页面 board_{boardId} 不撞 DOM id。 */
+const VFS_MIN_ZOOM = 0.5;
+const VFS_MAX_ZOOM = 3;
+const VFS_ZOOM_LS = "video_replay_fs_zoom";
+/* 滚轮步进（练习页 WHEEL_* 同款参数） */
+const VFS_WHEEL_STEP_PX = 100;
+const VFS_WHEEL_STEP_Z = 0.1;
+const VFS_WHEEL_MAX_STEPS = 5;
+
+function ReplayFullscreen({
+  level,
+  boardId,
+  boardStr,
+  stats,
+  status,
+  radarPoints,
+  radarOverall,
+  onToggle,
+  onPause,
+  onSeek,
+  onResume,
+  onExit,
+}: {
+  level: VideoLevel;
+  boardId: number;
+  boardStr: string;
+  stats: ReplayStats | null;
+  status: Status;
+  radarPoints?: VideoAnalysisPoint[];
+  radarOverall?: string;
+  onToggle: () => void;
+  onPause: () => void;
+  onSeek: (csec: number) => void;
+  onResume: () => void;
+  onExit: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<number | null>(null);
+  const wheelAcc = useRef(0);
+
+  /* 挂载下一帧再显形（同 #fs_tip 的做法：插入帧先 opacity:0，避免层闪现） */
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  /* 自适应基准：按视口算「棋盘能放下的最大倍率」，作为滚轮的起点与 clamp 上限 */
+  const fitZoom = useCallback((): number => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pad = 16 * 2; // 内衬
+    const gap = 14 * 2; // 中栏与两侧间隙
+    const sideW = vw >= 1180 ? 252 : 0; // 窄屏藏右栏（CSS 同步）
+    const panelW = vw >= 900 ? 194 : 0; // 极窄藏左面板
+    const dim = { beg: [8, 8], int: [16, 16], exp: [30, 16] }[level] ?? [30, 16];
+    const bw = dim[0] * 16 + 4;
+    const bh = dim[1] * 16 + 4;
+    const availW = vw - pad - gap - sideW - panelW;
+    const availH = vh - pad - 42 - 10; // 控制条高 + 间隙
+    if (availW < 50 || availH < 50) return 1;
+    return Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, Math.min(availW / bw, availH / bh)));
+  }, [level]);
+
+  /* 初始倍率：记住的滚轮值（clamp 到当前 fit 上限）→ 没有则 fit */
+  useEffect(() => {
+    if (zoomRef.current === null) {
+      let z = parseFloat(localStorage.getItem(VFS_ZOOM_LS) || "");
+      if (!Number.isFinite(z)) z = fitZoom();
+      zoomRef.current = Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, z));
+      if (wrapRef.current) wrapRef.current.style.setProperty("--vfz", String(zoomRef.current));
+    }
+  }, [fitZoom]);
+
+  /* 滚轮调比例（练习页口径：上滑放大、累计 100px 迈 0.1x、单事件封顶 5 格、停滚落盘） */
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    let dropT: number | undefined;
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      wheelAcc.current += e.deltaY;
+      const steps = Math.min(VFS_WHEEL_MAX_STEPS, Math.abs(wheelAcc.current) / VFS_WHEEL_STEP_PX);
+      if (steps < 1) return;
+      wheelAcc.current = 0;
+      const dir = wheelAcc2Dir(e.deltaY);
+      const cur = zoomRef.current ?? 1;
+      const next = Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, cur + dir * VFS_WHEEL_STEP_Z * Math.floor(steps)));
+      if (next === cur) return;
+      zoomRef.current = next;
+      el.style.setProperty("--vfz", String(next));
+      window.clearTimeout(dropT);
+      dropT = window.setTimeout(() => localStorage.setItem(VFS_ZOOM_LS, String(next)), 320);
+    };
+    const wheelAcc2Dir = (dy: number) => (dy < 0 ? 1 : -1);
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", wheel);
+      window.clearTimeout(dropT);
+    };
+  }, []);
+
+  /* 窗口缩放：按新视口 refit（保留用户手动倍率的话上限可能越界，统一回 fit 起点稳） */
+  useEffect(() => {
+    const onResize = () => {
+      const z = fitZoom();
+      zoomRef.current = z;
+      wrapRef.current?.style.setProperty("--vfz", String(z));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [fitZoom]);
+
+  /* 镜像：rAF 逐帧把页面回放引擎的格子类名抄到 FS 棋盘 + 光标位置换算（rect 数学，
+     与页面 wrap 的偏移解耦）；paused 时 DOM 静止，抄写无副作用照跑省状态判断 */
+  useEffect(() => {
+    let raf = 0;
+    const mirror = () => {
+      const srcTable = document.querySelector<HTMLTableSectionElement>(`#board_${boardId} tbody`);
+      const dstTable = document.querySelector<HTMLTableSectionElement>(`#fs_board_${boardId} tbody`);
+      if (srcTable && dstTable) {
+        const srcRows = srcTable.rows;
+        const dstRows = dstTable.rows;
+        for (let r = 0; r < srcRows.length; r++) {
+          const sc = srcRows[r].cells;
+          const dc = dstRows[r].cells;
+          for (let c = 0; c < sc.length; c++) {
+            if (dc[c].className !== sc[c].className) dc[c].className = sc[c].className;
+          }
+        }
+      }
+      /* 光标：页面光标 rect → FS wrap 局部（除以 wrap 的 zoom，rect 已含缩放） */
+      const srcCur = document.querySelector<HTMLElement>("#video_view .replay_cursor");
+      const fsWrap = document.querySelector<HTMLElement>(".vprfs_board_wrap");
+      const dstCur = wrapRef.current?.querySelector<HTMLElement>(".replay_cursor");
+      if (srcCur && fsWrap && dstCur) {
+        const cr = srcCur.getBoundingClientRect();
+        const wr = fsWrap.getBoundingClientRect();
+        const z = zoomRef.current ?? 1;
+        dstCur.style.left = (cr.left - wr.left) / z + "px";
+        dstCur.style.top = (cr.top - wr.top) / z + "px";
+        dstCur.style.display = cr.width > 0 ? "block" : "none";
+      }
+      raf = requestAnimationFrame(mirror);
+    };
+    raf = requestAnimationFrame(mirror);
+    return () => cancelAnimationFrame(raf);
+  }, [boardId]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      className={"vprfs" + (mounted ? " show" : "")}
+      ref={wrapRef}
+      onClick={(e) => {
+        /* 点层内任意空白（遮罩区）退出全屏；三栏内容各自 stopPropagation */
+        if (e.target === e.currentTarget || (e.target as HTMLElement).classList?.contains("vprfs_mask")) onExit();
+      }}
+    >
+      {/* 视觉遮罩（命中判定在 .vprfs 的 onClick 统一处理） */}
+      <div className="vprfs_mask" />
+      <div className="vprfs_inner" onClick={(e) => e.stopPropagation()}>
+        {/* 左：数据统计（与页面态同一份内容组件；自然尺寸，不吃滚轮 zoom） */}
+        <div className="vprfs_panel replay_panel">
+          {stats && <ReplayStatsTable level={level} s={stats} />}
+        </div>
+        {/* 中：棋盘 + 控制条（zoom 挂 wrap，整块随比例缩放） */}
+        <div className="vprfs_center">
+          <div className="vprfs_board_wrap">
+            <Board id={"fs_board_" + boardId} level={level} board={boardStr} size={16} />
+            <div className="replay_cursor" aria-hidden="true">
+              <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>
+            </div>
+          </div>
+          {stats && (
+            <ReplayBar
+              status={status}
+              stats={stats}
+              onToggle={onToggle}
+              onPause={onPause}
+              onSeek={onSeek}
+              onResume={onResume}
+              compact
+            />
+          )}
+        </div>
+        {/* 右：录像评级（雷达与右栏同源数据） */}
+        {radarPoints && (
+          <div className="vprfs_side">
+            <h2 className="vr_h">
+              录像评级
+              <span className="vr_rate" style={{ color: gradeColor(radarOverall ?? "?") }}>
+                {radarOverall ?? "—"}
+              </span>
+            </h2>
+            <div className="vr_line" />
+            <VideoAnalysisRadar data={radarPoints} />
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -954,14 +1273,15 @@ export function VideoReplayBoard({
   if (!ctx) return null;
   const replaying = ctx.status !== "idle";
   /* 十期（2026-10-16 张老师需求）：高级盘充分使用左栏版图宽度、中级复用同比例、
-     初级双倍比例——三级别视觉高度一致（都≈316px）。比例口径与依据见 globals.css .zoom_* 注释 */
+     初级双倍比例——三级别视觉高度一致（都≈318px）。比例口径与依据见 globals.css .zoom_* 注释 */
   const zoomCls = level === "exp" ? "zoom_exp" : level === "int" ? "zoom_int" : "zoom_beg";
   return (
     <div className="playable">
       {/* 结构沿用原 BoardPlay：.play_board 浮动收缩盒＝棋盘本体，回放光标挂这里。
           引擎定位走 board_{id}（Provider 传 boardId），此处无需 ref */}
-      {/* 九期：回放中在棋盘左侧弹数据面板（.playable 锚定，绝对定位不挤版式） */}
-      {replaying && ctx.stats && <ReplayStatsPanel level={level} s={ctx.stats} />}
+      {/* 九期：回放中在棋盘左侧弹数据面板（十期 portal 挂 body，摆脱盒裁剪）；
+          全屏层打开时页面态面板收起（全屏层自带面板） */}
+      {replaying && !ctx.fullscreen && ctx.stats && <ReplayStatsPanel level={level} s={ctx.stats} />}
       <div
         className={`play_board ${zoomCls}`}
         title={replaying ? "点击退出回放" : "点击播放在线录像"}
@@ -986,7 +1306,8 @@ export function VideoReplayBoard({
             </svg>
           </button>
         )}
-        {/* 九期：回放控制条（棋盘正下方同宽；点击不冒泡到棋盘退出） */}
+        {/* 九期：回放控制条（棋盘正下方同宽；点击不冒泡到棋盘退出）；
+            十期：加全屏按钮（进全屏回放层） */}
         {replaying && ctx.stats && (
           <ReplayBar
             status={ctx.status}
@@ -995,6 +1316,7 @@ export function VideoReplayBoard({
             onPause={ctx.pause}
             onSeek={ctx.seek}
             onResume={ctx.resume}
+            onFullscreen={() => ctx.setFullscreen(true)}
           />
         )}
       </div>

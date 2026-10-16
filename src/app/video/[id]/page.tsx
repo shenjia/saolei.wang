@@ -74,7 +74,15 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
       : null;
 
   return (
-    <VideoReplayProvider boardId={video.id} filepath={video.filepath} realTimeMs={video.realTime}>
+    <VideoReplayProvider
+      boardId={video.id}
+      filepath={video.filepath}
+      realTimeMs={video.realTime}
+      radarPoints={analysis?.points}
+      radarOverall={analysis?.overall}
+      level={level}
+      boardStr={board}
+    >
     <div id="page" className="two_columns">
     <ul id="video_view">
       <li className="main">
