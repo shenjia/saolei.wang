@@ -7749,7 +7749,7 @@ html:has(#online_play) #footer {
   background: #49483e;
   border: 1px solid #656355;
   border-radius: 6px;
-  padding: 8px 12px; /* 十四期：回练习页 greport 同款 */
+  padding: 9px 12px; /* 十六期：随字号上调微增 */
   z-index: 5;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: left;
@@ -7757,11 +7757,11 @@ html:has(#online_play) #footer {
      左侧空间不足或面板高于「棋盘+控制条」整块时整体缩小，宁可小也不越界 */
 }
 .replay_panel .gr_title {
-  font-size: 12px; /* 十四期：回练习页同款 12px（视觉×panelZoom≈12.6） */
+  font-size: 14px; /* 十六期：12→14px 随正文字号同步上调 */
   font-weight: bold;
   color: #e8e8e0;
-  padding-bottom: 4px;
-  margin-bottom: 4px;
+  padding-bottom: 5px;
+  margin-bottom: 5px;
   border-bottom: 1px solid #656355;
 }
 .replay_panel table {
@@ -7769,12 +7769,11 @@ html:has(#online_play) #footer {
   margin: 0 -6px;
 }
 .replay_panel td {
-  /* 十四期张老师定：面板尺寸/字体＝练习页 greport 同款（11px/15px）——
-     视觉放大交给 --vfz-panel（≥1.05，随棋盘等比），与练习页初级拉满的
-     视觉规格（11×1.056≈11.6px）对齐 */
-  font: 11px/15px Arial, Helvetica, sans-serif;
+  /* 十四期对齐练习页 greport（11px）；十六期张老师定初始偏小→13px/18px
+     （×panelZoom 下限 1.05 ≈13.7px 视觉，介于练习页 11.6 与十五期前 15 之间） */
+  font: 13px/18px Arial, Helvetica, sans-serif;
   color: #939387;
-  padding: 1px 5px 1px 0; /* label 右距交给 td+td 的 8px 分隔 */
+  padding: 1.5px 5px 1.5px 0;
   text-align: left;
   white-space: nowrap;
 }
