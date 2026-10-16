@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
 const LV_CLS: Record<string, string> = { beg: "lv_beg", int: "lv_int", exp: "lv_exp" };
 
 /** 浏览器标签页标题（2026-10-16 张老师定）：
-    「人名 - 高级 xx.xx NF (3bv123)录像 | 扫雷网 Saolei.wang」（后缀由根布局 template 拼接） */
+    「高级 xx.xx NF (3bv123) 人名的录像 | 扫雷网 Saolei.wang」（后缀由根布局 template 拼接） */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const videoId = parseInt(id, 10);
@@ -43,18 +43,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!video) return {};
   const level = video.level as VideoLevel;
   const time = scoreTime(videoScores(video.board3bv, video.realTime, level).time);
-  const parts = [
-    video.author?.chineseName,
-    [
-      LEVEL_NAMES[level] ?? video.level,
-      time,
-      video.noflag && "NF",
-      `(3bv${video.board3bv})`,
-    ]
-      .filter(Boolean)
-      .join(" "),
-  ].filter(Boolean);
-  return { title: `${parts.join(" - ")}录像` };
+  const score = [
+    LEVEL_NAMES[level] ?? video.level,
+    time,
+    video.noflag && "NF",
+    `(3bv${video.board3bv})`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const name = video.author?.chineseName ?? "未知玩家";
+  return { title: `${score} ${name}的录像` };
 }
 
 export default async function VideoViewPage({ params }: { params: Promise<{ id: string }> }) {
