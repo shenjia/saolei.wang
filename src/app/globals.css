@@ -7802,6 +7802,10 @@ html:has(#online_play) #footer {
 }
 .replay_panel td.gv {
   position: relative;
+  /* 十八期张老师定：播放中数值位数变化（0.000→26.24、1 位→2 位计数）会让
+     max-content 面板宽抖动 8~14px——数值列按字符宽预留（13ch 覆盖最长
+     "58.230 (59)"/"26.24@1.749" 行），短值右对齐留白、宽度恒定 */
+  min-width: 13ch;
 }
 .replay_panel td.gv .tip {
   display: none;
