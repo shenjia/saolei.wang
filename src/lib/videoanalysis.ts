@@ -127,7 +127,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
       const value = Number(row[def.key]);
       const dist = distFor(baseline, def.key);
-      const percent = dist.length ? percentOf(value, dist, def.highIsBetter) : 0;
+      const percent = dist.length ? percentOf(value, dist, def.highIsBetter, def.key) : 0;
       percents[def.key] = percent;
       return {
         key: def.key,
@@ -145,7 +145,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     //    STNB 分布列（video_metric_dist.stnb）本来就随跑批一起产出，无需额外数据。
     const stnbValue = Number(row.stnb);
     const stnbDist = distFor(baseline, "stnb");
-    const stnbPercent = stnbDist.length ? percentOf(stnbValue, stnbDist, true) : 0;
+    const stnbPercent = stnbDist.length ? percentOf(stnbValue, stnbDist, true, "stnb") : 0;
     const composite: VideoAnalysisPoint = {
       key: "stnb",
       name: "综合",

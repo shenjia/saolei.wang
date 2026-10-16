@@ -227,11 +227,22 @@ export function gradeOf(value: number, dist: number[], highIsBetter: boolean): s
   return GRADES[position];
 }
 
-/** 超越百分比（0-100） */
-export function percentOf(value: number, dist: number[], highIsBetter: boolean): number {
+/**
+ * 「容易顶格」指标（2026-10-16 张老师定）：corr / ioe 有理论极限，
+ * 新手慢慢玩、零废操作即可满分（本地实证：初级无猜组 20.6% 的盘 corr=1.0，
+ * 1.3 万盘并列「全网第一」），说「全网第一」明显不合理。
+ * 这些指标达到组内满分时百分位封顶 NO_FIRST_PERCENT（99.99），
+ * 气泡显示「超过 99.99% 的玩家」而非「全网第一」；等级仍按原档位评（SSS 保留）。
+ * bvs / cls / stnb 无理论上限、组内最大值只有真正最强的一盘，维持「全网第一」。
+ */
+export const NO_FIRST_METRICS: ReadonlySet<MetricKey> = new Set(["corr", "ioe"]);
+export const NO_FIRST_PERCENT = 99.99;
+
+/** 超越百分比（0-100；corr/ioe 等易顶格指标封顶 99.99，见 NO_FIRST_METRICS） */
+export function percentOf(value: number, dist: number[], highIsBetter: boolean, key?: MetricKey): number {
   if (!value || dist.length === 0) return 0;
   const position = getPosition(value, dist, highIsBetter);
-  if (position === 0) return GRADE_PERCENTS[0];
+  if (position === 0) return key && NO_FIRST_METRICS.has(key) ? NO_FIRST_PERCENT : GRADE_PERCENTS[0];
   const maxPercent = GRADE_PERCENTS[position - 1] - 1; // 百分位档是整数档，减 1 正确（沿用原版）
   const minPercent = GRADE_PERCENTS[position];
   const maxScore = upperBound(dist, position); // 分数上界是连续量，不能减 1 —— 见 upperBound 注释

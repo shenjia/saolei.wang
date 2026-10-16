@@ -1272,7 +1272,7 @@ export function OnlinePlay({
       const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
         const value = s.stats[def.key];
         const dist = group?.[def.key] ?? [];
-        const percent = dist.length ? percentOf(value, dist, def.highIsBetter) : 0;
+        const percent = dist.length ? percentOf(value, dist, def.highIsBetter, def.key) : 0;
         return {
           key: def.key,
           name: def.name,
@@ -1290,7 +1290,7 @@ export function OnlinePlay({
         name: "综合",
         value: stnbValue,
         disp: formatMetric("stnb", stnbValue),
-        percent: stnbDist.length ? percentOf(stnbValue, stnbDist, true) : 0,
+        percent: stnbDist.length ? percentOf(stnbValue, stnbDist, true, "stnb") : 0,
         grade: stnbDist.length ? gradeOf(stnbValue, stnbDist, true) : "?",
       };
       return rateable
