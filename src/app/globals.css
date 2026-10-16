@@ -628,10 +628,11 @@ body #video_view .video_cell .playable {
   --pbz: 1.22;
 }
 #video_view .play_board.zoom_beg {
-  /* 初级默认 1.5 倍（2026-10-16 张老师定）：自然高 132px（128+4 边框）
-     → 渲染高 198px，不再与高级渲染高度对齐 */
-  zoom: 1.5;
-  --pbz: 1.5;
+  /* 初级 2.6 倍（2026-10-16 十七期张老师定：1.5 时游戏区 198px 太小、
+     控制条 min-width 320 溢出到游戏区外）——渲染 132×2.6=343px ≥ 320，
+     条右缘与游戏区右缘对齐不再溢出；可用宽 592（playable）内仍余 229px */
+  zoom: 2.6;
+  --pbz: 2.6;
 }
 .play_overlay {
   position: absolute;
