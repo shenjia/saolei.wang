@@ -1118,6 +1118,10 @@ function ReplayBar({
    ⚠️ FS 层的 Board id 用 fs_{boardId}：与页面 board_{boardId} 不撞 DOM id。 */
 const VFS_MIN_ZOOM = 0.5;
 const VFS_MAX_ZOOM = 3;
+/* 面板/评级缩放下限（十四期）：与练习页初级拉满时 greport 的视觉规格对齐——
+   greport 1x 字号 11px、初级满比例下 zoom≈1.05 → 视觉 ≈11.6px；
+   本站面板 1x 字号即 11px（十四期回归），随棋盘等比、下限 1.05 */
+const PANEL_MIN_Z = 1.05;
 const VFS_ZOOM_LS = "video_replay_fs_zoom";
 /* 滚轮步进（练习页 WHEEL_* 同款参数） */
 const VFS_WHEEL_STEP_PX = 100;
@@ -1162,35 +1166,37 @@ function ReplayFullscreen({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  /* 自适应基准（十二期改）：按视口算「棋盘能放下的最大倍率」。
-     ⚠️ 面板/评级也吃 --vfz-panel（=max(1.349, z)），宽度随 zoom 线性涨——
-     预算必须按**渲染宽**算而非固定值（十一期固定 194/252 低估，放大即超屏）。
-     循环依赖（z↔panelZoom）用 2~3 轮迭代收敛（两侧都线性，收敛极快）。
+  /* 自适应基准（十四期重写：解析解替代迭代）。
+     联立方程：面板/评级 zoom=max(PANEL_Z, z) 与棋盘 z 同宽耦合——
+       z ≥ PANEL_Z 段：z·(bw + panelW + sideW) = availW → 单调一次可解
+       z < PANEL_Z 段：面板按 PANEL_Z 常数宽，z=(availW−面板常数和)/bw
+     两段取交界处连续，直接解；高度方向独立封顶。
+     （十二期的迭代在初级盘会螺旋：初值 3 → 面板按 3x 预算吞光宽度 → z 跌到
+      下限 0.5 → 全屏比非全屏还小、棋盘右侧空一半的根源。）
      基准宽 248/252 与 CSS（.replay_panel/.vprfs_side 的 width+padding+border）联动。 */
   const fitZoom = useCallback((): number => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const pad = 16 * 2; // 内衬
-    const gap = 18 * 2 + 2; // 中栏与两侧间隙（CSS gap 18）
+    const gap = 18 * 2; // 中栏与两侧间隙（CSS gap 18）
     const showSide = vw >= 1180; // 窄屏藏右栏（CSS 断点同步）
     const showPanel = vw >= 900; // 极窄藏左面板
     const dim = { beg: [8, 8], int: [16, 16], exp: [30, 16] }[level] ?? [30, 16];
     const bw = dim[0] * 16 + 4;
     const bh = dim[1] * 16 + 4;
+    const availW0 = vw - pad - gap;
     const availH = vh - pad - 24 - 42 - 10; // 顶部呼吸 24 + 控制条 42 + 间隙 10
+    if (availW0 < 50 || availH < 50) return 1;
     const clamp = (v: number) => Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, v));
-    if (vw - pad - gap < 50 || availH < 50) return 1;
-    let z = clamp(Math.min((vw - pad - gap) / bw, availH / bh));
-    for (let i = 0; i < 3; i++) {
-      const pz = Math.max(1.349, z);
-      const side = showSide ? 252 * pz : 0;
-      const panel = showPanel ? 248 * pz : 0;
-      const availW = vw - pad - gap - side - panel;
-      const nz = clamp(Math.min(availW / bw, availH / bh));
-      if (Math.abs(nz - z) < 0.001) return nz;
-      z = nz;
-    }
-    return z;
+    const sideW = showSide ? 252 : 0;
+    const panelW = showPanel ? 248 : 0;
+    const zByH = availH / bh;
+    /* 段 1：z ≥ PANEL_Z（面板随棋盘等比） */
+    const zCoupled = availW0 / (bw + panelW + sideW);
+    if (zCoupled >= PANEL_MIN_Z) return clamp(Math.min(zCoupled, zByH));
+    /* 段 2：z < PANEL_Z（面板按最小比例的常数宽） */
+    const zFlat = (availW0 - (panelW + sideW) * PANEL_MIN_Z) / bw;
+    return clamp(Math.min(zFlat, zByH));
   }, [level]);
 
   /* 初始倍率：记住的滚轮值（clamp 到当前 fit 上限）→ 没有则 fit */
@@ -1203,11 +1209,11 @@ function ReplayFullscreen({
     }
   }, [fitZoom]);
   /* 面板/评级与棋盘比例绑定（十一期张老师定）：--vfz-panel 恒等于棋盘 zoom，
-     下限 1.349（面板基准 12px×1.35≈16px 可读门槛；棋盘再小两栏也不缩成芝麻） */
+     下限 PANEL_MIN_Z=1.05（面板 1x 字号 11px 即练习页同款，×1.05≈11.6 与初级拉满视觉一致） */
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    el.style.setProperty("--vfz-panel", String(Math.max(1.349, zoomRef.current ?? 1)));
+    el.style.setProperty("--vfz-panel", String(Math.max(PANEL_MIN_Z, zoomRef.current ?? 1)));
   });
 
   /* 滚轮调比例（练习页口径：上滑放大、累计 100px 迈 0.1x、单事件封顶 5 格、停滚落盘） */
@@ -1218,7 +1224,7 @@ function ReplayFullscreen({
     const applyZoom = (next: number) => {
       zoomRef.current = next;
       el.style.setProperty("--vfz", String(next));
-      el.style.setProperty("--vfz-panel", String(Math.max(1.349, next)));
+      el.style.setProperty("--vfz-panel", String(Math.max(PANEL_MIN_Z, next)));
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -1251,7 +1257,7 @@ function ReplayFullscreen({
       const z = fitZoom();
       zoomRef.current = z;
       wrapRef.current?.style.setProperty("--vfz", String(z));
-      wrapRef.current?.style.setProperty("--vfz-panel", String(Math.max(1.349, z)));
+      wrapRef.current?.style.setProperty("--vfz-panel", String(Math.max(PANEL_MIN_Z, z)));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);

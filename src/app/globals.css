@@ -7749,7 +7749,7 @@ html:has(#online_play) #footer {
   background: #49483e;
   border: 1px solid #656355;
   border-radius: 6px;
-  padding: 9px 10px;
+  padding: 8px 12px; /* 十四期：回练习页 greport 同款 */
   z-index: 5;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: left;
@@ -7757,11 +7757,11 @@ html:has(#online_play) #footer {
      左侧空间不足或面板高于「棋盘+控制条」整块时整体缩小，宁可小也不越界 */
 }
 .replay_panel .gr_title {
-  font-size: 16px;
+  font-size: 12px; /* 十四期：回练习页同款 12px（视觉×panelZoom≈12.6） */
   font-weight: bold;
   color: #e8e8e0;
-  padding-bottom: 5px;
-  margin-bottom: 6px;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
   border-bottom: 1px solid #656355;
 }
 .replay_panel table {
@@ -7769,9 +7769,12 @@ html:has(#online_play) #footer {
   margin: 0 -6px;
 }
 .replay_panel td {
-  font: 15px/21px Arial, Helvetica, sans-serif; /* 十一期张老师定：字体太小→11→15 */
+  /* 十四期张老师定：面板尺寸/字体＝练习页 greport 同款（11px/15px）——
+     视觉放大交给 --vfz-panel（≥1.05，随棋盘等比），与练习页初级拉满的
+     视觉规格（11×1.056≈11.6px）对齐 */
+  font: 11px/15px Arial, Helvetica, sans-serif;
   color: #939387;
-  padding: 1px 6px 1px 0; /* 十二期：label 右距交给 td+td 的 8px 分隔 */
+  padding: 1px 5px 1px 0; /* label 右距交给 td+td 的 8px 分隔 */
   text-align: left;
   white-space: nowrap;
 }
@@ -7814,8 +7817,8 @@ html:has(#online_play) #footer {
   color: #f8f8f2;
   border: 1px solid #656355;
   border-radius: 4px;
-  padding: 6px 9px;
-  font: 13px/18px Arial, Helvetica, sans-serif;
+  padding: 5px 8px;
+  font: 11px/15px Arial, Helvetica, sans-serif; /* 十四期：练习页同款 */
   text-align: left;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
@@ -8690,6 +8693,8 @@ html.op-fakefs #header {
 }
 .vprfs_board_wrap {
   position: relative;
+  width: fit-content; /* 十四期：棋盘本体保持收缩（正方形），不被中栏 stretch 拉宽；
+     控制条另由自身 width:100% 填满中栏 */
 }
 .vprfs_center .replay_bar {
   /* 十二期张老师定：控制条与棋盘同宽（中栏收紧＝棋盘宽，条 100% 随填） */
@@ -8697,7 +8702,9 @@ html.op-fakefs #header {
   min-width: 0;
 }
 .vprfs_center .rb_track {
-  min-width: 120px;
+  min-width: 0; /* 十四期修初级长条盘：120 遗留值把条基宽顶到 290>棋盘 132，
+     center 随条放宽 → block 棋盘被拉伸成长方形（右侧空一半）。条 100% 跟随棋盘宽，
+     轨道吃剩余即可 */
 }
 /* 右栏：评级卡（雷达与右栏同源）；窄屏隐藏。
    十一期：zoom 绑定棋盘比例（--vfz-panel） */
