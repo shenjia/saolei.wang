@@ -37,7 +37,7 @@ import { Board } from "./Board";
 import { FlopSprites } from "./FlopSprites";
 import { FlopPlayer, playFlop } from "./FlopPlayer";
 import { avfToRawvf } from "@/lib/avf";
-import { mvfToRawvf } from "@/lib/mvf";
+import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { rmvToRawvf } from "@/lib/rmv";
 import { formatRawvf } from "@/lib/rawvf";
 import type { VideoLevel } from "@/lib/config";
@@ -71,7 +71,7 @@ function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?: number
       ext === "avf"
         ? avfToRawvf(buf)
         : ext === "mvf"
-          ? mvfToRawvf(buf)
+          ? (mvfToRawvfBest(buf)?.lines ?? null) // 择优口径：回放与判定同源（mvf-best.ts）
           : ext === "rmv"
             ? rmvToRawvf(buf)
             : null;

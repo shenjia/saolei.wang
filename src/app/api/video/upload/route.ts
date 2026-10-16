@@ -9,7 +9,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { avfToRawvf } from "@/lib/avf";
-import { mvfToRawvf } from "@/lib/mvf";
+import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { formatRawvf } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
@@ -49,7 +49,8 @@ export async function POST(req: Request) {
   // 解析（移植 Parser::parse 的全部校验分支）
   let lines: string[] | null = null;
   try {
-    lines = ext === "avf" ? avfToRawvf(buf) : mvfToRawvf(buf);
+    // mvf 走择优口径（mvf-best.ts：按下优先判胜即用，非胜时松开优先救场）
+    lines = ext === "avf" ? avfToRawvf(buf) : (mvfToRawvfBest(buf)?.lines ?? null);
   } catch {
     return fail("录像文件解析失败");
   }

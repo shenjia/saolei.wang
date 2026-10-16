@@ -57,6 +57,8 @@ function decodeName(bytes: number[]): string {
 
 class MvfParser {
   private r: Reader;
+  /** 快照差分歧义消解口径：press=按下优先（flop 官方） / release=松开优先（择优救场用，见 mvf-best.ts） */
+  private order: "press" | "release";
   private mode = 0;
   private level = 0;
   private w = 0;
@@ -83,8 +85,9 @@ class MvfParser {
   private version = "";
   private video: MvfEvent[] = [];
 
-  constructor(buf: Uint8Array) {
+  constructor(buf: Uint8Array, order: "press" | "release" = "press") {
     this.r = new Reader(buf);
+    this.order = order;
   }
 
   private readBoard(add: number) {
@@ -438,12 +441,24 @@ class MvfParser {
       const prev = this.video[i - 1];
       const evs: string[] = [];
       if (e.x !== prev.x || e.y !== prev.y) evs.push("mv");
-      if (e.lb && !prev.lb) evs.push("lc");
-      if (e.rb && !prev.rb) evs.push("rc");
-      if (e.mb && !prev.mb) evs.push("mc");
-      if (!e.lb && prev.lb) evs.push("lr");
-      if (!e.rb && prev.rb) evs.push("rr");
-      if (!e.mb && prev.mb) evs.push("mr");
+      if (this.order === "release") {
+        // 松开优先：先解释松开、再解释按下（歧义采样「松开+按下」同刻时，玩家的
+        // 真实动作通常是先松前一键、再按下一键——73304 @27.09s 实证）
+        if (!e.lb && prev.lb) evs.push("lr");
+        if (!e.rb && prev.rb) evs.push("rr");
+        if (!e.mb && prev.mb) evs.push("mr");
+        if (e.lb && !prev.lb) evs.push("lc");
+        if (e.rb && !prev.rb) evs.push("rc");
+        if (e.mb && !prev.mb) evs.push("mc");
+      } else {
+        // 按下优先（flop 官方口径，默认）
+        if (e.lb && !prev.lb) evs.push("lc");
+        if (e.rb && !prev.rb) evs.push("rc");
+        if (e.mb && !prev.mb) evs.push("mc");
+        if (!e.lb && prev.lb) evs.push("lr");
+        if (!e.rb && prev.rb) evs.push("rr");
+        if (!e.mb && prev.mb) evs.push("mr");
+      }
       for (const ev of evs) lines.push(`${ts(e)} ${ev} ${cell(e)}`);
     }
     return lines;
@@ -451,8 +466,8 @@ class MvfParser {
 }
 
 /** 解析 MVF 文件为 RawVF 文本行；失败抛 MvfParseError，无法识别版本返回 null */
-export function mvfToRawvf(buf: Uint8Array): string[] | null {
-  const parser = new MvfParser(buf);
+export function mvfToRawvf(buf: Uint8Array, order: "press" | "release" = "press"): string[] | null {
+  const parser = new MvfParser(buf, order);
   if (!parser.parse()) return null;
   return parser.toRawvfLines();
 }

@@ -20,7 +20,7 @@
 //     · Ce ＝ Cl −（wastedLeft + wastedRight + wastedDouble），与 flop Counters 一致。
 //   「胜局 solved3bv = 3BV」口径不变（10-14 实证，AVF NF 盘尾部自动展开不进事件流）。
 
-import { mvfToRawvf } from "./mvf";
+import { mvfToRawvfBest } from "./mvf-best";
 import { avfToRawvf } from "./avf";
 import { rmvToRawvf } from "./rmv";
 import { formatRawvf, type ParsedVideo } from "./rawvf";
@@ -104,7 +104,7 @@ export function parseVideoBinary(buf: Uint8Array, ext: string): ParsedVideo | nu
       ext === "avf"
         ? avfToRawvf(b)
         : ext === "mvf"
-          ? mvfToRawvf(b)
+          ? (mvfToRawvfBest(b)?.lines ?? null) // 择优口径：雷达指标与判定/回放同源（mvf-best.ts）
           : ext === "rmv"
             ? rmvToRawvf(b)
             : null;
