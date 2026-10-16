@@ -135,6 +135,17 @@ export default async function AdminDashboard() {
           foot={cmpFoot(traffic.today.uv, traffic.yesterday.uv)}
         />
         <Kpi
+          label="今日练习"
+          value={traffic.practice.today}
+          tone="cyan"
+          trend={traffic.practice.trend}
+          foot={
+            <>
+              近 30 天 {traffic.practice.d30.toLocaleString("zh-CN")} 局 · 含踩雷局
+            </>
+          }
+        />
+        <Kpi
           label="注册玩家"
           value={ov.userTotal}
           tone="green"
@@ -167,17 +178,6 @@ export default async function AdminDashboard() {
           foot={
             <>
               今日 <b>+{ov.videoToday}</b> · 通过率 <b>{ov.passRate}%</b>
-            </>
-          }
-        />
-        <Kpi
-          label="练习数量"
-          value={traffic.practice.today}
-          tone="cyan"
-          trend={traffic.practice.trend}
-          foot={
-            <>
-              近 30 天 {traffic.practice.d30.toLocaleString("zh-CN")} 局 · 含踩雷局
             </>
           }
         />

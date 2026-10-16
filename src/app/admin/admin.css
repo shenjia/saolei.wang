@@ -267,7 +267,7 @@ body:has(.admin_shell) #footer {
 .admin_kpis {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(202px, 1fr));
   margin-bottom: 14px;
 }
 .admin_kpi {
