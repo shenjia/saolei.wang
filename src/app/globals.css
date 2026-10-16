@@ -7629,9 +7629,11 @@ html:has(#online_play) #footer {
 /* 四按钮分两行（六期）：2 列 grid——DOM 顺序即「左上→右上→左下→右下」，
    「再来一局/重玩本局」在上排，「查看回放/下载录像」在下排。
    桌面面板宽 196 − 左右 padding 20 = 174，两列各 84.5px：图标 14 + 间距 6 + 四字 48 = 68，
-   放得下不折行；移动浮层卡片更宽，同样两列 */
+   放得下不折行；移动浮层卡片更宽，同样两列。
+   二十期起第三处宿主＝全屏回放的「我的评级」卡（只有两颗按钮，同两列；见 .vprfs_side） */
 #online_play .gresult .gr_btns,
-#gr_modal .gr_btns {
+#gr_modal .gr_btns,
+.vprfs_side .gr_btns {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 5px;
@@ -7641,7 +7643,8 @@ html:has(#online_play) #footer {
    上下渐变背景 + box-shadow 投影 + text-shadow 文字阴影，hover 变绿 #a6e22e、
    active 深绿 #8ac21b——与 .button 同一套配色（2026-10-15 十一期张老师定） */
 #online_play .gresult .grb,
-#gr_modal .grb {
+#gr_modal .grb,
+.vprfs_side .grb {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7659,18 +7662,21 @@ html:has(#online_play) #footer {
   transition: background-image 0.15s ease, color 0.15s ease;
 }
 #online_play .gresult .grb svg,
-#gr_modal .grb svg {
+#gr_modal .grb svg,
+.vprfs_side .grb svg {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
 }
 #online_play .gresult .grb:hover,
-#gr_modal .grb:hover {
+#gr_modal .grb:hover,
+.vprfs_side .grb:hover {
   background-image: linear-gradient(to bottom, #4c4b40, #3e3d34);
   color: #a6e22e;
 }
 #online_play .gresult .grb:active,
-#gr_modal .grb:active {
+#gr_modal .grb:active,
+.vprfs_side .grb:active {
   color: #8ac21b;
 }
 /* 窄形态（2026-10-15 张老师定）：右侧空间放不下面板自然宽（全屏大比例下棋盘
@@ -8700,8 +8706,59 @@ html.op-fakefs #header {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: max-content; /* 收紧＝最宽子元素（棋盘），控制条随填 */
+  width: max-content; /* 收紧＝最宽子元素（gwrap），控制条随填 */
   zoom: var(--vfz, 1);
+}
+/* ---- 十七期（2026-10-16 张老师定）：全屏层复用在线练习的游戏界面——
+   银灰外框（.gwrap）+ 凹面计数条（.gbar：LED 雷数 / 笑脸 / LED 计时），
+   规则自 #online_play 同名一组 1:1 移植（scope 改 .vprfs，声明同值不改） ---- */
+.vprfs .gwrap {
+  position: relative;
+  display: inline-block;
+  padding: 9px;
+  background: silver;
+  border: 3px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+  text-shadow: none;
+}
+.vprfs .gframe {
+  display: inline-block;
+}
+.vprfs .gbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px;
+  margin-bottom: 9px;
+  background: silver;
+  border: 2px solid;
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+.vprfs .ledc {
+  display: block;
+  width: 41px;
+  height: 25px;
+  flex: 0 0 auto;
+}
+.vprfs .face {
+  width: 26px;
+  height: 26px;
+  /* 压过 legacy-2013.css button 的 margin-right:8px（练习页同款注释） */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  flex: 0 0 auto;
+}
+/* 命中目标恒为 BUTTON 本身（练习页同款：mousedown 改 use href 后按下/抬起
+   目标不一致会丢 click） */
+.vprfs .face svg {
+  pointer-events: none;
 }
 .vprfs_board_wrap {
   position: relative;
@@ -8709,6 +8766,7 @@ html.op-fakefs #header {
      控制条另由自身 width:100% 填满中栏 */
 }
 .vprfs_center .replay_bar {
+  position: relative; /* 十八期：试玩态 .rb_hint 绝对定位的包含块 */
   /* 十二期：条与棋盘同宽；十五期张老师定「播放器尺寸比例固定，只有进度条
      随棋盘宽自适应」——中栏在 --vfz 缩放域内，控件（按钮/时间）若随域缩放，
      初级 2.17x 时按钮成 74px 巨物。反向 zoom 抵消（与页面态 --pbz 同手法）：
@@ -8726,18 +8784,54 @@ html.op-fakefs #header {
      center 随条放宽 → block 棋盘被拉伸成长方形（右侧空一半）。条 100% 跟随棋盘宽，
      轨道吃剩余即可 */
 }
-/* 右栏：评级卡（雷达与右栏同源）；窄屏隐藏。
-   十一期：zoom 绑定棋盘比例（--vfz-panel） */
+/* 试玩态底条（十七期）：中部提示文字替代进度轨道（翻页卡片同款几何）。
+   十八期修：flex 流内的长提示（nowrap ~400px）会参与 width:max-content 中栏的
+   本征宽计算，把 .gwrap 撑到约双倍棋盘宽（中级盘右侧大片空白）——
+   改绝对定位脱离流，中栏宽度只由游戏窗决定；左右 46px 让开两颗按钮。
+   十九期修：去掉居中——窄盘（中级）容器放不下整句时 flex 居中会两端溢出，
+   ellipsis 只能保行尾，左端也被裁；改左对齐 + ellipsis，长句从右端优雅截断 */
+.vprfs_center .rb_hint {
+  position: absolute;
+  left: 46px;
+  right: 46px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border: 1px dashed #49483e;
+  border-radius: 6px;
+  color: #75715e;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 右栏：评级卡（十九期恢复 2026-10-16 张老师定；雷达与详情页右栏同源）。
+   两种形态共用本卡片（二十期张老师定）：
+     · 回放态 / 试玩进行中 ＝「录像评级」（+ 综合评级字母）
+     · 试玩结束后         ＝「我的评级」（本局成绩 + 评级 + 雷达 + 查看回放/下载录像）
+   宽度＝数据统计面板渲染宽的 1.5 倍——CSS 域宽 1.5 × --vprfs-pw（实测面板自然
+   宽），zoom 与面板同挂 --vfz-panel 缩放域，故 CSS 域 1.5 倍＝渲染 1.5 倍；
+   border-box 让 padding/border 计入总宽。
+   （二十期曾整体缩 0.75，2026-10-16 张老师改回原尺寸，系数已移除）
+   断点：<1180 隐藏评级（宽度不够，与十六期口径一致） */
 .vprfs_side {
-  zoom: var(--vfz-panel, 1.35);
-  width: 222px;
+  zoom: var(--vfz-panel, 1.35); /* 与数据统计面板同一缩放域（由 JS 写在 .vprfs 上） */
+  box-sizing: border-box;
+  width: calc(1.5 * var(--vprfs-pw, 248px));
   background: #3b3a32;
   border: 1px solid #656355;
   border-radius: 10px;
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.45), 0 8px 32px rgba(0, 0, 0, 0.5);
-  border-radius: 10px;
   padding: 18px 14px;
   text-align: center;
+}
+/* 「我的评级」比「录像评级」多一行成绩与一排按钮：padding 收紧一档，免得太高 */
+.vprfs_side.vprfs_mine {
+  padding: 14px 12px;
 }
 .vprfs_side .vr_h {
   display: flex;
@@ -8756,11 +8850,49 @@ html.op-fakefs #header {
   border: 0;
   border-top: 1px solid #49483e;
 }
+/* 成绩行（二十期「我的评级」）：级别名 + 等宽级别色用时（与录像详情页 h1 em.lv_*、
+   练习页结算面板 .gr_lv 同一色阶：初级绿 / 中级橙 / 高级金）；未完成＝灰「未完成」
+   + 小一号亮灰括号预计用时（Est RTime 口径，同练习页十一期文案规则） */
+.vprfs_side .vr_score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #9a998d;
+}
+.vprfs_side .vr_score em {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 15px;
+  font-weight: bold;
+  font-style: normal;
+  color: #d6d6c8;
+}
+.vprfs_side .vr_score em.lv_beg {
+  color: #a6e22e;
+}
+.vprfs_side .vr_score em.lv_int {
+  color: #f79646;
+}
+.vprfs_side .vr_score em.lv_exp {
+  color: #fdc61d;
+}
+.vprfs_side .vr_score .est {
+  font-size: 11px;
+  color: #b1b1a4;
+}
+/* 按钮排（二十期）：与练习页结算面板同一套 .gr_btns / .grb（样式在主规则组里
+   与 #online_play .gresult / #gr_modal 并列，见「右侧结算面板」块），这里只补间距 */
+.vprfs_side .gr_btns {
+  margin-top: 10px;
+}
+/* 雷达容器：跟随卡片宽度（十九期：宽度由卡片定，去掉十一期的 234px 上限与
+   负边距——那套是 222px 定宽时代的补偿） */
 .vprfs_side .vr_wrap {
   position: relative;
-  margin: -12px;
-  width: calc(100% + 24px);
-  max-width: 234px;
+  width: 100%;
 }
 .vprfs_side .vr_wrap .chart {
   display: block;

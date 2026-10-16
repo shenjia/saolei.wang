@@ -25,21 +25,12 @@ import {
   percentOf,
 } from "./videoradar";
 import type { MetricKey } from "./videoradar";
+import type { VideoAnalysisPoint } from "./videoscore";
 import { ensureVideoMetrics } from "./videometrics";
 
-export interface VideoAnalysisPoint {
-  key: MetricKey;
-  /** 轴名 */
-  name: string;
-  /** 原始值（综合轴即加权百分位） */
-  value: number;
-  /** 气泡里的格式化数值 */
-  disp: string;
-  /** 该维度超越了百分之多少的玩家（0-100） */
-  percent: number;
-  /** 等级（SSS~F，含 +/-） */
-  grade: string;
-}
+/* VideoAnalysisPoint 的类型定义 2026-10-16 迁到 lib/videoscore.ts（纯数据类型；全屏试玩
+   「我的评级」在客户端要算同一套点，引不动本模块）。这里原样再导出，老 import 路径不变。 */
+export type { VideoAnalysisPoint };
 
 /** 录像评级盒的取数结果 */
 export interface VideoAnalysisResult {
@@ -49,6 +40,10 @@ export interface VideoAnalysisResult {
   overall: string;
   /** 综合评级对应的表现分（0-100，百分位量纲，调试/对账用） */
   overallScore: number;
+  /** 该组（级别 × 模式）的分位基准：指标 → 9 档边界。
+   *  2026-10-16 新增：全屏试玩结束时的「我的评级」要拿**同一个基准组**给玩家本局打分
+   *  （与首页录像评级可比），客户端算分必须拿到这份边界数组。 */
+  dists: Partial<Record<MetricKey, number[]>>;
 }
 
 export interface VideoAnalysisInput {
@@ -164,6 +159,15 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       points: [composite, ...subs],
       overall: overallScore > 0 ? gradeFromPercent(overallScore) : "?",
       overallScore,
+      /* 基准组的 9 档边界原样带出（2026-10-16）：全屏试玩「我的评级」在客户端按同一组
+         给玩家本局打分，边界数组必须与首页录像评级完全同源 */
+      dists: {
+        stnb: stnbDist,
+        bvs: distFor(baseline, "bvs"),
+        ioe: distFor(baseline, "ioe"),
+        corr: distFor(baseline, "corr"),
+        cls: distFor(baseline, "cls"),
+      },
     };
   } catch {
     return null;

@@ -29,6 +29,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -42,9 +43,10 @@ import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { rmvToRawvf } from "@/lib/rmv";
 import { formatRawvf } from "@/lib/rawvf";
-import type { VideoLevel } from "@/lib/config";
-import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
-import { gradeColor } from "@/lib/videoscore";
+import { LEVEL_NAMES, type VideoLevel } from "@/lib/config";
+import type { MetricKey, VideoAnalysisPoint } from "@/lib/videoscore";
+/* 五轴评级算法（共享件）；别名避开本文件里的 radarOverall 同名 prop */
+import { gradeColor, radarOverall as overallGrade, radarPointsFrom } from "@/lib/videoscore";
 
 /* RawVF 事件行 → 紧凑事件（csec 统一百分秒；px/py 为 16px/格 像素坐标） */
 interface ReplayEv {
@@ -115,6 +117,8 @@ export interface ReplayStats {
   csec: number;
   totalCsec: number;
   board3bv: number;
+  /** 全盘雷数（十七期：全屏计数条 LED 雷数＝totalMines − flags） */
+  totalMines: number;
   solvedBv: number;
   solvedOps: number;
   totalOps: number;
@@ -130,56 +134,15 @@ export interface ReplayStats {
   flags: number;
 }
 
-/* ---- 回放引擎（结构对齐练习页 OnlinePlay.startInPlaceReplay）---- */
-
-interface Engine {
-  restart: () => void;
-  stop: () => void;
-  /** 暂停（定格当前盘面与统计） */
-  pause: () => void;
-  /** 继续播放（已在终点则从头重播） */
-  resume: () => void;
-  /** 跳转：重置盘面后快进到目标时刻（counters 随 applyEv 重建） */
-  seek: (csec: number) => void;
-}
-
-function runReplay(opts: {
-  wrap: HTMLElement;
-  tbody: HTMLTableSectionElement;
-  rows: number;
-  cols: number;
-  data: ReplayData;
-  onEnd: () => void;
-  onStats: (s: ReplayStats) => void;
-}): Engine {
-  const { wrap, tbody, rows, cols, data, onEnd, onStats } = opts;
-  const N = rows * cols;
-  const mines = new Uint8Array(N);
-  const nums = new Uint8Array(N);
-  for (let i = 0; i < N; i++) {
-    const ch = data.board[i];
-    if (ch === "*") mines[i] = 1;
-    else nums[i] = ch.charCodeAt(0) - 48;
-  }
-  /* 邻居表（懒建缓存） */
-  const nb: number[][] = new Array(N);
-  const nbR = (i: number): number[] => {
-    if (nb[i]) return nb[i];
-    const x = i % cols,
-      y = (i / cols) | 0,
-      r: number[] = [];
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const nx = x + dx,
-          ny = y + dy;
-        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) r.push(ny * cols + nx);
-      }
-    nb[i] = r;
-    return r;
-  };
-  /* ---- 3BV 结构（练习页 compute3BV 同法）：空格连通域 regions（含边界数字格）、
-     其余非雷格 singles、singles 八连连通域 islands —— solvedBv/Ops/Isls 的分母 ---- */
+/* ---- 3BV 结构（练习页 compute3BV 同法）：空格连通域 regions（含边界数字格）、
+     其余非雷格 singles、singles 八连连通域 islands —— solvedBv/Ops/Isls 的分母。
+     十七期抽成模块级共享：回放引擎与全屏试玩引擎同一份结构 ---- */
+function buildBvStructures(
+  mines: Uint8Array,
+  nums: Uint8Array,
+  nbR: (i: number) => number[],
+): { bvRegions: number[][]; bvSingles: number[]; bvIslands: number[][]; board3bv: number } {
+  const N = mines.length;
   const region = new Int32Array(N).fill(-1);
   let regions = 0;
   for (let i = 0; i < N; i++) {
@@ -224,7 +187,108 @@ function runReplay(opts: {
     }
     bvIslands.push(isl);
   }
-  const board3bv = regions + bvSingles.length;
+  return { bvRegions, bvSingles, bvIslands, board3bv: regions + bvSingles.length };
+}
+
+/* solved 扫描（buildStats/试玩实时统计共用）：按当前开格态算 solvedBv/Ops/Isls */
+function solvedScan(
+  st: { bvRegions: number[][]; bvSingles: number[]; bvIslands: number[][] },
+  isOpen: (i: number) => boolean,
+): { solvedBv: number; solvedOps: number; solvedIsls: number } {
+  let solvedBv = 0;
+  let solvedOps = 0;
+  for (const reg of st.bvRegions) {
+    let ok = true;
+    for (const c of reg)
+      if (!isOpen(c)) {
+        ok = false;
+        break;
+      }
+    if (ok) {
+      solvedBv++;
+      solvedOps++;
+    }
+  }
+  for (const c of st.bvSingles) if (isOpen(c)) solvedBv++;
+  let solvedIsls = 0;
+  for (const isl of st.bvIslands) {
+    let ok = true;
+    for (const c of isl)
+      if (!isOpen(c)) {
+        ok = false;
+        break;
+      }
+    if (ok) solvedIsls++;
+  }
+  return { solvedBv, solvedOps, solvedIsls };
+}
+
+/* ---- 回放引擎（结构对齐练习页 OnlinePlay.startInPlaceReplay）---- */
+
+interface Engine {
+  restart: () => void;
+  stop: () => void;
+  /** 暂停（定格当前盘面与统计） */
+  pause: () => void;
+  /** 继续播放（已在终点则从头重播） */
+  resume: () => void;
+  /** 跳转：重置盘面后快进到目标时刻（counters 随 applyEv 重建） */
+  seek: (csec: number) => void;
+}
+
+/** 笑脸状态（十七期：练习页同款语义——按下 ooh / 松开 smile / 终局 win·dead） */
+type FaceKind = "smile" | "ooh" | "win" | "dead";
+const FACE_MAP: Record<FaceKind | "press", string> = {
+  smile: "face-normal",
+  ooh: "face-press-cell",
+  dead: "face-lose",
+  win: "face-win",
+  press: "face-press-normal",
+};
+
+function runReplay(opts: {
+  wrap: HTMLElement;
+  tbody: HTMLTableSectionElement;
+  rows: number;
+  cols: number;
+  data: ReplayData;
+  onEnd: () => void;
+  onStats: (s: ReplayStats) => void;
+  /** 笑脸状态变化（练习页口径；全屏层计数条消费，页面态无消费者） */
+  onFace?: (k: FaceKind) => void;
+}): Engine {
+  const { wrap, tbody, rows, cols, data, onEnd, onStats, onFace } = opts;
+  const N = rows * cols;
+  const mines = new Uint8Array(N);
+  const nums = new Uint8Array(N);
+  let mineCount = 0;
+  for (let i = 0; i < N; i++) {
+    const ch = data.board[i];
+    if (ch === "*") {
+      mines[i] = 1;
+      mineCount++;
+    } else nums[i] = ch.charCodeAt(0) - 48;
+  }
+  /* 邻居表（懒建缓存） */
+  const nb: number[][] = new Array(N);
+  const nbR = (i: number): number[] => {
+    if (nb[i]) return nb[i];
+    const x = i % cols,
+      y = (i / cols) | 0,
+      r: number[] = [];
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx,
+          ny = y + dy;
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) r.push(ny * cols + nx);
+      }
+    nb[i] = r;
+    return r;
+  };
+  /* ---- 3BV 结构（十七期抽共享 buildBvStructures）---- */
+  const bvSt = buildBvStructures(mines, nums, nbR);
+  const { board3bv } = bvSt; // solved 系走 solvedScan(bvSt)，结构体内部消费
   /* 回放状态机（0 未开 / 1 开 / 2 旗 / 3 问号）+ 原图类名备份（stop 恢复静态地图） */
   const rstate = new Uint8Array(N);
   const saved = new Array<string>(N);
@@ -301,6 +365,7 @@ function runReplay(opts: {
   const idxOf = (px: number, py: number) => ((py / 16) | 0) * cols + ((px / 16) | 0);
   /* flop open()：开单格（questioned 可开、flagged 跳过、0 号泛洪、踩雷 Blast）；
      返回是否真的开了（wasted 计数依据，flop openCell 同语义） */
+  let won = false; // 胜局标记（十七期：终局笑脸 win/dead） */
   function openR(px: number, py: number): boolean {
     if (dead || !inb(px, py)) return false;
     const i = idxOf(px, py);
@@ -309,6 +374,7 @@ function runReplay(opts: {
       hitIdx = i;
       dead = true;
       revealLoss(); // Blast：先于落子展示（flop 同样不把雷格画成数字格）
+      onFace?.("dead");
       return true;
     }
     rstate[i] = 1;
@@ -318,6 +384,7 @@ function runReplay(opts: {
         if (dead) return true;
         if (rstate[a] === 0) floodR(a);
       }
+    checkWinR();
     return true;
   }
   /* flop openAround()：单格 chord——仅光标下那格 opened 且 数字=0 或 =周围旗数 时开 3x3；
@@ -359,6 +426,21 @@ function runReplay(opts: {
       }
     }
   }
+  /* 胜局检测（十七期：全安全格开完 → win 脸 + 自动补旗揭示，练习页 checkWin 同款；
+     胜局录像收尾大多是滑键/chord 收官，事件流天然开满——补旗纯视觉不进事件） */
+  function checkWinR() {
+    if (won || dead) return;
+    let opened = 0;
+    for (let i = 0; i < N; i++) if (rstate[i] === 1) opened++;
+    if (opened < N - mineCount) return;
+    won = true;
+    for (let i = 0; i < N; i++)
+      if (mines[i] && rstate[i] !== 2) {
+        rstate[i] = 2;
+        paintR(i);
+      }
+    onFace?.("win");
+  }
   function applyEv(k: number) {
     const e = evs[k];
     moveCursor(e.px, e.py);
@@ -374,6 +456,12 @@ function runReplay(opts: {
       return;
     }
     if (e.ev === "mv") return;
+    /* 笑脸联动（十七期，练习页口径）：按下（lc/rc/sc）→ ooh、松开（lr/rr/mr）→ smile；
+       终局 win/dead 落定后不再回 smile（dead 早退在上面拦截） */
+    if (!dead && !won) {
+      if (e.ev === "lc" || e.ev === "rc" || e.ev === "sc") onFace?.("ooh");
+      else if (e.ev === "lr" || e.ev === "rr" || e.ev === "mr") onFace?.("smile");
+    }
     switch (e.ev) {
       case "lc":
         lp = lv = true;
@@ -426,31 +514,7 @@ function runReplay(opts: {
   }
   /* 统计快照（solved 系按 rstate 现算，≤480 格零开销；派生值 Est/QG/STNB 由面板组件算） */
   function buildStats(): ReplayStats {
-    let solvedBv = 0;
-    let solvedOps = 0;
-    for (const reg of bvRegions) {
-      let ok = true;
-      for (const c of reg)
-        if (rstate[c] !== 1) {
-          ok = false;
-          break;
-        }
-      if (ok) {
-        solvedBv++;
-        solvedOps++;
-      }
-    }
-    for (const c of bvSingles) if (rstate[c] === 1) solvedBv++;
-    let solvedIsls = 0;
-    for (const isl of bvIslands) {
-      let ok = true;
-      for (const c of isl)
-        if (rstate[c] !== 1) {
-          ok = false;
-          break;
-        }
-      if (ok) solvedIsls++;
-    }
+    const { solvedBv, solvedOps, solvedIsls } = solvedScan(bvSt, (i) => rstate[i] === 1);
     let flags = 0;
     for (let i = 0; i < N; i++) if (rstate[i] === 2) flags++;
     const cl = cLeft + cRight + cDouble;
@@ -459,11 +523,12 @@ function runReplay(opts: {
       csec: curCsec,
       totalCsec: data.totalCsec,
       board3bv,
+      totalMines: mineCount,
       solvedBv,
       solvedOps,
-      totalOps: bvRegions.length,
+      totalOps: bvSt.bvRegions.length,
       solvedIsls,
-      totalIsls: bvIslands.length,
+      totalIsls: bvSt.bvIslands.length,
       clLeft: cLeft,
       clRight: cRight,
       clDouble: cDouble,
@@ -495,6 +560,7 @@ function runReplay(opts: {
     lp = lv = rp = rv = sv = false;
     marks = data.marks;
     dead = false;
+    won = false;
     hitIdx = -1;
     cLeft = cRight = cDouble = wastedLeft = wastedRight = wastedDouble = 0;
     pathPx = 0;
@@ -545,12 +611,14 @@ function runReplay(opts: {
     rafId = requestAnimationFrame(tick);
   }
   resetReplay();
+  onFace?.("smile"); // 起播复位笑脸
   setPlaying(true);
   onStats(buildStats()); // 起播即出面板（全 0 值），不等首帧
   return {
     restart() {
       setPlaying(false);
       resetReplay();
+      onFace?.("smile");
       setPlaying(true);
       onStats(buildStats());
     },
@@ -571,6 +639,7 @@ function runReplay(opts: {
     seek(csec: number) {
       setPlaying(false);
       resetReplay();
+      onFace?.("smile"); // seek 重置盘面：笑脸同步复位（快进中若过终局会再落 win/dead）
       const target = Math.max(0, Math.min(data.totalCsec, Math.round(csec)));
       while (evIdx < evs.length) {
         if (evs[evIdx].csec > target) break;
@@ -580,6 +649,450 @@ function runReplay(opts: {
       curCsec = target;
       interpCursor(target);
       onStats(buildStats());
+    },
+  };
+}
+
+/* ---- 试玩终局成绩（二十期：全屏层「我的评级」的输入面） ----
+   纯客观事实，不含任何评级折算：面板拿它 + 本录像所属的分位基准，走 lib/videoscore
+   的共享件算出与录像评级同一口径的五轴点。 */
+export interface PlayResult {
+  /** 胜局（未完成＝踩雷） */
+  won: boolean;
+  /** 用时（百分秒） */
+  csec: number;
+  /** 已完成 3BV（与左侧数据面板 3BV 行的分母口径一致） */
+  solvedBv: number;
+  /** 全盘 3BV */
+  board3bv: number;
+  /** 总点击（左键 + 右键 + 双击） */
+  cl: number;
+  /** 有效点击（Ce = Cl − wasted） */
+  ce: number;
+}
+
+/* ---- 试玩引擎（十七期：全屏层点笑脸后「自己玩本局」）----
+   与在线练习 OnlinePlay 同一套交互口径（左开右旗 / chord / 按下态跟随 / 笑脸
+   ooh↔smile / 终局 win·dead / LED 雷数计时），但盘面锁定为本录像的布雷
+   （boardStr 反推雷区，无重排无猜救回），纯娱乐局：不录制事件流、不上传。
+   返回 { destroy }：退出试玩（回到回放 / 退出全屏）时销毁监听并重置 DOM。 */
+function runPlayGame(opts: {
+  boardHost: HTMLElement; // .vprfs_board_wrap（试玩态光标隐藏、事件挂这里）
+  tbody: HTMLTableSectionElement;
+  rows: number;
+  cols: number;
+  data: ReplayData;
+  onFace: (k: FaceKind | "press") => void;
+  onStats: (s: ReplayStats) => void;
+  /** 终局回调（二十期）：胜/负瞬间发一次，全屏层据此出「我的评级」 */
+  onFinish: (r: PlayResult) => void;
+}): { destroy: () => void } {
+  const { boardHost, tbody, rows, cols, data, onFace, onStats, onFinish } = opts;
+  const N = rows * cols;
+  const mines = new Uint8Array(N);
+  const nums = new Uint8Array(N);
+  let mineCount = 0;
+  for (let i = 0; i < N; i++) {
+    const ch = data.board[i];
+    if (ch === "*") {
+      mines[i] = 1;
+      mineCount++;
+    } else nums[i] = ch.charCodeAt(0) - 48;
+  }
+  const nb: number[][] = new Array(N);
+  const nbR = (i: number): number[] => {
+    if (nb[i]) return nb[i];
+    const x = i % cols,
+      y = (i / cols) | 0,
+      r: number[] = [];
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx,
+          ny = y + dy;
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) r.push(ny * cols + nx);
+      }
+    nb[i] = r;
+    return r;
+  };
+  const bvSt = buildBvStructures(mines, nums, nbR);
+  /* 3BV 与录像面板同一分母（试玩实时统计用） */
+  const state = new Uint8Array(N); // 0 未开 / 1 开 / 2 旗 / 3 问号
+  const cellTd = (i: number) => tbody.rows[(i / cols) | 0].cells[i % cols];
+  function paint(i: number) {
+    const td = cellTd(i);
+    td.className = state[i] === 1 ? "b" + nums[i] : state[i] === 2 ? "bf" : state[i] === 3 ? "bq" : "bb";
+    td.innerHTML = "";
+  }
+  /* 按下态（练习页 pressPaint 同款：平面下沉底 b0） */
+  let pressCell: number | null = null;
+  let chordCells: number[] | null = null;
+  function pressPaint(c: number) {
+    const td = cellTd(c);
+    td.className = "b0";
+    td.innerHTML = "";
+  }
+  function clearPress() {
+    if (pressCell !== null && state[pressCell] === 0) paint(pressCell);
+    pressCell = null;
+    if (chordCells) {
+      chordCells.forEach((c) => {
+        if (state[c] === 0) paint(c);
+      });
+      chordCells = null;
+    }
+  }
+  function pressSingle(i: number) {
+    if (pressCell === i) return;
+    if (pressCell !== null && state[pressCell] === 0) paint(pressCell);
+    pressCell = i;
+    if (state[i] === 0) pressPaint(i);
+  }
+  function pressAround(i: number) {
+    if (chordCells) chordCells.forEach((c) => state[c] === 0 && paint(c));
+    chordCells = nbR(i).concat([i]).filter((c) => state[c] === 0);
+    chordCells.forEach(pressPaint);
+  }
+  /* ---- 计数条（练习页 led 同款：-99~999 钳制、负数两格） ---- */
+  const ledEls = {
+    mines: boardHost.closest(".gwrap")?.querySelectorAll<SVGElement>("#fs_led_mines use.d"),
+    time: boardHost.closest(".gwrap")?.querySelectorAll<SVGElement>("#fs_led_time use.d"),
+  };
+  function led(kind: "mines" | "time", v: number) {
+    const uses = ledEls[kind];
+    if (!uses || uses.length < 3) return;
+    v = Math.max(-99, Math.min(999, Math.round(v)));
+    const a = Math.abs(v);
+    const ds: (string | number)[] =
+      v < 0 ? ["minus", ((a / 10) | 0) % 10, a % 10] : [((a / 100) | 0) % 10, ((a / 10) | 0) % 10, a % 10];
+    for (let k = 0; k < 3; k++) uses[k].setAttribute("href", "#count-" + ds[k]);
+  }
+  function flagsLeft() {
+    let f = 0;
+    for (let i = 0; i < N; i++) if (state[i] === 2) f++;
+    return mineCount - f;
+  }
+  /* ---- 对局状态 ---- */
+  let started = false;
+  let over = false;
+  let openedSafe = 0;
+  const totalSafe = N - mineCount;
+  let curCsec = 0; // 首击起计时（练习页同款：百分秒）
+  let timerId: number | null = null;
+  let lastTick: number | null = null;
+  /* 统计（练习页结算同源 ReplayCounts 口径的轻量子集——试玩实时面板） */
+  let cLeft = 0,
+    cRight = 0,
+    cDouble = 0,
+    wLeft = 0,
+    wRight = 0,
+    wDouble = 0;
+  function buildStats(): ReplayStats {
+    const { solvedBv, solvedOps, solvedIsls } = solvedScan(bvSt, (i) => state[i] === 1);
+    let flags = 0;
+    for (let i = 0; i < N; i++) if (state[i] === 2) flags++;
+    const cl = cLeft + cRight + cDouble;
+    const ce = cl - (wLeft + wRight + wDouble);
+    return {
+      csec: curCsec,
+      /* 试玩没有「总长」概念：totalCsec 给 Est 折算一个非零基数（同录像长度，
+         面板 RTime/Est 只显示不参与游戏逻辑） */
+      totalCsec: data.totalCsec || 1,
+      board3bv: bvSt.board3bv,
+      totalMines: mineCount,
+      solvedBv,
+      solvedOps,
+      totalOps: bvSt.bvRegions.length,
+      solvedIsls,
+      totalIsls: bvSt.bvIslands.length,
+      clLeft: cLeft,
+      clRight: cRight,
+      clDouble: cDouble,
+      ce,
+      path: 0,
+      flags,
+    };
+  }
+  function emitStats() {
+    onStats(buildStats());
+  }
+  /* 终局成绩快照（二十期）：判负/判胜各发一次。「已完成 3BV」走 buildStats 的
+     solvedScan（空区/孤块按完成度算），不是「开格数」——与左侧面板 3BV 行同源 */
+  function emitFinish(won: boolean) {
+    const s = buildStats();
+    onFinish({
+      won,
+      csec: s.csec,
+      solvedBv: s.solvedBv,
+      board3bv: s.board3bv,
+      cl: cLeft + cRight + cDouble,
+      ce: s.ce,
+    });
+  }
+  function startTimer() {
+    lastTick = null;
+    timerId = window.setInterval(() => {
+      const now = performance.now();
+      if (lastTick !== null) curCsec = Math.min(99900, curCsec + (now - lastTick) / 10);
+      lastTick = now;
+      led("time", Math.floor(curCsec / 100));
+      emitStats();
+    }, 100);
+  }
+  function stopTimer() {
+    if (timerId !== null) window.clearInterval(timerId);
+    timerId = null;
+  }
+  function flood(i: number) {
+    const stack = [i];
+    while (stack.length) {
+      const c = stack.pop()!;
+      if (state[c] === 1 || state[c] === 2 || mines[c]) continue;
+      state[c] = 1;
+      openedSafe++;
+      paint(c);
+      if (nums[c] === 0) for (const a of nbR(c)) if (state[a] === 0) stack.push(a);
+    }
+  }
+  function openCell(i: number) {
+    if (over || state[i] === 1 || state[i] === 2) return;
+    if (!started) {
+      started = true;
+      startTimer();
+    }
+    if (mines[i]) {
+      lose(i);
+      return;
+    }
+    flood(i);
+    checkWin();
+  }
+  function chord(i: number) {
+    if (over || state[i] !== 1 || nums[i] === 0) return;
+    const around = nbR(i);
+    let f = 0;
+    for (const a of around) if (state[a] === 2) f++;
+    if (f !== nums[i]) return;
+    for (const a of around) {
+      if (state[a] === 0) {
+        openCell(a);
+        if (over) return;
+      }
+    }
+  }
+  function toggleFlag(i: number) {
+    if (over || state[i] === 1) return;
+    /* 问号三态跟随录像 marks（试玩延续本局文件口径） */
+    if (state[i] === 0) state[i] = 2;
+    else if (state[i] === 2) state[i] = data.marks ? 3 : 0;
+    else state[i] = 0;
+    paint(i);
+    led("mines", flagsLeft());
+  }
+  function lose(hit: number) {
+    over = true;
+    stopTimer();
+    emitStats();
+    for (let i = 0; i < N; i++) {
+      if (mines[i] && state[i] !== 2 && state[i] !== 3) paintCellCls(cellTd(i), "bm");
+      if (!mines[i] && state[i] === 2) paintCellCls(cellTd(i), "bn");
+    }
+    paintCellCls(cellTd(hit), "bc");
+    onFace("dead");
+    emitFinish(false); // 二十期：全屏层据此出「我的评级」
+  }
+  function checkWin() {
+    if (openedSafe < totalSafe) return;
+    over = true;
+    stopTimer();
+    emitStats();
+    for (let i = 0; i < N; i++)
+      if (mines[i] && state[i] !== 2) {
+        state[i] = 2;
+        paint(i);
+      }
+    led("mines", 0);
+    onFace("win");
+    emitFinish(true); // 二十期：全屏层据此出「我的评级」
+  }
+  function paintCellCls(td: HTMLTableCellElement, cls: string) {
+    td.className = cls;
+    td.innerHTML = "";
+  }
+  /* ---- 事件绑定（练习页 mousedown/mouseover/mouseup 口径） ---- */
+  const ac = new AbortController();
+  const sig = { signal: ac.signal };
+  const boardDiv = boardHost.querySelector<HTMLElement>(".board")!;
+  const on = <E extends Event>(el: Element | Window, type: string, fn: (e: E) => void) =>
+    el.addEventListener(type, fn as EventListener, sig);
+  on<MouseEvent>(boardDiv, "contextmenu", (e) => e.preventDefault());
+  const eventCell = (e: { target: EventTarget | null }): number => {
+    const td = (e.target as HTMLElement).closest("td");
+    if (!td || !tbody.contains(td)) return -1;
+    return (td.parentNode as HTMLTableRowElement).rowIndex * cols + td.cellIndex;
+  };
+  let leftDown = false,
+    rightDown = false,
+    chordDone = false;
+  on<MouseEvent>(boardDiv, "mousedown", (e) => {
+    if (over) return;
+    const i = eventCell(e);
+    if (i < 0) return;
+    if (e.buttons === 3) {
+      clearPress();
+      pressAround(i);
+      onFace("ooh");
+      if (e.button === 2) rightDown = true;
+      else leftDown = true;
+    } else if (e.button === 0) {
+      leftDown = true;
+      rightDown = false;
+      chordDone = false;
+      pressSingle(i);
+      onFace("ooh");
+    } else if (e.button === 2) {
+      rightDown = true;
+      leftDown = false;
+      chordDone = false;
+      cRight++;
+      toggleFlag(i); // 插旗即刻生效（练习页 rc 口径）；无效右键（已开格上）进 wasted
+      if (state[i] === 1) wRight++;
+    }
+  });
+  on<MouseEvent>(boardDiv, "mouseover", (e) => {
+    if (over) return;
+    if (e.buttons === 0 && (leftDown || rightDown)) leftDown = rightDown = chordDone = false;
+    const i = eventCell(e);
+    if (i < 0) return;
+    if (e.buttons === 3) {
+      if (pressCell !== null) {
+        if (state[pressCell] === 0) paint(pressCell);
+        pressCell = null;
+      }
+      pressAround(i);
+      onFace("ooh");
+    } else if (e.buttons === 1) {
+      if (chordCells) {
+        chordCells.forEach((c) => state[c] === 0 && paint(c));
+        chordCells = null;
+      }
+      pressSingle(i);
+      onFace("ooh");
+    }
+  });
+  on<MouseEvent>(window, "mouseup", (e) => {
+    if (!leftDown && !rightDown) return;
+    if (over) {
+      clearPress();
+      leftDown = rightDown = chordDone = false;
+      return;
+    }
+    const i = eventCell(e);
+    clearPress();
+    onFace("smile");
+    if (e.button === 0) {
+      if (rightDown && !chordDone) {
+        chordDone = true;
+        cDouble++;
+        const ok = ((): boolean => {
+          if (i < 0) return false;
+          const before = openedSafe;
+          chord(i);
+          return openedSafe > before || state[i] === 1;
+        })();
+        if (!ok) wDouble++;
+      } else if (chordDone) {
+        /* 尾随松开：只闭合手势 */
+      } else if (i >= 0 && state[i] === 1) {
+        /* 单击已开数字格＝双击（练习页独有玩法，2026-10-16 张老师定） */
+        cDouble++;
+        const before = openedSafe;
+        chord(i);
+        if (openedSafe === before) wDouble++;
+      } else {
+        cLeft++;
+        if (i >= 0) openCell(i);
+        else wLeft++;
+      }
+      leftDown = false;
+    } else if (e.button === 2) {
+      if (leftDown && !chordDone) {
+        chordDone = true;
+        cDouble++;
+        const before = openedSafe;
+        if (i >= 0) chord(i);
+        if (openedSafe === before) wDouble++;
+      }
+      rightDown = false;
+    }
+    if (!leftDown && !rightDown) chordDone = false;
+    if (started && !over) emitStats();
+  });
+  on<MouseEvent>(boardDiv, "mouseleave", () => {
+    clearPress();
+    if (!over) onFace("smile");
+  });
+  /* 触屏（练习页口径：点按开格 / 长按 ≥150ms 插旗；超容差滑动取消） */
+  let touchTimer: number | null = null,
+    touchCell = -1,
+    longFired = false,
+    tX = 0,
+    tY = 0;
+  on<TouchEvent>(boardDiv, "touchstart", (e) => {
+    if (over || e.touches.length !== 1) return;
+    const i = eventCell(e);
+    if (i < 0) return;
+    touchCell = i;
+    longFired = false;
+    tX = e.touches[0].clientX;
+    tY = e.touches[0].clientY;
+    onFace("ooh");
+    touchTimer = window.setTimeout(() => {
+      if (over || touchCell < 0) return;
+      longFired = true;
+      cRight++;
+      toggleFlag(touchCell);
+      pressPaint(touchCell);
+    }, 150);
+  });
+  on<TouchEvent>(boardDiv, "touchmove", (e) => {
+    if (Math.hypot(e.touches[0].clientX - tX, e.touches[0].clientY - tY) > 12) {
+      if (touchTimer) window.clearTimeout(touchTimer);
+      touchTimer = null;
+      touchCell = -1;
+      if (!over) onFace("smile");
+    }
+  });
+  on<TouchEvent>(boardDiv, "touchend", (e) => {
+    if (touchTimer) window.clearTimeout(touchTimer);
+    touchTimer = null;
+    onFace("smile");
+    if (over || longFired || touchCell < 0) {
+      touchCell = -1;
+      longFired = false;
+      return;
+    }
+    const i = touchCell;
+    touchCell = -1;
+    e.preventDefault(); // 防 touch 后合成 click 再开一格
+    cLeft++;
+    openCell(i);
+    if (started && !over) emitStats();
+  });
+  /* 初始计数条 + 面板 + 全盘重置（进入/重开都从全未开的干净盘面起步——
+     上局试玩或回放镜像残留的类名全部刷回 bb） */
+  for (let i = 0; i < N; i++) {
+    state[i] = 0;
+    paint(i);
+  }
+  led("mines", flagsLeft());
+  led("time", 0);
+  emitStats();
+  return {
+    destroy() {
+      ac.abort();
+      stopTimer();
+      clearPress();
     },
   };
 }
@@ -622,6 +1135,7 @@ export function VideoReplayProvider({
   realTimeMs,
   radarPoints,
   radarOverall,
+  radarDists,
   level,
   boardStr,
   children,
@@ -631,10 +1145,14 @@ export function VideoReplayProvider({
   filepath: string;
   /** 库内权威用时（毫秒，video_info.real_time）：进度条总长与播放终点以库为准 */
   realTimeMs?: number;
-  /** 服务端算好的本局五轴雷达数据（详情页右栏同源）——全屏层右侧「录像评级」用 */
+  /** 服务端算好的本局五轴雷达数据（详情页右栏同源）——全屏层右侧「录像评级」用
+   *  （十九期恢复，2026-10-16 张老师定） */
   radarPoints?: VideoAnalysisPoint[];
   /** 综合评级字母（analysis.overall，同右栏口径） */
   radarOverall?: string;
+  /** 本录像所属组（级别 × 模式）的分位基准边界——全屏试玩结束时的「我的评级」
+   *  用同一组给玩家本局打分（二十期，2026-10-16） */
+  radarDists?: Partial<Record<MetricKey, number[]>>;
   /** 级别与整盘串（renderBoard 后 '*'/数字）——全屏层重画 Board 用 */
   level?: VideoLevel;
   boardStr?: string;
@@ -643,6 +1161,11 @@ export function VideoReplayProvider({
   const [status, setStatus] = useState<Status>("idle");
   const [stats, setStats] = useState<ReplayStats | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  /* 笑脸状态（十七期）：回放引擎 onFace 直通——全屏层计数条消费；
+     页面态无消费者不渲染，state 变更开销可忽略（每事件至多一次） */
+  const [face, setFace] = useState<FaceKind>("smile");
+  /* 解析产物镜像（十七期）：dataRef 的渲染期可读副本——全屏层试玩引擎数据源 */
+  const [replayData, setReplayData] = useState<ReplayData | null>(null);
   /* 播放失败气泡（2026-10-16）：文件 404/网络失败等场景，棋盘中央红字提示，
      3.5s 自动消失；再点播放重试（dataRef 已置 null 会重新 fetch） */
   const [notice, setNotice] = useState<string | null>(null);
@@ -726,7 +1249,10 @@ export function VideoReplayProvider({
           data,
           onEnd: () => setStatus("ended"),
           onStats: setStats,
+          onFace: setFace,
         });
+        /* 解析产物留 state 一份：全屏层试玩引擎的布雷数据源（渲染期可读） */
+        setReplayData(data);
         setStatus("playing");
       } catch (e) {
         dataRef.current = null;
@@ -749,6 +1275,8 @@ export function VideoReplayProvider({
     engineRef.current = null;
     setStats(null);
     setStatus("idle");
+    setFace("smile");
+    setReplayData(null);
   }, []);
 
   const pause = useCallback(() => {
@@ -821,7 +1349,9 @@ export function VideoReplayProvider({
       {/* 播放失败提示（2026-10-16）：棋盘中央红色气泡（文件 404 等场景，
           flop 播放器拉同一 URL 也必失败，不再弹全屏播放器） */}
       {notice && <div className="replay_notice" role="alert">{notice}</div>}
-      {/* 全屏回放层（十期）：遮罩 + 自适应布局，点遮罩退出 */}
+      {/* 全屏回放层（十期）：遮罩 + 自适应布局，点遮罩退出。
+          十七期：复用练习页游戏界面（银框+计数条+笑脸），撤右栏评级；
+          引擎启动时若已全屏，直接以全屏棋盘为宿主 */}
       {fullscreen && level && boardStr && (
         <ReplayFullscreen
           level={level}
@@ -829,8 +1359,11 @@ export function VideoReplayProvider({
           boardStr={boardStr}
           stats={stats}
           status={status}
+          replayData={replayData}
+          engineFace={face}
           radarPoints={radarPoints}
           radarOverall={radarOverall}
+          radarDists={radarDists}
           onToggle={togglePlay}
           onPause={pause}
           onSeek={seek}
@@ -925,7 +1458,11 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
       const gap = 14;
       const zW = (wr.left - gap - 12) / pr.width;
       const zH = hostH > 1 ? hostH / pr.height : 1;
-      const z = Math.max(0.3, Math.min(1, zW, zH));
+      /* 十九期张老师定：页面态（未全屏）面板放大 1.25 倍——先按既有约束取 fit
+         （宽不重叠棋盘、高不高于「棋盘+控制条」整块），再整体 ×1.25；
+         放大后横向仍不得与棋盘重叠（zW 硬上限，与棋盘贴太近会压住版图），
+         纵向允许向棋盘下方延伸（面板不是棋盘的一部分）。 */
+      const z = Math.max(0.3, Math.min(zW, Math.min(1, zH) * 1.25));
       /* 左侧空间放到 0.5x 以下（字号 11px×0.5≈5.5px 不可读；视口 ≈1024 时
          #page 固定 960 居中、左空间只够 0.44x）→ 面板隐藏，宁缺毋滥 */
       if (zW < 0.5) {
@@ -1109,24 +1646,39 @@ function ReplayBar({
   );
 }
 
-/* ---- 全屏回放层（十期张老师需求） ----
+/* ---- 全屏回放层（十期张老师需求；十七期改版） ----
    复用在线练习的全屏口径：遮罩点击退出、自适应尺寸尽量吃满屏幕、滚轮调比例
    （上滑放大 0.1x/格、单事件封顶 5 格，练习页 onWheelZoom 同参数）。
-   布局三栏：左＝数据统计（同款面板自然尺寸）、中＝棋盘（portal 外的独立 Board，
-   逐帧镜像页面回放引擎的格子类名——引擎只画页面 DOM，不重跑第二份）、右＝录像评级
-   （服务端注入的雷达数据，与右栏同源）。
+   十七期（2026-10-16 张老师定）：界面与在线练习完全一致——银灰外框（.gwrap）+
+   凹面计数条（.gbar：LED 雷数 / 笑脸 / LED 计时，CSS 自 #online_play 同名一组
+   1:1 移植）；右栏「录像评级」撤除，空间留给游戏界面；点笑脸＝自己玩本局
+   （同一盘面，试玩引擎练习页同款交互），试玩中再点＝重开本局。
+   笑脸状态与点击相关（练习页口径）：按下 ooh / 松开 smile / 终局 win·dead。
+   布局两栏：左＝数据统计、中＝游戏窗（计数条+棋盘+控制条，zoom 挂中栏）。
    ⚠️ FS 层的 Board id 用 fs_{boardId}：与页面 board_{boardId} 不撞 DOM id。 */
 const VFS_MIN_ZOOM = 0.5;
 const VFS_MAX_ZOOM = 3;
-/* 面板/评级缩放下限（十四期）：与练习页初级拉满时 greport 的视觉规格对齐——
-   greport 1x 字号 11px、初级满比例下 zoom≈1.05 → 视觉 ≈11.6px；
-   本站面板 1x 字号即 11px（十四期回归），随棋盘等比、下限 1.05 */
+/* 面板缩放下限（十四期口径保留）：面板 1x 字号 13px，随棋盘等比、下限 1.05 */
 const PANEL_MIN_Z = 1.05;
 const VFS_ZOOM_LS = "video_replay_fs_zoom";
 /* 滚轮步进（练习页 WHEEL_* 同款参数） */
 const VFS_WHEEL_STEP_PX = 100;
 const VFS_WHEEL_STEP_Z = 0.1;
 const VFS_WHEEL_MAX_STEPS = 5;
+/* 练习页游戏窗的固定布局开销（1x CSS px，fitZoom 高度预算用）：
+   gwrap padding 9×2 + border 3×2 = 24；gbar（LED 25 + padding 4×2 + border 2×2 + margin 9）= 46 */
+const GWRAP_OVERHEAD_Y = 70;
+const GWRAP_OVERHEAD_X = 24;
+
+/* LED 数码管渲染（练习页 led 同款：-99~999 钳制、负数两格+负号） */
+function ledRender(uses: NodeListOf<SVGElement> | undefined | null, v: number) {
+  if (!uses || uses.length < 3) return;
+  v = Math.max(-99, Math.min(999, Math.round(v)));
+  const a = Math.abs(v);
+  const ds: (string | number)[] =
+    v < 0 ? ["minus", ((a / 10) | 0) % 10, a % 10] : [((a / 100) | 0) % 10, ((a / 10) | 0) % 10, a % 10];
+  for (let k = 0; k < 3; k++) uses[k].setAttribute("href", "#count-" + ds[k]);
+}
 
 function ReplayFullscreen({
   level,
@@ -1134,8 +1686,11 @@ function ReplayFullscreen({
   boardStr,
   stats,
   status,
+  replayData,
+  engineFace,
   radarPoints,
-  radarOverall,
+  radarOverall: radarOverallProp,
+  radarDists,
   onToggle,
   onPause,
   onSeek,
@@ -1147,8 +1702,15 @@ function ReplayFullscreen({
   boardStr: string;
   stats: ReplayStats | null;
   status: Status;
+  /** Provider 持有的解析产物（试玩引擎锁定同盘布雷的数据源） */
+  replayData: ReplayData | null;
+  /** 回放引擎的笑脸状态（十七期：按下 ooh / 松开 smile / 终局 win·dead） */
+  engineFace: FaceKind;
+  /** 全屏右栏「录像评级」数据（十九期恢复；与详情页右栏同源） */
   radarPoints?: VideoAnalysisPoint[];
   radarOverall?: string;
+  /** 本录像所属组（级别 × 模式）的分位基准——试玩结束「我的评级」同基准打分（二十期） */
+  radarDists?: Partial<Record<MetricKey, number[]>>;
   onToggle: () => void;
   onPause: () => void;
   onSeek: (csec: number) => void;
@@ -1159,6 +1721,38 @@ function ReplayFullscreen({
   const wrapRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<number | null>(null);
   const wheelAcc = useRef(0);
+  /* 十八期（游戏窗 ≥ 面板高）：面板自然尺寸测量 + 面板 zoom 记账 + 落盘定时器；
+     十九期加宽度（--vprfs-pw 驱动右栏评级 1.5 倍宽） */
+  const panelRef = useRef<HTMLDivElement>(null);
+  const panelZRef = useRef(PANEL_MIN_Z);
+  const panelNatHRef = useRef(0);
+  const panelNatWRef = useRef(0);
+  const dropTRef = useRef<number | undefined>(undefined);
+  /* 十七期：回放/试玩双模式——replay＝引擎镜像 + 事件驱动笑脸/计数条；
+     play＝试玩引擎（点笑脸进入），退出回 replay（回放从定格处继续）。
+     笑脸显示源：回放态＝engineFace（引擎事件驱动）、试玩态＝本地 face */
+  const [mode, setMode] = useState<"replay" | "play">("replay");
+  const [face, setFace] = useState<FaceKind>("smile");
+  const playRef = useRef<{ destroy: () => void } | null>(null);
+  const faceUseRef = useRef<SVGUseElement | null>(null);
+  /* 试玩面板数值：本地 state（Provider stats 是回放时钟，两套不混用） */
+  const [playStats, setPlayStats] = useState<ReplayStats | null>(null);
+  /* 试玩终局成绩（二十期）：非空＝本局已结束，右栏由「录像评级」切「我的评级」。
+     进入试玩 / 重开 / 回到回放一律清空（见 startPlay / enterPlay / exitPlay） */
+  const [playResult, setPlayResult] = useState<PlayResult | null>(null);
+  /* 试玩数据源快照：enterPlay 事件里从 prop 取（事件回调中读 prop 是新鲜值，
+     渲染期不碰 ref——react-hooks/refs 口径） */
+  const replayDataRef = useRef<ReplayData | null>(null);
+  useEffect(() => {
+    replayDataRef.current = replayData;
+  }, [replayData]);
+
+  /* 笑脸渲染：use href 切贴图（练习页 setFace 同款；press 为瞬时态不记忆）。
+     显示源按模式切换：replay＝engineFace、play＝本地 face */
+  const faceShown = mode === "play" ? face : engineFace;
+  useEffect(() => {
+    faceUseRef.current?.setAttribute("href", "#" + FACE_MAP[faceShown]);
+  }, [faceShown]);
 
   /* 挂载下一帧再显形（同 #fs_tip 的做法：插入帧先 opacity:0，避免层闪现） */
   useEffect(() => {
@@ -1166,104 +1760,228 @@ function ReplayFullscreen({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  /* 自适应基准（十四期重写：解析解替代迭代）。
-     联立方程：面板/评级 zoom=max(PANEL_Z, z) 与棋盘 z 同宽耦合——
-       z ≥ PANEL_Z 段：z·(bw + panelW + sideW) = availW → 单调一次可解
-       z < PANEL_Z 段：面板按 PANEL_Z 常数宽，z=(availW−面板常数和)/bw
-     两段取交界处连续，直接解；高度方向独立封顶。
-     （十二期的迭代在初级盘会螺旋：初值 3 → 面板按 3x 预算吞光宽度 → z 跌到
-      下限 0.5 → 全屏比非全屏还小、棋盘右侧空一半的根源。）
-     基准宽 248/252 与 CSS（.replay_panel/.vprfs_side 的 width+padding+border）联动。 */
+  /* 卸载兜底（层卸载＝退出全屏：试玩引擎若在跑一并销毁，纯副作用无 setState） */
+  useEffect(
+    () => () => {
+      playRef.current?.destroy();
+      playRef.current = null;
+    },
+    []
+  );
+
+  /* 试玩启动（进入 + 重开共用）：盘面残留由试玩引擎自身重置（state 全 0 起步）。
+     playStats 的清理由本函数在启动前统一做（替代模式 effect 里的 setState——
+     react-hooks/set-state-in-effect 禁止在 effect 体里同步置 state）。
+     光标在试玩态即刻隐藏（镜像 rAF 已停，残留会钉在原地） */
+  const startPlay = useCallback(() => {
+    const host = wrapRef.current?.querySelector<HTMLElement>(".vprfs_board_wrap");
+    const tbody = wrapRef.current?.querySelector<HTMLTableSectionElement>(".gframe tbody");
+    const data = replayDataRef.current;
+    if (!host || !tbody || !data) return;
+    const rows = tbody.rows.length;
+    const cols = rows ? tbody.rows[0].cells.length : 0;
+    if (!rows || !cols) return;
+    const cursor = host.querySelector<HTMLElement>(".replay_cursor");
+    if (cursor) cursor.style.display = "none";
+    playRef.current = runPlayGame({
+      boardHost: host,
+      tbody,
+      rows,
+      cols,
+      data,
+      onFace: (k) => setFace(k === "press" ? "smile" : k),
+      onStats: setPlayStats,
+      onFinish: setPlayResult,
+    });
+    setFace("smile");
+  }, []);
+
+  /* 点笑脸：回放态＝暂停回放进入试玩；试玩态＝重开本局（练习页 F2 口径） */
+  const enterPlay = useCallback(() => {
+    playRef.current?.destroy(); // 重开路径同款：旧引擎监听/定时器全清
+    playRef.current = null;
+    setPlayStats(null); // 旧试玩面板数值即刻作废
+    setPlayResult(null); // 上一局的「我的评级」随即撤下（重开＝新的一局）
+    if (mode !== "play") {
+      onPause(); // 回放定格（exitPlay 回来时从定格处继续）
+      setMode("play");
+    }
+    startPlay();
+  }, [mode, onPause, startPlay]);
+
+  /* 退出试玩回到回放：销毁试玩引擎 + 面板切回回放统计（事件回调里 setState 合法）；
+     镜像 rAF 自动把页面引擎的盘面抄回 FS 棋盘 */
+  const exitPlay = useCallback(() => {
+    playRef.current?.destroy();
+    playRef.current = null;
+    setPlayStats(null);
+    setPlayResult(null);
+    setMode("replay");
+  }, []);
+
+  /* 试玩结束的「我的评级」（二十期 2026-10-16 张老师定）：级别 + 本录像所属的分位基准
+     （radarDists prop）在客户端算出与「录像评级」同一套五轴点 —— 组装与评级全部走
+     lib/videoscore 的共享件，本文件不自造口径。
+     STNB / 3BV/s / IOE / Corr / Cls 五个原始值的算法与练习页结算面板、左侧数据面板
+     同式（ReplayStatsTable 里那一段）；可评级的门槛（零点击 / 完成度 < 10%）同练习页。 */
+  const mineRating = useMemo(() => {
+    if (!playResult) return null;
+    const t = playResult.csec / 100;
+    const hasBv = playResult.solvedBv > 0 && t > 0;
+    const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
+    const qg = hasBv ? Math.pow(t, 1.7) / playResult.solvedBv : 0;
+    const stnb = hasBv
+      ? ((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * Math.sqrt(playResult.solvedBv / playResult.board3bv)
+      : 0;
+    const values: Partial<Record<MetricKey, number>> = {
+      stnb,
+      bvs: hasBv ? playResult.solvedBv / t : 0,
+      ioe: playResult.cl > 0 ? playResult.solvedBv / playResult.cl : 0,
+      corr: playResult.cl > 0 ? playResult.ce / playResult.cl : 0,
+      cls: t > 0 ? playResult.cl / t : 0,
+    };
+    const lowCompletion = playResult.board3bv <= 0 || playResult.solvedBv / playResult.board3bv < 0.1;
+    const points = radarPointsFrom(values, radarDists, !!radarDists && playResult.cl > 0 && !lowCompletion);
+    /* 预计完成用时（未完成时展示）：Est RTime 口径 = 实际用时 × 3BV ÷ 已完成 3BV */
+    const estSec = playResult.solvedBv > 0 ? t * (playResult.board3bv / playResult.solvedBv) : 0;
+    return { points, overall: overallGrade(points), estSec };
+  }, [playResult, level, radarDists]);
+
+  /* 自适应基准（十九期：三栏复原——面板 + 游戏窗 + 评级栏）。
+     十九期张老师定：全屏右侧恢复「录像评级」，宽度＝数据统计面板的 1.5 倍。
+     难点＝面板/评级的 zoom 与棋盘 zoom 不再恒等（十八期高度对齐把 pz 封顶到
+     「面板高＝游戏窗高」→ pz = z/R，R＝面板自然高/游戏窗含框基准高），
+     宽度方程随 pz 分段；解在 z = zFloor 处连续，取「高度换算解」与「宽度解」较小。
+     R 未实测（首帧 ref=0）时按 1 走保守估算，测量 effect 落地后立即重算。 */
   const fitZoom = useCallback((): number => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const pad = 16 * 2; // 内衬
-    const gap = 18 * 2; // 中栏与两侧间隙（CSS gap 18）
-    const showSide = vw >= 1180; // 窄屏藏右栏（CSS 断点同步）
-    const showPanel = vw >= 900; // 极窄藏左面板
+    const showPanel = vw >= 900; // 极窄藏左面板（CSS 断点同步）
+    const showSide = vw >= 1180; // 更窄藏右评级（CSS 断点同步）
+    const gapTotal = 18 * ((showPanel ? 1 : 0) + (showSide ? 1 : 0)); // 栏间 gap 18/个
     const dim = { beg: [8, 8], int: [16, 16], exp: [30, 16] }[level] ?? [30, 16];
-    const bw = dim[0] * 16 + 4;
-    const bh = dim[1] * 16 + 4;
-    const availW0 = vw - pad - gap;
+    const bw = dim[0] * 16 + 4 + GWRAP_OVERHEAD_X;
+    const bh = dim[1] * 16 + 4 + GWRAP_OVERHEAD_Y;
+    const availW0 = vw - pad - gapTotal;
     const availH = vh - pad - 24 - 42 - 10; // 顶部呼吸 24 + 控制条 42 + 间隙 10
     if (availW0 < 50 || availH < 50) return 1;
     const clamp = (v: number) => Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, v));
-    const sideW = showSide ? 252 : 0;
-    const panelW = showPanel ? 248 : 0;
+    /* 面板宽用实测自然宽（回退 248）；右栏（录像评级 / 我的评级）渲染宽＝面板的
+       1.5 倍——CSS 域宽度 1.5×pw、zoom 与面板同域（--vfz-panel），故渲染即 1.5 倍 */
+    const pw = panelNatWRef.current > 0 ? panelNatWRef.current : 248;
+    const sideW = pw * 1.5; // 右栏在 CSS 域占的宽（与 .vprfs_side 的 width 同式）
+    const span = showPanel ? pw + (showSide ? sideW : 0) : showSide ? sideW : 0;
+    const natH = panelNatHRef.current;
+    const R = natH > 0 ? natH / bh : 1; // 面板 zoom = 棋盘 zoom / R（高度对齐反解）
+    const zFloor = natH > 0 ? (natH * PANEL_MIN_Z) / bh : PANEL_MIN_Z; // 等高所需最小棋盘 zoom
     const zByH = availH / bh;
-    /* 段 1：z ≥ PANEL_Z（面板随棋盘等比） */
-    const zCoupled = availW0 / (bw + panelW + sideW);
-    if (zCoupled >= PANEL_MIN_Z) return clamp(Math.min(zCoupled, zByH));
-    /* 段 2：z < PANEL_Z（面板按最小比例的常数宽） */
-    const zFlat = (availW0 - (panelW + sideW) * PANEL_MIN_Z) / bw;
-    return clamp(Math.min(zFlat, zByH));
+    /* 段判定：z = zFloor 时面板/评级已按最小倍率(1.05)铺开的宽度是否放得下 */
+    const wAtFloor = bw * zFloor + span * PANEL_MIN_Z;
+    const zByW =
+      wAtFloor <= availW0
+        ? availW0 / (bw + span / R) // 段 1：z ≥ zFloor，面板/评级随 z/R 等比
+        : (availW0 - span * PANEL_MIN_Z) / bw; // 段 2：宽度吃紧，面板/评级钉在最小倍率
+    return clamp(Math.min(zByW, zByH));
   }, [level]);
 
-  /* 初始倍率：记住的滚轮值（clamp 到当前 fit 上限）→ 没有则 fit */
+  /* 统一 zoom 施加（十八期重构）：地板/上限/面板 zoom 收敛到一处。
+     十八期张老师定「全屏时游戏版图至少要和数据统计栏高度相同」——
+     棋盘 zoom 地板＝面板最小倍率(1.05)高度折算值（面板自然高由测量 effect 回填）；
+     面板 zoom 改「面板高 ≤ 游戏窗高」封顶（十一期的恒等比绑定在面板内容天然
+     比棋盘高时永不收敛，作废）；
+     上限＝视口 fit（十二期口径），地板超上限时让位视口（小屏放不下则随它去）。 */
+  const applyZoom = useCallback(
+    (next: number, persist = true) => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const dim = { beg: [8, 8], int: [16, 16], exp: [30, 16] }[level] ?? [30, 16];
+      const bh = dim[1] * 16 + 4 + GWRAP_OVERHEAD_Y;
+      const natH = panelNatHRef.current;
+      const cap = Math.min(VFS_MAX_ZOOM, fitZoom());
+      const floor = natH > 0 ? Math.min((natH * PANEL_MIN_Z) / bh, cap) : VFS_MIN_ZOOM;
+      const z = Math.min(cap, Math.max(floor, next));
+      /* 面板 zoom：min(棋盘 zoom 与下限 1.05 取大, 面板高=游戏窗高的封顶)——
+         natH<bh（棋盘本比面板高）时封顶>z，自然退回等比行为 */
+      const pz =
+        natH > 0
+          ? Math.min(Math.max(PANEL_MIN_Z, z), Math.max(PANEL_MIN_Z, (bh * z) / natH))
+          : Math.max(PANEL_MIN_Z, z);
+      zoomRef.current = z;
+      panelZRef.current = pz;
+      el.style.setProperty("--vfz", String(z));
+      el.style.setProperty("--vfz-panel", String(pz));
+      if (persist) {
+        window.clearTimeout(dropTRef.current);
+        dropTRef.current = window.setTimeout(() => localStorage.setItem(VFS_ZOOM_LS, String(z)), 320);
+      }
+    },
+    [fitZoom, level]
+  );
+
+  /* 初始倍率：记住的滚轮值（过地板/上限收敛）→ 没有则视口 fit */
   useEffect(() => {
     if (zoomRef.current === null) {
       let z = parseFloat(localStorage.getItem(VFS_ZOOM_LS) || "");
       if (!Number.isFinite(z)) z = fitZoom();
-      zoomRef.current = Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, z));
-      if (wrapRef.current) wrapRef.current.style.setProperty("--vfz", String(zoomRef.current));
+      applyZoom(z, false);
     }
-  }, [fitZoom]);
-  /* 面板/评级与棋盘比例绑定（十一期张老师定）：--vfz-panel 恒等于棋盘 zoom，
-     下限 PANEL_MIN_Z=1.05（面板 1x 字号 11px 即练习页同款，×1.05≈11.6 与初级拉满视觉一致） */
+  }, [fitZoom, applyZoom]);
+
+  /* 面板自然尺寸测量（十八期高 / 十九期宽）：每次渲染后测一次（行数恒定，
+     几何稳定后只读不写；CSS zoom 的 rect 是放大后的，除回当前面板 zoom 得自然值）。
+     高变化 → 重施 zoom（纯 DOM 写，无 setState）：首测把地板从 0.5 抬到面板折算值，
+     游戏窗随之上抬到与面板等高；
+     宽变化 → 写 --vprfs-pw（右栏评级 = 1.5×面板宽的 CSS 来源）；不重算 zoom，
+     避免数字位数微变引起整体缩放抖动。 */
   useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    el.style.setProperty("--vfz-panel", String(Math.max(PANEL_MIN_Z, zoomRef.current ?? 1)));
+    const el = panelRef.current;
+    if (!el || el.offsetParent === null) return; // 窄屏 display:none 跳过
+    const pz = panelZRef.current || PANEL_MIN_Z;
+    const rect = el.getBoundingClientRect();
+    const h = rect.height / pz;
+    const w = rect.width / pz;
+    if (w > 0 && Math.abs(w - panelNatWRef.current) > 1) {
+      panelNatWRef.current = w;
+      wrapRef.current?.style.setProperty("--vprfs-pw", `${w.toFixed(1)}px`);
+    }
+    if (h > 0 && Math.abs(h - panelNatHRef.current) > 2) {
+      panelNatHRef.current = h;
+      applyZoom(zoomRef.current ?? 1, false);
+    }
   });
 
-  /* 滚轮调比例（练习页口径：上滑放大、累计 100px 迈 0.1x、单事件封顶 5 格、停滚落盘） */
+  /* 滚轮调比例（练习页口径：上滑放大、累计 100px 迈 0.1x、单事件封顶 5 格、停滚落盘；
+     十八期：缩不出「游戏窗矮于面板」——applyZoom 内含地板） */
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    let dropT: number | undefined;
-    const applyZoom = (next: number) => {
-      zoomRef.current = next;
-      el.style.setProperty("--vfz", String(next));
-      el.style.setProperty("--vfz-panel", String(Math.max(PANEL_MIN_Z, next)));
-    };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       wheelAcc.current += e.deltaY;
       const steps = Math.min(VFS_WHEEL_MAX_STEPS, Math.abs(wheelAcc.current) / VFS_WHEEL_STEP_PX);
       if (steps < 1) return;
       wheelAcc.current = 0;
-      const dir = wheelAcc2Dir(e.deltaY);
+      const dir = e.deltaY < 0 ? 1 : -1;
       const cur = zoomRef.current ?? 1;
-      /* 上限＝fitZoom()（含面板/评级实时宽预算）——十二期张老师定：
-         无论如何缩放，三栏都不得超出屏幕（绝对上限 3 仅兜底） */
-      const cap = Math.min(VFS_MAX_ZOOM, fitZoom());
-      const next = Math.max(VFS_MIN_ZOOM, Math.min(cap, cur + dir * VFS_WHEEL_STEP_Z * Math.floor(steps)));
-      if (next === cur) return;
-      applyZoom(next);
-      window.clearTimeout(dropT);
-      dropT = window.setTimeout(() => localStorage.setItem(VFS_ZOOM_LS, String(next)), 320);
+      applyZoom(cur + dir * VFS_WHEEL_STEP_Z * Math.floor(steps));
     };
-    const wheelAcc2Dir = (dy: number) => (dy < 0 ? 1 : -1);
     el.addEventListener("wheel", wheel, { passive: false });
     return () => {
       el.removeEventListener("wheel", wheel);
-      window.clearTimeout(dropT);
+      window.clearTimeout(dropTRef.current);
     };
-  }, [fitZoom]);
+  }, [applyZoom]);
 
-  /* 窗口缩放：按新视口 refit（保留用户手动倍率的话上限可能越界，统一回 fit 起点稳） */
+  /* 窗口缩放：按新视口 refit（zoom 统一走 applyZoom，地板/上限随视口重算） */
   useEffect(() => {
-    const onResize = () => {
-      const z = fitZoom();
-      zoomRef.current = z;
-      wrapRef.current?.style.setProperty("--vfz", String(z));
-      wrapRef.current?.style.setProperty("--vfz-panel", String(Math.max(PANEL_MIN_Z, z)));
-    };
+    const onResize = () => applyZoom(zoomRef.current ?? 1, false);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [fitZoom]);
+  }, [applyZoom]);
 
-  /* 镜像：rAF 逐帧把页面回放引擎的格子类名抄到 FS 棋盘 + 光标位置换算。
+  /* 镜像（十七期加 mode 门控）：回放态 rAF 逐帧把页面回放引擎的格子类名抄到
+     FS 棋盘 + 光标位置换算；试玩态跳过（试玩引擎直接画 FS 棋盘）。
      ⚠️ Board 组件内部把 id 渲染成 `board_{id}`（FS 传 "fs_board_338799" → 实际
      id="board_fs_board_338799"）——十期选择器写 #fs_board_* 从未匹配，棋盘一直
      显示的是 boardStr 静态终局图（碰巧「看起来对」），回放中盘根本不同步。
@@ -1271,6 +1989,7 @@ function ReplayFullscreen({
      正确参照系＝棋盘表本体——页面光标相对页面棋盘的比例 × FS 棋盘当前尺寸，
      缩放级别（滚轮）变化后每帧重算自动同步。 */
   useEffect(() => {
+    if (mode !== "replay") return;
     let raf = 0;
     const mirror = () => {
       const srcTable = document.querySelector<HTMLTableSectionElement>(`#board_${boardId} tbody`);
@@ -1324,34 +2043,104 @@ function ReplayFullscreen({
     };
     raf = requestAnimationFrame(mirror);
     return () => cancelAnimationFrame(raf);
-  }, [boardId]);
+  }, [boardId, mode]);
+
+  /* 回放态计数条：LED 雷数＝totalMines − flags、LED 时间＝回放时钟整数秒
+     （笑脸由 Provider 的 engineFace prop 驱动，见下） */
+  useEffect(() => {
+    if (mode !== "replay") return;
+    const uses = wrapRef.current?.querySelectorAll<SVGElement>("#fs_led_mines use.d");
+    if (stats) ledRender(uses, stats.totalMines - stats.flags);
+  }, [mode, stats]);
+  useEffect(() => {
+    if (mode !== "replay") return;
+    const uses = wrapRef.current?.querySelectorAll<SVGElement>("#fs_led_time use.d");
+    if (stats) ledRender(uses, Math.floor(stats.csec / 100));
+  }, [mode, stats]);
+
+  /* 回放态棋盘点击不再退出（练习页语义：棋盘是对局区）；退出全屏走
+     遮罩空白/Esc/控制条按钮——沿用十期遮罩命中口径 */
 
   if (typeof document === "undefined") return null;
+  const showStats = mode === "play" ? playStats : stats;
   return createPortal(
     <div
       className={"vprfs" + (mounted ? " show" : "")}
       ref={wrapRef}
       onClick={(e) => {
-        /* 点层内任意空白（遮罩区）退出全屏；三栏内容各自 stopPropagation */
-        if (e.target === e.currentTarget || (e.target as HTMLElement).classList?.contains("vprfs_mask")) onExit();
+        /* 退出判定＝「点击落在两栏内容实体之外」：遮罩/层本体，或 .vprfs_inner 的
+           空白区（十七期实测：左栏面板比游戏窗高时，游戏区正下方的 inner 空白
+           挂着 stopPropagation 吞点击，底部大块「看着是遮罩」的点不退出）。 */
+        if (
+          e.target === e.currentTarget ||
+          (e.target as HTMLElement).classList?.contains("vprfs_mask") ||
+          (e.target as HTMLElement).classList?.contains("vprfs_inner")
+        )
+          onExit();
       }}
     >
       {/* 视觉遮罩（命中判定在 .vprfs 的 onClick 统一处理） */}
       <div className="vprfs_mask" />
-      <div className="vprfs_inner" onClick={(e) => e.stopPropagation()}>
-        {/* 左：数据统计（与页面态同一份内容组件；自然尺寸，不吃滚轮 zoom） */}
-        <div className="vprfs_panel replay_panel">
-          {stats && <ReplayStatsTable level={level} s={stats} />}
+      {/* inner 空白区（面板/游戏窗之外的容器本体）＝退出热区：e.target===自身时退出；
+          点击落在子内容上则照旧 stopPropagation 保护（冒泡到 inner 时 target 是子元素） */}
+      <div
+        className="vprfs_inner"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onExit();
+          else e.stopPropagation();
+        }}
+      >
+        {/* 左：数据统计（与页面态同一份内容组件；自然尺寸，不吃滚轮 zoom）。
+            试玩态显示本局实时数据（onStats 流）；ref 供面板自然高测量（十八期） */}
+        <div className="vprfs_panel replay_panel" ref={panelRef}>
+          {showStats && <ReplayStatsTable level={level} s={showStats} />}
         </div>
-        {/* 中：棋盘 + 控制条（zoom 挂 wrap，整块随比例缩放） */}
+        {/* 中：练习页同款游戏窗（.gwrap 银框：计数条+棋盘）+ 控制条（zoom 挂中栏） */}
         <div className="vprfs_center">
-          <div className="vprfs_board_wrap">
-            <Board id={"fs_board_" + boardId} level={level} board={boardStr} size={16} />
-            <div className="replay_cursor" aria-hidden="true">
-              <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>
+          <div className="gwrap">
+            <div className="gbar">
+              <svg className="ledc" id="fs_led_mines" viewBox="0 0 410 250" role="img" aria-label="剩余雷数">
+                <use href="#top-counters" />
+                <use className="d" href="#count-0" x="20" y="20" />
+                <use className="d" href="#count-0" x="150" y="20" />
+                <use className="d" href="#count-0" x="280" y="20" />
+              </svg>
+              <button
+                className="face"
+                id="fs_face_btn"
+                type="button"
+                title={mode === "play" ? "重开本局" : "自己玩本局"}
+                onMouseDown={() => faceUseRef.current?.setAttribute("href", "#" + FACE_MAP.press)}
+                onMouseUp={() => faceUseRef.current?.setAttribute("href", "#" + FACE_MAP[faceShown])}
+                onMouseLeave={() => faceUseRef.current?.setAttribute("href", "#" + FACE_MAP[faceShown])}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  enterPlay();
+                }}
+              >
+                <svg viewBox="0 0 260 260" width="26" height="26">
+                  <use ref={faceUseRef} href="#face-normal" />
+                </svg>
+              </button>
+              <svg className="ledc" id="fs_led_time" viewBox="0 0 410 250" role="img" aria-label="计时">
+                <use href="#top-counters" />
+                <use className="d" href="#count-0" x="20" y="20" />
+                <use className="d" href="#count-0" x="150" y="20" />
+                <use className="d" href="#count-0" x="280" y="20" />
+              </svg>
+            </div>
+            <div className="gframe">
+              <div className="vprfs_board_wrap">
+                <Board id={"fs_board_" + boardId} level={level} board={boardStr} size={16} />
+                <div className="replay_cursor" aria-hidden="true">
+                  <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>
+                </div>
+              </div>
             </div>
           </div>
-          {stats && (
+          {/* 控制条（回放态）：暂停/播放 + 时间 + 进度 + 退出全屏；
+              试玩态：回到回放 + 提示 + 退出全屏 */}
+          {mode === "replay" && stats && (
             <ReplayBar
               status={status}
               stats={stats}
@@ -1363,20 +2152,119 @@ function ReplayFullscreen({
               fsActive
             />
           )}
+          {mode === "play" && (
+            <div className="replay_bar vprfs_playbar" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className="rb_btn vprfs_backbtn"
+                title="回到回放"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  exitPlay();
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                  <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+                </svg>
+              </button>
+              <span className="rb_hint">试玩本局 · 点笑脸重开 · 不计成绩不上传</span>
+              <button
+                type="button"
+                className="rb_btn active"
+                title="退出全屏"
+                aria-label="退出全屏"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExit();
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 8V5h3" />
+                  <path d="M19 8V5h-3" />
+                  <path d="M5 16v3h3" />
+                  <path d="M19 16v3h-3" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
-        {/* 右：录像评级（雷达与右栏同源数据） */}
-        {radarPoints && (
-          <div className="vprfs_side">
+        {/* 右：评级卡（二十期张老师定）——
+             ① 试玩**已结束**（playResult 非空）→「我的评级」：本局成绩 + 五轴评级 + 雷达
+                ＋ 查看回放 / 下载录像（版式参考在线练习结算面板）；
+             ② 回放态 / 试玩进行中 →「录像评级」（十九期恢复；雷达与详情页右栏同源）。
+             宽度＝数据统计面板渲染宽的 1.5 倍（.vprfs_side 的 width，与面板同缩放域）；
+             窄屏（<1180）CSS 隐藏 */}
+        {mode === "play" && playResult && mineRating ? (
+          <div className="vprfs_side vprfs_mine">
             <h2 className="vr_h">
-              录像评级
-              <span className="vr_rate" style={{ color: gradeColor(radarOverall ?? "?") }}>
-                {radarOverall ?? "—"}
+              我的评级
+              <span className="vr_rate" style={{ color: gradeColor(mineRating.overall) }}>
+                {mineRating.overall === "?" ? "—" : mineRating.overall}
               </span>
             </h2>
             <div className="vr_line" />
-            <VideoAnalysisRadar data={radarPoints} />
+            {/* 成绩行：胜局＝级别名 + 级别色用时；未完成＝灰「未完成」+ 括号预计用时
+                （两条口径都与练习页结算面板同一份文案规则） */}
+            <div className="vr_score">
+              {playResult.won ? (
+                <>
+                  <span>{LEVEL_NAMES[level] ?? level}</span>
+                  <em className={"lv_" + level}>{(playResult.csec / 100).toFixed(2)}</em>
+                  <span>秒</span>
+                </>
+              ) : (
+                <>
+                  <span className="fail">未完成</span>
+                  {mineRating.estSec > 0 && (
+                    <span className="est">(预计 {mineRating.estSec.toFixed(2)}秒)</span>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="vr_wrap">
+              <VideoAnalysisRadar data={mineRating.points} fill />
+            </div>
+            <div className="gr_btns">
+              <button
+                type="button"
+                className="grb"
+                title="退出试玩，从头播放本录像的回放"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  exitPlay();
+                  onSeek(0); // 回放回到起点（练习页「查看回放」＝从头看）
+                  onResume();
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M8 5v14l11-7z" />
+                </svg>
+                查看回放
+              </button>
+              <a className="grb" href={`/video/download/${boardId}`} title="下载本录像文件">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="m7 10 5 5 5-5" />
+                  <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 15V3" />
+                </svg>
+                下载录像
+              </a>
+            </div>
           </div>
-        )}
+        ) : radarPoints ? (
+          <div className="vprfs_side">
+            <h2 className="vr_h">
+              录像评级
+              <span className="vr_rate" style={{ color: gradeColor(radarOverallProp ?? "?") }}>
+                {radarOverallProp ?? "—"}
+              </span>
+            </h2>
+            <div className="vr_line" />
+            <div className="vr_wrap">
+              <VideoAnalysisRadar data={radarPoints} />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body

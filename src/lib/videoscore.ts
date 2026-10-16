@@ -299,3 +299,69 @@ export const UNKNOWN_COLOR = "#636359";
 export function gradeColor(grade: string): string {
   return GRADE_COLORS[grade.replace(/[+-]$/, "")] ?? UNKNOWN_COLOR;
 }
+
+// ---------- 五轴雷达点组装（录像详情页 / 练习页结算 / 全屏试玩「我的评级」共用） ----------
+
+/**
+ * 单轴雷达点。原定义在 lib/videoanalysis.ts（那个模块挂着 prisma，只能服务端引）——
+ * 2026-10-16 迁到本模块：全屏试玩「我的评级」要在**客户端**算同一套点，
+ * 引不动 videoanalysis；videoanalysis 原样再导出一份，老 import 路径不变。
+ */
+export interface VideoAnalysisPoint {
+  key: MetricKey;
+  /** 轴名 */
+  name: string;
+  /** 原始值（综合轴即 STNB 原值） */
+  value: number;
+  /** 气泡里的格式化数值 */
+  disp: string;
+  /** 该维度超越了百分之多少的玩家（0-100） */
+  percent: number;
+  /** 等级（SSS~F，含 +/-） */
+  grade: string;
+}
+
+/**
+ * 五轴雷达点组装：综合（STNB 原值）置顶 + 速度 / 效率 / 精准 / 手速。
+ * 录像详情页右栏、练习页结算面板、全屏试玩「我的评级」**三处共用这一份**——
+ * 2026-10-14 副本分叉的教训（OnlinePlay 曾留本地副本，主模块修了口径副本没跟上）。
+ *
+ * @param values 本局原始指标值（stnb / bvs / ioe / corr / cls）
+ * @param group  该组（级别 × 模式）的分位基准：指标 → 9 档边界；缺项 / 空数组 → 该轴冻结为 "?"
+ * @param rateable 是否可评级（缺基准 / 零点击 / 完成度过低＝false）
+ *   —— false 时全轴 disp "—"、percent 0、grade "?"（雷达收缩到圆心的空图，值仍保留）
+ */
+export function radarPointsFrom(
+  values: Partial<Record<MetricKey, number>>,
+  group: Partial<Record<MetricKey, number[]>> | undefined,
+  rateable: boolean,
+): VideoAnalysisPoint[] {
+  const axis = (key: AxisMetricKey | "stnb", name: string, highIsBetter: boolean): VideoAnalysisPoint => {
+    const value = values[key] ?? 0;
+    const dist = group?.[key] ?? [];
+    return {
+      key,
+      name,
+      value,
+      disp: dist.length ? formatMetric(key, value) : "—",
+      percent: dist.length ? percentOf(value, dist, highIsBetter, key) : 0,
+      grade: dist.length ? gradeOf(value, dist, highIsBetter) : "?",
+    };
+  };
+  const all: VideoAnalysisPoint[] = [
+    axis("stnb", "综合", true),
+    ...AXIS_METRICS.map((d) => axis(d.key, d.name, d.highIsBetter)),
+  ];
+  return rateable ? all : all.map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
+}
+
+/**
+ * 五轴组内分位加权出的**综合评级**（STNB 占一半、四分项各 1/8，见 PERFORMANCE_WEIGHTS）。
+ * 全轴都无可评级（grade 全 "?")→ 返回 "?"（面板显示「—」）。
+ */
+export function radarOverall(points: VideoAnalysisPoint[]): string {
+  if (!points.some((p) => p.grade !== "?")) return "?";
+  const percents: Partial<Record<MetricKey, number>> = {};
+  for (const p of points) percents[p.key] = p.percent;
+  return gradeFromPercent(performanceOf(percents));
+}

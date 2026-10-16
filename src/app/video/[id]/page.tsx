@@ -80,6 +80,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
       realTimeMs={video.realTime}
       radarPoints={analysis?.points}
       radarOverall={analysis?.overall}
+      radarDists={analysis?.dists}
       level={level}
       boardStr={board}
     >

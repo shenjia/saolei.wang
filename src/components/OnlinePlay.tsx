@@ -44,18 +44,13 @@ import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwr
 import { replayCounts, MOUSE_CODE_TO_EV, type ReplayCounts } from "@/lib/replay-core";
 import { LEVEL_NAMES } from "@/lib/config";
 import { paintRangeFill } from "@/lib/paintRange";
-import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
+import type { VideoAnalysisPoint } from "@/lib/videoscore";
 import {
-  AXIS_METRICS,
   DIST_BUCKET_ALL,
-  formatMetric,
   gradeColor,
-  gradeFromPercent,
-  gradeOf,
-  percentOf,
-  performanceOf,
+  radarOverall,
+  radarPointsFrom,
 } from "@/lib/videoscore";
-import type { MetricKey } from "@/lib/videoscore";
 
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
 export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
@@ -1192,11 +1187,8 @@ export function OnlinePlay({
          权值见 lib/videoscore.ts PERFORMANCE_WEIGHTS）。
          无法评级（缺基准 / 完成度过低 / 无点击）时评级显示「—」 */
       const pts = computeRadarPoints(s);
-      const percents: Partial<Record<MetricKey, number>> = {};
-      for (const p of pts) percents[p.key] = p.percent;
-      const perfGrade = pts.some((p) => p.grade !== "?")
-        ? gradeFromPercent(performanceOf(percents))
-        : "?";
+      /* 综合评级走共享件（2026-10-16）：五轴组内分位加权，全屏试玩「我的评级」同一份算法 */
+      const perfGrade = radarOverall(pts);
       const lvName = (LEVEL_NAMES as Record<string, string>)[s.level] ?? "自定义";
       /* 预计完成用时（十一期）：Est RTime 同口径，半角括号整体小号亮灰 */
       const estSec = s.stats.solvedBv > 0 ? (s.csec / 100) * (s.bbbv / s.stats.solvedBv) : 0;
@@ -1316,34 +1308,9 @@ export function OnlinePlay({
       const group = metricDists[distLevel + (s.nf ? "_nf" : "")]?.[String(DIST_BUCKET_ALL)];
       const lowCompletion = s.bbbv <= 0 || s.stats.solvedBv / s.bbbv < 0.1;
       const rateable = !!group && !!s.stats.cl && !lowCompletion;
-      /* ① 四根分项轴 */
-      const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
-        const value = s.stats[def.key];
-        const dist = group?.[def.key] ?? [];
-        const percent = dist.length ? percentOf(value, dist, def.highIsBetter, def.key) : 0;
-        return {
-          key: def.key,
-          name: def.name,
-          value,
-          disp: formatMetric(def.key, value),
-          percent,
-          grade: dist.length ? gradeOf(value, dist, def.highIsBetter) : "?",
-        };
-      });
-      /* ② 综合轴置顶：STNB 原值 + 组内分位（与录像详情页同源，张老师 2026-10-14 晚定） */
-      const stnbValue = s.stats.stnb;
-      const stnbDist = group?.["stnb"] ?? [];
-      const composite: VideoAnalysisPoint = {
-        key: "stnb",
-        name: "综合",
-        value: stnbValue,
-        disp: formatMetric("stnb", stnbValue),
-        percent: stnbDist.length ? percentOf(stnbValue, stnbDist, true, "stnb") : 0,
-        grade: stnbDist.length ? gradeOf(stnbValue, stnbDist, true) : "?",
-      };
-      return rateable
-        ? [composite, ...subs]
-        : [composite, ...subs].map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
+      /* 五轴组装走 lib/videoscore.ts 的共享件（2026-10-16 起）：录像详情页右栏、
+         本结算面板、全屏试玩「我的评级」三处同一份实现，口径不再各写一遍 */
+      return radarPointsFrom(s.stats, group, rateable);
     }
     /* AVF 时间戳格式（Arbiter 惯例）：M.D.YYYY.HH:MM:SS:mmmm */
     function formatAvfTimestamp(d: Date): string {
