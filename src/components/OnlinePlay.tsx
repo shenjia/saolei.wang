@@ -227,6 +227,7 @@ export function OnlinePlay({
        「单击已开数字格＝双击」分支），速旗新增的是右键点已开数字也 chord（录 mr，
        不录 rc：引擎里 rc 落在已开格会挂起 rv、随后的 rr 计一次 wasted 右键，口径就歪了；
        mr 引擎无条件计 Double，与左键单击数字同口径）。
+       NF 与速旗互斥（2026-10-16 张老师定）：打开其一自动关闭另一者。
        localStorage 键沿用旧「自动双击」开关的 autoChord（平滑迁移） */
     let autoChord = false;
     /* 「显示统计」开关（2026-10-15 六期张老师定；2026-10-16 张老师定默认开）：左侧「数据统计」
@@ -292,6 +293,8 @@ export function OnlinePlay({
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
     let savedLv = "";
     loadSettings();
+    /* NF 与速旗互斥（2026-10-16 张老师定）：互斥上线前的存档可能两个同开，NF 优先 */
+    if (nf && autoChord) autoChord = false;
     let mines: Uint8Array | null = null, nums: Uint8Array | null = null;
     let state: Uint8Array = new Uint8Array(0); // 0=block 1=open 2=flag 3=question
     let started = false, over = false, startTs = 0, timerId: number | null = null;
@@ -2108,6 +2111,8 @@ export function OnlinePlay({
        激活显色（NF=黄 #fdc61d / 无猜=绿 #a6e22e / 速旗=默认黄，见 .gmode/.gmode_ng）、
        未激活灰。NF／无猜点击＝把内存开关取反 → saveSettings → 重开一局；
        速旗只影响之后的插旗/点数字行为，切换不重开当前局（原「自动双击」开关口径）。
+       NF 与速旗互斥（2026-10-16 张老师定）：打开其一自动关闭另一者——速旗的自动
+       chord 依赖插旗，NF 下无旗可插；速旗顶掉 NF 时对局模式已变，按 NF 切换口径重开。
        十期起设置浮窗里不再有 NF/无猜两项（行已删），快捷钮是唯一入口；
        「自动双击」设置开关同期撤出，改挂速旗快捷钮 */
     const btnNf = $("btn_nf") as HTMLButtonElement;
@@ -2120,6 +2125,7 @@ export function OnlinePlay({
     }
     on(btnNf, "click", () => {
       nf = !nf;
+      if (nf && autoChord) autoChord = false; // 互斥：开 NF 自动关速旗
       saveSettings();
       syncModeButtons();
       reset();
@@ -2132,6 +2138,12 @@ export function OnlinePlay({
     });
     on(btnSq, "click", () => {
       autoChord = !autoChord;
+      /* 互斥：开速旗自动关 NF——NF 被顶掉时对局禁旗语义已失效，须重开；
+         单纯切速旗（未顶掉 NF）仍不重开 */
+      if (autoChord && nf) {
+        nf = false;
+        reset();
+      }
       saveSettings();
       syncModeButtons();
     });
