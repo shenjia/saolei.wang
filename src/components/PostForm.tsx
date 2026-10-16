@@ -8,7 +8,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
@@ -46,15 +46,20 @@ export function PostForm({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const router = useRouter();
+  // 空内容红气泡后自动定位（2026-10-16 张老师要求）：标题框 / 正文画布（.wys contenteditable）
+  const titleRef = useRef<HTMLInputElement>(null);
+  const editorAreaRef = useRef<HTMLDivElement>(null);
 
   async function onSubmit() {
     // 空标题/空正文不再禁用按钮，点了给红色气泡（2026-10-16 张老师要求）
     if (!title.trim()) {
       toast("标题不能为空", "error");
+      titleRef.current?.focus();
       return;
     }
     if (!content.trim()) {
       toast("内容不能为空", "error");
+      editorAreaRef.current?.querySelector<HTMLElement>(".wys")?.focus();
       return;
     }
     setBusy(true);
@@ -100,6 +105,7 @@ export function PostForm({
       </div>
       <p className="frow">
         <input
+          ref={titleRef}
           type="text"
           placeholder="主题标题（100 字以内）"
           maxLength={100}
@@ -107,13 +113,15 @@ export function PostForm({
           onChange={(e) => setTitle(e.target.value)}
         />
       </p>
-      <RichEditor
-        initialContent={initialContent}
-        minHeight={300}
-        placeholder="直接输入正文，工具栏可插入表情与雷图"
-        onChange={setContent}
-        notify={toast}
-      />
+      <div ref={editorAreaRef}>
+        <RichEditor
+          initialContent={initialContent}
+          minHeight={300}
+          placeholder="直接输入正文，工具栏可插入表情与雷图"
+          onChange={setContent}
+          notify={toast}
+        />
+      </div>
       <p className="submit_row">
         <button className="lp_submit_btn" disabled={busy} onClick={onSubmit}>
           {postId ? "保存修改" : "发布主题"}

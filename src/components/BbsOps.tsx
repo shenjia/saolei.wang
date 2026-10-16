@@ -1,7 +1,7 @@
 // BBS 客户端交互：回帖表单 + 管理操作条 + 删帖/删回复
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
 import { RichEditor } from "./RichEditor";
@@ -45,6 +45,8 @@ export function ReplyForm({
    *  DOM 内容；重挂即清空画布、placeholder 复现——引用态已由 onQuoteCleared 先清） */
   const [formKey, setFormKey] = useState(0);
   const router = useRouter();
+  // 空内容红气泡后自动定位到正文画布（2026-10-16 张老师要求）
+  const editorAreaRef = useRef<HTMLDivElement>(null);
 
   if (locked) return <p className="text">主题已锁定，无法回复。</p>;
 
@@ -53,6 +55,7 @@ export function ReplyForm({
     // （2026-10-16 张老师要求，与发帖表单同口径）
     if (!content.trim()) {
       toast("内容不能为空", "error");
+      editorAreaRef.current?.querySelector<HTMLElement>(".wys")?.focus();
       return;
     }
     setBusy(true);
@@ -79,7 +82,7 @@ export function ReplyForm({
   }
 
   return (
-    <div className="reply_form">
+    <div className="reply_form" ref={editorAreaRef}>
       <RichEditor
         key={formKey}
         initialContent=""
