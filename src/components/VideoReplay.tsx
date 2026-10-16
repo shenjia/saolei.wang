@@ -742,7 +742,7 @@ export function VideoReplayProvider({
         setFlopUri(uri);
       }
     })();
-  }, [boardId, filepath, realTimeMs, uri]);
+  }, [boardId, filepath, realTimeMs, uri, notify]);
 
   const stop = useCallback(() => {
     engineRef.current?.stop();
@@ -954,7 +954,7 @@ function ReplayBar({
   onSeek,
   onResume,
   onFullscreen,
-  compact = false,
+  fsActive = false,
 }: {
   status: Status;
   stats: ReplayStats;
@@ -962,23 +962,22 @@ function ReplayBar({
   onPause: () => void;
   onSeek: (csec: number) => void;
   onResume: () => void;
+  /** 全屏按钮回调（页面态＝进全屏；全屏层内＝退出全屏继续播放） */
   onFullscreen?: () => void;
-  /** 全屏层内嵌形态：不显示全屏按钮（已在全屏中，Esc/遮罩退出） */
-  compact?: boolean;
+  /** 全屏态：按钮高亮、title 变「退出全屏」 */
+  fsActive?: boolean;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, wasPlaying: false, raf: 0, lastCsec: 0 });
   const total = stats.totalCsec;
   const pct = total > 0 ? Math.max(0, Math.min(1, stats.csec / total)) : 0;
   const posToCsec = (clientX: number) => {
-    const track = trackRef.current;
-    if (!track || total <= 0) return 0;
-    const r = track.getBoundingClientRect();
-    /* 轨道内衬 10px（.rb_rail 的 left/right），落点按内衬范围折算 */
-    const inner = 10;
-    const x = clientX - r.left - inner;
-    const w = r.width - inner * 2;
-    const ratio = w > 0 ? Math.max(0, Math.min(1, x / w)) : 0;
+    /* 轨道内衬即 .rb_rail（thumb/fill 都锚在 rail 里）：直接用 rail rect 折算，
+       100% 时 thumb 中心在 rail 右缘、半宽不出轨道（修尾部溢出） */
+    const rail = trackRef.current?.querySelector<HTMLElement>(".rb_rail");
+    if (!rail || total <= 0) return 0;
+    const r = rail.getBoundingClientRect();
+    const ratio = r.width > 0 ? Math.max(0, Math.min(1, (clientX - r.left) / r.width)) : 0;
     return Math.round(ratio * total);
   };
   /* 按帧合并拖动 seek（pointermove 频率高于帧率，逐事件重放会白费） */
@@ -1024,22 +1023,34 @@ function ReplayBar({
           </svg>
         )}
       </button>
-      {!compact && onFullscreen && (
+      {onFullscreen && (
         <button
           type="button"
-          className="rb_btn"
-          title="全屏播放"
-          aria-label="全屏播放"
+          className={"rb_btn" + (fsActive ? " active" : "")}
+          title={fsActive ? "退出全屏" : "全屏播放"}
+          aria-label={fsActive ? "退出全屏" : "全屏播放"}
           onClick={(e) => {
             e.stopPropagation(); /* 同上：不冒泡到棋盘退出 */
-            onFullscreen?.();
+            onFullscreen();
           }}
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-            <path d="M16 3h3a2 2 0 0 1 2 2v3" />
-            <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
-            <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+            {fsActive ? (
+              /* 退出态：四角向内收（收缩箭头语义） */
+              <>
+                <path d="M5 8V5h3" />
+                <path d="M19 8V5h-3" />
+                <path d="M5 16v3h3" />
+                <path d="M19 16v3h-3" />
+              </>
+            ) : (
+              <>
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+                <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </>
+            )}
           </svg>
         </button>
       )}
@@ -1075,10 +1086,12 @@ function ReplayBar({
           if (d.wasPlaying) onResume();
         }}
       >
+        {/* thumb 挂 rail 内：left 百分比锚 rail 宽（=轨道宽−左右内衬 10px），
+            两端 thumb 半宽 10px 恰好落在轨道边框内——修 100% 时超出容器 */}
         <div className="rb_rail">
           <div className="rb_fill" style={{ width: (pct * 100).toFixed(2) + "%" }} />
+          <div className="rb_thumb" style={{ left: (pct * 100).toFixed(2) + "%" }} />
         </div>
-        <div className="rb_thumb" style={{ left: (pct * 100).toFixed(2) + "%" }} />
       </div>
     </div>
   );
@@ -1163,12 +1176,24 @@ function ReplayFullscreen({
       if (wrapRef.current) wrapRef.current.style.setProperty("--vfz", String(zoomRef.current));
     }
   }, [fitZoom]);
+  /* 面板/评级与棋盘比例绑定（十一期张老师定）：--vfz-panel 恒等于棋盘 zoom，
+     下限 1.349（面板基准 12px×1.35≈16px 可读门槛；棋盘再小两栏也不缩成芝麻） */
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    el.style.setProperty("--vfz-panel", String(Math.max(1.349, zoomRef.current ?? 1)));
+  });
 
   /* 滚轮调比例（练习页口径：上滑放大、累计 100px 迈 0.1x、单事件封顶 5 格、停滚落盘） */
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     let dropT: number | undefined;
+    const applyZoom = (next: number) => {
+      zoomRef.current = next;
+      el.style.setProperty("--vfz", String(next));
+      el.style.setProperty("--vfz-panel", String(Math.max(1.349, next)));
+    };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       wheelAcc.current += e.deltaY;
@@ -1179,8 +1204,7 @@ function ReplayFullscreen({
       const cur = zoomRef.current ?? 1;
       const next = Math.max(VFS_MIN_ZOOM, Math.min(VFS_MAX_ZOOM, cur + dir * VFS_WHEEL_STEP_Z * Math.floor(steps)));
       if (next === cur) return;
-      zoomRef.current = next;
-      el.style.setProperty("--vfz", String(next));
+      applyZoom(next);
       window.clearTimeout(dropT);
       dropT = window.setTimeout(() => localStorage.setItem(VFS_ZOOM_LS, String(next)), 320);
     };
@@ -1198,18 +1222,24 @@ function ReplayFullscreen({
       const z = fitZoom();
       zoomRef.current = z;
       wrapRef.current?.style.setProperty("--vfz", String(z));
+      wrapRef.current?.style.setProperty("--vfz-panel", String(Math.max(1.349, z)));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [fitZoom]);
 
-  /* 镜像：rAF 逐帧把页面回放引擎的格子类名抄到 FS 棋盘 + 光标位置换算（rect 数学，
-     与页面 wrap 的偏移解耦）；paused 时 DOM 静止，抄写无副作用照跑省状态判断 */
+  /* 镜像：rAF 逐帧把页面回放引擎的格子类名抄到 FS 棋盘 + 光标位置换算。
+     ⚠️ Board 组件内部把 id 渲染成 `board_{id}`（FS 传 "fs_board_338799" → 实际
+     id="board_fs_board_338799"）——十期选择器写 #fs_board_* 从未匹配，棋盘一直
+     显示的是 boardStr 静态终局图（碰巧「看起来对」），回放中盘根本不同步。
+     ⚠️ 光标坐标系（十一期修）：两侧棋盘不在同一视口位置，视口差换算是错的；
+     正确参照系＝棋盘表本体——页面光标相对页面棋盘的比例 × FS 棋盘当前尺寸，
+     缩放级别（滚轮）变化后每帧重算自动同步。 */
   useEffect(() => {
     let raf = 0;
     const mirror = () => {
       const srcTable = document.querySelector<HTMLTableSectionElement>(`#board_${boardId} tbody`);
-      const dstTable = document.querySelector<HTMLTableSectionElement>(`#fs_board_${boardId} tbody`);
+      const dstTable = document.querySelector<HTMLTableSectionElement>(`#board_fs_board_${boardId} tbody`);
       if (srcTable && dstTable) {
         const srcRows = srcTable.rows;
         const dstRows = dstTable.rows;
@@ -1221,16 +1251,38 @@ function ReplayFullscreen({
           }
         }
       }
-      /* 光标：页面光标 rect → FS wrap 局部（除以 wrap 的 zoom，rect 已含缩放） */
       const srcCur = document.querySelector<HTMLElement>("#video_view .replay_cursor");
-      const fsWrap = document.querySelector<HTMLElement>(".vprfs_board_wrap");
       const dstCur = wrapRef.current?.querySelector<HTMLElement>(".replay_cursor");
-      if (srcCur && fsWrap && dstCur) {
+      const srcBoard = document.querySelector<HTMLElement>(`#board_${boardId}`);
+      const dstBoard = document.querySelector<HTMLElement>(`#board_fs_board_${boardId}`);
+      if (srcCur && dstCur && srcBoard && dstBoard) {
         const cr = srcCur.getBoundingClientRect();
-        const wr = fsWrap.getBoundingClientRect();
-        const z = zoomRef.current ?? 1;
-        dstCur.style.left = (cr.left - wr.left) / z + "px";
-        dstCur.style.top = (cr.top - wr.top) / z + "px";
+        const sr = srcBoard.getBoundingClientRect();
+        if (sr.width > 1 && cr.width > 0) {
+          /* 页面光标尖端相对页面棋盘**表格**的比例 → FS 表格上的落点。
+             ⚠️ 比例域用 table 而非 board div：事件坐标（16px/格）落在表格内，
+             表格相对 div 有 2px 边框偏移（页面引擎 off 同口径）；两侧同取 table
+             则偏移自消。FS 光标在 zoom 容器内：CSS left/top 会被 zoom 放大，
+             换算回 CSS 域除以 zoom（每帧实时取，滚轮缩放后自动同步）；
+             尖端锚 (0.5,1.21) 与页面引擎 TIP 口径一致。 */
+          const z = zoomRef.current ?? 1;
+          const srcTable = srcBoard.querySelector("table");
+          const dstTableEl = dstBoard.querySelector("table");
+          if (!srcTable || !dstTableEl) return;
+          const st = srcTable.getBoundingClientRect();
+          const dt = dstTableEl.getBoundingClientRect();
+          const tipX = cr.left + 0.5 * (cr.width / 12); // 尖端（宽=12×页面侧缩放）
+          const tipY = cr.top + 1.21 * (cr.height / 19);
+          const rx = (tipX - st.left) / st.width;
+          const ry = (tipY - st.top) / st.height;
+          /* 光标容器挂在 .vprfs_board_wrap（紧贴 board div 外框）：比例域是 table，
+             须补 table 相对 wrap 的渲染偏移（board div 2px 边框 × zoom）除回 CSS 域 */
+          const fsWrap = dstCur.parentElement?.getBoundingClientRect();
+          const offX = fsWrap ? (dt.left - fsWrap.left) / z : 0;
+          const offY = fsWrap ? (dt.top - fsWrap.top) / z : 0;
+          dstCur.style.left = offX + (rx * dt.width) / z - 0.5 + "px";
+          dstCur.style.top = offY + (ry * dt.height) / z - 1.21 + "px";
+        }
         dstCur.style.display = cr.width > 0 ? "block" : "none";
       }
       raf = requestAnimationFrame(mirror);
@@ -1272,7 +1324,8 @@ function ReplayFullscreen({
               onPause={onPause}
               onSeek={onSeek}
               onResume={onResume}
-              compact
+              onFullscreen={onExit}
+              fsActive
             />
           )}
         </div>

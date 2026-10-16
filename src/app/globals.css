@@ -7732,11 +7732,13 @@ html:has(#online_play) #footer {
   position: fixed;
   left: 0;
   top: 0;
-  width: 192px;
+  width: max-content; /* 十一期：宽度自适应内容（RTime 长值不折行不留空） */
+  min-width: 220px;
+  max-width: 300px;
   background: #49483e;
   border: 1px solid #656355;
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: 9px 13px;
   z-index: 5;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: left;
@@ -7744,11 +7746,11 @@ html:has(#online_play) #footer {
      左侧空间不足或面板高于「棋盘+控制条」整块时整体缩小，宁可小也不越界 */
 }
 .replay_panel .gr_title {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: bold;
   color: #e8e8e0;
-  padding-bottom: 4px;
-  margin-bottom: 4px;
+  padding-bottom: 5px;
+  margin-bottom: 6px;
   border-bottom: 1px solid #656355;
 }
 .replay_panel table {
@@ -7756,9 +7758,9 @@ html:has(#online_play) #footer {
   margin: 0 -6px;
 }
 .replay_panel td {
-  font: 11px/15px Arial, Helvetica, sans-serif;
+  font: 15px/21px Arial, Helvetica, sans-serif; /* 十一期张老师定：字体太小→11→15 */
   color: #939387;
-  padding: 1px 5px;
+  padding: 1px 6px;
   text-align: left;
   white-space: nowrap;
 }
@@ -7795,14 +7797,14 @@ html:has(#online_play) #footer {
   transform: translateY(-50%);
   z-index: 10;
   width: max-content;
-  max-width: 220px;
+  max-width: 260px;
   white-space: normal;
   background: #272822;
   color: #f8f8f2;
   border: 1px solid #656355;
   border-radius: 4px;
-  padding: 5px 8px;
-  font: 11px/15px Arial, Helvetica, sans-serif;
+  padding: 6px 9px;
+  font: 13px/18px Arial, Helvetica, sans-serif;
   text-align: left;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
@@ -7882,12 +7884,18 @@ html:has(#online_play) #footer {
 .rb_btn svg {
   display: block;
 }
+/* 全屏态按钮高亮（十一期张老师定：全屏中保留按钮并高亮，再点退出全屏继续播放） */
+.rb_btn.active {
+  border-color: #a6e22e;
+  color: #a6e22e;
+  background: #3b3a32;
+}
 /* 当前时间：站绿（2026-10-16 十期张老师定）；总时间已去（标题上有）。
    ⚠️ (0,2,1) 提权：legacy .video_cell span (0,1,1) 且 legacy 后加载，平级必输 */
 body .replay_bar .rb_time {
   flex: 0 0 auto;
   margin: 0 3px;
-  min-width: 48px;
+  min-width: 56px;
   height: 34px;
   display: flex;
   align-items: center;
@@ -7895,8 +7903,9 @@ body .replay_bar .rb_time {
   border: 1px solid #49483e;
   border-radius: 6px;
   background: #33322b;
-  padding: 0 10px;
-  font: 14px/1 "Courier New", Courier, monospace;
+  padding: 0 12px;
+  /* 十一期张老师定：绿色时间加粗加大 */
+  font: bold 16px/1 "Courier New", Courier, monospace;
   color: #a6e22e;
 }
 /* 轨道＝翻页卡片同款：34 高、#33322b 底、#49483e 边、6px 圆角；
@@ -7936,13 +7945,12 @@ body .replay_bar .rb_time {
 .rb_thumb {
   position: absolute;
   top: 50%;
-  width: 20px;
-  height: 20px;
-  margin: -10px 0 0 -10px;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px; /* 中心锚点：left % 落 rail 上的圆心 */
   border: 1px solid #8a6d1a;
-  border-radius: 3px;
+  border-radius: 50%; /* 十一期张老师定：圆形滑块 */
   background: #fdc61d;
-  color: #333;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
   cursor: grab;
 }
@@ -8639,19 +8647,20 @@ html.op-fakefs #header {
   position: relative;
   z-index: 1; /* 三栏内容整体压过遮罩；遮罩四周仍可点退出 */
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* 十一期张老师定：两面板与游戏区居顶对齐 */
   justify-content: center;
-  gap: 14px;
+  gap: 18px;
+  margin-top: 24px; /* 顶部留一手呼吸（遮罩可点区） */
   max-width: calc(100vw - 16px);
-  max-height: calc(100vh - 16px);
+  max-height: calc(100vh - 40px);
 }
-/* 左面板：自然尺寸，不吃滚轮 zoom（深底浮在遮罩上，阴影加深一档）。
-   ⚠️ 必须覆盖 .replay_panel 的 fixed 定位（fixed 会脱离层布局、盖住遮罩左侧） */
+/* 左面板：⚠️ 必须覆盖 .replay_panel 的 fixed 定位（fixed 会脱离层布局、盖住遮罩）；
+   十一期：zoom 绑定棋盘比例（--vfz-panel，下限 1.349 保可读） */
 .vprfs_panel.replay_panel {
-  position: absolute; /* 层内绝对——但为保持 flex 三栏布局改用 static 重置 */
   position: static;
   left: auto;
   top: auto;
+  zoom: var(--vfz-panel, 1.35);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 /* 中栏：棋盘 + 控制条整块按 --vfz 缩放 */
@@ -8672,8 +8681,10 @@ html.op-fakefs #header {
 .vprfs_center .rb_track {
   min-width: 120px;
 }
-/* 右栏：评级卡（雷达与右栏同源）；窄屏隐藏 */
+/* 右栏：评级卡（雷达与右栏同源）；窄屏隐藏。
+   十一期：zoom 绑定棋盘比例（--vfz-panel） */
 .vprfs_side {
+  zoom: var(--vfz-panel, 1.35);
   width: 222px;
   background: #3b3a32;
   border: 1px solid #656355;
