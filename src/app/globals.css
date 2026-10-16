@@ -6878,8 +6878,8 @@ button.msg_cancel:hover {
   100% { transform: rotate(0deg); }
 }
 /* 右上图标按钮 hover 气泡（2026-10-15 九期张老师定）：文案与设置浮窗对应开关一致，
-   观感同 .gs_row .tip（暗底/描边/小三角）；按钮贴视口右侧 → 气泡右对齐、
-   弹在按钮下方（设置行是弹在行下方，这里同理），4px 间隙够小不致 hover 闪烁。
+   观感同 .gs_row .tip（暗底/描边/小三角）。2026-10-16 张老师定：弹在按钮**正上方**
+   且与按钮水平居中对齐（小三角随之下移指向按钮），不再贴右下弹。
    2026-10-16 v8c 建议气泡（.fs_suggest 按需挂类）已废；v8d 起五颗钮全体常驻：
    设置＝「设置」、全屏＝「全屏沉浸式体验」+ 三颗模式钮原有说明 */
 #online_play .gicon {
@@ -6888,8 +6888,9 @@ button.msg_cancel:hover {
 #online_play .gicon .tip {
   display: none;
   position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
   white-space: nowrap;
   background: #272822;
   border: 1px solid #656355;
@@ -6905,13 +6906,28 @@ button.msg_cancel:hover {
 #online_play .gicon .tip::after {
   content: "";
   position: absolute;
-  bottom: 100%;
-  right: 11px;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
   border: 5px solid transparent;
-  border-bottom-color: #656355;
+  border-top-color: #656355;
 }
 #online_play .gicon:hover .tip {
   display: block;
+}
+/* 窄屏（≤880，与站内移动端断点一致）兜底：按钮贴近视口右缘，居中弹会被裁出屏
+   （实测 700px 宽全屏钮溢出 11px）→ 改贴按钮右缘向左展开，保完整可见 */
+@media (max-width: 880px) {
+  #online_play .gicon .tip {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  #online_play .gicon .tip::after {
+    left: auto;
+    right: 11px;
+    transform: none;
+  }
 }
 /* ---- 设置浮窗（2026-10-14 二期）：齿轮点开，绝对定位挂在标题行下缘右侧 ---- */
 #online_play .gsettings {
