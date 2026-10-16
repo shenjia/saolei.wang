@@ -8,7 +8,7 @@ import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { Board } from "./Board";
 
 export function VideoDetailCell({ video }: { video: VideoListItem }) {
-  const scores = videoScores(video.board3bv, video.realTime);
+  const scores = videoScores(video.board3bv, video.realTime, video.level as VideoLevel);
   return (
     <div className="video_cell box">
       <table cellPadding={0} cellSpacing={0}>

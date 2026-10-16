@@ -2,12 +2,17 @@
 // 本模块保持「纯函数、零副作用」（不碰 prisma），服务端与客户端组件可共用；
 // videoScores 2026-09-24 从 lib/queries 迁入，使录像行渲染件能被首页录像版块（客户端）复用。
 
-import { MIN_3BV_FOR_3BVS } from "./config";
+import { MIN_3BV_FOR_3BVS, type VideoLevel } from "./config";
 
 /** 录像成绩换算（移植 VideoModel::getScores）：time=real_time(ms)，3bvs=board_3bv×1e6/real_time，
- *  3BV 小于阈值时记负值（渲染层据此显示删除线，表示成绩不被承认） */
-export function videoScores(board3bv: number, realTime: number): { time: number; "3bvs": number } {
-  const sign = board3bv >= MIN_3BV_FOR_3BVS ? 1 : -1;
+ *  3BV 小于该级别限界（MIN_3BV_FOR_3BVS，2026-10-16 起初级 >10 才有效）时记负值
+ *  （渲染层据此显示删除线，表示成绩不被承认） */
+export function videoScores(
+  board3bv: number,
+  realTime: number,
+  level: VideoLevel
+): { time: number; "3bvs": number } {
+  const sign = board3bv >= MIN_3BV_FOR_3BVS[level] ? 1 : -1;
   return {
     time: realTime,
     "3bvs": realTime > 0 ? sign * Math.round((board3bv * 1000000) / realTime) : 0,

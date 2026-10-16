@@ -20,7 +20,7 @@ export function VideoHot({ videos }: { videos: VideoListItem[] }) {
           {videos.map((v) => {
             const lv = v.level as VideoLevel;
             const lvCls = LEVEL_CLS[lv] ?? "";
-            const scores = videoScores(v.board3bv, v.realTime);
+            const scores = videoScores(v.board3bv, v.realTime, lv);
             return (
               <tr key={v.id}>
                 <td className="user">

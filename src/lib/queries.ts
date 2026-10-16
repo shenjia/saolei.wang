@@ -589,7 +589,10 @@ function videoListConds(opts: {
   if (author) conds.push(`v.user = ${BigInt(author)}`);
   if (win) conds.push(`vi.real_time >= ${win[0]} AND vi.real_time < ${win[1]}`);
   if (order === "time" || order === "3bvs") conds.push(`vi.real_time > 0`);
-  if (order === "3bvs") conds.push(`vi.board_3bv >= ${MIN_3BV_FOR_3BVS}`);
+  if (order === "3bvs")
+    conds.push(
+      `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
+    );
   if (order === "comments") conds.push(`vs.comments > 0`);
   if (order === "clicks") conds.push(`vs.clicks > 0`);
   return { joins, where: conds.length ? `WHERE ${conds.join(" AND ")}` : "", selectId };
@@ -620,7 +623,8 @@ const getVideoListJoinCount = unstable_cache(
  * - order=id（默认，上传时间倒序）且无时间搜索：保持原索引路径（video 主键反扫 / 成绩表 id 倒序）；
  * - 其余排序或时间成绩搜索：统一 join 查询（驱动表与 ORDER BY 按排序键选索引，见 videoListConds）。
  * 时间成绩搜索：parseVideoTimeWindow 的 ±5ms 显示舍入窗口（匹配所有显示相同的成绩）。
- * 各排序方向：time 升序（快在前）、3bv 降序（大在前）、3bvs 降序（快在前，排除 3BV<4）、
+ * 各排序方向：time 升序（快在前）、3bv 降序（大在前）、3bvs 降序（快在前，排除运气盘：
+ * 初级 3BV≤10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）、
  * comments/clicks 降序（多在前，保留原 >0 过滤口径）。
  */
 export async function getVideoList(opts: {

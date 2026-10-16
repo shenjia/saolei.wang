@@ -85,7 +85,7 @@ export function VideoRowLine({
   video: VideoListItem;
   highlight?: VideoHighlight;
 }) {
-  const scores = videoScores(v.board3bv, v.realTime);
+  const scores = videoScores(v.board3bv, v.realTime, v.level as VideoLevel);
   const lvCls = LEVEL_CLS[v.level as VideoLevel] ?? "";
   return (
     <tr>

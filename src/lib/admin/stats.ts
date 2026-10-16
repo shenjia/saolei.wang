@@ -9,7 +9,7 @@
 
 import { prisma } from "@/lib/db";
 import { getTitleCounts, rankedOnly } from "@/lib/queries";
-import { TITLES, TITLE_THRESHOLDS, VIDEO_STATUS, VIDEO_LEVELS } from "@/lib/config";
+import { TITLES, TITLE_THRESHOLDS, VIDEO_STATUS, VIDEO_LEVELS, MIN_3BV_FOR_3BVS } from "@/lib/config";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -349,7 +349,7 @@ export async function getRecordCurve(
               ${agg}(${expr}) OVER (ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) run
        FROM video v JOIN video_info vi ON vi.id = v.id
        WHERE v.level = ? AND v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0
-         ${order === "3bvs" ? "AND vi.board_3bv >= 4" : ""}
+         ${order === "3bvs" ? `AND vi.board_3bv >= ${MIN_3BV_FOR_3BVS[level]}` : ""}
      ) t WHERE val ${cmp} run ORDER BY ct`,
     level
   );

@@ -247,7 +247,7 @@ export type VideoLevel = (typeof VIDEO_LEVELS)[number];
 
 // 录像列表排序列（2026-10-15 张老师需求：表头点击排序，去掉右侧排序 tabs）。
 // id=上传时间（默认，倒序）；time=成绩（升序，快在前）；3bv=3BV（降序，大在前）；
-// 3bvs=3BV/s（降序，快在前，排除 3BV<4 运气盘）；comments/clicks=评论/点击（降序，多在前）
+// 3bvs=3BV/s（降序，快在前，排除运气盘：初级 3BV≤10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）；comments/clicks=评论/点击（降序，多在前）
 export const VIDEO_LIST_ORDERS = ["id", "time", "3bv", "3bvs", "comments", "clicks"] as const;
 export type VideoListOrder = (typeof VIDEO_LIST_ORDERS)[number];
 
@@ -293,8 +293,10 @@ export const VIDEO_STATUS_NAMES: Record<number, string> = {
   20: "已通过",
 };
 
-// 3BV 小于该值时 3BV/s 成绩不被承认（显示删除线）
-export const MIN_3BV_FOR_3BVS = 4;
+// 3BV 小于该值时 3BV/s 成绩不被承认（显示删除线）。
+// 2026-10-16 张老师：初级限界由 3BV>=4 收紧为 3BV>10（即 >=11）；中/高级维持 4
+// （上传下限 30/100 本就高于 4，该值对中/高级实际不约束）。
+export const MIN_3BV_FOR_3BVS: Record<VideoLevel, number> = { beg: 11, int: 4, exp: 4 };
 
 // 无效 3BV/s 的 hover 气泡文案（2026-10-13 张老师要求：hover 删除线成绩弹气泡说明无效原因）。
 // 录像详情页与排行表共用同一条文案，改文案只改这里。

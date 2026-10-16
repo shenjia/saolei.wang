@@ -62,7 +62,7 @@ function userScoresTable(tx: Tx, nf: boolean): UserScoresDelegate {
   return (nf ? tx.userScoresNf : tx.userScores) as unknown as UserScoresDelegate;
 }
 
-/** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time（3BV<4 记负，入 video_scores 时取 max(0)） */
+/** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time（3BV 低于级别限界记负——2026-10-16 起初级 >10 才有效，入 video_scores 时取 max(0)） */
 interface ReviewVideo {
   id: number;
   level: VideoLevel;
@@ -76,7 +76,7 @@ interface ReviewVideo {
 
 /** VideoScores::update —— 把录像写入对应级别成绩表 */
 async function upsertVideoScores(tx: Tx, v: ReviewVideo, nf: boolean) {
-  const s = videoScores(v.board3bv, v.realTime);
+  const s = videoScores(v.board3bv, v.realTime, v.level);
   const table = videoScoresTable(tx, v.level, nf);
   await table.upsert({
     where: { id: BigInt(v.id) },
@@ -146,7 +146,7 @@ async function userScoresOnInsert(
   const existing = (await table.findUnique({ where: { id: BigInt(v.user) } })) as UserScoresRow | null;
   const original = rowToNumbers(existing);
   const merged = { ...original };
-  const s = videoScores(v.board3bv, v.realTime);
+  const s = videoScores(v.board3bv, v.realTime, v.level);
 
   // updateScore：时间更小 / 3BV/s 更大才更新（移植 insertVideo 的比较逻辑）
   const curTime = merged[F(v.level, "time")] ?? 0;
@@ -191,7 +191,7 @@ async function userScoresOnRemove(tx: Tx, v: ReviewVideo, nf: boolean): Promise<
     if (nextId) {
       const nv = await loadReviewVideo(tx, nextId);
       if (nv) {
-        const s = videoScores(nv.board3bv, nv.realTime);
+        const s = videoScores(nv.board3bv, nv.realTime, nv.level);
         merged[F(v.level, order)] = s[order];
         merged[F(v.level, order, "Video")] = nv.id;
         merged[F(v.level, order, "Date")] = nv.createTime;
@@ -331,7 +331,7 @@ export async function reviewVideo(
 
       // 上传录像动态（2026-09-24 张老师要求：每盘通过审核的录像都产生动态，
       // 不再只有传满三级入伍/破纪录才发；时间取录像上传时间，首页新闻流可见）
-      const vs = videoScores(rv.board3bv, rv.realTime);
+      const vs = videoScores(rv.board3bv, rv.realTime, rv.level);
       await publishNews({
         tx,
         type: NEWS_TYPE.VIDEO,

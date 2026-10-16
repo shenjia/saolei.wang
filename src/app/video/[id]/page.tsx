@@ -49,8 +49,8 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
     (async () => uniqueVideoAction(videoId, "click", clientIp(await headers())))(),
   ]);
 
-  const scores = videoScores(video.board3bv, video.realTime);
   const level = video.level as VideoLevel;
+  const scores = videoScores(video.board3bv, video.realTime, level);
   // 标题成绩按级别配色（2026-10-13 张老师要求：初级绿 / 中级橙 / 高级金，与录像列表 hover 同色阶）
   const lvCls = LV_CLS[level] ?? "";
   // 棋盘空（RMV 旧上传没解析器，board 没落库）→ 从文件现解析兜底并回写库。
