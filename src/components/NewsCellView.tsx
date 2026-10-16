@@ -104,24 +104,23 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
               {/* od 非法时按 3bvs 兜底显示（历史脏数据防御） */}
               {(d.od ?? "") === "time" ? ORDER_NAMES.time : ORDER_NAMES["3bvs"]}
             </span>
-            {/* 新成绩统一金色（2026-10-14 张老师定：三级分色视觉太乱，撤掉；
-                首创纪录（创造了）的新成绩也从灰改金，与刷新纪录同语言。
-                金色由 legacy #news .score{color:#fdc61a} 提供，无需自定义规则 */}
+            {/* 新成绩配色（2026-10-16 四轮张老师试色）：亮灰 #b1b1a4 加粗（record_score），
+                提升值金 #fdc61a——颜色对调试验轮；「创造了」首创行同亮灰保持一致。
+                首创行此前 2026-10-14 曾定金色，如要回退只改本注释与 CSS 即可 */}
             {(d.or ?? 0) > 0 ? (
               <>
-                {/* 2026-10-16 张老师定：新成绩提到箭头前（金粗可点，样式沿用 #news .score），
-                    箭头后改放绝对提升值（formatDelta：时间负=更快、3BV/s +=更高） */}
-                <Link href={`/video/${news.reference}`} target="_blank" className="score">
+                {/* 2026-10-16 张老师定：新成绩在前可点，后跟绝对提升值
+                    （formatDelta：时间负=更快、3BV/s +=更高；三轮已去箭头） */}
+                <Link href={`/video/${news.reference}`} target="_blank" className="score record_score">
                   {formatScore(d.od ?? "time", d.cr!)}
                 </Link>
-                {/* record_extra：宽度不够时整段隐藏（提升值），只留新成绩避免换行。
-                    2026-10-16 三轮张老师定：去掉绿色箭头，提升值字号变小、底端对齐 */}
+                {/* record_extra：宽度不够时整段隐藏（提升值），只留新成绩避免换行 */}
                 <span className="record_extra" ref={extraRef}>
                   <span className="delta">（{formatDelta(d.od ?? "time", d.or!, d.cr!)}）</span>
                 </span>
               </>
             ) : (
-              <Link href={`/video/${news.reference}`} target="_blank" className="score">
+              <Link href={`/video/${news.reference}`} target="_blank" className="score record_score">
                 {formatScore(d.od ?? "time", d.cr!)}
               </Link>
             )}
