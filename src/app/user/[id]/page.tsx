@@ -247,7 +247,7 @@ export default async function UserViewPage({
               </tbody>
             </table>
             <div className="rank_label">
-              <Link href="/titles" title="军衔体系">
+              <Link href="/titles" title="称号体系">
                 <RankBadge title={detail.title} size={72} />
                 <span className="rank_name" style={{ color: TITLE_COLORS[detail.title] }}>
                   {detail.title}

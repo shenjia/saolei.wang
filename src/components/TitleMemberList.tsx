@@ -146,7 +146,7 @@ export function TitleMemberList({
           <tr>
             <th>排名</th>
             <th>姓名</th>
-            <th>军衔</th>
+            <th>称号</th>
             {isReserve ? <th>注册时间</th> : COLS.map((c) => <th key={c.by}>{c.label}</th>)}
           </tr>
         </thead>

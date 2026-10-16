@@ -1,5 +1,5 @@
 // 管理后台 · 排行与荣誉（2026-09-24）
-// 排行快照（进步榜数据源）、军衔阈值体系——主站展示层的「数据地基」。
+// 排行快照（进步榜数据源）、称号阈值体系——主站展示层的「数据地基」。
 // 2026-10-13 张老师要求：每日一星功能整体下线，相关卡片与操作已移除。
 
 import Link from "next/link";
@@ -47,8 +47,8 @@ export default async function AdminRankPage() {
           foot={`最新快照日期 ${snapshot.latest}`}
         />
         <Kpi label="快照累计天数" value={snapshot.days} unit="天" tone="cyan" foot="进步榜有效数据天数" />
-        <Kpi label="上榜玩家" value={totalRanked} tone="yellow" foot="有高级成绩（SUB 军衔制）" />
-        <Kpi label="最高军衔" value={titles?.rows[0]?.count ?? 0} unit="人大元帅" tone="purple" foot="SUB35 绝对阈值制" />
+        <Kpi label="上榜玩家" value={totalRanked} tone="yellow" foot="有高级成绩（SUB 称号制）" />
+        <Kpi label="最高称号" value={titles?.rows[0]?.count ?? 0} unit="人大元帅" tone="purple" foot="SUB35 绝对阈值制" />
       </div>
 
       <AdminCard title="排行快照">
@@ -70,13 +70,13 @@ export default async function AdminRankPage() {
         </div>
       </AdminCard>
 
-      <AdminCard title="军衔阈值体系" tight more={titles ? `颁布于 ${formatDate(titles.createTime, "Y-n-j")}` : "无分布数据"}>
+      <AdminCard title="称号阈值体系" tight more={titles ? `颁布于 ${formatDate(titles.createTime, "Y-n-j")}` : "无分布数据"}>
         <div className="admin_scroll">
           <table className="admin_table">
             <thead>
               <tr>
                 <th className="c">序</th>
-                <th>军衔</th>
+                <th>称号</th>
                 <th className="num">高级时间上限（秒）</th>
                 <th className="num">当前人数</th>
                 <th className="c">徽章</th>
@@ -97,7 +97,7 @@ export default async function AdminRankPage() {
               {(!titles || titles.rows.length === 0) && (
                 <tr>
                   <td colSpan={5}>
-                    <div className="admin_empty">distribution 表没有军衔阈值数据</div>
+                    <div className="admin_empty">distribution 表没有称号阈值数据</div>
                   </td>
                 </tr>
               )}

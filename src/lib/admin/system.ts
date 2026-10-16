@@ -32,7 +32,7 @@ const TABLES: [string, string][] = [
   ["rank_snapshot", "排行快照"],
   ["admin_log", "后台操作日志"],
   ["donate", "赞助"],
-  ["distribution", "军衔阈值"],
+  ["distribution", "称号阈值"],
 ];
 
 /** 各表行数（information_schema 一次取，比逐表 COUNT(*) 快得多） */

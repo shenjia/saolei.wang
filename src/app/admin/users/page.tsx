@@ -109,7 +109,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 <th>玩家</th>
                 <th>账号</th>
                 <th>地区</th>
-                <th>军衔</th>
+                <th>称号</th>
                 <th className="num">总计时间</th>
                 <th className="num">录像</th>
                 <th className="c">角色</th>

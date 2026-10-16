@@ -55,7 +55,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
 
       <div className="admin_kpis">
         <div className="admin_kpi green">
-          <div className="label">军衔</div>
+          <div className="label">称号</div>
           <div className="value" style={{ fontSize: 20 }}>
             <TitleBadge title={u.title} />
           </div>

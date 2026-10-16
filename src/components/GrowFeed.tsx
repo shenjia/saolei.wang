@@ -148,7 +148,7 @@ export function GrowFeed({
           <tr>
             <th>排名</th>
             <th>姓名</th>
-            <th>军衔</th>
+            <th>称号</th>
             {RANKING_COLS.map((c) => (
               <th key={c.by}>{c.label}</th>
             ))}

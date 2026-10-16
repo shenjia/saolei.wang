@@ -248,7 +248,7 @@ export default async function AdminDashboard() {
           </div>
         </AdminCard>
 
-        <AdminCard title="军衔分布" more={<Link href="/admin/rank">军衔阈值 →</Link>}>
+        <AdminCard title="称号分布" more={<Link href="/admin/rank">称号阈值 →</Link>}>
           <BarList items={titleItems} />
         </AdminCard>
       </div>
@@ -347,7 +347,7 @@ export default async function AdminDashboard() {
               <thead>
                 <tr>
                   <th>玩家</th>
-                  <th>军衔</th>
+                  <th>称号</th>
                   <th className="num">总计</th>
                   <th>注册</th>
                 </tr>
