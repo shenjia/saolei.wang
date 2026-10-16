@@ -1,5 +1,5 @@
-// 录像离线重放引擎：mvf/avf 二进制 → 事件流重放 → 六维技术指标
-// 数据源：站内现有解析器（src/lib/{mvf,avf,rawvf}.ts），与上传校验 / 在线玩完全同源，
+// 录像离线重放引擎：mvf/avf/rmv 二进制 → 事件流重放 → 六维技术指标
+// 数据源：站内现有解析器（src/lib/{mvf,avf,rmv,rawvf}.ts），与上传校验 / 在线玩完全同源，
 // 保证「页面看到的指标」与「录像文件里的真实操作」一致。
 //
 // 为什么必须重放：avf/mvf 头部只给了 Time / 3BV / Mode，没有总点击数、有效点击数，
@@ -22,6 +22,7 @@
 
 import { mvfToRawvf } from "./mvf";
 import { avfToRawvf } from "./avf";
+import { rmvToRawvf } from "./rmv";
 import { formatRawvf, type ParsedVideo } from "./rawvf";
 
 /* 指标定义 / 分位评级 / 等级配色已拆到 lib/videoscore.ts（纯函数，客户端可直接引）。
@@ -99,7 +100,14 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 export function parseVideoBinary(buf: Uint8Array, ext: string): ParsedVideo | null {
   try {
     const b: Buffer = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
-    const lines = ext === "avf" ? avfToRawvf(b) : ext === "mvf" ? mvfToRawvf(b) : null;
+    const lines =
+      ext === "avf"
+        ? avfToRawvf(b)
+        : ext === "mvf"
+          ? mvfToRawvf(b)
+          : ext === "rmv"
+            ? rmvToRawvf(b)
+            : null;
     return lines ? formatRawvf(lines) : null;
   } catch {
     // 少数历史文件残缺（实测跑批每千余盘遇到一两个 mvf 提前 EOF），直接算无指标，不中断跑批

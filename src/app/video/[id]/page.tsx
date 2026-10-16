@@ -23,6 +23,7 @@ import { CommentForm, CommentList } from "@/components/Comments";
 import { VideoReplayProvider, VideoReplayBoard, VideoReplayButton } from "@/components/VideoReplay";
 import { VideoAnalysisRadar } from "@/components/VideoAnalysis";
 import { getVideoAnalysis } from "@/lib/videoanalysis";
+import { ensureVideoBoard } from "@/lib/videometrics";
 // 综合评级的等级配色（与雷达图同一份，统一在 videoscore.ts 维护）
 import { gradeColor } from "@/lib/videoscore";
 import { VIDEO_STATUS } from "@/lib/config";
@@ -52,6 +53,12 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
   const level = video.level as VideoLevel;
   // 标题成绩按级别配色（2026-10-13 张老师要求：初级绿 / 中级橙 / 高级金，与录像列表 hover 同色阶）
   const lvCls = LV_CLS[level] ?? "";
+  // 棋盘空（RMV 旧上传没解析器，board 没落库）→ 从文件现解析兜底并回写库。
+  // 与 metrics 缺行自愈同一思路；解析不出维持原样（棋盘不显示但页面不 500）。
+  let board = video.board;
+  if (!board) {
+    board = (await ensureVideoBoard(video.id)) ?? "";
+  }
   // 2026-10-14 张老师需求：本局六维表现雷达。10-16 张老师改定：待审只是合法性待确认，
   // 不应影响录像分析——屏蔽（status=0）才不显示
   const analysis =
@@ -94,7 +101,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             </span>
           </h2>
           <div className="info">
-            <VideoReplayBoard id={video.id} level={level} board={video.board} />
+            <VideoReplayBoard id={video.id} level={level} board={board} />
             <p>
               {video.author && (
                 <>

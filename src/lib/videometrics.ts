@@ -17,7 +17,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "./db";
-import { analyzeVideo } from "./videoradar";
+import { analyzeVideo, parseVideoBinary } from "./videoradar";
 import { VIDEO_STATUS } from "./config";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
@@ -112,4 +112,31 @@ export function ensureVideoMetrics(videoId: number): Promise<void> {
       /* 后置链路失败放行：缺一行最多是该盘没有雷达图，不影响任何主流程 */
     })
   );
+}
+
+/**
+ * 确保该录像的棋盘串（video_info.board）存在——空则从文件现解析并回写。
+ * 背景：RMV 上传时期站内无解析器，board 落库为空串（地图不显示）；
+ * rmv.ts 上线后可现解析。详情页调用；解析不出/失败返回 null（棋盘留空，页面不 500）。
+ */
+export async function ensureVideoBoard(videoId: number): Promise<string | null> {
+  try {
+    const info = await prisma.videoInfo.findUnique({
+      where: { id: BigInt(videoId) },
+      select: { filepath: true, board: true },
+    });
+    if (!info || (info.board !== null && info.board !== "")) return info?.board ?? null;
+    const buf = readVideoFile(info.filepath);
+    if (!buf) return null;
+    const ext = info.filepath.split(".").pop()?.toLowerCase() ?? "";
+    const v = parseVideoBinary(buf, ext);
+    if (!v || !v.board || v.board.length !== v.width * v.height) return null;
+    await prisma.videoInfo.update({
+      where: { id: BigInt(videoId) },
+      data: { board: v.board },
+    });
+    return v.board;
+  } catch {
+    return null;
+  }
 }

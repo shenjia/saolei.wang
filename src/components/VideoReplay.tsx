@@ -3,8 +3,9 @@
 // 录像详情页原地回放（2026-10-15 张老师需求：点播放后棋盘原地进行回放，
 // 复用在线练习自研回放的引擎口径——事件重演 + 光标插值 + 进即自动播完（固定 1x）。
 //
-// 数据：avf/mvf 解析器（与上传页浏览器端同一套，Uint8Array 入参，不碰 Buffer）；
-// rmv / 解析失败 / 尺寸不符 → 兜底懒挂 flop 播放器（playFlop 全屏播放）。
+// 数据：avf/mvf/rmv 解析器（与上传页浏览器端同一套，Uint8Array 入参，不碰 Buffer；
+// ⚠️ rmv.ts 的 getNum 走 Uint8Array 直读不依赖 Buffer，浏览器端可用）；
+// 解析失败 / 尺寸不符 → 兜底懒挂 flop 播放器（playFlop 全屏播放）。
 //
 // 事件应用口径（2026-10-16 四轮修正：flop 官方引擎源码 1:1 移植——已在 Node 原真运行
 // flop webpack 模块作 gold standard 逐事件对照，26 判例全对齐；此前二/三轮的
@@ -31,6 +32,7 @@ import { FlopSprites } from "./FlopSprites";
 import { FlopPlayer, playFlop } from "./FlopPlayer";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvf } from "@/lib/mvf";
+import { rmvToRawvf } from "@/lib/rmv";
 import { formatRawvf } from "@/lib/rawvf";
 import type { VideoLevel } from "@/lib/config";
 
@@ -53,11 +55,18 @@ interface ReplayData {
   marks: boolean;
 }
 
-/** avf/mvf 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底） */
+/** avf/mvf/rmv 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底） */
 function parseReplayData(buf: Uint8Array, ext: string): ReplayData | null {
   let lines: string[] | null = null;
   try {
-    lines = ext === "avf" ? avfToRawvf(buf) : ext === "mvf" ? mvfToRawvf(buf) : null;
+    lines =
+      ext === "avf"
+        ? avfToRawvf(buf)
+        : ext === "mvf"
+          ? mvfToRawvf(buf)
+          : ext === "rmv"
+            ? rmvToRawvf(buf)
+            : null;
   } catch {
     return null;
   }
@@ -414,8 +423,8 @@ export function VideoReplayProvider({
     const cols = rows ? (tbody as HTMLTableSectionElement).rows[0].cells.length : 0;
     if (!rows || !cols) return;
     const ext = (filepath.split(".").pop() || "").toLowerCase();
-    if (ext !== "avf" && ext !== "mvf") {
-      // rmf/rmv 等站内无解析器的格式 → flop 播放器兜底
+    if (ext !== "avf" && ext !== "mvf" && ext !== "rmv") {
+      // rmf 等站内无解析器的格式 → flop 播放器兜底
       setFlopUri(uri);
       return;
     }
