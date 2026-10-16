@@ -146,6 +146,21 @@ export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]
   return getNews({ type: NEWS_TYPE.NEWBIE, limit });
 }
 
+/**
+ * 动态级别筛选的 where 片段（展开到 where 顶层）。
+ * 老站（MSSQL 原样搬入的 4.1 万条 type=20）写的是带空格 JSON `{"lv": "beg", ...}`，
+ * 新站写紧凑 JSON `{"lv":"beg"}`——必须两种形态都匹配，否则筛选级别后
+ * 3bvs 纪录动态（老站形态）全部漏掉（2026-10-16 张老师报告）。
+ */
+function newsLevelFilter(level: string) {
+  return {
+    OR: [
+      { detailsData: { contains: `"lv":"${level}"` } },
+      { detailsData: { contains: `"lv": "${level}"` } },
+    ],
+  };
+}
+
 export async function getNews(opts: {
   type?: number;
   /** 多类型筛选（2026-10-13 用户主页「论坛」tab：发表主题 ARTICLE + 评论 COMMENT） */
@@ -165,7 +180,7 @@ export async function getNews(opts: {
     ...(opts.types ? { type: { in: opts.types } } : {}),
     ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
+    ...(opts.level ? newsLevelFilter(opts.level) : {}),
     // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
     ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
   };
@@ -211,7 +226,7 @@ export async function getNewsPage(opts: {
     ...(opts.types ? { type: { in: opts.types } } : {}),
     ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
+    ...(opts.level ? newsLevelFilter(opts.level) : {}),
   };
   const idRows = await prisma.news.findMany({
     where,
@@ -306,7 +321,7 @@ async function getNewsCountImpl(opts: {
       ...(opts.types ? { type: { in: opts.types } } : {}),
       ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-      ...(opts.level ? { detailsData: { contains: `"lv":"${opts.level}"` } } : {}),
+      ...(opts.level ? newsLevelFilter(opts.level) : {}),
     },
   });
 }
