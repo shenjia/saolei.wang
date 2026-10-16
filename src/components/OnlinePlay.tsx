@@ -1129,6 +1129,17 @@ export function OnlinePlay({
          与「下载的 AVF 在录像页跑出的指标」同源，不再有两份计数实现 */
       const cnt = gameCounts();
       const { solvedBv, html } = statsReport(t, cnt);
+      /* 练习局埋点（2026-10-16）：每局结束上报（胜/负都记），uid 服务端 session 取。
+         sendBeacon 不阻塞下一局，关页/刷新也不丢；失败静默（埋点不影响游戏） */
+      if (t > 0) {
+        try {
+          const payload = JSON.stringify({
+            level: lv, won, csec: Math.round(t * 100), bbbv: board3bv,
+            solvedBv, nf, clicks: cnt.clLeft + cnt.clRight + cnt.clDouble,
+          });
+          navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
+        } catch { /* ignore */ }
+      }
       /* 数据面板只在「显示统计」开着时、且只在**游戏结束**这一刻出现
          （2026-10-15 八期张老师定：对局中不再常驻实时刷新）；再开局由 reset 撤下。
          十期补：无论开关与否都定格一份 HTML，供局后补开开关时立即补弹本局面板 */
