@@ -6,14 +6,19 @@
 // 鼠标行程更是只有事件流里有（坐标是像素级）。Clone 的 mvf 头部有 Left/Right/DoubleClicks
 // 可作交叉校验，但 avf（Arbiter）没有，所以统一走重放，口径自洽。
 //
-// 两个钉死的口径（2026-10-14 对 963 盘真实 avf 实证）：
-//  1) 胜局 solved3bv = 3BV：站内只收过审胜局。Arbiter 支持「标满旗获胜 / 自动完成」，
-//     且 NF 盘结束时的自动展开不进事件流，实测 openedSafe 常比总安全格少 1-9，不是失败局。
-//  2) 双键 chord 判定：lc 后 50ms 内出现**同格** rc 且落点未开未旗 → 双键手势（rc 不插旗，
-//     记 Double）；rc 后接 lc（旗已插）→ lc 落在旗上，无效，Clone 同样记 Double。
-//     Clone 的 LeftClicks = 左键落在未开格、RightClicks = rc 总数（含拔旗，2026-10-16
-//     修齐：落在已开格的 rc 也计，与 Clone/练习页一致）、DoubleClicks = 左键落在已开格
-//     + 双键 chord —— 与 MVF 头部计数逐盘对齐。
+// ⚠️ 口径基准（2026-10-16 五轮修正）：**flop 官方引擎（模块 5fd3 VideoParser）源码 1:1**，
+//   与 videowin.ts（胜负判定）/ VideoReplay.tsx（原地回放）同一状态机（lp/lv/rp/rv/mp/sv+marks）。
+//   此前 10-14 版的 press↔release 配对口径只迁了胜负判定、漏迁了本统计引擎，
+//   在 1.5 击（rc lc lr rr）打法上 L/D 镜像偏移、旗落在松开位导致 chord 大面积失效，
+//   342232 对照原真 flop：Cl 185 vs 180、Ce 86 vs 159、Corr 0.465 vs 0.883。
+//   flop 计数语义（源码 leftRelease/rightPress/rightRelease/middleRelease）：
+//     · lr：rp||sv 时＝双击（Double++，openAround 松开位）；lv 时＝左键（Left++，open 松开位）；
+//     · rc：lp 按住时仅视觉不计数不插旗；否则 toggleLabel 改变盘面→Right++（按下位即刻生效），
+//           未改变盘面→挂 rv，待 rr 时 Right++ 且计 wasted；
+//     · rr：lp 按住时＝双击（Double++）；否则 rv 挂起时 Right++（wasted）；
+//     · mr：双击（Double++）；
+//     · Ce ＝ Cl −（wastedLeft + wastedRight + wastedDouble），与 flop Counters 一致。
+//   「胜局 solved3bv = 3BV」口径不变（10-14 实证，AVF NF 盘尾部自动展开不进事件流）。
 
 import { mvfToRawvf } from "./mvf";
 import { avfToRawvf } from "./avf";
@@ -24,20 +29,26 @@ import { formatRawvf, type ParsedVideo } from "./rawvf";
    import 路径不必改动。改评级口径请改 videoscore.ts —— 录像页与在线玩结算面板共用。 */
 export * from "./videoscore";
 
-/** 单盘原始计数（重放直出） */
+/** 单盘原始计数（重放直出，flop 口径） */
 export interface ReplayCounts {
   width: number;
   height: number;
   mines: number;
-  /** 左键落在未开格（开格动作） */
+  /** 左键有效开格数（flop LeftClicks） */
   clLeft: number;
-  /** 右键产生的插旗动作（含旗格上的往复） */
+  /** 右键点击数（flop RightClicks：按下即盘面变化 + 挂起补记） */
   clRight: number;
-  /** 双键 chord + 左键落在已开格 + 左键落在旗格 */
+  /** 双击数（flop DoubleClicks：chord 手势 + 中键） */
   clDouble: number;
-  /** 有效点击：该次操作真实改变了盘面（开格或有旗增减） */
+  /** 有效点击：Cl − wasted（flop Ce） */
   ce: number;
-  /** 拔旗次数（右键落在旗格） */
+  /** 无效左键（flop wastedLeftClicks：open 落旗/已开格） */
+  wastedLeft: number;
+  /** 无效右键（flop wastedRightClicks） */
+  wastedRight: number;
+  /** 无效双击（flop wastedDoubleClicks：chord 没开出格） */
+  wastedDouble: number;
+  /** 拔旗次数（rc 落在旗格；仅参考，不参与 flop 计数） */
   unflag: number;
   /** 鼠标行程（像素） */
   pathPx: number;
@@ -97,8 +108,9 @@ export function parseVideoBinary(buf: Uint8Array, ext: string): ParsedVideo | nu
 }
 
 /**
- * 重放事件流，产出原始计数。
- * 网格状态：0 未开 / 1 已开 / 2 旗
+ * 重放事件流，产出原始计数 —— **flop 官方引擎 1:1 移植**（2026-10-16 五轮修正）。
+ * 网格状态：0 未开 / 1 已开 / 2 旗；questioned 单独一维（flop Cell.questioned）。
+ * 状态机 lp/lv/rp/rv/mp/sv 与 videowin.ts / VideoReplay.tsx 完全同源。
  */
 export function replayEvents(v: ParsedVideo): ReplayCounts {
   const W = v.width;
@@ -127,71 +139,93 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
     nums[i] = c;
   }
 
-  const state = new Uint8Array(N);
-  const nb: number[][] = new Array(N);
-  const neighbors = (i: number): number[] => {
-    if (nb[i]) return nb[i];
+  const state = new Uint8Array(N); // 0 未开 / 1 已开
+  const flagged = new Uint8Array(N);
+  const questioned = new Uint8Array(N);
+  let dead = false; // chord/lc 展开遇雷（flop Blast）——胜局录像不该出现，保真用
+  const flagsAround = (i: number): number => {
     const x = i % W;
     const y = (i / W) | 0;
-    const r: number[] = [];
+    let f = 0;
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
         const nx = x + dx;
         const ny = y + dy;
-        if (nx >= 0 && nx < W && ny >= 0 && ny < H) r.push(ny * W + nx);
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        if (flagged[ny * W + nx]) f++;
       }
     }
-    nb[i] = r;
-    return r;
+    return f;
   };
-  const flood = (i: number) => {
-    if (state[i] !== 0 || mines[i]) return;
-    const stack = [i];
+  /** flop open(i)：开单格（含踩雷 Blast、0 号泛洪）；返回是否真的开了 */
+  const openCell = (i: number): boolean => {
+    if (i < 0 || i >= N || state[i] !== 0 || flagged[i]) return false;
     state[i] = 1;
+    if (mines[i]) {
+      dead = true;
+      return true;
+    }
     openedSafe++;
-    while (stack.length) {
-      const c = stack.pop() as number;
-      if (nums[c] !== 0) continue;
-      for (const a of neighbors(c)) {
-        if (state[a] === 0 && !mines[a]) {
-          state[a] = 1;
-          openedSafe++;
-          stack.push(a);
-        }
+    if (nums[i] === 0) openAroundIdx(i);
+    return true;
+  };
+  /** flop openAround(i)：仅该格已开且（0 号或旗数齐）才开 3x3 邻域（可开雷→dead） */
+  const openAroundIdx = (i: number): boolean => {
+    if (i < 0 || i >= N || state[i] !== 1) return false;
+    if (!(nums[i] === 0 || nums[i] === flagsAround(i))) return false;
+    const x = i % W;
+    const y = (i / W) | 0;
+    let any = false;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        any = openCell(ny * W + nx) || any;
       }
     }
+    return any;
   };
-  const chord = (i: number) => {
-    if (state[i] !== 1 || nums[i] <= 0) return;
-    const around = neighbors(i);
-    let f = 0;
-    for (const a of around) if (state[a] === 2) f++;
-    if (f !== nums[i]) return;
-    for (const a of around) if (state[a] === 0 && !mines[a]) flood(a);
+
+  // flop toggleLabel：旗→问号(marks)/摘旗、问号→清、未标→旗；返回是否动了格子
+  let unflag = 0; // 摘旗/清问号计数（站内参考字段）
+  const toggleLabel = (i: number, marks: boolean): boolean => {
+    if (state[i] === 1) return false;
+    if (marks && flagged[i]) {
+      flagged[i] = 0;
+      questioned[i] = 1;
+    } else if (flagged[i]) {
+      flagged[i] = 0;
+      questioned[i] = 0;
+      unflag++;
+    } else if (questioned[i]) {
+      flagged[i] = 0;
+      questioned[i] = 0;
+      unflag++;
+    } else {
+      flagged[i] = 1;
+      questioned[i] = 0;
+    }
+    return true;
   };
 
   let clLeft = 0;
   let clRight = 0;
   let clDouble = 0;
-  let ce = 0;
-  let unflag = 0;
-  let flagToggles = 0; // 旗状态实际翻转次数（供 Ce 判定）
-  let openedSafe = 0;
+  let wastedLeft = 0;
+  let wastedRight = 0;
+  let wastedDouble = 0;
   let pathPx = 0;
   let lastX: number | null = null;
   let lastY: number | null = null;
 
-  const counted = (fn: () => void) => {
-    const before = openedSafe * 1024 + flagToggles;
-    fn();
-    if (openedSafe * 1024 + flagToggles !== before) ce++;
-  };
-
-  // 事件行形态：`ts ev x y (px py)`，坐标为 1-based
-  const evs: { ts: number; ev: string; x: number; y: number; px: number; py: number }[] = [];
+  // 事件行形态：`ts ev x y (px py)`，坐标为 1-based（mt＝切换问号开关，不占格子）
+  type Ev = { ts: number; ev: string; x: number; y: number; px: number; py: number };
+  const evs: Ev[] = [];
   for (const line of v.events) {
-    const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+    const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (!m) continue;
     evs.push({
       ts: parseFloat(m[1]),
@@ -203,110 +237,113 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
     });
   }
 
-  // ⚠️ 2026-10-14 修正（张老师查 328090 这条世界纪录录像时揪出来的）：
-  // 一次「点击」在**松开**时才判定命中格，按下(lc/rc)与松开(lr/rr)常常落在不同格——
-  // 甩鼠标是高手常态（实测这条录像前 12 个操作里有 8 次按下/松开不同格）。
-  // 旧版以按下坐标为准，等于把一次点击记到隔壁格，最典型的症状是「已过审的胜局里还原出左键踩雷」
-  // 这种不可能事件：体检 400 条有 278 条中招（avf 62%、mvf 50%），Ce / Corr / Path 三项全面失真。
-  // 改成 press↔release 配对后同口径体检「踩雷=0」占比由 38% 升到 92%（见 topics/sync.md）。
-  type Ev = { ts: number; ev: string; x: number; y: number; px: number; py: number };
-  const inb = (e: Ev) => e.x >= 0 && e.y >= 0 && e.x < W && e.y < H;
+  // flop 状态机（与 videowin.ts 同源；本函数额外产出计数）。
+  // 越界点击（i<0）：flop open/openAround 返回 false → 照样计数、计 wasted，不落地。
+  let lp = false,
+    lv = false,
+    rp = false,
+    rv = false,
+    sv = false;
+  let marks = v.marks ?? false;
+  let over = false; // Win/Lose 后事件无效（flop performEvent 守卫）
+  let openedSafe = 0;
+  const safeTotal = N - v.mines;
+
   const idx = (e: Ev) => e.y * W + e.x;
 
-  // 左键落在某格：已开→单键 chord（计 Double）／旗格→无效 Double／未开→开格
-  const leftClick = (r: Ev) => {
-    if (!inb(r)) return;
-    const i = idx(r);
-    if (state[i] === 1) {
-      counted(() => {
-        clDouble++;
-        chord(i);
-      });
-    } else if (state[i] === 2) {
-      clDouble++; // 左键落在旗格：无效果，Clone 同样计 Double
-    } else {
-      clLeft++;
-      counted(() => flood(i));
-    }
-  };
-  // 右键落在某格：未开→插旗／已旗→拔旗（拔旗另记 unflag）／已开→无事。
-  // ⚠️ 2026-10-16 修：三种落点一律 clRight++（此前仅插旗计）。Clone 头部 RightClicks
-  //   = rc 总数（含拔旗），练习页实时口径 stRight 同样在动作前计数、不看落点——
-  //   旧版拔旗只进 Ce 不进 Cl，重放 corr 可 >1（库里实测 1269 行，最高 1.988），
-  //   污染分位基准后标雷局 corr=1 永远到不了 100 分位。修复后重放 Cl 与两方口径一致，
-  //   corr 恒 ≤1。
-  const rightClick = (r: Ev) => {
-    if (!inb(r)) return;
-    const i = idx(r);
-    if (state[i] === 0) {
-      clRight++;
-      counted(() => {
-        state[i] = 2;
-        flagToggles++;
-      });
-    } else if (state[i] === 2) {
-      clRight++; // 拔旗也是一次右键点击
-      unflag++;
-      counted(() => {
-        state[i] = 0;
-        flagToggles++;
-      });
-    } else {
-      clRight++; // 落在已开格：无效果但仍是点击（与练习页 stRight 口径一致）
-    }
-  };
-  const chordAt = (e: Ev) => {
-    if (!inb(e)) return;
-    counted(() => {
-      clDouble++;
-      chord(idx(e));
-    });
-  };
-
-  let pendL: Ev | null = null;
-  let pendR: Ev | null = null;
   for (const e of evs) {
-    // 鼠标行程：所有带像素坐标的事件按时间序累加欧氏距离
+    if (over) break;
+    // 鼠标行程：所有带像素坐标的事件按时间序累加欧氏距离（flop mouseMove 同款）
     if (e.px !== 0 || e.py !== 0) {
       if (lastX !== null && lastY !== null) pathPx += Math.hypot(e.px - lastX, e.py - lastY);
       lastX = e.px;
       lastY = e.py;
     }
-    if (e.ev === "lc") {
-      // 残缺录像：上一次按下没记录到松开就又要按下，先按按下坐标补记，免得整次操作丢失
-      if (pendL) leftClick(pendL);
-      pendL = e;
-    } else if (e.ev === "lr") {
-      if (pendL) {
-        leftClick(e); // ← 命中格取「松开」位置
-        pendL = null;
-      }
-    } else if (e.ev === "rc") {
-      if (pendL) {
-        // 双键 chord：左右键同时按下即刻生效（不等松开），这次 rc 不插旗
-        chordAt(e);
-        pendL = null;
-        pendR = null; // 随后的 lr/rr 属同一次手势，不再单独成操作
-      } else {
-        if (pendR) rightClick(pendR);
-        pendR = e;
-      }
-    } else if (e.ev === "rr") {
-      if (pendR) {
-        rightClick(e); // ← 命中格取「松开」位置
-        pendR = null;
-      }
-    } else if (e.ev === "sc" || e.ev === "mc") {
-      chordAt(e);
+    if (e.ev === "mt") {
+      marks = !marks;
+      continue;
     }
+    if (e.ev === "mv") continue;
+    const i = idx(e);
+    const inside = i >= 0 && i < N;
+    switch (e.ev) {
+      case "lc":
+        lp = lv = true;
+        break;
+      case "lr": {
+        // flop leftRelease：rp||sv → 双击；否则 lv → 左键开格（松开坐标）
+        if (rp || sv) {
+          clDouble++;
+          if (!openAroundIdx(inside ? i : -1)) wastedDouble++;
+        } else if (lv) {
+          clLeft++;
+          if (!openCell(inside ? i : -1)) wastedLeft++;
+        }
+        lp = lv = rv = sv = false; // 不动 rp（flop 原样）
+        break;
+      }
+      case "rc": {
+        // flop rightPress：lp 按住时仅视觉（1.5 击里尾随 lc 的 rc 不插旗）；否则按下即刻 toggleLabel
+        if (!lp) {
+          if (inside && toggleLabel(i, marks)) {
+            clRight++;
+            rv = false;
+          } else {
+            rv = true;
+          }
+        }
+        rp = true;
+        break;
+      }
+      case "rr": {
+        // flop rightRelease：lp 按住时＝双击（松开坐标）；否则 rv 挂起补记一次 wasted 右键
+        if (lp) {
+          clDouble++;
+          if (!openAroundIdx(inside ? i : -1)) wastedDouble++;
+        } else if (rv) {
+          clRight++;
+          wastedRight++;
+        }
+        rp = lv = rv = sv = false; // 不动 lp（flop 原样）
+        break;
+      }
+      case "mc":
+        // mp = true（flop 中键按住仅视觉，计数在 mr；状态位不影响任何分支，无需维护）
+        break;
+      case "mr": {
+        // flop middleRelease：无条件双击
+        clDouble++;
+        if (!openAroundIdx(inside ? i : -1)) wastedDouble++;
+        break;
+      }
+      case "sc":
+        // flop leftPressWithShift：chord 在其后的 lr 生效
+        lp = lv = sv = true;
+        break;
+    }
+    if (openedSafe >= safeTotal) over = true; // Win
+    if (dead) over = true; // Blast → Lose
   }
-  // 尾部兜底：录像在按下后直接结束（没记录松开）——按按下坐标补记，避免丢操作
-  if (pendL) leftClick(pendL);
-  if (pendR) rightClick(pendR);
 
   let flags = 0;
-  for (let i = 0; i < N; i++) if (state[i] === 2) flags++;
-  return { width: W, height: H, mines: v.mines, clLeft, clRight, clDouble, ce, unflag, pathPx, flags };
+  for (let i = 0; i < N; i++) if (flagged[i]) flags++;
+  const cl = clLeft + clRight + clDouble;
+  const ce = cl - (wastedLeft + wastedRight + wastedDouble);
+  return {
+    width: W,
+    height: H,
+    mines: v.mines,
+    clLeft,
+    clRight,
+    clDouble,
+    ce,
+    wastedLeft,
+    wastedRight,
+    wastedDouble,
+    unflag,
+    pathPx,
+    flags,
+  };
 }
 
 /**

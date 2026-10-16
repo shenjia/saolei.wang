@@ -106,7 +106,21 @@ function replayOld(v: ParsedVideo): ReplayCounts {
   if (pendR) rightClickOld(pendR);
   let flags = 0;
   for (let i = 0; i < N; i++) if (state[i] === 2) flags++;
-  return { width: W, height: H, mines: v.mines, clLeft, clRight, clDouble, ce, unflag, pathPx, flags };
+  return {
+    width: W,
+    height: H,
+    mines: v.mines,
+    clLeft,
+    clRight,
+    clDouble,
+    ce,
+    wastedLeft: 0,
+    wastedRight: 0,
+    wastedDouble: 0,
+    unflag,
+    pathPx,
+    flags,
+  };
 }
 
 function parseHeadCounts(lines: string[]): { l: number; r: number; d: number } | null {
