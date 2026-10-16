@@ -2501,8 +2501,11 @@ export function OnlinePlay({
         }
       }
     }
-    /* 全屏自动拉满——**只服务移动端**（2026-10-15 张老师定：PC 端进全屏保持比例不变，
-       只是视口变大、游戏多大还是多大；移动端才需要按屏幕重算比例拉满）。
+    /* 全屏自动拉满——服务移动端 + v8b 扩展（2026-10-16 张老师定：PC 端进全屏保持
+       比例不变，只是视口变大、游戏多大还是多大；移动端才需要按屏幕重算比例拉满）。
+       **v8b 例外：自定义盘比高级（30×16）还大（宽 >30 或高 >16）时，PC 全屏也自动
+       拉满**——大盘小比例进全屏视野浪费，直接按最大可显示比例适配；等于/小于高级
+       的自定义盘仍维持「比例不动」。退出全屏由 zoomBeforeFs 恢复原比例（既有机制）。
        移动端口径＝站内既有「移动版」定义：≤768 断点（同 globals.css 移动版规则）
        ＋ 横屏沉浸查询（orientation:landscape 且 max-height:520px，覆盖手机横屏——
        手机横屏宽 844 会超出 768 断点；PC 屏高不满足该查询不会误命中）。
@@ -2523,7 +2526,7 @@ export function OnlinePlay({
        不随游戏倍率变化，所以每次 fit 都是一次干净重算 */
     const mqNarrow = window.matchMedia("(max-width: 768px)"); // 站内「移动版」断点
     function fsAutoFit() {
-      return mqNarrow.matches || lsQuery.matches;
+      return mqNarrow.matches || lsQuery.matches || (lv === "cus" && (W > 30 || H > 16));
     }
     function fitZoomForFullscreen() {
       if (!fsAutoFit()) {
