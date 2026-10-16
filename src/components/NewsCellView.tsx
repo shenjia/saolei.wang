@@ -114,10 +114,9 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
                 <Link href={`/video/${news.reference}`} target="_blank" className="score">
                   {formatScore(d.od ?? "time", d.cr!)}
                 </Link>
-                {/* record_extra：宽度不够时整段隐藏（箭头+提升值），只留新成绩避免换行 */}
+                {/* record_extra：宽度不够时整段隐藏（提升值），只留新成绩避免换行。
+                    2026-10-16 三轮张老师定：去掉绿色箭头，提升值字号变小、底端对齐 */}
                 <span className="record_extra" ref={extraRef}>
-                  <span className="increase"></span>
-                  {/* 提升值：全角括号包带符号数字、绿色（同右下角数据统计「今日变化」，2026-10-16 二轮张老师定），不加单位 */}
                   <span className="delta">（{formatDelta(d.od ?? "time", d.or!, d.cr!)}）</span>
                 </span>
               </>
