@@ -7812,6 +7812,25 @@ html:has(#online_play) #footer {
 .replay_panel tr:hover td.gv .tip {
   display: block;
 }
+/* ---- 播放失败气泡（2026-10-16）：录像文件 404/网络失败时棋盘中央红色提示。
+   flop 播放器拉同一 URL 也必失败（旧版弹「状态404」全屏播放器的根因），
+   改此气泡 3.5s 自动消失；fixed 定位不依赖棋盘布局（portal 同级不裁剪） ---- */
+.replay_notice {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  transform: translateX(-50%);
+  z-index: 90;
+  max-width: min(480px, calc(100vw - 48px));
+  padding: 10px 18px;
+  border: 1px solid #6b2b2b;
+  border-radius: 6px;
+  background: #3a1f1f;
+  color: #ff8080;
+  font: 14px/22px Arial, Helvetica, sans-serif;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
 /* ---- 回放控制条：暂停/播放 + 全屏按钮 + 可拖拽进度条。
    十期张老师定：进度条像素级复刻翻页组件（.pager 卡片），当前时间站绿、总时间去掉 ---- */
 .replay_bar {

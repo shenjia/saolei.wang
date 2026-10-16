@@ -606,6 +606,16 @@ interface ReplayCtxValue {
 
 const ReplayCtx = createContext<ReplayCtxValue | null>(null);
 
+/* fetch 非 2xx（404/5xx 等）专用错误：拉不到文件时 flop 播放器拉同一 URL
+   也必失败，不再走 flop 兜底，改气泡提示（见 play() catch 分支） */
+class FetchError extends Error {
+  status: number;
+  constructor(status: number) {
+    super(`fetch ${status}`);
+    this.status = status;
+  }
+}
+
 export function VideoReplayProvider({
   boardId,
   filepath,
@@ -633,6 +643,21 @@ export function VideoReplayProvider({
   const [status, setStatus] = useState<Status>("idle");
   const [stats, setStats] = useState<ReplayStats | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  /* 播放失败气泡（2026-10-16）：文件 404/网络失败等场景，棋盘中央红字提示，
+     3.5s 自动消失；再点播放重试（dataRef 已置 null 会重新 fetch） */
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+  const notify = useCallback((msg: string) => {
+    setNotice(msg);
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 3500);
+  }, []);
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    },
+    []
+  );
   /* flop 兜底（rmv / 解析失败）：FlopPlayer 懒挂，挂上后再 playFlop。
      子组件 effect 先于本组件 effect 执行 → 届时 window.flop 已建好；
      播放器 iframe 未就绪时 playFlop 的 pendingUri 队列自动兜底 */
@@ -672,7 +697,7 @@ export function VideoReplayProvider({
       try {
         if (dataRef.current === undefined) {
           const res = await fetch(uri);
-          if (!res.ok) throw new Error(String(res.status));
+          if (!res.ok) throw new FetchError(res.status);
           dataRef.current = parseReplayData(
             new Uint8Array(await res.arrayBuffer()),
             ext,
@@ -703,8 +728,16 @@ export function VideoReplayProvider({
           onStats: setStats,
         });
         setStatus("playing");
-      } catch {
+      } catch (e) {
         dataRef.current = null;
+        /* 文件拉不到（404/5xx/网络断）：flop 播放器拉同一 URL 也必失败——
+           不再弹全屏播放器，改棋盘中央红色气泡提示（2026-10-16 张老师需求：
+           录像文件缺失可能是历史屏蔽误删，改判后可恢复，播放失败要能看懂原因） */
+        if (e instanceof FetchError) {
+          setStatus("idle");
+          notify(`录像文件加载失败（${e.status || "网络错误"}），无法播放`);
+          return;
+        }
         setStatus("idle");
         setFlopUri(uri);
       }
@@ -778,6 +811,9 @@ export function VideoReplayProvider({
       {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
       <FlopSprites />
       {flopUri && <FlopPlayer />}
+      {/* 播放失败提示（2026-10-16）：棋盘中央红色气泡（文件 404 等场景，
+          flop 播放器拉同一 URL 也必失败，不再弹全屏播放器） */}
+      {notice && <div className="replay_notice" role="alert">{notice}</div>}
       {/* 全屏回放层（十期）：遮罩 + 自适应布局，点遮罩退出 */}
       {fullscreen && level && boardStr && (
         <ReplayFullscreen
