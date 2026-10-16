@@ -68,7 +68,7 @@ export interface TrafficOverview {
   devices: { uaClass: string; pv: number }[];
   /** 活跃玩家：登录态访问去重用户（trend 为分日去重数，与 trend.dates 对齐） */
   active: { today: number; yesterday: number; d7: number; d30: number; trend: number[] };
-  /** 练习页（/online）访问：练习结果不落库，暂以页面 PV 口径（trend 为分日 PV） */
+  /** 练习局数（practice_log 埋点，2026-10-16 起；胜/负都记，trend 为分日局数） */
   practice: { today: number; yesterday: number; d30: number; trend: number[] };
   /** 高流失页（会话末页占该页 PV 比；录像详情页看完即走正常，排除；三档） */
   exits: { today: ExitPage[]; d7: ExitPage[]; d30: ExitPage[] };
@@ -112,22 +112,29 @@ async function aggregate(): Promise<TrafficOverview> {
   const d30 = dayStart(29);
 
   // 管理员自己的浏览剔除，避免污染 UV/PV/来源/入口/流失
-  const rows = await prisma.pageView.findMany({
-    where: { isAdmin: false, createTime: { gte: d30 } },
-    select: {
-      path: true,
-      visitorId: true,
-      referrer: true,
-      isEntry: true,
-      sessionId: true,
-      uaClass: true,
-      userId: true,
-      dwellMs: true,
-      scrollPct: true,
-      clicked: true,
-      createTime: true,
-    },
-  });
+  // 练习局流水单查 practice_log（30 天），与 page_view 并行
+  const [rows, practiceRows] = await Promise.all([
+    prisma.pageView.findMany({
+      where: { isAdmin: false, createTime: { gte: d30 } },
+      select: {
+        path: true,
+        visitorId: true,
+        referrer: true,
+        isEntry: true,
+        sessionId: true,
+        uaClass: true,
+        userId: true,
+        dwellMs: true,
+        scrollPct: true,
+        clicked: true,
+        createTime: true,
+      },
+    }),
+    prisma.practiceLog.findMany({
+      where: { createTime: { gte: d30 } },
+      select: { createTime: true },
+    }),
+  ]);
 
   // ---- 分日趋势 + 今日/昨日 ----
   const fromIdx = Math.floor((d30 + 28800) / 86400);
@@ -152,10 +159,17 @@ async function aggregate(): Promise<TrafficOverview> {
   const yesterdayActive = new Set<string>();
   const d7Active = new Set<string>();
   const d30Active = new Set<string>();
-  // 练习页 /online 分日 PV
-  const onlineMap = new Map<number, number>();
-  let onlineToday = 0;
-  let onlineYesterday = 0;
+  // 练习局数（practice_log）：分日局数 + 今日/昨日
+  const practiceMap = new Map<number, number>();
+  let practiceToday = 0;
+  let practiceYesterday = 0;
+  for (const p of practiceRows) {
+    const t = N(p.createTime);
+    const idx = Math.floor((t + 28800) / 86400);
+    practiceMap.set(idx, (practiceMap.get(idx) ?? 0) + 1);
+    if (t >= today0) practiceToday += 1;
+    else if (t >= yesterday0) practiceYesterday += 1;
+  }
 
   // 按时间序处理（流失统计取会话末页依赖顺序）
   const sorted = [...rows].sort((a, b) => N(a.createTime) - N(b.createTime));
@@ -184,11 +198,6 @@ async function aggregate(): Promise<TrafficOverview> {
       if (t >= d7) d7Active.add(uid);
       if (t >= today0) todayActive.add(uid);
       else if (t >= yesterday0) yesterdayActive.add(uid);
-    }
-    if (r.path === "/online") {
-      onlineMap.set(idx, (onlineMap.get(idx) ?? 0) + 1);
-      if (t >= today0) onlineToday += 1;
-      else if (t >= yesterday0) onlineYesterday += 1;
     }
 
     if (r.referrer && r.referrer !== "internal") {
@@ -225,14 +234,14 @@ async function aggregate(): Promise<TrafficOverview> {
   const pvSeries: number[] = [];
   const uvSeries: number[] = [];
   const activeSeries: number[] = [];
-  const onlineSeries: number[] = [];
+  const practiceSeries: number[] = [];
   for (let i = 0; i < 30; i++) {
     const b = trendMap.get(fromIdx + i)!;
     dates.push(new Date((fromIdx + i) * 86400000).toISOString().slice(0, 10));
     pvSeries.push(b.pv);
     uvSeries.push(b.uv.size);
     activeSeries.push(activeMap.get(fromIdx + i)?.size ?? 0);
-    onlineSeries.push(onlineMap.get(fromIdx + i) ?? 0);
+    practiceSeries.push(practiceMap.get(fromIdx + i) ?? 0);
   }
 
   const entryTop = (map: Map<string, number>) =>
@@ -404,10 +413,10 @@ async function aggregate(): Promise<TrafficOverview> {
       trend: activeSeries,
     },
     practice: {
-      today: onlineToday,
-      yesterday: onlineYesterday,
-      d30: onlineSeries.reduce((a, b) => a + b, 0),
-      trend: onlineSeries,
+      today: practiceToday,
+      yesterday: practiceYesterday,
+      d30: practiceSeries.reduce((a, b) => a + b, 0),
+      trend: practiceSeries,
     },
   };
 }
@@ -415,7 +424,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v3"],
+  ["admin-traffic", "v4"],
   { revalidate: 300 }
 );
 

@@ -177,7 +177,7 @@ export default async function AdminDashboard() {
           trend={traffic.practice.trend}
           foot={
             <>
-              近 30 天 {traffic.practice.d30.toLocaleString("zh-CN")} 次 · 练习页 PV 口径
+              近 30 天 {traffic.practice.d30.toLocaleString("zh-CN")} 局 · 含踩雷局
             </>
           }
         />

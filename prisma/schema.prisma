@@ -687,3 +687,22 @@ model PageView {
   @@index([createTime])
   @@map("page_view")
 }
+
+// 练习局埋点（2026-10-16）：/online 每局结束上报（胜/负都记），练习数量 KPI 与后期
+// 「谁练得最凶」排行数据源。客户端上报存在伪造可能——粉丝站轻量方案，接受此威胁模型。
+model PracticeLog {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  userId     BigInt? @map("user_id") @db.BigInt // 服务端 session 取（未登录 NULL；排行只算登录用户）
+  level      String  @db.VarChar(8) // beg / int / exp / cus
+  won        Boolean // 胜局 true / 踩雷 false
+  csec       Int // 用时（百分秒）
+  bbbv       Int @map("bbbv") // 全盘 3BV
+  solvedBv   Int     @map("solved_bv") // 已完成 3BV（败局 < bbbv）
+  nf         Boolean // 无旗局
+  clicks     Int // 总点击（cl，含双击）
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt // Unix 秒
+
+  @@index([createTime]) // 30 天流水（KPI 趋势）
+  @@index([userId, createTime]) // 后期按用户聚合排行
+  @@map("practice_log")
+}

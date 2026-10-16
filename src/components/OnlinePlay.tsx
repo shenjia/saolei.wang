@@ -1045,7 +1045,8 @@ export function OnlinePlay({
        公式与 flop player counters 逐项对齐（摘自其打包源码注释）：
        Est=RT×(3BV/solved)；IOE=solved/Cl；ThrP=solved/Ce；Corr=Ce/Cl；
        RQP=Est×(Est+1)/3BV；QG=RT^1.7/solved；
-       STNB=(87.420L²−155.829L+115.708)/QG×(solved/3BV)^0.5（L: beg=1/int=2/exp=3）；
+       STNB=(73.5L²−94.5L+57)/QG×(solved/3BV)^0.5（L: beg=1/int=2/exp=3；
+       2026-10-16 难度常数更新为 初级36/中级162/高级435）；
        RTime 后缀 (n)=floor(RT)+1（录像秒数口径） */
     /* 表格 HTML + 完成 3BV（六期从 report 抽出：与结算共用同一份构造，口径永不分叉。
        八期起只在游戏结束这一刻渲染一次，不再有对局中刷新路径） */
@@ -1073,7 +1074,7 @@ export function OnlinePlay({
       const rl = ratingLevel(lv, W, H, M);
       const ln = rl === "beg" ? 1 : rl === "int" ? 2 : 3;
       const stnb = hasBv
-        ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
+        ? (73.5 * ln * ln - 94.5 * ln + 57) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
       /* 玩家实际插的旗数＝重放终盘旗数（胜利自动补旗不进事件流，天然不含） */
       const playerFlags = cnt.flags;
@@ -1128,6 +1129,17 @@ export function OnlinePlay({
          与「下载的 AVF 在录像页跑出的指标」同源，不再有两份计数实现 */
       const cnt = gameCounts();
       const { solvedBv, html } = statsReport(t, cnt);
+      /* 练习局埋点（2026-10-16）：每局结束上报（胜/负都记），uid 服务端 session 取。
+         sendBeacon 不阻塞下一局，关页/刷新也不丢；失败静默（埋点不影响游戏） */
+      if (t > 0) {
+        try {
+          const payload = JSON.stringify({
+            level: lv, won, csec: Math.round(t * 100), bbbv: board3bv,
+            solvedBv, nf, clicks: cnt.clLeft + cnt.clRight + cnt.clDouble,
+          });
+          navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
+        } catch { /* ignore */ }
+      }
       /* 数据面板只在「显示统计」开着时、且只在**游戏结束**这一刻出现
          （2026-10-15 八期张老师定：对局中不再常驻实时刷新）；再开局由 reset 撤下。
          十期补：无论开关与否都定格一份 HTML，供局后补开开关时立即补弹本局面板 */
@@ -1145,7 +1157,7 @@ export function OnlinePlay({
       const rl = ratingLevel(lv, W, H, M);
       const ln = rl === "beg" ? 1 : rl === "int" ? 2 : 3;
       const stnb = hasBv
-        ? (87.420 * ln * ln - 155.829 * ln + 115.708) / qg * Math.sqrt(solvedBv / board3bv)
+        ? (73.5 * ln * ln - 94.5 * ln + 57) / qg * Math.sqrt(solvedBv / board3bv)
         : 0;
       snapshot = {
         w: W, h: H, m: M,
