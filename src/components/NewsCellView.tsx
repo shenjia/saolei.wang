@@ -195,8 +195,8 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
         {news.type === NEWS_TYPE.PROMOTION && news.author && (
           <>
             {authorCells}
-            <span className="promoted">晋升了！</span>
-            <span className="increase increase--gold" aria-hidden="true"></span>
+            {/* 2026-10-16 张老师定：去「了！」与金色箭头（increase--gold），文案仅「晋升」 */}
+            <span className="promoted">晋升</span>
             <span className="record person" data-tip={d.ti ? titleConditionText(d.ti) : undefined}>
               <RankBadge title={d.ti ?? ""} /> <em className={TITLE_CLASSES[d.ti ?? ""] ?? ""}>{d.ti ?? ""}</em>
             </span>

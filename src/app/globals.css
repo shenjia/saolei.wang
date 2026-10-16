@@ -3762,14 +3762,12 @@ body #page.ranking_old .ranking_box {
 
 /* （每日一星卡 #daily_star_card 样式已随功能于 2026-10-13 下线移除） */
 
-/* 晋升动态文案（2026-10-14 调整）：金色「晋升了！」+ 金色 increase--gold 箭头（图标 public/images/common/increase-gold.png，规则在 legacy-2013.css）+ 军衔徽章正常分级色；破纪录动态仍用绿色 increase.png */
+/* 晋升动态文案（2026-10-14 调整；2026-10-16 张老师定：去「了！」与金色箭头，仅「晋升」二字+
+   军衔徽章正常分级色；increase--gold 箭头规则仍在 legacy-2013.css 但已无使用方） */
 #news .promoted {
   margin: 0 2px 0 5px;
   color: #fdc61d;
   font-weight: bold;
-}
-#news .promoted + .increase {
-  margin-right: 5px;
 }
 #news .record.person em {
   margin: 0;
