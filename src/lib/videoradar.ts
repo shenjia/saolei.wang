@@ -149,7 +149,9 @@ export function stnbOf(level: string, solved: number, timeMs: number, bbbv: numb
   // 完成度因子：作弊式「只开一小片就收工」的半成品局会被按比例打折。
   // 胜局 solved === bbbv，恒为 1 —— 已入库的三十万盘数值不受影响，不必重算。
   const completion = bbbv > 0 ? Math.sqrt(solved / bbbv) : 0;
-  return Math.round(((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * completion * 10) / 10;
+  // 2026-10-16 张老师定：难度常数更新为 初级 36 / 中级 162 / 高级 435，
+  // 过这三点的二次系数 = (73.5, -94.5, 57)（87.42/-155.829/115.708 是旧常数）。
+  return Math.round(((73.5 * ln * ln - 94.5 * ln + 57) / qg) * completion * 10) / 10;
 }
 
 /**

@@ -1386,7 +1386,7 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
   /* STNB 难度系数（标准级别；公式与练习页 statsReport / lib/videoradar stnbOf 同式） */
   const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
   const stnb = hasBv
-    ? ((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * Math.sqrt(s.solvedBv / s.board3bv)
+    ? ((73.5 * ln * ln - 94.5 * ln + 57) / qg) * Math.sqrt(s.solvedBv / s.board3bv)
     : 0;
   const cl = s.clLeft + s.clRight + s.clDouble;
   const rows: [string, string, string][] = [
@@ -1831,7 +1831,7 @@ function ReplayFullscreen({
     const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
     const qg = hasBv ? Math.pow(t, 1.7) / playResult.solvedBv : 0;
     const stnb = hasBv
-      ? ((87.42 * ln * ln - 155.829 * ln + 115.708) / qg) * Math.sqrt(playResult.solvedBv / playResult.board3bv)
+      ? ((73.5 * ln * ln - 94.5 * ln + 57) / qg) * Math.sqrt(playResult.solvedBv / playResult.board3bv)
       : 0;
     const values: Partial<Record<MetricKey, number>> = {
       stnb,
