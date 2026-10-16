@@ -117,10 +117,8 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
                 {/* record_extra：宽度不够时整段隐藏（箭头+提升值），只留新成绩避免换行 */}
                 <span className="record_extra" ref={extraRef}>
                   <span className="increase"></span>
-                  <span className="delta">
-                    {formatDelta(d.od ?? "time", d.or!, d.cr!)}
-                    {(d.od ?? "time") === "time" && <small>秒</small>}
-                  </span>
+                  {/* 提升值：全角括号包带符号数字、绿色（同右下角数据统计「今日变化」，2026-10-16 二轮张老师定），不加单位 */}
+                  <span className="delta">（{formatDelta(d.od ?? "time", d.or!, d.cr!)}）</span>
                 </span>
               </>
             ) : (

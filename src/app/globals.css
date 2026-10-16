@@ -3783,21 +3783,17 @@ body #page.ranking_old .ranking_box {
 #news .record.person em.new { color: #636359; }
 
 /* 破纪录动态改版（2026-10-16 张老师定）：新成绩提到箭头前（金粗可点，样式沿用 legacy #news .score），
-   箭头后改放「绝对提升值」：时间记负=更快、3BV/s 记 +=更高；颜色/字号沿用原记录灰（#b1b1a4/16px）。
+   箭头后放「绝对提升值」：全角括号包带符号数字（时间负=更快、3BV/s +=更高）、不加单位；
+   绿色 #a6e22e 同右下角数据统计「今日变化」（#site_stats .table .delta，2026-09-27 全站今日增量统一绿）。
    箭头 .increase 在成绩右侧补左间距（legacy 只有 margin-right:5px）；
    record_extra 整段（箭头+提升值）在行宽不足时仍走 NewsCellView 既有自适应隐藏逻辑。 */
 #news .record_extra .increase {
   margin-left: 5px;
 }
 #news .delta {
-  color: #b1b1a4;
+  color: #a6e22e;
   font-size: 16px;
   line-height: 24px;
-}
-#news .delta small {
-  font-size: 12px;
-  color: #75715e;
-  margin-left: 2px;
 }
 
 /* 动态中的文章标题《…》（2026-10-13 张老师要求）：不用金色，改亮灰 #bbbbbb
