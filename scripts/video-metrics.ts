@@ -178,7 +178,9 @@ async function main() {
     let skip = 0;
     for (const info of infos) {
       const v = meta.get(info.id.toString());
-      // 只统计已通过录像：六维口径建立在「胜局」前提上
+      // 只统计已通过录像：跑批口径六维建立在「胜局」前提上。
+      // 待审录像的指标行由详情页兜底（10-16 张老师定：雷达对非屏蔽开放），不进跑批/基准，
+      // 防止审核未过（败局误传等）的行污染分位基准
       if (!v || v.status !== VIDEO_STATUS.REVIEWED) continue;
       if (since > 0 && Number(v.updateTime ?? v.createTime ?? 0) <= since) continue;
       if (existing?.has(info.id.toString())) continue;
@@ -267,28 +269,29 @@ async function main() {
   // ---- 分位基准 ----
   // 先清空再重建：分组随样本变化可能消失（如某分段样本跌破阈值），残留旧行会让页面取到过期基准
   await prisma.videoMetricDist.deleteMany({});
-  const all = await prisma.videoMetrics.findMany({
-    select: {
-      level: true,
-      noflag: true,
-      bbbv: true,
-      bvs: true,
-      ioe: true,
-      corr: true,
-      cls: true,
-      ppc: true,
-      stnb: true,
-    },
-    // cl=0 是缺文件的降级行：只有 STNB/3BV/s 有意义，其余全 0，
-    // 放进来会把 Corr/PPC 的分位边界整体拉低
-    where: { cl: { gt: 0 } },
-  });
+  const all = await prisma.$queryRawUnsafe<Array<{
+    level: string;
+    noflag: boolean;
+    bbbv: number;
+    bvs: number;
+    ioe: number;
+    corr: number;
+    cls: number;
+    ppc: number;
+    stnb: number;
+  }>>(`
+    SELECT m.level, m.noflag, m.bbbv, m.bvs, m.ioe, m.corr, m.cls, m.ppc, m.stnb
+    FROM video_metrics m JOIN video v ON v.id = m.id
+    WHERE m.cl > 0 AND v.status = ${VIDEO_STATUS.REVIEWED}
+  `);
+  // 口径：cl>0 排除缺文件降级行；status=20 排除待审行（详情页兜底会为待审录像落行，
+  // 但基准只认已过审的胜局——败局误传的待审行不能进分位，否则会把 Corr/IOE 边界拉低）
   console.log(`分位样本总量：${all.length}`);
 
   type Group = { size: number; vals: Record<BaseMetricKey, number[]> };
   const groups = new Map<string, Group>();
   const groupKey = (level: string, noflag: boolean, bucket: number) => `${level}|${noflag ? 1 : 0}|${bucket}`;
-  const push = (key: string, row: (typeof all)[number]) => {
+  const push = (key: string, row: Record<BaseMetricKey, number>) => {
     let g = groups.get(key);
     if (!g) {
       g = { size: 0, vals: { stnb: [], bvs: [], ioe: [], corr: [], cls: [], ppc: [] } };
@@ -299,7 +302,8 @@ async function main() {
   };
   for (const row of all) {
     // 分组只有「级别 × 模式」一档：bucket 恒为 -1（张老师 2026-10-14 定，不细分 3BV）
-    push(groupKey(row.level, row.noflag, DIST_BUCKET_ALL), row);
+    // noflag 走 raw SQL 回来是 0/1 number，转 boolean（groupKey 与 upsert 都按布尔用）
+    push(groupKey(row.level, Number(row.noflag) === 1, DIST_BUCKET_ALL), row);
   }
 
   let written = 0;

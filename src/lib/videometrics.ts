@@ -57,8 +57,11 @@ async function compute(videoId: number): Promise<void> {
       select: { filepath: true, noflag: true, board3bv: true, realTime: true },
     }),
   ]);
-  // 六维口径建立在「胜局」前提上：未过审 / 被屏蔽的录像算了也没意义
-  if (!video || !info || video.status !== VIDEO_STATUS.REVIEWED) return;
+  // 六维口径建立在「胜局」前提上：被屏蔽的录像算了也没意义。
+  // 待审（status=10）10-16 起允许落行——详情页雷达对非屏蔽录像开放（张老师定）。
+  // ⚠️ 基准防污染：本模块只写行不改行，待审行由跑批口径排除在基准外（跑批 dist
+  //    只收 status=20 已通过 + cl>0 的行，见 scripts/video-metrics.ts），不会污染分位。
+  if (!video || !info || video.status === VIDEO_STATUS.BANNED) return;
 
   const buf = readVideoFile(info.filepath);
   if (!buf) return;

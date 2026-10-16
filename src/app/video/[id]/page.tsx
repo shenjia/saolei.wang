@@ -52,9 +52,10 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
   const level = video.level as VideoLevel;
   // 标题成绩按级别配色（2026-10-13 张老师要求：初级绿 / 中级橙 / 高级金，与录像列表 hover 同色阶）
   const lvCls = LV_CLS[level] ?? "";
-  // 2026-10-14 张老师需求：本局六维表现雷达（过早pending/非过审录像没有意义，跳过）
+  // 2026-10-14 张老师需求：本局六维表现雷达。10-16 张老师改定：待审只是合法性待确认，
+  // 不应影响录像分析——屏蔽（status=0）才不显示
   const analysis =
-    video.status === VIDEO_STATUS.REVIEWED
+    video.status !== VIDEO_STATUS.BANNED
       ? await getVideoAnalysis({
           id: video.id,
           level,
