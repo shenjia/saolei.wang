@@ -422,7 +422,11 @@ export function OnlinePlay({
       return r;
     }
     /* LED 数码管：与 flop SkinCounterTop 同规则——负数时百位显负号、只显两位，范围 -99~999 */
+    /* 当前值顺手记账（二十期）：回放会征用计数条，退出回放要恢复结算终值 */
+    let ledTimeCur = 0, ledMinesCur = 0;
     function led(el: SVGElement, v: number) {
+      if (el === ledTime) ledTimeCur = v;
+      else ledMinesCur = v;
       v = Math.max(-99, Math.min(999, Math.round(v)));
       const a = Math.abs(v);
       const ds: (string | number)[] = v < 0
@@ -1375,7 +1379,8 @@ export function OnlinePlay({
       URL.revokeObjectURL(url);
     }
     /* ---- 自研回放（五期二版，2026-10-14 张老师定：不弹窗，就在游戏界面进行；
-       六期 2026-10-15 撤掉控制栏）----
+       六期 2026-10-15 撤掉控制栏；二十期 2026-10-16 张老师定：控制条回归——
+       与录像详情页 ReplayBar 同款（无全屏按钮），计数条（计时/雷数 LED）随回放实时同步）----
        复用游戏本体盘面（VEC 管线 + vecUse），回放引擎重演事件流，进回放即自动播完。
        六期：回放中再点「查看回放」＝从头重播（此前是 early-return 点不动）；
        退出回放走 Esc / 笑脸 /「再来一局」/「重玩本局」，退出后恢复结算盘面。
@@ -1388,6 +1393,9 @@ export function OnlinePlay({
     /* 重播钩子（六期）：同一局回放中再点「查看回放」＝从头放。与 forceExitReplay 同理——
        restartReplay 也是闭包内的，由 startInPlaceReplay 注册、exitReplay 自清 */
     let restartReplay: (() => void) | null = null;
+    /* 回放控制条宽度同步钩子（二十期）：条挂 #game_area、宽跟 gwrap 渲染宽走——
+       setZoomVisual 每次变倍调用（startInPlaceReplay 注册、exitReplay 自清） */
+    let syncReplayBarWidth: (() => void) | null = null;
     function startInPlaceReplay() {
       if (!snapshot) return;
       /* 已在回放中（六期张老师定）：不忽略点击，从头重播 */
@@ -1396,6 +1404,12 @@ export function OnlinePlay({
          即收起浮层，播完再弹回来（见 exitReplay / tick 的收尾） */
       hideResultModal();
       const s = snapshot;
+      /* 结算终值存档（二十期）：回放期间计数条被征用（计时/雷数 LED 随回放走），
+         退出回放恢复到这里存的读数；倍率同理——若为装下控制条自动缩小过，
+         退出时还原（玩家回放中手动动过倍率则尊重现状不还原） */
+      const savedTimeLed = ledTimeCur, savedMinesLed = ledMinesCur;
+      const savedZoom = zoomCur;
+      let shrankTo: number | null = null;
       replaying = true;
       const N = s.w * s.h;
       /* 重建数字盘（快照雷区 → 数字），与引擎 recalcAll 同式 */
@@ -1479,6 +1493,7 @@ export function OnlinePlay({
          lc/rc 只记按下（rc 按下即刻切旗，lp 按住下仅视觉；NF 局不切旗），
          lr/rr 松开生效（rp||sv 下＝双击），sc 等后续 lr，mr（自动双击）无条件 chord */
       let rLp = false, rRp = false, rSv = false;
+      let rFlags = 0; // 已插旗数（雷数 LED＝s.m − rFlags，随回放实时同步）
       function applyEv(k: number) {
         const e = evs[k];
         moveCursor(e.x, e.y);
@@ -1493,8 +1508,8 @@ export function OnlinePlay({
             break;
           case 9: // rc
             if (!rLp && !s.nf && inside) {
-              if (rstate[ci] === 0) { rstate[ci] = 2; paintR(ci); }
-              else if (rstate[ci] === 2) { rstate[ci] = s.qmark ? 3 : 0; paintR(ci); }
+              if (rstate[ci] === 0) { rstate[ci] = 2; rFlags++; paintR(ci); }
+              else if (rstate[ci] === 2) { rstate[ci] = s.qmark ? 3 : 0; rFlags--; paintR(ci); }
               else if (rstate[ci] === 3) { rstate[ci] = 0; paintR(ci); }
             }
             rRp = true;
@@ -1508,18 +1523,129 @@ export function OnlinePlay({
           default: break; // mv
         }
       }
-      /* 六期（2026-10-15 张老师定）：**不再插控制条**——原 rc_* 控制栏（重放/播放暂停/
-         速度/进度/退出）整条撤掉；进回放即自动播完（固定 1x），回放中再点「查看回放」
-         ＝从头重播，退出走 Esc / 笑脸 /「再来一局」/「重玩本局」（后两者经 reset 的
-         forceExitReplay）。 */
+      /* ---- 播放控制条（二十期 2026-10-16 张老师定，六期「撤条」口径作废）----
+         与录像详情页 ReplayBar 同款：复用 .replay_bar/.rb_* 全局样式（globals.css），
+         无全屏按钮。播放/暂停 + 当前时间 + 可拖拽进度条；拖拽＝按住即暂停（记住
+         原播放态）、拖动中按帧 seek 实时预览、松手定位续播；拖到最右停在结束那一刻
+         不自动续播（重播语义留给播放按钮——ended 态点播放＝从头重播）。
+         横屏沉浸 / 移动端全屏拉满态不挂条：这两种形态棋盘恰好铺满视口，流内条会被
+         整页锁滚裁出视口（fsAutoFit / fitZoomForLandscape 口径）；回放仍自动播完、
+         移动端播完自动退出，退出入口照旧。条挂 #game_area（gwrap 之后的流内子元素，
+         不吃游戏 zoom），宽度跟 gwrap 渲染宽走（十二期「控制条与棋盘同宽」口径），
+         setZoomVisual 变倍时经 syncReplayBarWidth 钩子重算。
+         ⚠️ 切级别自动适配把棋盘拉满到视口底−12px，条必然出视口——挂载后量一次，
+         装不下就临时缩小倍率（persist=false 不写盘），退出回放还原（见 exitReplay） */
+      const barOk = !(lsQuery.matches || (mqNarrow.matches && !!document.fullscreenElement));
+      let bar: HTMLDivElement | null = null;
+      let fillEl: HTMLElement | null = null, thumbEl: HTMLElement | null = null,
+          timeEl: HTMLElement | null = null;
+      let syncBtnFn: (() => void) | null = null;
+      if (barOk) {
+        bar = document.createElement("div");
+        bar.className = "replay_bar";
+        const ICON_PAUSE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+        const ICON_PLAY = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z"/></svg>';
+        bar.innerHTML =
+          '<button type="button" class="rb_btn" title="暂停" aria-label="暂停">' + ICON_PAUSE + "</button>" +
+          '<span class="rb_time">0.00</span>' +
+          '<div class="rb_track" title="拖动跳转进度"><div class="rb_rail"><div class="rb_fill"></div><div class="rb_thumb"></div></div></div>';
+        const btnEl = bar.querySelector<HTMLButtonElement>(".rb_btn")!;
+        timeEl = bar.querySelector<HTMLElement>(".rb_time")!;
+        fillEl = bar.querySelector<HTMLElement>(".rb_fill")!;
+        thumbEl = bar.querySelector<HTMLElement>(".rb_thumb")!;
+        const railEl = bar.querySelector<HTMLElement>(".rb_rail")!;
+        const trackEl = bar.querySelector<HTMLElement>(".rb_track")!;
+        /* 宽度＝gwrap 渲染宽；页面局部 px = 渲染 rect ÷ 页级 zoom（#page 窄屏阶梯缩放） */
+        const syncWidth = () => {
+          if (!bar) return;
+          bar.style.width = gwrap.getBoundingClientRect().width / pageZoom() + "px";
+          bar.style.marginLeft = bar.style.marginRight = "auto"; // 块级定宽后居中对齐银框
+        };
+        syncWidth();
+        /* 窄盘条按 min-width 向两侧延展 + 左右结算浮窗（greport z=5）比银框高——
+           条抬到浮窗之上，保证播放按钮不被压（视觉上只压到浮窗底行边缘几px） */
+        bar.style.zIndex = "6";
+        syncReplayBarWidth = syncWidth;
+        gwrap.parentElement!.appendChild(bar);
+        /* 播放/暂停按钮（ended 态点播放＝从头重播，setPlaying 内处理） */
+        syncBtnFn = () => {
+          btnEl.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
+          btnEl.title = playing ? "暂停" : "播放";
+          btnEl.setAttribute("aria-label", playing ? "暂停" : "播放");
+        };
+        btnEl.addEventListener("click", () => setPlaying(!playing));
+        /* 进度拖拽（按帧合并 seek：pointermove 频率高于帧率，逐事件重放白费） */
+        let dragActive = false, dragWasPlaying = false, dragRaf = 0, dragCsec = 0;
+        const posToCsec = (clientX: number) => {
+          const r = railEl.getBoundingClientRect();
+          const ratio = r.width > 0 ? Math.max(0, Math.min(1, (clientX - r.left) / r.width)) : 0;
+          return Math.round(ratio * s.csec);
+        };
+        const seekFrame = (clientX: number) => {
+          dragCsec = posToCsec(clientX);
+          if (!dragRaf) {
+            dragRaf = requestAnimationFrame(() => { dragRaf = 0; seekTo(dragCsec); });
+          }
+        };
+        trackEl.addEventListener("pointerdown", (e) => {
+          dragActive = true;
+          dragWasPlaying = playing;
+          if (dragWasPlaying) setPlaying(false);
+          trackEl.setPointerCapture(e.pointerId);
+          seekFrame(e.clientX);
+        });
+        trackEl.addEventListener("pointermove", (e) => { if (dragActive) seekFrame(e.clientX); });
+        const endDrag = (clientX: number | null) => {
+          if (!dragActive) return;
+          dragActive = false;
+          if (dragRaf) { cancelAnimationFrame(dragRaf); dragRaf = 0; }
+          const csec = clientX === null ? dragCsec : posToCsec(clientX);
+          seekTo(csec);
+          /* 拖到最右＝停在结束那一刻（十三期口径）：不 resume */
+          if (dragWasPlaying && csec < s.csec) setPlaying(true);
+        };
+        trackEl.addEventListener("pointerup", (e) => endDrag(e.clientX));
+        trackEl.addEventListener("pointercancel", () => endDrag(null));
+        /* 拉满倍率兜底：等一帧布局落定后量条，出视口即临时缩小倍率装下 */
+        requestAnimationFrame(() => {
+          if (!bar || !replaying) return;
+          const br = bar.getBoundingClientRect();
+          const vh = window.innerHeight;
+          if (br.height > 0 && br.bottom > vh - 4) {
+            const gwR2 = gwrap.getBoundingClientRect();
+            /* 可用银框底 = 视口底 − 4 余量 − 条渲染高 − 条 margin-top 8 */
+            const scale = (vh - 4 - br.height - 8 - gwR2.top) / (gwR2.bottom - gwR2.top);
+            const nz = zoomCur * scale;
+            if (nz > 0.2 && nz < zoomCur) {
+              const zBefore = zoomCur;
+              applyZoom(nz, false);
+              if (zoomCur < zBefore) shrankTo = zoomCur; // 被 floor 钳住没缩成则不记
+            }
+          }
+        });
+      }
       let evIdx = 0;
       let curCsec = 0;
       let playing = false;
       let rafId: number | null = null;
       let lastFrame = 0;
 
+      /* 计数条同步（二十期）：计时 LED 走回放时钟（整秒），雷数 LED＝总雷−已插旗 */
+      function updateCounters() {
+        led(ledTime, Math.min(999, Math.floor(curCsec / 100)));
+        led(ledMines, s.m - rFlags);
+      }
+      /* 控制条进度同步（二十期）：填充/滑块百分比 + 当前时间文本 */
+      function syncBarUI() {
+        const pct = s.csec > 0 ? Math.max(0, Math.min(1, curCsec / s.csec)) * 100 : 0;
+        if (fillEl) fillEl.style.width = pct.toFixed(2) + "%";
+        if (thumbEl) thumbEl.style.left = pct.toFixed(2) + "%";
+        if (timeEl) timeEl.textContent = (curCsec / 100).toFixed(2);
+      }
+
       function setPlaying(v: boolean) {
         playing = v;
+        syncBtnFn?.();
         if (playing) {
           if (curCsec >= s.csec) seekTo(0);
           lastFrame = 0;
@@ -1531,9 +1657,12 @@ export function OnlinePlay({
       function resetReplay() {
         rstate.fill(0);
         rLp = rRp = rSv = false; // 手势状态机一并归零（重播/拖动进度时）
+        rFlags = 0;
         for (let i = 0; i < N; i++) paintR(i);
         evIdx = 0; curCsec = 0;
         moveCursor(0, 0);
+        updateCounters();
+        syncBarUI();
       }
       function seekTo(csec: number) {
         resetReplay();
@@ -1546,6 +1675,8 @@ export function OnlinePlay({
         }
         curCsec = target;
         interpCursor(target);
+        updateCounters();
+        syncBarUI();
       }
       /* 光标插值（2026-10-14 张老师报回放一顿一顿）：时间轴推进的每帧，光标在
          「最近已应用事件」与「下一事件」之间按时间线性补间——即使两个 mv 间隔
@@ -1574,6 +1705,8 @@ export function OnlinePlay({
         }
         curCsec = target;
         interpCursor(target);
+        updateCounters();
+        syncBarUI();
         if (target >= s.csec) {
           setPlaying(false);
           /* 移动端（七期 2026-10-15 张老师定：回放播放完后再次显示浮层）：
@@ -1591,10 +1724,21 @@ export function OnlinePlay({
         setPlaying(false);
         replaying = false;
         restartReplay = null;
+        syncReplayBarWidth = null;
         curEl.remove();
+        bar?.remove(); // 控制条随回放退出一并撤掉（二十期）
         /* 恢复结算盘面（repaintAll 按引擎 state 重画，含败局雷区揭示）；
            reset 路径传 false（后面自会全盘重画） */
-        if (repaint) repaintAll();
+        if (repaint) {
+          repaintAll();
+          /* 计数条恢复结算终值（二十期）：计时/雷数 LED 归还为回放征用前的读数；
+             reset 路径不还——reset 开头自会 led(ledMines, M) / led(ledTime, 0) */
+          led(ledTime, savedTimeLed);
+          led(ledMines, savedMinesLed);
+          /* 回放开始时为装下控制条自动缩小过倍率 → 还原（玩家回放中手动动过
+             倍率则 zoomCur ≠ shrankTo，尊重现状） */
+          if (shrankTo !== null && zoomCur === shrankTo) applyZoom(savedZoom, false);
+        }
         document.removeEventListener("keydown", escR);
         if (restorePanel) showResultModal();
       }
@@ -2356,6 +2500,7 @@ export function OnlinePlay({
       paintRangeFill(cusZoom);
       cusZoomVal.textContent = v.toFixed(2) + "x";
       syncReportZoom(); // 结算面板同步缩放（显示中才生效）
+      if (replaying) syncReplayBarWidth?.(); // 回放控制条宽度跟随（二十期）
     }
     function applyZoom(v: number, persist = true, max?: number) {
       zoomWant = v; // 期望倍率暂存（v8 起页宽恒定，仅供 zoomDragEnd 定值用）
@@ -2556,6 +2701,17 @@ export function OnlinePlay({
       if (ga && ga.parentElement === host) {
         const kids = Array.from(host.children);
         for (const k of kids.slice(kids.indexOf(ga) + 1)) {
+          const kcs = getComputedStyle(k);
+          if (kcs.display === "none" || kcs.position === "absolute" || kcs.position === "fixed") continue;
+          const r = k.getBoundingClientRect();
+          if (r.height <= 0) continue;
+          belowH += r.height / pz + (parseFloat(kcs.marginTop) || 0) + (parseFloat(kcs.marginBottom) || 0);
+        }
+        /* 二十期：回放控制条在 #game_area **内**、gwrap 之后的流内子元素——
+           同样计入下方占用（横屏沉浸/移动端全屏不挂条，但全屏中先开回放再进
+           全屏的时序会带着条进拉满计算） */
+        const gkids = Array.from(ga.children);
+        for (const k of gkids.slice(gkids.indexOf(gwrap) + 1)) {
           const kcs = getComputedStyle(k);
           if (kcs.display === "none" || kcs.position === "absolute" || kcs.position === "fixed") continue;
           const r = k.getBoundingClientRect();
