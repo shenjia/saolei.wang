@@ -4,7 +4,7 @@
 --   * user_scores_nf   = 仅 noflag=1 的 status=20 录像（NF 榜设计语义；顺带清洗 NF 表 125 行 noflag=0 脏数据）
 --   * time = real_time；3bvs = ROUND(board_3bv×1e6/real_time)（MSSQL 原始浮点数据实证为 round，
 --            仅 board 修正遗留的 69/72058 行例外），仅 board_3bv 达级别限界（3bvs>0）参与：
---            初级 >=11（2026-10-16 张老师：3BV>10 才有效，原 >=4）、中/高级 >=4
+--            初级 >=10（2026-10-16 张老师：3BV≥10 才有效，原 >=4）、中/高级 >=4
 --   * tie-break：同成绩取 vid 最小（与增量「严格更优才替换」语义一致）
 --   * video/date 字段 = 达成该最优的录像 id 与其 create_time
 --   * sum_time/sum_3bvs = 三级都 >0 才求和，否则 0（review.ts withSum）
@@ -37,7 +37,7 @@ b_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_tim
            ROUND(vi.board_3bv*1000000/vi.real_time) bvs,
            ROW_NUMBER() OVER (PARTITION BY v.user ORDER BY ROUND(vi.board_3bv*1000000/vi.real_time) DESC, v.id ASC) rn
          FROM video v JOIN video_info vi ON vi.id=v.id
-         WHERE v.status=20 AND v.level='beg' AND vi.real_time>0 AND vi.board_3bv>=11) x WHERE rn=1),
+         WHERE v.status=20 AND v.level='beg' AND vi.real_time>0 AND vi.board_3bv>=10) x WHERE rn=1),
 i_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_time ct,
            ROUND(vi.board_3bv*1000000/vi.real_time) bvs,
            ROW_NUMBER() OVER (PARTITION BY v.user ORDER BY ROUND(vi.board_3bv*1000000/vi.real_time) DESC, v.id ASC) rn
@@ -105,7 +105,7 @@ b_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_tim
            ROUND(vi.board_3bv*1000000/vi.real_time) bvs,
            ROW_NUMBER() OVER (PARTITION BY v.user ORDER BY ROUND(vi.board_3bv*1000000/vi.real_time) DESC, v.id ASC) rn
          FROM video v JOIN video_info vi ON vi.id=v.id
-         WHERE v.status=20 AND v.level='beg' AND vi.noflag=1 AND vi.real_time>0 AND vi.board_3bv>=11) x WHERE rn=1),
+         WHERE v.status=20 AND v.level='beg' AND vi.noflag=1 AND vi.real_time>0 AND vi.board_3bv>=10) x WHERE rn=1),
 i_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_time ct,
            ROUND(vi.board_3bv*1000000/vi.real_time) bvs,
            ROW_NUMBER() OVER (PARTITION BY v.user ORDER BY ROUND(vi.board_3bv*1000000/vi.real_time) DESC, v.id ASC) rn

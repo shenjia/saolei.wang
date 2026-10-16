@@ -25,7 +25,7 @@ b_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_tim
            ROUND(vi.board_3bv*1000000/vi.real_time) bvs,
            ROW_NUMBER() OVER (PARTITION BY v.user ORDER BY ROUND(vi.board_3bv*1000000/vi.real_time) DESC, v.id ASC) rn
          FROM video v JOIN video_info vi ON vi.id=v.id
-         WHERE v.status=20 AND v.level='beg' AND (:NF=0 OR vi.noflag=1) AND vi.real_time>0 AND vi.board_3bv>=11) x WHERE rn=1),
+         WHERE v.status=20 AND v.level='beg' AND (:NF=0 OR vi.noflag=1) AND vi.real_time>0 AND vi.board_3bv>=10) x WHERE rn=1),
 i_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_time ct,
            ROUND(vi.board_3bv*1000000/vi.real_time) bvs,
            ROW_NUMBER() OVER (PARTITION BY v.user ORDER BY ROUND(vi.board_3bv*1000000/vi.real_time) DESC, v.id ASC) rn

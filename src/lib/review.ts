@@ -62,7 +62,7 @@ function userScoresTable(tx: Tx, nf: boolean): UserScoresDelegate {
   return (nf ? tx.userScoresNf : tx.userScores) as unknown as UserScoresDelegate;
 }
 
-/** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time（3BV 低于级别限界记负——2026-10-16 起初级 >10 才有效，入 video_scores 时取 max(0)） */
+/** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time（3BV 低于级别限界记负——2026-10-16 起初级 ≥10 才有效，入 video_scores 时取 max(0)） */
 interface ReviewVideo {
   id: number;
   level: VideoLevel;

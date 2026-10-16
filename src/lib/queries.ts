@@ -645,7 +645,7 @@ const getVideoListJoinCount = unstable_cache(
  * - 其余排序或时间成绩搜索：统一 join 查询（驱动表与 ORDER BY 按排序键选索引，见 videoListConds）。
  * 时间成绩搜索：parseVideoTimeWindow 的 ±5ms 显示舍入窗口（匹配所有显示相同的成绩）。
  * 各排序方向：time 升序（快在前）、3bv 降序（大在前）、3bvs 降序（快在前，排除运气盘：
- * 初级 3BV≤10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）、
+ * 初级 3BV<10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）、
  * comments/clicks 降序（多在前，保留原 >0 过滤口径）。
  */
 export async function getVideoList(opts: {
