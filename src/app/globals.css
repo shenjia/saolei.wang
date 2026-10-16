@@ -659,10 +659,14 @@ body #video_view .video_cell .playable {
 }
 .play_overlay svg {
   /* 随按钮同步反缩放（视觉恒 26px）；三角路径已按包围盒精确居中
-     （VideoReplay.tsx 内路径 bbox 中心＝viewBox 中心），不再要 margin 补偿——
-     旧 margin-left:3px 在版图 zoom 下被放大（初级 2.4x 时偏右 7.2px） */
+     （VideoReplay.tsx 内路径 bbox 中心＝viewBox 中心）——不再用旧 3px
+     margin（在版图 zoom 下被放大，初级 2.4x 时偏右 7.2px）。
+     光学补偿（2026-10-16 张老师定）：右指三角质量集中在左侧底边，几何居中
+     仍显偏左——margin 4px 经 flex 居中折半＝右移 2px（恰平衡质心偏移 2.2px），
+     随 --pbz 反折算保持渲染尺度恒定 */
   width: calc(26px / var(--pbz, 1));
   height: calc(26px / var(--pbz, 1));
+  margin-left: calc(4px / var(--pbz, 1));
 }
 
 /* ---------- 新增：加载更多按钮 ----------
