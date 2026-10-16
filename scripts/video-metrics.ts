@@ -7,6 +7,7 @@
 //   --limit=N          只处理前 N 个（默认全量）
 //   --from=N           从 id 第 N 个偏移开始（配合 --limit 分批）
 //   --missing-only     只补 video_metrics 里缺行的（增量，日常用这个）
+//   --ids=1,2,3        只重算指定 id（逗号分隔）；--ids-file=path 每行一个 id（定点重算）
 //   --since=<秒>       只处理 create/update 时间晚于此的录像
 //   --dist-only        跳过逐盘写表，仅按现有 video_metrics 重算分位基准
 //   --rank-only        只做最后的全站排名重排（不动指标与基准）
@@ -143,6 +144,18 @@ async function main() {
   const missingOnly = has("missing-only");
   const distOnly = has("dist-only");
   const rankOnly = has("rank-only");
+  // --ids=1,2,3 或 --ids-file=/path/to/ids.txt（每行一个 id）：只重算指定录像（幂等 upsert）。
+  // 用于口径点修后的定点重算（如 MVF 择优口径上线后的 210 条），比全量跑省时且不影响其他行。
+  const idsArg = arg("ids");
+  const idsFile = arg("ids-file");
+  const onlyIds: bigint[] | null = idsArg
+    ? idsArg.split(",").map((s) => BigInt(s.trim())).filter((n) => n > 0n)
+    : idsFile
+      ? readFileSync(idsFile, "utf8").split(/\r?\n/).map((s) => s.trim()).filter((s) => s !== "").map((s) => BigInt(s))
+      : null;
+  if (onlyIds) {
+    console.log(`定点模式：只处理 ${onlyIds.length} 个指定 id`);
+  }
   const rows = BASE_METRIC_KEYS as BaseMetricKey[];
 
   if (rankOnly) {
@@ -154,12 +167,14 @@ async function main() {
     const take = limit > 0 ? limit : undefined;
     const infos = await prisma.videoInfo.findMany({
       select: { id: true, filepath: true, board3bv: true, realTime: true, noflag: true },
+      where: onlyIds ? { id: { in: onlyIds } } : undefined,
       orderBy: { id: "asc" },
       skip: offset,
       take,
     });
     const videos = await prisma.video.findMany({
       select: { id: true, level: true, status: true, createTime: true, updateTime: true },
+      where: onlyIds ? { id: { in: onlyIds } } : undefined,
       orderBy: { id: "asc" },
       skip: offset,
       take,
