@@ -220,9 +220,14 @@ export function OnlinePlay({
        二期起这些开关收进设置浮窗，初始值从 localStorage 恢复。
        「显示3BV」开关已废（2026-10-15 八期张老师定：状态栏整个取消，见 gname 注释） */
     let nf = false, ng = true, qmark = false;
-    /* 「自动双击」开关（2026-10-16 张老师定，默认关）：标旗（右键/长按插上旗）后
-       自动对周围已开数字格做 chord——预检「旗数满足且有未开非旗邻格」才执行并录
-       mr 事件（计一次 Double）；开不出格的空 chord 不执行也不计数。 */
+    /* 「速旗模式」（2026-10-16 张老师定，默认关，入口＝NF 右侧小旗快捷钮）：
+       ① 标旗（右键/长按插上旗）后自动对周围已开数字格做 chord——预检「旗数满足且有
+       未开非旗邻格」才执行并录 mr 事件（计一次 Double）；开不出格的空 chord 不执行
+       也不计数；② 左右键点已开数字都视为双击——左键本就全局生效（见 mouseup
+       「单击已开数字格＝双击」分支），速旗新增的是右键点已开数字也 chord（录 mr，
+       不录 rc：引擎里 rc 落在已开格会挂起 rv、随后的 rr 计一次 wasted 右键，口径就歪了；
+       mr 引擎无条件计 Double，与左键单击数字同口径）。
+       localStorage 键沿用旧「自动双击」开关的 autoChord（平滑迁移） */
     let autoChord = false;
     /* 「显示统计」开关（2026-10-15 六期张老师定；2026-10-16 张老师定默认开）：左侧「数据统计」
        面板的**唯一**显示开关。八期改口径：开＝也只在**游戏结束**时随结算弹出（对局中不再
@@ -1016,8 +1021,8 @@ export function OnlinePlay({
       paint(i);
       led(ledMines, flagsLeft());
     }
-    /* 「自动双击」（2026-10-16 张老师定，设置开关默认关）：插上旗后对周围已开数字格
-       逐个预检——旗数恰好满足**且**有未开非旗邻格才执行 chord 并录 mr 事件
+    /* 「速旗模式」（2026-10-16 张老师定，NF 右侧小旗快捷钮，默认关）：插上旗后对周围
+       已开数字格逐个预检——旗数恰好满足**且**有未开非旗邻格才执行 chord 并录 mr 事件
        （计一次 Double、开出格即有效）；空 chord 不执行不录制不计数 */
     function autoChordAround(i: number) {
       for (const a of neighbors(i)) {
@@ -1031,9 +1036,18 @@ export function OnlinePlay({
         chord(a);
       }
     }
-    /* 插旗入口（右键按下 / 移动端长按）：toggleFlag 之后按开关触发自动双击；
-       仅「插上旗」（态→2）触发，摘旗/切问号不触发 */
+    /* 右键按下入口（桌面 mousedown；移动端长按不走这里）：
+       速旗开＋点在已开数字上＝双击——录 mr（不录 rc：引擎里 rc 落在已开格会挂起 rv、
+       随后的 rr 计一次 wasted 右键；mr 引擎无条件计 Double，与左键单击数字同口径）
+       并直接 chord（chord 内部自守卫：旗数不满足/0 格不动作，同左键单击数字口径）；
+       否则＝插旗（NF 下内部只抖动）+ 速旗自动 chord 联动 */
     function flagWithAutoChord(i: number) {
+      if (autoChord && nums && state[i] === 1) {
+        recordEv(65, i); // mr
+        chord(i);
+        return;
+      }
+      recordEv(9, i); // rc 按下即录——flop 插旗在按下位即刻生效
       toggleFlag(i);
       if (autoChord && state[i] === 2) autoChordAround(i);
     }
@@ -1086,7 +1100,7 @@ export function OnlinePlay({
         ["Isls", solvedIsls + "/" + bvIslands.length, "孤立数字块（island）的完成数 / 全盘总数"],
         ["Left", cnt.clLeft + "@" + (t > 0 ? f3(cnt.clLeft / t) : "0.000"), "左键点击次数 @ 每秒点击频率"],
         ["Right", cnt.clRight + "@" + (t > 0 ? f3(cnt.clRight / t) : "0.000"), "右键点击次数 @ 每秒点击频率"],
-        ["Double", cnt.clDouble + "@" + (t > 0 ? f3(cnt.clDouble / t) : "0.000"), "双击（左右同按/单击数字/自动双击）次数 @ 每秒频率"],
+        ["Double", cnt.clDouble + "@" + (t > 0 ? f3(cnt.clDouble / t) : "0.000"), "双击（左右同按/单击数字/速旗）次数 @ 每秒频率"],
         ["Ce", ce + "@" + (t > 0 ? f3(ce / t) : "0.000"), "有效点击次数（真正开出新格或完成 3BV 的点击）@ 每秒频率"],
         ["Cl", cl + "@" + (t > 0 ? f3(cl / t) : "0.000"), "总点击次数（左键 + 右键 + 双击）@ 每秒频率"],
         ["IOE", cl > 0 ? f3(solvedBv / cl) : "*", "效率指数 = 已完成 3BV ÷ 总点击次数"],
@@ -2088,19 +2102,19 @@ export function OnlinePlay({
       }
       if (over && lastReportHtml) paintStatPanel(lastReportHtml);
     });
-    /* 「自动双击」（2026-10-16 张老师定，默认关）：只影响之后的插旗行为，不重开当前局 */
-    const swAc = $("sw_ac") as HTMLInputElement;
-    on(swAc, "change", () => { autoChord = swAc.checked; saveSettings(); });
-
-    /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／无猜两颗 ----
-       激活显色（NF=黄 #fdc61d / 无猜=绿 #a6e22e，见 .gmode/.gmode_ng）、未激活灰。
-       点击＝把内存开关取反 → saveSettings → 重开一局。
-       十期起设置浮窗里不再有这两项（行已删），快捷钮是唯一入口 */
+    /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／无猜／速旗三颗 ----
+       激活显色（NF=黄 #fdc61d / 无猜=绿 #a6e22e / 速旗=默认黄，见 .gmode/.gmode_ng）、
+       未激活灰。NF／无猜点击＝把内存开关取反 → saveSettings → 重开一局；
+       速旗只影响之后的插旗/点数字行为，切换不重开当前局（原「自动双击」开关口径）。
+       十期起设置浮窗里不再有 NF/无猜两项（行已删），快捷钮是唯一入口；
+       「自动双击」设置开关同期撤出，改挂速旗快捷钮 */
     const btnNf = $("btn_nf") as HTMLButtonElement;
     const btnNg = $("btn_ng") as HTMLButtonElement;
+    const btnSq = $("btn_sq") as HTMLButtonElement;
     function syncModeButtons() {
       btnNf.classList.toggle("active", nf);
       btnNg.classList.toggle("active", ng);
+      btnSq.classList.toggle("active", autoChord);
     }
     on(btnNf, "click", () => {
       nf = !nf;
@@ -2113,6 +2127,11 @@ export function OnlinePlay({
       saveSettings();
       syncModeButtons();
       reset();
+    });
+    on(btnSq, "click", () => {
+      autoChord = !autoChord;
+      saveSettings();
+      syncModeButtons();
     });
 
     /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ----
@@ -2278,8 +2297,7 @@ export function OnlinePlay({
         setFace("ooh");
       } else if (e.button === 2) {
         rightDown = true; leftDown = false; chordDone = false; // e.buttons=2：同上自愈
-        recordEv(9, i); // rc 按下即录——flop 插旗在按下位即刻生效
-        flagWithAutoChord(i); // 插旗（NF 下内部只抖动）+「自动双击」开关联动
+        flagWithAutoChord(i); // rc 录制收进内部：速旗下点已开数字录 mr+chord，否则录 rc 插旗
       }
     });
     /* 按住滑动：按下态实时跟随鼠标经过的格子（出盘后再进盘按 e.buttons 自愈） */
@@ -2405,7 +2423,7 @@ export function OnlinePlay({
         if (state[i] === 1) return; // 已开格长按无意义
         recordEv(9, i); // rc 按下即录（flop 插旗按下生效口径）；rr 在 touchend 补录
         toggleFlag(i);
-        /* 「自动双击」开关开时：插旗成功（态→2）后对周围已开数字格预检 chord，
+        /* 速旗模式开时：插旗成功（态→2）后对周围已开数字格预检 chord，
            空 chord 不录不计（2026-10-16 张老师定；此前移动端无条件自动 chord，
            未满足的数字格也计入 Double——移动端 Corr 被系统性拉低的根因） */
         if (autoChord && state[i] === 2) autoChordAround(i);
@@ -3035,8 +3053,7 @@ export function OnlinePlay({
     /* 设置浮窗控件初始状态（从 localStorage 恢复的开关勾选态 + 3BV 滑杆初值） */
     swQm.checked = qmark;
     swStats.checked = showStats;
-    swAc.checked = autoChord;
-    syncModeButtons(); // 模式快捷钮按存档初值点亮（NF/无猜）
+    syncModeButtons(); // 模式快捷钮按存档初值点亮（NF/无猜/速旗）
     syncBvSlider();
 
     /* 开局恢复上次级别（四期张老师报：刷新/热更后回初级，3BV 范围浮窗也跟着变初级
@@ -3087,8 +3104,8 @@ export function OnlinePlay({
           <a data-lv="cus">自定义</a>
         </div>
         {/* 右上角图标按钮排（2026-10-14 二期张老师定，九期追补模式快捷钮）：
-            NF／无猜两颗模式钮在齿轮左侧——激活显色（NF=黄 / 无猜=绿）、未激活灰，
-            点击＝拨设置浮窗同名开关（双向同步），切换按既有口径重开一局 */
+            NF／无猜／速旗三颗模式钮在齿轮左侧——激活显色（NF=黄 / 无猜=绿 / 速旗=默认黄）、
+            未激活灰，NF／无猜点击重开一局；速旗只改行为不重开（原「自动双击」开关口径） */
         }
         <div className="gicons">
           {/* 模式快捷钮 hover 出气泡（2026-10-15 九期张老师定）：文案与设置浮窗
@@ -3096,6 +3113,17 @@ export function OnlinePlay({
           <button className="gicon gmode" id="btn_nf" type="button">
             NF
             <span className="tip">禁旗模式：不能插旗，全程只靠开格决胜</span>
+          </button>
+          {/* 速旗模式（2026-10-16 张老师定）：小旗图标＋NF 右侧；激活沿用 .gicon.active
+              默认黄。行为＝原「自动双击」开关（插旗后自动 chord）＋右键点已开数字也视为
+              双击（左键单击数字本就全局生效） */}
+          <button className="gicon gmode" id="btn_sq" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {/* 旗杆 + 右侧内凹三角旗面（线稿风格与齿轮/全屏一致） */}
+              <path d="M6 21V3.5" />
+              <path d="M6 4.5h11.5l-3 4 3 4H6z" />
+            </svg>
+            <span className="tip">速旗模式：开启后右键标雷自动尝试双击周围格子，左右键点击数字都视为双击</span>
           </button>
           <button className="gicon gmode gmode_ng" id="btn_ng" type="button">
             {/* 雨伞图标（2026-10-15 九期五改，张老师定）：合伞＝未激活态、
@@ -3150,13 +3178,8 @@ export function OnlinePlay({
             <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
             <span className="tip">游戏结束后在游戏界面左侧弹出数据统计面板</span>
           </div>
-          {/* 「自动双击」（2026-10-16 张老师定，默认关）：插旗后自动 chord 周围满足条件的
-              数字格；实际开出新格的计一次 Double，开不出的不计 */}
-          <div className="gs_row">
-            <span className="gs_name">自动双击</span>
-            <label className="gsw"><input type="checkbox" id="sw_ac" /><span className="track" /></label>
-            <span className="tip">标旗后自动对周围的数字进行双击</span>
-          </div>
+          {/* 「自动双击」设置行已撤（2026-10-16 张老师定）：入口改挂 NF 右侧的
+              速旗快捷钮（btn_sq），行为口径不变 */}
           <div className="gs_divider" />
           <div className="gs_zoom">
             <span className="zlabel">显示比例</span>
