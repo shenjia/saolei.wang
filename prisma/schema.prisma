@@ -648,3 +648,41 @@ model AvatarReview {
   @@index([user, createTime])
   @@map("avatar_review")
 }
+
+// 全站访问埋点（2026-10-16 仪表盘流量统计，参考 01xue.com 同名体系）
+// 前端 TrackPageView 组件挂 root layout，sendBeacon 上报到 /api/track/view；
+// 每个页面实例（clientId）的停留时长/滚动深度/点击由 /api/track/dwell 后写覆盖回填。
+// - 管理员登录态照常落库但打 isAdmin 标记，后台聚合时剔除，避免自己浏览污染数据
+// - referrer 只存：direct（直达）/ internal（站内跳转）/ 外站域名；入口统计只看 isEntry 且非 internal
+// - 会话：同 visitorId 30 分钟内视为同一会话；会话首条 PV 标 isEntry（= 落地页）
+// - /video/:id 不单列：聚合时按 path 正则归类，明细行保留原始 path 即可
+model PageView {
+  id            BigInt  @id @default(autoincrement()) @db.BigInt
+  path          String  @db.VarChar(255)
+  visitorId     String  @map("visitor_id") @db.Char(32) // 长期 cookie（1 年），访客去重身份
+  ip            String  @default("") @db.VarChar(40)
+  ua            String? @db.VarChar(255)
+  uaClass       String  @default("") @map("ua_class") @db.VarChar(20) // desktop / mobile / tablet / bot / unknown
+  referrer      String? @db.VarChar(100) // direct / internal / 外站域名
+  isEntry       Boolean @default(false) @map("is_entry") // 会话首条 PV（落地页统计）
+  sessionId     String? @map("session_id") @db.VarChar(64)
+  isAdmin       Boolean @default(false) @map("is_admin")
+  clientId      String? @map("client_id") @db.VarChar(24) // 页面实例 id（前端生成），dwell 回写关联键
+  dwellMs       Int?    @map("dwell_ms") // 前台可见停留毫秒（切后台不计）
+  scrollPct     Int?    @map("scroll_pct") // 最大滚动深度 0-100
+  clicked       Boolean @default(false)
+  firstClickHref String? @map("first_click_href") @db.VarChar(255) // 页内首个 <a> 点击目标
+  createTime    BigInt  @default(0) @map("create_time") @db.BigInt // Unix 秒
+
+  // (visitorId, createTime)：会话判定 findFirst（30 分钟窗口倒序第一条）
+  // (path, visitorId, createTime)：10 秒刷新去重 findFirst
+  // (sessionId)：流失统计按会话聚流水
+  // (isEntry, createTime)：落地页 Top 按档期聚合
+  // (createTime)：30 天流水全量拉取
+  @@index([visitorId, createTime])
+  @@index([path, visitorId, createTime])
+  @@index([sessionId])
+  @@index([isEntry, createTime])
+  @@index([createTime])
+  @@map("page_view")
+}

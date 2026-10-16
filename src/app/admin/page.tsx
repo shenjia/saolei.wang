@@ -1,8 +1,9 @@
-// 管理后台 · 仪表盘（2026-09-24）
-// 一屏掌握：规模指标（KPI）→ 30 天趋势 → 待办与分布 → 最新动态。
+// 管理后台 · 仪表盘（2026-09-24；2026-10-16 加流量统计区块）
+// 一屏掌握：规模指标（KPI）→ 30 天趋势 → 流量统计 → 待办与分布 → 最新动态。
 
 import Link from "next/link";
 import { getAnomalies, getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
+import { getTrafficOverview, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { getDashboardDistributions } from "@/lib/admin/cache";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
 import { TrendChart, BarList, type Series } from "@/components/admin/Charts";
@@ -16,7 +17,12 @@ export const metadata = { title: "仪表盘 | 管理后台" };
 
 export default async function AdminDashboard() {
   // 分两波取数：重的全表聚合走缓存且在内部串行，轻的实时查询并行
-  const [ov, trend, dist] = await Promise.all([getOverview(), getTrend(30), getDashboardDistributions()]);
+  const [ov, trend, dist, traffic] = await Promise.all([
+    getOverview(),
+    getTrend(30),
+    getDashboardDistributions(),
+    getTrafficOverview(),
+  ]);
   const [anomalies, latestUsers, latestVideos] = await Promise.all([
     getAnomalies(),
     getLatestUsers(8),
@@ -33,6 +39,55 @@ export default async function AdminDashboard() {
 
   const rankedRate = ov.userTotal ? Math.round((ov.rankedTotal / ov.userTotal) * 100) : 0;
   const { oldestPendingDays: pendingDays } = ov;
+
+  // 流量对比 foot：涨绿跌红（.down）
+  const cmpFoot = (today: number, yday: number) => {
+    if (!yday) return `昨日 0 · 首日统计`;
+    const pct = Math.round(((today - yday) / yday) * 1000) / 10;
+    const sign = pct >= 0 ? "+" : "";
+    return (
+      <>
+        昨日 {yday.toLocaleString("zh-CN")} · 较昨日{" "}
+        <b className={pct < 0 ? "down" : undefined}>
+          {sign}
+          {pct}%
+        </b>
+      </>
+    );
+  };
+
+  // 停留毫秒 → 人类可读（12s / 3m05s）
+  const fmtDur = (ms: number | null) => {
+    if (ms === null) return "—";
+    const s = Math.round(ms / 1000);
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
+  };
+
+  // 流失诊断 → 标签配色
+  const DIAGNOSIS_TAG: Record<string, string> = {
+    bounce: "bad",
+    shallow: "warn",
+    read_leave: "info",
+    normal: "plain",
+    collecting: "plain",
+  };
+  const ExitRow = ({ e }: { e: ExitPage }) => (
+    <tr>
+      <td className="mono" title={e.path}>
+        {e.path}
+      </td>
+      <td className="num">{e.pv.toLocaleString("zh-CN")}</td>
+      <td className="num strong">{(e.exitRate * 100).toFixed(0)}%</td>
+      <td className="num">{fmtDur(e.medianMs)}</td>
+      <td className="num">{e.medianScrollPct === null ? "—" : `${e.medianScrollPct}%`}</td>
+      <td>
+        <span className={`admin_tag ${DIAGNOSIS_TAG[e.diagnosis.type]}`} title={e.diagnosis.hint}>
+          {e.diagnosis.label}
+        </span>
+      </td>
+    </tr>
+  );
 
   const titleItems = titles.map((t) => ({
     label: t.title,
@@ -87,7 +142,7 @@ export default async function AdminDashboard() {
           href="/admin/videos"
           foot={
             <>
-              通过率 <b>{ov.passRate}%</b>
+              今日 <b>+{ov.videoToday}</b> · 通过率 <b>{ov.passRate}%</b>
             </>
           }
         />
@@ -123,7 +178,11 @@ export default async function AdminDashboard() {
           tone="yellow"
           trend={trend.series.comments}
           href="/admin/comments"
-          foot="未删除合计"
+          foot={
+            <>
+              今日 <b>+{ov.commentToday}</b> · 未删除合计
+            </>
+          }
         />
         <Kpi
           label="论坛主题"
@@ -131,7 +190,11 @@ export default async function AdminDashboard() {
           tone="cyan"
           trend={trend.series.bbs}
           href="/admin/bbs"
-          foot={`回复 ${ov.bbsReplyTotal.toLocaleString("zh-CN")} 条`}
+          foot={
+            <>
+              今日 <b>+{ov.bbsPostToday}</b> · 回复 {ov.bbsReplyTotal.toLocaleString("zh-CN")} 条
+            </>
+          }
         />
         <Kpi
           label="人气点击"
@@ -139,6 +202,21 @@ export default async function AdminDashboard() {
           tone="green"
           trend={trend.series.clicks}
           foot="看地盘去重计数"
+        />
+        {/* 流量 KPI（2026-10-16）：page_view 埋点，管理员浏览已剔除 */}
+        <Kpi
+          label="今日 PV"
+          value={traffic.today.pv}
+          tone="cyan"
+          trend={traffic.trend.pv}
+          foot={cmpFoot(traffic.today.pv, traffic.yesterday.pv)}
+        />
+        <Kpi
+          label="今日 UV"
+          value={traffic.today.uv}
+          tone="purple"
+          trend={traffic.trend.uv}
+          foot={cmpFoot(traffic.today.uv, traffic.yesterday.uv)}
         />
         <Kpi label="站内信" value={ov.messageTotal} tone="grey" href="/admin/messages" foot="含系统广播" />
         <Kpi
@@ -164,6 +242,18 @@ export default async function AdminDashboard() {
         <TrendChart dates={trend.dates} series={series} unit="" />
       </AdminCard>
 
+      {/* ---------- 访问趋势（2026-10-16 流量统计） ---------- */}
+      <AdminCard title="近 30 天访问" more="page_view 埋点 · 已剔除管理员浏览 · 缓存 5 分钟">
+        <TrendChart
+          dates={traffic.trend.dates}
+          series={[
+            { key: "pv", label: "PV", color: "#66d9ef", values: traffic.trend.pv },
+            { key: "uv", label: "UV", color: "#ae81ff", values: traffic.trend.uv },
+          ]}
+          unit=""
+        />
+      </AdminCard>
+
       {/* ---------- 待办 + 军衔分布 ---------- */}
       <div className="admin_grid c2">
         <AdminCard title="待办事项">
@@ -183,6 +273,79 @@ export default async function AdminDashboard() {
 
         <AdminCard title="军衔分布" more={<Link href="/admin/rank">军衔阈值 →</Link>}>
           <BarList items={titleItems} />
+        </AdminCard>
+      </div>
+
+      {/* ---------- 流量统计（2026-10-16）：来源 / 落地页 / 设备 / 热门录像 ---------- */}
+      <div className="admin_grid c2">
+        <AdminCard title="入口来源" more="近 30 天 · 会话入口的 referrer">
+          <BarList
+            items={traffic.referrers.map((r) => ({
+              label: REFERRER_NAMES[r.source] ?? r.source,
+              value: r.visits,
+            }))}
+            color="linear-gradient(90deg,#1f6f8b,#66d9ef)"
+          />
+        </AdminCard>
+
+        <AdminCard title="落地页 Top" more="近 7 天 · 会话首个页面（录像 ID 已归类）">
+          <BarList
+            items={traffic.entryPages.d7.map((e) => ({
+              label: e.path,
+              value: e.entries,
+            }))}
+            color="linear-gradient(90deg,#6b4f8b,#ae81ff)"
+          />
+        </AdminCard>
+      </div>
+
+      <div className="admin_grid c2">
+        <AdminCard title="设备分布" more="近 30 天 · 按 UA 粗分类">
+          <BarList
+            items={traffic.devices.map((d) => ({
+              label: DEVICE_NAMES[d.uaClass] ?? d.uaClass,
+              value: d.pv,
+            }))}
+            color="linear-gradient(90deg,#4f7a3a,#a6e22e)"
+          />
+        </AdminCard>
+
+        <AdminCard title="热门录像页" more="近 7 天 · /video/:id 访问榜" tight>
+          <div className="admin_scroll">
+            <table className="admin_table">
+              <thead>
+                <tr>
+                  <th>录像</th>
+                  <th className="c">级别</th>
+                  <th className="num">PV</th>
+                  <th className="num">UV</th>
+                </tr>
+              </thead>
+              <tbody>
+                {traffic.topVideos.d7.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="gray">
+                      暂无数据
+                    </td>
+                  </tr>
+                )}
+                {traffic.topVideos.d7.map((v) => (
+                  <tr key={v.path}>
+                    <td>
+                      <Link className="link" href={v.path} target="_blank">
+                        {v.label}
+                      </Link>
+                    </td>
+                    <td className="c">
+                      <LevelTag level={v.level} />
+                    </td>
+                    <td className="num strong">{v.pv.toLocaleString("zh-CN")}</td>
+                    <td className="num">{v.uv.toLocaleString("zh-CN")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </AdminCard>
       </div>
 
@@ -278,6 +441,40 @@ export default async function AdminDashboard() {
           </div>
         </AdminCard>
       </div>
+
+      {/* ---------- 高流失页（2026-10-16）：会话末页诊断 ---------- */}
+      <AdminCard
+        title="高流失页"
+        more="近 7 天 · 会话末页占比（录像详情页看完即走属正常，未计入；PV ≥ 5 才入榜）"
+        tight
+      >
+        <div className="admin_scroll">
+          <table className="admin_table">
+            <thead>
+              <tr>
+                <th>页面</th>
+                <th className="num">PV</th>
+                <th className="num">退出占比</th>
+                <th className="num">中位停留</th>
+                <th className="num">中位滚动</th>
+                <th>诊断</th>
+              </tr>
+            </thead>
+            <tbody>
+              {traffic.exits.d7.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="gray">
+                    暂无数据（埋点上线后随访问量积累）
+                  </td>
+                </tr>
+              )}
+              {traffic.exits.d7.map((e) => (
+                <ExitRow key={e.path} e={e} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </AdminCard>
     </>
   );
 }

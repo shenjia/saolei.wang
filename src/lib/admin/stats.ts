@@ -111,7 +111,9 @@ export interface Overview {
   newsTotal: number;
   newsToday: number;
   commentTotal: number;
+  commentToday: number;
   bbsPostTotal: number;
+  bbsPostToday: number;
   bbsReplyTotal: number;
   clickTotal: number;
   messageTotal: number;
@@ -140,7 +142,7 @@ export async function getOverview(): Promise<Overview> {
   const [
     userTotal, userToday, userWeek, rankedTotal,
     videoTotal, videoReviewed, videoPending, videoBanned, videoToday,
-    newsTotal, newsToday, commentTotal, bbsPostTotal, bbsReplyTotal,
+    newsTotal, newsToday, commentTotal, commentToday, bbsPostTotal, bbsPostToday, bbsReplyTotal,
     clickTotal, messageTotal, donateAgg, act7, act30,
   ] = await Promise.all([
     // 2026-10-14：人数口径与前台上榜口径统一——封禁账号（旧站「停用」）不计入
@@ -156,7 +158,9 @@ export async function getOverview(): Promise<Overview> {
     prisma.news.count(),
     prisma.news.count({ where: { createTime: { gte: BigInt(today) } } }),
     prisma.comment.count({ where: { status: 0 } }),
+    prisma.comment.count({ where: { status: 0, createTime: { gte: BigInt(today) } } }),
     prisma.bbsPost.count({ where: { status: 0 } }),
+    prisma.bbsPost.count({ where: { status: 0, createTime: { gte: BigInt(today) } } }),
     prisma.bbsReply.count({ where: { status: 0 } }),
     prisma.click.count(),
     prisma.message.count(),
@@ -192,7 +196,9 @@ export async function getOverview(): Promise<Overview> {
     newsTotal,
     newsToday,
     commentTotal,
+    commentToday,
     bbsPostTotal,
+    bbsPostToday,
     bbsReplyTotal,
     clickTotal,
     messageTotal,

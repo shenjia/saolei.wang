@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>管理后台仪表盘 · UV/PV 流量统计设计稿 · 2026-10-16</title>
+<style>
+  body{background:#272822;margin:0;padding:40px 0 80px;font-family:"微软雅黑",Arial,"宋体";color:#636359;font-size:14px;line-height:21px}
+  .design_wrap{width:960px;margin:0 auto;padding:0 15px;box-sizing:border-box}
+  h3{color:#eee;font-size:16px;margin:28px 0 12px}
+  .note{color:#939387;font-size:13px;line-height:22px;margin:6px 0 14px}
+  .note b{color:#b1b1a4}
+  .tag{display:inline-block;font-size:12px;color:#f92672;border:1px solid #f92672;border-radius:3px;padding:0 8px;margin-left:8px;vertical-align:1px}
+  .tag.new{color:#a6e22e;border-color:#a6e22e}
+
+  /* ===== 1:1 复刻 admin.css（KPI 卡） ===== */
+  .admin_kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));margin-bottom:14px}
+  .admin_kpi{background:#2d2d29;border:1px solid #49483e;border-left:3px solid #a6e22e;border-radius:8px;padding:12px 14px;box-shadow:2px 2px 5px rgba(0,0,0,.2);position:relative}
+  .admin_kpi .label{color:#939387;font-size:13px;line-height:20px}
+  .admin_kpi .value{color:#eee;font-size:25px;line-height:34px;font-weight:bold;font-variant-numeric:tabular-nums}
+  .admin_kpi .value small{font-size:13px;color:#939387;font-weight:normal;margin-left:3px}
+  .admin_kpi .foot{color:#75715e;font-size:12px;line-height:18px}
+  .admin_kpi .foot b{color:#a6e22e;font-weight:normal}
+  .admin_kpi .foot b.down{color:#f92672}
+  .admin_kpi.cyan{border-left-color:#66d9ef}
+  .admin_kpi.purple{border-left-color:#ae81ff}
+  .admin_kpi.green{border-left-color:#a6e22e}
+  .admin_kpi.grey{border-left-color:#6c6c61}
+  .admin_kpi .spark{position:absolute;right:12px;top:14px;opacity:.85}
+
+  /* ===== 1:1 复刻 AdminCard ===== */
+  .admin_card{background:#2d2d29;border:1px solid #49483e;border-radius:8px;margin-bottom:14px;box-shadow:2px 2px 5px rgba(0,0,0,.2)}
+  .admin_card>h2{display:flex;align-items:center;justify-content:space-between;font-size:15px;color:#eee;line-height:38px;padding:0 16px;margin:0;border-bottom:1px solid #49483e;font-weight:normal}
+  .admin_card>h2 .more{color:#939387;font-size:13px}
+  .admin_card_body{padding:14px 16px}
+  .admin_legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+  .admin_legend button{display:inline-flex;align-items:center;gap:6px;background:#26261f;border:1px solid #49483e;border-radius:4px;color:#b1b1a4;font-size:12px;line-height:24px;padding:0 10px;cursor:pointer}
+  .admin_legend button i{width:8px;height:8px;border-radius:4px;display:inline-block}
+  .admin_legend button b{font-variant-numeric:tabular-nums;color:#939387;font-weight:normal}
+  .admin_legend button.off{opacity:.4}
+
+  .demo_grid{display:grid;gap:14px;grid-template-columns:1fr 1fr}
+</style>
+</head>
+<body>
+<div class="design_wrap">
+
+  <h3>管理后台仪表盘 · UV/PV 流量统计（2026-10-16）<span class="tag new">新增</span></h3>
+  <p class="note">
+    现状：新站从未做过访问埋点（老站 ASP 计数器未迁），本次补齐「埋点 → 存储 → 聚合 → 展示」全链路。<br>
+    采集：Next 16 <b>proxy.ts</b> 拦截所有页面请求（排除 /api、/_next、静态资源、/admin 后台自身与 bot UA），fire-and-forget 写入 <b>pageview_log</b> 明细表（ts / path / ip_hash 匿名化 / 无个人信息）。<br>
+    口径：<b>PV = 页面请求数</b>；<b>UV = 当日去重 IP（sha256 截断匿名化）</b>；统计查询挂 unstable_cache 60s。<br>
+    下方数值均为示意图数据。
+  </p>
+
+  <h3>① KPI 区新增两张卡（插在「人气点击」之后）</h3>
+  <div class="admin_kpis">
+    <div class="admin_kpi green">
+      <div class="label">人气点击</div>
+      <div class="value">3,164,528</div>
+      <div class="foot">看地盘去重计数</div>
+    </div>
+    <div class="admin_kpi cyan">
+      <svg class="spark" width="96" height="26" viewBox="0 0 96 26"><path d="M0,18 L13,15 L26,17 L39,10 L52,12 L65,7 L78,9 L90,4 L96,6" fill="none" stroke="#66d9ef" stroke-width="1.5"/></svg>
+      <div class="label">今日 PV <span class="tag new" style="margin-left:4px">新增</span></div>
+      <div class="value">1,847</div>
+      <div class="foot">昨日 <b>1,632</b> · 较昨日 <b>+13.2%</b></div>
+    </div>
+    <div class="admin_kpi purple">
+      <svg class="spark" width="96" height="26" viewBox="0 0 96 26"><path d="M0,20 L13,18 L26,19 L39,14 L52,15 L65,11 L78,12 L90,8 L96,9" fill="none" stroke="#ae81ff" stroke-width="1.5"/></svg>
+      <div class="label">今日 UV <span class="tag new" style="margin-left:4px">新增</span></div>
+      <div class="value">726</div>
+      <div class="foot">昨日 <b>689</b> · 较昨日 <b>+5.4%</b></div>
+    </div>
+    <div class="admin_kpi grey">
+      <div class="label">站内信</div>
+      <div class="value">12,043</div>
+      <div class="foot">含系统广播</div>
+    </div>
+  </div>
+  <p class="note">
+    降幅为红色（同涨跌语义，与站点涨色习惯一致的反例：流量下跌不吉利，标红警示）。涨绿跌红仅用于对比 foot 文本。
+  </p>
+
+  <h3>② 新增「近 30 天访问」趋势卡（放在现有「近 30 天趋势」大卡正下方）</h3>
+  <p class="note">PV 与 UV 量级相近、互为参照，单独成卡不与现有 6 条小量级指标混排（避免压扁坐标轴）。双线均默认展示，图例可点击隐藏。</p>
+  <div class="demo_grid">
+    <div>
+      <div class="admin_card">
+        <h2>近 30 天访问<span class="more">数据出自 pageview_log · 缓存 60s</span></h2>
+        <div class="admin_card_body">
+          <div class="admin_legend">
+            <button class="on"><i style="background:#66d9ef"></i>PV <b>48,221</b></button>
+            <button class="on"><i style="background:#ae81ff"></i>UV <b>20,334</b></button>
+          </div>
+          <svg width="100%" viewBox="0 0 420 170" role="img" aria-label="访问趋势示意">
+            <!-- 网格 -->
+            <g stroke="#49483e" stroke-opacity=".5" stroke-dasharray="3 4">
+              <line x1="6" x2="414" y1="18" y2="18"/><line x1="6" x2="414" y1="50" y2="50"/>
+              <line x1="6" x2="414" y1="82" y2="82"/><line x1="6" x2="414" y1="114" y2="114"/>
+            </g>
+            <line x1="6" x2="414" y1="146" y2="146" stroke="#49483e" stroke-opacity=".9"/>
+            <text x="410" y="14" font-size="8" fill="#75715e" text-anchor="end">2,500</text>
+            <text x="410" y="46" font-size="8" fill="#75715e" text-anchor="end">1,875</text>
+            <text x="410" y="78" font-size="8" fill="#75715e" text-anchor="end">1,250</text>
+            <text x="410" y="110" font-size="8" fill="#75715e" text-anchor="end">625</text>
+            <text x="410" y="142" font-size="8" fill="#75715e" text-anchor="end">0</text>
+            <!-- PV 线 -->
+            <path d="M6,92 L20,84 L34,98 L48,76 L62,88 L76,70 L90,80 L104,58 L118,72 L132,64 L146,84 L160,60 L174,74 L188,52 L202,66 L216,58 L230,78 L244,48 L258,62 L272,54 L286,70 L300,44 L314,58 L328,50 L342,64 L356,40 L370,55 L384,47 L398,60 L412,52" fill="none" stroke="#66d9ef" stroke-width="2" stroke-linejoin="round"/>
+            <!-- UV 线 -->
+            <path d="M6,118 L20,112 L34,122 L48,106 L62,114 L76,100 L90,108 L104,90 L118,102 L132,96 L146,112 L160,90 L174,102 L188,82 L202,96 L216,88 L230,106 L244,78 L258,92 L272,84 L286,100 L300,74 L314,88 L328,80 L342,94 L356,70 L370,85 L384,77 L398,90 L412,82" fill="none" stroke="#ae81ff" stroke-width="2" stroke-linejoin="round"/>
+            <!-- 悬浮竖线示意 -->
+            <line x1="356" x2="356" y1="12" y2="146" stroke="#eee" stroke-opacity=".35"/>
+            <circle cx="356" cy="40" r="3.5" fill="#66d9ef" stroke="#272822" stroke-width="1.5"/>
+            <circle cx="356" cy="70" r="3.5" fill="#ae81ff" stroke="#272822" stroke-width="1.5"/>
+            <!-- 浮层 -->
+            <g>
+              <rect x="306" y="16" width="104" height="48" rx="6" fill="rgba(30,31,28,.96)" stroke="#49483e"/>
+              <text x="314" y="30" font-size="9" fill="#75715e">2026-10-11</text>
+              <circle cx="318" cy="40" r="3" fill="#66d9ef"/><text x="326" y="43" font-size="9" fill="#939387">PV</text><text x="402" y="43" font-size="9" fill="#66d9ef" text-anchor="end">1,986</text>
+              <circle cx="318" cy="55" r="3" fill="#ae81ff"/><text x="326" y="58" font-size="9" fill="#939387">UV</text><text x="402" y="58" font-size="9" fill="#ae81ff" text-anchor="end">913</text>
+            </g>
+            <!-- 日期轴 -->
+            <text x="6" y="163" font-size="9" fill="#75715e">09-17</text>
+            <text x="140" y="163" font-size="9" fill="#75715e">10-01</text>
+            <text x="270" y="163" font-size="9" fill="#75715e">10-11</text>
+            <text x="412" y="163" font-size="9" fill="#75715e" text-anchor="end">10-16</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="note">
+        <b>左卡即仪表盘实际效果（悬浮示意了 10-11 的明细浮层）。</b><br><br>
+        <b>埋点范围说明：</b><br>
+        · 计入：所有前台页面 RSC 导航请求（首页/排行/录像/录像详情/论坛/用户主页/练习等）<br>
+        · 不计：/api/*、/_next/*、public 静态资源、视频文件、/admin/*（后台自身访问）、favicon、明显 bot UA（含 bot/spider/crawler/curl）<br><br>
+        <b>表结构 pageview_log：</b>id / ts（Unix 秒）/ path（255）/ ip_hash（sha256(ip+盐) 截 16 位，不存明文 IP，无个人信息）。索引 (ts, ip_hash) 覆盖 UV 去重。<br><br>
+        <b>性能：</b>proxy 内 waitUntil 异步打点不阻塞页面响应；写库走 /api/track（Node runtime + Prisma 单条 INSERT，日 PV 万级无压力）；查询全部挂 unstable_cache（今日 60s、30 天序列 300s）。<br><br>
+        <b>上线：</b>本地先 db push 建表验证，生产蓝绿部署时同步 push（当前无 schema 外表阻塞）；上线首日起数据从零累积，历史无法回溯。
+      </p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

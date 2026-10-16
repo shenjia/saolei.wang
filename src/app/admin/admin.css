@@ -305,6 +305,10 @@ body:has(.admin_shell) #footer {
   color: #a6e22e;
   font-weight: normal;
 }
+/* 流量 KPI 较昨日对比：跌标红（2026-10-16） */
+.admin_kpi .foot b.down {
+  color: #f92672;
+}
 .admin_kpi.green { border-left-color: #a6e22e; }
 .admin_kpi.yellow { border-left-color: #e6db74; }
 .admin_kpi.orange { border-left-color: #f79646; }

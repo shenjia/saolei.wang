@@ -11,6 +11,7 @@ import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "@/compo
 import { MobileNav } from "@/components/MobileNav";
 import { ScrollReset } from "@/components/ScrollReset";
 import { ToastHost } from "@/components/Toast";
+import TrackPageView from "@/components/TrackPageView";
 import { isManager } from "@/lib/config";
 
 export const metadata: Metadata = {
@@ -154,6 +155,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={null}>
           <ScrollReset />
         </Suspense>
+        {/* 全站访问埋点（/admin 与 /api 由 track API 拒绝） */}
+        <TrackPageView />
         <div id="footer">
           <div className="wrapper">
             <p className="footer-meta">
