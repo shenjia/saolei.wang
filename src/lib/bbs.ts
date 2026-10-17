@@ -429,7 +429,7 @@ export async function createPost(userId: number, board: number, title: string, c
         title,
         content,
         expTime: BigInt(snap.expTime),
-        ranked: snap.ranked ? 1n : 0n,
+        ranked: snap.ranked ? BigInt(1) : BigInt(0),
         lastReplyTime: now,
         lastReplyUser: BigInt(userId),
         createTime: now,
@@ -506,7 +506,7 @@ export async function createReply(
     const reply = await tx.bbsReply.create({
       data: {
         post: BigInt(postId), user: BigInt(userId), content: full,
-        expTime: BigInt(snap.expTime), ranked: snap.ranked ? 1n : 0n,
+        expTime: BigInt(snap.expTime), ranked: snap.ranked ? BigInt(1) : BigInt(0),
         createTime: now, updateTime: now,
       },
     });

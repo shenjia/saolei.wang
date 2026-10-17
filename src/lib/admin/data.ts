@@ -685,7 +685,7 @@ export async function getNewsListAdmin(f: {
       user: N(n.user),
       author: authors.get(N(n.user)) ?? null,
       expTime: N(n.expTime),
-      ranked: n.ranked === 1n,
+      ranked: n.ranked === BigInt(1),
       reference: N(n.reference),
       detailsData: n.detailsData,
       createTime: N(n.createTime),

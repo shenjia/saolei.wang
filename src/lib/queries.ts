@@ -236,7 +236,7 @@ export async function getNews(opts: {
   return rows.map((r) => ({
     id: N(r.id),
     type: r.type,
-    ranked: r.ranked === 1n,
+    ranked: r.ranked === BigInt(1),
     expTime: N(r.expTime),
     reference: N(r.reference),
     details: safeJson(r.detailsData),
@@ -1184,7 +1184,7 @@ export async function addComment(videoId: number, userId: number, content: strin
         video: BigInt(videoId),
         user: BigInt(userId),
         expTime: BigInt(snap.expTime),
-        ranked: snap.ranked ? 1n : 0n,
+        ranked: snap.ranked ? BigInt(1) : BigInt(0),
         content,
         status: COMMENT_STATUS.NORMAL,
         createTime: now,

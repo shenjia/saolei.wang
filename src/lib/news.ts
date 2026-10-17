@@ -30,7 +30,7 @@ export async function publishNews(opts: {
       type: opts.type,
       user: BigInt(opts.userId),
       expTime: BigInt(snap.expTime),
-      ranked: snap.ranked ? 1n : 0n,
+      ranked: snap.ranked ? BigInt(1) : BigInt(0),
       reference: BigInt(opts.reference ?? 0),
       detailsData: JSON.stringify(opts.details ?? {}),
       createTime: BigInt(opts.createTime ?? Math.floor(Date.now() / 1000)),

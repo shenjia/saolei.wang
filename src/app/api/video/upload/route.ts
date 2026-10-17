@@ -113,7 +113,7 @@ export async function POST(req: Request) {
           hash,
           status: VIDEO_STATUS.NORMAL,
           expTime: BigInt(snap.expTime),
-          ranked: snap.ranked ? 1n : 0n,
+          ranked: snap.ranked ? BigInt(1) : BigInt(0),
           createTime: nowSec,
           updateTime: nowSec,
         },
