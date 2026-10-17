@@ -14,14 +14,14 @@ import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { RANKING_COLS, RankingRowLine, type TitledRow } from "./RankingRows";
 
-type GrowTitledRow = GrowRow & { title: string };
+type GrowTitledRow = GrowRow & { title: string; classic?: { name: string; color: string } | null };
 
 export function GrowFeed({
   initial,
   total,
   pageSize,
 }: {
-  initial: (GrowRow & { title: string })[];
+  initial: (GrowRow & { title: string; classic?: { name: string; color: string } | null })[];
   total: number;
   pageSize: number;
 }) {

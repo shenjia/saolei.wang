@@ -37,7 +37,7 @@ export function UserCard({ card }: { card: UserCardData }) {
               （军衔条件文案由 TitleBadge 的 data-tip 在 hover 时显示） */}
           <p className="ucd_name">
             <AvatarCell id={card.id} name={card.chineseName} sex={card.sex} gender="small" link />
-            <TitleBadge title={card.militaryTitle} link />
+            <TitleBadge title={card.militaryTitle} classic={card.classicTitle} link />
           </p>
           {/* 地区 / 全国排名：与用户主页 #user_view .info .rank_label .ranks 完全同构
               （两行 rank_line、13px、文字 #888、名次数字 Monokai 黄加粗正体；

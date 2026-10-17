@@ -24,7 +24,7 @@ export const RANKING_COLS: { by: RankingBy; label: string; cls: string }[] = [
 ];
 
 // 军衔列预评：服务端（RankingTable）/ API 侧先算好随行传入，客户端零成本渲染
-export type TitledRow = RankingRow & { title: string };
+export type TitledRow = RankingRow & { title: string; classic?: { name: string; color: string } | null };
 
 function ScoreCell({
   row,
@@ -110,7 +110,7 @@ export function RankingRowLine({
         <span className={`gender ${row.sex ? "male" : "female"} small`}></span>
       </td>
       <td className="miltitle">
-        <TitleBadge title={row.title} link />
+        <TitleBadge title={row.title} classic={row.classic} link />
       </td>
       {RANKING_COLS.map((c) => (
         <ScoreCell key={c.by} row={row} col={c} current={c.by === by} />

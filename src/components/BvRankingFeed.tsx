@@ -27,7 +27,7 @@ import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { toast } from "./Toast";
 
-export type BvTitledRow = BvRankingRow & { title: string };
+export type BvTitledRow = BvRankingRow & { title: string; classic?: { name: string; color: string } | null };
 
 const SORT_COLS: BvRankingBy[] = ["beg", "int", "exp", "total"];
 
@@ -293,7 +293,7 @@ export function BvRankingFeed({
                   <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
                 </td>
                 <td className="miltitle">
-                  <TitleBadge title={u.title} link />
+                  <TitleBadge title={u.title} classic={u.classic} link />
                 </td>
                 <BvBar n={u.beg} den={den.beg} active={by === "beg"} />
                 <BvBar n={u.int} den={den.int} active={by === "int"} />

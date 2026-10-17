@@ -31,6 +31,7 @@ const PAGE = 18;
 export function AreaRanking({
   rows,
   titles,
+  classics,
   order,
   head,
   rules,
@@ -38,6 +39,8 @@ export function AreaRanking({
   rows: AreaRow[];
   /** 领军人物的军衔，与 rows 同序 */
   titles: string[];
+  /** Phase 5：旧版称号备选（与 titles 同序） */
+  classics?: ({ name: string; color: string } | null)[];
   order: AreaOrder;
   /** 页头（.page_head，服务端渲染，插在主卡片顶部） */
   head?: ReactNode;
@@ -153,7 +156,7 @@ export function AreaRanking({
                       <Link href={`/user/${r.bestId}`} target="_blank" title="点击查看个人信息">
                         {r.bestName}
                       </Link>
-                      <TitleBadge title={titles[startRow + i] ?? ""} link />
+                      <TitleBadge title={titles[startRow + i] ?? ""} classic={classics?.[startRow + i]} link />
                     </td>
                     <td className={order === "power" ? "num current" : "num"}>{areaPower(r.power)}</td>
                   </tr>

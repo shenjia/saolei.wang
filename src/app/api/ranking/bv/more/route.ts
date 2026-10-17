@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { getBvRanking } from "@/lib/queries";
 import { parseBvRankingBy } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
+import { dualTitles } from "@/lib/title-system";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -26,7 +27,8 @@ export async function GET(req: Request) {
   }
   const { rows, total, pageSize } = data;
   // 军衔 SUB 制按高级时间评定（与成绩榜同口径）
-  const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime) }));
+  const pairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
+  const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime), classic: pairs.get(u.id)?.c ?? null }));
 
   return NextResponse.json({ rows: titled, total, pageSize });
 }

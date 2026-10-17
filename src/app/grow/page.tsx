@@ -6,6 +6,7 @@ import { getGrowRanking } from "@/lib/ranksnap";
 import { getRankingPageOfUser } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { title as assessTitle } from "@/lib/assess";
+import { dualTitles } from "@/lib/title-system";
 import { RankingNav } from "@/components/RankingNav";
 import { GrowFeed } from "@/components/GrowFeed";
 import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
@@ -41,8 +42,16 @@ export default async function GrowPage({
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const { rows, total, pageSize } = await getGrowRanking(page);
+  // Phase 5：补旧版称号备选（进步榜行全部在榜）
+  const growPairs = await dualTitles(
+    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
+  );
   const titled = await Promise.all(
-    rows.map(async (u) => ({ ...u, title: await assessTitle(u.scores.exp_time) }))
+    rows.map(async (u) => ({
+      ...u,
+      title: await assessTitle(u.scores.exp_time),
+      classic: growPairs.get(Number(u.id))?.c ?? null,
+    }))
   );
 
   // 登录未入榜 → 规则板块底部「如何加入排行？」（2026-10-15 从翻页控件右侧移入）。

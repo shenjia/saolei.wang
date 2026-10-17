@@ -11,6 +11,7 @@
 import { prisma } from "./db";
 import { getUserDetail, getUserRanks } from "./queries";
 import { resolveAvatarUrl } from "./avatar";
+import { resolveTitleDisplay } from "./title-system";
 
 /** 单级纪录：成绩原始值（×1000 存储，null=无）、对应录像 id 与日期（sum 级无录像 → null） */
 export interface UserCardScore {
@@ -27,6 +28,8 @@ export interface UserCardData {
   avatarUrl: string;
   /** 军衔（高级时间绝对阈值，与首页/排行榜/军衔页同口径） */
   militaryTitle: string;
+  /** Phase 5：旧版称号备选（按当前成绩+在榜状态评定） */
+  classicTitle: { name: string; color: string } | null;
   /** 全国名次（ROW_NUMBER 口径，与用户主页「全国第 X 名」同源）；null=未上榜 */
   rank: number | null;
   /** 地区（军区）名；areaPos=null 表示未加入地区排行（无地区/多地区） */
@@ -67,12 +70,17 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     scores[key] = { score: rec.score, videoId: rec.videoId, date: rec.date };
   }
 
+  // Phase 5：旧版称号备选（当前成绩评定；在榜=user.status===0 且有高级成绩）
+  const expMs = detail.scores.exp_time?.score ?? 0;
+  const classicPair = await resolveTitleDisplay("c", expMs, user.status === 0 && expMs > 0, user.sex, id);
+
   return {
     id,
     chineseName: user.chineseName,
     sex: user.sex,
     avatarUrl: avatarUrl(id, user.avatar),
     militaryTitle: detail.title,
+    classicTitle: classicPair.system === "c" ? { name: classicPair.name, color: classicPair.color ?? "#666666" } : null,
     rank: national,
     area,
     areaPos: ranks?.areaPos ?? null,
