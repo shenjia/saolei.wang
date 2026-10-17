@@ -5310,11 +5310,12 @@ h1.gray {
 
 /* ==================== 全站 hover 文字统一绿（2026-09-24 张老师要求） ====================
    全站悬停文字色一律 Monokai 绿 #a6e22e（legacy 2013 版链接 hover 原色），
-   覆盖此前新增样式里的黄/白/灰变体；军衔/称号等带内联基色的标签 hover 也转绿。
+   覆盖此前新增样式里的黄/白/灰变体。
+   2026-10-17 张老师要求：军衔/称号豁免——hover 不再转绿，改为当前分级色加亮
+   （见下方「军衔 em hover 提亮」段），故 a.title:hover em 不再入本绿链。
    注意：hover 行背景、边框高亮等非文字效果不在本规则范围。 */
 body a:hover:not(.button):not(.auth_button),
 body a.title:hover,
-body a.title:hover em,
 body a.avatar_link:hover,
 body a.name_link:hover,
 body .user_info_cell .name:hover {
@@ -5326,18 +5327,56 @@ body .email_bind_overlay a.btn_primary:hover,
 body .email_bind_overlay a.btn_primary:active {
   color: #2b2a20;
 }
-/* 军衔 em 分级色（legacy .title:hover em.marshal 特异性 (0,3,1)，
-   须同级枚举压制，否则排行表里军衔 hover 仍是分级色） */
-body a.title:hover em.supreme,
-body a.title:hover em.grand,
-body a.title:hover em.marshal,
-body a.title:hover em.general,
-body a.title:hover em.colonel,
-body a.title:hover em.captain,
-body a.title:hover em.sergeant,
-body a.title:hover em.private,
-body a.title:hover em.new {
+/* 军衔 em hover 提亮（2026-10-17 张老师要求）：hover 不转绿，改为「当前分级色加亮」。
+   实现 = 恢复各档原色（压过 legacy .ranking_list .user_cell a:hover em (0,3,2) 的
+   后加载绿）+ filter brightness(1.25) 提亮；选择器 body a.title:hover em.X 特异性
+   (0,3,3)，无论加载顺序均稳压两处 legacy 绿与站级绿链。原色与 TITLE_CLASS_COLORS
+   一一对应，改色需同步。 */
+body a.title:hover em.alien {
   color: #a6e22e;
+  filter: brightness(1.25);
+}
+body a.title:hover em.emperor,
+body a.title:hover em.grand,
+body a.title:hover em.marshal {
+  color: #e6db74;
+  filter: brightness(1.25);
+}
+body a.title:hover em.saint {
+  color: #ffcc00;
+  filter: brightness(1.25);
+}
+body a.title:hover em.god {
+  color: #66cc00;
+  filter: brightness(1.25);
+}
+body a.title:hover em.supreme {
+  color: #fdc61a;
+  filter: brightness(1.25);
+}
+body a.title:hover em.general {
+  color: #f79646;
+  filter: brightness(1.25);
+}
+body a.title:hover em.colonel {
+  color: #e26b0a;
+  filter: brightness(1.25);
+}
+body a.title:hover em.captain {
+  color: #9bbb59;
+  filter: brightness(1.25);
+}
+body a.title:hover em.sergeant {
+  color: #b1b1a4;
+  filter: brightness(1.25);
+}
+body a.title:hover em.private {
+  color: #939387;
+  filter: brightness(1.25);
+}
+body a.title:hover em.new {
+  color: #636359;
+  filter: brightness(1.25);
 }
 /* 排行表成绩单元格链接（继承列色，legacy 无 hover 规则） */
 body .ranking_table td a:not(.current):hover {
