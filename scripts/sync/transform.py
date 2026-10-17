@@ -244,6 +244,27 @@ v_rows, vi_rows, vst_rows = [], [], []
 vs_rows = {k: [] for k in ("beg", "int", "exp", "beg_nf", "int_nf", "exp_nf")}
 run("SELECT id FROM video_info", ())
 existing_vinfo = {r[0] for r in cur.fetchall()}
+# 2026-10-17 称号快照制：录像行内嵌上传时刻快照（按高级成绩流水重放，严格早于 create_time；
+# 与 backfill-title-snapshot.py 同口径）。旧库无 video_scores_exp 时（首次全量基线）全 0，
+# 由 backfill-title-snapshot.py 统一回填。
+run("SELECT user, score_time, create_time FROM video_scores_exp WHERE score_time > 0", ())
+_exp_flows = {}
+for u, s, ct in cur.fetchall():
+    _exp_flows.setdefault(u, []).append((ct or 0, s))
+for _lst in _exp_flows.values():
+    _lst.sort()
+
+def _exp_before(uid, ct):
+    lst = _exp_flows.get(uid)
+    if not lst:
+        return 0
+    best = 0
+    for fct, s in lst:
+        if fct >= ct:
+            break
+        if best == 0 or s < best:
+            best = s
+    return best
 
 for vid, v in videos.items():
     (_, model, player, path, islive, check, vtime_dt, score, bv, b3bvs, checkby, checktime, click, nf) = v
@@ -254,7 +275,8 @@ for vid, v in videos.items():
     ct = ux(vtime_dt)
     rt = ux(checktime)
     v_rows.append((vid, level, player, status,
-                   checkby if checkby else None, rt if rt else None, ct, 0))
+                   checkby if checkby else None, rt if rt else None, ct, 0,
+                   _exp_before(player, ct or 0)))
     real_ms = t_ms(score) if score is not None else 0
     b3bv = int(round(bv)) if bv is not None else 0
     if vid in existing_vinfo:
@@ -283,10 +305,10 @@ vi_upd = [r for r in vi_rows if len(r) == 3]
 # 会整页渲染「暂无数据」而左下角总数照常(2026-10-13 14:04 实测踩到)。
 # 现按 id 分批(每批 BATCH 个 id),同批的 video / video_info / video_stat / video_scores_*
 # 在**同一事务**内提交:对外任意时刻只有「整批可见」或「整批不可见」,不存在半截状态。
-SQL_VIDEO = """INSERT INTO video (id,level,user,hash,status,review_user,review_time,create_time,update_time)
-       VALUES (%s,%s,%s,'',%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
+SQL_VIDEO = """INSERT INTO video (id,level,user,hash,status,review_user,review_time,create_time,update_time,exp_time)
+       VALUES (%s,%s,%s,'',%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
        level=VALUES(level),user=VALUES(user),status=VALUES(status),
-       review_user=VALUES(review_user),review_time=VALUES(review_time),create_time=VALUES(create_time)"""
+       review_user=VALUES(review_user),review_time=VALUES(review_time),create_time=VALUES(create_time),exp_time=VALUES(exp_time)"""
 SQL_VI_NEW = """INSERT INTO video_info (id,filepath,signature,software,version,noflag,board,board_3bv,real_time,create_time,update_time)
        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"""
 SQL_VI_UPD = "UPDATE video_info SET board_3bv=%s, real_time=%s WHERE id=%s"
@@ -340,9 +362,10 @@ sc.execute("SELECT Comment_Id, Comment_Video, Comment_Player, Comment_Text, Comm
 cm_rows = []
 for cid, cv, cp, text, ctime, rank in sc.fetchall():
     ts = ux(ctime)
-    cm_rows.append((cid, cv, cp, int((rank or 0) + 0.5), text or "", 0, ts, 0))
-flush("""INSERT IGNORE INTO comment (id,video,user,user_score,content,status,create_time,update_time)
-       VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""", cm_rows, "comment")
+    cm_rows.append((cid, cv, cp, int((rank or 0) + 0.5), text or "", 0, 0, ts, 0))
+# 2026-10-17 称号快照制：user_score 已删；exp_time/ranked 快照由 backfill-title-snapshot.py 统一回填（此处先 0 占位）
+flush("""INSERT IGNORE INTO comment (id,video,user,exp_time,ranked,content,status,create_time,update_time)
+       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""", cm_rows, "comment")
 # 评论数回写 video_stat.comments
 print("  backfill video_stat.comments", flush=True)
 run("""UPDATE video_stat s JOIN (SELECT video, COUNT(*) c FROM comment GROUP BY video) x
@@ -360,9 +383,22 @@ else:
     # 现有 type=10 用户集合 + 最大 id
     run("SELECT DISTINCT user FROM news WHERE type=10", ())
     has_newbie = {r[0] for r in cur.fetchall()}
-    # 用户当前 sum_time(算 user_score 近似值)
-    run("SELECT id, sum_time FROM user_scores", ())
-    sum_map = {r[0]: r[1] or 0 for r in cur.fetchall()}
+    # 2026-10-17 称号快照制：exp_time 快照按高级成绩流水重放（_exp_flows 录像域已建；
+    # 入伍含同刻、破纪录严格早于，与 backfill-title-snapshot.py 同口径）
+
+    def exp_at(uid, ct, inclusive):
+        if not inclusive:
+            return _exp_before(uid, ct)
+        lst = _exp_flows.get(uid)
+        if not lst:
+            return 0
+        best = 0
+        for fct, s in lst:
+            if fct > ct:
+                break
+            if best == 0 or s < best:
+                best = s
+        return best
 
     sc.execute("""SELECT News_Id, News_Time, News_Video, News_Player, News_Model, News_Thing, News_Score, News_Grow
                 FROM News WHERE News_IsLive=1 AND News_Time > '2013-10-23 08:23:46' ORDER BY News_Id""")
@@ -388,7 +424,7 @@ else:
             if org < 0:
                 org = 0
         details = json.dumps({"lv": lv, "od": od, "or": str(org), "cr": str(cr), "nf": 0}, separators=(",", ":"))
-        n_rows.append((ux(ntime), 1, 20, nplayer, sum_map.get(nplayer, 0), nvideo, details))
+        n_rows.append((ux(ntime), 1, 20, nplayer, 0, nvideo, details, exp_at(nplayer, ux(ntime), False)))
 
     # 入伍动态:用户首个凑齐三级别的时刻(按录像时间)
     seen_lv = {}
@@ -403,13 +439,13 @@ else:
         s.add(level)
         if len(s) == 3:
             ct0 = ux(vtime_dt) or now
-            n_rows.append((ct0, 0, 10, player, sum_map.get(player, 0), 0, "[]"))
+            n_rows.append((ct0, 0, 10, player, 0, 0, "[]", exp_at(player, ct0, True)))
             has_newbie.add(player)
     # 合并后按 (create_time, newbie 优先) 排序插入,保证 id 序=时间序(游标分页依赖)
     n_rows.sort(key=lambda r: (r[0], r[1]))
-    ins_rows = [(t, u, us, ref, det, ct) for ct, _o, t, u, us, ref, det in n_rows]
-    flush("""INSERT INTO news (type,user,user_score,reference,details_data,create_time)
-           VALUES (%s,%s,%s,%s,%s,%s)""", ins_rows, "news(all)")
+    ins_rows = [(t, u, exp, 0, ref, det, ct) for ct, _o, t, u, exp, ref, det, _ in n_rows]
+    flush("""INSERT INTO news (type,user,exp_time,ranked,reference,details_data,create_time)
+           VALUES (%s,%s,%s,%s,%s,%s,%s)""", ins_rows, "news(all)")
 print(f"news done {time.time()-t0:.0f}s", flush=True)
 
 # ---------- 5. 论坛 ----------

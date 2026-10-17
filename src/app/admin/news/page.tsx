@@ -79,7 +79,7 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
                 <th>玩家</th>
                 <th>摘要</th>
                 <th>引用录像</th>
-                <th className="num">总计时间</th>
+                <th className="num">当时高级</th>
                 <th>时间</th>
                 <th>操作</th>
               </tr>
@@ -106,7 +106,7 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
                       <span className="sub">—</span>
                     )}
                   </td>
-                  <td className="num sub">{n.userScore ? (n.userScore / 1000).toFixed(2) : "—"}</td>
+                  <td className="num sub">{n.expTime ? (n.expTime / 1000).toFixed(2) : "—"}</td>
                   <td className="sub">{formatDate(n.createTime, "Y-m-d H:i")}</td>
                   <td className="ops">
                     <AdminAction
@@ -136,8 +136,9 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
       <AdminCard title="口径说明">
         <div className="admin_note">
           · 动态由审核通过时自动生成：首次三级成绩齐全发「入伍新兵」，其后每次刷新个人/地区/全国纪录发一条纪录动态。<br />
-          · <code>user_score</code> 是发布当时的玩家总计时间：基线（2013-10-23）前的历史动态是真实值，
-          其后的历史动态由模拟回填脚本估算，新站产生的动态则是实际值。<br />
+          · <code>exp_time</code> 是发布当时的玩家高级成绩快照（2026-10-17 称号快照制，取代原 user_score 总计时间）：
+          基线（2013-10-23）前的历史动态按成绩流水重放回填，新站产生的动态由写入点实时快照。
+          入伍/晋升动态存晋升后值、破纪录动态存覆盖前旧值。<br />
           · 删除动态是物理删除，不可恢复；若成绩本身有问题，应改去<Link href="/admin/videos"> 录像管理 </Link>屏蔽录像，成绩与动态会一并回退。
         </div>
       </AdminCard>

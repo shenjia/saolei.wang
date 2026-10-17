@@ -13,8 +13,9 @@
   2. tail 合并：cut = min(新事件时间)，删除 news 中 create_time >= cut 的尾部行，
      与新增事件一起按 (create_time, 原行优先) 重排后重插
      → 保「id 序 = create_time 序」铁律（前端游标分页依赖）
-  3. user_score：新增行按成绩流水重放估算（与 rebuild_news.py / backfill_news_score.py 同算法）；
-     尾部原行的 user_score 原样保留
+  3. 快照（2026-10-17 称号快照制）：新增行 exp_time 按高级成绩流水重放
+     （入伍/晋升含同刻、其余严格早于，与 backfill-title-snapshot.py 同口径）；
+     尾部原行的 exp_time/ranked 原样保留
 
 用法: python3 scripts/sync/news-delta.py [--apply]   默认 dry-run
 
@@ -102,7 +103,7 @@ has_post = {r[0] for r in cur.fetchall()}
 print(f"本地已有动态: 入伍={len(has_newbie)} 注册={len(has_join)} 首盘={len(has_first)} 论坛={len(has_post)}")
 
 # ---------- 1. 采集新增事件 ----------
-events = []  # (create_time, legacy, type, user, user_score, reference, details_data)
+events = []  # (create_time, legacy, type, user, reference, details_data)
 # legacy=None 表示新增行；否则为尾部原行的 (id, 内容) 元组
 
 # 1a. 旧站纪录动态（注意：News 结果必须先物化，否则会被同一游标的下一条查询顶掉）
@@ -143,7 +144,7 @@ for nid, ntime, nvideo, nplayer, nmodel, nthing, nscore, ngrow in news_rows:
         if org < 0:
             org = 0
     dd = json.dumps({"lv": lv, "od": od, "or": str(org), "cr": str(cr), "nf": 0}, separators=(",", ":"))
-    events.append((ux(ntime), None, 20, nplayer, 0, nvideo, dd))
+    events.append((ux(ntime), None, 20, nplayer, nvideo, dd))
     new_rec += 1
 print(f"新增纪录动态: {new_rec}")
 
@@ -162,7 +163,7 @@ for player, vs in by_user.items():
     if len(lvset) != 3:
         continue
     third = max(min(t for t, _, lv in vs if lv == L) for L in LEVELS)
-    events.append((third, None, 10, player, 0, 0, "[]"))
+    events.append((third, None, 10, player, 0, "[]"))
     new_newbie += 1
 print(f"新增入伍动态: {new_newbie}")
 
@@ -172,7 +173,7 @@ new_join = 0
 for uid, ct in cur.fetchall():
     if uid in has_join or not ct:
         continue
-    events.append((ct, None, 50, uid, 0, 0, "{}"))
+    events.append((ct, None, 50, uid, 0, "{}"))
     new_join += 1
 print(f"新增注册动态: {new_join}")
 
@@ -190,7 +191,7 @@ for (u, lvl), (ct, vid, rt, bv) in first_video.items():
     tm = rt if rt and rt > 0 else 0
     bv_score = (bv * 1000000 // rt) if rt and rt > 0 else 0
     dd = '{"lv":"%s","tm":%d,"bv":%d}' % (lvl, tm, max(bv_score, 0))
-    events.append((ct, None, 30, u, 0, vid, dd))
+    events.append((ct, None, 30, u, vid, dd))
     new_first += 1
 print(f"新增首盘上传动态: {new_first}")
 
@@ -201,7 +202,7 @@ for pid, u, ct, title in cur.fetchall():
     if pid in has_post:
         continue
     t = (title or "")[:50].replace("\\", "\\\\\\\\").replace('"', '\\\\"')
-    events.append((ct or 0, None, 40, u, 0, pid, '{"t":"%s"}' % t))
+    events.append((ct or 0, None, 40, u, pid, '{"t":"%s"}' % t))
     new_post += 1
 print(f"新增论坛动态: {new_post}")
 
@@ -229,20 +230,20 @@ if soft:
     else:
         print(f"\n[跳过] {len(soft)} 条派生事件时间早于上次同步（不补插，避免整表重编号）：")
         for e in sorted(soft, key=lambda x: x[0])[:15]:
-            print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[5]} {e[6][:50]}")
+            print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[4]} {e[5][:50]}")
         drop = {id(e) for e in soft}
         events = [e for e in events if id(e) not in drop]
 if ancient:
     print(f"\n[跳过·远古] {len(ancient)} 条事件早于上次同步 {ANCIENT_DAYS} 天以上（仅报告；--force 可强制并入）：")
     for e in sorted(ancient, key=lambda x: x[0])[:20]:
-        print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[5]} {e[6][:60]}")
+        print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[4]} {e[5][:60]}")
     if "--force" not in sys.argv:
         drop = {id(e) for e in ancient}
         events = [e for e in events if id(e) not in drop]
 if hard:
     print(f"\n[补插] {len(hard)} 条旧站事件时间略早于上次同步（并入尾部重排）：")
     for e in sorted(hard, key=lambda x: x[0])[:10]:
-        print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[5]} {e[6][:60]}")
+        print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[4]} {e[5][:60]}")
 
 if not events:
     print("\n无新增事件，无需处理。")
@@ -252,7 +253,8 @@ cut = min(e[0] for e in events)
 print(f"\n实际并入事件 {len(events)} 条，cut={cut}")
 
 # ---------- 2. 尾部原行 + 合并排序 ----------
-cur.execute("""SELECT id, type, user, user_score, reference, details_data, create_time
+# 2026-10-17 称号快照制：user_score 已删，行内快照 exp_time/ranked 随行保留重插
+cur.execute("""SELECT id, type, user, reference, details_data, create_time, exp_time, ranked
             FROM news WHERE create_time >= %s ORDER BY id""", (cut,))
 tail = list(cur.fetchall())
 print(f"尾部原行（create_time >= cut）: {len(tail)} 条")
@@ -261,51 +263,67 @@ if len(tail) > 50000 and "--force" not in sys.argv:
     sys.exit(2)
 
 merged = []
-for ct, lid, ntype, u, us, ref, dd in events:
-    merged.append((ct, None, ntype, u, us, ref, dd))
-for nid, ntype, u, us, ref, dd, ct in tail:
-    merged.append((ct, nid, ntype, u, us, ref, dd))
+for ct, lid, ntype, u, ref, dd in events:
+    merged.append((ct, None, ntype, u, ref, dd))
+for nid, ntype, u, ref, dd, ct, exp, rk in tail:
+    merged.append((ct, nid, ntype, u, ref, dd, exp, rk))
 # 同刻：原行在前（保持原相对顺序），新事件在后
 merged.sort(key=lambda e: (e[0], e[1] if e[1] is not None else (1 << 62)))
 
-# ---------- 3. 重放 user_score（仅新增行） ----------
+# ---------- 3. 重放快照 exp_time（仅新增行；2026-10-17 快照制，原 sum_time 重放退役） ----------
+# ranked：新增行统一按当前 user.status=0 快照（旧站增量期内无历史封禁流水）
+cur.execute("SELECT id, status FROM user")
+user_status = dict(cur.fetchall())
+INCLUSIVE = {10, 53}  # 入伍/晋升含同刻（晋升后军衔）；破纪录等严格早于（旧军衔）
+
 need_users = {e[3] for e in merged if e[1] is None}
 records = {}
-for lvl in LEVELS:
-    cur.execute(f"SELECT user, score_time, create_time FROM video_scores_{lvl} "
-                f"WHERE score_time < %s AND user IN ({','.join(['%s'] * len(need_users))})",
-                (SENTINEL, *need_users))
+cur.execute(f"SELECT user, score_time, create_time FROM video_scores_exp "
+            f"WHERE score_time < %s AND user IN ({','.join(['%s'] * len(need_users))})",
+            (SENTINEL, *need_users)) if need_users else None
+if need_users:
     for u, s, ct in cur.fetchall():
         if not s or s <= 0:
             continue
-        records.setdefault(u, {}).setdefault(lvl, []).append((ct or 0, s))
-for lvls in records.values():
-    for lvl in lvls:
-        lvls[lvl].sort()
-print(f"重放成绩流水用户: {len(records)}")
+        records.setdefault(u, []).append((ct or 0, s))
+for lst in records.values():
+    lst.sort()
+print(f"重放高级成绩流水用户: {len(records)}")
 
 state = {}
 final_rows = []
-for ct, lid, ntype, u, us, ref, dd in merged:
+for row in merged:
+    if len(row) == 8:
+        ct, lid, ntype, u, ref, dd, exp, rk = row
+    else:
+        ct, lid, ntype, u, ref, dd = row
+        exp = rk = None
     if lid is not None:
-        final_rows.append((ntype, ct, u, us, ref, dd))
-        # 尾部原行也要推进重放状态，保证后续新增行估算准确
-    st = state.setdefault(u, {"best": {}, "ptr": {k: 0 for k in LEVELS}})
-    user_recs = records.get(u, {})
-    for lvl in LEVELS:
-        lst = user_recs.get(lvl)
-        if not lst:
-            continue
-        i = st["ptr"][lvl]
+        # 尾部原行：快照随行保留
+        final_rows.append((ntype, ct, u, exp, rk, ref, dd))
+    st = state.setdefault(u, {"best": 0, "ptr": 0})
+    lst = records.get(u)
+    if lst:
+        i = st["ptr"]
         while i < len(lst) and lst[i][0] <= ct:
             ms = lst[i][1]
-            if lvl not in st["best"] or ms < st["best"][lvl]:
-                st["best"][lvl] = ms
+            if st["best"] == 0 or ms < st["best"]:
+                st["best"] = ms
             i += 1
-        st["ptr"][lvl] = i
+        st["ptr"] = i
     if lid is None:
-        est = sum(st["best"].values()) if len(st["best"]) == 3 else 0
-        final_rows.append((ntype, ct, u, est, ref, dd))
+        inc = ntype in INCLUSIVE
+        best = st["best"]
+        if not inc:
+            # 严格早于：回退「同刻推入」的成绩——本行快照取 ct 之前（不含）的 running best
+            best_before = 0
+            for fct, s in lst or []:
+                if fct >= ct:
+                    break
+                if best_before == 0 or s < best_before:
+                    best_before = s
+            best = best_before
+        final_rows.append((ntype, ct, u, best, 1 if user_status.get(u) == 0 else 0, ref, dd))
 
 print(f"重插行数: {len(final_rows)}（原 {len(tail)} + 新 {len(events)}）")
 
@@ -315,7 +333,7 @@ if "--apply" not in sys.argv:
     shown = 0
     for e in merged:
         if e[1] is None and shown < 10:
-            print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[5]} {e[6][:60]}")
+            print(f"  {datetime.fromtimestamp(e[0]).strftime('%Y-%m-%d %H:%M')} type={e[2]} user={e[3]} ref={e[4]} {e[5][:60]}")
             shown += 1
     print("\n[dry-run] 未写库。确认后加 --apply 执行。")
     sys.exit(0)
@@ -336,7 +354,7 @@ ins = 0
 for i in range(0, len(final_rows), BATCH):
     batch = final_rows[i:i + BATCH]
     cur.executemany(
-        "INSERT INTO news (type, create_time, user, user_score, reference, details_data) VALUES (%s,%s,%s,%s,%s,%s)",
+        "INSERT INTO news (type, create_time, user, exp_time, ranked, reference, details_data) VALUES (%s,%s,%s,%s,%s,%s,%s)",
         batch)
     ins += len(batch)
 my.commit()

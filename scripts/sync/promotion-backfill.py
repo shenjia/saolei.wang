@@ -12,7 +12,7 @@
   cut = 新事件最小时间，删除 create_time >= cut 的尾部行，与新事件一起重排重插。
   同刻时原行在前、新事件在后。
 
-user_score：历史口径为 sum_time 快照；晋升动效按重放 sum（三级 running best 之和）估算，
+exp_time 快照（2026-10-17 称号快照制）：晋升动态含同刻——取晋升后高级新值；
 与 backfill_news_score.py 同算法。
 
 用法: python3 scripts/sync/promotion-backfill.py [--apply]   默认 dry-run
@@ -48,25 +48,29 @@ BATCH = 5000
 LEVELS = ("beg", "int", "exp")
 SENTINEL = 998000
 
-# SUB 制军衔（与 src/lib/config.ts TITLES/TITLE_THRESHOLDS 严格一致；score_time 为毫秒）
-# 注意 2026-10-13 17:04 修正：此前士官以下错位一档（80000 曾写成中士，实为上士）；
-# 列兵 = 无上限（首成绩 >150s 也发晋升事件）
-# 2026-10-16 新增总司令档（SUB30）：现役仅鞠泽恩 1 人（25.10s）
+# 军衔/称号（与 src/lib/config.ts TITLES/TITLE_THRESHOLDS 严格一致；score_time 为毫秒）
+# 2026-10-17 人神界改版：论外+神界 7 档顶替 60s 以内军衔（总司令/原大元帅~少校 7 档除名），
+# 人界大元帅 ≤61s 起、上校起校段 3 级（大校除名）、上等兵线 150→200s
 TIERS = [
-    (30000, "总司令"), (35000, "大元帅"), (40000, "元帅"), (42000, "大将"),
-    (45000, "上将"),
-    (48000, "中将"), (50000, "少将"), (52000, "大校"), (55000, "上校"),
-    (58000, "中校"), (60000, "少校"), (63000, "上尉"), (66000, "中尉"),
-    (70000, "少尉"), (80000, "上士"), (90000, "中士"), (100000, "下士"),
-    (150000, "上等兵"), (float("inf"), "列兵"),
+    (30000, "外星人"), (35000, "大雷帝"), (40000, "小雷帝"), (45000, "大雷圣"),
+    (50000, "小雷圣"), (55000, "大雷神"), (60000, "小雷神"),
+    (61000, "大元帅"), (62000, "元帅"), (63000, "大将"),
+    (65000, "上将"),
+    (67000, "中将"), (70000, "少将"), (73000, "上校"), (76000, "中校"),
+    (80000, "少校"), (84000, "上尉"), (90000, "中尉"),
+    (100000, "少尉"), (110000, "上士"), (120000, "中士"), (150000, "下士"),
+    (200000, "上等兵"), (float("inf"), "列兵"),
 ]
 COND_TEXT = {
-    "总司令": "高级记录 < 30秒", "大元帅": "高级记录 < 35秒", "元帅": "高级记录 < 40秒", "大将": "高级记录 < 42秒",
-    "上将": "高级记录 < 45秒", "中将": "高级记录 < 48秒", "少将": "高级记录 < 50秒",
-    "大校": "高级记录 < 52秒", "上校": "高级记录 < 55秒", "中校": "高级记录 < 58秒",
-    "少校": "高级记录 < 60秒", "上尉": "高级记录 < 63秒", "中尉": "高级记录 < 66秒",
-    "少尉": "高级记录 < 70秒", "上士": "高级记录 < 80秒", "中士": "高级记录 < 90秒",
-    "下士": "高级记录 < 100秒", "上等兵": "高级记录 < 150秒", "列兵": "高级记录 ≥ 150秒",
+    "外星人": "高级记录 < 30秒", "大雷帝": "高级记录 < 35秒", "小雷帝": "高级记录 < 40秒",
+    "大雷圣": "高级记录 < 45秒", "小雷圣": "高级记录 < 50秒", "大雷神": "高级记录 < 55秒",
+    "小雷神": "高级记录 < 60秒",
+    "大元帅": "高级记录 < 61秒", "元帅": "高级记录 < 62秒", "大将": "高级记录 < 63秒",
+    "上将": "高级记录 < 65秒", "中将": "高级记录 < 67秒", "少将": "高级记录 < 70秒",
+    "上校": "高级记录 < 73秒", "中校": "高级记录 < 76秒", "少校": "高级记录 < 80秒",
+    "上尉": "高级记录 < 84秒", "中尉": "高级记录 < 90秒", "少尉": "高级记录 < 100秒",
+    "上士": "高级记录 < 110秒", "中士": "高级记录 < 120秒", "下士": "高级记录 < 150秒",
+    "上等兵": "高级记录 < 200秒", "列兵": "高级记录 ≥ 200秒",
 }
 
 
@@ -151,7 +155,7 @@ older = sum(1 for e in promo_events if e[0] < local_max_ct - 30 * 86400)
 print(f"\ncut={cut}（{datetime.fromtimestamp(cut)}）；早于最近同步的事件 {older} 条（历史回填，正常）")
 
 # ---------- 2. 尾部原行 + 合并排序 ----------
-cur.execute("""SELECT id, type, user, user_score, reference, details_data, create_time
+cur.execute("""SELECT id, type, user, reference, details_data, create_time, exp_time, ranked
             FROM news WHERE create_time >= %s ORDER BY id""", (cut,))
 tail = list(cur.fetchall())
 print(f"尾部原行（create_time >= cut）: {len(tail)} 条")
@@ -162,50 +166,50 @@ if len(tail) > 300000 and "--force" not in sys.argv:
 merged = []
 for ct, u, ti in promo_events:
     dd = json.dumps({"ti": ti, "cond": COND_TEXT[ti]}, separators=(",", ":"))
-    merged.append((ct, None, 53, u, 0, 0, dd))
-for nid, ntype, u, us, ref, dd, ct in tail:
-    merged.append((ct, nid, ntype, u, us, ref, dd))
+    merged.append((ct, None, 53, u, 0, dd, None, None))  # exp/rk 占位，重放段填
+for nid, ntype, u, ref, dd, ct, exp, rk in tail:
+    merged.append((ct, nid, ntype, u, ref, dd, exp, rk))
 # 同刻：原行在前，新事件在后
 merged.sort(key=lambda e: (e[0], e[1] if e[1] is not None else (1 << 62)))
 
-# ---------- 3. 重放 user_score（新增 type=53 行；口径=sum running best） ----------
-need_users = {e[3] for e in merged if e[1] is None}
+# ---------- 3. 重放快照 exp_time（新增 type=53 行；含同刻=晋升后高级新值） ----------
+need_users = {e[2] for e in merged if e[1] is None}
 records = {}
-for lvl in LEVELS:
-    placeholders = ",".join(["%s"] * len(need_users))
-    cur.execute(f"SELECT user, score_time, create_time FROM video_scores_{lvl} "
-                f"WHERE score_time < %s AND user IN ({placeholders})",
-                (SENTINEL, *need_users))
-    for u, s, ct in cur.fetchall():
-        if not s or s <= 0:
-            continue
-        records.setdefault(u, {}).setdefault(lvl, []).append((ct or 0, s))
-for lvls in records.values():
-    for lvl in lvls:
-        lvls[lvl].sort()
-print(f"重放 sum 成绩流水用户: {len(records)}")
+placeholders = ",".join(["%s"] * len(need_users))
+cur.execute("SELECT user, score_time, create_time FROM video_scores_exp "
+            f"WHERE score_time < %s AND user IN ({placeholders})",
+            (SENTINEL, *need_users))
+for u, s, ct in cur.fetchall():
+    if not s or s <= 0:
+        continue
+    records.setdefault(u, []).append((ct or 0, s))
+for lst in records.values():
+    lst.sort()
+print(f"重放高级成绩流水用户: {len(records)}")
 
-state = {}
+# ranked：新增行按当前 user.status=0
+cur.execute("SELECT id, status FROM user")
+user_status = dict(cur.fetchall())
+
+state = {}   # user -> (ptr, best)（含同刻推进：<= ct）
 final_rows = []
-for ct, lid, ntype, u, us, ref, dd in merged:
-    st = state.setdefault(u, {"best": {}, "ptr": {k: 0 for k in LEVELS}})
-    user_recs = records.get(u, {})
-    for lvl in LEVELS:
-        lst = user_recs.get(lvl)
-        if not lst:
-            continue
-        i = st["ptr"][lvl]
+for row in merged:
+    ct, lid, ntype, u, ref, dd = row[:6]
+    exp = row[6] if len(row) > 6 else None
+    st = state.setdefault(u, {"best": 0, "ptr": 0})
+    lst = records.get(u)
+    if lst:
+        i = st["ptr"]
         while i < len(lst) and lst[i][0] <= ct:
             ms = lst[i][1]
-            if lvl not in st["best"] or ms < st["best"][lvl]:
-                st["best"][lvl] = ms
+            if st["best"] == 0 or ms < st["best"]:
+                st["best"] = ms
             i += 1
-        st["ptr"][lvl] = i
+        st["ptr"] = i
     if lid is not None:
-        final_rows.append((ntype, ct, u, us, ref, dd))
+        final_rows.append((ntype, ct, u, exp, row[7], ref, dd))
     else:
-        est = sum(st["best"].values()) if len(st["best"]) == 3 else 0
-        final_rows.append((ntype, ct, u, est, ref, dd))
+        final_rows.append((ntype, ct, u, st["best"], 1 if user_status.get(u) == 0 else 0, ref, dd))
 
 print(f"重插行数: {len(final_rows)}（原 {len(tail)} + 新 {len(promo_events)}）")
 
@@ -235,7 +239,7 @@ ins = 0
 for i in range(0, len(final_rows), BATCH):
     batch = final_rows[i:i + BATCH]
     cur.executemany(
-        "INSERT INTO news (type, create_time, user, user_score, reference, details_data) VALUES (%s,%s,%s,%s,%s,%s)",
+        "INSERT INTO news (type, create_time, user, exp_time, ranked, reference, details_data) VALUES (%s,%s,%s,%s,%s,%s,%s)",
         batch)
     ins += len(batch)
 my.commit()

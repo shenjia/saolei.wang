@@ -76,24 +76,24 @@ def key_of(ntype, user, ref, dd, ct):
 
 
 def fetch_all(cur):
-    cur.execute("SELECT id, type, user, user_score, reference, details_data, create_time FROM news")
+    cur.execute("SELECT id, type, user, reference, details_data, create_time, exp_time, ranked FROM news")
     return cur.fetchall()
 
 
 local_rows = fetch_all(lc)
 target_rows = fetch_all(tc)
-target_keys = {key_of(t, u, r, dd, ct) for _, t, u, _, r, dd, ct in target_rows}
+target_keys = {key_of(t, u, r, dd, ct) for _, t, u, _, r, dd, ct, _e, _k in target_rows}
 
 # 本地有、生产无（排除本地测试：user 999xxx；user=1 的 type=52）
 missing = []
-for nid, ntype, u, us, ref, dd, ct in local_rows:
+for nid, ntype, u, ref, dd, ct, exp, rk in local_rows:
     if 999000 <= u <= 999999:
         continue
     if ntype == 52 and u == 1:
         continue
     k = key_of(ntype, u, ref, dd, ct)
     if k not in target_keys:
-        missing.append((ct, nid, ntype, u, us, ref, dd))
+        missing.append((ct, nid, ntype, u, ref, dd, exp, rk))
 
 missing.sort(key=lambda e: (e[0], e[1]))
 print(f"本地 {len(local_rows)} 行，生产 {len(target_rows)} 行；本地有生产无: {len(missing)} 条")
@@ -114,55 +114,20 @@ if DRY:
 
 # ---------- 尾部合并重排（id 序 = create_time 序铁律） ----------
 cut = min(e[0] for e in missing)
-tc.execute("SELECT id, type, user, user_score, reference, details_data, create_time "
+tc.execute("SELECT id, type, user, reference, details_data, create_time, exp_time, ranked "
            "FROM news WHERE create_time >= %s ORDER BY id", (cut,))
 tail = list(tc.fetchall())
 print(f"\ncut={cut}（{datetime.fromtimestamp(cut)}）；尾部原行 {len(tail)} 条")
 assert len(tail) < 50000, "尾部行数异常大，中止"
 
-merged = [(ct, None, ntype, u, us, ref, dd) for ct, nid, ntype, u, us, ref, dd in missing]
-for nid, ntype, u, us, ref, dd, ct in tail:
-    merged.append((ct, nid, ntype, u, us, ref, dd))
+merged = [(ct, None, ntype, u, ref, dd, exp, rk) for ct, nid, ntype, u, ref, dd, exp, rk in missing]
+for nid, ntype, u, ref, dd, ct, exp, rk in tail:
+    merged.append((ct, nid, ntype, u, ref, dd, exp, rk))
 merged.sort(key=lambda e: (e[0], e[1] if e[1] is not None else (1 << 62)))
 
-# user_score 重放（新增行：三级 running best 之和）
-LEVELS = ("beg", "int", "exp")
-SENTINEL = 998000
-need_users = {e[3] for e in merged if e[1] is None}
-records = {}
-for lvl in LEVELS:
-    ph = ",".join(["%s"] * len(need_users))
-    lc.execute(f"SELECT user, score_time, create_time FROM video_scores_{lvl} "
-               f"WHERE score_time < %s AND user IN ({ph})", (SENTINEL, *need_users))
-    for u, s, ct in lc.fetchall():
-        if not s or s <= 0:
-            continue
-        records.setdefault(u, {}).setdefault(lvl, []).append((ct or 0, s))
-for lvls in records.values():
-    for lvl in lvls:
-        lvls[lvl].sort()
-
-state = {}
-final_rows = []
-for ct, lid, ntype, u, us, ref, dd in merged:
-    st = state.setdefault(u, {"best": {}, "ptr": {k: 0 for k in LEVELS}})
-    user_recs = records.get(u, {})
-    for lvl in LEVELS:
-        lst = user_recs.get(lvl)
-        if not lst:
-            continue
-        i = st["ptr"][lvl]
-        while i < len(lst) and lst[i][0] <= ct:
-            ms = lst[i][1]
-            if lvl not in st["best"] or ms < st["best"][lvl]:
-                st["best"][lvl] = ms
-            i += 1
-        st["ptr"][lvl] = i
-    if lid is not None:
-        final_rows.append((ntype, ct, u, us, ref, dd))
-    else:
-        est = sum(st["best"].values()) if len(st["best"]) == 3 else 0
-        final_rows.append((ntype, ct, u, est, ref, dd))
+# 2026-10-17 称号快照制：exp_time/ranked 随行携带（本地缺失行的快照即本地已回填值，
+# 尾部生产原行快照原样保留），不再按成绩流水重放。
+final_rows = [(ntype, ct, u, exp, rk, ref, dd) for ct, lid, ntype, u, ref, dd, exp, rk in merged]
 
 print(f"重插 {len(final_rows)} 行（原 {len(tail)} + 新 {len(missing)}）")
 tc.execute("DELETE FROM news WHERE create_time >= %s", (cut,))
@@ -171,8 +136,8 @@ ins = 0
 for i in range(0, len(final_rows), BATCH):
     batch = final_rows[i:i + BATCH]
     tc.executemany(
-        "INSERT INTO news (type, create_time, user, user_score, reference, details_data) "
-        "VALUES (%s,%s,%s,%s,%s,%s)", batch)
+        "INSERT INTO news (type, create_time, user, exp_time, ranked, reference, details_data) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s)", batch)
     ins += len(batch)
 target.commit()
 print(f"[apply] 已重插 {ins} 行")

@@ -14,6 +14,7 @@ import { formatRawvf } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
+import { userTitleSnapshot } from "@/lib/queries";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -103,12 +104,16 @@ export async function POST(req: Request) {
           data: { user: BigInt(session.uid), signature: parsed.player, createTime: nowSec },
         });
       }
+      // 2026-10-17 称号快照制：上传时刻作者高级成绩 + 是否在榜，内嵌 video 行
+      const snap = await userTitleSnapshot(session.uid, tx);
       const video = await tx.video.create({
         data: {
           level,
           user: BigInt(session.uid),
           hash,
           status: VIDEO_STATUS.NORMAL,
+          expTime: BigInt(snap.expTime),
+          ranked: snap.ranked ? 1n : 0n,
           createTime: nowSec,
           updateTime: nowSec,
         },

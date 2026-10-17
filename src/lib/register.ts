@@ -94,11 +94,11 @@ export async function createRegisteredUser(input: RegisterInput): Promise<number
       data: { id: u.id, loginTimes: 1, loginTime: now, createTime: now, updateTime: now },
     });
     // 「加入扫雷网」动态（2026-09-24 张老师要求；仅个人主页可见，不进首页新闻流）
+    // 2026-10-17 称号快照制：新注册无成绩，快照 0/在榜（publishNews 内部自动取）
     await publishNews({
       tx,
       type: NEWS_TYPE.JOIN,
       userId: Number(u.id),
-      userScore: 0,
       createTime: Number(now),
     });
     return u;

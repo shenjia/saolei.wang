@@ -81,7 +81,6 @@ export async function POST(req: Request) {
       tx,
       type: NEWS_TYPE.JOIN,
       userId: Number(u.id),
-      userScore: 0,
       createTime: Number(now),
     });
     return u;

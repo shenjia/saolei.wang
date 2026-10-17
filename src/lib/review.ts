@@ -302,10 +302,14 @@ export async function reviewVideo(
 
       const sumTime = updated.sumTime ?? 0;
       if ((original.sumTime ?? 0) === 0 && sumTime > 0) {
-        // 入伍新兵动态（时间取审核时间）
-        await publishNews({ tx, type: NEWS_TYPE.NEWBIE, userId: rv.user, userScore: sumTime, createTime: rv.reviewTime! });
+        // 入伍新兵动态（时间取审核时间）——快照取更新后 exp_time（含同刻：显示入伍时军衔）
+        await publishNews({
+          tx, type: NEWS_TYPE.NEWBIE, userId: rv.user,
+          expTimeOverride: updated.expTime ?? 0,
+          createTime: rv.reviewTime!,
+        });
       } else {
-        // 个人纪录动态（时间取录像上传时间）
+        // 个人纪录动态（时间取录像上传时间）——快照取覆盖前旧 exp_time（显示破之前军衔）
         for (const level of ["beg", "int", "exp"] as VideoLevel[]) {
           for (const order of ORDERS) {
             if (Number(updated[F(level, order, "Video")] ?? 0) === rv.id) {
@@ -313,7 +317,7 @@ export async function reviewVideo(
                 tx,
                 type: NEWS_TYPE.PERSON_RECORD,
                 userId: rv.user,
-                userScore: sumTime,
+                expTimeOverride: original.expTime ?? 0,
                 reference: rv.id,
                 details: {
                   lv: level,

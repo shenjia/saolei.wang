@@ -644,7 +644,10 @@ export interface AdminNewsRow {
   type: number;
   user: number;
   author: UserBrief | null;
-  userScore: number;
+  /** 发布时刻高级成绩快照（毫秒，0=无；2026-10-17 称号快照制，原 user_score 已删） */
+  expTime: number;
+  /** 发布时是否在榜（快照） */
+  ranked: boolean;
   reference: number;
   detailsData: string;
   createTime: number;
@@ -681,7 +684,8 @@ export async function getNewsListAdmin(f: {
       type: n.type,
       user: N(n.user),
       author: authors.get(N(n.user)) ?? null,
-      userScore: n.userScore,
+      expTime: N(n.expTime),
+      ranked: n.ranked === 1n,
       reference: N(n.reference),
       detailsData: n.detailsData,
       createTime: N(n.createTime),

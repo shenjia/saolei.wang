@@ -9,7 +9,7 @@
   - 按用户重放 video_scores_{beg,int,exp} 流水（仅 status=20 录像，(create_time, video id) 序）；
   - time 维：score_time>0 且优于当前最优 → 事件 {lv, od:'time', or=旧最优(无则0), cr=新值}；
   - 3bvs 维：score_3bvs>0 且优于当前最优 → 事件 {lv, od:'3bvs', ...}；
-  - user_score = 该盘更新后三级最优时间之和（三级不全则 0，与 user_scores.sum_time 口径一致）；
+  - exp_time 快照 = 破纪录覆盖前的高级 running best（严格早于，2026-10-17 称号快照制；ranked 按当前 user.status）；
   - reference = 录像 id；nf 恒 0（NF 榜不发动态）；
   - 不补入伍动态（「老用户不补历史注册动态」铁律）；
   - 幂等：按 (user, create_time, lv, od) 跳过已存在的 type=20 行（旧站同步来的历史行原样不动）。
@@ -78,13 +78,13 @@ flows.sort()  # (ct, user, vid) —— 同用户同刻按录像 id
 
 best_time = {}   # (user, lv) -> 最优时间 ms
 best_3bvs = {}   # (user, lv) -> 最优 3bvs
-replay = []      # (ct, user, vid, lv, od, orv, crv, user_score)
-pending = []     # 同一盘录像的多个事件，结算时统一附 user_score
+replay = []      # (ct, user, vid, lv, od, orv, crv, exp_before)
+pending = []     # 同一盘录像的多个事件，结算时统一附 exp_before
 last_key = None
 for ct, u, vid, lvl, st, sb in flows:
     if last_key is not None and (u, ct, vid) != last_key:
-        times = [best_time.get((last_key[0], l), 0) for l in LEVELS]
-        us = sum(times) if all(times) else 0
+        # 2026-10-17 快照制：exp_before = 该用户「本盘之前」的高级 running best（严格早于）
+        us = best_time.get((last_key[0], "exp"), 0)
         replay.extend(e + (us,) for e in pending)
         pending = []
     last_key = (u, ct, vid)
@@ -97,8 +97,7 @@ for ct, u, vid, lvl, st, sb in flows:
         best_3bvs[(u, lvl)] = sb
         pending.append((ct, u, vid, lvl, "3bvs", orv, sb))
 if pending:
-    times = [best_time.get((last_key[0], l), 0) for l in LEVELS]
-    us = sum(times) if all(times) else 0
+    us = best_time.get((last_key[0], "exp"), 0)
     replay.extend(e + (us,) for e in pending)
 
 final_events = [e for e in replay if (e[1], e[0], e[3], e[4]) not in existing]
@@ -118,7 +117,7 @@ cut = min(e[0] for e in final_events)
 print(f"cut={cut}（{datetime.fromtimestamp(cut)}）")
 
 # ---------- 2. 尾部合并重排 ----------
-cur.execute("""SELECT id, type, user, user_score, reference, details_data, create_time
+cur.execute("""SELECT id, type, user, reference, details_data, create_time, exp_time, ranked
             FROM news WHERE create_time >= %s ORDER BY id""", (cut,))
 tail = list(cur.fetchall())
 print(f"尾部原行（create_time >= cut）: {len(tail)} 条")
@@ -130,9 +129,9 @@ merged = []
 for ct, u, vid, lv, od, orv, crv, us in final_events:
     dd = json.dumps({"lv": lv, "od": od, "or": str(orv), "cr": str(crv), "nf": 0},
                     separators=(",", ":"))
-    merged.append((ct, None, 20, u, us, vid, dd))
-for nid, ntype, u, us, ref, dd, ct in tail:
-    merged.append((ct, nid, ntype, u, us, ref, dd))
+    merged.append((ct, None, 20, u, vid, dd, us, 1))  # us=exp_before, ranked 占位 1
+for nid, ntype, u, ref, dd, ct, exp, rk in tail:
+    merged.append((ct, nid, ntype, u, ref, dd, exp, rk))
 # 同刻：原行在前，新事件在后
 merged.sort(key=lambda e: (e[0], e[1] if e[1] is not None else (1 << 62)))
 
@@ -160,9 +159,9 @@ print(f"已删尾部 {cur.rowcount} 行")
 
 ins = 0
 for i in range(0, len(merged), BATCH):
-    batch = [(ntype, ct, u, us, ref, dd) for ct, lid, ntype, u, us, ref, dd in merged[i:i + BATCH]]
+    batch = [(ntype, ct, u, exp, rk, ref, dd) for ct, lid, ntype, u, ref, dd, exp, rk in merged[i:i + BATCH]]
     cur.executemany(
-        "INSERT INTO news (type, create_time, user, user_score, reference, details_data) VALUES (%s,%s,%s,%s,%s,%s)",
+        "INSERT INTO news (type, create_time, user, exp_time, ranked, reference, details_data) VALUES (%s,%s,%s,%s,%s,%s,%s)",
         batch)
     ins += len(batch)
 my.commit()

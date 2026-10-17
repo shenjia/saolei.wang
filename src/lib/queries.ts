@@ -53,8 +53,9 @@ export interface UserBrief {
 export interface NewsItem {
   id: number;
   type: number;
-  userScore: number;
-  /** 动态时刻该用户的高级时间 running best（军衔按当时值评定，getNews 批量重放） */
+  /** 发布时是否在榜（快照；未来自选称号体系判「未加入排行」用） */
+  ranked: boolean;
+  /** 发布时刻高级时间 running best（毫秒，0=无成绩）——军衔按快照评定（2026-10-17 快照制） */
   expTime: number;
   reference: number;
   details: Record<string, unknown>;
@@ -133,6 +134,38 @@ export async function usersWithTitles(ids: number[]): Promise<Map<number, UserBr
   return out;
 }
 
+// ---------- 称号快照（2026-10-17 快照制：写入时取「当时高级成绩 + 是否在榜」） ----------
+
+export interface TitleSnapshot {
+  /** 快照时刻高级时间 running best（毫秒，0=无成绩） */
+  expTime: number;
+  /** 快照时刻是否在榜（user.status=0） */
+  ranked: boolean;
+}
+
+/**
+ * 取用户称号快照（写入 news/comment/bbs/video 时调用）。
+ * expTimeOverride：破纪录动态传覆盖前旧值（original.expTime）、入伍/晋升传更新后新值。
+ * db 参数可传事务 client（publishNews 事务内免二次开连接）。
+ */
+export async function userTitleSnapshot(
+  userId: number,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+  expTimeOverride?: number
+): Promise<TitleSnapshot> {
+  const [scores, u] = await Promise.all([
+    db.userScores.findUnique({
+      where: { id: BigInt(userId) },
+      select: { expTime: true },
+    }),
+    db.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true } }),
+  ]);
+  return {
+    expTime: expTimeOverride ?? (scores?.expTime ?? 0),
+    ranked: u?.status === 0,
+  };
+}
+
 /** 录像成绩：time=real_time(ms)，3bvs=board_3bv×1e6/real_time，3BV 过小记负（移植 VideoModel::getScores）
  *  2026-09-24 实现迁至 lib/format（纯模块，供客户端行渲染件共用），此处 re-export 兼容旧引用。 */
 export { videoScores } from "./format";
@@ -197,25 +230,14 @@ export async function getNews(opts: {
     ...(opts.ids ? {} : { take: opts.limit }),
   });
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
-  // 军衔按「动态时刻」的高级时间评定（2026-10-13 SUB 制，张老师要求显示当时军衔而非现在的）：
-  // 批量取相关用户的高级成绩流水，按每条动态的 create_time 重放 running best。
-  // 入伍（NEWBIE）与晋升（PROMOTION）动态含同刻成绩：老站这两类动态的时间=触发成绩的那盘上传时间，
-  // 严格早于会让「入伍新兵/晋升少尉」行首永远停在晋升前军衔（2026-10-13 张老师指出「入伍新兵怎么可能是预备役」；
-  // 2026-10-16 同理修晋升动态——行首「预备役」配文案「晋升为少尉」自相矛盾）。
-  // 破纪录动态仍严格早于（显示破之前旧军衔）
-  const expMap = await expTimeAtBatch(
-    [...new Set(rows.map((r) => r.user))],
-    rows.map((r) => ({
-      user: N(r.user),
-      ct: N(r.createTime),
-      inclusive: r.type === NEWS_TYPE.NEWBIE || r.type === NEWS_TYPE.PROMOTION,
-    }))
-  );
+  // 2026-10-17 称号快照制：军衔按行内 exp_time/ranked 快照评定（写入时定值），
+  // 不再按 video_scores_exp 流水重放——入伍/晋升「含同刻」、破纪录「严格早于」的口径
+  // 已固化在写入点（review.ts publishNews expTimeOverride），历史行为一次性回填迁移。
   return rows.map((r) => ({
     id: N(r.id),
     type: r.type,
-    userScore: r.userScore,
-    expTime: expMap.get(`${N(r.user)}:${N(r.createTime)}`) ?? 0,
+    ranked: r.ranked === 1n,
+    expTime: N(r.expTime),
     reference: N(r.reference),
     details: safeJson(r.detailsData),
     createTime: N(r.createTime),
@@ -261,42 +283,9 @@ export async function getNewsPage(opts: {
   });
 }
 
-/**
- * 批量重放「用户在指定时刻的高级时间 running best」（动态军衔显示当时值用）。
- * 取所有 (user, ct≤流水时间) 的成绩最小值；一次 IN 查询后在内存分组扫描。
- */
-async function expTimeAtBatch(
-  users: bigint[],
-  points: { user: number; ct: number; inclusive?: boolean }[]
-): Promise<Map<string, number>> {
-  if (!users.length) return new Map();
-  const flows = await prisma.videoScoresExp.findMany({
-    where: { user: { in: users }, scoreTime: { gt: 0 } },
-    select: { user: true, scoreTime: true, createTime: true },
-  });
-  // 按用户分组流水
-  const byUser = new Map<number, { ct: number; s: number }[]>();
-  for (const f of flows) {
-    const uid = N(f.user);
-    if (!byUser.has(uid)) byUser.set(uid, []);
-    byUser.get(uid)!.push({ ct: N(f.createTime), s: N(f.scoreTime) });
-  }
-  for (const lst of byUser.values()) lst.sort((a, b) => a.ct - b.ct);
-  const out = new Map<string, number>();
-  for (const p of points) {
-    const lst = byUser.get(p.user);
-    if (!lst || !lst.length) continue;
-    let best = 0;
-    for (const f of lst) {
-      // 默认严格早于动态时刻：同刻的成绩（含触发晋升/破纪录那盘）不改行首军衔——破纪录动态显示
-      // 破之前的旧军衔（张老师 17:19 要求）；入伍动态用 inclusive（含同刻，显示入伍时的军衔）
-      if (p.inclusive ? f.ct > p.ct : f.ct >= p.ct) break;
-      if (!best || f.s < best) best = f.s;
-    }
-    out.set(`${p.user}:${p.ct}`, best);
-  }
-  return out;
-}
+// （2026-10-17 称号快照制：原「expTimeAtBatch 流水重放」已整体移除——
+//  渲染改读行内快照 exp_time/ranked，入伍/晋升/破纪录口径固化在写入点与
+//  一次性回填脚本 scripts/backfill-title-snapshot.py 中）
 
 function safeJson(s: string): Record<string, unknown> {
   let obj: Record<string, unknown>;
@@ -965,17 +954,12 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     prisma.videoStat.findMany({ where: { id: { in: bigIds } } }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
-  // 作者最好成绩批量取（2026-10-15 上线前性能审计修 N+1：原循环内逐条 findUnique，
-  // 一页 17 条录像就是 17 次额外往返，首页/录像列表/用户页每个列表页都中招）
-  const authorScoreRows = await prisma.userScores.findMany({
-    where: { id: { in: videos.map((v) => v.user) } },
-    select: { id: true, expTime: true },
-  });
-  const authorScoreMap = new Map(authorScoreRows.map((s) => [N(s.id), s]));
   const infoMap = new Map(infos.map((i) => [N(i.id), i]));
   const statMap = new Map(stats.map((s) => [N(s.id), s]));
 
   // 保持传入 ids 的顺序（移植 Value::orderByIds）
+  // 2026-10-17 称号快照制：authorTitle 按录像行内 exp_time 快照评定（上传时刻军衔），
+  // 不再批量查 user_scores 当前值
   const videoMap = new Map(videos.map((v) => [N(v.id), v]));
   const result: VideoListItem[] = [];
   for (const id of ids) {
@@ -983,7 +967,6 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     const info = infoMap.get(id);
     if (!v || !info) continue;
     const author = authors.get(N(v.user)) ?? null;
-    const authorScores = author ? (authorScoreMap.get(N(author.id)) ?? null) : null;
     const stat = statMap.get(id);
     result.push({
       id,
@@ -999,7 +982,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       clicks: stat?.clicks ?? 0,
       comments: stat?.comments ?? 0,
       author,
-      authorTitle: title(authorScores?.expTime),
+      authorTitle: title(N(v.expTime)),
     });
   }
   return result;
@@ -1038,12 +1021,11 @@ export interface VideoDetail extends VideoListItem {
 export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
   const v = await prisma.video.findUnique({ where: { id: BigInt(id) } });
   if (!v) return null;
-  const [info, stat, author, reviewer, authorScores] = await Promise.all([
+  const [info, stat, author, reviewer] = await Promise.all([
     prisma.videoInfo.findUnique({ where: { id: v.id } }),
     prisma.videoStat.findUnique({ where: { id: v.id } }),
     prisma.user.findUnique({ where: { id: v.user } }),
     v.reviewUser ? prisma.user.findUnique({ where: { id: v.reviewUser } }) : null,
-    prisma.userScores.findUnique({ where: { id: v.user } }),
   ]);
   if (!info) return null;
   return {
@@ -1067,7 +1049,8 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     comments: stat?.comments ?? 0,
     downloads: stat?.downloads ?? 0,
     author: toBrief(author),
-    authorTitle: title(authorScores?.expTime),
+    // 2026-10-17 称号快照制：按录像行内快照评定（上传时刻军衔）
+    authorTitle: title(N(v.expTime)),
   };
 }
 
@@ -1148,7 +1131,8 @@ export interface CommentItem {
   content: string;
   createTime: number;
   author: UserBrief | null;
-  /** 作者军衔（2026-10-13 张老师要求：评论作者也显示军衔，与 BBS 楼层同款徽章） */
+  /** 作者军衔（2026-10-13 张老师要求：评论作者也显示军衔，与 BBS 楼层同款徽章；
+   *  2026-10-17 快照制：按评论时刻快照评定，不再实时查当前军衔） */
   authorTitle: string;
 }
 
@@ -1167,8 +1151,8 @@ export async function getComments(
     orderBy: { id: "desc" },
     take: limit,
   });
-  // 2026-10-13：作者带军衔（评论人名后显示徽章，与 BBS 楼层同一实现）
-  const authors = await usersWithTitles([...new Set(rows.map((r) => N(r.user)))]);
+  // 2026-10-17 称号快照制：军衔按评论行内 exp_time 快照评定（回填脚本已迁移存量）
+  const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
   return rows.map((r) => {
     const a = authors.get(N(r.user)) ?? null;
     return {
@@ -1176,7 +1160,7 @@ export async function getComments(
       content: r.content ?? "",
       createTime: N(r.createTime),
       author: a,
-      authorTitle: a?.title ?? "",
+      authorTitle: title(N(r.expTime)),
     };
   });
 }
@@ -1189,15 +1173,18 @@ export async function getCommentsCount(videoId: number): Promise<number> {
 }
 
 /** 发表评论并递增录像评论计数（2013 版漏了计数递增，新版补齐）
- *  2026-09-24 起事务内同发「评论」动态（仅个人主页可见，不进首页新闻流） */
+ *  2026-09-24 起事务内同发「评论」动态（仅个人主页可见，不进首页新闻流）
+ *  2026-10-17 称号快照制：写入评论时刻的 exp_time/ranked（评论行内嵌快照，渲染不再实时查） */
 export async function addComment(videoId: number, userId: number, content: string): Promise<number> {
   const now = BigInt(Math.floor(Date.now() / 1000));
   return prisma.$transaction(async (tx) => {
+    const snap = await userTitleSnapshot(userId, tx);
     const created = await tx.comment.create({
       data: {
         video: BigInt(videoId),
         user: BigInt(userId),
-        userScore: 0,
+        expTime: BigInt(snap.expTime),
+        ranked: snap.ranked ? 1n : 0n,
         content,
         status: COMMENT_STATUS.NORMAL,
         createTime: now,

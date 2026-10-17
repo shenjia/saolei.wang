@@ -203,6 +203,9 @@ model Video {
   // 连坐封禁前的 status（2026-10-16 限时封禁）：账号封禁勾选「同步封禁录像」时记录原值（10/20），
   // 解禁时据此精确恢复并清零；0=非连坐（单独屏蔽），解禁时不动
   statusBak  Int     @default(0) @map("status_bak") @db.TinyInt
+  // ---- 称号快照制（2026-10-17，语义同 news.exp_time/ranked）：上传时刻作者高级成绩 + 是否在榜 ----
+  expTime    BigInt  @default(0) @map("exp_time") @db.BigInt
+  ranked     BigInt  @default(0) @map("ranked") @db.BigInt
 
   // 2026-10-15 上线前性能审计新增：
   // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计
@@ -445,9 +448,15 @@ model News {
   id          BigInt @id @default(autoincrement()) @db.BigInt
   type        Int    @db.SmallInt
   user        BigInt @db.BigInt
-  userScore   Int    @map("user_score") @db.Int
   reference   BigInt @default(0) @db.BigInt
   detailsData String @map("details_data") @db.VarChar(200)
+  // ---- 称号快照制（2026-10-17 张老师定：库不存称号，存「动态时刻高级成绩 + 是否在榜」，前端渲染时换算）----
+  // exp_time：动态时刻该用户的高级时间 running best（毫秒，0=无成绩）。
+  //   入伍/晋升动态写「含同刻」值（显示晋升后军衔），破纪录动态写覆盖前旧值（张老师 10-13/10-16 口径）。
+  //   原 user_score（sum_time 快照，2013 军衔制遗留）已随本改版删除——新体系下无消费者。
+  // ranked：发布时用户是否在榜（user.status=0）。旧版称号「布衣」与未来自选体系用它判「未加入排行」
+  expTime    BigInt @default(0) @map("exp_time") @db.BigInt
+  ranked     BigInt @default(0) @map("ranked") @db.BigInt
   createTime  BigInt @default(0) @map("create_time") @db.BigInt
 
   // 2026-10-15 上线前性能审计新增：首页动态 feed 与 count 按 type 过滤、id 倒序，
@@ -461,10 +470,12 @@ model Comment {
   id         BigInt  @id @default(autoincrement()) @db.BigInt
   video      BigInt  @db.BigInt
   user       BigInt  @db.BigInt
-  userScore  Int     @map("user_score") @db.Int
   content    String? @db.Text
   status     Int     @default(0) @db.SmallInt
   aiReason   String? @map("ai_reason") @db.VarChar(200)
+  // ---- 称号快照制（2026-10-17，语义同 news.exp_time/ranked；评论时刻高级成绩 + 是否在榜）----
+  expTime    BigInt  @default(0) @map("exp_time") @db.BigInt
+  ranked     BigInt  @default(0) @map("ranked") @db.BigInt
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
@@ -550,6 +561,9 @@ model BbsPost {
   isLocked      Boolean @default(false) @map("is_locked")
   status        Int     @default(0) @db.SmallInt
   aiReason      String? @map("ai_reason") @db.VarChar(200)
+  // ---- 称号快照制（2026-10-17，语义同 news.exp_time/ranked）----
+  expTime       BigInt  @default(0) @map("exp_time") @db.BigInt
+  ranked        BigInt  @default(0) @map("ranked") @db.BigInt
   lastReplyTime BigInt  @default(0) @map("last_reply_time") @db.BigInt
   lastReplyUser BigInt  @default(0) @map("last_reply_user") @db.BigInt
   createTime    BigInt  @default(0) @map("create_time") @db.BigInt
@@ -567,6 +581,9 @@ model BbsReply {
   content    String  @db.MediumText
   status     Int     @default(0) @db.SmallInt
   aiReason   String? @map("ai_reason") @db.VarChar(200)
+  // ---- 称号快照制（2026-10-17，语义同 news.exp_time/ranked）----
+  expTime    BigInt  @default(0) @map("exp_time") @db.BigInt
+  ranked     BigInt  @default(0) @map("ranked") @db.BigInt
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 

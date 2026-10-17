@@ -1,7 +1,8 @@
 // BBS 论坛（移植 2008 版 BBS/*：板块/主题/回复/置顶/精华/锁定/移动/删除 + UBB 渲染）
 
 import { prisma } from "./db";
-import { usersWithTitles, type UserBrief } from "./queries";
+import { usersByIds, userTitleSnapshot, type UserBrief } from "./queries";
+import { title } from "./assess";
 import { oldTitle, type OldTitle } from "./oldtitle";
 import { NEWS_TYPE } from "./config";
 import { publishNews } from "./news";
@@ -195,18 +196,22 @@ export interface BbsAuthor extends UserBrief {
   old: OldTitle;
 }
 
-/** 军衔取数复用 queries.usersWithTitles（2026-10-13 提取，评论区同源），此处再补旧版称号 */
-async function authorsWithTitles(ids: number[]): Promise<Map<number, BbsAuthor>> {
-  const base = await usersWithTitles(ids);
+/** 军衔取数（2026-10-17 称号快照制）：按行内 exp_time 快照逐行评定，
+ *  不再实时查 user_scores 当前值——同页同一用户的多条内容显示各自时刻的称号 */
+async function authorsFromSnapshots(
+  rows: { user: number; expTime: number }[]
+): Promise<Map<number, BbsAuthor>> {
+  const ids = [...new Set(rows.map((r) => r.user).filter((x) => x > 0))];
+  const briefs = await usersByIds(ids);
   const out = new Map<number, BbsAuthor>();
-  for (const [id, b] of base) {
-    out.set(id, {
-      id: b.id,
-      chineseName: b.chineseName,
-      englishName: b.englishName,
-      sex: b.sex,
-      title: b.title,
-      old: oldTitle(b.expTime, b.sex),
+  for (const r of rows) {
+    if (r.user <= 0 || out.has(r.user)) continue;
+    const b = briefs.get(r.user);
+    if (!b) continue;
+    out.set(r.user, {
+      ...b,
+      title: title(r.expTime),
+      old: oldTitle(r.expTime, b.sex),
     });
   }
   return out;
@@ -277,7 +282,9 @@ export async function getPostList(opts: {
     skip: (page - 1) * BBS_PAGESIZE, // 页锚点恒按 base 19（页码语义不变）
     take: size, // 本批行数（「加载更多」递增批量可 > 19）
   });
-  const authors = await authorsWithTitles([...new Set(rows.map((r) => N(r.user)).filter((x) => x > 0))]);
+  const authors = await authorsFromSnapshots(
+    rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime) })).filter((x) => x.user > 0)
+  );
   return {
     posts: rows.map((r) => ({
       id: N(r.id),
@@ -312,7 +319,9 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
   if (bump) {
     await prisma.bbsPost.update({ where: { id: row.id }, data: { clicks: { increment: 1 } } });
   }
-  const authors = await authorsWithTitles([N(row.user)].filter((x) => x > 0));
+  const authors = await authorsFromSnapshots(
+    [N(row.user)].filter((x) => x > 0).map((user) => ({ user, expTime: N(row.expTime) }))
+  );
   return {
     id: N(row.id),
     board: row.board,
@@ -361,7 +370,9 @@ export async function getReplyFeed(
     orderBy: { id: "asc" },
     take: size,
   });
-  const authors = await authorsWithTitles([...new Set(rows.map((r) => N(r.user)))]);
+  const authors = await authorsFromSnapshots(
+    rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime) }))
+  );
   return {
     items: rows.map((r) => ({
       id: N(r.id),
@@ -409,12 +420,16 @@ export async function createPost(userId: number, board: number, title: string, c
   const now = nowSec();
   // 事务内同发「论坛文章」动态（2026-09-24 张老师要求；仅个人主页可见，不进首页新闻流）
   return prisma.$transaction(async (tx) => {
+    // 2026-10-17 称号快照制：发帖时刻 exp_time/ranked 内嵌本行
+    const snap = await userTitleSnapshot(userId, tx);
     const row = await tx.bbsPost.create({
       data: {
         board,
         user: BigInt(userId),
         title,
         content,
+        expTime: BigInt(snap.expTime),
+        ranked: snap.ranked ? 1n : 0n,
         lastReplyTime: now,
         lastReplyUser: BigInt(userId),
         createTime: now,
@@ -486,8 +501,14 @@ export async function createReply(
   const now = nowSec();
   // 事务内同发「评论」动态（BBS 回帖=评论文章，2026-09-24 张老师要求；仅个人主页可见）
   const replyId = await prisma.$transaction(async (tx) => {
+    // 2026-10-17 称号快照制：回帖时刻 exp_time/ranked 内嵌本行
+    const snap = await userTitleSnapshot(userId, tx);
     const reply = await tx.bbsReply.create({
-      data: { post: BigInt(postId), user: BigInt(userId), content: full, createTime: now, updateTime: now },
+      data: {
+        post: BigInt(postId), user: BigInt(userId), content: full,
+        expTime: BigInt(snap.expTime), ranked: snap.ranked ? 1n : 0n,
+        createTime: now, updateTime: now,
+      },
     });
     await tx.bbsPost.update({
       where: { id: BigInt(postId) },
