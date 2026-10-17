@@ -9,7 +9,7 @@
   - 只 INSERT IGNORE 生产缺失的 id，绝不动生产已有行（生产有今天的新评论/回复/动态）
   - 排除本地测试数据：user 999003-999006（绑定测试）、bbs_reply 24390/24391/24392
     （user=1 10-13 测试回复）
-  - news 不在此脚本处理——news 走语义重放（promotion-backfill + news-delta），不按 id 对齐
+  - news 不在此脚本处理——news 走语义重放（news-delta；晋升动态 2026-10-17 已下线），不按 id 对齐
   - ⚠️ 生产禁建 schema 外表（会阻塞全部部署），本脚本不建任何表
 
 用法：

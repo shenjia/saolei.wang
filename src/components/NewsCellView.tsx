@@ -8,12 +8,11 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLES, TITLE_CLASSES, TITLE_CLASS_COLORS, TITLE_THRESHOLDS, titleConditionText, type Level } from "@/lib/config";
+import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLES, TITLE_CLASSES, TITLE_CLASS_COLORS, TITLE_THRESHOLDS, type Level } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { DeltaArrow } from "./RankingRows";
-import { RankBadge } from "./RankBadge";
 
 function formatScore(order: string, value: number): string {
   return order === "time" ? scoreTime(value) : score3bvs(value);
@@ -56,10 +55,6 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
     bv?: number;
     t?: string;
     kind?: string;
-    /** 晋升军衔名（type=53） */
-    ti?: string;
-    /** 晋升条件文案（type=53，如「高级记录 < 40秒」） */
-    cond?: string;
   };
   const authorCells = news.author && (
     <>
@@ -222,17 +217,9 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
             )}
           </>
         )}
-        {news.type === NEWS_TYPE.PROMOTION && news.author && (
-          <>
-            {authorCells}
-            {/* 2026-10-16 张老师定：去「了！」与金色箭头；改「晋升为」暗灰（继承正文色，同「刷新了」） */}
-            <span className="promoted">晋升为</span>
-            <span className="record person" data-tip={d.ti ? titleConditionText(d.ti) : undefined}>
-              <RankBadge title={d.ti ?? ""} /> <em className={TITLE_CLASSES[d.ti ?? ""] ?? ""}>{d.ti ?? ""}</em>
-            </span>
-          </>
-        )}
-        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 53].includes(news.type) && (
+        {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
+            渲染块移除——details 的 ti/cond 字段随存量行一并消失 */}
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52].includes(news.type) && (
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>

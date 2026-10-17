@@ -5,14 +5,12 @@
 （实证：正常用户 0 部 IsLive=0，3038 部 IsLive=0 全属停用账号），
 transform.py 原流水条件 status==20 导致这些审核通过（Check=1）的录像
 不进 video_scores_* —— 后果：动态军衔重放为空（显示预备役）、
-promotion-backfill.py 无源（缺 type=53 晋升动态）、3BV 收集为空。
+3BV 收集为空（晋升动态已于 2026-10-17 整体下线，promotion-backfill.py 退役）。
 
 本脚本把封禁账号（user.status<>0）名下 status=0 且 real_time>0 的录像
 补进 video_scores_{beg,int,exp}（noflag=1 的同时补 _nf 表）：
   id = 录像 id（主键幂等，INSERT IGNORE 可重跑）
   score_3bvs = ROUND(board_3bv*1e6/real_time)（2026-10-15 全线定稿口径，禁 floor）
-
-跑完本脚本后需重跑 promotion-backfill.py --apply 补发晋升动态。
 
 用法: python3 scripts/sync/backfill-banned-flows.py [--apply]   默认 dry-run
 连接：默认本地 root@127.0.0.1:3306/saolei；

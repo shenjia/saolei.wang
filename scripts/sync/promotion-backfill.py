@@ -1,30 +1,25 @@
 #!/usr/bin/env python3
-"""军衔晋升动态回填（2026-10-13 SUB 制）：按 video_scores_exp 流水重放，补发首次晋升动态
+"""【已退役 2026-10-17】军衔晋升动态回填脚本——张老师要求晋升动态整体下线：
+存量 type=53 行已删除（备份见下），本脚本不再执行、防止误跑复活数据。
+保留仅作历史参考。退役前规则：
 
-规则：
-  - 对每个玩家按时间重放高级成绩 running best（同刻多盘按流水顺序自然收敛到最终最优）；
-  - 每当 running best 首次跨过一个 SUB 阈值（35/40/42/45/48/50/52/55/58/60/63/66/70/80/90/100/150s），
-    产生一条 type=53 晋升动态（create_time = 该成绩的流水时间）；
-  - 列兵档（>=150s）是首次产生高级成绩即落入，视同首次晋升（首成绩 <150s 的玩家则按实际跨越补）。
-  - 幂等：以 (user, ti) 为键跳过已存在的 type=53 行。
+  - 按 video_scores_exp 流水重放，首次跨过军衔阈值补发 type=53 晋升动态
+  - 排序铁律：news.id 序 = create_time 序 → 尾部合并重排
+  - exp_time 快照：晋升动态含同刻——取晋升后高级新值
 
-排序铁律：news.id 序 = create_time 序 → 走 news-delta 同款「尾部合并重排」：
-  cut = 新事件最小时间，删除 create_time >= cut 的尾部行，与新事件一起重排重插。
-  同刻时原行在前、新事件在后。
+存量备份（17582 行）：本地 .workbuddy/backups/20261017-promo-news-removed/；
+生产服务器 ~/backup/userscore-drop-20261017/promo-news-removed.sql.gz。
 
-exp_time 快照（2026-10-17 称号快照制）：晋升动态含同刻——取晋升后高级新值；
-与 backfill_news_score.py 同算法。
-
-用法: python3 scripts/sync/promotion-backfill.py [--apply]   默认 dry-run
-
-连接（2026-10-15 支持生产重放）：默认本地 root@127.0.0.1:3306/saolei；
-SAOLEI_DB_HOST/PORT/USER/PASSWORD 环境变量覆盖（写生产走 3316 隧道 + --allow-nonlocal）。
-⚠️ 生产禁建 schema 外表：--apply 时不再建 news_backup_* 表，改为提示——
-生产侧备份用 mysqldump 到服务器文件（news-backup-before-promo-20261015.sql.gz）。
+用法（退役后禁用）: 直接运行将拒绝执行并退出。
 """
 import json
 import os
 import sys
+
+print("[RETIRED] 晋升动态已于 2026-10-17 整体下线，本脚本不再执行。", file=sys.stderr)
+sys.exit(3)
+
+# ---------- 以下为退役前实现，仅存档 ----------
 from collections import defaultdict
 
 import pymysql

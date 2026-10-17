@@ -376,24 +376,26 @@ export const NEWS_TYPE = {
   JOIN: 50, // 加入扫雷网（注册）
   AVATAR: 51, // 更换头像
   COMMENT: 52, // 评论（录像评论 / BBS 回帖）
-  PROMOTION: 53, // 晋升军衔（2026-10-13 SUB 制回填：首次达到新军衔阈值）
+  PROMOTION: 53, // 晋升军衔（2026-10-17 张老师要求整体下线：存量已删、回填脚本退役；
+                 // 常量保留仅为类型编号存档，勿再写入/渲染）
 } as const;
 
 /** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻）
- *  2026-10-17 张老师定：上传录像（VIDEO）也撤出首页新闻——首页已有「录像」版块，
- *  录像动态一上传就刷屏新闻流；录像动态只在用户主页「动态」显示（NEWS_FEED_EXCLUDED） */
+ *  2026-10-17 张老师定：上传录像（VIDEO）撤出首页新闻——首页已有「录像」版块，
+ *  录像动态一上传就刷屏新闻流（只在用户主页「动态」显示，NEWS_FEED_EXCLUDED）；
+ *  同日再定：晋升动态（PROMOTION）整体下线，不再进入任何动态流 */
 export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.NOTICE,
   NEWS_TYPE.NEWBIE,
   NEWS_TYPE.PERSON_RECORD,
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
-  NEWS_TYPE.PROMOTION,
 ];
 
-/** 用户主页「动态」排除的类型（2026-10-17 张老师定：与首页同口径撤掉上传录像——
- *  录像一传就刷屏；主页另有「录像」版块，信息不丢）。管理后台不受此口径影响 */
-export const NEWS_FEED_EXCLUDED: number[] = [NEWS_TYPE.VIDEO];
+/** 用户主页「动态」排除的类型（2026-10-17：与首页同口径撤掉上传录像；
+ *  晋升动态存量已删，无需列入——此数组仅排除「仍会写入但不展示」的类型）。
+ *  管理后台不受此口径影响 */
+export const NEWS_FEED_EXCLUDED: number[] = [NEWS_TYPE.VIDEO, NEWS_TYPE.PROMOTION];
 
 // ---------- 地区 ----------
 
