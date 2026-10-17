@@ -137,7 +137,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
               {video.author && (
                 <>
                   <AvatarCell id={video.author.id} name={video.author.chineseName} sex={video.author.sex} className="author" link />
-                  <TitleBadge title={video.authorTitle} link />
+                  <TitleBadge title={video.authorTitle} classic={video.authorClassic} link />
                 </>
               )}
               <span className="create_time">

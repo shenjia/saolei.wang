@@ -98,7 +98,7 @@ export function BbsRow({
         {p.author && (
           <>
             <AvatarCell id={p.author.id} name={p.author.chineseName} sex={p.author.sex} gender="small" link />
-            <TitleBadge title={p.author.title} link />
+            <TitleBadge title={p.author.title} classic={p.author.old} link />
           </>
         )}
       </td>

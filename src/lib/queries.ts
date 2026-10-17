@@ -38,6 +38,7 @@ import {
 import { publishNews } from "./news";
 import { decodeLegacyEntities } from "./format";
 import { liftExpiredBans } from "./ban";
+import { dualTitles, type TitlePair } from "./title-system";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -53,7 +54,7 @@ export interface UserBrief {
 export interface NewsItem {
   id: number;
   type: number;
-  /** 发布时是否在榜（快照；未来自选称号体系判「未加入排行」用） */
+  /** 发布时是否在榜（快照；自选称号体系判「未加入排行」用） */
   ranked: boolean;
   /** 发布时刻高级时间 running best（毫秒，0=无成绩）——军衔按快照评定（2026-10-17 快照制） */
   expTime: number;
@@ -61,6 +62,8 @@ export interface NewsItem {
   details: Record<string, unknown>;
   createTime: number;
   author: UserBrief | null;
+  /** 双体系称号对（2026-10-17 Phase 5）：军衔 + 旧版称号，TitleBadge 按观看者体系渲染 */
+  authorTitles: TitlePair | null;
 }
 
 export interface RankingUser extends UserBrief {
@@ -86,6 +89,8 @@ export interface VideoListItem {
   comments: number;
   author: UserBrief | null;
   authorTitle: string;
+  /** Phase 5 双体系：旧版称号备选（上传时刻快照评定） */
+  authorClassic: { name: string; color: string } | null;
 }
 
 // ---------- 通用 ----------
@@ -233,6 +238,15 @@ export async function getNews(opts: {
   // 2026-10-17 称号快照制：军衔按行内 exp_time/ranked 快照评定（写入时定值），
   // 不再按 video_scores_exp 流水重放——入伍/晋升「含同刻」、破纪录「严格早于」的口径
   // 已固化在写入点（review.ts publishNews expTimeOverride），历史行为一次性回填迁移。
+  // Phase 5 双体系：批量补算旧版称号（TitlePair），TitleBadge 按观看者体系渲染
+  const pairs = await dualTitles(
+    rows.map((r) => ({
+      userId: N(r.user),
+      expTime: N(r.expTime),
+      ranked: r.ranked === BigInt(1),
+      sex: authors.get(N(r.user))?.sex ?? 1,
+    }))
+  );
   return rows.map((r) => ({
     id: N(r.id),
     type: r.type,
@@ -242,6 +256,7 @@ export async function getNews(opts: {
     details: safeJson(r.detailsData),
     createTime: N(r.createTime),
     author: authors.get(N(r.user)) ?? null,
+    authorTitles: pairs.get(N(r.user)) ?? null,
   }));
 }
 
@@ -959,7 +974,15 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
 
   // 保持传入 ids 的顺序（移植 Value::orderByIds）
   // 2026-10-17 称号快照制：authorTitle 按录像行内 exp_time 快照评定（上传时刻军衔），
-  // 不再批量查 user_scores 当前值
+  // 不再批量查 user_scores 当前值。Phase 5：批量补算旧版称号
+  const pairs = await dualTitles(
+    videos.map((v) => ({
+      userId: N(v.user),
+      expTime: N(v.expTime),
+      ranked: v.ranked === BigInt(1),
+      sex: authors.get(N(v.user))?.sex ?? 1,
+    }))
+  );
   const videoMap = new Map(videos.map((v) => [N(v.id), v]));
   const result: VideoListItem[] = [];
   for (const id of ids) {
@@ -968,6 +991,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     if (!v || !info) continue;
     const author = authors.get(N(v.user)) ?? null;
     const stat = statMap.get(id);
+    const p = pairs.get(N(v.user));
     result.push({
       id,
       level: v.level,
@@ -982,7 +1006,8 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       clicks: stat?.clicks ?? 0,
       comments: stat?.comments ?? 0,
       author,
-      authorTitle: title(N(v.expTime)),
+      authorTitle: p?.m ?? "",
+      authorClassic: p?.c ?? null,
     });
   }
   return result;
@@ -1028,6 +1053,16 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     v.reviewUser ? prisma.user.findUnique({ where: { id: v.reviewUser } }) : null,
   ]);
   if (!info) return null;
+  // Phase 5 双体系：按录像行内快照评定双套称号
+  const pairs = await dualTitles([
+    {
+      userId: N(v.user),
+      expTime: N(v.expTime),
+      ranked: v.ranked === BigInt(1),
+      sex: author?.sex ?? 1,
+    },
+  ]);
+  const p = pairs.get(N(v.user));
   return {
     id: N(v.id),
     level: v.level,
@@ -1050,7 +1085,8 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     downloads: stat?.downloads ?? 0,
     author: toBrief(author),
     // 2026-10-17 称号快照制：按录像行内快照评定（上传时刻军衔）
-    authorTitle: title(N(v.expTime)),
+    authorTitle: p?.m ?? "",
+    authorClassic: p?.c ?? null,
   };
 }
 
@@ -1131,9 +1167,10 @@ export interface CommentItem {
   content: string;
   createTime: number;
   author: UserBrief | null;
-  /** 作者军衔（2026-10-13 张老师要求：评论作者也显示军衔，与 BBS 楼层同款徽章；
-   *  2026-10-17 快照制：按评论时刻快照评定，不再实时查当前军衔） */
+  /** 作者军衔（快照评定，2026-10-17 快照制） */
   authorTitle: string;
+  /** 双体系称号对（Phase 5）：旧版称号备选，TitleBadge 按观看者体系渲染 */
+  authorClassic: { name: string; color: string } | null;
 }
 
 /** 评论列表：cursor=0 取最新，否则取 id<cursor 的更早评论（移植 Comment::getList + actionMore） */
@@ -1152,15 +1189,26 @@ export async function getComments(
     take: limit,
   });
   // 2026-10-17 称号快照制：军衔按评论行内 exp_time 快照评定（回填脚本已迁移存量）
+  // Phase 5 双体系：批量补算旧版称号
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
+  const pairs = await dualTitles(
+    rows.map((r) => ({
+      userId: N(r.user),
+      expTime: N(r.expTime),
+      ranked: r.ranked === BigInt(1),
+      sex: authors.get(N(r.user))?.sex ?? 1,
+    }))
+  );
   return rows.map((r) => {
     const a = authors.get(N(r.user)) ?? null;
+    const p = pairs.get(N(r.user));
     return {
       id: N(r.id),
       content: r.content ?? "",
       createTime: N(r.createTime),
       author: a,
-      authorTitle: title(N(r.expTime)),
+      authorTitle: p?.m ?? "",
+      authorClassic: p?.c ?? null,
     };
   });
 }

@@ -162,7 +162,7 @@ export default async function UserViewPage({
     getLevel3bvRanges(),
     getUser3bvCollection(userId),
   ]);
-  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime) }));
+  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime), classic: n.authorTitles?.c ?? null }));
 
   const { user, info, scores } = detail;
   const radar = await getRadarData(scores);

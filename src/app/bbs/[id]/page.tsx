@@ -91,7 +91,7 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
               {post.author && (
                 <>
                   <AvatarCell id={post.author.id} name={post.author.chineseName} sex={post.author.sex} gender="small" link />{" "}
-                  <TitleBadge title={post.author.title} link />{" "}
+                  <TitleBadge title={post.author.title} classic={post.author.old} link />{" "}
                 </>
               )}
               发表于 {timeOpposite(post.createTime, TIME_NEVER)}　

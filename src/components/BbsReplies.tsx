@@ -106,7 +106,7 @@ export function BbsReplySection({
             {r.author && (
               <>
                 <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} gender="small" link />{" "}
-                <TitleBadge title={r.author.title} link />{" "}
+                <TitleBadge title={r.author.title} classic={r.author.old} link />{" "}
               </>
             )}
             {timeOpposite(r.createTime, TIME_NEVER)}

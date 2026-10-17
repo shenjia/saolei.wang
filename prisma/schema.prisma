@@ -46,6 +46,9 @@ model UserInfo {
   pad        String  @default("") @db.VarChar(60)
   selfIntro  String? @map("self_intro") @db.VarChar(150)
   interest   String? @db.VarChar(150)
+  // 称号体系偏好（2026-10-17 Phase 5 双体系）：'m'=军衔制（默认）/ 'c'=旧版称号（雷帝/雷圣/…/布衣）。
+  // 渲染跟随**观看者**：未登录或未设置时固定渲染军衔制
+  titlePref  String  @default("m") @map("title_pref") @db.Char(1)
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 

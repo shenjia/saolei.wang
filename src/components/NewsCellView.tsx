@@ -45,7 +45,7 @@ function subGateColor(gateSec: number): string {
   return TITLE_CLASS_COLORS[TITLE_CLASSES[title] ?? ""] ?? "#b1b1a4";
 }
 
-export function NewsCellView({ news, title }: { news: NewsItem; title: string }) {
+export function NewsCellView({ news, title, classic }: { news: NewsItem; title: string; classic?: { name: string; color: string } | null }) {
   const d = news.details as {
     lv?: string;
     od?: string;
@@ -59,7 +59,7 @@ export function NewsCellView({ news, title }: { news: NewsItem; title: string })
   const authorCells = news.author && (
     <>
       <AvatarCell id={news.author.id} name={news.author.chineseName} sex={news.author.sex} className="author" gender="small" link />
-      <TitleBadge title={title} link />
+      <TitleBadge title={title} classic={classic} link />
     </>
   );
   // SUB 大关（null = 本条不显示标签）：刷新纪录才判（首创行 or=0 旧成绩为大关外，天然 null）

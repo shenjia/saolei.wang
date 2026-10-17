@@ -2,8 +2,8 @@
 
 import { prisma } from "./db";
 import { usersByIds, userTitleSnapshot, type UserBrief } from "./queries";
-import { title } from "./assess";
 import { oldTitle, type OldTitle } from "./oldtitle";
+import { dualTitles } from "./title-system";
 import { NEWS_TYPE } from "./config";
 import { publishNews } from "./news";
 import { WX_FACES, FACE_BY_KEY } from "./faces";
@@ -190,28 +190,41 @@ export function ubb(raw: string): string {
 
 /** 作者信息 + 军衔/旧版称号（2026-09-23 张老师要求：详情页人名旁带性别标记与军衔） */
 export interface BbsAuthor extends UserBrief {
-  /** 19 级军衔（按 sum_time 评定，详情页 TitleBadge 徽章用） */
+  /** 军衔（快照评定，TitleBadge 徽章用） */
   title: string;
-  /** 旧版称号（按高级纪录+性别，列表页 [称号] 用） */
+  /** 旧版称号（按快照高级纪录+性别+在榜，Phase 5 观看者体系切换用） */
   old: OldTitle;
+  /** 发布时是否在榜（快照；布衣=未加入排行） */
+  ranked: boolean;
 }
 
 /** 军衔取数（2026-10-17 称号快照制）：按行内 exp_time 快照逐行评定，
- *  不再实时查 user_scores 当前值——同页同一用户的多条内容显示各自时刻的称号 */
+ *  不再实时查 user_scores 当前值——同页同一用户的多条内容显示各自时刻的称号。
+ *  Phase 5：old 同时按快照 ranked 判布衣；雷帝在 dualTitles 内判（此处复用 TitlePair.c） */
 async function authorsFromSnapshots(
-  rows: { user: number; expTime: number }[]
+  rows: { user: number; expTime: number; ranked: boolean }[]
 ): Promise<Map<number, BbsAuthor>> {
   const ids = [...new Set(rows.map((r) => r.user).filter((x) => x > 0))];
   const briefs = await usersByIds(ids);
+  const pairs = await dualTitles(
+    rows.map((r) => ({
+      userId: r.user,
+      expTime: r.expTime,
+      ranked: r.ranked,
+      sex: briefs.get(r.user)?.sex ?? 1,
+    }))
+  ); // TitlePair：m 军衔 + c 旧称号（含雷帝判定）
   const out = new Map<number, BbsAuthor>();
   for (const r of rows) {
     if (r.user <= 0 || out.has(r.user)) continue;
     const b = briefs.get(r.user);
     if (!b) continue;
+    const p = pairs.get(r.user);
     out.set(r.user, {
       ...b,
-      title: title(r.expTime),
-      old: oldTitle(r.expTime, b.sex),
+      title: p?.m ?? "",
+      old: p?.c ? { name: p.c.name, color: p.c.color } : oldTitle(r.expTime, b.sex),
+      ranked: r.ranked,
     });
   }
   return out;
@@ -283,7 +296,9 @@ export async function getPostList(opts: {
     take: size, // 本批行数（「加载更多」递增批量可 > 19）
   });
   const authors = await authorsFromSnapshots(
-    rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime) })).filter((x) => x.user > 0)
+    rows
+      .map((r) => ({ user: N(r.user), expTime: N(r.expTime), ranked: r.ranked === BigInt(1) }))
+      .filter((x) => x.user > 0)
   );
   return {
     posts: rows.map((r) => ({
@@ -320,7 +335,9 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
     await prisma.bbsPost.update({ where: { id: row.id }, data: { clicks: { increment: 1 } } });
   }
   const authors = await authorsFromSnapshots(
-    [N(row.user)].filter((x) => x > 0).map((user) => ({ user, expTime: N(row.expTime) }))
+    [N(row.user)]
+      .filter((x) => x > 0)
+      .map((user) => ({ user, expTime: N(row.expTime), ranked: row.ranked === BigInt(1) }))
   );
   return {
     id: N(row.id),
@@ -371,7 +388,7 @@ export async function getReplyFeed(
     take: size,
   });
   const authors = await authorsFromSnapshots(
-    rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime) }))
+    rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime), ranked: r.ranked === BigInt(1) }))
   );
   return {
     items: rows.map((r) => ({

@@ -3,7 +3,7 @@
 
 import { prisma } from "./db";
 import { usersByIds, type UserBrief } from "./queries";
-import { title as assessTitle } from "./assess";
+import { dualTitles } from "./title-system";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -12,8 +12,10 @@ export const MESSAGE_CONTENT_LIMIT = 200;
 export const MESSAGE_PAGESIZE = 15;
 
 export interface MessageUserBrief extends UserBrief {
-  /** 19 级军衔（按 sum_time 评定，作者列 TitleBadge 用） */
+  /** 军衔（当前成绩评定，作者列 TitleBadge 用） */
   title: string;
+  /** 旧版称号备选（Phase 5：观看者体系切换渲染） */
+  classic: { name: string; color: string } | null;
 }
 
 export interface MessageItem {
@@ -25,7 +27,8 @@ export interface MessageItem {
   from: MessageUserBrief | null;
 }
 
-/** usersByIds 之上补军衔（distribution 阈值在 assess 内缓存；模式同 bbs.ts authorsWithTitles） */
+/** usersByIds 之上补双体系称号（当前成绩评定；站内信无快照列，用实时值——
+ *  站内信是瞬时通信场景，显示发信人当下称号合理） */
 export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<number, MessageUserBrief>> {
   const briefs = await usersByIds(ids);
   const scores = ids.length
@@ -34,10 +37,23 @@ export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<numbe
         select: { id: true, expTime: true },
       })
     : [];
+  const statusRows = ids.length
+    ? await prisma.user.findMany({ where: { id: { in: ids.map(BigInt) } }, select: { id: true, status: true } })
+    : [];
   const expMap = new Map(scores.map((s) => [N(s.id), s.expTime ?? 0]));
+  const statusMap = new Map(statusRows.map((u) => [N(u.id), u.status]));
+  const pairs = await dualTitles(
+    ids.map((id) => ({
+      userId: id,
+      expTime: expMap.get(id) ?? 0,
+      ranked: (statusMap.get(id) ?? -1) === 0,
+      sex: briefs.get(id)?.sex ?? 1,
+    }))
+  );
   const out = new Map<number, MessageUserBrief>();
   for (const [id, b] of briefs) {
-    out.set(id, { ...b, title: await assessTitle(expMap.get(id) ?? 0) });
+    const p = pairs.get(id);
+    out.set(id, { ...b, title: p?.m ?? "", classic: p?.c ?? null });
   }
   return out;
 }

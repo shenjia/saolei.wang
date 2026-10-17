@@ -33,7 +33,7 @@ export function VideoHot({ videos }: { videos: VideoListItem[] }) {
                         gender="small"
                         link
                       />
-                      <TitleBadge title={v.authorTitle} link />
+                      <TitleBadge title={v.authorTitle} classic={v.authorClassic} link />
                     </>
                   ) : (
                     <span className="avatar_link">?</span>

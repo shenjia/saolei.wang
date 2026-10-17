@@ -36,7 +36,7 @@ export function VideoDetailCell({ video }: { video: VideoListItem }) {
                 {video.author && (
                   <AvatarCell id={video.author.id} name={video.author.chineseName} sex={video.author.sex} className="author" />
                 )}
-                <TitleBadge title={video.authorTitle} />
+                <TitleBadge title={video.authorTitle} classic={video.authorClassic} />
                 <span className="create_time">
                   上传于<em>{timeOpposite(video.createTime)}</em>
                 </span>

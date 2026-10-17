@@ -48,7 +48,7 @@ export function MessageRow({ m, onRead }: { m: MessageItem; onRead: (id: number)
         ) : m.from ? (
           <>
             <AvatarCell id={m.from.id} name={m.from.chineseName} sex={m.from.sex} gender="small" link />
-            <TitleBadge title={m.from.title} link />
+            <TitleBadge title={m.from.title} classic={m.from.classic} link />
           </>
         ) : (
           "?"

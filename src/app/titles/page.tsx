@@ -13,6 +13,9 @@
 
 import Link from "next/link";
 import { getTitleCounts } from "@/lib/queries";
+import { getSession } from "@/lib/auth";
+import { resolveTitleSystem } from "@/lib/title-system";
+import { TitlePrefSwitch } from "@/components/TitlePrefSwitch";
 import { OLD_TITLES, TITLE_COLORS, TITLE_CONDITIONS } from "@/lib/config";
 import { RankBadge } from "@/components/RankBadge";
 
@@ -31,13 +34,16 @@ const TITLE_TIERS: string[][] = [
 ];
 
 export default async function TitlesPage() {
-  const counts = await getTitleCounts();
+  const [counts, session] = await Promise.all([getTitleCounts(), getSession()]);
+  const mySystem = await resolveTitleSystem(session?.uid);
   const countMap = new Map(counts.map((c) => [c.title, c.count]));
 
   return (
     <div id="page" className="two_columns">
       <ul id="home">
         <li className="main">
+          {/* Phase 5 双体系：观看者自选体系入口（未登录可看不可选） */}
+          <TitlePrefSwitch current={mySystem} loggedIn={!!session} />
           <div className="box">
             <h1>
               军衔体系 <span className="era">（2026～至今）</span>

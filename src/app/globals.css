@@ -9138,3 +9138,64 @@ html.op-fakefs #header {
 .ban_dur_opt {
   white-space: nowrap;
 }
+
+/* ---------- 旧版称号（Phase 5 双体系，2026-10-17） ----------
+   观看者偏好旧体系时 TitleBadge 渲染纯彩字（无盾形徽章，2008 版配色内联在
+   classic.color）；此处只调字号字重与行内对齐，使其与军衔徽章位等高不跳行 */
+.title_classic em {
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 18px;
+}
+/* 称号体系切换卡（Phase 5，/titles 页顶部） */
+.title_pref_box {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+}
+.title_pref_box h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.title_pref_opts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.title_pref_opt {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #1c1c17;
+  border: 1px solid #3b3a32;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.title_pref_opt.on {
+  border-color: #a6e22e;
+}
+.title_pref_opt:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+.title_pref_opt .name {
+  font-size: 14px;
+  color: #e8e8d8;
+}
+.title_pref_opt.on .name {
+  color: #a6e22e;
+}
+.title_pref_opt .desc {
+  font-size: 12px;
+  color: #8b8b7d;
+}
+.title_pref_note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #8b8b7d;
+}

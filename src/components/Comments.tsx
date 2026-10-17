@@ -30,7 +30,7 @@ export function CommentCell({ comment }: { comment: CommentItem }) {
               gender="small"
               link
             />{" "}
-            <TitleBadge title={comment.authorTitle} link />{" "}
+            <TitleBadge title={comment.authorTitle} classic={comment.authorClassic} link />{" "}
           </>
         )}
         {/* 2026-10-13 张老师要求：时间前加「评论于」；一个月以内显示相对时间，超过一个月显示具体日期 */}

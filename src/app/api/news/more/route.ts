@@ -29,7 +29,7 @@ export async function GET(req: Request) {
       getNewsPage({ types, userId, level, home, page, base, limit: size }),
       getNewsCount({ types, userId, level, home }),
     ]);
-    const withTitles = items.map((news) => ({ news, title: assessTitle(news.expTime) }));
+    const withTitles = items.map((news) => ({ news, title: assessTitle(news.expTime), classic: news.authorTitles?.c ?? null }));
     return NextResponse.json({
       items: withTitles,
       cursor: items.length ? items[items.length - 1].id : 0,
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
     // 同条件下的动态总数：「加载更多」括号内显示剩余条数用
     getNewsCount({ types, userId, level, home }),
   ]);
-  const withTitles = items.map((news) => ({ news, title: assessTitle(news.expTime) }));
+  const withTitles = items.map((news) => ({ news, title: assessTitle(news.expTime), classic: news.authorTitles?.c ?? null }));
   return NextResponse.json({
     items: withTitles,
     cursor: items.length ? items[items.length - 1].id : cursor,

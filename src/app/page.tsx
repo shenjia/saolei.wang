@@ -56,9 +56,9 @@ export default async function HomePage() {
     getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
     getVideoCount({ level: "all" }),
   ]);
-  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime) }));
+  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime), classic: n.authorTitles?.c ?? null }));
   // 入伍新兵按发布者实时高级时间评军衔（2026-10-13 SUB 制）
-  const newbieRows = newbies.map((n) => ({ ...n, title: assessTitle(n.expTime) }));
+  const newbieRows = newbies.map((n) => ({ ...n, title: assessTitle(n.expTime), classic: n.authorTitles?.c ?? null }));
 
   return (
     <>
@@ -125,7 +125,7 @@ export default async function HomePage() {
                         link
                       />
                     )}
-                    <TitleBadge title={n.title} link />
+                    <TitleBadge title={n.title} classic={n.classic} link />
                   </td>
                   <td className={"time " + (isRecent(n.createTime) ? "time--recent" : "time--old")}>
                     {timeOpposite(n.createTime, TIME_NEVER)}

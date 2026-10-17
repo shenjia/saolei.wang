@@ -15,7 +15,10 @@ import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 
 export interface NewsFeedItem {
   news: NewsItem;
+  /** 军衔制称号（服务端按快照评定） */
   title: string;
+  /** 旧版称号备选（Phase 5：观看者体系切换；来自 NewsItem.authorTitles.c） */
+  classic?: { name: string; color: string } | null;
 }
 
 // 2026-10-13 张老师要求：加「论坛」tab，发表主题（NEWS_TYPE.ARTICLE=40）和评论（COMMENT=52）都算。
@@ -231,8 +234,8 @@ export function NewsFeed({
       )}
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="table">
         <tbody>
-          {items.map(({ news, title: itemTitle }) => (
-            <NewsCellView key={news.id} news={news} title={itemTitle} />
+          {items.map(({ news, title: itemTitle, classic }) => (
+            <NewsCellView key={news.id} news={news} title={itemTitle} classic={classic} />
           ))}
           {items.length === 0 && (
             <tr>

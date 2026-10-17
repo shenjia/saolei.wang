@@ -13,6 +13,8 @@ import { ScrollReset } from "@/components/ScrollReset";
 import { ToastHost } from "@/components/Toast";
 import TrackPageView from "@/components/TrackPageView";
 import { isManager } from "@/lib/config";
+import { TitleSystemProvider } from "@/components/TitleSystemProvider";
+import { resolveTitleSystem, getThunderKingId } from "@/lib/title-system";
 
 export const metadata: Metadata = {
   /* 站点标题模板（2026-10-15 张老师要求）：所有子页面统一「XXX | 扫雷网 Saolei.wang」 */
@@ -40,6 +42,12 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await getSession();
+  // 称号体系（2026-10-17 Phase 5）：跟随观看者——未登录/未设置固定军衔制；
+  // 雷界第一人一并算好注入（旧体系「雷帝」渲染判定，缓存 60s）
+  const [titleSystem, thunderKingId] = await Promise.all([
+    resolveTitleSystem(session?.uid),
+    getThunderKingId(),
+  ]);
   const me = session ? await getHeaderUser(session.uid) : null;
   const displayName = me?.chineseName || session?.username || "";
   const avatarUrl = me?.avatarUrl || "/images/player/no.jpg";
@@ -149,7 +157,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             />
           </div>
         </div>
-        {children}
+        <TitleSystemProvider value={{ system: titleSystem, thunderKingId }}>
+          {children}
+        </TitleSystemProvider>
         {!session && <LoginModal />}
         <ToastHost />
         <Suspense fallback={null}>
