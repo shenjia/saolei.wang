@@ -329,18 +329,9 @@ export async function reviewVideo(
         }
       }
 
-      // 上传录像动态（2026-09-24 张老师要求：每盘通过审核的录像都产生动态，
-      // 不再只有传满三级入伍/破纪录才发；时间取录像上传时间，首页新闻流可见）
-      const vs = videoScores(rv.board3bv, rv.realTime, rv.level);
-      await publishNews({
-        tx,
-        type: NEWS_TYPE.VIDEO,
-        userId: rv.user,
-        userScore: sumTime,
-        reference: rv.id,
-        details: { lv: rv.level, tm: vs.time, bv: Math.max(vs["3bvs"], 0) },
-        createTime: rv.createTime,
-      });
+      // 上传录像动态已停发（2026-10-17 张老师定：录像一上传就刷屏动态流，撤出）。
+      // 2026-09-24 曾启用「每盘通过审核的录像都产生 type=30 动态」，现已不再写入；
+      // 存量 type=30 行保留（管理后台仍可按类型查询），但动态流一律不展示（NEWS_FEED_EXCLUDED）
 
       // 3BV 收集区间扩展（2026-10-13 张老师方案）：新通过录像的 board_3bv 突破
       // level_3bv_range 上下限时扩边，只扩不缩（屏蔽不回缩）；

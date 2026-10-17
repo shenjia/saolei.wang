@@ -14,6 +14,7 @@ import {
   HOME_TOP_NUMBER,
   LEVEL_MIN_3BV,
   MIN_3BV_FOR_3BVS,
+  NEWS_FEED_EXCLUDED,
   NEWS_HOME_TYPES,
   NEWS_TYPE,
   ORDER_DIRECTION,
@@ -183,6 +184,12 @@ export async function getNews(opts: {
     ...(opts.level ? newsLevelFilter(opts.level) : {}),
     // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
     ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
+    // 2026-10-17 张老师定：上传录像动态（type=30）撤出动态流——录像一传就刷屏；
+    // 首页/用户主页另有「录像」版块，信息不丢。显式 type/types 筛选（后台/论坛 tab）不受影响；
+    // home 模式也不量加：NEWS_HOME_TYPES 已不含 VIDEO，且对象展开会覆盖 home 的 in 过滤
+    ...(opts.type === undefined && !opts.types && !opts.home
+      ? { type: { notIn: NEWS_FEED_EXCLUDED } }
+      : {}),
   };
   const rows = await prisma.news.findMany({
     where: opts.ids ? { id: { in: opts.ids } } : where,
@@ -233,6 +240,8 @@ export async function getNewsPage(opts: {
     ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
     ...(opts.level ? newsLevelFilter(opts.level) : {}),
+    // 同 getNews：上传录像动态撤出动态流（2026-10-17）；home 模式同样不叠加（避免覆盖 in 过滤）
+    ...(opts.types || opts.home ? {} : { type: { notIn: NEWS_FEED_EXCLUDED } }),
   };
   const idRows = await prisma.news.findMany({
     where,
@@ -328,6 +337,11 @@ async function getNewsCountImpl(opts: {
       ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
       ...(opts.level ? newsLevelFilter(opts.level) : {}),
+      // 同 getNews：上传录像动态撤出动态流（2026-10-17）。home 模式下 NEWS_HOME_TYPES
+      // 已不含 VIDEO，此处 notIn 不与之冲突；显式 type 筛选（后台按类型过滤）不受影响
+      ...(opts.type === undefined && !opts.types && !opts.home
+        ? { type: { notIn: NEWS_FEED_EXCLUDED } }
+        : {}),
     },
   });
 }
@@ -337,7 +351,7 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
-  ["news-count-v1"],
+  ["news-count-v2"],
   { revalidate: 60 }
 );
 
@@ -1269,9 +1283,8 @@ export async function getSiteStats(): Promise<SiteStats> {
 
 // ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
-/** 各军衔人数（2026-10-13 起按高级时间绝对阈值分桶：第 i 档 = (thresholds[i-1], thresholds[i]]） */
-/** 各军衔人数（2026-10-13 SUB 制：TITLE_THRESHOLDS 与 TITLES 按下标对应，升序数组
- *  第 i 档 = (thresholds[i-1], thresholds[i]]，大元帅 = <= 35s，列兵 = > 150s 无上界） */
+/** 各军衔人数（2026-10-17 人神界改版：TITLE_THRESHOLDS 与 TITLES 按下标对应，升序数组
+ *  第 i 档 = (thresholds[i-1], thresholds[i]]，外星人 = <= 30s，列兵 = > 200s 无上界） */
 async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]> {
   const thresholds = getTitleDistribution().thresholds;
   if (!thresholds.length) return [];
@@ -1308,7 +1321,8 @@ async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]>
 
 // 2026-10-15 性能审计：军衔页每次请求 18 次 user_scores count（合计≈全索引扫一遍），
 // 军衔人数变化极慢，缓存 60s
-const fetchTitleCounts = unstable_cache(getTitleCountsImpl, ["title-counts-v1"], {
+// 2026-10-17 人神界改版（阈值全换 24 档）：缓存键升 v2
+const fetchTitleCounts = unstable_cache(getTitleCountsImpl, ["title-counts-v2"], {
   revalidate: 60,
 });
 
