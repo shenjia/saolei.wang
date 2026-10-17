@@ -13,6 +13,7 @@ import type { GrowRow } from "@/lib/ranksnap";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { RANKING_COLS, RankingRowLine, type TitledRow } from "./RankingRows";
+import { SystemText } from "./SystemText";
 
 type GrowTitledRow = GrowRow & { title: string; classic?: { name: string; color: string } | null };
 
@@ -148,7 +149,9 @@ export function GrowFeed({
           <tr>
             <th>排名</th>
             <th>姓名</th>
-            <th>称号</th>
+            <th>
+              <SystemText />
+            </th>
             {RANKING_COLS.map((c) => (
               <th key={c.by}>{c.label}</th>
             ))}

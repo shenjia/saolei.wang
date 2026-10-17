@@ -22,8 +22,8 @@ import { title as militaryTitle } from "./assess";
 export type TitleSystem = "m" | "c";
 
 export const TITLE_SYSTEMS: { key: TitleSystem; name: string; desc: string }[] = [
-  { key: "m", name: "军衔制", desc: "总司令 · 大元帅 · … · 列兵（19 级军阶）" },
-  { key: "c", name: "旧版称号", desc: "雷帝 · 雷圣 · 雷神 · … · 童生（2008 版科举称号）" },
+  { key: "m", name: "军衔体系（2026版）", desc: "总司令 · 大元帅 · … · 列兵（19 级军阶）" },
+  { key: "c", name: "人神界体系（2008版）", desc: "雷帝 · 雷圣 · 雷神 · … · 童生（2008 版科举称号）" },
 ];
 
 export function parseTitleSystem(v: string | null | undefined): TitleSystem {

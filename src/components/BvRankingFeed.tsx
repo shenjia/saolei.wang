@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import type { BvRankingRow } from "@/lib/queries";
 import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
 import { TitleBadge } from "./Cells";
+import { SystemText } from "./SystemText";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { toast } from "./Toast";
@@ -266,7 +267,9 @@ export function BvRankingFeed({
             <tr>
               <th>排名</th>
               <th>姓名</th>
-              <th>称号</th>
+              <th>
+                <SystemText />
+              </th>
               {SORT_COLS.map((c) => (
                 <th key={c}>
                   <Link

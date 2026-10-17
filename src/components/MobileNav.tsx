@@ -11,6 +11,7 @@ import { LoginLink } from "./LoginLink";
 import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "./MenuIcons";
 import { BubbleIcon } from "./SendMessageButton";
 import { pollWhenMobile, useUnreadMessages } from "./useUnreadMessages";
+import { SystemText } from "./SystemText";
 import { isManager } from "@/lib/config";
 
 export interface MobileNavUser {
@@ -21,7 +22,7 @@ export interface MobileNavUser {
   role: number;
 }
 
-/** 站内主导航（与桌面 #header_nav 前八项一致） */
+/** 站内主导航（与桌面 #header_nav 前八项一致；/titles 项文案随称号体系切换，见渲染处） */
 const SITE_LINKS: { href: string; label: string }[] = [
   { href: "/", label: "首页" },
   { href: "/ranking", label: "排行" },
@@ -29,7 +30,7 @@ const SITE_LINKS: { href: string; label: string }[] = [
   { href: "/bbs", label: "论坛" },
   { href: "/page/guide", label: "教程" },
   { href: "/online", label: "练习" },
-  { href: "/titles", label: "军衔" },
+  { href: "/titles", label: "" }, // 军衔/称号（SystemText 动态）
   { href: "/page/download", label: "下载" },
 ];
 
@@ -96,7 +97,8 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
           <ul className="mn_menu">
             {SITE_LINKS.map((l) => (
               <li key={l.href}>
-                <Link href={l.href}>{l.label}</Link>
+                {/* /titles 文案随观看者称号体系切换（军衔/称号） */}
+                <Link href={l.href}>{l.href === "/titles" ? <SystemText /> : l.label}</Link>
               </li>
             ))}
             {!user && (

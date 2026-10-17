@@ -5338,23 +5338,11 @@ body .email_bind_overlay a.btn_primary:active {
    实现 = 恢复各档原色（压过 legacy .ranking_list .user_cell a:hover em (0,3,2) 的
    后加载绿）+ filter brightness(1.25) 提亮；选择器 body a.title:hover em.X 特异性
    (0,3,3)，无论加载顺序均稳压两处 legacy 绿与站级绿链。原色与 TITLE_CLASS_COLORS
-   一一对应，改色需同步。 */
-body a.title:hover em.alien {
-  color: #a6e22e;
-  filter: brightness(1.25);
-}
-body a.title:hover em.emperor,
+   一一对应，改色需同步。
+   2026-10-18 清理：alien/emperor/saint/god 四类随人神界撤销（9bbac5c）已无引用，删死规则。 */
 body a.title:hover em.grand,
 body a.title:hover em.marshal {
   color: #e6db74;
-  filter: brightness(1.25);
-}
-body a.title:hover em.saint {
-  color: #ffcc00;
-  filter: brightness(1.25);
-}
-body a.title:hover em.god {
-  color: #66cc00;
   filter: brightness(1.25);
 }
 body a.title:hover em.supreme {
@@ -9147,14 +9135,11 @@ html.op-fakefs #header {
   font-weight: normal;
   line-height: 18px;
 }
-/* 称号体系切换卡（Phase 5，/titles 页顶部） */
+/* 称号体系切换卡（Phase 5，/titles 页顶部）
+   h2 不覆盖字号——继承 .box h2（20px，与上方「旧版称号」一致，2026-10-18 张老师要求） */
 .title_pref_box {
   margin-bottom: 10px;
   padding: 12px 14px;
-}
-.title_pref_box h2 {
-  margin: 0 0 10px;
-  font-size: 14px;
 }
 .title_pref_opts {
   display: flex;

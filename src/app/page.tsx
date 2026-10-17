@@ -29,6 +29,7 @@ import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoFeed } from "@/components/VideoFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { BbsLatest } from "@/components/BbsLatest";
+import { SystemText } from "@/components/SystemText";
 import { SiteStats } from "@/components/SiteStats";
 import { FlopSprites } from "@/components/FlopSprites";
 import { title as assessTitle } from "@/lib/assess";
@@ -110,7 +111,10 @@ export default async function HomePage() {
           <span>开始练习</span>
         </Link>
         <div id="newbie" className="box">
-          <h2>入伍新兵</h2>
+          {/* 板块名随观看者称号体系切换：军衔制「入伍新兵」/ 旧版「新人报到」（2026-10-18 张老师定） */}
+          <h2>
+            <SystemText m="入伍新兵" c="新人报到" />
+          </h2>
           <table cellPadding={0} cellSpacing={0} className="table full">
             <tbody>
               {newbieRows.map((n) => (

@@ -47,7 +47,7 @@ export function TitlePrefSwitch({ loggedIn }: { loggedIn: boolean }) {
           onClick={() => !isC && pick("m")}
           disabled={saving}
         >
-          <span className="name">军衔制</span>
+          <span className="name">军衔体系（2026版）</span>
           <span className="desc">总司令 · 大元帅 · … · 列兵</span>
         </button>
         <button
@@ -56,7 +56,7 @@ export function TitlePrefSwitch({ loggedIn }: { loggedIn: boolean }) {
           onClick={() => !isC && pick("c")}
           disabled={saving}
         >
-          <span className="name">旧版称号</span>
+          <span className="name">人神界体系（2008版）</span>
           <span className="desc">雷帝 · 雷圣 · … · 童生</span>
         </button>
       </div>

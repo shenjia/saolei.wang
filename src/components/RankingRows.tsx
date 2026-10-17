@@ -10,6 +10,7 @@ import type { RankingRow } from "@/lib/queries";
 import { scoreTime } from "@/lib/format";
 import { INVALID_3BVS_TIP, RANKING_BYS, type RankingBy } from "@/lib/config";
 import { TitleBadge } from "./Cells";
+import { SystemText } from "./SystemText";
 import { buildUrl } from "./Pager";
 
 export const RANKING_COLS: { by: RankingBy; label: string; cls: string }[] = [
@@ -160,7 +161,9 @@ export function RankingHead({
       <tr>
         <th>排名</th>
         <th>姓名</th>
-        <th>称号</th>
+        <th>
+          <SystemText />
+        </th>
         {RANKING_COLS.map((c) => (
           <th key={c.by}>
             <Link

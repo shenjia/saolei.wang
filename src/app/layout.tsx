@@ -10,6 +10,7 @@ import { MessageBadge } from "@/components/MessageBadge";
 import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "@/components/MenuIcons";
 import { MobileNav } from "@/components/MobileNav";
 import { ScrollReset } from "@/components/ScrollReset";
+import { SystemText } from "@/components/SystemText";
 import { ToastHost } from "@/components/Toast";
 import TrackPageView from "@/components/TrackPageView";
 import { isManager } from "@/lib/config";
@@ -57,6 +58,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <link rel="stylesheet" href="/styles/legacy-2013.css" />
       </head>
       <body>
+      {/* 称号体系上下文包裹全站（2026-10-18 提升：导航「军衔/称号」等 header 内文案也要跟随切换） */}
+      <TitleSystemProvider value={{ system: titleSystem, thunderKingId }}>
         <div id="header">
           <div className="wrapper">
             <div className="logo">
@@ -88,7 +91,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link href="/online">练习</Link>
                 </li>
                 <li>
-                  <Link href="/titles">军衔</Link>
+                  <Link href="/titles">
+                    <SystemText />
+                  </Link>
                 </li>
                 <li>
                   <Link href="/page/download">下载</Link>
@@ -157,9 +162,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             />
           </div>
         </div>
-        <TitleSystemProvider value={{ system: titleSystem, thunderKingId }}>
-          {children}
-        </TitleSystemProvider>
+        {children}
         {!session && <LoginModal />}
         <ToastHost />
         <Suspense fallback={null}>
@@ -183,6 +186,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             </p>
           </div>
         </div>
+      </TitleSystemProvider>
       </body>
     </html>
   );

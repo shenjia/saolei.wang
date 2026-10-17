@@ -217,12 +217,14 @@ export const TITLE_DISTRIBUTION: Record<string, number> = {
 };
 
 // ---------- 旧版称号（2008 版，按高级纪录评定，军衔页旁列参考） ----------
-// 颜色照搬 saolei.net-2008/asp/Models/Css/2008.css 的同名 class
+// 颜色照搬 saolei.net-2008/asp/Models/Css/2008.css 的同名 class；
+// 例外（2026-10-18 张老师三轮定色，原 2008 版黄/绿太刺眼）：
+//   雷帝=#FFCC00、雷圣=#e6db74（互换）、雷神=上尉绿 #9bbb59
 
 export const OLD_TITLES: { name: string; color: string; condition: string }[] = [
-  { name: "雷帝", color: "#ffff00", condition: "雷界排行第一人" },
-  { name: "雷圣", color: "#FFCC00", condition: "高级纪录 50 秒以内" },
-  { name: "雷神", color: "#66CC00", condition: "高级纪录 50～60 秒（GG）" },
+  { name: "雷帝", color: "#FFCC00", condition: "雷界排行第一人" },
+  { name: "雷圣", color: "#e6db74", condition: "高级纪录 50 秒以内" },
+  { name: "雷神", color: "#9bbb59", condition: "高级纪录 50～60 秒（GG）" },
   { name: "雷仙", color: "#FFCCCC", condition: "高级纪录 50～60 秒（mm）" },
   { name: "状元", color: "#ffffff", condition: "高级纪录 60～61 秒" },
   { name: "榜眼", color: "#ffffff", condition: "高级纪录 61～63 秒" },

@@ -42,7 +42,7 @@ export default async function TitlesPage() {
         <li className="main">
           <div className="box">
             <h1>
-              军衔体系 <span className="era">（2026～至今）</span>
+              军衔体系 <span className="era">（2026版）</span>
             </h1>
             <div className="titles_grid">
               {TITLE_TIERS.map((tier) => (
@@ -73,11 +73,16 @@ export default async function TitlesPage() {
         <li className="sidebar">
           <div className="box">
             <h2>
-              旧版称号 <span className="era">（2008～2013）</span>
+              人神界体系 <span className="era">（2008版）</span>
             </h2>
             <table cellPadding={0} cellSpacing={0} className="table full" style={{ fontFamily: "宋体" }}>
               <tbody>
-                {OLD_TITLES.map((t) => (
+                {OLD_TITLES.map((t) => {
+                  // 雷神/雷仙按性别分档：表格里（GG）/（mm）换小性别图标（2026-10-18 张老师要求）；
+                  // config 条件文案保留原文——TitleBadge 悬浮 tip 仍用文字形式
+                  const m = t.condition.match(/（(GG|mm)）$/);
+                  const condText = m ? t.condition.slice(0, m.index) : t.condition;
+                  return (
                   <tr key={t.name}>
                     <td
                       className="tac"
@@ -86,7 +91,7 @@ export default async function TitlesPage() {
                         fontWeight: "bold",
                         whiteSpace: "nowrap",
                         padding: "3px 10px",
-                        fontSize: 12,
+                        fontSize: 13,
                         fontFamily: "宋体",
                       }}
                     >
@@ -97,15 +102,22 @@ export default async function TitlesPage() {
                       style={{
                         whiteSpace: "nowrap",
                         padding: "3px 10px",
-                        fontSize: 12,
+                        fontSize: 13,
                         fontFamily: "宋体",
                         color: "#BBBBBB",
                       }}
                     >
-                      {t.condition}
+                      {condText}
+                      {m && (
+                        <span
+                          className={`gender ${m[1] === "GG" ? "male" : "female"} small`}
+                          style={{ marginRight: 0, marginLeft: 2 }}
+                        ></span>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
