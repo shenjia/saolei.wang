@@ -8,6 +8,7 @@ import {
   getMessageList,
   getUnreadCount,
   markAllRead,
+  markMessageRead,
   sendMessage,
   MESSAGE_CONTENT_LIMIT,
 } from "@/lib/message";
@@ -60,6 +61,16 @@ export async function POST(req: NextRequest) {
   if (action === "readall") {
     const count = await markAllRead(session.uid);
     return NextResponse.json({ count });
+  }
+
+  // 单条已读（2026-10-17 详情页下线，列表点击即读）
+  if (action === "read") {
+    const id = parseInt(String(body.id ?? ""), 10);
+    if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
+    const ok = await markMessageRead(id, session.uid);
+    return ok
+      ? NextResponse.json({ ok: true })
+      : NextResponse.json({ error: "消息不存在" }, { status: 404 });
   }
 
   if (action === "broadcast") {

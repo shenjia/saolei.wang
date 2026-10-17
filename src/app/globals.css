@@ -2136,16 +2136,14 @@ body #page.message_list > .box:first-child .page_head {
   font-weight: normal;
 }
 /* 未读正文高亮（2026-09-26 张老师要求）：白 #f8f8f2（同论坛高亮标题语义），
-   与普通 #bbbbbb / 已读 #75715e 形成三档明暗；与 msg_sys 黄 (1,4,2) 同特异性，
-   靠源码序（msg_sys 规则在后）让未读系统消息保持黄；hover 单独恢复绿
-   （ID 选择器压过 .bbs_list a.bbs_title:hover，同 msg_sys hover 处理模式） */
-#page.message_list .table tr.unread a.bbs_title {
+   与普通 #bbbbbb / 已读 #75715e 形成三档明暗。
+   2026-10-17 详情页下线：正文不再包 <a.bbs_title>，直接落在 td.msg_content 上；
+   未读整格可点击标已读，cursor 提示可点 */
+#page.message_list .table tr.unread td.msg_content {
   color: #f8f8f2;
+  cursor: pointer;
 }
-#page.message_list .table tr.unread a.bbs_title:hover {
-  color: #a6e22e;
-}
-#page.message_list .table tr.read .bbs_title,
+#page.message_list .table tr.read td.msg_content,
 #page.message_list .table tr.read td.time {
   color: #75715e;
 }
@@ -2160,24 +2158,33 @@ body #page.message_list > .box:first-child .page_head {
   margin-left: 5px;
 }
 /* 四轮曾单独缩小消息页「加载更多」（12px）——09-25 全站统一 .button.small 后已删除 */
-/* 系统消息标黄（2026-09-25 张老师要求）：类型标签 + 内容标题 + 【系统广播】发件人；
+/* 系统消息标黄（2026-09-25 张老师要求）：类型标签 + 正文 + 【系统广播】发件人；
    黄 #fdc61a 与 legacy 面板 highlight / 排行 .current 一致，全站高亮语义统一。
-   双类提权：压过已读变灰（.table tr.read .board_tag 0,3,1）与 legacy a.bbs_title 灰 */
-#page.message_list .table tr.read td .board_tag.msg_sys,
-#page.message_list .table tr.read td a.bbs_title.msg_sys {
+   双类提权压过已读变灰；unread 白规则 (1,4,2) 同特异性、靠源码序（本条在后）保持黄 */
+#page.message_list .table tr.read td .board_tag.msg_sys {
   color: #fdc61a;
 }
 #page.message_list .table td .board_tag.msg_sys,
-#page.message_list .table td a.bbs_title.msg_sys,
+#page.message_list .table tr td.msg_content.msg_sys,
 #page.message_list .table td.user .avatar_link.msg_sys,
 #page .bbs_post .bbs_meta .avatar_link.msg_sys {
   color: #fdc61a;
 }
-/* ID 提权后须单独恢复 hover 绿（全站 2026-09-24 统一规则压不过 ID 选择器；
-   带 tr.read 对齐已读灰规则特异性 (1,5,3)，否则已读系统消息 hover 仍黄） */
-#page.message_list .table tr.read td a.bbs_title.msg_sys:hover,
-#page.message_list .table td a.bbs_title.msg_sys:hover {
+/* 正文内嵌《文章标题》链接（评论消息跳文章页）：与读信页同款黄色，hover 恢复绿 */
+#page.message_list .table td.msg_content a.msg_title_link {
+  color: #e6db74;
+}
+#page.message_list .table td.msg_content a.msg_title_link:hover {
   color: #a6e22e;
+}
+/* 私信行尾「回复」入口（2026-10-17 详情页下线后补位，跳 /message?to=N） */
+.msg_reply_link {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #a6e22e;
+}
+.msg_reply_link:hover {
+  text-decoration: underline;
 }
 
 /* 未读消息角标 */

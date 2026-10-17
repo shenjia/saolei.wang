@@ -89,22 +89,17 @@ export async function getMessageList(
   };
 }
 
-/** 读信并标记已读（仅收件人可读；系统信没有寄件人页） */
-export async function readMessage(id: number, userId: number): Promise<MessageItem | null> {
-  const row = await prisma.message.findUnique({ where: { id: BigInt(id) } });
-  if (!row || N(row.toUser) !== userId) return null;
+/** 标记单条已读（仅收件人可操作；2026-10-17 详情页下线，列表点击即读） */
+export async function markMessageRead(id: number, userId: number): Promise<boolean> {
+  const row = await prisma.message.findUnique({
+    where: { id: BigInt(id) },
+    select: { id: true, toUser: true, isRead: true },
+  });
+  if (!row || N(row.toUser) !== userId) return false;
   if (!row.isRead) {
     await prisma.message.update({ where: { id: row.id }, data: { isRead: true, updateTime: nowSec() } });
   }
-  const authors = await messageAuthorsWithTitles([N(row.fromUser)]);
-  return {
-    id: N(row.id),
-    content: row.content,
-    isRead: true,
-    isSystem: row.isSystem,
-    createTime: N(row.createTime),
-    from: authors.get(N(row.fromUser)) ?? null,
-  };
+  return true;
 }
 
 /** 发信 */

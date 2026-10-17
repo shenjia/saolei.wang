@@ -1,6 +1,8 @@
 // 消息列表 + 「加载更多」（页码语义，模式同 BbsFeed）
 // 初始数据服务端渲染传入；「全部已读」后 router.refresh() 推送新 initial，
 // useEffect 同步重置列表（软导航下 useState(initial) 不重置的坑，见 BbsFeed 注释）
+// 2026-10-17（张老师要求）：完整正文直接上列表、详情页下线——点击正文即标已读，
+// 评论消息里的《文章标题》内嵌链接可直接点击跳文章页；私信末尾附「回复」入口
 
 "use client";
 
@@ -15,15 +17,24 @@ import { TotalCount } from "./TotalCount";
 /** 首屏/每页条数（与 lib/message.ts MESSAGE_PAGESIZE 一致；不 import 值防 prisma 进 bundle） */
 const PAGE_SIZE = 15;
 
-/** 列表摘要：链接段只留文字（整行已是 <Link>，内嵌 <a> 会造成嵌套交互；详情页才可点） */
-function contentPreview(content: string): string {
-  const plain = parseMessageParts(content)
-    .map((p) => (typeof p === "string" ? p : p.text))
-    .join("");
-  return plain.length > 40 ? plain.slice(0, 40) + "…" : plain;
+/** 正文渲染：链接段（《文章标题》跳文章页）与纯文本段交错（与下线的详情页同口径） */
+function MessageContent({ content }: { content: string }) {
+  return (
+    <>
+      {parseMessageParts(content).map((p, i) =>
+        typeof p === "string" ? (
+          <span key={i}>{p}</span>
+        ) : (
+          <Link key={i} href={p.href} className="msg_title_link">
+            {p.text}
+          </Link>
+        )
+      )}
+    </>
+  );
 }
 
-export function MessageRow({ m }: { m: MessageItem }) {
+export function MessageRow({ m, onRead }: { m: MessageItem; onRead: (id: number) => void }) {
   return (
     <tr className={m.isRead ? "read" : "unread"}>
       <td>
@@ -43,11 +54,18 @@ export function MessageRow({ m }: { m: MessageItem }) {
           "?"
         )}
       </td>
-      <td>
-        <Link className={`bbs_title ${m.isSystem ? "msg_sys" : ""}`} href={`/message/${m.id}`}>
-          {contentPreview(m.content)}
-        </Link>
+      {/* 未读时整格可点击标记已读（链接点击冒泡至此一并已读）；系统消息正文黄 */}
+      <td
+        className={`msg_content ${m.isSystem ? "msg_sys" : ""}`}
+        onClick={m.isRead ? undefined : () => onRead(m.id)}
+      >
+        <MessageContent content={m.content} />
         {!m.isRead && <span className="msg_new">新</span>}
+        {!m.isSystem && m.from && (
+          <Link className="msg_reply_link" href={`/message?to=${m.from.id}`}>
+            回复
+          </Link>
+        )}
       </td>
       <td className="time">{timeOpposite(m.createTime, TIME_NEVER)}</td>
     </tr>
@@ -93,10 +111,25 @@ export function MessageFeed({
     }
   }
 
+  /** 点击正文标记已读（2026-10-17 详情页下线）：本地置灰 + API 落库 + 广播角标刷新 */
+  async function markRead(id: number) {
+    setItems((prev) => prev.map((m) => (m.id === id ? { ...m, isRead: true } : m)));
+    try {
+      await fetch("/api/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "read", id }),
+      });
+      window.dispatchEvent(new Event("message:changed"));
+    } catch {
+      // 网络异常静默：本地已置灰，角标随下次轮询对齐
+    }
+  }
+
   return (
     <>
       {items.map((m) => (
-        <MessageRow key={m.id} m={m} />
+        <MessageRow key={m.id} m={m} onRead={markRead} />
       ))}
       {items.length === 0 && (
         <tr>

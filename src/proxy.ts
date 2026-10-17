@@ -350,8 +350,8 @@ export function proxy(req: NextRequest) {
     return movedTo(req, "/message");
   }
   if (path === "/message/show.asp") {
-    const n = id();
-    return movedTo(req, n ? `/message/${n}` : "/message");
+    // 2026-10-17 读信详情页下线（列表直显全文），旧链一律归到消息列表
+    return movedTo(req, "/message");
   }
   if (path === "/message/send.asp") {
     const n = id();
