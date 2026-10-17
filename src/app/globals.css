@@ -7862,11 +7862,12 @@ html:has(#online_play) #footer {
    设计稿 design/video-replay-panel-20261016.html）。
    面板规则与 #online_play .greport 一组同源（深底/圆角/阴影/hover 气泡），
    拆开写是因为详情页没有 #online_play 宿主——改样式两处同步 ---- */
-/* 十期：页面态面板 portal 挂 body（.video_cell overflow:hidden 裁剪教训），
-   fixed 定位 + JS 写 left/top（fit() 内按棋盘 rect 计算）。
-   全屏层内的面板（.vprfs_panel）在下方改 absolute 脱离 fixed 语义 */
+/* 十期：页面态面板 portal 挂 body（.video_cell overflow:hidden 裁剪教训）。
+   原为 fixed 定位（视口坐标），2026-10-17 张老师定：滚动页面时面板不得悬浮
+   钉在屏幕上遮住下方内容，须与棋盘保持位置关系随页滚动 → 改 absolute
+   （文档坐标 = 视口坐标 + scrollX/Y，fit() 内计算，见 VideoReplay.tsx） */
 .replay_panel {
-  position: fixed;
+  position: absolute;
   left: 0;
   top: 0;
   width: max-content; /* 十一期：宽度自适应内容；十二期去 min/max——数值右贴边缘 */
@@ -8800,7 +8801,7 @@ html.op-fakefs #header {
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 40px);
 }
-/* 左面板：⚠️ 必须覆盖 .replay_panel 的 fixed 定位（fixed 会脱离层布局、盖住遮罩）；
+/* 左面板：⚠️ 全屏层内覆盖页面态的 absolute 定位（脱离文档流会盖住遮罩）；
    十一期：zoom 绑定棋盘比例（--vfz-panel，下限 1.349 保可读） */
 .vprfs_panel.replay_panel {
   position: static;

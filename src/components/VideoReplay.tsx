@@ -1449,6 +1449,8 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
       const pr = el.getBoundingClientRect();
       if (pr.width < 1 || pr.height < 1) return;
       /* 定位：面板右缘（渲染值）贴棋盘左缘 −14px、顶边对齐棋盘顶。
+         absolute（2026-10-17 定：随页滚动、与棋盘保持位置关系，不用 fixed）→
+         文档坐标 = 视口坐标 + scrollX/Y。
          zoom 语义：CSS left/top 会随 zoom 同步缩放 → 换算成 CSS 值要除回 z；
          宽度在 CSS 域是自然宽 pr.width（不随 left 换算走）——
          即 CSS left = (wr.left − gap)/z − pr.width（首版把自然宽也除了 z，
@@ -1470,8 +1472,8 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
         return;
       }
       el.style.zoom = String(z);
-      el.style.left = (wr.left - gap) / z - pr.width + "px";
-      el.style.top = wr.top / z + "px";
+      el.style.left = (wr.left + window.scrollX - gap) / z - pr.width + "px";
+      el.style.top = (wr.top + window.scrollY) / z + "px";
     };
     fit();
     window.addEventListener("resize", fit);
