@@ -406,7 +406,7 @@ export async function isRankedUser(id: number): Promise<boolean> {
  *  故此处直接查 user（usersByIds 只回 UserBrief，不含 area） */
 async function getTopUsersImpl(
   limit = HOME_TOP_NUMBER
-): Promise<(UserBrief & { area: string; title: string; titleDate: number })[]> {
+): Promise<(UserBrief & { area: string; title: string; titleDate: number; classic: { name: string; color: string } | null })[]> {
   const rows = await prisma.userScores.findMany({
     where: { sumTime: { gt: 0 }, ...(await rankedOnly()) },
     orderBy: { sumTime: "asc" },
@@ -414,6 +414,10 @@ async function getTopUsersImpl(
   });
   const users = await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.id) } } });
   const byId = new Map(users.map((u) => [N(u.id), u]));
+  // Phase 5：批量补旧版称号备选（榜首即雷帝 TOP1，与 getThunderKingId 同源）
+  const topPairs = await dualTitles(
+    rows.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: byId.get(N(r.id))?.sex ?? 1 }))
+  );
   return rows.map((r) => {
     const u = byId.get(N(r.id));
     return {
@@ -423,6 +427,7 @@ async function getTopUsersImpl(
       sex: u?.sex ?? 1,
       area: u?.area ?? "",
       title: title(r.expTime),
+      classic: topPairs.get(N(r.id))?.c ?? null,
       // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
       titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
     };
@@ -430,11 +435,11 @@ async function getTopUsersImpl(
 }
 
 // 2026-10-15 性能审计：首页右栏排行前十，榜内成员极少变动，缓存 60s
-const fetchTopUsers = unstable_cache(getTopUsersImpl, ["top-users-v1"], { revalidate: 60 });
+const fetchTopUsers = unstable_cache(getTopUsersImpl, ["top-users-v2"], { revalidate: 60 });
 
 export async function getTopUsers(
   limit = HOME_TOP_NUMBER
-): Promise<(UserBrief & { area: string; title: string; titleDate: number })[]> {
+): Promise<(UserBrief & { area: string; title: string; titleDate: number; classic: { name: string; color: string } | null })[]> {
   return fetchTopUsers(limit);
 }
 

@@ -149,7 +149,7 @@ export default async function HomePage() {
                   </td>
                   <td className="user">
                     <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
-                    <TitleBadge title={u.title} link />
+                    <TitleBadge title={u.title} classic={u.classic} link />
                   </td>
                   <td className="area">{areaDisplay(u.area)}</td>
                 </tr>
