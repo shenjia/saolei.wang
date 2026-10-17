@@ -17,6 +17,7 @@ import { getSession } from "@/lib/auth";
 import { TitlePrefSwitch } from "@/components/TitlePrefSwitch";
 import { OLD_TITLES, TITLE_COLORS, TITLE_CONDITIONS } from "@/lib/config";
 import { RankBadge } from "@/components/RankBadge";
+import { SystemViewTitle } from "@/components/SystemViewTitle";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "军衔" };
@@ -41,9 +42,8 @@ export default async function TitlesPage() {
       <ul id="home">
         <li className="main">
           <div className="box">
-            <h1>
-              军衔体系 <span className="era">（2026版）</span>
-            </h1>
+            {/* 标题随当前体系高亮：选中=金色、未选=亮灰（SystemViewTitle 客户端组件，2026-10-18 张老师要求） */}
+            <SystemViewTitle as="h1" system="m" text="军衔体系" era="（2026版）" />
             <div className="titles_grid">
               {TITLE_TIERS.map((tier) => (
                 <div className="tier_row" key={tier[0]}>
@@ -72,9 +72,7 @@ export default async function TitlesPage() {
         </li>
         <li className="sidebar">
           <div className="box">
-            <h2>
-              人神界体系 <span className="era">（2008版）</span>
-            </h2>
+            <SystemViewTitle as="h2" system="c" text="人神界体系" era="（2008版）" />
             <table cellPadding={0} cellSpacing={0} className="table full" style={{ fontFamily: "宋体" }}>
               <tbody>
                 {OLD_TITLES.map((t) => {
