@@ -22,7 +22,11 @@ export function RankLabel({
   return (
     <Link href="/titles" title="称号体系">
       {system === "c" && classic ? (
-        <span className="rank_name rank_classic_name" style={{ color: classic.color, fontSize: 26, fontWeight: "bold" }}>
+        // 2026-10-18 张老师要求：旧称号字号至少 1.5 倍（26→40px），与 72px 大徽章视觉平衡
+        <span
+          className="rank_name rank_classic_name"
+          style={{ color: classic.color, fontSize: 40, fontWeight: "bold", lineHeight: 1.2, display: "block" }}
+        >
           {classic.name}
         </span>
       ) : (
