@@ -38,7 +38,7 @@ import {
 import { publishNews } from "./news";
 import { decodeLegacyEntities } from "./format";
 import { liftExpiredBans } from "./ban";
-import { dualTitles, type TitlePair } from "./title-system";
+import { dualTitles, classicTitle, type TitlePair } from "./title-system";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -1103,6 +1103,8 @@ export interface UserDetail {
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
   title: string;
+  /** Phase 5：旧版称号备选（当前成绩+在榜状态评定；用户主页大徽章区切换渲染） */
+  classicTitle: { name: string; color: string } | null;
 }
 
 export async function getUserDetail(id: number): Promise<UserDetail | null> {
@@ -1158,6 +1160,13 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
       : null,
     scores: scoreMap,
     title: title(scores?.expTime),
+    // Phase 5：旧版称号备选（在榜=user.status===0 且有高级成绩；含雷帝 TOP1 判定）
+    classicTitle:
+      (
+        await dualTitles([
+          { userId: N(u.id), expTime: N(scores?.expTime ?? 0), ranked: u.status === 0 && (scores?.expTime ?? 0) > 0, sex: u.sex },
+        ])
+      ).get(N(u.id))?.c ?? null,
   };
 }
 
@@ -1379,6 +1388,8 @@ export interface TitleMemberRow extends UserBrief {
   /** 全局总时间名次（1 起；预备役=行序号） */
   rank: number;
   sumTime: number;
+  /** Phase 5：旧版称号备选（军衔成员按各自高级成绩；预备役=布衣） */
+  classic: { name: string; color: string } | null;
   /** 注册时间（Unix 秒；预备役列表显示用） */
   createTime: number;
   /** 8 列成绩原始存储值（时间=ms，3bvs=×1000），0=无成绩（与 RankingRow 同构） */
@@ -1452,6 +1463,8 @@ export async function getTitleMembers(
         sumTime: 0,
         scores: {},
         videos: {},
+        // Phase 5：未加入排行 → 旧体系「布衣」
+        classic: classicTitle(0, false, u.sex),
       })),
       hasMore,
     };
@@ -1468,6 +1481,10 @@ export async function getTitleMembers(
   const page = rows.slice(0, take);
   const authors = await usersByIds(page.map((r) => N(r.id)));
   const ranks = await getUserSumRanksBatch(page.map((r) => r.id));
+  // Phase 5：批量补旧版称号备选（成员各按高级成绩；本列表恒在榜）
+  const memberPairs = await dualTitles(
+    page.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: authors.get(N(r.id))?.sex ?? 1 }))
+  );
   return {
     rows: page.map((r) => {
       const rec = r as unknown as Record<string, bigint | number | null>;
@@ -1485,6 +1502,7 @@ export async function getTitleMembers(
         sumTime: N(r.sumTime),
         scores,
         videos,
+        classic: memberPairs.get(N(r.id))?.c ?? null,
       };
     }),
     hasMore,

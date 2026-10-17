@@ -48,7 +48,7 @@ import { UserVideoSection } from "@/components/UserVideoSection";
 import { HistoryBox } from "@/components/HistoryBox";
 import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime } from "@/components/Cells";
-import { RankBadge } from "@/components/RankBadge";
+import { RankLabel } from "@/components/RankLabel";
 import { title as assessTitle } from "@/lib/assess";
 import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
@@ -247,14 +247,14 @@ export default async function UserViewPage({
               </tbody>
             </table>
             <div className="rank_label">
-              <Link href="/titles" title="称号体系">
-                <RankBadge title={detail.title} size={72} />
-                <span className="rank_name" style={{ color: TITLE_COLORS[detail.title] }}>
-                  {detail.title}
-                </span>
-              </Link>
+              {/* Phase 5 双体系：跟随观看者切换（旧体系=大号彩字无徽章） */}
+              <RankLabel
+                militaryTitle={detail.title}
+                militaryColor={TITLE_COLORS[detail.title]}
+                classic={detail.classicTitle}
+              />
               {/* 封禁用户（2026-10-16 张老师要求）：不参与排行，原排名位置显示红色
-                  「此用户已被封禁」；军衔徽章照常认定保留（上方 RankBadge 不受影响）；
+                  「此用户已被封禁」；军衔徽章照常认定保留（上方 RankLabel 不受影响）；
                   海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
                   口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」；
                   省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求） */}

@@ -14,6 +14,7 @@ import type { TitleMemberRow } from "@/lib/queries";
 import { scoreTime, formatDate } from "@/lib/format";
 import { INVALID_3BVS_TIP } from "@/lib/config";
 import { TitleBadge } from "./Cells";
+import { SystemText } from "./SystemText";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
 
@@ -146,7 +147,9 @@ export function TitleMemberList({
           <tr>
             <th>排名</th>
             <th>姓名</th>
-            <th>称号</th>
+            <th>
+              <SystemText />
+            </th>
             {isReserve ? <th>注册时间</th> : COLS.map((c) => <th key={c.by}>{c.label}</th>)}
           </tr>
         </thead>
@@ -175,7 +178,7 @@ export function TitleMemberList({
                 <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
               </td>
               <td className="miltitle">
-                <TitleBadge title={memberTitle} link />
+                <TitleBadge title={memberTitle} classic={u.classic} link />
               </td>
               {isReserve ? (
                 <td className="tac">{u.createTime ? formatDate(u.createTime, "Y-n-j") : "-"}</td>
