@@ -113,7 +113,7 @@ const TIPS: string[] = [
   "练习局的录像只能自己回看，不能上传参与排行。",
   "手机上长按格子可以标雷，标完会自动展开周围已满足的数字格。",
   "按 F2（或点笑脸）随时重开一局，不必等这局走完。",
-  "禁旗模式（NF）下不能插旗，全程只靠开格决胜。",
+  "禁旗模式（NF）下不能插旗，按下即开，滑动可以开多格。",
   "左右键同按（或单击已满足的数字格）可一次展开一圈，比逐格点快。",
   "自定义盘可以自由设定宽、高、雷数（8 – 99），想练什么规格都行。",
   "每局结束会给出 STNB 与五维雷达评级，口径与录像详情页一致。",
@@ -2295,6 +2295,17 @@ export function OnlinePlay({
     on(gboard, "mousedown", (e: MouseEvent) => {
       if (over || gameBusy()) return;
       const i = eventCell(e); if (i < 0) return;
+      /* NF 按下即开（2026-10-18 张老师定）：左键 mousedown 直接开格、按住滑动逐格开
+         （见 mouseover），每开一格录完整 lc+lr 对（按下即松，回放引擎 lr 才 flood，
+         配对后视觉只差一帧）；单击已开数字维持「双击」口径录 sc+lr（NF 无旗，
+         chord 必空转计 wasted Double）。松开不再补 lr / openCell（见 window mouseup） */
+      if (nf && e.button === 0) {
+        leftDown = true; rightDown = false; chordDone = false;
+        setFace("ooh");
+        if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
+        else if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
+        return;
+      }
       if (e.buttons === 3) { // 左右同按 = 双击手势（第二键并入，只录按下事件不动作）
         clearPress();
         pressAround(i);
@@ -2323,6 +2334,13 @@ export function OnlinePlay({
         pressAround(i);
         setFace("ooh");
       } else if (e.buttons === 1) {
+        /* NF 按住滑动逐格开（2026-10-18 张老师定）：经过未开格即开并录 lc+lr 对，
+           已开格不动作；无需按下态高亮（格瞬时已开） */
+        if (nf) {
+          setFace("ooh");
+          if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
+          return;
+        }
         if (chordCells) { chordCells.forEach((c) => { if (state[c] === 0) paint(c); }); chordCells = null; }
         pressSingle(i);
         setFace("ooh");
@@ -2351,7 +2369,12 @@ export function OnlinePlay({
       const rawPx = gbR ? (e.clientX - gbR.left) / (zoomCur * pageZoom()) : 0;
       const rel = (mouse: number) => { if (i >= 0) recordEv(mouse, i); else recordEvPx(mouse, rawPx); };
       if (e.button === 0) {
-        if (rightDown) {
+        if (nf) {
+          /* NF 按下即开：开格 / sc+lr 都已在 mousedown、滑动 mouseover 完成，
+             mouseup 只复位手势——同格此时 state 已 1，若落进下面「单击已开数字＝
+             双击」分支会凭空多计一次 Double（2026-10-18） */
+          leftDown = false;
+        } else if (rightDown) {
           /* 双击：flop 口径在**松开**生效（松开位坐标），lr 在 rp 下引擎计 Double。
              右键按住期间每次左键松开都触发（连点连 chord，与回放引擎逐次判 Double
              同口径，2026-10-18 张老师定） */
@@ -3126,7 +3149,7 @@ export function OnlinePlay({
               对应开关的 .tip 一致；不用原生 title（会跟气泡双份弹） */}
           <button className="gicon gmode" id="btn_nf" type="button">
             NF
-            <span className="tip">禁旗模式：不能插旗，全程只靠开格决胜</span>
+            <span className="tip">禁旗模式：不能插旗，按下即开，滑动可以开多格</span>
           </button>
           {/* 速旗模式（2026-10-16 张老师定）：小旗图标＋NF 右侧；激活沿用 .gicon.active
               默认黄。行为＝原「自动双击」开关（插旗后自动 chord）＋右键点已开数字也视为
