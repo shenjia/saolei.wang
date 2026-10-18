@@ -2422,8 +2422,33 @@ export function OnlinePlay({
        移动端插旗只走长按 ---- */
     let touchTimer: number | null = null, touchCell = -1, longFired = false;
     let touchX = 0, touchY = 0; // 起点坐标：滑动容差判定用
+    let touchLastX = 0, touchLastY = 0; // NF 滑动连开：上一采样点（棋盘 1x 像素坐标）
+    /* 触点屏幕坐标 → 棋盘 1x 像素：touch 事件 target 恒为起始格（不跟手指走），
+       滑动中必须按坐标算格（与 mousemove/recordMv 同一换算） */
+    function touchBoardPx(cx: number, cy: number) {
+      const gbR = gboard.getBoundingClientRect();
+      return {
+        x: (cx - gbR.left) / (zoomCur * pageZoom()),
+        y: (cy - gbR.top) / (zoomCur * pageZoom()),
+      };
+    }
+    /* NF 触屏单格动作（2026-10-18 张老师定，与桌面 mousedown/mouseover 同口径）：
+       未开格开（录 lc+lr 对）、已开数字录 sc+lr（NF 无旗，chord 必空转计 wasted） */
+    function nfTouchOpen(i: number) {
+      if (over) return;
+      if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
+      else if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
+    }
     on(gboard, "touchend", (e: TouchEvent) => {
       if (touchTimer) clearTimeout(touchTimer);
+      if (nf) {
+        /* NF 按下即开：开格动作已全部在 touchstart / touchmove 完成，touchend 只复位
+           （touchCell 在 NF 下复用为滑动轨迹当前格；长按在 NF 下自然空转——
+           touchstart 已把格开到 state=1，计时器里 state[i]===1 早退，无 rc 可闭合） */
+        touchCell = -1;
+        e.preventDefault();
+        return;
+      }
       if (longFired) {
         /* 长按插旗的 rr 闭合（rc 在长按触发时已录） */
         if (touchCell >= 0 && !over) recordEv(17, touchCell);
@@ -2445,7 +2470,27 @@ export function OnlinePlay({
     on(gboard, "touchmove", (e: TouchEvent) => {
       if (touchCell < 0) return;
       const t = e.changedTouches[0];
-      if (t && Math.hypot(t.clientX - touchX, t.clientY - touchY) > 12) {
+      if (!t) return;
+      if (nf) {
+        /* NF 滑动连开（2026-10-18 张老师定）：沿手指轨迹按半格步长插值逐格开——
+           touchmove 是合并事件，快滑会跳格，插值保证路径上的格不被漏掉。
+           滑动即取消长按计时（拖动意图明确） */
+        if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+        if (over) { touchCell = -1; return; }
+        const bp = touchBoardPx(t.clientX, t.clientY);
+        const steps = Math.max(1, Math.ceil(Math.hypot(bp.x - touchLastX, bp.y - touchLastY) / 8));
+        for (let s = 1; s <= steps; s++) {
+          const px = touchLastX + ((bp.x - touchLastX) * s) / steps;
+          const py = touchLastY + ((bp.y - touchLastY) * s) / steps;
+          const cx = (px / 16) | 0, cy = (py / 16) | 0;
+          if (cx < 0 || cx >= W || cy < 0 || cy >= H) continue;
+          const i = cy * W + cx;
+          if (state[i] === 0 && i !== touchCell) { touchCell = i; nfTouchOpen(i); }
+        }
+        touchLastX = bp.x; touchLastY = bp.y;
+        return;
+      }
+      if (Math.hypot(t.clientX - touchX, t.clientY - touchY) > 12) {
         if (touchTimer) clearTimeout(touchTimer);
         touchCell = -1;
       }
@@ -2455,6 +2500,12 @@ export function OnlinePlay({
       const i = eventCell(t); if (i < 0 || over) return;
       touchCell = i; longFired = false;
       touchX = t.clientX; touchY = t.clientY;
+      const bp0 = touchBoardPx(t.clientX, t.clientY);
+      touchLastX = bp0.x; touchLastY = bp0.y;
+      /* NF 按下即开（2026-10-18 张老师定）：与桌面同口径，触点落下直接开格，
+         滑动沿轨迹连开（见 touchmove）；长按计时照挂——开过的格 state=1，
+         计时器自然空转，触屏在 NF 下无插旗动作 */
+      if (nf) nfTouchOpen(i);
       touchTimer = window.setTimeout(() => {
         longFired = true;
         if (state[i] === 1) return; // 已开格长按无意义
