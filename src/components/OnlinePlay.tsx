@@ -358,9 +358,10 @@ export function OnlinePlay({
     let bvRegions: number[][] = []; // 空格连通域（含边界数字格）
     let bvSingles: number[] = []; // 非空格区的数字格（3BV 单击格）
     let bvIslands: number[][] = []; // singles 的八连连通域（岛屿）
-    /* 手势状态（2026-10-16 重构）：chord 按 flop 口径在**首次松开**生效——
-       双键都按下后，先松开的那一键触发 chord 并录对应松开事件（lr 或 rr），
-       另一键的松开只补录事件不再触发 */
+    /* 手势状态（2026-10-16 重构）：chord 按 flop 口径在**松开**生效——
+       双键都按下后，松开任一键触发 chord 并录对应松开事件（lr 或 rr）；
+       一键按住期间另一键**每次**点击都触发（按住右键连点左键＝连续双击，
+       2026-10-18 张老师定），chordDone 只用于「一键已松、另一键后松」的闭合配对 */
     let leftDown = false, rightDown = false, chordDone = false;
 
     const tbody = $("gtbody") as unknown as HTMLTableSectionElement;
@@ -2350,8 +2351,10 @@ export function OnlinePlay({
       const rawPx = gbR ? (e.clientX - gbR.left) / (zoomCur * pageZoom()) : 0;
       const rel = (mouse: number) => { if (i >= 0) recordEv(mouse, i); else recordEvPx(mouse, rawPx); };
       if (e.button === 0) {
-        if (rightDown && !chordDone) {
-          /* 双击：flop 口径在**首次松开**生效（松开位坐标），lr 在 rp 下引擎计 Double */
+        if (rightDown) {
+          /* 双击：flop 口径在**松开**生效（松开位坐标），lr 在 rp 下引擎计 Double。
+             右键按住期间每次左键松开都触发（连点连 chord，与回放引擎逐次判 Double
+             同口径，2026-10-18 张老师定） */
           chordDone = true;
           rel(5); if (i >= 0) chord(i);
         } else if (chordDone) {
@@ -2366,8 +2369,9 @@ export function OnlinePlay({
         }
         leftDown = false;
       } else if (e.button === 2) {
-        if (leftDown && !chordDone) {
-          /* 右键先松开的 chord：rr 在 lp 下＝双击（flop 口径） */
+        if (leftDown) {
+          /* 右键松开的 chord：rr 在 lp 下＝双击（flop 口径）；左键按住期间
+             连点右键同理逐次触发（与 lr/rp 对称，2026-10-18 张老师定） */
           chordDone = true;
           rel(17); if (i >= 0) chord(i);
         } else {
