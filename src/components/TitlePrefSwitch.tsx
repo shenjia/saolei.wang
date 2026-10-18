@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTitleSystem, setLocalTitleSystem } from "./TitleSystemProvider";
+import { toast } from "./Toast";
 import type { TitleSystem } from "@/lib/title-system";
 
 export function TitlePrefSwitch({ loggedIn }: { loggedIn: boolean }) {
@@ -19,6 +20,7 @@ export function TitlePrefSwitch({ loggedIn }: { loggedIn: boolean }) {
     if (saving) return;
     setSaving(true);
     setLocalTitleSystem(key); // 本设备即时生效（context 立即重渲染）
+    toast("切换成功", "success"); // 全局绿气泡确认（2026-10-18 张老师要求）
     if (loggedIn) {
       try {
         await fetch("/api/account/title-pref", {
