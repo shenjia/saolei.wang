@@ -44,7 +44,7 @@ export function TitlePrefSwitch({ loggedIn }: { loggedIn: boolean }) {
         <button
           type="button"
           className={`title_pref_opt ${!isC ? "on" : ""}`}
-          onClick={() => !isC && pick("m")}
+          onClick={() => isC && pick("m")}
           disabled={saving}
         >
           <span className="name">军衔体系（2026版）</span>
