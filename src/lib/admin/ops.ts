@@ -32,6 +32,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "user.delete": "administrator",
   "video.review": "manager",
   "video.batchReview": "manager",
+  "video.markWatched": "manager",
   "video.delete": "administrator",
   "comment.setStatus": "manager",
   "bbs.setPost": "manager",
@@ -193,6 +194,22 @@ async function dispatch(
       return { ok: true, message: `注销账号 ${auth.username}（#${id}），账号数据保留、无法再登录` };
     }
 
+    case "video.markWatched": {
+      // 后台播放器看过即标记（2026-10-19）：防盲审口径认 admin_watched；
+      // 幂等，重复上报无副作用。仅待审录像需要（已审过的不影响）。
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少录像 ID" };
+      const video = await prisma.video.findUnique({ where: { id: BigInt(id) }, select: { status: true } });
+      if (!video) return { ok: false, error: "录像不存在" };
+      if (video.status !== VIDEO_STATUS.NORMAL) return { ok: true, message: "已审过，无需标记" };
+      const now = BigInt(Math.floor(Date.now() / 1000));
+      await prisma.videoStat.update({
+        where: { id: BigInt(id) },
+        data: { adminWatched: 1, updateTime: now },
+      });
+      return { ok: true, message: `#${id} 已标记观看` };
+    }
+
     // ---------- 录像 ----------
     case "video.review": {
       const id = toId(p.id);
@@ -242,8 +259,13 @@ async function dispatch(
       }
       let done = 0;
       const errors: string[] = [];
+      /* 免核定批量通过跳过防盲审（2026-10-19 张老师报：免核池一键过被 2013 版
+         「必须先下载」卡死 73 条）——能走到这里的通过请求必为全免核定：
+         poolAll 服务端只取 autoFlag=1；ids 模式非免核定已被上面闸门整体拒绝。
+         批量屏蔽不跳过（下架是重动作，仍要求看过）。 */
+      const skipWatch = status === VIDEO_STATUS.REVIEWED;
       for (const id of targetIds) {
-        const r = await reviewVideo(actor.uid, actor.role, id, status);
+        const r = await reviewVideo(actor.uid, actor.role, id, status, { skipWatchCheck: skipWatch });
         if (r.ok) done++;
         else errors.push(`#${id}: ${r.error}`);
       }

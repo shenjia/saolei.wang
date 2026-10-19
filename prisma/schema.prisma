@@ -264,6 +264,9 @@ model VideoStat {
   downloads  Int     @default(0) @db.Int
   downloader String? @db.Char(40)
   comments   Int     @default(0) @db.Int
+  // 管理员在后台播放器里看过（2026-10-19：防盲审口径=downloads>0 或 admin_watched；
+  // 免核定批量通过不查此列——池内零触发器命中，由分拣闸门保证）
+  adminWatched Int   @default(0) @map("admin_watched") @db.TinyInt
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 

@@ -3018,16 +3018,12 @@ export function OnlinePlay({
     }
     /* 侧边态目标 zoom 与渲染宽（纯计算，不碰 DOM）：
        自然形态＝跟游戏倍率走，>1.5 时不得高于游戏窗高（十一期：面板顶与银框顶对齐、
-       等高即底边齐平）；再按侧空（视口缘 12 + 面板间隙 14）与视口高封顶；
-       maxRenderedH＝可选的渲染高上限（布局 px）——结算面板用数据面板的渲染高封顶
-       （2026-10-19 张老师定「结算面板高度不应超过数据统计面板的高度」：两面板
-       顶端对齐，压到等高即底边也齐平） */
+       等高即底边齐平）；再按侧空（视口缘 12 + 面板间隙 14）与视口高封顶 */
     function sideFit(
       base: { w: number; h: number },
       side: "left" | "right",
       gwR: DOMRect,
-      pz: number,
-      maxRenderedH?: number
+      pz: number
     ): { z: number; renderedW: number } {
       const gameCapH = zoomCur > 1.5 && gwR.height > 1 ? gwR.height / (base.h * pz) : 2.5;
       const naturalZ = Math.max(0.3, Math.min(zoomCur, gameCapH, 2.5));
@@ -3035,9 +3031,7 @@ export function OnlinePlay({
         side === "left" ? gwR.left - 12 - 14 : window.innerWidth - gwR.right - 12 - 14;
       const sideCap = base.w > 1 ? availSide / (base.w * pz) : 2.5;
       const hCap = base.h > 1 ? (window.innerHeight - gwR.top - 12) / (base.h * pz) : 2.5;
-      const hStats =
-        maxRenderedH != null && base.h > 1 ? maxRenderedH / (base.h * pz) : 2.5;
-      const z = Math.max(0.25, Math.min(naturalZ, sideCap, hCap, hStats));
+      const z = Math.max(0.25, Math.min(naturalZ, sideCap, hCap));
       return { z, renderedW: base.w * z * pz };
     }
     /* 侧边定位（公式＝旧版逐字，生产多轮验证）：left 面板右缘贴「银框左−14」、
@@ -3150,18 +3144,8 @@ export function OnlinePlay({
       const statsFit = wantStats
         ? sideFit({ w: panelBase.statsW, h: panelBase.statsH }, "left", gwR, pz)
         : null;
-      /* 结算面板渲染高封顶＝数据面板渲染高（张老师 2026-10-19 定，见 sideFit 注释）；
-         数据面板没显示（统计开关关）则不设限。渲染高＝自然高 × z × pz（屏幕 px） */
-      const resultMaxH =
-        statsFit && panelBase.statsH > 1 ? statsFit.z * panelBase.statsH * pz : undefined;
       const resultFit = wantResult
-        ? sideFit(
-            { w: panelBase.resultW, h: panelBase.resultH },
-            "right",
-            gwR,
-            pz,
-            resultMaxH
-          )
+        ? sideFit({ w: panelBase.resultW, h: panelBase.resultH }, "right", gwR, pz)
         : null;
       /* 阈值判定：任一面板按侧边公式摆出来都不到 120px 渲染宽 → 侧边没有意义，转遮罩 */
       if (

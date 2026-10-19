@@ -24,6 +24,7 @@ export const OP_LABELS: Record<string, string> = {
   "user.delete": "删除玩家",
   "video.review": "审核录像",
   "video.batchReview": "批量审核录像",
+  "video.markWatched": "标记已观看",
   "video.delete": "删除录像",
   "comment.setStatus": "处理评论",
   "bbs.setPost": "调整主题属性",

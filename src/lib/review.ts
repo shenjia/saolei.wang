@@ -242,13 +242,16 @@ async function loadReviewVideo(tx: Tx, id: number): Promise<ReviewVideo | null> 
 
 /**
  * Review::video —— 审核录像
- * 校验：管理员权限 / 录像存在 / 必须先下载过（防盲审）/ 状态合法 / 已审过的仅超管可重审
+ * 校验：管理员权限 / 录像存在 / 必须先看过（防盲审）/ 状态合法 / 已审过的仅超管可重审
+ * 防盲审口径（2026-10-19 扩展）：下载过（downloads>0）或在后台播放器里看过（admin_watched）
+ * 都算「看过」；免核定批量通过由 opts.skipWatchCheck 跳过（池内零触发器命中，分拣闸门保证）。
  */
 export async function reviewVideo(
   reviewerId: number,
   reviewerRole: number,
   videoId: number,
-  status: number
+  status: number,
+  opts: { skipWatchCheck?: boolean } = {}
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isManager(reviewerRole)) return { ok: false, error: "没有审核权限" };
   if (![VIDEO_STATUS.BANNED, VIDEO_STATUS.NORMAL, VIDEO_STATUS.REVIEWED].includes(status as 0 | 10 | 20)) {
@@ -257,9 +260,11 @@ export async function reviewVideo(
 
   const video = await prisma.video.findUnique({ where: { id: BigInt(videoId) } });
   if (!video) return { ok: false, error: "录像不存在" };
-  const stat = await prisma.videoStat.findUnique({ where: { id: video.id } });
-  if (!stat || stat.downloads === 0) {
-    return { ok: false, error: "请先下载观看该录像后再审核（禁止盲审）" };
+  if (!opts.skipWatchCheck) {
+    const stat = await prisma.videoStat.findUnique({ where: { id: video.id } });
+    if (!stat || (stat.downloads === 0 && stat.adminWatched === 0)) {
+      return { ok: false, error: "请先下载观看该录像后再审核（禁止盲审）" };
+    }
   }
   if (video.reviewUser && reviewerRole !== USER_ROLE.ADMINISTRATOR) {
     return { ok: false, error: "该录像已审核过，仅超级管理员可以重审" };

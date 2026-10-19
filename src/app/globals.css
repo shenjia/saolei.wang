@@ -7821,11 +7821,11 @@ html:has(#online_play) #footer {
 }
 /* ---- 结算按钮快捷键键帽（2026-10-19 张老师定）：文本后 [R]/[A]/[V]/[D]/[空格] ----
    kbd＝小号键帽（描边圆角 + 半透明底），颜色随按钮前景色（currentColor），
-   hover 变绿时同步。显隐按**面板实际宽度**自适应（「空间允许的情况下」）：
-   .gr_btns 声明为 size container，PC 上图标已由键帽代替（见下方 960 媒体查询），
-   按钮内容只剩「键帽 + 四字」≈71px，列宽 ≥85px 即放得下 → 阈值降到 170px
-   （容器宽 = 2 列 + 5px gap）——侧边 196px 窄面板（容器 ~174px）也能显示；
-   移动浮层卡片（≥248px）恒显示。
+   hover 变绿时同步；margin-left:auto 推到按钮右端（flex 尾部对齐，比固定间距
+   更能适应列宽）。显隐按**面板实际宽度**自适应（「空间允许的情况下」）：
+   .gr_btns 声明为 size container，容器宽 ≥240px（2 列各 ≥115px，
+   图标 14 + 间距 6 + 四字 48 + 键帽 ~22 放得下）才显示 kbd——侧边 196px 窄面板
+   （列宽 84.5px）自动隐藏；遮罩卡片（≥248px）与未来更宽的面板显示。
    复活按钮独占整行不进 .gr_btns，其「空格」键帽恒显示 */
 #online_play .gresult .grb kbd,
 #gr_modal .grb kbd {
@@ -7844,27 +7844,12 @@ html:has(#online_play) #footer {
 }
 #online_play .gresult .gr_btns kbd,
 #gr_modal .gr_btns kbd {
-  display: none; /* 窄面板默认隐藏 */
+  display: none; /* 窄面板默认隐藏（侧边 196px 列宽放不下） */
 }
-@container (min-width: 170px) {
+@container (min-width: 240px) {
   #online_play .gresult .gr_btns .grb kbd,
   #gr_modal .gr_btns .grb kbd {
-    display: inline-block; /* 放得下「键帽 + 文字」的面板显示 */
-  }
-}
-/* PC（2026-10-19 张老师定）：按键的快捷键代替按钮前的图标——键盘在手边，
-   键帽比装饰图标更有用。图标隐藏、键帽移到文字前（原图标位置）；
-   移动端没有键盘，图标照旧、键帽跟随容器宽度规则。
-   ⚠️ 960 断点与 mqPanelDesktop 同值（面板宿主切换的那条线） */
-@media (min-width: 960px) {
-  #online_play .gresult .grb svg,
-  #gr_modal .grb svg {
-    display: none;
-  }
-  #online_play .gresult .grb kbd,
-  #gr_modal .grb kbd {
-    order: -1; /* 键帽顶到文字前（原图标位置）；间距走 .grb 的 flex gap 6px */
-    margin-left: 0;
+    display: inline-block; /* 宽面板/遮罩卡片显示 */
   }
 }
 /* 窄形态（gr_narrow）与负层覆盖态（gr_cover）均已退役（2026-10-19 二版）：

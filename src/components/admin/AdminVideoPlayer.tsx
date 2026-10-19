@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { FlopSprites } from "../FlopSprites";
 import { FlopPlayer, playFlop } from "../FlopPlayer";
 import { parseReplayData, runReplay, type ReplayData, type ReplayStats } from "../VideoReplay";
+import { postOp } from "./AdminAction";
 import type { VideoLevel } from "@/lib/config";
 
 type Status = "idle" | "loading" | "playing" | "paused" | "ended";
@@ -144,6 +145,9 @@ function PlayerBody({ target, onClose }: { target: AdminPlayerTarget; onClose: (
           return;
         }
         setData(parsed);
+        // 在播放器里看过即算「已观看」（2026-10-19 防盲审口径扩展）：
+        // 静默上报，失败不打扰播放（下载过的本来就有 downloads 计数）
+        void postOp("video.markWatched", { id: target.id }).catch(() => undefined);
       } catch {
         if (!alive) return;
         setNotice("录像文件加载失败（可能已缺失）");
