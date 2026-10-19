@@ -18,8 +18,9 @@ export const AUTO_REASON = {
   LOW_TRUST: 1 << 9,
 } as const;
 
-/** press-release 分级阈值（ms）——2026-10-19 P0 回测 9837 盘锚定人类 p1 分位（初 44.3 / 中 55.9 / 高 57.3） */
-export const PRESS_AVG_MS: Record<string, number> = { beg: 45, int: 56, exp: 60 };
+/** press-release 分级阈值（ms）——初级/中级 45（2026-10-19 张老师晚定：中级从 56 放宽），
+ *  高级 60；初/中锚定 P0 回测人类 p1 分位 44.3 / 55.9 取整收紧，高级沿用原线 */
+export const PRESS_AVG_MS: Record<string, number> = { beg: 45, int: 45, exp: 60 };
 
 /** STNB 分级阈值（各级 p99 取整上浮） */
 export const STNB_TRIGGER: Record<string, number> = { beg: 205, int: 160, exp: 150 };

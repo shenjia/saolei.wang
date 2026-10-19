@@ -485,31 +485,43 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
 
 /** 现读录像文件算 press-release 平均时长（复用 video-triage 同口径；文件缺失/解析失败返回 null） */
 async function computePressAvg(ids: number[]): Promise<Map<number, number | null>> {
-  const { createRequire } = await import("module");
-  void createRequire; // 防 tree-shake 误删（Node 内置无需 require）
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: ids.map(BigInt) } },
     select: { id: true, filepath: true },
   });
+  const { readFileSync } = await import("fs");
+  const pathMod = await import("path");
+  const { parseVideoBinary } = await import("@/lib/videoradar");
+  const { pressPairStats } = await import("@/lib/video-triage");
+  const { PRESS_AVG_MS } = await import("@/lib/video-triage-limits");
   const result = new Map<number, number | null>();
   for (const info of infos) {
     result.set(N(info.id), null);
     try {
-      const { readFileSync } = await import("fs");
-      const pathMod = await import("path");
       const root = pathMod.join(process.cwd(), "videos");
       const full = pathMod.resolve(root, "." + info.filepath);
       if (!full.startsWith(root + pathMod.sep)) continue;
       const buf = new Uint8Array(readFileSync(full));
       const ext = info.filepath.split(".").pop()?.toLowerCase() ?? "";
-      const { parseVideoBinary } = await import("@/lib/videoradar");
-      const { pressPairStats } = await import("@/lib/video-triage");
       const parsed = parseVideoBinary(buf, ext);
       if (!parsed) continue;
+      const lv = await prisma.video.findUnique({
+        where: { id: info.id },
+        select: { level: true },
+      });
+      if (!lv) continue;
+      const line = PRESS_AVG_MS[lv.level] ?? 60;
       const ps = pressPairStats(parsed);
-      // 与触发口径一致：左键优先（n≥30），左键无配对再看右键
-      if (ps.leftAvg !== null) result.set(N(info.id), Math.round(ps.leftAvg));
-      else if (ps.rightAvg !== null) result.set(N(info.id), Math.round(ps.rightAvg));
+      /* 与触发口径一致：独立判左右键（n≥30 且 ≤阈值）；
+         标签数值取实际命中的那只键（2026-10-19 张老师报 87ms≤60ms 错位——
+         命中在右键 49ms、显示却取了左键 87ms）；两键都中取更低者 */
+      let hit: number | null = null;
+      if (ps.leftAvg !== null && ps.leftN >= 30 && ps.leftAvg <= line) hit = Math.round(ps.leftAvg);
+      if (ps.rightAvg !== null && ps.rightN >= 30 && ps.rightAvg <= line) {
+        const r = Math.round(ps.rightAvg);
+        hit = hit === null ? r : Math.min(hit, r);
+      }
+      result.set(N(info.id), hit);
     } catch {
       /* 单行失败保持 null，标签退化为无数值形态 */
     }

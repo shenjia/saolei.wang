@@ -36,7 +36,7 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 0)) {
     tags.push({
       text: `按住时长 ${pressVal}≤${pressLine}ms`,
-      title: `全盘鼠标按下→松开平均时长 ${v.pressAvgMs != null ? v.pressAvgMs + "ms" : "（现算失败）"}，低于${LEVEL_NAMES[lv] ?? "该级别"}线 ${pressLine}ms（人类 p1 分位），疑似机器生成事件流`,
+      title: `全盘鼠标按下→松开平均时长 ${v.pressAvgMs != null ? v.pressAvgMs + "ms（命中键：左/右键独立判定，取命中值）" : "（现算失败）"}，低于${LEVEL_NAMES[lv] ?? "该级别"}线 ${pressLine}ms，疑似机器生成事件流`,
       cls: "bad",
     });
   }
