@@ -7788,6 +7788,37 @@ html:has(#online_play) #footer {
 .vprfs_side .grb:active {
   color: #8ac21b;
 }
+/* ---- 原地复活按钮（2026-10-19 张老师定）：雷达图下方独占一行的黄色按钮 ----
+   仅踩雷结算态渲染（胜局无）。黄色系＝站内强调色 #fdc61d：文字/图标恒黄
+   （hover 不变绿——复活是「救回」动作，绿色留给常规按钮），描边与渐变底
+   同步黄阶；宽度顶满面板内容宽（两颗常规按钮宽度），与 .gr_btns 留 4px 间距 */
+#online_play .gresult .grb.grb_revive,
+#gr_modal .grb.grb_revive {
+  width: 100%;
+  margin-top: 4px;
+  border-color: #fdc61d;
+  background-color: #4d4423;
+  background-image: linear-gradient(to bottom, #5a4f28, #453d1f);
+  color: #fdc61d;
+  font-weight: bold;
+}
+#online_play .gresult .grb.grb_revive:hover,
+#gr_modal .grb.grb_revive:hover {
+  background-image: linear-gradient(to bottom, #66592f, #4f4624);
+  color: #ffd94d;
+}
+#online_play .gresult .grb.grb_revive:active,
+#gr_modal .grb.grb_revive:active {
+  color: #f0b511;
+}
+/* 数据面板「复活次数」行（2026-10-19 张老师定）：金色数值（呼应复活按钮）；
+   行 hover 高亮会把 td 文字刷白，金色需再压一层保持（同 gv_ng 手法） */
+#online_play .greport td.gv.gv_rv {
+  color: #fdc61d;
+}
+#online_play .greport tr:hover td.gv.gv_rv {
+  color: #fdc61d;
+}
 /* 窄形态（gr_narrow）已退役（2026-10-19 负层覆盖改造）：侧空放不下 1x 自然尺寸时
    不再「四按钮 4 行 + 压 0.3」地缩，改由 JS 挂 gr_cover 覆盖态盖在游戏画面上方 */
 #online_play .gresult.gr_cover,

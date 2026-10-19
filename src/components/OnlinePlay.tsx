@@ -123,6 +123,7 @@ const TIPS: string[] = [
   "左右键同按（或单击已满足的数字格）可一次展开一圈，比逐格点快。",
   "自定义盘可以自由设定宽、高、雷数（8 – 99），想练什么规格都行。",
   "每局结束会给出 STNB 与五维雷达评级，口径与录像详情页一致。",
+  "踩雷后可以按空格原地复活：撤销那一步误点，计时继续。",
 ];
 /* tips 生命周期（ms）：fade-in 由挂载后下一帧加 .show 触发；
    TIP_HOLD_MS 后撤 .show 走 transition 渐隐，TIP_FADE_MS 后整块卸载。
@@ -494,6 +495,64 @@ export function OnlinePlay({
       };
     }
     let snapshot: GameSnapshot | null = null;
+
+    /* ---- 原地复活（2026-10-19 张老师定）：踩雷后回滚「上次踩雷的那次点击」，时间继续 ----
+       回滚粒度＝**整次点击手势**（不是最后那半个事件）：致命点击可能是 lc→lr 的完整
+       松开开格、双键 chord（松开触发展开）、连击/触屏轨迹开格——任何一种，其
+       事件序列在「致命动作发生」那一刻才完整闭合。快照采用**手势起点拍摄**：
+       每次新手势（mousedown / touchstart）先拍一份「手势前状态」，踩雷升级为
+       死亡快照；复活＝回到手势起点（事件流剥到手势前长度，lc/sc/rc 等按下
+       事件一并回滚——重放引擎状态机没有半开手势，统计天然自洽）。
+       计时器不停表：复活后从死亡时刻续跑（「时间继续」的题意，练习者损失
+       思考时间自己承担）。连续复活：每次致命手势都会重新升级快照；revives
+       累计到终局（reset 清零）。 */
+    interface DieSnapshot {
+      state: Uint8Array;
+      openedSafe: number;
+      mines: Uint8Array;
+      nums: Uint8Array;
+      bvRegions: number[][];
+      bvSingles: number[];
+      bvIslands: number[][];
+      board3bv: number;
+      origMines: Uint8Array | null;
+      hit: number;
+      evLen: number;   // 事件流剥到这个长度（手势前的完整序列）
+      csec: number;    // 手势起点时刻（百分秒）——复活后计时从这里续跑
+      minesLed: number;
+    }
+    let dieSnap: DieSnapshot | null = null;   // 死亡快照（终态＝败局结算才有）
+    let gestureSnap: DieSnapshot | null = null; // 手势起点快照（每次新点击手势重拍）
+    let revives = 0; // 本局已复活次数（reset 清零；终局随统计口径自然记入快照）
+    /* 败局埋点延迟句柄（原地复活 2026-10-19）：败局 beacon 晚 300ms 发送，
+       复活即撤销（见 report/revive/reset 三处清理） */
+    let pendingLoseBeacon: number | null = null;
+    /* 手势起点快照：新点击手势（mousedown / touchstart）入口调用。盘面/统计构件
+       全量复制（8×8 初级 ~64 格、16×16 ~256、exp 480——一次 copy 可忽略）。
+       两道闸门：
+       ① !started（首击前）不拍——雷区尚未生成（重玩锁定盘首击可能即雷，
+          但空雷区快照复活会把整盘变成无雷废盘，宁可不提供复活）；
+       ② 只在手势**首键**拍（mousedown 传入时 leftDown/rightDown 均为假）——
+          双键 chord 的第二键不覆盖快照，回滚才能把整次手势（含孤儿按下事件）
+          干净剥掉，重放引擎不留半开手势 */
+    function snapGesture(hit: number) {
+      if (!started) return;
+      if (leftDown || rightDown) return;
+      gestureSnap = {
+        state: state.slice(), openedSafe,
+        mines: mines ? mines.slice() : new Uint8Array(0),
+        nums: nums ? nums.slice() : new Uint8Array(0),
+        bvRegions: bvRegions.map((r) => r.slice()),
+        bvSingles: bvSingles.slice(),
+        bvIslands: bvIslands.map((r) => r.slice()),
+        board3bv,
+        origMines: origMines ? origMines.slice() : null,
+        hit,
+        evLen: evStream.length,
+        csec: started ? Math.floor((performance.now() - startTs) / 10) : 0,
+        minesLed: ledMinesCur,
+      };
+    }
 
     function idx(x: number, y: number) { return y * W + x; }
     function inBoard(x: number, y: number) { return x >= 0 && x < W && y >= 0 && y < H; }
@@ -1051,9 +1110,14 @@ export function OnlinePlay({
         /* 必雷格（被已开数字 100% 锁死）：直接判负，绝不重排、盘面与 3BV 零变化
            （2026-10-14 张老师定）。其余踩雷才走无猜救回。重排不弹任何提醒
            （张老师定：笑脸/盘面状态已够） */
+        /* 原地复活（2026-10-19）：确定要 lose 了，把**手势起点快照**升格为死亡快照
+           （hit 填实际致命格；手势起点没有快照＝非点击路径死亡，不提供复活）。
+           无猜救回成功则作废快照（盘面已被重排改写，不存在「点击前」状态） */
+        dieSnap = gestureSnap ? { ...gestureSnap, hit: i } : null;
         if (!ng || isForcedMine(i)) { lose(i); return; }
         const saved = (isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false);
         if (!saved) { lose(i); return; }
+        dieSnap = null; // 救回：本局继续，死亡快照作废
         ngRedeals++; // 一次点击触发的无猜重排＝计数 1（内部重试不计）
         ngSaves++; // 触雷被救回＝1 次（面板「无猜重排」行）
         shakeModeBtn(btnNg); // 小雨伞抖一下（2026-10-15 十期张老师定）
@@ -1216,6 +1280,10 @@ export function OnlinePlay({
       ];
       /* 无猜模式专属行（2026-10-15 十期张老师定）：绿色数值，hover＝触雷被救回次数 */
       if (ng) rows.push(["无猜重排", String(ngSaves), "触雷但通过重排挽救的次数", "gv_ng"]);
+      /* 复活次数行（2026-10-19 张老师定）：金色数值（#fdc61d 站内黄），hover＝
+         原地复活说明；只有复活过的局才显示（revives>0） */
+      if (revives > 0)
+        rows.push(["复活次数", String(revives), "原地复活（回滚踩雷点击）的次数，复活后计时继续", "gv_rv"]);
       const html =
         /* 关闭按钮已废（2026-10-15 张老师定）：面板收起只由设置浮窗「显示统计」开关
            或新局 reset 决定，面板右上角不放按钮 */
@@ -1250,7 +1318,17 @@ export function OnlinePlay({
             level: lv, won, csec: Math.round(t * 100), bbbv: board3bv,
             solvedBv, nf, clicks: cnt.clLeft + cnt.clRight + cnt.clDouble,
           });
-          navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
+          /* 原地复活（2026-10-19）：**败局延迟 300ms 发送**——踩雷后 300ms 内按空格/
+             点复活按钮则撤销（那局还没完，败局不是终态）；胜局立即发 */
+          if (won) {
+            navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
+          } else {
+            if (pendingLoseBeacon !== null) clearTimeout(pendingLoseBeacon);
+            pendingLoseBeacon = window.setTimeout(() => {
+              navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
+              pendingLoseBeacon = null;
+            }, 300);
+          }
         } catch { /* ignore */ }
       }
       /* 数据面板只在「显示统计」开着时、且只在**游戏结束**这一刻出现
@@ -1346,16 +1424,28 @@ export function OnlinePlay({
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>',
         download:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 15V3"/></svg>',
+        /* 原地复活＝心电脉冲：一条心电图折线穿过一颗实心心形——「从死亡线上
+           拉回来」的直觉符号；stroke 风格与上面四颗同款（2026-10-19 设计） */
+        revive:
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M1.5 12h3.6l1.9-5.5L11 18l2.2-7.6 1.3 1.6h7.9"/><path fill="currentColor" d="M11.99 10.1c.45-1.55 2.6-1.85 3.5-.6.8 1.1.3 2.6-1 3.75L12 15.4l-2.5-2.15c-1.3-1.15-1.8-2.65-1-3.75.9-1.25 3.05-.95 3.49.6z"/></svg>',
       };
       /* 宿主按当前断点选（七期）：桌面＝右侧浮窗 gresult，移动＝居中浮层卡片 grmCard。
          非活动端同步清空——#gr_radar 与按钮 id 全文档只能存在一份 */
       const host = mqPanelDesktop.matches ? gresult : grmCard;
       (mqPanelDesktop.matches ? grmCard : gresult).innerHTML = "";
+      /* 原地复活按钮（2026-10-19 张老师定）：**仅败局且有死亡快照**在雷达图下方
+         额外一颗黄色按钮（与四按钮分开、独占一行），点击或空格触发 revive；
+         胜局/首击即雷（无快照）不渲染 */
+      const reviveBtn = !s.won && dieSnap
+        ? '<button type="button" class="grb grb_revive" id="grb_revive" title="按空格也可复活">' +
+          IC.revive + "原地复活</button>"
+        : "";
       /* 四个按钮分两行（2026-10-15 六期张老师定）：上排＝开局类（再来一局 / 重玩本局），
          下排＝本局录像类（查看回放 / 下载录像）。.gr_btns 走 2 列 grid，DOM 顺序即行列顺序 */
       host.innerHTML =
         titleLine +
         '<div class="gr_radar" id="gr_radar"></div>' +
+        reviveBtn +
         '<div class="gr_btns">' +
         '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + "再来一局</button>" +
         '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + "重玩本局</button>" +
@@ -1392,6 +1482,7 @@ export function OnlinePlay({
       bind("grb_replay_same", replaySameBoard);
       bind("grb_review", startInPlaceReplay);
       bind("grb_download", downloadAvf);
+      bind("grb_revive", revive);
     }
     /* 移动端结算浮层收起 / 再弹（七期 2026-10-15 张老师定）。
        收起**不清内容**——只是 hidden，再弹不必重建（雷达 React root 留在卡片里，
@@ -1874,6 +1965,53 @@ export function OnlinePlay({
       resetReplay();
       setPlaying(true); // 进入即自动播放（复位到 0 起播）
     }
+    /* ---- 原地复活执行（2026-10-19 张老师定）：回滚上次踩雷的点击，时间继续 ----
+       触发：结算面板黄色「原地复活」按钮（空格键快捷触发）。
+       动作：恢复死亡快照（盘面/雷区/数字/3BV 构件/事件流截断）→ over=false
+       → 计时器从死亡时刻续跑（elapsed 偏移回拨，表针无跳变）→ 败局埋点撤销
+       （这局还没完）→ 复活计数+1 → 撤结算面板（含移动端浮层）。 */
+    function revive() {
+      /* 三重守卫：死亡快照存在、确实在结算态、终态是**败局**（胜局快照/救回后
+         作废的 null 都不触发——空格键与按钮同路） */
+      if (!dieSnap || !over || snapshot?.won) return;
+      const d = dieSnap;
+      state = d.state.slice();
+      openedSafe = d.openedSafe;
+      mines = d.mines.slice();
+      nums = d.nums.slice();
+      bvRegions = d.bvRegions.map((r) => r.slice());
+      bvSingles = d.bvSingles.slice();
+      bvIslands = d.bvIslands.map((r) => r.slice());
+      board3bv = d.board3bv;
+      origMines = d.origMines ? d.origMines.slice() : null;
+      evStream.length = d.evLen; // 剥到手势前：致命手势（含其全部按下/松开事件）整体撤销
+      over = false;
+      hitIdx = null;
+      /* 计时续跑（「时间继续」的题意）：startTimer 会把 startTs 重置为 now，
+         先起表、再把 startTs 回拨到死亡时刻——elapsed 恰从 d.csec 续走、LED 表针
+         无跳变（回滚语义：致命点击不存在，用时也从点击那一刻继续） */
+      startTimer();
+      startTs -= d.csec * 10;
+      /* 败局埋点撤销 + 复活计数 */
+      if (pendingLoseBeacon !== null) { clearTimeout(pendingLoseBeacon); pendingLoseBeacon = null; }
+      revives++;
+      /* 盘面与计数恢复：repaintAll 在 over=false 下按 state 重画（含旗/数字），
+         死亡揭示的红雷/错旗贴图一并被覆盖掉；败局快照作废（这局还没完） */
+      gresult.classList.remove("show");
+      gresult.classList.remove("gr_cover");
+      gresult.style.visibility = "";
+      greport.classList.remove("show");
+      greport.classList.remove("gr_cover");
+      snapshot = null;
+      hideResultModal();
+      repaintAll();
+      led(ledMines, d.minesLed);
+      setFace("smile");
+      dieSnap = null; // 一次性：复活后再踩雷会重新拍摄
+      gestureSnap = null; // 手势快照同步作废（新手势会重拍）
+      showToast("已复活，时间继续");
+    }
+
     function lose(hit: number) {
       over = true;
       const t = stopTimer();
@@ -1923,6 +2061,11 @@ export function OnlinePlay({
       leftDown = rightDown = chordDone = false;
       comboGuard = true; // 开局保护窗随新局恢复
       evStream = [];
+      /* 原地复活状态随新局作废（2026-10-19）：死亡快照/手势快照/复活计数不跨局 */
+      dieSnap = null;
+      gestureSnap = null;
+      revives = 0;
+      if (pendingLoseBeacon !== null) { clearTimeout(pendingLoseBeacon); pendingLoseBeacon = null; }
       /* 数据面板（八期）：任何时刻都不因开局而显示——只有游戏结束且开关开着才弹出
          （见 report）。statsReport 只读 state/统计量、不读 snapshot，
          故与下面 snapshot = null 的先后无依赖 */
@@ -2425,6 +2568,8 @@ export function OnlinePlay({
     on(gboard, "mousedown", (e: MouseEvent) => {
       if (over || gameBusy()) return;
       const i = eventCell(e); if (i < 0) return;
+      /* 原地复活：新点击手势起点拍快照（踩雷时升格为死亡快照，见 openCell） */
+      snapGesture(i);
       /* 连击模式按下即触发（2026-10-19 张老师定，承 NF 按下即开口径）：
          左键按下＝完整一次点击、右键按下＝完整一次右击（见 comboLeftClick/comboRightClick），
          按住滑动逐格触发（见 mouseover），松开不补录任何事件（配对在触发时已闭合，
@@ -2665,6 +2810,8 @@ export function OnlinePlay({
     on(gboard, "touchstart", (e: TouchEvent) => {
       const t = e.changedTouches[0]; if (!t) return;
       const i = eventCell(t); if (i < 0 || over) return;
+      /* 原地复活：触点手势起点拍快照（点按/滑动连开/长按插旗共用一个起点） */
+      snapGesture(i);
       touchCell = i; longFired = false; touchMoved = false;
       touchX = t.clientX; touchY = t.clientY;
       const bp0 = touchBoardPx(t.clientX, t.clientY);
@@ -3247,6 +3394,18 @@ export function OnlinePlay({
     }, { signal });
 
     on(document, "keydown", (e: KeyboardEvent) => {
+      /* 空格＝原地复活（2026-10-19 张老师定）：仅踩雷结算态可触发（over 且有
+         死亡快照且终态为败局；胜局/开局/回放中/输入框聚焦一律不劫持） */
+      if (e.key === " ") {
+        const t0 = e.target as HTMLElement;
+        if (t0 && (t0.tagName === "INPUT" || t0.tagName === "TEXTAREA")) return;
+        if (replaying) return;
+        if (over && dieSnap && !snapshot?.won) {
+          e.preventDefault();
+          revive();
+        }
+        return;
+      }
       /* F2 ≡ 点笑脸重开（2026-10-14 张老师定）：必须与鼠标点笑脸完全同路——
          回放中、自定义弹窗开着、焦点在控件上，都一律重开，不做任何拦截。
          （reset 内部已自带 forceExitReplay，回放中重开是安全的；此前 replaying
@@ -3304,6 +3463,9 @@ export function OnlinePlay({
         bvSel: () => ({ ...bvSel[lv] }),
         lv: () => lv,
         ngRedeals: () => ngRedeals,
+        /* 原地复活（2026-10-19）：无头测试读死亡快照/复活计数 */
+        revives: () => revives,
+        dieSnap: () => (dieSnap ? { hit: dieSnap.hit, evLen: dieSnap.evLen, csec: dieSnap.csec } : null),
         /* 统计一致性验证（2026-10-16）：当局事件流 + 共享引擎重算结果 */
         events: () => evStream.slice(),
         counts: () => gameCounts(),
