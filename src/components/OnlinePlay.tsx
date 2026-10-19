@@ -1465,8 +1465,8 @@ export function OnlinePlay({
         '<div class="gr_radar" id="gr_radar"></div>' +
         reviveBtn +
         '<div class="gr_btns">' +
-        '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + '再来一局<kbd>R</kbd></button>' +
-        '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + '重玩本局<kbd>A</kbd></button>' +
+        '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + '再来一局<kbd>A</kbd></button>' +
+        '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + '重玩本局<kbd>R</kbd></button>' +
         '<button type="button" class="grb" id="grb_review">' + IC.review + '查看回放<kbd>V</kbd></button>' +
         '<button type="button" class="grb" id="grb_download">' + IC.download + '下载录像<kbd>D</kbd></button>' +
         "</div>";
@@ -3566,22 +3566,26 @@ export function OnlinePlay({
         }
         return;
       }
-      /* r/R 仍守旧规矩：弹窗开着（输入框里打字）/ 回放中不响应，避免误触清盘。
-         2026-10-19 快捷键化（张老师定）：与「再来一局」按钮**完全同路**（newGame
-         显式清锁定盘标记——此前直接 reset() 在「重玩本局后再按 R」会错误复刻
-         上一局盘面，顺手修正与按钮行为的偏差）；对局中与结算态都可触发 */
+      /* a/A＝再来一局（2026-10-19 张老师二定改键：A=再来一局、R=重玩本局）。
+         与按钮**完全同路**（newGame 显式清锁定盘标记）；对局中与结算态都可触发，
+         沿用旧 r/R 的守卫规矩：cus 弹窗开着（输入框里打字）/ 回放中不响应 */
       if (cusDlg.classList.contains("open")) return;
       if (replaying) return;
       const t2 = e.target as HTMLElement;
       if (t2 && (t2.tagName === "INPUT" || t2.tagName === "TEXTAREA")) return;
-      if (e.key === "r" || e.key === "R") { e.preventDefault(); newGame(); return; }
-      /* a/v/d＝重玩本局 / 查看回放 / 下载录像（2026-10-19 张老师定，与面板按钮同路）。
+      if (e.key === "a" || e.key === "A") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return; // 不劫持 Ctrl+A 全选
+        e.preventDefault();
+        newGame();
+        return;
+      }
+      /* r/v/d＝重玩本局 / 查看回放 / 下载录像（与面板按钮同路）。
          仅**结算态**触发（over 且有终局快照——胜/负局都可；对局中按了没结果属误触）。
          复用上面的守卫：cus 弹窗开 / 回放中 / 输入框聚焦都已 return。
-         ⚠️ 修饰键不拦会劫持 Cmd+D（收藏）、Ctrl+A（全选）等系统快捷键，必须守 */
+         ⚠️ 修饰键不拦会劫持 Cmd+D（收藏）等系统快捷键，必须守 */
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const panelReady = over && !!snapshot;
-      if (panelReady && (e.key === "a" || e.key === "A")) { e.preventDefault(); replaySameBoard(); return; }
+      if (panelReady && (e.key === "r" || e.key === "R")) { e.preventDefault(); replaySameBoard(); return; }
       if (panelReady && (e.key === "v" || e.key === "V")) { e.preventDefault(); startInPlaceReplay(); return; }
       if (panelReady && (e.key === "d" || e.key === "D")) { e.preventDefault(); downloadAvf(); return; }
     });
@@ -3610,9 +3614,11 @@ export function OnlinePlay({
         /* 原地复活（2026-10-19）：无头测试读死亡快照/复活计数 */
         revives: () => revives,
         dieSnap: () => (dieSnap ? { hit: dieSnap.hit, evLen: dieSnap.evLen, csec: dieSnap.csec } : null),
-        /* 快捷键/锁定盘测试钩子（2026-10-19）：A 键重玩本局的锁定盘注入验证 */
+        /* 快捷键/锁定盘测试钩子（2026-10-19）：A 键重玩本局的锁定盘注入验证
+           （pending 与 mines 同口径 Array.from——裸 Uint8Array 经 CDP 序列化会变形） */
         locked: () => replayBoardLocked,
-        pending: () => pendingBoard,
+        pending: () => (pendingBoard ? Array.from(pendingBoard) : null),
+        snapMines: () => (snapshot ? Array.from(snapshot.mines) : null),
         /* 统计一致性验证（2026-10-16）：当局事件流 + 共享引擎重算结果 */
         events: () => evStream.slice(),
         counts: () => gameCounts(),
