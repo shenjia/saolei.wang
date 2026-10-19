@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>注册表单 · 图形验证码行高保真稿（2026-10-19）</title>
+<style>
+  /* 与 legacy-2013.css 同源：底 #272822 / 边 #49483e / 绿 #a6e22e / 黄 #fdc61a / 红 #f92672 / 文 #b1b1a4 */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #272822; color: #636359; font: 14px/21px "微软雅黑", Arial, "宋体"; padding: 32px 24px 60px; }
+  .page { max-width: 760px; margin: 0 auto; }
+  .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 24px; }
+  .head h1 { color: #fdc61a; font-size: 26px; line-height: 39px; text-shadow: 0 2px 2px rgba(0,0,0,.25); }
+  .head .sub { color: #75715e; font-size: 12px; }
+
+  .box { background: #2d2d29; border: 1px solid #49483e; border-radius: 8px; padding: 28px 32px; margin-bottom: 28px; }
+  .box > h2 { color: #eeeeee; font-size: 16px; margin-bottom: 4px; }
+  .box > .desc { color: #75715e; font-size: 12px; margin-bottom: 20px; }
+
+  table.form { border-collapse: collapse; width: 100%; }
+  .form th { padding: .5em 1em .5em 0; color: #75715e; font-size: 16px; line-height: 24px; text-align: right; vertical-align: top; white-space: nowrap; }
+  .form td { position: relative; padding: .5em 0; color: #939387; font-size: 16px; line-height: 24px; vertical-align: top; }
+  .form td div { float: left; }
+  .form input[type="text"], .form input[type="password"] {
+    background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px; color: #b1b1a4;
+    font-size: 15px; line-height: 22px; padding: 5px 8px; width: 220px;
+  }
+  .form input:focus { border-color: #75715e; outline: 0; }
+  .form .hintMessage, .form .errorMessage { display: none; line-height: 36px; padding-left: 8px; font-size: 14px; }
+  .form .hintMessage { color: #a6e22e; }
+  .form .hintMessage em { margin: 0 8px; color: #fdc61a; font-style: normal; }
+  .form .errorMessage { color: #f92672; }
+  .form .focus .hintMessage { display: inline-block; }
+  .form .error .errorMessage { display: inline-block; }
+
+  /* 验证码行专用 */
+  .cap_wrap { display: flex; align-items: center; gap: 10px; float: left; }
+  .cap_img { width: 120px; height: 40px; border: 1px solid #49483e; border-radius: 4px; display: block; cursor: pointer; }
+  .cap_input { width: 110px !important; letter-spacing: 2px; text-transform: uppercase; }
+  .cap_refresh { color: #66d9ef; font-size: 13px; cursor: pointer; line-height: 40px; }
+  .cap_refresh:hover { text-decoration: underline; }
+
+  .button {
+    display: inline-block; border: 1px #49483e solid; border-radius: 5px;
+    background: linear-gradient(top, #49483e, #3b3a32); color: #b1b1a4;
+    font-size: 20px; line-height: 30px; padding: 8px 24px; text-shadow: 0 2px 2px rgba(0,0,0,.25);
+  }
+  .button.active { color: #8ac21b; }
+
+  .note { background: #1e1f1c; border: 1px solid #49483e; border-radius: 6px; padding: 12px 16px; font-size: 12.5px; color: #939387; line-height: 2; margin-bottom: 28px; }
+  .note b { color: #e6db74; }
+  .foot { color: #63635a; font-size: 11px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="head">
+    <h1>注册表单 · 图形验证码行</h1>
+    <span class="sub">高保真稿 · 2026-10-19 · 仅新增一行，其余不动</span>
+  </div>
+
+  <div class="note">
+    <b>改动范围</b>：注册表单「所在地区」之后、「完成注册」之前新增一行验证码；提交时校验（不区分大小写），<b>填错自动换一张并清空输入</b>；点击图片或「换一张」也可刷新。<br>
+    后端配套：同 IP 每分钟最多 5 次注册尝试、同 IP 每天最多注册 3 个账号（邮箱注册与扫码注册共用限额）。
+  </div>
+
+  <!-- 正常态 -->
+  <div class="box">
+    <h2>状态一 · 正常态（聚焦显示提示）</h2>
+    <p class="desc">与现有行交互一致：聚焦该行时显示绿色 hint</p>
+    <table class="form">
+      <tbody>
+        <tr>
+          <th>电子邮箱</th>
+          <td><div><input type="text" value="zhangsanjia@example.com"></div></td>
+        </tr>
+        <tr>
+          <th>所在地区</th>
+          <td><div><input type="text" value="陕西" style="width:120px"></div></td>
+        </tr>
+        <tr class="focus">
+          <th>验 证 码</th>
+          <td>
+            <div class="cap_wrap">
+              <img class="cap_img" alt="验证码" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%2240%22%3E%3Crect%20width%3D%22120%22%20height%3D%2240%22%20fill%3D%22%23f4f6f8%22%2F%3E%3Ctext%20x%3D%2216%22%20y%3D%2230%22%20fill%3D%22%234a6785%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(-12%2016%2030)%22%3EK%3C%2Ftext%3E%3Ctext%20x%3D%2242%22%20y%3D%2226%22%20fill%3D%22%237a5c8f%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(8%2042%2026)%22%3E7%3C%2Ftext%3E%3Ctext%20x%3D%2268%22%20y%3D%2232%22%20fill%3D%22%233d7a5c%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(-18%2068%2032)%22%3Em%3C%2Ftext%3E%3Ctext%20x%3D%2294%22%20y%3D%2227%22%20fill%3D%22%238f5c3d%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(14%2094%2027)%22%3EP%3C%2Ftext%3E%3Cpath%20d%3D%22M%2010%2030%20Q%2060%205%20110%2020%22%20stroke%3D%22%23b8c4d0%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M%200%2015%20Q%2050%2038%20120%2010%22%20stroke%3D%22%23b8c4d0%22%20fill%3D%22none%22%2F%3E%3C%2Fsvg%3E">
+              <input type="text" class="cap_input" placeholder="输入图中字符">
+              <span class="cap_refresh">换一张</span>
+            </div>
+            <span class="hintMessage">不区分大小写<em>看不清？点击图片或「换一张」</em></span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="clear:both; padding-top: 16px;">
+      <span class="button active">完成注册</span>
+    </div>
+  </div>
+
+  <!-- 错误态 -->
+  <div class="box">
+    <h2>状态二 · 错误态（验证码填错）</h2>
+    <p class="desc">红字提示 + 图已自动刷新（新 id），输入框清空</p>
+    <table class="form">
+      <tbody>
+        <tr class="error">
+          <th>验 证 码</th>
+          <td>
+            <div class="cap_wrap">
+              <img class="cap_img" alt="验证码" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%2240%22%3E%3Crect%20width%3D%22120%22%20height%3D%2240%22%20fill%3D%22%23f4f6f8%22%2F%3E%3Ctext%20x%3D%2216%22%20y%3D%2228%22%20fill%3D%22%233d7a5c%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(10%2016%2028)%22%3EX%3C%2Ftext%3E%3Ctext%20x%3D%2242%22%20y%3D%2231%22%20fill%3D%22%238f5c3d%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(-15%2042%2031)%22%3EA%3C%2Ftext%3E%3Ctext%20x%3D%2268%22%20y%3D%2225%22%20fill%3D%22%234a6785%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(20%2068%2025)%22%3E4%3C%2Ftext%3E%3Ctext%20x%3D%2294%22%20y%3D%2230%22%20fill%3D%22%237a5c8f%22%20font-size%3D%2226%22%20font-weight%3D%22bold%22%20font-family%3D%22Georgia%2C%20serif%22%20transform%3D%22rotate(-8%2094%2030)%22%3EQ%3C%2Ftext%3E%3Cpath%20d%3D%22M%205%2010%20Q%2060%2035%20115%2012%22%20stroke%3D%22%23b8c4d0%22%20fill%3D%22none%22%2F%3E%3C%2Fsvg%3E">
+              <input type="text" class="cap_input" value="">
+              <span class="cap_refresh">换一张</span>
+            </div>
+            <span class="errorMessage">验证码不正确，已为您换了一张</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 验证码字符集说明 -->
+  <div class="note">
+    <b>验证码规格</b>：4 位字符，字符集已剔除易混淆的 0/O、1/l/I、2/Z；随机旋转 ±25°、4 条干扰线、30 个干扰点；有效期 5 分钟、一次性（校验后立即作废，防重放）；同 IP 每分钟最多取 20 张（防脚本批量取图）。<br>
+    <b>扫码注册不加验证码</b>：微信/QQ 扫码本身就是强人机验证，脚本成本已很高；但与邮箱注册共用「同 IP 每天 3 个」限额。
+  </div>
+
+  <p class="foot">saolei.wang · 2026-10-19 · 稿件仅供确认，未落代码</p>
+</div>
+</body>
+</html>

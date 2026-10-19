@@ -69,7 +69,7 @@ export interface SessionUser {
   role: number;
 }
 
-export async function setSession(user: SessionUser): Promise<void> {
+export async function setSession(user: SessionUser, ip = ""): Promise<void> {
   const jar = await cookies();
   jar.set(SESSION_COOKIE, sign(user, SESSION_TTL), {
     httpOnly: true,
@@ -78,11 +78,14 @@ export async function setSession(user: SessionUser): Promise<void> {
     maxAge: SESSION_TTL,
     secure: process.env.NODE_ENV === "production",
   });
-  // 刷新最近登录时间（个人信息卡片用，2026-09-23）；失败不阻断登录
+  // 刷新最近登录时间 + 最近登录 IP（防小号关联，2026-10-19）；失败不阻断登录
   try {
     await prisma.user.update({
       where: { id: BigInt(user.uid) },
-      data: { lastLoginTime: BigInt(Math.floor(Date.now() / 1000)) },
+      data: {
+        lastLoginTime: BigInt(Math.floor(Date.now() / 1000)),
+        ...(ip ? { lastLoginIp: ip } : {}),
+      },
     });
   } catch {
     /* 忽略 */

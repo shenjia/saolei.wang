@@ -26,6 +26,23 @@ const CHINESE_NAME_RE = /^[\u4e00-\u9fa5]{2,6}$/;
 // 2013 版：([A-Z][a-z]{0,5}\s?){2,6}，每词首字母大写，词间单个空格
 const ENGLISH_NAME_RE = /^([A-Z][a-z]{0,5} ?){2,6}$/;
 
+// 保留字（2026-10-19 防假冒官方号）：中文名含即拦（「我是管理员」也不行），
+// 英文名按词全等比对（避免 Madison 之类误伤）
+const RESERVED_CHINESE = ["管理员", "官方", "裁判", "站长", "版主", "扫雷网", "系统", "网站"];
+const RESERVED_ENGLISH = new Set(["admin", "administrator", "moderator", "system", "root"]);
+
+/** 保留字检查，返回命中的提示文案（空串=通过）；邮箱注册与 OAuth 扫码注册共用 */
+export function checkReservedNames(chineseName: string, englishName: string): string {
+  const zh = chineseName.toLowerCase();
+  for (const word of RESERVED_CHINESE) {
+    if (zh.includes(word)) return `姓名中不能包含「${word}」`;
+  }
+  for (const word of englishName.trim().toLowerCase().split(/\s+/)) {
+    if (RESERVED_ENGLISH.has(word)) return "英文名不能使用保留词";
+  }
+  return "";
+}
+
 /** 逐字段校验，返回 field → 错误文案（空对象=通过）；顺序与设计稿表格一致 */
 export function validateRegister(input: RegisterInput): Record<string, string> {
   const errors: Record<string, string> = {};
@@ -60,11 +77,17 @@ export function validateRegister(input: RegisterInput): Record<string, string> {
   if (!AREA_LIST.includes(input.area as (typeof AREA_LIST)[number]))
     errors.area = "请选择所在地区！";
 
+  // 保留字：格式都过了才查，避免盖掉格式错误文案
+  if (!errors.chineseName && !errors.englishName) {
+    const reserved = checkReservedNames(input.chineseName, input.englishName);
+    if (reserved) errors.chineseName = reserved;
+  }
+
   return errors;
 }
 
-/** 创建用户（事务内 user/user_auth/user_stat 同 id），返回新用户 id */
-export async function createRegisteredUser(input: RegisterInput): Promise<number> {
+/** 创建用户（事务内 user/user_auth/user_stat 同 id），返回新用户 id；ip 用于防小号关联（2026-10-19） */
+export async function createRegisteredUser(input: RegisterInput, ip = ""): Promise<number> {
   const now = BigInt(Math.floor(Date.now() / 1000));
   const salt = createHash("md5").update(randomBytes(16)).digest("hex");
 
@@ -75,6 +98,7 @@ export async function createRegisteredUser(input: RegisterInput): Promise<number
         englishName: input.englishName.trim(),
         sex: input.sex,
         area: input.area,
+        registerIp: ip,
         createTime: now,
         updateTime: now,
       },

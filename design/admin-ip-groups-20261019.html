@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台 · 同 IP 账号组高保真稿（2026-10-19）</title>
+<style>
+  /* 与 admin.css 同源：底 #272822 / 面板 #2d2d29 / 描边 #49483e / 绿 #a6e22e / 橙 #f79646 / 红 #f92672 / 青 #66d9ef */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #272822; color: #b1b1a4; font: 13px/1.6 "微软雅黑", Arial, "宋体"; padding: 24px; }
+  .page { max-width: 1280px; margin: 0 auto; }
+  .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  .head h1 { font-size: 20px; color: #eeeeee; }
+  .head .sub { color: #75715e; font-size: 12px; }
+  .btn { display: inline-block; padding: 5px 14px; border: 1px solid #49483e; border-radius: 5px; color: #b1b1a4; font-size: 13px; cursor: pointer; background: #2d2d29; text-decoration: none; }
+  .btn:hover { color: #eeeeee; border-color: #75715e; }
+  .btn.danger { background: rgba(249,38,114,.1); color: #f92672; border-color: rgba(249,38,114,.4); }
+  .btn.sm { padding: 2px 10px; font-size: 12px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi { background: #2d2d29; border: 1px solid #49483e; border-radius: 6px; padding: 10px 14px; }
+  .kpi .v { font-size: 20px; font-weight: 700; color: #eeeeee; }
+  .kpi .v.g { color: #a6e22e; } .kpi .v.o { color: #f79646; } .kpi .v.r { color: #f92672; } .kpi .v.c { color: #66d9ef; }
+  .kpi .l { font-size: 11px; color: #75715e; margin-top: 2px; }
+
+  .card { background: #2d2d29; border: 1px solid #49483e; border-radius: 8px; margin-bottom: 16px; }
+  .card .ttl { padding: 10px 16px; border-bottom: 1px solid #49483e; display: flex; align-items: center; gap: 10px; }
+  .card .ttl b { color: #eeeeee; font-size: 14px; }
+  .card .ttl .sub { color: #75715e; font-size: 12px; }
+
+  .filterbar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid #49483e; font-size: 12.5px; }
+  .dim { display: flex; border: 1px solid #49483e; border-radius: 5px; overflow: hidden; }
+  .dim span { padding: 3px 12px; cursor: pointer; color: #939387; }
+  .dim span.on { background: rgba(102,217,239,.12); color: #66d9ef; }
+  .filterbar input[type="text"] { background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px; color: #b1b1a4; padding: 4px 8px; font-size: 12.5px; width: 180px; }
+  .filterbar select { background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px; color: #b1b1a4; padding: 3px 6px; font-size: 12.5px; }
+  .filterbar label { color: #939387; }
+  .filterbar .spacer { flex: 1; }
+  .filterbar .label { color: #75715e; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 7px 10px; color: #75715e; font-weight: 600; border-bottom: 1px solid #49483e; white-space: nowrap; }
+  td { padding: 7px 10px; border-bottom: 1px solid #363530; vertical-align: middle; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  a { color: #66d9ef; text-decoration: none; } a:hover { text-decoration: underline; }
+  .strong { color: #eeeeee; }
+  .mono { font-family: Menlo, Consolas, monospace; font-size: 12px; color: #b1b1a4; }
+
+  .rtag { display: inline-block; font-size: 11px; line-height: 18px; padding: 0 8px; border-radius: 3px; margin: 1px 2px 1px 0; white-space: nowrap; }
+  .rtag.hot { background: rgba(249,38,114,.14); color: #f92672; border: 1px solid rgba(249,38,114,.45); }
+  .rtag.warn { background: rgba(247,150,70,.14); color: #f79646; border: 1px solid rgba(247,150,70,.45); }
+  .rtag.info { background: rgba(102,217,239,.1); color: #66d9ef; border: 1px solid rgba(102,217,239,.35); }
+  .rtag.sys { background: rgba(117,113,94,.18); color: #939387; border: 1px solid rgba(117,113,94,.45); }
+  .tag { display: inline-block; font-size: 11px; line-height: 18px; padding: 0 7px; border-radius: 3px; }
+  .tag.ok { background: rgba(166,226,46,.12); color: #a6e22e; }
+  .tag.ban { background: rgba(117,113,94,.2); color: #939387; }
+
+  /* 展开明细行 */
+  tr.detail > td { background: #1e1f1c; padding: 0; }
+  .detail-inner { padding: 8px 16px 12px 46px; }
+  tr.group.hot td { background: rgba(249,38,114,.05); }
+
+  .note { background: #1e1f1c; border: 1px solid #49483e; border-radius: 6px; padding: 10px 14px; font-size: 12.5px; color: #939387; line-height: 1.9; }
+  .note b { color: #e6db74; }
+  .foot { margin-top: 20px; color: #63635a; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="head">
+    <h1>防小号 · 同 IP 账号组</h1>
+    <span class="sub">IP 关联仅人工参考，不做自动处置 · 学校机房 / 网吧 / 家庭同 IP 属正常现象</span>
+    <div class="right" style="margin-left:auto;"><a class="btn" href="#">← 用户管理</a></div>
+  </div>
+
+  <!-- KPI 行 -->
+  <div class="kpis">
+    <div class="kpi"><div class="v g">7</div><div class="l">今日新注册</div></div>
+    <div class="kpi"><div class="v o">2</div><div class="l">今日限额拦截次数</div></div>
+    <div class="kpi"><div class="v c">23</div><div class="l">同 IP 多号组（≥2 个）</div></div>
+    <div class="kpi"><div class="v r">1</div><div class="l">同 IP 多号组（≥5 个）</div></div>
+    <div class="kpi"><div class="v">4</div><div class="l">已人工标记疑似小号</div></div>
+  </div>
+
+  <!-- 组列表 -->
+  <div class="card">
+    <div class="ttl"><b>IP 账号组</b><span class="sub">按组内账号数倒序 · 数据口径：user.register_ip / user.last_login_ip（2026-10-19 起积累）</span></div>
+    <div class="filterbar">
+      <span class="label">关联维度</span>
+      <div class="dim"><span class="on">最近登录 IP</span><span>注册 IP</span></div>
+      <span class="label">组内账号</span>
+      <select><option>≥ 2 个</option><option>≥ 3 个</option><option>≥ 5 个</option></select>
+      <span class="label">精确查询</span>
+      <input type="text" placeholder="输入完整 IP 回车">
+      <div class="spacer"></div>
+      <label><input type="checkbox" checked> 只看无成绩账号</label>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:24px;"></th>
+          <th>IP</th>
+          <th class="num">账号数</th>
+          <th class="num">无成绩</th>
+          <th>注册跨度</th>
+          <th>组内账号</th>
+          <th>风险标签</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 示例 1：高风险组（展开态） -->
+        <tr class="group hot">
+          <td>▾</td>
+          <td class="mono strong">223.74.62.101</td>
+          <td class="num strong">7</td>
+          <td class="num">7</td>
+          <td>10-19 09:12 ~ 10-19 11:47</td>
+          <td><a href="#">雷神小队长</a>、<a href="#">战神归来</a>、<a href="#">扫雷王者666</a> <span style="color:#75715e;">等 7 个</span></td>
+          <td><span class="rtag hot">同日 7 号</span><span class="rtag hot">全部无成绩</span><span class="rtag warn">命名近似</span></td>
+        </tr>
+        <tr class="detail">
+          <td colspan="7">
+            <div class="detail-inner">
+              <table>
+                <thead>
+                  <tr><th>ID</th><th>中文名</th><th>登录账号</th><th>注册时间</th><th class="num">成绩数</th><th>状态</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td class="num">312481</td><td class="strong">雷神小队长</td><td class="mono">leishen123</td><td>10-19 09:12</td><td class="num">0</td><td><span class="tag ok">正常</span></td><td><a href="#">详情</a> · <a class="danger" href="#" style="color:#f92672;">封禁</a></td></tr>
+                  <tr><td class="num">312482</td><td class="strong">战神归来</td><td class="mono">zhanshen666</td><td>10-19 09:40</td><td class="num">0</td><td><span class="tag ok">正常</span></td><td><a href="#">详情</a> · <a class="danger" href="#" style="color:#f92672;">封禁</a></td></tr>
+                  <tr><td class="num">312487</td><td class="strong">扫雷王者666</td><td class="mono">saoleiwang_1</td><td>10-19 11:47</td><td class="num">0</td><td><span class="tag ok">正常</span></td><td><a href="#">详情</a> · <a class="danger" href="#" style="color:#f92672;">封禁</a></td></tr>
+                  <tr><td colspan="7" style="color:#75715e; padding-left:10px;">… 其余 4 个账号折叠显示，点击展开全部</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+        <!-- 示例 2：正常组 -->
+        <tr class="group">
+          <td>▸</td>
+          <td class="mono strong">113.132.245.18</td>
+          <td class="num strong">3</td>
+          <td class="num">0</td>
+          <td>09-26 ~ 10-02</td>
+          <td><a href="#">张三</a>、<a href="#">李四</a>、<a href="#">王五</a></td>
+          <td><span class="rtag sys">三号均有成绩</span><span class="rtag sys">跨度正常</span></td>
+        </tr>
+        <!-- 示例 3 -->
+        <tr class="group">
+          <td>▸</td>
+          <td class="mono strong">36.44.8.207</td>
+          <td class="num strong">2</td>
+          <td class="num">1</td>
+          <td>10-11 ~ 10-11</td>
+          <td><a href="#">小明</a>、<a href="#">xiaoming2</a></td>
+          <td><span class="rtag warn">同日 2 号</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>口径说明</b>：①「最近登录 IP」为默认维度——存量 11 万老账号无注册 IP，但每次登录都会刷新 last_login_ip，随登录逐步积累，覆盖面远大于注册 IP；②风险标签只是排序参考（同日多号 / 全部无成绩 / 命名近似），<b>处置永远人工决定</b>；③IP 归属地列暂未放——需要的话可接入 ip2region 离线库（免费、无调用费），在稿上确认后再加。
+  </div>
+
+  <p class="foot">saolei.wang · 2026-10-19 · 稿件仅供确认，未落代码</p>
+</div>
+</body>
+</html>

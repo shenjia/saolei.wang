@@ -25,6 +25,9 @@ model User {
   updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
   // 最近登录（2026-09-23 个人信息卡片新增，登录时刷新；0=未记录）
   lastLoginTime BigInt @default(0) @map("last_login_time") @db.BigInt
+  // 防小号关联（2026-10-19）：注册 IP 注册时落一次；最近登录 IP 每次 setSession 刷新（存量账号空串，随登录逐步积累）
+  registerIp  String @default("") @map("register_ip") @db.VarChar(45)
+  lastLoginIp String @default("") @map("last_login_ip") @db.VarChar(45)
   // 封禁截止 Unix 秒（2026-10-16 限时封禁）：仅 status=-1 时有意义；0=永久封禁；到期自动解禁
   banUntil BigInt @default(0) @map("ban_until") @db.BigInt
 
@@ -34,6 +37,8 @@ model User {
   @@index([area, status])
   @@index([status])
   @@index([area, sex])
+  @@index([registerIp])
+  @@index([lastLoginIp])
   @@map("user")
 }
 
@@ -209,6 +214,15 @@ model Video {
   // ---- 称号快照制（2026-10-17，语义同 news.exp_time/ranked）：上传时刻作者高级成绩 + 是否在榜 ----
   expTime    BigInt  @default(0) @map("exp_time") @db.BigInt
   ranked     BigInt  @default(0) @map("ranked") @db.BigInt
+  // ---- 自动分拣（2026-10-19 方案 v2：机器只分拣不审批，通过永远由管理员手动执行）----
+  // 1=免核定（零触发器命中，可批量一键通过）；0=需核定（任一触发器命中，只能逐条手审）；
+  // 2=分拣失败（解析/读文件失败，按需核定兜底）；-1=未分拣（历史存量未回填，视同 0 保守处理）
+  autoFlag   Int     @default(-1) @map("auto_flag") @db.TinyInt
+  // 位码触发原因（仅后台展示，玩家不可见）：
+  // bit0 press-release≤60ms | bit1 STNB 分位 | bit2 cls>10 | bit3 path=0/ppc 异常
+  // bit4 点击数不足 | bit5 首击<0.1s | bit6 破个人纪录 | bit7 级别 TOP 榜
+  // bit8 首次入伍 | bit9 低信任（屏蔽/封禁史）
+  autoReason Int     @default(0) @map("auto_reason") @db.Int
 
   // 2026-10-15 上线前性能审计新增：
   // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计

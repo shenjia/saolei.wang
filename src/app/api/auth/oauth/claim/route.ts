@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyPassword, setSession, getOauthTicket, clearOauthTicket } from "@/lib/auth";
+import { getClientIp } from "@/lib/net";
 
 export async function POST(req: Request) {
   const ticket = await getOauthTicket();
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
     },
   });
 
-  await setSession({ uid: Number(auth.id), username: auth.username, role: auth.role });
+  await setSession({ uid: Number(auth.id), username: auth.username, role: auth.role }, getClientIp(req));
   await clearOauthTicket();
   await prisma.userStat.updateMany({
     where: { id: auth.id },

@@ -8,6 +8,7 @@ import { verifyPassword, setSession } from "@/lib/auth";
 import { unbanUser } from "@/lib/ban";
 import { formatDate } from "@/lib/format";
 import { OAUTH_ENABLED } from "@/lib/config";
+import { getClientIp } from "@/lib/net";
 
 export async function POST(req: Request) {
   let body: { username?: string; password?: string };
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
   }
 
   const uid = Number(auth.id);
-  await setSession({ uid, username: auth.username, role: auth.role });
+  await setSession({ uid, username: auth.username, role: auth.role }, getClientIp(req));
 
   // 更新登录统计（沿用旧站 user_stat 语义）
   await prisma.userStat.updateMany({
