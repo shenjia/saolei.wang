@@ -92,7 +92,7 @@ function Crown({ x, y, s, fill }: { x: number; y: number; s: number; fill: strin
 /** 每级徽章的盾形内图案（盾形底板统一在此渲染） */
 function RankArt({ title }: { title: string }) {
   switch (title) {
-    // ---- 最高统帅：总司令（2026-10-16 新增，SUB30 档）----
+    // 最高统帅：总司令（2026-10-16 新增 SUB30 档；2026-10-19 改口径=雷界排行第一人）
     // 与大元帅同款「金盾反色」公式，金色提亮一档（首页标题金）+ 主图形星→皇冠
     case "总司令":
       return (

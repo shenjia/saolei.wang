@@ -7,6 +7,7 @@
 
 import { prisma } from "@/lib/db";
 import { title as assessTitle } from "@/lib/assess";
+import { getThunderKingId } from "@/lib/title-system";
 import { usersByIds, type UserBrief } from "@/lib/queries";
 import { BBS_BOARD_NAMES, BBS_BOARDS, ubb } from "@/lib/bbs";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
@@ -127,6 +128,8 @@ export async function getUserList(
   const authMap = new Map(auths.map((a) => [N(a.id), a]));
   const scoreMap = new Map(scores.map((s) => [N(s.id), s]));
   const vcMap = new Map(videoCounts.map((v) => [N(v.user), N(v.c)]));
+  // 2026-10-19 总司令=雷界第一人特判（后台实时视角）
+  const king = await getThunderKingId();
 
   const rows: AdminUserRow[] = [];
   for (const id of uidList) {
@@ -147,7 +150,7 @@ export async function getUserList(
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
       banUntil: N(u.banUntil),
-      title: await assessTitle(expTime),
+      title: await assessTitle(expTime, king > 0 && king === id),
       sumTime,
       videos: vcMap.get(id) ?? 0,
     });
@@ -264,7 +267,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       createTime: N(user.createTime),
       lastLoginTime: N(user.lastLoginTime),
       banUntil: N(user.banUntil),
-      title: await assessTitle(expTime),
+      title: await assessTitle(expTime, (await getThunderKingId()) === id),
       sumTime,
       videos: await prisma.video.count({ where: { user: uid } }),
     },
@@ -1078,6 +1081,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
   ]);
   const aMap = new Map(auths.map((a) => [N(a.id), a]));
   const sMap = new Map(scores.map((s) => [N(s.id), s]));
+  const king = await getThunderKingId(); // 2026-10-19 总司令=雷界第一人特判
   const rows: AdminUserRow[] = [];
   for (const u of users) {
     const id = N(u.id);
@@ -1095,7 +1099,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
       banUntil: N(u.banUntil),
-      title: await assessTitle(expTime),
+      title: await assessTitle(expTime, king > 0 && king === id),
       sumTime,
       videos: 0,
     });

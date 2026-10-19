@@ -11,7 +11,7 @@ import { getRankingTable } from "@/lib/queries";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles } from "@/lib/title-system";
+import { dualTitles, getThunderKingId } from "@/lib/title-system";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -33,8 +33,14 @@ export async function GET(req: Request) {
 
   // 军衔 SUB 制按高级时间评定（2026-10-13）；NF 榜行数据来自 NF 表，exp_time 是 NF 口径，
   // 军衔应按主榜评定——与 RankingTable 同口径，优先主榜回填的 overallExpTime（2026-10-14 修复：NF 榜加载更多误评预备役）
+  // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
+  const king = await getThunderKingId();
   const pairs = await dualTitles(rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex })));
-  const titled = rows.map((u) => ({ ...u, title: assessTitle(u.overallExpTime ?? u.scores.exp_time), classic: pairs.get(Number(u.id))?.c ?? null }));
+  const titled = rows.map((u) => ({
+    ...u,
+    title: assessTitle(u.overallExpTime ?? u.scores.exp_time, king > 0 && king === Number(u.id)),
+    classic: pairs.get(Number(u.id))?.c ?? null,
+  }));
 
   return NextResponse.json({ rows: titled, deltas, total, pageSize });
 }

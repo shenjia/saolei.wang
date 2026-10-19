@@ -38,7 +38,7 @@ import {
 import { publishNews } from "./news";
 import { decodeLegacyEntities } from "./format";
 import { liftExpiredBans } from "./ban";
-import { dualTitles, classicTitle, type TitlePair } from "./title-system";
+import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -119,9 +119,10 @@ export interface UserBriefWithTitle extends UserBrief {
   expTime: number;
 }
 
-/** usersByIds 之上补军衔（批量：BBS 楼层作者、录像评论作者共用） */
+/** usersByIds 之上补军衔（批量：BBS 楼层作者、录像评论作者共用；
+ *  2026-10-19 总司令=雷界第一人特判） */
 export async function usersWithTitles(ids: number[]): Promise<Map<number, UserBriefWithTitle>> {
-  const [briefs, scores] = await Promise.all([
+  const [briefs, scores, king] = await Promise.all([
     usersByIds(ids),
     ids.length
       ? prisma.userScores.findMany({
@@ -129,12 +130,13 @@ export async function usersWithTitles(ids: number[]): Promise<Map<number, UserBr
           select: { id: true, expTime: true },
         })
       : Promise.resolve([]),
+    getThunderKingId(),
   ]);
   const expMap = new Map(scores.map((s) => [N(s.id), s.expTime ?? 0]));
   const out = new Map<number, UserBriefWithTitle>();
   for (const [id, b] of briefs) {
     const exp = expMap.get(id) ?? 0;
-    out.set(id, { ...b, title: await title(exp), expTime: exp });
+    out.set(id, { ...b, title: title(exp, king > 0 && king === id), expTime: exp });
   }
   return out;
 }
@@ -415,6 +417,8 @@ async function getTopUsersImpl(
   const users = await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.id) } } });
   const byId = new Map(users.map((u) => [N(u.id), u]));
   // Phase 5：批量补旧版称号备选（榜首即雷帝 TOP1，与 getThunderKingId 同源）
+  // 2026-10-19：军衔制总司令=雷界第一人（rows 按 sum_time 升序，榜首即 king，取 0 位行）
+  const kingId = rows.length ? N(rows[0].id) : 0;
   const topPairs = await dualTitles(
     rows.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: byId.get(N(r.id))?.sex ?? 1 }))
   );
@@ -426,7 +430,7 @@ async function getTopUsersImpl(
       englishName: u?.englishName ?? "",
       sex: u?.sex ?? 1,
       area: u?.area ?? "",
-      title: title(r.expTime),
+      title: title(r.expTime, N(r.id) === kingId),
       classic: topPairs.get(N(r.id))?.c ?? null,
       // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
       titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
@@ -487,6 +491,7 @@ export async function getRanking(
     take: RANKING_PAGESIZE,
   });
   const authors = await usersByIds(rows.map((r) => N(r.id)));
+  const king = await getThunderKingId(); // 2026-10-19 总司令=雷界第一人特判
   const vField = VIDEO_FIELD(level, order);
   const dField = DATE_FIELD(level, order);
   const users: RankingUser[] = await Promise.all(
@@ -499,7 +504,7 @@ export async function getRanking(
         score: N(rec[field] as number),
         videoId: N(rec[vField] as bigint),
         date: N(rec[dField] as bigint),
-        title: title(rec.expTime as number | null),
+        title: title(rec.expTime as number | null, king > 0 && king === N(r.id)),
       };
     })
   );
@@ -1159,7 +1164,8 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
         }
       : null,
     scores: scoreMap,
-    title: title(scores?.expTime),
+    // 2026-10-19 总司令=雷界第一人特判（与雷帝同一判定源）
+    title: title(scores?.expTime, (await getThunderKingId()) === id),
     // Phase 5：旧版称号备选（在榜=user.status===0 且有高级成绩；含雷帝 TOP1 判定）
     classicTitle:
       (
@@ -1332,18 +1338,26 @@ export async function getSiteStats(): Promise<SiteStats> {
 
 // ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
-/** 各军衔人数（TITLE_THRESHOLDS 与 TITLES 按下标对应，升序数组
- *  第 i 档 = (thresholds[i-1], thresholds[i]]，总司令 = <= 30s，列兵 = > 150s 无上界。
- *  2026-10-18 张老师定：人神界体系撤销、军衔制回归 19 档（10-16 定稿版），缓存键升 v3） */
+/** 各军衔人数（thresholds 与 TITLES[1..] 按下标对应，升序数组：
+ *  TITLES[i] 档 = (thresholds[i-2], thresholds[i-1]]（i≥1），列兵 = > 150s 无上界。
+ *  总司令不占阈值档位：2026-10-19 张老师改口径=雷界排行第一人（getThunderKingId），
+ *  恒 1 人（无人上榜时 0），并从其高级成绩所在档位中摘出。
+ *  2026-10-18 张老师定：人神界体系撤销、军衔制回归 19 档（10-16 定稿版），缓存键升 v3；
+ *  2026-10-19 总司令改口径，缓存键升 v4 */
 async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]> {
   const thresholds = getTitleDistribution().thresholds;
   if (!thresholds.length) return [];
   // 封禁账号不计入军衔人数（旧站数据库口径一律 Player_IsLive=1）
   const ranked = await rankedOnly();
+  // 雷界第一人（总司令）：各档区间计数统一排除，恒计 1 人
+  const kingId = await getThunderKingId();
   const counts = await Promise.all(
     TITLES.map((_, i) => {
-      const lower = i > 0 ? thresholds[i - 1] : undefined; // 上一档线（不含）
-      const upper = i < TITLES.length - 1 ? thresholds[i] : undefined; // 本档线（含）；末档无上界
+      if (i === 0) return Promise.resolve(0); // 总司令：king 特判（下方置 1），不按区间计数
+      const lower = i >= 2 ? thresholds[i - 2] : undefined; // 上一档线（不含）；大元帅无下界
+      const upper = i < TITLES.length - 1 ? thresholds[i - 1] : undefined; // 本档线（含）；末档无上界
+      // king 摘出为总司令，各档区间计数一律排除（合并封禁黑名单）
+      const notIn = [...(ranked.id?.notIn ?? []), ...(kingId > 0 ? [kingId] : [])];
       return prisma.userScores.count({
         where: {
           expTime: {
@@ -1351,14 +1365,14 @@ async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]>
             ...(lower !== undefined ? { gt: lower } : {}),
             ...(upper !== undefined ? { lte: upper } : {}),
           },
-          ...ranked,
+          ...(notIn.length ? { id: { notIn } } : {}),
         },
       });
     })
   );
   const result: { title: string; count: number }[] = TITLES.map((t, i) => ({
     title: t,
-    count: counts[i] ?? 0,
+    count: i === 0 ? (kingId > 0 ? 1 : 0) : (counts[i] ?? 0),
   }));
   // 预备役：注册但没有任何高级成绩的玩家（2026-09-23 新增，2026-10-13 口径改高级）
   const [totalUsers, rankedTotal] = await Promise.all([
@@ -1371,8 +1385,8 @@ async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]>
 
 // 2026-10-15 性能审计：军衔页每次请求 18 次 user_scores count（合计≈全索引扫一遍），
 // 军衔人数变化极慢，缓存 60s
-// 2026-10-17 人神界改版（阈值全换 24 档）：缓存键升 v2
-const fetchTitleCounts = unstable_cache(getTitleCountsImpl, ["title-counts-v3"], {
+// 2026-10-17 人神界改版（阈值全换 24 档）：缓存键升 v2；10-18 回退升 v3；10-19 总司令改口径升 v4
+const fetchTitleCounts = unstable_cache(getTitleCountsImpl, ["title-counts-v4"], {
   revalidate: 60,
 });
 
@@ -1398,20 +1412,34 @@ export interface TitleMemberRow extends UserBrief {
   videos: Record<string, number>;
 }
 
-/** 军衔→user_scores 查询条件（与 getTitleCounts 同口径，升序 thresholds：第 i 档 = (thresholds[i-1], thresholds[i]]）；预备役返回 null（查 user 表） */
+/** 军衔→user_scores 查询条件（与 getTitleCounts 同口径，升序 thresholds：
+ *  TITLES[i] 档 = (thresholds[i-2], thresholds[i-1]]（i≥1））；
+ *  总司令=雷界第一人特判（id = king，2026-10-19 改口径），不按区间；
+ *  其余档位一律排除 king（已摘出为总司令，不重复占档）；
+ *  预备役返回 null（查 user 表） */
 async function titleScoresWhere(t: string): Promise<Record<string, unknown> | null> {
   const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
   if (idx < 0) return null;
+  const ranked = await rankedOnly();
+  if (idx === 0) {
+    // 总司令：雷界排行第一人（fetchThunderKingId 已保证 status=0，直接按 id 取；
+    // 注意不能展开 ranked——其 id.notIn 会覆盖掉这里的 id 精确条件）
+    const kingId = await getThunderKingId();
+    return kingId > 0 ? { id: BigInt(kingId) } : { id: BigInt(-1) };
+  }
   const dist = getTitleDistribution();
   if (!dist.thresholds.length) return null;
-  const lower = idx > 0 ? dist.thresholds[idx - 1] : undefined;
-  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : undefined;
+  const lower = idx >= 2 ? dist.thresholds[idx - 2] : undefined;
+  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx - 1] : undefined;
+  const kingId = await getThunderKingId();
+  // 合并封禁黑名单与 king 摘出（rankedOnly 只可能带 id.notIn）
+  const notIn = [...(ranked.id?.notIn ?? []), ...(kingId > 0 ? [kingId] : [])];
   return {
     expTime: {
       gt: lower !== undefined ? lower : 0,
       ...(upper !== undefined ? { lte: upper } : {}),
     },
-    ...(await rankedOnly()),
+    ...(notIn.length ? { id: { notIn } } : {}),
   };
 }
 
@@ -1537,13 +1565,19 @@ export async function getTitleMemberOffset(uid: number, t: string): Promise<numb
   if (!where) return -1;
   const row = await prisma.userScores.findUnique({ where: { id: BigInt(uid) } });
   if (!row?.expTime || !(row.expTime > 0)) return -1;
-  // 检验是否真在此军衔区间（同 titleScoresWhere 口径，升序 thresholds）
+  // 总司令：仅雷界第一人本人（2026-10-19 改口径）
+  const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
+  if (idx === 0) {
+    return (await getThunderKingId()) === uid ? 0 : -1;
+  }
+  // 检验是否真在此军衔区间（同 titleScoresWhere 口径，升序 thresholds；
+  // king 虽在区间内但已摘出为总司令，titleScoresWhere 的 id.notIn 已排除）
   const dist = getTitleDistribution();
   if (!dist.thresholds.length) return -1;
-  const idx = TITLES.indexOf(t as (typeof TITLES)[number]);
-  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx] : Infinity;
-  const lower = idx > 0 ? dist.thresholds[idx - 1] : 0;
+  const upper = idx < TITLES.length - 1 ? dist.thresholds[idx - 1] : Infinity;
+  const lower = idx >= 2 ? dist.thresholds[idx - 2] : 0;
   if (row.expTime > upper || row.expTime <= lower) return -1;
+  if ((await getThunderKingId()) === uid) return -1; // king 已摘出为总司令
   // 排序键 (expTime asc, id asc)：数排在自己前面的行数
   const before = await prisma.userScores.count({
     where: {

@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { getGrowRanking } from "@/lib/ranksnap";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles } from "@/lib/title-system";
+import { dualTitles, getThunderKingId } from "@/lib/title-system";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -14,14 +14,15 @@ export async function GET(req: Request) {
   const sizeRaw = parseInt(p.get("size") ?? "", 10);
   const size = Math.min(Math.max(sizeRaw || 20, 20), 100);
   const { rows, total, pageSize } = await getGrowRanking(page, sizeRaw ? size : 20);
-  // Phase 5：补旧版称号备选（进步榜行全部在榜）
+  // Phase 5：补旧版称号备选（进步榜行全部在榜）；2026-10-19 总司令=雷界第一人特判
+  const king = await getThunderKingId();
   const pairs = await dualTitles(
     rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
   );
   const titled = await Promise.all(
     rows.map(async (u) => ({
       ...u,
-      title: await assessTitle(u.scores.exp_time),
+      title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
       classic: pairs.get(Number(u.id))?.c ?? null,
     }))
   );

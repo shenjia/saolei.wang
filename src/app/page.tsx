@@ -33,6 +33,7 @@ import { SystemText } from "@/components/SystemText";
 import { SiteStats } from "@/components/SiteStats";
 import { FlopSprites } from "@/components/FlopSprites";
 import { title as assessTitle } from "@/lib/assess";
+import { getThunderKingId } from "@/lib/title-system";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +58,19 @@ export default async function HomePage() {
     getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
     getVideoCount({ level: "all" }),
   ]);
-  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime), classic: n.authorTitles?.c ?? null }));
+  // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
+  const king = await getThunderKingId();
+  const feed: NewsFeedItem[] = news.map((n) => ({
+    news: n,
+    title: assessTitle(n.expTime, king > 0 && king === (n.author?.id ?? 0)),
+    classic: n.authorTitles?.c ?? null,
+  }));
   // 入伍新兵按发布者实时高级时间评军衔（2026-10-13 SUB 制）
-  const newbieRows = newbies.map((n) => ({ ...n, title: assessTitle(n.expTime), classic: n.authorTitles?.c ?? null }));
+  const newbieRows = newbies.map((n) => ({
+    ...n,
+    title: assessTitle(n.expTime, king > 0 && king === (n.author?.id ?? 0)),
+    classic: n.authorTitles?.c ?? null,
+  }));
 
   return (
     <>

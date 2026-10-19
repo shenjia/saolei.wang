@@ -1,8 +1,10 @@
 // 称号体系（2026-10-17 Phase 5 双体系，张老师定）
 //
-// 体系 A「军衔制」（默认）：总司令/大元帅/…/列兵 19 档 + 预备役，按高级时间绝对阈值评定
-//   —— 定义在 config.ts（TITLES/TITLE_THRESHOLDS/TITLE_CONDITIONS）与 assess.ts（title()），
-//      未登录与用户未设置偏好时固定渲染这套。
+// 体系 A「军衔制」（默认）：总司令/大元帅/…/列兵 19 档 + 预备役。
+//   大元帅~列兵按高级时间绝对阈值评定；总司令=雷界排行第一人（总计时间 TOP1）特判
+//   （2026-10-19 张老师改口径，原 SUB30 绝对阈值；与旧体系「雷帝」同一判定源）——
+//   定义在 config.ts（TITLES/TITLE_THRESHOLDS/TITLE_CONDITIONS）与 assess.ts（title()），
+//   未登录与用户未设置偏好时固定渲染这套。
 // 体系 B「旧版称号」：雷帝/雷圣/雷神(GG)/雷仙(mm)/状元/榜眼/…/童生 + 布衣，
 //   移植 2008 版 Help/Title.asp 规则（oldtitle.ts 同源），阈值独立于军衔制。
 //
@@ -11,6 +13,7 @@
 //
 // 雷帝（雷界排行第一人）是相对排名，快照算不出——渲染旧体系时实时判 TOP1
 //（总计时间第一名，缓存 60s，张老师 2026-10-17 拍板可接受）。
+// 2026-10-19 起军衔制总司令与雷帝同一判定源（getThunderKingId）。
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "./db";
@@ -71,7 +74,7 @@ export function classicTitle(
   return { name, color: CLASSIC_COLOR[name] ?? "#666666" };
 }
 
-// ---------- 雷界第一人（旧体系「雷帝」） ----------
+// ---------- 雷界第一人（旧体系「雷帝」+ 军衔制「总司令」） ----------
 
 const fetchThunderKingId = unstable_cache(
   async (): Promise<number> => {
@@ -89,7 +92,8 @@ const fetchThunderKingId = unstable_cache(
   { revalidate: 60 }
 );
 
-/** 当前雷界第一人 user id（总计时间最小者；0=无人）。雷帝称号渲染时实时判 */
+/** 当前雷界第一人 user id（总计时间最小者；0=无人）。
+ *  旧体系「雷帝」与军衔制「总司令」（2026-10-19 改口径）渲染时实时判，共用本源 */
 export async function getThunderKingId(): Promise<number> {
   return fetchThunderKingId();
 }
@@ -123,7 +127,8 @@ export interface TitleDisplay {
 
 /**
  * 按观看者体系把「高级成绩快照 + 是否在榜」换算为称号。
- * 军衔制走 assess.title；旧版走 classicTitle（含雷帝实时判定，需 async）。
+ * 军衔制走 assess.title（总司令=雷界第一人特判）；旧版走 classicTitle（含雷帝实时判定）。
+ * 两者同一判定源 getThunderKingId（2026-10-19 起总司令与雷帝恒为同一人）。
  */
 export async function resolveTitleDisplay(
   system: TitleSystem,
@@ -132,14 +137,15 @@ export async function resolveTitleDisplay(
   sex: number,
   userId: number
 ): Promise<TitleDisplay> {
+  const king = await getThunderKingId();
+  const isKing = king > 0 && king === userId;
   if (system === "c") {
-    const king = await getThunderKingId();
-    const t = classicTitle(expTimeMs, ranked, sex, king > 0 && king === userId);
+    const t = classicTitle(expTimeMs, ranked, sex, isKing);
     return { system: "c", name: t.name, color: t.color };
   }
   // 军衔制：预备役=无成绩或未在榜（旧站口径：未加入排行不显示军衔）
   if (!ranked || expTimeMs <= 0) return { system: "m", name: "预备役" };
-  return { system: "m", name: militaryTitle(expTimeMs) };
+  return { system: "m", name: militaryTitle(expTimeMs, isKing) };
 }
 
 // ---------- 双体系 DTO 工厂（服务端换算点共用） ----------
@@ -153,16 +159,18 @@ export interface TitlePair {
   c: { name: string; color: string } | null;
 }
 
-/** 服务端批量换算「快照 → 双体系称号对」（雷帝判定一次性取 TOP1） */
+/** 服务端批量换算「快照 → 双体系称号对」（雷帝/总司令判定一次性取 TOP1；
+ *  2026-10-19 起总司令=雷界第一人，两体系 TOP1 恒同一人） */
 export async function dualTitles(
   rows: { userId: number; expTime: number; ranked: boolean; sex: number }[]
 ): Promise<Map<number, TitlePair>> {
   const king = await getThunderKingId();
   const out = new Map<number, TitlePair>();
   for (const r of rows) {
+    const isKing = king > 0 && king === r.userId;
     out.set(r.userId, {
-      m: !r.ranked || r.expTime <= 0 ? "预备役" : militaryTitle(r.expTime),
-      c: classicTitle(r.expTime, r.ranked, r.sex, king > 0 && king === r.userId),
+      m: !r.ranked || r.expTime <= 0 ? "预备役" : militaryTitle(r.expTime, isKing),
+      c: classicTitle(r.expTime, r.ranked, r.sex, isKing),
     });
   }
   return out;

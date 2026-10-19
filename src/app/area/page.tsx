@@ -7,7 +7,7 @@ import Link from "next/link";
 
 import { getAreaRanking, getRankingTable, getRankOfUsers } from "@/lib/queries";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles } from "@/lib/title-system";
+import { dualTitles, getThunderKingId } from "@/lib/title-system";
 import { parseRankingBy, areaDisplay, parseAreaOrder } from "@/lib/config";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -107,13 +107,15 @@ export default async function AreaPage({
     // 军衔列服务端预算（Feed 客户端零成本渲染）——SUB 制按主榜高级时间评定，
     // 与原 RankingTable 内部口径一致（NF 场景优先主榜回填值；地区内页恒主榜口径）
     // Phase 5：补旧版称号备选（地区榜行全部在榜）
+    // 2026-10-19 总司令=雷界第一人特判
+    const king = await getThunderKingId();
     const areaPairs = await dualTitles(
       rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex }))
     );
     const titledRows = await Promise.all(
       rows.map((u) => ({
         ...u,
-        title: assessTitle(u.overallExpTime ?? u.scores.exp_time),
+        title: assessTitle(u.overallExpTime ?? u.scores.exp_time, king > 0 && king === Number(u.id)),
         classic: areaPairs.get(Number(u.id))?.c ?? null,
       }))
     );
@@ -166,8 +168,10 @@ export default async function AreaPage({
   const order = parseAreaOrder(sp.order);
   const rows = await getAreaRanking(order);
   // 领军人物的军衔按高级时间评定（2026-10-13 SUB 制）；Phase 5 补旧版称号备选
+  // 2026-10-19 总司令=雷界第一人特判
+  const leadKing = await getThunderKingId();
   const leadPairs = await dualTitles(rows.map((r) => ({ userId: r.bestId, expTime: r.bestExpTime, ranked: true, sex: r.bestSex })));
-  const titles = await Promise.all(rows.map((r) => assessTitle(r.bestExpTime)));
+  const titles = await Promise.all(rows.map((r) => assessTitle(r.bestExpTime, leadKing > 0 && leadKing === r.bestId)));
 
   return (
     <div id="page" className="main ranking_old two_columns">

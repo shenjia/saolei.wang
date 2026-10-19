@@ -11,7 +11,7 @@ import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy, byLevelOrder, parseBvRankingBy, type VideoLevel } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles } from "@/lib/title-system";
+import { dualTitles, getThunderKingId } from "@/lib/title-system";
 import { getSession } from "@/lib/auth";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingFeed } from "@/components/RankingFeed";
@@ -179,8 +179,14 @@ export default async function RankingPage({
 
     const { rows, total, pageSize, den, totalDen } = bvData;
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；Phase 5 补旧版称号备选（BV 榜全在榜）
+    // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
+    const bvKing = await getThunderKingId();
     const bvPairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
-    const titled = rows.map((u) => ({ ...u, title: assessTitle(u.expTime), classic: bvPairs.get(u.id)?.c ?? null }));
+    const titled = rows.map((u) => ({
+      ...u,
+      title: assessTitle(u.expTime, bvKing > 0 && bvKing === u.id),
+      classic: bvPairs.get(u.id)?.c ?? null,
+    }));
 
     // 登录态：搜索框空输入推荐「自己」——对 BV 榜比成绩榜更实用（自己的名次常在几百页外），
     // 顺带取自己的名次（缓存数组查询，零 DB）；无录像则下拉显示「未加入 BV 排行」
@@ -292,13 +298,15 @@ export default async function RankingPage({
 
   // 军衔列在服务端预算（Feed 客户端零成本渲染）——SUB 制按高级时间评定（2026-10-13）
   // Phase 5：补旧版称号备选（榜单行全部在榜 ranked=true）
+  // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
+  const king = await getThunderKingId();
   const rankPairs = await dualTitles(
     rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
   );
   const titled = await Promise.all(
     rows.map(async (u) => ({
       ...u,
-      title: await assessTitle(u.scores.exp_time),
+      title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
       classic: rankPairs.get(Number(u.id))?.c ?? null,
     }))
   );

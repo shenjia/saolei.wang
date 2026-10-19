@@ -42,19 +42,24 @@ function getPosition(score: number, distribution: number[], direction: 0 | 1): n
   return i;
 }
 
-/** 军衔：按高级时间绝对阈值评定（2026-10-13 张老师改版，原按总计时间相对阈值）
+/** 军衔：总司令=雷界排行第一人特判（2026-10-19 张老师改口径，原 SUB30 绝对阈值），
+ *  其余按高级时间绝对阈值评定（2026-10-13 张老师改版，原按总计时间相对阈值）
  *  TITLE_THRESHOLDS 与 TITLES 同序（严→宽降序）：取第一个 score <= threshold 的档；
- *  全部超过（>150s）→ 列兵；无成绩 → 预备役 */
-export function title(score: number | null | undefined): string {
+ *  全部超过（>150s）→ 列兵；无成绩 → 预备役。
+ *  @param isKing 是否雷界排行第一人（总计时间 TOP1，调用方经 getThunderKingId 判定；
+ *                不传/未知时按 SUB35 起评——king 不会掉出大元帅档，保守显示） */
+export function title(score: number | null | undefined, isKing = false): string {
+  if (isKing) return "总司令";
   if (!score) return "预备役";
   for (let i = 0; i < TITLE_THRESHOLDS.length; i++) {
-    if (score <= TITLE_THRESHOLDS[i]) return TITLES[i] ?? "";
+    if (score <= TITLE_THRESHOLDS[i]) return TITLES[i + 1] ?? "";
   }
   return TITLES[TITLES.length - 1] ?? "";
 }
 
 export interface TitleDistribution {
-  /** 各军衔的高级时间上限（毫秒，升序；2026-10-13 起为常量 TITLE_THRESHOLDS） */
+  /** 各军衔的高级时间上限（毫秒，升序；2026-10-13 起为常量 TITLE_THRESHOLDS；
+   *  2026-10-19 总司令改雷界第一人特判，不占阈值档位，本数组=大元帅~上等兵 18 档） */
   thresholds: number[];
   /** 编制总人数（SUB 制下无意义，恒 0） */
   size: number;

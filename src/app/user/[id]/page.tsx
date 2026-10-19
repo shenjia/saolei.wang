@@ -50,6 +50,7 @@ import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankLabel } from "@/components/RankLabel";
 import { title as assessTitle } from "@/lib/assess";
+import { getThunderKingId } from "@/lib/title-system";
 import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { prisma } from "@/lib/db";
@@ -162,7 +163,13 @@ export default async function UserViewPage({
     getLevel3bvRanges(),
     getUser3bvCollection(userId),
   ]);
-  const feed: NewsFeedItem[] = news.map((n) => ({ news: n, title: assessTitle(n.expTime), classic: n.authorTitles?.c ?? null }));
+  // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
+  const king = await getThunderKingId();
+  const feed: NewsFeedItem[] = news.map((n) => ({
+    news: n,
+    title: assessTitle(n.expTime, king > 0 && king === (n.author?.id ?? 0)),
+    classic: n.authorTitles?.c ?? null,
+  }));
 
   const { user, info, scores } = detail;
   const radar = await getRadarData(scores);

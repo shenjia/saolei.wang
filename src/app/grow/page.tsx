@@ -6,7 +6,7 @@ import { getGrowRanking } from "@/lib/ranksnap";
 import { getRankingPageOfUser } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles } from "@/lib/title-system";
+import { dualTitles, getThunderKingId } from "@/lib/title-system";
 import { RankingNav } from "@/components/RankingNav";
 import { GrowFeed } from "@/components/GrowFeed";
 import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
@@ -46,10 +46,12 @@ export default async function GrowPage({
   const growPairs = await dualTitles(
     rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
   );
+  // 2026-10-19 总司令=雷界第一人特判
+  const king = await getThunderKingId();
   const titled = await Promise.all(
     rows.map(async (u) => ({
       ...u,
-      title: await assessTitle(u.scores.exp_time),
+      title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
       classic: growPairs.get(Number(u.id))?.c ?? null,
     }))
   );

@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { getNews, getNewsCount, getNewsPage } from "@/lib/queries";
 import { title as assessTitle } from "@/lib/assess";
+import { getThunderKingId } from "@/lib/title-system";
 import { NEWS_PAGESIZE, NEWS_TYPE } from "@/lib/config";
 
 export async function GET(req: Request) {
@@ -19,6 +20,9 @@ export async function GET(req: Request) {
   const types = p.get("type") === "forum" ? [NEWS_TYPE.ARTICLE, NEWS_TYPE.COMMENT] : undefined;
   // 首页新闻流口径（home=1）：仅 NEWS_HOME_TYPES，注册/头像/发帖/评论动态不进首页
   const home = p.get("home") === "1";
+  // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
+  const king = await getThunderKingId();
+  const isKing = (id: number | undefined) => king > 0 && king === (id ?? 0);
 
   // 页码模式（2026-10-14 用户主页动态翻页条）：?page=N 从头数第 N 页
   const pageRaw = parseInt(p.get("page") ?? "", 10);
@@ -29,7 +33,11 @@ export async function GET(req: Request) {
       getNewsPage({ types, userId, level, home, page, base, limit: size }),
       getNewsCount({ types, userId, level, home }),
     ]);
-    const withTitles = items.map((news) => ({ news, title: assessTitle(news.expTime), classic: news.authorTitles?.c ?? null }));
+    const withTitles = items.map((news) => ({
+      news,
+      title: assessTitle(news.expTime, isKing(news.author?.id)),
+      classic: news.authorTitles?.c ?? null,
+    }));
     return NextResponse.json({
       items: withTitles,
       cursor: items.length ? items[items.length - 1].id : 0,
@@ -43,7 +51,11 @@ export async function GET(req: Request) {
     // 同条件下的动态总数：「加载更多」括号内显示剩余条数用
     getNewsCount({ types, userId, level, home }),
   ]);
-  const withTitles = items.map((news) => ({ news, title: assessTitle(news.expTime), classic: news.authorTitles?.c ?? null }));
+  const withTitles = items.map((news) => ({
+    news,
+    title: assessTitle(news.expTime, isKing(news.author?.id)),
+    classic: news.authorTitles?.c ?? null,
+  }));
   return NextResponse.json({
     items: withTitles,
     cursor: items.length ? items[items.length - 1].id : cursor,
