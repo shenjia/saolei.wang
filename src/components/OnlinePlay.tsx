@@ -3180,6 +3180,19 @@ export function OnlinePlay({
         enterMask();
         return;
       }
+      /* 全屏专属判定（2026-10-19 张老师定）：全屏里侧空被棋盘吃干后，结算面板会被
+         压到不比数据面板宽——主次颠倒、雷达也糊成一团，此时就该换成遮罩居中显示。
+         （自然宽度下结算 ~204 > 数据 ~127，天然不会触发；只有被侧空 / 结算高封顶
+         压过才可能，即「真的被挤扁了」才换地方。+0.5 容差把「恰好相等」也算进来） */
+      if (
+        document.fullscreenElement === root &&
+        statsFit &&
+        resultFit &&
+        resultFit.renderedW <= statsFit.renderedW + 0.5
+      ) {
+        enterMask();
+        return;
+      }
       /* 放得下：回侧边宿主（空间恢复＝自动切回，不用玩家操作），遮罩收起 */
       mountPanels("side");
       grModal.hidden = true;
