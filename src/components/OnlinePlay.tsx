@@ -451,6 +451,12 @@ export function OnlinePlay({
        连击「松开拔旗」只放行空手松开（见 window mouseup）——否则
        按下插旗后同格松开会把刚插的旗自己拔掉，滑动收尾压到旗上也会误拔 */
     let comboHit = false;
+    /* 开局保护窗（2026-10-19 张老师定）：首击手势内滑动不开格——开局盘面全是
+       未开格，按下即拖会沿轨迹盲开处女地（高级盘雷密度 ~20%，无猜只保首击
+       安全不保盲滑），开局暴毙主因。规则＝一局第一次开格所在的那个按下→松开
+       手势里，左键滑动不动作（首击本身照常生效），松开即解除；右键滑旗不拦
+       （插旗零风险）。没有秒数常量，体感＝「第一下只能点，看到局面才能滑」 */
+    let comboGuard = true;
 
     const tbody = $("gtbody") as unknown as HTMLTableSectionElement;
     const ledMines = $("led_mines") as unknown as SVGElement;
@@ -1932,6 +1938,7 @@ export function OnlinePlay({
       /* 手势状态清零 + 隐藏结算报告（张老师：游戏再次开始时隐藏）；事件流同步清空
          （五期）；重玩锁定标记保留——placeMines 在首击时消费它 */
       leftDown = rightDown = chordDone = false;
+      comboGuard = true; // 开局保护窗随新局恢复
       evStream = [];
       /* 数据面板（八期）：任何时刻都不因开局而显示——只有游戏结束且开关开着才弹出
          （见 report）。statsReport 只读 state/统计量、不读 snapshot，
@@ -2268,6 +2275,9 @@ export function OnlinePlay({
        交互方式，不改变盘面规则/旗语义，对局中途切换无一致命状态 */
     on(btnCombo, "click", () => {
       combo = !combo;
+      /* 对局中途才开连击：开局保护窗已无意义（首击早已发生），直接放行滑动；
+         未开局时开着守卫等首击手势 */
+      if (combo && started) comboGuard = false;
       saveSettings();
       syncModeButtons();
     });
@@ -2472,6 +2482,9 @@ export function OnlinePlay({
          state 守卫，「一格限一次」天然成立（触发过 state 变更即不会再中）；
          无需按下态高亮（动作瞬时完成） */
       if (combo) {
+        /* 首击手势保护：左键滑动不动作（首击本身在 mousedown 已生效），
+           松开解除；右键滑旗零风险不拦 */
+        if (comboGuard && leftDown) return;
         if (leftDown) { setFace("ooh"); comboLeftClick(i); }
         else if (rightDown) { setFace("ooh"); comboRightClick(i); }
         return;
@@ -2519,7 +2532,9 @@ export function OnlinePlay({
           led(ledMines, flagsLeft());
           recordEv(17, ui);
         }
-        clearPress(); setFace("smile"); leftDown = rightDown = chordDone = false; return;
+        clearPress(); setFace("smile");
+        comboGuard = false; // 首击手势结束：开局保护窗解除，此后滑动恢复连开
+        leftDown = rightDown = chordDone = false; return;
       }
       const i = eventCell(e); clearPress(); setFace("smile");
       /* 盘外松开的原始像素坐标（1x 棋盘坐标系，可为负） */
@@ -2613,6 +2628,7 @@ export function OnlinePlay({
       }
       touchCell = -1;
       touchMoved = false;
+      comboGuard = false; // 首击手势结束：开局保护窗解除（与新局 reset 恢复）
       e.preventDefault();
     }, { passive: false });
     /* 滑动取消带 12px 容差：手指微颤（1-2px）不再吞掉点按——「有时点击无效」
@@ -2631,18 +2647,25 @@ export function OnlinePlay({
         if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
         if (over) { touchCell = -1; return; }
         touchMoved = true;
+        /* 首击手势保护：起始格照开（触点不即开，这里是首击的唯一入口，无猜下
+           必安全）——路径格不开，松开解除。开局按下即拖不再沿轨迹盲开处女地 */
         if (state[touchCell] === 0) comboTouchOpen(touchCell);
-        const bp = touchBoardPx(t.clientX, t.clientY);
-        const steps = Math.max(1, Math.ceil(Math.hypot(bp.x - touchLastX, bp.y - touchLastY) / 8));
-        for (let s = 1; s <= steps; s++) {
-          const px = touchLastX + ((bp.x - touchLastX) * s) / steps;
-          const py = touchLastY + ((bp.y - touchLastY) * s) / steps;
-          const cx = (px / 16) | 0, cy = (py / 16) | 0;
-          if (cx < 0 || cx >= W || cy < 0 || cy >= H) continue;
-          const i = cy * W + cx;
-          if (state[i] === 0 && i !== touchCell) { touchCell = i; comboTouchOpen(i); }
+        if (!comboGuard) {
+          const bp = touchBoardPx(t.clientX, t.clientY);
+          const steps = Math.max(1, Math.ceil(Math.hypot(bp.x - touchLastX, bp.y - touchLastY) / 8));
+          for (let s = 1; s <= steps; s++) {
+            const px = touchLastX + ((bp.x - touchLastX) * s) / steps;
+            const py = touchLastY + ((bp.y - touchLastY) * s) / steps;
+            const cx = (px / 16) | 0, cy = (py / 16) | 0;
+            if (cx < 0 || cx >= W || cy < 0 || cy >= H) continue;
+            const i = cy * W + cx;
+            if (state[i] === 0 && i !== touchCell) { touchCell = i; comboTouchOpen(i); }
+          }
+          touchLastX = bp.x; touchLastY = bp.y;
+        } else {
+          const bp = touchBoardPx(t.clientX, t.clientY);
+          touchLastX = bp.x; touchLastY = bp.y;
         }
-        touchLastX = bp.x; touchLastY = bp.y;
         return;
       }
       if (Math.hypot(t.clientX - touchX, t.clientY - touchY) > 12) {
@@ -3276,6 +3299,7 @@ export function OnlinePlay({
         nums: () => (nums ? Array.from(nums) : null),
         state: () => Array.from(state),
         combo: () => combo,
+        guard: () => comboGuard,
         nf: () => nf,
         ng: () => ng,
         bv3: () => board3bv,
