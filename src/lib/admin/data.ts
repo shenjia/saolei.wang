@@ -322,6 +322,12 @@ export interface AdminVideoRow {
   autoReason: number;
   /** STNB（video_metrics，缺行=null，需核定行展示用） */
   stnb: number | null;
+  /** 手速 cls（次/秒，触发 cls 线的行展示具体值用） */
+  cls: number | null;
+  /** 总点击 cl（触发点击数下限的行展示具体值用） */
+  cl: number | null;
+  /** press-release 平均时长 ms（需核定行现算：左键优先、右键单独；null=未算/不适用） */
+  pressAvgMs: number | null;
 }
 
 const VIDEO_ORDERS: Record<string, string> = {
@@ -417,7 +423,10 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
     prisma.video.findMany({ where: { id: { in: bigIds } } }),
     prisma.videoInfo.findMany({ where: { id: { in: bigIds } } }),
     prisma.videoStat.findMany({ where: { id: { in: bigIds } } }),
-    prisma.videoMetrics.findMany({ where: { id: { in: bigIds } }, select: { id: true, stnb: true } }),
+    prisma.videoMetrics.findMany({
+      where: { id: { in: bigIds } },
+      select: { id: true, stnb: true, cls: true, cl: true },
+    }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
   const reviewers = await usersByIds([...new Set(videos.map((v) => N(v.reviewUser)))].filter((x) => x > 0));
@@ -455,9 +464,54 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       autoFlag: v.autoFlag,
       autoReason: v.autoReason,
       stnb: mMap.get(id)?.stnb ?? null,
+      cls: mMap.get(id)?.cls ?? null,
+      cl: mMap.get(id)?.cl ?? null,
+      pressAvgMs: null,
     });
   }
+  // 需核定行现算 press-release 平均时长（触发原因展示具体数值；每页 ≤25 行 × ~3ms）
+  const needIds = out.filter((r) => r.autoFlag !== 1 && r.hasInfo).map((r) => r.id);
+  if (needIds.length) {
+    const pressMap = await computePressAvg(needIds);
+    for (const r of out) {
+      if (r.autoFlag !== 1) r.pressAvgMs = pressMap.get(r.id) ?? null;
+    }
+  }
   return out;
+}
+
+/** 现读录像文件算 press-release 平均时长（复用 video-triage 同口径；文件缺失/解析失败返回 null） */
+async function computePressAvg(ids: number[]): Promise<Map<number, number | null>> {
+  const { createRequire } = await import("module");
+  void createRequire; // 防 tree-shake 误删（Node 内置无需 require）
+  const infos = await prisma.videoInfo.findMany({
+    where: { id: { in: ids.map(BigInt) } },
+    select: { id: true, filepath: true },
+  });
+  const result = new Map<number, number | null>();
+  for (const info of infos) {
+    result.set(N(info.id), null);
+    try {
+      const { readFileSync } = await import("fs");
+      const pathMod = await import("path");
+      const root = pathMod.join(process.cwd(), "videos");
+      const full = pathMod.resolve(root, "." + info.filepath);
+      if (!full.startsWith(root + pathMod.sep)) continue;
+      const buf = new Uint8Array(readFileSync(full));
+      const ext = info.filepath.split(".").pop()?.toLowerCase() ?? "";
+      const { parseVideoBinary } = await import("@/lib/videoradar");
+      const { pressPairStats } = await import("@/lib/video-triage");
+      const parsed = parseVideoBinary(buf, ext);
+      if (!parsed) continue;
+      const ps = pressPairStats(parsed);
+      // 与触发口径一致：左键优先（n≥30），左键无配对再看右键
+      if (ps.leftAvg !== null) result.set(N(info.id), Math.round(ps.leftAvg));
+      else if (ps.rightAvg !== null) result.set(N(info.id), Math.round(ps.rightAvg));
+    } catch {
+      /* 单行失败保持 null，标签退化为无数值形态 */
+    }
+  }
+  return result;
 }
 
 // ---------- 评论 ----------

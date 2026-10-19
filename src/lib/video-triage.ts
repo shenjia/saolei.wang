@@ -27,6 +27,16 @@ import path from "path";
 import { prisma } from "./db";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER } from "./video-triage-limits";
+
+export { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER };
+
+/** 配对数守卫：低于此数不判 press（初级短局 2~21 次配对噪声大） */
+const PRESS_MIN_PAIRS = 30;
+/** cls 手速阈值（次/秒，全站真实 max 7.77） */
+const CLS_TRIGGER = 10;
+/** 点击数下限系数：cl < bbbv × 该系数 → 命中 */
+const CLICK_FLOOR_RATIO = 0.8;
 
 /** auto_flag 取值 */
 export const AUTO_FLAG = {
@@ -35,31 +45,6 @@ export const AUTO_FLAG = {
   FAILED: 2,      // 分拣失败（读文件/解析失败）——按需核定兜底
   UNSET: -1,      // 未分拣（历史存量未回填）——视同需核定保守处理
 } as const;
-
-/** auto_reason 位码 */
-export const AUTO_REASON = {
-  PRESS: 1 << 0,
-  STNB: 1 << 1,
-  CLS: 1 << 2,
-  PATH0: 1 << 3,
-  CLICK_FLOOR: 1 << 4,
-  // bit5 预留（首击信号已废）
-  PERSON_RECORD: 1 << 6,
-  TOP_BOARD: 1 << 7,
-  FIRST_ENLIST: 1 << 8,
-  LOW_TRUST: 1 << 9,
-} as const;
-
-/** press-release 分级阈值（ms）——2026-10-19 P0 回测 9837 盘锚定人类 p1 分位 */
-const PRESS_AVG_MS: Record<string, number> = { beg: 45, int: 56, exp: 60 };
-/** 配对数守卫：低于此数不判（初级短局 2~21 次配对噪声大） */
-const PRESS_MIN_PAIRS = 30;
-/** STNB 分级阈值（各级 p99 取整上浮） */
-const STNB_TRIGGER: Record<string, number> = { beg: 205, int: 160, exp: 150 };
-/** cls 手速阈值（次/秒，全站真实 max 7.77） */
-const CLS_TRIGGER = 10;
-/** 点击数下限系数：cl < bbbv × 该系数 → 命中 */
-const CLICK_FLOOR_RATIO = 0.8;
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 

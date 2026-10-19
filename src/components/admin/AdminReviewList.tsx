@@ -19,30 +19,71 @@ import { postOp, useOp } from "./AdminAction";
 import { toast } from "@/components/Toast";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { VIDEO_STATUS } from "@/lib/config";
+import { PRESS_AVG_MS, STNB_TRIGGER } from "@/lib/video-triage-limits";
 
-/** auto_reason 位码 → 后台标签（cheat 类红 / 价值类青 / 信任类紫 / 系统灰） */
-const REASON_BITS: [number, string, string][] = [
-  [1 << 0, "press≤阈值", "cheat"],
-  [1 << 1, "STNB分位", "val"],
-  [1 << 2, "cls>10", "cheat"],
-  [1 << 3, "path=0", "cheat"],
-  [1 << 4, "点击数不足", "cheat"],
-  [1 << 6, "破纪录", "val"],
-  [1 << 7, "TOP榜", "val"],
-  [1 << 8, "首次入伍", "val"],
-  [1 << 9, "低信任", "trust"],
-];
+const LEVEL_NAMES: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 
-function ReasonTags({ reason }: { reason: number }) {
-  const tags = REASON_BITS.filter(([bit]) => (reason & bit) !== 0);
+/** auto_reason 位码 → 后台标签（cheat 类红 / 价值类青 / 信任类紫 / 系统灰）；
+ *  标签带具体数值与阈值（2026-10-19 张老师要求：需手审的要看得到原因细节） */
+function reasonTagList(v: AdminVideoRow) {
+  const r = v.autoReason;
+  const lv = v.level;
+  const pressLine = PRESS_AVG_MS[lv] ?? 60;
+  const stnbLine = STNB_TRIGGER[lv] ?? 150;
+  const tags: { text: string; title: string; cls: string }[] = [];
+  const pressVal = v.pressAvgMs != null ? `${v.pressAvgMs}ms` : "命中";
+  if (r & (1 << 0)) {
+    tags.push({
+      text: `按住时长 ${pressVal}≤${pressLine}ms`,
+      title: `全盘鼠标按下→松开平均时长 ${v.pressAvgMs != null ? v.pressAvgMs + "ms" : "（现算失败）"}，低于${LEVEL_NAMES[lv] ?? "该级别"}线 ${pressLine}ms（人类 p1 分位），疑似机器生成事件流`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 1)) {
+    tags.push({
+      text: `STNB ${v.stnb != null ? v.stnb.toFixed(1) : "?"}>${stnbLine}`,
+      title: `表现分 STNB 超过${LEVEL_NAMES[lv] ?? "该级别"}线 ${stnbLine}（p99），值得人工复核的高光局`,
+      cls: "info",
+    });
+  }
+  if (r & (1 << 2)) {
+    tags.push({
+      text: `手速 ${v.cls != null ? v.cls.toFixed(1) : "?"}次/秒`,
+      title: `手速超过 10 次/秒（全站真实最高 7.77），人类极难达到`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 3)) {
+    tags.push({
+      text: "无鼠标移动",
+      title: "全程鼠标行程为 0 且点击超过 20 次——无移动连点，脚本特征",
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 4)) {
+    tags.push({
+      text: `点击数 ${v.cl ?? "?"} 过少`,
+      title: `总点击低于盘面 3BV×0.8 的理论下限，通关操作量不足`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 6)) tags.push({ text: "破个人纪录", title: "该成绩将刷新上传者个人最好成绩，动态发布前需人工确认", cls: "info" });
+  if (r & (1 << 7)) tags.push({ text: "进级别 TOP 榜", title: "该成绩将进入级别 TOP 榜，上榜成绩需人工把关", cls: "info" });
+  if (r & (1 << 8)) tags.push({ text: "首次入伍", title: "该录像通过将使上传者三级成绩首次齐全（触发入伍动态）", cls: "info" });
+  if (r & (1 << 9)) tags.push({ text: "低信任账号", title: "上传者名下有被屏蔽录像或账号有封禁记录，全部录像需人工审核", cls: "warn" });
+  return tags;
+}
+
+function ReasonTags({ video }: { video: AdminVideoRow }) {
+  const tags = reasonTagList(video);
   if (!tags.length) return <span className="sub">—</span>;
-  const cheatHits = tags.filter(([, , cls]) => cls === "cheat").length;
+  const cheatHits = tags.filter((t) => t.cls === "bad").length;
   return (
     <>
       {cheatHits >= 2 && <span className="admin_tag bad">疑似作弊</span>}{" "}
-      {tags.map(([, label, cls]) => (
-        <span key={label} className={`admin_tag ${cls === "cheat" ? "bad" : cls === "trust" ? "warn" : cls === "val" ? "info" : "plain"}`}>
-          {label}
+      {tags.map((t) => (
+        <span key={t.text} className={`admin_tag ${t.cls}`} title={t.title}>
+          {t.text}
         </span>
       ))}
     </>
@@ -227,13 +268,13 @@ function ReviewRow({
       <td className="sub">{[v.software, v.version].filter(Boolean).join(" ") || "—"}</td>
       <td className="c">
         {v.autoFlag === 1 ? (
-          <span className="admin_tag ok">免核定</span>
+          <span className="admin_tag ok" title="五类触发器零命中，可批量一键通过（仍需先下载防盲审）">免核定</span>
         ) : v.autoFlag === 2 ? (
-          <span className="admin_tag plain" title="分拣失败，按需核定">需核定·失败</span>
+          <span className="admin_tag plain" title="分拣失败（文件缺失/解析失败），按需核定兜底">需核定·分拣失败</span>
         ) : v.autoFlag === -1 ? (
-          <span className="admin_tag plain" title="历史存量未分拣，保守需核定">需核定·未分拣</span>
+          <span className="admin_tag plain" title="历史存量未分拣，保守按需核定">需核定·未分拣</span>
         ) : (
-          <ReasonTags reason={v.autoReason} />
+          <ReasonTags video={v} />
         )}
       </td>
       <td className="c">
