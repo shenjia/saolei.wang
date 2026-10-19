@@ -1,8 +1,8 @@
-// 审核队列（客户端，2026-09-24；2026-10-19 接自动分拣池）
+// 审核队列（客户端，2026-09-24；2026-10-19 接自动分拣池 + 播放栏）
 //
-// 与前台 /video/review 的关键差异：这里带「下载」入口与勾选批量操作。
-// 审核管线的硬性规则是「必须先下载观看才能审核」（防盲审），所以每行会明确标出
-// 是否已下载——未下载时点通过会被服务端拒绝，这里提前给视觉提示。
+// 与前台 /video/review 的关键差异：这里带「播放」入口与勾选批量操作。
+// 审核管线的防盲审规则（2026-10-19 起口径）：在播放器里看过或下载过（任一）即可审核，
+// 播放栏按钮弹全屏播放器出录像（AdminVideoPlayer），看过自动计数（markWatched）。
 //
 // 自动分拣（2026-10-19 方案 v2）：机器只分拣、不审批。
 // · pool="exempt"（免核定池）→ 显示勾选框，可批量一键通过；
@@ -257,7 +257,7 @@ export function AdminReviewList({
               <th className="c">玩法</th>
               <th>软件</th>
               <th className="c">分拣</th>
-              <th className="c">下载</th>
+              <th className="c">播放</th>
               <th className="c">状态</th>
               <th>上传时间</th>
               <th>操作</th>
@@ -383,23 +383,32 @@ function ReviewRow({
         )}
       </td>
       <td className="c">
-        {v.downloads > 0 ? (
-          <a className="admin_tag ok" href={`/video/download/${v.id}`} title="再次下载">
-            已下载
-          </a>
-        ) : (
-          <a className="admin_tag wait" href={`/video/download/${v.id}`} title="必须下载观看后才能审核">
-            未下载 ⬇
-          </a>
-        )}
+        {/* 播放栏（2026-10-19 张老师定：下载栏改播放栏）：按钮弹全屏播放器出录像；
+            看过即计防盲审（播放器 markWatched）；「已看」标已看过（下载或播放任一），
+            附下载直链兜底（解析不了的老格式/文件缺失时用） */}
+        <button
+          type="button"
+          className={`admin_btn sm${v.downloads > 0 ? "" : " primary"}`}
+          title={v.downloads > 0 ? "已看过（点击再次播放）" : "点击播放该录像（看过即可审核）"}
+          onClick={(e) => {
+            e.preventDefault();
+            onPlay();
+          }}
+          style={{ minWidth: 0, padding: "2px 8px" }}
+        >
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style={{ verticalAlign: "-1px", marginRight: 3 }}>
+            <path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z" />
+          </svg>
+          {v.downloads > 0 ? "已看" : "播放"}
+        </button>
       </td>
       <td className="c">
         <StatusTag status={v.status} />
       </td>
       <td className="sub">{v.createTime ? timeOpposite(v.createTime) : "—"}</td>
       <td className="ops">
-        <a className="admin_btn sm" href={`/video/download/${v.id}`}>
-          下载
+        <a className="admin_btn sm" href={`/video/download/${v.id}`} title="下载录像文件（兜底：播放器放不了的格式用这个）">
+          文件
         </a>
         {v.status !== VIDEO_STATUS.REVIEWED && (
           <button
