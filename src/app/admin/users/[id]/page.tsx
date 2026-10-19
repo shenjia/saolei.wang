@@ -88,7 +88,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <div className="admin_kpi grey">
           <div className="label">登录次数</div>
           <div className="value">{d.loginTimes}</div>
-          <div className="foot">最近 IP {d.loginIp || "—"}</div>
+          <div className="foot">最近 IP {d.lastLoginIp || "—"}</div>
         </div>
       </div>
 
@@ -107,6 +107,16 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             <dd>{u.area || "—"}</dd>
             <dt>注册时间</dt>
             <dd>{u.createTime ? formatDate(u.createTime, "Y-m-d H:i") : "—"}</dd>
+            <dt>注册 IP</dt>
+            <dd>
+              {d.registerIp ? (
+                <Link className="link" href={`/admin/ipgroups?dim=register&q=${encodeURIComponent(d.registerIp)}`}>
+                  {d.registerIp}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </dd>
             <dt>最近登录</dt>
             <dd>{u.lastLoginTime ? formatDate(u.lastLoginTime, "Y-m-d H:i") : "从未登录"}</dd>
             <dt>第三方绑定</dt>

@@ -34,11 +34,10 @@ export async function POST(req: Request) {
     area: String(body.area ?? "").trim(),
   };
 
-  // 图形验证码：UI 上线后前端必传；过渡期「传了才验」，前端就绪后改为强制
-  // TODO(ui-captcha): 前端验证码行上线后删除「未传放行」分支
+  // 图形验证码：强制校验（一次性，校验后立即作废）
   const captchaId = String(body.captchaId ?? "");
   const captchaText = String(body.captchaText ?? "");
-  if ((captchaId || captchaText) && !verifyCaptcha(captchaId, captchaText)) {
+  if (!captchaId || !captchaText || !verifyCaptcha(captchaId, captchaText)) {
     return NextResponse.json({ error: "验证码不正确", captcha: true }, { status: 400 });
   }
 

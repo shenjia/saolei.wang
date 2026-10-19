@@ -36,6 +36,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     title: "玩家",
     items: [
       { href: "/admin/users", label: "玩家管理", icon: "👥" },
+      { href: "/admin/ipgroups", label: "同 IP 账号组", icon: "🔗" },
       { href: "/admin/avatars", label: "头像审核", icon: "🖼", badgeKey: "avatar" },
     ],
   },

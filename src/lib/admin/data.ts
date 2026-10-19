@@ -165,6 +165,9 @@ export interface AdminUserDetail {
   interest: string;
   loginTimes: number;
   loginIp: string;
+  /** 防小号（2026-10-19）：注册 IP（落库一次）与最近登录 IP（setSession 实时刷新） */
+  registerIp: string;
+  lastLoginIp: string;
   clicks: number;
   newsCount: number;
   commentCount: number;
@@ -272,6 +275,8 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     interest: info?.interest ?? "",
     loginTimes: N(stat?.loginTimes),
     loginIp: stat?.loginIp ?? "",
+    registerIp: user.registerIp,
+    lastLoginIp: user.lastLoginIp,
     clicks,
     newsCount,
     commentCount,
@@ -290,6 +295,212 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     })),
     oauth: oauth.map((o) => ({ provider: o.provider, nickname: o.nickname, createTime: N(o.createTime) })),
     recentLogs: logs.map((l) => ({ action: l.action, detail: l.detail, createTime: N(l.createTime), user: N(l.user) })),
+  };
+}
+
+// ---------- 防小号：同 IP 账号组（2026-10-19） ----------
+//
+// 口径：
+// · 维度二选一：最近登录 IP（user.last_login_ip，新站登录实时刷新，存量账号随登录逐步积累——默认）
+//   或注册 IP（user.register_ip，2026-10-19 起新注册才有）。
+// · IP 关联只做人工参考，处置永远人工决定；学校机房/网吧/家庭同 IP 属正常现象。
+// · IP 归属地暂未接入（可选 ip2region 离线库），表中不展示归属地列。
+
+export type IpDim = "login" | "register";
+
+const IP_COL: Record<IpDim, string> = { login: "u.last_login_ip", register: "u.register_ip" };
+
+export interface IpGroupRow {
+  ip: string;
+  count: number;
+  unranked: number;
+  today: number;
+  firstReg: number;
+  lastReg: number;
+}
+
+export interface IpGroupMember {
+  id: number;
+  chineseName: string;
+  englishName: string;
+  username: string;
+  status: number;
+  createTime: number;
+  lastLoginTime: number;
+  ranked: boolean;
+}
+
+export interface IpGroupStats {
+  /** 今日新注册账号数 */
+  todayNew: number;
+  /** 今日新注册 IP 数（注册 IP 去重） */
+  todayIps: number;
+  /** 最近登录 IP 维度下 ≥2 / ≥5 个账号的组数 */
+  groups2: number;
+  groups5: number;
+  /** 最大组账号数 */
+  maxGroup: number;
+}
+
+export interface IpGroupsResult {
+  rows: { group: IpGroupRow; members: IpGroupMember[] }[];
+  total: number;
+  pageSize: number;
+  page: number;
+  stats: IpGroupStats;
+  /** q 精确命中某 IP 时为 true：组员全量展开 */
+  expanded: boolean;
+}
+
+export async function getIpGroups(opts: {
+  dim?: string;
+  min?: string;
+  q?: string;
+  onlyUnranked?: string;
+  page?: number;
+}): Promise<IpGroupsResult> {
+  const dim: IpDim = opts.dim === "register" ? "register" : "login";
+  const col = IP_COL[dim];
+  const min = [2, 3, 5].includes(parseInt(opts.min ?? "", 10)) ? parseInt(opts.min ?? "2", 10) : 2;
+  const page = Math.max(1, opts.page ?? 1);
+  // 精确查询仅接受 IPv4 形态，杜绝拼接风险（虽然始终走 ? 占位）
+  const q = opts.q?.trim() ?? "";
+  const exact = /^\d{1,3}(\.\d{1,3}){3}$/.test(q) ? q : "";
+  const onlyUnranked = opts.onlyUnranked === "1";
+
+  const todayStart = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return Math.floor(d.getTime() / 1000);
+  })();
+
+  const conds = [`${col} <> ''`];
+  const params: unknown[] = [];
+  if (exact) {
+    conds.push(`${col} = ?`);
+    params.push(exact);
+  }
+  const where = `WHERE ${conds.join(" AND ")}`;
+  // HAVING：最少账号数；「只看全部无成绩的组」→ c = unranked
+  const having = [`c >= ?`];
+  const havingParams: unknown[] = [min];
+  if (onlyUnranked) having.push(`c = unranked`);
+
+  const groupSelect = `SELECT ${col} ip, COUNT(*) c,
+      SUM(CASE WHEN s.sum_time IS NULL OR s.sum_time = 0 THEN 1 ELSE 0 END) unranked,
+      SUM(CASE WHEN u.create_time >= ? THEN 1 ELSE 0 END) today,
+      MIN(u.create_time) first_reg, MAX(u.create_time) last_reg
+    FROM \`user\` u LEFT JOIN user_scores s ON s.id = u.id
+    ${where}
+    GROUP BY ${col} HAVING ${having.join(" AND ")}`;
+
+  const [groupRows, countRows, statsRows] = await Promise.all([
+    prisma.$queryRawUnsafe<{
+      ip: string;
+      c: bigint;
+      unranked: bigint;
+      today: bigint;
+      first_reg: bigint;
+      last_reg: bigint;
+    }[]>(
+      `${groupSelect} ORDER BY c DESC, last_reg DESC LIMIT ? OFFSET ?`,
+      todayStart,
+      ...params,
+      ...havingParams,
+      ADMIN_PAGESIZE,
+      (page - 1) * ADMIN_PAGESIZE
+    ),
+    prisma.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*) c FROM (${groupSelect}) t`,
+      todayStart,
+      ...params,
+      ...havingParams
+    ),
+    prisma.$queryRawUnsafe<{
+      today_new: bigint;
+      today_ips: bigint;
+      groups2: bigint;
+      groups5: bigint;
+      max_group: bigint;
+    }[]>(
+      `SELECT
+        (SELECT COUNT(*) FROM \`user\` WHERE create_time >= ?) today_new,
+        (SELECT COUNT(DISTINCT register_ip) FROM \`user\` WHERE register_ip <> '' AND create_time >= ?) today_ips,
+        (SELECT COALESCE(COUNT(*), 0) FROM (SELECT last_login_ip FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip HAVING COUNT(*) >= 2) t) groups2,
+        (SELECT COALESCE(COUNT(*), 0) FROM (SELECT last_login_ip FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip HAVING COUNT(*) >= 5) t) groups5,
+        (SELECT COALESCE(MAX(c), 0) FROM (SELECT last_login_ip, COUNT(*) c FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip) t) max_group`,
+      todayStart,
+      todayStart
+    ),
+  ]);
+
+  const s = statsRows[0] ?? {};
+  const stats: IpGroupStats = {
+    todayNew: N(s.today_new),
+    todayIps: N(s.today_ips),
+    groups2: N(s.groups2),
+    groups5: N(s.groups5),
+    maxGroup: N(s.max_group),
+  };
+
+  const groups: IpGroupRow[] = groupRows.map((r) => ({
+    ip: String(r.ip),
+    count: N(r.c),
+    unranked: N(r.unranked),
+    today: N(r.today),
+    firstReg: N(r.first_reg),
+    lastReg: N(r.last_reg),
+  }));
+
+  // 第二轮：把本页各组的成员一次取回（组员可能跨页重复出现于不同组？不会——按 IP 分组互斥）
+  const ips = groups.map((g) => g.ip);
+  const membersByIp = new Map<string, IpGroupMember[]>();
+  if (ips.length) {
+    const memberRows = await prisma.$queryRawUnsafe<{
+      id: bigint;
+      chinese_name: string;
+      english_name: string;
+      create_time: bigint;
+      last_login_time: bigint;
+      status: number;
+      ip: string;
+      username: string | null;
+      ranked: number | boolean;
+    }[]>(
+      `SELECT u.id, u.chinese_name, u.english_name, u.create_time, u.last_login_time, u.status,
+              u.${dim === "login" ? "last_login_ip" : "register_ip"} ip, a.username,
+              (s.sum_time IS NOT NULL AND s.sum_time > 0) ranked
+        FROM \`user\` u
+        LEFT JOIN user_auth a ON a.id = u.id
+        LEFT JOIN user_scores s ON s.id = u.id
+        WHERE u.${dim === "login" ? "last_login_ip" : "register_ip"} IN (${ips.map(() => "?").join(",")})
+        ORDER BY u.create_time ASC, u.id ASC`,
+      ...ips
+    );
+    for (const r of memberRows) {
+      const ip = String(r.ip);
+      const list = membersByIp.get(ip) ?? [];
+      list.push({
+        id: N(r.id),
+        chineseName: String(r.chinese_name ?? ""),
+        englishName: String(r.english_name ?? ""),
+        username: String(r.username ?? ""),
+        status: N(r.status),
+        createTime: N(r.create_time),
+        lastLoginTime: N(r.last_login_time),
+        ranked: Number(r.ranked) === 1,
+      });
+      membersByIp.set(ip, list);
+    }
+  }
+
+  return {
+    rows: groups.map((g) => ({ group: g, members: membersByIp.get(g.ip) ?? [] })),
+    total: N(countRows[0]?.c),
+    pageSize: ADMIN_PAGESIZE,
+    page,
+    stats,
+    expanded: Boolean(exact),
   };
 }
 

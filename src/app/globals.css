@@ -9336,3 +9336,26 @@ html.op-fakefs #header {
   font-size: 12px;
   color: #8b8b7d;
 }
+
+/* 注册表单图形验证码行（2026-10-19 防小号） */
+.reg_captcha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.reg_captcha_img {
+  width: 120px;
+  height: 40px;
+  border: 1px solid #49483e;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.reg_captcha_input {
+  width: 110px !important;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.reg_captcha_refresh {
+  font-size: 13px;
+  line-height: 40px;
+}

@@ -2,9 +2,10 @@
 // - 行 class 驱动 legacy-2013.css：focus 行显示 hint（绿）、error 行显示 errorMessage（红）
 // - 性别用 .radioButton 雪碧图 span（/images/form/radioButton.png），与 2013 版一致
 // - 提交走 /api/auth/register，字段错误按行标红；成功后切换为「注册成功」视图（2008 Register_OK 骨架）
+// - 图形验证码（2026-10-19 防小号）：/api/auth/captcha 取图，填错自动换一张并清空输入
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AREA_LIST } from "@/lib/config";
 
@@ -60,6 +61,23 @@ export default function RegisterForm() {
   const [fatal, setFatal] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ chineseName: string; englishName: string } | null>(null);
+  // 图形验证码：id/svg 由服务端发放；答案大小写不敏感
+  const [captcha, setCaptcha] = useState<{ id: string; svg: string } | null>(null);
+  const [captchaText, setCaptchaText] = useState("");
+
+  const loadCaptcha = useCallback(async () => {
+    setCaptchaText("");
+    try {
+      const res = await fetch("/api/auth/captcha");
+      if (res.ok) setCaptcha(await res.json());
+    } catch {
+      /* 取图失败静默，提交时服务端会拦 */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCaptcha();
+  }, [loadCaptcha]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,13 +92,14 @@ export default function RegisterForm() {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...values, sex, area }),
+      body: JSON.stringify({ ...values, sex, area, captchaId: captcha?.id ?? "", captchaText }),
     });
     setBusy(false);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (data.errors) setErrors(data.errors);
       else setFatal(data.error ?? "注册失败，请稍候再试！");
+      if (data.captcha) await loadCaptcha(); // 验证码一次性，错了自动换一张
       return;
     }
     setDone({ chineseName: data.chineseName, englishName: data.englishName });
@@ -168,6 +187,41 @@ export default function RegisterForm() {
                 </select>
               </div>
               <span className="errorMessage">{errors.area}</span>
+            </td>
+          </tr>
+          <tr className={focus === "captcha" ? "focus" : ""}>
+            <th>验 证 码</th>
+            <td className="middle">
+              <div className="reg_captcha">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  className="reg_captcha_img"
+                  src={captcha?.svg ? `data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}` : ""}
+                  alt="验证码"
+                  title="看不清？点击换一张"
+                  onClick={() => void loadCaptcha()}
+                />
+                <input
+                  type="text"
+                  className="reg_captcha_input"
+                  maxLength={4}
+                  value={captchaText}
+                  placeholder="输入图中字符"
+                  onFocus={() => setFocus("captcha")}
+                  onBlur={() => setFocus("")}
+                  onChange={(e) => setCaptchaText(e.target.value)}
+                />
+                <a
+                  href="#"
+                  className="reg_captcha_refresh"
+                  onClick={(e) => (e.preventDefault(), void loadCaptcha())}
+                >
+                  换一张
+                </a>
+              </div>
+              <span className="hintMessage">
+                不区分大小写<em>看不清？点击图片或「换一张」</em>
+              </span>
             </td>
           </tr>
         </tbody>
