@@ -3409,7 +3409,7 @@ export function OnlinePlay({
               {/* 手：食指竖起（圆帽指尖）→ 两个指节圆弧 → 拳身 → 圆底收回到指根 */}
               <path d="M9.9 14.2V7.3a1.75 1.75 0 0 1 3.5 0V10.5a1.55 1.55 0 0 1 3.1 .55a1.55 1.55 0 0 1 3.1 .55V16.6a6.3 6.3 0 0 1 -9.7 3.1V14.2Z" />
             </svg>
-            <span className="tip">连击模式：按下鼠标即触发，对滑过的格子自动进行点击</span>
+            <span className="tip">连击模式：开局成功后，按下并拖动视为对所有经过格子进行点击</span>
           </button>
           <button className="gicon gmode gmode_ng" id="btn_ng" type="button">
             {/* 雨伞图标（2026-10-15 九期五改，张老师定）：合伞＝未激活态、
