@@ -115,6 +115,19 @@ export function ensureVideoMetrics(videoId: number): Promise<void> {
 }
 
 /**
+ * 分拣后置钩子（2026-10-19 自动分拣）：先确保指标行（press 之外的触发器要读），
+ * 再跑 triageVideo 写 auto_flag/auto_reason。与 ensureVideoMetrics 同一条串行队列。
+ * ⚠️ 必须在视频事务提交后调用（triageVideo 自开连接读库）。
+ */
+export function ensureVideoTriage(videoId: number): Promise<void> {
+  return serialize(async () => {
+    await compute(videoId).catch(() => undefined);
+    const { triageVideo } = await import("./video-triage");
+    await triageVideo(videoId);
+  });
+}
+
+/**
  * 确保该录像的棋盘串（video_info.board）存在——空则从文件现解析并回写。
  * 背景：RMV 上传时期站内无解析器，board 落库为空串（地图不显示）；
  * rmv.ts 上线后可现解析。详情页调用；解析不出/失败返回 null（棋盘留空，页面不 500）。

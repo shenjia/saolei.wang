@@ -6,6 +6,7 @@ import { createHash } from "crypto";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { avfToRawvf } from "@/lib/avf";
@@ -13,7 +14,9 @@ import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { formatRawvf } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
+import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
+import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { userTitleSnapshot } from "@/lib/queries";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
@@ -80,6 +83,13 @@ export async function POST(req: Request) {
   const minBbbv = LEVEL_MIN_3BV[level];
   if ((parsed.bbbv ?? 0) < minBbbv) return fail(`该录像的3BV小于${minBbbv}`);
 
+  // 录像标识文字会公开展示在录像页，并写入 user_sig。命中则不注册签名、不落文件
+  const sigHit = checkSensitive(parsed.player);
+  if (!sigHit.ok) {
+    logSensitiveHit("video.signature", session.uid, sigHit);
+    return fail(sensitiveRejectMessage(sigHit, "上传"));
+  }
+
   // 签名注册（移植 UserSig::register：已存在则必须是本人）
   const sig = await prisma.userSig.findFirst({ where: { signature: parsed.player } });
   if (sig && Number(sig.user) !== session.uid) return fail("该录像标示已被他人注册");
@@ -97,6 +107,7 @@ export async function POST(req: Request) {
     return fail("录像保存失败", 500);
   }
 
+  let videoId = 0;
   try {
     await prisma.$transaction(async (tx) => {
       if (!sig) {
@@ -136,9 +147,21 @@ export async function POST(req: Request) {
       await tx.videoStat.create({
         data: { id: video.id, clicks: 0, downloads: 0, comments: 0, createTime: nowSec, updateTime: nowSec },
       });
+      videoId = Number(video.id);
     });
   } catch {
     return fail("录像保存失败", 500);
+  }
+
+  // 自动分拣后置钩子（2026-10-19 方案 v2）：事务提交后异步跑触发器组，
+  // 写 auto_flag（免核定/需核定）+ auto_reason（位码）。只打标不动 status——
+  // 通过永远由管理员手动执行（免核定池批量一键过 / 需核定逐条手审）。
+  if (videoId > 0) {
+    try {
+      after(() => ensureVideoTriage(videoId));
+    } catch {
+      void ensureVideoTriage(videoId);
+    }
   }
   return NextResponse.json({ ok: true });
 }

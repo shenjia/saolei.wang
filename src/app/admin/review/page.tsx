@@ -22,13 +22,20 @@ const TABS: [string, string][] = [
   [String(VIDEO_STATUS.BANNED), "已屏蔽"],
 ];
 
+/** 待审核页内的分拣池页签（2026-10-19 自动分拣）：机器只分拣，通过永远管理员手动 */
+const POOLS: [string, string][] = [
+  ["exempt", "免核定（可一键过）"],
+  ["need", "需核定（只能手审）"],
+];
+
 export default async function AdminReviewPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const status = ["10", "20", "0"].includes(sp.status ?? "") ? parseInt(sp.status!, 10) : VIDEO_STATUS.NORMAL;
+  const pool = ["exempt", "need"].includes(sp.pool ?? "") ? sp.pool : undefined;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const [list, ov, workload] = await Promise.all([
-    getVideoListAdmin({ status: String(status), order: status === VIDEO_STATUS.NORMAL ? "old" : "new", page }),
+    getVideoListAdmin({ status: String(status), order: status === VIDEO_STATUS.NORMAL ? "old" : "new", page, pool }),
     getOverview(),
     getAuditorWorkload(6),
   ]);
@@ -83,7 +90,31 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           <span className="label">共 {list.total.toLocaleString("zh-CN")} 条</span>
         </div>
 
-        <AdminReviewList key={`${status}_${page}`} initial={list.rows} status={status} />
+        {/* 分拣池页签（仅待审核页显示）：免核定可批量一键过，需核定只能逐条手审 */}
+        {status === VIDEO_STATUS.NORMAL && (
+          <div className="admin_filterbar" style={{ borderTop: 0 }}>
+            {POOLS.map(([v, label]) => (
+              <Link
+                key={v}
+                href={`/admin/review?status=10&pool=${v}`}
+                className={`admin_btn${pool === v ? (v === "exempt" ? " primary" : " danger") : ""}`}
+              >
+                {label}
+              </Link>
+            ))}
+            {pool && (
+              <Link href="/admin/review?status=10" className="admin_btn">
+                全部待审
+              </Link>
+            )}
+            <span className="spacer" />
+            <span className="label">
+              {pool === "exempt" ? "零触发器命中 · 勾选后可批量通过（仍需先下载防盲审）" : pool === "need" ? "任一触发器命中 · 无勾选框，只能逐条手审" : "可切分拣池过滤"}
+            </span>
+          </div>
+        )}
+
+        <AdminReviewList key={`${status}_${pool}_${page}`} initial={list.rows} status={status} pool={pool} />
 
         {list.total > list.pageSize && (
           <div className="admin_pager">
@@ -148,12 +179,14 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
         </AdminCard>
       </div>
 
-      <AdminCard title="审核规则（移植 2013 版 Review::video）">
+      <AdminCard title="审核规则（机器只分拣、不审批——2026-10-19 自动分拣上线）">
         <div className="admin_note">
-          · <b>必须先在后台下载观看过该录像</b>才能审核，未下载的审核请求会被服务端拒绝（防盲审）；列表里「未下载 ⬇」即为提示。<br />
+          · <b>免核定池</b>＝press-release / STNB / cls / path / 点击数五类触发器零命中 → 可勾选批量通过（仍需先下载，防盲审照旧）；<br />
+          · <b>需核定池</b>＝任一触发器命中（触发原因见行内标签）→ 只能逐条手审，批量通过会被服务端拒绝；疑似作弊（多重命中）行内红标提示；<br />
+          · <b>必须先在后台下载观看过该录像</b>才能审核，未下载的审核请求会被服务端拒绝（防盲审）。<br />
           · 已审核过的录像默认不可重审，只有超级管理员可以改判（改判会重算成绩与动态）。<br />
           · 通过 = 写入录像成绩表 → 更新玩家最好成绩 → 刷新纪录则发布动态；屏蔽 = 移除成绩并用次优录像顶替。<br />
-          · 批量操作逐条调用同一审核管线，逐条独立成败，失败原因会在提示里汇总。
+          · 分拣触发原因仅后台展示，玩家端任何页面不可见。
         </div>
       </AdminCard>
     </>

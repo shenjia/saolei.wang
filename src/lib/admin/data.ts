@@ -316,6 +316,12 @@ export interface AdminVideoRow {
   comments: number;
   /** 是否有解析信息（false = 上传中断/解析失败） */
   hasInfo: boolean;
+  /** 自动分拣（2026-10-19 方案 v2）：-1 未分拣 / 0 需核定 / 1 免核定 / 2 失败 */
+  autoFlag: number;
+  /** 触发原因位码（仅后台展示） */
+  autoReason: number;
+  /** STNB（video_metrics，缺行=null，需核定行展示用） */
+  stnb: number | null;
 }
 
 const VIDEO_ORDERS: Record<string, string> = {
@@ -335,6 +341,8 @@ export interface VideoFilter {
   to?: string;
   order?: string;
   page?: number;
+  /** 分拣池（2026-10-19）：exempt=免核定 / need=需核定；缺省=全部 */
+  pool?: string;
 }
 
 function videoWhere(f: VideoFilter): { sql: string; params: unknown[] } {
@@ -348,6 +356,9 @@ function videoWhere(f: VideoFilter): { sql: string; params: unknown[] } {
     conds.push("v.status = ?");
     params.push(parseInt(f.status, 10));
   }
+  // 分拣池筛选：需核定含未分拣(-1)/失败(2)（保守一律人工）；免核定只认 1
+  if (f.pool === "exempt") conds.push("v.auto_flag = 1");
+  if (f.pool === "need") conds.push("(v.auto_flag = 0 OR v.auto_flag = 2 OR v.auto_flag = -1)");
   if (f.nf === "1") conds.push("vi.noflag = 1");
   if (f.nf === "0") conds.push("vi.noflag = 0");
   const q = (f.q ?? "").trim();
@@ -402,16 +413,18 @@ export async function getVideoListAdmin(
 export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
   if (!ids.length) return [];
   const bigIds = ids.map(BigInt);
-  const [videos, infos, stats] = await Promise.all([
+  const [videos, infos, stats, metrics] = await Promise.all([
     prisma.video.findMany({ where: { id: { in: bigIds } } }),
     prisma.videoInfo.findMany({ where: { id: { in: bigIds } } }),
     prisma.videoStat.findMany({ where: { id: { in: bigIds } } }),
+    prisma.videoMetrics.findMany({ where: { id: { in: bigIds } }, select: { id: true, stnb: true } }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
   const reviewers = await usersByIds([...new Set(videos.map((v) => N(v.reviewUser)))].filter((x) => x > 0));
   const vMap = new Map(videos.map((v) => [N(v.id), v]));
   const iMap = new Map(infos.map((i) => [N(i.id), i]));
   const sMap = new Map(stats.map((s) => [N(s.id), s]));
+  const mMap = new Map(metrics.map((m) => [N(m.id), m]));
 
   const out: AdminVideoRow[] = [];
   for (const id of ids) {
@@ -439,6 +452,9 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       downloads: st?.downloads ?? 0,
       comments: st?.comments ?? 0,
       hasInfo: Boolean(info),
+      autoFlag: v.autoFlag,
+      autoReason: v.autoReason,
+      stnb: mMap.get(id)?.stnb ?? null,
     });
   }
   return out;

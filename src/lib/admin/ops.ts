@@ -213,6 +213,21 @@ async function dispatch(
       if (![VIDEO_STATUS.BANNED, VIDEO_STATUS.REVIEWED].includes(status as 0 | 20)) {
         return { ok: false, error: "批量只能「通过」或「屏蔽」" };
       }
+      // 自动分拣闸门（2026-10-19 方案 v2）：需核定录像（auto_flag=0/2/-1）只能逐条手审，
+      // 拒绝批量通过（批量屏蔽仍放行——下架不受限）。机器只分拣不审批，铁闸在服务端。
+      if (status === VIDEO_STATUS.REVIEWED) {
+        const flagged = await prisma.video.findMany({
+          where: { id: { in: ids.map(BigInt) }, autoFlag: { not: 1 } },
+          select: { id: true },
+        });
+        if (flagged.length) {
+          const bad = flagged.map((f) => `#${Number(f.id)}`).join("、");
+          return {
+            ok: false,
+            error: `以下 ${flagged.length} 条为「需核定」录像，只能逐条手审，不能批量通过：${bad}`,
+          };
+        }
+      }
       let done = 0;
       const errors: string[] = [];
       for (const id of ids) {
