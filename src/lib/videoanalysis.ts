@@ -5,7 +5,8 @@
 //
 // 口径（张老师 2026-10-14 定）：
 //   · 分组只按 **级别 × 模式（标雷/无猜）**，不细分 3BV，也不同级别之间比；
-//   · 雷达 **五轴**：综合（置顶）/ 速度 / 效率 / 精准 / 手速 —— 原「移动」轴已去掉；
+//   · 雷达 **五轴**：判雷（置顶，2026-10-19 张老师定改名，原「综合」）/ 速度 / 效率 / 精准 / 手速
+//     —— 原「移动」轴已去掉；
 //   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
 //     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
 //     video_metrics.composite 的口径同步见 scripts/video-metrics.ts。
@@ -134,7 +135,8 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       };
     });
 
-    // ② 综合轴置顶：**STNB 原值**（张老师 2026-10-14 晚定：数值与评级都回到 STNB 口径，
+    // ② 判雷轴（2026-10-19 张老师定改名，原「综合」）置顶：**STNB 原值**
+    //    （张老师 2026-10-14 晚定：数值与评级都回到 STNB 口径，
     //    弃用中途的「四轴百分位加权平均」）。半径与气泡「超过 xx%」用 STNB 在组内的分位，
     //    等级走同一份分布 + gradeOf —— 与其余四轴同一套算法，口径自洽。
     //    STNB 分布列（video_metric_dist.stnb）本来就随跑批一起产出，无需额外数据。
@@ -143,7 +145,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     const stnbPercent = stnbDist.length ? percentOf(stnbValue, stnbDist, true, "stnb") : 0;
     const composite: VideoAnalysisPoint = {
       key: "stnb",
-      name: "综合",
+      name: "判雷",
       value: stnbValue,
       disp: formatMetric("stnb", stnbValue),
       percent: stnbPercent,

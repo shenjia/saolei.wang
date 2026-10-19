@@ -47,6 +47,7 @@ import { paintRangeFill } from "@/lib/paintRange";
 import type { VideoAnalysisPoint } from "@/lib/videoscore";
 import {
   DIST_BUCKET_ALL,
+  demoteGrade,
   gradeColor,
   radarOverall,
   radarPointsFrom,
@@ -1403,8 +1404,16 @@ export function OnlinePlay({
          权值见 lib/videoscore.ts PERFORMANCE_WEIGHTS）。
          无法评级（缺基准 / 完成度过低 / 无点击）时评级显示「—」 */
       const pts = computeRadarPoints(s);
-      /* 综合评级走共享件（2026-10-16）：五轴组内分位加权，全屏试玩「我的评级」同一份算法 */
-      const perfGrade = radarOverall(pts);
+      /* 综合评级走共享件（2026-10-16）：五轴组内分位加权，全屏试玩「我的评级」同一份算法。
+         复活降档（2026-10-19 张老师定）：每原地复活一次，雷达「判雷」轴（原「综合」）
+         的档位强制降一级——**先独立计算，再加修正**（demoteGrade 按九档主档下移、
+         最低 F）。降档作用于判雷轴的 grade 与标题「评级：X」两处（标题评级里
+         STNB 权重占一半，判雷被罚降则整体评级同步降，口径一致）；速度/效率/
+         精准/手速四根分项轴不受影响（复活惩罚只打在「判雷」上） */
+      const perfGradeRaw = radarOverall(pts);
+      const demoted = perfGradeRaw !== "?" && revives > 0;
+      const perfGrade = demoteGrade(perfGradeRaw, revives);
+      if (demoted && pts[0]?.grade !== "?") pts[0] = { ...pts[0], grade: demoteGrade(pts[0].grade, revives) };
       const lvName = (LEVEL_NAMES as Record<string, string>)[s.level] ?? "自定义";
       /* 预计完成用时（十一期）：Est RTime 同口径，半角括号整体小号亮灰 */
       const estSec = s.stats.solvedBv > 0 ? (s.csec / 100) * (s.bbbv / s.stats.solvedBv) : 0;

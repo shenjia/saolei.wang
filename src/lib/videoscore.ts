@@ -43,7 +43,7 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   // 2026-10-14 晚张老师定：气泡里的「3BV/s」与手速单位都放到数值前/整词化 ——
   // 速度轴 3BV/s 由后缀改前缀（气泡读「3BV/s 4.065」），手速由「次/秒」改「次点击/秒」。
   // ⚠️ BASE_METRICS 与 AXIS_METRICS 两处定义必须同步改（录像页与练习页都走 formatMetric）。
-  { key: "stnb", name: "综合", desc: "综合评分 STNB", prefix: "STNB", unit: "", digits: 1, highIsBetter: true },
+  { key: "stnb", name: "判雷", desc: "综合评分 STNB", prefix: "STNB", unit: "", digits: 1, highIsBetter: true },
   { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
   { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
   { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
@@ -349,7 +349,7 @@ export function radarPointsFrom(
     };
   };
   const all: VideoAnalysisPoint[] = [
-    axis("stnb", "综合", true),
+    axis("stnb", "判雷", true),
     ...AXIS_METRICS.map((d) => axis(d.key, d.name, d.highIsBetter)),
   ];
   return rateable ? all : all.map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
@@ -364,4 +364,19 @@ export function radarOverall(points: VideoAnalysisPoint[]): string {
   const percents: Partial<Record<MetricKey, number>> = {};
   for (const p of points) percents[p.key] = p.percent;
   return gradeFromPercent(performanceOf(percents));
+}
+
+/**
+ * 档位强制下修（2026-10-19 张老师定：在线练习每原地复活一次，雷达「判雷」轴
+ * ——原「综合」轴——的档位强制降一级，最低 F；**先独立计算，再加修正**）。
+ * 纯函数，练习页结算面板专用；录像详情页（真实对局）不经过这里。
+ * 语义：按 GRADES 九档主档（SSS…F）下移 steps 位，落点**不带 +/- 尾缀**
+ * （惩罚性钳位不保留细分）；"?"（无法评级）与 F 原样/钳底。
+ */
+export function demoteGrade(grade: string, steps: number): string {
+  if (grade === "?" || steps <= 0) return grade;
+  const base = grade.replace(/[+-]$/, "");
+  const i = GRADES.indexOf(base as (typeof GRADES)[number]);
+  if (i < 0) return grade;
+  return GRADES[Math.min(i + steps, GRADES.length - 1)];
 }
