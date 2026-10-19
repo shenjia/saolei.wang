@@ -59,9 +59,6 @@ export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number 
 const LS_KEY = "online_play_settings";
 /* 移动端连击模式自动开启的一次性标记（2026-10-19）：存在＝已初始化过，不再自动开 */
 const COMBO_AUTO_KEY = "online_play_combo_auto";
-/* 开局 tips 的已显记录键（2026-10-19）：{ d: 当天日期串, n: 今天已显示过的 TIPS 索引 }
-   ——日期变了整组作废（次日重新轮起），当天不重复、全部出现过后不再提示 */
-const TIP_STATE_KEY = "online_play_tips";
 
 /* 自定义规格范围（三期，2026-10-14 18:2x 张老师定）：
    下限 8——8×8 以下盘面撑不住 #page 版式（格子太少时 gframe 过窄、页脚版块会被挤变形）；
@@ -105,9 +102,9 @@ const WHEEL_STEP_Z = 0.1;
 const WHEEL_MAX_STEPS = 5;
 
 /* ---- 开局 tips（2026-10-15 张老师定「进页一条」，2026-10-19 改口径为「每局一条」）----
-   每次开局（reset）从池里取一条**当天还没出现过**的，在主板块底部以气泡浮现
-   （正文前一枚金色灯泡），3 秒后渐隐；已显记录存 localStorage（TIP_STATE_KEY，
-   按天记录）——当天不重复，全部出现过后当天不再提示（次日重新轮起）。
+   每次开局（reset）从池里随机取一条，在主板块底部以气泡浮现
+   （正文前一枚金色灯泡），3 秒后渐隐；不做已显记录、每局必出可重复
+   （2026-10-19 二改，张老师定「去掉不能重的逻辑」）。
    设置浮窗「开局提示」开关（默认开）可整体关闭，关闭后任何提示都不出。
    ⚠️ 文案一律只写**已上线**的既有行为（口径与设置浮窗 .tip / 各按钮 title 一致），
       别把计划中或已废弃的功能（如「显示3BV」「极简模式」）写进来 */
@@ -181,9 +178,9 @@ export function OnlinePlay({
     });
 
     /* ---- 开局气泡 tips + 局中通知气泡（2026-10-19 张老师定）----
-       tips：每次开局（reset 末尾调 showTip）显示一条**当天未出现过**的（TIPS 池，
-       已显记录入 localStorage 按天存），全部出现过后当天不再提示；
-       设置浮窗「开局提示」开关关闭则任何提示都不出。
+       tips：每次开局（reset 末尾调 showTip）随机显示一条（TIPS 池，
+       2026-10-19 二改：张老师定「去掉不能重的逻辑」——不做已显记录，
+       每局必出、纯随机可重复）；设置浮窗「开局提示」开关关闭则任何提示都不出。
        toast：绿色通知气泡（如下载成功），用时动态创建、渐隐后自摘。
        走**命令式 DOM**而不是 React state：
        ① 文案选择只能客户端做——渲染期做会撞 react-hooks/purity，且 SSR 与客户端
@@ -199,22 +196,7 @@ export function OnlinePlay({
     let tipFadeTimer: number | null = null;
     function showTip() {
       if (!tipsOn) return;
-      let idx = -1;
-      try {
-        const today = new Date().toDateString();
-        const st = JSON.parse(localStorage.getItem(TIP_STATE_KEY) || "null") as
-          { d?: string; n?: number[] } | null;
-        const shown = st && st.d === today && Array.isArray(st.n) ? st.n : [];
-        /* 当天没出过的才有资格；全出过 → 本局不提示 */
-        const unseen: number[] = [];
-        for (let i = 0; i < TIPS.length; i++) if (!shown.includes(i)) unseen.push(i);
-        if (!unseen.length) return;
-        idx = unseen[Math.floor(Math.random() * unseen.length)];
-        shown.push(idx);
-        localStorage.setItem(TIP_STATE_KEY, JSON.stringify({ d: today, n: shown }));
-      } catch { /* 隐私模式：退化为纯随机、不记录（下次可能重复，可接受） */
-        idx = Math.floor(Math.random() * TIPS.length);
-      }
+      const idx = Math.floor(Math.random() * TIPS.length);
       tipsEl.querySelector(".txt")!.textContent = TIPS[idx];
       if (tipFadeTimer !== null) clearTimeout(tipFadeTimer);
       /* 下一帧再挂 .show：确保从 opacity:0 初始态起步，同帧加类会被合并、
@@ -293,7 +275,7 @@ export function OnlinePlay({
        再开局撤下。localStorage 存过偏好的浏览器仍按存值恢复。 */
     let showStats = true;
     /* 「开局提示」开关（2026-10-19 张老师定，默认开）：每次开局显示一条技巧气泡
-       （showTip，见上方 tips 块）——当天不重复、全部出现后不再提示；
+       （showTip，见上方 tips 块，随机可重复）；
        关闭后任何开局提示都不出（下载成功等局中通知气泡不受它管） */
     let tipsOn = true;
     /* 局末定格的统计面板 HTML（2026-10-15 十期张老师定）：report 时无论开关与否都存
@@ -1997,8 +1979,8 @@ export function OnlinePlay({
       }
       /* 数据面板常驻时（六期）重开后盘面尺寸/倍率可能已变，重新对齐+缩放 */
       if (showStats) syncReportZoom();
-      /* 开局 tips（2026-10-19 张老师定）：每局一条、当天不重复（showTip 内部自判
-         开关/已显记录，全出过或开关关闭则本局静默） */
+      /* 开局 tips（2026-10-19 张老师定）：每局一条随机出（showTip 内部自判
+         开关，关闭则本局静默） */
       showTip();
     }
 
@@ -3481,12 +3463,12 @@ export function OnlinePlay({
             <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
             <span className="tip">游戏结束后在游戏界面左侧弹出数据统计面板</span>
           </div>
-          {/* 「开局提示」（2026-10-19 张老师定，默认开）：每次开局显示一条技巧气泡——
-              当天不重复、全部出现后不再提示（次日重新轮起）；关闭后任何开局提示都不出 */}
+          {/* 「开局提示」（2026-10-19 张老师定，默认开）：每次开局随机显示一条技巧气泡；
+              关闭后任何开局提示都不出 */}
           <div className="gs_row">
             <span className="gs_name">开局提示</span>
             <label className="gsw"><input type="checkbox" id="sw_tips" /><span className="track" /></label>
-            <span className="tip">每次开局显示一条技巧提示，当天不重复，可随时关闭</span>
+            <span className="tip">每次开局显示一条技巧提示，可随时关闭</span>
           </div>
           {/* 「自动双击」设置行已撤（2026-10-16 张老师定）：入口改挂 NF 右侧的
               速旗快捷钮（btn_sq），行为口径不变 */}
