@@ -317,10 +317,15 @@ function ReviewRow({
   onPlay: () => void;
 }) {
   const { run, busy } = useOp();
-  // 需核定行（含未分拣/失败保守处理）微红底提示
+  // 需核定行（含未分拣/失败保守处理）微红底提示；已看行整行淡显（2026-10-19 张老师定：视觉区分）
   const needRow = v.autoFlag !== 1;
+  const rowStyle = needRow
+    ? { background: "rgba(249,38,114,.05)" }
+    : v.watched
+      ? { opacity: 0.55 }
+      : undefined;
   return (
-    <tr style={needRow ? { background: "rgba(249,38,114,.05)" } : undefined}>
+    <tr style={rowStyle}>
       {showPick ? (
         <td className="c">
           <input
@@ -350,7 +355,8 @@ function ReviewRow({
       <td className="num strong">
         {v.realTime && v.filepath ? (
           <a
-            className="link"
+            className={v.watched ? "" : "link"}
+            style={v.watched ? { color: "#75715e", cursor: "pointer" } : undefined}
             href={`/video/${v.id}`}
             target="_blank"
             title="点击弹层播放该录像"
@@ -384,12 +390,12 @@ function ReviewRow({
       </td>
       <td className="c">
         {/* 播放栏（2026-10-19 张老师定：下载栏改播放栏）：按钮弹全屏播放器出录像；
-            看过即计防盲审（播放器 markWatched）；「已看」标已看过（下载或播放任一），
-            附下载直链兜底（解析不了的老格式/文件缺失时用） */}
+            看过即计防盲审（播放器 markWatched 或下载任一 → watched）；
+            已看按钮静态灰化（行也淡显），未看高亮引导 */}
         <button
           type="button"
-          className={`admin_btn sm${v.downloads > 0 ? "" : " primary"}`}
-          title={v.downloads > 0 ? "已看过（点击再次播放）" : "点击播放该录像（看过即可审核）"}
+          className={`admin_btn sm${v.watched ? "" : " primary"}`}
+          title={v.watched ? "已看过（点击再次播放）" : "点击播放该录像（看过即可审核）"}
           onClick={(e) => {
             e.preventDefault();
             onPlay();
@@ -399,7 +405,7 @@ function ReviewRow({
           <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style={{ verticalAlign: "-1px", marginRight: 3 }}>
             <path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z" />
           </svg>
-          {v.downloads > 0 ? "已看" : "播放"}
+          {v.watched ? "已看" : "播放"}
         </button>
       </td>
       <td className="c">

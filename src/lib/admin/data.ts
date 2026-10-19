@@ -313,6 +313,8 @@ export interface AdminVideoRow {
   reviewTime: number | null;
   clicks: number;
   downloads: number;
+  /** 管理员已看过（后台播放器或下载任一，防盲审口径同 reviewVideo） */
+  watched: boolean;
   comments: number;
   /** 是否有解析信息（false = 上传中断/解析失败） */
   hasInfo: boolean;
@@ -461,6 +463,7 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       reviewTime: v.reviewTime == null ? null : N(v.reviewTime),
       clicks: st?.clicks ?? 0,
       downloads: st?.downloads ?? 0,
+      watched: (st?.downloads ?? 0) > 0 || st?.adminWatched === 1,
       comments: st?.comments ?? 0,
       hasInfo: Boolean(info),
       autoFlag: v.autoFlag,
