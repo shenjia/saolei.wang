@@ -3285,6 +3285,16 @@ export function OnlinePlay({
       const t = e.target as HTMLElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if (e.key === "r" || e.key === "R") reset();
+      /* 数字键 1/2/3/4 切级别（2026-10-19 张老师定）：1=初级 2=中级 3=高级，
+         同级别再按＝刷新重开（与 tab 点击「同级别不动」不同，快捷键恒刷新）；
+         4=自定义，≡点「自定义」tab：恒开规格窗、未在自定义时切盘（openCusDialog 内语义）。
+         带 Ctrl/Meta/Alt 修饰不拦（不劫持浏览器切标签等快捷键） */
+      if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        if (e.key === "4") openCusDialog();
+        else reset(e.key === "1" ? "beg" : e.key === "2" ? "int" : "exp");
+      }
     });
 
     /* ---- 重玩本局（五期）：replayBoardLocked=true 时，下一局的雷区完全复刻 pendingBoard，
