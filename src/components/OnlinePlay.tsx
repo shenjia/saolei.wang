@@ -1340,7 +1340,6 @@ export function OnlinePlay({
           lvName +
           '<em class="lv_' + s.level + '">' + (s.csec / 100).toFixed(2) + "</em>秒" +
           (s.nf ? "<ins>NF</ins>" : "") +
-          (s.combo ? "<ins>连击</ins>" : "") +
           "</span>"
         : '<span class="gr_lv fail">未完成' +
           (estSec > 0
