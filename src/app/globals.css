@@ -7509,7 +7509,7 @@ html:has(#online_play) #footer {
    全部由 JS 按 gwrap 渲染矩形定位（CSS 值仅作初值兜底），不吃游戏倍率。
    2026-10-15 六期：显隐改由设置项「显示统计」唯一决定（默认关＝任何时刻都不出现；
    开＝常驻，对局中随计时实时刷新）---- */
-#online_play .greport {
+:is(#online_play, #gr_modal) .greport {
   display: none;
   position: absolute;
   top: 0;
@@ -7526,7 +7526,7 @@ html:has(#online_play) #footer {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: left;
 }
-#online_play .greport .gr_title {
+:is(#online_play, #gr_modal) .greport .gr_title {
   font-size: 12px;
   font-weight: bold;
   color: #e8e8e0;
@@ -7534,14 +7534,14 @@ html:has(#online_play) #footer {
   margin-bottom: 4px;
   border-bottom: 1px solid #656355;
 }
-#online_play .greport td {
+:is(#online_play, #gr_modal) .greport td {
   font: 11px/15px Arial, Helvetica, sans-serif;
   color: #939387;
   padding: 1px 5px;
   text-align: left;
   white-space: nowrap;
 }
-#online_play .greport td + td {
+:is(#online_play, #gr_modal) .greport td + td {
   padding-left: 8px;
   text-align: right;
   color: #e8e8e0;
@@ -7551,39 +7551,39 @@ html:has(#online_play) #footer {
    left:calc(100% + 11px) 贴到数值右侧；行垂直居中，底部行由 JS 追加 .tip-up
    翻到行上方、三角朝下防出屏。行内左右各留 6px 内距 + 表格 -6px 负外边距，
    文字仍落在面板 14px 内缘、高亮底可铺满整行 */
-#online_play .greport table {
+:is(#online_play, #gr_modal) .greport table {
   border-collapse: collapse;
   margin: 0 -6px;
 }
-#online_play .greport tr {
+:is(#online_play, #gr_modal) .greport tr {
   cursor: help;
 }
-#online_play .greport tr:hover {
+:is(#online_play, #gr_modal) .greport tr:hover {
   position: relative;
   z-index: 9; /* 高亮行与气泡压过后面的行 */
 }
-#online_play .greport tr:hover td {
+:is(#online_play, #gr_modal) .greport tr:hover td {
   background: #5c5b4e;
   color: #f8f8f2;
 }
-#online_play .greport tr:hover td:first-child {
+:is(#online_play, #gr_modal) .greport tr:hover td:first-child {
   border-radius: 3px 0 0 3px;
 }
-#online_play .greport tr:hover td:last-child {
+:is(#online_play, #gr_modal) .greport tr:hover td:last-child {
   border-radius: 0 3px 3px 0;
 }
-#online_play .greport td.gv {
+:is(#online_play, #gr_modal) .greport td.gv {
   position: relative;
 }
 /* 「无猜重排」行数值（2026-10-15 十期张老师定）：绿色呼应雨伞激活态；
    行 hover 高亮会把 td 文字刷白，绿色需再压一层保持 */
-#online_play .greport td.gv.gv_ng {
+:is(#online_play, #gr_modal) .greport td.gv.gv_ng {
   color: #a6e22e;
 }
-#online_play .greport tr:hover td.gv.gv_ng {
+:is(#online_play, #gr_modal) .greport tr:hover td.gv.gv_ng {
   color: #a6e22e;
 }
-#online_play .greport td.gv .tip {
+:is(#online_play, #gr_modal) .greport td.gv .tip {
   display: none;
   position: absolute;
   left: calc(100% + 11px);
@@ -7603,7 +7603,7 @@ html:has(#online_play) #footer {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 /* 对话气泡小三角：默认在气泡左侧、尖端朝左指着数值 */
-#online_play .greport td.gv .tip::before {
+:is(#online_play, #gr_modal) .greport td.gv .tip::before {
   content: "";
   position: absolute;
   right: 100%;
@@ -7612,17 +7612,17 @@ html:has(#online_play) #footer {
   border: 5px solid transparent;
   border-right-color: #272822;
 }
-#online_play .greport tr:hover td.gv .tip {
+:is(#online_play, #gr_modal) .greport tr:hover td.gv .tip {
   display: block;
 }
 /* 贴视口底缘的行：气泡翻到行上方，三角移到底部、尖端朝下（类挂在 tr 上：
    鼠标常落在术语格，判定必须按整行，见 OnlinePlay 的 mouseover 委托） */
-#online_play .greport tr.tip-up .tip {
+:is(#online_play, #gr_modal) .greport tr.tip-up .tip {
   top: auto;
   bottom: calc(100% + 6px);
   transform: none;
 }
-#online_play .greport tr.tip-up .tip::before {
+:is(#online_play, #gr_modal) .greport tr.tip-up .tip::before {
   top: auto;
   bottom: -5px;
   left: 12px;
@@ -7632,7 +7632,7 @@ html:has(#online_play) #footer {
   border-top-color: #272822;
 }
 @media (min-width: 960px) {
-  #online_play .greport.show {
+  :is(#online_play, #gr_modal) .greport.show {
     display: block;
   }
 }
@@ -7813,29 +7813,28 @@ html:has(#online_play) #footer {
 }
 /* 数据面板「复活次数」行（2026-10-19 张老师定）：金色数值（呼应复活按钮）；
    行 hover 高亮会把 td 文字刷白，金色需再压一层保持（同 gv_ng 手法） */
-#online_play .greport td.gv.gv_rv {
+:is(#online_play, #gr_modal) .greport td.gv.gv_rv {
   color: #fdc61d;
 }
-#online_play .greport tr:hover td.gv.gv_rv {
+:is(#online_play, #gr_modal) .greport tr:hover td.gv.gv_rv {
   color: #fdc61d;
 }
-/* 窄形态（gr_narrow）已退役（2026-10-19 负层覆盖改造）：侧空放不下 1x 自然尺寸时
-   不再「四按钮 4 行 + 压 0.3」地缩，改由 JS 挂 gr_cover 覆盖态盖在游戏画面上方 */
-#online_play .gresult.gr_cover,
-#online_play .greport.gr_cover {
-  /* 覆盖态浮层感：阴影加深一档（4/16 → 8/28），示意「压在棋盘上的临时层」 */
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-}
+/* 窄形态（gr_narrow）与负层覆盖态（gr_cover）均已退役（2026-10-19 二版）：
+   空间不够时不再「压小 / 硬盖在棋盘上」，改由 JS 判定「任一面板渲染宽 < 120px」
+   → 整体搬进 #gr_modal 遮罩卡片居中放大显示（见 OnlinePlay.tsx syncReportZoom） */
 @media (min-width: 960px) {
   #online_play .gresult.show {
     display: block;
   }
 }
-/* ---- 移动端结算浮层（2026-10-15 七期张老师定）----
-   <960px 时桌面右侧面板不显示（.gresult.show 只在 ≥960px 生效），完成一局改弹本浮层：
+/* ---- 结算浮层（2026-10-15 七期；2026-10-19 二版扩到桌面）----
+   两种情形弹本浮层：①<960px 没有侧边位（.gresult.show 只在 ≥960px 生效）；
+   ②≥960px 但侧边渲染宽 < 120px（全屏高级最大比例下侧空被棋盘吃干）。
    全屏遮罩 + 屏幕居中卡片，**点遮罩关闭**。元素由 OnlinePlay.tsx 动态挂到 body 直下
    （同 #fs_tip）——#page 在 ≤605px 有整页 zoom，做在里面 fixed 遮罩会随缩放失真、
-   铺不满屏。卡片内部沿用上面那组 .gr_*（与桌面面板同一份样式，只是换宿主） */
+   铺不满屏；进全屏时再搬进全屏宿主（浏览器只渲染 fullscreenElement 子树）。
+   卡片本身只是排版容器（透明无边框）：两块面板各带自己的深色盒子，卡片整体 zoom
+   由 JS fitMaskCard 按视口放大——张老师定「遮罩态结算面板的比例应尽可能利用屏幕空间」 */
 #gr_modal {
   position: fixed;
   inset: 0;
@@ -7846,20 +7845,85 @@ html:has(#online_play) #footer {
   padding: 16px;
   box-sizing: border-box;
   text-shadow: none;
+  /* 极度窄小屏缩到 0.5x 仍装不下时允许滚动——绝不裁掉按钮 */
+  overflow: auto;
 }
 #gr_modal:not([hidden]) {
   display: flex;
 }
+/* 卡片排版：竖屏（手机竖拿 / 窄窗单列）＝结算在上、数据面板在下；
+   横屏（手机横屏 / 桌面全屏遮罩）＝数据面板在结算面板左侧（2026-10-19 张老师定）。
+   DOM 顺序结算在前、数据在后，横屏只把数据 order 到 -1，无需 JS 干预 */
 #gr_modal .grm_card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(92vw, 420px);
+  margin: auto; /* flex 居中 + 放大溢出时两端不被裁（justify-content:center 的经典坑） */
+  box-sizing: border-box;
+  text-align: center;
+}
+/* 宿主槽不参与排版，面板直接当卡片的 flex 项（order/宽度规则的落点都是面板本身） */
+#gr_modal .grm_slot {
+  display: contents;
+}
+/* 面板进卡片后不再是浮窗：定位交给 flex，盒子外观自己带（#online_play 的规则不在
+   作用域内，这里补齐）；宽度＝结算顶满卡片、数据面板自适应内容再拉伸齐宽 */
+#gr_modal .greport {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  max-width: 100%;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+#gr_modal .greport.show {
+  display: block; /* 不受 ≥960 断点约束（窄屏 / 手机上同样要显示） */
+}
+#gr_modal .gresult {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
   width: 100%;
-  max-width: 248px;
   box-sizing: border-box;
   background: #49483e;
   border: 1px solid #656355;
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
-  padding: 10px 12px;
+  border-radius: 6px;
+  padding: 8px 10px;
   text-align: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+#gr_modal .gresult.show {
+  display: block;
+}
+@media (orientation: landscape) {
+  #gr_modal .grm_card {
+    flex-direction: row;
+    align-items: flex-start;
+    width: auto;
+    max-width: 96vw;
+  }
+  /* ⚠️ order 必须挂在面板本身：宿主槽是 display:contents（盒子不存在），
+     排版的 flex 项就是 .greport —— 挂在 #grm_stats 上会被忽略 */
+  #gr_modal .greport {
+    order: -1; /* 数据面板摆到结算面板左侧 */
+  }
+  #gr_modal .gresult {
+    width: min(46vw, 380px);
+    flex: 0 0 auto;
+  }
+}
+@media (orientation: portrait) {
+  /* 单列时数据面板与结算面板齐宽（撤掉 max-content 让 flex 拉伸），
+     表跟着铺满、值列贴到面板右缘——窄窄一条贴左很难看 */
+  #gr_modal .greport {
+    width: auto;
+    align-self: stretch;
+  }
+  #gr_modal .greport table {
+    width: calc(100% + 12px);
+  }
 }
 /* 游戏界面内回放控制栏（五期二版的三~五期产物）已于 2026-10-15 六期整条撤除
    （张老师定：看回放时不再出现控制条）——回放改为进即自动播完，重播/退出走右侧面板
@@ -7885,7 +7949,7 @@ html:has(#online_play) #footer {
 
 /* ---- 录像详情页原地回放：左侧数据面板 + 控制条（2026-10-16 九期张老师需求；
    设计稿 design/video-replay-panel-20261016.html）。
-   面板规则与 #online_play .greport 一组同源（深底/圆角/阴影/hover 气泡），
+   面板规则与练习页 .greport 一组同源（深底/圆角/阴影/hover 气泡），
    拆开写是因为详情页没有 #online_play 宿主——改样式两处同步 ---- */
 /* 十期：页面态面板 portal 挂 body（.video_cell overflow:hidden 裁剪教训）。
    原为 fixed 定位（视口坐标），2026-10-17 张老师定：滚动页面时面板不得悬浮

@@ -452,21 +452,33 @@ export function OnlinePlay({
     };
     const greport = $("greport");
     const gresult = $("gresult"); // 右侧结算面板（六期：雷达图 + 四按钮两行）
-    /* ---- 七期（2026-10-15 张老师定）：移动端结算浮层 ----------------------------------
-       <960px 时 CSS 里 .gresult.show 不生效（桌面右侧栏位放不下），完成一局改弹本浮层：
-       全屏遮罩 + 屏幕居中卡片，点遮罩关闭。
+    /* ---- 结算浮层（2026-10-15 七期；2026-10-19 二版扩到桌面）-----------------------
+       全屏遮罩 + 屏幕居中卡片，点遮罩关闭。**两种情形弹它**：
+       ①<960px：CSS 里 .greport.show/.gresult.show 只在 ≥960 生效，窄屏没有侧边位；
+       ②≥960px 但空间被挤爆：任一显示中的面板侧边渲染宽 < 120px（张老师截图：全屏
+         高级最大比例下两侧面板小到看不清）→ 收起侧板、改遮罩居中显示。
        ⚠️ 必须挂 body 直下（同 #fs_tip）：#page 在 ≤605px 有整页 zoom，做在 #page 里的
-          fixed 遮罩会随缩放失真、铺不满屏（本项目的既有教训）。
-       断点与 CSS 的 (min-width: 960px) 必须同值——JS 按它决定把面板渲染到哪个宿主。 */
+          fixed 遮罩会随缩放失真、铺不满屏（本项目的既有教训）；全屏态再搬进全屏宿主
+         （浏览器只渲染 fullscreenElement 子树，挂 body 的浮层会整体不可见）。
+       断点与 CSS 的 (min-width: 960px) 必须同值——JS 按它决定面板有没有侧边位。 */
     const mqPanelDesktop = window.matchMedia("(min-width: 960px)");
     const grModal = document.createElement("div");
     grModal.id = "gr_modal";
     grModal.hidden = true;
-    /* 卡片是个空壳：内容由 renderResultPanel 按当前断点填（另一端同步清空，
-       保证 #gr_radar / 按钮 id 全文档只有一份） */
-    grModal.innerHTML = '<div class="grm_card" id="grm_card"></div>';
+    /* 卡片里两个宿主槽（2026-10-19 二版）：grm_result 放结算面板、grm_stats 放数据面板。
+       面板本体仍是 #game_area 里的 #greport / #gresult 两个节点——进出遮罩＝搬家，
+       不重建 DOM（雷达 React root、按钮事件绑定都不丢）。DOM 顺序＝结算在前、数据在后：
+       竖屏单列时结算在上、数据在下（张老师定）；横屏 row 用 order 把数据摆到左侧。
+       卡片本身只做 flex 容器（透明无边框），两块面板各带自己的深色盒子 */
+    grModal.innerHTML =
+      '<div class="grm_card" id="grm_card">' +
+      '<div class="grm_slot" id="grm_result"></div>' +
+      '<div class="grm_slot" id="grm_stats"></div>' +
+      "</div>";
     document.body.appendChild(grModal);
     const grmCard = grModal.querySelector("#grm_card") as HTMLElement;
+    const grmResult = grModal.querySelector("#grm_result") as HTMLElement;
+    const grmStats = grModal.querySelector("#grm_stats") as HTMLElement;
     /* 记录面板当前在哪个宿主（resize 跨断点时用来判断要不要搬家） */
     let panelOnDesktop = mqPanelDesktop.matches;
     /* 点遮罩关闭（卡片内部点击的 e.target 是卡片或其子节点，不会命中）。
@@ -553,6 +565,7 @@ export function OnlinePlay({
         minesLed: ledMinesCur,
       };
     }
+
 
     function idx(x: number, y: number) { return y * W + x; }
     function inBoard(x: number, y: number) { return x >= 0 && x < W && y >= 0 && y < H; }
@@ -1311,15 +1324,15 @@ export function OnlinePlay({
       const cnt = gameCounts();
       const { solvedBv, html } = statsReport(t, cnt);
       /* 练习局埋点（2026-10-16）：每局结束上报（胜/负都记），uid 服务端 session 取。
-         sendBeacon 不阻塞下一局，关页/刷新也不丢；失败静默（埋点不影响游戏） */
+         sendBeacon 不阻塞下一局，关页/刷新也不丢；失败静默（埋点不影响游戏）。
+         原地复活（2026-10-19）：**败局延迟 300ms 发送**——踩雷后 300ms 内按空格/
+         点复活按钮则撤销（那局还没完，败局不是终态）；胜局立即发（没有复活可推翻） */
       if (t > 0) {
         try {
           const payload = JSON.stringify({
             level: lv, won, csec: Math.round(t * 100), bbbv: board3bv,
             solvedBv, nf, clicks: cnt.clLeft + cnt.clRight + cnt.clDouble,
           });
-          /* 原地复活（2026-10-19）：**败局延迟 300ms 发送**——踩雷后 300ms 内按空格/
-             点复活按钮则撤销（那局还没完，败局不是终态）；胜局立即发 */
           if (won) {
             navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
           } else {
@@ -1429,13 +1442,15 @@ export function OnlinePlay({
         revive:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M1.5 12h3.6l1.9-5.5L11 18l2.2-7.6 1.3 1.6h7.9"/><path fill="currentColor" d="M11.99 10.1c.45-1.55 2.6-1.85 3.5-.6.8 1.1.3 2.6-1 3.75L12 15.4l-2.5-2.15c-1.3-1.15-1.8-2.65-1-3.75.9-1.25 3.05-.95 3.49.6z"/></svg>',
       };
-      /* 宿主按当前断点选（七期）：桌面＝右侧浮窗 gresult，移动＝居中浮层卡片 grmCard。
-         非活动端同步清空——#gr_radar 与按钮 id 全文档只能存在一份 */
-      const host = mqPanelDesktop.matches ? gresult : grmCard;
-      (mqPanelDesktop.matches ? grmCard : gresult).innerHTML = "";
+      /* 渲染目标恒为 #gresult 本体（2026-10-19 二版）：遮罩态下这个节点被搬进
+         #grm_result 槽、侧边态下在 #game_area——宿主切换交给 syncReportZoom 统一搬，
+         这里只管把内容写进唯一那份 DOM（#gr_radar / 按钮 id 全文档恒一份） */
+      const host = gresult;
+      gresult.innerHTML = "";
       /* 原地复活按钮（2026-10-19 张老师定）：**仅败局且有死亡快照**在雷达图下方
          额外一颗黄色按钮（与四按钮分开、独占一行），点击或空格触发 revive；
-         胜局/首击即雷（无快照）不渲染 */
+         胜局/首击即雷（无快照）不渲染。渲染条件与 revive()/空格守卫同源：
+         dieSnap 存在 */
       const reviveBtn = !s.won && dieSnap
         ? '<button type="button" class="grb grb_revive" id="grb_revive" title="按空格也可复活">' +
           IC.revive + "原地复活</button>"
@@ -1452,9 +1467,10 @@ export function OnlinePlay({
         '<button type="button" class="grb" id="grb_review">' + IC.review + "查看回放</button>" +
         '<button type="button" class="grb" id="grb_download">' + IC.download + "下载录像</button>" +
         "</div>";
-      /* 桌面：右侧浮窗显形（left/top/zoom 由 syncReportZoom 定位）；移动：弹遮罩浮层 */
-      gresult.classList.toggle("show", mqPanelDesktop.matches);
-      grModal.hidden = mqPanelDesktop.matches;
+      /* 显隐标志与宿主（2026-10-19 二版）：.show 一律置上＝「这局要显示」，
+         至于摆侧边还是进遮罩卡片，由 syncReportZoom 按空间判定后搬家 */
+      gresult.classList.add("show");
+      maskOpen = true;
       /* 雷达图恒显示（2026-10-15 张老师定）：自定义盘参照高级基准评级；
          缺基准 / 完成度过低 → 空雷达（全轴 ?、收缩到圆心），hover 提示「参考数据不足，无法评级」 */
       const radarHost = host.querySelector("#gr_radar") as HTMLElement | null;
@@ -1470,10 +1486,11 @@ export function OnlinePlay({
       }
       /* 显形后立刻定位缩放：数据面板关着时 syncReportZoom 不再被 paintStatPanel 带动
          （那是「面板小、叠棋盘左上」bug 的另一半——游戏结束这刻也无人调用）。
-         雷达是 createRoot 异步渲染、首帧量不到高度，再排一帧复核；数据面板开着时
-         重复算一遍值相同，无害 */
+         雷达是 createRoot 异步渲染、首帧量不到高度，再排一帧复核；遮罩态卡片是按
+         卡片实测尺寸放大缩小的，首帧量矮了会把卡片放过头 → 90ms 后再补一次 */
       syncReportZoom();
       requestAnimationFrame(syncReportZoom);
+      window.setTimeout(() => { if (panelSlot === "mask") fitMaskCard(); }, 90);
       const bind = (id: string, fn: () => void) => {
         const el = host.querySelector("#" + id) as HTMLElement | null;
         if (el) on(el, "click", fn);
@@ -1484,16 +1501,22 @@ export function OnlinePlay({
       bind("grb_download", downloadAvf);
       bind("grb_revive", revive);
     }
-    /* 移动端结算浮层收起 / 再弹（七期 2026-10-15 张老师定）。
+    /* 结算浮层收起 / 再弹（七期 2026-10-15；2026-10-19 二版扩到桌面遮罩态）。
        收起**不清内容**——只是 hidden，再弹不必重建（雷达 React root 留在卡片里，
-       hidden 期间不响应 hover，无副作用；真正清空发生在 renderResultPanel 换宿主时） */
+       hidden 期间不响应 hover，无副作用；内容只在新一局结算时被重写）。
+       maskOpen 与 panelSlot 分开记：前者＝「遮罩此刻该不该展开」（点遮罩关掉后
+       再 resize 不能自己弹回来），后者＝「面板住在哪」（空间不够就得一直住在卡片里） */
     function hideResultModal() {
+      maskOpen = false;
       grModal.hidden = true;
     }
     function showResultModal() {
-      /* 桌面端右侧浮窗常驻可见，没有「再弹」这回事；浮层只在移动端存在 */
-      if (mqPanelDesktop.matches || !snapshot) return;
+      if (!snapshot) return;
+      maskOpen = true;
+      /* 侧边态的面板常驻可见，没有「再弹」这回事；只有遮罩态需要重新展开 */
+      if (panelSlot !== "mask") return;
       grModal.hidden = false;
+      fitMaskCard();
     }
     /* 雷达分位计算：基准由服务端注入（video_metric_dist 全表），分组只按「级别 × 模式」——
        全站恒 6 行，bucket 一律 DIST_BUCKET_ALL（张老师 2026-10-14 定：不细分 3BV、
@@ -1605,12 +1628,9 @@ export function OnlinePlay({
       /* 已在回放中（六期张老师定）：不忽略点击，从头重播 */
       if (replaying) { restartReplay?.(); return; }
       /* 移动端（七期）：回放在游戏盘面上演，结算浮层（带遮罩）挡着盘面——点「查看回放」
-         即收起浮层，播完再弹回来（见 exitReplay / tick 的收尾） */
+         即收起浮层，播完再弹回来（见 exitReplay / tick 的收尾）。
+         二版起桌面遮罩态同理（面板也在浮层里），一并收起 */
       hideResultModal();
-      /* 负层覆盖态的面板盖在棋盘正上方，回放征用棋盘画面 → 临时让位
-         （visibility:hidden 保布局不重排，exitReplay 恢复；侧边态面板在盘外不动） */
-      if (gresult.classList.contains("gr_cover")) gresult.style.visibility = "hidden";
-      if (greport.classList.contains("gr_cover")) greport.style.visibility = "hidden";
       const s = snapshot;
       /* 结算终值存档（二十期）：回放期间计数条被征用（计时/雷数 LED 随回放走），
          退出回放恢复到这里存的读数；倍率同理——若为装下控制条自动缩小过，
@@ -1917,11 +1937,10 @@ export function OnlinePlay({
         syncBarUI();
         if (target >= s.csec) {
           setPlaying(false);
-          /* 移动端（七期 2026-10-15 张老师定：回放播放完后再次显示浮层）：
-             浮层是带遮罩的全屏层，回放停在原地会被它盖住、连退出入口都摸不到——
-             播完直接退出回放（恢复结算盘面）并重新弹出「本局表现」浮层。
-             桌面端浮窗本来就在盘面旁常驻，保持原样（回放停在终局画面）。 */
-          if (!mqPanelDesktop.matches) exitReplay();
+          /* 遮罩态（移动端 / 二版桌面挤爆时）：浮层是带遮罩的全屏层，回放停在原地会被它
+             盖住、连退出入口都摸不到——播完直接退出回放并重新弹出「本局表现」浮层。
+             侧边态浮窗本来就在盘面旁常驻，保持原样（回放停在终局画面）。 */
+          if (!mqPanelDesktop.matches || panelSlot === "mask") exitReplay();
           return;
         }
         rafId = requestAnimationFrame(tick);
@@ -1948,10 +1967,8 @@ export function OnlinePlay({
           if (shrankTo !== null && zoomCur === shrankTo) applyZoom(savedZoom, false);
         }
       document.removeEventListener("keydown", escR);
-      /* 恢复覆盖态面板显形（进入回放时 visibility:hidden 让位，见 startInPlaceReplay）；
-         reset 路径无害——reset 已把两面板 display:none，visibility 是死属性 */
-      gresult.style.visibility = "";
-      greport.style.visibility = "";
+      /* 再弹结算浮层（七期移动端 / 二版桌面遮罩）：侧边态的面板没被收起过，
+         showResultModal 内部按宿主自己判断 */
       if (restorePanel) showResultModal();
       }
       /* 注册给外层用（进回放时更新引用，退出时自清）：
@@ -1968,8 +1985,11 @@ export function OnlinePlay({
     /* ---- 原地复活执行（2026-10-19 张老师定）：回滚上次踩雷的点击，时间继续 ----
        触发：结算面板黄色「原地复活」按钮（空格键快捷触发）。
        动作：恢复死亡快照（盘面/雷区/数字/3BV 构件/事件流截断）→ over=false
-       → 计时器从死亡时刻续跑（elapsed 偏移回拨，表针无跳变）→ 败局埋点撤销
-       （这局还没完）→ 复活计数+1 → 撤结算面板（含移动端浮层）。 */
+       → 计时器从死亡时刻续跑（elapsed 偏移 = startTs 前移死亡经过的时长，表针连续）
+       → 败局埋点撤销（这局还没完）→ 复活计数+1 → 撤结算面板（含移动端浮层）。
+       ⚠️ 恢复路径全部走既有函数：repaintAll 重画盘面（over=false 时按 state 画，
+       不再揭示雷区）、led 恢复雷数计数、setFace 回笑脸。手雷数由 flagsLeft 重算
+       （快照里 state 含玩家旗，重算即死亡前 LED 值）。 */
     function revive() {
       /* 三重守卫：死亡快照存在、确实在结算态、终态是**败局**（胜局快照/救回后
          作废的 null 都不触发——空格键与按钮同路） */
@@ -1984,7 +2004,7 @@ export function OnlinePlay({
       bvIslands = d.bvIslands.map((r) => r.slice());
       board3bv = d.board3bv;
       origMines = d.origMines ? d.origMines.slice() : null;
-      evStream.length = d.evLen; // 剥到手势前：致命手势（含其全部按下/松开事件）整体撤销
+      evStream.length = d.evLen; // 截断：致命点击及之后的事件（雷揭示 paint 不录事件，天然无需处理）
       over = false;
       hitIdx = null;
       /* 计时续跑（「时间继续」的题意）：startTimer 会把 startTs 重置为 now，
@@ -1998,10 +2018,7 @@ export function OnlinePlay({
       /* 盘面与计数恢复：repaintAll 在 over=false 下按 state 重画（含旗/数字），
          死亡揭示的红雷/错旗贴图一并被覆盖掉；败局快照作废（这局还没完） */
       gresult.classList.remove("show");
-      gresult.classList.remove("gr_cover");
-      gresult.style.visibility = "";
       greport.classList.remove("show");
-      greport.classList.remove("gr_cover");
       snapshot = null;
       hideResultModal();
       repaintAll();
@@ -2071,13 +2088,7 @@ export function OnlinePlay({
          故与下面 snapshot = null 的先后无依赖 */
       greport.classList.remove("show");
       gresult.classList.remove("show");
-      /* 覆盖态残留双保险：回放让位的 visibility 与 gr_cover 类随新局一并清
-         （正常路径 exitReplay 已清，这里防「回放中直接 reset」等绕行路径） */
-      greport.style.visibility = "";
-      gresult.style.visibility = "";
-      greport.classList.remove("gr_cover");
-      gresult.classList.remove("gr_cover");
-      hideResultModal(); // 移动端浮层（七期）随新局一并收起
+      hideResultModal(); // 结算浮层（七期移动端 / 二版桌面遮罩）随新局一并收起
       snapshot = null;
       stopTimer();
       led(ledMines, M); led(ledTime, 0);
@@ -2359,6 +2370,8 @@ export function OnlinePlay({
       saveSettings();
       if (!showStats) {
         greport.classList.remove("show");
+        /* 二版起必须重算：数据面板撤下后，只剩结算面板的遮罩态可能该回侧边了 */
+        syncReportZoom();
         return;
       }
       if (over && lastReportHtml) paintStatPanel(lastReportHtml);
@@ -2492,6 +2505,17 @@ export function OnlinePlay({
     on(document, "fullscreenchange", () => {
       const entered = document.fullscreenElement === root;
       fsBtn.classList.toggle("active", entered);
+      /* 结算浮层跟着全屏宿主走（2026-10-19 二版）：全屏态浏览器只渲染
+         fullscreenElement 子树，挂在 body 直下的浮层会整体不可见——而桌面遮罩态
+         恰恰只在全屏拉满时才触发，这条是命门。退出全屏搬回 body（避开 #page 的整页 zoom） */
+      const fsHost =
+        document.fullscreenElement instanceof HTMLElement
+          ? document.fullscreenElement
+          : document.body;
+      if (grModal.parentElement !== fsHost) {
+        fsHost.appendChild(grModal);
+        window.setTimeout(() => { if (panelSlot === "mask") fitMaskCard(); }, 0);
+      }
       if (entered) {
         zoomBeforeFs = zoomCur;
         // 等全屏渲染稳定（innerWidth 更新为屏幕尺寸）后再测量计算
@@ -2509,10 +2533,11 @@ export function OnlinePlay({
       if (document.fullscreenElement === root) fitZoomForFullscreen();
       else if (lsQuery.matches && !lsManual) fitZoomForLandscape(); // 首帧横屏（zoomBeforeLs 恒 null）也要兜底，故只看 lsManual
       else applyZoom(zoomCur, false);
-      /* 数据面板常驻时（六期）：跟随 gwrap 重新贴合（内部对未显示的面板直接早退） */
+      /* 数据面板常驻时（六期）：跟随 gwrap 重新贴合；二版起这里同时负责
+         「<120px 转遮罩 / 空间恢复回侧边」的重新判定（内部对未显示的面板直接早退） */
       syncReportZoom();
       /* 断点跨越（七期）：宽屏 ↔ 窄屏互切后，已结束那局的结算面板搬到对应宿主
-         （桌面右侧浮窗 / 移动居中浮层）——否则窄屏下面板会留在看不见的 gresult 里 */
+         （桌面侧边浮窗 / 遮罩卡片）——否则窄屏下面板会留在看不见的 gresult 里 */
       if (snapshot && mqPanelDesktop.matches !== panelOnDesktop) {
         panelOnDesktop = mqPanelDesktop.matches;
         renderResultPanel();
@@ -2963,97 +2988,179 @@ export function OnlinePlay({
        游戏区域的高度」）：高倍率下右侧结算面板不再按视口、改按 **gwrap 渲染高**
        封顶——面板顶本就与 gwrap 顶对齐，压到等高即底边齐平；≤1.5 不启用
        （低倍率面板跟游戏走，压它反而破跟手感） */
-    /* 单面板几何 fit（负层覆盖改造，2026-10-19 张老师定）：一个面板一份决策——
-       先按「基准尺寸 × min(游戏倍率, 高度/游戏高封顶)」估自然形态（与旧共享 z 口径
-       一致），侧空（视口到银框左右缘）放得下自然形态 → 维持侧边浮窗、zoom 按需放大；
-       放不下 → **负层覆盖态**（gr_cover）：面板叠在游戏画面上方、zoom 封 1x 不缩小，
-       左面板贴银框左缘、右面板贴右缘、均上移 14px 间隙内缩——「宁盖不缩」，
-       棋盘上还有 40px 露边保证笑脸可点。旧 gr_narrow（四按钮 2 列改 4 行 + 面板压 0.3）
-       机制随之退役：那正是「面板无法正常尺寸出现」的病灶。
-       z 量取与旧版同源：zoom 归 1 量 rect 再 ÷pz（十期口径，全引擎一致）；
-       设后实量闭环复核（视口底越界按高度比一步收敛）。 */
-    function fitOnePanel(
+    /* ---- 面板几何与宿主切换（2026-10-19 二版，张老师两定）---------------------------
+       ①「任一显示中的面板侧边渲染宽 < 120px」→ 收起侧板、改遮罩居中显示。
+          （上一版 gr_cover「宁盖不缩」被实测否决：全屏高级最大比例下侧空只剩 200px
+          上下，196px 的结算面板连雷达带四按钮根本看不清——病根是「地方太小」，
+          那就换地方，不是硬塞。）
+       ②遮罩态卡片按视口可用宽高整体放大（fitMaskCard），尽量吃满屏幕。
+       侧边态 z 口径沿用旧版（跟游戏倍率走 + 侧空/视口高封顶）；自然尺寸量取仍是
+       「zoom 归 1 量 rect ÷ 页级 zoom」（十期口径，全引擎一致）。 */
+    const PANEL_MIN_W = 120; // 渲染宽下限（屏幕 px）：低于它＝看不清 → 转遮罩
+    /* 面板当前住哪：side＝#game_area 左右浮窗；mask＝#gr_modal 卡片（双栏/单列） */
+    let panelSlot: "side" | "mask" = "side";
+    /* 遮罩此刻是否展开：点遮罩关掉后，即便空间依旧不够也不自动弹回来；
+       新一局结算 / 回放结束再弹才置真（见 renderResultPanel / showResultModal） */
+    let maskOpen = false;
+    /* 侧边宿主下 zoom=1 量的自然尺寸（布局 px）：遮罩态里面板宽由卡片给（width:100%），
+       量不出自然宽，所以「回侧边还够不够」只能靠这份缓存反推 */
+    const panelBase = { statsW: 0, statsH: 0, resultW: 0, resultH: 0, valid: false };
+
+    /* 自然尺寸（zoom 归 1 再量，÷ 页级 zoom 回布局 px）；返回 0 宽＝量不出
+       （display:none / 正在搬家） */
+    function panelNatural(panel: HTMLElement, pz: number): { w: number; h: number } {
+      panel.style.zoom = "1";
+      const r = panel.getBoundingClientRect();
+      return { w: r.width / pz, h: r.height / pz };
+    }
+    /* 侧边态目标 zoom 与渲染宽（纯计算，不碰 DOM）：
+       自然形态＝跟游戏倍率走，>1.5 时不得高于游戏窗高（十一期：面板顶与银框顶对齐、
+       等高即底边齐平）；再按侧空（视口缘 12 + 面板间隙 14）与视口高封顶 */
+    function sideFit(
+      base: { w: number; h: number },
+      side: "left" | "right",
+      gwR: DOMRect,
+      pz: number
+    ): { z: number; renderedW: number } {
+      const gameCapH = zoomCur > 1.5 && gwR.height > 1 ? gwR.height / (base.h * pz) : 2.5;
+      const naturalZ = Math.max(0.3, Math.min(zoomCur, gameCapH, 2.5));
+      const availSide =
+        side === "left" ? gwR.left - 12 - 14 : window.innerWidth - gwR.right - 12 - 14;
+      const sideCap = base.w > 1 ? availSide / (base.w * pz) : 2.5;
+      const hCap = base.h > 1 ? (window.innerHeight - gwR.top - 12) / (base.h * pz) : 2.5;
+      const z = Math.max(0.25, Math.min(naturalZ, sideCap, hCap));
+      return { z, renderedW: base.w * z * pz };
+    }
+    /* 侧边定位（公式＝旧版逐字，生产多轮验证）：left 面板右缘贴「银框左−14」、
+       right 面板左缘贴「银框右+14」，顶端与银框顶对齐；视口坐标 → game_area 局部
+       坐标（再 ÷页级 zoom ÷ 自身 zoom）。设后实测闭环：底部越出视口就按高度比
+       再压一档（面板高 ∝ zoom 线性） */
+    function placeSide(
       panel: HTMLElement,
       side: "left" | "right",
+      base: { w: number; h: number },
+      z: number,
       gwR: DOMRect,
       gaR: DOMRect,
       pz: number
     ): void {
-      /* 覆盖残留先清（class 与 inline zoom 都会污染量测） */
-      panel.style.zoom = "1";
-      panel.classList.remove("gr_cover");
-      const rect = panel.getBoundingClientRect();
-      const rawW = rect.width / pz;
-      const rawH = rect.height / pz;
-      if (rawW < 1 || rawH < 1) return; // display:none（未显形/换宿主瞬间）量不出
-      /* 自然形态 zoom：跟游戏倍率走（跟手感），但 >1.5 时不得高于游戏窗
-         （十一期口径：面板顶与 gwrap 顶对齐，等高即底边齐平） */
-      const gameCapH = zoomCur > 1.5 && gwR.height > 1 ? gwR.height / (rawH * pz) : 2.5;
-      const naturalZ = Math.max(0.3, Math.min(zoomCur, gameCapH, 2.5));
-      /* 侧空：视口缘 12px + 面板间隙 14px */
-      const availSide =
-        side === "left"
-          ? gwR.left - 12 - 14
-          : window.innerWidth - gwR.right - 12 - 14;
-      /* 判定阈值＝自然形态在 **1x**（下限尺寸）下是否还放得进侧空——放得下 → 侧边浮窗
-         （zoom 跟游戏倍率走，但不得超过侧空/视口封顶）；放不下 → **负层覆盖态**：
-         面板以 ≤1x 叠在游戏画面上方（左面板贴银框左缘、右面板贴右缘，各留 14px 间隙），
-         「宁盖不缩」——绝不因空间不足把面板压到看不清的尺寸。覆盖时棋盘仍有
-         银框/计数条露边，笑脸可点；被面板遮住的区域用「再来一局」即开新局 */
-      let z: number;
-      if (rawW * pz > availSide) {
-        z = Math.min(1, naturalZ);
-        panel.classList.add("gr_cover");
-      } else {
-        z = naturalZ;
-        /* 侧边态完整可见性封顶：宽度不越侧空、底部不越视口（高 ∝ z 线性压） */
-        const sideCap = rawW > 1 ? availSide / (rawW * pz) : 2.5;
-        const availH = window.innerHeight - gwR.top - 12;
-        const hCap = rawH > 1 ? availH / (rawH * pz) : 2.5;
-        z = Math.max(0.3, Math.min(z, sideCap, hCap));
-      }
-      /* 定位统一经 place(z)：锚点在视口坐标选定后换算 game_area 局部坐标。
-         侧边态公式＝旧版逐字（生产多轮验证）：left 面板右缘贴锚 A=银框左−14 →
-         left = toLocal(A−gaR.left) − rawW；right 面板左缘贴锚 A=银框右+14 →
-         left = toLocal(A−gaR.left)。覆盖态按同一变换镜像：left 面板左缘贴
-         银框左+14（盖进棋盘）、right 面板右缘贴银框右−14；面板宽超过
-         可用视口宽时钳到视口缘 12px（高倍全屏 + 大数据面板的极端组合） */
-      const place = (zz: number) => {
+      const put = (zz: number) => {
         const t = (v: number) => v / pz / zz;
         panel.style.zoom = String(zz);
         panel.style.top = t(gwR.top - gaR.top) + "px";
-        if (panel.classList.contains("gr_cover")) {
-          if (side === "left") {
-            const vx = Math.max(gwR.left + 14, 12);
-            panel.style.left = t(vx - gaR.left) + "px";
-          } else {
-            const vx = Math.max(gwR.right - 14 - rawW * zz * pz, 12);
-            panel.style.left = t(vx - gaR.left) + "px";
-          }
-        } else {
-          panel.style.left =
-            side === "left"
-              ? t(gwR.left - gaR.left - 14) - rawW + "px"
-              : t(gwR.right - gaR.left + 14) + "px";
-        }
+        panel.style.left =
+          side === "left"
+            ? t(gwR.left - gaR.left - 14) - base.w + "px"
+            : t(gwR.right - gaR.left + 14) + "px";
       };
-      place(z);
-      /* 设后实测闭环（旧版沿用）：底部仍超视口就按高度比再压一次 zoom，
-         覆盖态同理（盖在棋盘上也不许越出视口），压完重定位 */
+      put(z);
       const now = panel.getBoundingClientRect();
       if (now.bottom > window.innerHeight - 8 && now.height > 1) {
-        place(Math.max(0.3, z * ((window.innerHeight - 8 - now.top) / now.height)));
+        put(Math.max(0.25, z * ((window.innerHeight - 8 - now.top) / now.height)));
       }
     }
+    /* 面板搬家：只挪节点、不重建（雷达 React root、按钮事件绑定都留在原位）。
+       进遮罩清掉侧边态的 inline 定位与缩放——卡片统一缩放，面板不再自理 */
+    function mountPanels(slot: "side" | "mask") {
+      if (slot === "mask") {
+        if (gresult.parentElement !== grmResult) grmResult.appendChild(gresult);
+        if (greport.parentElement !== grmStats) grmStats.appendChild(greport);
+        for (const p of [greport, gresult]) {
+          p.style.left = "";
+          p.style.top = "";
+          p.style.zoom = "";
+        }
+      } else {
+        if (gresult.parentElement !== gameAreaEl) gameAreaEl.appendChild(gresult);
+        if (greport.parentElement !== gameAreaEl) gameAreaEl.appendChild(greport);
+      }
+      panelSlot = slot;
+    }
+    /* 遮罩卡片整体缩放（张老师定「遮罩态结算面板的比例应尽可能利用屏幕空间」）：
+       zoom 归 1 量卡片自然尺寸 → 按视口可用宽高等比放大（#gr_modal padding 16×2），
+       封顶 2.5（与侧边自然上限同档，再大就成放大镜）、保底 0.5（两栏并排的窄屏兜底） */
+    function fitMaskCard() {
+      if (panelSlot !== "mask" || grModal.hidden) return;
+      grmCard.style.zoom = "1";
+      const r = grmCard.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return;
+      const z = Math.max(
+        0.5,
+        Math.min(2.5, (window.innerWidth - 32) / r.width, (window.innerHeight - 32) / r.height)
+      );
+      grmCard.style.zoom = String(z);
+    }
+    /* 转遮罩。首次进入（面板还在侧边）自动展开——空间被挤爆是被迫换地方，
+       玩家需要看到结算；已住在卡片里则沿用 maskOpen（点遮罩关掉就别自己弹回） */
+    function enterMask() {
+      if (panelSlot !== "mask") {
+        mountPanels("mask");
+        maskOpen = true;
+      }
+      grModal.hidden = !maskOpen;
+      if (maskOpen) fitMaskCard();
+    }
     function syncReportZoom() {
+      const wantStats = greport.classList.contains("show");
+      const wantResult = gresult.classList.contains("show");
+      if (!wantStats && !wantResult) {
+        grModal.hidden = true;
+        return;
+      }
+      /* 窄屏（<960）CSS 里没有侧边位（.greport.show/.gresult.show 只在 ≥960 生效），
+         恒走遮罩卡片：竖屏单列（数据面板在结算面板下面）、横屏双栏（数据在左），
+         排版见 globals.css 的 #gr_modal 块 */
+      if (!mqPanelDesktop.matches) {
+        enterMask();
+        return;
+      }
       const pz = pageZoom();
       const gwR = gwrap.getBoundingClientRect();
       const gaR = gameAreaEl.getBoundingClientRect();
-      /* 两面板各自独立 fit（2026-10-19 负层覆盖改造）：旧版「greport 显示时
-         gresult 连坐共享 z」的耦合废除——空间充裕时行为与旧版一致（两边都侧边
-         浮窗、z=游戏倍率），一侧爆满时只那一侧入覆盖态，另一侧不受牵连 */
-      if (greport.classList.contains("show")) fitOnePanel(greport, "left", gwR, gaR, pz);
-      if (gresult.classList.contains("show")) fitOnePanel(gresult, "right", gwR, gaR, pz);
+      /* 自然尺寸只能在侧边宿主量得出：缓存为空、或某个要显示的面板还没量过
+         （先在窄屏显示、再转宽屏）时，先搬回侧边量一次，之后一路靠缓存判断 */
+      const needMeasure =
+        panelSlot === "mask" &&
+        (!panelBase.valid ||
+          (wantStats && panelBase.statsW < 1) ||
+          (wantResult && panelBase.resultW < 1));
+      if (needMeasure) mountPanels("side");
+      if (panelSlot === "side") {
+        if (wantStats) {
+          const b = panelNatural(greport, pz);
+          panelBase.statsW = b.w;
+          panelBase.statsH = b.h;
+        }
+        if (wantResult) {
+          const b = panelNatural(gresult, pz);
+          panelBase.resultW = b.w;
+          panelBase.resultH = b.h;
+        }
+        panelBase.valid = panelBase.statsW > 1 || panelBase.resultW > 1;
+      }
+      const statsFit = wantStats
+        ? sideFit({ w: panelBase.statsW, h: panelBase.statsH }, "left", gwR, pz)
+        : null;
+      const resultFit = wantResult
+        ? sideFit({ w: panelBase.resultW, h: panelBase.resultH }, "right", gwR, pz)
+        : null;
+      /* 阈值判定：任一面板按侧边公式摆出来都不到 120px 渲染宽 → 侧边没有意义，转遮罩 */
+      if (
+        (statsFit && statsFit.renderedW < PANEL_MIN_W) ||
+        (resultFit && resultFit.renderedW < PANEL_MIN_W)
+      ) {
+        enterMask();
+        return;
+      }
+      /* 放得下：回侧边宿主（空间恢复＝自动切回，不用玩家操作），遮罩收起 */
+      mountPanels("side");
+      grModal.hidden = true;
+      if (statsFit) {
+        placeSide(greport, "left", { w: panelBase.statsW, h: panelBase.statsH }, statsFit.z, gwR, gaR, pz);
+      }
+      if (resultFit) {
+        placeSide(gresult, "right", { w: panelBase.resultW, h: panelBase.resultH }, resultFit.z, gwR, gaR, pz);
+      }
     }
     /* 全屏自动拉满——服务移动端 + v8b 扩展（2026-10-16 张老师定：PC 端进全屏保持
        比例不变，只是视口变大、游戏多大还是多大；移动端才需要按屏幕重算比例拉满）。
@@ -3090,6 +3197,11 @@ export function OnlinePlay({
         const capFs = String(normalMaxZoom());
         zoomRange.max = capFs;
         cusZoom.max = capFs;
+        /* 面板几何必须跟着重算（2026-10-19 二版）：旧版这里直接 return，全屏拉大后
+           侧空被压缩、面板却还按进全屏前的尺寸摆着 —— 张老师截图里那两条窄边就是这么来的。
+           现在重算一次即可判出「侧边放不下 → 转遮罩」 */
+        syncReportZoom();
+        requestAnimationFrame(syncReportZoom);
         return;
       }
       gwrap.style.minHeight = ""; // 撤掉横屏的银框兜底拉伸（横屏中进全屏时残留会撑歪）
@@ -3395,7 +3507,8 @@ export function OnlinePlay({
 
     on(document, "keydown", (e: KeyboardEvent) => {
       /* 空格＝原地复活（2026-10-19 张老师定）：仅踩雷结算态可触发（over 且有
-         死亡快照且终态为败局；胜局/开局/回放中/输入框聚焦一律不劫持） */
+         死亡快照；胜局/开局/回放中/输入框聚焦一律不劫持）。 revive 内部自带
+         over/dieSnap 守卫，这里再拦输入框，避免打字场景误触发 */
       if (e.key === " ") {
         const t0 = e.target as HTMLElement;
         if (t0 && (t0.tagName === "INPUT" || t0.tagName === "TEXTAREA")) return;
@@ -3497,9 +3610,13 @@ export function OnlinePlay({
     return () => {
       ac.abort(); // 摘除全部事件监听
       fsTip.remove(); // iOS 引导浮层挂在 body 上，随组件卸载一起收走
-      /* 移动端结算浮层（七期）同样挂在 body 上：卸载时先卸雷达 React root 再摘元素 */
+      /* 结算浮层（七期）挂在 body/全屏宿主上：卸载时先卸雷达 React root 再摘元素。
+         面板若正住在卡片里，先搬回 React 自己的宿主（#game_area），
+         否则会随 grModal.remove() 一起被摘走、React 卸载时找不到节点 */
       radarRootRef.current?.unmount();
       radarRootRef.current = null;
+      if (greport.parentElement === grmStats) gameAreaEl.appendChild(greport);
+      if (gresult.parentElement === grmResult) gameAreaEl.appendChild(gresult);
       grModal.remove();
       document.documentElement.classList.remove("op-fakefs"); // 伪全屏态不跨页残留
       document.documentElement.classList.remove("op-noscroll"); // 整页锁滚随本页一起摘掉
