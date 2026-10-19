@@ -1516,6 +1516,10 @@ export function OnlinePlay({
       /* 移动端（七期）：回放在游戏盘面上演，结算浮层（带遮罩）挡着盘面——点「查看回放」
          即收起浮层，播完再弹回来（见 exitReplay / tick 的收尾） */
       hideResultModal();
+      /* 负层覆盖态的面板盖在棋盘正上方，回放征用棋盘画面 → 临时让位
+         （visibility:hidden 保布局不重排，exitReplay 恢复；侧边态面板在盘外不动） */
+      if (gresult.classList.contains("gr_cover")) gresult.style.visibility = "hidden";
+      if (greport.classList.contains("gr_cover")) greport.style.visibility = "hidden";
       const s = snapshot;
       /* 结算终值存档（二十期）：回放期间计数条被征用（计时/雷数 LED 随回放走），
          退出回放恢复到这里存的读数；倍率同理——若为装下控制条自动缩小过，
@@ -1852,8 +1856,12 @@ export function OnlinePlay({
              倍率则 zoomCur ≠ shrankTo，尊重现状） */
           if (shrankTo !== null && zoomCur === shrankTo) applyZoom(savedZoom, false);
         }
-        document.removeEventListener("keydown", escR);
-        if (restorePanel) showResultModal();
+      document.removeEventListener("keydown", escR);
+      /* 恢复覆盖态面板显形（进入回放时 visibility:hidden 让位，见 startInPlaceReplay）；
+         reset 路径无害——reset 已把两面板 display:none，visibility 是死属性 */
+      gresult.style.visibility = "";
+      greport.style.visibility = "";
+      if (restorePanel) showResultModal();
       }
       /* 注册给外层用（进回放时更新引用，退出时自清）：
          forceExitReplay 供 reset 强制退出；restartReplay 供回放中再点「查看回放」从头重播 */
@@ -1920,6 +1928,12 @@ export function OnlinePlay({
          故与下面 snapshot = null 的先后无依赖 */
       greport.classList.remove("show");
       gresult.classList.remove("show");
+      /* 覆盖态残留双保险：回放让位的 visibility 与 gr_cover 类随新局一并清
+         （正常路径 exitReplay 已清，这里防「回放中直接 reset」等绕行路径） */
+      greport.style.visibility = "";
+      gresult.style.visibility = "";
+      greport.classList.remove("gr_cover");
+      gresult.classList.remove("gr_cover");
       hideResultModal(); // 移动端浮层（七期）随新局一并收起
       snapshot = null;
       stopTimer();
@@ -2802,108 +2816,97 @@ export function OnlinePlay({
        游戏区域的高度」）：高倍率下右侧结算面板不再按视口、改按 **gwrap 渲染高**
        封顶——面板顶本就与 gwrap 顶对齐，压到等高即底边齐平；≤1.5 不启用
        （低倍率面板跟游戏走，压它反而破跟手感） */
+    /* 单面板几何 fit（负层覆盖改造，2026-10-19 张老师定）：一个面板一份决策——
+       先按「基准尺寸 × min(游戏倍率, 高度/游戏高封顶)」估自然形态（与旧共享 z 口径
+       一致），侧空（视口到银框左右缘）放得下自然形态 → 维持侧边浮窗、zoom 按需放大；
+       放不下 → **负层覆盖态**（gr_cover）：面板叠在游戏画面上方、zoom 封 1x 不缩小，
+       左面板贴银框左缘、右面板贴右缘、均上移 14px 间隙内缩——「宁盖不缩」，
+       棋盘上还有 40px 露边保证笑脸可点。旧 gr_narrow（四按钮 2 列改 4 行 + 面板压 0.3）
+       机制随之退役：那正是「面板无法正常尺寸出现」的病灶。
+       z 量取与旧版同源：zoom 归 1 量 rect 再 ÷pz（十期口径，全引擎一致）；
+       设后实量闭环复核（视口底越界按高度比一步收敛）。 */
+    function fitOnePanel(
+      panel: HTMLElement,
+      side: "left" | "right",
+      gwR: DOMRect,
+      gaR: DOMRect,
+      pz: number
+    ): void {
+      /* 覆盖残留先清（class 与 inline zoom 都会污染量测） */
+      panel.style.zoom = "1";
+      panel.classList.remove("gr_cover");
+      const rect = panel.getBoundingClientRect();
+      const rawW = rect.width / pz;
+      const rawH = rect.height / pz;
+      if (rawW < 1 || rawH < 1) return; // display:none（未显形/换宿主瞬间）量不出
+      /* 自然形态 zoom：跟游戏倍率走（跟手感），但 >1.5 时不得高于游戏窗
+         （十一期口径：面板顶与 gwrap 顶对齐，等高即底边齐平） */
+      const gameCapH = zoomCur > 1.5 && gwR.height > 1 ? gwR.height / (rawH * pz) : 2.5;
+      const naturalZ = Math.max(0.3, Math.min(zoomCur, gameCapH, 2.5));
+      /* 侧空：视口缘 12px + 面板间隙 14px */
+      const availSide =
+        side === "left"
+          ? gwR.left - 12 - 14
+          : window.innerWidth - gwR.right - 12 - 14;
+      /* 判定阈值＝自然形态在 **1x**（下限尺寸）下是否还放得进侧空——放得下 → 侧边浮窗
+         （zoom 跟游戏倍率走，但不得超过侧空/视口封顶）；放不下 → **负层覆盖态**：
+         面板以 ≤1x 叠在游戏画面上方（左面板贴银框左缘、右面板贴右缘，各留 14px 间隙），
+         「宁盖不缩」——绝不因空间不足把面板压到看不清的尺寸。覆盖时棋盘仍有
+         银框/计数条露边，笑脸可点；被面板遮住的区域用「再来一局」即开新局 */
+      let z: number;
+      if (rawW * pz > availSide) {
+        z = Math.min(1, naturalZ);
+        panel.classList.add("gr_cover");
+      } else {
+        z = naturalZ;
+        /* 侧边态完整可见性封顶：宽度不越侧空、底部不越视口（高 ∝ z 线性压） */
+        const sideCap = rawW > 1 ? availSide / (rawW * pz) : 2.5;
+        const availH = window.innerHeight - gwR.top - 12;
+        const hCap = rawH > 1 ? availH / (rawH * pz) : 2.5;
+        z = Math.max(0.3, Math.min(z, sideCap, hCap));
+      }
+      /* 定位统一经 place(z)：锚点在视口坐标选定后换算 game_area 局部坐标。
+         侧边态公式＝旧版逐字（生产多轮验证）：left 面板右缘贴锚 A=银框左−14 →
+         left = toLocal(A−gaR.left) − rawW；right 面板左缘贴锚 A=银框右+14 →
+         left = toLocal(A−gaR.left)。覆盖态按同一变换镜像：left 面板左缘贴
+         银框左+14（盖进棋盘）、right 面板右缘贴银框右−14；面板宽超过
+         可用视口宽时钳到视口缘 12px（高倍全屏 + 大数据面板的极端组合） */
+      const place = (zz: number) => {
+        const t = (v: number) => v / pz / zz;
+        panel.style.zoom = String(zz);
+        panel.style.top = t(gwR.top - gaR.top) + "px";
+        if (panel.classList.contains("gr_cover")) {
+          if (side === "left") {
+            const vx = Math.max(gwR.left + 14, 12);
+            panel.style.left = t(vx - gaR.left) + "px";
+          } else {
+            const vx = Math.max(gwR.right - 14 - rawW * zz * pz, 12);
+            panel.style.left = t(vx - gaR.left) + "px";
+          }
+        } else {
+          panel.style.left =
+            side === "left"
+              ? t(gwR.left - gaR.left - 14) - rawW + "px"
+              : t(gwR.right - gaR.left + 14) + "px";
+        }
+      };
+      place(z);
+      /* 设后实测闭环（旧版沿用）：底部仍超视口就按高度比再压一次 zoom，
+         覆盖态同理（盖在棋盘上也不许越出视口），压完重定位 */
+      const now = panel.getBoundingClientRect();
+      if (now.bottom > window.innerHeight - 8 && now.height > 1) {
+        place(Math.max(0.3, z * ((window.innerHeight - 8 - now.top) / now.height)));
+      }
+    }
     function syncReportZoom() {
       const pz = pageZoom();
       const gwR = gwrap.getBoundingClientRect();
       const gaR = gameAreaEl.getBoundingClientRect();
-      if (greport.classList.contains("show")) {
-        greport.style.zoom = "1";
-        const rect = greport.getBoundingClientRect();
-        const rawW = rect.width / pz; // 面板基准尺寸（未缩放布局尺寸）
-        const rawH = rect.height / pz;
-        if (rawW < 1 || rawH < 1) return;
-        const availW = gwR.left - 12 - 14; // 视口左缘 12px + 贴边间隙 14px
-        const availH = window.innerHeight - gwR.top - 12;
-        /* 右侧结算面板共享同一个 z，cap 还须保证它不越出右缘（2026-10-15 张老师
-           截图报：z 曾只按左侧空间封顶，右侧面板按该 z 放大会整块出屏）。
-           右侧空间放不下面板自然宽 → 先切窄形态（四按钮 2 列改 4 行单列）再量；
-           gresult 可能带着上局残留的 inline zoom，量前先归 1 保口径一致 */
-        const availRW = window.innerWidth - gwR.right - 12 - 14;
-        gresult.style.zoom = "1";
-        gresult.classList.remove("gr_narrow");
-        let grect = gresult.getBoundingClientRect();
-        let grawW = grect.width / pz;
-        if (grawW > 1 && grawW * pz > availRW) {
-          gresult.classList.add("gr_narrow");
-          grect = gresult.getBoundingClientRect();
-          grawW = grect.width / pz;
-        }
-        const grawH = grect.height / pz; // 窄形态按钮 4 行更高，切完窄再量高
-        const rightCap = grawW > 1 ? availRW / (grawW * pz) : 2.5;
-        /* 十一期：>1.5 时面板不得高于游戏区（gwrap 渲染高 ÷ 面板基准高 ÷ 页级系数）。
-           共享 z 会顺带把左侧数据面板压进同一高度——面板底与游戏窗底齐平，观感一致 */
-        const gameCapH = zoomCur > 1.5 && grawH > 1 ? gwR.height / (grawH * pz) : 2.5;
-        /* 下限 0.3（2026-10-15 张老师定「面板尺寸自适应，无论如何不出滚动条」）：
-           空间极小时允许面板缩得比游戏更小，宁可小也不越界 */
-        const cap = Math.max(0.3, Math.min(2.5,
-          Math.min(availW / (rawW * pz), availH / (rawH * pz), rightCap, gameCapH)));
-        const z = Math.max(0.3, Math.min(zoomCur, cap));
-        greport.style.zoom = String(z);
-        gresult.style.zoom = String(z);
-        /* 定位：面板 zoom 会缩放 left/top 偏移 → 先除回；game_area 局部坐标 =
-         (gwrap 渲染坐标 − game_area 渲染坐标) ÷ 页级 zoom（game_area 无 zoom） */
-        const toLocal = (v: number) => v / pz / z;
-        greport.style.top = toLocal(gwR.top - gaR.top) + "px";
-        greport.style.left = toLocal(gwR.left - gaR.left - 14) - rawW + "px";
-        gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
-        gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
-        /* 设后实测闭环（2026-10-15 张老师窗口截图报两面板底被视口截断）：上面的
-           cap 是「先量基准÷zoom」的推算，量纲/时序有漏网可能——设完 zoom 实量
-           rect，底部仍超视口就按高度比再压一次（高∝z 线性，一步收敛），压完重定位 */
-        const grNow = greport.getBoundingClientRect();
-        const grTop = grNow.top;
-        const grBtm = Math.max(grNow.bottom, gresult.getBoundingClientRect().bottom);
-        if (grBtm > window.innerHeight - 8 && grBtm - grTop > 1) {
-          const z2 = Math.max(0.3, z * ((window.innerHeight - 8 - grTop) / (grBtm - grTop)));
-          greport.style.zoom = String(z2);
-          gresult.style.zoom = String(z2);
-          const toLocal2 = (v: number) => v / pz / z2;
-          greport.style.top = toLocal2(gwR.top - gaR.top) + "px";
-          greport.style.left = toLocal2(gwR.left - gaR.left - 14) - rawW + "px";
-          gresult.style.top = toLocal2(gwR.top - gaR.top) + "px";
-          gresult.style.left = toLocal2(gwR.right - gaR.left + 14) + "px";
-        }
-      } else if (gresult.classList.contains("show")) {
-        /* 📌 数据面板关着时结算面板**独立**定位缩放（2026-10-15 张老师截图报的 bug）：
-           此前整个函数被 greport.show 门控——数据面板一关（设置浮窗「显示统计」off），
-           gresult 就永远拿不到 left/top/zoom，回退 CSS 兜底 top:0;left:0 + zoom:1，
-           面板缩小叠在棋盘左上。同一套几何口径（含十期「zoom 复位 1 再量」修正），
-           改量 gresult 自己的 rect、看右侧空间（gwR.right 之外到视口右缘）；
-           两端面板同显时仍走上面分支共用 z */
-        gresult.style.zoom = "1";
-        gresult.classList.remove("gr_narrow");
-        let rect = gresult.getBoundingClientRect();
-        let rawW = rect.width / pz;
-        const availW = window.innerWidth - gwR.right - 12 - 14; // 视口右缘 12px + 间隙 14px
-        /* 空间不够先切窄形态（四按钮 2 列改 4 行单列）再量，量完仍超则交给下方 cap 缩 */
-        if (rawW > 1 && rawW * pz > availW) {
-          gresult.classList.add("gr_narrow");
-          rect = gresult.getBoundingClientRect();
-          rawW = rect.width / pz;
-        }
-        const rawH = rect.height / pz;
-        if (rawW < 1 || rawH < 1) return; // display:none 中量不出尺寸（换宿主/收起瞬间）
-        const availH = window.innerHeight - gwR.top - 12;
-        /* 十一期（同上分支）：>1.5 时面板不得高于游戏区，压到与 gwrap 等高（底边齐平） */
-        const gameCapH = zoomCur > 1.5 && gwR.height > 1 ? gwR.height / (rawH * pz) : 2.5;
-        const cap = Math.max(0.3, Math.min(2.5,
-          Math.min(availW / (rawW * pz), availH / (rawH * pz), gameCapH)));
-        const z = Math.max(0.3, Math.min(zoomCur, cap));
-        gresult.style.zoom = String(z);
-        const toLocal = (v: number) => v / pz / z;
-        gresult.style.top = toLocal(gwR.top - gaR.top) + "px";
-        gresult.style.left = toLocal(gwR.right - gaR.left + 14) + "px";
-        /* 设后实测闭环（同上分支）：底部仍超视口就按高度比再压一次 zoom */
-        const grNow = gresult.getBoundingClientRect();
-        if (grNow.bottom > window.innerHeight - 8 && grNow.height > 1) {
-          const z2 = Math.max(0.3,
-            z * ((window.innerHeight - 8 - grNow.top) / grNow.height));
-          gresult.style.zoom = String(z2);
-          const toLocal2 = (v: number) => v / pz / z2;
-          gresult.style.top = toLocal2(gwR.top - gaR.top) + "px";
-          gresult.style.left = toLocal2(gwR.right - gaR.left + 14) + "px";
-        }
-      }
+      /* 两面板各自独立 fit（2026-10-19 负层覆盖改造）：旧版「greport 显示时
+         gresult 连坐共享 z」的耦合废除——空间充裕时行为与旧版一致（两边都侧边
+         浮窗、z=游戏倍率），一侧爆满时只那一侧入覆盖态，另一侧不受牵连 */
+      if (greport.classList.contains("show")) fitOnePanel(greport, "left", gwR, gaR, pz);
+      if (gresult.classList.contains("show")) fitOnePanel(gresult, "right", gwR, gaR, pz);
     }
     /* 全屏自动拉满——服务移动端 + v8b 扩展（2026-10-16 张老师定：PC 端进全屏保持
        比例不变，只是视口变大、游戏多大还是多大；移动端才需要按屏幕重算比例拉满）。

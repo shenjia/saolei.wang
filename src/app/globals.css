@@ -7788,18 +7788,12 @@ html:has(#online_play) #footer {
 .vprfs_side .grb:active {
   color: #8ac21b;
 }
-/* 窄形态（2026-10-15 张老师定）：右侧空间放不下面板自然宽（全屏大比例下棋盘
-   几乎顶满屏幕）→ 四按钮 2 列改 4 行单列、面板收窄；标题允许折行（成绩/评级
-   上下两行）；雷达 fill 模式 width:100% 自动跟随新宽度 */
-#online_play .gresult.gr_narrow {
-  width: 112px;
-}
-#online_play .gresult.gr_narrow .gr_title {
-  flex-wrap: wrap;
-  row-gap: 2px;
-}
-#online_play .gresult.gr_narrow .gr_btns {
-  grid-template-columns: 1fr;
+/* 窄形态（gr_narrow）已退役（2026-10-19 负层覆盖改造）：侧空放不下 1x 自然尺寸时
+   不再「四按钮 4 行 + 压 0.3」地缩，改由 JS 挂 gr_cover 覆盖态盖在游戏画面上方 */
+#online_play .gresult.gr_cover,
+#online_play .greport.gr_cover {
+  /* 覆盖态浮层感：阴影加深一档（4/16 → 8/28），示意「压在棋盘上的临时层」 */
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
 }
 @media (min-width: 960px) {
   #online_play .gresult.show {
