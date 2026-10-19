@@ -225,7 +225,7 @@ export function OnlinePlay({
        右键按下只抖 NF 钮反馈、不录任何事件（对局里零右键点击），左键行为与常规完全
        一致；不再携带旧版的「按下即开/滑动连开」（那部分已独立成连击模式）。
        与速旗互斥（继续沿用 2026-10-16 口径）：打开其一自动关闭另一者，NF 切换重开。
-       激活显色＝绿（gmode_nf，与无猜同色）。 */
+       激活显色＝默认黄（.gicon.active 站内黄，2026-10-19 二次定）。 */
     let nf = false;
     let ng = true, qmark = false;
     /* 「连击模式」（2026-10-19 张老师定，默认关，入口＝原 NF 快捷钮位）：
@@ -3271,16 +3271,16 @@ export function OnlinePlay({
           <a data-lv="cus">自定义</a>
         </div>
         {/* 右上角图标按钮排（2026-10-14 二期张老师定，九期追补模式快捷钮）：
-            NF／速旗／连击／无猜四颗模式钮在齿轮左侧——激活显色（NF=绿（2026-10-19 定）/
-            无猜=绿 / 速旗=默认黄 / 连击=默认黄），未激活灰；NF／无猜点击重开一局，
-            速旗/连击只改行为不重开（原「自动双击」开关口径） */
+            NF／速旗／连击／无猜四颗模式钮在齿轮左侧——激活显色（NF=默认黄 /
+            速旗=默认黄 / 连击=绿（2026-10-19 二次定）/ 无猜=绿），未激活灰；
+            NF／无猜点击重开一局，速旗/连击只改行为不重开（原「自动双击」开关口径） */
         }
         <div className="gicons">
           {/* 模式快捷钮 hover 出气泡（2026-10-15 九期张老师定）：文案与设置浮窗
               对应开关的 .tip 一致；不用原生 title（会跟气泡双份弹） */}
           {/* NF 模式（2026-10-19 张老师定：恢复保留，语义收窄为仅禁右键）：
-              文本钮沿用旧样式；激活显色＝绿（gmode_nf，与无猜同色） */}
-          <button className="gicon gmode gmode_nf" id="btn_nf" type="button">
+              文本钮沿用旧样式；激活显色＝默认黄（.gicon.active 站内黄） */}
+          <button className="gicon gmode" id="btn_nf" type="button">
             NF
             <span className="tip">NF 模式：不能插旗，右键已禁用</span>
           </button>
@@ -3297,8 +3297,9 @@ export function OnlinePlay({
           </button>
           {/* 连击模式（2026-10-19 张老师定）：鼠标双击图标（指针＋尖端两道点击弧线）；
               按下即触发、按住滑动连续点击（左开右旗，一格限一次）；与速旗不互斥；
-              移动端首次进入自动开启；位置在无猜之前 */}
-          <button className="gicon gmode" id="btn_combo" type="button">
+              移动端首次进入自动开启；位置在无猜之前；激活显色＝绿（gmode_combo，
+              与无猜同色，2026-10-19 二次定） */}
+          <button className="gicon gmode gmode_combo" id="btn_combo" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               {/* 指针箭头（尖端朝左上）+ 尖端两道同心点击弧线＝双击连击意象 */}
               <path d="M8 6.5 L8 20 L11.8 16.5 L14.2 21.6 L16.7 20.4 L14.2 15.3 L19 14.8 Z" />
