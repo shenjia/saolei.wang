@@ -1450,22 +1450,25 @@ export function OnlinePlay({
       /* 原地复活按钮（2026-10-19 张老师定）：**仅败局且有死亡快照**在雷达图下方
          额外一颗黄色按钮（与四按钮分开、独占一行），点击或空格触发 revive；
          胜局/首击即雷（无快照）不渲染。渲染条件与 revive()/空格守卫同源：
-         dieSnap 存在 */
+         dieSnap 存在。独占整行宽度充裕，「空格」键帽恒显示（2026-10-19 快捷键标注） */
       const reviveBtn = !s.won && dieSnap
         ? '<button type="button" class="grb grb_revive" id="grb_revive" title="按空格也可复活">' +
-          IC.revive + "原地复活</button>"
+          IC.revive + '原地复活<kbd>空格</kbd></button>'
         : "";
       /* 四个按钮分两行（2026-10-15 六期张老师定）：上排＝开局类（再来一局 / 重玩本局），
-         下排＝本局录像类（查看回放 / 下载录像）。.gr_btns 走 2 列 grid，DOM 顺序即行列顺序 */
+         下排＝本局录像类（查看回放 / 下载录像）。.gr_btns 走 2 列 grid，DOM 顺序即行列顺序。
+         快捷键键帽（2026-10-19 张老师定）：R/A/V/D 与按钮一一对应；侧边窄面板
+         （列宽 ~84px）放不下由 CSS container query 自动隐藏（.gr_btns 容器宽
+         ≥240px 才显示 kbd），遮罩卡片/宽面板下显示 */
       host.innerHTML =
         titleLine +
         '<div class="gr_radar" id="gr_radar"></div>' +
         reviveBtn +
         '<div class="gr_btns">' +
-        '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + "再来一局</button>" +
-        '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + "重玩本局</button>" +
-        '<button type="button" class="grb" id="grb_review">' + IC.review + "查看回放</button>" +
-        '<button type="button" class="grb" id="grb_download">' + IC.download + "下载录像</button>" +
+        '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + '再来一局<kbd>R</kbd></button>' +
+        '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + '重玩本局<kbd>A</kbd></button>' +
+        '<button type="button" class="grb" id="grb_review">' + IC.review + '查看回放<kbd>V</kbd></button>' +
+        '<button type="button" class="grb" id="grb_download">' + IC.download + '下载录像<kbd>D</kbd></button>' +
         "</div>";
       /* 显隐标志与宿主（2026-10-19 二版）：.show 一律置上＝「这局要显示」，
          至于摆侧边还是进遮罩卡片，由 syncReportZoom 按空间判定后搬家 */
@@ -3547,12 +3550,24 @@ export function OnlinePlay({
         }
         return;
       }
-      /* r/R 仍守旧规矩：弹窗开着（输入框里打字）/ 回放中不响应，避免误触清盘 */
+      /* r/R 仍守旧规矩：弹窗开着（输入框里打字）/ 回放中不响应，避免误触清盘。
+         2026-10-19 快捷键化（张老师定）：与「再来一局」按钮**完全同路**（newGame
+         显式清锁定盘标记——此前直接 reset() 在「重玩本局后再按 R」会错误复刻
+         上一局盘面，顺手修正与按钮行为的偏差）；对局中与结算态都可触发 */
       if (cusDlg.classList.contains("open")) return;
       if (replaying) return;
       const t2 = e.target as HTMLElement;
       if (t2 && (t2.tagName === "INPUT" || t2.tagName === "TEXTAREA")) return;
-      if (e.key === "r" || e.key === "R") reset();
+      if (e.key === "r" || e.key === "R") { e.preventDefault(); newGame(); return; }
+      /* a/v/d＝重玩本局 / 查看回放 / 下载录像（2026-10-19 张老师定，与面板按钮同路）。
+         仅**结算态**触发（over 且有终局快照——胜/负局都可；对局中按了没结果属误触）。
+         复用上面的守卫：cus 弹窗开 / 回放中 / 输入框聚焦都已 return。
+         ⚠️ 修饰键不拦会劫持 Cmd+D（收藏）、Ctrl+A（全选）等系统快捷键，必须守 */
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const panelReady = over && !!snapshot;
+      if (panelReady && (e.key === "a" || e.key === "A")) { e.preventDefault(); replaySameBoard(); return; }
+      if (panelReady && (e.key === "v" || e.key === "V")) { e.preventDefault(); startInPlaceReplay(); return; }
+      if (panelReady && (e.key === "d" || e.key === "D")) { e.preventDefault(); downloadAvf(); return; }
     });
 
     /* ---- 重玩本局（五期）：replayBoardLocked=true 时，下一局的雷区完全复刻 pendingBoard，
@@ -3579,6 +3594,9 @@ export function OnlinePlay({
         /* 原地复活（2026-10-19）：无头测试读死亡快照/复活计数 */
         revives: () => revives,
         dieSnap: () => (dieSnap ? { hit: dieSnap.hit, evLen: dieSnap.evLen, csec: dieSnap.csec } : null),
+        /* 快捷键/锁定盘测试钩子（2026-10-19）：A 键重玩本局的锁定盘注入验证 */
+        locked: () => replayBoardLocked,
+        pending: () => pendingBoard,
         /* 统计一致性验证（2026-10-16）：当局事件流 + 共享引擎重算结果 */
         events: () => evStream.slice(),
         counts: () => gameCounts(),

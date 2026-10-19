@@ -7819,6 +7819,39 @@ html:has(#online_play) #footer {
 :is(#online_play, #gr_modal) .greport tr:hover td.gv.gv_rv {
   color: #fdc61d;
 }
+/* ---- 结算按钮快捷键键帽（2026-10-19 张老师定）：文本后 [R]/[A]/[V]/[D]/[空格] ----
+   kbd＝小号键帽（描边圆角 + 半透明底），颜色随按钮前景色（currentColor），
+   hover 变绿时同步；margin-left:auto 推到按钮右端（flex 尾部对齐，比固定间距
+   更能适应列宽）。显隐按**面板实际宽度**自适应（「空间允许的情况下」）：
+   .gr_btns 声明为 size container，容器宽 ≥240px（2 列各 ≥115px，
+   图标 14 + 间距 6 + 四字 48 + 键帽 ~22 放得下）才显示 kbd——侧边 196px 窄面板
+   （列宽 84.5px）自动隐藏；遮罩卡片（≥248px）与未来更宽的面板显示。
+   复活按钮独占整行不进 .gr_btns，其「空格」键帽恒显示 */
+#online_play .gresult .grb kbd,
+#gr_modal .grb kbd {
+  font: bold 10px/1 Arial, Helvetica, sans-serif;
+  padding: 2px 4px;
+  margin-left: auto;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.75;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+#online_play .gresult .gr_btns,
+#gr_modal .gr_btns {
+  container-type: inline-size;
+}
+#online_play .gresult .gr_btns kbd,
+#gr_modal .gr_btns kbd {
+  display: none; /* 窄面板默认隐藏（侧边 196px 列宽放不下） */
+}
+@container (min-width: 240px) {
+  #online_play .gresult .gr_btns .grb kbd,
+  #gr_modal .gr_btns .grb kbd {
+    display: inline-block; /* 宽面板/遮罩卡片显示 */
+  }
+}
 /* 窄形态（gr_narrow）与负层覆盖态（gr_cover）均已退役（2026-10-19 二版）：
    空间不够时不再「压小 / 硬盖在棋盘上」，改由 JS 判定「任一面板渲染宽 < 120px」
    → 整体搬进 #gr_modal 遮罩卡片居中放大显示（见 OnlinePlay.tsx syncReportZoom） */
