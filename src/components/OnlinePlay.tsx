@@ -447,6 +447,10 @@ export function OnlinePlay({
        一键按住期间另一键**每次**点击都触发（按住右键连点左键＝连续双击，
        2026-10-18 张老师定），chordDone 只用于「一键已松、另一键后松」的闭合配对 */
     let leftDown = false, rightDown = false, chordDone = false;
+    /* 连击手势动作标记：本次按下已产生过开格/插旗/chord 任一动作。
+       连击「松开拔旗」只放行空手松开（见 window mouseup）——否则
+       按下插旗后同格松开会把刚插的旗自己拔掉，滑动收尾压到旗上也会误拔 */
+    let comboHit = false;
 
     const tbody = $("gtbody") as unknown as HTMLTableSectionElement;
     const ledMines = $("led_mines") as unknown as SVGElement;
@@ -1143,15 +1147,18 @@ export function OnlinePlay({
        已开数字双击（sc+lr，与全局「单击已开数字格＝双击」同口径）；
        右击＝未开格插旗（录完整 rc+rr 对，按下位生效；速旗联动照走——
        点已开数字录 mr 不录 rc/rr、插旗成功后 autoChordAround）。
-       旗/问号格右击不动作不录事件：连击是「插旗连发」，滑过已有旗不误拔 */
+       旗/问号格按下不动作不录事件：连击是「插旗连发」，滑过已有旗不误拔；
+       拔旗走松开路径——右键在旗格上**松开**＝取消标记（见 window mouseup，
+       仅空手松开生效），事件流补 rc+rr 配对与常规右键同口径 */
     function comboLeftClick(i: number) {
-      if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
-      else if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
+      if (state[i] === 1) { comboHit = true; recordEv(11, i); recordEv(5, i); chord(i); }
+      else if (state[i] === 0) { comboHit = true; recordEv(3, i); recordEv(5, i); openCell(i); }
     }
     function comboRightClick(i: number) {
       if (nf) return; // NF：右键禁用（入口已拦，双保险）
-      if (autoChord && nums && state[i] === 1) { recordEv(65, i); chord(i); return; }
+      if (autoChord && nums && state[i] === 1) { comboHit = true; recordEv(65, i); chord(i); return; }
       if (state[i] !== 0) return;
+      comboHit = true;
       recordEv(9, i);
       toggleFlag(i);
       recordEv(17, i);
@@ -2424,14 +2431,14 @@ export function OnlinePlay({
          按住滑动逐格触发（见 mouseover），松开不补录任何事件（配对在触发时已闭合，
          见 window mouseup）。双键同按无 chord 手势语义——两键各自即时生效 */
       if (combo && e.button === 0) {
-        leftDown = true; rightDown = false; chordDone = false;
+        leftDown = true; rightDown = false; chordDone = false; comboHit = false;
         setFace("ooh");
         comboLeftClick(i);
         return;
       }
       if (combo && e.button === 2) {
         if (nf) { shakeModeBtn(btnNf); return; } // NF：右键禁用（连击只保留左键连开）
-        rightDown = true; leftDown = false; chordDone = false;
+        rightDown = true; leftDown = false; chordDone = false; comboHit = false;
         setFace("ooh");
         comboRightClick(i);
         return;
@@ -2497,8 +2504,23 @@ export function OnlinePlay({
       if (!leftDown && !rightDown) return; // 无棋盘手势：笑脸/设置等点击不进场
       if (over || gameBusy()) { clearPress(); leftDown = rightDown = chordDone = false; return; }
       /* 连击模式松开＝纯复位（2026-10-19）：每次点击的 lc+lr / rc+rr 配对在按下/
-         滑过触发时已完整闭合，松开不再补录任何事件——否则引擎里多出无主 lr/rr */
-      if (combo) { clearPress(); setFace("smile"); leftDown = rightDown = chordDone = false; return; }
+         滑过触发时已完整闭合，松开不再补录任何事件——否则引擎里多出无主 lr/rr。
+         唯一例外＝松开拔旗（2026-10-19 张老师定）：右键在旗格上松开＝取消标记，
+         仅空手松开放行（本次按下没开过格/插过旗/chord 过，comboHit 守卫）——
+         按下插旗后同格松开不复位自己的旗、滑动收尾压到旗上也不误拔。
+         直接归零不走 toggleFlag（不受问号三态影响：松开即彻底取消标记）；
+         事件流补 rc+rr 配对（与常规右键同一口径，回放可见拔旗） */
+      if (combo) {
+        const ui = rightDown ? eventCell(e) : -1;
+        if (ui >= 0 && !comboHit && !nf && state[ui] === 2) {
+          recordEv(9, ui);
+          state[ui] = 0;
+          paint(ui);
+          led(ledMines, flagsLeft());
+          recordEv(17, ui);
+        }
+        clearPress(); setFace("smile"); leftDown = rightDown = chordDone = false; return;
+      }
       const i = eventCell(e); clearPress(); setFace("smile");
       /* 盘外松开的原始像素坐标（1x 棋盘坐标系，可为负） */
       const gbR = i < 0 ? gboard.getBoundingClientRect() : null;
