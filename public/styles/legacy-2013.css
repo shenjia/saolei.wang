@@ -24,6 +24,7 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #guide h2{margin:36px 0 0}
 #guide hr{margin:6px 0 30px}
 #guide p a{color:#b1b1a4}
+#guide p a:hover{color:#a6e22e}
 /* 摆雷图（BBS UBB 雷图）：连续纯雷图行包 .mine-map 块，行高=图高 16px，行间零缝隙拼成完整地图（同 2008 版 .Mine 机制） */
 .mine-map{line-height:16px}
 .mine-map img{vertical-align:top}
