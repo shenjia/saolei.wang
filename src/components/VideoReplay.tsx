@@ -1408,7 +1408,7 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
     ["Flags", String(s.flags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
     ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
     ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
-    ["STNB", hasBv ? f3(stnb) : "*", "无猜综合评分（按难度与完成度归一化，越大越好）"],
+    ["STNB", hasBv ? f3(stnb) : "*", "综合评分（按难度与完成度归一化，越大越好）"],
   ];
   return (
     <>
