@@ -43,6 +43,7 @@ export function TrendChart({
   const series = allSeries.filter((s) => !hidden[s.key]);
   const [hover, setHover] = useState<number | null>(null);
   const [cursorPx, setCursorPx] = useState<number | null>(null);
+  const [cursorPy, setCursorPy] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [boxW, setBoxW] = useState(1000);
 
@@ -72,7 +73,7 @@ export function TrendChart({
   const labelStep = Math.max(1, Math.ceil(n / 10));
   const hovered = hover !== null ? hover : null;
 
-  const pick = (clientX: number) => {
+  const pick = (clientX: number, clientY: number) => {
     const el = wrapRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -81,30 +82,27 @@ export function TrendChart({
     const i = Math.round((svgX - padX) / step);
     setHover(Math.min(n - 1, Math.max(0, i)));
     setCursorPx(clientX - rect.left);
+    setCursorPy(clientY - rect.top);
   };
 
   if (n < 2) return <div className="admin_empty">暂无数据</div>;
 
-  // 浮层定位：以光标相对竖线为界翻向
+  // 浮层定位：跟随鼠标（水平以光标为锚点翻向，垂直以光标为中线上下翻）
   const TIP_W = 168;
+  // 浮层实际占位 = content + 左右 padding 20 + border 2（clamp 右界按总宽算）
+  const TIP_OUTER_W = TIP_W + 22;
   const scale = boxW / W;
   const boxH = H * scale;
   const tipRows = series.length;
-  const TIP_H = 30 + tipRows * 19;
-  const tipLeft = (() => {
-    if (hover === null) return 0;
-    const px = x(hover) * scale;
-    const toLeft = cursorPx === null ? px < boxW / 2 : cursorPx < px;
-    const left = toLeft ? px + 12 : px - 12 - TIP_W;
-    return Math.min(Math.max(left, 4), Math.max(4, boxW - TIP_W - 4));
-  })();
+  // 实测高度公式：border 2 + padding 14 + 日期行 16 + 每行 (19 行高 + 2 间距)
+  const TIP_H = 32 + tipRows * 21;
+  const px = cursorPx ?? x(hover ?? 0) * scale;
+  const toLeft = px < boxW / 2;
+  const tipLeft = Math.min(Math.max(toLeft ? px + 14 : px - 14 - TIP_OUTER_W, 4), Math.max(4, boxW - TIP_OUTER_W - 4));
   const tipTop = (() => {
-    if (hover === null) return 6;
     if (boxH < TIP_H + 12) return 0;
-    const py = y(max) * scale;
-    void py;
-    const lowest = Math.max(...series.map((s) => y(s.values[hover] ?? 0) * scale));
-    return lowest < boxH / 2 ? Math.max(4, boxH - padBottom * scale - TIP_H - 4) : 6;
+    const py = cursorPy ?? boxH / 2;
+    return py < boxH / 2 ? Math.min(boxH - TIP_H - 4, py + 14) : Math.max(4, py - TIP_H - 14);
   })();
 
   return (
@@ -139,9 +137,10 @@ export function TrendChart({
           onPointerLeave={() => {
             setHover(null);
             setCursorPx(null);
+            setCursorPy(null);
           }}
-          onPointerMove={(e) => pick(e.clientX)}
-          onPointerDown={(e) => pick(e.clientX)}
+          onPointerMove={(e) => pick(e.clientX, e.clientY)}
+          onPointerDown={(e) => pick(e.clientX, e.clientY)}
         >
           {/* 横网格 + 纵轴刻度 */}
           {[0, 0.25, 0.5, 0.75, 1].map((r) => {
@@ -224,8 +223,10 @@ export function TrendChart({
 
         {hovered !== null && (
           <div
-            className="pointer-events-none absolute z-10"
             style={{
+              position: "absolute",
+              pointerEvents: "none",
+              zIndex: 10,
               left: tipLeft,
               top: tipTop,
               width: TIP_W,
