@@ -1067,16 +1067,15 @@ export function OnlinePlay({
       if (!started) { started = true; placeMines(i); startTimer(); }
       if (mines![i]) {
         /* 必雷格（被已开数字 100% 锁死）：直接判负，绝不重排、盘面与 3BV 零变化
-           （2026-10-14 张老师定）。其余踩雷才走无猜救回。重玩本局（replayPristine）
-           同样不重排——重排会改掉原盘，背弃「重完本局＝原样复刻」（2026-10-19）。
-           重排不弹任何提醒（张老师定：笑脸/盘面状态已够） */
-        if (!ng || replayPristine || isForcedMine(i)) { lose(i); return; }
+           （2026-10-14 张老师定）。其余踩雷才走无猜救回。重排不弹任何提醒
+           （张老师定：笑脸/盘面状态已够） */
+        if (!ng || isForcedMine(i)) { lose(i); return; }
         const saved = (isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false);
         if (!saved) { lose(i); return; }
         ngRedeals++; // 一次点击触发的无猜重排＝计数 1（内部重试不计）
         ngSaves++; // 触雷被救回＝1 次（面板「无猜重排」行）
         shakeModeBtn(btnNg); // 小雨伞抖一下（2026-10-15 十期张老师定）
-      } else if (ng && !replayPristine && nums![i] !== 0 && isBlind(i)) {
+      } else if (ng && nums![i] !== 0 && isBlind(i)) {
         const changed = tryNoGuess(i, true); // 安全盲点（数字格）：同样尽量换成 opening，盲点必开空
         if (changed) ngRedeals++;
       }
@@ -1462,15 +1461,14 @@ export function OnlinePlay({
       const p2 = (n: number) => String(n).padStart(2, "0");
       return `${d.getMonth() + 1}.${d.getDate()}.${d.getFullYear()}.${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}:${String(d.getMilliseconds()).padStart(4, "0")}`;
     }
-    /* ---- 重玩本局：完全复刻结束时的地图（2026-10-19 张老师定：无猜开关保持
-       原状不再强制关闭——无猜是用户偏好；盘面原样由 replayPristine 保证，
-       重玩这一局内不触发任何无猜重排） ---- */
+    /* ---- 重玩本局：复刻结束时的地图注入锁定盘；无猜保持原状不强制关闭
+       （2026-10-19 张老师两定：偏好不被重玩按钮破坏；重玩局内无猜照常救回，
+       允许盘面漂移） ---- */
     function replaySameBoard() {
       if (!snapshot) return;
       replayBoardLocked = true; // 标记：下一局布雷走锁定盘
       pendingBoard = snapshot.mines.slice();
       reset(lv === "cus" ? "cus" : lv);
-      replayPristine = true; // reset 不清本标记（锁定盘消费时游戏已开局长存）
     }
     /* ---- 再来一局（六期）：与「重玩本局」相对——全新随机盘面。必须显式清掉锁定标记，
        否则重玩本局之后再点再来一局，placeMines 仍会注入上一局的 pendingBoard ---- */
@@ -1520,11 +1518,6 @@ export function OnlinePlay({
        ⚠️ 回放期间必须屏蔽游戏交互（gboard 命中由 replaying 标志拦截），
        且不动引擎 state/mines——回放用自己的 rstate 副本驱动贴图。 */
     let replaying = false;
-    /* 「重完本局」锁定盘复刻中（2026-10-19 张老师定）：无猜灯保持亮、偏好不被
-       重玩按钮破坏，但本局内**不发生无猜重排**——重排会把原盘改掉，背弃
-       「重完本局＝原样复刻」的承诺（首击盲点开数字也会被 makeOpening 重排）。
-       仅约束重玩出来的这一局，下一局 reset 自动恢复无猜完整效力 */
-    let replayPristine = false;
     /* 强制退出钩子：exitReplay 是闭包内的，reset（外层）够不着——由 startInPlaceReplay
        每次进入时注册，退出时自清；repaint 参数控制是否重画结算盘面（reset 路径不需要） */
     let forceExitReplay: (repaint?: boolean, restorePanel?: boolean) => void = () => {};
@@ -1939,7 +1932,6 @@ export function OnlinePlay({
          （五期）；重玩锁定标记保留——placeMines 在首击时消费它 */
       leftDown = rightDown = chordDone = false;
       comboGuard = true; // 开局保护窗随新局恢复
-      replayPristine = false; // 非重玩路径的新局恢复无猜完整效力（重玩路径 reset 后重置）
       evStream = [];
       /* 数据面板（八期）：任何时刻都不因开局而显示——只有游戏结束且开关开着才弹出
          （见 report）。statsReport 只读 state/统计量、不读 snapshot，
@@ -3311,7 +3303,6 @@ export function OnlinePlay({
         state: () => Array.from(state),
         combo: () => combo,
         guard: () => comboGuard,
-        pristine: () => replayPristine,
         over: () => over,
         nf: () => nf,
         ng: () => ng,
