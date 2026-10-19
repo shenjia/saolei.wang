@@ -114,7 +114,13 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           </div>
         )}
 
-        <AdminReviewList key={`${status}_${pool}_${page}`} initial={list.rows} status={status} pool={pool} />
+        <AdminReviewList
+          key={`${status}_${pool}_${page}`}
+          initial={list.rows}
+          status={status}
+          pool={pool}
+          exemptTotal={pool === "exempt" ? list.total : undefined}
+        />
 
         {list.total > list.pageSize && (
           <div className="admin_pager">

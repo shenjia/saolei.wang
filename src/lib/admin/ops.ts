@@ -209,13 +209,25 @@ async function dispatch(
     case "video.batchReview": {
       const ids = (Array.isArray(p.ids) ? p.ids : []).map(toId).filter((x): x is number => !!x);
       const status = parseInt(String(p.status ?? ""), 10);
-      if (!ids.length) return { ok: false, error: "请先勾选录像" };
+      // pool 模式（2026-10-19 张老师需求）：ids=["all"] 时对「当前待审的全部免核定」执行——
+      // 全选跨页：勾选框不再是本页 25 条，而是整个免核定池
+      const poolAll = String(p.pool ?? "") === "exempt" && Array.isArray(p.ids) && p.ids.length === 1 && p.ids[0] === "all";
+      if (!ids.length && !poolAll) return { ok: false, error: "请先勾选录像" };
       if (![VIDEO_STATUS.BANNED, VIDEO_STATUS.REVIEWED].includes(status as 0 | 20)) {
         return { ok: false, error: "批量只能「通过」或「屏蔽」" };
       }
       // 自动分拣闸门（2026-10-19 方案 v2）：需核定录像（auto_flag=0/2/-1）只能逐条手审，
       // 拒绝批量通过（批量屏蔽仍放行——下架不受限）。机器只分拣不审批，铁闸在服务端。
-      if (status === VIDEO_STATUS.REVIEWED) {
+      let targetIds = ids;
+      if (poolAll) {
+        const rows = await prisma.video.findMany({
+          where: { status: VIDEO_STATUS.NORMAL, autoFlag: 1 },
+          select: { id: true },
+          orderBy: { id: "asc" },
+        });
+        targetIds = rows.map((r) => Number(r.id));
+        if (!targetIds.length) return { ok: false, error: "当前没有免核定录像" };
+      } else if (status === VIDEO_STATUS.REVIEWED) {
         const flagged = await prisma.video.findMany({
           where: { id: { in: ids.map(BigInt) }, autoFlag: { not: 1 } },
           select: { id: true },
@@ -230,7 +242,7 @@ async function dispatch(
       }
       let done = 0;
       const errors: string[] = [];
-      for (const id of ids) {
+      for (const id of targetIds) {
         const r = await reviewVideo(actor.uid, actor.role, id, status);
         if (r.ok) done++;
         else errors.push(`#${id}: ${r.error}`);
@@ -238,7 +250,7 @@ async function dispatch(
       if (!done) return { ok: false, error: errors[0] ?? "全部失败" };
       return {
         ok: true,
-        message: `批量${statusName(status)} ${done}/${ids.length} 条${errors.length ? `（${errors.length} 条失败）` : ""}`,
+        message: `批量${statusName(status)} ${done}/${targetIds.length} 条${errors.length ? `（${errors.length} 条失败）` : ""}`,
       };
     }
 

@@ -328,6 +328,8 @@ export interface AdminVideoRow {
   cl: number | null;
   /** press-release 平均时长 ms（需核定行现算：左键优先、右键单独；null=未算/不适用） */
   pressAvgMs: number | null;
+  /** 录像文件路径（/2026/01/05/xxx.mvf；后台播放器 fetch 用） */
+  filepath: string;
 }
 
 const VIDEO_ORDERS: Record<string, string> = {
@@ -467,6 +469,7 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       cls: mMap.get(id)?.cls ?? null,
       cl: mMap.get(id)?.cl ?? null,
       pressAvgMs: null,
+      filepath: info?.filepath ?? "",
     });
   }
   // 需核定行现算 press-release 平均时长（触发原因展示具体数值；每页 ≤25 行 × ~3ms）

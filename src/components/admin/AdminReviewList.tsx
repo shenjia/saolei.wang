@@ -18,8 +18,9 @@ import { LevelTag, StatusTag } from "./Widgets";
 import { postOp, useOp } from "./AdminAction";
 import { toast } from "@/components/Toast";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
-import { VIDEO_STATUS } from "@/lib/config";
+import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { PRESS_AVG_MS, STNB_TRIGGER } from "@/lib/video-triage-limits";
+import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
 
 const LEVEL_NAMES: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 
@@ -94,14 +95,23 @@ export function AdminReviewList({
   initial,
   status,
   pool,
+  exemptTotal,
 }: {
   initial: AdminVideoRow[];
   status: number;
   pool?: string;
+  /** 当前待审免核定总数（跨页全选用，来自列表查询 total 或独立 count） */
+  exemptTotal?: number;
 }) {
   const [items, setItems] = useState(initial);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
+  /** 全选跨页模式：选中「全部免核定」（不限于本页）；此时已选数＝服务端全池计数 */
+  const [allMode, setAllMode] = useState(false);
+  /** 屏蔽气泡确认（应用内弹窗，不用浏览器模态） */
+  const [banConfirm, setBanConfirm] = useState<"page" | "all" | null>(null);
+  /** 全屏回放播放器（2026-10-19 张老师需求：点时间列弹层看录像） */
+  const [playTarget, setPlayTarget] = useState<AdminPlayerTarget | null>(null);
 
   // 可勾选的行：免核定池（或未分池视图里的免核定行）且仍待审
   const pickable = (v: AdminVideoRow) =>
@@ -118,22 +128,50 @@ export function AdminReviewList({
     });
 
   const pickableItems = items.filter(pickable);
-  const allOn = pickableItems.length > 0 && picked.size === pickableItems.length;
-  const toggleAll = () => setPicked(allOn ? new Set() : new Set(pickableItems.map((i) => i.id)));
+  // 全池免核定数：exempt 池视图直接用列表 total；混合视图独立统计本页（全选仅对 exempt 池开放跨页）
+  const exemptCount = pool === "exempt" ? (exemptTotal ?? pickableItems.length) : pickableItems.length;
+  const allOn = allMode || (pickableItems.length > 0 && picked.size === pickableItems.length && pool !== "exempt");
+  const toggleAll = () => {
+    if (pool === "exempt") {
+      // 跨页全选：进入 all 模式（已选=全部免核定）；再点取消
+      setAllMode((v) => !v);
+      setPicked(new Set());
+    } else {
+      setPicked(allOn ? new Set() : new Set(pickableItems.map((i) => i.id)));
+    }
+  };
+  const selectedCount = allMode ? exemptCount : picked.size;
 
-  const batch = async (nextStatus: number) => {
-    const ids = [...picked];
-    if (!ids.length) return;
-    const label = nextStatus === VIDEO_STATUS.REVIEWED ? "通过" : "屏蔽";
-    if (!window.confirm(`确认批量${label}选中的 ${ids.length} 条录像？`)) return;
+  const runBatch = async (ids: number[], all: boolean, nextStatus: number) => {
     setBusy(true);
-    const res = await postOp("video.batchReview", { ids, status: nextStatus });
+    const res = await postOp("video.batchReview", {
+      ids: all ? ["all"] : ids, // ids=["all"]+pool=exempt = 服务端取全部免核定（跨页）
+      pool: all ? "exempt" : undefined,
+      status: nextStatus,
+    });
     setBusy(false);
     toast(res.ok ? res.message ?? "批量完成" : res.error ?? "批量失败", res.ok ? "success" : "error");
     if (res.ok) {
-      drop(ids);
+      if (all) setItems([]); // 全池操作：本页清空（全池都已处理）
+      else drop(ids);
       setPicked(new Set());
+      setAllMode(false);
     }
+  };
+
+  // 批量通过：免确认直接执行（2026-10-19 张老师定：通过无需确认）
+  const batchPass = () => {
+    if (allMode) return runBatch([], true, VIDEO_STATUS.REVIEWED);
+    const ids = [...picked];
+    if (ids.length) return runBatch(ids, false, VIDEO_STATUS.REVIEWED);
+  };
+  // 批量屏蔽：应用内气泡确认（不用 window.confirm 模态）
+  const batchBanAsk = () => setBanConfirm(allMode ? "all" : "page");
+  const batchBanDo = () => {
+    setBanConfirm(null);
+    if (allMode) return runBatch([], true, VIDEO_STATUS.BANNED);
+    const ids = [...picked];
+    if (ids.length) return runBatch(ids, false, VIDEO_STATUS.BANNED);
   };
 
   const showBatchBar = status === VIDEO_STATUS.NORMAL && (pool === undefined || pool === "exempt") && items.length > 0;
@@ -144,33 +182,66 @@ export function AdminReviewList({
         <div className="admin_filterbar">
           <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "#939387" }}>
             <input type="checkbox" checked={allOn} onChange={toggleAll} style={{ width: 14, height: 14 }} />
-            全选免核定
+            {pool === "exempt" ? "全选全部免核定（跨页）" : "全选本页免核定"}
           </label>
-          <span className="label">已选 {picked.size} 条</span>
+          <span className="label">
+            已选 {selectedCount} 条{allMode ? "（全部免核定，含未翻页）" : pool === "exempt" ? ` / 共 ${exemptCount} 条` : ""}
+          </span>
           <span className="spacer" />
           <button
             type="button"
             className="admin_btn primary"
-            disabled={busy || !picked.size}
-            onClick={() => batch(VIDEO_STATUS.REVIEWED)}
+            disabled={busy || selectedCount === 0}
+            onClick={batchPass}
           >
-            批量通过
+            批量通过{selectedCount > 0 ? `（${selectedCount}）` : ""}
           </button>
           <button
             type="button"
             className="admin_btn danger"
-            disabled={busy || !picked.size}
-            onClick={() => batch(VIDEO_STATUS.BANNED)}
+            disabled={busy || selectedCount === 0}
+            onClick={batchBanAsk}
           >
             批量屏蔽
           </button>
-          {picked.size > 0 && (
-            <button type="button" className="admin_btn" onClick={() => setPicked(new Set())}>
+          {(picked.size > 0 || allMode) && (
+            <button
+              type="button"
+              className="admin_btn"
+              onClick={() => {
+                setPicked(new Set());
+                setAllMode(false);
+              }}
+            >
               取消选择
             </button>
           )}
         </div>
       )}
+
+      {/* 批量屏蔽气泡确认（应用内弹窗，复用 ban_overlay 视觉） */}
+      {banConfirm && (
+        <div className="ban_overlay" onClick={() => !busy && setBanConfirm(null)}>
+          <div className="ban_dialog" onClick={(e) => e.stopPropagation()}>
+            <h1>批量屏蔽确认</h1>
+            <p className="ban_desc">
+              即将屏蔽 <b style={{ color: "#f92672" }}>{banConfirm === "all" ? `全部 ${exemptCount} 条免核定` : `${picked.size} 条选中`}</b>
+              录像，对应玩家最好成绩会被回退（有次优录像则自动顶替）。此操作影响公开榜单，请确认。
+            </p>
+            <div className="ban_ops">
+              <button type="button" className="admin_btn" disabled={busy} onClick={() => setBanConfirm(null)}>
+                取消
+              </button>
+              <button type="button" className="admin_btn danger" disabled={busy} onClick={batchBanDo}>
+                {busy ? "处理中…" : "确认屏蔽"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 全屏回放播放器（点时间列弹出，Esc/关闭按钮退出） */}
+      <AdminVideoPlayer target={playTarget} onClose={() => setPlayTarget(null)} />
 
       <div className="admin_scroll">
         <table className="admin_table">
@@ -201,6 +272,19 @@ export function AdminReviewList({
                 picked={picked.has(v.id)}
                 onToggle={() => toggle(v.id)}
                 onRemoved={() => drop([v.id])}
+                onPlay={() =>
+                  setPlayTarget(
+                    v.filepath && v.realTime
+                      ? {
+                          id: v.id,
+                          level: v.level as VideoLevel,
+                          filepath: v.filepath,
+                          realTime: v.realTime,
+                          player: v.author?.chineseName ?? `#${v.user}`,
+                        }
+                      : null
+                  )
+                }
               />
             ))}
             {items.length === 0 && (
@@ -223,12 +307,14 @@ function ReviewRow({
   picked,
   onToggle,
   onRemoved,
+  onPlay,
 }: {
   video: AdminVideoRow;
   showPick: boolean;
   picked: boolean;
   onToggle: () => void;
   onRemoved: () => void;
+  onPlay: () => void;
 }) {
   const { run, busy } = useOp();
   // 需核定行（含未分拣/失败保守处理）微红底提示
@@ -261,7 +347,26 @@ function ReviewRow({
       <td className="c">
         <LevelTag level={v.level} />
       </td>
-      <td className="num strong">{v.realTime ? scoreTime(v.realTime) : "—"}</td>
+      <td className="num strong">
+        {v.realTime && v.filepath ? (
+          <a
+            className="link"
+            href={`/video/${v.id}`}
+            target="_blank"
+            title="点击弹层播放该录像"
+            onClick={(e) => {
+              e.preventDefault();
+              onPlay();
+            }}
+          >
+            {scoreTime(v.realTime)}
+          </a>
+        ) : v.realTime ? (
+          scoreTime(v.realTime)
+        ) : (
+          "—"
+        )}
+      </td>
       <td className="num">{v.board3bv && v.realTime ? score3bvs(Math.round((v.board3bv * 1e6) / v.realTime)) : "—"}</td>
       <td className="num">{v.stnb != null ? v.stnb.toFixed(1) : "—"}</td>
       <td className="c">{v.noflag ? <span className="admin_tag info">NF</span> : <span className="sub">标雷</span>}</td>

@@ -56,7 +56,7 @@ interface ReplayEv {
   py: number;
 }
 
-interface ReplayData {
+export interface ReplayData {
   w: number;
   h: number;
   /** renderBoard 后的整盘串（'*'=雷，其余=数字），与页面 Board 同源格式 */
@@ -69,8 +69,9 @@ interface ReplayData {
 
 /** avf/mvf/rmv 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底）。
  *  timeCsecOverride：库内权威用时（video_info.real_time，百分秒）——进度条总长与
- *  播放终点以库为准（页面标题成绩同一来源），缺省退回文件内 Time。 */
-function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?: number): ReplayData | null {
+ *  播放终点以库为准（页面标题成绩同一来源），缺省退回文件内 Time。
+ *  2026-10-19 导出：管理后台审核页全屏播放器（AdminVideoPlayer）复用同一解析。 */
+export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?: number): ReplayData | null {
   let lines: string[] | null = null;
   try {
     lines =
@@ -246,7 +247,8 @@ const FACE_MAP: Record<FaceKind | "press", string> = {
   press: "face-press-normal",
 };
 
-function runReplay(opts: {
+/* 2026-10-19 导出：管理后台审核页全屏播放器（AdminVideoPlayer）复用同一引擎 */
+export function runReplay(opts: {
   wrap: HTMLElement;
   tbody: HTMLTableSectionElement;
   rows: number;
