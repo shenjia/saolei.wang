@@ -57,6 +57,8 @@ export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number 
 
 /* localStorage 设置键（2026-10-14 二期：全部设置入 localStorage 记住） */
 const LS_KEY = "online_play_settings";
+/* 移动端连击模式自动开启的一次性标记（2026-10-19）：存在＝已初始化过，不再自动开 */
+const COMBO_AUTO_KEY = "online_play_combo_auto";
 
 /* 自定义规格范围（三期，2026-10-14 18:2x 张老师定）：
    下限 8——8×8 以下盘面撑不住 #page 版式（格子太少时 gframe 过窄、页脚版块会被挤变形）；
@@ -214,20 +216,34 @@ export function OnlinePlay({
       if (m > w * h - 9) return "雷数过多（需留出首击 3×3 保护区）";
       return null;
     }
-    /* NF / 无猜为独立开关（可叠加，2026-10-14 张老师定）；全屏开关只控制显示、不影响对局；
+    /* 无猜为独立开关；全屏开关只控制显示、不影响对局；
        问号开关（默认关）只影响右键循环是否经过问号态，切换不重开。
        无猜默认开（2026-10-15 张老师定）；localStorage 存过偏好的浏览器仍按存值恢复。
        二期起这些开关收进设置浮窗，初始值从 localStorage 恢复。
        「显示3BV」开关已废（2026-10-15 八期张老师定：状态栏整个取消，见 gname 注释） */
-    let nf = false, ng = true, qmark = false;
-    /* 「速旗模式」（2026-10-16 张老师定，默认关，入口＝NF 右侧小旗快捷钮）：
+    /* NF 模式（2026-10-19 张老师定：恢复保留，语义收窄）——**仅仅限制不能右键**：
+       右键按下只抖 NF 钮反馈、不录任何事件（对局里零右键点击），左键行为与常规完全
+       一致；不再携带旧版的「按下即开/滑动连开」（那部分已独立成连击模式）。
+       与速旗互斥（继续沿用 2026-10-16 口径）：打开其一自动关闭另一者，NF 切换重开。
+       激活显色＝绿（gmode_nf，与无猜同色）。 */
+    let nf = false;
+    let ng = true, qmark = false;
+    /* 「连击模式」（2026-10-19 张老师定，默认关，入口＝原 NF 快捷钮位）：
+       NF 模式退役换防——「按下即开＋滑动连开」交互保留并扩展到右键：
+       ① 左键按下即触发——未开格直接开（录完整 lc+lr 对）、已开数字直接双击（sc+lr）；
+       ② 右键按下即触发——未开格直接插旗（录完整 rc+rr 对）；
+       ③ 按住任一键滑动＝对滑过的格子连续点击，一格限一次（state 守卫天然保证：
+          开过/旗过 state 变更即不会二次触发）；松开不补录事件（配对在触发时已闭合）。
+       与速旗模式**不再互斥**（可叠加）。移动端（pointer:coarse）首次进入自动开启。
+       localStorage 键 combo */
+    let combo = false;
+    /* 「速旗模式」（2026-10-16 张老师定，默认关，快捷钮小旗）：
        ① 标旗（右键/长按插上旗）后自动对周围已开数字格做 chord——预检「旗数满足且有
        未开非旗邻格」才执行并录 mr 事件（计一次 Double）；开不出格的空 chord 不执行
        也不计数；② 左右键点已开数字都视为双击——左键本就全局生效（见 mouseup
        「单击已开数字格＝双击」分支），速旗新增的是右键点已开数字也 chord（录 mr，
        不录 rc：引擎里 rc 落在已开格会挂起 rv、随后的 rr 计一次 wasted 右键，口径就歪了；
        mr 引擎无条件计 Double，与左键单击数字同口径）。
-       NF 与速旗互斥（2026-10-16 张老师定）：打开其一自动关闭另一者。
        localStorage 键沿用旧「自动双击」开关的 autoChord（平滑迁移） */
     let autoChord = false;
     /* 「显示统计」开关（2026-10-15 六期张老师定；2026-10-16 张老师定默认开）：左侧「数据统计」
@@ -255,16 +271,34 @@ export function OnlinePlay({
     }
     /* localStorage 读取：解析失败/缺字段时静默用默认值（隐私模式同） */
     function loadSettings() {
+      /* 移动端首次进入自动开启连击模式（2026-10-19 张老师定）：触屏设备（pointer:coarse）
+         且从未进过练习页（标记键不存在）→ 自动打开；标记键保证只此一次，
+         用户之后手动关掉也不会再被自动打开。
+         ⚠️ 判断必须在最前（首次访问连存档都没有，下面 `!raw` 会提前 return），
+         但**落盘必须在存档解析之后**——此刻 lv/bv/cus 还是挂载默认值，先写会把
+         老用户存好的级别/3BV 区间整个冲掉 */
+      let comboAuto = false;
+      try {
+        if (window.matchMedia("(pointer: coarse)").matches && !localStorage.getItem(COMBO_AUTO_KEY)) {
+          combo = true;
+          localStorage.setItem(COMBO_AUTO_KEY, "1");
+          comboAuto = true;
+        }
+      } catch { /* 隐私模式：跳过自动开启 */ }
       try {
         const raw = localStorage.getItem(LS_KEY);
-        if (!raw) return;
+        if (!raw) {
+          if (comboAuto) saveSettings(); // 无存档：把 combo:true 连同默认设置一起落盘
+          return;
+        }
         const s = JSON.parse(raw) as {
-          nf?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
+          nf?: boolean; combo?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
           showStats?: boolean; autoChord?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
         if (typeof s.nf === "boolean") nf = s.nf;
+        if (typeof s.combo === "boolean") combo = s.combo;
         if (typeof s.ng === "boolean") ng = s.ng;
         if (typeof s.qmark === "boolean") qmark = s.qmark;
         if (typeof s.showStats === "boolean") showStats = s.showStats;
@@ -284,10 +318,14 @@ export function OnlinePlay({
           }
         }
       } catch { /* 隐私模式 / 脏数据：用默认 */ }
+      /* 自动开启压过存档旧值：上面解析会把 combo 恢复成存档里的 false（老用户从未
+         开过连击），这里重新置真——触发过自动开启本次就生效，随后一并落盘 */
+      if (comboAuto) combo = true;
+      if (comboAuto) saveSettings(); // 有存档：解析完（级别/3BV 区间已恢复）再补写 combo:true
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, ng, qmark, showStats, autoChord, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -352,7 +390,7 @@ export function OnlinePlay({
           px: e.x,
           py: e.y,
         })),
-        { marks: qmark, noflag: nf }
+        { marks: qmark }
       );
     }
     let bvRegions: number[][] = []; // 空格连通域（含边界数字格）
@@ -408,7 +446,7 @@ export function OnlinePlay({
       bbbv: number;
       csec: number;           // 用时（百分秒）
       won: boolean;
-      nf: boolean; ng: boolean; qmark: boolean;
+      nf: boolean; combo: boolean; ng: boolean; qmark: boolean;
       level: string;          // beg/int/exp/cus
       events: OnlineEvent[];
       dateStr: string;        // 对局时间（AVF 时间戳）
@@ -1017,7 +1055,6 @@ export function OnlinePlay({
     function toggleFlag(i: number) {
       if (over) return;
       if (state[i] === 1) return;
-      if (nf) { shakeModeBtn(btnNf); return; } // NF 禁旗：右键只给个抖动反馈
       /* 问号开关关：空白 ↔ 标雷 两态；开：空白 → 标雷 → 问号 三态循环 */
       if (state[i] === 0) state[i] = 2;
       else if (state[i] === 2) state[i] = qmark ? 3 : 0;
@@ -1054,6 +1091,26 @@ export function OnlinePlay({
       recordEv(9, i); // rc 按下即录——flop 插旗在按下位即刻生效
       toggleFlag(i);
       if (autoChord && state[i] === 2) autoChordAround(i);
+    }
+    /* ---- 连击模式单格动作（2026-10-19 张老师定，桌面鼠标与触屏轨迹共用） ----
+       左击＝未开格开（录完整 lc+lr 对：按下即松，回放引擎 lr 才 flood，视觉只差一帧）、
+       已开数字双击（sc+lr，与全局「单击已开数字格＝双击」同口径）；
+       右击＝未开格插旗（录完整 rc+rr 对，按下位生效；速旗联动照走——
+       点已开数字录 mr 不录 rc/rr、插旗成功后 autoChordAround）。
+       旗/问号格右击不动作不录事件：连击是「插旗连发」，滑过已有旗不误拔 */
+    function comboLeftClick(i: number) {
+      if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
+      else if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
+    }
+    function comboRightClick(i: number) {
+      if (nf) return; // NF：右键禁用（入口已拦，双保险）
+      if (autoChord && nums && state[i] === 1) { recordEv(65, i); chord(i); return; }
+      if (state[i] !== 0) return;
+      recordEv(9, i);
+      toggleFlag(i);
+      recordEv(17, i);
+      const st: number = state[i]; // toggleFlag 改过盘面，取宽化副本供 速旗联动 判断
+      if (autoChord && st === 2) autoChordAround(i);
     }
     /* ---- 结算报告（2026-10-14 张老师定：游戏结束时桌面版左侧浮窗，再开局隐藏；
        2026-10-15 六期改：显示时机交给设置开关「显示统计」，见 showStats）。
@@ -1180,7 +1237,7 @@ export function OnlinePlay({
         bbbv: board3bv,
         csec: Math.round(t * 100),
         won,
-        nf, ng, qmark,
+        nf, combo, ng, qmark,
         level: lv,
         events: evStream.slice(),
         dateStr: formatAvfTimestamp(new Date()),
@@ -1224,6 +1281,7 @@ export function OnlinePlay({
           lvName +
           '<em class="lv_' + s.level + '">' + (s.csec / 100).toFixed(2) + "</em>秒" +
           (s.nf ? "<ins>NF</ins>" : "") +
+          (s.combo ? "<ins>连击</ins>" : "") +
           "</span>"
         : '<span class="gr_lv fail">未完成' +
           (estSec > 0
@@ -1332,6 +1390,7 @@ export function OnlinePlay({
     }
     function computeRadarPoints(s: GameSnapshot): VideoAnalysisPoint[] {
       const distLevel = ratingLevel(s.level, s.w, s.h, s.m);
+      /* NF 局走 _nf 基准分布（无右键行程的指标形态与常规局不同）；连击局与常规局同分布 */
       const group = metricDists[distLevel + (s.nf ? "_nf" : "")]?.[String(DIST_BUCKET_ALL)];
       const lowCompletion = s.bbbv <= 0 || s.stats.solvedBv / s.bbbv < 0.1;
       const rateable = !!group && !!s.stats.cl && !lowCompletion;
@@ -1387,7 +1446,7 @@ export function OnlinePlay({
       a.download = onlineAvfFilename({
         level: snapshot.level,
         csec: snapshot.csec,
-        nf: snapshot.nf,
+        nf: snapshot.nf, // NF 局文件名带 NF 段（连击局不禁旗、不带）
         bbbv: snapshot.bbbv,
         user: player, // 未登录为 null → 文件名省略 `# 用户ID 英文名` 段
       });
@@ -1508,7 +1567,7 @@ export function OnlinePlay({
         curEl.style.top = py + gboardOff.y - TIP_Y + "px";
       }
       /* 回放事件应用（2026-10-16 重写）：与新录制方言 / flop 状态机同语义——
-         lc/rc 只记按下（rc 按下即刻切旗，lp 按住下仅视觉；NF 局不切旗），
+         lc/rc 只记按下（rc 按下即刻切旗，lp 按住下仅视觉），
          lr/rr 松开生效（rp||sv 下＝双击），sc 等后续 lr，mr（自动双击）无条件 chord */
       let rLp = false, rRp = false, rSv = false;
       let rFlags = 0; // 已插旗数（雷数 LED＝s.m − rFlags，随回放实时同步）
@@ -1525,7 +1584,7 @@ export function OnlinePlay({
             rLp = false; rSv = false;
             break;
           case 9: // rc
-            if (!rLp && !s.nf && inside) {
+            if (!rLp && inside) {
               if (rstate[ci] === 0) { rstate[ci] = 2; rFlags++; paintR(ci); }
               else if (rstate[ci] === 2) { rstate[ci] = s.qmark ? 3 : 0; rFlags--; paintR(ci); }
               else if (rstate[ci] === 3) { rstate[ci] = 0; paintR(ci); }
@@ -2089,7 +2148,7 @@ export function OnlinePlay({
     });
 
     /* ---- 设置浮窗内开关：问号只改右键循环。NF/无猜两项已于十期撤出设置
-       （入口收敛到模式快捷钮 btnNf/btnNg，见下方九期块） ---- */
+       （入口收敛到模式快捷钮 btnCombo/btnNg，见下方九期块） ---- */
     const swQm = $("sw_qm") as HTMLInputElement;
     const swStats = $("sw_stats") as HTMLInputElement;
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
@@ -2106,21 +2165,24 @@ export function OnlinePlay({
       }
       if (over && lastReportHtml) paintStatPanel(lastReportHtml);
     });
-    /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／无猜／速旗三颗 ----
-       激活显色（NF=黄 #fdc61d / 无猜=绿 #a6e22e / 速旗=默认黄，见 .gmode/.gmode_ng）、
+    /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／速旗／连击／无猜四颗 ----
+       激活显色（NF=绿 #a6e22e（2026-10-19 张老师定）/ 无猜=绿 / 速旗=默认黄 / 连击=默认黄）、
        未激活灰。NF／无猜点击＝把内存开关取反 → saveSettings → 重开一局；
-       速旗只影响之后的插旗/点数字行为，切换不重开当前局（原「自动双击」开关口径）。
-       NF 与速旗互斥（2026-10-16 张老师定）：打开其一自动关闭另一者——速旗的自动
-       chord 依赖插旗，NF 下无旗可插；速旗顶掉 NF 时对局模式已变，按 NF 切换口径重开。
+       速旗/连击只影响之后的操作行为，切换不重开当前局（原「自动双击」开关口径）。
+       NF 与速旗互斥（2026-10-16 张老师定，NF 恢复后继续沿用）：打开其一自动关闭另一者；
+       NF 切换重开（禁右键改变对局语义）；速旗被顶掉时 NF 开启中 → 同步重开。
+       连击与速旗**不互斥**（2026-10-19 张老师定，可叠加）。
        十期起设置浮窗里不再有 NF/无猜两项（行已删），快捷钮是唯一入口；
        「自动双击」设置开关同期撤出，改挂速旗快捷钮 */
     const btnNf = $("btn_nf") as HTMLButtonElement;
-    const btnNg = $("btn_ng") as HTMLButtonElement;
     const btnSq = $("btn_sq") as HTMLButtonElement;
+    const btnCombo = $("btn_combo") as HTMLButtonElement;
+    const btnNg = $("btn_ng") as HTMLButtonElement;
     function syncModeButtons() {
       btnNf.classList.toggle("active", nf);
-      btnNg.classList.toggle("active", ng);
       btnSq.classList.toggle("active", autoChord);
+      btnCombo.classList.toggle("active", combo);
+      btnNg.classList.toggle("active", ng);
     }
     on(btnNf, "click", () => {
       nf = !nf;
@@ -2129,15 +2191,9 @@ export function OnlinePlay({
       syncModeButtons();
       reset();
     });
-    on(btnNg, "click", () => {
-      ng = !ng;
-      saveSettings();
-      syncModeButtons();
-      reset();
-    });
     on(btnSq, "click", () => {
       autoChord = !autoChord;
-      /* 互斥：开速旗自动关 NF——NF 被顶掉时对局禁旗语义已失效，须重开；
+      /* 互斥：开速旗自动关 NF——NF 被顶掉时对局禁右键语义已失效，须重开；
          单纯切速旗（未顶掉 NF）仍不重开 */
       if (autoChord && nf) {
         nf = false;
@@ -2145,6 +2201,19 @@ export function OnlinePlay({
       }
       saveSettings();
       syncModeButtons();
+    });
+    /* 连击切换不重开（2026-10-19 张老师定）：它只改「按下即触发＋滑动连点」的
+       交互方式，不改变盘面规则/旗语义，对局中途切换无一致命状态 */
+    on(btnCombo, "click", () => {
+      combo = !combo;
+      saveSettings();
+      syncModeButtons();
+    });
+    on(btnNg, "click", () => {
+      ng = !ng;
+      saveSettings();
+      syncModeButtons();
+      reset();
     });
 
     /* ---- 全屏按钮（图标按钮，点击在全屏/非全屏间切换） ----
@@ -2295,15 +2364,21 @@ export function OnlinePlay({
     on(gboard, "mousedown", (e: MouseEvent) => {
       if (over || gameBusy()) return;
       const i = eventCell(e); if (i < 0) return;
-      /* NF 按下即开（2026-10-18 张老师定）：左键 mousedown 直接开格、按住滑动逐格开
-         （见 mouseover），每开一格录完整 lc+lr 对（按下即松，回放引擎 lr 才 flood，
-         配对后视觉只差一帧）；单击已开数字维持「双击」口径录 sc+lr（NF 无旗，
-         chord 必空转计 wasted Double）。松开不再补 lr / openCell（见 window mouseup） */
-      if (nf && e.button === 0) {
+      /* 连击模式按下即触发（2026-10-19 张老师定，承 NF 按下即开口径）：
+         左键按下＝完整一次点击、右键按下＝完整一次右击（见 comboLeftClick/comboRightClick），
+         按住滑动逐格触发（见 mouseover），松开不补录任何事件（配对在触发时已闭合，
+         见 window mouseup）。双键同按无 chord 手势语义——两键各自即时生效 */
+      if (combo && e.button === 0) {
         leftDown = true; rightDown = false; chordDone = false;
         setFace("ooh");
-        if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
-        else if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
+        comboLeftClick(i);
+        return;
+      }
+      if (combo && e.button === 2) {
+        if (nf) { shakeModeBtn(btnNf); return; } // NF：右键禁用（连击只保留左键连开）
+        rightDown = true; leftDown = false; chordDone = false;
+        setFace("ooh");
+        comboRightClick(i);
         return;
       }
       if (e.buttons === 3) { // 左右同按 = 双击手势（第二键并入，只录按下事件不动作）
@@ -2318,6 +2393,7 @@ export function OnlinePlay({
         pressSingle(i);
         setFace("ooh");
       } else if (e.button === 2) {
+        if (nf) { shakeModeBtn(btnNf); return; } // NF 模式：右键禁用，只抖钮反馈、不录事件
         rightDown = true; leftDown = false; chordDone = false; // e.buttons=2：同上自愈
         flagWithAutoChord(i); // rc 录制收进内部：速旗下点已开数字录 mr+chord，否则录 rc 插旗
       }
@@ -2329,18 +2405,20 @@ export function OnlinePlay({
          空手（buttons=0）划回棋盘说明手势早已结束 */
       if (e.buttons === 0 && (leftDown || rightDown)) { leftDown = rightDown = chordDone = false; }
       const i = eventCell(e); if (i < 0) return;
+      /* 连击模式滑动连点（2026-10-19 张老师定）：按住左键（含双键同按）滑过未开格
+         即开、只按右键滑过未开格即插旗——comboLeftClick/comboRightClick 内部按
+         state 守卫，「一格限一次」天然成立（触发过 state 变更即不会再中）；
+         无需按下态高亮（动作瞬时完成） */
+      if (combo) {
+        if (leftDown) { setFace("ooh"); comboLeftClick(i); }
+        else if (rightDown) { setFace("ooh"); comboRightClick(i); }
+        return;
+      }
       if (e.buttons === 3) {
         if (pressCell !== null) { if (state[pressCell] === 0) paint(pressCell); pressCell = null; }
         pressAround(i);
         setFace("ooh");
       } else if (e.buttons === 1) {
-        /* NF 按住滑动逐格开（2026-10-18 张老师定）：经过未开格即开并录 lc+lr 对，
-           已开格不动作；无需按下态高亮（格瞬时已开） */
-        if (nf) {
-          setFace("ooh");
-          if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
-          return;
-        }
         if (chordCells) { chordCells.forEach((c) => { if (state[c] === 0) paint(c); }); chordCells = null; }
         pressSingle(i);
         setFace("ooh");
@@ -2363,18 +2441,16 @@ export function OnlinePlay({
     on(window, "mouseup", (e: MouseEvent) => {
       if (!leftDown && !rightDown) return; // 无棋盘手势：笑脸/设置等点击不进场
       if (over || gameBusy()) { clearPress(); leftDown = rightDown = chordDone = false; return; }
+      /* 连击模式松开＝纯复位（2026-10-19）：每次点击的 lc+lr / rc+rr 配对在按下/
+         滑过触发时已完整闭合，松开不再补录任何事件——否则引擎里多出无主 lr/rr */
+      if (combo) { clearPress(); setFace("smile"); leftDown = rightDown = chordDone = false; return; }
       const i = eventCell(e); clearPress(); setFace("smile");
       /* 盘外松开的原始像素坐标（1x 棋盘坐标系，可为负） */
       const gbR = i < 0 ? gboard.getBoundingClientRect() : null;
       const rawPx = gbR ? (e.clientX - gbR.left) / (zoomCur * pageZoom()) : 0;
       const rel = (mouse: number) => { if (i >= 0) recordEv(mouse, i); else recordEvPx(mouse, rawPx); };
       if (e.button === 0) {
-        if (nf) {
-          /* NF 按下即开：开格 / sc+lr 都已在 mousedown、滑动 mouseover 完成，
-             mouseup 只复位手势——同格此时 state 已 1，若落进下面「单击已开数字＝
-             双击」分支会凭空多计一次 Double（2026-10-18） */
-          leftDown = false;
-        } else if (rightDown) {
+        if (rightDown) {
           /* 双击：flop 口径在**松开**生效（松开位坐标），lr 在 rp 下引擎计 Double。
              右键按住期间每次左键松开都触发（连点连 chord，与回放引擎逐次判 Double
              同口径，2026-10-18 张老师定） */
@@ -2421,8 +2497,9 @@ export function OnlinePlay({
        插旗后自动对邻近所有已开数字格执行双击（chord）。「插旗模式」按钮已废——
        移动端插旗只走长按 ---- */
     let touchTimer: number | null = null, touchCell = -1, longFired = false;
+    let touchMoved = false; // 连击滑动连开标记：本次触点发生过轨迹滑动（touchend 据此跳过点按分支）
     let touchX = 0, touchY = 0; // 起点坐标：滑动容差判定用
-    let touchLastX = 0, touchLastY = 0; // NF 滑动连开：上一采样点（棋盘 1x 像素坐标）
+    let touchLastX = 0, touchLastY = 0; // 连击滑动连开：上一采样点（棋盘 1x 像素坐标）
     /* 触点屏幕坐标 → 棋盘 1x 像素：touch 事件 target 恒为起始格（不跟手指走），
        滑动中必须按坐标算格（与 mousemove/recordMv 同一换算） */
     function touchBoardPx(cx: number, cy: number) {
@@ -2432,26 +2509,21 @@ export function OnlinePlay({
         y: (cy - gbR.top) / (zoomCur * pageZoom()),
       };
     }
-    /* NF 触屏单格动作（2026-10-18 张老师定，与桌面 mousedown/mouseover 同口径）：
-       未开格开（录 lc+lr 对）、已开数字录 sc+lr（NF 无旗，chord 必空转计 wasted） */
-    function nfTouchOpen(i: number) {
+    /* 连击触屏单格动作（2026-10-19，承 nfTouchOpen 改名；与桌面同口径）：
+       未开格开（录 lc+lr 对）、已开数字双击（录 sc+lr+chord） */
+    function comboTouchOpen(i: number) {
       if (over) return;
       if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
       else if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
     }
     on(gboard, "touchend", (e: TouchEvent) => {
       if (touchTimer) clearTimeout(touchTimer);
-      if (nf) {
-        /* NF 按下即开：开格动作已全部在 touchstart / touchmove 完成，touchend 只复位
-           （touchCell 在 NF 下复用为滑动轨迹当前格；长按在 NF 下自然空转——
-           touchstart 已把格开到 state=1，计时器里 state[i]===1 早退，无 rc 可闭合） */
-        touchCell = -1;
-        e.preventDefault();
-        return;
-      }
       if (longFired) {
         /* 长按插旗的 rr 闭合（rc 在长按触发时已录） */
         if (touchCell >= 0 && !over) recordEv(17, touchCell);
+      } else if (touchMoved) {
+        /* 连击滑动连开：动作已在 touchmove 沿轨迹触发完毕，抬起只复位——
+           不能再走点按分支（末格已开，会误录 sc+lr 空转双击） */
       } else if (touchCell >= 0 && !over) {
         if (state[touchCell] === 1) {
           /* 单击已开数字格＝双击：录 sc+lr，统计计 Double（与桌面端同口径） */
@@ -2463,6 +2535,7 @@ export function OnlinePlay({
         }
       }
       touchCell = -1;
+      touchMoved = false;
       e.preventDefault();
     }, { passive: false });
     /* 滑动取消带 12px 容差：手指微颤（1-2px）不再吞掉点按——「有时点击无效」
@@ -2471,12 +2544,17 @@ export function OnlinePlay({
       if (touchCell < 0) return;
       const t = e.changedTouches[0];
       if (!t) return;
-      if (nf) {
-        /* NF 滑动连开（2026-10-18 张老师定）：沿手指轨迹按半格步长插值逐格开——
-           touchmove 是合并事件，快滑会跳格，插值保证路径上的格不被漏掉。
-           滑动即取消长按计时（拖动意图明确） */
+      if (combo) {
+        /* 连击滑动连开（2026-10-19 张老师定，承 NF 滑动连开）：容差内不算滑动
+           （保长按插旗）；超容差沿手指轨迹按半格步长插值逐格开——touchmove 是
+           合并事件，快滑会跳格，插值保证路径上的格不被漏掉。触点下的起始格
+           combo touchstart 不再即开（要让位给长按插旗），滑动一开始在此补开
+           （state 守卫幂等）；「一格限一次」由 state 变更天然保证 */
+        if (Math.hypot(t.clientX - touchX, t.clientY - touchY) <= 12) return;
         if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
         if (over) { touchCell = -1; return; }
+        touchMoved = true;
+        if (state[touchCell] === 0) comboTouchOpen(touchCell);
         const bp = touchBoardPx(t.clientX, t.clientY);
         const steps = Math.max(1, Math.ceil(Math.hypot(bp.x - touchLastX, bp.y - touchLastY) / 8));
         for (let s = 1; s <= steps; s++) {
@@ -2485,7 +2563,7 @@ export function OnlinePlay({
           const cx = (px / 16) | 0, cy = (py / 16) | 0;
           if (cx < 0 || cx >= W || cy < 0 || cy >= H) continue;
           const i = cy * W + cx;
-          if (state[i] === 0 && i !== touchCell) { touchCell = i; nfTouchOpen(i); }
+          if (state[i] === 0 && i !== touchCell) { touchCell = i; comboTouchOpen(i); }
         }
         touchLastX = bp.x; touchLastY = bp.y;
         return;
@@ -2498,16 +2576,16 @@ export function OnlinePlay({
     on(gboard, "touchstart", (e: TouchEvent) => {
       const t = e.changedTouches[0]; if (!t) return;
       const i = eventCell(t); if (i < 0 || over) return;
-      touchCell = i; longFired = false;
+      touchCell = i; longFired = false; touchMoved = false;
       touchX = t.clientX; touchY = t.clientY;
       const bp0 = touchBoardPx(t.clientX, t.clientY);
       touchLastX = bp0.x; touchLastY = bp0.y;
-      /* NF 按下即开（2026-10-18 张老师定）：与桌面同口径，触点落下直接开格，
-         滑动沿轨迹连开（见 touchmove）；长按计时照挂——开过的格 state=1，
-         计时器自然空转，触屏在 NF 下无插旗动作 */
-      if (nf) nfTouchOpen(i);
+      /* 连击模式触点不即开（2026-10-19 张老师定）：点按在 touchend 开、滑动在
+         touchmove 连开，按下即开要让位给**长按插旗**（连击不禁旗，触屏唯一的
+         插旗途径必须保留）；三种手势按位移/时长自然分流 */
       touchTimer = window.setTimeout(() => {
         longFired = true;
+        if (nf) { shakeModeBtn(btnNf); return; } // NF 模式：长按插旗禁用（右键语义整体禁用）
         if (state[i] === 1) return; // 已开格长按无意义
         recordEv(9, i); // rc 按下即录（flop 插旗按下生效口径）；rr 在 touchend 补录
         toggleFlag(i);
@@ -3120,6 +3198,7 @@ export function OnlinePlay({
         mines: () => (mines ? Array.from(mines) : null),
         nums: () => (nums ? Array.from(nums) : null),
         state: () => Array.from(state),
+        combo: () => combo,
         nf: () => nf,
         ng: () => ng,
         bv3: () => board3bv,
@@ -3141,7 +3220,7 @@ export function OnlinePlay({
     /* 设置浮窗控件初始状态（从 localStorage 恢复的开关勾选态 + 3BV 滑杆初值） */
     swQm.checked = qmark;
     swStats.checked = showStats;
-    syncModeButtons(); // 模式快捷钮按存档初值点亮（NF/无猜/速旗）
+    syncModeButtons(); // 模式快捷钮按存档初值点亮（连击/无猜/速旗）
     syncBvSlider();
 
     /* 开局恢复上次级别（四期张老师报：刷新/热更后回初级，3BV 范围浮窗也跟着变初级
@@ -3192,19 +3271,22 @@ export function OnlinePlay({
           <a data-lv="cus">自定义</a>
         </div>
         {/* 右上角图标按钮排（2026-10-14 二期张老师定，九期追补模式快捷钮）：
-            NF／无猜／速旗三颗模式钮在齿轮左侧——激活显色（NF=黄 / 无猜=绿 / 速旗=默认黄）、
-            未激活灰，NF／无猜点击重开一局；速旗只改行为不重开（原「自动双击」开关口径） */
+            NF／速旗／连击／无猜四颗模式钮在齿轮左侧——激活显色（NF=绿（2026-10-19 定）/
+            无猜=绿 / 速旗=默认黄 / 连击=默认黄），未激活灰；NF／无猜点击重开一局，
+            速旗/连击只改行为不重开（原「自动双击」开关口径） */
         }
         <div className="gicons">
           {/* 模式快捷钮 hover 出气泡（2026-10-15 九期张老师定）：文案与设置浮窗
               对应开关的 .tip 一致；不用原生 title（会跟气泡双份弹） */}
-          <button className="gicon gmode" id="btn_nf" type="button">
+          {/* NF 模式（2026-10-19 张老师定：恢复保留，语义收窄为仅禁右键）：
+              文本钮沿用旧样式；激活显色＝绿（gmode_nf，与无猜同色） */}
+          <button className="gicon gmode gmode_nf" id="btn_nf" type="button">
             NF
-            <span className="tip">禁旗模式：不能插旗，按下即开，滑动可以开多格</span>
+            <span className="tip">NF 模式：不能插旗，右键已禁用</span>
           </button>
           {/* 速旗模式（2026-10-16 张老师定）：小旗图标＋NF 右侧；激活沿用 .gicon.active
               默认黄。行为＝原「自动双击」开关（插旗后自动 chord）＋右键点已开数字也视为
-              双击（左键单击数字本就全局生效） */}
+              双击（左键单击数字本就全局生效）；与 NF 互斥 */}
           <button className="gicon gmode" id="btn_sq" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               {/* 旗杆 + 右侧内凹三角旗面（线稿风格与齿轮/全屏一致） */}
@@ -3212,6 +3294,18 @@ export function OnlinePlay({
               <path d="M6 4.5h11.5l-3 4 3 4H6z" />
             </svg>
             <span className="tip">速旗模式：开启后右键标雷自动尝试双击周围格子，左右键点击数字都视为双击</span>
+          </button>
+          {/* 连击模式（2026-10-19 张老师定）：鼠标双击图标（指针＋尖端两道点击弧线）；
+              按下即触发、按住滑动连续点击（左开右旗，一格限一次）；与速旗不互斥；
+              移动端首次进入自动开启；位置在无猜之前 */}
+          <button className="gicon gmode" id="btn_combo" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {/* 指针箭头（尖端朝左上）+ 尖端两道同心点击弧线＝双击连击意象 */}
+              <path d="M8 6.5 L8 20 L11.8 16.5 L14.2 21.6 L16.7 20.4 L14.2 15.3 L19 14.8 Z" />
+              <path d="M5 6.5 A3 3 0 0 1 8 3.5" />
+              <path d="M2.5 6.5 A5.5 5.5 0 0 1 8 1" />
+            </svg>
+            <span className="tip">连击模式：按下鼠标即触发，对滑过的格子自动进行点击</span>
           </button>
           <button className="gicon gmode gmode_ng" id="btn_ng" type="button">
             {/* 雨伞图标（2026-10-15 九期五改，张老师定）：合伞＝未激活态、

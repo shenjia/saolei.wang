@@ -6910,12 +6910,17 @@ button.msg_cancel:hover {
   width: 17px;
   height: 17px;
 }
-/* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／无猜两颗 ----
+/* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／速旗／连击／无猜四颗 ----
    「外套边框」即 .gicon 自带的底框；未激活沿用灰 #b1b1a4，激活显色：
-   NF=黄（.gicon.active 的 #fdc61d 正好是站内黄），无猜=站内绿 #a6e22e（单列覆盖） */
+   速旗/连击=黄（.gicon.active 的 #fdc61d 正好是站内黄），NF/无猜=站内绿 #a6e22e（单列覆盖；
+   NF 变绿为 2026-10-19 张老师定） */
 #online_play .gicon.gmode {
   font: bold 12px/1 Arial, Helvetica, sans-serif;
   letter-spacing: 0.5px;
+}
+#online_play .gicon.gmode_nf.active {
+  color: #a6e22e;
+  border-color: #a6e22e;
 }
 #online_play .gicon.gmode_ng.active {
   color: #a6e22e;
