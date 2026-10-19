@@ -59,6 +59,9 @@ export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number 
 const LS_KEY = "online_play_settings";
 /* 移动端连击模式自动开启的一次性标记（2026-10-19）：存在＝已初始化过，不再自动开 */
 const COMBO_AUTO_KEY = "online_play_combo_auto";
+/* 开局 tips 的已显记录键（2026-10-19）：{ d: 当天日期串, n: 今天已显示过的 TIPS 索引 }
+   ——日期变了整组作废（次日重新轮起），当天不重复、全部出现过后不再提示 */
+const TIP_STATE_KEY = "online_play_tips";
 
 /* 自定义规格范围（三期，2026-10-14 18:2x 张老师定）：
    下限 8——8×8 以下盘面撑不住 #page 版式（格子太少时 gframe 过窄、页脚版块会被挤变形）；
@@ -101,9 +104,11 @@ const WHEEL_STEP_Z = 0.1;
    封顶时把累计清零（而不是继续留余量），免得下一格又跳一次 */
 const WHEEL_MAX_STEPS = 5;
 
-/* ---- 进入练习页的一次性 tips（2026-10-15 张老师定）----
-   挂载时随机取一条，在主板块底部以气泡浮现（正文前一枚金色灯泡），
-   3 秒后渐隐并卸载，本次进入不再出现；条数随意加，随机池即本数组。
+/* ---- 开局 tips（2026-10-15 张老师定「进页一条」，2026-10-19 改口径为「每局一条」）----
+   每次开局（reset）从池里取一条**当天还没出现过**的，在主板块底部以气泡浮现
+   （正文前一枚金色灯泡），3 秒后渐隐；已显记录存 localStorage（TIP_STATE_KEY，
+   按天记录）——当天不重复，全部出现过后当天不再提示（次日重新轮起）。
+   设置浮窗「开局提示」开关（默认开）可整体关闭，关闭后任何提示都不出。
    ⚠️ 文案一律只写**已上线**的既有行为（口径与设置浮窗 .tip / 各按钮 title 一致），
       别把计划中或已废弃的功能（如「显示3BV」「极简模式」）写进来 */
 const TIPS: string[] = [
@@ -113,9 +118,11 @@ const TIPS: string[] = [
   "鼠标滚轮可直接调显示比例：上滑放大，下滑缩小。",
   "设置里能限定 3BV 范围，只练你想要的开局难度。",
   "练习局的录像只能自己回看，不能上传参与排行。",
+  "在线练习录像不能参与排行，下载后仅供自己回看。",
   "手机上长按格子可以标雷，标完会自动展开周围已满足的数字格。",
   "按 F2（或点笑脸）随时重开一局，不必等这局走完。",
   "禁旗模式（NF）下不能插旗，按下即开，滑动可以开多格。",
+  "连击模式下按下鼠标即触发，按住左/右键滑动可连续点击滑过的格子（一格一次）。",
   "左右键同按（或单击已满足的数字格）可一次展开一圈，比逐格点快。",
   "自定义盘可以自由设定宽、高、雷数（8 – 99），想练什么规格都行。",
   "每局结束会给出 STNB 与五维雷达评级，口径与录像详情页一致。",
@@ -173,25 +180,59 @@ export function OnlinePlay({
       if (t instanceof HTMLInputElement && t.type === "range") paintRangeFill(t);
     });
 
-    /* ---- 底部气泡 tips（2026-10-15 张老师定）----
-       进入本页随机显示一条（文案池 TIPS），3 秒后渐隐、再 0.7 秒整块摘除，
-       本次进入不再出现。走**命令式 DOM**而不是 React state：
-       ① 随机值只能在客户端取——渲染期取会撞 react-hooks/purity，且 SSR 与客户端
-          两条随机值不同即 hydration mismatch（故 JSX 里 .txt 恒为空，文字在这里填）；
+    /* ---- 开局气泡 tips + 局中通知气泡（2026-10-19 张老师定）----
+       tips：每次开局（reset 末尾调 showTip）显示一条**当天未出现过**的（TIPS 池，
+       已显记录入 localStorage 按天存），全部出现过后当天不再提示；
+       设置浮窗「开局提示」开关关闭则任何提示都不出。
+       toast：绿色通知气泡（如下载成功），用时动态创建、渐隐后自摘。
+       走**命令式 DOM**而不是 React state：
+       ① 文案选择只能客户端做——渲染期做会撞 react-hooks/purity，且 SSR 与客户端
+          两条结果不同即 hydration mismatch（故 JSX 里 .txt 恒为空，文字在这里填）；
        ② 主 useEffect 本就是本组件的「外部系统同步区」，
           react-hooks/set-state-in-effect 规则禁止在 effect 体里同步 setState。
        ⚠️ 元素脱流绝对定位（CSS 里写死），出现/消失都不改版面高度——
-          页面锁滚 + 棋盘按视口 fit，任何高度变化都会让 fit 基准偏移、棋盘跳动 */
+          页面锁滚 + 棋盘按视口 fit，任何高度变化都会让 fit 基准偏移、棋盘跳动。
+       #op_tips 元素常驻不摘（切 display 由 .show 控制）：每局都要复用它，
+       反复摘挂既浪费也让「重复挂载撞 id」的旧顾虑回来 */
     const tipsEl = root.querySelector<HTMLElement>("#op_tips")!;
-    tipsEl.querySelector(".txt")!.textContent =
-      TIPS[Math.floor(Math.random() * TIPS.length)];
-    /* 下一帧再挂 .show：插入帧已是 opacity:0 初始态，同帧加类会被合并、
-       transition 不触发（气泡就「闪」一下没了） */
-    const tipRaf = requestAnimationFrame(() => tipsEl.classList.add("show"));
-    const tipFade = window.setTimeout(() => tipsEl.classList.remove("show"), TIP_HOLD_MS);
-    /* 渐隐走完再摘元素：留着会是个不可见的空盒子（脱流虽不占位，但 DOM 里
-       挂个废元素不干净，重复挂载时还会撞 #op_tips 这个 id） */
-    const tipDrop = window.setTimeout(() => tipsEl.remove(), TIP_HOLD_MS + TIP_FADE_MS);
+    /* 上一条 tips 的渐隐定时（快速连开新局时重置，避免上一条的定时把新气泡提前掐灭） */
+    let tipFadeTimer: number | null = null;
+    function showTip() {
+      if (!tipsOn) return;
+      let idx = -1;
+      try {
+        const today = new Date().toDateString();
+        const st = JSON.parse(localStorage.getItem(TIP_STATE_KEY) || "null") as
+          { d?: string; n?: number[] } | null;
+        const shown = st && st.d === today && Array.isArray(st.n) ? st.n : [];
+        /* 当天没出过的才有资格；全出过 → 本局不提示 */
+        const unseen: number[] = [];
+        for (let i = 0; i < TIPS.length; i++) if (!shown.includes(i)) unseen.push(i);
+        if (!unseen.length) return;
+        idx = unseen[Math.floor(Math.random() * unseen.length)];
+        shown.push(idx);
+        localStorage.setItem(TIP_STATE_KEY, JSON.stringify({ d: today, n: shown }));
+      } catch { /* 隐私模式：退化为纯随机、不记录（下次可能重复，可接受） */
+        idx = Math.floor(Math.random() * TIPS.length);
+      }
+      tipsEl.querySelector(".txt")!.textContent = TIPS[idx];
+      if (tipFadeTimer !== null) clearTimeout(tipFadeTimer);
+      /* 下一帧再挂 .show：确保从 opacity:0 初始态起步，同帧加类会被合并、
+         transition 不触发（气泡就「闪」一下没了） */
+      requestAnimationFrame(() => tipsEl.classList.add("show"));
+      tipFadeTimer = window.setTimeout(() => tipsEl.classList.remove("show"), TIP_HOLD_MS);
+    }
+    /* 局中绿色通知气泡（下载成功等）：复用 .optips 形态叠 .optoast 绿色变体，
+       动态创建、show 即现、TIP_HOLD 后渐隐、渐隐完自摘（与 tips 不同不用常驻） */
+    function showToast(msg: string) {
+      const t = document.createElement("div");
+      t.className = "optips optoast show";
+      t.setAttribute("role", "status");
+      t.textContent = msg;
+      container.appendChild(t);
+      window.setTimeout(() => t.classList.remove("show"), TIP_HOLD_MS);
+      window.setTimeout(() => t.remove(), TIP_HOLD_MS + TIP_FADE_MS);
+    }
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
        cus＝自定义盘（三期）：规格来自弹窗滑杆，宽/高 8–99、雷 1..格数-9（首击 3×3 保护后仍须有余地） */
@@ -251,6 +292,10 @@ export function OnlinePlay({
        常驻实时刷新——张老师定「只有游戏结束才出现数据面板」）；关＝任何时刻都不显示。
        再开局撤下。localStorage 存过偏好的浏览器仍按存值恢复。 */
     let showStats = true;
+    /* 「开局提示」开关（2026-10-19 张老师定，默认开）：每次开局显示一条技巧气泡
+       （showTip，见上方 tips 块）——当天不重复、全部出现后不再提示；
+       关闭后任何开局提示都不出（下载成功等局中通知气泡不受它管） */
+    let tipsOn = true;
     /* 局末定格的统计面板 HTML（2026-10-15 十期张老师定）：report 时无论开关与否都存
        一份——局后补开「显示统计」时直接复用，不再重算（胜利自动补旗/败局揭雷之后
        重算会把 Flags 等口径算歪），保证与当时应弹出的面板逐字一致。
@@ -293,7 +338,7 @@ export function OnlinePlay({
         }
         const s = JSON.parse(raw) as {
           nf?: boolean; combo?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
-          showStats?: boolean; autoChord?: boolean;
+          showStats?: boolean; autoChord?: boolean; tips?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -303,6 +348,7 @@ export function OnlinePlay({
         if (typeof s.qmark === "boolean") qmark = s.qmark;
         if (typeof s.showStats === "boolean") showStats = s.showStats;
         if (typeof s.autoChord === "boolean") autoChord = s.autoChord;
+        if (typeof s.tips === "boolean") tipsOn = s.tips;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -325,7 +371,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -1454,6 +1500,8 @@ export function OnlinePlay({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      /* 局中绿色气泡反馈（2026-10-19 张老师定）：确认下载动作已完成 */
+      showToast("下载成功");
     }
     /* ---- 自研回放（五期二版，2026-10-14 张老师定：不弹窗，就在游戏界面进行；
        六期 2026-10-15 撤掉控制栏；二十期 2026-10-16 张老师定：控制条回归——
@@ -1942,6 +1990,9 @@ export function OnlinePlay({
       }
       /* 数据面板常驻时（六期）重开后盘面尺寸/倍率可能已变，重新对齐+缩放 */
       if (showStats) syncReportZoom();
+      /* 开局 tips（2026-10-19 张老师定）：每局一条、当天不重复（showTip 内部自判
+         开关/已显记录，全出过或开关关闭则本局静默） */
+      showTip();
     }
 
     on($("level_tabs"), "click", (e: MouseEvent) => {
@@ -2151,6 +2202,7 @@ export function OnlinePlay({
        （入口收敛到模式快捷钮 btnCombo/btnNg，见下方九期块） ---- */
     const swQm = $("sw_qm") as HTMLInputElement;
     const swStats = $("sw_stats") as HTMLInputElement;
+    const swTips = $("sw_tips") as HTMLInputElement;
     on(swQm, "change", () => { qmark = swQm.checked; saveSettings(); });
     /* 「显示统计」（八期改口径）：只影响**游戏结束**时是否弹出数据面板，不重开当前局。
        打开时对局中不提前出现；关闭时若上一局定格的面板还挂着，立刻撤下。
@@ -2165,6 +2217,9 @@ export function OnlinePlay({
       }
       if (over && lastReportHtml) paintStatPanel(lastReportHtml);
     });
+    /* 「开局提示」开关：只管开局技巧气泡（showTip），不影响局中通知气泡（showToast）；
+       切换不重开当前局 */
+    on(swTips, "change", () => { tipsOn = swTips.checked; saveSettings(); });
     /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／速旗／连击／无猜四颗 ----
        激活显色（NF=绿 #a6e22e（2026-10-19 张老师定）/ 无猜=绿 / 速旗=默认黄 / 连击=默认黄）、
        未激活灰。NF／无猜点击＝把内存开关取反 → saveSettings → 重开一局；
@@ -3220,6 +3275,7 @@ export function OnlinePlay({
     /* 设置浮窗控件初始状态（从 localStorage 恢复的开关勾选态 + 3BV 滑杆初值） */
     swQm.checked = qmark;
     swStats.checked = showStats;
+    swTips.checked = tipsOn;
     syncModeButtons(); // 模式快捷钮按存档初值点亮（连击/无猜/速旗）
     syncBvSlider();
 
@@ -3245,10 +3301,8 @@ export function OnlinePlay({
       if (touchTimer) clearTimeout(touchTimer);
       if (cusTimer !== null) clearTimeout(cusTimer); // 拖杆节流残留的 trailing 定时器
       if (wheelTimer !== null) clearTimeout(wheelTimer); // 滚轮落盘的 trailing 定时器
-      /* 气泡 tips 的三段定时（卸载早于 3 秒时不留残余定时器/回调） */
-      cancelAnimationFrame(tipRaf);
-      clearTimeout(tipFade);
-      clearTimeout(tipDrop);
+      /* 开局 tips 的渐隐定时（卸载时不留残余回调） */
+      if (tipFadeTimer !== null) clearTimeout(tipFadeTimer);
       if (win.__op) delete win.__op;
     };
   }, []);
@@ -3368,6 +3422,13 @@ export function OnlinePlay({
             <label className="gsw"><input type="checkbox" id="sw_stats" /><span className="track" /></label>
             <span className="tip">游戏结束后在游戏界面左侧弹出数据统计面板</span>
           </div>
+          {/* 「开局提示」（2026-10-19 张老师定，默认开）：每次开局显示一条技巧气泡——
+              当天不重复、全部出现后不再提示（次日重新轮起）；关闭后任何开局提示都不出 */}
+          <div className="gs_row">
+            <span className="gs_name">开局提示</span>
+            <label className="gsw"><input type="checkbox" id="sw_tips" /><span className="track" /></label>
+            <span className="tip">每次开局显示一条技巧提示，当天不重复，可随时关闭</span>
+          </div>
           {/* 「自动双击」设置行已撤（2026-10-16 张老师定）：入口改挂 NF 右侧的
               速旗快捷钮（btn_sq），行为口径不变 */}
           <div className="gs_divider" />
@@ -3462,9 +3523,8 @@ export function OnlinePlay({
             触屏「插旗模式」按钮已废（同日张老师定）——移动端插旗一律长按 ≥150ms */}
       </div>
 
-      {/* 进入练习页的一次性气泡 tips（2026-10-15 张老师定）：主体板块下方
-          （隔一条缝隙）随机一条，正文前一枚金色灯泡，3 秒后渐隐卸载、
-          本次进入不再出现。
+      {/* 开局气泡 tips（2026-10-15 张老师定；2026-10-19 改「每局一条」）：主体板块下方
+          （隔一条缝隙），正文前一枚金色灯泡，3 秒后渐隐（元素常驻复用，见上文 tips 块）。
           挂组件根（#game_area 之外）→ 不吃游戏倍率，也不参与任何 fit 量测
           （绝对定位脱流，出现/消失都不会让版面跳动） */}
       {/* ⚠️ .txt 在 SSR 阶段恒为空（文案由 useEffect 随机填，见上文 tips 块）——

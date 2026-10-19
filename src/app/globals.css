@@ -8533,6 +8533,16 @@ html.op-fakefs #header {
 #online_play .optips .txt {
   min-width: 0;
 }
+/* 绿色通知气泡（2026-10-19 张老师定）：局中动作反馈（如「下载成功」）——
+   形态与开局 tips 同款（JS showToast 动态创建），绿色描边＋绿字＋微光晕，
+   无灯泡图标（纯文字），3 秒后渐隐自摘 */
+#online_play .optips.optoast {
+  border-color: #a6e22e;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 12px rgba(166, 226, 46, 0.3);
+  color: #a6e22e;
+  font-weight: bold;
+  z-index: 60; /* 压过开局 tips（40）——通知比技巧提示更紧迫 */
+}
 /* 移动端 .box 底衬收紧为 16px（globals「盒子内边距收紧」块），缝隙保持 8px */
 @media (max-width: 768px) {
   #online_play .optips {
