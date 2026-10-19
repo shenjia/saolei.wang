@@ -13,6 +13,7 @@ import {
   MESSAGE_CONTENT_LIMIT,
 } from "@/lib/message";
 import { prisma } from "@/lib/db";
+import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -46,6 +47,11 @@ export async function POST(req: NextRequest) {
     if (!to) return NextResponse.json({ error: "收件人不能为空" }, { status: 400 });
     if (to === session.uid) return NextResponse.json({ error: "不能给自己发信" }, { status: 400 });
     if (!content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
+    const hit = checkSensitive(content);
+    if (!hit.ok) {
+      logSensitiveHit("message.send", session.uid, hit);
+      return NextResponse.json({ error: sensitiveRejectMessage(hit, "发送") }, { status: 400 });
+    }
     const target = await prisma.userAuth.findUnique({ where: { id: BigInt(to) }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "收件人不存在" }, { status: 404 });
     const id = await sendMessage(session.uid, to, content);
@@ -77,6 +83,11 @@ export async function POST(req: NextRequest) {
     if (!isManager(session.role)) return NextResponse.json({ error: "无权广播" }, { status: 403 });
     const content = String(body.content ?? "").trim().slice(0, MESSAGE_CONTENT_LIMIT);
     if (!content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
+    const hit = checkSensitive(content);
+    if (!hit.ok) {
+      logSensitiveHit("message.broadcast", session.uid, hit);
+      return NextResponse.json({ error: sensitiveRejectMessage(hit, "发送") }, { status: 400 });
+    }
     const count = await broadcast(session.uid, content);
     return NextResponse.json({ count });
   }

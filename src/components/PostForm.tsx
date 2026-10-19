@@ -4,7 +4,8 @@
 // 排序分身份：管理员=公告/技术/杂谈/问答，普通用户=杂谈/技术/问答（公告不显示）；
 // 提交按钮 = 登录弹窗 .lp_submit 同款黄色按钮，居中。
 // 2026-10-16 张老师要求：空标题/空正文不再禁用按钮——点了弹红色气泡；
-// 敏感词前置过滤未通过（服务端 400 文案）同样红色气泡提示。
+// 敏感词前置过滤未通过（服务端 400 文案）同样只弹红色气泡，
+// 不再在「返回」按钮右侧重复一行红字。
 
 "use client";
 
@@ -43,7 +44,6 @@ export function PostForm({
   );
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   // 空内容红气泡后自动定位（2026-10-16 张老师要求）：标题框 / 正文画布（.wys contenteditable）
@@ -63,7 +63,6 @@ export function PostForm({
       return;
     }
     setBusy(true);
-    setError("");
     const body = postId
       ? { action: "edit", id: postId, title, content, board }
       : { action: "post", board, title, content };
@@ -75,10 +74,8 @@ export function PostForm({
     setBusy(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      // 敏感词前置过滤未通过等，服务端文案同步红色气泡（2026-10-16 张老师要求）
-      const msg = data.error ?? "提交失败";
-      setError(msg);
-      toast(msg, "error");
+      // 敏感词等服务端拒绝只走红色气泡，不在「返回」旁再写一行
+      toast(data.error ?? "提交失败", "error");
       return;
     }
     const data = await res.json();
@@ -126,8 +123,7 @@ export function PostForm({
         <button className="lp_submit_btn" disabled={busy} onClick={onSubmit}>
           {postId ? "保存修改" : "发布主题"}
         </button>{" "}
-        <Link className="btn_back" href="/bbs">返回</Link>{" "}
-        <span className="error">{error}</span>
+        <Link className="btn_back" href="/bbs">返回</Link>
       </p>
     </div>
   );

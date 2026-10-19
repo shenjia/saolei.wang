@@ -1,7 +1,7 @@
 // 敏感词过滤引擎（2026-10-13 张老师需求）
 //
-// 用途：论坛发主题/回复、录像评论等 UGC 发布入口，写库前先过一遍，
-//       命中即拒绝发布（不落库、不发动态）。
+// 用途：论坛主题（标题+正文）/回复、录像评论、纪事、个人资料、中文名、
+//       录像签名、站内信等 UGC 写库前先过一遍，命中即拒绝（不落库）。
 //
 // 设计要点：
 //   1. 纯本地、零依赖、零网络：归一化 + Trie 前缀树扫描，单次判定在微秒级。
@@ -145,12 +145,15 @@ export function checkSensitiveAll(
   return { ok: words.size === 0, categories: [...cats], words: [...words] };
 }
 
-/** 命中时给用户的提示文案（不含具体词） */
-export function sensitiveRejectMessage(result: SensitiveResult): string {
+/**
+ * 命中时给用户的提示文案（不含具体词）。
+ * action 按入口换成「发布 / 保存 / 注册 / 上传 / 发送」，默认「发布」。
+ */
+export function sensitiveRejectMessage(result: SensitiveResult, action = "发布"): string {
   const names = result.categories.map((c) => SENSITIVE_CATEGORY_NAMES[c]);
   return names.length
-    ? `内容包含${names.join("、")}信息，无法发布，请修改后重试`
-    : "内容包含敏感信息，无法发布，请修改后重试";
+    ? `内容包含${names.join("、")}信息，无法${action}，请修改后重试`
+    : `内容包含敏感信息，无法${action}，请修改后重试`;
 }
 
 /**

@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { checkSensitiveAll, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 
 const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, interest: 50 } as const;
 const LABELS: Record<string, string> = {
@@ -46,6 +47,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "生日不能是将来的日期" }, { status: 400 });
     }
     birthday = BigInt(Math.floor(date.getTime() / 1000));
+  }
+
+  // 个人资料公开展示（昵称/爱好/QQ/鼠标/鼠标垫），写库前过敏感词
+  const hit = checkSensitiveAll([
+    fields.qq, fields.nickname, fields.mouse, fields.pad, fields.interest,
+  ]);
+  if (!hit.ok) {
+    logSensitiveHit("account.profile", session.uid, hit);
+    return NextResponse.json({ error: sensitiveRejectMessage(hit, "保存") }, { status: 400 });
   }
 
   await prisma.userInfo.update({
