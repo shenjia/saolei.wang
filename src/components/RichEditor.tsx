@@ -825,7 +825,7 @@ export function RichEditor({
         {full && toolbarBtn("link", "🔗 链接", { act: "link" })}
         {toolbarBtn("img", "🖼️ 贴图", { act: "pop", pop: "imgs" })}
         {toolbarBtn("faces", "表情", { act: "pop", pop: "faces" })}
-        {toolbarBtn("mines", <><img className="bico" src="/images/mine/Mine.gif" alt="" />摆雷</>, { act: "pop", pop: "mines" })}
+        {toolbarBtn("mines", <><img className="bico" src="/images/mine/mine.gif" alt="" />摆雷</>, { act: "pop", pop: "mines" })}
 
         {pop === "faces" && (
           <div className="wpop faces">
