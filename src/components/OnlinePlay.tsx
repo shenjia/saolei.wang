@@ -3093,7 +3093,7 @@ export function OnlinePlay({
       gwR: DOMRect,
       gaR: DOMRect,
       pz: number
-    ): void {
+    ): number {
       const put = (zz: number) => {
         const t = (v: number) => v / pz / zz;
         panel.style.zoom = String(zz);
@@ -3105,9 +3105,12 @@ export function OnlinePlay({
       };
       put(z);
       const now = panel.getBoundingClientRect();
+      let zFinal = z;
       if (now.bottom > window.innerHeight - 8 && now.height > 1) {
-        put(Math.max(0.25, z * ((window.innerHeight - 8 - now.top) / now.height)));
+        zFinal = Math.max(0.25, z * ((window.innerHeight - 8 - now.top) / now.height));
+        put(zFinal);
       }
+      return zFinal; // 实际生效 zoom（末段兜底收缩后可能 < 入参；结算封顶要用它）
     }
     /* 面板搬家：只挪节点、不重建（雷达 React root、按钮事件绑定都留在原位）。
        进遮罩清掉侧边态的 inline 定位与缩放——卡片统一缩放，面板不再自理 */
@@ -3123,14 +3126,26 @@ export function OnlinePlay({
       } else {
         if (gresult.parentElement !== gameAreaEl) gameAreaEl.appendChild(gresult);
         if (greport.parentElement !== gameAreaEl) gameAreaEl.appendChild(greport);
+        /* 搬回侧边：清掉遮罩态钳过的雷达宽（侧边态自有一套几何，重新判定） */
+        const radarSvg = gresult.querySelector<SVGElement>(".vr_wrap .chart");
+        if (radarSvg) radarSvg.style.maxWidth = "";
       }
       panelSlot = slot;
     }
     /* 遮罩卡片整体缩放（张老师定「遮罩态结算面板的比例应尽可能利用屏幕空间」）：
        zoom 归 1 量卡片自然尺寸 → 按视口可用宽高等比放大（#gr_modal padding 16×2），
-       封顶 2.5（与侧边自然上限同档，再大就成放大镜）、保底 0.5（两栏并排的窄屏兜底） */
+       封顶 2.5（与侧边自然上限同档，再大就成放大镜）、保底 0.5（两栏并排的窄屏兜底）。
+       **结算面板高度封顶（2026-10-19 三期「任何时候」）**：卡片比侧边宽 → 雷达
+       fill 高度∝宽度涨，结算面板常反超数据面板（竖屏实测 461 vs 343）。给面板整体
+       zoom 压不住——雷达 SVG 是 width:100%，按宿主**布局宽**自适应，面板缩放后
+       布局宽没变，雷达反而按新渲染宽回涨。正解＝直接钳雷达宽：雷达是面板里唯一
+       弹性高度、且高≡宽（正方形 viewBox），把渲染宽压掉超出量、高度 1:1 回落，
+       百分比 max-width 相对宿主取值、免算页级缩放 */
     function fitMaskCard() {
       if (panelSlot !== "mask" || grModal.hidden) return;
+      /* 清上一轮钳宽：卡片先按未压自然尺寸适配 */
+      const radarSvg = gresult.querySelector<SVGElement>(".vr_wrap .chart");
+      if (radarSvg) radarSvg.style.maxWidth = "";
       grmCard.style.zoom = "1";
       const r = grmCard.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return;
@@ -3139,6 +3154,23 @@ export function OnlinePlay({
         Math.min(2.5, (window.innerWidth - 32) / r.width, (window.innerHeight - 32) / r.height)
       );
       grmCard.style.zoom = String(z);
+      if (greport.classList.contains("show") && radarSvg) {
+        /* 迭代收敛（同侧边态闭环复核）：目标＝数据面板实际渲染高；单次钳宽受
+           布局量化影响可能差零点几像素，迭代「量→压→再量」至多 3 轮 */
+        const target = greport.getBoundingClientRect().height;
+        if (target > 1) {
+          for (let i = 0; i < 3; i++) {
+            const h = gresult.getBoundingClientRect().height;
+            if (h <= target + 0.5) break;
+            const rw = radarSvg.getBoundingClientRect().width;
+            if (rw <= 100) break;
+            const over = h - target - 0.5;
+            const cur = radarSvg.style.maxWidth ? parseFloat(radarSvg.style.maxWidth) / 100 : 1;
+            const next = Math.max(100 / rw, (rw - over) / rw) * cur;
+            radarSvg.style.maxWidth = (next * 100).toFixed(3) + "%";
+          }
+        }
+      }
     }
     /* 转遮罩。首次进入（面板还在侧边）自动展开——空间被挤爆是被迫换地方，
        玩家需要看到结算；已住在卡片里则沿用 maskOpen（点遮罩关掉就别自己弹回） */
@@ -3176,6 +3208,10 @@ export function OnlinePlay({
           (wantResult && panelBase.resultW < 1));
       if (needMeasure) mountPanels("side");
       if (panelSlot === "side") {
+        /* 量取前清上一轮的雷达钳宽（2026-10-19 三期）：钳过的自然高是假自然高，
+           panelBase 缓存一旦吃进污染值，后续所有 fit 判定全偏 */
+        const radarSvgM = gresult.querySelector<SVGElement>(".vr_wrap .chart");
+        if (radarSvgM) radarSvgM.style.maxWidth = "";
         if (wantStats) {
           const b = panelNatural(greport, pz);
           panelBase.statsW = b.w;
@@ -3225,14 +3261,41 @@ export function OnlinePlay({
         enterMask();
         return;
       }
-      /* 放得下：回侧边宿主（空间恢复＝自动切回，不用玩家操作），遮罩收起 */
+      /* 放得下：回侧边宿主（空间恢复＝自动切回，不用玩家操作），遮罩收起。
+         结算高封顶用数据面板**最终落位 zoom**算（2026-10-19 三期）：placeSide 末段
+         有「底边越视口」兜底收缩，数据面板被压过的话，先摆它、拿实际生效 zoom
+         再算结算封顶——否则封顶偏松，极端窄高视口下结算仍可能超过数据面板 */
       mountPanels("side");
       grModal.hidden = true;
+      let statsZFinal: number | null = null;
       if (statsFit) {
-        placeSide(greport, "left", { w: panelBase.statsW, h: panelBase.statsH }, statsFit.z, gwR, gaR, pz);
+        statsZFinal = placeSide(greport, "left", { w: panelBase.statsW, h: panelBase.statsH }, statsFit.z, gwR, gaR, pz);
       }
       if (resultFit) {
-        placeSide(gresult, "right", { w: panelBase.resultW, h: panelBase.resultH }, resultFit.z, gwR, gaR, pz);
+        const capH = statsZFinal != null ? statsZFinal * panelBase.statsH * pz : resultMaxH;
+        const zCap = capH != null && panelBase.resultH > 1 ? capH / (panelBase.resultH * pz) : 2.5;
+        const zRes = Math.max(0.25, Math.min(resultFit.z, zCap));
+        placeSide(gresult, "right", { w: panelBase.resultW, h: panelBase.resultH }, zRes, gwR, gaR, pz);
+        /* 闭环复核 + 迭代收敛（2026-10-19 三期）：zoom 舍入与 maxWidth 的布局量化
+           （Chrome 1/64px）让单次开环钳宽常差零点几像素——迭代「量→压→再量」
+           至多 3 轮收敛；目标直接用数据面板**实际渲染高**（消除计算值 ε）。
+           与 fitMaskCard 同一手法（那边超出量大、单发即中，这里超出量小才需要迭代） */
+        if (statsZFinal != null) {
+          const target = greport.getBoundingClientRect().height;
+          const radarSvg = gresult.querySelector<SVGElement>(".vr_wrap .chart");
+          if (radarSvg && target > 1) {
+            for (let i = 0; i < 3; i++) {
+              const h = gresult.getBoundingClientRect().height;
+              if (h <= target + 0.5) break;
+              const rw = radarSvg.getBoundingClientRect().width;
+              if (rw <= 100) break; // 雷达保底 100px，不硬压成一条线
+              const over = h - target - 0.5;
+              const cur = radarSvg.style.maxWidth ? parseFloat(radarSvg.style.maxWidth) / 100 : 1;
+              const next = Math.max(100 / rw, (rw - over) / rw) * cur;
+              radarSvg.style.maxWidth = (next * 100).toFixed(3) + "%";
+            }
+          }
+        }
       }
     }
     /* 全屏自动拉满——服务移动端 + v8b 扩展（2026-10-16 张老师定：PC 端进全屏保持
