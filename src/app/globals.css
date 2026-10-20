@@ -206,6 +206,21 @@ body .tabs > a:hover::after {
 .board.size16 td {
   min-width: 16px;
 }
+/* 被踩中的雷（回放/试玩，paintBombCell）：td 内嵌红雷 SVG（#cell-mine-bomb）。
+   SVG 是 replaced inline 元素，固有尺寸参与表格 auto 布局会把整列撑宽、
+   整行撑高（2026-10-20 张老师截图「踩雷后整个页面乱了」）——
+   绝对定位脱流 + td 自身锁 16px 方格，SVG 铺满格子绘制零布局影响 */
+.board td.bmb {
+  position: relative;
+  padding: 0;
+}
+.board td.bmb svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 
 /* ---------- 账号体系：登录 / 绑定 / 注册 ----------
    2026-09-24 玻璃层改版（方案01，张老师选定）：

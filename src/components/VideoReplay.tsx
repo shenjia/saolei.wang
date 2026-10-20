@@ -250,12 +250,14 @@ const FACE_MAP: Record<FaceKind | "press", string> = {
 /** 被踩中的雷：td 内嵌 flop 原版红底雷（#cell-mine-bomb，与练习页踩雷同图）。
  *  td 位图体系的 bc 贴图是灰调雷（block16x16.png 第 12 行无红色像素），
  *  2026-10-20 张老师定：全屏试玩/回放踩中格一律用带红底的雷图（和练习踩雷一样）。
+ *  类名 bmb：globals.css 里 SVG 绝对定位脱流——inline SVG 固有尺寸会参与表格
+ *  auto 布局把整列撑宽整行撑高（首版空类名+裸 SVG 的「页面乱了」教训）。
  *  依赖页面内的 FlopSprites（详情页/全屏层/后台播放器均已挂载）；
  *  paintR/paint/stop 恢复路径会重写 className+innerHTML，红雷自然被刷掉。 */
 function paintBombCell(td: HTMLTableCellElement) {
-  td.className = "";
+  td.className = "bmb";
   td.innerHTML =
-    '<svg viewBox="0 0 168 168" width="100%" height="100%" aria-hidden="true"><use href="#cell-mine-bomb" /></svg>';
+    '<svg viewBox="0 0 168 168" aria-hidden="true"><use href="#cell-mine-bomb" /></svg>';
 }
 
 /* 2026-10-19 导出：管理后台审核页全屏播放器（AdminVideoPlayer）复用同一引擎 */
@@ -2027,13 +2029,13 @@ function ReplayFullscreen({
           const sc = srcRows[r].cells;
           const dc = dstRows[r].cells;
           for (let c = 0; c < sc.length; c++) {
-            /* 踩雷格是空类名 + 内嵌红雷 SVG（paintBombCell）：类名变化到空串时
+            /* 踩雷格是 bmb 类 + 内嵌红雷 SVG（paintBombCell）：类名变到 bmb 时
                连 innerHTML 一起抄；反向（红雷→普通格）清掉残留 SVG。
                正常格 innerHTML 恒空，不逐帧序列化比对（60fps 性能） */
             const scls = sc[c].className;
             if (dc[c].className !== scls) {
               dc[c].className = scls;
-              if (!scls) dc[c].innerHTML = sc[c].innerHTML;
+              if (scls === "bmb") dc[c].innerHTML = sc[c].innerHTML;
               else if (dc[c].innerHTML) dc[c].innerHTML = "";
             }
           }
