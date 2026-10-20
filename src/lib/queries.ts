@@ -628,7 +628,7 @@ function videoListConds(opts: {
   bv: number | null;
 }): { joins: string; where: string; selectId: string } {
   const { level, order, author, win, bv } = opts;
-  const needVi = !!win || !!bv || order === "time" || order === "3bv" || order === "3bvs";
+  const needVi = !!win || !!bv || order === "time" || order === "3bv" || order === "3bvs" || order === "stnb";
   const needVs = order === "comments" || order === "clicks";
   // 2026-10-20 ioe/stnb 排序：join video_metrics（指标行可能缺——老盘跑批已全量覆盖，
   // 仅个别解析失败盘无行；排序语义=「有指标者中排前」，缺行自然不出现）
@@ -645,8 +645,11 @@ function videoListConds(opts: {
   if (author) conds.push(`v.user = ${BigInt(author)}`);
   if (win) conds.push(`vi.real_time >= ${win[0]} AND vi.real_time < ${win[1]}`);
   if (bv !== null) conds.push(`vi.board_3bv = ${bv}`);
-  if (order === "time" || order === "3bvs") conds.push(`vi.real_time > 0`);
-  if (order === "3bvs")
+  if (order === "time" || order === "3bvs" || order === "stnb") conds.push(`vi.real_time > 0`);
+  // 运气盘限界（2026-10-20 张老师定：STNB 与 3BV/s 同口径，初级 3BV<10 不参与排行）：
+  // 3bvs 与 stnb 共用 MIN_3BV_FOR_3BVS（初 10 / 中 4 / 高 4）——不限则初级 3BV=2 的
+  // 0.09s 秒开盘 STNB 4316 会霸榜（STNB 榜同理，见 fetchStnbCollection）
+  if (order === "3bvs" || order === "stnb")
     conds.push(
       `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
     );
@@ -658,7 +661,8 @@ function videoListConds(opts: {
 /** 列表总数（非默认排序/时间搜索路径）：join 计数有 0.1~0.5s 代价（30 万行），
  *  挂 60s 缓存（2026-10-15 上线前性能审计同口径：热点统计必须 unstable_cache）；
  *  键升级 v2（改查询逻辑必须升缓存键版本号）；v3（2026-10-20：videoListConds
- *  加 3bv 精确筛选与 ioe/stnb 排序，键空间随参数扩容） */
+ *  加 3bv 精确筛选与 ioe/stnb 排序，键空间随参数扩容）；v4（2026-10-20：stnb
+ *  排序补运气盘限界 MIN_3BV_FOR_3BVS，与 3bvs 口径对齐） */
 const getVideoListJoinCount = unstable_cache(
   async (level: string, order: string, author: number, time: string, bv: number): Promise<number> => {
     const win = parseVideoTimeWindow(time);
@@ -672,7 +676,7 @@ const getVideoListJoinCount = unstable_cache(
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v3"],
+  ["video-list-join-count", "v4"],
   { revalidate: 60 }
 );
 
@@ -682,8 +686,9 @@ const getVideoListJoinCount = unstable_cache(
  * - order=id（默认，上传时间倒序）且无时间搜索：保持原索引路径（video 主键反扫 / 成绩表 id 倒序）；
  * - 其余排序或时间成绩搜索：统一 join 查询（驱动表与 ORDER BY 按排序键选索引，见 videoListConds）。
  * 时间成绩搜索：parseVideoTimeWindow 的 ±5ms 显示舍入窗口（匹配所有显示相同的成绩）。
- * 各排序方向：time 升序（快在前）、3bv 降序（大在前）、3bvs 降序（快在前，排除运气盘：
- * 初级 3BV<10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）、
+ * 各排序方向：time 升序（快在前）、3bv 降序（大在前）、3bvs/stnb 降序（快/大在前，
+ * 均排除运气盘：初级 3BV<10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS——2026-10-20 张老师定
+ * STNB 成绩与 3BV/s 同口径，限界内才有效）、
  * comments/clicks 降序（多在前，保留原 >0 过滤口径）。
  */
 export async function getVideoList(opts: {
