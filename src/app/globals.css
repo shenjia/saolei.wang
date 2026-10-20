@@ -6863,6 +6863,43 @@ button.msg_cancel:hover {
 .ranking_table .snum.current em {
   color: #fdc61d;
 }
+/* 成绩链接（2026-10-20 张老师需求：点击去对应录像 /video/<id>）+ hover 气泡
+   「高级 xx.xx 秒 NF 3月前」——气泡复用全站 data-tip 立即弹机制（同军衔徽章/无效 3BV/s） */
+.ranking_table .snum a {
+  color: inherit;
+  text-decoration: none;
+  position: relative;
+}
+.ranking_table .snum a:hover em {
+  color: #f8f8f2;
+}
+.ranking_table .snum.current a:hover em {
+  color: #fdc61d;
+}
+.ranking_table .snum a[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+  /* 数字非衬线（气泡内文案跟全站正文字体） */
+  font-family: inherit;
+}
+.ranking_table .snum a[data-tip]:hover::after {
+  opacity: 1;
+}
 
 /* 各排行榜页底规则说明（2026-10-14 张老师要求：所有排行独立标准板块 .box + h2，外观随全站
    板块；组件 components/RankingRules.tsx）。这里只定列表与文字的局部排版 */

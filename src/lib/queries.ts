@@ -2093,7 +2093,19 @@ export async function getBvRankOfUser(
 // ---------- STNB 榜（2026-10-20 张老师需求：筛选器 BV 右侧新增 STNB 榜，展示类似 BV 榜） ----------
 
 /** STNB 榜条目：一名玩家的三级历史最高 STNB + 高级时间（军衔评定用）。
- *  列值 0 = 该级无有效成绩；total 仅在三级齐全时为三者之和，否则 0（按总计排序时不上榜）。 */
+ *  列值 0 = 该级无有效成绩；total 仅在三级齐全时为三者之和，否则 0（按总计排序时不上榜）。
+ *  best.<level> = 该级最优盘（成绩点击跳转 + hover 气泡「高级 xx.xx 秒 NF 3月前」用）。 */
+export interface StnbBestVideo {
+  /** 录像 id（点击跳转 /video/<id>） */
+  vid: number;
+  /** 用时 Unix 毫秒（气泡显示 xx.xx 秒） */
+  timeMs: number;
+  /** NF 标记（气泡显示 NF） */
+  nf: boolean;
+  /** 上传时间 Unix 秒（气泡显示相对时间） */
+  ct: number;
+}
+
 export interface StnbRankingEntry {
   id: number;
   chineseName: string;
@@ -2103,6 +2115,7 @@ export interface StnbRankingEntry {
   exp: number;
   total: number;
   expTime: number;
+  best: Record<VideoLevel, StnbBestVideo | null>;
 }
 
 export interface StnbRankingRow extends StnbRankingEntry {
@@ -2123,6 +2136,9 @@ export interface StnbRankingResult {
 //     中高级上传下限 30/100 本就高于 4，实际只约束初级——不限则 3BV=2 的 0.09s
 //     秒开盘 STNB 4316 会霸榜，实测限界内 top 为 473.7）
 //   · 不区分 NF（NF 录像同为过审胜局，STNB 同口径计算，混合排——同 BV 榜不分模式）
+//   · 每级最优盘（2026-10-20 张老师需求：成绩点击跳对应录像 + hover 气泡）：GROUP_CONCAT
+//     组内按 stnb DESC, id ASC 排序取第一个（同分取注册序影像 id 较小者，与排序口径一致）。
+//     注：窗口函数版实测 55s（全表 filesort），GROUP_CONCAT 组内排序 4.2s。
 // 注意改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化）。
 const fetchStnbCollection = unstable_cache(
   async (): Promise<StnbRankingEntry[]> => {
@@ -2135,14 +2151,23 @@ const fetchStnbCollection = unstable_cache(
         beg: number;
         inter: number;
         exp: number;
+        best_beg: string;
+        best_int: string;
+        best_exp: string;
       }[]
     >`
       SELECT u.id, u.chinese_name, u.sex, us.exp_time,
         SUM(CASE WHEN t.level = 'beg' THEN t.n ELSE 0 END) AS beg,
         SUM(CASE WHEN t.level = 'int' THEN t.n ELSE 0 END) AS inter,
-        SUM(CASE WHEN t.level = 'exp' THEN t.n ELSE 0 END) AS exp
+        SUM(CASE WHEN t.level = 'exp' THEN t.n ELSE 0 END) AS exp,
+        MAX(CASE WHEN t.level = 'beg' THEN t.best END) AS best_beg,
+        MAX(CASE WHEN t.level = 'int' THEN t.best END) AS best_int,
+        MAX(CASE WHEN t.level = 'exp' THEN t.best END) AS best_exp
       FROM (
-        SELECT v.user, v.level, MAX(m.stnb) AS n
+        SELECT v.user, v.level, MAX(m.stnb) AS n,
+          SUBSTRING_INDEX(GROUP_CONCAT(
+            CONCAT_WS(':', m.id, vi.real_time, vi.noflag, v.create_time)
+            ORDER BY m.stnb DESC, m.id ASC SEPARATOR ','), ',', 1) AS best
         FROM video_metrics m
           JOIN video v ON v.id = m.id
           JOIN video_info vi ON vi.id = m.id
@@ -2156,6 +2181,17 @@ const fetchStnbCollection = unstable_cache(
       JOIN user u ON u.id = t.user AND u.status = 0
       LEFT JOIN user_scores us ON us.id = t.user
       GROUP BY u.id, u.chinese_name, u.sex, us.exp_time`;
+    // best 串 "vid:real_time(ms):noflag:create_time"——noflag 在 video_info 是 tinyint，
+    // CONCAT 时 0/1 仍按数值拼（MySQL 隐式转换），安全解析。
+    const parseBest = (raw: string | null): StnbBestVideo | null => {
+      if (!raw) return null;
+      const [vid, rt, nf, ct] = raw.split(":");
+      const v = parseInt(vid, 10);
+      const timeMs = parseInt(rt, 10);
+      const ctv = parseInt(ct, 10);
+      if (!Number.isFinite(v) || !Number.isFinite(timeMs)) return null;
+      return { vid: v, timeMs, nf: nf === "1", ct: Number.isFinite(ctv) ? ctv : 0 };
+    };
     return rows.map((r) => {
       // MAX/SUM 走 float 会带精度尾差（4316.399902…），统一回 1 位小数（stnb 落库即 1 位）
       const beg = Math.round(N(r.beg) * 10) / 10;
@@ -2171,10 +2207,15 @@ const fetchStnbCollection = unstable_cache(
         // 总计与成绩榜同语义：三级都有有效成绩才算（缺级不上总计榜）
         total: beg > 0 && inter > 0 && exp > 0 ? Math.round((beg + inter + exp) * 10) / 10 : 0,
         expTime: N(r.exp_time),
+        best: {
+          beg: parseBest(r.best_beg),
+          int: parseBest(r.best_int),
+          exp: parseBest(r.best_exp),
+        },
       };
     });
   },
-  ["stnb-collection-v1"],
+  ["stnb-collection-v2"],
   { revalidate: 3600, tags: ["stnb-collection"] }
 );
 

@@ -11,8 +11,9 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { StnbRankingRow } from "@/lib/queries";
-import { LEVEL_NAMES, type BvRankingBy } from "@/lib/config";
+import type { StnbBestVideo, StnbRankingRow } from "@/lib/queries";
+import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
+import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import { TitleBadge } from "./Cells";
 import { SystemText } from "./SystemText";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
@@ -23,12 +24,30 @@ export type StnbTitledRow = StnbRankingRow & { title: string; classic?: { name: 
 
 const SORT_COLS: BvRankingBy[] = ["beg", "int", "exp", "total"];
 
-/** STNB 数值单元格：右对齐数字，当前排序列金黄（.snum.current，同 pbar.current 命中色） */
-function StnbNum({ v, active }: { v: number; active: boolean }) {
+/** 成绩秒数显示：xx.xx（秒，毫秒精确到百分位；与站内成绩显示同款） */
+function stnbSeconds(timeMs: number): string {
+  return (timeMs / 1000).toFixed(2);
+}
+
+/** hover 气泡文案（2026-10-20 张老师定格式）：「高级 xx.xx 秒 NF 3月前」
+ *  ——级别 + 成绩秒；NF 盘插 NF 标记；结尾相对上传时间（timeOpposite 永久相对口径）。 */
+function bestTip(level: VideoLevel, b: StnbBestVideo): string {
+  return `${LEVEL_NAMES[level]} ${stnbSeconds(b.timeMs)} 秒${b.nf ? " NF" : ""} ${timeOpposite(b.ct, TIME_NEVER)}`;
+}
+
+/** STNB 数值单元格：有成绩 → 白链跳对应录像（/video/<id>，新标签页）+ hover 气泡；
+ *  无成绩 → 灰「—」。当前排序列金黄（.snum.current，同 pbar.current 命中色）。 */
+function StnbNum({ level, v, b, active }: { level: VideoLevel; v: number; b: StnbBestVideo | null; active: boolean }) {
   return (
     <td>
       <span className={`snum${active ? " current" : ""}`}>
-        <em>{v > 0 ? v.toFixed(1) : "—"}</em>
+        {v > 0 && b ? (
+          <Link href={`/video/${b.vid}`} target="_blank" data-tip={bestTip(level, b)}>
+            <em>{v.toFixed(1)}</em>
+          </Link>
+        ) : (
+          <em>—</em>
+        )}
       </span>
     </td>
   );
@@ -277,10 +296,10 @@ export function StnbRankingFeed({
                 <td className="miltitle">
                   <TitleBadge title={u.title} classic={u.classic} link />
                 </td>
-                <StnbNum v={u.beg} active={by === "beg"} />
-                <StnbNum v={u.int} active={by === "int"} />
-                <StnbNum v={u.exp} active={by === "exp"} />
-                <StnbNum v={u.total} active={by === "total"} />
+                <StnbNum level="beg" v={u.beg} b={u.best.beg} active={by === "beg"} />
+                <StnbNum level="int" v={u.int} b={u.best.int} active={by === "int"} />
+                <StnbNum level="exp" v={u.exp} b={u.best.exp} active={by === "exp"} />
+                <StnbNum level="exp" v={u.total} b={u.best.exp} active={by === "total"} />
               </tr>
             ))}
             {rows.length === 0 && (
