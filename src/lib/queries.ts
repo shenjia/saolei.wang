@@ -2130,6 +2130,142 @@ export async function getBvRankOfUser(
   return { rank: hit.rank, page: Math.floor((hit.rank - 1) / RANKING_PAGESIZE) + 1, collected: hit.collected, total, totalDen };
 }
 
+// ---------- STNB 榜（2026-10-20 张老师需求：筛选器 BV 右侧新增 STNB 榜，展示类似 BV 榜） ----------
+
+/** STNB 榜条目：一名玩家的三级历史最高 STNB + 高级时间（军衔评定用）。
+ *  列值 0 = 该级无有效成绩；total 仅在三级齐全时为三者之和，否则 0（按总计排序时不上榜）。 */
+export interface StnbRankingEntry {
+  id: number;
+  chineseName: string;
+  sex: number;
+  beg: number;
+  int: number;
+  exp: number;
+  total: number;
+  expTime: number;
+}
+
+export interface StnbRankingRow extends StnbRankingEntry {
+  rank: number;
+}
+
+export interface StnbRankingResult {
+  rows: StnbRankingRow[];
+  total: number;
+  pageSize: number;
+}
+
+// 全量聚合 1 小时缓存（同 fetchBvCollection 理由：30 万行级聚合并发会 P1017，铁律）。
+// 口径（2026-10-20）：
+//   · 录像须已通过审核（v.status=20 胜局）+ 用户正常（u.status=0），与 BV 榜同口径
+//   · 每级取历史最高 STNB（video_metrics.stnb，与录像评级「判雷」轴同源）
+//   · 运气盘限界与 3BV/s 成绩同款（MIN_3BV_FOR_3BVS：初 10 / 中 4 / 高 4；
+//     中高级上传下限 30/100 本就高于 4，实际只约束初级——不限则 3BV=2 的 0.09s
+//     秒开盘 STNB 4316 会霸榜，实测限界内 top 为 473.7）
+//   · 不区分 NF（NF 录像同为过审胜局，STNB 同口径计算，混合排——同 BV 榜不分模式）
+// 注意改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化）。
+const fetchStnbCollection = unstable_cache(
+  async (): Promise<StnbRankingEntry[]> => {
+    const rows = await prisma.$queryRaw<
+      {
+        id: bigint;
+        chinese_name: string;
+        sex: number;
+        exp_time: number | null;
+        beg: number;
+        inter: number;
+        exp: number;
+      }[]
+    >`
+      SELECT u.id, u.chinese_name, u.sex, us.exp_time,
+        SUM(CASE WHEN t.level = 'beg' THEN t.n ELSE 0 END) AS beg,
+        SUM(CASE WHEN t.level = 'int' THEN t.n ELSE 0 END) AS inter,
+        SUM(CASE WHEN t.level = 'exp' THEN t.n ELSE 0 END) AS exp
+      FROM (
+        SELECT v.user, v.level, MAX(m.stnb) AS n
+        FROM video_metrics m
+          JOIN video v ON v.id = m.id
+          JOIN video_info vi ON vi.id = m.id
+        WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
+          AND vi.board_3bv >= CASE v.level
+            WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg}
+            WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int}
+            ELSE ${MIN_3BV_FOR_3BVS.exp} END
+        GROUP BY v.user, v.level
+      ) t
+      JOIN user u ON u.id = t.user AND u.status = 0
+      LEFT JOIN user_scores us ON us.id = t.user
+      GROUP BY u.id, u.chinese_name, u.sex, us.exp_time`;
+    return rows.map((r) => {
+      // MAX/SUM 走 float 会带精度尾差（4316.399902…），统一回 1 位小数（stnb 落库即 1 位）
+      const beg = Math.round(N(r.beg) * 10) / 10;
+      const inter = Math.round(N(r.inter) * 10) / 10;
+      const exp = Math.round(N(r.exp) * 10) / 10;
+      return {
+        id: N(r.id),
+        chineseName: r.chinese_name,
+        sex: r.sex,
+        beg,
+        int: inter,
+        exp,
+        // 总计与成绩榜同语义：三级都有有效成绩才算（缺级不上总计榜）
+        total: beg > 0 && inter > 0 && exp > 0 ? Math.round((beg + inter + exp) * 10) / 10 : 0,
+        expTime: N(r.exp_time),
+      };
+    });
+  },
+  ["stnb-collection-v1"],
+  { revalidate: 3600, tags: ["stnb-collection"] }
+);
+
+/** 榜人口随排序列变化（与成绩榜同语义，异于 BV 榜恒定人口）：
+ *  按总计 = 三级齐全；按级别 = 该级有有效成绩。 */
+function stnbPopulation(all: StnbRankingEntry[], by: BvRankingBy): StnbRankingEntry[] {
+  return all.filter((e) => e[by] > 0);
+}
+
+/** 排序口径（与 BV 榜一致）：所选列降序，同分用户 ID 小在前 */
+function sortStnb(list: StnbRankingEntry[], by: BvRankingBy): StnbRankingEntry[] {
+  return [...list].sort((a, b) => b[by] - a[by] || a.id - b.id);
+}
+
+/** STNB 榜一页（by 复用 BvRankingBy：total/beg/int/exp 同构）。 */
+export async function getStnbRanking(by: BvRankingBy, page: number, take?: number): Promise<StnbRankingResult> {
+  const all = await fetchStnbCollection();
+  const sorted = sortStnb(stnbPopulation(all, by), by);
+  const size = take ?? RANKING_PAGESIZE;
+  const rows = sorted
+    .slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size)
+    .map((e, i) => ({ ...e, rank: (page - 1) * RANKING_PAGESIZE + i + 1 }));
+  return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE };
+}
+
+/** STNB 榜「用户 → 名次」索引（搜索下拉增强用）：一次内存排序构建 Map，零 DB 重活。 */
+export async function getStnbBoardIndex(by: BvRankingBy): Promise<{
+  index: Map<number, number>;
+  total: number;
+}> {
+  const all = await fetchStnbCollection();
+  const sorted = sortStnb(stnbPopulation(all, by), by);
+  const index = new Map<number, number>();
+  sorted.forEach((e, i) => index.set(e.id, i + 1));
+  return { index, total: sorted.length };
+}
+
+/**
+ * STNB 榜内求某人的名次与页码（「STNB 版我在哪里」，走 1 小时缓存全量数组，零 DB）。
+ * 不在榜（无有效 STNB 成绩 / 当前列缺级）返回 null。
+ */
+export async function getStnbRankOfUser(
+  id: number,
+  by: BvRankingBy
+): Promise<{ rank: number; page: number } | null> {
+  const { index } = await getStnbBoardIndex(by);
+  const rank = index.get(id);
+  if (!rank) return null;
+  return { rank, page: Math.floor((rank - 1) / RANKING_PAGESIZE) + 1 };
+}
+
 /**
  * 在线玩结算雷达的分位基准（2026-10-14 五期）：读取 video_metric_dist 全表，
  * 组织成 OnlinePlay 需要的 { `${level}${nf?"_nf":""}`: { bucket: { 指标: number[] } } }。

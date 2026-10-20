@@ -21,12 +21,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
 
-export type RankingView = "all" | "nf" | "bv" | "grow" | "area" | "world";
+export type RankingView = "all" | "nf" | "bv" | "stnb" | "grow" | "area" | "world";
 
 const TABS: { key: RankingView; label: string; href: string }[] = [
   { key: "all", label: "雷界", href: "/ranking" },
   { key: "nf", label: "NF", href: "/ranking?view=nf" },
   { key: "bv", label: "BV", href: "/ranking?view=bv" },
+  { key: "stnb", label: "STNB", href: "/ranking?view=stnb" },
   { key: "grow", label: "进步", href: "/grow" },
   { key: "area", label: "地区", href: "/area" },
   { key: "world", label: "世界", href: "/ranking?view=world" },
@@ -37,8 +38,10 @@ interface SuggestUser {
   chineseName: string;
   englishName: string;
   sex: number;
-  /** BV 榜名次（仅 BV 附加查询回带；缺失＝未加入 BV 排行） */
+  /** BV/STNB 榜名次（仅缓存数组榜附加查询回带；缺失＝未加入该排行） */
   bvRank?: number;
+  /** STNB 榜名次（同上） */
+  stnbRank?: number;
   /** 成绩榜名次（带 by 附加查询回带；缺失＝未加入排行） */
   rank?: number;
 }
@@ -66,30 +69,38 @@ export function RankingNav({
   // 后又冒出来盖住表格（2026-10-14 张老师要求：选中即收起）。记下刚选中的关键字，跳过这一轮。
   const pickedRef = useRef<string | null>(null);
 
-  // BV 榜模式：搜索框带 by 查榜内名次——下拉直接给出名次或「未加入 BV 排行」
+  // BV / STNB 榜模式：搜索框带 by 查榜内名次——下拉直接给出名次或「未加入 XX 排行」
   const bvMode = current === "bv";
-  const bvBy = bvMode ? (by ?? "total") : "";
+  const stnbMode = current === "stnb";
+  const boardMode = bvMode || stnbMode; // 缓存数组榜（BV/STNB）公共分支
+  const bvBy = boardMode ? (by ?? "total") : "";
   // 地区内页模式：搜索框带 by+area 查地区内名次（2026-10-14）
   const areaMode = current === "area" && !!area;
 
-  /** 定位/查询统一带的榜别参数（成绩榜 view=nf、BV 榜 view=bv） */
+  /** 定位/查询统一带的榜别参数（成绩榜 view=nf、BV 榜 view=bv、STNB 榜 view=stnb） */
   function viewParam(): string | undefined {
-    return current === "nf" ? "nf" : bvMode ? "bv" : undefined;
+    return current === "nf" ? "nf" : bvMode ? "bv" : stnbMode ? "stnb" : undefined;
   }
 
-  /** 该候选是否在榜（BV 看 bvRank、成绩榜看 rank；两者都由搜索接口回带） */
+  /** 该候选是否在榜（缓存数组榜看 bvRank/stnbRank、成绩榜看 rank；都由搜索接口回带） */
   function inBoard(u: SuggestUser): boolean {
-    return bvMode ? u.bvRank !== undefined : u.rank !== undefined;
+    return bvMode ? u.bvRank !== undefined : stnbMode ? u.stnbRank !== undefined : u.rank !== undefined;
   }
 
-  /** 下拉次级文字（2026-10-14 张老师要求：各榜统一只显示名次，未在榜显示提示并置灰） */
+  /** 下拉次级文字（各榜统一只显示名次，未在榜显示提示并置灰） */
   function suggestMeta(u: SuggestUser): { text: string; inBoard: boolean } {
     if (inBoard(u)) {
-      const rank = bvMode ? u.bvRank! : u.rank!;
+      const rank = bvMode ? u.bvRank! : stnbMode ? u.stnbRank! : u.rank!;
       return { text: `第 ${rank.toLocaleString("zh-CN")} 位`, inBoard: true };
     }
     return {
-      text: bvMode ? "未加入 BV 排行" : areaMode ? "未加入地区排行" : "未加入排行",
+      text: bvMode
+        ? "未加入 BV 排行"
+        : stnbMode
+          ? "未加入 STNB 排行"
+          : areaMode
+            ? "未加入地区排行"
+            : "未加入排行",
       inBoard: false,
     };
   }
@@ -157,10 +168,12 @@ export function RankingNav({
     const timer = setTimeout(async () => {
       try {
         const qs = new URLSearchParams({ q: kw });
-        // 榜单名次：BV 带 bvBy（1 小时缓存数组内存查，零 DB）；成绩榜带 by（+nf）走索引区间统计；
+        // 榜单名次：BV/STNB 带 bvBy（1 小时缓存数组内存查，零 DB）；成绩榜带 by（+nf）走索引区间统计；
         // 地区内页另带 area（名次限定该地区人口）
-        if (bvMode) qs.set("bvBy", bvBy);
-        else if (by) {
+        if (boardMode) {
+          qs.set("bvBy", bvBy);
+          if (stnbMode) qs.set("stnb", "1");
+        } else if (by) {
           qs.set("by", by);
           if (current === "nf") qs.set("nf", "1");
           if (areaMode) qs.set("area", area!);
@@ -176,8 +189,14 @@ export function RankingNav({
         // 另要求候选确实在榜（接口带回名次信息时才有此判据）——否则自动定位会立刻弹「未加入」气泡
         // 注：此处内联判据（不调 inBoard()）——外部函数进依赖数组会让 effect 每渲染重跑
         const first = list[0];
-        const firstInBoard = first ? (bvMode ? first.bvRank !== undefined : first.rank !== undefined) : false;
-        if (list.length === 1 && !numeric && (!(bvMode || by) || firstInBoard)) {
+        const firstInBoard = first
+          ? bvMode
+            ? first.bvRank !== undefined
+            : stnbMode
+              ? first.stnbRank !== undefined
+              : first.rank !== undefined
+          : false;
+        if (list.length === 1 && !numeric && (!(boardMode || by) || firstInBoard)) {
           setUsers(null);
           locate(first.id);
         }
@@ -186,7 +205,7 @@ export function RankingNav({
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [q, bvBy, bvMode, by, current, numeric, areaMode, area]);
+  }, [q, bvBy, boardMode, bvMode, stnbMode, by, current, numeric, areaMode, area]);
 
   // 点击外部收起下拉
   useEffect(() => {
@@ -224,9 +243,11 @@ export function RankingNav({
           toast(
             bvMode
               ? "该玩家暂无已通过审核的录像，未加入 BV 排行"
-              : areaMode
-                ? "该玩家未加入该地区排行（暂无成绩）"
-                : "该玩家未加入排行榜（暂无成绩）"
+              : stnbMode
+                ? "该玩家暂无有效 STNB 成绩，未加入 STNB 排行"
+                : areaMode
+                  ? "该玩家未加入该地区排行（暂无成绩）"
+                  : "该玩家未加入排行榜（暂无成绩）"
           );
           return;
         }
@@ -282,7 +303,7 @@ export function RankingNav({
           )
         )}
       </div>
-      {(current === "all" || current === "nf" || bvMode || areaMode) && (
+      {(current === "all" || current === "nf" || boardMode || areaMode) && (
         <div className="goto_form" ref={boxRef}>
           <span className="goto_search">
             <svg className="goto_icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">

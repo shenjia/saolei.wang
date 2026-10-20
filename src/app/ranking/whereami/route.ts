@@ -8,7 +8,7 @@
 // 2026-10-14：新增 area=<地区>（地区内页搜索定位）——页码限定该地区人口，302 回 /area（page+hl）
 
 import { NextRequest, NextResponse } from "next/server";
-import { findUserByName, getRankingPageOfUser, getBvRankOfUser } from "@/lib/queries";
+import { findUserByName, getRankingPageOfUser, getBvRankOfUser, getStnbRankOfUser } from "@/lib/queries";
 import {
   byLevelOrder,
   parseRankingBy,
@@ -35,12 +35,14 @@ export async function GET(req: NextRequest) {
 
   // ---- BV 收集榜分支（2026-10-14）：名次不进成绩表体系，改走缓存数组 ----
   // 榜外（没传过录像 / 无已通过录像）→ json 回 page:0（前端弹气泡），302 则退回榜首
-  if (p.get("view") === "bv") {
+  // ---- STNB 榜分支（2026-10-20）：同构，名次走 getStnbRankOfUser 缓存数组 ----
+  if (p.get("view") === "bv" || p.get("view") === "stnb") {
+    const stnb = p.get("view") === "stnb";
     const bvBy = parseBvRankingBy(p.get("by") ?? "");
-    const bqs = new URLSearchParams({ view: "bv" });
+    const bqs = new URLSearchParams({ view: stnb ? "stnb" : "bv" });
     if (bvBy !== "total") bqs.set("by", bvBy);
     if (id > 0) {
-      const hit = await getBvRankOfUser(id, bvBy);
+      const hit = stnb ? await getStnbRankOfUser(id, bvBy) : await getBvRankOfUser(id, bvBy);
       if (hit) {
         if (p.get("format") === "json") return NextResponse.json({ page: hit.page });
         bqs.set("page", String(hit.page));

@@ -6,7 +6,7 @@
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
-import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser, getRankOfUsers } from "@/lib/queries";
+import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser, getStnbRanking, getStnbRankOfUser, getRankOfUsers } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy, byLevelOrder, parseBvRankingBy, type VideoLevel } from "@/lib/config";
@@ -17,6 +17,7 @@ import { RankingNav } from "@/components/RankingNav";
 import { RankingFeed } from "@/components/RankingFeed";
 import { WorldTop100 } from "@/components/WorldTop100";
 import { BvRankingFeed } from "@/components/BvRankingFeed";
+import { StnbRankingFeed } from "@/components/StnbRankingFeed";
 import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,28 @@ const NF_RULES = [
   </>,
 ];
 
+// STNB 榜规则条目（2026-10-20 张老师需求；口径见 queries.fetchStnbCollection）
+const STNB_RULES = [
+  <>
+    <b>统计口径</b>：取每位玩家各难度<i>已通过审核</i>胜局录像的历史最高 STNB（综合评分，
+    与录像评级「判雷」轴同源），按初级 / 中级 / 高级分别统计。运气盘限界与 3BV/s 成绩
+    同款：初级 3BV &lt; <i>10</i> 的秒开盘不计入（实测不限则 3BV=2 的 0.09s 盘 STNB 达
+    <i>4316</i>，远超正常水平 <i>473</i>）。
+  </>,
+  <>
+    <b>总计成绩</b>：初级、中级、高级都有有效 STNB 成绩才计算总计（三级最高值之和），
+    否则不上总计榜。
+  </>,
+  <>
+    <b>排序规则</b>：按所选列的 STNB 降序排列；同分时注册较早（用户 ID 较小）的玩家排在
+    前面。点击表头可在初级 / 中级 / 高级 / 总计之间切换排序。
+  </>,
+  <>
+    <b>数据来源</b>：与录像分析雷达同一套指标体系（video_metrics），NF 录像同样计入；
+    每小时更新一次，新过审的录像最迟 <i>1</i> 小时后计入榜单。
+  </>,
+];
+
 // BV 榜规则条目（分母随统计区间动态变化，故为函数；口径见 queries.fetchBvCollection）
 function bvRules(den: Record<VideoLevel, number>, totalDen: number) {
   return [
@@ -104,9 +127,19 @@ export async function generateMetadata({
         ? "world"
         : sp.view === "bv"
           ? "bv"
-          : "all";
+          : sp.view === "stnb"
+            ? "stnb"
+            : "all";
   const name =
-    view === "world" ? "世界排行" : view === "nf" ? "NF排行" : view === "bv" ? "BV排行" : "雷界排行";
+    view === "world"
+      ? "世界排行"
+      : view === "nf"
+        ? "NF排行"
+        : view === "bv"
+          ? "BV排行"
+          : view === "stnb"
+            ? "STNB排行"
+            : "雷界排行";
   return { title: name };
 }
 
@@ -124,7 +157,9 @@ export default async function RankingPage({
         ? "world"
         : sp.view === "bv"
           ? "bv"
-          : "all";
+          : sp.view === "stnb"
+            ? "stnb"
+            : "all";
   let by = sp.by;
   if (!sp.view && !sp.by && (sp.level || sp.order || sp.nf)) {
     view = sp.nf === "1" ? "nf" : "all";
@@ -245,6 +280,102 @@ export default async function RankingPage({
           title="BV 排行规则"
           items={bvRules(den, totalDen)}
           footer={session?.uid && me?.bvRank === undefined ? <JoinRankingHelp /> : undefined}
+        />
+      </div>
+    );
+  }
+
+  // STNB 榜（2026-10-20 张老师需求）：展示形态仿 BV 榜（初级/中级/高级/总计四列排序，
+  // 默认总计），数值列替进度条。数据 1 小时缓存（见 queries.getStnbRanking）。
+  if (view === "stnb") {
+    const stnbBy = parseBvRankingBy(sp.by);
+    const stnbPage = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+    const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
+    const [stnbData, session] = await Promise.all([
+      // 降级兜底（同 BV 榜）：全量聚合冷缓存重建遇 DB 抖动时降级文案，不整页 500
+      getStnbRanking(stnbBy, stnbPage).catch((e: unknown) => {
+        console.error("[ranking] STNB 榜数据获取失败，降级显示", e);
+        return null;
+      }),
+      getSession(),
+    ]);
+
+    if (!stnbData) {
+      return (
+        <div id="page" className="main ranking_old">
+          <div className="box ranking_box">
+            <div className="page_head">
+              <h1 className="page_title">STNB排行</h1>
+              <RankingNav current="stnb" by={stnbBy} />
+            </div>
+            <p className="ranking_fail">STNB 排行数据暂时不可用，请稍后再试。</p>
+          </div>
+        </div>
+      );
+    }
+
+    const { rows, total, pageSize } = stnbData;
+    // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；总司令=雷界第一人特判（两体系共用）
+    const stnbKing = await getThunderKingId();
+    const stnbPairs = await dualTitles(
+      rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex }))
+    );
+    const titled = rows.map((u) => ({
+      ...u,
+      title: assessTitle(u.expTime, stnbKing > 0 && stnbKing === u.id),
+      classic: stnbPairs.get(u.id)?.c ?? null,
+    }));
+
+    // 登录态：搜索框空输入推荐「自己」+ 自己的名次（缓存数组查询，零 DB）
+    let me:
+      | {
+          id: number;
+          chineseName: string;
+          englishName: string;
+          sex: number;
+          stnbRank?: number;
+        }
+      | undefined;
+    if (session?.uid) {
+      const [u, mine] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: BigInt(session.uid) },
+          select: { id: true, chineseName: true, englishName: true, sex: true },
+        }),
+        getStnbRankOfUser(session.uid, stnbBy),
+      ]);
+      if (u) {
+        me = {
+          id: Number(u.id),
+          chineseName: u.chineseName,
+          englishName: u.englishName,
+          sex: u.sex,
+          stnbRank: mine?.rank,
+        };
+      }
+    }
+
+    return (
+      <div id="page" className="main ranking_old">
+        <div className="box ranking_box">
+          <div className="page_head">
+            <h1 className="page_title">STNB排行</h1>
+            <RankingNav current="stnb" by={stnbBy} me={me} />
+          </div>
+          {/* key 含 by/page/hl：软导航时强制重挂载，否则 useState(initial) 保留旧数据 */}
+          <StnbRankingFeed
+            key={`stnb-${stnbBy}-${stnbPage}-${hl ?? 0}`}
+            initial={titled}
+            by={stnbBy}
+            total={total}
+            pageSize={pageSize}
+            initialHl={hl}
+          />
+        </div>
+        <RankingRules
+          title="STNB 排行规则"
+          items={STNB_RULES}
+          footer={session?.uid && me?.stnbRank === undefined ? <JoinRankingHelp /> : undefined}
         />
       </div>
     );

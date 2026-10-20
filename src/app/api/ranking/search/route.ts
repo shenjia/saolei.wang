@@ -7,9 +7,11 @@
 //   数据取自 1 小时缓存的 BV 全量榜（内存 Map），不额外打库。
 // 2026-10-14（张老师要求：其他排行搜索也显示名次）：带 by=<RankingBy> 时回带成绩榜名次
 //   → { users: [{…, rank?}] }（nf=1 走 user_scores_nf）；缺 rank 即「未加入排行」。
+// 2026-10-20（STNB 榜）：带 bvBy + stnb=1 时回带 STNB 名次 → { users: [{…, stnbRank?}] }
+//   （bvBy 参数名沿用——STNB 榜排序枚举与 BV 榜同构复用）。
 
 import { NextResponse } from "next/server";
-import { searchUsers, getBvBoardIndex, getRankOfUsers } from "@/lib/queries";
+import { searchUsers, getBvBoardIndex, getStnbBoardIndex, getRankOfUsers } from "@/lib/queries";
 import { BV_RANKING_BYS, RANKING_BYS, parseBvRankingBy, type RankingBy } from "@/lib/config";
 
 export async function GET(req: Request) {
@@ -18,9 +20,18 @@ export async function GET(req: Request) {
   const limit = Math.min(12, Math.max(1, parseInt(p.get("limit") ?? "8", 10) || 8));
   const users = await searchUsers(q, limit);
 
-  // BV 榜：附带名次（下拉「第 3,168 位」用）
+  // BV / STNB 榜：附带名次（下拉「第 3,168 位」用）；stnb=1 区分两榜
   const bvRaw = p.get("bvBy") ?? "";
   if ((BV_RANKING_BYS as readonly string[]).includes(bvRaw)) {
+    if (p.get("stnb") === "1") {
+      const { index } = await getStnbBoardIndex(parseBvRankingBy(bvRaw));
+      return NextResponse.json({
+        users: users.map((u) => {
+          const hit = index.get(u.id);
+          return hit ? { ...u, stnbRank: hit } : u;
+        }),
+      });
+    }
     const { index } = await getBvBoardIndex(parseBvRankingBy(bvRaw));
     return NextResponse.json({
       users: users.map((u) => {

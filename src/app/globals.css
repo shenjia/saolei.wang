@@ -5846,7 +5846,18 @@ body #page.video_old .page_head {
     margin-left: 0;
   }
   .video_table {
-    min-width: 640px;
+    min-width: 860px; /* 2026-10-20 新增 IOE/STNB 两列后自然全宽（实测）加余量 */
+  }
+}
+
+/* ==================== /video 列表通栏（2026-10-20 张老师要求：去右栏，与排行页同版式） ====================
+   版式对齐排行页方案 A：≥769 卡片 width:max(62%,720)（中段死区修复，同 body #page.ranking_old.main）；
+   ≤768 由 video_table 的盒内横滑（.box:has(.ranking_table) 规则已覆盖 video_table——
+   video_table 同时带 ranking_table 类名）兜底，无需整页 zoom 阶梯（表格是数据表非榜表，
+   保持全站 ≤605 整页缩放 + 盒内横滑的组合即可）。 */
+@media (min-width: 769px) {
+  body #page.video_old.main {
+    width: max(62%, 720px);
   }
 }
 
@@ -6830,6 +6841,27 @@ button.msg_cancel:hover {
 }
 .ranking_table .pbar.current .pfill {
   background: #fdc61d;
+}
+
+/* ===== STNB 榜数值单元格（2026-10-20 张老师需求，形态仿 BV 榜进度条格） =====
+   数值右对齐、恒定 1 位小数（stnb 落库即 1 位）；默认灰、当前排序列金黄 #fdc61d
+   （与 pbar.current / 表头 a.current 命中色一致）；无成绩显示「—」 */
+.ranking_table .snum {
+  display: inline-block;
+  min-width: 64px;
+  font-size: 14px;
+  line-height: 21px;
+  color: #b1b1a4;
+  font-family: Consolas, "Courier New", monospace;
+  letter-spacing: 0.5px;
+}
+.ranking_table .snum em {
+  font-weight: bold;
+  color: #b1b1a4;
+  font-style: normal;
+}
+.ranking_table .snum.current em {
+  color: #fdc61d;
 }
 
 /* 各排行榜页底规则说明（2026-10-14 张老师要求：所有排行独立标准板块 .box + h2，外观随全站
