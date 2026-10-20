@@ -2904,9 +2904,34 @@ export function OnlinePlay({
         zoomBeforeFs = zoomCur;
         // 等全屏渲染稳定（innerWidth 更新为屏幕尺寸）后再测量计算
         window.setTimeout(() => { if (document.fullscreenElement === root) fitZoomForFullscreen(); }, 80);
-      } else if (zoomBeforeFs !== null) {
-        applyZoom(zoomBeforeFs, false);
-        zoomBeforeFs = null;
+      } else {
+        if (zoomBeforeFs !== null) {
+          applyZoom(zoomBeforeFs, false);
+          zoomBeforeFs = null;
+        } else {
+          /* 全屏里手动调过比例（zoomDragInput/onWheelZoom 已置 null）：不再原样
+             恢复，但也不能把全屏专用的高倍率原封带到窗口模式——小窗口滞留 2.5x
+             时右侧结算面板跟着 zoomCur 放大到突兀（2026-10-21 张老师报
+             「小窗口玩几把右框变大」根因）。判据与滚轮路径同源（张老师 2026-10-15
+             定「无论如何不应该让页面出现滚动条」：溢出比参照态大即收）。⚠️ 基线
+             不能就地量——当前已滞留高倍率、溢出已进基线，「不比基线大」恒成立；
+             先临时回默认倍率（cus=1x / 标准=1.71x，即 localStorage 被污染前的
+             兜底初值）量一份干净参照，再从当前值逐档回收到不超参照为止 */
+          applyZoom(zoomCur, false); // 先按 normalMaxZoom 封一道（宽度方向等）
+          const zRef = zoomCur;
+          applyZoom(lv === "cus" ? 1 : defaultZoom(), false);
+          const refOv = flowOverflowPx();
+          applyZoom(zRef, false);
+          let ov = flowOverflowPx();
+          while ((ov.y > refOv.y + 2 || ov.x > refOv.x + 2) && zoomCur > 0.51) {
+            applyZoom(+(zoomCur - 0.1).toFixed(2), false);
+            ov = flowOverflowPx();
+          }
+          /* 收档结果落盘：全屏里滚轮/滑杆已把高倍率写进 localStorage，不写回的话
+             刷新页面又回到全屏级高倍率、bug 复发。无需收档时写回同值也无害 */
+          zoomWant = zoomCur;
+          zoomDragEnd();
+        }
         /* 退出全屏后仍在横屏自动模式：按视口高度重新拉满 */
         if (lsQuery.matches && !lsManual) fitZoomForLandscape();
       }
