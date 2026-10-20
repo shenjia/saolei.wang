@@ -1516,7 +1516,10 @@ export function OnlinePlay({
       gresult.classList.add("show");
       maskOpen = true;
       /* 雷达图恒显示（2026-10-15 张老师定）：自定义盘参照高级基准评级；
-         缺基准 / 完成度过低 → 空雷达（全轴 ?、收缩到圆心），hover 提示「参考数据不足，无法评级」 */
+         缺基准 / 完成度过低 → 空雷达（全轴 ?、收缩到圆心），hover 提示「参考数据不足，无法评级」。
+         ⚠️ 不写 inline display——CSS（.gr_radar）是 flex 居中容器（2026-10-20 张老师定
+         「雷达图任何时候在板块内居中」）：inline display:block 会压死 flex，钳宽后的
+         雷达（.vr_wrap max-width）就失去居中锚点了 */
       const radarHost = host.querySelector("#gr_radar") as HTMLElement | null;
       if (radarHost) {
         radarHost.style.display = "block";
@@ -3127,8 +3130,8 @@ export function OnlinePlay({
         if (gresult.parentElement !== gameAreaEl) gameAreaEl.appendChild(gresult);
         if (greport.parentElement !== gameAreaEl) gameAreaEl.appendChild(greport);
         /* 搬回侧边：清掉遮罩态钳过的雷达宽（侧边态自有一套几何，重新判定） */
-        const radarSvg = gresult.querySelector<SVGElement>(".vr_wrap .chart");
-        if (radarSvg) radarSvg.style.maxWidth = "";
+        const radarWrap = gresult.querySelector<HTMLElement>(".vr_wrap");
+        if (radarWrap) radarWrap.style.maxWidth = "";
       }
       panelSlot = slot;
     }
@@ -3143,9 +3146,12 @@ export function OnlinePlay({
        百分比 max-width 相对宿主取值、免算页级缩放 */
     function fitMaskCard() {
       if (panelSlot !== "mask" || grModal.hidden) return;
-      /* 清上一轮钳宽：卡片先按未压自然尺寸适配 */
-      const radarSvg = gresult.querySelector<SVGElement>(".vr_wrap .chart");
-      if (radarSvg) radarSvg.style.maxWidth = "";
+      /* 清上一轮钳宽：卡片先按未压自然尺寸适配。钳宽落点＝.vr_wrap（2026-10-20
+         张老师定「雷达图任何时候居中」）：钳 svg 时块级 svg 默认靠左；挂在 wrap 上
+         由 .gr_radar 的 flex justify-content:center 自动居中，且 svg 恒填满 wrap、
+         气泡「与 wrap 等宽同起点」的定位假设保持成立 */
+      const radarWrap = gresult.querySelector<HTMLElement>(".vr_wrap");
+      if (radarWrap) radarWrap.style.maxWidth = "";
       grmCard.style.zoom = "1";
       const r = grmCard.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return;
@@ -3154,7 +3160,7 @@ export function OnlinePlay({
         Math.min(2.5, (window.innerWidth - 32) / r.width, (window.innerHeight - 32) / r.height)
       );
       grmCard.style.zoom = String(z);
-      if (greport.classList.contains("show") && radarSvg) {
+      if (greport.classList.contains("show") && radarWrap) {
         /* 迭代收敛（同侧边态闭环复核）：目标＝数据面板实际渲染高；单次钳宽受
            布局量化影响可能差零点几像素，迭代「量→压→再量」至多 3 轮 */
         const target = greport.getBoundingClientRect().height;
@@ -3162,12 +3168,12 @@ export function OnlinePlay({
           for (let i = 0; i < 3; i++) {
             const h = gresult.getBoundingClientRect().height;
             if (h <= target + 0.5) break;
-            const rw = radarSvg.getBoundingClientRect().width;
+            const rw = radarWrap.getBoundingClientRect().width;
             if (rw <= 100) break;
             const over = h - target - 0.5;
-            const cur = radarSvg.style.maxWidth ? parseFloat(radarSvg.style.maxWidth) / 100 : 1;
+            const cur = radarWrap.style.maxWidth ? parseFloat(radarWrap.style.maxWidth) / 100 : 1;
             const next = Math.max(100 / rw, (rw - over) / rw) * cur;
-            radarSvg.style.maxWidth = (next * 100).toFixed(3) + "%";
+            radarWrap.style.maxWidth = (next * 100).toFixed(3) + "%";
           }
         }
       }
@@ -3210,8 +3216,8 @@ export function OnlinePlay({
       if (panelSlot === "side") {
         /* 量取前清上一轮的雷达钳宽（2026-10-19 三期）：钳过的自然高是假自然高，
            panelBase 缓存一旦吃进污染值，后续所有 fit 判定全偏 */
-        const radarSvgM = gresult.querySelector<SVGElement>(".vr_wrap .chart");
-        if (radarSvgM) radarSvgM.style.maxWidth = "";
+        const radarWrapM = gresult.querySelector<HTMLElement>(".vr_wrap");
+        if (radarWrapM) radarWrapM.style.maxWidth = "";
         if (wantStats) {
           const b = panelNatural(greport, pz);
           panelBase.statsW = b.w;
@@ -3282,17 +3288,17 @@ export function OnlinePlay({
            与 fitMaskCard 同一手法（那边超出量大、单发即中，这里超出量小才需要迭代） */
         if (statsZFinal != null) {
           const target = greport.getBoundingClientRect().height;
-          const radarSvg = gresult.querySelector<SVGElement>(".vr_wrap .chart");
-          if (radarSvg && target > 1) {
+          const radarWrap = gresult.querySelector<HTMLElement>(".vr_wrap");
+          if (radarWrap && target > 1) {
             for (let i = 0; i < 3; i++) {
               const h = gresult.getBoundingClientRect().height;
               if (h <= target + 0.5) break;
-              const rw = radarSvg.getBoundingClientRect().width;
+              const rw = radarWrap.getBoundingClientRect().width;
               if (rw <= 100) break; // 雷达保底 100px，不硬压成一条线
               const over = h - target - 0.5;
-              const cur = radarSvg.style.maxWidth ? parseFloat(radarSvg.style.maxWidth) / 100 : 1;
+              const cur = radarWrap.style.maxWidth ? parseFloat(radarWrap.style.maxWidth) / 100 : 1;
               const next = Math.max(100 / rw, (rw - over) / rw) * cur;
-              radarSvg.style.maxWidth = (next * 100).toFixed(3) + "%";
+              radarWrap.style.maxWidth = (next * 100).toFixed(3) + "%";
             }
           }
         }
