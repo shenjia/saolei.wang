@@ -56,7 +56,9 @@ export function BbvCollection({
                   <i className="tip">
                     <b>3BV = {b}</b>
                     {c ? (
-                      <span>共{c}个录像，点击查看</span>
+                      <span>
+                        共 <em>{c}</em> 个录像，点击查看
+                      </span>
                     ) : (
                       <span>暂无录像</span>
                     )}

@@ -655,9 +655,14 @@ function videoListConds(opts: {
   // 驱动表按需选择：成绩/3BV 类从 video_info 起索引序扫描；计数类从 video_stat 起反向索引扫描；
   // 指标类从 video_metrics 起（ioe/stnb 无单列索引，回表排序，见 getVideoList 注释）
   const table = needVm ? "video_metrics vm" : needVi ? "video_info vi" : needVs ? "video_stat vs" : "video v";
+  // 2026-10-20 修复：驱动表之外的引用表必须补 JOIN——bv/time 筛选（needVi）+ comments/clicks
+  // 排序（needVs）组合下，驱动表是 video_info 而 conds 引用 vs.comments/vs.clicks，
+  // 漏 JOIN 直接 SQL 报错 500（线上定向列表点「评论/点击」无反应的根因）
   const joins = `FROM ${table} JOIN video v ON v.id = ${
     needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id"
-  }${needVi && needVm ? " JOIN video_info vi ON vi.id = v.id" : ""}`;
+  }${needVi && needVm ? " JOIN video_info vi ON vi.id = v.id" : ""}${
+    needVs && (needVi || needVm) ? " JOIN video_stat vs ON vs.id = v.id" : ""
+  }`;
   const selectId = needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id";
   const conds: string[] = [];
   if (level !== "all") conds.push(`v.level = '${level}'`);
@@ -667,8 +672,11 @@ function videoListConds(opts: {
   if (order === "time" || order === "3bvs" || order === "stnb") conds.push(`vi.real_time > 0`);
   // 运气盘限界（2026-10-20 张老师定：STNB 与 3BV/s 同口径，初级 3BV<10 不参与排行）：
   // 3bvs 与 stnb 共用 MIN_3BV_FOR_3BVS（初 10 / 中 4 / 高 4）——不限则初级 3BV=2 的
-  // 0.09s 秒开盘 STNB 4316 会霸榜（STNB 榜同理，见 fetchStnbCollection）
-  if (order === "3bvs" || order === "stnb")
+  // 0.09s 秒开盘 STNB 4316 会霸榜（STNB 榜同理，见 fetchStnbCollection）。
+  // 2026-10-20 修复：bv 精确筛选时跳过限界——用户已锁定 3BV 集合（如初级 3BV=5 的
+  // 定向列表），限界与筛选矛盾会把行全部滤空（线上点 3BVS/STNB「录像消失」根因）；
+  // 无效成绩由渲染层处理（videoScores 低于限界记负值显示删除线，口径一致）
+  if ((order === "3bvs" || order === "stnb") && bv === null)
     conds.push(
       `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
     );
@@ -681,7 +689,9 @@ function videoListConds(opts: {
  *  挂 60s 缓存（2026-10-15 上线前性能审计同口径：热点统计必须 unstable_cache）；
  *  键升级 v2（改查询逻辑必须升缓存键版本号）；v3（2026-10-20：videoListConds
  *  加 3bv 精确筛选与 ioe/stnb 排序，键空间随参数扩容）；v4（2026-10-20：stnb
- *  排序补运气盘限界 MIN_3BV_FOR_3BVS，与 3bvs 口径对齐） */
+ *  排序补运气盘限界 MIN_3BV_FOR_3BVS，与 3bvs 口径对齐）；v5（2026-10-20 修复：
+ *  bv 筛选时跳过运气盘限界 + needVs 时补 video_stat JOIN——旧缓存里这些组合的
+ *  计数是 0/陈旧值，必须失效） */
 const getVideoListJoinCount = unstable_cache(
   async (level: string, order: string, author: number, time: string, bv: number): Promise<number> => {
     const win = parseVideoTimeWindow(time);
@@ -695,7 +705,7 @@ const getVideoListJoinCount = unstable_cache(
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v4"],
+  ["video-list-join-count", "v5"],
   { revalidate: 60 }
 );
 

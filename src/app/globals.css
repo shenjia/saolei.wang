@@ -6799,6 +6799,11 @@ button.msg_cancel:hover {
   display: block;
   color: #b1b1a4;
 }
+/* 气泡「共 X 个录像」数字金色（2026-10-20 张老师要求，站内金色 #fdc61d 同 tp_row b.gold） */
+#user_3bv .tip span em {
+  font-style: normal;
+  color: #fdc61d;
+}
 #user_3bv .tip::after {
   content: "";
   position: absolute;
