@@ -39,8 +39,10 @@ PREHEAT_HOST="${PREHEAT_HOST:-127.0.0.1}"
 # 每条都注明成本依据，日后路由/查询变化时按注释维护。
 PREHEAT_PATHS=(
   "/ranking?view=bv"    # 最重：30 万行 video⋈video_info 全量聚合（1h 缓存）+ level_3bv_range 惰性补种
+  "/ranking?view=stnb"  # 次重：STNB 榜全量聚合（GROUP_CONCAT 三表 join，生产实测 6s；1h 缓存紧凑元组 ~1.2MB，2026-10-20 进清单）
   "/"                   # 首页：6 条并发 + SiteStats 9 条 count（video 两条件全表扫 30 万行）
   "/video"              # 录像列表：video.count 全表 + getVideoBoxStats 两个 groupBy（各扫 30 万行）
+  "/video?order=stnb"   # STNB 排序列表页：stnb 索引反扫行查询 + 单表化 count（2026-10-20 进清单；FORCE INDEX 后 <0.5s，预热顺手）
   "/ranking"            # 雷界榜：顺带触发 rank_snapshot 当日惰性快照（全表窗口函数写入，每天一次）
   "/area"               # 地区排行：实时窗口函数大 SQL（user⋈user_scores + 活跃用户全表扫），无缓存
   "/ranking?view=world" # 世界榜：外部抓取 minesweepergame.com（1 天缓存，已加 8s 超时）
