@@ -652,24 +652,33 @@ function videoListConds(opts: {
   // 2026-10-20 ioe/stnb 排序：join video_metrics（指标行可能缺——老盘跑批已全量覆盖，
   // 仅个别解析失败盘无行；排序语义=「有指标者中排前」，缺行自然不出现）
   const needVm = order === "ioe" || order === "stnb";
-  // 驱动表按需选择：成绩/3BV 类从 video_info 起索引序扫描；计数类从 video_stat 起反向索引扫描；
-  // 指标类从 video_metrics 起（ioe/stnb 无单列索引，回表排序，见 getVideoList 注释）
-  const table = needVm ? "video_metrics vm" : needVi ? "video_info vi" : needVs ? "video_stat vs" : "video v";
+  // 2026-10-20 stnb 单表化：vm.realTime/bbbv/level 与 vi.real_time/board_3bv、v.level
+  // 全量一致（生产 307,567 行校验：level/符号零差异、bbbv 仅 1 行历史脏数据），
+  // stnb 排序在无 author/bv/win/time 筛选时**免 join**（video/vm 无孤儿行，生产校验 0）。
+  // FORCE INDEX（2026-10-20 张老师报障「录像按 STNB 排序很慢」根因修复）：
+  // MySQL 8 统计信息过期时优化器会弃 vm.stnb 索引反扫、改选 video_info 全索引扫驱动
+  // （生产 EXPLAIN 实证 29 万行 + temporary + filesort = 10~12s；FORCE 后恒定 0.04s）。
+  // 带筛选（author/bv/win/time）时保留 join 形态且不加 FORCE（v.user 索引驱动更优，实测 0.04s）。
+  const stnbSimple = order === "stnb" && !author && !win && bv === null;
+  const table = needVm ? `video_metrics vm${stnbSimple ? " FORCE INDEX (video_metrics_stnb_idx)" : ""}` : needVi ? "video_info vi" : needVs ? "video_stat vs" : "video v";
   // 2026-10-20 修复：驱动表之外的引用表必须补 JOIN——bv/time 筛选（needVi）+ comments/clicks
   // 排序（needVs）组合下，驱动表是 video_info 而 conds 引用 vs.comments/vs.clicks，
   // 漏 JOIN 直接 SQL 报错 500（线上定向列表点「评论/点击」无反应的根因）
-  const joins = `FROM ${table} JOIN video v ON v.id = ${
-    needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id"
-  }${needVi && needVm ? " JOIN video_info vi ON vi.id = v.id" : ""}${
-    needVs && (needVi || needVm) ? " JOIN video_stat vs ON vs.id = v.id" : ""
-  }`;
+  const joins = stnbSimple
+    ? `FROM ${table}`
+    : `FROM ${table} JOIN video v ON v.id = ${
+        needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id"
+      }${needVi && needVm ? " JOIN video_info vi ON vi.id = v.id" : ""}${
+        needVs && (needVi || needVm) ? " JOIN video_stat vs ON vs.id = v.id" : ""
+      }`;
   const selectId = needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id";
   const conds: string[] = [];
-  if (level !== "all") conds.push(`v.level = '${level}'`);
+  if (level !== "all") conds.push(stnbSimple ? `vm.level = '${level}'` : `v.level = '${level}'`);
   if (author) conds.push(`v.user = ${BigInt(author)}`);
   if (win) conds.push(`vi.real_time >= ${win[0]} AND vi.real_time < ${win[1]}`);
   if (bv !== null) conds.push(`vi.board_3bv = ${bv}`);
-  if (order === "time" || order === "3bvs" || order === "stnb") conds.push(`vi.real_time > 0`);
+  if (order === "time" || order === "3bvs" || order === "stnb")
+    conds.push(stnbSimple ? `vm.real_time > 0` : `vi.real_time > 0`);
   // 运气盘限界（2026-10-20 张老师定：STNB 与 3BV/s 同口径，初级 3BV<10 不参与排行）：
   // 3bvs 与 stnb 共用 MIN_3BV_FOR_3BVS（初 10 / 中 4 / 高 4）——不限则初级 3BV=2 的
   // 0.09s 秒开盘 STNB 4316 会霸榜（STNB 榜同理，见 fetchStnbCollection）。
@@ -678,7 +687,9 @@ function videoListConds(opts: {
   // 无效成绩由渲染层处理（videoScores 低于限界记负值显示删除线，口径一致）
   if ((order === "3bvs" || order === "stnb") && bv === null)
     conds.push(
-      `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
+      stnbSimple
+        ? `vm.bbbv >= CASE vm.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
+        : `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
     );
   if (order === "comments") conds.push(`vs.comments > 0`);
   if (order === "clicks") conds.push(`vs.clicks > 0`);
@@ -691,7 +702,8 @@ function videoListConds(opts: {
  *  加 3bv 精确筛选与 ioe/stnb 排序，键空间随参数扩容）；v4（2026-10-20：stnb
  *  排序补运气盘限界 MIN_3BV_FOR_3BVS，与 3bvs 口径对齐）；v5（2026-10-20 修复：
  *  bv 筛选时跳过运气盘限界 + needVs 时补 video_stat JOIN——旧缓存里这些组合的
- *  计数是 0/陈旧值，必须失效） */
+ *  计数是 0/陈旧值，必须失效）；v6（2026-10-20：stnb 无筛选路径单表化免 join，
+ *  条件列同步换 vm 自身列——旧缓存计数同值但查询形态已变，失效重来） */
 const getVideoListJoinCount = unstable_cache(
   async (level: string, order: string, author: number, time: string, bv: number): Promise<number> => {
     const win = parseVideoTimeWindow(time);
@@ -705,7 +717,7 @@ const getVideoListJoinCount = unstable_cache(
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v5"],
+  ["video-list-join-count", "v6"],
   { revalidate: 60 }
 );
 
