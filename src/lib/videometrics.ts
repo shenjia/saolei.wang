@@ -94,6 +94,7 @@ async function compute(videoId: number): Promise<void> {
     cls: m.cls,
     ppc: m.ppc,
     stnb: m.stnb,
+    qg: m.qg,
   };
   await prisma.videoMetrics.upsert({
     where: { id },

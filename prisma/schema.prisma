@@ -300,6 +300,10 @@ model VideoMetrics {
   cls        Float  @db.Float
   ppc        Float  @db.Float
   stnb       Float  @db.Float
+  // QG 质量分 = (用时秒)^1.7 ÷ 已解 3BV（STNB 的中间量，越小越好）。
+  // 2026-10-20 张老师定落库：此前只在回放/结算面板实时现算。只依赖 real_time×bbbv，
+  // 故历史行回填免重放（跑批 --qg-only 一条 SQL 从本表两列直接算）。
+  qg         Float  @default(0) @db.Float
   // 综合分（0-100）= **STNB 在「级别×模式」组内的分位**（2026-10-14 晚张老师改口径；
   // 旧口径「速度/效率/精准/手速四轴百分位加权平均」已弃）。与雷达「综合」轴读数一致。
   // 它依赖分位基准，所以不是一算永逸：基准一变就要全量重算（跑批里几十秒）。

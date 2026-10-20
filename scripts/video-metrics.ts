@@ -12,6 +12,7 @@
 //   --dist-only        跳过逐盘写表，仅按现有 video_metrics 重算分位基准
 //   --rank-only        只做最后的全站排名重排（不动指标与基准）
 //   --no-rank          跳过排名重排（只重放 + 基准）
+//   --qg-only          只回填 qg 列（一条 SQL 从本表 real_time×bbbv 直接算，免重放；2026-10-20 加列后的存量回填）
 //
 // 幂等：video_metrics 按 id upsert，video_metric_dist 按 (level,noflag,bucket) upsert，
 //       排名每次全量重算。
@@ -35,6 +36,7 @@ import {
   buildDist,
   MIN_DIST_SIZE,
   percentOf,
+  qgOf,
   stnbOf,
 } from "../src/lib/videoradar";
 import type { BaseMetricKey } from "../src/lib/videoradar";
@@ -138,6 +140,21 @@ async function rebuildRank() {
 }
 
 async function main() {
+  // QG 存量回填（2026-10-20 加列）：qg 只依赖 real_time×bbbv（表内已有），
+  // 一条 UPDATE 直接算，不重放录像文件。与 qgOf 严格同公式：t<0.01s 或 bbbv≤0 记 0。
+  if (has("qg-only")) {
+    const n = await prisma.$executeRawUnsafe(`
+      UPDATE video_metrics
+      SET qg = CASE
+        WHEN real_time > 10 AND bbbv > 0
+          THEN ROUND(POWER(real_time / 1000, 1.7) / bbbv, 3)
+        ELSE 0
+      END
+    `);
+    console.log(`qg 存量回填完成：${n} 行`);
+    return;
+  }
+
   const limit = Number(arg("limit") ?? 0);
   const offset = Number(arg("from") ?? 0);
   const since = Number(arg("since") ?? 0);
@@ -235,6 +252,7 @@ async function main() {
             cls: 0,
             ppc: 0,
             stnb,
+            qg: qgOf(info.board3bv, info.realTime),
           });
           noFile++;
         } else {
@@ -274,6 +292,7 @@ async function main() {
         cls: m.cls,
         ppc: m.ppc,
         stnb: m.stnb,
+        qg: m.qg,
       });
       ok++;
       if ((ok + noFile) % 5000 === 0) console.log(`  ...${ok + noFile} 盘已写入（有文件 ${ok} / 缺文件 ${noFile} / 跳过 ${skip}）`);

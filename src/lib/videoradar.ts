@@ -63,6 +63,8 @@ export interface VideoMetrics {
   ppc: number;
   /** 综合：按级别与难度归一化的 STNB 评分 */
   stnb: number;
+  /** QG 质量分（越小越好）= (用时秒)^1.7 ÷ 已解 3BV，STNB 的中间量 */
+  qg: number;
 }
 
 const CELL_PX = 16; // 扫雷标准格边长，用于把像素行程折成「格」（跨软件无量纲）
@@ -119,6 +121,20 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
     evs,
     { marks: v.marks ?? false }
   );
+}
+
+/**
+ * QG 质量分 —— **纯函数，只需要 solved 3BV / 用时**（与 stnbOf 同一批输入）。
+ * QG = (用时秒)^1.7 ÷ solved；越小越好。是 STNB 的直接中间量：
+ * STNB = 难度系数 ÷ QG × 完成度因子。
+ * 2026-10-20 起随 video_metrics 落库（此前只在回放/结算面板实时现算）。
+ */
+export function qgOf(solved: number, timeMs: number): number {
+  if (!Number.isFinite(solved) || !Number.isFinite(timeMs)) return 0;
+  if (solved <= 0) return 0;
+  const t = timeMs / 1000;
+  if (t < 0.01) return 0;
+  return Math.round((Math.pow(t, 1.7) / solved) * 1000) / 1000;
 }
 
 /**
@@ -206,5 +222,6 @@ export function analyzeVideo(
     cls: valid ? r3(cl / t) : 0,
     ppc: cl > 0 ? r3(path / cl) : 0,
     stnb: Math.round(stnb * 10) / 10,
+    qg: qgOf(solved, timeMs),
   };
 }
