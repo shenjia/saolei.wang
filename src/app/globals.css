@@ -7451,6 +7451,32 @@ html:has(#online_play) #footer {
   height: 100%;
   pointer-events: none;
 }
+/* 新手提示覆盖层（2026-10-19 张老师定；二版：安全格不闪烁、静态显示）：
+   与 vecboard 同形态叠在盘面最上，纯视觉提示——雷用 #cell-mine 半透明
+   （opacity 挂在 use 上不影响 symbol 内部），安全格绿色半透明填充+描边
+   （二版张老师定：不闪烁，透明度提高到 0.45）；
+   空层（.empty）整体隐藏省一次合成 */
+#online_play #gboard .hintboard {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+#online_play #gboard .hintboard.empty {
+  display: none;
+}
+#online_play #gboard .hintboard .op-hint-mine {
+  opacity: 0.55;
+}
+#online_play #gboard .hintboard .op-hint-safe {
+  fill: rgba(166, 226, 46, 0.45);
+  stroke: #a6e22e;
+  stroke-width: 1.5;
+}
 #online_play #gboard td {
   background: none;
 }

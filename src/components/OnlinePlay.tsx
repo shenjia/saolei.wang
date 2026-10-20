@@ -157,12 +157,23 @@ const TIPS: string[] = [
   "调鼠标灵敏度的参考标准：一次自然的手部移动恰好移过一格的宽度。",
   "戴上耳机听音乐并让音量压过鼠标按键声，点击速度更容易放开。",
   "玩一会儿需要精确移动鼠标的小游戏热热身，再开始扫雷状态更好。",
+  /* ---- 2026-10-19 新手提示功能上线补录 ---- */
+  "卡住时打开设置里的「新手提示」，会标出附近能确定的雷和安全格。"
 ];
 /* tips 生命周期（ms）：fade-in 由挂载后下一帧加 .show 触发；
    TIP_HOLD_MS 后撤 .show 走 transition 渐隐，TIP_FADE_MS 后整块卸载。
    「3 秒后渐隐」＝ 从浮现到开始消失共 3 秒，渐隐本身 0.7s 不占额度 */
 const TIP_HOLD_MS = 3000;
 const TIP_FADE_MS = 700;
+
+/* ---- 新手提示（2026-10-19 张老师定，设置开关默认关；二版同日改）----
+   对局中连续 ROOKIE_IDLE_MS 无有效操作（标雷 = 插上旗、开空 = 开出格子）时
+   激活：以鼠标（移动端 = 最后触点）所在格为中心、ROOKIE_RADIUS 格半径内，
+   可 100% 推理确定的雷格叠半透明雷图标、确定非雷的未开格静态绿框标示
+   （二版：安全格不再闪烁，透明度 0.45）；下一次有效操作立即停止并重新计时。
+   设置开关 id=sw_rookie，hover 文案＝张老师原话「当卡住时，提示附近能确定的地雷和空」 */
+const ROOKIE_IDLE_MS = 3000;
+const ROOKIE_RADIUS = 10; // 提示半径（格）
 
 /* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
@@ -312,6 +323,20 @@ export function OnlinePlay({
        （showTip，见上方 tips 块，随机可重复）；
        关闭后任何开局提示都不出（下载成功等局中通知气泡不受它管） */
     let tipsOn = true;
+    /* 「新手提示」开关（2026-10-19 张老师定，默认关）：对局中连续 3 秒无有效操作
+       （标雷 = 插上旗、开空 = 开出格子）时，鼠标 10 格半径内 100% 可确定的雷
+       叠半透明雷图标、可确定的非雷格 500ms 闪烁；下一次有效操作立即停止 */
+    let rookieOn = false;
+    /* ---- 新手提示运行时状态（全部在本 effect 闭包内，不触 React）----
+       anchor: 当前提示中心格（board 索引，-1 = 无）；未激活时为 -1
+       lastAct: 上次有效操作时刻（performance.now()）——计时起点
+       timer: 唤醒定时器（每 300ms 复查「闲置满 3 秒？」）
+       lastPointer: 鼠标/触点最近一次落在棋盘上的格（-1 = 不在棋盘上），
+         桌面 mousemove / 触屏 touchstart+touchmove 持续更新 */
+    let rookieAnchor = -1;
+    let rookieLastAct = 0;
+    let rookieTimer: number | null = null;
+    let rookiePointer = -1;
     /* 局末定格的统计面板 HTML（2026-10-15 十期张老师定）：report 时无论开关与否都存
        一份——局后补开「显示统计」时直接复用，不再重算（胜利自动补旗/败局揭雷之后
        重算会把 Flags 等口径算歪），保证与当时应弹出的面板逐字一致。
@@ -354,7 +379,7 @@ export function OnlinePlay({
         }
         const s = JSON.parse(raw) as {
           nf?: boolean; combo?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
-          showStats?: boolean; autoChord?: boolean; tips?: boolean;
+          showStats?: boolean; autoChord?: boolean; tips?: boolean; rookie?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -365,6 +390,7 @@ export function OnlinePlay({
         if (typeof s.showStats === "boolean") showStats = s.showStats;
         if (typeof s.autoChord === "boolean") autoChord = s.autoChord;
         if (typeof s.tips === "boolean") tipsOn = s.tips;
+        if (typeof s.rookie === "boolean") rookieOn = s.rookie;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -387,7 +413,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, rookie: rookieOn, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -1172,14 +1198,17 @@ export function OnlinePlay({
         if (changed) ngRedeals++;
       }
       const stack = [i];
+      let openedAny = false;
       while (stack.length) {
         const c = stack.pop()!;
         if (state[c] === 1 || state[c] === 2 || mines![c]) continue;
         state[c] = 1; openedSafe++; paint(c);
+        openedAny = true;
         if (nums![c] === 0) {
           for (const a of neighbors(c)) if (state[a] === 0) stack.push(a);
         }
       }
+      if (openedAny) rookieAction(); // 开出格子＝有效操作（新手提示口径）
       checkWin();
     }
     function chord(i: number) {
@@ -1204,7 +1233,7 @@ export function OnlinePlay({
       if (over) return;
       if (state[i] === 1) return;
       /* 问号开关关：空白 ↔ 标雷 两态；开：空白 → 标雷 → 问号 三态循环 */
-      if (state[i] === 0) state[i] = 2;
+      if (state[i] === 0) { state[i] = 2; rookieAction(); } // 插上旗＝有效操作（新手提示口径）
       else if (state[i] === 2) state[i] = qmark ? 3 : 0;
       else state[i] = 0;
       paint(i);
@@ -1685,6 +1714,7 @@ export function OnlinePlay({
       const savedZoom = zoomCur;
       let shrankTo: number | null = null;
       replaying = true;
+      rookieStop(); // 新手提示：回放征用盘面，提示层必须撤（退出回放由结算态自然不激活）
       const N = s.w * s.h;
       /* 重建数字盘（快照雷区 → 数字），与引擎 recalcAll 同式 */
       const nums = new Uint8Array(N);
@@ -2072,11 +2102,13 @@ export function OnlinePlay({
       setFace("smile");
       dieSnap = null; // 一次性：复活后再踩雷会重新拍摄
       gestureSnap = null; // 手势快照同步作废（新手势会重拍）
+      rookieLastAct = performance.now(); // 新手提示：复活后重新计闲置（lose 里已停）
       showToast("已复活，时间继续");
     }
 
     function lose(hit: number) {
       over = true;
+      rookieStop(); // 新手提示随局终停止（雷区已全部揭示，提示无意义）
       const t = stopTimer();
       report(t, false); // 雷区揭示不影响统计（区域/单子只含非雷格，旗帜格不动）；败局快照在揭示前定格
       for (let i = 0; i < mines!.length; i++) {
@@ -2092,6 +2124,7 @@ export function OnlinePlay({
     function checkWin() {
       if (openedSafe !== totalSafe) return;
       over = true;
+      rookieStop(); // 新手提示随局终停止
       const t = stopTimer();
       report(t, true); // 须在自动补旗之前：Flags 只算玩家实际插的
       for (let i = 0; i < mines!.length; i++) if (mines![i] && state[i] !== 2) { state[i] = 2; paint(i); }
@@ -2099,6 +2132,198 @@ export function OnlinePlay({
       setFace("win");
       /* 胜利同样不再有任何文字提醒（数据都在左侧报告浮窗里） */
     }
+
+    /* ---- 新手提示（2026-10-19 张老师定）：闲置 3 秒标出附近 100% 确定的雷与安全格 ----
+       交互口径（张老师原话拆解）：
+       · 有效操作只有两种——标雷（插上旗）、开空（开出格子）；点击/移动鼠标不算
+       · 连续 3 秒无有效操作 → 激活；下一次有效操作立即停止并重新计时
+       · 激活时以鼠标（移动端＝最后触点）所在格为中心 10 格半径：
+         可 100% 确定的雷 → 半透明雷图标（op-hint-mine 类，矢量层叠 #cell-mine 半透明）
+         可 100% 确定不是雷的未开格 → 静态绿框标示（op-hint-safe，二版不闪烁）
+       · 局终（胜/负/复活）/重开/进回放一律停；提示纯视觉层，不落任何事件流、
+         不动 state/mines，对录像/统计零影响（覆盖层只叠加在未开格 bb 上，任何
+         paint 都会整格重写、自然清掉提示，无需逐格手工回收）
+       推理口径（保守优先，宁可漏报绝不误报）：对每个前沿连通分量独立全枚举
+       （每个已开数字的隐藏邻格雷数＝数字值），恒雷 → 必雷、恒空 → 必安全；
+       **不联立全局总雷数约束**（M−旗 数作上界裁枝会引入「玩家旗可能标错」的
+       依赖——提示只在「所有可行布局下都成立」时报，旗错时宁可不出提示）。
+       问号/旗格不参与任何提示（它们不是「未打开」的未知格语义） */
+    const rookieLayer: SVGSVGElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    rookieLayer.setAttribute("class", "hintboard");
+    rookieLayer.setAttribute("aria-hidden", "true");
+    function rookieHintSet(): { mines: number[]; safe: number[] } {
+      /* 前沿格收集（已开数字的未开邻居）；约束图按共享前沿格连通成分量 */
+      const n = W * H;
+      const inFrontier = new Uint8Array(n);
+      const clues: number[] = [];
+      for (let i = 0; i < n; i++) {
+        if (state[i] !== 1 || !nums || nums[i] === 0) continue;
+        let has = false;
+        for (const a of neighbors(i)) {
+          if (state[a] !== 1) { inFrontier[a] = 1; has = true; }
+        }
+        if (has) clues.push(i);
+      }
+      /* clue 连通分量（共享前沿格即同分量）：分量内独立枚举，规模可控
+         （实战分量 ≤ 数十字；99×99 自定义极端盘上限 20 万节点兜底防卡） */
+      const compOf = new Int32Array(clues.length).fill(-1);
+      const comps: { clues: number[]; vars: number[] }[] = [];
+      const clueLocal = new Map<number, number>();
+      clues.forEach((c, k) => clueLocal.set(c, k));
+      for (let k = 0; k < clues.length; k++) {
+        if (compOf[k] >= 0) continue;
+        const cid = comps.length;
+        const cl: number[] = [], vl: number[] = [];
+        const stack = [k];
+        compOf[k] = cid;
+        while (stack.length) {
+          const cur = clues[stack.pop()!];
+          cl.push(cur);
+          for (const a of neighbors(cur)) {
+            if (state[a] !== 1 && inFrontier[a]) {
+              vl.push(a);
+              for (const c2 of neighbors(a)) {
+                const lk = clueLocal.get(c2);
+                if (lk !== undefined && compOf[lk] < 0) { compOf[lk] = cid; stack.push(lk); }
+              }
+            }
+          }
+        }
+        comps.push({ clues: cl, vars: vl });
+      }
+      const couldMine = new Uint8Array(n), couldSafe = new Uint8Array(n);
+      let nodes = 0;
+      const NODE_CAP = 400000; // 全部分量共享的节点预算（上界剪枝后中高级盘远用不满）
+      for (const comp of comps) {
+        const vlist = Array.from(new Set(comp.vars));
+        const vIdx = new Map<number, number>();
+        vlist.forEach((v, t) => vIdx.set(v, t));
+        const F = vlist.length;
+        const mineCnt = new Int32Array(F), openCnt = new Int32Array(F);
+        /* 每个 clue 的成员格表（转置成 cluesOfVar[t]，DFS 每层只扫自己的 clue） */
+        const clueVars: number[][] = comp.clues.map((c) => {
+          const arr: number[] = [];
+          for (const a of neighbors(c)) if (vIdx.has(a)) arr.push(vIdx.get(a)!);
+          return arr;
+        });
+        const cluesOfVar: number[][] = Array.from({ length: F }, () => []);
+        clueVars.forEach((vars, ci) => { for (const v of vars) cluesOfVar[v].push(ci); });
+        const need0 = comp.clues.map((c) => nums![c]);
+        const free0 = clueVars.map((v) => v.length);
+        let overflow = false;
+        /* 枚举分量全部可行解（val 1=雷 0=空）：带双向剪枝（与 noGuessOnce 同款）——
+           ① 下界：某 clue 的剩余需求 need < 0（雷放多了）→ 剪；
+           ② 上界：need > 剩余未定格数 free（雷放不满）→ 剪。只防负不防欠/防欠不防溢
+              都会让搜索树在中期局面爆炸（中高级「无提示」的根因，2026-10-19 二版修）。
+           叶端（need 全 0）按各格取值累计「可为雷/可为空」次数；
+           恒雷（openCnt=0）/恒空（mineCnt=0）即 100% 确定。
+           超预算只作废本分量（宁可少报不卡页面），不拖垮其他分量的提示 */
+        const assignArr = new Int8Array(F);
+        const dfs = (t: number, need: number[], free: number[]): void => {
+          if (overflow) return;
+          if (t === F) {
+            for (let ci = 0; ci < need.length; ci++) if (need[ci] !== 0) return;
+            for (let k = 0; k < F; k++) {
+              if (assignArr[k] === 1) mineCnt[k]++;
+              else openCnt[k]++;
+            }
+            return;
+          }
+          if (++nodes > NODE_CAP) { overflow = true; return; }
+          const mineCls = cluesOfVar[t];
+          for (const val of [1, 0] as const) {
+            let ok = true;
+            for (let m = 0; m < mineCls.length; m++) {
+              const ci = mineCls[m];
+              const nl = need[ci] - val, fl = free[ci] - 1;
+              if (nl < 0 || nl > fl) { ok = false; break; }
+            }
+            if (!ok) continue;
+            const need2 = need.slice(), free2 = free.slice();
+            for (let m = 0; m < mineCls.length; m++) {
+              const ci = mineCls[m];
+              need2[ci] -= val; free2[ci] -= 1;
+            }
+            assignArr[t] = val;
+            dfs(t + 1, need2, free2);
+          }
+        };
+        dfs(0, need0.slice(), free0.slice());
+        for (let t = 0; t < F; t++) {
+          if (overflow) break;
+          if (mineCnt[t] > 0 && openCnt[t] === 0) couldMine[vlist[t]] = 1;
+          else if (openCnt[t] > 0 && mineCnt[t] === 0) couldSafe[vlist[t]] = 1;
+        }
+        /* overflow 只影响本分量：不作废全局，继续下一个分量 */
+      }
+      /* 半径过滤：中心＝鼠标/触点所在格；不在盘上（-1）则不出提示。
+         显示只画纯净未开格（state=0）——旗/问号格虽作为未知格参与枚举，
+         但玩家已落了自己的标记，再叠雷图/闪烁框只会视觉打架 */
+      const resM: number[] = [], resS: number[] = [];
+      if (rookiePointer >= 0) {
+        const cx = rookiePointer % W, cy = (rookiePointer / W) | 0;
+        for (let i = 0; i < n; i++) {
+          if (state[i] !== 0) continue;
+          const x = i % W, y = (i / W) | 0;
+          if (Math.hypot(x - cx, y - cy) > ROOKIE_RADIUS) continue;
+          if (couldMine[i]) resM.push(i);
+          else if (couldSafe[i]) resS.push(i);
+        }
+      }
+      return { mines: resM, safe: resS };
+    }
+    /** 提示覆盖层重画（锚点或盘面变化时整层重建；静态显示，无节拍） */
+    function rookiePaint() {
+      const cw = gboard.clientWidth, ch = gboard.clientHeight;
+      rookieLayer.setAttribute("viewBox", "0 0 " + cw + " " + ch);
+      rookieLayer.setAttribute("preserveAspectRatio", "none");
+      const { mines: hm, safe } = rookieHintSet();
+      let s = "";
+      for (const i of hm) {
+        s += '<use href="#cell-mine" x="' + (i % W) * 16 + '" y="' + ((i / W) | 0) * 16 + '" width="16" height="16" class="op-hint-mine"/>';
+      }
+      for (const i of safe) {
+        s += '<rect x="' + ((i % W) * 16 + 0.5) + '" y="' + (((i / W) | 0) * 16 + 0.5) + '" width="15" height="15" rx="2" class="op-hint-safe"/>';
+      }
+      rookieLayer.innerHTML = s;
+      rookieLayer.classList.toggle("empty", !s);
+    }
+    /** 激活提示：建层重画；锚点跟鼠标走（唤醒/重算时刷新中心）。
+        二版（2026-10-19 张老师定）：安全格不再闪烁，静态绿框显示 */
+    function rookieStart() {
+      if (!rookieLayer.parentElement) gboard.appendChild(rookieLayer);
+      rookieAnchor = rookiePointer;
+      rookiePaint();
+    }
+    /** 停止提示并清层（保留 rookiePointer；lastAct 由调用点决定是否重置） */
+    function rookieStop() {
+      if (rookieLayer.parentElement) rookieLayer.remove();
+      rookieLayer.innerHTML = "";
+      rookieAnchor = -1;
+    }
+    /** 有效操作信号（toggleFlag 成功插旗 / openCell 开出格时调用）：
+        停提示 + 重新计时 3 秒 */
+    function rookieAction() {
+      rookieStop();
+      rookieLastAct = performance.now();
+    }
+    /* 唤醒定时器：对局中每 300ms 复查——闲置满 3 秒即激活；激活中鼠标挪窝
+       （换格）跟随刷新提示中心；局终自动停（tick 内判 over） */
+    rookieTimer = window.setInterval(() => {
+      if (!rookieOn || over || !started || replaying) return;
+      if (performance.now() - rookieLastAct >= ROOKIE_IDLE_MS) {
+        if (rookieAnchor < 0) {
+          if (rookiePointer >= 0) rookieStart();
+        } else if (rookieAnchor !== rookiePointer) {
+          rookieAnchor = rookiePointer;
+          rookiePaint();
+        }
+      }
+    }, 300);
+    /* 换局时基准确立：rookieLastAct 不在挂载时初始化（performance.now() 在 effect
+       内闭包取值即可），开局后第一次唤醒若已闲置 3 秒（如长考后落子前）也会提示——
+       符合「卡住」语义 */
+
     /* 高级/自定义横屏最大化（2026-10-15 张老师五定）：去掉极简模式开关，改为
        移动端高级和自定义横屏时直接不显示时间笑脸区、游戏边框收细（CSS 横屏块
        .op-lsmax 门控）。类挂在组件根 div 上——随组件卸载自动消失，无需清理；
@@ -2128,6 +2353,10 @@ export function OnlinePlay({
       dieSnap = null;
       gestureSnap = null;
       revives = 0;
+      /* 新手提示随新局重置：清提示层 + 闲置计时归零（开局起重新等 3 秒）；
+         指针记账保留（鼠标可能还停在盘上，首击后即可为提示定位） */
+      rookieStop();
+      rookieLastAct = performance.now();
       if (pendingLoseBeacon !== null) { clearTimeout(pendingLoseBeacon); pendingLoseBeacon = null; }
       /* 数据面板（八期）：任何时刻都不因开局而显示——只有游戏结束且开关开着才弹出
          （见 report）。statsReport 只读 state/统计量、不读 snapshot，
@@ -2425,6 +2654,14 @@ export function OnlinePlay({
     /* 「开局提示」开关：只管开局技巧气泡（showTip），不影响局中通知气泡（showToast）；
        切换不重开当前局 */
     on(swTips, "change", () => { tipsOn = swTips.checked; saveSettings(); });
+    /* 「新手提示」开关：对局中即时生效——关掉立即撤提示层；打开不立刻出
+       （须闲置满 3 秒才激活，唤醒定时器会接手）。切换不重开当前局、不动闲置计时 */
+    const swRookie = $("sw_rookie") as HTMLInputElement;
+    on(swRookie, "change", () => {
+      rookieOn = swRookie.checked;
+      saveSettings();
+      if (!rookieOn) rookieStop();
+    });
     /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／速旗／连击／无猜四颗 ----
        激活显色（NF=绿 #a6e22e（2026-10-19 张老师定）/ 无猜=绿 / 速旗=默认黄 / 连击=默认黄）、
        未激活灰。NF／无猜点击＝把内存开关取反 → saveSettings → 重开一局；
@@ -2777,10 +3014,11 @@ export function OnlinePlay({
       }
       if (!leftDown && !rightDown) chordDone = false;
     });
-    on(gboard, "mouseleave", () => { clearPress(); if (!over) setFace("smile"); });
+    on(gboard, "mouseleave", () => { clearPress(); if (!over) setFace("smile"); rookiePointer = -1; });
     /* mv 事件流（回放光标 + 引擎行程 pathPx 的数据源）：屏幕坐标 → 棋盘 1x 像素
        （除以倍率与页级缩放，再减棋盘原点）；节流 ≥4px 在 recordMv 内控 */
     on(gboard, "mousemove", (e: MouseEvent) => {
+      rookiePointer = eventCell(e); // 新手提示：指针所在格实时记账
       if (started && !over) {
         const gbR = gboard.getBoundingClientRect();
         recordMv(
@@ -2842,6 +3080,12 @@ export function OnlinePlay({
       if (touchCell < 0) return;
       const t = e.changedTouches[0];
       if (!t) return;
+      /* 新手提示：触点所在格记账（按坐标算格，target 恒为起始格不可用） */
+      {
+        const bp0 = touchBoardPx(t.clientX, t.clientY);
+        const rx = (bp0.x / 16) | 0, ry = (bp0.y / 16) | 0;
+        rookiePointer = rx >= 0 && rx < W && ry >= 0 && ry < H ? ry * W + rx : -1;
+      }
       if (combo) {
         /* 连击滑动连开（2026-10-19 张老师定，承 NF 滑动连开）：容差内不算滑动
            （保长按插旗）；超容差沿手指轨迹按半格步长插值逐格开——touchmove 是
@@ -2881,6 +3125,7 @@ export function OnlinePlay({
     on(gboard, "touchstart", (e: TouchEvent) => {
       const t = e.changedTouches[0]; if (!t) return;
       const i = eventCell(t); if (i < 0 || over) return;
+      rookiePointer = i; // 新手提示：触点所在格记账
       /* 原地复活：触点手势起点拍快照（点按/滑动连开/长按插旗共用一个起点） */
       snapGesture(i);
       touchCell = i; longFired = false; touchMoved = false;
@@ -3743,6 +3988,9 @@ export function OnlinePlay({
         snapMines: () => (snapshot ? Array.from(snapshot.mines) : null),
         /* 统计一致性验证（2026-10-16）：当局事件流 + 共享引擎重算结果 */
         events: () => evStream.slice(),
+        /* 新手提示（2026-10-19）测试钩子：开关/指针/锚点/闲置计时 */
+        rookie: () => ({ on: rookieOn, pointer: rookiePointer, anchor: rookieAnchor, sinceAct: performance.now() - rookieLastAct }),
+        hint: () => rookieHintSet(),
         counts: () => gameCounts(),
         size: () => ({ w: W, h: H, m: M }),
         /* 诊断：单次重排的 bv（测分布用，不动盘面之外的任何状态） */
@@ -3757,6 +4005,7 @@ export function OnlinePlay({
     swQm.checked = qmark;
     swStats.checked = showStats;
     swTips.checked = tipsOn;
+    swRookie.checked = rookieOn;
     syncModeButtons(); // 模式快捷钮按存档初值点亮（连击/无猜/速旗）
     syncBvSlider();
 
@@ -3788,6 +4037,9 @@ export function OnlinePlay({
       if (wheelTimer !== null) clearTimeout(wheelTimer); // 滚轮落盘的 trailing 定时器
       /* 开局 tips 的渐隐定时（卸载时不留残余回调） */
       if (tipFadeTimer !== null) clearTimeout(tipFadeTimer);
+      /* 新手提示：唤醒定时器与覆盖层一并清掉 */
+      if (rookieTimer !== null) clearInterval(rookieTimer);
+      rookieLayer.remove();
       if (win.__op) delete win.__op;
     };
   }, []);
@@ -3913,6 +4165,13 @@ export function OnlinePlay({
             <span className="gs_name">开局提示</span>
             <label className="gsw"><input type="checkbox" id="sw_tips" /><span className="track" /></label>
             <span className="tip">每次开局显示一条技巧提示，可随时关闭</span>
+          </div>
+          {/* 「新手提示」（2026-10-19 张老师定，默认关）：闲置 3 秒标出鼠标附近
+              100% 可确定的雷（半透明雷）与安全格（闪烁）；hover 文案＝张老师原话 */}
+          <div className="gs_row">
+            <span className="gs_name">新手提示</span>
+            <label className="gsw"><input type="checkbox" id="sw_rookie" /><span className="track" /></label>
+            <span className="tip">当卡住时，提示附近能确定的地雷和空</span>
           </div>
           {/* 「自动双击」设置行已撤（2026-10-16 张老师定）：入口改挂 NF 右侧的
               速旗快捷钮（btn_sq），行为口径不变 */}
