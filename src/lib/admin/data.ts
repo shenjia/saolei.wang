@@ -972,7 +972,8 @@ export async function getNewsListAdmin(f: {
   const [news, total] = await Promise.all([
     prisma.news.findMany({
       where,
-      orderBy: { id: "desc" },
+      // 2026-10-20：动态流全站改 (create_time,id) 倒序（时间口径见 queries.getNews 注释）
+      orderBy: [{ createTime: "desc" }, { id: "desc" }],
       skip: (page - 1) * ADMIN_PAGESIZE,
       take: ADMIN_PAGESIZE,
     }),

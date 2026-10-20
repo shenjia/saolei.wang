@@ -487,10 +487,13 @@ model News {
   ranked     BigInt @default(0) @map("ranked") @db.BigInt
   createTime  BigInt @default(0) @map("create_time") @db.BigInt
 
-  // 2026-10-15 上线前性能审计新增：首页动态 feed 与 count 按 type 过滤、id 倒序，
-  // 原为 23 万行全表扫描
-  @@index([user])
-  @@index([type, id])
+  // 2026-10-15 上线前性能审计新增：动态 count 按 type 过滤。
+  // 2026-10-20 动态流改 (create_time,id) 倒序（时间口径见 queries.getNews）：
+  //   [createTime] 承载无筛选动态流；[type,createTime] 承载 home/type 筛选流；[user,createTime]
+  //   承载用户主页动态。原 [type,id]/[user] 已无消费查询，删除。
+  @@index([createTime])
+  @@index([type, createTime])
+  @@index([user, createTime])
   @@map("news")
 }
 

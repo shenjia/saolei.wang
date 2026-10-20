@@ -214,6 +214,10 @@ export async function getNews(opts: {
   userId?: number;
   /** 等级筛选（beg/int/exp）：按 details JSON 的 lv 字段匹配（details_data 全为 {"lv":...} 格式） */
   level?: string;
+  /** keyset 游标：上一批末行的 id，服务端据此查 (create_time,id) 序更早的动态。
+   *  2026-10-20 起动态流按 (create_time, id) 倒序（破纪录动态时间=录像上传时间，
+   *  id 序不再等于时间序），cursor 单传 id 不再够用——实现上改为先查 cursor 行的
+   *  create_time 再做 OR(create_time<ct / 同刻 id<id) keyset，保证翻页无缝。 */
   cursor?: number;
   /** 首页新闻流口径：仅 NEWS_HOME_TYPES（注册/头像/发帖/评论动态不进首页，2026-09-24） */
   home?: boolean;
@@ -221,14 +225,28 @@ export async function getNews(opts: {
   /** 内部：直接指定 id 列表（getNewsPage 页码模式用；与 cursor 互斥） */
   ids?: bigint[];
 }): Promise<NewsItem[]> {
+  // 2026-10-20 张老师定：动态流按 (create_time, id) 倒序——破纪录动态时间取录像上传时间，
+  // 补审积压时动态 id 追表尾而时间是旧的，id 序≠时间序（10-19 方案 B 改审核时间被否，
+  // 一批补审动态时间全挤在过审时刻不可接受）。排序不再依赖「id 序=create_time 序」铁律。
+  // cursor 为 keyset 语义：先取 cursor 行的 create_time，再 (ct,id) 双条件取更早行。
+  let cursorTime: bigint | undefined;
+  if (opts.cursor && !opts.ids) {
+    const anchor = await prisma.news.findUnique({
+      where: { id: BigInt(opts.cursor) },
+      select: { createTime: true },
+    });
+    cursorTime = anchor?.createTime;
+  }
   const where = {
     ...(opts.type !== undefined ? { type: opts.type } : {}),
     ...(opts.types ? { type: { in: opts.types } } : {}),
     ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
     ...(opts.level ? newsLevelFilter(opts.level) : {}),
-    // 游标分页：取 id 小于 cursor 的更早动态（移植 News::getRecentNews 的 cursor 语义）
-    ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
+    // keyset 游标：查 (create_time,id) 序比 cursor 行更早的动态（同刻按 id 分先后）
+    ...(cursorTime !== undefined
+      ? { OR: [{ createTime: { lt: cursorTime } }, { createTime: cursorTime, id: { lt: BigInt(opts.cursor!) } }] }
+      : {}),
     // 2026-10-17 张老师定：上传录像动态（type=30）撤出动态流——录像一传就刷屏；
     // 首页/用户主页另有「录像」版块，信息不丢。显式 type/types 筛选（后台/论坛 tab）不受影响；
     // home 模式也不量加：NEWS_HOME_TYPES 已不含 VIDEO，且对象展开会覆盖 home 的 in 过滤
@@ -238,7 +256,7 @@ export async function getNews(opts: {
   };
   const rows = await prisma.news.findMany({
     where: opts.ids ? { id: { in: opts.ids } } : where,
-    orderBy: { id: "desc" },
+    orderBy: [{ createTime: "desc" }, { id: "desc" }],
     ...(opts.ids ? {} : { take: opts.limit }),
   });
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
@@ -267,9 +285,10 @@ export async function getNews(opts: {
   }));
 }
 
-/** 动态页码模式（2026-10-14 用户主页动态翻页条）：id 倒序第 page 页起 limit 条。
+/** 动态页码模式（2026-10-14 用户主页动态翻页条）：(create_time,id) 倒序第 page 页起 limit 条。
  *  页锚点按 base（=调用方传入的页大小）计；skip 恒按 base 锚点，take 才是本批行数
- *  （与列表类 more 接口同语义）。两段查询：先 id 列表（带筛选条件）再复用 getNews 组装军衔。 */
+ *  （与列表类 more 接口同语义）。两段查询：先 id 列表（带筛选条件）再复用 getNews 组装军衔。
+ *  2026-10-20 排序随 getNews 从 id 倒序改为 (create_time,id) 倒序（上传时间口径，见 getNews 注释）。 */
 export async function getNewsPage(opts: {
   types?: number[];
   userId?: number;
@@ -290,7 +309,7 @@ export async function getNewsPage(opts: {
   const idRows = await prisma.news.findMany({
     where,
     select: { id: true },
-    orderBy: { id: "desc" },
+    orderBy: [{ createTime: "desc" }, { id: "desc" }],
     skip: (opts.page - 1) * opts.base,
     take: opts.limit,
   });

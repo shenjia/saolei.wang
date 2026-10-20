@@ -314,11 +314,12 @@ export async function reviewVideo(
           createTime: rv.reviewTime!,
         });
       } else {
-        // 个人纪录动态（时间取审核时间）——快照取覆盖前旧 exp_time（显示破之前军衔）
-        // 2026-10-19 张老师定：此前取 rv.createTime（录像上传时间），补审积压旧录像时
-        // 动态行 id 追加表尾而 create_time 是旧时间，打破「id 序=create_time 序」铁律，
-        // 动态流（按 id 倒序）时间错乱。改取审核时间，与入伍动态同口径；成绩时间语义
-        // 由 details 的 or/cr（毫秒级成绩）保留。
+        // 个人纪录动态（时间取录像上传时间）——快照取覆盖前旧 exp_time（显示破之前军衔）
+        // 口径演变：最初取 rv.createTime（上传时间）→ 2026-10-19 因「补审积压旧录像时
+        // 动态 id 追表尾而时间是旧的，打破 id 序=create_time 序铁律」改取审核时间（b83e20e）
+        // → 2026-10-20 张老师再定改回上传时间（一批补审的动态时间不该全挤在过审时刻），
+        // 铁律问题改由消费端解决：动态流排序一律 (create_time, id) 倒序，不再依赖 id 序。
+        // 成绩时间语义由 details 的 or/cr（毫秒级成绩）保留；入伍动态仍取审核时间。
         for (const level of ["beg", "int", "exp"] as VideoLevel[]) {
           for (const order of ORDERS) {
             if (Number(updated[F(level, order, "Video")] ?? 0) === rv.id) {
@@ -335,7 +336,7 @@ export async function reviewVideo(
                   cr: updated[F(level, order)] ?? 0,
                   nf: 0,
                 },
-                createTime: rv.reviewTime!,
+                createTime: rv.createTime,
               });
             }
           }
