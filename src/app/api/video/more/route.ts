@@ -30,10 +30,12 @@ export async function GET(req: Request) {
     const order = parseVideoListOrder(p.get("order") ?? undefined);
     const author = parseInt(p.get("author") ?? "", 10) || undefined;
     const time = p.get("time")?.trim() || undefined;
+    // 2026-10-20：透传 3BV 搜索（精确筛选）
+    const bv = p.get("3bv")?.trim() || undefined;
     // 每页条数：调用方自定义（用户主页录像版块传 10），默认 /video 列表的 20；
     // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
-    const { videos, total, pageSize } = await getVideoList({ level, order, author, time, page, pageSize: size });
+    const { videos, total, pageSize } = await getVideoList({ level, order, author, time, bv, page, pageSize: size });
     return NextResponse.json({
       videos,
       total,

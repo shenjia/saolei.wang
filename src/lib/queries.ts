@@ -34,6 +34,7 @@ import {
   type VideoLevel,
   type VideoListOrder,
   parseVideoTimeWindow,
+  parseVideo3bv,
 } from "./config";
 import { publishNews } from "./news";
 import { decodeLegacyEntities } from "./format";
@@ -91,6 +92,10 @@ export interface VideoListItem {
   authorTitle: string;
   /** Phase 5 双体系：旧版称号备选（上传时刻快照评定） */
   authorClassic: { name: string; color: string } | null;
+  /** 效率指标 IOE（video_metrics.ioe，无指标行为 null——2026-10-20 列表列显示用） */
+  ioe: number | null;
+  /** 判雷指标 STNB（video_metrics.stnb，无指标行为 null——2026-10-20 列表列显示用） */
+  stnb: number | null;
 }
 
 // ---------- 通用 ----------
@@ -619,24 +624,27 @@ function videoListConds(opts: {
   order: VideoListOrder;
   author?: number;
   win: [number, number] | null;
+  /** 3BV 精确筛选（2026-10-20）：vi.board_3bv = N（显示值即库值，无舍入窗口） */
+  bv: number | null;
 }): { joins: string; where: string; selectId: string } {
-  const { level, order, author, win } = opts;
-  const needVi = !!win || order === "time" || order === "3bv" || order === "3bvs";
+  const { level, order, author, win, bv } = opts;
+  const needVi = !!win || !!bv || order === "time" || order === "3bv" || order === "3bvs";
   const needVs = order === "comments" || order === "clicks";
-  // 驱动表按需选择：成绩/3BV 类从 video_info 起索引序扫描；计数类从 video_stat 起反向索引扫描
-  const joins =
-    needVi && needVs
-      ? "FROM video_info vi JOIN video v ON v.id = vi.id JOIN video_stat vs ON vs.id = v.id"
-      : needVi
-        ? "FROM video_info vi JOIN video v ON v.id = vi.id"
-        : needVs
-          ? "FROM video_stat vs JOIN video v ON v.id = vs.id"
-          : "FROM video v";
-  const selectId = needVi ? "vi.id" : needVs ? "vs.id" : "v.id";
+  // 2026-10-20 ioe/stnb 排序：join video_metrics（指标行可能缺——老盘跑批已全量覆盖，
+  // 仅个别解析失败盘无行；排序语义=「有指标者中排前」，缺行自然不出现）
+  const needVm = order === "ioe" || order === "stnb";
+  // 驱动表按需选择：成绩/3BV 类从 video_info 起索引序扫描；计数类从 video_stat 起反向索引扫描；
+  // 指标类从 video_metrics 起（ioe/stnb 无单列索引，回表排序，见 getVideoList 注释）
+  const table = needVm ? "video_metrics vm" : needVi ? "video_info vi" : needVs ? "video_stat vs" : "video v";
+  const joins = `FROM ${table} JOIN video v ON v.id = ${
+    needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id"
+  }${needVi && needVm ? " JOIN video_info vi ON vi.id = v.id" : ""}`;
+  const selectId = needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id";
   const conds: string[] = [];
   if (level !== "all") conds.push(`v.level = '${level}'`);
   if (author) conds.push(`v.user = ${BigInt(author)}`);
   if (win) conds.push(`vi.real_time >= ${win[0]} AND vi.real_time < ${win[1]}`);
+  if (bv !== null) conds.push(`vi.board_3bv = ${bv}`);
   if (order === "time" || order === "3bvs") conds.push(`vi.real_time > 0`);
   if (order === "3bvs")
     conds.push(
@@ -649,20 +657,22 @@ function videoListConds(opts: {
 
 /** 列表总数（非默认排序/时间搜索路径）：join 计数有 0.1~0.5s 代价（30 万行），
  *  挂 60s 缓存（2026-10-15 上线前性能审计同口径：热点统计必须 unstable_cache）；
- *  键升级 v2（改查询逻辑必须升缓存键版本号） */
+ *  键升级 v2（改查询逻辑必须升缓存键版本号）；v3（2026-10-20：videoListConds
+ *  加 3bv 精确筛选与 ioe/stnb 排序，键空间随参数扩容） */
 const getVideoListJoinCount = unstable_cache(
-  async (level: string, order: string, author: number, time: string): Promise<number> => {
+  async (level: string, order: string, author: number, time: string, bv: number): Promise<number> => {
     const win = parseVideoTimeWindow(time);
     const { joins, where } = videoListConds({
       level: level as VideoLevel | "all",
       order: order as VideoListOrder,
       author: author || undefined,
       win,
+      bv: bv || null,
     });
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v2"],
+  ["video-list-join-count", "v3"],
   { revalidate: 60 }
 );
 
@@ -682,6 +692,8 @@ export async function getVideoList(opts: {
   author?: number;
   /** 时间成绩搜索输入（秒字符串，如 "37.29"），非法输入忽略 */
   time?: string;
+  /** 3BV 精确搜索输入（整数字符串，如 "42"），非法输入忽略（2026-10-20） */
+  bv?: string;
   page: number;
   /** 每页条数（默认 VIDEO_PAGESIZE；用户主页录像版块传 USER_VIDEO_NUMBER，2026-09-26） */
   pageSize?: number;
@@ -689,8 +701,9 @@ export async function getVideoList(opts: {
   const { level, order, author, page } = opts;
   const size = opts.pageSize ?? VIDEO_PAGESIZE;
   const win = parseVideoTimeWindow(opts.time);
+  const bv = parseVideo3bv(opts.bv);
 
-  if (order === "id" && !win) {
+  if (order === "id" && !win && bv === null) {
     // 默认排序（上传时间倒序）原路径：全部=video 主键反扫；指定级别=成绩表 id 倒序
     let ids: number[] = [];
     let total = 0;
@@ -722,8 +735,8 @@ export async function getVideoList(opts: {
     return { videos, total, pageSize: size };
   }
 
-  // 其余排序 / 时间搜索：统一 join 查询（order=id 且有时间窗口时按 v.id 倒序）
-  const { joins, where, selectId } = videoListConds({ level, order, author, win });
+  // 其余排序 / 时间搜索 / 3BV 搜索：统一 join 查询（order=id 且带搜索时按 v.id 倒序）
+  const { joins, where, selectId } = videoListConds({ level, order, author, win, bv });
   const orderBy =
     order === "time"
       ? "vi.real_time ASC"
@@ -731,13 +744,17 @@ export async function getVideoList(opts: {
         ? "vi.board_3bv DESC"
         : order === "3bvs"
           ? "(vi.board_3bv * 1000000 / vi.real_time) DESC"
-          : order === "comments"
-            ? "vs.comments DESC"
-            : order === "clicks"
-              ? "vs.clicks DESC"
-              : "v.id DESC"; // 默认排序 + 时间搜索：上传时间倒序（v.id 索引序）
+          : order === "ioe"
+            ? "vm.ioe DESC"
+            : order === "stnb"
+              ? "vm.stnb DESC"
+              : order === "comments"
+                ? "vs.comments DESC"
+                : order === "clicks"
+                  ? "vs.clicks DESC"
+                  : "v.id DESC"; // 默认排序 + 时间/3BV 搜索：上传时间倒序（v.id 索引序）
   const [total, idRows] = await Promise.all([
-    getVideoListJoinCount(level, order, author ?? 0, opts.time ?? ""),
+    getVideoListJoinCount(level, order, author ?? 0, opts.time ?? "", bv ?? 0),
     prisma.$queryRawUnsafe<{ id: bigint }[]>(
       `SELECT ${selectId} AS id ${joins} ${where} ORDER BY ${orderBy} LIMIT ${size} OFFSET ${(page - 1) * size}`
     ),
@@ -825,81 +842,8 @@ export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
 }
 
-/**
- * 录像统计（/video 右栏版块）：级别细分 + 总数 + 评论总数，每行各带「今日新增」增量。
- * 2026-10-13 二轮：去掉本日/本周/本月三行，改为四行右侧统一挂今日增量列。
- * 2026-10-13 三轮（张老师要求）：末行增「评论总数」（口径与首页「发布评论」严格一致：
- *   comment.status=COMMENT_STATUS.NORMAL，增量按 create_time 落在今日）。
- */
-export interface VideoBoxStats {
-  /** 初级录像（仅已通过） */
-  beg: number;
-  /** 中级录像（仅已通过） */
-  int: number;
-  /** 高级录像（仅已通过） */
-  exp: number;
-  total: number;
-  /** 今日新增（按级别）；口径与首页「上传录像」增量严格一致：status=REVIEWED 且 review_time 落在今日 */
-  begToday: number;
-  intToday: number;
-  expToday: number;
-  /** 今日新增合计（= 三段之和，不必再查库） */
-  totalToday: number;
-  /** 评论总数（仅正常状态，软删/屏蔽不计） */
-  commentTotal: number;
-  /** 评论今日新增（按 create_time；与首页「发布评论」口径一致） */
-  commentToday: number;
-}
-
-async function getVideoBoxStatsImpl(): Promise<VideoBoxStats> {
-  const now = new Date();
-  const dayStart = BigInt(Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000));
-  // 两次 GROUP BY 一次取全（video 表无 status/level 索引，逐项 count 会各扫一遍全表）；
-  // 今日量按 review_time 而非 create_time——与首页「上传录像（+N）」口径一致（审过才算新增）
-  const [total, levelRows, todayRows, commentTotal, commentToday] = await Promise.all([
-    prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
-    prisma.video.groupBy({
-      by: ["level"],
-      where: { status: VIDEO_STATUS.REVIEWED },
-      _count: { _all: true },
-    }),
-    prisma.video.groupBy({
-      by: ["level"],
-      where: { status: VIDEO_STATUS.REVIEWED, reviewTime: { gte: dayStart } },
-      _count: { _all: true },
-    }),
-    prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL } }),
-    prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL, createTime: { gte: dayStart } } }),
-  ]);
-  // 三段口径与「录像总数」严格一致（均只算已通过），故三者之和 = total
-  const byLevel = new Map(levelRows.map((r) => [r.level, r._count._all]));
-  const todayByLevel = new Map(todayRows.map((r) => [r.level, r._count._all]));
-  const begToday = todayByLevel.get("beg") ?? 0;
-  const intToday = todayByLevel.get("int") ?? 0;
-  const expToday = todayByLevel.get("exp") ?? 0;
-  return {
-    beg: byLevel.get("beg") ?? 0,
-    int: byLevel.get("int") ?? 0,
-    exp: byLevel.get("exp") ?? 0,
-    total,
-    begToday,
-    intToday,
-    expToday,
-    totalToday: begToday + intToday + expToday,
-    commentTotal,
-    commentToday,
-  };
-}
-
-// 2026-10-15 性能审计：/video 页每次请求 2 个 GROUP BY 全扫 video 30 万行 + comment 计数，
-// 统计数字允许分钟级延迟，缓存 60s
-const fetchVideoBoxStats = unstable_cache(getVideoBoxStatsImpl, ["video-box-stats-v1"], {
-  revalidate: 60,
-});
-
-export async function getVideoBoxStats(): Promise<VideoBoxStats> {
-  return fetchVideoBoxStats();
-}
+// （2026-10-20 张老师要求 /video 列表改通栏、右栏「统计」板块下线——
+//  getVideoBoxStats 与 VideoBoxStats 接口已随板块一并删除，无调用方）
 
 /** 某用户今日新增录像（按级别 + 合计）；口径与首页「上传录像」增量一致：status=REVIEWED 且 review_time 落在今日 */
 export async function getUserTodayVideos(
@@ -973,14 +917,20 @@ function scoresTable(level: VideoLevel): ScoresDelegate {
 async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
   if (!ids.length) return [];
   const bigIds = ids.map(BigInt);
-  const [videos, infos, stats] = await Promise.all([
+  const [videos, infos, stats, metrics] = await Promise.all([
     prisma.video.findMany({ where: { id: { in: bigIds } } }),
     prisma.videoInfo.findMany({ where: { id: { in: bigIds } } }),
     prisma.videoStat.findMany({ where: { id: { in: bigIds } } }),
+    // 2026-10-20 列表 IOE/STNB 列：批量补指标（缺行=无指标，显示 -）
+    prisma.videoMetrics.findMany({
+      where: { id: { in: bigIds } },
+      select: { id: true, ioe: true, stnb: true },
+    }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
   const infoMap = new Map(infos.map((i) => [N(i.id), i]));
   const statMap = new Map(stats.map((s) => [N(s.id), s]));
+  const metricMap = new Map(metrics.map((m) => [N(m.id), m]));
 
   // 保持传入 ids 的顺序（移植 Value::orderByIds）
   // 2026-10-17 称号快照制：authorTitle 按录像行内 exp_time 快照评定（上传时刻军衔），
@@ -1001,6 +951,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     if (!v || !info) continue;
     const author = authors.get(N(v.user)) ?? null;
     const stat = statMap.get(id);
+    const m = metricMap.get(id);
     const p = pairs.get(N(v.user));
     result.push({
       id,
@@ -1018,6 +969,8 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       author,
       authorTitle: p?.m ?? "",
       authorClassic: p?.c ?? null,
+      ioe: m ? m.ioe : null,
+      stnb: m ? m.stnb : null,
     });
   }
   return result;
@@ -1056,11 +1009,16 @@ export interface VideoDetail extends VideoListItem {
 export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
   const v = await prisma.video.findUnique({ where: { id: BigInt(id) } });
   if (!v) return null;
-  const [info, stat, author, reviewer] = await Promise.all([
+  const [info, stat, author, reviewer, metrics] = await Promise.all([
     prisma.videoInfo.findUnique({ where: { id: v.id } }),
     prisma.videoStat.findUnique({ where: { id: v.id } }),
     prisma.user.findUnique({ where: { id: v.user } }),
     v.reviewUser ? prisma.user.findUnique({ where: { id: v.reviewUser } }) : null,
+    // 2026-10-20 VideoListItem 扩 ioe/stnb：详情页顺带补指标行（缺行=null）
+    prisma.videoMetrics.findUnique({
+      where: { id: v.id },
+      select: { ioe: true, stnb: true },
+    }),
   ]);
   if (!info) return null;
   // Phase 5 双体系：按录像行内快照评定双套称号
@@ -1097,6 +1055,8 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     // 2026-10-17 称号快照制：按录像行内快照评定（上传时刻军衔）
     authorTitle: p?.m ?? "",
     authorClassic: p?.c ?? null,
+    ioe: metrics ? metrics.ioe : null,
+    stnb: metrics ? metrics.stnb : null,
   };
 }
 

@@ -8,11 +8,12 @@
 // 匹配所有显示相同的成绩；输中文出推荐下拉，与排行搜索同体验）；
 // 排序改表头点击（成绩/3BV/3BV/s/评论/点击/上传时间），默认上传时间且不高亮，
 // 其余排序列高亮表头与对应数据。
-
 // 2026-10-16 晚（张老师拍板「切换」）：主栏换客户端壳 VideoListSection——切级别筛选、
 // 点表头排序就地生效不导航不跳顶；搜索框仍软导航（key=author-time 重挂载换数据）。
+// 2026-10-20 张老师要求：去掉右栏「热门录像」与「统计」（热门录像移首页替换排行前十），
+// 页面改通栏（与排行页同版式：.main 单卡片、62% 流式宽）。
 
-import { getHotVideos, getVideoBoxStats, getVideoList } from "@/lib/queries";
+import { getVideoList } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import {
   VIDEO_LEVELS,
@@ -21,8 +22,6 @@ import {
   type VideoListOrder,
 } from "@/lib/config";
 import { VideoListSection } from "@/components/VideoListSection";
-import { VideoHot } from "@/components/VideoHot";
-import { VideoStats } from "@/components/VideoStats";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "录像" };
@@ -42,11 +41,11 @@ export default async function VideoListPage({
   const author = sp.author ? parseInt(sp.author, 10) || undefined : undefined;
   // 时间成绩搜索输入（秒字符串，如 37.29；非法输入忽略）
   const time = sp.time?.trim() || undefined;
+  // 3BV 搜索输入（整数字符串，如 42；非法输入忽略，2026-10-20）
+  const bv = sp["3bv"]?.trim() || undefined;
 
-  const [{ videos, total, pageSize }, hot, stats, authorName] = await Promise.all([
-    getVideoList({ level, order, author, time, page: 1 }),
-    getHotVideos(10),
-    getVideoBoxStats(),
+  const [{ videos, total, pageSize }, authorName] = await Promise.all([
+    getVideoList({ level, order, author, time, bv, page: 1 }),
     // 玩家筛选回显姓名（搜索框显示当前筛选）
     author
       ? prisma.user
@@ -56,27 +55,20 @@ export default async function VideoListPage({
   ]);
 
   return (
-    <div id="page" className="two_columns video_old">
-    <ul id="home">
-      <li className="main">
-        {/* 页头（h1+级别 tabs+搜索框）与表格都在壳组件内：级别/排序就地切换，
-            搜索走软导航（author/time 变化由壳内 key 重挂载换入新数据） */}
-        <VideoListSection
-          initial={videos}
-          total={total}
-          pageSize={pageSize}
-          level={level}
-          order={order}
-          author={author}
-          authorName={authorName}
-          time={time}
-        />
-      </li>
-      <li className="sidebar">
-        <VideoHot videos={hot} />
-        <VideoStats stats={stats} />
-      </li>
-    </ul>
+    <div id="page" className="main video_old">
+      {/* 页头（h1+级别 tabs+搜索框）与表格都在壳组件内：级别/排序就地切换，
+          搜索走软导航（author/time/3bv 变化由壳内 key 重挂载换入新数据） */}
+      <VideoListSection
+        initial={videos}
+        total={total}
+        pageSize={pageSize}
+        level={level}
+        order={order}
+        author={author}
+        authorName={authorName}
+        time={time}
+        bv={bv}
+      />
     </div>
   );
 }

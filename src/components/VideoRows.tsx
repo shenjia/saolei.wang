@@ -77,6 +77,9 @@ export function VideoHead({
         <th>{col("time", "成绩", "按成绩排列（快在前）")}</th>
         <th className="c">{col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
         <th className="c">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
+        {/* 2026-10-20 张老师需求：新增 IOE（效率）/STNB（判雷）指标列，可点击排序 */}
+        <th className="c">{col("ioe", "IOE", "按效率 IOE 排列（大在前）")}</th>
+        <th className="c">{col("stnb", "STNB", "按判雷 STNB 排列（大在前）")}</th>
         <th>
           {/* 评论/点击同列两个独立排序入口（张老师要求均可触发排序） */}
           {sort ? (
@@ -141,6 +144,27 @@ export function VideoRowLine({
           <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
             {score3bvs(-scores["3bvs"])}
           </del>
+        )}
+      </td>
+      {/* 指标列（2026-10-20）：IOE 3 位小数 / STNB 1 位小数（与雷达口径一致，
+          见 videoscore BASE_METRICS digits）；无指标行（个别老盘解析失败）显 -。
+          hover 气泡说明指标含义 */}
+      <td className={`c_3bvs ioe c${highlight === "ioe" ? " current" : ""}`}>
+        {v.ioe != null ? (
+          <span data-tip="IOE 效率：每点击换回的 3BV" aria-label="IOE 效率">
+            {v.ioe.toFixed(3)}
+          </span>
+        ) : (
+          <span title="该录像暂无分析数据">-</span>
+        )}
+      </td>
+      <td className={`c_3bvs stnb c${highlight === "stnb" ? " current" : ""}`}>
+        {v.stnb != null ? (
+          <span data-tip="STNB 判雷：综合评分（越高越强）" aria-label="STNB 判雷">
+            {v.stnb.toFixed(1)}
+          </span>
+        ) : (
+          <span title="该录像暂无分析数据">-</span>
         )}
       </td>
       <td className="counters">

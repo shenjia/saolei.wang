@@ -14,16 +14,16 @@
 import Link from "next/link";
 import {
   getHomeNews,
+  getHotVideos,
   getNewbies,
   getNewsCount,
-  getTopUsers,
   getVideoFeed,
   getVideoCount,
 } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EmailBindNotice } from "@/components/EmailBindNotice";
-import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, areaDisplay } from "@/lib/config";
+import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER } from "@/lib/config";
 import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoFeed } from "@/components/VideoFeed";
@@ -32,6 +32,7 @@ import { BbsLatest } from "@/components/BbsLatest";
 import { SystemText } from "@/components/SystemText";
 import { SiteStats } from "@/components/SiteStats";
 import { FlopSprites } from "@/components/FlopSprites";
+import { VideoHot } from "@/components/VideoHot";
 import { title as assessTitle } from "@/lib/assess";
 import { getThunderKingId } from "@/lib/title-system";
 
@@ -49,10 +50,11 @@ export default async function HomePage() {
     showEmailNotice = !auth || Number(auth.emailVerified) === 0;
   }
 
-  const [news, newbies, top, newsTotal, videos, videoTotal] = await Promise.all([
+  const [news, newbies, hot, newsTotal, videos, videoTotal] = await Promise.all([
     getHomeNews(),
     getNewbies(),
-    getTopUsers(),
+    // 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块，数据源原 /video 右栏同款）
+    getHotVideos(10),
     // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
     getNewsCount({ home: true }),
     getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
@@ -151,27 +153,10 @@ export default async function HomePage() {
           </table>
         </div>
         <BbsLatest />
-        <div id="top" className="box">
-          <Link href="/ranking" target="_blank">
-            <h2>排行前十</h2>
-          </Link>
-          <table cellPadding={0} cellSpacing={0} className="table full">
-            <tbody>
-              {top.map((u, i) => (
-                <tr key={u.id}>
-                  <td className="rank">
-                    <em>{i + 1}</em>
-                  </td>
-                  <td className="user">
-                    <AvatarCell id={u.id} name={u.chineseName} sex={u.sex} gender="small" link />
-                    <TitleBadge title={u.title} classic={u.classic} link />
-                  </td>
-                  <td className="area">{areaDisplay(u.area)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块——按上传时间倒序
+            至少两条评论的录像；版块样式沿用 VideoHot（原 /video 右栏同款紧凑行）。
+            原 #top 排行前十板块与 getTopUsers 查询一并撤下 */}
+        <VideoHot videos={hot} />
         <SiteStats />
       </li>
     </ul>

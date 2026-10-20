@@ -45,8 +45,8 @@ export function VideoListFeed({
   /** 当前筛选条件下的录像总数 */
   total: number;
   pageSize: number;
-  /** 筛选参数（level/order/author/time；client 模式下仅作初始值） */
-  query: { level: string; order: string; author?: number; time?: string };
+  /** 筛选参数（level/order/author/time/3bv；client 模式下仅作初始值） */
+  query: { level: string; order: string; author?: number; time?: string; bv?: string };
   /** 表头排序（/video：Link 导航；client 模式：href 仅作中键/新标签兜底，左键就地排序）。
    *  authorInLinks：client 模式兜底链接是否携带 author（/video 的 author 是真实筛选必须带；
    *  用户主页 author 隐含在路径 /user/{id}，默认剥掉） */
@@ -94,6 +94,7 @@ export function VideoListFeed({
     const qs = new URLSearchParams({ level: curLevel, order: curOrder, page: String(page) });
     if (query.author) qs.set("author", String(query.author));
     if (query.time) qs.set("time", query.time);
+    if (query.bv) qs.set("3bv", query.bv);
     // 每页条数：递增批量（首击=一页 base），默认与初始页一致（列表页 20 / 用户主页 10）
     qs.set("size", String(size ?? pageSize));
     return `/api/video/more?${qs}`;
@@ -129,6 +130,7 @@ export function VideoListFeed({
       });
       if (query.author) qs.set("author", String(query.author));
       if (query.time) qs.set("time", query.time);
+      if (query.bv) qs.set("3bv", query.bv);
       const res = await fetch(`/api/video/more?${qs}`);
       if (!res.ok) throw new Error("加载失败");
       const data = (await res.json()) as { videos: VideoListItem[]; total: number };
@@ -268,8 +270,9 @@ export function VideoListFeed({
                         level: curLevel,
                         author: headSort.authorInLinks ? query.author : undefined,
                         time: query.time,
+                        "3bv": query.bv,
                       }
-                    : { level: curLevel, author: query.author, time: query.time },
+                    : { level: curLevel, author: query.author, time: query.time, "3bv": query.bv },
                   order: curOrder,
                 }
               : undefined
@@ -282,7 +285,7 @@ export function VideoListFeed({
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={7} style={{ textAlign: "center" }}>
+              <td colSpan={9} style={{ textAlign: "center" }}>
                 暂无数据
               </td>
             </tr>

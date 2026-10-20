@@ -1,6 +1,8 @@
-// 热门录像（/video 右栏，2026-09-26 张老师要求）：
+// 热门录像（2026-09-26 /video 右栏起家；2026-10-20 张老师要求移至首页右栏，
+// 替换原「排行前十」板块；/video 列表页改通栏后本组件仅首页使用）：
 // 按上传时间倒序显示至少两条评论的录像；行内只保留
 // 作者（名称+军衔徽章）/ 级别 / 时间成绩（成绩链接进详情，NF 小标保留）。
+// 标题链到 /video（同原首页板块标题可点进列表页的语言）。
 
 import Link from "next/link";
 import type { VideoListItem } from "@/lib/queries";
@@ -14,7 +16,9 @@ export function VideoHot({ videos }: { videos: VideoListItem[] }) {
   if (!videos.length) return null;
   return (
     <div id="video_hot" className="box">
-      <h2>热门录像</h2>
+      <Link href="/video">
+        <h2>热门录像</h2>
+      </Link>
       <table cellPadding={0} cellSpacing={0} className="table full video_hot_table">
         <tbody>
           {videos.map((v) => {

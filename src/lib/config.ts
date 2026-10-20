@@ -253,8 +253,20 @@ export type VideoLevel = (typeof VIDEO_LEVELS)[number];
 
 // 录像列表排序列（2026-10-15 张老师需求：表头点击排序，去掉右侧排序 tabs）。
 // id=上传时间（默认，倒序）；time=成绩（升序，快在前）；3bv=3BV（降序，大在前）；
-// 3bvs=3BV/s（降序，快在前，排除运气盘：初级 3BV<10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）；comments/clicks=评论/点击（降序，多在前）
-export const VIDEO_LIST_ORDERS = ["id", "time", "3bv", "3bvs", "comments", "clicks"] as const;
+// 3bvs=3BV/s（降序，快在前，排除运气盘：初级 3BV<10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）；
+// comments/clicks=评论/点击（降序，多在前）
+// 2026-10-20 张老师需求：新增 ioe/stnb（效率/判雷，video_metrics 指标列，降序大在前，
+// 无指标行的录像不参与排序——老录像跑批已全量覆盖，仅个别解析失败/屏蔽盘缺行）
+export const VIDEO_LIST_ORDERS = [
+  "id",
+  "time",
+  "3bv",
+  "3bvs",
+  "ioe",
+  "stnb",
+  "comments",
+  "clicks",
+] as const;
 export type VideoListOrder = (typeof VIDEO_LIST_ORDERS)[number];
 
 export function parseVideoListOrder(v?: string): VideoListOrder {
@@ -263,6 +275,16 @@ export function parseVideoListOrder(v?: string): VideoListOrder {
 
 /** 时间成绩搜索输入（秒）：1-3 位整数，最多 3 位小数（如 37 / 37.2 / 37.29） */
 export const VIDEO_TIME_INPUT_RE = /^\d{1,3}(?:\.\d{1,3})?$/;
+
+/** 3BV 搜索输入：1-3 位整数（2~999，与站内 3BV 值域一致） */
+export const VIDEO_3BV_INPUT_RE = /^\d{1,3}$/;
+
+/** 3BV 搜索输入 → 3BV 值（1~999 内合法；0 不合法——无 3BV 为 0 的有效录像） */
+export function parseVideo3bv(v?: string): number | null {
+  if (!v || !VIDEO_3BV_INPUT_RE.test(v)) return null;
+  const n = parseInt(v, 10);
+  return n >= 1 && n <= 999 ? n : null;
+}
 
 /**
  * 时间成绩搜索输入 → 匹配窗口 [lo, hi)（毫秒）。

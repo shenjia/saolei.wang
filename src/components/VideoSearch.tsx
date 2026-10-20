@@ -4,16 +4,25 @@
 // 匹配所有显示相同（±5ms 舍入窗）的成绩；纯整数同时探测同 ID 玩家（排行同款）。
 // 2026-10-16 张老师需求：纯整数额外探测同 ID 录像（/api/video/lookup），命中出
 // 「录像 #ID（级别 · 上传者）」项，回车/点击直达 /video/<id>；屏蔽录像视同不存在。
+// 2026-10-20 张老师需求：搜索支持 3BV——纯整数输入额外出「3BV N」项（精确匹配
+// 该 3BV 值的所有录像），与时间成绩项并列（纯整数语义多重：ID 录像/同 ID 玩家/
+// 3BV/时间成绩，全部列出让用户选）。
 // 交互语言对齐 RankingNav：防抖 250ms、键盘上下选、回车确认、唯一中文候选自动筛选、
 // 选中即收起（pickedRef 抑制随后那轮同名推荐）、点击外部收起。
-// 已有筛选（玩家/时间）时聚焦或清空输入 → 下拉出「清除搜索」。
-// 筛选与级别/排序列正交：跳转保留 level 与 order，玩家/时间互斥（二选一）。
+// 已有筛选（玩家/时间/3BV）时聚焦或清空输入 → 下拉出「清除搜索」。
+// 筛选与级别/排序列正交：跳转保留 level 与 order，玩家/时间/3BV 互斥（三选一）。
 
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LEVEL_NAMES, parseVideoTimeWindow, VIDEO_TIME_INPUT_RE, type Level } from "@/lib/config";
+import {
+  LEVEL_NAMES,
+  parseVideoTimeWindow,
+  parseVideo3bv,
+  VIDEO_TIME_INPUT_RE,
+  type Level,
+} from "@/lib/config";
 import { scoreTime } from "@/lib/format";
 import { buildUrl } from "./Pager";
 import { toast } from "./Toast";
@@ -34,11 +43,12 @@ interface SuggestVideo {
   chineseName: string;
 }
 
-/** 下拉项：玩家候选 / 录像 ID 直达 / 时间成绩搜索 / 清除搜索（空数组=无匹配，渲染空态文案） */
+/** 下拉项：玩家候选 / 录像 ID 直达 / 时间成绩搜索 / 3BV 搜索 / 清除搜索（空数组=无匹配，渲染空态文案） */
 type Item =
   | { kind: "user"; user: SuggestUser }
   | { kind: "video"; video: SuggestVideo }
   | { kind: "time"; value: string }
+  | { kind: "3bv"; value: number }
   | { kind: "clear" };
 
 export function VideoSearch({
@@ -47,6 +57,7 @@ export function VideoSearch({
   author,
   authorName,
   time,
+  bv,
 }: {
   level: string;
   /** 当前排序（跳转时保留；默认排序 id 不进 URL） */
@@ -57,9 +68,11 @@ export function VideoSearch({
   authorName?: string;
   /** 当前时间成绩搜索输入（回显用） */
   time?: string;
+  /** 当前 3BV 搜索输入（回显用，2026-10-20） */
+  bv?: string;
 }) {
   const router = useRouter();
-  const [q, setQ] = useState(authorName ?? time ?? "");
+  const [q, setQ] = useState(authorName ?? time ?? (bv != null ? `3BV ${bv}` : ""));
   const [items, setItems] = useState<Item[] | null>(null);
   const [active, setActive] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -70,7 +83,7 @@ export function VideoSearch({
   // 用户是否实际输入过：带筛选进页时输入框有回显值，但不应自动弹推荐下拉
   const dirtyRef = useRef(false);
 
-  const hasFilter = !!author || !!time;
+  const hasFilter = !!author || !!time || bv != null;
 
   const kw = q.trim();
   const isTimeInput = VIDEO_TIME_INPUT_RE.test(kw);
@@ -80,6 +93,12 @@ export function VideoSearch({
   function timeItem(): Item {
     const win = parseVideoTimeWindow(kw)!;
     return { kind: "time", value: scoreTime(win[0] + 5) };
+  }
+
+  /** 3BV 项（2026-10-20）：输入是合法 3BV 整数时给出 */
+  function bvItem(): Item | null {
+    const n = parseVideo3bv(kw);
+    return n != null ? { kind: "3bv", value: n } : null;
   }
 
   // 防抖 250ms：时间项 / 数字输入的 ID 玩家+ID 录像 / 中文模糊玩家（setState 只发生在异步回调里）
@@ -118,10 +137,12 @@ export function VideoSearch({
           videoRes.status === "fulfilled" && videoRes.value.ok
             ? ((await videoRes.value.json()) as { video: SuggestVideo | null }).video
             : null;
-        // ID 录像置顶（整数输入时它是最高意图），同 ID 玩家与时间项随后
+        // ID 录像置顶（整数输入时它是最高意图），同 ID 玩家、3BV 与时间项随后
         const list: Item[] = [];
         if (video) list.push({ kind: "video", video });
         list.push(...users.map((u) => ({ kind: "user" as const, user: u })));
+        const bi = bvItem();
+        if (bi) list.push(bi);
         if (isTimeInput) list.push(timeItem());
         setItems(list);
         setActive(0);
@@ -157,14 +178,15 @@ export function VideoSearch({
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
 
-  /** 跳转 URL：保留级别与排序，玩家/时间互斥 */
-  function nav(params: { author?: number; time?: string }) {
+  /** 跳转 URL：保留级别与排序，玩家/时间/3BV 互斥（三选一） */
+  function nav(params: { author?: number; time?: string; bv?: string }) {
     router.push(
       buildUrl("/video", {
         level,
         order: order === "id" ? undefined : order,
         author: params.author,
         time: params.time,
+        "3bv": params.bv,
         page: undefined,
       })
     );
@@ -192,6 +214,15 @@ export function VideoSearch({
     nav({ time: value });
   }
 
+  /** 3BV 搜索（2026-10-20）：精确匹配该 3BV 的所有录像；回显值带「3BV 」前缀
+   *  与时间成绩数字区分（「3BV 42」不会命中时间/ID 语义，回车提交也走 3BV 分支） */
+  function pick3bv(value: number) {
+    pickedRef.current = `3BV ${value}`;
+    setItems(null);
+    setQ(`3BV ${value}`);
+    nav({ bv: String(value) });
+  }
+
   function pickClear() {
     pickedRef.current = null;
     setItems(null);
@@ -199,9 +230,19 @@ export function VideoSearch({
     nav({});
   }
 
-  /** 回车无候选时提交：时间格式→时间搜索；纯整数→ID 录像直达；#前缀强制走 ID，否则玩家精确反查 */
+  /** 回车无候选时提交：3BV 前缀→3BV 搜索；时间格式→时间搜索；纯整数→ID 录像直达；
+   *  #前缀强制走 ID，否则玩家精确反查 */
   async function submit(text: string) {
     const raw = text.trim();
+    // 「3BV 42」前缀（2026-10-20）：用户明确指定 3BV 搜索，跳过时间/ID 语义
+    const bvMatch = raw.match(/^3BV\s+(\d{1,3})$/i);
+    if (bvMatch) {
+      const n = parseVideo3bv(bvMatch[1]);
+      if (n != null) {
+        pick3bv(n);
+        return;
+      }
+    }
     const hash = raw.startsWith("#"); // # 前缀=用户明确指定录像/玩家 ID，跳过时间语义
     const key = raw.replace(/^#/, "");
     if (!key) return;
@@ -272,6 +313,7 @@ export function VideoSearch({
       if (item.kind === "user") pickUser(item.user);
       else if (item.kind === "video") pickVideo(item.video);
       else if (item.kind === "time") pickTime(item.value);
+      else if (item.kind === "3bv") pick3bv(item.value);
       else if (item.kind === "clear") pickClear();
     } else if (e.key === "Escape") {
       setItems(null);
@@ -289,8 +331,8 @@ export function VideoSearch({
           type="text"
           value={q}
           maxLength={12}
-          placeholder="玩家/成绩/ID"
-          title="输入玩家姓名筛选其上传的录像，输入时间成绩（秒，如 37.29）查找相同成绩的所有录像，或输入录像 ID（如 345155）直达该录像"
+          placeholder="玩家/成绩/3BV/ID"
+          title="输入玩家姓名筛选其上传的录像，输入时间成绩（秒，如 37.29）查找相同成绩的所有录像，输入 3BV 数值（如 42）查找相同 3BV 的所有录像，或输入录像 ID（如 345155）直达该录像"
           onChange={(e) => {
             dirtyRef.current = true;
             setQ(e.target.value);
@@ -367,12 +409,26 @@ export function VideoSearch({
                   </li>
                 );
               }
+              if (item.kind === "3bv") {
+                return (
+                  <li key="3bv" className={cls || undefined}>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => pick3bv(item.value)}
+                    >
+                      <em>3BV {item.value}</em>
+                      <span>找相同 3BV 的录像</span>
+                    </button>
+                  </li>
+                );
+              }
               // clear
               return (
                 <li key="clear" className={cls || undefined}>
                   <button type="button" onMouseEnter={() => setActive(i)} onClick={pickClear}>
                     <em>清除搜索</em>
-                    <span>{authorName ?? time}</span>
+                    <span>{authorName ?? (bv != null ? `3BV ${bv}` : time)}</span>
                   </button>
                 </li>
               );

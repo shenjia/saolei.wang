@@ -33,6 +33,7 @@ export function VideoListSection({
   author,
   authorName,
   time,
+  bv,
 }: {
   initial: VideoListItem[];
   /** 服务端解析的当前筛选条件下的录像总数 */
@@ -46,18 +47,20 @@ export function VideoListSection({
   authorName?: string;
   /** 时间成绩搜索输入（回显用） */
   time?: string;
+  /** 3BV 搜索输入（回显用，2026-10-20） */
+  bv?: string;
 }) {
   return (
     <div className="box video_box">
-      {/* key=author/time：搜索软导航改变这两项时强制重挂载换服务端数据；
-          就地切级别/排序不动这两项，key 稳定不重挂载（铁律的正确收窄用法） */}
+      {/* key=author/time/3bv：搜索软导航改变这三项时强制重挂载换服务端数据；
+          就地切级别/排序不动这三项，key 稳定不重挂载（铁律的正确收窄用法） */}
       <VideoListFeed
         client
-        key={`${author ?? ""}-${time ?? ""}`}
+        key={`${author ?? ""}-${time ?? ""}-${bv ?? ""}`}
         initial={initial}
         total={total}
         pageSize={pageSize}
-        query={{ level, order, author, time }}
+        query={{ level, order, author, time, bv }}
         headSort={{ base: "/video", order, authorInLinks: true }}
         head={(ctx) => (
           <div className="page_head">
@@ -80,6 +83,7 @@ export function VideoListSection({
                           order: ctx.order === "id" ? undefined : ctx.order,
                           author,
                           time,
+                          "3bv": bv,
                           page: undefined,
                         })}
                         onClick={(e) => {
@@ -101,6 +105,7 @@ export function VideoListSection({
                   author={author}
                   authorName={authorName}
                   time={time}
+                  bv={bv}
                 />
               </div>
             </div>
