@@ -1458,6 +1458,7 @@ export function OnlinePlay({
           ppc: cl > 0 ? path / cl : 0,
         },
       };
+      maskDelaySeq++; // 结算代际 +1：旧延时定时器自此失效（见 renderResultPanel 尾部）
       renderResultPanel();
     }
     function renderResultPanel() {
@@ -1571,6 +1572,28 @@ export function OnlinePlay({
         root.render(<VideoAnalysisRadar data={pts} fill />);
         radarRootRef.current = root;
       }
+      /* 全屏遮罩延时 500ms 弹出（2026-10-20 张老师定）：新结算正处全屏时，给玩家
+         半秒看清盘面（败局红雷在哪死的/胜局终盘）再盖遮罩——立即弹出太突兀。
+         · **必须在下面 syncReportZoom 之前武装**：enterMask 见 timer 挂着就不翻
+           grModal.hidden，延时才真正生效（宿主搬家/几何计算照常同步落定）；
+         · 到点复核：结算代际变了（又开了一局）/ 面板已撤（reset/复活/进回放都走
+           hideResultModal 取消定时器，此处兜底）/ 已回侧边宿主（侧边本就可见，
+           无「遮盖突兀」可谈）则不弹；窗口模式遮罩（窄屏/移动端）没有盖住整个
+         游戏画面的突兀感，不延时——只在全屏结算这一刻武装；
+         · 500ms 内退出全屏：仍按到点弹（此时若空间够早已被 resize 路径搬回
+           侧边、回调见 panelSlot!=="mask" 自然不弹；仍是遮罩态则弹出正确） */
+      if (document.fullscreenElement === root) {
+        const bornAt = maskDelaySeq;
+        if (maskDelayTimer !== null) clearTimeout(maskDelayTimer);
+        maskDelayTimer = window.setTimeout(() => {
+          maskDelayTimer = null;
+          if (bornAt !== maskDelaySeq) return;
+          if (!maskOpen) return;
+          if (panelSlot !== "mask") return;
+          grModal.hidden = false;
+          fitMaskCard();
+        }, 500);
+      }
       /* 显形后立刻定位缩放：数据面板关着时 syncReportZoom 不再被 paintStatPanel 带动
          （那是「面板小、叠棋盘左上」bug 的另一半——游戏结束这刻也无人调用）。
          雷达是 createRoot 异步渲染、首帧量不到高度，再排一帧复核；遮罩态卡片是按
@@ -1595,6 +1618,12 @@ export function OnlinePlay({
        再 resize 不能自己弹回来），后者＝「面板住在哪」（空间不够就得一直住在卡片里） */
     function hideResultModal() {
       maskOpen = false;
+      /* 延时弹出窗口内被撤（新局 reset/复活/进回放）：定时器一并取消，
+         否则 500ms 后遮罩自己弹出来 */
+      if (maskDelayTimer !== null) {
+        clearTimeout(maskDelayTimer);
+        maskDelayTimer = null;
+      }
       grModal.hidden = true;
     }
     function showResultModal() {
@@ -3357,6 +3386,13 @@ export function OnlinePlay({
     /* 遮罩此刻是否展开：点遮罩关掉后，即便空间依旧不够也不自动弹回来；
        新一局结算 / 回放结束再弹才置真（见 renderResultPanel / showResultModal） */
     let maskOpen = false;
+    /* 全屏遮罩延时弹出（2026-10-20 张老师定）：新结算在全屏+遮罩态下延时 500ms
+       再显示——立即盖住棋盘太突兀，「连在哪死的都还没看清楚」。null＝无延时在途。
+       调度点在 buildResultPanel 尾部（仅新结算），enterMask 感知本态防 resize 提前弹 */
+    let maskDelayTimer: number | null = null;
+    /* 结算代际（2026-10-20 延时弹出用）：buildResultPanel 每次新结算 +1——
+       延时回调核对自己还是「当前这局」，连续快开新局时旧定时器不越权弹旧结算 */
+    let maskDelaySeq = 0;
     /* 侧边宿主下 zoom=1 量的自然尺寸（布局 px）：遮罩态里面板宽由卡片给（width:100%），
        量不出自然宽，所以「回侧边还够不够」只能靠这份缓存反推 */
     const panelBase = { statsW: 0, statsH: 0, resultW: 0, resultH: 0, valid: false };
@@ -3487,12 +3523,15 @@ export function OnlinePlay({
       }
     }
     /* 转遮罩。首次进入（面板还在侧边）自动展开——空间被挤爆是被迫换地方，
-       玩家需要看到结算；已住在卡片里则沿用 maskOpen（点遮罩关掉就别自己弹回） */
+       玩家需要看到结算；已住在卡片里则沿用 maskOpen（点遮罩关掉就别自己弹回）。
+       延时窗口内（maskDelayTimer 挂着）不提前展开——500ms 的「看清死在哪」
+       缓冲由定时器收口，resize 触发的重判别把缓冲吃掉 */
     function enterMask() {
       if (panelSlot !== "mask") {
         mountPanels("mask");
         maskOpen = true;
       }
+      if (maskDelayTimer !== null) return;
       grModal.hidden = !maskOpen;
       if (maskOpen) fitMaskCard();
     }
@@ -4106,6 +4145,8 @@ export function OnlinePlay({
       if (wheelTimer !== null) clearTimeout(wheelTimer); // 滚轮落盘的 trailing 定时器
       /* 开局 tips 的渐隐定时（卸载时不留残余回调） */
       if (tipFadeTimer !== null) clearTimeout(tipFadeTimer);
+      /* 全屏遮罩延时弹出的定时器（同上，卸载即废） */
+      if (maskDelayTimer !== null) clearTimeout(maskDelayTimer);
       /* 新手提示：唤醒定时器与覆盖层一并清掉 */
       if (rookieTimer !== null) clearInterval(rookieTimer);
       rookieLayer.remove();
