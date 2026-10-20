@@ -7546,6 +7546,13 @@ html:has(#online_play) #footer {
   stroke: #a6e22e;
   stroke-width: 1.5;
 }
+/* 三期（2026-10-20 张老师定）：确定性提示耗尽后的低概率格——站内黄 #fdc61d，
+   填充 0.4 + 描边；与安全格绿框形态同款但色系区分明确 */
+#online_play #gboard .hintboard .op-hint-low {
+  fill: rgba(253, 198, 29, 0.4);
+  stroke: #fdc61d;
+  stroke-width: 1.5;
+}
 #online_play #gboard td {
   background: none;
 }

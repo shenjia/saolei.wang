@@ -168,12 +168,11 @@ const TIP_FADE_MS = 700;
 
 /* ---- 新手提示（2026-10-19 张老师定，设置开关默认关；二版同日改）----
    对局中连续 ROOKIE_IDLE_MS 无有效操作（标雷 = 插上旗、开空 = 开出格子）时
-   激活：以鼠标（移动端 = 最后触点）所在格为中心、ROOKIE_RADIUS 格半径内，
+   激活：全图（四版 2026-10-20 张老师定：不再限定鼠标半径）标示——
    可 100% 推理确定的雷格叠半透明雷图标、确定非雷的未开格静态绿框标示
-   （二版：安全格不再闪烁，透明度 0.45）；下一次有效操作立即停止并重新计时。
+   （二版：安全格不再闪烁，透明度 0.45）；下一次有效操作重新计时。
    设置开关 id=sw_rookie，hover 文案＝张老师原话「当卡住时，提示附近能确定的地雷和空」 */
 const ROOKIE_IDLE_MS = 3000;
-const ROOKIE_RADIUS = 10; // 提示半径（格）
 
 /* 雷达基准分布（服务端注入）：`${level}${nf?"_nf":""}` → bucket(恒为 "-1") → 指标 → 9 档边界。
    bucket 层保留是为了不破坏 video_metric_dist 的唯一键结构，实际全站每组只有一行。 */
@@ -340,15 +339,15 @@ export function OnlinePlay({
        （中途重新打开可立即使用） */
     let reviveOn = true;
     /* ---- 新手提示运行时状态（全部在本 effect 闭包内，不触 React）----
-       anchor: 当前提示中心格（board 索引，-1 = 无）；未激活时为 -1
+       anchor: -1 = 未激活；1 = 激活中（四版全图模式无锚点坐标语义）
+       shown: 激活时定格的提示集合（mines/safe/low）；期间新开格由
+         rookieAction 摘除、不重算（四版「提示期间新开格不显示提示」）
        lastAct: 上次有效操作时刻（performance.now()）——计时起点
-       timer: 唤醒定时器（每 300ms 复查「闲置满 3 秒？」）
-       lastPointer: 鼠标/触点最近一次落在棋盘上的格（-1 = 不在棋盘上），
-         桌面 mousemove / 触屏 touchstart+touchmove 持续更新 */
+       timer: 唤醒定时器（每 300ms 复查「闲置满 3 秒？」） */
     let rookieAnchor = -1;
+    let rookieShown: { mines: number[]; safe: number[]; low: number[] } | null = null;
     let rookieLastAct = 0;
     let rookieTimer: number | null = null;
-    let rookiePointer = -1;
     /* 局末定格的统计面板 HTML（2026-10-15 十期张老师定）：report 时无论开关与否都存
        一份——局后补开「显示统计」时直接复用，不再重算（胜利自动补旗/败局揭雷之后
        重算会把 Flags 等口径算歪），保证与当时应弹出的面板逐字一致。
@@ -2147,13 +2146,19 @@ export function OnlinePlay({
       /* 胜利同样不再有任何文字提醒（数据都在左侧报告浮窗里） */
     }
 
-    /* ---- 新手提示（2026-10-19 张老师定）：闲置 3 秒标出附近 100% 确定的雷与安全格 ----
-       交互口径（张老师原话拆解）：
+    /* ---- 新手提示（2026-10-19 张老师定）：闲置 3 秒标出 100% 确定的雷与安全格 ----
+       交互口径（张老师原话拆解，四版 2026-10-20 全图模式）：
        · 有效操作只有两种——标雷（插上旗）、开空（开出格子）；点击/移动鼠标不算
-       · 连续 3 秒无有效操作 → 激活；下一次有效操作立即停止并重新计时
-       · 激活时以鼠标（移动端＝最后触点）所在格为中心 10 格半径：
+       · 连续 3 秒无有效操作 → 激活；**全图**标示（不再限定鼠标半径——提示内容
+         与鼠标位置无关，鼠标挪窝不重算不跳动）：
          可 100% 确定的雷 → 半透明雷图标（op-hint-mine 类，矢量层叠 #cell-mine 半透明）
          可 100% 确定不是雷的未开格 → 静态绿框标示（op-hint-safe，二版不闪烁）
+       · 三期（2026-10-20；同日二改）：确定安全格全部已开（无可再打开的格子）→
+         雷概率最低的未开前沿格标黄（op-hint-low，并列全标，50/50 死猜两格皆黄）；
+         概率 = 分量枚举的为雷解数 ÷ 总解数；必雷格是否已插旗不影响触发
+       · 出现后持续显示：激活时刻的格子集合定格（rookieShown），期间新开的格子
+         从显示中摘除（不再进入提示）；本轮绿格全部打开后整层收起，闲置满 3 秒
+         再激活时按新盘面重新计算；纯黄提示（无可开绿格）持续到局终/重开/关开关
        · 局终（胜/负/复活）/重开/进回放一律停；提示纯视觉层，不落任何事件流、
          不动 state/mines，对录像/统计零影响（覆盖层只叠加在未开格 bb 上，任何
          paint 都会整格重写、自然清掉提示，无需逐格手工回收）
@@ -2165,7 +2170,7 @@ export function OnlinePlay({
     const rookieLayer: SVGSVGElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     rookieLayer.setAttribute("class", "hintboard");
     rookieLayer.setAttribute("aria-hidden", "true");
-    function rookieHintSet(): { mines: number[]; safe: number[] } {
+    function rookieHintSet(): { mines: number[]; safe: number[]; low: number[] } {
       /* 前沿格收集（已开数字的未开邻居）；约束图按共享前沿格连通成分量 */
       const n = W * H;
       const inFrontier = new Uint8Array(n);
@@ -2206,6 +2211,9 @@ export function OnlinePlay({
         comps.push({ clues: cl, vars: vl });
       }
       const couldMine = new Uint8Array(n), couldSafe = new Uint8Array(n);
+      /* 前沿格雷概率（三期 2026-10-20 张老师定）：分量内条件概率 = 为雷解数 ÷ 总解数；
+         -1 = 非前沿格 / 分量超限无数据。用于确定性提示耗尽后的「低概率格标黄」 */
+      const prob = new Float64Array(n).fill(-1);
       let nodes = 0;
       const NODE_CAP = 400000; // 全部分量共享的节点预算（上界剪枝后中高级盘远用不满）
       for (const comp of comps) {
@@ -2263,8 +2271,11 @@ export function OnlinePlay({
           }
         };
         dfs(0, need0.slice(), free0.slice());
+        /* 概率 = mineCnt / (mineCnt+openCnt)（分量内条件概率，三期概率提示数据源） */
         for (let t = 0; t < F; t++) {
           if (overflow) break;
+          const total = mineCnt[t] + openCnt[t];
+          if (total > 0) prob[vlist[t]] = mineCnt[t] / total;
           if (mineCnt[t] > 0 && openCnt[t] === 0) couldMine[vlist[t]] = 1;
           else if (openCnt[t] > 0 && mineCnt[t] === 0) couldSafe[vlist[t]] = 1;
         }
@@ -2274,64 +2285,96 @@ export function OnlinePlay({
          显示只画纯净未开格（state=0）——旗/问号格虽作为未知格参与枚举，
          但玩家已落了自己的标记，再叠雷图/闪烁框只会视觉打架 */
       const resM: number[] = [], resS: number[] = [];
-      if (rookiePointer >= 0) {
-        const cx = rookiePointer % W, cy = (rookiePointer / W) | 0;
-        for (let i = 0; i < n; i++) {
-          if (state[i] !== 0) continue;
-          const x = i % W, y = (i / W) | 0;
-          if (Math.hypot(x - cx, y - cy) > ROOKIE_RADIUS) continue;
-          if (couldMine[i]) resM.push(i);
-          else if (couldSafe[i]) resS.push(i);
+      /* 三期（2026-10-20 张老师定；同日二改：不再要求必雷格已插旗）：
+         确定安全格全部已开（无可再打开的格子）即触发黄色提示——把
+         雷概率最低的未开前沿格标黄（并列全标：50/50 死猜两格皆黄，
+         天然提示「二选一」）。必雷格标没标旗不影响触发（半透明雷提示照常显示）。
+         四版（同日）：全图生效——不再按鼠标半径过滤，res* 即全盘结果 */
+      const resLow: number[] = [];
+      let exhausted = true;
+      for (let i = 0; i < n && exhausted; i++) {
+        if (couldSafe[i] && state[i] !== 1) exhausted = false;
+      }
+      for (let i = 0; i < n; i++) {
+        if (state[i] !== 0) continue;
+        if (couldMine[i]) resM.push(i);
+        else if (couldSafe[i]) resS.push(i);
+        if (exhausted && prob[i] >= 1e-9) resLow.push(i);
+      }
+      if (exhausted && resLow.length) {
+        let minP = Infinity;
+        for (const i of resLow) minP = Math.min(minP, prob[i]);
+        for (let k = resLow.length - 1; k >= 0; k--) {
+          if (prob[resLow[k]] > minP + 1e-9) resLow.splice(k, 1);
         }
       }
-      return { mines: resM, safe: resS };
+      return { mines: resM, safe: resS, low: resLow };
     }
-    /** 提示覆盖层重画（锚点或盘面变化时整层重建；静态显示，无节拍） */
+    /** 提示覆盖层重画（四版：渲染 rookieShown 缓存集合——激活时定格，期间
+        新开格由 rookieAction 摘除；不再现场调 rookieHintSet，与鼠标无关） */
     function rookiePaint() {
       const cw = gboard.clientWidth, ch = gboard.clientHeight;
       rookieLayer.setAttribute("viewBox", "0 0 " + cw + " " + ch);
       rookieLayer.setAttribute("preserveAspectRatio", "none");
-      const { mines: hm, safe } = rookieHintSet();
+      const set = rookieShown ?? rookieHintSet();
       let s = "";
-      for (const i of hm) {
+      for (const i of set.mines) {
         s += '<use href="#cell-mine" x="' + (i % W) * 16 + '" y="' + ((i / W) | 0) * 16 + '" width="16" height="16" class="op-hint-mine"/>';
       }
-      for (const i of safe) {
+      for (const i of set.safe) {
         s += '<rect x="' + ((i % W) * 16 + 0.5) + '" y="' + (((i / W) | 0) * 16 + 0.5) + '" width="15" height="15" rx="2" class="op-hint-safe"/>';
+      }
+      for (const i of set.low) {
+        s += '<rect x="' + ((i % W) * 16 + 0.5) + '" y="' + (((i / W) | 0) * 16 + 0.5) + '" width="15" height="15" rx="2" class="op-hint-low"/>';
       }
       rookieLayer.innerHTML = s;
       rookieLayer.classList.toggle("empty", !s);
     }
-    /** 激活提示：建层重画；锚点跟鼠标走（唤醒/重算时刷新中心）。
-        二版（2026-10-19 张老师定）：安全格不再闪烁，静态绿框显示 */
+    /** 激活提示：建层重画。四版（2026-10-20 张老师定）：全图生效——
+        提示内容与鼠标位置无关（画面不随鼠标挪窝跳动/重算）；
+        出现后**持续显示**：锚定格子集合进 rookieShown，新开格子不再进入提示
+        （直接把新开格从显示中摘掉），直到「本轮所有绿格都已打开」才整层收起；
+        纯黄提示（无可开绿格）时无消失条件，持续到局终/重开/关开关 */
     function rookieStart() {
       if (!rookieLayer.parentElement) gboard.appendChild(rookieLayer);
-      rookieAnchor = rookiePointer;
+      rookieAnchor = 1;
+      const { mines: hm, safe, low } = rookieHintSet();
+      rookieShown = { mines: hm.slice(), safe: safe.slice(), low: low.slice() };
       rookiePaint();
     }
-    /** 停止提示并清层（保留 rookiePointer；lastAct 由调用点决定是否重置） */
+    /** 停止提示并清层（lastAct 由调用点决定是否重置） */
     function rookieStop() {
       if (rookieLayer.parentElement) rookieLayer.remove();
       rookieLayer.innerHTML = "";
       rookieAnchor = -1;
+      rookieShown = null;
     }
     /** 有效操作信号（toggleFlag 成功插旗 / openCell 开出格时调用）：
-        停提示 + 重新计时 3 秒 */
+        新开的格子从显示集合中摘除（不重算、不重建层——四版「提示期间新开的
+        格子不显示提示」）；若本轮绿格（必安全格）已全部打开，整层收起；
+        闲置计时保持原语义（从激活时刻重新累计 3 秒后才会再激活） */
     function rookieAction() {
-      rookieStop();
+      if (rookieAnchor >= 0 && rookieShown) {
+        for (let k = rookieShown.safe.length - 1; k >= 0; k--) {
+          if (state[rookieShown.safe[k]] === 1) rookieShown.safe.splice(k, 1);
+        }
+        for (let k = rookieShown.mines.length - 1; k >= 0; k--) {
+          if (state[rookieShown.mines[k]] !== 0) rookieShown.mines.splice(k, 1);
+        }
+        for (let k = rookieShown.low.length - 1; k >= 0; k--) {
+          if (state[rookieShown.low[k]] !== 0) rookieShown.low.splice(k, 1);
+        }
+        rookiePaint(); // 按剩余集合重画（层不重建、与鼠标无关）
+        if (rookieShown.safe.length === 0) rookieStop(); // 本轮绿格全部打开：收起
+      }
       rookieLastAct = performance.now();
     }
-    /* 唤醒定时器：对局中每 300ms 复查——闲置满 3 秒即激活；激活中鼠标挪窝
-       （换格）跟随刷新提示中心；局终自动停（tick 内判 over） */
+    /* 唤醒定时器：对局中每 300ms 复查——闲置满 3 秒且未激活即激活。
+       四版：激活后不再跟鼠标重算（全图模式，无锚点跟随） */
     rookieTimer = window.setInterval(() => {
       if (!rookieOn || over || !started || replaying) return;
-      if (performance.now() - rookieLastAct >= ROOKIE_IDLE_MS) {
-        if (rookieAnchor < 0) {
-          if (rookiePointer >= 0) rookieStart();
-        } else if (rookieAnchor !== rookiePointer) {
-          rookieAnchor = rookiePointer;
-          rookiePaint();
-        }
+      if (rookieAnchor < 0 && performance.now() - rookieLastAct >= ROOKIE_IDLE_MS) {
+        rookieStart();
       }
     }, 300);
     /* 换局时基准确立：rookieLastAct 不在挂载时初始化（performance.now() 在 effect
@@ -3043,11 +3086,10 @@ export function OnlinePlay({
       }
       if (!leftDown && !rightDown) chordDone = false;
     });
-    on(gboard, "mouseleave", () => { clearPress(); if (!over) setFace("smile"); rookiePointer = -1; });
+    on(gboard, "mouseleave", () => { clearPress(); if (!over) setFace("smile"); });
     /* mv 事件流（回放光标 + 引擎行程 pathPx 的数据源）：屏幕坐标 → 棋盘 1x 像素
        （除以倍率与页级缩放，再减棋盘原点）；节流 ≥4px 在 recordMv 内控 */
     on(gboard, "mousemove", (e: MouseEvent) => {
-      rookiePointer = eventCell(e); // 新手提示：指针所在格实时记账
       if (started && !over) {
         const gbR = gboard.getBoundingClientRect();
         recordMv(
@@ -3109,12 +3151,6 @@ export function OnlinePlay({
       if (touchCell < 0) return;
       const t = e.changedTouches[0];
       if (!t) return;
-      /* 新手提示：触点所在格记账（按坐标算格，target 恒为起始格不可用） */
-      {
-        const bp0 = touchBoardPx(t.clientX, t.clientY);
-        const rx = (bp0.x / 16) | 0, ry = (bp0.y / 16) | 0;
-        rookiePointer = rx >= 0 && rx < W && ry >= 0 && ry < H ? ry * W + rx : -1;
-      }
       if (combo) {
         /* 连击滑动连开（2026-10-19 张老师定，承 NF 滑动连开）：容差内不算滑动
            （保长按插旗）；超容差沿手指轨迹按半格步长插值逐格开——touchmove 是
@@ -3154,7 +3190,6 @@ export function OnlinePlay({
     on(gboard, "touchstart", (e: TouchEvent) => {
       const t = e.changedTouches[0]; if (!t) return;
       const i = eventCell(t); if (i < 0 || over) return;
-      rookiePointer = i; // 新手提示：触点所在格记账
       /* 原地复活：触点手势起点拍快照（点按/滑动连开/长按插旗共用一个起点） */
       snapGesture(i);
       touchCell = i; longFired = false; touchMoved = false;
@@ -4020,7 +4055,7 @@ export function OnlinePlay({
         /* 统计一致性验证（2026-10-16）：当局事件流 + 共享引擎重算结果 */
         events: () => evStream.slice(),
         /* 新手提示（2026-10-19）测试钩子：开关/指针/锚点/闲置计时 */
-        rookie: () => ({ on: rookieOn, pointer: rookiePointer, anchor: rookieAnchor, sinceAct: performance.now() - rookieLastAct }),
+        rookie: () => ({ on: rookieOn, active: rookieAnchor >= 0, sinceAct: performance.now() - rookieLastAct }),
         hint: () => rookieHintSet(),
         /* 开局提示候选池（2026-10-20）：无头验证「允许复活」过滤逻辑 */
         tipPool: () => tipPool(),
