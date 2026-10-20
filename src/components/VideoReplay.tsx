@@ -247,6 +247,17 @@ const FACE_MAP: Record<FaceKind | "press", string> = {
   press: "face-press-normal",
 };
 
+/** 被踩中的雷：td 内嵌 flop 原版红底雷（#cell-mine-bomb，与练习页踩雷同图）。
+ *  td 位图体系的 bc 贴图是灰调雷（block16x16.png 第 12 行无红色像素），
+ *  2026-10-20 张老师定：全屏试玩/回放踩中格一律用带红底的雷图（和练习踩雷一样）。
+ *  依赖页面内的 FlopSprites（详情页/全屏层/后台播放器均已挂载）；
+ *  paintR/paint/stop 恢复路径会重写 className+innerHTML，红雷自然被刷掉。 */
+function paintBombCell(td: HTMLTableCellElement) {
+  td.className = "";
+  td.innerHTML =
+    '<svg viewBox="0 0 168 168" width="100%" height="100%" aria-hidden="true"><use href="#cell-mine-bomb" /></svg>';
+}
+
 /* 2026-10-19 导出：管理后台审核页全屏播放器（AdminVideoPlayer）复用同一引擎 */
 export function runReplay(opts: {
   wrap: HTMLElement;
@@ -304,6 +315,8 @@ export function runReplay(opts: {
     else if (rstate[i] === 2) cls = "bf";
     else if (rstate[i] === 3) cls = "bq";
     td.className = cls;
+    /* 清掉可能残留的内嵌红雷 SVG（paintBombCell；重置/seek/重播路径） */
+    if (td.innerHTML) td.innerHTML = "";
   }
   function floodR(i: number) {
     const stack = [i];
@@ -418,15 +431,18 @@ export function runReplay(opts: {
     paintR(i);
     return true;
   }
-  /* 败局雷区揭示（踩雷瞬间；位图类：bc=踩中红叉雷 / bm=雷 / bn=错旗） */
+  /* 败局雷区揭示（踩雷瞬间；位图类：bm=雷 / bn=错旗） */
   function revealLoss() {
     for (let i = 0; i < N; i++) {
       if (mines[i]) {
-        if (rstate[i] !== 2 && rstate[i] !== 3) cellTd(i).className = i === hitIdx ? "bc" : "bm";
+        if (rstate[i] !== 2 && rstate[i] !== 3) cellTd(i).className = "bm";
       } else if (rstate[i] === 2) {
         cellTd(i).className = "bn";
       }
     }
+    /* 被踩中的雷：flop 原版红底雷（#cell-mine-bomb，与练习页踩雷同图）——
+       td 位图体系的 bc 贴图是灰调雷（无红色像素），2026-10-20 张老师报错纠正 */
+    paintBombCell(cellTd(hitIdx));
   }
   /* 胜局检测（十七期：全安全格开完 → win 脸 + 自动补旗揭示，练习页 checkWin 同款；
      胜局录像收尾大多是滑键/chord 收官，事件流天然开满——补旗纯视觉不进事件） */
@@ -627,7 +643,12 @@ export function runReplay(opts: {
     stop() {
       setPlaying(false);
       curEl.remove();
-      for (let i = 0; i < N; i++) cellTd(i).className = saved[i];
+      /* 静态地图恢复：saved 类名回写 + 清内嵌 SVG（paintBombCell 的红雷） */
+      for (let i = 0; i < N; i++) {
+        const td = cellTd(i);
+        if (td.className !== saved[i]) td.className = saved[i];
+        if (td.innerHTML) td.innerHTML = "";
+      }
     },
     pause() {
       if (!playing) return;
@@ -899,7 +920,8 @@ function runPlayGame(opts: {
       if (mines[i] && state[i] !== 2 && state[i] !== 3) paintCellCls(cellTd(i), "bm");
       if (!mines[i] && state[i] === 2) paintCellCls(cellTd(i), "bn");
     }
-    paintCellCls(cellTd(hit), "bc");
+    /* 被踩中的雷：红底雷（#cell-mine-bomb，与练习页踩雷同图；bc 位图是灰雷） */
+    paintBombCell(cellTd(hit));
     onFace("dead");
     emitFinish(false); // 二十期：全屏层据此出「我的评级」
   }
@@ -2005,7 +2027,15 @@ function ReplayFullscreen({
           const sc = srcRows[r].cells;
           const dc = dstRows[r].cells;
           for (let c = 0; c < sc.length; c++) {
-            if (dc[c].className !== sc[c].className) dc[c].className = sc[c].className;
+            /* 踩雷格是空类名 + 内嵌红雷 SVG（paintBombCell）：类名变化到空串时
+               连 innerHTML 一起抄；反向（红雷→普通格）清掉残留 SVG。
+               正常格 innerHTML 恒空，不逐帧序列化比对（60fps 性能） */
+            const scls = sc[c].className;
+            if (dc[c].className !== scls) {
+              dc[c].className = scls;
+              if (!scls) dc[c].innerHTML = sc[c].innerHTML;
+              else if (dc[c].innerHTML) dc[c].innerHTML = "";
+            }
           }
         }
       }
