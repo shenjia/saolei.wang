@@ -21,6 +21,7 @@ import {
 } from "./config";
 import { videoScores } from "./queries";
 import { publishNews } from "./news";
+import { refreshUserStnb } from "./userstnb";
 
 type Tx = Prisma.TransactionClient;
 
@@ -296,6 +297,8 @@ export async function reviewVideo(
         await videoScoresTable(tx, rv.level, true).deleteMany({ where: { id: BigInt(videoId) } });
         await userScoresOnRemove(tx, rv, true);
       }
+      // STNB 榜落盘表（2026-10-20）：屏蔽可能撤掉该用户该级最高 STNB → 单组重算
+      await refreshUserStnb(rv.user, rv.level, tx);
     } else if (status === VIDEO_STATUS.REVIEWED) {
       // VideoScores::insertVideo → flag 榜（含动态），NF 录像同时入 NF 榜（不发动态）
       await upsertVideoScores(tx, rv, false);
@@ -304,6 +307,10 @@ export async function reviewVideo(
         await upsertVideoScores(tx, rv, true);
         await userScoresOnInsert(tx, rv, true);
       }
+      // STNB 榜落盘表（2026-10-20）：新过审录像可能破该用户该级最高 STNB → 单组重算
+      // （注意：审核时 video_metrics 行可能还没算出来——ensureVideoMetrics 在事务提交后跑，
+      //  那里会再刷新一次；此处先刷是兜「已算过行」的重新审核路径）
+      await refreshUserStnb(rv.user, rv.level, tx);
 
       const sumTime = updated.sumTime ?? 0;
       if ((original.sumTime ?? 0) === 0 && sumTime > 0) {

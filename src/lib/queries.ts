@@ -2234,6 +2234,77 @@ function inflateStnbRow(c: StnbCompactRow): StnbRankingEntry {
   };
 }
 
+// STNB 榜数据源（2026-10-20 落盘改版，张老师拍板）：
+//   主源 = user_stnb_best 落盘表（~2.4 万行，全表读 ~0.1s；写入点见 lib/userstnb.ts）
+//   回退 = 原实时聚合（表空时自愈窗口：首次部署回填前页面不空）
+// 口径不变（与落盘表写入完全同源）：
+//   · 录像须已通过审核（v.status=20 胜局）+ 用户正常（u.status=0），与 BV 榜同口径
+//   · 每级取历史最高 STNB（video_metrics.stnb，与录像评级「判雷」轴同源）
+//   · 运气盘限界与 3BV/s 成绩同款（MIN_3BV_FOR_3BVS：初 10 / 中 4 / 高 4；
+//     中高级上传下限 30/100 本就高于 4，实际只约束初级——不限则 3BV=2 的 0.09s
+//     秒开盘 STNB 4316 会霸榜，实测限界内 top 为 473.7）
+//   · 不区分 NF（NF 录像同为过审胜局，STNB 同口径计算，混合排——同 BV 榜不分模式）
+//   · 每级最优盘（成绩点击跳对应录像 + hover 气泡）：组内 stnb DESC, id ASC
+//     排序取第一个（同分取注册序影像 id 较小者，与排序口径一致）。
+// ⚠️ 缓存载荷仍走紧凑元组形态（2026-10-20 线上 STNB 榜 7~12s 根因教训）：
+// unstable_cache 落盘走 fetch-cache，**单条上限 2MB**（next 源码 incremental-cache：
+// 超限 production 只 console.warn 后静默丢弃，不落盘）。落盘表读回后组装的元组
+// 形态实测 1.14MB 安全；保持紧凑形态是防未来膨胀的保险（2.4 万行全对象形态会到 ~3MB）。
+// 缓存 60s（原 1h）：读表很快，重建成本低，破纪录上榜时效从最迟 1h 收敛到 1min 内。
+// 注意：①改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化）。
+
+const fetchStnbFromTable = unstable_cache(
+  async (): Promise<StnbCompactRow[] | null> => {
+    // 落盘表 join user/user_scores 组装（榜行需要姓名/性别/军衔时间）。
+    // 行数 ~2.4 万，全部走索引，实测亚秒级。
+    const rows = await prisma.$queryRaw<
+      {
+        id: bigint;
+        chinese_name: string;
+        sex: number;
+        exp_time: number | null;
+        beg: number | null;
+        inter: number | null;
+        exp: number | null;
+        best_beg: string | null;
+        best_int: string | null;
+        best_exp: string | null;
+      }[]
+    >`
+      SELECT u.id, u.chinese_name, u.sex, us.exp_time,
+        MAX(CASE WHEN b.level = 'beg' THEN b.stnb END) AS beg,
+        MAX(CASE WHEN b.level = 'int' THEN b.stnb END) AS inter,
+        MAX(CASE WHEN b.level = 'exp' THEN b.stnb END) AS exp,
+        MAX(CASE WHEN b.level = 'beg' THEN CONCAT_WS(':', b.best_video, b.best_time, b.best_nf, b.best_ct) END) AS best_beg,
+        MAX(CASE WHEN b.level = 'int' THEN CONCAT_WS(':', b.best_video, b.best_time, b.best_nf, b.best_ct) END) AS best_int,
+        MAX(CASE WHEN b.level = 'exp' THEN CONCAT_WS(':', b.best_video, b.best_time, b.best_nf, b.best_ct) END) AS best_exp
+      FROM user_stnb_best b
+        JOIN user u ON u.id = b.user AND u.status = 0
+        LEFT JOIN user_scores us ON us.id = b.user
+      GROUP BY u.id, u.chinese_name, u.sex, us.exp_time`;
+    if (!rows.length) return null; // 空表 → 回退实时聚合（首次部署自愈窗口）
+    return rows.map((r) => {
+      const beg = r.beg == null ? 0 : Math.round(N(r.beg) * 10) / 10;
+      const inter = r.inter == null ? 0 : Math.round(N(r.inter) * 10) / 10;
+      const exp = r.exp == null ? 0 : Math.round(N(r.exp) * 10) / 10;
+      return [
+        N(r.id),
+        r.chinese_name,
+        r.sex,
+        beg,
+        inter,
+        exp,
+        beg > 0 && inter > 0 && exp > 0 ? Math.round((beg + inter + exp) * 10) / 10 : 0,
+        N(r.exp_time),
+        [r.best_beg, r.best_int, r.best_exp],
+      ] satisfies StnbCompactRow;
+    });
+  },
+  ["stnb-table-v1"],
+  { revalidate: 60, tags: ["stnb-collection"] }
+);
+
+// 原实时聚合（回退源，逻辑保持 v3 形态不动；表回填后此路径仅首次部署窗口/对账时走）
 const fetchStnbCompact = unstable_cache(
   async (): Promise<StnbCompactRow[]> => {
     const rows = await prisma.$queryRaw<
@@ -2298,10 +2369,13 @@ const fetchStnbCompact = unstable_cache(
   { revalidate: 3600, tags: ["stnb-collection"] }
 );
 
-/** STNB 榜全量聚合入口（1 小时缓存，紧凑元组出缓存后 inflate 成对象形态）。
- *  调用方（getStnbRanking / getStnbBoardIndex / getStnbRankOfUser）零改动。 */
+/** STNB 榜全量数据入口：落盘表（60s 缓存）优先，空表回退实时聚合（1h 缓存）。
+ *  出缓存后 inflate 成对象形态；调用方（getStnbRanking / getStnbBoardIndex /
+ *  getStnbRankOfUser）零改动。 */
 async function fetchStnbCollection(): Promise<StnbRankingEntry[]> {
-  return (await fetchStnbCompact()).map(inflateStnbRow);
+  const fromTable = await fetchStnbFromTable().catch(() => null);
+  const compact = fromTable ?? (await fetchStnbCompact());
+  return compact.map(inflateStnbRow);
 }
 
 /** 榜人口随排序列变化（与成绩榜同语义，异于 BV 榜恒定人口）：

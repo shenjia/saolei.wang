@@ -51,7 +51,7 @@ async function compute(videoId: number): Promise<void> {
   if (exist) return;
 
   const [video, info] = await Promise.all([
-    prisma.video.findUnique({ where: { id }, select: { status: true, level: true } }),
+    prisma.video.findUnique({ where: { id }, select: { status: true, level: true, user: true } }),
     prisma.videoInfo.findUnique({
       where: { id },
       select: { filepath: true, noflag: true, board3bv: true, realTime: true },
@@ -101,6 +101,23 @@ async function compute(videoId: number): Promise<void> {
     create: { id, ...data, createTime: BigInt(Math.floor(Date.now() / 1000)) },
     update: data,
   });
+
+  // STNB 榜落盘表（2026-10-20）：指标行落库后刷新该用户该级的最高 STNB 组。
+  // 审核钩子在事务内刷过一次，但那时本行可能还没算出来——这里是真正生效的一次。
+  // 失败静默（后置链路放行原则）；缺这一步最多是上榜滞后到下次跑批/对账。
+  if (m.stnb > 0 && video.level) {
+    try {
+      const { refreshUserStnb } = await import("./userstnb");
+      await refreshUserStnb(N2(video.user), video.level);
+    } catch {
+      /* 榜落盘失败不影响主流程 */
+    }
+  }
+}
+
+/** BigInt 安全转 number（局部小工具，避免在模块顶部引 queries 造成循环依赖） */
+function N2(v: bigint | null | undefined): number {
+  return v == null ? 0 : Number(v);
 }
 
 /**

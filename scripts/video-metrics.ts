@@ -364,6 +364,15 @@ async function main() {
   await rebuildComposite();
 
   if (!has("no-rank")) await rebuildRank();
+
+  // ---- STNB 榜落盘表（2026-10-20）：stnb 值可能被本跑批改写 → 全量重建 ----
+  // 跳过条件与 --no-rank 同款：--qg-only 只动 qg 列（不影响 stnb 榜），
+  // --dist-only/--rank-only 不动 stnb 值，均无需重建。
+  if (!has("qg-only") && !has("dist-only") && !has("rank-only")) {
+    const { rebuildUserStnbBest } = await import("../src/lib/userstnb");
+    const { rows } = await rebuildUserStnbBest();
+    console.log(`STNB 榜落盘表重建：${rows} 行`);
+  }
 }
 
 main()

@@ -350,6 +350,36 @@ model VideoMetricDist {
   @@map("video_metric_dist")
 }
 
+// STNB 榜落盘（2026-10-20 张老师拍板）：每用户每级历史最高 STNB + 最优盘快照。
+// 背景：实时聚合（video_metrics⋈video⋈video_info 30 万行三表 GROUP BY，生产 4~6s）
+// 挂 1h 缓存后，每小时缓存过期的首个访客吃 6s——落盘后榜查询 ~0.1s 且过审实时上榜。
+// 行数 ~2.4 万（user×level 组），极小。
+// 写入口径（与原实时聚合完全同源）：
+//   · 参与条件：v.status=20（过审胜局）+ m.stnb>0 + board_3bv ≥ MIN_3BV_FOR_3BVS（初10/中4/高4）
+//   · 组内排序：stnb DESC, id ASC（同分取 id 小者）
+// 写入点（四处，缺一处即失同步，见 lib/userstnb.ts 注释）：
+//   ① 审核通过/屏蔽（lib/review.ts reviewVideo，最常见路径）
+//   ② 跑批重算指标后（scripts/video-metrics.ts，stnb 值全量变的场景）
+//   ③ 数据修正（级别/board_3bv 修复脚本）
+//   ④ 全量重建命令（幂等重建，对账用）
+model UserStnbBest {
+  // user id（非 FK 约束，与 video_scores_* 同惯例——同步管线灌表顺序不保证）
+  user      BigInt @db.BigInt
+  level     String @db.Char(3)
+  // 该级历史最高 STNB（1 位小数，与 video_metrics.stnb 同精度）
+  stnb      Float  @db.Float
+  // 最优盘快照：点击跳 /video/<bestVideo> + hover 气泡「高级 xx.xx 秒 NF 3月前」
+  bestVideo BigInt @map("best_video") @db.BigInt
+  bestTime  Int    @map("best_time") @db.Int
+  bestNf    Boolean @map("best_nf")
+  bestCt    BigInt @map("best_ct") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@id([user, level])
+  @@index([level, stnb])
+  @@map("user_stnb_best")
+}
+
 // 各级别 3BV 收集区间（2026-10-13）：站内已通过（status=20）录像的 board_3bv 实际上下限，
 // 个人主页侧栏「3BV 收集」方格区间用。审核通过新录像突破区间时扩展
 // （lib/review.ts reviewVideo，INSERT ... ON DUPLICATE KEY UPDATE），只扩不缩；
