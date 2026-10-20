@@ -111,27 +111,65 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_session_cache   shared:SSL:10m;
 
+    # ========== 静态缓存（2026-10-20）==========
+    # 背景：Next 代理对 public/ 资源一律 max-age=0 每请求回源验证；这里按类型直读磁盘。
+    # ^~ 前缀优先于下方正则，防止误劫持。
+
+    # Next 构建产物：自带 Cache-Control immutable 一年，原样转发即可
+    location ^~ /_next/ {
+        proxy_pass http://saolei_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
     # 运行时上传（头像）由 nginx 直读磁盘：Next 生产模式 public/ 是构建期快照，
-    # 运行期新增文件不经 nginx 读不到（01xue 同款坑）
-    location /uploads/ {
+    # 运行期新增文件不经 nginx 读不到（01xue 同款坑）。URL 可能固定复用 → 只给 7d
+    location ^~ /uploads/ {
         alias /home/deploy/saolei.wang/public/uploads/;
         expires 7d;
         access_log off;
     }
 
     # 旧站迁移用户照片（/images/player/{id}.jpg，gitignore 不入库，运行期补文件同样需要直读）
-    location /images/player/ {
+    location ^~ /images/player/ {
         alias /home/deploy/saolei.wang/public/images/player/;
         expires 7d;
         access_log off;
     }
 
     # 录像实体文件（/videos/** gitignore 不入库，单独 rsync，部署 --delete 不碰）
-    location /videos/ {
+    location ^~ /videos/ {
         alias /home/deploy/saolei.wang/videos/;
         expires 30d;
         access_log off;
     }
+
+    # 唯一生效样式文件（改动相对频繁，部署即变）：短缓存，隔天全网可见
+    location = /styles/legacy-2013.css {
+        root /home/deploy/saolei.wang/public;
+        expires 1d;
+        access_log off;
+    }
+
+    # Next metadata 图标（编译产物在 src/app/，磁盘 public/ 没有）→ 交回 Next 处理
+    location = /icon.svg       { proxy_pass http://saolei_upstream; }
+    location = /favicon.ico    { proxy_pass http://saolei_upstream; }
+    location = /apple-icon.png { proxy_pass http://saolei_upstream; }
+
+    # 其余 public 静态（logo/表情/军衔图/下载包/皮肤包/练习页 js+css 等）：
+    # 均为构建期快照、部署才变 → 长缓存。URL 路径与 public/ 下相对路径一致，用 root 直读
+    location ~* \.(gif|jpe?g|png|svg|ico|webp|css|js|woff2?|ttf|eot|zip|rar|7z|apk|exe|mp3|wav)$ {
+        root /home/deploy/saolei.wang/public;
+        expires 30d;
+        access_log off;
+    }
+
+    # ========== 静态缓存段结束 ==========
 
     location / {
         proxy_pass http://saolei_upstream;
