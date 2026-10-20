@@ -137,11 +137,13 @@ export default async function AdminDashboard() {
         <Kpi
           label="今日练习"
           value={traffic.practice.today}
+          unit="局"
           tone="cyan"
           trend={traffic.practice.trend}
           foot={
             <>
-              近 30 天 {traffic.practice.d30.toLocaleString("zh-CN")} 局 · 含踩雷局
+              {traffic.practice.todayUsers} 人练习 · 近 30 天{" "}
+              {traffic.practice.d30.toLocaleString("zh-CN")} 局 · 含踩雷局
             </>
           }
         />

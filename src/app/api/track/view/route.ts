@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { isManager } from "@/lib/config";
 import { ensureVisitorId, getClientIp } from "@/lib/visitor";
 
 export const dynamic = "force-dynamic";
@@ -83,9 +84,11 @@ export async function POST(request: NextRequest) {
       ? body.clientId
       : null;
 
-  // 管理员登录态检测（结果随 PV 落库：isAdmin 标记 + userId，活跃玩家趋势用）
+  // 登录态检测（结果随 PV 落库：isAdmin 标记 + userId，活跃玩家趋势用）
+  // ⚠️ isAdmin 必须按 role 判（isManager）：早期版本 !!session 把所有登录玩家都误标 admin，
+  // 聚合端剔除 isAdmin 后活跃玩家恒 0（2026-10-20 修复）
   const session = await getSession().catch(() => null);
-  const isAdmin = !!session;
+  const isAdmin = session ? isManager(session.role) : false;
   const userId = session ? BigInt(session.uid) : null;
 
   const probe = NextResponse.json({});

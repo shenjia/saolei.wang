@@ -68,8 +68,14 @@ export interface TrafficOverview {
   devices: { uaClass: string; pv: number }[];
   /** 活跃玩家：登录态访问去重用户（trend 为分日去重数，与 trend.dates 对齐） */
   active: { today: number; yesterday: number; d7: number; d30: number; trend: number[] };
-  /** 练习局数（practice_log 埋点，2026-10-16 起；胜/负都记，trend 为分日局数） */
-  practice: { today: number; yesterday: number; d30: number; trend: number[] };
+  /** 练习局数（practice_log 埋点，2026-10-16 起；胜/负都记，trend 为分日局数；
+   *  users 为去重玩家数——登录态去重 user_id，游客局并入「人次」口径（ip+ua 不可靠，不强行去重） */
+  practice: {
+    today: number; todayUsers: number;
+    yesterday: number; yesterdayUsers: number;
+    d30: number; d30Users: number;
+    trend: number[]; trendUsers: number[];
+  };
   /** 高流失页（会话末页占该页 PV 比；录像详情页看完即走正常，排除；三档） */
   exits: { today: ExitPage[]; d7: ExitPage[]; d30: ExitPage[] };
   /** 热门录像页（/video/:id 三档 Top 10，带玩家名/级别） */
@@ -132,7 +138,7 @@ async function aggregate(): Promise<TrafficOverview> {
     }),
     prisma.practiceLog.findMany({
       where: { createTime: { gte: d30 } },
-      select: { createTime: true },
+      select: { createTime: true, userId: true },
     }),
   ]);
 
@@ -159,14 +165,30 @@ async function aggregate(): Promise<TrafficOverview> {
   const yesterdayActive = new Set<string>();
   const d7Active = new Set<string>();
   const d30Active = new Set<string>();
-  // 练习局数（practice_log）：分日局数 + 今日/昨日
+  // 练习局数（practice_log）：分日局数 + 分日去重玩家 + 各档期
   const practiceMap = new Map<number, number>();
+  const practiceUserMap = new Map<number, Set<string>>();
   let practiceToday = 0;
   let practiceYesterday = 0;
+  const todayPracticeUsers = new Set<string>();
+  const yesterdayPracticeUsers = new Set<string>();
+  const d30PracticeUsers = new Set<string>();
   for (const p of practiceRows) {
     const t = N(p.createTime);
     const idx = Math.floor((t + 28800) / 86400);
     practiceMap.set(idx, (practiceMap.get(idx) ?? 0) + 1);
+    if (p.userId) {
+      const uid = String(N(p.userId));
+      let set = practiceUserMap.get(idx);
+      if (!set) {
+        set = new Set();
+        practiceUserMap.set(idx, set);
+      }
+      set.add(uid);
+      d30PracticeUsers.add(uid);
+      if (t >= today0) todayPracticeUsers.add(uid);
+      else if (t >= yesterday0) yesterdayPracticeUsers.add(uid);
+    }
     if (t >= today0) practiceToday += 1;
     else if (t >= yesterday0) practiceYesterday += 1;
   }
@@ -235,6 +257,7 @@ async function aggregate(): Promise<TrafficOverview> {
   const uvSeries: number[] = [];
   const activeSeries: number[] = [];
   const practiceSeries: number[] = [];
+  const practiceUserSeries: number[] = [];
   for (let i = 0; i < 30; i++) {
     const b = trendMap.get(fromIdx + i)!;
     dates.push(new Date((fromIdx + i) * 86400000).toISOString().slice(0, 10));
@@ -242,6 +265,7 @@ async function aggregate(): Promise<TrafficOverview> {
     uvSeries.push(b.uv.size);
     activeSeries.push(activeMap.get(fromIdx + i)?.size ?? 0);
     practiceSeries.push(practiceMap.get(fromIdx + i) ?? 0);
+    practiceUserSeries.push(practiceUserMap.get(fromIdx + i)?.size ?? 0);
   }
 
   const entryTop = (map: Map<string, number>) =>
@@ -414,9 +438,13 @@ async function aggregate(): Promise<TrafficOverview> {
     },
     practice: {
       today: practiceToday,
+      todayUsers: todayPracticeUsers.size,
       yesterday: practiceYesterday,
+      yesterdayUsers: yesterdayPracticeUsers.size,
       d30: practiceSeries.reduce((a, b) => a + b, 0),
+      d30Users: d30PracticeUsers.size,
       trend: practiceSeries,
+      trendUsers: practiceUserSeries,
     },
   };
 }
@@ -424,7 +452,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v4"],
+  ["admin-traffic", "v5"],
   { revalidate: 300 }
 );
 
