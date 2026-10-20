@@ -239,10 +239,16 @@ export function OnlinePlay({
     const tipsEl = root.querySelector<HTMLElement>("#op_tips")!;
     /* 上一条 tips 的渐隐定时（快速连开新局时重置，避免上一条的定时把新气泡提前掐灭） */
     let tipFadeTimer: number | null = null;
+    /* 开局提示候选池（2026-10-20）：「允许复活」关着时剔除空格复活两条
+       （教玩家按空格却无效是误导；「踩雷后按A/R」那条不含复活、保留） */
+    function tipPool(): string[] {
+      return reviveOn ? TIPS : TIPS.filter((s) => !s.includes("复活"));
+    }
     function showTip() {
       if (!tipsOn) return;
-      const idx = Math.floor(Math.random() * TIPS.length);
-      tipsEl.querySelector(".txt")!.textContent = TIPS[idx];
+      const pool = tipPool();
+      const idx = Math.floor(Math.random() * pool.length);
+      tipsEl.querySelector(".txt")!.textContent = pool[idx];
       if (tipFadeTimer !== null) clearTimeout(tipFadeTimer);
       /* 下一帧再挂 .show：确保从 opacity:0 初始态起步，同帧加类会被合并、
          transition 不触发（气泡就「闪」一下没了） */
@@ -327,6 +333,12 @@ export function OnlinePlay({
        （标雷 = 插上旗、开空 = 开出格子）时，鼠标 10 格半径内 100% 可确定的雷
        叠半透明雷图标、可确定的非雷格 500ms 闪烁；下一次有效操作立即停止 */
     let rookieOn = false;
+    /* 「允许复活」开关（2026-10-20 张老师定，默认开）：关闭后原地复活功能整体
+       下线——踩雷结算面板不再出现「原地复活」按钮、空格键不触发（revive() 入口
+       同步拦截）、开局提示里复活相关条目也一并不出（教玩家按空格却无效会误导）。
+       切换即时生效（含已定格的败局结算面板）、不重开当前局、不影响快照拍摄
+       （中途重新打开可立即使用） */
+    let reviveOn = true;
     /* ---- 新手提示运行时状态（全部在本 effect 闭包内，不触 React）----
        anchor: 当前提示中心格（board 索引，-1 = 无）；未激活时为 -1
        lastAct: 上次有效操作时刻（performance.now()）——计时起点
@@ -379,7 +391,7 @@ export function OnlinePlay({
         }
         const s = JSON.parse(raw) as {
           nf?: boolean; combo?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
-          showStats?: boolean; autoChord?: boolean; tips?: boolean; rookie?: boolean;
+          showStats?: boolean; autoChord?: boolean; tips?: boolean; rookie?: boolean; revive?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -391,6 +403,7 @@ export function OnlinePlay({
         if (typeof s.autoChord === "boolean") autoChord = s.autoChord;
         if (typeof s.tips === "boolean") tipsOn = s.tips;
         if (typeof s.rookie === "boolean") rookieOn = s.rookie;
+        if (typeof s.revive === "boolean") reviveOn = s.revive;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -413,7 +426,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, rookie: rookieOn, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, rookie: rookieOn, revive: reviveOn, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -1521,7 +1534,7 @@ export function OnlinePlay({
          额外一颗黄色按钮（与四按钮分开、独占一行），点击或空格触发 revive；
          胜局/首击即雷（无快照）不渲染。渲染条件与 revive()/空格守卫同源：
          dieSnap 存在。独占整行宽度充裕，「空格」键帽恒显示（2026-10-19 快捷键标注） */
-      const reviveBtn = !s.won && dieSnap
+      const reviveBtn = !s.won && dieSnap && reviveOn
         ? '<button type="button" class="grb grb_revive" id="grb_revive" title="按空格也可复活">' +
           IC.revive + '原地复活<kbd>空格</kbd></button>'
         : "";
@@ -2068,8 +2081,9 @@ export function OnlinePlay({
        （快照里 state 含玩家旗，重算即死亡前 LED 值）。 */
     function revive() {
       /* 三重守卫：死亡快照存在、确实在结算态、终态是**败局**（胜局快照/救回后
-         作废的 null 都不触发——空格键与按钮同路） */
-      if (!dieSnap || !over || snapshot?.won) return;
+         作废的 null 都不触发——空格键与按钮同路）；「允许复活」开关关闭时
+         一并拦截（按钮不渲染、空格不劫持，此处兜底防 __op 等旁路触发） */
+      if (!reviveOn || !dieSnap || !over || snapshot?.won) return;
       const d = dieSnap;
       state = d.state.slice();
       openedSafe = d.openedSafe;
@@ -2661,6 +2675,21 @@ export function OnlinePlay({
       rookieOn = swRookie.checked;
       saveSettings();
       if (!rookieOn) rookieStop();
+    });
+    /* 「允许复活」开关：即时生效、不重开当前局。败局结算面板正挂着时立即重画
+       一次（renderResultPanel 复用定格 snapshot、reviveOn 参与按钮渲染条件）——
+       关→按钮当场消失、开→补出按钮（dieSnap 仍在，随时可复活）。用户点遮罩
+       关掉过的（maskOpen=false），重画后不强弹回（renderResultPanel 会置
+       maskOpen=true，这里补一次 hideResultModal 恢复「关」态） */
+    const swRevive = $("sw_revive") as HTMLInputElement;
+    on(swRevive, "change", () => {
+      reviveOn = swRevive.checked;
+      saveSettings();
+      if (over && snapshot && !snapshot.won && gresult.classList.contains("show")) {
+        const keepClosed = !maskOpen;
+        renderResultPanel();
+        if (keepClosed) hideResultModal();
+      }
     });
     /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／速旗／连击／无猜四颗 ----
        激活显色（NF=绿 #a6e22e（2026-10-19 张老师定）/ 无猜=绿 / 速旗=默认黄 / 连击=默认黄）、
@@ -3899,7 +3928,7 @@ export function OnlinePlay({
         const t0 = e.target as HTMLElement;
         if (t0 && (t0.tagName === "INPUT" || t0.tagName === "TEXTAREA")) return;
         if (replaying) return;
-        if (over && dieSnap && !snapshot?.won) {
+        if (over && dieSnap && !snapshot?.won && reviveOn) {
           e.preventDefault();
           revive();
         }
@@ -3978,8 +4007,10 @@ export function OnlinePlay({
         bvSel: () => ({ ...bvSel[lv] }),
         lv: () => lv,
         ngRedeals: () => ngRedeals,
-        /* 原地复活（2026-10-19）：无头测试读死亡快照/复活计数 */
+        /* 原地复活（2026-10-19）：无头测试读死亡快照/复活计数；
+           reviveOn＝「允许复活」开关状态（2026-10-20） */
         revives: () => revives,
+        reviveOn: () => reviveOn,
         dieSnap: () => (dieSnap ? { hit: dieSnap.hit, evLen: dieSnap.evLen, csec: dieSnap.csec } : null),
         /* 快捷键/锁定盘测试钩子（2026-10-19）：A 键重玩本局的锁定盘注入验证
            （pending 与 mines 同口径 Array.from——裸 Uint8Array 经 CDP 序列化会变形） */
@@ -3991,6 +4022,8 @@ export function OnlinePlay({
         /* 新手提示（2026-10-19）测试钩子：开关/指针/锚点/闲置计时 */
         rookie: () => ({ on: rookieOn, pointer: rookiePointer, anchor: rookieAnchor, sinceAct: performance.now() - rookieLastAct }),
         hint: () => rookieHintSet(),
+        /* 开局提示候选池（2026-10-20）：无头验证「允许复活」过滤逻辑 */
+        tipPool: () => tipPool(),
         counts: () => gameCounts(),
         size: () => ({ w: W, h: H, m: M }),
         /* 诊断：单次重排的 bv（测分布用，不动盘面之外的任何状态） */
@@ -4006,6 +4039,7 @@ export function OnlinePlay({
     swStats.checked = showStats;
     swTips.checked = tipsOn;
     swRookie.checked = rookieOn;
+    swRevive.checked = reviveOn;
     syncModeButtons(); // 模式快捷钮按存档初值点亮（连击/无猜/速旗）
     syncBvSlider();
 
@@ -4172,6 +4206,13 @@ export function OnlinePlay({
             <span className="gs_name">新手提示</span>
             <label className="gsw"><input type="checkbox" id="sw_rookie" /><span className="track" /></label>
             <span className="tip">当卡住时，提示附近能确定的地雷和空</span>
+          </div>
+          {/* 「允许复活」（2026-10-20 张老师定，默认开）：关闭后踩雷结算不再出现
+              复活按钮、空格键也不能复活；hover 文案＝张老师原话 */}
+          <div className="gs_row">
+            <span className="gs_name">允许复活</span>
+            <label className="gsw"><input type="checkbox" id="sw_revive" /><span className="track" /></label>
+            <span className="tip">踩雷后允许复活继续</span>
           </div>
           {/* 「自动双击」设置行已撤（2026-10-16 张老师定）：入口改挂 NF 右侧的
               速旗快捷钮（btn_sq），行为口径不变 */}
