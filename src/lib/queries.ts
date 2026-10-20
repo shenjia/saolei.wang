@@ -1939,8 +1939,9 @@ export async function getLevel3bvRanges(): Promise<
 
 /**
  * 用户已收集的 3BV 集合（按级别分组的不同 board_3bv，仅已通过录像）。
- * 值 = { vid: 该 3BV 首个录像 id, t: 其上传时间 Unix 秒 }（id 序=上传时间序，
- * MIN(id)/MIN(create_time) 同盘），供侧栏方格气泡展示 + 点击跳首盘（2026-10-13 张老师要求）。
+ * 值 = 该 3BV 的录像数（≥1），供侧栏方格气泡「共X个录像，点击查看」
+ * （2026-10-20 张老师要求；原「首个录像 id+时间」已随格子直开首盘入口下线，
+ * 点击入口改为定向列表 /video?author=..&level=..&3bv=..&order=time）。
  * 2026-10-14 张老师：按现行排行规则收敛——低于 LEVEL_MIN_3BV（初 2 / 中 30 / 高 100）
  * 的 3BV 不计入收集（CASE 按级别取下限，与 BV 榜 fetchBvCollection 同口径）。
  * 2026-10-16 张老师：封禁用户的录像计入本人收集——旧站封禁会把账号全部录像连坐
@@ -1951,9 +1952,9 @@ export async function getLevel3bvRanges(): Promise<
  */
 export async function getUser3bvCollection(
   userId: number
-): Promise<Record<VideoLevel, Map<number, { vid: number; t: number }>>> {
-  const rows = await prisma.$queryRaw<{ level: string; b3bv: number; first_vid: bigint; first_ct: bigint }[]>`
-    SELECT v.level, vi.board_3bv AS b3bv, MIN(v.id) AS first_vid, MIN(v.create_time) AS first_ct
+): Promise<Record<VideoLevel, Map<number, number>>> {
+  const rows = await prisma.$queryRaw<{ level: string; b3bv: number; n: bigint }[]>`
+    SELECT v.level, vi.board_3bv AS b3bv, COUNT(*) AS n
     FROM video v JOIN video_info vi ON vi.id = v.id
       JOIN \`user\` u ON u.id = v.user
     WHERE v.user = ${BigInt(userId)}
@@ -1963,12 +1964,12 @@ export async function getUser3bvCollection(
         WHEN 'int' THEN ${LEVEL_MIN_3BV.int}
         ELSE ${LEVEL_MIN_3BV.exp} END
     GROUP BY v.level, vi.board_3bv`;
-  const out: Record<VideoLevel, Map<number, { vid: number; t: number }>> = {
+  const out: Record<VideoLevel, Map<number, number>> = {
     beg: new Map(),
     int: new Map(),
     exp: new Map(),
   };
-  for (const r of rows) out[r.level as VideoLevel]?.set(r.b3bv, { vid: N(r.first_vid), t: N(r.first_ct) });
+  for (const r of rows) out[r.level as VideoLevel]?.set(r.b3bv, N(r.n));
   return out;
 }
 
