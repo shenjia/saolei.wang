@@ -33,13 +33,16 @@ export interface VideoSortSpec {
 
 /** 表头（列定义唯一来源，两处共用）。有 sort 时可排序列渲染为链接（排行表头同语言）。
  *  onSort（2026-10-16）：提供时普通左键点击就地客户端排序（preventDefault 不导航），
- *  修饰键点击/中键仍走真实链接（新标签打开该排序的 URL，URL 即状态兜底） */
+ *  修饰键点击/中键仍走真实链接（新标签打开该排序的 URL，URL 即状态兜底）。
+ *  noSort3bv（2026-10-20 定向视图）：3BV 列禁排序（整列同值无意义），渲染纯文本 */
 export function VideoHead({
   sort,
   onSort,
+  noSort3bv,
 }: {
   sort?: VideoSortSpec;
   onSort?: (order: VideoListOrder) => void;
+  noSort3bv?: boolean;
 }) {
   // 各列排序链接（id=默认排序：URL 省略 order 参数）
   function col(order: VideoListOrder, label: string, title: string) {
@@ -75,7 +78,8 @@ export function VideoHead({
         <th>上传者</th>
         <th>级别</th>
         <th>{col("time", "成绩", "按成绩排列（快在前）")}</th>
-        <th className="c">{col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
+        {/* 定向视图（3BV 精确筛选）下 3BV 整列同值，禁排序纯文本（2026-10-20） */}
+        <th className="c">{noSort3bv ? "3BV" : col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
         <th className="c">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
         {/* 2026-10-20 张老师需求：新增 IOE（效率）/STNB（判雷）指标列，可点击排序 */}
         <th className="c">{col("ioe", "IOE", "按效率 IOE 排列（大在前）")}</th>

@@ -12,10 +12,15 @@
 // 点表头排序就地生效不导航不跳顶；搜索框仍软导航（key=author-time 重挂载换数据）。
 // 2026-10-20 张老师要求：去掉右栏「热门录像」与「统计」（热门录像移首页替换排行前十），
 // 页面改通栏（与排行页同版式：.main 单卡片、62% 流式宽）。
+// 2026-10-20 二轮（张老师需求）：支持定向视图 author+level+3bv 全带时标题改为
+// 「XXX的初级/中级/高级录像（3BV=XX）」（来自用户主页 3BV 收集格子点击），其余情况仍恒为「录像」；
+// 定向视图下 3BV 列禁排序（整列同值无意义）。
 
+import type { Metadata } from "next";
 import { getVideoList } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import {
+  LEVEL_NAMES,
   VIDEO_LEVELS,
   parseVideoListOrder,
   type VideoLevel,
@@ -24,10 +29,29 @@ import {
 import { VideoListSection } from "@/components/VideoListSection";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "录像" };
 
 function parseLevel(v?: string): VideoLevel | "all" {
   return (VIDEO_LEVELS as readonly string[]).includes(v ?? "") ? (v as VideoLevel) : "all";
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  // 定向视图（author+3bv 全带，与壳内 h1 同判定）：标题「XXX的初级录像（3BV=42）」，
+  // 级别词随 URL level（all=「全部」）；其余恒「录像」
+  const author = sp.author ? parseInt(sp.author, 10) || 0 : 0;
+  const bv = parseInt(sp["3bv"]?.trim() ?? "", 10);
+  const level = parseLevel(sp.level);
+  if (!author || !bv) return { title: "录像" };
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(author) },
+    select: { chineseName: true },
+  });
+  if (!u) return { title: "录像" };
+  return { title: `${u.chineseName}的${LEVEL_NAMES[level]}录像（3BV=${bv}）` };
 }
 
 export default async function VideoListPage({
@@ -46,13 +70,16 @@ export default async function VideoListPage({
 
   const [{ videos, total, pageSize }, authorName] = await Promise.all([
     getVideoList({ level, order, author, time, bv, page: 1 }),
-    // 玩家筛选回显姓名（搜索框显示当前筛选）
+    // 玩家筛选回显姓名（搜索框显示当前筛选 + 定向视图标题用）
     author
       ? prisma.user
           .findUnique({ where: { id: BigInt(author) }, select: { chineseName: true } })
           .then((u) => u?.chineseName)
       : Promise.resolve(undefined),
   ]);
+
+  // 定向视图判定由壳内完成（authorName+bv 全带即定向：标题动态组装 + 禁 3BV 列排序），
+  // 页面层只负责把筛选结果与 authorName 递进去
 
   return (
     <div id="page" className="main video_old">

@@ -40,6 +40,7 @@ export function VideoListFeed({
   headSort,
   client = false,
   head,
+  noSort3bv,
 }: {
   initial: VideoListItem[];
   /** 当前筛选条件下的录像总数 */
@@ -55,6 +56,8 @@ export function VideoListFeed({
   client?: boolean;
   /** head 渲染位（client 模式）：渲染在表格上方，随内部筛选状态实时重渲染 */
   head?: (ctx: VideoListHeadCtx) => ReactNode;
+  /** 3BV 列禁排序（2026-10-20 定向视图：整列同值排序无意义），透传 VideoHead.noSort3bv */
+  noSort3bv?: boolean;
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initial.length < total);
@@ -260,6 +263,7 @@ export function VideoListFeed({
       {head && head({ level: curLevel, order: curOrder, setLevel: changeLevel, setOrder: changeOrder })}
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
         <VideoHead
+          noSort3bv={noSort3bv}
           sort={
             headSort
               ? {

@@ -347,7 +347,7 @@ export default async function UserViewPage({
             位置在实力雷达之下、个人资料之上；显示条件与雷达一致（有上传过录像才显示） */}
         {detail.stat &&
           detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
-            <BbvCollection ranges={bbvRanges} collected={bbvCollection} />
+            <BbvCollection userId={userId} ranges={bbvRanges} collected={bbvCollection} />
           )}
         {hasProfileFields && (
           <div className="profile box">

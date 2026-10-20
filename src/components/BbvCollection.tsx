@@ -5,7 +5,9 @@
 // 已收集=级别色（初绿/中橙/高黄），未收集=深灰。
 // 悬停出 CSS 气泡（2026-10-13 张老师要求）：3BV 值 + 该 3BV 首个录像的上传日期；
 // 未收集的格子显示「暂无录像」。
-// 已收集方格点击新标签打开该 3BV 首个录像（2026-10-13 张老师要求，target=_blank 同站内录像链接惯例）。
+// 已收集方格点击跳该 3BV 定向录像列表 /video?author=..&level=..&3bv=..&order=time
+// （2026-10-20 张老师需求：筛该玩家该级别该 3BV 全部录像，默认按成绩升序；
+// 原先直开首个录像详情的 target=_blank 属「录像链接」惯例，目标是列表页后改为当前标签导航）。
 // 纯服务端渲染：气泡也是纯 CSS（:hover 显隐），无 hydration、无 API 路由、无任何客户端 JS。
 
 import Link from "next/link";
@@ -13,9 +15,12 @@ import { LEVEL_NAMES, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { formatDate } from "@/lib/format";
 
 export function BbvCollection({
+  userId,
   ranges,
   collected,
 }: {
+  /** 玩家 id（已收集方格的定向列表链接 /video?author= 用） */
+  userId: number;
   ranges: Partial<Record<VideoLevel, { min: number; max: number }>>;
   /** level -> (3BV -> 该 3BV 首个录像的 id 与上传时间 Unix 秒) */
   collected: Record<VideoLevel, Map<number, { vid: number; t: number }>>;
@@ -60,8 +65,7 @@ export function BbvCollection({
                   <Link
                     key={b}
                     className="sq on"
-                    href={`/video/${c.vid}`}
-                    target="_blank"
+                    href={`/video?author=${userId}&level=${level}&3bv=${b}&order=time`}
                   >
                     {tip}
                   </Link>

@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import type { VideoListItem } from "@/lib/queries";
-import type { VideoListOrder } from "@/lib/config";
+import { LEVEL_NAMES, type Level, type VideoListOrder } from "@/lib/config";
 import { buildUrl } from "./Pager";
 import { VideoSearch } from "./VideoSearch";
 import { VideoListFeed } from "./VideoListFeed";
@@ -42,12 +42,14 @@ export function VideoListSection({
   /** 服务端解析的初始筛选（URL 即状态：直链/分享进入时与链接语义一致） */
   level: string;
   order: VideoListOrder;
-  /** 玩家筛选（用户 id）与回显姓名（搜索框初始状态用） */
+  /** 玩家筛选（用户 id）与回显姓名（搜索框初始状态 + 定向视图标题素材用） */
   author?: number;
   authorName?: string;
   /** 时间成绩搜索输入（回显用） */
   time?: string;
-  /** 3BV 搜索输入（回显用，2026-10-20） */
+  /** 3BV 搜索输入（回显用，2026-10-20）；定向视图判定：authorName+bv 全带时
+   *  标题随当前级别动态组装「张三的中级录像（3BV=42）」并禁 3BV 列排序（整列同值），
+   *  其余情况保持恒定标题「录像」（搜索后也不变，张老师 2026-10-15 口径） */
   bv?: string;
 }) {
   return (
@@ -62,10 +64,17 @@ export function VideoListSection({
         pageSize={pageSize}
         query={{ level, order, author, time, bv }}
         headSort={{ base: "/video", order, authorInLinks: true }}
+        noSort3bv={!!(authorName && bv)}
         head={(ctx) => (
           <div className="page_head">
-            {/* 标题恒为「录像」（张老师 2026-10-15：搜索后标题不变，级别状态由 tabs 表达） */}
-            <h1 className="page_title">录像</h1>
+            {/* 标题：定向视图（3BV 收集格子进入）显示「XXX的XX录像（3BV=XX）」并随
+                ctx.level 实时变化，其余恒为「录像」（张老师 2026-10-15：搜索后标题不变，
+                级别状态由 tabs 表达） */}
+            <h1 className="page_title">
+              {authorName && bv
+                ? `${authorName}的${LEVEL_NAMES[ctx.level as Level | "all"] ?? ""}录像（3BV=${bv}）`
+                : "录像"}
+            </h1>
             <div className="video_nav">
               {/* 普通左键 → ctx.setLevel 就地切换（不导航不跳顶）；
                   修饰键/中键 → 真实链接兜底（新标签打开该筛选 URL） */}
