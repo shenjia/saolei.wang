@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     console.error("[api/ranking/stnb/more] STNB 榜数据获取失败", e);
     return NextResponse.json({ error: "stnb_unavailable" }, { status: 503 });
   }
-  const { rows, total, pageSize } = data;
+  const { rows, total, pageSize, den, totalDen } = data;
   // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；总司令=雷界第一人特判（两体系共用）
   const king = await getThunderKingId();
   const pairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
@@ -34,5 +34,5 @@ export async function GET(req: Request) {
     classic: pairs.get(u.id)?.c ?? null,
   }));
 
-  return NextResponse.json({ rows: titled, total, pageSize });
+  return NextResponse.json({ rows: titled, total, pageSize, den, totalDen });
 }

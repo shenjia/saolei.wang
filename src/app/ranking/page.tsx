@@ -85,9 +85,24 @@ const STNB_RULES = [
   </>,
   <>
     <b>数据来源</b>：与录像分析雷达同一套指标体系（video_metrics），NF 录像同样计入；
-    每小时更新一次，新过审的录像最迟 <i>1</i> 小时后计入榜单。
+    新过审录像破纪录即时计入榜单。
   </>,
 ];
+
+// STNB 榜规则条目（进度条分母动态注入；2026-10-20 张老师定：渲染与 BV 榜一致）
+function stnbRules(den: Record<VideoLevel, number>, totalDen: number) {
+  return [
+    STNB_RULES[0],
+    STNB_RULES[1],
+    <>
+      <b>进度条</b>：进度条分母为该难度全站最高 STNB 纪录（当前初级<i>{den.beg.toFixed(1)}</i>、
+      中级 <i>{den.int.toFixed(1)}</i>、高级 <i>{den.exp.toFixed(1)}</i>，总计 <i>{totalDen.toFixed(1)}</i>
+      ）；纪录刷新时分母随之更新。点击数值可查看对应录像。
+    </>,
+    STNB_RULES[2],
+    STNB_RULES[3],
+  ];
+}
 
 // BV 榜规则条目（分母随统计区间动态变化，故为函数；口径见 queries.fetchBvCollection）
 function bvRules(den: Record<VideoLevel, number>, totalDen: number) {
@@ -314,7 +329,7 @@ export default async function RankingPage({
       );
     }
 
-    const { rows, total, pageSize } = stnbData;
+    const { rows, total, pageSize, den, totalDen } = stnbData;
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；总司令=雷界第一人特判（两体系共用）
     const stnbKing = await getThunderKingId();
     const stnbPairs = await dualTitles(
@@ -369,12 +384,14 @@ export default async function RankingPage({
             by={stnbBy}
             total={total}
             pageSize={pageSize}
+            den={den}
+            totalDen={totalDen}
             initialHl={hl}
           />
         </div>
         <RankingRules
           title="STNB 排行规则"
-          items={STNB_RULES}
+          items={stnbRules(den, totalDen)}
           footer={session?.uid && me?.stnbRank === undefined ? <JoinRankingHelp /> : undefined}
         />
       </div>

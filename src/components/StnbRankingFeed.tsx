@@ -1,7 +1,9 @@
 // STNB 榜表格 + 「加载更多」（2026-10-20 张老师需求，展示形态仿 BvRankingFeed）。
 // 列：排名 | 姓名 | 军衔 | 初级 | 中级 | 高级 | 总计——基础三列复刻 RankingRowLine 的
-// 真实渲染（第 N 位 / 白链+性别图标 / TitleBadge 徽章+气泡），成绩列为 STNB 数值
-// （与「判雷」轴同源；当前排序列金黄 #fdc61d，与 BV 榜进度条命中色一致）。
+// 真实渲染（第 N 位 / 白链+性别图标 / TitleBadge 徽章+气泡），成绩列为 pbar 进度条
+// （2026-10-20 张老师定：渲染方式与 BV 榜一致——上 STNB 数值、下 3px 细条，
+// 分母=该级别全站最高记录；数值白链跳对应录像 + hover 气泡「高级 xx.xx 秒 NF 3月前」；
+// 当前排序列金黄 #fdc61d，与 BV 榜命中色一致）。
 // 表头即排序切换（同 BV 榜列头 Link 模式）；总计=三级历史最高 STNB 之和，缺级不上总计榜。
 // 定位/翻页/滑条全套沿用 BV 榜语义（2026-10-14 C 方案），仅数据源与单元格渲染不同。
 
@@ -35,19 +37,40 @@ function bestTip(level: VideoLevel, b: StnbBestVideo): string {
   return `${LEVEL_NAMES[level]} ${stnbSeconds(b.timeMs)} 秒${b.nf ? " NF" : ""} ${timeOpposite(b.ct, TIME_NEVER)}`;
 }
 
-/** STNB 数值单元格：有成绩 → 白链跳对应录像（/video/<id>，新标签页）+ hover 气泡；
- *  无成绩 → 灰「—」。当前排序列金黄（.snum.current，同 pbar.current 命中色）。 */
-function StnbNum({ level, v, b, active }: { level: VideoLevel; v: number; b: StnbBestVideo | null; active: boolean }) {
+/** STNB 进度条单元格（2026-10-20 张老师定：与 BV 榜 pbar 同形态）：
+ *  上 STNB 数值（白链跳对应录像 /video/<id> 新标签页 + hover 气泡
+ *  「高级 xx.xx 秒 NF 3月前」）、下 3px 细进度条（分母=该级别全站最高记录）；
+ *  无成绩 → 灰「—」无条。当前排序列金黄（.pbar.current 同 BvBar）。 */
+function StnbBar({ level, v, b, den, active }: {
+  level: VideoLevel;
+  v: number;
+  b: StnbBestVideo | null;
+  den: number;
+  active: boolean;
+}) {
+  if (!(v > 0) || !b) {
+    return (
+      <td>
+        <span className="pbar">
+          <span className="pnum">
+            <em>—</em>
+          </span>
+        </span>
+      </td>
+    );
+  }
+  const pct = den > 0 ? (v / den) * 100 : 0;
   return (
     <td>
-      <span className={`snum${active ? " current" : ""}`}>
-        {v > 0 && b ? (
+      <span className={`pbar${active ? " current" : ""}`} title={`${LEVEL_NAMES[level]}最高 ${v.toFixed(1)}（全站纪录 ${den.toFixed(1)}）`}>
+        <span className="pnum">
           <Link href={`/video/${b.vid}`} target="_blank" data-tip={bestTip(level, b)}>
             <em>{v.toFixed(1)}</em>
           </Link>
-        ) : (
-          <em>—</em>
-        )}
+        </span>
+        <span className="ptrack">
+          <span className="pfill" style={{ width: `${pct}%` }} />
+        </span>
       </span>
     </td>
   );
@@ -58,12 +81,17 @@ export function StnbRankingFeed({
   by,
   pageSize,
   total,
+  den,
+  totalDen,
   initialHl,
 }: {
   initial: StnbTitledRow[];
   by: BvRankingBy;
   pageSize: number;
   total: number;
+  /** 各级别全站最高 STNB（进度条分母）与总计分母（2026-10-20 张老师定） */
+  den: Record<VideoLevel, number>;
+  totalDen: number;
   /** 定位落地行（whereami 302 携带 hl=<uid>，SSR 即高亮，无 JS 也可见） */
   initialHl?: number;
 }) {
@@ -296,10 +324,10 @@ export function StnbRankingFeed({
                 <td className="miltitle">
                   <TitleBadge title={u.title} classic={u.classic} link />
                 </td>
-                <StnbNum level="beg" v={u.beg} b={u.best.beg} active={by === "beg"} />
-                <StnbNum level="int" v={u.int} b={u.best.int} active={by === "int"} />
-                <StnbNum level="exp" v={u.exp} b={u.best.exp} active={by === "exp"} />
-                <StnbNum level="exp" v={u.total} b={u.best.exp} active={by === "total"} />
+                <StnbBar level="beg" v={u.beg} b={u.best.beg} den={den.beg} active={by === "beg"} />
+                <StnbBar level="int" v={u.int} b={u.best.int} den={den.int} active={by === "int"} />
+                <StnbBar level="exp" v={u.exp} b={u.best.exp} den={den.exp} active={by === "exp"} />
+                <StnbBar level="exp" v={u.total} b={u.best.exp} den={totalDen} active={by === "total"} />
               </tr>
             ))}
             {rows.length === 0 && (

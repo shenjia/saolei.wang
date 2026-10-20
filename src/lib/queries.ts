@@ -2173,6 +2173,10 @@ export interface StnbRankingResult {
   rows: StnbRankingRow[];
   total: number;
   pageSize: number;
+  /** 各级别全站最高 STNB（进度条分母，2026-10-20 张老师定：渲染方式与 BV 榜一致，
+   *  分母=该级别全站最高记录）与总计分母（三级最高之和） */
+  den: Record<VideoLevel, number>;
+  totalDen: number;
 }
 
 // STNB 榜全量聚合：口径 + 缓存形态说明。
@@ -2389,15 +2393,28 @@ function sortStnb(list: StnbRankingEntry[], by: BvRankingBy): StnbRankingEntry[]
   return [...list].sort((a, b) => b[by] - a[by] || a.id - b.id);
 }
 
+/** 各级别全站最高 STNB（进度条分母）：从全量数组内存取 max，零额外查询。
+ *  与 BV 榜 den（3BV 区间跨度）不同——STNB 榜分母=该级别全站最高记录（张老师 2026-10-20 定）。 */
+function stnbDenoms(all: StnbRankingEntry[]): { den: Record<VideoLevel, number>; totalDen: number } {
+  const den: Record<VideoLevel, number> = { beg: 0, int: 0, exp: 0 };
+  for (const e of all) {
+    if (e.beg > den.beg) den.beg = e.beg;
+    if (e.int > den.int) den.int = e.int;
+    if (e.exp > den.exp) den.exp = e.exp;
+  }
+  return { den, totalDen: Math.round((den.beg + den.int + den.exp) * 10) / 10 };
+}
+
 /** STNB 榜一页（by 复用 BvRankingBy：total/beg/int/exp 同构）。 */
 export async function getStnbRanking(by: BvRankingBy, page: number, take?: number): Promise<StnbRankingResult> {
   const all = await fetchStnbCollection();
   const sorted = sortStnb(stnbPopulation(all, by), by);
+  const { den, totalDen } = stnbDenoms(all);
   const size = take ?? RANKING_PAGESIZE;
   const rows = sorted
     .slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size)
     .map((e, i) => ({ ...e, rank: (page - 1) * RANKING_PAGESIZE + i + 1 }));
-  return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE };
+  return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen };
 }
 
 /** STNB 榜「用户 → 名次」索引（搜索下拉增强用）：一次内存排序构建 Map，零 DB 重活。 */
