@@ -317,6 +317,10 @@ model VideoMetrics {
   @@index([rankAll])
   @@index([level, noflag, rankGroup])
   @@index([level, noflag, composite])
+  // 2026-10-20 张老师要求：录像列表 IOE/STNB 排序列建索引（order=ioe/stnb 时
+  // 索引反扫免 30 万行 filesort；本地实测建前 0.135s）
+  @@index([ioe])
+  @@index([stnb])
   @@map("video_metrics")
 }
 
