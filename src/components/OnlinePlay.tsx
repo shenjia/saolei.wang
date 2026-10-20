@@ -1522,7 +1522,6 @@ export function OnlinePlay({
          雷达（.vr_wrap max-width）就失去居中锚点了 */
       const radarHost = host.querySelector("#gr_radar") as HTMLElement | null;
       if (radarHost) {
-        radarHost.style.display = "block";
         /* 复用录像详情页的 VideoAnalysisRadar 组件（张老师 2026-10-14 定：不该再维护第二份
            绘制）。面板是 innerHTML 注入流、JSX 挂不进去，所以用 createRoot 把 React 组件挂到
            占位 div —— 文案/字号/气泡样式与录像页**由同一个组件保证同源**，不会再分叉。
