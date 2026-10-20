@@ -2153,7 +2153,7 @@ export interface StnbRankingResult {
   pageSize: number;
 }
 
-// 全量聚合 1 小时缓存（同 fetchBvCollection 理由：30 万行级聚合并发会 P1017，铁律）。
+// STNB 榜全量聚合：口径 + 缓存形态说明。
 // 口径（2026-10-20）：
 //   · 录像须已通过审核（v.status=20 胜局）+ 用户正常（u.status=0），与 BV 榜同口径
 //   · 每级取历史最高 STNB（video_metrics.stnb，与录像评级「判雷」轴同源）
@@ -2161,12 +2161,59 @@ export interface StnbRankingResult {
 //     中高级上传下限 30/100 本就高于 4，实际只约束初级——不限则 3BV=2 的 0.09s
 //     秒开盘 STNB 4316 会霸榜，实测限界内 top 为 473.7）
 //   · 不区分 NF（NF 录像同为过审胜局，STNB 同口径计算，混合排——同 BV 榜不分模式）
-//   · 每级最优盘（2026-10-20 张老师需求：成绩点击跳对应录像 + hover 气泡）：GROUP_CONCAT
-//     组内按 stnb DESC, id ASC 排序取第一个（同分取注册序影像 id 较小者，与排序口径一致）。
-//     注：窗口函数版实测 55s（全表 filesort），GROUP_CONCAT 组内排序 4.2s。
-// 注意改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化）。
-const fetchStnbCollection = unstable_cache(
-  async (): Promise<StnbRankingEntry[]> => {
+//   · 每级最优盘（成绩点击跳对应录像 + hover 气泡）：GROUP_CONCAT 组内按
+//     stnb DESC, id ASC 排序取第一个（同分取注册序影像 id 较小者，与排序口径一致）。
+//     注：窗口函数版实测 55s（全表 filesort），GROUP_CONCAT 组内排序 4.2s（本地）/
+//     6.2s（生产，buffer pool 128M）——缓存必须命中，否则页面恒慢。
+// ⚠️ 缓存载荷必须走紧凑元组形态（2026-10-20 线上 STNB 榜 7~12s 根因修复）：
+// unstable_cache 落盘走 fetch-cache，**单条上限 2MB**（next 源码 incremental-cache：
+// 超限 production 只 console.warn 后静默丢弃，不落盘）。对象形态 9851 用户序列化
+// 3.05MB 恒超限（pm2 日志 "items over 2MB can not be cached (3048519 bytes)"），
+// 缓存永远写不进 → 每个请求都现场重跑 6s 聚合 SQL。紧凑元组 + best 存原串后
+// 1.14MB（Next 包装系数实测 ~1.14，落盘 ~1.3MB），余量 38%。
+// 注意：①改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化）；
+// ②用户数涨到 ~1.6 万时将再触线，届时可退化为 TSV 整串（0.93MB，实测）。
+type StnbCompactRow = [
+  number, // id
+  string, // chineseName
+  number, // sex
+  number, // beg
+  number, // int
+  number, // exp
+  number, // total
+  number, // expTime
+  [string | null, string | null, string | null] // best 三级原串 "vid:realTime:noflag:createTime"
+];
+
+/** best 串 "vid:real_time(ms):noflag:create_time"——noflag 在 video_info 是 tinyint，
+ *  CONCAT 时 0/1 仍按数值拼（MySQL 隐式转换），安全解析。 */
+function parseStnbBest(raw: string | null): StnbBestVideo | null {
+  if (!raw) return null;
+  const [vid, rt, nf, ct] = raw.split(":");
+  const v = parseInt(vid, 10);
+  const timeMs = parseInt(rt, 10);
+  const ctv = parseInt(ct, 10);
+  if (!Number.isFinite(v) || !Number.isFinite(timeMs)) return null;
+  return { vid: v, timeMs, nf: nf === "1", ct: Number.isFinite(ctv) ? ctv : 0 };
+}
+
+/** 紧凑元组 → StnbRankingEntry（出缓存后 inflate，9851 条 map 微秒级） */
+function inflateStnbRow(c: StnbCompactRow): StnbRankingEntry {
+  return {
+    id: c[0],
+    chineseName: c[1],
+    sex: c[2],
+    beg: c[3],
+    int: c[4],
+    exp: c[5],
+    total: c[6],
+    expTime: c[7],
+    best: { beg: parseStnbBest(c[8][0]), int: parseStnbBest(c[8][1]), exp: parseStnbBest(c[8][2]) },
+  };
+}
+
+const fetchStnbCompact = unstable_cache(
+  async (): Promise<StnbCompactRow[]> => {
     const rows = await prisma.$queryRaw<
       {
         id: bigint;
@@ -2206,43 +2253,34 @@ const fetchStnbCollection = unstable_cache(
       JOIN user u ON u.id = t.user AND u.status = 0
       LEFT JOIN user_scores us ON us.id = t.user
       GROUP BY u.id, u.chinese_name, u.sex, us.exp_time`;
-    // best 串 "vid:real_time(ms):noflag:create_time"——noflag 在 video_info 是 tinyint，
-    // CONCAT 时 0/1 仍按数值拼（MySQL 隐式转换），安全解析。
-    const parseBest = (raw: string | null): StnbBestVideo | null => {
-      if (!raw) return null;
-      const [vid, rt, nf, ct] = raw.split(":");
-      const v = parseInt(vid, 10);
-      const timeMs = parseInt(rt, 10);
-      const ctv = parseInt(ct, 10);
-      if (!Number.isFinite(v) || !Number.isFinite(timeMs)) return null;
-      return { vid: v, timeMs, nf: nf === "1", ct: Number.isFinite(ctv) ? ctv : 0 };
-    };
     return rows.map((r) => {
       // MAX/SUM 走 float 会带精度尾差（4316.399902…），统一回 1 位小数（stnb 落库即 1 位）
       const beg = Math.round(N(r.beg) * 10) / 10;
       const inter = Math.round(N(r.inter) * 10) / 10;
       const exp = Math.round(N(r.exp) * 10) / 10;
-      return {
-        id: N(r.id),
-        chineseName: r.chinese_name,
-        sex: r.sex,
+      return [
+        N(r.id),
+        r.chinese_name,
+        r.sex,
         beg,
-        int: inter,
+        inter,
         exp,
         // 总计与成绩榜同语义：三级都有有效成绩才算（缺级不上总计榜）
-        total: beg > 0 && inter > 0 && exp > 0 ? Math.round((beg + inter + exp) * 10) / 10 : 0,
-        expTime: N(r.exp_time),
-        best: {
-          beg: parseBest(r.best_beg),
-          int: parseBest(r.best_int),
-          exp: parseBest(r.best_exp),
-        },
-      };
+        beg > 0 && inter > 0 && exp > 0 ? Math.round((beg + inter + exp) * 10) / 10 : 0,
+        N(r.exp_time),
+        [r.best_beg, r.best_int, r.best_exp],
+      ] satisfies StnbCompactRow;
     });
   },
-  ["stnb-collection-v2"],
+  ["stnb-collection-v3"],
   { revalidate: 3600, tags: ["stnb-collection"] }
 );
+
+/** STNB 榜全量聚合入口（1 小时缓存，紧凑元组出缓存后 inflate 成对象形态）。
+ *  调用方（getStnbRanking / getStnbBoardIndex / getStnbRankOfUser）零改动。 */
+async function fetchStnbCollection(): Promise<StnbRankingEntry[]> {
+  return (await fetchStnbCompact()).map(inflateStnbRow);
+}
 
 /** 榜人口随排序列变化（与成绩榜同语义，异于 BV 榜恒定人口）：
  *  按总计 = 三级齐全；按级别 = 该级有有效成绩。 */
