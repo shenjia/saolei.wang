@@ -10,8 +10,10 @@ import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/s
 import { getClientIp } from "@/lib/net";
 import { rateLimit } from "@/lib/ratelimit";
 import { verifyCaptcha } from "@/lib/captcha";
+import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 
 export async function POST(req: Request) {
+  if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
   const session = await getSession();
   if (session) {
     return NextResponse.json({ error: "您已登录，无需重复注册" }, { status: 400 });

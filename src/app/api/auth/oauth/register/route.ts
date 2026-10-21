@@ -12,6 +12,7 @@ import { checkSensitiveAll, logSensitiveHit, sensitiveRejectMessage } from "@/li
 import { checkReservedNames } from "@/lib/register";
 import { getClientIp } from "@/lib/net";
 import { rateLimit } from "@/lib/ratelimit";
+import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 
 const USERNAME_RE = /^[A-Za-z0-9_]{2,32}$/;
 // 2026-10-19 防小号：用户名至少含 1 个字母（防纯数字 QQ 号式批量账号）
@@ -21,6 +22,7 @@ const CHINESE_NAME_RE = /^[\u4e00-\u9fa5]{2,6}$/;
 const ENGLISH_NAME_RE = /^([A-Z][a-z]{0,5} ?){2,6}$/;
 
 export async function POST(req: Request) {
+  if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
   const ticket = await getOauthTicket();
   if (!ticket) {
     return NextResponse.json({ error: "扫码凭证已过期，请重新扫码" }, { status: 400 });

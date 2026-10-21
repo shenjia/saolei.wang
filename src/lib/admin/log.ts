@@ -35,6 +35,7 @@ export const OP_LABELS: Record<string, string> = {
   "message.broadcast": "群发站内信",
   "rank.snapshot": "生成排行快照",
   "avatar.review": "审核玩家头像",
+  "site.setMaintenance": "维护模式开关",
 };
 
 export function opLabel(action: string): string {

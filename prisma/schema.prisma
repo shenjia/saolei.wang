@@ -793,3 +793,13 @@ model PracticeLog {
   @@index([userId, createTime]) // 后期按用户聚合排行
   @@map("practice_log")
 }
+
+// 站点运行时开关（2026-10-22，新旧站数据合并）：key/value 单表。
+// 首个键 maintenance_mode——维护模式期间所有产生新数据的用户入口
+// （注册/上传录像/发帖回帖/评论/私信）统一返回气泡提示，管理员不受影响。
+model SiteFlag {
+  key   String @id @db.VarChar(50)
+  value String @db.VarChar(255)
+
+  @@map("site_flag")
+}

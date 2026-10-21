@@ -7,6 +7,8 @@ import { getSnapshotHealth } from "@/lib/admin/stats";
 import { AdminCard, Kpi } from "@/components/admin/Widgets";
 import { formatDate } from "@/lib/format";
 import { OAUTH_ENABLED } from "@/lib/config";
+import { isMaintenanceOn } from "@/lib/maintenance";
+import MaintenanceSwitch from "@/components/admin/MaintenanceSwitch";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "系统信息 | 管理后台" };
@@ -21,11 +23,12 @@ function humanSeconds(sec: number): string {
 }
 
 export default async function AdminSystemPage() {
-  const [envs, runtime, tables, snapshot] = await Promise.all([
+  const [envs, runtime, tables, snapshot, maintenance] = await Promise.all([
     Promise.resolve(getEnvChecks()),
     getRuntimeInfo(),
     getTableStats(),
     getSnapshotHealth(),
+    isMaintenanceOn(),
   ]);
 
   const missing = envs.filter((e) => !e.ok);
@@ -121,6 +124,14 @@ export default async function AdminSystemPage() {
 
         <AdminCard title="功能开关与约定">
           <dl className="admin_kv">
+            <dt>维护模式</dt>
+            <dd>
+              <MaintenanceSwitch initialOn={maintenance} />
+              <div className="sub" style={{ marginTop: 4 }}>
+                开启后注册、上传录像、发帖回帖、评论、私信统一返回「本站正在维护中」气泡；
+                管理员操作（审核/删除/后台）不受影响。用于新旧站数据合并窗口。
+              </div>
+            </dd>
             <dt>第三方登录</dt>
             <dd>
               {OAUTH_ENABLED ? (

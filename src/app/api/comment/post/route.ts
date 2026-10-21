@@ -7,8 +7,10 @@ import { addComment } from "@/lib/queries";
 import { COMMENT_CONTENT_LIMIT } from "@/lib/config";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { runContentReview } from "@/lib/content-review";
+import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 
 export async function POST(req: Request) {
+  if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 });

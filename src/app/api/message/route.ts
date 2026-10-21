@@ -14,6 +14,7 @@ import {
 } from "@/lib/message";
 import { prisma } from "@/lib/db";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
+import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -35,10 +36,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // 维护模式：挡用户发信（send）；已读/清空/管理员广播不受影响
+  const pre = await req.json().catch(() => ({}));
+  if (String(pre.action ?? "") === "send" && (await isMaintenanceOn())) {
+    return maintenanceReject() as unknown as NextResponse;
+  }
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 });
 
-  const body = await req.json().catch(() => ({}));
+  const body = pre;
   const action = String(body.action ?? "");
 
   if (action === "send") {

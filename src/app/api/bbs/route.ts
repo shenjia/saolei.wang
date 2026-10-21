@@ -25,14 +25,19 @@ import {
   sensitiveRejectMessage,
   type SensitiveResult,
 } from "@/lib/sensitive";
+import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 
 export async function POST(req: NextRequest) {
+  // 维护模式：挡产生新内容/新楼层的入口（post/reply/edit）；delete/admin 是收敛操作，放行
+  const body = await req.json().catch(() => ({}));
+  const action = String(body.action ?? "");
+  if (["post", "reply", "edit"].includes(action) && (await isMaintenanceOn())) {
+    return maintenanceReject() as unknown as NextResponse;
+  }
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 });
   const admin = isManager(session.role);
 
-  const body = await req.json().catch(() => ({}));
-  const action = String(body.action ?? "");
   const id = parseInt(String(body.id ?? ""), 10) || 0;
 
   // 敏感词命中的统一拒绝出口（2026-10-13）：不落库、不发动态，只回提示文案（不暴露具体词）

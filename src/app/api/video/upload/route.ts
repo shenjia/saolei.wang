@@ -18,6 +18,7 @@ import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { userTitleSnapshot } from "@/lib/queries";
+import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -27,6 +28,7 @@ function fail(error: string, status = 400) {
 }
 
 export async function POST(req: Request) {
+  if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
   const session = await getSession();
   if (!session) return fail("请先登录", 401);
 

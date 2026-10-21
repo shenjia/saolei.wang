@@ -19,6 +19,7 @@ import { reviewVideo } from "@/lib/review";
 import { banUntilFromKey, unbanUser } from "@/lib/ban";
 import { broadcast, sendSystemMessage } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
+import { setMaintenance } from "@/lib/maintenance";
 import { logAdmin } from "./log";
 import type { AdminLevel } from "./guard";
 
@@ -44,6 +45,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "rank.snapshot": "manager",
   // （star.set 每日一星指定已随功能于 2026-10-13 移除）
   "avatar.review": "manager",
+  "site.setMaintenance": "administrator",
 };
 
 // ---------- 参数工具 ----------
@@ -521,6 +523,13 @@ async function dispatch(
         ok: true,
         message: `驳回 ${name}（#${Number(row.user)}）的头像${revert ? "，并已回滚到上一张" : ""}`,
       };
+    }
+
+    // ---------- 站点开关 ----------
+    case "site.setMaintenance": {
+      const on = toBool(p.on);
+      await setMaintenance(on);
+      return { ok: true, message: on ? "维护模式已开启：注册/上传/发帖/评论/私信已停" : "维护模式已关闭，站点恢复正常" };
     }
 
     default:
