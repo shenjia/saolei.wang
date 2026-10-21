@@ -1132,6 +1132,8 @@ interface ReplayCtxValue {
   stats: ReplayStats | null;
   fullscreen: boolean;
   play: () => void;
+  /** 一键全屏试玩（二十一期）：等价于「点全屏按钮 + 点笑脸」两步 */
+  playGame: () => void;
   stop: () => void;
   pause: () => void;
   resume: () => void;
@@ -1214,6 +1216,8 @@ export function VideoReplayProvider({
   /* undefined＝未加载；null＝试过但失败（后续直接走 flop，不重复拉取） */
   const dataRef = useRef<ReplayData | null | undefined>(undefined);
   const engineRef = useRef<Engine | null>(null);
+  /* 起播请求在途标记（二十一期：startEngine 防抖，见其注释） */
+  const loadingRef = useRef(false);
 
   const uri = `/videos${filepath}`;
 
@@ -1221,80 +1225,97 @@ export function VideoReplayProvider({
     if (flopUri && window.flop) playFlop(flopUri);
   }, [flopUri]);
 
-  const play = useCallback(() => {
+  /* 起播核心（二十一期从 play() 抽出，play/playGame 共用）：完成 fetch+parse+
+     页面回放引擎启动。返回 true＝引擎就绪（试玩数据源 replayData 已落 state）；
+     false＝flop 兜底或加载失败（播放失败气泡 / flop 播放器由本函数内部负责，
+     调用方按返回值决定后续，勿再自动进全屏）。 */
+  const startEngine = useCallback(async (): Promise<boolean> => {
     /* 回放中/已结束再点＝从头重播（练习页六期口径） */
     if (engineRef.current) {
       engineRef.current.restart();
       setStatus("playing");
-      return;
+      return true;
     }
+    /* 请求在途防抖（按钮 disabled 是渲染层，双击同拍竞态在此兜底：
+       连续两次 runReplay 会双挂光标 div、双份 rAF——必须挡住） */
+    if (loadingRef.current) return false;
     const boardEl = document.getElementById(`board_${boardId}`);
     const wrap = (boardEl?.closest(".play_board") as HTMLElement | null) ?? null;
     const tbody = boardEl?.querySelector("tbody");
-    if (!wrap || !tbody) return;
+    if (!wrap || !tbody) return false;
     const rows = (tbody as HTMLTableSectionElement).rows.length;
     const cols = rows ? (tbody as HTMLTableSectionElement).rows[0].cells.length : 0;
-    if (!rows || !cols) return;
+    if (!rows || !cols) return false;
     const ext = (filepath.split(".").pop() || "").toLowerCase();
     if (ext !== "avf" && ext !== "mvf" && ext !== "rmv") {
       // rmf 等站内无解析器的格式 → flop 播放器兜底
       setFlopUri(uri);
-      return;
+      return false;
     }
+    loadingRef.current = true;
     setStatus("loading");
-    void (async () => {
-      try {
-        if (dataRef.current === undefined) {
-          const res = await fetch(uri);
-          if (!res.ok) throw new FetchError(res.status);
-          dataRef.current = parseReplayData(
-            new Uint8Array(await res.arrayBuffer()),
-            ext,
-            realTimeMs ? Math.round(realTimeMs / 10) : undefined
-          );
-        }
-        const data = dataRef.current;
-        /* 尺寸不符（盘面与文件对不上，理论不至）或解析失败 → flop 兜底 */
-        if (!data || data.w !== cols || data.h !== rows) {
-          dataRef.current = null;
-          setStatus("idle");
-          setFlopUri(uri);
-          return;
-        }
-        /* 极端并发（加载完成与用户二次点击同拍）：已有引擎就重播，不双开 */
-        if (engineRef.current) {
-          engineRef.current.restart();
-          setStatus("playing");
-          return;
-        }
-        engineRef.current = runReplay({
-          wrap,
-          tbody: tbody as HTMLTableSectionElement,
-          rows,
-          cols,
-          data,
-          onEnd: () => setStatus("ended"),
-          onStats: setStats,
-          onFace: setFace,
-        });
-        /* 解析产物留 state 一份：全屏层试玩引擎的布雷数据源（渲染期可读） */
-        setReplayData(data);
-        setStatus("playing");
-      } catch (e) {
+    try {
+      if (dataRef.current === undefined) {
+        const res = await fetch(uri);
+        if (!res.ok) throw new FetchError(res.status);
+        dataRef.current = parseReplayData(
+          new Uint8Array(await res.arrayBuffer()),
+          ext,
+          realTimeMs ? Math.round(realTimeMs / 10) : undefined
+        );
+      }
+      const data = dataRef.current;
+      /* 尺寸不符（盘面与文件对不上，理论不至）或解析失败 → flop 兜底 */
+      if (!data || data.w !== cols || data.h !== rows) {
         dataRef.current = null;
-        /* 文件拉不到（404/5xx/网络断）：flop 播放器拉同一 URL 也必失败——
-           不再弹全屏播放器，改棋盘中央红色气泡提示（2026-10-16 张老师需求：
-           录像文件缺失可能是历史屏蔽误删，改判后可恢复，播放失败要能看懂原因） */
-        if (e instanceof FetchError) {
-          setStatus("idle");
-          notify(`录像文件加载失败（${e.status || "网络错误"}），无法播放`);
-          return;
-        }
         setStatus("idle");
         setFlopUri(uri);
+        return false;
       }
-    })();
+      /* 极端并发（加载完成与用户二次点击同拍）：已有引擎就重播，不双开。
+         ⚠️ as 断言不可省：顶部 guard 后 TS 把 engineRef.current 收窄为 null
+         且跨 await 不失效（TS 不跟踪异步交错），此处真值分支会被推成 never */
+      const eng = engineRef.current as Engine | null;
+      if (eng) {
+        eng.restart();
+        setStatus("playing");
+        return true;
+      }
+      engineRef.current = runReplay({
+        wrap,
+        tbody: tbody as HTMLTableSectionElement,
+        rows,
+        cols,
+        data,
+        onEnd: () => setStatus("ended"),
+        onStats: setStats,
+        onFace: setFace,
+      });
+      /* 解析产物留 state 一份：全屏层试玩引擎的布雷数据源（渲染期可读） */
+      setReplayData(data);
+      setStatus("playing");
+      return true;
+    } catch (e) {
+      dataRef.current = null;
+      /* 文件拉不到（404/5xx/网络断）：flop 播放器拉同一 URL 也必失败——
+         不再弹全屏播放器，改棋盘中央红色气泡提示（2026-10-16 张老师需求：
+         录像文件缺失可能是历史屏蔽误删，改判后可恢复，播放失败要能看懂原因） */
+      if (e instanceof FetchError) {
+        setStatus("idle");
+        notify(`录像文件加载失败（${e.status || "网络错误"}），无法播放`);
+        return false;
+      }
+      setStatus("idle");
+      setFlopUri(uri);
+      return false;
+    } finally {
+      loadingRef.current = false;
+    }
   }, [boardId, filepath, realTimeMs, uri, notify]);
+
+  const play = useCallback(() => {
+    void startEngine();
+  }, [startEngine]);
 
   const stop = useCallback(() => {
     engineRef.current?.stop();
@@ -1304,6 +1325,32 @@ export function VideoReplayProvider({
     setFace("smile");
     setReplayData(null);
   }, []);
+
+  /* 一键全屏试玩（二十一期，2026-10-21 张老师需求）：等价于依次点
+     「播放→全屏→笑脸」三步直达。起播核心 await 成功后进全屏 + 置 autoPlay
+     flag（ReplayFullscreen 挂载后自动「点笑脸」进试玩，见其 autoEnterPlay
+     effect）；失败（fetch 404 / flop 兜底）不自开全屏——播放失败气泡与
+     flop 播放器由 startEngine 内部负责，本函数只按返回值决定后续。 */
+  const [autoPlay, setAutoPlay] = useState(false);
+  const statusRef = useRef<Status>("idle");
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+  const playGame = useCallback(() => {
+    if (statusRef.current === "loading") return; // 加载中重复点：忽略（防双 fetch）
+    /* 预检：不支持原地解析的格式（rmv / rmf 等）没有锁盘试玩能力（走 flop
+       播放器兜底，无布雷数据）——直接提示，不进全屏 */
+    const ext = (filepath.split(".").pop() || "").toLowerCase();
+    if (ext !== "avf" && ext !== "mvf") {
+      notify("该录像格式不支持试玩（仅 avf / mvf）");
+      return;
+    }
+    void (async () => {
+      if (!(await startEngine())) return;
+      setFullscreen(true);
+      setAutoPlay(true);
+    })();
+  }, [startEngine, filepath, notify]);
 
   const pause = useCallback(() => {
     engineRef.current?.pause();
@@ -1355,6 +1402,10 @@ export function VideoReplayProvider({
     stop();
   }, [stop]);
 
+  /* 一键试玩 flag 回收（二十一期）：stabilized 回调，供 ReplayFullscreen
+     的一次性触发 effect 引用 */
+  const autoEnterDone = useCallback(() => setAutoPlay(false), []);
+
   /* 卸载清理（软导航离开页面时停引擎、恢复/释放 DOM） */
   useEffect(
     () => () => {
@@ -1366,7 +1417,19 @@ export function VideoReplayProvider({
 
   return (
     <ReplayCtx.Provider
-      value={{ status, stats, fullscreen, play, stop: stopAll, pause, resume, togglePlay, seek, setFullscreen }}
+      value={{
+        status,
+        stats,
+        fullscreen,
+        play,
+        playGame,
+        stop: stopAll,
+        pause,
+        resume,
+        togglePlay,
+        seek,
+        setFullscreen,
+      }}
     >
       {children}
       {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
@@ -1390,6 +1453,8 @@ export function VideoReplayProvider({
           radarPoints={radarPoints}
           radarOverall={radarOverall}
           radarDists={radarDists}
+          autoEnterPlay={autoPlay}
+          onAutoEnterDone={autoEnterDone}
           onToggle={togglePlay}
           onPause={pause}
           onSeek={seek}
@@ -1719,6 +1784,8 @@ function ReplayFullscreen({
   radarPoints,
   radarOverall: radarOverallProp,
   radarDists,
+  autoEnterPlay,
+  onAutoEnterDone,
   onToggle,
   onPause,
   onSeek,
@@ -1739,6 +1806,10 @@ function ReplayFullscreen({
   radarOverall?: string;
   /** 本录像所属组（级别 × 模式）的分位基准——试玩结束「我的评级」同基准打分（二十期） */
   radarDists?: Partial<Record<MetricKey, number[]>>;
+  /** 二十一期一键试玩：挂载即自动「点笑脸」进试玩（等价点全屏后点笑脸） */
+  autoEnterPlay?: boolean;
+  /** 自动试玩一次性 flag 的回收（触发或层卸载时调用） */
+  onAutoEnterDone?: () => void;
   onToggle: () => void;
   onPause: () => void;
   onSeek: (csec: number) => void;
@@ -1836,6 +1907,19 @@ function ReplayFullscreen({
     }
     startPlay();
   }, [mode, onPause, startPlay]);
+
+  /* 一键试玩直达（二十一期）：autoEnterPlay 置位时挂载即自动 enterPlay
+     （等价「点全屏按钮 + 点笑脸」两步）。enterPlay 需要棋盘 DOM 已挂载，
+     故放 rAF 下一帧执行；fire-and-forget（不挂 cleanup 取消——onAutoEnterDone
+     的 setState 会立刻改 deps 触发 cleanup 把 rAF 误杀；层若在下一帧前卸载，
+     startPlay 的空守卫自然吞掉）。doneRef 防重入：deps 波动不二次进试玩。 */
+  const autoPlayDoneRef = useRef(false);
+  useEffect(() => {
+    if (!autoEnterPlay || autoPlayDoneRef.current) return;
+    autoPlayDoneRef.current = true;
+    onAutoEnterDone?.();
+    requestAnimationFrame(() => enterPlay());
+  }, [autoEnterPlay, enterPlay, onAutoEnterDone]);
 
   /* 退出试玩回到回放：销毁试玩引擎 + 面板切回回放统计（事件回调里 setState 合法）；
      镜像 rAF 自动把页面引擎的盘面抄回 FS 棋盘 */
@@ -2382,24 +2466,44 @@ export function VideoReplayBoard({
   );
 }
 
-/** 「播放」按钮（替代原 PlayButton）：加载中禁用；回放中/结束＝「重播」 */
+/** 「播放」「试玩」按钮（替代原 PlayButton）：
+ *  播放——加载中禁用；回放中/结束＝「重播」。
+ *  试玩（二十一期，2026-10-21 张老师需求）——一键直达全屏试玩（等价点全屏
+ *  按钮后再点笑脸），锁定本录像布雷不可更改；首点自动 fetch+起播再进全屏。
+ *  图标＝手柄（游戏手柄＝亲手玩一盘的语义，与播放三角/下载箭头区分）。 */
 export function VideoReplayButton() {
   const ctx = useContext(ReplayCtx);
   if (!ctx) return null;
   const { status } = ctx;
   const label = status === "loading" ? "加载中…" : status === "idle" ? "播放" : "重播";
   return (
-    <button type="button" onClick={ctx.play} disabled={status === "loading"}>
-      {status === "idle" || status === "loading" ? (
-        <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
-          <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
+    <>
+      <button type="button" onClick={ctx.play} disabled={status === "loading"}>
+        {status === "idle" || status === "loading" ? (
+          <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
+          </svg>
+        ) : (
+          <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+          </svg>
+        )}
+        {label}
+      </button>
+      <button
+        type="button"
+        onClick={ctx.playGame}
+        disabled={status === "loading"}
+        title="全屏试玩本局盘面（锁定本录像布雷，不计成绩不上传）"
+      >
+        <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          {/* 手柄主体 + 叉键 + 两键——「亲手玩」语义 */}
+          <path d="M7.5 7h9a5.5 5.5 0 0 1 5.35 4.25l.9 4.2a2.6 2.6 0 0 1-4.62 2.2l-1.42-1.9a1.5 1.5 0 0 0-1.2-.6H8.49a1.5 1.5 0 0 0-1.2.6l-1.42 1.9a2.6 2.6 0 0 1-4.62-2.2l.9-4.2A5.5 5.5 0 0 1 7.5 7z" />
+          <path d="M8 10.2v3.6M6.2 12h3.6" />
+          <path d="M15.8 11.2h.01M18 13.4h.01" />
         </svg>
-      ) : (
-        <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-          <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-        </svg>
-      )}
-      {label}
-    </button>
+        试玩
+      </button>
+    </>
   );
 }
