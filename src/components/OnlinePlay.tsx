@@ -1289,15 +1289,27 @@ export function OnlinePlay({
        旗/问号格按下不动作不录事件：连击是「插旗连发」，滑过已有旗不误拔；
        拔旗走松开路径——右键在旗格上**松开**＝取消标记（见 window mouseup，
        仅空手松开生效），事件流补 rc+rr 配对与常规右键同口径。
-       slide=true＝滑动路径经过（2026-10-21 张老师两定）：①左键滑动＝只开未开格，
-       滑过已开数字格不录 sc+lr 不计 Double——按住左键持续开空曾整路误计 Double
-       （chord 不成立还全记 wasted），Double 只属于明确点击（mousedown 按下瞬间
-       所在格）；②右键滑动过数字格＝「有效才计」（二定）：旗数恰好满足且有未开
-       邻格才 mr+chord 计一次 Double（速旗滑行收尾手势），不满足静默跳过零 wasted。
-       触屏 touchmove 本就 state===0 守卫只开未开格，无需同改 */
+       slide=true＝滑动路径经过（2026-10-21 张老师四定汇总）：①滑动一律不做
+       chord——左键滑动只开未开格，滑过已开格零动作（按住持续开空曾整路误计
+       Double）；②chord 类 Double 全部「**有效才计**」——左键按下在已开格
+       （三定）与右键按下/滑动过数字格（二定）统一判据：数字非 0、旗数恰好
+       满足且有未开非旗邻格才触发（sc+lr 或 mr）+chord 计一次 Double；
+       0 格/旗不满足/无可开的落格＝走位失误，不录事件不计 Double 零 wasted。
+       病根（三定案）：初级按住左键连开整局＝多段手势（首击保护窗强制松手
+       重按），落点几乎必在已开区，每次按下白计一次 Double。触屏 touchmove
+       本就 state===0 守卫只开未开格，无需同改 */
     function comboLeftClick(i: number, slide = false) {
       if (state[i] === 1) {
-        if (slide) return; // 左键滑过已开数字格：不双击、不录事件、不计 Double
+        /* 左键滑过已开格：不双击（一审）；按下在已开格＝chord 手势，「有效才计」
+           （2026-10-21 三定）：数字非 0、旗数恰好满足且有未开非旗邻格才录
+           sc+lr+chord——0 格/旗不满足/无可开的按下是走位失误不是双击意图，
+           不录事件不计 Double 零 wasted */
+        if (slide) return;
+        if (!nums || nums[i] === 0) return;
+        const around = neighbors(i);
+        let f = 0;
+        for (const c of around) if (state[c] === 2) f++;
+        if (f !== nums[i] || !around.some((c) => state[c] === 0)) return;
         comboHit = true; recordEv(11, i); recordEv(5, i); chord(i);
       }
       else if (state[i] === 0) { comboHit = true; recordEv(3, i); recordEv(5, i); openCell(i); }
@@ -1305,16 +1317,13 @@ export function OnlinePlay({
     function comboRightClick(i: number, slide = false) {
       if (nf) return; // NF：右键禁用（入口已拦，双保险）
       if (autoChord && nums && state[i] === 1) {
-        /* 右键滑动过数字格：有效才计（判据与 autoChordAround 同款）——
+        /* 连击模式右键在已开数字格上（按下与滑动同口径，「有效才计」）：
            旗数恰好满足且有未开非旗邻格才 mr+chord；否则静默跳过 */
-        if (slide) {
-          if (nums[i] === 0) return;
-          const around = neighbors(i);
-          let f = 0;
-          for (const c of around) if (state[c] === 2) f++;
-          if (f !== nums[i] || !around.some((c) => state[c] === 0)) return;
-          comboHit = true; recordEv(65, i); chord(i); return;
-        }
+        if (nums[i] === 0) return;
+        const around = neighbors(i);
+        let f = 0;
+        for (const c of around) if (state[c] === 2) f++;
+        if (f !== nums[i] || !around.some((c) => state[c] === 0)) return;
         comboHit = true; recordEv(65, i); chord(i); return;
       }
       if (state[i] !== 0) return;
