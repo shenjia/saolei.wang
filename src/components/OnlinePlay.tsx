@@ -131,7 +131,7 @@ const TIPS: string[] = [
   "设置里能限定 3BV 范围，只练你想要的开局难度。",
   "在线练习录像不能参与排行，下载后仅供自己回看。",
   "手机上长按格子可以标雷，标完会自动展开周围已满足的数字格。",
-  "点笑脸随时重开一局（手摆雷的局点笑脸＝复玩同一张手摆地图）；F2 恒换新地图。",
+  "点笑脸随时重开一局（自定义手摆的图会一直保留，切模式或重新摆雷才换）；F2 恒换新地图。",
   "禁旗模式（NF）下不能插旗，按下即开，滑动可以开多格。",
   "连击模式下按下鼠标即触发，按住左/右键滑动可连续点击滑过的格子（一格一次）。",
   "左右键同按（或单击已满足的数字格）可一次展开一圈，比逐格点快。",
@@ -1233,6 +1233,7 @@ export function OnlinePlay({
           manualBoard = true;
           manualMode = false;
           mines = manualMines.slice();
+          manualStoredMines = mines.slice(); // 常驻副本：此后点笑脸一直复玩这张图
           manualMines = new Uint8Array(0);
           stopManualMode();
           recalcAll();
@@ -1303,6 +1304,9 @@ export function OnlinePlay({
        「重玩本局」复用锁定盘机制自动复刻手摆局。 */
     let manualPlaced = 0; // 已摆雷数（reset 清零）
     let manualMines: Uint8Array = new Uint8Array(0); // 手摆雷位标记（与盘面同尺寸）
+    /* 手摆图常驻副本（2026-10-21 张老师定）：首击定格时存一份，之后点笑脸永远
+       复玩这张图（锁定盘注入，可无限次）；只在切级别/改规格/重新摆雷时作废 */
+    let manualStoredMines: Uint8Array | null = null;
     /* 摆雷拖动手势（2026-10-21 张老师补）：1=按住左键滑过连续摆 / -1=按住右键滑过连续撤 /
        0=无。不走 leftDown/rightDown（那两旗会把 mouseup 送进常规开局/插旗分支） */
     let manualDrag = 0;
@@ -1320,6 +1324,7 @@ export function OnlinePlay({
     function startManualMode() {
       if (lv !== "cus") return;
       closeCusDialog();
+      manualStoredMines = null; // 重新摆雷＝旧手摆图作废（2026-10-21 张老师定）
       if (started || over) reset("cus"); // 已开局/已结束：重开再摆
       manualMode = true;
       manualBtn.classList.add("active");
@@ -2830,9 +2835,13 @@ export function OnlinePlay({
          exitReplay 的 repaintAll 在这里跳过：reset 后面自会全盘重画。
          第二个参数 false（七期）：新开一局不许把「本局表现」浮层弹回来 */
       if (replaying) forceExitReplay(false, false);
-      const prevLv = lv, prevW = W, prevH = H;
+      const prevLv = lv, prevW = W, prevH = H, prevM = M;
       lv = level || lv;
       const L = levelSize(lv); W = L.x; H = L.y; M = L.m;
+      /* 手摆图常驻副本作废条件（2026-10-21 张老师定）：切级别，或自定义规格变了
+         （宽/高/雷数任一变化）。笑脸/F2/再来一局等平级 reset 不作废——自定义+
+         手摆后只要不切模式/不重新摆雷，点笑脸永远复玩同一张图 */
+      if ((level && level !== prevLv) || prevW !== W || prevH !== H || prevM !== M) manualStoredMines = null;
       /* 手动摆雷状态随新局清零（2026-10-21）：manualMode/manualBoard/manualMines
          全部重置；指示器与按钮态收尾（stopManualMode 幂等，非摆雷时只收 UI） */
       manualMode = false;
@@ -3367,13 +3376,17 @@ export function OnlinePlay({
     }, { signal });
 
     /* 笑脸＝重新开始（2026-10-21 张老师定）：重新随机布局开新局；
-       唯一例外＝手摆局（manualBoard，自定义+手动摆雷开局后）——点笑脸＝重玩本局
-       不换图（当前手摆雷区注入锁定盘复刻，与 R 同机制）。
-       摆雷期未开局（manualBoard 尚为 false）＝其他情况，普通重开会清掉已摆雷位；
-       回放中点笑脸＝退出回放开新局（reset 自带 forceExitReplay） */
+       唯一例外＝自定义+有手摆图（manualStoredMines，首击定格时存常驻副本）——
+       点笑脸永远复玩同一张手摆图（锁定盘注入，可无限次；副本只在切级别/
+       改规格/重新摆雷时作废，见 reset 与 startManualMode）。
+       摆雷期未开局＝普通重开（清掉已摆雷位）；回放中点笑脸＝退出回放
+       （reset 自带 forceExitReplay），有手摆图则复玩手摆图 */
     const faceBtn = $("face_btn");
     on(faceBtn, "click", () => {
-      if (manualBoard && mines) { pendingBoard = mines.slice(); replayBoardLocked = true; }
+      if (lv === "cus" && manualStoredMines) {
+        pendingBoard = manualStoredMines.slice();
+        replayBoardLocked = true;
+      }
       reset();
     });
     on(faceBtn, "mousedown", () => setFace("press"));
@@ -4620,6 +4633,7 @@ export function OnlinePlay({
         started: () => started,
         manualMode: () => manualMode,
         manualPlaced: () => manualPlaced,
+        manualStored: () => (manualStoredMines ? Array.from(manualStoredMines) : null),
         M: () => M,
         combo: () => combo,
         guard: () => comboGuard,
