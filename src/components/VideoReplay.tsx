@@ -1134,6 +1134,8 @@ interface ReplayCtxValue {
   play: () => void;
   /** 一键全屏试玩（二十一期）：等价于「点全屏按钮 + 点笑脸」两步 */
   playGame: () => void;
+  /** 弹旧版（flop）播放器播放本录像（2026-10-21 张老师需求：大按钮 hover 气泡入口） */
+  playLegacy: () => void;
   stop: () => void;
   pause: () => void;
   resume: () => void;
@@ -1352,6 +1354,14 @@ export function VideoReplayProvider({
     })();
   }, [startEngine, filepath, notify]);
 
+  /* 旧版播放器（2026-10-21 张老师需求）：大播放按钮 hover 气泡里的入口——
+     复用 Provider 现成的 flop 懒挂链路（rmv 兜底同款）：setFlopUri(uri) 挂
+     FlopPlayer iframe，挂上后 effect 调 playFlop 弹全屏 flop 播放器；
+     播放器未就绪时 playFlop 的 pendingUri 队列自动补播，多次点击幂等 */
+  const playLegacy = useCallback(() => {
+    setFlopUri(uri);
+  }, [uri]);
+
   const pause = useCallback(() => {
     engineRef.current?.pause();
     setStatus("paused");
@@ -1423,6 +1433,7 @@ export function VideoReplayProvider({
         fullscreen,
         play,
         playGame,
+        playLegacy,
         stop: stopAll,
         pause,
         resume,
@@ -1829,8 +1840,11 @@ function ReplayFullscreen({
   const dropTRef = useRef<number | undefined>(undefined);
   /* 十七期：回放/试玩双模式——replay＝引擎镜像 + 事件驱动笑脸/计数条；
      play＝试玩引擎（点笑脸进入），退出回 replay（回放从定格处继续）。
-     笑脸显示源：回放态＝engineFace（引擎事件驱动）、试玩态＝本地 face */
-  const [mode, setMode] = useState<"replay" | "play">("replay");
+     笑脸显示源：回放态＝engineFace（引擎事件驱动）、试玩态＝本地 face。
+     二十一期补丁：一键试玩（autoEnterPlay）时初始即 "play"——挂载帧镜像 rAF
+     不启动（否则把页面回放引擎已重演几帧的开格抄进 FS 污染干净盘面），
+     FS 棋盘也从空盘渲染（boardStr 是录像终局图，见 Board 处注释） */
+  const [mode, setMode] = useState<"replay" | "play">(autoEnterPlay ? "play" : "replay");
   const [face, setFace] = useState<FaceKind>("smile");
   const playRef = useRef<{ destroy: () => void } | null>(null);
   const faceUseRef = useRef<SVGUseElement | null>(null);
@@ -1912,14 +1926,19 @@ function ReplayFullscreen({
      （等价「点全屏按钮 + 点笑脸」两步）。enterPlay 需要棋盘 DOM 已挂载，
      故放 rAF 下一帧执行；fire-and-forget（不挂 cleanup 取消——onAutoEnterDone
      的 setState 会立刻改 deps 触发 cleanup 把 rAF 误杀；层若在下一帧前卸载，
-     startPlay 的空守卫自然吞掉）。doneRef 防重入：deps 波动不二次进试玩。 */
+     startPlay 的空守卫自然吞掉）。doneRef 防重入：deps 波动不二次进试玩。
+     ⚠️ mode 已在 useState 初始化为 "play"（本层挂载帧镜像 rAF 就不启动），
+     但页面回放引擎还在跑（playGame 起播后它 playing 中）——先 onPause() 定格，
+     否则 exitPlay 回 replay 时引擎从已跑远的时间点继续（试玩刚开时它还
+     在页面侧继续重演进度）。 */
   const autoPlayDoneRef = useRef(false);
   useEffect(() => {
     if (!autoEnterPlay || autoPlayDoneRef.current) return;
     autoPlayDoneRef.current = true;
     onAutoEnterDone?.();
+    onPause(); // 页面回放引擎定格（mode 已是 play，镜像 rAF 不在跑）
     requestAnimationFrame(() => enterPlay());
-  }, [autoEnterPlay, enterPlay, onAutoEnterDone]);
+  }, [autoEnterPlay, enterPlay, onAutoEnterDone, onPause]);
 
   /* 退出试玩回到回放：销毁试玩引擎 + 面板切回回放统计（事件回调里 setState 合法）；
      镜像 rAF 自动把页面引擎的盘面抄回 FS 棋盘 */
@@ -2251,7 +2270,17 @@ function ReplayFullscreen({
             </div>
             <div className="gframe">
               <div className="vprfs_board_wrap">
-                <Board id={"fs_board_" + boardId} level={level} board={boardStr} size={16} />
+                {/* 试玩态渲染空盘（二十一期）：boardStr 是录像**终局图**（胜局全开格
+                    +雷全标旗），一键试玩若按终局图渲染再靠引擎 reset 刷回，慢机器上
+                    有可感知的「已开格→全闭合」闪变；runPlayGame 的初始全盘重置仍在
+                    （兜底任何残留），但首帧就该是干净的未开盘面。回放态不受影响
+                    （镜像 rAF 每帧把页面引擎盘面抄过来，boardStr 只是骨架）。 */}
+                <Board
+                  id={"fs_board_" + boardId}
+                  level={level}
+                  board={mode === "play" ? "b".repeat(boardStr.length) : boardStr}
+                  size={16}
+                />
                 <div className="replay_cursor" aria-hidden="true">
                   <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>
                 </div>
@@ -2467,7 +2496,8 @@ export function VideoReplayBoard({
 }
 
 /** 「播放」「试玩」按钮（替代原 PlayButton）：
- *  播放——加载中禁用；回放中/结束＝「重播」。
+ *  播放——加载中禁用；回放中/结束＝「重播」；hover 时按钮下方弹深灰气泡
+ *  「使用旧版播放器」（2026-10-21 张老师需求），点击弹 flop 播放器播放本录像。
  *  试玩（二十一期，2026-10-21 张老师需求）——一键直达全屏试玩（等价点全屏
  *  按钮后再点笑脸），锁定本录像布雷不可更改；首点自动 fetch+起播再进全屏。
  *  图标＝手柄（游戏手柄＝亲手玩一盘的语义，与播放三角/下载箭头区分）。 */
@@ -2478,18 +2508,43 @@ export function VideoReplayButton() {
   const label = status === "loading" ? "加载中…" : status === "idle" ? "播放" : "重播";
   return (
     <>
-      <button type="button" onClick={ctx.play} disabled={status === "loading"}>
-        {status === "idle" || status === "loading" ? (
-          <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
-            <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
-          </svg>
-        ) : (
-          <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-          </svg>
-        )}
-        {label}
-      </button>
+      <span className="tip_host">
+        <button type="button" onClick={ctx.play} disabled={status === "loading"}>
+          {status === "idle" || status === "loading" ? (
+            <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
+            </svg>
+          ) : (
+            <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+            </svg>
+          )}
+          {label}
+        </button>
+        {/* 旧版播放器气泡（2026-10-21 张老师需求）：hover 播放按钮时下方弹深灰
+            气泡，点击弹 flop 播放器（ctx.playLegacy）。span.tip_host 包按钮做
+            hover 联动锚（气泡是 host 后代，hover 气泡不闪断）；点击 stopPropagation
+            防触发按钮自身的原地回播。加载中隐藏（按钮此时禁用，入口无意义） */}
+        <span
+          className="tip_bubble"
+          role="button"
+          tabIndex={0}
+          aria-label="使用旧版播放器播放本录像"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (status !== "loading") ctx.playLegacy();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              if (status !== "loading") ctx.playLegacy();
+            }
+          }}
+        >
+          使用旧版播放器
+        </span>
+      </span>
       <button
         type="button"
         onClick={ctx.playGame}
