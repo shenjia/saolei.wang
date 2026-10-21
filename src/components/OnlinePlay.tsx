@@ -605,6 +605,9 @@ export function OnlinePlay({
       /** 拖拽导入局标记（2026-10-21）：回放播完即退、定格引擎终态（败局揭示雷区），
           与「刚打完一局」形态一致；自打局维持原口径（侧边态停在回放终帧） */
       imported?: boolean;
+      /** 手摆局标记（2026-10-21）：快照来自手摆图对局——R「重玩本局」复刻后
+          仍按手摆局口径（manualBoard=true）禁用无猜救回，防重排改写手摆图 */
+      manual?: boolean;
       stats: {
         solvedBv: number; cl: number; ce: number; stnb: number;
         bvs: number; ioe: number; corr: number; cls: number; ppc: number;
@@ -1604,6 +1607,7 @@ export function OnlinePlay({
         events: evStream.slice(),
         dateStr: formatAvfTimestamp(new Date()),
         imported,
+        manual: manualBoard, // 手摆局标记：R 重玩复刻后延续无猜禁用口径（防重排改写手摆图）
         stats: {
           solvedBv, cl, ce, stnb,
           bvs: hasBv ? solvedBv / t : 0,
@@ -1848,7 +1852,12 @@ export function OnlinePlay({
       if (!snapshot) return;
       replayBoardLocked = true; // 标记：下一局布雷走锁定盘
       pendingBoard = snapshot.mines.slice();
+      const wasManual = !!snapshot.manual; // 先取（reset 会清 manualBoard）
       reset(lv === "cus" ? "cus" : lv);
+      /* 手摆局快照：复玩局延续 manualBoard=true——无猜不救回（救回会重排
+         改写手摆图，违背 2026-10-21 张老师定「不切模式/不重摆就一直不换图」）。
+         普通局快照维持 10-19 口径：无猜照常救回，允许盘面漂移 */
+      if (wasManual) manualBoard = true;
     }
     /* ---- 再来一局（六期）：与「重玩本局」相对——全新随机盘面。必须显式清掉锁定标记，
        否则重玩本局之后再点再来一局，placeMines 仍会注入上一局的 pendingBoard ---- */
@@ -3386,8 +3395,13 @@ export function OnlinePlay({
       if (lv === "cus" && manualStoredMines) {
         pendingBoard = manualStoredMines.slice();
         replayBoardLocked = true;
-      }
-      reset();
+        reset();
+        /* 复玩局延续手摆局口径（manualBoard=true）：无猜不救回——若放任无猜
+           重排，玩着玩着盘面就被改写（张老师 21:37 报「踩雷后点笑脸有概率
+           重置地图」的真因：复玩局里无猜救回把手摆图悄悄换了）；manualBoard
+           也让本局终局快照带 manual 标记，R 链路延续同口径 */
+        manualBoard = true;
+      } else reset();
     });
     on(faceBtn, "mousedown", () => setFace("press"));
     on(faceBtn, "mouseup", () => setFace(faceKind));
