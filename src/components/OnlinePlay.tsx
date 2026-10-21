@@ -171,6 +171,14 @@ const TIPS: string[] = [
 const TIP_HOLD_MS = 3000;
 const TIP_FADE_MS = 700;
 
+/* 键盘类 tips 条目特征（2026-10-21 张老师定：移动端没有键盘，不出现快捷键提示）——
+   命中即从触屏设备的候选池剔除。须同时覆盖两种在途文案形态（改写版「按1234数字键」
+   「踩雷后按A键/按R键」与原版「键盘 1/2/3 快速切换」「快捷键：A 随时再来一局」），
+   以及 F2 / Esc / 空格（按空格复活也是键盘教学；复活按钮触屏可点，评级警告桌面保留）。
+   ⚠️ 精心选词防误伤：「长按格子」「按下即开」「按住左/右键」「左右键同按」「鼠标按键声」
+   都不含下列模式；改 TIPS 池文案时须对照维护本正则 */
+const KEY_TIP_RE = /键盘|快捷键|按 ?F2|数字键|按 ?A ?键|按 ?R ?键|按 ?Esc|按 ?空格/;
+
 /* ---- 新手提示（2026-10-19 张老师定，设置开关默认关；二版同日改）----
    对局中连续 ROOKIE_IDLE_MS 无有效操作（标雷 = 插上旗、开空 = 开出格子）时
    激活：全图（四版 2026-10-20 张老师定：不再限定鼠标半径）标示——
@@ -210,6 +218,10 @@ export function OnlinePlay({
     document.documentElement.classList.add("op-noscroll");
     const ac = new AbortController();
     const signal = ac.signal;
+    /* 触屏设备判定（2026-10-21 张老师定）：移动端没有键盘，快捷键类提示一律
+       不出现——tips 池剔除键盘条目、结算按钮键帽（kbd）不渲染。
+       口径与连击模式自动开启一致（pointer:coarse），iPad 外接键盘属罕见个案可接受 */
+    const touchUI = window.matchMedia("(pointer: coarse)").matches;
     const on = <E extends Event>(
       el: HTMLElement | Document | Window,
       type: string,
@@ -244,9 +256,13 @@ export function OnlinePlay({
     /* 上一条 tips 的渐隐定时（快速连开新局时重置，避免上一条的定时把新气泡提前掐灭） */
     let tipFadeTimer: number | null = null;
     /* 开局提示候选池（2026-10-20）：「允许复活」关着时剔除空格复活两条
-       （教玩家按空格却无效是误导；「踩雷后按A/R」那条不含复活、保留） */
+       （教玩家按空格却无效是误导；「踩雷后按A/R」那条不含复活、保留）。
+       触屏设备（2026-10-21 张老师定「移动端不要再出现快捷键提示，没有键盘」）：
+       KEY_TIP_RE 剔除全部键盘类条目（F2/数字键/A/R/Esc/空格/「键盘」「快捷键」字样） */
     function tipPool(): string[] {
-      return reviveOn ? TIPS : TIPS.filter((s) => !s.includes("复活"));
+      let pool = reviveOn ? TIPS : TIPS.filter((s) => !s.includes("复活"));
+      if (touchUI) pool = pool.filter((s) => !KEY_TIP_RE.test(s));
+      return pool;
     }
     function showTip() {
       if (!tipsOn) return;
@@ -1568,25 +1584,29 @@ export function OnlinePlay({
       /* 原地复活按钮（2026-10-19 张老师定）：**仅败局且有死亡快照**在雷达图下方
          额外一颗黄色按钮（与四按钮分开、独占一行），点击或空格触发 revive；
          胜局/首击即雷（无快照）不渲染。渲染条件与 revive()/空格守卫同源：
-         dieSnap 存在。独占整行宽度充裕，「空格」键帽恒显示（2026-10-19 快捷键标注） */
+         dieSnap 存在。独占整行宽度充裕，「空格」键帽恒显示（2026-10-19 快捷键标注；
+         触屏设备不渲染键帽与键盘 title——2026-10-21 张老师定，没有键盘不提快捷键） */
+      const kb = (k: string) => (touchUI ? "" : "<kbd>" + k + "</kbd>");
       const reviveBtn = !s.won && dieSnap && reviveOn
-        ? '<button type="button" class="grb grb_revive" id="grb_revive" title="按空格也可复活">' +
-          IC.revive + '原地复活<kbd>空格</kbd></button>'
+        ? '<button type="button" class="grb grb_revive" id="grb_revive"' +
+          (touchUI ? "" : ' title="按空格也可复活"') + ">" +
+          IC.revive + '原地复活' + kb("空格") + "</button>"
         : "";
       /* 四个按钮分两行（2026-10-15 六期张老师定）：上排＝开局类（再来一局 / 重玩本局），
          下排＝本局录像类（查看回放 / 下载录像）。.gr_btns 走 2 列 grid，DOM 顺序即行列顺序。
          快捷键键帽（2026-10-19 张老师定）：R/A/V/D 与按钮一一对应；侧边窄面板
          （列宽 ~84px）放不下由 CSS container query 自动隐藏（.gr_btns 容器宽
-         ≥240px 才显示 kbd），遮罩卡片/宽面板下显示 */
+         ≥240px 才显示 kbd），遮罩卡片/宽面板下显示；
+         触屏设备整个不渲染键帽（2026-10-21 张老师定：移动端没有键盘） */
       host.innerHTML =
         titleLine +
         '<div class="gr_radar" id="gr_radar"></div>' +
         reviveBtn +
         '<div class="gr_btns">' +
-        '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + '再来一局<kbd>A</kbd></button>' +
-        '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + '重玩本局<kbd>R</kbd></button>' +
-        '<button type="button" class="grb" id="grb_review">' + IC.review + '查看回放<kbd>V</kbd></button>' +
-        '<button type="button" class="grb" id="grb_download">' + IC.download + '下载录像<kbd>D</kbd></button>' +
+        '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + '再来一局' + kb("A") + "</button>" +
+        '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + '重玩本局' + kb("R") + "</button>" +
+        '<button type="button" class="grb" id="grb_review">' + IC.review + '查看回放' + kb("V") + "</button>" +
+        '<button type="button" class="grb" id="grb_download">' + IC.download + '下载录像' + kb("D") + "</button>" +
         "</div>";
       /* 显隐标志与宿主（2026-10-19 二版）：.show 一律置上＝「这局要显示」，
          至于摆侧边还是进遮罩卡片，由 syncReportZoom 按空间判定后搬家 */
