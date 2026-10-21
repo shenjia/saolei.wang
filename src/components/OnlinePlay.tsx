@@ -1289,14 +1289,15 @@ export function OnlinePlay({
        旗/问号格按下不动作不录事件：连击是「插旗连发」，滑过已有旗不误拔；
        拔旗走松开路径——右键在旗格上**松开**＝取消标记（见 window mouseup，
        仅空手松开生效），事件流补 rc+rr 配对与常规右键同口径。
-       slide=true＝滑动路径经过（2026-10-21 张老师定）：滑过已开数字格不再录
-       sc+lr / mr 计 Double——按住左键持续开空滑过数字格曾整路误计 Double
-       （chord 不成立还全记 wasted）；**Double 只属于明确点击**（mousedown
-       按下瞬间所在格），滑动只保留开格/插旗两种基础动作。触屏 touchmove
-       本就 state===0 守卫只开未开格，无需同改 */
+       slide=true＝滑动路径经过（2026-10-21 张老师两定）：①左键滑动＝只开未开格，
+       滑过已开数字格不录 sc+lr 不计 Double——按住左键持续开空曾整路误计 Double
+       （chord 不成立还全记 wasted），Double 只属于明确点击（mousedown 按下瞬间
+       所在格）；②右键滑动过数字格＝「有效才计」（二定）：旗数恰好满足且有未开
+       邻格才 mr+chord 计一次 Double（速旗滑行收尾手势），不满足静默跳过零 wasted。
+       触屏 touchmove 本就 state===0 守卫只开未开格，无需同改 */
     function comboLeftClick(i: number, slide = false) {
       if (state[i] === 1) {
-        if (slide) return; // 滑过已开数字格：不双击、不录事件、不计 Double
+        if (slide) return; // 左键滑过已开数字格：不双击、不录事件、不计 Double
         comboHit = true; recordEv(11, i); recordEv(5, i); chord(i);
       }
       else if (state[i] === 0) { comboHit = true; recordEv(3, i); recordEv(5, i); openCell(i); }
@@ -1304,7 +1305,16 @@ export function OnlinePlay({
     function comboRightClick(i: number, slide = false) {
       if (nf) return; // NF：右键禁用（入口已拦，双保险）
       if (autoChord && nums && state[i] === 1) {
-        if (slide) return; // 同口径：滑过已开数字格不触发速旗 mr 双击
+        /* 右键滑动过数字格：有效才计（判据与 autoChordAround 同款）——
+           旗数恰好满足且有未开非旗邻格才 mr+chord；否则静默跳过 */
+        if (slide) {
+          if (nums[i] === 0) return;
+          const around = neighbors(i);
+          let f = 0;
+          for (const c of around) if (state[c] === 2) f++;
+          if (f !== nums[i] || !around.some((c) => state[c] === 0)) return;
+          comboHit = true; recordEv(65, i); chord(i); return;
+        }
         comboHit = true; recordEv(65, i); chord(i); return;
       }
       if (state[i] !== 0) return;
