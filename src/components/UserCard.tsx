@@ -6,6 +6,8 @@
 //   分隔线以下为四级纪录（直接复用用户主页的 ScoreTime / Score3bvs 渲染，
 //   级别灰阶与 hover 变色同源，数字可点进对应录像）。
 //   2026-10-14 张老师要求：卡片不再显示最近登录时间。
+//   2026-10-21 张老师要求：恢复——底部「最近登录」行重新上线（绝对日期 Y年n月j日），
+//   四级纪录表头级别名后加「记录」二字（初级记录 / 中级记录 / 高级记录 / 总计记录）。
 // 卡片下方可跟一个「实力」雷达图板块（UserPanel 统一组装，与用户主页同款）。
 // 旧版「进入TA的地盘」按钮、人气 / 今日人气、旧版称号、(id) 均已下线。
 // 用于 /bbs/[id] 右栏与 /video/[id] 右栏。
@@ -17,6 +19,7 @@ import { getRadarData } from "@/lib/radar";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { RadarChart } from "./RadarChart";
 import { areaDisplay, AREA_OVERSEAS, LEVELS, LEVEL_NAMES } from "@/lib/config";
+import { formatDate } from "@/lib/format";
 
 export function UserCard({ card }: { card: UserCardData }) {
   return (
@@ -78,7 +81,8 @@ export function UserCard({ card }: { card: UserCardData }) {
       <hr className="ucd_hr" />
 
       {/* 四级纪录：照搬用户主页 .scores 的渲染（ScoreTime / Score3bvs）；
-          2026-10-15 张老师要求：卡片不再传 date（不显示纪录达成日期），用户主页不受影响 */}
+          2026-10-15 张老师要求：卡片不再传 date（不显示纪录达成日期），用户主页不受影响；
+          2026-10-21 张老师要求：表头级别名后加「记录」二字（初级记录 / … / 总计记录） */}
       <table className="scores" cellPadding={0} cellSpacing={0}>
         <tbody>
           {LEVELS.map((level) => {
@@ -86,7 +90,7 @@ export function UserCard({ card }: { card: UserCardData }) {
             const bvsRec = card.scores[`${level}_3bvs`];
             return (
               <tr key={level} className={level}>
-                <th>{LEVEL_NAMES[level]}</th>
+                <th>{LEVEL_NAMES[level]}记录</th>
                 <td>
                   <ScoreTime
                     score={timeRec?.score ?? null}
@@ -106,6 +110,15 @@ export function UserCard({ card }: { card: UserCardData }) {
           })}
         </tbody>
       </table>
+
+      {/* 最近登录（2026-10-21 张老师要求恢复）：绝对日期显示，从未登录显示「?」。
+          二轮调整：整行字体与表头「XX记录」一致（12.5px / #75715e），
+          日期用亮灰 #b1b1a4（em，与卡片中级数字/正文亮灰同源）；
+          三轮：标签后不放冒号，空格分隔 */}
+      <p className="ucd_login">
+        最近登录{" "}
+        {card.lastLoginTime > 0 ? <em>{formatDate(card.lastLoginTime, "Y年n月j日")}</em> : "?"}
+      </p>
     </div>
   );
 }

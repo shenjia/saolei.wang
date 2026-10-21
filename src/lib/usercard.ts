@@ -1,8 +1,8 @@
 // 侧栏个人卡片数据（2026-10-13 六轮定稿，设计稿 design/sidebar-panel.html）
 // 卡片结构：照片（点击进主页）｜ 右侧姓名 + 性别图标 + 军衔、其下地区/全国排行（与头像齐平）
 //   ｜ 分隔线以下四级纪录（照搬用户主页 ScoreTime / Score3bvs 渲染）；
-//   2026-10-14 张老师要求：卡片不再显示最近登录时间（lastLoginTime 一并下线）、
-//   不再显示排行升降（delta 字段与 rank_snapshot 查询一并下线）。
+//   2026-10-14 张老师要求：卡片不再显示排行升降（delta 字段与 rank_snapshot 查询一并下线）。
+//   2026-10-21 张老师要求：恢复最近登录行（lastLoginTime 重新上线，卡片底部绝对日期显示）。
 //   卡片下方另有「实力」雷达图板块，由页面按 hasVideos 决定是否渲染（与用户主页同规则）。
 // 数据来源：getUserDetail（用户 + 成绩 + 录像统计，与用户主页完全同一口径）
 //   + getUserRanks（地区/全国名次）。
@@ -37,6 +37,8 @@ export interface UserCardData {
   areaPos: number | null;
   /** 四级成绩（键 `${level}_${order}`，与 getUserDetail 同构，直接喂 ScoreTime / Score3bvs） */
   scores: Record<string, UserCardScore>;
+  /** 最近登录时间（Unix 秒；0=从未登录，卡片底部「最近登录」行显示用，2026-10-21 恢复） */
+  lastLoginTime: number;
   /** 是否上传过录像（决定是否显示「实力」雷达板块，与用户主页同门槛） */
   hasVideos: boolean;
 }
@@ -85,6 +87,7 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     area,
     areaPos: ranks?.areaPos ?? null,
     scores,
+    lastLoginTime: detail.user.lastLoginTime,
     hasVideos: !!stat && stat.begVideos + stat.intVideos + stat.expVideos > 0,
   };
 }
