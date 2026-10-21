@@ -711,8 +711,13 @@ function runPlayGame(opts: {
   onStats: (s: ReplayStats) => void;
   /** 终局回调（二十期）：胜/负瞬间发一次，全屏层据此出「我的评级」 */
   onFinish: (r: PlayResult) => void;
+  /** 模式开关即时值（二十一期：NF/速旗/连击，与练习页 online_play_settings 同一份；
+      引擎每事件入口现读——React 切换即时生效，无需重建引擎（速旗/连击只改行为） */
+  getModes: () => { nf: boolean; quickFlag: boolean; combo: boolean };
+  /** NF 模式下右键被拦时的反馈（抖 NF 钮，练习页 shakeModeBtn 同款入口） */
+  onNfBlocked?: () => void;
 }): { destroy: () => void } {
-  const { boardHost, tbody, rows, cols, data, onFace, onStats, onFinish } = opts;
+  const { boardHost, tbody, rows, cols, data, onFace, onStats, onFinish, getModes, onNfBlocked } = opts;
   const N = rows * cols;
   const mines = new Uint8Array(N);
   const nums = new Uint8Array(N);
@@ -905,6 +910,21 @@ function runPlayGame(opts: {
       }
     }
   }
+  /* 速旗 chord 联动（二十一期，练习页 autoChordAround 同口径不录事件版）：
+     插上旗后对周围已开数字格做 chord——预检「旗数满足且有未开非旗邻格」
+     才执行；开不出格的空 chord 不做也不计数 */
+  function quickChordAround(i: number) {
+    for (const a of nbR(i)) {
+      if (over || state[a] !== 1 || nums[a] === 0) continue;
+      const around = nbR(a);
+      let f = 0;
+      for (const c of around) if (state[c] === 2) f++;
+      if (f !== nums[a]) continue;
+      if (!around.some((c) => state[c] === 0)) continue;
+      cDouble++; // 有效 chord 计一次 Double（练习页 mr 引擎计 Double 同价）
+      chord(a);
+    }
+  }
   function toggleFlag(i: number) {
     if (over || state[i] === 1) return;
     /* 问号三态跟随录像 marks（试玩延续本局文件口径） */
@@ -913,6 +933,53 @@ function runPlayGame(opts: {
     else state[i] = 0;
     paint(i);
     led("mines", flagsLeft());
+  }
+  /* 连击单格动作（二十一期，练习页 comboLeftClick/comboRightClick 同口径）：
+     左＝未开格开 / 已开数字有效才 chord（滑过已开格零动作）；右＝未开格插旗 +
+     速旗联动 / 已开数字（速旗开）有效才 chord；旗问号格不动作 */
+  function comboLeft(i: number, slide = false) {
+    if (over) return;
+    if (state[i] === 1) {
+      if (slide) return; // 滑过已开格：零动作（练习页四定）
+      if (nums[i] === 0) return;
+      const around = nbR(i);
+      let f = 0;
+      for (const c of around) if (state[c] === 2) f++;
+      if (f !== nums[i] || !around.some((c) => state[c] === 0)) return;
+      cDouble++;
+      comboHit = true;
+      chord(i);
+    } else if (state[i] === 0) {
+      comboHit = true;
+      cLeft++;
+      openCell(i);
+    }
+  }
+  function comboRight(i: number) {
+    if (over) return;
+    const m = getModes();
+    if (m.nf) return; // NF：右键禁用（入口已拦，双保险）
+    if (m.quickFlag && state[i] === 1) {
+      /* 连击右键在已开数字格（按下与滑动同口径，「有效才计」）：
+         旗数恰好满足且有未开非旗邻格才 chord；否则静默跳过（slide 语义内置） */
+      if (nums[i] === 0) return;
+      const around = nbR(i);
+      let f = 0;
+      for (const c of around) if (state[c] === 2) f++;
+      if (f !== nums[i] || !around.some((c) => state[c] === 0)) return;
+      cDouble++;
+      comboHit = true;
+      chord(i);
+      return;
+    }
+    if (state[i] !== 0) return; // 旗/问号格（含滑动经过）：不动作不误拔
+    comboHit = true;
+    cRight++;
+    toggleFlag(i);
+    /* toggleFlag 改过盘面，重读判定（TS 对 Uint8Array 元素的控制流窄化跨函数
+       调用不失效——直接写 state[i] === 2 会被窄化成 0 恒 false 报 TS2367） */
+    const st: number = state[i];
+    if (m.quickFlag && st === 2) quickChordAround(i);
   }
   function lose(hit: number) {
     over = true;
@@ -945,12 +1012,16 @@ function runPlayGame(opts: {
     td.className = cls;
     td.innerHTML = "";
   }
-  /* ---- 事件绑定（练习页 mousedown/mouseover/mouseup 口径） ---- */
+  /* ---- 事件绑定（练习页 mousedown/mouseover/mouseup 口径 + 三模式） ---- */
   const ac = new AbortController();
   const sig = { signal: ac.signal };
   const boardDiv = boardHost.querySelector<HTMLElement>(".board")!;
-  const on = <E extends Event>(el: Element | Window, type: string, fn: (e: E) => void) =>
-    el.addEventListener(type, fn as EventListener, sig);
+  const on = <E extends Event>(
+    el: Element | Window,
+    type: string,
+    fn: (e: E) => void,
+    opts?: AddEventListenerOptions
+  ) => el.addEventListener(type, fn as EventListener, opts ? { ...sig, ...opts } : sig);
   on<MouseEvent>(boardDiv, "contextmenu", (e) => e.preventDefault());
   const eventCell = (e: { target: EventTarget | null }): number => {
     const td = (e.target as HTMLElement).closest("td");
@@ -960,10 +1031,39 @@ function runPlayGame(opts: {
   let leftDown = false,
     rightDown = false,
     chordDone = false;
+  /* 连击手势标记（练习页同款）：comboHit＝本次按下已产生过动作（松开拔旗只放行
+     空手松开）；comboGuard＝首击手势滑动不动作（开局保护窗，松开解除） */
+  let comboHit = false;
+  let comboGuard = true;
   on<MouseEvent>(boardDiv, "mousedown", (e) => {
     if (over) return;
     const i = eventCell(e);
     if (i < 0) return;
+    const m = getModes();
+    /* 连击模式按下即触发（练习页同款）：左＝完整一次点击、右＝完整一次右击，
+       按住滑动逐格连点（见 mouseover），松开只复位（拔旗例外，见 mouseup） */
+    if (m.combo && e.button === 0) {
+      leftDown = true;
+      rightDown = false;
+      chordDone = false;
+      comboHit = false;
+      onFace("ooh");
+      comboLeft(i); // 按下即触发（首击也在 mousedown 生效；保护窗只拦滑动）
+      return;
+    }
+    if (m.combo && e.button === 2) {
+      if (m.nf) {
+        onNfBlocked?.();
+        return;
+      }
+      rightDown = true;
+      leftDown = false;
+      chordDone = false;
+      comboHit = false;
+      onFace("ooh");
+      comboRight(i);
+      return;
+    }
     if (e.buttons === 3) {
       clearPress();
       pressAround(i);
@@ -977,12 +1077,34 @@ function runPlayGame(opts: {
       pressSingle(i);
       onFace("ooh");
     } else if (e.button === 2) {
+      if (m.nf) {
+        // NF 模式：右键禁用（练习页口径——只抖 NF 钮反馈，无动作）
+        onNfBlocked?.();
+        return;
+      }
       rightDown = true;
       leftDown = false;
       chordDone = false;
       cRight++;
-      toggleFlag(i); // 插旗即刻生效（练习页 rc 口径）；无效右键（已开格上）进 wasted
-      if (state[i] === 1) wRight++;
+      /* 速旗开＋点已开数字＝双击（练习页 flagWithAutoChord 口径）；否则插旗，
+         插上后速旗联动 quickChordAround */
+      if (m.quickFlag && state[i] === 1) {
+        cRight--; // 双击口径：不计右键，计 Double
+        cDouble++;
+        const before = openedSafe;
+        chord(i);
+        if (openedSafe === before && state[i] === 1) {
+          /* 预检不满足（旗数未满足/无可开格）＝走位失误：练习页不录不计——
+             这里回退计数（wasted 口径与练习页「有效才计」一致） */
+          cDouble--;
+          cRight++;
+          wRight++;
+        }
+      } else {
+        toggleFlag(i); // 插旗即刻生效（练习页 rc 口径）；无效右键（已开格上）进 wasted
+        if (m.quickFlag && state[i] === 2) quickChordAround(i);
+        if (state[i] === 1) wRight++;
+      }
     }
   });
   on<MouseEvent>(boardDiv, "mouseover", (e) => {
@@ -990,6 +1112,20 @@ function runPlayGame(opts: {
     if (e.buttons === 0 && (leftDown || rightDown)) leftDown = rightDown = chordDone = false;
     const i = eventCell(e);
     if (i < 0) return;
+    const m = getModes();
+    /* 连击滑动连点（练习页同款）：按住左键滑过未开格即开（首击手势保护窗内
+       不动作）、只按右键滑过未开格即插旗；无需按下态高亮（动作瞬时完成） */
+    if (m.combo) {
+      if (comboGuard && leftDown) return;
+      if (leftDown) {
+        onFace("ooh");
+        comboLeft(i, true);
+      } else if (rightDown) {
+        onFace("ooh");
+        comboRight(i);
+      }
+      return;
+    }
     if (e.buttons === 3) {
       if (pressCell !== null) {
         if (state[pressCell] === 0) paint(pressCell);
@@ -1014,6 +1150,26 @@ function runPlayGame(opts: {
       return;
     }
     const i = eventCell(e);
+    const m = getModes();
+    /* 连击松开＝纯复位（练习页同款）：配对在按下/滑过触发时已闭合。
+       例外＝松开拔旗：右键在旗格上松开＝取消标记，仅空手松开放行
+       （comboHit 守卫：按下插过旗不拔自己的旗） */
+    if (m.combo) {
+      const ui = rightDown ? i : -1;
+      if (ui >= 0 && !comboHit && !m.nf && state[ui] === 2) {
+        cRight++;
+        state[ui] = 0;
+        paint(ui);
+        led("mines", flagsLeft());
+        cRight--; // 拔旗不计右键（练习页松开拔旗录 rc+rr 但引擎 rr 不计右键；对齐计数）
+      }
+      clearPress();
+      onFace("smile");
+      comboGuard = false; // 首击手势结束：保护窗解除
+      leftDown = rightDown = chordDone = false;
+      if (started && !over) emitStats();
+      return;
+    }
     clearPress();
     onFace("smile");
     if (e.button === 0) {
@@ -1043,11 +1199,17 @@ function runPlayGame(opts: {
       leftDown = false;
     } else if (e.button === 2) {
       if (leftDown && !chordDone) {
+        /* 按住左键连点右键＝连续 chord（2026-10-18 练习页口径，二十一期同步到
+           试玩引擎）：每次右键松开都触发，不再只第一次 */
         chordDone = true;
         cDouble++;
         const before = openedSafe;
         if (i >= 0) chord(i);
         if (openedSafe === before) wDouble++;
+      } else if (leftDown && chordDone) {
+        /* 尾随松开：只闭合手势 */
+      } else {
+        /* rr 闭合（插旗在 mousedown 已生效，练习页 AVF 配对口径） */
       }
       rightDown = false;
     }
@@ -1058,41 +1220,129 @@ function runPlayGame(opts: {
     clearPress();
     if (!over) onFace("smile");
   });
-  /* 触屏（练习页口径：点按开格 / 长按 ≥150ms 插旗；超容差滑动取消） */
+  /* 触屏（练习页口径：点按开格 / 长按 ≥150ms 插旗；超容差滑动取消；
+      连击开＝滑动沿轨迹连开（半格步长插值防跳格），长按插旗保留不受影响） */
   let touchTimer: number | null = null,
     touchCell = -1,
     longFired = false,
     tX = 0,
     tY = 0;
+  /* 连击触屏轨迹采样（练习页同款）：上一采样点（棋盘 1x 像素）+ 已滑动标记 */
+  let touchMoved = false,
+    touchLastX = 0,
+    touchLastY = 0;
+  /* 触点屏幕坐标 → 棋盘 1x 像素（touch target 恒为起始格，滑动须按坐标算格；
+      渲染尺寸÷格子总数＝单格渲染尺寸，client 偏移÷单格＝1x 像素域坐标——
+      不依赖 --vfz 读取，zoom 域变化自动适应） */
+  const touchBoardPx = (cx: number, cy: number) => {
+    const br = boardDiv.getBoundingClientRect();
+    return {
+      x: ((cx - br.left) / br.width) * cols * 16,
+      y: ((cy - br.top) / br.height) * rows * 16,
+    };
+  };
   on<TouchEvent>(boardDiv, "touchstart", (e) => {
     if (over || e.touches.length !== 1) return;
     const i = eventCell(e);
     if (i < 0) return;
     touchCell = i;
     longFired = false;
+    touchMoved = false;
     tX = e.touches[0].clientX;
     tY = e.touches[0].clientY;
+    const bp0 = touchBoardPx(tX, tY);
+    touchLastX = bp0.x;
+    touchLastY = bp0.y;
     onFace("ooh");
+    /* 连击开：触点不即开（让位长按插旗），点按在 touchend 开、滑动在 touchmove 连开 */
+    if (getModes().combo) return;
     touchTimer = window.setTimeout(() => {
       if (over || touchCell < 0) return;
+      const m = getModes();
+      if (m.nf) {
+        onNfBlocked?.();
+        return;
+      }
       longFired = true;
       cRight++;
       toggleFlag(touchCell);
       pressPaint(touchCell);
+      if (m.quickFlag && state[touchCell] === 2) quickChordAround(touchCell);
     }, 150);
   });
   on<TouchEvent>(boardDiv, "touchmove", (e) => {
-    if (Math.hypot(e.touches[0].clientX - tX, e.touches[0].clientY - tY) > 12) {
+    const t = e.changedTouches[0];
+    if (!t || touchCell < 0) return;
+    if (getModes().combo) {
+      /* 连击滑动连开（练习页同款）：容差内不算滑动（保长按插旗）；超容差沿轨迹
+         半格步长插值逐格开（快滑跳格防漏）；起始格在此补开（touchstart 不即开）；
+         首击保护窗内路径格不开（起始格照常） */
+      if (Math.hypot(t.clientX - tX, t.clientY - tY) <= 12) return;
+      if (touchTimer) {
+        window.clearTimeout(touchTimer);
+        touchTimer = null;
+      }
+      if (over) {
+        touchCell = -1;
+        return;
+      }
+      touchMoved = true;
+      /* 起始格补开（touchstart 不即开，这里是首击唯一入口）；路径格在首击
+         保护窗内不开（练习页触屏同款：起始格照开、路径格等松开解除） */
+      if (state[touchCell] === 0) comboLeft(touchCell);
+      if (!comboGuard) {
+        const bp = touchBoardPx(t.clientX, t.clientY);
+        const steps = Math.max(1, Math.ceil(Math.hypot(bp.x - touchLastX, bp.y - touchLastY) / 8));
+        for (let s = 1; s <= steps; s++) {
+          const px = touchLastX + ((bp.x - touchLastX) * s) / steps;
+          const py = touchLastY + ((bp.y - touchLastY) * s) / steps;
+          const cx = (px / 16) | 0,
+            cy = (py / 16) | 0;
+          if (cx < 0 || cx >= cols || cy < 0 || cy >= rows) continue;
+          const i = cy * cols + cx;
+          if (state[i] === 0 && i !== touchCell) {
+            touchCell = i;
+            comboLeft(i);
+          }
+        }
+        touchLastX = bp.x;
+        touchLastY = bp.y;
+      } else {
+        const bp = touchBoardPx(t.clientX, t.clientY);
+        touchLastX = bp.x;
+        touchLastY = bp.y;
+      }
+      return;
+    }
+    if (Math.hypot(t.clientX - tX, t.clientY - tY) > 12) {
       if (touchTimer) window.clearTimeout(touchTimer);
       touchTimer = null;
       touchCell = -1;
       if (!over) onFace("smile");
     }
-  });
+  }, { passive: true });
   on<TouchEvent>(boardDiv, "touchend", (e) => {
     if (touchTimer) window.clearTimeout(touchTimer);
     touchTimer = null;
     onFace("smile");
+    if (getModes().combo) {
+      /* 连击触屏：点按在松开开格（touchstart 未即开）；滑动已在 touchmove 完成 */
+      if (over || touchCell < 0) {
+        touchCell = -1;
+        longFired = false;
+        touchMoved = false;
+        return;
+      }
+      const i = touchCell;
+      touchCell = -1;
+      const moved = touchMoved;
+      touchMoved = false;
+      comboGuard = false; // 手势结束：保护窗解除
+      e.preventDefault();
+      if (!moved && !longFired) comboLeft(i);
+      if (started && !over) emitStats();
+      return;
+    }
     if (over || longFired || touchCell < 0) {
       touchCell = -1;
       longFired = false;
@@ -1845,6 +2095,91 @@ function ReplayFullscreen({
      不启动（否则把页面回放引擎已重演几帧的开格抄进 FS 污染干净盘面），
      FS 棋盘也从空盘渲染（boardStr 是录像终局图，见 Board 处注释） */
   const [mode, setMode] = useState<"replay" | "play">(autoEnterPlay ? "play" : "replay");
+  /* 三模式开关（二十一期，2026-10-21 张老师需求）：NF / 速旗 / 连击，行为与
+     练习页同口径；初始值**继承练习页设置**（online_play_settings 的
+     nf/combo/autoChord 三键——张老师定的「试玩模式开关跟随练习页」）；
+     写回**独立键** vprfs_play_modes（不动练习页存档——练习页那份数据
+     级别更重，别让试玩的临时偏好污染它）。NF 与速旗互斥（练习页 2026-10-16 口径）。
+     ⚠️ localStorage 读取放 lazy 初始化器（react-hooks/set-state-in-effect 禁止
+     effect 体内同步 setState；SSR 下 localStorage 不存在须 typeof 守卫） */
+  const readInitModes = (): { nf: boolean; qf: boolean; combo: boolean } => {
+    if (typeof document === "undefined") return { nf: false, qf: false, combo: false };
+    try {
+      /* 优先级：试玩自己的存档 > 练习页设置（首次试玩继承）> 全关 */
+      const raw = localStorage.getItem("vprfs_play_modes");
+      if (raw) {
+        const s = JSON.parse(raw) as { nf?: boolean; qf?: boolean; combo?: boolean };
+        return {
+          nf: typeof s.nf === "boolean" ? s.nf : false,
+          qf: typeof s.qf === "boolean" ? s.qf : false,
+          combo: typeof s.combo === "boolean" ? s.combo : false,
+        };
+      }
+      const opRaw = localStorage.getItem("online_play_settings");
+      if (opRaw) {
+        const s = JSON.parse(opRaw) as { nf?: boolean; combo?: boolean; autoChord?: boolean };
+        return {
+          nf: typeof s.nf === "boolean" ? s.nf : false,
+          qf: typeof s.autoChord === "boolean" ? s.autoChord : false,
+          combo: typeof s.combo === "boolean" ? s.combo : false,
+        };
+      }
+    } catch {
+      /* 隐私模式/脏数据：全关 */
+    }
+    return { nf: false, qf: false, combo: false };
+  };
+  const [initModes] = useState(readInitModes);
+  const [playNf, setPlayNf] = useState(initModes.nf);
+  const [playQuickFlag, setPlayQuickFlag] = useState(initModes.qf);
+  const [playCombo, setPlayCombo] = useState(initModes.combo);
+  const savePlayModes = useCallback((nf: boolean, qf: boolean, combo: boolean) => {
+    try {
+      localStorage.setItem("vprfs_play_modes", JSON.stringify({ nf, qf: qf, combo }));
+    } catch {
+      /* 隐私模式 */
+    }
+  }, []);
+  /* 开关切换（二十一期）：NF↔速旗互斥；NF 切换即重开本局（练习页口径——NF 下
+     已插的旗语义不连续）；速旗/连击只改行为不重开。状态变更即写盘。
+     重开通过 startPlayRef 转发（startPlay 在下方声明，引用晚绑定） */
+  const startPlayRef = useRef<() => void>(() => {});
+  const togglePlayNf = useCallback(() => {
+    const nv = !playNf;
+    const nq = nv ? false : playQuickFlag; // NF 与速旗互斥
+    setPlayNf(nv);
+    setPlayQuickFlag(nq);
+    savePlayModes(nv, nq, playCombo);
+    if (mode === "play") startPlayRef.current(); // NF 切换重开本局
+  }, [playNf, playQuickFlag, playCombo, mode, savePlayModes]);
+  const togglePlayQuickFlag = useCallback(() => {
+    const nv = !playQuickFlag;
+    const nn = nv ? false : playNf; // 互斥：开速旗关 NF
+    setPlayQuickFlag(nv);
+    setPlayNf(nn);
+    savePlayModes(nn, nv, playCombo);
+  }, [playNf, playQuickFlag, playCombo, savePlayModes]);
+  const togglePlayCombo = useCallback(() => {
+    const nv = !playCombo;
+    setPlayCombo(nv);
+    savePlayModes(playNf, playQuickFlag, nv);
+  }, [playNf, playQuickFlag, playCombo, savePlayModes]);
+  /* 引擎模式读数（getModes）：ref 镜像最新 state，事件入口现读即时生效
+     （渲染期不写 ref——react-hooks/refs 口径，同步收进 effect） */
+  const modesRef = useRef({ nf: false, quickFlag: false, combo: false });
+  useEffect(() => {
+    modesRef.current = { nf: playNf, quickFlag: playQuickFlag, combo: playCombo };
+  }, [playNf, playQuickFlag, playCombo]);
+  const getModes = useCallback(() => modesRef.current, []);
+  /* NF 被拦反馈：抖 NF 钮（练习页 shakeModeBtn 同款视觉） */
+  const nfBtnRef = useRef<HTMLButtonElement | null>(null);
+  const onNfBlocked = useCallback(() => {
+    const b = nfBtnRef.current;
+    if (!b) return;
+    b.classList.remove("pg_shake");
+    void b.offsetWidth; // 强制 reflow 重放动画
+    b.classList.add("pg_shake");
+  }, []);
   const [face, setFace] = useState<FaceKind>("smile");
   const playRef = useRef<{ destroy: () => void } | null>(null);
   const faceUseRef = useRef<SVGUseElement | null>(null);
@@ -1905,9 +2240,15 @@ function ReplayFullscreen({
       onFace: (k) => setFace(k === "press" ? "smile" : k),
       onStats: setPlayStats,
       onFinish: setPlayResult,
+      getModes,
+      onNfBlocked,
     });
     setFace("smile");
-  }, []);
+  }, [getModes, onNfBlocked]);
+  /* 晚绑定 startPlay（togglePlayNf 的 NF 切换重开入口；渲染期不写 ref） */
+  useEffect(() => {
+    startPlayRef.current = startPlay;
+  }, [startPlay]);
 
   /* 点笑脸：回放态＝暂停回放进入试玩；试玩态＝重开本局（练习页 F2 口径） */
   const enterPlay = useCallback(() => {
@@ -2316,6 +2657,54 @@ function ReplayFullscreen({
                   <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
                 </svg>
               </button>
+              {/* 三模式开关（二十一期，2026-10-21 张老师需求）：NF / 速旗 / 连击，
+                  行为与练习页同口径（互斥、重开、连点 chord 等）；初始继承练习页
+                  设置（online_play_settings），此后试玩自己的偏好独立落盘
+                  （vprfs_play_modes）。图标与练习页快捷钮同款（NF 文本钮 /
+                  小旗 / 连击手势） */}
+              <div className="vprfs_modes">
+                <button
+                  ref={nfBtnRef}
+                  type="button"
+                  className={"rb_btn rb_mode" + (playNf ? " active" : "")}
+                  title="NF 模式：不能插旗，右键已禁用（切换重开本局）"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayNf();
+                  }}
+                >
+                  NF
+                </button>
+                <button
+                  type="button"
+                  className={"rb_btn rb_mode" + (playQuickFlag ? " active" : "")}
+                  title="速旗模式：右键标雷自动双击周围数字格，点数字格也视为双击（与 NF 互斥）"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayQuickFlag();
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6 21V3.5" />
+                    <path d="M6 4.5h11.5l-3 4 3 4H6z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className={"rb_btn rb_mode" + (playCombo ? " active" : "")}
+                  title="连击模式：按下即触发，按住左/右键滑动连续点击滑过的格子"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayCombo();
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5.25 8.2a6.4 6.4 0 0 1 12.8 0" />
+                    <path d="M7.75 8.2a3.9 3.9 0 0 1 7.8 0" />
+                    <path d="M9.9 14.2V7.3a1.75 1.75 0 0 1 3.5 0V10.5a1.55 1.55 0 0 1 3.1 .55a1.55 1.55 0 0 1 3.1 .55V16.6a6.3 6.3 0 0 1 -9.7 3.1V14.2Z" />
+                  </svg>
+                </button>
+              </div>
               <span className="rb_hint">试玩本局 · 点笑脸重开 · 不计成绩不上传</span>
               <button
                 type="button"

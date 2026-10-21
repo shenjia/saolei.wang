@@ -9379,7 +9379,9 @@ html.op-fakefs #header {
    ellipsis 只能保行尾，左端也被裁；改左对齐 + ellipsis，长句从右端优雅截断 */
 .vprfs_center .rb_hint {
   position: absolute;
-  left: 46px;
+  /* 二十一期：左侧让开「回到回放」+ 三模式开关（34px×4 + 3px×4 间隔 + 8px）；
+     右侧退出全屏 46px 不变 */
+  left: 162px;
   right: 46px;
   top: 50%;
   transform: translateY(-50%);
@@ -9809,4 +9811,30 @@ html.op-fakefs #header {
 }
 .faq_dialog footer button:hover {
   color: #a6e22e;
+}
+
+/* ---- 试玩控制条三模式开关（二十一期，2026-10-21 张老师需求）----
+   NF / 速旗 / 连击三颗小钮（练习页快捷钮 gmode 的移植版），挂「回到回放」右侧。
+   复用 .rb_btn 几何（34×34 翻页卡），激活态沿用 .rb_btn.active 站绿；
+   NF 为文本钮（12px 粗体，同练习页 gmode 字号口径）；速旗/连击为线稿图标。 */
+.vprfs_playbar .vprfs_modes {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.vprfs_playbar .rb_btn.rb_mode {
+  font: bold 12px/1 Arial, Helvetica, sans-serif;
+  letter-spacing: 0.5px;
+}
+/* NF 被拦抖动（练习页 shakeModeBtn 同款：绕底部中心左右摆） */
+.vprfs_playbar .rb_btn.rb_mode.pg_shake {
+  animation: vprfs_nf_shake 0.45s ease-in-out;
+  transform-origin: 50% 85%;
+}
+@keyframes vprfs_nf_shake {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-14deg); }
+  45% { transform: rotate(11deg); }
+  70% { transform: rotate(-6deg); }
+  100% { transform: rotate(0deg); }
 }
