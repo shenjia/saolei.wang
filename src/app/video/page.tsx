@@ -67,9 +67,11 @@ export default async function VideoListPage({
   const time = sp.time?.trim() || undefined;
   // 3BV 搜索输入（整数字符串，如 42；非法输入忽略，2026-10-20）
   const bv = sp["3bv"]?.trim() || undefined;
+  // NF 筛选开关（2026-10-20 张老师要求）：URL nf=1 开启（只显示 NF 录像），默认关
+  const nf = sp.nf === "1";
 
   const [{ videos, total, pageSize }, authorName] = await Promise.all([
-    getVideoList({ level, order, author, time, bv, page: 1 }),
+    getVideoList({ level, order, author, time, bv, nf, page: 1 }),
     // 玩家筛选回显姓名（搜索框显示当前筛选 + 定向视图标题用）
     author
       ? prisma.user
@@ -95,6 +97,7 @@ export default async function VideoListPage({
         authorName={authorName}
         time={time}
         bv={bv}
+        nf={nf}
       />
     </div>
   );

@@ -11,6 +11,10 @@
 // 选中即收起（pickedRef 抑制随后那轮同名推荐）、点击外部收起。
 // 已有筛选（玩家/时间/3BV）时聚焦或清空输入 → 下拉出「清除搜索」。
 // 筛选与级别/排序列正交：跳转保留 level 与 order，玩家/时间/3BV 互斥（三选一）。
+// 2026-10-20（张老师需求）：① NF 开关态透传——跳转保留 nf=1（NF 筛选与搜索正交）；
+// ② scope="user" 用户主页录像版块模式——右上角上传按钮换搜索框（张老师需求），
+// 作者锁定为该主页用户（不可搜玩家），仅支持时间成绩/3BV/录像 ID 三种查询；
+// 跳转回本主页 URL（/user/{id}?time=…），不动 /video。
 
 "use client";
 
@@ -58,6 +62,9 @@ export function VideoSearch({
   authorName,
   time,
   bv,
+  nf,
+  scope,
+  userId,
 }: {
   level: string;
   /** 当前排序（跳转时保留；默认排序 id 不进 URL） */
@@ -70,9 +77,19 @@ export function VideoSearch({
   time?: string;
   /** 当前 3BV 搜索输入（回显用，2026-10-20） */
   bv?: string;
+  /** NF 筛选开关（2026-10-20）：跳转保留 nf=1 */
+  nf?: boolean;
+  /** 作用域（2026-10-20）："list"=默认 /video 列表页；"user"=用户主页录像版块
+   *  （作者锁定，只支持 成绩/3BV/ID 三种查询，跳转回本主页 URL） */
+  scope?: "list" | "user";
+  /** scope=user：主页用户 id（跳转 /user/{id}）与显示名（清除搜索回显） */
+  userId?: number;
 }) {
   const router = useRouter();
-  const [q, setQ] = useState(authorName ?? time ?? (bv != null ? `3BV ${bv}` : ""));
+  const isUser = scope === "user";
+  const [q, setQ] = useState(
+    isUser ? (time ?? (bv != null ? `3BV ${bv}` : "")) : authorName ?? time ?? (bv != null ? `3BV ${bv}` : "")
+  );
   const [items, setItems] = useState<Item[] | null>(null);
   const [active, setActive] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -83,7 +100,21 @@ export function VideoSearch({
   // 用户是否实际输入过：带筛选进页时输入框有回显值，但不应自动弹推荐下拉
   const dirtyRef = useRef(false);
 
-  const hasFilter = !!author || !!time || bv != null;
+  const hasFilter = (isUser ? false : !!author) || !!time || bv != null;
+
+  /** 同 ID 玩家候选（user 模式不调用）与同 ID 录像探测的薄封装（2026-10-20 user 模式引入） */
+  async function fetchUsers(kw: string): Promise<SuggestUser[]> {
+    const res = await fetch(`/api/ranking/search?q=${encodeURIComponent(kw)}&limit=8`);
+    if (!res.ok) return [];
+    const { users } = (await res.json()) as { users: SuggestUser[] };
+    return users;
+  }
+  async function fetchVideoById(id: string): Promise<SuggestVideo | null> {
+    const res = await fetch(`/api/video/lookup?id=${id}`);
+    if (!res.ok) return null;
+    const { video } = (await res.json()) as { video: SuggestVideo | null };
+    return video;
+  }
 
   const kw = q.trim();
   const isTimeInput = VIDEO_TIME_INPUT_RE.test(kw);
@@ -122,21 +153,14 @@ export function VideoSearch({
         setActive(0);
         return;
       }
-      // 纯整数：并行探测同 ID 玩家（排行同款）与同 ID 录像（2026-10-16 新增）
+      // 纯整数：并行探测同 ID 玩家（排行同款；user 模式作者锁定跳过）与同 ID 录像
       if (isPureInt) {
-        const [usersRes, videoRes] = await Promise.allSettled([
-          fetch(`/api/ranking/search?q=${encodeURIComponent(kw)}&limit=8`),
-          fetch(`/api/video/lookup?id=${kw}`),
-        ]);
+        // user 模式玩家候选恒空（作者锁定），跳过 ranking/search 请求
+        const users: SuggestUser[] = isUser
+          ? []
+          : await fetchUsers(kw).catch(() => []);
+        const video = await fetchVideoById(kw).catch(() => null);
         if (seq !== reqSeq.current) return;
-        const users =
-          usersRes.status === "fulfilled" && usersRes.value.ok
-            ? ((await usersRes.value.json()) as { users: SuggestUser[] }).users
-            : [];
-        const video =
-          videoRes.status === "fulfilled" && videoRes.value.ok
-            ? ((await videoRes.value.json()) as { video: SuggestVideo | null }).video
-            : null;
         // ID 录像置顶（整数输入时它是最高意图），同 ID 玩家、3BV 与时间项随后
         const list: Item[] = [];
         if (video) list.push({ kind: "video", video });
@@ -147,6 +171,12 @@ export function VideoSearch({
         setItems(list);
         setActive(0);
         // 数字输入始终展示候选（用户可能还要继续输位数/小数），不自动筛选
+        return;
+      }
+      if (isUser) {
+        // 用户主页模式：作者已锁定，中文输入无玩家语义 → 空态（回车提示）
+        setItems([]);
+        setActive(0);
         return;
       }
       try {
@@ -178,8 +208,20 @@ export function VideoSearch({
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
 
-  /** 跳转 URL：保留级别与排序，玩家/时间/3BV 互斥（三选一） */
+  /** 跳转 URL：列表模式保留级别/排序/作者筛选，玩家/时间/3BV 互斥（三选一），
+   *  NF 开关态正交保留（2026-10-20）；user 模式跳回本主页 /user/{id}
+   *  （作者锁定，level/order/nf 由主页壳的 URL 状态承接） */
   function nav(params: { author?: number; time?: string; bv?: string }) {
+    if (isUser) {
+      router.push(
+        buildUrl(`/user/${userId}`, {
+          time: params.time,
+          "3bv": params.bv,
+          page: undefined,
+        })
+      );
+      return;
+    }
     router.push(
       buildUrl("/video", {
         level,
@@ -187,6 +229,7 @@ export function VideoSearch({
         author: params.author,
         time: params.time,
         "3bv": params.bv,
+        nf: nf ? "1" : undefined,
         page: undefined,
       })
     );
@@ -252,7 +295,8 @@ export function VideoSearch({
       return;
     }
     if (hash || /^\d+$/.test(key)) {
-      // 纯整数：探测 ID 录像，命中直达；未命中回落玩家精确反查（同 ID 玩家）
+      // 纯整数：探测 ID 录像，命中直达；未命中回落玩家精确反查（同 ID 玩家；
+      // user 模式作者锁定，无玩家回落 → 直接提示未找到）
       try {
         const res = await fetch(`/api/video/lookup?id=${key}`);
         if (res.ok) {
@@ -268,9 +312,17 @@ export function VideoSearch({
       } catch {
         /* 网络异常继续走玩家反查 */
       }
+      if (isUser) {
+        toast(`没有找到 ID 为 ${key} 的录像`);
+        return;
+      }
       const u = await findUser(key);
       if (u) pickUser(u);
       else toast(`没有找到 ID 为 ${key} 的录像或玩家`);
+      return;
+    }
+    if (isUser) {
+      toast("可输入时间成绩（如 37.29）、3BV 数值或录像 ID 进行查询");
       return;
     }
     const u = await findUser(key);
@@ -331,8 +383,12 @@ export function VideoSearch({
           type="text"
           value={q}
           maxLength={12}
-          placeholder="玩家/成绩/3BV/ID"
-          title="输入玩家姓名筛选其上传的录像，输入时间成绩（秒，如 37.29）查找相同成绩的所有录像，输入 3BV 数值（如 42）查找相同 3BV 的所有录像，或输入录像 ID（如 345155）直达该录像"
+          placeholder={isUser ? "成绩/3BV/ID" : "玩家/成绩/3BV/ID"}
+          title={
+            isUser
+              ? "输入时间成绩（秒，如 37.29）查找相同成绩的录像，输入 3BV 数值（如 42）查找相同 3BV 的录像，或输入录像 ID（如 345155）直达该录像"
+              : "输入玩家姓名筛选其上传的录像，输入时间成绩（秒，如 37.29）查找相同成绩的所有录像，输入 3BV 数值（如 42）查找相同 3BV 的所有录像，或输入录像 ID（如 345155）直达该录像"
+          }
           onChange={(e) => {
             dirtyRef.current = true;
             setQ(e.target.value);
@@ -428,7 +484,7 @@ export function VideoSearch({
                 <li key="clear" className={cls || undefined}>
                   <button type="button" onMouseEnter={() => setActive(i)} onClick={pickClear}>
                     <em>清除搜索</em>
-                    <span>{authorName ?? (bv != null ? `3BV ${bv}` : time)}</span>
+                    <span>{(isUser ? undefined : authorName) ?? (bv != null ? `3BV ${bv}` : time)}</span>
                   </button>
                 </li>
               );

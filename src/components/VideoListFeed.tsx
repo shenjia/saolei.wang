@@ -12,6 +12,9 @@
 // 2026-10-16 晚：/video 列表页也切换 client 模式（张老师拍板「切换」）——级别 tabs 收进
 // 客户端壳 VideoListSection（页头+搜索框一起就地重渲染）；搜索框（author/time 筛选）
 // 仍走软导航，由 key=author-time 强制重挂载换入服务端新数据（client 内部状态随之归位）。
+// 2026-10-20（张老师需求）：NF 筛选开关（默认关，开启只显示 NF 录像）——curNf 就地
+// 切换（同级别/排序通道重拉第 1 页），URL 同步 nf=1（默认关不带参）。三处入口：
+// /video 列表页页头、用户主页录像版块、首页录像区（首页走 VideoFeed 自己的通道）。
 
 "use client";
 
@@ -28,8 +31,11 @@ import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 export interface VideoListHeadCtx {
   level: string;
   order: VideoListOrder;
+  /** NF 筛选开关（2026-10-20）：开启=只显示 NF 录像 */
+  nf: boolean;
   setLevel: (lv: string) => void;
   setOrder: (o: VideoListOrder) => void;
+  setNf: (on: boolean) => void;
 }
 
 export function VideoListFeed({
@@ -46,8 +52,8 @@ export function VideoListFeed({
   /** 当前筛选条件下的录像总数 */
   total: number;
   pageSize: number;
-  /** 筛选参数（level/order/author/time/3bv；client 模式下仅作初始值） */
-  query: { level: string; order: string; author?: number; time?: string; bv?: string };
+  /** 筛选参数（level/order/author/time/3bv/nf；client 模式下仅作初始值） */
+  query: { level: string; order: string; author?: number; time?: string; bv?: string; nf?: boolean };
   /** 表头排序（/video：Link 导航；client 模式：href 仅作中键/新标签兜底，左键就地排序）。
    *  authorInLinks：client 模式兜底链接是否携带 author（/video 的 author 是真实筛选必须带；
    *  用户主页 author 隐含在路径 /user/{id}，默认剥掉） */
@@ -69,6 +75,8 @@ export function VideoListFeed({
   const [curOrder, setCurOrder] = useState<VideoListOrder>(
     (query.order as VideoListOrder) || "id"
   );
+  // NF 筛选（2026-10-20）：默认关；开启只显示 NF 录像（与级别/排序同通道就地重拉）
+  const [curNf, setCurNf] = useState(!!query.nf);
   // 条件总数：client 模式切级别后随接口返回更新（total prop 只代表服务端初始条件）
   const [curTotal, setCurTotal] = useState(total);
   // 排序命中列高亮（默认排序=上传时间不高亮，2026-10-15 扩展全部排序列）
@@ -98,6 +106,7 @@ export function VideoListFeed({
     if (query.author) qs.set("author", String(query.author));
     if (query.time) qs.set("time", query.time);
     if (query.bv) qs.set("3bv", query.bv);
+    if (curNf) qs.set("nf", "1");
     // 每页条数：递增批量（首击=一页 base），默认与初始页一致（列表页 20 / 用户主页 10）
     qs.set("size", String(size ?? pageSize));
     return `/api/video/more?${qs}`;
@@ -108,22 +117,38 @@ export function VideoListFeed({
    *  patch 了 window.history.replaceState——外部调用若不带内部标记会 dispatch ACTION_RESTORE
    *  并异步把视口滚到该 URL 的缓存滚动位（实测表现为「切筛选/排序后页面跳顶」）；
    *  带标记则直接透传原生 replaceState，Router 零介入、零滚动（2026-10-16 实证） */
-  function syncUrl(next: { level?: string; order?: VideoListOrder }) {
+  function syncUrl(next: { level?: string; order?: VideoListOrder; nf?: boolean }) {
     const url = new URL(window.location.href);
     if (next.level !== undefined) url.searchParams.set("level", next.level);
     if (next.order !== undefined) {
       if (next.order === "id") url.searchParams.delete("order");
       else url.searchParams.set("order", next.order);
     }
+    if (next.nf !== undefined) {
+      if (next.nf) url.searchParams.set("nf", "1");
+      else url.searchParams.delete("nf");
+    }
     window.history.replaceState(window.history.state, "", url);
   }
 
   /** 就地重拉第 1 页（client 模式切级别/切排序共用）：整表替换 + 分页状态归零 +
-   *  视口锚定（captureViewportAnchor 保滚动位置，切换不跳动） */
-  async function refetchFirstPage(nextLevel: string, nextOrder: VideoListOrder) {
+   *  视口锚定（captureViewportAnchor 保滚动位置，切换不跳动）。
+   *  opt.nf（2026-10-20 二轮）：NF 开关走乐观更新——点击立即 setCurNf + syncUrl
+   *  （按钮即时变高亮、URL 即时同步），数据回来再整表替换；失败静默回滚开关态。
+   *  （NF 查询在服务端需 join video_info 过滤，冷时几百毫秒，不能让按钮等它） */
+  async function refetchFirstPage(
+    nextLevel: string,
+    nextOrder: VideoListOrder,
+    nextNf: boolean,
+    opt?: { nfOptimistic?: boolean }
+  ) {
     if (loading) return;
     const seq = ++reqSeq.current;
     setLoading(true);
+    if (opt?.nfOptimistic) {
+      setCurNf(nextNf);
+      syncUrl({ nf: nextNf });
+    }
     try {
       const qs = new URLSearchParams({
         level: nextLevel,
@@ -134,6 +159,7 @@ export function VideoListFeed({
       if (query.author) qs.set("author", String(query.author));
       if (query.time) qs.set("time", query.time);
       if (query.bv) qs.set("3bv", query.bv);
+      if (nextNf) qs.set("nf", "1");
       const res = await fetch(`/api/video/more?${qs}`);
       if (!res.ok) throw new Error("加载失败");
       const data = (await res.json()) as { videos: VideoListItem[]; total: number };
@@ -148,23 +174,31 @@ export function VideoListFeed({
         setBatchStep(0);
         setCurLevel(nextLevel);
         setCurOrder(nextOrder);
+        setCurNf(nextNf);
         setCurTotal(data.total);
         setHasMore(data.videos.length < data.total);
       });
       restoreViewportAnchor(tableRef.current, anchor);
-      syncUrl({ level: nextLevel, order: nextOrder });
+      syncUrl({ level: nextLevel, order: nextOrder, nf: nextNf });
     } catch {
-      /* 网络异常静默：可重试 */
+      /* 网络异常静默：可重试；NF 乐观更新回滚开关态与 URL（表格数据未变） */
+      if (opt?.nfOptimistic) {
+        setCurNf(!nextNf);
+        syncUrl({ nf: !nextNf });
+      }
     } finally {
       if (seq === reqSeq.current) setLoading(false);
     }
   }
 
   const changeLevel = (lv: string) => {
-    if (lv !== curLevel) refetchFirstPage(lv, curOrder);
+    if (lv !== curLevel) refetchFirstPage(lv, curOrder, curNf);
   };
   const changeOrder = (o: VideoListOrder) => {
-    if (o !== curOrder) refetchFirstPage(curLevel, o);
+    if (o !== curOrder) refetchFirstPage(curLevel, o, curNf);
+  };
+  const changeNf = (on: boolean) => {
+    if (on !== curNf) refetchFirstPage(curLevel, curOrder, on, { nfOptimistic: true });
   };
 
   async function loadMore() {
@@ -260,7 +294,15 @@ export function VideoListFeed({
 
   return (
     <>
-      {head && head({ level: curLevel, order: curOrder, setLevel: changeLevel, setOrder: changeOrder })}
+      {head &&
+        head({
+          level: curLevel,
+          order: curOrder,
+          nf: curNf,
+          setLevel: changeLevel,
+          setOrder: changeOrder,
+          setNf: changeNf,
+        })}
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
         <VideoHead
           noSort3bv={noSort3bv}
@@ -275,6 +317,7 @@ export function VideoListFeed({
                         author: headSort.authorInLinks ? query.author : undefined,
                         time: query.time,
                         "3bv": query.bv,
+                        nf: curNf ? "1" : undefined,
                       }
                     : { level: curLevel, author: query.author, time: query.time, "3bv": query.bv },
                   order: curOrder,

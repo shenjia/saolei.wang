@@ -3352,6 +3352,15 @@ body #user_view .sidebar .table .delta {
 /* 2026-10-13 张老师要求：「上传录像」按钮回归 legacy .button.active 深底绿字，
    与论坛「发布主题」同款（原定制绿底覆盖已删，仅保留上方贴行尾定位）。 */
 /* 版块内表格贴标题：首行与 h2 间距收紧（video_table 行自带紧凑 padding） */
+/* 2026-10-20 张老师要求：上传按钮换搜索框（NF 钮插在「高级」右侧、搜索框之前）——
+   搜索框接管「贴行尾」职责（原上传按钮的 margin-left:auto 语义）；
+   NF 钮 30×30 与 tabs 文字行混排，垂直自居中（容器 align-items:center 已有） */
+#user_videos .video_head_box .user_video_search {
+  margin-left: auto;
+}
+#user_videos .video_head_box .nf_toggle {
+  align-self: center;
+}
 
 /* ==================== 排行榜 2008 编排改造（2026-09-23 张老师要求） ====================
    左：榜别 tabs + 全级别成绩表 + 老式分页；右：每日一星/雷界统计 + 世界TOP10。
@@ -5737,6 +5746,87 @@ body #video_list .score_3bvs a:hover em {
 #page.video_old .page_head .video_nav .tabs {
   clear: none;
   float: none;
+}
+
+/* ---------- NF 筛选开关（2026-10-20 张老师需求） ----------
+   样式复用练习页右上角 NF 快捷钮（#online_play .gicon.gmode 文本钮形态），因练习页
+   选择器挂在 #online_play 作用域下，这里逐项复刻为通用 .nf_toggle：
+   30×30 暗底方钮（#49483e 底 / #656355 框 / 5px 圆角）、灰字 #b1b1a4、
+   激活显站内黄 #fdc61d（字+框）、hover 字亮框灰亮、hover 出正上方气泡 tip。
+   放置：筛选器右侧——/video 页头 video_nav 尾、用户主页 video_head_box 尾、
+   首页录像 news_head 尾；flex 尾置由各容器自带（margin-left:auto 的 video_search
+   在前时 NF 钮跟在其后，二者共同贴行尾成组）。 */
+.nf_toggle {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #49483e;
+  border: 1px solid #656355;
+  border-radius: 5px;
+  color: #b1b1a4;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  font: bold 12px/1 Arial, Helvetica, sans-serif;
+  letter-spacing: 0.5px;
+  position: relative;
+  /* 练习页 .gmode 同款：与 tabs 底线对齐时按行尾容器自身的 align 控制，
+     这里不自撑 margin */
+}
+.nf_toggle:hover {
+  color: #e8e8e0;
+  border-color: #939387;
+}
+.nf_toggle.active {
+  color: #fdc61d;
+  border-color: #fdc61d;
+}
+/* hover 气泡：练习页 .gicon .tip 同款（正上方居中、暗底描边、小三角下指）；
+   窄屏（≤880）贴按钮右缘向左展开防裁切（练习页同款兜底） */
+.nf_toggle .tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: #272822;
+  border: 1px solid #656355;
+  border-radius: 5px;
+  color: #f8f8f2;
+  font: 12px/18px Arial, Helvetica, sans-serif;
+  letter-spacing: normal;
+  padding: 5px 10px;
+  z-index: 5;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+.nf_toggle .tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #656355;
+}
+.nf_toggle:hover .tip {
+  display: block;
+}
+@media (max-width: 880px) {
+  .nf_toggle .tip {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  .nf_toggle .tip::after {
+    left: auto;
+    right: 11px;
+    transform: none;
+  }
 }
 
 /* 表头排序链接（排行表头同语言：灰字、hover 绿、命中黄；2026-10-15 张老师需求） */

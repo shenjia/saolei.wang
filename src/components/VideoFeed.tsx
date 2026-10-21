@@ -3,6 +3,9 @@
 // 与首页「新闻」版块同款：··· + 滑轨 + 页码；页码模式 ?feedPage=N&base=15，
 // 松手/停顿 500ms 即加载、视口零跳动、零提示——与全站列表交互统一）。
 // 行/表头渲染复用 VideoRows（与 /video 列表同源，保证两处版式一致）。
+// 2026-10-20（张老师需求）：级别 tabs 右侧加 NF 筛选开关（NfToggle，样式复用练习页
+// 右上角 NF 快捷钮；默认关，开启只显示 NF 录像）——与切级别同通道重拉第 1 页 +
+// 翻页状态重置；NF 不进 URL（首页无筛选 URL 语义，与级别 tabs 一致均为会话态）。
 
 "use client";
 
@@ -10,6 +13,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { VideoListItem } from "@/lib/queries";
 import { VideoHead, VideoRowLine } from "./VideoRows";
+import { NfToggle } from "./NfToggle";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 
@@ -45,6 +49,8 @@ export function VideoFeed({
   const [level, setLevel] = useState("");
   const [switching, setSwitching] = useState(false);
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（切级别重置）
+  // NF 筛选开关（2026-10-20）：默认关；开启只显示 NF 录像（与切级别同通道重拉）
+  const [nf, setNf] = useState(false);
 
   // ---- 翻页条状态（2026-10-14 四轮）----
   const [curPage, setPage] = useState(1);
@@ -60,11 +66,12 @@ export function VideoFeed({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 页码模式请求：?feedPage=N&base=pageSize（id 倒序按页取） */
-  async function fetchByPage(lv: string, page: number, size?: number) {
+  /** 页码模式请求：?feedPage=N&base=pageSize（id 倒序按页取）；nf=1 只取 NF 录像 */
+  async function fetchByPage(lv: string, page: number, size?: number, nfOn = false) {
     const url =
       `/api/video/more?feedPage=${page}&base=${pageSize}&size=${size ?? pageSize}` +
-      (lv ? `&level=${lv}` : "");
+      (lv ? `&level=${lv}` : "") +
+      (nfOn ? "&nf=1" : "");
     const res = await fetch(url);
     return (await res.json()) as {
       items: VideoListItem[];
@@ -80,7 +87,7 @@ export function VideoFeed({
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = await fetchByPage(level, winStart + Math.floor(items.length / pageSize), size);
+      const data = await fetchByPage(level, winStart + Math.floor(items.length / pageSize), size, nf);
       if (seq !== reqSeq.current) return;
       const prevCount = items.length;
       setItems((prev) => [...prev, ...data.items]);
@@ -132,7 +139,7 @@ export function VideoFeed({
     const seq = ++reqSeq.current;
     setLoading(true);
     try {
-      const data = await fetchByPage(level, p);
+      const data = await fetchByPage(level, p, undefined, nf);
       if (seq !== reqSeq.current) return;
       if (!data.items.length) {
         setHasMore(false);
@@ -155,16 +162,19 @@ export function VideoFeed({
     }
   }
 
-  // 切换级别：重置列表并取该级别第一页（批量序列/翻页状态同步重置）
-  async function switchLevel(lv: string) {
-    if (lv === level || switching) return;
+  // 切换筛选（级别/NF）：重置列表并取第一页（批量序列/翻页状态同步重置）。
+  // 2026-10-20：switchLevel/switchNf 收敛为 switchFeed(lv, nfOn)——级别与 NF
+  // 同通道（切级别保 NF 态，切 NF 保级别态）
+  async function switchFeed(lv: string, nfOn: boolean) {
+    if ((lv === level && nfOn === nf) || switching) return;
     setSwitching(true);
     setLevel(lv);
+    setNf(nfOn);
     setBatchStep(0);
     setPage(1);
     setWinStart(1);
     try {
-      const data = await fetchByPage(lv, 1);
+      const data = await fetchByPage(lv, 1, undefined, nfOn);
       setItems(data.items);
       pageCache.current = new PageCache();
       pageCache.current.set(1, data.items);
@@ -186,7 +196,7 @@ export function VideoFeed({
         href="#"
         onClick={(e) => {
           e.preventDefault();
-          switchLevel(t.key);
+          switchFeed(t.key, nf);
         }}
       >
         {t.label}
@@ -202,9 +212,15 @@ export function VideoFeed({
           {/* 2026-09-27 张老师要求：筛选器与排行/录像页同款大号版对齐
               （去 side 小号变体与无定义的死类 head，标题+tabs 成等高标签带） */}
           <div className="news_tabs ranking_tabs">{tabs}</div>
+          {/* NF 筛选开关（2026-10-20 张老师需求）：筛选器右侧、行尾；
+              与 /video 列表页/用户主页录像版块同款（样式复用练习页 NF 钮） */}
+          <NfToggle active={nf} onToggle={(next) => switchFeed(level, next)} />
         </div>
       ) : (
-        <div className="news_tabs ranking_tabs side">{tabs}</div>
+        <div className="news_tabs ranking_tabs side">
+          {tabs}
+          <NfToggle active={nf} onToggle={(next) => switchFeed(level, next)} />
+        </div>
       )}
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
         <VideoHead />

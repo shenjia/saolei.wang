@@ -254,6 +254,10 @@ model VideoInfo {
   // 计算排序（比值在索引内算得，filesort 免回表，306k 行 0.48s→0.17s 实测）
   @@index([realTime])
   @@index([board3bv, realTime])
+  // NF 筛选（2026-10-20 张老师需求）：录像列表/首页 feed 的 NF 开关按
+  // noflag=1 过滤（vi.noflag 在 video_info，30 万行无索引时全表扫 ~0.3s 冷启）；
+  // 单列索引让 NF 查询走索引扫描（实测 count 0.28s→0.06s、列表页 0.33s→0.08s）
+  @@index([noflag])
   @@map("video_info")
 }
 

@@ -32,10 +32,12 @@ export async function GET(req: Request) {
     const time = p.get("time")?.trim() || undefined;
     // 2026-10-20：透传 3BV 搜索（精确筛选）
     const bv = p.get("3bv")?.trim() || undefined;
+    // 2026-10-20：透传 NF 筛选（只显示 NF 录像，开关在首页/列表页/用户主页录像版块）
+    const nf = p.get("nf") === "1";
     // 每页条数：调用方自定义（用户主页录像版块传 10），默认 /video 列表的 20；
     // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
-    const { videos, total, pageSize } = await getVideoList({ level, order, author, time, bv, page, pageSize: size });
+    const { videos, total, pageSize } = await getVideoList({ level, order, author, time, bv, nf, page, pageSize: size });
     return NextResponse.json({
       videos,
       total,
@@ -49,9 +51,11 @@ export async function GET(req: Request) {
     const level = parseLevel(p);
     const base = parseInt(p.get("base") ?? "", 10) || VIDEO_PAGESIZE;
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
+    // 2026-10-20：透传 NF 筛选（首页录像版块 NF 开关）
+    const nf = p.get("nf") === "1";
     const [items, total] = await Promise.all([
-      getVideoFeedPage({ level, page: feedPage, base, limit: size }),
-      getVideoCount({ level }),
+      getVideoFeedPage({ level, page: feedPage, base, limit: size, nf }),
+      getVideoCount({ level, nf }),
     ]);
     return NextResponse.json({
       items,
@@ -65,11 +69,13 @@ export async function GET(req: Request) {
   const cursor = parseInt(p.get("cursor") ?? "0", 10) || 0;
   const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
   const level = parseLevel(p);
+  // 2026-10-20：透传 NF 筛选（首页录像版块 NF 开关）
+  const nf = p.get("nf") === "1";
 
   const [items, total] = await Promise.all([
-    getVideoFeed({ level, cursor: cursor || undefined, limit: size }),
+    getVideoFeed({ level, cursor: cursor || undefined, limit: size, nf }),
     // 同条件下的录像总数（左下角总数行）
-    getVideoCount({ level }),
+    getVideoCount({ level, nf }),
   ]);
   return NextResponse.json({
     items,

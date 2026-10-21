@@ -133,6 +133,12 @@ export default async function UserViewPage({
   // 录像版块排序（2026-10-16 张老师要求）：与 /video 列表页同语义——表头点击排序
   // （成绩/3BV/3BV/s/评论/点击/上传时间），默认上传时间（id）且不高亮
   const order: VideoListOrder = parseVideoListOrder(sp.order);
+  // 录像版块搜索（2026-10-20 张老师要求：上传按钮换搜索框）：时间成绩/3BV 精确查询，
+  // 与 /video 同语义（互斥三选一，本页 author 恒为 userId）
+  const time = sp.time?.trim() || undefined;
+  const bv = sp["3bv"]?.trim() || undefined;
+  // 录像版块 NF 筛选开关（2026-10-20）：URL nf=1 开启，默认关
+  const nf = sp.nf === "1";
 
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
@@ -153,8 +159,9 @@ export default async function UserViewPage({
     getSession(),
     getUserRanks(userId),
     // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
-    // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）
-    getVideoList({ level, order, author: userId, page: 1, pageSize: USER_VIDEO_NUMBER }),
+    // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）；
+    // time/bv/nf 搜索与 NF 筛选（2026-10-20）
+    getVideoList({ level, order, author: userId, time, bv, nf, page: 1, pageSize: USER_VIDEO_NUMBER }),
     // 今日新增录像（按级别），统计盒增量列用（2026-10-13 张老师要求）
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
@@ -319,18 +326,23 @@ export default async function UserViewPage({
             />
           </div>
         )}
-        {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像，「加载更多」走列表模式翻页），
-            右上角「上传录像」按钮（仅本人可见）。2026-09-27 二轮：加 全部/初级/中级/高级 级别筛选；
-            标题与筛选器居中对齐（与动态版块同款编排）。2026-10-16 张老师要求：切级别/点表头排序
-            就地生效不导航不跳顶（UserVideoSection 客户端壳，与首页切换筛选同体验），URL 仍即状态 */}
+        {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像，「加载更多」走列表模式翻页）。
+            2026-09-27 二轮：加 全部/初级/中级/高级 级别筛选；标题与筛选器居中对齐（与动态版块同款编排）。
+            2026-10-16 张老师要求：切级别/点表头排序就地生效不导航不跳顶（客户端壳，URL 仍即状态）。
+            2026-10-20 张老师要求：右上角「上传录像」按钮换成搜索框（成绩/3BV/ID 查询）
+            + NF 筛选开关；key=time-bv-nf——搜索软导航改变三项时强制重挂载换服务端数据
+            （就地切级别/排序/NF 不动这三项，key 稳定不重挂载，与 VideoListSection 同法） */}
         <UserVideoSection
+          key={`${time ?? ""}-${bv ?? ""}-${nf ? "1" : ""}`}
           userId={userId}
-          isSelf={isSelf}
           initial={userVideos.videos}
           total={userVideos.total}
           pageSize={userVideos.pageSize}
           level={level}
           order={order}
+          time={time}
+          bv={bv}
+          nf={nf}
         />
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
       </li>
