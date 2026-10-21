@@ -1,7 +1,10 @@
 // 扫雷教程索引（移植 2008 版 Guide/Index.asp）
 // 原站教程正文都在论坛精华帖中，此处将各条目链接到对应的论坛帖子
+// 2026-10-21 张老师需求：右侧开侧栏「常见问题」（旧版首页右下角 Help/List.asp 搬运），
+//   5 条遮罩弹窗 + 2 条跳论坛帖，见 GuideFaq 组件
 
 import Link from "next/link";
+import GuideFaq from "@/components/GuideFaq";
 
 export const metadata = { title: "扫雷教程" };
 
@@ -62,27 +65,34 @@ const GROUPS: [string, [string, string, number | null][]][] = [
 
 export default function GuidePage() {
   return (
-    <div id="page" className="main">
-      <div id="guide" className="box text">
-        <h1>扫雷教程</h1>
-        {GROUPS.map(([group, items]) => (
-          <div key={group}>
-            <h2>【{group}】</h2>
-            <hr />
-            {items.map(([title, author, postId]) =>
-              postId ? (
-                <p key={title}>
-                  ※ <Link href={`/bbs/${postId}`}>{title}</Link>　<em>作者: {author}</em>
-                </p>
-              ) : (
-                <p key={title}>
-                  ※ {title}　<em>作者: {author}</em>
-                </p>
-              )
-            )}
+    <div id="page" className="two_columns">
+      <ul id="home">
+        <li className="main">
+          <div id="guide" className="box text">
+            <h1>扫雷教程</h1>
+            {GROUPS.map(([group, items]) => (
+              <div key={group}>
+                <h2>【{group}】</h2>
+                <hr />
+                {items.map(([title, author, postId]) =>
+                  postId ? (
+                    <p key={title}>
+                      ※ <Link href={`/bbs/${postId}`}>{title}</Link>　<em>作者: {author}</em>
+                    </p>
+                  ) : (
+                    <p key={title}>
+                      ※ {title}　<em>作者: {author}</em>
+                    </p>
+                  )
+                )}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </li>
+        <li className="sidebar">
+          <GuideFaq />
+        </li>
+      </ul>
     </div>
   );
 }

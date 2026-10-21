@@ -9642,3 +9642,114 @@ html.op-fakefs #header {
   font-size: 13px;
   line-height: 40px;
 }
+
+/* ---------- guide 页常见问题侧栏 + 弹窗（2026-10-21，旧版首页右下角 Help 搬运） ----------
+   侧栏复用 two_columns 右栏形态（#faq_side 即一个 box）；列表用旧版常见问题的
+   黄点链接感——此处以亮灰链接 + 虚线分隔替代。弹窗样式对齐 legacy box：
+   深底 #3b3a32 / #49483e 头条 / 金色标题，宽 500 居中，内容超高内部滚动；
+   Esc / 点遮罩 / 按钮三路关闭（行为对齐旧版 Window 弹窗）。 */
+#faq_side .faq_list {
+  margin-top: 10px;
+}
+#faq_side .faq_list li {
+  padding: 7px 0;
+  border-bottom: 1px dashed #49483e;
+}
+#faq_side .faq_list li:last-child {
+  border-bottom: 0;
+}
+#faq_side .faq_list a {
+  color: #b1b1a4;
+}
+#faq_side .faq_list a:hover {
+  color: #a6e22e;
+}
+#faq_side .faq_more {
+  margin-top: 12px;
+  color: #636359;
+  font-size: 13px;
+}
+#faq_side .faq_more a {
+  color: #fdc61a;
+}
+
+/* 弹窗遮罩：全屏半透明黑，与站内 toast/lightbox 同顶层 */
+.faq_mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.faq_dialog {
+  background: #3b3a32;
+  border: 1px solid #656355;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
+  width: 500px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+}
+.faq_dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #49483e;
+  padding: 8px 12px;
+}
+.faq_dialog header h3 {
+  margin: 0;
+  color: #fdc61a;
+  font-size: 16px;
+  line-height: 24px;
+}
+.faq_dialog .faq_close {
+  color: #b1b1a4;
+  font-size: 20px;
+  line-height: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.faq_dialog .faq_close:hover {
+  color: #a6e22e;
+}
+.faq_dialog .faq_body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  line-height: 24px;
+}
+.faq_dialog .faq_body .term {
+  color: #e6db74;
+}
+.faq_dialog .faq_body .note {
+  color: #b1b1a4;
+}
+.faq_dialog .faq_body kbd {
+  font-family: inherit;
+  color: #e6db74;
+}
+.faq_dialog .faq_body a {
+  color: #fdc61a;
+}
+.faq_dialog .faq_body a:hover {
+  color: #a6e22e;
+}
+.faq_dialog footer {
+  padding: 10px 16px 14px;
+  text-align: center;
+}
+.faq_dialog footer button {
+  background: #555555;
+  color: #b1b1a4;
+  border: 1px solid #656355;
+  padding: 6px 18px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+}
+.faq_dialog footer button:hover {
+  color: #a6e22e;
+}
