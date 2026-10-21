@@ -7830,8 +7830,8 @@ html:has(#online_play) #footer {
   padding: 0;
   border: 0;
   background: transparent;
-  /* 笑脸＝纯状态显示（2026-10-21 张老师定：点笑脸不重置地图）——不再给手型 */
-  cursor: default;
+  /* 笑脸＝重玩本局（2026-10-21 张老师定）：可点击，恢复手型 */
+  cursor: pointer;
   line-height: 0;
   flex: 0 0 auto;
 }

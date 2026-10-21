@@ -131,7 +131,7 @@ const TIPS: string[] = [
   "设置里能限定 3BV 范围，只练你想要的开局难度。",
   "在线练习录像不能参与排行，下载后仅供自己回看。",
   "手机上长按格子可以标雷，标完会自动展开周围已满足的数字格。",
-  "按 F2 随时重开一局，不必等这局走完。",
+  "点笑脸随时重开一局（手摆雷的局点笑脸＝复玩同一张手摆地图）；F2 恒换新地图。",
   "禁旗模式（NF）下不能插旗，按下即开，滑动可以开多格。",
   "连击模式下按下鼠标即触发，按住左/右键滑动可连续点击滑过的格子（一格一次）。",
   "左右键同按（或单击已满足的数字格）可一次展开一圈，比逐格点快。",
@@ -141,7 +141,7 @@ const TIPS: string[] = [
   /* ---- 2026-10-19 张老师定：补录未收录的新功能与快捷键 ---- */
   "键盘 1/2/3 快速切换初级/中级/高级（同级再按＝刷新重开），4 打开自定义盘。",
   "快捷键：A 随时再来一局，结算后 R 重玩同一盘面、V 查看回放、D 下载录像。",
-  "查看回放就在本页原地重演整局操作，按 Esc 即可退出。",
+  "查看回放就在本页原地重演整局操作，按 Esc 或点笑脸即可退出。",
   "速旗模式：右键标雷后自动双击周围数字格，点数字格也视为双击。",
   /* ---- 2026-10-19 张老师指定两条 ---- */
   "已经完全确定的雷，如果不能帮助开空，就不要标出来。",
@@ -546,6 +546,7 @@ export function OnlinePlay({
     const ledMines = $("led_mines") as unknown as SVGElement;
     const ledTime = $("led_time") as unknown as SVGElement;
     const faceUse = $("face_use") as unknown as SVGUseElement;
+    let faceKind = "smile"; // 当前笑脸状态（press 为瞬时按下态，不记）
     const FACE_MAP: Record<string, string> = {
       smile: "face-normal", ooh: "face-press-cell", dead: "face-lose",
       win: "face-win", press: "face-press-normal",
@@ -696,6 +697,7 @@ export function OnlinePlay({
       for (let k = 0; k < 3; k++) uses[k].setAttribute("href", "#count-" + ds[k]);
     }
     function setFace(kind: string) {
+      if (kind !== "press") faceKind = kind;
       faceUse.setAttribute("href", "#" + FACE_MAP[kind]);
     }
     /* 状态栏已整个取消（2026-10-15 八期张老师定：「没有意义」）——级别名与筛选 tabs 重复、
@@ -3364,9 +3366,19 @@ export function OnlinePlay({
       positionCusDialog(); // 窗口尺寸/换行变化后重新对准「自定义」tab（未开窗时内部直接跳过）
     }, { signal });
 
-    /* 笑脸＝纯状态显示（2026-10-21 张老师定：点笑脸不再重置地图——重开只走
-       「再来一局」按钮 / 换级别 tab / F2），不挂任何点击交互。
-       回放退出相应收窄为 Esc / 回放控制条（原「点笑脸退出回放」随重置一并取消） */
+    /* 笑脸＝重新开始（2026-10-21 张老师定）：重新随机布局开新局；
+       唯一例外＝手摆局（manualBoard，自定义+手动摆雷开局后）——点笑脸＝重玩本局
+       不换图（当前手摆雷区注入锁定盘复刻，与 R 同机制）。
+       摆雷期未开局（manualBoard 尚为 false）＝其他情况，普通重开会清掉已摆雷位；
+       回放中点笑脸＝退出回放开新局（reset 自带 forceExitReplay） */
+    const faceBtn = $("face_btn");
+    on(faceBtn, "click", () => {
+      if (manualBoard && mines) { pendingBoard = mines.slice(); replayBoardLocked = true; }
+      reset();
+    });
+    on(faceBtn, "mousedown", () => setFace("press"));
+    on(faceBtn, "mouseup", () => setFace(faceKind));
+    on(faceBtn, "mouseleave", () => setFace(faceKind));
 
     /* ---- 鼠标交互：右键按下即插旗；左键抬起开格；左右同按在数字上 = 双击开周围 ---- */
     const gboard = $("gboard");
@@ -4541,7 +4553,7 @@ export function OnlinePlay({
         }
         return;
       }
-      /* F2 键盘重开（2026-10-21 起：点笑脸已不再重置地图，键盘 F2 保留）——
+      /* F2＝换一张新地图重开（手摆局点笑脸才会复玩地图，F2 恒新图——2026-10-21 张老师定）——
          回放中、自定义弹窗开着、焦点在控件上，都一律重开，不做任何拦截。
          （reset 内部已自带 forceExitReplay，回放中重开是安全的） */
       if (e.key === "F2") {
@@ -4899,8 +4911,8 @@ export function OnlinePlay({
               <use className="d" href="#count-1" x="150" y="20" />
               <use className="d" href="#count-0" x="280" y="20" />
             </svg>
-            {/* 笑脸＝纯状态显示（2026-10-21 张老师定：点笑脸不重置地图），无可点击语义 */}
-            <button className="face" id="face_btn" type="button" tabIndex={-1} aria-hidden="true">
+            {/* 笑脸＝重新开始（手摆局＝重玩本局，见 faceBtn click 处注释） */}
+            <button className="face" id="face_btn" title="重新开始" type="button">
               <svg viewBox="0 0 260 260" width="26" height="26"><use id="face_use" href="#face-normal" /></svg>
             </button>
             <svg className="ledc" id="led_time" viewBox="0 0 410 250" role="img" aria-label="计时">
