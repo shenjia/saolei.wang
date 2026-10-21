@@ -633,6 +633,22 @@ export async function getVideoListAdmin(
   return { rows, total: N(countRows[0]?.c), pageSize: ADMIN_PAGESIZE, page };
 }
 
+/** 待审分拣池计数（2026-10-21 默认落点用）：exempt=免核定 / need=需核定（含未分拣/失败）。
+ *  只碰 video 单表 status+auto_flag（(status, level, review_time) 索引前缀可用），无 JOIN。 */
+export async function getPoolCounts(): Promise<{ exempt: number; need: number }> {
+  const rows = await prisma.$queryRawUnsafe<{ flag: number; c: bigint }[]>(
+    `SELECT auto_flag flag, COUNT(*) c FROM video WHERE status = ? GROUP BY auto_flag`,
+    VIDEO_STATUS.NORMAL
+  );
+  let exempt = 0;
+  let need = 0;
+  for (const r of rows) {
+    if (r.flag === 1) exempt += N(r.c);
+    else need += N(r.c); // 0/2/-1 全归需核定（保守人工），与 videoWhere 的 pool 口径一致
+  }
+  return { exempt, need };
+}
+
 /** 按 id 批量补齐录像行（保持传入顺序，缺 video_info 的照样列出并标记） */
 export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
   if (!ids.length) return [];

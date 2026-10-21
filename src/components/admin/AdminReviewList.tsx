@@ -96,18 +96,22 @@ export function AdminReviewList({
   status,
   pool,
   exemptTotal,
+  needTotal,
 }: {
   initial: AdminVideoRow[];
   status: number;
   pool?: string;
   /** 当前待审免核定总数（跨页全选用，来自列表查询 total 或独立 count） */
   exemptTotal?: number;
+  /** 2026-10-21 需核定池剩余数（免核定清空后的自动跳转判断用） */
+  needTotal?: number;
 }) {
   const [items, setItems] = useState(initial);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
-  /** 全选跨页模式：选中「全部免核定」（不限于本页）；此时已选数＝服务端全池计数 */
-  const [allMode, setAllMode] = useState(false);
+  /** 全选跨页模式：选中「全部免核定」（不限于本页）；此时已选数＝服务端全池计数。
+   *  2026-10-21 张老师需求：进免核定池默认全选（进页即可批量通过）。 */
+  const [allMode, setAllMode] = useState(pool === "exempt");
   /** 屏蔽气泡确认（应用内弹窗，不用浏览器模态） */
   const [banConfirm, setBanConfirm] = useState<"page" | "all" | null>(null);
   /** 全屏回放播放器（2026-10-19 张老师需求：点时间列弹层看录像） */
@@ -156,6 +160,14 @@ export function AdminReviewList({
       else drop(ids);
       setPicked(new Set());
       setAllMode(false);
+      // 免核定清空后自动转去需核定手审（2026-10-21 张老师需求；下一屏没活干就回全部待审）
+      if (pool === "exempt") {
+        const rest = (exemptTotal ?? ids.length) - ids.length;
+        if (rest <= 0) {
+          const to = (needTotal ?? 0) > 0 ? "/admin/review?status=10&pool=need" : "/admin/review?status=10";
+          if (typeof window !== "undefined") window.location.href = to;
+        }
+      }
     }
   };
 

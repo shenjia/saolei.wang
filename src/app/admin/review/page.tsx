@@ -2,7 +2,7 @@
 // 待审队列 + 批量审核 + 审核积压监控；审核逻辑与前台 /video/review 完全同一套（lib/review.ts）。
 
 import Link from "next/link";
-import { getVideoListAdmin } from "@/lib/admin/data";
+import { getVideoListAdmin, getPoolCounts } from "@/lib/admin/data";
 import { getAuditorWorkload, getOverview } from "@/lib/admin/stats";
 import { usersByIds } from "@/lib/queries";
 import { VIDEO_STATUS } from "@/lib/config";
@@ -31,7 +31,15 @@ const POOLS: [string, string][] = [
 export default async function AdminReviewPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const status = ["10", "20", "0"].includes(sp.status ?? "") ? parseInt(sp.status!, 10) : VIDEO_STATUS.NORMAL;
-  const pool = ["exempt", "need"].includes(sp.pool ?? "") ? sp.pool : undefined;
+  // 默认落点（2026-10-21 张老师需求）：不带 pool 进待审视图时，有免核定录像
+  // → 默认进免核定（可一键过）；一条都没有 → 默认进需核定（手审）。手动切过的 URL 带参不受影响。
+  const rawPool = sp.pool;
+  let pool = ["exempt", "need"].includes(rawPool ?? "") ? rawPool : undefined;
+  let poolCounts: { exempt: number; need: number } = { exempt: 0, need: 0 };
+  if (status === VIDEO_STATUS.NORMAL) {
+    poolCounts = await getPoolCounts();
+    if (!pool) pool = poolCounts.exempt > 0 ? "exempt" : "need";
+  }
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const [list, ov, workload] = await Promise.all([
@@ -99,7 +107,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
                 href={`/admin/review?status=10&pool=${v}`}
                 className={`admin_btn${pool === v ? (v === "exempt" ? " primary" : " danger") : ""}`}
               >
-                {label}
+                {v === "exempt" ? `免核定（${poolCounts.exempt}，可一键过）` : `需核定（${poolCounts.need}，只能手审）`}
               </Link>
             ))}
             {pool && (
@@ -120,6 +128,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           status={status}
           pool={pool}
           exemptTotal={pool === "exempt" ? list.total : undefined}
+          needTotal={pool === "exempt" ? poolCounts.need : undefined}
         />
 
         {list.total > list.pageSize && (
