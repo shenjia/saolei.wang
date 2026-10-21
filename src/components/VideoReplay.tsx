@@ -1134,6 +1134,8 @@ interface ReplayCtxValue {
   play: () => void;
   /** 一键全屏试玩（二十一期）：等价于「点全屏按钮 + 点笑脸」两步 */
   playGame: () => void;
+  /** 弹旧版（flop）播放器播放本录像（2026-10-21 张老师需求：大按钮 hover 气泡入口） */
+  playLegacy: () => void;
   stop: () => void;
   pause: () => void;
   resume: () => void;
@@ -1352,6 +1354,14 @@ export function VideoReplayProvider({
     })();
   }, [startEngine, filepath, notify]);
 
+  /* 旧版播放器（2026-10-21 张老师需求）：大播放按钮 hover 气泡里的入口——
+     复用 Provider 现成的 flop 懒挂链路（rmv 兜底同款）：setFlopUri(uri) 挂
+     FlopPlayer iframe，挂上后 effect 调 playFlop 弹全屏 flop 播放器；
+     播放器未就绪时 playFlop 的 pendingUri 队列自动补播，多次点击幂等 */
+  const playLegacy = useCallback(() => {
+    setFlopUri(uri);
+  }, [uri]);
+
   const pause = useCallback(() => {
     engineRef.current?.pause();
     setStatus("paused");
@@ -1423,6 +1433,7 @@ export function VideoReplayProvider({
         fullscreen,
         play,
         playGame,
+        playLegacy,
         stop: stopAll,
         pause,
         resume,
@@ -2467,7 +2478,8 @@ export function VideoReplayBoard({
 }
 
 /** 「播放」「试玩」按钮（替代原 PlayButton）：
- *  播放——加载中禁用；回放中/结束＝「重播」。
+ *  播放——加载中禁用；回放中/结束＝「重播」；hover 时按钮下方弹深灰气泡
+ *  「使用旧版播放器」（2026-10-21 张老师需求），点击弹 flop 播放器播放本录像。
  *  试玩（二十一期，2026-10-21 张老师需求）——一键直达全屏试玩（等价点全屏
  *  按钮后再点笑脸），锁定本录像布雷不可更改；首点自动 fetch+起播再进全屏。
  *  图标＝手柄（游戏手柄＝亲手玩一盘的语义，与播放三角/下载箭头区分）。 */
@@ -2478,18 +2490,43 @@ export function VideoReplayButton() {
   const label = status === "loading" ? "加载中…" : status === "idle" ? "播放" : "重播";
   return (
     <>
-      <button type="button" onClick={ctx.play} disabled={status === "loading"}>
-        {status === "idle" || status === "loading" ? (
-          <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
-            <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
-          </svg>
-        ) : (
-          <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-          </svg>
-        )}
-        {label}
-      </button>
+      <span className="tip_host">
+        <button type="button" onClick={ctx.play} disabled={status === "loading"}>
+          {status === "idle" || status === "loading" ? (
+            <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
+            </svg>
+          ) : (
+            <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+            </svg>
+          )}
+          {label}
+        </button>
+        {/* 旧版播放器气泡（2026-10-21 张老师需求）：hover 播放按钮时下方弹深灰
+            气泡，点击弹 flop 播放器（ctx.playLegacy）。span.tip_host 包按钮做
+            hover 联动锚（气泡是 host 后代，hover 气泡不闪断）；点击 stopPropagation
+            防触发按钮自身的原地回播。加载中隐藏（按钮此时禁用，入口无意义） */}
+        <span
+          className="tip_bubble"
+          role="button"
+          tabIndex={0}
+          aria-label="使用旧版播放器播放本录像"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (status !== "loading") ctx.playLegacy();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              if (status !== "loading") ctx.playLegacy();
+            }
+          }}
+        >
+          使用旧版播放器
+        </span>
+      </span>
       <button
         type="button"
         onClick={ctx.playGame}
