@@ -1288,14 +1288,25 @@ export function OnlinePlay({
        点已开数字录 mr 不录 rc/rr、插旗成功后 autoChordAround）。
        旗/问号格按下不动作不录事件：连击是「插旗连发」，滑过已有旗不误拔；
        拔旗走松开路径——右键在旗格上**松开**＝取消标记（见 window mouseup，
-       仅空手松开生效），事件流补 rc+rr 配对与常规右键同口径 */
-    function comboLeftClick(i: number) {
-      if (state[i] === 1) { comboHit = true; recordEv(11, i); recordEv(5, i); chord(i); }
+       仅空手松开生效），事件流补 rc+rr 配对与常规右键同口径。
+       slide=true＝滑动路径经过（2026-10-21 张老师定）：滑过已开数字格不再录
+       sc+lr / mr 计 Double——按住左键持续开空滑过数字格曾整路误计 Double
+       （chord 不成立还全记 wasted）；**Double 只属于明确点击**（mousedown
+       按下瞬间所在格），滑动只保留开格/插旗两种基础动作。触屏 touchmove
+       本就 state===0 守卫只开未开格，无需同改 */
+    function comboLeftClick(i: number, slide = false) {
+      if (state[i] === 1) {
+        if (slide) return; // 滑过已开数字格：不双击、不录事件、不计 Double
+        comboHit = true; recordEv(11, i); recordEv(5, i); chord(i);
+      }
       else if (state[i] === 0) { comboHit = true; recordEv(3, i); recordEv(5, i); openCell(i); }
     }
-    function comboRightClick(i: number) {
+    function comboRightClick(i: number, slide = false) {
       if (nf) return; // NF：右键禁用（入口已拦，双保险）
-      if (autoChord && nums && state[i] === 1) { comboHit = true; recordEv(65, i); chord(i); return; }
+      if (autoChord && nums && state[i] === 1) {
+        if (slide) return; // 同口径：滑过已开数字格不触发速旗 mr 双击
+        comboHit = true; recordEv(65, i); chord(i); return;
+      }
       if (state[i] !== 0) return;
       comboHit = true;
       recordEv(9, i);
@@ -3053,8 +3064,8 @@ export function OnlinePlay({
         /* 首击手势保护：左键滑动不动作（首击本身在 mousedown 已生效），
            松开解除；右键滑旗零风险不拦 */
         if (comboGuard && leftDown) return;
-        if (leftDown) { setFace("ooh"); comboLeftClick(i); }
-        else if (rightDown) { setFace("ooh"); comboRightClick(i); }
+        if (leftDown) { setFace("ooh"); comboLeftClick(i, true); }
+        else if (rightDown) { setFace("ooh"); comboRightClick(i, true); }
         return;
       }
       if (e.buttons === 3) {
