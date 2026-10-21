@@ -31,9 +31,15 @@ export async function GET(req: Request) {
   const field = SCORE_FIELD(level, order);
   const vField = VIDEO_FIELD(level, order);
 
-  // 复用 queries.ts 的统一委托类型做法（union delegate 不可调用）
-  const table = nf ? prisma.userScoresNf : prisma.userScores;
+  // 复用 queries.ts 的统一委托类型做法（union delegate 不可调用，2026-10-21 CI 实证）
+  interface ScoresDelegate {
+    count(args: { where?: Record<string, unknown> }): Promise<number>;
+    findMany(args: Record<string, unknown>): Promise<Record<string, bigint | number | null>[]>;
+  }
+  const table = (nf ? prisma.userScoresNf : prisma.userScores) as unknown as ScoresDelegate;
   const where: Record<string, unknown> = { [field]: { gt: 0 }, ...(await rankedOnly()) };
+  // sum 列（总计时间/3BVS）没有单一关联录像——与站内口径一致：videoId 恒 0，select 跳过该字段
+  const isSum = level === "sum";
   const [total, rows] = await Promise.all([
     table.count({ where }),
     table.findMany({
@@ -41,11 +47,11 @@ export async function GET(req: Request) {
       orderBy: { [field]: ORDER_DIRECTION[order] },
       skip: (page - 1) * size,
       take: size,
-      select: { id: true, [field]: true, [vField]: true },
+      ...(isSum ? {} : { select: { id: true, [field]: true, [vField]: true } }),
     }),
   ]);
 
-  const authors = await usersByIds(rows.map((r: { id: bigint }) => Number(r.id)));
+  const authors = await usersByIds(rows.map((r) => Number(r.id)));
 
   return NextResponse.json({
     by,
@@ -62,7 +68,7 @@ export async function GET(req: Request) {
         name: brief.chineseName,
         englishName: brief.englishName,
         score: Number(r[field]),
-        videoId: Number(r[vField] ?? 0),
+        videoId: isSum ? 0 : Number(r[vField] ?? 0),
       };
     }),
   });
