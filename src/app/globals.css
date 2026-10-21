@@ -7613,6 +7613,57 @@ button.msg_cancel:hover {
   padding-top: 10px;
   border-top: 1px solid #5a594e;
 }
+/* ---- 手动摆雷（2026-10-21 张老师定）：弹窗底部按钮 + 「自定义」tab 右侧指示器 ---- */
+/* 按钮：占比例行还低半档，与浮窗内滑杆行同一灰底家族；激活（摆雷中）站内黄 */
+#online_play .cus_dialog .cus_manual_btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 0;
+  background: #5a594e;
+  border: 1px solid #6d6c5f;
+  border-radius: 6px;
+  color: #e8e8e0;
+  font: bold 13px/1 Arial, Helvetica, sans-serif;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-shadow: none;
+}
+#online_play .cus_dialog .cus_manual_btn:hover {
+  border-color: #a6e22e;
+  color: #a6e22e;
+}
+#online_play .cus_dialog .cus_manual_btn.active {
+  border-color: #fdc61d;
+  color: #fdc61d;
+}
+/* 指示器：挂在 tabs 内、「自定义」tab 右侧——黄字进行中 / 绿字完成。
+   清掉 .ranking_tabs span 的 padding/下划线钩子（badge 不是 tab，不吃 tab 形态） */
+#online_play .ranking_tabs .manual_badge {
+  display: block;
+  align-self: center;
+  padding: 0 0 9px 4px;
+  font: bold 13px/1 Arial, Helvetica, sans-serif;
+  color: #fdc61d;
+  white-space: nowrap;
+  cursor: default;
+}
+#online_play .ranking_tabs .manual_badge::after {
+  display: none;
+}
+#online_play .ranking_tabs .manual_badge.full {
+  color: #a6e22e;
+}
+/* 摆雷中盘面光标提示：格子可点摆雷 */
+#online_play.manual_editing #gboard {
+  cursor: crosshair;
+}
+/* 摆雷已画雷位（td.bm）在摆雷期的描边强调：矢量覆盖层画实雷图标，
+   td 底色加一圈暗红边区分「摆的雷」与开局后未开格 */
+#online_play.manual_editing #gboard td.bm {
+  outline: 1px solid rgba(253, 198, 29, 0.65);
+  outline-offset: -1px;
+}
 /* 练习页禁滚动（2026-10-15 张老师定：「练习页禁滚动，滑动鼠标滚轮可调整显示比例」）：
    整页锁死滚动，滚轮改由 OnlinePlay 的 onWheelZoom 劫持为调整显示比例。
    类由组件挂载时加到 <html>、卸载时摘除，不污染站内其他页面。

@@ -460,6 +460,10 @@ export function OnlinePlay({
     /* NF 与速旗互斥（2026-10-16 张老师定）：互斥上线前的存档可能两个同开，NF 优先 */
     if (nf && autoChord) autoChord = false;
     let mines: Uint8Array | null = null, nums: Uint8Array | null = null;
+    /* ---- 手动摆雷模式（2026-10-21 张老师定）：自定义盘专用 ----
+       manualMode＝摆雷阶段激活（仅 !started 期间有意义，切出 cus / 首击消费后清）；
+       manualBoard＝本局雷区为手摆（首击那一刻定格，无猜重排整体禁用，reset 清） */
+    let manualMode = false, manualBoard = false;
     let state: Uint8Array = new Uint8Array(0); // 0=block 1=open 2=flag 3=question
     let started = false, over = false, startTs = 0, timerId: number | null = null;
     let openedSafe = 0, totalSafe = 0, board3bv = 0;
@@ -1218,7 +1222,24 @@ export function OnlinePlay({
     }
     function openCell(i: number) {
       if (over || state[i] === 1 || state[i] === 2) return;
-      if (!started) { started = true; placeMines(i); startTimer(); }
+      if (!started) {
+        started = true;
+        if (manualMode && manualPlaced < M) { started = false; return; } // 手摆未摆满：摆雷期双保险（正常路径到不了这）
+        if (manualMode) {
+          /* 手动摆雷局：雷区＝已绘雷位（manualMines → mines），跳过 placeMines
+             （无首击 3×3 保护——雷是玩家自己摆的，首击踩雷属自担）；
+             manualBoard 定格＝本局无猜重排整体禁用。摆雷 UI 收尾：
+             雷位贴图还原为未开格（state=0，开局后重画） */
+          manualBoard = true;
+          manualMode = false;
+          mines = manualMines.slice();
+          manualMines = new Uint8Array(0);
+          stopManualMode();
+          recalcAll();
+          repaintAll();
+        } else placeMines(i);
+        startTimer();
+      }
       if (mines![i]) {
         /* 必雷格（被已开数字 100% 锁死）：直接判负，绝不重排、盘面与 3BV 零变化
            （2026-10-14 张老师定）。其余踩雷才走无猜救回。重排不弹任何提醒
@@ -1227,14 +1248,16 @@ export function OnlinePlay({
            （hit 填实际致命格；手势起点没有快照＝非点击路径死亡，不提供复活）。
            无猜救回成功则作废快照（盘面已被重排改写，不存在「点击前」状态） */
         dieSnap = gestureSnap ? { ...gestureSnap, hit: i } : null;
-        if (!ng || isForcedMine(i)) { lose(i); return; }
+        /* 手摆局（manualBoard）无猜整体禁用：雷是玩家亲手构造的局面，
+           重排会把手摆盘改写掉——踩雷直接判负 */
+        if (!ng || manualBoard || isForcedMine(i)) { lose(i); return; }
         const saved = (isBlind(i) && tryNoGuess(i, true)) || tryNoGuess(i, false);
         if (!saved) { lose(i); return; }
         dieSnap = null; // 救回：本局继续，死亡快照作废
         ngRedeals++; // 一次点击触发的无猜重排＝计数 1（内部重试不计）
         ngSaves++; // 触雷被救回＝1 次（面板「无猜重排」行）
         shakeModeBtn(btnNg); // 小雨伞抖一下（2026-10-15 十期张老师定）
-      } else if (ng && nums![i] !== 0 && isBlind(i)) {
+      } else if (ng && !manualBoard && nums![i] !== 0 && isBlind(i)) {
         const changed = tryNoGuess(i, true); // 安全盲点（数字格）：同样尽量换成 opening，盲点必开空
         if (changed) ngRedeals++;
       }
@@ -1270,6 +1293,68 @@ export function OnlinePlay({
       void btn.offsetWidth;
       btn.classList.add("gshake");
     }
+    /* ---- 手动摆雷模式（2026-10-21 张老师定）：自定义盘专用 ----
+       入口＝自定义弹窗底部「手动摆雷」按钮；进入后弹窗收起、盘面清空待摆。
+       交互：左键未摆格＝摆雷（画实雷）；右键已摆格＝取消（还原未开格）；
+       触屏（无右键）点按＝toggle（摆雷中点已摆格＝取消）。摆满 M 颗前不能开局——
+       所有开局手势（左键开格/双键 chord/连击/触屏）一律拦下。
+       摆满后正常开局：首击那一刻 mines 定格为手摆雷区（openCell manualMode 分支），
+       无猜重排整体禁用（manualBoard，见 openCell）；
+       「重玩本局」复用锁定盘机制自动复刻手摆局。 */
+    let manualPlaced = 0; // 已摆雷数（reset 清零）
+    let manualMines: Uint8Array = new Uint8Array(0); // 手摆雷位标记（与盘面同尺寸）
+    const manualBtn = $("btn_manual");
+    const manualBadge = $("manual_badge");
+    function syncManualBadge() {
+      const full = manualPlaced >= M;
+      manualBadge.textContent = full ? "（摆雷完成）" : `（摆雷中 ${manualPlaced}/${M}）`;
+      manualBadge.classList.toggle("full", full);
+    }
+    /* 进入摆雷：仅自定义级别、未开局时有效；已开局则重开一局（手摆盘要全新盘面）。
+       从弹窗按钮进入时先收弹窗（closeCusDialog 定义在本块之后——函数声明提升可用） */
+    function startManualMode() {
+      if (lv !== "cus") return;
+      closeCusDialog();
+      if (started || over) reset("cus"); // 已开局/已结束：重开再摆
+      manualMode = true;
+      manualBtn.classList.add("active");
+      manualBadge.hidden = false;
+      container.classList.add("manual_editing"); // 盘面 crosshair 光标 + 雷位描边
+      syncManualBadge();
+      showToast("摆雷模式：左键摆雷，右键取消；摆满 " + M + " 颗后开始游戏");
+    }
+    /* 退出摆雷（切级别/重开/弹窗改规格时调）：清指示器与按钮态。
+       reset 内也会清一次（manualMode=false）——这里只负责 UI 收尾 */
+    function stopManualMode() {
+      manualMode = false;
+      manualBtn.classList.remove("active");
+      manualBadge.hidden = true;
+      container.classList.remove("manual_editing");
+    }
+    /* 摆雷动作（i＝格子下标，add=true 摆 / false 取消）。幂等：摆已摆/取消未摆零动作。
+       摆雷期间 mines 尚为 null（未开局）——雷位只记在 manualMines，首击
+       （openCell manualMode 分支）才整体赋给 mines；雷数 LED 同步显示剩余可摆数 */
+    function manualToggle(i: number, add: boolean) {
+      if (add && !manualMines[i] && manualPlaced < M) {
+        manualMines[i] = 1;
+        manualPlaced++;
+        paintCell(cellTd(i), "bm"); // bm=cell-mine 实雷图标（与败局揭示同贴图）
+        led(ledMines, M - manualPlaced);
+        syncManualBadge();
+        if (manualPlaced === M) showToast("摆雷完成，点击格子开始游戏");
+      } else if (!add && manualMines[i]) {
+        manualMines[i] = 0;
+        manualPlaced--;
+        paintCell(cellTd(i), "bb"); // 还原未开格
+        led(ledMines, M - manualPlaced);
+        syncManualBadge();
+      }
+    }
+    on(manualBtn, "click", (e: Event) => {
+      e.stopPropagation(); // 浮窗内点击不冒泡到外点关闭
+      if (manualMode) { stopManualMode(); reset("cus"); return; } // 再点一次＝放弃重开
+      startManualMode();
+    });
     function toggleFlag(i: number) {
       if (over) return;
       if (state[i] === 1) return;
@@ -2743,6 +2828,13 @@ export function OnlinePlay({
       const prevLv = lv, prevW = W, prevH = H;
       lv = level || lv;
       const L = levelSize(lv); W = L.x; H = L.y; M = L.m;
+      /* 手动摆雷状态随新局清零（2026-10-21）：manualMode/manualBoard/manualMines
+         全部重置；指示器与按钮态收尾（stopManualMode 幂等，非摆雷时只收 UI） */
+      manualMode = false;
+      manualBoard = false;
+      manualMines = new Uint8Array(W * H);
+      manualPlaced = 0;
+      stopManualMode();
       mines = null; nums = null; state = new Uint8Array(W * H);
       started = false; over = false; openedSafe = 0; totalSafe = W * H - M; board3bv = 0;
       /* 手势状态清零 + 隐藏结算报告（张老师：游戏再次开始时隐藏）；事件流同步清空
@@ -3317,6 +3409,25 @@ export function OnlinePlay({
     on(gboard, "mousedown", (e: MouseEvent) => {
       if (over || gameBusy()) return;
       const i = eventCell(e); if (i < 0) return;
+      /* 手动摆雷模式（2026-10-21）：左键摆雷 / 右键取消（画实雷图标），不录事件流
+         （摆雷发生在计时器启动前，事件流 t=0 起步，混入会毁掉回放/录像口径）；
+         摆满 M 颗后左键放行＝正常开局手势（首击在 openCell 消费手摆雷区）。
+         右键语义：点中手摆雷＝取消（可再补摆）；点空格＝无动作吞掉（摆雷期
+         插旗会污染 state）。⚠️ 双键手势第二键（leftDown 已按）不取消——摆满后
+         双键 chord 开局，右键落点恰在雷上会误撤雷导致开局哑火 */
+      if (manualMode && !started) {
+        const full = manualPlaced >= M;
+        if (e.button === 2) {
+          e.preventDefault();
+          if (!leftDown && manualMines[i]) manualToggle(i, false);
+          return;
+        }
+        if (e.button === 0) {
+          if (!full) { manualToggle(i, true); return; }
+          if (manualMines[i]) return; // 落点仍是雷（摆满后右键取消的最后一颗没补）：点了算走位，等补满
+          /* 已摆满：本次手势转正常开局，跌出摆雷（manualMode 收尾=首击 openCell 内定格） */
+        } else return;
+      }
       /* 原地复活：新点击手势起点拍快照（踩雷时升格为死亡快照，见 openCell） */
       snapGesture(i);
       /* 连击模式按下即触发（2026-10-19 张老师定，承 NF 按下即开口径）：
@@ -3473,6 +3584,7 @@ export function OnlinePlay({
        移动端插旗只走长按 ---- */
     let touchTimer: number | null = null, touchCell = -1, longFired = false;
     let touchMoved = false; // 连击滑动连开标记：本次触点发生过轨迹滑动（touchend 据此跳过点按分支）
+    let touchManual = false; // 摆雷手势标记（2026-10-21）：本次触点走摆雷 toggle 分支
     let touchX = 0, touchY = 0; // 起点坐标：滑动容差判定用
     let touchLastX = 0, touchLastY = 0; // 连击滑动连开：上一采样点（棋盘 1x 像素坐标）
     /* 触点屏幕坐标 → 棋盘 1x 像素：touch 事件 target 恒为起始格（不跟手指走），
@@ -3493,6 +3605,16 @@ export function OnlinePlay({
     }
     on(gboard, "touchend", (e: TouchEvent) => {
       if (touchTimer) clearTimeout(touchTimer);
+      /* 摆雷手势（2026-10-21）：toggle 已在 120ms 定时器触发（或滑动取消），
+         收尾只复位，不落常规点按/长按分支。摆满后穿透开局的触点不带此标记、
+         走下方常规流程（openCell 消费手摆雷区） */
+      if (touchManual) {
+        touchManual = false;
+        touchCell = -1;
+        touchMoved = false;
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
       if (longFired) {
         /* 长按插旗的 rr 闭合（rc 在长按触发时已录） */
         if (touchCell >= 0 && !over) recordEv(17, touchCell);
@@ -3520,6 +3642,13 @@ export function OnlinePlay({
       if (touchCell < 0) return;
       const t = e.changedTouches[0];
       if (!t) return;
+      /* 摆雷中滑动＝取消点按（与常规点按同容差），防手指微颤误摆 */
+      if (touchManual && touchTimer) {
+        if (Math.hypot(t.clientX - touchX, t.clientY - touchY) > 12) {
+          clearTimeout(touchTimer); touchTimer = null; touchManual = false; touchCell = -1;
+        }
+        return;
+      }
       if (combo) {
         /* 连击滑动连开（2026-10-19 张老师定，承 NF 滑动连开）：容差内不算滑动
            （保长按插旗）；超容差沿手指轨迹按半格步长插值逐格开——touchmove 是
@@ -3559,6 +3688,26 @@ export function OnlinePlay({
     on(gboard, "touchstart", (e: TouchEvent) => {
       const t = e.changedTouches[0]; if (!t) return;
       const i = eventCell(t); if (i < 0 || over) return;
+      /* 手动摆雷模式（2026-10-21）：触屏无右键，点按＝toggle 摆雷/取消。
+         不走长按（长按语义是插旗，与摆雷冲突）；滑动（touchmove 超容差）
+         touchCell 会被清 -1，touchend 自然跳过 toggle */
+      if (manualMode && !started) {
+        touchCell = i;
+        touchX = t.clientX; touchY = t.clientY;
+        touchMoved = false;
+        const full = manualPlaced >= M;
+        if (!full || manualMines[i]) {
+          touchManual = true; // 摆雷手势：touchend 走摆雷收尾分支
+          touchTimer = window.setTimeout(() => {
+            /* 点按 toggle：摆满前点未摆格＝摆；摆满后点已摆格＝取消（可再补摆） */
+            manualToggle(i, !manualMines[i] && manualPlaced < M);
+            if (navigator.vibrate) navigator.vibrate(15);
+          }, 120);
+          e.preventDefault();
+          return;
+        }
+        /* 已摆满且点的是空格：放行为正常开局手势（下落常规流程，openCell 消费手摆雷区） */
+      }
       /* 原地复活：触点手势起点拍快照（点按/滑动连开/长按插旗共用一个起点） */
       snapGesture(i);
       touchCell = i; longFired = false; touchMoved = false;
@@ -4538,6 +4687,9 @@ export function OnlinePlay({
           <a data-lv="int">中级</a>
           <a data-lv="exp">高级</a>
           <a data-lv="cus">自定义</a>
+          {/* 手动摆雷指示器（2026-10-21 张老师定）：摆雷模式激活时出现在
+              「自定义」tab 右侧——「（摆雷中 x/M）」黄字，摆满变绿「（摆雷完成）」 */}
+          <span className="manual_badge" id="manual_badge" hidden>（摆雷中）</span>
         </div>
         {/* 右上角图标按钮排（2026-10-14 二期张老师定，九期追补模式快捷钮）：
             NF／速旗／连击／无猜四颗模式钮在齿轮左侧——激活显色（NF=默认黄 /
@@ -4705,6 +4857,9 @@ export function OnlinePlay({
             <input type="range" id="cus_zoom" min="0.5" max="2.5" step="0.05" defaultValue="1" />
             <span className="cval" id="cus_zoom_val">1.00x</span>
           </div>
+          {/* 手动摆雷（2026-10-21 张老师定）：进入摆雷模式——左键摆雷 / 右键取消，
+              摆满雷数后才能开局；进行中再点＝放弃并重开随机盘 */}
+          <button className="cus_manual_btn" id="btn_manual" type="button">手动摆雷</button>
         </div>
       </div>
 
