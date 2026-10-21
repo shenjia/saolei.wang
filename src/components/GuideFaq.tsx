@@ -10,7 +10,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 // 弹窗正文（旧版原文，仅做 HTML 化；term=术语高亮 note=注意事项，样式在 globals.css）
-type FaqItem = { title: string; body: React.ReactNode };
+// wide=1.5 倍宽弹窗（2026-10-21 张老师需求：「怎样加入排行」内容多，500→750）
+type FaqItem = { title: string; body: React.ReactNode; wide?: boolean };
 
 const RANKING_LINKS = (
   <>
@@ -61,6 +62,7 @@ const FAQ_ITEMS: Record<string, FaqItem> = {
   },
   ranking: {
     title: "怎样加入雷界排行榜",
+    wide: true,
     body: (
       <>
         <b className="term">下载并安装扫雷软件</b>
@@ -240,7 +242,12 @@ export default function GuideFaq() {
             if (e.target === e.currentTarget) close();
           }}
         >
-          <div className="faq_dialog" role="dialog" aria-modal="true" aria-label={item.title}>
+          <div
+            className={"faq_dialog" + (item.wide ? " wide" : "")}
+            role="dialog"
+            aria-modal="true"
+            aria-label={item.title}
+          >
             <header>
               <h3>{item.title}</h3>
               <span className="faq_close" onClick={close} role="button" aria-label="关闭">

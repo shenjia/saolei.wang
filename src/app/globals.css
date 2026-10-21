@@ -9740,6 +9740,11 @@ html.op-fakefs #header {
   display: flex;
   flex-direction: column;
 }
+/* 1.5 倍宽变体（2026-10-21 张老师需求：排行弹窗内容多）；
+   旧版原窗即 560 宽双按钮排版，750 复刻该阅读密度 */
+.faq_dialog.wide {
+  width: 750px;
+}
 .faq_dialog header {
   display: flex;
   align-items: center;
@@ -9767,7 +9772,12 @@ html.op-fakefs #header {
   padding: 14px 16px;
   overflow-y: auto;
   line-height: 24px;
+  /* 正文与教程页正文同款（2026-10-21 张老师要求：原先继承基础色 #636359 偏暗）——
+     legacy `.text p` 即 #939387 / 16px，教程页每条 p 实测同值 */
+  color: #939387;
+  font-size: 16px;
 }
+/* 正文内的强调层级：term/note 在 16px 正文上保持原有区分 */
 .faq_dialog .faq_body .term {
   color: #e6db74;
 }
