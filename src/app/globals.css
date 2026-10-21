@@ -7639,20 +7639,24 @@ button.msg_cancel:hover {
 }
 /* 指示器：挂在 tabs 内、「自定义」tab 右侧——黄字进行中 / 绿字完成。
    清掉 .ranking_tabs span 的 padding/下划线钩子（badge 不是 tab，不吃 tab 形态） */
+/* 摆雷指示器（2026-10-21 张老师定两轮）：
+   ① 常显 bug：badge 是 .ranking_tabs 里的 span，命中 `.ranking_tabs span` 的
+      display:block，把 UA 的 [hidden]{display:none} 盖掉了——初级/中级/高级也
+      一直显示「摆雷中」。显式补 [hidden] 规则压回。
+   ② 对齐：不覆写字号/行高/上下内距（全盘沿用 .ranking_tabs span 的 15px/9px），
+      文字即与筛选器 tabs 天然同基线；只收水平内距、加粗、染黄 */
 #online_play .ranking_tabs .manual_badge {
-  display: block;
-  align-self: center;
-  padding: 0 0 9px 4px;
-  font: bold 13px/1 Arial, Helvetica, sans-serif;
+  padding: 9px 0 9px 6px;
   color: #fdc61d;
+  font-weight: bold;
   white-space: nowrap;
   cursor: default;
 }
-#online_play .ranking_tabs .manual_badge::after {
+#online_play .ranking_tabs .manual_badge[hidden] {
   display: none;
 }
-#online_play .ranking_tabs .manual_badge.full {
-  color: #a6e22e;
+#online_play .ranking_tabs .manual_badge::after {
+  display: none;
 }
 /* 摆雷中盘面光标提示：格子可点摆雷。
    ⚠️ manual_editing 挂在组件根 .op_root 上（OnlinePlay 的 container 引用），
@@ -7826,7 +7830,8 @@ html:has(#online_play) #footer {
   padding: 0;
   border: 0;
   background: transparent;
-  cursor: pointer;
+  /* 笑脸＝纯状态显示（2026-10-21 张老师定：点笑脸不重置地图）——不再给手型 */
+  cursor: default;
   line-height: 0;
   flex: 0 0 auto;
 }

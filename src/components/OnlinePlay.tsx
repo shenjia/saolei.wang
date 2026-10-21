@@ -131,7 +131,7 @@ const TIPS: string[] = [
   "设置里能限定 3BV 范围，只练你想要的开局难度。",
   "在线练习录像不能参与排行，下载后仅供自己回看。",
   "手机上长按格子可以标雷，标完会自动展开周围已满足的数字格。",
-  "按 F2（或点笑脸）随时重开一局，不必等这局走完。",
+  "按 F2 随时重开一局，不必等这局走完。",
   "禁旗模式（NF）下不能插旗，按下即开，滑动可以开多格。",
   "连击模式下按下鼠标即触发，按住左/右键滑动可连续点击滑过的格子（一格一次）。",
   "左右键同按（或单击已满足的数字格）可一次展开一圈，比逐格点快。",
@@ -141,7 +141,7 @@ const TIPS: string[] = [
   /* ---- 2026-10-19 张老师定：补录未收录的新功能与快捷键 ---- */
   "键盘 1/2/3 快速切换初级/中级/高级（同级再按＝刷新重开），4 打开自定义盘。",
   "快捷键：A 随时再来一局，结算后 R 重玩同一盘面、V 查看回放、D 下载录像。",
-  "查看回放就在本页原地重演整局操作，按 Esc 或点笑脸即可退出。",
+  "查看回放就在本页原地重演整局操作，按 Esc 即可退出。",
   "速旗模式：右键标雷后自动双击周围数字格，点数字格也视为双击。",
   /* ---- 2026-10-19 张老师指定两条 ---- */
   "已经完全确定的雷，如果不能帮助开空，就不要标出来。",
@@ -546,7 +546,6 @@ export function OnlinePlay({
     const ledMines = $("led_mines") as unknown as SVGElement;
     const ledTime = $("led_time") as unknown as SVGElement;
     const faceUse = $("face_use") as unknown as SVGUseElement;
-    let faceKind = "smile"; // 当前笑脸状态（press 为瞬时按下态，不记）
     const FACE_MAP: Record<string, string> = {
       smile: "face-normal", ooh: "face-press-cell", dead: "face-lose",
       win: "face-win", press: "face-press-normal",
@@ -697,7 +696,6 @@ export function OnlinePlay({
       for (let k = 0; k < 3; k++) uses[k].setAttribute("href", "#count-" + ds[k]);
     }
     function setFace(kind: string) {
-      if (kind !== "press") faceKind = kind;
       faceUse.setAttribute("href", "#" + FACE_MAP[kind]);
     }
     /* 状态栏已整个取消（2026-10-15 八期张老师定：「没有意义」）——级别名与筛选 tabs 重复、
@@ -1303,12 +1301,17 @@ export function OnlinePlay({
        「重玩本局」复用锁定盘机制自动复刻手摆局。 */
     let manualPlaced = 0; // 已摆雷数（reset 清零）
     let manualMines: Uint8Array = new Uint8Array(0); // 手摆雷位标记（与盘面同尺寸）
+    /* 摆雷拖动手势（2026-10-21 张老师补）：1=按住左键滑过连续摆 / -1=按住右键滑过连续撤 /
+       0=无。不走 leftDown/rightDown（那两旗会把 mouseup 送进常规开局/插旗分支） */
+    let manualDrag = 0;
     const manualBtn = $("btn_manual");
     const manualBadge = $("manual_badge");
     function syncManualBadge() {
+      /* 张老师 2026-10-21 定：只显示「摆雷中 x/M」；摆满即整体隐藏（toast 已报
+         完成，不留字样）——撤一颗后重新出现继续计数 */
       const full = manualPlaced >= M;
-      manualBadge.textContent = full ? "（摆雷完成）" : `（摆雷中 ${manualPlaced}/${M}）`;
-      manualBadge.classList.toggle("full", full);
+      manualBadge.hidden = full;
+      if (!full) manualBadge.textContent = `（摆雷中 ${manualPlaced}/${M}）`;
     }
     /* 进入摆雷：仅自定义级别、未开局时有效；已开局则重开一局（手摆盘要全新盘面）。
        从弹窗按钮进入时先收弹窗（closeCusDialog 定义在本块之后——函数声明提升可用） */
@@ -2820,8 +2823,8 @@ export function OnlinePlay({
       container.classList.toggle("op-lsmax", lsQuery.matches && (lv === "exp" || lv === "cus"));
     }
     function reset(level?: string) {
-      /* 回放中重开（笑脸/F2/切级别）：先强制退出回放，清掉光标/拦截标志
-         （2026-10-14 张老师报：播放回放后点笑脸不能再玩——回放元素残留锁死游戏）。
+      /* 回放中重开（F2/切级别/再来一局）：先强制退出回放，清掉光标/拦截标志
+         （2026-10-14 张老师报：播放回放后重开不能再玩——回放元素残留锁死游戏）。
          exitReplay 的 repaintAll 在这里跳过：reset 后面自会全盘重画。
          第二个参数 false（七期）：新开一局不许把「本局表现」浮层弹回来 */
       if (replaying) forceExitReplay(false, false);
@@ -2863,7 +2866,7 @@ export function OnlinePlay({
       setFace("smile");
       ngRedeals = 0;
       ngSaves = 0;
-      /* 同盘面重开（点笑脸/F2）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
+      /* 同盘面重开（F2/R）不重建任何 DOM——重建会造成页面跳动（2026-10-14 张老师报），
          只重置格子贴图；盘面尺寸变化（切难度/首建）才重建 tbody 与矢量覆盖层 */
       const gridChanged = W !== prevW || H !== prevH || !vecUse.length;
       if (gridChanged) {
@@ -2882,7 +2885,7 @@ export function OnlinePlay({
       if (lv !== prevLv) saveSettings();
       /* 级别筛选器：激活项重建为 span.current，其余为 a（ranking_tabs 结构）；
          NF / 无猜开关是原生 checkbox，状态自持、跨局保持，无需重绘。
-         级别没变（点笑脸重开）不动它——outerHTML 重建会丢焦点且白排一版 */
+         级别没变（同级别重开）不动它——outerHTML 重建会丢焦点且白排一版 */
       if (lv !== prevLv) {
         container.querySelectorAll("#level_tabs [data-lv]").forEach((el) => {
           const l = el.getAttribute("data-lv")!;
@@ -3361,11 +3364,9 @@ export function OnlinePlay({
       positionCusDialog(); // 窗口尺寸/换行变化后重新对准「自定义」tab（未开窗时内部直接跳过）
     }, { signal });
 
-    const faceBtn = $("face_btn");
-    on(faceBtn, "click", () => reset());
-    on(faceBtn, "mousedown", () => setFace("press"));
-    on(faceBtn, "mouseup", () => setFace(faceKind));
-    on(faceBtn, "mouseleave", () => setFace(faceKind));
+    /* 笑脸＝纯状态显示（2026-10-21 张老师定：点笑脸不再重置地图——重开只走
+       「再来一局」按钮 / 换级别 tab / F2），不挂任何点击交互。
+       回放退出相应收窄为 Esc / 回放控制条（原「点笑脸退出回放」随重置一并取消） */
 
     /* ---- 鼠标交互：右键按下即插旗；左键抬起开格；左右同按在数字上 = 双击开周围 ---- */
     const gboard = $("gboard");
@@ -3414,16 +3415,22 @@ export function OnlinePlay({
          摆满 M 颗后左键放行＝正常开局手势（首击在 openCell 消费手摆雷区）。
          右键语义：点中手摆雷＝取消（可再补摆）；点空格＝无动作吞掉（摆雷期
          插旗会污染 state）。⚠️ 双键手势第二键（leftDown 已按）不取消——摆满后
-         双键 chord 开局，右键落点恰在雷上会误撤雷导致开局哑火 */
+         双键 chord 开局，右键落点恰在雷上会误撤雷导致开局哑火。
+         拖动（2026-10-21 张老师补）：按住左键滑过＝连续摆雷、按住右键滑过＝
+         连续撤雷——mousedown 起手势（manualDrag），mouseover 逐格 toggle，
+         window mouseup 收尾 */
       if (manualMode && !started) {
         const full = manualPlaced >= M;
         if (e.button === 2) {
           e.preventDefault();
-          if (!leftDown && manualMines[i]) manualToggle(i, false);
+          if (!leftDown) {
+            if (manualMines[i]) manualToggle(i, false);
+            manualDrag = -1; // 按住右键滑动＝连续撤雷
+          }
           return;
         }
         if (e.button === 0) {
-          if (!full) { manualToggle(i, true); return; }
+          if (!full) { manualToggle(i, true); manualDrag = 1; return; } // 按住左键滑动＝连续摆雷
           if (manualMines[i]) return; // 落点仍是雷（摆满后右键取消的最后一颗没补）：点了算走位，等补满
           /* 已摆满：本次手势转正常开局，跌出摆雷（manualMode 收尾=首击 openCell 内定格） */
         } else return;
@@ -3466,6 +3473,19 @@ export function OnlinePlay({
     /* 按住滑动：按下态实时跟随鼠标经过的格子（出盘后再进盘按 e.buttons 自愈） */
     on(gboard, "mouseover", (e: MouseEvent) => {
       if (over || gameBusy()) return;
+      /* 摆雷拖动（2026-10-21 张老师补）：按住左键滑过＝连续摆、按住右键滑过＝连续撤。
+         manualToggle 幂等（摆已摆/撤未撤零动作），来回滑不重复计数；
+         摆满后左键手势已转开局（manualDrag=0），不会进本分支。
+         空手（buttons=0）划回＝松开发生在窗口外、window mouseup 没收到——
+         手势早已结束，先自愈再走常规分支 */
+      if (manualDrag && manualMode && !started) {
+        if (e.buttons === 0) { manualDrag = 0; }
+        else {
+          const mi = eventCell(e);
+          if (mi >= 0) manualToggle(mi, manualDrag > 0);
+          return;
+        }
+      }
       /* 手势残留自愈：松开发生在浏览器窗口外时 window mouseup 捕不到，
          空手（buttons=0）划回棋盘说明手势早已结束 */
       if (e.buttons === 0 && (leftDown || rightDown)) { leftDown = rightDown = chordDone = false; }
@@ -3507,6 +3527,7 @@ export function OnlinePlay({
        留下不配对的 lc，引擎状态机卡住（后续 rc 被吞、lr 误判 Double）。
        非棋盘手势（点笑脸/齿轮/滑杆后的松开）由 leftDown/rightDown 门控忽略。 */
     on(window, "mouseup", (e: MouseEvent) => {
+      manualDrag = 0; // 摆雷拖动手势收尾（先于 leftDown 早退——摆雷路径不置 leftDown/rightDown）
       if (!leftDown && !rightDown) return; // 无棋盘手势：笑脸/设置等点击不进场
       if (over || gameBusy()) { clearPress(); leftDown = rightDown = chordDone = false; return; }
       /* 连击模式松开＝纯复位（2026-10-19）：每次点击的 lc+lr / rc+rr 配对在按下/
@@ -4520,10 +4541,9 @@ export function OnlinePlay({
         }
         return;
       }
-      /* F2 ≡ 点笑脸重开（2026-10-14 张老师定）：必须与鼠标点笑脸完全同路——
+      /* F2 键盘重开（2026-10-21 起：点笑脸已不再重置地图，键盘 F2 保留）——
          回放中、自定义弹窗开着、焦点在控件上，都一律重开，不做任何拦截。
-         （reset 内部已自带 forceExitReplay，回放中重开是安全的；此前 replaying
-         早退让 F2 在回放中哑火，与点笑脸行为不一致，张老师报过） */
+         （reset 内部已自带 forceExitReplay，回放中重开是安全的） */
       if (e.key === "F2") {
         e.preventDefault();
         reset();
@@ -4584,6 +4604,11 @@ export function OnlinePlay({
         mines: () => (mines ? Array.from(mines) : null),
         nums: () => (nums ? Array.from(nums) : null),
         state: () => Array.from(state),
+        /* 手动摆雷测试钩子（2026-10-21）：摆雷进度与开局态 */
+        started: () => started,
+        manualMode: () => manualMode,
+        manualPlaced: () => manualPlaced,
+        M: () => M,
         combo: () => combo,
         guard: () => comboGuard,
         over: () => over,
@@ -4874,7 +4899,8 @@ export function OnlinePlay({
               <use className="d" href="#count-1" x="150" y="20" />
               <use className="d" href="#count-0" x="280" y="20" />
             </svg>
-            <button className="face" id="face_btn" title="重新开始 (F2)" type="button">
+            {/* 笑脸＝纯状态显示（2026-10-21 张老师定：点笑脸不重置地图），无可点击语义 */}
+            <button className="face" id="face_btn" type="button" tabIndex={-1} aria-hidden="true">
               <svg viewBox="0 0 260 260" width="26" height="26"><use id="face_use" href="#face-normal" /></svg>
             </button>
             <svg className="ledc" id="led_time" viewBox="0 0 410 250" role="img" aria-label="计时">
