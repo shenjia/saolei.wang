@@ -214,34 +214,36 @@ export default async function AdminDashboard() {
         );
       })()}
 
-      {/* ---------- 趋势（2026-10-16 合并业务趋势与 PV/UV 访问趋势，x 轴同为 +08:00 切天） ---------- */}
-      <AdminCard
-        title="近 30 天趋势"
-        more={
-          <>
-            <span className="sub">PV/UV 为 page_view 埋点 · 已剔除管理员浏览</span>
-            <Link href="/admin/stats">深入分析 →</Link>
-          </>
-        }
-      >
-        <TrendChart dates={trend.dates} series={series} unit="" defaultHidden={defaultHidden} />
-      </AdminCard>
+      {/* ---------- 待办 + 趋势并排（2026-10-21 张老师定：待办在左） ---------- */}
+      <div className="admin_grid todo_trend">
+        <AdminCard title="待办事项">
+          <div className="admin_todo">
+            {todos.map((t) => (
+              <Link key={t.label} href={t.href}>
+                <span>{t.label}</span>
+                {t.hint && <span className="admin_hint">{t.hint}</span>}
+                <span className={`badge${t.value === 0 ? " zero" : ""}`}>{t.value.toLocaleString("zh-CN")}</span>
+              </Link>
+            ))}
+          </div>
+          <div className="admin_hint" style={{ marginTop: 10 }}>
+            提示：待审录像必须「先下载观看再审核」（防盲审），系统会拒绝未下载的审核请求。
+          </div>
+        </AdminCard>
 
-      {/* ---------- 待办（2026-10-21 称号分布卡下线，独占全宽） ---------- */}
-      <AdminCard title="待办事项">
-        <div className="admin_todo">
-          {todos.map((t) => (
-            <Link key={t.label} href={t.href}>
-              <span>{t.label}</span>
-              {t.hint && <span className="admin_hint">{t.hint}</span>}
-              <span className={`badge${t.value === 0 ? " zero" : ""}`}>{t.value.toLocaleString("zh-CN")}</span>
-            </Link>
-          ))}
-        </div>
-        <div className="admin_hint" style={{ marginTop: 10 }}>
-          提示：待审录像必须「先下载观看再审核」（防盲审），系统会拒绝未下载的审核请求。
-        </div>
-      </AdminCard>
+        {/* 趋势（2026-10-16 合并业务趋势与 PV/UV 访问趋势，x 轴同为 +08:00 切天） */}
+        <AdminCard
+          title="近 30 天趋势"
+          more={
+            <>
+              <span className="sub">PV/UV 为 page_view 埋点 · 已剔除管理员浏览</span>
+              <Link href="/admin/stats">深入分析 →</Link>
+            </>
+          }
+        >
+          <TrendChart dates={trend.dates} series={series} unit="" defaultHidden={defaultHidden} />
+        </AdminCard>
+      </div>
 
       {/* ---------- 流量统计（2026-10-16）：来源 / 落地页 / 设备 / 热门录像 ---------- */}
       <div className="admin_grid c2">
@@ -266,7 +268,8 @@ export default async function AdminDashboard() {
         </AdminCard>
       </div>
 
-      <div className="admin_grid c2">
+      {/* ---------- 三个分布环形图并一行（2026-10-21 张老师定：设备/称号/软件；热门录像页板块下线） ---------- */}
+      <div className="admin_grid pies3">
         <AdminCard title="设备分布" more="近 30 天 · 按 UA 粗分类">
           <Donut
             items={traffic.devices.map((d) => ({
@@ -277,61 +280,21 @@ export default async function AdminDashboard() {
           />
         </AdminCard>
 
-        <AdminCard title="热门录像页" more="近 7 天 · /video/:id 访问榜" tight>
-          <div className="admin_scroll">
-            <table className="admin_table">
-              <thead>
-                <tr>
-                  <th>录像</th>
-                  <th className="c">级别</th>
-                  <th className="num">PV</th>
-                  <th className="num">UV</th>
-                </tr>
-              </thead>
-              <tbody>
-                {traffic.topVideos.d7.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="gray">
-                      暂无数据
-                    </td>
-                  </tr>
-                )}
-                {traffic.topVideos.d7.map((v) => (
-                  <tr key={v.path}>
-                    <td>
-                      <Link className="link" href={v.path} target="_blank">
-                        {v.label}
-                      </Link>
-                    </td>
-                    <td className="c">
-                      <LevelTag level={v.level} />
-                    </td>
-                    <td className="num strong">{v.pv.toLocaleString("zh-CN")}</td>
-                    <td className="num">{v.uv.toLocaleString("zh-CN")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <AdminCard title="称号体系偏好" more="user_info.title_pref · 10 分钟缓存">
+          <Donut items={titlePrefs} centerLabel="已存偏好玩家" mergeSmall={false} />
+          <div className="admin_hint" style={{ marginTop: 10 }}>
+            口径：只统计资料保存过的账号（user_info 有行才建偏好；站内无会话表，无法按「已登录」精确圈定）。
+            未设置偏好按军衔制渲染，因此「旧版」占比 = 主动切换旧版称号的玩家比例。
           </div>
         </AdminCard>
+
+        <AdminCard title="录像软件分布" more="按录像解析">
+          <Donut
+            items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))}
+            centerLabel="录像总数"
+          />
+        </AdminCard>
       </div>
-
-      {/* ---------- 称号体系偏好（2026-10-21 张老师需求：新版军衔 vs 旧版人神界称号占比） ---------- */}
-      <AdminCard title="称号体系偏好" more="user_info.title_pref · 10 分钟缓存">
-        <Donut items={titlePrefs} centerLabel="已存偏好玩家" mergeSmall={false} />
-        <div className="admin_hint" style={{ marginTop: 10 }}>
-          口径：只统计资料保存过的账号（user_info 有行才建偏好；站内无会话表，无法按「已登录」精确圈定）。
-          未设置偏好按军衔制渲染，因此「旧版」占比 = 主动切换旧版称号的玩家比例。
-        </div>
-      </AdminCard>
-
-      {/* ---------- 软件分布（2026-10-21 地区分布卡下线，改环形 Donut） ---------- */}
-      <AdminCard title="录像软件分布" more="按录像解析">
-        <Donut
-          items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))}
-          centerLabel="录像总数"
-        />
-      </AdminCard>
 
       {/* ---------- 最新注册 / 最新上传 ---------- */}
       <div className="admin_grid c2">

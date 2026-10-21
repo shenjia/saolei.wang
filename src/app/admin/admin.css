@@ -211,6 +211,19 @@ body:has(.admin_shell) #footer {
 .admin_grid.c3 {
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 }
+/* 三饼图一行（2026-10-21 张老师定）：设备/称号/软件并排，中屏内也不塌成两行 */
+.admin_grid.pies3 {
+  grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+}
+/* 待办 + 趋势并排（2026-10-21 张老师定：待办在左、趋势占主） */
+.admin_grid.todo_trend {
+  grid-template-columns: minmax(340px, 5fr) minmax(480px, 7fr);
+}
+@media (max-width: 1200px) {
+  .admin_grid.todo_trend {
+    grid-template-columns: 1fr;
+  }
+}
 .admin_card {
   background: #2d2d29;
   border: 1px solid #49483e;
@@ -726,12 +739,18 @@ table.admin_table .ai_reason {
 .admin_todo a:hover {
   background: #33322b;
 }
+/* 待办数字徽标（2026-10-21 张老师定）：深灰底 + 金色数字（金色与后台 h2 标题 #e6db74 同源） */
 .admin_todo .badge {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
-  font-size: 15px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: bold;
-  color: #f79646;
+  padding: 1px 9px;
+  border-radius: 9px;
+  background: #1e1f1c;
+  border: 1px solid #3a3a32;
+  color: #e6db74;
 }
 .admin_todo .badge.zero {
   color: #6c6c61;
