@@ -2339,7 +2339,13 @@ export function VideoReplayBoard({
           else if (ctx.status !== "loading") ctx.stop();
         }}
       >
-        <Board id={id} level={level} board={board} size={16} />
+        {/* 地图银框（2026-10-21 张老师需求：像练习页那样加边框，但不要计时器
+            和笑脸）——复刻 #online_play .gwrap 的凸起银框形态，计数条不加；
+            框在版图 zoom 域内随盘同缩（练习页 zoom 挂 gwrap 同款）。回放引擎
+            光标定位按运行时量取 table 相对 wrap 偏移，加框自动适应 */}
+        <div className="pb_frame">
+          <Board id={id} level={level} board={board} size={16} />
+        </div>
         {!replaying && (
           <button
             type="button"

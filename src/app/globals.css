@@ -625,27 +625,42 @@ body #video_view .video_cell .playable {
 #video_view .play_board .board {
   margin: 0;
 }
+/* 地图银框（2026-10-21 张老师需求：像练习页那样加边框，但不要计时器和笑脸）——
+   复刻 #online_play .gwrap 的凸起银灰框（padding 9 + 3px 白/灰凸边），
+   不含计数条（.gbar）。框在版图 zoom 域内随盘同缩（练习页 zoom 挂 gwrap 同款）；
+   回放引擎光标定位按运行时量取 table 相对 wrap 偏移，加框自动适应 */
+#video_view .play_board .pb_frame {
+  display: inline-block;
+  padding: 9px;
+  background: silver;
+  border: 3px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+  text-shadow: none;
+}
 /* 版图放大（2026-10-16 十期张老师需求）：高级盘充分使用左栏版图空间、
-   中级复用同比例（exp/int 1.22）；初级默认 1.5 倍（同日十三期张老师改定，
+   中级复用同比例；初级默认 1.5 倍（同日十三期张老师改定，
    原「双倍比例对齐高度≈318px」口径作废）。
    #page 封顶 960px 时 .main 宽 672px，cell 内边距 30×2、棋盘右 margin 20px
-   → 棋盘可用宽 592px；高级盘 484px → zoom 1.22 恰好占满。
+   → 棋盘可用宽 592px。
+   2026-10-21 加银框后重算：高级盘 482×1.22=588 原恰好占满；加框整体 508px，
+   1.22 会溢出 28px 被 .video_cell 的 overflow:hidden 裁右缘
+   → exp/int 降为 1.15（508×1.15=584 ≤ 592，语义不变：框外缘恰好占满可用宽）。
    ⚠️ zoom 挂 .play_board（棋盘 DOM 不动，回放引擎像素坐标系零影响——
    off 量取、光标/进度条均在缩放盒内自然随动；播放按钮/控制条按 --pbz
    反向折算保持视觉尺寸恒定）；移动端断点（≤631/≤768）
    有整页 zoom + 横滑兜底，此处不设上限，溢出由 .playable 盒内滑动。 */
 #video_view .play_board.zoom_exp {
-  zoom: 1.22;
-  --pbz: 1.22;
+  zoom: 1.15;
+  --pbz: 1.15;
 }
 #video_view .play_board.zoom_int {
-  zoom: 1.22;
-  --pbz: 1.22;
+  zoom: 1.15;
+  --pbz: 1.15;
 }
 #video_view .play_board.zoom_beg {
-  /* 初级 2.6 倍（2026-10-16 十七期张老师定：1.5 时游戏区 198px 太小、
-     控制条 min-width 320 溢出到游戏区外）——渲染 132×2.6=343px ≥ 320，
-     条右缘与游戏区右缘对齐不再溢出；可用宽 592（playable）内仍余 229px */
+  /* 初级 2.6 倍（2026-10-16 十七期张老师定：1.5 时游戏区 168px 太小、
+     控制条 min-width 320 溢出到游戏区外）——加框后 (128+2+24)×2.6≈400px，
+     控制条 320 仍在框宽内不溢出；可用宽 592（playable）内余 ~192px */
   zoom: 2.6;
   --pbz: 2.6;
 }
