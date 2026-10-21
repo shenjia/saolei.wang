@@ -1,5 +1,8 @@
 // 进步榜（移植 2008 版 Ranking_Grow + Top10_Grow）
-// 2008 版靠「刷新排行」时保存 Old_Rank 得升降；新版实时计算、每日快照 rank_snapshot 替代
+// 2008 版：每日 job 滚动 31 张 Rank_N 表存 Player_Real_Rank（deploy/day.sql），
+//          玩家表挂 Old_Rank（月度重置）算升降——本质是「30 天窗口名次对比」。
+// 2026-10-22 重构（张老师定）：每人一行 + ranks JSON 滚动存 31 天总计时间名次，
+//          每日定时脚本预计算 delta（窗口内最早可得快照名次 − 今日名次）落库。
 
 import { prisma } from "./db";
 import { usersByIds, SCORE_FIELD, VIDEO_FIELD, type RankingRow, type UserBrief } from "./queries";
@@ -12,63 +15,115 @@ function dateStr(d = new Date()): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** 滚动窗口大小（天）：与旧站 day.sql 的 Rank_1..Rank_31 一致 */
+export const RANK_SNAPSHOT_WINDOW = 31;
+
 /**
- * 排行升降（移植 2008 版 Ranking_All 的 Old_Rank 对比，新版用每日快照）：
- * 返回 Map<userId, delta>——delta 为正=进步名次数，负=下降，0=持平，null=今日新上榜（昨日无快照）。
- * 昨日快照整体缺失（新站首日）时全部按 0 持平处理。调用前需先 ensureTodaySnapshot()。
+ * 每日刷新（幂等，cron 与页面惰性兜底共用同一实现）：
+ * 1. 窗口函数算今日总计时间名次（MySQL 8+；封禁账号 status!=0 不进，旧站 Player_IsLive=1 口径）
+ * 2. 每人 JSON 写入今日名次、剔除 >30 天旧键
+ * 3. delta = 窗口内最早可得快照名次 − 今日名次（正=进步），baseDate 一并落库
+ * force=false 时当日已刷新过（ranks 含今日键且行数>0）则跳过；force=true 强制重算（后台重算入口）。
+ */
+export async function refreshRankSnapshots(force = false): Promise<void> {
+  const today = dateStr();
+
+  if (!force) {
+    // 幂等闸门：任一行 ranks 含今日键即视为已刷新（刷新是全量单语句，要么全有要么全无）
+    const done = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*) c FROM rank_snapshot WHERE JSON_CONTAINS_PATH(ranks, 'one', ?)`,
+      `$."${today}"`
+    );
+    if (N(done[0]?.c) > 0) return;
+  }
+
+  // 单条 SQL 完成全量重写（不把全表拉到 Node 侧）：
+  //   t      = 今日总计时间榜（窗口函数，CAST SIGNED 防 ROW_NUMBER 的 UNSIGNED 参与减法溢出）
+  //   p      = 每人现有 ranks 剔除 >30 天旧键（keys 展开 → JSON_EXTRACT 取值 → JSON_OBJECTAGG 回聚）
+  //   merged = p + 今日名次（JSON_MERGE_PATCH；无历史的新玩家=只有今日键）
+  //   base   = merged 最早日期（首日新玩家 base=今日 → delta=0 不上榜，符合预期）
+  //   delta  = merged[base] − 今日名次（正=进步）
+  // 未上榜玩家（sum_time=0/封禁）不 INSERT 新行；旧行若今日无名次，下方清理语句把 delta 归 0。
+  // MySQL 兼容坑（2026-10-22 实证本地 9.2 / 生产 8.0）：
+  //   ① JSON_TABLE 不能作相关子查询（1064）——只能横向 JOIN（含 GROUP BY 聚合成派生表）；
+  //   ② JSON 值经 JSON_TABLE COLUMNS(br INT) 取出是 UNSIGNED，与 SIGNED 相减报 1690 溢出——
+  //      两侧都显式 CAST AS SIGNED；
+  //   ③ values 提取用 JSON_EXTRACT(列, CONCAT('$."', key, '"'))，不要第二个 JSON_TABLE（动态路径不支持）。
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO rank_snapshot (user, ranks, delta, base_date, create_time, update_time)
+     SELECT id, merged, delta, base, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
+     FROM (
+       SELECT q2.id, q2.merged,
+              CAST(CAST(jt.br AS SIGNED) - CAST(q2.today_rank AS SIGNED) AS SIGNED) AS delta,
+              q2.base
+       FROM (
+         SELECT b.id, b.today_rank, b.merged, MIN(kk.k) AS base
+         FROM (
+           SELECT t.id, t.r AS today_rank,
+                  JSON_MERGE_PATCH(
+                    COALESCE(p.pruned, CAST('{}' AS JSON)),
+                    JSON_OBJECT(?, t.r)
+                  ) AS merged
+           FROM (
+             SELECT s.id, CAST(ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) AS SIGNED) r
+             FROM user_scores s
+             JOIN \`user\` u ON u.id = s.id AND u.status = 0
+             WHERE s.sum_time > 0
+           ) t
+           LEFT JOIN (
+             SELECT rs.user, JSON_OBJECTAGG(kk.k, JSON_EXTRACT(rs.ranks, CONCAT('$."', kk.k, '"'))) AS pruned
+             FROM rank_snapshot rs
+             JOIN JSON_TABLE(JSON_KEYS(rs.ranks), '$[*]' COLUMNS(k VARCHAR(10) PATH '$')) kk
+             WHERE kk.k > DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+             GROUP BY rs.user, rs.ranks
+           ) p ON p.user = t.id
+         ) b
+         JOIN JSON_TABLE(JSON_KEYS(b.merged), '$[*]' COLUMNS(k VARCHAR(10) PATH '$')) kk
+         GROUP BY b.id, b.today_rank, b.merged
+       ) q2
+       JOIN JSON_TABLE(
+         CAST(CONCAT('[', CAST(JSON_UNQUOTE(JSON_EXTRACT(q2.merged, CONCAT('$."', q2.base, '"'))) AS CHAR), ']') AS JSON),
+         '$[*]' COLUMNS(br INT PATH '$')) jt
+     ) fin
+     ON DUPLICATE KEY UPDATE
+       ranks = VALUES(ranks),
+       delta = VALUES(delta),
+       base_date = VALUES(base_date),
+       update_time = VALUES(update_time)`,
+    today
+  );
+
+  // 掉榜清理：今日无名次的旧行 delta 归 0（不参与进步榜；JSON 历史保留自然滚动淘汰）
+  await prisma.$executeRawUnsafe(
+    `UPDATE rank_snapshot SET delta = 0, update_time = UNIX_TIMESTAMP()
+     WHERE JSON_CONTAINS_PATH(ranks, 'one', ?) = 0 AND delta <> 0`,
+    `$."${today}"`
+  );
+}
+
+/** 兼容旧调用点（ranking 页惰性兜底）：保留旧函数名，内部转调刷新 */
+export async function ensureTodaySnapshot(force = false): Promise<void> {
+  await refreshRankSnapshots(force);
+}
+
+/**
+ * 排行榜升降列（总计时间榜专用）：直读预计算 delta。
+ * 返回 Map<userId, delta|null>——正=进步名次数，负=下降，0=持平/无基准（含新上榜首日）。
  */
 export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, number | null>> {
   const map = new Map<number, number | null>();
   if (!ids.length) return map;
   const today = dateStr();
-  const yesterday = dateStr(new Date(Date.now() - 86400_000));
-  const yesterdayCount = await prisma.rankSnapshot.count({ where: { date: yesterday } });
-  if (!yesterdayCount) {
-    for (const id of ids) map.set(id, 0);
-    return map;
-  }
   const rows = await prisma.rankSnapshot.findMany({
-    where: { user: { in: ids.map(BigInt) }, date: { in: [today, yesterday] } },
-    select: { user: true, date: true, sumTimeRank: true },
+    where: { user: { in: ids.map(BigInt) } },
+    select: { user: true, delta: true, baseDate: true, ranks: true },
   });
-  const tMap = new Map<number, number>();
-  const yMap = new Map<number, number>();
   for (const r of rows) {
-    if (r.date === today) tMap.set(N(r.user), r.sumTimeRank);
-    else yMap.set(N(r.user), r.sumTimeRank);
-  }
-  for (const id of ids) {
-    const t = tMap.get(id);
-    const y = yMap.get(id);
-    map.set(id, t && y ? y - t : null);
+    // 今日未刷新（cron 失败且惰性兜底前的短暂窗口）→ 按持平 0 处理
+    const ranks = (r.ranks ?? {}) as Record<string, number>;
+    map.set(N(r.user), ranks[today] === undefined ? 0 : r.delta);
   }
   return map;
-}
-
-/** 惰性快照：当天首次调用时把全量排行写入 rank_snapshot（每日一次）；force=true 强制重算 */
-export async function ensureTodaySnapshot(force = false): Promise<void> {
-  const today = dateStr();
-  if (!force) {
-    const existing = await prisma.rankSnapshot.findFirst({ where: { date: today }, select: { id: true } });
-    if (existing) return;
-  }
-  // MySQL 8+ 窗口函数一次算两个榜（sum_time 升序、sum_3bvs 降序），upsert 防并发重复
-  // 封禁账号不进快照（旧站 Player_IsLive=1 口径；与排行榜/进步榜一致）
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO rank_snapshot (user, date, sum_time_rank, sum_3bvs_rank, create_time, update_time)
-     SELECT s.id, ?, tr.r, COALESCE(br.r, 0), UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
-     FROM user_scores s
-     JOIN \`user\` u ON u.id = s.id AND u.status = 0
-     JOIN (SELECT s2.id, ROW_NUMBER() OVER (ORDER BY s2.sum_time ASC) r
-             FROM user_scores s2 JOIN \`user\` u2 ON u2.id = s2.id AND u2.status = 0
-            WHERE s2.sum_time > 0) tr ON tr.id = s.id
-     LEFT JOIN (SELECT s3.id, ROW_NUMBER() OVER (ORDER BY s3.sum_3bvs DESC) r
-                  FROM user_scores s3 JOIN \`user\` u3 ON u3.id = s3.id AND u3.status = 0
-                 WHERE s3.sum_3bvs > 0) br ON br.id = s.id
-     WHERE s.sum_time > 0
-     ON DUPLICATE KEY UPDATE sum_time_rank = VALUES(sum_time_rank), sum_3bvs_rank = VALUES(sum_3bvs_rank)`,
-    today
-  );
 }
 
 export interface GrowUser extends UserBrief {
@@ -76,6 +131,7 @@ export interface GrowUser extends UserBrief {
   rank: number;
   /** 今日全国总计时间榜名次（榜单口径备用，不再用于排名列展示） */
   todayRank: number;
+  /** delta 基准日的全国总计时间榜名次（30 天窗口内最早可得快照） */
   yesterdayRank: number;
   delta: number;
 }
@@ -85,43 +141,42 @@ export type GrowRow = RankingRow & GrowUser;
 
 /** 进步榜（2026-09-24 张老师要求改为雷界排行同款表格）：行=RankingRow 同构（8 列成绩+录像），
  *  rank=本进步榜内名次（2026-10-16 张老师定：按进步幅度排序后的榜序位次，非全国总计时间名次），
- *  delta=昨日-今日名次差（升为正）；表内排序按 delta 降序（进步幅度大在前）。
- *  上榜条件（2026-10-16 张老师定）：昨日到今日名次必须上升（delta > 0）——持平/下降/新上榜一律不出现。
- *  注意排序三元组 delta DESC, sum_time_rank ASC 中 sum_time_rank 唯一 → 全表全序，榜序位次稳定。 */
+ *  delta=30 天窗口名次差（窗口内最早可得快照 − 今日，2026-10-22 重构口径，旧站同款 30 天窗口）；
+ *  表内排序按 delta 降序（进步幅度大在前）。
+ *  上榜条件（2026-10-16 张老师定）：delta > 0——持平/下降/新上榜一律不出现。
+ *  查询（2026-10-22 起）：预计算 delta 单表直查，替代旧「今日快照 JOIN 昨日快照」双表算差。 */
 export async function getGrowRanking(
   page: number,
   /** 返回条数（「加载更多」递增批量用；skip 恒按 base=20 的页锚点，take 才是行数） */
   take = 20
 ): Promise<{ rows: GrowRow[]; total: number; pageSize: number }> {
-  await ensureTodaySnapshot();
+  // 惰性兜底：cron（00:05）失败或未跑时，当天首个进步榜访问触发刷新（幂等闸门在刷新内）
+  await refreshRankSnapshots();
   const today = dateStr();
-  const yesterday = dateStr(new Date(Date.now() - 86400_000));
 
   const rows = await prisma.$queryRawUnsafe<
-    { user: bigint; today_rank: number; yesterday_rank: number; delta: number }[]
+    { user: bigint; today_rank: number; base_rank: number; delta: number | bigint }[]
   >(
-    // 注意：MySQL 算术表达式返回 BIGINT，delta 实际是 bigint（下方 N() 归一化，防 JSON 序列化炸）
-    // 封禁账号不上榜（旧站 Player_IsLive=1 口径）：快照里若留有旧行，读时一并滤掉
-    `SELECT t.user, t.sum_time_rank today_rank, y.sum_time_rank yesterday_rank,
-            (y.sum_time_rank - t.sum_time_rank) delta
-     FROM rank_snapshot t
-     JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
-     JOIN \`user\` u ON u.id = t.user AND u.status = 0
-     WHERE t.date = ? AND y.sum_time_rank > t.sum_time_rank
-     ORDER BY delta DESC, t.sum_time_rank ASC
+    // 封禁账号不上榜（旧站 Player_IsLive=1 口径）：读时 JOIN user 滤掉
+    `SELECT s.user, CAST(JSON_UNQUOTE(JSON_EXTRACT(s.ranks, ?)) AS UNSIGNED) today_rank,
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(s.ranks, CONCAT('$."', s.base_date, '"'))) AS UNSIGNED) base_rank,
+            s.delta
+     FROM rank_snapshot s
+     JOIN \`user\` u ON u.id = s.user AND u.status = 0
+     WHERE s.delta > 0 AND JSON_CONTAINS_PATH(s.ranks, 'one', ?)
+     ORDER BY s.delta DESC, CAST(JSON_UNQUOTE(JSON_EXTRACT(s.ranks, ?)) AS UNSIGNED) ASC
      LIMIT ? OFFSET ?`,
-    yesterday,
-    today,
+    `$."${today}"`,
+    `$."${today}"`,
+    `$."${today}"`,
     take, // 「加载更多」递增批量（take 可以 > 20，多拉本批行）
     (page - 1) * 20 // skip 恒按 base 20 的页锚点（页码语义不变）
-  ) as { user: bigint; today_rank: number; yesterday_rank: number; delta: number | bigint }[];
+  );
   const countRows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
-    `SELECT COUNT(*) c FROM rank_snapshot t
-     JOIN rank_snapshot y ON y.user = t.user AND y.date = ?
-     JOIN \`user\` u ON u.id = t.user AND u.status = 0
-     WHERE t.date = ? AND y.sum_time_rank > t.sum_time_rank`,
-    yesterday,
-    today
+    `SELECT COUNT(*) c FROM rank_snapshot s
+     JOIN \`user\` u ON u.id = s.user AND u.status = 0
+     WHERE s.delta > 0 AND JSON_CONTAINS_PATH(s.ranks, 'one', ?)`,
+    `$."${today}"`
   );
   // 8 列成绩与录像：user_scores 主表批量取（与排行表同源）
   const scoreRows = rows.length
@@ -152,9 +207,9 @@ export async function getGrowRanking(
         rank: (page - 1) * 20 + i + 1, // 排名列=本榜内名次（2026-10-16 张老师定，第 1 页即 1—20 位）
         scores,
         videos,
-        todayRank: r.today_rank, // 全国总计时间名次保留在字段里备用
-        yesterdayRank: r.yesterday_rank,
-        delta: N(r.delta), // BIGINT 算术结果归一化为 number
+        todayRank: N(r.today_rank), // 全国总计时间名次保留在字段里备用
+        yesterdayRank: N(r.base_rank), // 基准日名次（30 天窗口内最早快照）
+        delta: N(r.delta),
       };
     }),
     total: N(countRows[0]?.c),

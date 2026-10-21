@@ -39,8 +39,8 @@ const ALL_RULES = [
     3BV/s）；时间按升序、3BV/s 按降序；成绩相同时按用户 ID 排序（时间榜注册较早者在前）。
   </>,
   <>
-    <b>升降列</b>：仅在按总计时间排序时显示，为今日名次与昨日名次之差；昨日不在榜的显示
-    「新上榜」。名次快照于每天首次访问时生成。
+    <b>升降列</b>：仅在按总计时间排序时显示，为今日名次与 30 天窗口基准名次之差（窗口内
+    最早可得快照；无基准的显示「新上榜」）。名次快照每天 0:05 定时刷新。
   </>,
   <>
     <b>上榜条件</b>：对应项目成绩大于 <i>0</i> 即在榜；榜单实时更新，录像过审即上榜。
@@ -407,7 +407,7 @@ export default async function RankingPage({
     getSession(),
   ]);
 
-  // 日升降：今日快照（惰性生成）vs 昨日；升降列仅按总计时间排序的普通榜显示
+  // 升降：30 天窗口预计算 delta（cron 00:05 刷新，此处惰性兜底）；升降列仅按总计时间排序的普通榜显示
   let deltas: Map<number, number | null> | undefined;
   if (rankingBy === "sum_time" && !nf) {
     await ensureTodaySnapshot();

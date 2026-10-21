@@ -442,9 +442,10 @@ async function dispatch(
 
     // ---------- 排行 / 荣誉 ----------
     case "rank.snapshot": {
+      // 2026-10-22 JSON 重构：force 重算当日名次并重写 delta（每人一行，ranks 滚动 31 天）
       await ensureTodaySnapshot(true);
       const c = await prisma.rankSnapshot.count();
-      return { ok: true, message: `已重算今日排行快照（库内累计 ${c} 条）` };
+      return { ok: true, message: `已重算排行快照（库内 ${c} 名玩家，30 天窗口名次已刷新）` };
     }
 
     // ---------- 头像审核（2026-09-24）----------

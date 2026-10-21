@@ -167,7 +167,7 @@ export function GrowFeed({
           {rows.length === 0 && (
             <tr>
               <td colSpan={12} style={{ textAlign: "center" }}>
-                今日暂无名次上升的玩家（快照数据积累两天后开始有进步排行）。
+                当前窗口内暂无名次上升的玩家（快照基准至少需要积累两天数据）。
               </td>
             </tr>
           )}

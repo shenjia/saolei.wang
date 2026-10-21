@@ -16,6 +16,15 @@ registerHooks({
         /* 落回原样 */
       }
     }
+    // Node ESM 要求显式扩展名：裸包名子路径（如 next/cache）补 .js
+    // （2026-10-22 rank-snapshot-refresh.ts 引入链上的 queries.ts 带 next/cache，实证 1064 同款 ERR_MODULE_NOT_FOUND）
+    if (!specifier.startsWith(".") && !specifier.startsWith("node:") && /\w\/\w/.test(specifier) && !/\.[cm]?[jt]s$/.test(specifier)) {
+      try {
+        return nextResolve(specifier + ".js", context);
+      } catch {
+        /* 落回原样 */
+      }
+    }
     return nextResolve(specifier, context);
   },
 });

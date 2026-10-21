@@ -53,8 +53,9 @@ export default async function AdminRankPage() {
 
       <AdminCard title="排行快照">
         <div className="admin_note" style={{ marginBottom: 12 }}>
-          进步榜靠「今日名次 − 昨日名次」算升降，数据源就是 <code>rank_snapshot</code> 表。
-          快照由首次访问进步榜时惰性生成（每天一次）；若发现进步榜整页空白或名次异常，先在这里重算。
+          进步榜与排行榜升降列靠预计算的 <code>delta</code>（30 天窗口内最早快照名次 − 今日名次）驱动，
+          数据源是 <code>rank_snapshot</code> 表（每人一行，ranks JSON 滚动 31 天）。
+          快照每天 0:05 定时刷新（cron），页面访问惰性兜底；若发现进步榜整页空白或名次异常，先在这里重算。
         </div>
         <div className="admin_ops">
           <AdminAction

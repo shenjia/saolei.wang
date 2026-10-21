@@ -71,9 +71,9 @@ export default async function AdminStatsPage() {
         <span className="sub">近 30 天窗口（增长曲线为 90 天）· 按 +08:00 切天</span>
         <div className="right">
           <span className={`admin_tag ${snapshot.todayDone ? "ok" : "bad"}`}>
-            今日快照{snapshot.todayDone ? "已生成" : "未生成"}
+            今日快照{snapshot.todayDone ? "已刷新" : "未刷新"}
           </span>
-          <AdminAction op="rank.snapshot" label="重算排行快照" variant="primary" confirm="重算今日排行快照？会覆盖今日已生成的数据。" />
+          <AdminAction op="rank.snapshot" label="重算排行快照" variant="primary" confirm="重算排行快照？会覆盖今日已生成的名次与升降数据。" />
         </div>
       </div>
 
@@ -226,7 +226,8 @@ export default async function AdminStatsPage() {
           · 纪录演变曲线只取「刷新纪录的那一刻」，因此点数等于历史破纪录次数；
           曲线台阶向下（时间越短越好）为正常。<br />
           · 时段 / 星期分布按 +08:00 折算，使用全量历史数据，不受 30 天窗口影响。<br />
-          · 排行快照每日惰性生成一次（首次访问进步榜时），缺快照会导致进步榜整页空白。
+          · 排行快照每天 0:05 定时刷新（cron，页面访问惰性兜底）；缺当日快照会导致进步榜
+          整页空白与升降列异常。
         </div>
       </AdminCard>
     </>

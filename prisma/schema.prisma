@@ -661,20 +661,23 @@ model BbsReply {
   @@map("bbs_reply")
 }
 
-// 排行每日快照（进步榜数据源，替代 2008 版「刷新排行」时的 Old_Rank）
+// 排行名次快照（进步榜 + 排行榜升降列数据源；2026-10-22 重构，替代 2008 版滚动 Rank_1..31 表 + Old_Rank）。
+// 旧结构「每人每天一行」14 天已 9.8 万行（~255 万行/年），改为**每人一行**：
+//   ranks    = JSON 对象 {"2026-10-21":123,…}，滚动保留 31 天的「总计时间榜名次」（3bvs 名次无消费方，已删）
+//   delta    = 每日刷新时预计算：窗口内最早可得快照名次 − 今日名次（正=进步，沿用旧站 30 天口径）
+//   baseDate = delta 所用基准日（30 天窗口内最早可得快照那天）
+// 刷新由每日定时脚本（scripts/rank-snapshot-refresh.ts，crontab 00:05）驱动，页面访问惰性兜底。
 model RankSnapshot {
-  id          BigInt @id @default(autoincrement()) @db.BigInt
-  user        BigInt @db.BigInt
-  date        String @db.Char(10)
-  sumTimeRank Int    @default(0) @map("sum_time_rank") @db.Int
-  sum3bvsRank Int    @default(0) @map("sum_3bvs_rank") @db.Int
-  createTime  BigInt @default(0) @map("create_time") @db.BigInt
-  updateTime  BigInt @default(0) @map("update_time") @db.BigInt
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @unique @db.BigInt
+  ranks      Json
+  delta      Int    @default(0) @db.Int
+  baseDate   String @default("") @map("base_date") @db.Char(10)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
-  // 2026-10-15 上线前性能审计新增：进步榜按 date 取今日快照（原 (user,date) 前导列不对，
-  // date-only 过滤只能覆盖索引扫全表 5 万行）
-  @@unique([user, date])
-  @@index([date])
+  // delta 索引服务进步榜 WHERE delta>0 ORDER BY delta DESC（2026-10-22 重构新增）
+  @@index([delta])
   @@map("rank_snapshot")
 }
 

@@ -513,15 +513,26 @@ export async function getCurrentRecords(): Promise<CurrentRecord[]> {
   );
 }
 
-/** 排行快照健康度（今日是否已生成、累计天数、最新日期） */
+/** 排行快照健康度（今日是否已刷新、窗口累计天数、最新日期）
+ *  2026-10-22 JSON 重构后：ranks 是每人一个 JSON 对象 {date: rank}，无独立 date 列——
+ *  今日判定 = 任一行 ranks 含今日键；窗口天数 = 全表 JSON 键的并集天数。 */
 export async function getSnapshotHealth(): Promise<{ todayDone: boolean; days: number; latest: string }> {
   const today = dayIndexToDate(Math.floor((Date.now() / 1000 + 28800) / 86400));
-  const [todayCount, days, latestRow] = await Promise.all([
-    prisma.rankSnapshot.count({ where: { date: today } }),
-    prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(DISTINCT date) c FROM rank_snapshot`),
-    prisma.rankSnapshot.findFirst({ orderBy: { date: "desc" }, select: { date: true } }),
+  const [todayRows, dayRows, latestRows] = await Promise.all([
+    prisma.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*) c FROM rank_snapshot WHERE JSON_CONTAINS_PATH(ranks, 'one', ?)`,
+      `$."${today}"`
+    ),
+    prisma.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(DISTINCT jt.k) c FROM rank_snapshot,
+       JSON_TABLE(JSON_KEYS(ranks), '$[*]' COLUMNS(k VARCHAR(10) PATH '$')) jt`
+    ),
+    prisma.$queryRawUnsafe<{ k: string }[]>(
+      `SELECT MAX(jt.k) k FROM rank_snapshot,
+       JSON_TABLE(JSON_KEYS(ranks), '$[*]' COLUMNS(k VARCHAR(10) PATH '$')) jt`
+    ),
   ]);
-  return { todayDone: todayCount > 0, days: N(days[0]?.c), latest: latestRow?.date ?? "—" };
+  return { todayDone: N(todayRows[0]?.c) > 0, days: N(dayRows[0]?.c), latest: latestRows[0]?.k ?? "—" };
 }
 
 /** 军衔阈值表（2026-10-13 起为常量 TITLE_THRESHOLDS，不再读 distribution）+ 各军衔人数，军衔页/仪表盘共用 */
