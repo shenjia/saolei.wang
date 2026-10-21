@@ -90,6 +90,10 @@ const LS_RESERVE_W = 2;
    卡到 0 余量时宿主 scrollHeight 会多出 1px → 平白冒出一条竖滚动条。
    两个方向各留 2px（同横屏 LS_RESERVE_W 的取舍：宁小 2px，不裁内容/不出滚动条） */
 const FS_RESERVE = 2;
+/* 全屏模式显示比例上限（2026-10-21 张老师定）：高级盘 PC 全屏无上限可拉到 5x，
+   格子像素级失真、超屏分辨率渲染白耗性能——封 2.4。普通模式上限 2.5 不动，
+   仅全屏相关路径（normalMaxZoom 全屏分支 / fitZoomForFullscreen 拉满 / 滑杆行程）受限 */
+const FS_ZOOM_CAP = 2.4;
 /* 滚轮调显示比例（2026-10-15 张老师定「练习页禁滚动，滑动鼠标滚轮可调整显示比例」）：
    累计滚动量（归一化到像素）每满 WHEEL_STEP_PX 迈一格 WHEEL_STEP_Z。
    按**累计**而非「每个 wheel 事件迈一格」——触控板惯性连滚一次能出十几个事件，
@@ -3320,14 +3324,21 @@ export function OnlinePlay({
     /* 普通模式倍率上限：游戏渲染宽不得超过容器宽，否则冲出 #page 版块。
        用 getBoundingClientRect 实测自校准：gfR.width = 基准宽 × zoomCur × 所有祖先
        zoom，gaR.width = 容器宽 × 同一祖先 zoom——比值里 zoom 全部抵消，任意页级
-       缩放/窄屏断点下都成立。全屏/横屏由 fitZoom* 拉满（max=5），不走此封顶。
+       缩放/窄屏断点下都成立。全屏/横屏由 fitZoom* 拉满（max=5，仅 fsAutoFit 路径；
+       PC 全屏手动上限 FS_ZOOM_CAP），不走此封顶。
        （v8：#page 版式恒定，标准级别与 cus 统一按当前容器封顶——v7 时代 cus
        「宽度按视口/扩版上限算、不按容器」的前提是页宽跟着盘面走，已废）
        cus 额外加高度封顶：常规三级盘高度有限（≤16 行）从不需要，自定义最高
        99 行会被视口下方内容推出去——按「视口底到游戏区顶的可用高」反算倍率，
        与宽度方向取小，保证整个盘面完整可见不裁切 */
     function normalMaxZoom() {
-      if (document.fullscreenElement === root) return 5;
+      if (document.fullscreenElement === root) {
+        /* fsAutoFit 拉满场景（移动端/横屏/超大 cus 盘）维持 5：页级 zoom 0.65 的
+           补偿倍率与「铺满」语义都需要 3x+，封 2.4 会把拉满值直接砸下来；
+           PC 标准级别全屏手动调比例才封 FS_ZOOM_CAP（fsAutoFit 为函数声明已提升，
+           且全屏分支只可能在挂载完成后被事件回调触达，mqNarrow 无 TDZ 风险） */
+        return fsAutoFit() ? 5 : FS_ZOOM_CAP;
+      }
       const gfR = gframe.getBoundingClientRect();
       const gaR = ($("game_area") as HTMLElement).getBoundingClientRect();
       if (gfR.width <= 0 || gaR.width <= 0) return 2.5;
@@ -3740,8 +3751,9 @@ export function OnlinePlay({
        zoom pz）；offset* 是布局尺寸但**取整**——棋盘整格是小数（实测 offsetH 208 vs
        真值 208.27），拿它当基准会把倍率算大 1px 高，拉满时正好顶出一条滚动条，故基准
        一律 rect ÷ zoomCur ÷ pz「绝对式」反算（与 zoomCur 是否同步无关），目标尺寸统一
-       归一到布局 px（同 fitZoomForLandscape 口径）。max 放到 5：手机上页级 0.65 会把
-       渲染尺寸缩回去，拉满常需 3+（不进 localStorage）。
+       归一到布局 px（同 fitZoomForLandscape 口径）。max 5 仅服务 fsAutoFit 拉满路径
+       （移动端页级 0.65 会把渲染尺寸缩回去，拉满常需 3+，不进 localStorage）；PC 标准
+       级别全屏上限已封 FS_ZOOM_CAP=2.4（2026-10-21 张老师定，拉满路径不受影响）。
 
        📌 移动端拉满的竖向预算须按**宿主实际几何**算：此前直接按 `innerHeight − 48`
        （:fullscreen 的 24px 上下 padding）算，把宿主内、游戏窗之外的占位全漏了——
@@ -3756,12 +3768,15 @@ export function OnlinePlay({
     }
     function fitZoomForFullscreen() {
       if (!fsAutoFit()) {
-        /* PC 端：比例原样不动，只把滑杆行程放宽到全屏口径（normalMaxZoom 全屏恒 5，
+        /* PC 端：比例不动，只把滑杆行程放宽到全屏口径（normalMaxZoom 全屏恒 FS_ZOOM_CAP，
            玩家在全屏里想手动放大不受普通模式的容器宽限制）。
-           ⚠️ 不能走 applyZoom(zoomCur)：cus 大盘 0.3~0.5x 会被 floor 0.5 抬升小幅放大 */
+           ⚠️ 不能无条件走 applyZoom(zoomCur)：cus 大盘 0.3~0.5x 会被 floor 0.5 抬升
+           小幅放大（setZoomVisual 才是不动比例的安全路径）。仅当窗口模式已调到
+           超 2.4（窗口上限 2.5）时才经 applyZoom 压回全屏上限 */
         const capFs = String(normalMaxZoom());
         zoomRange.max = capFs;
         cusZoom.max = capFs;
+        if (zoomCur > FS_ZOOM_CAP) applyZoom(zoomCur, false);
         /* 面板几何必须跟着重算（2026-10-19 二版）：旧版这里直接 return，全屏拉大后
            侧空被压缩、面板却还按进全屏前的尺寸摆着 —— 张老师截图里那两条窄边就是这么来的。
            现在重算一次即可判出「侧边放不下 → 转遮罩」 */
