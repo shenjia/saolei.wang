@@ -7654,13 +7654,15 @@ button.msg_cancel:hover {
 #online_play .ranking_tabs .manual_badge.full {
   color: #a6e22e;
 }
-/* 摆雷中盘面光标提示：格子可点摆雷 */
-#online_play.manual_editing #gboard {
+/* 摆雷中盘面光标提示：格子可点摆雷。
+   ⚠️ manual_editing 挂在组件根 .op_root 上（OnlinePlay 的 container 引用），
+   不是外层 #online_play——选择器走 .op_root.manual_editing 后代链 */
+#online_play .op_root.manual_editing #gboard {
   cursor: crosshair;
 }
 /* 摆雷已画雷位（td.bm）在摆雷期的描边强调：矢量覆盖层画实雷图标，
    td 底色加一圈暗红边区分「摆的雷」与开局后未开格 */
-#online_play.manual_editing #gboard td.bm {
+#online_play .op_root.manual_editing #gboard td.bm {
   outline: 1px solid rgba(253, 198, 29, 0.65);
   outline-offset: -1px;
 }

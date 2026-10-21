@@ -3427,8 +3427,7 @@ export function OnlinePlay({
           if (manualMines[i]) return; // 落点仍是雷（摆满后右键取消的最后一颗没补）：点了算走位，等补满
           /* 已摆满：本次手势转正常开局，跌出摆雷（manualMode 收尾=首击 openCell 内定格） */
         } else return;
-      }
-      /* 原地复活：新点击手势起点拍快照（踩雷时升格为死亡快照，见 openCell） */
+      }      /* 原地复活：新点击手势起点拍快照（踩雷时升格为死亡快照，见 openCell） */
       snapGesture(i);
       /* 连击模式按下即触发（2026-10-19 张老师定，承 NF 按下即开口径）：
          左键按下＝完整一次点击、右键按下＝完整一次右击（见 comboLeftClick/comboRightClick），
