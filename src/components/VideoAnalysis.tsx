@@ -13,10 +13,14 @@
 // 宽度随内容变化，先隐藏渲染 → 实测宽后钳位定位再显示。
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { VideoAnalysisPoint } from "@/lib/videoanalysis";
 // 等级配色与「实力」雷达（RadarChart.tsx）同源：统一在 lib/videoscore.ts 维护，勿单独改
 import { gradeColor } from "@/lib/videoscore";
+
+/* 服务端退化为 useEffect（SSR 渲染 useLayoutEffect 会打告警；本组件在录像详情页
+   会被 SSR，练习页走 createRoot 纯客户端——两端都要安静） */
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 const SIZE = 222;
 const CENTER = SIZE / 2;
@@ -72,7 +76,17 @@ function polygonPoints(n: number, r: number): string {
  *   默认 false＝录像详情页既有出血布局（尺寸交给 `#page #video_view …` 页面 CSS）。
  *   SVG 内部坐标恒按 222 视图绘制、靠 viewBox 等比缩放，标签字号随尺寸一起等比。
  */
-export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysisPoint[]; fill?: boolean }) {
+export function VideoAnalysisRadar({
+  data,
+  fill = false,
+  onMount,
+}: {
+  data: VideoAnalysisPoint[];
+  fill?: boolean;
+  /** fill 模式专用：DOM 挂载后同步回调（layout 时机）——供宿主在量面板自然高度前
+   *  确保雷达已落地（练习页结算面板高度封顶依赖完整高度，2026-10-21） */
+  onMount?: () => void;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   // 气泡定位：宽度随内容变化，挂载时先隐藏 → effect 实测气泡/容器宽后写入 left/top 并显示。
   // 用 key={hover} 让每次换轴都重新走一遍「隐藏→定位→显示」，避免换轴瞬间闪现在旧位置。
@@ -94,6 +108,13 @@ export function VideoAnalysisRadar({ data, fill = false }: { data: VideoAnalysis
     tip.style.left = `${Math.min(Math.max((lx / SIZE) * w, tip.offsetWidth / 2 + 2), w - tip.offsetWidth / 2 - 2)}px`;
     tip.style.visibility = "visible";
   }, [hover, data.length]);
+
+  /* DOM 挂载即回调（2026-10-21，方案 B 配套）：练习页结算面板在量自然高度前
+     必须确认雷达已落地——layout 时机回调发生在浏览器绘制之前，
+     宿主拿到通知后补量的高度即完整高度（服务端退化为 useEffect，见上） */
+  useIsoLayoutEffect(() => {
+    onMount?.();
+  }, [onMount]);
 
   const n = data.length;
   const points = data.map((d, i) => polar(i, n, (d.percent / 100) * RADIUS));

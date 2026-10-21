@@ -38,6 +38,7 @@
 
 import { useEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { flushSync } from "react-dom";
 import { FlopSprites } from "./FlopSprites";
 import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
@@ -1597,9 +1598,16 @@ export function OnlinePlay({
         /* 复用录像详情页的 VideoAnalysisRadar 组件（张老师 2026-10-14 定：不该再维护第二份
            绘制）。面板是 innerHTML 注入流、JSX 挂不进去，所以用 createRoot 把 React 组件挂到
            占位 div —— 文案/字号/气泡样式与录像页**由同一个组件保证同源**，不会再分叉。
-           fill 模式（八期 2026-10-15 张老师定）：宽度顶满面板内容宽，不再给固定边长 */
+           fill 模式（八期 2026-10-15 张老师定）：宽度顶满面板内容宽，不再给固定边长
+           ⚠️ 必须 flushSync 同步 commit（2026-10-21 张老师报「初级结算面板反复横跳」根因）：
+           concurrent 调度下 render() 返回时 DOM 未落地，下方 syncReportZoom 立刻量高度，
+           拿到的是「无雷达」的假小高度（~120px，真实含雷达 ~290px）→ panelBase 缓存被
+           污染 → 高度封顶（不得超游戏窗高 / 不得超数据面板高）全部失守 → 面板放大；
+           雷达随后落地，高度暴涨，且再无代码回收。是否失守取决于 React 调度与渲染帧的
+           时序竞争，初级封顶本来就压着（中高级不压）故只初级肉眼可见、时大时正常。
+           flushSync 让 DOM 在本行同步落地，竞争从根上消失 */
         const root = createRoot(radarHost);
-        root.render(<VideoAnalysisRadar data={pts} fill />);
+        flushSync(() => root.render(<VideoAnalysisRadar data={pts} fill onMount={radarMounted} />));
         radarRootRef.current = root;
       }
       /* 全屏遮罩延时 500ms 弹出（2026-10-20 张老师定）：新结算正处全屏时，给玩家
@@ -3451,6 +3459,12 @@ export function OnlinePlay({
     /* 侧边宿主下 zoom=1 量的自然尺寸（布局 px）：遮罩态里面板宽由卡片给（width:100%），
        量不出自然宽，所以「回侧边还够不够」只能靠这份缓存反推 */
     const panelBase = { statsW: 0, statsH: 0, resultW: 0, resultH: 0, valid: false };
+    /* 雷达挂载回调（2026-10-21 方案 B 配套）：雷达落地（含以后任何重挂）后补一发
+       面板几何——治「量高度时雷达还没渲染出来」的时序竞争残余路径 */
+    function radarMounted() {
+      if (!gresult.classList.contains("show")) return;
+      syncReportZoom();
+    }
 
     /* 自然尺寸（zoom 归 1 再量，÷ 页级 zoom 回布局 px）；返回 0 宽＝量不出
        （display:none / 正在搬家） */
@@ -3463,8 +3477,9 @@ export function OnlinePlay({
        自然形态＝跟游戏倍率走，>1.5 时不得高于游戏窗高（十一期：面板顶与银框顶对齐、
        等高即底边齐平）；再按侧空（视口缘 12 + 面板间隙 14）与视口高封顶；
        maxRenderedH＝可选的渲染高上限（布局 px）——结算面板用数据面板的渲染高封顶
-       （2026-10-19 张老师定「结算面板高度不应超过数据统计面板的高度」：两面板
-       顶端对齐，压到等高即底边也齐平） */
+       （2026-10-19 张老师定「任何时候结算面板高度都不应超过数据统计面板」：两面板
+       顶端对齐，压到等高即底边也齐平。这里是初算值；placeSide 落位后若数据面板被
+       底部兜底收缩过，落位处会用最终 zoom 再钳一次） */
     function sideFit(
       base: { w: number; h: number },
       side: "left" | "right",
@@ -3626,6 +3641,12 @@ export function OnlinePlay({
           panelBase.statsH = b.h;
         }
         if (wantResult) {
+          /* 防污染闸（2026-10-21 张老师报「初级结算面板反复横跳」根因，方案 B）：
+             雷达未挂上（.vr_wrap 不存在）时结算面板正处在「无雷达」假形态，此刻量出的
+             高度比真实矮 ~170px——绝不能写进 panelBase 缓存，否则所有高度封顶失守、
+             雷达落地后面板暴涨。跳过本面板一次测量，沿用缓存值；缓存也没有时（首次）
+             由 flushSync（方案 A）保证雷达先落地，正常不会走到这条路 */
+          if (!gresult.querySelector(".vr_wrap")) return;
           const b = panelNatural(gresult, pz);
           panelBase.resultW = b.w;
           panelBase.resultH = b.h;
