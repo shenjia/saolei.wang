@@ -84,6 +84,11 @@ cat > "$CONF" <<'NGINXEOF'
 log_format spider_saolei '$http_x_forwarded_for - $time_iso8601 "$request" $status $body_bytes_sent '
                   '"$http_referer" rt=$request_time "$http_user_agent"';
 
+# ========== 反爬（2026-10-21）==========
+# map / limit_req_zone 定义在 /etc/nginx/conf.d/00-saolei-antibot.conf（软链到
+# /home/deploy/nginx-conf/00-saolei-antibot.conf，root-antibot-setup.sh 安装）。
+# 本脚本重写本文件时，server 块内的挂载点（if 403 / limit_req）必须原样保留。
+
 server {
     listen 80;
     server_name new.saolei.wang www.saolei.wang saolei.wang;
@@ -110,6 +115,12 @@ server {
     ssl_certificate_key /etc/nginx/ssl/saolei/key.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_session_cache   shared:SSL:10m;
+
+    # ========== 反爬（2026-10-21，定义见 00-saolei-antibot.conf）==========
+    # UA 黑名单（空 UA / 脚本库 UA）直接 403；搜索引擎 bot 与 curl 不在黑名单
+    if ($saolei_bad_ua) { return 403; }
+    # 全局限速 10r/s burst 20（真人无感，全量爬取会被拖到不可用）
+    limit_req zone=saolei_general burst=20 nodelay;
 
     # ========== 静态缓存（2026-10-20）==========
     # 背景：Next 代理对 public/ 资源一律 max-age=0 每请求回源验证；这里按类型直读磁盘。
@@ -144,6 +155,8 @@ server {
 
     # 录像实体文件（/videos/** gitignore 不入库，单独 rsync，部署 --delete 不碰）
     location ^~ /videos/ {
+        # 录像文件带宽保护：56 万文件，狂抓打爆带宽（2026-10-21）
+        limit_req zone=saolei_videos burst=6 nodelay;
         alias /home/deploy/saolei.wang/videos/;
         expires 30d;
         access_log off;
