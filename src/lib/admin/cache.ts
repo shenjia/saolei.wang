@@ -10,8 +10,8 @@
 // 注意：缓存键带版本前缀，改口径时记得升 key 版本丢弃旧缓存。
 
 import { unstable_cache } from "next/cache";
-import { getTitleCounts } from "@/lib/queries";
 import {
+  getAnomalies,
   getAreaCounts,
   getBoardCounts,
   getCurrentRecords,
@@ -29,13 +29,14 @@ export const ADMIN_CACHE_TTL = 600; // 10 分钟
 const cache = <T>(fn: () => Promise<T>, key: string) =>
   unstable_cache(fn, [`admin-v1-${key}`], { revalidate: ADMIN_CACHE_TTL, tags: ["admin-stats"] });
 
-/** 仪表盘分布（军衔 / 地区 / 软件）——内部串行执行，避免一次性占满连接 */
-export const getDashboardDistributions = cache(async () => {
-  const titles = await getTitleCounts();
-  const areas = await getAreaCounts(10);
+/** 仪表盘软件分布（2026-10-21 称号/地区分布卡下线后瘦身，军衔分布看 /admin/rank、地区看 /admin/stats） */
+export const getDashboardDistributionsSoftwares = cache(async () => {
   const softwares = await getSoftwareCounts(6);
-  return { titles, areas, softwares };
-}, "dashboard-distributions");
+  return { softwares };
+}, "dashboard-softwares");
+
+/** 仪表盘异常检测（4 条全表聚合 ~2.5s，2026-10-21 挂缓存；数据变化频率低，10 分钟足够） */
+export const getCachedAnomalies = cache(() => getAnomalies(), "anomalies");
 
 /** 数据分析页：全表扫描类分布（串行，减少并发连接占用） */
 export const getStatsDistributions = cache(async () => {

@@ -2,33 +2,33 @@
 // 一屏掌握：规模指标（KPI）→ 30 天趋势 → 流量统计 → 待办与分布 → 最新动态。
 
 import Link from "next/link";
-import { getAnomalies, getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
+import { getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
-import { getDashboardDistributions } from "@/lib/admin/cache";
+import { getDashboardDistributionsSoftwares, getCachedAnomalies } from "@/lib/admin/cache";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
-import { TrendChart, BarList, type Series } from "@/components/admin/Charts";
+import { TrendChart, BarList, Pie, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi, LevelTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, scoreTime, timeOpposite } from "@/lib/format";
-import { TITLE_COLORS } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "仪表盘 | 管理后台" };
 
 export default async function AdminDashboard() {
   // 分两波取数：重的全表聚合走缓存且在内部串行，轻的实时查询并行
+  // （2026-10-21 称号/地区分布卡下线，dashboard-distributions 只剩软件分布）
   const [ov, trend, dist, traffic] = await Promise.all([
     getOverview(),
     getTrend(30),
-    getDashboardDistributions(),
+    getDashboardDistributionsSoftwares(),
     getTrafficOverview(),
   ]);
   const [anomalies, latestUsers, latestVideos] = await Promise.all([
-    getAnomalies(),
+    getCachedAnomalies(),
     getLatestUsers(8),
     getLatestVideosBrief(8),
   ]);
-  const { titles, areas, softwares } = dist;
+  const { softwares } = dist;
 
   const series: Series[] = [
     // 流量两序列排最前（2026-10-16 张老师定：与业务趋势合并为一张图，默认只亮 UV/PV/新玩家/新录像）
@@ -94,12 +94,6 @@ export default async function AdminDashboard() {
       </td>
     </tr>
   );
-
-  const titleItems = titles.map((t) => ({
-    label: t.title,
-    value: t.count,
-    color: TITLE_COLORS[t.title] ?? "#6c6c61",
-  }));
 
   const todos: { label: string; value: number; href: string; hint?: string }[] = [
     { label: "待审核录像", value: ov.videoPending, href: "/admin/review", hint: pendingDays > 0 ? `最老 ${pendingDays} 天` : undefined },
@@ -233,27 +227,21 @@ export default async function AdminDashboard() {
         <TrendChart dates={trend.dates} series={series} unit="" defaultHidden={defaultHidden} />
       </AdminCard>
 
-      {/* ---------- 待办 + 军衔分布 ---------- */}
-      <div className="admin_grid c2">
-        <AdminCard title="待办事项">
-          <div className="admin_todo">
-            {todos.map((t) => (
-              <Link key={t.label} href={t.href}>
-                <span>{t.label}</span>
-                {t.hint && <span className="admin_hint">{t.hint}</span>}
-                <span className={`badge${t.value === 0 ? " zero" : ""}`}>{t.value.toLocaleString("zh-CN")}</span>
-              </Link>
-            ))}
-          </div>
-          <div className="admin_hint" style={{ marginTop: 10 }}>
-            提示：待审录像必须「先下载观看再审核」（防盲审），系统会拒绝未下载的审核请求。
-          </div>
-        </AdminCard>
-
-        <AdminCard title="称号分布" more={<Link href="/admin/rank">称号阈值 →</Link>}>
-          <BarList items={titleItems} />
-        </AdminCard>
-      </div>
+      {/* ---------- 待办（2026-10-21 称号分布卡下线，独占全宽） ---------- */}
+      <AdminCard title="待办事项">
+        <div className="admin_todo">
+          {todos.map((t) => (
+            <Link key={t.label} href={t.href}>
+              <span>{t.label}</span>
+              {t.hint && <span className="admin_hint">{t.hint}</span>}
+              <span className={`badge${t.value === 0 ? " zero" : ""}`}>{t.value.toLocaleString("zh-CN")}</span>
+            </Link>
+          ))}
+        </div>
+        <div className="admin_hint" style={{ marginTop: 10 }}>
+          提示：待审录像必须「先下载观看再审核」（防盲审），系统会拒绝未下载的审核请求。
+        </div>
+      </AdminCard>
 
       {/* ---------- 流量统计（2026-10-16）：来源 / 落地页 / 设备 / 热门录像 ---------- */}
       <div className="admin_grid c2">
@@ -280,12 +268,12 @@ export default async function AdminDashboard() {
 
       <div className="admin_grid c2">
         <AdminCard title="设备分布" more="近 30 天 · 按 UA 粗分类">
-          <BarList
+          <Pie
             items={traffic.devices.map((d) => ({
               label: DEVICE_NAMES[d.uaClass] ?? d.uaClass,
               value: d.pv,
             }))}
-            color="linear-gradient(90deg,#4f7a3a,#a6e22e)"
+            centerLabel="访问 PV"
           />
         </AdminCard>
 
@@ -328,18 +316,13 @@ export default async function AdminDashboard() {
         </AdminCard>
       </div>
 
-      {/* ---------- 地区 / 软件分布 ---------- */}
-      <div className="admin_grid c2">
-        <AdminCard title="地区分布 Top 10" more="按注册资料">
-          <BarList items={areas} />
-        </AdminCard>
-        <AdminCard title="录像软件分布" more="按录像解析">
-          <BarList
-            items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))}
-            color="linear-gradient(90deg,#1f6f8b,#66d9ef)"
-          />
-        </AdminCard>
-      </div>
+      {/* ---------- 软件分布（2026-10-21 地区分布卡下线，改饼图） ---------- */}
+      <AdminCard title="录像软件分布" more="按录像解析">
+        <Pie
+          items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))}
+          centerLabel="录像总数"
+        />
+      </AdminCard>
 
       {/* ---------- 最新注册 / 最新上传 ---------- */}
       <div className="admin_grid c2">

@@ -403,6 +403,97 @@ export function Donut({
   );
 }
 
+// ---------- 实心饼图（占比，无中心孔；2026-10-21 设备/软件分布用） ----------
+
+export function Pie({
+  items,
+  centerLabel,
+}: {
+  items: { label: string; value: number }[];
+  centerLabel?: string;
+}) {
+  const total = items.reduce((s, i) => s + i.value, 0);
+  if (!total) return <div className="admin_empty">暂无数据</div>;
+  const R = 52;
+  const cx = 70;
+  const cy = 70;
+  // 渲染前把每段路径算好（reduce 累积，避免渲染期副作用，同 Donut）
+  // SVG 圆弧 path：起角 -90°（12 点方向），每段按占比扫过；不足 0.5% 的段并入前一段避免视觉消失
+  const polar = (deg: number, r: number) => {
+    const rad = ((deg - 90) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  };
+  const segs = items.reduce<
+    { list: { key: string; color: string; d: string }[]; acc: number; lastIdx: number }
+  >(
+    (state, it, idx) => {
+      const frac = it.value / total;
+      const startDeg = state.acc * 360;
+      const endDeg = (state.acc + frac) * 360;
+      if (frac < 0.005 && state.list.length > 0) {
+        // 太小的段并入前一段（改写前段的终点）
+        const prev = state.list[state.list.length - 1];
+        const s0 = polar(startDeg, R);
+        const e1 = polar(endDeg, R);
+        const large = endDeg - startDeg > 180 ? 1 : 0;
+        prev.d = `M ${cx} ${cy} L ${s0.x} ${s0.y} A ${R} ${R} 0 ${large} 1 ${e1.x} ${e1.y} Z`;
+        return { ...state, acc: state.acc + frac, lastIdx: idx };
+      }
+      const s0 = polar(startDeg, R);
+      const e1 = polar(endDeg, R);
+      const large = endDeg - startDeg > 180 ? 1 : 0;
+      return {
+        list: [
+          ...state.list,
+          {
+            key: it.label,
+            color: SERIES_COLORS[idx % SERIES_COLORS.length],
+            d: `M ${cx} ${cy} L ${s0.x} ${s0.y} A ${R} ${R} 0 ${large} 1 ${e1.x} ${e1.y} Z`,
+          },
+        ],
+        acc: state.acc + frac,
+        lastIdx: idx,
+      };
+    },
+    { list: [], acc: 0, lastIdx: -1 }
+  ).list;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+      <svg viewBox="0 0 140 140" style={{ width: 132, height: 132, flex: "0 0 132px" }} role="img" aria-label="占比">
+        {segs.map((s) => (
+          <path key={s.key} d={s.d} fill={s.color} stroke="#272822" strokeWidth="1" />
+        ))}
+        <text x="70" y="66" fontSize="19" fontWeight="bold" fill="#eeeeee" textAnchor="middle">
+          {total.toLocaleString("zh-CN")}
+        </text>
+        <text x="70" y="83" fontSize="10" fill="#75715e" textAnchor="middle">
+          {centerLabel ?? "合计"}
+        </text>
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13, minWidth: 130 }}>
+        {items.map((it, idx) => (
+          <div key={it.label} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span
+              style={{
+                width: 9,
+                height: 9,
+                borderRadius: 2,
+                background: SERIES_COLORS[idx % SERIES_COLORS.length],
+                flex: "0 0 9px",
+              }}
+            />
+            <span style={{ color: "#939387", flex: 1 }}>{it.label}</span>
+            <span style={{ color: "#b1b1a4", fontVariantNumeric: "tabular-nums" }}>{it.value.toLocaleString("zh-CN")}</span>
+            <span style={{ color: "#75715e", fontSize: 12, width: 46, textAlign: "right" }}>
+              {((it.value / total) * 100).toFixed(1)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------- 迷你走势线（KPI 卡内嵌） ----------
 
 export function Sparkline({ values, color = "#a6e22e", width = 96, height = 26 }: {

@@ -34,11 +34,13 @@ model User {
   // 2026-10-15 上线前性能审计新增：
   // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；
   // (status) 服务首页注册人数 count（ACTIVE_USER 口径）
+  // 2026-10-21 后台性能：create_time 服务后台增长曲线/最新注册排序（原全表扫描 4.5s）
   @@index([area, status])
   @@index([status])
   @@index([area, sex])
   @@index([registerIp])
   @@index([lastLoginIp])
+  @@index([createTime])
   @@map("user")
 }
 
@@ -228,10 +230,13 @@ model Video {
   // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计
   // （count status / GROUP BY level / 今日按 review_time），原为 30 万行全表扫描；
   // (level, id) 服务首页与录像列表的级别筛选 feed（原走主键反扫+过滤）
+  // 2026-10-21 后台性能：create_time 服务后台趋势图 dailyCounts（30 天 GROUP BY 切天，
+  // 原全表扫描 45s，加索引后 30ms）
   @@index([status, level, reviewTime])
   @@index([level, id])
   @@index([user, level])
   @@index([hash])
+  @@index([createTime])
   @@map("video")
 }
 
