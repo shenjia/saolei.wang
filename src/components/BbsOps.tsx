@@ -1,10 +1,11 @@
 // BBS 客户端交互：回帖表单 + 管理操作条 + 删帖/删回复
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
 import { RichEditor } from "./RichEditor";
+import { useDraft, useHydrated } from "./useDraft";
 
 async function callApi(body: Record<string, unknown>): Promise<string | null> {
   const res = await fetch("/api/bbs", {
@@ -30,6 +31,7 @@ export function ReplyForm({
   onPosted,
   quote,
   onQuoteCleared,
+  authorId,
 }: {
   postId: number;
   locked: boolean;
@@ -37,16 +39,40 @@ export function ReplyForm({
   /** 引用目标（楼层）：null = 普通回复 */
   quote: { replyId: number; authorName: string; excerpt: string } | null;
   onQuoteCleared?: () => void;
+  /** 当前登录用户 id（草稿按作者隔离） */
+  authorId: number;
 }) {
   const [content, setContent] = useState("");
+  // 草稿秒级备份：按作者 uid + 主题 id 隔离（同主题一份草稿，引用不备份——引用由点击「回复」重新触发）
+  const draft = useDraft(`bbs-reply:${authorId}:${postId}`);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   /** 提交成功后 +1 强制重挂编辑器（画布是非受控 contenteditable，setContent("") 清不掉
-   *  DOM 内容；重挂即清空画布、placeholder 复现——引用态已由 onQuoteCleared 先清） */
+   *  DOM 内容；重挂即清空画布、placeholder 复现——引用态已由 onQuoteCleared 先清）。
+   *  草稿恢复同样靠它：水合后合并到草稿正文即 +1 重挂载入 */
   const [formKey, setFormKey] = useState(0);
   const router = useRouter();
   // 空内容红气泡后自动定位到正文画布（2026-10-16 张老师要求）
   const editorAreaRef = useRef<HTMLDivElement>(null);
+
+  // 水合后一次性合并草稿正文（渲染期调整 state——React 官方模式）：
+  // 草稿 UBB 即序列化产物，直接入 state + 翻 key 重挂画布
+  const hydrated = useHydrated();
+  const [merged, setMerged] = useState(false);
+  if (hydrated && !merged) {
+    setMerged(true);
+    if (draft.value) {
+      setContent(draft.value);
+      setFormKey((k) => k + 1);
+    }
+  }
+
+  // 合并完成后内容变化即写盘（秒级备份）
+  useEffect(() => {
+    if (!merged) return;
+    draft.set(content);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [merged, content]);
 
   if (locked) return <p className="text">主题已锁定，无法回复。</p>;
 
@@ -72,6 +98,7 @@ export function ReplyForm({
       toast(err, "error");
       return;
     }
+    draft.clear(); // 回复成功清空草稿
     setContent("");
     toast("回复发表成功", "success");
     onQuoteCleared?.();
@@ -85,7 +112,7 @@ export function ReplyForm({
     <div className="reply_form" ref={editorAreaRef}>
       <RichEditor
         key={formKey}
-        initialContent=""
+        initialContent={draft.value}
         minHeight={200}
         placeholder="直接输入回复内容"
         onChange={setContent}

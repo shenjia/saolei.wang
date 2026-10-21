@@ -4,9 +4,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
+import { useDraft } from "./useDraft";
 
-export function SendMessageForm({ to, toName }: { to?: number; toName?: string }) {
-  const [content, setContent] = useState("");
+export function SendMessageForm({ to, toName, authorId }: { to?: number; toName?: string; authorId: number }) {
+  // 草稿秒级备份：受控直绑 draft.value；按作者 uid + 收件人 id 隔离，与用户主页气泡浮窗共用同一份草稿
+  const draft = useDraft(to ? `pm:${authorId}:${to}` : null);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,7 +20,7 @@ export function SendMessageForm({ to, toName }: { to?: number; toName?: string }
     const res = await fetch("/api/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "send", to, content }),
+      body: JSON.stringify({ action: "send", to, content: draft.value }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -28,7 +30,7 @@ export function SendMessageForm({ to, toName }: { to?: number; toName?: string }
     }
     setOk("已发送");
     toast("站内信已发送", "success");
-    setContent("");
+    draft.clear(); // 发送成功清空草稿
   }
 
   if (!to) return null;
@@ -41,11 +43,11 @@ export function SendMessageForm({ to, toName }: { to?: number; toName?: string }
         rows={3}
         maxLength={200}
         placeholder="说点什么…（200 字以内）"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+        value={draft.value}
+        onChange={(e) => draft.set(e.target.value)}
       />
       <p>
-        <button className="button small active" disabled={busy || !content.trim()} onClick={onSend}>
+        <button className="button small active" disabled={busy || !draft.value.trim()} onClick={onSend}>
           发送
         </button>{" "}
         <span className="error">{error}</span>
@@ -111,24 +113,25 @@ export function MarkAllReadButton({ unread }: { unread?: number }) {
   );
 }
 
-export function BroadcastForm() {
-  const [content, setContent] = useState("");
+export function BroadcastForm({ authorId }: { authorId: number }) {
+  // 草稿秒级备份：广播按作者 uid 隔离（管理员专属输入，历史草稿及时清理）
+  const draft = useDraft(`bc:${authorId}`);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function onBroadcast() {
-    if (!confirm(`确定向全站所有用户广播吗？\n\n${content}`)) return;
+    if (!confirm(`确定向全站所有用户广播吗？\n\n${draft.value}`)) return;
     setBusy(true);
     const res = await fetch("/api/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "broadcast", content }),
+      body: JSON.stringify({ action: "broadcast", content: draft.value }),
     });
     setBusy(false);
     const data = await res.json().catch(() => ({}));
     setMsg(res.ok ? `已广播给 ${data.count} 位用户` : data.error ?? "广播失败");
     if (res.ok) {
-      setContent("");
+      draft.clear(); // 广播成功清空草稿
       toast(`已广播给 ${data.count} 位用户`, "success");
     }
   }
@@ -140,11 +143,11 @@ export function BroadcastForm() {
         rows={3}
         maxLength={200}
         placeholder="广播内容…（200 字以内）"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+        value={draft.value}
+        onChange={(e) => draft.set(e.target.value)}
       />
       <p>
-        <button className="button small active" disabled={busy || !content.trim()} onClick={onBroadcast}>
+        <button className="button small active" disabled={busy || !draft.value.trim()} onClick={onBroadcast}>
           {busy ? "广播中…" : "开始广播"}
         </button>{" "}
         <span>{msg}</span>

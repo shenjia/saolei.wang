@@ -13,6 +13,7 @@ import { noFocusJump } from "./useKeepScroll";
 import { toast } from "./Toast";
 import { TotalCount } from "./TotalCount";
 import { nextBatchSize } from "./PageSlider";
+import { useDraft } from "./useDraft";
 
 /** 单条评论（移植 comment/_cell 的应有结构）
  *  2026-10-13 张老师要求：作者名后显示军衔徽章（与 BBS 楼层 bbs_meta 同款 AvatarCell + TitleBadge） */
@@ -111,9 +112,10 @@ export function CommentList({
  *  2026-10-13 张老师要求：外观与论坛编辑器一致但不支持 UBB——
  *  输入框直接复用编辑器画布 .wys 的样式类（纯文本 textarea，无工具栏），
  *  提交按钮改走 .submit_row（居中，同论坛回帖的黄色主按钮布局） */
-export function CommentForm({ videoId }: { videoId: number }) {
+export function CommentForm({ videoId, authorId }: { videoId: number; authorId: number }) {
   const router = useRouter();
-  const [content, setContent] = useState("");
+  // 草稿秒级备份：受控直绑 draft.value——水合后存稿自动回填输入框（2026-10-22 张老师要求）
+  const draft = useDraft(`c:${authorId}:${videoId}`);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -125,14 +127,14 @@ export function CommentForm({ videoId }: { videoId: number }) {
       const res = await fetch("/api/comment/post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video: videoId, content }),
+        body: JSON.stringify({ video: videoId, content: draft.value }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? "发表失败");
         return;
       }
-      setContent("");
+      draft.clear(); // 发布成功清空草稿
       toast("评论发表成功", "success");
       router.refresh();
     } finally {
@@ -148,8 +150,8 @@ export function CommentForm({ videoId }: { videoId: number }) {
         rows={3}
         maxLength={COMMENT_CONTENT_LIMIT}
         placeholder="我来说两句…（纯文本）"
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+        value={draft.value}
+        onChange={(e) => draft.set(e.target.value)}
       />
       {error && <div className="error">{error}</div>}
       <p className="submit_row">

@@ -162,6 +162,7 @@ export function BbsReplySection({
             postId={postId}
             locked={locked}
             onPosted={onPosted}
+            authorId={viewerUid ?? 0}
             quote={
               quote
                 ? {

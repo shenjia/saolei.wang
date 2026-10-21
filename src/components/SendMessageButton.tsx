@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "./Toast";
+import { useDraft } from "./useDraft";
 
 /** 与 lib/message.ts 的 MESSAGE_CONTENT_LIMIT 保持一致
  *  （lib/message 依赖 prisma，不能进客户端 bundle，故此处独立声明） */
@@ -36,9 +37,19 @@ export function BubbleIcon() {
   );
 }
 
-export function SendMessageButton({ to, name }: { to: number; name: string }) {
+export function SendMessageButton({
+  to,
+  name,
+  authorId,
+}: {
+  to: number;
+  name: string;
+  authorId: number;
+}) {
   const [open, setOpen] = useState(false);
-  const [content, setContent] = useState("");
+  // 草稿秒级备份：受控直绑 draft.value（浮窗挂载即恢复）；按作者 uid + 收件人 id 隔离，
+  // 与消息页发信表单共用同一份草稿——气泡里没发完就关掉，去消息页接着写也能接上
+  const draft = useDraft(`pm:${authorId}:${to}`);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -59,7 +70,7 @@ export function SendMessageButton({ to, name }: { to: number; name: string }) {
       const res = await fetch("/api/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send", to, content }),
+        body: JSON.stringify({ action: "send", to, content: draft.value }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -68,7 +79,7 @@ export function SendMessageButton({ to, name }: { to: number; name: string }) {
       }
       // 成功：关浮窗 + 屏中成功气泡（2 秒后渐隐）
       setOpen(false);
-      setContent("");
+      draft.clear(); // 发送成功清空草稿
       toast("发送成功", "success", 2000);
     } finally {
       setBusy(false);
@@ -104,15 +115,15 @@ export function SendMessageButton({ to, name }: { to: number; name: string }) {
               rows={3}
               maxLength={CONTENT_LIMIT}
               placeholder={`说点什么…（${CONTENT_LIMIT} 字以内）`}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
+              value={draft.value}
+              onChange={(e) => draft.set(e.target.value)}
             />
             {error && <div className="msg_error">{error}</div>}
             <p className="msg_ops">
               <button
                 type="button"
                 className="msg_send"
-                disabled={busy || !content.trim()}
+                disabled={busy || !draft.value.trim()}
                 onClick={send}
               >
                 {busy ? "发送中…" : "发 送"}

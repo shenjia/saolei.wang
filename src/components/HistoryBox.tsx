@@ -12,6 +12,7 @@ import type { HistoryItem } from "@/lib/history";
 import { isRecent } from "@/lib/format";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
+import { useDraft, useHydrated } from "./useDraft";
 
 export function HistoryBox({
   userId,
@@ -131,6 +132,7 @@ export function HistoryBox({
       {dialog && (
         <HistoryDialog
           item={dialogItem}
+          authorId={userId}
           onClose={() => setDialog(null)}
           onSaved={(saved) => {
             if (dialog.id == null) {
@@ -162,18 +164,39 @@ export function normalizeHistoryText(text: string): string {
 /** 写纪事 / 编辑纪事浮窗（新增与编辑复用同一设计） */
 function HistoryDialog({
   item,
+  authorId,
   onClose,
   onSaved,
 }: {
   item?: HistoryItem;
+  /** 纪事属主用户 id（草稿按属主隔离；本浮窗仅 editable=true 即本人可开） */
+  authorId: number;
   onClose: () => void;
   onSaved: (item: HistoryItem) => void;
 }) {
   const isEdit = !!item;
   const [month, setMonth] = useState(item?.month ?? "");
+  // 草稿秒级备份：新增按属主 uid、编辑按属主 uid + 纪事 id 隔离
+  const draft = useDraft(isEdit && item ? `history:${authorId}:${item.id}` : `history:${authorId}`);
   const [content, setContent] = useState(item?.content ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // 水合后一次性合并草稿（渲染期调整 state——React 官方模式）：
+  // 新增态恢复上次未保存草稿；编辑态回落已保存内容（不被旧草稿覆盖）
+  const hydrated = useHydrated();
+  const [merged, setMerged] = useState(false);
+  if (hydrated && !merged) {
+    setMerged(true);
+    if (!isEdit && draft.value) setContent(draft.value);
+  }
+
+  // 合并后键入即写盘（秒级备份）
+  useEffect(() => {
+    if (!merged) return;
+    draft.set(content);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [merged, content]);
 
   useEffect(() => {
     if (!error) return;
@@ -197,6 +220,7 @@ function HistoryDialog({
     if (!res.ok) return setError(data.error ?? "操作失败");
     if (isEdit) onSaved({ ...item!, content: content.trim() });
     else onSaved({ id: data.id, month, content: content.trim() });
+    draft.clear(); // 保存成功清空草稿
   }
 
   return (

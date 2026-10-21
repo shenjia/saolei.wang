@@ -201,7 +201,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
         <div className="post box">
           <h2>发表评论</h2>
           {session ? (
-            <CommentForm videoId={video.id} />
+            <CommentForm videoId={video.id} authorId={session.uid} />
           ) : (
             <p className="text login_hint">
               <LoginLink>登录</LoginLink> 后才能发表评论。

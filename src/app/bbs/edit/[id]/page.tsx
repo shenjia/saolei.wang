@@ -30,6 +30,7 @@ export default async function BbsEditPage({ params }: { params: Promise<{ id: st
           postId={post.id}
           boards={boards}
           isAdmin={admin}
+          authorId={session.uid}
           initialBoard={post.board}
           initialTitle={post.title}
           initialContent={post.content}

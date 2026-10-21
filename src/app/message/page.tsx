@@ -78,12 +78,12 @@ export default async function MessagePage({
       {to && (
         <div className="box">
           <h2>发消息</h2>
-          <SendMessageForm to={to} toName={toName} />
+          <SendMessageForm to={to} toName={toName} authorId={session.uid} />
         </div>
       )}
       {isManager(session.role) && (
         <div className="box">
-          <BroadcastForm />
+          <BroadcastForm authorId={session.uid} />
         </div>
       )}
     </div>

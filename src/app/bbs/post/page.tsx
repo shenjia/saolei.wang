@@ -20,7 +20,7 @@ export default async function BbsPostPage() {
   return (
     <div id="page" className="main">
       <div className="box">
-        <PostForm boards={boards} isAdmin={admin} />
+        <PostForm boards={boards} isAdmin={admin} authorId={session.uid} />
       </div>
     </div>
   );
