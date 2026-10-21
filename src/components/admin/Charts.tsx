@@ -1,8 +1,10 @@
-// 后台图表组件（2026-09-24）
+// 后台图表组件（2026-09-24；2026-10-21 占比图改版）
 // 零依赖纯 SVG / CSS 实现，与 01xue.com 后台同思路：不引第三方图表库，
 // 避免为几张图表引入 recharts/echarts 这类几百 KB 的运行时。
 //
 // 色板固定取主站 2013 Monokai，调用方只传 key，颜色由 SERIES_COLORS 统一给。
+// 2026-10-21 占比图改版（对齐 01xue.com 后台）：实心 Pie 淘汰，统一环形 Donut
+// （中心汇总 + 图例悬浮联动高亮 + 2 位小数百分比 + <0.5% 小项合并「其他」）。
 
 "use client";
 
@@ -320,33 +322,56 @@ export function ColumnChart({
   );
 }
 
-// ---------- 环形占比 ----------
+// ---------- 环形占比（2026-10-21 改版，学习 01xue.com 后台） ----------
+// · 实心饼 → 环形（中心汇总数字），观感更透气
+// · 图例 ↔ 扇区悬浮联动高亮（对应扇区加粗、其余变暗）
+// · 百分比 2 位小数；极小占比显示 <0.01%
+// · 小于 0.5% 的段默认并入「其他」防细缝（单点关键数据传 mergeSmall={false}）
 
 export function Donut({
   items,
   centerLabel,
+  mergeSmall = true,
 }: {
   items: { label: string; value: number }[];
   centerLabel?: string;
+  /** 小于 0.5% 的段并入「其他」（称号体系偏好这类「每一段都是关键数据」的场景传 false） */
+  mergeSmall?: boolean;
 }) {
+  const [hover, setHover] = useState<number | null>(null);
   const total = items.reduce((s, i) => s + i.value, 0);
   if (!total) return <div className="admin_empty">暂无数据</div>;
-  const R = 52;
+
+  // 小项合并（渲染前算好；沿用 reduce 累积，不做渲染期副作用）
+  const small = items.filter((i) => i.value / total < 0.005);
+  const list: { label: string; value: number; merged?: boolean }[] = items.filter(
+    (i) => i.value / total >= 0.005
+  );
+  if (!mergeSmall) list.push(...small);
+  else if (small.length > 0)
+    list.push({ label: `其他（<0.5% 共 ${small.length} 项）`, value: small.reduce((s, i) => s + i.value, 0), merged: true });
+
+  const R = 62;
   const C = 2 * Math.PI * R;
-  // 渲染前先把每段的角度累计好（用 reduce 累积，避免改渲染期外部变量，react-hooks/immutability）
-  const segs = items.reduce<
-    { list: { key: string; color: string; dasharray: string; dashoffset: number }[]; acc: number }
+  const SW = 20;
+  // 段间留 2px 呼吸缝：弧长扣 2、起点补 1；极小段弧长保底 0.5 防负数
+  const segs = list.reduce<
+    { list: { idx: number; key: string; color: string; value: number; frac: number; dash: string; offset: number }[]; acc: number }
   >(
     (state, it, idx) => {
       const frac = it.value / total;
+      const len = Math.max(0.5, frac * C - 2);
       return {
         list: [
           ...state.list,
           {
+            idx,
             key: it.label,
-            color: SERIES_COLORS[idx % SERIES_COLORS.length],
-            dasharray: `${frac * C} ${C}`,
-            dashoffset: -state.acc * C,
+            color: it.merged ? "#6c6c61" : SERIES_COLORS[idx % SERIES_COLORS.length],
+            value: it.value,
+            frac,
+            dash: `${len} ${C - len}`,
+            offset: -(state.acc * C) + 1,
           },
         ],
         acc: state.acc + frac,
@@ -354,139 +379,69 @@ export function Donut({
     },
     { list: [], acc: 0 }
   ).list;
+
+  // 极小但非零的占比显示 <0.01%（toFixed(2) 会显示成 0.00% 造成「没有人用」误读）
+  const pct = (f: number) => (f > 0 && f < 0.0001 ? "<0.01%" : `${(f * 100).toFixed(2)}%`);
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-      <svg viewBox="0 0 140 140" style={{ width: 132, height: 132, flex: "0 0 132px" }} role="img" aria-label="占比">
-        <circle cx="70" cy="70" r={R} fill="none" stroke="#3a3a32" strokeWidth="15" />
+    <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+      <svg
+        viewBox="0 0 168 168"
+        style={{ width: 168, height: 168, flex: "0 0 168px" }}
+        role="img"
+        aria-label="占比"
+      >
+        <circle cx="84" cy="84" r={R} fill="none" stroke="#3a3a32" strokeWidth={SW} />
         {segs.map((s) => (
           <circle
             key={s.key}
-            cx="70"
-            cy="70"
+            cx="84"
+            cy="84"
             r={R}
             fill="none"
             stroke={s.color}
-            strokeWidth="15"
-            strokeDasharray={s.dasharray}
-            strokeDashoffset={s.dashoffset}
-            transform="rotate(-90 70 70)"
+            strokeWidth={hover === s.idx ? SW + 5 : SW}
+            strokeDasharray={s.dash}
+            strokeDashoffset={s.offset}
+            transform="rotate(-90 84 84)"
+            style={{
+              opacity: hover === null || hover === s.idx ? 1 : 0.28,
+              transition: "stroke-width .12s ease, opacity .12s ease",
+              cursor: "pointer",
+            }}
+            onMouseEnter={() => setHover(s.idx)}
+            onMouseLeave={() => setHover(null)}
           />
         ))}
-        <text x="70" y="66" fontSize="19" fontWeight="bold" fill="#eeeeee" textAnchor="middle">
+        <text x="84" y="80" fontSize="20" fontWeight="bold" fill="#eeeeee" textAnchor="middle">
           {total.toLocaleString("zh-CN")}
         </text>
-        <text x="70" y="83" fontSize="10" fill="#75715e" textAnchor="middle">
+        <text x="84" y="99" fontSize="11" fill="#75715e" textAnchor="middle">
           {centerLabel ?? "合计"}
         </text>
       </svg>
-      <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13, minWidth: 130 }}>
-        {items.map((it, idx) => (
-          <div key={it.label} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <span
-              style={{
-                width: 9,
-                height: 9,
-                borderRadius: 2,
-                background: SERIES_COLORS[idx % SERIES_COLORS.length],
-                flex: "0 0 9px",
-              }}
-            />
-            <span style={{ color: "#939387", flex: 1 }}>{it.label}</span>
-            <span style={{ color: "#b1b1a4", fontVariantNumeric: "tabular-nums" }}>{it.value.toLocaleString("zh-CN")}</span>
-            <span style={{ color: "#75715e", fontSize: 12, width: 46, textAlign: "right" }}>
-              {((it.value / total) * 100).toFixed(1)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---------- 实心饼图（占比，无中心孔；2026-10-21 设备/软件分布用） ----------
-
-export function Pie({
-  items,
-  centerLabel,
-}: {
-  items: { label: string; value: number }[];
-  centerLabel?: string;
-}) {
-  const total = items.reduce((s, i) => s + i.value, 0);
-  if (!total) return <div className="admin_empty">暂无数据</div>;
-  const R = 52;
-  const cx = 70;
-  const cy = 70;
-  // 渲染前把每段路径算好（reduce 累积，避免渲染期副作用，同 Donut）
-  // SVG 圆弧 path：起角 -90°（12 点方向），每段按占比扫过；不足 0.5% 的段并入前一段避免视觉消失
-  const polar = (deg: number, r: number) => {
-    const rad = ((deg - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  };
-  const segs = items.reduce<
-    { list: { key: string; color: string; d: string }[]; acc: number; lastIdx: number }
-  >(
-    (state, it, idx) => {
-      const frac = it.value / total;
-      const startDeg = state.acc * 360;
-      const endDeg = (state.acc + frac) * 360;
-      if (frac < 0.005 && state.list.length > 0) {
-        // 太小的段并入前一段（改写前段的终点）
-        const prev = state.list[state.list.length - 1];
-        const s0 = polar(startDeg, R);
-        const e1 = polar(endDeg, R);
-        const large = endDeg - startDeg > 180 ? 1 : 0;
-        prev.d = `M ${cx} ${cy} L ${s0.x} ${s0.y} A ${R} ${R} 0 ${large} 1 ${e1.x} ${e1.y} Z`;
-        return { ...state, acc: state.acc + frac, lastIdx: idx };
-      }
-      const s0 = polar(startDeg, R);
-      const e1 = polar(endDeg, R);
-      const large = endDeg - startDeg > 180 ? 1 : 0;
-      return {
-        list: [
-          ...state.list,
-          {
-            key: it.label,
-            color: SERIES_COLORS[idx % SERIES_COLORS.length],
-            d: `M ${cx} ${cy} L ${s0.x} ${s0.y} A ${R} ${R} 0 ${large} 1 ${e1.x} ${e1.y} Z`,
-          },
-        ],
-        acc: state.acc + frac,
-        lastIdx: idx,
-      };
-    },
-    { list: [], acc: 0, lastIdx: -1 }
-  ).list;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-      <svg viewBox="0 0 140 140" style={{ width: 132, height: 132, flex: "0 0 132px" }} role="img" aria-label="占比">
+      <div className="admin_donut_legend">
         {segs.map((s) => (
-          <path key={s.key} d={s.d} fill={s.color} stroke="#272822" strokeWidth="1" />
-        ))}
-        <text x="70" y="66" fontSize="19" fontWeight="bold" fill="#eeeeee" textAnchor="middle">
-          {total.toLocaleString("zh-CN")}
-        </text>
-        <text x="70" y="83" fontSize="10" fill="#75715e" textAnchor="middle">
-          {centerLabel ?? "合计"}
-        </text>
-      </svg>
-      <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13, minWidth: 130 }}>
-        {items.map((it, idx) => (
-          <div key={it.label} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <div
+            key={s.key}
+            className={`admin_donut_row${hover === s.idx ? " hot" : ""}`}
+            onMouseEnter={() => setHover(s.idx)}
+            onMouseLeave={() => setHover(null)}
+          >
             <span
               style={{
-                width: 9,
-                height: 9,
-                borderRadius: 2,
-                background: SERIES_COLORS[idx % SERIES_COLORS.length],
-                flex: "0 0 9px",
+                width: 10,
+                height: 10,
+                borderRadius: 3,
+                background: s.color,
+                flex: "0 0 10px",
               }}
             />
-            <span style={{ color: "#939387", flex: 1 }}>{it.label}</span>
-            <span style={{ color: "#b1b1a4", fontVariantNumeric: "tabular-nums" }}>{it.value.toLocaleString("zh-CN")}</span>
-            <span style={{ color: "#75715e", fontSize: 12, width: 46, textAlign: "right" }}>
-              {((it.value / total) * 100).toFixed(1)}%
+            <span className="name" title={s.key}>
+              {s.key}
             </span>
+            <span className="val">{s.value.toLocaleString("zh-CN")}</span>
+            <span className="pct">{pct(s.frac)}</span>
           </div>
         ))}
       </div>

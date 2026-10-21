@@ -269,6 +269,27 @@ export async function getSexCounts(): Promise<{ label: string; value: number }[]
     .sort((a, b) => b.value - a.value);
 }
 
+/**
+ * 称号体系偏好分布（2026-10-21 张老师需求：统计新版军衔 vs 旧版人神界称号占比）。
+ * 口径：user_info 有行的账号（资料保存过才建行，纯注册无行；站内无 session 表，
+ * 「已登录」不可考，这是最接近「用过账号功能的登录玩家」的分母）。
+ * 'm'=军衔制（默认口径，含未主动设置）/ 'c'=旧版称号（主动切换）。
+ */
+export async function getTitlePrefCounts(): Promise<{ label: string; value: number }[]> {
+  const rows = await prisma.$queryRawUnsafe<{ pref: string; c: bigint }[]>(
+    `SELECT title_pref pref, COUNT(*) c FROM user_info GROUP BY title_pref`
+  );
+  const map = new Map(rows.map((r) => [r.pref, N(r.c)]));
+  const classic = map.get("c") ?? 0;
+  // 脏值（非 'c'）与 'm' 一样按军衔口径渲染，并入军衔制
+  const military =
+    [...map.entries()].filter(([k]) => k !== "c").reduce((s, [, v]) => s + v, 0) + (map.get("m") ?? 0);
+  return [
+    { label: "军衔制（默认口径）", value: military },
+    { label: "旧版人神界称号", value: classic },
+  ];
+}
+
 /** 录像级别分布 */
 export async function getLevelCounts(): Promise<{ label: string; value: number }[]> {
   const rows = await prisma.$queryRawUnsafe<{ level: string; c: bigint }[]>(

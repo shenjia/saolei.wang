@@ -1,4 +1,4 @@
-// 管理后台 · 仪表盘（2026-09-24；2026-10-16 加流量统计区块）
+// 管理后台 · 仪表盘（2026-09-24；2026-10-16 加流量统计区块；2026-10-21 加称号体系偏好 + 占比图全面换环形 Donut）
 // 一屏掌握：规模指标（KPI）→ 30 天趋势 → 流量统计 → 待办与分布 → 最新动态。
 
 import Link from "next/link";
@@ -6,7 +6,7 @@ import { getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies } from "@/lib/admin/cache";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
-import { TrendChart, BarList, Pie, type Series } from "@/components/admin/Charts";
+import { TrendChart, BarList, Donut, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi, LevelTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, scoreTime, timeOpposite } from "@/lib/format";
@@ -16,7 +16,7 @@ export const metadata = { title: "仪表盘 | 管理后台" };
 
 export default async function AdminDashboard() {
   // 分两波取数：重的全表聚合走缓存且在内部串行，轻的实时查询并行
-  // （2026-10-21 称号/地区分布卡下线，dashboard-distributions 只剩软件分布）
+  // （2026-10-21 称号/地区分布卡下线，dashboard-distributions 只剩软件分布 + 称号偏好）
   const [ov, trend, dist, traffic] = await Promise.all([
     getOverview(),
     getTrend(30),
@@ -28,7 +28,7 @@ export default async function AdminDashboard() {
     getLatestUsers(8),
     getLatestVideosBrief(8),
   ]);
-  const { softwares } = dist;
+  const { softwares, titlePrefs } = dist;
 
   const series: Series[] = [
     // 流量两序列排最前（2026-10-16 张老师定：与业务趋势合并为一张图，默认只亮 UV/PV/新玩家/新录像）
@@ -268,7 +268,7 @@ export default async function AdminDashboard() {
 
       <div className="admin_grid c2">
         <AdminCard title="设备分布" more="近 30 天 · 按 UA 粗分类">
-          <Pie
+          <Donut
             items={traffic.devices.map((d) => ({
               label: DEVICE_NAMES[d.uaClass] ?? d.uaClass,
               value: d.pv,
@@ -316,9 +316,18 @@ export default async function AdminDashboard() {
         </AdminCard>
       </div>
 
-      {/* ---------- 软件分布（2026-10-21 地区分布卡下线，改饼图） ---------- */}
+      {/* ---------- 称号体系偏好（2026-10-21 张老师需求：新版军衔 vs 旧版人神界称号占比） ---------- */}
+      <AdminCard title="称号体系偏好" more="user_info.title_pref · 10 分钟缓存">
+        <Donut items={titlePrefs} centerLabel="已存偏好玩家" mergeSmall={false} />
+        <div className="admin_hint" style={{ marginTop: 10 }}>
+          口径：只统计资料保存过的账号（user_info 有行才建偏好；站内无会话表，无法按「已登录」精确圈定）。
+          未设置偏好按军衔制渲染，因此「旧版」占比 = 主动切换旧版称号的玩家比例。
+        </div>
+      </AdminCard>
+
+      {/* ---------- 软件分布（2026-10-21 地区分布卡下线，改环形 Donut） ---------- */}
       <AdminCard title="录像软件分布" more="按录像解析">
-        <Pie
+        <Donut
           items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))}
           centerLabel="录像总数"
         />

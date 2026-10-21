@@ -636,6 +636,48 @@ table.admin_table .ai_reason {
   font-variant-numeric: tabular-nums;
 }
 
+/* 环形占比图例（2026-10-21 改版 Donut）：行悬浮高亮与扇区联动 */
+.admin_donut_legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  min-width: 200px;
+  flex: 1;
+}
+.admin_donut_row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.admin_donut_row:hover,
+.admin_donut_row.hot {
+  background: #33322b;
+}
+.admin_donut_row .name {
+  color: #939387;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin_donut_row .val {
+  color: #e6db74;
+  font-variant-numeric: tabular-nums;
+}
+.admin_donut_row .pct {
+  color: #75715e;
+  font-size: 12px;
+  width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 横向柱状图（时段/星期分布） */
 .admin_columns {
   display: flex;
