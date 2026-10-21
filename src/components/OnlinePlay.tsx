@@ -41,8 +41,16 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { FlopSprites } from "./FlopSprites";
 import { VideoAnalysisRadar } from "./VideoAnalysis";
+import { toast } from "./Toast";
 import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
 import { replayCounts, MOUSE_CODE_TO_EV, type ReplayCounts } from "@/lib/replay-core";
+/* 拖拽导入录像（2026-10-21）：站内同款解析管线全为纯前端（avf/mvf 择优/rmv →
+   rawvf 结构化 → videowin 胜负判定），录像详情页 VideoReplay 同套客户端在用 */
+import { avfToRawvf } from "@/lib/avf";
+import { mvfToRawvfBest } from "@/lib/mvf-best";
+import { rmvToRawvf } from "@/lib/rmv";
+import { formatRawvf } from "@/lib/rawvf";
+import { judgeVideoOutcome } from "@/lib/videowin";
 import { LEVEL_NAMES } from "@/lib/config";
 import { paintRangeFill } from "@/lib/paintRange";
 import type { VideoAnalysisPoint } from "@/lib/videoscore";
@@ -163,13 +171,14 @@ const TIPS: string[] = [
   "戴上耳机听音乐并让音量压过鼠标按键声，点击速度更容易放开。",
   "玩一会儿需要精确移动鼠标的小游戏热热身，再开始扫雷状态更好。",
   /* ---- 2026-10-19 新手提示功能上线补录 ---- */
-  "卡住时打开设置里的「新手提示」，会标出附近能确定的雷和安全格。"
+  "卡住时打开设置里的「新手提示」，会标出附近能确定的雷和安全格。",
+  /* ---- 2026-10-21 拖拽导入录像上线补录（张老师定文案） ---- */
+  "将录像文件拖到练习界面里可以播放录像。"
 ];
 /* tips 生命周期（ms）：fade-in 由挂载后下一帧加 .show 触发；
-   TIP_HOLD_MS 后撤 .show 走 transition 渐隐，TIP_FADE_MS 后整块卸载。
-   「3 秒后渐隐」＝ 从浮现到开始消失共 3 秒，渐隐本身 0.7s 不占额度 */
+   TIP_HOLD_MS 后撤 .show 走 transition 渐隐（元素常驻复用、无卸载时序）。
+   （旧 TIP_FADE_MS 已随 .optoast 废弃删除——2026-10-21 局中通知改走全站 Toast） */
 const TIP_HOLD_MS = 3000;
-const TIP_FADE_MS = 700;
 
 /* 键盘类 tips 条目特征（2026-10-21 张老师定：移动端没有键盘，不出现快捷键提示）——
    命中即从触屏设备的候选池剔除。须同时覆盖两种在途文案形态（改写版「按1234数字键」
@@ -275,16 +284,12 @@ export function OnlinePlay({
       requestAnimationFrame(() => tipsEl.classList.add("show"));
       tipFadeTimer = window.setTimeout(() => tipsEl.classList.remove("show"), TIP_HOLD_MS);
     }
-    /* 局中绿色通知气泡（下载成功等）：复用 .optips 形态叠 .optoast 绿色变体，
-       动态创建、show 即现、TIP_HOLD 后渐隐、渐隐完自摘（与 tips 不同不用常驻） */
-    function showToast(msg: string) {
-      const t = document.createElement("div");
-      t.className = "optips optoast show";
-      t.setAttribute("role", "status");
-      t.textContent = msg;
-      container.appendChild(t);
-      window.setTimeout(() => t.classList.remove("show"), TIP_HOLD_MS);
-      window.setTimeout(() => t.remove(), TIP_HOLD_MS + TIP_FADE_MS);
+    /* 局中通知（下载成功 / 导入失败 / 复活）走**全站居中气泡**（2026-10-21 张老师定：
+       与其他全站居中提示同组件同尺寸——components/Toast.tsx，fixed 视口居中、success
+       带 ✓；此前自造的 .optoast 底部小气泡已废）。ToastHost 挂在 layout 全站生效，
+       这里只需命令式调用 */
+    function showToast(msg: string, err = false) {
+      toast(msg, err ? "error" : "success");
     }
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
@@ -593,6 +598,9 @@ export function OnlinePlay({
       level: string;          // beg/int/exp/cus
       events: OnlineEvent[];
       dateStr: string;        // 对局时间（AVF 时间戳）
+      /** 拖拽导入局标记（2026-10-21）：回放播完即退、定格引擎终态（败局揭示雷区），
+          与「刚打完一局」形态一致；自打局维持原口径（侧边态停在回放终帧） */
+      imported?: boolean;
       stats: {
         solvedBv: number; cl: number; ce: number; stnb: number;
         bvs: number; ioe: number; corr: number; cls: number; ppc: number;
@@ -1324,7 +1332,8 @@ export function OnlinePlay({
         /* 左键滑过已开格：不双击（一审）；按下在已开格＝chord 手势，「有效才计」
            （2026-10-21 三定）：数字非 0、旗数恰好满足且有未开非旗邻格才录
            sc+lr+chord——0 格/旗不满足/无可开的按下是走位失误不是双击意图，
-           不录事件不计 Double 零 wasted */
+           不录事件不计 Double 零 wasted。病根＝初级按住左键连开整局（多段
+           手势松手重按）落点几乎必在已开区上，每次白计一次 Double */
         if (slide) return;
         if (!nums || nums[i] === 0) return;
         const around = neighbors(i);
@@ -1476,8 +1485,9 @@ export function OnlinePlay({
       if (showStats) paintStatPanel(html);
       buildResultPanel(t, solvedBv, won, cnt);
     }
-    /* ---- 右侧结算面板（五期）：雷达图 + 再来一局 / 重玩本局 / 查看回放 / 下载录像 ---- */
-    function buildResultPanel(t: number, solvedBv: number, won: boolean, cnt: ReplayCounts) {
+    /* ---- 右侧结算面板（五期）：雷达图 + 再来一局 / 重玩本局 / 查看回放 / 下载录像 ----
+       imported=true＝拖拽导入局（2026-10-21）：快照带来源标记（回放播完即退出口径） */
+    function buildResultPanel(t: number, solvedBv: number, won: boolean, cnt: ReplayCounts, imported = false) {
       const cl = cnt.clLeft + cnt.clRight + cnt.clDouble, ce = cnt.ce;
       const path = Math.round(cnt.pathPx / 16); // 行程折「格」（16px/格），与录像页同量纲
       const hasBv = solvedBv > 0 && t > 0;
@@ -1498,6 +1508,7 @@ export function OnlinePlay({
         level: lv,
         events: evStream.slice(),
         dateStr: formatAvfTimestamp(new Date()),
+        imported,
         stats: {
           solvedBv, cl, ce, stnb,
           bvs: hasBv ? solvedBv / t : 0,
@@ -2118,8 +2129,11 @@ export function OnlinePlay({
           setPlaying(false);
           /* 遮罩态（移动端 / 二版桌面挤爆时）：浮层是带遮罩的全屏层，回放停在原地会被它
              盖住、连退出入口都摸不到——播完直接退出回放并重新弹出「本局表现」浮层。
-             侧边态浮窗本来就在盘面旁常驻，保持原样（回放停在终局画面）。 */
-          if (!mqPanelDesktop.matches || panelSlot === "mask") exitReplay();
+             侧边态浮窗本来就在盘面旁常驻，保持原样（回放停在终局画面）。
+             拖拽导入局（2026-10-21 张老师定「播完像刚打完一样」）：无论宿主形态，
+             播完都退出回放、恢复引擎终态（败局揭示雷区/胜局全旗）——exitReplay 里
+             repaintAll 按注入的 state 重画，就是终局定格画面 */
+          if (!mqPanelDesktop.matches || panelSlot === "mask" || s.imported) exitReplay();
           return;
         }
         rafId = requestAnimationFrame(tick);
@@ -2161,6 +2175,245 @@ export function OnlinePlay({
       resetReplay();
       setPlaying(true); // 进入即自动播放（复位到 0 起播）
     }
+    /* ---- 拖拽导入录像（2026-10-21 张老师定）：把录像文件拖到页面 → 本页原地自动回放，
+       播完的界面就像刚打完一局（结算面板齐备），「重玩本局」即可重试这盘地图 ----
+       链路与站内完全同源：avf/mvf（mvf-best 择优）/rmv → rawvf 行 → formatRawvf
+       结构化 → videowin 判定胜负 → 重放终态注入引擎 → buildResultPanel 出结算面板
+       → startInPlaceReplay() 原地自动播放。盘面级别按录像规格走（标准三级按原级别，
+       其余 cus；重玩锁定盘首击注入原雷区——与站内「重玩本局」完全同路）；导入局
+       不发 practice_log 埋点、下载的 AVF 带 Online 标记照旧不占排行。 */
+    let importedName = ""; // 最近一次拖入的文件名（dev 钩子 / 调试用）
+    /** rawvf 事件行解析：`ts ev col row (px py)` → OnlineEvent。
+        ⚠️ mv（鼠标移动）必须收——事件名→码表带上 mv:1（2026-10-21 张老师报
+        「拖入回放鼠标轨迹丢细节」根因：mv 不在反查表里，111 条移动事件全被
+        continue 丢弃，光标只剩点击点之间的直线插值，对比自打局回放的顺滑轨迹
+        「细节全丢」）；越界坐标不裁剪——回放引擎自带 inside 判定。
+        ⚠️ 反查表只收**标准码**（lc=3/lr=5/rc=9/rr=17/sc=11/mr=65）——MOUSE_CODE_TO_EV
+        还带 21:"lr"/145:"rr"/193:"mr" 三个变体码（Arbiter 某些版本产出），无脑
+        反查会让变体码覆盖标准码（lr 变 21），页内回放引擎 applyEv 的 switch 不认
+        变体码 → 首击 lr 永不 flood、整盘「只有光标动」（2026-10-21 张老师上传
+        Exp 4.74s 实锤：事件流第 2 条就是 mouse=21） */
+    const EV_NAME_TO_MOUSE: Record<string, number> = { mv: 1, lc: 3, lr: 5, rc: 9, rr: 17, sc: 11, mr: 65 };
+    function importDroppedVideo(buf: Uint8Array, extIn: string): string | null {
+      /* ① 解析：按扩展名分发，mvf 走 mvf-best 择优（判定与回放同源，站内口径） */
+      let lines: string[] | null = null;
+      try {
+        lines =
+          extIn === "avf"
+            ? avfToRawvf(buf)
+            : extIn === "mvf"
+              ? (mvfToRawvfBest(buf)?.lines ?? null)
+              : extIn === "rmv"
+                ? rmvToRawvf(buf)
+                : null;
+      } catch {
+        return "文件已损坏，无法解析";
+      }
+      if (!lines) return "无法识别的录像文件（支持 avf / mvf / rmv）";
+      const v = formatRawvf(lines);
+      if (!v.width || !v.height || v.board.length !== v.width * v.height)
+        return "录像数据不完整";
+      const outcome = judgeVideoOutcome({
+        width: v.width, height: v.height, board: v.board, events: v.events, marks: v.marks,
+      });
+      if (outcome === "incomplete") return "这不是一局完整的录像";
+      const won = outcome === "win";
+      /* ② 雷区/数字重建（board 串：'*'=雷，其余=数字字符） */
+      const N = v.width * v.height;
+      const bMines = new Uint8Array(N);
+      const bNums = new Uint8Array(N);
+      for (let i = 0; i < N; i++) {
+        if (v.board[i] === "*") bMines[i] = 1;
+        else bNums[i] = v.board.charCodeAt(i) - 48;
+      }
+      /* ③ 事件流解析 + 终态重放（flop 状态机 1:1，与页内回放 applyEv 同语义） */
+      const evs: OnlineEvent[] = [];
+      for (const line of v.events) {
+        const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+        if (!m) continue;
+        if (m[2] === "mt") continue; // 问号开关切换：无对应交互事件，跳过
+        const code = EV_NAME_TO_MOUSE[m[2]];
+        if (code === undefined) continue;
+        const sec = Math.floor(parseFloat(m[1]));
+        evs.push({ mouse: code, x: +m[5], y: +m[6], sec, hun: Math.round((parseFloat(m[1]) - sec) * 100) });
+      }
+      if (!evs.length) return "录像里没有任何操作事件";
+      const finalSec = evs[evs.length - 1].sec;
+      const rstate = new Uint8Array(N); // 0 未开 1 开 2 旗 3 问号
+      let rLp = false, rRp = false, rSv = false;
+      const inside = (px: number, py: number) => px >= 0 && px < v.width * 16 && py >= 0 && py < v.height * 16;
+      const cellOf = (px: number, py: number) => ((py / 16) | 0) * v.width + ((px / 16) | 0);
+      const flood = (i: number) => {
+        const stack = [i];
+        while (stack.length) {
+          const c = stack.pop()!;
+          if (rstate[c] === 1 || rstate[c] === 2 || bMines[c]) continue;
+          rstate[c] = 1;
+          if (bNums[c] === 0)
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              const x = (c % v.width) + dx, y = ((c / v.width) | 0) + dy;
+              if (x >= 0 && x < v.width && y >= 0 && y < v.height && rstate[y * v.width + x] === 0) stack.push(y * v.width + x);
+            }
+        }
+      };
+      const chord = (i: number) => {
+        if (rstate[i] !== 1 || bNums[i] === 0) return;
+        const x = i % v.width, y = (i / v.width) | 0;
+        let f = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < v.width && ny >= 0 && ny < v.height && rstate[ny * v.width + nx] === 2) f++;
+        }
+        if (f !== bNums[i]) return;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < v.width && ny >= 0 && ny < v.height && rstate[ny * v.width + nx] === 0)
+            flood(ny * v.width + nx);
+        }
+      };
+      for (const e of evs) {
+        const ci = inside(e.x, e.y) ? cellOf(e.x, e.y) : -1;
+        switch (e.mouse) {
+          case 3: rLp = true; break; // lc
+          case 5: // lr
+            if (ci >= 0) { if (rRp || rSv) chord(ci); else flood(ci); }
+            rLp = false; rSv = false;
+            break;
+          case 9: // rc（lp 按住仅视觉）
+            if (!rLp && ci >= 0) {
+              if (rstate[ci] === 0) rstate[ci] = 2;
+              else if (rstate[ci] === 2) rstate[ci] = v.marks ? 3 : 0;
+              else if (rstate[ci] === 3) rstate[ci] = 0;
+            }
+            rRp = true;
+            break;
+          case 17: if (rLp && ci >= 0) chord(ci); rRp = false; break; // rr
+          case 11: rLp = true; rSv = true; break; // sc
+          case 65: if (ci >= 0) chord(ci); break; // mr
+          default: break; // mv
+        }
+      }
+      /* 胜局：未标旗的雷全部记旗（checkWin 自动补旗的终态口径） */
+      if (won) for (let i = 0; i < N; i++) if (bMines[i] && rstate[i] === 0) rstate[i] = 2;
+      /* ④ 终态统计（重放引擎跑权威计数；won 时不重放已无必要——直接算） */
+      const cnt = replayCounts(
+        { width: v.width, height: v.height, mines: v.mines, board: bMines },
+        evs.map((e) => ({
+          ev: MOUSE_CODE_TO_EV[e.mouse] ?? "mv",
+          x: (e.x / 16) | 0, y: (e.y / 16) | 0, px: e.x, py: e.y,
+        })),
+        { marks: v.marks }
+      );
+      /* ⑤ 注入引擎：cus（自定义规格）/ 标准级别都交给 reset 自行设尺寸——
+         ⚠️ 绝不在此手动改 W/H/M/lv：reset 的 gridChanged 对比「进入时 W/H」，
+         提前赋值会把 gridChanged 钉成 false、tbody 不重建，旧盘行列对不上新盘
+         直接炸 paintCell（cells[x] undefined）。
+         ⚠️ 级别判定**不看胜负**（2026-10-21 张老师报：高级踩雷局存下来变 Cus）——
+         只要规格恰好是标准三级（含踩雷局）就按原级别走，重下载文件名/雷区 tab
+         才能对得上；自定义规格才落 cus */
+      const targetLv =
+        v.width === 8 && v.height === 8 && v.mines === 10 ? "beg"
+        : v.width === 16 && v.height === 16 && v.mines === 40 ? "int"
+        : v.width === 30 && v.height === 16 && v.mines === 99 ? "exp"
+        : "cus";
+      if (targetLv === "cus") cusSpec = { w: v.width, h: v.height, m: v.mines };
+      if (won) { replayBoardLocked = true; pendingBoard = bMines.slice(); }
+      reset(targetLv);
+      mines = bMines.slice();
+      nums = bNums.slice();
+      origMines = mines.slice();
+      state = rstate.slice();
+      /* 败局终局揭示（2026-10-21）：把未插旗的雷格直接写进 state＝1（引擎 lose()
+         的 DOM 揭示不进 state，但 exitReplay 走 repaintAll 按 state 重画——不写
+         进 state 的话退出回放后雷区揭示会消失）；踩中格＝重放中最后一个被开的
+         雷格（flood 拒开雷，正常重放里雷格恒 0——踩雷在真实对局由引擎 lose 标
+         hitIdx，这里从事件流反查最后一个落在雷格上的开格动作） */
+      if (!won) {
+        let hitCell = -1;
+        let rp2 = false, sv2 = false;
+        for (const e of evs) {
+          const ci = inside(e.x, e.y) ? cellOf(e.x, e.y) : -1;
+          if (e.mouse === 11) sv2 = true;
+          else if (e.mouse === 5) {
+            if (ci >= 0 && mines[ci] && !(rp2 || sv2)) hitCell = ci; // 左键开在雷上＝踩雷
+            sv2 = false;
+          } else if (e.mouse === 9) rp2 = true;
+          else if (e.mouse === 17) rp2 = false;
+        }
+        for (let i = 0; i < N; i++) if (mines[i] && state[i] !== 2) state[i] = 1;
+        hitIdx = hitCell >= 0 ? hitCell : null;
+      } else hitIdx = null;
+      started = true;
+      over = true;
+      openedSafe = 0;
+      for (let i = 0; i < N; i++) if (state[i] === 1 && !mines[i]) openedSafe++;
+      totalSafe = N - v.mines;
+      evStream = evs;
+      /* 3BV 构件照 placeMines 锁定盘口径重建（compute3BV 读全局 mines/nums） */
+      compute3BV();
+      if (v.bbbv && v.bbbv > 0) board3bv = v.bbbv; // 文件头权威值优先
+      /* ⑥ 结算（report 不走——埋点是玩家真实练习口径，导入局不发） */
+      const tSec = Math.max(finalSec / 100, v.timeMs / 1000, 0.01);
+      const { solvedBv, html } = statsReport(tSec, cnt);
+      lastReportHtml = html;
+      if (showStats) paintStatPanel(html);
+      buildResultPanel(tSec, solvedBv, won, cnt, true);
+      /* 败局错旗（flag 标在非雷格上＝bn）：repaintAll 按 td 类名 contains("bn") 保留，
+         引擎 lose() 靠 DOM 类名传递——导入路径没有这一步，必须在 repaintAll 之前
+         先画上（画完 repaintAll 才能识别并保留） */
+      if (!won) for (let i = 0; i < N; i++) if (!bMines[i] && state[i] === 2) paintCell(cellTd(i), "bn");
+      repaintAll();
+      led(ledMines, won ? 0 : v.mines - cnt.flags);
+      led(ledTime, Math.floor(tSec));
+      setFace(won ? "win" : "dead");
+      /* ⑦ 原地自动回放（与「查看回放」同路）；导入局播完即退、定格引擎终态
+         （败局揭示雷区/胜局全旗——「像刚打完一样」，快照 imported 标记驱动） */
+      startInPlaceReplay();
+      return null;
+    }
+    /* ---- 拖拽落点（2026-10-21）：全页拖入录像文件即导入；拖拽悬停高亮 ----
+       dragover 必须 preventDefault 否则浏览器直接打开文件；drop 里读 File →
+       ArrayBuffer → importDroppedVideo。失败弹红色气泡（站内错误红 #f92672）。 */
+    const dropHint = document.createElement("div");
+    dropHint.id = "op_drop_zone"; // 提示文案由 CSS ::before 出（JS 不设文本，避免双份）
+    container.appendChild(dropHint);
+    let dragDepth = 0;
+    function hasFiles(e: DragEvent): boolean {
+      return Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    }
+    on(container, "dragenter", (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth++;
+      dropHint.classList.add("on");
+    });
+    on(container, "dragover", (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); // 不拦就变成浏览器打开文件
+    });
+    on(container, "dragleave", () => {
+      if (--dragDepth <= 0) { dragDepth = 0; dropHint.classList.remove("on"); }
+    });
+    on(container, "drop", async (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth = 0;
+      dropHint.classList.remove("on");
+      const f = e.dataTransfer?.files?.[0];
+      if (!f) return;
+      importedName = f.name;
+      const ext = (f.name.split(".").pop() || "").toLowerCase();
+      try {
+        const buf = new Uint8Array(await f.arrayBuffer());
+        const err = importDroppedVideo(buf, ext);
+        if (err) showToast("导入失败：" + err, true);
+      } catch {
+        showToast("导入失败：文件读取错误", true);
+      }
+    });
     /* ---- 原地复活执行（2026-10-19 张老师定）：回滚上次踩雷的点击，时间继续 ----
        触发：结算面板黄色「原地复活」按钮（空格键快捷触发）。
        动作：恢复死亡快照（盘面/雷区/数字/3BV 构件/事件流截断）→ over=false
@@ -4211,6 +4464,9 @@ export function OnlinePlay({
         tipPool: () => tipPool(),
         counts: () => gameCounts(),
         size: () => ({ w: W, h: H, m: M }),
+        /* 拖拽导入（2026-10-21）：最近导入的文件名 + 手动触发入口（无头测试用） */
+        imported: () => importedName,
+        dropImport: (buf: number[], ext: string) => importDroppedVideo(new Uint8Array(buf), ext),
         /* 诊断：单次重排的 bv（测分布用，不动盘面之外的任何状态） */
         ngOnce: (i: number, opening: boolean) => {
           const ok = noGuessOnce(i, opening, W * H);
@@ -4240,6 +4496,7 @@ export function OnlinePlay({
     return () => {
       ac.abort(); // 摘除全部事件监听
       fsTip.remove(); // iOS 引导浮层挂在 body 上，随组件卸载一起收走
+      dropHint.remove(); // 拖拽导入高亮层随组件卸载一起收走
       /* 结算浮层（七期）挂在 body/全屏宿主上：卸载时先卸雷达 React root 再摘元素。
          面板若正住在卡片里，先搬回 React 自己的宿主（#game_area），
          否则会随 grModal.remove() 一起被摘走、React 卸载时找不到节点 */
