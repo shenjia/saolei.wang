@@ -223,7 +223,9 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                     破纪录行口径），改录像列表页三级灰度（beg #999994 / int #bbbbaf /
                     exp #ddddcf，同 .video_table td.score.lv_* 单一数据源 LEVEL_CLS 口径），
                     hover 保持全站绿；上标问题由 news_vscore 的 inline+baseline 解决（三轮） */}
-                评论了录像
+                {/* 五轮（同日张老师反馈）：「录像」与楼主名之间补空隙——JSX 换行空白会被
+                    剥离，需显式 {" "}（同 bbs 页 authorCells 与后续文字的分隔手法） */}
+                评论了录像{" "}
                 {d.lv || d.tm ? (
                   <>
                     {news.videoOwner ? (
