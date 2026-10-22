@@ -1555,9 +1555,13 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     // 论坛评论（bbs_reply；2026-10-22 起首页行名「论坛评论」，口径同 bbs_post：软删 -1 不计）
     prisma.bbsReply.count({ where: { status: 0 } }),
     prisma.bbsReply.count({ where: { status: 0, createTime: { gte: dayStart } } }),
-    // 在线练习（practice_log 全量；口径同「今日练习」板块：胜负都算、游客局也计）
-    prisma.practiceLog.count(),
-    prisma.practiceLog.count({ where: { createTime: { gte: dayStart } } }),
+    // 在线练习（practice_daily 日汇总：SUM 全量；口径同「今日练习」板块：胜负都算、游客局也计。
+    // 2026-10-22 张老师定：不逐盘落行改汇总表，原 practice_log 已迁移清理）
+    prisma.$queryRaw<Array<{ p: bigint }>>`SELECT COALESCE(SUM(plays),0) AS p FROM practice_daily`,
+    prisma.$queryRaw<Array<{ p: bigint }>>`
+      SELECT COALESCE(SUM(plays),0) AS p FROM practice_daily
+      WHERE day = ${Math.floor((Number(dayStart) + 28800) / 86400)}
+    `,
   ]);
   return {
     userTotal,
@@ -1571,8 +1575,9 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     bbsToday,
     bbsReplyTotal,
     bbsReplyToday,
-    practiceTotal,
-    practiceToday,
+    // $queryRaw SUM 返回 bigint → number
+    practiceTotal: Number(practiceTotal[0]?.p ?? 0),
+    practiceToday: Number(practiceToday[0]?.p ?? 0),
   };
 }
 

@@ -118,7 +118,8 @@ async function aggregate(): Promise<TrafficOverview> {
   const d30 = dayStart(29);
 
   // 管理员自己的浏览剔除，避免污染 UV/PV/来源/入口/流失
-  // 练习局流水单查 practice_log（30 天），与 page_view 并行
+  // 练习计数走 practice_daily 日汇总表（2026-10-22 张老师定：不逐盘落行；
+  // 每人每日一行 UPSERT，游客并入 user_id=0），与 page_view 并行
   const [rows, practiceRows] = await Promise.all([
     prisma.pageView.findMany({
       where: { isAdmin: false, createTime: { gte: d30 } },
@@ -136,10 +137,11 @@ async function aggregate(): Promise<TrafficOverview> {
         createTime: true,
       },
     }),
-    prisma.practiceLog.findMany({
-      where: { createTime: { gte: d30 } },
-      select: { createTime: true, userId: true },
-    }),
+    prisma.$queryRaw<Array<{ day: bigint; user_id: bigint; plays: bigint; wins: bigint }>>`
+      SELECT day, user_id, plays, wins
+      FROM practice_daily
+      WHERE day >= ${Math.floor((d30 + 28800) / 86400)}
+    `,
   ]);
 
   // ---- 分日趋势 + 今日/昨日 ----
@@ -165,7 +167,9 @@ async function aggregate(): Promise<TrafficOverview> {
   const yesterdayActive = new Set<string>();
   const d7Active = new Set<string>();
   const d30Active = new Set<string>();
-  // 练习局数（practice_log）：分日局数 + 分日去重玩家 + 各档期
+  // 练习计数（practice_daily 日汇总行）：分日局数 + 分日去重玩家 + 各档期。
+  // day 序号与 +08:00 切天一致；user_id=0 为游客聚合行（计入局数、不计「位」）
+  const yesterdayIdx = Math.floor((yesterday0 + 28800) / 86400);
   const practiceMap = new Map<number, number>();
   const practiceUserMap = new Map<number, Set<string>>();
   let practiceToday = 0;
@@ -174,23 +178,24 @@ async function aggregate(): Promise<TrafficOverview> {
   const yesterdayPracticeUsers = new Set<string>();
   const d30PracticeUsers = new Set<string>();
   for (const p of practiceRows) {
-    const t = N(p.createTime);
-    const idx = Math.floor((t + 28800) / 86400);
-    practiceMap.set(idx, (practiceMap.get(idx) ?? 0) + 1);
-    if (p.userId) {
-      const uid = String(N(p.userId));
+    const idx = N(p.day);
+    const plays = N(p.plays);
+    practiceMap.set(idx, (practiceMap.get(idx) ?? 0) + plays);
+    const uid = N(p.user_id);
+    if (uid > 0) {
+      const key = String(uid);
       let set = practiceUserMap.get(idx);
       if (!set) {
         set = new Set();
         practiceUserMap.set(idx, set);
       }
-      set.add(uid);
-      d30PracticeUsers.add(uid);
-      if (t >= today0) todayPracticeUsers.add(uid);
-      else if (t >= yesterday0) yesterdayPracticeUsers.add(uid);
+      set.add(key);
+      d30PracticeUsers.add(key);
+      if (idx === todayIdx) todayPracticeUsers.add(key);
+      else if (idx === yesterdayIdx) yesterdayPracticeUsers.add(key);
     }
-    if (t >= today0) practiceToday += 1;
-    else if (t >= yesterday0) practiceYesterday += 1;
+    if (idx === todayIdx) practiceToday += plays;
+    else if (idx === yesterdayIdx) practiceYesterday += plays;
   }
 
   // 按时间序处理（流失统计取会话末页依赖顺序）
