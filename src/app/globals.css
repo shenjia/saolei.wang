@@ -9915,6 +9915,11 @@ html.op-fakefs #header {
 .faq_dialog .faq_body .term {
   color: #e6db74;
 }
+/* 术语独立页（2026-10-22）：FAQ 术语弹窗改独立页承载后，页内每条术语名与次级高亮
+   片段（Ce/Cl 等）沿用弹窗同款 .term 黄（#e6db74），作用域限定本页 box */
+body #page .word_terms .term {
+  color: #e6db74;
+}
 .faq_dialog .faq_body .note {
   color: #b1b1a4;
 }

@@ -1,20 +1,22 @@
 // 扫雷教程索引（移植 2008 版 Guide/Index.asp）
 // 原站教程正文都在论坛精华帖中，此处将各条目链接到对应的论坛帖子
 // 2026-10-21 张老师需求：右侧开侧栏「常见问题」（旧版首页右下角 Help/List.asp 搬运），
-//   5 条遮罩弹窗 + 2 条跳论坛帖，见 GuideFaq 组件
+//   4 条遮罩弹窗 + 3 条直链，见 GuideFaq 组件
+// 2026-10-22：「扫雷术语介绍」改指站内独立页 /page/help/word（弹窗内容变长出滚动条），
+//   GROUPS 条目支持 link 字段（站内页优先于论坛帖）；论坛原帖 227 保留作历史资料
 
 import Link from "next/link";
 import GuideFaq from "@/components/GuideFaq";
 
 export const metadata = { title: "扫雷教程" };
 
-// [分类, [标题, 作者, 论坛帖子id | null]]
-const GROUPS: [string, [string, string, number | null][]][] = [
+// [分类, [标题, 作者, 论坛帖子id | null, 站内链接?]]
+const GROUPS: [string, [string, string, number | null, string?][]][] = [
   [
     "基础入门",
     [
       ["扫雷新手上路", "门世运", 177],
-      ["扫雷术语介绍", "张砷镓", 227],
+      ["扫雷术语介绍", "张砷镓", null, "/page/help/word"],
       ["扫雷定式及其变化", "张砷镓", 362],
       ["关于数字1-7周围8格中雷的分布的各种形状", "杨萧杨", 8243],
       ["扫雷游戏的起源", "张砷镓", 1005],
@@ -74,8 +76,12 @@ export default function GuidePage() {
               <div key={group}>
                 <h2>【{group}】</h2>
                 <hr />
-                {items.map(([title, author, postId]) =>
-                  postId ? (
+                {items.map(([title, author, postId, pageLink]) =>
+                  pageLink ? (
+                    <p key={title}>
+                      ※ <Link href={pageLink}>{title}</Link>　<em>作者: {author}</em>
+                    </p>
+                  ) : postId ? (
                     <p key={title}>
                       ※ <Link href={`/bbs/${postId}`}>{title}</Link>　<em>作者: {author}</em>
                     </p>

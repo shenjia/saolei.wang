@@ -2,7 +2,9 @@
 
 // guide 页「常见问题」侧栏 + 遮罩弹窗（2026-10-21 张老师需求）
 // 内容移植自旧版首页右下角常见问题（saolei.net-2008/asp/Help/*.asp，2007-12 张砷镓原作）：
-//   5 条弹窗（Why/Grow/Ranking/Word/Video）原文搬运 + 2 条跳论坛帖（分辨率 283 / QQ群 1187）
+//   4 条弹窗（Why/Grow/Ranking/Video）原文搬运 + 3 条直链（分辨率 283 / QQ群 1187 /
+//   术语介绍 /page/help/word——2026-10-22 术语内容变长弹窗出滚动条，改独立页承载，
+//   页面本身带 .term 黄高亮，弹窗版数据已删）
 // 布局：guide 页 two_columns 右栏；≤880 随站内规则单列化落到主栏下方
 // 关闭方式：Esc / 点遮罩 / 右下按钮（与旧版 Window 弹窗行为一致）
 
@@ -106,70 +108,6 @@ const FAQ_ITEMS: Record<string, FaqItem> = {
       </>
     ),
   },
-  word: {
-    title: "扫雷术语介绍",
-    body: (
-      <>
-        <b className="term">3BV</b>: Bechtel&apos;s Board Benchmark Value
-        <br />
-        每局将所有非雷的方块点开所需最少左键点击数，目前普遍用来评估局面难易程度的数据。
-        <br />
-        <b className="term">3BV/s</b>: 3BV per second [ 3BV / (Time - 1) ]
-        <br />
-        一局内平均每秒钟完成的3BV值，是目前普遍用来评估玩家扫雷速度的数据。
-        <br />
-        <b className="term">UPK</b>: Unfair Prior Knowledge
-        <br />
-        可重新开始同一局的游戏模式，本模式保存的录象不能参与排名。
-        <br />
-        <b className="term">IOE</b>: Index of Efficiency [ 3BV / Total Clicks ]
-        <br />
-        3BV与实际点击数的比率，是目前普遍用来评估玩家操作效率的数据。
-        <br />
-        <b className="term">IOS</b>: Index of Speed [ log (Time - 1) / log (3BV) ]
-        <br />
-        时间的倒数与3BV的倒数之比率，与3BV/s作用相当。
-        <br />
-        <b className="term">RQP</b>: Rapport Qualité Prix [ Time / (3BV/s) ]
-        <br />
-        时间与3BV/s的比率，因加入了时间因素，比3BV/s更能说明扫雷速度。
-        <br />
-        <b className="term">QG</b>: Quality Grade [ Time^1.7 / 已完成3BV ]
-        <br />
-        质量分，综合用时与完成3BV的数据，越小越好，是计算 STNB 的中间量。
-        <br />
-        <b className="term">STNB</b> [ 系数(初级36、中级162、高级435) / QG × (已完成3BV/3BV)^0.5 ]
-        <br />
-        综合评分，用来衡量一局游戏（包括失败的游戏尸体）所体现出的竞速水平，现已取代 RQP，越大越好。
-        <br />
-        <b className="term">ThrP</b>: Throughput [ 已完成3BV / Ce ]
-        <br />
-        吞吐效率，已完成3BV与有效点击数的比率。Ce为真正开出新格或完成3BV的有效点击。
-        <br />
-        <b className="term">Corr</b>: Correctness [ Ce / Cl ]
-        <br />
-        准确率，有效点击数Ce与总点击数Cl的比率。Cl为左键、右键、双击的总点击次数，用来衡量操作的精准程度。
-        <br />
-        <b className="term">NF</b>: No Flag
-        <br />
-        一种仅用左键点击完成游戏，不标雷的玩法。
-        <br />
-        <b className="term">MB</b>: Miss Block
-        <br />
-        整个局面都完成，但有一个方块因忽视而没有点开的情况。
-        <br />
-        <b className="term">LC</b>: Lose on the last click
-        <br />
-        打开最后一个方格时不幸踩雷。
-        <br />
-        <b className="term">Sum</b>: 初级、中级、高级成绩相加而得出的总成绩。
-        <br />
-        <b className="term">Sub</b>: 小于某数值，比如高级Sub50就说明高级成绩&lt;50。
-        <br />
-        <b className="term">Sup</b>: 大于某数值，比如高级3BV/S Sup4就说明高级3BV/S&gt;4。
-      </>
-    ),
-  },
   video: {
     title: "怎么看录像",
     body: (
@@ -198,12 +136,12 @@ const FAQ_ITEMS: Record<string, FaqItem> = {
   },
 };
 
-// 侧栏条目：key 弹窗 | bbsId 跳论坛帖（旧版同款直链）
-const FAQ_LINKS: { key: string; label: string; bbsId?: number }[] = [
+// 侧栏条目：key 弹窗 | link 站内直链 | bbsId 跳论坛帖（旧版同款直链）
+const FAQ_LINKS: { key: string; label: string; bbsId?: number; link?: string }[] = [
   { key: "why", label: "我们为什么玩扫雷？" },
   { key: "grow", label: "怎样提高我的扫雷水平？" },
   { key: "ranking", label: "怎样加入雷界排行榜？" },
-  { key: "word", label: "3BV、NF等术语是什么意思？" },
+  { key: "word", label: "3BV、NF等术语是什么意思？", link: "/page/help/word" },
   { key: "video", label: "如何观看本网站的录像？" },
   { key: "bbs-283", label: "怎样调整屏幕分辨率？", bbsId: 283 },
   { key: "bbs-1187", label: "怎样加入扫雷网QQ群？", bbsId: 1187 },
@@ -229,9 +167,11 @@ export default function GuideFaq() {
     <div id="faq_side" className="box text">
       <h2>常见问题</h2>
       <ul className="faq_list">
-        {FAQ_LINKS.map(({ key, label, bbsId }) => (
+        {FAQ_LINKS.map(({ key, label, bbsId, link }) => (
           <li key={key}>
-            {bbsId ? (
+            {link ? (
+              <Link href={link}>{label}</Link>
+            ) : bbsId ? (
               <Link href={`/bbs/${bbsId}`}>{label}</Link>
             ) : (
               <a
