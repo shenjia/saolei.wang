@@ -12,14 +12,15 @@
 // 2026-09-26（张老师）：右上角加搜索框（样式参考排行页 goto_form）——
 //   ?q=关键字 按标题或作者人名过滤主题；搜索态下分类 tabs 收起，
 //   换成「搜索 "xx" 的结果 N 帖 + 清除搜索」返回常规列表
+// 2026-10-22（张老师需求）：「精华」从分类筛选项改为正交开关（对齐录像页 NF）——
+//   页头（tabs/搜索/发布按钮）收拢进 BbsSection 客户端壳（开关与列表就地联动），
+//   本页只做筛选解析 + 首屏取数；精华与板块叠加（board=1&nice=1=技术区精华），
+//   旧深链 board=nice / nice=1 / order=nice 一律 301 归一到 canonical URL
 
-import Link from "next/link";
-import { BBS_BOARDS, BBS_BOARD_NAMES, getPostPage } from "@/lib/bbs";
+import { redirect } from "next/navigation";
+import { BBS_BOARD_NAMES, getPostPage } from "@/lib/bbs";
 import { getSession } from "@/lib/auth";
-import { Tabs } from "@/components/Pager";
-import { BbsFeed } from "@/components/BbsFeed";
-import { BbsSearch } from "@/components/BbsSearch";
-import { TotalCount } from "@/components/TotalCount";
+import { BbsSection } from "@/components/BbsFeed";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "论坛" };
@@ -30,109 +31,61 @@ export default async function BbsPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  // 六轮：「精华」并入分类筛选组（board=nice = 只看精华，跨板块、与具体板块互斥）；
-  //   旧深链 ?nice=1 / ?order=nice 兼容视作 board=nice；排序固定更新时间（order 参数作废）
+  // 精华开关态：nice=1（正交，可与板块叠加）；board=nice / order=nice 旧深链兼容视为开启
   const nice = sp.nice === "1" || sp.order === "nice" || sp.board === "nice";
   const boardRaw = parseInt(sp.board ?? "", 10);
-  const board = !nice && BBS_BOARD_NAMES[boardRaw] !== undefined ? boardRaw : undefined;
+  const board = BBS_BOARD_NAMES[boardRaw] !== undefined ? boardRaw : undefined;
   // 搜索关键字（2026-09-26）：搜索态优先于板块/精华筛选（列表只按 q 过滤，board/nice 忽略）
   const q = (sp.q ?? "").trim().slice(0, 30);
 
+  // 旧深链归一（2026-10-22）：精华已不是 board 的一种，canonical 形态=board + nice=1；
+  //   board=nice / order=nice 是历史形态需 301 归一（否则 syncNiceUrl 只增删 nice 参数，
+  //   旧参数残留形成脏 URL）；nice=1 本身就是 canonical，不能进本条件（否则死循环）。
+  //   搜索态 q 优先，board/nice 一并剥掉
+  if (sp.order === "nice" || sp.board === "nice") {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    else {
+      if (board !== undefined) params.set("board", String(board));
+      params.set("nice", "1");
+    }
+    const qs = params.toString();
+    redirect(qs ? `/bbs?${qs}` : "/bbs");
+  }
+
   const [{ posts, hasMore, total }, session] = await Promise.all([
-    getPostPage({ board: q ? undefined : board, order: "reply", nice: q ? undefined : nice || undefined, q: q || undefined, page: 1 }),
+    getPostPage({
+      board: q ? undefined : board,
+      order: "reply",
+      nice: q ? undefined : nice || undefined,
+      q: q || undefined,
+      page: 1,
+    }),
     getSession(),
   ]);
   const query: Record<string, string> = q
     ? { q }
-    : nice
-      ? { board: "nice" }
-      : board !== undefined
-        ? { board: String(board) }
-        : {};
-  const feedKey = q ? `q-${q}` : nice ? "nice" : (board ?? "all");
+    : {
+        ...(board !== undefined ? { board: String(board) } : {}),
+        ...(nice ? { nice: "1" } : {}),
+      };
+  const feedKey = q ? `q-${q}` : `${board ?? "all"}${nice ? "-nice" : ""}`;
 
   return (
     <div id="page" className="main bbs_old">
-      {/* 2026-09-24 五轮（张老师要求）：页头（title+分类 tabs+发布按钮）
-          整体移入主体卡片内，与排行/录像页同编排——h1 左、分类 tabs 紧随（六轮：
-          「精华」为分类组末位项）、发布主题贴行尾 */}
+      {/* 2026-10-22：页头（title+分类 tabs+精华开关+发布按钮+搜索框）整体收进
+          BbsSection 客户端壳（与录像页 VideoListSection 同模式）——精华开关就地
+          重拉需与列表联动，RSC 不能传函数 prop；本页只解析筛选+首屏取数 */}
       <div className="box">
-        <div className="page_head">
-          <h1 className="page_title">论坛</h1>
-          <div className="bbs_head_nav">
-            {q ? (
-              /* 搜索态：tabs 收起，显示结果条 + 清除返回（筛选与搜索互斥，q 优先） */
-              <div className="bbs_search_bar">
-                <span className="bbs_search_kw">
-                  搜索 <em>“{q}”</em> 的结果
-                </span>
-                <TotalCount total={total} unit="帖" />
-                <Link className="button small" href="/bbs">
-                  清除搜索
-                </Link>
-              </div>
-            ) : (
-              <Tabs
-                base="/bbs"
-                params={query}
-                name="board"
-                current={nice ? "nice" : board === undefined ? "all" : String(board)}
-                options={[
-                  ["all", "全部"],
-                  ...BBS_BOARDS.map((b) => [String(b.id), b.name] as [string, string]),
-                  ["nice", "精华"],
-                ]}
-              />
-            )}
-            {/* 动作组（2026-09-26 二轮张老师：发布按钮移到搜索框左边、垂直居中对齐）：
-                组内 align-items:center——按钮随搜索胶囊居中，整体贴行尾 */}
-            <div className="bbs_actions">
-              {session && (
-                <Link className="button active small bbs_post_btn" href="/bbs/post">
-                  {/* 书写图标（2026-10-14 张老师：「发布主题」改「写文章」+ 前置笔形矢量图） */}
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    style={{ verticalAlign: "-2px", marginRight: 4 }}
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                  写文章
-                </Link>
-              )}
-              <BbsSearch initialQ={q} />
-            </div>
-          </div>
-        </div>
-        <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
-          <thead>
-            <tr>
-              <th className="topic">分类 / 主题</th>
-              <th className="author">作者</th>
-              <th className="num">评论 / 阅读</th>
-              <th className="time">最后更新</th>
-            </tr>
-          </thead>
-          <tbody>
-            <BbsFeed
-              key={feedKey}
-              initial={posts}
-              initialHasMore={hasMore}
-              total={total}
-              query={query}
-              showBoard={true}
-              emptyMsg={q ? `没有找到与“${q}”相关的主题` : undefined}
-            />
-          </tbody>
-        </table>
+        <BbsSection
+          key={feedKey}
+          initial={posts}
+          initialHasMore={hasMore}
+          total={total}
+          query={query}
+          canPost={!!session}
+          emptyMsg={q ? `没有找到与“${q}”相关的主题` : undefined}
+        />
       </div>
     </div>
   );

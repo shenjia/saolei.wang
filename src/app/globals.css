@@ -5938,6 +5938,24 @@ body #video_list .score_3bvs a:hover em {
   }
 }
 
+/* 论坛页头精华开关（2026-10-22 张老师需求：精华从分类筛选项改为正交开关，对齐
+   录像页 NF）：bbs_head_nav 为 flex 尾置容器，★ 钮紧贴分类 tabs 右侧（居中对齐
+   tabs 文字行；30×30 方钮与 tabs 行高 30 相当，flex-end 布局下与 tabs 底线自然
+   坐底）。两行式（≤1289）bbs_head_nav 是 display:contents，★ 钮提升为 page_head
+   直接子项——order:3 随 tabs 折到第二行居左组尾，行内 gap 由 page_head row-gap
+   承担。 */
+#page .bbs_head_nav .nf_toggle {
+  flex: none;
+  margin-bottom: 2px; /* 与 tabs/post 按钮同款基线微调（legacy .tabs margin-bottom:2px 对齐） */
+}
+@media (max-width: 1289px) {
+  #page .bbs_old .page_head .bbs_head_nav .nf_toggle {
+    order: 3;
+    align-self: flex-end;
+    margin-bottom: 0; /* 两行式 tabs 贴底线坐底，钮随 flex-end 自然对齐，去桌面基线微调 */
+  }
+}
+
 /* 表头排序链接（排行表头同语言：灰字、hover 绿、命中黄；2026-10-15 张老师需求） */
 .video_table th a {
   color: #b1b1a4;
