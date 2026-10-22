@@ -543,13 +543,16 @@ export function OnlinePlay({
        **有雷的格子被跳过**（无事件零动作，玩家无感；无猜首击 3×3 保护只在
        首格，盲滑轨迹仍会踩雷——开局一瞬误滑就暴毙是开局暴毙主因）。窗口到期
        全放行（雷格也照常触发＝回到真实排雷）。时长三定（同日）：**初级不设
-       保护、中级/高级/自定义半秒**。首格＝首击入口照常开（无猜下 placeMines
-       保证安全） */
+       保护、中级/高级/自定义半秒**；四定（同日）：中级收窄 **250ms**，且
+       **开局后松开左键（触屏抬起）即刻终止**——保护只活在开局那次按住手势
+       内。首格＝首击入口照常开（无猜下 placeMines 保证安全） */
     let comboGraceT0 = 0;
-    /* 保护窗时长按级别（2026-10-22 张老师三定）：初级不设保护（8×8 小盘
-       滑不出什么、盲开也快），中级/高级/自定义半秒。开局切级别时 lv 已
-       先落位，首击读到的一定是本局级别 */
-    const COMBO_GRACE_MS = () => (lv === "beg" ? 0 : 500);
+    /* 保护窗时长按级别（2026-10-22 张老师三定/四定）：初级不设保护，中级
+       250ms、高级/自定义 500ms；且**开局后用户松开左键（触屏＝抬起手指）
+       即刻终止**（四定）——保护只活在开局的那次按住手势内，时长上限只是
+       防按住过久的双保险（桌面 mouseup / 触屏 touchend 均置 comboGraceT0=0）。
+       开局切级别时 lv 已先落位，首击读到的一定是本局级别 */
+    const COMBO_GRACE_MS = () => (lv === "beg" ? 0 : lv === "int" ? 250 : 500);
     /* 保护窗内＝连击开格要跳雷（性能计时，不受复活回拨影响）；未开局恒 false */
     const comboShield = () => started && performance.now() - comboGraceT0 < COMBO_GRACE_MS();
 
@@ -3605,6 +3608,10 @@ export function OnlinePlay({
           led(ledMines, flagsLeft());
           recordEv(17, ui);
         }
+        /* 开局保护随松开即刻终止（2026-10-22 张老师四定）：开局的那次按住
+           手势结束（松开任一键，本就覆盖「松开左键」）＝保护停。后续手势的
+           滑动全按真实排雷（雷格照常触发）；对局中途无窗可言（guard 已 0） */
+        comboGraceT0 = 0;
         clearPress(); setFace("smile");
         leftDown = rightDown = chordDone = false; return;
       }
@@ -3716,6 +3723,9 @@ export function OnlinePlay({
       }
       touchCell = -1;
       touchMoved = false;
+      /* 开局保护随抬起即刻终止（2026-10-22 张老师四定，与桌面 mouseup 同口径）：
+       * 开局的那次按住手势结束＝保护停，后续手势全按真实排雷 */
+      comboGraceT0 = 0;
       e.preventDefault();
     }, { passive: false });
     /* 滑动取消带 12px 容差：手指微颤（1-2px）不再吞掉点按——「有时点击无效」
@@ -4671,9 +4681,9 @@ export function OnlinePlay({
         manualStored: () => (manualStoredMines ? Array.from(manualStoredMines) : null),
         M: () => M,
         combo: () => combo,
-        /* 连击开局保护窗剩余毫秒（2026-10-22 时间窗版；时长三定＝初级 0/其余
-           500ms）；<=0＝不在窗内 */
-        guard: () => (started ? Math.max(0, (lv === "beg" ? 0 : 500) - (performance.now() - comboGraceT0)) : 0),
+        /* 连击开局保护窗剩余毫秒（2026-10-22 时间窗版；时长四定＝初级 0/
+           中级 250/高级与自定义 500，开局后松开左键即刻归零）；<=0＝不在窗内 */
+        guard: () => (started ? Math.max(0, (lv === "beg" ? 0 : lv === "int" ? 250 : 500) - (performance.now() - comboGraceT0)) : 0),
         over: () => over,
         nf: () => nf,
         ng: () => ng,
