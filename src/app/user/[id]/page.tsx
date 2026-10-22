@@ -57,6 +57,7 @@ import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { SendMessageButton } from "@/components/SendMessageButton";
 import { BbvCollection } from "@/components/BbvCollection";
+import { UserSigs } from "@/components/UserSigs";
 
 export const dynamic = "force-dynamic";
 
@@ -197,8 +198,20 @@ export default async function UserViewPage({
   const avatarPending = latestAvatarReview?.status === AVATAR_REVIEW_STATUS.PENDING;
 
   // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
+  // 2026-10-22「标识」行（user_sig 录像标识文字）也算可展示内容——
+  // 有标识但没填资料的老用户，个人资料版块同样显示
   const hasProfileFields =
     !!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info]);
+
+  // 标识列表（user_sig，按注册先后 id 升序；过滤空串脏数据，2026-10-22）
+  const sigs = (
+    await prisma.userSig.findMany({
+      where: { user: BigInt(userId), signature: { not: "" } },
+      orderBy: { id: "asc" },
+      select: { signature: true },
+    })
+  ).map((s) => s.signature);
+  const showProfile = hasProfileFields || sigs.length > 0;
 
   // 照片优先级：新版上传头像（/uploads/avatar/…）→ OAuth 头像外链（http 开头）
   // → 老用户本地照片墙（头像实体为 /images/player/{id}.jpg，以文件存在为准）→ 默认头像
@@ -361,7 +374,7 @@ export default async function UserViewPage({
           detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
             <BbvCollection userId={userId} ranges={bbvRanges} collected={bbvCollection} />
           )}
-        {hasProfileFields && (
+        {showProfile && (
           <div className="profile box">
           <h2>个人资料</h2>
           <span className="id">
@@ -380,6 +393,16 @@ export default async function UserViewPage({
                   </tr>
                 );
               })}
+              {/* 标识（user_sig 录像标识文字，2026-10-22 张老师要求）：
+                  小字号 12px 尽量不换行；超过 3 条「…」按钮就地展开 */}
+              {sigs.length > 0 && (
+                <tr>
+                  <th>标识</th>
+                  <td>
+                    <UserSigs items={sigs} />
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
           </div>
