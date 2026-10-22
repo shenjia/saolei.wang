@@ -73,7 +73,7 @@ export function PracticeToday({
         <span className="sep">/</span>
         <b className="total">{total.toLocaleString("zh-CN")}</b> 局
       </p>
-      <p className="pt_sub">{users}位雷友参与</p>
+      <p className="pt_sub">共{users}位雷友参与</p>
       <div className="pt_chart">
         <Line values={trend} color={GREEN} height={38} />
       </div>
