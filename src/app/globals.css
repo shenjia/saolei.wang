@@ -8858,6 +8858,55 @@ html.op-fakefs #header {
   background: #75745f;
   color: #fff;
 }
+/* 首页「今日练习」板块（2026-10-22 张老师要求）：「开始练习」按钮上方。
+   主行「今日已练习 xxx/yyy 局」——xxx=我的局数（标准绿 #a6e22e 加粗放大）、
+   yyy=全站局数；下灰色小字「xx位雷友参与」；底部近 30 天走势折线铺满整个模块宽。
+   桌面侧栏副本与移动端置顶副本同款，断点显隐与 #play_entry / #play_entry_top 一致 */
+.practice_today {
+  margin: 16px 8px -6px; /* 底距上提抵住「开始练习」按钮顶距，视觉成组 */
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+.practice_today .pt_line {
+  font-size: 15px;
+  line-height: 22px;
+  color: #e8e8e0;
+}
+.practice_today .pt_line .mine {
+  color: #a6e22e; /* 站内标准绿（站点 logo hover 同色），暗底上醒目 */
+  font-size: 18px;
+  font-weight: bold;
+}
+.practice_today .pt_line .total {
+  color: #e8e8e0;
+  font-size: 18px;
+  font-weight: bold;
+}
+.practice_today .pt_line .sep {
+  margin: 0 1px;
+  color: #75715e;
+}
+.practice_today .pt_sub {
+  font-size: 12px;
+  line-height: 18px;
+  color: #75715e; /* 与 #review_entry 灰字同色的低调次级 */
+}
+.practice_today .pt_chart {
+  margin-top: 8px;
+  opacity: 0.9;
+}
+/* 移动端置顶副本：桌面隐藏，≤880 单列带内显示（与 #play_entry_top 同款断点） */
+#practice_today_top {
+  display: none;
+}
+@media (max-width: 880px) {
+  #practice_today_top {
+    display: block;
+  }
+  #practice_today {
+    display: none;
+  }
+}
 /* 首页右栏「开一局」大按钮（2026-10-14 张老师定）：扁平、与侧栏板块同宽（桌面盒外径 272px），
    样式复用游戏笑脸按钮的经典银灰凸起边框，笑脸图标在前、文字在后 */
 #play_entry {

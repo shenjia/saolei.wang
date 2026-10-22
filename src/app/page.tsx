@@ -12,6 +12,9 @@
 // 桌面版侧栏按钮与置顶版并存、由 CSS 按断点显隐）。
 // 2026-10-22 张老师要求：管理员登录态在侧栏「开始练习」按钮下方显示待审录像数
 // （数字金色）+「去审核」小按钮直达 /admin/review；待审清零时不渲染。
+// 2026-10-22 张老师要求：「开始练习」上方新增「今日练习」板块——「今日已练习
+// xxx/yyy 局」（xxx=我的局数绿显）+灰字「xx位雷友参与」+30 天走势图铺满模块宽，
+// 口径与后台仪表盘「今日练习」KPI 一致（practice_log，含踩雷局与游客局）。
 
 import Link from "next/link";
 import {
@@ -35,6 +38,8 @@ import { SystemText } from "@/components/SystemText";
 import { SiteStats } from "@/components/SiteStats";
 import { FlopSprites } from "@/components/FlopSprites";
 import { VideoHot } from "@/components/VideoHot";
+import { PracticeToday } from "@/components/PracticeToday";
+import { getPracticeToday } from "@/lib/practice";
 import { title as assessTitle } from "@/lib/assess";
 import { getThunderKingId } from "@/lib/title-system";
 
@@ -86,6 +91,10 @@ export default async function HomePage() {
     });
   }
 
+  // 今日练习（2026-10-22 张老师要求）：「开始练习」上方板块，
+  // 口径与后台仪表盘「今日练习」KPI 一致；未登录 mine=0 只显示全站口径
+  const practice = await getPracticeToday(session?.uid);
+
   return (
     <>
     {/* 邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层 + 以后再说 24h）。
@@ -97,6 +106,14 @@ export default async function HomePage() {
         {/* 移动端（≤880 单列带）置顶「开始练习」大按钮：高度翻倍（总高 100 CSS px）、
             字号 26px、图标 36px；桌面隐藏（display:none），侧栏小按钮照旧（2026-10-15 张老师要求）。
             注：≤605 视口有整页 zoom（0.65~0.94 档），渲染尺寸同比例缩放 */}
+        {/* 今日练习（2026-10-22 张老师要求）：移动端副本，置于置顶「开始练习」大按钮上方 */}
+        <PracticeToday
+          prefix="practice_today_top"
+          mine={practice.mine}
+          total={practice.today}
+          users={practice.todayUsers}
+          trend={practice.trend}
+        />
         <Link id="play_entry_top" href="/online">
           <svg viewBox="0 0 260 260" width="36" height="36" aria-hidden="true">
             <use href="#face-flat" />
@@ -140,6 +157,14 @@ export default async function HomePage() {
             位于入伍新兵之上；为腾出其高度，论坛新帖由 8 条减为 6 条，保持左右栏底部基本对齐。
             仅桌面（≥881）显示；移动端由主栏顶部 #play_entry_top 接管（2026-10-15） */}
         <FlopSprites />
+        {/* 今日练习（2026-10-22 张老师要求）：桌面侧栏副本，「开始练习」按钮上方 */}
+        <PracticeToday
+          prefix="practice_today"
+          mine={practice.mine}
+          total={practice.today}
+          users={practice.todayUsers}
+          trend={practice.trend}
+        />
         <Link id="play_entry" href="/online">
           <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
             <use href="#face-flat" />
