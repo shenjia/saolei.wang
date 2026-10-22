@@ -116,9 +116,11 @@ jobs:
             --exclude='design/' \
             --exclude='videos/' \
             --exclude='public/uploads/' \
+            --exclude='public/bbs-img/' \
             --exclude='.deployed-commit' \
             --filter='protect videos/***' \
             --filter='protect public/uploads/***' \
+            --filter='protect public/bbs-img/***' \
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
 
       - name: Sync build artifacts

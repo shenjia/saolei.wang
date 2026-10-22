@@ -146,6 +146,14 @@ server {
         access_log off;
     }
 
+    # 论坛外链图本地化 WebP（2026-10-22，gitignore 不入库、部署 rsync --delete 不碰，
+    # 运行期由 scripts/sync/bbs-img-localize.py 落盘；内容寻址不可变 → 长缓存）
+    location ^~ /bbs-img/ {
+        alias /home/deploy/saolei.wang/public/bbs-img/;
+        expires 30d;
+        access_log off;
+    }
+
     # 旧站迁移用户照片（/images/player/{id}.jpg，gitignore 不入库，运行期补文件同样需要直读）
     location ^~ /images/player/ {
         alias /home/deploy/saolei.wang/public/images/player/;
