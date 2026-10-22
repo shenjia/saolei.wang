@@ -77,7 +77,7 @@ export function AdminSidebar({ badges }: { badges: { pending: number; avatar: nu
                 <Link key={it.href} href={it.href} className={isActive(it.href) ? "on" : undefined}>
                   <i>{it.icon}</i>
                   {it.label}
-                  {n > 0 && <span className="n">{n > 99 ? "99+" : n}</span>}
+                  {n > 0 && <span className="n">{n}</span>}
                 </Link>
               );
             })}
