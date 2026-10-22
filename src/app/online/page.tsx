@@ -9,6 +9,7 @@
 import type { Metadata } from "next";
 import { OnlinePlay } from "@/components/OnlinePlay";
 import { getLevel3bvRanges, getOnlineMetricDists } from "@/lib/queries";
+import { getPracticeToday } from "@/lib/practice";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
@@ -26,6 +27,11 @@ export default async function OnlinePage() {
     ? await prisma.user.findUnique({ where: { id: BigInt(session.uid) }, select: { englishName: true } })
     : null;
   const player = session && me ? { id: session.uid, name: me.englishName.trim() } : null;
+  /* 今日练习统计（2026-10-23 张老师定）：登录取 practice_log/practice_daily 当日
+     「我的完成/尝试」作 SSR 初值（练习页内每局终态客户端自增实时刷新）；
+     未登录不查库（客户端走 localStorage 记数） */
+  const practice = session ? await getPracticeToday(session.uid) : null;
+  const today = practice ? { w: practice.mineWon, p: practice.mine } : null;
   /* 服务端注入各级别统计区间（getLevel3bvRanges 已按现行排行规则钳下限、
      初级上限抬到理论最大 54，2026-10-22）；缺行（极端空库）时按同口径兜底，
      保证浮窗滑杆始终可用 */
@@ -37,7 +43,7 @@ export default async function OnlinePage() {
   return (
     <div id="page" className="main">
       <div className="box" id="online_play">
-        <OnlinePlay bvRanges={bvRanges} metricDists={metricDists} player={player} />
+        <OnlinePlay bvRanges={bvRanges} metricDists={metricDists} player={player} today={today} logged={!!session} />
       </div>
     </div>
   );

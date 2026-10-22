@@ -53,7 +53,10 @@ import { formatRawvf } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { LEVEL_NAMES } from "@/lib/config";
 import { paintRangeFill } from "@/lib/paintRange";
-import { bumpLocalPractice } from "@/lib/practice-local";
+import {
+  bumpLocalPractice,
+  getLocalPracticeToday,
+} from "@/lib/practice-local";
 import type { VideoAnalysisPoint } from "@/lib/videoscore";
 import {
   DIST_BUCKET_ALL,
@@ -205,11 +208,18 @@ export function OnlinePlay({
   bvRanges,
   metricDists = {},
   player = null,
+  today = null,
+  logged = false,
 }: {
   bvRanges: BvRanges;
   metricDists?: MetricDists;
   /** 登录玩家（服务端注入）：仅用于「下载录像」文件名里的署名段；未登录为 null */
   player?: { id: number; name: string } | null;
+  /** 我今日完成/尝试盘数（2026-10-23 张老师定）：登录=practice_log 当日计数
+      （服务端 getPracticeToday 注入 SSR 初值）；未登录 0，水合后走 localStorage */
+  today?: { w: number; p: number } | null;
+  /** 登录态：true=信任服务端 today；false=读 localStorage 当日记数 */
+  logged?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   /* 结算面板里雷达组件的 React root（面板走 innerHTML 注入，只能这样挂 React 组件） */
@@ -238,6 +248,43 @@ export function OnlinePlay({
       fn: (e: E) => void,
       opts?: AddEventListenerOptions,
     ) => el.addEventListener(type, fn as EventListener, { ...opts, signal });
+
+    /* ---- 今日练习统计（2026-10-23 张老师定）：标题行 tabs 右侧
+       「今日已完成 w / p 局 开率 r%」——与首页「今日练习」首行同款口径：
+       登录=服务端 practice_log 当日计数（SSR 注入初值）；未登录=localStorage
+       当日记数（practice-local）。每盘终态实时自增：胜局立即 / 败局 300ms
+       复活窗后（与 bumpLocalPractice 同点调用，复活撤销＝未终态不计）。
+       命令式 DOM 直写（同 tips 口径，避免逐局 setState 走 React 渲染） */
+    let todayW = 0;
+    let todayP = 0;
+    if (logged) {
+      todayW = today?.w ?? 0;
+      todayP = today?.p ?? 0;
+    } else {
+      const lt = getLocalPracticeToday();
+      todayW = lt.w;
+      todayP = lt.p;
+    }
+    const paintToday = () => {
+      const ew = $("op_tw");
+      const ep = $("op_tp");
+      const erate = $("op_trate");
+      if (!ew || !ep || !erate) return;
+      ew.textContent = String(todayW);
+      ep.textContent = String(todayP);
+      erate.hidden = todayP <= 0; // 无尝试不显开率（与首页首行一致）
+      if (todayP > 0) {
+        const er = erate.querySelector("#op_tr");
+        if (er) er.textContent = `${Math.round((todayW / todayP) * 1000) / 10}%`;
+      }
+    };
+    paintToday();
+    /** 局终 +1（won=胜局）；只在 report() 里与 bumpLocalPractice 同点调用 */
+    const bumpToday = (won: boolean) => {
+      todayP += 1;
+      if (won) todayW += 1;
+      paintToday();
+    };
 
     /* ---- 滑条填充自绘（张老师定稿：填充 #8ac21b + 滑块 #a6e22e）----
        初始写一遍 --pct；用户拖动走 input 委托（覆盖动态插入的滑条），
@@ -1591,11 +1638,13 @@ export function OnlinePlay({
           if (won) {
             navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
             bumpLocalPractice(true); // 未登录「今日练习」记数（2026-10-22）：胜局终态立即记
+            bumpToday(true); // 标题行「今日已完成」实时自增（2026-10-23，与左侧记数同点）
           } else {
             if (pendingLoseBeacon !== null) clearTimeout(pendingLoseBeacon);
             pendingLoseBeacon = window.setTimeout(() => {
               navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
               bumpLocalPractice(false); // 败局复活窗（300ms）结束后才算终态，此时记尝试
+              bumpToday(false); // 复活撤销时本定时器一并被清，统计不误计
               pendingLoseBeacon = null;
             }, 300);
           }
@@ -4790,6 +4839,20 @@ export function OnlinePlay({
           {/* 手动摆雷指示器（2026-10-21 张老师定）：摆雷模式激活时出现在
               「自定义」tab 右侧——「（摆雷中 x/M）」黄字，摆满变绿「（摆雷完成）」 */}
           <span className="manual_badge" id="manual_badge" hidden>（摆雷中）</span>
+        </div>
+        {/* 今日练习统计（2026-10-23 张老师定）：与首页「今日练习」首行同款——
+            「今日已完成 w / p 局 开率 r%」，完成数绿、尝试数亮灰、标签暗灰、
+            开率数值绿（样式见 globals.css .op_today）。数值由 effect 内
+            paintToday 命令式填充（JSX 留空骨架，规避 SSR/水合两套口径）；
+            ≤880px 窄屏整块隐藏（空间不够可隐藏，张老师定）；横屏沉浸
+            news_head 整块隐藏时随之消失 */}
+        <div className="op_today" id="op_today">
+          <span className="lead">今日已完成</span>
+          <b className="mine" id="op_tw"></b>
+          <span className="sep">/</span>
+          <b className="total" id="op_tp"></b>
+          <span className="lead">局</span>
+          <span className="rate" id="op_trate" hidden>开率 <b className="ratev" id="op_tr"></b></span>
         </div>
         {/* 右上角图标按钮排（2026-10-14 二期张老师定，九期追补模式快捷钮）：
             NF／速旗／连击／无猜四颗模式钮在齿轮左侧——激活显色（NF=默认黄 /

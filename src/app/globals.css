@@ -8976,6 +8976,65 @@ html.op-fakefs #header {
     display: none;
   }
 }
+/* ==================== 练习页标题行「今日已完成」统计（2026-10-23 张老师定） ====================
+   /online 标题行级别筛选 tabs 右侧：与首页「今日练习」首行同款口径与配色——
+   「今日已完成 w / p 局 开率 r%」（w 完成数绿 #a6e22e / p 尝试数亮灰 #b1b1a4 /
+   「开率」标签暗灰 #75715e / 开率数值绿），数字 16px 加粗微缩（18px 在 26px h1
+   旁略抢）；每盘终态实时自增（胜局立即 / 败局 300ms 复活窗后，复活撤销不计）。
+   空间不够可隐藏：≤880px 整块隐藏（与 #practice_today_top 断点一致）；
+   横屏沉浸态 news_head 整块隐藏时随之消失，无需另写规则 */
+#online_play .op_today {
+  display: flex;
+  align-items: baseline;
+  gap: 4px; /* 数字左右留隙，与首页 pt_line 同款 */
+  align-self: center; /* 标题行 flex-end 底线对齐下自行居中，与 tabs 视线齐平 */
+  font-size: 13px;
+  line-height: 22px;
+  color: #b1b1a4;
+  white-space: nowrap;
+}
+#online_play .op_today .mine {
+  color: #a6e22e; /* 完成盘数：站内标准绿，与首页首行 .pt_line .mine 同口径 */
+  font-size: 16px;
+  font-weight: bold;
+}
+#online_play .op_today .total {
+  color: #b1b1a4;
+  font-size: 16px;
+  font-weight: bold;
+}
+#online_play .op_today .sep {
+  margin: 0 1px;
+  color: #75715e;
+}
+#online_play .op_today .rate {
+  margin-left: 4px;
+  color: #75715e; /* 标签暗灰（首页首行开率标签同色口径） */
+  font-size: 12px;
+  font-weight: bold;
+}
+#online_play .op_today .rate .ratev {
+  color: #a6e22e; /* 开率数值绿色（标签暗灰/数值绿分层，同首页） */
+}
+@media (max-width: 880px) {
+  #online_play .op_today {
+    display: none; /* 窄屏空间不够：统计隐藏（2026-10-23 张老师定「可隐藏」） */
+  }
+}
+/* 全屏态（2026-10-23 张老师定）：统计与游戏区域水平居中——全屏宿主铺满视口，
+   棋盘 gwrap 在 #game_area 内 text-align:center 居中（中心＝视口中线），
+   标题行里「跟在 tabs 后」的位置不再对齐盘面中心，改绝对定位吸附到
+   .news_head（补 position:relative 作包含块）水平中点：脱离 flex 流不动
+   tabs/按钮排布局，行宽恒≥视口宽不会与两侧元素相撞（≤880 隐藏规则仍生效） */
+#online_play > div:fullscreen .news_head {
+  position: relative;
+}
+#online_play > div:fullscreen .op_today {
+  position: absolute;
+  left: 50%;
+  bottom: 3px; /* 行内 align-items:flex-end 底线对齐的近似视觉位 */
+  transform: translateX(-50%);
+}
 /* 首页右栏「开一局」大按钮（2026-10-14 张老师定）：扁平、与侧栏板块同宽（桌面盒外径 272px），
    样式复用游戏笑脸按钮的经典银灰凸起边框，笑脸图标在前、文字在后 */
 #play_entry {
