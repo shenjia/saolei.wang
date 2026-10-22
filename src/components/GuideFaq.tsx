@@ -134,6 +134,22 @@ const FAQ_ITEMS: Record<string, FaqItem> = {
         <br />
         时间与3BV/s的比率，因加入了时间因素，比3BV/s更能说明扫雷速度。
         <br />
+        <b className="term">QG</b>: Quality Grade [ Time^1.7 / 已完成3BV ]
+        <br />
+        质量分，综合用时与完成3BV的数据，越小越好，是计算 STNB 的中间量。
+        <br />
+        <b className="term">STNB</b> [ 系数(初级36、中级162、高级435) / QG × (已完成3BV/3BV)^0.5 ]
+        <br />
+        综合评分，用来衡量一局游戏（包括失败的游戏尸体）所体现出的竞速水平，现已取代 RQP，越大越好。
+        <br />
+        <b className="term">ThrP</b>: Throughput [ 已完成3BV / Ce ]
+        <br />
+        吞吐效率，已完成3BV与有效点击数的比率。Ce为真正开出新格或完成3BV的有效点击。
+        <br />
+        <b className="term">Corr</b>: Correctness [ Ce / Cl ]
+        <br />
+        准确率，有效点击数Ce与总点击数Cl的比率。Cl为左键、右键、双击的总点击次数，用来衡量操作的精准程度。
+        <br />
         <b className="term">NF</b>: No Flag
         <br />
         一种仅用左键点击完成游戏，不标雷的玩法。
