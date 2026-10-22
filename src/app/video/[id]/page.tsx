@@ -11,6 +11,7 @@ import {
   INVALID_3BVS_TIP,
   LEVEL_NAMES,
   VIDEO_STATUS_NAMES,
+  isManager,
   type VideoLevel,
 } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
@@ -40,6 +41,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!videoId) return {};
   const video = await getVideoDetail(videoId);
   if (!video) return {};
+  // 屏蔽盘不给普通访客（含爬虫/meta 抓取）任何元数据；管理员仍可看（后台审核链
+  // 直接链到前台详情页，2026-10-22 张老师指令：屏蔽不进前台、后台除外）
+  if (video.status === VIDEO_STATUS.BANNED) {
+    const session = await getSession();
+    if (!session || !isManager(session.role)) return {};
+  }
   const level = video.level as VideoLevel;
   const time = scoreTime(videoScores(video.board3bv, video.realTime, level).time);
   const score = [
@@ -61,6 +68,12 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
 
   const video = await getVideoDetail(videoId);
   if (!video) notFound();
+  // 2026-10-22 张老师指令：已屏蔽录像不进前台（列表/搜索/动态已滤，此处详情页
+  // 补口）——仅管理员可见（后台审核/管理页直接链到本页播放与下载，属「后台除外」）
+  if (video.status === VIDEO_STATUS.BANNED) {
+    const guard = await getSession();
+    if (!guard || !isManager(guard.role)) notFound();
+  }
   // 2026-10-22：先取 session 再取评论——本人待审行（status=5）按 viewerUid 放行
   const session = await getSession();
   const [comments, commentTotal] = await Promise.all([

@@ -656,36 +656,39 @@ function videoListConds(opts: {
   // 2026-10-20 ioe/stnb 排序：join video_metrics（指标行可能缺——老盘跑批已全量覆盖，
   // 仅个别解析失败盘无行；排序语义=「有指标者中排前」，缺行自然不出现）
   const needVm = order === "ioe" || order === "stnb";
-  // 2026-10-20 stnb 单表化：vm.realTime/bbbv/level 与 vi.real_time/board_3bv、v.level
-  // 全量一致（生产 307,567 行校验：level/符号零差异、bbbv 仅 1 行历史脏数据），
-  // stnb 排序在无 author/bv/win/time 筛选时**免 join**（video/vm 无孤儿行，生产校验 0）。
-  // FORCE INDEX（2026-10-20 张老师报障「录像按 STNB 排序很慢」根因修复）：
-  // MySQL 8 统计信息过期时优化器会弃 vm.stnb 索引反扫、改选 video_info 全索引扫驱动
-  // （生产 EXPLAIN 实证 29 万行 + temporary + filesort = 10~12s；FORCE 后恒定 0.04s）。
-  // 带筛选（author/bv/win/time）时保留 join 形态且不加 FORCE（v.user 索引驱动更优，实测 0.04s）。
-  const stnbSimple = order === "stnb" && !author && !win && bv === null && !nf;
-  const table = needVm ? `video_metrics vm${stnbSimple ? " FORCE INDEX (video_metrics_stnb_idx)" : ""}` : needVi ? "video_info vi" : needVs ? "video_stat vs" : "video v";
+  // 2026-10-20 stnb 单表化曾在此免 join（vm 与 v 全量一致）——2026-10-22 作废：
+  // 前台列表屏蔽录像（status=0）一律不展示（张老师指令），vm 无 status 列必须
+  // join video 过滤。FORCE INDEX 驱动保留（2026-10-20「STNB 排序 10~12s」根因
+  // 修复的主力就是它），join 为 video PK 点查，实测仍亚秒级。
+  const table = needVm
+    ? `video_metrics vm FORCE INDEX (video_metrics_stnb_idx)`
+    : needVi
+      ? "video_info vi"
+      : needVs
+        ? "video_stat vs"
+        : "video v";
   // 2026-10-20 修复：驱动表之外的引用表必须补 JOIN——bv/time 筛选（needVi）+ comments/clicks
   // 排序（needVs）组合下，驱动表是 video_info 而 conds 引用 vs.comments/vs.clicks，
   // 漏 JOIN 直接 SQL 报错 500（线上定向列表点「评论/点击」无反应的根因）
-  const joins = stnbSimple
-    ? `FROM ${table}`
-    : `FROM ${table} JOIN video v ON v.id = ${
-        needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id"
-      }${needVi && needVm ? " JOIN video_info vi ON vi.id = v.id" : ""}${
-        needVs && (needVi || needVm) ? " JOIN video_stat vs ON vs.id = v.id" : ""
-      }`;
+  const joins = `FROM ${table} JOIN video v ON v.id = ${
+    needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id"
+  }${needVi && needVm ? " JOIN video_info vi ON vi.id = v.id" : ""}${
+    needVs && (needVi || needVm) ? " JOIN video_stat vs ON vs.id = v.id" : ""
+  }`;
   const selectId = needVm ? "vm.id" : needVi ? "vi.id" : needVs ? "vs.id" : "v.id";
   const conds: string[] = [];
+  // 2026-10-22 张老师指令：屏蔽录像（status=0）不得出现在任何前台列表——
+  // 全路径统一 v.status=20（REVIEWED；待审 10 同样不进前台，与站点统计/
+  // 3BV 收集/STNB 榜口径一致。旧站 2008 版同款：Video_IsLive=1）
+  conds.push(`v.status = ${VIDEO_STATUS.REVIEWED}`);
   // NF 筛选（2026-10-20）：needVi 已因 nf=true 走 video_info 驱动/JOIN，
-  // stnbSimple 判定已含「无额外筛选」前提（nf=true 时不成立），此处统一 vi 列引用安全
+  // 此处统一 vi 列引用安全
   if (nf) conds.push(`vi.noflag = 1`);
-  if (level !== "all") conds.push(stnbSimple ? `vm.level = '${level}'` : `v.level = '${level}'`);
+  if (level !== "all") conds.push(`v.level = '${level}'`);
   if (author) conds.push(`v.user = ${BigInt(author)}`);
   if (win) conds.push(`vi.real_time >= ${win[0]} AND vi.real_time < ${win[1]}`);
   if (bv !== null) conds.push(`vi.board_3bv = ${bv}`);
-  if (order === "time" || order === "3bvs" || order === "stnb")
-    conds.push(stnbSimple ? `vm.real_time > 0` : `vi.real_time > 0`);
+  if (order === "time" || order === "3bvs" || order === "stnb") conds.push(`vi.real_time > 0`);
   // 运气盘限界（2026-10-20 张老师定：STNB 与 3BV/s 同口径，初级 3BV<10 不参与排行）：
   // 3bvs 与 stnb 共用 MIN_3BV_FOR_3BVS（初 10 / 中 4 / 高 4）——不限则初级 3BV=2 的
   // 0.09s 秒开盘 STNB 4316 会霸榜（STNB 榜同理，见 fetchStnbCollection）。
@@ -694,9 +697,7 @@ function videoListConds(opts: {
   // 无效成绩由渲染层处理（videoScores 低于限界记负值显示删除线，口径一致）
   if ((order === "3bvs" || order === "stnb") && bv === null)
     conds.push(
-      stnbSimple
-        ? `vm.bbbv >= CASE vm.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
-        : `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
+      `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
     );
   if (order === "comments") conds.push(`vs.comments > 0`);
   if (order === "clicks") conds.push(`vs.clicks > 0`);
@@ -711,7 +712,9 @@ function videoListConds(opts: {
  *  bv 筛选时跳过运气盘限界 + needVs 时补 video_stat JOIN——旧缓存里这些组合的
  *  计数是 0/陈旧值，必须失效）；v6（2026-10-20：stnb 无筛选路径单表化免 join，
  *  条件列同步换 vm 自身列——旧缓存计数同值但查询形态已变，失效重来）；
- *  v7（2026-10-20：加 NF 筛选参数，键空间扩容） */
+ *  v7（2026-10-20：加 NF 筛选参数，键空间扩容）；
+ *  v8（2026-10-22：全路径统一 v.status=20 过滤（屏蔽/待审不进前台）——
+ *  stnb 单表化作废恢复 join video，旧缓存计数含屏蔽行，必须失效） */
 const getVideoListJoinCount = unstable_cache(
   async (
     level: string,
@@ -733,7 +736,7 @@ const getVideoListJoinCount = unstable_cache(
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v7"],
+  ["video-list-join-count", "v8"],
   { revalidate: 60 }
 );
 
@@ -775,10 +778,13 @@ export async function getVideoList(opts: {
     // id 序≠上传时间序（本地库 27.8 万处相邻逆序），id 充当时间序时「上传时间」列乱序。
     // 成绩表 create_time 与 video 全量一致（本地校验 0 差异）；索引已补
     // （video: (level,create_time) / video_scores_*: create_time），实测首屏 ~0.06s
+    // 2026-10-22 张老师指令：屏蔽/待审录像不进前台——video 路径加 status=20；
+    // 成绩表路径 join video 过滤（同步管线按 Check 写流水不看 status——封禁连坐的
+    // 3038 部合法盘 status=0 但成绩表有行，旧站 Video_My 同款带 IsLive=1 过滤）
     let ids: number[] = [];
     let total = 0;
     if (level === "all") {
-      const where = author ? { user: BigInt(author) } : {};
+      const where = { status: VIDEO_STATUS.REVIEWED, ...(author ? { user: BigInt(author) } : {}) };
       total = await prisma.video.count({ where });
       const rows = await prisma.video.findMany({
         where,
@@ -789,17 +795,21 @@ export async function getVideoList(opts: {
       });
       ids = rows.map((r) => N(r.id));
     } else {
-      const table = scoresTable(level);
-      const where = author ? { user: BigInt(author) } : {};
-      total = await table.count({ where });
-      const rows = await table.findMany({
-        where,
-        select: { id: true },
-        orderBy: [{ createTime: "desc" }, { id: "desc" }],
-        skip: (page - 1) * size,
-        take: size,
-      });
-      ids = rows.map((r: { id: bigint }) => N(r.id));
+      // 级别默认排序（成绩表）：驱动 video (level, create_time) 复合索引反扫，
+      // 成绩表只出 id 集合（JOIN video 滤 status；EXPLAIN: video 驱动 + vs PK 等值查）
+      const conds = [
+        `v.level = '${level}'`,
+        `v.status = ${VIDEO_STATUS.REVIEWED}`,
+        ...(author ? [`v.user = ${BigInt(author)}`] : []),
+      ].join(" AND ");
+      const totalRows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
+        `SELECT COUNT(*) AS c FROM video v WHERE ${conds}`
+      );
+      total = N(totalRows[0]?.c);
+      const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
+        `SELECT vs.id AS id FROM video_scores_${level} vs JOIN video v ON v.id = vs.id WHERE ${conds} ORDER BY vs.create_time DESC, vs.id DESC LIMIT ${size} OFFSET ${(page - 1) * size}`
+      );
+      ids = rows.map((r) => N(r.id));
     }
     const videos = await getVideosByIds(ids);
     return { videos, total, pageSize: size };
@@ -810,7 +820,8 @@ export async function getVideoList(opts: {
   // 默认排序（2026-10-22）：(create_time, id) 倒序（真上传时间序，见 getVideoList 头注）。
   // NF 路径驱动表是 video_info：ORDER BY 用 vi.create_time/vi.id（与 v.* 等值同序），
   // 优化器得以吃 (noflag, create_time) 复合索引做反向索引扫描（免 filesort，
-  // 实测 11.6 万 NF 行 p1 0.46s→0.09s）
+  // 实测 11.6 万 NF 行 p1 0.46s→0.09s）。status 过滤后驱动表索引不再全覆盖，
+  // 需回表滤 status=20（1285 行屏蔽盘占比 <0.5%，代价可忽略）
   const idOrder = nf ? "vi.create_time DESC, vi.id DESC" : "v.create_time DESC, v.id DESC";
   const orderBy =
     order === "time"
@@ -849,6 +860,8 @@ export async function getVideoList(opts: {
  * id 序≠上传时间序（MSSQL 分组灌入，本地库 27.8 万处相邻逆序），id 充当时间序时
  * 「上传时间」列显示乱序。vi.create_time 与 v.create_time 全量一致（生产/本地校验 0 差异），
  * ORDER BY vi.create_time 吃 (noflag, create_time) 复合索引免 join 免 filesort。
+ * 2026-10-22 张老师指令：屏蔽/待审录像不进前台——nf 路径 join video 滤 status=20
+ * （单表免 join 优化作废；NF 全量 11.6 万行 join PK 等值查，实测 p1 仍 <0.1s）。
  */
 export async function getVideoFeed(opts: {
   level: VideoLevel | "all";
@@ -858,21 +871,23 @@ export async function getVideoFeed(opts: {
 }): Promise<VideoListItem[]> {
   if (opts.nf) {
     const conds = [
-      opts.level !== "all" ? `vi.level = '${opts.level}'` : "",
+      "v.status = " + VIDEO_STATUS.REVIEWED,
+      opts.level !== "all" ? `v.level = '${opts.level}'` : "",
       opts.cursor ? `vi.create_time < ${BigInt(opts.cursor)}` : "",
       "vi.noflag = 1",
     ]
       .filter(Boolean)
       .join(" AND ");
-    // vi.create_time 单表索引序扫描（(noflag, create_time) 复合索引）：
-    // 与旧「vi.id 隐式 PK 序反扫」完全同构，实测 11.6 万 NF 行 p1 0.09s
+    // vi (noflag, create_time) 索引反扫驱动 + v PK 点查滤 status
     const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT vi.id FROM video_info vi WHERE ${conds} ORDER BY vi.create_time DESC, vi.id DESC LIMIT ${opts.limit}`
+      `SELECT vi.id FROM video_info vi JOIN video v ON v.id = vi.id WHERE ${conds} ORDER BY vi.create_time DESC, vi.id DESC LIMIT ${opts.limit}`
     );
     return getVideosByIds(rows.map((r) => N(r.id)));
   }
   const rows = await prisma.video.findMany({
     where: {
+      // 2026-10-22 屏蔽/待审不进前台（张老师指令），与 getVideoList 全路径同口径
+      status: VIDEO_STATUS.REVIEWED,
       ...(opts.level !== "all" ? { level: opts.level } : {}),
       // 游标：取 create_time 早于 cursor 的更早录像（动态 getNews 同语义；
       // (create_time, id) 双键稳定序，翻页无重复无遗漏）
@@ -888,7 +903,8 @@ export async function getVideoFeed(opts: {
 /** 录像流页码模式（2026-10-14 四轮，首页录像版块翻页条）：上传时间倒序第 page 页起 limit 条。
  *  页锚点按 base（=调用方传入的页大小）计；skip 恒按 base 锚点，take 才是本批行数。
  *  NF 筛选（2026-10-20）：nf=true 走 video_info 单表 noflag 过滤（同 getVideoFeed nf 路径）。
- *  2026-10-22：排序键 id DESC → (create_time, id) DESC（真上传时间序，见 getVideoFeed 注）。 */
+ *  2026-10-22：排序键 id DESC → (create_time, id) DESC（真上传时间序，见 getVideoFeed 注）；
+ *  同日张老师指令：屏蔽/待审不进前台（nf 路径 join video 滤 status=20）。 */
 export async function getVideoFeedPage(opts: {
   level: VideoLevel | "all";
   page: number;
@@ -898,19 +914,24 @@ export async function getVideoFeedPage(opts: {
 }): Promise<VideoListItem[]> {
   if (opts.nf) {
     const conds = [
-      opts.level !== "all" ? `vi.level = '${opts.level}'` : "",
+      "v.status = " + VIDEO_STATUS.REVIEWED,
+      opts.level !== "all" ? `v.level = '${opts.level}'` : "",
       "vi.noflag = 1",
     ]
       .filter(Boolean)
       .join(" AND ");
-    // vi.create_time 索引序反扫（(noflag, create_time) 复合索引），同 getVideoFeed nf 分支
+    // vi (noflag, create_time) 索引反扫 + v PK 点查滤 status，同 getVideoFeed nf 分支
     const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT vi.id FROM video_info vi WHERE ${conds} ORDER BY vi.create_time DESC, vi.id DESC LIMIT ${opts.limit} OFFSET ${(opts.page - 1) * opts.base}`
+      `SELECT vi.id FROM video_info vi JOIN video v ON v.id = vi.id WHERE ${conds} ORDER BY vi.create_time DESC, vi.id DESC LIMIT ${opts.limit} OFFSET ${(opts.page - 1) * opts.base}`
     );
     return getVideosByIds(rows.map((r) => N(r.id)));
   }
   const rows = await prisma.video.findMany({
-    where: opts.level !== "all" ? { level: opts.level } : {},
+    where: {
+      // 2026-10-22 屏蔽/待审不进前台（张老师指令）
+      status: VIDEO_STATUS.REVIEWED,
+      ...(opts.level !== "all" ? { level: opts.level } : {}),
+    },
     select: { id: true },
     orderBy: [{ createTime: "desc" }, { id: "desc" }],
     skip: (opts.page - 1) * opts.base,
@@ -922,22 +943,28 @@ export async function getVideoFeedPage(opts: {
 /** 录像总数（「加载更多」括号内剩余条数口径，过滤条件与 getVideoFeed 严格一致）
  *  2026-10-15 性能审计：键空间仅 all/beg/int/exp 四档，缓存 60s（video 30 万行 count 走主键扫描）
  *  2026-10-20 NF 筛选：键空间扩 nf 维度（v2）——nf 路径 join video_info 全表扫过滤，
- *  实测 ~0.3s，必须走缓存（与铁律「热点统计查询必须挂 unstable_cache」一致） */
+ *  实测 ~0.3s，必须走缓存（与铁律「热点统计查询必须挂 unstable_cache」一致）
+ *  2026-10-22 v3：屏蔽/待审不进前台（张老师指令）——nf 路径加 v.status=20
+ *  （join video 滤；原 vi 单表 SQL 形态已变），非 nf 路径 count 加 status 条件，
+ *  旧缓存计数含 1285 部屏蔽行，必须失效重来 */
 const fetchVideoCount = unstable_cache(
   async (opts: { level?: VideoLevel | "all"; nf?: boolean } = {}) => {
     if (opts.nf) {
       const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
-        `SELECT COUNT(*) AS c FROM video v JOIN video_info vi ON vi.id = v.id${
-          opts.level && opts.level !== "all" ? ` WHERE v.level = '${opts.level}' AND vi.noflag = 1` : " WHERE vi.noflag = 1"
-        }`
+        `SELECT COUNT(*) AS c FROM video v JOIN video_info vi ON vi.id = v.id WHERE v.status = ${VIDEO_STATUS.REVIEWED}${
+          opts.level && opts.level !== "all" ? ` AND v.level = '${opts.level}'` : ""
+        } AND vi.noflag = 1`
       );
       return N(rows[0]?.c);
     }
     return prisma.video.count({
-      where: opts.level && opts.level !== "all" ? { level: opts.level } : {},
+      where: {
+        status: VIDEO_STATUS.REVIEWED,
+        ...(opts.level && opts.level !== "all" ? { level: opts.level } : {}),
+      },
     });
   },
-  ["video-count-v2"],
+  ["video-count-v3"],
   { revalidate: 60 }
 );
 
@@ -949,23 +976,25 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boo
  * 热门录像（/video 右栏版块，2026-09-26 张老师要求）：
  * 按上传时间倒序显示「至少两条评论」的录像，只带作者（名称+军衔）/级别/时间成绩。
  * 口径与 getVideoList 的 order=comments（videoStat.comments>0）一致，此处收紧为 ≥2。
+ * 2026-10-22 张老师指令：屏蔽/待审不进前台——join video 滤 status=20（实测 30 部
+ * 屏蔽盘 comments≥2 曾可上榜）。走 (comments) 索引 + v (create_time) 索引，代价可忽略。
  */
 async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
   // 2026-10-22：id 倒序 → create_time 倒序（真上传时间序；vs.create_time 与 video
   // 同步写入一致，(comments) 索引 + filesort 仅 9 千候选行，代价可忽略）
-  const rows = await prisma.videoStat.findMany({
-    where: { comments: { gte: 2 } },
-    select: { id: true },
-    orderBy: { createTime: "desc" },
-    take: limit,
-  });
+  const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
+    `SELECT vs.id FROM video_stat vs JOIN video v ON v.id = vs.id
+     WHERE vs.comments >= 2 AND v.status = ${VIDEO_STATUS.REVIEWED}
+     ORDER BY v.create_time DESC, vs.id DESC LIMIT ${limit}`
+  );
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
 // 2026-10-15 性能审计：热评录像全是老录像，反向主键扫描实际近乎全表（30 万行），
 // 且结果几乎不变，缓存 60s
-// 2026-10-22 v2：排序键 id → create_time（真上传时间序），升键失效旧缓存
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v2"], { revalidate: 60 });
+// 2026-10-22 v2：排序键 id → create_time（真上传时间序）；v3 同日：加 status=20
+// 过滤（屏蔽不进前台，张老师指令）——升键失效旧缓存
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v3"], { revalidate: 60 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
@@ -1017,32 +1046,9 @@ export async function getUserActivity(
   return { posts, postsToday, comments, commentsToday };
 }
 
-// 三张成绩表字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
-// orderBy 收单对象或数组（2026-10-22 默认排序 (create_time,id) 双键起用数组形态）
-interface ScoresDelegate {
-  count(args: { where?: Record<string, unknown> }): Promise<number>;
-  findMany(args: {
-    where?: Record<string, unknown>;
-    select: { id: true };
-    orderBy: Record<string, string> | Record<string, string>[];
-    skip: number;
-    take: number;
-  }): Promise<{ id: bigint }[]>;
-}
-
-function scoresTable(level: VideoLevel): ScoresDelegate {
-  switch (level) {
-    case "beg":
-      return prisma.videoScoresBeg as unknown as ScoresDelegate;
-    case "int":
-      return prisma.videoScoresInt as unknown as ScoresDelegate;
-    case "exp":
-      return prisma.videoScoresExp as unknown as ScoresDelegate;
-  }
-}
-
 // 成绩表物理表名（raw SQL 用）：原 3BVS 榜分支使用，2026-10-15 排序统一改 video ⋈ video_info
-// 计算序后不再需要（保留 scoresTable() 供默认排序路径）
+// 计算序后不再需要；2026-10-22 起默认排序级别路径也改 raw SQL（JOIN video 滤
+// status=20，屏蔽不进前台）——ScoresDelegate/scoresTable 已无调用方，随之移除
 
 async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
   if (!ids.length) return [];
