@@ -2,6 +2,8 @@
 // 布局（2026-09-23 张老师要求）：页面级双栏——左列帖子楼层流，右列楼主卡片独立板块
 // 楼层流（2026-10-13 张老师要求）：由「翻页」改「加载更多」——首屏取第一批交 BbsReplySection，
 //   后续批次走 /api/bbs/reply/more（cursor 语义），?page= 深链作废
+// 2026-10-22 张老师要求：多条评论支持滑动分页——升级全站通用 PageSlider 页码滑条
+//   （BbsReplies 内部走页码模式 /api/bbs/reply/more?page=N；首屏仍服务端渲染第一页）
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";

@@ -383,15 +383,19 @@ export interface BbsReplyItem {
   status: number;
 }
 
-/** 楼层流取数（cursor 语义，按 id 升序）
+/** 楼层流取数（cursor / page 双语义，按 id 升序）
  *  2026-10-13 张老师要求：主题详情底部由「翻页」改「加载更多」，故从 page/skip 改为 id > cursor 取下一批；
  *  命中 @@index([post, status, id])，翻到底返回空数组即止
+ *  2026-10-22 张老师要求：多条评论支持滑动分页（升级全站通用 PageSlider 页码滑条）——
+ *   page 传入时走页码模式：skip 恒按 BBS_REPLY_PAGESIZE 页锚点、take 才是本批行数
+ *   （同 getPostList /api/news/more 的递增批量口径；cursor 语义保留兼容）
  *  2026-10-22：viewerUid 非空时本人待审行（status=5）一并带出（张老师要求：发出即可见） */
 export async function getReplyFeed(
   postId: number,
   cursor = 0,
   size = BBS_REPLY_PAGESIZE,
-  viewerUid: number | null = null
+  viewerUid: number | null = null,
+  page?: number
 ): Promise<{ items: BbsReplyItem[]; total: number }> {
   const visible = viewerUid
     ? { OR: [{ status: 0 }, { status: 5, user: BigInt(viewerUid) }] }
@@ -401,10 +405,12 @@ export async function getReplyFeed(
     where: {
       post: BigInt(postId),
       ...visible,
-      ...(cursor > 0 ? { id: { gt: BigInt(cursor) } } : {}),
+      ...(cursor > 0 && page === undefined ? { id: { gt: BigInt(cursor) } } : {}),
     },
     orderBy: { id: "asc" },
-    take: size,
+    ...(page !== undefined
+      ? { skip: (page - 1) * BBS_REPLY_PAGESIZE, take: size }
+      : { take: size }),
   });
   const authors = await authorsFromSnapshots(
     rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime), ranked: r.ranked === BigInt(1) }))

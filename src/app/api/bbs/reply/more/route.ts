@@ -2,6 +2,9 @@
 // 2026-10-13 张老师要求：主题详情底部由「翻页」改「加载更多」
 //   —— cursor 取「已加载的最后一个楼层 id」，返回 id 更大的下一批（id 升序即楼层顺序）
 // 2026-10-22：带登录态 viewerUid——本人可加载到自己的待审楼层（与列表首屏同口径）
+// 2026-10-22 张老师要求：多条评论支持滑动分页（升级 PageSlider 页码滑条）——
+//   带 page 参数即走页码模式（同 /api/news/more 双语义）：?page=N&size=M 从头数
+//   第 N 页起 M 条（skip 按 BBS_REPLY_PAGESIZE=10 页锚点，size 才是本批行数）
 
 import { NextResponse } from "next/server";
 import { BBS_REPLY_PAGESIZE, getReplyFeed } from "@/lib/bbs";
@@ -12,12 +15,19 @@ export async function GET(req: Request) {
   const postId = parseInt(p.get("post") ?? "", 10);
   const cursor = parseInt(p.get("cursor") ?? "0", 10) || 0;
   const size = Math.min(parseInt(p.get("size") ?? "", 10) || BBS_REPLY_PAGESIZE, 50);
+  const page = parseInt(p.get("page") ?? "", 10) || undefined;
   if (!postId) {
     return NextResponse.json({ error: "参数错误" }, { status: 400 });
   }
 
   const session = await getSession();
-  const { items, total } = await getReplyFeed(postId, cursor, size, session?.uid ?? null);
+  const { items, total } = await getReplyFeed(
+    postId,
+    cursor,
+    size,
+    session?.uid ?? null,
+    page !== undefined ? Math.max(1, page) : undefined
+  );
   return NextResponse.json({
     items,
     cursor: items.length ? items[items.length - 1].id : cursor,
