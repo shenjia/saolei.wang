@@ -90,10 +90,11 @@ export function StatusTag({ status }: { status: number }) {
   return <span className={`admin_tag ${tone}`}>{VIDEO_STATUS_NAMES[status] ?? status}</span>;
 }
 
-/** 级别标签 */
+/** 级别标签（2026-10-22 张老师要求：与前台同色——初级绿/中级橙/高级金，
+ *  色值同前台 .video_table hover 与详情页标题色阶，样式类在 admin.css .admin_tag.lv_*） */
 export function LevelTag({ level }: { level: string }) {
   const names: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
-  const tone = level === "beg" ? "plain" : level === "int" ? "info" : "warn";
+  const tone = level === "beg" ? "lv_beg" : level === "int" ? "lv_int" : "lv_exp";
   return <span className={`admin_tag ${tone}`}>{names[level] ?? level}</span>;
 }
 

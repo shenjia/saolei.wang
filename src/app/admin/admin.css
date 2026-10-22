@@ -431,6 +431,11 @@ table.admin_table .ai_reason {
 .admin_tag.info { background: rgba(102, 217, 239, 0.14); color: #66d9ef; border-color: rgba(102, 217, 239, 0.35); }
 .admin_tag.warn { background: rgba(247, 150, 70, 0.14); color: #f79646; border-color: rgba(247, 150, 70, 0.35); }
 .admin_tag.plain { background: #33322b; color: #939387; border-color: #49483e; }
+/* 级别标签（2026-10-22 张老师要求：与前台同色）——初级绿/中级橙/高级金，
+   色值同前台 globals.css（.video_table hover lv_* / 详情页标题 em.lv_*） */
+.admin_tag.lv_beg { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
+.admin_tag.lv_int { background: rgba(247, 150, 70, 0.14); color: #f79646; border-color: rgba(247, 150, 70, 0.35); }
+.admin_tag.lv_exp { background: rgba(253, 198, 29, 0.14); color: #fdc61d; border-color: rgba(253, 198, 29, 0.35); }
 .admin_tags {
   display: inline-flex;
   gap: 5px;
