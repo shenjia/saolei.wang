@@ -7,6 +7,8 @@
   · type=52 kind=video（评论了一盘录像）：评论已删（comment.status=-1/行不存在）或录像已下线
   · type=52 无 cid 行（2026-10-15 前存量，无法精确匹配）：按「同帖同人无 cid 行整组撤」
     口径处理——同一批产生的动态与删除联动（退避口径同 lib/bbs.ts commentNewsWhere）
+  · type=52 kind=bbs 自评行（2026-10-22 张老师要求：自评自己的文章不发动态）：
+    动态作者=楼主本人的行一并撤（含 2026-10-22 前产生的存量）
 
 幂等：删除条件全部基于「目标内容已不存在/不可见」，清过即不再命中。
 注意：不处理 type=20/21/22/30（录像类动态的屏蔽级联在 review.ts 已有，103 条残留在
@@ -136,6 +138,25 @@ else:
     all_ids = [t[0] for t in del_ids]
     if all_ids:
         cur.execute("DELETE FROM news WHERE id IN (%s)" % ",".join(str(i) for i in all_ids))
+        print(f"  已删除 {cur.rowcount} 行")
+        total_del += cur.rowcount
+
+# ---------- 4. type=52 kind=bbs 自评行：动态作者=楼主（自评不发动态，2026-10-22 起）----------
+cur.execute("""
+  SELECT n.id, n.user, n.reference FROM news n
+  JOIN bbs_post p ON p.id = n.reference
+  WHERE n.type = 52 AND n.details_data LIKE '%"kind":"bbs"%'
+    AND n.user = p.user
+""")
+rows = list(cur.fetchall())
+print(f"[4] type=52 kind=bbs 自评自己文章的动态：{len(rows)} 行")
+for nid, u, ref in rows[:50]:
+    print(f"  news={nid} user={u} post={ref}")
+if DRY:
+    print("  [dry-run] 未删除")
+else:
+    if rows:
+        cur.execute("DELETE FROM news WHERE id IN (%s)" % ",".join(str(r[0]) for r in rows))
         print(f"  已删除 {cur.rowcount} 行")
         total_del += cur.rowcount
 

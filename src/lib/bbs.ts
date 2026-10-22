@@ -569,6 +569,8 @@ export async function createReply(
   }
   const now = nowSec();
   // 事务内同发「评论」动态（BBS 回帖=评论文章，2026-09-24 张老师要求；仅个人主页可见）
+  // 2026-10-22 张老师要求：自评自己的文章（含在自己文章下回复他人评论）不发动态——
+  // 「自己评论自己」对个人主页动态流没有信息量；通知照发，动态不发
   const replyId = await prisma.$transaction(async (tx) => {
     // 2026-10-17 称号快照制：回帖时刻 exp_time/ranked 内嵌本行
     const snap = await userTitleSnapshot(userId, tx);
@@ -583,15 +585,17 @@ export async function createReply(
       where: { id: BigInt(postId) },
       data: { replies: { increment: 1 }, lastReplyTime: now, lastReplyUser: BigInt(userId) },
     });
-    await publishNews({
-      tx,
-      type: NEWS_TYPE.COMMENT,
-      userId,
-      reference: postId,
-      // cid = 回复 id：AI 后置复审据此精确撤下这条动态
-      details: { kind: "bbs", t: post.title.slice(0, 50), cid: N(reply.id) },
-      createTime: N(now),
-    });
+    if (N(post.user) !== userId) {
+      await publishNews({
+        tx,
+        type: NEWS_TYPE.COMMENT,
+        userId,
+        reference: postId,
+        // cid = 回复 id：AI 后置复审据此精确撤下这条动态
+        details: { kind: "bbs", t: post.title.slice(0, 50), cid: N(reply.id) },
+        createTime: N(now),
+      });
+    }
     return N(reply.id);
   });
   return { id: replyId, quotedUserId: quotedUserId === userId ? null : quotedUserId };

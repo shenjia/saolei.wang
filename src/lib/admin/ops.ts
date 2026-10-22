@@ -532,29 +532,36 @@ async function dispatch(
         }
         // 2026-10-22 张老师要求：回复状态流转联动动态——删除撤下；恢复正常补发（缺失时，
         // 时间回填回复原发时间；标题从主题行取，恢复 t 字段口径）
+        // 自评自己文章的楼层不补发（口径同 createReply：楼主本人的评论动态本就不产生）
         if (status === -1) {
           await deleteReplyNews(tx, reply.user, reply.post, id);
         } else if (status === 0 && reply.status !== 0) {
-          const exists = await tx.news.findFirst({
-            where: {
-              type: NEWS_TYPE.COMMENT,
-              user: reply.user,
-              reference: reply.post,
-              detailsData: { contains: `"cid":${id}}` },
-            },
-            select: { id: true },
+          const post = await tx.bbsPost.findUnique({
+            where: { id: reply.post },
+            select: { title: true, user: true },
           });
-          if (!exists) {
-            const post = await tx.bbsPost.findUnique({ where: { id: reply.post }, select: { title: true } });
-            await publishNews({
-              tx,
-              type: NEWS_TYPE.COMMENT,
-              userId: N(reply.user),
-              reference: N(reply.post),
-              details: { kind: "bbs", t: (post?.title ?? "").slice(0, 50), cid: id },
-              createTime: N(reply.createTime),
-              expTimeOverride: N(reply.expTime),
+          const isSelfReply = post ? N(post.user) === N(reply.user) : false;
+          if (!isSelfReply) {
+            const exists = await tx.news.findFirst({
+              where: {
+                type: NEWS_TYPE.COMMENT,
+                user: reply.user,
+                reference: reply.post,
+                detailsData: { contains: `"cid":${id}}` },
+              },
+              select: { id: true },
             });
+            if (!exists) {
+              await publishNews({
+                tx,
+                type: NEWS_TYPE.COMMENT,
+                userId: N(reply.user),
+                reference: N(reply.post),
+                details: { kind: "bbs", t: (post?.title ?? "").slice(0, 50), cid: id },
+                createTime: N(reply.createTime),
+                expTimeOverride: N(reply.expTime),
+              });
+            }
           }
         }
       });
