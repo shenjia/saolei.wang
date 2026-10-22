@@ -6035,6 +6035,26 @@ body #page.video_old .page_head {
   }
 }
 
+/* 移动端（≤768）首页 #video / 用户主页 #user_videos 录像表瘦身（2026-10-22 张老师
+   要求）：隐藏 3BV / 3BV/s / IOE / STNB 四个数据列——表头恰好仅这四列带 th.c、
+   数据行恰好仅这四格带 td.c_3bvs（VideoRows.tsx），选择器一一对应；表格收进屏宽、
+   盒内不再横滑出滚动条。/video 列表页与审核页（#page.video_old）不在此列，
+   保持全列 + 上面 860px min-width 的横滑兜底。 */
+@media (max-width: 768px) {
+  #video .video_table th.c,
+  #user_videos .video_table th.c,
+  #video .video_table td.c_3bvs,
+  #user_videos .video_table td.c_3bvs {
+    display: none;
+  }
+  /* 860px min-width 若保留会把藏列后的表格继续撑出滚动条，收回自然宽度
+     （(1,1,0) 特异性压过 .video_table (0,1,0)，与顺序无关） */
+  #video .video_table,
+  #user_videos .video_table {
+    min-width: 0;
+  }
+}
+
 /* ==================== /video 列表通栏（2026-10-20 张老师要求：去右栏，与排行页同版式） ====================
    版式对齐排行页方案 A：≥769 卡片 width:max(62%,720)（中段死区修复，同 body #page.ranking_old.main）；
    ≤768 由 video_table 的盒内横滑（.box:has(.ranking_table) 规则已覆盖 video_table——
