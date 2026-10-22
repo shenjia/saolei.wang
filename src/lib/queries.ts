@@ -1382,7 +1382,10 @@ export async function getCommentById(id: number): Promise<CommentItem | null> {
 
 /** 发表评论并递增录像评论计数（2013 版漏了计数递增，新版补齐）
  *  2026-09-24 起事务内同发「评论」动态（仅个人主页可见，不进首页新闻流）
- *  2026-10-17 称号快照制：写入评论时刻的 exp_time/ranked（评论行内嵌快照，渲染不再实时查） */
+ *  2026-10-17 称号快照制：写入评论时刻的 exp_time/ranked（评论行内嵌快照，渲染不再实时查）
+ *  2026-10-22 张老师要求：动态带录像基本信息（「评论了yyy的高级40.44NF录像」）——
+ *  lv/tm/nf（级别/成绩/NF）与 vn（楼主名）快照进 details；键序 cid 尾置不动，
+ *  AI 复审/删除联动的 detailsData contains "cid":<id>} 精确匹配口径不受影响 */
 export async function addComment(videoId: number, userId: number, content: string): Promise<number> {
   const now = BigInt(Math.floor(Date.now() / 1000));
   return prisma.$transaction(async (tx) => {
@@ -1403,14 +1406,29 @@ export async function addComment(videoId: number, userId: number, content: strin
       where: { id: BigInt(videoId) },
       data: { comments: { increment: 1 } },
     });
+    // 录像信息快照（video.level + video_info.noflag/real_time + 楼主名）
+    const [video, owner] = await Promise.all([
+      tx.video.findUnique({ where: { id: BigInt(videoId) }, select: { level: true, user: true } }),
+      tx.videoInfo.findUnique({ where: { id: BigInt(videoId) }, select: { noflag: true, realTime: true } }),
+    ]);
+    const ownerName =
+      (await tx.user.findUnique({ where: { id: video?.user ?? BigInt(0) }, select: { chineseName: true } }))
+        ?.chineseName ?? "";
     await publishNews({
       tx,
       type: NEWS_TYPE.COMMENT,
       userId,
       reference: videoId,
-      // cid = 本条评论 id：AI 后置复审要按它精确定位并撤下这一条动态
-      // （同秒多条评论 createTime 相同，只靠时间会把别人的动态一并删掉）
-      details: { kind: "video", cid: Number(created.id) },
+      // cid = 本条评论 id：AI 后置复审/删除联动要按它精确定位并撤下这一条动态
+      // （同秒多条评论 createTime 相同，只靠时间会把别人的动态一并删掉）——cid 必须尾置
+      details: {
+        kind: "video",
+        lv: video?.level ?? "",
+        tm: N(owner?.realTime ?? 0),
+        nf: owner?.noflag ? 1 : 0,
+        vn: ownerName.slice(0, 20),
+        cid: Number(created.id),
+      },
       createTime: Number(now),
     });
     return N(created.id);

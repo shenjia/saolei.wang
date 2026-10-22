@@ -57,6 +57,10 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
     kind?: string;
     /** 评论动态的目标内容 id（2026-10-15 写入点起有；同步存量行无——渲染退避只跳文章） */
     cid?: number;
+    /** 录像评论动态：NF 快照（1=NF；2026-10-22 写入点起有） */
+    nf?: number;
+    /** 录像评论动态：楼主名快照（2026-10-22 写入点起有） */
+    vn?: string;
   };
   const authorCells = news.author && (
     <>
@@ -215,9 +219,26 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             ) : (
               <>
                 评论了一盘
-                <Link href={`/video/${news.reference}`} target="_blank" className="score">
-                  录像
-                </Link>
+                {/* 2026-10-22 张老师要求：动态带录像基本信息——「yyy的高级40.44NF录像」。
+                    lv/tm/nf/vn 是写入点快照（存量行无这些键，退回原「录像」文案）；
+                    成绩同破纪录/上传动态口径可点，跳录像详情页 */}
+                {d.lv || d.tm ? (
+                  <>
+                    {d.vn ? <span className="record person">{d.vn}的</span> : null}
+                    <span className="record person">
+                      {LEVEL_NAMES[(d.lv ?? "") as Level] ?? d.lv}
+                    </span>
+                    <Link href={`/video/${news.reference}`} target="_blank" className="score record_score">
+                      {formatScore("time", d.tm ?? 0)}
+                    </Link>
+                    {d.nf ? <span className="news_nf">NF</span> : null}
+                    录像
+                  </>
+                ) : (
+                  <Link href={`/video/${news.reference}`} target="_blank" className="score">
+                    录像
+                  </Link>
+                )}
               </>
             )}
           </>

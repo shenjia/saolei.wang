@@ -340,7 +340,8 @@ async function dispatch(
           });
         }
         // 2026-10-22 张老师要求：评论删除（-1）动态一并撤下；
-        // 恢复正常（→0）时若动态缺失则补发（AI 转待审时撤下过）
+        // 恢复正常（→0）时若动态缺失则补发（AI 转待审时撤下过）——
+        // 补发行带录像信息快照（lv/tm/nf/vn，同 addComment 写入口径；cid 尾置）
         if (status === -1) {
           await tx.news.deleteMany({
             where: {
@@ -361,13 +362,29 @@ async function dispatch(
             select: { id: true },
           });
           if (!exists) {
+            const [video, info] = await Promise.all([
+              tx.video.findUnique({ where: { id: row.video }, select: { level: true, user: true } }),
+              tx.videoInfo.findUnique({ where: { id: row.video }, select: { noflag: true, realTime: true } }),
+            ]);
+            const ownerName =
+              (await tx.user.findUnique({
+                where: { id: video?.user ?? BigInt(0) },
+                select: { chineseName: true },
+              }))?.chineseName ?? "";
             // 补发动态：时间回填评论原发时间（不冒充当下）
             await publishNews({
               tx,
               type: NEWS_TYPE.COMMENT,
               userId: N(row.user),
               reference: N(row.video),
-              details: { kind: "video", cid: id },
+              details: {
+                kind: "video",
+                lv: video?.level ?? "",
+                tm: N(info?.realTime ?? 0),
+                nf: info?.noflag ? 1 : 0,
+                vn: ownerName.slice(0, 20),
+                cid: id,
+              },
               createTime: N(row.createTime),
               expTimeOverride: N(row.expTime),
             });

@@ -10186,3 +10186,12 @@ body #page .word_terms .desc {
 .reply_anchor_hit {
   animation: reply_anchor_flash 1.6s ease-out;
 }
+
+/* ---- 录像评论动态的 NF 小标（2026-10-22 张老师需求）----
+   「xxx评论了yyy的高级40.44NF录像」里的 NF 后缀：沿用录像列表 td.score .nf 的
+   黄小字语言（同 2008 版 Counter 口径），动态表无 .video_table 作用域故独立类。 */
+#news .news_nf {
+  margin: 0 0 0 1px;
+  font-size: 11px;
+  color: #fdc61d;
+}
