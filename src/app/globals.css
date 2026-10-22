@@ -10233,15 +10233,16 @@ body #page .word_terms .desc {
   color: #fdc61d;
 }
 
-/* ---- 录像评论动态文案二轮（2026-10-22 张老师需求）----
-   「评论了录像 楼主[性别][称号] 的高级 40.44NF」：成绩数字行内垂直居中——
-   legacy a.score 是 inline-block+vertical-align:middle，在含 AvatarCell（内含
-   inline-block 性别图标）的行里 baseline 漂移致成绩下沉；此处统一钉 baseline，
-   与同行的 record person 文本对齐（#news (1,1,1) + .record_score 类名 (1,2,2) 提权）。 */
-#news .table td a.score.record_score {
+/* ---- 录像评论动态文案三轮（2026-10-22 张老师反馈）----
+   「评论了 迈克尔[♂][大元帅] 的高级 40.44NF 录像」：
+   ①成绩数字回正文基线——legacy #news a.score 是 inline-block+vertical-align:middle，
+     middle 按 x-height 中线对齐，数字无下伸部（g/y/p）整体偏高，视觉=上标；
+     此处 display:inline+vertical-align:baseline 归位（(1,1,2) 压过 legacy (1,1,1)），
+     不与破纪录行共享 record_score（那边与 delta/SUB 徽章有既定布局，不动）。
+   ②楼主性别图标与军衔徽章之间无空格：.gender 自带 margin-right:10px，
+     JSX 不再额外输出空白文本节点（上轮 {" "} 已删）。 */
+#news .table td a.score.news_vscore {
+  display: inline;
+  max-width: none;
   vertical-align: baseline;
-}
-/* 楼主身份段（AvatarCell+TitleBadge）与文本的间距，同动态作者行节奏 */
-#news .table td .title {
-  margin-right: 0;
 }

@@ -218,12 +218,13 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
               </>
             ) : (
               <>
-                评论了录像
-                {/* 2026-10-22 张老师两轮要求：文案「评论了一盘…录像」改「评论了录像…」
-                    （去尾缀）；楼主渲染完整身份（姓名+性别+称号，姓名可点进主页，
-                    与动态作者同款 AvatarCell+TitleBadge）；成绩垂直居中。
-                    lv/tm/nf/vid 是写入点快照（存量行无这些键，退回原「录像」链接文案）；
-                    成绩同破纪录/上传动态口径可点，跳录像详情页 */}
+                {/* 2026-10-22 张老师三轮反馈：「录像」移行尾（评论了 迈克尔的高级40.44NF 录像）；
+                    性别标记与军衔之间不留空格（.gender 自带 margin-right:10px 足够间隔，
+                    多余空格会把徽章推远）；成绩用 news_vscore 专类回正文流（legacy
+                    a.score 是 inline-block+vertical-align:middle，middle 对 x-height 中线，
+                    数字无下伸部整体偏高=上标感——改 display:inline+baseline 归位，
+                    不动破纪录行共享的 record_score） */}
+                评论了
                 {d.lv || d.tm ? (
                   <>
                     {news.videoOwner ? (
@@ -235,12 +236,12 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                           className="author"
                           gender="small"
                           link
-                        />{" "}
+                        />
                         <TitleBadge
                           title={news.videoOwner.titles?.m ?? ""}
                           classic={news.videoOwner.titles?.c ?? null}
                           link
-                        />{" "}
+                        />
                         的
                       </>
                     ) : d.vn ? (
@@ -249,10 +250,11 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                     <span className="record person">
                       {LEVEL_NAMES[(d.lv ?? "") as Level] ?? d.lv}
                     </span>
-                    <Link href={`/video/${news.reference}`} target="_blank" className="score record_score">
+                    <Link href={`/video/${news.reference}`} target="_blank" className="score news_vscore">
                       {formatScore("time", d.tm ?? 0)}
                     </Link>
                     {d.nf ? <span className="news_nf">NF</span> : null}
+                    录像
                   </>
                 ) : (
                   <Link href={`/video/${news.reference}`} target="_blank" className="score">
