@@ -1025,7 +1025,8 @@ export async function getUserTodayVideos(
 /**
  * 某用户「发表文章」（论坛主题）与「发表评论」（录像评论）数量 + 今日增量
  * （2026-10-13 张老师要求，用户主页右栏「数据统计」新增两行）。
- * 口径与首页「数据统计」的发布主题/发布评论严格一致：
+ * 口径与首页「数据统计」的论坛主题/录像评论严格一致（2026-10-22 首页行名更新后：
+ *   主题对应论坛主题、此处「发表评论」仍是录像评论）：
  *   文章 = bbs_post.status=0（软删 -1 不计）；评论 = comment.status=COMMENT_STATUS.NORMAL；
  *   今日增量按 create_time 落在今天（站点自然日，与首页增量同一算法）。
  */
@@ -1428,6 +1429,10 @@ export interface SiteStats {
   commentToday: number;
   bbsTotal: number;
   bbsToday: number;
+  // 2026-10-22 张老师要求：「发布评论」更名「论坛评论」并换数据源 bbs_reply（原 comment 表
+  // 是录像评论，改挂「录像评论」新行）——两行统计数字各归各位
+  bbsReplyTotal: number;
+  bbsReplyToday: number;
 }
 
 async function getSiteStatsImpl(): Promise<SiteStats> {
@@ -1442,6 +1447,7 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     videoTotal, videoToday,
     commentTotal, commentToday,
     bbsTotal, bbsToday,
+    bbsReplyTotal, bbsReplyToday,
   ] = await Promise.all([
     // 2026-10-14：注册人数按旧站口径排除封禁账号（旧站 @All_Number = count(...Player_IsLive='1')）
     prisma.user.count({ where: ACTIVE_USER }),
@@ -1449,10 +1455,14 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     prisma.userScores.count({ where: { sumTime: { gt: 0 }, ...(await rankedOnly()) } }),
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED, reviewTime: { gte: dayStart } } }),
+    // 录像评论（comment 表带 video 外键；2026-10-22 起首页行名「录像评论」）
     prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL } }),
     prisma.comment.count({ where: { status: COMMENT_STATUS.NORMAL, createTime: { gte: dayStart } } }),
     prisma.bbsPost.count({ where: { status: 0 } }),
     prisma.bbsPost.count({ where: { status: 0, createTime: { gte: dayStart } } }),
+    // 论坛评论（bbs_reply；2026-10-22 起首页行名「论坛评论」，口径同 bbs_post：软删 -1 不计）
+    prisma.bbsReply.count({ where: { status: 0 } }),
+    prisma.bbsReply.count({ where: { status: 0, createTime: { gte: dayStart } } }),
   ]);
   return {
     userTotal,
@@ -1464,6 +1474,8 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     commentToday,
     bbsTotal,
     bbsToday,
+    bbsReplyTotal,
+    bbsReplyToday,
   };
 }
 

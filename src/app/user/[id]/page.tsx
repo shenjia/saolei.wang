@@ -438,7 +438,7 @@ export default async function UserViewPage({
                   </Link>
                 </StatRow>
                 {/* 2026-10-13 张老师要求：新增发表文章（论坛主题）/ 发表评论两行，
-                    口径与首页「数据统计」的发布主题/发布评论一致 */}
+                    口径与首页「数据统计」的论坛主题/录像评论一致（2026-10-22 首页行名更新） */}
                 <StatRow label="发表文章" today={activity.postsToday}>
                   <em>{activity.posts}</em>
                 </StatRow>
