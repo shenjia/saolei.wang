@@ -241,6 +241,9 @@ model Video {
   @@index([user, level])
   @@index([hash])
   @@index([createTime])
+  // (review_user, status) 2026-10-22 迁移收尾索引排查：团队页 getTeam 逐管理员 count
+  // （WHERE review_user=N AND status=20）原走 (status,…) 索引扫 15 万条目，实测 1.4s/人
+  @@index([reviewUser, status])
   @@map("video")
 }
 
@@ -652,7 +655,14 @@ model BbsPost {
   createTime    BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime    BigInt  @default(0) @map("update_time") @db.BigInt
 
-  @@index([board, status, lastReplyTime])
+  // 2026-10-22 迁移收尾索引排查：列表排序 ORDER BY is_pinned DESC, (id|last_reply_time) DESC
+  // 此前无任何索引可用，全板块路径全表 filesort 拖 content 大字段（实测 105ms）。
+  // · (board, status, isPinned↓, lastReplyTime↓)：板内列表（含 nice 子集）免 filesort
+  // · (status, isPinned↓, lastReplyTime↓)：全板块默认「最后回复」排序（/bbs 热路径）
+  // · (status, isPinned↓, id↓)：全板块「发布时间」排序（getLatestPosts 首页右栏）
+  @@index([board, status, isPinned(sort: Desc), lastReplyTime(sort: Desc)])
+  @@index([status, isPinned(sort: Desc), lastReplyTime(sort: Desc)])
+  @@index([status, isPinned(sort: Desc), id(sort: Desc)])
   @@map("bbs_post")
 }
 
@@ -690,7 +700,9 @@ model RankSnapshot {
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
   // delta 索引服务进步榜 WHERE delta>0 ORDER BY delta DESC（2026-10-22 重构新增）
+  // update_time 索引：幂等闸门「今日已刷新？」判定（2026-10-22 JSON 全表扫 1.9s 根治）
   @@index([delta])
+  @@index([updateTime])
   @@map("rank_snapshot")
 }
 

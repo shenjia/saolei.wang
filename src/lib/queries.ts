@@ -1699,23 +1699,33 @@ export interface TeamMember extends UserBrief {
   reviewCount: number;
 }
 
-export async function getTeam(): Promise<TeamMember[]> {
+async function getTeamImpl(): Promise<TeamMember[]> {
   const auths = await prisma.userAuth.findMany({
     where: { role: { in: [USER_ROLE.MANAGER, USER_ROLE.ADMINISTRATOR] } },
   });
   const authors = await usersByIds(auths.map((a) => N(a.id)));
-  const members: TeamMember[] = [];
-  for (const a of auths) {
-    const reviewCount = await prisma.video.count({
-      where: { reviewUser: a.id, status: VIDEO_STATUS.REVIEWED },
-    });
-    members.push({
-      ...(authors.get(N(a.id)) ?? { id: N(a.id), chineseName: "?", englishName: "", sex: 1 }),
-      role: a.role,
-      reviewCount,
-    });
-  }
+  // 2026-10-22 迁移收尾索引排查：审核量 count 改单条 GROUP BY（(review_user,status)
+  // 索引覆盖，一次扫完所有管理员区间）；此前逐人 count，最大审核员 12.6 万条目扫 1.4s/人
+  const counts = await prisma.video.groupBy({
+    by: ["reviewUser"],
+    where: { reviewUser: { in: auths.map((a) => a.id) }, status: VIDEO_STATUS.REVIEWED },
+    _count: { _all: true },
+  });
+  const cntMap = new Map(counts.map((c) => [N(c.reviewUser), N(c._count._all)]));
+  const members: TeamMember[] = auths.map((a) => ({
+    ...(authors.get(N(a.id)) ?? { id: N(a.id), chineseName: "?", englishName: "", sex: 1 }),
+    role: a.role,
+    reviewCount: cntMap.get(N(a.id)) ?? 0,
+  }));
   return members.sort((x, y) => y.role - x.role || y.reviewCount - x.reviewCount);
+}
+
+// 2026-10-22：团队页低频变化，缓存 300s（大审核员 12.6 万条目覆盖扫描 ~1s，
+// 没必要每次访问都跑）；缓存键 v2 起版（查询形态已变）
+const fetchTeam = unstable_cache(getTeamImpl, ["team-v2"], { revalidate: 300 });
+
+export async function getTeam(): Promise<TeamMember[]> {
+  return fetchTeam();
 }
 
 /** 随机串门（移植 2008 版 Player/Random.asp：随机访问一个有成绩用户的地盘） */

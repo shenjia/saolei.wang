@@ -29,12 +29,22 @@ export async function refreshRankSnapshots(force = false): Promise<void> {
   const today = dateStr();
 
   if (!force) {
-    // 幂等闸门：任一行 ranks 含今日键即视为已刷新（刷新是全量单语句，要么全有要么全无）
-    const done = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
-      `SELECT COUNT(*) c FROM rank_snapshot WHERE JSON_CONTAINS_PATH(ranks, 'one', ?)`,
-      `$."${today}"`
+    // 幂等闸门：当日已刷新过（任一行 ranks 含今日键）即视为已刷新（刷新是全量单语句，要么全有要么全无）。
+    // 2026-10-22 改判定源：原 JSON_CONTAINS_PATH 全表扫 ranks JSON（7 千行实测 1.9s，
+    // /ranking 进步榜 tab 每次访问都触发）。刷新语句统一写 update_time=UNIX_TIMESTAMP()，
+    // 故「今日已刷新」⇔ 存在 update_time >= 今日 0 点的行——走 delta 索引以外的
+    // update_time 索引即可亚毫秒判定（索引见 schema RankSnapshot）。
+    // 空表（首次部署）自然返回 0 行 → 照常刷新，语义与原 JSON 判定一致。
+    const dayStartTs = (() => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      return Math.floor(d.getTime() / 1000);
+    })();
+    const done = await prisma.$queryRawUnsafe<1[]>(
+      `SELECT 1 FROM rank_snapshot WHERE update_time >= ? LIMIT 1`,
+      dayStartTs
     );
-    if (N(done[0]?.c) > 0) return;
+    if (done.length > 0) return;
   }
 
   // 单条 SQL 完成全量重写（不把全表拉到 Node 侧）：
