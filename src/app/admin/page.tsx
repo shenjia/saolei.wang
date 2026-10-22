@@ -46,14 +46,14 @@ export default async function AdminDashboard() {
 
   const { oldestPendingDays: pendingDays } = ov;
 
-  // 流量对比 foot：涨绿跌红（.down）
+  // 流量对比 foot：涨绿跌红（.down）；基数为昨日同时段（今日 00:00~现在 vs 昨日 00:00~昨日此刻）
   const cmpFoot = (today: number, yday: number) => {
-    if (!yday) return `昨日 0 · 首日统计`;
+    if (!yday) return `昨日同时 0 · 暂无同比`;
     const pct = Math.round(((today - yday) / yday) * 1000) / 10;
     const sign = pct >= 0 ? "+" : "";
     return (
       <>
-        昨日 {yday.toLocaleString("zh-CN")} · 较昨日{" "}
+        昨日同时 {yday.toLocaleString("zh-CN")} · 同比{" "}
         <b className={pct < 0 ? "down" : undefined}>
           {sign}
           {pct}%
