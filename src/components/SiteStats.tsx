@@ -8,6 +8,10 @@
 // 2026-10-22 张老师要求：行名回正——「发布主题」→「论坛主题」、「发布评论」→「论坛评论」
 //   （数据源同步换 bbs_reply）；「上传录像」下新增一行「录像评论」（原 comment 表数据
 //   各归各位）。行序：录像评论紧贴上传录像、论坛评论固定最底行。
+// 2026-10-22 二轮：「论坛主题」下新增「在线练习」行——practice_log 累计练习盘数
+//   +今日增量（口径同「今日练习」板块：胜负都算、游客局也计）；论坛评论仍固定最底行。
+// 2026-10-22 三轮（张老师要求）：行名「在线练习」改「练习盘数」，行位由「论坛主题」下
+//   移至「排行人数」之下（与上传录像等 UGC 行分区分开，紧跟人数类指标）。
 // 排行人数无「今日」增量——user_scores.create_time 是注册时间非上榜时间，历史数据不干净。
 
 import { getSiteStats } from "@/lib/queries";
@@ -34,6 +38,10 @@ export async function SiteStats() {
         <tbody>
           <StatRow label="雷友总数" total={s.userTotal} today={s.userToday} />
           <StatRow label="排行人数" total={s.rankedTotal} />
+          {/* 2026-10-22 张老师要求：新增「练习盘数」——practice_log 累计练习盘数
+              +今日增量（口径同「今日练习」板块/后台 KPI：胜负都算、游客局也计）；
+              二轮定位：行名「在线练习」改「练习盘数」，行位移到「排行人数」之下 */}
+          <StatRow label="练习盘数" total={s.practiceTotal} today={s.practiceToday} />
           <StatRow label="上传录像" total={s.videoTotal} today={s.videoToday} />
           {/* 2026-10-22 张老师要求：新增「录像评论」（原「发布评论」的 comment 表数据归此处） */}
           <StatRow label="录像评论" total={s.commentTotal} today={s.commentToday} />
