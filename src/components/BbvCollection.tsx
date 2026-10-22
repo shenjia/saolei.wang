@@ -3,6 +3,8 @@
 // 方格区间 = level_3bv_range 表的站内统计区间（2026-10-14 张老师：下限按现行排行规则
 // 钳到 LEVEL_MIN_3BV——初 2 / 中 30 / 高 100，低于下限的 3BV 不再统计完成度），每整数一格；
 // 已收集=级别色（初绿/中橙/高黄），未收集=深灰。
+// 2026-10-22 张老师：区间上限抬到理论最大值（初级 54），50/52/53 三个数学不可达值
+// 去掉不渲染——方格墙留出空槽缺口，总数与进度条按「可达值个数」计（与 BV 榜分母同源）。
 // 悬停出 CSS 气泡（2026-10-13 张老师要求）：3BV 值 + 该 3BV 录像数；
 // 2026-10-20 张老师要求：文案改「共X个录像，点击查看」（链接已是定向列表，数字与
 // 格子点亮口径同源 getUser3bvCollection）；未收集的格子显示「暂无录像」。
@@ -12,7 +14,7 @@
 // 纯服务端渲染：气泡也是纯 CSS（:hover 显隐），无 hydration、无 API 路由、无任何客户端 JS。
 
 import Link from "next/link";
-import { LEVEL_NAMES, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
+import { LEVEL_NAMES, VIDEO_LEVELS, UNREACHABLE_3BV, type VideoLevel } from "@/lib/config";
 
 export function BbvCollection({
   userId,
@@ -31,10 +33,15 @@ export function BbvCollection({
       {VIDEO_LEVELS.map((level) => {
         const range = ranges[level];
         if (!range) return null;
-        const total = range.max - range.min + 1;
+        // 区间内可达值序列（2026-10-22）：跳过数学不可达值（初级 50/52/53），
+        // 方格墙留空槽、分母/进度条均按此序列计
+        const dead = new Set(UNREACHABLE_3BV[level] ?? []);
+        const values: number[] = [];
+        for (let b = range.min; b <= range.max; b++) if (!dead.has(b)) values.push(b);
+        const total = values.length;
         if (total <= 0) return null;
         const map = collected[level];
-        const n = map.size;
+        const n = values.reduce((acc, b) => acc + (map.has(b) ? 1 : 0), 0);
         const pct = (n / total) * 100;
         return (
           <div className={`bbv_level ${level}`} key={level}>
@@ -48,8 +55,12 @@ export function BbvCollection({
               <div className="bbv_fill" style={{ width: `${pct}%` }} />
             </div>
             <div className="bbv_grid">
-              {Array.from({ length: total }, (_, i) => {
+              {Array.from({ length: range.max - range.min + 1 }, (_, i) => {
                 const b = range.min + i;
+                if (dead.has(b)) {
+                  // 不可达值：不渲染方格，仅占位维持「缺口」视觉（间隙与格距同宽 12px）
+                  return <span key={b} className="sq none" />;
+                }
                 // 已收集=该 3BV 录像数（≥1），未收集=undefined
                 const c = map.get(b);
                 const tip = (

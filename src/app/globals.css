@@ -7007,6 +7007,12 @@ button.msg_cancel:hover {
   background: #49483e;
   border-radius: 2px;
 }
+/* 数学不可达值（初级 50/52/53，2026-10-22 张老师：去掉收集目标）：
+   不渲染方格、仅按格距占位留出「缺口」，hover 无高亮无气泡 */
+#user_3bv .sq.none {
+  background: none;
+  border-radius: 0;
+}
 /* 级别标准配色：初绿 / 中橙 / 高黄——级别名、数字、已收集方格、进度条一并变色 */
 #user_3bv .beg .bbv_name,
 #user_3bv .beg .bbv_stat em {
@@ -7083,6 +7089,10 @@ button.msg_cancel:hover {
 #user_3bv .sq:hover {
   outline: 1px solid #f8f8f2;
   z-index: 61;
+}
+/* 不可达死格（.sq.none）不吃 hover 高亮 */
+#user_3bv .sq.none:hover {
+  outline: none;
 }
 
 /* ===== BV 收集榜进度条单元格（2026-10-13 张老师需求，设计稿 design/ranking-bv.html v3） =====

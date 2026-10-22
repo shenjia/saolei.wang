@@ -2092,12 +2092,12 @@ export async function getUserRanks(userId: number): Promise<UserRanks | null> {
  * 2026-10-14 张老师：按现行排行规则收敛统计区间——下限钳到 LEVEL_MIN_3BV
  * （初 2 / 中 30 / 高 100），中级 <30、高级 <100 不再统计完成度；
  * 库里的行「只扩不缩」可能留着更低的下限，读取时钳（self-heal 补种同样钳）。
- * 2026-10-22 张老师：上限按理论最大值补齐——初级理论最大 54（8×8 非雷格全为
- * 孤立数字格），50/52/53 数学不可达（推导见 config.LEVEL_MAX_3BV），站内实际
- * 数据顶格 51 属「角上单 0」极限盘；库里的 max_3bv 只跟实际录像走（当前 51），
- * 读取时抬到理论值，54 被收集时 review.ts 扩边自然接上。50/52/53 三个不可达值
- * 在 BbvCollection 格子墙单独渲染死格（不做收集目标），BV 榜分母按可达值个数计
- * （见 bvDenoms）。
+ * 2026-10-22 张老师：初级上限抬到理论最大值 54（8×8 非雷格全为孤立数字格），
+ * 50/52/53 数学不可达（推导见 config.LEVEL_MAX_3BV），站内实际数据顶格 51 属
+ * 「角上单 0」极限盘；库里的 max_3bv 只跟实际录像走（当前 51），读取时抬到理论值，
+ * 54 被收集时 review.ts 扩边自然接上。50/52/53 三个不可达值在 BbvCollection
+ * 格子墙单独渲染死格（不做收集目标），BV 榜分母按可达值个数计（见 bvDenoms）。
+ * 仅初级——中/高级不做理论抬升（实际顶格 133/271 远低于理论值，抬了分母虚高）。
  * 缺行时从已通过录像现算并补种（自愈：兼容生产首次部署空表；主键幂等，
  * 并发补种最坏只是多跑一次现算）。
  */
@@ -2109,9 +2109,11 @@ export async function getLevel3bvRanges(): Promise<
   for (const r of rows) {
     const level = r.level as VideoLevel;
     const min = Math.max(r.min3bv, LEVEL_MIN_3BV[level]);
-    // 上限抬到理论最大（2026-10-22）：初级实际 51 → 理论 54，给「理论最大值」
-    // 54 留出收集目标位；中/高级理论值远超实际区间，max() 天然保实际值
-    const max = Math.min(Math.max(r.max3bv, LEVEL_MAX_3BV[level]), 999);
+    // 上限按级别定义抬到理论最大（2026-10-22，仅初级 54）：初级实际顶格 51，
+    // 理论最大 54 留出收集目标位，54 被收集时 review.ts 扩边自然接上；
+    // 中/高级无 LEVEL_MAX_3BV 定义，上限仍随实际数据走
+    const theoryMax = LEVEL_MAX_3BV[level];
+    const max = theoryMax ? Math.max(r.max3bv, theoryMax) : r.max3bv;
     if (min <= max) out[level] = { min, max };
   }
 
@@ -2128,7 +2130,8 @@ export async function getLevel3bvRanges(): Promise<
       const level = a.level as VideoLevel;
       if (!missing.includes(level)) continue;
       const min = Math.max(N(a.mn), LEVEL_MIN_3BV[level]);
-      const max = Math.min(Math.max(N(a.mx), LEVEL_MAX_3BV[level]), 999);
+      const theoryMax = LEVEL_MAX_3BV[level];
+      const max = theoryMax ? Math.max(N(a.mx), theoryMax) : N(a.mx);
       if (min > max) continue; // 该级别全部低于统计下限，不出区间（侧栏该级整行隐藏）
       await prisma.level3bvRange.upsert({
         where: { level },

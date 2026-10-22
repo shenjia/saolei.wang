@@ -26,10 +26,11 @@ export default async function OnlinePage() {
     ? await prisma.user.findUnique({ where: { id: BigInt(session.uid) }, select: { englishName: true } })
     : null;
   const player = session && me ? { id: session.uid, name: me.englishName.trim() } : null;
-  /* 服务端注入各级别统计区间（getLevel3bvRanges 已按现行排行规则钳下限）；
-     缺行（极端空库）时按理论完整范围兜底，保证浮窗滑杆始终可用 */
+  /* 服务端注入各级别统计区间（getLevel3bvRanges 已按现行排行规则钳下限、
+     初级上限抬到理论最大 54，2026-10-22）；缺行（极端空库）时按同口径兜底，
+     保证浮窗滑杆始终可用 */
   const bvRanges = {
-    beg: ranges.beg ?? { min: 2, max: 51 },
+    beg: ranges.beg ?? { min: 2, max: 54 },
     int: ranges.int ?? { min: 30, max: 133 },
     exp: ranges.exp ?? { min: 100, max: 271 },
   };

@@ -4925,10 +4925,13 @@ export function OnlinePlay({
             <span className="bname">3BV 范围</span>
             <div className="dual" id="bv_dual">
               <div className="rail" /><div className="fill" />
-              <input type="range" id="bv_lo" min="2" max="51" step="1" defaultValue="2" />
-              <input type="range" id="bv_hi" min="2" max="51" step="1" defaultValue="51" />
+              {/* 初级上限 54＝理论最大值（2026-10-22 张老师定，50/52/53 数学不可达）；
+                  min/max/value 由 syncBvSlider 按注入区间运行时覆写，此处的
+                  min/max/defaultValue 只是首屏初始值，与服务端区间保持一致防跳变 */}
+              <input type="range" id="bv_lo" min="2" max="54" step="1" defaultValue="2" />
+              <input type="range" id="bv_hi" min="2" max="54" step="1" defaultValue="54" />
             </div>
-            <span className="bcur" id="bv_cur">2 – 51</span>
+            <span className="bcur" id="bv_cur">2 – 54</span>
           </div>
         </div>
 

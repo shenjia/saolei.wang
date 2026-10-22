@@ -360,6 +360,25 @@ export const OAUTH_ENABLED = false;
 // 上传录像各级别最小 3BV（移植 VideoConfig::$level_min_3bv）
 export const LEVEL_MIN_3BV: Record<VideoLevel, number> = { beg: 2, int: 30, exp: 100 };
 
+// 各级别 3BV 理论上限（2026-10-22 张老师定：初级棋盘 8×8、10 雷 → 非雷格 54，
+// 全部为孤立数字格时 3BV=54 即理论最大值，收集区间上限抬到 54）。
+// ⚠️ 只定义 beg——中/高级不做理论抬升（理论上限虽为非雷格数 216/381，见
+// design/max-3bv-boards.html，但站内实际顶格远低于此（133/271），抬到理论值会
+// 平添上百个无人能收集的格子、分母虚高；其统计区间仍随 level_3bv_range 实际数据走）。
+// 初级 50 / 52 / 53 数学不可达：8×8 盘共 64 格，10 雷余 54 个非雷格；若盘上存在
+// 空格（0 格），其 3×3 邻域内的非雷格会被一次点击整片展开——3BV = 非雷格数 −
+// 展开节省数，其中「角上单 0」省 3、单 0 居中省 8……按节省数枚举 50/52/53 无解
+// （实际可达顶：54 无 0 格、51 角 0、49 边 0、46 中 0，与站内数据吻合——初级
+// 已过审录像 3BV 顶格 51 有 1 盘、49 有 7 盘、50/48 为 0）。
+export const LEVEL_MAX_3BV: Partial<Record<VideoLevel, number>> = { beg: 54 };
+
+// 初级 3BV 区间内数学不可达的值（50/52/53，见 LEVEL_MAX_3BV 注释推导）。
+// BV 收集分母与用户主页格子墙按「可达值个数」计——初级 2..54 跨度 53，
+// 扣 3 个不可达值 = 50 格。未来中/高级若确认存在不可达值，在此按级别扩展。
+export const UNREACHABLE_3BV: Partial<Record<VideoLevel, readonly number[]>> = {
+  beg: [50, 52, 53],
+};
+
 // ---------- 新闻（移植 NewsConfig） ----------
 
 export const NEWS_TYPE = {
