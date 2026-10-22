@@ -8919,12 +8919,12 @@ html.op-fakefs #header {
 }
 .practice_today .pt_line .rate {
   margin-left: auto; /* 今日有尝试时最右侧的开率 */
-  color: #b1b1a4; /* 标签亮灰（2026-10-22 七轮张老师要求，原整体绿色） */
+  color: #75715e; /* 标签暗灰（2026-10-22 八轮张老师要求：与次行开率标签同色，原亮灰） */
   font-size: 12px;
   font-weight: bold;
 }
 .practice_today .pt_line .rate .ratev {
-  color: #a6e22e; /* 开率数值绿色（与完成盘数同色口径，标签亮灰/数值绿分层） */
+  color: #a6e22e; /* 开率数值绿色（与完成盘数同色口径，标签暗灰/数值绿分层） */
 }
 .practice_today .pt_sub {
   display: flex;
