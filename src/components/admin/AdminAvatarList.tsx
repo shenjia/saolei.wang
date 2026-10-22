@@ -11,6 +11,9 @@ import { AVATAR_CATEGORY_NAMES, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { timeOpposite } from "@/lib/format";
 import type { AdminAvatarRow } from "@/lib/admin/data";
 
+/** 驳回原因默认文案（2026-10-23 张老师指定：最常见驳回场景预填，管理员可改） */
+const DEFAULT_REJECT_REASON = "请上传真人正面照片";
+
 export function AdminAvatarList({
   initial,
   status,
@@ -134,7 +137,7 @@ export function AdminAvatarList({
                           disabled={busy}
                           onClick={() => {
                             setRejectingId(row.id);
-                            setReason("");
+                            setReason(DEFAULT_REJECT_REASON);
                           }}
                         >
                           {row.status === AVATAR_REVIEW_STATUS.APPROVED ? "撤销并驳回" : "驳回"}
