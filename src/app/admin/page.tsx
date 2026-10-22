@@ -1,4 +1,6 @@
-// 管理后台 · 仪表盘（2026-09-24；2026-10-16 加流量统计区块；2026-10-21 加称号体系偏好 + 占比图全面换环形 Donut）
+// 管理后台 · 仪表盘（2026-09-24；2026-10-16 加流量统计区块；2026-10-21 加称号体系偏好 + 占比图全面换环形 Donut；
+// 2026-10-23 张老师定：KPI 首行收敛为 6 卡——流量同比只留百分比、练习两行（人参与/近7天盘数）、
+// 注册两行（今日/近7天）、活跃只留今日、「上传录像」只留今日、论坛主题卡下线）
 // 一屏掌握：规模指标（KPI）→ 30 天趋势 → 流量统计 → 待办与分布 → 最新动态。
 
 import Link from "next/link";
@@ -46,14 +48,14 @@ export default async function AdminDashboard() {
 
   const { oldestPendingDays: pendingDays } = ov;
 
-  // 流量对比 foot：涨绿跌红（.down）；基数为昨日同时段（今日 00:00~现在 vs 昨日 00:00~昨日此刻）
+  // 流量对比 foot：只显示同比（涨绿跌红 .down）；基数为昨日同时段（今日 00:00~现在 vs 昨日 00:00~昨日此刻）
   const cmpFoot = (today: number, yday: number) => {
-    if (!yday) return `昨日同时 0 · 暂无同比`;
+    if (!yday) return `暂无同比`;
     const pct = Math.round(((today - yday) / yday) * 1000) / 10;
     const sign = pct >= 0 ? "+" : "";
     return (
       <>
-        昨日同时 {yday.toLocaleString("zh-CN")} · 同比{" "}
+        同比{" "}
         <b className={pct < 0 ? "down" : undefined}>
           {sign}
           {pct}%
@@ -136,8 +138,9 @@ export default async function AdminDashboard() {
           trend={traffic.practice.trend}
           foot={
             <>
-              {traffic.practice.todayUsers} 人练习 · 近 30 天{" "}
-              {traffic.practice.d30.toLocaleString("zh-CN")} 局 · 含踩雷局
+              {traffic.practice.todayUsers} 人参与
+              <br />
+              近 7 天 {traffic.practice.trend.slice(-7).reduce((a, b) => a + b, 0).toLocaleString("zh-CN")} 盘
             </>
           }
         />
@@ -149,7 +152,9 @@ export default async function AdminDashboard() {
           href="/admin/users"
           foot={
             <>
-              今日 <b>+{ov.userToday}</b> · 近 7 天 +{ov.userWeek}
+              今日 <b>+{ov.userToday}</b>
+              <br />
+              近 7 天 +{ov.userWeek}
             </>
           }
         />
@@ -161,31 +166,19 @@ export default async function AdminDashboard() {
           trend={traffic.active.trend}
           foot={
             <>
-              近 7 日登录态访问 · 今日 <b>{traffic.active.today}</b>
+              今日 <b>{traffic.active.today}</b>
             </>
           }
         />
         <Kpi
-          label="录像总数"
+          label="上传录像"
           value={ov.videoTotal}
           tone="yellow"
           trend={trend.series.videos}
           href="/admin/videos"
           foot={
             <>
-              今日 <b>+{ov.videoToday}</b> · 通过率 <b>{ov.passRate}%</b>
-            </>
-          }
-        />
-        <Kpi
-          label="论坛主题"
-          value={ov.bbsPostTotal}
-          tone="purple"
-          trend={trend.series.bbs}
-          href="/admin/bbs"
-          foot={
-            <>
-              今日 <b>+{ov.bbsPostToday}</b> · 回复 {ov.bbsReplyTotal.toLocaleString("zh-CN")} 条
+              今日 <b>+{ov.videoToday}</b>
             </>
           }
         />
