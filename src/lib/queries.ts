@@ -9,6 +9,7 @@ import { getTitleDistribution, title } from "./assess";
 import {
   COMMENT_STATUS,
   COMMENT_TOP_NUMBER,
+  FEED_USER_LEVEL_QUOTA,
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
@@ -930,6 +931,9 @@ export async function getVideoList(opts: {
  * ORDER BY vi.create_time 吃 (noflag, create_time) 复合索引免 join 免 filesort。
  * 2026-10-22 张老师指令：屏蔽/待审录像不进前台——nf 路径 join video 滤 status=20
  * （单表免 join 优化作废；NF 全量 11.6 万行 join PK 等值查，实测 p1 仍 <0.1s）。
+ * 2026-10-23：首页 SSR 已改走 getVideoFeedPage（发现流去重口径，见该函数注）；
+ * 本函数仅剩 /api/video/more 游标分支（无调用方）引用，保持全量口径
+ * （keyset 游标与配额去重不兼容，若未来启用需另行设计）。
  */
 export async function getVideoFeed(opts: {
   level: VideoLevel | "all";
@@ -972,7 +976,90 @@ export async function getVideoFeed(opts: {
  *  页锚点按 base（=调用方传入的页大小）计；skip 恒按 base 锚点，take 才是本批行数。
  *  NF 筛选（2026-10-20）：nf=true 走 video_info 单表 noflag 过滤（同 getVideoFeed nf 路径）。
  *  2026-10-22：排序键 id DESC → (create_time, id) DESC（真上传时间序，见 getVideoFeed 注）；
- *  同日张老师指令：屏蔽/待审不进前台（nf 路径 join video 滤 status=20）。 */
+ *  同日张老师指令：屏蔽/待审不进前台（nf 路径 join video 滤 status=20）。
+ *  2026-10-23（张老师定）防刷屏去重：发现流按 (用户, 级别) 分区配额——每人每级别最多露
+ *  最新 FEED_USER_LEVEL_QUOTA 盘；纪录盘（user_scores(_nf) 12 个 *_video 指针 = 当前
+ *  个人最好成绩）不占配额、永不参与淘汰（不进 ROW_NUMBER 计数，UNION ALL 直通）。
+ *  仅首页发现流生效；/video 列表（getVideoList）、个人页、动态流保持全量口径。
+ *  性能：全量窗口函数（30.9 万行排序物化）裸查 ~百 ms 级，按铁律 unstable_cache
+ *  60s 兜底（[level,nf,page,base,limit] 键空间），首页第一页进 scripts/preheat.sh；
+ *  冷页偶发一次重建（stale-while-revalidate 不阻塞请求）。 */
+
+/** 纪录盘 id 集合子查询：user_scores / user_scores_nf 各 6 个 *_video 指针列
+ *  （beg/int/exp × time/3bvs），指向即「当前有效个人最好成绩」——审核管线自动维护
+ *  （破纪录换指针、屏蔽撤纪录清指针），无需独立清理任务。 */
+const PB_VIDEO_IDS_SQL = `SELECT id FROM (
+  SELECT beg_time_video AS id FROM user_scores WHERE beg_time_video IS NOT NULL
+  UNION SELECT beg_3bvs_video FROM user_scores WHERE beg_3bvs_video IS NOT NULL
+  UNION SELECT int_time_video FROM user_scores WHERE int_time_video IS NOT NULL
+  UNION SELECT int_3bvs_video FROM user_scores WHERE int_3bvs_video IS NOT NULL
+  UNION SELECT exp_time_video FROM user_scores WHERE exp_time_video IS NOT NULL
+  UNION SELECT exp_3bvs_video FROM user_scores WHERE exp_3bvs_video IS NOT NULL
+  UNION SELECT beg_time_video FROM user_scores_nf WHERE beg_time_video IS NOT NULL
+  UNION SELECT beg_3bvs_video FROM user_scores_nf WHERE beg_3bvs_video IS NOT NULL
+  UNION SELECT int_time_video FROM user_scores_nf WHERE int_time_video IS NOT NULL
+  UNION SELECT int_3bvs_video FROM user_scores_nf WHERE int_3bvs_video IS NOT NULL
+  UNION SELECT exp_time_video FROM user_scores_nf WHERE exp_time_video IS NOT NULL
+  UNION SELECT exp_3bvs_video FROM user_scores_nf WHERE exp_3bvs_video IS NOT NULL
+) pb`;
+
+const fetchFeedDedupIdsImpl = async (
+  level: VideoLevel | "all",
+  nf: boolean,
+  page: number,
+  base: number,
+  limit: number
+): Promise<number[]> => {
+  const lvCond = level !== "all" ? ` AND v.level = '${level}'` : "";
+  // nf 视图 join video_info 滤 noflag（vi.create_time 与 v.create_time 全量一致，排序用 v 即可）
+  const nfJoin = nf ? " JOIN video_info vi ON vi.id = v.id AND vi.noflag = 1" : "";
+  const quota = FEED_USER_LEVEL_QUOTA;
+  const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(`
+    SELECT f.id FROM (
+      SELECT q.id, q.create_time FROM (
+        SELECT v.id AS id, v.create_time AS create_time,
+               ROW_NUMBER() OVER (PARTITION BY v.user, v.level ORDER BY v.create_time DESC, v.id DESC) AS rn
+        FROM video v${nfJoin}
+        WHERE v.status = ${VIDEO_STATUS.REVIEWED}${lvCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
+      ) q WHERE q.rn <= ${quota}
+      UNION ALL
+      SELECT v.id, v.create_time FROM video v${nfJoin}
+      WHERE v.status = ${VIDEO_STATUS.REVIEWED}${lvCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
+    ) f
+    ORDER BY f.create_time DESC, f.id DESC
+    LIMIT ${limit} OFFSET ${(page - 1) * base}
+  `);
+  return rows.map((r) => N(r.id));
+};
+const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v1"], { revalidate: 60 });
+
+/** 首页发现流去重总数（与 fetchFeedDedupIds 口径严格一致）：
+ *  Σ 每组 (用户,级别) 的 min(非纪录盘数, 配额) + 纪录盘总数。 */
+const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean): Promise<number> => {
+  const lvCond = level !== "all" ? ` AND v.level = '${level}'` : "";
+  const nfJoin = nf ? " JOIN video_info vi ON vi.id = v.id AND vi.noflag = 1" : "";
+  const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`
+    SELECT (
+      SELECT COALESCE(SUM(q.c), 0) FROM (
+        SELECT LEAST(COUNT(*), ${FEED_USER_LEVEL_QUOTA}) AS c FROM video v${nfJoin}
+        WHERE v.status = ${VIDEO_STATUS.REVIEWED}${lvCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
+        GROUP BY v.user, v.level
+      ) q
+    ) + (
+      SELECT COUNT(*) FROM video v${nfJoin}
+      WHERE v.status = ${VIDEO_STATUS.REVIEWED}${lvCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
+    ) AS c
+  `);
+  return N(rows[0]?.c);
+};
+const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v1"], { revalidate: 60 });
+
+/** 首页「最新录像」发现流总数（去重口径，2026-10-23）——
+ *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。 */
+export async function getVideoFeedCount(opts: { level?: VideoLevel | "all"; nf?: boolean } = {}): Promise<number> {
+  return fetchFeedDedupCount(opts.level ?? "all", opts.nf === true);
+}
+
 export async function getVideoFeedPage(opts: {
   level: VideoLevel | "all";
   page: number;
@@ -980,32 +1067,8 @@ export async function getVideoFeedPage(opts: {
   limit: number;
   nf?: boolean;
 }): Promise<VideoListItem[]> {
-  if (opts.nf) {
-    const conds = [
-      "v.status = " + VIDEO_STATUS.REVIEWED,
-      opts.level !== "all" ? `v.level = '${opts.level}'` : "",
-      "vi.noflag = 1",
-    ]
-      .filter(Boolean)
-      .join(" AND ");
-    // vi (noflag, create_time) 索引反扫 + v PK 点查滤 status，同 getVideoFeed nf 分支
-    const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT vi.id FROM video_info vi JOIN video v ON v.id = vi.id WHERE ${conds} ORDER BY vi.create_time DESC, vi.id DESC LIMIT ${opts.limit} OFFSET ${(opts.page - 1) * opts.base}`
-    );
-    return getVideosByIds(rows.map((r) => N(r.id)));
-  }
-  const rows = await prisma.video.findMany({
-    where: {
-      // 2026-10-22 屏蔽/待审不进前台（张老师指令）
-      status: VIDEO_STATUS.REVIEWED,
-      ...(opts.level !== "all" ? { level: opts.level } : {}),
-    },
-    select: { id: true },
-    orderBy: [{ createTime: "desc" }, { id: "desc" }],
-    skip: (opts.page - 1) * opts.base,
-    take: opts.limit,
-  });
-  return getVideosByIds(rows.map((r) => N(r.id)));
+  const ids = await fetchFeedDedupIds(opts.level, opts.nf === true, opts.page, opts.base, opts.limit);
+  return getVideosByIds(ids);
 }
 
 /** 录像总数（「加载更多」括号内剩余条数口径，过滤条件与 getVideoFeed 严格一致）

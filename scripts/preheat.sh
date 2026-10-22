@@ -41,6 +41,13 @@ PREHEAT_PATHS=(
   "/ranking?view=bv"    # 最重：30 万行 video⋈video_info 全量聚合（1h 缓存）+ level_3bv_range 惰性补种
   "/ranking?view=stnb"  # 次重：STNB 榜全量聚合（GROUP_CONCAT 三表 join，生产实测 6s；1h 缓存紧凑元组 ~1.2MB，2026-10-20 进清单）
   "/"                   # 首页：6 条并发 + SiteStats 9 条 count（video 两条件全表扫 30 万行）
+                        #   └ 2026-10-23 随之焐热录像发现流去重键 page1/all（窗口函数全量排序 ~2.1s/键）
+  # 录像发现流去重缓存补键（2026-10-23）：级别 tabs 与 NF 开关的第 1 页——
+  # 窗口函数 (用户,级别) 配额 + 纪录盘保位全量排序，冷键 ~2.1s，避免切流后首击承担
+  "/api/video/more?feedPage=1&base=18&size=18&level=beg"
+  "/api/video/more?feedPage=1&base=18&size=18&level=int"
+  "/api/video/more?feedPage=1&base=18&size=18&level=exp"
+  "/api/video/more?feedPage=1&base=18&size=18&nf=1"
   "/video"              # 录像列表：video.count 全表 + getVideoBoxStats 两个 groupBy（各扫 30 万行）
   "/video?order=stnb"   # STNB 排序列表页：stnb 索引反扫行查询 + 单表化 count（2026-10-20 进清单；FORCE INDEX 后 <0.5s，预热顺手）
   "/ranking"            # 雷界榜：顺带触发 rank_snapshot 当日惰性快照（全表窗口函数写入，每天一次）

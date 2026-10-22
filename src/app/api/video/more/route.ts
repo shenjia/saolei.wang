@@ -8,7 +8,7 @@
 // 军衔称号在服务端预算好随 JSON 返回，客户端直接渲染。
 
 import { NextResponse } from "next/server";
-import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoList } from "@/lib/queries";
+import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoFeedCount, getVideoList } from "@/lib/queries";
 import { VIDEO_PAGESIZE, VIDEO_LEVELS, parseVideoListOrder, type VideoLevel } from "@/lib/config";
 
 function parseLevel(p: URLSearchParams): VideoLevel | "all" {
@@ -47,6 +47,8 @@ export async function GET(req: Request) {
   }
 
   // ③ 首页页码模式（feedPage）：id 倒序第 N 页起 size 条
+  //  2026-10-23：首页发现流去重口径——(用户,级别) 配额 + 纪录盘保位（getVideoFeedPage 内实现），
+  //  total 同步换 getVideoFeedCount 去重口径（与首页 SSR 同源同键，共享 60s 缓存）
   const feedPage = parseInt(p.get("feedPage") ?? "", 10);
   if (feedPage >= 1) {
     const level = parseLevel(p);
@@ -56,7 +58,7 @@ export async function GET(req: Request) {
     const nf = p.get("nf") === "1";
     const [items, total] = await Promise.all([
       getVideoFeedPage({ level, page: feedPage, base, limit: size, nf }),
-      getVideoCount({ level, nf }),
+      getVideoFeedCount({ level, nf }),
     ]);
     return NextResponse.json({
       items,
@@ -70,6 +72,8 @@ export async function GET(req: Request) {
   // create_time（响应同名字段返回）。旧参数 cursor（录像id）与 (create_time,id) 序
   // 不兼容，不再作为续拉游标——携带旧 cursor 的请求自然取第 1 页（无当前调用方，
   // VideoFeed 已全量走 feedPage 页码模式）。
+  //  2026-10-23 注：本分支保持全量口径（keyset 游标与去重配额不兼容），且当前无调用方——
+  //  首页 SSR 与 feedPage 分支均已走去重口径；若未来启用需另行设计。
   const cursorTime = parseInt(p.get("cursorTime") ?? "0", 10) || 0;
   const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
   const level = parseLevel(p);

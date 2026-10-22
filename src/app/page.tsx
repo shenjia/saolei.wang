@@ -22,8 +22,8 @@ import {
   getHotVideos,
   getNewbies,
   getNewsCount,
-  getVideoFeed,
-  getVideoCount,
+  getVideoFeedCount,
+  getVideoFeedPage,
 } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -66,8 +66,10 @@ export default async function HomePage() {
     getHotVideos(10),
     // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
     getNewsCount({ home: true }),
-    getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
-    getVideoCount({ level: "all" }),
+    // 首页「最新录像」发现流（2026-10-23 起走去重口径：首页 feed 与 /api/video/more
+    // feedPage 分支共用 getVideoFeedPage 的 (用户,级别) 配额 + 纪录盘保位；翻页 API 同源）
+    getVideoFeedPage({ level: "all", page: 1, base: HOME_VIDEO_NUMBER, limit: HOME_VIDEO_NUMBER }),
+    getVideoFeedCount({ level: "all" }),
   ]);
   // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
   const king = await getThunderKingId();
