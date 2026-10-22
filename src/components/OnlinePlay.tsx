@@ -535,12 +535,16 @@ export function OnlinePlay({
        连击「松开拔旗」只放行空手松开（见 window mouseup）——否则
        按下插旗后同格松开会把刚插的旗自己拔掉，滑动收尾压到旗上也会误拔 */
     let comboHit = false;
-    /* 开局保护窗（2026-10-19 张老师定）：首击手势内滑动不开格——开局盘面全是
-       未开格，按下即拖会沿轨迹盲开处女地（高级盘雷密度 ~20%，无猜只保首击
-       安全不保盲滑），开局暴毙主因。规则＝一局第一次开格所在的那个按下→松开
-       手势里，左键滑动不动作（首击本身照常生效），松开即解除；右键滑旗不拦
-       （插旗零风险）。没有秒数常量，体感＝「第一下只能点，看到局面才能滑」 */
-    let comboGuard = true;
+    /* 连击开局保护（2026-10-19 张老师定首击手势版，2026-10-22 改**开局后即生效**）：
+       原口径＝首击手势内滑动不开格（「第一下只能点」）；连击改为开局即生效后，
+       按下即开取代了「首击单击」形态，保护窗随之改为**时间窗**——首格开出
+       （openCell 起表，startTimer 末尾写 comboGraceT0）起 1 秒内，连击**自动
+       触发**的开格被冻结（无猜首击 3×3 保护只在首格，盲滑轨迹仍会踩雷；开局
+       一瞬手还没离开起点、误滑一下就暴毙是开局暴毙主因）。手动语义不受影响：
+       起始格照常开（首击入口）、点已开数字格照常双击；开局满 1 秒后全放行 */
+    let comboGraceT0 = 0;
+    /* 保护窗内＝冻结连击自动开格（性能计时，不受复活回拨影响）；未开局恒 false */
+    const comboShield = () => started && performance.now() - comboGraceT0 < 1000;
 
     const tbody = $("gtbody") as unknown as HTMLTableSectionElement;
     const ledMines = $("led_mines") as unknown as SVGElement;
@@ -928,6 +932,7 @@ export function OnlinePlay({
     }
     function startTimer() {
       startTs = performance.now();
+      comboGraceT0 = startTs; // 连击开局保护窗起点＝起表时刻（首格开出）
       timerId = window.setInterval(() => {
         led(ledTime, Math.floor((performance.now() - startTs) / 1000));
       }, 100);
@@ -1440,7 +1445,13 @@ export function OnlinePlay({
         if (f !== nums[i] || !around.some((c) => state[c] === 0)) return;
         comboHit = true; recordEv(11, i); recordEv(5, i); chord(i);
       }
-      else if (state[i] === 0) { comboHit = true; recordEv(3, i); recordEv(5, i); openCell(i); }
+      else if (state[i] === 0) {
+        /* 开局保护窗内冻结自动开格（2026-10-22）：起始格＝首击入口（openCell 内
+           placeMines 前 nums 尚空、comboShield 亦为假），照常开；开局 1 秒内的
+           滑动/按下触雷格会被这里拦下（无事件零动作），满 1 秒放行 */
+        if (comboShield() && nums) return;
+        comboHit = true; recordEv(3, i); recordEv(5, i); openCell(i);
+      }
     }
     function comboRightClick(i: number, slide = false) {
       if (nf) return; // NF：右键禁用（入口已拦，双保险）
@@ -2863,7 +2874,7 @@ export function OnlinePlay({
       /* 手势状态清零 + 隐藏结算报告（张老师：游戏再次开始时隐藏）；事件流同步清空
          （五期）；重玩锁定标记保留——placeMines 在首击时消费它 */
       leftDown = rightDown = chordDone = false;
-      comboGuard = true; // 开局保护窗随新局恢复
+      comboGraceT0 = 0; // 连击开局保护窗随新局重置（首格开出时由 startTimer 重启）
       evStream = [];
       /* 原地复活状态随新局作废（2026-10-19）：死亡快照/手势快照/复活计数不跨局 */
       dieSnap = null;
@@ -3234,9 +3245,11 @@ export function OnlinePlay({
        交互方式，不改变盘面规则/旗语义，对局中途切换无一致命状态 */
     on(btnCombo, "click", () => {
       combo = !combo;
-      /* 对局中途才开连击：开局保护窗已无意义（首击早已发生），直接放行滑动；
-         未开局时开着守卫等首击手势 */
-      if (combo && started) comboGuard = false;
+      /* 开局保护窗按「是否已开局」定（2026-10-22 改开局即生效后重定）：
+         未开局（含未首击）→ 窗待命（开局后首格起 1 秒内冻结自动开格）；
+         对局中途才开连击 → 首击早已发生且开局已远超 1 秒，comboShield
+         自然为假，无需任何放行处理 */
+      if (combo && started) comboGraceT0 = 0;
       saveSettings();
       syncModeButtons();
     });
@@ -3534,9 +3547,8 @@ export function OnlinePlay({
          state 守卫，「一格限一次」天然成立（触发过 state 变更即不会再中）；
          无需按下态高亮（动作瞬时完成） */
       if (combo) {
-        /* 首击手势保护：左键滑动不动作（首击本身在 mousedown 已生效），
-           松开解除；右键滑旗零风险不拦 */
-        if (comboGuard && leftDown) return;
+        /* 开局保护（2026-10-22 时间窗版）：窗内的冻结收在 comboLeftClick/
+           comboRightClick 内部（无事件零动作），滑动分支只管分发 */
         if (leftDown) { setFace("ooh"); comboLeftClick(i, true); }
         else if (rightDown) { setFace("ooh"); comboRightClick(i, true); }
         return;
@@ -3586,7 +3598,6 @@ export function OnlinePlay({
           recordEv(17, ui);
         }
         clearPress(); setFace("smile");
-        comboGuard = false; // 首击手势结束：开局保护窗解除，此后滑动恢复连开
         leftDown = rightDown = chordDone = false; return;
       }
       const i = eventCell(e); clearPress(); setFace("smile");
@@ -3660,7 +3671,12 @@ export function OnlinePlay({
     function comboTouchOpen(i: number) {
       if (over) return;
       if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
-      else if (state[i] === 0) { recordEv(3, i); recordEv(5, i); openCell(i); }
+      else if (state[i] === 0) {
+        /* 开局保护窗内冻结自动开格（2026-10-22，与桌面 comboLeftClick 同口径）：
+           起始格＝首击入口（nums 尚空）照常开，开局 1 秒内其余格无事件零动作 */
+        if (comboShield() && nums) return;
+        recordEv(3, i); recordEv(5, i); openCell(i);
+      }
     }
     on(gboard, "touchend", (e: TouchEvent) => {
       if (touchTimer) clearTimeout(touchTimer);
@@ -3692,7 +3708,6 @@ export function OnlinePlay({
       }
       touchCell = -1;
       touchMoved = false;
-      comboGuard = false; // 首击手势结束：开局保护窗解除（与新局 reset 恢复）
       e.preventDefault();
     }, { passive: false });
     /* 滑动取消带 12px 容差：手指微颤（1-2px）不再吞掉点按——「有时点击无效」
@@ -3718,10 +3733,11 @@ export function OnlinePlay({
         if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
         if (over) { touchCell = -1; return; }
         touchMoved = true;
-        /* 首击手势保护：起始格照开（触点不即开，这里是首击的唯一入口，无猜下
-           必安全）——路径格不开，松开解除。开局按下即拖不再沿轨迹盲开处女地 */
+        /* 起始格补开（触点不即开，滑动一开始在此补开；首击入口 comboShield
+           为假照常开）＋沿轨迹插值逐格开——开局 1 秒保护窗内的冻结收在
+           comboTouchOpen 内部（无事件零动作），不再有手势级闸门（2026-10-22） */
         if (state[touchCell] === 0) comboTouchOpen(touchCell);
-        if (!comboGuard) {
+        {
           const bp = touchBoardPx(t.clientX, t.clientY);
           const steps = Math.max(1, Math.ceil(Math.hypot(bp.x - touchLastX, bp.y - touchLastY) / 8));
           for (let s = 1; s <= steps; s++) {
@@ -3732,9 +3748,6 @@ export function OnlinePlay({
             const i = cy * W + cx;
             if (state[i] === 0 && i !== touchCell) { touchCell = i; comboTouchOpen(i); }
           }
-          touchLastX = bp.x; touchLastY = bp.y;
-        } else {
-          const bp = touchBoardPx(t.clientX, t.clientY);
           touchLastX = bp.x; touchLastY = bp.y;
         }
         return;
@@ -4650,7 +4663,8 @@ export function OnlinePlay({
         manualStored: () => (manualStoredMines ? Array.from(manualStoredMines) : null),
         M: () => M,
         combo: () => combo,
-        guard: () => comboGuard,
+        /* 连击开局保护窗剩余毫秒（2026-10-22 时间窗版）；<=0＝不在窗内 */
+        guard: () => (started ? Math.max(0, 1000 - (performance.now() - comboGraceT0)) : 0),
         over: () => over,
         nf: () => nf,
         ng: () => ng,
@@ -4794,7 +4808,7 @@ export function OnlinePlay({
               {/* 手：食指竖起（圆帽指尖）→ 两个指节圆弧 → 拳身 → 圆底收回到指根 */}
               <path d="M9.9 14.2V7.3a1.75 1.75 0 0 1 3.5 0V10.5a1.55 1.55 0 0 1 3.1 .55a1.55 1.55 0 0 1 3.1 .55V16.6a6.3 6.3 0 0 1 -9.7 3.1V14.2Z" />
             </svg>
-            <span className="tip">连击模式：开局成功后，按下并拖动视为对所有经过格子进行点击</span>
+            <span className="tip">连击模式：按下并拖动视为对所有经过格子进行点击</span>
           </button>
           <button className="gicon gmode gmode_ng" id="btn_ng" type="button">
             {/* 雨伞图标（2026-10-15 九期五改，张老师定）：合伞＝未激活态、
