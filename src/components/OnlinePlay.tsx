@@ -539,14 +539,19 @@ export function OnlinePlay({
        原口径＝首击手势内滑动不开格（「第一下只能点」）；连击改为开局即生效后，
        保护随之改为**时间窗内跳雷**（张老师同日二定：「一秒内也应该是滑动连开，
        只是把碰到雷的格子跳过」）——首格开出（openCell 起表，startTimer 末尾写
-       comboGraceT0）起 1 秒内，连击滑动/按下路径上的**安全格照常连开**，仅
+       comboGraceT0）起保护窗内，连击滑动/按下路径上的**安全格照常连开**，仅
        **有雷的格子被跳过**（无事件零动作，玩家无感；无猜首击 3×3 保护只在
-       首格，盲滑轨迹仍会踩雷——开局一瞬误滑就暴毙是开局暴毙主因）。开局满
-       1 秒后全放行（雷格也照常触发＝回到真实排雷）。首格＝首击入口照常开
-       （无猜下 placeMines 保证安全） */
+       首格，盲滑轨迹仍会踩雷——开局一瞬误滑就暴毙是开局暴毙主因）。窗口到期
+       全放行（雷格也照常触发＝回到真实排雷）。时长三定（同日）：**初级不设
+       保护、中级/高级/自定义半秒**。首格＝首击入口照常开（无猜下 placeMines
+       保证安全） */
     let comboGraceT0 = 0;
+    /* 保护窗时长按级别（2026-10-22 张老师三定）：初级不设保护（8×8 小盘
+       滑不出什么、盲开也快），中级/高级/自定义半秒。开局切级别时 lv 已
+       先落位，首击读到的一定是本局级别 */
+    const COMBO_GRACE_MS = () => (lv === "beg" ? 0 : 500);
     /* 保护窗内＝连击开格要跳雷（性能计时，不受复活回拨影响）；未开局恒 false */
-    const comboShield = () => started && performance.now() - comboGraceT0 < 1000;
+    const comboShield = () => started && performance.now() - comboGraceT0 < COMBO_GRACE_MS();
 
     const tbody = $("gtbody") as unknown as HTMLTableSectionElement;
     const ledMines = $("led_mines") as unknown as SVGElement;
@@ -1448,9 +1453,10 @@ export function OnlinePlay({
         comboHit = true; recordEv(11, i); recordEv(5, i); chord(i);
       }
       else if (state[i] === 0) {
-        /* 开局保护窗内跳雷（2026-10-22 二定）：安全格照常开，仅有雷格被跳过
-           （无事件零动作）。首格＝首击入口（openCell 内 placeMines 前 nums 尚空、
-           mines 也尚未生成），判据天然放行；满 1 秒后雷格也照常触发 */
+        /* 开局保护窗内跳雷（2026-10-22 二定；时长三定＝初级 0/其余 500ms）：
+           安全格照常开，仅有雷格被跳过（无事件零动作）。首格＝首击入口
+           （openCell 内 placeMines 前 nums 尚空、mines 也尚未生成），判据
+           天然放行；窗口到期后雷格也照常触发 */
         if (comboShield() && mines && mines[i]) return;
         comboHit = true; recordEv(3, i); recordEv(5, i); openCell(i);
       }
@@ -3674,8 +3680,8 @@ export function OnlinePlay({
       if (over) return;
       if (state[i] === 1) { recordEv(11, i); recordEv(5, i); chord(i); }
       else if (state[i] === 0) {
-        /* 开局保护窗内跳雷（2026-10-22 二定，与桌面 comboLeftClick 同口径）：
-           安全格照常开，仅有雷格被跳过（无事件零动作） */
+        /* 开局保护窗内跳雷（2026-10-22 二定，与桌面 comboLeftClick 同口径；
+           时长三定＝初级 0/其余 500ms）：安全格照常开，仅有雷格被跳过（无事件零动作） */
         if (comboShield() && mines && mines[i]) return;
         recordEv(3, i); recordEv(5, i); openCell(i);
       }
@@ -4665,8 +4671,9 @@ export function OnlinePlay({
         manualStored: () => (manualStoredMines ? Array.from(manualStoredMines) : null),
         M: () => M,
         combo: () => combo,
-        /* 连击开局保护窗剩余毫秒（2026-10-22 时间窗版）；<=0＝不在窗内 */
-        guard: () => (started ? Math.max(0, 1000 - (performance.now() - comboGraceT0)) : 0),
+        /* 连击开局保护窗剩余毫秒（2026-10-22 时间窗版；时长三定＝初级 0/其余
+           500ms）；<=0＝不在窗内 */
+        guard: () => (started ? Math.max(0, (lv === "beg" ? 0 : 500) - (performance.now() - comboGraceT0)) : 0),
         over: () => over,
         nf: () => nf,
         ng: () => ng,
