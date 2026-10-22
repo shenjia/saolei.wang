@@ -28,6 +28,8 @@ export interface PracticeToday {
   trend: number[];
   /** 近 30 天全网完成盘数走势（与 trend 同轴对齐） */
   trendWon: number[];
+  /** 近 30 天我的尝试盘数走势（登录才有；末位=今日实时数。绿线数据源） */
+  mineTrend: number[];
 }
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
@@ -63,6 +65,32 @@ const getTrendCached = unstable_cache(
   { revalidate: 300 }
 );
 
+/** 近 30 天我的分日尝试盘数（不含今天；uid 参与缓存 key，每人一份不串）。
+ *  五轮首版绿线恒平的根因：登录态没查个人分日序列，用 0 数组兜底（2026-10-22 六轮修复） */
+const getMineTrendCached = (uid: number) =>
+  unstable_cache(
+    async (): Promise<number[]> => {
+      const rows = await prisma.$queryRaw<Array<{ d: bigint; c: bigint }>>`
+        SELECT FLOOR((create_time + 28800) / 86400) AS d, COUNT(*) AS c
+        FROM practice_log
+        WHERE user_id = ${BigInt(uid)} AND create_time >= ${BigInt(dayStart(29))}
+        GROUP BY d
+      `;
+      const map = new Map<number, number>(rows.map((r) => [N(r.d), N(r.c)]));
+      const fromIdx = Math.floor((dayStart(29) + 28800) / 86400);
+      const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
+      const out: number[] = [];
+      for (let i = 0; i < 30; i++) {
+        const idx = fromIdx + i;
+        if (idx >= todayIdx) break;
+        out.push(map.get(idx) ?? 0);
+      }
+      return out;
+    },
+    ["home-practice-mine-trend", `u${uid}`, "v1"],
+    { revalidate: 300 }
+  )();
+
 export async function getPracticeToday(uid?: number | null): Promise<PracticeToday> {
   const today0 = dayStart(0);
   // 实时五数并行：全网尝试/完成/去重玩家 + 我的尝试/完成
@@ -86,6 +114,7 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
       : Promise.resolve(0),
   ]);
   const trend30 = await getTrendCached();
+  const mineTrendBase = uid ? await getMineTrendCached(uid) : [];
   return {
     today,
     todayWon,
@@ -94,5 +123,6 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
     mineWon,
     trend: [...trend30.p, today],
     trendWon: [...trend30.w, todayWon],
+    mineTrend: uid ? [...mineTrendBase, mine] : [],
   };
 }

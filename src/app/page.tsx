@@ -61,8 +61,9 @@ export default async function HomePage() {
     getHomeNews(),
     getNewbies(),
     // 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块，数据源原 /video 右栏同款；
-    // 2026-10-22 张老师要求：10 → 9，少占一个位置）
-    getHotVideos(9),
+    // 2026-10-22 张老师要求：10 → 9，少占一个位置；
+    // 同日再调：论坛新帖 6 → 5 腾位置，热门录像 9 → 10 收回）
+    getHotVideos(10),
     // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
     getNewsCount({ home: true }),
     getVideoFeed({ level: "all", limit: HOME_VIDEO_NUMBER }),
@@ -122,6 +123,7 @@ export default async function HomePage() {
           net={practice.today}
           users={practice.todayUsers}
           trendNet={practice.trend}
+          trendMine={practice.mineTrend}
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方 */}
@@ -177,6 +179,7 @@ export default async function HomePage() {
           net={practice.today}
           users={practice.todayUsers}
           trendNet={practice.trend}
+          trendMine={practice.mineTrend}
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22 张老师要求）：待审录像数金色 +

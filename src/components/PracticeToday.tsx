@@ -59,6 +59,7 @@ export function PracticeToday({
   net,
   users,
   trendNet,
+  trendMine,
   logged,
 }: {
   /** DOM id 前缀：桌面侧栏 "practice_today" / 移动端 "practice_today_top" */
@@ -74,6 +75,8 @@ export function PracticeToday({
   users: number;
   /** 近 30 天全网尝试走势（末位=今日） */
   trendNet: number[];
+  /** 近 30 天我的尝试走势（登录=practice_log 分日；未登录由 localStorage 趋势替代） */
+  trendMine: number[];
   /** 登录态：true=信任服务端；false=读 localStorage */
   logged: boolean;
 }) {
@@ -99,7 +102,8 @@ export function PracticeToday({
   const myPlayed = local?.today.p ?? mine;
   // 未登录趋势与全网趋势按尾对齐（localStorage 天数不足时前面补 0，多了截断）
   const myTrend = (() => {
-    if (logged || !local) return null;
+    if (logged) return trendMine;
+    if (!local) return trendNet.map(() => 0);
     const lt = local.trend;
     if (lt.length >= trendNet.length) return lt.slice(lt.length - trendNet.length);
     return [...Array(trendNet.length - lt.length).fill(0), ...lt];
@@ -113,16 +117,16 @@ export function PracticeToday({
         <b className="mine">{myWon}</b>
         <span className="sep">/</span>
         <b className="total">{myPlayed}</b>
-        <span className="lead">盘</span>
+        <span className="lead">局</span>
         {r !== null && <span className="rate">开率 {r}%</span>}
       </p>
       <p className="pt_sub">
-        共{users}位雷友完成了 <b className="net">{netWon}</b>
+        共 <b className="users">{users}</b> 位雷友完成了 <b className="net">{netWon}</b>
         <span className="sep"> / </span>
         <b className="netb">{net}</b> 局{rNet !== null && <span className="rate"> 开率 {rNet}%</span>}
       </p>
       <div className="pt_chart">
-        <DoubleLine mine={myTrend ?? trendNet.map(() => 0)} net={trendNet} height={38} />
+        <DoubleLine mine={myTrend} net={trendNet} height={38} />
       </div>
     </div>
   );

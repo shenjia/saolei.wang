@@ -8902,12 +8902,17 @@ html.op-fakefs #header {
   font-weight: bold;
 }
 .practice_today .pt_sub {
+  display: flex;
+  align-items: baseline;
   font-size: 12px;
   line-height: 18px;
   color: #75715e; /* 与 #review_entry 灰字同色的低调次级 */
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; /* 侧栏 260px 窄，长文案截尾保排版 */
+}
+.practice_today .pt_sub .users {
+  color: #b1b1a4; /* 雷友数：站内标准亮灰（与首行尝试数同口径，2026-10-22 六轮） */
+  font-weight: bold;
 }
 .practice_today .pt_sub .net {
   color: #fdc61a; /* 全网完成数用站内金（#review_entry 待审数同色口径） */
@@ -8918,8 +8923,9 @@ html.op-fakefs #header {
   font-weight: bold;
 }
 .practice_today .pt_sub .rate {
-  margin-left: 6px;
-  color: #a6e22e;
+  margin-left: auto; /* 与首行开率同款右浮对齐（六轮张老师要求） */
+  padding-left: 6px;
+  color: #fdc61a; /* 金色（与首行绿色区分层级） */
   font-weight: bold;
 }
 .practice_today .pt_chart {
