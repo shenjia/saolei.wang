@@ -53,6 +53,7 @@ import { formatRawvf } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { LEVEL_NAMES } from "@/lib/config";
 import { paintRangeFill } from "@/lib/paintRange";
+import { bumpLocalPractice } from "@/lib/practice-local";
 import type { VideoAnalysisPoint } from "@/lib/videoscore";
 import {
   DIST_BUCKET_ALL,
@@ -1589,10 +1590,12 @@ export function OnlinePlay({
           });
           if (won) {
             navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
+            bumpLocalPractice(); // 未登录「今日练习」记数（2026-10-22）：胜局终态立即 +1
           } else {
             if (pendingLoseBeacon !== null) clearTimeout(pendingLoseBeacon);
             pendingLoseBeacon = window.setTimeout(() => {
               navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
+              bumpLocalPractice(); // 败局复活窗（300ms）结束后才算终态，此时 +1
               pendingLoseBeacon = null;
             }, 300);
           }

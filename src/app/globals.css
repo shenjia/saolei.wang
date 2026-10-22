@@ -8858,19 +8858,19 @@ html.op-fakefs #header {
   background: #75745f;
   color: #fff;
 }
-/* 首页「今日练习」板块（2026-10-22 张老师要求）：「开始练习」按钮上方。
+/* 首页「今日练习」板块（2026-10-22 张老师要求）：「开始练习」按钮下方、审核提醒行上方。
    主行「今日已练习 xxx/yyy 局」——xxx=我的局数（标准绿 #a6e22e 加粗放大）、
    yyy=全站局数；下灰色小字「xx位雷友参与」；底部近 30 天走势折线铺满整个模块宽。
    桌面侧栏副本与移动端置顶副本同款，断点显隐与 #play_entry / #play_entry_top 一致 */
 .practice_today {
-  margin: 16px 8px -6px; /* 底距上提抵住「开始练习」按钮顶距，视觉成组 */
+  margin: -6px 8px 16px; /* 顶距上提贴住「开始练习」按钮底距（净距 10px），视觉成组 */
   padding: 0 6px;
   box-sizing: border-box;
 }
 .practice_today .pt_line {
   font-size: 15px;
   line-height: 22px;
-  color: #e8e8e0;
+  color: #b1b1a4; /* 站内标准亮灰（数据统计数值同色，2026-09-27 口径） */
 }
 .practice_today .pt_line .mine {
   color: #a6e22e; /* 站内标准绿（站点 logo hover 同色），暗底上醒目 */
@@ -8878,7 +8878,7 @@ html.op-fakefs #header {
   font-weight: bold;
 }
 .practice_today .pt_line .total {
-  color: #e8e8e0;
+  color: #b1b1a4;
   font-size: 18px;
   font-weight: bold;
 }
@@ -10174,4 +10174,15 @@ body #page .word_terms .desc {
   vertical-align: middle;
   white-space: nowrap;
   cursor: help;
+}
+
+/* ---- 评论定位高亮（2026-10-22 张老师需求）----
+   ?reply= 深链/消息链接落地后目标楼层的短暂高亮：边框扫过 Monokai 站绿，
+   2 秒后由 BbsReplySection 摘除类名。与 .review_pending 同段追加，零依赖。 */
+@keyframes reply_anchor_flash {
+  0% { border-color: #a6e22e; box-shadow: 0 0 0 3px rgba(166, 226, 46, 0.25); }
+  100% { border-color: #48483c; box-shadow: 0 0 0 3px rgba(166, 226, 46, 0); }
+}
+.reply_anchor_hit {
+  animation: reply_anchor_flash 1.6s ease-out;
 }
