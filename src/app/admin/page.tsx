@@ -273,8 +273,15 @@ export default async function AdminDashboard() {
           />
         </AdminCard>
 
-        <AdminCard title="称号体系偏好" more="user_info.title_pref · 10 分钟缓存">
-          <Donut items={titlePrefs} centerLabel="已存偏好玩家" mergeSmall={false} />
+        <AdminCard title="称号体系偏好" more="user_info.title_pref · 10 分钟缓存 · 点击图例查看玩家列表">
+          <Donut
+            items={titlePrefs.map((t) => ({
+              ...t,
+              href: t.label === "旧版人神界称号" ? "/admin/users?title=c&order=sum" : "/admin/users?title=m&order=sum",
+            }))}
+            centerLabel="已存偏好玩家"
+            mergeSmall={false}
+          />
           <div className="admin_hint" style={{ marginTop: 10 }}>
             口径：只统计资料保存过的账号（user_info 有行才建偏好；站内无会话表，无法按「已登录」精确圈定）。
             未设置偏好按军衔制渲染，因此「旧版」占比 = 主动切换旧版称号的玩家比例。

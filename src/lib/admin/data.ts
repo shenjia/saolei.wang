@@ -50,6 +50,8 @@ export interface UserFilter {
   sex?: string;
   area?: string;
   ranked?: string;
+  /** 称号体系偏好（仪表盘环形图点击穿透）：c=旧版人神界 / m=军衔制 */
+  title?: string;
   order?: string;
   page?: number;
 }
@@ -92,6 +94,12 @@ function userWhere(f: UserFilter): { sql: string; params: unknown[] } {
   }
   if (f.ranked === "1") conds.push("s.sum_time > 0");
   if (f.ranked === "0") conds.push("(s.sum_time IS NULL OR s.sum_time = 0)");
+  // 称号体系偏好筛选（2026-10-23 仪表盘环形图点击穿透）：与 getTitlePrefCounts 同口径——
+  // 环形图只统计 user_info 有行的玩家（未存过资料不在任何一段），故用 EXISTS 而非 LEFT JOIN 判空；
+  // 'c'=旧版人神界称号；'m'=军衔制（含脏值，脏值同按军衔渲染）
+  if (f.title === "c") conds.push("EXISTS (SELECT 1 FROM user_info ti WHERE ti.id = u.id AND ti.title_pref = 'c')");
+  else if (f.title === "m")
+    conds.push("EXISTS (SELECT 1 FROM user_info ti WHERE ti.id = u.id AND ti.title_pref IS NOT NULL AND ti.title_pref <> 'c' AND ti.title_pref <> '')");
   return { sql: conds.length ? "WHERE " + conds.join(" AND ") : "", params };
 }
 

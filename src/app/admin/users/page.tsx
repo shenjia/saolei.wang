@@ -32,6 +32,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       sex: sp.sex,
       area: sp.area,
       ranked: sp.ranked,
+      title: sp.title,
       order: sp.order,
       page,
     }),
@@ -72,6 +73,12 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 type: "select",
                 prefix: "成绩",
                 options: [["", "全部"], ["1", "已上榜"], ["0", "未上榜"]],
+              },
+              {
+                name: "title",
+                type: "select",
+                prefix: "称号偏好",
+                options: [["", "全部称号"], ["m", "军衔制"], ["c", "旧版人神界"]],
               },
               {
                 name: "sex",

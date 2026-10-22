@@ -333,7 +333,7 @@ export function Donut({
   centerLabel,
   mergeSmall = true,
 }: {
-  items: { label: string; value: number }[];
+  items: { label: string; value: number; href?: string }[];
   centerLabel?: string;
   /** 小于 0.5% 的段并入「其他」（称号体系偏好这类「每一段都是关键数据」的场景传 false） */
   mergeSmall?: boolean;
@@ -344,7 +344,7 @@ export function Donut({
 
   // 小项合并（渲染前算好；沿用 reduce 累积，不做渲染期副作用）
   const small = items.filter((i) => i.value / total < 0.005);
-  const list: { label: string; value: number; merged?: boolean }[] = items.filter(
+  const list: { label: string; value: number; href?: string; merged?: boolean }[] = items.filter(
     (i) => i.value / total >= 0.005
   );
   if (!mergeSmall) list.push(...small);
@@ -356,7 +356,7 @@ export function Donut({
   const SW = 20;
   // 段间留 2px 呼吸缝：弧长扣 2、起点补 1；极小段弧长保底 0.5 防负数
   const segs = list.reduce<
-    { list: { idx: number; key: string; color: string; value: number; frac: number; dash: string; offset: number }[]; acc: number }
+    { list: { idx: number; key: string; color: string; value: number; href?: string; frac: number; dash: string; offset: number }[]; acc: number }
   >(
     (state, it, idx) => {
       const frac = it.value / total;
@@ -369,6 +369,7 @@ export function Donut({
             key: it.label,
             color: it.merged ? "#6c6c61" : SERIES_COLORS[idx % SERIES_COLORS.length],
             value: it.value,
+            href: it.href,
             frac,
             dash: `${len} ${C - len}`,
             offset: -(state.acc * C) + 1,
@@ -427,6 +428,11 @@ export function Donut({
             className={`admin_donut_row${hover === s.idx ? " hot" : ""}`}
             onMouseEnter={() => setHover(s.idx)}
             onMouseLeave={() => setHover(null)}
+            onClick={() => {
+              // 有链接的段（如称号偏好）整行可点击跳转
+              if (s.href) window.location.href = s.href;
+            }}
+            style={s.href ? { cursor: "pointer" } : undefined}
           >
             <span
               style={{
@@ -437,7 +443,7 @@ export function Donut({
                 flex: "0 0 10px",
               }}
             />
-            <span className="name" title={s.key}>
+            <span className="name" title={s.href ? `${s.key}（点击查看列表）` : s.key}>
               {s.key}
             </span>
             <span className="val">{s.value.toLocaleString("zh-CN")}</span>

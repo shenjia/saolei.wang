@@ -31,11 +31,11 @@ const cache = <T>(fn: () => Promise<T>, key: string) =>
   unstable_cache(fn, [`admin-v1-${key}`], { revalidate: ADMIN_CACHE_TTL, tags: ["admin-stats"] });
 
 /** 仪表盘软件分布 + 称号体系偏好（2026-10-21 加 titlePrefs，载荷结构变更 → key 升 v2 丢弃旧缓存；
- *  称号/地区分布卡已下线，军衔分布看 /admin/rank、地区看 /admin/stats） */
+ *  2026-10-23 修军衔制双重计数 → key 升 v3；称号/地区分布卡已下线，军衔分布看 /admin/rank、地区看 /admin/stats） */
 export const getDashboardDistributionsSoftwares = cache(async () => {
   const [softwares, titlePrefs] = await Promise.all([getSoftwareCounts(6), getTitlePrefCounts()]);
   return { softwares, titlePrefs };
-}, "dashboard-softwares-v2");
+}, "dashboard-softwares-v3");
 
 /** 仪表盘异常检测（4 条全表聚合 ~2.5s，2026-10-21 挂缓存；数据变化频率低，10 分钟足够） */
 export const getCachedAnomalies = cache(() => getAnomalies(), "anomalies");

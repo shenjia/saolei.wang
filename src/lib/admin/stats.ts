@@ -282,8 +282,8 @@ export async function getTitlePrefCounts(): Promise<{ label: string; value: numb
   const map = new Map(rows.map((r) => [r.pref, N(r.c)]));
   const classic = map.get("c") ?? 0;
   // 脏值（非 'c'）与 'm' 一样按军衔口径渲染，并入军衔制
-  const military =
-    [...map.entries()].filter(([k]) => k !== "c").reduce((s, [, v]) => s + v, 0) + (map.get("m") ?? 0);
+  // 2026-10-23 修双重计数：filter(≠'c') 求和已含 'm'，原先又 +map.get('m') 把 'm' 算了两遍
+  const military = [...map.entries()].filter(([k]) => k !== "c").reduce((s, [, v]) => s + v, 0);
   return [
     { label: "军衔制（默认口径）", value: military },
     { label: "旧版人神界称号", value: classic },
