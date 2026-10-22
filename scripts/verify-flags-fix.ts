@@ -13,7 +13,9 @@ import { avfToRawvf } from "../src/lib/avf";
 import { formatRawvf } from "../src/lib/rawvf";
 
 function simulate(fp: string) {
-  const v = formatRawvf(avfToRawvf(new Uint8Array(readFileSync(fp))));
+  const raw = avfToRawvf(new Uint8Array(readFileSync(fp)));
+  if (!raw) throw new Error("avf 解析失败: " + fp);
+  const v = formatRawvf(raw);
   const rows = v.height, cols = v.width, N = rows * cols;
   const mines = new Uint8Array(N), nums = new Uint8Array(N);
   let mineCount = 0;
@@ -140,7 +142,9 @@ function simulate(fp: string) {
 
 /* 338799：flop 真值 Flags=29（3BV 132/132 胜局） */
 const a = simulate("videos/2026/04/06/1b194bca789f3f2a1d19ac94791b51ee.avf");
-const va = formatRawvf(avfToRawvf(new Uint8Array(readFileSync("videos/2026/04/06/1b194bca789f3f2a1d19ac94791b51ee.avf"))));
+const vaRaw = avfToRawvf(new Uint8Array(readFileSync("videos/2026/04/06/1b194bca789f3f2a1d19ac94791b51ee.avf")));
+if (!vaRaw) throw new Error("avf 解析失败（事件统计段）");
+const va = formatRawvf(vaRaw);
 const evCnt: Record<string, number> = {};
 for (const l of va.events) {
   const m = /^[\d.]+ (lc|lr|rc|rr|mc|mr|sc|mt) /.exec(l);
