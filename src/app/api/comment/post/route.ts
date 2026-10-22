@@ -3,7 +3,7 @@
 import { NextResponse, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { addComment } from "@/lib/queries";
+import { addComment, getCommentById } from "@/lib/queries";
 import { COMMENT_CONTENT_LIMIT } from "@/lib/config";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { runContentReview } from "@/lib/content-review";
@@ -50,5 +50,8 @@ export async function POST(req: Request) {
   // AI 后置复审（2026-10-13）：词库已放行则正常展示，响应返回后异步送 AI 复核；
   // 判可疑会把这条评论转为「待审」并撤下动态（见 content-review.ts），用户无感知延迟
   after(() => runContentReview("comment", commentId, content));
-  return NextResponse.json({ ok: true });
+  // 2026-10-22 张老师要求：返回新评论行（作者/称号快照齐全），评论区就地插入列表头，
+  // 不再依赖整页刷新；若 AI 复审转待审，本人视角查询层仍会放行该行（带「审核中」徽章）
+  const comment = await getCommentById(commentId);
+  return NextResponse.json({ ok: true, comment });
 }

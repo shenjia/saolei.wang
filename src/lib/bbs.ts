@@ -325,11 +325,21 @@ export async function getPostList(opts: {
 
 export interface BbsPostDetail extends BbsPostItem {
   content: string;
+  /** 0 正常 / 5 待审（AI 复审转待审，2026-10-22 本人/管理员视角可见并渲染「审核中」徽章） */
+  status: number;
 }
 
-/** 读主题并点击 +1（移植 Title_Check；编辑预载等场景传 bump=false 避免误计） */
-export async function getPost(id: number, bump = true): Promise<BbsPostDetail | null> {
-  const row = await prisma.bbsPost.findFirst({ where: { id: BigInt(id), status: 0 } });
+/** 读主题并点击 +1（移植 Title_Check；编辑预载等场景传 bump=false 避免误计）
+ *  2026-10-22：includePending=true 时（作者/管理员视角）待审主题（status=5）也返回——
+ *  张老师要求：文章发出后不管过没过审，发表者本人必须一直看得到（发帖成功跳转目标不能 404） */
+export async function getPost(
+  id: number,
+  bump = true,
+  includePending = false
+): Promise<BbsPostDetail | null> {
+  const row = await prisma.bbsPost.findFirst({
+    where: { id: BigInt(id), status: includePending ? { in: [0, 5] } : 0 },
+  });
   if (!row) return null;
   if (bump) {
     await prisma.bbsPost.update({ where: { id: row.id }, data: { clicks: { increment: 1 } } });
@@ -354,12 +364,14 @@ export async function getPost(id: number, bump = true): Promise<BbsPostDetail | 
     createTime: N(row.createTime),
     lastReplyTime: N(row.lastReplyTime),
     author: authors.get(N(row.user)) ?? null,
+    status: row.status,
   };
 }
 
 /** 楼层流条目（详情页首屏 + 「加载更多」共用）
  *  html 在服务端用 ubb() 预算好——客户端组件只渲染字符串，不引 ubb/Prisma；
- *  楼层号不入库（bbs_reply 无 floor 列），由展示层按顺序推得（1 楼是主题，见 BbsReplySection） */
+ *  楼层号不入库（bbs_reply 无 floor 列），由展示层按顺序推得（1 楼是主题，见 BbsReplySection）
+ *  2026-10-22：status 带出——本人待审行（5）仅作者可见，渲染「审核中」徽章 */
 export interface BbsReplyItem {
   id: number;
   createTime: number;
@@ -367,21 +379,28 @@ export interface BbsReplyItem {
   html: string;
   /** UBB 剥标签纯文本摘要（≤50 字超出省略）——「回复」链接引用框预填用（2026-10-15） */
   excerpt: string;
+  /** 0 正常 / 5 待审（AI 复审转待审，2026-10-22 本人可见） */
+  status: number;
 }
 
 /** 楼层流取数（cursor 语义，按 id 升序）
  *  2026-10-13 张老师要求：主题详情底部由「翻页」改「加载更多」，故从 page/skip 改为 id > cursor 取下一批；
- *  命中 @@index([post, status, id])，翻到底返回空数组即止 */
+ *  命中 @@index([post, status, id])，翻到底返回空数组即止
+ *  2026-10-22：viewerUid 非空时本人待审行（status=5）一并带出（张老师要求：发出即可见） */
 export async function getReplyFeed(
   postId: number,
   cursor = 0,
-  size = BBS_REPLY_PAGESIZE
+  size = BBS_REPLY_PAGESIZE,
+  viewerUid: number | null = null
 ): Promise<{ items: BbsReplyItem[]; total: number }> {
-  const total = await prisma.bbsReply.count({ where: { post: BigInt(postId), status: 0 } });
+  const visible = viewerUid
+    ? { OR: [{ status: 0 }, { status: 5, user: BigInt(viewerUid) }] }
+    : { status: 0 };
+  const total = await prisma.bbsReply.count({ where: { post: BigInt(postId), ...visible } });
   const rows = await prisma.bbsReply.findMany({
     where: {
       post: BigInt(postId),
-      status: 0,
+      ...visible,
       ...(cursor > 0 ? { id: { gt: BigInt(cursor) } } : {}),
     },
     orderBy: { id: "asc" },
@@ -397,6 +416,7 @@ export async function getReplyFeed(
       author: authors.get(N(r.user)) ?? null,
       html: ubb(r.content),
       excerpt: ubbExcerpt(r.content, REPLY_QUOTE_LIMIT),
+      status: r.status,
     })),
     total,
   };
@@ -545,9 +565,11 @@ export async function createReply(
   return { id: replyId, quotedUserId: quotedUserId === userId ? null : quotedUserId };
 }
 
-/** 删主题（软删；本人或管理员，移植 Title_Del / Del_My） */
+/** 删主题（软删；本人或管理员，移植 Title_Del / Del_My）
+ *  2026-10-22：待审主题（status=5，仅本人可见）本人同样可删——可见即可删，不能出现
+ *  「看得到却删不掉」的矛盾 */
 export async function deletePost(id: number, userId: number, isAdmin: boolean): Promise<boolean> {
-  const row = await prisma.bbsPost.findFirst({ where: { id: BigInt(id), status: 0 } });
+  const row = await prisma.bbsPost.findFirst({ where: { id: BigInt(id), status: { in: [0, 5] } } });
   if (!row) return false;
   if (!isAdmin && N(row.user) !== userId) return false;
   // 2026-10-22 张老师定：删帖级联回复（防孤儿回复——24396 案例主帖删后回复仍 status=0 残留）
@@ -559,17 +581,23 @@ export async function deletePost(id: number, userId: number, isAdmin: boolean): 
   return true;
 }
 
-/** 删回复（本人/楼主/管理员，移植 2008 版录像评论删除的权限语义） */
+/** 删回复（本人/楼主/管理员，移植 2008 版录像评论删除的权限语义）
+ *  2026-10-22：待审楼层（status=5，仅本人可见）本人同样可删（可见即可删） */
 export async function deleteReply(id: number, userId: number, isAdmin: boolean): Promise<boolean> {
-  const row = await prisma.bbsReply.findFirst({ where: { id: BigInt(id), status: 0 } });
+  const row = await prisma.bbsReply.findFirst({ where: { id: BigInt(id), status: { in: [0, 5] } } });
   if (!row) return false;
   const post = await prisma.bbsPost.findUnique({ where: { id: row.post } });
   if (!post) return false;
   if (!isAdmin && N(row.user) !== userId && N(post.user) !== userId) return false;
-  await prisma.$transaction([
-    prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } }),
-    prisma.bbsPost.update({ where: { id: row.post }, data: { replies: { decrement: 1 } } }),
-  ]);
+  // 待审行不在 replies 冗余计数里（AI 转待审时已回退），软删时不能再 decrement
+  if (row.status === 0) {
+    await prisma.$transaction([
+      prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } }),
+      prisma.bbsPost.update({ where: { id: row.post }, data: { replies: { decrement: 1 } } }),
+    ]);
+  } else {
+    await prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } });
+  }
   return true;
 }
 

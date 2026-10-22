@@ -1280,18 +1280,31 @@ export interface CommentItem {
   authorTitle: string;
   /** 双体系称号对（Phase 5）：旧版称号备选，TitleBadge 按观看者体系渲染 */
   authorClassic: { name: string; color: string } | null;
+  /** 2026-10-22 本人可见待审行：0 正常 / 5 待审（AI 复审转待审后仅作者本人仍可见，渲染「审核中」徽章） */
+  status: number;
+}
+
+/** 评论可见性（2026-10-22 张老师要求：评论发出后不管过没过审，发表者本人必须一直能看到）
+ *  他人/游客只看 NORMAL(0)；本人额外看到自己 PENDING(5) 的行 */
+function commentVisibleWhere(videoId: number, viewerUid: number | null) {
+  return {
+    video: BigInt(videoId),
+    ...(viewerUid
+      ? { OR: [{ status: COMMENT_STATUS.NORMAL }, { status: 5, user: BigInt(viewerUid) }] }
+      : { status: COMMENT_STATUS.NORMAL }),
+  };
 }
 
 /** 评论列表：cursor=0 取最新，否则取 id<cursor 的更早评论（移植 Comment::getList + actionMore） */
 export async function getComments(
   videoId: number,
   cursor = 0,
-  limit = COMMENT_TOP_NUMBER
+  limit = COMMENT_TOP_NUMBER,
+  viewerUid: number | null = null
 ): Promise<CommentItem[]> {
   const rows = await prisma.comment.findMany({
     where: {
-      video: BigInt(videoId),
-      status: COMMENT_STATUS.NORMAL,
+      ...commentVisibleWhere(videoId, viewerUid),
       ...(cursor > 0 ? { id: { lt: BigInt(cursor) } } : {}),
     },
     orderBy: { id: "desc" },
@@ -1318,15 +1331,45 @@ export async function getComments(
       author: a,
       authorTitle: p?.m ?? "",
       authorClassic: p?.c ?? null,
+      status: r.status,
     };
   });
 }
 
-/** 评论总数（「加载更多」括号内显示剩余条数用，过滤条件与 getComments 一致） */
-export async function getCommentsCount(videoId: number): Promise<number> {
+/** 评论总数（「加载更多」括号内显示剩余条数用，过滤条件与 getComments 一致——含本人待审行） */
+export async function getCommentsCount(videoId: number, viewerUid: number | null = null): Promise<number> {
   return prisma.comment.count({
-    where: { video: BigInt(videoId), status: COMMENT_STATUS.NORMAL },
+    where: commentVisibleWhere(videoId, viewerUid),
   });
+}
+
+/** 按 id 取单条评论（发表接口返回新行用，2026-10-22）：作者信息/称号与列表同口径 */
+export async function getCommentById(id: number): Promise<CommentItem | null> {
+  const rows = await prisma.comment.findMany({
+    where: { id: BigInt(id), status: { in: [COMMENT_STATUS.NORMAL, 5] } },
+    take: 1,
+  });
+  if (!rows.length) return null;
+  const r = rows[0];
+  const authors = await usersByIds([N(r.user)]);
+  const pairs = await dualTitles([
+    {
+      userId: N(r.user),
+      expTime: N(r.expTime),
+      ranked: r.ranked === BigInt(1),
+      sex: authors.get(N(r.user))?.sex ?? 1,
+    },
+  ]);
+  const p = pairs.get(N(r.user));
+  return {
+    id: N(r.id),
+    content: r.content ?? "",
+    createTime: N(r.createTime),
+    author: authors.get(N(r.user)) ?? null,
+    authorTitle: p?.m ?? "",
+    authorClassic: p?.c ?? null,
+    status: r.status,
+  };
 }
 
 /** 发表评论并递增录像评论计数（2013 版漏了计数递增，新版补齐）

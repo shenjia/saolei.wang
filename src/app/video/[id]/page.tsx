@@ -16,8 +16,7 @@ import {
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { UserPanel } from "@/components/UserCard";
-import { LoginLink } from "@/components/LoginLink";
-import { CommentForm, CommentList } from "@/components/Comments";
+import { CommentSection } from "@/components/Comments";
 // 原地回放（2026-10-15 张老师需求：点播放后棋盘原地重演，复用练习页回放引擎；
 // rmv/解析失败自动兜底 flop 全屏播放器——FlopPlayer 由 VideoReplayProvider 按需挂）
 import { VideoReplayProvider, VideoReplayBoard, VideoReplayButton } from "@/components/VideoReplay";
@@ -62,11 +61,12 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
 
   const video = await getVideoDetail(videoId);
   if (!video) notFound();
-  const [session, comments, commentTotal] = await Promise.all([
-    getSession(),
-    getComments(videoId, 0, COMMENT_TOP_NUMBER),
+  // 2026-10-22：先取 session 再取评论——本人待审行（status=5）按 viewerUid 放行
+  const session = await getSession();
+  const [comments, commentTotal] = await Promise.all([
+    getComments(videoId, 0, COMMENT_TOP_NUMBER, session?.uid ?? null),
     // 评论总数（「加载更多」括号内剩余条数口径，按实际行数而非 video_stat 冗余计数）
-    getCommentsCount(videoId),
+    getCommentsCount(videoId, session?.uid ?? null),
     // 点击计数（移植 actionView 的 uniqueAction('click')）
     (async () => uniqueVideoAction(videoId, "click", clientIp(await headers())))(),
   ]);
@@ -190,24 +190,15 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
             </p>
           </div>
         </div>
-        <CommentList
+        {/* 2026-10-22：评论区收拢为客户端壳——发表后就地插入列表头（张老师要求：
+            评论发出后立刻可见，不管有没有过审；本人待审行查询层按登录态放行） */}
+        <CommentSection
           videoId={video.id}
+          authorId={session?.uid ?? 0}
           initial={comments}
           initialHasMore={comments.length < commentTotal}
           initialTotal={commentTotal}
         />
-        {/* 2026-10-13 张老师要求：底部加「发表评论」板块（参考论坛详情页底部的「回复主题」盒子）——
-            盒子常驻：登录用户见输入框，未登录见「登录 后才能发表评论。」（点击弹全局登录浮窗） */}
-        <div className="post box">
-          <h2>发表评论</h2>
-          {session ? (
-            <CommentForm videoId={video.id} authorId={session.uid} />
-          ) : (
-            <p className="text login_hint">
-              <LoginLink>登录</LoginLink> 后才能发表评论。
-            </p>
-          )}
-        </div>
       </li>
       <li className="sidebar">
         {/* 2026-10-13 六轮：右栏由「名字 + 军衔」小盒换成与论坛右栏同款个人卡片 + 实力雷达图

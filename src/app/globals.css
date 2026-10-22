@@ -9926,3 +9926,22 @@ html.op-fakefs #header {
   70% { transform: rotate(-6deg); }
   100% { transform: rotate(0deg); }
 }
+
+/* ---- 「审核中」徽章（2026-10-22 张老师需求）----
+   评论/楼层/文章发出后即使被 AI 转待审（status=5），发表者本人仍可见，行上带此徽章；
+   仅本人视角会出现（他人查询层即过滤掉）。取 Monokai 黄（同公告板块 board_tag.notice），
+   形态仿 board_tag 徽章（圆角描边小号粗体）。 */
+.review_pending {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid #867b17;
+  border-radius: 3px;
+  color: #fdc61a;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 18px;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: help;
+}

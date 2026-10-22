@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
-import { BBS_BOARD_NAMES, getPost, getReplyFeed, ubb } from "@/lib/bbs";
+import { BBS_BOARD_NAMES, BBS_REPLY_PAGESIZE, getPost, getReplyFeed, ubb } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER, decodeLegacyEntities } from "@/lib/format";
 import { PostOps } from "@/components/BbsOps";
 import { BbsReplySection } from "@/components/BbsReplies";
@@ -31,7 +31,7 @@ export async function generateMetadata({
   const postId = parseInt((await params).id, 10);
   if (!postId) return {};
   const p = await prisma.bbsPost.findFirst({
-    where: { id: BigInt(postId), status: 0 },
+    where: { id: BigInt(postId), status: { in: [0, 5] } },
     select: { title: true, board: true },
   });
   if (!p) return {};
@@ -44,10 +44,21 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const postId = parseInt(id, 10) || 0;
 
-  const [post, session] = await Promise.all([getPost(postId), getSession()]);
-  if (!post) notFound();
-  const { items: replies, total: replyTotal } = await getReplyFeed(postId);
+  // 2026-10-22 张老师要求：文章/评论发出后不管过没过审，发表者本人必须一直看得到。
+  // 取数带 includePending（待审主题不 404），取回后再按视角拦截：待审主题仅作者本人/管理员可见。
+  const session = await getSession();
   const admin = session ? isManager(session.role) : false;
+  const post = await getPost(postId, true, true);
+  if (!post) notFound();
+  const pendingPost = post.status === 5 && !admin && session?.uid !== post.author?.id;
+  if (pendingPost) notFound();
+  // 楼层流同口径：本人待审楼层（status=5）一并带出（渲染「审核中」徽章）
+  const { items: replies, total: replyTotal } = await getReplyFeed(
+    postId,
+    0,
+    BBS_REPLY_PAGESIZE,
+    session?.uid ?? null
+  );
 
   return (
     <div id="page" className="two_columns">
@@ -74,6 +85,12 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
                 {BBS_BOARD_NAMES[post.board]}
               </span>
               {post.title}
+              {/* 2026-10-22：待审主题徽章（仅作者本人/管理员视角能走到这里） */}
+              {post.status === 5 && (
+                <span className="review_pending" data-tip="文章已发出，通过审核后其他人才能看到">
+                  审核中
+                </span>
+              )}
               {post.isNice && (
                 <span className="bbs_star" data-tip="精华">
                   ★

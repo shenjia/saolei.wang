@@ -110,6 +110,12 @@ export function BbsReplySection({
               </>
             )}
             {timeOpposite(r.createTime, TIME_NEVER)}
+            {/* 2026-10-22 张老师要求：本人待审楼层可见，带「审核中」徽章（他人视角查不到该行） */}
+            {r.status === 5 && (
+              <span className="review_pending" data-tip="回复已发出，通过审核后其他人才能看到">
+                审核中
+              </span>
+            )}
             {viewerUid && !locked && (
               <span className="bbs_ops">
                 {" "}

@@ -1,8 +1,10 @@
 // 评论加载更多（移植 CommentController::actionMore 的 JSON 协议：items/cursor/count）
+// 2026-10-22：带登录态 viewerUid——本人可加载到自己的待审行（与列表首屏同口径）
 
 import { NextResponse } from "next/server";
 import { getComments, getCommentsCount } from "@/lib/queries";
 import { COMMENT_PAGESIZE } from "@/lib/config";
+import { getSession } from "@/lib/auth";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -13,10 +15,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "参数错误" }, { status: 400 });
   }
 
+  const session = await getSession();
   const [items, total] = await Promise.all([
-    getComments(videoId, cursor, size),
+    getComments(videoId, cursor, size, session?.uid ?? null),
     // 本录像评论总数：「加载更多」括号内显示剩余条数用
-    getCommentsCount(videoId),
+    getCommentsCount(videoId, session?.uid ?? null),
   ]);
   return NextResponse.json({
     items,

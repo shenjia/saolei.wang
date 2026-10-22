@@ -14,7 +14,8 @@ export default async function BbsEditPage({ params }: { params: Promise<{ id: st
   if (!session) redirect("/account/login");
 
   const { id } = await params;
-  const post = await getPost(parseInt(id, 10) || 0, false);
+  // includePending=true：作者可编辑被 AI 转待审（status=5）的主题（2026-10-22 本人可见口径）
+  const post = await getPost(parseInt(id, 10) || 0, false, true);
   if (!post) notFound();
   const admin = isManager(session.role);
   if (!admin && session.uid !== post.author?.id) notFound();
