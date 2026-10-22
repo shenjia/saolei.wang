@@ -550,7 +550,12 @@ export async function deletePost(id: number, userId: number, isAdmin: boolean): 
   const row = await prisma.bbsPost.findFirst({ where: { id: BigInt(id), status: 0 } });
   if (!row) return false;
   if (!isAdmin && N(row.user) !== userId) return false;
-  await prisma.bbsPost.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } });
+  // 2026-10-22 张老师定：删帖级联回复（防孤儿回复——24396 案例主帖删后回复仍 status=0 残留）
+  const ts = nowSec();
+  await prisma.$transaction([
+    prisma.bbsPost.update({ where: { id: row.id }, data: { status: -1, updateTime: ts } }),
+    prisma.bbsReply.updateMany({ where: { post: row.id, status: 0 }, data: { status: -1, updateTime: ts } }),
+  ]);
   return true;
 }
 

@@ -299,6 +299,15 @@ export async function reviewVideo(
       }
       // STNB 榜落盘表（2026-10-20）：屏蔽可能撤掉该用户该级最高 STNB → 单组重算
       await refreshUserStnb(rv.user, rv.level, tx);
+      // 屏蔽级联（2026-10-22 张老师定）：录像下线时，其评论与引用它的动态一并删除——
+      // 详情页不再有挂空评论/「XX破纪录」动态指向屏蔽录像的问题（video.delete 已同款）
+      await tx.comment.deleteMany({ where: { video: BigInt(videoId) } });
+      await tx.news.deleteMany({
+        where: {
+          reference: BigInt(videoId),
+          type: { in: [NEWS_TYPE.PERSON_RECORD, NEWS_TYPE.AREA_RECORD, NEWS_TYPE.NATION_RECORD, NEWS_TYPE.VIDEO] },
+        },
+      });
     } else if (status === VIDEO_STATUS.REVIEWED) {
       // VideoScores::insertVideo → flag 榜（含动态），NF 录像同时入 NF 榜（不发动态）
       await upsertVideoScores(tx, rv, false);
