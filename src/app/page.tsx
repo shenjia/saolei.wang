@@ -10,6 +10,8 @@
 // 2026-10-15 张老师要求：按钮文案「开一局」→「开始练习」；「国内TOP10」→「排行前十」；
 // 移动端（≤880 单列带）「开始练习」改为页面顶部大按钮（新闻上方，高度 2 倍、字体图标加大，
 // 桌面版侧栏按钮与置顶版并存、由 CSS 按断点显隐）。
+// 2026-10-22 张老师要求：管理员登录态在侧栏「开始练习」按钮下方显示待审录像数
+// （数字金色）+「去审核」小按钮直达 /admin/review；待审清零时不渲染。
 
 import Link from "next/link";
 import {
@@ -23,7 +25,7 @@ import {
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EmailBindNotice } from "@/components/EmailBindNotice";
-import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER } from "@/lib/config";
+import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, VIDEO_STATUS, isManager } from "@/lib/config";
 import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoFeed } from "@/components/VideoFeed";
@@ -74,6 +76,15 @@ export default async function HomePage() {
     classic: n.authorTitles?.c ?? null,
   }));
 
+  // 待审录像数（2026-10-22 张老师要求）：仅管理员登录态查一次，
+  // 侧栏「开始练习」按钮下方显示「N 部录像待审核」+「去审核」直达 /admin/review
+  let pendingReview = 0;
+  if (session && isManager(session.role)) {
+    pendingReview = await prisma.video.count({
+      where: { status: VIDEO_STATUS.NORMAL },
+    });
+  }
+
   return (
     <>
     {/* 邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层 + 以后再说 24h）。
@@ -91,6 +102,17 @@ export default async function HomePage() {
           </svg>
           <span>开始练习</span>
         </Link>
+        {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方 */}
+        {pendingReview > 0 && (
+          <div id="review_entry_top">
+            <span className="n">
+              <b>{pendingReview}</b> 部录像待审核
+            </span>
+            <Link className="go" href="/admin/review">
+              去审核
+            </Link>
+          </div>
+        )}
         <div id="news" className="box">
           <NewsFeed
             title="新闻"
@@ -123,6 +145,18 @@ export default async function HomePage() {
           </svg>
           <span>开始练习</span>
         </Link>
+        {/* 管理员待审提示行（2026-10-22 张老师要求）：待审录像数金色 +
+            「去审核」小按钮直达后台审核页；仅待审>0 时渲染 */}
+        {pendingReview > 0 && (
+          <div id="review_entry">
+            <span className="n">
+              <b>{pendingReview}</b> 部录像待审核
+            </span>
+            <Link className="go" href="/admin/review">
+              去审核
+            </Link>
+          </div>
+        )}
         <div id="newbie" className="box">
           {/* 板块名随观看者称号体系切换：军衔制「入伍新兵」/ 旧版「新人报到」（2026-10-18 张老师定） */}
           <h2>

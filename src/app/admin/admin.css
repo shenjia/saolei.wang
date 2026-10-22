@@ -37,6 +37,8 @@ body:has(.admin_shell) #footer {
   border-right: 1px solid #3a3a32;
   overflow-y: auto;
 }
+/* 品牌区（2026-10-22 张老师要求）：换成与前台统一的 LOGO 与站名——
+   「扫雷网」用前台站名金 #fdc61a，点击新标签页回首页 */
 .admin_brand {
   display: flex;
   align-items: center;
@@ -44,12 +46,15 @@ body:has(.admin_shell) #footer {
   padding: 14px 16px;
   border-bottom: 1px solid #3a3a32;
 }
+.admin_brand:hover b {
+  color: #a6e22e;
+}
 .admin_brand img {
   width: 24px;
   height: 24px;
 }
 .admin_brand b {
-  color: #eeeeee;
+  color: #fdc61a;
   font-size: 16px;
   line-height: 21px;
 }

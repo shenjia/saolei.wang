@@ -58,14 +58,17 @@ export function AdminSidebar({ badges }: { badges: { pending: number; avatar: nu
 
   return (
     <aside className="admin_side">
-      <div className="admin_brand">
+      {/* 品牌区（2026-10-22 张老师要求）：换成与前台统一的 LOGO 与站名——
+          icon.svg +「扫雷网」（前台站名金 #fdc61a）+ Saolei.wang，点击回首页。
+          同页跳转（新标签需求由底部「查看网站」承担） */}
+      <Link href="/" className="admin_brand">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon.svg" alt="" />
         <span>
-          <b>扫雷网后台</b>
-          <em>Saolei.wang Admin</em>
+          <b>扫雷网</b>
+          <em>Saolei.wang</em>
         </span>
-      </div>
+      </Link>
 
       <nav className="admin_nav">
         {GROUPS.map((g) => (
