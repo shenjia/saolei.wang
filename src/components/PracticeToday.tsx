@@ -1,9 +1,11 @@
 // 首页「今日练习」板块（2026-10-22 张老师要求，五轮改版）：「开始练习」按钮下方。
 // 首行「今日已完成 xxx / yyy 盘」：xxx=完成盘数（绿 #a6e22e）、yyy=尝试盘数（亮灰），
-// 今日有尝试时最右侧开率（一位小数）——七轮（2026-10-22 张老师要求）：
-// 标签「开率」亮灰、数值绿色（与次行「标签暗灰数值亮灰」同构分层）。
+// 今日有尝试时最右侧开率（一位小数，如 63.6%）——七轮（2026-10-22 张老师要求）：
+// 标签「开率」亮灰、数值绿色，与次行开率「标签暗灰数值亮灰」同构分层。
 // 次行「共xx位雷友完成了 aaa / bbb 局」：aaa=全网完成（金 #fdc61a）、bbb=全网尝试（亮灰）。
-// 底部近 30 天双线折线铺满模块宽：绿线=我的尝试盘数、黄线=全网尝试盘数（归一化各画各的）。
+// 底部近 30 天双线折线铺满模块宽：黄线=全网尝试盘数（按自身最大值顶格归一）、
+// 绿线=我的尝试盘数（峰值只归一到 0.618 高度，2026-10-22 张老师要求——
+// 避免两线各自顶格归一后几乎重合、看不出量级差）。
 // 「我的」双轨：登录=服务端 practice_log（SSR 直出）；未登录=localStorage 当日记数
 // （practice-local.ts）——SSR 初值 0，水合后 useSyncExternalStore 接管补真值。
 
@@ -19,21 +21,22 @@ import {
 const GREEN = "#a6e22e"; // 站内标准绿（.logo a h1 hover / Sparkline 默认色）
 const YELLOW = "#e6db74"; // 站内标准黄（后台趋势「新玩家」序列同色）
 
-/** 双线叠加图：绿=我、黄=全网，各自按自身最大值归一（量级悬殊也能同图看清走势） */
+/** 双线叠加图：黄=全网按自身最大值顶格归一；绿=我同样归一但峰值封顶 0.618 倍绘图高——
+ *  量级悬殊时两条线靠高度差拉开，不再因「各画各的顶格」而重合 */
 function DoubleLine({ mine, net, height }: { mine: number[]; net: number[]; height: number }) {
   if (mine.length < 2 || net.length < 2) return null;
-  const path = (values: number[]): string => {
+  const path = (values: number[], top: number): string => {
     const max = Math.max(...values, 1);
     const step = 100 / (values.length - 1);
     return values
-      .map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(2)},${(height - (v / max) * (height - 3) - 1.5).toFixed(2)}`)
+      .map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(2)},${(height - (v / max) * (height - 3) * top - 1.5).toFixed(2)}`)
       .join(" ");
   };
   return (
     <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height }} aria-hidden="true">
       {/* 黄（全网）画在下层：参与人数/大盘量级通常高于个人 */}
-      <path d={path(net)} fill="none" stroke={YELLOW} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
-      <path d={path(mine)} fill="none" stroke={GREEN} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
+      <path d={path(net, 1)} fill="none" stroke={YELLOW} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
+      <path d={path(mine, 0.618)} fill="none" stroke={GREEN} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -126,9 +129,9 @@ export function PracticeToday({
         )}
       </p>
       <p className="pt_sub">
-        共 <b className="users">{users}</b> 位雷友完成了 <b className="net">{netWon}</b>
+        共<b className="users">{users}</b>位雷友完成了<b className="net">{netWon}</b>
         <span className="sep"> / </span>
-        <b className="netb">{net}</b> 局{rNet !== null && <span className="rate"> 开率 {rNet}%</span>}
+        <b className="netb">{net}</b>局{rNet !== null && <span className="rate">开率 <b className="ratev">{rNet}%</b></span>}
       </p>
       <div className="pt_chart">
         <DoubleLine mine={myTrend} net={trendNet} height={38} />

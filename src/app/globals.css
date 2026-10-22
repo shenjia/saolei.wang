@@ -8919,6 +8919,8 @@ html.op-fakefs #header {
 }
 .practice_today .pt_line .rate {
   margin-left: auto; /* 今日有尝试时最右侧的开率 */
+  width: 64px; /* 定宽+左对齐：与次行开率左边缘对齐（2026-10-22 张老师要求） */
+  text-align: left;
   color: #75715e; /* 标签暗灰（2026-10-22 八轮张老师要求：与次行开率标签同色，原亮灰） */
   font-size: 12px;
   font-weight: bold;
@@ -8929,6 +8931,7 @@ html.op-fakefs #header {
 .practice_today .pt_sub {
   display: flex;
   align-items: baseline;
+  gap: 4px; /* 数字左右留隙（2026-10-22 张老师要求；flex 内空白文本节点不渲染，间距只能靠 gap） */
   font-size: 12px;
   line-height: 18px;
   color: #75715e; /* 与 #review_entry 灰字同色的低调次级 */
@@ -8949,8 +8952,12 @@ html.op-fakefs #header {
 }
 .practice_today .pt_sub .rate {
   margin-left: auto; /* 与首行开率同款右浮对齐（六轮张老师要求） */
-  padding-left: 6px;
-  color: #fdc61a; /* 金色（与首行绿色区分层级） */
+  width: 64px; /* 定宽与首行开率一致，两行「开率」左边缘对齐 */
+  text-align: left;
+  color: #75715e; /* 暗灰：与次行文案同色不抢眼（2026-10-22 张老师要求，原金色太刺眼） */
+}
+.practice_today .pt_sub .ratev {
+  color: #b1b1a4; /* 开率数值亮灰（站内数据数值口径），标签暗灰数值亮灰分层 */
   font-weight: bold;
 }
 .practice_today .pt_chart {
