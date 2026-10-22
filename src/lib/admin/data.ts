@@ -633,7 +633,11 @@ export async function getVideoListAdmin(
       ADMIN_PAGESIZE,
       (page - 1) * ADMIN_PAGESIZE
     ),
-    prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c ${VIDEO_FROM} ${sql}`, ...params),
+    // 2026-10-23 慢 SQL 巡检：无过滤时三个 LEFT JOIN 均到主键不改变行数，
+    // 短路成单表 COUNT（原四表 JOIN 全扫 2.5s/次，生产 10 次/日）
+    sql
+      ? prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c ${VIDEO_FROM} ${sql}`, ...params)
+      : prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c FROM video v`),
   ]);
 
   const rows = await fillVideos(ids.map((r) => N(r.id)));

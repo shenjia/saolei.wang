@@ -1931,14 +1931,17 @@ async function getTeamImpl(): Promise<TeamMember[]> {
     where: { role: { in: [USER_ROLE.MANAGER, USER_ROLE.ADMINISTRATOR] } },
   });
   const authors = await usersByIds(auths.map((a) => N(a.id)));
-  // 2026-10-22 迁移收尾索引排查：审核量 count 改单条 GROUP BY（(review_user,status)
-  // 索引覆盖，一次扫完所有管理员区间）；此前逐人 count，最大审核员 12.6 万条目扫 1.4s/人
-  const counts = await prisma.video.groupBy({
-    by: ["reviewUser"],
-    where: { reviewUser: { in: auths.map((a) => a.id) }, status: VIDEO_STATUS.REVIEWED },
-    _count: { _all: true },
-  });
-  const cntMap = new Map(counts.map((c) => [N(c.reviewUser), N(c._count._all)]));
+  // 2026-10-22 迁移收尾索引排查：审核量 count 改单条 GROUP BY；此前逐人 count，
+  // 最大审核员 12.6 万条目扫 1.4s/人。
+  // 2026-10-23 慢 SQL 巡检修正：Prisma groupBy 的 IN 列表让优化器弃用 (review_user,status)
+  // 索引、改走 (status,…) 索引扫 30.8 万行且不覆盖 review_user（生产 1~3.5s/次）——
+  // 改手写 SQL + FORCE INDEX 钉死覆盖索引（9 个区间 range 扫，毫秒级）
+  const counts = await prisma.$queryRawUnsafe<{ review_user: bigint; c: bigint }[]>(
+    `SELECT review_user, COUNT(*) c FROM video
+     WHERE review_user IN (${auths.map((a) => a.id).join(",")}) AND status = ${VIDEO_STATUS.REVIEWED}
+     GROUP BY review_user`,
+  );
+  const cntMap = new Map(counts.map((c) => [N(c.review_user), N(c.c)]));
   const members: TeamMember[] = auths.map((a) => ({
     ...(authors.get(N(a.id)) ?? { id: N(a.id), chineseName: "?", englishName: "", sex: 1 }),
     role: a.role,
@@ -2375,8 +2378,10 @@ const fetchBvCollection = unstable_cache(
         SUM(CASE WHEN t.level = 'int' THEN t.n ELSE 0 END) AS inter,
         SUM(CASE WHEN t.level = 'exp' THEN t.n ELSE 0 END) AS exp
       FROM (
+        -- 2026-10-23 慢 SQL 巡检：驱动侧 FORCE INDEX (user, level) 让 GROUP BY 顺序
+        -- 即索引顺序，消除 15 万行 Sort（生产 avg 2.35s/次 × 50 次/日）
         SELECT v.user, v.level, COUNT(DISTINCT vi.board_3bv) AS n
-        FROM video v JOIN video_info vi ON vi.id = v.id
+        FROM video v FORCE INDEX (video_user_level_idx) JOIN video_info vi ON vi.id = v.id
         WHERE v.status = ${VIDEO_STATUS.REVIEWED}
           AND vi.board_3bv >= CASE v.level
             WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
@@ -2403,7 +2408,7 @@ const fetchBvCollection = unstable_cache(
       };
     });
   },
-  ["bv-collection-v4"], // v4（2026-10-22）：区间上限抬到理论最大（初级 54）、分母扣不可达值，口径变更整体升版
+  ["bv-collection-v5"], // v5（2026-10-23）：驱动侧 FORCE INDEX (user,level) 消除 Sort（纯计划优化，口径不变）；v4（2026-10-22）：区间上限抬到理论最大（初级 54）、分母扣不可达值
   { revalidate: 3600, tags: ["bv-collection"] }
 );
 
