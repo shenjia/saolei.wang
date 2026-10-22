@@ -9,7 +9,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
-import { BBS_BOARD_NAMES, BBS_REPLY_PAGESIZE, getPost, getReplyFeed, ubb } from "@/lib/bbs";
+import { BBS_BOARD_NAMES, BBS_REPLY_PAGESIZE, getPost, getReplyFeed, locateReply, ubb } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER, decodeLegacyEntities } from "@/lib/format";
 import { PostOps } from "@/components/BbsOps";
 import { BbsReplySection } from "@/components/BbsReplies";
@@ -42,7 +42,13 @@ export async function generateMetadata({
   return { title: `${board ? `【${board}】` : ""}${decodeLegacyEntities(p.title)}` };
 }
 
-export default async function BbsTitlePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BbsTitlePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const postId = parseInt(id, 10) || 0;
 
@@ -50,6 +56,18 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
   // 取数带 includePending（待审主题不 404），取回后再按视角拦截：待审主题仅作者本人/管理员可见。
   const session = await getSession();
   const admin = session ? isManager(session.role) : false;
+
+  // 2026-10-22 张老师要求：评论动态/消息通知链接要能定位到具体评论——
+  // ?reply=<回复id>：服务端定位该楼层所在页（页码口径同翻页滑条），首屏直接 SSR 该页，
+  // 客户端挂载后滚到 #reply-<id> 锚点并高亮；目标已删则回退第一页（链接仍落到文章）
+  const sp = await searchParams;
+  const anchorReply = parseInt(sp.reply ?? "", 10) || 0;
+  let startPage = 1;
+  if (anchorReply) {
+    const loc = await locateReply(anchorReply, session?.uid ?? null);
+    if (loc && loc.post === postId) startPage = loc.page;
+  }
+
   const post = await getPost(postId, true, true);
   if (!post) notFound();
   const pendingPost = post.status === 5 && !admin && session?.uid !== post.author?.id;
@@ -59,7 +77,8 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
     postId,
     0,
     BBS_REPLY_PAGESIZE,
-    session?.uid ?? null
+    session?.uid ?? null,
+    startPage > 1 ? startPage : undefined
   );
 
   return (
@@ -134,13 +153,16 @@ export default async function BbsTitlePage({ params }: { params: Promise<{ id: s
             <div className="bbs_content" dangerouslySetInnerHTML={{ __html: ubb(post.content) }} />
           </div>
 
-          {/* 楼层流 + 「加载更多」+ 回复表单（同一客户端组件：回帖后就地接上新楼层）
-              key=post.id：软导航切主题时强制重挂载，避免沿用上一个主题的已加载楼层 */}
+          {/* 楼层流 + 「加载更多/页码滑条」+ 回复表单（同一客户端组件：回帖后就地接上新楼层）
+              key=post.id：软导航切主题时强制重挂载，避免沿用上一个主题的已加载楼层
+              initialPage/anchorReply（2026-10-22）：?reply= 深链首屏直接渲染目标页并定位锚点 */}
           <BbsReplySection
             key={post.id}
             postId={post.id}
             initial={replies}
             initialTotal={replyTotal}
+            initialPage={startPage}
+            anchorReply={anchorReply}
             canReply={!!session}
             locked={post.isLocked && !admin}
             viewerUid={session?.uid ?? null}

@@ -55,6 +55,8 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
     bv?: number;
     t?: string;
     kind?: string;
+    /** 评论动态的目标内容 id（2026-10-15 写入点起有；同步存量行无——渲染退避只跳文章） */
+    cid?: number;
   };
   const authorCells = news.author && (
     <>
@@ -198,8 +200,11 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             {d.kind === "bbs" ? (
               <>
                 评论了文章
+                {/* 2026-10-22 张老师要求：点击直达该条评论（不只跳文章）——
+                    ?reply=<cid> 由详情页定位到楼层所在页 + 锚点滚动高亮；
+                    存量无 cid 行不带参数，退回只跳文章 */}
                 <Link
-                  href={`/bbs/${news.reference}`}
+                  href={d.cid ? `/bbs/${news.reference}?reply=${d.cid}#reply-${d.cid}` : `/bbs/${news.reference}`}
                   target="_blank"
                   className="score news_article"
                   title={d.t ?? undefined}

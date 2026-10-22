@@ -88,7 +88,9 @@ export async function POST(req: NextRequest) {
     });
     if (post) {
       const postTitle = decodeLegacyEntities(post.title);
-      const titleLink = `[url /bbs/${id}]《${postTitle}》[/url]`;
+      // 2026-10-22 张老师要求：消息里的链接直达该条评论——?reply=<回复id> 由详情页
+      // 定位到楼层所在页并锚点滚动（MSG_LINK_RE 的 path 段含 ?/#，query 天然可解析）
+      const titleLink = `[url /bbs/${id}?reply=${replyId}#reply-${replyId}]《${postTitle}》[/url]`;
       // ① 回复了别人的评论 → 通知被回复者
       if (r.quotedUserId) {
         await sendMessage(session.uid, r.quotedUserId, `我回复了你在${titleLink}文章中的评论`);

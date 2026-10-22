@@ -26,6 +26,8 @@ export function BbsReplySection({
   postId,
   initial,
   initialTotal,
+  initialPage = 1,
+  anchorReply = 0,
   canReply,
   locked,
   viewerUid,
@@ -35,6 +37,10 @@ export function BbsReplySection({
   postId: number;
   initial: BbsReplyItem[];
   initialTotal: number;
+  /** 首屏渲染的页码（?reply= 深链时服务端定位的目标页；默认 1） */
+  initialPage?: number;
+  /** ?reply= 深链定位的回复 id（挂载后滚到锚点并高亮；0=无） */
+  anchorReply?: number;
   /** 已登录（表单可见） */
   canReply: boolean;
   /** 主题锁定且当前用户非管理员 */
@@ -46,7 +52,7 @@ export function BbsReplySection({
   isAdmin: boolean;
 }) {
   const [items, setItems] = useState(initial);
-  const [hasMore, setHasMore] = useState(initial.length < initialTotal);
+  const [hasMore, setHasMore] = useState(initialPage * BBS_REPLY_PAGESIZE < initialTotal);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动 ··· 批量，2026-10-22）
@@ -57,15 +63,28 @@ export function BbsReplySection({
   const pageSize = BBS_REPLY_PAGESIZE;
   const listRef = useRef<HTMLDivElement>(null);
   // 窗口起点显式跟踪（2026-10-16 修复「跳远页后拖不回第 1 页」，同 VideoListFeed）
-  const [winStart, setWinStart] = useState(1);
+  const [winStart, setWinStart] = useState(initialPage);
   const winEnd = Math.max(winStart, Math.ceil(items.length / pageSize));
-  const [curPage, setCurPage] = useState(1);
+  const [curPage, setCurPage] = useState(initialPage);
   const pageCache = useRef(new PageCache<BbsReplyItem[]>());
   const reqSeq = useRef(0);
   const maxPage = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
-    pageCache.current.set(1, initial);
+    pageCache.current.set(initialPage, initial);
+    // ?reply= 深链定位（2026-10-22 张老师要求：点击评论动态/消息直达该评论）——
+    // 服务端已把目标楼层所在页 SSR 进首屏，这里滚到锚点并加高亮动画（新楼层脱靶时
+    // 页面无该锚点元素，静默回退——链接仍落在正确文章页）
+    if (anchorReply) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`reply-${anchorReply}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("reply_anchor_hit");
+          setTimeout(() => el.classList.remove("reply_anchor_hit"), 2000);
+        }
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -233,7 +252,7 @@ export function BbsReplySection({
           children[first] 即窗口内第 first 楼——不引入表格，样式零变化 */}
       <div ref={listRef}>
         {items.map((r, i) => (
-          <div key={r.id} className="box bbs_post">
+          <div key={r.id} id={`reply-${r.id}`} className="box bbs_post">
             <p className="bbs_meta">
               <em>{(winStart - 1) * pageSize + i + 2} 楼</em>{" "}
               {r.author && (

@@ -8,6 +8,7 @@
 // 接口层只管 JSON 解析与错误码，业务规则全在这里。
 
 import { randomBytes } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
@@ -85,6 +86,19 @@ export async function runOp(
     });
   }
   return res;
+}
+
+/** 撤下 BBS 回复的评论动态（type=52，kind=bbs）——含无 cid 存量行退避（口径同 lib/bbs.ts commentNewsWhere） */
+async function deleteReplyNews(tx: Prisma.TransactionClient, replyUser: bigint, postId: bigint, replyId: number) {
+  await tx.news.deleteMany({
+    where: {
+      type: NEWS_TYPE.COMMENT,
+      OR: [
+        { user: replyUser, reference: postId, detailsData: { contains: `"cid":${replyId}}` } },
+        { user: replyUser, reference: postId, detailsData: { contains: '"kind":"bbs"', not: { contains: '"cid"' } } },
+      ],
+    },
+  });
 }
 
 async function dispatch(
@@ -325,6 +339,40 @@ async function dispatch(
             data: { comments: { increment: delta }, updateTime: BigInt(now()) },
           });
         }
+        // 2026-10-22 张老师要求：评论删除（-1）动态一并撤下；
+        // 恢复正常（→0）时若动态缺失则补发（AI 转待审时撤下过）
+        if (status === -1) {
+          await tx.news.deleteMany({
+            where: {
+              type: NEWS_TYPE.COMMENT,
+              user: row.user,
+              reference: row.video,
+              detailsData: { contains: `"cid":${id}}` },
+            },
+          });
+        } else if (status === 0 && row.status !== 0) {
+          const exists = await tx.news.findFirst({
+            where: {
+              type: NEWS_TYPE.COMMENT,
+              user: row.user,
+              reference: row.video,
+              detailsData: { contains: `"cid":${id}}` },
+            },
+            select: { id: true },
+          });
+          if (!exists) {
+            // 补发动态：时间回填评论原发时间（不冒充当下）
+            await publishNews({
+              tx,
+              type: NEWS_TYPE.COMMENT,
+              userId: N(row.user),
+              reference: N(row.video),
+              details: { kind: "video", cid: id },
+              createTime: N(row.createTime),
+              expTimeOverride: N(row.expTime),
+            });
+          }
+        }
       });
       return {
         ok: true,
@@ -357,8 +405,9 @@ async function dispatch(
         changed.push(`板块=${board}`);
       }
       // 审核状态（2026-10-13）：0 通过 / 5 待审 / -1 删除；主题本身无冗余计数，故只改 status
+      let st = 0;
       if ("status" in p) {
-        const st = parseInt(String(p.status ?? ""), 10);
+        st = parseInt(String(p.status ?? ""), 10);
         if (st !== 0 && st !== 5 && st !== -1) {
           return { ok: false, error: "参数错误：状态只能为 0（正常）/ 5（待审）/ -1（删除）" };
         }
@@ -366,18 +415,61 @@ async function dispatch(
         changed.push(`状态=${st === 0 ? "通过" : st === 5 ? "待审" : "删除"}`);
       }
       if (!changed.length) return { ok: false, error: "没有需要修改的属性" };
-      await prisma.bbsPost.update({ where: { id: BigInt(id) }, data });
+      const before = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { status: true, user: true } });
+      await prisma.$transaction(async (tx) => {
+        await tx.bbsPost.update({ where: { id: BigInt(id) }, data });
+        // 2026-10-22 张老师要求：主题状态流转联动动态——
+        // 删（→-1）：撤楼主 ARTICLE 动态 + 全部楼层 bbs 评论动态（口径同 lib/bbs.ts deletePost）；
+        // 恢复（→0）：补发 ARTICLE 动态（缺失时；时间回填主题原发时间）
+        if ("status" in p && st !== before?.status) {
+          if (st === -1) {
+            await tx.news.deleteMany({
+              where: { type: NEWS_TYPE.ARTICLE, user: before!.user, reference: BigInt(id) },
+            });
+            await tx.news.deleteMany({
+              where: { type: NEWS_TYPE.COMMENT, reference: BigInt(id), detailsData: { contains: '"kind":"bbs"' } },
+            });
+          } else if (st === 0 && before?.status !== 0) {
+            const exists = await tx.news.findFirst({
+              where: { type: NEWS_TYPE.ARTICLE, user: before!.user, reference: BigInt(id) },
+              select: { id: true },
+            });
+            if (!exists) {
+              const full = await tx.bbsPost.findUnique({
+                where: { id: BigInt(id) },
+                select: { title: true, createTime: true },
+              });
+              if (full) {
+                await publishNews({
+                  tx,
+                  type: NEWS_TYPE.ARTICLE,
+                  userId: N(before!.user),
+                  reference: id,
+                  details: { t: full.title.slice(0, 50), cid: id },
+                  createTime: N(full.createTime),
+                  expTimeOverride: undefined,
+                });
+              }
+            }
+          }
+        }
+      });
       return { ok: true, message: `主题 #${id} ${changed.join("，")}` };
     }
 
     case "bbs.deletePost": {
       const id = toId(p.id);
       if (!id) return { ok: false, error: "参数错误：缺少主题 ID" };
-      const post = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { title: true } });
+      const post = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { title: true, user: true } });
       if (!post) return { ok: false, error: "主题不存在" };
       await prisma.$transaction([
         prisma.bbsPost.update({ where: { id: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } }),
         prisma.bbsReply.updateMany({ where: { post: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } }),
+        // 2026-10-22 张老师要求：删帖联动撤动态（口径同 lib/bbs.ts deletePost）
+        prisma.news.deleteMany({ where: { type: NEWS_TYPE.ARTICLE, user: post.user, reference: BigInt(id) } }),
+        prisma.news.deleteMany({
+          where: { type: NEWS_TYPE.COMMENT, reference: BigInt(id), detailsData: { contains: '"kind":"bbs"' } },
+        }),
       ]);
       return { ok: true, message: `删除主题 #${id}「${decodeLegacyEntities(post.title)}」及其全部回复` };
     }
@@ -396,6 +488,8 @@ async function dispatch(
             data: { replies: { decrement: 1 }, updateTime: BigInt(now()) },
           });
         }
+        // 2026-10-22 张老师要求：删回复联动撤评论动态（见 deleteReplyNews）
+        await deleteReplyNews(tx, reply.user, reply.post, id);
       });
       return { ok: true, message: `删除回复 #${id}` };
     }
@@ -418,6 +512,33 @@ async function dispatch(
             where: { id: reply.post },
             data: { replies: { increment: delta }, updateTime: BigInt(now()) },
           });
+        }
+        // 2026-10-22 张老师要求：回复状态流转联动动态——删除撤下；恢复正常补发（缺失时，
+        // 时间回填回复原发时间；标题从主题行取，恢复 t 字段口径）
+        if (status === -1) {
+          await deleteReplyNews(tx, reply.user, reply.post, id);
+        } else if (status === 0 && reply.status !== 0) {
+          const exists = await tx.news.findFirst({
+            where: {
+              type: NEWS_TYPE.COMMENT,
+              user: reply.user,
+              reference: reply.post,
+              detailsData: { contains: `"cid":${id}}` },
+            },
+            select: { id: true },
+          });
+          if (!exists) {
+            const post = await tx.bbsPost.findUnique({ where: { id: reply.post }, select: { title: true } });
+            await publishNews({
+              tx,
+              type: NEWS_TYPE.COMMENT,
+              userId: N(reply.user),
+              reference: N(reply.post),
+              details: { kind: "bbs", t: (post?.title ?? "").slice(0, 50), cid: id },
+              createTime: N(reply.createTime),
+              expTimeOverride: N(reply.expTime),
+            });
+          }
         }
       });
       return {
@@ -547,6 +668,8 @@ async function dispatch(
 function now(): number {
   return Math.floor(Date.now() / 1000);
 }
+
+const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
 function statusName(status: number): string {
   return status === VIDEO_STATUS.REVIEWED ? "已通过" : status === VIDEO_STATUS.BANNED ? "已屏蔽" : "待审核";

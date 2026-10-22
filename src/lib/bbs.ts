@@ -1,5 +1,6 @@
 // BBS 论坛（移植 2008 版 BBS/*：板块/主题/回复/置顶/精华/锁定/移动/删除 + UBB 渲染）
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { usersByIds, userTitleSnapshot, type UserBrief } from "./queries";
 import { oldTitle, type OldTitle } from "./oldtitle";
@@ -428,6 +429,31 @@ export async function getReplyFeed(
   };
 }
 
+/** 定位回复所在页码（2026-10-22 张老师要求：动态/消息点击跳转直达该条评论）
+ *  楼层按 id 升序分页（BBS_REPLY_PAGESIZE=10，口径同 getReplyFeed 页码模式），
+ *  该回复之前的可见行数 ÷ 每页条数即所在页；查不到（已删/不存在）返回 null。
+ *  注意：viewerUid 视角自己的待审行也计入序（与 BbsReplySection 翻页口径一致）。 */
+export async function locateReply(
+  replyId: number,
+  viewerUid: number | null
+): Promise<{ post: number; page: number } | null> {
+  const row = await prisma.bbsReply.findFirst({
+    where: {
+      id: BigInt(replyId),
+      OR: [{ status: 0 }, { status: 5, user: BigInt(viewerUid ?? 0) }],
+    },
+    select: { post: true },
+  });
+  if (!row) return null;
+  const visible = viewerUid
+    ? { post: row.post, OR: [{ status: 0 }, { status: 5, user: BigInt(viewerUid) }] }
+    : { post: row.post, status: 0 };
+  const before = await prisma.bbsReply.count({
+    where: { ...visible, id: { lt: BigInt(replyId) } },
+  });
+  return { post: N(row.post), page: Math.floor(before / BBS_REPLY_PAGESIZE) + 1 };
+}
+
 /** 最新主题（首页右栏用，移植 Title_Index_New；按发布时间取最新，置顶帖不掺入） */
 export async function getLatestPosts(limit = 8): Promise<BbsPostItem[]> {
   const { posts } = await getPostList({ order: "post", page: 1 });
@@ -571,6 +597,18 @@ export async function createReply(
   return { id: replyId, quotedUserId: quotedUserId === userId ? null : quotedUserId };
 }
 
+/** 撤下评论动态（type=52）的公共条件片（2026-10-22 张老师要求：评论删除后动态同步消失）
+ *  有 cid 行按 cid（=回复 id）精确定位；cid 是 2026-10-15 才加的，同步存量行没有 cid
+ *  ——退避按 user+帖子 的无 cid 行匹配（同一批产生的动态一并撤下）。 */
+function commentNewsWhere(userId: bigint, postId: bigint, replyId: number): Prisma.NewsWhereInput[] {
+  return [
+    // 精确：details 含 "cid":<replyId>（尾随 } 保证数值完整，不会前缀误配 2439 匹配 24396）
+    { user: userId, reference: postId, detailsData: { contains: `"cid":${replyId}}` } },
+    // 退避：kind=bbs 且无 cid 的存量行（user+帖子 维度）
+    { user: userId, reference: postId, detailsData: { contains: '"kind":"bbs"', not: { contains: '"cid"' } } },
+  ];
+}
+
 /** 删主题（软删；本人或管理员，移植 Title_Del / Del_My）
  *  2026-10-22：待审主题（status=5，仅本人可见）本人同样可删——可见即可删，不能出现
  *  「看得到却删不掉」的矛盾 */
@@ -579,30 +617,48 @@ export async function deletePost(id: number, userId: number, isAdmin: boolean): 
   if (!row) return false;
   if (!isAdmin && N(row.user) !== userId) return false;
   // 2026-10-22 张老师定：删帖级联回复（防孤儿回复——24396 案例主帖删后回复仍 status=0 残留）
+  // 2026-10-22 张老师要求：帖子删除后动态一并消失——
+  //   ①楼主的「发表了《…》」动态（type=40，reference=帖子 id）
+  //   ②所有楼层的「评论了文章」动态（type=52，kind=bbs，reference=帖子 id；
+  //     帖子没了，任何人的评论动态都不该再挂着，按帖子维度整清）
   const ts = nowSec();
   await prisma.$transaction([
     prisma.bbsPost.update({ where: { id: row.id }, data: { status: -1, updateTime: ts } }),
     prisma.bbsReply.updateMany({ where: { post: row.id, status: 0 }, data: { status: -1, updateTime: ts } }),
+    prisma.news.deleteMany({
+      where: { type: NEWS_TYPE.ARTICLE, user: row.user, reference: row.id },
+    }),
+    prisma.news.deleteMany({
+      where: { type: NEWS_TYPE.COMMENT, reference: row.id, detailsData: { contains: '"kind":"bbs"' } },
+    }),
   ]);
   return true;
 }
 
 /** 删回复（本人/楼主/管理员，移植 2008 版录像评论删除的权限语义）
- *  2026-10-22：待审楼层（status=5，仅本人可见）本人同样可删（可见即可删） */
+ *  2026-10-22：待审楼层（status=5，仅本人可见）本人同样可删（可见即可删）
+ *  2026-10-22 张老师要求：评论删除后其动态（type=52）一并撤下（见 commentNewsWhere） */
 export async function deleteReply(id: number, userId: number, isAdmin: boolean): Promise<boolean> {
   const row = await prisma.bbsReply.findFirst({ where: { id: BigInt(id), status: { in: [0, 5] } } });
   if (!row) return false;
   const post = await prisma.bbsPost.findUnique({ where: { id: row.post } });
   if (!post) return false;
   if (!isAdmin && N(row.user) !== userId && N(post.user) !== userId) return false;
+  const newsDeletes = commentNewsWhere(row.user, row.post, id).map((where) =>
+    prisma.news.deleteMany({ where: { type: NEWS_TYPE.COMMENT, ...where } })
+  );
   // 待审行不在 replies 冗余计数里（AI 转待审时已回退），软删时不能再 decrement
   if (row.status === 0) {
     await prisma.$transaction([
       prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } }),
       prisma.bbsPost.update({ where: { id: row.post }, data: { replies: { decrement: 1 } } }),
+      ...newsDeletes,
     ]);
   } else {
-    await prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } });
+    await prisma.$transaction([
+      prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } }),
+      ...newsDeletes,
+    ]);
   }
   return true;
 }

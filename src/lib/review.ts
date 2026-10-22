@@ -315,7 +315,17 @@ export async function reviewVideo(
       await tx.news.deleteMany({
         where: {
           reference: BigInt(videoId),
-          type: { in: [NEWS_TYPE.PERSON_RECORD, NEWS_TYPE.AREA_RECORD, NEWS_TYPE.NATION_RECORD, NEWS_TYPE.VIDEO] },
+          type: {
+            in: [
+              NEWS_TYPE.PERSON_RECORD,
+              NEWS_TYPE.AREA_RECORD,
+              NEWS_TYPE.NATION_RECORD,
+              NEWS_TYPE.VIDEO,
+              // 2026-10-22：录像评论动态（kind=video 的 type=52）一并撤下——
+              // 评论行已级联删除，动态再挂着就是「评论了一盘录像」挂空链
+              NEWS_TYPE.COMMENT,
+            ],
+          },
         },
       });
     } else if (status === VIDEO_STATUS.REVIEWED) {
