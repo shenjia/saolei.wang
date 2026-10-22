@@ -68,6 +68,10 @@ export interface NewsItem {
   author: UserBrief | null;
   /** 双体系称号对（2026-10-17 Phase 5）：军衔 + 旧版称号，TitleBadge 按观看者体系渲染 */
   authorTitles: TitlePair | null;
+  /** 录像评论动态的目标录像楼主（2026-10-22：渲染「评论了录像 楼主的高级xx.xx」用；
+   *  仅 kind=video 且 details.vid 有效时带出，其余类型 null。楼主称号按其录像行内
+   *  快照评定——发评论时楼主成绩已定格在该录像审核时刻，语义贴合） */
+  videoOwner: (UserBrief & { titles: TitlePair | null }) | null;
 }
 
 export interface RankingUser extends UserBrief {
@@ -275,17 +279,79 @@ export async function getNews(opts: {
       sex: authors.get(N(r.user))?.sex ?? 1,
     }))
   );
-  return rows.map((r) => ({
-    id: N(r.id),
-    type: r.type,
-    ranked: r.ranked === BigInt(1),
-    expTime: N(r.expTime),
-    reference: N(r.reference),
-    details: safeJson(r.detailsData),
-    createTime: N(r.createTime),
-    author: authors.get(N(r.user)) ?? null,
-    authorTitles: pairs.get(N(r.user)) ?? null,
-  }));
+  // 录像评论动态的楼主身份批量补全（2026-10-22 张老师要求：渲染「评论了录像 楼主的高级xx.xx」，
+  // 楼主要带姓名/性别/称号并可点进主页，与动态作者同款）——按 details.vid 聚合查询；
+  // 楼主称号按其录像行内 exp_time/ranked 快照评定（video 表有这两列，见 getVideoDetail）
+  const ownerIds = [
+    ...new Set(
+      rows
+        .filter((r) => r.type === NEWS_TYPE.COMMENT && safeJson(r.detailsData).kind === "video")
+        .map((r) => {
+          const v = safeJson(r.detailsData).vid;
+          return typeof v === "number" ? v : 0;
+        })
+        .filter((v) => v > 0)
+    ),
+  ];
+  let ownerMap = new Map<number, UserBrief & { titles: TitlePair | null }>();
+  if (ownerIds.length) {
+    // 仅 kind=video 行的 reference 是录像 id（bbs 帖 id 与录像 id 同数值空间，混入会查到别人）
+    const videoRefs = [
+      ...new Set(
+        rows
+          .filter((r) => r.type === NEWS_TYPE.COMMENT && safeJson(r.detailsData).kind === "video")
+          .map((r) => r.reference)
+          .filter(Boolean)
+      ),
+    ];
+    const [ownerBriefs, videoSnaps] = await Promise.all([
+      usersByIds(ownerIds),
+      prisma.video.findMany({
+        where: { id: { in: videoRefs.map(BigInt) } },
+        select: { id: true, user: true, expTime: true, ranked: true },
+      }),
+    ]);
+    // vid → 该楼主的录像行快照（同一楼主多部录像取任一行，快照同值）
+    const snapByOwner = new Map<number, { expTime: bigint; ranked: bigint }>();
+    for (const v of videoSnaps) {
+      const ou = N(v.user);
+      if (!snapByOwner.has(ou)) snapByOwner.set(ou, { expTime: v.expTime, ranked: v.ranked });
+    }
+    const ownerPairs = await dualTitles(
+      ownerIds.map((id) => ({
+        userId: id,
+        expTime: N(snapByOwner.get(id)?.expTime ?? 0),
+        ranked: (snapByOwner.get(id)?.ranked ?? BigInt(0)) === BigInt(1),
+        sex: ownerBriefs.get(id)?.sex ?? 1,
+      }))
+    );
+    ownerMap = new Map(
+      ownerIds
+        .map((id) => ownerBriefs.get(id))
+        .filter((b): b is UserBrief => !!b)
+        .map((b) => [b.id, { ...b, titles: ownerPairs.get(b.id) ?? null }])
+    );
+  }
+  return rows.map((r) => {
+    const d = safeJson(r.detailsData);
+    const vid = typeof d.vid === "number" ? d.vid : 0;
+    const owner =
+      r.type === NEWS_TYPE.COMMENT && d.kind === "video" && vid > 0
+        ? ownerMap.get(vid) ?? null
+        : null;
+    return {
+      id: N(r.id),
+      type: r.type,
+      ranked: r.ranked === BigInt(1),
+      expTime: N(r.expTime),
+      reference: N(r.reference),
+      details: d,
+      createTime: N(r.createTime),
+      author: authors.get(N(r.user)) ?? null,
+      authorTitles: pairs.get(N(r.user)) ?? null,
+      videoOwner: owner,
+    };
+  });
 }
 
 /** 动态页码模式（2026-10-14 用户主页动态翻页条）：(create_time,id) 倒序第 page 页起 limit 条。
@@ -1429,6 +1495,7 @@ export async function addComment(videoId: number, userId: number, content: strin
         tm: N(info?.realTime ?? 0),
         nf: info?.noflag ? 1 : 0,
         vn: ownerName.slice(0, 20),
+        vid: N(video?.user ?? 0),
         cid: Number(created.id),
       },
       createTime: Number(now),
@@ -1453,6 +1520,10 @@ export interface SiteStats {
   // 是录像评论，改挂「录像评论」新行）——两行统计数字各归各位
   bbsReplyTotal: number;
   bbsReplyToday: number;
+  // 2026-10-22 张老师要求：新增「在线练习」行——practice_log 累计练习盘数 + 今日增量
+  // （口径同「今日练习」板块/后台 KPI：胜负都算、游客局也计）
+  practiceTotal: number;
+  practiceToday: number;
 }
 
 async function getSiteStatsImpl(): Promise<SiteStats> {
@@ -1468,6 +1539,7 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     commentTotal, commentToday,
     bbsTotal, bbsToday,
     bbsReplyTotal, bbsReplyToday,
+    practiceTotal, practiceToday,
   ] = await Promise.all([
     // 2026-10-14：注册人数按旧站口径排除封禁账号（旧站 @All_Number = count(...Player_IsLive='1')）
     prisma.user.count({ where: ACTIVE_USER }),
@@ -1483,6 +1555,9 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     // 论坛评论（bbs_reply；2026-10-22 起首页行名「论坛评论」，口径同 bbs_post：软删 -1 不计）
     prisma.bbsReply.count({ where: { status: 0 } }),
     prisma.bbsReply.count({ where: { status: 0, createTime: { gte: dayStart } } }),
+    // 在线练习（practice_log 全量；口径同「今日练习」板块：胜负都算、游客局也计）
+    prisma.practiceLog.count(),
+    prisma.practiceLog.count({ where: { createTime: { gte: dayStart } } }),
   ]);
   return {
     userTotal,
@@ -1496,6 +1571,8 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     bbsToday,
     bbsReplyTotal,
     bbsReplyToday,
+    practiceTotal,
+    practiceToday,
   };
 }
 

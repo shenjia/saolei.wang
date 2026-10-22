@@ -10226,3 +10226,16 @@ body #page .word_terms .desc {
   font-size: 11px;
   color: #fdc61d;
 }
+
+/* ---- 录像评论动态文案二轮（2026-10-22 张老师需求）----
+   「评论了录像 楼主[性别][称号] 的高级 40.44NF」：成绩数字行内垂直居中——
+   legacy a.score 是 inline-block+vertical-align:middle，在含 AvatarCell（内含
+   inline-block 性别图标）的行里 baseline 漂移致成绩下沉；此处统一钉 baseline，
+   与同行的 record person 文本对齐（#news (1,1,1) + .record_score 类名 (1,2,2) 提权）。 */
+#news .table td a.score.record_score {
+  vertical-align: baseline;
+}
+/* 楼主身份段（AvatarCell+TitleBadge）与文本的间距，同动态作者行节奏 */
+#news .table td .title {
+  margin-right: 0;
+}

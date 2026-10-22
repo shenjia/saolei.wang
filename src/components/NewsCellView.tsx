@@ -218,13 +218,34 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
               </>
             ) : (
               <>
-                评论了一盘
-                {/* 2026-10-22 张老师要求：动态带录像基本信息——「yyy的高级40.44NF录像」。
-                    lv/tm/nf/vn 是写入点快照（存量行无这些键，退回原「录像」文案）；
+                评论了录像
+                {/* 2026-10-22 张老师两轮要求：文案「评论了一盘…录像」改「评论了录像…」
+                    （去尾缀）；楼主渲染完整身份（姓名+性别+称号，姓名可点进主页，
+                    与动态作者同款 AvatarCell+TitleBadge）；成绩垂直居中。
+                    lv/tm/nf/vid 是写入点快照（存量行无这些键，退回原「录像」链接文案）；
                     成绩同破纪录/上传动态口径可点，跳录像详情页 */}
                 {d.lv || d.tm ? (
                   <>
-                    {d.vn ? <span className="record person">{d.vn}的</span> : null}
+                    {news.videoOwner ? (
+                      <>
+                        <AvatarCell
+                          id={news.videoOwner.id}
+                          name={news.videoOwner.chineseName}
+                          sex={news.videoOwner.sex}
+                          className="author"
+                          gender="small"
+                          link
+                        />{" "}
+                        <TitleBadge
+                          title={news.videoOwner.titles?.m ?? ""}
+                          classic={news.videoOwner.titles?.c ?? null}
+                          link
+                        />{" "}
+                        的
+                      </>
+                    ) : d.vn ? (
+                      <span className="record person">{d.vn}的</span>
+                    ) : null}
                     <span className="record person">
                       {LEVEL_NAMES[(d.lv ?? "") as Level] ?? d.lv}
                     </span>
@@ -232,7 +253,6 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                       {formatScore("time", d.tm ?? 0)}
                     </Link>
                     {d.nf ? <span className="news_nf">NF</span> : null}
-                    录像
                   </>
                 ) : (
                   <Link href={`/video/${news.reference}`} target="_blank" className="score">

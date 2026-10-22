@@ -64,7 +64,8 @@ for nid, user, ref, dd in rows:
     owner_name = (u[0] if u else "")[:20]
     new_dd = json.dumps(
         {"kind": "video", "lv": level or "", "tm": int(real_time or 0),
-         "nf": 1 if noflag else 0, "vn": owner_name, "cid": int(d.get("cid", 0))},
+         "nf": 1 if noflag else 0, "vn": owner_name, "vid": int(owner),
+         "cid": int(d.get("cid", 0))},
         ensure_ascii=False, separators=(",", ":"))
     print(f"  news={nid} user={user} video={ref} lv={level} tm={real_time} nf={noflag} vn={owner_name}")
     if not DRY:

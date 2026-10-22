@@ -382,6 +382,7 @@ async function dispatch(
                 tm: N(info?.realTime ?? 0),
                 nf: info?.noflag ? 1 : 0,
                 vn: ownerName.slice(0, 20),
+                vid: N(video?.user ?? 0),
                 cid: id,
               },
               createTime: N(row.createTime),
