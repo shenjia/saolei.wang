@@ -53,17 +53,20 @@ body:has(.admin_shell) #footer {
   width: 24px;
   height: 24px;
 }
+.admin_brand span {
+  white-space: nowrap;
+}
 .admin_brand b {
   color: #fdc61a;
   font-size: 16px;
-  line-height: 21px;
+  line-height: 24px;
 }
 .admin_brand em {
   color: #75715e;
   font-size: 12px;
   font-style: normal;
-  display: block;
-  line-height: 16px;
+  line-height: 24px;
+  margin-left: 6px;
 }
 .admin_nav {
   flex: 1;
