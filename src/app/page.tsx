@@ -116,7 +116,7 @@ export default async function HomePage() {
           <span>开始练习</span>
         </Link>
         {/* 今日练习（2026-10-22 五轮张老师要求）：移动端副本，置于置顶「开始练习」大按钮下方、
-            管理员审核提醒行上方。完成/尝试双口径 + 开率 + 我/全网双线图 */}
+            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我/全网双线图 */}
         <PracticeToday
           prefix="practice_today_top"
           mineWon={practice.mineWon}
@@ -172,7 +172,7 @@ export default async function HomePage() {
           <span>开始练习</span>
         </Link>
         {/* 今日练习（2026-10-22 五轮张老师要求）：桌面侧栏副本，置于「开始练习」按钮下方、
-            管理员审核提醒行上方。完成/尝试双口径 + 开率 + 我/全网双线图 */}
+            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我/全网双线图 */}
         <PracticeToday
           prefix="practice_today"
           mineWon={practice.mineWon}

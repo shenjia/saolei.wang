@@ -8882,8 +8882,8 @@ html.op-fakefs #header {
 }
 /* 首页「今日练习」板块（2026-10-22 张老师要求，五轮改版）：「开始练习」按钮下方。
    首行「今日已完成 xxx / yyy 盘」——xxx=我的完成盘数（标准绿 #a6e22e）、yyy=我的尝试盘数
-   （亮灰）；今日有尝试时最右侧绿色开率（一位小数）。次行灰字「共xx位雷友完成了
-   aaa / bbb 局」——aaa=全网完成盘数（金色 #fdc61a）、bbb=全网尝试盘数，尾部开率同款。
+   （亮灰）；今日有尝试时最右侧绿色胜率（一位小数）。次行灰字「共xx位雷友完成了
+   aaa / bbb 局」——aaa=全网完成盘数（金色 #fdc61a）、bbb=全网尝试盘数，尾部胜率同款。
    底部近 30 天双线图铺满模块宽：绿线=我的尝试盘数（登录走 practice_log、未登录走
    localStorage）、黄线=全网尝试盘数。桌面侧栏副本与移动端置顶副本同款，断点显隐
    与 #play_entry / #play_entry_top 一致 */
@@ -8918,15 +8918,15 @@ html.op-fakefs #header {
   color: #75715e;
 }
 .practice_today .pt_line .rate {
-  margin-left: auto; /* 今日有尝试时最右侧的开率 */
-  width: 64px; /* 定宽+左对齐：与次行开率左边缘对齐（2026-10-22 张老师要求） */
+  margin-left: auto; /* 今日有尝试时最右侧的胜率 */
+  width: 64px; /* 定宽+左对齐：与次行胜率左边缘对齐（2026-10-22 张老师要求） */
   text-align: left;
-  color: #75715e; /* 标签暗灰（2026-10-22 八轮张老师要求：与次行开率标签同色，原亮灰） */
+  color: #75715e; /* 标签暗灰（2026-10-22 八轮张老师要求：与次行胜率标签同色，原亮灰） */
   font-size: 12px;
   font-weight: bold;
 }
 .practice_today .pt_line .rate .ratev {
-  color: #a6e22e; /* 开率数值绿色（与完成盘数同色口径，标签暗灰/数值绿分层） */
+  color: #a6e22e; /* 胜率数值绿色（与完成盘数同色口径，标签暗灰/数值绿分层） */
 }
 .practice_today .pt_sub {
   display: flex;
@@ -8951,13 +8951,13 @@ html.op-fakefs #header {
   font-weight: bold;
 }
 .practice_today .pt_sub .rate {
-  margin-left: auto; /* 与首行开率同款右浮对齐（六轮张老师要求） */
-  width: 64px; /* 定宽与首行开率一致，两行「开率」左边缘对齐 */
+  margin-left: auto; /* 与首行胜率同款右浮对齐（六轮张老师要求） */
+  width: 64px; /* 定宽与首行胜率一致，两行「胜率」左边缘对齐 */
   text-align: left;
   color: #75715e; /* 暗灰：与次行文案同色不抢眼（2026-10-22 张老师要求，原金色太刺眼） */
 }
 .practice_today .pt_sub .ratev {
-  color: #b1b1a4; /* 开率数值亮灰（站内数据数值口径），标签暗灰数值亮灰分层 */
+  color: #b1b1a4; /* 胜率数值亮灰（站内数据数值口径），标签暗灰数值亮灰分层 */
   font-weight: bold;
 }
 .practice_today .pt_chart {
@@ -8978,8 +8978,8 @@ html.op-fakefs #header {
 }
 /* ==================== 练习页标题行「今日已完成」统计（2026-10-23 张老师定） ====================
    /online 标题行级别筛选 tabs 右侧：与首页「今日练习」首行同款口径与配色——
-   「今日已完成 w / p 局 开率 r%」（w 完成数绿 #a6e22e / p 尝试数亮灰 #b1b1a4 /
-   「开率」标签暗灰 #75715e / 开率数值绿），数字 16px 加粗微缩（18px 在 26px h1
+   「今日已完成 w / p 局 胜率 r%」（w 完成数绿 #a6e22e / p 尝试数亮灰 #b1b1a4 /
+   「胜率」标签暗灰 #75715e / 胜率数值绿），数字 16px 加粗微缩（18px 在 26px h1
    旁略抢）；每盘终态实时自增（胜局立即 / 败局 300ms 复活窗后，复活撤销不计）。
    空间不够可隐藏：≤880px 整块隐藏（与 #practice_today_top 断点一致）；
    横屏沉浸态 news_head 整块隐藏时随之消失，无需另写规则 */
@@ -9009,12 +9009,12 @@ html.op-fakefs #header {
 }
 #online_play .op_today .rate {
   margin-left: 4px;
-  color: #75715e; /* 标签暗灰（首页首行开率标签同色口径） */
+  color: #75715e; /* 标签暗灰（首页首行胜率标签同色口径） */
   font-size: 12px;
   font-weight: bold;
 }
 #online_play .op_today .rate .ratev {
-  color: #a6e22e; /* 开率数值绿色（标签暗灰/数值绿分层，同首页） */
+  color: #a6e22e; /* 胜率数值绿色（标签暗灰/数值绿分层，同首页） */
 }
 @media (max-width: 880px) {
   #online_play .op_today {

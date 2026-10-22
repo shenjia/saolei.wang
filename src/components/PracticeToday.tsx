@@ -1,7 +1,7 @@
 // 首页「今日练习」板块（2026-10-22 张老师要求，五轮改版）：「开始练习」按钮下方。
 // 首行「今日已完成 xxx / yyy 盘」：xxx=完成盘数（绿 #a6e22e）、yyy=尝试盘数（亮灰），
-// 今日有尝试时最右侧开率（一位小数，如 63.6%）——七轮（2026-10-22 张老师要求）：
-// 标签「开率」亮灰、数值绿色，与次行开率「标签暗灰数值亮灰」同构分层。
+// 今日有尝试时最右侧胜率（一位小数，如 63.6%）——七轮（2026-10-22 张老师要求）：
+// 标签「胜率」亮灰、数值绿色，与次行胜率「标签暗灰数值亮灰」同构分层。
 // 次行「共xx位雷友完成了 aaa / bbb 局」：aaa=全网完成（金 #fdc61a）、bbb=全网尝试（亮灰）。
 // 底部近 30 天双线折线铺满模块宽：黄线=全网尝试盘数（按自身最大值顶格归一）、
 // 绿线=我的尝试盘数（峰值只归一到 0.618 高度，2026-10-22 张老师要求——
@@ -51,7 +51,7 @@ const subscribePractice = (cb: () => void): (() => void) => {
   };
 };
 
-/** 开率（0-100，一位小数）；无尝试返回 null（不渲染） */
+/** 胜率（0-100，一位小数）；无尝试返回 null（不渲染） */
 const rate = (won: number, played: number): number | null =>
   played > 0 ? Math.round((won / played) * 1000) / 10 : null;
 
@@ -124,14 +124,14 @@ export function PracticeToday({
         <span className="lead">局</span>
         {r !== null && (
           <span className="rate">
-            开率 <b className="ratev">{r}%</b>
+            胜率 <b className="ratev">{r}%</b>
           </span>
         )}
       </p>
       <p className="pt_sub">
         共<b className="users">{users}</b>位雷友完成了<b className="net">{netWon}</b>
         <span className="sep"> / </span>
-        <b className="netb">{net}</b>局{rNet !== null && <span className="rate">开率 <b className="ratev">{rNet}%</b></span>}
+        <b className="netb">{net}</b>局{rNet !== null && <span className="rate">胜率 <b className="ratev">{rNet}%</b></span>}
       </p>
       <div className="pt_chart">
         <DoubleLine mine={myTrend} net={trendNet} height={38} />

@@ -250,7 +250,7 @@ export function OnlinePlay({
     ) => el.addEventListener(type, fn as EventListener, { ...opts, signal });
 
     /* ---- 今日练习统计（2026-10-23 张老师定）：标题行 tabs 右侧
-       「今日已完成 w / p 局 开率 r%」——与首页「今日练习」首行同款口径：
+       「今日已完成 w / p 局 胜率 r%」——与首页「今日练习」首行同款口径：
        登录=服务端 practice_log 当日计数（SSR 注入初值）；未登录=localStorage
        当日记数（practice-local）。每盘终态实时自增：胜局立即 / 败局 300ms
        复活窗后（与 bumpLocalPractice 同点调用，复活撤销＝未终态不计）。
@@ -272,7 +272,7 @@ export function OnlinePlay({
       if (!ew || !ep || !erate) return;
       ew.textContent = String(todayW);
       ep.textContent = String(todayP);
-      erate.hidden = todayP <= 0; // 无尝试不显开率（与首页首行一致）
+      erate.hidden = todayP <= 0; // 无尝试不显胜率（与首页首行一致）
       if (todayP > 0) {
         const er = erate.querySelector("#op_tr");
         if (er) er.textContent = `${Math.round((todayW / todayP) * 1000) / 10}%`;
@@ -4841,8 +4841,8 @@ export function OnlinePlay({
           <span className="manual_badge" id="manual_badge" hidden>（摆雷中）</span>
         </div>
         {/* 今日练习统计（2026-10-23 张老师定）：与首页「今日练习」首行同款——
-            「今日已完成 w / p 局 开率 r%」，完成数绿、尝试数亮灰、标签暗灰、
-            开率数值绿（样式见 globals.css .op_today）。数值由 effect 内
+            「今日已完成 w / p 局 胜率 r%」，完成数绿、尝试数亮灰、标签暗灰、
+            胜率数值绿（样式见 globals.css .op_today）。数值由 effect 内
             paintToday 命令式填充（JSX 留空骨架，规避 SSR/水合两套口径）；
             ≤880px 窄屏整块隐藏（空间不够可隐藏，张老师定）；横屏沉浸
             news_head 整块隐藏时随之消失 */}
@@ -4852,7 +4852,7 @@ export function OnlinePlay({
           <span className="sep">/</span>
           <b className="total" id="op_tp"></b>
           <span className="lead">局</span>
-          <span className="rate" id="op_trate" hidden>开率 <b className="ratev" id="op_tr"></b></span>
+          <span className="rate" id="op_trate" hidden>胜率 <b className="ratev" id="op_tr"></b></span>
         </div>
         {/* 右上角图标按钮排（2026-10-14 二期张老师定，九期追补模式快捷钮）：
             NF／速旗／连击／无猜四颗模式钮在齿轮左侧——激活显色（NF=默认黄 /
