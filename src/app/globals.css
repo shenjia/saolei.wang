@@ -8866,6 +8866,95 @@ html.op-fakefs #header {
 #play_entry:active {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
+/* 管理员待审提示行（2026-10-22 张老师要求）：「开始练习」按钮正下方一行——
+   待审数金色（前台站名金 #fdc61a 口径）、右侧「去审核」小按钮直达 /admin/review。
+   仅管理员登录态且待审>0 才渲染（服务端把关）；布局与 #play_entry 同款盒宽对齐 */
+#review_entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 272px;
+  margin: -8px 8px 16px; /* 顶距上提抵住按钮底距，视觉紧贴按钮下方 */
+  padding: 0 6px;
+  box-sizing: border-box;
+  font-size: 13px;
+  color: #b1b1a4;
+}
+#review_entry .n {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#review_entry .n b {
+  color: #fdc61a; /* 前台站名金（.logo a h1 同色），Monokai 暗底上足够醒目 */
+  font-size: 15px;
+  font-weight: bold;
+}
+#review_entry .go {
+  flex: 0 0 auto;
+  display: inline-block;
+  padding: 2px 10px;
+  background: #272822;
+  border: 1px solid #49483e; /* header 底分隔线同色，低调融入暗底 */
+  border-radius: 3px;
+  color: #a6e22e;
+  font-size: 12px;
+  line-height: 18px;
+}
+#review_entry .go:hover {
+  color: #fdc61a;
+  border-color: #75715e;
+}
+/* 移动端副本（2026-10-22）：桌面隐藏，≤880 单列带内紧贴置顶「开始练习」大按钮下方 */
+#review_entry_top {
+  display: none;
+}
+@media (max-width: 880px) {
+  #review_entry_top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    margin: -10px 8px 16px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    font-size: 13px;
+    color: #b1b1a4;
+  }
+  #review_entry_top .n {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  #review_entry_top .n b {
+    color: #fdc61a;
+    font-size: 15px;
+    font-weight: bold;
+  }
+  #review_entry_top .go {
+    flex: 0 0 auto;
+    display: inline-block;
+    padding: 2px 10px;
+    background: #272822;
+    border: 1px solid #49483e;
+    border-radius: 3px;
+    color: #a6e22e;
+    font-size: 12px;
+    line-height: 18px;
+  }
+  #review_entry_top .go:hover {
+    color: #fdc61a;
+    border-color: #75715e;
+  }
+  /* 桌面侧栏副本在单列带内退役（与 #play_entry 同款处理） */
+  #review_entry {
+    display: none;
+  }
+}
 @media (max-width: 880px) {
   /* 移动端侧栏盒子解除固定宽，按钮同步铺满 */
   #play_entry {
@@ -9915,10 +10004,15 @@ html.op-fakefs #header {
 .faq_dialog .faq_body .term {
   color: #e6db74;
 }
-/* 术语独立页（2026-10-22）：FAQ 术语弹窗改独立页承载后，页内每条术语名与次级高亮
-   片段（Ce/Cl 等）沿用弹窗同款 .term 黄（#e6db74），作用域限定本页 box */
-body #page .word_terms .term {
+/* 术语独立页（2026-10-22 张老师 15:22 定稿配色）：仅「:」前缩写金色加粗，
+   冒号后全称/公式与说明正文统一白色（#f8f8f2 站内 Monokai 前景白），
+   作用域限定本页 box；上一版「desc 内片段同黄」因太刺眼已撤 */
+body #page .word_terms .term_head {
   color: #e6db74;
+}
+body #page .word_terms .term_rest,
+body #page .word_terms .desc {
+  color: #f8f8f2;
 }
 .faq_dialog .faq_body .note {
   color: #b1b1a4;
