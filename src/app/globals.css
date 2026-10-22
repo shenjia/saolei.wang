@@ -599,6 +599,20 @@ body #video_view .video_cell .counters span {
   font-size: 16px;
 }
 
+/* 录像详情页状态标签（2026-10-23 张老师需求）：
+   ①待审核（st10）橙色——legacy 的 .status.st10 是绿（.video_cell .status.st10 (0,3,0)
+   且 legacy 后加载），须 body 前缀 (0,3,1) 压过；橙色取中级色 #f79646（站点标准橙档）
+   ②已通过（st20）文字后 ✓ 小标（em.ok）——继承 st20 绿 #a6e22e，10px 与列表
+   td.score .reviewed 同款（legacy em 字重正常，这里不复位，细 ✓ 更像下标） */
+body #video_view .video_cell .status.st10 {
+  color: #f79646;
+}
+body #video_view .video_cell .status .ok {
+  font-style: normal;
+  margin-left: 4px;
+  font-size: 10px;
+}
+
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
    半透明黑圆 + 白三角，绝对定位在棋盘几何中心。
    legacy 的 #video_view .board{float:left;margin:5px 20px 20px 0} 外边距

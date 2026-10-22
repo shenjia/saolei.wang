@@ -168,8 +168,11 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
                   </span>
                 </>
               )}
+              {/* 2026-10-23 张老师需求：已通过（st20）文字后放 ✓（继承 st20 绿）；
+                  待审核（st10）橙色显示（globals.css 提权覆盖 legacy 绿） */}
               <span className={`status st${video.status}`}>
                 {VIDEO_STATUS_NAMES[video.status] ?? video.status}
+                {video.status === VIDEO_STATUS.REVIEWED && <em className="ok">✓</em>}
               </span>
             </p>
             <p>
