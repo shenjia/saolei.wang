@@ -574,10 +574,13 @@ def cmd_refill():
                 skipped_dup.append(old_id)
                 continue
         ts = v.get("update_time") or now_sec()
+        # ⚠️ 快照列 ranked 与 exp_time 同为必填（2026-10-22 预备役 bug：本清单漏 ranked，
+        #   refill 新行落默认 0 → 82 部录像详情页全显示「预备役」）
         cols_v = ["level", "user", "hash", "status", "review_user", "review_time",
-                  "create_time", "update_time", "exp_time"]
+                  "create_time", "update_time", "exp_time", "ranked"]
         vals_v = [v["level"], v["user"], h, v["status"], v.get("review_user"),
-                  v.get("review_time"), v["create_time"], ts, v.get("exp_time") or 0]
+                  v.get("review_time"), v["create_time"], ts, v.get("exp_time") or 0,
+                  v.get("ranked") or 0]
         for opt in ("auto_flag", "auto_reason"):
             if v.get(opt) is not None:
                 cols_v.append(opt)
