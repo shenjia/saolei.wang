@@ -12,6 +12,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AdminVideoRow } from "@/lib/admin/data";
 import { LevelTag, StatusTag } from "./Widgets";
@@ -109,6 +110,7 @@ export function AdminReviewList({
   const [items, setItems] = useState(initial);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
   /** 全选跨页模式：选中「全部免核定」（不限于本页）；此时已选数＝服务端全池计数。
    *  2026-10-21 张老师需求：进免核定池默认全选（进页即可批量通过）。 */
   const [allMode, setAllMode] = useState(pool === "exempt");
@@ -160,6 +162,9 @@ export function AdminReviewList({
       else drop(ids);
       setPicked(new Set());
       setAllMode(false);
+      // 刷新服务端布局：侧栏待审角标 / 顶栏摘要 / KPI 随审核结果同步减少，归零即消失
+      //（2026-10-22 张老师报障：批量审核走裸 postOp 不刷新布局，红数字不动）
+      router.refresh();
       // 免核定清空后自动转去需核定手审（2026-10-21 张老师需求；下一屏没活干就回全部待审）
       if (pool === "exempt") {
         const rest = (exemptTotal ?? ids.length) - ids.length;
