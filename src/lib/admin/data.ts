@@ -60,13 +60,20 @@ function userWhere(f: UserFilter): { sql: string; params: unknown[] } {
   const params: unknown[] = [];
   const q = (f.q ?? "").trim();
   if (q) {
+    // 录像标识（user_sig.signature，上传录像时注册）检索：EXPLAIN 下 OR+EXISTS 会全表扫
+    // user，改用 IN 子查询（user_sig 仅 1.6 万行、signature 有唯一索引，实测 <60ms）
+    const sigSub = "(u.id IN (SELECT user FROM user_sig WHERE signature LIKE ?))";
     if (/^\d+$/.test(q)) {
-      conds.push("u.id = ?");
-      params.push(BigInt(q));
-    } else {
-      conds.push("(u.chinese_name LIKE ? OR u.english_name LIKE ? OR a.username LIKE ? OR i.nickname LIKE ?)");
+      // 纯数字：ID 精确匹配 + 标识模糊（存在纯数字标识如 "638"，只按 ID 会漏）
+      conds.push(`(u.id = ? OR ${sigSub})`);
       const like = `%${q}%`;
-      params.push(like, like, like, like);
+      params.push(BigInt(q), like);
+    } else {
+      conds.push(
+        `(u.chinese_name LIKE ? OR u.english_name LIKE ? OR a.username LIKE ? OR i.nickname LIKE ? OR ${sigSub})`
+      );
+      const like = `%${q}%`;
+      params.push(like, like, like, like, like);
     }
   }
   if (f.status === "banned") conds.push("u.status <> 0");

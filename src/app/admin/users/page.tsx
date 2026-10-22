@@ -49,7 +49,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <Suspense fallback={<div className="admin_filterbar">筛选项加载中…</div>}>
           <AdminFilters
             fields={[
-              { name: "q", type: "search", placeholder: "姓名 / 账号 / 昵称 / ID" },
+              { name: "q", type: "search", placeholder: "姓名 / 账号 / 昵称 / ID / 录像标识" },
               {
                 name: "status",
                 type: "select",
