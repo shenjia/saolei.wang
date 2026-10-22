@@ -66,7 +66,7 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
    用户主页 #user_view 下 #news（动态）#user_videos（录像）#history（纪事）。 */
 #news.box,#video.box,#user_view #news.box,#user_videos.box,#history.box{padding-bottom:10px}
 
-/* 2026-10-22 张老师要求：无成绩占位「?」与正常成绩同位同字体——
-   原继承标签字号 14px 又小又偏，统一为成绩数字 em 的 20px/24px 粗体，
-   颜色保持 ins.null 灰色 #636359（时间列/3BV/s 列一并统一）。 */
-.score_time ins.null,.score_3bvs ins.null{font-size:20px;line-height:24px;font-weight:bold}
+/* 2026-10-22 张老师要求：无成绩占位「?」改用 em 包裹（Cells.tsx em.null），
+   天然继承成绩数字字号/粗体/位置，无需再补字号规则；此处压颜色为灰。
+   带 #page 提特异性，压过 #page .score_* em 的数字默认色与 #user_list 变体。 */
+#page .score_time em.null,#page .score_3bvs em.null{color:#636359;cursor:help}

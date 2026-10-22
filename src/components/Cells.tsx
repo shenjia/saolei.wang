@@ -65,9 +65,10 @@ export function ScoreTime({
           秒
         </>
       ) : (
-        <ins className="null" title="在此级别没有被承认成绩的录像，因此没有纪录">
+        // 2026-10-22 张老师要求：「?」用 em 包住，与成绩数字同位同字体（位置天然对齐），仅灰色
+        <em className="null" title="在此级别没有被承认成绩的录像，因此没有纪录">
           ?
-        </ins>
+        </em>
       )}
       {noflag && <ins title="仅用左键点击完成游戏，全程不用右键标雷">NF</ins>}
       {/* 2026-10-13 张老师要求：日期包 .score_date，用户主页窄屏（≤768）整体隐藏 */}
@@ -105,9 +106,10 @@ export function Score3bvs({
           {score3bvs(-score)}
         </del>
       ) : (
-        <ins className="null" title="在此级别没有被承认成绩的录像，因此没有纪录">
+        // 2026-10-22 张老师要求：「?」用 em 包住，与成绩数字同位同字体（位置天然对齐），仅灰色
+        <em className="null" title="在此级别没有被承认成绩的录像，因此没有纪录">
           ?
-        </ins>
+        </em>
       )}
       {date ? <span className="score_date">({timeOpposite(date, TIME_NEVER)})</span> : null}
     </span>

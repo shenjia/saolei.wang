@@ -1875,13 +1875,18 @@ del[data-tip]:hover::after {
   color: #fdc61a;
   cursor: help;
 }
-#page .user_card .score_time ins.null,
-#page .user_card .score_3bvs ins.null {
+#page .user_card .score_time em.null,
+#page .user_card .score_3bvs em.null {
+  /* 2026-10-22 张老师要求：「?」改 em 包裹后天然继承数字样式；
+     压灰需高于 .scores .beg/.sum em 的级别配色 (1,4,1)，故并入同段特异性的选择器组 */
   color: #636359;
-  /* 2026-10-22 张老师要求：无成绩「?」与同级数字同位同字体（同 em 15px/20px 粗体），仅灰色 */
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: bold;
+  cursor: help;
+}
+#page .user_card .scores .beg em.null,
+#page .user_card .scores .int em.null,
+#page .user_card .scores .exp em.null,
+#page .user_card .scores .sum em.null {
+  color: #636359;
 }
 /* 不被承认的 3BV/s（del）：颜色与字号跟同级数字一致，不继承 legacy 的 20px */
 #page .user_card .score_3bvs del {
@@ -3318,12 +3323,18 @@ body #user_view .info .score_3bvs em {
   font-size: 16px;
   line-height: 20px;
 }
-/* 2026-10-22 张老师要求：无成绩「?」与同级数字同位同字体（同 em 16px/20px 粗体），仅灰色 */
-body #user_view .info .score_time ins.null,
-body #user_view .info .score_3bvs ins.null {
-  font-size: 16px;
-  line-height: 20px;
-  font-weight: bold;
+/* 2026-10-22 张老师要求：「?」改 em 包裹后天然继承数字样式；压灰需高于
+   #user_view .info .scores .beg em 等级别配色 (2,4,1)，并入同特异性选择器组 */
+body #user_view .info .score_time em.null,
+body #user_view .info .score_3bvs em.null {
+  color: #636359;
+  cursor: help;
+}
+body #user_view .info .scores .beg em.null,
+body #user_view .info .scores .int em.null,
+body #user_view .info .scores .exp em.null,
+body #user_view .info .scores .sum em.null {
+  color: #636359;
 }
 /* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示）。
    2026-10-13 张老师要求：整块定高 160px（= 头像高度）改 flex 列，
