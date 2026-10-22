@@ -10,7 +10,9 @@ import Link from "next/link";
 import type { VideoListItem } from "@/lib/queries";
 import {
   INVALID_3BVS_TIP,
+  INVALID_STNB_TIP,
   LEVEL_NAMES,
+  MIN_3BV_FOR_3BVS,
   type VideoLevel,
   type VideoListOrder,
 } from "@/lib/config";
@@ -163,10 +165,19 @@ export function VideoRowLine({
         )}
       </td>
       <td className={`c_3bvs stnb c${highlight === "stnb" ? " current" : ""}`}>
+        {/* 2026-10-22 张老师定：初级 3BV<10（MIN_3BV_FOR_3BVS，中/高级上传下限本就
+            高于 4）的 STNB 与 3BV/s 同口径划线不承认——运气盘虚高值（如 3BV=2 的
+            4316）不当真成绩展示，也不参与排行（排行侧限界 2026-10-20 已上线） */}
         {v.stnb != null ? (
-          <span data-tip="STNB 判雷：综合评分（越高越强）" aria-label="STNB 判雷">
-            {v.stnb.toFixed(1)}
-          </span>
+          v.board3bv >= MIN_3BV_FOR_3BVS[v.level as VideoLevel] ? (
+            <span data-tip="STNB 判雷：综合评分（越高越强）" aria-label="STNB 判雷">
+              {v.stnb.toFixed(1)}
+            </span>
+          ) : (
+            <del data-tip={INVALID_STNB_TIP} aria-label={INVALID_STNB_TIP}>
+              {v.stnb.toFixed(1)}
+            </del>
+          )
         ) : (
           <span title="该录像暂无分析数据">-</span>
         )}

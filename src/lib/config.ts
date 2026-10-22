@@ -330,6 +330,10 @@ export const MIN_3BV_FOR_3BVS: Record<VideoLevel, number> = { beg: 10, int: 4, e
 // 录像详情页与排行表共用同一条文案，改文案只改这里。
 export const INVALID_3BVS_TIP = "因为3BV太小，运气成分过高，该3BV/s成绩不被承认";
 
+// 无效 STNB 的 hover 气泡文案（2026-10-22 张老师定：初级 3BV<10 的 STNB 同 3BV/s
+// 划线不承认——运气盘虚高值如 3BV=2 的 4316 不该当真成绩展示；与 INVALID_3BVS_TIP 同款）。
+export const INVALID_STNB_TIP = "因为3BV太小，运气成分过高，该STNB成绩不被承认";
+
 // 棋盘尺寸（移植 board.js）
 export const BOARD_SIZE: Record<VideoLevel, { x: number; y: number }> = {
   beg: { x: 8, y: 8 },
