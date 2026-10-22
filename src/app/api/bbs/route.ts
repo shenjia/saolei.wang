@@ -93,9 +93,10 @@ export async function POST(req: NextRequest) {
       if (r.quotedUserId) {
         await sendMessage(session.uid, r.quotedUserId, `我回复了你在${titleLink}文章中的评论`);
       }
-      // ② 任何评论 → 通知楼主（自评不发）
+      // ② 任何评论 → 通知楼主（自评不发；被回复者就是楼主时 ① 已通知，不再重复发——
+      // 2026-10-22 张老师反馈：楼主收到「回复评论」+「评论文章」两条重复短信）
       const postOwnerId = Number(post.user);
-      if (postOwnerId !== session.uid) {
+      if (postOwnerId !== session.uid && r.quotedUserId !== postOwnerId) {
         await sendMessage(session.uid, postOwnerId, `我评论了你的文章${titleLink}`);
       }
     }
