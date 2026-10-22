@@ -422,14 +422,26 @@ export function runReplay(opts: {
     }
     return any;
   }
+  /* 玩家实际旗数（2026-10-22 张老师报错）：rstate 现数会被 checkWinR 的胜利
+     自动补旗污染（Flags 终值虚高）；练习页口径＝report 须在自动补旗之前。
+     这里以 rc 事件流增量维护：rc 系玩家动作，toggleLabelR 命中才 +/-，
+     checkWinR 的补旗不经此路 → 统计永不计自动旗 */
+  let playerFlags = 0;
   /* flop toggleLabel()：旗→问号(marks)/摘旗、问号→清除、未标→旗；返回是否可操作 */
   function toggleLabelR(px: number, py: number): boolean {
     if (!inb(px, py)) return false;
     const i = idxOf(px, py);
     if (rstate[i] === 1) return false;
-    if (marks && rstate[i] === 2) rstate[i] = 3;
-    else if (rstate[i] === 2 || rstate[i] === 3) rstate[i] = 0;
-    else rstate[i] = 2;
+    if (marks && rstate[i] === 2) {
+      rstate[i] = 3;
+      playerFlags--;
+    } else if (rstate[i] === 2 || rstate[i] === 3) {
+      if (rstate[i] === 2) playerFlags--;
+      rstate[i] = 0;
+    } else {
+      rstate[i] = 2;
+      playerFlags++;
+    }
     paintR(i);
     return true;
   }
@@ -465,6 +477,11 @@ export function runReplay(opts: {
     const e = evs[k];
     moveCursor(e.px, e.py);
     if (dead) return;
+    /* 胜局后事件全无效（flop performEvent 守卫；同 videowin.ts 主循环）：
+       不拦的话残余 rc 会拔走 rstate 旗——虽不再污染 playerFlags（rc 分支
+       需 toggleLabelR 命中才计数，而拔的是自动补的旗），但 smile 联动与
+       光标后挂事件会继续走，与 flop 终局定格不符 */
+    if (won) return;
     /* 鼠标行程（flop mouseMove 口径，videoradar 同法）：所有带坐标事件按时间序累加 */
     if (e.px !== 0 || e.py !== 0) {
       if (lastPX !== null) pathPx += Math.hypot(e.px - lastPX, e.py - lastPY);
@@ -535,8 +552,6 @@ export function runReplay(opts: {
   /* 统计快照（solved 系按 rstate 现算，≤480 格零开销；派生值 Est/QG/STNB 由面板组件算） */
   function buildStats(): ReplayStats {
     const { solvedBv, solvedOps, solvedIsls } = solvedScan(bvSt, (i) => rstate[i] === 1);
-    let flags = 0;
-    for (let i = 0; i < N; i++) if (rstate[i] === 2) flags++;
     const cl = cLeft + cRight + cDouble;
     const ce = cl - (wastedLeft + wastedRight + wastedDouble);
     return {
@@ -554,7 +569,7 @@ export function runReplay(opts: {
       clDouble: cDouble,
       ce,
       path: pathPx,
-      flags,
+      flags: playerFlags,
     };
   }
   /* rAF 驱动（九期起支持暂停/继续/拖拽；统计按 ~100ms 节流回传） */
@@ -582,6 +597,7 @@ export function runReplay(opts: {
     dead = false;
     won = false;
     hitIdx = -1;
+    playerFlags = 0;
     cLeft = cRight = cDouble = wastedLeft = wastedRight = wastedDouble = 0;
     pathPx = 0;
     lastPX = null;
@@ -2525,13 +2541,14 @@ function ReplayFullscreen({
     return () => cancelAnimationFrame(raf);
   }, [boardId, mode]);
 
-  /* 回放态计数条：LED 雷数＝totalMines − flags、LED 时间＝回放时钟整数秒
-     （笑脸由 Provider 的 engineFace prop 驱动，见下） */
+  /* 回放态计数条：LED 雷数＝totalMines − flags（胜利时归 0——练习页 L2495 口径：
+     flags 改为只计玩家实际插旗后，终值不再「恰好」等于雷数，须显式 win 置 0）、
+     LED 时间＝回放时钟整数秒（笑脸由 Provider 的 engineFace prop 驱动，见下） */
   useEffect(() => {
     if (mode !== "replay") return;
     const uses = wrapRef.current?.querySelectorAll<SVGElement>("#fs_led_mines use.d");
-    if (stats) ledRender(uses, stats.totalMines - stats.flags);
-  }, [mode, stats]);
+    if (stats) ledRender(uses, engineFace === "win" ? 0 : stats.totalMines - stats.flags);
+  }, [mode, stats, engineFace]);
   useEffect(() => {
     if (mode !== "replay") return;
     const uses = wrapRef.current?.querySelectorAll<SVGElement>("#fs_led_time use.d");
