@@ -86,10 +86,23 @@ export function parseMessageParts(content: string): Array<MsgLinkPart | string> 
   return out;
 }
 
+/** 剥离开头的 [quote]…[/quote] 前导引用块（循环剥净多层）：
+ *  回复一条已含引用的评论时，摘要只取该作者本人写的内容，
+ *  不再把其引用的更早内容串进来（2026-10-22 张老师要求） */
+function stripLeadingQuotes(s: string): string {
+  let out = s;
+  while (/^\s*\[quote\][\s\S]*?\[\/quote\]/i.test(out)) {
+    out = out.replace(/^\s*\[quote\][\s\S]*?\[\/quote\]/i, "");
+  }
+  return out.trimStart();
+}
+
 /** UBB 剥标签纯文本（回帖引用摘要用）：[img]→图、[face]→[表情]、[N]/雷图键→[雷]、
- *  其余 UBB 标签直接剥壳留内容；老 ASP 实体先解（同 ubb() 管线口径） */
+ *  其余 UBB 标签直接剥壳留内容；老 ASP 实体先解（同 ubb() 管线口径）。
+ *  前导 [quote] 引用块整块剥除（见 stripLeadingQuotes）——摘要=作者本人内容 */
 export function ubbExcerpt(raw: string, limit: number): string {
-  const norm = decodeLegacyEntities(raw.replace(/<br\s*\/?>/gi, "\n"));
+  const own = stripLeadingQuotes(raw.replace(/<br\s*\/?>/gi, "\n"));
+  const norm = decodeLegacyEntities(own);
   const t = norm
     .replace(/\[img\][^\[\]]*?\[\/img\]/gi, "[图]")
     .replace(/\[face\][^\[\]]*?\[\/face\]/gi, "[表情]")
