@@ -10022,15 +10022,18 @@ html.op-fakefs #header {
 .faq_dialog .faq_body .term {
   color: #e6db74;
 }
-/* 术语独立页（2026-10-22 张老师 15:22 定稿配色）：仅「:」前缩写金色加粗，
-   冒号后全称/公式与说明正文统一白色（#f8f8f2 站内 Monokai 前景白），
-   作用域限定本页 box；上一版「desc 内片段同黄」因太刺眼已撤 */
+/* 术语独立页配色（2026-10-22 16:31 张老师定稿三层）：
+   ① term_head「:」前缩写——金色加粗（#e6db74）
+   ② term_rest「:」后公式/译名——亮灰（#b1b1a4，.note 同款）
+   ③ desc 说明正文——标准灰（#939387，站内 .text 正文灰），不再跟亮 */
 body #page .word_terms .term_head {
   color: #e6db74;
 }
-body #page .word_terms .term_rest,
+body #page .word_terms .term_rest {
+  color: #b1b1a4;
+}
 body #page .word_terms .desc {
-  color: #f8f8f2;
+  color: #939387;
 }
 .faq_dialog .faq_body .note {
   color: #b1b1a4;
