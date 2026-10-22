@@ -65,7 +65,7 @@ export function ScoreTime({
           秒
         </>
       ) : (
-        <ins className="null" title="在此级别没有被承认成绩的录像，因此没有记录">
+        <ins className="null" title="在此级别没有被承认成绩的录像，因此没有纪录">
           ?
         </ins>
       )}
@@ -105,7 +105,7 @@ export function Score3bvs({
           {score3bvs(-score)}
         </del>
       ) : (
-        <ins className="null" title="在此级别没有被承认成绩的录像，因此没有记录">
+        <ins className="null" title="在此级别没有被承认成绩的录像，因此没有纪录">
           ?
         </ins>
       )}

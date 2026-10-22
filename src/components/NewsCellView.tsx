@@ -27,7 +27,7 @@ function formatDelta(order: string, oldScore: number, newScore: number): string 
 
 /** 高级时间破纪录突破整数大关（SUB30~SUB100，2026-10-16 张老师定）：
     旧成绩所在 10s 大关下界，且新成绩已跨入关内（< 大关）才算突破。
-    只认高级时间记录（军衔口径只看高级时间）；首创行旧成绩为 0，天然不出标签 */
+    只认高级时间纪录（军衔口径只看高级时间）；首创行旧成绩为 0，天然不出标签 */
 function subMilestone(od: string | undefined, lv: string | undefined, oldMs: number, newMs: number): number | null {
   if (od !== "time" || lv !== "exp") return null;
   const gate = Math.floor(oldMs / 10000) * 10;

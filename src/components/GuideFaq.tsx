@@ -83,7 +83,7 @@ const FAQ_ITEMS: Record<string, FaqItem> = {
         <br />
         <b className="term">保存扫雷录像</b>
         <br />
-        　每次突破记录后软件会将录像自动保存在软件目录下。
+        　每次突破纪录后软件会将录像自动保存在软件目录下。
         <br />
         <b className="term">查看录像数据</b>
         <br />
