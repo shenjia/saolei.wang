@@ -5979,6 +5979,11 @@ body #page.video_old .page_head {
 #video_hot td.score {
   text-align: right;
   font-weight: bold;
+  /* 2026-10-22：右 padding 8→10px。NF 悬浮右溢（margin 3px+字宽 ~16px=19px）由
+     「本列右 padding 10px + 盒右 padding 14px」链吸收，余量 5px——此前 8px 垫时
+     链余量仅 1px，移动端整页 zoom 分数像素舍入（border 1.538px）把它顶出 2px，
+     触发 .box:has(.table) 横滑规则渲染出滚动条（实测藏 NF 行溢出即归零） */
+  padding-right: 10px;
 }
 #video_hot td.score a {
   color: inherit;
@@ -6000,7 +6005,9 @@ body #page.video_old .page_head {
   left: 100%;
   top: 50%;
   transform: translateY(-50%);
-  margin-left: 5px;
+  margin-left: 3px; /* 2026-10-22：5→3px。悬浮右溢（margin+字宽 ~19px）在窄屏恰好
+     顶着「成绩列右 padding + 盒右 padding」吸收链极限，zoom 分数像素舍入即顶出 2px
+     横向滚动条；缩 2px 让链余量回到安全区（NF 与时间间距仍清晰） */
   font-size: 11px;
   font-weight: normal;
   line-height: 1;
