@@ -105,7 +105,8 @@ export function RankingRowLine({
         第&nbsp;<em>{row.rank}</em>&nbsp;位
       </td>
       <td className="name">
-        <Link href={`/user/${row.id}`} title="点击查看个人信息">
+        {/* 2026-10-23 张老师要求：排行表人名新标签页打开，不破坏榜单浏览位置 */}
+        <Link href={`/user/${row.id}`} target="_blank" title="点击查看个人信息">
           {row.chineseName}
         </Link>
         <span className={`gender ${row.sex ? "male" : "female"} small`}></span>

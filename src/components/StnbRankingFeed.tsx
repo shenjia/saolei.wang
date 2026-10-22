@@ -316,7 +316,7 @@ export function StnbRankingFeed({
                   第&nbsp;<em>{u.rank}</em>&nbsp;位
                 </td>
                 <td className="name">
-                  <Link href={`/user/${u.id}`} title="点击查看个人信息">
+                  <Link href={`/user/${u.id}`} target="_blank" title="点击查看个人信息">
                     {u.chineseName}
                   </Link>
                   <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
