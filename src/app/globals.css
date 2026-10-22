@@ -1878,6 +1878,10 @@ del[data-tip]:hover::after {
 #page .user_card .score_time ins.null,
 #page .user_card .score_3bvs ins.null {
   color: #636359;
+  /* 2026-10-22 张老师要求：无成绩「?」与同级数字同位同字体（同 em 15px/20px 粗体），仅灰色 */
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: bold;
 }
 /* 不被承认的 3BV/s（del）：颜色与字号跟同级数字一致，不继承 legacy 的 20px */
 #page .user_card .score_3bvs del {
@@ -3313,6 +3317,13 @@ body #user_view .info .score_time em,
 body #user_view .info .score_3bvs em {
   font-size: 16px;
   line-height: 20px;
+}
+/* 2026-10-22 张老师要求：无成绩「?」与同级数字同位同字体（同 em 16px/20px 粗体），仅灰色 */
+body #user_view .info .score_time ins.null,
+body #user_view .info .score_3bvs ins.null {
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: bold;
 }
 /* 军衔徽章：绝对定位到卡片右上角，与头像顶部齐平（置顶展示）。
    2026-10-13 张老师要求：整块定高 160px（= 头像高度）改 flex 列，
