@@ -177,6 +177,8 @@ model UserSig {
   createTime BigInt @default(0) @map("create_time") @db.BigInt
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
+  // 用户主页标识版块按 user 查（热路径）；signature 唯一索引管归属校验
+  @@index([user])
   @@map("user_sig")
 }
 
