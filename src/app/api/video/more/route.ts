@@ -1,9 +1,10 @@
 // 录像「加载更多」增量接口：
-// ① 默认（游标 cursor+size+level）——首页「最新录像」版块（2026-09-24，与 /api/news/more 同构）
+// ① 默认（游标 cursor+size+level）——首页「最新录像」版块（2026-09-24，与 /api/news/more 同构；
+//    2026-10-22 起排序键为 (create_time,id)，cursor 语义见分支内注释）
 // ② 列表模式（page+level+order+author）——/video 列表页 + 用户主页录像版块，
 //    与 getVideoList 的页码/筛选语义完全一致（复用同一查询，含成绩表排序切换）
 // ③ 首页页码模式（feedPage+base+level，2026-10-14 四轮）——首页录像版块翻页条，
-//    id 倒序按页取（getVideoFeedPage）；feedPage 与 ② 的 page 互不干扰
+//    上传时间倒序按页取（getVideoFeedPage）；feedPage 与 ② 的 page 互不干扰
 // 军衔称号在服务端预算好随 JSON 返回，客户端直接渲染。
 
 import { NextResponse } from "next/server";
@@ -65,21 +66,25 @@ export async function GET(req: Request) {
     });
   }
 
-  // ① 首页游标模式
-  const cursor = parseInt(p.get("cursor") ?? "0", 10) || 0;
+  // ① 首页游标模式（2026-10-22 排序键改 create_time）：cursorTime=上一批末条的
+  // create_time（响应同名字段返回）。旧参数 cursor（录像id）与 (create_time,id) 序
+  // 不兼容，不再作为续拉游标——携带旧 cursor 的请求自然取第 1 页（无当前调用方，
+  // VideoFeed 已全量走 feedPage 页码模式）。
+  const cursorTime = parseInt(p.get("cursorTime") ?? "0", 10) || 0;
   const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
   const level = parseLevel(p);
   // 2026-10-20：透传 NF 筛选（首页录像版块 NF 开关）
   const nf = p.get("nf") === "1";
 
   const [items, total] = await Promise.all([
-    getVideoFeed({ level, cursor: cursor || undefined, limit: size, nf }),
+    getVideoFeed({ level, cursor: cursorTime || undefined, limit: size, nf }),
     // 同条件下的录像总数（左下角总数行）
     getVideoCount({ level, nf }),
   ]);
   return NextResponse.json({
     items,
-    cursor: items.length ? items[items.length - 1].id : cursor,
+    cursor: items.length ? items[items.length - 1].id : 0,
+    cursorTime: items.length ? items[items.length - 1].createTime : 0,
     count: items.length,
     total,
   });

@@ -232,8 +232,12 @@ model Video {
   // (level, id) 服务首页与录像列表的级别筛选 feed（原走主键反扫+过滤）
   // 2026-10-21 后台性能：create_time 服务后台趋势图 dailyCounts（30 天 GROUP BY 切天，
   // 原全表扫描 45s，加索引后 30ms）
+  // 2026-10-22 默认排序改真上传时间序（张老师：id 序≠上传时间序，历史同步数据
+  // 27.8 万处相邻逆序）：级别筛选 feed 按 (create_time, id) 倒序，(level, create_time)
+  // 复合索引覆盖反扫（beg 首屏 0.34s→0.06s）
   @@index([status, level, reviewTime])
   @@index([level, id])
+  @@index([level, createTime])
   @@index([user, level])
   @@index([hash])
   @@index([createTime])
@@ -263,6 +267,9 @@ model VideoInfo {
   // noflag=1 过滤（vi.noflag 在 video_info，30 万行无索引时全表扫 ~0.3s 冷启）；
   // 单列索引让 NF 查询走索引扫描（实测 count 0.28s→0.06s、列表页 0.33s→0.08s）
   @@index([noflag])
+  // (noflag, create_time) 2026-10-22 默认排序改真上传时间序：NF 路径按
+  // (create_time, id) 倒序，复合索引覆盖反扫免 filesort（p1 0.46s→0.09s）
+  @@index([noflag, createTime])
   @@map("video_info")
 }
 
@@ -411,9 +418,11 @@ model VideoScoresBeg {
   score3bvs  Int    @map("score_3bvs") @db.Int
   createTime BigInt @default(0) @map("create_time") @db.BigInt
 
+  // 2026-10-22 默认排序改真上传时间序：用户主页指定级别的 feed 按 (create_time, id) 倒序
   @@index([scoreTime])
   @@index([score3bvs])
   @@index([user])
+  @@index([createTime])
   @@map("video_scores_beg")
 }
 
@@ -437,9 +446,11 @@ model VideoScoresInt {
   score3bvs  Int    @map("score_3bvs") @db.Int
   createTime BigInt @default(0) @map("create_time") @db.BigInt
 
+  // 2026-10-22 默认排序改真上传时间序：用户主页指定级别的 feed 按 (create_time, id) 倒序
   @@index([scoreTime])
   @@index([score3bvs])
   @@index([user])
+  @@index([createTime])
   @@map("video_scores_int")
 }
 
@@ -463,9 +474,11 @@ model VideoScoresExp {
   score3bvs  Int    @map("score_3bvs") @db.Int
   createTime BigInt @default(0) @map("create_time") @db.BigInt
 
+  // 2026-10-22 默认排序改真上传时间序：用户主页指定级别的 feed 按 (create_time, id) 倒序
   @@index([scoreTime])
   @@index([score3bvs])
   @@index([user])
+  @@index([createTime])
   @@map("video_scores_exp")
 }
 

@@ -739,7 +739,8 @@ const getVideoListJoinCount = unstable_cache(
 /**
  * 录像列表（2026-10-15 张老师需求重构：右侧排序 tabs 换搜索框后，排序改表头点击，
  * 6 列 × 级别/玩家/时间筛选须全组合可用）：
- * - order=id（默认，上传时间倒序）且无时间搜索：保持原索引路径（video 主键反扫 / 成绩表 id 倒序）；
+ * - order=id（默认，上传时间倒序）且无时间搜索：保持原路径（video 表 / 成绩表，
+ *   2026-10-22 起按 (create_time, id) 倒序——真上传时间序，索引已补齐）；
  * - 其余排序或时间成绩搜索：统一 join 查询（驱动表与 ORDER BY 按排序键选索引，见 videoListConds）。
  * 时间成绩搜索：parseVideoTimeWindow 的 ±5ms 显示舍入窗口（匹配所有显示相同的成绩）。
  * 各排序方向：time 升序（快在前）、3bv 降序（大在前）、3bvs/stnb 降序（快/大在前，
@@ -768,7 +769,11 @@ export async function getVideoList(opts: {
   const nf = !!opts.nf;
 
   if (order === "id" && !win && bv === null && !nf) {
-    // 默认排序（上传时间倒序）原路径：全部=video 主键反扫；指定级别=成绩表 id 倒序
+    // 默认排序（上传时间倒序）原路径：全部=video 表；指定级别=成绩表。
+    // 2026-10-22（张老师要求）：id 倒序 → (create_time, id) 倒序——历史同步数据
+    // id 序≠上传时间序（本地库 27.8 万处相邻逆序），id 充当时间序时「上传时间」列乱序。
+    // 成绩表 create_time 与 video 全量一致（本地校验 0 差异）；索引已补
+    // （video: (level,create_time) / video_scores_*: create_time），实测首屏 ~0.06s
     let ids: number[] = [];
     let total = 0;
     if (level === "all") {
@@ -777,7 +782,7 @@ export async function getVideoList(opts: {
       const rows = await prisma.video.findMany({
         where,
         select: { id: true },
-        orderBy: { id: "desc" },
+        orderBy: [{ createTime: "desc" }, { id: "desc" }],
         skip: (page - 1) * size,
         take: size,
       });
@@ -789,7 +794,7 @@ export async function getVideoList(opts: {
       const rows = await table.findMany({
         where,
         select: { id: true },
-        orderBy: { id: "desc" },
+        orderBy: [{ createTime: "desc" }, { id: "desc" }],
         skip: (page - 1) * size,
         take: size,
       });
@@ -799,12 +804,13 @@ export async function getVideoList(opts: {
     return { videos, total, pageSize: size };
   }
 
-  // 其余排序 / 时间搜索 / 3BV 搜索 / NF 筛选：统一 join 查询（order=id 且带搜索时按 v.id 倒序）
+  // 其余排序 / 时间搜索 / 3BV 搜索 / NF 筛选：统一 join 查询（order=id 且带搜索时按上传时间倒序）
   const { joins, where, selectId } = videoListConds({ level, order, author, win, bv, nf });
-  // NF 默认排序优化（2026-10-20）：ORDER BY 用 vi.id 替代 v.id（两者等值同序）——
-  // 优化器得以吃 noflag 索引的隐式主键序做反向索引扫描（免 filesort），
-  // 实测 30 万行第 1 页 0.42s→0.03s（含 author/level 组合同受益）
-  const idOrderCol = nf ? "vi.id" : "v.id";
+  // 默认排序（2026-10-22）：(create_time, id) 倒序（真上传时间序，见 getVideoList 头注）。
+  // NF 路径驱动表是 video_info：ORDER BY 用 vi.create_time/vi.id（与 v.* 等值同序），
+  // 优化器得以吃 (noflag, create_time) 复合索引做反向索引扫描（免 filesort，
+  // 实测 11.6 万 NF 行 p1 0.46s→0.09s）
+  const idOrder = nf ? "vi.create_time DESC, vi.id DESC" : "v.create_time DESC, v.id DESC";
   const orderBy =
     order === "time"
       ? "vi.real_time ASC"
@@ -820,7 +826,7 @@ export async function getVideoList(opts: {
                 ? "vs.comments DESC"
                 : order === "clicks"
                   ? "vs.clicks DESC"
-                  : `${idOrderCol} DESC`; // 默认排序 + 时间/3BV 搜索：上传时间倒序（索引序）
+                  : idOrder; // 默认排序 + 时间/3BV 搜索：上传时间倒序（create_time 索引序）
   const [total, idRows] = await Promise.all([
     getVideoListJoinCount(level, order, author ?? 0, opts.time ?? "", bv ?? 0, nf),
     prisma.$queryRawUnsafe<{ id: bigint }[]>(
@@ -832,12 +838,16 @@ export async function getVideoList(opts: {
 }
 
 /**
- * 录像流（首页录像版块用）：按上传时间（id 倒序）游标翻页，语义与动态列表一致。
+ * 录像流（首页录像版块用）：按上传时间倒序游标翻页，语义与动态列表一致。
  * 与 getVideoList 的区别：① 游标而非页码（配合「加载更多」）；② 级别筛选按录像本身的级别过滤，
  * 始终「最新在前」（getVideoList 在指定级别下会切到成绩表排序，不适用首页「最新录像」）。
  * NF 筛选（2026-10-20 张老师要求）：nf=true 时只取 NF 录像（video_info.noflag=1）。
- * noflag 在 video_info（video 行不带），nf 路径改 raw SQL join video_info——
+ * noflag 在 video_info（video 行不带），nf 路径改 raw SQL 单表扫 video_info——
  * 无 nf 索引下即全表扫过滤，实测 30 万行 count+首页页 ~0.3s，靠 60s count 缓存兜住。
+ * 2026-10-22（张老师要求）：排序键 id DESC → (create_time, id) DESC——历史同步数据
+ * id 序≠上传时间序（MSSQL 分组灌入，本地库 27.8 万处相邻逆序），id 充当时间序时
+ * 「上传时间」列显示乱序。vi.create_time 与 v.create_time 全量一致（生产/本地校验 0 差异），
+ * ORDER BY vi.create_time 吃 (noflag, create_time) 复合索引免 join 免 filesort。
  */
 export async function getVideoFeed(opts: {
   level: VideoLevel | "all";
@@ -847,35 +857,37 @@ export async function getVideoFeed(opts: {
 }): Promise<VideoListItem[]> {
   if (opts.nf) {
     const conds = [
-      opts.level !== "all" ? `v.level = '${opts.level}'` : "",
-      opts.cursor ? `v.id < ${BigInt(opts.cursor)}` : "",
+      opts.level !== "all" ? `vi.level = '${opts.level}'` : "",
+      opts.cursor ? `vi.create_time < ${BigInt(opts.cursor)}` : "",
       "vi.noflag = 1",
     ]
       .filter(Boolean)
       .join(" AND ");
-    // ORDER BY vi.id（与 v.id 等值同序）：让优化器吃 noflag 索引的隐式主键序做
-    // 反向索引扫描（免 filesort）——实测 30 万行首页第 1 页 0.33s→0.038s（2026-10-20）
+    // vi.create_time 单表索引序扫描（(noflag, create_time) 复合索引）：
+    // 与旧「vi.id 隐式 PK 序反扫」完全同构，实测 11.6 万 NF 行 p1 0.09s
     const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT vi.id FROM video v JOIN video_info vi ON vi.id = v.id WHERE ${conds} ORDER BY vi.id DESC LIMIT ${opts.limit}`
+      `SELECT vi.id FROM video_info vi WHERE ${conds} ORDER BY vi.create_time DESC, vi.id DESC LIMIT ${opts.limit}`
     );
     return getVideosByIds(rows.map((r) => N(r.id)));
   }
   const rows = await prisma.video.findMany({
     where: {
       ...(opts.level !== "all" ? { level: opts.level } : {}),
-      // 游标：取 id 小于 cursor 的更早录像（与动态 getNews 同语义）
-      ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
+      // 游标：取 create_time 早于 cursor 的更早录像（动态 getNews 同语义；
+      // (create_time, id) 双键稳定序，翻页无重复无遗漏）
+      ...(opts.cursor ? { createTime: { lt: BigInt(opts.cursor) } } : {}),
     },
     select: { id: true },
-    orderBy: { id: "desc" },
+    orderBy: [{ createTime: "desc" }, { id: "desc" }],
     take: opts.limit,
   });
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
-/** 录像流页码模式（2026-10-14 四轮，首页录像版块翻页条）：id 倒序第 page 页起 limit 条。
+/** 录像流页码模式（2026-10-14 四轮，首页录像版块翻页条）：上传时间倒序第 page 页起 limit 条。
  *  页锚点按 base（=调用方传入的页大小）计；skip 恒按 base 锚点，take 才是本批行数。
- *  NF 筛选（2026-10-20）：nf=true 走 video ⋈ video_info 过滤（同 getVideoFeed nf 路径）。 */
+ *  NF 筛选（2026-10-20）：nf=true 走 video_info 单表 noflag 过滤（同 getVideoFeed nf 路径）。
+ *  2026-10-22：排序键 id DESC → (create_time, id) DESC（真上传时间序，见 getVideoFeed 注）。 */
 export async function getVideoFeedPage(opts: {
   level: VideoLevel | "all";
   page: number;
@@ -885,21 +897,21 @@ export async function getVideoFeedPage(opts: {
 }): Promise<VideoListItem[]> {
   if (opts.nf) {
     const conds = [
-      opts.level !== "all" ? `v.level = '${opts.level}'` : "",
+      opts.level !== "all" ? `vi.level = '${opts.level}'` : "",
       "vi.noflag = 1",
     ]
       .filter(Boolean)
       .join(" AND ");
-    // ORDER BY vi.id 同 getVideoFeed nf 分支（noflag 索引隐式 PK 序反向扫描免 filesort）
+    // vi.create_time 索引序反扫（(noflag, create_time) 复合索引），同 getVideoFeed nf 分支
     const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT vi.id FROM video v JOIN video_info vi ON vi.id = v.id WHERE ${conds} ORDER BY vi.id DESC LIMIT ${opts.limit} OFFSET ${(opts.page - 1) * opts.base}`
+      `SELECT vi.id FROM video_info vi WHERE ${conds} ORDER BY vi.create_time DESC, vi.id DESC LIMIT ${opts.limit} OFFSET ${(opts.page - 1) * opts.base}`
     );
     return getVideosByIds(rows.map((r) => N(r.id)));
   }
   const rows = await prisma.video.findMany({
     where: opts.level !== "all" ? { level: opts.level } : {},
     select: { id: true },
-    orderBy: { id: "desc" },
+    orderBy: [{ createTime: "desc" }, { id: "desc" }],
     skip: (opts.page - 1) * opts.base,
     take: opts.limit,
   });
@@ -938,10 +950,12 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boo
  * 口径与 getVideoList 的 order=comments（videoStat.comments>0）一致，此处收紧为 ≥2。
  */
 async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
+  // 2026-10-22：id 倒序 → create_time 倒序（真上传时间序；vs.create_time 与 video
+  // 同步写入一致，(comments) 索引 + filesort 仅 9 千候选行，代价可忽略）
   const rows = await prisma.videoStat.findMany({
     where: { comments: { gte: 2 } },
     select: { id: true },
-    orderBy: { id: "desc" },
+    orderBy: { createTime: "desc" },
     take: limit,
   });
   return getVideosByIds(rows.map((r) => N(r.id)));
@@ -949,7 +963,8 @@ async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
 
 // 2026-10-15 性能审计：热评录像全是老录像，反向主键扫描实际近乎全表（30 万行），
 // 且结果几乎不变，缓存 60s
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v1"], { revalidate: 60 });
+// 2026-10-22 v2：排序键 id → create_time（真上传时间序），升键失效旧缓存
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v2"], { revalidate: 60 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
@@ -1002,12 +1017,13 @@ export async function getUserActivity(
 }
 
 // 三张成绩表字段结构一致，收敛为统一委托类型，避免 union delegate 不可调用
+// orderBy 收单对象或数组（2026-10-22 默认排序 (create_time,id) 双键起用数组形态）
 interface ScoresDelegate {
   count(args: { where?: Record<string, unknown> }): Promise<number>;
   findMany(args: {
     where?: Record<string, unknown>;
     select: { id: true };
-    orderBy: Record<string, string>;
+    orderBy: Record<string, string> | Record<string, string>[];
     skip: number;
     take: number;
   }): Promise<{ id: bigint }[]>;
