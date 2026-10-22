@@ -227,6 +227,12 @@ def cmd_plan():
 VIDEO_TABLES = ["video", "video_info", "video_stat",
                 "video_scores_beg", "video_scores_int", "video_scores_exp",
                 "video_scores_beg_nf", "video_scores_int_nf", "video_scores_exp_nf"]
+# ⚠️ 视频域衍生表（不参与行移动，但腾位/换行会让它们变 stale，收尾必须对账）：
+#   video_metrics   —— 指标行按 id 对应「某一盘」，行被换成旧站终态后旧指标行描述的就是
+#                      「别的盘」（2026-10-22 实证：81 条 mixed 窗失同步，STNB 落盘 34.2
+#                      vs 回放现算 135）。detach 删行刻意不含它（--missing-only 只补缺行、
+#                      有行就跳过），收尾必须显式对账 + --ids-file 定点重算（见 cmd_ingest 尾注）。
+#   video_triage.auto_flag —— detach 不删（-1 未分拣兜底），靠收尾 --only-pending 补判。
 # 行移动的表：PK 即 user id 的（user_sig 等 PK 是自身自增 id，只改 user 列、不移动行）
 # ⚠️ user_donate 生产不存在（首次备份即因此截断），勿加
 USER_MOVE_TABLES = ["user", "user_info", "user_scores", "user_scores_nf", "user_stat", "user_auth"]
@@ -530,12 +536,24 @@ def cmd_ingest():
     stg.close()
     tgt.close()
     print("ingest DONE")
-    # ⚠️ 收尾必做（2026-10-22 实证漏跑）：ingest 的 video 行不走上传 after() 钩子，
-    # auto_flag 落默认 -1（未分拣）→ 后台需核定池误膨胀。迁移收尾必须补跑：
-    #   cd 项目根 && set -a && . ./.env && set +a && env -u NODE_OPTIONS node \
-    #     --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs \
-    #     scripts/video-triage-backfill.ts --only-pending   # 已通过行另跑一轮 status=20 补判
-    print("REMINDER: ingest 后必须跑 video-triage-backfill.ts 补分拣（见上行命令）")
+    # ⚠️ 收尾必做清单（2026-10-22 两项实证漏跑）：
+    # ① triage：ingest 的 video 行不走上传 after() 钩子，auto_flag 落默认 -1（未分拣）
+    #    → 后台需核定池误膨胀。必须补跑：
+    #      cd 项目根 && set -a && . ./.env && set +a && env -u NODE_OPTIONS node \
+    #        --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs \
+    #        scripts/video-triage-backfill.ts --only-pending   # 已通过行另跑一轮 status=20 补判
+    # ② video_metrics 失同步对账：mixed 窗腾位后旧指标行描述的是「别的盘」，
+    #    --missing-only 只补缺行不重算已有行（幂等补缺语义）。先跑审计 SQL：
+    #      SELECT m.id FROM video_metrics m JOIN video_info vi ON vi.id=m.id
+    #        JOIN video v ON v.id=m.id
+    #        WHERE m.real_time<>vi.real_time OR m.bbbv<>vi.board_3bv
+    #           OR m.level<>v.level OR (m.noflag<>0)<>(vi.noflag<>0);
+    #    有结果 → 导出到 ids 文件，nice -n 19 ionice -c3 定点重算（含尾部全链路：
+    #    分位基准/综合分/组内排名/user_stnb_best，30.8 万盘约 3 分钟）：
+    #      env -u NODE_OPTIONS node --experimental-transform-types \
+    #        --import ./scripts/sync/ts-extension-loader.mjs \
+    #        scripts/video-metrics.ts --ids-file=/tmp/stale-metrics-ids.txt
+    print("REMINDER: 收尾必做 ① video-triage-backfill.ts --only-pending ② video_metrics 失同步对账+重算（见上方清单）")
 
 
 # ============================================================

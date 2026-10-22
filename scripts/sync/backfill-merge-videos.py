@@ -8,6 +8,11 @@
 口径与 Phase B import-videos.py 一致：只回填空缺字段，real_time 以库值为准。
 用法：SAOLEI_DB_NAME=... python backfill-merge-videos.py [--allow-nonlocal]
      （hash 计算按文件内容 md5；filepath 改写为新站形态 /YYYY/M/D/<hash>.avf|mvf）
+
+⚠️ 回填后必查 video_metrics 失同步（2026-10-22 实证）：本脚本会改 video_info 的
+   real_time 来源值链（board_3bv/noflag 等），指标行若按旧值算过则描述的不再是当前盘——
+   ensureVideoMetrics 是幂等补缺语义（有行就跳过），不会自愈。审计+重算命令见
+   merge-migration.py cmd_ingest 尾部「收尾必做清单」②。
 """
 import hashlib
 import json
