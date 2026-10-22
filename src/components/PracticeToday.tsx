@@ -1,6 +1,7 @@
 // 首页「今日练习」板块（2026-10-22 张老师要求，五轮改版）：「开始练习」按钮下方。
 // 首行「今日已完成 xxx / yyy 盘」：xxx=完成盘数（绿 #a6e22e）、yyy=尝试盘数（亮灰），
-// 今日有尝试时最右侧绿色开率（一位小数，如 63.6%）。
+// 今日有尝试时最右侧开率（一位小数）——七轮（2026-10-22 张老师要求）：
+// 标签「开率」亮灰、数值绿色（与次行「标签暗灰数值亮灰」同构分层）。
 // 次行「共xx位雷友完成了 aaa / bbb 局」：aaa=全网完成（金 #fdc61a）、bbb=全网尝试（亮灰）。
 // 底部近 30 天双线折线铺满模块宽：绿线=我的尝试盘数、黄线=全网尝试盘数（归一化各画各的）。
 // 「我的」双轨：登录=服务端 practice_log（SSR 直出）；未登录=localStorage 当日记数
@@ -118,7 +119,11 @@ export function PracticeToday({
         <span className="sep">/</span>
         <b className="total">{myPlayed}</b>
         <span className="lead">局</span>
-        {r !== null && <span className="rate">开率 {r}%</span>}
+        {r !== null && (
+          <span className="rate">
+            开率 <b className="ratev">{r}%</b>
+          </span>
+        )}
       </p>
       <p className="pt_sub">
         共 <b className="users">{users}</b> 位雷友完成了 <b className="net">{netWon}</b>
