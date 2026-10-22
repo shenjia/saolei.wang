@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""录像评论动态回填录像信息快照（2026-10-22 张老师要求：存量动态也要渲染「评论了yyy的高级40.44NF录像」）
+"""录像评论动态回填录像信息快照（2026-10-22 张老师要求：存量动态也要渲染「评论了录像 楼主[性别][称号] 的高级40.44NF」）
 
-背景：2026-10-22 d9980fd 起 addComment 写入点把 lv（级别）/tm（成绩）/nf（NF）/vn（楼主名）
+背景：2026-10-22 起写入点把 lv（级别）/tm（成绩）/nf（NF）/vn（楼主名）/vid（楼主 id）
 快照进 details；此前的存量行只有 {"kind":"video","cid":N}，渲染退回「评论了一盘录像」。
 本脚本为存量行补齐快照——数据取当前 video/video_info/user 行（录像信息不可变，回填即当年值）。
+二轮（同日晚）：vid 加入快照集；幂等条件改为「缺 vid 或缺 lv」（一轮已回填 lv 但无 vid 的行也会补全）。
 
 规则：
-  · 只补 details 无 "lv" 键的行（幂等：补过后不再命中）
-  · 键序固定 kind,lv,tm,nf,vn,cid——cid 必须尾置（AI 复审/删除联动按 "cid":<id>} 尾缀精确匹配）
-  · 录像已不存在/评论已删的行跳过（属孤儿动态，归 news-orphan-clean.py 管）
+  · 幂等：details 同时含 "vid" 与 "lv" 键的行不再命中
+  · 键序固定 kind,lv,tm,nf,vn,vid,cid——cid 必须尾置（AI 复审/删除联动按 "cid":<id>} 尾缀精确匹配）
+  · 录像已不存在的行跳过（属孤儿动态，归 news-orphan-clean.py 管）
 
 用法: python3 scripts/sync/backfill-video-comment-news.py [--apply]   默认 dry-run
 生产: SAOLEI_DB_* env（3316 隧道）+ --allow-nonlocal；先服务器侧 mysqldump 备份再执行。
@@ -38,10 +39,10 @@ cur.execute("""
   SELECT n.id, n.user, n.reference, n.details_data FROM news n
   WHERE n.type = 52
     AND (n.details_data LIKE '%"kind":"video"%' OR n.details_data NOT LIKE '%"kind":%')
-    AND n.details_data NOT LIKE '%"lv"%'
+    AND (n.details_data NOT LIKE '%"lv"%' OR n.details_data NOT LIKE '%"vid"%')
 """)
 rows = list(cur.fetchall())
-print(f"待回填（kind=video 且无 lv 快照）：{len(rows)} 行")
+print(f"待回填（kind=video 且缺 lv 或缺 vid 快照）：{len(rows)} 行")
 
 updated = 0
 skipped = []
