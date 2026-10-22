@@ -30,6 +30,7 @@ const TABLES: [string, string][] = [
   // （star 每日一星表已随功能于 2026-10-13 下线，历史数据保留但不再列出）
   ["history", "扫雷历程"],
   ["rank_snapshot", "排行快照"],
+  ["user_rank", "名次落盘"],
   ["admin_log", "后台操作日志"],
   ["donate", "赞助"],
   ["distribution", "称号阈值"],

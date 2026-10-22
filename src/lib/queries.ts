@@ -37,6 +37,7 @@ import {
   parseVideo3bv,
 } from "./config";
 import { publishNews } from "./news";
+import { rebuildUserRanksOnce } from "./userrank";
 import { decodeLegacyEntities } from "./format";
 import { liftExpiredBans } from "./ban";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
@@ -2011,29 +2012,27 @@ export interface UserRanks {
 }
 
 async function getUserRanksImpl(userId: number): Promise<UserRanks | null> {
-  // 2026-10-15 海外名次：arear 不再排除「海外」——海外玩家的地区名次即「海外第 X 名」，
-  // 与地区榜 getAreaRanking v3（恢复含海外）口径对齐，组内 ROW_NUMBER 完全同构
-  const rows = await prisma.$queryRaw<{ national: bigint; area: string; areaPos: bigint | null }[]>`
-     WITH allr AS (
-        SELECT s.id, u.area,
-              ROW_NUMBER() OVER (ORDER BY s.sum_time ASC) npos
-       FROM user_scores s JOIN user u ON u.id = s.id
-       WHERE s.sum_time > 0 AND u.status = 0
-     ),
-     arear AS (
-        SELECT id, area,
-              ROW_NUMBER() OVER (PARTITION BY area ORDER BY npos) apos
-       FROM allr
-       WHERE area <> '' AND area NOT LIKE '%&%'
-     )
-     SELECT a.npos national, a.area, b.apos areaPos
-     FROM allr a LEFT JOIN arear b ON b.id = a.id
-     WHERE a.id = ${userId}`;
+  // 2026-10-22 名次落盘：读 user_rank 表（触发点增量维护 + 每日 00:05 重建兜底，见 lib/userrank.ts），
+  // 不再全表 ROW_NUMBER 窗口扫（慢日志实证 1.1s/次、20 分钟 12 次，站点常态 CPU 税大头）。
+  // 海外名次口径不变：地区名次含「海外」，多地区/空地区 area_pos 为 null。
+  let rows = await prisma.$queryRaw<{ national: number; area: string; area_pos: number | null }[]>`
+    SELECT national, area, area_pos FROM user_rank WHERE id = ${userId}`;
+  if (!rows.length) {
+    // 自愈兜底：该用户确实在榜却无落盘行（同步管线整表重写 user_scores 后漂移/表刚上线）→ 全量重建一次
+    const ranked = await prisma.$queryRaw<unknown[]>`
+      SELECT 1 x FROM user_scores s JOIN user u ON u.id = s.id
+      WHERE s.id = ${userId} AND s.sum_time > 0 AND u.status = 0`;
+    if (ranked.length) {
+      await rebuildUserRanksOnce();
+      rows = await prisma.$queryRaw<{ national: number; area: string; area_pos: number | null }[]>`
+        SELECT national, area, area_pos FROM user_rank WHERE id = ${userId}`;
+    }
+  }
   if (!rows.length) return null;
   return {
-    national: N(rows[0].national),
+    national: Number(rows[0].national),
     area: rows[0].area,
-    areaPos: rows[0].areaPos === null ? null : N(rows[0].areaPos),
+    areaPos: rows[0].area_pos === null ? null : Number(rows[0].area_pos),
   };
 }
 

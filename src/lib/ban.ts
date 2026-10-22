@@ -10,6 +10,7 @@
 
 import { prisma } from "./db";
 import { BAN_DURATIONS } from "./config";
+import { rankEnter, safeRankOp } from "./userrank";
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -38,6 +39,10 @@ export async function unbanUser(uid: number | bigint): Promise<number> {
     where: { id },
     data: { status: 0, banUntil: BigInt(0), updateTime: ts },
   });
+  // 名次落盘（2026-10-22 张老师定）：解禁回榜（含连坐录像恢复——user_scores 封禁期间未动，
+  // 回榜位次按当前 user_scores 重算），占位并后移他人；失败不阻断解禁，读取侧自愈兜底。
+  // rankEnter 内部按 status=0 + sum_time>0 过滤，须在上方 user.update 之后调用。
+  await safeRankOp(() => rankEnter(prisma, id), `unban enter #${uid}`);
   return Number(restored);
 }
 

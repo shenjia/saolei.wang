@@ -22,6 +22,7 @@ import {
 import { videoScores } from "./queries";
 import { publishNews } from "./news";
 import { refreshUserStnb } from "./userstnb";
+import { applyRankScoreChange } from "./userrank";
 
 type Tx = Prisma.TransactionClient;
 
@@ -179,11 +180,16 @@ async function userScoresOnInsert(
   return { original, updated: merged };
 }
 
-/** UserScores::removeVideo —— 录像被屏蔽后，若它是用户最优成绩则用次优顶替，否则清零 */
-async function userScoresOnRemove(tx: Tx, v: ReviewVideo, nf: boolean): Promise<void> {
+/** UserScores::removeVideo —— 录像被屏蔽后，若它是用户最优成绩则用次优顶替，否则清零。
+ *  返回更新前后成绩（供名次落盘判断 sum_time 变化方向；与 userScoresOnInsert 同款） */
+async function userScoresOnRemove(
+  tx: Tx,
+  v: ReviewVideo,
+  nf: boolean
+): Promise<{ original: Record<string, number | null>; updated: Record<string, number | null> }> {
   const table = userScoresTable(tx, nf);
   const existing = (await table.findUnique({ where: { id: BigInt(v.user) } })) as UserScoresRow | null;
-  if (!existing) return;
+  if (!existing) return { original: {}, updated: {} };
   const merged = rowToNumbers(existing);
 
   for (const order of ORDERS) {
@@ -218,6 +224,8 @@ async function userScoresOnRemove(tx: Tx, v: ReviewVideo, nf: boolean): Promise<
       updateTime: BigInt(Math.floor(Date.now() / 1000)),
     },
   });
+  const original = rowToNumbers(existing);
+  return { original, updated: merged };
 }
 
 // ---------- 动态（发布走 lib/news.ts 公共入口；user_score 取成绩更新后的 sum_time，见文件头说明 2） ----------
@@ -292,7 +300,9 @@ export async function reviewVideo(
     if (status === VIDEO_STATUS.BANNED) {
       // VideoScores::removeVideo
       await videoScoresTable(tx, rv.level, false).deleteMany({ where: { id: BigInt(videoId) } });
-      await userScoresOnRemove(tx, rv, false);
+      const removed = await userScoresOnRemove(tx, rv, false);
+      // 名次落盘（2026-10-22 张老师定）：屏蔽撤纪录 → sum_time 变大/掉榜，增量搬位
+      await applyRankScoreChange(tx, rv.user, removed.original.sumTime ?? 0, removed.updated.sumTime ?? 0);
       if (rv.noflag) {
         await videoScoresTable(tx, rv.level, true).deleteMany({ where: { id: BigInt(videoId) } });
         await userScoresOnRemove(tx, rv, true);
@@ -312,6 +322,8 @@ export async function reviewVideo(
       // VideoScores::insertVideo → flag 榜（含动态），NF 录像同时入 NF 榜（不发动态）
       await upsertVideoScores(tx, rv, false);
       const { original, updated } = await userScoresOnInsert(tx, rv, false);
+      // 名次落盘（2026-10-22 张老师定）：破纪录 sum_time 变小 / 首次入伍进榜，增量搬位
+      await applyRankScoreChange(tx, rv.user, original.sumTime ?? 0, updated.sumTime ?? 0);
       if (rv.noflag) {
         await upsertVideoScores(tx, rv, true);
         await userScoresOnInsert(tx, rv, true);

@@ -19,6 +19,7 @@ import { reviewVideo } from "@/lib/review";
 import { banUntilFromKey, unbanUser } from "@/lib/ban";
 import { broadcast, sendSystemMessage } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
+import { rankLeave, safeRankOp } from "@/lib/userrank";
 import { setMaintenance } from "@/lib/maintenance";
 import { logAdmin } from "./log";
 import type { AdminLevel } from "./guard";
@@ -128,6 +129,9 @@ async function dispatch(
         where: { id: BigInt(id) },
         data: { status: -1, banUntil: BigInt(banUntil), updateTime: ts },
       });
+      // 名次落盘（2026-10-22 张老师定）：上榜用户被封 → 出榜，位次在后者前移；
+      // 失败不阻断封禁，读取侧自愈兜底（未上榜用户 leave 为 no-op）
+      await safeRankOp(() => rankLeave(prisma, BigInt(id)), `ban leave #${id}`);
       const durLabel = banUntil === 0 ? "永久" : `至 ${formatDate(banUntil, "Y-m-d H:i")}`;
       return {
         ok: true,

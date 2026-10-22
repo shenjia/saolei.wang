@@ -10,6 +10,7 @@
 // 运行环境：项目根目录（.env 由 src/lib/db 读入；生产在 /home/deploy/saolei.wang）。
 
 import { refreshRankSnapshots } from "../src/lib/ranksnap";
+import { rebuildUserRanks } from "../src/lib/userrank";
 import { prisma } from "../src/lib/db";
 
 async function main() {
@@ -17,6 +18,11 @@ async function main() {
   const t0 = Date.now();
   console.log(`[rank-snapshot-refresh] start force=${force}`);
   await refreshRankSnapshots(force);
+  // 名次落盘全量重建兜底（2026-10-22 张老师定）：同步管线整表重写 user_scores、
+  // 以及任何未挂钩子的路径（如录像硬删）后的对齐口径；触发点增量搬位为主，此处兜底。
+  const t1 = Date.now();
+  await rebuildUserRanks(prisma);
+  console.log(`[rank-snapshot-refresh] user_rank rebuilt in ${((Date.now() - t1) / 1000).toFixed(1)}s`);
   const [{ c: rows }] = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
     `SELECT COUNT(*) c FROM rank_snapshot`
   );

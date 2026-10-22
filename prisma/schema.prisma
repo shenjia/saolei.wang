@@ -706,6 +706,26 @@ model RankSnapshot {
   @@map("rank_snapshot")
 }
 
+// 名次落盘表（2026-10-22 张老师定）：用户页/用户卡的全国名次+地区名次，替代 getUserRanks
+// 的全表 ROW_NUMBER 窗口扫（慢日志实证 1.1s/次，站点常态 CPU 税大头）。
+// 维护口径——触发点增量搬位（尽量不动全站）：
+// · 审核通过/屏蔽录像 → sum_time 变化 → 出旧位进新位（review.ts）
+// · 用户封禁/解禁（含限时封禁到期自动解禁）→ 出榜/回榜（ops.ts / ban.ts）
+// 兜底：每日 00:05 rank-snapshot-refresh 顺带全量重建；读取侧在榜却缺行时自愈重建。
+// 平序破法 (sum_time ASC, id ASC)——ROW_NUMBER 必须可复现，增量位移才成立。
+model UserRank {
+  id         BigInt @id @db.BigInt // = user.id
+  national   Int // 全国名次（sum_time 升序）
+  area       String @db.VarChar(12) // 军区（原样存 user.area；空/含& 时 area_pos 为 null）
+  areaPos    Int?   @map("area_pos")
+  updateTime BigInt @map("update_time") @db.BigInt
+
+  // national 索引：增量位移 UPDATE ... WHERE national >= ? 走索引
+  @@index([national])
+  @@index([area, areaPos])
+  @@map("user_rank")
+}
+
 // ---------- 后台（2026-09-24 管理后台新增） ----------
 
 // 后台操作日志：管理端一切写操作留痕（谁、何时、对谁、做了什么、来源 IP）
