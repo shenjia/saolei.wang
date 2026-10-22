@@ -140,6 +140,13 @@ export function VideoRowLine({
             NF
           </span>
         )}
+        {/* 2026-10-23 张老师需求：已审核（status=20）录像成绩后加绿色 ✓ 下标
+            （待审 10 放行进前台后区分已审/未审；NF 标记存在时排在 NF 后面） */}
+        {v.status === 20 && (
+          <span className="reviewed" title="已通过审核">
+            ✓
+          </span>
+        )}
       </td>
       <td className={`c_3bvs bv c${highlight === "3bv" ? " current" : ""}`}>{v.board3bv}</td>
       <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>

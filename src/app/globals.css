@@ -5835,6 +5835,14 @@ body #video_list .score_3bvs a:hover em {
   font-size: 11px;
   color: #fdc61d;
 }
+/* 已审核 ✓ 下标（2026-10-23 张老师需求：待审录像放行进前台后，已审核录像成绩后
+   加绿色 ✓ 区分——有 NF 标记时排在 NF 后面）。绿色取站点标准绿（同 .status.st10 /
+   初级 hover #a6e22e），10px 小字号（比 NF 的 11px 更小一档，只要能识别即可） */
+.video_table td.score .reviewed {
+  margin-left: 5px;
+  font-size: 10px;
+  color: #a6e22e;
+}
 /* 计数列「评论 / 点击」：论坛同款 em 强调回复/评论数（legacy em margin 归零） */
 .video_table td.counters {
   color: #939387;
@@ -5859,6 +5867,10 @@ body #video_list .score_3bvs a:hover em {
 }
 #page .video_table td.score.current .nf {
   color: #fdc61d;
+}
+/* 成绩列命中排序黄时 ✓ 保持绿（不被整列黄染色，2026-10-23） */
+#page .video_table td.score.current .reviewed {
+  color: #a6e22e;
 }
 
 /* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、搜索框贴行尾 */
