@@ -1,33 +1,38 @@
-// 首页「今日练习」板块（2026-10-22 张老师要求）：「开始练习」按钮下方、审核提醒行上方。
-// 文案「今日已练习 xxx/yyy 局」（xxx=我的局数，绿色；yyy=全站局数）+
-// 灰色小字「xx位雷友参与」；下缘 30 天走势迷你折线铺满整个模块宽度。
-// 桌面侧栏与移动端置顶按钮各渲染一份（id 前缀区分，隐区由 CSS 断点控制）。
-// 「我的局数」双轨（2026-10-22 二轮张老师要求）：
-// · 登录态＝服务端 practice_log 按 uid 计数（SSR 直出，信任服务端）；
-// · 未登录＝localStorage 当日记数（practice-local.ts，OnlinePlay 终态局 +1）——
-//   SSR 初值 0，水合后 useSyncExternalStore 订阅补真值（跨 tab 实时同步，
-//   无水合不匹配；storage 事件触发重读，练完一局回首页刷新即见）。
-// 2026-10-22 三轮（张老师要求）：板块移到「开始练习」按钮**下方**；主行文字改站内标准亮灰
-// #b1b1a4（与数据统计盒数值同色，2026-09-27 口径），仅「我的局数」保持绿色。
+// 首页「今日练习」板块（2026-10-22 张老师要求，五轮改版）：「开始练习」按钮下方。
+// 首行「今日已完成 xxx / yyy 盘」：xxx=完成盘数（绿 #a6e22e）、yyy=尝试盘数（亮灰），
+// 今日有尝试时最右侧绿色开率（一位小数，如 63.6%）。
+// 次行「共xx位雷友完成了 aaa / bbb 局」：aaa=全网完成（金 #fdc61a）、bbb=全网尝试（亮灰）。
+// 底部近 30 天双线折线铺满模块宽：绿线=我的尝试盘数、黄线=全网尝试盘数（归一化各画各的）。
+// 「我的」双轨：登录=服务端 practice_log（SSR 直出）；未登录=localStorage 当日记数
+// （practice-local.ts）——SSR 初值 0，水合后 useSyncExternalStore 接管补真值。
 
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { getLocalPractice, practiceLocalKey } from "@/lib/practice-local";
+import { useRef, useSyncExternalStore } from "react";
+import {
+  getLocalPracticeTrend,
+  getLocalPracticeToday,
+  practiceLocalKey,
+} from "@/lib/practice-local";
 
 const GREEN = "#a6e22e"; // 站内标准绿（.logo a h1 hover / Sparkline 默认色）
+const YELLOW = "#e6db74"; // 站内标准黄（后台趋势「新玩家」序列同色）
 
-/** 零依赖迷你折线（后台 admin/Charts Sparkline 同款算法） */
-function Line({ values, color, height }: { values: number[]; color: string; height: number }) {
-  if (values.length < 2) return null;
-  const max = Math.max(...values, 1);
-  const step = 100 / (values.length - 1); // viewBox 横向铺满 0-100
-  const d = values
-    .map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(2)},${(height - (v / max) * (height - 3) - 1.5).toFixed(2)}`)
-    .join(" ");
+/** 双线叠加图：绿=我、黄=全网，各自按自身最大值归一（量级悬殊也能同图看清走势） */
+function DoubleLine({ mine, net, height }: { mine: number[]; net: number[]; height: number }) {
+  if (mine.length < 2 || net.length < 2) return null;
+  const path = (values: number[]): string => {
+    const max = Math.max(...values, 1);
+    const step = 100 / (values.length - 1);
+    return values
+      .map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(2)},${(height - (v / max) * (height - 3) - 1.5).toFixed(2)}`)
+      .join(" ");
+  };
   return (
     <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height }} aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.85" vectorEffect="non-scaling-stroke" />
+      {/* 黄（全网）画在下层：参与人数/大盘量级通常高于个人 */}
+      <path d={path(net)} fill="none" stroke={YELLOW} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
+      <path d={path(mine)} fill="none" stroke={GREEN} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -42,40 +47,82 @@ const subscribePractice = (cb: () => void): (() => void) => {
   };
 };
 
+/** 开率（0-100，一位小数）；无尝试返回 null（不渲染） */
+const rate = (won: number, played: number): number | null =>
+  played > 0 ? Math.round((won / played) * 1000) / 10 : null;
+
 export function PracticeToday({
   prefix,
+  mineWon,
   mine,
-  total,
+  netWon,
+  net,
   users,
-  trend,
+  trendNet,
   logged,
 }: {
   /** DOM id 前缀：桌面侧栏 "practice_today" / 移动端 "practice_today_top" */
   prefix: string;
-  /** 服务端口径的「我的局数」：登录=practice_log 当日 uid 计数；未登录恒 0 */
+  /** 服务端口径「我的完成盘数」：登录=practice_log 当日 won=1 计数；未登录恒 0 */
+  mineWon: number;
+  /** 服务端口径「我的尝试盘数」：未登录恒 0 */
   mine: number;
-  total: number;
+  /** 全网完成盘数（won=1） */
+  netWon: number;
+  /** 全网尝试盘数 */
+  net: number;
   users: number;
-  trend: number[];
-  /** 登录态：true=信任服务端 mine；false=读 localStorage */
+  /** 近 30 天全网尝试走势（末位=今日） */
+  trendNet: number[];
+  /** 登录态：true=信任服务端；false=读 localStorage */
   logged: boolean;
 }) {
-  const localMine = useSyncExternalStore(
+  // 未登录：水合后从 localStorage 取「今日完成/尝试」+ 近 30 天尝试趋势。
+  // getSnapshot 必须返回缓存引用（每次新建对象会触发无限重渲）——ref 内按内容判等换新。
+  const snapRef = useRef<{ today: { p: number; w: number }; trend: number[] } | null>(null);
+  const snapEqual = (a: { p: number; w: number } | null, b: { p: number; w: number } | null) =>
+    a === b || (!!a && !!b && a.p === b.p && a.w === b.w);
+  const local = useSyncExternalStore(
     subscribePractice,
-    () => (logged ? mine : getLocalPractice()),
-    () => mine // SSR 快照：登录=真值、未登录=0（水合后由 getSnapshot 接管补真值）
+    () => {
+      if (logged) return null;
+      const today = getLocalPracticeToday();
+      const prev = snapRef.current;
+      if (prev && snapEqual(prev.today, today)) return prev; // 今日值没变：沿用旧引用（trend 同源同判）
+      const snap = { today, trend: getLocalPracticeTrend(trendNet.length) };
+      snapRef.current = snap;
+      return snap;
+    },
+    () => null
   );
+  const myWon = local?.today.w ?? mineWon;
+  const myPlayed = local?.today.p ?? mine;
+  // 未登录趋势与全网趋势按尾对齐（localStorage 天数不足时前面补 0，多了截断）
+  const myTrend = (() => {
+    if (logged || !local) return null;
+    const lt = local.trend;
+    if (lt.length >= trendNet.length) return lt.slice(lt.length - trendNet.length);
+    return [...Array(trendNet.length - lt.length).fill(0), ...lt];
+  })();
+  const r = rate(myWon, myPlayed);
+  const rNet = rate(netWon, net);
   return (
     <div id={prefix} className="practice_today">
       <p className="pt_line">
-        今日已练习{" "}
-        <b className="mine">{localMine}</b>
+        <span className="lead">今日已完成</span>
+        <b className="mine">{myWon}</b>
         <span className="sep">/</span>
-        <b className="total">{total.toLocaleString("zh-CN")}</b> 局
+        <b className="total">{myPlayed}</b>
+        <span className="lead">盘</span>
+        {r !== null && <span className="rate">开率 {r}%</span>}
       </p>
-      <p className="pt_sub">共{users}位雷友参与</p>
+      <p className="pt_sub">
+        共{users}位雷友完成了 <b className="net">{netWon}</b>
+        <span className="sep"> / </span>
+        <b className="netb">{net}</b> 局{rNet !== null && <span className="rate"> 开率 {rNet}%</span>}
+      </p>
       <div className="pt_chart">
-        <Line values={trend} color={GREEN} height={38} />
+        <DoubleLine mine={myTrend ?? trendNet.map(() => 0)} net={trendNet} height={38} />
       </div>
     </div>
   );

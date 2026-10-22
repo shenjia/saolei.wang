@@ -1590,12 +1590,12 @@ export function OnlinePlay({
           });
           if (won) {
             navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
-            bumpLocalPractice(); // 未登录「今日练习」记数（2026-10-22）：胜局终态立即 +1
+            bumpLocalPractice(true); // 未登录「今日练习」记数（2026-10-22）：胜局终态立即记
           } else {
             if (pendingLoseBeacon !== null) clearTimeout(pendingLoseBeacon);
             pendingLoseBeacon = window.setTimeout(() => {
               navigator.sendBeacon("/api/track/practice", new Blob([payload], { type: "application/json" }));
-              bumpLocalPractice(); // 败局复活窗（300ms）结束后才算终态，此时 +1
+              bumpLocalPractice(false); // 败局复活窗（300ms）结束后才算终态，此时记尝试
               pendingLoseBeacon = null;
             }, 300);
           }

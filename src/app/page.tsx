@@ -112,14 +112,16 @@ export default async function HomePage() {
           </svg>
           <span>开始练习</span>
         </Link>
-        {/* 今日练习（2026-10-22 张老师要求）：移动端副本，置于置顶「开始练习」大按钮下方、
-            管理员审核提醒行上方 */}
+        {/* 今日练习（2026-10-22 五轮张老师要求）：移动端副本，置于置顶「开始练习」大按钮下方、
+            管理员审核提醒行上方。完成/尝试双口径 + 开率 + 我/全网双线图 */}
         <PracticeToday
           prefix="practice_today_top"
+          mineWon={practice.mineWon}
           mine={practice.mine}
-          total={practice.today}
+          netWon={practice.todayWon}
+          net={practice.today}
           users={practice.todayUsers}
-          trend={practice.trend}
+          trendNet={practice.trend}
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方 */}
@@ -165,14 +167,16 @@ export default async function HomePage() {
           </svg>
           <span>开始练习</span>
         </Link>
-        {/* 今日练习（2026-10-22 张老师要求）：桌面侧栏副本，置于「开始练习」按钮下方、
-            管理员审核提醒行上方 */}
+        {/* 今日练习（2026-10-22 五轮张老师要求）：桌面侧栏副本，置于「开始练习」按钮下方、
+            管理员审核提醒行上方。完成/尝试双口径 + 开率 + 我/全网双线图 */}
         <PracticeToday
           prefix="practice_today"
+          mineWon={practice.mineWon}
           mine={practice.mine}
-          total={practice.today}
+          netWon={practice.todayWon}
+          net={practice.today}
           users={practice.todayUsers}
-          trend={practice.trend}
+          trendNet={practice.trend}
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22 张老师要求）：待审录像数金色 +

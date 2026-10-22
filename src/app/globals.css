@@ -8868,19 +8868,28 @@ html.op-fakefs #header {
   background: #75745f;
   color: #fff;
 }
-/* 首页「今日练习」板块（2026-10-22 张老师要求）：「开始练习」按钮下方、审核提醒行上方。
-   主行「今日已练习 xxx/yyy 局」——xxx=我的局数（标准绿 #a6e22e 加粗放大）、
-   yyy=全站局数；下灰色小字「xx位雷友参与」；底部近 30 天走势折线铺满整个模块宽。
-   桌面侧栏副本与移动端置顶副本同款，断点显隐与 #play_entry / #play_entry_top 一致 */
+/* 首页「今日练习」板块（2026-10-22 张老师要求，五轮改版）：「开始练习」按钮下方。
+   首行「今日已完成 xxx / yyy 盘」——xxx=我的完成盘数（标准绿 #a6e22e）、yyy=我的尝试盘数
+   （亮灰）；今日有尝试时最右侧绿色开率（一位小数）。次行灰字「共xx位雷友完成了
+   aaa / bbb 局」——aaa=全网完成盘数（金色 #fdc61a）、bbb=全网尝试盘数，尾部开率同款。
+   底部近 30 天双线图铺满模块宽：绿线=我的尝试盘数（登录走 practice_log、未登录走
+   localStorage）、黄线=全网尝试盘数。桌面侧栏副本与移动端置顶副本同款，断点显隐
+   与 #play_entry / #play_entry_top 一致 */
 .practice_today {
   margin: -6px 8px 16px; /* 顶距上提贴住「开始练习」按钮底距（净距 10px），视觉成组 */
   padding: 0 6px;
   box-sizing: border-box;
 }
 .practice_today .pt_line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
   font-size: 15px;
   line-height: 22px;
   color: #b1b1a4; /* 站内标准亮灰（数据统计数值同色，2026-09-27 口径） */
+}
+.practice_today .pt_line .lead {
+  flex: 0 0 auto;
 }
 .practice_today .pt_line .mine {
   color: #a6e22e; /* 站内标准绿（站点 logo hover 同色），暗底上醒目 */
@@ -8896,10 +8905,32 @@ html.op-fakefs #header {
   margin: 0 1px;
   color: #75715e;
 }
+.practice_today .pt_line .rate {
+  margin-left: auto; /* 今日有尝试时最右侧的开率 */
+  color: #a6e22e;
+  font-size: 12px;
+  font-weight: bold;
+}
 .practice_today .pt_sub {
   font-size: 12px;
   line-height: 18px;
   color: #75715e; /* 与 #review_entry 灰字同色的低调次级 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* 侧栏 260px 窄，长文案截尾保排版 */
+}
+.practice_today .pt_sub .net {
+  color: #fdc61a; /* 全网完成数用站内金（#review_entry 待审数同色口径） */
+  font-weight: bold;
+}
+.practice_today .pt_sub .netb {
+  color: #b1b1a4; /* 全网尝试数：亮灰次级，弱于金色但高于纯灰文案 */
+  font-weight: bold;
+}
+.practice_today .pt_sub .rate {
+  margin-left: 6px;
+  color: #a6e22e;
+  font-weight: bold;
 }
 .practice_today .pt_chart {
   margin-top: 8px;
