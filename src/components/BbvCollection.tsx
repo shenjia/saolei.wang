@@ -4,7 +4,8 @@
 // 钳到 LEVEL_MIN_3BV——初 2 / 中 30 / 高 100，低于下限的 3BV 不再统计完成度），每整数一格；
 // 已收集=级别色（初绿/中橙/高黄），未收集=深灰。
 // 2026-10-22 张老师：区间上限抬到理论最大值（初级 54），50/52/53 三个数学不可达值
-// 去掉不渲染——方格墙留出空槽缺口，总数与进度条按「可达值个数」计（与 BV 榜分母同源）。
+// **彻底不渲染**（不留占位缺口，格子墙连续收缩为 50 格，54 为末格、外观与其他格一致）；
+// 总数与进度条按「可达值个数」计（与 BV 榜分母同源）。
 // 悬停出 CSS 气泡（2026-10-13 张老师要求）：3BV 值 + 该 3BV 录像数；
 // 2026-10-20 张老师要求：文案改「共X个录像，点击查看」（链接已是定向列表，数字与
 // 格子点亮口径同源 getUser3bvCollection）；未收集的格子显示「暂无录像」。
@@ -55,12 +56,7 @@ export function BbvCollection({
               <div className="bbv_fill" style={{ width: `${pct}%` }} />
             </div>
             <div className="bbv_grid">
-              {Array.from({ length: range.max - range.min + 1 }, (_, i) => {
-                const b = range.min + i;
-                if (dead.has(b)) {
-                  // 不可达值：不渲染方格，仅占位维持「缺口」视觉（间隙与格距同宽 12px）
-                  return <span key={b} className="sq none" />;
-                }
+              {values.map((b) => {
                 // 已收集=该 3BV 录像数（≥1），未收集=undefined
                 const c = map.get(b);
                 const tip = (
