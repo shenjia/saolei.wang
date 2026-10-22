@@ -237,8 +237,10 @@ interface Engine {
   seek: (csec: number) => void;
 }
 
-/** 笑脸状态（十七期：练习页同款语义——按下 ooh / 松开 smile / 终局 win·dead） */
-type FaceKind = "smile" | "ooh" | "win" | "dead";
+/** 笑脸状态（十七期：练习页同款语义——按下 ooh / 松开 smile / 终局 win·dead）。
+ *  2026-10-22 导出：后台审核播放器（AdminVideoPlayer standalone 模式）的
+ *  engineFace prop 需要。 */
+export type FaceKind = "smile" | "ooh" | "win" | "dead";
 const FACE_MAP: Record<FaceKind | "press", string> = {
   smile: "face-normal",
   ooh: "face-press-cell",
@@ -271,8 +273,13 @@ export function runReplay(opts: {
   onStats: (s: ReplayStats) => void;
   /** 笑脸状态变化（练习页口径；全屏层计数条消费，页面态无消费者） */
   onFace?: (k: FaceKind) => void;
+  /** 宿主生效 zoom 读取器（2026-10-22 standalone 模式）：默认量 wrap 自身
+   *  computed zoom（页面态 .play_board 自带 zoom 类）；FS 层 zoom 挂祖先
+   *  .vprfs_center，wrap 量不到 → 调用方传 getter（值变化时 off 重量取，
+   *  滚轮改 --vfz 后光标锚点自动跟进） */
+  getHostZoom?: () => number;
 }): Engine {
-  const { wrap, tbody, rows, cols, data, onEnd, onStats, onFace } = opts;
+  const { wrap, tbody, rows, cols, data, onEnd, onStats, onFace, getHostZoom } = opts;
   const N = rows * cols;
   const mines = new Uint8Array(N);
   const nums = new Uint8Array(N);
@@ -353,19 +360,38 @@ export function runReplay(opts: {
   wrap.appendChild(curEl);
   const table = tbody.parentElement as HTMLTableElement;
   /* 十期：.play_board 有版图 zoom（exp/int 1.22、beg 1.5）——rect 是视觉坐标，
-     写 style.left/top 是布局坐标（会被外层 zoom 再乘），须除回 wrap 的 zoom */
-  const wrapZoom = (() => {
+     写 style.left/top 是布局坐标（会被外层 zoom 再乘），须除回 wrap 的 zoom。
+     standalone 模式（2026-10-22）：FS 层 zoom 挂祖先 .vprfs_center，wrap 自身
+     量不到 → getHostZoom 由调用方传入；zoom 变化（滚轮 --vfz）时 off 重量取
+     （off 是布局域 2px 边框差，视觉差/Z 恒等于它，重量取只是防漂移兜底） */
+  const readZoom = () => {
+    if (getHostZoom) {
+      const z = getHostZoom();
+      if (Number.isFinite(z) && z > 0) return z;
+    }
     const z = parseFloat(getComputedStyle(wrap).zoom);
     return Number.isFinite(z) && z > 0 ? z : 1;
-  })();
+  };
+  let wrapZoom = readZoom();
   const off = (() => {
     const tr = table.getBoundingClientRect();
     const wr = wrap.getBoundingClientRect();
     return { x: (tr.left - wr.left) / wrapZoom, y: (tr.top - wr.top) / wrapZoom };
   })();
+  /* 每帧光标移动前校验 zoom 漂移（滚轮缩放）：变了就重量 off——便宜且自愈 */
+  function ensureZoom() {
+    const z = readZoom();
+    if (z === wrapZoom) return;
+    wrapZoom = z;
+    const tr = table.getBoundingClientRect();
+    const wr = wrap.getBoundingClientRect();
+    off.x = (tr.left - wr.left) / z;
+    off.y = (tr.top - wr.top) / z;
+  }
   const TIP_X = 0.5,
     TIP_Y = 1.21;
   function moveCursor(px: number, py: number) {
+    ensureZoom();
     curEl.style.left = px + off.x - TIP_X + "px";
     curEl.style.top = py + off.y - TIP_Y + "px";
   }
@@ -1391,7 +1417,9 @@ function runPlayGame(opts: {
 
 /* ---- React 外壳：Provider（引擎/缓存/flop 兜底）+ Board + Panel + Bar + Button ---- */
 
-type Status = "idle" | "loading" | "playing" | "paused" | "ended";
+/* 2026-10-22 导出 Status：后台审核播放器（AdminVideoPlayer）standalone 模式
+ *  需要以同一状态机驱动 ReplayFullscreen 的控制条 */
+export type Status = "idle" | "loading" | "playing" | "paused" | "ended";
 
 interface ReplayCtxValue {
   status: Status;
@@ -2050,34 +2078,42 @@ function ledRender(uses: NodeListOf<SVGElement> | undefined | null, v: number) {
   for (let k = 0; k < 3; k++) uses[k].setAttribute("href", "#count-" + ds[k]);
 }
 
-function ReplayFullscreen({
+/* 2026-10-22 导出：后台审核播放器（AdminVideoPlayer）直接复用本全屏层
+ *  （standalone 模式：无页面棋盘，引擎直跑 FS 棋盘）——前台详情页/后台审核
+ *  同一套播放器 UI（游戏窗/计数条/控制条/数据统计面板/滚轮缩放）。 */
+export function ReplayFullscreen({
   level,
   boardId,
   boardStr,
-  stats,
-  status,
-  replayData,
-  engineFace,
+  stats = null,
+  status = "idle",
+  replayData = null,
+  engineFace = "smile",
   radarPoints,
   radarOverall: radarOverallProp,
   radarDists,
   autoEnterPlay,
   onAutoEnterDone,
-  onToggle,
-  onPause,
-  onSeek,
-  onResume,
+  onToggle = () => {},
+  onPause = () => {},
+  onSeek = () => {},
+  onResume = () => {},
   onExit,
+  standalone = false,
+  fsData = null,
+  header,
 }: {
   level: VideoLevel;
   boardId: number;
   boardStr: string;
-  stats: ReplayStats | null;
-  status: Status;
+  /** Provider 的回放统计（standalone 下不传，用内部 fsStats） */
+  stats?: ReplayStats | null;
+  /** Provider 的回放状态（standalone 下不传，用内部 fsStatus） */
+  status?: Status;
   /** Provider 持有的解析产物（试玩引擎锁定同盘布雷的数据源） */
-  replayData: ReplayData | null;
+  replayData?: ReplayData | null;
   /** 回放引擎的笑脸状态（十七期：按下 ooh / 松开 smile / 终局 win·dead） */
-  engineFace: FaceKind;
+  engineFace?: FaceKind;
   /** 全屏右栏「录像评级」数据（十九期恢复；与详情页右栏同源） */
   radarPoints?: VideoAnalysisPoint[];
   radarOverall?: string;
@@ -2087,11 +2123,19 @@ function ReplayFullscreen({
   autoEnterPlay?: boolean;
   /** 自动试玩一次性 flag 的回收（触发或层卸载时调用） */
   onAutoEnterDone?: () => void;
-  onToggle: () => void;
-  onPause: () => void;
-  onSeek: (csec: number) => void;
-  onResume: () => void;
+  onToggle?: () => void;
+  onPause?: () => void;
+  onSeek?: (csec: number) => void;
+  onResume?: () => void;
   onExit: () => void;
+  /** 独立模式（2026-10-22 后台审核播放器）：无页面棋盘可镜像，回放引擎直接
+   *  跑在 FS 棋盘上；试玩与右栏评级不开放（审核场景只看）。status/stats/
+   *  engineFace 等 props 被内部自持状态取代，仅需传 fsData/onExit。 */
+  standalone?: boolean;
+  /** standalone 数据源：外部 fetch+parse 的解析产物（就绪即自动开播） */
+  fsData?: ReplayData | null;
+  /** standalone 顶部信息条（标题/关闭按钮，由调用方组装） */
+  header?: ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -2111,6 +2155,13 @@ function ReplayFullscreen({
      不启动（否则把页面回放引擎已重演几帧的开格抄进 FS 污染干净盘面），
      FS 棋盘也从空盘渲染（boardStr 是录像终局图，见 Board 处注释） */
   const [mode, setMode] = useState<"replay" | "play">(autoEnterPlay ? "play" : "replay");
+  /* ---- standalone 自持状态（2026-10-22 后台审核播放器）----
+     页面态的 status/stats/engineFace 来自 Provider props；standalone 下没有
+     Provider，本组件自持同构状态机（引擎 onStats/onFace/onEnd 驱动）。 */
+  const [fsStatus, setFsStatus] = useState<Status>("idle");
+  const [fsStats, setFsStats] = useState<ReplayStats | null>(null);
+  const [fsFace, setFsFace] = useState<FaceKind>("smile");
+  const fsEngineRef = useRef<Engine | null>(null);
   /* 三模式开关（二十一期，2026-10-21 张老师需求）：NF / 速旗 / 连击，行为与
      练习页同口径；初始值**继承练习页设置**（online_play_settings 的
      nf/combo/autoChord 三键——张老师定的「试玩模式开关跟随练习页」）；
@@ -2213,7 +2264,7 @@ function ReplayFullscreen({
 
   /* 笑脸渲染：use href 切贴图（练习页 setFace 同款；press 为瞬时态不记忆）。
      显示源按模式切换：replay＝engineFace、play＝本地 face */
-  const faceShown = mode === "play" ? face : engineFace;
+  const faceShown = standalone ? fsFace : mode === "play" ? face : engineFace;
   useEffect(() => {
     faceUseRef.current?.setAttribute("href", "#" + FACE_MAP[faceShown]);
   }, [faceShown]);
@@ -2229,9 +2280,50 @@ function ReplayFullscreen({
     () => () => {
       playRef.current?.destroy();
       playRef.current = null;
+      fsEngineRef.current?.stop();
+      fsEngineRef.current = null;
     },
     []
   );
+
+  /* ---- standalone 引擎接线（2026-10-22 后台审核播放器）----
+     fsData prop 就绪（外部 fetch+parse 完成）即自动开播：引擎直挂 FS 棋盘
+     （.vprfs_board_wrap + .gframe tbody），onStats/onFace/onEnd 驱动本组件
+     自持状态（fsStats/fsFace/fsStatus → 计数条 LED/控制条/笑脸）。
+     rAF 下一帧启动：portal DOM 需先挂载（Board 渲染出 tbody 才能 runReplay）。
+     重播（ended 后点播放/笑脸）走 fsEngineRef.restart()。 */
+  const startFsEngine = useCallback(
+    (d: ReplayData) => {
+      const wrap = wrapRef.current?.querySelector<HTMLElement>(".vprfs_board_wrap");
+      const tbody = wrapRef.current?.querySelector<HTMLTableSectionElement>(".gframe tbody");
+      if (!wrap || !tbody) return;
+      const rows = tbody.rows.length;
+      const cols = rows ? tbody.rows[0].cells.length : 0;
+      if (!rows || !cols) return;
+      if (d.w !== cols || d.h !== rows) return;
+      fsEngineRef.current?.stop();
+      fsEngineRef.current = runReplay({
+        wrap,
+        tbody,
+        rows,
+        cols,
+        data: d,
+        onEnd: () => setFsStatus("ended"),
+        onStats: setFsStats,
+        onFace: setFsFace,
+        getHostZoom: () => zoomRef.current ?? 1,
+      });
+      setFsStatus("playing");
+    },
+    []
+  );
+  useEffect(() => {
+    if (!standalone || !fsData) return;
+    const raf = requestAnimationFrame(() => {
+      if (!fsEngineRef.current) startFsEngine(fsData);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [standalone, fsData, startFsEngine]);
 
   /* 试玩启动（进入 + 重开共用）：盘面残留由试玩引擎自身重置（state 全 0 起步）。
      playStats 的清理由本函数在启动前统一做（替代模式 effect 里的 setState——
@@ -2346,7 +2438,7 @@ function ReplayFullscreen({
     const vh = window.innerHeight;
     const pad = 16 * 2; // 内衬
     const showPanel = vw >= 900; // 极窄藏左面板（CSS 断点同步）
-    const showSide = vw >= 1180; // 更窄藏右评级（CSS 断点同步）
+    const showSide = !standalone && vw >= 1180; // 更窄藏右评级（CSS 断点同步；standalone 无右栏）
     const gapTotal = 18 * ((showPanel ? 1 : 0) + (showSide ? 1 : 0)); // 栏间 gap 18/个
     const dim = { beg: [8, 8], int: [16, 16], exp: [30, 16] }[level] ?? [30, 16];
     const bw = dim[0] * 16 + 4 + GWRAP_OVERHEAD_X;
@@ -2371,7 +2463,7 @@ function ReplayFullscreen({
         ? availW0 / (bw + span / R) // 段 1：z ≥ zFloor，面板/评级随 z/R 等比
         : (availW0 - span * PANEL_MIN_Z) / bw; // 段 2：宽度吃紧，面板/评级钉在最小倍率
     return clamp(Math.min(zByW, zByH));
-  }, [level]);
+  }, [level, standalone]);
 
   /* 统一 zoom 施加（十八期重构）：地板/上限/面板 zoom 收敛到一处。
      十八期张老师定「全屏时游戏版图至少要和数据统计栏高度相同」——
@@ -2477,7 +2569,7 @@ function ReplayFullscreen({
      正确参照系＝棋盘表本体——页面光标相对页面棋盘的比例 × FS 棋盘当前尺寸，
      缩放级别（滚轮）变化后每帧重算自动同步。 */
   useEffect(() => {
-    if (mode !== "replay") return;
+    if (mode !== "replay" || standalone) return;
     let raf = 0;
     const mirror = () => {
       const srcTable = document.querySelector<HTMLTableSectionElement>(`#board_${boardId} tbody`);
@@ -2539,27 +2631,59 @@ function ReplayFullscreen({
     };
     raf = requestAnimationFrame(mirror);
     return () => cancelAnimationFrame(raf);
-  }, [boardId, mode]);
+  }, [boardId, mode, standalone]);
 
   /* 回放态计数条：LED 雷数＝totalMines − flags（胜利时归 0——练习页 L2495 口径：
      flags 改为只计玩家实际插旗后，终值不再「恰好」等于雷数，须显式 win 置 0）、
-     LED 时间＝回放时钟整数秒（笑脸由 Provider 的 engineFace prop 驱动，见下） */
+     LED 时间＝回放时钟整数秒（笑脸由 Provider 的 engineFace prop 驱动，见下；
+     standalone 无 Provider——数据源切自持 fsStats/fsFace） */
+  const ledStats = standalone ? fsStats : stats;
+  const ledFace = standalone ? fsFace : engineFace;
   useEffect(() => {
     if (mode !== "replay") return;
     const uses = wrapRef.current?.querySelectorAll<SVGElement>("#fs_led_mines use.d");
-    if (stats) ledRender(uses, engineFace === "win" ? 0 : stats.totalMines - stats.flags);
-  }, [mode, stats, engineFace]);
+    if (ledStats) ledRender(uses, ledFace === "win" ? 0 : ledStats.totalMines - ledStats.flags);
+  }, [mode, ledStats, ledFace]);
   useEffect(() => {
     if (mode !== "replay") return;
     const uses = wrapRef.current?.querySelectorAll<SVGElement>("#fs_led_time use.d");
-    if (stats) ledRender(uses, Math.floor(stats.csec / 100));
-  }, [mode, stats]);
+    if (ledStats) ledRender(uses, Math.floor(ledStats.csec / 100));
+  }, [mode, ledStats]);
 
   /* 回放态棋盘点击不再退出（练习页语义：棋盘是对局区）；退出全屏走
      遮罩空白/Esc/控制条按钮——沿用十期遮罩命中口径 */
 
   if (typeof document === "undefined") return null;
-  const showStats = mode === "play" ? playStats : stats;
+  const showStats = standalone ? fsStats : mode === "play" ? playStats : stats;
+  /* standalone 控制条回调（引擎直挂 FS 棋盘，无 Provider）：ended 后重播走
+     restart；seek/pause/resume 直通引擎 */
+  const fsToggle = () => {
+    if (fsStatus === "playing") {
+      fsEngineRef.current?.pause();
+      setFsStatus("paused");
+    } else {
+      /* paused/ended 同门：引擎 resume 在终点时自动从头重播（练习页六期口径） */
+      fsEngineRef.current?.resume();
+      setFsStatus("playing");
+    }
+  };
+  const fsPause = () => {
+    if (fsStatus === "playing") {
+      fsEngineRef.current?.pause();
+      setFsStatus("paused");
+    }
+  };
+  const fsResume = () => {
+    if (fsStatus === "paused") {
+      fsEngineRef.current?.resume();
+      setFsStatus("playing");
+    }
+  };
+  const fsSeek = (csec: number) => {
+    if (!fsEngineRef.current || !fsStats) return;
+    fsEngineRef.current.seek(csec);
+    setFsStatus(csec >= fsStats.totalCsec ? "ended" : "paused");
+  };
   return createPortal(
     <div
       className={"vprfs" + (mounted ? " show" : "")}
@@ -2578,6 +2702,13 @@ function ReplayFullscreen({
     >
       {/* 视觉遮罩（命中判定在 .vprfs 的 onClick 统一处理） */}
       <div className="vprfs_mask" />
+      {/* standalone 顶部信息条（2026-10-22 后台审核）：调用方组装（标题+关闭），
+          绝对定位右上角（standalone 无右栏，该区域空白） */}
+      {standalone && header && (
+        <div className="vprfs_header" onClick={(e) => e.stopPropagation()}>
+          {header}
+        </div>
+      )}
       {/* inner 空白区（面板/游戏窗之外的容器本体）＝退出热区：e.target===自身时退出；
           点击落在子内容上则照旧 stopPropagation 保护（冒泡到 inner 时 target 是子元素） */}
       <div
@@ -2606,12 +2737,18 @@ function ReplayFullscreen({
                 className="face"
                 id="fs_face_btn"
                 type="button"
-                title={mode === "play" ? "重开本局" : "自己玩本局"}
+                title={standalone ? "重新播放" : mode === "play" ? "重开本局" : "自己玩本局"}
                 onMouseDown={() => faceUseRef.current?.setAttribute("href", "#" + FACE_MAP.press)}
                 onMouseUp={() => faceUseRef.current?.setAttribute("href", "#" + FACE_MAP[faceShown])}
                 onMouseLeave={() => faceUseRef.current?.setAttribute("href", "#" + FACE_MAP[faceShown])}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (standalone) {
+                    /* 审核场景：点笑脸＝从头重播（引擎 restart 含复位+重播） */
+                    fsEngineRef.current?.restart();
+                    setFsStatus("playing");
+                    return;
+                  }
                   enterPlay();
                 }}
               >
@@ -2632,21 +2769,40 @@ function ReplayFullscreen({
                     +雷全标旗），一键试玩若按终局图渲染再靠引擎 reset 刷回，慢机器上
                     有可感知的「已开格→全闭合」闪变；runPlayGame 的初始全盘重置仍在
                     （兜底任何残留），但首帧就该是干净的未开盘面。回放态不受影响
-                    （镜像 rAF 每帧把页面引擎盘面抄过来，boardStr 只是骨架）。 */}
+                    （镜像 rAF 每帧把页面引擎盘面抄过来，boardStr 只是骨架）。
+                    standalone（2026-10-22）：无镜像，引擎直接在本 tbody 上重演，
+                    首帧同样要干净空盘。 */}
                 <Board
                   id={"fs_board_" + boardId}
                   level={level}
-                  board={mode === "play" ? "b".repeat(boardStr.length) : boardStr}
+                  board={mode === "play" || standalone ? "b".repeat(boardStr.length) : boardStr}
                   size={16}
                 />
-                <div className="replay_cursor" aria-hidden="true">
-                  <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>
-                </div>
+                {/* 静态光标占位（镜像 rAF 驱动其位置；standalone 不渲染——
+                    引擎自建光标直挂本 wrap，静态占位会双影） */}
+                {!standalone && (
+                  <div className="replay_cursor" aria-hidden="true">
+                    <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>
+                  </div>
+                )}
               </div>
             </div>
           </div>
           {/* 控制条（回放态）：暂停/播放 + 时间 + 进度 + 退出全屏；
-              试玩态：回到回放 + 提示 + 退出全屏 */}
+              试玩态：回到回放 + 提示 + 退出全屏；
+              standalone：数据源/回调切自持（fsStats/fsStatus/fsToggle…） */}
+          {standalone && fsStats && (
+            <ReplayBar
+              status={fsStatus}
+              stats={fsStats}
+              onToggle={fsToggle}
+              onPause={fsPause}
+              onSeek={fsSeek}
+              onResume={fsResume}
+              onFullscreen={onExit}
+              fsActive
+            />
+          )}
           {mode === "replay" && stats && (
             <ReplayBar
               status={status}
@@ -2748,8 +2904,9 @@ function ReplayFullscreen({
                 ＋ 查看回放 / 下载录像（版式参考在线练习结算面板）；
              ② 回放态 / 试玩进行中 →「录像评级」（十九期恢复；雷达与详情页右栏同源）。
              宽度＝数据统计面板渲染宽的 1.5 倍（.vprfs_side 的 width，与面板同缩放域）；
-             窄屏（<1180）CSS 隐藏 */}
-        {mode === "play" && playResult && mineRating ? (
+             窄屏（<1180）CSS 隐藏；
+             standalone（后台审核）不渲染——审核场景不需要评级卡 */}
+        {!standalone && mode === "play" && playResult && mineRating ? (
           <div className="vprfs_side vprfs_mine">
             <h2 className="vr_h">
               我的评级
@@ -2806,7 +2963,7 @@ function ReplayFullscreen({
               </a>
             </div>
           </div>
-        ) : radarPoints ? (
+        ) : !standalone && radarPoints ? (
           <div className="vprfs_side">
             <h2 className="vr_h">
               录像评级

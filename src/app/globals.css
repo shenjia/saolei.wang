@@ -9739,6 +9739,23 @@ html.op-fakefs #header {
     display: none;
   }
 }
+/* standalone 顶部信息条（2026-10-22 后台审核播放器）：绝对定位右上角
+   （standalone 无右栏，该区域空白）；不参与 inner 的 flex 布局与 zoom 计算 */
+.vprfs_header {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.vprfs_header .vprfs_title {
+  color: #b1b1a4;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
 
 /* ---------- 后台封禁账号弹窗（2026-10-16 限时封禁） ----------
    复用登录浮窗同款暗玻璃视觉（.history_overlay/.history_dialog 一脉） */
