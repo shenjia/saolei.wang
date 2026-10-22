@@ -530,6 +530,12 @@ def cmd_ingest():
     stg.close()
     tgt.close()
     print("ingest DONE")
+    # ⚠️ 收尾必做（2026-10-22 实证漏跑）：ingest 的 video 行不走上传 after() 钩子，
+    # auto_flag 落默认 -1（未分拣）→ 后台需核定池误膨胀。迁移收尾必须补跑：
+    #   cd 项目根 && set -a && . ./.env && set +a && env -u NODE_OPTIONS node \
+    #     --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs \
+    #     scripts/video-triage-backfill.ts --only-pending   # 已通过行另跑一轮 status=20 补判
+    print("REMINDER: ingest 后必须跑 video-triage-backfill.ts 补分拣（见上行命令）")
 
 
 # ============================================================
