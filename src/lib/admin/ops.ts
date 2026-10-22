@@ -362,10 +362,9 @@ async function dispatch(
             select: { id: true },
           });
           if (!exists) {
-            const [video, info] = await Promise.all([
-              tx.video.findUnique({ where: { id: row.video }, select: { level: true, user: true } }),
-              tx.videoInfo.findUnique({ where: { id: row.video }, select: { noflag: true, realTime: true } }),
-            ]);
+            // 事务内顺序查询（不能 Promise.all 并行 tx——P2028，同 addComment 修复）
+            const video = await tx.video.findUnique({ where: { id: row.video }, select: { level: true, user: true } });
+            const info = await tx.videoInfo.findUnique({ where: { id: row.video }, select: { noflag: true, realTime: true } });
             const ownerName =
               (await tx.user.findUnique({
                 where: { id: video?.user ?? BigInt(0) },

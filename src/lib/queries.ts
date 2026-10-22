@@ -12,8 +12,10 @@ import {
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
+  LEVEL_MAX_3BV,
   LEVEL_MIN_3BV,
   MIN_3BV_FOR_3BVS,
+  UNREACHABLE_3BV,
   NEWS_FEED_EXCLUDED,
   NEWS_HOME_TYPES,
   NEWS_TYPE,
@@ -1406,11 +1408,11 @@ export async function addComment(videoId: number, userId: number, content: strin
       where: { id: BigInt(videoId) },
       data: { comments: { increment: 1 } },
     });
-    // 录像信息快照（video.level + video_info.noflag/real_time + 楼主名）
-    const [video, owner] = await Promise.all([
-      tx.video.findUnique({ where: { id: BigInt(videoId) }, select: { level: true, user: true } }),
-      tx.videoInfo.findUnique({ where: { id: BigInt(videoId) }, select: { noflag: true, realTime: true } }),
-    ]);
+    // 录像信息快照（video.level + video_info.noflag/real_time + 楼主名）。
+    // 注意：交互式事务内不能用 Promise.all 并行发多个 tx 查询（P2028：事务被并发
+    // 使用后立即失效，实测 addComment 500）——全部顺序 await
+    const video = await tx.video.findUnique({ where: { id: BigInt(videoId) }, select: { level: true, user: true } });
+    const info = await tx.videoInfo.findUnique({ where: { id: BigInt(videoId) }, select: { noflag: true, realTime: true } });
     const ownerName =
       (await tx.user.findUnique({ where: { id: video?.user ?? BigInt(0) }, select: { chineseName: true } }))
         ?.chineseName ?? "";
@@ -1424,8 +1426,8 @@ export async function addComment(videoId: number, userId: number, content: strin
       details: {
         kind: "video",
         lv: video?.level ?? "",
-        tm: N(owner?.realTime ?? 0),
-        nf: owner?.noflag ? 1 : 0,
+        tm: N(info?.realTime ?? 0),
+        nf: info?.noflag ? 1 : 0,
         vn: ownerName.slice(0, 20),
         cid: Number(created.id),
       },
@@ -2090,6 +2092,12 @@ export async function getUserRanks(userId: number): Promise<UserRanks | null> {
  * 2026-10-14 张老师：按现行排行规则收敛统计区间——下限钳到 LEVEL_MIN_3BV
  * （初 2 / 中 30 / 高 100），中级 <30、高级 <100 不再统计完成度；
  * 库里的行「只扩不缩」可能留着更低的下限，读取时钳（self-heal 补种同样钳）。
+ * 2026-10-22 张老师：上限按理论最大值补齐——初级理论最大 54（8×8 非雷格全为
+ * 孤立数字格），50/52/53 数学不可达（推导见 config.LEVEL_MAX_3BV），站内实际
+ * 数据顶格 51 属「角上单 0」极限盘；库里的 max_3bv 只跟实际录像走（当前 51），
+ * 读取时抬到理论值，54 被收集时 review.ts 扩边自然接上。50/52/53 三个不可达值
+ * 在 BbvCollection 格子墙单独渲染死格（不做收集目标），BV 榜分母按可达值个数计
+ * （见 bvDenoms）。
  * 缺行时从已通过录像现算并补种（自愈：兼容生产首次部署空表；主键幂等，
  * 并发补种最坏只是多跑一次现算）。
  */
@@ -2101,7 +2109,10 @@ export async function getLevel3bvRanges(): Promise<
   for (const r of rows) {
     const level = r.level as VideoLevel;
     const min = Math.max(r.min3bv, LEVEL_MIN_3BV[level]);
-    if (min <= r.max3bv) out[level] = { min, max: r.max3bv };
+    // 上限抬到理论最大（2026-10-22）：初级实际 51 → 理论 54，给「理论最大值」
+    // 54 留出收集目标位；中/高级理论值远超实际区间，max() 天然保实际值
+    const max = Math.min(Math.max(r.max3bv, LEVEL_MAX_3BV[level]), 999);
+    if (min <= max) out[level] = { min, max };
   }
 
   const missing = VIDEO_LEVELS.filter((l) => !out[l]);
@@ -2117,7 +2128,7 @@ export async function getLevel3bvRanges(): Promise<
       const level = a.level as VideoLevel;
       if (!missing.includes(level)) continue;
       const min = Math.max(N(a.mn), LEVEL_MIN_3BV[level]);
-      const max = N(a.mx);
+      const max = Math.min(Math.max(N(a.mx), LEVEL_MAX_3BV[level]), 999);
       if (min > max) continue; // 该级别全部低于统计下限，不出区间（侧栏该级整行隐藏）
       await prisma.level3bvRange.upsert({
         where: { level },
@@ -2244,7 +2255,7 @@ const fetchBvCollection = unstable_cache(
       };
     });
   },
-  ["bv-collection-v3"],
+  ["bv-collection-v4"], // v4（2026-10-22）：区间上限抬到理论最大（初级 54）、分母扣不可达值，口径变更整体升版
   { revalidate: 3600, tags: ["bv-collection"] }
 );
 
@@ -2253,7 +2264,9 @@ function sortBv(all: BvRankingEntry[], by: BvRankingBy): BvRankingEntry[] {
   return [...all].sort((a, b) => b[by] - a[by] || a.id - b.id);
 }
 
-/** 分母 = level_3bv_range 统计区间跨度（下限已按 LEVEL_MIN_3BV 钳制，上限随新录像突破自动扩展） */
+/** 分母 = 区间内**可达** 3BV 值个数（2026-10-22 张老师：初级 50/52/53 数学不可达，
+ *  不做收集目标——跨度 53 扣 3 个 = 50）。分子（fetchBvCollection 的 COUNT DISTINCT）
+ *  天然只数真实存在的值，分子分母口径自洽。 */
 function bvDenoms(ranges: Partial<Record<VideoLevel, { min: number; max: number }>>): {
   den: Record<VideoLevel, number>;
   totalDen: number;
@@ -2261,7 +2274,10 @@ function bvDenoms(ranges: Partial<Record<VideoLevel, { min: number; max: number 
   const den: Record<VideoLevel, number> = { beg: 0, int: 0, exp: 0 };
   for (const l of VIDEO_LEVELS) {
     const r = ranges[l];
-    if (r) den[l] = r.max - r.min + 1;
+    if (!r) continue;
+    const span = r.max - r.min + 1;
+    const miss = (UNREACHABLE_3BV[l] ?? []).filter((v) => v >= r.min && v <= r.max).length;
+    den[l] = span - miss;
   }
   return { den, totalDen: den.beg + den.int + den.exp };
 }
