@@ -612,6 +612,14 @@ body #video_view .video_cell .status .ok {
   margin-left: 4px;
   font-size: 10px;
 }
+/* ③同款 ✓ 上主版块标题（2026-10-23 张老师需求）：h1 行尾（NF 之后）。
+   h1 内 em 被 legacy .video_cell h1 em 钉成金色 26px (0,2,1)，且 legacy 后加载，
+   须 body 前缀 (0,3,2) 压过改色改号（绿 #a6e22e 14px——比 20px 的 NF 再小一档下标） */
+body #video_view .video_cell h1 em.ok {
+  color: #a6e22e;
+  font-size: 14px;
+  margin-left: 6px;
+}
 
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
    半透明黑圆 + 白三角，绝对定位在棋盘几何中心。
