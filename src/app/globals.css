@@ -10245,15 +10245,30 @@ body #page .word_terms .desc {
 }
 
 /* ---- 录像评论动态文案三轮（2026-10-22 张老师反馈）----
-   「评论了 迈克尔[♂][大元帅] 的高级 40.44NF 录像」：
+   「评论了录像 楼主[性别][称号] 的高级 40.44NF」：
    ①成绩数字回正文基线——legacy #news a.score 是 inline-block+vertical-align:middle，
      middle 按 x-height 中线对齐，数字无下伸部（g/y/p）整体偏高，视觉=上标；
      此处 display:inline+vertical-align:baseline 归位（(1,1,2) 压过 legacy (1,1,1)），
      不与破纪录行共享 record_score（那边与 delta/SUB 徽章有既定布局，不动）。
    ②楼主性别图标与军衔徽章之间无空格：.gender 自带 margin-right:10px，
-     JSX 不再额外输出空白文本节点（上轮 {" "} 已删）。 */
+     JSX 不再额外输出空白文本节点（上轮 {" "} 已删）。
+   四轮（同日）：成绩色弃 legacy 金（那是破纪录行口径），改录像列表页三级灰度
+   （.video_table td.score.lv_* 同色值单一来源）：beg #999994 / int #bbbbaf / exp #ddddcf；
+   hover 保持全站链接绿。 */
 #news .table td a.score.news_vscore {
   display: inline;
   max-width: none;
   vertical-align: baseline;
+}
+#news .table td a.score.news_vscore.lv_beg {
+  color: #999994;
+}
+#news .table td a.score.news_vscore.lv_int {
+  color: #bbbbaf;
+}
+#news .table td a.score.news_vscore.lv_exp {
+  color: #ddddcf;
+}
+#news .table td a.score.news_vscore:hover {
+  color: #a6e22e;
 }
