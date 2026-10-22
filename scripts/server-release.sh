@@ -5,6 +5,8 @@
 # B1 架构（2026-09-27 起）：构建在 GitHub Actions 完成，本脚本只做：
 #   pnpm install（生产依赖）→ prisma generate → prisma db push → pm2 重启备槽
 #   → 健康检查 → 切 nginx 主备 → 终检（失败自动回滚）
+# B2 单活模式（2026-10-22 起）：发布成功后 pm2 stop 旧主力槽（回滚失败路径亦然），
+#   常驻只留一个 Next 实例省 ~300MB 内存；回滚 = pm2 start 旧槽 + 切 upstream，秒级。
 #
 # ⚠️ 本脚本绝不运行 next build（旧机教训：服务器 build 触发 SWC 崩溃 + OOM + 内核 hang）
 # ⚠️ CI 只构建一次（标准 .next，Turbopack 二次构建会互删产物），rsync 到 .next-release/；
@@ -50,6 +52,7 @@ ACTIVE="$(read_active)"
 [[ "$ACTIVE" == blue || "$ACTIVE" == green ]] || ACTIVE=blue
 if [[ "$ACTIVE" == blue ]]; then STANDBY=green; else STANDBY=blue; fi
 S_APP="$(slot_app "$STANDBY")"; S_PORT="$(slot_port "$STANDBY")"; S_DIR="$(slot_dir "$STANDBY")"
+A_APP="$(slot_app "$ACTIVE")"
 
 info "当前主力: $ACTIVE  → 本次发布备槽: $STANDBY (app=$S_APP port=$S_PORT dir=$S_DIR)"
 
@@ -137,8 +140,11 @@ fix_prisma_stub() {
 fix_prisma_stub "$S_DIR"
 
 # ---------- 重启备槽实例 ----------
+# 单活模式（2026-10-22）下备槽处于 stopped 态：pm2 start 对 stopped/online 都安全
+# （online 时为 no-op），随后的 restart 确保加载本次新产物。
 if pm2 describe "$S_APP" >/dev/null 2>&1; then
-  info "重启 $S_APP ..."
+  info "启动/重启 $S_APP ..."
+  pm2 start "$S_APP"
   pm2 restart "$S_APP"
 else
   info "首次启动 $S_APP ..."
@@ -170,12 +176,20 @@ final_check() {
 }
 if final_check; then
   ok "经 nginx 终检通过 ✓  新主力: $STANDBY"
+  # ---------- 单活模式（2026-10-22）：停掉旧主力槽，释放常驻内存 ----------
+  # 3.5G 内存机上空闲槽常驻 ~300MB 是颠簸挂机事故的诱因之一（见 .workbuddy/memory/2026-10-22.md）。
+  # 回滚 = pm2 start 旧槽 + write_upstream 切回 + reload，秒级。upstream 里的 backup 行保留，
+  # 空闲槽停止后 nginx 在主力故障时只是少一层兜底，属单活模式的已知取舍。
+  info "单活模式: 停止旧主力槽 $A_APP ..."
+  pm2 stop "$A_APP" || warn "pm2 stop $A_APP 失败（不阻断发布，请人工检查 pm2 ls）"
 else
   warn "终检失败！自动回滚到 $ACTIVE ..."
   write_upstream "$ACTIVE"
   sudo -n "$NGINX_BIN" -t && sudo -n "$NGINX_BIN" -s reload
+  # 回滚同样维持单活：停掉本次刚拉起的新槽
+  pm2 stop "$S_APP" || true
   fail "已回滚。请查: pm2 logs $S_APP --lines 50 / pm2 ls"
 fi
 
 pm2 save
-ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (active=$STANDBY, standby=$ACTIVE 下次部署再更新)"
+ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (active=$STANDBY, 空闲槽 $A_APP 已停)"
