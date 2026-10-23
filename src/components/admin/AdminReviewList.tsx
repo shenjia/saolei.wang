@@ -80,6 +80,13 @@ function reasonTagList(v: AdminVideoRow) {
       cls: "bad",
     });
   }
+  if (r & (1 << 11)) {
+    tags.push({
+      text: "path 超速·平均移动过快",
+      title: "全程平均鼠标移动速率超 30 格/秒（≥30 秒长局）——人类全站最高 22.4 格/s（2026-10-23 定标，347022 作弊盘 51.2 格/s）",
+      cls: "bad",
+    });
+  }
   return tags;
 }
 

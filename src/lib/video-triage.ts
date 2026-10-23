@@ -27,7 +27,7 @@ import path from "path";
 import { prisma } from "./db";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS } from "./video-triage-limits";
 
 export { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER };
 
@@ -70,9 +70,11 @@ export interface PathJumpStats {
   /** 瞬移贡献行程占比（0~1），未达标守卫时为 null */
   jumpRatio: number | null;
   jumpCount: number;
+  /** 哨兵过滤后的总行程（格）——PATH_SPEED 触发器复用，与 metrics path 口径一致 */
+  totalCells: number;
 }
 
-/** 对事件行流算瞬移统计（纯函数；v.timeMs 由调用方传入） */
+/** 对事件行流算瞬移统计（纯函数；timeMs 由调用方传入） */
 export function pathJumpStats(v: ParsedVideo, timeMs: number): PathJumpStats {
   let totalPx = 0, jumpsPx = 0, jumpCount = 0;
   let lastPx: number | null = null, lastPy: number | null = null;
@@ -91,12 +93,13 @@ export function pathJumpStats(v: ParsedVideo, timeMs: number): PathJumpStats {
     }
     lastPx = px; lastPy = py;
   }
-  if (totalPx < MIN_PATH_CELLS * 16) return { jumpRatio: null, jumpCount };
+  const totalCells = Math.round(totalPx / 16);
+  if (totalPx < MIN_PATH_CELLS * 16) return { jumpRatio: null, jumpCount, totalCells };
   const durSec = timeMs / 1000;
   if (jumpCount < MIN_JUMPS || (durSec > 0 && jumpCount / durSec < MIN_JUMPS_PER_SEC)) {
-    return { jumpRatio: null, jumpCount };
+    return { jumpRatio: null, jumpCount, totalCells };
   }
-  return { jumpRatio: jumpsPx / totalPx, jumpCount };
+  return { jumpRatio: jumpsPx / totalPx, jumpCount, totalCells };
 }
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
@@ -201,6 +204,14 @@ export function triageParsed(
   const pj = pathJumpStats(v, timeMs);
   if (pj.jumpRatio !== null && pj.jumpRatio > JUMP_RATIO_TRIGGER) {
     reason |= AUTO_REASON.PATH_JUMP;
+  }
+
+  // path 超速（2026-10-23）：≥30s 盘全程平均移动速率超 30 格/s。
+  // 定标：人类全站（含 Vienna 高采样盘）≥30s max=22.4 格/s；347022 作弊盘 51.2。
+  // 短局不判（5.5s 初级局人类可瞬时甩出 54.9 格/s）。
+  if (timeMs >= PATH_SPEED_MIN_TIME_MS) {
+    const cellsPerSec = pj.totalCells / (timeMs / 1000);
+    if (cellsPerSec > PATH_SPEED_TRIGGER) reason |= AUTO_REASON.PATH_SPEED;
   }
 
   if (metrics) {

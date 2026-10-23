@@ -208,11 +208,17 @@ export function replayCounts(
 
   for (const e of events) {
     if (over) break;
-    // 鼠标行程：所有带像素坐标的事件按时间序累加欧氏距离（flop mouseMove 同款）
-    if (e.px !== 0 || e.py !== 0) {
+    // 鼠标行程：所有带像素坐标的事件按时间序累加欧氏距离（flop mouseMove 同款）。
+    // rmv 哨兵坐标豁免：Vienna 格式在窗口失焦等场景写 ~6552x 的哨兵值（2026-10-23
+    // 实证 259991 库存 path 8249 格 vs 真实 55 格，133/261 条 rmv 的 path 被污染）——
+    // 哨兵本身不计行程，且断开位移链（哨兵前后的正常坐标不跨它连成巨量假位移）
+    if ((e.px !== 0 || e.py !== 0) && e.px < 60000 && e.py < 60000) {
       if (lastX !== null && lastY !== null) pathPx += Math.hypot(e.px - lastX, e.py - lastY);
       lastX = e.px;
       lastY = e.py;
+    } else {
+      lastX = null;
+      lastY = null;
     }
     if (e.ev === "mt") {
       marks = !marks;

@@ -12,9 +12,9 @@
 
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
-import { createConnection } from "net";
 import { prisma } from "../src/lib/db";
 import { parseVideoBinary } from "../src/lib/videoradar";
+import { AUTO_REASON, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS } from "../src/lib/video-triage-limits";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const EV = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/;
@@ -38,22 +38,24 @@ interface Row {
   status: number;
   ppc: number | null;
   path: number | null;
+  realTime: number | null;
   user: bigint;
   chineseName: string | null;
   filepath: string;
 }
 
 async function fetchCandidates(): Promise<Row[]> {
-  // video_metrics 有 path（格）；SQL 先粗筛：ppc>4 或 path 异常大，再逐文件精算。
-  // 全量 30 万盘文件 IO 太重，粗筛口径（ppc>4 约 1.5 万盘）覆盖全部已知异常形态。
+  // 粗筛：ppc>4（覆盖往返瞬移形态）或 path/秒>20（覆盖超速形态；阈值远低于
+  // 触发线 30，给 rmv 哨兵污染盘留余量）。PATH_SPEED 需要 ≥30s 长局，SQL 同步约束。
   return prisma.$queryRawUnsafe<Row[]>(`
-    SELECT m.id, v.level, v.status, m.ppc, m.path, v.user, u.chinese_name, vi.filepath
+    SELECT m.id, v.level, v.status, m.ppc, m.path, vi.real_time AS realTime,
+           v.user, u.chinese_name, vi.filepath
     FROM video_metrics m
     JOIN video v ON v.id = m.id
     JOIN video_info vi ON vi.id = m.id
     LEFT JOIN user u ON u.id = v.user
-    WHERE m.ppc > 4
-    ORDER BY m.ppc DESC
+    WHERE m.ppc > 4 OR (vi.real_time >= 30000 AND m.path / (vi.real_time / 1000) > 20)
+    ORDER BY m.id ASC
   `);
 }
 
@@ -71,6 +73,8 @@ interface ScanResult {
   clicks: number;
   jumpsPathCells: number;
   events: number;
+  cellsPerSec: number;
+  triggers: number[];
 }
 
 async function main() {
@@ -97,7 +101,8 @@ async function main() {
     const v = parseVideoBinary(new Uint8Array(buf), ext);
     if (!v) { parseFail++; continue; }
 
-    // 事件流逐对位移
+    // 事件流逐对位移（真实时长用库内 real_time——rmv 文件内 Time 恒 0）
+    const timeMs = r.realTime ?? v.timeMs;
     let totalPx = 0, jumpsPx = 0, jumpCount = 0, clicks = 0, events = 0;
     let lastPx: number | null = null, lastPy: number | null = null;
     for (const line of v.events) {
@@ -118,41 +123,45 @@ async function main() {
       }
       lastPx = px; lastPy = py;
     }
-    if (totalPx < MIN_PATH_CELLS * 16) continue;
-    const durSec = v.timeMs / 1000;
-    if (jumpCount < MIN_JUMPS || (durSec > 0 && jumpCount / durSec < MIN_JUMPS_PER_SEC)) continue;
+    const totalCells = Math.round(totalPx / 16);
+    const hitSpeed = timeMs >= PATH_SPEED_MIN_TIME_MS && totalCells / (timeMs / 1000) > PATH_SPEED_TRIGGER;
+    const hitJump =
+      totalPx >= MIN_PATH_CELLS * 16 &&
+      jumpCount >= MIN_JUMPS &&
+      jumpCount / (timeMs / 1000) >= MIN_JUMPS_PER_SEC &&
+      jumpsPx / totalPx > JUMP_RATIO_TRIGGER;
 
-    const jumpRatio = jumpsPx / totalPx;
-    if (jumpRatio > JUMP_RATIO_TRIGGER) {
+    if (hitJump || hitSpeed) {
       results.push({
         id: Number(r.id), status: r.status, level: r.level,
         user: Number(r.user), name: r.chineseName,
         ppc: r.ppc, path: r.path,
-        jumpRatio: Math.round(jumpRatio * 1000) / 1000,
-        jumpCount, totalPathCells: Math.round(totalPx / 16),
+        jumpRatio: jumpsPx > 0 ? Math.round((jumpsPx / totalPx) * 1000) / 1000 : 0,
+        jumpCount, totalPathCells: totalCells,
         jumpsPathCells: Math.round(jumpsPx / 16), clicks, events,
+        cellsPerSec: Math.round((totalCells / (timeMs / 1000)) * 10) / 10,
+        triggers: [hitJump ? AUTO_REASON.PATH_JUMP : 0, hitSpeed ? AUTO_REASON.PATH_SPEED : 0].filter(Boolean),
       });
-      const tag = `⚠️ 异常`;
-      console.log(`${tag} id=${r.id} status=${r.status} ${r.level} ${r.chineseName ?? "?"} ppc=${r.ppc} 瞬移占=${(jumpRatio * 100).toFixed(1)}% 瞬移${jumpCount}次 行程=${Math.round(totalPx / 16)}格`);
+      console.log(`⚠️ id=${r.id} status=${r.status} ${r.level} ${r.chineseName ?? "?"} 行程=${totalCells}格 ${(totalCells / (timeMs / 1000)).toFixed(1)}格/s 瞬移占=${totalPx ? ((jumpsPx / totalPx) * 100).toFixed(0) : 0}%(${jumpCount}次) [${hitJump ? "PATH_JUMP " : ""}${hitSpeed ? "PATH_SPEED" : ""}]`);
     }
   }
 
-  results.sort((a, b) => b.jumpRatio - a.jumpRatio);
+  results.sort((a, b) => b.cellsPerSec - a.cellsPerSec);
   console.log(`\n===== 扫描结果 =====`);
-  console.log(`扫描 ${rows.length} 盘（ppc>4），读失败 ${readFail}，解析失败 ${parseFail}`);
-  console.log(`异常盘（瞬移占比>${JUMP_RATIO_TRIGGER * 100}%）共 ${results.length} 盘:`);
+  console.log(`扫描 ${rows.length} 盘（ppc>4 或 ≥30s且>20格/s），读失败 ${readFail}，解析失败 ${parseFail}`);
+  console.log(`异常盘（PATH_JUMP 瞬移占比>${JUMP_RATIO_TRIGGER * 100}% / PATH_SPEED ≥30s 且 >${PATH_SPEED_TRIGGER}格/s）共 ${results.length} 盘:`);
   const byStatus = new Map<number, ScanResult[]>();
   for (const x of results) { const a = byStatus.get(x.status) ?? []; a.push(x); byStatus.set(x.status, a); }
   for (const [st, arr] of [...byStatus.entries()].sort()) {
     console.log(`  status=${st}: ${arr.length} 盘`);
     for (const x of arr) {
-      console.log(`    id=${x.id} ${x.level} ${x.name ?? "?"}(uid=${x.user}) ppc=${x.ppc} path=${x.path} 瞬移占${(x.jumpRatio * 100).toFixed(0)}% ${x.jumpCount}次/行程${x.totalPathCells}格 点击${x.clicks} 事件${x.events}`);
+      console.log(`    id=${x.id} ${x.level} ${x.name ?? "?"}(uid=${x.user}) 行程${x.totalPathCells}格 ${x.cellsPerSec}格/s 瞬移占${(x.jumpRatio * 100).toFixed(0)}%(${x.jumpCount}次) [${x.triggers.map((t) => t === AUTO_REASON.PATH_JUMP ? "PATH_JUMP" : "PATH_SPEED").join("+")}]`);
     }
   }
 
   writeFileSync("/tmp/path-anomaly-scan-report.json", JSON.stringify({
     scanned: rows.length, readFail, parseFail, trigger: JUMP_RATIO_TRIGGER, jumpPx: JUMP_PX,
-    anomalies: results,
+    speedTrigger: PATH_SPEED_TRIGGER, anomalies: results,
   }, null, 2));
   console.log(`报告已写 /tmp/path-anomaly-scan-report.json（${dry ? "dry 模式未写库" : "本脚本只读不写库"}）`);
 }
