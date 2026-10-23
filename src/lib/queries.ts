@@ -36,6 +36,8 @@ import {
   type RankingBy,
   type VideoLevel,
   type VideoListOrder,
+  type VideoListDir,
+  VIDEO_LIST_DEFAULT_DIR,
   parseVideoTimeWindow,
   parseVideo3bv,
 } from "./config";
@@ -826,6 +828,8 @@ const getVideoListJoinCount = unstable_cache(
 export async function getVideoList(opts: {
   level: VideoLevel | "all";
   order: VideoListOrder;
+  /** 排序方向（2026-10-23 升降序切换）：缺省=该列默认方向（VIDEO_LIST_DEFAULT_DIR） */
+  dir?: VideoListDir;
   author?: number;
   /** 时间成绩搜索输入（秒字符串，如 "37.29"），非法输入忽略 */
   time?: string;
@@ -842,6 +846,9 @@ export async function getVideoList(opts: {
   const win = parseVideoTimeWindow(opts.time);
   const bv = parseVideo3bv(opts.bv);
   const nf = !!opts.nf;
+  // 方向归一（2026-10-23）：非法/缺省回退该列默认方向
+  const dir: VideoListDir = opts.dir ?? VIDEO_LIST_DEFAULT_DIR[order];
+  const asc = dir === "asc";
 
   if (order === "id" && !win && bv === null && !nf) {
     // 默认排序（上传时间倒序）原路径：全部=video 表；指定级别=成绩表。
@@ -855,13 +862,15 @@ export async function getVideoList(opts: {
     // 成绩表已无必要，回归 video 单表直出 id
     let ids: number[] = [];
     let total = 0;
+    // 方向（2026-10-23 升降序切换）：默认路径按 (create_time,id) 排，asc=正序（最早在前）
+    const timeDir = asc ? "asc" : "desc";
     if (level === "all") {
       const where = { status: { not: VIDEO_STATUS.BANNED }, ...(author ? { user: BigInt(author) } : {}) };
       total = await prisma.video.count({ where });
       const rows = await prisma.video.findMany({
         where,
         select: { id: true },
-        orderBy: [{ createTime: "desc" }, { id: "desc" }],
+        orderBy: [{ createTime: timeDir }, { id: timeDir }],
         skip: (page - 1) * size,
         take: size,
       });
@@ -879,7 +888,7 @@ export async function getVideoList(opts: {
       );
       total = N(totalRows[0]?.c);
       const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-        `SELECT v.id AS id FROM video v WHERE ${conds} ORDER BY v.create_time DESC, v.id DESC LIMIT ${size} OFFSET ${(page - 1) * size}`
+        `SELECT v.id AS id FROM video v WHERE ${conds} ORDER BY v.create_time ${timeDir.toUpperCase()}, v.id ${timeDir.toUpperCase()} LIMIT ${size} OFFSET ${(page - 1) * size}`
       );
       ids = rows.map((r) => N(r.id));
     }
@@ -887,30 +896,30 @@ export async function getVideoList(opts: {
     return { videos, total, pageSize: size };
   }
 
-  // 其余排序 / 时间搜索 / 3BV 搜索 / NF 筛选：统一 join 查询（order=id 且带搜索时按上传时间倒序）
-  const { joins, where, selectId } = videoListConds({ level, order, author, win, bv, nf });
-  // 默认排序（2026-10-22）：(create_time, id) 倒序（真上传时间序，见 getVideoList 头注）。
-  // NF 路径驱动表是 video_info：ORDER BY 用 vi.create_time/vi.id（与 v.* 等值同序），
-  // 优化器得以吃 (noflag, create_time) 复合索引做反向索引扫描（免 filesort，
-  // 实测 11.6 万 NF 行 p1 0.46s→0.09s）。status 过滤后驱动表索引不再全覆盖，
-  // 需回表滤 status=20（1285 行屏蔽盘占比 <0.5%，代价可忽略）
-  const idOrder = nf ? "vi.create_time DESC, vi.id DESC" : "v.create_time DESC, v.id DESC";
+  // 其余排序 / 时间搜索 / 3BV 搜索 / NF 筛选：统一 join 查询（order=id 且带搜索时按上传时间排序）。
+  // 方向（2026-10-23 升降序切换）：各排序键 ASC/DESC 双向；默认排序+搜索沿 (create_time,id)
+  // 索引序双向。方向与列内并列无关（索引序扫描的并列键按 InnoDB (键,id) 物理序天然稳定）
+  const idOrder = nf
+    ? `vi.create_time ${asc ? "ASC" : "DESC"}, vi.id ${asc ? "ASC" : "DESC"}`
+    : `v.create_time ${asc ? "ASC" : "DESC"}, v.id ${asc ? "ASC" : "DESC"}`;
+  const D = asc ? "ASC" : "DESC";
   const orderBy =
     order === "time"
-      ? "vi.real_time ASC"
+      ? `vi.real_time ${D}`
       : order === "3bv"
-        ? "vi.board_3bv DESC"
+        ? `vi.board_3bv ${D}`
         : order === "3bvs"
-          ? "(vi.board_3bv * 1000000 / vi.real_time) DESC"
+          ? `(vi.board_3bv * 1000000 / vi.real_time) ${D}`
           : order === "ioe"
-            ? "vm.ioe DESC"
+            ? `vm.ioe ${D}`
             : order === "stnb"
-              ? "vm.stnb DESC"
+              ? `vm.stnb ${D}`
               : order === "comments"
-                ? "vs.comments DESC"
+                ? `vs.comments ${D}`
                 : order === "clicks"
-                  ? "vs.clicks DESC"
-                  : idOrder; // 默认排序 + 时间/3BV 搜索：上传时间倒序（create_time 索引序）
+                  ? `vs.clicks ${D}`
+                  : idOrder; // 默认排序 + 时间/3BV 搜索：上传时间序（create_time 索引序）
+  const { joins, where, selectId } = videoListConds({ level, order, author, win, bv, nf });
   const [total, idRows] = await Promise.all([
     getVideoListJoinCount(level, order, author ?? 0, opts.time ?? "", bv ?? 0, nf),
     prisma.$queryRawUnsafe<{ id: bigint }[]>(

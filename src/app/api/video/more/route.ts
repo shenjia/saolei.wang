@@ -9,7 +9,14 @@
 
 import { NextResponse } from "next/server";
 import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoFeedCount, getVideoList } from "@/lib/queries";
-import { VIDEO_PAGESIZE, VIDEO_LEVELS, parseVideoListOrder, type VideoLevel } from "@/lib/config";
+import {
+  VIDEO_PAGESIZE,
+  VIDEO_LEVELS,
+  VIDEO_LIST_DIRS,
+  parseVideoListOrder,
+  type VideoLevel,
+  type VideoListDir,
+} from "@/lib/config";
 
 function parseLevel(p: URLSearchParams): VideoLevel | "all" {
   const lv = p.get("level") ?? "";
@@ -29,6 +36,11 @@ export async function GET(req: Request) {
     const level = parseLevel(p);
     // 2026-10-15：排序列扩为表头点击全集（parseVideoListOrder），并透传时间成绩搜索
     const order = parseVideoListOrder(p.get("order") ?? undefined);
+    // 2026-10-23：排序方向（升降序切换）；非法值回 undefined → getVideoList 内按列默认方向
+    const dirRaw = p.get("dir") ?? "";
+    const dir: VideoListDir | undefined = (VIDEO_LIST_DIRS as readonly string[]).includes(dirRaw)
+      ? (dirRaw as VideoListDir)
+      : undefined;
     const author = parseInt(p.get("author") ?? "", 10) || undefined;
     const time = p.get("time")?.trim() || undefined;
     // 2026-10-20：透传 3BV 搜索（精确筛选）
@@ -38,7 +50,7 @@ export async function GET(req: Request) {
     // 每页条数：调用方自定义（用户主页录像版块传 10），默认 /video 列表的 20；
     // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
-    const { videos, total, pageSize } = await getVideoList({ level, order, author, time, bv, nf, page, pageSize: size });
+    const { videos, total, pageSize } = await getVideoList({ level, order, dir, author, time, bv, nf, page, pageSize: size });
     return NextResponse.json({
       videos,
       total,

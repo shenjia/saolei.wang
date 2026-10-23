@@ -14,7 +14,7 @@
 
 import Link from "next/link";
 import type { VideoListItem } from "@/lib/queries";
-import { LEVEL_NAMES, type Level, type VideoListOrder } from "@/lib/config";
+import { LEVEL_NAMES, type Level, type VideoListOrder, type VideoListDir } from "@/lib/config";
 import { buildUrl } from "./Pager";
 import { VideoSearch } from "./VideoSearch";
 import { NfToggle } from "./NfToggle";
@@ -34,6 +34,8 @@ export function VideoListSection({
   pageSize,
   level,
   order,
+  dir,
+  explicit,
   author,
   authorName,
   time,
@@ -47,6 +49,10 @@ export function VideoListSection({
   /** 服务端解析的初始筛选（URL 即状态：直链/分享进入时与链接语义一致） */
   level: string;
   order: VideoListOrder;
+  /** 排序方向（2026-10-23 升降序切换）：URL dir 参数（服务端已归一） */
+  dir: VideoListDir;
+  /** URL 是否显式带 order/dir（显式态「上传时间」列高亮出箭头，默认进页不亮） */
+  explicit: boolean;
   /** 玩家筛选（用户 id）与回显姓名（搜索框初始状态 + 定向视图标题素材用） */
   author?: number;
   authorName?: string;
@@ -69,7 +75,7 @@ export function VideoListSection({
         initial={initial}
         total={total}
         pageSize={pageSize}
-        query={{ level, order, author, time, bv, nf }}
+        query={{ level, order, dir, explicit, author, time, bv, nf }}
         headSort={{ base: "/video", order, authorInLinks: true }}
         noSort3bv={!!(authorName && bv)}
         head={(ctx) => (
@@ -97,6 +103,7 @@ export function VideoListSection({
                         href={buildUrl("/video", {
                           level: value,
                           order: ctx.order === "id" ? undefined : ctx.order,
+                          dir: ctx.dir,
                           author,
                           time,
                           "3bv": bv,
@@ -123,6 +130,7 @@ export function VideoListSection({
                 <VideoSearch
                   level={ctx.level}
                   order={ctx.order}
+                  dir={ctx.dir}
                   author={author}
                   authorName={authorName}
                   time={time}

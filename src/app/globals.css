@@ -6032,6 +6032,47 @@ body #video_list .score_3bvs a:hover em {
 .video_table th a.current:hover {
   color: #a6e22e;
 }
+/* 升降序双箭头（2026-10-23 张老师需求：表头点击切换升降序 + 方向箭头高亮）：
+   仅当前排序列渲染（VideoHead 内 .sa）；链接改 inline-flex、文字与箭头列
+   align-items:center 垂直居中对齐（张老师要求，不用 baseline 手调）。
+   上/下两枚 4px 小三角纵向堆叠，命中方向金色 #fdc61d、另一枚暗色；
+   悬停该表头时暗三角提亮一档（#75715e），暗示可点击切换方向 */
+.video_table th a.current {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.video_table th a.current .sa {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5px;
+  line-height: 0;
+}
+.video_table th a.current .sa i {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+}
+.video_table th a.current .sa i.up {
+  border-bottom: 4.5px solid #49483e;
+}
+.video_table th a.current .sa i.down {
+  border-top: 4.5px solid #49483e;
+}
+.video_table th a.current .sa i.up.on {
+  border-bottom-color: #fdc61d;
+}
+.video_table th a.current .sa i.down.on {
+  border-top-color: #fdc61d;
+}
+.video_table th:hover .sa i.up:not(.on) {
+  border-bottom-color: #75715e;
+}
+.video_table th:hover .sa i.down:not(.on) {
+  border-top-color: #75715e;
+}
 /* 评论/点击计数命中（td.counters 内 em=评论、span=点击，各自独立变黄） */
 #page .video_table td.counters em.current,
 #page .video_table td.counters span.current {

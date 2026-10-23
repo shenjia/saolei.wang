@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import type { VideoListItem } from "@/lib/queries";
-import type { VideoListOrder } from "@/lib/config";
+import { VIDEO_LIST_DEFAULT_DIR, type VideoListOrder, type VideoListDir } from "@/lib/config";
 import { VideoListFeed } from "./VideoListFeed";
 import { VideoSearch } from "./VideoSearch";
 import { NfToggle } from "./NfToggle";
@@ -31,6 +31,8 @@ export function UserVideoSection({
   pageSize,
   level,
   order,
+  dir,
+  explicit,
   time,
   bv,
   nf,
@@ -42,6 +44,10 @@ export function UserVideoSection({
   /** 服务端解析的初始筛选（URL 即状态：直链/分享进入时与链接语义一致） */
   level: string;
   order: VideoListOrder;
+  /** 排序方向（2026-10-23 升降序切换）：URL dir 参数（服务端已归一） */
+  dir: VideoListDir;
+  /** URL 是否显式带 order/dir（显式态「上传时间」列高亮出箭头，默认进页不亮） */
+  explicit: boolean;
   /** 时间成绩搜索输入（回显用，2026-10-20 搜索框） */
   time?: string;
   /** 3BV 搜索输入（回显用，2026-10-20 搜索框） */
@@ -56,7 +62,7 @@ export function UserVideoSection({
         initial={initial}
         total={total}
         pageSize={pageSize}
-        query={{ level, order, author: userId, time, bv, nf }}
+        query={{ level, order, dir, explicit, author: userId, time, bv, nf }}
         headSort={{ base: `/user/${userId}`, order }}
         head={(ctx) => (
           <div className="video_head_box">
@@ -68,6 +74,7 @@ export function UserVideoSection({
               {VIDEO_LEVEL_TABS.map(([value, label]) => {
                 const qs = new URLSearchParams({ level: value });
                 if (ctx.order !== "id") qs.set("order", ctx.order);
+                if (ctx.dir !== VIDEO_LIST_DEFAULT_DIR[ctx.order]) qs.set("dir", ctx.dir);
                 if (time) qs.set("time", time);
                 if (bv) qs.set("3bv", bv);
                 if (ctx.nf) qs.set("nf", "1");
@@ -103,6 +110,7 @@ export function UserVideoSection({
                 userId={userId}
                 level={ctx.level}
                 order={ctx.order}
+                dir={ctx.dir}
                 time={time}
                 bv={bv}
               />

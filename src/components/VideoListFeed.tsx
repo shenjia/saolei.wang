@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { VideoListItem } from "@/lib/queries";
-import type { VideoListOrder } from "@/lib/config";
+import { VIDEO_LIST_DEFAULT_DIR, type VideoListOrder, type VideoListDir } from "@/lib/config";
 import { VideoHead, VideoRowLine, type VideoHighlight } from "./VideoRows";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
@@ -31,10 +31,12 @@ import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 export interface VideoListHeadCtx {
   level: string;
   order: VideoListOrder;
+  /** 排序方向（2026-10-23 升降序切换） */
+  dir: VideoListDir;
   /** NF 筛选开关（2026-10-20）：开启=只显示 NF 录像 */
   nf: boolean;
   setLevel: (lv: string) => void;
-  setOrder: (o: VideoListOrder) => void;
+  setOrder: (o: VideoListOrder, dir: VideoListDir) => void;
   setNf: (on: boolean) => void;
 }
 
@@ -52,8 +54,19 @@ export function VideoListFeed({
   /** 当前筛选条件下的录像总数 */
   total: number;
   pageSize: number;
-  /** 筛选参数（level/order/author/time/3bv/nf；client 模式下仅作初始值） */
-  query: { level: string; order: string; author?: number; time?: string; bv?: string; nf?: boolean };
+  /** 筛选参数（level/order/dir/author/time/3bv/nf；client 模式下仅作初始值）。
+   *  explicit：URL 是否显式带 order/dir（显式态「上传时间」列也高亮出箭头；
+   *  页面层从 searchParams 判定后传入——order 归一后恒有值，此处不能自行推断） */
+  query: {
+    level: string;
+    order: string;
+    dir?: string;
+    explicit?: boolean;
+    author?: number;
+    time?: string;
+    bv?: string;
+    nf?: boolean;
+  };
   /** 表头排序（/video：Link 导航；client 模式：href 仅作中键/新标签兜底，左键就地排序）。
    *  authorInLinks：client 模式兜底链接是否携带 author（/video 的 author 是真实筛选必须带；
    *  用户主页 author 隐含在路径 /user/{id}，默认剥掉） */
@@ -72,16 +85,26 @@ export function VideoListFeed({
 
   // ---- 客户端筛选状态（client 模式可就地切换；非 client 恒等于服务端 query）----
   const [curLevel, setCurLevel] = useState(query.level);
+  // 排序显式态（2026-10-23 升降序切换）：URL 显式带 order（含 id 或 dir）才算显式——
+  // 显式态下「上传时间」列也高亮出箭头；默认进页（无参数）id 列纯文本（张老师 2026-10-15 口径）
   const [curOrder, setCurOrder] = useState<VideoListOrder>(
     (query.order as VideoListOrder) || "id"
+  );
+  const [curDir, setCurDir] = useState<VideoListDir>(
+    query.dir === "asc" || query.dir === "desc"
+      ? query.dir
+      : VIDEO_LIST_DEFAULT_DIR[(query.order as VideoListOrder) || "id"]
+  );
+  const [curExplicit, setCurExplicit] = useState(
+    query.explicit ?? false
   );
   // NF 筛选（2026-10-20）：默认关；开启只显示 NF 录像（与级别/排序同通道就地重拉）
   const [curNf, setCurNf] = useState(!!query.nf);
   // 条件总数：client 模式切级别后随接口返回更新（total prop 只代表服务端初始条件）
   const [curTotal, setCurTotal] = useState(total);
-  // 排序命中列高亮（默认排序=上传时间不高亮，2026-10-15 扩展全部排序列）
-  const highlight: VideoHighlight | undefined =
-    curOrder === "id" ? undefined : (curOrder as VideoHighlight);
+  // 排序命中列高亮：显式态含 id（上传时间列金色），默认态 id 不高亮（2026-10-15 扩展；
+  // 2026-10-23 id 列纳入升降序切换体系）
+  const highlight: VideoHighlight | undefined = curExplicit || curOrder !== "id" ? curOrder : undefined;
 
   // ---- 滑条窗口状态（2026-10-14）----
   const tableRef = useRef<HTMLTableElement>(null);
@@ -103,6 +126,8 @@ export function VideoListFeed({
 
   function moreUrl(page: number, size?: number) {
     const qs = new URLSearchParams({ level: curLevel, order: curOrder, page: String(page) });
+    // 方向参数（2026-10-23）：非该列默认方向才带（默认方向省参，与 URL 即状态口径一致）
+    if (curDir !== VIDEO_LIST_DEFAULT_DIR[curOrder]) qs.set("dir", curDir);
     if (query.author) qs.set("author", String(query.author));
     if (query.time) qs.set("time", query.time);
     if (query.bv) qs.set("3bv", query.bv);
@@ -112,17 +137,34 @@ export function VideoListFeed({
     return `/api/video/more?${qs}`;
   }
 
-  /** URL 即状态（client 模式）：replaceState 同步 level/order（默认值删参）。
+  /** URL 即状态（client 模式）：replaceState 同步 level/order/dir（默认值删参）。
    *  必须把当前 history.state 原样传回（它带 __NA/_N 内部标记）：Next 16 的 app-router
    *  patch 了 window.history.replaceState——外部调用若不带内部标记会 dispatch ACTION_RESTORE
    *  并异步把视口滚到该 URL 的缓存滚动位（实测表现为「切筛选/排序后页面跳顶」）；
    *  带标记则直接透传原生 replaceState，Router 零介入、零滚动（2026-10-16 实证） */
-  function syncUrl(next: { level?: string; order?: VideoListOrder; nf?: boolean }) {
+  function syncUrl(next: {
+    level?: string;
+    order?: VideoListOrder;
+    dir?: VideoListDir;
+    explicit?: boolean;
+    nf?: boolean;
+  }) {
     const url = new URL(window.location.href);
     if (next.level !== undefined) url.searchParams.set("level", next.level);
     if (next.order !== undefined) {
-      if (next.order === "id") url.searchParams.delete("order");
+      // 显式 id 态（表头点了「上传时间」）保留 order=id 进 URL；回到默认则删参
+      if (next.order === "id" && next.explicit) url.searchParams.set("order", "id");
+      else if (next.order === "id") url.searchParams.delete("order");
       else url.searchParams.set("order", next.order);
+    }
+    if (next.dir !== undefined) {
+      // 方向省参口径：列默认方向不带 dir（显式 id 态 order=id&dir=desc 双省参回纯默认）
+      if (next.order !== undefined) {
+        if (next.dir === VIDEO_LIST_DEFAULT_DIR[next.order] && !(next.order === "id" && next.explicit))
+          url.searchParams.delete("dir");
+        else url.searchParams.set("dir", next.dir);
+      } else if (next.dir === VIDEO_LIST_DEFAULT_DIR[curOrder]) url.searchParams.delete("dir");
+      else url.searchParams.set("dir", next.dir);
     }
     if (next.nf !== undefined) {
       if (next.nf) url.searchParams.set("nf", "1");
@@ -139,6 +181,7 @@ export function VideoListFeed({
   async function refetchFirstPage(
     nextLevel: string,
     nextOrder: VideoListOrder,
+    nextDir: VideoListDir,
     nextNf: boolean,
     opt?: { nfOptimistic?: boolean }
   ) {
@@ -156,6 +199,7 @@ export function VideoListFeed({
         page: "1",
         size: String(pageSize),
       });
+      if (nextDir !== VIDEO_LIST_DEFAULT_DIR[nextOrder]) qs.set("dir", nextDir);
       if (query.author) qs.set("author", String(query.author));
       if (query.time) qs.set("time", query.time);
       if (query.bv) qs.set("3bv", query.bv);
@@ -174,12 +218,16 @@ export function VideoListFeed({
         setBatchStep(0);
         setCurLevel(nextLevel);
         setCurOrder(nextOrder);
+        setCurDir(nextDir);
+        // 表头点击排序恒为显式态（2026-10-23）：含 id 列（上传时间）也进入箭头体系
+        setCurExplicit(true);
         setCurNf(nextNf);
         setCurTotal(data.total);
         setHasMore(data.videos.length < data.total);
       });
       restoreViewportAnchor(tableRef.current, anchor);
-      syncUrl({ level: nextLevel, order: nextOrder, nf: nextNf });
+      // 显式 id 态（表头点了「上传时间」）order=id 进 URL；默认方向省 dir
+      syncUrl({ level: nextLevel, order: nextOrder, dir: nextDir, explicit: true, nf: nextNf });
     } catch {
       /* 网络异常静默：可重试；NF 乐观更新回滚开关态与 URL（表格数据未变） */
       if (opt?.nfOptimistic) {
@@ -192,13 +240,15 @@ export function VideoListFeed({
   }
 
   const changeLevel = (lv: string) => {
-    if (lv !== curLevel) refetchFirstPage(lv, curOrder, curNf);
+    if (lv !== curLevel) refetchFirstPage(lv, curOrder, curDir, curNf);
   };
-  const changeOrder = (o: VideoListOrder) => {
-    if (o !== curOrder) refetchFirstPage(curLevel, o, curNf);
+  // 表头排序（2026-10-23 升降序切换）：同列反向 / 切列取目标方向（VideoHead 计算好传入）
+  const changeOrder = (o: VideoListOrder, dir: VideoListDir) => {
+    if (o === curOrder && dir === curDir) return;
+    refetchFirstPage(curLevel, o, dir, curNf);
   };
   const changeNf = (on: boolean) => {
-    if (on !== curNf) refetchFirstPage(curLevel, curOrder, on, { nfOptimistic: true });
+    if (on !== curNf) refetchFirstPage(curLevel, curOrder, curDir, on, { nfOptimistic: true });
   };
 
   async function loadMore() {
@@ -298,6 +348,7 @@ export function VideoListFeed({
         head({
           level: curLevel,
           order: curOrder,
+          dir: curDir,
           nf: curNf,
           setLevel: changeLevel,
           setOrder: changeOrder,
@@ -321,6 +372,8 @@ export function VideoListFeed({
                       }
                     : { level: curLevel, author: query.author, time: query.time, "3bv": query.bv },
                   order: curOrder,
+                  dir: curDir,
+                  explicit: curExplicit,
                 }
               : undefined
           }

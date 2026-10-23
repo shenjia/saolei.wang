@@ -32,6 +32,7 @@ import { getHistory } from "@/lib/history";
 import {
   VIDEO_LEVELS,
   parseVideoListOrder,
+  parseVideoListDir,
   LEVELS,
   LEVEL_NAMES,
   TITLE_COLORS,
@@ -42,6 +43,7 @@ import {
   type Level,
   type VideoLevel,
   type VideoListOrder,
+  type VideoListDir,
 } from "@/lib/config";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { UserVideoSection } from "@/components/UserVideoSection";
@@ -132,8 +134,12 @@ export default async function UserViewPage({
     ? (sp.level as VideoLevel)
     : "all";
   // 录像版块排序（2026-10-16 张老师要求）：与 /video 列表页同语义——表头点击排序
-  // （成绩/3BV/3BV/s/评论/点击/上传时间），默认上传时间（id）且不高亮
+  // （成绩/3BV/3BV/s/评论/点击/上传时间），默认上传时间（id）且不高亮；
+  // 方向（2026-10-23 升降序切换）：非法/缺省回退该列默认方向
   const order: VideoListOrder = parseVideoListOrder(sp.order);
+  const dir: VideoListDir = parseVideoListDir(sp.dir, order);
+  // 显式态（2026-10-23）：URL 带 order（含 id）/dir——「上传时间」列高亮出箭头
+  const videoSortExplicit = sp.order !== undefined || sp.dir !== undefined;
   // 录像版块搜索（2026-10-20 张老师要求：上传按钮换搜索框）：时间成绩/3BV 精确查询，
   // 与 /video 同语义（互斥三选一，本页 author 恒为 userId）
   const time = sp.time?.trim() || undefined;
@@ -162,7 +168,7 @@ export default async function UserViewPage({
     // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
     // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）；
     // time/bv/nf 搜索与 NF 筛选（2026-10-20）
-    getVideoList({ level, order, author: userId, time, bv, nf, page: 1, pageSize: USER_VIDEO_NUMBER }),
+    getVideoList({ level, order, dir, author: userId, time, bv, nf, page: 1, pageSize: USER_VIDEO_NUMBER }),
     // 今日新增录像（按级别），统计盒增量列用（2026-10-13 张老师要求）
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
@@ -353,6 +359,8 @@ export default async function UserViewPage({
           pageSize={userVideos.pageSize}
           level={level}
           order={order}
+          dir={dir}
+          explicit={videoSortExplicit}
           time={time}
           bv={bv}
           nf={nf}

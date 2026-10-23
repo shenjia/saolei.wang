@@ -58,6 +58,7 @@ type Item =
 export function VideoSearch({
   level,
   order,
+  dir,
   author,
   authorName,
   time,
@@ -69,6 +70,8 @@ export function VideoSearch({
   level: string;
   /** 当前排序（跳转时保留；默认排序 id 不进 URL） */
   order: string;
+  /** 排序方向（2026-10-23 升降序切换；跳转保留非默认方向） */
+  dir?: string;
   /** 当前玩家筛选（用户 id） */
   author?: number;
   /** 当前玩家筛选的姓名（搜索框回显用） */
@@ -208,9 +211,9 @@ export function VideoSearch({
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
 
-  /** 跳转 URL：列表模式保留级别/排序/作者筛选，玩家/时间/3BV 互斥（三选一），
+  /** 跳转 URL：列表模式保留级别/排序/方向/作者筛选，玩家/时间/3BV 互斥（三选一），
    *  NF 开关态正交保留（2026-10-20）；user 模式跳回本主页 /user/{id}
-   *  （作者锁定，level/order/nf 由主页壳的 URL 状态承接） */
+   *  （作者锁定，level/order/dir 由主页壳的 URL 状态承接） */
   function nav(params: { author?: number; time?: string; bv?: string }) {
     if (isUser) {
       router.push(
@@ -226,6 +229,7 @@ export function VideoSearch({
       buildUrl("/video", {
         level,
         order: order === "id" ? undefined : order,
+        dir,
         author: params.author,
         time: params.time,
         "3bv": params.bv,

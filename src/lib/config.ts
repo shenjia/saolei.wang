@@ -279,6 +279,28 @@ export function parseVideoListOrder(v?: string): VideoListOrder {
   return (VIDEO_LIST_ORDERS as readonly string[]).includes(v ?? "") ? (v as VideoListOrder) : "id";
 }
 
+// 排序方向（2026-10-23 张老师需求：表头点击升降序切换 + 方向箭头高亮）
+export const VIDEO_LIST_DIRS = ["asc", "desc"] as const;
+export type VideoListDir = (typeof VIDEO_LIST_DIRS)[number];
+
+/** 各列首次点击的默认方向（沿用原排序语义）：成绩=升序（快在前），
+ *  其余全部降序（大/多/新在前）；id=上传时间默认倒序（最新在前） */
+export const VIDEO_LIST_DEFAULT_DIR: Record<VideoListOrder, VideoListDir> = {
+  id: "desc",
+  time: "asc",
+  "3bv": "desc",
+  "3bvs": "desc",
+  ioe: "desc",
+  stnb: "desc",
+  comments: "desc",
+  clicks: "desc",
+};
+
+/** URL dir 参数解析：非法/缺省回退该列默认方向 */
+export function parseVideoListDir(dir: string | undefined, order: VideoListOrder): VideoListDir {
+  return dir === "asc" || dir === "desc" ? dir : VIDEO_LIST_DEFAULT_DIR[order];
+}
+
 /** 时间成绩搜索输入（秒）：1-3 位整数，最多 3 位小数（如 37 / 37.2 / 37.29） */
 export const VIDEO_TIME_INPUT_RE = /^\d{1,3}(?:\.\d{1,3})?$/;
 

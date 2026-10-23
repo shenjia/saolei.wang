@@ -23,8 +23,10 @@ import {
   LEVEL_NAMES,
   VIDEO_LEVELS,
   parseVideoListOrder,
+  parseVideoListDir,
   type VideoLevel,
   type VideoListOrder,
+  type VideoListDir,
 } from "@/lib/config";
 import { VideoListSection } from "@/components/VideoListSection";
 
@@ -62,6 +64,10 @@ export default async function VideoListPage({
   const sp = await searchParams;
   const level = parseLevel(sp.level);
   const order: VideoListOrder = parseVideoListOrder(sp.order);
+  // 排序方向（2026-10-23 升降序切换）：非法/缺省回退该列默认方向；
+  // 显式态=URL 带 order（含 id）或 dir——显式态「上传时间」列也高亮出箭头
+  const dir: VideoListDir = parseVideoListDir(sp.dir, order);
+  const explicit = sp.order !== undefined || sp.dir !== undefined;
   const author = sp.author ? parseInt(sp.author, 10) || undefined : undefined;
   // 时间成绩搜索输入（秒字符串，如 37.29；非法输入忽略）
   const time = sp.time?.trim() || undefined;
@@ -71,7 +77,7 @@ export default async function VideoListPage({
   const nf = sp.nf === "1";
 
   const [{ videos, total, pageSize }, authorName] = await Promise.all([
-    getVideoList({ level, order, author, time, bv, nf, page: 1 }),
+    getVideoList({ level, order, dir, author, time, bv, nf, page: 1 }),
     // 玩家筛选回显姓名（搜索框显示当前筛选 + 定向视图标题用）
     author
       ? prisma.user
@@ -93,6 +99,8 @@ export default async function VideoListPage({
         pageSize={pageSize}
         level={level}
         order={order}
+        dir={dir}
+        explicit={explicit}
         author={author}
         authorName={authorName}
         time={time}
