@@ -9000,7 +9000,8 @@ html.op-fakefs #header {
 }
 .practice_today .pt_line .rate {
   margin-left: auto; /* 今日有尝试时最右侧的胜率 */
-  width: 64px; /* 定宽+左对齐：与次行胜率左边缘对齐（2026-10-22 张老师要求） */
+  width: 72px; /* 定宽+左对齐：与次行胜率左边缘对齐（2026-10-22 张老师要求）；72px 容下「胜率 100.0%」不折行（2026-10-23） */
+  white-space: nowrap; /* 移动端窄盒内禁止折行 */
   text-align: left;
   color: #75715e; /* 标签暗灰（2026-10-22 八轮张老师要求：与次行胜率标签同色，原亮灰） */
   font-size: 12px;
@@ -9033,7 +9034,8 @@ html.op-fakefs #header {
 }
 .practice_today .pt_sub .rate {
   margin-left: auto; /* 与首行胜率同款右浮对齐（六轮张老师要求） */
-  width: 64px; /* 定宽与首行胜率一致，两行「胜率」左边缘对齐 */
+  width: 72px; /* 定宽与首行胜率一致，两行「胜率」左边缘对齐 */
+  white-space: nowrap;
   text-align: left;
   color: #75715e; /* 暗灰：与次行文案同色不抢眼（2026-10-22 张老师要求，原金色太刺眼） */
 }
