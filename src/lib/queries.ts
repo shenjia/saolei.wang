@@ -837,6 +837,10 @@ export async function getVideoList(opts: {
   bv?: string;
   /** NF 筛选（2026-10-20 张老师要求）：true=只显示 NF 录像 */
   nf?: boolean;
+  /** 屏蔽盘放行（2026-10-23 张老师需求）：true=不过滤 status=0（本人主页看自己被屏蔽
+   *  的录像用）。仅默认排序（order=id 无搜索）路径支持；其余排序路径走
+   *  videoListConds 仍滤屏蔽（个人页屏蔽盘排序无意义，本人按上传时间翻找即可） */
+  includeBanned?: boolean;
   page: number;
   /** 每页条数（默认 VIDEO_PAGESIZE；用户主页录像版块传 USER_VIDEO_NUMBER，2026-09-26） */
   pageSize?: number;
@@ -860,12 +864,18 @@ export async function getVideoList(opts: {
     // （屏蔽仍挡）；级别路径顺带简化：video_scores_* 只有过审管线写入（review.ts），
     // 待审盘必无成绩表行，驱动 video (level, create_time) 过滤 status 后再 join
     // 成绩表已无必要，回归 video 单表直出 id
+    // 同日二轮：includeBanned=true 时连屏蔽盘也放行（本人主页看自己的屏蔽录像，
+    // 渲染层红 ✕ 标记）——仅此两路径放行，其余前台面仍一律滤屏蔽
+    const noBanFilter = !!opts.includeBanned;
     let ids: number[] = [];
     let total = 0;
     // 方向（2026-10-23 升降序切换）：默认路径按 (create_time,id) 排，asc=正序（最早在前）
     const timeDir = asc ? "asc" : "desc";
     if (level === "all") {
-      const where = { status: { not: VIDEO_STATUS.BANNED }, ...(author ? { user: BigInt(author) } : {}) };
+      const where = {
+        ...(noBanFilter ? {} : { status: { not: VIDEO_STATUS.BANNED } }),
+        ...(author ? { user: BigInt(author) } : {}),
+      };
       total = await prisma.video.count({ where });
       const rows = await prisma.video.findMany({
         where,
@@ -880,7 +890,7 @@ export async function getVideoList(opts: {
       // 待审盘也要出列，成绩表无待审行，改 video (level, create_time) 复合索引反扫
       const conds = [
         `v.level = '${level}'`,
-        `v.status <> ${VIDEO_STATUS.BANNED}`,
+        ...(noBanFilter ? [] : [`v.status <> ${VIDEO_STATUS.BANNED}`]),
         ...(author ? [`v.user = ${BigInt(author)}`] : []),
       ].join(" AND ");
       const totalRows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(

@@ -9,6 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoFeedCount, getVideoList } from "@/lib/queries";
+import { getSession } from "@/lib/auth";
 import {
   VIDEO_PAGESIZE,
   VIDEO_LEVELS,
@@ -47,10 +48,20 @@ export async function GET(req: Request) {
     const bv = p.get("3bv")?.trim() || undefined;
     // 2026-10-20：透传 NF 筛选（只显示 NF 录像，开关在首页/列表页/用户主页录像版块）
     const nf = p.get("nf") === "1";
+    // 2026-10-23 张老师需求：本人主页放行自己的屏蔽盘。服务端铁闸——banned=1 仅在
+    // 「请求者本人 == author」时生效（他人/未登录带此参数一律忽略，防枚举他人屏蔽盘）
+    let includeBanned = false;
+    if (p.get("banned") === "1" && author) {
+      const session = await getSession();
+      includeBanned = !!session && session.uid === author;
+    }
     // 每页条数：调用方自定义（用户主页录像版块传 10），默认 /video 列表的 20；
     // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
-    const { videos, total, pageSize } = await getVideoList({ level, order, dir, author, time, bv, nf, page, pageSize: size });
+    const { videos, total, pageSize } = await getVideoList({
+      level, order, dir, author, time, bv, nf, page, pageSize: size,
+      ...(includeBanned ? { includeBanned: true } : {}),
+    });
     return NextResponse.json({
       videos,
       total,

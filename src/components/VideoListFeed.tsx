@@ -66,6 +66,9 @@ export function VideoListFeed({
     time?: string;
     bv?: string;
     nf?: boolean;
+    /** 屏蔽盘放行（2026-10-23）：本人主页传 true——翻页/就地重拉带 banned=1，
+     *  服务端铁闸校验请求者 == author 才生效 */
+    includeBanned?: boolean;
   };
   /** 表头排序（/video：Link 导航；client 模式：href 仅作中键/新标签兜底，左键就地排序）。
    *  authorInLinks：client 模式兜底链接是否携带 author（/video 的 author 是真实筛选必须带；
@@ -132,6 +135,7 @@ export function VideoListFeed({
     if (query.time) qs.set("time", query.time);
     if (query.bv) qs.set("3bv", query.bv);
     if (curNf) qs.set("nf", "1");
+    if (query.includeBanned) qs.set("banned", "1");
     // 每页条数：递增批量（首击=一页 base），默认与初始页一致（列表页 20 / 用户主页 10）
     qs.set("size", String(size ?? pageSize));
     return `/api/video/more?${qs}`;
@@ -204,6 +208,7 @@ export function VideoListFeed({
       if (query.time) qs.set("time", query.time);
       if (query.bv) qs.set("3bv", query.bv);
       if (nextNf) qs.set("nf", "1");
+      if (query.includeBanned) qs.set("banned", "1");
       const res = await fetch(`/api/video/more?${qs}`);
       if (!res.ok) throw new Error("加载失败");
       const data = (await res.json()) as { videos: VideoListItem[]; total: number };

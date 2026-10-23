@@ -22,8 +22,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const video = await prisma.video.findUnique({ where: { id: BigInt(videoId) } });
   if (!video) return new Response("Not Found", { status: 404 });
   if (video.status === VIDEO_STATUS.BANNED) {
+    // 管理员（后台审核防盲审依赖下载）+ 录像主人（本人查看/删除屏蔽盘，2026-10-23）
     const session = await getSession();
-    if (!session || !isManager(session.role)) return new Response("Not Found", { status: 404 });
+    if (!session || (!isManager(session.role) && session.uid !== Number(video.user))) {
+      return new Response("Not Found", { status: 404 });
+    }
   }
   const [info, author] = await Promise.all([
     prisma.videoInfo.findUnique({ where: { id: video.id } }),

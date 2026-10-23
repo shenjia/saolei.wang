@@ -36,6 +36,7 @@ export function UserVideoSection({
   time,
   bv,
   nf,
+  self,
 }: {
   userId: number;
   initial: VideoListItem[];
@@ -54,6 +55,8 @@ export function UserVideoSection({
   bv?: string;
   /** NF 筛选开关（2026-10-20）：服务端解析初始态（URL nf=1），默认关 */
   nf?: boolean;
+  /** 是否本人视角（2026-10-23）：true 时录像版块放行自己的屏蔽盘（红 ✕ 标记） */
+  self?: boolean;
 }) {
   return (
     <div className="box" id="user_videos">
@@ -62,7 +65,7 @@ export function UserVideoSection({
         initial={initial}
         total={total}
         pageSize={pageSize}
-        query={{ level, order, dir, explicit, author: userId, time, bv, nf }}
+        query={{ level, order, dir, explicit, author: userId, time, bv, nf, ...(self ? { includeBanned: true } : {}) }}
         headSort={{ base: `/user/${userId}`, order }}
         head={(ctx) => (
           <div className="video_head_box">

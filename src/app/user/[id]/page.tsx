@@ -156,19 +156,30 @@ export default async function UserViewPage({
   await recordClick(userId, ip);
   const clicks = await getClicks(userId);
 
+  // session 提前取（2026-10-23）：本人主页录像版块要放行自己的屏蔽盘（includeBanned），
+  // 判定 isSelf 须在 getVideoList 之前
+  const session = await getSession();
+  const isSelf = !!session && session.uid === userId;
+
   const [news, newsTotal] = await Promise.all([
     getUserNews(userId, USER_NEWS_NUMBER),
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, session, ranks, userVideos, todayVideos, activity, bbvRanges, bbvCollection] = await Promise.all([
+  const [history, ranks, userVideos, todayVideos, activity, bbvRanges, bbvCollection] = await Promise.all([
     getHistory(userId),
-    getSession(),
     getUserRanks(userId),
-    // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
-    // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）；
-    // time/bv/nf 搜索与 NF 筛选（2026-10-20）
-    getVideoList({ level, order, dir, author: userId, time, bv, nf, page: 1, pageSize: USER_VIDEO_NUMBER }),
+  // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
+  // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）；
+  // time/bv/nf 搜索与 NF 筛选（2026-10-20）
+  // 2026-10-23 张老师需求：本人主页放行自己的屏蔽盘（红 ✕ 标记，详情页可自助删除）；
+  // 他人视角仍滤屏蔽（includeBanned 仅 isSelf）——排序/搜索路径不支持该放行，
+  // 本人切排序/搜索时屏蔽盘自然不出列（默认上传时间序可见，够用）
+  getVideoList({
+    level, order, dir, author: userId, time, bv, nf,
+    page: 1, pageSize: USER_VIDEO_NUMBER,
+    ...(isSelf ? { includeBanned: true } : {}),
+  }),
     // 今日新增录像（按级别），统计盒增量列用（2026-10-13 张老师要求）
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
@@ -190,7 +201,7 @@ export default async function UserViewPage({
 
   // 是不是「我自己的主页」——决定头像能不能点（2026-09-24 张老师需求：
   // 点击直接弹上传窗口 + 方形裁剪预览 + 待审气泡）
-  const isSelf = !!session && session.uid === userId;
+  // （isSelf 判定已提前到 Promise.all 之前，2026-10-23 屏蔽盘放行需要）
 
   // 只有自己的主页才需要查「有没有头像在审」（头像下方的「审核中」气泡），
   // 别人的主页不多跑这一趟查询
@@ -364,6 +375,7 @@ export default async function UserViewPage({
           time={time}
           bv={bv}
           nf={nf}
+          self={isSelf}
         />
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
       </li>

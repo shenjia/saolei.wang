@@ -21,8 +21,11 @@ import {
 } from "./config";
 import { videoScores } from "./queries";
 import { publishNews } from "./news";
+import { sendSystemMessage } from "./message";
 import { refreshUserStnb } from "./userstnb";
 import { applyRankScoreChange } from "./userrank";
+import { LEVEL_NAMES } from "./config";
+import { scoreTime } from "./format";
 
 type Tx = Prisma.TransactionClient;
 
@@ -279,6 +282,10 @@ export async function reviewVideo(
     return { ok: false, error: "该录像已审核过，仅超级管理员可以重审" };
   }
 
+  // 屏蔽通知要在事务外发（见下方），先把录像关键信息带出来
+  // （对象包装避免 TS 闭包赋值收窄为 never）
+  const rvOut: { v: { id: number; user: number; level: string; realTime: number } | null } = { v: null };
+
   await prisma.$transaction(async (tx) => {
     const now = BigInt(Math.floor(Date.now() / 1000));
     await tx.video.update({
@@ -296,6 +303,7 @@ export async function reviewVideo(
     const rv = await loadReviewVideo(tx, videoId);
     if (!rv) throw new Error("录像数据不完整");
     rv.reviewTime = Number(now);
+    rvOut.v = { id: rv.id, user: rv.user, level: rv.level, realTime: rv.realTime };
 
     if (status === VIDEO_STATUS.BANNED) {
       // VideoScores::removeVideo
@@ -401,6 +409,22 @@ export async function reviewVideo(
       `;
     }
   });
+
+  // 屏蔽通知（2026-10-23 张老师需求）：录像被屏蔽后系统消息告知本人，正文带
+  // 详情页可点链接（MSG_LINK_RE 语法）。放事务外——通知失败不应把屏蔽操作带崩
+  // （成绩回退/级联清理已提交，消息属锦上添花）；文案不带理由（张老师拍板）。
+  const rv0 = rvOut.v;
+  if (status === VIDEO_STATUS.BANNED && rv0) {
+    try {
+      const lv = LEVEL_NAMES[rv0.level as keyof typeof LEVEL_NAMES] ?? rv0.level;
+      await sendSystemMessage(
+        rv0.user,
+        `你上传的录像 [url /video/${rv0.id}]#${rv0.id}[/url]（${lv} ${scoreTime(rv0.realTime)} 秒）未通过审核，如有疑问请联系管理员。`
+      );
+    } catch (e) {
+      console.warn("[review] 屏蔽通知发送失败", videoId, e);
+    }
+  }
 
   // 录像指标后置补算（2026-10-14 张老师需求：新录像不必等跑批）
   // 必须排在事务提交「之后」—— ensureVideoMetrics 自己开连接读 video/video_info，

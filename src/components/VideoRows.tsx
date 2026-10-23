@@ -180,6 +180,13 @@ export function VideoRowLine({
             ✓
           </span>
         )}
+        {/* 2026-10-23 张老师需求：屏蔽盘（status=0，仅本人主页可见）同位置红 ✕
+            （替代 ✓ 的位置语义：此录像已被屏蔽，详情页可自助删除） */}
+        {v.status === 0 && (
+          <span className="banned" title="该录像已被屏蔽">
+            ✕
+          </span>
+        )}
       </td>
       <td className={`c_3bvs bv c${highlight === "3bv" ? " current" : ""}`}>{v.board3bv}</td>
       <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>

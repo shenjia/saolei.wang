@@ -21,6 +21,7 @@ import { CommentSection } from "@/components/Comments";
 // 原地回放（2026-10-15 张老师需求：点播放后棋盘原地重演，复用练习页回放引擎；
 // rmv/解析失败自动兜底 flop 全屏播放器——FlopPlayer 由 VideoReplayProvider 按需挂）
 import { VideoReplayProvider, VideoReplayBoard, VideoReplayButton } from "@/components/VideoReplay";
+import { VideoSelfDeleteButton } from "@/components/VideoSelfDeleteButton";
 import { VideoAnalysisRadar } from "@/components/VideoAnalysis";
 import { getVideoAnalysis } from "@/lib/videoanalysis";
 import { ensureVideoBoard } from "@/lib/videometrics";
@@ -41,11 +42,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!videoId) return {};
   const video = await getVideoDetail(videoId);
   if (!video) return {};
-  // 屏蔽盘不给普通访客（含爬虫/meta 抓取）任何元数据；管理员仍可看（后台审核链
-  // 直接链到前台详情页，2026-10-22 张老师指令：屏蔽不进前台、后台除外）
+  // 屏蔽盘不给普通访客（含爬虫/meta 抓取）任何元数据；管理员与录像主人可见
+  // （后台审核链直接链到前台详情页，2026-10-22；本人自助删除入口 2026-10-23）
   if (video.status === VIDEO_STATUS.BANNED) {
     const session = await getSession();
-    if (!session || !isManager(session.role)) return {};
+    if (!session || (!isManager(session.role) && session.uid !== video.author?.id)) return {};
   }
   const level = video.level as VideoLevel;
   const time = scoreTime(videoScores(video.board3bv, video.realTime, level).time);
@@ -70,9 +71,11 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
   if (!video) notFound();
   // 2026-10-22 张老师指令：已屏蔽录像不进前台（列表/搜索/动态已滤，此处详情页
   // 补口）——仅管理员可见（后台审核/管理页直接链到本页播放与下载，属「后台除外」）
+  // 2026-10-23 张老师需求补充：录像主人本人也放行——屏蔽后只在个人主页可见（红 ✕），
+  // 本人从详情页可自助删除（下载按钮旁红色删除钮）
   if (video.status === VIDEO_STATUS.BANNED) {
     const guard = await getSession();
-    if (!guard || !isManager(guard.role)) notFound();
+    if (!guard || (!isManager(guard.role) && guard.uid !== video.author?.id)) notFound();
   }
   // 2026-10-22：先取 session 再取评论——本人待审行（status=5）按 viewerUid 放行
   const session = await getSession();
@@ -193,6 +196,11 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
               </svg>
               下载
             </a>
+            {/* 2026-10-23 张老师需求：本人查看自己的屏蔽盘时，下载按钮旁提供红色
+                「删除」按钮——确认后彻底删除该录像（连带评论/引用动态），跳回个人主页 */}
+            {video.status === VIDEO_STATUS.BANNED && session && session.uid === video.author?.id && (
+              <VideoSelfDeleteButton videoId={video.id} userId={session.uid} />
+            )}
             <p className="counters">
               <span className="clicks">
                 点击<em>{video.clicks}</em>

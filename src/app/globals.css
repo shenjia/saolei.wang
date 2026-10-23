@@ -5914,6 +5914,16 @@ body #video_list .score_3bvs a:hover em {
 #page .video_table td.score.current .reviewed {
   color: #a6e22e;
 }
+/* 屏蔽盘红 ✕（2026-10-23 张老师需求）：屏蔽录像仅本人主页可见，✓ 同位置红 ✕。
+   红取 .button.danger 同款 #e60657（站点标准红）；排序命中列黄时保持红不染 */
+.video_table td.score .banned {
+  margin-left: 5px;
+  font-size: 10px;
+  color: #e60657;
+}
+#page .video_table td.score.current .banned {
+  color: #e60657;
+}
 
 /* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、搜索框贴行尾 */
 #page .page_head .video_nav {
