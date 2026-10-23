@@ -450,10 +450,12 @@ export async function locateReply(
   return { post: N(row.post), page: Math.floor(before / BBS_REPLY_PAGESIZE) + 1 };
 }
 
-/** 最新主题（首页右栏用，移植 Title_Index_New；按发布时间取最新，置顶帖不掺入） */
+/** 最新主题（首页右栏用，移植 Title_Index_New；按发布时间取最新）
+ *  2026-10-24 张老师要求：置顶帖不再排除——置顶在前、普通新帖补足（getPostList
+ *  本就 isPinned desc 优先排序，去掉过滤后即「列表页同款排序的前 N 条」） */
 export async function getLatestPosts(limit = 8): Promise<BbsPostItem[]> {
   const { posts } = await getPostList({ order: "post", page: 1 });
-  return posts.filter((p) => !p.isPinned).slice(0, limit);
+  return posts.slice(0, limit);
 }
 
 /** 加载更多（页码语义，BbsFeed 客户端组件 + /api/bbs/more 复用 getPostList） */
