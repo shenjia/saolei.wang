@@ -12,6 +12,7 @@ import { BanUserDialog } from "@/components/admin/BanUserDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { MESSAGE_CONTENT_LIMIT } from "@/lib/message";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "玩家详情 | 管理后台" };
@@ -206,6 +207,29 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
           </div>
         </AdminCard>
       )}
+
+      {/* ---------- 发送系统通知（manager 及以上） ---------- */}
+      <AdminCard title="发送系统通知">
+        <AdminForm
+          op="user.sendSystemMessage"
+          params={{ id: u.id }}
+          layout="stack"
+          fields={[
+            {
+              name: "content",
+              label: `通知内容（最多 ${MESSAGE_CONTENT_LIMIT} 字，超出截断）`,
+              type: "textarea",
+              placeholder: `例如：你好，你上传的录像 #123 已通过审核，感谢分享。`,
+              required: true,
+            },
+          ]}
+          submitLabel="发送系统消息"
+          confirm={`确认向「${u.chineseName}」发送这条系统消息？发送后立即进入对方收件箱，不可撤回。`}
+        />
+        <div className="admin_hint" style={{ marginTop: 8 }}>
+          以「系统消息」身份发送（无寄件人），对方收件箱立即可见并计未读；管理员与超级管理员均可操作，操作记入日志。
+        </div>
+      </AdminCard>
 
       {/* ---------- 最近录像 ---------- */}
       <AdminCard title="最近录像" tight more={<Link href={`/admin/videos?q=${u.id}`}>该玩家全部录像 →</Link>}>

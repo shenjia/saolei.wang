@@ -33,6 +33,9 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "user.setRole": "administrator",
   "user.resetPassword": "administrator",
   "user.delete": "administrator",
+  // 给单个玩家发系统消息（2026-10-23）：manager 可用——与头像审核通知同级触达能力；
+  // 全站广播 message.broadcast 仍是超管专属
+  "user.sendSystemMessage": "manager",
   "video.review": "manager",
   "video.batchReview": "manager",
   "video.markWatched": "manager",
@@ -582,6 +585,25 @@ async function dispatch(
     }
 
     // ---------- 站内信 ----------
+    case "user.sendSystemMessage": {
+      // 给单个玩家发系统通知（2026-10-23 张老师需求）：后台用户详情页入口，
+      // is_system=1 无真实寄件人，收件人以「系统消息」呈现
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
+      const content = toText(p.content, 200);
+      if (!content) return { ok: false, error: "请填写消息内容" };
+      const user = await prisma.user.findUnique({
+        where: { id: BigInt(id) },
+        select: { chineseName: true },
+      });
+      if (!user) return { ok: false, error: "玩家不存在" };
+      await sendSystemMessage(id, content);
+      return {
+        ok: true,
+        message: `已向 ${user.chineseName}（#${id}）发送系统消息：「${content.slice(0, 30)}${content.length > 30 ? "…" : ""}」`,
+      };
+    }
+
     case "message.broadcast": {
       const content = toText(p.content, 200);
       if (!content) return { ok: false, error: "请填写广播内容" };

@@ -32,6 +32,7 @@ export const OP_LABELS: Record<string, string> = {
   "bbs.deleteReply": "删除回复",
   "bbs.setReplyStatus": "处理回复",
   "news.delete": "删除动态",
+  "user.sendSystemMessage": "发送系统消息",
   "message.broadcast": "群发站内信",
   "rank.snapshot": "生成排行快照",
   "avatar.review": "审核玩家头像",
