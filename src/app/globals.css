@@ -1698,6 +1698,17 @@ del[data-tip]:hover::after {
   height: 24px;
   width: 24px;
 }
+/* 论坛正文外链（2026-10-23 张老师）：元帅金 #e6db74（与军衔 marshal 档文字同色）。
+   ubb() 已把站内绝对链接重写为相对路径，[href^="http"] / [href^="//"] 只命中外链，
+   站内相对链接保持全局灰；hover 沿用全站 a:hover 惯例亮绿 #a6e22e（特异性压过 legacy） */
+.bbs_content a[href^="http"],
+.bbs_content a[href^="//"] {
+  color: #e6db74;
+}
+.bbs_content a[href^="http"]:hover,
+.bbs_content a[href^="//"]:hover {
+  color: #a6e22e;
+}
 .bbs_content blockquote {
   border-left: 4px solid #a59f85;
   background: #33332e;
