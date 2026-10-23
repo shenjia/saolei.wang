@@ -10447,3 +10447,26 @@ body #page .word_terms .desc {
 #news .table td a.score.news_vscore:hover {
   color: #a6e22e;
 }
+
+/* ---- API key 签发弹窗（2026-10-24）：key 明文展示块 ----
+   弹窗壳复用 .ban_overlay/.ban_dialog；key 大字等宽、点击即复制，
+   金色 #e6db74 与站内 code 语义一致，长 key 自动换行不断流。 */
+.apikey_value {
+  font-family: Menlo, Consolas, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #e6db74;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed #75715e;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 4px 0 18px;
+  word-break: break-all;
+  cursor: pointer;
+  user-select: all;
+  transition: border-color 0.15s;
+}
+.apikey_value:hover {
+  border-color: #e6db74;
+}

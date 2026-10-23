@@ -6,7 +6,8 @@
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin/guard";
 import { AdminCard } from "@/components/admin/Widgets";
-import { AdminAction, AdminForm } from "@/components/admin/AdminAction";
+import { AdminAction } from "@/components/admin/AdminAction";
+import { ApiKeyCreateForm } from "@/components/admin/ApiKeyCreateForm";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -24,18 +25,7 @@ export default async function AdminApiKeysPage() {
       </div>
 
       <AdminCard title="签发新 key">
-        <AdminForm
-          op="apikey.create"
-          layout="stack"
-          submitLabel="签发"
-          fields={[
-            { name: "name", label: "合作方名称", placeholder: "如 openms.top", required: true, hint: "限速与用量统计的维度" },
-            { name: "note", label: "备注", placeholder: "用途 / 联系方式（可选）" },
-          ]}
-        />
-        <p className="admin_hint" style={{ marginTop: 8 }}>
-          明文 key 仅在签发成功的提示里显示一次，请当场复制发给合作方；库里只存哈希，后台无法再查明文。
-        </p>
+        <ApiKeyCreateForm />
       </AdminCard>
 
       <AdminCard title={`已签发 key（${keys.length}）`} tight>
