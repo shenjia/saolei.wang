@@ -19,7 +19,7 @@ export default async function VideoUploadPage() {
         <h1>上传录像</h1>
         <p>
           本站现接受 <em>Minesweeper Arbiter 0.52.3</em> 生成的 <em>avf</em> 录像，以及{" "}
-          <em>元扫雷 3.3.4</em> 生成的 <em>evf</em> 录像。更低版本生成的录像不被支持。
+          <em>元扫雷 3.3.4</em> 生成的 <em>evf</em> 录像。
         </p>
         <p>上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。</p>
         <hr />
