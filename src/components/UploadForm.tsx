@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "./Toast";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvf } from "@/lib/mvf";
-import { formatRawvf } from "@/lib/rawvf";
+import { evfToRawvf } from "@/lib/evf";
+import { formatRawvf, checkProgramVersion } from "@/lib/rawvf";
 import { scoreTime } from "@/lib/format";
 
 const MAX_SIZE = 500 * 1024; // 与服务端一致（旧版 plupload max_file_size: 500kb）
@@ -78,9 +79,21 @@ export function UploadForm() {
       file
         .arrayBuffer()
         .then((ab) => {
-          const lines = ext === "avf" ? avfToRawvf(new Uint8Array(ab)) : mvfToRawvf(new Uint8Array(ab));
+          const bytes = new Uint8Array(ab);
+          const lines =
+            ext === "avf" ? avfToRawvf(bytes) : ext === "evf" ? evfToRawvf(bytes) : mvfToRawvf(bytes);
           if (!lines) return;
-          const { level, timeMs, bbbv, noflag } = formatRawvf(lines);
+          const { level, timeMs, bbbv, noflag, program, version } = formatRawvf(lines);
+          // 最低软件版本（与服务端 checkProgramVersion 同源）：低于即直接标红拦下，不给上传
+          const tooOld = checkProgramVersion(program, version);
+          if (tooOld) {
+            applyItems(
+              itemsRef.current.map((i) =>
+                i.key === key ? { ...i, status: "invalid" as const, message: tooOld } : i
+              )
+            );
+            return;
+          }
           if (level === "beg" || level === "int" || level === "exp") {
             const meta: Meta = { level, timeMs, bbbv, noflag };
             applyItems(itemsRef.current.map((i) => (i.key === key ? { ...i, meta } : i)));
@@ -104,9 +117,9 @@ export function UploadForm() {
         const ext = file.name.slice(file.name.lastIndexOf(".") + 1).toLowerCase();
         let status: ItemStatus = "pending";
         let message = "";
-        if (ext !== "mvf" && ext !== "avf") {
+        if (ext !== "mvf" && ext !== "avf" && ext !== "evf") {
           status = "invalid";
-          message = "只支持 mvf / avf 格式的录像";
+          message = "只支持 mvf / avf / evf 格式的录像";
         } else if (file.size > MAX_SIZE) {
           status = "invalid";
           message = "文件大小不能超过 500KB";
@@ -247,13 +260,13 @@ export function UploadForm() {
           {dragOver ? "松开鼠标即可添加" : "点击选择录像文件，或将文件拖拽到页面任意位置"}
         </span>
         <span style={{ display: "block", color: "#49483e", fontSize: 12, lineHeight: "20px" }}>
-          支持 mvf / avf，可批量选择，单个文件不超过 500KB
+          支持 mvf / avf / evf，可批量选择，单个文件不超过 500KB
         </span>
       </div>
       <input
         ref={inputRef}
         type="file"
-        accept=".mvf,.avf"
+        accept=".mvf,.avf,.evf"
         multiple
         style={{ display: "none" }}
         onChange={(e) => {

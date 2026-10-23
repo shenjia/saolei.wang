@@ -23,6 +23,7 @@
 import { mvfToRawvfBest } from "./mvf-best";
 import { avfToRawvf } from "./avf";
 import { rmvToRawvf } from "./rmv";
+import { evfToRawvf } from "./evf";
 import { formatRawvf, type ParsedVideo } from "./rawvf";
 import { replayCounts, type NormEvent, type ReplayCounts } from "./replay-core";
 
@@ -86,7 +87,9 @@ export function parseVideoBinary(buf: Uint8Array, ext: string): ParsedVideo | nu
           ? (mvfToRawvfBest(b)?.lines ?? null) // 择优口径：雷达指标与判定/回放同源（mvf-best.ts）
           : ext === "rmv"
             ? rmvToRawvf(b)
-            : null;
+            : ext === "evf"
+              ? evfToRawvf(b) // evf（元扫雷）：转换器内部已折算 16px 口径并消歧非标准码
+              : null;
     return lines ? formatRawvf(lines) : null;
   } catch {
     // 少数历史文件残缺（实测跑批每千余盘遇到一两个 mvf 提前 EOF），直接算无指标，不中断跑批

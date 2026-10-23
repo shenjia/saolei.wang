@@ -53,6 +53,41 @@ export function renderBoard(board: string[]): string {
 }
 
 /**
+ * 上传最低软件版本检查（2026-10-24 张老师定稿）：
+ *   Minesweeper Arbiter 0.52.3（avf）、元扫雷 3.3.4（evf）——低于版本生成的录像上传阶段拦截。
+ * 口径说明：
+ *   · avf 头部的版本字节只到主次版本（0.49/0.50/0.51/0.52，库内四档分布实证），
+ *     补丁号（0.52.x 内的 .3）不在文件里——0.52 系列全放行，0.51 及以下拦。
+ *   · evf 的 Software 字段自报「元X.Y.Z」（转换器已归一为「元扫雷X.Y.Z」），带完整补丁号，精确比较。
+ *   · 其他软件（Clone/mvf 已有 "<=0.96" 检查、Viennasweeper 转码等）不在此规则内，返回 null 放行。
+ * 返回 null = 通过；返回字符串 = 面向用户的拒绝原因。
+ */
+export function checkProgramVersion(program: string, version: string): string | null {
+  const verCompare = (a: number[], b: number[]) => {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const d = (a[i] ?? 0) - (b[i] ?? 0);
+      if (d) return d;
+    }
+    return 0;
+  };
+
+  const p = program.trim();
+  if (/^Arbiter\b/.test(p)) {
+    // Arbiter：version 形如 "0.52"（fs 版 "R2" 等非常规串不在此规则内，放行）
+    const m = /^(\d+)\.(\d+)$/.exec(version.trim());
+    if (m && verCompare([Number(m[1]), Number(m[2])], [0, 52]) < 0) {
+      return `Minesweeper Arbiter 版本过低（${version.trim()}），本站接受 0.52.3 及以上版本生成的录像`;
+    }
+    return null;
+  }
+  const mm = /^元扫雷(\d+(?:\.\d+){1,3})$/.exec(p);
+  if (mm && verCompare(mm[1].split(".").map(Number), [3, 3, 4]) < 0) {
+    return `元扫雷版本过低（${mm[1]}），本站接受 3.3.4 及以上版本生成的录像`;
+  }
+  return null;
+}
+
+/**
  * Parser::format —— 从 RawVF 文本行提取结构化字段
  * 忠实复刻 PHP 的两个怪癖：
  * 1. 值只取第一个冒号后的第一段（`explode(':')[1]`，含冒号的值会被截断，如 Timestamp）

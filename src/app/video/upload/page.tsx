@@ -1,4 +1,6 @@
-// 上传录像页（移植 views/video/upload；旧版文案说只收 avf，与解析器实际行为不符，按实际写）
+// 上传录像页（移植 views/video/upload；2026-10-23 张老师定稿文案：只列 avf / evf；
+// 2026-10-24 补版本号与低版本拦截口径——检查实现在 rawvf.checkProgramVersion。
+// 注意 mvf 仍在上传白名单内——文案是给用户看的重点，不代表格式支持面收窄）
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
@@ -16,8 +18,8 @@ export default async function VideoUploadPage() {
       <div className="video_upload box center">
         <h1>上传录像</h1>
         <p>
-          本站接受 <em>Minesweeper Clone</em> 保存的 <em>mvf</em> 录像与{" "}
-          <em>Minesweeper Arbiter</em> 保存的 <em>avf</em> 录像。
+          本站现接受 <em>Minesweeper Arbiter 0.52.3</em> 生成的 <em>avf</em> 录像，以及{" "}
+          <em>元扫雷 3.3.4</em> 生成的 <em>evf</em> 录像。更低版本生成的录像不被支持。
         </p>
         <p>上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。</p>
         <hr />

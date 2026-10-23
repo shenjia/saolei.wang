@@ -42,6 +42,7 @@ import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { rmvToRawvf } from "@/lib/rmv";
+import { evfToRawvf } from "@/lib/evf";
 import { formatRawvf } from "@/lib/rawvf";
 import { LEVEL_NAMES, type VideoLevel } from "@/lib/config";
 import type { MetricKey, VideoAnalysisPoint } from "@/lib/videoscore";
@@ -81,7 +82,9 @@ export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?:
           ? (mvfToRawvfBest(buf)?.lines ?? null) // 择优口径：回放与判定同源（mvf-best.ts）
           : ext === "rmv"
             ? rmvToRawvf(buf)
-            : null;
+            : ext === "evf"
+              ? evfToRawvf(buf) // evf（元扫雷）：转换器内部已折算 16px 口径并消歧非标准码
+              : null;
   } catch {
     return null;
   }
@@ -1543,7 +1546,7 @@ export function VideoReplayProvider({
     const cols = rows ? (tbody as HTMLTableSectionElement).rows[0].cells.length : 0;
     if (!rows || !cols) return false;
     const ext = (filepath.split(".").pop() || "").toLowerCase();
-    if (ext !== "avf" && ext !== "mvf" && ext !== "rmv") {
+    if (ext !== "avf" && ext !== "mvf" && ext !== "rmv" && ext !== "evf") {
       // rmf 等站内无解析器的格式 → flop 播放器兜底
       setFlopUri(uri);
       return false;
@@ -1637,8 +1640,8 @@ export function VideoReplayProvider({
     /* 预检：不支持原地解析的格式（rmv / rmf 等）没有锁盘试玩能力（走 flop
        播放器兜底，无布雷数据）——直接提示，不进全屏 */
     const ext = (filepath.split(".").pop() || "").toLowerCase();
-    if (ext !== "avf" && ext !== "mvf") {
-      notify("该录像格式不支持试玩（仅 avf / mvf）");
+    if (ext !== "avf" && ext !== "mvf" && ext !== "evf") {
+      notify("该录像格式不支持试玩（仅 avf / mvf / evf）");
       return;
     }
     void (async () => {

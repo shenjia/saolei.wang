@@ -83,7 +83,8 @@ function PlayerBody({ target, onClose }: { target: AdminPlayerTarget; onClose: (
 
   /* 打开即加载文件（弹层本身就是「我要看这盘」的意图） */
   const ext = (target.filepath.split(".").pop() || "").toLowerCase();
-  const unsupportedExt = ext !== "avf" && ext !== "mvf" && ext !== "rmv";
+  // evf（元扫雷）：与前台 VideoReplay.parseReplayData 同一套解析分支（2026-10-24 补，此前漏接导致后台点播放无响应）
+  const unsupportedExt = ext !== "avf" && ext !== "mvf" && ext !== "rmv" && ext !== "evf";
   useEffect(() => {
     if (unsupportedExt) return;
     const uri = `/videos${target.filepath}`;

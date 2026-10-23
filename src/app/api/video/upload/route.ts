@@ -11,7 +11,8 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvfBest } from "@/lib/mvf-best";
-import { formatRawvf } from "@/lib/rawvf";
+import { evfToRawvf } from "@/lib/evf";
+import { formatRawvf, checkProgramVersion } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { ensureVideoTriage } from "@/lib/videometrics";
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
   if (buf.length > MAX_SIZE) return fail("文件大小不能超过 500KB");
 
   const ext = path.extname(file.name ?? "").slice(1).toLowerCase();
-  if (ext !== "mvf" && ext !== "avf") return fail("只支持 mvf / avf 格式的录像");
+  if (ext !== "mvf" && ext !== "avf" && ext !== "evf") return fail("只支持 mvf / avf / evf 格式的录像");
 
   // md5 去重（移植 Video::hashExists）
   const hash = createHash("md5").update(buf).digest("hex");
@@ -56,7 +57,12 @@ export async function POST(req: Request) {
   let lines: string[] | null = null;
   try {
     // mvf 走择优口径（mvf-best.ts：按下优先判胜即用，非胜时松开优先救场）
-    lines = ext === "avf" ? avfToRawvf(buf) : (mvfToRawvfBest(buf)?.lines ?? null);
+    lines =
+      ext === "avf"
+        ? avfToRawvf(buf)
+        : ext === "evf"
+          ? evfToRawvf(buf) // evf（元扫雷）：转换器内部完成 16px 口径折算与非标准码消歧
+          : (mvfToRawvfBest(buf)?.lines ?? null);
   } catch {
     return fail("录像文件解析失败");
   }
@@ -64,6 +70,10 @@ export async function POST(req: Request) {
   const parsed = formatRawvf(lines);
 
   if (parsed.version === "<=0.96") return fail("软件版本过低");
+  // 最低软件版本（2026-10-24 张老师定稿）：Arbiter 0.52.3（avf 头版本字节只到 0.52，系列内全放）、
+  // 元扫雷 3.3.4（evf Software 自报全版本号，精确比较）；低于即拦，共享检查在 rawvf.checkProgramVersion
+  const tooOld = checkProgramVersion(parsed.program, parsed.version);
+  if (tooOld) return fail(tooOld);
   /* 在线玩生成的录像拒绝上传（2026-10-14 五期）：avfwrite 在 Program 字段写入
      ONLINE_PROGRAM_MARKER 标识，命中即拒——在线玩是纯前端娱乐局，成绩不入排行 */
   if (parsed.program.includes(ONLINE_PROGRAM_MARKER)) {
