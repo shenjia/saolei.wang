@@ -1,7 +1,8 @@
-// 论坛新帖（移植 2008 版首页 BBS/Index_New.asp）：单行列表 + [板块] + 标题 + .精
+// 论坛新帖（移植 2008 版首页 BBS/Index_New.asp）：单行列表 + [板块] + 标题
 // 2026-09-24 张老师要求：去掉标题前的黄色方块与行尾 M-D 日期（腾出宽度让长标题显示更全）
 // 2026-09-26 张老师要求：分类标签与论坛列表页同款徽章渲染（board_tag 四板块配色）
-// 2026-10-24 张老师要求：包含置顶帖（▲ 标与 /bbs 列表页同款），置顶在前、新帖补足
+// 2026-10-24 张老师要求：包含置顶帖（置顶在前、新帖补足）；同日再定：
+// 置顶/精华尾部标记（▲/.精）一律不加，行内所有空间留给文章标题
 
 import Link from "next/link";
 import { BBS_BOARD_NAMES, getLatestPosts } from "@/lib/bbs";
@@ -39,11 +40,10 @@ export async function BbsLatest() {
                     {BBS_BOARD_NAMES[p.board]}
                   </span>
                   {/* 2026-10-23（张老师）：取消论坛高亮——首页新帖标题不再加 .high 白显 */}
+                  {/* 2026-10-24（张老师）：置顶/精华尾部标记（▲/.精）不再渲染，空间全留给标题 */}
                   <Link href={`/bbs/${p.id}`} target="_blank" className="t">
                     {p.title}
                   </Link>
-                  {p.isPinned && <span className="pin">▲</span>}
-                  {p.isNice && <span className="nice">.精</span>}
                 </div>
               </td>
             </tr>
