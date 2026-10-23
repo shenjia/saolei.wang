@@ -126,11 +126,14 @@ async function aggregate(): Promise<TrafficOverview> {
   const ydayEnd = now - 86400;
 
   // 管理员自己的浏览剔除，避免污染 UV/PV/来源/入口/流失
+  // 2026-10-23 补：爬虫行一并剔除——meta-externalagent 等 AI 爬虫不存 cookie，
+  // 每次请求一个新 vid，把 UV 刷爆（当天 2841 行 bot = 2841 个假 UV）；track 端
+  // 已同时改为 bot 不落库，此处过滤兜住历史行。设备分布同理不再计入爬虫。
   // 练习计数走 practice_daily 日汇总表（2026-10-22 张老师定：不逐盘落行；
   // 每人每日一行 UPSERT，游客并入 user_id=0），与 page_view 并行
   const [rows, practiceRows] = await Promise.all([
     prisma.pageView.findMany({
-      where: { isAdmin: false, createTime: { gte: d30 } },
+      where: { isAdmin: false, uaClass: { not: "bot" }, createTime: { gte: d30 } },
       select: {
         path: true,
         visitorId: true,
@@ -478,7 +481,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v6"],
+  ["admin-traffic", "v7"],
   { revalidate: 300 }
 );
 

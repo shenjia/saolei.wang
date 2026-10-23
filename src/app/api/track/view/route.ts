@@ -61,6 +61,16 @@ function ownHostsFromRequest(request: NextRequest): Set<string> {
 }
 
 export async function POST(request: NextRequest) {
+  // 爬虫 UA 直接拒收（2026-10-23）：meta-externalagent（Meta AI 爬虫）当天从 100 个
+  // IP 抓 /video 列表 2800+ 次且执行 JS 触发本埋点，但不存 cookie → 每次都生成新
+  // vid → UV 虚高 30 倍。爬虫行对统计毫无价值，源头不落库；nginx UA 黑名单是第一道
+  // 防线，这里是兜底（UA 完全伪装成浏览器的归 ua_class=desktop 走量小不致命）。
+  const ua = request.headers.get("user-agent");
+  const uaClass = classifyUa(ua);
+  if (uaClass === "bot") {
+    return NextResponse.json({ ok: true, skipped: true, bot: true });
+  }
+
   let body: { path?: string; referrer?: string; clientId?: string };
   try {
     body = await request.json();
@@ -128,8 +138,8 @@ export async function POST(request: NextRequest) {
       path,
       visitorId,
       ip: getClientIp(request),
-      ua: request.headers.get("user-agent")?.slice(0, 255) ?? null,
-      uaClass: classifyUa(request.headers.get("user-agent")),
+      ua: ua?.slice(0, 255) ?? null,
+      uaClass,
       referrer: refClass,
       isEntry,
       sessionId,
