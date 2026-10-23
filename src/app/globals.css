@@ -2319,6 +2319,20 @@ body #page.message_list > .box:first-child .page_head {
   text-decoration: underline;
 }
 
+/* 消息内容列完整显示（2026-10-23 张老师要求：超长消息不再单行省略）：
+   解除 .table.bbs_list td 的 nowrap/ellipsis（论坛列表保持单行省略不动），
+   长消息多行折行完整显示，行高沿用站内多行正文惯例（bbs_content 同款 1.8），
+   word-break: break-all 保证长邮箱/长 URL 可断行 */
+#page.message_list .table.bbs_list td.msg_content {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.8;
+  word-break: break-all;
+  vertical-align: top;
+}
+/* 折行后「新」字标与「回复」入口随正文流排布（inline 元素自然跟随，无需额外处理）；
+   已读置灰、系统黄等颜色规则不受影响（均落在同选择器前缀，特异性不变） */
+
 /* 未读消息角标 */
 .badge {
   display: inline-block;
