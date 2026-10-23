@@ -60,7 +60,9 @@ function ScoreCell({
   return (
     <td className={cls}>
       {videoId ? (
-        <Link href={`/video/${videoId}`} target="_blank" title={neg ? undefined : "点击查看录像"}>
+        /* prefetch={false}：_blank 新标签页用不上预取缓存（Next 16 源码实证 mountLinkInstance
+            不看 target，照发预取请求白吃 nginx 限速配额）——排行页 Link 密度全站最高，是切榜 429 主因 */
+        <Link href={`/video/${videoId}`} target="_blank" prefetch={false} title={neg ? undefined : "点击查看录像"}>
           {inner}
         </Link>
       ) : (
@@ -106,7 +108,7 @@ export function RankingRowLine({
       </td>
       <td className="name">
         {/* 2026-10-23 张老师要求：排行表人名新标签页打开，不破坏榜单浏览位置 */}
-        <Link href={`/user/${row.id}`} target="_blank" title="点击查看个人信息">
+        <Link href={`/user/${row.id}`} target="_blank" prefetch={false} title="点击查看个人信息">
           {row.chineseName}
         </Link>
         <span className={`gender ${row.sex ? "male" : "female"} small`}></span>

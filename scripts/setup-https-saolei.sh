@@ -88,6 +88,12 @@ log_format spider_saolei '$http_x_forwarded_for - $time_iso8601 "$request" $stat
 # map / limit_req_zone 定义在 /etc/nginx/conf.d/00-saolei-antibot.conf（软链到
 # /home/deploy/nginx-conf/00-saolei-antibot.conf，root-antibot-setup.sh 安装）。
 # 本脚本重写本文件时，server 块内的挂载点（if 403 / limit_req）必须原样保留。
+#
+# 2026-10-23 限速豁免（静态资源）：limit_req 原挂 server 顶层，一次页面加载
+# （HTML+JS chunk+CSS+头像 30-50 请求）叠加 Link prefetch 即打满 burst=20 → 玩家
+# 切排行 tab 连点出 429。开源 nginx 无 limit_req off 参数——改为把 general 限速
+# 下沉到 443 的动态 location /（只管 HTML/RSC/API）；静态 location 各自成块
+# 不带 limit_req，天然不限速。/videos/ 档不变。
 
 server {
     listen 80;
@@ -119,8 +125,9 @@ server {
     # ========== 反爬（2026-10-21，定义见 00-saolei-antibot.conf）==========
     # UA 黑名单（空 UA / 脚本库 UA）直接 403；搜索引擎 bot 与 curl 不在黑名单
     if ($saolei_bad_ua) { return 403; }
-    # 全局限速 10r/s burst 20（真人无感，全量爬取会被拖到不可用）
-    limit_req zone=saolei_general burst=20 nodelay;
+    # 注意：general 限速不在此挂载（2026-10-23 下沉到 443 的动态 location /，
+    # 见下方——server 顶层挂载会把 JS chunk/头像等静态请求也计入 burst，玩家
+    # 切排行 tab 连点即 429；/videos/ 档仍在专属 location 内挂载）
 
     # ========== 静态缓存（2026-10-20）==========
     # 背景：Next 代理对 public/ 资源一律 max-age=0 每请求回源验证；这里按类型直读磁盘。
@@ -163,7 +170,8 @@ server {
 
     # 录像实体文件（/videos/** gitignore 不入库，单独 rsync，部署 --delete 不碰）
     location ^~ /videos/ {
-        # 录像文件带宽保护：56 万文件，狂抓打爆带宽（2026-10-21）
+        # 录像文件带宽保护：56 万文件，狂抓打爆带宽（2026-10-21）。
+        # videos 档在本 location 内独立挂载（general 已下沉到动态 location /，两档不叠加）
         limit_req zone=saolei_videos burst=6 nodelay;
         alias /home/deploy/saolei.wang/videos/;
         expires 30d;
@@ -193,6 +201,10 @@ server {
     # ========== 静态缓存段结束 ==========
 
     location / {
+        # general 限速下沉至此（2026-10-23）：只管动态路径（HTML/RSC/API）；
+        # 静态 location 各自成块不带 limit_req 即天然不限速（server 顶层挂载会把
+        # JS chunk/头像也算进 burst，玩家切排行 tab 连点即 429）
+        limit_req zone=saolei_general burst=20 nodelay;
         proxy_pass http://saolei_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

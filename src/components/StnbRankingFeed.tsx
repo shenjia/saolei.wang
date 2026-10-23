@@ -64,7 +64,7 @@ function StnbBar({ level, v, b, den, active }: {
     <td>
       <span className={`pbar${active ? " current" : ""}`} title={`${LEVEL_NAMES[level]}最高 ${v.toFixed(1)}（全站纪录 ${den.toFixed(1)}）`}>
         <span className="pnum">
-          <Link href={`/video/${b.vid}`} target="_blank" data-tip={bestTip(level, b)}>
+          <Link href={`/video/${b.vid}`} target="_blank" prefetch={false} data-tip={bestTip(level, b)}>
             <em>{v.toFixed(1)}</em>
           </Link>
         </span>
@@ -316,7 +316,7 @@ export function StnbRankingFeed({
                   第&nbsp;<em>{u.rank}</em>&nbsp;位
                 </td>
                 <td className="name">
-                  <Link href={`/user/${u.id}`} target="_blank" title="点击查看个人信息">
+                  <Link href={`/user/${u.id}`} target="_blank" prefetch={false} title="点击查看个人信息">
                     {u.chineseName}
                   </Link>
                   <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
