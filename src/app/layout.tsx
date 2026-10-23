@@ -125,7 +125,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                         <li>
                           <Link href="/account">
                             <IconGear />
-                            账户管理
+                            账户设置
                           </Link>
                         </li>
                         {isManager(session.role) && (

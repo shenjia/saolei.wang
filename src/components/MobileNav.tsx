@@ -146,7 +146,7 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
               <li>
                 <Link href="/account">
                   <IconGear />
-                  账户管理
+                  账户设置
                 </Link>
               </li>
               {isManager(user.role) && (
