@@ -1,15 +1,15 @@
 // 管理后台 · 录像管理（2026-09-24）
 // 全量录像检索与处置：级别 / 状态 / NF / 时间范围 / 玩家，行内可审核、下载、彻底删除。
+// 2026-10-23：tbody 收进客户端 AdminVideoTable——「时间」列点击弹全屏播放器（与审核页同一套）。
 
 import Link from "next/link";
 import { Suspense } from "react";
 import { getSession } from "@/lib/auth";
-import { USER_ROLE, VIDEO_STATUS } from "@/lib/config";
+import { USER_ROLE } from "@/lib/config";
 import { getVideoListAdmin, type VideoFilter } from "@/lib/admin/data";
-import { AdminAction } from "@/components/admin/AdminAction";
 import { AdminFilters } from "@/components/admin/AdminFilters";
-import { AdminCard, AdminPager, LevelTag, StatusTag } from "@/components/admin/Widgets";
-import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { AdminCard, AdminPager } from "@/components/admin/Widgets";
+import { AdminVideoTable } from "@/components/admin/AdminVideoTable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "录像管理 | 管理后台" };
@@ -102,84 +102,7 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
                 <th>操作</th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map((v) => (
-                <tr key={v.id} className={v.status === 0 ? "off" : undefined}>
-                  <td className="c">
-                    <Link className="link" href={`/video/${v.id}`} target="_blank">
-                      {v.id}
-                    </Link>
-                  </td>
-                  <td>
-                    <Link className="link" href={`/admin/users/${v.user}`}>
-                      {v.author?.chineseName ?? `#${v.user}`}
-                    </Link>
-                  </td>
-                  <td className="c">
-                    <LevelTag level={v.level} />
-                  </td>
-                  <td className="num strong">{v.realTime ? scoreTime(v.realTime) : "—"}</td>
-                  <td className="num">{v.board3bv && v.realTime ? score3bvs(Math.round((v.board3bv * 1e6) / v.realTime)) : "—"}</td>
-                  <td className="num">{v.board3bv || "—"}</td>
-                  <td className="c">{v.noflag ? <span className="admin_tag info">NF</span> : <span className="sub">标雷</span>}</td>
-                  <td className="sub">{[v.software, v.version].filter(Boolean).join(" ") || "—"}</td>
-                  <td className="c">
-                    <StatusTag status={v.status} />
-                  </td>
-                  <td className="sub">
-                    {v.reviewer ? (
-                      <>
-                        {v.reviewer.chineseName}
-                        <br />
-                        {v.reviewTime ? timeOpposite(v.reviewTime) : ""}
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="num">{v.clicks || "—"}</td>
-                  <td className="num">{v.downloads || "—"}</td>
-                  <td className="num">{v.comments || "—"}</td>
-                  <td className="sub">{v.createTime ? timeOpposite(v.createTime) : "—"}</td>
-                  <td className="ops">
-                    {v.status !== VIDEO_STATUS.REVIEWED && (
-                      <AdminAction
-                        op="video.review"
-                        params={{ id: v.id, status: VIDEO_STATUS.REVIEWED }}
-                        label="通过"
-                        variant="primary"
-                        confirm={`确认通过录像 #${v.id}？将写入成绩并可能刷新纪录动态。`}
-                      />
-                    )}
-                    {v.status !== VIDEO_STATUS.BANNED && (
-                      <AdminAction
-                        op="video.review"
-                        params={{ id: v.id, status: VIDEO_STATUS.BANNED }}
-                        label="屏蔽"
-                        variant="danger"
-                        confirm={`确认屏蔽录像 #${v.id}？该录像对应的最好成绩会被回退。`}
-                      />
-                    )}
-                    {isSuper && (
-                      <AdminAction
-                        op="video.delete"
-                        params={{ id: v.id }}
-                        label="删除"
-                        variant="danger"
-                        confirm={`⚠️ 彻底删除录像 #${v.id}？将连带删除解析信息、评论与引用它的动态，不可恢复。`}
-                      />
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={15}>
-                    <div className="admin_empty">没有符合条件的录像</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
+            <AdminVideoTable rows={rows} isSuper={isSuper} />
           </table>
         </div>
 
