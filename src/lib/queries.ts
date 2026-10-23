@@ -1129,19 +1129,20 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boo
 }
 
 /**
- * 热门录像（/video 右栏版块，2026-09-26 张老师要求）：
- * 按上传时间倒序显示「至少两条评论」的录像，只带作者（名称+军衔）/级别/时间成绩。
- * 口径与 getVideoList 的 order=comments（videoStat.comments>0）一致，此处收紧为 ≥2。
- * 2026-10-22 张老师指令：屏蔽/待审不进前台——join video 滤 status=20（实测 30 部
- * 屏蔽盘 comments≥2 曾可上榜）。走 (comments) 索引 + v (create_time) 索引，代价可忽略。
+ * 热评录像（/video 右栏版块起家，2026-09-26 张老师要求；现仅首页右栏使用）：
+ * 按上传时间倒序显示有评论的录像，只带作者（名称+军衔）/级别/时间成绩。
+ * 2026-10-23 张老师指令：板块更名「热门录像」→「热评录像」，口径由 ≥2 收紧的
+ * 反向放宽回 >0（与 getVideoList 的 order=comments 一致）——候选行 9.2k → 24k，
+ * (comments) 索引 + filesort 代价可忽略（本地实测 54ms）。
+ * 2026-10-22 张老师指令：屏蔽盘不进前台——join video 滤 status<>0（v3 曾为 =20，
+ * v4 待审放行放宽）。走 (comments) 索引 + v (create_time) 索引。
  */
 async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
   // 2026-10-22：id 倒序 → create_time 倒序（真上传时间序；vs.create_time 与 video
-  // 同步写入一致，(comments) 索引 + filesort 仅 9 千候选行，代价可忽略）
-  // 2026-10-23：status 过滤放宽 <>0（待审放行进前台，屏蔽仍挡）
+  // 同步写入一致）；2026-10-23：comments ≥2 → >0（板块更名「热评录像」随口径放宽）
   const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
     `SELECT vs.id FROM video_stat vs JOIN video v ON v.id = vs.id
-     WHERE vs.comments >= 2 AND v.status <> ${VIDEO_STATUS.BANNED}
+     WHERE vs.comments > 0 AND v.status <> ${VIDEO_STATUS.BANNED}
      ORDER BY v.create_time DESC, vs.id DESC LIMIT ${limit}`
   );
   return getVideosByIds(rows.map((r) => N(r.id)));
@@ -1151,8 +1152,9 @@ async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
 // 且结果几乎不变，缓存 60s
 // 2026-10-22 v2：排序键 id → create_time（真上传时间序）；v3 同日：加 status=20
 // 过滤（屏蔽不进前台，张老师指令）——升键失效旧缓存；
-// v4（2026-10-23）：待审放行（<>0），旧缓存不含待审行，失效
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v4"], { revalidate: 60 });
+// v4（2026-10-23）：待审放行（<>0），旧缓存不含待审行，失效；
+// v5（2026-10-23）：板块更名「热评录像」，口径 ≥2 → >0，旧缓存为 ≥2 结果，失效
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v5"], { revalidate: 60 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);

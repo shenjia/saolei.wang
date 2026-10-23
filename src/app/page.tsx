@@ -60,9 +60,10 @@ export default async function HomePage() {
   const [news, newbies, hot, newsTotal, videos, videoTotal] = await Promise.all([
     getHomeNews(),
     getNewbies(),
-    // 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块，数据源原 /video 右栏同款；
+    // 热评录像（2026-10-20 张老师要求：替换原「排行前十」板块，数据源原 /video 右栏同款；
     // 2026-10-22 张老师要求：10 → 9，少占一个位置；
-    // 同日再调：论坛新帖 6 → 5 腾位置，热门录像 9 → 10 收回）
+    // 同日再调：论坛新帖 6 → 5 腾位置，热评录像 9 → 10 收回；
+    // 2026-10-23 更名「热门录像」→「热评录像」，口径 ≥2 → >0）
     getHotVideos(10),
     // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
     getNewsCount({ home: true }),
@@ -226,9 +227,10 @@ export default async function HomePage() {
           </table>
         </div>
         <BbsLatest />
-        {/* 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块——按上传时间倒序
-            至少两条评论的录像；版块样式沿用 VideoHot（原 /video 右栏同款紧凑行）。
-            原 #top 排行前十板块与 getTopUsers 查询一并撤下 */}
+        {/* 热评录像（2026-10-20 张老师要求：替换原「排行前十」板块——按上传时间倒序
+            有评论的录像；版块样式沿用 VideoHot（原 /video 右栏同款紧凑行）。
+            原 #top 排行前十板块与 getTopUsers 查询一并撤下；
+            2026-10-23 更名「热门录像」→「热评录像」，口径 ≥2 → >0） */}
         <VideoHot videos={hot} />
         <SiteStats />
       </li>
