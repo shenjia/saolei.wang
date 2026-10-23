@@ -2286,7 +2286,18 @@ body #page.message_list > .box:first-child .page_head {
 #page.message_list .table tr.read td.msg_content a.msg_title_link:hover {
   color: #a6e22e;
 }
-/* 私信行尾「回复」入口（2026-10-17 详情页下线后补位，跳 /message?to=N） */
+/* 私信行尾「回复」入口（2026-10-17 详情页下线后补位；2026-10-24 改原位弹窗后由
+   button 承载——legacy reset 只清了 border/padding 未清 buttonface 底色与默认行高，
+   呈现会胖一圈；此处补全套 UA 复位，视觉与原 <a> 文字链完全一致、刚好包住字 */
+button.msg_reply_link {
+  background: none;
+  padding: 0;
+  border: 0;
+  line-height: inherit;
+  font-size: 12px;
+  vertical-align: baseline;
+  cursor: pointer;
+}
 .msg_reply_link {
   margin-left: 8px;
   font-size: 12px;

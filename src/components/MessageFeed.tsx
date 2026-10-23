@@ -1,4 +1,6 @@
-// 消息列表 + 「加载更多」（页码语义，模式同 BbsFeed）
+// 消息列表（2026-10-24 二轮：底部「加载更多+剩余条数」换标准翻页控件——
+//   张老师要求；Pager 由页面服务端渲染承载 ?page=，本组件退化为纯列表渲染 +
+//   点击标已读（保留 use client 只因标已读交互），筛选/翻页全走 URL）
 // 初始数据服务端渲染传入；「全部已读」后 router.refresh() 推送新 initial，
 // useEffect 同步重置列表（软导航下 useState(initial) 不重置的坑，见 BbsFeed 注释）
 // 2026-10-17（张老师要求）：完整正文直接上列表、详情页下线——点击正文即标已读，
@@ -13,12 +15,7 @@ import Link from "next/link";
 import { timeOpposite, TIME_NEVER, parseMessageParts } from "@/lib/format";
 import type { MessageItem } from "@/lib/message";
 import { AvatarCell, TitleBadge } from "./Cells";
-import { noFocusJump } from "./useKeepScroll";
-import { TotalCount } from "./TotalCount";
 import { SendMessageButton } from "./SendMessageButton";
-
-/** 首屏/每页条数（与 lib/message.ts MESSAGE_PAGESIZE 一致；不 import 值防 prisma 进 bundle） */
-const PAGE_SIZE = 15;
 
 /** 正文渲染：链接段（《文章标题》跳文章页）与纯文本段交错（与下线的详情页同口径） */
 function MessageContent({ content }: { content: string }) {
@@ -88,46 +85,19 @@ export function MessageRow({
 }
 
 export function MessageFeed({
-  type = "all",
   initial,
-  initialHasMore,
-  total: initialTotal,
   authorId,
 }: {
-  /** 类型筛选（2026-10-14）：加载更多按同一口径翻页；key=筛选串由页面侧强制重挂载 */
-  type?: "all" | "system" | "private";
   initial: MessageItem[];
-  initialHasMore: boolean;
-  total: number;
   /** 当前登录用户 id（「回复」浮窗草稿键隔离用） */
   authorId: number;
 }) {
   const [items, setItems] = useState(initial);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [total, setTotal] = useState(initialTotal);
-  const [loading, setLoading] = useState(false);
 
   // 「全部已读」/清空后 router.refresh() 会推送新 initial——同步重置本地列表
   useEffect(() => {
     setItems(initial);
-    setHasMore(initialHasMore);
-    setTotal(initialTotal);
-  }, [initial, initialHasMore, initialTotal]);
-
-  async function loadMore() {
-    setLoading(true);
-    try {
-      const qs = new URLSearchParams({ action: "more", page: String(Math.floor(items.length / PAGE_SIZE) + 1) });
-      if (type !== "all") qs.set("type", type);
-      const res = await fetch(`/api/message?${qs}`);
-      const data = (await res.json()) as { messages: MessageItem[]; hasMore: boolean; total: number };
-      setItems((prev) => [...prev, ...data.messages]);
-      setHasMore(data.hasMore);
-      setTotal(data.total);
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [initial]);
 
   /** 点击正文标记已读（2026-10-17 详情页下线）：本地置灰 + API 落库 + 广播角标刷新 */
   async function markRead(id: number) {
@@ -154,26 +124,6 @@ export function MessageFeed({
           <td colSpan={4}>还没有消息。</td>
         </tr>
       )}
-      <tr className="bbs_more_row">
-        <td colSpan={4}>
-          {/* 按钮右侧跟总数（张老师三轮要求）；加载完全部后按钮消失、总数保留居中 */}
-          <div className="more_loader">
-            {hasMore && (
-              <button
-                type="button"
-                className="button small"
-                disabled={loading}
-                onMouseDown={noFocusJump}
-                onClick={loadMore}
-              >
-                {loading ? "加载中…" : "加载更多"}
-              </button>
-            )}
-            {/* 2026-09-26 张老师要求：显示剩余条数而非总数 */}
-            <TotalCount total={total} loaded={items.length} unit="条" />
-          </div>
-        </td>
-      </tr>
     </>
   );
 }
