@@ -1,30 +1,29 @@
-// 合作站点录像元数据增量同步（2026-10-21，首批 openms.top）
-// GET /api/partner/v1/videos?since=<Unix秒>&cursor=<录像id>&level=<beg|int|exp>&size=200
+// 公开 API · 录像元数据增量同步（2026-10-24，由 partner/v1/videos 更名迁移）
+// GET /api/public/v1/video_list?cursor=<录像id>&since=<Unix秒>&level=<beg|int|exp>&size=200
 // 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
 //
 // 同步语义（增量）：
 //  - 首次全量：不传 cursor，从 id=1 起按 id 升序拉完（循环到 hasMore=false）
 //  - 增量：上次响应的 nextCursor 继续拉；也可用 since=<上传时间秒> 跳到近段
 //    （since 与 cursor 同时给时以 cursor 为准）
-//  - 只含 status=20（过审）胜局录像，与站内列表口径一致
+//  - 只含 status=20（过审）胜局录像，与站内入榜口径一致
+//    （要逐条查含待审的详情请用 video_info 接口）
 //  - 文件本体不给（合作方需要回放请引导用户来本站；这也正是数据同步的商业意义）
 //
 // 3bvs 字段已按站内口径（ROUND(board_3bv×1e6/real_time)，运气盘记负值）算好直接给，
 // 消费方无需自行换算。
 
 import { NextResponse } from "next/server";
-import { requirePartner, unauthorized } from "@/lib/partner";
+import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
 import { rateLimit } from "@/lib/ratelimit";
 import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 
 export async function GET(req: Request) {
-  const partner = requirePartner(req);
+  const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`partner-videos:${partner}`, 60, 60_000)) {
-    return NextResponse.json({ error: "rate_limited", message: "请求过频，请降低频率（限 60 次/分钟）" }, { status: 429 });
-  }
+  if (!rateLimit(`pub-video-list:${partner}`, 60, 60_000)) return rateLimited();
 
   const p = new URL(req.url).searchParams;
   const cursor = Math.max(0, parseInt(p.get("cursor") ?? "0", 10) || 0);

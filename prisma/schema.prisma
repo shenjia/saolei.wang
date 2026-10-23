@@ -747,6 +747,24 @@ model AdminLog {
   @@map("admin_log")
 }
 
+// 对外开放 API 的调用凭据（2026-10-24 公开 API 体系）
+// key 只存 sha256 哈希——明文仅创建时回显一次，后台不可再查；
+// 吊销=软删（status=0），保留审计轨迹；每 key 限速维度用 name。
+model ApiKey {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  name       String  @db.VarChar(50)
+  keyHash    String  @unique @map("key_hash") @db.Char(64)
+  status     Int     @default(1) @db.TinyInt // 1=启用 0=吊销
+  note       String  @default("") @db.VarChar(200)
+  requestCount BigInt @default(0) @map("request_count") @db.BigInt
+  lastUsedAt BigInt  @default(0) @map("last_used_at") @db.BigInt
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+
+  @@index([status])
+  @@map("api_key")
+}
+
 // 密码重置令牌（邮箱找回，新版测试.txt 需求）
 model PasswordToken {
   id         BigInt  @id @default(autoincrement()) @db.BigInt

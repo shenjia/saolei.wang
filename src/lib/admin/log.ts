@@ -37,6 +37,9 @@ export const OP_LABELS: Record<string, string> = {
   "rank.snapshot": "生成排行快照",
   "avatar.review": "审核玩家头像",
   "site.setMaintenance": "维护模式开关",
+  "apikey.create": "签发 API key",
+  "apikey.revoke": "吊销 API key",
+  "apikey.restore": "恢复 API key",
 };
 
 export function opLabel(action: string): string {

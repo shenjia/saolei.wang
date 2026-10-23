@@ -22,6 +22,7 @@ import { broadcast, sendSystemMessage } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
 import { rankLeave, safeRankOp } from "@/lib/userrank";
 import { setMaintenance } from "@/lib/maintenance";
+import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { logAdmin } from "./log";
 import type { AdminLevel } from "./guard";
 
@@ -51,6 +52,11 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   // （star.set 每日一星指定已随功能于 2026-10-13 移除）
   "avatar.review": "manager",
   "site.setMaintenance": "administrator",
+  // API key 管理（2026-10-24 公开 API 体系）：签发/吊销都是超管权限——
+  // key 即数据出口凭据，签发对象需张老师把关
+  "apikey.create": "administrator",
+  "apikey.revoke": "administrator",
+  "apikey.restore": "administrator",
 };
 
 // ---------- 参数工具 ----------
@@ -694,6 +700,52 @@ async function dispatch(
       const on = toBool(p.on);
       await setMaintenance(on);
       return { ok: true, message: on ? "维护模式已开启：注册/上传/发帖/评论/私信已停" : "维护模式已关闭，站点恢复正常" };
+    }
+
+    // ---------- 公开 API key（2026-10-24） ----------
+    case "apikey.create": {
+      const name = toText(p.name, 50);
+      const note = toText(p.note, 200);
+      if (!name) return { ok: false, error: "参数错误：需提供合作方名称" };
+      const dup = await prisma.apiKey.findFirst({ where: { name } });
+      if (dup) return { ok: false, error: `已存在同名合作方「${name}」（#${dup.id}），请换名或复用原 key` };
+      const key = generateApiKey();
+      const ts = BigInt(now());
+      const row = await prisma.apiKey.create({
+        data: { name, note, keyHash: sha256(key), status: 1, createTime: ts, updateTime: ts },
+      });
+      invalidateApiKeyCache();
+      // 明文 key 只在 message 里出现这一次（admin_log 会留档这条 message；
+      // 与「重置密码回显」同款先例——后台本身是超管可见面，可接受）
+      return { ok: true, message: `已为「${name}」签发 API key（#${row.id}）：${key} —— 请立即复制保存，明文不再显示` };
+    }
+
+    case "apikey.revoke": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少 key ID" };
+      const row = await prisma.apiKey.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "key 不存在" };
+      if (row.status === 0) return { ok: false, error: "该 key 已是吊销状态" };
+      await prisma.apiKey.update({
+        where: { id: BigInt(id) },
+        data: { status: 0, updateTime: BigInt(now()) },
+      });
+      invalidateApiKeyCache();
+      return { ok: true, message: `已吊销「${row.name}」的 API key（#${id}），最迟 30 秒内生效` };
+    }
+
+    case "apikey.restore": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少 key ID" };
+      const row = await prisma.apiKey.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "key 不存在" };
+      if (row.status === 1) return { ok: false, error: "该 key 已是启用状态" };
+      await prisma.apiKey.update({
+        where: { id: BigInt(id) },
+        data: { status: 1, updateTime: BigInt(now()) },
+      });
+      invalidateApiKeyCache();
+      return { ok: true, message: `已恢复「${row.name}」的 API key（#${id}）` };
     }
 
     default:
