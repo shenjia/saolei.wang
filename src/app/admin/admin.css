@@ -232,8 +232,14 @@ body:has(.admin_shell) #footer {
 .admin_grid.todo_trend {
   grid-template-columns: minmax(340px, 5fr) minmax(480px, 7fr);
 }
+/* 用户详情页：发送系统通知（左）+ 账号处置（右）并排（2026-10-23 张老师要求）。
+   通知卡较窄、处置卡操作多占主；≤1200px 塌成单列（与 todo_trend 同断点） */
+.admin_grid.ops_notify {
+  grid-template-columns: minmax(360px, 2fr) minmax(480px, 3fr);
+}
 @media (max-width: 1200px) {
-  .admin_grid.todo_trend {
+  .admin_grid.todo_trend,
+  .admin_grid.ops_notify {
     grid-template-columns: 1fr;
   }
 }

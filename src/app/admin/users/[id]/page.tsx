@@ -143,93 +143,97 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         </AdminCard>
       </div>
 
-      {/* ---------- 处置面板（仅超管） ---------- */}
-      {isSuper && u.id !== session?.uid && (
-        <AdminCard title="账号处置" more="仅超级管理员可见，全部操作记入日志">
-          <div className="admin_ops" style={{ marginBottom: 14 }}>
-            {u.status === 0 ? (
-              <BanUserDialog userId={u.id} name={u.chineseName} sm={false} />
-            ) : (
-              <AdminAction
-                op="user.setStatus"
-                params={{ id: u.id, status: 0 }}
-                label="解除封禁"
-                variant="primary"
-                sm={false}
-                confirm={`确认解封「${u.chineseName}」？连坐封禁的录像将自动恢复。`}
-              />
-            )}
-            <AdminAction
-              op="user.setRole"
-              params={{ id: u.id, role: u.role === USER_ROLE.PLAYER ? USER_ROLE.MANAGER : USER_ROLE.PLAYER }}
-              label={u.role === USER_ROLE.PLAYER ? "设为管理员" : "取消管理员"}
-              variant="warn"
-              sm={false}
-              confirm={
-                u.role === USER_ROLE.PLAYER
-                  ? `确认把「${u.chineseName}」设为管理员？管理员可审核录像并管理内容。`
-                  : `确认取消「${u.chineseName}」的管理权限？`
-              }
-            />
-            {u.videos === 0 && d.postTotal === 0 ? (
-              <AdminAction
-                op="user.delete"
-                params={{ id: u.id }}
-                label="注销账号"
-                variant="danger"
-                sm={false}
-                confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（操作不可撤销）。`}
-              />
-            ) : (
-              <span className="admin_hint" style={{ alignSelf: "center" }}>
-                该玩家已有 {u.videos} 部录像、{d.postTotal} 篇论坛主题，不能注销账号（如需禁止登录请用「封禁账号」）
-              </span>
-            )}
-          </div>
-
+      {/* ---------- 发送系统通知（manager 及以上）+ 账号处置（仅超管）----------
+          2026-10-23 张老师要求：并排放置，通知在左、处置在右（ops_notify 栅格）；
+          非超管视角无处置面板，通知卡单独一行（栅格单卡自动占满） */}
+      <div className={`admin_grid${isSuper && u.id !== session?.uid ? " ops_notify" : ""}`}>
+        <AdminCard title="发送系统通知">
           <AdminForm
-            op="user.resetPassword"
+            op="user.sendSystemMessage"
             params={{ id: u.id }}
-            layout="row"
+            layout="stack"
             fields={[
               {
-                name: "password",
-                label: "重置密码",
-                placeholder: "留空则随机生成 10 位",
-                width: "search",
+                name: "content",
+                label: `通知内容（最多 ${MESSAGE_CONTENT_LIMIT} 字，超出截断）`,
+                type: "textarea",
+                placeholder: `例如：你好，你上传的录像 #123 已通过审核，感谢分享。`,
+                required: true,
               },
             ]}
-            submitLabel="执行重置"
-            confirm="确认重置该玩家密码？旧密码立即失效。"
+            submitLabel="发送系统消息"
+            confirm={`确认向「${u.chineseName}」发送这条系统消息？发送后立即进入对方收件箱，不可撤回。`}
           />
           <div className="admin_hint" style={{ marginTop: 8 }}>
-            重置结果（含新密码）会以气泡提示显示，请复制后转告玩家；同时会使所有未过期的找回密码链接失效。
+            以「系统消息」身份发送（无寄件人），对方收件箱立即可见并计未读；管理员与超级管理员均可操作，操作记入日志。
           </div>
         </AdminCard>
-      )}
 
-      {/* ---------- 发送系统通知（manager 及以上） ---------- */}
-      <AdminCard title="发送系统通知">
-        <AdminForm
-          op="user.sendSystemMessage"
-          params={{ id: u.id }}
-          layout="stack"
-          fields={[
-            {
-              name: "content",
-              label: `通知内容（最多 ${MESSAGE_CONTENT_LIMIT} 字，超出截断）`,
-              type: "textarea",
-              placeholder: `例如：你好，你上传的录像 #123 已通过审核，感谢分享。`,
-              required: true,
-            },
-          ]}
-          submitLabel="发送系统消息"
-          confirm={`确认向「${u.chineseName}」发送这条系统消息？发送后立即进入对方收件箱，不可撤回。`}
-        />
-        <div className="admin_hint" style={{ marginTop: 8 }}>
-          以「系统消息」身份发送（无寄件人），对方收件箱立即可见并计未读；管理员与超级管理员均可操作，操作记入日志。
-        </div>
-      </AdminCard>
+        {/* ---------- 处置面板（仅超管） ---------- */}
+        {isSuper && u.id !== session?.uid && (
+          <AdminCard title="账号处置" more="仅超级管理员可见，全部操作记入日志">
+            <div className="admin_ops" style={{ marginBottom: 14 }}>
+              {u.status === 0 ? (
+                <BanUserDialog userId={u.id} name={u.chineseName} sm={false} />
+              ) : (
+                <AdminAction
+                  op="user.setStatus"
+                  params={{ id: u.id, status: 0 }}
+                  label="解除封禁"
+                  variant="primary"
+                  sm={false}
+                  confirm={`确认解封「${u.chineseName}」？连坐封禁的录像将自动恢复。`}
+                />
+              )}
+              <AdminAction
+                op="user.setRole"
+                params={{ id: u.id, role: u.role === USER_ROLE.PLAYER ? USER_ROLE.MANAGER : USER_ROLE.PLAYER }}
+                label={u.role === USER_ROLE.PLAYER ? "设为管理员" : "取消管理员"}
+                variant="warn"
+                sm={false}
+                confirm={
+                  u.role === USER_ROLE.PLAYER
+                    ? `确认把「${u.chineseName}」设为管理员？管理员可审核录像并管理内容。`
+                    : `确认取消「${u.chineseName}」的管理权限？`
+                }
+              />
+              {u.videos === 0 && d.postTotal === 0 ? (
+                <AdminAction
+                  op="user.delete"
+                  params={{ id: u.id }}
+                  label="注销账号"
+                  variant="danger"
+                  sm={false}
+                  confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（操作不可撤销）。`}
+                />
+              ) : (
+                <span className="admin_hint" style={{ alignSelf: "center" }}>
+                  该玩家已有 {u.videos} 部录像、{d.postTotal} 篇论坛主题，不能注销账号（如需禁止登录请用「封禁账号」）
+                </span>
+              )}
+            </div>
+
+            <AdminForm
+              op="user.resetPassword"
+              params={{ id: u.id }}
+              layout="row"
+              fields={[
+                {
+                  name: "password",
+                  label: "重置密码",
+                  placeholder: "留空则随机生成 10 位",
+                  width: "search",
+                },
+              ]}
+              submitLabel="执行重置"
+              confirm="确认重置该玩家密码？旧密码立即失效。"
+            />
+            <div className="admin_hint" style={{ marginTop: 8 }}>
+              重置结果（含新密码）会以气泡提示显示，请复制后转告玩家；同时会使所有未过期的找回密码链接失效。
+            </div>
+          </AdminCard>
+        )}
+      </div>
 
       {/* ---------- 最近录像 ---------- */}
       <AdminCard title="最近录像" tight more={<Link href={`/admin/videos?q=${u.id}`}>该玩家全部录像 →</Link>}>
