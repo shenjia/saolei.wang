@@ -4,6 +4,7 @@ import Link from "next/link";
 export const metadata = { title: "软件下载" };
 
 const SOFTWARE: [string, string, [string, string][]?][] = [
+  ["元扫雷 3.3.4", "Metasweeper_3.3.4.exe"],
   ["Minesweeper Arbiter 0.52.3", "Arbiter_0.52.3.zip", [["教程", "/page/guide"], ["中文插件", "/download/Arbiter_cn.zip"]]],
   ["Minesweeper Clone 0.97", "Minesweeper_Clone_0.97.exe", [["使用说明", "/page/guide"], ["常见问题", "/page/help/clone-faq"]]],
   ["Minesweeper Clone 2007", "Minesweeper_Clone_2007.exe"],
