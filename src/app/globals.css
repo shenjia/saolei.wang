@@ -2277,6 +2277,15 @@ body #page.message_list > .box:first-child .page_head {
 #page.message_list .table td.msg_content a.msg_title_link:hover {
   color: #a6e22e;
 }
+
+/* 已读消息内的链接改亮灰（2026-10-24 张老师要求：不再金黄——已读整行置灰的语义
+   延伸到内嵌链接；hover 仍回绿提示可点。双类提权压过上面未读黄色规则） */
+#page.message_list .table tr.read td.msg_content a.msg_title_link {
+  color: #999;
+}
+#page.message_list .table tr.read td.msg_content a.msg_title_link:hover {
+  color: #a6e22e;
+}
 /* 私信行尾「回复」入口（2026-10-17 详情页下线后补位，跳 /message?to=N） */
 .msg_reply_link {
   margin-left: 8px;

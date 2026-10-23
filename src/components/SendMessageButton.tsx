@@ -4,6 +4,8 @@
 //   居中「发送（黄主按钮）/ 取消（灰）」。
 // 成功后：浮窗与遮罩立即消失，屏中弹绿色「发送成功」气泡，停留 2 秒后渐隐（登录成功同款）。
 // 提交仍走既有接口 /api/message（action=send），文案与站内信页一致。
+// variant="text"（2026-10-24 张老师要求）：消息列表「回复」入口同款浮窗——
+//   渲染为行内文字链（.msg_reply_link 既有样式），点击弹浮窗而非跳页。
 
 "use client";
 
@@ -41,10 +43,13 @@ export function SendMessageButton({
   to,
   name,
   authorId,
+  variant = "bubble",
 }: {
   to: number;
   name: string;
   authorId: number;
+  /** bubble＝用户主页气泡图标钮（默认）；text＝消息列表行内文字链（「回复」） */
+  variant?: "bubble" | "text";
 }) {
   const [open, setOpen] = useState(false);
   // 草稿秒级备份：受控直绑 draft.value（浮窗挂载即恢复）；按作者 uid + 收件人 id 隔离，
@@ -88,15 +93,26 @@ export function SendMessageButton({
 
   return (
     <>
-      <button
-        type="button"
-        className="msg_btn"
-        title={`给 ${name} 发消息`}
-        aria-label="发消息"
-        onClick={() => setOpen(true)}
-      >
-        <BubbleIcon />
-      </button>
+      {variant === "text" ? (
+        <button
+          type="button"
+          className="msg_reply_link"
+          title={`回复 ${name}`}
+          onClick={() => setOpen(true)}
+        >
+          回复
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="msg_btn"
+          title={`给 ${name} 发消息`}
+          aria-label="发消息"
+          onClick={() => setOpen(true)}
+        >
+          <BubbleIcon />
+        </button>
+      )}
       {open && (
         <div
           className="msg_overlay"

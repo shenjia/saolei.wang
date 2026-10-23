@@ -3,6 +3,8 @@
 // useEffect 同步重置列表（软导航下 useState(initial) 不重置的坑，见 BbsFeed 注释）
 // 2026-10-17（张老师要求）：完整正文直接上列表、详情页下线——点击正文即标已读，
 // 评论消息里的《文章标题》内嵌链接可直接点击跳文章页；私信末尾附「回复」入口
+// 2026-10-24（张老师要求）：「回复」由跳 /message?to=N 改为原位弹发信浮窗
+//   （与用户主页对话气泡同款 SendMessageButton variant="text"）；authorId 自页面透传
 
 "use client";
 
@@ -13,6 +15,7 @@ import type { MessageItem } from "@/lib/message";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
+import { SendMessageButton } from "./SendMessageButton";
 
 /** 首屏/每页条数（与 lib/message.ts MESSAGE_PAGESIZE 一致；不 import 值防 prisma 进 bundle） */
 const PAGE_SIZE = 15;
@@ -34,7 +37,16 @@ function MessageContent({ content }: { content: string }) {
   );
 }
 
-export function MessageRow({ m, onRead }: { m: MessageItem; onRead: (id: number) => void }) {
+export function MessageRow({
+  m,
+  onRead,
+  authorId,
+}: {
+  m: MessageItem;
+  onRead: (id: number) => void;
+  /** 当前登录用户 id：发信浮窗草稿键 pm:{uid}:{to} 与气泡/表单共用一份 */
+  authorId: number;
+}) {
   return (
     <tr className={m.isRead ? "read" : "unread"}>
       <td>
@@ -62,9 +74,12 @@ export function MessageRow({ m, onRead }: { m: MessageItem; onRead: (id: number)
         <MessageContent content={m.content} />
         {!m.isRead && <span className="msg_new">新</span>}
         {!m.isSystem && m.from && (
-          <Link className="msg_reply_link" href={`/message?to=${m.from.id}`}>
-            回复
-          </Link>
+          <SendMessageButton
+            variant="text"
+            to={m.from.id}
+            name={m.from.chineseName || `ID ${m.from.id}`}
+            authorId={authorId}
+          />
         )}
       </td>
       <td className="time">{timeOpposite(m.createTime, TIME_NEVER)}</td>
@@ -77,12 +92,15 @@ export function MessageFeed({
   initial,
   initialHasMore,
   total: initialTotal,
+  authorId,
 }: {
   /** 类型筛选（2026-10-14）：加载更多按同一口径翻页；key=筛选串由页面侧强制重挂载 */
   type?: "all" | "system" | "private";
   initial: MessageItem[];
   initialHasMore: boolean;
   total: number;
+  /** 当前登录用户 id（「回复」浮窗草稿键隔离用） */
+  authorId: number;
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -129,7 +147,7 @@ export function MessageFeed({
   return (
     <>
       {items.map((m) => (
-        <MessageRow key={m.id} m={m} onRead={markRead} />
+        <MessageRow key={m.id} m={m} onRead={markRead} authorId={authorId} />
       ))}
       {items.length === 0 && (
         <tr>

@@ -71,6 +71,7 @@ export default async function MessagePage({
               initial={messages}
               initialHasMore={total > MESSAGE_PAGESIZE}
               total={total}
+              authorId={session.uid}
             />
           </tbody>
         </table>
