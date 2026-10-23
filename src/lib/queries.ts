@@ -1547,7 +1547,8 @@ export async function getCommentById(id: number): Promise<CommentItem | null> {
  *  2026-10-17 称号快照制：写入评论时刻的 exp_time/ranked（评论行内嵌快照，渲染不再实时查）
  *  2026-10-22 张老师要求：动态带录像基本信息（「评论了yyy的高级40.44NF录像」）——
  *  lv/tm/nf（级别/成绩/NF）与 vn（楼主名）快照进 details；键序 cid 尾置不动，
- *  AI 复审/删除联动的 detailsData contains "cid":<id>} 精确匹配口径不受影响 */
+ *  AI 复审/删除联动的 detailsData contains "cid":<id>} 精确匹配口径不受影响
+ *  2026-10-24 张老师要求：自评自己的录像不发动态（口径同 addReply 自评文章） */
 export async function addComment(videoId: number, userId: number, content: string): Promise<number> {
   const now = BigInt(Math.floor(Date.now() / 1000));
   return prisma.$transaction(async (tx) => {
@@ -1572,6 +1573,10 @@ export async function addComment(videoId: number, userId: number, content: strin
     // 注意：交互式事务内不能用 Promise.all 并行发多个 tx 查询（P2028：事务被并发
     // 使用后立即失效，实测 addComment 500）——全部顺序 await
     const video = await tx.video.findUnique({ where: { id: BigInt(videoId) }, select: { level: true, user: true } });
+    // 2026-10-24 张老师要求：自评自己的录像（含楼主在自己录像下回复他人）不发动态——
+    // 「自己评论自己」对个人主页动态流没有信息量（口径同 bbs.ts addReply 自评守卫）；
+    // 评论照常入库并提交，动态不发（info/楼主名只为动态快照服务，一并跳过）
+    if (N(video?.user ?? 0) === userId) return N(created.id);
     const info = await tx.videoInfo.findUnique({ where: { id: BigInt(videoId) }, select: { noflag: true, realTime: true } });
     const ownerName =
       (await tx.user.findUnique({ where: { id: video?.user ?? BigInt(0) }, select: { chineseName: true } }))

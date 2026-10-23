@@ -379,24 +379,27 @@ async function dispatch(
                 where: { id: video?.user ?? BigInt(0) },
                 select: { chineseName: true },
               }))?.chineseName ?? "";
-            // 补发动态：时间回填评论原发时间（不冒充当下）
-            await publishNews({
-              tx,
-              type: NEWS_TYPE.COMMENT,
-              userId: N(row.user),
-              reference: N(row.video),
-              details: {
-                kind: "video",
-                lv: video?.level ?? "",
-                tm: N(info?.realTime ?? 0),
-                nf: info?.noflag ? 1 : 0,
-                vn: ownerName.slice(0, 20),
-                vid: N(video?.user ?? 0),
-                cid: id,
-              },
-              createTime: N(row.createTime),
-              expTimeOverride: N(row.expTime),
-            });
+            // 补发动态：时间回填评论原发时间（不冒充当下）。
+            // 2026-10-24 自评守卫（同 addComment）：楼主自评不补发，只恢复他人评论的动态
+            if (N(video?.user ?? 0) !== N(row.user)) {
+              await publishNews({
+                tx,
+                type: NEWS_TYPE.COMMENT,
+                userId: N(row.user),
+                reference: N(row.video),
+                details: {
+                  kind: "video",
+                  lv: video?.level ?? "",
+                  tm: N(info?.realTime ?? 0),
+                  nf: info?.noflag ? 1 : 0,
+                  vn: ownerName.slice(0, 20),
+                  vid: N(video?.user ?? 0),
+                  cid: id,
+                },
+                createTime: N(row.createTime),
+                expTimeOverride: N(row.expTime),
+              });
+            }
           }
         }
       });
