@@ -16,6 +16,9 @@ export const AUTO_REASON = {
   TOP_BOARD: 1 << 7,
   FIRST_ENLIST: 1 << 8,
   LOW_TRUST: 1 << 9,
+  /** path 异常：超大范围往返瞬移（2026-10-23 张老师指令；347022+已屏蔽 3 盘定标，
+   *  全站 30 万盘回扫零误报——判定口径见 lib/video-triage.ts pathJumpStats） */
+  PATH_JUMP: 1 << 10,
 } as const;
 
 /** press-release 分级阈值（ms）——初级/中级 45（2026-10-19 张老师晚定：中级从 56 放宽），

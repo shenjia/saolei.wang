@@ -46,6 +46,59 @@ export const AUTO_FLAG = {
   UNSET: -1,      // 未分拣（历史存量未回填）——视同需核定保守处理
 } as const;
 
+// ---------- path 瞬移异常统计（2026-10-23；347022 与已屏蔽 3 盘同款作弊形态） ----------
+//
+// 形态：相邻事件 >JUMP_PX 像素的「超大范围瞬移」贡献了全盘大部分行程，且瞬移方向
+// 左右对称（跳出去→马上跳回来），呈周期性（嫌疑盘 2~5 次/秒）。正常人类盘（含
+// ppc 高到 300+ 的慢局）瞬移占比 ≤34% 且无对称往返；慢局思考期偶发大跳（81983
+// 实证：987s 内 34 跳=0.03 次/秒）由密度守卫排除。全站 30 万盘回扫零误报。
+
+/** 瞬移判定：相邻事件位移超过此像素数 */
+const JUMP_PX = 100;
+/** 异常判定：瞬移贡献行程占比超过此比例 */
+const JUMP_RATIO_TRIGGER = 0.5;
+/** 守卫：总行程低于此格数不判（分母太小，短局偶发瞬移会虚高占比） */
+const MIN_PATH_CELLS = 200;
+/** rmv 哨兵坐标（Vienna 格式越界哨兵 ~65523，259991/274037 实证）——断链不计位移 */
+const SENTINEL_PX = 60000;
+/** 守卫：瞬移密度低于此次/秒不判（人类慢局思考期偶发大跳） */
+const MIN_JUMPS_PER_SEC = 0.5;
+/** 守卫：瞬移次数下限 */
+const MIN_JUMPS = 10;
+
+export interface PathJumpStats {
+  /** 瞬移贡献行程占比（0~1），未达标守卫时为 null */
+  jumpRatio: number | null;
+  jumpCount: number;
+}
+
+/** 对事件行流算瞬移统计（纯函数；v.timeMs 由调用方传入） */
+export function pathJumpStats(v: ParsedVideo, timeMs: number): PathJumpStats {
+  let totalPx = 0, jumpsPx = 0, jumpCount = 0;
+  let lastPx: number | null = null, lastPy: number | null = null;
+  for (const line of v.events) {
+    const m = EV_LINE.exec(line);
+    if (!m) continue;
+    const px = +m[5], py = +m[6];
+    if (px >= SENTINEL_PX || py >= SENTINEL_PX || px < 0 || py < 0) {
+      lastPx = null; lastPy = null; // 哨兵：断开位移链
+      continue;
+    }
+    if (lastPx !== null && lastPy !== null) {
+      const d = Math.hypot(px - lastPx, py - lastPy);
+      totalPx += d;
+      if (d > JUMP_PX) { jumpsPx += d; jumpCount++; }
+    }
+    lastPx = px; lastPy = py;
+  }
+  if (totalPx < MIN_PATH_CELLS * 16) return { jumpRatio: null, jumpCount };
+  const durSec = timeMs / 1000;
+  if (jumpCount < MIN_JUMPS || (durSec > 0 && jumpCount / durSec < MIN_JUMPS_PER_SEC)) {
+    return { jumpRatio: null, jumpCount };
+  }
+  return { jumpRatio: jumpsPx / totalPx, jumpCount };
+}
+
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 
 // ---------- press-release 统计（与回测脚本同一口径） ----------
@@ -125,13 +178,15 @@ export interface TriageResult {
 /**
  * 对已解析的录像跑触发器组（纯函数，不落库）。
  * stnb/cls/path 来自 video_metrics（调用方读库传入；缺行＝按需核定保守处理）。
+ * timeMs 为库内权威用时（video_info.real_time，ms）——path 瞬移密度守卫需要。
  */
 export function triageParsed(
   v: ParsedVideo,
   level: string,
   metrics: { stnb: number | null; cls: number | null; path: number | null } | null,
   lowTrust: boolean,
-  extra: TriageExtra = {}
+  extra: TriageExtra = {},
+  timeMs: number = v.timeMs
 ): TriageResult {
   let reason = 0;
 
@@ -140,6 +195,12 @@ export function triageParsed(
   if ((ps.leftAvg !== null && ps.leftN >= PRESS_MIN_PAIRS && ps.leftAvg <= pressMs) ||
       (ps.rightAvg !== null && ps.rightN >= PRESS_MIN_PAIRS && ps.rightAvg <= pressMs)) {
     reason |= AUTO_REASON.PRESS;
+  }
+
+  // path 瞬移异常（2026-10-23；timeMs 用库内权威值，调用方在 triageVideo 传入）
+  const pj = pathJumpStats(v, timeMs);
+  if (pj.jumpRatio !== null && pj.jumpRatio > JUMP_RATIO_TRIGGER) {
+    reason |= AUTO_REASON.PATH_JUMP;
   }
 
   if (metrics) {
@@ -201,7 +262,7 @@ export async function triageVideo(videoId: number): Promise<void> {
     });
 
     const lowTrust = await isLowTrustUser(Number(video.user));
-    const { flag, reason } = triageParsed(parsed, video.level, metrics, lowTrust);
+    const { flag, reason } = triageParsed(parsed, video.level, metrics, lowTrust, {}, info.realTime);
 
     await prisma.video.update({ where: { id }, data: { autoFlag: flag, autoReason: reason } });
   } catch {

@@ -73,6 +73,13 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 7)) tags.push({ text: "进级别 TOP 榜", title: "该成绩将进入级别 TOP 榜，上榜成绩需人工把关", cls: "info" });
   if (r & (1 << 8)) tags.push({ text: "首次入伍", title: "该录像通过将使上传者三级成绩首次齐全（触发入伍动态）", cls: "info" });
   if (r & (1 << 9)) tags.push({ text: "低信任账号", title: "上传者名下有被屏蔽录像或账号有封禁记录，全部录像需人工审核", cls: "warn" });
+  if (r & (1 << 10)) {
+    tags.push({
+      text: "path 异常·超大往返瞬移",
+      title: "鼠标轨迹含超大范围往返瞬移：相邻事件 >100px 的瞬移贡献过半行程，且方向左右对称、呈周期性（2026-10-23 347022 与已屏蔽 3 盘定标；全站 30 万盘回扫零误报）——脚本/外挂特征",
+      cls: "bad",
+    });
+  }
   return tags;
 }
 
