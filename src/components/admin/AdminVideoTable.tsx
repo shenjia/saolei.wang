@@ -1,6 +1,7 @@
 // 录像管理列表（客户端，2026-10-23）
-// 与审核页 AdminReviewList 同款播放逻辑（张老师需求）：点「时间」列成绩 →
-// 弹全屏播放器 AdminVideoPlayer（前台同一套回放 UI，rmv/解析失败自动 flop 兜底）。
+// 2026-10-23 张老师调整：播放器入口独立成「播放」列（点击列前，弹全屏
+// AdminVideoPlayer，与审核页同一套回放 UI，rmv/解析失败自动 flop 兜底）；
+// 「时间」列成绩改回纯链接——新标签页打开前台录像详情页。
 // RSC 页面无法传回调，故表格主体 tbody 收进本客户端组件；thead/筛选/分页仍留服务端页面。
 // 播放器内看过会静默 markWatched，与审核页防盲审口径一致（全量检索场景仅计数展示，不做限制）。
 
@@ -40,29 +41,12 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
             <td className="c">
               <LevelTag level={v.level} />
             </td>
-            {/* 时间列＝播放入口（与审核页一致：点击弹层播放，中键/右键仍可新开详情页） */}
+            {/* 时间列＝新标签页打开前台详情页；播放入口独立在「播放」列 */}
             <td className="num strong">
-              {v.realTime && v.filepath ? (
-                <a
-                  className="link"
-                  href={`/video/${v.id}`}
-                  target="_blank"
-                  title="点击弹层播放该录像"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setPlayTarget({
-                      id: v.id,
-                      level: v.level as VideoLevel,
-                      filepath: v.filepath,
-                      realTime: v.realTime,
-                      player: v.author?.chineseName ?? `#${v.user}`,
-                    });
-                  }}
-                >
+              {v.realTime ? (
+                <a className="link" href={`/video/${v.id}`} target="_blank" rel="noopener" title="新标签页打开前台录像详情页">
                   {scoreTime(v.realTime)}
                 </a>
-              ) : v.realTime ? (
-                scoreTime(v.realTime)
               ) : (
                 "—"
               )}
@@ -83,6 +67,36 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
                 </>
               ) : (
                 "—"
+              )}
+            </td>
+            {/* 播放列（2026-10-23 张老师需求：点击列前，弹全屏播放器，与审核页同款按钮） */}
+            <td className="c">
+              {v.filepath && v.realTime ? (
+                <button
+                  type="button"
+                  className={`admin_btn sm${v.watched ? "" : " primary"}`}
+                  title={v.watched ? "已看过（点击再次播放）" : "点击弹层播放该录像"}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setPlayTarget({
+                      id: v.id,
+                      level: v.level as VideoLevel,
+                      filepath: v.filepath,
+                      realTime: v.realTime,
+                      player: v.author?.chineseName ?? `#${v.user}`,
+                    });
+                  }}
+                  style={{ minWidth: 0, padding: "2px 8px" }}
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style={{ verticalAlign: "-1px", marginRight: 3 }}>
+                    <path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z" />
+                  </svg>
+                  {v.watched ? "已看" : "播放"}
+                </button>
+              ) : (
+                <span className="sub" title="录像文件缺失或无解析信息">
+                  —
+                </span>
               )}
             </td>
             <td className="num">{v.clicks || "—"}</td>
@@ -122,7 +136,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
         ))}
         {rows.length === 0 && (
           <tr>
-            <td colSpan={15}>
+            <td colSpan={16}>
               <div className="admin_empty">没有符合条件的录像</div>
             </td>
           </tr>

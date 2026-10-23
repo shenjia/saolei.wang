@@ -1,6 +1,7 @@
 // 管理后台 · 录像管理（2026-09-24）
 // 全量录像检索与处置：级别 / 状态 / NF / 时间范围 / 玩家，行内可审核、下载、彻底删除。
-// 2026-10-23：tbody 收进客户端 AdminVideoTable——「时间」列点击弹全屏播放器（与审核页同一套）。
+// 2026-10-23：tbody 收进客户端 AdminVideoTable——「播放」列（点击列前）弹全屏播放器
+// （与审核页同一套）；「时间」列成绩＝新标签页打开前台录像详情页。
 
 import Link from "next/link";
 import { Suspense } from "react";
@@ -95,6 +96,7 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
                 <th>软件</th>
                 <th className="c">状态</th>
                 <th>审核</th>
+                <th className="c">播放</th>
                 <th className="num">点击</th>
                 <th className="num">下载</th>
                 <th className="num">评论</th>
