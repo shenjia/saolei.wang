@@ -48,6 +48,13 @@ function hlTitle(title: string, kw?: string): ReactNode {
   );
 }
 
+/** 已读后标题保持亮灰不变的帖子（2026-10-23 张老师：取消高亮后口径统一）——
+ *  公告（board=0）与精华（isNice）已读后标题降至亮灰 #bbbbbb，不随已读降暗灰，
+ *  与原「公告/高亮帖已读」规则同语义，仅换载体类名 */
+function isReadKeep(p: BbsPostItem): boolean {
+  return p.board === 0 || p.isNice;
+}
+
 export function BbsRow({
   p,
   showBoard,
@@ -84,8 +91,10 @@ export function BbsRow({
               {BBS_BOARD_NAMES[p.board]}
             </span>
           )}
+          {/* 2026-10-23（张老师）：取消论坛高亮设定——标题一律不加 highlight 类，
+              管理员高亮操作入口一并移除；公告/精华已读标题保持亮灰（keep 类） */}
           <Link
-            className={"bbs_title" + (p.isTop ? " highlight" : "")}
+            className={"bbs_title" + (isReadKeep(p) ? " keep" : "")}
             href={`/bbs/${p.id}`}
             target="_blank"
             onClick={() => markBbsRead(p.id)}

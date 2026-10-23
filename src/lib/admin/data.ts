@@ -860,7 +860,6 @@ export interface AdminPostRow {
   title: string;
   replies: number;
   clicks: number;
-  isTop: boolean;
   isPinned: boolean;
   isNice: boolean;
   isLocked: boolean;
@@ -884,7 +883,6 @@ export async function getPostListAdmin(f: {
   if (f.status === "1") where.status = -1;
   else if (f.status === "0") where.status = 0;
   else if (f.status === "5") where.status = 5; // AI 待审（2026-10-13）
-  if (f.flag === "top") where.isTop = true;
   if (f.flag === "pinned") where.isPinned = true;
   if (f.flag === "nice") where.isNice = true;
   if (f.flag === "locked") where.isLocked = true;
@@ -902,7 +900,7 @@ export async function getPostListAdmin(f: {
       take: ADMIN_PAGESIZE,
       select: {
         id: true, board: true, user: true, title: true, replies: true, clicks: true,
-        isTop: true, isPinned: true, isNice: true, isLocked: true, status: true, aiReason: true,
+        isPinned: true, isNice: true, isLocked: true, status: true, aiReason: true,
         lastReplyTime: true, createTime: true,
       },
     }),
@@ -921,7 +919,6 @@ export async function getPostListAdmin(f: {
       title: decodeLegacyEntities(p.title),
       replies: p.replies,
       clicks: p.clicks,
-      isTop: p.isTop,
       isPinned: p.isPinned,
       isNice: p.isNice,
       isLocked: p.isLocked,

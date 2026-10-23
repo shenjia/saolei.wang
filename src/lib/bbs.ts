@@ -237,8 +237,6 @@ export interface BbsPostItem {
   title: string;
   replies: number;
   clicks: number;
-  /** 高亮（旧版 IsHigh 语义：仅标题白显，不参与排序；历史 172 条保留） */
-  isTop: boolean;
   /** 置顶（新版真置顶：列表排序提前，2026-09-25 独立） */
   isPinned: boolean;
   isNice: boolean;
@@ -286,8 +284,8 @@ export async function getPostList(opts: {
     ...(nice ? { isNice: true } : {}),
   };
   const total = await prisma.bbsPost.count({ where });
-  // 旧版 IsHigh=「高亮」不参与排序（BBS_All/Page_List 仅按时间列），isTop 保持该语义；
-  // 置顶由新列 isPinned 承担：置顶组在前、组内与普通帖同按时间列倒序（2026-09-25 张老师定）
+  // 2026-10-23（张老师）：取消论坛高亮——isTop 不参与排序也不再有前台效果；
+  // 置顶由 isPinned 承担：置顶组在前、组内与普通帖同按时间列倒序（2026-09-25 张老师定）
   const orderField = order === "post" ? "id" : "lastReplyTime";
   const size = opts.take ?? BBS_PAGESIZE;
   const rows = await prisma.bbsPost.findMany({
@@ -309,9 +307,8 @@ export async function getPostList(opts: {
       title: decodeLegacyEntities(r.title),
       replies: r.replies,
       clicks: r.clicks,
-      // 公告板块（board=0）一律强制高亮（2026-09-25 张老师定）——展示层判定，
-      // 不写库：同步重放与旧数据都不受影响；BbsOps 对公告隐藏「高亮」操作
-      isTop: r.isTop || r.board === 0,
+      // 2026-10-23（张老师）：取消论坛高亮设定——isTop 不再输出（DB 列保留，历史值仅备查）；
+      // 公告（board=0）已读标题保持亮灰由 BbsFeed isReadKeep 判定
       isPinned: r.isPinned,
       isNice: r.isNice,
       isLocked: r.isLocked,
@@ -357,8 +354,7 @@ export async function getPost(
     content: row.content,
     replies: row.replies,
     clicks: row.clicks + (bump ? 1 : 0),
-    // 公告板块强制高亮（同 getPostList 展示层判定）
-    isTop: row.isTop || row.board === 0,
+    // 2026-10-23（张老师）：取消论坛高亮——isTop 不再输出（同 getPostList 口径）
     isPinned: row.isPinned,
     isNice: row.isNice,
     isLocked: row.isLocked,
@@ -667,10 +663,10 @@ export async function deleteReply(id: number, userId: number, isAdmin: boolean):
   return true;
 }
 
-/** 管理员：置顶/高亮/精华/锁定/移动板块（置顶=isPinned 新语义；高亮=isTop 旧版 IsHigh 语义） */
+/** 管理员：置顶/精华/锁定/移动板块（置顶=isPinned；2026-10-23 取消高亮——isTop 不再可写） */
 export async function adminSetPost(
   id: number,
-  data: { isPinned?: boolean; isTop?: boolean; isNice?: boolean; isLocked?: boolean; board?: number }
+  data: { isPinned?: boolean; isNice?: boolean; isLocked?: boolean; board?: number }
 ): Promise<void> {
   await prisma.bbsPost.update({ where: { id: BigInt(id) }, data: { ...data, updateTime: nowSec() } });
 }

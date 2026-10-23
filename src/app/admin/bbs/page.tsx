@@ -48,7 +48,6 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                 options: [
                   ["", "全部"],
                   ["pinned", "仅置顶"],
-                  ["top", "仅高亮"],
                   ["nice", "仅精华"],
                   ["locked", "仅锁定"],
                 ],
@@ -108,10 +107,10 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                   <td className="c">
                     <span className="admin_tags">
                       {p.isPinned && <span className="admin_tag bad">置顶</span>}
-                      {(p.isTop || p.board === 0) && <span className="admin_tag bad">高亮</span>}
+                      {/* 2026-10-23（张老师）：取消论坛高亮设定——后台不再展示/操作高亮 */}
                       {p.isNice && <span className="admin_tag warn">精华</span>}
                       {p.isLocked && <span className="admin_tag plain">锁定</span>}
-                      {!p.isPinned && !p.isTop && p.board !== 0 && !p.isNice && !p.isLocked && <span className="sub">—</span>}
+                      {!p.isPinned && !p.isNice && !p.isLocked && <span className="sub">—</span>}
                     </span>
                   </td>
                   <td className="c">
@@ -143,14 +142,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       params={{ id: p.id, isPinned: !p.isPinned }}
                       label={p.isPinned ? "取消置顶" : "置顶"}
                     />
-                    {/* 公告板块一律强制高亮，不提供手动高亮/取消操作 */}
-                    {p.board !== 0 && (
-                      <AdminAction
-                        op="bbs.setPost"
-                        params={{ id: p.id, isTop: !p.isTop }}
-                        label={p.isTop ? "取消高亮" : "高亮"}
-                      />
-                    )}
+                    {/* 2026-10-23（张老师）：取消论坛高亮设定——高亮/取消高亮操作移除 */}
                     <AdminAction
                       op="bbs.setPost"
                       params={{ id: p.id, isNice: !p.isNice }}

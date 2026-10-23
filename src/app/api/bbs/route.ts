@@ -145,22 +145,15 @@ export async function POST(req: NextRequest) {
   if (action === "admin") {
     if (!admin) return NextResponse.json({ error: "无权操作" }, { status: 403 });
     if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
-    const data: { isPinned?: boolean; isTop?: boolean; isNice?: boolean; isLocked?: boolean; board?: number } = {};
+    const data: { isPinned?: boolean; isNice?: boolean; isLocked?: boolean; board?: number } = {};
     if (body.isPinned !== undefined) data.isPinned = !!body.isPinned;
-    if (body.isTop !== undefined) data.isTop = !!body.isTop;
+    // 2026-10-23（张老师）：取消论坛高亮设定——isTop 不再接受写入（历史值仅留库备查）
     if (body.isNice !== undefined) data.isNice = !!body.isNice;
     if (body.isLocked !== undefined) data.isLocked = !!body.isLocked;
     if (body.board !== undefined) {
       const board = parseInt(String(body.board), 10);
       if (!(board in BBS_BOARD_NAMES)) return NextResponse.json({ error: "板块不存在" }, { status: 400 });
       data.board = board;
-    }
-    // 公告板块一律强制高亮（展示层判定）——isTop 写操作对公告无效，防绕过前端直调
-    if (data.isTop === false) {
-      const post = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { board: true } });
-      if (post?.board === 0) {
-        return NextResponse.json({ error: "公告板块主题始终高亮，无需手动设置" }, { status: 400 });
-      }
     }
     await adminSetPost(id, data);
     return NextResponse.json({ ok: true });

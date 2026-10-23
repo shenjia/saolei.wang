@@ -141,15 +141,12 @@ export function PostOps({
   postId,
   isOwner,
   isAdmin,
-  notice,
   flags,
 }: {
   postId: number;
   isOwner: boolean;
   isAdmin: boolean;
-  /** notice=true 时隐藏「高亮」——公告板块一律强制高亮（2026-09-25），无需也不可手动切换 */
-  notice?: boolean;
-  flags: { isTop: boolean; isPinned: boolean; isNice: boolean; isLocked: boolean };
+  flags: { isPinned: boolean; isNice: boolean; isLocked: boolean };
 }) {
   const router = useRouter();
 
@@ -168,19 +165,15 @@ export function PostOps({
           ? body.isPinned
             ? "已置顶"
             : "已取消置顶"
-          : body.isTop !== undefined
-            ? body.isTop
-              ? "已高亮"
-              : "已取消高亮"
-            : body.isNice !== undefined
-              ? body.isNice
-                ? "已加精"
-                : "已取消精华"
-              : body.isLocked !== undefined
-                ? body.isLocked
-                  ? "已锁定"
-                  : "已解锁"
-                : "操作成功";
+          : body.isNice !== undefined
+            ? body.isNice
+              ? "已加精"
+              : "已取消精华"
+            : body.isLocked !== undefined
+              ? body.isLocked
+                ? "已锁定"
+                : "已解锁"
+              : "操作成功";
     toast(label, "success");
     if (body.action === "delete") router.push("/bbs");
     else router.refresh();
@@ -193,13 +186,8 @@ export function PostOps({
           <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isPinned: !flags.isPinned }))}>
             {flags.isPinned ? "取消置顶" : "置顶"}
           </a>{" "}
-          {!notice && (
-            <>
-              <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isTop: !flags.isTop }))}>
-                {flags.isTop ? "取消高亮" : "高亮"}
-              </a>{" "}
-            </>
-          )}
+          {/* 2026-10-23（张老师）：取消论坛高亮设定——「高亮」操作链接移除，
+              isTop 不再可写（API 端同步忽略） */}
           <a href="#" onClick={(e) => (e.preventDefault(), op({ action: "admin", id: postId, isNice: !flags.isNice }))}>
             {flags.isNice ? "取消精华" : "加精"}
           </a>{" "}

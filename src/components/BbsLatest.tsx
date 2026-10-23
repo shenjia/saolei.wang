@@ -37,11 +37,8 @@ export async function BbsLatest() {
                   >
                     {BBS_BOARD_NAMES[p.board]}
                   </span>
-                  <Link
-                    href={`/bbs/${p.id}`}
-                    target="_blank"
-                    className={"t" + (p.isTop ? " high" : "")}
-                  >
+                  {/* 2026-10-23（张老师）：取消论坛高亮——首页新帖标题不再加 .high 白显 */}
+                  <Link href={`/bbs/${p.id}`} target="_blank" className="t">
                     {p.title}
                   </Link>
                   {p.isPinned && <span className="pin">▲</span>}

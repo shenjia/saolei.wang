@@ -1469,15 +1469,10 @@ body #page.bbs_old .page_head {
   font-size: 13px;
   margin-left: 5px;
 }
-/* 高亮（旧版 IsHigh 语义，2026-09-25 与置顶分离）：标题白显 + 详情页 ◆ 标记 */
-.bbs_list a.bbs_title.highlight {
-  color: #f8f8f2;
-}
-.bbs_list a.bbs_title.highlight:hover {
-  color: #a6e22e;
-}
-/* 已读主题：点击过的帖子标题变灰 #75715e（普通帖；公告/高亮帖已读另降亮灰，
-   见下方 highlight read 规则）。2026-10-14 张老师：统计数字（评论/阅读）
+/* 2026-10-23（张老师）：取消论坛高亮设定——原 .highlight 白显规则删除（历史 172 条
+   isTop 记录不再有前台效果，DB 列保留），公告/精华已读保持亮灰的规则换 .keep 载体 */
+/* 已读主题：点击过的帖子标题变灰 #75715e（普通帖；公告/精华帖已读另降亮灰，
+   见下方 keep read 规则）。2026-10-14 张老师：统计数字（评论/阅读）
    不再随已读变色——计数是客观数据，明暗只表达评论>阅读的层级，
    故 read 规则只作用于标题 */
 .bbs_list tr.read .bbs_title {
@@ -1486,10 +1481,11 @@ body #page.bbs_old .page_head {
 .bbs_list tr.read a.bbs_title:hover {
   color: #a6e22e;
 }
-/* 公告/高亮帖已读（2026-10-16 张老师）：标题降到亮灰 #bbbbbb（普通未读标题同色），
-   不随已读降到暗灰——公告常驻列表顶部，看过即视为「不再强调」而非「过期冷置」。
+/* 公告/精华帖已读（2026-10-16 张老师；2026-10-23 取消高亮后扩至精华）：
+   标题降到亮灰 #bbbbbb（普通未读标题同色），不随已读降到暗灰——
+   公告常驻列表顶部、精华是运营推荐位，看过即视为「不再强调」而非「过期冷置」。
    (0,4,1) 压过上面 read 暗灰 (0,3,1)；hover 绿 (0,4,2) 仍压过本规则 */
-.bbs_list tr.read a.bbs_title.highlight {
+.bbs_list tr.read a.bbs_title.keep {
   color: #bbbbbb;
 }
 /* 搜索态结果标题关键字高亮（2026-10-15 张老师）：命中片段绿显（同页头搜索词
@@ -1498,35 +1494,7 @@ body #page.bbs_old .page_head {
 .bbs_list a.bbs_title .search_kw {
   color: #a6e22e;
 }
-.bbs_high_flag {
-  color: #f8f8f2;
-  font-size: 15px;
-  margin-left: 5px;
-  position: relative;
-  cursor: default;
-}
-.bbs_high_flag::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: 150%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1e1f1c;
-  color: #f8f8f2;
-  border: 1px solid #49483e;
-  border-radius: 3px;
-  padding: 1px 7px;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.08s;
-  z-index: 9999;
-}
-.bbs_high_flag:hover::after {
-  opacity: 1;
-}
+
 /* 自定义 tooltip：悬停立即弹出，替代原生 title 的 1s 延迟 */
 .bbs_star,
 .bbs_top {
