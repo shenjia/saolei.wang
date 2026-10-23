@@ -18,8 +18,15 @@ export default async function VideoUploadPage() {
       <div className="video_upload box center">
         <h1>上传录像</h1>
         <p>
-          本站现接受 <em>Minesweeper Arbiter 0.52.3</em> 生成的 <em>avf</em> 录像，以及{" "}
-          <em>元扫雷 3.3.4</em> 生成的 <em>evf</em> 录像。
+          本站现接受{" "}
+          <a href="/download/Arbiter_0.52.3.zip" download>
+            <em>Minesweeper Arbiter 0.52.3</em>
+          </a>{" "}
+          生成的 <em>avf</em> 录像，以及{" "}
+          <a href="/download/Metasweeper_3.3.4.exe" download>
+            <em>元扫雷 3.3.4</em>
+          </a>{" "}
+          生成的 <em>evf</em> 录像。
         </p>
         <p>上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。</p>
         <hr />
