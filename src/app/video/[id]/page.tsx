@@ -126,8 +126,6 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
           <h1>
             {LEVEL_NAMES[level] ?? video.level}
             <em className={lvCls}>{scoreTime(scores.time)}</em>秒 {video.noflag && <ins>NF</ins>}
-            {/* 2026-10-23 张老师需求：主版块标题后加 ✓ 表示已审核（NF 之后，绿色小标） */}
-            {video.status === VIDEO_STATUS.REVIEWED && <em className="ok">✓</em>}
           </h1>
           <h2>
             <span className="board_3bv">

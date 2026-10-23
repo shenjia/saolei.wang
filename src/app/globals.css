@@ -602,23 +602,18 @@ body #video_view .video_cell .counters span {
 /* 录像详情页状态标签（2026-10-23 张老师需求）：
    ①待审核（st10）橙色——legacy 的 .status.st10 是绿（.video_cell .status.st10 (0,3,0)
    且 legacy 后加载），须 body 前缀 (0,3,1) 压过；橙色取中级色 #f79646（站点标准橙档）
-   ②已通过（st20）文字后 ✓ 小标（em.ok）——继承 st20 绿 #a6e22e，10px 与列表
-   td.score .reviewed 同款（legacy em 字重正常，这里不复位，细 ✓ 更像下标） */
+   ②已通过（st20）文字后 ✓ 小标（em.ok）绿色——⚠️ 不能靠「继承 st20 绿」：legacy
+   .video_cell em{color:#939387;...}(0,2,0) 直接命中 em 本身，直接声明永远压过
+   继承（首版实证：✓ 被染成灰 20px）。必须显式 color:#a6e22e 并复位 padding/字号 */
 body #video_view .video_cell .status.st10 {
   color: #f79646;
 }
 body #video_view .video_cell .status .ok {
   font-style: normal;
+  padding: 0;
   margin-left: 4px;
   font-size: 10px;
-}
-/* ③同款 ✓ 上主版块标题（2026-10-23 张老师需求）：h1 行尾（NF 之后）。
-   h1 内 em 被 legacy .video_cell h1 em 钉成金色 26px (0,2,1)，且 legacy 后加载，
-   须 body 前缀 (0,3,2) 压过改色改号（绿 #a6e22e 14px——比 20px 的 NF 再小一档下标） */
-body #video_view .video_cell h1 em.ok {
   color: #a6e22e;
-  font-size: 14px;
-  margin-left: 6px;
 }
 
 /* 可播放棋盘：地图中心播放图标（2026-09-26 张老师要求）
