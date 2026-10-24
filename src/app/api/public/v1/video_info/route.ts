@@ -6,7 +6,8 @@
 // 含 userId / userName（原 partner 草案 videos 接口不含逐盘指标，本接口补齐）。
 // 只出口站内公开展示口径：屏蔽(0)录像 404 不返回；待审(10)/已通过(20)可查
 // （status 字段如实返回，2026-10-23 张老师定的前台口径：待审即上传即可见）。
-// 隐私不出：文件路径 filepath、审核人 reviewUser 等。
+// fileUrl：录像文件完整 URL（/videos{filepath}，同站内回放页口径，2026-10-24 张老师指令）。
+// 隐私不出：审核人 reviewUser 等；filepath 不单出（已拼进 fileUrl）。
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
       id: bigint; level: string; user: bigint; hash: string; status: number;
       create_time: bigint; review_time: bigint | null;
       real_time: number; board_3bv: number; noflag: number;
+      filepath: string;
       software: string; version: string; signature: string;
       cl: number | null; cl_left: number | null; cl_right: number | null;
       cl_double: number | null; ce: number | null; path: number | null;
@@ -43,7 +45,7 @@ export async function GET(req: Request) {
     }[]
   >(
     `SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
-            vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version, vi.signature,
+            vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version, vi.signature, vi.filepath,
             m.cl, m.cl_left, m.cl_right, m.cl_double, m.ce, m.path, m.ioe, m.stnb
      FROM video v
      JOIN video_info vi ON vi.id = v.id
@@ -52,6 +54,9 @@ export async function GET(req: Request) {
   );
 
   const authors = await usersByIds([...new Set(rows.map((r) => Number(r.user)))]);
+
+  // 文件域名：SITE_URL 优先（生产= https://new.saolei.wang），未配时退请求 origin（本地 dev 可用）
+  const base = process.env.SITE_URL ?? new URL(req.url).origin;
 
   const items = rows.map((r) => {
     const brief = authors.get(Number(r.user));
@@ -71,6 +76,8 @@ export async function GET(req: Request) {
       board3bv: bv,
       "3bvs": rt > 0 ? sign * Math.round((bv * 1000000) / rt) : 0,
       nf: Number(r.noflag) === 1,
+      // 录像文件完整 URL（/videos{filepath}，同站内回放页口径；直接 GET 即下载，Content-Type octet-stream）
+      fileUrl: `${base}/videos${r.filepath}`,
       software: r.software,
       version: r.version,
       // 玩家标识（录像内嵌签名，站内「录像标识」版块口径）

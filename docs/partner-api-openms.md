@@ -79,7 +79,7 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
 
 ### 3. 录像详情（含重放指标）`GET /api/public/v1/video_info?id=1,2,3`
 
-`id` = 逗号分隔的录像 ID，最多 50 个。返回录像全部**已落盘公开数据**：video_list 全部字段 + `status`（10=待审 / 20=已通过）+ `signature`（录像内嵌玩家标识）+ `metrics`（离线重放引擎算得的落盘指标）。
+`id` = 逗号分隔的录像 ID，最多 50 个。返回录像全部**已落盘公开数据**：video_list 全部字段 + `status`（10=待审 / 20=已通过）+ `signature`（录像内嵌玩家标识）+ `metrics`（离线重放引擎算得的落盘指标）+ `fileUrl`（录像文件完整 URL）。
 
 ```json
 {
@@ -91,6 +91,7 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
       "realTime": 25100, "board3bv": 152, "3bvs": 6055,
       "nf": false, "software": "Arbiter", "version": "0.52.3",
       "signature": "JuZeEn",
+      "fileUrl": "https://new.saolei.wang/videos/2025/09/28/xxx.evf",
       "metrics": {
         "cl": 185,
         "clLeft": 120, "clRight": 40, "clDouble": 25,
@@ -107,6 +108,7 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 
 说明：
 - 屏蔽（status=0）录像不返回；待审（10）/已通过（20）均可查
+- `fileUrl` = 录像文件（MVF/EVF 等）完整下载地址，直接 GET 即得文件本体（`application/octet-stream`）；注意全站对该类静态文件限速 3 req/s，批量拉取请自行排队，勿并发打爆
 - `metrics` 为 null 表示该录像重放指标尚未落盘（老录像跑批覆盖中）
 - 点击计数为站内 flop 引擎口径（2026-10-16 定稿）：左/右/双按事件语义归类，`ce` = 有效点击，与其他站点的派生口径可能不同，请勿混用
 
@@ -141,10 +143,11 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 ## 三、通用约定
 
 - 所有时间戳均为 Unix 秒；time 类成绩为毫秒，3bvs 为实际值（整数）
+- 录像文件本体不随 `video_list` 出（列表接口轻量）；需要文件时用 `video_info` 的 `fileUrl` 下载
 - 数据仅限站内公开展示口径；**不包含**任何联系方式（QQ/邮箱）、IP、登录时间等隐私字段
 - 引用数据时请注明来源：扫雷网 saolei.wang
 - 接口变更会尽量保持向后兼容；重大变更提前通知
-- 本 API 不提供录像文件下载；网页回放请引导用户访问 `https://new.saolei.wang/video/{id}`
+- 网页回放请引导用户访问 `https://new.saolei.wang/video/{id}`
 
 ## 四、快速验证
 
@@ -157,4 +160,5 @@ curl -H "X-Api-Key: <你的key>" "https://new.saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
+- 2026-10-24：`video_info` 新增 `fileUrl` 字段（录像文件完整 URL）。
 - 2026-10-24：草案重构。`/api/partner/v1/*` → `/api/public/v1/*`；`videos` → `video_list`、`users` → `user_list`；新增 `video_info`（含重放指标）、`user_info`（双体系成绩+标识列表）、`stats`（站点统计+max id）；key 改为后台签发管理（原 .env 草案 key 过渡期兼容）；草案期 rankings 接口废弃。
