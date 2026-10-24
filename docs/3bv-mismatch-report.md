@@ -1,6 +1,6 @@
 # 3BV 口径不一致扫描结果（2026-10-23）
 
-背景：https://new.saolei.wang/video/85419（中级，Arbiter 0.52，2014-03-30，wuqifeng(zhejiang)）
+背景：https://saolei.wang/video/85419（中级，Arbiter 0.52，2014-03-30，wuqifeng(zhejiang)）
 页面 3BV 显示 90，但录像播放统计面板显示的分母只有 60。
 
 ## 根因（85419）

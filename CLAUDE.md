@@ -85,7 +85,7 @@
 
 - `mvf.ts` / `avf.ts`：MVF/AVF 解析器（594/349 行 C 的忠实 TS 移植），输出 RawVF 文本行
 - `videofile.ts`：录像文件统一读取（2026-10-16）——本地 `videos/` 命中回流，未命中按 `VIDEO_FALLBACK_ORIGIN`
-  （.env，现 https://new.saolei.wang，切主域后改 saolei.wang）**服务端反代**主站同名文件；
+  （.env，填 https://saolei.wang）**服务端反代**主站同名文件；
   `/videos/[...path]` 与 `/video/download/[id]` 都走它。必须反代而非 302：客户端 fetch 跨域重定向被 CORS 拦
 - `rawvf.ts`：Parser::format / renderBoard 移植。renderBoard 曾复刻 PHP 7.1+ 负偏移怪癖
   （`"$row[-1]"` 取行尾 → 左边界格把同行 x=max 当左邻），2026-10-13 对照 Arbiter 实局确认该怪癖
@@ -132,7 +132,7 @@
 
 ## 生产部署（B1 架构，2026-09-28 定型）
 
-**服务器：60.205.137.210（2C3.5G+4G swap），DNS new.saolei.wang**。旧机 123.57.59.12 已退役。
+**服务器：60.205.137.210（2C3.5G+4G swap），域名 saolei.wang（www/裸域主域，new.* 过渡域已 301 归一化，2026-10-25 切换）**。旧机 123.57.59.12 已退役。
 
 - **链路：GitHub Actions 构建 → artifact → rsync 产物到服务器 → server-release.sh 发布**。
   CI 单次构建标准 `.next`，服务器端复制成备槽。完整流程见 `.github/workflows/deploy.yml`

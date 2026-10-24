@@ -8,7 +8,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = process.env.SITE_URL ?? "https://new.saolei.wang";
+  const base = process.env.SITE_URL ?? "https://saolei.wang";
   const now = new Date();
   const page = (path: string, priority = 0.5, changeFrequency: "daily" | "weekly" | "monthly" = "weekly") => ({
     url: `${base}${path}`,

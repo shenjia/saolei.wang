@@ -55,7 +55,7 @@ export async function GET(req: Request) {
 
   const authors = await usersByIds([...new Set(rows.map((r) => Number(r.user)))]);
 
-  // 文件域名：SITE_URL 优先（生产= https://new.saolei.wang），未配时退请求 origin（本地 dev 可用）
+  // 文件域名：SITE_URL 优先（生产切换主域时配 https://saolei.wang），未配时退请求 origin（本地 dev 可用）
   const base = process.env.SITE_URL ?? new URL(req.url).origin;
 
   const items = rows.map((r) => {

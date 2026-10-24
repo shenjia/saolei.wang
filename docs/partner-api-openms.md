@@ -2,7 +2,7 @@
 
 > 适用对象：外部机器人 / 数据同步服务（首批 openms.top）
 > 版本：v1（2026-10-24，取代 2026-10-21 未启用的 partner 草案）
-> 基础地址：`https://new.saolei.wang`（正式域名切换为 www.saolei.wang 后地址不变，届时另行通知）
+> 基础地址：`https://saolei.wang`（2026-10-25 已正式切换主域，旧 new.saolei.wang 整体 301 到此，请接入方更新）
 
 ## 一、鉴权
 
@@ -73,7 +73,7 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
 字段说明：
 - `realTime` 毫秒；`3bvs` 已按站内口径算好（`ROUND(board_3bv×1e6/real_time)`），**负值 = 运气盘**（初级 3BV<10、中高级 3BV<4），成绩不被站内承认，建议同步侧同样标注或排除
 - `nf`：true = 无标雷（NF）录像
-- 只含过审（status=20）胜局录像；**录像文件本体不提供**，如需回放请链接到 `https://new.saolei.wang/video/{id}`
+- 只含过审（status=20）胜局录像；**录像文件本体不提供**，如需回放请链接到 `https://saolei.wang/video/{id}`
 
 增量同步建议：记上次 `nextCursor`，每次从断点续拉；上传侧删除/屏蔽的录像会从数据中消失，建议以「全量对账 + 增量追加」组合维护。用 `stats` 接口的 `maxVideoId` 确定抓取上界。
 
@@ -91,7 +91,7 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
       "realTime": 25100, "board3bv": 152, "3bvs": 6055,
       "nf": false, "software": "Arbiter", "version": "0.52.3",
       "signature": "JuZeEn",
-      "fileUrl": "https://new.saolei.wang/videos/2025/09/28/xxx.evf",
+      "fileUrl": "https://saolei.wang/videos/2025/09/28/xxx.evf",
       "metrics": {
         "cl": 185,
         "clLeft": 120, "clRight": 40, "clDouble": 25,
@@ -147,12 +147,12 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 - 数据仅限站内公开展示口径；**不包含**任何联系方式（QQ/邮箱）、IP、登录时间等隐私字段
 - 引用数据时请注明来源：扫雷网 saolei.wang
 - 接口变更会尽量保持向后兼容；重大变更提前通知
-- 网页回放请引导用户访问 `https://new.saolei.wang/video/{id}`
+- 网页回放请引导用户访问 `https://saolei.wang/video/{id}`
 
 ## 四、快速验证
 
 ```bash
-curl -H "X-Api-Key: <你的key>" "https://new.saolei.wang/api/public/v1/stats"
+curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 ```
 
 ---

@@ -251,4 +251,4 @@ NGINXEOF
 
 nginx -t
 nginx -s reload
-echo "[ok] HTTPS 就绪 → https://new.saolei.wang  （80 端口已整体 301 到 https）"
+echo "[ok] HTTPS 就绪 → https://saolei.wang  （80 端口已整体 301 到 https；new.* 过渡域已 301 到主域）"

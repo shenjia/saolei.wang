@@ -1,7 +1,6 @@
 // 录像文件统一读取（本地 videos/ 命中直接回流；未命中时按 VIDEO_FALLBACK_ORIGIN
 // 反代主站同名文件兜底——开发环境不带 55 万录像文件，靠主站播放/下载）。
-// 主站域名写在 .env 的 VIDEO_FALLBACK_ORIGIN（现为 https://new.saolei.wang，
-// 正式切换主域后改成 https://saolei.wang 即可）。
+// 主站域名写在 .env 的 VIDEO_FALLBACK_ORIGIN（生产切换主域时配 https://saolei.wang）。
 // 用服务端反代而非 302：客户端 fetch 跨域重定向会被 CORS 拦截，反代对
 // fetch / flop iframe / 下载三种消费方都透明。
 
@@ -11,7 +10,7 @@ import { Readable } from "stream";
 
 export const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 
-/** 主站兜底源（如 https://new.saolei.wang），未配置则本地缺失时直接 404 */
+/** 主站兜底源（如 https://saolei.wang），未配置则本地缺失时直接 404 */
 export const VIDEO_FALLBACK_ORIGIN = (process.env.VIDEO_FALLBACK_ORIGIN || "").replace(/\/+$/, "");
 
 /** 解析本地文件路径（带目录穿越防护）；不存在返回 null */

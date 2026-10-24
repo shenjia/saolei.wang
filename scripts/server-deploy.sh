@@ -194,8 +194,10 @@ sleep 1
 # 双协议探测：证书就位前只有 80（HTTP），证书就位后 443（HTTPS）——任一通即过。
 # 正式切 https 后可只留 443 探测。
 final_check() {
-  curl -sf --max-time 10 --resolve "new.saolei.wang:443:127.0.0.1" "https://new.saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
-  curl -sf --max-time 10 --resolve "new.saolei.wang:80:127.0.0.1" "http://new.saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
+  # 主域 saolei.wang（2026-10-25 切换；勿用 new.*——它已 301 归一化，探测会打到 301 上，
+  # curl -sf 对 301 返回 0 → 永远「通过」，探测不到真实上游）
+  curl -sf --max-time 10 --resolve "saolei.wang:443:127.0.0.1" "https://saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
+  curl -sf --max-time 10 --resolve "saolei.wang:80:127.0.0.1" "http://saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
   return 1
 }
 if final_check; then

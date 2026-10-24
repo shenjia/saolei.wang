@@ -87,7 +87,7 @@ const APIS: ApiDoc[] = [
 }`,
     notes: [
       "realTime 毫秒；3bvs 已按站内口径算好（ROUND(board_3bv×1e6/real_time)），负值 = 运气盘（初级 3BV<10、中高级 3BV<4），成绩不被站内承认",
-      "nf: true = 无标雷（NF）录像；列表不含录像文件，需要文件用 video_info 的 fileUrl，网页回放链到 https://new.saolei.wang/video/{id}",
+      "nf: true = 无标雷（NF）录像；列表不含录像文件，需要文件用 video_info 的 fileUrl，网页回放链到 https://saolei.wang/video/{id}",
     ],
   },
   {
@@ -112,7 +112,7 @@ const APIS: ApiDoc[] = [
       "board3bv": 123,
       "3bvs": 4900,
       "nf": false,
-      "fileUrl": "https://new.saolei.wang/videos/2025/07/31/6d58634fbe0987003dda90f4a68944a7.avf",
+      "fileUrl": "https://saolei.wang/videos/2025/07/31/6d58634fbe0987003dda90f4a68944a7.avf",
       "software": "Arbiter",
       "version": "0.52",
       "signature": "Ju Ze En",
@@ -296,7 +296,7 @@ export default function ApiPage() {
 
         <p>
           快速验证：
-          <code>curl -H &quot;X-Api-Key: 你的key&quot; https://new.saolei.wang/api/public/v1/stats</code>
+          <code>curl -H &quot;X-Api-Key: 你的key&quot; https://saolei.wang/api/public/v1/stats</code>
         </p>
 
         <hr />

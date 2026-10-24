@@ -57,8 +57,8 @@ pnpm dev                     # http://localhost:3000
 ### 录像文件
 
 `videos/`（55 万+ 录像实体文件）不入仓，本地没有也不影响开发：
-本地缺失的录像由 `/videos/*` 路由按 `VIDEO_FALLBACK_ORIGIN`（`.env` 中配置，现为
-`https://new.saolei.wang`，正式切换主域后改为 `https://saolei.wang`）反向代理主站同名文件，
+本地缺失的录像由 `/videos/*` 路由按 `VIDEO_FALLBACK_ORIGIN`（`.env` 中配置，填
+`https://saolei.wang`）反向代理主站同名文件，
 在线回放与下载都能走通。留空该变量则缺失录像直接 404。
 
 ## 部署

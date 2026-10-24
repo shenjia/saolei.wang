@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // pm2 两个进程（ecosystem.config.js env）各自启动时同样带上 → next build/start 都落到自己的目录。
   // ⚠️ Next.js 不认 NEXT_DIST_DIR 环境变量，必须在这里显式读取——漏掉此行会导致两个槽共用
   // .next，CI 每次构建覆盖运行中进程的磁盘产物，HTML 引用的 chunk 在磁盘上消失 → CSS/JS 全 500
-  // （2026-09-25 new.saolei.wang 首日实踩，样式全丢即此因）
+  // （2026-09-25 上线首日实踩，样式全丢即此因）
   distDir: process.env.NEXT_DIST_DIR || ".next",
 
   // dev 预览走 nginx 反代 https://dev.saolei.wang：
