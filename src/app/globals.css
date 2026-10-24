@@ -638,6 +638,11 @@ body #video_view .video_cell .playable {
   margin: 5px 20px 20px 0;
   /* 点击热区＝棋盘本体（点击播放已移到 .play_board，2026-09-26），给手型光标 */
   cursor: pointer;
+  /* 禁文本选择（2026-10-24，玩家报错）：回放中按住拖动会发起原生选择/拖拽，
+     落在非放置目标上光标变 🚫 禁用标记——对齐练习页 #game_area 的
+     user-select:none（练习页没有此问题正是靠这层） */
+  user-select: none;
+  -webkit-user-select: none;
 }
 #video_view .play_board .board {
   margin: 0;
@@ -9874,6 +9879,11 @@ html.op-fakefs #header {
   position: relative;
   width: fit-content; /* 十四期：棋盘本体保持收缩（正方形），不被中栏 stretch 拉宽；
      控制条另由自身 width:100% 填满中栏 */
+  /* 禁文本选择（2026-10-24，玩家报错）：全屏试玩/回放中按住拖动出现 🚫 禁用
+     光标＝原生选择/拖拽未被抑制——练习页靠 #game_area 的 user-select:none
+     天然免疫，本层与页面态 .play_board 同步补上（见该处注释） */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .vprfs_center .replay_bar {
   position: relative; /* 十八期：试玩态 .rb_hint 绝对定位的包含块 */
