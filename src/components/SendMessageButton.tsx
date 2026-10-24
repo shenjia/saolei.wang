@@ -47,10 +47,14 @@ export function SendMessageButton({
 }: {
   to: number;
   name: string;
+  /** 0=未登录（按钮灰置，hover「登录后可发消息」）；等于 to=看自己（「不能给自己发消息」） */
   authorId: number;
   /** bubble＝用户主页气泡图标钮（默认）；text＝消息列表行内文字链（「回复」） */
   variant?: "bubble" | "text";
 }) {
+  // 2026-10-25 十二轮张老师定：按钮全场景常驻——未登录/看自己时灰置不可点，
+  // hover 提示原因（msg_btn--disabled + data-tip 复用全站气泡模式）
+  const disabled = authorId <= 0 || authorId === to;
   const [open, setOpen] = useState(false);
   // 草稿秒级备份：受控直绑 draft.value（浮窗挂载即恢复）；按作者 uid + 收件人 id 隔离，
   // 与消息页发信表单共用同一份草稿——气泡里没发完就关掉，去消息页接着写也能接上
@@ -105,10 +109,14 @@ export function SendMessageButton({
       ) : (
         <button
           type="button"
-          className="msg_btn"
-          title={`给 ${name} 发消息`}
-          aria-label="发消息"
-          onClick={() => setOpen(true)}
+          className={"msg_btn" + (disabled ? " msg_btn--disabled" : "")}
+          title={disabled ? undefined : `给 ${name} 发消息`}
+          data-tip={disabled ? (authorId <= 0 ? "登录后可发消息" : "不能给自己发消息") : undefined}
+          aria-label={disabled ? "发消息（不可用）" : "发消息"}
+          aria-disabled={disabled}
+          onClick={() => {
+            if (!disabled) setOpen(true);
+          }}
         >
           <BubbleIcon />
         </button>

@@ -88,11 +88,10 @@ export function UserCard({
             {/* 发消息气泡按钮（2026-10-25 二轮定稿）：绝对定位钉在排行块右缘、
                 与两行排名的中线垂直对齐（二轮调整：原「最近登录」行右端位置被否），
                 登录且非本人时渲染——不参与文字流、不挤占排名文字 */}
-            {viewerId > 0 && viewerId !== card.id && (
-              <span className="ucd_msg">
-                <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
-              </span>
-            )}
+            {/* 十二轮（2026-10-25）：按钮常驻——未登录/看自己灰置 + hover 提示 */}
+            <span className="ucd_msg">
+              <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
+            </span>
           </div>
         </div>
       </div>
@@ -137,11 +136,10 @@ export function UserCard({
       <p className="ucd_login">
         最近登录{" "}
         {card.lastLoginTime > 0 ? <em>{formatDate(card.lastLoginTime, "Y年n月j日")}</em> : "?"}
-        {viewerId > 0 && viewerId !== card.id && (
-          <span className="ucd_msg">
-            <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
-          </span>
-        )}
+        {/* 十二轮：同上，按钮常驻 */}
+        <span className="ucd_msg">
+          <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
+        </span>
       </p>
     </div>
   );
@@ -165,6 +163,14 @@ export async function UserPanel({
 }) {
   const card = await getUserCard(userId);
   if (!card) return null;
+  // 卡片展示计人气（十五轮 2026-10-25 张老师定）：同 IP 同日跨来源去重，失败不阻断渲染
+  try {
+    const { headers } = await import("next/headers");
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
+    const { recordClick } = await import("@/lib/star");
+    await recordClick(userId, ip, "card");
+  } catch {}
   const radar = card.hasVideos && !hideRadar ? await getRadarData(card.scores) : [];
   // 发消息按钮（2026-10-25）：登录且非本人时渲染（本人卡片不渲染，与用户主页同口径）
   const session = await getSession();

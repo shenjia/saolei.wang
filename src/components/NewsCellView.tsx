@@ -265,9 +265,15 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             )}
           </>
         )}
+        {news.type === NEWS_TYPE.STAR && news.author && (
+          <>
+            {authorCells}
+            <em className="news_star">当选了每日一星！</em>
+          </>
+        )}
         {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
             渲染块移除——details 的 ti/cond 字段随存量行一并消失 */}
-        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52].includes(news.type) && (
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54].includes(news.type) && (
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>

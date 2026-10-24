@@ -150,10 +150,10 @@ export default async function UserViewPage({
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
 
-  // 计人气：同一 IP 同一天只计一次
+  // 计人气：同一 IP 同一天只计一次（十五轮起 ip 列带来源标记 |home，与卡片/每日一星跨来源去重）
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
-  await recordClick(userId, ip);
+  await recordClick(userId, ip, "home");
   const clicks = await getClicks(userId);
 
   // session 提前取（2026-10-23）：本人主页录像版块要放行自己的屏蔽盘（includeBanned），
@@ -257,9 +257,8 @@ export default async function UserViewPage({
           <span className={`gender big ${user.sex ? "male" : "female"}`}></span>
           {/* 2026-10-13 张老师定稿：原「发消息」灰色大按钮改为性别图标右侧的对话气泡小按钮，
               点击弹带遮罩的发信浮窗（输入框同录像评论），成功后屏中弹「发送成功」气泡 */}
-          {session && session.uid !== userId && (
-            <SendMessageButton to={userId} name={user.chineseName} authorId={session.uid} />
-          )}
+          {/* 十二轮（2026-10-25）：按钮常驻——未登录/看自己灰置 + hover 提示 */}
+          <SendMessageButton to={userId} name={user.chineseName} authorId={session?.uid ?? 0} />
           <div className="info_body">
             <table className="scores" cellPadding={0} cellSpacing={0}>
               <tbody>

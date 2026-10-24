@@ -472,13 +472,6 @@ body .tabs > a:hover::after {
 .qq_icon_btn svg {
   display: block;
 }
-/* QQ 已绑定状态（2026-10-25 手动绑定入口在 QQ 行后）：灰色置灰，区别于可点的黄色入口 */
-#account_manage .bind_email_btn.qq_bound,
-#account_manage .bind_email_btn.qq_bound:hover {
-  color: #75715e;
-  cursor: default;
-  text-decoration: none;
-}
 /* ---------- bind/oauth 旧表单结构（暂保留，待后续统一到 lp_*） ---------- */
 .auth_tabs {
   margin-bottom: 18px;
@@ -3217,6 +3210,13 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 #account_manage .bind_email_btn:hover {
   color: #a6e22e;
 }
+/* QQ 已绑定状态（2026-10-25 手动绑定入口在 QQ 行后）：灰色置灰，区别于可点的黄色入口 */
+#account_manage .bind_email_btn.qq_bound,
+#account_manage .bind_email_btn.qq_bound:hover {
+  color: #75715e;
+  cursor: default;
+  text-decoration: none;
+}
 /* 绑定结果反馈（弹窗授权后主窗跳回 /account?bound=1 / ?error=taken） */
 .account_flash {
   margin: 10px 0 0;
@@ -4044,7 +4044,7 @@ body #page.ranking_old .ranking_box {
   font-size: 12px;
 }
 
-/* （每日一星卡 #daily_star_card 样式已随功能于 2026-10-13 下线移除） */
+/* （每日一星 2026-10-25 恢复：渲染复用 .user_card 体系样式，无需专用样式块） */
 
 /* 晋升动态文案（2026-10-14 调整；2026-10-16 张老师定：去「了！」与金色箭头，仅「晋升」二字+
    军衔徽章正常分级色；同日再定：文案改「晋升为」、颜色改暗灰不加粗（继承正文色，同破纪录动态「刷新了」）；
@@ -4118,6 +4118,151 @@ body #page.ranking_old .ranking_box {
 }
 #news .table td a.score.news_article:hover {
   color: #a6e22e;
+}
+
+/* 当选每日一星动态（2026-10-25 张老师定）：文案金色（#fdc61d 全站金牌色，与 .score 成绩金同源）。
+   news_star 挂在 <em> 上——其余类型的 em 是常规斜体灰，本类型用 (1,2,1) 提权盖过 */
+#news .table td em.news_star {
+  font-style: normal;
+  color: #fdc61d;
+  font-weight: bold;
+}
+
+/* 每日一星盒（七轮 2026-10-25 03:37 张老师定）：左右布局——
+   头像局左（板块可用宽 50%）；右侧姓名+性别 / 军衔 / 地区排行 / 全国排行。
+   排名行与用户主页 .ranks 同构（13px / #888 / 名次数字金 #e6db74 加粗）；
+   标题亮灰（与其他板块一致）无图标无日期；无纪录表无最近登录 */
+/* 十轮试元帅金 → 十二轮（04:24）张老师定稿：回归亮灰（legacy h2 全局默认 #b1b1a4，
+   无需覆盖规则）；问号图标保留 */
+/* 问号圆圈图标（十轮）：标题右侧，hover 显示评选规则气泡。
+   气泡复用全站 data-tip 模式但允许换行（文案长，white-space:normal + 定宽） */
+#daily_star h2 .star_help {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  color: #75715e;
+  position: relative;
+  cursor: help;
+  vertical-align: middle;
+}
+#daily_star h2 .star_help:hover {
+  color: #b1b1a4;
+}
+#daily_star h2 .star_help::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 160%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.7;
+  white-space: normal;
+  width: 240px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+#daily_star h2 .star_help:hover::after {
+  opacity: 1;
+}
+#daily_star .star_body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+#daily_star .star_left {
+  flex: 0 0 50%;
+  max-width: 144px;
+}
+#daily_star .star_avatar {
+  display: block;
+  width: 100%;
+  border: 1px solid #656355;
+}
+#daily_star .star_right {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 22px;
+}
+#daily_star .star_name {
+  font-size: 14px;
+  line-height: 22px;
+  margin: 0 0 2px; /* 十四轮：清 legacy p 默认上边距 8.4px——姓名与头像顶对齐的关键 */
+}
+#daily_star .star_name {
+  font-size: 14px;
+  line-height: 22px;
+}
+#daily_star .star_title {
+  line-height: 22px;
+  margin-top: 2px;
+}
+#daily_star .ranks .rank_line {
+  display: block;
+  font-size: 13px;
+  color: #888888;
+  line-height: 21px;
+}
+#daily_star .ranks .rank_line em {
+  color: #e6db74;
+  font-weight: bold;
+  font-style: normal;
+}
+#daily_star .ranks .star_null {
+  color: #75715e;
+}
+/* 感言（八轮→九轮 2026-10-25）：全角引号包裹 + 亮灰 13px；
+   九轮起位于 star_body 下方通栏（头像下面），充分利用板块宽度。
+   十一轮：连续标点（！！…）不换行会撑破容器——anywhere 断行（比 break-all
+   更好：优先正常断字，长串无空格内容（连续感叹号/英文串）才强制断） */
+#daily_star .star_speech {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #b1b1a4;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+/* 管理员删除小按钮（九轮）：感言尾部的暗红小字链 */
+#daily_star .star_speech .star_speech_del {
+  background: none;
+  border: none;
+  padding: 0 0 0 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #75715e;
+  cursor: pointer;
+}
+#daily_star .star_speech .star_speech_del:hover {
+  color: #f92672;
+}
+/* 本人「发表感言」按钮（九轮）：板块底部通栏居左，
+   样式复用论坛「写文章」button active small（legacy 已有，无需重写颜色） */
+#daily_star .star_speech_btn {
+  display: inline-block;
+  margin-top: 8px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+/* 字数实时统计（十一轮）：输入框下右对齐暗灰小字，超限红 */
+.star_speech_count {
+  text-align: right;
+  font-size: 12px;
+  color: #75715e;
+  margin-top: 2px;
+}
+.star_speech_count .over {
+  color: #f92672;
+  font-weight: bold;
 }
 
 /* ---------- 世界 TOP10（2008 版 Top10_World；中国选手行高亮） ---------- */
@@ -7002,6 +7147,43 @@ button.msg_btn:active {
   width: 20px;
   height: 20px;
   margin: 1px auto 0;
+}
+
+/* 灰置态（2026-10-25 十二轮张老师定）：未登录 / 看自己——按钮常驻但不可点，
+   hover 提示原因（data-tip 复用全站气泡视觉：暗底浅字小气泡） */
+button.msg_btn.msg_btn--disabled {
+  color: #4a4a41;
+  cursor: not-allowed;
+}
+button.msg_btn.msg_btn--disabled:hover {
+  color: #4a4a41;
+  background: transparent;
+  background-image: none;
+}
+button.msg_btn.msg_btn--disabled[data-tip] {
+  position: relative;
+}
+button.msg_btn.msg_btn--disabled[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+button.msg_btn.msg_btn--disabled[data-tip]:hover::after {
+  opacity: 1;
 }
 
 /* ---------- ② 发信浮窗：登录浮窗同款遮罩 + 暗玻璃面板 ---------- */

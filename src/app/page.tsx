@@ -7,6 +7,8 @@
 // （排行前十 从栏首移至论坛新帖之下；原名「十大元帅」更名，末列由时间改为「所在地区」）。
 // 二轮定名：版块标题定为「新闻」「录像」，录像标题走灰色次级样式（字号保持 legacy 26px）。
 // 2026-10-13 张老师要求：每日一星功能整体下线（评选触发一并移除）。
+// 2026-10-25 张老师定新版口径恢复：少将及以上 ∪ 30 天名次进步者，排除近 30 日当选，
+// 右栏「入伍新兵」上方展示（版式沿用 09 版卡片）。
 // 2026-10-15 张老师要求：按钮文案「开一局」→「开始练习」；「国内TOP10」→「排行前十」；
 // 移动端（≤880 单列带）「开始练习」改为页面顶部大按钮（新闻上方，高度 2 倍、字体图标加大，
 // 桌面版侧栏按钮与置顶版并存、由 CSS 按断点显隐）。
@@ -34,6 +36,7 @@ import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoFeed } from "@/components/VideoFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { BbsLatest } from "@/components/BbsLatest";
+import { DailyStar } from "@/components/DailyStar";
 import { SystemText } from "@/components/SystemText";
 import { SiteStats } from "@/components/SiteStats";
 import { FlopSprites } from "@/components/FlopSprites";
@@ -197,6 +200,9 @@ export default async function HomePage() {
             </Link>
           </div>
         )}
+        {/* 每日一星（2026-10-25 恢复）：评选在 getTodayStar 内完成（无今日行才选），
+            首页首访即触发的旧模式不复活——右栏展示于入伍新兵之上 */}
+        <DailyStar />
         <div id="newbie" className="box">
           {/* 板块名随观看者称号体系切换：军衔制「入伍新兵」/ 旧版「新人报到」（2026-10-18 张老师定） */}
           <h2>

@@ -26,6 +26,7 @@ const TYPE_NAMES: Record<number, string> = {
   [NEWS_TYPE.JOIN]: "加入扫雷网",
   [NEWS_TYPE.AVATAR]: "更换头像",
   [NEWS_TYPE.COMMENT]: "评论",
+  [NEWS_TYPE.STAR]: "每日一星",
 };
 
 const TYPE_OPTIONS: [string, string][] = [
