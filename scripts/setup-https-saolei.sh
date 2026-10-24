@@ -47,11 +47,17 @@ CERT_DIR="/etc/nginx/ssl/saolei"
 chmod o+x /home/deploy
 
 # 预检：三个域名都必须解析到本机公网 IP，否则 http-01 必挂（DNS 没切就先别跑）
+# 坑（2026-10-25 实证）：set -euo pipefail 下「command_sub=$(dig|grep|tail)」任一环失败
+# 会直接 abort 整个脚本（本机没装 dig 时必炸），必须给管道兜 || true；ifconfig.me 从
+# Aliyun 内网常被 reset，本机 IP 优先走 metadata 服务
 echo "[0/3] DNS 预检（须全部指向本机）..."
-HOST_IP=$(curl -s --max-time 5 ifconfig.me || true)
+HOST_IP=$( (curl -s --max-time 5 http://100.100.100.200/latest/meta-data/eipv4 || curl -s --max-time 5 ifconfig.me || true) | tr -d '[:space:]' )
 for D in "${DOMAINS[@]}"; do
-  RESOLVED=$(dig +short "$D" @223.5.5.5 2>/dev/null | grep -E '^[0-9.]+$' | tail -1)
-  [[ -n "$RESOLVED" ]] || RESOLVED=$(getent hosts "$D" 2>/dev/null | awk '{print $1}' | tail -1)
+  RESOLVED=""
+  if command -v dig >/dev/null 2>&1; then
+    RESOLVED=$( (dig +short "$D" @223.5.5.5 2>/dev/null || true) | grep -E '^[0-9.]+$' | tail -1 || true )
+  fi
+  [[ -n "$RESOLVED" ]] || RESOLVED=$( (getent hosts "$D" 2>/dev/null || true) | awk '{print $1}' | tail -1 || true )
   echo "  $D -> ${RESOLVED:-未解析}"
   if [[ -n "$HOST_IP" && "$RESOLVED" != "$HOST_IP" ]]; then
     echo "[fail] $D 未指向本机（$HOST_IP），先完成 DNS 切换再跑本脚本"
@@ -64,6 +70,8 @@ echo "[1/3] acme.sh 签发 SAN 证书：${DOMAINS[*]}（http-01, webroot=$WEBROO
 # 避开 acme.sh 3.x 默认 ZeroSSL 需要额外注册的不确定性
 ISSUE_ARGS=(); for D in "${DOMAINS[@]}"; do ISSUE_ARGS+=(-d "$D"); done
 "$ACME" --issue -w "$WEBROOT" --server letsencrypt "${ISSUE_ARGS[@]}" 2>&1 | tail -4
+# | tail 会吞签发失败退出码，须用 PIPESTATUS 显式判败（否则带着坏证书继续安装）
+[[ ${PIPESTATUS[0]} -eq 0 ]] || { echo "[fail] 证书签发失败，见上方输出"; exit 1; }
 
 echo "[2/3] 安装证书到 $CERT_DIR 并挂续期 reload..."
 mkdir -p "$CERT_DIR"
