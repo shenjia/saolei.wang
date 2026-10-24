@@ -4175,10 +4175,11 @@ body #page.ranking_old .ranking_box {
 #daily_star .star_body {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 8px; /* 十九轮（05:10）：12→8，右栏再让 4px */
 }
 #daily_star .star_left {
-  flex: 0 0 48%; /* 十八轮（04:55）：50%→48%，右栏多 ~6px 防排名/姓名行折行 */
+  flex: 0 0 44%; /* 十九轮（05:10）：48%→44%——侧栏内容宽恒 210px，右栏=0.56×210-8≈110px，
+     实测「全国第 99999 名」需 105px（rank_line nowrap），五位数名次不折不溢 */
   max-width: 144px;
 }
 #daily_star .star_avatar {
@@ -4210,6 +4211,7 @@ body #page.ranking_old .ranking_box {
   font-size: 13px;
   color: #888888;
   line-height: 21px;
+  white-space: nowrap; /* 全国第 X 名 短行禁折行——中文默认可任意字间断 */
 }
 #daily_star .ranks .rank_line em {
   color: #e6db74;
