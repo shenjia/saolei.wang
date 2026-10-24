@@ -3,6 +3,13 @@
 //          玩家表挂 Old_Rank（月度重置）算升降——本质是「30 天窗口名次对比」。
 // 2026-10-22 重构（张老师定）：每人一行 + ranks JSON 滚动存 31 天总计时间名次，
 //          每日定时脚本预计算 delta（窗口内最早可得快照名次 − 今日名次）落库。
+// 2026-10-25 补封禁修正（张老师定）：基准日名次统计的是当天现役人群（含后来被封者），
+//          今日名次只含现役——窗口内每个被封且基准日排在我前面的玩家，都会给我的
+//          delta 白 +1（批量封禁会灌水整整一个窗口期）。修正 = delta −（现已封禁 ∧
+//          基准日名次比我好）的人数：封禁者自己的 ranks JSON 历史保留（掉榜清理只
+//          归零 delta 不删行），其基准日名次可查，故可离线修正。修正后 delta>0 的
+//          语义 =「名次上升是超过还活着的对手，不是别人被抬走」（进步榜与每日一星
+//          ② 路共用同一字段）。无需回填历史：delta 每日全量重算，上线次日 cron 自愈。
 
 import { prisma } from "./db";
 import { usersByIds, SCORE_FIELD, VIDEO_FIELD, type RankingRow, type UserBrief } from "./queries";
@@ -23,6 +30,7 @@ export const RANK_SNAPSHOT_WINDOW = 31;
  * 1. 窗口函数算今日总计时间名次（MySQL 8+；封禁账号 status!=0 不进，旧站 Player_IsLive=1 口径）
  * 2. 每人 JSON 写入今日名次、剔除 >30 天旧键
  * 3. delta = 窗口内最早可得快照名次 − 今日名次（正=进步），baseDate 一并落库
+ * 4. 封禁修正：delta -=（现已封禁 ∧ 基准日名次比我好）的人数（2026-10-25，见文件头说明）
  * force=false 时当日已刷新过（ranks 含今日键且行数>0）则跳过；force=true 强制重算（后台重算入口）。
  */
 export async function refreshRankSnapshots(force = false): Promise<void> {
@@ -107,6 +115,39 @@ export async function refreshRankSnapshots(force = false): Promise<void> {
   await prisma.$executeRawUnsafe(
     `UPDATE rank_snapshot SET delta = 0, update_time = UNIX_TIMESTAMP()
      WHERE JSON_CONTAINS_PATH(ranks, 'one', ?) = 0 AND delta <> 0`,
+    `$."${today}"`
+  );
+
+  // 封禁修正（2026-10-25 张老师定，见文件头说明）：
+  //   delta -= |{已封禁玩家 b : b 在我的基准日名次比我好}|
+  //   实现：先把所有已封禁者（user.status<>0）ranks JSON 里 30 天内的 (日期,名次)
+  //   炸开成行（bx，被封后不再刷新、key 只增不减，必须按日期过滤），再与现役玩家的
+  //   基准日配对比较；只修今日在榜（有今日 key）的现役行。边界自洽：
+  //   · 封禁发生在基准日之前 → b 无基准日 key，bx 里没这行 → 不计；
+  //   · 限时封禁到期回榜 → status 回 0，不再算 b；回榜者进今日榜压回名次，自动还原；
+  //   · 新上榜玩家（base=今日）→ 被封者无今日 key（INSERT 只覆盖现役）→ 白捡为 0。
+  //   JSON_TABLE 只能横向 JOIN 不能作相关子查询（MySQL 兼容坑②），故先炸开成派生表。
+  await prisma.$executeRawUnsafe(
+    `UPDATE rank_snapshot rs
+     JOIN (
+       SELECT u2.user AS uid, COUNT(*) AS ban_above
+       FROM rank_snapshot u2
+       JOIN \`user\` uu ON uu.id = u2.user AND uu.status = 0
+       JOIN (
+         SELECT b.user AS bid, kk.k AS d,
+                CAST(JSON_UNQUOTE(JSON_EXTRACT(b.ranks, CONCAT('$."', kk.k, '"'))) AS SIGNED) AS r
+         FROM rank_snapshot b
+         JOIN \`user\` bu ON bu.id = b.user AND bu.status <> 0
+         JOIN JSON_TABLE(JSON_KEYS(b.ranks), '$[*]' COLUMNS(k VARCHAR(10) PATH '$')) kk
+         WHERE kk.k > DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+       ) bx ON bx.d COLLATE utf8mb4_0900_ai_ci = u2.base_date
+           AND bx.r < CAST(JSON_UNQUOTE(JSON_EXTRACT(u2.ranks, CONCAT('$."', u2.base_date, '"'))) AS SIGNED)
+       WHERE u2.base_date <> ''
+         AND JSON_CONTAINS_PATH(u2.ranks, 'one', ?)
+       GROUP BY u2.id
+     ) c ON c.uid = rs.user
+     SET rs.delta = rs.delta - c.ban_above,
+         rs.update_time = UNIX_TIMESTAMP()`,
     `$."${today}"`
   );
 }

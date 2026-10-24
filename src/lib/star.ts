@@ -127,7 +127,8 @@ export async function getTodayStar(): Promise<StarInfo | null> {
   // 候选池两路并集（十七轮 2026-10-25 张老师定：取消头像硬性限制，改为权重加成）：
   //   ① 少将及以上现役；② 30 天内破纪录 ∧ 排名上升（delta>0）现役。
   // 封禁账号不入池（两路均 JOIN user.status=0；②路 rank_snapshot 残留 delta 的
-  // 被封者一并滤掉，与 /grow 进步榜口径一致）。
+  // 被封者一并滤掉，与 /grow 进步榜口径一致）。delta 本身已在快照刷新时做封禁修正
+  // （ranksnap.ts：扣掉「别人被封白捡的名次」），delta>0 即真实名次上升。
   // 头像加成：有合法头像（/uploads/avatar/%、http 外链、旧站 '1'）者在抽签袋中
   // 放两份（选中概率翻倍）——鼓励上传真人照片，但不阻断无头像者参选。
   const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; hasAvatar: number }>>(
