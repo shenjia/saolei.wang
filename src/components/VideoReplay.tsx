@@ -759,10 +759,12 @@ function runPlayGame(opts: {
   /** 模式开关即时值（二十一期：NF/速旗/连击，与练习页 online_play_settings 同一份；
       引擎每事件入口现读——React 切换即时生效，无需重建引擎（速旗/连击只改行为） */
   getModes: () => { nf: boolean; quickFlag: boolean; combo: boolean };
+  /** 级别（连击开局保护窗时长按级别：初级 0 / 中级 250ms / 高级 500ms，练习页同口径） */
+  level: VideoLevel;
   /** NF 模式下右键被拦时的反馈（抖 NF 钮，练习页 shakeModeBtn 同款入口） */
   onNfBlocked?: () => void;
 }): { destroy: () => void } {
-  const { boardHost, tbody, rows, cols, data, onFace, onStats, onFinish, getModes, onNfBlocked } = opts;
+  const { boardHost, tbody, rows, cols, data, onFace, onStats, onFinish, getModes, onNfBlocked, level } = opts;
   const N = rows * cols;
   const mines = new Uint8Array(N);
   const nums = new Uint8Array(N);
@@ -853,6 +855,17 @@ function runPlayGame(opts: {
   let openedSafe = 0;
   const totalSafe = N - mineCount;
   let curCsec = 0; // 首击起计时（练习页同款：百分秒）
+  /* 连击开局保护（2026-10-24 与练习页 comboShield 同步）：原口径＝首击手势内
+     滑动不开格（comboGuard）；练习页 2026-10-22 已改**时间窗内跳雷**——首格
+     开出（openCell 起表）起保护窗内，连击滑动/按下路径上**安全格照常连开**，
+     仅**有雷的格子被跳过**（无事件零动作）；窗口到期或开局手势松开（mouseup/
+     touchend 置 comboGraceT0=0）后雷格照常触发。时长：初级 0（不设保护）/
+     中级 250ms / 高级 500ms（试玩盘面锁定无自定义级别，exp 兜底） */
+  let comboGraceT0 = 0;
+  const COMBO_GRACE_MS = () => (level === "beg" ? 0 : level === "int" ? 250 : 500);
+  /* 保护窗内＝连击开格要跳雷；未开局恒 false（首击即雷的锁定盘与练习页
+     重玩本局同口径：保护只从首个安全格开出起算） */
+  const comboShield = () => started && performance.now() - comboGraceT0 < COMBO_GRACE_MS();
   let timerId: number | null = null;
   let lastTick: number | null = null;
   /* 统计（练习页结算同源 ReplayCounts 口径的轻量子集——试玩实时面板） */
@@ -934,6 +947,7 @@ function runPlayGame(opts: {
     if (!started) {
       started = true;
       startTimer();
+      comboGraceT0 = performance.now(); // 连击开局保护窗起点＝起表时刻（练习页同口径）
     }
     if (mines[i]) {
       lose(i);
@@ -995,6 +1009,9 @@ function runPlayGame(opts: {
       comboHit = true;
       chord(i);
     } else if (state[i] === 0) {
+      /* 开局保护窗内跳雷（与练习页 comboLeftClick 同口径）：安全格照常开，
+         仅有雷格被跳过（无事件零动作，玩家无感）；窗口到期后雷格照常触发 */
+      if (comboShield() && mines[i]) return;
       comboHit = true;
       cLeft++;
       openCell(i);
@@ -1077,9 +1094,9 @@ function runPlayGame(opts: {
     rightDown = false,
     chordDone = false;
   /* 连击手势标记（练习页同款）：comboHit＝本次按下已产生过动作（松开拔旗只放行
-     空手松开）；comboGuard＝首击手势滑动不动作（开局保护窗，松开解除） */
+     空手松开）。开局保护窗改时间窗跳雷（comboShield，见对局状态区），不再有
+     手势级闸门 */
   let comboHit = false;
-  let comboGuard = true;
   on<MouseEvent>(boardDiv, "mousedown", (e) => {
     if (over) return;
     const i = eventCell(e);
@@ -1093,7 +1110,7 @@ function runPlayGame(opts: {
       chordDone = false;
       comboHit = false;
       onFace("ooh");
-      comboLeft(i); // 按下即触发（首击也在 mousedown 生效；保护窗只拦滑动）
+      comboLeft(i); // 按下即触发（开局保护窗内雷格由 comboLeft 内部跳过）
       return;
     }
     if (m.combo && e.button === 2) {
@@ -1158,10 +1175,9 @@ function runPlayGame(opts: {
     const i = eventCell(e);
     if (i < 0) return;
     const m = getModes();
-    /* 连击滑动连点（练习页同款）：按住左键滑过未开格即开（首击手势保护窗内
-       不动作）、只按右键滑过未开格即插旗；无需按下态高亮（动作瞬时完成） */
+    /* 连击滑动连点（练习页同款）：按住左键滑过未开格即开（开局保护窗内雷格
+       在 comboLeft 内部跳过）、只按右键滑过未开格即插旗；无需按下态高亮（动作瞬时完成） */
     if (m.combo) {
-      if (comboGuard && leftDown) return;
       if (leftDown) {
         onFace("ooh");
         comboLeft(i, true);
@@ -1210,7 +1226,7 @@ function runPlayGame(opts: {
       }
       clearPress();
       onFace("smile");
-      comboGuard = false; // 首击手势结束：保护窗解除
+      comboGraceT0 = 0; // 开局保护随开局手势松开即刻终止（练习页 mouseup 同口径）
       leftDown = rightDown = chordDone = false;
       if (started && !over) emitStats();
       return;
@@ -1320,8 +1336,8 @@ function runPlayGame(opts: {
     if (!t || touchCell < 0) return;
     if (getModes().combo) {
       /* 连击滑动连开（练习页同款）：容差内不算滑动（保长按插旗）；超容差沿轨迹
-         半格步长插值逐格开（快滑跳格防漏）；起始格在此补开（touchstart 不即开）；
-         首击保护窗内路径格不开（起始格照常） */
+         半格步长插值逐格开（快滑跳格防漏）；起始格在此补开（touchstart 不即开，
+         开局保护窗内雷格由 comboLeft 内部跳过） */
       if (Math.hypot(t.clientX - tX, t.clientY - tY) <= 12) return;
       if (touchTimer) {
         window.clearTimeout(touchTimer);
@@ -1332,10 +1348,11 @@ function runPlayGame(opts: {
         return;
       }
       touchMoved = true;
-      /* 起始格补开（touchstart 不即开，这里是首击唯一入口）；路径格在首击
-         保护窗内不开（练习页触屏同款：起始格照开、路径格等松开解除） */
+      /* 起始格补开（touchstart 不即开，这里是首击唯一入口）＋沿轨迹插值逐格开——
+         开局保护窗内的跳雷收在 comboLeft 内部（无事件零动作），不再有手势级
+         闸门（2026-10-24 与练习页同步） */
       if (state[touchCell] === 0) comboLeft(touchCell);
-      if (!comboGuard) {
+      {
         const bp = touchBoardPx(t.clientX, t.clientY);
         const steps = Math.max(1, Math.ceil(Math.hypot(bp.x - touchLastX, bp.y - touchLastY) / 8));
         for (let s = 1; s <= steps; s++) {
@@ -1350,10 +1367,6 @@ function runPlayGame(opts: {
             comboLeft(i);
           }
         }
-        touchLastX = bp.x;
-        touchLastY = bp.y;
-      } else {
-        const bp = touchBoardPx(t.clientX, t.clientY);
         touchLastX = bp.x;
         touchLastY = bp.y;
       }
@@ -1382,7 +1395,7 @@ function runPlayGame(opts: {
       touchCell = -1;
       const moved = touchMoved;
       touchMoved = false;
-      comboGuard = false; // 手势结束：保护窗解除
+      comboGraceT0 = 0; // 开局保护随抬起即刻终止（练习页 touchend 同口径）
       e.preventDefault();
       if (!moved && !longFired) comboLeft(i);
       if (started && !over) emitStats();
@@ -2353,9 +2366,10 @@ export function ReplayFullscreen({
       onFinish: setPlayResult,
       getModes,
       onNfBlocked,
+      level,
     });
     setFace("smile");
-  }, [getModes, onNfBlocked]);
+  }, [getModes, onNfBlocked, level]);
   /* 晚绑定 startPlay（togglePlayNf 的 NF 切换重开入口；渲染期不写 ref） */
   useEffect(() => {
     startPlayRef.current = startPlay;
@@ -2767,7 +2781,10 @@ export function ReplayFullscreen({
               </svg>
             </div>
             <div className="gframe">
-              <div className="vprfs_board_wrap">
+              <div
+                className="vprfs_board_wrap"
+                onDragStart={(e) => e.preventDefault()} /* 游戏容器禁拖放（2026-10-24）：防原生拖拽 🚫 光标；standalone（后台审核）同层受益 */
+              >
                 {/* 试玩态渲染空盘（二十一期）：boardStr 是录像**终局图**（胜局全开格
                     +雷全标旗），一键试玩若按终局图渲染再靠引擎 reset 刷回，慢机器上
                     有可感知的「已开格→全闭合」闪变；runPlayGame 的初始全盘重置仍在
@@ -3013,6 +3030,7 @@ export function VideoReplayBoard({
       <div
         className={`play_board ${zoomCls}`}
         title={replaying ? "点击退出回放" : "点击播放在线录像"}
+        onDragStart={(e) => e.preventDefault()} /* 游戏容器禁拖放（2026-10-24）：防原生拖拽 🚫 光标 */
         onClick={() => {
           if (ctx.status === "idle") ctx.play();
           else if (ctx.status !== "loading") ctx.stop();
