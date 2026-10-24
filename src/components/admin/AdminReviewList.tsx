@@ -87,6 +87,20 @@ function reasonTagList(v: AdminVideoRow) {
       cls: "bad",
     });
   }
+  if (r & (1 << 12)) {
+    tags.push({
+      text: "ms-toollib 校验不通过",
+      title: "ms-toollib（Rust 扫雷算法库）按排名网站自动审核规则判为不通过：软件白名单外 / 校验和为测试值 / 软件判定使用辅助手段 / 鼠标轨迹呈程序化特征（重复移动 / 按住过短 / 极短按过多 / 轨迹熵过低）。⚠️ 元扫雷 3.3.5+ 新版本不在库白名单内也会触发本项，复核时先看录像 software 字段",
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 13)) {
+    tags.push({
+      text: "ms-toollib 校验可疑",
+      title: "ms-toollib 自动审核判为可疑：操作细节不足（动作数/3BV < 10）或鼠标特征达可疑阈值（按住时长 30~40ms / 极短按 4~10 次 / 轨迹方向熵/转向熵偏低），无法确认真实，需人工复核",
+      cls: "warn",
+    });
+  }
   return tags;
 }
 

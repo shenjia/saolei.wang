@@ -273,7 +273,21 @@ export async function triageVideo(videoId: number): Promise<void> {
     });
 
     const lowTrust = await isLowTrustUser(Number(video.user));
-    const { flag, reason } = triageParsed(parsed, video.level, metrics, lowTrust, {}, info.realTime);
+    const { flag: baseFlag, reason: baseReason } = triageParsed(parsed, video.level, metrics, lowTrust, {}, info.realTime);
+    let flag = baseFlag;
+    let reason = baseReason;
+
+    // evf 附加校验（2026-10-24）：ms-toollib is_valid（软件白名单/校验和/公平性/
+    // 完成性/鼠标轨迹特征）→ bit12 不通过 / bit13 可疑。只作分拣信号、不上传硬拒
+    // （库白名单止于元3.3.4，元 3.3.5+ 新版本真录像会误报不通过——见 lib/msvalid.ts）。
+    // 校验失败（null）无信号，不影响原判档。
+    if (ext === "evf") {
+      const { evfIsValid } = await import("./msvalid");
+      const result = await evfIsValid(buf, path.basename(info.filepath));
+      if (result?.verdict === 1) reason |= AUTO_REASON.MSTOOL_FAIL;
+      else if (result?.verdict === 3) reason |= AUTO_REASON.MSTOOL_SUSPECT;
+      flag = reason === 0 ? 1 : 0;
+    }
 
     await prisma.video.update({ where: { id }, data: { autoFlag: flag, autoReason: reason } });
   } catch {
