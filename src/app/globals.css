@@ -5260,6 +5260,23 @@ body #page.two_columns li.main {
   body #page #home > li.sidebar .title {
     font-size: 15px;
   }
+  /* 入伍新兵不参与放大（2026-10-25 张老师反馈 4 字名徽章折行）：盒子内容宽恒 210，
+     放大后最坏组合「4 字名 + 3 字衔 + 5 字时间」（名 72 + 性别 18 + 徽章 66 + 时间 78
+     ≈ 234）放不下 → 时间列 nowrap 后徽章被挤断折行。本盒回退桌面字号
+     （名 16 / 徽章 14 / 时间 14），与 2026-10-24 已验证恰好单行放下的桌面最坏组合同宽 */
+  body #page #home > li.sidebar #newbie .table td {
+    font-size: 16px;
+    line-height: 24px;
+  }
+  body #page #home > li.sidebar #newbie .table td.time {
+    font-size: 14px;
+  }
+  body #page #home > li.sidebar #newbie .avatar_link {
+    font-size: 16px;
+  }
+  body #page #home > li.sidebar #newbie .title {
+    font-size: 14px;
+  }
   /* 论坛新帖行（.bbs_new 非 .table）：14→17px，行高 25→28px；板块徽章 12→13px */
   body #page #home > li.sidebar #bbs_latest .bbs_new td {
     font-size: 17px;
@@ -6536,6 +6553,11 @@ body #page.video_old .page_head {
 }
 #newbie .title {
   margin: 0 3px;
+}
+/* 名字+性别+徽章整格不折行（2026-10-25）：窄屏放大形态曾把徽章挤到第二行错位；
+   护栏兜底——极端超宽（如 5 字名）时宁可横向溢出也不折行错位 */
+#newbie .user {
+  white-space: nowrap;
 }
 
 /* ---------- 顶部导航右侧用户菜单（2026-09-24 张老师要求） ----------
