@@ -4175,7 +4175,8 @@ body #page.ranking_old .ranking_box {
 #daily_star .star_body {
   display: flex;
   align-items: flex-start;
-  gap: 8px; /* 十九轮（05:10）：12→8，右栏再让 4px */
+  gap: 12px; /* 二十轮（05:20）：8→12 回还原（张老师看观感宽裕）；右栏=0.56×210-12≈105.6px，
+     恰容「全国第 99999 名」105px——余量仅 0.6px 属贴边，若再紧须动 star_left */
 }
 #daily_star .star_left {
   flex: 0 0 44%; /* 十九轮（05:10）：48%→44%——侧栏内容宽恒 210px，右栏=0.56×210-8≈110px，
