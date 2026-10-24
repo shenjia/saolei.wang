@@ -1,13 +1,13 @@
 // 账号密码登录（老用户）
 // 校验 md5(password+salt)，兼容 2013 旧站全部 11,564 个账号
-// 登录成功后检查微信/QQ 绑定：未绑定 → needBind=true，前端强制跳 /account/bind
+// 2026-10-25 张老师定：登录后不再强制绑定微信/QQ（QQ 改账户管理页手动绑定）；
+// 邮箱绑定提醒沿用旧站形式（账户管理页账户名后「绑定邮箱」入口，邮箱可找回密码）
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyPassword, setSession } from "@/lib/auth";
 import { unbanUser } from "@/lib/ban";
 import { formatDate } from "@/lib/format";
-import { OAUTH_ENABLED } from "@/lib/config";
 import { getClientIp } from "@/lib/net";
 
 export async function POST(req: Request) {
@@ -51,9 +51,6 @@ export async function POST(req: Request) {
     data: { loginTimes: { increment: 1 }, loginTime: BigInt(Math.floor(Date.now() / 1000)) },
   });
 
-  // 第三方登录未开放阶段不强制绑定（2026-09-24 张老师要求）
-  if (!OAUTH_ENABLED) return NextResponse.json({ ok: true, needBind: false });
-
-  const bindCount = await prisma.userOauth.count({ where: { userId: auth.id } });
-  return NextResponse.json({ ok: true, needBind: bindCount === 0 });
+  // 2026-10-25：不强制绑定第三方，直接成功
+  return NextResponse.json({ ok: true });
 }

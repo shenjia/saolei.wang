@@ -14,6 +14,8 @@ import { getUserDetail } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { UserPanel } from "@/components/UserCard";
+import { QqBindLink } from "@/components/QqLogin";
+import { QQ_OAUTH_ENABLED } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
@@ -24,12 +26,17 @@ function isEmail(s: string): boolean {
   return s.includes("@");
 }
 
-export default async function AccountManagePage() {
+export default async function AccountManagePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const session = await getSession();
   if (!session) redirect("/account/login");
 
+  const sp = await searchParams;
   const uid = BigInt(session.uid);
-  const [detail, auth, latestAvatar, me] = await Promise.all([
+  const [detail, auth, latestAvatar, me, qqBinding] = await Promise.all([
     getUserDetail(session.uid),
     // 账户名 + 邮箱绑定状态：绑定入口跟在账户名后面（2026-10-15）
     prisma.userAuth.findUnique({
@@ -43,6 +50,11 @@ export default async function AccountManagePage() {
       select: { status: true },
     }),
     prisma.user.findUnique({ where: { id: uid }, select: { avatar: true } }),
+    // QQ 第三方绑定状态：未绑定则在 QQ 行后显示「（绑定QQ）」入口（2026-10-25 张老师定）
+    prisma.userOauth.findFirst({
+      where: { userId: uid, provider: "qq" },
+      select: { nickname: true },
+    }),
   ]);
   if (!detail) redirect("/account/login");
   const { user, info } = detail;
@@ -122,13 +134,27 @@ export default async function AccountManagePage() {
                     <tr key={label}>
                       <th>{label}</th>
                       <td>
-                        <div>{value}</div>
+                        <div>
+                          {value}
+                          {label === "QQ" && QQ_OAUTH_ENABLED && (
+                            qqBinding ? (
+                              <span className="bind_email_btn qq_bound">
+                                已绑定{qqBinding.nickname ? ` ${qqBinding.nickname}` : ""}
+                              </span>
+                            ) : (
+                              <QqBindLink />
+                            )
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {/* 绑定结果反馈（弹窗授权完成后主窗跳回 /account?bound=1 / ?error=taken） */}
+            {sp.bound === "1" && <p className="account_flash ok">QQ 绑定成功，今后点登录框的企鹅图标即可登录</p>}
+            {sp.error === "taken" && <p className="account_flash err">该 QQ 已绑定其他账号，请换一个试试</p>}
           </div>
         </li>
         <li className="sidebar">

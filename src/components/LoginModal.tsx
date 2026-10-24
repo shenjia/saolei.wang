@@ -34,17 +34,11 @@ export function LoginModal() {
     };
   }, [open]);
 
-  const handleSuccess = useCallback(
-    (needBind: boolean) => {
-      if (needBind) {
-        router.push("/account/bind"); // 老用户未绑定 → 强制绑定页
-        return;
-      }
-      setOpen(false);
-      router.refresh(); // 导航条「登录」换成用户名
-    },
-    [router]
-  );
+  // 2026-10-25：登录成功不再强制绑定 QQ（改账户管理页手动绑定），直接关窗刷新
+  const handleSuccess = useCallback(() => {
+    setOpen(false);
+    router.refresh(); // 导航条「登录」换成用户名
+  }, [router]);
 
   if (!open) return null;
 

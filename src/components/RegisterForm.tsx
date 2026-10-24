@@ -60,7 +60,7 @@ export default function RegisterForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [fatal, setFatal] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ chineseName: string; englishName: string } | null>(null);
+  const [done, setDone] = useState<{ chineseName: string; englishName: string; oauthBound?: boolean } | null>(null);
   // 图形验证码：id/svg 由服务端发放；答案大小写不敏感
   const [captcha, setCaptcha] = useState<{ id: string; svg: string } | null>(null);
   const [captchaText, setCaptchaText] = useState("");
@@ -102,7 +102,7 @@ export default function RegisterForm() {
       if (data.captcha) await loadCaptcha(); // 验证码一次性，错了自动换一张
       return;
     }
-    setDone({ chineseName: data.chineseName, englishName: data.englishName });
+    setDone({ chineseName: data.chineseName, englishName: data.englishName, oauthBound: data.oauthBound });
   }
 
   // ---------- 注册成功（2008 版 Register_OK.asp 骨架） ----------
@@ -112,6 +112,7 @@ export default function RegisterForm() {
         <div className="flash">
           {done.chineseName}（{done.englishName}），注册成功了，恭喜您！
         </div>
+        {done.oauthBound && <p>您的 QQ 已自动关联本账号，今后点登录框的企鹅图标即可登录。</p>}
         <p>
           您已自动登录。上传录像前，请先在 Minesweeper Arbiter 中按 <b>F5</b>{" "}
           设置您的录像标识文字（建议使用姓名拼音，如 <b>{done.englishName}</b>），

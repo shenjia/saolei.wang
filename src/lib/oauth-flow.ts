@@ -1,5 +1,5 @@
 // 微信/QQ 扫码回调的共用分支逻辑：
-// 1. 已登录状态下扫码 → 把该第三方身份绑定到当前账号（老用户强制绑定走这里）
+// 1. 已登录状态下扫码 → 把该第三方身份绑定到当前账号（账户管理页手动绑定走这里）
 // 2. 未登录 + 该身份已绑定 → 直接登录
 // 3. 未登录 + 未绑定 → 发临时票据，进入「认领老账号 / 注册新账号」流程
 
@@ -45,7 +45,7 @@ export async function handleOauthCallback(
   if (session) {
     if (existing) {
       if (Number(existing.userId) === session.uid) return redirect("/"); // 重复绑定，直接回首页
-      return redirect("/account/bind?error=taken"); // 该身份已被其他账号绑定
+      return redirect("/account?error=taken"); // 该身份已被其他账号绑定（绑定入口在账户管理页）
     }
     await prisma.userOauth.create({
       data: {

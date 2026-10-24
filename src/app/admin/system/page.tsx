@@ -6,7 +6,7 @@ import { getEnvChecks, getRuntimeInfo, getTableStats } from "@/lib/admin/system"
 import { getSnapshotHealth } from "@/lib/admin/stats";
 import { AdminCard, Kpi } from "@/components/admin/Widgets";
 import { formatDate } from "@/lib/format";
-import { OAUTH_ENABLED } from "@/lib/config";
+import { QQ_OAUTH_ENABLED, WECHAT_OAUTH_ENABLED } from "@/lib/config";
 import { isMaintenanceOn } from "@/lib/maintenance";
 import MaintenanceSwitch from "@/components/admin/MaintenanceSwitch";
 
@@ -134,14 +134,16 @@ export default async function AdminSystemPage() {
             </dd>
             <dt>第三方登录</dt>
             <dd>
-              {OAUTH_ENABLED ? (
-                <span className="admin_tag ok">已开启</span>
-              ) : (
-                <span className="admin_tag plain">本地测试期关闭</span>
-              )}
+              <span className={`admin_tag ${QQ_OAUTH_ENABLED ? "ok" : "plain"}`}>
+                QQ {QQ_OAUTH_ENABLED ? "已开启" : "关闭"}
+              </span>{" "}
+              <span className={`admin_tag ${WECHAT_OAUTH_ENABLED ? "ok" : "plain"}`}>
+                微信 {WECHAT_OAUTH_ENABLED ? "已开启" : "关闭"}
+              </span>
               <div className="sub" style={{ marginTop: 4 }}>
-                微信 / QQ 扫码在 <code>src/lib/config.ts</code> 的 <code>OAUTH_ENABLED</code> 控制，
-                两平台申请落地后置为 true 即恢复。
+                分平台开关在 <code>src/lib/config.ts</code> 的{" "}
+                <code>QQ_OAUTH_ENABLED</code> / <code>WECHAT_OAUTH_ENABLED</code>
+                （2026-10-25 起不强制绑定：登录后直接放行，绑定入口在账户管理页 QQ 行后）。
               </div>
             </dd>
             <dt>录像状态</dt>

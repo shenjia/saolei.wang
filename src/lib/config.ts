@@ -381,9 +381,14 @@ export function isManager(role: number): boolean {
 }
 
 // ---------- 第三方登录（微信/QQ） ----------
-// 本地测试阶段整体隐藏（2026-09-24 张老师）：登录入口只留账号密码，不强制绑定。
-// 两平台申请落地后改回 true，恢复扫码登录 tab 与老用户强制绑定流程。
-export const OAUTH_ENABLED = false;
+// 2026-10-25：QQ 互联应用已创建（APPID 1905797308，审核中），先开放 QQ 扫码——
+// 审核要求网站上可见 QQ 登录按钮（点按钮能跳 QQ 官方授权页即合规，
+// 未过审时非开发者授权会被腾讯拦截，属正常状态）。
+// 微信开放平台未申请下来前 WECHAT_OAUTH_ENABLED 保持 false（防暴露 dev mock 二维码）。
+export const QQ_OAUTH_ENABLED = true;
+export const WECHAT_OAUTH_ENABLED = false;
+// 任一 provider 开放即视为第三方登录开放（认领/注册等流程共用此开关）
+export const OAUTH_ENABLED = QQ_OAUTH_ENABLED || WECHAT_OAUTH_ENABLED;
 
 // 上传录像各级别最小 3BV（移植 VideoConfig::$level_min_3bv）
 export const LEVEL_MIN_3BV: Record<VideoLevel, number> = { beg: 2, int: 30, exp: 100 };
@@ -422,6 +427,7 @@ export const NEWS_TYPE = {
   COMMENT: 52, // 评论（录像评论 / BBS 回帖）
   PROMOTION: 53, // 晋升军衔（2026-10-17 张老师要求整体下线：存量已删、回填脚本退役；
                  // 常量保留仅为类型编号存档，勿再写入/渲染）
+  STAR: 54, // 当选每日一星（2026-10-25 恢复：评选落库时发金色动态）
 } as const;
 
 /** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻）
@@ -434,6 +440,7 @@ export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.PERSON_RECORD,
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
+  NEWS_TYPE.STAR, // 当选每日一星（2026-10-25：金色动态上首页新闻流）
 ];
 
 /** 用户主页「动态」排除的类型（2026-10-17：与首页同口径撤掉上传录像；

@@ -1,10 +1,11 @@
 // 注册接口：验证码 → 字段校验 → 邮箱唯一性 → 同 IP 限额 → 事务建号 → 自动登录
 // 已登录用户重复注册直接拒绝；用户名即邮箱（与登录/找回密码同口径）
 // 防小号（2026-10-19）：图形验证码 + 同 IP 限速/限额 + 注册 IP 落库
+// 2026-10-25：带 OAuth 票据（QQ 扫码新用户从完成登录页跳来）时，建号后自动绑定该身份
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession, setSession } from "@/lib/auth";
+import { getSession, setSession, getOauthTicket, clearOauthTicket } from "@/lib/auth";
 import { validateRegister, createRegisteredUser, type RegisterInput } from "@/lib/register";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { getClientIp } from "@/lib/net";
@@ -85,10 +86,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "注册失败，请稍候再试！" }, { status: 500 });
   }
 
+  // QQ 扫码新用户（完成登录页跳来，带 OAuth 票据）：自动绑定该身份
+  // 已被其他账号绑定的极端情形直接放弃绑定，不影响注册本身
+  const ticket = await getOauthTicket();
+  let oauthBound = false;
+  if (ticket) {
+    await clearOauthTicket();
+    try {
+      await prisma.userOauth.create({
+        data: {
+          userId: BigInt(uid),
+          provider: ticket.provider,
+          openid: ticket.openid,
+          unionid: ticket.unionid,
+          nickname: ticket.nickname,
+          avatar: ticket.avatar,
+          createTime: BigInt(Math.floor(Date.now() / 1000)),
+          updateTime: BigInt(Math.floor(Date.now() / 1000)),
+        },
+      });
+      oauthBound = true;
+    } catch {
+      // provider+openid 唯一索引冲突（该身份已被绑定）——跳过绑定
+    }
+  }
+
   await setSession({ uid, username: input.email, role: 0 }, ip);
   return NextResponse.json({
     ok: true,
     chineseName: input.chineseName,
     englishName: input.englishName,
+    oauthBound,
   });
 }

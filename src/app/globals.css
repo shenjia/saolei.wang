@@ -433,6 +433,52 @@ body .tabs > a:hover::after {
   font-size: 11px;
   color: #75715e;
 }
+/* 第三方登录图标区（2026-10-25 亮灰企鹅弹窗登录，参照爱给网，张老师定交互） */
+.lp_oauth {
+  margin-top: 18px;
+}
+.lp_oauth_rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #75715e;
+}
+.lp_oauth_rule::before,
+.lp_oauth_rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #49483e;
+}
+.lp_oauth_icons {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 12px;
+}
+.qq_icon_btn {
+  padding: 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 50%;
+  transition: filter 0.15s;
+}
+.qq_icon_btn:hover {
+  filter: brightness(1.25);
+}
+.qq_icon_btn svg {
+  display: block;
+}
+/* QQ 已绑定状态（2026-10-25 手动绑定入口在 QQ 行后）：灰色置灰，区别于可点的黄色入口 */
+#account_manage .bind_email_btn.qq_bound,
+#account_manage .bind_email_btn.qq_bound:hover {
+  color: #75715e;
+  cursor: default;
+  text-decoration: none;
+}
 /* ---------- bind/oauth 旧表单结构（暂保留，待后续统一到 lp_*） ---------- */
 .auth_tabs {
   margin-bottom: 18px;
@@ -3154,6 +3200,17 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 }
 #account_manage .bind_email_btn:hover {
   color: #a6e22e;
+}
+/* 绑定结果反馈（弹窗授权后主窗跳回 /account?bound=1 / ?error=taken） */
+.account_flash {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.account_flash.ok {
+  color: #a6e22e;
+}
+.account_flash.err {
+  color: #f92672;
 }
 /* 侧栏几何与首页/录像详情页统一（五轮张老师要求）：legacy 默认 sidebar 222 / 盒 192，
    统一为 288 / 盒内容 210（外径 272，与 #home、#video_view 右栏完全一致）；

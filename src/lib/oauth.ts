@@ -8,6 +8,9 @@ import { cookies } from "next/headers";
 import type { OauthTicket } from "@/lib/auth";
 
 const STATE_COOKIE = "saolei_oauth_state";
+// 弹窗登录标记（2026-10-25 企鹅图标弹窗交互）：入口 ?popup=1 时种下，
+// 回调消费后改输出「关窗 + 主窗跳转」页而非 302
+const POPUP_COOKIE = "saolei_oauth_popup";
 
 export function siteUrl(): string {
   return process.env.SITE_URL ?? "http://localhost:3000";
@@ -33,6 +36,52 @@ export async function checkState(state: string | null): Promise<boolean> {
   const saved = jar.get(STATE_COOKIE)?.value;
   jar.delete(STATE_COOKIE);
   return !!state && !!saved && state === saved;
+}
+
+// ---------- 弹窗登录标记 ----------
+
+// 入口路由调用：popup 时种标记；非弹窗入口顺手清掉残留标记
+// （用户开过弹窗没走完流程又去点普通入口时，防止普通登录被误关窗）。
+// next：授权成功后主窗口的回跳地址（如账户管理页发起的绑定 → /account），
+// 直接编码进 cookie 值（格式 "1" 或 "1<next>"），仅放行站内路径。
+export async function markPopup(popup: boolean, next?: string): Promise<void> {
+  const jar = await cookies();
+  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "";
+  if (popup) {
+    jar.set(POPUP_COOKIE, `1${safeNext}`, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 600,
+      secure: process.env.NODE_ENV === "production",
+    });
+  } else {
+    jar.delete(POPUP_COOKIE);
+  }
+}
+
+// 回调路由调用：读取并清除标记。popup=false 表示非弹窗流程
+export async function consumePopup(): Promise<{ popup: boolean; next: string }> {
+  const jar = await cookies();
+  const v = jar.get(POPUP_COOKIE)?.value ?? "";
+  if (v) jar.delete(POPUP_COOKIE);
+  const popup = v.startsWith("1");
+  return { popup, next: popup ? v.slice(1) : "" };
+}
+
+// 弹窗内的收尾页：把最终去向交给主窗口后自闭；无 opener（直接打开/移动端新标签页）时自跳
+export function popupClosePage(target: string): string {
+  const t = JSON.stringify(target);
+  return (
+    `<!doctype html><html><head><meta charset="utf-8"><title>QQ 登录</title></head>` +
+    `<body style="background:#272822;color:#b1b1a4;font:13px/1.8 sans-serif;text-align:center;padding-top:80px">` +
+    `<p id="tip">正在完成登录…</p>` +
+    `<script>var t=${t};` +
+    `if(window.opener&&!window.opener.closed){window.opener.location.href=t;window.close();` +
+    `document.getElementById("tip").textContent="登录完成，本窗口将自动关闭";}` +
+    `else{location.replace(t);}</script>` +
+    `</body></html>`
+  );
 }
 
 // ---------- 配置与 mock ----------
@@ -95,11 +144,13 @@ async function exchangeWechat(code: string): Promise<OauthTicket> {
 
 // ---------- QQ ----------
 
-export function qqAuthorizeUrl(state: string): string {
+export function qqAuthorizeUrl(state: string, display?: "pc"): string {
   const redirectUri = encodeURIComponent(`${siteUrl()}/api/auth/qq/callback`);
   return (
     `https://graph.qq.com/oauth2.0/authorize?response_type=code&client_id=${process.env.QQ_APP_ID}` +
-    `&redirect_uri=${redirectUri}&state=${state}`
+    `&redirect_uri=${redirectUri}&state=${state}` +
+    // display=pc：弹窗小版式授权页（graph.qq.com/oauth2.0/show?which=Login 那种紧凑窗口）
+    (display ? `&display=${display}` : "")
   );
 }
 
