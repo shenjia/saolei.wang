@@ -19,6 +19,7 @@ import {
   UNREACHABLE_3BV,
   NEWS_FEED_EXCLUDED,
   NEWS_HOME_TYPES,
+  NEWS_RECORD_FIRST_MARKS,
   NEWS_TYPE,
   ORDER_DIRECTION,
   RANKING_PAGESIZE,
@@ -217,6 +218,22 @@ function newsLevelFilter(level: string) {
   };
 }
 
+/** 首页新闻流类型过滤（2026-10-25 张老师定）：NEWS_HOME_TYPES 白名单内，
+ *  再排除破纪录动态（type=20）的首创行——or=0 渲染「创造了」（多为新用户预备役第一盘，
+ *  成绩不值得放首页），「刷新了」（or>0）照常上首页。
+ *  or=0 落库两种形态（新行数字 "or":0 / 同步存量行字符串 "or":"0"，渲染层 "0">0 同判 false），
+ *  details_data 是 VarChar 无法做 JSON 路径过滤，用 contains 双标记匹配（形态普查 2026-10-25 全覆盖）。
+ *  getNews / getNewsPage / getNewsCount 三处 home 分支共用，保证行集与计数严格一致 */
+function homeNewsTypeFilter() {
+  return {
+    type: { in: NEWS_HOME_TYPES },
+    NOT: {
+      type: NEWS_TYPE.PERSON_RECORD,
+      OR: NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
+    },
+  };
+}
+
 export async function getNews(opts: {
   type?: number;
   /** 多类型筛选（2026-10-13 用户主页「论坛」tab：发表主题 ARTICLE + 评论 COMMENT） */
@@ -250,7 +267,7 @@ export async function getNews(opts: {
   const where = {
     ...(opts.type !== undefined ? { type: opts.type } : {}),
     ...(opts.types ? { type: { in: opts.types } } : {}),
-    ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
+    ...(opts.home ? homeNewsTypeFilter() : {}),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
     ...(opts.level ? newsLevelFilter(opts.level) : {}),
     // keyset 游标：查 (create_time,id) 序比 cursor 行更早的动态（同刻按 id 分先后）
@@ -372,7 +389,7 @@ export async function getNewsPage(opts: {
 }): Promise<NewsItem[]> {
   const where = {
     ...(opts.types ? { type: { in: opts.types } } : {}),
-    ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
+    ...(opts.home ? homeNewsTypeFilter() : {}),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
     ...(opts.level ? newsLevelFilter(opts.level) : {}),
     // 同 getNews：上传录像动态撤出动态流（2026-10-17）；home 模式同样不叠加（避免覆盖 in 过滤）
@@ -436,7 +453,7 @@ async function getNewsCountImpl(opts: {
     where: {
       ...(opts.type !== undefined ? { type: opts.type } : {}),
       ...(opts.types ? { type: { in: opts.types } } : {}),
-      ...(opts.home ? { type: { in: NEWS_HOME_TYPES } } : {}),
+      ...(opts.home ? homeNewsTypeFilter() : {}),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
       ...(opts.level ? newsLevelFilter(opts.level) : {}),
       // 同 getNews：上传录像动态撤出动态流（2026-10-17）。home 模式下 NEWS_HOME_TYPES
@@ -453,7 +470,8 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
-  ["news-count-v2"],
+  // v3：home 口径新增排除「创造了」首创行（2026-10-25），bump 防旧缓存
+  ["news-count-v3"],
   { revalidate: 60 }
 );
 
