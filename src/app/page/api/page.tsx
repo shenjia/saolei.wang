@@ -87,13 +87,13 @@ const APIS: ApiDoc[] = [
 }`,
     notes: [
       "realTime 毫秒；3bvs 已按站内口径算好（ROUND(board_3bv×1e6/real_time)），负值 = 运气盘（初级 3BV<10、中高级 3BV<4），成绩不被站内承认",
-      "nf: true = 无标雷（NF）录像；录像文件本体不提供，回放请链到 https://new.saolei.wang/video/{id}",
+      "nf: true = 无标雷（NF）录像；列表不含录像文件，需要文件用 video_info 的 fileUrl，网页回放链到 https://new.saolei.wang/video/{id}",
     ],
   },
   {
     path: "/api/public/v1/video_info",
-    title: "录像详情（含重放指标）",
-    desc: "返回录像全部已落盘公开数据：video_list 全部字段 + status + signature（录像内嵌玩家标识）+ metrics（离线重放引擎算得的落盘指标）。",
+    title: "录像详情（含重放指标 + 录像文件 URL）",
+    desc: "返回录像全部已落盘公开数据：video_list 全部字段 + status + signature（录像内嵌玩家标识）+ metrics（离线重放引擎算得的落盘指标）+ fileUrl（录像文件完整 URL）。",
     params: [{ name: "id", required: true, desc: "逗号分隔的录像 ID，最多 50 个" }],
     request: "GET /api/public/v1/video_info?id=328090",
     response: `{
@@ -112,6 +112,7 @@ const APIS: ApiDoc[] = [
       "board3bv": 123,
       "3bvs": 4900,
       "nf": false,
+      "fileUrl": "https://new.saolei.wang/videos/2025/07/31/6d58634fbe0987003dda90f4a68944a7.avf",
       "software": "Arbiter",
       "version": "0.52",
       "signature": "Ju Ze En",
@@ -130,6 +131,7 @@ const APIS: ApiDoc[] = [
 }`,
     notes: [
       "status：10=待审 / 20=已通过（屏蔽 0 不返回）",
+      "fileUrl：录像文件（MVF/EVF 等）完整下载地址，直接 GET 即得文件本体；该类文件全站限速 3 次/秒，批量拉取请自行排队",
       "metrics：cl 总点击（左+右+双）· ce 有效点击 · path 鼠标行程（16px/格折算）· ioe 效率（3BV/总点击）· stnb 判雷指标；null = 该录像重放指标尚未落盘",
       "点击计数为站内 flop 引擎口径，与其他站点的派生口径可能不同，请勿混用",
     ],
