@@ -30,6 +30,8 @@ model User {
   lastLoginIp String @default("") @map("last_login_ip") @db.VarChar(45)
   // 封禁截止 Unix 秒（2026-10-16 限时封禁）：仅 status=-1 时有意义；0=永久封禁；到期自动解禁
   banUntil BigInt @default(0) @map("ban_until") @db.BigInt
+  // 可信用户组（2026-10-24）：组内用户上传录像自动分拣时不检查 STNB 触发器（后台 /admin/users/[id] 超管维护）
+  trusted Boolean @default(false)
 
   // 2026-10-15 上线前性能审计新增：
   // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；

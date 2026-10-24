@@ -38,6 +38,11 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         </h1>
         <div className="right">
           <RoleTag role={u.role} />
+          {u.trusted && (
+            <span className="admin_tag ok" title="可信用户组：该玩家上传录像自动分拣时不检查 STNB 触发器">
+              可信用户
+            </span>
+          )}
           {u.status === 0 ? (
             <span className="admin_tag ok">正常</span>
           ) : (
@@ -195,6 +200,18 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                   u.role === USER_ROLE.PLAYER
                     ? `确认把「${u.chineseName}」设为管理员？管理员可审核录像并管理内容。`
                     : `确认取消「${u.chineseName}」的管理权限？`
+                }
+              />
+              <AdminAction
+                op="user.setTrusted"
+                params={{ id: u.id, trusted: u.trusted ? 0 : 1 }}
+                label={u.trusted ? "移出可信用户组" : "加入可信用户组"}
+                variant={u.trusted ? "warn" : "primary"}
+                sm={false}
+                confirm={
+                  u.trusted
+                    ? `确认把「${u.chineseName}」移出可信用户组？其后续上传录像将恢复 STNB 触发器检查，待审录像会立即重分拣。`
+                    : `确认把「${u.chineseName}」加入可信用户组？其上传录像自动分拣时不再检查 STNB 触发器（其余触发器照常），待审录像会立即重分拣。`
                 }
               />
               {u.videos === 0 && d.postTotal === 0 ? (

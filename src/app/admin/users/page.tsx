@@ -135,6 +135,15 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                       {u.chineseName}
                     </Link>
                     {u.englishName && <span className="sub"> {u.englishName}</span>}
+                    {u.trusted && (
+                      <span
+                        className="admin_tag ok"
+                        style={{ marginLeft: 6 }}
+                        title="可信用户组：该玩家上传录像自动分拣时不检查 STNB 触发器"
+                      >
+                        可信
+                      </span>
+                    )}
                   </td>
                   <td className="sub">{u.username || "—"}</td>
                   <td className="sub">{u.area || "—"}</td>
@@ -216,6 +225,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
           · <b>管理员（10）</b>可审核录像、处理评论 / 论坛 / 动态；<b>超级管理员（100）</b>额外可封禁玩家、改角色、重置密码、注销账号、群发站内信。<br />
           · 封禁依靠 <code>user.status</code>：0 = 正常、-1 = 封禁；登录接口会直接拒绝被封禁账号。封禁可选时长（一天/一周/一月/一年/永久），到期自动解禁；可选同步封禁该玩家录像，解禁时自动恢复。<br />
           · 注销账号（玩家详情页）只删除登录凭据（user_auth / oauth），保留成绩与录像，避免破坏排行榜与历史引用；仅对没有任何录像和论坛主题的玩家开放，有内容的玩家请改用封禁。<br />
+          · <b>可信用户组</b>（玩家详情页设置，仅超管）：组内玩家上传录像自动分拣时不再检查 STNB 触发器（按住时长 / 手速 / 轨迹等其余触发器照常），加入或移出会立即重分拣其全部待审录像。<br />
           · 后台所有写操作都会记入<Link href="/admin/logs"> 操作日志 </Link>。
         </div>
       </AdminCard>

@@ -9,7 +9,8 @@
 //       2026-10-19 张老师晚定中级放宽 56→45，初/中同线；高级沿用 60），
 //       守卫配对数 n≥30；左右键独立判（各自 n≥30 且 ≤阈值）。分级依据：初级人类
 //       普遍点击快（p50 仅 72ms），统一 60ms 线会误落 17% 真人（回测 9837 盘实证）
-//   bit1 STNB 分位：beg>205 / int>160 / exp>150（flag 与 NF 同线，各级 p99 定标）
+//   bit1 STNB 分位：beg>205 / int>160 / exp>150（flag 与 NF 同线，各级 p99 定标）；
+//       2026-10-24 起两路豁免：初级 3BV<10 运气盘不判（与 3BV/s 划线同口径）、可信用户组不判
 //   bit2 cls>10 次/秒（全站真实 max 7.77）
 //   bit3 path=0 且 cl>20（无移动连点）——ppc 阈值暂不启用（回测 min 1.106 远离 0.5，无区分度）
 //   bit4 点击数不足：cl < board_3bv × 0.8
@@ -25,6 +26,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "./db";
+import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
 import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS } from "./video-triage-limits";
@@ -160,15 +162,19 @@ export interface TriageExtra {
   firstEnlist?: boolean;
 }
 
-/** 上传者是否低信任：名下有被屏蔽录像 或 账号曾被封（user.status=-1 即封禁口径，含限时未到期） */
-export async function isLowTrustUser(userId: number): Promise<boolean> {
+/** 上传者信任信息（一次查询同时拿低信任与可信组两个口径） */
+export async function getUserTrustInfo(userId: number): Promise<{ lowTrust: boolean; trusted: boolean }> {
   const [bannedVideo, userRow] = await Promise.all([
     prisma.video.findFirst({ where: { user: BigInt(userId), status: 0 }, select: { id: true } }),
-    prisma.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true } }),
+    prisma.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true, trusted: true } }),
   ]);
-  if (bannedVideo) return true;
-  if (userRow && userRow.status === -1) return true;
-  return false;
+  const lowTrust = Boolean(bannedVideo) || userRow?.status === -1;
+  return { lowTrust, trusted: Boolean(userRow?.trusted) };
+}
+
+/** 上传者是否低信任：名下有被屏蔽录像 或 账号曾被封（user.status=-1 即封禁口径，含限时未到期） */
+export async function isLowTrustUser(userId: number): Promise<boolean> {
+  return (await getUserTrustInfo(userId)).lowTrust;
 }
 
 // ---------- 判档主函数 ----------
@@ -182,6 +188,7 @@ export interface TriageResult {
  * 对已解析的录像跑触发器组（纯函数，不落库）。
  * stnb/cls/path 来自 video_metrics（调用方读库传入；缺行＝按需核定保守处理）。
  * timeMs 为库内权威用时（video_info.real_time，ms）——path 瞬移密度守卫需要。
+ * trusted 为上传者是否在可信用户组（组内不检查 STNB 触发器，2026-10-24）。
  */
 export function triageParsed(
   v: ParsedVideo,
@@ -189,7 +196,8 @@ export function triageParsed(
   metrics: { stnb: number | null; cls: number | null; path: number | null } | null,
   lowTrust: boolean,
   extra: TriageExtra = {},
-  timeMs: number = v.timeMs
+  timeMs: number = v.timeMs,
+  trusted: boolean = false
 ): TriageResult {
   let reason = 0;
 
@@ -215,7 +223,13 @@ export function triageParsed(
   }
 
   if (metrics) {
-    if (metrics.stnb !== null && metrics.stnb > (STNB_TRIGGER[level] ?? Infinity)) reason |= AUTO_REASON.STNB;
+    // STNB 触发器豁免（2026-10-24 张老师定）：
+    // ① 初级 3BV<10 运气盘 STNB 无意义（与 3BV/s 划线口径 MIN_3BV_FOR_3BVS.beg=10 一致）；
+    // ② 可信用户组不检查 STNB。bbbv 未知（解析缺值）时同按不检查处理——无盘面 3BV 的 STNB 本就无从谈起。
+    const stnbBbbvValid = level !== "beg" || (v.bbbv !== null && v.bbbv >= MIN_3BV_FOR_3BVS.beg);
+    if (!trusted && stnbBbbvValid && metrics.stnb !== null && metrics.stnb > (STNB_TRIGGER[level] ?? Infinity)) {
+      reason |= AUTO_REASON.STNB;
+    }
     if (metrics.cls !== null && metrics.cls > CLS_TRIGGER) reason |= AUTO_REASON.CLS;
     if (metrics.path !== null && metrics.path === 0 && ps.cl > 20) reason |= AUTO_REASON.PATH0;
   }
@@ -272,8 +286,16 @@ export async function triageVideo(videoId: number): Promise<void> {
       select: { stnb: true, cls: true, path: true },
     });
 
-    const lowTrust = await isLowTrustUser(Number(video.user));
-    const { flag: baseFlag, reason: baseReason } = triageParsed(parsed, video.level, metrics, lowTrust, {}, info.realTime);
+    const { lowTrust, trusted } = await getUserTrustInfo(Number(video.user));
+    const { flag: baseFlag, reason: baseReason } = triageParsed(
+      parsed,
+      video.level,
+      metrics,
+      lowTrust,
+      {},
+      info.realTime,
+      trusted
+    );
     let flag = baseFlag;
     let reason = baseReason;
 

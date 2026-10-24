@@ -297,6 +297,7 @@ export function AdminReviewList({
               <th>玩家</th>
               <th className="c">级别</th>
               <th className="num">时间</th>
+              <th className="num">3BV</th>
               <th className="num">3BV/s</th>
               <th className="num">STNB</th>
               <th className="c">玩法</th>
@@ -334,7 +335,7 @@ export function AdminReviewList({
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={14}>
+                <td colSpan={15}>
                   <div className="admin_empty">该状态下没有录像</div>
                 </td>
               </tr>
@@ -418,6 +419,7 @@ function ReviewRow({
           "—"
         )}
       </td>
+      <td className="num">{v.board3bv || "—"}</td>
       <td className="num">{v.board3bv && v.realTime ? score3bvs(Math.round((v.board3bv * 1e6) / v.realTime)) : "—"}</td>
       <td className="num">{v.stnb != null ? v.stnb.toFixed(1) : "—"}</td>
       <td className="c">{v.noflag ? <span className="admin_tag info">NF</span> : <span className="sub">标雷</span>}</td>

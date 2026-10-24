@@ -20,6 +20,7 @@ export const OP_LABELS: Record<string, string> = {
   "user.ban": "封禁玩家",
   "user.unban": "解封玩家",
   "user.setRole": "调整玩家角色",
+  "user.setTrusted": "设置可信用户组",
   "user.resetPassword": "重置玩家密码",
   "user.delete": "删除玩家",
   "video.review": "审核录像",

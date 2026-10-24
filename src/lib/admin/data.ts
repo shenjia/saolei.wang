@@ -33,6 +33,8 @@ export interface AdminUserRow extends UserBrief {
   sumTime: number;
   /** 录像总数 */
   videos: number;
+  /** 可信用户组（2026-10-24）：录像分拣不检查 STNB 触发器 */
+  trusted: boolean;
 }
 
 const USER_ORDERS: Record<string, string> = {
@@ -168,6 +170,7 @@ export async function getUserList(
       title: await assessTitle(expTime, king > 0 && king === id),
       sumTime,
       videos: vcMap.get(id) ?? 0,
+      trusted: u.trusted,
     });
   }
 
@@ -285,6 +288,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       title: await assessTitle(expTime, (await getThunderKingId()) === id),
       sumTime,
       videos: await prisma.video.count({ where: { user: uid } }),
+      trusted: user.trusted,
     },
     qq: info?.qq ?? "",
     nickname: info?.nickname ?? "",
@@ -1135,6 +1139,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
       title: await assessTitle(expTime, king > 0 && king === id),
       sumTime,
       videos: 0,
+      trusted: u.trusted,
     });
   }
   return rows;
