@@ -433,11 +433,13 @@ export const NEWS_TYPE = {
 /** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻）
  *  2026-10-17 张老师定：上传录像（VIDEO）撤出首页新闻——首页已有「录像」版块，
  *  录像动态一上传就刷屏新闻流（只在用户主页「动态」显示，NEWS_FEED_EXCLUDED）；
- *  同日再定：晋升动态（PROMOTION）整体下线，不再进入任何动态流 */
+ *  同日再定：晋升动态（PROMOTION）整体下线，不再进入任何动态流
+ *  2026-10-25 张老师定：破纪录动态（PERSON_RECORD「创造了/刷新了」）整体撤出首页新闻，
+ *  只在用户主页「动态」显示（新用户未加入排行时创造的记录不进首页新闻）；
+ *  动态仍照常写入（用户主页可见），AREA/NATION 纪录类型无写入点仅存档 */
 export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.NOTICE,
   NEWS_TYPE.NEWBIE,
-  NEWS_TYPE.PERSON_RECORD,
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
   NEWS_TYPE.STAR, // 当选每日一星（2026-10-25：金色动态上首页新闻流）
