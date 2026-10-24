@@ -29,6 +29,7 @@ export default async function VideoUploadPage() {
           生成的 <em>evf</em> 录像。
         </p>
         <p>上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。</p>
+        <p>※ 可接受的初级最低 3BV 为 2，中级最低 3BV 为 30，高级最低 3BV 为 100。</p>
         <hr />
         <UploadForm />
       </div>
