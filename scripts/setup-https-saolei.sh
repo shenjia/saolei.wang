@@ -103,9 +103,33 @@ log_format spider_saolei '$http_x_forwarded_for - $time_iso8601 "$request" $stat
 # 下沉到 443 的动态 location /（只管 HTML/RSC/API）；静态 location 各自成块
 # 不带 limit_req，天然不限速。/videos/ 档不变。
 
+# ========== new.* 过渡域 301 归一化（2026-10-25 张老师指令）==========
+# new.saolei.wang 整体 301 到主域 saolei.wang（裸域）；80 块保留 acme 验证目录
+# （SAN 证书续期 http-01 会打三个域名，挑战请求不能跟着 301 走，留原地 200 最稳）
 server {
     listen 80;
-    server_name new.saolei.wang www.saolei.wang saolei.wang;
+    server_name new.saolei.wang;
+    location /.well-known/acme-challenge/ {
+        root /home/deploy/acme-www;
+    }
+    location / {
+        return 301 https://saolei.wang$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name new.saolei.wang;
+    ssl_certificate     /etc/nginx/ssl/saolei/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/saolei/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    return 301 https://saolei.wang$request_uri;
+}
+
+server {
+    listen 80;
+    server_name www.saolei.wang saolei.wang;
     access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
     client_max_body_size 30m;
 
@@ -121,7 +145,7 @@ server {
 
 server {
     listen 443 ssl;
-    server_name new.saolei.wang www.saolei.wang saolei.wang;
+    server_name www.saolei.wang saolei.wang;
     access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
     client_max_body_size 30m;
 
