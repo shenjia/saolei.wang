@@ -10492,3 +10492,129 @@ body #page .word_terms .desc {
 .apikey_value:hover {
   border-color: #e6db74;
 }
+
+/* ---- 开放 API 说明页（/page/api，2026-10-24）----
+   深色内容页（.box.text 容器）内的代码块 / 要点列表 / 接口表：
+   code/pre 沿用站内 Monokai 语汇（金 #e6db74 点缀、前景白 #f8f8f2），
+   表格与录像列表页数据表同风格（暗底、细边框、行 hover 微亮）。 */
+.api_code {
+  display: block;
+  background: #272822;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 8px 0 14px;
+  overflow-x: auto;
+}
+.api_code code,
+#page .api_brief code,
+#page .api_table code {
+  color: #e6db74;
+  font-family: Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.api_brief {
+  margin: 8px 0 16px 18px;
+  list-style: disc;
+}
+.api_brief li {
+  margin-bottom: 4px;
+  line-height: 22px;
+}
+.api_table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 16px;
+  font-size: 13px;
+}
+.api_table th,
+.api_table td {
+  border: 1px solid #49483e;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  line-height: 20px;
+}
+.api_table th {
+  color: #b1b1a4;
+  background: #3b3a32;
+}
+.api_table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+.api_table td:last-child {
+  color: #f8f8f2;
+}
+
+/* ---- 开放 API 说明页二轮（2026-10-24）：接口折叠块 ----
+   每个接口一个 <details>（默认展开）：summary 行 = GET 徽标 + 路径 + 标题，
+   折叠态有边框卡片感，展开态左缘金线；内部小节标题（输入参数/请求/返回示例）用 .api_sub。 */
+.api_endpoint {
+  border: 1px solid #49483e;
+  border-radius: 8px;
+  margin: 0 0 14px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.api_endpoint[open] {
+  border-left: 3px solid #e6db74;
+}
+.api_endpoint > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  line-height: 24px;
+}
+.api_endpoint > summary::-webkit-details-marker {
+  display: none;
+}
+.api_endpoint > summary::before {
+  content: "▸";
+  color: #75715e;
+  transition: transform 0.15s;
+}
+.api_endpoint[open] > summary::before {
+  transform: rotate(90deg);
+}
+.api_method {
+  font-family: Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #a6e22e;
+  border: 1px solid #a6e22e;
+  border-radius: 4px;
+  padding: 1px 6px;
+  line-height: 18px;
+}
+.api_endpoint > summary code {
+  color: #e6db74;
+  font-family: Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.api_ep_title {
+  color: #939387;
+  font-size: 13px;
+}
+.api_ep_body {
+  padding: 2px 14px 14px 30px;
+}
+.api_ep_desc {
+  color: #c2c2b8;
+  line-height: 22px;
+  margin: 0 0 10px;
+}
+.api_sub {
+  font-size: 13px;
+  color: #b1b1a4;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+.api_ep_body .api_code {
+  margin: 0 0 4px;
+}
+.api_ep_body .api_table {
+  margin: 0 0 8px;
+}

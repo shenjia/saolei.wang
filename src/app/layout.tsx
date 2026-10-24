@@ -180,6 +180,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/page/history">更新历史</Link> ·{" "}
               <Link href="/team">管理团队</Link> ·{" "}
               <Link href="/page/donate">提供赞助</Link> ·{" "}
+              <Link href="/page/api">开放API</Link> ·{" "}
               <a href="http://www.miibeian.gov.cn" target="_blank" rel="noopener noreferrer">
                 陕ICP备19026089号-1
               </a>
