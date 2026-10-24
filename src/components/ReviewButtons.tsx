@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { VIDEO_STATUS } from "@/lib/config";
 import { toast } from "./Toast";
+import { confirmDialog } from "./Confirm";
 
 export function ReviewButtons({
   videoId,
@@ -24,7 +25,15 @@ export function ReviewButtons({
   async function review(target: number) {
     const needConfirm =
       target === VIDEO_STATUS.BANNED || status === VIDEO_STATUS.BANNED;
-    if (needConfirm && !window.confirm(target === VIDEO_STATUS.BANNED ? "确定屏蔽该录像？" : "确定恢复该录像？")) {
+    if (
+      needConfirm &&
+      !(await confirmDialog({
+        title: target === VIDEO_STATUS.BANNED ? "屏蔽录像" : "恢复录像",
+        message: target === VIDEO_STATUS.BANNED ? "确定屏蔽该录像？" : "确定恢复该录像？",
+        confirmText: target === VIDEO_STATUS.BANNED ? "屏蔽" : "恢复",
+        danger: target === VIDEO_STATUS.BANNED,
+      }))
+    ) {
       return;
     }
     setBusy(true);

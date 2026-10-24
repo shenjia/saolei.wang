@@ -2282,7 +2282,6 @@ body #page.message_list > .box:first-child .page_head {
 #page.message_list .table td.msg_content a.msg_title_link:hover {
   color: #a6e22e;
 }
-
 /* 已读消息内的链接改亮灰（2026-10-24 张老师要求：不再金黄——已读整行置灰的语义
    延伸到内嵌链接；hover 仍回绿提示可点。双类提权压过上面未读黄色规则） */
 #page.message_list .table tr.read td.msg_content a.msg_title_link {
@@ -10470,29 +10469,6 @@ body #page .word_terms .desc {
   color: #a6e22e;
 }
 
-/* ---- API key 签发弹窗（2026-10-24）：key 明文展示块 ----
-   弹窗壳复用 .ban_overlay/.ban_dialog；key 大字等宽、点击即复制，
-   金色 #e6db74 与站内 code 语义一致，长 key 自动换行不断流。 */
-.apikey_value {
-  font-family: Menlo, Consolas, monospace;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: #e6db74;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px dashed #75715e;
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin: 4px 0 18px;
-  word-break: break-all;
-  cursor: pointer;
-  user-select: all;
-  transition: border-color 0.15s;
-}
-.apikey_value:hover {
-  border-color: #e6db74;
-}
-
 /* ---- 开放 API 说明页（/page/api，2026-10-24）----
    深色内容页（.box.text 容器）内的代码块 / 要点列表 / 接口表：
    code/pre 沿用站内 Monokai 语汇（金 #e6db74 点缀、前景白 #f8f8f2），
@@ -10544,6 +10520,90 @@ body #page .word_terms .desc {
 }
 .api_table td:last-child {
   color: #f8f8f2;
+}
+
+/* ---- API key 签发弹窗（2026-10-24）：key 明文展示块 ----
+   弹窗壳复用 .ban_overlay/.ban_dialog；key 大字等宽、点击即复制，
+   金色 #e6db74 与站内 code 语义一致，长 key 自动换行不断流。 */
+.apikey_value {
+  font-family: Menlo, Consolas, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #e6db74;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed #75715e;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 4px 0 18px;
+  word-break: break-all;
+  cursor: pointer;
+  user-select: all;
+  transition: border-color 0.15s;
+}
+.apikey_value:hover {
+  border-color: #e6db74;
+}
+
+/* ---------- 通用确认浮窗（2026-10-24） ----------
+   替换前台所有 window.confirm 系统模态框（张老师要求：网站内置浮窗做确认）。
+   遮罩 + 暗玻璃面板与登录浮窗 / 纪事浮窗同款视觉（.history_overlay/.history_dialog 一脉）。
+   组件见 src/components/Confirm.tsx：confirmDialog() 命令式调用，ConfirmHost 挂 layout。
+   打开时锁页面滚动；ESC / 点遮罩 / × = 取消；确认键自动聚焦（回车即确认）。 */
+.confirm_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+.confirm_dialog {
+  position: relative;
+  box-sizing: border-box;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  margin: 0;
+  padding: 22px 26px 20px;
+  background: rgba(39, 40, 34, 0.92);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+  border: 0;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(248, 248, 242, 0.1),
+    inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+    0 32px 64px -16px rgba(0, 0, 0, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.confirm_dialog h1 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #f8f8f2;
+  margin: 0;
+}
+.confirm_dialog .confirm_desc {
+  margin-top: 10px;
+  color: #b1b1a4;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: pre-line;
+}
+.confirm_dialog .confirm_desc em {
+  font-style: normal;
+  color: #f92672;
+}
+.confirm_ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.confirm_ops .button:focus-visible {
+  outline: 2px solid #a6e22e;
+  outline-offset: 1px;
 }
 
 /* ---- 开放 API 说明页二轮（2026-10-24）：接口折叠块 ----

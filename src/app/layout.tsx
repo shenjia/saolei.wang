@@ -12,6 +12,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { ScrollReset } from "@/components/ScrollReset";
 import { SystemText } from "@/components/SystemText";
 import { ToastHost } from "@/components/Toast";
+import { ConfirmHost } from "@/components/Confirm";
 import TrackPageView from "@/components/TrackPageView";
 import { isManager } from "@/lib/config";
 import { TitleSystemProvider } from "@/components/TitleSystemProvider";
@@ -165,6 +166,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         {!session && <LoginModal />}
         <ToastHost />
+        <ConfirmHost />
         <Suspense fallback={null}>
           <ScrollReset />
         </Suspense>

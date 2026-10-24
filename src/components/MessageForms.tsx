@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
+import { confirmDialog } from "./Confirm";
 import { useDraft } from "./useDraft";
 
 export function SendMessageForm({ to, toName, authorId }: { to?: number; toName?: string; authorId: number }) {
@@ -61,7 +62,7 @@ export function ClearButton() {
   const [done, setDone] = useState(false);
   const router = useRouter();
   async function onClear() {
-    if (!confirm("确定清空所有消息吗？此操作不可恢复。")) return;
+    if (!(await confirmDialog({ title: "清空消息", message: "确定清空所有消息吗？此操作不可恢复。" }))) return;
     const res = await fetch("/api/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -120,7 +121,20 @@ export function BroadcastForm({ authorId }: { authorId: number }) {
   const [busy, setBusy] = useState(false);
 
   async function onBroadcast() {
-    if (!confirm(`确定向全站所有用户广播吗？\n\n${draft.value}`)) return;
+    if (
+      !(await confirmDialog({
+        title: "全站广播",
+        message: (
+          <>
+            确定向全站所有用户广播吗？
+            {"\n\n"}
+            {draft.value}
+          </>
+        ),
+        confirmText: "确定广播",
+      }))
+    )
+      return;
     setBusy(true);
     const res = await fetch("/api/message", {
       method: "POST",

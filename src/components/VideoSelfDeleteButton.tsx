@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { confirmDialog } from "./Confirm";
 
 export function VideoSelfDeleteButton({ videoId, userId }: { videoId: number; userId: number }) {
   const router = useRouter();
@@ -14,9 +15,18 @@ export function VideoSelfDeleteButton({ videoId, userId }: { videoId: number; us
 
   async function onDelete() {
     if (
-      !window.confirm(
-        `⚠️ 确认彻底删除录像 #${videoId}？\n删除后该录像及其全部评论、相关动态将一并消失，不可恢复。`
-      )
+      !(await confirmDialog({
+        title: "删除录像",
+        message: (
+          <>
+            确认彻底删除录像 <em>#{videoId}</em>？
+            {"\n"}
+            删除后该录像及其全部评论、相关动态将一并消失，<em>不可恢复</em>。
+          </>
+        ),
+        confirmText: "删除",
+        danger: true,
+      }))
     )
       return;
     setBusy(true);

@@ -13,6 +13,7 @@ import { isRecent } from "@/lib/format";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
 import { useDraft, useHydrated } from "./useDraft";
+import { confirmDialog } from "./Confirm";
 
 export function HistoryBox({
   userId,
@@ -38,7 +39,7 @@ export function HistoryBox({
   }
 
   async function onDelete(id: number) {
-    if (!confirm("确定删除这条纪事吗？")) return;
+    if (!(await confirmDialog({ title: "删除纪事", message: "确定删除这条纪事吗？", danger: true, confirmText: "删除" }))) return;
     if (!(await call({ action: "delete", id }))) return;
     setItems((list) => list.filter((it) => it.id !== id));
   }

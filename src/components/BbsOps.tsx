@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
+import { confirmDialog } from "./Confirm";
 import { RichEditor } from "./RichEditor";
 import { useDraft, useHydrated } from "./useDraft";
 
@@ -151,7 +152,7 @@ export function PostOps({
   const router = useRouter();
 
   async function op(body: Record<string, unknown>, confirmText?: string) {
-    if (confirmText && !confirm(confirmText)) return;
+    if (confirmText && !(await confirmDialog({ title: "删除主题", message: confirmText, danger: true, confirmText: "删除" }))) return;
     const err = await callApi(body);
     if (err) {
       toast(err, "error");
@@ -219,7 +220,7 @@ export function ReplyDelete({ replyId, onDeleted }: { replyId: number; onDeleted
       href="#"
       onClick={async (e) => {
         e.preventDefault();
-        if (!confirm("确定删除该回复吗？")) return;
+        if (!(await confirmDialog({ title: "删除回复", message: "确定删除该回复吗？", danger: true, confirmText: "删除" }))) return;
         const err = await callApi({ action: "delete_reply", id: replyId });
         if (err) {
           toast(err, "error");
