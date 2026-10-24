@@ -17,7 +17,7 @@ import { parseVideoBinary } from "../src/lib/videoradar";
 import { AUTO_REASON, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS } from "../src/lib/video-triage-limits";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
-const EV = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/;
+const EV = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/;
 /** 瞬移判定：相邻事件位移超过此像素数 */
 const JUMP_PX = 100;
 /** 异常判定：瞬移贡献行程占比超过此比例 */

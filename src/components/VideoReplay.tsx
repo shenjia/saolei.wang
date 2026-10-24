@@ -95,7 +95,8 @@ export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?:
   let lastCsec = 0;
   for (const line of v.events) {
     // 行形态：`ts ev col row (px py)`（与 videoradar replayEvents 同一正则）
-    const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+    // ts 可为负（evf 负值修正：开局前按下/标旗）——起点前事件在播放在 0 点立即生效
+    const m = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (!m) continue;
     const csec = Math.round(parseFloat(m[1]) * 100);
     evs.push({ csec, ev: m[2], px: +m[5], py: +m[6] });

@@ -19,7 +19,7 @@ const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const sinceYear = Number(process.argv[2] ?? 2026);
 
 // ---------- press-release 配对统计（与 lib/video-triage.ts 同口径；此处先内联，定稿后收敛进 lib） ----------
-const EV = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/;
+const EV = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/;
 
 interface PressStats {
   leftAvg: number | null;

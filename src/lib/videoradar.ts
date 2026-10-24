@@ -107,9 +107,10 @@ export function replayEvents(v: ParsedVideo): ReplayCounts {
   for (let i = 0; i < mines.length; i++) mines[i] = v.board[i] === "*" ? 1 : 0;
 
   // 事件行形态：`ts ev x y (px py)`（mt＝切换问号开关，不占格子）
+  // ts 可为负（evf 负值修正：开局前按下/标旗），此处不消费时间
   const evs: NormEvent[] = [];
   for (const line of v.events) {
-    const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+    const m = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (!m) continue;
     evs.push({
       ev: m[2] as NormEvent["ev"],

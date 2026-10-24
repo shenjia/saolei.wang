@@ -476,6 +476,14 @@ export function parseEvf(buf: Uint8Array): EvfVideo {
  *     （样例实测 17 次双击失效、32 格缺口、误判 incomplete）；cc→sc 后 381/381 WIN。
  *   l/r/m（方向未知）→ 有限状态机消歧（按当前按下状态判定按压/松开）。
  * 棋盘事件/指标事件无站点产出，直接跳过；停顿已折进时间戳累计。
+ *
+ * 负值修正（2026-10-24，347107 排查结论）：evf 时间轴 0 点＝最早影响盘面的
+ * 左键「按下」（lc），而计时起点＝第一个 lr 且其位置不是已标雷（开局前插的旗、
+ * 点在旗上的 lr 都不算开始——张老师定口径）。全站时间口径（页面成绩/库内
+ * real_time）取头文件 rtime（计时起点基准），事件流须整体平移 -t0 对齐：
+ * 开局前事件（按下未弹起、pre-game 标旗）得负时间。不平移的话，回放终点/
+ * 胜利时刻会比成绩多出这段「按下未弹起」时间（347107 实测差 64ms：事件流
+ * 尾 65.480s vs 成绩 65.416s，恰好等于首个 lc→lr 间隔）。
  */
 export function evfToRawvf(buf: Uint8Array): string[] {
   const v = parseEvf(buf);
@@ -511,6 +519,35 @@ export function evfToRawvf(buf: Uint8Array): string[] {
   const line = (t: number, name: string, x: number, y: number) =>
     `${t.toFixed(3)} ${name} ${Math.trunc(px(x) / 16) + 1} ${Math.trunc(px(y) / 16) + 1} (${px(x)} ${px(y)})`;
 
+  // —— 负值修正：t0＝第一个 lr 且其位置不是已标雷（计时起点）；开局前事件得负时间 ——
+  // 开局前无已开格，旗状态只需跟踪 pf/rc（rc 开局前＝toggleLabel 插/摘旗）；
+  // lr 点在已标雷上＝无效操作不算开始（flop open() 跳过 flagged，同语义）。
+  let t0Ms = 0;
+  {
+    const flagged = new Set<number>();
+    outer: for (const e of v.events) {
+      if (!e.mouse) continue;
+      const key = Math.trunc(px(e.x ?? 0) / 16) * 1024 + Math.trunc(px(e.y ?? 0) / 16);
+      switch (e.mouse) {
+        case "pf":
+          flagged.add(key);
+          break;
+        case "rc":
+          if (flagged.has(key)) flagged.delete(key);
+          else flagged.add(key);
+          break;
+        case "lr":
+          if (!flagged.has(key)) {
+            t0Ms = Math.round(e.time * 1000);
+            break outer;
+          }
+          break;
+        // lc/mv/cc/rr：开局前无盘面效果，不影响计时起点
+      }
+    }
+  }
+  const t0Sec = t0Ms / 1000;
+
   // l/r/m 消歧状态机（转码录像可能产出）
   let lDown = false;
   let rDown = false;
@@ -523,41 +560,41 @@ export function evfToRawvf(buf: Uint8Array): string[] {
       case "l":
         if (lDown) {
           lDown = false;
-          lines.push(line(e.time, "lr", x, y));
+          lines.push(line(e.time - t0Sec, "lr", x, y));
         } else {
           lDown = true;
-          lines.push(line(e.time, "lc", x, y));
+          lines.push(line(e.time - t0Sec, "lc", x, y));
         }
         break;
       case "r":
         if (rDown) {
           rDown = false;
-          lines.push(line(e.time, "rr", x, y));
+          lines.push(line(e.time - t0Sec, "rr", x, y));
         } else {
           rDown = true;
-          lines.push(line(e.time, "rc", x, y));
+          lines.push(line(e.time - t0Sec, "rc", x, y));
         }
         break;
       case "m":
         if (mDown) {
           mDown = false;
-          lines.push(line(e.time, "mr", x, y));
+          lines.push(line(e.time - t0Sec, "mr", x, y));
         } else {
           mDown = true;
-          lines.push(line(e.time, "mc", x, y));
+          lines.push(line(e.time - t0Sec, "mc", x, y));
         }
         break;
       case "pf":
         // 开局前标记：等价一次插旗（按下+松开同拍）
-        lines.push(line(e.time, "rc", x, y));
-        lines.push(line(e.time, "rr", x, y));
+        lines.push(line(e.time - t0Sec, "rc", x, y));
+        lines.push(line(e.time - t0Sec, "rr", x, y));
         break;
       case "cc":
         // 双击按下（按钮未知）：sc 语义置 sv，chord 在其后的 lr（或按住左键时的 rr）生效
-        lines.push(line(e.time, "sc", x, y));
+        lines.push(line(e.time - t0Sec, "sc", x, y));
         break;
       default:
-        lines.push(line(e.time, e.mouse, x, y));
+        lines.push(line(e.time - t0Sec, e.mouse, x, y));
     }
   }
   return lines;

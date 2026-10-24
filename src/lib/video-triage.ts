@@ -108,7 +108,7 @@ const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 
 // ---------- press-release 统计（与回测脚本同一口径） ----------
 
-const EV_LINE = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/;
+const EV_LINE = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/;
 
 export interface PressPairStats {
   leftAvg: number | null;
@@ -118,9 +118,11 @@ export interface PressPairStats {
   cl: number;
 }
 
-/** 左键按下＝lc/mc/sc、松开＝lr/mr；右键按下＝rc、松开＝rr；时间序自然配对 */
+/** 左键按下＝lc/mc/sc、松开＝lr/mr；右键按下＝rc、松开＝rr；时间序自然配对。
+ *  ts 可为负（evf 负值修正：开局前按下）——按下/松开哨兵用 null，不能用 -1，
+ *  否则负时间按下会被哨兵吞掉（按下时长统计丢对）。 */
 export function pressPairStats(v: ParsedVideo): PressPairStats {
-  const presses: { L: number; R: number } = { L: -1, R: -1 };
+  const presses: { L: number | null; R: number | null } = { L: null, R: null };
   const dursL: number[] = [];
   const dursR: number[] = [];
   let cl = 0;
@@ -136,14 +138,14 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
       presses.R = ts;
       cl++;
     } else if (ev === "lr" || ev === "mr") {
-      if (presses.L >= 0) {
+      if (presses.L !== null) {
         dursL.push(ts - presses.L);
-        presses.L = -1;
+        presses.L = null;
       }
     } else if (ev === "rr") {
-      if (presses.R >= 0) {
+      if (presses.R !== null) {
         dursR.push(ts - presses.R);
-        presses.R = -1;
+        presses.R = null;
       }
     }
   }

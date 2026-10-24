@@ -27,7 +27,7 @@ function simulate(fp: string) {
   const rstate = new Uint8Array(N); // 0/1/2/3
   const evs = v.events
     .map((line) => {
-      const m = /^([\d.]+) (lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+      const m = /^(-?[\d.]+) (lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
       return m ? { ev: m[2], px: +m[5], py: +m[6] } : null;
     })
     .filter(Boolean) as { ev: string; px: number; py: number }[];
@@ -147,7 +147,7 @@ if (!vaRaw) throw new Error("avf 解析失败（事件统计段）");
 const va = formatRawvf(vaRaw);
 const evCnt: Record<string, number> = {};
 for (const l of va.events) {
-  const m = /^[\d.]+ (lc|lr|rc|rr|mc|mr|sc|mt) /.exec(l);
+  const m = /^-?[\d.]+ (lc|lr|rc|rr|mc|mr|sc|mt) /.exec(l);
   if (m) evCnt[m[1]] = (evCnt[m[1]] || 0) + 1;
 }
 console.log("[338799] evs:", JSON.stringify(evCnt), "time:", va.timeMs, "marks:", va.marks);

@@ -2407,7 +2407,9 @@ export function OnlinePlay({
       /* ③ 事件流解析 + 终态重放（flop 状态机 1:1，与页内回放 applyEv 同语义） */
       const evs: OnlineEvent[] = [];
       for (const line of v.events) {
-        const m = /^([\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+        // ts 可为负（evf 负值修正：开局前按下/标旗）——sec/hun 折算后为负，
+        // 回放分发 `sec*100+hun > target` 在 0 点起点会立即生效，无需特判
+        const m = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
         if (!m) continue;
         if (m[2] === "mt") continue; // 问号开关切换：无对应交互事件，跳过
         const code = EV_NAME_TO_MOUSE[m[2]];

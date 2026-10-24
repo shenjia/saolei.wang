@@ -44,7 +44,8 @@ export function judgeVideoOutcome(v: {
   }
   const evs: { ev: string; px: number; py: number }[] = [];
   for (const line of v.events) {
-    const m = /^([\d.]+) (lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
+    // 时间戳可为负（evf 负值修正：开局前按下/标旗在计时起点之前），此处不消费时间
+    const m = /^(-?[\d.]+) (lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (m) evs.push({ ev: m[2], px: +m[5], py: +m[6] });
   }
   if (!evs.length) return "incomplete"; // flop：无事件 gameState 停在 Begin
