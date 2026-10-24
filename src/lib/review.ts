@@ -352,41 +352,44 @@ export async function reviewVideo(
       await refreshUserStnb(rv.user, rv.level, tx);
 
       const sumTime = updated.sumTime ?? 0;
+      // 个人纪录动态（时间取录像上传时间）——快照取覆盖前旧 exp_time（显示破之前军衔）
+      // 2026-10-24 张老师定：入伍与破纪录不再互斥（原 if/else 会让首次入伍吞掉同刻的
+      // 各级首纪录动态）——先发纪录动态（首创行 or=0 渲染成「创造了」），最后发入伍动态收尾。
+      // 口径演变：最初取 rv.createTime（上传时间）→ 2026-10-19 因「补审积压旧录像时
+      // 动态 id 追表尾而时间是旧的，打破 id 序=create_time 序铁律」改取审核时间（b83e20e）
+      // → 2026-10-20 张老师再定改回上传时间（一批补审的动态时间不该全挤在过审时刻），
+      // 铁律问题改由消费端解决：动态流排序一律 (create_time, id) 倒序，不再依赖 id 序。
+      // 成绩时间语义由 details 的 or/cr（毫秒级成绩）保留；入伍动态仍取审核时间。
+      for (const level of ["beg", "int", "exp"] as VideoLevel[]) {
+        for (const order of ORDERS) {
+          if (Number(updated[F(level, order, "Video")] ?? 0) === rv.id) {
+            await publishNews({
+              tx,
+              type: NEWS_TYPE.PERSON_RECORD,
+              userId: rv.user,
+              expTimeOverride: original.expTime ?? 0,
+              reference: rv.id,
+              details: {
+                lv: level,
+                od: order,
+                or: original[F(level, order)] ?? 0,
+                cr: updated[F(level, order)] ?? 0,
+                nf: 0,
+              },
+              createTime: rv.createTime,
+            });
+          }
+        }
+      }
+
       if ((original.sumTime ?? 0) === 0 && sumTime > 0) {
-        // 入伍新兵动态（时间取审核时间）——快照取更新后 exp_time（含同刻：显示入伍时军衔）
+        // 入伍新兵动态收尾（时间取审核时间）——快照取更新后 exp_time（含同刻：显示入伍时军衔）。
+        // 发布顺序在纪录动态之后（2026-10-24 张老师定：先纪录、后入伍）
         await publishNews({
           tx, type: NEWS_TYPE.NEWBIE, userId: rv.user,
           expTimeOverride: updated.expTime ?? 0,
           createTime: rv.reviewTime!,
         });
-      } else {
-        // 个人纪录动态（时间取录像上传时间）——快照取覆盖前旧 exp_time（显示破之前军衔）
-        // 口径演变：最初取 rv.createTime（上传时间）→ 2026-10-19 因「补审积压旧录像时
-        // 动态 id 追表尾而时间是旧的，打破 id 序=create_time 序铁律」改取审核时间（b83e20e）
-        // → 2026-10-20 张老师再定改回上传时间（一批补审的动态时间不该全挤在过审时刻），
-        // 铁律问题改由消费端解决：动态流排序一律 (create_time, id) 倒序，不再依赖 id 序。
-        // 成绩时间语义由 details 的 or/cr（毫秒级成绩）保留；入伍动态仍取审核时间。
-        for (const level of ["beg", "int", "exp"] as VideoLevel[]) {
-          for (const order of ORDERS) {
-            if (Number(updated[F(level, order, "Video")] ?? 0) === rv.id) {
-              await publishNews({
-                tx,
-                type: NEWS_TYPE.PERSON_RECORD,
-                userId: rv.user,
-                expTimeOverride: original.expTime ?? 0,
-                reference: rv.id,
-                details: {
-                  lv: level,
-                  od: order,
-                  or: original[F(level, order)] ?? 0,
-                  cr: updated[F(level, order)] ?? 0,
-                  nf: 0,
-                },
-                createTime: rv.createTime,
-              });
-            }
-          }
-        }
       }
 
       // 上传录像动态已停发（2026-10-17 张老师定：录像一上传就刷屏动态流，撤出）。
