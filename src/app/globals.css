@@ -1960,10 +1960,21 @@ del[data-tip]:hover::after {
   color: #75715e;
   font-size: 12.5px;
   line-height: 20px;
+  position: relative; /* 行内右端发消息按钮的定位父级（2026-10-25） */
 }
 .user_card .ucd_login em {
   font-style: normal;
   color: #b1b1a4;
+}
+/* 用户卡片「发消息」气泡按钮（2026-10-25 张老师要求）：「最近登录」行右端，
+   绝对定位钉在行右缘（随行垂直居中），不参与文字流、不挤占文字区域；
+   按钮本体复用用户主页 button.msg_btn（20px 气泡图标，hover 全站绿），点击弹同款发信浮窗 */
+.user_card .ucd_msg {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  line-height: 0;
 }
 /* 无数据占位（未加入地区排行 / 未加入排行）：压过排行文字色，须写在最后 */
 .user_card .ranks .ucd_null {

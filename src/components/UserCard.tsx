@@ -8,6 +8,8 @@
 //   2026-10-14 张老师要求：卡片不再显示最近登录时间。
 //   2026-10-21 张老师要求：恢复——底部「最近登录」行重新上线（绝对日期 Y年n月j日），
 //   四级纪录表头级别名后加「纪录」二字（初级纪录 / 中级纪录 / 高级纪录 / 总计纪录）。
+//   2026-10-25 张老师要求：「最近登录」行右端加「发消息」气泡小按钮（用户主页同款
+//   SendMessageButton），绝对定位钉在行右缘、不挤占文字；登录且非本人时渲染。
 // 卡片下方可跟一个「实力」雷达图板块（UserPanel 统一组装，与用户主页同款）。
 // 旧版「进入TA的地盘」按钮、人气 / 今日人气、旧版称号、(id) 均已下线。
 // 用于 /bbs/[id] 右栏与 /video/[id] 右栏。
@@ -16,12 +18,21 @@ import Link from "next/link";
 import type { UserCardData } from "@/lib/usercard";
 import { getUserCard } from "@/lib/usercard";
 import { getRadarData } from "@/lib/radar";
+import { getSession } from "@/lib/auth";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { RadarChart } from "./RadarChart";
+import { SendMessageButton } from "./SendMessageButton";
 import { areaDisplay, AREA_OVERSEAS, LEVELS, LEVEL_NAMES } from "@/lib/config";
 import { formatDate } from "@/lib/format";
 
-export function UserCard({ card }: { card: UserCardData }) {
+export function UserCard({
+  card,
+  viewerId = 0,
+}: {
+  card: UserCardData;
+  /** 当前登录用户 id（0=未登录）：登录且非本人时，「最近登录」行右端渲染发消息按钮 */
+  viewerId?: number;
+}) {
   return (
     <div className="user_card">
       <div className="ucd_top">
@@ -114,10 +125,17 @@ export function UserCard({ card }: { card: UserCardData }) {
       {/* 最近登录（2026-10-21 张老师要求恢复）：绝对日期显示，从未登录显示「?」。
           二轮调整：整行字体与表头「XX纪录」一致（12.5px / #75715e），
           日期用亮灰 #b1b1a4（em，与卡片中级数字/正文亮灰同源）；
-          三轮：标签后不放冒号，空格分隔 */}
+          三轮：标签后不放冒号，空格分隔。
+          2026-10-25：行右端绝对定位「发消息」气泡按钮（用户主页同款浮窗），
+          登录且非本人时渲染——钉在行右缘，不参与文字流、不挤占文字区域 */}
       <p className="ucd_login">
         最近登录{" "}
         {card.lastLoginTime > 0 ? <em>{formatDate(card.lastLoginTime, "Y年n月j日")}</em> : "?"}
+        {viewerId > 0 && viewerId !== card.id && (
+          <span className="ucd_msg">
+            <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
+          </span>
+        )}
       </p>
     </div>
   );
@@ -142,10 +160,12 @@ export async function UserPanel({
   const card = await getUserCard(userId);
   if (!card) return null;
   const radar = card.hasVideos && !hideRadar ? await getRadarData(card.scores) : [];
+  // 发消息按钮（2026-10-25）：登录且非本人时渲染（本人卡片不渲染，与用户主页同口径）
+  const session = await getSession();
   return (
     <>
       <div id={cardId} className="box">
-        <UserCard card={card} />
+        <UserCard card={card} viewerId={session?.uid ?? 0} />
       </div>
       {card.hasVideos && !hideRadar && (
         <div className="radar box">
