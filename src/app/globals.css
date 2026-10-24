@@ -4178,7 +4178,7 @@ body #page.ranking_old .ranking_box {
   gap: 12px;
 }
 #daily_star .star_left {
-  flex: 0 0 50%;
+  flex: 0 0 48%; /* 十八轮（04:55）：50%→48%，右栏多 ~6px 防排名/姓名行折行 */
   max-width: 144px;
 }
 #daily_star .star_avatar {
