@@ -588,9 +588,17 @@ export interface VideoFilter {
   pool?: string;
 }
 
-function videoWhere(f: VideoFilter): { sql: string; params: unknown[] } {
+function videoWhere(f: VideoFilter): {
+  sql: string;
+  params: unknown[];
+  /** 过滤条件是否引用了 vi./u./t. 列（false = 仅 video 单表）——COUNT 短路判据 */
+  joinsNeeded: boolean;
+} {
   const conds: string[] = [];
   const params: unknown[] = [];
+  // 过滤条件是否引用了 vi./u. 列（false = 仅 video 单表）——COUNT 短路判据。
+  // 新增引用别表列的条件时必须同步置 true，否则 COUNT 会丢过滤。
+  let joinsNeeded = false;
   if (f.level && ["beg", "int", "exp"].includes(f.level)) {
     conds.push("v.level = ?");
     params.push(f.level);
@@ -602,8 +610,14 @@ function videoWhere(f: VideoFilter): { sql: string; params: unknown[] } {
   // 分拣池筛选：需核定含未分拣(-1)/失败(2)（保守一律人工）；免核定只认 1
   if (f.pool === "exempt") conds.push("v.auto_flag = 1");
   if (f.pool === "need") conds.push("(v.auto_flag = 0 OR v.auto_flag = 2 OR v.auto_flag = -1)");
-  if (f.nf === "1") conds.push("vi.noflag = 1");
-  if (f.nf === "0") conds.push("vi.noflag = 0");
+  if (f.nf === "1") {
+    conds.push("vi.noflag = 1");
+    joinsNeeded = true;
+  }
+  if (f.nf === "0") {
+    conds.push("vi.noflag = 0");
+    joinsNeeded = true;
+  }
   const q = (f.q ?? "").trim();
   if (q) {
     if (/^\d+$/.test(q)) {
@@ -612,6 +626,7 @@ function videoWhere(f: VideoFilter): { sql: string; params: unknown[] } {
     } else {
       conds.push("u.chinese_name LIKE ?");
       params.push(`%${q}%`);
+      joinsNeeded = true;
     }
   }
   // 日期（本地日边界）
@@ -623,7 +638,7 @@ function videoWhere(f: VideoFilter): { sql: string; params: unknown[] } {
     conds.push("v.create_time < ?");
     params.push(Math.floor(new Date(`${f.to}T00:00:00`).getTime() / 1000) + 86400);
   }
-  return { sql: conds.length ? "WHERE " + conds.join(" AND ") : "", params };
+  return { sql: conds.length ? "WHERE " + conds.join(" AND ") : "", params, joinsNeeded };
 }
 
 const VIDEO_FROM = `FROM video v
@@ -635,7 +650,7 @@ export async function getVideoListAdmin(
   f: VideoFilter
 ): Promise<{ rows: AdminVideoRow[]; total: number; pageSize: number; page: number }> {
   const page = Math.max(1, f.page ?? 1);
-  const { sql, params } = videoWhere(f);
+  const { sql, params, joinsNeeded } = videoWhere(f);
   const order = VIDEO_ORDERS[f.order ?? "new"] ?? VIDEO_ORDERS.new;
 
   const [ids, countRows] = await Promise.all([
@@ -646,10 +661,15 @@ export async function getVideoListAdmin(
       (page - 1) * ADMIN_PAGESIZE
     ),
     // 2026-10-23 慢 SQL 巡检：无过滤时三个 LEFT JOIN 均到主键不改变行数，
-    // 短路成单表 COUNT（原四表 JOIN 全扫 2.5s/次，生产 10 次/日）
-    sql
-      ? prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c ${VIDEO_FROM} ${sql}`, ...params)
-      : prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c FROM video v`),
+    // 短路成单表 COUNT（原四表 JOIN 全扫 2.5s/次，生产 10 次/日）。
+    // 2026-10-25 巡检扩展：带过滤但过滤条件仅涉 video 单表（level/status/pool/
+    // 数字 q/from/to）时同样短路——LEFT JOIN 到主键不改变行数，四表形态纯属
+    // 扫描放大（生产实测 status=20 筛选 3.66s × rowsExam 123.6 万 → 单表亚秒）
+    sql && !joinsNeeded
+      ? prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c FROM video v ${sql}`, ...params)
+      : sql
+        ? prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c ${VIDEO_FROM} ${sql}`, ...params)
+        : prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c FROM video v`),
   ]);
 
   const rows = await fillVideos(ids.map((r) => N(r.id)));
