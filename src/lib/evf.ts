@@ -507,8 +507,11 @@ export function evfToRawvf(buf: Uint8Array): string[] {
     `Time: ${(v.rtimeMs / 1000).toFixed(3)}`,
     `3BV: ${v.bbbv}`,
   ];
-  // useQuestion=1 表示已禁用问号；RawVF 的 QuestionMarks: on = 问号开启
-  if (!v.useQuestion) lines.push("QuestionMarks: on");
+  // settings bit0x80 = use_question（1=开启问号）——官方写入端 `if use_question |= 0b1000_0000`、
+  // 解析端 `use_question = bit != 0`、base_video 默认 false（「禁用问号是共识」）。
+  // evf标准.md 写的「1 表示关闭」是文档错误（全库 evf 无一置位，若按文档则全站问号开启，显然荒谬）。
+  // RawVF 的 QuestionMarks: on = 问号开启
+  if (v.useQuestion) lines.push("QuestionMarks: on");
   lines.push("Board:");
   for (const row of v.grid) lines.push(row);
   lines.push("Events:");
