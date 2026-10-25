@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth";
 import { getUserDetail } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { AccountHeader } from "@/components/AccountHeader";
-import { ProfileForm, type AvatarSlot } from "/components/AccountForms";
+import { ProfileForm, type AvatarSlot } from "@/components/AccountForms";
 import { UserPanel } from "@/components/UserCard";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
