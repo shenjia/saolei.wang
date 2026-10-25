@@ -56,16 +56,25 @@ export async function GET(req: Request) {
       includeBanned = !!session && session.uid === author;
     }
     // 每页条数：调用方自定义（用户主页录像版块传 20），默认 /video 列表的 20；
-    // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）
+    // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）。
+    // 2026-10-26 修复「加载更多」跳行：size 语义改为「本批行数 take」（递增批量可 >20），
+    // OFFSET 页锚点恒按 20——与客户端页码按 20/页推进（page = winStart + items.length/20）
+    // 基准对齐（对齐 /api/bbs/more、/api/ranking/more 的 skip-锚定-base 模式）。
+    // 原 OFFSET=(page-1)*size 在第 2 击起（size=40/80/100）跳过整段行，玩家按「加载更多」
+    // 永远翻不到落在间隙里的录像（钱旭程 342344 案例）；hasMore 同步改按锚点页数计
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
     const { videos, total, pageSize } = await getVideoList({
       level, order, dir, author, time, bv, nf, page, pageSize: size,
+      ...(size > VIDEO_PAGESIZE ? { pageAnchor: VIDEO_PAGESIZE } : {}),
       ...(includeBanned ? { includeBanned: true } : {}),
     });
     return NextResponse.json({
       videos,
       total,
-      hasMore: page * pageSize < total,
+      // 已加载末位 = 页锚点偏移 + 本批行数；恰达 total 时必须报 false——
+      // 若按 page*20 < total，批落在尾页非整倍处（如 160+90=250）会误判 true，
+      // 再点一次按 Math.floor(250/20) 重算页码会重复拉已加载的尾段
+      hasMore: (page - 1) * VIDEO_PAGESIZE + videos.length < total,
     });
   }
 
