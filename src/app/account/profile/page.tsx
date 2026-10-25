@@ -67,12 +67,8 @@ export default async function AccountProfilePage() {
           </div>
         </li>
         <li className="sidebar">
-          <div className="box user_info_cell">
-            <h2>
-              <Link href={`/user/${detail.user.id}`}>{detail.user.chineseName}</Link>
-            </h2>
-            <p className="title_line">{detail.title}</p>
-          </div>
+          {/* 与 /account 侧栏同款标准玩家卡片（hideRadar：卡片下只放玩家卡片，2026-10-25） */}
+          <UserPanel userId={session.uid} cardId="account_user_card" hideRadar />
         </li>
       </ul>
     </div>
