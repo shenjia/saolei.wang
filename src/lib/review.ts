@@ -233,6 +233,38 @@ async function userScoresOnRemove(
 
 // ---------- 动态（发布走 lib/news.ts 公共入口；user_score 取成绩更新后的 sum_time，见文件头说明 2） ----------
 
+// ---------- 录像计数（user_stat.beg/int/exp_videos） ----------
+//
+// 2026-10-26 钱1033旭程报障发现：这三列只有同步管线（transform.py 从旧站
+// MSSQL IsLive 实时 COUNT）在写，新站审核/上传/删除流程从未维护 →
+// 上线后过审的录像全部漏计（生产 189 人偏少、106 封禁号残留偏多）。
+// 修复口径（与前台可见性一致）：status<>0 即计数（待审 10 + 通过 20），
+// 屏蔽 0 不计——旧站前台也是实时 COUNT(IsLive=1)（含未审），同语义。
+
+/** 按状态是否计入 user_stat 录像计数（待审 10 / 通过 20 计，屏蔽 0 不计） */
+function countsVideo(status: number): boolean {
+  return status !== VIDEO_STATUS.BANNED;
+}
+
+/** 审核状态变迁时同步 user_stat 计数（旧态/新态差值，差 0 不动作）。
+ *  upsert：行可能缺失（merge-migration ingest 段只建 user/user_auth 漏建 stat 行） */
+async function syncUserStatVideoCount(
+  tx: Tx,
+  userId: number,
+  level: string,
+  delta: number
+) {
+  if (!delta) return;
+  const field =
+    level === "beg" ? "begVideos" : level === "int" ? "intVideos" : "expVideos";
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  await tx.userStat.upsert({
+    where: { id: BigInt(userId) },
+    create: { id: BigInt(userId), [field]: Math.max(delta, 0), createTime: now, updateTime: now },
+    update: { [field]: { increment: delta }, updateTime: now },
+  });
+}
+
 // ---------- 审核主流程 ----------
 
 async function loadReviewVideo(tx: Tx, id: number): Promise<ReviewVideo | null> {
@@ -299,6 +331,15 @@ export async function reviewVideo(
         statusBak: 0,
       },
     });
+
+    // user_stat 录像计数（2026-10-26 补）：按「审核前旧态 → 新态」的计数差调整；
+    // 普通待审→通过 +1、通过→屏蔽 -1、屏蔽→通过 +1（重审翻案）、同态差 0 不动作。
+    // countsVideo 口径与前台可见性一致（待审/通过计、屏蔽不计）
+    const countDelta =
+      (countsVideo(status) ? 1 : 0) - (countsVideo(Number(video.status)) ? 1 : 0);
+    if (countDelta !== 0) {
+      await syncUserStatVideoCount(tx, Number(video.user), video.level, countDelta);
+    }
 
     const rv = await loadReviewVideo(tx, videoId);
     if (!rv) throw new Error("录像数据不完整");

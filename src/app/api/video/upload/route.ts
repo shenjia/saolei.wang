@@ -159,6 +159,20 @@ export async function POST(req: Request) {
       await tx.videoStat.create({
         data: { id: video.id, clicks: 0, downloads: 0, comments: 0, createTime: nowSec, updateTime: nowSec },
       });
+      // user_stat 录像计数（2026-10-26 补）：上传即 status=10 待审，按前台可见性
+      // 口径（status<>0 计数）立即 +1；后续审核通过/屏蔽由 review.ts 按差值调整
+      await tx.userStat.upsert({
+        where: { id: BigInt(session.uid) },
+        create: { id: BigInt(session.uid), createTime: nowSec, updateTime: nowSec, ...(level === "beg" ? { begVideos: 1 } : level === "int" ? { intVideos: 1 } : { expVideos: 1 }) },
+        update: {
+          ...(level === "beg"
+            ? { begVideos: { increment: 1 } }
+            : level === "int"
+              ? { intVideos: { increment: 1 } }
+              : { expVideos: { increment: 1 } }),
+          updateTime: nowSec,
+        },
+      });
       videoId = Number(video.id);
     });
   } catch {

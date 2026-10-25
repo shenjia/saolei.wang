@@ -565,7 +565,12 @@ def cmd_ingest():
     #      env -u NODE_OPTIONS node --experimental-transform-types \
     #        --import ./scripts/sync/ts-extension-loader.mjs \
     #        scripts/video-metrics.ts --ids-file=/tmp/stale-metrics-ids.txt
-    print("REMINDER: 收尾必做 ① video-triage-backfill.ts --only-pending ② video_metrics 失同步对账+重算（见上方清单）")
+    # ③ user_stat 录像计数回算（2026-10-26 补，钱1033旭程报障）：ingest 搬入的
+    #    video 行不走 reviewVideo/upload，user_stat.beg/int/exp_videos 漏维护；
+    #    且 ingest 段只建 user/user_auth、不建 user_stat 行（35489/35497 实证缺行）。
+    #    必须按 video 实际重算（对全体用户幂等，脚本 scripts/sync/recalc-user-video-counts.py）：
+    #      python3 scripts/sync/recalc-user-video-counts.py --allow-nonlocal   # 写生产前先 dry-run 看差异
+    print("REMINDER: 收尾必做 ① video-triage-backfill.ts --only-pending ② video_metrics 失同步对账+重算 ③ user_stat 计数回算（见上方清单）")
 
 
 # ============================================================
