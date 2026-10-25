@@ -6,6 +6,10 @@
 //   而 CommentList 的 useState(initial) 在软刷新下不重置，新评论其实不会立刻出现）
 // · 发表接口返回新评论行，就地插入列表顶部（参照 BbsReplySection 的 onPosted 模式）
 // · AI 复审转待审（status=5）后本人仍可见（查询层按 viewerUid 放行），行上带「审核中」徽章
+//
+// 2026-10-26 张老师需求：评论支持删除——发布者可删自己发的评论，
+// 录像作者可删别人写在自己录像下的评论（权限铁闸在 /api/comment/delete 服务端）；
+// 删除按钮只在有权限的行渲染，确认浮窗后就地移除列表行 + total-1
 
 "use client";
 
@@ -18,6 +22,7 @@ import { AvatarCell, TitleBadge } from "./Cells";
 import { LoginLink } from "./LoginLink";
 import { noFocusJump } from "./useKeepScroll";
 import { toast } from "./Toast";
+import { confirmDialog } from "./Confirm";
 import { TotalCount } from "./TotalCount";
 import { nextBatchSize } from "./PageSlider";
 import { useDraft } from "./useDraft";
@@ -28,8 +33,19 @@ function PendingBadge() {
 }
 
 /** 单条评论（移植 comment/_cell 的应有结构）
- *  2026-10-13 张老师要求：作者名后显示军衔徽章（与 BBS 楼层 bbs_meta 同款 AvatarCell + TitleBadge） */
-export function CommentCell({ comment }: { comment: CommentItem }) {
+ *  2026-10-13 张老师要求：作者名后显示军衔徽章（与 BBS 楼层 bbs_meta 同款 AvatarCell + TitleBadge）
+ *  2026-10-26：meta 行尾挂删除小按钮（canDelete 由上层按登录态判定传入） */
+export function CommentCell({
+  comment,
+  canDelete,
+  deleting,
+  onDelete,
+}: {
+  comment: CommentItem;
+  canDelete?: boolean;
+  deleting?: boolean;
+  onDelete?: (c: CommentItem) => void;
+}) {
   return (
     <div className="comment_cell box">
       <p className="meta">
@@ -49,6 +65,17 @@ export function CommentCell({ comment }: { comment: CommentItem }) {
         {/* 2026-10-13 张老师要求：时间前加「评论于」；一个月以内显示相对时间，超过一个月显示具体日期 */}
         <span className="create_time">评论于 {timeOpposite(comment.createTime, TIME_MONTH)}</span>{" "}
         {comment.status === 5 && <PendingBadge />}
+        {/* 2026-10-26：删除按钮浮右（跟评论区 meta 同行，录像作者/发布者本人可见） */}
+        {canDelete && (
+          <button
+            type="button"
+            className="comment_del"
+            disabled={deleting}
+            onClick={() => onDelete?.(comment)}
+          >
+            {deleting ? "删除中…" : "删除"}
+          </button>
+        )}
       </p>
       <p className="content">{comment.content}</p>
     </div>
@@ -65,6 +92,9 @@ export function CommentList({
   loading,
   batchStep,
   onLoadMore,
+  canDelete,
+  deletingId,
+  onDelete,
 }: {
   items: CommentItem[];
   hasMore: boolean;
@@ -72,11 +102,20 @@ export function CommentList({
   loading: boolean;
   batchStep: number;
   onLoadMore: () => void;
+  canDelete?: (c: CommentItem) => boolean;
+  deletingId?: number;
+  onDelete?: (c: CommentItem) => void;
 }) {
   return (
     <div className="comments">
       {items.map((c) => (
-        <CommentCell key={c.id} comment={c} />
+        <CommentCell
+          key={c.id}
+          comment={c}
+          canDelete={canDelete?.(c)}
+          deleting={deletingId === c.id}
+          onDelete={onDelete}
+        />
       ))}
       {/* 2026-09-26 张老师要求：无评论时不显示「共 0 条评论」整行隐藏 */}
       {items.length > 0 && (
@@ -174,16 +213,21 @@ export function CommentForm({
 
 /** 评论区整体壳（2026-10-22）：列表 + 加载更多 + 发表表单同一客户端 state 树。
  *  RSC 页面只与它对接；发表成功 → 新行插到列表头（列表按 id 倒序，新评论 id 最大）+ total+1，
- *  不再依赖整页刷新。 */
+ *  不再依赖整页刷新。
+ *  2026-10-26：接入删除（发布者本人 ∪ 录像作者，服务端 /api/comment/delete 铁闸）；
+ *  确认浮窗后就地移除行 + total-1，同时 router.refresh() 同步录像卡上的「评论 N」计数 */
 export function CommentSection({
   videoId,
+  videoOwnerId,
   authorId,
   initial,
   initialHasMore,
   initialTotal,
 }: {
   videoId: number;
-  /** 当前登录用户 id；0=未登录（不渲染表单） */
+  /** 录像上传者 uid（0=异常兑底；用于判定「录像作者删别人评论」权限） */
+  videoOwnerId: number;
+  /** 当前登录用户 id；0=未登录（不渲染表单与删除钮） */
   authorId: number;
   initial: CommentItem[];
   initialHasMore: boolean;
@@ -195,6 +239,8 @@ export function CommentSection({
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14）
+  const [deletingId, setDeletingId] = useState(0); // 正在删除的评论 id（驱动行内按钮禁用态）
+  const router = useRouter();
 
   async function loadMore() {
     setLoading(true);
@@ -218,6 +264,48 @@ export function CommentSection({
     setTotal((t) => t + 1);
   }
 
+  /** 删除权限（前端渲染判定，与 /api/comment/delete 服务端铁闸同口径）：
+   *  登录 且（发布者本人 或 录像上传者）。待审行（status=5）只有发布者本人看得到，
+   *  天然落在「本人」分支内，不会出现录像作者删他人待审行的渲染 */
+  function canDelete(c: CommentItem) {
+    return authorId > 0 && (c.authorId === authorId || videoOwnerId === authorId);
+  }
+
+  /** 删除：确认浮窗 → POST /api/comment/delete → 就地移除行 + total-1 + refresh 同步计数 */
+  async function onDelete(c: CommentItem) {
+    if (
+      !(await confirmDialog({
+        title: "删除评论",
+        message: "确认删除这条评论？删除后其他人将不再可见（可在后台恢复）。",
+        confirmText: "删除",
+        danger: true,
+      }))
+    )
+      return;
+    setDeletingId(c.id);
+    try {
+      const res = await fetch("/api/comment/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: c.id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        toast(data.error ?? "删除失败，请稍后再试", "error");
+        return;
+      }
+      setItems((prev) => prev.filter((x) => x.id !== c.id));
+      setTotal((t) => Math.max(0, t - 1));
+      toast("评论已删除", "success");
+      // 同步服务端数据：录像卡上的「评论 N」冗余计数随 refresh 更新
+      router.refresh();
+    } catch {
+      toast("网络错误，请重试", "error");
+    } finally {
+      setDeletingId(0);
+    }
+  }
+
   return (
     <>
       <CommentList
@@ -227,6 +315,9 @@ export function CommentSection({
         loading={loading}
         batchStep={batchStep}
         onLoadMore={loadMore}
+        canDelete={canDelete}
+        deletingId={deletingId}
+        onDelete={onDelete}
       />
       {/* 「发表评论」盒子常驻（2026-10-13 张老师要求，参考论坛详情页底部的「回复主题」盒子）：
           登录用户见输入框，未登录见「登录 后才能发表评论。」（点击弹全局登录浮窗） */}

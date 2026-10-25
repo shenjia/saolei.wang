@@ -876,9 +876,17 @@ export async function getVideoList(opts: {
   page: number;
   /** 每页条数（默认 VIDEO_PAGESIZE；用户主页录像版块传 USER_VIDEO_NUMBER，2026-09-26） */
   pageSize?: number;
+  /** 页锚点（2026-10-26 修复「加载更多」跳行漏行）：OFFSET/skip 恒按本页基锚定，pageSize
+   *  （size）退化为「本批行数 take」。原实现 OFFSET=(page-1)*size 与客户端页码按 20/页
+   *  推进（page = winStart + items.length/20）基准错位——递增批量（40/80/100）下每次
+   *  「加载更多」都跳过一段行且间隙越滚越大（81-130 行区间整段漏掉，玩家钱旭程评论=5
+   *  的 342344 落在间隙里「翻不到」的根因）。对齐 BBS/Ranking/Grow/News 的
+   *  skip-锚定-base 模式；锚点恒为 20（/video 列表与用户主页页基相同）。 */
+  pageAnchor?: number;
 }): Promise<{ videos: VideoListItem[]; total: number; pageSize: number }> {
   const { level, order, author, page } = opts;
   const size = opts.pageSize ?? VIDEO_PAGESIZE;
+  const anchor = opts.pageAnchor ?? VIDEO_PAGESIZE;
   const win = parseVideoTimeWindow(opts.time);
   const bv = parseVideo3bv(opts.bv);
   const nf = !!opts.nf;
@@ -964,8 +972,10 @@ export async function getVideoList(opts: {
   const { joins, where, selectId } = videoListConds({ level, order, author, win, bv, nf });
   const [total, idRows] = await Promise.all([
     getVideoListJoinCount(level, order, author ?? 0, opts.time ?? "", bv ?? 0, nf),
+    // 2026-10-26 修复：OFFSET 恒按页锚点 20（页码语义），take 才是本批行数（递增批量）——
+    // 原 (page-1)*size 在递增批量下跳行（详见 pageAnchor 注）
     prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT ${selectId} AS id ${joins} ${where} ORDER BY ${orderBy} LIMIT ${size} OFFSET ${(page - 1) * size}`
+      `SELECT ${selectId} AS id ${joins} ${where} ORDER BY ${orderBy} LIMIT ${size} OFFSET ${(page - 1) * anchor}`
     ),
   ]);
   const videos = await getVideosByIds(idRows.map((r) => N(r.id)));
@@ -1475,6 +1485,8 @@ export async function getUserNews(userId: number, limit = 10): Promise<NewsItem[
 
 export interface CommentItem {
   id: number;
+  /** 发布者 uid（2026-10-26：前台删除按钮按「发布者本人」判定渲染，不必再依赖 author?.id） */
+  authorId: number;
   content: string;
   createTime: number;
   author: UserBrief | null;
@@ -1528,6 +1540,7 @@ export async function getComments(
     const p = pairs.get(N(r.user));
     return {
       id: N(r.id),
+      authorId: N(r.user),
       content: r.content ?? "",
       createTime: N(r.createTime),
       author: a,
@@ -1565,6 +1578,7 @@ export async function getCommentById(id: number): Promise<CommentItem | null> {
   const p = pairs.get(N(r.user));
   return {
     id: N(r.id),
+    authorId: N(r.user),
     content: r.content ?? "",
     createTime: N(r.createTime),
     author: authors.get(N(r.user)) ?? null,

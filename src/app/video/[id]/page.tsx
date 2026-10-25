@@ -215,9 +215,12 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
         {/* 2026-10-22：评论区收拢为客户端壳——发表后就地插入列表头（张老师要求：
-            评论发出后立刻可见，不管有没有过审；本人待审行查询层按登录态放行） */}
+            评论发出后立刻可见，不管有没有过审；本人待审行查询层按登录态放行）
+            2026-10-26：新增删除权限——发布者本人可删自己的评论、录像作者可删他人评论
+            （videoOwnerId 供前端判定，服务端 /api/comment/delete 铁闸同口径） */}
         <CommentSection
           videoId={video.id}
+          videoOwnerId={video.author?.id ?? 0}
           authorId={session?.uid ?? 0}
           initial={comments}
           initialHasMore={comments.length < commentTotal}
