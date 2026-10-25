@@ -1,4 +1,4 @@
-// 录像列表单元格（移植 views/video/_detailCell），/video 列表与 /video/review 审核列表共用
+// 录像列表单元格（移植 views/video/_detailCell）
 
 import Link from "next/link";
 import { videoScores, type VideoListItem } from "@/lib/queries";

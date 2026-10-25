@@ -12,7 +12,6 @@ const LOGIN_REQUIRED_PREFIXES = [
   "/account",
   "/message",
   "/video/upload",
-  "/video/review",
   "/admin",
   "/bbs/post",
   "/bbs/edit",

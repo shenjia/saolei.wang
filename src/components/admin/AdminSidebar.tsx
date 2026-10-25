@@ -5,6 +5,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AdminUserMenu } from "./AdminUserMenu";
 
 interface NavItem {
   href: string;
@@ -51,7 +52,13 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-export function AdminSidebar({ badges }: { badges: { pending: number; avatar: number } }) {
+export function AdminSidebar({
+  badges,
+  user,
+}: {
+  badges: { pending: number; avatar: number };
+  user: { uid: number; name: string; administrator: boolean };
+}) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -62,14 +69,17 @@ export function AdminSidebar({ badges }: { badges: { pending: number; avatar: nu
       {/* 品牌区（2026-10-22 张老师要求）：换成与前台统一的 LOGO 与站名——
           icon.svg +「扫雷网」（前台站名金 #fdc61a）+ Saolei.wang，点击回首页。
           同页跳转（新标签需求由底部「查看网站」承担） */}
-      <Link href="/" className="admin_brand">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.svg" alt="" />
-        <span>
-          <b>扫雷网</b>
-          <em>Saolei.wang</em>
-        </span>
-      </Link>
+      <div className="admin_brand_row">
+        <Link href="/" className="admin_brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" alt="" />
+          <span>
+            <b>扫雷网</b>
+            <em>Saolei.wang</em>
+          </span>
+        </Link>
+        <AdminUserMenu uid={user.uid} name={user.name} administrator={user.administrator} />
+      </div>
 
       <nav className="admin_nav">
         {GROUPS.map((g) => (

@@ -1317,24 +1317,6 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
   return result;
 }
 
-/** 审核列表（移植 Video::findByStatus：待审按 id 升序先到先审，其余按 id 倒序） */
-export async function getReviewList(
-  status: number,
-  page: number
-): Promise<{ videos: VideoListItem[]; total: number; pageSize: number }> {
-  const where = { status };
-  const total = await prisma.video.count({ where });
-  const rows = await prisma.video.findMany({
-    where,
-    select: { id: true },
-    orderBy: { id: status === VIDEO_STATUS.NORMAL ? "asc" : "desc" },
-    skip: (page - 1) * VIDEO_PAGESIZE,
-    take: VIDEO_PAGESIZE,
-  });
-  const videos = await getVideosByIds(rows.map((r) => N(r.id)));
-  return { videos, total, pageSize: VIDEO_PAGESIZE };
-}
-
 // ---------- 录像详情 ----------
 
 export interface VideoDetail extends VideoListItem {

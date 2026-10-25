@@ -68,6 +68,12 @@ body:has(.admin_shell) #footer {
   line-height: 24px;
   margin-left: 6px;
 }
+.admin_brand_row {
+  position: relative;
+}
+.admin_usermenu {
+  display: none;
+}
 .admin_nav {
   flex: 1;
   padding: 10px 8px;
@@ -879,19 +885,90 @@ table.admin_table .ai_reason {
     flex-direction: column;
   }
   .admin_side {
+    position: relative;
+    z-index: 2;
     width: 100%;
     flex: 0 0 auto;
     flex-direction: column;
     align-items: stretch;
-    overflow: hidden;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid #3a3a32;
+  }
+  .admin_brand_row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding-right: 12px;
   }
   .admin_brand {
     border-bottom: 0;
     padding: 8px 12px;
     flex: 0 0 auto;
     align-self: flex-start;
+  }
+  .admin_usermenu {
+    display: block;
+    min-width: 0;
+    margin-left: auto;
+  }
+  .admin_usermenu_trigger {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    min-height: 34px;
+    padding: 3px 0 3px 8px;
+    border: 0;
+    background: transparent;
+    color: #939387;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .admin_usermenu_trigger .name {
+    max-width: 88px;
+    overflow: hidden;
+    color: #d5d5c8;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .admin_usermenu_backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    padding: 0;
+    border: 0;
+    appearance: none;
+    background: none !important;
+    box-shadow: none;
+  }
+  .admin_usermenu_pop {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    z-index: 11;
+    width: 136px;
+    padding: 5px;
+    border: 1px solid #49483e;
+    border-radius: 8px;
+    background: #26261f;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+  .admin_usermenu_pop a {
+    display: block;
+    padding: 9px 12px;
+    border-radius: 5px;
+    color: #d5d5c8;
+    font-size: 13px;
+    line-height: 20px;
+  }
+  .admin_usermenu_pop a:hover {
+    background: #33322b;
+    color: #a6e22e;
+  }
+  .admin_usermenu_pop a:last-child {
+    color: #f79646;
   }
   .admin_nav {
     display: flex;
@@ -937,9 +1014,7 @@ table.admin_table .ai_reason {
     line-height: 24px;
   }
   .admin_top .right {
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    font-size: 12px;
+    display: none;
   }
   .admin_main {
     padding: 12px 10px 30px;

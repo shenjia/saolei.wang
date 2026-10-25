@@ -1,5 +1,5 @@
 // 管理后台 · 审核管理（2026-09-24）
-// 待审队列 + 批量审核 + 审核积压监控；审核逻辑与前台 /video/review 完全同一套（lib/review.ts）。
+// 待审队列 + 批量审核 + 审核积压监控；审核状态变更统一走 lib/review.ts。
 
 import Link from "next/link";
 import { getVideoListAdmin, getPoolCounts } from "@/lib/admin/data";
@@ -61,11 +61,6 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           待审 {ov.videoPending} 条
           {ov.oldestPendingTime > 0 && ` · 最老一条上传于 ${timeOpposite(ov.oldestPendingTime, 0, "Y-m-d H:i")}（${pendingDays} 天前）`}
         </span>
-        <div className="right">
-          <Link className="admin_btn" href="/video/review" target="_blank">
-            前台审核页
-          </Link>
-        </div>
       </div>
 
       <div className="admin_kpis">

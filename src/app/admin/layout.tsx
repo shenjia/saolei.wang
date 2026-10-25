@@ -21,9 +21,10 @@ export const metadata: Metadata = {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdmin();
-  const [pending, avatarPending] = await Promise.all([
+  const [pending, avatarPending, currentUser] = await Promise.all([
     prisma.video.count({ where: { status: VIDEO_STATUS.NORMAL } }),
     prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.PENDING } }),
+    prisma.user.findUnique({ where: { id: session.uid }, select: { chineseName: true } }),
   ]);
   const roleTag =
     session.role === USER_ROLE.ADMINISTRATOR ? (
@@ -34,7 +35,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="admin_shell">
-      <AdminSidebar badges={{ pending, avatar: avatarPending }} />
+      <AdminSidebar
+        badges={{ pending, avatar: avatarPending }}
+        user={{
+          uid: session.uid,
+          name: currentUser?.chineseName || session.username,
+          administrator: session.role === USER_ROLE.ADMINISTRATOR,
+        }}
+      />
       <div className="admin_body">
         <div className="admin_top">
           <h1>管理后台</h1>
