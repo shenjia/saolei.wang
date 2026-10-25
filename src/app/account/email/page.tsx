@@ -2,13 +2,12 @@
 // 老用户登录名非邮箱，忘记密码无法自助找回——绑定并验证邮箱后走邮箱找回。
 // 2026-10-15 张老师改版：标题「绑定邮箱」，标题右侧只放「返回」（回 /account），
 // 不再挂子导航；侧栏卡片名字去链接（本页右侧不出现任何链接）。
-// 2026-10-25：侧栏统一为标准玩家卡片（UserPanel，与 /account 一致，hideRadar）。
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { getUserDetail } from "@/lib/queries";
 import { EmailBindForm } from "@/components/AccountForms";
-import { UserPanel } from "@/components/UserCard";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -18,12 +17,14 @@ export default async function AccountEmailPage() {
   const session = await getSession();
   if (!session) redirect("/account/login");
 
-  const [auth] = await Promise.all([
+  const [detail, auth] = await Promise.all([
+    getUserDetail(session.uid),
     prisma.userAuth.findUnique({
       where: { id: BigInt(session.uid) },
       select: { email: true, emailVerified: true },
     }),
   ]);
+  if (!detail) redirect("/account/login");
 
   return (
     <div id="page" className="two_columns">
@@ -43,8 +44,10 @@ export default async function AccountEmailPage() {
           </div>
         </li>
         <li className="sidebar">
-          {/* 标准玩家卡片（名字带链接去用户主页，2026-10-25 与 /account 统一后恢复常规卡片口径） */}
-          <UserPanel userId={session.uid} cardId="account_user_card" hideRadar />
+          <div className="box user_info_cell">
+            <h2>{detail.user.chineseName}</h2>
+            <p className="title_line">{detail.title}</p>
+          </div>
         </li>
       </ul>
     </div>

@@ -458,6 +458,18 @@ def cmd_ingest():
         tgt.commit()
         print(f"comment ingest {len(rows)}")
 
+    # 评论数回填 video_stat.comments（2026-10-25 补：首次 merge 漏了这一步，导致 18 部
+    # 录像的冗余评论数漂移——新站并行期评论（如 56263-56281 段）INSERT IGNORE 撞主键
+    # 静默跳过、计数列留默认 0，前台详情页/热评榜读到的计数全是 0。
+    # 口径与 transform.py L369-372 一致：按 status=0 正常态实体行数回写全表）
+    tc.execute("""UPDATE video_stat vs
+               LEFT JOIN (SELECT video, COUNT(*) c FROM comment WHERE status=0 GROUP BY video) x
+                 ON x.video=vs.id
+               SET vs.comments=COALESCE(x.c,0)
+               WHERE vs.comments<>COALESCE(x.c,0)""")
+    print(f"  backfill video_stat.comments: 修正 {tc.rowcount} 行")
+    tgt.commit()
+
     # ---------- BBS（Title 分流：Get_Id>0=回帖，否则=帖） ----------
     # collide id 同理并入：detach 已腾位的旧站行要进来（时序缺陷修正，同录像域）
     ti = sorted(set(pb["ingest_titles"]) | set(pb["collide_posts"]))
@@ -853,6 +865,18 @@ def cmd_verify():
 
     tc.execute("SELECT COUNT(*) FROM user WHERE id >= 900000")
     check("999 段已清空", tc.fetchone()[0] == 0)
+
+    # 冗余计数对账（2026-10-25 补：评论/回帖实体行数 vs 落盘计数，口径 status=0 正常态）
+    tc.execute("""SELECT COUNT(*) FROM video_stat vs
+               LEFT JOIN (SELECT video, COUNT(*) c FROM comment WHERE status=0 GROUP BY video) x
+                 ON x.video=vs.id
+               WHERE vs.comments<>COALESCE(x.c,0)""")
+    check("video_stat.comments 无漂移", tc.fetchone()[0] == 0)
+    tc.execute("""SELECT COUNT(*) FROM bbs_post p
+               LEFT JOIN (SELECT post, COUNT(*) c FROM bbs_reply WHERE status=0 GROUP BY post) x
+                 ON x.post=p.id
+               WHERE p.replies<>COALESCE(x.c,0)""")
+    check("bbs_post.replies 无漂移", tc.fetchone()[0] == 0)
 
     # bbs_reply 指向旧站 id 的行数应 = 旧站回帖数（新站回帖已映射新 post id）
     if os.path.exists(os.path.join(STATE_DIR, "detach-backup.json")):
