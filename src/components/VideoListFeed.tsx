@@ -136,7 +136,7 @@ export function VideoListFeed({
     if (query.bv) qs.set("3bv", query.bv);
     if (curNf) qs.set("nf", "1");
     if (query.includeBanned) qs.set("banned", "1");
-    // 每页条数：递增批量（首击=一页 base），默认与初始页一致（列表页 20 / 用户主页 10）
+    // 每页条数：递增批量（首击=一页 base），默认与初始页一致（列表页 20 / 用户主页 20）
     qs.set("size", String(size ?? pageSize));
     return `/api/video/more?${qs}`;
   }

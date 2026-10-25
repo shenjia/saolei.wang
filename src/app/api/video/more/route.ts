@@ -55,7 +55,7 @@ export async function GET(req: Request) {
       const session = await getSession();
       includeBanned = !!session && session.uid === author;
     }
-    // 每页条数：调用方自定义（用户主页录像版块传 10），默认 /video 列表的 20；
+    // 每页条数：调用方自定义（用户主页录像版块传 20），默认 /video 列表的 20；
     // 上限 100（2026-10-14「加载更多」递增批量封顶放宽，原 50）
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
     const { videos, total, pageSize } = await getVideoList({
