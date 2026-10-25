@@ -1,12 +1,12 @@
 // 账号中心 · 修改资料（移植 views/account/profile）
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getUserDetail } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { AccountHeader } from "@/components/AccountHeader";
-import { ProfileForm, type AvatarSlot } from "@/components/AccountForms";
+import { ProfileForm, type AvatarSlot } from "/components/AccountForms";
+import { UserPanel } from "@/components/UserCard";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
