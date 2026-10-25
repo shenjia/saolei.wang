@@ -10,6 +10,8 @@
 //   四级纪录表头级别名后加「纪录」二字（初级纪录 / 中级纪录 / 高级纪录 / 总计纪录）。
 //   2026-10-25 张老师要求：「发消息」气泡小按钮（用户主页同款 SendMessageButton）；
 //   二轮定稿：钉在排行块（两行排名）右缘、与其垂直中线对齐，登录且非本人时渲染。
+//   同日晚些去重：十二轮曾把按钮复制到「最近登录」行右端一份，导致双气泡——
+//   已删，只保留排行块右缘这一个。
 // 卡片下方可跟一个「实力」雷达图板块（UserPanel 统一组装，与用户主页同款）。
 // 旧版「进入TA的地盘」按钮、人气 / 今日人气、旧版称号、(id) 均已下线。
 // 用于 /bbs/[id] 右栏与 /video/[id] 右栏。
@@ -136,10 +138,6 @@ export function UserCard({
       <p className="ucd_login">
         最近登录{" "}
         {card.lastLoginTime > 0 ? <em>{formatDate(card.lastLoginTime, "Y年n月j日")}</em> : "?"}
-        {/* 十二轮：同上，按钮常驻 */}
-        <span className="ucd_msg">
-          <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
-        </span>
       </p>
     </div>
   );
