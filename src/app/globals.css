@@ -4085,7 +4085,8 @@ body #page.ranking_old .ranking_box {
   display: inline-block;
   vertical-align: -1px;  margin-right: 2px;
 }
-/* SUB 大关标签（2026-10-16 张老师定）：高级时间破纪录跨过 10s 整数大关（SUB30~SUB100）时，
+/* SUB 大关标签（2026-10-16 张老师定；2026-10-25 SUB60 以下改 5s 一档）：高级时间破纪录跨过整数大关
+   （SUB30~SUB100，≥60 每 10s、<60 每 5s 一档）时，
    提升值后加「SUB xx」徽章——形态取首页论坛新帖分类标签 board_tag（灰底圆角描边加粗），
    字色 inline 由组件按「该秒数对应军衔档文字色」传入（TITLE_CLASS_COLORS 单一数据源：
    SUB30 总司令金 / SUB40 元帅金 / SUB50 少将亮橙 / SUB60 少校暗橙 / SUB70 少尉绿 / SUB80+ 士官亮灰）；

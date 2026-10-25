@@ -25,15 +25,18 @@ function formatDelta(order: string, oldScore: number, newScore: number): string 
   return order === "time" ? dv.toFixed(2) : dv.toFixed(3);
 }
 
-/** 高级时间破纪录突破整数大关（SUB30~SUB100，2026-10-16 张老师定）：
-    旧成绩所在 10s 大关下界，且新成绩已跨入关内（< 大关）才算突破。
+/** 高级时间破纪录突破整数大关（SUB30~SUB100，2026-10-16 张老师定；2026-10-25 张老师定 SUB60 以下改 5s 一档）：
+    60~100 每 10s 一档、55~30 每 5s 一档，取本条已跨过的大关中最深一档（一次跨多档时显示与成绩一致的最深档）。
     只认高级时间纪录（军衔口径只看高级时间）；首创行旧成绩为 0，天然不出标签 */
 function subMilestone(od: string | undefined, lv: string | undefined, oldMs: number, newMs: number): number | null {
   if (od !== "time" || lv !== "exp") return null;
-  const gate = Math.floor(oldMs / 10000) * 10;
-  if (gate < 30 || gate > 100) return null;
-  if (newMs >= gate * 1000) return null;
-  return gate;
+  const oldSec = oldMs / 1000;
+  const newSec = newMs / 1000;
+  for (let g = 30; g <= 100; g += 5) {
+    if (g > 60 && g % 10 !== 0) continue; // 60 以上只留 10s 档（60/70/80/90/100）
+    if (oldSec >= g && newSec < g) return g; // 升序遍历，首个命中即最深跨档
+  }
+  return null;
 }
 
 /** SUB 大关标签颜色 = 该秒数对应军衔档的文字色（SUB40→元帅金、SUB50→少将亮橙、SUB60→少校暗橙…）。
@@ -145,7 +148,8 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                     <DeltaArrow dir={(d.od ?? "time") === "time" ? "down" : "up"} />
                     {formatDelta(d.od ?? "time", d.or!, d.cr!)}
                   </span>
-                  {/* SUB 大关标签（2026-10-16 张老师定）：高级时间破纪录跨过 10s 整数大关时显示，
+                  {/* SUB 大关标签（2026-10-16 张老师定；2026-10-25 SUB60 以下改 5s 一档）：
+                      高级时间破纪录跨过整数大关时显示（≥60 每 10s、<60 每 5s 一档），
                       形态同首页论坛新帖 board_tag 徽章，字色 inline 按军衔档色传入；
                       置于 record_extra 内，窄屏自适应隐藏时与提升值一起收起 */}
                   {subGate && (
