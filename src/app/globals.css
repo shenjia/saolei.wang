@@ -8867,6 +8867,206 @@ html:has(#online_play) #footer {
     width: calc(100% + 12px);
   }
 }
+/* 手机横屏结算（2026-10-26 张老师定）：不再按内容自然高缩成两小块。
+   卡片占满视口上下 16px 安全区，两块面板等高顶满；统计表与雷达弹性分高，
+   字号直接落在可读尺寸，不靠 fitMaskCard 的整体 zoom 放大。仅触屏横屏生效，
+   桌面窄窗 / 竖屏仍沿用原布局。 */
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+  #gr_modal .grm_card {
+    height: calc(100vh - 32px);
+    height: calc(100dvh - 32px);
+    align-items: stretch;
+    gap: 12px;
+  }
+  #gr_modal .greport.show,
+  #gr_modal .gresult.show {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #gr_modal .greport {
+    width: 218px;
+    flex: 0 0 218px;
+    padding: 10px 12px;
+  }
+  #gr_modal .gresult {
+    width: 404px;
+    flex: 0 0 404px;
+    gap: 8px;
+    padding: 10px 16px 12px;
+  }
+  #gr_modal .greport .gr_title {
+    flex: 0 0 28px;
+    margin: 0;
+    padding: 0;
+    font-size: 18px;
+    line-height: 28px;
+  }
+  #gr_modal .greport table {
+    flex: 1;
+    min-height: 0;
+    width: calc(100% + 12px);
+  }
+  #gr_modal .greport td {
+    padding-top: 0;
+    padding-bottom: 0;
+    font-size: 16px;
+    line-height: 1;
+  }
+  #gr_modal .gresult .gr_title {
+    flex: 0 0 30px;
+    margin: 0;
+    padding: 0 0 5px;
+    font-size: 18px;
+    line-height: 24px;
+  }
+  #gr_modal .gresult .gr_title .gr_lv.fail .est {
+    font-size: 16px;
+  }
+  #gr_modal .gresult .gr_title .gr_rate b {
+    font-size: 22px;
+  }
+  #gr_modal .gresult .gr_radar {
+    flex: 1;
+    min-height: 0;
+  }
+  #gr_modal .gresult .gr_radar .vr_wrap {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    aspect-ratio: 1;
+  }
+  #gr_modal .gresult .gr_radar .chart {
+    width: 100%;
+    height: 100%;
+  }
+  /* SVG 内部坐标也随小屏缩放，直接增大 tspan 才能抵消雷达边长收缩。 */
+  #gr_modal .gresult .gr_radar tspan:first-child {
+    font-size: 20px;
+  }
+  #gr_modal .gresult .gr_radar tspan + tspan {
+    font-size: 13px;
+    dy: 16px;
+  }
+  #gr_modal .gresult .grb {
+    min-height: 46px;
+    padding: 0 4px;
+    font-size: 17px;
+  }
+  #gr_modal .gresult .grb svg {
+    width: 18px;
+    height: 18px;
+  }
+  #gr_modal .gresult .grb.grb_revive {
+    flex: 0 0 46px;
+    margin: 0;
+    font-size: 19px;
+  }
+  #gr_modal .gresult .gr_btns {
+    flex: 0 0 100px;
+    gap: 8px 10px;
+    margin: 0;
+  }
+}
+/* 较矮横屏（含 667×375 / 740×360）仍比原 11px 清晰，给 21 行统计留足行高。 */
+@media (orientation: landscape) and (max-height: 420px) and (pointer: coarse) {
+  #gr_modal .greport {
+    width: 196px;
+    flex-basis: 196px;
+    padding: 9px 11px;
+  }
+  #gr_modal .gresult {
+    width: 360px;
+    flex-basis: 360px;
+    gap: 6px;
+    padding: 9px 12px 11px;
+  }
+  #gr_modal .greport td {
+    font-size: 14px;
+    line-height: 1;
+  }
+  #gr_modal .gresult .gr_title,
+  #gr_modal .greport .gr_title {
+    font-size: 16px;
+  }
+  #gr_modal .gresult .gr_title .gr_lv.fail .est {
+    font-size: 14px;
+  }
+  #gr_modal .gresult .gr_radar tspan:first-child {
+    font-size: 22px;
+  }
+  #gr_modal .gresult .gr_radar tspan + tspan {
+    font-size: 15px;
+    dy: 18px;
+  }
+  #gr_modal .gresult .grb {
+    min-height: 40px;
+    font-size: 15px;
+  }
+  #gr_modal .gresult .grb.grb_revive {
+    flex-basis: 40px;
+    font-size: 17px;
+  }
+  #gr_modal .gresult .gr_btns {
+    flex-basis: 88px;
+  }
+}
+@media (orientation: landscape) and (max-height: 340px) and (pointer: coarse) {
+  #gr_modal .greport {
+    padding: 6px 10px;
+  }
+  #gr_modal .gresult {
+    gap: 4px;
+    padding: 6px 10px 8px;
+  }
+  #gr_modal .greport .gr_title {
+    flex-basis: 24px;
+    line-height: 24px;
+  }
+  #gr_modal .greport td {
+    font-size: 12px;
+    line-height: 1;
+  }
+  #gr_modal .gresult .gr_title,
+  #gr_modal .greport .gr_title {
+    font-size: 14px;
+  }
+  #gr_modal .gresult .gr_title {
+    flex-basis: 26px;
+  }
+  #gr_modal .gresult .gr_title .gr_lv.fail .est {
+    font-size: 12px;
+  }
+  #gr_modal .gresult .gr_radar tspan:first-child {
+    font-size: 24px;
+  }
+  #gr_modal .gresult .gr_radar tspan + tspan {
+    font-size: 17px;
+    dy: 20px;
+  }
+  #gr_modal .gresult .grb {
+    min-height: 34px;
+    font-size: 13px;
+  }
+  #gr_modal .gresult .grb.grb_revive {
+    flex-basis: 36px;
+    font-size: 15px;
+  }
+  #gr_modal .gresult .gr_btns {
+    flex-basis: 76px;
+    gap: 6px 8px;
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 640px) and (pointer: coarse) {
+  #gr_modal .greport {
+    width: 176px;
+    flex-basis: 176px;
+  }
+  #gr_modal .gresult {
+    width: 320px;
+    flex-basis: 320px;
+  }
+}
 /* 游戏界面内回放控制栏（五期二版的三~五期产物）已于 2026-10-15 六期整条撤除
    （张老师定：看回放时不再出现控制条）——回放改为进即自动播完，重播/退出走右侧面板
    的「查看回放」与 Esc / 笑脸 /「再来一局」。相关 .rc_* 样式已随之下线。 */
