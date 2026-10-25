@@ -772,6 +772,22 @@ model ApiKey {
   @@map("api_key")
 }
 
+// API key 分时用量（2026-10-25）：requirePartner 鉴权通过后按小时桶 UPSERT 累加
+// （含 env 兼容草案 key，key=0），供 /admin/apikeys 今日调用走势图与合作方详情页。
+// 每 key 每小时每接口最多一行（60 次/分/合作方上限，单行值有界），不设清理任务。
+model ApiKeyUsage {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  key        BigInt @db.BigInt // api_key.id；env 草案 key 记 0
+  hour       BigInt @db.BigInt // +08:00 小时序号：FLOOR((t+28800)/3600)
+  endpoint   String @default("") @db.VarChar(30) // 接口短名（stats/video_list/...；空=旧行/未知）
+  calls      BigInt @default(0) @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@unique([key, hour, endpoint])
+  @@index([hour])
+  @@map("api_key_usage")
+}
+
 // 密码重置令牌（邮箱找回，新版测试.txt 需求）
 model PasswordToken {
   id         BigInt  @id @default(autoincrement()) @db.BigInt

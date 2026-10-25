@@ -8,6 +8,10 @@
 //   · 兼容期：env PARTNER_API_KEYS 仍可用（老草案 key 不至于全断），查库优先
 //
 // 限速：沿用 lib/ratelimit.ts 进程内滑动窗口，60 次/分/合作方（各接口独立维度）。
+//
+// 2026-10-25 新增分时用量：鉴权通过即按 +08:00 小时桶 × 接口短名 UPSERT api_key_usage
+// （env 草案 key 记 key=0），/admin/apikeys 据此画今日调用走势折线图与合作方分接口统计；
+// fire-and-forget，失败不影响请求。
 
 import { createHash, randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
@@ -47,10 +51,13 @@ export async function requirePartner(req: Request): Promise<string | null> {
   if (!provided) return null;
   const h = sha256(provided);
   const now = Date.now();
+  // 接口短名（/api/public/v1/stats?x=1 → stats；路径不匹配记空串，聚合时归「其他/未知」）
+  const m = req.url.match(/\/api\/public\/v1\/([a-z_]+)/);
+  const endpoint = m ? m[1] : "";
 
   const hit = cache.get(h);
   if (hit && now - hit.at < CACHE_TTL) {
-    void touchUsage(hit.keyId);
+    void touchUsage(hit.keyId, endpoint);
     return hit.name;
   }
 
@@ -58,24 +65,39 @@ export async function requirePartner(req: Request): Promise<string | null> {
     const row = await prisma.apiKey.findUnique({ where: { keyHash: h } });
     if (row && row.status === 1) {
       cache.set(h, { name: row.name, keyId: Number(row.id), at: now });
-      void touchUsage(Number(row.id));
+      void touchUsage(Number(row.id), endpoint);
       return row.name;
     }
   } catch {
     /* 查库异常走 env 兜底 */
   }
-  return envPartnerName(provided);
+  const envName = envPartnerName(provided);
+  // env 草案 key 也记用量（key=0），今日走势图才能覆盖过渡期流量
+  if (envName) void bumpUsage(0, Math.floor(Date.now() / 1000), endpoint);
+  return envName;
 }
 
 /** 用量累计：异步 fire-and-forget，失败不影响请求 */
-function touchUsage(keyId: number): void {
-  const ts = BigInt(Math.floor(Date.now() / 1000));
+function touchUsage(keyId: number, endpoint: string): void {
+  const now = Math.floor(Date.now() / 1000);
+  const ts = BigInt(now);
   void prisma.apiKey
     .update({
       where: { id: BigInt(keyId) },
       data: { requestCount: { increment: 1 }, lastUsedAt: ts },
     })
     .catch(() => {});
+  void bumpUsage(keyId, now, endpoint);
+}
+
+/** 分时用量（2026-10-25）：按 +08:00 小时桶 × 接口 UPSERT 累加，供 /admin/apikeys 走势图与详情页 */
+function bumpUsage(keyId: number, now: number, endpoint: string): void {
+  const hour = BigInt(Math.floor((now + 28800) / 3600));
+  void prisma.$executeRaw`
+    INSERT INTO api_key_usage (\`key\`, hour, endpoint, calls, update_time)
+    VALUES (${keyId}, ${hour}, ${endpoint}, 1, ${now})
+    ON DUPLICATE KEY UPDATE calls = calls + 1, update_time = ${now}
+  `.catch(() => {});
 }
 
 /** 统一的 401 响应（不透露 key 是否存在） */

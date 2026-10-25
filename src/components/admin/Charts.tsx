@@ -30,6 +30,8 @@ export function TrendChart({
   height = 240,
   unit = "",
   defaultHidden = [],
+  rawLabel = false,
+  legendHrefBase,
 }: {
   dates: string[];
   series: Series[];
@@ -38,6 +40,10 @@ export function TrendChart({
   unit?: string;
   /** 初始即隐藏的序列 key（量级悬殊时避免小值序列被压平） */
   defaultHidden?: string[];
+  /** 标签原样显示（小时轴如「14时」）；默认裁切成 MM-DD（日期轴） */
+  rawLabel?: boolean;
+  /** 图例跳转前缀（拼系列 key 成链接，如 /admin/apikeys/3）；RSC 不能传函数 prop，走字符串拼接 */
+  legendHrefBase?: string;
 }) {
   const [hidden, setHidden] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(defaultHidden.map((k) => [k, true]))
@@ -115,16 +121,22 @@ export function TrendChart({
             const off = hidden[s.key];
             const total = s.values.reduce((a, b) => a + b, 0);
             return (
-              <button
-                key={s.key}
-                type="button"
-                className={off ? "off" : "on"}
-                onClick={() => setHidden((h) => ({ ...h, [s.key]: !h[s.key] }))}
-              >
-                <i style={{ background: s.color }} />
-                {s.label}
-                <b>{total.toLocaleString("zh-CN")}</b>
-              </button>
+              <span key={s.key} style={{ display: "inline-flex", alignItems: "center" }}>
+                <button
+                  type="button"
+                  className={off ? "off" : "on"}
+                  onClick={() => setHidden((h) => ({ ...h, [s.key]: !h[s.key] }))}
+                >
+                  <i style={{ background: s.color }} />
+                  {s.label}
+                  <b>{total.toLocaleString("zh-CN")}</b>
+                </button>
+                {legendHrefBase && (
+                  <a href={`${legendHrefBase}/${s.key}`} title="查看该合作方分接口统计" style={{ marginLeft: 6, fontSize: 12 }}>
+                    ↗
+                  </a>
+                )}
+              </span>
             );
           })}
         </div>
@@ -217,7 +229,7 @@ export function TrendChart({
                 fillOpacity={hover === i ? 0.95 : 0.7}
                 textAnchor={i === n - 1 ? "end" : i === 0 ? "start" : "middle"}
               >
-                {d.slice(5)}
+                {rawLabel ? d : d.slice(5)}
               </text>
             ) : null
           )}
