@@ -138,6 +138,7 @@ body:has(.admin_shell) #footer {
 .admin_body {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -180,7 +181,11 @@ body:has(.admin_shell) #footer {
 
 .admin_main {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 18px 20px 40px;
 }
 
@@ -351,7 +356,10 @@ body:has(.admin_shell) #footer {
 
 /* ---------- 表格 ---------- */
 .admin_scroll {
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 table.admin_table {
   width: 100%;
@@ -865,7 +873,7 @@ table.admin_table .ai_reason {
   font-size: 12px;
 }
 
-/* ---------- 窄屏：侧栏折成顶部横条 ---------- */
+/* ---------- 窄屏：品牌与导航分两行，主区独立滚动 ---------- */
 @media (max-width: 900px) {
   .admin_shell {
     flex-direction: column;
@@ -873,9 +881,9 @@ table.admin_table .ai_reason {
   .admin_side {
     width: 100%;
     flex: 0 0 auto;
-    flex-direction: row;
-    align-items: center;
-    overflow-x: auto;
+    flex-direction: column;
+    align-items: stretch;
+    overflow: hidden;
     border-right: 0;
     border-bottom: 1px solid #3a3a32;
   }
@@ -883,10 +891,23 @@ table.admin_table .ai_reason {
     border-bottom: 0;
     padding: 8px 12px;
     flex: 0 0 auto;
+    align-self: flex-start;
   }
   .admin_nav {
     display: flex;
-    padding: 6px 8px;
+    flex: none;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4px 8px 7px;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .admin_nav > div {
+    display: flex;
+    flex: 0 0 auto;
     gap: 4px;
   }
   .admin_nav_group,
@@ -894,9 +915,11 @@ table.admin_table .ai_reason {
     display: none;
   }
   .admin_nav a {
+    flex: 0 0 auto;
     margin-bottom: 0;
     padding: 6px 10px;
     font-size: 13px;
+    white-space: nowrap;
   }
   .admin_nav a.on {
     box-shadow: inset 0 -2px 0 #a6e22e;
@@ -914,6 +937,8 @@ table.admin_table .ai_reason {
     line-height: 24px;
   }
   .admin_top .right {
+    flex-wrap: wrap;
+    gap: 8px 12px;
     font-size: 12px;
   }
   .admin_main {
@@ -921,6 +946,16 @@ table.admin_table .ai_reason {
   }
   .admin_kv {
     grid-template-columns: 78px 1fr;
+  }
+  .admin_grid.c2,
+  .admin_grid.c3,
+  .admin_grid.pies3,
+  .admin_grid.todo_trend,
+  .admin_grid.ops_notify {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin_card {
+    min-width: 0;
   }
 }
 
