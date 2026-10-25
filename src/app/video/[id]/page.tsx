@@ -222,6 +222,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
           videoId={video.id}
           videoOwnerId={video.author?.id ?? 0}
           authorId={session?.uid ?? 0}
+          isManager={!!session && isManager(session.role)}
           initial={comments}
           initialHasMore={comments.length < commentTotal}
           initialTotal={commentTotal}

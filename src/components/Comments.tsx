@@ -215,11 +215,13 @@ export function CommentForm({
  *  RSC 页面只与它对接；发表成功 → 新行插到列表头（列表按 id 倒序，新评论 id 最大）+ total+1，
  *  不再依赖整页刷新。
  *  2026-10-26：接入删除（发布者本人 ∪ 录像作者，服务端 /api/comment/delete 铁闸）；
- *  确认浮窗后就地移除行 + total-1，同时 router.refresh() 同步录像卡上的「评论 N」计数 */
+ *  确认浮窗后就地移除行 + total-1，同时 router.refresh() 同步录像卡上的「评论 N」计数。
+ *  2026-10-26 二轮：管理员前台也可删（isManager prop；管理员删除服务端写 admin_log 留痕） */
 export function CommentSection({
   videoId,
   videoOwnerId,
   authorId,
+  isManager: manager = false,
   initial,
   initialHasMore,
   initialTotal,
@@ -229,6 +231,8 @@ export function CommentSection({
   videoOwnerId: number;
   /** 当前登录用户 id；0=未登录（不渲染表单与删除钮） */
   authorId: number;
+  /** 当前登录用户是否管理员（role 10/100；前台删除全量放行） */
+  isManager?: boolean;
   initial: CommentItem[];
   initialHasMore: boolean;
   initialTotal: number;
@@ -265,10 +269,10 @@ export function CommentSection({
   }
 
   /** 删除权限（前端渲染判定，与 /api/comment/delete 服务端铁闸同口径）：
-   *  登录 且（发布者本人 或 录像上传者）。待审行（status=5）只有发布者本人看得到，
-   *  天然落在「本人」分支内，不会出现录像作者删他人待审行的渲染 */
+   *  登录 且（发布者本人 或 录像上传者 或 管理员——管理员全量放行）。
+   *  待审行（status=5）只有发布者本人看得到，天然落在「本人」分支内 */
   function canDelete(c: CommentItem) {
-    return authorId > 0 && (c.authorId === authorId || videoOwnerId === authorId);
+    return authorId > 0 && (manager || c.authorId === authorId || videoOwnerId === authorId);
   }
 
   /** 删除：确认浮窗 → POST /api/comment/delete → 就地移除行 + total-1 + refresh 同步计数 */
