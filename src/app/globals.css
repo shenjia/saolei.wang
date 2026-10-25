@@ -8923,8 +8923,11 @@ html:has(#online_play) #footer {
   #gr_modal .gresult .gr_title .gr_lv.fail .est {
     font-size: 16px;
   }
+  #gr_modal .gresult .gr_title .gr_rate {
+    font-size: 16px;
+  }
   #gr_modal .gresult .gr_title .gr_rate b {
-    font-size: 22px;
+    font-size: 20px;
   }
   #gr_modal .gresult .gr_radar {
     flex: 1;
@@ -8942,10 +8945,10 @@ html:has(#online_play) #footer {
   }
   /* SVG 内部坐标也随小屏缩放，直接增大 tspan 才能抵消雷达边长收缩。 */
   #gr_modal .gresult .gr_radar tspan:first-child {
-    font-size: 20px;
+    font-size: 18px;
   }
   #gr_modal .gresult .gr_radar tspan + tspan {
-    font-size: 13px;
+    font-size: 11px;
     dy: 16px;
   }
   #gr_modal .gresult .grb {
@@ -8992,11 +8995,17 @@ html:has(#online_play) #footer {
   #gr_modal .gresult .gr_title .gr_lv.fail .est {
     font-size: 14px;
   }
+  #gr_modal .gresult .gr_title .gr_rate {
+    font-size: 14px;
+  }
+  #gr_modal .gresult .gr_title .gr_rate b {
+    font-size: 18px;
+  }
   #gr_modal .gresult .gr_radar tspan:first-child {
-    font-size: 22px;
+    font-size: 20px;
   }
   #gr_modal .gresult .gr_radar tspan + tspan {
-    font-size: 15px;
+    font-size: 13px;
     dy: 18px;
   }
   #gr_modal .gresult .grb {
@@ -9037,11 +9046,17 @@ html:has(#online_play) #footer {
   #gr_modal .gresult .gr_title .gr_lv.fail .est {
     font-size: 12px;
   }
+  #gr_modal .gresult .gr_title .gr_rate {
+    font-size: 12px;
+  }
+  #gr_modal .gresult .gr_title .gr_rate b {
+    font-size: 16px;
+  }
   #gr_modal .gresult .gr_radar tspan:first-child {
-    font-size: 24px;
+    font-size: 22px;
   }
   #gr_modal .gresult .gr_radar tspan + tspan {
-    font-size: 17px;
+    font-size: 15px;
     dy: 20px;
   }
   #gr_modal .gresult .grb {
