@@ -9,16 +9,18 @@ export function AdminCard({
   title,
   more,
   tight,
+  className,
   children,
 }: {
   title?: React.ReactNode;
   more?: React.ReactNode;
   /** 表格类内容去掉内边距，让表头贴边 */
   tight?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="admin_card">
+    <div className={`admin_card${className ? ` ${className}` : ""}`}>
       {title !== undefined && (
         <h2>
           {title}

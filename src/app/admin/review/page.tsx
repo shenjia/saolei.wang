@@ -54,7 +54,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
   const recent = list.rows.slice(0, 5);
 
   return (
-    <>
+    <div className="admin_review_page">
       <div className="admin_page_head">
         <h1>审核管理</h1>
         <span className="sub">
@@ -82,7 +82,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
         <Kpi label="今日上传" value={ov.videoToday} tone="yellow" foot="全部状态" />
       </div>
 
-      <AdminCard tight>
+      <AdminCard tight className="review_queue">
         {/* 状态页签：走 URL，便于分享与退回 */}
         <div className="admin_filterbar">
           {TABS.map(([v, label]) => (
@@ -204,6 +204,6 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           · 分拣触发原因仅后台展示，玩家端任何页面不可见。
         </div>
       </AdminCard>
-    </>
+    </div>
   );
 }

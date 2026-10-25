@@ -957,6 +957,83 @@ table.admin_table .ai_reason {
   .admin_card {
     min-width: 0;
   }
+
+  /* 数据卡两行起排：390px 下一行两个，迷你趋势图同步收窄 */
+  .admin_kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .admin_kpi {
+    min-width: 0;
+    padding: 10px 11px;
+  }
+  .admin_kpi .value {
+    font-size: 23px;
+    line-height: 30px;
+  }
+  .admin_kpi .foot {
+    gap: 4px !important;
+  }
+  .admin_kpi .foot svg {
+    width: 56px !important;
+    flex: 0 0 56px;
+  }
+
+  /* 审核页首屏优先：指标单行横滑，分拣与录像队列紧随其后 */
+  .admin_review_page .admin_page_head {
+    gap: 4px 8px;
+    margin-bottom: 10px;
+  }
+  .admin_review_page .admin_page_head h1 {
+    font-size: 18px;
+    line-height: 28px;
+  }
+  .admin_review_page .admin_page_head .sub {
+    order: 3;
+    flex-basis: 100%;
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .admin_review_page .admin_page_head .right {
+    margin-left: auto;
+  }
+  .admin_review_page .admin_kpis {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 3px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+  .admin_review_page .admin_kpi {
+    flex: 0 0 148px;
+    padding: 8px 10px;
+    scroll-snap-align: start;
+  }
+  .admin_review_page .admin_kpi .label {
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .admin_review_page .admin_kpi .value {
+    font-size: 22px;
+    line-height: 28px;
+  }
+  .admin_review_page .admin_kpi .foot {
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+  .review_queue .admin_filterbar {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .review_queue .admin_filterbar > .label:last-child {
+    display: none;
+  }
 }
 
 /* ---------- 头像审核（2026-09-24）---------- */
