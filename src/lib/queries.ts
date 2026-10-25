@@ -747,10 +747,22 @@ function videoListConds(opts: {
   const needVm = order === "ioe" || order === "stnb";
   // 2026-10-20 stnb 单表化曾在此免 join（vm 与 v 全量一致）——2026-10-22 作废：
   // 前台列表屏蔽录像（status=0）一律不展示（张老师指令），vm 无 status 列必须
-  // join video 过滤。FORCE INDEX 驱动保留（2026-10-20「STNB 排序 10~12s」根因
-  // 修复的主力就是它），join 为 video PK 点查，实测仍亚秒级。
+  // join video 过滤。
+  // 2026-10-25 个人页排序卡顿修复（张老师报「STNB/IOE 比其他排序卡」）：FORCE INDEX
+  // 收窄到无 author 的全站列表——author 过滤选择性极高（个人录像几百条 vs 全站 30 万），
+  // FORCE 钉死 vm 驱动会沿全表指标序扫描找该用户的行（每行 video/video_info 两次 PK
+  // 回表，级别筛选/翻页越深扫得越多）；IOE 更惨：ORDER BY ioe 用不上 stnb 索引 →
+  // 全表扫 29.6 万行 + filesort（本地实测 ~0.9s，「等一会才刷新」的根因）。去 FORCE 后
+  // 优化器走 video(user) 索引驱动 + 用户录像小集合 filesort（本地实测毫秒级）。
+  // 全站路径保留 FORCE（2026-10-20「STNB 排序 10~12s」根因修复的主力），但索引按排序列
+  // 匹配：ioe 排序反扫 ioe 索引——原两排序共用 stnb_idx 是笔误，[ioe] 索引建了却被
+  // FORCE 废掉（全站 IOE 排序同样在吃全表扫 + filesort）。
   const table = needVm
-    ? `video_metrics vm FORCE INDEX (video_metrics_stnb_idx)`
+    ? author
+      ? "video_metrics vm"
+      : `video_metrics vm FORCE INDEX (${
+          order === "ioe" ? "video_metrics_ioe_idx" : "video_metrics_stnb_idx"
+        })`
     : needVi
       ? "video_info vi"
       : needVs
@@ -805,7 +817,9 @@ function videoListConds(opts: {
  *  v8（2026-10-22：全路径统一 v.status=20 过滤（屏蔽/待审不进前台）——
  *  stnb 单表化作废恢复 join video，旧缓存计数含屏蔽行，必须失效）；
  *  v9（2026-10-23：待审放行进前台，过滤放宽 v.status<>0——旧缓存计数不含
- *  待审行，必须失效） */
+ *  待审行，必须失效）；
+ *  v10（2026-10-25：FORCE INDEX 收窄到无 author 路径 + ioe 排序改反扫 ioe 索引，
+ *  查询计划形态变——旧缓存计数值仍正确但为彻底失效重来） */
 const getVideoListJoinCount = unstable_cache(
   async (
     level: string,
@@ -827,7 +841,7 @@ const getVideoListJoinCount = unstable_cache(
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v9"],
+  ["video-list-join-count", "v10"],
   { revalidate: 60 }
 );
 
