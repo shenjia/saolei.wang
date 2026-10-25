@@ -149,6 +149,52 @@ export async function applyRankScoreChange(
   if (nextSumTime > 0) await rankEnter(client, BigInt(uid));
 }
 
+/**
+ * 换地区名次维护（2026-10-25 修改资料可更换地区）：在 user.area 写入之后同事务调用。
+ * 语义：旧区出位（同区后者前移）→ 新区重算进位（national 不变，名次与成绩无关只随 area 搬）。
+ * 全量重建口径一致性：arear 只排 area<>'' 且不含 '&' 的用户——旧区/新区任一是多地区
+ * 或空值时，对应侧退化为纯 area 字段更新（无区名次可搬）。
+ */
+export async function applyRankAreaChange(
+  client: DB,
+  uid: number,
+  prevArea: string,
+  nextArea: string
+): Promise<void> {
+  if (prevArea === nextArea) return;
+  const tx = asTx(client);
+  const buid = BigInt(uid);
+  const cur = await readUserRank(tx, buid);
+  if (!cur) return; // 不在榜（无成绩/封禁中）→ user_rank 无行，area 由 user 表自带，无需搬位
+
+  const hasAreaRank = (a: string) => a !== "" && !a.includes("&");
+  // 旧区有区名次：同区后者整体前移一位，与本表 area_pos 语义一致
+  if (cur.areaPos !== null && hasAreaRank(cur.area)) {
+    await tx.$executeRaw`UPDATE user_rank SET area_pos = area_pos - 1 WHERE area = ${cur.area} AND area_pos > ${cur.areaPos}`;
+  }
+  // 新区有名次资格：严格排在前面的人 +1（平序 (sum_time, id)，与 rankEnter 同口径；
+  // 但 national 全榜位次不变，不搬全国位）→ 同区 >= 新位者后移一位
+  let nextPos: number | null = null;
+  if (hasAreaRank(nextArea)) {
+    const rows = await tx.$queryRaw<{ st: bigint }[]>`
+      SELECT s.sum_time st FROM user_scores s WHERE s.id = ${buid}`;
+    const sumTime = rows.length ? Number(rows[0].st) : 0;
+    if (sumTime > 0) {
+      const p = await tx.$queryRaw<{ p: bigint }[]>`
+        SELECT COUNT(*) + 1 p
+        FROM user_scores s JOIN user u ON u.id = s.id
+        WHERE s.sum_time > 0 AND u.status = 0 AND u.area = ${nextArea}
+          AND (s.sum_time < ${sumTime} OR (s.sum_time = ${sumTime} AND s.id < ${buid}))`;
+      nextPos = Number(p[0].p);
+      await tx.$executeRaw`UPDATE user_rank SET area_pos = area_pos + 1 WHERE area = ${nextArea} AND area_pos >= ${nextPos}`;
+    }
+  }
+  // 本行：area 换新值；新区无资格（多地区/空）时 area_pos 置 null（与全量重建 arear 过滤一致）
+  await tx.$executeRaw`
+    UPDATE user_rank SET area = ${nextArea}, area_pos = ${nextPos}, update_time = UNIX_TIMESTAMP()
+    WHERE id = ${buid}`;
+}
+
 /** 非事务路径（后台封禁/解禁）的安全包装：失败仅记日志，靠读取侧自愈兜底 */
 export async function safeRankOp(fn: () => Promise<void>, label: string): Promise<void> {
   try {

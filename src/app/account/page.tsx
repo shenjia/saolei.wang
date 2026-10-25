@@ -1,7 +1,7 @@
-// 账户管理首页（2026-10-15 张老师四轮定稿：原「账号中心 · 我的资料」）
-// 主栏：标题行（左「账户管理」h1 + 右「修改资料/修改密码」小按钮同行）→
+// 账户设置首页（2026-10-25 张老师：标题「账户管理」→「账户设置」，与导航菜单文案统一）
+// 主栏：标题行（左「账户设置」h1 + 右「修改资料/修改密码」小按钮同行）→
 //   头像单独一行（可点更换）→ 一张连续资料表（账户名/中文名/英文名与
-//   爱好、QQ 等同格式分栏，无小标题无分割线）。
+//   地区、爱好、QQ 等同格式分栏，无小标题无分割线）。
 // 侧栏：标准 UserPanel 玩家卡片（与录像详情页/论坛主题页右栏同款）。
 // （2026-10-16 张老师：侧栏原「数据统计」盒已去掉，只留玩家卡片。）
 
@@ -15,11 +15,11 @@ import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { UserPanel } from "@/components/UserCard";
 import { QqBindLink } from "@/components/QqLogin";
-import { QQ_OAUTH_ENABLED } from "@/lib/config";
+import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "账户管理" };
+export const metadata = { title: "账户设置" };
 
 /** 账户名是否为邮箱（2026-10-15 张老师：非邮箱时才显示「绑定邮箱」入口） */
 function isEmail(s: string): boolean {
@@ -60,6 +60,9 @@ export default async function AccountManagePage({
   const { user, info } = detail;
 
   const rows: [string, string][] = [
+    // 地区（2026-10-25 张老师要求加在爱好前）：存库中文原值，显示走 areaDisplay 合规化
+    //（香港/澳门/台湾 → 中国香港/中国澳门/中国台湾；「海外」原样显示）
+    ["地区", user.area ? areaDisplay(user.area) : ""],
     ["爱好", info?.interest ?? ""],
     ["QQ", info?.qq ?? ""],
     ["昵称", info?.nickname ?? ""],
@@ -85,7 +88,7 @@ export default async function AccountManagePage({
         <li className="main">
           <div className="box">
             <div className="manage_head">
-              <h1>账户管理</h1>
+              <h1>账户设置</h1>
               <div className="manage_actions">
                 <Link href="/account/profile" className="button small">
                   修改资料

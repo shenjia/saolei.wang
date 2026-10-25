@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AREA_LIST } from "@/lib/config";
 import { AvatarUploader } from "./AvatarUploader";
 import { toast } from "./Toast";
 
@@ -11,6 +12,7 @@ import { toast } from "./Toast";
 const LIMITS = { qq: 15, nickname: 10, mouse: 30, pad: 30, interest: 50 } as const;
 
 export interface ProfileDefaults {
+  area: string; // 当前地区（AREA_LIST 内的值；空串 = 未设置/旧多地区值，不修改）
   qq: string;
   nickname: string;
   mouse: string;
@@ -36,7 +38,7 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
   const [submitting, setSubmitting] = useState(false);
 
   const set = (k: keyof ProfileDefaults) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-    setForm({ ...form, [k]: e.target.type === "select-one" ? parseInt(e.target.value, 10) || 0 : e.target.value });
+    setForm({ ...form, [k]: e.target.type === "select-one" && k !== "area" ? parseInt(e.target.value, 10) || 0 : e.target.value });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,6 +73,25 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
       <table className="form" cellPadding={0} cellSpacing={0}>
         <tbody>
           <AvatarUploader {...avatarSlot} />
+          <tr>
+            <th>地区</th>
+            <td className="middle">
+              <div>
+                {/* 2026-10-25 张老师要求：修改资料可更换地区。当前值不在 AREA_LIST
+                    （历史遗留多地区「xx&xx」）时补一条「保持现状」选项兜底，不丢数据 */}
+                <select value={form.area} onChange={set("area")}>
+                  {form.area && !(AREA_LIST as readonly string[]).includes(form.area) && (
+                    <option value={form.area}>{form.area}（保持现状）</option>
+                  )}
+                  {AREA_LIST.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </td>
+          </tr>
           <tr>
             <th>爱好</th>
             <td>

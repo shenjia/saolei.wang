@@ -17,12 +17,14 @@ export default async function AccountProfilePage() {
   if (!session) redirect("/account/login");
 
   const uid = BigInt(session.uid);
-  const [detail, info, me, latestAvatar] = await Promise.all([
+  const [detail, info, me, latestAvatar, userRow] = await Promise.all([
     getUserDetail(session.uid),
     prisma.userInfo.findUnique({ where: { id: uid } }),
     prisma.user.findUnique({ where: { id: uid }, select: { avatar: true } }),
     // 最新一条头像审核记录：待审 / 驳回时才需要提示（自动放行的无需提示）
     prisma.avatarReview.findFirst({ where: { user: uid }, orderBy: { id: "desc" } }),
+    // 地区存 user 表（2026-10-25 张老师要求：修改资料可更换地区）
+    prisma.user.findUnique({ where: { id: uid }, select: { area: true } }),
   ]);
   if (!detail) redirect("/account/login");
 
@@ -54,6 +56,7 @@ export default async function AccountProfilePage() {
             <ProfileForm
               avatarSlot={avatarSlot}
               defaults={{
+                area: userRow?.area ?? "",
                 interest: info?.interest ?? "",
                 qq: info?.qq ?? "",
                 nickname: info?.nickname ?? "",
