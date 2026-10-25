@@ -3241,6 +3241,24 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 #page #account_manage > li.sidebar .box {
   width: 210px;
 }
+/* 修改资料 / 修改密码 / 绑定邮箱页侧栏同几何（2026-10-25）：侧栏已换标准玩家卡片（UserPanel，
+   与 /account 一致），右栏几何同步统一为 288 / 盒内容 210，卡片不再挤压。 */
+#page #account_profile > li.sidebar,
+#page #account_password > li.sidebar,
+#page #account_email > li.sidebar {
+  width: 288px;
+}
+#page #account_profile > li.main,
+#page #account_password > li.main,
+#page #account_email > li.main {
+  width: calc(100% - 290px);
+  min-width: 0;
+}
+#page #account_profile > li.sidebar .box,
+#page #account_password > li.sidebar .box,
+#page #account_email > li.sidebar .box {
+  width: 210px;
+}
 
 /* ---------- 头像方形裁剪弹窗（2026-09-24）----------
    主页点击头像、个人资料页点击缩略图都走这个浮窗；
