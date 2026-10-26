@@ -104,8 +104,13 @@ const LS_RESERVE_W = 2;
 const FS_RESERVE = 2;
 /* 全屏模式显示比例上限（2026-10-21 张老师定）：高级盘 PC 全屏无上限可拉到 5x，
    格子像素级失真、超屏分辨率渲染白耗性能——封 2.4。普通模式上限 2.5 不动，
-   仅全屏相关路径（normalMaxZoom 全屏分支 / fitZoomForFullscreen 拉满 / 滑杆行程）受限 */
+   仅全屏相关路径（normalMaxZoom 全屏分支 / fitZoomForFullscreen 拉满 / 滑杆行程）受限。
+   ⚠️ 2026-10-26 张老师改：PC 高级全屏不再钉死 2.4——结算面板转浮层居中后无需
+   留右侧空间，改为允许放大到「顶格」（normalMaxZoom 全屏分支返回 fullscreenFitCap）；
+   2.4 现仅对初级/中级/自定义的 PC 全屏手动上限生效 */
 const FS_ZOOM_CAP = 2.4;
+/* PC 高级进入全屏自动升到的显示比例（2026-10-26 张老师定：2.1，不再每次手动拖杆） */
+const FS_AUTO_ZOOM = 2.1;
 /* 滚轮调显示比例（2026-10-15 张老师定「练习页禁滚动，滑动鼠标滚轮可调整显示比例」）：
    累计滚动量（归一化到像素）每满 WHEEL_STEP_PX 迈一格 WHEEL_STEP_Z。
    按**累计**而非「每个 wheel 事件迈一格」——触控板惯性连滚一次能出十几个事件，
@@ -3901,8 +3906,14 @@ export function OnlinePlay({
       if (document.fullscreenElement === root) {
         /* fsAutoFit 拉满场景（移动端/横屏/超大 cus 盘）维持 5：页级 zoom 0.65 的
            补偿倍率与「铺满」语义都需要 3x+，封 2.4 会把拉满值直接砸下来；
-           PC 标准级别全屏手动调比例才封 FS_ZOOM_CAP（fsAutoFit 为函数声明已提升，
+           PC 高级全屏（2026-10-26 张老师定）：允许继续放大到棋盘顶格——结算面板
+           已是浮层居中，不再需要右侧留白，上限改为视口可容纳的最大比例；
+           PC 其余级别全屏手动调比例才封 FS_ZOOM_CAP（fsAutoFit 为函数声明已提升，
            且全屏分支只可能在挂载完成后被事件回调触达，mqNarrow 无 TDZ 风险） */
+        if (lv === "exp") {
+          const fit = fullscreenFitCap();
+          if (fit > 0) return fit;
+        }
         return fsAutoFit() ? 5 : FS_ZOOM_CAP;
       }
       const gfR = gframe.getBoundingClientRect();
@@ -4332,37 +4343,18 @@ export function OnlinePlay({
     function fsAutoFit() {
       return mqNarrow.matches || lsQuery.matches || (lv === "cus" && (W > 30 || H > 16));
     }
-    function fitZoomForFullscreen() {
-      if (!fsAutoFit()) {
-        /* PC 端：比例不动，只把滑杆行程放宽到全屏口径（normalMaxZoom 全屏恒 FS_ZOOM_CAP，
-           玩家在全屏里想手动放大不受普通模式的容器宽限制）。
-           ⚠️ 不能无条件走 applyZoom(zoomCur)：cus 大盘 0.3~0.5x 会被 floor 0.5 抬升
-           小幅放大（setZoomVisual 才是不动比例的安全路径）。仅当窗口模式已调到
-           超 2.4（窗口上限 2.5）时才经 applyZoom 压回全屏上限 */
-        const capFs = String(normalMaxZoom());
-        zoomRange.max = capFs;
-        cusZoom.max = capFs;
-        if (zoomCur > FS_ZOOM_CAP) applyZoom(zoomCur, false);
-        /* 面板几何必须跟着重算（2026-10-19 二版）：旧版这里直接 return，全屏拉大后
-           侧空被压缩、面板却还按进全屏前的尺寸摆着 —— 张老师截图里那两条窄边就是这么来的。
-           现在重算一次即可判出「侧边放不下 → 转遮罩」 */
-        syncReportZoom();
-        requestAnimationFrame(syncReportZoom);
-        return;
-      }
-      gwrap.style.minHeight = ""; // 撤掉横屏的银框兜底拉伸（横屏中进全屏时残留会撑歪）
+    /* 全屏「顶格」比例＝棋盘（含计数条/状态栏的整个银框窗 gwrap）在视口里装得下的
+       最大倍率。供两处复用：normalMaxZoom 全屏分支（PC 高级滑杆/滚轮上限）与
+       fitZoomForFullscreen 拉满分支。基准宽高按当前 zoomCur 反算（与倍率无关），
+       宿主/下方流内内容/页级缩放口径与拉满分支完全一致。量不到（无全屏/基准过小）返回 0 */
+    function fullscreenFitCap() {
       const pz = pageZoom();
       const gwR = gwrap.getBoundingClientRect();
       const baseW = gwR.width / (zoomCur * pz), baseH = gwR.height / (zoomCur * pz);
-      if (baseW < 8 || baseH < 8) return;
-      /* 宿主＝全屏根容器（#online_play > div）；无全屏（伪全屏/横屏）时退回站点根容器 */
+      if (baseW < 8 || baseH < 8) return 0;
       const host = document.fullscreenElement instanceof HTMLElement ? document.fullscreenElement : container;
       const hostR = host.getBoundingClientRect();
-      /* 下 padding 的渲染值 = 计算值 × 宿主自身缩放（实测宿主缩放 = pz，移动端 0.65 对齐） */
       const padB = (parseFloat(getComputedStyle(host).paddingBottom) || 0) * pz;
-      /* 游戏窗下方的流内内容（当前结构里 #game_area 是宿主最后一个流内子元素＝0；
-         留这个扫描是给将来加页脚兜底）——绝不能用 host.scrollHeight：全屏溢出时
-         它已被撑大，会把缺口算成 0 */
       let belowH = 0;
       const ga = gwrap.parentElement;
       if (ga && ga.parentElement === host) {
@@ -4374,9 +4366,6 @@ export function OnlinePlay({
           if (r.height <= 0) continue;
           belowH += r.height / pz + (parseFloat(kcs.marginTop) || 0) + (parseFloat(kcs.marginBottom) || 0);
         }
-        /* 二十期：回放控制条在 #game_area **内**、gwrap 之后的流内子元素——
-           同样计入下方占用（横屏沉浸/移动端全屏不挂条，但全屏中先开回放再进
-           全屏的时序会带着条进拉满计算） */
         const gkids = Array.from(ga.children);
         for (const k of gkids.slice(gkids.indexOf(gwrap) + 1)) {
           const kcs = getComputedStyle(k);
@@ -4386,15 +4375,39 @@ export function OnlinePlay({
           belowH += r.height / pz + (parseFloat(kcs.marginTop) || 0) + (parseFloat(kcs.marginBottom) || 0);
         }
       }
-      const availH = (hostR.bottom - padB - gwR.top) / pz - belowH - FS_RESERVE; // 布局 px
-      /* 横向：#game_area 无 padding，gwrap 是其中 inline-block（text-align:center）——
-         可用宽即其内容宽；窄到放不下时 inline-block 不收缩，靠这条封顶防横向滚动条 */
+      const availH = (hostR.bottom - padB - gwR.top) / pz - belowH - FS_RESERVE;
       const gaCs = ga ? getComputedStyle(ga) : null;
       const availW = ga
         ? ga.clientWidth - (parseFloat(gaCs!.paddingLeft) || 0) - (parseFloat(gaCs!.paddingRight) || 0) - FS_RESERVE
         : hostR.width / pz - 24 - FS_RESERVE;
-      if (availH <= 8 || availW <= 8) return;
-      applyZoom(Math.min(availW / baseW, availH / baseH), false, 5);
+      if (availH <= 8 || availW <= 8) return 0;
+      return Math.min(availW / baseW, availH / baseH);
+    }
+    function fitZoomForFullscreen() {
+      if (!fsAutoFit()) {
+        /* PC 高级（2026-10-26 张老师定）：进入全屏自动升到 2.1x，不再要求每次手动拖杆；
+           滑杆/滚轮上限放宽到「顶格」——结算面板已是浮层居中，不再占右侧空间，
+           棋盘可继续放大到贴满屏幕。persist=false 不覆盖窗口比例记忆，退出时由
+           zoomBeforeFs 原样恢复；全屏中手动调过比例则 zoomBeforeFs 已清空，退出走收档口径。
+           其他 PC 盘面：比例不动，只把滑杆行程放宽到全屏口径（normalMaxZoom 全屏恒 FS_ZOOM_CAP）。
+           ⚠️ 不能对 cus 无条件走 applyZoom(zoomCur)：0.3~0.5x 会被 floor 0.5 抬升；
+           仅当窗口模式已调到超 2.4（窗口上限 2.5）时才经 applyZoom 压回全屏上限 */
+        const capFs = String(normalMaxZoom());
+        zoomRange.max = capFs;
+        cusZoom.max = capFs;
+        if (lv === "exp") applyZoom(FS_AUTO_ZOOM, false);
+        else if (zoomCur > FS_ZOOM_CAP) applyZoom(zoomCur, false);
+        /* 面板几何必须跟着重算（2026-10-19 二版）：旧版这里直接 return，全屏拉大后
+           侧空被压缩、面板却还按进全屏前的尺寸摆着 —— 张老师截图里那两条窄边就是这么来的。
+           现在重算一次即可判出「侧边放不下 → 转遮罩」 */
+        syncReportZoom();
+        requestAnimationFrame(syncReportZoom);
+        return;
+      }
+      gwrap.style.minHeight = ""; // 撤掉横屏的银框兜底拉伸（横屏中进全屏时残留会撑歪）
+      const fitCap = fullscreenFitCap();
+      if (fitCap <= 0) return;
+      applyZoom(fitCap, false, 5);
     }
     /* 设置浮窗这张比例滑杆与自定义弹窗那张同源（v7）：共用 zoomDragInput/zoomDragEnd，
        拖动中不重算页宽、松手后一次到位（理由见 zoomDragInput 注释） */
