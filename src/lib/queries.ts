@@ -2430,7 +2430,7 @@ export interface BvRankingResult {
 // 缓存后页面渲染/加载更多只是对万级小数组排序切片，DB 每小时最多被打一次。
 // 注意改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化，dev 重启不清）。
 const fetchBvCollection = unstable_cache(
-  async (): Promise<BvRankingEntry[]> => {
+  async (nf: boolean = false): Promise<BvRankingEntry[]> => {
     const rows = await prisma.$queryRaw<
       {
         id: bigint;
@@ -2452,6 +2452,7 @@ const fetchBvCollection = unstable_cache(
         SELECT v.user, v.level, COUNT(DISTINCT vi.board_3bv) AS n
         FROM video v FORCE INDEX (video_user_level_idx) JOIN video_info vi ON vi.id = v.id
         WHERE v.status = ${VIDEO_STATUS.REVIEWED}
+          ${nf ? Prisma.sql`AND vi.noflag = 1` : Prisma.empty}
           AND vi.board_3bv >= CASE v.level
             WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
             WHEN 'int' THEN ${LEVEL_MIN_3BV.int}
@@ -2477,7 +2478,7 @@ const fetchBvCollection = unstable_cache(
       };
     });
   },
-  ["bv-collection-v5"], // v5（2026-10-23）：驱动侧 FORCE INDEX (user,level) 消除 Sort（纯计划优化，口径不变）；v4（2026-10-22）：区间上限抬到理论最大（初级 54）、分母扣不可达值
+  ["bv-collection-v6"], // v6（2026-10-26）：nf 参数进入缓存键，支持混合/NF 两套收集聚合
   { revalidate: 3600, tags: ["bv-collection"] }
 );
 
@@ -2505,8 +2506,8 @@ function bvDenoms(ranges: Partial<Record<VideoLevel, { min: number; max: number 
 }
 
 /** BV 收集榜一页。 */
-export async function getBvRanking(by: BvRankingBy, page: number, take?: number): Promise<BvRankingResult> {
-  const [all, ranges] = await Promise.all([fetchBvCollection(), getLevel3bvRanges()]);
+export async function getBvRanking(by: BvRankingBy, page: number, take?: number, nf = false): Promise<BvRankingResult> {
+  const [all, ranges] = await Promise.all([fetchBvCollection(nf), getLevel3bvRanges()]);
   const { den, totalDen } = bvDenoms(ranges);
   const sorted = sortBv(all, by);
   const size = take ?? RANKING_PAGESIZE;
@@ -2518,12 +2519,12 @@ export async function getBvRanking(by: BvRankingBy, page: number, take?: number)
 
 /** BV 榜「用户 → 名次 + 总计收集数」索引（2026-10-14 搜索定位/下拉增强）：
  *  一次内存排序构建 Map，不在 Map 里即「未加入 BV 排行」。零 DB 重活（只有 3 行的 ranges 小表）。 */
-export async function getBvBoardIndex(by: BvRankingBy): Promise<{
+export async function getBvBoardIndex(by: BvRankingBy, nf = false): Promise<{
   index: Map<number, { rank: number; collected: number }>;
   total: number;
   totalDen: number;
 }> {
-  const [all, ranges] = await Promise.all([fetchBvCollection(), getLevel3bvRanges()]);
+  const [all, ranges] = await Promise.all([fetchBvCollection(nf), getLevel3bvRanges()]);
   const { totalDen } = bvDenoms(ranges);
   const sorted = sortBv(all, by);
   const index = new Map<number, { rank: number; collected: number }>();
@@ -2538,9 +2539,10 @@ export async function getBvBoardIndex(by: BvRankingBy): Promise<{
  */
 export async function getBvRankOfUser(
   id: number,
-  by: BvRankingBy
+  by: BvRankingBy,
+  nf = false
 ): Promise<{ rank: number; page: number; collected: number; total: number; totalDen: number } | null> {
-  const { index, total, totalDen } = await getBvBoardIndex(by);
+  const { index, total, totalDen } = await getBvBoardIndex(by, nf);
   const hit = index.get(id);
   if (!hit) return null;
   return { rank: hit.rank, page: Math.floor((hit.rank - 1) / RANKING_PAGESIZE) + 1, collected: hit.collected, total, totalDen };
@@ -2595,7 +2597,7 @@ export interface StnbRankingResult {
 //   · 运气盘限界与 3BV/s 成绩同款（MIN_3BV_FOR_3BVS：初 10 / 中 4 / 高 4；
 //     中高级上传下限 30/100 本就高于 4，实际只约束初级——不限则 3BV=2 的 0.09s
 //     秒开盘 STNB 4316 会霸榜，实测限界内 top 为 473.7）
-//   · 不区分 NF（NF 录像同为过审胜局，STNB 同口径计算，混合排——同 BV 榜不分模式）
+//   · 默认混合统计；nf=true 时仅取 noflag=1，并使用独立缓存/落盘表
 //   · 每级最优盘（成绩点击跳对应录像 + hover 气泡）：GROUP_CONCAT 组内按
 //     stnb DESC, id ASC 排序取第一个（同分取注册序影像 id 较小者，与排序口径一致）。
 //     注：窗口函数版实测 55s（全表 filesort），GROUP_CONCAT 组内排序 4.2s（本地）/
@@ -2656,7 +2658,7 @@ function inflateStnbRow(c: StnbCompactRow): StnbRankingEntry {
 //   · 运气盘限界与 3BV/s 成绩同款（MIN_3BV_FOR_3BVS：初 10 / 中 4 / 高 4；
 //     中高级上传下限 30/100 本就高于 4，实际只约束初级——不限则 3BV=2 的 0.09s
 //     秒开盘 STNB 4316 会霸榜，实测限界内 top 为 473.7）
-//   · 不区分 NF（NF 录像同为过审胜局，STNB 同口径计算，混合排——同 BV 榜不分模式）
+//   · 默认混合统计；nf=true 时仅取 noflag=1，并使用独立缓存/落盘表
 //   · 每级最优盘（成绩点击跳对应录像 + hover 气泡）：组内 stnb DESC, id ASC
 //     排序取第一个（同分取注册序影像 id 较小者，与排序口径一致）。
 // ⚠️ 缓存载荷仍走紧凑元组形态（2026-10-20 线上 STNB 榜 7~12s 根因教训）：
@@ -2667,7 +2669,7 @@ function inflateStnbRow(c: StnbCompactRow): StnbRankingEntry {
 // 注意：①改查询逻辑必须升缓存键版本号（unstable_cache 文件持久化）。
 
 const fetchStnbFromTable = unstable_cache(
-  async (): Promise<StnbCompactRow[] | null> => {
+  async (nf: boolean = false): Promise<StnbCompactRow[] | null> => {
     // 落盘表 join user/user_scores 组装（榜行需要姓名/性别/军衔时间）。
     // 行数 ~2.4 万，全部走索引，实测亚秒级。
     const rows = await prisma.$queryRaw<
@@ -2691,7 +2693,7 @@ const fetchStnbFromTable = unstable_cache(
         MAX(CASE WHEN b.level = 'beg' THEN CONCAT_WS(':', b.best_video, b.best_time, b.best_nf, b.best_ct) END) AS best_beg,
         MAX(CASE WHEN b.level = 'int' THEN CONCAT_WS(':', b.best_video, b.best_time, b.best_nf, b.best_ct) END) AS best_int,
         MAX(CASE WHEN b.level = 'exp' THEN CONCAT_WS(':', b.best_video, b.best_time, b.best_nf, b.best_ct) END) AS best_exp
-      FROM user_stnb_best b
+      FROM ${Prisma.raw(nf ? "user_stnb_best_nf" : "user_stnb_best")} b
         JOIN user u ON u.id = b.user AND u.status = 0
         LEFT JOIN user_scores us ON us.id = b.user
       GROUP BY u.id, u.chinese_name, u.sex, us.exp_time`;
@@ -2713,13 +2715,13 @@ const fetchStnbFromTable = unstable_cache(
       ] satisfies StnbCompactRow;
     });
   },
-  ["stnb-table-v1"],
+  ["stnb-table-v2"],
   { revalidate: 60, tags: ["stnb-collection"] }
 );
 
 // 原实时聚合（回退源，逻辑保持 v3 形态不动；表回填后此路径仅首次部署窗口/对账时走）
 const fetchStnbCompact = unstable_cache(
-  async (): Promise<StnbCompactRow[]> => {
+  async (nf: boolean = false): Promise<StnbCompactRow[]> => {
     const rows = await prisma.$queryRaw<
       {
         id: bigint;
@@ -2750,6 +2752,7 @@ const fetchStnbCompact = unstable_cache(
           JOIN video v ON v.id = m.id
           JOIN video_info vi ON vi.id = m.id
         WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
+          ${nf ? Prisma.sql`AND vi.noflag = 1` : Prisma.empty}
           AND vi.board_3bv >= CASE v.level
             WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg}
             WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int}
@@ -2778,16 +2781,16 @@ const fetchStnbCompact = unstable_cache(
       ] satisfies StnbCompactRow;
     });
   },
-  ["stnb-collection-v3"],
+  ["stnb-collection-v4"],
   { revalidate: 3600, tags: ["stnb-collection"] }
 );
 
 /** STNB 榜全量数据入口：落盘表（60s 缓存）优先，空表回退实时聚合（1h 缓存）。
  *  出缓存后 inflate 成对象形态；调用方（getStnbRanking / getStnbBoardIndex /
  *  getStnbRankOfUser）零改动。 */
-async function fetchStnbCollection(): Promise<StnbRankingEntry[]> {
-  const fromTable = await fetchStnbFromTable().catch(() => null);
-  const compact = fromTable ?? (await fetchStnbCompact());
+async function fetchStnbCollection(nf = false): Promise<StnbRankingEntry[]> {
+  const fromTable = await fetchStnbFromTable(nf).catch(() => null);
+  const compact = fromTable ?? (await fetchStnbCompact(nf));
   return compact.map(inflateStnbRow);
 }
 
@@ -2815,8 +2818,8 @@ function stnbDenoms(all: StnbRankingEntry[]): { den: Record<VideoLevel, number>;
 }
 
 /** STNB 榜一页（by 复用 BvRankingBy：total/beg/int/exp 同构）。 */
-export async function getStnbRanking(by: BvRankingBy, page: number, take?: number): Promise<StnbRankingResult> {
-  const all = await fetchStnbCollection();
+export async function getStnbRanking(by: BvRankingBy, page: number, take?: number, nf = false): Promise<StnbRankingResult> {
+  const all = await fetchStnbCollection(nf);
   const sorted = sortStnb(stnbPopulation(all, by), by);
   const { den, totalDen } = stnbDenoms(all);
   const size = take ?? RANKING_PAGESIZE;
@@ -2827,11 +2830,11 @@ export async function getStnbRanking(by: BvRankingBy, page: number, take?: numbe
 }
 
 /** STNB 榜「用户 → 名次」索引（搜索下拉增强用）：一次内存排序构建 Map，零 DB 重活。 */
-export async function getStnbBoardIndex(by: BvRankingBy): Promise<{
+export async function getStnbBoardIndex(by: BvRankingBy, nf = false): Promise<{
   index: Map<number, number>;
   total: number;
 }> {
-  const all = await fetchStnbCollection();
+  const all = await fetchStnbCollection(nf);
   const sorted = sortStnb(stnbPopulation(all, by), by);
   const index = new Map<number, number>();
   sorted.forEach((e, i) => index.set(e.id, i + 1));
@@ -2844,9 +2847,10 @@ export async function getStnbBoardIndex(by: BvRankingBy): Promise<{
  */
 export async function getStnbRankOfUser(
   id: number,
-  by: BvRankingBy
+  by: BvRankingBy,
+  nf = false
 ): Promise<{ rank: number; page: number } | null> {
-  const { index } = await getStnbBoardIndex(by);
+  const { index } = await getStnbBoardIndex(by, nf);
   const rank = index.get(id);
   if (!rank) return null;
   return { rank, page: Math.floor((rank - 1) / RANKING_PAGESIZE) + 1 };

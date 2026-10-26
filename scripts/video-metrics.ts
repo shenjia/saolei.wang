@@ -369,9 +369,10 @@ async function main() {
   // 跳过条件与 --no-rank 同款：--qg-only 只动 qg 列（不影响 stnb 榜），
   // --dist-only/--rank-only 不动 stnb 值，均无需重建。
   if (!has("qg-only") && !has("dist-only") && !has("rank-only")) {
-    const { rebuildUserStnbBest } = await import("../src/lib/userstnb");
+    const { rebuildUserStnbBest, rebuildUserStnbBestNf } = await import("../src/lib/userstnb");
     const { rows } = await rebuildUserStnbBest();
-    console.log(`STNB 榜落盘表重建：${rows} 行`);
+    const { rows: nfRows } = await rebuildUserStnbBestNf();
+    console.log(`STNB 榜落盘表重建：混合 ${rows} 行，NF ${nfRows} 行`);
   }
 }
 

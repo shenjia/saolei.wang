@@ -6,6 +6,7 @@
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
+import { redirect } from "next/navigation";
 import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser, getStnbRanking, getStnbRankOfUser, getRankOfUsers } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
@@ -91,7 +92,7 @@ const STNB_RULES = [
 ];
 
 // STNB 榜规则条目（进度条分母动态注入；2026-10-20 张老师定：渲染与 BV 榜一致）
-function stnbRules(den: Record<VideoLevel, number>, totalDen: number) {
+function stnbRules(den: Record<VideoLevel, number>, totalDen: number, nf = false) {
   return [
     STNB_RULES[0],
     STNB_RULES[1],
@@ -101,15 +102,18 @@ function stnbRules(den: Record<VideoLevel, number>, totalDen: number) {
       ）；纪录刷新时分母随之更新。点击数值可查看对应录像。
     </>,
     STNB_RULES[2],
-    STNB_RULES[3],
+    <>
+      <b>数据来源</b>：与录像分析雷达同一套指标体系（video_metrics），{nf ? "仅统计 NF 录像" : "NF 录像同样计入"}；
+      新过审录像破纪录即时计入榜单。
+    </>,
   ];
 }
 
 // BV 榜规则条目（分母随统计区间动态变化，故为函数；口径见 queries.fetchBvCollection）
-function bvRules(den: Record<VideoLevel, number>, totalDen: number) {
+function bvRules(den: Record<VideoLevel, number>, totalDen: number, nf = false) {
   return [
     <>
-      <b>统计口径</b>：统计每位玩家<i>已通过审核</i>的录像中出现过的不同 3BV
+      <b>统计口径</b>：统计每位玩家<i>已通过审核</i>的{nf ? " NF " : ""}录像中出现过的不同 3BV
       数量——同一个 3BV 值只要有一盘过审录像即算「已收集」，按初级 / 中级 / 高级分别统计。
       统计区间按现行排行规则收敛：初级 3BV ≥ <i>2</i>、中级 ≥ <i>30</i>、高级 ≥
       <i>100</i>，低于下限的录像不计入收集。
@@ -138,25 +142,24 @@ export async function generateMetadata({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
+  const nf = sp.view === "nf" || sp.nf === "1";
   const view =
-    sp.view === "nf" || sp.nf === "1"
-      ? "nf"
-      : sp.view === "world"
-        ? "world"
-        : sp.view === "bv"
-          ? "bv"
-          : sp.view === "stnb"
-            ? "stnb"
-            : "all";
+    sp.view === "world"
+      ? "world"
+      : sp.view === "bv"
+        ? "bv"
+        : sp.view === "stnb"
+          ? "stnb"
+          : "all";
   const name =
     view === "world"
       ? "世界排行"
-      : view === "nf"
-        ? "NF排行"
-        : view === "bv"
-          ? "BV排行"
-          : view === "stnb"
-            ? "STNB排行"
+      : view === "bv"
+        ? `${nf ? "NF " : ""}BV排行`
+        : view === "stnb"
+          ? `${nf ? "NF " : ""}STNB排行`
+          : nf
+            ? "NF排行"
             : "雷界排行";
   return { title: name };
 }
@@ -167,20 +170,28 @@ export default async function RankingPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
+  // 旧独立 NF 榜入口统一归一到成绩榜的正交 nf 开关，保留排序/页码/定位参数。
+  if (sp.view === "nf") {
+    const qs = new URLSearchParams();
+    for (const [key, value] of Object.entries(sp)) {
+      if (key !== "view" && value !== undefined) qs.set(key, value);
+    }
+    qs.set("nf", "1");
+    redirect(`/ranking?${qs.toString()}`);
+  }
   // 新参数 view/by；兼容旧参数（level/order/nf → by/view）
   let view =
-    sp.view === "nf"
-      ? "nf"
-      : sp.view === "world"
-        ? "world"
-        : sp.view === "bv"
-          ? "bv"
-          : sp.view === "stnb"
-            ? "stnb"
-            : "all";
+    sp.view === "world"
+      ? "world"
+      : sp.view === "bv"
+        ? "bv"
+        : sp.view === "stnb"
+          ? "stnb"
+          : "all";
+  const nf = sp.view === "nf" || sp.nf === "1";
   let by = sp.by;
   if (!sp.view && !sp.by && (sp.level || sp.order || sp.nf)) {
-    view = sp.nf === "1" ? "nf" : "all";
+    view = "all";
     by = `${sp.level ?? "sum"}_${sp.order ?? "time"}`;
   }
 
@@ -209,7 +220,7 @@ export default async function RankingPage({
       // video⋈video_info 全量聚合（queries.fetchBvCollection，1 小时缓存）。冷缓存重建时
       // 若 DB 抖动（P1017 / P2024 连接池打满，生产池仅 5 条），异常冒到页面就是整页 500。
       // 这里兜住改为降级文案（与世界榜 world_fail 同语言）。
-      getBvRanking(bvBy, bvPage).catch((e: unknown) => {
+      getBvRanking(bvBy, bvPage, undefined, nf).catch((e: unknown) => {
         console.error("[ranking] BV 榜数据获取失败，降级显示", e);
         return null;
       }),
@@ -221,8 +232,8 @@ export default async function RankingPage({
         <div id="page" className="main ranking_old">
           <div className="box ranking_box">
             <div className="page_head">
-              <h1 className="page_title">BV排行</h1>
-              <RankingNav current="bv" by={bvBy} />
+              <h1 className="page_title">{nf ? "NF BV排行" : "BV排行"}</h1>
+              <RankingNav current="bv" by={bvBy} nf={nf} />
             </div>
             <p className="ranking_fail">BV 排行数据暂时不可用，请稍后再试。</p>
           </div>
@@ -258,7 +269,7 @@ export default async function RankingPage({
           where: { id: BigInt(session.uid) },
           select: { id: true, chineseName: true, englishName: true, sex: true },
         }),
-        getBvRankOfUser(session.uid, bvBy),
+        getBvRankOfUser(session.uid, bvBy, nf),
       ]);
       if (u) {
         me = {
@@ -275,15 +286,16 @@ export default async function RankingPage({
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           <div className="page_head">
-            <h1 className="page_title">BV排行</h1>
-            <RankingNav current="bv" by={bvBy} me={me} />
+            <h1 className="page_title">{nf ? "NF BV排行" : "BV排行"}</h1>
+            <RankingNav current="bv" by={bvBy} nf={nf} me={me} />
           </div>
           {/* key 含 by/page/hl：软导航（排序切换、whereami 302 回跳）时强制重挂载，
               否则 useState(initial) 保留旧数据、表格显示错页 */}
           <BvRankingFeed
-            key={`bv-${bvBy}-${bvPage}-${hl ?? 0}`}
+            key={`bv-${nf ? "nf" : "all"}-${bvBy}-${bvPage}-${hl ?? 0}`}
             initial={titled}
             by={bvBy}
+            nf={nf}
             total={total}
             pageSize={pageSize}
             den={den}
@@ -296,7 +308,7 @@ export default async function RankingPage({
             footer：登录未加入 BV 排行时板块内底部「如何加入排行？」（2026-10-15 移入规则板块） */}
         <RankingRules
           title="BV 排行规则"
-          items={bvRules(den, totalDen)}
+          items={bvRules(den, totalDen, nf)}
           footer={session?.uid && me?.bvRank === undefined ? <JoinRankingHelp /> : undefined}
         />
       </div>
@@ -311,7 +323,7 @@ export default async function RankingPage({
     const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
     const [stnbData, session] = await Promise.all([
       // 降级兜底（同 BV 榜）：全量聚合冷缓存重建遇 DB 抖动时降级文案，不整页 500
-      getStnbRanking(stnbBy, stnbPage).catch((e: unknown) => {
+      getStnbRanking(stnbBy, stnbPage, undefined, nf).catch((e: unknown) => {
         console.error("[ranking] STNB 榜数据获取失败，降级显示", e);
         return null;
       }),
@@ -323,8 +335,8 @@ export default async function RankingPage({
         <div id="page" className="main ranking_old">
           <div className="box ranking_box">
             <div className="page_head">
-              <h1 className="page_title">STNB排行</h1>
-              <RankingNav current="stnb" by={stnbBy} />
+              <h1 className="page_title">{nf ? "NF STNB排行" : "STNB排行"}</h1>
+              <RankingNav current="stnb" by={stnbBy} nf={nf} />
             </div>
             <p className="ranking_fail">STNB 排行数据暂时不可用，请稍后再试。</p>
           </div>
@@ -360,7 +372,7 @@ export default async function RankingPage({
           where: { id: BigInt(session.uid) },
           select: { id: true, chineseName: true, englishName: true, sex: true },
         }),
-        getStnbRankOfUser(session.uid, stnbBy),
+        getStnbRankOfUser(session.uid, stnbBy, nf),
       ]);
       if (u) {
         me = {
@@ -377,14 +389,15 @@ export default async function RankingPage({
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           <div className="page_head">
-            <h1 className="page_title">STNB排行</h1>
-            <RankingNav current="stnb" by={stnbBy} me={me} />
+            <h1 className="page_title">{nf ? "NF STNB排行" : "STNB排行"}</h1>
+            <RankingNav current="stnb" by={stnbBy} nf={nf} me={me} />
           </div>
           {/* key 含 by/page/hl：软导航时强制重挂载，否则 useState(initial) 保留旧数据 */}
           <StnbRankingFeed
-            key={`stnb-${stnbBy}-${stnbPage}-${hl ?? 0}`}
+            key={`stnb-${nf ? "nf" : "all"}-${stnbBy}-${stnbPage}-${hl ?? 0}`}
             initial={titled}
             by={stnbBy}
+            nf={nf}
             total={total}
             pageSize={pageSize}
             den={den}
@@ -394,14 +407,13 @@ export default async function RankingPage({
         </div>
         <RankingRules
           title="STNB 排行规则"
-          items={stnbRules(den, totalDen)}
+          items={stnbRules(den, totalDen, nf)}
           footer={session?.uid && me?.stnbRank === undefined ? <JoinRankingHelp /> : undefined}
         />
       </div>
     );
   }
 
-  const nf = view === "nf";
   const rankingBy = parseRankingBy(by);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
@@ -462,7 +474,7 @@ export default async function RankingPage({
     }))
   );
 
-  const viewParams = { view: nf ? ("nf" as const) : undefined };
+  const viewParams = { nf: nf ? "1" : undefined };
 
   // 搜索/whereami 定位落地行：SSR 即高亮（无 JS 也可见），客户端接管后持续
   const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
@@ -471,8 +483,8 @@ export default async function RankingPage({
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
-          <h1 className="page_title">{view === "nf" ? "NF排行" : "雷界排行"}</h1>
-          <RankingNav current={nf ? "nf" : "all"} by={rankingBy} me={me} />
+          <h1 className="page_title">{nf ? "NF排行" : "雷界排行"}</h1>
+          <RankingNav current="all" by={rankingBy} me={me} nf={nf} />
         </div>
         {/* key 含 page/view/by/hl：软导航（whereami 302 回跳）时强制重挂载，
             否则 Feed 的 useState(initial) 保留旧页数据、表格显示错页 */}

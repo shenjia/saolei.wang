@@ -59,6 +59,7 @@ export function BvRankingFeed({
   den,
   totalDen,
   initialHl,
+  nf = false,
 }: {
   initial: BvTitledRow[];
   by: BvRankingBy;
@@ -68,8 +69,17 @@ export function BvRankingFeed({
   totalDen: number;
   /** 定位落地行（whereami 302 携带 hl=<uid>，SSR 即高亮，无 JS 也可见） */
   initialHl?: number;
+  /** 仅统计 NF 录像 */
+  nf?: boolean;
 }) {
   const router = useRouter();
+  const nfQuery = nf ? "&nf=1" : "";
+  function rankingHref(sort: BvRankingBy) {
+    const qs = new URLSearchParams({ view: "bv" });
+    if (sort !== "total") qs.set("by", sort);
+    if (nf) qs.set("nf", "1");
+    return `/ranking?${qs}`;
+  }
   const [rows, setRows] = useState(initial);
   // 下页 = 已加载末行的下一页（`?page=N` 直接落地时首行不是第 1 位，硬编码 2 会拉错页）
   const nextPage = useRef(Math.floor((initial.at(-1)?.rank ?? 0) / pageSize) + 1);
@@ -112,7 +122,7 @@ export function BvRankingFeed({
     try {
       const size = nextBatchSize(batchStep, pageSize);
       const res = await fetch(
-        `/api/ranking/bv/more?by=${by}&page=${nextPage.current}&size=${size}`
+        `/api/ranking/bv/more?by=${by}&page=${nextPage.current}&size=${size}${nfQuery}`
       );
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { rows: BvTitledRow[] };
@@ -167,7 +177,7 @@ export function BvRankingFeed({
     const seq = ++reqSeq.current;
     setLoading(true);
     try {
-      const res = await fetch(`/api/ranking/bv/more?by=${by}&page=${p}`);
+      const res = await fetch(`/api/ranking/bv/more?by=${by}&page=${p}${nfQuery}`);
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { rows: BvTitledRow[] };
       if (seq !== reqSeq.current) return;
@@ -193,6 +203,7 @@ export function BvRankingFeed({
   function jumpToWhereami(uid: number) {
     const qs = new URLSearchParams({ id: String(uid), view: "bv" });
     if (by !== "total") qs.set("by", by);
+    if (nf) qs.set("nf", "1");
     router.push(`/ranking/whereami?${qs}`);
   }
 
@@ -201,19 +212,20 @@ export function BvRankingFeed({
     if (locating) return;
     setHlUid(uid);
     if (scrollToRow(uid)) {
-        return;
+      return;
     }
     setLocating(true);
     try {
       const qs = new URLSearchParams({ id: String(uid), view: "bv", format: "json" });
       if (by !== "total") qs.set("by", by);
+      if (nf) qs.set("nf", "1");
       const res = await fetch(`/ranking/whereami?${qs}`);
       if (!res.ok) throw new Error();
       const { page } = (await res.json()) as { page: number };
       if (page <= 0) {
         // 全局居中气泡（与成绩榜「暂无成绩」同款交互），不跳转
         toast("该玩家暂无已通过审核的录像，未加入 BV 排行");
-            setHlUid(undefined);
+        setHlUid(undefined);
         return;
       }
       jumpToWhereami(uid);
@@ -233,7 +245,7 @@ export function BvRankingFeed({
     window.addEventListener("ranking:locate", onLocate);
     return () => window.removeEventListener("ranking:locate", onLocate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, locating, by]);
+  }, [rows, locating, by, nf]);
 
   // 落地补一次滚动：whereami 302 带 hl + #id_ 锚点，硬导航靠锚点、软导航下补滚动更稳
   useEffect(() => {
@@ -252,7 +264,7 @@ export function BvRankingFeed({
           {startRank > 1 && (
             <Link
               className="back"
-              href={by === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${by}`}
+              href={rankingHref(by)}
               title="返回 BV 排行第一页"
             >
               回到榜首
@@ -273,7 +285,7 @@ export function BvRankingFeed({
               {SORT_COLS.map((c) => (
                 <th key={c}>
                   <Link
-                    href={c === "total" ? "/ranking?view=bv" : `/ranking?view=bv&by=${c}`}
+                    href={rankingHref(c)}
                     className={c === by ? "current" : ""}
                     title={`按${c === "total" ? "总计" : LEVEL_NAMES[c]}收集进度排列`}
                   >

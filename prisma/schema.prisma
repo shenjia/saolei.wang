@@ -403,6 +403,22 @@ model UserStnbBest {
   @@map("user_stnb_best")
 }
 
+// NF STNB 榜落盘：与 user_stnb_best 同构，仅统计 noflag=1 的已过审录像。
+model UserStnbBestNf {
+  user      BigInt @db.BigInt
+  level     String @db.Char(3)
+  stnb      Float  @db.Float
+  bestVideo BigInt @map("best_video") @db.BigInt
+  bestTime  Int    @map("best_time") @db.Int
+  bestNf    Boolean @map("best_nf")
+  bestCt    BigInt @map("best_ct") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@id([user, level])
+  @@index([level, stnb])
+  @@map("user_stnb_best_nf")
+}
+
 // 各级别 3BV 收集区间（2026-10-13）：站内已通过（status=20）录像的 board_3bv 实际上下限，
 // 个人主页侧栏「3BV 收集」方格区间用。审核通过新录像突破区间时扩展
 // （lib/review.ts reviewVideo，INSERT ... ON DUPLICATE KEY UPDATE），只扩不缩；

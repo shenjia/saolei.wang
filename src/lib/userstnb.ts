@@ -1,4 +1,4 @@
-// STNB 榜落盘表 user_stnb_best 的读写模块（2026-10-20 张老师拍板落盘）
+// STNB 榜落盘表 user_stnb_best / user_stnb_best_nf 的读写模块（2026-10-20 张老师拍板落盘）
 //
 // 为什么落盘：实时聚合（video_metrics⋈video⋈video_info 30 万行三表 GROUP BY，
 // 生产实测 4~6s）即使挂 1h 缓存，每小时缓存过期的首个访客仍要吃 6s；
@@ -20,7 +20,7 @@
 // 首次部署空表窗口期页面不空。
 
 import { prisma } from "./db";
-import { VIDEO_STATUS, MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "./config";
+import { VIDEO_STATUS, MIN_3BV_FOR_3BVS, VIDEO_LEVELS } from "./config";
 
 /** Prisma 事务类型（与 review.ts 同款引用方式） */
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -48,6 +48,31 @@ export async function refreshUserStnb(user: number, level: string, db: Db = pris
       WHERE v.user = ${uid} AND v.level = ${level}
         AND v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
         AND vi.board_3bv >= ${lim}
+      ORDER BY m.stnb DESC, m.id ASC
+      LIMIT 1
+    ) t
+  `;
+}
+
+/** NF 单组重算：口径同 refreshUserStnb，仅统计 noflag=1 的录像。 */
+export async function refreshUserStnbNf(user: number, level: string, db: Db = prisma): Promise<void> {
+  const uid = BigInt(user);
+  const lim =
+    level === "beg" ? MIN_3BV_FOR_3BVS.beg : level === "int" ? MIN_3BV_FOR_3BVS.int : MIN_3BV_FOR_3BVS.exp;
+  await db.$executeRaw`
+    DELETE FROM user_stnb_best_nf WHERE user = ${uid} AND level = ${level}
+  `;
+  await db.$executeRaw`
+    INSERT INTO user_stnb_best_nf (user, level, stnb, best_video, best_time, best_nf, best_ct, update_time)
+    SELECT ${uid}, ${level}, t.stnb, t.vid, t.rt, t.nf, t.ct, UNIX_TIMESTAMP()
+    FROM (
+      SELECT m.stnb, m.id AS vid, vi.real_time AS rt, vi.noflag AS nf, v.create_time AS ct
+      FROM video_metrics m
+        JOIN video v ON v.id = m.id
+        JOIN video_info vi ON vi.id = m.id
+      WHERE v.user = ${uid} AND v.level = ${level}
+        AND v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
+        AND vi.board_3bv >= ${lim} AND vi.noflag = 1
       ORDER BY m.stnb DESC, m.id ASC
       LIMIT 1
     ) t
@@ -98,6 +123,50 @@ export async function rebuildUserStnbBest(db: Db = prisma): Promise<{ rows: numb
     `;
   }
   const cnt = await db.userStnbBest.count();
+  return { rows: cnt };
+}
+
+/** NF 全量重建（幂等）：口径同 rebuildUserStnbBest，仅统计 noflag=1 的录像。 */
+export async function rebuildUserStnbBestNf(db: Db = prisma): Promise<{ rows: number }> {
+  const lim = (lv: string) =>
+    lv === "beg" ? MIN_3BV_FOR_3BVS.beg : lv === "int" ? MIN_3BV_FOR_3BVS.int : MIN_3BV_FOR_3BVS.exp;
+  await db.$executeRaw`
+    DELETE FROM user_stnb_best_nf
+    WHERE (user, level) NOT IN (
+      SELECT v.user, v.level FROM video v
+        JOIN video_metrics m ON m.id = v.id
+        JOIN video_info vi ON vi.id = v.id
+      WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
+        AND vi.board_3bv >= CASE v.level
+          WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg}
+          WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int}
+          ELSE ${MIN_3BV_FOR_3BVS.exp} END
+        AND vi.noflag = 1
+      GROUP BY v.user, v.level
+    )
+  `;
+  for (const lv of VIDEO_LEVELS) {
+    await db.$executeRaw`
+      INSERT INTO user_stnb_best_nf (user, level, stnb, best_video, best_time, best_nf, best_ct, update_time)
+      SELECT t.user, t.level, t.stnb, t.vid, t.rt, t.nf, t.ct, UNIX_TIMESTAMP()
+      FROM (
+        SELECT v.user, v.level, m.stnb, m.id AS vid, vi.real_time AS rt, vi.noflag AS nf, v.create_time AS ct,
+               ROW_NUMBER() OVER (PARTITION BY v.user, v.level ORDER BY m.stnb DESC, m.id ASC) AS rn
+        FROM video_metrics m
+          JOIN video v ON v.id = m.id
+          JOIN video_info vi ON vi.id = m.id
+        WHERE v.level = ${lv}
+          AND v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
+          AND vi.board_3bv >= ${lim(lv)} AND vi.noflag = 1
+      ) t
+      JOIN user u ON u.id = t.user AND u.status = 0
+      WHERE t.rn = 1
+      ON DUPLICATE KEY UPDATE
+        stnb = VALUES(stnb), best_video = VALUES(best_video), best_time = VALUES(best_time),
+        best_nf = VALUES(best_nf), best_ct = VALUES(best_ct), update_time = VALUES(update_time)
+    `;
+  }
+  const cnt = await db.userStnbBestNf.count();
   return { rows: cnt };
 }
 

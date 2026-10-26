@@ -236,7 +236,7 @@ VIDEO_TABLES = ["video", "video_info", "video_stat",
 # 行移动的表：PK 即 user id 的（user_sig 等 PK 是自身自增 id，只改 user 列、不移动行）
 # ⚠️ user_donate 生产不存在（首次备份即因此截断），勿加
 USER_MOVE_TABLES = ["user", "user_info", "user_scores", "user_scores_nf", "user_stat", "user_auth"]
-USER_TABLES = USER_MOVE_TABLES + ["user_sig", "user_oauth", "user_stnb_best"]
+USER_TABLES = USER_MOVE_TABLES + ["user_sig", "user_oauth", "user_stnb_best", "user_stnb_best_nf"]
 
 
 def fetch_rows(tc, table, where_col, ids):
@@ -782,6 +782,7 @@ USER_REF_TABLES = [
     ("user_sig", "user"),
     ("user_oauth", "user_id"),
     ("user_stnb_best", "user"),
+    ("user_stnb_best_nf", "user"),
 ]
 
 

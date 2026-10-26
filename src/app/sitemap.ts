@@ -21,7 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     page("/", 1.0, "daily"),
     // 排行域
     page("/ranking", 0.9, "daily"),
-    page("/ranking?view=nf", 0.6),
+    page("/ranking?nf=1", 0.6),
     page("/ranking?view=bv", 0.6),
     page("/ranking?view=world", 0.7, "daily"),
     page("/area", 0.7, "weekly"),

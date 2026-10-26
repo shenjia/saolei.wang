@@ -22,7 +22,7 @@ import {
 import { videoScores } from "./queries";
 import { publishNews } from "./news";
 import { sendSystemMessage } from "./message";
-import { refreshUserStnb } from "./userstnb";
+import { refreshUserStnb, refreshUserStnbNf } from "./userstnb";
 import { applyRankScoreChange } from "./userrank";
 import { LEVEL_NAMES } from "./config";
 import { scoreTime } from "./format";
@@ -362,6 +362,7 @@ export async function reviewVideo(
       }
       // STNB 榜落盘表（2026-10-20）：屏蔽可能撤掉该用户该级最高 STNB → 单组重算
       await refreshUserStnb(rv.user, rv.level, tx);
+      if (rv.noflag) await refreshUserStnbNf(rv.user, rv.level, tx);
       // 屏蔽级联（2026-10-22 张老师定）：录像下线时，其评论与引用它的动态一并删除——
       // 详情页不再有挂空评论/「XX破纪录」动态指向屏蔽录像的问题（video.delete 已同款）
       await tx.comment.deleteMany({ where: { video: BigInt(videoId) } });
@@ -395,6 +396,7 @@ export async function reviewVideo(
       // （注意：审核时 video_metrics 行可能还没算出来——ensureVideoMetrics 在事务提交后跑，
       //  那里会再刷新一次；此处先刷是兜「已算过行」的重新审核路径）
       await refreshUserStnb(rv.user, rv.level, tx);
+      if (rv.noflag) await refreshUserStnbNf(rv.user, rv.level, tx);
 
       const sumTime = updated.sumTime ?? 0;
       // 个人纪录动态（时间取录像上传时间）——快照取覆盖前旧 exp_time（显示破之前军衔）

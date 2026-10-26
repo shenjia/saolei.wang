@@ -1,5 +1,5 @@
 // 排行榜「加载更多」增量接口（2026-09-24 张老师要求，替代分页）：
-// GET /api/ranking/more?by=<排序列>&view=nf&page=N[&size=M][&area=地区名] → { rows, deltas }
+// GET /api/ranking/more?by=<排序列>&nf=1&page=N[&size=M][&area=地区名] → { rows, deltas }
 // area（2026-10-15 地区内页换加载更多）：限定地区人口；带 area 时跳过日升降计算
 // （地区内页不显示升降列，与 /area SSR 口径一致）
 // 军衔与日升降在服务端预算好随 JSON 返回（对齐 /api/news/more 的模式），
@@ -16,7 +16,7 @@ import { dualTitles, getThunderKingId } from "@/lib/title-system";
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const by = parseRankingBy(p.get("by") ?? "");
-  const nf = p.get("view") === "nf";
+  const nf = p.get("view") === "nf" || p.get("nf") === "1";
   const page = Math.max(1, parseInt(p.get("page") ?? "1", 10) || 1);
   const sizeRaw = parseInt(p.get("size") ?? "", 10);
   const size = Math.min(Math.max(sizeRaw || 20, 20), 100);

@@ -22,9 +22,10 @@ export async function GET(req: Request) {
 
   // BV / STNB 榜：附带名次（下拉「第 3,168 位」用）；stnb=1 区分两榜
   const bvRaw = p.get("bvBy") ?? "";
+  const nf = p.get("nf") === "1";
   if ((BV_RANKING_BYS as readonly string[]).includes(bvRaw)) {
     if (p.get("stnb") === "1") {
-      const { index } = await getStnbBoardIndex(parseBvRankingBy(bvRaw));
+      const { index } = await getStnbBoardIndex(parseBvRankingBy(bvRaw), nf);
       return NextResponse.json({
         users: users.map((u) => {
           const hit = index.get(u.id);
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
         }),
       });
     }
-    const { index } = await getBvBoardIndex(parseBvRankingBy(bvRaw));
+    const { index } = await getBvBoardIndex(parseBvRankingBy(bvRaw), nf);
     return NextResponse.json({
       users: users.map((u) => {
         const hit = index.get(u.id);

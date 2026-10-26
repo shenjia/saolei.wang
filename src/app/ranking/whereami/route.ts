@@ -1,5 +1,5 @@
 // 「我在哪里」查找定位（移植 2008 版 Ranking/Goto：按姓名或 ID 定位到对应页锚点）
-// GET /ranking/whereami?id=<uid>&name=<姓名>&q=<姓名或ID>&view=all|nf&by=<排序列>
+// GET /ranking/whereami?id=<uid>&name=<姓名>&q=<姓名或ID>&view=all|bv|stnb&nf=1&by=<排序列>
 //   &format=json → { page }（底部「我在哪里」按钮轻量探测页码用）
 // → 302 到 /ranking?...&page=N#id_<uid>；兼容旧参数 level/order/nf/name/id
 // 2026-09-24：新增合并搜索框参数 q（纯数字按 ID、否则按姓名），原 name/id 仍可用
@@ -39,10 +39,12 @@ export async function GET(req: NextRequest) {
   if (p.get("view") === "bv" || p.get("view") === "stnb") {
     const stnb = p.get("view") === "stnb";
     const bvBy = parseBvRankingBy(p.get("by") ?? "");
+    const nf = p.get("nf") === "1";
     const bqs = new URLSearchParams({ view: stnb ? "stnb" : "bv" });
     if (bvBy !== "total") bqs.set("by", bvBy);
+    if (nf) bqs.set("nf", "1");
     if (id > 0) {
-      const hit = stnb ? await getStnbRankOfUser(id, bvBy) : await getBvRankOfUser(id, bvBy);
+      const hit = stnb ? await getStnbRankOfUser(id, bvBy, nf) : await getBvRankOfUser(id, bvBy, nf);
       if (hit) {
         if (p.get("format") === "json") return NextResponse.json({ page: hit.page });
         bqs.set("page", String(hit.page));
@@ -60,7 +62,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const nf = p.get("view") ? p.get("view") === "nf" : p.get("nf") === "1";
+  const nf = p.get("view") === "nf" || p.get("nf") === "1";
   let by = p.get("by") ?? "";
   if (!by && (p.get("level") || p.get("order"))) {
     const level = ((LEVELS as readonly string[]).includes(p.get("level") ?? "") ? p.get("level") : "sum") as Level;
@@ -98,7 +100,7 @@ export async function GET(req: NextRequest) {
   // 手动拼相对 Location：nginx 反代下 req.url 是内部地址（localhost:3100），
   // NextResponse.redirect(absolute) 会把内网 host 泄给浏览器
   const qs = new URLSearchParams();
-  if (nf) qs.set("view", "nf");
+  if (nf) qs.set("nf", "1");
   if (rankingBy !== "sum_time") qs.set("by", rankingBy);
 
   if (id > 0) {

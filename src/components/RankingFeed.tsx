@@ -99,6 +99,7 @@ export function RankingFeed(props: RankingFeedProps) {
   async function fetchPage(p: number, size?: number): Promise<MoreJson> {
     const qs = new URLSearchParams({ by, page: String(p) });
     if (params.view) qs.set("view", String(params.view));
+    if (params.nf) qs.set("nf", String(params.nf));
     // 地区内页（params.name=地区名）：增量接口同样限定地区人口（2026-10-15）
     if (params.name) qs.set("area", String(params.name));
     if (size && size > pageSize) qs.set("size", String(size));
@@ -225,6 +226,7 @@ export function RankingFeed(props: RankingFeedProps) {
       // 估算目标页：先问 whereami 服务端要页码（一次轻量 JSON），再决定拉取或跳转
       const qs = new URLSearchParams({ id: String(uid), by, format: "json" });
       if (params.view) qs.set("view", String(params.view));
+      if (params.nf) qs.set("nf", String(params.nf));
       const res = await fetch(`/ranking/whereami?${qs}`);
       if (!res.ok) throw new Error();
       const { page } = (await res.json()) as { page: number };
@@ -284,6 +286,7 @@ export function RankingFeed(props: RankingFeedProps) {
   function jumpToWhereami(uid: number) {
     const qs = new URLSearchParams({ id: String(uid), by });
     if (params.view) qs.set("view", String(params.view));
+    if (params.nf) qs.set("nf", String(params.nf));
     router.push(`/ranking/whereami?${qs}`);
   }
 
@@ -296,7 +299,7 @@ export function RankingFeed(props: RankingFeedProps) {
     window.addEventListener("ranking:locate", onLocate);
     return () => window.removeEventListener("ranking:locate", onLocate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, locating, by, params.view]);
+  }, [rows, locating, by, params.view, params.nf]);
 
   return (
     // rank_scroll：表格与页脚同宽容器（2026-10-15 张老师要求：翻页控件与最后一行

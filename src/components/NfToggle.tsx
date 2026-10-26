@@ -15,6 +15,7 @@ export function NfToggle({
   onToggle,
   tip = "只显示 NF 录像",
   label = "NF",
+  disabled = false,
 }: {
   /** 当前开关态（开启=只显示 NF 录像） */
   active: boolean;
@@ -23,12 +24,15 @@ export function NfToggle({
   tip?: string;
   /** 按钮文字（默认 "NF"；论坛精华开关用 "★" 与行内精华标记同符号） */
   label?: string;
+  /** 禁用态（排行中地区/世界/进步等不支持 NF 的榜单） */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`nf_toggle${active ? " active" : ""}`}
+      className={`nf_toggle${active ? " active" : ""}${disabled ? " disabled" : ""}`}
       aria-pressed={active}
+      disabled={disabled}
       onClick={() => onToggle(!active)}
     >
       {label}

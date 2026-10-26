@@ -20,12 +20,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "./Toast";
+import { NfToggle } from "./NfToggle";
 
-export type RankingView = "all" | "nf" | "bv" | "stnb" | "grow" | "area" | "world";
+export type RankingView = "all" | "bv" | "stnb" | "grow" | "area" | "world";
 
 const TABS: { key: RankingView; label: string; href: string }[] = [
   { key: "all", label: "雷界", href: "/ranking" },
-  { key: "nf", label: "NF", href: "/ranking?view=nf" },
   { key: "bv", label: "BV", href: "/ranking?view=bv" },
   { key: "stnb", label: "STNB", href: "/ranking?view=stnb" },
   { key: "grow", label: "进步", href: "/grow" },
@@ -51,6 +51,7 @@ export function RankingNav({
   by,
   me,
   area,
+  nf = false,
 }: {
   current: RankingView;
   by?: string;
@@ -58,6 +59,8 @@ export function RankingNav({
   me?: SuggestUser;
   /** 地区内页搜索：地区名（仅 /area?name=xx 传入；传入即启用地区模式搜索框） */
   area?: string;
+  /** NF 正交筛选：成绩/BV/STNB 可用，其余榜禁用 */
+  nf?: boolean;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -76,10 +79,27 @@ export function RankingNav({
   const bvBy = boardMode ? (by ?? "total") : "";
   // 地区内页模式：搜索框带 by+area 查地区内名次（2026-10-14）
   const areaMode = current === "area" && !!area;
+  const nfSupported = current === "all" || boardMode;
 
-  /** 定位/查询统一带的榜别参数（成绩榜 view=nf、BV 榜 view=bv、STNB 榜 view=stnb） */
+  /** 榜间切换只在支持 NF 的榜单间保留模式，其余榜强制回到混合/原口径 */
+  function tabHref(key: RankingView, fallback: string): string {
+    if (!nf || !(key === "all" || key === "bv" || key === "stnb")) return fallback;
+    return `${fallback}${fallback.includes("?") ? "&" : "?"}nf=1`;
+  }
+
+  /** 定位/查询统一带的榜别参数（BV/STNB；成绩榜 NF 独立使用 nf=1） */
   function viewParam(): string | undefined {
-    return current === "nf" ? "nf" : bvMode ? "bv" : stnbMode ? "stnb" : undefined;
+    return bvMode ? "bv" : stnbMode ? "stnb" : undefined;
+  }
+
+  function toggleNf(next: boolean) {
+    if (!nfSupported) return;
+    const qs = new URLSearchParams();
+    if (boardMode) qs.set("view", current);
+    if (by && by !== (boardMode ? "total" : "sum_time")) qs.set("by", by);
+    if (next) qs.set("nf", "1");
+    const query = qs.toString();
+    router.push(`/ranking${query ? `?${query}` : ""}`);
   }
 
   /** 该候选是否在榜（缓存数组榜看 bvRank/stnbRank、成绩榜看 rank；都由搜索接口回带） */
@@ -173,9 +193,10 @@ export function RankingNav({
         if (boardMode) {
           qs.set("bvBy", bvBy);
           if (stnbMode) qs.set("stnb", "1");
+          if (nf) qs.set("nf", "1");
         } else if (by) {
           qs.set("by", by);
-          if (current === "nf") qs.set("nf", "1");
+          if (nf && !areaMode) qs.set("nf", "1");
           if (areaMode) qs.set("area", area!);
         }
         const res = await fetch(`/api/ranking/search?${qs}`);
@@ -205,7 +226,7 @@ export function RankingNav({
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [q, bvBy, boardMode, bvMode, stnbMode, by, current, numeric, areaMode, area]);
+  }, [q, bvBy, boardMode, bvMode, stnbMode, by, current, numeric, areaMode, area, nf]);
 
   // 点击外部收起下拉
   useEffect(() => {
@@ -234,6 +255,7 @@ export function RankingNav({
     const qs = new URLSearchParams({ name, format: "json" });
     if (by) qs.set("by", by);
     if (view) qs.set("view", view);
+    if (nf && nfSupported) qs.set("nf", "1");
     if (areaMode) qs.set("area", area!);
     try {
       const res = await fetch(`/ranking/whereami?${qs}`);
@@ -258,6 +280,7 @@ export function RankingNav({
     const nav = new URLSearchParams({ name });
     if (by) nav.set("by", by);
     if (view) nav.set("view", view);
+    if (nf && nfSupported) nav.set("nf", "1");
     if (areaMode) nav.set("area", area!);
     // 姓名需服务端反查 id（whereami 302 会带 page+hl 回来，落地即高亮），走整页导航
     router.push(`/ranking/whereami?${nav}`);
@@ -290,20 +313,28 @@ export function RankingNav({
 
   return (
     <div className="ranking_nav">
-      <div className="ranking_tabs">
-        {TABS.map((t) =>
-          t.key === current ? (
-            <span key={t.key} className="current">
-              {t.label}
-            </span>
-          ) : (
-            <Link key={t.key} href={t.href}>
-              {t.label}
-            </Link>
-          )
-        )}
+      <div className="ranking_left">
+        <div className="ranking_tabs">
+          {TABS.map((t) =>
+            t.key === current ? (
+              <span key={t.key} className="current">
+                {t.label}
+              </span>
+            ) : (
+              <Link key={t.key} href={tabHref(t.key, t.href)}>
+                {t.label}
+              </Link>
+            )
+          )}
+        </div>
+        <NfToggle
+          active={nf && nfSupported}
+          disabled={!nfSupported}
+          tip={nfSupported ? (nf ? "只统计 NF 录像" : "开启后只统计 NF 录像") : "该榜不支持 NF 筛选"}
+          onToggle={toggleNf}
+        />
       </div>
-      {(current === "all" || current === "nf" || boardMode || areaMode) && (
+      {(current === "all" || boardMode || areaMode) && (
         <div className="goto_form" ref={boxRef}>
           <span className="goto_search">
             <svg className="goto_icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">

@@ -107,8 +107,9 @@ async function compute(videoId: number): Promise<void> {
   // 失败静默（后置链路放行原则）；缺这一步最多是上榜滞后到下次跑批/对账。
   if (m.stnb > 0 && video.level) {
     try {
-      const { refreshUserStnb } = await import("./userstnb");
+      const { refreshUserStnb, refreshUserStnbNf } = await import("./userstnb");
       await refreshUserStnb(N2(video.user), video.level);
+      if (info.noflag) await refreshUserStnbNf(N2(video.user), video.level);
     } catch {
       /* 榜落盘失败不影响主流程 */
     }

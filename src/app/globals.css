@@ -3667,6 +3667,14 @@ body #page.ranking_old .ranking_box {
   align-items: flex-end;
   margin: 16px 8px -8px;
 }
+.ranking_left {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.ranking_left > .nf_toggle {
+  margin-bottom: 1px;
+}
 .ranking_tabs {
   display: flex;
   flex-wrap: wrap;
@@ -6254,6 +6262,13 @@ body #video_list .score_3bvs a:hover em {
 .nf_toggle.active {
   color: #fdc61d;
   border-color: #fdc61d;
+}
+.nf_toggle:disabled,
+.nf_toggle:disabled:hover {
+  background: #414037;
+  border-color: #555449;
+  color: #636359;
+  cursor: not-allowed;
 }
 /* hover 气泡：练习页 .gicon .tip 同款（正上方居中、暗底描边、小三角下指）；
    窄屏（≤880）贴按钮右缘向左展开防裁切（练习页同款兜底） */
