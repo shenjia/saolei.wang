@@ -35,7 +35,7 @@ export async function DailyStar() {
       <h2>
         每日一星
         {/* 问号圆圈图标（十轮 04:17）：hover 显示评选规则气泡（data-tip 复用全站模式） */}
-        <span className="star_help" data-tip="每日凌晨，在30天内有打破过记录且排名处上升状态者，以及高级SUB50玩家中随机选择。30日内当选过的不参选，上传本人真实照片可增加选中概率。">
+        <span className="star_help" data-tip="每日凌晨，在30天内有打破过记录且排名处上升状态，或30天内登录过且高级SUB50的玩家中随机选择。30日内当选过的不参选，上传本人真实照片，可显著提升被选中的概率。">
           <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
             <circle cx="10" cy="10" r="8.4" />
             <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />

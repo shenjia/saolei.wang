@@ -65,16 +65,18 @@ export async function getClicks(userId: number): Promise<{ total: number; today:
 // 旧版（2008~2026-10）：神界全员 ∪ 近 30 天破纪录者，当月不复选。
 // 新版（人神界体系已撤销）：候选池 =
 //   ① 少将级（含）以上军衔——高级时间 exp_time ≤ SUB50 阈值（TITLE_THRESHOLDS 少将档），
-//      现役（user.status=0）。总司令（雷界第一人）必然 exp_time ≤ 50s，天然覆盖。
+//      现役（user.status=0），且近 30 天登录过（last_login_time，2026-10-26 张老师增列：
+//      沉睡老将不参选，实测①路 221 → 70、总池 262 → 113）。总司令（雷界第一人）
+//      必然 exp_time ≤ 50s，天然覆盖。
 //   ② 非少将级玩家收紧条件（张老师 10-25 定）：30 日内打破过个人纪录 且 排名处于上升状态——
 //      近 30 天有破纪录动态（news.type=20 PERSON_RECORD，与旧版口径同源）
 //      且 rank_snapshot.delta > 0（30 天滚动窗口名次差，正=上升；每日 00:05 cron
 //      预计算，与进步榜 /grow 同源）。两条件取交集：只破纪录但名次没涨 / 名次涨了
 //      但靠别人掉出榜都不够，要「自己进步 + 名次兑现」。
-//   ③ 合法头像（2026-10-25 张老师定追加）：user.avatar 为新版上传（/uploads/avatar/，
-//      AI 审核通过才写入）/ OAuth 外链（http）/ 旧站照片标记（'1'，实体
-//      /images/player/{id}.jpg）——'0'/'' 是 no.jpg 默认图，不算。
-//   两路并集 ∩ 头像条件，去掉近 30 日内已当选者，按日期哈希确定性随机抽一位。
+//   ③ 头像不再硬性要求（十七轮 2026-10-25 改定）：有合法头像（新版上传 /uploads/avatar/、
+//      OAuth 外链 http / 旧站照片标记 '1'）者在抽签袋中权重 ×2——鼓励上传真人照片，
+//      但不阻断无头像者参选。
+//   两路并集，去掉近 30 日内已当选者，按日期哈希确定性随机抽一位（有头像者概率翻倍）。
 //   旧版「当月不复选」收紧为「30 日不复选」——与候选资格的 30 天窗口同拍，
 //   也避免月末/月初边界出现同月二次当选的观感问题。
 
@@ -108,8 +110,8 @@ async function recentStarUserIds(today: string): Promise<Set<number>> {
 
 /**
  * 取今日之星，没有则评选（并发安全：确定性哈希 + star.date 唯一键兜底）：
- * 候选 = 少将及以上现役 ∪（近 30 日破纪录 且 名次上升者），排除近 30 日已当选者；
- * 同一天多次请求结果一致（日期哈希），无候选返回 null。
+ * 候选 =（少将及以上现役 且 近 30 天登录过）∪（近 30 日破纪录 且 名次上升者），
+ * 排除近 30 日已当选者；同一天多次请求结果一致（日期哈希），无候选返回 null。
  */
 export async function getTodayStar(): Promise<StarInfo | null> {
   const today = todayStr();
@@ -125,7 +127,9 @@ export async function getTodayStar(): Promise<StarInfo | null> {
   }
 
   // 候选池两路并集（十七轮 2026-10-25 张老师定：取消头像硬性限制，改为权重加成）：
-  //   ① 少将及以上现役；② 30 天内破纪录 ∧ 排名上升（delta>0）现役。
+  //   ① 少将及以上现役 且 30 天内登录过（2026-10-26 张老师增列 last_login_time 条件——
+  //      沉睡老将不参选，只约束①路；②路破纪录本身即活跃证明，不另设登录门槛）；
+  //   ② 30 天内破纪录 ∧ 排名上升（delta>0）现役。
   // 封禁账号不入池（两路均 JOIN user.status=0；②路 rank_snapshot 残留 delta 的
   // 被封者一并滤掉，与 /grow 进步榜口径一致）。delta 本身已在快照刷新时做封禁修正
   // （ranksnap.ts：扣掉「别人被封白捡的名次」），delta>0 即真实名次上升。
@@ -134,7 +138,7 @@ export async function getTodayStar(): Promise<StarInfo | null> {
   const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; hasAvatar: number }>>(
     `SELECT s.id, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
        FROM user_scores s
-       JOIN \`user\` u ON u.id = s.id AND u.status = 0
+       JOIN \`user\` u ON u.id = s.id AND u.status = 0 AND u.last_login_time >= ?
        WHERE s.exp_time > 0 AND s.exp_time <= ?
      UNION
      SELECT DISTINCT n.user, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END
@@ -142,6 +146,7 @@ export async function getTodayStar(): Promise<StarInfo | null> {
        JOIN rank_snapshot r ON r.user = n.user AND r.delta > 0
        JOIN \`user\` u ON u.id = n.user AND u.status = 0
        WHERE n.type = 20 AND n.user > 0 AND n.create_time >= ?`,
+    Math.floor(Date.now() / 1000) - 30 * 86400,
     MAJOR_GENERAL_MS,
     Math.floor(Date.now() / 1000) - 30 * 86400
   );
