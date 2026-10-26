@@ -196,11 +196,12 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
               </svg>
               下载
             </a>
-            {/* 2026-10-23 张老师需求：本人查看自己的屏蔽盘时，下载按钮旁提供红色
-                「删除」按钮——确认后彻底删除该录像（连带评论/引用动态），跳回个人主页 */}
-            {video.status === VIDEO_STATUS.BANNED && session && session.uid === video.author?.id && (
-              <VideoSelfDeleteButton videoId={video.id} userId={session.uid} />
-            )}
+            {/* 本人可在下载按钮旁删除自己的待审/屏蔽录像；已通过录像不开放自助删除。
+                确认后连带清理评论/引用动态，跳回个人主页。 */}
+            {(video.status === VIDEO_STATUS.NORMAL || video.status === VIDEO_STATUS.BANNED) &&
+              session && session.uid === video.author?.id && (
+                <VideoSelfDeleteButton videoId={video.id} userId={session.uid} />
+              )}
             <p className="counters">
               <span className="clicks">
                 点击<em>{video.clicks}</em>

@@ -1,7 +1,7 @@
-// 屏蔽录像本人自助删除按钮（2026-10-23 张老师需求）
-// 仅在「本人查看自己被屏蔽的录像详情页」渲染（页面侧判定），下载按钮旁红色小按钮。
-// 点击 → confirm 二次确认 → POST /api/video/self-delete → 成功跳回个人主页录像版块。
-// 服务端权限铁闸：仅录像主人本人 + status=0（屏蔽态）可删（见 api/video/self-delete）。
+// 待审/屏蔽录像本人自助删除按钮。
+// 仅在「本人查看自己待审或已屏蔽的录像详情页」渲染（页面侧判定），下载按钮旁红色小按钮。
+// 点击 → 站内浮窗二次确认 → POST /api/video/self-delete → 成功跳回个人主页录像版块。
+// 服务端权限铁闸：仅录像主人本人 + status=10/0 可删（见 api/video/self-delete）。
 
 "use client";
 
@@ -42,7 +42,7 @@ export function VideoSelfDeleteButton({ videoId, userId }: { videoId: number; us
         setBusy(false);
         return;
       }
-      // 删除成功：跳回个人主页录像版块（屏蔽盘已随之消失）
+      // 删除成功：跳回个人主页录像版块（待审/屏蔽盘已随之消失）
       router.push(`/user/${userId}#user_videos`);
     } catch {
       window.alert("网络错误，请重试");
