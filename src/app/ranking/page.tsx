@@ -142,7 +142,7 @@ export async function generateMetadata({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const nf = sp.view === "nf" || sp.nf === "1";
+  // NF 开关不参与 title（2026-10-26 张老师要求：开启 NF 不改标题）
   const view =
     sp.view === "world"
       ? "world"
@@ -155,12 +155,10 @@ export async function generateMetadata({
     view === "world"
       ? "世界排行"
       : view === "bv"
-        ? `${nf ? "NF " : ""}BV排行`
+        ? "BV排行"
         : view === "stnb"
-          ? `${nf ? "NF " : ""}STNB排行`
-          : nf
-            ? "NF排行"
-            : "雷界排行";
+          ? "STNB排行"
+          : "雷界排行";
   return { title: name };
 }
 
@@ -232,7 +230,7 @@ export default async function RankingPage({
         <div id="page" className="main ranking_old">
           <div className="box ranking_box">
             <div className="page_head">
-              <h1 className="page_title">{nf ? "NF BV排行" : "BV排行"}</h1>
+              <h1 className="page_title">BV排行</h1>
               <RankingNav current="bv" by={bvBy} nf={nf} />
             </div>
             <p className="ranking_fail">BV 排行数据暂时不可用，请稍后再试。</p>
@@ -286,7 +284,7 @@ export default async function RankingPage({
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           <div className="page_head">
-            <h1 className="page_title">{nf ? "NF BV排行" : "BV排行"}</h1>
+            <h1 className="page_title">BV排行</h1>
             <RankingNav current="bv" by={bvBy} nf={nf} me={me} />
           </div>
           {/* key 含 by/page/hl：软导航（排序切换、whereami 302 回跳）时强制重挂载，
@@ -335,7 +333,7 @@ export default async function RankingPage({
         <div id="page" className="main ranking_old">
           <div className="box ranking_box">
             <div className="page_head">
-              <h1 className="page_title">{nf ? "NF STNB排行" : "STNB排行"}</h1>
+              <h1 className="page_title">STNB排行</h1>
               <RankingNav current="stnb" by={stnbBy} nf={nf} />
             </div>
             <p className="ranking_fail">STNB 排行数据暂时不可用，请稍后再试。</p>
@@ -389,7 +387,7 @@ export default async function RankingPage({
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           <div className="page_head">
-            <h1 className="page_title">{nf ? "NF STNB排行" : "STNB排行"}</h1>
+            <h1 className="page_title">STNB排行</h1>
             <RankingNav current="stnb" by={stnbBy} nf={nf} me={me} />
           </div>
           {/* key 含 by/page/hl：软导航时强制重挂载，否则 useState(initial) 保留旧数据 */}
@@ -483,7 +481,7 @@ export default async function RankingPage({
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
-          <h1 className="page_title">{nf ? "NF排行" : "雷界排行"}</h1>
+          <h1 className="page_title">雷界排行</h1>
           <RankingNav current="all" by={rankingBy} me={me} nf={nf} />
         </div>
         {/* key 含 page/view/by/hl：软导航（whereami 302 回跳）时强制重挂载，
@@ -505,7 +503,8 @@ export default async function RankingPage({
           规则各自成板块，不再嵌在数据卡片内）。
           footer：登录未入榜时板块内底部「如何加入排行？」（2026-10-15 从翻页控件右侧移入） */}
       <RankingRules
-        title={nf ? "NF 排行规则" : "雷界排行规则"}
+        // 标题不随 NF 变（2026-10-26 张老师要求：开启 NF 不改标题）；内容仍按 NF 切换
+        title="雷界排行规则"
         items={nf ? NF_RULES : ALL_RULES}
         footer={myUid && !inRanking ? <JoinRankingHelp /> : undefined}
       />
