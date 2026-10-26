@@ -65,6 +65,10 @@ import {
   radarOverall,
   radarPointsFrom,
 } from "@/lib/videoscore";
+/* 自动截屏（2026-10-26）：结算画面出现后把游戏窗口（.gwrap）截成 PNG 复制到
+   剪贴板。选 html-to-image 而非 html2canvas：foreignObject 原生渲染对 CSS zoom
+   （练习页游戏倍率的核心机制）兼容性好，体积也更小 */
+import { toPng } from "html-to-image";
 
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
 export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
@@ -417,6 +421,11 @@ export function OnlinePlay({
        切换即时生效（含已定格的败局结算面板）、不重开当前局、不影响快照拍摄
        （中途重新打开可立即使用） */
     let reviveOn = true;
+    /* 「自动截屏」开关（2026-10-26 张老师定，默认开）：一局结束（结算画面出现）
+       自动把游戏窗口（.gwrap 银框）截成 PNG 复制到剪贴板，屏幕中心绿色气泡提示。
+       截图走 html-to-image（foreignObject 原生渲染，对 CSS zoom 兼容好）；
+       剪贴板写入失败（HTTP 环境/浏览器拦截）静默降级为提示失败 */
+    let autoShot = true;
     /* ---- 新手提示运行时状态（全部在本 effect 闭包内，不触 React）----
        anchor: -1 = 未激活；1 = 激活中（四版全图模式无锚点坐标语义）
        shown: 激活时定格的提示集合（mines/safe/low）；期间新开格由
@@ -470,6 +479,7 @@ export function OnlinePlay({
         const s = JSON.parse(raw) as {
           nf?: boolean; combo?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
           showStats?: boolean; autoChord?: boolean; tips?: boolean; rookie?: boolean; revive?: boolean;
+          autoShot?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -482,6 +492,7 @@ export function OnlinePlay({
         if (typeof s.tips === "boolean") tipsOn = s.tips;
         if (typeof s.rookie === "boolean") rookieOn = s.rookie;
         if (typeof s.revive === "boolean") reviveOn = s.revive;
+        if (typeof s.autoShot === "boolean") autoShot = s.autoShot;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -504,7 +515,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, rookie: rookieOn, revive: reviveOn, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, rookie: rookieOn, revive: reviveOn, autoShot, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -713,6 +724,9 @@ export function OnlinePlay({
     /* 败局埋点延迟句柄（原地复活 2026-10-19）：败局 beacon 晚 300ms 发送，
        复活即撤销（见 report/revive/reset 三处清理） */
     let pendingLoseBeacon: number | null = null;
+    /* 自动截屏延迟句柄（2026-10-26）：与败局埋点同窗口——败局延迟 300ms 截
+       （复活窗内复活则撤销，不截「这局还没完」的中间态）；胜局立即截 */
+    let pendingShot: number | null = null;
     /* 手势起点快照：新点击手势（mousedown / touchstart）入口调用。盘面/统计构件
        全量复制（8×8 初级 ~64 格、16×16 ~256、exp 480——一次 copy 可忽略）。
        两道闸门：
@@ -1626,6 +1640,36 @@ export function OnlinePlay({
       greport.classList.add("show");
       syncReportZoom();
     }
+    /* ---- 自动截屏（2026-10-26 张老师定）：结算画面出现后把游戏窗口截成 PNG
+       复制到剪贴板，屏幕中心绿色气泡提示「已截图复制到剪贴板」----
+       · 截图对象＝.gwrap 银框（计数条+棋盘+状态栏整窗），不含结算面板；
+       · FlopSprites 精灵图容器（<symbol> 定义）挂在 .op_root 顶部、gwrap 外——
+         html-to-image 克隆 gwrap 子树进 foreignObject 后 <use href="#…"> 引用
+         不可达、棋盘贴图全丢；截图前临时把精灵图容器搬进 gwrap（width=0
+         height=0 position:absolute 不占布局），截完原位放回；
+       · 败局与埋点同窗：延迟 300ms（复活窗内复活则撤销）；胜局立即截；
+       · 剪贴板 ClipboardItem 需安全上下文（https/localhost），失败静默降级为
+         红色气泡提示，不干扰游戏节奏 */
+    async function autoScreenshot() {
+      if (!autoShot) return;
+      try {
+        const host = container.querySelector<HTMLElement>(".gwrap");
+        const sprites = container.querySelector<HTMLElement>("svg[width='0']");
+        if (!host) return;
+        const parent = sprites ? sprites.parentElement : null;
+        if (sprites && parent !== host) host.appendChild(sprites); // 临时搬进截图子树
+        try {
+          const url = await toPng(host, { pixelRatio: 2 });
+          const blob = await (await fetch(url)).blob();
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          showToast("已截图复制到剪贴板");
+        } finally {
+          if (sprites && parent && parent !== host) parent.appendChild(sprites); // 原位放回
+        }
+      } catch {
+        showToast("截图失败或剪贴板被拒绝", true);
+      }
+    }
     function report(t: number, won: boolean) {
       /* 结算统计＝对当局事件流跑共享重放引擎（2026-10-16 重构）：面板/雷达/快照
          与「下载的 AVF 在录像页跑出的指标」同源，不再有两份计数实现 */
@@ -1662,6 +1706,14 @@ export function OnlinePlay({
       lastReportHtml = html;
       if (showStats) paintStatPanel(html);
       buildResultPanel(t, solvedBv, won, cnt);
+      /* 自动截屏（2026-10-26）：结算画面出现即截。败局同埋点口径延迟 300ms
+         （复活窗内复活则撤销）；胜局立即（无复活可推翻） */
+      if (autoShot && t > 0) {
+        if (pendingShot !== null) clearTimeout(pendingShot);
+        pendingShot = won
+          ? window.setTimeout(() => { pendingShot = null; void autoScreenshot(); }, 0)
+          : window.setTimeout(() => { pendingShot = null; void autoScreenshot(); }, 300);
+      }
     }
     /* ---- 右侧结算面板（五期）：雷达图 + 再来一局 / 重玩本局 / 查看回放 / 下载录像 ----
        imported=true＝拖拽导入局（2026-10-21）：快照带来源标记（回放播完即退出口径） */
@@ -2633,6 +2685,7 @@ export function OnlinePlay({
       startTs -= d.csec * 10;
       /* 败局埋点撤销 + 复活计数 */
       if (pendingLoseBeacon !== null) { clearTimeout(pendingLoseBeacon); pendingLoseBeacon = null; }
+      if (pendingShot !== null) { clearTimeout(pendingShot); pendingShot = null; } // 自动截屏同样撤销（这局还没完）
       revives++;
       /* 盘面与计数恢复：repaintAll 在 over=false 下按 state 重画（含旗/数字），
          死亡揭示的红雷/错旗贴图一并被覆盖掉；败局快照作废（这局还没完） */
@@ -2961,6 +3014,7 @@ export function OnlinePlay({
       rookieStop();
       rookieLastAct = performance.now();
       if (pendingLoseBeacon !== null) { clearTimeout(pendingLoseBeacon); pendingLoseBeacon = null; }
+      if (pendingShot !== null) { clearTimeout(pendingShot); pendingShot = null; } // 重开清掉上一局的待截任务
       /* 数据面板（八期）：任何时刻都不因开局而显示——只有游戏结束且开关开着才弹出
          （见 report）。statsReport 只读 state/统计量、不读 snapshot，
          故与下面 snapshot = null 的先后无依赖 */
@@ -3279,6 +3333,12 @@ export function OnlinePlay({
         renderResultPanel();
         if (keepClosed) hideResultModal();
       }
+    });
+    /* 「自动截屏」开关：只影响之后每局结束的自动截图，切换即时生效、不重开 */
+    const swShot = $("sw_shot") as HTMLInputElement;
+    on(swShot, "change", () => {
+      autoShot = swShot.checked;
+      saveSettings();
     });
     /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／速旗／连击／无猜四颗 ----
        激活显色（NF=绿 #a6e22e（2026-10-19 张老师定）/ 无猜=绿 / 速旗=默认黄 / 连击=默认黄）、
@@ -4829,6 +4889,7 @@ export function OnlinePlay({
     swTips.checked = tipsOn;
     swRookie.checked = rookieOn;
     swRevive.checked = reviveOn;
+    swShot.checked = autoShot;
     syncModeButtons(); // 模式快捷钮按存档初值点亮（连击/无猜/速旗）
     syncBvSlider();
 
@@ -5022,6 +5083,13 @@ export function OnlinePlay({
             <span className="gs_name">允许复活</span>
             <label className="gsw"><input type="checkbox" id="sw_revive" /><span className="track" /></label>
             <span className="tip">踩雷后允许复活继续</span>
+          </div>
+          {/* 「自动截屏」（2026-10-26 张老师定，默认开）：结算画面出现后自动把
+              游戏窗口截屏并复制到剪贴板，屏幕中心绿色气泡提示；hover 文案＝张老师原话 */}
+          <div className="gs_row">
+            <span className="gs_name">自动截屏</span>
+            <label className="gsw"><input type="checkbox" id="sw_shot" /><span className="track" /></label>
+            <span className="tip">扫完一局后，自动截屏并复制到剪贴板</span>
           </div>
           {/* 「自动双击」设置行已撤（2026-10-16 张老师定）：入口改挂 NF 右侧的
               速旗快捷钮（btn_sq），行为口径不变 */}
