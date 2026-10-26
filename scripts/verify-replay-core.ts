@@ -114,7 +114,7 @@ const direct = replayCounts(
 // 走 AVF 字节往返（下载录像 → 录像页口径）
 const avf = buildOnlineAvf({
   width: W, height: H, mines: M, board, questionMarks: false,
-  bbbv: 10, scoreCsec: sec100, events: evs, timestamp: "10.16.2026.12:00:00:0000",
+  bbbv: 10, scoreCsec: sec100, won: false, events: evs, timestamp: "16.10.2026.12:00:00:0000",
 });
 const lines = avfToRawvf(Buffer.from(avf));
 if (!lines) throw new Error("往返：AVF 解析失败");
