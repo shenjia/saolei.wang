@@ -13,7 +13,7 @@ import Link from "next/link";
 import type { TitleMemberRow } from "@/lib/queries";
 import { scoreTime, formatDate } from "@/lib/format";
 import { INVALID_3BVS_TIP } from "@/lib/config";
-import { TitleBadge } from "./Cells";
+import { RankingName, TitleBadge } from "./Cells";
 import { SystemText } from "./SystemText";
 import { noFocusJump } from "./useKeepScroll";
 import { TotalCount } from "./TotalCount";
@@ -147,7 +147,7 @@ export function TitleMemberList({
         <thead>
           <tr>
             <th>排名</th>
-            <th>姓名</th>
+            <th className="name">姓名</th>
             <th>
               <SystemText />
             </th>
@@ -173,10 +173,7 @@ export function TitleMemberList({
                 )}
               </td>
               <td className="name">
-                <Link href={`/user/${u.id}`} target="_blank" title="点击查看个人信息">
-                  {u.chineseName}
-                </Link>
-                <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
+                <RankingName id={u.id} name={u.chineseName} sex={u.sex} avatar={u.avatar} />
               </td>
               <td className="miltitle">
                 <TitleBadge title={memberTitle} classic={u.classic} link />

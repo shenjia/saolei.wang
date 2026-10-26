@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import type { StnbBestVideo, StnbRankingRow } from "@/lib/queries";
 import { LEVEL_NAMES, type BvRankingBy, type VideoLevel } from "@/lib/config";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
-import { TitleBadge } from "./Cells";
+import { RankingName, TitleBadge } from "./Cells";
 import { SystemText } from "./SystemText";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
@@ -317,7 +317,7 @@ export function StnbRankingFeed({
           <thead>
             <tr>
               <th>排名</th>
-              <th>姓名</th>
+              <th className="name">姓名</th>
               <th>
                 <SystemText />
               </th>
@@ -341,10 +341,7 @@ export function StnbRankingFeed({
                   第&nbsp;<em>{u.rank}</em>&nbsp;位
                 </td>
                 <td className="name">
-                  <Link href={`/user/${u.id}`} target="_blank" prefetch={false} title="点击查看个人信息">
-                    {u.chineseName}
-                  </Link>
-                  <span className={`gender ${u.sex ? "male" : "female"} small`}></span>
+                  <RankingName id={u.id} name={u.chineseName} sex={u.sex} avatar={u.avatar} />
                 </td>
                 <td className="miltitle">
                   <TitleBadge title={u.title} classic={u.classic} link />

@@ -4056,6 +4056,25 @@ body #page.ranking_old .ranking_box {
 .ranking_table td.name a:hover {
   color: #a6e22e;
 }
+/* 排行榜上传头像（2026-10-27）：姓名列与表头统一预留 20px 左槽。
+   头像与名字同字号、垂直居中，绝对定位不占文字流；有无头像时名字坐标不变。 */
+.ranking_table th.name,
+.ranking_table td.name {
+  padding-left: 20px;
+}
+.ranking_table td.name .ranking_name {
+  display: inline-block;
+  position: relative;
+}
+.ranking_table td.name .ranking_avatar {
+  position: absolute;
+  right: calc(100% + 3px);
+  top: 50%;
+  width: 1em;
+  height: 1em;
+  object-fit: cover;
+  transform: translateY(-50%);
+}
 .ranking_table td.oldtitle a {
   color: #939387;
 }
@@ -4089,9 +4108,12 @@ body #page.ranking_old .ranking_box {
 /* 列宽钉死表（rank_fixed，2026-10-26 张老师要求 NF 开关列宽零变化）：
    fixed 布局下列宽只由 colgroup 决定、与内容无关；名字列兜底——
    极端超长名省略号（链接原生 title 有全名），不再把列撑宽 */
+.ranking_table.rank_fixed td.name .ranking_name {
+  max-width: calc(100% - 20px); /* 给行内性别图标留位 */
+}
 .ranking_table.rank_fixed td.name a {
   display: inline-block;
-  max-width: calc(100% - 20px); /* 给行内性别图标留位 */
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;

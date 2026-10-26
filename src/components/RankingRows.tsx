@@ -9,7 +9,7 @@ import Link from "next/link";
 import type { RankingRow } from "@/lib/queries";
 import { scoreTime } from "@/lib/format";
 import { INVALID_3BVS_TIP, RANKING_BYS, type RankingBy } from "@/lib/config";
-import { TitleBadge } from "./Cells";
+import { RankingName, TitleBadge } from "./Cells";
 import { SystemText } from "./SystemText";
 import { buildUrl } from "./Pager";
 
@@ -116,10 +116,7 @@ export function RankingRowLine({
       </td>
       <td className="name">
         {/* 2026-10-23 张老师要求：排行表人名新标签页打开，不破坏榜单浏览位置 */}
-        <Link href={`/user/${row.id}`} target="_blank" prefetch={false} title="点击查看个人信息">
-          {row.chineseName}
-        </Link>
-        <span className={`gender ${row.sex ? "male" : "female"} small`}></span>
+        <RankingName id={row.id} name={row.chineseName} sex={row.sex} avatar={row.avatar} />
       </td>
       <td className="miltitle">
         <TitleBadge title={row.title} classic={row.classic} link />
@@ -171,7 +168,7 @@ export function RankingHead({
     <thead>
       <tr>
         <th>排名</th>
-        <th>姓名</th>
+        <th className="name">姓名</th>
         <th>
           <SystemText />
         </th>

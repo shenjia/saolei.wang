@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { INVALID_3BVS_TIP } from "@/lib/config";
+import { isUploadedAvatar } from "@/lib/avatar";
 import { score3bvs, scoreTime, timeOpposite, TIME_NEVER } from "@/lib/format";
 
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
@@ -33,6 +34,33 @@ export function AvatarCell({
         <span className={`avatar_link ${className}`}>{name}</span>
       )}
       <span className={`gender ${sex ? "male" : "female"} ${gender}`}></span>
+    </>
+  );
+}
+
+/** 排行榜姓名：上传头像绝对定位在左侧预留区，不参与名字与性别图标的居中排版。 */
+export function RankingName({
+  id,
+  name,
+  sex,
+  avatar = "",
+}: {
+  id: number;
+  name: string;
+  sex: number;
+  avatar?: string;
+}) {
+  return (
+    <>
+      <span className="ranking_name">
+        {isUploadedAvatar(avatar) && (
+          <img className="ranking_avatar" src={avatar} alt="" width={13} height={13} />
+        )}
+        <Link href={`/user/${id}`} target="_blank" prefetch={false} title="点击查看个人信息">
+          {name}
+        </Link>
+      </span>
+      <span className={`gender ${sex ? "male" : "female"} small`}></span>
     </>
   );
 }

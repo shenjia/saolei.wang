@@ -46,6 +46,7 @@ import { publishNews } from "./news";
 import { rebuildUserRanksOnce } from "./userrank";
 import { decodeLegacyEntities } from "./format";
 import { liftExpiredBans } from "./ban";
+import { AVATAR_UPLOAD_PREFIX, isUploadedAvatar } from "./avatar";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
@@ -57,6 +58,8 @@ export interface UserBrief {
   chineseName: string;
   englishName: string;
   sex: number;
+  /** 新版上传头像路径；无上传头像时缺省或空串（排行榜小头像用） */
+  avatar?: string;
 }
 
 export interface NewsItem {
@@ -116,15 +119,32 @@ function toBrief(u: {
   chineseName: string;
   englishName: string;
   sex: number;
+  avatar: string;
 } | null): UserBrief | null {
   if (!u) return null;
-  return { id: N(u.id), chineseName: u.chineseName, englishName: u.englishName, sex: u.sex };
+  return {
+    id: N(u.id),
+    chineseName: u.chineseName,
+    englishName: u.englishName,
+    sex: u.sex,
+    avatar: isUploadedAvatar(u.avatar) ? u.avatar : "",
+  };
 }
 
 export async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>> {
   if (!ids.length) return new Map();
   const rows = await prisma.user.findMany({ where: { id: { in: ids.map(BigInt) } } });
   return new Map(rows.map((r) => [N(r.id), toBrief(r)!]));
+}
+
+/** 当前榜页的上传头像（仅按需查 20 行，避免给 BV/STNB 全量缓存增加头像字段）。 */
+async function uploadedAvatarsByIds(ids: number[]): Promise<Map<number, string>> {
+  if (!ids.length) return new Map();
+  const rows = await prisma.user.findMany({
+    where: { id: { in: ids.map(BigInt) }, avatar: { startsWith: AVATAR_UPLOAD_PREFIX } },
+    select: { id: true, avatar: true },
+  });
+  return new Map(rows.map((r) => [N(r.id), r.avatar]));
 }
 
 /** 作者信息 + 军衔（2026-10-13：评论区人名后显示军衔徽章用；BBS 作者同源复用） */
@@ -1870,7 +1890,7 @@ export async function getTitleMembers(
       orderBy: [{ createTime: "desc" }, { id: "desc" }],
       skip: cursor,
       take: take + 1,
-      select: { id: true, chineseName: true, englishName: true, sex: true, createTime: true },
+      select: { id: true, chineseName: true, englishName: true, sex: true, avatar: true, createTime: true },
     });
     const hasMore = rows.length > take;
     return {
@@ -1879,6 +1899,7 @@ export async function getTitleMembers(
         chineseName: u.chineseName,
         englishName: u.englishName,
         sex: u.sex,
+        avatar: isUploadedAvatar(u.avatar) ? u.avatar : "",
         createTime: N(u.createTime),
         rank: cursor + 1, // 预备役序号=行号（1 起）
         sumTime: 0,
@@ -2412,6 +2433,8 @@ export interface BvRankingEntry {
   id: number;
   chineseName: string;
   sex: number;
+  /** 当前页渲染时补入；全量收集缓存不携带 */
+  avatar?: string;
   beg: number;
   int: number;
   exp: number;
@@ -2519,9 +2542,13 @@ export async function getBvRanking(by: BvRankingBy, page: number, take?: number,
   const { den, totalDen } = bvDenoms(ranges);
   const sorted = sortBv(all, by);
   const size = take ?? RANKING_PAGESIZE;
-  const rows = sorted
-    .slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size)
-    .map((e, i) => ({ ...e, rank: (page - 1) * RANKING_PAGESIZE + i + 1 }));
+  const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
+  const avatars = await uploadedAvatarsByIds(pageRows.map((e) => e.id));
+  const rows = pageRows.map((e, i) => ({
+    ...e,
+    avatar: avatars.get(e.id) ?? "",
+    rank: (page - 1) * RANKING_PAGESIZE + i + 1,
+  }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen, ranges };
 }
 
@@ -2576,6 +2603,8 @@ export interface StnbRankingEntry {
   id: number;
   chineseName: string;
   sex: number;
+  /** 当前页渲染时补入；紧凑全量缓存不携带，守住 2MB 载荷上限 */
+  avatar?: string;
   beg: number;
   int: number;
   exp: number;
@@ -2831,9 +2860,13 @@ export async function getStnbRanking(by: BvRankingBy, page: number, take?: numbe
   const sorted = sortStnb(stnbPopulation(all, by), by);
   const { den, totalDen } = stnbDenoms(all);
   const size = take ?? RANKING_PAGESIZE;
-  const rows = sorted
-    .slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size)
-    .map((e, i) => ({ ...e, rank: (page - 1) * RANKING_PAGESIZE + i + 1 }));
+  const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
+  const avatars = await uploadedAvatarsByIds(pageRows.map((e) => e.id));
+  const rows = pageRows.map((e, i) => ({
+    ...e,
+    avatar: avatars.get(e.id) ?? "",
+    rank: (page - 1) * RANKING_PAGESIZE + i + 1,
+  }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen };
 }
 
