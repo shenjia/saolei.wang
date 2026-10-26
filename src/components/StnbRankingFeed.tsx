@@ -21,6 +21,7 @@ import { SystemText } from "./SystemText";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { toast } from "./Toast";
+import { BV_COL_WIDTHS } from "./BvRankingFeed";
 
 export type StnbTitledRow = StnbRankingRow & { title: string; classic?: { name: string; color: string } | null };
 
@@ -300,7 +301,19 @@ export function StnbRankingFeed({
       )}
       {/* rank_scroll：同 BV 榜——表格与翻页控件同宽，窄屏盒内横滑时一起滚 */}
       <div className="rank_scroll">
-        <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
+        <table
+          ref={tableRef}
+          cellPadding={0}
+          cellSpacing={0}
+          className="ranking_table rank_fixed"
+          style={{ tableLayout: "fixed" }}
+        >
+          {/* 列宽钉死（2026-10-26 张老师要求：NF 开关列宽零变化），与 BV 榜同款 colgroup */}
+          <colgroup>
+            {BV_COL_WIDTHS.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               <th>排名</th>

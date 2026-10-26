@@ -24,6 +24,12 @@ export const RANKING_COLS: { by: RankingBy; label: string; cls: string }[] = [
   { by: "sum_3bvs", label: "3BV/s", cls: "c_3bvs" },
 ];
 
+// 雷界/地区榜列宽钉死（2026-10-26 张老师要求：NF 开关/换页/加载更多列宽零变化）。
+// table-layout:fixed 下列宽只由 colgroup 决定、与内容无关；各值 ≥ 实测最小内容宽
+// （1px 钉宽 + scrollWidth 实测：[71,74,85,33,42,33,39,42,39,42,42,30]），
+// 名字列给足 6 字中文名 + 性别图标（实测最长 ~94px），余量由 fixed 布局按比例摊。
+export const RANKING_COL_WIDTHS = [73, 130, 105, 54, 62, 54, 60, 58, 60, 58, 60, 32];
+
 // 军衔列预评：服务端（RankingTable）/ API 侧先算好随行传入，客户端零成本渲染
 export type TitledRow = RankingRow & { title: string; classic?: { name: string; color: string } | null };
 

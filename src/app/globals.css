@@ -4055,6 +4055,17 @@ body #page.ranking_old .ranking_box {
    继续撑住列宽（列宽由表头决定，比箭头数字宽），与总计态逐像素一致，版式零跳动 */
 .ranking_table th.delta_pad { visibility: hidden; }
 
+/* 列宽钉死表（rank_fixed，2026-10-26 张老师要求 NF 开关列宽零变化）：
+   fixed 布局下列宽只由 colgroup 决定、与内容无关；名字列兜底——
+   极端超长名省略号（链接原生 title 有全名），不再把列撑宽 */
+.ranking_table.rank_fixed td.name a {
+  display: inline-block;
+  max-width: calc(100% - 20px); /* 给行内性别图标留位 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
 /* 升降矢量小三角：与数字基线对齐 */
 .ranking_table td.delta .up,
 .ranking_table td.delta .down { white-space: nowrap; }

@@ -32,6 +32,11 @@ export type BvTitledRow = BvRankingRow & { title: string; classic?: { name: stri
 
 const SORT_COLS: BvRankingBy[] = ["beg", "int", "exp", "total"];
 
+// BV/STNB 榜列宽钉死（2026-10-26 张老师要求：NF 开关列宽零变化）。
+// table-layout:fixed 下列宽只由 colgroup 决定、与内容无关；前 3 列 ≥ 实测最小内容宽
+// （1px 钉宽 + scrollWidth 实测 [71,58,85,98,98,98,98]），4 个进度条列均分余量。
+export const BV_COL_WIDTHS = [73, 130, 105, 132, 132, 132, 131];
+
 /** 进度条单元格：个人主页 3BV 收集同款形态（2026-10-14 张老师要求试做）——
     上面收集数 n（2026-10-14 张老师：去掉分母，分母移到 title 气泡）、下面 3px 细进度条；
     默认灰，当前排序列金黄 #fdc61d */
@@ -274,7 +279,19 @@ export function BvRankingFeed({
       )}
       {/* rank_scroll：同 RankingFeed——表格与翻页控件同宽，窄屏盒内横滑时一起滚 */}
       <div className="rank_scroll">
-        <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
+        <table
+          ref={tableRef}
+          cellPadding={0}
+          cellSpacing={0}
+          className="ranking_table rank_fixed"
+          style={{ tableLayout: "fixed" }}
+        >
+          {/* 列宽钉死（2026-10-26 张老师要求：NF 开关列宽零变化）；进度条 pfill 按百分比填充，轨道伸缩不失真 */}
+          <colgroup>
+            {BV_COL_WIDTHS.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               <th>排名</th>

@@ -13,6 +13,7 @@ import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy, byLevelOrder, parseBvRankingBy, type VideoLevel } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
 import { dualTitles, getThunderKingId } from "@/lib/title-system";
+import { RANKING_COL_WIDTHS } from "@/components/RankingRows";
 import { getSession } from "@/lib/auth";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingFeed } from "@/components/RankingFeed";
@@ -497,6 +498,7 @@ export default async function RankingPage({
           pageSize={pageSize}
           initialHl={hl}
           reserveDelta
+          colWidths={RANKING_COL_WIDTHS}
         />
       </div>
       {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求：所有排行的

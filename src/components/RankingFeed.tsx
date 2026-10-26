@@ -40,6 +40,9 @@ export interface RankingFeedProps {
   /** 升降列占位（2026-10-14 张老师需求）：雷界榜切其它排序列时保留空列，版式不跳动；
       仅 /ranking 雷界榜传 true（2026-10-26 起 NF 模式同样占位防跳动；BV/进步/地区/世界无升降数据，不占位） */
   reserveDelta?: boolean;
+  /** 列宽钉死（2026-10-26 张老师要求：NF 开关列宽零变化）。传 RANKING_COL_WIDTHS；
+      仅升降列在位（deltaCol）时生效，列数才与 colgroup 一致 */
+  colWidths?: number[];
   /** 页脚右侧扩展按钮（2026-10-15 地区内页「返回地区排行」）：有值时页脚转 flex 行，
       滑条吃余量、按钮贴右缘（同世界榜 world_pager 口径，CSS 见 globals.css pager_extra） */
   footerExtra?: ReactNode;
@@ -53,7 +56,7 @@ interface MoreJson {
 const NEARBY_PAGES = 30; // 未加载时最多并发拉取的页数（每页 20 行 ×30 = 600 行上限）
 
 export function RankingFeed(props: RankingFeedProps) {
-  const { by, base, params, total, pageSize, reserveDelta } = props;
+  const { by, base, params, total, pageSize, reserveDelta, colWidths } = props;
   const [rows, setRows] = useState(props.initial);
   const [deltas, setDeltas] = useState<Map<number, number | null> | undefined>(props.initialDeltas);
   const nextPage = useRef(Math.floor((props.initial.at(-1)?.rank ?? 0) / pageSize) + 1);
@@ -86,6 +89,8 @@ export function RankingFeed(props: RankingFeedProps) {
 
   const showDelta = by === "sum_time" && deltas !== undefined;
   const deltaCol = reserveDelta === true;
+  // fixed 布局：列宽只由 colgroup 决定（与行内容无关），NF 开关/翻页零跳列
+  const colGroup = colWidths && deltaCol ? colWidths : undefined;
 
   function scrollToRow(id: number) {
     const el = document.getElementById(`id_${id}`);
@@ -305,7 +310,20 @@ export function RankingFeed(props: RankingFeedProps) {
     // rank_scroll：表格与页脚同宽容器（2026-10-15 张老师要求：翻页控件与最后一行
     // 数据左右对齐；窄屏盒内横滑时两者一起滚，右缘贴齐）。CSS 见 globals.css
     <div className="rank_scroll">
-      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table">
+      <table
+        ref={tableRef}
+        cellPadding={0}
+        cellSpacing={0}
+        className={"ranking_table" + (colGroup ? " rank_fixed" : "")}
+        style={colGroup ? { tableLayout: "fixed" } : undefined}
+      >
+        {colGroup && (
+          <colgroup>
+            {colGroup.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
+          </colgroup>
+        )}
         <RankingHead by={by} base={base} params={params} showDelta={showDelta} deltaCol={deltaCol} />
         <tbody>
           {rows.map((u) => (
