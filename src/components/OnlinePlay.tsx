@@ -823,6 +823,7 @@ export function OnlinePlay({
       else paintCell(td, "bb");
     }
     let hitIdx: number | null = null; // 敗局踩中格（红底炸弹），重开清空
+    let loseMenuUntil = 0; // 踩雷后右键菜单禁用截止时刻（performance.now 口径，0=无窗口）
     function paintBomb(i: number) {
       const td = cellTd(i);
       td.className = "";
@@ -2662,6 +2663,11 @@ export function OnlinePlay({
       paintBomb(hit);
       setFace("dead");
       /* 踩雷不再有任何文字提醒（张老师定：笑脸状态已经够了） */
+      /* 踩雷后 2 秒内全局禁右键菜单（2026-10-26 张老师定）：对局节奏中玩家还在
+         高速右键（插旗惯性/双击还原），点在棋盘外的空白处会弹出浏览器菜单，
+         下意识点回去就误中菜单项。gboard 内本就拦了 contextmenu，这里补
+         document 级 2 秒窗口——只拦败局瞬间，平时右键不受影响 */
+      loseMenuUntil = performance.now() + 2000;
     }
     function checkWin() {
       if (openedSafe !== totalSafe) return;
@@ -3493,6 +3499,12 @@ export function OnlinePlay({
     /* ---- 鼠标交互：右键按下即插旗；左键抬起开格；左右同按在数字上 = 双击开周围 ---- */
     const gboard = $("gboard");
     on(gboard, "contextmenu", (e: Event) => e.preventDefault());
+    /* 踩雷后 2 秒窗口内连棋盘外的右键一起拦（见 lose 内 loseMenuUntil 赋值处
+       注释）：玩家手速未停就出局，右键极易落在棋盘外空白处，弹出菜单后
+       下一次点按会误中菜单项（复制/检查等直达浏览器功能） */
+    on(document, "contextmenu", (e: Event) => {
+      if (loseMenuUntil > performance.now()) e.preventDefault();
+    });
     /* 回放期间游戏盘不吃任何鼠标交互（F2/R 重开也拦，避免回放中被清盘） */
     const gameBusy = () => replaying;
     function eventCell(e: { target: EventTarget | null }): number {
@@ -3998,6 +4010,11 @@ export function OnlinePlay({
            各记各的（大盘常需 <1x、标准盘常 >1x，互窜体验差）；旧单键迁移见 loadZoom */
         try {
           localStorage.setItem(lv === "cus" ? "online_play_zoom_cus" : "online_play_zoom", String(v));
+          /* 全屏中手动定值（滑杆松手/滚轮停 320ms，2026-10-26 张老师定）：按级别
+             另记一份「全屏比例」，下次进全屏自动恢复。cus 不记（大盘走拉满、
+             小盘跟随窗口记忆）；v 已按全屏顶格封顶后写入，恢复时再封一次也无害 */
+          if (document.fullscreenElement === root && lv !== "cus")
+            localStorage.setItem(`online_play_zoom_fs_${lv}`, String(v));
         } catch { /* 隐私模式 */ }
       }
     }
@@ -4399,7 +4416,21 @@ export function OnlinePlay({
         const capFs = String(normalMaxZoom());
         zoomRange.max = capFs;
         cusZoom.max = capFs;
-        if (firstEntry && lv === "exp") applyZoom(FS_AUTO_ZOOM, false);
+        if (firstEntry && lv !== "cus") {
+          /* 进全屏首次（2026-10-26 张老师定）：优先恢复该级别「全屏比例记忆」——
+             全屏中手动调过（滑杆/滚轮）即按级别落 online_play_zoom_fs_<lv>，
+             下次进全屏自动设置，不再要求每次重调；applyZoom 内部按全屏顶格
+             封顶（换小屏后记忆超顶格自动压回，不溢出）。无记忆回落：高级
+             2.1x（FS_AUTO_ZOOM），初/中级保持进全屏前的窗口比例不动 */
+          let fsSaved: number;
+          try {
+            const raw = localStorage.getItem(`online_play_zoom_fs_${lv}`);
+            fsSaved = raw === null ? NaN : parseFloat(raw);
+          } catch { fsSaved = NaN; }
+          if (fsSaved > 0) applyZoom(fsSaved, false);
+          else if (lv === "exp") applyZoom(FS_AUTO_ZOOM, false);
+          else if (zoomCur > Number(capFs)) applyZoom(zoomCur, false);
+        }
         else if (zoomCur > Number(capFs)) applyZoom(zoomCur, false);
         /* 面板几何必须跟着重算（2026-10-19 二版）：旧版这里直接 return，全屏拉大后
            侧空被压缩、面板却还按进全屏前的尺寸摆着 —— 张老师截图里那两条窄边就是这么来的。
