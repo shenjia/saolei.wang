@@ -73,6 +73,8 @@ import { toCanvas } from "html-to-image";
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
 export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
 
+/* 排名模式先在 dev 调试，生产构建隐藏入口并强制按普通练习局运行。 */
+const RANKED_MODE_ENABLED = process.env.NODE_ENV === "development";
 /* localStorage 设置键（2026-10-14 二期：全部设置入 localStorage 记住） */
 const LS_KEY = "online_play_settings";
 /* 移动端连击模式自动开启的一次性标记（2026-10-19）：存在＝已初始化过，不再自动开 */
@@ -522,7 +524,7 @@ export function OnlinePlay({
         if (typeof s.rookie === "boolean") rookieOn = s.rookie;
         if (typeof s.revive === "boolean") reviveOn = s.revive;
         if (typeof s.autoShot === "boolean") autoShot = s.autoShot;
-        if (logged && typeof s.ranked === "boolean") ranked = s.ranked;
+        if (RANKED_MODE_ENABLED && logged && typeof s.ranked === "boolean") ranked = s.ranked;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -553,7 +555,7 @@ export function OnlinePlay({
     loadSettings();
     /* NF 与速旗互斥（2026-10-16 张老师定）：互斥上线前的存档可能两个同开，NF 优先 */
     if (nf && autoChord) autoChord = false;
-    if (!logged) ranked = false;
+    if (!RANKED_MODE_ENABLED || !logged) ranked = false;
     if (ranked) {
       autoChord = false; combo = false; ng = false; rookieOn = false; reviveOn = false;
       if (savedLv === "cus") savedLv = "beg";
@@ -3522,18 +3524,20 @@ export function OnlinePlay({
        连击与速旗**不互斥**（2026-10-19 张老师定，可叠加）。
        十期起设置浮窗里不再有 NF/无猜两项（行已删），快捷钮是唯一入口；
        「自动双击」设置开关同期撤出，改挂速旗快捷钮 */
-    const btnRank = $("btn_rank") as HTMLButtonElement;
+    const btnRank = $("btn_rank") as HTMLButtonElement | null;
     const btnNf = $("btn_nf") as HTMLButtonElement;
     const btnSq = $("btn_sq") as HTMLButtonElement;
     const btnCombo = $("btn_combo") as HTMLButtonElement;
     const btnNg = $("btn_ng") as HTMLButtonElement;
     function syncModeButtons() {
-      btnRank.classList.toggle("active", ranked);
-      btnRank.disabled = !logged;
-      btnRank.classList.toggle("rank_locked", !logged);
-      btnRank.querySelector(".tip")!.textContent = logged
-        ? "排名模式，禁用所有辅助功能，服务器生成录像，可参与排行"
-        : "登录后才能使用";
+      if (btnRank) {
+        btnRank.classList.toggle("active", ranked);
+        btnRank.disabled = !logged;
+        btnRank.classList.toggle("rank_locked", !logged);
+        btnRank.querySelector(".tip")!.textContent = logged
+          ? "排名模式，禁用所有辅助功能，服务器生成录像，可参与排行"
+          : "登录后才能使用";
+      }
       btnNf.classList.toggle("active", nf);
       btnSq.classList.toggle("active", autoChord);
       btnCombo.classList.toggle("active", combo);
@@ -3548,21 +3552,23 @@ export function OnlinePlay({
       }
       $("level_tabs").querySelector('[data-lv="cus"]')?.classList.toggle("rank_locked", ranked);
     }
-    on(btnRank, "click", () => {
-      if (!logged) return;
-      ranked = !ranked;
-      if (ranked) {
-        autoChord = false; combo = false; ng = false; rookieOn = false; reviveOn = false;
-        rookieStop();
-      }
-      replayBoardLocked = false;
-      pendingBoard = null;
-      swRookie.checked = rookieOn;
-      swRevive.checked = reviveOn;
-      saveSettings();
-      syncModeButtons();
-      reset(ranked && lv === "cus" ? "beg" : undefined);
-    });
+    if (btnRank) {
+      on(btnRank, "click", () => {
+        if (!RANKED_MODE_ENABLED || !logged) return;
+        ranked = !ranked;
+        if (ranked) {
+          autoChord = false; combo = false; ng = false; rookieOn = false; reviveOn = false;
+          rookieStop();
+        }
+        replayBoardLocked = false;
+        pendingBoard = null;
+        swRookie.checked = rookieOn;
+        swRevive.checked = reviveOn;
+        saveSettings();
+        syncModeButtons();
+        reset(ranked && lv === "cus" ? "beg" : undefined);
+      });
+    }
     on(btnNf, "click", () => {
       nf = !nf;
       if (nf && autoChord) autoChord = false; // 互斥：开 NF 自动关速旗
@@ -5189,11 +5195,13 @@ export function OnlinePlay({
         <div className="gicons">
           {/* 模式快捷钮 hover 出气泡（2026-10-15 九期张老师定）：文案与设置浮窗
               对应开关的 .tip 一致；不用原生 title（会跟气泡双份弹） */}
-          {/* 排名模式：NF 前；默认关闭，登录后可用。 */}
-          <button className="gicon gmode" id="btn_rank" type="button" disabled={!logged}>
-            排
-            <span className="tip">{logged ? "排名模式，禁用所有辅助功能，服务器生成录像，可参与排行" : "登录后才能使用"}</span>
-          </button>
+          {/* 排名模式：NF 前；默认关闭，登录后可用。生产开放前仅 dev 渲染。 */}
+          {RANKED_MODE_ENABLED && (
+            <button className="gicon gmode" id="btn_rank" type="button" disabled={!logged}>
+              排
+              <span className="tip">{logged ? "排名模式，禁用所有辅助功能，服务器生成录像，可参与排行" : "登录后才能使用"}</span>
+            </button>
+          )}
           {/* NF 模式（2026-10-19 张老师定：恢复保留，语义收窄为仅禁右键）：
               文本钮沿用旧样式；激活显色＝默认黄（.gicon.active 站内黄） */}
           <button className="gicon gmode" id="btn_nf" type="button">

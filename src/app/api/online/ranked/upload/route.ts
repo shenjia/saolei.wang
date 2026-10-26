@@ -20,6 +20,9 @@ function fail(error: string, status = 400) {
 }
 
 export async function POST(req: Request) {
+  // 功能仍在 dev 调试，生产开放前同时关闭服务端入口，避免仅隐藏按钮却保留调用面。
+  if (process.env.NODE_ENV === "production") return fail("排名模式暂未开放", 404);
+
   const session = await getSession();
   if (!session) return fail("请先登录", 401);
 
