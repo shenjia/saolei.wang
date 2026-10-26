@@ -289,6 +289,19 @@ export function BbsSection({
     }
   }
 
+  /** 列头排序链接目标（2026-10-26 张老师：改用 <a>）：当前筛选（board/q/nice）
+   *  + 目标 order 的页面 URL——单击被拦截走就地重拉，右键/中键新标签可直接
+   *  打开对应排序的服务端渲染页（href 即语义，排版与普通链接一致） */
+  function pageUrl(o: BbsOrder) {
+    const qs = new URLSearchParams();
+    if (board) qs.set("board", board);
+    if (q) qs.set("q", q);
+    if (nice) qs.set("nice", "1");
+    if (o !== "reply") qs.set("order", o);
+    const s = qs.toString();
+    return s ? `/bbs?${s}` : "/bbs";
+  }
+
   function moreUrl(page: number, size?: number) {
     const qs = new URLSearchParams();
     if (board) qs.set("board", board);
@@ -462,41 +475,53 @@ export function BbsSection({
             <th className="author">作者</th>
             <th className="num">
               {/* 2026-10-26 列头排序：评论/阅读可点，按对应列逆序；激活项金色（行内
-                  对应数字同步金色），未激活项列头灰 */}
-              <button
-                type="button"
+                  对应数字同步金色），未激活项列头灰。张老师三轮定稿：<a> 排版 */}
+              <a
                 className={"sort_link" + (order === "replies" ? " on" : "")}
-                onClick={() => switchOrder("replies")}
+                href={pageUrl("replies")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  switchOrder("replies");
+                }}
               >
                 评论
-              </button>
+              </a>
               <span className="sort_sep">/</span>
-              <button
-                type="button"
+              <a
                 className={"sort_link" + (order === "clicks" ? " on" : "")}
-                onClick={() => switchOrder("clicks")}
+                href={pageUrl("clicks")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  switchOrder("clicks");
+                }}
               >
                 阅读
-              </button>
+              </a>
             </th>
             {/* 2026-10-26：「最后更新」改「更新 / 发布」——默认按更新时间（更新高亮），
                 点发布切发布时间逆序（时间列改显发布时间）；时间列筛选不高亮行 */}
             <th className="time">
-              <button
-                type="button"
+              <a
                 className={"sort_link" + (order === "reply" ? " on" : "")}
-                onClick={() => switchOrder("reply")}
+                href={pageUrl("reply")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  switchOrder("reply");
+                }}
               >
                 更新
-              </button>
+              </a>
               <span className="sort_sep">/</span>
-              <button
-                type="button"
+              <a
                 className={"sort_link" + (order === "post" ? " on" : "")}
-                onClick={() => switchOrder("post")}
+                href={pageUrl("post")}
+                onClick={(e) => {
+                  e.preventDefault();
+                  switchOrder("post");
+                }}
               >
                 发布
-              </button>
+              </a>
             </th>
           </tr>
         </thead>

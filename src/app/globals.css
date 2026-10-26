@@ -1443,16 +1443,14 @@ body #page.bbs_old .page_head {
 .bbs_list .bbs_count {
   color: #75715e;
 }
-/* 列头排序（2026-10-26 张老师）：「更新 / 发布」「评论 / 阅读」可点切换逆序——
+/* 列头排序（2026-10-26 张老师）：「更新/发布」「评论/阅读」可点切换逆序——
    可点项默认列头灰 #939387、hover 提亮；激活项金色 #fdc61a（全站高亮语义）。
-   行内被排序命中的数字同金色（.sort_on）；时间列筛选（更新/发布）不高亮行 */
+   行内被排序命中的数字同金色（.sort_on）；时间列筛选（更新/发布）不高亮行。
+   2026-10-26 三轮张老师定稿：元素从 button 改 <a>（带真实 href，右键/中键
+   新标签可直接开对应排序页），补 text-decoration:none 抵消 a 默认下划线 */
 .bbs_list th .sort_link {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
+  text-decoration: none;
   color: #939387;
-  cursor: pointer;
   white-space: nowrap;
 }
 .bbs_list th .sort_link:hover {
