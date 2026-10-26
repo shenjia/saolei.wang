@@ -3082,7 +3082,7 @@ export function VideoReplayBoard({
 
 /** 「播放」「试玩」按钮（替代原 PlayButton）：
  *  播放——加载中禁用；回放中/结束＝「重播」；hover 时按钮下方弹深灰气泡
- *  「使用旧版播放器」（2026-10-21 张老师需求），点击弹 flop 播放器播放本录像。
+ *  「使用Flop Player播放」（2026-10-21 张老师需求），点击弹 flop 播放器播放本录像。
  *  试玩（二十一期，2026-10-21 张老师需求）——一键直达全屏试玩（等价点全屏
  *  按钮后再点笑脸），锁定本录像布雷不可更改；首点自动 fetch+起播再进全屏。
  *  图标＝手柄（游戏手柄＝亲手玩一盘的语义，与播放三角/下载箭头区分）。 */
@@ -3114,7 +3114,7 @@ export function VideoReplayButton() {
           className="tip_bubble"
           role="button"
           tabIndex={0}
-          aria-label="使用旧版播放器播放本录像"
+          aria-label="使用Flop Player播放本录像"
           onClick={(e) => {
             e.stopPropagation();
             if (status !== "loading") ctx.playLegacy();
@@ -3127,7 +3127,7 @@ export function VideoReplayButton() {
             }
           }}
         >
-          使用旧版播放器
+          使用Flop Player播放
         </span>
       </span>
       <button
