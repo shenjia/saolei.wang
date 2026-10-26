@@ -10056,14 +10056,16 @@ html.op-fakefs #header {
       组件根 padding box 底缘，它比板块外底缘高「底衬 + 边框」，补上即得「整条气泡
       悬在板块下方、顶缘与板块隔 8px」——bottom 锚做不到（气泡高度不定，只能钉死
       底缘，气泡主体仍压在板块上）；桌面底衬 30px → top 偏移 39px，移动端
-      （≤768px）底衬 16px → 25px（见下方媒体查询）。横屏沉浸模式 .box padding
-      已清零且气泡直接不显示（见⑤）；
+      （≤768px）底衬 16px → 25px（见下方媒体查询）。横屏沉浸模式的非全屏态
+      .box padding 已清零且气泡直接不显示（见⑤）；全屏态由 JS 改锚游戏窗口底缘，
+      按实际剩余空间决定显示（2026-10-26 张老师定）；
    ② 观感沿用站内气泡（.gs_row .tip 同款：深底 #272822 + #656355 描边 + 投影），
       正文前一枚金色灯泡（#E6DB74，与录像雷达数值金同色）；
    ③ pointer-events:none —— 3 秒内绝不能挡住格子点击；
    ④ 浮现/渐隐都走 transition（挂载下一帧加 .show，见组件内 useEffect）：
       CSS animation 会在元素插入瞬间定格，transition 才有「浮上来」的手感。
-   ⑤ 横屏沉浸模式不显示：棋盘已拉满整屏，气泡会盖住底排格子
+   ⑤ 横屏沉浸模式的非全屏态不显示：棋盘已拉满整屏，气泡会盖住底排格子；
+      全屏态不再一刀切，空间是否足够由 OnlinePlay.showTip 实测
       （本块须在所有 .optips 规则之后——媒体查询不加优先级，后定义者胜）
    ⑥ 居中**不用** left:50% + translateX(-50%)：绝对定位元素的收缩适配可用宽 =
       「包含块宽 − left」，移动端 339 容器会被砍到 170px（气泡凭空窄一半、文字
@@ -10129,7 +10131,7 @@ html.op-fakefs #header {
   }
 }
 @media (orientation: landscape) and (max-height: 520px) {
-  #online_play .optips {
+  #online_play > div:not(:fullscreen) .optips {
     display: none;
   }
 }

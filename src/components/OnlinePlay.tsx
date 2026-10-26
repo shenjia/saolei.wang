@@ -340,10 +340,29 @@ export function OnlinePlay({
       const pool = tipPool();
       const idx = Math.floor(Math.random() * pool.length);
       tipsEl.querySelector(".txt")!.textContent = pool[idx];
+      tipsEl.classList.remove("show");
+      tipsEl.style.top = "";
+      const fullscreen = document.fullscreenElement === root;
+      if (fullscreen) {
+        /* 全屏宿主本身铺满视口，不能沿用「根容器底 + 39px」：那会把 tips 永远
+           放到屏幕外。改锚到游戏银框实际底缘；底部空间够整条气泡才显示，
+           空间不足保持静默，绝不盖住棋盘最后一排（2026-10-26 张老师定）。 */
+        const rootR = container.getBoundingClientRect();
+        const gameR = gwrap.getBoundingClientRect();
+        tipsEl.style.top = `${(gameR.bottom - rootR.top) / pageZoom() + 8}px`;
+      }
       if (tipFadeTimer !== null) clearTimeout(tipFadeTimer);
       /* 下一帧再挂 .show：确保从 opacity:0 初始态起步，同帧加类会被合并、
          transition 不触发（气泡就「闪」一下没了） */
-      requestAnimationFrame(() => tipsEl.classList.add("show"));
+      requestAnimationFrame(() => {
+        if (fullscreen) {
+          const hostR = container.getBoundingClientRect();
+          const cs = getComputedStyle(container);
+          const visibleBottom = hostR.bottom - (parseFloat(cs.paddingBottom) || 0) * pageZoom();
+          if (tipsEl.getBoundingClientRect().bottom > visibleBottom + 0.5) return;
+        }
+        tipsEl.classList.add("show");
+      });
       tipFadeTimer = window.setTimeout(() => tipsEl.classList.remove("show"), TIP_HOLD_MS);
     }
     /* 局中通知（下载成功 / 导入失败 / 复活 / 自动截屏）沿用全站居中气泡样式。
