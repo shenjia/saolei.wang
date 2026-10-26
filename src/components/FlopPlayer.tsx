@@ -118,6 +118,9 @@ const MASK_EXIT_SCRIPT = `
   window.addEventListener("pointerdown", function (e) {
     var t = e.target;
     if (!(t instanceof Element)) return;
+    // Ant Design 的下拉菜单/弹层挂在 body 下、位于玩家窗口之外，
+    // 但它们仍是播放器自身 UI（尤其「选择本地文件」），不能按暗区退出。
+    if (t.closest(".ant-menu-dropdown, .ant-menu-submenu-popup, .ant-select-dropdown, .ant-picker-dropdown, .ant-modal-root, .ant-popover, .ant-tooltip, .ant-message, input[type=file]")) return;
     var menu = document.querySelector(".game-menu");
     if (!menu) return;
     // Vue 根 = .game-menu 向上直至 body 的直接子级
