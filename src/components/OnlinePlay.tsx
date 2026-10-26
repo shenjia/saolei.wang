@@ -2098,10 +2098,10 @@ export function OnlinePlay({
          本结算面板、全屏试玩「我的评级」三处同一份实现，口径不再各写一遍 */
       return radarPointsFrom(s.stats, group, rateable);
     }
-    /* AVF 时间戳格式（Arbiter 惯例）：M.D.YYYY.HH:MM:SS:mmmm */
+    /* AVF 时间戳格式（Arbiter 惯例）：D.M.YYYY.HH:MM:SS:mmmm */
     function formatAvfTimestamp(d: Date): string {
       const p2 = (n: number) => String(n).padStart(2, "0");
-      return `${d.getMonth() + 1}.${d.getDate()}.${d.getFullYear()}.${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}:${String(d.getMilliseconds()).padStart(4, "0")}`;
+      return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}.${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}:${String(d.getMilliseconds()).padStart(4, "0")}`;
     }
     /* ---- 重玩本局：复刻结束时的地图注入锁定盘；无猜保持原状不强制关闭
        （2026-10-19 张老师两定：偏好不被重玩按钮破坏；重玩局内无猜照常救回，
@@ -2135,6 +2135,7 @@ export function OnlinePlay({
         questionMarks: snapshot.qmark,
         bbbv: snapshot.bbbv,
         scoreCsec: snapshot.csec,
+        won: snapshot.won,
         events: snapshot.events,
         timestamp: snapshot.dateStr,
       });
