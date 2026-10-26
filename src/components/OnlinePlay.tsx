@@ -746,8 +746,8 @@ export function OnlinePlay({
     /* 败局埋点延迟句柄（原地复活 2026-10-19）：败局 beacon 晚 300ms 发送，
        复活即撤销（见 report/revive/reset 三处清理） */
     let pendingLoseBeacon: number | null = null;
-    /* 自动截屏延迟句柄（2026-10-26）：与败局埋点同窗口——败局延迟 300ms 截
-       （复活窗内复活则撤销，不截「这局还没完」的中间态）；胜局立即截 */
+    /* 自动截屏延迟句柄（2026-10-26）：胜局立即截；败局延迟 3 秒，
+       期间复活或重开都撤销，仍停在败局结算才截 */
     let pendingShot: number | null = null;
     /* 手势起点快照：新点击手势（mousedown / touchstart）入口调用。盘面/统计构件
        全量复制（8×8 初级 ~64 格、16×16 ~256、exp 480——一次 copy 可忽略）。
@@ -1802,11 +1802,11 @@ export function OnlinePlay({
       lastReportHtml = html;
       if (showStats) paintStatPanel(html);
       buildResultPanel(t, solvedBv, won, cnt);
-      /* 自动截屏：移动端恒不调度。桌面端败局至少等 300ms 复活窗；全屏结算
-         遮罩另有 500ms 延时，须等它真实显示后再截，避免漏掉两个面板 */
+      /* 自动截屏：移动端恒不调度。桌面端败局延迟 3 秒，期间复活或重开
+         由各自入口撤销；全屏胜局仍须等 500ms 遮罩真实显示后再截 */
       if (autoShot && !touchUI && t > 0) {
         if (pendingShot !== null) clearTimeout(pendingShot);
-        const delay = Math.max(won ? 0 : 300, maskDelayTimer !== null ? 550 : 0);
+        const delay = Math.max(won ? 0 : 3000, maskDelayTimer !== null ? 550 : 0);
         pendingShot = window.setTimeout(() => {
           pendingShot = null;
           void autoScreenshot();
