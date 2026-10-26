@@ -470,7 +470,7 @@ export function BbsSection({
               >
                 评论
               </button>
-              {" / "}
+              {"/"}
               <button
                 type="button"
                 className={"sort_link" + (order === "clicks" ? " on" : "")}
@@ -489,7 +489,7 @@ export function BbsSection({
               >
                 更新
               </button>
-              {" / "}
+              {"/"}
               <button
                 type="button"
                 className={"sort_link" + (order === "post" ? " on" : "")}
