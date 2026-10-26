@@ -48,6 +48,14 @@ if [[ "$1" == "--local-test" ]]; then
 fi
 
 if [[ "$1" == "--prod" ]]; then
+  # 生产避峰守卫（2026-10-27 慢 SQL 巡检治理）：2026-10-26 13:17 曾有会话在临近高峰期
+  # 直跑重算（WITH 13.1s + INSERT 6s 万行级写）。高峰期（14-17 点）拒绝执行，
+  # 确认无碍可加 --off-peak-ok 放行。
+  if [[ $(date +%H) -ge 14 && $(date +%H) -lt 17 && "$2" != "--off-peak-ok" ]]; then
+    echo "[避峰守卫] 当前 $(date +%H) 点处于生产高峰期（14-17 点），拒绝执行 user_scores 重算。" >&2
+    echo "           请在低峰期运行，或确认无碍后追加 --off-peak-ok 放行。" >&2
+    exit 1
+  fi
   echo "== 1/4 备份生产两表 =="
   ssh -i $SSH_KEY $SSH_HOST 'DB_PASS=$(sed -n "s/^DATABASE_URL=\"mysql:\/\/saolei:\([^@]*\)@localhost.*/\1/p" /home/deploy/saolei.wang/.env); export MYSQL_PWD="$DB_PASS"; test -n "$MYSQL_PWD" && \
     mkdir -p ~/backup/user-scores-recompute-'"$TS"' && cd ~/backup/user-scores-recompute-'"$TS"' && \

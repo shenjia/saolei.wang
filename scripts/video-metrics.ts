@@ -41,6 +41,25 @@ import {
 } from "../src/lib/videoradar";
 import type { BaseMetricKey } from "../src/lib/videoradar";
 
+// ---- 生产避峰守卫（2026-10-27 慢 SQL 巡检治理）----
+// 2026-10-26 15:15 曾有会话在生产高峰期（14-17 点）直跑全量重建，DELETE+INSERT 万行级
+// 写与前台抢资源。守卫规则：连接的是生产库（host 不是 localhost）且处于高峰时段
+// （本地 14-17 点）时拒绝执行，需 --off-peak-ok 显式放行。本地库不受限。
+function assertOffPeak(): void {
+  const url = process.env.DATABASE_URL ?? "";
+  const isProd = !/localhost|127\.0\.0\.1/.test(url);
+  if (!isProd) return;
+  const h = new Date().getHours();
+  if (h >= 14 && h < 17 && !has("off-peak-ok")) {
+    console.error(
+      `[避峰守卫] 当前 ${h} 点处于生产高峰期（14-17 点），拒绝执行重算/跑批。` +
+        `请在低峰期运行，或确认无碍后加 --off-peak-ok 放行。`
+    );
+    process.exit(1);
+  }
+}
+assertOffPeak();
+
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 
 function arg(name: string): string | null {
