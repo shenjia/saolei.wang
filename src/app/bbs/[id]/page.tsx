@@ -13,7 +13,7 @@ import { BBS_BOARD_NAMES, BBS_REPLY_PAGESIZE, getPost, getReplyFeed, locateReply
 import { timeOpposite, TIME_NEVER, decodeLegacyEntities } from "@/lib/format";
 import { PostOps } from "@/components/BbsOps";
 import { BbsReplySection } from "@/components/BbsReplies";
-import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { BbsAuthorName, TitleBadge } from "@/components/Cells";
 import { UserPanel } from "@/components/UserCard";
 import { BbsReadMark } from "@/components/BbsRead";
 import { prisma } from "@/lib/db";
@@ -128,7 +128,13 @@ export default async function BbsTitlePage({
             <p className="bbs_meta">
               {post.author && (
                 <>
-                  <AvatarCell id={post.author.id} name={post.author.chineseName} sex={post.author.sex} gender="small" link />{" "}
+                  <BbsAuthorName
+                    id={post.author.id}
+                    name={post.author.chineseName}
+                    sex={post.author.sex}
+                    avatar={post.author.avatar}
+                    layout="inline"
+                  />{" "}
                   <TitleBadge title={post.author.title} classic={post.author.old} link />{" "}
                 </>
               )}

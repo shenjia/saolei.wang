@@ -16,7 +16,7 @@ import { flushSync } from "react-dom";
 import { BBS_REPLY_PAGESIZE } from "@/lib/bbs";
 import type { BbsReplyItem } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
-import { AvatarCell, TitleBadge } from "./Cells";
+import { BbsAuthorName, TitleBadge } from "./Cells";
 import { LoginLink } from "./LoginLink";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
@@ -257,7 +257,13 @@ export function BbsReplySection({
               <em>{(winStart - 1) * pageSize + i + 2} 楼</em>{" "}
               {r.author && (
                 <>
-                  <AvatarCell id={r.author.id} name={r.author.chineseName} sex={r.author.sex} gender="small" link />{" "}
+                  <BbsAuthorName
+                    id={r.author.id}
+                    name={r.author.chineseName}
+                    sex={r.author.sex}
+                    avatar={r.author.avatar}
+                    layout="inline"
+                  />{" "}
                   <TitleBadge title={r.author.title} classic={r.author.old} link />{" "}
                 </>
               )}

@@ -24,7 +24,7 @@ import Link from "next/link";
 import { BBS_BOARDS, BBS_BOARD_NAMES, BBS_ORDERS, type BbsOrder } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import type { BbsPostItem } from "@/lib/bbs";
-import { AvatarCell, TitleBadge } from "./Cells";
+import { BbsAuthorName, TitleBadge } from "./Cells";
 import { NfToggle } from "./NfToggle";
 import { Tabs } from "./Pager";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
@@ -126,7 +126,13 @@ export function BbsRow({
       <td className="user">
         {p.author && (
           <>
-            <AvatarCell id={p.author.id} name={p.author.chineseName} sex={p.author.sex} gender="small" link />
+            <BbsAuthorName
+              id={p.author.id}
+              name={p.author.chineseName}
+              sex={p.author.sex}
+              avatar={p.author.avatar}
+              layout="absolute"
+            />
             <TitleBadge title={p.author.title} classic={p.author.old} link />
           </>
         )}
