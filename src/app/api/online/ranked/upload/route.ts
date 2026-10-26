@@ -4,8 +4,10 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { buildRankedEvf } from "@/lib/evfwrite";
 import type { OnlineEvent } from "@/lib/avfwrite";
+import { canonicalizeOnlineEvents, repairWinningEvents } from "@/lib/avfwrite";
 import { uploadVideo } from "@/app/api/video/upload/route";
 
 const STANDARD = [
@@ -68,11 +70,23 @@ export async function POST(req: Request) {
 
   let evf: Uint8Array;
   try {
+    // 签名口径（张老师 2026-10-26 定）：#用户ID + 中文姓名（站点玩家实名惯例）
+    const playerRow = await prisma.user.findUnique({
+      where: { id: BigInt(session.uid) },
+      select: { chineseName: true },
+    });
+    /* 事件流先过与 AVF 下载同源的归一 + 胜局修复（canonicalizeOnlineEvents /
+       repairWinningEvents，均自 avfwrite 导出）：双击手势归一成 mr、无猜重排局
+       危险 chord 改逐格安全点击、末尾补开遗留非雷格——否则 ms-toollib（FlopPlayer）
+       重放终盘雷格数 ≠ 雷数，报「不能播放没有扫完的录像」（2026-10-26 实证）。 */
+    const canonical = canonicalizeOnlineEvents(events);
+    const exportEvents = repairWinningEvents(width, height, board, body.questionMarks, canonical, scoreCsec);
     evf = buildRankedEvf({
-      width, height, mines, board, bbbv, scoreCsec, events,
+      width, height, mines, board, bbbv, scoreCsec,
+      events: exportEvents,
       questionMarks: body.questionMarks,
       nf: body.nf,
-      player: `#${session.uid} ${session.username}`,
+      player: `#${session.uid} ${playerRow?.chineseName ?? session.username}`,
       uniqueIdentifier: randomUUID(),
     });
   } catch {

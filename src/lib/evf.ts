@@ -496,6 +496,7 @@ export function evfToRawvf(buf: Uint8Array): string[] {
   const lines: string[] = [
     "RawVF_Version: Rev5",
     `Program: ${program}`,
+    // Version 行维持「0.EVF格式版本」通用口径（张老师 2026-10-26 定）
     `Version: 0.${v.version}`,
     // 玩家标识可能为空（靠 UUID 区分身份的录法），逐级兜底防止空签名入库
     `Player: ${v.playerIdentifier || v.uniqueIdentifier || "元扫雷玩家"}`,

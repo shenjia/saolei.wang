@@ -42,7 +42,8 @@ import { flushSync } from "react-dom";
 import { FlopSprites } from "./FlopSprites";
 import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { toast } from "./Toast";
-import { buildOnlineAvf, onlineAvfFilename, type OnlineEvent } from "@/lib/avfwrite";
+import { onlineAvfFilename, canonicalizeOnlineEvents, repairWinningEvents, type OnlineEvent } from "@/lib/avfwrite";
+import { buildRankedEvf } from "@/lib/evfwrite";
 import { replayCounts, MOUSE_CODE_TO_EV, type ReplayCounts } from "@/lib/replay-core";
 /* 拖拽导入录像（2026-10-21）：站内同款解析管线全为纯前端（avf/mvf 择优/rmv →
    rawvf 结构化 → videowin 胜负判定），录像详情页 VideoReplay 同套客户端在用 */
@@ -2143,22 +2144,30 @@ export function OnlinePlay({
       pendingBoard = null;
       reset(lv === "cus" ? "cus" : lv);
     }
-    /* ---- 下载录像：标准 AVF 字节流 → Blob 下载 ---- */
+    /* ---- 下载录像（2026-10-26 张老师定：统一 EVF 格式，替代原 AVF）----
+       走与排名上传同源的「归一 + 胜局修复 + buildRankedEvf」管线，保证下载的
+       EVF 在 FlopPlayer（ms-toollib）可正常重放；Program 仍写排名软件名——
+       手动上传会被上传路由拒绝（在线排行模式录像只允许服务器生成）。 */
     function downloadAvf() {
       if (!snapshot) return;
-      const avf = buildOnlineAvf({
+      const canonical = canonicalizeOnlineEvents(snapshot.events);
+      const exportEvents = snapshot.won
+        ? repairWinningEvents(snapshot.w, snapshot.h, snapshot.mines, snapshot.qmark, canonical, snapshot.csec)
+        : canonical;
+      const evf = buildRankedEvf({
         width: snapshot.w,
         height: snapshot.h,
         mines: snapshot.m,
         board: snapshot.mines,
         questionMarks: snapshot.qmark,
+        nf: snapshot.nf,
         bbbv: snapshot.bbbv,
         scoreCsec: snapshot.csec,
         won: snapshot.won,
-        events: snapshot.events,
+        events: exportEvents,
         timestamp: snapshot.dateStr,
       });
-      const blob = new Blob([avf as unknown as BlobPart], { type: "application/octet-stream" });
+      const blob = new Blob([evf as unknown as BlobPart], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -2168,6 +2177,7 @@ export function OnlinePlay({
         nf: snapshot.nf, // NF 局文件名带 NF 段（连击局不禁旗、不带）
         bbbv: snapshot.bbbv,
         user: player, // 未登录为 null → 文件名省略 `# 用户ID 英文名` 段
+        ext: "evf",
       });
       document.body.appendChild(a);
       a.click();

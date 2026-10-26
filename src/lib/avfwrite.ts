@@ -101,7 +101,7 @@ function avfTimestamps(endText: string, scoreCsec: number): { start: string; end
 
 /** 把站内双击手势统一成 mr：双键 chord、sc+lr 与自动双击在外部播放器里同义。
  *  同时移除手势的原始按下/松开，避免归一后残留按键状态污染后续插旗。 */
-function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
+export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
   const out: (OnlineEvent | null)[] = [];
   let lp = false, rp = false, sv = false;
   let lcAt = -1, rcAt = -1;
@@ -148,7 +148,7 @@ function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
 
 /** AVF 只有一张静态雷区；无猜在 chord 展开中重排时，原手势不一定能在终盘上重放。
  *  正常事件原样保留；危险 chord 改为逐格安全点击，末尾补开遗留非雷格，保证胜局可播完。 */
-function repairWinningEvents(
+export function repairWinningEvents(
   w: number, h: number, board: Uint8Array | number[], questionMarks: boolean,
   events: OnlineEvent[], scoreCsec: number,
 ): OnlineEvent[] {
@@ -308,8 +308,10 @@ export function onlineAvfFilename(input: {
   user?: { id: number; name: string } | null;
   /** 文件名里的日期，默认当下（本地时区） */
   date?: Date;
+  /** 扩展名（2026-10-26 张老师定：练习页下载统一 EVF，替代原 AVF） */
+  ext?: "avf" | "evf";
 }): string {
-  const { level, csec, nf, bbbv, user, date = new Date() } = input;
+  const { level, csec, nf, bbbv, user, date = new Date(), ext = "avf" } = input;
   const lv = level[0].toUpperCase() + level.slice(1);
   /* 用时口径与 lib/format 的 scoreTime 一致：毫秒 ÷ 1000 → 两位小数 */
   const secs = (csec / 100).toFixed(2);
@@ -318,6 +320,6 @@ export function onlineAvfFilename(input: {
   return (
     `${lv} ${secs}s${nf ? " NF" : ""} - 3BV ${bbbv}` +
     (user ? ` - # ${user.id} ${user.name}` : "") +
-    ` (${day}).avf`
+    ` (${day}).${ext}`
   );
 }

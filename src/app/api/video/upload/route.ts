@@ -86,7 +86,7 @@ export async function uploadVideo(req: Request, options?: { rankedInternal?: boo
   }
   // 排名模式 EVF 只经专用入口生成后内部调用本函数；普通文件上传不能冒充该来源。
   if (parsed.program === RANKED_SOFTWARE && !options?.rankedInternal) {
-    return fail("排名模式录像请从练习页结算面板上传");
+    return fail("在线排行模式录像只允许服务器生成，不允许手动上传");
   }
   if (!(parsed.level in LEVEL_MIN_3BV)) return fail("只支持初级/中级/高级录像");
   if (parsed.mode !== "classic") return fail("只支持经典模式录像");
