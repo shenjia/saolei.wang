@@ -1459,10 +1459,10 @@ body #page.bbs_old .page_head {
 .bbs_list th .sort_link.on {
   color: #fdc61a;
 }
-/* 斜杠对称小边距：CJK 全角字右侧自带留白，裸斜杠会显得「/」偏紧偏左；
-   左右各 2px 视觉对称，总宽仍控制在 96px 时间列内不折行 */
+/* 斜杠两侧空格（2026-10-26 四轮张老师：改 <a> 后空格排版正常）——空格收进
+   sort_sep 并 nowrap，断行机会全灭，96px 时间列不折行（溢出 ~3px 落右 padding） */
 .bbs_list th .sort_sep {
-  margin: 0 2px;
+  white-space: nowrap;
 }
 /* 阅读数原并写在 .bbs_count 内（「/ N」同 span）——排序金色高亮需单独命中数字，
    2026-10-26 拆出独立 .bbs_clicks，配色沿用原 .bbs_count 口径 */

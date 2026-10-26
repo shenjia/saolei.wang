@@ -486,7 +486,7 @@ export function BbsSection({
               >
                 评论
               </a>
-              <span className="sort_sep">/</span>
+              <span className="sort_sep"> / </span>
               <a
                 className={"sort_link" + (order === "clicks" ? " on" : "")}
                 href={pageUrl("clicks")}
@@ -511,7 +511,7 @@ export function BbsSection({
               >
                 更新
               </a>
-              <span className="sort_sep">/</span>
+              <span className="sort_sep"> / </span>
               <a
                 className={"sort_link" + (order === "post" ? " on" : "")}
                 href={pageUrl("post")}
