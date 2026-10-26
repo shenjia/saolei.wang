@@ -1,11 +1,11 @@
 // 后台流量统计（2026-10-16 仪表盘 UV/PV，参考 01xue.com /api/admin/stats/overview；
-// 2026-10-23 张老师指出：同比基数必须是「昨日同时段」而非昨日全天，否则白天看板今日永远追不满）
+// 2026-10-26 张老师定：同比基数为「上周同一日同时段」，避免 weekday/weekend 流量差异干扰）
 //
 // 口径约定（与 stats.ts 一致）：
 // · page_view.create_time 为 Unix 秒；「按天」聚合一律 +08:00 切天（FLOOR((t+28800)/86400)），
 //   不依赖服务器时区。
 // · PV = page_view 行数（排除 isAdmin）；UV = 按日去重 visitorId。
-// · 同比口径：今日 00:00~取数时刻 vs 昨日 00:00~昨日同一时刻（窗口秒数对齐）；
+// · 同比口径：今日 00:00~取数时刻 vs 上周同一日 00:00~上周同一时刻（窗口秒数对齐）；
 //   缓存 300s，「此刻」最多滞后 5 分钟。
 // · 30 天流水一次拉全量内存聚合（个人站量级，上线初期即全量）。
 // · 整个聚合挂 unstable_cache 300s（铁律：热点统计必须挂缓存；改查询逻辑必须升版本号）。
@@ -61,8 +61,8 @@ export interface TrafficOverview {
   today: { pv: number; uv: number };
   /** 昨日全天 PV（趋势图当日桶，保留给未来用） */
   yesterdayFull: { pv: number; uv: number };
-  /** 昨日同时段（昨日 00:00 ~ 昨日 now 同一时刻，同比基数） */
-  yesterday: { pv: number; uv: number };
+  /** 上周同一日同时段（上周同一日 00:00 ~ 上周 now 同一时刻，同比基数） */
+  lastWeek: { pv: number; uv: number };
   d30: { pv: number; uv: number };
   /** 近 30 天分日趋势（+08:00 切天，与业务趋势同 x 轴） */
   trend: { dates: string[]; pv: number[]; uv: number[] };
@@ -120,10 +120,11 @@ async function aggregate(): Promise<TrafficOverview> {
   const now = Math.floor(Date.now() / 1000);
   const today0 = dayStart(0);
   const yesterday0 = dayStart(1);
+  const lastWeek0 = today0 - 7 * 86400;
   const d7 = dayStart(6);
   const d30 = dayStart(29);
-  // 同比窗口右端点：昨日此刻（今日已过窗口 [today0, now) 对应昨日 [yesterday0, now-86400)）
-  const ydayEnd = now - 86400;
+  // 同比窗口右端点：上周此刻（今日已过窗口 [today0, now) 对应上周 [lastWeek0, now-7*86400)）
+  const lastWeekEnd = now - 7 * 86400;
 
   // 管理员自己的浏览剔除，避免污染 UV/PV/来源/入口/流失
   // 2026-10-23 补：爬虫行一并剔除——meta-externalagent 等 AI 爬虫不存 cookie，
@@ -162,11 +163,11 @@ async function aggregate(): Promise<TrafficOverview> {
   for (let i = 0; i < 30; i++) trendMap.set(fromIdx + i, { pv: 0, uv: new Set() });
 
   const todayUv = new Set<string>();
-  const yesterdayUv = new Set<string>();
+  const lastWeekUv = new Set<string>();
   const yesterdayFullUv = new Set<string>();
   const d30Uv = new Set<string>();
-  // 昨日同时段 PV（[yesterday0, ydayEnd) 计数；今日 PV 沿用 trendMap 当日桶=今日至今）
-  let yesterdaySamePv = 0;
+  // 上周同一日同时段 PV（[lastWeek0, lastWeekEnd) 计数；今日 PV 沿用 trendMap 当日桶=今日至今）
+  let lastWeekSamePv = 0;
   const refMap = new Map<string, number>();
   const deviceMap = new Map<string, number>();
   const entryToday = new Map<string, number>();
@@ -225,12 +226,10 @@ async function aggregate(): Promise<TrafficOverview> {
     }
     d30Uv.add(r.visitorId);
     if (t >= today0) todayUv.add(r.visitorId);
-    else if (t >= yesterday0) {
-      yesterdayFullUv.add(r.visitorId);
-      if (t < ydayEnd) {
-        yesterdayUv.add(r.visitorId);
-        yesterdaySamePv += 1;
-      }
+    else if (t >= yesterday0) yesterdayFullUv.add(r.visitorId);
+    if (t >= lastWeek0 && t < lastWeekEnd) {
+      lastWeekUv.add(r.visitorId);
+      lastWeekSamePv += 1;
     }
 
     if (r.userId) {
@@ -438,9 +437,9 @@ async function aggregate(): Promise<TrafficOverview> {
   return {
     now,
     today: { pv: trendMap.get(todayIdx)?.pv ?? 0, uv: todayUv.size },
-    yesterday: {
-      pv: yesterdaySamePv,
-      uv: yesterdayUv.size,
+    lastWeek: {
+      pv: lastWeekSamePv,
+      uv: lastWeekUv.size,
     },
     yesterdayFull: {
       pv: trendMap.get(todayIdx - 1)?.pv ?? 0,
@@ -481,7 +480,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v7"],
+  ["admin-traffic", "v8"],
   { revalidate: 300 }
 );
 

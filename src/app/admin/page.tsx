@@ -48,10 +48,10 @@ export default async function AdminDashboard() {
 
   const { oldestPendingDays: pendingDays } = ov;
 
-  // 流量对比 foot：只显示同比（涨绿跌红 .down）；基数为昨日同时段（今日 00:00~现在 vs 昨日 00:00~昨日此刻）
-  const cmpFoot = (today: number, yday: number) => {
-    if (!yday) return `暂无同比`;
-    const pct = Math.round(((today - yday) / yday) * 1000) / 10;
+  // 流量对比 foot：只显示同比（涨绿跌红 .down）；基数为上周同一日同时段（今日 00:00~现在 vs 上周同一日 00:00~上周此刻）
+  const cmpFoot = (today: number, lastWeek: number) => {
+    if (!lastWeek) return `暂无同比`;
+    const pct = Math.round(((today - lastWeek) / lastWeek) * 1000) / 10;
     const sign = pct >= 0 ? "+" : "";
     return (
       <>
@@ -121,14 +121,14 @@ export default async function AdminDashboard() {
           value={traffic.today.pv}
           tone="cyan"
           trend={traffic.trend.pv}
-          foot={cmpFoot(traffic.today.pv, traffic.yesterday.pv)}
+          foot={cmpFoot(traffic.today.pv, traffic.lastWeek.pv)}
         />
         <Kpi
           label="今日 UV"
           value={traffic.today.uv}
           tone="purple"
           trend={traffic.trend.uv}
-          foot={cmpFoot(traffic.today.uv, traffic.yesterday.uv)}
+          foot={cmpFoot(traffic.today.uv, traffic.lastWeek.uv)}
         />
         <Kpi
           label="今日练习"
