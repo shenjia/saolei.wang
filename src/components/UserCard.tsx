@@ -123,6 +123,7 @@ export function UserCard({
                     score={bvsRec?.score ?? null}
                     videoId={bvsRec?.videoId ?? null}
                     className={level}
+                    allowZero={level === "beg"}
                   />
                 </td>
               </tr>

@@ -32,7 +32,8 @@ const COLS: { by: string; label: string; cls: string }[] = [
 function ScoreCell({ row, col }: { row: TitleMemberRow; col: (typeof COLS)[number] }) {
   const v = row.scores[col.by];
   const isTime = col.by.endsWith("_time");
-  if (!v) return <td className={col.cls}>-</td>;
+  // 有初级时间但 3BV 未达限界时，初级 3BV/s=0 是有效零纪录
+  if (!v && !(col.by === "beg_3bvs" && row.scores.beg_time > 0)) return <td className={col.cls}>-</td>;
   const neg = !isTime && v < 0;
   const text = isTime ? scoreTime(v) : ((neg ? -v : v) / 1000).toFixed(2);
   const videoId = row.videos[col.by];

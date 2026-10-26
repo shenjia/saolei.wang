@@ -173,7 +173,12 @@ export async function getRadarData(
       const direction = ORDER_DIRECTION[order];
       points.push({
         name: LEVEL_NAMES[level] + ORDER_NAMES[order],
-        score: raw > 0 ? (order === "time" ? scoreTime(raw) : score3bvs(raw)) : "无",
+        score:
+          raw > 0 || (level === "beg" && order === "3bvs" && (scores.beg_time?.score ?? 0) > 0)
+            ? order === "time"
+              ? scoreTime(raw)
+              : score3bvs(raw)
+            : "无",
         percent: percent(dist, direction, raw),
         beatPct: beatPct[`${level}_${order}`] ?? 0,
         grade: grade(dist, direction, raw),

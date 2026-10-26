@@ -49,9 +49,10 @@ fi
 
 if [[ "$1" == "--prod" ]]; then
   echo "== 1/4 备份生产两表 =="
-  ssh -i $SSH_KEY $SSH_HOST "mkdir -p ~/backup/user-scores-recompute-$TS && cd ~/backup/user-scores-recompute-$TS && \
-    mysqldump -usaolei -pSa0lei_Pr0d_2026 --complete-insert --single-transaction $DB_NAME user_scores user_scores_nf | gzip > user_scores-backup.sql.gz && \
-    gzip -t user_scores-backup.sql.gz && ls -la"
+  ssh -i $SSH_KEY $SSH_HOST 'DB_PASS=$(sed -n "s/^DATABASE_URL=\"mysql:\/\/saolei:\([^@]*\)@localhost.*/\1/p" /home/deploy/saolei.wang/.env); export MYSQL_PWD="$DB_PASS"; test -n "$MYSQL_PWD" && \
+    mkdir -p ~/backup/user-scores-recompute-'"$TS"' && cd ~/backup/user-scores-recompute-'"$TS"' && \
+    mysqldump -usaolei --complete-insert --single-transaction '"$DB_NAME"' user_scores user_scores_nf | gzip > user_scores-backup.sql.gz && \
+    gzip -t user_scores-backup.sql.gz && ls -la'
   mkdir -p "../../.workbuddy/backups/$TS-prod-user-scores"
   scp -i $SSH_KEY $SSH_HOST:~/backup/user-scores-recompute-$TS/user_scores-backup.sql.gz "../../.workbuddy/backups/$TS-prod-user-scores/"
   gunzip -t "../../.workbuddy/backups/$TS-prod-user-scores/user_scores-backup.sql.gz" && echo "本地备份校验 OK"
@@ -65,7 +66,8 @@ if [[ "$1" == "--prod" ]]; then
   { echo "START TRANSACTION;"; echo "SOURCE ~/backup/user-scores-recompute-$TS/us.sql;"; \
     echo "SOURCE ~/backup/user-scores-recompute-$TS/usn.sql;"; echo "COMMIT;"; } > $WORK/us-all.sql
   scp -i $SSH_KEY $WORK/us-all.sql $SSH_HOST:~/backup/user-scores-recompute-$TS/
-  ssh -i $SSH_KEY $SSH_HOST "mysql -usaolei -pSa0lei_Pr0d_2026 $DB_NAME < ~/backup/user-scores-recompute-$TS/us-all.sql"
+  ssh -i $SSH_KEY $SSH_HOST 'DB_PASS=$(sed -n "s/^DATABASE_URL=\"mysql:\/\/saolei:\([^@]*\)@localhost.*/\1/p" /home/deploy/saolei.wang/.env); export MYSQL_PWD="$DB_PASS"; test -n "$MYSQL_PWD" && \
+    mysql -usaolei '"$DB_NAME"' < ~/backup/user-scores-recompute-'"$TS"'/us-all.sql'
 fi
 
 echo "用法: $0 --local-test | --prod"

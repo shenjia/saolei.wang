@@ -83,16 +83,19 @@ export function Score3bvs({
   videoId,
   date,
   className = "",
+  allowZero = false,
 }: {
   score: number | null;
   videoId?: number | null;
   date?: number | null;
   className?: string;
+  /** 初级有成绩但 3BV 未达限界时，0 是有效零纪录；其他无成绩场景仍显示「?」 */
+  allowZero?: boolean;
 }) {
   return (
     <span className={`score_3bvs ${className}`}>
       3BV/s
-      {score && score > 0 ? (
+      {score !== null && (score > 0 || (allowZero && score === 0)) ? (
         videoId ? (
           <Link href={`/video/${videoId}`} target="_blank">
             <em>{score3bvs(score)}</em>

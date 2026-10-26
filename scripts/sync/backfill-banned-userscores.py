@@ -13,7 +13,7 @@ user_scores / user_scores_nf 的全部 20 个成绩列（只动 status<>0 的账
 口径锚点（与 transform.py 完全一致）：
   time 列: 秒 <999.99 才有效，存 (秒-1)*1000 毫秒；3bvs: >0 才有效，存 ×1000；
   *_video 列为 MSSQL 录像 id；*_date 列取该录像 Video_Time 转 unix 秒；
-  sum_time/sum_3bvs = 三级齐全才合成，否则 0。
+  sum_time = 三级时间齐全才合成；sum_3bvs 允许有初级时间但未达 3BV 限界时按初级 0 合成。
 
 校验基准：2747（杨萧杨）应为 beg 620 / int 9960 / exp 36790 / sum 47370。
 
@@ -119,6 +119,9 @@ def build_rows(nf):
         bt, bb, btv, bbv, btd, bbd = score_fields(p, 1 + off, nf)
         it, ib, itv, ibv, itd, ibd = score_fields(p, 5 + off, nf)
         et, eb, etv, ebv, etd, ebd = score_fields(p, 9 + off, nf)
+        # 与 transform.py / review.ts 同口径：有初级成绩但未达 3BV 限界记 0
+        if bt is not None and bb is None:
+            bb = 0
         sum_t = (bt + it + et) if (bt is not None and it is not None and et is not None) else 0
         sum_b = (bb + ib + eb) if (bb is not None and ib is not None and eb is not None) else 0
         rows.append((bt, bb, it, ib, et, eb, sum_t, sum_b,

@@ -122,12 +122,16 @@ type UserScoresRow = Record<string, bigint | number | null> & { id: bigint };
 const F = (level: string, order: Order, suffix: "" | "Video" | "Date" = "") =>
   `${level}${order === "time" ? "Time" : "3bvs"}${suffix}`;
 
-/** updateSumScores：三级都有成绩才算总计，否则总计清零 */
+/** updateSumScores：时间三级都有才合计；3BV/s 允许「有初级成绩但未达 3BV 限界」按 0 参与合计。
+ *  完全没有初级成绩时仍是 null，不能误当 0 生成总计（2026-10-26 张老师定）。 */
 function withSum(row: Record<string, number | null>): void {
+  const hasBeg = (row[F("beg", "time")] ?? 0) > 0;
+  if (hasBeg && row[F("beg", "3bvs")] == null) row[F("beg", "3bvs")] = 0;
+  if (!hasBeg && row[F("beg", "3bvs")] === 0) row[F("beg", "3bvs")] = null;
   const t = ["beg", "int", "exp"].map((l) => row[F(l, "time")] ?? 0);
   const b = ["beg", "int", "exp"].map((l) => row[F(l, "3bvs")] ?? 0);
   row.sumTime = t.every((x) => x > 0) ? t.reduce((a, c) => a + c, 0) : 0;
-  row.sum3bvs = b.every((x) => x > 0) ? b.reduce((a, c) => a + c, 0) : 0;
+  row.sum3bvs = hasBeg && b[1] > 0 && b[2] > 0 ? b.reduce((a, c) => a + c, 0) : 0;
 }
 
 function rowToNumbers(row: UserScoresRow | null): Record<string, number | null> {

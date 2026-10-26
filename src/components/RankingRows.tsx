@@ -42,7 +42,9 @@ function ScoreCell({
   // 总计列（sum）保持全站 hover 绿
   const lvCls = col.by.startsWith("beg") ? "hv_beg" : col.by.startsWith("int") ? "hv_int" : col.by.startsWith("exp") ? "hv_exp" : "";
   const cls = `${col.cls}${current ? " current" : ""}${lvCls ? ` ${lvCls}` : ""}`;
-  if (!v) return <td className={cls}>-</td>;
+  // 有初级时间但 3BV 未达限界时，初级 3BV/s=0 是有效零纪录（2026-10-26 口径）；
+  // 其他列的 0 仍表示无成绩。
+  if (!v && !(col.by === "beg_3bvs" && row.scores.beg_time > 0)) return <td className={cls}>-</td>;
   // 3BV/s 负值 = 3BV 太小不被承认（删除线，对齐 Score3bvs 语义）
   // 排行表内 3BV/s 按 2008 版 FormatNumber(...,2) 显示两位小数
   const neg = !isTime && v < 0;

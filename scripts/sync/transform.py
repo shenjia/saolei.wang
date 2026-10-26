@@ -184,6 +184,9 @@ for p in players:
         bt, bb, btv, bbv, btd, bbd = score_fields(p, "beg", nf)
         it, ib, itv, ibv, itd, ibd = score_fields(p, "int", nf)
         et, eb, etv, ebv, etd, ebd = score_fields(p, "exp", nf)
+        # 有初级成绩但 3BV 未达限界：初级 3BV/s 记 0，并允许参与总计；无初级成绩仍为 NULL
+        if bt is not None and bb is None:
+            bb = 0
         sum_t = (bt + it + et) if (bt is not None and it is not None and et is not None) else 0
         sum_b = (bb + ib + eb) if (bb is not None and ib is not None and eb is not None) else 0
         rows.append((pid, bt, bb, it, ib, et, eb, sum_t, sum_b,

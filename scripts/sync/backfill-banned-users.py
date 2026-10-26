@@ -25,7 +25,7 @@ transform.py 的用户域筛选条件是 `FROM Player WHERE Player_IsLive=1`（�
                  （停用账号不继承管理权限；实测停用账号里 IsMaster=1 为 0 个）
 
 字段口径与 transform.py 完全一致：时间成绩=(秒-1)*1000、3BVS=值*1000、999.99/NULL=无成绩、
-MSSQL datetime 视为 +08:00；改口径时两处必须同步改。
+有初级时间但未达 3BV 限界时初级 3BV/s=0；MSSQL datetime 视为 +08:00；改口径时两处必须同步改。
 
 用法
 ----
@@ -215,6 +215,9 @@ for p in players:
         bt, bb, btv, bbv, btd, bbd = score_fields(p, "beg", nf)
         it, ib, itv, ibv, itd, ibd = score_fields(p, "int", nf)
         et, eb, etv, ebv, etd, ebd = score_fields(p, "exp", nf)
+        # 与 transform.py 同口径：有初级成绩但未达 3BV 限界记 0
+        if bt is not None and bb is None:
+            bb = 0
         sum_t = (bt + it + et) if (bt is not None and it is not None and et is not None) else 0
         sum_b = (bb + ib + eb) if (bb is not None and ib is not None and eb is not None) else 0
         rows.append((pid, bt, bb, it, ib, et, eb, sum_t, sum_b,

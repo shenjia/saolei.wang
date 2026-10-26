@@ -2047,7 +2047,7 @@ export async function getRandomUserId(): Promise<number | null> {
 
 export interface RankingRow extends UserBrief {
   rank: number;
-  /** 8 列成绩原始存储值（时间=ms，3bvs=×1000），0=无成绩 */
+  /** 8 列成绩原始存储值（时间=ms，3bvs=×1000）；0 通常为无成绩，初级 3BV/s 有初级时间时为例外零纪录 */
   scores: Record<string, number>;
   /** 各级别成绩对应录像 id（sum 无录像=0） */
   videos: Record<string, number>;

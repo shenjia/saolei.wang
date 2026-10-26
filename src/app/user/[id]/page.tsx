@@ -282,6 +282,7 @@ export default async function UserViewPage({
                           videoId={bvsRec?.videoId ?? null}
                           date={bvsRec?.date ?? null}
                           className={level}
+                          allowZero={level === "beg"}
                         />
                       </td>
                     </tr>

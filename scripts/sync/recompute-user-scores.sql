@@ -7,7 +7,8 @@
 --            初级 >=10（2026-10-16 张老师：3BV≥10 才有效，原 >=4）、中/高级 >=4
 --   * tie-break：同成绩取 vid 最小（与增量「严格更优才替换」语义一致）
 --   * video/date 字段 = 达成该最优的录像 id 与其 create_time
---   * sum_time/sum_3bvs = 三级都 >0 才求和，否则 0（review.ts withSum）
+--   * sum_time = 三级时间都 >0 才求和；sum_3bvs = 中/高级 >0 且有初级时间才求和，
+--     有初级时间但无达标 3BV/s 时 beg_3bvs=0 参与合计，完全无初级成绩仍不生成总计（2026-10-26）
 --   * 有行无通过录像的用户（117 例「全屏蔽但成绩未清零」遗留）→ 成绩清零
 --
 -- 用法：
@@ -50,13 +51,13 @@ e_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_tim
          WHERE v.status=20 AND v.level='exp' AND vi.real_time>0 AND vi.board_3bv>=4) x WHERE rn=1),
 calc AS (
   SELECT u.uid, b_t.rt beg_time, b_t.vid beg_time_video, b_t.ct beg_time_date,
-         b_b.bvs beg_3bvs, b_b.vid beg_3bvs_video, b_b.ct beg_3bvs_date,
+         IF(b_t.rt>0, COALESCE(b_b.bvs,0), NULL) beg_3bvs, b_b.vid beg_3bvs_video, b_b.ct beg_3bvs_date,
          i_t.rt int_time, i_t.vid int_time_video, i_t.ct int_time_date,
          i_b.bvs int_3bvs, i_b.vid int_3bvs_video, i_b.ct int_3bvs_date,
          e_t.rt exp_time, e_t.vid exp_time_video, e_t.ct exp_time_date,
          e_b.bvs exp_3bvs, e_b.vid exp_3bvs_video, e_b.ct exp_3bvs_date,
          IF(b_t.rt>0 AND i_t.rt>0 AND e_t.rt>0, b_t.rt+i_t.rt+e_t.rt, 0) sum_time,
-         IF(b_b.bvs>0 AND i_b.bvs>0 AND e_b.bvs>0, b_b.bvs+i_b.bvs+e_b.bvs, 0) sum_3bvs
+         IF(b_t.rt>0 AND i_b.bvs>0 AND e_b.bvs>0, COALESCE(b_b.bvs,0)+i_b.bvs+e_b.bvs, 0) sum_3bvs
   FROM (SELECT DISTINCT user uid FROM video WHERE status=20) u
   LEFT JOIN b_t ON b_t.uid=u.uid LEFT JOIN b_b ON b_b.uid=u.uid
   LEFT JOIN i_t ON i_t.uid=u.uid LEFT JOIN i_b ON i_b.uid=u.uid
@@ -118,13 +119,13 @@ e_b AS (SELECT uid, vid, bvs, ct FROM (SELECT v.user uid, v.id vid, v.create_tim
          WHERE v.status=20 AND v.level='exp' AND vi.noflag=1 AND vi.real_time>0 AND vi.board_3bv>=4) x WHERE rn=1),
 calc AS (
   SELECT u.uid, b_t.rt beg_time, b_t.vid beg_time_video, b_t.ct beg_time_date,
-         b_b.bvs beg_3bvs, b_b.vid beg_3bvs_video, b_b.ct beg_3bvs_date,
+         IF(b_t.rt>0, COALESCE(b_b.bvs,0), NULL) beg_3bvs, b_b.vid beg_3bvs_video, b_b.ct beg_3bvs_date,
          i_t.rt int_time, i_t.vid int_time_video, i_t.ct int_time_date,
          i_b.bvs int_3bvs, i_b.vid int_3bvs_video, i_b.ct int_3bvs_date,
          e_t.rt exp_time, e_t.vid exp_time_video, e_t.ct exp_time_date,
          e_b.bvs exp_3bvs, e_b.vid exp_3bvs_video, e_b.ct exp_3bvs_date,
          IF(b_t.rt>0 AND i_t.rt>0 AND e_t.rt>0, b_t.rt+i_t.rt+e_t.rt, 0) sum_time,
-         IF(b_b.bvs>0 AND i_b.bvs>0 AND e_b.bvs>0, b_b.bvs+i_b.bvs+e_b.bvs, 0) sum_3bvs
+         IF(b_t.rt>0 AND i_b.bvs>0 AND e_b.bvs>0, COALESCE(b_b.bvs,0)+i_b.bvs+e_b.bvs, 0) sum_3bvs
   FROM (SELECT DISTINCT user uid FROM video WHERE status=20 AND level='beg' AND EXISTS(SELECT 1 FROM video_info vi2 WHERE vi2.id=video.id AND vi2.noflag=1)
         UNION
         SELECT DISTINCT user uid FROM video WHERE status=20 AND level='int' AND EXISTS(SELECT 1 FROM video_info vi2 WHERE vi2.id=video.id AND vi2.noflag=1)
