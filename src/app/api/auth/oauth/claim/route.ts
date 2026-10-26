@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyPassword, setSession, getOauthTicket, clearOauthTicket } from "@/lib/auth";
+import { importQqAvatar } from "@/lib/oauth-avatar";
 import { getClientIp } from "@/lib/net";
 
 export async function POST(req: Request) {
@@ -47,6 +48,11 @@ export async function POST(req: Request) {
       updateTime: now,
     },
   });
+
+  // 首次绑定 QQ：拉取授权头像送审（AI pass 生效 / 否则人工队列），失败不影响绑定（2026-10-26）
+  if (ticket.provider === "qq" && ticket.avatar) {
+    void importQqAvatar(Number(auth.id), ticket.avatar);
+  }
 
   await setSession({ uid: Number(auth.id), username: auth.username, role: auth.role }, getClientIp(req));
   await clearOauthTicket();

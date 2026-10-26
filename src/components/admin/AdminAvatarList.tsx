@@ -193,6 +193,7 @@ function AiVerdict({ row }: { row: AdminAvatarRow }) {
           : "";
   return (
     <div className="admin_ai_verdict">
+      {row.source === "qq" && <span className="admin_tag plain">QQ 头像</span>}{" "}
       {row.verdict === "pass" ? (
         <span className="admin_tag ok">AI 放行</span>
       ) : degraded ? (

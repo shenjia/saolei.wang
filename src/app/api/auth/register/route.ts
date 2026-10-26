@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession, setSession, getOauthTicket, clearOauthTicket } from "@/lib/auth";
 import { validateRegister, createRegisteredUser, type RegisterInput } from "@/lib/register";
+import { importQqAvatar } from "@/lib/oauth-avatar";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { getClientIp } from "@/lib/net";
 import { rateLimit } from "@/lib/ratelimit";
@@ -106,6 +107,10 @@ export async function POST(req: Request) {
         },
       });
       oauthBound = true;
+      // 首次绑定 QQ：拉取授权头像送审（AI pass 生效 / 否则人工队列），失败不影响注册（2026-10-26）
+      if (ticket.provider === "qq" && ticket.avatar) {
+        void importQqAvatar(uid, ticket.avatar);
+      }
     } catch {
       // provider+openid 唯一索引冲突（该身份已被绑定）——跳过绑定
     }

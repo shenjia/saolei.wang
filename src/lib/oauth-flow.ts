@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession, setSession, setOauthTicket } from "@/lib/auth";
 import { checkState, exchangeCode } from "@/lib/oauth";
+import { importQqAvatar } from "@/lib/oauth-avatar";
 
 function redirect(path: string): NextResponse {
   // 手写相对 Location（同 ranking/whereami 的约定）：siteUrl() 拼绝对地址在
@@ -59,6 +60,10 @@ export async function handleOauthCallback(
         updateTime: now,
       },
     });
+    // 首次绑定 QQ 成功：拉取授权头像送审（AI pass 生效 / 否则人工队列），失败不影响绑定（2026-10-26）
+    if (provider === "qq" && ticket.avatar) {
+      void importQqAvatar(session.uid, ticket.avatar);
+    }
     return redirect("/?bound=1");
   }
 
