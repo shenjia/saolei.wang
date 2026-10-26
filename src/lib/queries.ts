@@ -470,9 +470,11 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
-  // v3：home 口径新增排除「创造了」首创行（2026-10-25），bump 防旧缓存
-  ["news-count-v3"],
-  { revalidate: 60 }
+  // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
+  // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
+  // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
+  ["news-count-v4"],
+  { revalidate: 300 }
 );
 
 export async function getNewsCount(opts: Parameters<typeof getNewsCountImpl>[0]): Promise<number> {
