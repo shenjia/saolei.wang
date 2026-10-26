@@ -38,7 +38,7 @@ export interface RankingFeedProps {
   /** 初始高亮行（whereami 302 携带 hl=<uid>，SSR 即高亮，无 JS 也可见） */
   initialHl?: number;
   /** 升降列占位（2026-10-14 张老师需求）：雷界榜切其它排序列时保留空列，版式不跳动；
-      仅 /ranking 雷界榜传 true（NF/BV/进步/地区/世界无升降数据，不占位） */
+      仅 /ranking 雷界榜传 true（2026-10-26 起 NF 模式同样占位防跳动；BV/进步/地区/世界无升降数据，不占位） */
   reserveDelta?: boolean;
   /** 页脚右侧扩展按钮（2026-10-15 地区内页「返回地区排行」）：有值时页脚转 flex 行，
       滑条吃余量、按钮贴右缘（同世界榜 world_pager 口径，CSS 见 globals.css pager_extra） */

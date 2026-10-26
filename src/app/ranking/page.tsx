@@ -496,7 +496,7 @@ export default async function RankingPage({
           total={total}
           pageSize={pageSize}
           initialHl={hl}
-          reserveDelta={!nf}
+          reserveDelta
         />
       </div>
       {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求：所有排行的
