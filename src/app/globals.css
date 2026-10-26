@@ -4056,11 +4056,11 @@ body #page.ranking_old .ranking_box {
 .ranking_table td.name a:hover {
   color: #a6e22e;
 }
-/* 排行榜上传头像（2026-10-27）：姓名列与表头统一预留 20px 左槽。
+/* 排行榜上传头像（2026-10-27）：姓名列与表头统一预留 18px 左槽。
    头像与名字同字号、垂直居中，绝对定位不占文字流；有无头像时名字坐标不变。 */
 .ranking_table th.name,
 .ranking_table td.name {
-  padding-left: 20px;
+  padding-left: 18px;
 }
 .ranking_table td.name .ranking_name {
   display: inline-block;
@@ -5115,17 +5115,15 @@ body #page.two_columns li.main {
    在该区间撑不下一行式页头（h1 104 + gap 20 + tabs 336 + 搜索 184 ≈ 需内容宽
    640，62% 流式要视口 ≥1130 才给得到）→ .ranking_tabs 自带 flex-wrap 逐个
    折行成竖排，562px 自然宽的成绩表同时溢出卡片（overflow-x:auto 仅 ≤768 生效）。
-   width:max(62%,720px)：769~1188 视口卡片固定 720 外径（内容 664 ≥ 640），
-   页头一行排开；≥1188 恢复 62% 流式，960 上限不变。
-   已知副作用：787~899 视口卡片比 80% 顶栏宽（左缘最大偏移 45px，卡片居中，
-   观感为深色通栏上的浮卡片，不显眼）；900 视口两者恰好重合。
-   ⚠️ 必须包进 ≥769 媒体查询：不限定会把 ≤768 移动版 #page 也顶到 720，
-   窄于 720 的视口出现横向滚动（2026-10-13 实测踩过）。 */
+   width:max(62%,881px)：按当前最宽的 BV/STNB 固定表完整容纳所有列；
+   ≥1422 恢复 62% 流式，960 上限不变，低宽度由下方阶梯整体缩放。
+   ⚠️ 必须包进 ≥769 媒体查询：移动版使用下方独立的虚拟宽与缩放规则。 */
 @media (min-width: 769px) {
   /* :not(.two_columns)——地区总榜 2026-10-15 起挂 two_columns（地图上右侧双栏，
      宽度走 80%/max 960 口径，见 .area_top 处），不再吃 62% 竖版宽度 */
   body #page.ranking_old.main:not(.two_columns) {
-    width: max(62%, 720px);
+    /* 最宽的 BV/STNB 表为 823px，加卡片边框/内外距需 881px 才能完整容纳 */
+    width: max(62%, 881px);
   }
 }
 
@@ -5133,39 +5131,47 @@ body #page.two_columns li.main {
    「所有排行页主体板块自适应宽度做一个下限，保证每一列数据都能显示出来」；
    随后纠偏：「宽度降到一定程度之后出现了水平滚动条。如果空间不够，就整体缩放。
    主板块的比例无论如何，不应该出现水平滚动条」） ----------
-   各榜表格逐列实测自然全宽（nowrap）：雷界 562 / BV·进步 601 / 世界 610 / 地区 352。
-   布局：#page 钳 700 虚拟宽下限（.box 外距 8×2 + padding 16 14 + 边框 2 →
-   卡片内容区 = 700 − 46 ＝ 654 ≥ 652：表格 min-width 640 + .rank_scroll 页脚
-   实测再吃 12px）。min-width 只定「按多宽排版」，不产生页面级横滑——
-   视口 <708（700 + #page 左右外距 8）时由下面的 zoom 阶梯整体缩放 #page，
-   渲染宽 700×zoom + 8 恒 ≤ 视口，任何宽度都不出水平滚动条；
-   缩放对象只含 #page（顶栏/移动导航/footer 在外，保持原尺寸）。
-   军衔成员榜 /titles/[title] 根元素无 ranking_old，挂 rank_fit 类加入同一体系
-   （徽章页头自然宽约 702 实际主导，表格本身 ≈540 放得下）。
-   zoom 阶梯口径：700×zoom ≤ 视口 − 8，步距 5%（阶梯内最多富余 33px，
-   空档不至于显眼；窄端 322px 以下继续降档覆盖小屏）。
-   特异性 body #page.ranking_old.main / body #page.rank_fit 高于 ≤605 整页
-   zoom 阶梯的 body #page，排行页在窄屏用自己的更大虚拟宽系数（vw/708 而非 vw/605）。 */
+   2026-10-27 固定列宽后重定口径：主榜 / BV / STNB / 进步榜姓名列收紧至 118px，
+   最宽的 BV/STNB 表约 823px，#page 需要 881px 虚拟排版宽；低宽度整页缩放，不裁列、不在卡片内横滑。
+   军衔成员榜 /titles/[title] 根元素无 ranking_old，挂 rank_fit 类，仍沿用
+   原 700px 下限（徽章页头自然宽约 702，表格本身 ≈540）。
+   特异性高于 ≤605 整页 zoom 阶梯；缩放对象只含 #page，顶栏与 footer 不缩放。 */
 @media (max-width: 768px) {
-  body #page.ranking_old.main,
+  body #page.ranking_old.main {
+    min-width: 881px;
+  }
   body #page.rank_fit {
     min-width: 700px;
   }
   /* ⚠️ 下限只挂 #page（虚拟排版宽）；.title_members_box 等盒不挂——
-     盒自带 margin 8×2，再挂 700 会变 710 顶破 #page（10-15 实测 5~25px 间歇溢出） */
+     盒自带 margin 8×2，再挂下限会顶破 #page。 */
 }
-@media (max-width: 707px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.95; } }
-@media (max-width: 672px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.90; } }
-@media (max-width: 637px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.85; } }
-@media (max-width: 602px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.80; } }
-@media (max-width: 567px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.75; } }
-@media (max-width: 532px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.70; } }
-@media (max-width: 497px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.65; } }
-@media (max-width: 462px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.60; } }
-@media (max-width: 427px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.55; } }
-@media (max-width: 392px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.50; } }
-@media (max-width: 357px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.45; } }
-@media (max-width: 322px) { body #page.ranking_old.main, body #page.rank_fit { zoom: 0.40; } }
+@media (max-width: 889px) { body #page.ranking_old.main { zoom: 0.95; } }
+@media (max-width: 844px) { body #page.ranking_old.main { zoom: 0.90; } }
+@media (max-width: 800px) { body #page.ranking_old.main { zoom: 0.85; } }
+@media (max-width: 756px) { body #page.ranking_old.main { zoom: 0.80; } }
+@media (max-width: 712px) { body #page.ranking_old.main { zoom: 0.75; } }
+@media (max-width: 668px) { body #page.ranking_old.main { zoom: 0.70; } }
+@media (max-width: 624px) { body #page.ranking_old.main { zoom: 0.65; } }
+@media (max-width: 580px) { body #page.ranking_old.main { zoom: 0.60; } }
+@media (max-width: 536px) { body #page.ranking_old.main { zoom: 0.55; } }
+@media (max-width: 492px) { body #page.ranking_old.main { zoom: 0.50; } }
+@media (max-width: 448px) { body #page.ranking_old.main { zoom: 0.45; } }
+@media (max-width: 404px) { body #page.ranking_old.main { zoom: 0.40; } }
+@media (max-width: 360px) { body #page.ranking_old.main { zoom: 0.35; } }
+@media (max-width: 316px) { body #page.ranking_old.main { zoom: 0.30; } }
+@media (max-width: 707px) { body #page.rank_fit { zoom: 0.95; } }
+@media (max-width: 672px) { body #page.rank_fit { zoom: 0.90; } }
+@media (max-width: 637px) { body #page.rank_fit { zoom: 0.85; } }
+@media (max-width: 602px) { body #page.rank_fit { zoom: 0.80; } }
+@media (max-width: 567px) { body #page.rank_fit { zoom: 0.75; } }
+@media (max-width: 532px) { body #page.rank_fit { zoom: 0.70; } }
+@media (max-width: 497px) { body #page.rank_fit { zoom: 0.65; } }
+@media (max-width: 462px) { body #page.rank_fit { zoom: 0.60; } }
+@media (max-width: 427px) { body #page.rank_fit { zoom: 0.55; } }
+@media (max-width: 392px) { body #page.rank_fit { zoom: 0.50; } }
+@media (max-width: 357px) { body #page.rank_fit { zoom: 0.45; } }
+@media (max-width: 322px) { body #page.rank_fit { zoom: 0.40; } }
 
 /* ---------- 论坛页中段死区修复（2026-10-13 张老师要求，参照排行页方案 A 统一调整） ----------
    死区根因（769~1188 视口表格挤烂 + 页头折行错乱，张老师截图即此）：
