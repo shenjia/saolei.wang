@@ -133,7 +133,6 @@ export default async function BbsTitlePage({
                     name={post.author.chineseName}
                     sex={post.author.sex}
                     avatar={post.author.avatar}
-                    layout="inline"
                   />{" "}
                   <TitleBadge title={post.author.title} classic={post.author.old} link />{" "}
                 </>

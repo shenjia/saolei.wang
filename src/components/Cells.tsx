@@ -38,33 +38,23 @@ export function AvatarCell({
   );
 }
 
-/** 论坛作者名：列表用绝对定位避免推挤文字；详情页用 inline 与名字共同排版。
- *  无头像直接回退原 AvatarCell，不渲染图片、不增加占位。 */
+/** 主题详情作者名：头像与名字共同排版；无头像时不渲染图片、不增加占位。 */
 export function BbsAuthorName({
   id,
   name,
   sex,
   avatar = "",
-  layout,
 }: {
   id: number;
   name: string;
   sex: number;
   avatar?: string;
-  layout: "absolute" | "inline";
 }) {
   const avatarUrl = resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "");
   if (!avatarUrl) return <AvatarCell id={id} name={name} sex={sex} gender="small" link />;
-  const absolute = layout === "absolute";
   return (
-    <span className={absolute ? "bbs_list_name" : "bbs_meta_author"}>
-      <img
-        className={absolute ? "bbs_list_avatar" : "bbs_meta_avatar"}
-        src={avatarUrl}
-        alt=""
-        width={absolute ? 13 : 16}
-        height={absolute ? 13 : 16}
-      />
+    <span className="bbs_meta_author">
+      <img className="bbs_meta_avatar" src={avatarUrl} alt="" width={16} height={16} />
       <AvatarCell id={id} name={name} sex={sex} gender="small" link />
     </span>
   );

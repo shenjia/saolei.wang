@@ -1375,21 +1375,6 @@ body #page.bbs_old .page_head {
   word-break: break-all;
   line-height: 24px;
 }
-/* 论坛列表头像（2026-10-27）：绝对定位在作者名左侧，不占文字流；
-   无头像不渲染外层，所有作者名与性别图标坐标保持原样。 */
-.bbs_list .bbs_list_name {
-  display: inline-block;
-  position: relative;
-}
-.bbs_list .bbs_list_avatar {
-  position: absolute;
-  right: calc(100% + 4px);
-  top: 50%;
-  width: 13px;
-  height: 13px;
-  object-fit: cover;
-  transform: translateY(-50%);
-}
 /* 十六轮：计数改「x阅读 x评论」后放宽——历史最大 187684阅读，110px 会截断；
    十七轮：改「x / y」纯数字——去单位词后收窄回 110px */
 .bbs_list th.num {
@@ -1761,12 +1746,15 @@ del[data-tip]:hover::after {
   color: #75715e;
   font-size: 13px;
 }
-/* 主题详情楼主与评论者：头像参与 meta 行排版；无头像时无外层、无间距占位。 */
+/* 主题详情楼主与评论者：头像参与 meta 行排版；无头像时无外层、无间距占位。
+   作者区域继承的 24px 行高会把汉字字形压得偏下；统一为 16px 行高，
+   使头像、姓名与性别图标的视觉中心一致。 */
 .bbs_post .bbs_meta_author {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   vertical-align: middle;
+  line-height: 16px;
 }
 .bbs_post .bbs_meta_avatar {
   display: block;

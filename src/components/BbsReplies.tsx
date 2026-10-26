@@ -262,7 +262,6 @@ export function BbsReplySection({
                     name={r.author.chineseName}
                     sex={r.author.sex}
                     avatar={r.author.avatar}
-                    layout="inline"
                   />{" "}
                   <TitleBadge title={r.author.title} classic={r.author.old} link />{" "}
                 </>
