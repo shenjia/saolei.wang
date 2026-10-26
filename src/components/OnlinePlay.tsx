@@ -142,7 +142,7 @@ const TIPS: string[] = [
   "无猜模式下需要靠猜的局面会自动重排，全程都能靠推理解决。",
   "鼠标滚轮可直接调显示比例：上滑放大，下滑缩小。",
   "设置里能限定 3BV 范围，只练你想要的开局难度。",
-  "在线练习录像不能参与排行，下载后仅供自己回看。",
+  "普通练习录像仅供回看；排名模式胜局可手动上传参与排行。",
   "手机上长按格子可以标雷，标完会自动展开周围已满足的数字格。",
   "点笑脸随时重开一局（自定义手摆的图会一直保留，切模式或重新摆雷才换）；F2 恒换新地图。",
   "禁旗模式（NF）下不能插旗，按下即开，滑动可以开多格。",
@@ -408,6 +408,10 @@ export function OnlinePlay({
        与速旗互斥（继续沿用 2026-10-16 口径）：打开其一自动关闭另一者，NF 切换重开。
        激活显色＝默认黄（.gicon.active 站内黄，2026-10-19 二次定）。 */
     let nf = false;
+    /* 排名模式（2026-10-26）：仅登录用户可开；默认关。开启即重开一局，
+       关闭速旗/连击/无猜/新手提示/复活，锁完整 3BV 区间并禁止自定义与同盘 UPK。 */
+    let ranked = false;
+    let rankedUploading = false, rankedUploaded = false;
     let ng = true, qmark = false;
     /* 「连击模式」（2026-10-19 张老师定，默认关，入口＝原 NF 快捷钮位）：
        NF 模式退役换防——「按下即开＋滑动连开」交互保留并扩展到右键：
@@ -504,7 +508,7 @@ export function OnlinePlay({
         const s = JSON.parse(raw) as {
           nf?: boolean; combo?: boolean; ng?: boolean; qmark?: boolean; bv?: Record<string, { lo: number; hi: number }>;
           showStats?: boolean; autoChord?: boolean; tips?: boolean; rookie?: boolean; revive?: boolean;
-          autoShot?: boolean;
+          autoShot?: boolean; ranked?: boolean;
           lv?: string;
           cus?: { w: number; h: number; m: number };
         };
@@ -518,6 +522,7 @@ export function OnlinePlay({
         if (typeof s.rookie === "boolean") rookieOn = s.rookie;
         if (typeof s.revive === "boolean") reviveOn = s.revive;
         if (typeof s.autoShot === "boolean") autoShot = s.autoShot;
+        if (logged && typeof s.ranked === "boolean") ranked = s.ranked;
         /* 级别持久化（2026-10-14 四期张老师报：刷新/热更后回初级，设置浮窗的 3BV
            范围也跟着变初级区间，与玩家正在玩的级别脱节）——记住上次级别，开局恢复 */
         if (s.lv === "beg" || s.lv === "int" || s.lv === "exp" || s.lv === "cus") savedLv = s.lv;
@@ -540,7 +545,7 @@ export function OnlinePlay({
     }
     function saveSettings() {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, rookie: rookieOn, revive: reviveOn, autoShot, lv, bv: bvSel, cus: cusSpec }));
+        localStorage.setItem(LS_KEY, JSON.stringify({ nf, combo, ng, qmark, showStats, autoChord, tips: tipsOn, rookie: rookieOn, revive: reviveOn, autoShot, ranked, lv, bv: bvSel, cus: cusSpec }));
       } catch { /* 隐私模式 */ }
     }
     /* 上次级别（loadSettings 恢复；无记忆/脏数据回落 beg） */
@@ -548,6 +553,11 @@ export function OnlinePlay({
     loadSettings();
     /* NF 与速旗互斥（2026-10-16 张老师定）：互斥上线前的存档可能两个同开，NF 优先 */
     if (nf && autoChord) autoChord = false;
+    if (!logged) ranked = false;
+    if (ranked) {
+      autoChord = false; combo = false; ng = false; rookieOn = false; reviveOn = false;
+      if (savedLv === "cus") savedLv = "beg";
+    }
     let mines: Uint8Array | null = null, nums: Uint8Array | null = null;
     /* ---- 手动摆雷模式（2026-10-21 张老师定）：自定义盘专用 ----
        manualMode＝摆雷阶段激活（仅 !started 期间有意义，切出 cus / 首击消费后清）；
@@ -702,6 +712,7 @@ export function OnlinePlay({
       csec: number;           // 用时（百分秒）
       won: boolean;
       nf: boolean; combo: boolean; ng: boolean; qmark: boolean;
+      ranked?: boolean;       // 合规排名局：胜局面板显示服务端 EVF 上传按钮
       level: string;          // beg/int/exp/cus
       events: OnlineEvent[];
       dateStr: string;        // 对局时间（AVF 时间戳）
@@ -1072,7 +1083,7 @@ export function OnlinePlay({
     /* 3BV 范围是否完整（=该级别统计区间原样）：完整时重排也无需校验（零成本）。
        自定义盘（cus）无统计区间，视为完整（跳过范围校验，重排全速） */
     function bvRangeFull(): boolean {
-      if (lv === "cus") return true;
+      if (ranked || lv === "cus") return true;
       const r = bvRanges[lv as keyof BvRanges], s = bvSel[lv];
       return s.lo === r.min && s.hi === r.max;
     }
@@ -1819,6 +1830,8 @@ export function OnlinePlay({
     /* ---- 右侧结算面板（五期）：雷达图 + 再来一局 / 重玩本局 / 查看回放 / 下载录像 ----
        imported=true＝拖拽导入局（2026-10-21）：快照带来源标记（回放播完即退出口径） */
     function buildResultPanel(t: number, solvedBv: number, won: boolean, cnt: ReplayCounts, imported = false) {
+      rankedUploading = false;
+      rankedUploaded = false;
       const cl = cnt.clLeft + cnt.clRight + cnt.clDouble, ce = cnt.ce;
       const path = Math.round(cnt.pathPx / 16); // 行程折「格」（16px/格），与录像页同量纲
       const hasBv = solvedBv > 0 && t > 0;
@@ -1836,6 +1849,7 @@ export function OnlinePlay({
         csec: Math.round(t * 100),
         won,
         nf, combo, ng, qmark,
+        ranked: ranked && !imported,
         level: lv,
         events: evStream.slice(),
         dateStr: formatAvfTimestamp(new Date()),
@@ -1914,6 +1928,8 @@ export function OnlinePlay({
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>',
         download:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m7 10 5 5 5-5"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 15V3"/></svg>',
+        upload:
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m17 8-5-5-5 5"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12"/></svg>',
         /* 原地复活＝心电脉冲：一条心电图折线穿过一颗实心心形——「从死亡线上
            拉回来」的直觉符号；stroke 风格与上面四颗同款（2026-10-19 设计） */
         revive:
@@ -1930,10 +1946,16 @@ export function OnlinePlay({
          dieSnap 存在。独占整行宽度充裕，「空格」键帽恒显示（2026-10-19 快捷键标注；
          触屏设备不渲染键帽与键盘 title——2026-10-21 张老师定，没有键盘不提快捷键） */
       const kb = (k: string) => (touchUI ? "" : "<kbd>" + k + "</kbd>");
-      const reviveBtn = !s.won && dieSnap && reviveOn
+      const reviveBtn = !s.won && dieSnap && reviveOn && !ranked
         ? '<button type="button" class="grb grb_revive" id="grb_revive"' +
           (touchUI ? "" : ' title="按空格也可复活"') + ">" +
           IC.revive + '原地复活' + kb("空格") + "</button>"
+        : "";
+      /* 排名胜局：上传按钮占原「原地复活」的独占行。只绑定点击，不存在自动上传调用。 */
+      const uploadBtn = s.ranked && s.won
+        ? '<button type="button" class="grb grb_upload" id="grb_upload"' +
+          (rankedUploading || rankedUploaded ? " disabled" : "") + ">" +
+          IC.upload + (rankedUploaded ? "已上传" : rankedUploading ? "上传中…" : "上传录像") + "</button>"
         : "";
       /* 四个按钮分两行（2026-10-15 六期张老师定）：上排＝开局类（再来一局 / 重玩本局），
          下排＝本局录像类（查看回放 / 下载录像）。.gr_btns 走 2 列 grid，DOM 顺序即行列顺序。
@@ -1944,10 +1966,10 @@ export function OnlinePlay({
       host.innerHTML =
         titleLine +
         '<div class="gr_radar" id="gr_radar"></div>' +
-        reviveBtn +
+        reviveBtn + uploadBtn +
         '<div class="gr_btns">' +
         '<button type="button" class="grb" id="grb_new_game">' + IC.newGame + '再来一局' + kb("A") + "</button>" +
-        '<button type="button" class="grb" id="grb_replay_same">' + IC.replaySame + '重玩本局' + kb("R") + "</button>" +
+        '<button type="button" class="grb" id="grb_replay_same"' + (s.ranked ? ' disabled title="排名模式禁止重玩同一盘面"' : "") + '>' + IC.replaySame + '重玩本局' + kb("R") + "</button>" +
         '<button type="button" class="grb" id="grb_review">' + IC.review + '查看回放' + kb("V") + "</button>" +
         '<button type="button" class="grb" id="grb_download">' + IC.download + '下载录像' + kb("D") + "</button>" +
         "</div>";
@@ -2015,6 +2037,7 @@ export function OnlinePlay({
       bind("grb_review", startInPlaceReplay);
       bind("grb_download", downloadAvf);
       bind("grb_revive", revive);
+      bind("grb_upload", () => { void uploadRankedEvf(); });
     }
     /* 结算浮层收起 / 再弹（七期 2026-10-15；2026-10-19 二版扩到桌面遮罩态）。
        收起**不清内容**——只是 hidden，再弹不必重建（雷达 React root 留在卡片里，
@@ -2082,7 +2105,7 @@ export function OnlinePlay({
        （2026-10-19 张老师两定：偏好不被重玩按钮破坏；重玩局内无猜照常救回，
        允许盘面漂移） ---- */
     function replaySameBoard() {
-      if (!snapshot) return;
+      if (!snapshot || ranked || snapshot.ranked) return;
       replayBoardLocked = true; // 标记：下一局布雷走锁定盘
       pendingBoard = snapshot.mines.slice();
       const wasManual = !!snapshot.manual; // 先取（reset 会清 manualBoard）
@@ -2130,6 +2153,37 @@ export function OnlinePlay({
       URL.revokeObjectURL(url);
       /* 局中绿色气泡反馈（2026-10-19 张老师定）：确认下载动作已完成 */
       showToast("下载成功");
+    }
+    /* 排名模式唯一上传触发点：用户点击结算面板的绿色按钮后才请求服务端生成 EVF。 */
+    async function uploadRankedEvf() {
+      const s = snapshot;
+      if (!s?.ranked || !s.won || !logged || rankedUploading || rankedUploaded) return;
+      rankedUploading = true;
+      renderResultPanel();
+      try {
+        const res = await fetch("/api/online/ranked/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            width: s.w, height: s.h, mines: s.m,
+            board: Array.from(s.mines),
+            questionMarks: s.qmark, nf: s.nf,
+            bbbv: s.bbbv, scoreCsec: s.csec, events: s.events,
+          }),
+        });
+        const data = await res.json() as { ok?: boolean; error?: string };
+        if (!res.ok || !data.ok) throw new Error(data.error || "上传失败，请稍后重试");
+        if (snapshot !== s) return; // 请求期间已开新局，结果不污染新面板
+        rankedUploaded = true;
+        showToast("录像已上传，等待审核");
+      } catch (err) {
+        if (snapshot === s) showToast(err instanceof Error ? err.message : "上传失败，请稍后重试", true);
+      } finally {
+        if (snapshot === s) {
+          rankedUploading = false;
+          renderResultPanel();
+        }
+      }
     }
     /* ---- 自研回放（五期二版，2026-10-14 张老师定：不弹窗，就在游戏界面进行；
        六期 2026-10-15 撤掉控制栏；二十期 2026-10-16 张老师定：控制条回归——
@@ -2741,6 +2795,7 @@ export function OnlinePlay({
       e.preventDefault();
       dragDepth = 0;
       dropHint.classList.remove("on");
+      if (ranked) { showToast("排名模式不能导入录像", true); return; }
       const f = e.dataTransfer?.files?.[0];
       if (!f) return;
       importedName = f.name;
@@ -2765,7 +2820,7 @@ export function OnlinePlay({
       /* 三重守卫：死亡快照存在、确实在结算态、终态是**败局**（胜局快照/救回后
          作废的 null 都不触发——空格键与按钮同路）；「允许复活」开关关闭时
          一并拦截（按钮不渲染、空格不劫持，此处兜底防 __op 等旁路触发） */
-      if (!reviveOn || !dieSnap || !over || snapshot?.won) return;
+      if (ranked || !reviveOn || !dieSnap || !over || snapshot?.won) return;
       const d = dieSnap;
       state = d.state.slice();
       openedSafe = d.openedSafe;
@@ -3086,7 +3141,8 @@ export function OnlinePlay({
          第二个参数 false（七期）：新开一局不许把「本局表现」浮层弹回来 */
       if (replaying) forceExitReplay(false, false);
       const prevLv = lv, prevW = W, prevH = H, prevM = M;
-      lv = level || lv;
+      lv = ranked && level === "cus" ? "beg" : level || lv;
+      if (ranked && lv === "cus") lv = "beg";
       const L = levelSize(lv); W = L.x; H = L.y; M = L.m;
       /* 手摆图常驻副本作废条件（2026-10-21 张老师定）：切级别，或自定义规格变了
          （宽/高/雷数任一变化）。笑脸/F2/再来一局等平级 reset 不作废——自定义+
@@ -3106,6 +3162,8 @@ export function OnlinePlay({
       leftDown = rightDown = chordDone = false;
       comboGraceT0 = 0; // 连击开局保护窗随新局重置（首格开出时由 startTimer 重启）
       evStream = [];
+      rankedUploading = false;
+      rankedUploaded = false;
       /* 原地复活状态随新局作废（2026-10-19）：死亡快照/手势快照/复活计数不跨局 */
       dieSnap = null;
       gestureSnap = null;
@@ -3189,6 +3247,7 @@ export function OnlinePlay({
       const t = (e.target as HTMLElement).closest("[data-lv]");
       if (!t) return;
       const to = t.getAttribute("data-lv")!;
+      if (ranked && to === "cus") { showToast("排名模式只支持标准级别", true); return; }
       if (to === "cus") {
         /* 自定义（v4 张老师 18:19 定）：点 tab 恒开窗——不做 toggle。
            原先「开→关」的 toggle 语义有两个坑：①连点/双击第二击把自己关掉，
@@ -3329,6 +3388,7 @@ export function OnlinePlay({
       cusDlg.style.top = Math.round(tab.offsetTop + tab.offsetHeight + 10) + "px";
     }
     function openCusDialog() {
+      if (ranked) { showToast("排名模式只支持标准级别", true); return; }
       /* 滑杆值只在窗原本关着时按记忆规格回填；已开着（连点 tab）不回填，
          免得把玩家正拖到一半的值弹回去 */
       if (!cusDlg.classList.contains("open")) {
@@ -3416,6 +3476,7 @@ export function OnlinePlay({
        （须闲置满 3 秒才激活，唤醒定时器会接手）。切换不重开当前局、不动闲置计时 */
     const swRookie = $("sw_rookie") as HTMLInputElement;
     on(swRookie, "change", () => {
+      if (ranked) { swRookie.checked = false; return; }
       rookieOn = swRookie.checked;
       saveSettings();
       if (!rookieOn) rookieStop();
@@ -3427,6 +3488,7 @@ export function OnlinePlay({
        maskOpen=true，这里补一次 hideResultModal 恢复「关」态） */
     const swRevive = $("sw_revive") as HTMLInputElement;
     on(swRevive, "change", () => {
+      if (ranked) { swRevive.checked = false; return; }
       reviveOn = swRevive.checked;
       saveSettings();
       if (over && snapshot && !snapshot.won && gresult.classList.contains("show")) {
@@ -3460,16 +3522,47 @@ export function OnlinePlay({
        连击与速旗**不互斥**（2026-10-19 张老师定，可叠加）。
        十期起设置浮窗里不再有 NF/无猜两项（行已删），快捷钮是唯一入口；
        「自动双击」设置开关同期撤出，改挂速旗快捷钮 */
+    const btnRank = $("btn_rank") as HTMLButtonElement;
     const btnNf = $("btn_nf") as HTMLButtonElement;
     const btnSq = $("btn_sq") as HTMLButtonElement;
     const btnCombo = $("btn_combo") as HTMLButtonElement;
     const btnNg = $("btn_ng") as HTMLButtonElement;
     function syncModeButtons() {
+      btnRank.classList.toggle("active", ranked);
+      btnRank.disabled = !logged;
+      btnRank.classList.toggle("rank_locked", !logged);
+      btnRank.querySelector(".tip")!.textContent = logged
+        ? "排名模式，禁用所有辅助功能，服务器生成录像，可参与排行"
+        : "登录后才能使用";
       btnNf.classList.toggle("active", nf);
       btnSq.classList.toggle("active", autoChord);
       btnCombo.classList.toggle("active", combo);
       btnNg.classList.toggle("active", ng);
+      for (const btn of [btnSq, btnCombo, btnNg]) {
+        btn.disabled = ranked;
+        btn.classList.toggle("rank_locked", ranked);
+      }
+      for (const sw of [swRookie, swRevive]) {
+        sw.disabled = ranked;
+        sw.closest(".gs_row")?.classList.toggle("rank_locked", ranked);
+      }
+      $("level_tabs").querySelector('[data-lv="cus"]')?.classList.toggle("rank_locked", ranked);
     }
+    on(btnRank, "click", () => {
+      if (!logged) return;
+      ranked = !ranked;
+      if (ranked) {
+        autoChord = false; combo = false; ng = false; rookieOn = false; reviveOn = false;
+        rookieStop();
+      }
+      replayBoardLocked = false;
+      pendingBoard = null;
+      swRookie.checked = rookieOn;
+      swRevive.checked = reviveOn;
+      saveSettings();
+      syncModeButtons();
+      reset(ranked && lv === "cus" ? "beg" : undefined);
+    });
     on(btnNf, "click", () => {
       nf = !nf;
       if (nf && autoChord) autoChord = false; // 互斥：开 NF 自动关速旗
@@ -3478,6 +3571,7 @@ export function OnlinePlay({
       reset();
     });
     on(btnSq, "click", () => {
+      if (ranked) return;
       autoChord = !autoChord;
       /* 互斥：开速旗自动关 NF——NF 被顶掉时对局禁右键语义已失效，须重开；
          单纯切速旗（未顶掉 NF）仍不重开 */
@@ -3491,6 +3585,7 @@ export function OnlinePlay({
     /* 连击切换不重开（2026-10-19 张老师定）：它只改「按下即触发＋滑动连点」的
        交互方式，不改变盘面规则/旗语义，对局中途切换无一致命状态 */
     on(btnCombo, "click", () => {
+      if (ranked) return;
       combo = !combo;
       /* 开局保护窗按「是否已开局」定（2026-10-22 改开局即生效后重定）：
          未开局（含未首击）→ 窗待命（开局后首格起 1 秒内冻结自动开格）；
@@ -3501,6 +3596,7 @@ export function OnlinePlay({
       syncModeButtons();
     });
     on(btnNg, "click", () => {
+      if (ranked) return;
       ng = !ng;
       saveSettings();
       syncModeButtons();
@@ -4711,21 +4807,24 @@ export function OnlinePlay({
       /* 自定义盘无统计区间：整个 3BV 区禁用（半透明 + 滑杆不可拖 + title 说明） */
       const cus = lv === "cus";
       bvRow.classList.toggle("cus", cus);
+      bvRow.classList.toggle("rank_locked", ranked);
       [bvLo, bvHi].forEach((el) => {
-        el.disabled = cus;
+        el.disabled = cus || ranked;
       });
       if (cus) {
         bvRow.title = "自定义盘面不支持 3BV 筛选";
         bvCur.textContent = "—";
         return;
       }
-      const r = bvRanges[lv as keyof BvRanges], s = bvSel[lv];
+      const r = bvRanges[lv as keyof BvRanges];
+      const saved = bvSel[lv];
+      const s = ranked ? { lo: r.min, hi: r.max } : saved;
       bvLo.min = bvHi.min = String(r.min);
       bvLo.max = bvHi.max = String(r.max);
       bvLo.value = String(s.lo); bvHi.value = String(s.hi);
       bvDual.style.setProperty("--lo", ((s.lo - r.min) / (r.max - r.min)) * 100 + "%");
       bvDual.style.setProperty("--hi", ((s.hi - r.min) / (r.max - r.min)) * 100 + "%");
-      bvRow.title = LV_NAMES[lv] + "统计区间 " + r.min + "–" + r.max;
+      bvRow.title = ranked ? "排名模式使用完整 3BV 范围，不可调整" : LV_NAMES[lv] + "统计区间 " + r.min + "–" + r.max;
       bvCur.textContent = s.lo + " – " + s.hi;
     }
     on(bvLo, "input", () => {
@@ -4959,6 +5058,8 @@ export function OnlinePlay({
         guard: () => (started ? Math.max(0, (lv === "beg" ? 0 : lv === "int" ? 250 : 500) - (performance.now() - comboGraceT0)) : 0),
         over: () => over,
         nf: () => nf,
+        ranked: () => ranked,
+        rankedUploaded: () => rankedUploaded,
         ng: () => ng,
         bv3: () => board3bv,
         bvSel: () => ({ ...bvSel[lv] }),
@@ -5088,6 +5189,11 @@ export function OnlinePlay({
         <div className="gicons">
           {/* 模式快捷钮 hover 出气泡（2026-10-15 九期张老师定）：文案与设置浮窗
               对应开关的 .tip 一致；不用原生 title（会跟气泡双份弹） */}
+          {/* 排名模式：NF 前；默认关闭，登录后可用。 */}
+          <button className="gicon gmode" id="btn_rank" type="button" disabled={!logged}>
+            排
+            <span className="tip">{logged ? "排名模式，禁用所有辅助功能，服务器生成录像，可参与排行" : "登录后才能使用"}</span>
+          </button>
           {/* NF 模式（2026-10-19 张老师定：恢复保留，语义收窄为仅禁右键）：
               文本钮沿用旧样式；激活显色＝默认黄（.gicon.active 站内黄） */}
           <button className="gicon gmode" id="btn_nf" type="button">

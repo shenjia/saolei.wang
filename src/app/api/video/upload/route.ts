@@ -15,6 +15,7 @@ import { evfToRawvf } from "@/lib/evf";
 import { formatRawvf, checkProgramVersion } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
+import { RANKED_SOFTWARE } from "@/lib/evfwrite";
 import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
@@ -29,6 +30,10 @@ function fail(error: string, status = 400) {
 }
 
 export async function POST(req: Request) {
+  return uploadVideo(req);
+}
+
+export async function uploadVideo(req: Request, options?: { rankedInternal?: boolean }) {
   if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
   const session = await getSession();
   if (!session) return fail("请先登录", 401);
@@ -78,6 +83,10 @@ export async function POST(req: Request) {
      ONLINE_PROGRAM_MARKER 标识，命中即拒——在线玩是纯前端娱乐局，成绩不入排行 */
   if (parsed.program.includes(ONLINE_PROGRAM_MARKER)) {
     return fail("在线玩的录像不能上传（成绩不计入排行）");
+  }
+  // 排名模式 EVF 只经专用入口生成后内部调用本函数；普通文件上传不能冒充该来源。
+  if (parsed.program === RANKED_SOFTWARE && !options?.rankedInternal) {
+    return fail("排名模式录像请从练习页结算面板上传");
   }
   if (!(parsed.level in LEVEL_MIN_3BV)) return fail("只支持初级/中级/高级录像");
   if (parsed.mode !== "classic") return fail("只支持经典模式录像");
