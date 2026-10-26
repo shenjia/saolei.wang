@@ -65,10 +65,10 @@ import {
   radarOverall,
   radarPointsFrom,
 } from "@/lib/videoscore";
-/* 自动截屏（2026-10-26）：结算画面出现后把游戏窗口（.gwrap）截成 PNG 复制到
-   剪贴板。选 html-to-image 而非 html2canvas：foreignObject 原生渲染对 CSS zoom
-   （练习页游戏倍率的核心机制）兼容性好，体积也更小 */
-import { toPng } from "html-to-image";
+/* 自动截屏（2026-10-26）：结算后把游戏窗口与可见面板分别渲染，再合成 PNG
+   复制到剪贴板。选 html-to-image 而非 html2canvas：foreignObject 原生渲染
+   对本页的矢量棋盘兼容好，体积也更小；CSS zoom 在克隆样式里归 1，避免裁角 */
+import { toCanvas } from "html-to-image";
 
 /* 各级别 3BV 统计区间（服务端 /online page 从 level_3bv_range 表读取注入） */
 export type BvRanges = Record<"beg" | "int" | "exp", { min: number; max: number }>;
@@ -1640,34 +1640,84 @@ export function OnlinePlay({
       greport.classList.add("show");
       syncReportZoom();
     }
-    /* ---- 自动截屏（2026-10-26 张老师定）：结算画面出现后把游戏窗口截成 PNG
-       复制到剪贴板，屏幕中心绿色气泡提示「已截图复制到剪贴板」----
-       · 截图对象＝.gwrap 银框（计数条+棋盘+状态栏整窗），不含结算面板；
-       · FlopSprites 精灵图容器（<symbol> 定义）挂在 .op_root 顶部、gwrap 外——
-         html-to-image 克隆 gwrap 子树进 foreignObject 后 <use href="#…"> 引用
-         不可达、棋盘贴图全丢；截图前临时把精灵图容器搬进 gwrap（width=0
-         height=0 position:absolute 不占布局），截完原位放回；
-       · 败局与埋点同窗：延迟 300ms（复活窗内复活则撤销）；胜局立即截；
-       · 剪贴板 ClipboardItem 需安全上下文（https/localhost），失败静默降级为
-         红色气泡提示，不干扰游戏节奏 */
+    /* ---- 自动截屏（2026-10-26 张老师定，同日完整画面版）------------------------
+       游戏局面、已打开的数据面板、结算面板分别渲染后横向合成，保证全屏遮罩态
+       也不会互相遮挡；顺序与桌面一致：数据在左、游戏居中、结算在右。
+       · toCanvas 默认把 offset 尺寸当画布、又保留 CSS zoom，高倍率下会只截到
+         放大内容的一角。这里显式传「自然布局尺寸 + 实际渲染尺寸」，并只在克隆
+         根节点把 zoom 归 1——页面不闪动，完整内容按实际显示大小输出；
+       · FlopSprites 的 <symbol> 在 gwrap 外，渲染游戏区前临时搬进其子树，
+         否则 foreignObject 里的 <use href="#…"> 引用不可达；完成后原位放回；
+       · 移动端（touchUI）入口与执行双重禁用，保留系统截屏，不写剪贴板 */
+    async function renderShotPart(host: HTMLElement): Promise<HTMLCanvasElement> {
+      const rect = host.getBoundingClientRect();
+      const pz = pageZoom();
+      return toCanvas(host, {
+        width: host.offsetWidth,
+        height: host.offsetHeight,
+        canvasWidth: Math.max(1, Math.round(rect.width / pz)),
+        canvasHeight: Math.max(1, Math.round(rect.height / pz)),
+        pixelRatio: 2,
+        style: {
+          zoom: "1",
+          boxSizing: "border-box", // offsetWidth/Height 含 padding+border，避免右下框被挤出画布
+          position: "relative",
+          left: "0",
+          top: "0",
+          right: "auto",
+          bottom: "auto",
+          margin: "0",
+          transform: "none",
+        },
+      });
+    }
+    function shotPanelVisible(panel: HTMLElement): boolean {
+      if (!panel.classList.contains("show")) return false;
+      const r = panel.getBoundingClientRect();
+      return r.width > 1 && r.height > 1; // 隐藏中的全屏遮罩 rect=0，不进入截图
+    }
     async function autoScreenshot() {
-      if (!autoShot) return;
+      if (!autoShot || touchUI) return;
+      const game = container.querySelector<HTMLElement>(".gwrap");
+      if (!game) return;
+      const sprites = container.querySelector<HTMLElement>("svg[width='0']");
+      const spritesParent = sprites?.parentElement ?? null;
       try {
-        const host = container.querySelector<HTMLElement>(".gwrap");
-        const sprites = container.querySelector<HTMLElement>("svg[width='0']");
-        if (!host) return;
-        const parent = sprites ? sprites.parentElement : null;
-        if (sprites && parent !== host) host.appendChild(sprites); // 临时搬进截图子树
+        const parts: HTMLCanvasElement[] = [];
+        if (shotPanelVisible(greport)) parts.push(await renderShotPart(greport));
+        if (sprites && spritesParent !== game) game.appendChild(sprites);
         try {
-          const url = await toPng(host, { pixelRatio: 2 });
-          const blob = await (await fetch(url)).blob();
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          showToast("已截图复制到剪贴板");
+          parts.push(await renderShotPart(game));
         } finally {
-          if (sprites && parent && parent !== host) parent.appendChild(sprites); // 原位放回
+          if (sprites && spritesParent && spritesParent !== game) spritesParent.appendChild(sprites);
         }
+        if (shotPanelVisible(gresult)) parts.push(await renderShotPart(gresult));
+        if (!parts.length) return;
+        /* 各部件已经 2x 光栅化，合成画布不再整体放大；间隙取 12 CSS px＝24 像素。
+           顶对齐与页面侧边面板一致，透明间隙不写死网页背景色 */
+        const gap = 24;
+        const output = document.createElement("canvas");
+        output.width = parts.reduce((sum, c) => sum + c.width, 0) + gap * (parts.length - 1);
+        output.height = Math.max(...parts.map((c) => c.height));
+        const ctx = output.getContext("2d");
+        if (!ctx) throw new Error("canvas unavailable");
+        let x = 0;
+        for (const part of parts) {
+          ctx.drawImage(part, x, 0);
+          x += part.width + gap;
+        }
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          output.toBlob((b) => b ? resolve(b) : reject(new Error("png encode failed")), "image/png");
+        });
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        showToast("已截图复制到剪贴板");
       } catch {
         showToast("截图失败或剪贴板被拒绝", true);
+      } finally {
+        /* 任意失败路径都不能把精灵图留在游戏区（React 卸载/下一局仍要找到它） */
+        if (sprites && spritesParent && sprites.parentElement !== spritesParent) {
+          spritesParent.appendChild(sprites);
+        }
       }
     }
     function report(t: number, won: boolean) {
@@ -1706,13 +1756,15 @@ export function OnlinePlay({
       lastReportHtml = html;
       if (showStats) paintStatPanel(html);
       buildResultPanel(t, solvedBv, won, cnt);
-      /* 自动截屏（2026-10-26）：结算画面出现即截。败局同埋点口径延迟 300ms
-         （复活窗内复活则撤销）；胜局立即（无复活可推翻） */
-      if (autoShot && t > 0) {
+      /* 自动截屏：移动端恒不调度。桌面端败局至少等 300ms 复活窗；全屏结算
+         遮罩另有 500ms 延时，须等它真实显示后再截，避免漏掉两个面板 */
+      if (autoShot && !touchUI && t > 0) {
         if (pendingShot !== null) clearTimeout(pendingShot);
-        pendingShot = won
-          ? window.setTimeout(() => { pendingShot = null; void autoScreenshot(); }, 0)
-          : window.setTimeout(() => { pendingShot = null; void autoScreenshot(); }, 300);
+        const delay = Math.max(won ? 0 : 300, maskDelayTimer !== null ? 550 : 0);
+        pendingShot = window.setTimeout(() => {
+          pendingShot = null;
+          void autoScreenshot();
+        }, delay);
       }
     }
     /* ---- 右侧结算面板（五期）：雷达图 + 再来一局 / 重玩本局 / 查看回放 / 下载录像 ----
@@ -3334,9 +3386,19 @@ export function OnlinePlay({
         if (keepClosed) hideResultModal();
       }
     });
-    /* 「自动截屏」开关：只影响之后每局结束的自动截图，切换即时生效、不重开 */
+    /* 「自动截屏」开关：桌面端即时生效；触屏设备禁用且不覆盖桌面端存档 */
     const swShot = $("sw_shot") as HTMLInputElement;
+    swShot.disabled = touchUI;
+    if (touchUI) {
+      const row = swShot.closest(".gs_row");
+      if (row) {
+        row.setAttribute("title", "移动端请使用系统截屏");
+        const tip = row.querySelector<HTMLElement>(".tip");
+        if (tip) tip.textContent = "移动端请使用系统截屏";
+      }
+    }
     on(swShot, "change", () => {
+      if (touchUI) { swShot.checked = false; return; }
       autoShot = swShot.checked;
       saveSettings();
     });
@@ -4889,7 +4951,7 @@ export function OnlinePlay({
     swTips.checked = tipsOn;
     swRookie.checked = rookieOn;
     swRevive.checked = reviveOn;
-    swShot.checked = autoShot;
+    swShot.checked = autoShot && !touchUI;
     syncModeButtons(); // 模式快捷钮按存档初值点亮（连击/无猜/速旗）
     syncBvSlider();
 
@@ -4917,6 +4979,7 @@ export function OnlinePlay({
       document.documentElement.classList.remove("op-fakefs"); // 伪全屏态不跨页残留
       document.documentElement.classList.remove("op-noscroll"); // 整页锁滚随本页一起摘掉
       if (timerId) clearInterval(timerId);
+      if (pendingShot !== null) clearTimeout(pendingShot);
       if (touchTimer) clearTimeout(touchTimer);
       if (cusTimer !== null) clearTimeout(cusTimer); // 拖杆节流残留的 trailing 定时器
       if (wheelTimer !== null) clearTimeout(wheelTimer); // 滚轮落盘的 trailing 定时器
