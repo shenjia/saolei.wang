@@ -1670,7 +1670,10 @@ export function VideoReplayProvider({
      FlopPlayer iframe，挂上后 effect 调 playFlop 弹全屏 flop 播放器；
      播放器未就绪时 playFlop 的 pendingUri 队列自动补播，多次点击幂等 */
   const playLegacy = useCallback(() => {
-    setFlopUri(uri);
+    // 已挂载的播放器必须每次都直接起播：flopUri 不变时 setState 不会触发
+    // 上面的 effect，否则同一录像关闭后无法再次进入。
+    if (window.flop) playFlop(uri);
+    else setFlopUri(uri);
   }, [uri]);
 
   const pause = useCallback(() => {

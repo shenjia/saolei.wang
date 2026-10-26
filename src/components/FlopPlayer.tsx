@@ -23,6 +23,8 @@ declare global {
         }
       ) => void;
       onload?: () => void;
+      /** 退出播放并复位内部状态（遮罩点击与 X 共用播放器原生退出链路） */
+      closeVideo?: () => void;
       /** 播放器未就绪时的待播队列（playFlop 记下，onload 后补播） */
       pendingUri?: string;
     };
@@ -105,29 +107,15 @@ const CURSOR_COLOR_SCRIPT = `
 `;
 
 /* 注入播放器 iframe 的「点击暗区退出」脚本：
-   播放器的 background 选项渲染的遮罩层 z-index:-9999（负值），按 CSS 绘制
-   规则位于普通流内容之下——Vue 根容器（占满视口的无 class DIV）盖在遮罩
-   之上，真实鼠标点击暗区时 target 是 Vue 根 DIV，遮罩层永远收不到事件。
-   故改为判定「点击是否落在玩家窗口子树之外」：
-   - 玩家窗口 = .game-menu 向上至 Vue 根（body 直接子级）下的那个窗口子树
-   - 窗口外（暗区/遮罩任意位置）→ 程序化点击右上角退出菜单（CloseOutlined
-     特征 path d 以 M563.8 512 开头），走播放器自己的 setExit 退出链路
-   - 窗口内（棋盘/菜单/控制条）→ 不拦截，交给播放器自身交互 */
+   播放器的 background 选项渲染的遮罩层 z-index:-9999（负值），真实点击
+   落在 Vue 根容器而不是遮罩上。因此按事件目标是否在玩家窗口内判定，
+   窗口外直接调用 IframeAdapter 暴露的 closeVideo，与 X 同走 setExit
+   原生退出链路；不再依赖易随上游变化的关闭图标 DOM。 */
 const MASK_EXIT_SCRIPT = `
 (function () {
   if (window.__flopMaskExit) return;
   window.__flopMaskExit = true;
-  function findExitLi() {
-    var paths = document.querySelectorAll("svg path");
-    for (var i = 0; i < paths.length; i++) {
-      var d = paths[i].getAttribute("d") || "";
-      if (d.indexOf("M563.8 512") !== 0) continue;
-      var li = paths[i].closest("svg").closest(".ant-menu-submenu, li");
-      if (li) return li;
-    }
-    return null;
-  }
-  document.addEventListener("click", function (e) {
+  window.addEventListener("pointerdown", function (e) {
     var t = e.target;
     if (!(t instanceof Element)) return;
     var menu = document.querySelector(".game-menu");
@@ -140,11 +128,10 @@ const MASK_EXIT_SCRIPT = `
     var win = menu;
     while (win.parentElement && win.parentElement !== root) win = win.parentElement;
     if (win === menu || win.contains(t)) return; // 窗口内：交给播放器
-    var li = findExitLi();
-    if (li) {
+    if (parent.flop && typeof parent.flop.closeVideo === "function") {
       e.preventDefault();
       e.stopPropagation();
-      li.click();
+      parent.flop.closeVideo();
     }
   }, true);
 })();
