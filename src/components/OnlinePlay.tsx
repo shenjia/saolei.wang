@@ -1663,8 +1663,10 @@ export function OnlinePlay({
       syncReportZoom();
     }
     /* ---- 自动截屏（2026-10-26 张老师定，同日完整画面版）------------------------
-       游戏局面、已打开的数据面板、结算面板分别渲染后横向合成，保证全屏遮罩态
-       也不会互相遮挡；顺序与桌面一致：数据在左、游戏居中、结算在右。
+       游戏局面、已打开的数据面板、结算面板分别渲染后合成：
+       · 侧边态横向拼接（数据｜游戏｜结算），避免面板互相遮挡；
+       · 遮罩态严格按当前视觉合成——游戏区为底、铺实际遮罩色，两个面板按
+         实时屏幕坐标叠回游戏区，全屏高级截图与玩家看到的画面一致。
        · toCanvas 默认把 offset 尺寸当画布、又保留 CSS zoom，高倍率下会只截到
          放大内容的一角。这里显式传「自然布局尺寸 + 实际渲染尺寸」，并只在克隆
          根节点把 zoom 归 1——页面不闪动，完整内容按实际显示大小输出；
@@ -1705,31 +1707,50 @@ export function OnlinePlay({
       const sprites = container.querySelector<HTMLElement>("svg[width='0']");
       const spritesParent = sprites?.parentElement ?? null;
       try {
-        const parts: HTMLCanvasElement[] = [];
-        if (shotPanelVisible(greport)) parts.push(await renderShotPart(greport));
+        const gameRect = game.getBoundingClientRect();
+        const statsRect = greport.getBoundingClientRect();
+        const resultRect = gresult.getBoundingClientRect();
+        const overlay = panelSlot === "mask" && !grModal.hidden;
+        const statsPart = shotPanelVisible(greport) ? await renderShotPart(greport) : null;
         if (sprites && spritesParent !== game) game.appendChild(sprites);
+        let gamePart: HTMLCanvasElement;
         try {
-          parts.push(await renderShotPart(game));
+          gamePart = await renderShotPart(game);
         } finally {
           if (sprites && spritesParent && spritesParent !== game) spritesParent.appendChild(sprites);
         }
-        if (shotPanelVisible(gresult)) parts.push(await renderShotPart(gresult));
-        if (!parts.length) return;
-        /* 各部件已经 2x 光栅化，合成画布不再整体放大；间隙取 12 CSS px＝24 像素。
-           顶对齐与页面侧边面板一致，整张图的透明底统一填练习页底色 #272822，
-           避免复制到微信/图片查看器后透明区域显示成白色 */
-        const gap = 24;
+        const resultPart = shotPanelVisible(gresult) ? await renderShotPart(gresult) : null;
         const output = document.createElement("canvas");
-        output.width = parts.reduce((sum, c) => sum + c.width, 0) + gap * (parts.length - 1);
-        output.height = Math.max(...parts.map((c) => c.height));
+        if (overlay) {
+          /* 遮罩态＝所见即所得：输出就是游戏银框的完整矩形，面板按截图前的
+             实际视口坐标叠回。横屏双栏/竖屏单列都不用另算布局 */
+          output.width = gamePart.width;
+          output.height = gamePart.height;
+        } else {
+          /* 侧边态仍完整横拼；各部件已 2x 光栅化，12 CSS px 间隙＝24 像素 */
+          const gap = 24;
+          const parts = [statsPart, gamePart, resultPart].filter((c): c is HTMLCanvasElement => c !== null);
+          output.width = parts.reduce((sum, c) => sum + c.width, 0) + gap * (parts.length - 1);
+          output.height = Math.max(...parts.map((c) => c.height));
+        }
         const ctx = output.getContext("2d");
         if (!ctx) throw new Error("canvas unavailable");
         ctx.fillStyle = "#272822";
         ctx.fillRect(0, 0, output.width, output.height);
-        let x = 0;
-        for (const part of parts) {
-          ctx.drawImage(part, x, 0);
-          x += part.width + gap;
+        if (overlay) {
+          ctx.drawImage(gamePart, 0, 0);
+          ctx.fillStyle = getComputedStyle(grModal).backgroundColor;
+          ctx.fillRect(0, 0, output.width, output.height);
+          const scale = gamePart.width / gameRect.width;
+          if (statsPart) ctx.drawImage(statsPart, (statsRect.left - gameRect.left) * scale, (statsRect.top - gameRect.top) * scale);
+          if (resultPart) ctx.drawImage(resultPart, (resultRect.left - gameRect.left) * scale, (resultRect.top - gameRect.top) * scale);
+        } else {
+          let x = 0;
+          for (const part of [statsPart, gamePart, resultPart]) {
+            if (!part) continue;
+            ctx.drawImage(part, x, 0);
+            x += part.width + 24;
+          }
         }
         const blob = await new Promise<Blob>((resolve, reject) => {
           output.toBlob((b) => b ? resolve(b) : reject(new Error("png encode failed")), "image/png");
