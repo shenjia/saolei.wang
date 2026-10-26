@@ -1461,6 +1461,11 @@ body #page.bbs_old .page_head {
 .bbs_list th .sort_link.on {
   color: #fdc61a;
 }
+/* 斜杠对称小边距：CJK 全角字右侧自带留白，裸斜杠会显得「/」偏紧偏左；
+   左右各 2px 视觉对称，总宽仍控制在 96px 时间列内不折行 */
+.bbs_list th .sort_sep {
+  margin: 0 2px;
+}
 /* 阅读数原并写在 .bbs_count 内（「/ N」同 span）——排序金色高亮需单独命中数字，
    2026-10-26 拆出独立 .bbs_clicks，配色沿用原 .bbs_count 口径 */
 .bbs_list .bbs_clicks {
