@@ -341,12 +341,34 @@ export function OnlinePlay({
       requestAnimationFrame(() => tipsEl.classList.add("show"));
       tipFadeTimer = window.setTimeout(() => tipsEl.classList.remove("show"), TIP_HOLD_MS);
     }
-    /* 局中通知（下载成功 / 导入失败 / 复活）走**全站居中气泡**（2026-10-21 张老师定：
-       与其他全站居中提示同组件同尺寸——components/Toast.tsx，fixed 视口居中、success
-       带 ✓；此前自造的 .optoast 底部小气泡已废）。ToastHost 挂在 layout 全站生效，
-       这里只需命令式调用 */
+    /* 局中通知（下载成功 / 导入失败 / 复活 / 自动截屏）沿用全站居中气泡样式。
+       非全屏走 ToastHost；全屏时浏览器只渲染 fullscreenElement 子树，layout 里的
+       ToastHost 不可见，须把同款气泡挂进练习页根节点，否则剪贴板已写入玩家却
+       看不到「已截图复制到剪贴板」，就像自动截屏没有执行（2026-10-26 实测）。 */
+    let localToast: HTMLElement | null = null;
+    let localToastHold: number | null = null;
+    let localToastRemove: number | null = null;
     function showToast(msg: string, err = false) {
-      toast(msg, err ? "error" : "success");
+      const fsRoot = document.fullscreenElement;
+      if (!fsRoot || fsRoot !== root) {
+        toast(msg, err ? "error" : "success");
+        return;
+      }
+      if (localToast) localToast.remove();
+      if (localToastHold !== null) clearTimeout(localToastHold);
+      if (localToastRemove !== null) clearTimeout(localToastRemove);
+      const bubble = document.createElement("div");
+      bubble.className = "toast_bubble " + (err ? "toast_error" : "toast_success");
+      bubble.setAttribute("role", "status");
+      bubble.textContent = (err ? "" : "✓ ") + msg;
+      fsRoot.appendChild(bubble);
+      localToast = bubble;
+      const hold = err ? 2800 : 1000;
+      localToastHold = window.setTimeout(() => bubble.classList.add("toast_leave"), hold);
+      localToastRemove = window.setTimeout(() => {
+        bubble.remove();
+        if (localToast === bubble) localToast = null;
+      }, hold + 360);
     }
 
     /* 级别口径与站内排行一致（lib/config.ts：beg 8×8，2026-10-14 张老师指正）。
@@ -1694,13 +1716,16 @@ export function OnlinePlay({
         if (shotPanelVisible(gresult)) parts.push(await renderShotPart(gresult));
         if (!parts.length) return;
         /* 各部件已经 2x 光栅化，合成画布不再整体放大；间隙取 12 CSS px＝24 像素。
-           顶对齐与页面侧边面板一致，透明间隙不写死网页背景色 */
+           顶对齐与页面侧边面板一致，整张图的透明底统一填练习页底色 #272822，
+           避免复制到微信/图片查看器后透明区域显示成白色 */
         const gap = 24;
         const output = document.createElement("canvas");
         output.width = parts.reduce((sum, c) => sum + c.width, 0) + gap * (parts.length - 1);
         output.height = Math.max(...parts.map((c) => c.height));
         const ctx = output.getContext("2d");
         if (!ctx) throw new Error("canvas unavailable");
+        ctx.fillStyle = "#272822";
+        ctx.fillRect(0, 0, output.width, output.height);
         let x = 0;
         for (const part of parts) {
           ctx.drawImage(part, x, 0);
@@ -4979,6 +5004,9 @@ export function OnlinePlay({
       document.documentElement.classList.remove("op-fakefs"); // 伪全屏态不跨页残留
       document.documentElement.classList.remove("op-noscroll"); // 整页锁滚随本页一起摘掉
       if (timerId) clearInterval(timerId);
+      if (localToastHold !== null) clearTimeout(localToastHold);
+      if (localToastRemove !== null) clearTimeout(localToastRemove);
+      localToast?.remove();
       if (pendingShot !== null) clearTimeout(pendingShot);
       if (touchTimer) clearTimeout(touchTimer);
       if (cusTimer !== null) clearTimeout(cusTimer); // 拖杆节流残留的 trailing 定时器
