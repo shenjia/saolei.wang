@@ -1172,33 +1172,34 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boo
   return fetchVideoCount(opts);
 }
 
+const HOT_VIDEO_WINDOW_SECONDS = 30 * 24 * 3600;
+const HOT_VIDEO_COMMENT_WEIGHT = 20;
+
 /**
- * 热评录像（/video 右栏版块起家，2026-09-26 张老师要求；现仅首页右栏使用）：
- * 按上传时间倒序显示有评论的录像，只带作者（名称+军衔）/级别/时间成绩。
- * 2026-10-23 张老师指令：板块更名「热门录像」→「热评录像」，口径由 ≥2 收紧的
- * 反向放宽回 >0（与 getVideoList 的 order=comments 一致）——候选行 9.2k → 24k，
- * (comments) 索引 + filesort 代价可忽略（本地实测 54ms）。
- * 2026-10-22 张老师指令：屏蔽盘不进前台——join video 滤 status<>0（v3 曾为 =20，
- * v4 待审放行放宽）。走 (comments) 索引 + v (create_time) 索引。
+ * 热门录像（现仅首页右栏使用）：近 30 天上传，按点击与他人有效评论综合排序。
+ * 热度 = 点击量 + 有效评论数 × 20；评论只计 NORMAL，且 c.user <> v.user，
+ * 排除作者自评（包括在自己录像下回复他人）对热度的影响。屏蔽录像仍不进前台。
  */
 async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
-  // 2026-10-22：id 倒序 → create_time 倒序（真上传时间序；vs.create_time 与 video
-  // 同步写入一致）；2026-10-23：comments ≥2 → >0（板块更名「热评录像」随口径放宽）
-  const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-    `SELECT vs.id FROM video_stat vs JOIN video v ON v.id = vs.id
-     WHERE vs.comments > 0 AND v.status <> ${VIDEO_STATUS.BANNED}
-     ORDER BY v.create_time DESC, vs.id DESC LIMIT ${limit}`
-  );
+  const cutoff = BigInt(Math.floor(Date.now() / 1000) - HOT_VIDEO_WINDOW_SECONDS);
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const rows = await prisma.$queryRaw<{ id: bigint }[]>`
+    WITH hot_candidates AS (
+      SELECT v.id, vs.clicks,
+        (SELECT COUNT(*) FROM comment c
+         WHERE c.video = v.id AND c.status = ${COMMENT_STATUS.NORMAL} AND c.user <> v.user
+        ) AS external_comments
+      FROM video v JOIN video_stat vs ON vs.id = v.id
+      WHERE v.status <> ${VIDEO_STATUS.BANNED} AND v.create_time >= ${cutoff}
+    )
+    SELECT id FROM hot_candidates
+    ORDER BY clicks + external_comments * ${HOT_VIDEO_COMMENT_WEIGHT} DESC, id DESC
+    LIMIT ${safeLimit}`;
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
-// 2026-10-15 性能审计：热评录像全是老录像，反向主键扫描实际近乎全表（30 万行），
-// 且结果几乎不变，缓存 60s
-// 2026-10-22 v2：排序键 id → create_time（真上传时间序）；v3 同日：加 status=20
-// 过滤（屏蔽不进前台，张老师指令）——升键失效旧缓存；
-// v4（2026-10-23）：待审放行（<>0），旧缓存不含待审行，失效；
-// v5（2026-10-23）：板块更名「热评录像」，口径 ≥2 → >0，旧缓存为 ≥2 结果，失效
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v5"], { revalidate: 60 });
+// 2026-10-26 v6：热评改热门——限近 30 天，点击 + 他人有效评论 × 20，升键作废旧缓存
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v6"], { revalidate: 60 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
