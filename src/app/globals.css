@@ -1443,6 +1443,34 @@ body #page.bbs_old .page_head {
 .bbs_list .bbs_count {
   color: #75715e;
 }
+/* 列头排序（2026-10-26 张老师）：「更新 / 发布」「评论 / 阅读」可点切换逆序——
+   可点项默认列头灰 #939387、hover 提亮；激活项金色 #fdc61a（全站高亮语义）。
+   行内被排序命中的数字同金色（.sort_on）；时间列筛选（更新/发布）不高亮行 */
+.bbs_list th .sort_link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: #939387;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bbs_list th .sort_link:hover {
+  color: #bbbbbb;
+}
+.bbs_list th .sort_link.on {
+  color: #fdc61a;
+}
+/* 阅读数原并写在 .bbs_count 内（「/ N」同 span）——排序金色高亮需单独命中数字，
+   2026-10-26 拆出独立 .bbs_clicks，配色沿用原 .bbs_count 口径 */
+.bbs_list .bbs_clicks {
+  color: #75715e;
+  font-weight: bold;
+}
+.bbs_list .bbs_replies.sort_on,
+.bbs_list .bbs_clicks.sort_on {
+  color: #fdc61a;
+}
 /* 分类标签：与正文同字号（legacy .level 是 20px，不可用）。
    七轮：并入主题列后作为行内标签，flex 不收缩（标题负责收缩出省略号）。
    八轮（2026-09-25 张老师）：公告标签醒目黄（#fdc61a 与消息页系统广播/

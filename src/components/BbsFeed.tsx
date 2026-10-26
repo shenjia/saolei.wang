@@ -10,13 +10,18 @@
 //   key=筛选串强制重挂载换服务端数据）。为此页头（tabs/搜索/发布按钮）从 RSC
 //   page.tsx 收拢进本客户端壳（同 VideoListSection 模式：RSC 不能传函数 prop）。
 //   搜索态（q）优先于板块/精华，tabs 区收起时开关一并隐藏（沿用原互斥口径）。
+// 2026-10-26（张老师）：列头排序——「最后更新」表头改「更新 / 发布」（默认更新高亮，
+//   点发布切发布时间逆序），「评论 / 阅读」同可点按对应列逆序；切换就地重拉第 1 页
+//   （与精华开关共用 refetchFirstPage 通道）+ replaceState 同步 order 参数；
+//   行内按评论/阅读排序时对应数字金色高亮（时间列筛选不高亮），发布排序时时间列
+//   改显发布时间
 
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
-import { BBS_BOARDS, BBS_BOARD_NAMES } from "@/lib/bbs";
+import { BBS_BOARDS, BBS_BOARD_NAMES, BBS_ORDERS, type BbsOrder } from "@/lib/bbs";
 import { timeOpposite, TIME_NEVER } from "@/lib/format";
 import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
@@ -59,11 +64,15 @@ export function BbsRow({
   p,
   showBoard,
   hlKw,
+  order = "reply",
 }: {
   p: BbsPostItem;
   showBoard: boolean;
   /** 搜索关键字：命中片段在标题中绿显（非搜索态不传） */
   hlKw?: string;
+  /** 当前列表排序（2026-10-26 列头排序）：post=时间列改显发布时间；
+   *  replies/clicks=对应计数金色高亮；时间列筛选（reply/post）不高亮 */
+  order?: BbsOrder;
 }) {
   const readIds = useBbsReadSet();
   const isRead = readIds.has(p.id);
@@ -124,12 +133,16 @@ export function BbsRow({
       </td>
       {/* 计数「x / y」：x=评论（亮灰 #bbbbbb）、y=阅读（暗灰 #75715e），
           斜杠分隔与表头「评论 / 阅读」呼应；配色规则在 globals.css .bbs_list 作用域，
-          已读帖不再改变计数颜色（2026-10-14 张老师） */}
+          已读帖不再改变计数颜色（2026-10-14 张老师）。
+          2026-10-26：阅读数拆独立 .bbs_clicks（排序金色高亮需单独命中数字）；
+          按评论/阅读排序时对应数字挂 sort_on 金色，时间列筛选不高亮 */}
       <td>
-        <em className="bbs_replies">{p.replies}</em>
-        <span className="bbs_count"> / {p.clicks}</span>
+        <em className={"bbs_replies" + (order === "replies" ? " sort_on" : "")}>{p.replies}</em>
+        <span className="bbs_count"> / </span>
+        <span className={"bbs_clicks" + (order === "clicks" ? " sort_on" : "")}>{p.clicks}</span>
       </td>
-      <td className="time">{timeOpposite(p.lastReplyTime, TIME_NEVER)}</td>
+      {/* 发布排序时本列改显发布时间（列头即「发布」语义，2026-10-26） */}
+      <td className="time">{timeOpposite(order === "post" ? p.createTime : p.lastReplyTime, TIME_NEVER)}</td>
     </tr>
   );
 }
@@ -165,6 +178,11 @@ export function BbsSection({
   const q = query.q ?? "";
   const board = query.board;
   const [nice, setNice] = useState(query.nice === "1");
+  // 列表排序（2026-10-26 列头排序）：服务端由 URL order 解析进 query；
+  // 「更新/发布」「评论/阅读」列头可点逆序，默认「更新」
+  const [order, setOrder] = useState<BbsOrder>(
+    query.order && query.order in BBS_ORDERS ? (query.order as BbsOrder) : "reply"
+  );
 
   // ---- 滑条窗口状态（2026-10-14；BBS_PAGESIZE=19，base 由初始行数推）----
   const pageSize = 19;
@@ -182,35 +200,24 @@ export function BbsSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 精华开关 URL 同步（2026-10-22）：replaceState 原样传回 history.state（Next 16
-   *  app-router patch 了 replaceState，传 null 会 dispatch ACTION_RESTORE 异步跳顶，
-   *  2026-10-16 实证铁律）；默认关删参，URL 即状态可分享 */
-  function syncNiceUrl(on: boolean) {
-    const url = new URL(window.location.href);
-    if (on) url.searchParams.set("nice", "1");
-    else url.searchParams.delete("nice");
-    window.history.replaceState(window.history.state, "", url);
-  }
-
-  /** 精华开关就地重拉第 1 页（2026-10-22，对齐录像页 NF 乐观更新通道）：点击立即
-   *  setNice + syncNiceUrl（按钮即时高亮、URL 即时同步），数据回来整表替换 + 视口
-   *  锚定（captureViewportAnchor 不跳动）+ 分页状态归零；失败静默回滚开关态与 URL。
-   *  board 维持服务端 query（板块切换走 tabs 链接软导航，key 重挂载换新数据，
-   *  tabs 链接携带 nice 态保证开关跨板块不丢）。 */
-  async function toggleNice(next: boolean) {
-    if (loading) return;
+  /** 就地重拉第 1 页（2026-10-26 自 toggleNice 抽出共用）：精华开关与列头排序
+   *  同一通道——拉回整表替换 + 视口锚定（不跳动）+ 分页状态归零 + 缓存重建。
+   *  返回 ok / stale（已有更新请求接管，不可回滚）/ error（调用方自行回滚乐观态） */
+  async function refetchFirstPage(
+    nextNice: boolean,
+    nextOrder: BbsOrder
+  ): Promise<"ok" | "stale" | "error"> {
     const seq = ++reqSeq.current;
     setLoading(true);
-    setNice(next);
-    syncNiceUrl(next);
     try {
       const qs = new URLSearchParams();
       if (board) qs.set("board", board);
       if (q) qs.set("q", q);
       qs.set("page", "1");
-      if (next) qs.set("nice", "1");
+      if (nextNice) qs.set("nice", "1");
+      if (nextOrder !== "reply") qs.set("order", nextOrder);
       const res = await fetch(`/api/bbs/more?${qs}`);
-      if (seq !== reqSeq.current) return;
+      if (seq !== reqSeq.current) return "stale";
       if (!res.ok) throw new Error("加载失败");
       const data = (await res.json()) as { posts: BbsPostItem[]; hasMore: boolean; total?: number };
       pageCache.current = new PageCache<BbsPostItem[]>();
@@ -225,14 +232,60 @@ export function BbsSection({
         if (typeof data.total === "number") setTotal(data.total);
       });
       restoreViewportAnchor(tableRef.current, anchor);
+      return "ok";
     } catch {
-      /* 网络异常静默回滚：开关态与 URL 还原，表格数据未变，可重试 */
-      if (seq === reqSeq.current) {
-        setNice(!next);
-        syncNiceUrl(!next);
-      }
+      return "error";
     } finally {
       if (seq === reqSeq.current) setLoading(false);
+    }
+  }
+
+  /** 精华开关 URL 同步（2026-10-22）：replaceState 原样传回 history.state（Next 16
+   *  app-router patch 了 replaceState，传 null 会 dispatch ACTION_RESTORE 异步跳顶，
+   *  2026-10-16 实证铁律）；默认关删参，URL 即状态可分享 */
+  function syncNiceUrl(on: boolean) {
+    const url = new URL(window.location.href);
+    if (on) url.searchParams.set("nice", "1");
+    else url.searchParams.delete("nice");
+    window.history.replaceState(window.history.state, "", url);
+  }
+
+  /** 列头排序 URL 同步（2026-10-26）：默认「更新」删参，其余 order=xxx；
+   *  同样原样传回 history.state（Next 16 铁律） */
+  function syncOrderUrl(o: BbsOrder) {
+    const url = new URL(window.location.href);
+    if (o === "reply") url.searchParams.delete("order");
+    else url.searchParams.set("order", o);
+    window.history.replaceState(window.history.state, "", url);
+  }
+
+  /** 精华开关就地重拉第 1 页（2026-10-22，对齐录像页 NF 乐观更新通道）：点击立即
+   *  setNice + syncNiceUrl（按钮即时高亮、URL 即时同步），数据回来整表替换；
+   *  失败静默回滚开关态与 URL。board 维持服务端 query（板块切换走 tabs 链接
+   *  软导航，key 重挂载换新数据，tabs 链接携带 nice 态保证开关跨板块不丢）。 */
+  async function toggleNice(next: boolean) {
+    if (loading) return;
+    setNice(next);
+    syncNiceUrl(next);
+    const r = await refetchFirstPage(next, order);
+    if (r === "error") {
+      /* 网络异常静默回滚：开关态与 URL 还原，表格数据未变，可重试 */
+      setNice(!next);
+      syncNiceUrl(!next);
+    }
+  }
+
+  /** 列头排序切换（2026-10-26 张老师）：乐观切换 + 就地重拉第 1 页（同 toggleNice
+   *  通道），失败静默回滚排序态与 URL；重复点击当前排序不动作 */
+  async function switchOrder(next: BbsOrder) {
+    if (loading || next === order) return;
+    const prev = order;
+    setOrder(next);
+    syncOrderUrl(next);
+    const r = await refetchFirstPage(nice, next);
+    if (r === "error") {
+      setOrder(prev);
+      syncOrderUrl(prev);
     }
   }
 
@@ -242,6 +295,7 @@ export function BbsSection({
     if (q) qs.set("q", q);
     qs.set("page", String(page));
     if (nice) qs.set("nice", "1");
+    if (order !== "reply") qs.set("order", order);
     if (size && size > pageSize) qs.set("size", String(size));
     return `/api/bbs/more?${qs}`;
   }
@@ -406,13 +460,49 @@ export function BbsSection({
           <tr>
             <th className="topic">分类 / 主题</th>
             <th className="author">作者</th>
-            <th className="num">评论 / 阅读</th>
-            <th className="time">最后更新</th>
+            <th className="num">
+              {/* 2026-10-26 列头排序：评论/阅读可点，按对应列逆序；激活项金色（行内
+                  对应数字同步金色），未激活项列头灰 */}
+              <button
+                type="button"
+                className={"sort_link" + (order === "replies" ? " on" : "")}
+                onClick={() => switchOrder("replies")}
+              >
+                评论
+              </button>
+              {" / "}
+              <button
+                type="button"
+                className={"sort_link" + (order === "clicks" ? " on" : "")}
+                onClick={() => switchOrder("clicks")}
+              >
+                阅读
+              </button>
+            </th>
+            {/* 2026-10-26：「最后更新」改「更新 / 发布」——默认按更新时间（更新高亮），
+                点发布切发布时间逆序（时间列改显发布时间）；时间列筛选不高亮行 */}
+            <th className="time">
+              <button
+                type="button"
+                className={"sort_link" + (order === "reply" ? " on" : "")}
+                onClick={() => switchOrder("reply")}
+              >
+                更新
+              </button>
+              {" / "}
+              <button
+                type="button"
+                className={"sort_link" + (order === "post" ? " on" : "")}
+                onClick={() => switchOrder("post")}
+              >
+                发布
+              </button>
+            </th>
           </tr>
         </thead>
         <tbody>
           {items.map((p) => (
-            <BbsRow key={p.id} p={p} showBoard={true} hlKw={q || undefined} />
+            <BbsRow key={p.id} p={p} showBoard={true} hlKw={q || undefined} order={order} />
           ))}
           {items.length === 0 && (
             <tr>

@@ -16,9 +16,12 @@
 //   页头（tabs/搜索/发布按钮）收拢进 BbsSection 客户端壳（开关与列表就地联动），
 //   本页只做筛选解析 + 首屏取数；精华与板块叠加（board=1&nice=1=技术区精华），
 //   旧深链 board=nice / nice=1 / order=nice 一律 301 归一到 canonical URL
+// 2026-10-26（张老师）：列头排序——表头「最后更新」改「更新 / 发布」（默认更新，
+//   可点切换按发布时间逆序），「评论 / 阅读」也可点按对应列逆序；order 深链参数
+//   复活（白名单 BBS_ORDERS），客户端切换由 BbsSection 就地重拉 + replaceState 同步
 
 import { redirect } from "next/navigation";
-import { BBS_BOARD_NAMES, getPostPage } from "@/lib/bbs";
+import { BBS_BOARD_NAMES, BBS_ORDERS, getPostPage, type BbsOrder } from "@/lib/bbs";
 import { getSession } from "@/lib/auth";
 import { BbsSection } from "@/components/BbsFeed";
 
@@ -37,6 +40,9 @@ export default async function BbsPage({
   const board = BBS_BOARD_NAMES[boardRaw] !== undefined ? boardRaw : undefined;
   // 搜索关键字（2026-09-26）：搜索态优先于板块/精华筛选（列表只按 q 过滤，board/nice 忽略）
   const q = (sp.q ?? "").trim().slice(0, 30);
+  // 排序（2026-10-26）：order 白名单校验，缺省/非法一律回「更新时间」
+  const orderRaw = sp.order ?? "reply";
+  const order: BbsOrder = orderRaw in BBS_ORDERS ? (orderRaw as BbsOrder) : "reply";
 
   // 旧深链归一（2026-10-22）：精华已不是 board 的一种，canonical 形态=board + nice=1；
   //   board=nice / order=nice 是历史形态需 301 归一（否则 syncNiceUrl 只增删 nice 参数，
@@ -56,7 +62,7 @@ export default async function BbsPage({
   const [{ posts, hasMore, total }, session] = await Promise.all([
     getPostPage({
       board: q ? undefined : board,
-      order: "reply",
+      order,
       nice: q ? undefined : nice || undefined,
       q: q || undefined,
       page: 1,
@@ -64,12 +70,13 @@ export default async function BbsPage({
     getSession(),
   ]);
   const query: Record<string, string> = q
-    ? { q }
+    ? { q, ...(order !== "reply" ? { order } : {}) }
     : {
         ...(board !== undefined ? { board: String(board) } : {}),
         ...(nice ? { nice: "1" } : {}),
+        ...(order !== "reply" ? { order } : {}),
       };
-  const feedKey = q ? `q-${q}` : `${board ?? "all"}${nice ? "-nice" : ""}`;
+  const feedKey = q ? `q-${q}` : `${board ?? "all"}${nice ? "-nice" : ""}${order !== "reply" ? `-${order}` : ""}`;
 
   return (
     <div id="page" className="main bbs_old">

@@ -36,9 +36,13 @@ export const BBS_CONTENT_LIMIT = 5000;
 // 同日三轮：去掉「点击数/回复数」两种排序，只留时间类）
 // 2026-09-25 六轮：排序筛选器已取消，列表固定更新时间排序（order="reply"）；
 //   BBS_ORDERS/BbsOrder 保留供 getPostList 类型签名使用，页面不再暴露 order 参数
+// 2026-10-26（张老师）：列表头排序回归——更新/发布/评论/阅读四种（列头可点，
+//   逆序），replies/clicks 重新纳入；BBS_ORDERS 同时作 order 参数白名单
 export const BBS_ORDERS = {
   reply: "更新时间",
   post: "发布时间",
+  replies: "评论数",
+  clicks: "阅读数",
 } as const;
 export type BbsOrder = keyof typeof BBS_ORDERS;
 
@@ -285,8 +289,16 @@ export async function getPostList(opts: {
   };
   const total = await prisma.bbsPost.count({ where });
   // 2026-10-23（张老师）：取消论坛高亮——isTop 不参与排序也不再有前台效果；
-  // 置顶由 isPinned 承担：置顶组在前、组内与普通帖同按时间列倒序（2026-09-25 张老师定）
-  const orderField = order === "post" ? "id" : "lastReplyTime";
+  // 置顶由 isPinned 承担：置顶组在前、组内与普通帖同按当前排序列倒序（2026-09-25 张老师定）
+  // 2026-10-26：order 扩展 replies/clicks（列头排序，均逆序）
+  const orderField =
+    order === "post"
+      ? "id"
+      : order === "replies"
+        ? "replies"
+        : order === "clicks"
+          ? "clicks"
+          : "lastReplyTime";
   const size = opts.take ?? BBS_PAGESIZE;
   const rows = await prisma.bbsPost.findMany({
     where,

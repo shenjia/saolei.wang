@@ -6,9 +6,10 @@
 // size（2026-10-14 递增批量）：本批行数，skip 恒按 19/页锚点；不传=一页 19。
 // 2026-10-22：精华改正交开关（对齐录像页 NF）——nice=1 与 board 叠加
 //   （board=1&nice=1=技术区精华）；旧形态 board=nice 兼容视为 nice 开启（board 剥掉）。
+// 2026-10-26：order 参数复活（列头排序：reply/post/replies/clicks 白名单，缺省 reply）
 
 import { NextResponse } from "next/server";
-import { BBS_BOARD_NAMES, getPostPage } from "@/lib/bbs";
+import { BBS_BOARD_NAMES, BBS_ORDERS, getPostPage, type BbsOrder } from "@/lib/bbs";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -22,10 +23,14 @@ export async function GET(req: Request) {
   const board = BBS_BOARD_NAMES[boardRaw] !== undefined ? boardRaw : undefined;
   const sizeRaw = parseInt(p.get("size") ?? "", 10);
   const size = Math.min(Math.max(sizeRaw || 19, 19), 100);
+  // order 白名单（2026-10-26）：非法值一律回默认「更新时间」；order=nice 属旧深链
+  // 已被上面 nice 兼容吸收，不会再落到排序位
+  const orderRaw = p.get("order") ?? "reply";
+  const order: BbsOrder = orderRaw in BBS_ORDERS ? (orderRaw as BbsOrder) : "reply";
 
   const { posts, hasMore, total } = await getPostPage({
     board: q ? undefined : board,
-    order: "reply",
+    order,
     nice: q ? undefined : nice || undefined,
     q: q || undefined,
     page,
