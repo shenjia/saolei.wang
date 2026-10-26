@@ -186,7 +186,9 @@ const TIPS: string[] = [
   /* ---- 2026-10-19 新手提示功能上线补录 ---- */
   "卡住时打开设置里的「新手提示」，会标出附近能确定的雷和安全格。",
   /* ---- 2026-10-21 拖拽导入录像上线补录（张老师定文案） ---- */
-  "将录像文件拖到练习界面里可以播放录像。"
+  "将录像文件拖到练习界面里可以播放录像。",
+  /* ---- 2026-10-26 自动截屏上线补录：移动端禁用，tipPool 同步剔除 ---- */
+  "开启「自动截屏」后，胜局立即、败局 3 秒后自动复制结算画面到剪贴板。"
 ];
 /* tips 生命周期（ms）：fade-in 由挂载后下一帧加 .show 触发；
    TIP_HOLD_MS 后撤 .show 走 transition 渐隐（元素常驻复用、无卸载时序）。
@@ -324,10 +326,11 @@ export function OnlinePlay({
     /* 开局提示候选池（2026-10-20）：「允许复活」关着时剔除空格复活两条
        （教玩家按空格却无效是误导；「踩雷后按A/R」那条不含复活、保留）。
        触屏设备（2026-10-21 张老师定「移动端不要再出现快捷键提示，没有键盘」）：
-       KEY_TIP_RE 剔除全部键盘类条目（F2/数字键/A/R/Esc/空格/「键盘」「快捷键」字样） */
+       KEY_TIP_RE 剔除全部键盘类条目（F2/数字键/A/R/Esc/空格/「键盘」「快捷键」字样）；
+       自动截屏在触屏端禁用，对应提示也一并剔除 */
     function tipPool(): string[] {
       let pool = reviveOn ? TIPS : TIPS.filter((s) => !s.includes("复活"));
-      if (touchUI) pool = pool.filter((s) => !KEY_TIP_RE.test(s));
+      if (touchUI) pool = pool.filter((s) => !KEY_TIP_RE.test(s) && !s.includes("自动截屏"));
       return pool;
     }
     function showTip() {
