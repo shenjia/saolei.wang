@@ -466,7 +466,8 @@ export function parseEvf(buf: Uint8Array): EvfVideo {
 /**
  * EVF → RawVF 文本行（与 avf/rmv 转换器同构，formatRawvf 直接消费）。
  * 关键折算：全站下游（judgeVideoOutcome / 回放引擎 / Path 统计）一律 16px 格子口径，
- * evf 的像素坐标按 cellPixelSize 等比折算到 16px（round 误差 ≤0.5px，不跨格不影响判定）。
+ * evf 的像素坐标按 cellPixelSize 等比折算到 16px；必须向下取整，四舍五入会让
+ * 格边附近的指针提前跨进相邻格（48px 样例曾因此误判 incomplete/loss）。
  * 事件名映射（标准文档「不推荐」码的消歧）：
  *   mv/lc/lr/rc/rr/mc/mr 直通；
  *   pf（开局前标记）→ rc+rr 对（等价插旗，right+1/flag+1）；
@@ -518,7 +519,7 @@ export function evfToRawvf(buf: Uint8Array): string[] {
 
   // 像素折算：evf 像素 → 16px 口径像素
   const cell = v.cellPixelSize || 16;
-  const px = (p: number) => Math.round((p * 16) / cell);
+  const px = (p: number) => Math.floor((p * 16) / cell);
   const line = (t: number, name: string, x: number, y: number) =>
     `${t.toFixed(3)} ${name} ${Math.trunc(px(x) / 16) + 1} ${Math.trunc(px(y) / 16) + 1} (${px(x)} ${px(y)})`;
 
