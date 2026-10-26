@@ -53,14 +53,15 @@ const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/video_list",
     title: "录像列表（增量同步）",
-    desc: "按录像 id 升序分页拉取，只含过审（status=20）胜局录像；cursor 断点续拉。配合 stats.maxVideoId 可做「全量对账 + 增量追加」。",
+    desc: "按录像 id 升序分页拉取全部审核状态的录像；cursor 断点续拉，可用 player_id 只拉取指定玩家。配合 stats.maxVideoId 可做「全量对账 + 增量追加」。",
     params: [
       { name: "cursor", desc: "上次响应的 nextCursor，首次不传" },
       { name: "since", desc: "Unix 秒，跳过该时间之前上传的（仅首次全量可选用；与 cursor 同给时 cursor 优先）" },
       { name: "level", desc: "beg / int / exp，缺省 = 全部" },
+      { name: "player_id", desc: "玩家 ID，提供后只返回该玩家的录像；需为大于 0 的整数" },
       { name: "size", desc: "每页条数，默认 200，上限 1000" },
     ],
-    request: "GET /api/public/v1/video_list?cursor=0&size=2",
+    request: "GET /api/public/v1/video_list?player_id=1&cursor=0&size=2",
     response: `{
   "cursor": 0,
   "nextCursor": 25,
@@ -74,6 +75,7 @@ const APIS: ApiDoc[] = [
       "userId": 1,
       "userName": "张砷镓",
       "hash": "4cd9e3e261f76888be8d8919f06d0428",
+      "status": 20,
       "uploadTime": 1167978360,
       "reviewTime": 1167978403,
       "realTime": 1110,
@@ -86,6 +88,7 @@ const APIS: ApiDoc[] = [
   ]
 }`,
     notes: [
+      "status：0=已屏蔽 / 10=待审 / 20=已通过；列表不按审核状态过滤，调用方可按需自行筛选",
       "realTime 毫秒；3bvs 已按站内口径算好（ROUND(board_3bv×1e6/real_time)），负值 = 运气盘（初级 3BV<10、中高级 3BV<4），成绩不被站内承认",
       "nf: true = 无标雷（NF）录像；列表不含录像文件，需要文件用 video_info 的 fileUrl，网页回放链到 https://saolei.wang/video/{id}",
     ],
@@ -93,7 +96,7 @@ const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/video_info",
     title: "录像详情（含重放指标 + 录像文件 URL）",
-    desc: "返回录像全部已落盘公开数据：video_list 全部字段 + status + signature（录像内嵌玩家标识）+ metrics（离线重放引擎算得的落盘指标）+ fileUrl（录像文件完整 URL）。",
+    desc: "返回录像全部已落盘公开数据：video_list 全部字段 + signature（录像内嵌玩家标识）+ metrics（离线重放引擎算得的落盘指标）+ fileUrl（录像文件完整 URL）。",
     params: [{ name: "id", required: true, desc: "逗号分隔的录像 ID，最多 50 个" }],
     request: "GET /api/public/v1/video_info?id=328090",
     response: `{

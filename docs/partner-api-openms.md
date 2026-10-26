@@ -52,6 +52,7 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
 | `cursor` | 上次响应的 `nextCursor`，首次不传 |
 | `since` | Unix 秒，跳过该时间之前上传的（仅首次全量可选用；与 cursor 同给时 cursor 优先） |
 | `level` | `beg` / `int` / `exp`，缺省 = 全部 |
+| `player_id` | 玩家 ID，提供后只返回该玩家的录像；需为大于 0 的整数 |
 | `size` | 每页条数，默认 200，上限 1000 |
 
 响应示例：
@@ -62,7 +63,7 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
   "generatedAt": 1792555559,
   "items": [
     { "id": 24, "level": "beg", "userId": 1, "userName": "张砷镓",
-      "hash": "4cd9e3e261f76888be8d8919f06d0428",
+      "hash": "4cd9e3e261f76888be8d8919f06d0428", "status": 20,
       "uploadTime": 1167978360, "reviewTime": 1167978403,
       "realTime": 1110, "board3bv": 4, "3bvs": -3604,
       "nf": true, "software": "Clone", "version": "0.97" }
@@ -71,15 +72,16 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
 ```
 
 字段说明：
+- `status`：0=已屏蔽 / 10=待审 / 20=已通过；列表返回全部审核状态，调用方可按需自行筛选
 - `realTime` 毫秒；`3bvs` 已按站内口径算好（`ROUND(board_3bv×1e6/real_time)`），**负值 = 运气盘**（初级 3BV<10、中高级 3BV<4），成绩不被站内承认，建议同步侧同样标注或排除
 - `nf`：true = 无标雷（NF）录像
-- 只含过审（status=20）胜局录像；**录像文件本体不提供**，如需回放请链接到 `https://saolei.wang/video/{id}`
+- **录像文件本体不随列表提供**，如需回放请链接到 `https://saolei.wang/video/{id}`；已屏蔽录像不能通过 `video_info` 查询详情或文件
 
-增量同步建议：记上次 `nextCursor`，每次从断点续拉；上传侧删除/屏蔽的录像会从数据中消失，建议以「全量对账 + 增量追加」组合维护。用 `stats` 接口的 `maxVideoId` 确定抓取上界。
+增量同步建议：记上次 `nextCursor`，每次从断点续拉；已删除的录像会从数据中消失，屏蔽录像则保留并以 `status=0` 返回，建议以「全量对账 + 增量追加」组合维护。用 `stats` 接口的 `maxVideoId` 确定抓取上界。
 
 ### 3. 录像详情（含重放指标）`GET /api/public/v1/video_info?id=1,2,3`
 
-`id` = 逗号分隔的录像 ID，最多 50 个。返回录像全部**已落盘公开数据**：video_list 全部字段 + `status`（10=待审 / 20=已通过）+ `signature`（录像内嵌玩家标识）+ `metrics`（离线重放引擎算得的落盘指标）+ `fileUrl`（录像文件完整 URL）。
+`id` = 逗号分隔的录像 ID，最多 50 个。返回录像全部**已落盘公开数据**：video_list 全部字段 + `signature`（录像内嵌玩家标识）+ `metrics`（离线重放引擎算得的落盘指标）+ `fileUrl`（录像文件完整 URL）；`status` 仅含 10=待审 / 20=已通过，屏蔽录像不返回。
 
 ```json
 {
@@ -160,5 +162,6 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
+- 2026-10-26：`video_list` 不再按审核状态过滤，条目新增 `status` 字段；新增可选参数 `player_id`，用于只拉取指定玩家录像。
 - 2026-10-24：`video_info` 新增 `fileUrl` 字段（录像文件完整 URL）。
 - 2026-10-24：草案重构。`/api/partner/v1/*` → `/api/public/v1/*`；`videos` → `video_list`、`users` → `user_list`；新增 `video_info`（含重放指标）、`user_info`（双体系成绩+标识列表）、`stats`（站点统计+max id）；key 改为后台签发管理（原 .env 草案 key 过渡期兼容）；草案期 rankings 接口废弃。

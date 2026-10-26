@@ -1,13 +1,12 @@
 // 公开 API · 录像元数据增量同步（2026-10-24，由 partner/v1/videos 更名迁移）
-// GET /api/public/v1/video_list?cursor=<录像id>&since=<Unix秒>&level=<beg|int|exp>&size=200
+// GET /api/public/v1/video_list?cursor=<录像id>&since=<Unix秒>&level=<beg|int|exp>&player_id=<玩家id>&size=200
 // 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
 //
 // 同步语义（增量）：
 //  - 首次全量：不传 cursor，从 id=1 起按 id 升序拉完（循环到 hasMore=false）
 //  - 增量：上次响应的 nextCursor 继续拉；也可用 since=<上传时间秒> 跳到近段
 //    （since 与 cursor 同时给时以 cursor 为准）
-//  - 只含 status=20（过审）胜局录像，与站内入榜口径一致
-//    （要逐条查含待审的详情请用 video_info 接口）
+//  - 返回全部审核状态（0=屏蔽 / 10=待审 / 20=通过），可用 player_id 限定玩家
 //  - 文件本体不给（合作方需要回放请引导用户来本站；这也正是数据同步的商业意义）
 //
 // 3bvs 字段已按站内口径（ROUND(board_3bv×1e6/real_time)，运气盘记负值）算好直接给，
@@ -31,22 +30,32 @@ export async function GET(req: Request) {
   const lv = p.get("level") ?? "";
   const level = (VIDEO_LEVELS as readonly string[]).includes(lv) ? (lv as VideoLevel) : undefined;
   const size = Math.min(Math.max(parseInt(p.get("size") ?? "200", 10) || 200, 1), 1000);
+  const playerIdRaw = p.get("player_id");
+  const playerId = playerIdRaw === null ? null : Number(playerIdRaw);
+  if (playerIdRaw !== null && (!/^\d+$/.test(playerIdRaw) || !Number.isSafeInteger(playerId) || playerId === null || playerId < 1)) {
+    return NextResponse.json(
+      { error: "bad_request", message: "player_id 需为大于 0 的整数" },
+      { status: 400 }
+    );
+  }
 
   // create_time 为 Unix 秒；cursor 优先，since 作为无 cursor 时的起点过滤
-  const conds = ["v.status = 20", cursor > 0 ? `v.id > ${cursor}` : ""];
+  const conds: string[] = [];
+  if (cursor > 0) conds.push(`v.id > ${cursor}`);
   if (cursor === 0 && since > 0) conds.push(`v.create_time >= ${since}`);
   if (level) conds.push(`v.level = '${level}'`);
+  if (playerId !== null) conds.push(`v.user = ${playerId}`);
 
   const rows = await prisma.$queryRawUnsafe<{
-    id: bigint; level: string; user: bigint; hash: string;
+    id: bigint; level: string; user: bigint; hash: string; status: number;
     create_time: bigint; review_time: bigint | null;
     real_time: number; board_3bv: number; noflag: number;
     software: string; version: string;
   }[]>(
-    `SELECT v.id, v.level, v.user, v.hash, v.create_time, v.review_time,
+    `SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
             vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version
      FROM video v JOIN video_info vi ON vi.id = v.id
-     WHERE ${conds.filter(Boolean).join(" AND ")}
+     ${conds.length ? `WHERE ${conds.filter(Boolean).join(" AND ")}` : ""}
      ORDER BY v.id ASC LIMIT ${size}`
   );
 
@@ -63,6 +72,7 @@ export async function GET(req: Request) {
       userId: Number(r.user),
       userName: brief?.chineseName ?? "?",
       hash: r.hash,
+      status: Number(r.status),
       uploadTime: Number(r.create_time),
       reviewTime: r.review_time ? Number(r.review_time) : 0,
       realTime: rt,
