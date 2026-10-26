@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { INVALID_3BVS_TIP } from "@/lib/config";
-import { isUploadedAvatar } from "@/lib/avatar";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import { score3bvs, scoreTime, timeOpposite, TIME_NEVER } from "@/lib/format";
 
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
@@ -50,12 +50,13 @@ export function RankingName({
   sex: number;
   avatar?: string;
 }) {
+  // 与主页/用户卡片同口径：新版上传、OAuth 外链、旧站 "1"（照片墙实体）；
+  // 无头像时 fallback 为空，绝不把默认 no.jpg 混进排行榜。
+  const avatarUrl = resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "");
   return (
     <>
       <span className="ranking_name">
-        {isUploadedAvatar(avatar) && (
-          <img className="ranking_avatar" src={avatar} alt="" width={13} height={13} />
-        )}
+        {avatarUrl && <img className="ranking_avatar" src={avatarUrl} alt="" width={13} height={13} />}
         <Link href={`/user/${id}`} target="_blank" prefetch={false} title="点击查看个人信息">
           {name}
         </Link>

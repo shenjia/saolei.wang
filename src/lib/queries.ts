@@ -46,7 +46,7 @@ import { publishNews } from "./news";
 import { rebuildUserRanksOnce } from "./userrank";
 import { decodeLegacyEntities } from "./format";
 import { liftExpiredBans } from "./ban";
-import { AVATAR_UPLOAD_PREFIX, isUploadedAvatar } from "./avatar";
+import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
@@ -127,7 +127,7 @@ function toBrief(u: {
     chineseName: u.chineseName,
     englishName: u.englishName,
     sex: u.sex,
-    avatar: isUploadedAvatar(u.avatar) ? u.avatar : "",
+    avatar: u.avatar,
   };
 }
 
@@ -137,11 +137,18 @@ export async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>>
   return new Map(rows.map((r) => [N(r.id), toBrief(r)!]));
 }
 
-/** 当前榜页的上传头像（仅按需查 20 行，避免给 BV/STNB 全量缓存增加头像字段）。 */
-async function uploadedAvatarsByIds(ids: number[]): Promise<Map<number, string>> {
+/** 当前榜页的真实头像（仅按需查 20 行，避免给 BV/STNB 全量缓存增加头像字段）。 */
+async function rankingAvatarsByIds(ids: number[]): Promise<Map<number, string>> {
   if (!ids.length) return new Map();
   const rows = await prisma.user.findMany({
-    where: { id: { in: ids.map(BigInt) }, avatar: { startsWith: AVATAR_UPLOAD_PREFIX } },
+    where: {
+      id: { in: ids.map(BigInt) },
+      OR: [
+        { avatar: { startsWith: AVATAR_UPLOAD_PREFIX } },
+        { avatar: { startsWith: "http" } },
+        { avatar: "1" }, // 旧站上传头像，实体为 /images/player/{id}.jpg
+      ],
+    },
     select: { id: true, avatar: true },
   });
   return new Map(rows.map((r) => [N(r.id), r.avatar]));
@@ -1904,7 +1911,7 @@ export async function getTitleMembers(
         chineseName: u.chineseName,
         englishName: u.englishName,
         sex: u.sex,
-        avatar: isUploadedAvatar(u.avatar) ? u.avatar : "",
+        avatar: u.avatar,
         createTime: N(u.createTime),
         rank: cursor + 1, // 预备役序号=行号（1 起）
         sumTime: 0,
@@ -2549,7 +2556,7 @@ export async function getBvRanking(by: BvRankingBy, page: number, take?: number,
   const sorted = sortBv(all, by);
   const size = take ?? RANKING_PAGESIZE;
   const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
-  const avatars = await uploadedAvatarsByIds(pageRows.map((e) => e.id));
+  const avatars = await rankingAvatarsByIds(pageRows.map((e) => e.id));
   const rows = pageRows.map((e, i) => ({
     ...e,
     avatar: avatars.get(e.id) ?? "",
@@ -2867,7 +2874,7 @@ export async function getStnbRanking(by: BvRankingBy, page: number, take?: numbe
   const { den, totalDen } = stnbDenoms(all);
   const size = take ?? RANKING_PAGESIZE;
   const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
-  const avatars = await uploadedAvatarsByIds(pageRows.map((e) => e.id));
+  const avatars = await rankingAvatarsByIds(pageRows.map((e) => e.id));
   const rows = pageRows.map((e, i) => ({
     ...e,
     avatar: avatars.get(e.id) ?? "",
