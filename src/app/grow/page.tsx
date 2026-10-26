@@ -52,10 +52,10 @@ export default async function GrowPage({
   // 2026-10-19 总司令=雷界第一人特判
   const king = await getThunderKingId();
   const titled = await Promise.all(
-    rows.map(async (u) => ({
+    rows.map(async (u, i) => ({
       ...u,
       title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
-      classic: growPairs.get(Number(u.id))?.c ?? null,
+      classic: growPairs[i]?.c ?? null,
     }))
   );
 

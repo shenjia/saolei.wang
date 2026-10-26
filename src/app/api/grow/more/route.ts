@@ -20,10 +20,10 @@ export async function GET(req: Request) {
     rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
   );
   const titled = await Promise.all(
-    rows.map(async (u) => ({
+    rows.map(async (u, i) => ({
       ...u,
       title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
-      classic: pairs.get(Number(u.id))?.c ?? null,
+      classic: pairs[i]?.c ?? null,
     }))
   );
   return NextResponse.json({ rows: titled, total, pageSize });

@@ -159,19 +159,35 @@ export interface TitlePair {
   c: { name: string; color: string } | null;
 }
 
+/**
+ * dualTitle：单行「快照 → 双体系称号对」（雷帝/总司令判定由调用方一次性取 TOP1 后逐行传入；
+ * 2026-10-19 起总司令=雷界第一人，两体系 TOP1 恒同一人）
+ */
+export function dualTitle(
+  userId: number,
+  expTime: number,
+  ranked: boolean,
+  sex: number,
+  king: number
+): TitlePair {
+  const isKing = king > 0 && king === userId;
+  return {
+    m: !ranked || expTime <= 0 ? "预备役" : militaryTitle(expTime, isKing),
+    c: classicTitle(expTime, ranked, sex, isKing),
+  };
+}
+
 /** 服务端批量换算「快照 → 双体系称号对」（雷帝/总司令判定一次性取 TOP1；
- *  2026-10-19 起总司令=雷界第一人，两体系 TOP1 恒同一人） */
+ *  2026-10-19 起总司令=雷界第一人，两体系 TOP1 恒同一人）
+ *
+ * ⚠️ 返回**与传入行序严格对齐的数组**（2026-10-27 修复），不再返回 Map：
+ * 旧 Map 以 userId 为键，同一用户多行（各带各的上传时刻快照——如个人主页录像区、
+ * 评论区、BBS 楼层流）时后行覆盖前行，整批塌缩成同一称号（个人主页录像整页
+ * 同一军衔的根因）。调用方一律 `dualTitles(rows)[i]` 按下标取本行称号。
+ * 每行数据互不依赖（king 单次查询），无共享状态。 */
 export async function dualTitles(
   rows: { userId: number; expTime: number; ranked: boolean; sex: number }[]
-): Promise<Map<number, TitlePair>> {
+): Promise<TitlePair[]> {
   const king = await getThunderKingId();
-  const out = new Map<number, TitlePair>();
-  for (const r of rows) {
-    const isKing = king > 0 && king === r.userId;
-    out.set(r.userId, {
-      m: !r.ranked || r.expTime <= 0 ? "预备役" : militaryTitle(r.expTime, isKing),
-      c: classicTitle(r.expTime, r.ranked, r.sex, isKing),
-    });
-  }
-  return out;
+  return rows.map((r) => dualTitle(r.userId, r.expTime, r.ranked, r.sex, king));
 }

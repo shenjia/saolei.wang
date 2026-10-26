@@ -205,13 +205,15 @@ export interface BbsAuthor extends UserBrief {
 
 /** 军衔取数（2026-10-17 称号快照制）：按行内 exp_time 快照逐行评定，
  *  不再实时查 user_scores 当前值——同页同一用户的多条内容显示各自时刻的称号。
- *  Phase 5：old 同时按快照 ranked 判布衣；雷帝在 dualTitles 内判（此处复用 TitlePair.c） */
+ *  Phase 5：old 同时按快照 ranked 判布衣；雷帝在 dualTitles 内判（此处复用 TitlePair.c）
+ *  2026-10-27 dualTitles 改行序数组（旧 Map 同用户多楼层塌缩成同一军衔）：
+ *  返回「行序 → 作者」数组（不再按 user 去重建 Map），调用方按下标配对 */
 async function authorsFromSnapshots(
   rows: { user: number; expTime: number; ranked: boolean }[]
-): Promise<Map<number, BbsAuthor>> {
+): Promise<(BbsAuthor | null)[]> {
   const ids = [...new Set(rows.map((r) => r.user).filter((x) => x > 0))];
   const briefs = await usersByIds(ids);
-  const pairs = await dualTitles(
+  const pairList = await dualTitles(
     rows.map((r) => ({
       userId: r.user,
       expTime: r.expTime,
@@ -219,20 +221,18 @@ async function authorsFromSnapshots(
       sex: briefs.get(r.user)?.sex ?? 1,
     }))
   ); // TitlePair：m 军衔 + c 旧称号（含雷帝判定）
-  const out = new Map<number, BbsAuthor>();
-  for (const r of rows) {
-    if (r.user <= 0 || out.has(r.user)) continue;
+  return rows.map((r, i) => {
+    if (r.user <= 0) return null;
     const b = briefs.get(r.user);
-    if (!b) continue;
-    const p = pairs.get(r.user);
-    out.set(r.user, {
+    if (!b) return null;
+    const p = pairList[i];
+    return {
       ...b,
       title: p?.m ?? "",
       old: p?.c ? { name: p.c.name, color: p.c.color } : oldTitle(r.expTime, b.sex),
       ranked: r.ranked,
-    });
-  }
-  return out;
+    };
+  });
 }
 
 export interface BbsPostItem {
@@ -306,13 +306,12 @@ export async function getPostList(opts: {
     skip: (page - 1) * BBS_PAGESIZE, // 页锚点恒按 base 19（页码语义不变）
     take: size, // 本批行数（「加载更多」递增批量可 > 19）
   });
-  const authors = await authorsFromSnapshots(
-    rows
-      .map((r) => ({ user: N(r.user), expTime: N(r.expTime), ranked: r.ranked === BigInt(1) }))
-      .filter((x) => x.user > 0)
+  // 行序数组（2026-10-27）：不预过滤 user<=0 行（会错位），null 由 authorsFromSnapshots 内部处理
+  const authorList = await authorsFromSnapshots(
+    rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime), ranked: r.ranked === BigInt(1) }))
   );
   return {
-    posts: rows.map((r) => ({
+    posts: rows.map((r, i) => ({
       id: N(r.id),
       board: r.board,
       // 老 ASP 入库转义的实体（&nbsp; 等）出口统一解码（2026-10-15，详见 format.ts decodeLegacyEntities）
@@ -326,7 +325,7 @@ export async function getPostList(opts: {
       isLocked: r.isLocked,
       createTime: N(r.createTime),
       lastReplyTime: N(r.lastReplyTime),
-      author: authors.get(N(r.user)) ?? null,
+      author: authorList[i] ?? null,
     })),
     total,
     pageSize: BBS_PAGESIZE,
@@ -354,6 +353,7 @@ export async function getPost(
   if (bump) {
     await prisma.bbsPost.update({ where: { id: row.id }, data: { clicks: { increment: 1 } } });
   }
+  // 行序数组（2026-10-27）：单行场景，取 [0]
   const authors = await authorsFromSnapshots(
     [N(row.user)]
       .filter((x) => x > 0)
@@ -372,7 +372,7 @@ export async function getPost(
     isLocked: row.isLocked,
     createTime: N(row.createTime),
     lastReplyTime: N(row.lastReplyTime),
-    author: authors.get(N(row.user)) ?? null,
+    author: authors[0] ?? null,
     status: row.status,
   };
 }
@@ -421,14 +421,15 @@ export async function getReplyFeed(
       ? { skip: (page - 1) * BBS_REPLY_PAGESIZE, take: size }
       : { take: size }),
   });
-  const authors = await authorsFromSnapshots(
+  // 行序数组（2026-10-27）：与 rows 下标一一对应——同人多层楼各显各时刻军衔
+  const authorList = await authorsFromSnapshots(
     rows.map((r) => ({ user: N(r.user), expTime: N(r.expTime), ranked: r.ranked === BigInt(1) }))
   );
   return {
-    items: rows.map((r) => ({
+    items: rows.map((r, i) => ({
       id: N(r.id),
       createTime: N(r.createTime),
-      author: authors.get(N(r.user)) ?? null,
+      author: authorList[i] ?? null,
       html: ubb(r.content),
       excerpt: ubbExcerpt(r.content, REPLY_QUOTE_LIMIT),
       status: r.status,

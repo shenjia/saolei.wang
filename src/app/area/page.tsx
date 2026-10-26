@@ -113,10 +113,10 @@ export default async function AreaPage({
       rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex }))
     );
     const titledRows = await Promise.all(
-      rows.map((u) => ({
+      rows.map((u, i) => ({
         ...u,
         title: assessTitle(u.overallExpTime ?? u.scores.exp_time, king > 0 && king === Number(u.id)),
-        classic: areaPairs.get(Number(u.id))?.c ?? null,
+        classic: areaPairs[i]?.c ?? null,
       }))
     );
     return (
@@ -184,7 +184,7 @@ export default async function AreaPage({
       <AreaRanking
         rows={rows}
         titles={titles}
-        classics={rows.map((r) => leadPairs.get(r.bestId)?.c ?? null)}
+        classics={rows.map((r, i) => leadPairs[i]?.c ?? null)}
         order={order}
         head={
           <div className="page_head">

@@ -42,7 +42,7 @@ export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<numbe
     : [];
   const expMap = new Map(scores.map((s) => [N(s.id), s.expTime ?? 0]));
   const statusMap = new Map(statusRows.map((u) => [N(u.id), u.status]));
-  const pairs = await dualTitles(
+  const pairList = await dualTitles(
     ids.map((id) => ({
       userId: id,
       expTime: expMap.get(id) ?? 0,
@@ -50,11 +50,13 @@ export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<numbe
       sex: briefs.get(id)?.sex ?? 1,
     }))
   );
+  // dualTitles 行序数组（2026-10-27）：ids 传入前已去重，一人一行无塌缩，下标一一对应
   const out = new Map<number, MessageUserBrief>();
-  for (const [id, b] of briefs) {
-    const p = pairs.get(id);
-    out.set(id, { ...b, title: p?.m ?? "", classic: p?.c ?? null });
-  }
+  ids.forEach((id, i) => {
+    const b = briefs.get(id);
+    const p = pairList[i];
+    if (b) out.set(id, { ...b, title: p?.m ?? "", classic: p?.c ?? null });
+  });
   return out;
 }
 

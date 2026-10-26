@@ -318,7 +318,8 @@ export async function getNews(opts: {
   // 不再按 video_scores_exp 流水重放——入伍/晋升「含同刻」、破纪录「严格早于」的口径
   // 已固化在写入点（review.ts publishNews expTimeOverride），历史行为一次性回填迁移。
   // Phase 5 双体系：批量补算旧版称号（TitlePair），TitleBadge 按观看者体系渲染
-  const pairs = await dualTitles(
+  // 2026-10-27 dualTitles 改行序数组（旧 Map 同用户多行塌缩）：按下标配对
+  const pairList = await dualTitles(
     rows.map((r) => ({
       userId: N(r.user),
       expTime: N(r.expTime),
@@ -372,14 +373,15 @@ export async function getNews(opts: {
         sex: ownerBriefs.get(id)?.sex ?? 1,
       }))
     );
+    // dualTitles 行序数组（2026-10-27）：ownerIds 下标与 ownerPairs 一一对应
     ownerMap = new Map(
-      ownerIds
-        .map((id) => ownerBriefs.get(id))
-        .filter((b): b is UserBrief => !!b)
-        .map((b) => [b.id, { ...b, titles: ownerPairs.get(b.id) ?? null }])
+      ownerIds.flatMap((id, i) => {
+        const b = ownerBriefs.get(id);
+        return b ? [[b.id, { ...b, titles: ownerPairs[i] ?? null }] as const] : [];
+      })
     );
   }
-  return rows.map((r) => {
+  return rows.map((r, i) => {
     const d = safeJson(r.detailsData);
     const vid = typeof d.vid === "number" ? d.vid : 0;
     const owner =
@@ -395,7 +397,7 @@ export async function getNews(opts: {
       details: d,
       createTime: N(r.createTime),
       author: authors.get(N(r.user)) ?? null,
-      authorTitles: pairs.get(N(r.user)) ?? null,
+      authorTitles: pairList[i] ?? null,
       videoOwner: owner,
     };
   });
@@ -563,10 +565,11 @@ async function getTopUsersImpl(
   // Phase 5：批量补旧版称号备选（榜首即雷帝 TOP1，与 getThunderKingId 同源）
   // 2026-10-19：军衔制总司令=雷界第一人（rows 按 sum_time 升序，榜首即 king，取 0 位行）
   const kingId = rows.length ? N(rows[0].id) : 0;
+  // dualTitles 行序数组（2026-10-27）：与 rows 下标一一对应
   const topPairs = await dualTitles(
     rows.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: byId.get(N(r.id))?.sex ?? 1 }))
   );
-  return rows.map((r) => {
+  return rows.map((r, i) => {
     const u = byId.get(N(r.id));
     return {
       id: N(r.id),
@@ -575,7 +578,7 @@ async function getTopUsersImpl(
       sex: u?.sex ?? 1,
       area: u?.area ?? "",
       title: title(r.expTime, N(r.id) === kingId),
-      classic: topPairs.get(N(r.id))?.c ?? null,
+      classic: topPairs[i]?.c ?? null,
       // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
       titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
     };
@@ -1307,7 +1310,9 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
   // 保持传入 ids 的顺序（移植 Value::orderByIds）
   // 2026-10-17 称号快照制：authorTitle 按录像行内 exp_time 快照评定（上传时刻军衔），
   // 不再批量查 user_scores 当前值。Phase 5：批量补算旧版称号
-  const pairs = await dualTitles(
+  // 2026-10-27 dualTitles 改行序数组（旧 Map 同用户多行塌缩——个人主页录像区
+  // 整页同一人时全部共用同一军衔的根因）：视频下标与称号下标一一配对
+  const pairList = await dualTitles(
     videos.map((v) => ({
       userId: N(v.user),
       expTime: N(v.expTime),
@@ -1316,6 +1321,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     }))
   );
   const videoMap = new Map(videos.map((v) => [N(v.id), v]));
+  const videoIdx = new Map(videos.map((v, i) => [N(v.id), i]));
   const result: VideoListItem[] = [];
   for (const id of ids) {
     const v = videoMap.get(id);
@@ -1324,7 +1330,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     const author = authors.get(N(v.user)) ?? null;
     const stat = statMap.get(id);
     const m = metricMap.get(id);
-    const p = pairs.get(N(v.user));
+    const p = pairList[videoIdx.get(id) ?? 0];
     result.push({
       id,
       level: v.level,
@@ -1375,8 +1381,8 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     }),
   ]);
   if (!info) return null;
-  // Phase 5 双体系：按录像行内快照评定双套称号
-  const pairs = await dualTitles([
+  // Phase 5 双体系：按录像行内快照评定双套称号（dualTitles 行序数组，2026-10-27）
+  const [p] = await dualTitles([
     {
       userId: N(v.user),
       expTime: N(v.expTime),
@@ -1384,7 +1390,6 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
       sex: author?.sex ?? 1,
     },
   ]);
-  const p = pairs.get(N(v.user));
   return {
     id: N(v.id),
     level: v.level,
@@ -1486,7 +1491,7 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
         await dualTitles([
           { userId: N(u.id), expTime: N(scores?.expTime ?? 0), ranked: u.status === 0 && (scores?.expTime ?? 0) > 0, sex: u.sex },
         ])
-      ).get(N(u.id))?.c ?? null,
+      )[0]?.c ?? null,
   };
 }
 
@@ -1539,8 +1544,9 @@ export async function getComments(
   });
   // 2026-10-17 称号快照制：军衔按评论行内 exp_time 快照评定（回填脚本已迁移存量）
   // Phase 5 双体系：批量补算旧版称号
+  // 2026-10-27 dualTitles 行序数组（旧 Map 同用户多条评论塌缩成同一军衔）
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
-  const pairs = await dualTitles(
+  const pairList = await dualTitles(
     rows.map((r) => ({
       userId: N(r.user),
       expTime: N(r.expTime),
@@ -1548,9 +1554,9 @@ export async function getComments(
       sex: authors.get(N(r.user))?.sex ?? 1,
     }))
   );
-  return rows.map((r) => {
+  return rows.map((r, i) => {
     const a = authors.get(N(r.user)) ?? null;
-    const p = pairs.get(N(r.user));
+    const p = pairList[i];
     return {
       id: N(r.id),
       authorId: N(r.user),
@@ -1580,7 +1586,7 @@ export async function getCommentById(id: number): Promise<CommentItem | null> {
   if (!rows.length) return null;
   const r = rows[0];
   const authors = await usersByIds([N(r.user)]);
-  const pairs = await dualTitles([
+  const [p] = await dualTitles([
     {
       userId: N(r.user),
       expTime: N(r.expTime),
@@ -1588,7 +1594,6 @@ export async function getCommentById(id: number): Promise<CommentItem | null> {
       sex: authors.get(N(r.user))?.sex ?? 1,
     },
   ]);
-  const p = pairs.get(N(r.user));
   return {
     id: N(r.id),
     authorId: N(r.user),
@@ -1924,11 +1929,12 @@ export async function getTitleMembers(
   const authors = await usersByIds(page.map((r) => N(r.id)));
   const ranks = await getUserSumRanksBatch(page.map((r) => r.id));
   // Phase 5：批量补旧版称号备选（成员各按高级成绩；本列表恒在榜）
+  // dualTitles 行序数组（2026-10-27）：与 page 下标一一对应
   const memberPairs = await dualTitles(
     page.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: authors.get(N(r.id))?.sex ?? 1 }))
   );
   return {
-    rows: page.map((r) => {
+    rows: page.map((r, i) => {
       const rec = r as unknown as Record<string, bigint | number | null>;
       const scores: Record<string, number> = {};
       const videos: Record<string, number> = {};
@@ -1944,7 +1950,7 @@ export async function getTitleMembers(
         sumTime: N(r.sumTime),
         scores,
         videos,
-        classic: memberPairs.get(N(r.id))?.c ?? null,
+        classic: memberPairs[i]?.c ?? null,
       };
     }),
     hasMore,

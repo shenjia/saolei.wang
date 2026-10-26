@@ -36,10 +36,10 @@ export async function GET(req: Request) {
   // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
   const king = await getThunderKingId();
   const pairs = await dualTitles(rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex })));
-  const titled = rows.map((u) => ({
+  const titled = rows.map((u, i) => ({
     ...u,
     title: assessTitle(u.overallExpTime ?? u.scores.exp_time, king > 0 && king === Number(u.id)),
-    classic: pairs.get(Number(u.id))?.c ?? null,
+    classic: pairs[i]?.c ?? null,
   }));
 
   return NextResponse.json({ rows: titled, deltas, total, pageSize });

@@ -245,10 +245,10 @@ export default async function RankingPage({
     // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
     const bvKing = await getThunderKingId();
     const bvPairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
-    const titled = rows.map((u) => ({
+    const titled = rows.map((u, i) => ({
       ...u,
       title: assessTitle(u.expTime, bvKing > 0 && bvKing === u.id),
-      classic: bvPairs.get(u.id)?.c ?? null,
+      classic: bvPairs[i]?.c ?? null,
     }));
 
     // 登录态：搜索框空输入推荐「自己」——对 BV 榜比成绩榜更实用（自己的名次常在几百页外），
@@ -349,10 +349,10 @@ export default async function RankingPage({
     const stnbPairs = await dualTitles(
       rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex }))
     );
-    const titled = rows.map((u) => ({
+    const titled = rows.map((u, i) => ({
       ...u,
       title: assessTitle(u.expTime, stnbKing > 0 && stnbKing === u.id),
-      classic: stnbPairs.get(u.id)?.c ?? null,
+      classic: stnbPairs[i]?.c ?? null,
     }));
 
     // 登录态：搜索框空输入推荐「自己」+ 自己的名次（缓存数组查询，零 DB）
@@ -466,10 +466,10 @@ export default async function RankingPage({
     rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
   );
   const titled = await Promise.all(
-    rows.map(async (u) => ({
+    rows.map(async (u, i) => ({
       ...u,
       title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
-      classic: rankPairs.get(Number(u.id))?.c ?? null,
+      classic: rankPairs[i]?.c ?? null,
     }))
   );
 

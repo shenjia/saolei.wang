@@ -30,10 +30,10 @@ export async function GET(req: Request) {
   // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；2026-10-19 总司令=雷界第一人特判
   const king = await getThunderKingId();
   const pairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
-  const titled = rows.map((u) => ({
+  const titled = rows.map((u, i) => ({
     ...u,
     title: assessTitle(u.expTime, king > 0 && king === u.id),
-    classic: pairs.get(u.id)?.c ?? null,
+    classic: pairs[i]?.c ?? null,
   }));
 
   return NextResponse.json({ rows: titled, total, pageSize });
