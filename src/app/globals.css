@@ -4176,8 +4176,10 @@ body #page.ranking_old .ranking_box {
 /* 十轮试元帅金 → 十二轮（04:24）张老师定稿：回归亮灰（legacy h2 全局默认 #b1b1a4，
    无需覆盖规则）；问号图标保留 */
 /* 问号圆圈图标（十轮）：标题右侧，hover 显示评选规则气泡。
-   气泡复用全站 data-tip 模式但允许换行（文案长，white-space:normal + 定宽） */
-#daily_star h2 .star_help {
+   气泡复用全站 data-tip 模式但允许换行（文案长，white-space:normal + 定宽）；
+   2026-10-26 热门录像标题复用同款问号与规则气泡 */
+#daily_star h2 .star_help,
+#video_hot h2 .star_help {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
@@ -4186,10 +4188,12 @@ body #page.ranking_old .ranking_box {
   cursor: help;
   vertical-align: middle;
 }
-#daily_star h2 .star_help:hover {
+#daily_star h2 .star_help:hover,
+#video_hot h2 .star_help:hover {
   color: #b1b1a4;
 }
-#daily_star h2 .star_help::after {
+#daily_star h2 .star_help::after,
+#video_hot h2 .star_help::after {
   content: attr(data-tip);
   position: absolute;
   top: 160%;
@@ -4210,7 +4214,8 @@ body #page.ranking_old .ranking_box {
   transition: opacity 0.08s;
   z-index: 9999;
 }
-#daily_star h2 .star_help:hover::after {
+#daily_star h2 .star_help:hover::after,
+#video_hot h2 .star_help:hover::after {
   opacity: 1;
 }
 #daily_star .star_body {

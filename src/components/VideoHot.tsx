@@ -17,9 +17,20 @@ export function VideoHot({ videos }: { videos: VideoListItem[] }) {
   if (!videos.length) return null;
   return (
     <div id="video_hot" className="box">
-      <Link href="/video">
-        <h2>热门录像</h2>
-      </Link>
+      <h2>
+        <Link href="/video">热门录像</Link>
+        {/* 选取规则问号（2026-10-26）：与每日一星同图标、同 data-tip 气泡 */}
+        <span
+          className="star_help"
+          data-tip="选取近30天上传的录像，按“点击量 + 他人有效评论数 × 20”计算热度，取前8部。作者自评、待审及已删除评论不计入。"
+        >
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <circle cx="10" cy="10" r="8.4" />
+            <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />
+            <circle cx="10" cy="14.6" r="0.9" fill="currentColor" stroke="none" />
+          </svg>
+        </span>
+      </h2>
       <table cellPadding={0} cellSpacing={0} className="table full video_hot_table">
         <tbody>
           {videos.map((v) => {
