@@ -45,12 +45,13 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #footer .wrapper{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px}
 
 /* 2026-10-14 上传列表改卡片流（张老师要求）：不显示文件名/尺寸，只显示级别/成绩/3BV；
-   响应式 grid——1 个时满行，多个时一行多个（auto-fit + minmax）；限高内滚不撑长页面。
-   padding 是给 .cancel 叉叉（凸出行外 -16px）留的可见空间，否则被滚动容器裁掉 */
-#filelist{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;max-height:400px;overflow-y:auto;padding:16px 16px 0 0}
-#filelist .progressBar{margin-top:0;height:auto;min-height:36px}
+   响应式 grid——1 个时满行，多个时一行多个（auto-fit + minmax）。
+   2026-10-26：取消限高与内部滚动，批量上传只向下撑高页面；卡片内容允许换行，避免横向溢出。
+   padding 是给 .cancel 叉叉（凸出行外 -16px）留的可见空间 */
+#filelist{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:10px;padding:16px 16px 0 0}
+#filelist .progressBar{margin-top:0;height:auto;min-height:36px;min-width:0}
 #filelist .progressBar .title{position:relative;width:auto;height:auto;line-height:20px;padding:8px 10px}
-#filelist .progressBar .title .name{float:none;display:flex;align-items:center;gap:8px;max-width:none;padding-left:0;font-size:14px;white-space:nowrap}
+#filelist .progressBar .title .name{float:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;max-width:none;padding-left:0;font-size:14px}
 #filelist .progressBar .title .name span{font-size:14px;line-height:20px}
 #filelist .progressBar .title .name b{font-weight:normal}
 #filelist .progressBar .title .message{float:none;display:block;padding-right:0;font-size:12px;line-height:18px;min-height:0}
