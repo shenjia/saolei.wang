@@ -3416,7 +3416,7 @@ export function OnlinePlay({
       if (entered) {
         zoomBeforeFs = zoomCur;
         // 等全屏渲染稳定（innerWidth 更新为屏幕尺寸）后再测量计算
-        window.setTimeout(() => { if (document.fullscreenElement === root) fitZoomForFullscreen(); }, 80);
+        window.setTimeout(() => { if (document.fullscreenElement === root) fitZoomForFullscreen(true); }, 80);
       } else {
         if (zoomBeforeFs !== null) {
           applyZoom(zoomBeforeFs, false);
@@ -3906,11 +3906,12 @@ export function OnlinePlay({
       if (document.fullscreenElement === root) {
         /* fsAutoFit 拉满场景（移动端/横屏/超大 cus 盘）维持 5：页级 zoom 0.65 的
            补偿倍率与「铺满」语义都需要 3x+，封 2.4 会把拉满值直接砸下来；
-           PC 高级全屏（2026-10-26 张老师定）：允许继续放大到棋盘顶格——结算面板
-           已是浮层居中，不再需要右侧留白，上限改为视口可容纳的最大比例；
-           PC 其余级别全屏手动调比例才封 FS_ZOOM_CAP（fsAutoFit 为函数声明已提升，
-           且全屏分支只可能在挂载完成后被事件回调触达，mqNarrow 无 TDZ 风险） */
-        if (lv === "exp") {
+           PC 标准级别（beg/int/exp）全屏（2026-10-26 张老师定）：允许继续放大到
+           棋盘顶格——结算面板已是浮层居中，不再需要右侧留白，上限改为视口可容纳的
+           最大比例（不再区分级别钉死 2.4）；cus 大盘走 fsAutoFit 分支、小盘封 FS_ZOOM_CAP。
+           （fsAutoFit 为函数声明已提升，且全屏分支只可能在挂载完成后被事件回调触达，
+           mqNarrow 无 TDZ 风险） */
+        if (lv !== "cus") {
           const fit = fullscreenFitCap();
           if (fit > 0) return fit;
         }
@@ -4383,20 +4384,23 @@ export function OnlinePlay({
       if (availH <= 8 || availW <= 8) return 0;
       return Math.min(availW / baseW, availH / baseH);
     }
-    function fitZoomForFullscreen() {
+    function fitZoomForFullscreen(firstEntry = false) {
       if (!fsAutoFit()) {
-        /* PC 高级（2026-10-26 张老师定）：进入全屏自动升到 2.1x，不再要求每次手动拖杆；
-           滑杆/滚轮上限放宽到「顶格」——结算面板已是浮层居中，不再占右侧空间，
-           棋盘可继续放大到贴满屏幕。persist=false 不覆盖窗口比例记忆，退出时由
-           zoomBeforeFs 原样恢复；全屏中手动调过比例则 zoomBeforeFs 已清空，退出走收档口径。
-           其他 PC 盘面：比例不动，只把滑杆行程放宽到全屏口径（normalMaxZoom 全屏恒 FS_ZOOM_CAP）。
+        /* PC 标准级别（2026-10-26 张老师定）：进全屏首次高级自动升到 2.1x，不再要求
+           每次手动拖杆；滑杆/滚轮上限放宽到「顶格」——结算面板已是浮层居中，不再占
+           右侧空间，棋盘可继续放大到贴满屏幕。persist=false 不覆盖窗口比例记忆，
+           退出时由 zoomBeforeFs 原样恢复；全屏中手动调过比例则 zoomBeforeFs 已清空，
+           退出走收档口径。
+           全屏中重开/切级别/ resize 时（firstEntry=false）保持当前比例不动，仅当
+           当前比例超过顶格上限时才压回（applyZoom(zoomCur) 内部走 normalMaxZoom
+           全屏分支=顶格，自动封顶）。
            ⚠️ 不能对 cus 无条件走 applyZoom(zoomCur)：0.3~0.5x 会被 floor 0.5 抬升；
-           仅当窗口模式已调到超 2.4（窗口上限 2.5）时才经 applyZoom 压回全屏上限 */
+           仅当窗口模式已调到超顶格上限时才经 applyZoom 压回 */
         const capFs = String(normalMaxZoom());
         zoomRange.max = capFs;
         cusZoom.max = capFs;
-        if (lv === "exp") applyZoom(FS_AUTO_ZOOM, false);
-        else if (zoomCur > FS_ZOOM_CAP) applyZoom(zoomCur, false);
+        if (firstEntry && lv === "exp") applyZoom(FS_AUTO_ZOOM, false);
+        else if (zoomCur > Number(capFs)) applyZoom(zoomCur, false);
         /* 面板几何必须跟着重算（2026-10-19 二版）：旧版这里直接 return，全屏拉大后
            侧空被压缩、面板却还按进全屏前的尺寸摆着 —— 张老师截图里那两条窄边就是这么来的。
            现在重算一次即可判出「侧边放不下 → 转遮罩」 */
