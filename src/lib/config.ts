@@ -436,8 +436,9 @@ export const NEWS_TYPE = {
  *  录像动态一上传就刷屏新闻流（只在用户主页「动态」显示，NEWS_FEED_EXCLUDED）；
  *  同日再定：晋升动态（PROMOTION）整体下线，不再进入任何动态流
  *  2026-10-25 张老师定：破纪录动态（PERSON_RECORD）保留首页资格，但首创行（or=0，
- *  渲染「创造了」，多为新用户预备役的第一盘，成绩不值得放首页）不进首页新闻；
- *  「刷新了」（or>0）照常上首页——过滤口径见 NEWS_RECORD_FIRST_MARKS / queries.ts home 分支 */
+ *  渲染「创造了」，成绩不值得放首页）不进首页新闻；
+ *  2026-10-26 张老师定：预备役用户（快照 exp_time=0 或 ranked=0）的破纪录动态一律不进首页，
+ *  含「刷新了」（or>0）——过滤口径见 NEWS_RECORD_FIRST_MARKS / queries.ts homeNewsTypeFilter */
 export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.NOTICE,
   NEWS_TYPE.NEWBIE,
@@ -449,7 +450,8 @@ export const NEWS_HOME_TYPES: number[] = [
 
 /** 「创造了」首创行（or=0）在 details_data 里的两种落库形态：
  *  新写入行 JSON.stringify 数字 0 → "or":0；2026-09-24 前同步存量行字符串 → "or":"0"。
- *  home 口径（NEWS_HOME_TYPES + 本标记）据此排除首创行；渲染层 "0" > 0 为 false 同判「创造了」，口径一致 */
+ *  home 口径（NEWS_HOME_TYPES + 本标记 + 预备役 exp_time/ranked 排除）据此过滤破纪录动态；
+ *  渲染层 "0" > 0 为 false 同判「创造了」，口径一致 */
 export const NEWS_RECORD_FIRST_MARKS: string[] = ['"or":0', '"or":"0"'];
 
 /** 用户主页「动态」排除的类型（2026-10-17：与首页同口径撤掉上传录像；

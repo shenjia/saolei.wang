@@ -218,9 +218,11 @@ function newsLevelFilter(level: string) {
   };
 }
 
-/** 首页新闻流类型过滤（2026-10-25 张老师定）：NEWS_HOME_TYPES 白名单内，
- *  再排除破纪录动态（type=20）的首创行——or=0 渲染「创造了」（多为新用户预备役第一盘，
- *  成绩不值得放首页），「刷新了」（or>0）照常上首页。
+/** 首页新闻流类型过滤（2026-10-25 张老师定，2026-10-26 扩口径）：NEWS_HOME_TYPES 白名单内，
+ *  再排除破纪录动态（type=20）中的两类：
+ *  ① 首创行 or=0 渲染「创造了」——成绩不值得放首页（10-25 原口径）；
+ *  ② 预备役用户（快照 exp_time=0 或 ranked=0，与 title-system 预备役判定一致）——
+ *    一律不进首页，**含「刷新了」or>0**（2026-10-26 张老师定：预备役的破纪录动态不进首页）。
  *  or=0 落库两种形态（新行数字 "or":0 / 同步存量行字符串 "or":"0"，渲染层 "0">0 同判 false），
  *  details_data 是 VarChar 无法做 JSON 路径过滤，用 contains 双标记匹配（形态普查 2026-10-25 全覆盖）。
  *  getNews / getNewsPage / getNewsCount 三处 home 分支共用，保证行集与计数严格一致 */
@@ -229,7 +231,12 @@ function homeNewsTypeFilter() {
     type: { in: NEWS_HOME_TYPES },
     NOT: {
       type: NEWS_TYPE.PERSON_RECORD,
-      OR: NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
+      OR: [
+        ...NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
+        // 预备役快照：无高级成绩 或 未在榜（news 表 exp_time/ranked 列，写入时定值）
+        { expTime: BigInt(0) },
+        { ranked: BigInt(0) },
+      ],
     },
   };
 }
@@ -470,10 +477,11 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  // v5：2026-10-26 home 口径扩「预备役破纪录一律不进首页」（exp_time/ranked=0 并入排除）。
   // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
-  ["news-count-v4"],
+  ["news-count-v5"],
   { revalidate: 300 }
 );
 
