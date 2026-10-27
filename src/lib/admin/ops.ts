@@ -23,6 +23,7 @@ import { ensureTodaySnapshot } from "@/lib/ranksnap";
 import { rankLeave, safeRankOp } from "@/lib/userrank";
 import { setMaintenance } from "@/lib/maintenance";
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
+import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
 import { logAdmin } from "./log";
 import type { AdminLevel } from "./guard";
 
@@ -211,31 +212,59 @@ async function dispatch(
     }
 
     case "user.clearCheatPenalty": {
-      /* 手动解除反作弊标记（2026-10-27 张老师定，对齐信任组操作）：
-         清 rank_ban_until（练习页排名模式禁用）+ low_trust_until（低信任组），
-         并重分拣其待审录像（低信任硬规则解除后可回免核定池） */
+      /* 移出低信任用户组（2026-10-27 张老师定，列表与详情页共用同一 op）：
+         ① 清 rank_ban_until（练习页排名模式禁用）+ low_trust_until（反作弊标记）；
+         ② 记 low_trust_exempt = 本次时刻（屏蔽史豁免：早于此刻的屏蔽录像不再作为入组依据，
+            之后再有录像被屏蔽会自动重新入组）；
+         ③ 可选 restoreBlocked：同时把名下独立屏蔽的录像恢复为「通过」（成绩回榜、参与排名），
+            封禁连坐（status_bak≠0）的不动——那些由解禁流程负责恢复；
+         ④ 重分拣其待审录像（低信任硬规则解除后可回免核定池） */
       const id = toId(p.id);
       if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
+      const restoreBlocked = toBool(p.restoreBlocked);
       const user = await prisma.user.findUnique({
         where: { id: BigInt(id) },
-        select: { chineseName: true, rankBanUntil: true, lowTrustUntil: true },
+        select: { chineseName: true, rankBanUntil: true, lowTrustUntil: true, lowTrustExempt: true },
       });
       if (!user) return { ok: false, error: "玩家不存在" };
       const t = now();
-      if (Number(user.rankBanUntil) <= t && Number(user.lowTrustUntil) <= t) {
-        return { ok: false, error: "该玩家没有生效中的反作弊标记" };
+      const blockedHistory = await loadBlockedHistoryOf(id);
+      const state = lowTrustState(user, blockedHistory, t);
+      const rankBanned = Number(user.rankBanUntil) > t;
+      if (!state.member && !rankBanned) {
+        return { ok: false, error: "该玩家不在低信任用户组（无生效标记、无未豁免的屏蔽史）" };
       }
+
       await prisma.user.update({
         where: { id: BigInt(id) },
-        data: { rankBanUntil: BigInt(0), lowTrustUntil: BigInt(0) },
+        data: { rankBanUntil: BigInt(0), lowTrustUntil: BigInt(0), lowTrustExempt: BigInt(t) },
       });
+
+      // 同时解除屏蔽（可选）：只处理独立屏蔽的录像，封禁连坐交给解禁流程
+      let restored = 0;
+      if (restoreBlocked) {
+        const blocked = await prisma.video.findMany({
+          where: { user: BigInt(id), status: VIDEO_STATUS.BANNED, statusBak: 0 },
+          select: { id: true },
+          orderBy: { id: "asc" },
+        });
+        for (const v of blocked) {
+          // 已在处置面板人工确认过，跳过「先看后审」闸（那条闸防的是批量盲过免核定池）
+          const r = await reviewVideo(actor.uid, actor.role, Number(v.id), VIDEO_STATUS.REVIEWED, {
+            skipWatchCheck: true,
+          });
+          if (r.ok) restored += 1;
+        }
+      }
+
       const pending = await prisma.video.findMany({ where: { user: BigInt(id), status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");
       for (const { id: vid } of pending) await triageVideo(Number(vid));
-      return {
-        ok: true,
-        message: `${user.chineseName}（#${id}）已移出低信任用户组，排行模式已启用`,
-      };
+
+      const parts = ["已移出低信任用户组", "排名模式已恢复"];
+      if (restored) parts.push(`已恢复被屏蔽录像 ${restored} 部`);
+      if (state.blockedCount > 0 && !restored) parts.push(`名下 ${state.blockedCount} 部屏蔽录像保持屏蔽`);
+      return { ok: true, message: `${user.chineseName}（#${id}）${parts.join("，")}` };
     }
 
     case "cheat.confirm": {

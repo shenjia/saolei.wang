@@ -48,6 +48,11 @@ export async function uploadVideo(
   const session = await getSession();
   if (!session) return fail("请先登录", 401);
 
+  // 封禁拦截（2026-10-27）：低信任口径已不计入封禁账号（口径见 lib/lowtrust.ts），
+  // 这里补上真正的闸——否则持旧会话的被封玩家仍能上传且逃过「低信任→全量人工审核」
+  const me = await prisma.user.findUnique({ where: { id: BigInt(session.uid) }, select: { status: true } });
+  if (me?.status === -1) return fail("账号已被封禁，无法上传录像", 403);
+
   // 低信任上传限速（2026-10-27 反作弊）：标记未到期用户 24h 滚动窗口内 ≤5 个录像。
   // 排在格式校验前，伪造请求也吃同一限额。
   const penalty = await getRankPenalty(session.uid);

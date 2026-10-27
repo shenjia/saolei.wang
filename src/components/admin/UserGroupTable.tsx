@@ -1,17 +1,18 @@
 // 用户组列表客户端壳（2026-10-27 张老师需求）
 // · 新成员行加亮：以 localStorage 记录上次查看时刻，joinTime 晚于它的行加 new 类；
 // · 进入列表即把查看时刻刷成「本次服务端组内最新加入时间」，并广播事件让侧栏 badge 消失；
-// · 移出操作走统一 op 接口（confirmDialog 站内浮窗确认）：
-//   可信组 → user.setTrusted false；低信任组 → 反作弊标记源 user.clearCheatPenalty，
-//   其余源（屏蔽史/封禁史）是历史事实，不能由本页移除，跳玩家详情页处理。
+// · 移出操作（2026-10-27 张老师定：低信任组每行都是「移出」，不再有「详情处理」跳转）：
+//   可信组 → user.setTrusted false；低信任组 → LowTrustDialog（user.clearCheatPenalty，
+//   弹窗里可选同时解除名下被屏蔽录像的屏蔽）。
 
 "use client";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { postOp } from "./AdminAction";
 import { toast } from "@/components/Toast";
 import { confirmDialog } from "@/components/Confirm";
+import { postOp } from "./AdminAction";
+import { LowTrustDialog } from "./LowTrustDialog";
 import { formatDate } from "@/lib/format";
 import type { GroupRow } from "@/lib/admin/usergroups";
 
@@ -64,19 +65,14 @@ export function UserGroupTable({
   }, [groupKey, maxJoin, total]);
 
   const remove = async (u: GroupRow) => {
-    const isFlagSource = u.sources.includes("反作弊标记");
     const ok = await confirmDialog({
       title: "操作确认",
-      message: isFlagSource
-        ? `确认把「${u.chineseName}」移出低信任用户组？将清除其反作弊标记（排名模式与上传限制恢复），待审录像会立即重分拣。`
-        : `确认把「${u.chineseName}」移出可信用户组？其后续上传录像将恢复 STNB 触发器检查，待审录像会立即重分拣。`,
+      message: `确认把「${u.chineseName}」移出可信用户组？其后续上传录像将恢复 STNB 触发器检查，待审录像会立即重分拣。`,
       danger: true,
     });
     if (!ok) return;
     setBusyId(u.id);
-    const res = isFlagSource
-      ? await postOp("user.clearCheatPenalty", { id: u.id })
-      : await postOp("user.setTrusted", { id: u.id, trusted: false });
+    const res = await postOp("user.setTrusted", { id: u.id, trusted: false });
     setBusyId(0);
     if (res.ok) {
       toast(res.message ?? "操作成功", "success");
@@ -119,7 +115,7 @@ export function UserGroupTable({
                     {u.sources.map((s) => (
                       <span
                         key={s}
-                        className={`admin_tag ${s === "反作弊标记" ? "bad" : s === "封禁史" ? "warn" : "plain"}`}
+                        className={`admin_tag ${s === "反作弊标记" ? "bad" : "plain"}`}
                         style={{ marginRight: 4 }}
                       >
                         {s}
@@ -132,7 +128,11 @@ export function UserGroupTable({
                 {groupKey === "lowtrust" && (
                   <td className="sub">
                     {u.lowTrustUntil > 0 ? formatDate(u.lowTrustUntil, "Y-m-d H:i") : "—"}
-                    {u.status === -1 && <span className="admin_tag bad" style={{ marginLeft: 4 }}>封禁中</span>}
+                    {u.blockedCount > 0 && (
+                      <span className="admin_tag plain" style={{ marginLeft: 4 }} title="名下已屏蔽的录像（不勾选「同时解除屏蔽」则保持屏蔽）">
+                        屏蔽 {u.blockedCount} 部
+                      </span>
+                    )}
                   </td>
                 )}
                 <td className="c">
@@ -156,23 +156,17 @@ export function UserGroupTable({
                     ) : (
                       <span className="sub">仅超管</span>
                     )
-                  ) : u.sources.includes("反作弊标记") ? (
-                    isAdmin ? (
-                      <button
-                        type="button"
-                        className="admin_btn sm"
-                        disabled={busyId === u.id}
-                        onClick={() => remove(u)}
-                      >
-                        {busyId === u.id ? "…" : "移出用户组"}
-                      </button>
-                    ) : (
-                      <span className="sub">仅超管</span>
-                    )
+                  ) : isAdmin ? (
+                    <LowTrustDialog
+                      userId={u.id}
+                      name={u.chineseName}
+                      blockedCount={u.blockedCount}
+                      onDone={(ok) => {
+                        if (ok) setRemoved((s) => new Set(s).add(u.id));
+                      }}
+                    />
                   ) : (
-                    <Link className="admin_btn sm" href={`/admin/users/${u.id}`}>
-                      详情处理
-                    </Link>
+                    <span className="sub">仅超管</span>
                   )}
                 </td>
               </tr>
@@ -180,7 +174,7 @@ export function UserGroupTable({
           })}
           {visible.length === 0 && (
             <tr>
-              <td colSpan={groupKey === "lowtrust" ? 7 : 6}>
+              <td colSpan={groupKey === "lowtrust" ? 8 : 6}>
                 <div className="admin_empty">当前没有组内成员</div>
               </td>
             </tr>

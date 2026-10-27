@@ -1,5 +1,5 @@
 // 玩家管理顶部 tab 条（客户端，2026-10-27）
-// · 独立入口合并进玩家管理后，侧栏「玩家管理」红点是两组（可信/低可信）合并的，
+// · 独立入口合并进玩家管理后，侧栏「玩家管理」红点是两组（可信/低信任）合并的，
 //   落地页却在「全部玩家」——不知道该看哪个 tab（张老师反馈）。
 // · 这里在 tab 按钮上挂**各组自己的** badge（数字，算不出差值按 1 显示——
 //   2026-10-27 张老师定恒显数字，与侧栏两组之和口径对齐），复用同一套
@@ -55,7 +55,7 @@ export function UserGroupTabs({
   const tabs: { key: "all" | GroupKey; label: string }[] = [
     { key: "all", label: "全部玩家" },
     { key: "trusted", label: "可信用户组" },
-    { key: "lowtrust", label: "低可信用户组" },
+    { key: "lowtrust", label: "低信任用户组" },
   ];
 
   return (

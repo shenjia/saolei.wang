@@ -13,6 +13,8 @@ import { BBS_BOARD_NAMES, BBS_BOARDS, ubb } from "@/lib/bbs";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { decodeLegacyEntities } from "@/lib/format";
+import { loadBlockedHistoryOf, lowTrustState, type LowTrustState } from "@/lib/lowtrust";
+import { likeContains } from "@/lib/sqlguard";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -73,13 +75,13 @@ function userWhere(f: UserFilter): { sql: string; params: unknown[] } {
     if (/^\d+$/.test(q)) {
       // 纯数字：ID 精确匹配 + 标识模糊（存在纯数字标识如 "638"，只按 ID 会漏）
       conds.push(`(u.id = ? OR ${sigSub})`);
-      const like = `%${q}%`;
+      const like = likeContains(q);
       params.push(BigInt(q), like);
     } else {
       conds.push(
         `(u.chinese_name LIKE ? OR u.english_name LIKE ? OR a.username LIKE ? OR i.nickname LIKE ? OR ${sigSub})`
       );
-      const like = `%${q}%`;
+      const like = likeContains(q);
       params.push(like, like, like, like, like);
     }
   }
@@ -194,8 +196,8 @@ export async function getUserList(
 
 export interface AdminUserDetail {
   row: AdminUserRow;
-  /** 反作弊标记生效中（low_trust_until 未到期，数据层算好时效） */
-  lowTrustFlagged: boolean;
+  /** 低信任组成员资格（口径见 lib/lowtrust.ts，与后台组列表 / 录像分拣同源） */
+  lowTrust: LowTrustState;
   /** 练习页排名模式禁用生效中（rank_ban_until 未到期） */
   rankBanned: boolean;
   /** 排名禁用截止 Unix 秒（详情页倒计时用；0=无标记） */
@@ -339,8 +341,8 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     bbsCount,
     postTotal,
     messageCount,
-    /* 反作弊标记时效在数据层算好（RSC 渲染期禁 Date.now()） */
-    lowTrustFlagged: N(user.lowTrustUntil) > Math.floor(Date.now() / 1000),
+    /* 低信任组口径在数据层算好（RSC 渲染期禁 Date.now()）：与后台组列表 / 录像分拣同源 */
+    lowTrust: lowTrustState(user, await loadBlockedHistoryOf(uid)),
     rankBanned: N(user.rankBanUntil) > Math.floor(Date.now() / 1000),
     rankBanUntil: N(user.rankBanUntil),
     /* G1 排名行为审计：累计盲区率/旗精度展示，极端值判定口径见私有 core */
@@ -671,7 +673,7 @@ function videoWhere(f: VideoFilter): {
       params.push(BigInt(q), BigInt(q));
     } else {
       conds.push("u.chinese_name LIKE ?");
-      params.push(`%${q}%`);
+      params.push(likeContains(q));
       joinsNeeded = true;
     }
   }
@@ -1405,7 +1407,7 @@ export async function getMessageStats(): Promise<{ total: number; unread: number
 export async function searchUsersBrief(q: string, limit = 10): Promise<{ id: number; name: string; username: string }[]> {
   const kw = q.trim();
   if (!kw) return [];
-  const like = `%${kw}%`;
+  const like = likeContains(kw);
   const rows = await prisma.$queryRawUnsafe<{ id: bigint; chinese_name: string; username: string }[]>(
     `SELECT u.id, u.chinese_name, COALESCE(a.username, '') username
      FROM user u LEFT JOIN user_auth a ON a.id = u.id

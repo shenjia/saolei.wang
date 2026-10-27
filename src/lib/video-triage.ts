@@ -18,7 +18,7 @@
 //   bit6 破个人纪录（time / 3bvs 任一将刷新，需调用方传入，见 triageVideo 注释）
 //   bit7 级别 TOP 榜（时间 TOP100 / 3bvs TOP10，同上由调用方判定传入）
 //   bit8 首次入伍（三级成绩将首次齐全，同上）
-//   bit9 低信任：上传者名下有被屏蔽录像 或 账号曾被封
+//   bit9 低信任：上传者属低信任组（口径见 lib/lowtrust.ts：反作弊标记未到期 ∪ 屏蔽史）
 //
 // 另外的强制口径（不是触发器）：bit16 在线排行模式录像一律转手审
 //   （2026-10-27 张老师指令「暂时」，开关 RANKED_FORCE_MANUAL_REVIEW——
@@ -35,6 +35,7 @@ import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
 import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
+import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
 
 export { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER };
 
@@ -175,18 +176,18 @@ export interface TriageExtra {
   firstEnlist?: boolean;
 }
 
-/** 上传者信任信息（一次查询同时拿低信任与可信组两个口径） */
+/** 上传者信任信息（一次查询同时拿低信任与可信组两个口径）
+ *  低信任口径 2026-10-27 收敛到 lib/lowtrust（后台组列表 / 详情页 / 分拣三处共用）：
+ *  反作弊标记未到期 ∪ 屏蔽史（屏蔽时刻晚于人工移出时刻）；封禁账号不计入。 */
 export async function getUserTrustInfo(userId: number): Promise<{ lowTrust: boolean; trusted: boolean }> {
-  const [bannedVideo, userRow] = await Promise.all([
-    prisma.video.findFirst({ where: { user: BigInt(userId), status: 0 }, select: { id: true } }),
-    prisma.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true, trusted: true, lowTrustUntil: true } }),
+  const [userRow, blocked] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+      select: { trusted: true, lowTrustUntil: true, lowTrustExempt: true },
+    }),
+    loadBlockedHistoryOf(userId),
   ]);
-  // 低信任口径（2026-10-27 扩展）：屏蔽史 / 封禁史 / 反作弊探测标记（low_trust_until 未到期）
-  const lowTrust =
-    Boolean(bannedVideo) ||
-    userRow?.status === -1 ||
-    Number(userRow?.lowTrustUntil ?? 0) > Math.floor(Date.now() / 1000);
-  return { lowTrust, trusted: Boolean(userRow?.trusted) };
+  return { lowTrust: lowTrustState(userRow, blocked).member, trusted: Boolean(userRow?.trusted) };
 }
 
 /** 上传者是否低信任：名下有被屏蔽录像 / 账号曾被封 / 反作弊标记未到期（user.status=-1 即封禁口径，含限时未到期） */

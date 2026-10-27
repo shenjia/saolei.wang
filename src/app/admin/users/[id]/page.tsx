@@ -9,6 +9,7 @@ import { getUserDetailAdmin } from "@/lib/admin/data";
 import { opLabel } from "@/lib/admin/log";
 import { AdminAction, AdminForm } from "@/components/admin/AdminAction";
 import { BanUserDialog } from "@/components/admin/BanUserDialog";
+import { LowTrustDialog } from "@/components/admin/LowTrustDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, score3bvs, scoreTime, timeOpposite } from "@/lib/format";
@@ -53,8 +54,11 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
               可信用户
             </span>
           )}
-          {d.lowTrustFlagged && (
-            <span className="admin_tag warn" title="反作弊探测命中：练习页排名模式禁用中，上传录像 24h ≤5 且全部需人工审核">
+          {d.lowTrust.member && (
+            <span
+              className="admin_tag warn"
+              title={`低信任组成员：${d.lowTrust.sources.join(" + ")}。上传录像 24h ≤5 且全部需人工审核${d.rankBanned ? "，练习页排名模式禁用中" : ""}`}
+            >
               低信任{d.rankBanned ? "·排名禁用" : ""}
             </span>
           )}
@@ -281,25 +285,36 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                   confirm={`确认禁用「${u.chineseName}」的排名模式 24 小时？`}
                 />
               )}
-              {!u.trusted && !d.lowTrustFlagged && (
-                <AdminAction
-                  op="user.setLowTrust"
-                  params={{ id: u.id }}
-                  label="加入低信任用户组"
-                  variant="warn"
+              {/* 低信任组（2026-10-27 张老师定）：成员资格与后台组列表同源（lib/lowtrust），
+                  在组内就是「移出」（弹窗里可选同时解除名下被屏蔽录像的屏蔽）；
+                  不在组内才给「加入」。封禁中的账号不计入组，故不给「加入」 */}
+              {d.lowTrust.member ? (
+                <LowTrustDialog
+                  userId={u.id}
+                  name={u.chineseName}
+                  blockedCount={d.lowTrust.blockedCount}
                   sm={false}
-                  confirm={`确认把「${u.chineseName}」加入低信任用户组？其 7 天内上传限流（每日 5 部）且全部录像需人工审核，练习页排名模式同步禁用 24 小时，待审录像会立即重分拣。`}
-                />
-              )}
-              {d.lowTrustFlagged && (
-                <AdminAction
-                  op="user.clearCheatPenalty"
-                  params={{ id: u.id }}
                   label="移出低信任用户组"
-                  variant="warn"
-                  sm={false}
-                  confirm={`确认把「${u.chineseName}」移出低信任用户组？其练习页排名模式与上传限制立即恢复，待审录像会重分拣（解除后回免核定判定）。`}
                 />
+              ) : (
+                u.status === 0 &&
+                !u.trusted && (
+                  <AdminAction
+                    op="user.setLowTrust"
+                    params={{ id: u.id }}
+                    label="加入低信任用户组"
+                    variant="warn"
+                    sm={false}
+                    confirm={`确认把「${u.chineseName}」加入低信任用户组？其 7 天内上传限流（每日 5 部）且全部录像需人工审核，练习页排名模式同步禁用 24 小时，待审录像会立即重分拣。`}
+                  />
+                )
+              )}
+              {d.lowTrust.member && d.lowTrust.sources.length > 0 && (
+                <span className="admin_hint" style={{ alignSelf: "center" }}>
+                  入组依据：{d.lowTrust.sources.join(" + ")}
+                  {d.lowTrust.blockedCount > 0 ? `（名下 ${d.lowTrust.blockedCount} 部录像已屏蔽）` : ""}
+                  {d.lowTrust.exemptAt > 0 ? ` · 上次人工移出 ${formatDate(d.lowTrust.exemptAt, "Y-m-d H:i")}` : ""}
+                </span>
               )}
               {!isSelf &&
                 (u.videos === 0 && d.postTotal === 0 ? (

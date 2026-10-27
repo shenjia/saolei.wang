@@ -1,16 +1,18 @@
 // 用户组列表（2026-10-27 张老师需求）：可信用户组 / 低信任用户组两个后台列表页 + 导航 badge。
 //
-// 口径（与录像分拣 getUserTrustInfo 严格一致，勿单边漂移）：
+// 口径：
 // · 可信组 = user.trusted = 1（组内不检查 STNB 触发器，2026-10-24）
-// · 低信任组 = 屏蔽史（名下有 status=0 录像）∪ 封禁史（user.status=-1）∪ low_trust_until 未到期
-//   ——即 isLowTrustUser 三源（2026-10-27 扩展后口径）。
+// · 低信任组 = 反作弊标记未到期 ∪ 屏蔽史（最近屏蔽时刻晚于人工移出时刻）
+//   —— 详细定义与「为什么封禁账号不计入」见 src/lib/lowtrust.ts（与录像分拣 getUserTrustInfo 同源，
+//   列表 / 详情页 / 分拣三处禁单边漂移）。
 //
 // 「加入时间 / 操作管理员」没有落库字段，从 admin_log 反查最新一条加组动作
-// （user.setTrusted 加入 / user.setLowTrust / user.setStatus 封禁 / video.review|batchReview 屏蔽）；
-// 探测器自动加入走 cheat_report（操作者=反作弊系统）。
-// 建组前的历史屏蔽/封禁无法溯源，joinTime=null，排在列表尾部。
+// （user.setTrusted 加入 / user.setLowTrust）；探测器自动加入走 cheat_report（操作者=反作弊系统）；
+// 屏蔽史取该玩家最近一次被屏蔽的时刻与审核人（video.review_time / review_user）。
+// 建组前的历史屏蔽无法溯源审核人时，joinBy=null。
 
 import { prisma } from "@/lib/db";
+import { loadBlockedHistory, lowTrustState, type LowTrustBlocked, type LowTrustState } from "@/lib/lowtrust";
 import { ADMIN_PAGESIZE } from "./data";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
@@ -21,8 +23,10 @@ export interface GroupRow {
   id: number;
   chineseName: string;
   status: number;
-  /** 低信任组：生效中的反作弊标记截止（0=非标记源） */
+  /** 低信任组：反作弊标记截止（0=无标记；「标记到期」列用） */
   lowTrustUntil: number;
+  /** 低信任组：名下独立屏蔽录像部数（含已豁免的，「同时解除屏蔽」文案用） */
+  blockedCount: number;
   /** 加入时间（Unix 秒；无法溯源的历史行为 null） */
   joinTime: number | null;
   /** 操作管理员（探测器自动加入 = 「反作弊系统」；无法溯源 = null） */
@@ -48,29 +52,16 @@ export interface GroupBadges {
   lowTrustMaxJoin: number;
 }
 
-// ---------- 加组动作反查 ----------
-
-/** 是否「加入低信任组」动作（admin_log.detail 文案匹配）
- *  ⚠️ 只认 targetId=玩家 ID 的动作：user.setLowTrust（手动加组）/ user.setStatus（封禁）。
- *  video.review / video.batchReview 的屏蔽日志 targetId 是录像 ID，无法映射到玩家——
- *  纯屏蔽史入组的成员 joinTime 不可溯源（null，排列表尾部）。 */
-function isLowTrustJoinLog(action: string, detail: string): boolean {
-  if (action === "user.setLowTrust") return true; // 已加入低信任用户组
-  if (action === "user.setStatus" && detail.startsWith("封禁玩家")) return true;
-  return false;
-}
+// ---------- admin_log 反查 ----------
 
 /** admin_log 反查：user → 最新加组时间与操作管理员（两组合并一轮查询） */
 async function loadJoinLogs(): Promise<{
   trustedJoin: Map<number, { time: number; adminId: number }>;
   lowJoin: Map<number, { time: number; adminId: number }>;
-  adminIds: number[];
 }> {
-  // admin_log 全表仅百行级，按 action 前缀收窄后全量读入，内存归并
+  // admin_log 全表仅百行级，按 action 收窄后全量读入，内存归并
   const logs = await prisma.adminLog.findMany({
-    where: {
-      action: { in: ["user.setTrusted", "user.setLowTrust", "user.setStatus"] },
-    },
+    where: { action: { in: ["user.setTrusted", "user.setLowTrust"] } },
     select: { user: true, targetId: true, action: true, detail: true, createTime: true },
     orderBy: { id: "asc" }, // 升序遍历，同 user 后写覆盖前写 = 最新
   });
@@ -81,12 +72,11 @@ async function loadJoinLogs(): Promise<{
     if (!uid) continue;
     if (log.action === "user.setTrusted" && log.detail.includes("已加入可信用户组")) {
       trustedJoin.set(uid, { time: N(log.createTime), adminId: N(log.user) });
-    } else if (isLowTrustJoinLog(log.action, log.detail)) {
+    } else if (log.action === "user.setLowTrust") {
       lowJoin.set(uid, { time: N(log.createTime), adminId: N(log.user) });
     }
   }
-  const adminIds = [...new Set([...trustedJoin.values(), ...lowJoin.values()].map((v) => v.adminId).filter(Boolean))];
-  return { trustedJoin, lowJoin, adminIds };
+  return { trustedJoin, lowJoin };
 }
 
 /** admin id → 显示名 */
@@ -117,14 +107,90 @@ function sortRows(rows: GroupRow[]) {
   });
 }
 
+// ---------- 低信任组成员（列表与 badge 共用） ----------
+
+interface LowTrustMember {
+  id: number;
+  chineseName: string;
+  status: number;
+  state: LowTrustState;
+  blocked: LowTrustBlocked | null;
+}
+
+/** 全量低信任组成员（量级百人）：标记中 ∪ 有屏蔽史的候选集，再按豁免时刻逐人判定。
+ *  封禁账号（status=-1）不计入（2026-10-27 张老师定）。 */
+async function loadLowTrustMembers(): Promise<LowTrustMember[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const [flagged, blockedMap] = await Promise.all([
+    prisma.user.findMany({ where: { lowTrustUntil: { gt: BigInt(now) } }, select: { id: true } }),
+    loadBlockedHistory(),
+  ]);
+  const ids = new Set<number>();
+  for (const u of flagged) ids.add(N(u.id));
+  for (const uid of blockedMap.keys()) ids.add(uid);
+  if (!ids.size) return [];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...ids].map((x) => BigInt(x)) }, status: { not: -1 } },
+    select: { id: true, chineseName: true, status: true, lowTrustUntil: true, lowTrustExempt: true },
+  });
+  const members: LowTrustMember[] = [];
+  for (const u of users) {
+    const blocked = blockedMap.get(N(u.id)) ?? null;
+    const state = lowTrustState(u, blocked, now);
+    if (!state.member) continue;
+    members.push({ id: N(u.id), chineseName: u.chineseName, status: u.status, state, blocked });
+  }
+  return members.sort((a, b) => b.id - a.id); // 最终排序在 getLowTrustGroup 按加入时间做
+}
+
+/** 成员加入时间/操作管理员：标记源取 admin_log 或探测器时间，屏蔽源取最近一次屏蔽的审核人 */
+async function resolveJoinInfo(members: LowTrustMember[]): Promise<Map<number, { time: number; by: number | null }>> {
+  const now = Math.floor(Date.now() / 1000);
+  const flaggedIds = members.filter((m) => m.state.flagUntil > now).map((m) => m.id);
+  const [logs, cheats] = await Promise.all([
+    flaggedIds.length
+      ? prisma.adminLog.findMany({
+          where: { action: "user.setLowTrust", targetId: { in: flaggedIds.map(BigInt) } },
+          select: { user: true, targetId: true, createTime: true },
+          orderBy: { id: "asc" },
+        })
+      : Promise.resolve([]),
+    latestCheatReports(),
+  ]);
+  const logMap = new Map<number, { time: number; adminId: number }>();
+  for (const l of logs) logMap.set(N(l.targetId), { time: N(l.createTime), adminId: N(l.user) });
+
+  const out = new Map<number, { time: number; by: number | null }>();
+  for (const m of members) {
+    const cands: { time: number; by: number | null }[] = [];
+    if (m.state.flagUntil > now) {
+      const lg = logMap.get(m.id);
+      if (lg) cands.push({ time: lg.time, by: lg.adminId });
+      const ct = cheats.get(m.id) ?? 0;
+      if (ct) cands.push({ time: ct, by: null }); // 探测器：by=null 显示「反作弊系统」
+    }
+    if (m.state.blockedLast > 0) {
+      cands.push({ time: m.state.blockedLast, by: m.blocked?.lastUser || null });
+    }
+    if (!cands.length) {
+      out.set(m.id, { time: 0, by: null });
+      continue;
+    }
+    cands.sort((a, b) => b.time - a.time);
+    out.set(m.id, cands[0]);
+  }
+  return out;
+}
+
 // ---------- 列表查询 ----------
 
 export async function getTrustedGroup(page: number, q?: string): Promise<GroupListResult> {
   const kw = (q ?? "").trim();
   // trusted 组极小（个位数～两位数），一次取全量后在内存分页
   const users = await prisma.user.findMany({ where: { trusted: true } });
-  const { trustedJoin, adminIds } = await loadJoinLogs();
-  const names = await adminNames(adminIds);
+  const { trustedJoin } = await loadJoinLogs();
+  const names = await adminNames([...trustedJoin.values()].map((v) => v.adminId).filter(Boolean));
 
   const rows: GroupRow[] = [];
   for (const u of users) {
@@ -137,96 +203,45 @@ export async function getTrustedGroup(page: number, q?: string): Promise<GroupLi
       chineseName: u.chineseName,
       status: u.status,
       lowTrustUntil: 0,
+      blockedCount: 0,
       joinTime: j ? j.time : null,
       joinBy: j ? names.get(j.adminId) ?? `#${j.adminId}` : null,
       sources: [],
     });
   }
   sortRows(rows);
-  const maxJoin = users.length
-    ? Math.max(
-        ...users.map((u) => trustedJoin.get(N(u.id))?.time ?? 0)
-      )
-    : 0;
+  const maxJoin = users.length ? Math.max(...users.map((u) => trustedJoin.get(N(u.id))?.time ?? 0)) : 0;
   const start = (page - 1) * ADMIN_PAGESIZE;
   return { rows: rows.slice(start, start + ADMIN_PAGESIZE), total: rows.length, pageSize: ADMIN_PAGESIZE, page, maxJoin };
 }
 
 export async function getLowTrustGroup(page: number, q?: string): Promise<GroupListResult> {
   const kw = (q ?? "").trim();
-  const t = Math.floor(Date.now() / 1000);
-  // 三源合并（与 isLowTrustUser 同口径）：标记 / 封禁史 / 屏蔽史。量级百人，全量取回内存分页。
-  const [flagged, banned, blockedUsers, joinInfo, cheatTimes] = await Promise.all([
-    prisma.user.findMany({ where: { lowTrustUntil: { gt: BigInt(t) } }, select: { id: true } }),
-    prisma.user.findMany({ where: { status: -1 }, select: { id: true } }),
-    prisma.$queryRawUnsafe<{ user: bigint }[]>(`SELECT DISTINCT user FROM video WHERE status = 0`),
-    loadJoinLogs(),
-    latestCheatReports(),
-  ]);
+  const members = await loadLowTrustMembers();
+  const joinInfo = await resolveJoinInfo(members);
 
-  const blockedIds = new Set(blockedUsers.map((r) => N(r.user)));
-  const idSet = new Set<number>();
-  for (const u of [...flagged, ...banned]) idSet.add(N(u.id));
-  for (const uid of blockedIds) idSet.add(uid);
+  // 操作管理员名（日志管理员 + 屏蔽审核人）
+  const ids = new Set<number>();
+  for (const v of joinInfo.values()) if (v.by) ids.add(v.by);
+  const names = await adminNames([...ids]);
+
   // badge 基线口径：maxJoin 一律取全量（搜索过滤不拉低基线，否则 badge 误消）
-  const allIds = [...idSet];
-
-  let ids = allIds;
-  let hits: { id: bigint }[] | null = null;
-  if (kw) {
-    // 搜索过滤在合并后的 id 集上做（数字=ID 精确，否则姓名包含）
-    hits = await prisma.user.findMany({
-      where: /^\d+$/.test(kw) ? { id: BigInt(kw) } : { chineseName: { contains: kw } },
-      select: { id: true },
-    });
-    const hitSet = new Set(hits.map((h) => N(h.id)));
-    ids = ids.filter((x) => hitSet.has(x));
-  }
-  // 全量最新加入时刻（不受搜索影响；日志/探测器时间取 max）
-  const allMaxJoin = (() => {
-    let m = 0;
-    for (const uid of allIds) {
-      m = Math.max(m, joinInfo.lowJoin.get(uid)?.time ?? 0, cheatTimes.get(uid) ?? 0);
-    }
-    return m;
-  })();
-  if (!ids.length) return { rows: [], total: 0, pageSize: ADMIN_PAGESIZE, page, maxJoin: allMaxJoin };
-
-  const users = await prisma.user.findMany({ where: { id: { in: ids.map(BigInt) } } });
-  const uMap = new Map(users.map((u) => [N(u.id), u]));
-  const { lowJoin, adminIds } = joinInfo;
-  const names = await adminNames(adminIds);
+  let allMaxJoin = 0;
+  for (const m of members) allMaxJoin = Math.max(allMaxJoin, joinInfo.get(m.id)?.time ?? 0);
 
   const rows: GroupRow[] = [];
-  for (const uid of ids) {
-    const u = uMap.get(uid);
-    if (!u) continue;
-    const flagUntil = N(u.lowTrustUntil);
-    const sources: string[] = [];
-    if (flagUntil > t) sources.push("反作弊标记");
-    if (u.status === -1) sources.push("封禁史");
-    if (blockedIds.has(uid)) sources.push("屏蔽录像");
-    if (!sources.length) continue; // 搜索过滤兜底：三源全空不该出现
-    // 加入时间优先级：管理员动作日志 > 探测器 cheat_report > 无法溯源（null）
-    const jl = lowJoin.get(uid);
-    const ct = cheatTimes.get(uid);
-    let joinTime: number | null = null;
-    let joinBy: string | null = null;
-    if (jl) {
-      joinTime = jl.time;
-      joinBy = names.get(jl.adminId) ?? `#${jl.adminId}`;
-    } else if (ct) {
-      joinTime = ct;
-      joinBy = "反作弊系统";
-    }
+  for (const m of members) {
+    if (kw && !(kw === String(m.id) || m.chineseName.includes(kw))) continue;
+    const j = joinInfo.get(m.id);
     rows.push({
-      id: uid,
-      chineseName: u.chineseName,
-      status: u.status,
-      lowTrustUntil: flagUntil,
-      joinTime,
-      joinBy,
-      sources,
+      id: m.id,
+      chineseName: m.chineseName,
+      status: m.status,
+      lowTrustUntil: m.state.flagUntil,
+      blockedCount: m.state.blockedCount,
+      joinTime: j && j.time > 0 ? j.time : null,
+      joinBy: j && j.time > 0 ? (j.by ? names.get(j.by) ?? `#${j.by}` : "反作弊系统") : null,
+      sources: m.state.sources,
     });
   }
   sortRows(rows);
@@ -237,50 +252,23 @@ export async function getLowTrustGroup(page: number, q?: string): Promise<GroupL
 // ---------- badge 查询（layout 每次渲染调用，必须轻） ----------
 
 export async function getGroupBadges(): Promise<GroupBadges> {
-  const t = Math.floor(Date.now() / 1000);
-  const [trustedCount, lowCountRows, trustedMaxRows, lowMaxRows] = await Promise.all([
+  const [trustedCount, members, trustedMaxRows] = await Promise.all([
     prisma.user.count({ where: { trusted: true } }),
-    // 三源去重计数（同 getLowTrustGroup 口径）
-    prisma.$queryRawUnsafe<{ c: bigint }[]>(
-      `SELECT COUNT(*) c FROM (
-         SELECT id FROM user WHERE low_trust_until > ? OR status = -1
-         UNION
-         SELECT DISTINCT user FROM video WHERE status = 0
-       ) x`,
-      t
-    ),
+    loadLowTrustMembers(),
     prisma.$queryRawUnsafe<{ m: bigint | null }[]>(
       `SELECT MAX(create_time) m FROM admin_log WHERE action = 'user.setTrusted' AND detail LIKE '%已加入可信用户组%'`
     ),
-    // 低信任组「新动作」信号——⚠️ 只统计**组内成员**的加入时间（2026-10-27 修复：
-    // 此前 MAX(cheat_report) 取全库，已移出/已解除的探测记录会推进 maxJoin，
-    // 红点亮但组内无新行可看，还会把已读基线抬高成"幽灵时间"吞掉后续真新行的高亮）。
-    // 手动加组/封禁日志与探测器命中都限定 target 在组员集内取 max（口径同 getLowTrustGroup allMaxJoin）。
-    prisma.$queryRawUnsafe<{ m: bigint | null }[]>(
-      `SELECT MAX(t) m FROM (
-         SELECT MAX(l.create_time) t FROM admin_log l
-         WHERE (l.action = 'user.setLowTrust' OR (l.action = 'user.setStatus' AND l.detail LIKE '封禁玩家%'))
-           AND l.target_id IN (
-             SELECT id FROM user WHERE low_trust_until > ? OR status = -1
-             UNION SELECT DISTINCT user FROM video WHERE status = 0
-           )
-         GROUP BY l.target_id
-         UNION ALL
-         SELECT MAX(c.create_time) t FROM cheat_report c
-         WHERE c.user IN (
-           SELECT id FROM user WHERE low_trust_until > ? OR status = -1
-           UNION SELECT DISTINCT user FROM video WHERE status = 0
-         )
-         GROUP BY c.user
-       ) x`,
-      t,
-      t
-    ),
   ]);
+  // 低信任组「新动作」信号——只统计**组内成员**的加入时间（口径同 getLowTrustGroup 的 maxJoin）：
+  // 已移出/已豁免的探测记录不能推进基线，否则红点亮但组内无新行可看。
+  const joinInfo = await resolveJoinInfo(members);
+  let lowTrustMaxJoin = 0;
+  for (const m of members) lowTrustMaxJoin = Math.max(lowTrustMaxJoin, joinInfo.get(m.id)?.time ?? 0);
+
   return {
     trustedCount,
-    lowTrustCount: N(lowCountRows[0]?.c),
+    lowTrustCount: members.length,
     trustedMaxJoin: N(trustedMaxRows[0]?.m),
-    lowTrustMaxJoin: N(lowMaxRows[0]?.m),
+    lowTrustMaxJoin,
   };
 }

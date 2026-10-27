@@ -39,6 +39,10 @@ model User {
   // 低信任标记截止 Unix 秒：并入 getUserTrustInfo 低信任口径（video.auto_reason bit9
   // 影响后台审核），且 24h 内上传录像数 ≤5；命中后 7 天
   lowTrustUntil BigInt @default(0) @map("low_trust_until") @db.BigInt
+  // 人工移出低信任组时刻 Unix 秒（2026-10-27）：后台「移出低信任用户组」写入。
+  // 屏蔽史只在「最近一次屏蔽时刻 > 本值」时算入组依据——之后再有新录像被屏蔽会自动重新入组。
+  // 口径见 src/lib/lowtrust.ts（列表 / 详情页 / 录像分拣三处共用，禁单边漂移）
+  lowTrustExempt BigInt @default(0) @map("low_trust_exempt") @db.BigInt
 
   // 2026-10-15 上线前性能审计新增：
   // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；
