@@ -50,6 +50,7 @@ import { decodeLegacyEntities } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
+import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -2407,11 +2408,26 @@ export async function getLevel3bvRanges(): Promise<
   return out;
 }
 
+/** 「3BV / PB」单格：某级别某 3BV 的录像数 + 最好成绩（该 3BV 最快那盘） */
+export interface BbvCell {
+  /** 该 3BV 的录像数（≥1） */
+  n: number;
+  /** 最好成绩用时（毫秒）——该 3BV 内 real_time 最小者 */
+  bestTime: number;
+  /** 最好成绩录像 id */
+  bestVideo: number;
+  /** 时间评级（SSS~F，含 +/-）。口径＝该盘 3BV/s 在它自己所属「级别 × 模式(NF/FL)」
+   *  基准组内的分位等级（与录像详情页雷达「速度」轴同算法、同一份 video_metric_dist）；
+   *  "?" ＝ 该组基准样本不足（<MIN_DIST_SIZE）或该 3BV 低于 3BV/s 计分限界（成绩不承认） */
+  grade: string;
+}
+
 /**
  * 用户已收集的 3BV 集合（按级别分组的不同 board_3bv，仅已通过录像）。
- * 值 = 该 3BV 的录像数（≥1），供侧栏方格气泡「共X个录像，点击查看」
- * （2026-10-20 张老师要求；原「首个录像 id+时间」已随格子直开首盘入口下线，
- * 点击入口改为定向列表 /video?author=..&level=..&3bv=..&order=time）。
+ * 2026-10-27 张老师改「3BV / PB」：每格除录像数外，还要给**该 3BV 最好成绩的录像**
+ * （real_time 最小，同分取 id 小者）+ 它的**时间评级**（格子底色按评级渲染）。
+ * 气泡里保留「共X个录像，点击查看」（2026-10-20 张老师要求）；点击仍进定向列表
+ * /video?author=..&level=..&3bv=..&order=time。
  * 2026-10-14 张老师：按现行排行规则收敛——低于 LEVEL_MIN_3BV（初 2 / 中 30 / 高 100）
  * 的 3BV 不计入收集（CASE 按级别取下限，与 BV 榜 fetchBvCollection 同口径）。
  * 2026-10-16 张老师：封禁用户的录像计入本人收集——旧站封禁会把账号全部录像连坐
@@ -2419,27 +2435,67 @@ export async function getLevel3bvRanges(): Promise<
  * 这些是审核通过的合法成绩，封禁只剥夺上榜资格、不抹除历史数据；
  * 正常用户被管理员单独屏蔽的录像（owner 未封禁）仍不计入。
  * 走 video 表 (user, level) 索引 + video_info/user 主键 join，全站最重用户（5k+ 盘）毫秒级。
+ *
+ * ⚠️ 评级坑（2026-10-27）：初级 3BV=2..9 的收集格虽然计入完成度，但 3BV 低于
+ *    MIN_3BV_FOR_3BVS（初 10 / 中 4 / 高 4）成绩不被承认（列表显示删除线），
+ *    若照算 bvs 会被 0.09s 的极短局顶成 SSS；这些格评级一律给 "?"。
  */
 export async function getUser3bvCollection(
   userId: number
-): Promise<Record<VideoLevel, Map<number, number>>> {
-  const rows = await prisma.$queryRaw<{ level: string; b3bv: number; n: bigint }[]>`
-    SELECT v.level, vi.board_3bv AS b3bv, COUNT(*) AS n
-    FROM video v JOIN video_info vi ON vi.id = v.id
-      JOIN \`user\` u ON u.id = v.user
-    WHERE v.user = ${BigInt(userId)}
-      AND (v.status = ${VIDEO_STATUS.REVIEWED} OR (v.status = ${VIDEO_STATUS.BANNED} AND u.status <> 0))
-      AND vi.board_3bv >= CASE v.level
-        WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
-        WHEN 'int' THEN ${LEVEL_MIN_3BV.int}
-        ELSE ${LEVEL_MIN_3BV.exp} END
-    GROUP BY v.level, vi.board_3bv`;
-  const out: Record<VideoLevel, Map<number, number>> = {
+): Promise<Record<VideoLevel, Map<number, BbvCell>>> {
+  // 窗口函数一次取齐：每 (级别, 3BV) 的行数 + 该组最快那行（rn=1）
+  const rows = await prisma.$queryRaw<
+    { level: string; b3bv: number; n: bigint; rt: number; vid: bigint; noflag: number }[]
+  >`
+    SELECT t.level, t.b3bv, t.n, t.rt, t.vid, t.noflag FROM (
+      SELECT v.level, vi.board_3bv AS b3bv, vi.real_time AS rt, v.id AS vid, vi.noflag AS noflag,
+             COUNT(*) OVER (PARTITION BY v.level, vi.board_3bv) AS n,
+             ROW_NUMBER() OVER (PARTITION BY v.level, vi.board_3bv
+                                ORDER BY vi.real_time ASC, v.id ASC) AS rn
+      FROM video v JOIN video_info vi ON vi.id = v.id
+        JOIN \`user\` u ON u.id = v.user
+      WHERE v.user = ${BigInt(userId)}
+        AND (v.status = ${VIDEO_STATUS.REVIEWED} OR (v.status = ${VIDEO_STATUS.BANNED} AND u.status <> 0))
+        AND vi.board_3bv >= CASE v.level
+          WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
+          WHEN 'int' THEN ${LEVEL_MIN_3BV.int}
+          ELSE ${LEVEL_MIN_3BV.exp} END
+    ) t
+    WHERE t.rn = 1`;
+
+  // 分位基准：级别 × 模式 全组行（bucket=-1），bvs 的 9 档边界
+  const distRows = await prisma.videoMetricDist.findMany({
+    where: { bucket: DIST_BUCKET_ALL },
+    select: { level: true, noflag: true, size: true, bvs: true },
+  });
+  const dists = new Map<string, number[]>();
+  for (const d of distRows) {
+    if (d.size < MIN_DIST_SIZE) continue;
+    dists.set(
+      `${d.level}:${d.noflag ? 1 : 0}`,
+      d.bvs.split(",").filter((s) => s !== "").map(Number)
+    );
+  }
+
+  const out: Record<VideoLevel, Map<number, BbvCell>> = {
     beg: new Map(),
     int: new Map(),
     exp: new Map(),
   };
-  for (const r of rows) out[r.level as VideoLevel]?.set(r.b3bv, N(r.n));
+  for (const r of rows) {
+    const level = r.level as VideoLevel;
+    if (!out[level]) continue;
+    const scoreable = r.b3bv >= MIN_3BV_FOR_3BVS[level];
+    const dist = dists.get(`${level}:${r.noflag ? 1 : 0}`) ?? [];
+    // 3BV/s 与 video_metrics.bvs 同公式（r3(solved / 秒)），保证评级与录像页速度轴一致
+    const bvs = r.rt > 0 ? Math.round(((r.b3bv * 1000) / r.rt) * 1000) / 1000 : 0;
+    out[level].set(r.b3bv, {
+      n: N(r.n),
+      bestTime: N(r.rt),
+      bestVideo: N(r.vid),
+      grade: scoreable && bvs > 0 && dist.length ? gradeOf(bvs, dist, true) : "?",
+    });
+  }
   return out;
 }
 

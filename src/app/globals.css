@@ -7663,30 +7663,45 @@ button.msg_cancel:hover {
   background: #49483e;
   border-radius: 2px;
 }
-/* 级别标准配色：初绿 / 中橙 / 高黄——级别名、数字、已收集方格、进度条一并变色 */
+/* 级别标准配色：初绿 / 中橙 / 高黄——级别名、数字、进度条一并变色。
+   2026-10-27 起**已收集方格不再用级别色**（改按时间评级四档，见下方 .g_* 规则），
+   级别色只保留在级别名 / 收集数 / 进度条上 */
 #user_3bv .beg .bbv_name,
 #user_3bv .beg .bbv_stat em {
   color: #a6e22e;
 }
-#user_3bv .beg .bbv_fill,
-#user_3bv .beg .sq.on {
+#user_3bv .beg .bbv_fill {
   background: #a6e22e;
 }
 #user_3bv .int .bbv_name,
 #user_3bv .int .bbv_stat em {
   color: #fd971f;
 }
-#user_3bv .int .bbv_fill,
-#user_3bv .int .sq.on {
+#user_3bv .int .bbv_fill {
   background: #fd971f;
 }
 #user_3bv .exp .bbv_name,
 #user_3bv .exp .bbv_stat em {
   color: #e6db74;
 }
-#user_3bv .exp .bbv_fill,
-#user_3bv .exp .sq.on {
+#user_3bv .exp .bbv_fill {
   background: #e6db74;
+}
+
+/* 已收集方格底色＝该 3BV **最好成绩录像的时间评级**（2026-10-27 张老师定：
+   SSS~S 都显示为金色）。四档取色与雷达 GRADE_COLORS 同源，只是把相近档并为四档
+   （10px 小格分不出 9 档）：金 #E6DB74 / 玫红 #FF0080 / 紫 #A000E5 / 灰 #8A8878 */
+#user_3bv .sq.on.g_gold {
+  background: #e6db74;
+}
+#user_3bv .sq.on.g_rose {
+  background: #ff0080;
+}
+#user_3bv .sq.on.g_violet {
+  background: #a000e5;
+}
+#user_3bv .sq.on.g_gray {
+  background: #8a8878;
 }
 
 /* 3BV 收集方格气泡提示（2026-10-13 张老师要求）：3BV 值 + 首个录像上传日期，纯 CSS :hover 显隐，零 JS */
