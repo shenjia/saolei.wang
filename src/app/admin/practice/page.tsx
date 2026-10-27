@@ -49,16 +49,13 @@ export default async function AdminPracticePage() {
       </div>
 
       <div className="admin_grid trend_pies">
-        <AdminCard title="练习趋势（近 30 天，点击图例可切换级别）" more={`级别自 ${LEVEL_CLEAN_SINCE} 起统计（当日差额曾混入未记级别盘，之前不计）`}>
+        <AdminCard title="练习趋势（近 30 天，点击图例可切换级别）">
           <TrendChart dates={trend.dates} series={series} />
         </AdminCard>
-        <AdminCard title="级别占比（近 30 天总量）" more={`与趋势图同窗口；级别自 ${LEVEL_CLEAN_SINCE} 起统计`}>
+        <AdminCard title="级别占比（近 30 天总量）">
           <Donut items={levelItems} centerLabel={`总 ${d30Total.toLocaleString("zh-CN")} 盘`} mergeSmall={false} />
         </AdminCard>
-        <AdminCard
-          title="模式占比（近 7 天）"
-          more={`自 ${LEVEL_CLEAN_SINCE} 起统计；模式可叠加，各项之和可超 100%`}
-        >
+<AdminCard title="模式占比（近 7 天）">
           {modes.total > 0 ? (
             <BarList
               items={modes.items.map((m) => ({
