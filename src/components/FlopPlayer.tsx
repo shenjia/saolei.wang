@@ -110,7 +110,9 @@ const CURSOR_COLOR_SCRIPT = `
    播放器的 background 选项渲染的遮罩层 z-index:-9999（负值），真实点击
    落在 Vue 根容器而不是遮罩上。因此按事件目标是否在玩家窗口内判定，
    窗口外直接调用 IframeAdapter 暴露的 closeVideo，与 X 同走 setExit
-   原生退出链路；不再依赖易随上游变化的关闭图标 DOM。 */
+   原生退出链路；不再依赖易随上游变化的关闭图标 DOM。
+   2026-10-28 补：窗口未渲染（加载/异常空窗期，.game-menu 尚不存在）时
+   整个可视区都是暗区，点击一律退出——此前该空窗期点击无响应。 */
 const MASK_EXIT_SCRIPT = `
 (function () {
   if (window.__flopMaskExit) return;
@@ -121,8 +123,15 @@ const MASK_EXIT_SCRIPT = `
     // Ant Design 的下拉菜单/弹层挂在 body 下、位于玩家窗口之外，
     // 但它们仍是播放器自身 UI（尤其「选择本地文件」），不能按暗区退出。
     if (t.closest(".ant-menu-dropdown, .ant-menu-submenu-popup, .ant-select-dropdown, .ant-picker-dropdown, .ant-modal-root, .ant-popover, .ant-tooltip, .ant-message, input[type=file]")) return;
+    var exit = function () {
+      if (parent.flop && typeof parent.flop.closeVideo === "function") {
+        e.preventDefault();
+        e.stopPropagation();
+        parent.flop.closeVideo();
+      }
+    };
     var menu = document.querySelector(".game-menu");
-    if (!menu) return;
+    if (!menu) { exit(); return; }
     // Vue 根 = .game-menu 向上直至 body 的直接子级
     var root = menu;
     while (root.parentElement && root.parentElement !== document.body) root = root.parentElement;
@@ -131,11 +140,7 @@ const MASK_EXIT_SCRIPT = `
     var win = menu;
     while (win.parentElement && win.parentElement !== root) win = win.parentElement;
     if (win === menu || win.contains(t)) return; // 窗口内：交给播放器
-    if (parent.flop && typeof parent.flop.closeVideo === "function") {
-      e.preventDefault();
-      e.stopPropagation();
-      parent.flop.closeVideo();
-    }
+    exit();
   }, true);
 })();
 `;
