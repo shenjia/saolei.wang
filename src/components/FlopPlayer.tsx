@@ -141,15 +141,49 @@ const CURSOR_COLOR_SCRIPT = `
 
 /* 注入播放器 iframe 的「点击暗区退出」脚本：
    播放器的 background 选项渲染的遮罩层 z-index:-9999（负值），真实点击
-   落在 Vue 根容器而不是遮罩上。因此按事件目标是否在玩家窗口内判定，
-   窗口外直接调用 IframeAdapter 暴露的 closeVideo，与 X 同走 setExit
-   原生退出链路；不再依赖易随上游变化的关闭图标 DOM。
-   2026-10-28 补：窗口未渲染（加载/异常空窗期，.game-menu 尚不存在）时
-   整个可视区都是暗区，点击一律退出——此前该空窗期点击无响应。 */
+   落在 Vue 根容器而不是遮罩上。因此按点击位置判定，窗口可视 UI 外直接
+   调用 IframeAdapter 暴露的 closeVideo，与 X 同走 setExit 原生退出链路。
+   2026-10-28 补一：窗口未渲染（加载/异常空窗期，.game-menu 尚不存在）时
+   整个可视区都是暗区，点击一律退出。
+   2026-10-28 补二（张老师实测红框）：窗口外框是透明容器且被底部控制条
+   撑宽，包围盒左部盖在宿主页面内容上——用 contains() 判「窗口内」会让
+   视觉暗区点击无效。改为「窗口内可视元素矩形并集」判定：有背景/边框/
+   画布/表单控件的元素才算窗口 UI，透明区域一律视为暗区。 */
 const MASK_EXIT_SCRIPT = `
 (function () {
   if (window.__flopMaskExit) return;
   window.__flopMaskExit = true;
+  /* 可视元素矩形缓存：TTL 250ms（回放中布局稳定，无需监听 mutation） */
+  var rectsCache = null, rectsAt = 0;
+  function paints(el) {
+    var tag = el.tagName;
+    if (tag === "CANVAS" || tag === "IMG" || tag === "VIDEO" || tag === "INPUT" ||
+        tag === "BUTTON" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (el.namespaceURI && el.namespaceURI.indexOf("svg") !== -1) return true;
+    var cs = window.getComputedStyle(el);
+    if (cs.backgroundColor && cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent") return true;
+    if (cs.borderTopStyle !== "none" && cs.borderTopWidth !== "0px") return true;
+    return false;
+  }
+  function inVisibleUI(winEl, x, y) {
+    var now = Date.now();
+    if (!rectsCache || now - rectsAt > 250) {
+      rectsCache = [];
+      rectsAt = now;
+      var els = winEl.querySelectorAll("*");
+      for (var i = 0; i < els.length; i++) {
+        if (!paints(els[i])) continue;
+        var r = els[i].getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        rectsCache.push([r.left, r.top, r.right, r.bottom]);
+      }
+    }
+    for (var j = 0; j < rectsCache.length; j++) {
+      var rc = rectsCache[j];
+      if (x >= rc[0] && x <= rc[2] && y >= rc[1] && y <= rc[3]) return true;
+    }
+    return false;
+  }
   window.addEventListener("pointerdown", function (e) {
     var t = e.target;
     if (!(t instanceof Element)) return;
@@ -172,7 +206,9 @@ const MASK_EXIT_SCRIPT = `
     // 玩家窗口 = 根之下包含菜单的那个子树
     var win = menu;
     while (win.parentElement && win.parentElement !== root) win = win.parentElement;
-    if (win === menu || win.contains(t)) return; // 窗口内：交给播放器
+    if (win === menu) return; // 结构异常：宁可保持原状也不误关
+    // 命中判定＝可视元素矩形并集：透明外框/空隙一律视为暗区
+    if (inVisibleUI(win, e.clientX, e.clientY)) return; // 窗口可视 UI 内：交给播放器
     exit();
   }, true);
 })();
