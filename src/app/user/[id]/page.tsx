@@ -52,6 +52,7 @@ import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankLabel } from "@/components/RankLabel";
 import { title as assessTitle } from "@/lib/assess";
+import { formatDate } from "@/lib/format";
 import { getThunderKingId } from "@/lib/title-system";
 import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
@@ -442,7 +443,7 @@ export default async function UserViewPage({
                 今日新增独立成列（绿色括号，左对齐），无新增不显示 */}
             <table className="table full">
               <tbody>
-                <StatRow label="人气" today={clicks.today}>
+                <StatRow label="累计人气" today={clicks.today}>
                   <em>{clicks.total}</em>
                 </StatRow>
                 <StatRow label="初级录像" today={todayVideos.beg}>
@@ -472,6 +473,14 @@ export default async function UserViewPage({
                 </StatRow>
                 <StatRow label="发表评论" today={activity.commentsToday}>
                   <em>{activity.comments}</em>
+                </StatRow>
+                {/* 2026-10-28 张老师要求：末尾补 注册时间 / 最近登录（yyyy-mm-dd）；
+                    lastLoginTime=0（从未登录过）显示 — */}
+                <StatRow label="注册时间">
+                  <em>{formatDate(user.createTime, "Y-m-d")}</em>
+                </StatRow>
+                <StatRow label="最近登录">
+                  <em>{user.lastLoginTime > 0 ? formatDate(user.lastLoginTime, "Y-m-d") : "—"}</em>
                 </StatRow>
               </tbody>
             </table>
