@@ -26,6 +26,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # 2026-10-27 起 src/core 为私有 submodule（排名模式核心抽取至
+      # shenjia/saolei.wang-core）。actions/checkout 的 GITHUB_TOKEN 无权拉
+      # 其他私有仓，submodules 会静默检成空目录 → build module not found
+      # （run 4046072 实证）。方案：账户级只读部署 key（saolei-wang-ci-submodule）
+      # 存仓库 Secret CORE_SUBMODULE_SSH_KEY，检出前注入 SSH config，
+      # submodule 走 SSH 拉取。.gitmodules 的 URL 已是 https 形态，
+      # SSH config 的 insteadOf 负责改写。
+      - name: Setup submodule SSH key
+        env:
+          CORE_SUBMODULE_SSH_KEY: ${{ secrets.CORE_SUBMODULE_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$CORE_SUBMODULE_SSH_KEY" > ~/.ssh/core_submodule_key
+          chmod 600 ~/.ssh/core_submodule_key
+          cat > ~/.ssh/config <<'CONF'
+          Host github.com-core-submodule
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/core_submodule_key
+            IdentitiesOnly yes
+          Host github.com
+            User git
+            IdentityFile ~/.ssh/core_submodule_key
+            IdentitiesOnly yes
+          CONF
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Checkout with submodules
+        run: git submodule update --init --recursive
+
       # 顺序必须是先装 pnpm 再 setup-node：package.json 声明了 packageManager
       # (pnpm@10.32.1)，setup-node@v5 检测到后会在解析缓存时调用 pnpm 可执行文件，
       # 若 pnpm 未装直接报「Unable to locate executable file: pnpm」（2026-09-27 实证）。
@@ -69,6 +99,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # deploy 只 rsync 源码；src/core 也要同步上服务器（运行时 ranked 薄壳
+      # 转发依赖 core 模块）。私有 submodule 同 build job 走 SSH key。
+      - name: Setup submodule SSH key
+        env:
+          CORE_SUBMODULE_SSH_KEY: ${{ secrets.CORE_SUBMODULE_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$CORE_SUBMODULE_SSH_KEY" > ~/.ssh/core_submodule_key
+          chmod 600 ~/.ssh/core_submodule_key
+          cat > ~/.ssh/config <<'CONF'
+          Host github.com
+            User git
+            IdentityFile ~/.ssh/core_submodule_key
+            IdentitiesOnly yes
+          CONF
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Checkout with submodules
+        run: git submodule update --init --recursive
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4

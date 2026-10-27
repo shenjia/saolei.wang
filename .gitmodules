@@ -1,4 +1,4 @@
 [submodule "src/core"]
 	path = src/core
-	url = git@github.com:shenjia/saolei.wang-core.git
+	url = https://github.com/shenjia/saolei.wang-core.git
 	branch = main
