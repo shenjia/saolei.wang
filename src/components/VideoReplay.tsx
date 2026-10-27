@@ -1247,8 +1247,9 @@ function runPlayGame(opts: {
         if (!ok) wDouble++;
       } else if (chordDone) {
         /* 尾随松开：只闭合手势 */
-      } else if (i >= 0 && state[i] === 1) {
-        /* 单击已开数字格＝双击（练习页独有玩法，2026-10-16 张老师定） */
+      } else if (m.quickFlag && i >= 0 && state[i] === 1) {
+        /* 单击已开数字格＝双击：速旗模式专属（2026-10-27 练习页口径同步——
+           关速旗后点数字格零动作，落 else 计左键 wasted，openCell 已开格守卫吞掉） */
         cDouble++;
         const before = openedSafe;
         chord(i);
