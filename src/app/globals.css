@@ -3852,7 +3852,7 @@ body #user_view .info .rank_label .rank_name {
    2026-10-13 张老师要求：与首页/录像页「数据统计」统一——字号 14px（16px 时
    标签 80px + 数值 55px + 增量 59px 会超过表格 192px 硬宽），数值列右对齐，
    今日新增独立成列（绿色括号、左对齐、无新增留空）；delta 列显式给 4em，
-   余量全留给数值列。
+   余量全留给数值列（2026-10-28 收窄至 3.2em，见下）。
    2026-10-13 二轮：行距也与首页对齐——原 padding 8px 0（行高 40px），
    首页/录像页走 legacy `.table td{padding:3px}`（行高 30px），故改 3px 0。 */
 body #user_view .sidebar .table {
@@ -3862,9 +3862,12 @@ body #user_view .sidebar .table td {
   padding: 3px 0;
   font-size: 14px;
 }
+/* 2026-10-28 张老师要求：标签列与数值列间距尽可能小（padding 8px→0、列宽收到
+   4.2em——恰好容 4 个汉字）；delta 列收到 3.2em（恰好容「（+999）」三位数字），
+   余量全让给数值列（日期行 yyyy-mm-dd 更贴近标签） */
 body #user_view .sidebar .table td:first-child {
-  width: 4.8em;
-  padding-right: 8px;
+  width: 4.2em;
+  padding-right: 0;
   white-space: nowrap;
 }
 body #user_view .sidebar .table .num {
@@ -3872,7 +3875,7 @@ body #user_view .sidebar .table .num {
 }
 /* 今日增量列：与 #site_stats / #video_stats 的 .delta 同款（绿色、左对齐、不折行） */
 body #user_view .sidebar .table .delta {
-  width: 4em;
+  width: 3.2em;
   padding-left: 0;
   padding-right: 0;
   white-space: nowrap;
