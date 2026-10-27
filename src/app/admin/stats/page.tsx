@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usersByIds } from "@/lib/queries";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { getAuditorWorkload, getGrowth, getSnapshotHealth, getTrend, TREND_METRICS } from "@/lib/admin/stats";
-import { getPracticeLevelCounts, LEVEL_COLS_SINCE } from "@/lib/admin/practice";
+import { getPracticeLevelCounts, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 import { getCachedCurrentRecords, getRecordCurves, getStatsDistributions } from "@/lib/admin/cache";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi } from "@/components/admin/Widgets";
@@ -198,7 +198,7 @@ export default async function AdminStatsPage() {
         </AdminCard>
         <AdminCard
           title="练习级别分布"
-          more={`全量聚合，${LEVEL_COLS_SINCE} 级别列起记（此前只进总数）；「自定义」含历史无级别盘`}
+          more={`自 ${LEVEL_CLEAN_SINCE} 起聚合（此前级别维度未记，差额是污染值不计）`}
         >
           <Donut items={practiceLevels.items} centerLabel={`练习盘数 ${practiceLevels.total.toLocaleString("zh-CN")}`} mergeSmall={false} />
         </AdminCard>

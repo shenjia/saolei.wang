@@ -1,8 +1,8 @@
 // 练习数据聚合（2026-10-27 张老师定：/admin/practice 详情页 + 数据分析页级别分布）
 // 数据源 practice_daily（日汇总，10-22 起不逐盘落行）+ practice_hourly（小时桶，本日起）。
-// ⚠️ 口径：级别三列 plays_beg/int/exp 自 2026-10-27 下午起记——历史行三列为 0，
-// 差额（plays − 三列和）含「上线前的历史盘」与真自定义盘，展示端必须注明起记日
-// 防误读（95% 假自定义事件的教训）。
+// ⚠️ 口径（张老师 16:10 定稿）：级别三列 10-27 15:11 才生效，当日差额混着大量
+// 生效前未记盘（「自定义」是污染值）——**级别维度（初/中/高/自）一律自干净起点
+// 2026-10-28（day 20754）起算，之前计 0**；总量 plays 任意日期都准。
 
 import { prisma } from "@/lib/db";
 
@@ -19,8 +19,16 @@ export const PRACTICE_LEVEL_COLORS: Record<string, string> = {
   total: "#b1b1a4",
 };
 
-/** 级别三列起记日（2026-10-27 生产 15:10 左右生效；当日三列和>0 的最小 day） */
-const LEVEL_COLS_SINCE = "2026-10-27";
+/** 级别数据干净起点（day 20754 = 2026-10-28 全天，张老师 2026-10-27 定）：
+ *  10-27 起记当日的差额里混着大量生效前的未记盘（「自定义」是污染值，不可用），
+ *  所有级别维度（初/中/高/自）的聚合与展示一律自 10-28 起算，之前计 0；
+ *  总量 plays 任意日期都准，不受影响。 */
+export const LEVEL_CLEAN_SINCE_DAY = 20754;
+export const LEVEL_CLEAN_SINCE = "2026-10-28";
+/** 今日是否已有干净级别数据（仪表盘 KPI 占比行用：10-28 前显示对齐提示不显污染占比） */
+export function practiceLevelsClean(): boolean {
+  return Math.floor((Math.floor(Date.now() / 1000) + 28800) / 86400) >= LEVEL_CLEAN_SINCE_DAY;
+}
 
 export interface PracticeTrend {
   dates: string[];
@@ -54,15 +62,17 @@ export async function getPracticeTrend(days = 30): Promise<PracticeTrend> {
     const idx = fromIdx + i;
     const r = map.get(idx);
     const p = N(r?.plays);
-    const b = N(r?.beg);
-    const it = N(r?.intg);
-    const e = N(r?.exp);
+    // 级别维度只认干净起点之后（10-27 当天差额是污染值）；总量任意日期都准
+    const clean = idx >= LEVEL_CLEAN_SINCE_DAY;
+    const b = clean ? N(r?.beg) : 0;
+    const it = clean ? N(r?.intg) : 0;
+    const e = clean ? N(r?.exp) : 0;
     dates.push(new Date(idx * 86400000).toISOString().slice(0, 10));
     total.push(p);
     beg.push(b);
     int.push(it);
     exp.push(e);
-    cus.push(Math.max(0, p - b - it - e)); // 差额=自定义 + 起记日前历史盘（见文件头）
+    cus.push(clean ? Math.max(0, p - b - it - e) : 0); // 干净起点后差额=真自定义
   }
   return { dates, total, beg, int, exp, cus };
 }
@@ -115,39 +125,42 @@ export async function getPracticeDays(days = 7): Promise<PracticeDayRow[]> {
   );
   return rows.map((r) => {
     const p = N(r.plays);
-    const b = N(r.beg);
-    const it = N(r.intg);
-    const e = N(r.exp);
+    const day = N(r.day);
+    // 级别维度只认干净起点之后；10-27 及之前差额是污染值，级别四列一律 0
+    const clean = day >= LEVEL_CLEAN_SINCE_DAY;
+    const b = clean ? N(r.beg) : 0;
+    const it = clean ? N(r.intg) : 0;
+    const e = clean ? N(r.exp) : 0;
     return {
-      date: new Date(N(r.day) * 86400000).toISOString().slice(0, 10),
+      date: new Date(day * 86400000).toISOString().slice(0, 10),
       plays: p,
       wins: N(r.wins),
       beg: b,
       int: it,
       exp: e,
-      cus: Math.max(0, p - b - it - e),
+      cus: clean ? Math.max(0, p - b - it - e) : 0,
       players: N(r.users) + (N(r.guests) > 0 ? 1 : 0), // 游客聚合行算 1「位」
     };
   });
 }
 
-/** 全量级别聚合（数据分析页 Donut）：自三列起记日（20753=2026-10-27）起——
- *  起记日下午生效，当日为部分样本但占比真实（分布不受样本时长影响） */
+/** 全量级别聚合（数据分析页 Donut）：自干净起点（LEVEL_CLEAN_SINCE_DAY=20754
+ *  =2026-10-28）起——张老师定：起记日 10-27 当天的差额混着生效前大量未记盘
+ *  （「自定义」是污染值），级别维度统计一律自上线后首个整天开始 */
 export async function getPracticeLevelCounts(): Promise<{
   items: { label: string; value: number; color?: string }[];
   total: number;
 }> {
   const rows = await prisma.$queryRawUnsafe<{ beg: bigint; intg: bigint; exp: bigint; plays: bigint }[]>(
     `SELECT SUM(plays_beg) beg, SUM(plays_int) intg, SUM(plays_exp) exp, SUM(plays) plays
-     FROM practice_daily WHERE day >= 20753`
+     FROM practice_daily WHERE day >= ${LEVEL_CLEAN_SINCE_DAY}`
   );
   const r = rows[0];
   const beg = N(r?.beg);
   const int = N(r?.intg);
   const exp = N(r?.exp);
   const plays = N(r?.plays);
-  // 起记日（部分样本）计入分母——占比对样本时长不敏感；差额=自定义（含起记前盘）
-  const cus = Math.max(0, plays - beg - int - exp);
+  const cus = Math.max(0, plays - beg - int - exp); // 干净起点后差额=真自定义
   return {
     items: [
       { label: "初级", value: beg, color: PRACTICE_LEVEL_COLORS.beg },
@@ -159,4 +172,3 @@ export async function getPracticeLevelCounts(): Promise<{
   };
 }
 
-export { LEVEL_COLS_SINCE };

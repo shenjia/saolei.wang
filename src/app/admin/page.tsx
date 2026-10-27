@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
+import { practiceLevelsClean } from "@/lib/admin/practice";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies } from "@/lib/admin/cache";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
 import { TrendChart, BarList, Donut, type Series } from "@/components/admin/Charts";
@@ -146,9 +147,12 @@ export default async function AdminDashboard() {
               {cmpFoot(traffic.practice.today, traffic.practice.lastWeek)}
               <br />
               {/* 2026-10-27 张老师定：foot 四行制——同比 / 初+中 / 高+自。
-                  占比分母=今日总盘数（含自定义）；占比取整，四项之和可能 <100%
-                  （差额=上线首日列生效前玩的历史局，次日自然对齐）。 */}
+                  级别占比自 2026-10-28（干净起点）起显示——起记当日差额混着
+                  生效前未记盘（「自定义」是污染值），之前显示对齐提示。 */}
               {(() => {
+                if (!practiceLevelsClean()) {
+                  return <>级别占比明日起对齐</>;
+                }
                 const { beg, int, exp } = traffic.practice.todayLevels;
                 const total = traffic.practice.today;
                 const pct = (n: number) => (total <= 0 ? 0 : Math.round((n / total) * 100));

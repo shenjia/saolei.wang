@@ -6,7 +6,7 @@
 
 import { AdminCard } from "@/components/admin/Widgets";
 import { ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
-import { getPracticeDays, getPracticeHourly, getPracticeTrend, PRACTICE_LEVEL_COLORS, LEVEL_COLS_SINCE } from "@/lib/admin/practice";
+import { getPracticeDays, getPracticeHourly, getPracticeTrend, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "练习数据 | 管理后台" };
@@ -44,10 +44,10 @@ export default async function AdminPracticePage() {
       </div>
 
       <div className="admin_grid trend_pie">
-        <AdminCard title="练习趋势（近 30 天，点击图例可切换级别）" more={`「自定义」含 ${LEVEL_COLS_SINCE} 级别列起记前的历史盘`}>
+        <AdminCard title="练习趋势（近 30 天，点击图例可切换级别）" more={`级别自 ${LEVEL_CLEAN_SINCE} 起统计（当日差额曾混入未记级别盘，之前不计）`}>
           <TrendChart dates={trend.dates} series={series} />
         </AdminCard>
-        <AdminCard title="级别占比（近 30 天总量）" more="与趋势图同窗口；「自定义」含起记前历史盘">
+        <AdminCard title="级别占比（近 30 天总量）" more={`与趋势图同窗口；级别自 ${LEVEL_CLEAN_SINCE} 起统计`}>
           <Donut items={levelItems} centerLabel={`总 ${d30Total.toLocaleString("zh-CN")} 盘`} mergeSmall={false} />
         </AdminCard>
       </div>
@@ -56,7 +56,7 @@ export default async function AdminPracticePage() {
         <AdminCard title="24 小时分布（近 7 天聚合）" more="0-23 时按 +08:00，今日起记">
           <ColumnChart items={hourly} color="linear-gradient(180deg,#66d9ef,#2f6f8b)" height={150} />
         </AdminCard>
-        <AdminCard title="近 7 天明细" more={`人数含游客（${LEVEL_COLS_SINCE} 前级别为 0 是未记，差额归「自定义」）`}>
+        <AdminCard title="近 7 天明细" more={`人数含游客；${LEVEL_CLEAN_SINCE} 前级别维度未记（计 0）`}>
           <div className="admin_scroll">
             <table className="admin_table">
               <thead>
