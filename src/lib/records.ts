@@ -12,8 +12,9 @@
 //   收集BV（=BV榜第一，getBvRanking total）/
 //   上传录像 / 发表文章 / 发表评论 / 发表纪事 / 练习盘数 / 审核录像——各取 TOP1。
 //
-// 性能：窗口函数扫 30 万行级 video，三组曲线串行 + 八项并行，全量挂 unstable_cache
-// （10 分钟，载荷 ~200 个点 + 8 行，远小于 2MB 上限）；/records 已进 preheat.sh 清单。
+// 性能（2026-10-28 张老师定分层）：左侧曲线重查询+基本不变 → 24h 持久缓存
+// （records-curves）；右侧七项轻查询实时抓取 → 60s 短缓存（records-tops）。
+// 载荷 ~200 点 + 7 行，远小于 2MB 上限；/records 已进 preheat.sh 预热清单。
 
 import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
@@ -322,14 +323,23 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
   ].filter((r): r is SiteTopRow => r !== null);
 }
 
-/** 纪录页全量数据（缓存 10 分钟；改口径升 key 版本丢旧缓存） */
-export const getRecordsPageData = unstable_cache(
-  async (): Promise<{ curves: RecordCurveRow[]; tops: SiteTopRow[] }> => {
-    // 曲线重（窗口函数 30 万行，内部三查询串行）；八项较轻并行
-    const curves = await fetchRecordCurves();
-    const tops = await fetchSiteTops();
-    return { curves, tops };
-  },
-  ["records-page-v5"], // v5（2026-10-28 四轮）：总计三指标全部事件重放出曲线
-  { revalidate: 600 }
+/** 左侧纪录曲线（2026-10-28 张老师定：持久化缓存——重查询+基本不变：
+ *  全站纪录只有被打破才变，24h TTL 已远超实际变化频率；即便有新纪录，
+ *  一天内旧曲线展示完全可接受。⚠️ 改曲线口径必须升版本号（v5 起）。 */
+export const getRecordCurves = unstable_cache(
+  fetchRecordCurves,
+  ["records-curves-v5"],
+  { revalidate: 86400, tags: ["records-curves"] }
 );
+
+/** 右侧七项 TOP1（轻查询实时性优先：60s 短缓存，热数据近实时可见） */
+export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v3"], {
+  revalidate: 60,
+  tags: ["records-tops"],
+});
+
+/** 纪录页数据入口（分层缓存出口；页面层勿再包 unstable_cache） */
+export async function getRecordsPageData(): Promise<{ curves: RecordCurveRow[]; tops: SiteTopRow[] }> {
+  const [curves, tops] = await Promise.all([getRecordCurves(), getSiteTops()]);
+  return { curves, tops };
+}
