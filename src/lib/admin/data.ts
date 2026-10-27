@@ -29,6 +29,9 @@ export interface AdminUserRow extends UserBrief {
   lastLoginTime: number;
   /** 封禁截止 Unix 秒（仅 status=-1 时有意义；0=永久） */
   banUntil: number;
+  /** 反作弊处置（2026-10-27）：练习页排名模式禁用截止 / 低信任组截止（0=无标记） */
+  rankBanUntil: number;
+  lowTrustUntil: number;
   title: string;
   sumTime: number;
   /** 录像总数 */
@@ -167,6 +170,8 @@ export async function getUserList(
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
       banUntil: N(u.banUntil),
+      rankBanUntil: N(u.rankBanUntil),
+      lowTrustUntil: N(u.lowTrustUntil),
       title: await assessTitle(expTime, king > 0 && king === id),
       sumTime,
       videos: vcMap.get(id) ?? 0,
@@ -179,6 +184,21 @@ export async function getUserList(
 
 export interface AdminUserDetail {
   row: AdminUserRow;
+  /** 反作弊标记生效中（low_trust_until 未到期，数据层算好时效） */
+  lowTrustFlagged: boolean;
+  /** 练习页排名模式禁用生效中（rank_ban_until 未到期） */
+  rankBanned: boolean;
+  /** G1 排名行为审计累计（2026-10-27）；null=该玩家还没有排名局上传 */
+  rankedAudit: {
+    games: number;
+    clicks: number;
+    blindClicks: number;
+    flags: number;
+    blindFlags: number;
+    blindRate: number;
+    flagPrecision: number;
+    suspicious: boolean;
+  } | null;
   qq: string;
   nickname: string;
   mouse: string;
@@ -285,6 +305,8 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       createTime: N(user.createTime),
       lastLoginTime: N(user.lastLoginTime),
       banUntil: N(user.banUntil),
+      rankBanUntil: N(user.rankBanUntil),
+      lowTrustUntil: N(user.lowTrustUntil),
       title: await assessTitle(expTime, (await getThunderKingId()) === id),
       sumTime,
       videos: await prisma.video.count({ where: { user: uid } }),
@@ -305,6 +327,17 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     bbsCount,
     postTotal,
     messageCount,
+    /* 反作弊标记时效在数据层算好（RSC 渲染期禁 Date.now()） */
+    lowTrustFlagged: N(user.lowTrustUntil) > Math.floor(Date.now() / 1000),
+    rankBanned: N(user.rankBanUntil) > Math.floor(Date.now() / 1000),
+    /* G1 排名行为审计：累计盲区率/旗精度展示，极端值判定口径见私有 core */
+    rankedAudit: await (async () => {
+      const s = await prisma.rankedAuditStat.findUnique({ where: { user: uid } });
+      if (!s) return null;
+      /* 判定口径已私有化（src/core/src/lib/admin-audit-secret.ts），主仓只展示 */
+      const { summarizeRankedAudit } = await import("@/core/src/lib/admin-audit-secret");
+      return summarizeRankedAudit({ games: s.games, clicks: s.clicks, blindClicks: s.blindClicks, flags: s.flags, blindFlags: s.blindFlags });
+    })(),
     sumRank: sumTime ? N(rankRows[0]?.c) + 1 : 0,
     ranks: { beg: begRank, int: intRank, exp: expRank },
     recentVideos: videos.map((v) => ({
@@ -1156,6 +1189,8 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
       createTime: N(u.createTime),
       lastLoginTime: N(u.lastLoginTime),
       banUntil: N(u.banUntil),
+      rankBanUntil: N(u.rankBanUntil),
+      lowTrustUntil: N(u.lowTrustUntil),
       title: await assessTitle(expTime, king > 0 && king === id),
       sumTime,
       videos: 0,

@@ -16,11 +16,13 @@ import { formatRawvf, checkProgramVersion } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { RANKED_SOFTWARE } from "@/lib/evfwrite";
+import { evfSignature } from "@/core/src/lib/evf-sign";
 import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { userTitleSnapshot } from "@/lib/queries";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
+import { getRankPenalty, countRecentUploads, LOW_TRUST_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -33,10 +35,28 @@ export async function POST(req: Request) {
   return uploadVideo(req);
 }
 
-export async function uploadVideo(req: Request, options?: { rankedInternal?: boolean }) {
+export async function uploadVideo(
+  req: Request,
+  options?: {
+    rankedInternal?: boolean;
+    /** 排名局行为审计（调用方已重放事件流）：本局决策点击数与盲区点击数，
+     *  透传给分拣做盲区率触发器（<10% 需核定，张老师 2026-10-27 指令） */
+    audit?: { clicks: number; blindClicks: number };
+  }
+) {
   if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
   const session = await getSession();
   if (!session) return fail("请先登录", 401);
+
+  // 低信任上传限速（2026-10-27 反作弊）：标记未到期用户 24h 滚动窗口内 ≤5 个录像。
+  // 排在格式校验前，伪造请求也吃同一限额。
+  const penalty = await getRankPenalty(session.uid);
+  if (penalty.lowTrust) {
+    const recent = await countRecentUploads(session.uid);
+    if (recent >= LOW_TRUST_UPLOAD_LIMIT) {
+      return fail(`低信任用户 24 小时内最多上传 ${LOW_TRUST_UPLOAD_LIMIT} 个录像`, 429);
+    }
+  }
 
   let file: File | null;
   try {
@@ -161,6 +181,11 @@ export async function uploadVideo(req: Request, options?: { rankedInternal?: boo
           board: parsed.board,
           board3bv: parsed.bbbv ?? 0,
           realTime: parsed.timeMs,
+          // 排名局录像签名（2026-10-27 张老师要求）：对实际存储字节算 HMAC 存库，
+          // 之后分拣/巡检可随时比对——文件被篡改即验出。普通上传为 null
+          ...(options?.rankedInternal
+            ? { evfSig: evfSignature(buf) }
+            : {}),
           createTime: nowSec,
           updateTime: nowSec,
         },
@@ -192,10 +217,13 @@ export async function uploadVideo(req: Request, options?: { rankedInternal?: boo
   // 写 auto_flag（免核定/需核定）+ auto_reason（位码）。只打标不动 status——
   // 通过永远由管理员手动执行（免核定池批量一键过 / 需核定逐条手审）。
   if (videoId > 0) {
+    const triageExtra = options?.audit
+      ? { auditClicks: options.audit.clicks, auditBlindClicks: options.audit.blindClicks }
+      : undefined;
     try {
-      after(() => ensureVideoTriage(videoId));
+      after(() => ensureVideoTriage(videoId, triageExtra));
     } catch {
-      void ensureVideoTriage(videoId);
+      void ensureVideoTriage(videoId, triageExtra);
     }
   }
   return NextResponse.json({ ok: true });

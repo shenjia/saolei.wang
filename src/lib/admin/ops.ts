@@ -36,6 +36,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "user.delete": "administrator",
   // 可信用户组（2026-10-24）：组内用户录像分拣不检查 STNB 触发器；超管把关
   "user.setTrusted": "administrator",
+  "user.clearCheatPenalty": "administrator",
   // 给单个玩家发系统消息（2026-10-23）：manager 可用——与头像审核通知同级触达能力；
   // 全站广播 message.broadcast 仍是超管专属
   "user.sendSystemMessage": "manager",
@@ -199,6 +200,34 @@ async function dispatch(
       return {
         ok: true,
         message: `${user.chineseName}（#${id}）已${trusted ? "加入" : "移出"}可信用户组${pending.length ? `，已重分拣其待审录像 ${pending.length} 部` : ""}`,
+      };
+    }
+
+    case "user.clearCheatPenalty": {
+      /* 手动解除反作弊标记（2026-10-27 张老师定，对齐信任组操作）：
+         清 rank_ban_until（练习页排名模式禁用）+ low_trust_until（低信任组），
+         并重分拣其待审录像（低信任硬规则解除后可回免核定池） */
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
+      const user = await prisma.user.findUnique({
+        where: { id: BigInt(id) },
+        select: { chineseName: true, rankBanUntil: true, lowTrustUntil: true },
+      });
+      if (!user) return { ok: false, error: "玩家不存在" };
+      const t = now();
+      if (Number(user.rankBanUntil) <= t && Number(user.lowTrustUntil) <= t) {
+        return { ok: false, error: "该玩家没有生效中的反作弊标记" };
+      }
+      await prisma.user.update({
+        where: { id: BigInt(id) },
+        data: { rankBanUntil: BigInt(0), lowTrustUntil: BigInt(0) },
+      });
+      const pending = await prisma.video.findMany({ where: { user: BigInt(id), status: VIDEO_STATUS.NORMAL }, select: { id: true } });
+      const { triageVideo } = await import("@/lib/video-triage");
+      for (const { id: vid } of pending) await triageVideo(Number(vid));
+      return {
+        ok: true,
+        message: `${user.chineseName}（#${id}）已解除反作弊标记（排名模式与低信任组恢复）${pending.length ? `，已重分拣其待审录像 ${pending.length} 部` : ""}`,
       };
     }
 

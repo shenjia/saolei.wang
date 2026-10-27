@@ -139,6 +139,17 @@ fix_prisma_stub() {
 }
 fix_prisma_stub "$S_DIR"
 
+# ---------- 启动/更新权威对局服务 ----------
+# 独立于 Next 蓝绿槽；发布会重启该进程，进行中的排名局需要重开（生产当前尚未开放入口）。
+if pm2 describe saolei-authority >/dev/null 2>&1; then
+  info "重启 saolei-authority ..."
+  pm2 restart saolei-authority
+else
+  info "首次启动 saolei-authority ..."
+  pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only saolei-authority
+fi
+curl -sf --max-time 10 http://127.0.0.1:3104/health >/dev/null || fail "权威对局服务健康检查失败"
+
 # ---------- 重启备槽实例 ----------
 # 单活模式（2026-10-22）下备槽处于 stopped 态：pm2 start 对 stopped/online 都安全
 # （online 时为 no-op），随后的 restart 确保加载本次新产物。

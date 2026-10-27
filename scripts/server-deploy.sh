@@ -164,6 +164,14 @@ if ! NEXT_DIST_DIR="$S_DIR" nice -n 19 ionice -c3 pnpm build; then
   fail "build 失败（备槽已清空，线上不受影响）"
 fi
 
+# ---------- 启动/更新权威对局服务 ----------
+if pm2 describe saolei-authority >/dev/null 2>&1; then
+  pm2 restart saolei-authority
+else
+  pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only saolei-authority
+fi
+curl -sf --max-time 10 http://127.0.0.1:3104/health >/dev/null || fail "权威对局服务健康检查失败"
+
 # ---------- 重启备槽实例 ----------
 if pm2 describe "$S_APP" >/dev/null 2>&1; then
   info "重启 $S_APP ..."

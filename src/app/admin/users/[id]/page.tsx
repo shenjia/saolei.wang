@@ -26,6 +26,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
   if (!d) notFound();
   const isSuper = session?.role === USER_ROLE.ADMINISTRATOR;
   const u = d.row;
+  /* 2026-10-27 张老师实测：看自己的详情页也要能解除反作弊标记——处置面板本人也渲染，
+     但隐藏自伤性操作（封禁/改管理员/注销），防自杀式误操作守卫收窄到操作级 */
+  const isSelf = u.id === session?.uid;
 
   return (
     <>
@@ -41,6 +44,11 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
           {u.trusted && (
             <span className="admin_tag ok" title="可信用户组：该玩家上传录像自动分拣时不检查 STNB 触发器">
               可信用户
+            </span>
+          )}
+          {d.lowTrustFlagged && (
+            <span className="admin_tag warn" title="反作弊探测命中：练习页排名模式禁用中，上传录像 24h ≤5 且全部需人工审核">
+              低信任{d.rankBanned ? "·排名禁用" : ""}
             </span>
           )}
           {u.status === 0 ? (
@@ -131,6 +139,26 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                 ? d.oauth.map((o) => `${o.provider === "wechat" ? "微信" : "QQ"}（${o.nickname || "无昵称"}）`).join("、")
                 : "—"}
             </dd>
+            {d.rankedAudit && (
+              <>
+                <dt>
+                  排名审计
+                  {d.rankedAudit.suspicious && (
+                    <span className="admin_tag bad" style={{ marginLeft: 6 }}>
+                      异常
+                    </span>
+                  )}
+                </dt>
+                <dd>
+                  {d.rankedAudit.games} 局 · 盲区点击率 {(d.rankedAudit.blindRate * 100).toFixed(1)}%
+                  （{d.rankedAudit.blindClicks}/{d.rankedAudit.clicks}）· 旗精度 {(d.rankedAudit.flagPrecision * 100).toFixed(1)}%
+                  （{d.rankedAudit.flags - d.rankedAudit.blindFlags}/{d.rankedAudit.flags}）
+                  <span className="admin_hint" style={{ display: "block" }}>
+                    盲区＝可靠性求解器无法证明安全的动作；求解器辅助玩家两项逼近 0%，正常玩家显著偏高（仅供人工分诊）
+                  </span>
+                </dd>
+              </>
+            )}
           </dl>
         </AdminCard>
 
@@ -151,7 +179,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       {/* ---------- 发送系统通知（manager 及以上）+ 账号处置（仅超管）----------
           2026-10-23 张老师要求：并排放置，通知在左、处置在右（ops_notify 栅格）；
           非超管视角无处置面板，通知卡单独一行（栅格单卡自动占满） */}
-      <div className={`admin_grid${isSuper && u.id !== session?.uid ? " ops_notify" : ""}`}>
+      <div className={`admin_grid${isSuper ? " ops_notify" : ""}`}>
         <AdminCard title="发送系统通知">
           <AdminForm
             op="user.sendSystemMessage"
@@ -174,34 +202,40 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
           </div>
         </AdminCard>
 
-        {/* ---------- 处置面板（仅超管） ---------- */}
-        {isSuper && u.id !== session?.uid && (
-          <AdminCard title="账号处置" more="仅超级管理员可见，全部操作记入日志">
+        {/* ---------- 处置面板（仅超管；本人可见但隐藏自伤操作，2026-10-27） ---------- */}
+        {isSuper && (
+          <AdminCard
+            title="账号处置"
+            more={isSelf ? "本人视角：封禁/改管理员/注销等自伤操作已隐藏" : "仅超级管理员可见，全部操作记入日志"}
+          >
             <div className="admin_ops" style={{ marginBottom: 14 }}>
-              {u.status === 0 ? (
-                <BanUserDialog userId={u.id} name={u.chineseName} sm={false} />
-              ) : (
+              {!isSelf &&
+                (u.status === 0 ? (
+                  <BanUserDialog userId={u.id} name={u.chineseName} sm={false} />
+                ) : (
+                  <AdminAction
+                    op="user.setStatus"
+                    params={{ id: u.id, status: 0 }}
+                    label="解除封禁"
+                    variant="primary"
+                    sm={false}
+                    confirm={`确认解封「${u.chineseName}」？连坐封禁的录像将自动恢复。`}
+                  />
+                ))}
+              {!isSelf && (
                 <AdminAction
-                  op="user.setStatus"
-                  params={{ id: u.id, status: 0 }}
-                  label="解除封禁"
-                  variant="primary"
+                  op="user.setRole"
+                  params={{ id: u.id, role: u.role === USER_ROLE.PLAYER ? USER_ROLE.MANAGER : USER_ROLE.PLAYER }}
+                  label={u.role === USER_ROLE.PLAYER ? "设为管理员" : "取消管理员"}
+                  variant="warn"
                   sm={false}
-                  confirm={`确认解封「${u.chineseName}」？连坐封禁的录像将自动恢复。`}
+                  confirm={
+                    u.role === USER_ROLE.PLAYER
+                      ? `确认把「${u.chineseName}」设为管理员？管理员可审核录像并管理内容。`
+                      : `确认取消「${u.chineseName}」的管理权限？`
+                  }
                 />
               )}
-              <AdminAction
-                op="user.setRole"
-                params={{ id: u.id, role: u.role === USER_ROLE.PLAYER ? USER_ROLE.MANAGER : USER_ROLE.PLAYER }}
-                label={u.role === USER_ROLE.PLAYER ? "设为管理员" : "取消管理员"}
-                variant="warn"
-                sm={false}
-                confirm={
-                  u.role === USER_ROLE.PLAYER
-                    ? `确认把「${u.chineseName}」设为管理员？管理员可审核录像并管理内容。`
-                    : `确认取消「${u.chineseName}」的管理权限？`
-                }
-              />
               <AdminAction
                 op="user.setTrusted"
                 params={{ id: u.id, trusted: u.trusted ? 0 : 1 }}
@@ -214,20 +248,31 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     : `确认把「${u.chineseName}」加入可信用户组？其上传录像自动分拣时不再检查 STNB 触发器（其余触发器照常），待审录像会立即重分拣。`
                 }
               />
-              {u.videos === 0 && d.postTotal === 0 ? (
+              {d.lowTrustFlagged && (
                 <AdminAction
-                  op="user.delete"
+                  op="user.clearCheatPenalty"
                   params={{ id: u.id }}
-                  label="注销账号"
-                  variant="danger"
+                  label="解除反作弊标记"
+                  variant="warn"
                   sm={false}
-                  confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（操作不可撤销）。`}
+                  confirm={`确认解除「${u.chineseName}」的反作弊标记？其练习页排名模式与低信任组限制立即恢复，待审录像会重分拣（解除后回免核定判定）。`}
                 />
-              ) : (
-                <span className="admin_hint" style={{ alignSelf: "center" }}>
-                  该玩家已有 {u.videos} 部录像、{d.postTotal} 篇论坛主题，不能注销账号（如需禁止登录请用「封禁账号」）
-                </span>
               )}
+              {!isSelf &&
+                (u.videos === 0 && d.postTotal === 0 ? (
+                  <AdminAction
+                    op="user.delete"
+                    params={{ id: u.id }}
+                    label="注销账号"
+                    variant="danger"
+                    sm={false}
+                    confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（操作不可撤销）。`}
+                  />
+                ) : (
+                  <span className="admin_hint" style={{ alignSelf: "center" }}>
+                    该玩家已有 {u.videos} 部录像、{d.postTotal} 篇论坛主题，不能注销账号（如需禁止登录请用「封禁账号」）
+                  </span>
+                ))}
             </div>
 
             <AdminForm

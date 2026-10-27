@@ -20,6 +20,16 @@ type Item = { id: number; message: string; type: ToastType; hold: number };
 
 let emit: ((message: string, type: ToastType, hold?: number) => void) | null = null;
 
+/* G12 反作弊自家节点注册表（2026-10-27 红队 B11）：ToastHost 渲染的气泡元素在
+   ref 回调里入册，OnlinePlay 的 isOwnNode 用对象身份判别——气泡 class/样式
+   会被攻击者模仿，WeakSet 闭包外的元素塞不进来 */
+const toastNodes = new WeakSet<Element>();
+
+/** 该元素是否为本模块渲染的真实气泡（含历史元素，元素卸载由 WeakSet 自动回收） */
+export function isRegisteredToast(el: Element): boolean {
+  return toastNodes.has(el);
+}
+
 /** 命令式调用：任意客户端组件（含事件回调）直接 toast("文本", "success") */
 export function toast(message: string, type: ToastType = "info", hold?: number) {
   emit?.(message, type, hold);
@@ -87,6 +97,7 @@ export function ToastHost() {
   return (
     <div
       key={item.id}
+      ref={(el) => { if (el) toastNodes.add(el); }}
       className={`toast_bubble toast_${item.type}${leaving ? " toast_leave" : ""}`}
       role="status"
       aria-live="polite"

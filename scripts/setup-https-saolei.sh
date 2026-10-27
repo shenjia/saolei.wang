@@ -161,6 +161,19 @@ server {
     # 见下方——server 顶层挂载会把 JS chunk/头像等静态请求也计入 burst，玩家
     # 切排行 tab 连点即 429；/videos/ 档仍在专属 location 内挂载）
 
+    # 排名模式权威对局 WebSocket：独立 Node 服务，仅本机监听；不挂 general 限速。
+    location = /ws/online/ranked {
+        proxy_pass http://127.0.0.1:3104;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+    }
+
     # ========== 静态缓存（2026-10-20）==========
     # 背景：Next 代理对 public/ 资源一律 max-age=0 每请求回源验证；这里按类型直读磁盘。
     # ^~ 前缀优先于下方正则，防止误劫持。

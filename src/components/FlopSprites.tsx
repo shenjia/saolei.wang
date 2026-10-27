@@ -3,9 +3,11 @@
 // 注意：flop-player 为 GPL-3.0 许可证（张老师已知晓并确认采用）。
 // 在线玩（OnlinePlay）与首页「开一局」按钮共用此贴图库。
 
-export function FlopSprites() {
+import type { Ref } from "react";
+
+export function FlopSprites({ innerRef }: { innerRef?: Ref<SVGSVGElement> } = {}) {
   return (
-      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+      <svg ref={innerRef} width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
         <symbol id="count-0">
           <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
           <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0m100 0v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />

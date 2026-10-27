@@ -33,6 +33,13 @@ model User {
   // 可信用户组（2026-10-24）：组内用户上传录像自动分拣时不检查 STNB 触发器（后台 /admin/users/[id] 超管维护）
   trusted Boolean @default(false)
 
+  // ---- 反作弊处置（2026-10-27）：客户端探测命中（__op 蜜罐/棋盘注入/整页标记浮层）----
+  // 排名模式禁用截止 Unix 秒：命中后 24 小时内无法开启排名模式（WS/上传/入口三处闸）
+  rankBanUntil BigInt @default(0) @map("rank_ban_until") @db.BigInt
+  // 低信任标记截止 Unix 秒：并入 getUserTrustInfo 低信任口径（video.auto_reason bit9
+  // 影响后台审核），且 24h 内上传录像数 ≤5；命中后 7 天
+  lowTrustUntil BigInt @default(0) @map("low_trust_until") @db.BigInt
+
   // 2026-10-15 上线前性能审计新增：
   // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；
   // (status) 服务首页注册人数 count（ACTIVE_USER 口径）
@@ -261,6 +268,9 @@ model VideoInfo {
   board      String @db.VarChar(500)
   board3bv   Int    @map("board_3bv") @db.Int
   realTime   Int    @map("real_time") @db.Int
+  // 2026-10-27 排名录像服务端签名（张老师要求）：排名局 evf 的 HMAC-SHA256（hex 64 位），
+  // 密钥只在服务端（lib/evf-sign.ts 派生自 AUTH_SECRET）——文件被篡改即可验出。普通上传为 null
+  evfSig     String? @map("evf_sig") @db.VarChar(64)
   createTime BigInt @default(0) @map("create_time") @db.BigInt
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
@@ -933,4 +943,35 @@ model SiteFlag {
   value String @db.VarChar(255)
 
   @@map("site_flag")
+}
+
+// 反作弊探测证据（2026-10-27）：客户端探测器命中后上报一条；处置（rank_ban_until /
+// low_trust_until）落 user 行，本表只留证据供后台核查与同因去重（1 小时窗口）。
+// reason 口径：op_bait=读取 __op 蜜罐 / dom_inject=棋盘子树外来节点 /
+// body_overlay=覆盖棋盘的整页标记浮层
+model CheatReport {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  reason     String @db.VarChar(32)
+  evidence   String @db.VarChar(500)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([user, createTime])
+  @@map("cheat_report")
+}
+
+// 排名行为审计累计（2026-10-27 G1 主防线）：每局上传结算时对权威事件流跑可靠性
+// 求解器（子集消元，恒 sound 不冤枉），累积盲区点击率与盲区插旗率。
+// 求解器辅助玩家两项逼近数学下界（盲区≈0），正常玩家显著偏离——数据供后台
+// 人工分诊，不做自动处罚（专家玩家盲区率也偏低，阈值必须看群体分布）。
+model RankedAuditStat {
+  user        BigInt @id @db.BigInt
+  games       Int    @default(0)
+  clicks      Int    @default(0)
+  blindClicks Int    @default(0)
+  flags       Int    @default(0)
+  blindFlags  Int    @default(0)
+  updateTime  BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@map("ranked_audit_stat")
 }

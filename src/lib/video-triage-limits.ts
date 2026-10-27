@@ -29,6 +29,11 @@ export const AUTO_REASON = {
   /** ms-toollib is_valid 判定可疑：操作细节不足（动作数/3BV<10）或鼠标特征达可疑阈值
    *  （按住时长 30~40ms / 极短按 4~10 次 / 轨迹方向熵/转向熵偏低） */
   MSTOOL_SUSPECT: 1 << 13,
+  /** 盲区点击率过低（阈值口径见私有 core）：排名局专属信号，需手审 */
+  BLIND_RATE: 1 << 14,
+  /** 排名 evf 签名校验失败（2026-10-27）：文件字节与 video_info.evf_sig 的 HMAC 不一致
+   *  ——库内文件被替换/篡改。签名缺失（历史数据）不判 */
+  EVF_SIG: 1 << 15,
 } as const;
 
 /** path 超速触发线（格/秒）+ 时长守卫（ms）——短局甩鼠标可瞬时超速，不判 */
@@ -41,3 +46,7 @@ export const PRESS_AVG_MS: Record<string, number> = { beg: 45, int: 45, exp: 60 
 
 /** STNB 分级阈值（各级 p99 取整上浮） */
 export const STNB_TRIGGER: Record<string, number> = { beg: 205, int: 160, exp: 150 };
+
+// 盲区率阈值定义已移入私有 submodule（src/core/src/lib/triage-secret.ts），
+// 此处转发符号——阈值与口径注释不再随主仓公开。
+export { BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS } from "@/core/src/lib/triage-secret";

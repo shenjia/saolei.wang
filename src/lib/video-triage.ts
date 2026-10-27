@@ -29,7 +29,7 @@ import { prisma } from "./db";
 import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS } from "./video-triage-limits";
 
 export { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER };
 
@@ -168,13 +168,17 @@ export interface TriageExtra {
 export async function getUserTrustInfo(userId: number): Promise<{ lowTrust: boolean; trusted: boolean }> {
   const [bannedVideo, userRow] = await Promise.all([
     prisma.video.findFirst({ where: { user: BigInt(userId), status: 0 }, select: { id: true } }),
-    prisma.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true, trusted: true } }),
+    prisma.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true, trusted: true, lowTrustUntil: true } }),
   ]);
-  const lowTrust = Boolean(bannedVideo) || userRow?.status === -1;
+  // 低信任口径（2026-10-27 扩展）：屏蔽史 / 封禁史 / 反作弊探测标记（low_trust_until 未到期）
+  const lowTrust =
+    Boolean(bannedVideo) ||
+    userRow?.status === -1 ||
+    Number(userRow?.lowTrustUntil ?? 0) > Math.floor(Date.now() / 1000);
   return { lowTrust, trusted: Boolean(userRow?.trusted) };
 }
 
-/** 上传者是否低信任：名下有被屏蔽录像 或 账号曾被封（user.status=-1 即封禁口径，含限时未到期） */
+/** 上传者是否低信任：名下有被屏蔽录像 / 账号曾被封 / 反作弊标记未到期（user.status=-1 即封禁口径，含限时未到期） */
 export async function isLowTrustUser(userId: number): Promise<boolean> {
   return (await getUserTrustInfo(userId)).lowTrust;
 }
@@ -258,16 +262,23 @@ function readVideoFile(filepath: string): Uint8Array | null {
   }
 }
 
+/** 排名上传专用的额外信号（调用方算好传入，普通上传不传） */
+export interface TriageUploadExtra {
+  /** 本局行为审计：决策点击数与盲区点击数（lib/ranked-audit.ts 重放权威事件流所得） */
+  auditClicks?: number;
+  auditBlindClicks?: number;
+}
+
 /**
  * 对一盘录像执行完整分拣并写回 auto_flag / auto_reason。
  * 供上传 after() 钩子与存量回填脚本共用。失败一律写 FAILED（按需核定），静默返回。
  */
-export async function triageVideo(videoId: number): Promise<void> {
+export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtra = {}): Promise<void> {
   try {
     const id = BigInt(videoId);
     const [video, info] = await Promise.all([
       prisma.video.findUnique({ where: { id }, select: { level: true, user: true, status: true } }),
-      prisma.videoInfo.findUnique({ where: { id }, select: { filepath: true, board3bv: true, realTime: true, noflag: true } }),
+      prisma.videoInfo.findUnique({ where: { id }, select: { filepath: true, board3bv: true, realTime: true, noflag: true, evfSig: true } }),
     ]);
     if (!video || !info) return;
 
@@ -311,6 +322,27 @@ export async function triageVideo(videoId: number): Promise<void> {
       if (result?.verdict === 1) reason |= AUTO_REASON.MSTOOL_FAIL;
       else if (result?.verdict === 3) reason |= AUTO_REASON.MSTOOL_SUSPECT;
       flag = reason === 0 ? 1 : 0;
+      // 排名 evf 签名校验（2026-10-27 张老师要求）：库内 evf_sig 与文件字节 HMAC 比对。
+      // invalid（不一致）= 文件被替换/篡改 → bit15 需核定；unsigned（无签名，历史/普通上传）不判
+      if (info.evfSig) {
+        const { verifyEvfSig } = await import("../core/src/lib/evf-sign");
+        if (verifyEvfSig(buf, info.evfSig) === "invalid") {
+          reason |= AUTO_REASON.EVF_SIG;
+          flag = 0;
+        }
+      }
+    }
+
+    // 盲区率触发器（2026-10-27 张老师定标 2%）：排名局盲区点击率 <2% → 需核定。
+    // 定标依据：高级时间榜 TOP20 真人实测全部 2.6%~10%，2% 线零误伤。
+    // 双守卫（张老师补充）：整局盲区 <2 个比率无参考意义（初/中级短局天然盲区少，
+    // 不应触发）；决策点击太少（<15）同样无统计意义。盲区 ≥2 且 <2% 蕴含点击 >100
+    if (uploadExtra.auditClicks !== undefined && uploadExtra.auditBlindClicks !== undefined &&
+        uploadExtra.auditClicks >= BLIND_RATE_MIN_CLICKS &&
+        uploadExtra.auditBlindClicks >= BLIND_RATE_MIN_BLINDS &&
+        uploadExtra.auditBlindClicks / uploadExtra.auditClicks < BLIND_RATE_TRIGGER) {
+      reason |= AUTO_REASON.BLIND_RATE;
+      flag = 0;
     }
 
     await prisma.video.update({ where: { id }, data: { autoFlag: flag, autoReason: reason } });
