@@ -216,7 +216,8 @@ export default async function AdminDashboard() {
             foot: ov.videoPending ? (pendingDays ? `最老积压 ${pendingDays} 天` : "均已下载") : "",
           },
           { label: "评论待审", value: ov.commentPending, href: "/admin/comments?status=5", foot: "AI 复核存疑" },
-          { label: "论坛待审", value: ov.bbsPending, href: "/admin/bbs?status=5", foot: "AI 复核存疑" },
+          // 2026-10-27：论坛待审=主题+回复合计（同侧栏 badge 口径）；页面顶部即待审混合队列，无需 ?status=5
+          { label: "论坛待审", value: ov.bbsPending, href: "/admin/bbs", foot: "AI 复核存疑" },
           { label: "头像待审", value: ov.avatarPending, href: "/admin/avatars", foot: "AI 判 review" },
         ].filter((p) => p.value > 0);
         if (reviewItems.length === 0) return null;

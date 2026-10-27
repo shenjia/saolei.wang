@@ -409,9 +409,9 @@ export async function getReplyFeed(
   viewerUid: number | null = null,
   page?: number
 ): Promise<{ items: BbsReplyItem[]; total: number }> {
-  const visible = viewerUid
-    ? { OR: [{ status: 0 }, { status: 5, user: BigInt(viewerUid) }] }
-    : { status: 0 };
+  // 2026-10-27 张老师定：过敏感词即公开、AI/人审后置——待审楼层（5）与正常（0）同列可见；
+  // viewerUid 保留参数位（调用方兼容），不再参与过滤
+  const visible = { status: { in: [0, 5] } };
   const total = await prisma.bbsReply.count({ where: { post: BigInt(postId), ...visible } });
   const rows = await prisma.bbsReply.findMany({
     where: {
@@ -444,7 +444,7 @@ export async function getReplyFeed(
 /** 定位回复所在页码（2026-10-22 张老师要求：动态/消息点击跳转直达该条评论）
  *  楼层按 id 升序分页（BBS_REPLY_PAGESIZE=10，口径同 getReplyFeed 页码模式），
  *  该回复之前的可见行数 ÷ 每页条数即所在页；查不到（已删/不存在）返回 null。
- *  注意：viewerUid 视角自己的待审行也计入序（与 BbsReplySection 翻页口径一致）。 */
+ *  2026-10-27：待审（5）公开可见，定位口径同步（viewerUid 保留参数位）。 */
 export async function locateReply(
   replyId: number,
   viewerUid: number | null
@@ -452,16 +452,15 @@ export async function locateReply(
   const row = await prisma.bbsReply.findFirst({
     where: {
       id: BigInt(replyId),
-      OR: [{ status: 0 }, { status: 5, user: BigInt(viewerUid ?? 0) }],
+      // 2026-10-27：待审（5）公开可见，定位口径同步（仅排除已删 -1）
+      status: { in: [0, 5] },
     },
     select: { post: true },
   });
   if (!row) return null;
-  const visible = viewerUid
-    ? { post: row.post, OR: [{ status: 0 }, { status: 5, user: BigInt(viewerUid) }] }
-    : { post: row.post, status: 0 };
+  // 同上：可见集与楼层流一致（[0,5]）
   const before = await prisma.bbsReply.count({
-    where: { ...visible, id: { lt: BigInt(replyId) } },
+    where: { post: row.post, status: { in: [0, 5] }, id: { lt: BigInt(replyId) } },
   });
   return { post: N(row.post), page: Math.floor(before / BBS_REPLY_PAGESIZE) + 1 };
 }

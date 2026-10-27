@@ -38,19 +38,6 @@ export interface AdminUserRow extends UserBrief {
   videos: number;
   /** 可信用户组（2026-10-24）：录像分拣不检查 STNB 触发器 */
   trusted: boolean;
-  /** 用户组信息（2026-10-27 合并进玩家管理）：仅 group 筛选模式对当页行填充，其余视图恒 undefined */
-  groupInfo?: {
-    /** 组类型（trusted / lowtrust） */
-    group: "trusted" | "lowtrust";
-    /** 低信任来源标签（低信任组专用；可信组恒空数组） */
-    sources: string[];
-    /** 加入时间（Unix 秒；无法溯源的历史行为 null） */
-    joinTime: number | null;
-    /** 操作管理员（探测器自动加入 = 「反作弊系统」；无法溯源 = null） */
-    joinBy: string | null;
-    /** 反作弊标记到期（仅标记源有意义，0=非标记源） */
-    flagUntil: number;
-  };
 }
 
 const USER_ORDERS: Record<string, string> = {
@@ -70,8 +57,6 @@ export interface UserFilter {
   ranked?: string;
   /** 称号体系偏好（仪表盘环形图点击穿透）：c=旧版人神界 / m=军衔制 */
   title?: string;
-  /** 用户组筛选（2026-10-27 合并进玩家管理）：trusted=可信用户组 / lowtrust=低可信用户组 */
-  group?: string;
   order?: string;
   page?: number;
 }
@@ -114,15 +99,6 @@ function userWhere(f: UserFilter): { sql: string; params: unknown[] } {
   }
   if (f.ranked === "1") conds.push("s.sum_time > 0");
   if (f.ranked === "0") conds.push("(s.sum_time IS NULL OR s.sum_time = 0)");
-  // 用户组筛选（2026-10-27）：低可信口径与录像分拣 isLowTrustUser 严格一致——
-  // 反作弊标记未到期 ∪ 封禁史 ∪ 屏蔽史（三源任一命中即入组）
-  if (f.group === "trusted") conds.push("u.trusted = 1");
-  if (f.group === "lowtrust") {
-    conds.push(
-      "(u.low_trust_until > ? OR u.status = -1 OR EXISTS (SELECT 1 FROM video v WHERE v.user = u.id AND v.status = 0))"
-    );
-    params.push(BigInt(Math.floor(Date.now() / 1000)));
-  }
   // 称号体系偏好筛选（2026-10-23 仪表盘环形图点击穿透）：与 getTitlePrefCounts 同口径——
   // 环形图只统计 user_info 有行的玩家（未存过资料不在任何一段），故用 EXISTS 而非 LEFT JOIN 判空；
   // 'c'=旧版人神界称号；'m'=军衔制（含脏值，脏值同按军衔渲染）
@@ -142,7 +118,6 @@ export async function getUserList(
 ): Promise<{ rows: AdminUserRow[]; total: number; pageSize: number; page: number }> {
   const page = Math.max(1, f.page ?? 1);
   const { sql, params } = userWhere(f);
-  const isGroupView = f.group === "trusted" || f.group === "lowtrust";
   const order = USER_ORDERS[f.order ?? "reg"] ?? USER_ORDERS.reg;
   // 纯数字搜索=按 ID 找人（2026-10-27）：ID 精确命中置顶，避免被录像标识/账号模糊命中淹没
   // （q=1 曾命中 373 人、ID=1 按注册时间排到第 15 页翻不到）
@@ -154,48 +129,18 @@ export async function getUserList(
     orderParams.push(BigInt(q));
   }
 
-  // 用户组视图（2026-10-27 合并进玩家管理）：按「最新加入在前」排序——加入时间来自日志反查，
-  // SQL 无对应列，故先取全组 id（组规模：可信个位数 / 低信任千人内），内存算 joinTime 排序后切页，
-  // 再走下方与普通视图完全相同的批量补数据。其余筛选（q/状态/角色/地区…）与本组条件 AND 叠加。
-  let uidList: number[];
-  let total: number;
-  let groupJoin: Map<number, number> | null = null;
-  if (isGroupView) {
-    const all = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT u.id ${USER_FROM} ${sql} ORDER BY u.id ASC`,
-      ...params
-    );
-    const allIds = all.map((r) => N(r.id));
-    const { groupJoinTimes } = await (await import("./usergroups")).joinTimesForGroup(
-      f.group as "trusted" | "lowtrust",
-      allIds
-    );
-    groupJoin = groupJoinTimes;
-    const sorted = [...allIds].sort((a, b) => {
-      const ja = groupJoin!.get(a) ?? 0;
-      const jb = groupJoin!.get(b) ?? 0;
-      if (ja && jb) return jb - ja || b - a; // 都有加入时间：新→旧
-      if (ja) return -1; // 有时间的在前
-      if (jb) return 1;
-      return a - b; // 都无法溯源：按 id
-    });
-    total = sorted.length;
-    uidList = sorted.slice((page - 1) * ADMIN_PAGESIZE, page * ADMIN_PAGESIZE);
-  } else {
-    const [ids, countRows] = await Promise.all([
-      prisma.$queryRawUnsafe<{ id: bigint }[]>(
-        `SELECT u.id ${USER_FROM} ${sql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
-        ...params,
-        ...orderParams,
-        ADMIN_PAGESIZE,
-        (page - 1) * ADMIN_PAGESIZE
-      ),
-      prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c ${USER_FROM} ${sql}`, ...params),
-    ]);
-    uidList = ids.map((r) => N(r.id));
-    total = N(countRows[0]?.c);
-  }
+  const [ids, countRows] = await Promise.all([
+    prisma.$queryRawUnsafe<{ id: bigint }[]>(
+      `SELECT u.id ${USER_FROM} ${sql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
+      ...params,
+      ...orderParams,
+      ADMIN_PAGESIZE,
+      (page - 1) * ADMIN_PAGESIZE
+    ),
+    prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c ${USER_FROM} ${sql}`, ...params),
+  ]);
 
+  const uidList = ids.map((r) => N(r.id));
   const bigIds = uidList.map(BigInt);
   const [users, auths, scores, videoCounts] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: bigIds } } }),
@@ -244,69 +189,7 @@ export async function getUserList(
     });
   }
 
-  // 用户组视图：当页行补「来源/加入时间/操作管理员」（与原独立页同口径）
-  if (isGroupView && rows.length) {
-    await fillGroupInfo(rows, f.group as "trusted" | "lowtrust");
-  }
-
-  return { rows, total, pageSize: ADMIN_PAGESIZE, page };
-}
-
-/** 用户组视图附加信息（2026-10-27 合并进玩家管理）：对当页行补「来源/加入时间/操作管理员」。
- *  加入时间与操作管理员从 admin_log / cheat_report 反查（与原独立页同口径），
- *  页面只传 group 筛选模式下的当页行——「全部」视图不算（不展示这些列）。 */
-export async function fillGroupInfo(
-  rows: AdminUserRow[],
-  group: "trusted" | "lowtrust",
-  blockedUserIds?: Set<number>
-): Promise<void> {
-  if (!rows.length) return;
-  const { loadJoinLogs, latestCheatReports } = await import("./usergroups");
-  const t = Math.floor(Date.now() / 1000);
-  const needBlocked = group === "lowtrust" && !blockedUserIds;
-  const [joinInfo, cheatTimes, blocked] = await Promise.all([
-    loadJoinLogs(),
-    latestCheatReports(),
-    needBlocked
-      ? prisma.$queryRawUnsafe<{ user: bigint }[]>(`SELECT DISTINCT user FROM video WHERE status = 0`)
-      : Promise.resolve(null as unknown as { user: bigint }[]),
-  ]);
-  const blockedIds = blockedUserIds ?? new Set((blocked ?? []).map((r) => N(r.user)));
-  const adminIds = [
-    ...new Set(
-      [...joinInfo.trustedJoin.values(), ...joinInfo.lowJoin.values()].map((v) => v.adminId).filter(Boolean)
-    ),
-  ];
-  const adminNameRows = adminIds.length
-    ? await prisma.user.findMany({ where: { id: { in: adminIds.map(BigInt) } }, select: { id: true, chineseName: true } })
-    : [];
-  const names = new Map(adminNameRows.map((r) => [N(r.id), r.chineseName]));
-
-  for (const r of rows) {
-    r.groupInfo = { group, sources: [], joinTime: null, joinBy: null, flagUntil: 0 };
-    if (group === "trusted") {
-      const j = joinInfo.trustedJoin.get(r.id);
-      r.groupInfo.joinTime = j ? j.time : null;
-      r.groupInfo.joinBy = j ? names.get(j.adminId) ?? `#${j.adminId}` : null;
-      continue;
-    }
-    // 低信任三源
-    if (r.lowTrustUntil > t) {
-      r.groupInfo.sources.push("反作弊标记");
-      r.groupInfo.flagUntil = r.lowTrustUntil;
-    }
-    if (r.status === -1) r.groupInfo.sources.push("封禁史");
-    if (blockedIds.has(r.id)) r.groupInfo.sources.push("屏蔽录像");
-    const jl = joinInfo.lowJoin.get(r.id);
-    const ct = cheatTimes.get(r.id);
-    if (jl) {
-      r.groupInfo.joinTime = jl.time;
-      r.groupInfo.joinBy = names.get(jl.adminId) ?? `#${jl.adminId}`;
-    } else if (ct) {
-      r.groupInfo.joinTime = ct;
-      r.groupInfo.joinBy = "反作弊系统";
-    }
-  }
+  return { rows, total: N(countRows[0]?.c), pageSize: ADMIN_PAGESIZE, page };
 }
 
 export interface AdminUserDetail {
@@ -315,8 +198,6 @@ export interface AdminUserDetail {
   lowTrustFlagged: boolean;
   /** 练习页排名模式禁用生效中（rank_ban_until 未到期） */
   rankBanned: boolean;
-  /** 排名禁用到期时刻（Unix 秒；0=未禁用）——处置面板显示倒计时 */
-  rankBanUntil: number;
   /** G1 排名行为审计累计（2026-10-27）；null=该玩家还没有排名局上传 */
   rankedAudit: {
     games: number;
@@ -459,7 +340,6 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     /* 反作弊标记时效在数据层算好（RSC 渲染期禁 Date.now()） */
     lowTrustFlagged: N(user.lowTrustUntil) > Math.floor(Date.now() / 1000),
     rankBanned: N(user.rankBanUntil) > Math.floor(Date.now() / 1000),
-    rankBanUntil: N(user.rankBanUntil),
     /* G1 排名行为审计：累计盲区率/旗精度展示，极端值判定口径见私有 core */
     rankedAudit: await (async () => {
       const s = await prisma.rankedAuditStat.findUnique({ where: { user: uid } });

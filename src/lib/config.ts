@@ -83,15 +83,17 @@ export const COMMENT_STATUS = { NORMAL: 0, DELETED: -1 } as const;
 
 // ---------- UGC 内容审核状态（2026-10-13 引入 AI 后置审核） ----------
 // comment / bbs_post / bbs_reply 三张表共用同一套 status 语义：
-//    0  正常（公开，计入条数）
-//    5  AI 判定可疑 → 转人工复核（对外不公开，不计入条数）
+// 2026-10-27 张老师定：敏感词前置拦截、AI/人审一律后置——
+//    0  正常（公开）
+//    5  AI 存疑 → 转人工复核（前台照常公开展示，仅后台待审队列出现）
 //   -1  删除 / 屏蔽（软删，不公开）
-// 前台查询一律 where status = 0，因此待审内容自动不展示、无需改各页查询。
+// 前台查询一律 status in [0,5]；待审被管理员删除（→-1）才从展示面消失。
 export const CONTENT_STATUS = { NORMAL: 0, PENDING: 5, DELETED: -1 } as const;
 
-/** 该状态是否计入冗余条数（video_stat.comments / bbs_post.replies）——仅正常态计入 */
+/** 该状态是否计入冗余条数（video_stat.comments / bbs_post.replies）——正常与待审均计入
+ *  （2026-10-27：待审内容前台可见，条数不回退；删除态不计） */
 export function countsInTotal(status: number): boolean {
-  return status === CONTENT_STATUS.NORMAL;
+  return status === CONTENT_STATUS.NORMAL || status === CONTENT_STATUS.PENDING;
 }
 
 /** 状态中文名（管理后台展示用） */

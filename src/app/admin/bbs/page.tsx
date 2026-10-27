@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BBS_BOARDS } from "@/lib/bbs";
-import { getPostListAdmin, getReplyListAdmin } from "@/lib/admin/data";
+import { getPendingBbsAdmin, getPostListAdmin, getReplyListAdmin } from "@/lib/admin/data";
 import { AdminAction, AdminSelect } from "@/components/admin/AdminAction";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager } from "@/components/admin/Widgets";
@@ -18,9 +18,10 @@ type SP = Record<string, string | undefined>;
 export default async function AdminBbsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const [{ rows, total, pageSize }, detail] = await Promise.all([
+  const [{ rows, total, pageSize }, detail, pendingRows] = await Promise.all([
     getPostListAdmin({ q: sp.q, board: sp.board, flag: sp.flag, status: sp.status, page }),
     sp.post ? getReplyListAdmin(parseInt(sp.post, 10)) : Promise.resolve({ post: null, rows: [] }),
+    getPendingBbsAdmin(),
   ]);
 
   return (
@@ -29,6 +30,105 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
         <h1>论坛管理</h1>
         <span className="sub">共 {total.toLocaleString("zh-CN")} 个主题命中当前条件</span>
       </div>
+
+      {/* ---------- 待人工审核（2026-10-27 张老师要求：主题+回复混合队列；无待审整块隐藏） ----------
+          语义：敏感词前置拦截、AI/人审一律后置——待审内容前台照常公开，
+          此队列是「AI 存疑转人工复核」的处理台；通过=确认无问题（status 5→0），删除=下架（→-1）。 */}
+      {pendingRows.length > 0 && (
+        <AdminCard
+          title={`待人工审核（${pendingRows.length}）`}
+          tight
+        >
+          <div className="admin_scroll">
+            <table className="admin_table">
+              <thead>
+                <tr>
+                  <th className="c">类型</th>
+                  <th>内容</th>
+                  <th>作者</th>
+                  <th>AI 判定</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRows.map((r) => (
+                  <tr key={r.replyId ? `r${r.replyId}` : `p${r.postId}`}>
+                    <td className="c">
+                      {r.replyId ? (
+                        <span className="admin_tag plain">回复</span>
+                      ) : (
+                        <span className="admin_tag warn">主题</span>
+                      )}
+                    </td>
+                    <td style={{ maxWidth: 480 }}>
+                      {r.replyId ? (
+                        <div dangerouslySetInnerHTML={{ __html: r.html }} />
+                      ) : (
+                        <Link className="link" href={`/bbs/${r.postId}`} target="_blank">
+                          {r.html}
+                        </Link>
+                      )}
+                      <div className="sub">
+                        所属主题{" "}
+                        <Link className="link" href={`/admin/bbs?post=${r.postId}`}>
+                          #{r.postId}
+                        </Link>
+                      </div>
+                    </td>
+                    <td>
+                      <Link className="link" href={`/admin/users/${r.user}`}>
+                        {r.author?.chineseName ?? `#${r.user}`}
+                      </Link>
+                    </td>
+                    <td className="sub" style={{ maxWidth: 200 }}>
+                      {r.aiReason ?? "—"}
+                    </td>
+                    <td className="sub">{formatDate(r.createTime, "Y-m-d H:i")}</td>
+                    <td className="ops">
+                      {r.replyId ? (
+                        <>
+                          <AdminAction
+                            op="bbs.setReplyStatus"
+                            params={{ id: r.replyId, status: 0 }}
+                            label="通过"
+                            variant="primary"
+                            confirm={`确认通过回复 #${r.replyId}？`}
+                          />
+                          <AdminAction
+                            op="bbs.setReplyStatus"
+                            params={{ id: r.replyId, status: -1 }}
+                            label="删除"
+                            variant="danger"
+                            confirm={`确认删除回复 #${r.replyId}？删除后前台不可见。`}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <AdminAction
+                            op="bbs.setPost"
+                            params={{ id: r.postId, status: 0 }}
+                            label="通过"
+                            variant="primary"
+                            confirm={`确认通过主题 #${r.postId}？`}
+                          />
+                          <AdminAction
+                            op="bbs.deletePost"
+                            params={{ id: r.postId }}
+                            label="删除"
+                            variant="danger"
+                            confirm={`确认删除主题 #${r.postId}？其全部回复会一并隐藏。`}
+                          />
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </AdminCard>
+      )}
 
       <AdminCard tight>
         <Suspense fallback={<div className="admin_filterbar">筛选项加载中…</div>}>

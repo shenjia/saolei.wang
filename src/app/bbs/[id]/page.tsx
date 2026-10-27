@@ -70,8 +70,8 @@ export default async function BbsTitlePage({
 
   const post = await getPost(postId, true, true);
   if (!post) notFound();
-  const pendingPost = post.status === 5 && !admin && session?.uid !== post.author?.id;
-  if (pendingPost) notFound();
+  // 2026-10-27 张老师定：过敏感词即公开、AI/人审一律后置——待审主题（5）不再对非作者 404；
+  // 「审核中」徽章仅作者本人/管理员视角渲染
   // 楼层流同口径：本人待审楼层（status=5）一并带出（渲染「审核中」徽章）
   const { items: replies, total: replyTotal } = await getReplyFeed(
     postId,
@@ -106,9 +106,9 @@ export default async function BbsTitlePage({
                 {BBS_BOARD_NAMES[post.board]}
               </span>
               {post.title}
-              {/* 2026-10-22：待审主题徽章（仅作者本人/管理员视角能走到这里） */}
-              {post.status === 5 && (
-                <span className="review_pending" data-tip="文章已发出，通过审核后其他人才能看到">
+              {/* 2026-10-27：待审主题对所有人可见；「审核中」徽章仅作者本人/管理员视角渲染 */}
+              {post.status === 5 && (admin || session?.uid === post.author?.id) && (
+                <span className="review_pending" data-tip="文章已公开展示，AI 存疑转人工复核中">
                   审核中
                 </span>
               )}

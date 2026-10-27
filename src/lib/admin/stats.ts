@@ -173,9 +173,13 @@ export async function getOverview(): Promise<Overview> {
     prisma.donate.aggregate({ _sum: { amount: true } }),
     activeUploaders(d7),
     activeUploaders(d30),
-    // 待人工复核队列（AI 后置审核存疑 → status=5）
+    // 待人工复核队列（AI 后置审核存疑 → status=5；2026-10-27 论坛口径=主题+回复合计，
+    // 与 admin/layout.tsx 侧栏 badge 一致，仪表盘卡片不再漏算回复）
     prisma.comment.count({ where: { status: CONTENT_STATUS.PENDING } }),
-    prisma.bbsPost.count({ where: { status: CONTENT_STATUS.PENDING } }),
+    Promise.all([
+      prisma.bbsPost.count({ where: { status: CONTENT_STATUS.PENDING } }),
+      prisma.bbsReply.count({ where: { status: CONTENT_STATUS.PENDING } }),
+    ]).then(([a, b]) => a + b),
     prisma.avatarReview.count({ where: { status: 10 } }),
   ]);
 

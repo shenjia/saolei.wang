@@ -1,22 +1,21 @@
-// UGC 内容 AI 复审调度（2026-10-13）
+// UGC 内容 AI 复审调度（2026-10-13；2026-10-27 语义简化）
 //
 // 调用时机：论坛发主题/回复、录像评论「发表成功之后」异步触发（route 里用 next/server 的 after()）。
-// 处理规则：AI 判 review → 把该条内容置为「待审」（CONTENT_STATUS.PENDING，前台不可见），
-//          并同步 ①回退冗余条数 ②撤下这条内容产生的动态。AI 判 pass / 调用失败 → 不动。
+// 处理规则（2026-10-27 张老师定：敏感词前置拦截，AI/人审一律后置）：
+//   AI 判 review → 只把该条置为「待审」（status=5，写 ai_reason）进后台人工队列。
+//   内容前台保持公开展示、计数不回退、动态/通知不撤——人审删除（→-1）才真正下架。
+//   AI 判 pass / 调用失败 → 不动。
 //
 // 幂等：只处理 status 仍为 NORMAL 的记录；重复调用、内容已被删除/编辑过都会安全跳过。
-// 计数口径：见 config.ts 的 countsInTotal——只有 NORMAL 计入 video_stat.comments / bbs_post.replies。
 
 import { prisma } from "./db";
-import { CONTENT_STATUS, NEWS_TYPE } from "./config";
+import { CONTENT_STATUS } from "./config";
 import { moderateText, textModerationEnabled, TEXT_CATEGORY_NAMES } from "./text-moderate";
-import { retractReplyNotice } from "./message";
 import type { TextModerationResult } from "./text-moderate";
 
 export type ContentKind = "comment" | "bbs_post" | "bbs_reply";
 
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
-const B = (v: bigint | number): bigint => BigInt(v);
 
 /**
  * 存库的判定摘要：`类别：理由`，供管理后台在待审行上直接展示。
@@ -54,89 +53,37 @@ export async function runContentReview(kind: ContentKind, id: number, text: stri
   }
 }
 
-/** 把内容置为待审，并回退计数、撤下动态。返回是否真的发生了状态变更。 */
+// 三表字段结构一致（status/aiReason/updateTime），收敛统一委托类型——
+// prisma delegate union（三元）TS2349 不可调用，必须 cast（同 queries.ts UserScoresDelegate 解法）
+interface ContentTableDelegate {
+  findUnique(args: {
+    where: { id: bigint };
+    select: { status: true };
+  }): Promise<{ status: number } | null>;
+  update(args: {
+    where: { id: bigint };
+    data: { status: number; aiReason: string; updateTime: bigint };
+  }): Promise<unknown>;
+}
+
+function contentTable(kind: ContentKind): ContentTableDelegate {
+  return (
+    kind === "comment" ? prisma.comment : kind === "bbs_post" ? prisma.bbsPost : prisma.bbsReply
+  ) as unknown as ContentTableDelegate;
+}
+
+/** 把内容置为待审（仅改 status + ai_reason，进后台人工队列；前台展示/计数/动态/通知均不动）。
+ *  返回是否真的发生了状态变更。 */
 async function markPending(kind: ContentKind, id: number, note: string): Promise<boolean> {
-  const now = nowSec();
-
-  if (kind === "comment") {
-    const row = await prisma.comment.findUnique({
-      where: { id: B(id) },
-      select: { id: true, video: true, user: true, status: true },
-    });
-    if (!row || row.status !== CONTENT_STATUS.NORMAL) return false;
-    await prisma.$transaction(async (tx) => {
-      await tx.comment.update({
-        where: { id: row.id },
-        data: { status: CONTENT_STATUS.PENDING, aiReason: note, updateTime: now },
-      });
-      await tx.videoStat.updateMany({
-        where: { id: row.video },
-        data: { comments: { decrement: 1 }, updateTime: now },
-      });
-      // 撤下该条评论的动态：按 details_data 里的 cid（= 评论 id）精确定位。
-      // 不能只按 createTime——同一用户在同一录像下同秒发两条评论时，时间完全相同会误删另一条。
-      await tx.news.deleteMany({
-        where: {
-          type: NEWS_TYPE.COMMENT,
-          user: row.user,
-          reference: row.video,
-          detailsData: { contains: `"cid":${id}}` },
-        },
-      });
-    });
-    return true;
-  }
-
-  if (kind === "bbs_post") {
-    const row = await prisma.bbsPost.findUnique({
-      where: { id: B(id) },
-      select: { id: true, user: true, status: true },
-    });
-    if (!row || row.status !== CONTENT_STATUS.NORMAL) return false;
-    await prisma.$transaction(async (tx) => {
-      await tx.bbsPost.update({
-        where: { id: row.id },
-        data: { status: CONTENT_STATUS.PENDING, aiReason: note, updateTime: now },
-      });
-      await tx.news.deleteMany({
-        where: {
-          type: NEWS_TYPE.ARTICLE,
-          user: row.user,
-          reference: row.id,
-          detailsData: { contains: `"cid":${id}}` },
-        },
-      });
-    });
-    return true;
-  }
-
-  // bbs_reply
-  const row = await prisma.bbsReply.findUnique({
-    where: { id: B(id) },
-    select: { id: true, post: true, user: true, status: true },
+  const table = contentTable(kind);
+  const row = await table.findUnique({
+    where: { id: BigInt(id) },
+    select: { status: true },
   });
   if (!row || row.status !== CONTENT_STATUS.NORMAL) return false;
-  await prisma.$transaction(async (tx) => {
-    await tx.bbsReply.update({
-      where: { id: row.id },
-      data: { status: CONTENT_STATUS.PENDING, aiReason: note, updateTime: now },
-    });
-    await tx.bbsPost.update({
-      where: { id: row.post },
-      data: { replies: { decrement: 1 }, updateTime: now },
-    });
-    await tx.news.deleteMany({
-      where: {
-        type: NEWS_TYPE.COMMENT,
-        user: row.user,
-        reference: row.post,
-        detailsData: { contains: `"cid":${id}}` },
-      },
-    });
-    // 2026-10-27 张老师要求：AI 转待审同步撤通知消息——评论前台已不可见，
-    // 通知再留着就是「点进去看不到评论」的死链（24474 案例：发布 2 秒后被转待审，
-    // 楼主收到的通知成了空指向）
-    await retractReplyNotice(Number(row.user), id, tx);
+  await table.update({
+    where: { id: BigInt(id) },
+    data: { status: CONTENT_STATUS.PENDING, aiReason: note, updateTime: nowSec() },
   });
   return true;
 }

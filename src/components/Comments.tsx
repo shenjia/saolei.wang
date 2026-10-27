@@ -5,7 +5,8 @@
 // · 列表 state 提升进 CommentSection 壳（此前表单提交只靠 router.refresh()，
 //   而 CommentList 的 useState(initial) 在软刷新下不重置，新评论其实不会立刻出现）
 // · 发表接口返回新评论行，就地插入列表顶部（参照 BbsReplySection 的 onPosted 模式）
-// · AI 复审转待审（status=5）后本人仍可见（查询层按 viewerUid 放行），行上带「审核中」徽章
+// · AI 复审转待审（status=5）后内容前台保持公开（2026-10-27 张老师定：AI/人审一律后置），
+//   仅作者本人视角在行上看到「审核中」徽章
 //
 // 2026-10-26 张老师需求：评论支持删除——发布者可删自己发的评论，
 // 录像作者可删别人写在自己录像下的评论（权限铁闸在 /api/comment/delete 服务端）；
@@ -27,9 +28,9 @@ import { TotalCount } from "./TotalCount";
 import { nextBatchSize } from "./PageSlider";
 import { useDraft } from "./useDraft";
 
-/** 待审徽章（仅本人视角会收到 status=5 的行，他人不可见该行） */
+/** 待审徽章（2026-10-27 起 status=5 前台对所有人可见；仅作者本人视角渲染此徽章，tip 提示处于人工复核） */
 function PendingBadge() {
-  return <span className="review_pending" data-tip="评论已发出，通过审核后其他人才能看到">审核中</span>;
+  return <span className="review_pending" data-tip="内容已公开展示，AI 存疑转人工复核中">审核中</span>;
 }
 
 /** 单条评论（移植 comment/_cell 的应有结构）
@@ -37,11 +38,14 @@ function PendingBadge() {
  *  2026-10-26：meta 行尾挂删除小按钮（canDelete 由上层按登录态判定传入） */
 export function CommentCell({
   comment,
+  isOwn,
   canDelete,
   deleting,
   onDelete,
 }: {
   comment: CommentItem;
+  /** 作者本人视角（status=5 行仅本人渲染「审核中」徽章；2026-10-27 起待审内容对所有人可见） */
+  isOwn?: boolean;
   canDelete?: boolean;
   deleting?: boolean;
   onDelete?: (c: CommentItem) => void;
@@ -64,7 +68,7 @@ export function CommentCell({
         )}
         {/* 2026-10-13 张老师要求：时间前加「评论于」；一个月以内显示相对时间，超过一个月显示具体日期 */}
         <span className="create_time">评论于 {timeOpposite(comment.createTime, TIME_MONTH)}</span>{" "}
-        {comment.status === 5 && <PendingBadge />}
+        {isOwn && comment.status === 5 && <PendingBadge />}
         {/* 2026-10-26：删除按钮浮右（跟评论区 meta 同行，录像作者/发布者本人可见） */}
         {canDelete && (
           <button
@@ -95,6 +99,7 @@ export function CommentList({
   canDelete,
   deletingId,
   onDelete,
+  viewerUid = 0,
 }: {
   items: CommentItem[];
   hasMore: boolean;
@@ -105,6 +110,8 @@ export function CommentList({
   canDelete?: (c: CommentItem) => boolean;
   deletingId?: number;
   onDelete?: (c: CommentItem) => void;
+  /** 当前登录用户（「审核中」徽章仅作者本人可见，2026-10-27） */
+  viewerUid?: number;
 }) {
   return (
     <div className="comments">
@@ -112,6 +119,7 @@ export function CommentList({
         <CommentCell
           key={c.id}
           comment={c}
+          isOwn={viewerUid > 0 && c.authorId === viewerUid}
           canDelete={canDelete?.(c)}
           deleting={deletingId === c.id}
           onDelete={onDelete}
@@ -322,6 +330,7 @@ export function CommentSection({
         canDelete={canDelete}
         deletingId={deletingId}
         onDelete={onDelete}
+        viewerUid={authorId}
       />
       {/* 「发表评论」盒子常驻（2026-10-13 张老师要求，参考论坛详情页底部的「回复主题」盒子）：
           登录用户见输入框，未登录见「登录 后才能发表评论。」（点击弹全局登录浮窗） */}

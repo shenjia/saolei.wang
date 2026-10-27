@@ -267,9 +267,9 @@ export function BbsReplySection({
                 </>
               )}
               {timeOpposite(r.createTime, TIME_NEVER)}
-              {/* 2026-10-22 张老师要求：本人待审楼层可见，带「审核中」徽章（他人视角查不到该行） */}
-              {r.status === 5 && (
-                <span className="review_pending" data-tip="回复已发出，通过审核后其他人才能看到">
+              {/* 2026-10-27 张老师定：待审楼层对所有人可见；「审核中」徽章仅作者本人/管理员视角 */}
+              {r.status === 5 && (isAdmin || viewerUid === r.author?.id) && (
+                <span className="review_pending" data-tip="回复已公开展示，AI 存疑转人工复核中">
                   审核中
                 </span>
               )}

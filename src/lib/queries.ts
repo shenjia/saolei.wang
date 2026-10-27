@@ -1526,11 +1526,11 @@ export interface CommentItem {
 /** 评论可见性（2026-10-22 张老师要求：评论发出后不管过没过审，发表者本人必须一直能看到）
  *  他人/游客只看 NORMAL(0)；本人额外看到自己 PENDING(5) 的行 */
 function commentVisibleWhere(videoId: number, viewerUid: number | null) {
+  // 2026-10-27 张老师定：过敏感词即公开，AI/人审一律后置——待审（5）与正常（0）同列可见；
+  // viewerUid 保留参数位（签名兼容调用方），已不参与过滤
   return {
     video: BigInt(videoId),
-    ...(viewerUid
-      ? { OR: [{ status: COMMENT_STATUS.NORMAL }, { status: 5, user: BigInt(viewerUid) }] }
-      : { status: COMMENT_STATUS.NORMAL }),
+    status: { in: [COMMENT_STATUS.NORMAL, 5] },
   };
 }
 
