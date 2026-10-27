@@ -69,3 +69,13 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
    天然继承成绩数字字号/粗体/位置，无需再补字号规则；此处压颜色为灰。
    带 #page 提特异性，压过 #page .score_* em 的数字默认色与 #user_list 变体。 */
 #page .score_time em.null,#page .score_3bvs em.null{color:#636359;cursor:help}
+
+/* 2026-10-28 玩家反馈：iPhone Safari 看排行页文字整体膨胀（首页正常）。
+   机理＝Mobile Safari 对比视口宽的文本块自动放大字号（double-tap 可读性优化），
+   排行页 10 列宽表自然宽 592~594 远超手机视口即触发。html 上原有的
+   -webkit-text-size-adjust:100% 在 #page zoom 缩放子树 + 宽表组合下保护不到，
+   在 #page / table 上显式声明；iOS Safari 只认 -webkit- 前缀（globals 产物被
+   lightningcss 剥前缀，故补在本文体——静态原样下发不经 minifier）。
+   值用 100% 不用 none：none 禁用户手动放大、有桌面副作用。 */
+html{text-size-adjust:100%}
+body #page,body #page table{-webkit-text-size-adjust:100%;text-size-adjust:100%}
