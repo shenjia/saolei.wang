@@ -132,6 +132,7 @@ export default async function AdminDashboard() {
         />
         <Kpi
           label="今日练习"
+          href="/admin/practice"
           value={
             <>
               {traffic.practice.today.toLocaleString("zh-CN")}

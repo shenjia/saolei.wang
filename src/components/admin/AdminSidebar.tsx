@@ -20,6 +20,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "仪表盘", icon: "📊" },
       { href: "/admin/stats", label: "数据分析", icon: "📈" },
+      { href: "/admin/practice", label: "练习数据", icon: "🎮" },
     ],
   },
   {

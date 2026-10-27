@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usersByIds } from "@/lib/queries";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { getAuditorWorkload, getGrowth, getSnapshotHealth, getTrend, TREND_METRICS } from "@/lib/admin/stats";
+import { getPracticeLevelCounts, LEVEL_COLS_SINCE } from "@/lib/admin/practice";
 import { getCachedCurrentRecords, getRecordCurves, getStatsDistributions } from "@/lib/admin/cache";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi } from "@/components/admin/Widgets";
@@ -26,6 +27,7 @@ export default async function AdminStatsPage() {
     getStatsDistributions(),
     getCachedCurrentRecords(),
   ]);
+  const practiceLevels = await getPracticeLevelCounts();
   const { expTime, expB3bvs, intTime, begTime } = curves;
   const { hourly, weekday, areas, sex, levels, nf, boards, softwares } = distributions;
 
@@ -194,11 +196,17 @@ export default async function AdminStatsPage() {
         <AdminCard title="标雷 / 无标（NF）比例">
           <Donut items={nf} centerLabel="录像总数" />
         </AdminCard>
-        <AdminCard title="地图难度分布（3BV 分档）">
-          <BarList items={boards} color="linear-gradient(90deg,#7a5c1f,#e6db74)" />
+        <AdminCard
+          title="练习级别分布"
+          more={`全量聚合，${LEVEL_COLS_SINCE} 级别列起记（此前只进总数）；「自定义」含历史无级别盘`}
+        >
+          <Donut items={practiceLevels.items} centerLabel={`练习盘数 ${practiceLevels.total.toLocaleString("zh-CN")}`} />
         </AdminCard>
       </div>
       <div className="admin_grid c2">
+        <AdminCard title="地图难度分布（3BV 分档）">
+          <BarList items={boards} color="linear-gradient(90deg,#7a5c1f,#e6db74)" />
+        </AdminCard>
         <AdminCard title="地区分布 Top 12">
           <BarList items={areas} />
         </AdminCard>

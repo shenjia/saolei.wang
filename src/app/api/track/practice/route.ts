@@ -54,5 +54,17 @@ export async function POST(req: NextRequest) {
       plays_exp = plays_exp + ${expInc},
       update_time = ${now}
   `;
+  // 小时分布桶（2026-10-27 /admin/practice 24h 图）：与主计数独立 UPSERT，
+  // 失败静默 catch——小时图缺数据不影响 plays 主链路
+  const hour = Math.floor((now + 28800) % 86400 / 3600);
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO practice_hourly (day, hour, plays, create_time, update_time)
+      VALUES (${day}, ${hour}, 1, ${now}, ${now})
+      ON DUPLICATE KEY UPDATE
+        plays = plays + 1,
+        update_time = ${now}
+    `;
+  } catch { /* ignore：小时分布缺一桶可接受 */ }
   return NextResponse.json({ ok: true });
 }
