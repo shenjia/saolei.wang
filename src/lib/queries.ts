@@ -248,6 +248,38 @@ function newsLevelFilter(level: string) {
   };
 }
 
+/** 级别筛选只在「成绩类动态」里匹配（2026-10-27）。
+ *  背景：录像评论动态（type=52）的 details.lv 记的是**被评论录像**的级别，级别筛选只按
+ *  details_data 的 lv 串匹配、不限类型，于是用户主页「初级」tab 里冒出
+ *  「评论了录像 岳慎哲 的 初级 1.74NF」（张老师 2026-10-27 报告）。
+ *  级别 tab 的语义＝该用户在该级别的成绩动态（旧站 News_My_Beg/Int/Exp 也只列破纪录），
+ *  评论一律不在其内（要看去「全部」或「论坛」）。地区/全国纪录同为成绩类，一并保留口径。 */
+const NEWS_LEVEL_TYPES: number[] = [
+  NEWS_TYPE.PERSON_RECORD,
+  NEWS_TYPE.AREA_RECORD,
+  NEWS_TYPE.NATION_RECORD,
+];
+
+/**
+ * 动态流类型口径（getNews / getNewsPage / getNewsCount 三处必须共用，保证行集与计数一致）：
+ * ① 显式 type / types（后台、论坛 tab）各自成口径，不叠加；
+ * ② home 口径见 homeNewsTypeFilter（已排除评论等非首页类型）；
+ * ③ 级别筛选 + 无显式类型 → 只取成绩类动态（NEWS_LEVEL_TYPES），档掉录像评论的 lv 误命中；
+ * ④ 其余 → 排除 NEWS_FEED_EXCLUDED（上传录像 / 晋升）。
+ */
+function feedTypeFilter(opts: {
+  type?: number;
+  types?: number[];
+  home?: boolean;
+  level?: string;
+}): Prisma.NewsWhereInput {
+  if (opts.type !== undefined) return { type: opts.type };
+  if (opts.types) return { type: { in: opts.types } };
+  if (opts.home) return homeNewsTypeFilter();
+  if (opts.level) return { type: { in: [...NEWS_LEVEL_TYPES] } };
+  return { type: { notIn: NEWS_FEED_EXCLUDED } };
+}
+
 /** 首页新闻流类型过滤（2026-10-25 张老师定，2026-10-26 扩口径）：NEWS_HOME_TYPES 白名单内，
  *  再排除破纪录动态（type=20）中的两类：
  *  ① 首创行 or=0 渲染「创造了」——成绩不值得放首页（10-25 原口径）；
@@ -302,21 +334,20 @@ export async function getNews(opts: {
     cursorTime = anchor?.createTime;
   }
   const where = {
-    ...(opts.type !== undefined ? { type: opts.type } : {}),
-    ...(opts.types ? { type: { in: opts.types } } : {}),
-    ...(opts.home ? homeNewsTypeFilter() : {}),
+    // 类型口径统一由 feedTypeFilter 决定（含级别筛选只认成绩类，2026-10-27）
+    ...feedTypeFilter(opts),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    ...(opts.level ? newsLevelFilter(opts.level) : {}),
-    // keyset 游标：查 (create_time,id) 序比 cursor 行更早的动态（同刻按 id 分先后）
-    ...(cursorTime !== undefined
-      ? { OR: [{ createTime: { lt: cursorTime } }, { createTime: cursorTime, id: { lt: BigInt(opts.cursor!) } }] }
-      : {}),
-    // 2026-10-17 张老师定：上传录像动态（type=30）撤出动态流——录像一传就刷屏；
-    // 首页/用户主页另有「录像」版块，信息不丢。显式 type/types 筛选（后台/论坛 tab）不受影响；
-    // home 模式也不量加：NEWS_HOME_TYPES 已不含 VIDEO，且对象展开会覆盖 home 的 in 过滤
-    ...(opts.type === undefined && !opts.types && !opts.home
-      ? { type: { notIn: NEWS_FEED_EXCLUDED } }
-      : {}),
+    // keyset 游标与级别筛选都是 OR 组，必须并列进 AND——曾因两者都写成顶层 OR
+    // 而在「cursor + level」组合下后者覆盖前者（级别筛选静默失效）
+    ...(() => {
+      const and: Prisma.NewsWhereInput[] = [];
+      if (opts.level) and.push(newsLevelFilter(opts.level));
+      // 查 (create_time,id) 序比 cursor 行更早的动态（同刻按 id 分先后）
+      if (cursorTime !== undefined) {
+        and.push({ OR: [{ createTime: { lt: cursorTime } }, { createTime: cursorTime, id: { lt: BigInt(opts.cursor!) } }] });
+      }
+      return and.length ? { AND: and } : {};
+    })(),
   };
   const rows = await prisma.news.findMany({
     where: opts.ids ? { id: { in: opts.ids } } : where,
@@ -427,12 +458,10 @@ export async function getNewsPage(opts: {
   limit: number;
 }): Promise<NewsItem[]> {
   const where = {
-    ...(opts.types ? { type: { in: opts.types } } : {}),
-    ...(opts.home ? homeNewsTypeFilter() : {}),
+    // 与 getNews 同一口径（含级别筛选只认成绩类，2026-10-27）
+    ...feedTypeFilter(opts),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    ...(opts.level ? newsLevelFilter(opts.level) : {}),
-    // 同 getNews：上传录像动态撤出动态流（2026-10-17）；home 模式同样不叠加（避免覆盖 in 过滤）
-    ...(opts.types || opts.home ? {} : { type: { notIn: NEWS_FEED_EXCLUDED } }),
+    ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
   };
   const idRows = await prisma.news.findMany({
     where,
@@ -490,16 +519,11 @@ async function getNewsCountImpl(opts: {
 }): Promise<number> {
   return prisma.news.count({
     where: {
-      ...(opts.type !== undefined ? { type: opts.type } : {}),
-      ...(opts.types ? { type: { in: opts.types } } : {}),
-      ...(opts.home ? homeNewsTypeFilter() : {}),
+      // 与 getNews / getNewsPage 严格同一类型口径（级别筛选只认成绩类，2026-10-27），
+      // 否则剩余条数 / 翻页条总页数会与实际行集对不上
+      ...feedTypeFilter(opts),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-      ...(opts.level ? newsLevelFilter(opts.level) : {}),
-      // 同 getNews：上传录像动态撤出动态流（2026-10-17）。home 模式下 NEWS_HOME_TYPES
-      // 已不含 VIDEO，此处 notIn 不与之冲突；显式 type 筛选（后台按类型过滤）不受影响
-      ...(opts.type === undefined && !opts.types && !opts.home
-        ? { type: { notIn: NEWS_FEED_EXCLUDED } }
-        : {}),
+      ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
     },
   });
 }
@@ -509,11 +533,12 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  // v6：2026-10-27 级别筛选收窄为「成绩类动态」（录像评论的 lv 不再命中级别 tab）。
   // v5：2026-10-26 home 口径扩「预备役破纪录一律不进首页」（exp_time/ranked=0 并入排除）。
   // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
-  ["news-count-v5"],
+  ["news-count-v6"],
   { revalidate: 300 }
 );
 
