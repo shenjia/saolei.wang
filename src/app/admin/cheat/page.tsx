@@ -3,6 +3,7 @@
 // 多为扩展误报（Grammarly/翻译类）——dismiss 即解除排名禁用。
 // 核实（cheat.confirm）→ 封 7 天：低信任 7 天 + 排名禁用 7 天（同窗重计）；误报（cheat.dismiss）
 // → 清除排名禁用。两操作都走站内浮窗确认。
+// 改判（2026-10-28 张老师需求）：已复核行结论列可反向改判（核实↔误报），复用同一对 op。
 
 import Link from "next/link";
 import { prisma } from "@/lib/db";
@@ -186,7 +187,30 @@ export default async function AdminCheatPage() {
             </td>
           ) : (
             <>
-              <td>{r.resolved === 1 ? "✅ 已核实" : "↩️ 误报"}</td>
+              {/* 结论列可改判（2026-10-28 张老师需求）：已核实的可改判误报、判过误报的可改判
+                  核实——复用待复核行的同一对 op，服务端本就是完整反向处置（解除/重封 7 天
+                  + 重发系统消息 + 重分拣待审录像），resolver/复核时间随改判刷新 */}
+              <td>
+                <div className="cheat_conclusion">
+                  {r.resolved === 1 ? "✅ 已核实" : "↩️ 误报"}
+                  <span
+                    className="admin_tip"
+                    data-tip={`发送：${r.resolved === 1 ? CHEAT_DISMISS_NOTICE : CHEAT_CONFIRM_NOTICE}`}
+                  >
+                    <AdminAction
+                      op={r.resolved === 1 ? "cheat.dismiss" : "cheat.confirm"}
+                      params={{ reportId: Number(r.id) }}
+                      label={r.resolved === 1 ? "改判误报" : "改判核实"}
+                      variant={r.resolved === 1 ? "warn" : "danger"}
+                      confirm={
+                        r.resolved === 1
+                          ? `将报告 #${r.id} 改判为误报？将立即解除该玩家的排名禁用与低信任标记，并给玩家重发恢复消息。`
+                          : `将报告 #${r.id} 改判为核实作弊？将转低信任用户组（7 天限流+全量人工审）并封禁排名模式 7 天（从现在重计），同时给玩家重发实锤消息。`
+                      }
+                    />
+                  </span>
+                </div>
+              </td>
               <td className="cheat_resolver">
                 {resolverMap.get(r.resolver) ? `${resolverMap.get(r.resolver)}（#${r.resolver}）` : r.resolver > BigInt(0) ? `#${r.resolver}` : "—"}
               </td>

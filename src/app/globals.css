@@ -11825,3 +11825,15 @@ body #page .word_terms .desc {
 .cheat_hist b.hist_fp {
   color: #d0d0c8;
 }
+/* 反作弊复核页：已复核行结论列改判入口（2026-10-28 张老师需求）——
+   结论文字与改判按钮上下排（列窄，横排会把复核表撑爆），按钮即反向处置 */
+.cheat_conclusion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  white-space: nowrap;
+}
+.cheat_conclusion .admin_tip {
+  display: inline-block;
+  width: fit-content;
+}
