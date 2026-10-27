@@ -5,14 +5,19 @@
 // 绿 #a6e22e / 橙 #f79646 / 金 #fdc61d（同 admin_tag.lv_* 与前台 hover 配色）。
 
 import { AdminCard } from "@/components/admin/Widgets";
-import { ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
-import { getPracticeDays, getPracticeHourly, getPracticeTrend, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
+import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
+import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "练习数据 | 管理后台" };
 
 export default async function AdminPracticePage() {
-  const [trend, hourly, days] = await Promise.all([getPracticeTrend(30), getPracticeHourly(7), getPracticeDays(7)]);
+  const [trend, hourly, days, modes] = await Promise.all([
+    getPracticeTrend(30),
+    getPracticeHourly(7),
+    getPracticeDays(7),
+    getPracticeModes(7),
+  ]);
   const C = PRACTICE_LEVEL_COLORS;
 
   const series: Series[] = [
@@ -89,6 +94,23 @@ export default async function AdminPracticePage() {
           </div>
         </AdminCard>
       </div>
+
+      <AdminCard
+        title="模式使用比例（近 7 天）"
+        more={`自 ${LEVEL_CLEAN_SINCE} 起统计；模式可叠加，各项占比之和可超 100%`}
+      >
+        {modes.total > 0 ? (
+          <BarList
+            items={modes.items.map((m) => ({
+              label: `${m.label}（${modes.total > 0 ? Math.round((m.value / modes.total) * 100) : 0}%）`,
+              value: m.value,
+            }))}
+            color="linear-gradient(90deg,#75715e,#a6e22e)"
+          />
+        ) : (
+          <div className="admin_empty">暂无数据（{LEVEL_CLEAN_SINCE} 起开始记录）</div>
+        )}
+      </AdminCard>
     </>
   );
 }

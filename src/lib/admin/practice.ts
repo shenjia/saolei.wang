@@ -77,8 +77,37 @@ export async function getPracticeTrend(days = 30): Promise<PracticeTrend> {
   return { dates, total, beg, int, exp, cus };
 }
 
-/** 24 小时分布（近 N 天 practice_hourly 聚合；自起记日起有数据） */
-export async function getPracticeHourly(days = 7): Promise<{ label: string; value: number }[]> {
+/** 模式使用聚合（2026-10-27 张老师定：柱状图「排名/NF/无猜/速旗/连击」使用比例）。
+ *  模式五列与级别列同日上线，同用干净起点；分母=同期总盘数（模式可叠加，五项之和可 >100%） */
+export async function getPracticeModes(days = 7): Promise<{
+  items: { label: string; value: number }[];
+  total: number;
+}> {
+  const now = Math.floor(Date.now() / 1000);
+  const todayIdx = Math.floor((now + 28800) / 86400);
+  const fromIdx = Math.max(todayIdx - (days - 1), LEVEL_CLEAN_SINCE_DAY);
+  const rows = await prisma.$queryRawUnsafe<{
+    ranked: bigint; nf: bigint; ng: bigint; sq: bigint; combo: bigint; plays: bigint;
+  }[]>(
+    `SELECT SUM(mode_ranked) ranked, SUM(mode_nf) nf, SUM(mode_ng) ng, SUM(mode_sq) sq,
+            SUM(mode_combo) combo, SUM(plays) plays
+     FROM practice_daily WHERE day >= ?`,
+    fromIdx
+  );
+  const r = rows[0];
+  return {
+    items: [
+      { label: "排名", value: N(r?.ranked) },
+      { label: "NF", value: N(r?.nf) },
+      { label: "无猜", value: N(r?.ng) },
+      { label: "速旗", value: N(r?.sq) },
+      { label: "连击", value: N(r?.combo) },
+    ],
+    total: N(r?.plays),
+  };
+}
+
+/** 24 小时分布（近 N 天 practice_hourly 聚合；自起记日起有数据） */export async function getPracticeHourly(days = 7): Promise<{ label: string; value: number }[]> {
   const now = Math.floor(Date.now() / 1000);
   const fromIdx = Math.floor((now + 28800) / 86400) - (days - 1);
   const rows = await prisma.$queryRawUnsafe<{ hour: number; plays: bigint }[]>(

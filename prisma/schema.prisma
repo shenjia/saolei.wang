@@ -931,6 +931,12 @@ model PracticeDaily {
   playsBeg   Int @default(0) @map("plays_beg") // 初级尝试盘数
   playsInt   Int @default(0) @map("plays_int") // 中级尝试盘数
   playsExp   Int @default(0) @map("plays_exp") // 高级尝试盘数
+  // 模式使用盘数（2026-10-27 张老师定：后台模式使用比例柱状图；可叠加，五列之和可 > plays）
+  modeRanked Int @default(0) @map("mode_ranked") // 排名模式
+  modeNf     Int @default(0) @map("mode_nf") // NF（无标）
+  modeNg     Int @default(0) @map("mode_ng") // 无猜（默认开）
+  modeSq     Int @default(0) @map("mode_sq") // 速旗
+  modeCombo  Int @default(0) @map("mode_combo") // 连击
   createTime BigInt @default(0) @map("create_time") @db.BigInt // 当日首盘 Unix 秒
   updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近一盘 Unix 秒
 

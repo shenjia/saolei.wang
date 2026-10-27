@@ -24,6 +24,12 @@ export async function POST(req: NextRequest) {
   const bbbv = Number(body.bbbv);
   const solvedBv = Number(body.solvedBv);
   const clicks = Number(body.clicks);
+  // 模式开关（2026-10-27）：布尔粗校验，缺省 false（老客户端不带这些字段）
+  const ranked = body.ranked === true;
+  const nfOn = body.nf === true;
+  const ngOn = body.ng === true;
+  const sqOn = body.sq === true;
+  const comboOn = body.combo === true;
   if (
     !LEVELS.has(level) ||
     !Number.isFinite(csec) || csec <= 0 || csec > 3_600_000 || // 10 小时封顶
@@ -44,14 +50,21 @@ export async function POST(req: NextRequest) {
   const expInc = level === "exp" ? 1 : 0;
   // 原子 UPSERT：当日当用户无行则新建，有行则计数自增（并发局也安全）
   await prisma.$executeRaw`
-    INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp, create_time, update_time)
-    VALUES (${day}, ${uid}, 1, ${wonInt}, ${begInc}, ${intInc}, ${expInc}, ${now}, ${now})
+    INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp,
+      mode_ranked, mode_nf, mode_ng, mode_sq, mode_combo, create_time, update_time)
+    VALUES (${day}, ${uid}, 1, ${wonInt}, ${begInc}, ${intInc}, ${expInc},
+      ${ranked ? 1 : 0}, ${nfOn ? 1 : 0}, ${ngOn ? 1 : 0}, ${sqOn ? 1 : 0}, ${comboOn ? 1 : 0}, ${now}, ${now})
     ON DUPLICATE KEY UPDATE
       plays = plays + 1,
       wins = wins + ${wonInt},
       plays_beg = plays_beg + ${begInc},
       plays_int = plays_int + ${intInc},
       plays_exp = plays_exp + ${expInc},
+      mode_ranked = mode_ranked + ${ranked ? 1 : 0},
+      mode_nf = mode_nf + ${nfOn ? 1 : 0},
+      mode_ng = mode_ng + ${ngOn ? 1 : 0},
+      mode_sq = mode_sq + ${sqOn ? 1 : 0},
+      mode_combo = mode_combo + ${comboOn ? 1 : 0},
       update_time = ${now}
   `;
   // 小时分布桶（2026-10-27 /admin/practice 24h 图）：与主计数独立 UPSERT，
