@@ -323,6 +323,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* ---------- 最新注册 / 最新上传 ---------- */}
+      {/* 2026-10-28 张老师要求：最新上传录像玩家列名字后加军衔（同左表称号口径） */}
       <div className="admin_grid c2">
         <AdminCard title="最新注册玩家" tight more={<Link href="/admin/users?order=reg">全部 →</Link>}>
           <div className="admin_scroll">
@@ -390,7 +391,8 @@ export default async function AdminDashboard() {
                     <td>
                       <Link className="link" href={`/admin/users/${v.user}`}>
                         {v.authorName}
-                      </Link>
+                      </Link>{" "}
+                      <TitleBadge title={v.authorTitle} />
                     </td>
                     <td className="c">
                       <LevelTag level={v.level} />

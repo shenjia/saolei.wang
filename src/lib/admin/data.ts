@@ -8,7 +8,7 @@
 import { prisma } from "@/lib/db";
 import { title as assessTitle } from "@/lib/assess";
 import { getThunderKingId } from "@/lib/title-system";
-import { usersByIds, type UserBrief } from "@/lib/queries";
+import { usersByIds, usersWithTitles, type UserBrief } from "@/lib/queries";
 import { BBS_BOARD_NAMES, BBS_BOARDS, ubb } from "@/lib/bbs";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
@@ -1372,10 +1372,19 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
   return rows;
 }
 
-export async function getLatestVideosBrief(limit = 8): Promise<(AdminVideoRow & { authorName: string })[]> {
+export async function getLatestVideosBrief(
+  limit = 8
+): Promise<(AdminVideoRow & { authorName: string; authorTitle: string })[]> {
   const ids = await prisma.video.findMany({ orderBy: { id: "desc" }, take: limit, select: { id: true } });
   const rows = await fillVideos(ids.map((r) => N(r.id)));
-  return rows.map((r) => ({ ...r, authorName: r.author?.chineseName ?? `#${r.user}` }));
+  // 玩家列军衔（2026-10-28）：同页「最新注册玩家」称号列同口径（usersWithTitles
+  // 批量补 exp_time + 总司令=雷界第一人特判），仪表盘只 8 行开销可忽略
+  const titles = await usersWithTitles(rows.map((r) => r.user));
+  return rows.map((r) => ({
+    ...r,
+    authorName: r.author?.chineseName ?? `#${r.user}`,
+    authorTitle: titles.get(r.user)?.title ?? "",
+  }));
 }
 
 // ---------- 站内信广播历史 ----------
