@@ -179,12 +179,15 @@ done
 ok "权威对局服务健康 ✓"
 
 # ---------- 重启备槽实例 ----------
-# 单活模式（2026-10-22）下备槽处于 stopped 态：pm2 start 对 stopped/online 都安全
-# （online 时为 no-op），随后的 restart 确保加载本次新产物。
+# 单活模式（2026-10-22）下备槽处于 stopped 态。⚠️ 2026-10-27 生产事故教训：
+# pm2 restart **不重读 ecosystem.config.js 的新 env**（RANKED_MODE_OPEN 加进
+# ecosystem 后，老进程 restart 仍是旧 env——排名入口在生产消失 22 分钟）。
+# 备槽此刻不在服务（nginx 指向主力槽），delete + start 重建无流量损失，
+# 且保证每次发布后两槽都是最新 ecosystem env。
 if pm2 describe "$S_APP" >/dev/null 2>&1; then
-  info "启动/重启 $S_APP ..."
-  pm2 start "$S_APP"
-  pm2 restart "$S_APP"
+  info "重建 $S_APP（delete+start，确保加载最新 ecosystem env）..."
+  pm2 delete "$S_APP" >/dev/null 2>&1
+  pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$S_APP"
 else
   info "首次启动 $S_APP ..."
   pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$S_APP"
