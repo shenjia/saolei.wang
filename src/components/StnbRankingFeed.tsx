@@ -20,7 +20,7 @@ import { RankingName, TitleBadge } from "./Cells";
 import { SystemText } from "./SystemText";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-import { toast } from "./Toast";
+import { toast, toastLoadingDone } from "./Toast";
 import { BV_COL_WIDTHS } from "./BvRankingFeed";
 
 export type StnbTitledRow = StnbRankingRow & { title: string; classic?: { name: string; color: string } | null };
@@ -238,7 +238,11 @@ export function StnbRankingFeed({
   async function locateRow(uid: number) {
     if (locating) return;
     setHlUid(uid);
+    // 搜索等待气泡（2026-10-27 张老师要求，与 BV 榜同款）：已加载行直接滚动 / 未入榜
+    // 两个不跳转分支在此收气泡；whereami 整页导航由 URL 变化自动渐隐
+    let navigated = false;
     if (scrollToRow(uid)) {
+      toastLoadingDone();
       return;
     }
     setLocating(true);
@@ -253,13 +257,17 @@ export function StnbRankingFeed({
         // 全局居中气泡（与成绩榜「暂无成绩」同款交互），不跳转
         toast("该玩家暂无有效 STNB 成绩，未加入 STNB 排行");
         setHlUid(undefined);
+        toastLoadingDone();
         return;
       }
+      navigated = true;
       jumpToWhereami(uid);
     } catch {
+      navigated = true;
       jumpToWhereami(uid); // 探测失败走导航兜底
     } finally {
       setLocating(false);
+      if (!navigated) toastLoadingDone();
     }
   }
 

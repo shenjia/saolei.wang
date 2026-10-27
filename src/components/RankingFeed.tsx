@@ -25,7 +25,7 @@ import type { RankingBy } from "@/lib/config";
 import { RankingHead, RankingRowLine, RankingEmpty, type TitledRow } from "./RankingRows";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-import { toast } from "./Toast";
+import { toast, toastLoadingDone } from "./Toast";
 
 export interface RankingFeedProps {
   initial: (RankingRow & { title: string })[];
@@ -218,13 +218,21 @@ export function RankingFeed(props: RankingFeedProps) {
   async function locateRow(uid: number) {
     if (locating) return;
     setHlUid(uid);
-    if (scrollToRow(uid)) return;
+    // 搜索等待气泡（2026-10-27 张老师要求）：RankingNav 定位前已 toastLoading()；
+    // 本流程「不跳转」的分支（已加载行滚动 / 拉到缺页后滚动）在 finally 里收气泡，
+    // 走 jumpToWhereami 的整页导航由 URL 变化自动渐隐（navigated 标记区分）
+    let navigated = false;
+    if (scrollToRow(uid)) {
+      toastLoadingDone();
+      return;
+    }
     const targetPage = Math.ceil(((rowRankById(rows, uid) as number | undefined) ?? 0) / pageSize);
     void targetPage; // 行 rank 未知时按页数并发探测
     setLocating(true);
     try {
       const nextPageNum = nextPage.current;
       if (nextPageNum > maxPage) {
+        navigated = true;
         jumpToWhereami(uid);
         return;
       }
@@ -248,6 +256,7 @@ export function RankingFeed(props: RankingFeedProps) {
             return;
       }
       if (page - Math.floor(lastLoadedRank / pageSize) > NEARBY_PAGES) {
+        navigated = true;
         jumpToWhereami(uid);
         return;
       }
@@ -281,9 +290,11 @@ export function RankingFeed(props: RankingFeedProps) {
       if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
       else void 0;
     } catch {
+      navigated = true;
       jumpToWhereami(uid);
     } finally {
       setLocating(false);
+      if (!navigated) toastLoadingDone();
     }
   }
 

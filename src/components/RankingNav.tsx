@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { toast } from "./Toast";
+import { toast, toastLoading } from "./Toast";
 import { NfToggle } from "./NfToggle";
 
 export type RankingView = "all" | "bv" | "stnb" | "grow" | "area" | "world";
@@ -193,6 +193,9 @@ export function RankingNav({
 
   // 事件委托：RankingFeed 在同页监听并执行定位（页内滚动/拉取/跳 whereami）
   function locate(id: number) {
+    // 搜索等待气泡（2026-10-27 张老师要求）：定位链路有延迟（whereami 探测/拉缺页/跳转），
+    // 立即弹「搜索中」；不跳转的分支由 Feed 调 toastLoadingDone 关闭，跳转的由 URL 变化自动关闭
+    toastLoading();
     if (areaMode) {
       void locateArea(id);
       return;
@@ -282,6 +285,9 @@ export function RankingNav({
   async function locateName(name: string) {
     const view = viewParam();
     // 先轻量探测（json）：无成绩/不存在 → 全局居中气泡提示，不跳转
+    // 搜索等待气泡（2026-10-27）：探测 + 整页导航都有延迟，先弹「搜索中」；
+    // 无成绩分支的 toast 会顶替它，跳转分支由 URL 变化自动渐隐
+    toastLoading();
     const qs = new URLSearchParams({ name, format: "json" });
     if (by) qs.set("by", by);
     if (view) qs.set("view", view);

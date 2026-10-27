@@ -26,7 +26,7 @@ import { RankingName, TitleBadge } from "./Cells";
 import { SystemText } from "./SystemText";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-import { toast } from "./Toast";
+import { toast, toastLoadingDone } from "./Toast";
 
 export type BvTitledRow = BvRankingRow & { title: string; classic?: { name: string; color: string } | null };
 
@@ -216,7 +216,12 @@ export function BvRankingFeed({
   async function locateRow(uid: number) {
     if (locating) return;
     setHlUid(uid);
+    // 搜索等待气泡（2026-10-27 张老师要求）：RankingNav 定位前已 toastLoading()；
+    // 已加载行直接滚动 / 未入榜这两种「不跳转」分支在此收气泡，走 whereami 整页导航的
+    // 分支由 URL 变化自动渐隐（navigated 标记区分）
+    let navigated = false;
     if (scrollToRow(uid)) {
+      toastLoadingDone();
       return;
     }
     setLocating(true);
@@ -231,13 +236,17 @@ export function BvRankingFeed({
         // 全局居中气泡（与成绩榜「暂无成绩」同款交互），不跳转
         toast("该玩家暂无已通过审核的录像，未加入 BV 排行");
         setHlUid(undefined);
+        toastLoadingDone();
         return;
       }
+      navigated = true;
       jumpToWhereami(uid);
     } catch {
+      navigated = true;
       jumpToWhereami(uid); // 探测失败走导航兜底
     } finally {
       setLocating(false);
+      if (!navigated) toastLoadingDone();
     }
   }
 

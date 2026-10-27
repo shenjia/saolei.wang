@@ -3989,9 +3989,37 @@ body #page.ranking_old .ranking_box {
     0 10px 40px rgba(0, 0, 0, 0.7),
     0 0 34px -6px rgba(166, 226, 46, 0.4);
 }
+/* 搜索中（2026-10-27 张老师要求，全站前台搜索框统一）：绿色气泡与成功同色系，
+   文字「搜索中」后跟 CSS 转圈；跳转完成（URL 变化）由 Toast.tsx 触发渐隐。
+   形制与成功气泡一致——不新增尺寸/字体，只加等待动效。 */
+.toast_bubble.toast_loading {
+  border-color: #a6e22e;
+  background: #1b2117;
+  color: #a6e22e;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 10px 40px rgba(0, 0, 0, 0.7),
+    0 0 34px -6px rgba(166, 226, 46, 0.4);
+}
+/* 转圈：2px 轨道 + 亮色缺口，纯 CSS 旋转（无 JS 定时器，跳转期间不掉帧） */
+.toast_bubble .toast_spin {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(166, 226, 46, 0.28);
+  border-top-color: #a6e22e;
+  border-radius: 50%;
+  animation: toast_spin 0.72s linear infinite;
+}
+@keyframes toast_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 /* 失败：粉红（legacy .error 同色） */
 .toast_bubble.toast_error {
   border-color: #f92672;
+
   background: #251a1f;
   color: #f92672;
   box-shadow:

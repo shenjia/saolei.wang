@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toastLoading } from "./Toast";
 
 interface SuggestUser {
   id: number;
@@ -62,6 +63,8 @@ export function BbsSearch({ initialQ = "" }: { initialQ?: string }) {
   function search(keyword: string) {
     const key = keyword.trim();
     if (!key) return;
+    // 搜索等待气泡（2026-10-27 张老师要求，全站前台搜索框统一）：跳转完成（URL 变化）后自动渐隐
+    toastLoading();
     router.push(`/bbs?q=${encodeURIComponent(key)}`);
   }
 

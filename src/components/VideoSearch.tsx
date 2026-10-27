@@ -29,7 +29,7 @@ import {
 } from "@/lib/config";
 import { scoreTime } from "@/lib/format";
 import { buildUrl } from "./Pager";
-import { toast } from "./Toast";
+import { toast, toastLoading } from "./Toast";
 
 interface SuggestUser {
   id: number;
@@ -215,6 +215,9 @@ export function VideoSearch({
    *  NF 开关态正交保留（2026-10-20）；user 模式跳回本主页 /user/{id}
    *  （作者锁定，level/order/dir 由主页壳的 URL 状态承接） */
   function nav(params: { author?: number; time?: string; bv?: string }) {
+    // 搜索等待气泡（2026-10-27 张老师要求，全站前台搜索框统一）：跳转延迟期间弹「搜索中」，
+    // URL 变化（跳转完成）后由 Toast 自动渐隐
+    toastLoading();
     if (isUser) {
       router.push(
         buildUrl(`/user/${userId}`, {
@@ -251,6 +254,7 @@ export function VideoSearch({
     pickedRef.current = `#${v.id}`;
     setItems(null);
     setQ(`#${v.id}`);
+    toastLoading(); // 同 nav()：跳转等待气泡
     router.push(`/video/${v.id}`);
   }
 
@@ -309,6 +313,7 @@ export function VideoSearch({
             pickedRef.current = `#${video.id}`;
             setItems(null);
             setQ(`#${video.id}`);
+            toastLoading(); // 回车直达录像：同样是跳转等待
             router.push(`/video/${video.id}`);
             return;
           }
