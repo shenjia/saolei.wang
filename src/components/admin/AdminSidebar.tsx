@@ -86,20 +86,20 @@ export interface GroupBadgeInput {
   maxJoin: number;
 }
 
-/** 计算某组的 badge 值：null=不亮；0=红点（有变化但人数差算不出）；>0=新增人数 */
+/** 计算某组的 badge 值：null=不亮；0=算不出差值（合并时按 1 计）；>0=新增人数 */
 function computeBadge(key: GroupKey, g: GroupBadgeInput, seen: Record<string, number>): number | null {
   if (seen[key] === undefined) return null; // 首次：不亮（由初始化写基线）
   if (g.maxJoin <= seen[key]) return null; // 没有新成员
   const baseCount = seen[key + "_c"];
-  if (baseCount === undefined || g.count <= baseCount) return 0; // 差值算不出/变少 → 红点
+  if (baseCount === undefined || g.count <= baseCount) return 0; // 差值算不出/变少
   return g.count - baseCount;
 }
 
-/** 两组 diff 合并：null（都不亮）｜>0（数字和）｜0（任一红点且无数字可显） */
+/** 两组 diff 合并（2026-10-27 张老师定：恒显数字，不再退化纯红点）：
+ *  null（都不亮）｜>0（数字和——差值算得出的组贡献差值，算不出的组按 1 计） */
 function mergeGroupDiff(a: number | null, b: number | null): number | null {
   if (a === null && b === null) return null;
-  const sum = Math.max(a ?? 0, 0) + Math.max(b ?? 0, 0);
-  return sum > 0 ? sum : 0;
+  return (a === null ? 0 : a || 1) + (b === null ? 0 : b || 1);
 }
 
 export function AdminSidebar({
@@ -181,8 +181,8 @@ export function AdminSidebar({
                   <i>{it.icon}</i>
                   {it.label}
                   {n > 0 && <span className="n">{n}</span>}
+                  {/* 2026-10-27 张老师定：组 badge 恒显数字（两组之和），不再退化纯红点 */}
                   {it.groupBadge && groupDiff !== null && groupDiff > 0 && <span className="n">{groupDiff}</span>}
-                  {it.groupBadge && groupDiff === 0 && <span className="n dot" />}
                 </Link>
               );
             })}

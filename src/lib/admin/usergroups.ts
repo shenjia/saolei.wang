@@ -238,7 +238,7 @@ export async function getLowTrustGroup(page: number, q?: string): Promise<GroupL
 
 export async function getGroupBadges(): Promise<GroupBadges> {
   const t = Math.floor(Date.now() / 1000);
-  const [trustedCount, lowCountRows, trustedMaxRows, lowMaxManualRows, lowMaxCheatRows] = await Promise.all([
+  const [trustedCount, lowCountRows, trustedMaxRows, lowMaxRows] = await Promise.all([
     prisma.user.count({ where: { trusted: true } }),
     // 三源去重计数（同 getLowTrustGroup 口径）
     prisma.$queryRawUnsafe<{ c: bigint }[]>(
@@ -252,17 +252,35 @@ export async function getGroupBadges(): Promise<GroupBadges> {
     prisma.$queryRawUnsafe<{ m: bigint | null }[]>(
       `SELECT MAX(create_time) m FROM admin_log WHERE action = 'user.setTrusted' AND detail LIKE '%已加入可信用户组%'`
     ),
-    // 低信任组「新动作」信号：手动加组 / 封禁（口径同 isLowTrustJoinLog；纯屏蔽史不可溯源不触发 badge）
+    // 低信任组「新动作」信号——⚠️ 只统计**组内成员**的加入时间（2026-10-27 修复：
+    // 此前 MAX(cheat_report) 取全库，已移出/已解除的探测记录会推进 maxJoin，
+    // 红点亮但组内无新行可看，还会把已读基线抬高成"幽灵时间"吞掉后续真新行的高亮）。
+    // 手动加组/封禁日志与探测器命中都限定 target 在组员集内取 max（口径同 getLowTrustGroup allMaxJoin）。
     prisma.$queryRawUnsafe<{ m: bigint | null }[]>(
-      `SELECT MAX(create_time) m FROM admin_log WHERE action IN ('user.setLowTrust','user.setStatus')
-       AND (action = 'user.setLowTrust' OR detail LIKE '封禁玩家%')`
+      `SELECT MAX(t) m FROM (
+         SELECT MAX(l.create_time) t FROM admin_log l
+         WHERE (l.action = 'user.setLowTrust' OR (l.action = 'user.setStatus' AND l.detail LIKE '封禁玩家%'))
+           AND l.target_id IN (
+             SELECT id FROM user WHERE low_trust_until > ? OR status = -1
+             UNION SELECT DISTINCT user FROM video WHERE status = 0
+           )
+         GROUP BY l.target_id
+         UNION ALL
+         SELECT MAX(c.create_time) t FROM cheat_report c
+         WHERE c.user IN (
+           SELECT id FROM user WHERE low_trust_until > ? OR status = -1
+           UNION SELECT DISTINCT user FROM video WHERE status = 0
+         )
+         GROUP BY c.user
+       ) x`,
+      t,
+      t
     ),
-    prisma.$queryRawUnsafe<{ m: bigint | null }[]>(`SELECT MAX(create_time) m FROM cheat_report`),
   ]);
   return {
     trustedCount,
     lowTrustCount: N(lowCountRows[0]?.c),
     trustedMaxJoin: N(trustedMaxRows[0]?.m),
-    lowTrustMaxJoin: Math.max(N(lowMaxManualRows[0]?.m), N(lowMaxCheatRows[0]?.m)),
+    lowTrustMaxJoin: N(lowMaxRows[0]?.m),
   };
 }
