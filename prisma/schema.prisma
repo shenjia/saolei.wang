@@ -904,14 +904,19 @@ model PracticeLog {
 // 练习日汇总（2026-10-22 张老师定：不逐盘落行，每局 UPSERT 当日当用户计数）。
 // day = +08:00 切天序号 FLOOR((t+28800)/86400)，与全站日聚合口径一致；
 // user_id=0 为游客聚合行（未登录局无法归属到人，MySQL 唯一索引不认 NULL，用 0 兜底聚合）；
-// plays=尝试盘数（含踩雷）、wins=完成盘数（won=1）。
+// plays=尝试盘数（含踩雷）、wins=完成盘数。
 // 原 practice_log 明细已于 2026-10-22 迁移汇总后清理（历史曾累计 20244 行 → 107 行）。
+// 2026-10-27 加级别三列：plays_beg/int/exp=对应级别尝试盘数（后台「今日练习」KPI
+// 显示初/中/高占比）；自定义盘（cus）只进 plays 总数不进三列，占比分母=当日 plays。
 model PracticeDaily {
   id         BigInt @id @default(autoincrement()) @db.BigInt
   day        Int // +08:00 切天序号
   userId     BigInt @default(0) @map("user_id") @db.BigInt // 0=游客聚合
   plays      Int // 尝试盘数
   wins       Int // 完成盘数
+  playsBeg   Int @default(0) @map("plays_beg") // 初级尝试盘数
+  playsInt   Int @default(0) @map("plays_int") // 中级尝试盘数
+  playsExp   Int @default(0) @map("plays_exp") // 高级尝试盘数
   createTime BigInt @default(0) @map("create_time") @db.BigInt // 当日首盘 Unix 秒
   updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近一盘 Unix 秒
 

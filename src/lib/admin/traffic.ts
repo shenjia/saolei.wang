@@ -74,13 +74,16 @@ export interface TrafficOverview {
   devices: { uaClass: string; pv: number }[];
   /** 活跃玩家：登录态访问去重用户（trend 为分日去重数，与 trend.dates 对齐） */
   active: { today: number; yesterday: number; d7: number; d30: number; trend: number[] };
-  /** 练习局数（practice_log 埋点，2026-10-16 起；胜/负都记，trend 为分日局数；
-   *  users 为去重玩家数——登录态去重 user_id，游客局并入「人次」口径（ip+ua 不可靠，不强行去重） */
+  /** 练习局数（practice_daily 日汇总，2026-10-16 起；胜/负都记，trend 为分日局数；
+   *  users 为去重玩家数——登录态去重 user_id，游客局并入「人次」口径（ip+ua 不可靠，不强行去重）；
+   *  todayLevels 为今日初/中/高局数（2026-10-27 加级别列起记，历史日期三列恒 0，
+   *  自定义盘只进 today 总数不进三列） */
   practice: {
     today: number; todayUsers: number;
     yesterday: number; yesterdayUsers: number;
     d30: number; d30Users: number;
     trend: number[]; trendUsers: number[];
+    todayLevels: { beg: number; int: number; exp: number };
   };
   /** 高流失页（会话末页占该页 PV 比；录像详情页看完即走正常，排除；三档） */
   exits: { today: ExitPage[]; d7: ExitPage[]; d30: ExitPage[] };
@@ -149,8 +152,8 @@ async function aggregate(): Promise<TrafficOverview> {
         createTime: true,
       },
     }),
-    prisma.$queryRaw<Array<{ day: bigint; user_id: bigint; plays: bigint; wins: bigint }>>`
-      SELECT day, user_id, plays, wins
+    prisma.$queryRaw<Array<{ day: bigint; user_id: bigint; plays: bigint; wins: bigint; beg: bigint; intg: bigint; exp: bigint }>>`
+      SELECT day, user_id, plays, wins, plays_beg AS beg, plays_int AS intg, plays_exp AS exp
       FROM practice_daily
       WHERE day >= ${Math.floor((d30 + 28800) / 86400)}
     `,
@@ -189,6 +192,8 @@ async function aggregate(): Promise<TrafficOverview> {
   const practiceUserMap = new Map<number, Set<string>>();
   let practiceToday = 0;
   let practiceYesterday = 0;
+  // 今日级别局数（2026-10-27 起记；含游客行——与 practiceToday 同分母口径）
+  const todayLevels = { beg: 0, int: 0, exp: 0 };
   const todayPracticeUsers = new Set<string>();
   const yesterdayPracticeUsers = new Set<string>();
   const d30PracticeUsers = new Set<string>();
@@ -209,7 +214,12 @@ async function aggregate(): Promise<TrafficOverview> {
       if (idx === todayIdx) todayPracticeUsers.add(key);
       else if (idx === yesterdayIdx) yesterdayPracticeUsers.add(key);
     }
-    if (idx === todayIdx) practiceToday += plays;
+    if (idx === todayIdx) {
+      practiceToday += plays;
+      todayLevels.beg += N(p.beg);
+      todayLevels.int += N(p.intg);
+      todayLevels.exp += N(p.exp);
+    }
     else if (idx === yesterdayIdx) practiceYesterday += plays;
   }
 
@@ -473,6 +483,7 @@ async function aggregate(): Promise<TrafficOverview> {
       d30Users: d30PracticeUsers.size,
       trend: practiceSeries,
       trendUsers: practiceUserSeries,
+      todayLevels,
     },
   };
 }
@@ -480,7 +491,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v8"],
+  ["admin-traffic", "v9"],
   { revalidate: 300 }
 );
 

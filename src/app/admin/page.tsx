@@ -140,7 +140,16 @@ export default async function AdminDashboard() {
             <>
               {traffic.practice.todayUsers} 人参与
               <br />
-              近 7 天 {traffic.practice.trend.slice(-7).reduce((a, b) => a + b, 0).toLocaleString("zh-CN")} 盘
+              {/* 2026-10-27 张老师定：「近 7 天 N 盘」没意义，改显今日初/中/高占比。
+                  分母=今日总盘数（含自定义）；占比取整，三项之和可能 <100%
+                  （差额=自定义盘 + 上线首日的历史无级别局，次日自然对齐）。 */}
+              {(() => {
+                const { beg, int, exp } = traffic.practice.todayLevels;
+                const total = traffic.practice.today;
+                if (total <= 0) return "级别占比 —";
+                const pct = (n: number) => Math.round((n / total) * 100);
+                return `初 ${pct(beg)}% / 中 ${pct(int)}% / 高 ${pct(exp)}%`;
+              })()}
             </>
           }
         />
