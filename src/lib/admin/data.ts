@@ -627,6 +627,8 @@ export interface VideoFilter {
   level?: string;
   status?: string;
   nf?: string;
+  /** 软件筛选（2026-10-28）：arbiter/clone/vienna/saoleiwang/yuan/none */
+  software?: string;
   q?: string;
   from?: string;
   to?: string;
@@ -664,6 +666,27 @@ function videoWhere(f: VideoFilter): {
   }
   if (f.nf === "0") {
     conds.push("vi.noflag = 0");
+    joinsNeeded = true;
+  }
+  // 软件筛选（vi 列）：知名软件精确匹配；元扫雷按前缀「元」（含元扫雷3.3.4 等版本号）；
+  // none = 空串/NULL（旧库导入缺失）
+  if (f.software === "arbiter") {
+    conds.push("vi.software = 'Arbiter'");
+    joinsNeeded = true;
+  } else if (f.software === "clone") {
+    conds.push("vi.software = 'Clone'");
+    joinsNeeded = true;
+  } else if (f.software === "vienna") {
+    conds.push("vi.software = 'Vienna'");
+    joinsNeeded = true;
+  } else if (f.software === "saoleiwang") {
+    conds.push("vi.software = 'Saolei.wang'");
+    joinsNeeded = true;
+  } else if (f.software === "yuan") {
+    conds.push("vi.software LIKE '元%'");
+    joinsNeeded = true;
+  } else if (f.software === "none") {
+    conds.push("(vi.software IS NULL OR vi.software = '')");
     joinsNeeded = true;
   }
   const q = (f.q ?? "").trim();

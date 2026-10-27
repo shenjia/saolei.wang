@@ -27,6 +27,7 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
     level: sp.level,
     status: sp.status,
     nf: sp.nf,
+    software: sp.software,
     from: sp.from,
     to: sp.to,
     order: sp.order,
@@ -64,6 +65,20 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
                 ],
               },
               { name: "nf", type: "select", prefix: "玩法", options: [["", "全部"], ["0", "标雷"], ["1", "无标 NF"]] },
+              {
+                name: "software",
+                type: "select",
+                prefix: "软件",
+                options: [
+                  ["", "全部软件"],
+                  ["arbiter", "Arbiter"],
+                  ["clone", "Minesweeper Clone"],
+                  ["vienna", "Vienna"],
+                  ["saoleiwang", "Saolei.wang 在线"],
+                  ["yuan", "元扫雷"],
+                  ["none", "未知/缺失"],
+                ],
+              },
               {
                 name: "order",
                 type: "select",
