@@ -44,7 +44,10 @@ export function AdminVideoPlayer({
     // 等 iframe 挂载后再起播：页面刚打开就首点播放时，不能让请求早于
     // FlopPlayer 的 window.flop 初始化而丢失。
     if (!mounted || !target) return;
-    playFlop(`/videos${target.filepath}`);
+    /* ⚠️ 带时间戳穿透缓存（2026-10-27，347943 案）：站内生成的 evf 可能被服务端
+       原地修补（时间倒流钳制），而 nginx 对 /videos/ 下发 30d 缓存——审核播放必须
+       拿到磁盘上的当前版本，不能用浏览器里的陈旧副本。后台量小，全量穿透可接受。 */
+    playFlop(`/videos${target.filepath}?t=${Date.now()}`);
     // 打开审核播放即记「已观看」，上报成功回调列表即时刷新「已看」态；
     // 失败不打扰播放（刷新页面后 watched 仍以库内为准）。
     const watched = target.id;
