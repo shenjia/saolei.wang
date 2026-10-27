@@ -42,6 +42,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "user.setLowTrust": "administrator",
   "cheat.confirm": "administrator",
   "cheat.dismiss": "administrator",
+  "user.setRankBan": "administrator",
   // 给单个玩家发系统消息（2026-10-23）：manager 可用——与头像审核通知同级触达能力；
   // 全站广播 message.broadcast 仍是超管专属
   "user.sendSystemMessage": "manager",
@@ -261,12 +262,16 @@ async function dispatch(
         where: { id: BigInt(id) },
         data: { resolved: 1 },
       });
+      /* 系统消息（2026-10-27 张老师定：与手动加入低信任同款告知） */
+      try {
+        await sendSystemMessage(Number(report.user), "经系统检测，您在排行模式中存在作弊行为，已将您移入低信任用户组（7 天内上传录像每日限 5 部且需人工审核），排行模式禁用 24 小时。如有异议请联系管理员。");
+      } catch { /* 消息失败不阻断 */ }
       const pending = await prisma.video.findMany({ where: { user: report.user, status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");
       for (const { id: vid } of pending) await triageVideo(Number(vid));
       return {
         ok: true,
-        message: `已确认「${user?.chineseName ?? report.user}」作弊：转低信任用户组（7 天限流+全量人工审），排名模式禁用 24h${pending.length ? `，重分拣待审录像 ${pending.length} 部` : ""}`,
+        message: `已确认「${user?.chineseName ?? report.user}」作弊：转低信任用户组（7 天限流+全量人工审），排名模式禁用 24h，已发系统消息告知${pending.length ? `，重分拣待审录像 ${pending.length} 部` : ""}`,
       };
     }
 
@@ -281,18 +286,50 @@ async function dispatch(
         where: { id: report.user },
         select: { chineseName: true },
       });
+      /* 误报＝完全恢复（2026-10-27 张老师定）：排名禁用 + 低信任标记一并清除
+         （低信任虽不自动转入，但可能经其它路径存在——统一清零兜底），并发
+         系统消息告知玩家已恢复 */
       await prisma.user.update({
         where: { id: report.user },
-        data: { rankBanUntil: BigInt(0) },
+        data: { rankBanUntil: BigInt(0), lowTrustUntil: BigInt(0) },
       });
       await prisma.cheatReport.update({
         where: { id: BigInt(id) },
         data: { resolved: 2 },
       });
+      try {
+        await sendSystemMessage(Number(report.user), "经管理员复核，之前您在排行模式中的出现的疑似作弊行为属于误报，现已恢复");
+      } catch { /* 消息失败不阻断 */ }
+      const pending = await prisma.video.findMany({ where: { user: report.user, status: VIDEO_STATUS.NORMAL }, select: { id: true } });
+      const { triageVideo } = await import("@/lib/video-triage");
+      for (const { id: vid } of pending) await triageVideo(Number(vid));
       return {
         ok: true,
-        message: `已判定「${user?.chineseName ?? report.user}」为误报：排名模式禁用已解除`,
+        message: `已判定「${user?.chineseName ?? report.user}」为误报：排名模式禁用与低信任标记均已解除，已发系统消息告知${pending.length ? `，重分拣待审录像 ${pending.length} 部` : ""}`,
       };
+    }
+
+    case "user.setRankBan": {
+      /* 排名模式开关（2026-10-27 张老师定）：账号处置面板直接管理——
+         on=禁用 24h（与探测命中同款时长），off=手动解禁；不动低信任 */
+      const id = toId(p.id);
+      const on = p.on === 1 || p.on === true;
+      if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
+      const user = await prisma.user.findUnique({
+        where: { id: BigInt(id) },
+        select: { chineseName: true, rankBanUntil: true },
+      });
+      if (!user) return { ok: false, error: "玩家不存在" };
+      const t = now();
+      if (on) {
+        await prisma.user.update({ where: { id: BigInt(id) }, data: { rankBanUntil: BigInt(t + 24 * 3600) } });
+        return { ok: true, message: `${user.chineseName}（#${id}）排名模式已禁用 24 小时` };
+      }
+      if (Number(user.rankBanUntil) <= t) {
+        return { ok: false, error: "该玩家排名模式未被禁用" };
+      }
+      await prisma.user.update({ where: { id: BigInt(id) }, data: { rankBanUntil: BigInt(0) } });
+      return { ok: true, message: `${user.chineseName}（#${id}）排名模式已解禁` };
     }
 
     case "user.setLowTrust": {
@@ -313,12 +350,15 @@ async function dispatch(
         where: { id: BigInt(id) },
         data: { lowTrustUntil: BigInt(t + 7 * 24 * 3600), rankBanUntil: BigInt(t + 24 * 3600) },
       });
+      try {
+        await sendSystemMessage(id, "经系统检测，您在排行模式中存在作弊行为，已将您移入低信任用户组（7 天内上传录像每日限 5 部且需人工审核），排行模式禁用 24 小时。如有异议请联系管理员。");
+      } catch { /* 消息失败不阻断 */ }
       const pending = await prisma.video.findMany({ where: { user: BigInt(id), status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");
       for (const { id: vid } of pending) await triageVideo(Number(vid));
       return {
         ok: true,
-        message: `${user.chineseName}（#${id}）已加入低信任用户组，排行模式已禁用`,
+        message: `${user.chineseName}（#${id}）已加入低信任用户组，排行模式已禁用，已发系统消息告知`,
       };
     }
 

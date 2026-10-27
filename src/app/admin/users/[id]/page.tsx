@@ -17,6 +17,13 @@ import { MESSAGE_CONTENT_LIMIT } from "@/lib/message";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "玩家详情 | 管理后台" };
 
+
+function rankBanCountdown(secLeft: number): string {
+  const h = Math.floor(secLeft / 3600);
+  const m = Math.floor((secLeft % 3600) / 60);
+  return h > 0 ? `${h} 小时 ${m} 分` : `${m} 分`;
+}
+
 export default async function AdminUserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const uid = parseInt(id, 10);
@@ -248,6 +255,32 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     : `确认把「${u.chineseName}」加入可信用户组？其上传录像自动分拣时不再检查 STNB 触发器（其余触发器照常），待审录像会立即重分拣。`
                 }
               />
+              {/* 排名模式开关（2026-10-27 张老师定）：禁用中显示倒计时+解禁钮；
+                  未禁用显示禁用钮。与信任组状态独立 */}
+              {d.rankBanned ? (
+                <>
+                  <span className="admin_tag bad" style={{ alignSelf: "center" }}>
+                    排名禁用中 · 剩余 {rankBanCountdown(d.rankBanUntil - Math.floor(Date.now() / 1000))}
+                  </span>
+                  <AdminAction
+                    op="user.setRankBan"
+                    params={{ id: u.id, on: 0 }}
+                    label="解禁排名模式"
+                    variant="primary"
+                    sm={false}
+                    confirm={`确认解禁「${u.chineseName}」的排名模式？其可立即恢复参与排名对局。`}
+                  />
+                </>
+              ) : (
+                <AdminAction
+                  op="user.setRankBan"
+                  params={{ id: u.id, on: 1 }}
+                  label="禁用排名模式"
+                  variant="warn"
+                  sm={false}
+                  confirm={`确认禁用「${u.chineseName}」的排名模式 24 小时？`}
+                />
+              )}
               {!u.trusted && !d.lowTrustFlagged && (
                 <AdminAction
                   op="user.setLowTrust"

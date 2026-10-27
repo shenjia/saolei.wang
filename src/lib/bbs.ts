@@ -275,8 +275,10 @@ export async function getPostList(opts: {
     });
     authorIds = matched.map((u) => u.id);
   }
+  // 2026-10-27 张老师定：敏感词前置拦截、AI/人审一律后置——过敏感词的内容前台即公开，
+  // 待审（5）与正常（0）同列展示；已删除（-1）仍不可见
   const where = {
-    status: 0,
+    status: { in: [0, 5] },
     ...(kw
       ? {
           OR: [
