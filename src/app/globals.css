@@ -2699,6 +2699,224 @@ button.msg_reply_link {
   margin-left: 4px;
 }
 
+/* ---------- 纪录页 /records（2026-10-28 三轮，张老师口径） ----------
+   左宽右窄（复用首页 ul#home 双栏骨架；右栏 300px 与排行页一致）。
+   左 = 一个大 .box「纪录」+ page_head（h1 左 + 级别筛选器右，复刻排行页页头，
+   .ranking_tabs 样式直接复用）+ 当前级别三图；级别专属色由组件 inline 传入
+   （总计金/初绿 #a6e22e / 中橙 #f79646 / 高金 #fdc61a）。
+   右 = 八个标准 .box 板块（h2 与首页右栏同款 legacy 20px）。 */
+@media (min-width: 769px) {
+  body #page.records_old #home > li.sidebar {
+    width: 300px;
+  }
+  body #page.records_old #home > li.main {
+    width: calc(100% - 302px);
+  }
+}
+/* 三板块（四轮）：legacy .box 默认 padding 30px 30px 10px 30px（首页新闻同款）；
+   板块页头与图表拉开 10px；板块标题用 h2（legacy 20px）与 tabs 同行底对齐 */
+body #page.records_old .records_box .page_head {
+  margin: 0 0 10px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-end;
+  gap: 16px;
+}
+.records_sec_title {
+  /* 五轮张老师定：与首页左栏板块标题（新闻 h1）同款 26px；
+     六轮：默认亮灰 #b1b1a4，仅时间纪录（.gold）保留首页金 #fdc61a */
+  margin: 0;
+  color: #b1b1a4;
+  font-size: 26px;
+  line-height: 39px;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+.records_sec_title.gold {
+  color: #fdc61a;
+}
+.rec_group {
+  margin-bottom: 4px;
+}
+.rec_card {
+  background: #1e1f1c;
+  border: 1px solid #3a3a32;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.rec_head {
+  font-size: 13px;
+  line-height: 22px;
+  margin-bottom: 6px;
+  color: #939387;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rec_head .rec_name {
+  color: #b1b1a4;
+}
+.rec_head .rec_val {
+  color: #e6db74;
+  font-weight: bold;
+  font-size: 20px; /* 四轮张老师定：记录数字加大 */
+  line-height: 24px;
+  margin: 0 4px;
+}
+.rec_head .rec_meta {
+  color: #75715e;
+}
+.rec_head .rec_user {
+  color: #939387;
+}
+.rec_head .rec_user:hover {
+  color: #e6db74;
+}
+.rec_chart {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: ew-resize;
+}
+.rec_chart svg {
+  display: block;
+}
+.rec_chart_empty {
+  color: #75715e;
+  padding: 30px 0;
+  text-align: center;
+}
+/* 浮层：定位由组件按滚动容器可视坐标计算（left 仅水平，垂直恒贴顶） */
+.rec_tip {
+  position: absolute;
+  top: 6px;
+  pointer-events: none;
+  z-index: 10;
+  width: auto;
+  min-width: 200px;
+  max-width: 260px;
+  background: rgba(30, 31, 28, 0.96);
+  border: 1px solid #49483e;
+  border-radius: 8px;
+  padding: 7px 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 19px;
+}
+.rec_tip .d {
+  color: #75715e;
+  white-space: nowrap;
+}
+.rec_tip .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.rec_tip .row > span:first-child {
+  color: #75715e;
+  flex: none;
+}
+/* 三轮张老师要求：创造者行（人名+性别+军衔）强制同行——
+   legacy .title 在此上下文是 display:block 且 width 挤压会换行，
+   这里改 inline + 不收缩，浮层宽度 auto 按内容撑开（min/max 钳制） */
+.rec_tip .who {
+  color: #939387;
+  white-space: nowrap;
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+}
+/* who 内的 .title（inline）不许被 flex 挤窄——挤窄会令徽章/军衔名内部换行 */
+.rec_tip .who > .title {
+  flex: none;
+}
+.rec_tip .who .title {
+  /* inline-flex 强制徽章+军衔名单行排列（block/inline 形态在 flex 容器内测宽会折行） */
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  width: auto;
+  height: auto;
+  position: static;
+  line-height: inherit;
+}
+/* em 30px line-height 在 12px 浮层里撑高行盒；首页 #home 内实测 em 14px/inline——复刻 */
+.rec_tip .who .title em {
+  font-size: 14px;
+  line-height: inherit;
+}
+.rec_tip .who .title .rank-badge {
+  vertical-align: -0.12em;
+}
+.rec_tip .who a {
+  color: #939387;
+}
+.rec_tip .who a:hover {
+  color: #e6db74;
+}
+.rec_tip b {
+  color: #e6db74;
+  font-size: 16px; /* 四轮：hover 气泡纪录数字同步加大 */
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.rec_tip b.hold {
+  color: #a6e22e;
+}
+/* 右栏八项：标准 .box 板块——标题 h2（legacy 20px 同首页右栏）左 + 大数右；
+   下一行左「纪录保持者」深灰小字 + 右人名（AvatarCell 14px）+军衔（三轮张老师定） */
+.records_top_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.records_top_head h2 {
+  margin: 0;
+  /* 首页右栏 h2 即 legacy 通用样式：20px #b1b1a4——不覆盖即同款，此处显式钉住防漂移 */
+  font-size: 20px;
+  line-height: 30px;
+}
+.records_top_val {
+  color: #fdc61a;
+  font-size: 22px;
+  line-height: 26px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.records_top_val small {
+  /* 七轮张老师定：单位一律亮灰 #b1b1a4（数值仍金色） */
+  color: #b1b1a4;
+  font-size: 12px;
+  font-weight: normal;
+}
+.records_top_sub {
+  /* 八轮张老师定：「纪录保持者」居左（与上方标题左对齐），人名+军衔右对齐 */
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  /* 五轮张老师定：两行间距拉开 */
+  margin-top: 8px;
+  line-height: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.records_top_label {
+  color: #75715e;
+  font-size: 14px;
+  flex: none;
+}
+.records_top_who {
+  color: #939387;
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* ---------- 用户主页统计（2026-09-24 张老师要求） ----------
    数字（legacy .table em 本为黄 #fdc61a）默认改亮灰 #b1b1a4；
    「今日 +N」属于今日数据，用绿 #a6e22e 高亮（2026-09-27 张老师：全站今日增量统一绿色）。 */
@@ -11550,6 +11768,11 @@ body #page .word_terms .desc {
 }
 .confirm_dialog .confirm_content {
   margin-top: 14px;
+}
+/* 勾选框区块（2026-10-28 屏蔽录像「是否加入低信任组」）：复用 ban_check 视觉，
+   加上边距与按钮组隔开 */
+.confirm_dialog .confirm_check {
+  margin-top: 12px;
 }
 .qq_avatar_swap {
   display: flex;
