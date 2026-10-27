@@ -1,7 +1,9 @@
 // 后台侧栏导航（2026-09-24）
-// 分组：概览 / 内容 / 玩家 / 运营。待审录像/头像/论坛/反作弊数作为红点角标（服务端传入）。
+// 分组：概览 / 内容 / 玩家 / 运营。待审录像/头像/论坛/反作弊数作为红点角标。
 // 2026-10-27 用户组入口合并进「玩家管理」（?group= 筛选），独立入口移除；
 // 两组新成员 badge 合并挂「玩家管理」项（差值求和，算不出退化为红点）。
+// 2026-10-27 badge 改「服务端初值 + 客户端校准」：共享 layout 切页不重跑，只靠服务端必停在旧值
+// （待审 2→17 而 badge 显 2）；现由 PendingCounts 在切页/轮询/回前台时拉接口校正。
 
 "use client";
 
@@ -9,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminUserMenu } from "./AdminUserMenu";
+import { usePendingCounts, type PendingCounts } from "./PendingCounts";
 
 interface NavItem {
   href: string;
@@ -107,13 +110,15 @@ export function AdminSidebar({
   user,
   groupBadges,
 }: {
-  badges: { pending: number; avatar: number; bbs: number; cheat: number };
+  badges: PendingCounts;
   user: { uid: number; name: string; administrator: boolean };
   /** 用户组 badge 信号（服务端 layout 查询；旧调用方缺省 = 恒不亮，向后兼容） */
   groupBadges?: Record<GroupKey, GroupBadgeInput>;
 }) {
   const pathname = usePathname();
   const [groupDiff, setGroupDiff] = useState<number | null>(null);
+  // 待审计数：服务端初值 → 切页/轮询校准后的实时值
+  const liveBadges = usePendingCounts(badges);
 
   // badge 对比 + 首次基线初始化 + 监听组视图已读事件
   useEffect(() => {
@@ -175,7 +180,7 @@ export function AdminSidebar({
           <div key={g.title}>
             <div className="admin_nav_group">{g.title}</div>
             {g.items.map((it) => {
-              const n = it.badgeKey ? badges[it.badgeKey] : 0;
+              const n = it.badgeKey ? liveBadges[it.badgeKey] : 0;
               return (
                 <Link key={it.href} href={it.href} className={isActive(it.href) ? "on" : undefined}>
                   <i>{it.icon}</i>

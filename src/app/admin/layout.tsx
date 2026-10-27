@@ -11,6 +11,7 @@ import { USER_ROLE, VIDEO_STATUS } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { getGroupBadges } from "@/lib/admin/usergroups";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { AdminTopSummary } from "@/components/admin/PendingCounts";
 import { ConfirmHost } from "@/components/Confirm";
 import "./admin.css";
 
@@ -61,11 +62,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="admin_body">
         <div className="admin_top">
           <h1>管理后台</h1>
-          <span className="sub">
-            {pending > 0 ? `待审录像 ${pending} 条` : "待审录像已清空"}
-            {avatarPending > 0 ? ` · 待审头像 ${avatarPending} 张` : ""}
-            {bbsPending > 0 ? ` · 论坛待审 ${bbsPending} 条` : ""}
-          </span>
+          {/* 2026-10-27：摘要数字与侧栏 badge 同源——服务端首帧 + 客户端切页/轮询校准，
+              修「共享 layout 不重跑导致外壳数字停在旧值」的问题（组件自带 .sub 样式） */}
+          <AdminTopSummary initial={{ pending, avatar: avatarPending, bbs: bbsPending, cheat: cheatPending }} />
           <div className="right">
             {roleTag}
             <span>{session.username}</span>
