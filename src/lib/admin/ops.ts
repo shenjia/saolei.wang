@@ -18,7 +18,7 @@ import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
 import { reviewVideo } from "@/lib/review";
 import { banUntilFromKey, unbanUser } from "@/lib/ban";
-import { broadcast, sendSystemMessage } from "@/lib/message";
+import { broadcast, sendSystemMessage, retractReplyNotice, retractPostNotices } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
 import { rankLeave, safeRankOp } from "@/lib/userrank";
 import { setMaintenance } from "@/lib/maintenance";
@@ -564,15 +564,23 @@ async function dispatch(
       if (!id) return { ok: false, error: "参数错误：缺少主题 ID" };
       const post = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { title: true, user: true } });
       if (!post) return { ok: false, error: "主题不存在" };
-      await prisma.$transaction([
-        prisma.bbsPost.update({ where: { id: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } }),
-        prisma.bbsReply.updateMany({ where: { post: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } }),
-        // 2026-10-22 张老师要求：删帖联动撤动态（口径同 lib/bbs.ts deletePost）
-        prisma.news.deleteMany({ where: { type: NEWS_TYPE.ARTICLE, user: post.user, reference: BigInt(id) } }),
-        prisma.news.deleteMany({
+      // 2026-10-27：删帖级联撤动态 + 撤指向该帖的通知消息（口径同 lib/bbs.ts deletePost）
+      const replyAuthors = await prisma.bbsReply.findMany({
+        where: { post: BigInt(id) },
+        select: { user: true },
+        distinct: ["user"],
+      });
+      await prisma.$transaction(async (tx) => {
+        await tx.bbsPost.update({ where: { id: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } });
+        await tx.bbsReply.updateMany({ where: { post: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } });
+        await tx.news.deleteMany({ where: { type: NEWS_TYPE.ARTICLE, user: post.user, reference: BigInt(id) } });
+        await tx.news.deleteMany({
           where: { type: NEWS_TYPE.COMMENT, reference: BigInt(id), detailsData: { contains: '"kind":"bbs"' } },
-        }),
-      ]);
+        });
+        for (const a of replyAuthors) {
+          await retractPostNotices(N(a.user), id, tx);
+        }
+      });
       return { ok: true, message: `删除主题 #${id}「${decodeLegacyEntities(post.title)}」及其全部回复` };
     }
 
@@ -592,6 +600,8 @@ async function dispatch(
         }
         // 2026-10-22 张老师要求：删回复联动撤评论动态（见 deleteReplyNews）
         await deleteReplyNews(tx, reply.user, reply.post, id);
+        // 2026-10-27 张老师要求：删回复联动撤通知消息
+        await retractReplyNotice(N(reply.user), id, tx);
       });
       return { ok: true, message: `删除回复 #${id}` };
     }
@@ -620,6 +630,8 @@ async function dispatch(
         // 自评自己文章的楼层不补发（口径同 createReply：楼主本人的评论动态本就不产生）
         if (status === -1) {
           await deleteReplyNews(tx, reply.user, reply.post, id);
+          // 2026-10-27 张老师要求：删除态联动撤通知消息
+          await retractReplyNotice(N(reply.user), id, tx);
         } else if (status === 0 && reply.status !== 0) {
           const post = await tx.bbsPost.findUnique({
             where: { id: reply.post },
@@ -645,6 +657,34 @@ async function dispatch(
                 details: { kind: "bbs", t: (post?.title ?? "").slice(0, 50), cid: id },
                 createTime: N(reply.createTime),
                 expTimeOverride: N(reply.expTime),
+              });
+            }
+            // 2026-10-27 张老师要求：恢复通过时补发楼主通知消息（AI 转待审曾把它撤下）——
+            // 与动态补发对称，否则误判通过的评论楼主永远失去线索。锚点格式同发帖通知；
+            // 幂等：仅当该回复的锚点通知不存在时补（避免重复通过/待审循环刷屏）
+            const noticeExists = await tx.message.findFirst({
+              where: {
+                fromUser: reply.user,
+                isSystem: false,
+                OR: [
+                  { content: { startsWith: "我评论了你的文章", contains: `?reply=${id}#reply-${id}` } },
+                  { content: { startsWith: "我回复了你在", contains: `?reply=${id}#reply-${id}` } },
+                ],
+              },
+              select: { id: true },
+            });
+            if (!noticeExists) {
+              const now = BigInt(Math.floor(Date.now() / 1000));
+              await tx.message.create({
+                data: {
+                  fromUser: reply.user,
+                  toUser: post!.user,
+                  content: `我评论了你的文章[url /bbs/${N(reply.post)}?reply=${id}#reply-${id}]《${decodeLegacyEntities(post!.title)}》[/url]`.slice(0, 200),
+                  isRead: false,
+                  isSystem: false,
+                  createTime: now,
+                  updateTime: now,
+                },
               });
             }
           }

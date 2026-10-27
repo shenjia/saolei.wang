@@ -7,6 +7,7 @@ import { oldTitle, type OldTitle } from "./oldtitle";
 import { dualTitles } from "./title-system";
 import { NEWS_TYPE } from "./config";
 import { publishNews } from "./news";
+import { retractReplyNotice, retractPostNotices } from "./message";
 import { WX_FACES, FACE_BY_KEY } from "./faces";
 import { decodeLegacyEntities, ubbExcerpt } from "./format";
 
@@ -636,45 +637,54 @@ export async function deletePost(id: number, userId: number, isAdmin: boolean): 
   //   ①楼主的「发表了《…》」动态（type=40，reference=帖子 id）
   //   ②所有楼层的「评论了文章」动态（type=52，kind=bbs，reference=帖子 id；
   //     帖子没了，任何人的评论动态都不该再挂着，按帖子维度整清）
+  // 2026-10-27 张老师要求：帖子删除后，指向它的评论通知消息一并撤回（死链治理）。
+  //   楼层作者各异 → 先取该帖全部楼层作者，逐人撤（retractPostNotices 带 from_user 护栏，
+  //   不会误伤无关私信；楼主本人的通知不存在——自评不发通知，天然幂等）
   const ts = nowSec();
-  await prisma.$transaction([
-    prisma.bbsPost.update({ where: { id: row.id }, data: { status: -1, updateTime: ts } }),
-    prisma.bbsReply.updateMany({ where: { post: row.id, status: 0 }, data: { status: -1, updateTime: ts } }),
-    prisma.news.deleteMany({
+  const replyAuthors = await prisma.bbsReply.findMany({
+    where: { post: row.id, status: { in: [0, 5, -1] } },
+    select: { user: true },
+    distinct: ["user"],
+  });
+  await prisma.$transaction(async (tx) => {
+    await tx.bbsPost.update({ where: { id: row.id }, data: { status: -1, updateTime: ts } });
+    await tx.bbsReply.updateMany({ where: { post: row.id, status: 0 }, data: { status: -1, updateTime: ts } });
+    await tx.news.deleteMany({
       where: { type: NEWS_TYPE.ARTICLE, user: row.user, reference: row.id },
-    }),
-    prisma.news.deleteMany({
+    });
+    await tx.news.deleteMany({
       where: { type: NEWS_TYPE.COMMENT, reference: row.id, detailsData: { contains: '"kind":"bbs"' } },
-    }),
-  ]);
+    });
+    for (const a of replyAuthors) {
+      await retractPostNotices(N(a.user), id, tx);
+    }
+  });
   return true;
 }
 
 /** 删回复（本人/楼主/管理员，移植 2008 版录像评论删除的权限语义）
  *  2026-10-22：待审楼层（status=5，仅本人可见）本人同样可删（可见即可删）
- *  2026-10-22 张老师要求：评论删除后其动态（type=52）一并撤下（见 commentNewsWhere） */
+ *  2026-10-22 张老师要求：评论删除后其动态（type=52）一并撤下（见 commentNewsWhere）
+ *  2026-10-27 张老师要求：评论删除后其通知消息一并撤回（见 retractReplyNotice）——
+ *  改交互式事务：数组事务的 PrismaPromise 由根客户端创建，在回调里 await 会脱离事务 */
 export async function deleteReply(id: number, userId: number, isAdmin: boolean): Promise<boolean> {
   const row = await prisma.bbsReply.findFirst({ where: { id: BigInt(id), status: { in: [0, 5] } } });
   if (!row) return false;
   const post = await prisma.bbsPost.findUnique({ where: { id: row.post } });
   if (!post) return false;
   if (!isAdmin && N(row.user) !== userId && N(post.user) !== userId) return false;
-  const newsDeletes = commentNewsWhere(row.user, row.post, id).map((where) =>
-    prisma.news.deleteMany({ where: { type: NEWS_TYPE.COMMENT, ...where } })
-  );
-  // 待审行不在 replies 冗余计数里（AI 转待审时已回退），软删时不能再 decrement
-  if (row.status === 0) {
-    await prisma.$transaction([
-      prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } }),
-      prisma.bbsPost.update({ where: { id: row.post }, data: { replies: { decrement: 1 } } }),
-      ...newsDeletes,
-    ]);
-  } else {
-    await prisma.$transaction([
-      prisma.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } }),
-      ...newsDeletes,
-    ]);
-  }
+  const newsWhere = commentNewsWhere(row.user, row.post, id);
+  await prisma.$transaction(async (tx) => {
+    await tx.bbsReply.update({ where: { id: row.id }, data: { status: -1, updateTime: nowSec() } });
+    // 待审行不在 replies 冗余计数里（AI 转待审时已回退），软删时不能再 decrement
+    if (row.status === 0) {
+      await tx.bbsPost.update({ where: { id: row.post }, data: { replies: { decrement: 1 } } });
+    }
+    for (const where of newsWhere) {
+      await tx.news.deleteMany({ where: { type: NEWS_TYPE.COMMENT, ...where } });
+    }
+    await retractReplyNotice(N(row.user), id, tx);
+  });
   return true;
 }
 

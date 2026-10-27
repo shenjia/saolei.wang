@@ -1,6 +1,7 @@
 // 站内信（移植 2008 版 Message/*：消息列表/读信/发信/清空 + 管理员广播）
 // 2026-09-24 改版（张老师要求）：「收件箱」更名「消息」，作者列带军衔（论坛列表同款）
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { usersByIds, type UserBrief } from "./queries";
 import { dualTitles } from "./title-system";
@@ -151,6 +152,65 @@ export async function markMessageRead(id: number, userId: number): Promise<boole
     await prisma.message.update({ where: { id: row.id }, data: { isRead: true, updateTime: nowSec() } });
   }
   return true;
+}
+
+/**
+ * 撤回「评论/回复文章」通知消息（2026-10-27 张老师要求：评论删了消息还在，
+ * 点进去看不到评论——通知与内容生命周期同步）。
+ *
+ * 通知锚点格式（见 api/bbs/route.ts 发送处）：`?reply=<回复id>#reply-<回复id>`，
+ * 按整段子串精确匹配（两段互为完整锚，`?reply=2447` 不会误配 `#reply-24474`）。
+ * 三重护栏防误删普通私信：
+ *   ① from_user 锁发送者=评论者本人；② 前缀必须是通知模板「我评论了你的文章」/「我回复了你在」；
+ *   ③ 锚点整段匹配。
+ */
+const REPLY_NOTICE_PREFIXES = ["我评论了你的文章", "我回复了你在"] as const;
+
+export async function retractReplyNotice(
+  fromUserId: number,
+  replyId: number,
+  tx?: Prisma.TransactionClient
+): Promise<number> {
+  const db = tx ?? prisma;
+  const res = await db.message.deleteMany({
+    where: {
+      fromUser: BigInt(fromUserId),
+      isSystem: false,
+      OR: REPLY_NOTICE_PREFIXES.map((prefix) => ({
+        content: { startsWith: prefix, contains: `?reply=${replyId}#reply-${replyId}` },
+      })),
+    },
+  });
+  if (res.count > 0) console.log(`[message-retract] 撤回复 #${replyId} 通知：${res.count} 条`);
+  return res.count;
+}
+
+/**
+ * 撤回与某主题相关的全部评论通知（删帖场景：主题没了，任何指向它的通知都成死链）。
+ * 按发送者=评论者 + 主题 id 维度整清；早期无锚点通知（`[url /bbs/<id>]` 直链）一并覆盖。
+ * 前缀护栏同上——只清通知模板消息，绝不动用户手写私信。
+ * 注意 Prisma 6 字符串过滤器的 OR 不能嵌在 StringFilter 里，只能在 where 顶层展开。
+ */
+export async function retractPostNotices(
+  fromUserId: number,
+  postId: number,
+  tx?: Prisma.TransactionClient
+): Promise<number> {
+  const db = tx ?? prisma;
+  const res = await db.message.deleteMany({
+    where: {
+      fromUser: BigInt(fromUserId),
+      isSystem: false,
+      OR: [
+        { content: { startsWith: "我评论了你的文章", contains: `/bbs/${postId}?reply=` } },
+        { content: { startsWith: "我评论了你的文章", contains: `[url /bbs/${postId}]` } },
+        { content: { startsWith: "我回复了你在", contains: `/bbs/${postId}?reply=` } },
+        { content: { startsWith: "我回复了你在", contains: `[url /bbs/${postId}]` } },
+      ],
+    },
+  });
+  if (res.count > 0) console.log(`[message-retract] 撤主题 #${postId} 通知：${res.count} 条`);
+  return res.count;
 }
 
 /** 发信 */

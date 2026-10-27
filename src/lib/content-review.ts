@@ -10,6 +10,7 @@
 import { prisma } from "./db";
 import { CONTENT_STATUS, NEWS_TYPE } from "./config";
 import { moderateText, textModerationEnabled, TEXT_CATEGORY_NAMES } from "./text-moderate";
+import { retractReplyNotice } from "./message";
 import type { TextModerationResult } from "./text-moderate";
 
 export type ContentKind = "comment" | "bbs_post" | "bbs_reply";
@@ -132,6 +133,10 @@ async function markPending(kind: ContentKind, id: number, note: string): Promise
         detailsData: { contains: `"cid":${id}}` },
       },
     });
+    // 2026-10-27 张老师要求：AI 转待审同步撤通知消息——评论前台已不可见，
+    // 通知再留着就是「点进去看不到评论」的死链（24474 案例：发布 2 秒后被转待审，
+    // 楼主收到的通知成了空指向）
+    await retractReplyNotice(Number(row.user), id, tx);
   });
   return true;
 }
