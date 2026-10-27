@@ -149,7 +149,9 @@ AUTH_WAITED=0
 if pm2 describe saolei-authority >/dev/null 2>&1; then
   GAMES_DEADLINE=$((SECONDS + 900))
   while :; do
-    GAMES_NOW=$(curl -sf --max-time 3 http://127.0.0.1:3104/health 2>/dev/null | grep -oE '"active":[0-9]+' | grep -oE '[0-9]+')
+    # ⚠️ 脚本头 set -euo pipefail：旧 authority（无 active 字段）grep 无匹配
+    # exit 1 会经命令替换杀掉整个发布——管道尾加 || true 兜底
+    GAMES_NOW=$(curl -sf --max-time 3 http://127.0.0.1:3104/health 2>/dev/null | grep -oE '"active":[0-9]+' | grep -oE '[0-9]+' || true)
     [ -z "$GAMES_NOW" ] && GAMES_NOW=0
     if [ "$GAMES_NOW" -eq 0 ] || (( SECONDS >= GAMES_DEADLINE )); then
       [ "$GAMES_NOW" -gt 0 ] && warn "仍有 $GAMES_NOW 局进行中，等待超时（15min）——强制重启，进行中的对局需重开"
