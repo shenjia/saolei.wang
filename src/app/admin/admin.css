@@ -252,11 +252,28 @@ body:has(.admin_shell) #footer {
 .admin_grid.trend_pie {
   grid-template-columns: minmax(480px, 7fr) minmax(300px, 3fr);
 }
+/* 练习数据页三卡同行（2026-10-27 张老师定）：趋势占主 + 级别占比 + 模式占比；
+   ≤1500px 模式卡换行到下一行占满，≤1200px 全塌单列 */
+.admin_grid.trend_pies {
+  grid-template-columns: minmax(460px, 7fr) minmax(280px, 3fr) minmax(280px, 3fr);
+}
+@media (max-width: 1500px) {
+  .admin_grid.trend_pies {
+    grid-template-columns: minmax(480px, 7fr) minmax(300px, 3fr);
+  }
+  .admin_grid.trend_pies > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
 @media (max-width: 1200px) {
   .admin_grid.todo_trend,
   .admin_grid.ops_notify,
-  .admin_grid.trend_pie {
+  .admin_grid.trend_pie,
+  .admin_grid.trend_pies {
     grid-template-columns: 1fr;
+  }
+  .admin_grid.trend_pies > :nth-child(3) {
+    grid-column: auto;
   }
 }
 .admin_card {
