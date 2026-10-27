@@ -122,6 +122,8 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           initial={list.rows}
           status={status}
           pool={pool}
+          pendingTotal={ov.videoPending}
+          poolCounts={status === VIDEO_STATUS.NORMAL ? poolCounts : { exempt: 0, need: 0 }}
           exemptTotal={pool === "exempt" ? list.total : undefined}
           needTotal={pool === "exempt" ? poolCounts.need : undefined}
         />

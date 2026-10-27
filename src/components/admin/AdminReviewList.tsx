@@ -13,10 +13,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AdminVideoRow } from "@/lib/admin/data";
 import { LevelTag, StatusTag } from "./Widgets";
 import { postOp, useOp } from "./AdminAction";
+import { onPendingCounts, refreshPendingCounts } from "./PendingCounts";
 import { toast } from "@/components/Toast";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
@@ -146,12 +147,19 @@ export function AdminReviewList({
   initial,
   status,
   pool,
+  pendingTotal,
+  poolCounts,
   exemptTotal,
   needTotal,
 }: {
   initial: AdminVideoRow[];
   status: number;
   pool?: string;
+  /** 服务端渲染这一刻的待审录像总数（video.status=10）。用作「队列变了」的基线：
+   *  客户端校准到的待审数一旦与之不同 → 说明有新片进来或被别人审掉 → 自动刷新本页 */
+  pendingTotal: number;
+  /** 两个分拣池待审数（仅待审视图有值）：当前池没活时自动切到有活的那个 */
+  poolCounts: { exempt: number; need: number };
   /** 当前待审免核定总数（跨页全选用，来自列表查询 total 或独立 count） */
   exemptTotal?: number;
   /** 2026-10-21 需核定池剩余数（免核定清空后的自动跳转判断用） */
@@ -168,6 +176,90 @@ export function AdminReviewList({
   const [banConfirm, setBanConfirm] = useState<"page" | "all" | null>(null);
   /** 全屏回放播放器（2026-10-19 张老师需求：点时间列弹层看录像） */
   const [playTarget, setPlayTarget] = useState<AdminPlayerTarget | null>(null);
+
+  // ---------- 队列实时校准（2026-10-27 张老师报障） ----------
+  // 现象：全部审完后又有新录像，侧栏/顶栏红数字亮了（60s 轮询），本页还停在「该状态下没有录像」。
+  // 做法：订阅同一份待审计数，数字一变就 router.refresh() 重跑本页（KPI、池计数、列表都是服务端算的）。
+
+  /** 已知的待审总数基线：服务端每次重渲后跟新值，避免同一次变化反复刷新 */
+  const pendingRef = useRef(pendingTotal);
+  useEffect(() => {
+    pendingRef.current = pendingTotal;
+  }, [pendingTotal]);
+
+  /** 忙（批量操作中）/ 正在看录像时不打断，等下一轮轮询再处理 */
+  const busyRef = useRef(busy);
+  const playingRef = useRef(playTarget !== null);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+  useEffect(() => {
+    playingRef.current = playTarget !== null;
+  }, [playTarget]);
+
+  /** 刷新去抖：一次变化只刷一次（避免连续变化把渲染冲掉） */
+  const timerRef = useRef<number | null>(null);
+  const scheduleRefresh = useCallback(() => {
+    if (timerRef.current !== null) return;
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      router.refresh();
+    }, 600);
+  }, [router]);
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (status !== VIDEO_STATUS.NORMAL) return;
+    return onPendingCounts(({ pending }) => {
+      if (pending === pendingRef.current) return;
+      // 基线不动 → 下一轮轮询会再判一次（忙完/关掉播放器后自动补上）
+      if (busyRef.current || playingRef.current) return;
+      pendingRef.current = pending;
+      scheduleRefresh();
+    });
+  }, [status, scheduleRefresh]);
+
+  /** 审核页把校准频率提到 10s（全局 60s 太钝：新片进来要尽快看到）。
+   *  同一份计数只拉一次，侧栏 badge 与顶栏摘要跟着一起准。 */
+  useEffect(() => {
+    if (status !== VIDEO_STATUS.NORMAL) return;
+    const id = window.setInterval(() => void refreshPendingCounts(true), 10_000);
+    return () => window.clearInterval(id);
+  }, [status]);
+
+  /** 服务端重渲带回新列表（自动刷新 / 自己审完的 router.refresh）→ items 跟上。
+   *  useState 只在挂载时吃 initial，之后 props 变了不会自动同步——
+   *  不补这一步，自动刷新只会更新外壳与 KPI，表格还是旧的（甚至是空着）。 */
+  const initialRef = useRef(initial);
+  useEffect(() => {
+    if (initialRef.current === initial) return;
+    initialRef.current = initial;
+    setItems(initial);
+    // 勾选只保留仍然存在的行（被别人审掉的行不能继续算进批量操作）
+    setPicked((prev) => {
+      if (prev.size === 0) return prev;
+      const keep = new Set(initial.map((i) => i.id));
+      const next = new Set([...prev].filter((id) => keep.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [initial]);
+
+  /** 当前池清空了、另一个池有活 → 自动切过去。
+   *  沿用 2026-10-21「免核定清空后自动转需核定」的口径：空队列不让人干等；
+   *  也覆盖「清空后新片进了另一个池」——否则本页空着、角标却在亮红数字。 */
+  useEffect(() => {
+    if (status !== VIDEO_STATUS.NORMAL || !pool || items.length > 0) return;
+    const self = pool === "exempt" ? poolCounts.exempt : poolCounts.need;
+    const other = pool === "exempt" ? poolCounts.need : poolCounts.exempt;
+    if (self > 0 || other <= 0) return;
+    const to = pool === "exempt" ? "need" : "exempt";
+    router.replace(`/admin/review?status=${VIDEO_STATUS.NORMAL}&pool=${to}`);
+  }, [status, pool, items.length, poolCounts.exempt, poolCounts.need, router]);
 
   // 可勾选的行：免核定池（或未分池视图里的免核定行）且仍待审
   const pickable = (v: AdminVideoRow) =>

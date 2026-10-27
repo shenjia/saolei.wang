@@ -26,8 +26,9 @@ export interface PendingCounts {
   cheat: number;
 }
 
-/** 广播事件名（同 module 内的消费方都听它） */
-const EVENT = "admin-pending-count";
+/** 广播事件名（侧栏/顶栏/审核页等所有消费方都听它） */
+export const PENDING_EVENT = "admin-pending-count";
+const EVENT = PENDING_EVENT;
 /** 轮询间隔：后台数字够用就行，别给库添压力 */
 const REFRESH_MS = 60_000;
 /** 最小请求间隔：多个消费方同时挂载/切页时只发一次 */
@@ -60,6 +61,15 @@ export function refreshPendingCounts(force = false): Promise<void> {
     }
   })();
   return inflight;
+}
+
+/** 订阅实时计数（每次拉取/服务端初值变化都会广播一次）。
+ *  审核页据此在「待审数变了」时自动刷新列表——2026-10-27 张老师报障：
+ *  队列清空后又有新录像，外壳角标亮红数字、本页却还停在「没有录像」。 */
+export function onPendingCounts(handler: (c: PendingCounts) => void): () => void {
+  const fn = (e: Event) => handler((e as CustomEvent<PendingCounts>).detail);
+  window.addEventListener(EVENT, fn);
+  return () => window.removeEventListener(EVENT, fn);
 }
 
 /** 全局只挂一份定时器与可见性监听（后台壳全程存活，不需要引用计数） */
