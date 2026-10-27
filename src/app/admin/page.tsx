@@ -343,6 +343,14 @@ export default async function AdminDashboard() {
                         {u.chineseName}
                       </Link>
                       <span className="sub"> #{u.id}</span>
+                      {u.status !== 0 && (
+                        <span
+                          className="admin_tag bad"
+                          title={u.banUntil > 0 ? `至 ${formatDate(u.banUntil, "Y-m-d H:i")} 自动解禁` : "永久封禁"}
+                        >
+                          已封禁
+                        </span>
+                      )}
                     </td>
                     <td>
                       <TitleBadge title={u.title} />
