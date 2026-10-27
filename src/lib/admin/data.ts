@@ -1000,6 +1000,63 @@ export async function getPostListAdmin(f: {
   };
 }
 
+// ---------- 论坛待审混合队列（2026-10-27 张老师要求：主题 + 回复合并一处人审） ----------
+
+export interface AdminBbsPendingRow {
+  /** 主题 id（两种行都带：主题行=自身，回复行=所属主题，点进前台/下钻用） */
+  postId: number;
+  /** 回复 id（0 = 这是一条主题） */
+  replyId: number;
+  user: number;
+  author: UserBrief | null;
+  /** 主题标题 / 回复内容 UBB 渲染 */
+  html: string;
+  aiReason: string | null;
+  createTime: number;
+}
+
+/** 待审（status=5）主题 + 回复合并列表，按时间倒序（新疑点排前）。无待审返回空数组。 */
+export async function getPendingBbsAdmin(limit = 50): Promise<AdminBbsPendingRow[]> {
+  const [posts, replies] = await Promise.all([
+    prisma.bbsPost.findMany({
+      where: { status: 5 },
+      orderBy: { id: "desc" },
+      take: limit,
+      select: { id: true, user: true, title: true, aiReason: true, createTime: true },
+    }),
+    prisma.bbsReply.findMany({
+      where: { status: 5 },
+      orderBy: { id: "desc" },
+      take: limit,
+      select: { id: true, post: true, user: true, content: true, aiReason: true, createTime: true },
+    }),
+  ]);
+  const authors = await usersByIds([
+    ...new Set([...posts, ...replies].map((r) => N(r.user))),
+  ]);
+  const rows: AdminBbsPendingRow[] = [
+    ...posts.map((p) => ({
+      postId: N(p.id),
+      replyId: 0,
+      user: N(p.user),
+      author: authors.get(N(p.user)) ?? null,
+      html: `【主题】${decodeLegacyEntities(p.title)}`,
+      aiReason: p.aiReason ?? null,
+      createTime: N(p.createTime),
+    })),
+    ...replies.map((r) => ({
+      postId: N(r.post),
+      replyId: N(r.id),
+      user: N(r.user),
+      author: authors.get(N(r.user)) ?? null,
+      html: ubb(r.content ?? ""),
+      aiReason: r.aiReason ?? null,
+      createTime: N(r.createTime),
+    })),
+  ];
+  return rows.sort((a, b) => b.createTime - a.createTime).slice(0, limit);
+}
+
 export interface AdminReplyRow {
   id: number;
   post: number;
