@@ -79,7 +79,7 @@ export function LowTrustDialog({
                 不勾选则只移出用户组：被屏蔽的录像保持屏蔽（前台仍不可见、成绩不入榜），只是不再据此把该玩家当低信任对待。
               </p>
             )}
-            <p className="ban_hint">之后该玩家再有录像被屏蔽，会自动重新加入低信任用户组。</p>
+            <p className="ban_hint">之后该玩家再有录像被屏蔽时，会弹出「是否加入低信任用户组」确认，由管理员当场选择。</p>
 
             <div className="ban_ops">
               <button type="button" className="admin_btn" disabled={busy} onClick={() => setOpen(false)}>

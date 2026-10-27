@@ -11,10 +11,11 @@ import Link from "next/link";
 import { useState } from "react";
 import type { AdminVideoRow } from "@/lib/admin/data";
 import { LevelTag, StatusTag } from "./Widgets";
-import { AdminAction } from "./AdminAction";
+import { AdminAction, useOp } from "./AdminAction";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
+import { confirmDialogChecked } from "@/components/Confirm";
 
 export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSuper: boolean }) {
   /** 全屏回放播放器（点时间列弹出，Esc/关闭按钮退出） */
@@ -119,15 +120,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
                   confirm={`确认通过录像 #${v.id}？将写入成绩并可能刷新纪录动态。`}
                 />
               )}
-              {v.status !== VIDEO_STATUS.BANNED && (
-                <AdminAction
-                  op="video.review"
-                  params={{ id: v.id, status: VIDEO_STATUS.BANNED }}
-                  label="屏蔽"
-                  variant="danger"
-                  confirm={`确认屏蔽录像 #${v.id}？该录像对应的最好成绩会被回退。`}
-                />
-              )}
+              {v.status !== VIDEO_STATUS.BANNED && <BanVideoButton v={v} />}
               {isSuper && (
                 <AdminAction
                   op="video.delete"
@@ -149,5 +142,40 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
         )}
       </tbody>
     </>
+  );
+}
+
+/** 屏蔽按钮（2026-10-28 张老师需求：录像处理与人处理分开）——
+ *  弹通用确认浮窗 + 「同时将上传者加入低信任用户组」勾选（默认勾选），
+ *  勾选态随 lowTrust 参数传 video.review，服务端分流（勾＝屏蔽史自然入组；不勾＝写豁免不入组）。 */
+function BanVideoButton({ v }: { v: AdminVideoRow }) {
+  const { run, busy } = useOp();
+  return (
+    <button
+      type="button"
+      className="admin_btn danger sm"
+      disabled={busy}
+      onClick={async () => {
+        const { ok, checked } = await confirmDialogChecked({
+          title: "屏蔽录像",
+          message: `确认屏蔽录像 #${v.id}？该录像对应的最好成绩会被回退。`,
+          danger: true,
+          confirmText: "确认屏蔽",
+          checkbox: {
+            label: (
+              <>
+                同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
+                （此后其上传的录像需人工审核、每日限 5 部；上传者已在组内或账号已封禁时不重复处理）
+              </>
+            ),
+            defaultChecked: true,
+          },
+        });
+        if (!ok) return;
+        await run("video.review", { id: v.id, status: VIDEO_STATUS.BANNED, lowTrust: checked });
+      }}
+    >
+      {busy ? "…" : "屏蔽"}
+    </button>
   );
 }

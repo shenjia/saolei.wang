@@ -28,23 +28,39 @@ export type ConfirmOptions = {
   danger?: boolean;
   /** 按钮组整体居中 + 确认键居左（2026-10-27 排名模式提示专用；默认右对齐取消居左） */
   centerActions?: boolean;
+  /** 确认键下方附勾选框（2026-10-28 屏蔽录像用）：确认结果经 confirmDialogChecked 拿勾选态；
+   *  用 confirmDialog（boolean 版）时勾选态被忽略 */
+  checkbox?: {
+    /** 勾选框说明（可用 <b> 强调） */
+    label: React.ReactNode;
+    /** 初始勾选态，默认不勾 */
+    defaultChecked?: boolean;
+  };
 };
 
-type Pending = { options: ConfirmOptions; resolve: (ok: boolean) => void };
+/** confirmDialogChecked 的返回：ok=确认/取消；checked=勾选框最终状态（无勾选框恒为 defaultChecked??false） */
+export type ConfirmCheckedResult = { ok: boolean; checked: boolean };
 
-let emit: ((options: ConfirmOptions) => Promise<boolean>) | null = null;
+type Pending = { options: ConfirmOptions; resolve: (r: ConfirmCheckedResult) => void };
+
+let emit: ((options: ConfirmOptions) => Promise<ConfirmCheckedResult>) | null = null;
 
 /** 命令式调用：任意客户端组件直接 `if (!(await confirmDialog(...))) return;` */
 export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
+  return confirmDialogChecked(options).then((r) => r.ok);
+}
+
+/** 带勾选框版（2026-10-28）：`const { ok, checked } = await confirmDialogChecked({...})` */
+export function confirmDialogChecked(options: ConfirmOptions): Promise<ConfirmCheckedResult> {
   if (emit) return emit(options);
   // Host 尚未挂载：effect 是「子先父后」执行，页面组件在首帧调用时会早于 layout 里的
   // ConfirmHost 注册 emit（2026-10-27 绑定 QQ 头像浮窗实证：URL 参数被清掉但浮窗没弹）。
   // 这里轮询等待 ~300ms，仍无 Host 才按取消处理，绝不误执行。
-  return new Promise<boolean>((resolve) => {
+  return new Promise<ConfirmCheckedResult>((resolve) => {
     let tries = 0;
     const tick = () => {
       if (emit) return resolve(emit(options));
-      if (++tries > 10) return resolve(false);
+      if (++tries > 10) return resolve({ ok: false, checked: options.checkbox?.defaultChecked ?? false });
       setTimeout(tick, 30);
     };
     tick();
@@ -55,10 +71,12 @@ export function ConfirmHost() {
   const [queue, setQueue] = useState<Pending[]>([]);
   const current = queue[0];
   const confirmRef = useRef<HTMLButtonElement>(null);
+  /** 当前弹窗勾选框状态（无勾选框为 undefined；每条队列项打开时初始化，2026-10-28） */
+  const [checked, setChecked] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     emit = (options) =>
-      new Promise<boolean>((resolve) => {
+      new Promise<ConfirmCheckedResult>((resolve) => {
         setQueue((q) => [...q, { options, resolve }]);
       });
     return () => {
@@ -68,13 +86,15 @@ export function ConfirmHost() {
 
   function finish(ok: boolean) {
     if (!current) return;
-    current.resolve(ok);
+    current.resolve({ ok, checked: checked ?? current.options.checkbox?.defaultChecked ?? false });
     setQueue((q) => q.slice(1));
+    setChecked(undefined);
   }
 
-  // 打开时锁页面滚动 + ESC 取消 + 确认键聚焦
+  // 打开时锁页面滚动 + ESC 取消 + 确认键聚焦 + 勾选框初始化
   useEffect(() => {
     if (!current) return;
+    setChecked(current.options.checkbox ? (current.options.checkbox.defaultChecked ?? false) : undefined);
     document.body.style.overflow = "hidden";
     confirmRef.current?.focus();
     function onKey(e: KeyboardEvent) {
@@ -111,6 +131,16 @@ export function ConfirmHost() {
         <h1>{o.title}</h1>
         <p className="confirm_desc">{o.message}</p>
         {o.content && <div className="confirm_content">{o.content}</div>}
+        {o.checkbox && (
+          <label className="ban_check confirm_check">
+            <input
+              type="checkbox"
+              checked={checked ?? false}
+              onChange={(e) => setChecked(e.target.checked)}
+            />
+            <span>{o.checkbox.label}</span>
+          </label>
+        )}
         <div className={`confirm_ops${o.centerActions ? " centered" : ""}`}>
           <button type="button" className="button small" onClick={() => finish(false)}>
             {o.cancelText ?? "取消"}

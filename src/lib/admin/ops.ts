@@ -216,7 +216,7 @@ async function dispatch(
       /* 移出低信任用户组（2026-10-27 张老师定，列表与详情页共用同一 op）：
          ① 清 rank_ban_until（练习页排名模式禁用）+ low_trust_until（反作弊标记）；
          ② 记 low_trust_exempt = 本次时刻（屏蔽史豁免：早于此刻的屏蔽录像不再作为入组依据，
-            之后再有录像被屏蔽会自动重新入组）；
+            之后再有录像被屏蔽时弹窗选择「加入」才会重新入组）；
          ③ 可选 restoreBlocked：同时把名下独立屏蔽的录像恢复为「通过」（成绩回榜、参与排名），
             封禁连坐（status_bak≠0）的不动——那些由解禁流程负责恢复；
          ④ 重分拣其待审录像（低信任硬规则解除后可回免核定池） */
@@ -476,9 +476,16 @@ async function dispatch(
       if (![VIDEO_STATUS.BANNED, VIDEO_STATUS.NORMAL, VIDEO_STATUS.REVIEWED].includes(status as 0 | 10 | 20)) {
         return { ok: false, error: "参数错误：非法状态" };
       }
+      // 屏蔽 → 低信任分流（2026-10-28 张老师需求：录像处理与人处理分开）。
+      // 前端屏蔽弹窗带「是否将上传者加入低信任用户组」勾选（默认勾选）：
+      // 未传 lowTrust（脚本/内部路径）时维持旧行为（屏蔽史自动入组，从严）。
+      const lowTrustParam = status === VIDEO_STATUS.BANNED && "lowTrust" in p ? toBool(p.lowTrust) : null;
+      const pre = lowTrustParam !== null ? await preBanTrust(id) : null;
       const r = await reviewVideo(actor.uid, actor.role, id, status);
       if (!r.ok) return { ok: false, error: r.error ?? "审核失败" };
-      return { ok: true, message: `录像 #${id} → ${statusName(status)}` };
+      const { note } =
+        lowTrustParam !== null ? await postBanTrust(pre, lowTrustParam) : { note: "" };
+      return { ok: true, message: `录像 #${id} → ${statusName(status)}${note}` };
     }
 
     case "video.batchReview": {
@@ -491,6 +498,8 @@ async function dispatch(
       if (![VIDEO_STATUS.BANNED, VIDEO_STATUS.REVIEWED].includes(status as 0 | 20)) {
         return { ok: false, error: "批量只能「通过」或「屏蔽」" };
       }
+      // 屏蔽 → 低信任分流（2026-10-28 张老师需求）：批量屏蔽弹窗同款勾选，语义同 video.review
+      const lowTrustParam = status === VIDEO_STATUS.BANNED && "lowTrust" in p ? toBool(p.lowTrust) : null;
       // 自动分拣闸门（2026-10-19 方案 v2）：需核定录像（auto_flag=0/2/-1）只能逐条手审，
       // 拒绝批量通过（批量屏蔽仍放行——下架不受限）。机器只分拣不审批，铁闸在服务端。
       let targetIds = ids;
@@ -515,6 +524,19 @@ async function dispatch(
           };
         }
       }
+      // 屏蔽分流的预检：按上传者（去重）取屏蔽前低信任态，屏蔽完成后统一写豁免
+      let preByUser: Map<number, BanTrustPre> | null = null;
+      if (lowTrustParam !== null) {
+        const rows = await prisma.video.findMany({
+          where: { id: { in: targetIds.map(BigInt) } },
+          select: { user: true },
+        });
+        preByUser = new Map();
+        for (const uid of [...new Set(rows.map((r) => N(r.user)))]) {
+          const pre = await preBanTrustUser(uid);
+          if (pre) preByUser.set(uid, pre);
+        }
+      }
       let done = 0;
       const errors: string[] = [];
       /* 免核定批量通过跳过防盲审（2026-10-19 张老师报：免核池一键过被 2013 版
@@ -528,9 +550,28 @@ async function dispatch(
         else errors.push(`#${id}: ${r.error}`);
       }
       if (!done) return { ok: false, error: errors[0] ?? "全部失败" };
+      // 屏蔽分流的写回（语义同单条）：勾选＝屏蔽史自然入组（零写入）；未勾选＝非成员写豁免
+      let trustNote = "";
+      if (lowTrustParam !== null && preByUser) {
+        const added: string[] = [];
+        const notAdded: string[] = [];
+        for (const pre of preByUser.values()) {
+          if (!pre) continue;
+          if (lowTrustParam) {
+            if (newlyJoined(pre)) added.push(pre.name);
+          } else if ((await applyBanTrustExempt(pre)) !== "") {
+            notAdded.push(pre.name);
+          }
+        }
+        if (lowTrustParam) {
+          if (added.length) trustNote = `（${namesBrief(added)}已加入低信任用户组）`;
+        } else if (notAdded.length) {
+          trustNote = `（${namesBrief(notAdded)}未加入低信任用户组）`;
+        }
+      }
       return {
         ok: true,
-        message: `批量${statusName(status)} ${done}/${targetIds.length} 条${errors.length ? `（${errors.length} 条失败）` : ""}`,
+        message: `批量${statusName(status)} ${done}/${targetIds.length} 条${errors.length ? `（${errors.length} 条失败）` : ""}${trustNote}`,
       };
     }
 
@@ -1036,6 +1077,92 @@ function now(): number {
 }
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
+
+/* ---------- 屏蔽 → 低信任分流（2026-10-28 张老师需求：录像处理与人处理分开） ----------
+ *
+ * 后台屏蔽录像弹窗新增「是否将上传者加入低信任用户组」勾选（默认勾选）：
+ * · 勾选 → 屏蔽史自然生效，上传者经 lowtrust.ts 既有推导自动入组（零写入，列表可溯源）；
+ * · 不勾 → 屏蔽完成后写 low_trust_exempt=now，把「时刻早于本次屏蔽」的屏蔽史整体豁免，
+ *   上传者不进组。判定端（lib/lowtrust.ts / 分拣 / 上传限流）零改动——豁免就是既有
+ *   「人工移出」机制的字段复用，语义完全一致。
+ * · 只对「屏蔽前还不是成员」的用户新写豁免：已在组的成员不受本次选择影响
+ *  （在组是因为更早的屏蔽/反作弊标记，不该被本次「不加入」顺手移出）。
+ * · 未传 lowTrust 参数的调用方（脚本 / user.clearCheatPenalty 恢复 / video.delete
+ *   预屏蔽）维持旧行为：屏蔽史自动入组（从严），不打扰既有链路。
+ */
+
+interface BanTrustPre {
+  userId: number;
+  name: string;
+  /** 屏蔽前是否已是低信任组成员（封禁账号恒 false——本就不入组） */
+  member: boolean;
+  /** 账号是否处于封禁状态（封禁不入组、组列表也不显示，提示省略） */
+  accountBanned: boolean;
+  /** 屏蔽前 low_trust_exempt 值（不加入路径只在非成员时整体前移，成员不动） */
+  exemptAt: number;
+}
+
+/** 屏蔽前取上传者低信任态（单条 video.review 用） */
+async function preBanTrust(videoId: number): Promise<BanTrustPre | null> {
+  const video = await prisma.video.findUnique({
+    where: { id: BigInt(videoId) },
+    select: { user: true },
+  });
+  if (!video) return null;
+  return preBanTrustUser(N(video.user));
+}
+
+async function preBanTrustUser(uid: number): Promise<BanTrustPre | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: BigInt(uid) },
+    select: { chineseName: true, status: true, lowTrustUntil: true, lowTrustExempt: true },
+  });
+  if (!user) return null;
+  const blocked = await loadBlockedHistoryOf(uid);
+  const state = lowTrustState(user, blocked, now());
+  return {
+    userId: uid,
+    name: user.chineseName,
+    member: state.member,
+    accountBanned: user.status === -1,
+    exemptAt: state.exemptAt,
+  };
+}
+
+/** 「屏蔽后新入组」判定：原本不是成员、且不是封禁账号（封禁不入组），
+ *  本次屏蔽经屏蔽史推导让其成为成员 */
+function newlyJoined(pre: BanTrustPre): boolean {
+  return !pre.member && !pre.accountBanned;
+}
+
+/** 屏蔽后写回（单条 video.review 用）：返回 note 供 message 拼接
+ *  · 勾选加入 → 零写入，屏蔽史自然入组；新入组给提示
+ *  · 不加入   → 非成员写 exempt=now 豁免本次屏蔽；已在组保持不动 */
+async function postBanTrust(pre: BanTrustPre | null, lowTrust: boolean): Promise<{ note: string }> {
+  if (!pre) return { note: "" };
+  if (lowTrust) {
+    return newlyJoined(pre) ? { note: `，${pre.name}（#${pre.userId}）已加入低信任用户组` } : { note: "" };
+  }
+  const applied = await applyBanTrustExempt(pre);
+  return { note: applied ? `，${applied}` : "" };
+}
+
+/** 写豁免（不加入低信任组的路径）：非成员才写；返回 message 片段（空=无需动作） */
+async function applyBanTrustExempt(pre: BanTrustPre): Promise<string> {
+  if (pre.member || pre.accountBanned) return "";
+  await prisma.user.update({
+    where: { id: BigInt(pre.userId) },
+    data: { lowTrustExempt: BigInt(now()) },
+  });
+  return `${pre.name}（#${pre.userId}）未加入低信任用户组`;
+}
+
+/** 批量消息用名列表：≤3 个全列，超过给「N 名玩家」 */
+function namesBrief(names: string[]): string {
+  if (!names.length) return "";
+  if (names.length <= 3) return `${names.join("、")} `;
+  return `${names.length} 名玩家 `;
+}
 
 function statusName(status: number): string {
   return status === VIDEO_STATUS.REVIEWED ? "已通过" : status === VIDEO_STATUS.BANNED ? "已屏蔽" : "待审核";

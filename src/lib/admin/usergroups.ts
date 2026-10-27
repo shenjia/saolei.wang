@@ -5,6 +5,7 @@
 // · 低信任组 = 反作弊标记未到期 ∪ 屏蔽史（最近屏蔽时刻晚于人工移出时刻）
 //   —— 详细定义与「为什么封禁账号不计入」见 src/lib/lowtrust.ts（与录像分拣 getUserTrustInfo 同源，
 //   列表 / 详情页 / 分拣三处禁单边漂移）。
+//   屏蔽 → 入组联动自 2026-10-28 起改为弹窗可选（默认加入；不加入则 ops.ts 写豁免），见 lowtrust.ts 头注。
 //
 // 「加入时间 / 操作管理员」没有落库字段，从 admin_log 反查最新一条加组动作
 // （user.setTrusted 加入 / user.setLowTrust）；探测器自动加入走 cheat_report（操作者=反作弊系统）；
