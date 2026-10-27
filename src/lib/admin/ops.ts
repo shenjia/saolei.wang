@@ -270,8 +270,9 @@ async function dispatch(
 
     case "cheat.confirm": {
       /* 作弊核实（2026-10-27 张老师定）：探测命中只禁排名；管理员核实后
-         在此转低信任（7 天：上传限 5/日 + 全量人工审），rank_ban 同步延长
-         （核实即实锤，排名禁用从复核时刻重计 24h） */
+         在此转低信任（7 天：上传限 5/日 + 全量人工审），rank_ban 同步改为
+         7 天（核实即实锤，从复核时刻重计——不复用命中期的 24h，两档时长
+         必须在写库与玩家可见文案上一致） */
       const id = toId(p.reportId);
       if (!id) return { ok: false, error: "参数错误：缺少上报 ID" };
       const report = await prisma.cheatReport.findUnique({ where: { id: BigInt(id) } });
@@ -281,11 +282,13 @@ async function dispatch(
         select: { chineseName: true },
       });
       const t = now();
+      // 核实成立＝封 7 天：低信任与排名禁用同一窗口（2026-10-27 张老师定）
+      const BAN_SEC = 7 * 24 * 3600;
       await prisma.user.update({
         where: { id: report.user },
         data: {
-          rankBanUntil: BigInt(t + 24 * 3600),
-          lowTrustUntil: BigInt(t + 7 * 24 * 3600),
+          rankBanUntil: BigInt(t + BAN_SEC),
+          lowTrustUntil: BigInt(t + BAN_SEC),
         },
       });
       await prisma.cheatReport.update({
@@ -303,7 +306,7 @@ async function dispatch(
       for (const { id: vid } of pending) await triageVideo(Number(vid));
       return {
         ok: true,
-        message: `已确认「${user?.chineseName ?? report.user}」作弊：转低信任用户组（7 天限流+全量人工审），排名模式禁用 24h，已发系统消息告知${pending.length ? `，重分拣待审录像 ${pending.length} 部` : ""}`,
+        message: `已确认「${user?.chineseName ?? report.user}」作弊：转低信任用户组（7 天限流+全量人工审），排名模式禁用 7 天，已发系统消息告知${pending.length ? `，重分拣待审录像 ${pending.length} 部` : ""}`,
       };
     }
 
@@ -366,8 +369,8 @@ async function dispatch(
     }
 
     case "user.setLowTrust": {
-      /* 手动加入低信任组（2026-10-27 张老师定）：7 天低信任（上传限 5/日 + 全量人工审核）+
-         排名模式同步禁 24 小时（与探测器命中同款时长，口径 2026-10-27 张老师定） */
+      /* 手动加入低信任组（2026-10-27 张老师定）：封 7 天——低信任（上传限 5/日 + 全量
+         人工审核）与排名禁用同一 7 天窗口，与 cheat.confirm 核实口径保持一致 */
       const id = toId(p.id);
       if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
       const user = await prisma.user.findUnique({
@@ -379,12 +382,13 @@ async function dispatch(
       if (Number(user.lowTrustUntil) > t) {
         return { ok: false, error: "该玩家已在低信任用户组（标记生效中）" };
       }
+      const BAN_SEC = 7 * 24 * 3600;
       await prisma.user.update({
         where: { id: BigInt(id) },
-        data: { lowTrustUntil: BigInt(t + 7 * 24 * 3600), rankBanUntil: BigInt(t + 24 * 3600) },
+        data: { lowTrustUntil: BigInt(t + BAN_SEC), rankBanUntil: BigInt(t + BAN_SEC) },
       });
       try {
-        await sendSystemMessage(id, "经系统检测，您在排行模式中存在作弊行为，已将您移入低信任用户组（7 天内上传录像每日限 5 部且需人工审核），排行模式禁用 24 小时。如有异议请联系管理员。");
+        await sendSystemMessage(id, "经系统检测，您在排行模式中存在作弊行为，已将您移入低信任用户组（7 天内上传录像每日限 5 部且需人工审核），排行模式禁用 7 天。如有异议请联系管理员。");
       } catch { /* 消息失败不阻断 */ }
       const pending = await prisma.video.findMany({ where: { user: BigInt(id), status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");

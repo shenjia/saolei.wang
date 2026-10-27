@@ -305,7 +305,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     label="加入低信任用户组"
                     variant="warn"
                     sm={false}
-                    confirm={`确认把「${u.chineseName}」加入低信任用户组？其 7 天内上传限流（每日 5 部）且全部录像需人工审核，练习页排名模式同步禁用 24 小时，待审录像会立即重分拣。`}
+                    confirm={`确认把「${u.chineseName}」加入低信任用户组？封 7 天：期内上传限流（每日 5 部）且全部录像需人工审核，练习页排名模式同步禁用 7 天，待审录像会立即重分拣。`}
                   />
                 )
               )}

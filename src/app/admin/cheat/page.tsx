@@ -1,7 +1,7 @@
 // 管理后台 · 反作弊复核（2026-10-27 张老师定：探测命中只禁排名，核实才转低信任）
 // 待复核列表（resolved=0）+ 已复核历史。证据栈含 chrome-extension:// 前缀的
 // 多为扩展误报（Grammarly/翻译类）——dismiss 即解除排名禁用。
-// 核实（cheat.confirm）→ 转低信任 7 天 + 排名禁用 24h 重计；误报（cheat.dismiss）
+// 核实（cheat.confirm）→ 封 7 天：低信任 7 天 + 排名禁用 7 天（同窗重计）；误报（cheat.dismiss）
 // → 清除排名禁用。两操作都走站内浮窗确认。
 
 import Link from "next/link";
@@ -135,7 +135,7 @@ export default async function AdminCheatPage() {
                   params={{ reportId: Number(r.id) }}
                   label="核实作弊"
                   variant="danger"
-                  confirm={`确认核实报告 #${r.id} 为真实作弊？将转低信任用户组（7 天限流+全量人工审）、禁用排名模式 24 小时，并给玩家发一条系统消息。`}
+                  confirm={`确认核实报告 #${r.id} 为真实作弊？将转低信任用户组（7 天限流+全量人工审）并封禁排名模式 7 天，同时给玩家发一条系统消息。`}
                 />
               </span>
               <span className="admin_tip" data-tip={`发送：${CHEAT_DISMISS_NOTICE}`}>
@@ -192,9 +192,9 @@ export default async function AdminCheatPage() {
           </tbody>
         </table>
         <p className="admin_hint" style={{ marginTop: 8 }}>
-          处置口径（2026-10-27 张老师定）：探测命中只禁用排名模式 24h；
+          处置口径（2026-10-27 张老师定）：探测命中只禁用排名模式 24h（嫌疑期临时限制）；
           🧩 前缀（证据含 chrome-extension://）多为浏览器扩展误报——判「误报」立即解禁。
-          核实为真实作弊才转低信任用户组（上传限 5/日 + 全量人工审 7 天）。
+          核实为真实作弊即封 7 天：低信任用户组（上传限 5/日 + 全量人工审）与排名禁用同为 7 天。
         </p>
       </AdminCard>
       {resolved.length > 0 && (
