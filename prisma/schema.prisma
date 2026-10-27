@@ -995,8 +995,12 @@ model CheatReport {
   reason     String @db.VarChar(32)
   evidence   String @db.VarChar(500)
   createTime BigInt @default(0) @map("create_time") @db.BigInt
+  /// 人工复核状态（2026-10-27 张老师定：探测只禁排名，核实才转低信任）：
+  /// 0=待复核 1=确认作弊（已转低信任）2=误报（已解除排名禁用）
+  resolved   Int    @default(0) @db.TinyInt
 
   @@index([user, createTime])
+  @@index([resolved])
   @@map("cheat_report")
 }
 

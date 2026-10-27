@@ -14,7 +14,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: string;
-  badgeKey?: "pending" | "avatar" | "bbs";
+  badgeKey?: "pending" | "avatar" | "bbs" | "cheat";
   groupBadgeKey?: "trusted" | "lowtrust";
 }
 
@@ -42,6 +42,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     title: "玩家",
     items: [
       { href: "/admin/users", label: "玩家管理", icon: "👥" },
+      { href: "/admin/cheat", label: "反作弊复核", icon: "🚨", badgeKey: "cheat" },
       { href: "/admin/trusted", label: "可信用户组", icon: "🛡", groupBadgeKey: "trusted" },
       { href: "/admin/lowtrust", label: "低可信用户组", icon: "⚠️", groupBadgeKey: "lowtrust" },
       { href: "/admin/ipgroups", label: "同 IP 账号组", icon: "🔗" },
@@ -99,7 +100,7 @@ export function AdminSidebar({
   user,
   groupBadges,
 }: {
-  badges: { pending: number; avatar: number; bbs: number };
+  badges: { pending: number; avatar: number; bbs: number; cheat: number };
   user: { uid: number; name: string; administrator: boolean };
   /** 用户组 badge 信号（服务端 layout 查询；旧调用方缺省 = 恒不亮，向后兼容） */
   groupBadges?: Record<GroupKey, GroupBadgeInput>;

@@ -25,13 +25,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await requireAdmin();
   // 论坛待审（2026-10-27 张老师要求：与录像/头像同款红点角标）——待审主题 + 待审回复合计；
   // 用户组 badge 信号（2026-10-27）：组人数 + 最新加入时刻，客户端与 localStorage 基线对比
-  const [pending, avatarPending, bbsPending, currentUser, groupBadges] = await Promise.all([
+  const [pending, avatarPending, bbsPending, cheatPending, currentUser, groupBadges] = await Promise.all([
     prisma.video.count({ where: { status: VIDEO_STATUS.NORMAL } }),
     prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.PENDING } }),
     Promise.all([
       prisma.bbsPost.count({ where: { status: 5 } }),
       prisma.bbsReply.count({ where: { status: 5 } }),
     ]).then(([a, b]) => a + b),
+    // 反作弊待复核数（2026-10-27 处置分级：探测只禁排名，此处人工核实）
+    prisma.cheatReport.count({ where: { resolved: 0 } }),
     prisma.user.findUnique({ where: { id: session.uid }, select: { chineseName: true } }),
     getGroupBadges(),
   ]);
@@ -45,7 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="admin_shell">
       <AdminSidebar
-        badges={{ pending, avatar: avatarPending, bbs: bbsPending }}
+        badges={{ pending, avatar: avatarPending, bbs: bbsPending, cheat: cheatPending }}
         groupBadges={{
           trusted: { count: groupBadges.trustedCount, maxJoin: groupBadges.trustedMaxJoin },
           lowtrust: { count: groupBadges.lowTrustCount, maxJoin: groupBadges.lowTrustMaxJoin },

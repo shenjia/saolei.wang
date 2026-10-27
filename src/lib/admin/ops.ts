@@ -40,6 +40,8 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "user.setTrusted": "administrator",
   "user.clearCheatPenalty": "administrator",
   "user.setLowTrust": "administrator",
+  "cheat.confirm": "administrator",
+  "cheat.dismiss": "administrator",
   // 给单个玩家发系统消息（2026-10-23）：manager 可用——与头像审核通知同级触达能力；
   // 全站广播 message.broadcast 仍是超管专属
   "user.sendSystemMessage": "manager",
@@ -232,6 +234,64 @@ async function dispatch(
       return {
         ok: true,
         message: `${user.chineseName}（#${id}）已移出低信任用户组，排行模式已启用`,
+      };
+    }
+
+    case "cheat.confirm": {
+      /* 作弊核实（2026-10-27 张老师定）：探测命中只禁排名；管理员核实后
+         在此转低信任（7 天：上传限 5/日 + 全量人工审），rank_ban 同步延长
+         （核实即实锤，排名禁用从复核时刻重计 24h） */
+      const id = toId(p.reportId);
+      if (!id) return { ok: false, error: "参数错误：缺少上报 ID" };
+      const report = await prisma.cheatReport.findUnique({ where: { id: BigInt(id) } });
+      if (!report) return { ok: false, error: "上报记录不存在" };
+      const user = await prisma.user.findUnique({
+        where: { id: report.user },
+        select: { chineseName: true },
+      });
+      const t = now();
+      await prisma.user.update({
+        where: { id: report.user },
+        data: {
+          rankBanUntil: BigInt(t + 24 * 3600),
+          lowTrustUntil: BigInt(t + 7 * 24 * 3600),
+        },
+      });
+      await prisma.cheatReport.update({
+        where: { id: BigInt(id) },
+        data: { resolved: 1 },
+      });
+      const pending = await prisma.video.findMany({ where: { user: report.user, status: VIDEO_STATUS.NORMAL }, select: { id: true } });
+      const { triageVideo } = await import("@/lib/video-triage");
+      for (const { id: vid } of pending) await triageVideo(Number(vid));
+      return {
+        ok: true,
+        message: `已确认「${user?.chineseName ?? report.user}」作弊：转低信任用户组（7 天限流+全量人工审），排名模式禁用 24h${pending.length ? `，重分拣待审录像 ${pending.length} 部` : ""}`,
+      };
+    }
+
+    case "cheat.dismiss": {
+      /* 误报解除（2026-10-27）：核实为误报（扩展类等）——清除排名禁用，
+         上报标记已复核；低信任不受影响（本就未自动转入） */
+      const id = toId(p.reportId);
+      if (!id) return { ok: false, error: "参数错误：缺少上报 ID" };
+      const report = await prisma.cheatReport.findUnique({ where: { id: BigInt(id) } });
+      if (!report) return { ok: false, error: "上报记录不存在" };
+      const user = await prisma.user.findUnique({
+        where: { id: report.user },
+        select: { chineseName: true },
+      });
+      await prisma.user.update({
+        where: { id: report.user },
+        data: { rankBanUntil: BigInt(0) },
+      });
+      await prisma.cheatReport.update({
+        where: { id: BigInt(id) },
+        data: { resolved: 2 },
+      });
+      return {
+        ok: true,
+        message: `已判定「${user?.chineseName ?? report.user}」为误报：排名模式禁用已解除`,
       };
     }
 
