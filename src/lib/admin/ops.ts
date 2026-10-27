@@ -24,6 +24,7 @@ import { rankLeave, safeRankOp } from "@/lib/userrank";
 import { setMaintenance } from "@/lib/maintenance";
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
+import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
 import { logAdmin } from "./log";
 import type { AdminLevel } from "./guard";
 
@@ -291,9 +292,12 @@ async function dispatch(
         where: { id: BigInt(id) },
         data: { resolved: 1, resolver: BigInt(actor.uid), resolvedTime: BigInt(t) },
       });
-      /* 系统消息暂停（2026-10-27 张老师定：误报概率高，先停发——复核已由
-         管理员人工完成再 confirm，此时玩家已知结果，无需再通知；
-         待误报率稳定后再评估恢复） */
+      /* 系统消息（2026-10-27 张老师定：恢复发送）——核实成立要给玩家一个明确
+         结论，文案与复核页按钮气泡「发送：xxxx」共用 CHEAT_CONFIRM_NOTICE 常量，
+         保证看到的和收到的逐字一致。失败不阻断处置 */
+      try {
+        await sendSystemMessage(Number(report.user), CHEAT_CONFIRM_NOTICE);
+      } catch { /* 消息失败不阻断 */ }
       const pending = await prisma.video.findMany({ where: { user: report.user, status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");
       for (const { id: vid } of pending) await triageVideo(Number(vid));
@@ -327,7 +331,7 @@ async function dispatch(
         data: { resolved: 2, resolver: BigInt(actor.uid), resolvedTime: BigInt(t) },
       });
       try {
-        await sendSystemMessage(Number(report.user), "经管理员复核，之前您在排行模式中的出现的疑似作弊行为属于误报，现已恢复");
+        await sendSystemMessage(Number(report.user), CHEAT_DISMISS_NOTICE);
       } catch { /* 消息失败不阻断 */ }
       const pending = await prisma.video.findMany({ where: { user: report.user, status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");

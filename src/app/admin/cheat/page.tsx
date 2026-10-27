@@ -7,9 +7,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { AdminAction } from "@/components/admin/AdminAction";
+import { SendMessageButton } from "@/components/admin/SendMessageButton";
 import { AdminCard } from "@/components/admin/Widgets";
 import { title as milTitle } from "@/lib/assess";
 import { TITLE_COLORS } from "@/lib/config";
+import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "反作弊复核 | 管理后台" };
@@ -100,46 +102,52 @@ export default async function AdminCheatPage() {
                 <img src={shotUrl} alt="命中瞬间截图" className="cheat_shot" />
               </a>
             )}
-            {(verifiedState > 0 || extSuspect) && (
+            {extSuspect && (
               <div className="cheat_ev_tags">
-                {verifiedState === 1 && (
-                  <span className="cheat_ev_tag ok" title="权威进程核验通过：对局存在、属于该玩家、事件序未超界">
-                    ✓ 核验通过
-                  </span>
-                )}
-                {verifiedState === 2 && (
-                  <span className="cheat_ev_tag bad" title="权威进程核验不符：对局/玩家/事件序对不上（伪造上报或旧局残留）">
-                    ⚠ 核验不符
-                  </span>
-                )}
-                {extSuspect && (
-                  <span className="cheat_ev_tag warn" title="证据含 chrome-extension:// —— 多为浏览器扩展误报（Grammarly/翻译类）">
-                    🧩 扩展
-                  </span>
-                )}
+                <span className="cheat_ev_tag warn" title="证据含 chrome-extension:// —— 多为浏览器扩展误报（Grammarly/翻译类）">
+                  🧩 扩展
+                </span>
               </div>
             )}
+            {/* 核验状态标签内联在正文前（2026-10-27 张老师要求）：原来独立一行
+                白占高度，且「通过」这个状态是读正文前最该先看到的判断依据 */}
             <div className="cheat_ev_text" title={plainEv}>
+              {verifiedState === 1 && (
+                <span className="cheat_ev_tag ok inline" title="权威进程核验通过：对局存在、属于该玩家、事件序未超界">
+                  ✓ 真实对局
+                </span>
+              )}
+              {verifiedState === 2 && (
+                <span className="cheat_ev_tag bad inline" title="权威进程核验不符：对局/玩家/事件序对不上（伪造上报或旧局残留）">
+                  ⚠ 核验不符
+                </span>
+              )}
               {plainEv}
             </div>
           </td>
           <td>{new Date(Number(r.createTime) * 1000).toLocaleString("zh-CN")}</td>
           {r.resolved === 0 ? (
             <td className="cheat_ops">
-              <AdminAction
-                op="cheat.confirm"
-                params={{ reportId: Number(r.id) }}
-                label="核实作弊"
-                variant="danger"
-                confirm={`确认核实报告 #${r.id} 为真实作弊？将转低信任用户组（7 天限流+全量人工审）并禁用排名模式 24 小时。`}
-              />
-              <AdminAction
-                op="cheat.dismiss"
-                params={{ reportId: Number(r.id) }}
-                label="误报"
-                variant="warn"
-                confirm={`判定报告 #${r.id} 为误报？将立即解除该玩家的排名模式禁用。`}
-              />
+              {/* hover 气泡＝点下去实际会发给玩家的系统消息（同一常量，逐字一致） */}
+              <span className="admin_tip" data-tip={`发送：${CHEAT_CONFIRM_NOTICE}`}>
+                <AdminAction
+                  op="cheat.confirm"
+                  params={{ reportId: Number(r.id) }}
+                  label="核实作弊"
+                  variant="danger"
+                  confirm={`确认核实报告 #${r.id} 为真实作弊？将转低信任用户组（7 天限流+全量人工审）、禁用排名模式 24 小时，并给玩家发一条系统消息。`}
+                />
+              </span>
+              <span className="admin_tip" data-tip={`发送：${CHEAT_DISMISS_NOTICE}`}>
+                <AdminAction
+                  op="cheat.dismiss"
+                  params={{ reportId: Number(r.id) }}
+                  label="误报"
+                  variant="warn"
+                  confirm={`判定报告 #${r.id} 为误报？将立即解除该玩家的排名模式禁用，并给玩家发一条系统消息。`}
+                />
+              </span>
+              <SendMessageButton uid={Number(r.user)} name={nameMap.get(r.user) ?? "（已注销）"} />
             </td>
           ) : (
             <>

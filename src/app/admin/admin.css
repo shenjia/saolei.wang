@@ -1249,3 +1249,44 @@ table.admin_table .ai_reason {
   color: #f8f8f2;
   font-weight: normal;
 }
+
+/* ---------- 行内按钮 hover 气泡（2026-10-27 张老师要求）----------
+   复核页「核实作弊」「误报」悬停要显示「发送：xxxx」＝点下去实际发给玩家的
+   系统消息。用 ::after + data-tip 而非原生 title：可控换行与配色，长句不撑成一整行。
+   注意 .admin_card 是 overflow:hidden、按钮又在最后一列——气泡一律「向上、右对齐
+   按钮右缘」向左展开，才不会被卡片裁掉。 */
+.admin_tip {
+  position: relative;
+  display: inline-block;
+}
+.admin_tip::after {
+  content: attr(data-tip);
+  display: none;
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: 300px;
+  padding: 6px 9px;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #1e1f1c;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  color: #d5d5c8;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+.admin_tip:hover::after {
+  display: block;
+}
+
+/* 核验状态标签内联在证据正文前（2026-10-27 张老师要求）：与文字同一行，
+   右留 5px 间距；vertical-align 提到与 12px 正文的基线对齐 */
+.cheat_ev_tag.inline {
+  margin-right: 5px;
+  vertical-align: 1px;
+}
