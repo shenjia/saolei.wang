@@ -38,14 +38,47 @@ const PLAY_OPTIONS = {
   listener: () => {},
 } as const;
 
-/** 播放录像（播放器未就绪时先记入待播队列，就绪后自动补播） */
+/** 待播轮询句柄（模块级单例；onload 回调之外的兜底补播通道） */
+let pendingPoll: number | undefined;
+
+/** 播放器就绪前 playFlop 的兜底轮询：onload 可能已经放过（晚于点击时不再触发），
+    也可能因 window.flop 被本函数先建出来而错过赋值——统一靠轮询补播。 */
+function startPendingPoll() {
+  if (pendingPoll !== undefined) return;
+  pendingPoll = window.setInterval(() => {
+    const flop = window.flop;
+    if (flop?.playVideo && flop.pendingUri) {
+      const uri = flop.pendingUri;
+      flop.pendingUri = undefined;
+      window.clearInterval(pendingPoll);
+      pendingPoll = undefined;
+      flop.playVideo(uri, PLAY_OPTIONS);
+    }
+  }, 120);
+  // 15s 兜底停表：播放器始终未就绪（如 iframe 加载失败）就放弃
+  window.setTimeout(() => {
+    if (pendingPoll !== undefined) {
+      window.clearInterval(pendingPoll);
+      pendingPoll = undefined;
+    }
+  }, 15000);
+}
+
+/** 播放录像（播放器未就绪时记入待播队列，就绪后自动补播） */
 export function playFlop(uri: string) {
-  const flop = window.flop;
-  if (!flop?.playVideo) {
-    if (flop) flop.pendingUri = uri;
+  /* ⚠️ window.flop 可能尚未存在——SSR 表格（tbody）出现在 iframe 引导完成之前，
+     用户此时点播放，此前「直接 return」会把 URI 静默丢弃（2026-10-28 生产实测：
+     就绪前点击 video-file 请求数为 0，播放器永远停在初始菜单）。改为先建对象
+     记下 pendingUri，再用 120ms 轮询兜底补播（与 FlopPlayer 的 onload 回调
+     双通道都判 pendingUri，先到先播、不会重复起播）。 */
+  const flop = (window.flop = window.flop ?? {});
+  flop.pendingUri = uri;
+  if (flop.playVideo) {
+    flop.playVideo(uri, PLAY_OPTIONS);
+    flop.pendingUri = undefined;
     return;
   }
-  flop.playVideo(uri, PLAY_OPTIONS);
+  startPendingPoll();
 }
 
 /* 注入播放器 iframe 的窄屏适配脚本：
