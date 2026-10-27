@@ -5,9 +5,10 @@
 //
 // 口径（张老师 2026-10-14 定；2026-10-28 轴调整）：
 //   · 分组只按 **级别 × 模式（标雷/无猜）**，不细分 3BV，也不同级别之间比；
-//   · 雷达 **五轴**：判雷（置顶，2026-10-19 张老师定改名，原「综合」）/ 速度 / 效率 / 走位 / 手速
-//     —— 原「移动」轴已去掉；原「精准」corr 轴 2026-10-28 换「走位」（3BV/PATH）；
-//     「效率」按组选指标：NF=IOE / FL=ThrP（张老师 2026-10-28 定）；
+//   · 雷达 **五轴**（2026-10-28 晚张老师定四字名）：判雷能力（置顶，2026-10-19 定改名，
+//     原「综合」）/ 开图速度 / 操作效率 / 路线规划 / 点击速度（旧名：判雷/速度/效率/走位/手速）
+//     —— 原「移动」轴已去掉；原「精准」corr 轴 2026-10-28 换「路线规划」（3BV/PATH）；
+//     「操作效率」按组选指标：NF=IOE / FL=ThrP（张老师 2026-10-28 定）；
 //   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
 //     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
 //     video_metrics.composite 的口径同步见 scripts/video-metrics.ts。
@@ -36,7 +37,7 @@ export type { VideoAnalysisPoint };
 
 /** 录像评级盒的取数结果 */
 export interface VideoAnalysisResult {
-  /** 五根轴：综合（STNB）置顶 + 速度 / 效率 / 精准 / 手速 */
+  /** 五根轴：判雷能力（STNB）置顶 + 开图速度 / 操作效率 / 路线规划 / 点击速度 */
   points: VideoAnalysisPoint[];
   /** 综合评级（S+/A-…）：五轴组内分位加权，与练习页结算面板同算法 */
   overall: string;
@@ -141,7 +142,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       };
     });
 
-    // ② 判雷轴（2026-10-19 张老师定改名，原「综合」）置顶：**STNB 原值**
+    // ② 判雷能力轴（2026-10-19 张老师定改名，原「综合」；2026-10-28 晚定四字名）置顶：**STNB 原值**
     //    （张老师 2026-10-14 晚定：数值与评级都回到 STNB 口径，
     //    弃用中途的「四轴百分位加权平均」）。半径与气泡「超过 xx%」用 STNB 在组内的分位，
     //    等级走同一份分布 + gradeOf —— 与其余四轴同一套算法，口径自洽。
@@ -151,7 +152,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     const stnbPercent = stnbDist.length ? percentOf(stnbValue, stnbDist, true, "stnb") : 0;
     const composite: VideoAnalysisPoint = {
       key: "stnb",
-      name: "判雷",
+      name: "判雷能力",
       value: stnbValue,
       disp: formatMetric("stnb", stnbValue),
       percent: stnbPercent,

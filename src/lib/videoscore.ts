@@ -47,30 +47,34 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   // 2026-10-14 晚张老师定：气泡里的「3BV/s」与手速单位都放到数值前/整词化 ——
   // 速度轴 3BV/s 由后缀改前缀（气泡读「3BV/s 4.065」），手速由「次/秒」改「次点击/秒」。
   // ⚠️ BASE_METRICS 与 axisMetricsFor 两处定义必须同步改（录像页与练习页都走 formatMetric）。
-  { key: "stnb", name: "判雷", desc: "综合评分 STNB", prefix: "STNB", unit: "", digits: 1, highIsBetter: true },
-  { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
-  { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
-  { key: "thrp", name: "效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
+  // 2026-10-28 晚张老师定：五轴改四字名（纯文案）——判雷→判雷能力、速度→开图速度、
+  // 效率→操作效率、走位→路线规划、手速→点击速度（corr/ppc 已退出雷达，名不动）。
+  // ⚠️ BASE_METRICS 与 axisMetricsFor 两处定义必须同步改（录像页与练习页都走 formatMetric）。
+  { key: "stnb", name: "判雷能力", desc: "综合评分 STNB", prefix: "STNB", unit: "", digits: 1, highIsBetter: true },
+  { key: "bvs", name: "开图速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
+  { key: "ioe", name: "操作效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
+  { key: "thrp", name: "操作效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
   { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
-  { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
+  { key: "cls", name: "点击速度", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   { key: "ppc", name: "移动", desc: "每击鼠标行程", prefix: "", unit: "格/次", digits: 2, highIsBetter: false },
-  { key: "bpp", name: "走位", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
+  { key: "bpp", name: "路线规划", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
 ];
 
 /**
- * 雷达的四根分项轴 —— 自顶部「判雷」起顺时针：速度 / 效率 / 走位 / 手速。
- * 「效率」按组选指标（2026-10-28 张老师定）：FL=ThrP（每次有效操作换回的 3BV，
+ * 雷达的四根分项轴 —— 自顶部「判雷能力」起顺时针：开图速度 / 操作效率 / 路线规划 / 点击速度
+ * （2026-10-28 晚张老师定四字名；旧名：速度 / 效率 / 走位 / 手速）。
+ * 「操作效率」按组选指标（2026-10-28 张老师定）：FL=ThrP（每次有效操作换回的 3BV，
  * 即 chord 收益），NF=IOE（每点击换回的 3BV）——NF 无 chord，ThrP 恒 ≤1 无区分度。
- * 「走位」= 3BV/PATH，替换原「精准」corr 轴（corr 与水平负相关：世界第一 F、纯萌新 SSS）。
+ * 「路线规划」= 3BV/PATH，替换原「精准」corr 轴（corr 与水平负相关：世界第一 F、纯萌新 SSS）。
  */
 export function axisMetricsFor(noflag: boolean): MetricDef<AxisMetricKey>[] {
   return [
-    { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
+    { key: "bvs", name: "开图速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
     noflag
-      ? { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true }
-      : { key: "thrp", name: "效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
-    { key: "bpp", name: "走位", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
-    { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
+      ? { key: "ioe", name: "操作效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true }
+      : { key: "thrp", name: "操作效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
+    { key: "bpp", name: "路线规划", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
+    { key: "cls", name: "点击速度", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   ];
 }
 
@@ -141,7 +145,7 @@ export function compositeOf(percents: Partial<Record<MetricKey, number>>, noflag
 
 /**
  * 「本局表现」评级（在线玩结算面板标题右侧「评级：S+」）的权重 —— 2026-10-15 张老师定：
- * **判雷(STNB) 占一半，速度 / 效率 / 走位 / 手速 各 1/8**。
+ * **判雷能力(STNB) 占一半，开图速度 / 操作效率 / 路线规划 / 点击速度 各 1/8**。
  * （2026-10-28 轴调整：原「精准 corr」换「走位 bpp」；效率轴 FL=thrp / NF=ioe ——
  * 两组各自只会提供其中一个键，performanceOf 只对**有值的键**加权。）
  *
@@ -345,7 +349,8 @@ export interface VideoAnalysisPoint {
 }
 
 /**
- * 五轴雷达点组装：判雷（STNB 原值）置顶 + 速度 / 效率 / 走位 / 手速。
+ * 五轴雷达点组装：判雷能力（STNB 原值）置顶 + 开图速度 / 操作效率 / 路线规划 / 点击速度
+ * （2026-10-28 晚张老师定四字名，旧名：判雷 / 速度 / 效率 / 走位 / 手速）。
  * 录像详情页右栏、练习页结算面板、全屏试玩「我的评级」**三处共用这一份**——
  * 2026-10-14 副本分叉的教训（OnlinePlay 曾留本地副本，主模块修了口径副本没跟上）。
  *
@@ -374,7 +379,7 @@ export function radarPointsFrom(
     };
   };
   const all: VideoAnalysisPoint[] = [
-    axis("stnb", "判雷", true),
+    axis("stnb", "判雷能力", true),
     ...axisMetricsFor(noflag).map((d) => axis(d.key, d.name, d.highIsBetter)),
   ];
   return rateable ? all : all.map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
