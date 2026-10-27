@@ -1028,6 +1028,83 @@ export async function getReplyListAdmin(postId: number): Promise<{
   };
 }
 
+// ---------- 每日一星（2026-10-27 后台历史页） ----------
+
+export interface AdminStarRow {
+  id: number;
+  date: string;
+  user: number;
+  author: UserBrief | null;
+  /** 当选感言（空串=未写/被删；speechDel>0 时可能被删过） */
+  speech: string;
+  /** 感言被管理员删除次数（≥2=本人永久不能再发） */
+  speechDel: number;
+  /** 感言赞/踩计数（2026-10-27 上线起记录；此前恒 0） */
+  speechUp: number;
+  speechDown: number;
+  createTime: number;
+}
+
+/** 后台每日一星历史列表：按日期倒序分页，q 支持玩家 ID/名字前缀过滤 */
+export async function getStarListAdmin(f: {
+  q?: string;
+  page?: number;
+}): Promise<{ rows: AdminStarRow[]; total: number; pageSize: number; page: number }> {
+  const page = Math.max(1, f.page ?? 1);
+  const q = (f.q ?? "").trim();
+
+  // 玩家名前缀 → 先查 user 表拿 id 集（star 行数少，in 过滤足够；数字按 id/user 精确匹配）
+  let userFilter: number[] | null = null;
+  let userExact = 0;
+  if (q) {
+    if (/^\d+$/.test(q)) {
+      userExact = parseInt(q, 10);
+    } else {
+      const matched = await prisma.user.findMany({
+        where: { chineseName: { startsWith: q } },
+        select: { id: true },
+        take: 200,
+      });
+      userFilter = matched.map((u) => N(u.id));
+    }
+  }
+
+  const where: Record<string, unknown> = {};
+  if (userExact) where.user = BigInt(userExact);
+  else if (userFilter) {
+    if (!userFilter.length) return { rows: [], total: 0, pageSize: ADMIN_PAGESIZE, page };
+    where.user = { in: userFilter.map((id) => BigInt(id)) };
+  }
+
+  const [stars, total] = await Promise.all([
+    prisma.star.findMany({
+      where,
+      orderBy: { date: "desc" },
+      skip: (page - 1) * ADMIN_PAGESIZE,
+      take: ADMIN_PAGESIZE,
+    }),
+    prisma.star.count({ where }),
+  ]);
+  const authors = await usersByIds(stars.map((s) => N(s.user)));
+
+  return {
+    rows: stars.map((s) => ({
+      id: N(s.id),
+      date: s.date,
+      user: N(s.user),
+      author: authors.get(N(s.user)) ?? null,
+      speech: s.speech,
+      speechDel: s.speechDel,
+      speechUp: s.speechUp,
+      speechDown: s.speechDown,
+      createTime: N(s.createTime),
+    })),
+    total,
+    pageSize: ADMIN_PAGESIZE,
+    page,
+  };
+}
+
 // ---------- 动态 ----------
 
 export interface AdminNewsRow {

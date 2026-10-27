@@ -46,6 +46,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     title: "运营",
     items: [
       { href: "/admin/rank", label: "排行与荣誉", icon: "🏆" },
+      { href: "/admin/star", label: "每日一星", icon: "⭐" },
       { href: "/admin/apikeys", label: "API Key", icon: "🔑" },
       { href: "/admin/logs", label: "操作日志", icon: "🗂" },
       { href: "/admin/system", label: "系统信息", icon: "⚙️" },
