@@ -198,6 +198,8 @@ export interface AdminUserDetail {
   lowTrustFlagged: boolean;
   /** 练习页排名模式禁用生效中（rank_ban_until 未到期） */
   rankBanned: boolean;
+  /** 排名禁用截止 Unix 秒（详情页倒计时用；0=无标记） */
+  rankBanUntil: number;
   /** G1 排名行为审计累计（2026-10-27）；null=该玩家还没有排名局上传 */
   rankedAudit: {
     games: number;
@@ -340,6 +342,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     /* 反作弊标记时效在数据层算好（RSC 渲染期禁 Date.now()） */
     lowTrustFlagged: N(user.lowTrustUntil) > Math.floor(Date.now() / 1000),
     rankBanned: N(user.rankBanUntil) > Math.floor(Date.now() / 1000),
+    rankBanUntil: N(user.rankBanUntil),
     /* G1 排名行为审计：累计盲区率/旗精度展示，极端值判定口径见私有 core */
     rankedAudit: await (async () => {
       const s = await prisma.rankedAuditStat.findUnique({ where: { user: uid } });
