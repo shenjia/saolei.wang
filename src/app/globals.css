@@ -7663,9 +7663,7 @@ button.msg_cancel:hover {
   background: #49483e;
   border-radius: 2px;
 }
-/* 级别标准配色：初绿 / 中橙 / 高黄——级别名、数字、进度条一并变色。
-   2026-10-27 起**已收集方格不再用级别色**（改按时间评级四档，见下方 .g_* 规则），
-   级别色只保留在级别名 / 收集数 / 进度条上 */
+/* 级别标准配色：初绿 / 中橙 / 高黄——级别名、数字、进度条、以及「3BV」模式下的已收集方格 */
 #user_3bv .beg .bbv_name,
 #user_3bv .beg .bbv_stat em {
   color: #a6e22e;
@@ -7688,19 +7686,83 @@ button.msg_cancel:hover {
   background: #e6db74;
 }
 
-/* 已收集方格底色＝该 3BV **最好成绩录像的时间评级**（2026-10-27 张老师定：
-   SSS~S 都显示为金色）。四档取色与雷达 GRADE_COLORS 同源，只是把相近档并为四档
-   （10px 小格分不出 9 档）：金 #E6DB74 / 玫红 #FF0080 / 紫 #A000E5 / 灰 #8A8878 */
-#user_3bv .sq.on.g_gold {
+/* 标题行下的「3BV / PB」筛选器（视觉沿用站内 .ranking_tabs 侧栏小变体：文字 + 3px 底线） */
+#user_3bv .bbv_tabs {
+  display: flex;
+  gap: 4px;
+  margin: -6px 0 10px;
+  border-bottom: 1px solid #49483e;
+}
+#user_3bv .bbv_tab {
+  position: relative;
+  display: block;
+  padding: 5px 12px;
+  border: 0;
+  background: none;
+  color: #939387;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+#user_3bv .bbv_tab::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+  transition: background 0.15s;
+}
+#user_3bv .bbv_tab:hover {
+  color: #a6e22e;
+}
+#user_3bv .bbv_tab:hover::after {
+  background: #49483e;
+}
+/* 当前 tab 高亮**纯 CSS 跟随 box 的 data-mode**（不用 JS 改 class，避免 hydration 属性打架）：
+   data-mode=3bv 时亮 3BV，=pb 时亮 PB */
+#user_3bv[data-mode="3bv"] .bbv_tab[data-mode="3bv"],
+#user_3bv[data-mode="pb"] .bbv_tab[data-mode="pb"] {
+  color: #fdc61a;
+  font-weight: bold;
+  cursor: default;
+}
+#user_3bv[data-mode="3bv"] .bbv_tab[data-mode="3bv"]::after,
+#user_3bv[data-mode="pb"] .bbv_tab[data-mode="pb"]::after,
+#user_3bv[data-mode="3bv"] .bbv_tab[data-mode="3bv"]:hover::after,
+#user_3bv[data-mode="pb"] .bbv_tab[data-mode="pb"]:hover::after {
+  background: #fdc61d;
+}
+
+/* 已收集方格配色·「3BV」模式（默认）：级别三色（与上面级别名的色一致） */
+#user_3bv .beg .sq.on {
+  background: #a6e22e;
+}
+#user_3bv .int .sq.on {
+  background: #fd971f;
+}
+#user_3bv .exp .sq.on {
   background: #e6db74;
 }
-#user_3bv .sq.on.g_rose {
+
+/* 已收集方格配色·「PB」模式（2026-10-27 张老师定）：按该 3BV **最好成绩录像的时间评级**
+   分四档，SSS~S 都显示为金色。四档取色与雷达 GRADE_COLORS 同源，只是把相近档并为四档
+   （10px 小格分不出 9 档）：金 #E6DB74 / 玫红 #FF0080 / 紫 #A000E5 / 灰 #8A8878。
+   选择器带 [data-mode="pb"]，特异性高于上面的级别三色，切换只改 box 的 data-mode（不重渲染） */
+#user_3bv[data-mode="pb"] .sq.on.g_gold {
+  background: #e6db74;
+}
+#user_3bv[data-mode="pb"] .sq.on.g_rose {
   background: #ff0080;
 }
-#user_3bv .sq.on.g_violet {
+#user_3bv[data-mode="pb"] .sq.on.g_violet {
   background: #a000e5;
 }
-#user_3bv .sq.on.g_gray {
+#user_3bv[data-mode="pb"] .sq.on.g_gray {
   background: #8a8878;
 }
 
