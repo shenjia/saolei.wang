@@ -248,14 +248,24 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     : `确认把「${u.chineseName}」加入可信用户组？其上传录像自动分拣时不再检查 STNB 触发器（其余触发器照常），待审录像会立即重分拣。`
                 }
               />
+              {!u.trusted && !d.lowTrustFlagged && (
+                <AdminAction
+                  op="user.setLowTrust"
+                  params={{ id: u.id }}
+                  label="加入低信任用户组"
+                  variant="warn"
+                  sm={false}
+                  confirm={`确认把「${u.chineseName}」加入低信任用户组？其 7 天内上传限流（每日 5 部）且全部录像需人工审核，待审录像会立即重分拣。`}
+                />
+              )}
               {d.lowTrustFlagged && (
                 <AdminAction
                   op="user.clearCheatPenalty"
                   params={{ id: u.id }}
-                  label="解除反作弊标记"
+                  label="移出低信任用户组"
                   variant="warn"
                   sm={false}
-                  confirm={`确认解除「${u.chineseName}」的反作弊标记？其练习页排名模式与低信任组限制立即恢复，待审录像会重分拣（解除后回免核定判定）。`}
+                  confirm={`确认把「${u.chineseName}」移出低信任用户组？其练习页排名模式与上传限制立即恢复，待审录像会重分拣（解除后回免核定判定）。`}
                 />
               )}
               {!isSelf &&

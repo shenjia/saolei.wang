@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/admin/guard";
 import { USER_ROLE, VIDEO_STATUS } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { ConfirmHost } from "@/components/Confirm";
 import "./admin.css";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
         <div className="admin_main">{children}</div>
       </div>
+      {/* 2026-10-27 张老师定：后台确认操作也用站内浮窗（此前的 window.confirm
+          模态豁免到此为止——用户组四按钮率先接入，其余 op 渐进迁移） */}
+      <ConfirmHost />
     </div>
   );
 }

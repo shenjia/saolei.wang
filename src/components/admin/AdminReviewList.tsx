@@ -22,6 +22,7 @@ import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { PRESS_AVG_MS, STNB_TRIGGER } from "@/lib/video-triage-limits";
 import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
+import { confirmDialog } from "@/components/Confirm";
 
 const LEVEL_NAMES: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 
@@ -496,7 +497,7 @@ function ReviewRow({
             className="admin_btn danger sm"
             disabled={busy}
             onClick={async () => {
-              if (!window.confirm(`确认屏蔽录像 #${v.id}？对应最好成绩会被回退。`)) return;
+              if (!(await confirmDialog({ title: "屏蔽录像", message: `确认屏蔽录像 #${v.id}？对应最好成绩会被回退。`, danger: true }))) return;
               const ok = await run("video.review", { id: v.id, status: VIDEO_STATUS.BANNED });
               if (ok) onRemoved();
             }}

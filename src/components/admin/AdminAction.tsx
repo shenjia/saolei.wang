@@ -13,6 +13,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { toast } from "@/components/Toast";
+import { confirmDialog } from "@/components/Confirm";
 
 export interface OpResponse {
   ok: boolean;
@@ -86,7 +87,7 @@ export function AdminAction({
       className={`admin_btn${variant ? " " + variant : ""}${sm ? " sm" : ""}`}
       disabled={disabled || busy}
       onClick={async () => {
-        if (confirm && !window.confirm(confirm)) return;
+        if (confirm && !(await confirmDialog({ title: "操作确认", message: confirm, danger: true }))) return;
         const ok = await run(op, params);
         onDone?.(ok);
       }}
@@ -124,7 +125,7 @@ export function AdminSelect({
       disabled={busy}
       onChange={async (e) => {
         const next = e.target.value;
-        if (confirm && !window.confirm(confirm)) {
+        if (confirm && !(await confirmDialog({ title: "操作确认", message: confirm, danger: true }))) {
           e.target.value = value;
           return;
         }
@@ -190,7 +191,7 @@ export function AdminForm({
             return;
           }
         }
-        if (confirm && !window.confirm(confirm)) return;
+        if (confirm && !(await confirmDialog({ title: "操作确认", message: confirm, danger: true }))) return;
         const ok = await run(op, { ...params, ...values });
         if (ok && resetAfterSubmit) {
           setValues(Object.fromEntries(fields.map((f) => [f.name, f.defaultValue ?? ""])));

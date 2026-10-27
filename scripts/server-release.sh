@@ -215,4 +215,14 @@ else
 fi
 
 pm2 save
+
+# ---------- authority 心跳监控 cron 安装（2026-10-27 张老师要求）----------
+# 每分钟探测 /health：进程消失→pm2 start；连续 2 次不可达→pm2 restart。
+# 幂等安装（grep 防重复行）。
+CRON_LINE="* * * * * $DEPLOY_DIR/scripts/authority-healthcheck.sh >> /tmp/authority-healthcheck.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "authority-healthcheck.sh"); then
+  (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
+  ok "已安装 authority 心跳监控 cron（每分钟）"
+fi
+
 ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (active=$STANDBY, 空闲槽 $A_APP 已停)"

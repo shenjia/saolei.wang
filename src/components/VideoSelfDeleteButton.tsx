@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { confirmDialog } from "./Confirm";
+import { toast } from "@/components/Toast";
 
 export function VideoSelfDeleteButton({ videoId, userId }: { videoId: number; userId: number }) {
   const router = useRouter();
@@ -38,14 +39,14 @@ export function VideoSelfDeleteButton({ videoId, userId }: { videoId: number; us
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!data.ok) {
-        window.alert(data.error ?? "删除失败，请稍后再试");
+        toast(data.error ?? "删除失败，请稍后再试", "error", 5000);
         setBusy(false);
         return;
       }
       // 删除成功：跳回个人主页录像版块（待审/屏蔽盘已随之消失）
       router.push(`/user/${userId}#user_videos`);
     } catch {
-      window.alert("网络错误，请重试");
+      toast("网络错误，请重试", "error", 5000);
       setBusy(false);
     }
   }

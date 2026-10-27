@@ -37,6 +37,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   // 可信用户组（2026-10-24）：组内用户录像分拣不检查 STNB 触发器；超管把关
   "user.setTrusted": "administrator",
   "user.clearCheatPenalty": "administrator",
+  "user.setLowTrust": "administrator",
   // 给单个玩家发系统消息（2026-10-23）：manager 可用——与头像审核通知同级触达能力；
   // 全站广播 message.broadcast 仍是超管专属
   "user.sendSystemMessage": "manager",
@@ -228,6 +229,34 @@ async function dispatch(
       return {
         ok: true,
         message: `${user.chineseName}（#${id}）已解除反作弊标记（排名模式与低信任组恢复）${pending.length ? `，已重分拣其待审录像 ${pending.length} 部` : ""}`,
+      };
+    }
+
+    case "user.setLowTrust": {
+      /* 手动加入低信任组（2026-10-27 张老师定）：与探测器命中同口径——
+         7 天低信任（上传限 5/日 + 全量人工审核），不动排名禁用（那是作弊
+         实锤的处置，人工观察用低信任即可） */
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
+      const user = await prisma.user.findUnique({
+        where: { id: BigInt(id) },
+        select: { chineseName: true, lowTrustUntil: true },
+      });
+      if (!user) return { ok: false, error: "玩家不存在" };
+      const t = now();
+      if (Number(user.lowTrustUntil) > t) {
+        return { ok: false, error: "该玩家已在低信任用户组（标记生效中）" };
+      }
+      await prisma.user.update({
+        where: { id: BigInt(id) },
+        data: { lowTrustUntil: BigInt(t + 7 * 24 * 3600) },
+      });
+      const pending = await prisma.video.findMany({ where: { user: BigInt(id), status: VIDEO_STATUS.NORMAL }, select: { id: true } });
+      const { triageVideo } = await import("@/lib/video-triage");
+      for (const { id: vid } of pending) await triageVideo(Number(vid));
+      return {
+        ok: true,
+        message: `${user.chineseName}（#${id}）已加入低信任用户组（7 天，上传限流 + 全量人工审核）${pending.length ? `，已重分拣其待审录像 ${pending.length} 部` : ""}`,
       };
     }
 

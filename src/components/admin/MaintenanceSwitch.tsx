@@ -6,6 +6,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/components/Toast";
+import { confirmDialog } from "@/components/Confirm";
 
 export default function MaintenanceSwitch({ initialOn }: { initialOn: boolean }) {
   const [on, setOn] = useState(initialOn);
@@ -14,7 +16,7 @@ export default function MaintenanceSwitch({ initialOn }: { initialOn: boolean })
 
   async function toggle() {
     const next = !on;
-    if (next && !window.confirm("确定开启维护模式吗？\n\n开启后全站用户将无法注册、上传录像、发帖回帖、评论、私信，直到关闭为止。")) {
+    if (next && !(await confirmDialog({ title: "开启维护模式", message: "开启后全站用户将无法注册、上传录像、发帖回帖、评论、私信，直到关闭为止。", danger: true }))) {
       return;
     }
     const res = await fetch("/api/admin/action", {
@@ -24,7 +26,7 @@ export default function MaintenanceSwitch({ initialOn }: { initialOn: boolean })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
-      window.alert(data.error ?? "操作失败");
+      toast(data.error ?? "操作失败", "error", 5000);
       return;
     }
     setOn(next);
