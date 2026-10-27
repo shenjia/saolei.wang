@@ -8,12 +8,13 @@ import { Suspense } from "react";
 import { getSession } from "@/lib/auth";
 import { USER_ROLE } from "@/lib/config";
 import { getUserList, getAreaOptions } from "@/lib/admin/data";
-import { getTrustedGroup, getLowTrustGroup } from "@/lib/admin/usergroups";
+import { getTrustedGroup, getLowTrustGroup, getGroupBadges } from "@/lib/admin/usergroups";
 import { AdminAction, AdminSelect } from "@/components/admin/AdminAction";
 import { BanUserDialog } from "@/components/admin/BanUserDialog";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager, RoleTag } from "@/components/admin/Widgets";
 import { UserGroupTable } from "@/components/admin/UserGroupTable";
+import { UserGroupTabs } from "@/components/admin/UserGroupTabs";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, scoreTime, timeOpposite } from "@/lib/format";
 
@@ -31,11 +32,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   // ---------- 顶部 tab（走 URL） ----------
-  const tabs: [string, string][] = [
-    ["all", "全部玩家"],
-    ["trusted", "可信用户组"],
-    ["lowtrust", "低可信用户组"],
-  ];
+  // tab 上挂各组自己的 badge（2026-10-27 张老师反馈：侧栏红点合并两组，
+  // 落地页不知道该看哪个 tab）——信号与 layout 侧栏同源（getGroupBadges）
+  const groupBadges = await getGroupBadges();
 
   // ---------- 组 tab：原独立列表页原样 ----------
   if (tab !== "all") {
@@ -49,17 +48,13 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         </div>
 
         <AdminCard tight>
-          <div className="admin_filterbar">
-            {tabs.map(([v, label]) => (
-              <Link
-                key={v}
-                href={v === "all" ? "/admin/users" : `/admin/users?group=${v}`}
-                className={`admin_btn${tab === v ? " primary" : ""}`}
-              >
-                {label}
-              </Link>
-            ))}
-          </div>
+          <UserGroupTabs
+            tab={tab}
+            groupBadges={{
+              trusted: { count: groupBadges.trustedCount, maxJoin: groupBadges.trustedMaxJoin },
+              lowtrust: { count: groupBadges.lowTrustCount, maxJoin: groupBadges.lowTrustMaxJoin },
+            }}
+          />
           <Suspense fallback={<div className="admin_filterbar">筛选项加载中…</div>}>
             <AdminFilters fields={[{ name: "q", type: "search", placeholder: "玩家 ID / 姓名" }]} />
           </Suspense>
@@ -121,17 +116,13 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       </div>
 
       <AdminCard tight>
-        <div className="admin_filterbar">
-          {tabs.map(([v, label]) => (
-            <Link
-              key={v}
-              href={v === "all" ? "/admin/users" : `/admin/users?group=${v}`}
-              className={`admin_btn${tab === v ? " primary" : ""}`}
-            >
-              {label}
-            </Link>
-          ))}
-        </div>
+        <UserGroupTabs
+          tab={tab}
+          groupBadges={{
+            trusted: { count: groupBadges.trustedCount, maxJoin: groupBadges.trustedMaxJoin },
+            lowtrust: { count: groupBadges.lowTrustCount, maxJoin: groupBadges.lowTrustMaxJoin },
+          }}
+        />
         <Suspense fallback={<div className="admin_filterbar">筛选项加载中…</div>}>
           <AdminFilters
             fields={[

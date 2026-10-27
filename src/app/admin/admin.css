@@ -433,6 +433,26 @@ table.admin_table tr.ug_new td {
 table.admin_table tr.ug_new td:first-child {
   box-shadow: inset 2px 0 0 #f92672;
 }
+/* 玩家管理 tab 上的组 badge（2026-10-27）：侧栏红点合并了两组，tab 上分别指明
+   新成员在哪个组（数字=新增人数；dot=有变化但算不出差值）；配色同侧栏 .n */
+.admin_filterbar a.admin_btn .ug_tab_badge {
+  display: inline-block;
+  vertical-align: 1px;
+  margin-left: 6px;
+  background: #f92672;
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+}
+.admin_filterbar a.admin_btn .ug_tab_badge.dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  vertical-align: 2px;
+  border-radius: 50%;
+}
 table.admin_table td.num,
 table.admin_table th.num {
   text-align: right;
