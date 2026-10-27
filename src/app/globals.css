@@ -11397,3 +11397,27 @@ body #page .word_terms .desc {
 .api_ep_body .api_table {
   margin: 0 0 8px;
 }
+
+/* ---- 开放 API 说明页三轮补（2026-10-27 16:37 张老师定）：表格正文字色 ----
+   接口导航表：说明列（title）白、功能列（brief）亮灰；
+   参数表：必填「是」金色强调 /「否」亮灰，说明列正文亮灰。
+   白=#f8f8f2、亮灰=#c2c2b8（api_ep_desc 同款）、金=#e6db74（站内 code 语汇）。
+   ⚠️ 选择器带 td：功能列是表最后一列，须与 .api_table td:last-child（0,2,1）
+   同特异性靠后位覆盖，两纯类选择器（0,2,0）压不过它会不生效。 */
+.api_nav td.api_nav_title {
+  color: #f8f8f2;
+}
+.api_nav td.api_nav_brief {
+  color: #c2c2b8;
+}
+.api_table .api_req_yes {
+  color: #e6db74;
+  font-weight: 600;
+}
+.api_table .api_req_no {
+  color: #c2c2b8;
+}
+.api_table td.api_param_desc {
+  color: #c2c2b8;
+}
+

@@ -326,9 +326,10 @@ export default function ApiPage() {
         </ul>
 
         {/* 接口导航（2026-10-27 张老师要求）：首屏总表，点击跳到对应接口区块。
-            行数据直接映射 APIS 数组——加减接口只改上面 APIS 一处，此表自动跟随。 */}
+            行数据直接映射 APIS 数组——加减接口只改上面 APIS 一处，此表自动跟随。
+            配色（张老师 16:37 定）：说明列白、功能列亮灰（.api_nav 修饰类区分参数表）。 */}
         <h2>接口导航</h2>
-        <table className="api_table">
+        <table className="api_table api_nav">
           <thead>
             <tr>
               <th style={{ width: 64 }}>方法</th>
@@ -348,8 +349,8 @@ export default function ApiPage() {
                     <code>{api.path}</code>
                   </a>
                 </td>
-                <td>{api.title}</td>
-                <td>{api.brief}</td>
+                <td className="api_nav_title">{api.title}</td>
+                <td className="api_nav_brief">{api.brief}</td>
               </tr>
             ))}
           </tbody>
@@ -382,8 +383,11 @@ export default function ApiPage() {
                         <td>
                           <code>{p.name}</code>
                         </td>
-                        <td>{p.required ? "是" : "否"}</td>
-                        <td>{p.desc}</td>
+                        {/* 必填「是」金 /「否」亮灰，说明列正文亮灰（2026-10-27 张老师定） */}
+                        <td>
+                          <span className={p.required ? "api_req_yes" : "api_req_no"}>{p.required ? "是" : "否"}</span>
+                        </td>
+                        <td className="api_param_desc">{p.desc}</td>
                       </tr>
                     ))}
                   </tbody>
