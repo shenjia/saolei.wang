@@ -4155,14 +4155,15 @@ body #page.ranking_old .ranking_box {
 .ranking_table td.name a:hover {
   color: #a6e22e;
 }
-/* 排行榜上传头像（2026-10-27）：姓名列与表头统一预留 18px 左槽。
+/* 排行榜上传头像（2026-10-27）：姓名列与表头统一预留左槽。
    仅排行页与军衔成员榜生效；录像表虽复用 ranking_table 类，但不渲染头像也不留槽。
-   头像与名字同字号、垂直居中，绝对定位不占文字流；有无头像时名字坐标不变。 */
+   头像与名字同字号、垂直居中，绝对定位不占文字流；有无头像时名字坐标不变。
+   2026-10-28 张老师要求收紧：18→16（头像 1em=13px + 右距 3px 恰好填满，零余量）。 */
 #page.ranking_old .ranking_table th.name,
 #page.ranking_old .ranking_table td.name,
 #page.rank_fit .ranking_table th.name,
 #page.rank_fit .ranking_table td.name {
-  padding-left: 18px;
+  padding-left: 16px;
 }
 .ranking_table td.name .ranking_name {
   display: inline-block;
