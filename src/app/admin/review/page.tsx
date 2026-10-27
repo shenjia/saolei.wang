@@ -112,7 +112,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
             )}
             <span className="spacer" />
             <span className="label">
-              {pool === "exempt" ? "零触发器命中 · 勾选后可批量通过（仍需先下载防盲审）" : pool === "need" ? "任一触发器命中 · 无勾选框，只能逐条手审" : "可切分拣池过滤"}
+              {pool === "exempt" ? "零触发器命中 · 勾选后可批量通过（仍需先下载防盲审）" : pool === "need" ? "触发器命中 / 排名局强制转审 · 无勾选框，只能逐条手审" : "可切分拣池过滤"}
             </span>
           </div>
         )}
@@ -193,6 +193,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
         <div className="admin_note">
           · <b>免核定池</b>＝press-release / STNB / cls / path / 点击数五类触发器零命中 → 可勾选批量通过（仍需先下载，防盲审照旧）；<br />
           · <b>需核定池</b>＝任一触发器命中（触发原因见行内标签）→ 只能逐条手审，批量通过会被服务端拒绝；疑似作弊（多重命中）行内红标提示；<br />
+          · <b>在线排行模式</b>的录像暂时<b>全部转手审</b>（2026-10-27 指令）：不看机器判档，一律进需核定池，行内标「在线排行模式·转手审」（该标签不是作弊信号）；<br />
           · <b>必须先在后台下载观看过该录像</b>才能审核，未下载的审核请求会被服务端拒绝（防盲审）。<br />
           · 已审核过的录像默认不可重审，只有超级管理员可以改判（改判会重算成绩与动态）。<br />
           · 通过 = 写入录像成绩表 → 更新玩家最好成绩 → 刷新纪录则发布动态；屏蔽 = 移除成绩并用次优录像顶替。<br />

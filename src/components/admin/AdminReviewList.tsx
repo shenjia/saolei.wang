@@ -116,6 +116,13 @@ function reasonTagList(v: AdminVideoRow) {
       cls: "bad",
     });
   }
+  if (r & (1 << 16)) {
+    tags.push({
+      text: "在线排行模式·转手审",
+      title: "在线排行模式的录像暂时全部转人工审核（2026-10-27 张老师指令）：这类局不看机器判档结果，一律进需核定池逐条复核。本条不是作弊信号——没有其他原因标签时说明本盘零触发器命中",
+      cls: "info",
+    });
+  }
   return tags;
 }
 

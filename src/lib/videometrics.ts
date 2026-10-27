@@ -138,7 +138,7 @@ export function ensureVideoMetrics(videoId: number): Promise<void> {
  * 再跑 triageVideo 写 auto_flag/auto_reason。与 ensureVideoMetrics 同一条串行队列。
  * ⚠️ 必须在视频事务提交后调用（triageVideo 自开连接读库）。
  */
-export function ensureVideoTriage(videoId: number, uploadExtra?: { auditClicks?: number; auditBlindClicks?: number }): Promise<void> {
+export function ensureVideoTriage(videoId: number, uploadExtra?: { auditClicks?: number; auditBlindClicks?: number; ranked?: boolean }): Promise<void> {
   return serialize(async () => {
     await compute(videoId).catch(() => undefined);
     const { triageVideo } = await import("./video-triage");

@@ -20,6 +20,10 @@
 //   bit8 首次入伍（三级成绩将首次齐全，同上）
 //   bit9 低信任：上传者名下有被屏蔽录像 或 账号曾被封
 //
+// 另外的强制口径（不是触发器）：bit16 在线排行模式录像一律转手审
+//   （2026-10-27 张老师指令「暂时」，开关 RANKED_FORCE_MANUAL_REVIEW——
+//   排名局不看机器判档，全部进需核定池逐条手审）
+//
 // 失败兜底：读文件/解析/计算任一失败 → auto_flag=2（按需核定），绝不静默免核定。
 // 结果仅后台展示，玩家端任何页面不出现机器判定痕迹（张老师拍板④）。
 
@@ -29,7 +33,8 @@ import { prisma } from "./db";
 import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW } from "./video-triage-limits";
+import { RANKED_SOFTWARE } from "./evfwrite";
 
 export { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER };
 
@@ -267,6 +272,8 @@ export interface TriageUploadExtra {
   /** 本局行为审计：决策点击数与盲区点击数（lib/ranked-audit.ts 重放权威事件流所得） */
   auditClicks?: number;
   auditBlindClicks?: number;
+  /** 本次上传来自在线排行模式专用入口（2026-10-27）——与库内 software/evf_sig 双保险 */
+  ranked?: boolean;
 }
 
 /**
@@ -278,19 +285,27 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
     const id = BigInt(videoId);
     const [video, info] = await Promise.all([
       prisma.video.findUnique({ where: { id }, select: { level: true, user: true, status: true } }),
-      prisma.videoInfo.findUnique({ where: { id }, select: { filepath: true, board3bv: true, realTime: true, noflag: true, evfSig: true } }),
+      prisma.videoInfo.findUnique({ where: { id }, select: { filepath: true, board3bv: true, realTime: true, noflag: true, evfSig: true, software: true } }),
     ]);
     if (!video || !info) return;
 
+    // 在线排行模式录像一律转手审（2026-10-27 张老师指令「暂时」）：识别三路兜底——
+    // 上传入口显式标记 / 库内软件名 / 服务端签名（重跑分拣的历史盘与后台重分拣
+    // 拿不到 uploadExtra，靠后两路仍然命中）。前置于解析，失败兜底也带上标记。
+    const rankedHit =
+      RANKED_FORCE_MANUAL_REVIEW &&
+      Boolean(uploadExtra.ranked || info.software === RANKED_SOFTWARE || info.evfSig !== null);
+    const rankedReason = rankedHit ? AUTO_REASON.RANKED_MANUAL : 0;
+
     const buf = readVideoFile(info.filepath);
     if (!buf) {
-      await prisma.video.update({ where: { id }, data: { autoFlag: AUTO_FLAG.FAILED, autoReason: 0 } });
+      await prisma.video.update({ where: { id }, data: { autoFlag: AUTO_FLAG.FAILED, autoReason: rankedReason } });
       return;
     }
     const ext = info.filepath.split(".").pop()?.toLowerCase() ?? "";
     const parsed = parseVideoBinary(buf, ext);
     if (!parsed) {
-      await prisma.video.update({ where: { id }, data: { autoFlag: AUTO_FLAG.FAILED, autoReason: 0 } });
+      await prisma.video.update({ where: { id }, data: { autoFlag: AUTO_FLAG.FAILED, autoReason: rankedReason } });
       return;
     }
 
@@ -342,6 +357,13 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
         uploadExtra.auditBlindClicks >= BLIND_RATE_MIN_BLINDS &&
         uploadExtra.auditBlindClicks / uploadExtra.auditClicks < BLIND_RATE_TRIGGER) {
       reason |= AUTO_REASON.BLIND_RATE;
+      flag = 0;
+    }
+
+    // 在线排行模式录像一律转手审（2026-10-27 张老师指令「暂时」）：不是触发器命中，
+    // 而是口径强制——排名局全部进需核定池逐条看，不看机器判档结果（识别见上方 rankedHit）。
+    if (rankedHit) {
+      reason |= AUTO_REASON.RANKED_MANUAL;
       flag = 0;
     }
 

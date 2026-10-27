@@ -224,9 +224,15 @@ export async function uploadVideo(
   // 写 auto_flag（免核定/需核定）+ auto_reason（位码）。只打标不动 status——
   // 通过永远由管理员手动执行（免核定池批量一键过 / 需核定逐条手审）。
   if (videoId > 0) {
-    const triageExtra = options?.audit
-      ? { auditClicks: options.audit.clicks, auditBlindClicks: options.audit.blindClicks }
-      : undefined;
+    const triageExtra =
+      options?.audit || options?.rankedInternal
+        ? {
+            ...(options?.audit ? { auditClicks: options.audit.clicks, auditBlindClicks: options.audit.blindClicks } : {}),
+            // 在线排行模式录像一律转手审（2026-10-27 张老师指令）：显式带上来源标记，
+            // 分拣侧与库内 software/evf_sig 双保险（见 lib/video-triage.ts bit16）
+            ...(options?.rankedInternal ? { ranked: true } : {}),
+          }
+        : undefined;
     try {
       after(() => ensureVideoTriage(videoId, triageExtra));
     } catch {

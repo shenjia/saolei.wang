@@ -6,9 +6,23 @@
 // 用法: env -u NODE_OPTIONS node --experimental-transform-types \
 //         --import ./scripts/sync/ts-extension-loader.mjs scripts/sync/parse-videos.ts ...
 import { registerHooks } from "node:module";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+// tsconfig 的 "@/*" → "src/*" 别名：Node 不认，脚本链上只要 import 到 src/lib 里
+// 用了 "@/core/..." 的模块（如 video-triage-limits → @/core/src/lib/triage-secret）
+// 就 ERR_MODULE_NOT_FOUND（2026-10-27 ranked-retriage.ts 实证）。此处补上解析。
+const SRC_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../src");
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith("@/")) {
+      const base = path.join(SRC_ROOT, specifier.slice(2));
+      for (const cand of [base, `${base}.ts`, `${base}.tsx`, path.join(base, "index.ts")]) {
+        if (existsSync(cand)) return { url: pathToFileURL(cand).href, shortCircuit: true };
+      }
+    }
     if (specifier.startsWith(".") && !/\.[cm]?[jt]s$/.test(specifier)) {
       try {
         return nextResolve(specifier + ".ts", context);
