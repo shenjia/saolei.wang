@@ -5,7 +5,7 @@
 // 两个后台列表的所有直接播放入口都汇聚到本组件；每次 target 变化即重新起播，
 // 同一录像关闭后再次点击也会生成新 target，可正常反复进入。
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FlopPlayer, playFlop } from "../FlopPlayer";
 import { postOp } from "./AdminAction";
@@ -34,6 +34,13 @@ export function AdminVideoPlayer({
   onWatched?: (id: number) => void;
 }) {
   const [mounted, setMounted] = useState(false);
+  /* onWatched/onClose 是父组件每次渲染都新建的内联函数——若进 effect 依赖，
+     列表任何一次重渲染（markWatched 回调、待审数轮询、router.refresh）都会
+     重跑本 effect → playFlop 重调 → 播放器复位回「加载中」→ 闪烁循环，
+     且反复 markWatched POST 会打爆 nginx general 档（burst=20）出 429
+     （2026-10-28 347943 实测）。改 ref 持有，effect 只跟 target 走。 */
+  const watchedRef = useRef(onWatched);
+  watchedRef.current = onWatched;
   /* rAF 异步置位，避免 effect 内同步 setState 级联渲染 */
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMounted(true));
@@ -56,10 +63,10 @@ export function AdminVideoPlayer({
     const watched = target.id;
     void postOp("video.markWatched", { id: watched })
       .then((res) => {
-        if (res.ok) onWatched?.(watched);
+        if (res.ok) watchedRef.current?.(watched);
       })
       .catch(() => undefined);
-  }, [mounted, target, onWatched]);
+  }, [mounted, target]);
 
   // 首次打开后 iframe 常驻，后续 target 变化直接复用； flop 自带未就绪补播队列。
   if (!mounted) return null;
