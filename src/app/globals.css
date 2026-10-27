@@ -4371,6 +4371,40 @@ body #page.ranking_old .ranking_box {
   overflow-wrap: anywhere;
   word-break: break-all;
 }
+/* 感言赞/踩小按钮（2026-10-27 张老师定）：亮灰小按钮 + 小字计数，感言尾部；
+   游客可投，localStorage 按日期去重（一天一票，赞/踩二选一）；
+   已投后整组置灰、所投一侧保留颜色高亮示已选 */
+#daily_star .star_speech .star_vote {
+  margin-left: 8px;
+  white-space: nowrap;
+}
+#daily_star .star_speech .star_vote_btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  color: #75715e;
+  cursor: pointer;
+}
+#daily_star .star_speech .star_vote_btn + .star_vote_btn {
+  margin-left: 8px;
+}
+#daily_star .star_speech .star_vote_btn:hover:not(:disabled) {
+  color: #a6e22e;
+}
+#daily_star .star_speech .star_vote_btn:disabled {
+  color: #4a483d;
+  cursor: default;
+}
+#daily_star .star_speech .star_vote_btn.voted {
+  color: #a6e22e;
+}
+#daily_star .star_speech .star_vote_btn.voted:disabled {
+  color: #a6e22e;
+  cursor: default;
+}
 /* 管理员删除小按钮（九轮）：感言尾部的暗红小字链 */
 #daily_star .star_speech .star_speech_del {
   background: none;

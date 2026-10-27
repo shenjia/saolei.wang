@@ -16,6 +16,7 @@ import { getSession } from "@/lib/auth";
 import { SendMessageButton } from "@/components/SendMessageButton";
 import { StarSpeechBar } from "@/components/StarSpeechBar";
 import { StarSpeechDeleteButton } from "@/components/StarSpeechDeleteButton";
+import { StarSpeechVote } from "@/components/StarSpeechVote";
 
 export async function DailyStar() {
   const star = await getTodayStar();
@@ -93,10 +94,13 @@ export async function DailyStar() {
         </div>
       </div>
       {/* 感言（九轮）：已发表时显示在 star_body 下方通栏（头像下面）——
-          全角引号 + 亮灰，充分利用板块宽度；管理员旁附「删除」小按钮 */}
+          全角引号 + 亮灰，充分利用板块宽度；管理员旁附「删除」小按钮。
+          感言尾部赞/踩小按钮（2026-10-27 张老师定）：游客可投，
+          localStorage 按日期去重（一天一票，赞/踩二选一），点击就地更新计数 */}
       {star.speech && (
         <p className="star_speech">
           “{star.speech}”
+          <StarSpeechVote date={star.date} up={star.speechUp} down={star.speechDown} />
           {manager && <StarSpeechDeleteButton />}
         </p>
       )}

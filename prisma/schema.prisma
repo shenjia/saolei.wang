@@ -624,12 +624,16 @@ model Click {
 // speech：当选感言（2026-10-25 张老师定，≤28 字；空串=未写/被删）
 // speechDel：感言被管理员删除次数（0/1=还可再发一次；≥2=永久禁止再发——
 //   删两次即封嘴，star 行落盘永久保存供翻历史）
+// speechUp/speechDown：感言赞/踩计数（2026-10-27 张老师定）——游客可投，
+//   localStorage 按日期去重（纯前端闸门，不落 IP 明细）；删除感言/重发时清零
 model Star {
   id          BigInt  @id @default(autoincrement()) @db.BigInt
   user        BigInt  @db.BigInt
   date        String  @db.Char(10)
   speech      String  @default("") @db.VarChar(84)
   speechDel   Int     @default(0) @map("speech_del") @db.Int
+  speechUp    Int     @default(0) @map("speech_up") @db.Int
+  speechDown  Int     @default(0) @map("speech_down") @db.Int
   createTime  BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
 

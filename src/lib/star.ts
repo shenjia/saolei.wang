@@ -90,6 +90,9 @@ export interface StarInfo {
   speech: string;
   /** 感言被管理员删除次数（≥2 = 本人永久不能再发；九轮张老师定） */
   speechDel: number;
+  /** 感言赞/踩计数（2026-10-27 张老师定：游客可投，localStorage 按日期去重） */
+  speechUp: number;
+  speechDown: number;
 }
 
 /** 少将档高级时间上限（毫秒）——TITLES 序：总司令(特判), 大元帅 35000, 元帅 40000, 大将 42000,
@@ -123,6 +126,8 @@ export async function getTodayStar(): Promise<StarInfo | null> {
       user: authors.get(N(existing.user)) ?? null,
       speech: existing.speech,
       speechDel: existing.speechDel,
+      speechUp: existing.speechUp,
+      speechDown: existing.speechDown,
     };
   }
 
@@ -194,7 +199,14 @@ export async function getTodayStar(): Promise<StarInfo | null> {
   const row = await prisma.star.findUnique({ where: { date: today } });
   if (!row) return null;
   const authors = await usersByIds([N(row.user)]);
-  return { date: today, user: authors.get(N(row.user)) ?? null, speech: row.speech, speechDel: row.speechDel };
+  return {
+    date: today,
+    user: authors.get(N(row.user)) ?? null,
+    speech: row.speech,
+    speechDel: row.speechDel,
+    speechUp: row.speechUp,
+    speechDown: row.speechDown,
+  };
 }
 
 /** 感言字数上限（全角字计；十一轮张老师定 28 → 30） */
@@ -236,7 +248,8 @@ export async function setStarSpeech(userId: number, speech: string): Promise<{ o
   const now = nowSec();
   await prisma.star.update({
     where: { date: today },
-    data: { speech: text, updateTime: now },
+    // 感言计数清零（2026-10-27）：被删后重发是新感言，旧赞/踩不结转
+    data: { speech: text, speechUp: 0, speechDown: 0, updateTime: now },
   });
   return { ok: true, speech: text };
 }
@@ -253,7 +266,8 @@ export async function deleteStarSpeech(operatorId: number): Promise<void> {
   const row = await prisma.star.findUnique({ where: { date: today } });
   await prisma.star.update({
     where: { date: today },
-    data: { speech: "", speechDel: { increment: 1 }, updateTime: nowSec() },
+    // 感言计数清零（2026-10-27）：感言撤下即无投票对象，旧计数不残留
+    data: { speech: "", speechDel: { increment: 1 }, speechUp: 0, speechDown: 0, updateTime: nowSec() },
   });
   if (row && row.speech) {
     const { sendSystemMessage } = await import("./message");
@@ -267,4 +281,27 @@ export async function deleteStarSpeech(operatorId: number): Promise<void> {
       `管理员${opName}删除了你每日之星的感言，公开场合请注意措辞，合理发言`
     ).catch(() => undefined); // 通知失败不阻断删除
   }
+}
+
+/**
+ * 感言赞/踩（2026-10-27 张老师定）：游客可投；同一天只能投一次（赞或踩二选一）。
+ * 去重闸门在客户端 localStorage（按日期键），服务端只做无脑 increment——
+ * 与张老师定的轻量口径一致，不落 IP 明细表；返回最新计数供前端即时刷新。
+ */
+export async function voteStarSpeech(dir: "up" | "down"): Promise<{ ok: boolean; error?: string; up?: number; down?: number }> {
+  const today = todayStr();
+  const row = await prisma.star.findUnique({ where: { date: today } });
+  if (!row || !row.speech) {
+    return { ok: false, error: "今日感言不存在" };
+  }
+  const data =
+    dir === "up"
+      ? { speechUp: { increment: 1 } }
+      : { speechDown: { increment: 1 } };
+  const updated = await prisma.star.update({
+    where: { date: today },
+    data,
+    select: { speechUp: true, speechDown: true },
+  });
+  return { ok: true, up: updated.speechUp, down: updated.speechDown };
 }
