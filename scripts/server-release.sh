@@ -148,7 +148,17 @@ else
   info "首次启动 saolei-authority ..."
   pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only saolei-authority
 fi
-curl -sf --max-time 10 http://127.0.0.1:3104/health >/dev/null || fail "权威对局服务健康检查失败"
+# 权威对局健康检查（2026-10-27 改循环等待）：pm2 restart 到端口可听有几秒延迟，
+# 单发 curl 在发布序列里偶发抢跑（run 4 次 CI 里两次「进程终将 ready 但检查已 fail」）；
+# 沿用 wait_healthy 的循环语义但走 /health 独立路径，60s 上限。
+AUTH_DEADLINE=$((SECONDS + 60))
+until curl -sf --max-time 5 http://127.0.0.1:3104/health >/dev/null 2>&1; do
+  if (( SECONDS >= AUTH_DEADLINE )); then
+    fail "权威对局服务健康检查超时（60s）。请检查: pm2 logs saolei-authority --lines 50"
+  fi
+  sleep 2
+done
+ok "权威对局服务健康 ✓"
 
 # ---------- 重启备槽实例 ----------
 # 单活模式（2026-10-22）下备槽处于 stopped 态：pm2 start 对 stopped/online 都安全
