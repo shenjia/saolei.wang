@@ -52,6 +52,9 @@ jobs:
             IdentitiesOnly yes
           CONF
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+          # SSH config 不作用于 https URL；用 insteadOf 把 github https 全局改写为
+          # SSH 形态，submodule clone 才会走上面的 IdentityFile（2026-10-27 二次实证）
+          git config --global url."git@github.com:".insteadOf "https://github.com/"
 
       - name: Checkout with submodules
         run: git submodule update --init --recursive
@@ -116,6 +119,7 @@ jobs:
             IdentitiesOnly yes
           CONF
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git config --global url."git@github.com:".insteadOf "https://github.com/"
 
       - name: Checkout with submodules
         run: git submodule update --init --recursive
