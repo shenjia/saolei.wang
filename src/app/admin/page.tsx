@@ -158,11 +158,11 @@ export default async function AdminDashboard() {
                 const pct = (n: number) => (total <= 0 ? 0 : Math.round((n / total) * 100));
                 return (
                   <>
-                    初 {pct(beg)}%
+                    初级 {pct(beg)}%
                     <br />
-                    中 {pct(int)}%
+                    中级 {pct(int)}%
                     <br />
-                    高 {pct(exp)}%
+                    高级 {pct(exp)}%
                   </>
                 );
               })()}
