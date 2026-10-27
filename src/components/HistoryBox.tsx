@@ -150,6 +150,12 @@ export function HistoryBox({
   );
 }
 
+/** 当前月份 "YYYY-MM"（客户端本地时区） */
+function currentMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /** "YYYY-MM" → 该月 15 号的 Unix 秒（仅供 isRecent 判断新鲜度，取月中避免时区偏差） */
 function monthToUnix(month: string): number {
   const [y, m] = month.split("-").map(Number);
@@ -204,6 +210,12 @@ function HistoryDialog({
     const t = setTimeout(() => setError(""), 3000);
     return () => clearTimeout(t);
   }, [error]);
+
+  // 新增态默认选中当前月份（2026-10-27 张老师要求）。
+  // 挂载后设置而非 useState 初值：SSR 预渲染与客户端可能时区/跨月不一致，避免 hydration 冲突。
+  useEffect(() => {
+    if (!isEdit) setMonth((m) => m || currentMonth());
+  }, [isEdit]);
 
   async function submit() {
     if (!month) return setError("请选择月份");
