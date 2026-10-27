@@ -162,7 +162,7 @@ export function AdminSidebar({
     <aside className="admin_side">
       {/* 品牌区（2026-10-22 张老师要求）：换成与前台统一的 LOGO 与站名——
           icon.svg +「扫雷网」（前台站名金 #fdc61a）+ Saolei.wang，点击回首页。
-          同页跳转（新标签需求由底部「查看网站」承担） */}
+          2026-10-28 底部「查看网站/更新历史」脚注移除（张老师：无用），新标签需求由品牌区自行开右键 */}
       <div className="admin_brand_row">
         <Link href="/" className="admin_brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -195,15 +195,6 @@ export function AdminSidebar({
         ))}
       </nav>
 
-      <div className="admin_side_foot">
-        <a href="/" target="_blank" rel="noopener noreferrer">
-          🌐 查看网站
-        </a>
-        <br />
-        <a href="/page/history" target="_blank" rel="noopener noreferrer">
-          📜 更新历史
-        </a>
-      </div>
     </aside>
   );
 }
