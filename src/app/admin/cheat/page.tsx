@@ -8,6 +8,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { AdminCard } from "@/components/admin/Widgets";
+import { title as milTitle } from "@/lib/assess";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "反作弊复核 | 管理后台" };
@@ -38,23 +39,51 @@ export default async function AdminCheatPage() {
       take: 30,
     }),
   ]);
+  /* 玩家名列（2026-10-27 张老师需求）：批量取姓名+军衔（高级时间阈值口径） */
+  const uids = Array.from(new Set([...pending, ...resolved].map((r) => r.user)));
+  const users = await prisma.user.findMany({
+    where: { id: { in: uids } },
+    select: { id: true, chineseName: true },
+  });
+  const scores = await prisma.userScores.findMany({
+    where: { id: { in: uids } },
+    select: { id: true, expTime: true },
+  });
+  const nameMap = new Map(users.map((u) => [u.id, u.chineseName]));
+  const rankMap = new Map(scores.map((i) => [i.id, milTitle(i.expTime)]));
 
   const rows = (list: typeof pending) =>
     list.map((r) => {
       const extSuspect = r.evidence.includes("chrome-extension://");
-      const userLink = (
-        <Link href={`/admin/users/${r.user}`} target="_blank">
-          #{r.user}
-        </Link>
-      );
+      /* 证据内嵌截图标记 [shot:/uploads/cheat/x.jpg]（2026-10-27 张老师需求：
+         命中瞬间整页截图供人工分诊——文字只够定性，截图看得到扩展悬浮窗真容） */
+      const shotMatch = r.evidence.match(/\[shot:(\/uploads\/cheat\/[^\]]+)\]/);
+      const shotUrl = shotMatch ? shotMatch[1] : null;
+      const plainEv = r.evidence.replace(/\[shot:[^\]]*\]\s*/, "");
       return (
         <tr key={r.id}>
           <td>{r.id}</td>
-          <td>{userLink}</td>
+          <td>
+            <Link href={`/admin/users/${r.user}`} target="_blank">
+              #{r.user}
+            </Link>
+          </td>
+          <td>
+            <Link href={`/user/${r.user}`} target="_blank">
+              {nameMap.get(r.user) ?? "（已注销）"}
+            </Link>
+            <span className="cheat_rank">{rankMap.get(r.user) ?? ""}</span>
+          </td>
           <td>{REASON_LABEL[r.reason] ?? r.reason}</td>
-          <td className="cheat_ev" title={r.evidence}>
+          <td className="cheat_ev" title={plainEv}>
+            {shotUrl && (
+              <a href={shotUrl} target="_blank" rel="noopener noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={shotUrl} alt="命中瞬间截图" className="cheat_shot" />
+              </a>
+            )}
             {extSuspect ? "🧩 " : ""}
-            {r.evidence.slice(0, 60)}
+            {plainEv.slice(0, 60)}
           </td>
           <td>{new Date(Number(r.createTime) * 1000).toLocaleString("zh-CN")}</td>
           {r.resolved === 0 ? (
@@ -91,6 +120,7 @@ export default async function AdminCheatPage() {
           <thead>
             <tr>
               <th>#</th>
+              <th>玩家ID</th>
               <th>玩家</th>
               <th>类型</th>
               <th>证据</th>
@@ -103,7 +133,7 @@ export default async function AdminCheatPage() {
               rows(pending)
             ) : (
               <tr>
-                <td colSpan={6} className="admin_hint">
+                <td colSpan={7} className="admin_hint">
                   暂无待复核报告——探测命中才会产生记录，干净时段为空属正常
                 </td>
               </tr>
@@ -122,6 +152,7 @@ export default async function AdminCheatPage() {
             <thead>
               <tr>
                 <th>#</th>
+                <th>玩家ID</th>
                 <th>玩家</th>
                 <th>类型</th>
                 <th>证据</th>
