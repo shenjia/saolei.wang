@@ -1,5 +1,5 @@
-// 每日一星感言「赞/踩」小按钮（2026-10-27 张老师定）：
-// 亮灰小按钮 + 小字计数，感言尾部；游客可投（不要求登录）；
+// 每日一星感言「赞/踩」小链接（2026-10-27 张老师定）：链接形态非按钮；
+// 亮灰小字 + 小字计数，感言尾部；游客可投（不要求登录）；
 // 同一天只能投一次（赞/踩二选一）——localStorage 按日期键去重（纯客户端闸门）；
 // 点击后 POST /api/star action=vote，用返回的最新计数就地刷新，不重载页面。
 
@@ -72,24 +72,24 @@ export function StarSpeechVote({ date, up, down }: { date: string; up: number; d
   const done = voted !== null;
   return (
     <span className="star_vote">
-      <button
-        type="button"
-        className={`star_vote_btn${voted === "up" ? " voted" : ""}`}
+      <a
+        href="javascript:void(0)"
+        className={`star_vote_link${voted === "up" ? " voted" : ""}`}
         onClick={() => vote("up")}
-        disabled={done || busy}
+        aria-disabled={done || busy}
         title={done ? "今天已投过票" : "赞"}
       >
         <ThumbIcon /> {counts.up}
-      </button>
-      <button
-        type="button"
-        className={`star_vote_btn${voted === "down" ? " voted" : ""}`}
+      </a>
+      <a
+        href="javascript:void(0)"
+        className={`star_vote_link${voted === "down" ? " voted" : ""}`}
         onClick={() => vote("down")}
-        disabled={done || busy}
+        aria-disabled={done || busy}
         title={done ? "今天已投过票" : "踩"}
       >
         <ThumbIcon down /> {counts.down}
-      </button>
+      </a>
     </span>
   );
 }

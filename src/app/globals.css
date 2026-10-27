@@ -4371,37 +4371,30 @@ body #page.ranking_old .ranking_box {
   overflow-wrap: anywhere;
   word-break: break-all;
 }
-/* 感言赞/踩小按钮（2026-10-27 张老师定）：亮灰小按钮 + 小字计数，感言尾部；
-   游客可投，localStorage 按日期去重（一天一票，赞/踩二选一）；
-   已投后整组置灰、所投一侧保留颜色高亮示已选 */
+/* 感言赞/踩小链接（2026-10-27 张老师定，二轮改链接形态）：亮灰小字 + 计数，
+   感言尾部 a 链接（非按钮）；游客可投，localStorage 按日期去重（一天一票，赞/踩二选一）；
+   已投后整组置灰、所投一侧保留绿色高亮示已选 */
 #daily_star .star_speech .star_vote {
   margin-left: 8px;
   white-space: nowrap;
 }
-#daily_star .star_speech .star_vote_btn {
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: inherit;
+#daily_star .star_speech .star_vote_link {
   font-size: 12px;
-  line-height: 20px;
   color: #75715e;
+  text-decoration: none;
   cursor: pointer;
 }
-#daily_star .star_speech .star_vote_btn + .star_vote_btn {
+#daily_star .star_speech .star_vote_link + .star_vote_link {
   margin-left: 8px;
 }
-#daily_star .star_speech .star_vote_btn:hover:not(:disabled) {
+#daily_star .star_speech .star_vote_link:hover:not(.voted):not([aria-disabled="true"]) {
   color: #a6e22e;
 }
-#daily_star .star_speech .star_vote_btn:disabled {
+#daily_star .star_speech .star_vote_link[aria-disabled="true"]:not(.voted) {
   color: #4a483d;
   cursor: default;
 }
-#daily_star .star_speech .star_vote_btn.voted {
-  color: #a6e22e;
-}
-#daily_star .star_speech .star_vote_btn.voted:disabled {
+#daily_star .star_speech .star_vote_link.voted {
   color: #a6e22e;
   cursor: default;
 }
