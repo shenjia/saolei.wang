@@ -19,7 +19,9 @@ import { StarSpeechDeleteButton } from "@/components/StarSpeechDeleteButton";
 import { StarSpeechVote } from "@/components/StarSpeechVote";
 
 export async function DailyStar() {
-  const star = await getTodayStar();
+  // 先取 session（getTodayStar 带上 viewer，SSR 顺带查出 myVote——跨设备一致的已投态）
+  const session = await getSession();
+  const star = await getTodayStar(session?.uid);
   if (!star?.user) return null;
   // 卡片展示计人气（十五轮）：同 IP 同日跨来源去重，失败不阻断渲染
   try {
@@ -27,7 +29,7 @@ export async function DailyStar() {
     const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
     await recordClick(star.user.id, ip, "star");
   } catch {}
-  const [card, session] = await Promise.all([getUserCard(star.user.id), getSession()]);
+  const card = await getUserCard(star.user.id);
   if (!card) return null;
   const own = !!session && session.uid === card.id;
   const manager = !!session && isManager(session.role);
@@ -94,13 +96,19 @@ export async function DailyStar() {
         </div>
       </div>
       {/* 感言（九轮）：已发表时显示在 star_body 下方通栏（头像下面）——
-          全角引号 + 亮灰，充分利用板块宽度；管理员旁附「删除」小按钮。
-          感言尾部赞/踩小按钮（2026-10-27 张老师定）：游客可投，
-          localStorage 按日期去重（一天一票，赞/踩二选一），点击就地更新计数 */}
+          全角引号 + 亮灰，充分利用板块宽度；管理员旁附「删除」小链接。
+          感言尾部赞/踩小链接（2026-10-27 张老师定，二轮收紧）：仅登录可投
+          （未登录弹登录浮窗），服务端明细按人硬去重；默认空心+深灰数字，
+          领先一方实心+亮灰，我投的赞绿/踩红；点击就地更新计数 */}
       {star.speech && (
         <p className="star_speech">
           “{star.speech}”
-          <StarSpeechVote date={star.date} up={star.speechUp} down={star.speechDown} />
+          <StarSpeechVote
+            up={star.speechUp}
+            down={star.speechDown}
+            myVote={star.myVote}
+            loggedIn={!!session}
+          />
           {manager && <StarSpeechDeleteButton />}
         </p>
       )}

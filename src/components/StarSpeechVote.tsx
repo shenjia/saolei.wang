@@ -1,25 +1,23 @@
-// 每日一星感言「赞/踩」小链接（2026-10-27 张老师定）：链接形态非按钮；
-// 亮灰小字 + 小字计数，感言尾部；游客可投（不要求登录）；
-// 同一天只能投一次（赞/踩二选一）——localStorage 按日期键去重（纯客户端闸门）；
-// 点击后 POST /api/star action=vote，用返回的最新计数就地刷新，不重载页面。
+// 每日一星感言「赞/踩」小链接（2026-10-27 张老师定；二轮定稿）：
+// 仅登录用户可投（未登录点按弹全局登录浮窗，不走请求）；
+// 服务端 star_vote 明细按人硬去重（一天一票、赞/踩二选一，SSR 带 myVote 跨设备一致）；
+// 视觉（张老师二轮口径）：
+//   默认：空心图标 + 深灰数字；领先一方（计数超过对方）实心图标 + 亮灰数字；
+//   我投过：赞=绿（图标+数字）、踩=红（图标+数字）。
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { toast } from "./Toast";
 
-/** localStorage 键：star_vote_<日期>，值 "up" / "down"（跨设备/清存储可再投，符合轻量口径） */
-function lsKey(date: string) {
-  return `star_vote_${date}`;
-}
-
-function ThumbIcon({ down }: { down?: boolean }) {
-  // 手势图标（down 时整体翻转即成「踩」），描边风格与站内小 ICON 一致
+function ThumbIcon({ down, filled }: { down?: boolean; filled?: boolean }) {
+  // 手势图标（down 翻转成「踩」）；filled 切换实心/空心
   return (
     <svg
       width="13"
       height="13"
       viewBox="0 0 24 24"
-      fill="none"
+      fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
@@ -33,21 +31,28 @@ function ThumbIcon({ down }: { down?: boolean }) {
   );
 }
 
-export function StarSpeechVote({ date, up, down }: { date: string; up: number; down: number }) {
+export function StarSpeechVote({
+  up,
+  down,
+  myVote,
+  loggedIn,
+}: {
+  up: number;
+  down: number;
+  myVote: "up" | "down" | null;
+  loggedIn: boolean;
+}) {
   const [counts, setCounts] = useState({ up, down });
-  const [voted, setVoted] = useState<"up" | "down" | null>(null);
+  const [voted, setVoted] = useState<"up" | "down" | null>(myVote);
   const [busy, setBusy] = useState(false);
-
-  // 挂载时读 localStorage：已投则锁定（按钮置灰、所投一侧高亮）
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(lsKey(date));
-      if (v === "up" || v === "down") setVoted(v);
-    } catch {}
-  }, [date]);
 
   async function vote(dir: "up" | "down") {
     if (voted || busy) return;
+    // 未登录：弹全局登录浮窗（LoginModal 监听 app:login）
+    if (!loggedIn) {
+      window.dispatchEvent(new CustomEvent("app:login"));
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/star", {
@@ -55,46 +60,67 @@ export function StarSpeechVote({ date, up, down }: { date: string; up: number; d
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "vote", dir }),
       });
-      if (!res.ok) return; // 感言已被删等情况静默失败，不打扰
-      const data = (await res.json().catch(() => ({}))) as { up?: number; down?: number };
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        up?: number;
+        down?: number;
+        myVote?: "up" | "down";
+      };
+      if (!res.ok) {
+        toast(data.error ?? "投票失败", "error", 2500);
+        return;
+      }
       if (typeof data.up === "number" && typeof data.down === "number") {
         setCounts({ up: data.up, down: data.down });
       }
-      setVoted(dir);
-      try {
-        localStorage.setItem(lsKey(date), dir);
-      } catch {}
+      setVoted(data.myVote ?? dir);
     } finally {
       setBusy(false);
     }
   }
 
   const done = voted !== null;
+  // 领先方（严格大于才实心；0:0 都空心）
+  const upLeading = counts.up > counts.down;
+  const downLeading = counts.down > counts.up;
+  // 我投的方位
+  const iVotedUp = done && voted === "up";
+  const iVotedDown = done && voted === "down";
+
+  const cls = (dir: "up" | "down") => {
+    const leading = dir === "up" ? upLeading : downLeading;
+    const mine = dir === "up" ? iVotedUp : iVotedDown;
+    if (mine) return `star_vote_link mine-${dir}`; // 我投的：绿（赞）/红（踩）
+    if (done) return "star_vote_link dim"; // 已投后另一侧置灰
+    return `star_vote_link${leading ? " lead" : ""}`; // 默认：领先实心+亮灰
+  };
+
   return (
     <span className="star_vote">
       <a
         href="#"
-        className={`star_vote_link${voted === "up" ? " voted" : ""}`}
+        className={cls("up")}
         onClick={(e) => {
           e.preventDefault();
           vote("up");
         }}
         aria-disabled={done || busy}
-        title={done ? "今天已投过票" : "赞"}
+        title={!loggedIn ? "登录后投票" : iVotedUp ? "我投的赞" : done ? "今天已投过票" : "赞"}
       >
-        <ThumbIcon /> {counts.up}
+        <ThumbIcon filled={iVotedUp || upLeading} /> {counts.up}
       </a>
       <a
         href="#"
-        className={`star_vote_link${voted === "down" ? " voted" : ""}`}
+        className={cls("down")}
         onClick={(e) => {
           e.preventDefault();
           vote("down");
         }}
         aria-disabled={done || busy}
-        title={done ? "今天已投过票" : "踩"}
+        title={!loggedIn ? "登录后投票" : iVotedDown ? "我投的踩" : done ? "今天已投过票" : "踩"}
       >
-        <ThumbIcon down /> {counts.down}
+        <ThumbIcon down filled={iVotedDown || downLeading} /> {counts.down}
       </a>
     </span>
   );

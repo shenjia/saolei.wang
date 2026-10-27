@@ -90,9 +90,11 @@ export interface StarInfo {
   speech: string;
   /** 感言被管理员删除次数（≥2 = 本人永久不能再发；九轮张老师定） */
   speechDel: number;
-  /** 感言赞/踩计数（2026-10-27 张老师定：游客可投，localStorage 按日期去重） */
+  /** 感言赞/踩计数（2026-10-27 张老师定：登录用户可投，star_vote 明细按人硬去重） */
   speechUp: number;
   speechDown: number;
+  /** 当前登录用户的已投票向（"up"/"down"/null 未投；SSR 带出，跨设备一致） */
+  myVote: "up" | "down" | null;
 }
 
 /** 少将档高级时间上限（毫秒）——TITLES 序：总司令(特判), 大元帅 35000, 元帅 40000, 大将 42000,
@@ -111,16 +113,30 @@ async function recentStarUserIds(today: string): Promise<Set<number>> {
   return new Set(rows.map((r) => N(r.user)));
 }
 
+/** 今日感言投票明细补充：SSR 带出「我投过什么」（跨设备一致；未登录/未投=null） */
+async function getMyVote(date: string, viewerUid: number | null): Promise<"up" | "down" | null> {
+  if (!viewerUid) return null;
+  const v = await prisma.starVote.findUnique({
+    where: { date_user: { date, user: BigInt(viewerUid) } },
+    select: { dir: true },
+  });
+  return v ? (v.dir ? "up" : "down") : null;
+}
+
 /**
  * 取今日之星，没有则评选（并发安全：确定性哈希 + star.date 唯一键兜底）：
  * 候选 =（少将及以上现役 且 近 30 天登录过）∪（近 30 日破纪录 且 名次上升者），
  * 排除近 30 日已当选者；同一天多次请求结果一致（日期哈希），无候选返回 null。
+ * viewerUid：当前登录用户（用于带出 myVote；可不传）。
  */
-export async function getTodayStar(): Promise<StarInfo | null> {
+export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null> {
   const today = todayStr();
   const existing = await prisma.star.findUnique({ where: { date: today } });
   if (existing) {
-    const authors = await usersByIds([N(existing.user)]);
+    const [authors, myVote] = await Promise.all([
+      usersByIds([N(existing.user)]),
+      getMyVote(today, viewerUid ?? null),
+    ]);
     return {
       date: today,
       user: authors.get(N(existing.user)) ?? null,
@@ -128,6 +144,7 @@ export async function getTodayStar(): Promise<StarInfo | null> {
       speechDel: existing.speechDel,
       speechUp: existing.speechUp,
       speechDown: existing.speechDown,
+      myVote,
     };
   }
 
@@ -198,7 +215,10 @@ export async function getTodayStar(): Promise<StarInfo | null> {
   }
   const row = await prisma.star.findUnique({ where: { date: today } });
   if (!row) return null;
-  const authors = await usersByIds([N(row.user)]);
+  const [authors, myVote] = await Promise.all([
+    usersByIds([N(row.user)]),
+    getMyVote(today, viewerUid ?? null),
+  ]);
   return {
     date: today,
     user: authors.get(N(row.user)) ?? null,
@@ -206,6 +226,7 @@ export async function getTodayStar(): Promise<StarInfo | null> {
     speechDel: row.speechDel,
     speechUp: row.speechUp,
     speechDown: row.speechDown,
+    myVote,
   };
 }
 
@@ -246,11 +267,15 @@ export async function setStarSpeech(userId: number, speech: string): Promise<{ o
     return { ok: false, error: "感言包含敏感词，请修改后重试" };
   }
   const now = nowSec();
-  await prisma.star.update({
-    where: { date: today },
-    // 感言计数清零（2026-10-27）：被删后重发是新感言，旧赞/踩不结转
-    data: { speech: text, speechUp: 0, speechDown: 0, updateTime: now },
-  });
+  await prisma.$transaction([
+    prisma.star.update({
+      where: { date: today },
+      // 感言计数清零（2026-10-27）：被删后重发是新感言，旧赞/踩不结转
+      data: { speech: text, speechUp: 0, speechDown: 0, updateTime: now },
+    }),
+    // 投票明细一并清空：重发的新感言可再投（旧票不占额）
+    prisma.starVote.deleteMany({ where: { date: today } }),
+  ]);
   return { ok: true, speech: text };
 }
 
@@ -264,11 +289,15 @@ export async function setStarSpeech(userId: number, speech: string): Promise<{ o
 export async function deleteStarSpeech(operatorId: number): Promise<void> {
   const today = todayStr();
   const row = await prisma.star.findUnique({ where: { date: today } });
-  await prisma.star.update({
-    where: { date: today },
-    // 感言计数清零（2026-10-27）：感言撤下即无投票对象，旧计数不残留
-    data: { speech: "", speechDel: { increment: 1 }, speechUp: 0, speechDown: 0, updateTime: nowSec() },
-  });
+  await prisma.$transaction([
+    prisma.star.update({
+      where: { date: today },
+      // 感言计数清零（2026-10-27）：感言撤下即无投票对象，旧计数不残留
+      data: { speech: "", speechDel: { increment: 1 }, speechUp: 0, speechDown: 0, updateTime: nowSec() },
+    }),
+    // 投票明细一并清空：感言已撤下，释放投票额（重发后可再投）
+    prisma.starVote.deleteMany({ where: { date: today } }),
+  ]);
   if (row && row.speech) {
     const { sendSystemMessage } = await import("./message");
     const op = await prisma.user.findUnique({
@@ -284,24 +313,38 @@ export async function deleteStarSpeech(operatorId: number): Promise<void> {
 }
 
 /**
- * 感言赞/踩（2026-10-27 张老师定）：游客可投；同一天只能投一次（赞或踩二选一）。
- * 去重闸门在客户端 localStorage（按日期键），服务端只做无脑 increment——
- * 与张老师定的轻量口径一致，不落 IP 明细表；返回最新计数供前端即时刷新。
+ * 感言赞/踩（2026-10-27 张老师定；二轮收紧：仅登录用户，服务端按人硬去重）：
+ * star_vote 明细同日同人只一行（唯一键 date+user 兜底并发），事务写明细 + 计数 +1；
+ * 同一事务里明细插入冲突即回滚 = 已投过（error="已投过票"）。
+ * 彻底堵隐身浏览器无限刷——去重不再依赖 localStorage。
  */
-export async function voteStarSpeech(dir: "up" | "down"): Promise<{ ok: boolean; error?: string; up?: number; down?: number }> {
+export async function voteStarSpeech(
+  userId: number,
+  dir: "up" | "down"
+): Promise<{ ok: boolean; error?: string; up?: number; down?: number; myVote?: "up" | "down" }> {
   const today = todayStr();
-  const row = await prisma.star.findUnique({ where: { date: today } });
-  if (!row || !row.speech) {
+  const star = await prisma.star.findUnique({ where: { date: today } });
+  if (!star || !star.speech) {
     return { ok: false, error: "今日感言不存在" };
   }
-  const data =
-    dir === "up"
-      ? { speechUp: { increment: 1 } }
-      : { speechDown: { increment: 1 } };
-  const updated = await prisma.star.update({
+  try {
+    const now = nowSec();
+    await prisma.$transaction([
+      prisma.starVote.create({
+        data: { date: today, user: BigInt(userId), dir: dir === "up", createTime: now },
+      }),
+      prisma.star.update({
+        where: { date: today },
+        data: dir === "up" ? { speechUp: { increment: 1 } } : { speechDown: { increment: 1 } },
+      }),
+    ]);
+  } catch {
+    // 唯一键冲突 = 该用户今天已投过（赞或踩二选一）
+    return { ok: false, error: "今天已投过票了" };
+  }
+  const updated = await prisma.star.findUnique({
     where: { date: today },
-    data,
     select: { speechUp: true, speechDown: true },
   });
-  return { ok: true, up: updated.speechUp, down: updated.speechDown };
+  return { ok: true, up: updated?.speechUp ?? 0, down: updated?.speechDown ?? 0, myVote: dir };
 }

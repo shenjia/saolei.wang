@@ -624,8 +624,8 @@ model Click {
 // speech：当选感言（2026-10-25 张老师定，≤28 字；空串=未写/被删）
 // speechDel：感言被管理员删除次数（0/1=还可再发一次；≥2=永久禁止再发——
 //   删两次即封嘴，star 行落盘永久保存供翻历史）
-// speechUp/speechDown：感言赞/踩计数（2026-10-27 张老师定）——游客可投，
-//   localStorage 按日期去重（纯前端闸门，不落 IP 明细）；删除感言/重发时清零
+// speechUp/speechDown：感言赞/踩计数（2026-10-27 张老师定）——登录用户可投，
+//   明细去重落 star_vote 表（同日同人一票，服务端硬闸门）；删除感言/重发时清零
 model Star {
   id          BigInt  @id @default(autoincrement()) @db.BigInt
   user        BigInt  @db.BigInt
@@ -639,6 +639,19 @@ model Star {
 
   @@unique([date])
   @@map("star")
+}
+
+// 感言赞/踩投票明细（2026-10-27 二轮：登录闸 + 服务端按用户硬去重——
+// 防匿名无限刷：同一天同一用户只能投一次，赞/踩二选一，唯一键兜底并发）
+model StarVote {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  date       String @db.Char(10)
+  user       BigInt @db.BigInt
+  dir        Boolean // true=赞 false=踩
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@unique([date, user])
+  @@map("star_vote")
 }
 
 // 扫雷历程：按月记事（移植 2008 版 History 表，同年月唯一）

@@ -4371,31 +4371,42 @@ body #page.ranking_old .ranking_box {
   overflow-wrap: anywhere;
   word-break: break-all;
 }
-/* 感言赞/踩小链接（2026-10-27 张老师定，二轮改链接形态）：亮灰小字 + 计数，
-   感言尾部 a 链接（非按钮）；游客可投，localStorage 按日期去重（一天一票，赞/踩二选一）；
-   已投后整组置灰、所投一侧保留绿色高亮示已选 */
+/* 感言赞/踩小链接（2026-10-27 张老师定，三轮视觉定稿）：
+   默认空心图标 + 深灰数字；计数领先一方实心图标 + 亮灰数字（严格大于）；
+   我投过：赞=绿、踩=红（图标实心 + 数字同色）；已投后另一侧置灰。
+   仅登录用户可投（未登录点按弹登录浮窗）；服务端明细按人硬去重 */
 #daily_star .star_speech .star_vote {
   margin-left: 8px;
   white-space: nowrap;
 }
 #daily_star .star_speech .star_vote_link {
   font-size: 12px;
-  color: #75715e;
+  color: #75715e; /* 深灰数字（未领先侧默认态） */
   text-decoration: none;
   cursor: pointer;
 }
 #daily_star .star_speech .star_vote_link + .star_vote_link {
   margin-left: 8px;
 }
-#daily_star .star_speech .star_vote_link:hover:not(.voted):not([aria-disabled="true"]) {
+/* 领先方：实心图标 + 亮灰数字 */
+#daily_star .star_speech .star_vote_link.lead {
+  color: #a6a699;
+}
+#daily_star .star_speech .star_vote_link:hover:not(.dim):not(.mine-up):not(.mine-down) {
   color: #a6e22e;
 }
-#daily_star .star_speech .star_vote_link[aria-disabled="true"]:not(.voted) {
+/* 已投后未选侧：置灰不可点 */
+#daily_star .star_speech .star_vote_link.dim {
   color: #4a483d;
   cursor: default;
 }
-#daily_star .star_speech .star_vote_link.voted {
+/* 我投的：赞绿 / 踩红（含实心图标与数字） */
+#daily_star .star_speech .star_vote_link.mine-up {
   color: #a6e22e;
+  cursor: default;
+}
+#daily_star .star_speech .star_vote_link.mine-down {
+  color: #f92672;
   cursor: default;
 }
 /* 管理员删除小链接（九轮；2026-10-27 改链接形态与赞/踩统一）：感言尾部的暗红小字链 */
@@ -11421,3 +11432,30 @@ body #page .word_terms .desc {
   color: #c2c2b8;
 }
 
+/* ---- 排名局结算气泡与 PB 徽标（2026-10-27 张老师定）---- */
+/* 金色破纪录气泡：站内黄系（与雷达数值金同源 #E6DB74 偏亮） */
+.toast_bubble.toast_gold {
+  background: linear-gradient(135deg, #b8860b, #daa520);
+  border: 1px solid #ffd700;
+  color: #fff8dc;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+/* 数据面板 PB 金标（标签名后） */
+.pb_badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #daa520;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 14px;
+  vertical-align: 1px;
+}
+/* 3BV 行的 New 绿标 */
+.pb_badge.new {
+  background: #2e8b57;
+}
