@@ -7714,13 +7714,13 @@ button.msg_cancel:hover {
   background: #e6db74;
 }
 
-/* 标题行：标题左 + 筛选器右，单行不换行（2026-10-27 张老师二轮要求：
-   筛选器是链接、放在 Title 右侧）。行高由 h2 的 39px 行盒撑起 */
+/* 标题行：标题左、筛选器紧跟标题之后（2026-10-27 三轮：张老师要求像左侧板块那样
+   左对齐排布，不要推到右侧）。行高由 h2 的 39px 行盒撑起 */
 #user_3bv .bbv_title {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: baseline;
-  gap: 8px;
+  gap: 2px;
   margin: 0 0 4px;
   white-space: nowrap;
 }
