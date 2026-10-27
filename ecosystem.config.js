@@ -37,8 +37,10 @@ module.exports = {
     },
     {
       // 排名模式权威对局：独立单进程，内存保存对局；不随 Next 蓝绿槽重启。
+      // 2026-10-27 core 抽私有 submodule 后脚本迁至 src/core/scripts/authority/
+      // （.env 读取在 server.mjs 内做两级探测：主仓根优先、core 根兜底）。
       name: "saolei-authority",
-      script: "scripts/authority/server.mjs",
+      script: "src/core/scripts/authority/server.mjs",
       cwd: __dirname,
       watch: false,
       max_memory_restart: "256M",
