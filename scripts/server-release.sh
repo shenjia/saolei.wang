@@ -147,7 +147,11 @@ fix_prisma_stub "$S_DIR"
 # （超时兜底：极少见的挂机局不能永远阻塞发布）。
 AUTH_WAITED=0
 if pm2 describe saolei-authority >/dev/null 2>&1; then
-  GAMES_DEADLINE=$((SECONDS + 900))
+  # 先开排空模式（拒新局——张老师方案，2026-10-27）：消除「新局不断进来
+  # 永等不到 0」的活锁；存量局打完即重启，等待上限可收紧
+  curl -sf --max-time 3 -X POST -H "Content-Type: application/json" \
+    -d '{"on":true}' http://127.0.0.1:3104/drain >/dev/null 2>&1 || true
+  GAMES_DEADLINE=$((SECONDS + 360))
   while :; do
     # ⚠️ 脚本头 set -euo pipefail：旧 authority（无 active 字段）grep 无匹配
     # exit 1 会经命令替换杀掉整个发布——管道尾加 || true 兜底
