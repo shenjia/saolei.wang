@@ -146,7 +146,8 @@ export default async function AdminDashboard() {
             <>
               {cmpFoot(traffic.practice.today, traffic.practice.lastWeek)}
               <br />
-              {/* 2026-10-27 张老师定：foot 四行制——同比 / 初+中 / 高+自。
+              {/* 2026-10-27 张老师定：foot 同比 / 初+中 / 高+自；
+                  2026-10-28 改：去掉「自x%」，初/中/高 各占一行。
                   16:50 定：级别三列起记后即显真占比（分母=初中高自之和，
                   不掺生效前未记盘）；仅起记当日（10-27）「自定义」差额不可
                   分离计 0，次日全维度自然对齐。 */}
@@ -157,9 +158,11 @@ export default async function AdminDashboard() {
                 const pct = (n: number) => (total <= 0 ? 0 : Math.round((n / total) * 100));
                 return (
                   <>
-                    初 {pct(beg)}% 中 {pct(int)}%
+                    初 {pct(beg)}%
                     <br />
-                    高 {pct(exp)}% 自 {pct(cus)}%
+                    中 {pct(int)}%
+                    <br />
+                    高 {pct(exp)}%
                   </>
                 );
               })()}
