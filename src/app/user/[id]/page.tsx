@@ -146,6 +146,9 @@ export default async function UserViewPage({
   const bv = sp["3bv"]?.trim() || undefined;
   // 录像版块 NF 筛选开关（2026-10-20）：URL nf=1 开启，默认关
   const nf = sp.nf === "1";
+  // 收集墙配色（2026-10-27 张老师要求筛选器改链接）：URL ?bbv=pb 明确指定时服务端
+  // 直接渲染该配色（链接可中键新开/F5 不断链）；无参数时默认 3bv，客户端按 localStorage 校正
+  const bbvMode: "3bv" | "pb" = sp.bbv === "pb" ? "pb" : "3bv";
 
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
@@ -392,7 +395,12 @@ export default async function UserViewPage({
             位置在实力雷达之下、个人资料之上；显示条件与雷达一致（有上传过录像才显示） */}
         {detail.stat &&
           detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
-            <BbvCollection userId={userId} ranges={bbvRanges} collected={bbvCollection} />
+            <BbvCollection
+              userId={userId}
+              ranges={bbvRanges}
+              collected={bbvCollection}
+              initialMode={bbvMode}
+            />
           )}
         {showProfile && (
           <div className="profile box">
