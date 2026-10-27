@@ -154,9 +154,9 @@ export default async function AdminDashboard() {
                 const cus = Math.max(0, total - beg - int - exp);
                 return (
                   <>
-                    初 {pct(beg)}% / 中 {pct(int)}%
+                    初 {pct(beg)}% 中 {pct(int)}%
                     <br />
-                    高 {pct(exp)}% / 自 {pct(cus)}%
+                    高 {pct(exp)}% 自 {pct(cus)}%
                   </>
                 );
               })()}
