@@ -103,17 +103,22 @@ function StatRow({
   label,
   children,
   today,
+  wide,
 }: {
   label: string;
   children: ReactNode;
   today?: number;
+  /** 无今日增量的日期行（2026-10-28 张老师要求）：数值列与今日列合并空间 */
+  wide?: boolean;
 }) {
   const hasDelta = today !== undefined && today > 0;
   return (
     <tr>
       <td>{label}</td>
-      <td className="num">{children}</td>
-      <td className="delta">{hasDelta ? `（+${today}）` : ""}</td>
+      <td className="num" colSpan={wide ? 2 : undefined}>
+        {children}
+      </td>
+      {!wide && <td className="delta">{hasDelta ? `（+${today}）` : ""}</td>}
     </tr>
   );
 }
@@ -476,10 +481,10 @@ export default async function UserViewPage({
                 </StatRow>
                 {/* 2026-10-28 张老师要求：末尾补 注册时间 / 最近登录（yyyy-mm-dd）；
                     lastLoginTime=0（从未登录过）显示 — */}
-                <StatRow label="注册时间">
+                <StatRow label="注册时间" wide>
                   <em>{formatDate(user.createTime, "Y-m-d")}</em>
                 </StatRow>
-                <StatRow label="最近登录">
+                <StatRow label="最近登录" wide>
                   <em>{user.lastLoginTime > 0 ? formatDate(user.lastLoginTime, "Y-m-d") : "—"}</em>
                 </StatRow>
               </tbody>
