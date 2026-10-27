@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
-import { practiceLevelsClean } from "@/lib/admin/practice";
+import { practiceCusClean } from "@/lib/admin/practice";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies } from "@/lib/admin/cache";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
 import { TrendChart, BarList, Donut, type Series } from "@/components/admin/Charts";
@@ -147,16 +147,14 @@ export default async function AdminDashboard() {
               {cmpFoot(traffic.practice.today, traffic.practice.lastWeek)}
               <br />
               {/* 2026-10-27 张老师定：foot 四行制——同比 / 初+中 / 高+自。
-                  级别占比自 2026-10-28（干净起点）起显示——起记当日差额混着
-                  生效前未记盘（「自定义」是污染值），之前显示对齐提示。 */}
+                  16:50 定：级别三列起记后即显真占比（分母=初中高自之和，
+                  不掺生效前未记盘）；仅起记当日（10-27）「自定义」差额不可
+                  分离计 0，次日全维度自然对齐。 */}
               {(() => {
-                if (!practiceLevelsClean()) {
-                  return <>级别占比明日起对齐</>;
-                }
                 const { beg, int, exp } = traffic.practice.todayLevels;
-                const total = traffic.practice.today;
+                const cus = practiceCusClean() ? Math.max(0, traffic.practice.today - beg - int - exp) : 0;
+                const total = beg + int + exp + cus;
                 const pct = (n: number) => (total <= 0 ? 0 : Math.round((n / total) * 100));
-                const cus = Math.max(0, total - beg - int - exp);
                 return (
                   <>
                     初 {pct(beg)}% 中 {pct(int)}%

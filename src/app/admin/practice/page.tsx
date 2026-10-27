@@ -30,13 +30,16 @@ export default async function AdminPracticePage() {
 
   const d30Total = trend.total.reduce((a, b) => a + b, 0);
   const weekPlays = days.reduce((a, d) => a + d.plays, 0);
-  // 近 30 天级别占比（与趋势图同窗口的总量口径；色值与趋势图序列一致）
+  // 近 30 天级别占比（色值与趋势图序列一致）；分母=四段之和（已记级别的盘数，
+  // 10-27 起记日当天 cus 计 0——差额不可分离，其余三列即真值）
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+  const lvBeg = sum(trend.beg), lvInt = sum(trend.int), lvExp = sum(trend.exp), lvCus = sum(trend.cus);
+  const lvTotal = lvBeg + lvInt + lvExp + lvCus;
   const levelItems = [
-    { label: "初级", value: sum(trend.beg), color: C.beg },
-    { label: "中级", value: sum(trend.int), color: C.int },
-    { label: "高级", value: sum(trend.exp), color: C.exp },
-    { label: "自定义", value: sum(trend.cus), color: C.cus },
+    { label: "初级", value: lvBeg, color: C.beg },
+    { label: "中级", value: lvInt, color: C.int },
+    { label: "高级", value: lvExp, color: C.exp },
+    { label: "自定义", value: lvCus, color: C.cus },
   ];
 
   return (
@@ -53,10 +56,10 @@ export default async function AdminPracticePage() {
           <TrendChart dates={trend.dates} series={series} />
         </AdminCard>
         <AdminCard title="级别占比（近 30 天总量）">
-          <Donut items={levelItems} centerLabel={`总 ${d30Total.toLocaleString("zh-CN")} 盘`} mergeSmall={false} />
+          <Donut items={levelItems} centerLabel={`已记 ${lvTotal.toLocaleString("zh-CN")} 盘`} mergeSmall={false} />
         </AdminCard>
-<AdminCard title="模式占比（近 7 天）">
-          {modes.total > 0 ? (
+        <AdminCard title="模式占比（近 7 天）">
+          {modes.items.some((m) => m.value > 0) ? (
             <BarList
               items={modes.items.map((m) => ({
                 label: `${m.label}（${modes.total > 0 ? Math.round((m.value / modes.total) * 100) : 0}%）`,
@@ -65,7 +68,7 @@ export default async function AdminPracticePage() {
               color="linear-gradient(90deg,#75715e,#a6e22e)"
             />
           ) : (
-            <div className="admin_empty">{LEVEL_CLEAN_SINCE} 起开始记录</div>
+            <div className="admin_empty">暂无模式数据</div>
           )}
         </AdminCard>
       </div>
@@ -74,7 +77,7 @@ export default async function AdminPracticePage() {
         <AdminCard title="24 小时分布（近 7 天聚合）" more="0-23 时按 +08:00，今日起记">
           <ColumnChart items={hourly} color="linear-gradient(180deg,#66d9ef,#2f6f8b)" height={150} />
         </AdminCard>
-        <AdminCard title="近 7 天明细" more={`人数含游客；${LEVEL_CLEAN_SINCE} 前级别维度未记（计 0）`}>
+        <AdminCard title="近 7 天明细" more={`人数含游客；${LEVEL_CLEAN_SINCE} 15:11 前级别维度未记（计 0）`}>
           <div className="admin_scroll">
             <table className="admin_table">
               <thead>
