@@ -16,6 +16,10 @@ export type ConfirmOptions = {
   title: string;
   /** 正文；传字符串时按 pre-line 折行，可传 JSX（<em> 关键字标红） */
   message: React.ReactNode;
+  /** 正文下方的自定义区块（不套 <p>，可放图片/并排对比等块级内容，2026-10-27） */
+  content?: React.ReactNode;
+  /** 加宽一档（420px）：并排展示图片等需要横向空间的浮窗用 */
+  wide?: boolean;
   /** 确认键文案，默认「确定」 */
   confirmText?: string;
   /** 取消键文案，默认「取消」 */
@@ -33,7 +37,18 @@ let emit: ((options: ConfirmOptions) => Promise<boolean>) | null = null;
 /** 命令式调用：任意客户端组件直接 `if (!(await confirmDialog(...))) return;` */
 export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
   if (emit) return emit(options);
-  return Promise.resolve(false); // Host 未挂载（极端时序）按取消处理，绝不误执行
+  // Host 尚未挂载：effect 是「子先父后」执行，页面组件在首帧调用时会早于 layout 里的
+  // ConfirmHost 注册 emit（2026-10-27 绑定 QQ 头像浮窗实证：URL 参数被清掉但浮窗没弹）。
+  // 这里轮询等待 ~300ms，仍无 Host 才按取消处理，绝不误执行。
+  return new Promise<boolean>((resolve) => {
+    let tries = 0;
+    const tick = () => {
+      if (emit) return resolve(emit(options));
+      if (++tries > 10) return resolve(false);
+      setTimeout(tick, 30);
+    };
+    tick();
+  });
 }
 
 export function ConfirmHost() {
@@ -79,7 +94,7 @@ export function ConfirmHost() {
   return (
     <div className="confirm_overlay" onClick={() => finish(false)}>
       <div
-        className="confirm_dialog"
+        className={`confirm_dialog${o.wide ? " wide" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={o.title}
@@ -95,6 +110,7 @@ export function ConfirmHost() {
         </a>
         <h1>{o.title}</h1>
         <p className="confirm_desc">{o.message}</p>
+        {o.content && <div className="confirm_content">{o.content}</div>}
         <div className={`confirm_ops${o.centerActions ? " centered" : ""}`}>
           <button type="button" className="button small" onClick={() => finish(false)}>
             {o.cancelText ?? "取消"}

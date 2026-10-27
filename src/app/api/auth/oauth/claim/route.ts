@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyPassword, setSession, getOauthTicket, clearOauthTicket } from "@/lib/auth";
-import { importQqAvatar } from "@/lib/oauth-avatar";
+import { importQqAvatar, hasOwnAvatarPhoto } from "@/lib/oauth-avatar";
 import { getClientIp } from "@/lib/net";
 
 export async function POST(req: Request) {
@@ -49,9 +49,20 @@ export async function POST(req: Request) {
     },
   });
 
-  // 首次绑定 QQ：拉取授权头像送审（AI pass 生效 / 否则人工队列），失败不影响绑定（2026-10-26）
+  // 首次绑定 QQ：处理授权头像（2026-10-26 / 10-27 张老师口径）
+  // 老账号本人已传过照片 → 不自动替换，回一个标记，前端跳账户页弹「要不要换成
+  // QQ 头像」浮窗；本人没照片 → 直接拉取送审（失败不影响绑定）
+  let askQqAvatar = false;
   if (ticket.provider === "qq" && ticket.avatar) {
-    void importQqAvatar(Number(auth.id), ticket.avatar);
+    const me = await prisma.user.findUnique({
+      where: { id: auth.id },
+      select: { avatar: true },
+    });
+    if (hasOwnAvatarPhoto(me?.avatar ?? "")) {
+      askQqAvatar = true;
+    } else {
+      void importQqAvatar(Number(auth.id), ticket.avatar);
+    }
   }
 
   await setSession({ uid: Number(auth.id), username: auth.username, role: auth.role }, getClientIp(req));
@@ -60,5 +71,5 @@ export async function POST(req: Request) {
     where: { id: auth.id },
     data: { loginTimes: { increment: 1 }, loginTime: now },
   });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, askQqAvatar });
 }

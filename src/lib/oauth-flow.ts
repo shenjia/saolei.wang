@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession, setSession, setOauthTicket } from "@/lib/auth";
 import { checkState, exchangeCode } from "@/lib/oauth";
-import { importQqAvatar } from "@/lib/oauth-avatar";
+import { importQqAvatar, hasOwnAvatarPhoto } from "@/lib/oauth-avatar";
 
 function redirect(path: string): NextResponse {
   // 手写相对 Location（同 ranking/whereami 的约定）：siteUrl() 拼绝对地址在
@@ -60,8 +60,17 @@ export async function handleOauthCallback(
         updateTime: now,
       },
     });
-    // 首次绑定 QQ 成功：拉取授权头像送审（AI pass 生效 / 否则人工队列），失败不影响绑定（2026-10-26）
+    // 首次绑定 QQ 成功：处理授权头像（2026-10-26 / 10-27 张老师口径）
+    // 本人已传过照片 → 不自动替换，带回 ?qqavatar=1 让账户页弹浮窗问一句；
+    // 本人没照片 → 直接拉取送审（失败不影响绑定）
     if (provider === "qq" && ticket.avatar) {
+      const me = await prisma.user.findUnique({
+        where: { id: BigInt(session.uid) },
+        select: { avatar: true },
+      });
+      if (hasOwnAvatarPhoto(me?.avatar ?? "")) {
+        return redirect("/?bound=1&qqavatar=1");
+      }
       void importQqAvatar(session.uid, ticket.avatar);
     }
     return redirect("/?bound=1");

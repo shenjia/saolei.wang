@@ -11387,6 +11387,48 @@ body #page .word_terms .desc {
   outline-offset: 1px;
 }
 
+/* ---- 确认浮窗自定义内容区 + QQ 头像二选一（2026-10-27 张老师要求）----
+   绑定 QQ 时本人已有头像 → 浮窗里并排展示「当前头像 → QQ 头像」再问是否更换。
+   content 是块级容器（不套 <p>），wide 给 420px 横向空间。 */
+.confirm_dialog.wide {
+  width: 420px;
+}
+.confirm_dialog .confirm_content {
+  margin-top: 14px;
+}
+.qq_avatar_swap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.qq_avatar_swap figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+}
+.qq_avatar_swap img {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(248, 248, 242, 0.14);
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.75);
+}
+.qq_avatar_swap figcaption {
+  font-size: 12px;
+  line-height: 16px;
+  color: #8f908a;
+}
+.qq_avatar_swap .qq_avatar_arrow {
+  display: flex;
+  align-items: center;
+  color: #e6db74;
+}
+
 /* ---- 开放 API 说明页三轮（2026-10-27）：首屏接口导航表 ----
    导航行由 APIS 数组自动生成；链接锚到对应 <details> 区块。
    api_endpoint 加 scroll-margin-top：锚点跳转落点下让位页面吸顶头；

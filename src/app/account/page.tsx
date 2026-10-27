@@ -15,6 +15,7 @@ import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { UserPanel } from "@/components/UserCard";
 import { QqBindLink } from "@/components/QqLogin";
+import { QqAvatarPrompt } from "@/components/QqAvatarPrompt";
 import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
@@ -51,9 +52,10 @@ export default async function AccountManagePage({
     }),
     prisma.user.findUnique({ where: { id: uid }, select: { avatar: true } }),
     // QQ 第三方绑定状态：未绑定则在 QQ 行后显示「（绑定QQ）」入口（2026-10-25 张老师定）
+    // avatar：绑定后「要不要换成 QQ 头像」浮窗的右侧预览图（2026-10-27）
     prisma.userOauth.findFirst({
       where: { userId: uid, provider: "qq" },
-      select: { nickname: true },
+      select: { nickname: true, avatar: true },
     }),
   ]);
   if (!detail) redirect("/account/login");
@@ -158,6 +160,11 @@ export default async function AccountManagePage({
             {/* 绑定结果反馈（弹窗授权完成后主窗跳回 /account?bound=1 / ?error=taken） */}
             {sp.bound === "1" && <p className="account_flash ok">QQ 绑定成功，今后点登录框的企鹅图标即可登录</p>}
             {sp.error === "taken" && <p className="account_flash err">该 QQ 已绑定其他账号，请换一个试试</p>}
+            {/* 本人已有照片时问一句：要不要换成 QQ 头像（2026-10-27 张老师要求）。
+                浮窗自己把 URL 上的 qqavatar 抹掉，只问一次。 */}
+            {sp.qqavatar === "1" && qqBinding?.avatar && (
+              <QqAvatarPrompt currentUrl={photo} qqUrl={qqBinding.avatar} />
+            )}
           </div>
         </li>
         <li className="sidebar">

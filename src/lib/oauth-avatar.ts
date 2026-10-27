@@ -2,10 +2,13 @@
 //
 // 数据源：OAuth 授权时 get_user_info 已拉到 figureurl_qq_2（100×100）/ figureurl_qq_1
 // （40×40），存在 ticket.avatar / user_oauth.avatar。绑定成功后下载该 URL：
-// - **仅当本人还没传过照片时**才同步（2026-10-27 张老师口径）：user.avatar 已是
-//   上传路径（/uploads/avatar/）或旧站实体照片标记 "1" → 一律跳过，绝不替换本人照片；
+// - **仅当本人还没传过照片时**才自动同步（2026-10-27 张老师口径）：user.avatar 已是
+//   上传路径（/uploads/avatar/）或旧站实体照片标记 "1" → 默认跳过，绝不悄悄替换本人照片；
 //   本人还有自传头像在审核中（avatar_review 待审且 source≠qq）→ 同样跳过，避免把
 //   他的待审记录清掉
+// - **本人已有照片时改为「问一句」**（2026-10-27 追加）：绑定后带 ?qqavatar=1 回到账户页，
+//   由 QqAvatarPrompt 浮窗并排展示「当前头像 → QQ 头像」，用户点「换成 QQ 头像」才走
+//   force=true 导入（接口 /api/account/avatar/qq）
 // - 限 2MB、magic bytes 校验（同上传头像口径），GIF/HEIC 等直接放弃
 // - 落盘 /uploads/avatar/{uid}-qq-{ts}.{ext}
 // - AI 初审仅作参考意见（verdict/category/reason 展示在审核队列），**一律落
@@ -57,37 +60,50 @@ export function hasOwnAvatarPhoto(avatar: string): boolean {
   return isUploadedAvatar(avatar) || avatar === "1";
 }
 
+/** importQqAvatar 的结果：进队列 / 按口径跳过 / 拉取或写库失败 */
+export type QqAvatarImportResult = "queued" | "skipped" | "failed";
+
 /**
  * QQ 绑定成功后拉取授权头像并送审。任何失败都只打日志，不抛出。
- * 本人已有照片（或自传照片正在审核）时直接跳过，什么都不做。
+ * 本人已有照片（或自传照片正在审核）时默认跳过，什么都不做；
+ * 用户在浮窗里明确选了「换成 QQ 头像」时传 force=true 绕过这两道闸门。
  * @param uid    user.id
  * @param avatarUrl QQ get_user_info 返回的头像外链（figureurl_qq_2 优先）
+ * @param opts.force 用户已确认替换（本人原头像照旧保留到审核通过为止）
  */
-export async function importQqAvatar(uid: number, avatarUrl: string): Promise<void> {
-  if (!avatarUrl || !/^https?:\/\//.test(avatarUrl)) return;
+export async function importQqAvatar(
+  uid: number,
+  avatarUrl: string,
+  opts: { force?: boolean } = {},
+): Promise<QqAvatarImportResult> {
+  if (!avatarUrl || !/^https?:\/\//.test(avatarUrl)) return "failed";
   try {
-    // 0. 前置闸门：本人已传过照片 → 不同步（绝不覆盖）；本人自传头像在审 → 也不插队，
-    //    否则下面 deleteMany 会把他自己待审的记录清掉
     const current = await prisma.user.findUnique({
       where: { id: BigInt(uid) },
       select: { avatar: true },
     });
     const prevAvatar = current?.avatar ?? "";
-    if (hasOwnAvatarPhoto(prevAvatar)) {
-      console.log(`[qq-avatar] user ${uid} 已有本人照片（${prevAvatar}），跳过 QQ 头像同步`);
-      return;
-    }
-    const ownPending = await prisma.avatarReview.findFirst({
-      where: {
-        user: BigInt(uid),
-        status: AVATAR_REVIEW_STATUS.PENDING,
-        source: { not: "qq" },
-      },
-      select: { id: true },
-    });
-    if (ownPending) {
-      console.log(`[qq-avatar] user ${uid} 有自传头像待审（#${ownPending.id}），跳过 QQ 头像同步`);
-      return;
+
+    // 0. 前置闸门（force 时跳过——用户已在浮窗里明确同意替换）
+    if (!opts.force) {
+      // 本人已传过照片 → 不同步（绝不覆盖）
+      if (hasOwnAvatarPhoto(prevAvatar)) {
+        console.log(`[qq-avatar] user ${uid} 已有本人照片（${prevAvatar}），跳过 QQ 头像同步`);
+        return "skipped";
+      }
+      // 本人自传头像在审 → 也不插队，否则下面 deleteMany 会把他自己待审的记录清掉
+      const ownPending = await prisma.avatarReview.findFirst({
+        where: {
+          user: BigInt(uid),
+          status: AVATAR_REVIEW_STATUS.PENDING,
+          source: { not: "qq" },
+        },
+        select: { id: true },
+      });
+      if (ownPending) {
+        console.log(`[qq-avatar] user ${uid} 有自传头像待审（#${ownPending.id}），跳过 QQ 头像同步`);
+        return "skipped";
+      }
     }
 
     // 1. 下载（超时保护；QQ 头像 CDN 第三方网址，仅取图片二进制）
@@ -97,19 +113,19 @@ export async function importQqAvatar(uid: number, avatarUrl: string): Promise<vo
     });
     if (!resp.ok) {
       console.warn(`[qq-avatar] 下载失败 HTTP ${resp.status}: ${avatarUrl}`);
-      return;
+      return "failed";
     }
     const buf = Buffer.from(await resp.arrayBuffer());
     if (!buf.length || buf.length > MAX_SIZE) {
       console.warn(`[qq-avatar] 大小异常 ${buf.length}B，放弃`);
-      return;
+      return "failed";
     }
 
     // 2. 类型校验（QQ 头像多为 jpg/png/webp；gif 动图 AI 接口不吃，直接放弃）
     const ext = sniffImage(buf);
     if (!ext) {
       console.warn(`[qq-avatar] 不支持的图片格式，放弃`);
-      return;
+      return "failed";
     }
 
     // 3. 落盘
@@ -151,7 +167,9 @@ export async function importQqAvatar(uid: number, avatarUrl: string): Promise<vo
       },
     });
     console.log(`[qq-avatar] user ${uid} 已进人工审核队列（AI 参考：${ai.verdict}/${ai.category}）`);
+    return "queued";
   } catch (e) {
     console.warn("[qq-avatar] 导入失败（不影响绑定）:", e instanceof Error ? e.message : e);
+    return "failed";
   }
 }

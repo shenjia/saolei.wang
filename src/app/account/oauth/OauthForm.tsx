@@ -33,7 +33,8 @@ export default function OauthForm({ providerName, nickname }: { providerName: st
         return;
       }
       toast("绑定成功", "success");
-      window.location.href = "/";
+      // 老账号已有照片时：到账户页弹「要不要换成 QQ 头像」浮窗（2026-10-27）
+      window.location.href = data.askQqAvatar ? "/account?bound=1&qqavatar=1" : "/";
     } finally {
       setLoading(false);
     }
