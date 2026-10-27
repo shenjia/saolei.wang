@@ -62,7 +62,7 @@ export function ClearButton() {
   const [done, setDone] = useState(false);
   const router = useRouter();
   async function onClear() {
-    if (!(await confirmDialog({ title: "清空消息", message: "确定清空所有消息吗？此操作不可恢复。" }))) return;
+    if (!(await confirmDialog({ title: "清空消息", message: "确定清空所有消息吗？此操作不可恢复。", confirmText: "清空", danger: true }))) return;
     const res = await fetch("/api/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
