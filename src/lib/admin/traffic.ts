@@ -76,11 +76,13 @@ export interface TrafficOverview {
   active: { today: number; yesterday: number; d7: number; d30: number; trend: number[] };
   /** 练习局数（practice_daily 日汇总，2026-10-16 起；胜/负都记，trend 为分日局数；
    *  users 为去重玩家数——登录态去重 user_id，游客局并入「人次」口径（ip+ua 不可靠，不强行去重）；
+   *  lastWeek 为上周同一日同时段练习局数（同比基数，与其他 KPI 同构）；
    *  todayLevels 为今日初/中/高局数（2026-10-27 加级别列起记，历史日期三列恒 0，
-   *  自定义盘只进 today 总数不进三列） */
+   *  自定义盘只进 today 总数不进三列——「自」占比=total-三项差额） */
   practice: {
     today: number; todayUsers: number;
     yesterday: number; yesterdayUsers: number;
+    lastWeek: number;
     d30: number; d30Users: number;
     trend: number[]; trendUsers: number[];
     todayLevels: { beg: number; int: number; exp: number };
@@ -190,17 +192,24 @@ async function aggregate(): Promise<TrafficOverview> {
   const yesterdayIdx = Math.floor((yesterday0 + 28800) / 86400);
   const practiceMap = new Map<number, number>();
   const practiceUserMap = new Map<number, Set<string>>();
+  // 上周同一日全天盘数（同比折算基数；行集只覆盖近 30 天，上周同日恒在范围内）
+  const practiceLastWeekMap = new Map<number, number>();
   let practiceToday = 0;
   let practiceYesterday = 0;
+  // 上周同一日同时段练习局数（同比基数）：上周日全天盘数 × (今日已过秒数/86400) 折算——
+  // practice_daily 是日汇总无逐盘时刻，取「同时段占比折算」近似（与 PV/UV 的逐行精确窗口不同）
+  let practiceLastWeek = 0;
   // 今日级别局数（2026-10-27 起记；含游客行——与 practiceToday 同分母口径）
   const todayLevels = { beg: 0, int: 0, exp: 0 };
   const todayPracticeUsers = new Set<string>();
   const yesterdayPracticeUsers = new Set<string>();
   const d30PracticeUsers = new Set<string>();
+  const lastWeekIdx = Math.floor((lastWeek0 + 28800) / 86400); // 上周同一日的 day 桶
   for (const p of practiceRows) {
     const idx = N(p.day);
     const plays = N(p.plays);
     practiceMap.set(idx, (practiceMap.get(idx) ?? 0) + plays);
+    if (idx === lastWeekIdx) practiceLastWeekMap.set(idx, (practiceLastWeekMap.get(idx) ?? 0) + plays);
     const uid = N(p.user_id);
     if (uid > 0) {
       const key = String(uid);
@@ -222,6 +231,9 @@ async function aggregate(): Promise<TrafficOverview> {
     }
     else if (idx === yesterdayIdx) practiceYesterday += plays;
   }
+  // 同比折算：上周同日全天 × 今日已过时长占比（now 恒 ≥ today0，比例 ∈ (0,1]）
+  const lastWeekFull = practiceLastWeekMap.get(lastWeekIdx) ?? 0;
+  practiceLastWeek = Math.round(lastWeekFull * ((now - today0) / 86400));
 
   // 按时间序处理（流失统计取会话末页依赖顺序）
   const sorted = [...rows].sort((a, b) => N(a.createTime) - N(b.createTime));
@@ -479,6 +491,7 @@ async function aggregate(): Promise<TrafficOverview> {
       todayUsers: todayPracticeUsers.size,
       yesterday: practiceYesterday,
       yesterdayUsers: yesterdayPracticeUsers.size,
+      lastWeek: practiceLastWeek,
       d30: practiceSeries.reduce((a, b) => a + b, 0),
       d30Users: d30PracticeUsers.size,
       trend: practiceSeries,
@@ -491,7 +504,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v9"],
+  ["admin-traffic", "v10"],
   { revalidate: 300 }
 );
 

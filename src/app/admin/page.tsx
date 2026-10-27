@@ -132,23 +132,28 @@ export default async function AdminDashboard() {
         />
         <Kpi
           label="今日练习"
-          value={traffic.practice.today}
-          unit="局"
+          value={`${traffic.practice.today.toLocaleString("zh-CN")} 局 / ${traffic.practice.todayUsers} 人参与`}
           tone="cyan"
           trend={traffic.practice.trend}
           foot={
             <>
-              {traffic.practice.todayUsers} 人参与
+              {cmpFoot(traffic.practice.today, traffic.practice.lastWeek)}
               <br />
-              {/* 2026-10-27 张老师定：「近 7 天 N 盘」没意义，改显今日初/中/高占比。
-                  分母=今日总盘数（含自定义）；占比取整，三项之和可能 <100%
-                  （差额=自定义盘 + 上线首日的历史无级别局，次日自然对齐）。 */}
+              {/* 2026-10-27 张老师定：foot 四行制——同比 / 初+中 / 高+自。
+                  占比分母=今日总盘数（含自定义）；占比取整，四项之和可能 <100%
+                  （差额=上线首日列生效前玩的历史局，次日自然对齐）。 */}
               {(() => {
                 const { beg, int, exp } = traffic.practice.todayLevels;
                 const total = traffic.practice.today;
-                if (total <= 0) return "级别占比 —";
-                const pct = (n: number) => Math.round((n / total) * 100);
-                return `初 ${pct(beg)}% / 中 ${pct(int)}% / 高 ${pct(exp)}%`;
+                const pct = (n: number) => (total <= 0 ? 0 : Math.round((n / total) * 100));
+                const cus = Math.max(0, total - beg - int - exp);
+                return (
+                  <>
+                    初 {pct(beg)}% / 中 {pct(int)}%
+                    <br />
+                    高 {pct(exp)}% / 自 {pct(cus)}%
+                  </>
+                );
               })()}
             </>
           }
