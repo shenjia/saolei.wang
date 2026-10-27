@@ -1290,3 +1290,12 @@ table.admin_table .ai_reason {
   margin-right: 5px;
   vertical-align: 1px;
 }
+
+/* 后台表格内军衔字号与正文（姓名）一致（2026-10-28 张老师要求）：
+   legacy-2013.css 全局 .title em{font-size:16px} 会把后台表格里的军衔
+   撑大一号（前台评论区/BBS/录像表各有 14px 对齐规则，后台此前没有）。
+   admin.css 在 legacy 之后加载，覆盖全部后台表格场景（仪表盘玩家列/
+   称号列、玩家管理称号列等）。徽章 .rank-badge 为 1em 自动跟随。 */
+.admin_table .title em {
+  font-size: 14px;
+}
