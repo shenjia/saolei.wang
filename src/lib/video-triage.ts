@@ -20,9 +20,9 @@
 //   bit8 首次入伍（三级成绩将首次齐全，同上）
 //   bit9 低信任：上传者属低信任组（口径见 lib/lowtrust.ts：反作弊标记未到期 ∪ 屏蔽史）
 //
-// 另外的强制口径（不是触发器）：bit16 在线排行模式录像一律转手审
-//   （2026-10-27 张老师指令「暂时」，开关 RANKED_FORCE_MANUAL_REVIEW——
-//   排名局不看机器判档，全部进需核定池逐条手审）
+// 另外的强制口径（不是触发器）：bit16 在线排行模式录像强制转手审
+//   （2026-10-27 张老师指令开启，2026-10-28 张老师指令关闭——排名局走正常分拣；
+//   开关 RANKED_FORCE_MANUAL_REVIEW，存量旧位重跑分拣即覆盖清除）
 //
 // 失败兜底：读文件/解析/计算任一失败 → auto_flag=2（按需核定），绝不静默免核定。
 // 结果仅后台展示，玩家端任何页面不出现机器判定痕迹（张老师拍板④）。
@@ -296,9 +296,9 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
     ]);
     if (!video || !info) return;
 
-    // 在线排行模式录像一律转手审（2026-10-27 张老师指令「暂时」）：识别三路兜底——
-    // 上传入口显式标记 / 库内软件名 / 服务端签名（重跑分拣的历史盘与后台重分拣
-    // 拿不到 uploadExtra，靠后两路仍然命中）。前置于解析，失败兜底也带上标记。
+    // 在线排行模式强制转手审识别（口径见 RANKED_FORCE_MANUAL_REVIEW，2026-10-28 起关闭）：
+    // 上传入口显式标记 / 库内软件名 / 服务端签名三路兜底——存量回填与后台重分拣
+    // 拿不到 uploadExtra 也能命中。开关关闭时 rankedHit 恒 false
     const rankedHit =
       RANKED_FORCE_MANUAL_REVIEW &&
       Boolean(uploadExtra.ranked || info.software === RANKED_SOFTWARE || info.evfSig !== null);
@@ -367,8 +367,9 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
       flag = 0;
     }
 
-    // 在线排行模式录像一律转手审（2026-10-27 张老师指令「暂时」）：不是触发器命中，
-    // 而是口径强制——排名局全部进需核定池逐条看，不看机器判档结果（识别见上方 rankedHit）。
+    // 在线排行模式录像强制转手审（2026-10-27 开启，2026-10-28 张老师指令关闭：
+    // 排名局走正常分拣逻辑）。开关再开 true 即恢复强制；关闭后 rankedHit 恒 false，
+    // 重跑分拣会覆盖掉存量已打的 bit16（识别三路兜底见上方 rankedHit 注释）。
     if (rankedHit) {
       reason |= AUTO_REASON.RANKED_MANUAL;
       flag = 0;

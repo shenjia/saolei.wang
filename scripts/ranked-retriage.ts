@@ -1,16 +1,20 @@
-// 在线排行模式录像转手审回填（2026-10-27 张老师指令「暂时」）
+// 在线排行模式录像分拣重判（随临时口径开关 RANKED_FORCE_MANUAL_REVIEW 配套）
+//
+// 历史：2026-10-27 张老师指令排名局全部强制转手审（本脚本为存量回填）；
+//       2026-10-28 张老师指令关闭强制——排名局走正常分拣，本脚本用于清掉
+//       存量已打的 bit16（重跑分拣即覆盖，零命中的回到免核定池）。
 //
 // 跑法（项目根）:
 //   env -u NODE_OPTIONS node --experimental-transform-types \
 //     --import ./scripts/sync/ts-extension-loader.mjs scripts/ranked-retriage.ts [--apply] [--all]
 //
 // 无参数：只列清单 + 现状分布，不写库；
-// --apply：对排名录像重跑分拣（口径同上传链路 lib/video-triage.ts），
-//          排名局一律 auto_flag=0 + bit16，进「需核定」池逐条手审；
+// --apply：对排名录像重跑分拣（口径同上传链路 lib/video-triage.ts）：
+//          开关开=一律 auto_flag=0 + bit16 进需核定池；开关关（现状）=按正常
+//          触发器重判，覆盖清掉存量 bit16，零命中的回到免核定池；
 // --all  ：连已通过（status=20）的排名录像一起重判（只动 auto_flag/auto_reason，不碰 status）。
 //
 // 识别口径：software='Saolei.wang'（排名局 evf 的 Program 字段）或 evf_sig 非空。
-// 开关关闭（RANKED_FORCE_MANUAL_REVIEW=false）后跑 --apply 可把 bit16 洗掉、回到免核定池。
 
 import { prisma } from "../src/lib/db";
 import { triageVideo } from "../src/lib/video-triage";

@@ -240,7 +240,7 @@ model Video {
   // bit4 点击数不足 | bit5 首击<0.1s | bit6 破个人纪录 | bit7 级别 TOP 榜
   // bit8 首次入伍 | bit9 低信任（屏蔽/封禁史）
   // bit10 path 瞬移 | bit11 path 超速 | bit12/13 ms-toollib 不通过/可疑 | bit14 盲区率过低
-  // bit15 排名 evf 签名不符 | bit16 在线排行模式强制转手审（不是作弊信号，临时口径）
+  // bit15 排名 evf 签名不符 | bit16 排名局强制转手审标记（临时口径已停用，残留位重跑分拣即清）
   autoReason Int     @default(0) @map("auto_reason") @db.Int
 
   // 2026-10-15 上线前性能审计新增：

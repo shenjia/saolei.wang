@@ -34,17 +34,18 @@ export const AUTO_REASON = {
   /** 排名 evf 签名校验失败（2026-10-27）：文件字节与 video_info.evf_sig 的 HMAC 不一致
    *  ——库内文件被替换/篡改。签名缺失（历史数据）不判 */
   EVF_SIG: 1 << 15,
-  /** 在线排行模式录像一律转手审（2026-10-27 张老师指令「暂时」）：
-   *  不是触发器命中，而是口径强制——开关见 RANKED_FORCE_MANUAL_REVIEW。
-   *  关闭开关后本条自然消失（存量的旧位不会自动清，重跑分拣即覆盖） */
+  /** 在线排行模式强制转手审标记（2026-10-27 张老师指令「暂时」，2026-10-28 起停用）：
+   *  不是触发器命中，而是口径强制——开关见 RANKED_FORCE_MANUAL_REVIEW（现 false，
+   *  新录像不再打本位；存量的旧位重跑分拣即覆盖清除） */
   RANKED_MANUAL: 1 << 16,
 } as const;
 
-/** 在线排行模式录像全部转手审（临时口径，2026-10-27 张老师指令）
- *  true  → 排名局（software=Saolei.wang / 带 evf_sig）无论触发器是否命中，一律 auto_flag=0 进需核定池
- *  false → 恢复原逻辑（机器只分拣、零命中免核定）
- *  改回 false 后，已打 bit16 的录像需重跑分拣（scripts/ranked-retriage.ts --all）才会回到免核定池 */
-export const RANKED_FORCE_MANUAL_REVIEW = true;
+/** 在线排行模式录像是否全部转手审（临时口径）
+ *  2026-10-27 张老师指令开启（排名局一律进需核定池）；2026-10-28 张老师指令关闭——
+ *  排名局走正常分拣逻辑（机器只分拣、零命中免核定）。
+ *  再开 true 即恢复强制手审；关闭期间已打 bit16 的录像重跑分拣
+ *  （scripts/ranked-retriage.ts --apply）即清位回正常池 */
+export const RANKED_FORCE_MANUAL_REVIEW = false;
 
 /** path 超速触发线（格/秒）+ 时长守卫（ms）——短局甩鼠标可瞬时超速，不判 */
 export const PATH_SPEED_TRIGGER = 30;

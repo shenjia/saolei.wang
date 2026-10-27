@@ -23,7 +23,7 @@ import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { PRESS_AVG_MS, STNB_TRIGGER } from "@/lib/video-triage-limits";
 import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
-import { confirmDialog } from "@/components/Confirm";
+import { confirmDialogChecked } from "@/components/Confirm";
 
 const LEVEL_NAMES: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 
@@ -119,8 +119,8 @@ function reasonTagList(v: AdminVideoRow) {
   }
   if (r & (1 << 16)) {
     tags.push({
-      text: "在线排行模式·转手审",
-      title: "在线排行模式的录像暂时全部转人工审核（2026-10-27 张老师指令）：这类局不看机器判档结果，一律进需核定池逐条复核。本条不是作弊信号——没有其他原因标签时说明本盘零触发器命中",
+      text: "排名局·历史强审标记",
+      title: "2026-10-27 排名局曾全部强制转手审时打的标记（该临时口径已于 2026-10-28 停用，排名局恢复正常分拣）。这不是作弊信号；本盘未被重跑分拣前仍显示旧位",
       cls: "info",
     });
   }
@@ -174,6 +174,8 @@ export function AdminReviewList({
   const [allMode, setAllMode] = useState(pool === "exempt");
   /** 屏蔽气泡确认（应用内弹窗，不用浏览器模态） */
   const [banConfirm, setBanConfirm] = useState<"page" | "all" | null>(null);
+  /** 批量屏蔽 → 低信任分流勾选（2026-10-28 张老师需求，默认勾选；单条屏蔽走 confirmDialogChecked） */
+  const [banLowTrust, setBanLowTrust] = useState(true);
   /** 全屏回放播放器（2026-10-19 张老师需求：点时间列弹层看录像） */
   const [playTarget, setPlayTarget] = useState<AdminPlayerTarget | null>(null);
 
@@ -290,12 +292,13 @@ export function AdminReviewList({
   };
   const selectedCount = allMode ? exemptCount : picked.size;
 
-  const runBatch = async (ids: number[], all: boolean, nextStatus: number) => {
+  const runBatch = async (ids: number[], all: boolean, nextStatus: number, lowTrust?: boolean) => {
     setBusy(true);
     const res = await postOp("video.batchReview", {
       ids: all ? ["all"] : ids, // ids=["all"]+pool=exempt = 服务端取全部免核定（跨页）
       pool: all ? "exempt" : undefined,
       status: nextStatus,
+      ...(nextStatus === VIDEO_STATUS.BANNED && lowTrust !== undefined ? { lowTrust } : {}),
     });
     setBusy(false);
     toast(res.ok ? res.message ?? "批量完成" : res.error ?? "批量失败", res.ok ? "success" : "error");
@@ -325,12 +328,15 @@ export function AdminReviewList({
     if (ids.length) return runBatch(ids, false, VIDEO_STATUS.REVIEWED);
   };
   // 批量屏蔽：应用内气泡确认（不用 window.confirm 模态）
-  const batchBanAsk = () => setBanConfirm(allMode ? "all" : "page");
+  const batchBanAsk = () => {
+    setBanLowTrust(true); // 每次打开重置默认勾选
+    setBanConfirm(allMode ? "all" : "page");
+  };
   const batchBanDo = () => {
     setBanConfirm(null);
-    if (allMode) return runBatch([], true, VIDEO_STATUS.BANNED);
+    if (allMode) return runBatch([], true, VIDEO_STATUS.BANNED, banLowTrust);
     const ids = [...picked];
-    if (ids.length) return runBatch(ids, false, VIDEO_STATUS.BANNED);
+    if (ids.length) return runBatch(ids, false, VIDEO_STATUS.BANNED, banLowTrust);
   };
 
   const showBatchBar = status === VIDEO_STATUS.NORMAL && (pool === undefined || pool === "exempt") && items.length > 0;
@@ -387,6 +393,13 @@ export function AdminReviewList({
               即将屏蔽 <b style={{ color: "#f92672" }}>{banConfirm === "all" ? `全部 ${exemptCount} 条免核定` : `${picked.size} 条选中`}</b>
               录像，对应玩家最好成绩会被回退（有次优录像则自动顶替）。此操作影响公开榜单，请确认。
             </p>
+            <label className="ban_check">
+              <input type="checkbox" checked={banLowTrust} onChange={(e) => setBanLowTrust(e.target.checked)} />
+              <span>
+                同时将涉及的上传者加入低信任用户组（此后其上传的录像需人工审核、每日限 5 部；
+                已在组内或账号已封禁的上传者不重复处理）
+              </span>
+            </label>
             <div className="ban_ops">
               <button type="button" className="admin_btn" disabled={busy} onClick={() => setBanConfirm(null)}>
                 取消
@@ -603,9 +616,30 @@ function ReviewRow({
             className="admin_btn danger sm"
             disabled={busy}
             onClick={async () => {
-              if (!(await confirmDialog({ title: "屏蔽录像", message: `确认屏蔽录像 #${v.id}？对应最好成绩会被回退。`, danger: true }))) return;
-              const ok = await run("video.review", { id: v.id, status: VIDEO_STATUS.BANNED });
-              if (ok) onRemoved();
+              // 屏蔽 + 低信任分流确认（2026-10-28 张老师需求）：勾选默认开——
+              // 确认后一并把上传者纳入低信任组；不勾则只屏蔽录像、不动用户
+              const { ok, checked } = await confirmDialogChecked({
+                title: "屏蔽录像",
+                message: `确认屏蔽录像 #${v.id}？对应最好成绩会被回退。`,
+                danger: true,
+                confirmText: "确认屏蔽",
+                checkbox: {
+                  label: (
+                    <>
+                      同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
+                      （此后其上传的录像需人工审核、每日限 5 部；上传者已在组内或账号已封禁时不重复处理）
+                    </>
+                  ),
+                  defaultChecked: true,
+                },
+              });
+              if (!ok) return;
+              const done = await run("video.review", {
+                id: v.id,
+                status: VIDEO_STATUS.BANNED,
+                lowTrust: checked,
+              });
+              if (done) onRemoved();
             }}
           >
             屏蔽
