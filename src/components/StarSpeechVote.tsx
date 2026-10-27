@@ -73,18 +73,24 @@ export function StarSpeechVote({ date, up, down }: { date: string; up: number; d
   return (
     <span className="star_vote">
       <a
-        href="javascript:void(0)"
+        href="#"
         className={`star_vote_link${voted === "up" ? " voted" : ""}`}
-        onClick={() => vote("up")}
+        onClick={(e) => {
+          e.preventDefault();
+          vote("up");
+        }}
         aria-disabled={done || busy}
         title={done ? "今天已投过票" : "赞"}
       >
         <ThumbIcon /> {counts.up}
       </a>
       <a
-        href="javascript:void(0)"
+        href="#"
         className={`star_vote_link${voted === "down" ? " voted" : ""}`}
-        onClick={() => vote("down")}
+        onClick={(e) => {
+          e.preventDefault();
+          vote("down");
+        }}
         aria-disabled={done || busy}
         title={done ? "今天已投过票" : "踩"}
       >
