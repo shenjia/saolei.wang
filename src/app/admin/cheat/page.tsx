@@ -54,6 +54,26 @@ export default async function AdminCheatPage() {
   });
   const nameMap = new Map(users.map((u) => [u.id, u.chineseName]));
   const rankMap = new Map(scores.map((i) => [i.id, milTitle(i.expTime)]));
+  /* 玩家累计复核战绩（2026-10-27 张老师需求）：待复核列表在玩家名下显示
+     「n 作弊 n 误报」＝该玩家历史上被核实作弊（resolved=1）/ 判为误报（resolved=2）
+     的次数。分组聚合一次取全量历史，供人工分诊：惯犯多命中即实锤，首次命中更可能
+     是扩展误报（Grammarly/翻译类）。待复核（resolved=0）不计入，那些还没结论 */
+  const pendingUids = Array.from(new Set(pending.map((r) => r.user)));
+  const histRows = pendingUids.length
+    ? await prisma.cheatReport.groupBy({
+        by: ["user", "resolved"],
+        where: { user: { in: pendingUids }, resolved: { in: [1, 2] } },
+        _count: { _all: true },
+      })
+    : [];
+  const histMap = new Map<string, { cheat: number; fp: number }>();
+  for (const h of histRows) {
+    const k = String(h.user);
+    const cur = histMap.get(k) ?? { cheat: 0, fp: 0 };
+    if (h.resolved === 1) cur.cheat = h._count._all;
+    if (h.resolved === 2) cur.fp = h._count._all;
+    histMap.set(k, cur);
+  }
   /* 复核者名单（已复核表显示「名字（#id）」） */
   const rids = Array.from(new Set(resolved.map((r) => r.resolver).filter((v) => v > BigInt(0))));
   const resolvers = rids.length
@@ -61,7 +81,7 @@ export default async function AdminCheatPage() {
     : [];
   const resolverMap = new Map(resolvers.map((u) => [u.id, u.chineseName]));
 
-  const rows = (list: typeof pending) =>
+  const rows = (list: typeof pending, withHist = false) =>
     list.map((r) => {
       const extSuspect = r.evidence.includes("chrome-extension://");
       /* 证据内嵌截图标记 [shot:/uploads/cheat/x.jpg]（2026-10-27 张老师需求：
@@ -93,6 +113,21 @@ export default async function AdminCheatPage() {
             <span className="cheat_rank" style={{ color: TITLE_COLORS[rankMap.get(r.user) ?? ""] ?? "#999" }}>
               {rankMap.get(r.user) ?? ""}
             </span>
+            {withHist &&
+              (() => {
+                /* 累计战绩（2026-10-27 张老师定）：作弊次数红、误报次数绿——
+                   与核验标签同一套主题色，暗面板上「红=坏事 / 绿=清白」一眼分开。
+                   零次也照样显示（首次命中就该看到 0 作弊，那是最像误报的情形） */
+                const h = histMap.get(String(r.user)) ?? { cheat: 0, fp: 0 };
+                return (
+                  <div
+                    className="cheat_hist"
+                    title={`历史复核：核实作弊 ${h.cheat} 次 · 误报 ${h.fp} 次（不含本条待复核）`}
+                  >
+                    <b className="hist_cheat">{h.cheat}</b> 作弊 <b className="hist_fp">{h.fp}</b> 误报
+                  </div>
+                );
+              })()}
           </td>
           <td>{REASON_LABEL[r.reason] ?? r.reason}</td>
           <td className="cheat_ev">
@@ -180,8 +215,8 @@ export default async function AdminCheatPage() {
             </tr>
           </thead>
           <tbody>
-            {rows(pending).length ? (
-              rows(pending)
+            {pending.length ? (
+              rows(pending, true)
             ) : (
               <tr>
                 <td colSpan={6} className="admin_hint">
