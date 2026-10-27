@@ -97,9 +97,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   </Link>
                 </li>
                 <li>
-                  <Link href="/records">纪录</Link>
-                </li>
-                <li>
                   <Link href="/page/download">下载</Link>
                 </li>
                 {session ? (

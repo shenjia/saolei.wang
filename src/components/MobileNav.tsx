@@ -31,7 +31,6 @@ const SITE_LINKS: { href: string; label: string }[] = [
   { href: "/page/guide", label: "教程" },
   { href: "/online", label: "练习" },
   { href: "/titles", label: "" }, // 军衔/称号（SystemText 动态）
-  { href: "/records", label: "纪录" },
   { href: "/page/download", label: "下载" },
 ];
 
