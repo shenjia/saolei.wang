@@ -140,8 +140,24 @@ fix_prisma_stub() {
 fix_prisma_stub "$S_DIR"
 
 # ---------- 启动/更新权威对局服务 ----------
-# 独立于 Next 蓝绿槽；发布会重启该进程，进行中的排名局需要重开（生产当前尚未开放入口）。
+# 独立于 Next 蓝绿槽。对局状态在 authority 进程内存——重启即清空。
+# 2026-10-27 排名模式上线后：有进行中对局（active>0，未结束局；games 含已结束
+# 未过 30min TTL 的历史局不可作判据）则等待其结束（15 分钟上限，覆盖高级局最长
+# 时长；期间 Next 槽已切完、页面正常，对局玩家无感）；无对局或超时才重启
+# （超时兜底：极少见的挂机局不能永远阻塞发布）。
+AUTH_WAITED=0
 if pm2 describe saolei-authority >/dev/null 2>&1; then
+  GAMES_DEADLINE=$((SECONDS + 900))
+  while :; do
+    GAMES_NOW=$(curl -sf --max-time 3 http://127.0.0.1:3104/health 2>/dev/null | grep -oE '"active":[0-9]+' | grep -oE '[0-9]+')
+    [ -z "$GAMES_NOW" ] && GAMES_NOW=0
+    if [ "$GAMES_NOW" -eq 0 ] || (( SECONDS >= GAMES_DEADLINE )); then
+      [ "$GAMES_NOW" -gt 0 ] && warn "仍有 $GAMES_NOW 局进行中，等待超时（15min）——强制重启，进行中的对局需重开"
+      break
+    fi
+    if (( AUTH_WAITED == 0 )); then info "排名对局进行中（$GAMES_NOW 局），等待结束（最多 15 分钟）..."; AUTH_WAITED=1; fi
+    sleep 10
+  done
   info "重启 saolei-authority ..."
   pm2 restart saolei-authority
 else
