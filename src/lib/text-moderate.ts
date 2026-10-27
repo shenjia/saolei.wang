@@ -52,27 +52,27 @@ const SYSTEM_PROMPT = `你是扫雷网（saolei.wang）的内容审核员。站�
 玩家会发布论坛主题、回帖与录像评论。请判定这段内容是否需要人工复核。
 
 判为 review 的类别（内容必须明确属于以下之一才判）：
+- ad：广告推广（拉群带货、代练/外挂/刷成绩、私服、留微信QQ等联系方式引流）
 - porn：色情、低俗、性暗示
 - politics：真实政治议题（国家、政府、政党、领导人、政治事件、分裂国家言论）
 - abuse：辱骂攻击、人身威胁、地域歧视、人肉
 - illegal：赌博、毒品、诈骗、传销等违法内容
 
 以下一律 pass，不得误判：
-- 广告推广（拉群带货、代练/外挂/刷成绩、私服、留微信QQ等联系方式引流）——站长明确不拦截广告，哪怕很明显的硬广也 pass
 - 扫雷技术、成绩、比赛、聚会等正常讨论，以及提问、求助、闲聊
 - 对游戏规则、排行榜、版本更新、军衔体系的吐槽与批评
 - 对本站运营、官方活动、管理团队的意见与批评——此处「官方」「政策」「改版」指的是扫雷网站方，与政治无关
 - 输局后的抱怨、负面情绪、轻度口头禅
 
 规则：
-1. 只有能明确归入上述四个类别之一时才判 review，否则一律 pass
+1. 只有能明确归入上述五个类别之一时才判 review，否则一律 pass
 2. politics 仅指现实政治（国家、政府、政党、领导人、政治事件、分裂国家言论）；谈游戏与网站运营不算
 3. 只能返回 pass 或 review，不要返回其他值
 4. reason 用中文，不超过 30 字
 
-只返回 JSON：{"verdict":"pass"|"review","category":"ok"|"porn"|"politics"|"abuse"|"illegal","reason":"简短说明"}`;
+只返回 JSON：{"verdict":"pass"|"review","category":"ok"|"ad"|"porn"|"politics"|"abuse"|"illegal","reason":"简短说明"}`;
 
-const CATEGORIES: TextCategory[] = ["ok", "porn", "politics", "abuse", "illegal"];
+const CATEGORIES: TextCategory[] = ["ok", "ad", "porn", "politics", "abuse", "illegal"];
 
 function degrade(reason: string, source: TextModerationSource, category: TextCategory = "ok"): TextModerationResult {
   return { verdict: "pass", category, reason, source };
@@ -135,10 +135,6 @@ export async function moderateText(text: string): Promise<TextModerationResult> 
 
     const verdict: TextVerdict = parsed.verdict === "review" ? "review" : "pass";
     const rawCat = String(parsed.category ?? "");
-    // 2026-10-27 张老师：不拦截广告——模型仍按旧口径返回 ad 时一律放行
-    if (rawCat === "ad") {
-      return { verdict: "pass", category: "ok", reason: "广告不拦截", source: "ai" };
-    }
     const category: TextCategory = (CATEGORIES as string[]).includes(rawCat)
       ? (rawCat as TextCategory)
       : "ok";

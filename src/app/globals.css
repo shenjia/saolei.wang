@@ -1774,41 +1774,6 @@ del[data-tip]:hover::after {
 .bbs_content img {
   vertical-align: middle;
 }
-/* 论坛正文贴图小图化（2026-10-27 张老师要求）：[img] 产物一律 100x100 内缩略，
-   点击弹大图（ImageLightboxHost）；min-width 防止超小图被拉伸 */
-.bbs_content img.ubb_img,
-.wys img.ubb_img {
-  max-width: 100px;
-  max-height: 100px;
-  min-width: 16px;
-  min-height: 16px;
-  cursor: zoom-in;
-  border-radius: 3px;
-}
-/* 灯箱遮罩（同 confirm_overlay 家族，z-index 略低一档——确认框永远压在最上） */
-.lightbox_overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9998;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.78);
-  cursor: zoom-out;
-}
-.lightbox_overlay .lightbox_img {
-  max-width: 92vw;
-  max-height: 90vh;
-  object-fit: contain;
-  border-radius: 4px;
-  background: #1e1f1c;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
-}
-.lightbox_overlay .lightbox_close {
-  position: absolute;
-  top: 14px;
-  right: 18px;
-}
 /* 微信新版表情（[face]Nn[/face] → /images/face-wx/N.png，128px 源图）：行内 24px 与旧 QQ gif 协调 */
 .bbs_content img[src^="/images/face-wx/"] {
   height: 24px;
