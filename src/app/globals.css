@@ -4398,15 +4398,13 @@ body #page.ranking_old .ranking_box {
   color: #a6e22e;
   cursor: default;
 }
-/* 管理员删除小按钮（九轮）：感言尾部的暗红小字链 */
+/* 管理员删除小链接（九轮；2026-10-27 改链接形态与赞/踩统一）：感言尾部的暗红小字链 */
 #daily_star .star_speech .star_speech_del {
-  background: none;
-  border: none;
-  padding: 0 0 0 8px;
   font-size: 12px;
-  line-height: 20px;
   color: #75715e;
+  text-decoration: none;
   cursor: pointer;
+  margin-left: 8px;
 }
 #daily_star .star_speech .star_speech_del:hover {
   color: #f92672;

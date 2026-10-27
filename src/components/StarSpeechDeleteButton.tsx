@@ -1,5 +1,5 @@
-// 每日一星感言「删除」按钮（九轮 2026-10-25）：管理员登录态、感言旁小按钮；
-// 走站内浮窗 confirmDialog 确认后 POST /api/star action=delete。
+// 每日一星感言「删除」小链接（九轮 2026-10-25；2026-10-27 改链接形态与赞/踩统一）：
+// 管理员登录态、感言旁小链接；走站内浮窗 confirmDialog 确认后 POST /api/star action=delete。
 
 "use client";
 
@@ -38,8 +38,16 @@ export function StarSpeechDeleteButton() {
   }
 
   return (
-    <button type="button" className="star_speech_del" onClick={del} disabled={busy}>
+    <a
+      href="#"
+      className="star_speech_del"
+      onClick={(e) => {
+        e.preventDefault();
+        del();
+      }}
+      aria-disabled={busy}
+    >
       删除
-    </button>
+    </a>
   );
 }
