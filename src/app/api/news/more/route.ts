@@ -16,8 +16,16 @@ export async function GET(req: Request) {
   const size = Math.min(parseInt(p.get("size") ?? "", 10) || NEWS_PAGESIZE, 100); // 2026-10-14 递增批量上限放宽（原 50）
   const lv = p.get("level") ?? "";
   const level = lv === "beg" || lv === "int" || lv === "exp" ? lv : undefined;
-  // 论坛筛选（2026-10-13 张老师要求）：发表主题（ARTICLE）+ 评论（COMMENT）都算，与等级筛选互斥
-  const types = p.get("type") === "forum" ? [NEWS_TYPE.ARTICLE, NEWS_TYPE.COMMENT] : undefined;
+  // tab 筛选（2026-10-27 张老师定）：「发表」只看自己写的文章（ARTICLE），
+  // 「评论」= 文章回帖 + 录像评论（COMMENT，两种 kind 都算）；与等级筛选互斥。
+  // 旧值 forum（ARTICLE+COMMENT 合流）已随「论坛」tab 下线，仅客户端取数，无外链兼容负担
+  const typeParam = p.get("type") ?? "";
+  const types =
+    typeParam === "post"
+      ? [NEWS_TYPE.ARTICLE]
+      : typeParam === "comment"
+        ? [NEWS_TYPE.COMMENT]
+        : undefined;
   // 首页新闻流口径（home=1）：仅 NEWS_HOME_TYPES，注册/头像/发帖/评论动态不进首页
   const home = p.get("home") === "1";
   // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）

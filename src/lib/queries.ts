@@ -305,7 +305,7 @@ function homeNewsTypeFilter() {
 
 export async function getNews(opts: {
   type?: number;
-  /** 多类型筛选（2026-10-13 用户主页「论坛」tab：发表主题 ARTICLE + 评论 COMMENT） */
+  /** 多类型筛选（用户主页「发表」= ARTICLE /「评论」= COMMENT tab，2026-10-27 拆分） */
   types?: number[];
   userId?: number;
   /** 等级筛选（beg/int/exp）：按 details JSON 的 lv 字段匹配（details_data 全为 {"lv":...} 格式） */
@@ -510,7 +510,7 @@ function safeJson(s: string): Record<string, unknown> {
  */
 async function getNewsCountImpl(opts: {
   type?: number;
-  /** 与 getNews 的多类型口径一致（用户主页「论坛」tab 剩余条数） */
+  /** 与 getNews 的多类型口径一致（用户主页「发表/评论」tab 剩余条数） */
   types?: number[];
   userId?: number;
   level?: string;

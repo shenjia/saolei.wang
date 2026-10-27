@@ -21,15 +21,20 @@ export interface NewsFeedItem {
   classic?: { name: string; color: string } | null;
 }
 
-// 2026-10-13 张老师要求：加「论坛」tab，发表主题（NEWS_TYPE.ARTICLE=40）和评论（COMMENT=52）都算。
-// 论坛筛选与等级筛选互斥：选中论坛时按 type in (40,52) 过滤，不再匹配 details.lv
+// 2026-10-27 张老师定：原「论坛」tab 拆成「发表」「评论」两个——
+// 发表只看自己写的文章（ARTICLE=40）；评论 = 文章回帖 + 录像评论（COMMENT=52）。
+// 这两个 tab 与等级筛选互斥：选中时按 type 过滤，不再匹配 details.lv
 const LEVEL_TABS: { key: string; label: string }[] = [
   { key: "", label: "全部" },
   { key: "beg", label: "初级" },
   { key: "int", label: "中级" },
   { key: "exp", label: "高级" },
-  { key: "forum", label: "论坛" },
+  { key: "post", label: "发表" },
+  { key: "comment", label: "评论" },
 ];
+
+/** 发表/评论两个 tab 走 type 过滤（与等级筛选互斥），beg/int/exp 走 level 过滤 */
+const isTypeTab = (key: string) => key === "post" || key === "comment";
 
 export function NewsFeed({
   initial,
@@ -81,8 +86,7 @@ export function NewsFeed({
     const url =
       `/api/news/more?cursor=${cur}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      (lv && lv !== "forum" ? `&level=${lv}` : "") +
-      (lv === "forum" ? "&type=forum" : "") +
+      (isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
       (homeOnly ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
@@ -93,8 +97,7 @@ export function NewsFeed({
     const url =
       `/api/news/more?page=${page}&base=${pageSize}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      (lv && lv !== "forum" ? `&level=${lv}` : "") +
-      (lv === "forum" ? "&type=forum" : "") +
+      (isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
       (homeOnly ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
@@ -194,8 +197,8 @@ export function NewsFeed({
     }
   }
 
-  // 「论坛」tab 只在用户主页出现：首页新闻流口径（NEWS_HOME_TYPES）本来就不含发帖/评论动态
-  const tabs = (userId ? LEVEL_TABS : LEVEL_TABS.filter((t) => t.key !== "forum")).map((t) =>
+  // 「发表」「评论」tab 只在用户主页出现：首页新闻流口径（NEWS_HOME_TYPES）本来就不含发帖/评论动态
+  const tabs = (userId ? LEVEL_TABS : LEVEL_TABS.filter((t) => !isTypeTab(t.key))).map((t) =>
     t.key === level ? (
       <span key={t.key || "all"} className="current">
         {t.label}
