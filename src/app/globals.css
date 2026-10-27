@@ -5607,6 +5607,23 @@ body #page.two_columns li.main {
   }
 }
 
+/* ---------- iOS Safari 文本自动放大（text autosizing）禁用（2026-10-28 玩家反馈） ----------
+   玩家 iPhone Safari 看排行页文字整体膨胀无法阅读（首页正常）。机理：Mobile Safari 对
+   「比视口宽的文本块」自动放大字号（double-tap 可读性优化），排行页 10 列宽表自然宽
+   592~594 远超手机视口即触发；首页各块都在视口内不触发。Mac Safari 与无头浏览器无此
+   行为，本地复现不了属正常，只能真机验证。
+   legacy html 上已有 -webkit-text-size-adjust:100%（normalize 同款），但 #page 挂了
+   zoom 缩放子树 + 宽表组合下保护不到，须在 #page / table 上显式声明。
+   值用 100% 不用 none：none 会禁掉用户手动放大字号，且有桌面副作用。 */
+html {
+  text-size-adjust: 100%;
+}
+body #page,
+body #page table {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 /* ---------- 窄屏整页缩放（2026-10-13 张老师要求：竖屏下主体板块完整显示，全站生效） ----------
    目的：竖屏手机（≤605px）把 #page 主体整体缩小，让宽内容一屏呈现——排行榜
    10 列成绩表、BBS 宽表、页头 tabs+搜索框都不再折行/横滑（缩后虚拟可用宽
