@@ -125,7 +125,11 @@ export interface PressPairStats {
 
 /** 左键按下＝lc/mc/sc、松开＝lr/mr；右键按下＝rc、松开＝rr；时间序自然配对。
  *  ts 可为负（evf 负值修正：开局前按下）——按下/松开哨兵用 null，不能用 -1，
- *  否则负时间按下会被哨兵吞掉（按下时长统计丢对）。 */
+ *  否则负时间按下会被哨兵吞掉（按下时长统计丢对）。
+ *  同刻配对（差 0ms）不计入时长：evf 时间量化到 10ms，人最快按不住 0ms，
+ *  这类配对一律是合成事件——开局前状态压到 0 点、avfwrite 的 repairWinningEvents
+ *  补洞（末尾同时间戳批量点击）。计进去会把真人按压均值拉向 0，误触 <45ms 门线
+ *  （2026-10-27 347863 实测：含 5 次补洞时 59.4ms，剔除后真实 70ms）。 */
 export function pressPairStats(v: ParsedVideo): PressPairStats {
   const presses: { L: number | null; R: number | null } = { L: null, R: null };
   const dursL: number[] = [];
@@ -144,12 +148,14 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
       cl++;
     } else if (ev === "lr" || ev === "mr") {
       if (presses.L !== null) {
-        dursL.push(ts - presses.L);
+        const d = ts - presses.L;
+        if (d > 0) dursL.push(d);
         presses.L = null;
       }
     } else if (ev === "rr") {
       if (presses.R !== null) {
-        dursR.push(ts - presses.R);
+        const d = ts - presses.R;
+        if (d > 0) dursR.push(d);
         presses.R = null;
       }
     }

@@ -527,8 +527,16 @@ export function evfToRawvf(buf: Uint8Array): string[] {
   // —— 负值修正：t0＝第一个 lr 且其位置不是已标雷（计时起点）；开局前事件得负时间 ——
   // 开局前无已开格，旗状态只需跟踪 pf/rc（rc 开局前＝toggleLabel 插/摘旗）；
   // lr 点在已标雷上＝无效操作不算开始（flop open() 跳过 flagged，同语义）。
+  //
+  // ⚠️ 本站客户端（Saolei.wang）例外，不平移（2026-10-27，347863 排查结论）：
+  // evfwrite 的事件时间直接写服务端权威 csec（authority/server.mjs），0 点已经是
+  // 计时起点，再按「首个有效 lr」扣一次＝双重扣减。347863 实测错位 1.03s——
+  // 事件轴末端被压到 14.23s，而头文件/库内成绩是 15.31s，回放先定格、秒表还在走，
+  // 且开局前 20 个事件变负值后被回放引擎在 0 点一次性应用（光标开头乱跳的观感来源）。
+  // 元扫雷录的 evf 仍是「0 点＝首个 lc」口径，照旧平移。
+  const SITE_SOFTWARE = "Saolei.wang";
   let t0Ms = 0;
-  {
+  if (v.software !== SITE_SOFTWARE) {
     const flagged = new Set<number>();
     outer: for (const e of v.events) {
       if (!e.mouse) continue;

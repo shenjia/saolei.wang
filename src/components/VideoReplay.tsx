@@ -95,10 +95,12 @@ export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?:
   let lastCsec = 0;
   for (const line of v.events) {
     // 行形态：`ts ev col row (px py)`（与 videoradar replayEvents 同一正则）
-    // ts 可为负（evf 负值修正：开局前按下/标旗）——起点前事件在播放在 0 点立即生效
+    // ts 可为负（元扫雷 evf 的负值修正：开局前按下/标旗）——钳到 0：这类事件属于
+    // 「开局瞬间的盘面状态」，必须在 0 点之前就位；留着负值会让它们落入插值区间之外，
+    // 与首帧事件挤在一起乱跳（2026-10-27 347863 观感问题的一半原因）。
     const m = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (!m) continue;
-    const csec = Math.round(parseFloat(m[1]) * 100);
+    const csec = Math.max(0, Math.round(parseFloat(m[1]) * 100));
     evs.push({ csec, ev: m[2], px: +m[5], py: +m[6] });
     if (csec > lastCsec) lastCsec = csec;
   }
