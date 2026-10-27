@@ -100,15 +100,20 @@ function avfTimestamps(endText: string, scoreCsec: number): { start: string; end
 }
 
 /** 把站内双击手势统一成 mr：双键 chord、sc+lr 与自动双击在外部播放器里同义。
- *  同时移除手势的原始按下/松开，避免归一后残留按键状态污染后续插旗。 */
+ *  同时移除手势的原始按下/松开，避免归一后残留按键状态污染后续插旗。
+ *  ⚠️ 2026-10-27 修（347849 案）：右键先按手势（rc 插旗→按住右键点左键→lr=chord）
+ *  里 rc 是**按下即刻生效的真实插旗**（服务端/引擎语义），折叠成 mr 时只可删
+ *  待定的 lc，rc 必须保留——否则丢旗：服务端靠它判 WIN，导出流却没这面旗，
+ *  回放里 chord 全哑、终局靠 repairWinningEvents 合成点击补洞（347849 6.46s
+ *  一瞬间开出一片的怪象）。同理 rr 分支：rc 保留后 rr 也要配对保留，否则
+ *  rp 状态残留污染下一手势（rc 在 flop 语义里 rp=true 会吞后续真插旗）。 */
 export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
   const out: (OnlineEvent | null)[] = [];
   let lp = false, rp = false, sv = false;
   let lcAt = -1, rcAt = -1;
   const removePresses = () => {
     if (lcAt >= 0) out[lcAt] = null;
-    if (rcAt >= 0) out[rcAt] = null;
-    lcAt = rcAt = -1;
+    lcAt = -1;
   };
   for (const e of events) {
     if (e.mouse === 3) {
@@ -121,9 +126,10 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
       lp = sv = true; // 随后的 lr 统一收成 mr
     } else if (e.mouse === 5) {
       if (rp || sv) {
-        removePresses();
+        removePresses(); // 只删待定的 lc；rc 是已生效插旗，保留
         out.push({ ...e, mouse: 65 });
-        // flop：另一键仍按住，后续可连续 chord；其闭合松开已被抑制
+        // flop：另一键仍按住，后续可连续 chord；其闭合松开已被抑制。
+        // 右键按住场景：rc 已在流中，rp 保持 true 直到 rr 配对闭合（见 mouse===17）
       } else {
         if (lcAt >= 0) out.push(e);
         lcAt = -1;
@@ -131,7 +137,7 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
       lp = sv = false;
     } else if (e.mouse === 17) {
       if (lp) {
-        removePresses();
+        removePresses(); // 左键按住时 rr=chord：同理只删待定 lc；rc（若有）保留
         out.push({ ...e, mouse: 65 });
         lcAt = -1;
       } else {
