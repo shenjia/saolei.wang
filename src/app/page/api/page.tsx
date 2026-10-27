@@ -3,6 +3,8 @@
 // 面向想接入的第三方开发者（机器人 / 数据同步服务）。
 // 2026-10-24 二轮（张老师要求）：每个接口详细列出输入参数表 + 响应示例（JSON），
 // 页面自足可读，不必跳 GitHub；接口区块用 <details> 折叠（默认展开，长页可收起）。
+// 2026-10-27：首屏新增接口导航表（锚点跳转到对应区块）——导航行直接由 APIS 数组
+// 生成，**今后加减接口只改 APIS 数组一处**，导航表自动跟随，无需单独维护。
 
 import Link from "next/link";
 
@@ -17,6 +19,8 @@ interface ParamDoc {
 interface ApiDoc {
   path: string;
   title: string;
+  /** 一句话简介（首屏接口导航表用） */
+  brief: string;
   desc: string;
   params: ParamDoc[];
   request: string;
@@ -28,6 +32,7 @@ const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/stats",
     title: "站点统计",
+    brief: "全站总量统计 + 最大 id（增量抓取定位用）",
     desc: "首页「站点统计」版块同口径数据 + 两个最大 ID（确定增量抓取范围、减少试探请求用）。无参数。",
     params: [],
     request: "GET /api/public/v1/stats",
@@ -53,6 +58,7 @@ const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/video_list",
     title: "录像列表（增量同步）",
+    brief: "按 id 升序全量/增量拉取录像元数据",
     desc: "按录像 id 升序分页拉取全部审核状态的录像；cursor 断点续拉，可用 player_id 只拉取指定玩家。配合 stats.maxVideoId 可做「全量对账 + 增量追加」。",
     params: [
       { name: "cursor", desc: "上次响应的 nextCursor，首次不传" },
@@ -96,6 +102,7 @@ const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/video_info",
     title: "录像详情（含重放指标 + 录像文件 URL）",
+    brief: "单个/批量录像全量公开数据 + 重放指标 + 文件下载地址",
     desc: "返回录像全部已落盘公开数据：video_list 全部字段 + signature（录像内嵌玩家标识）+ metrics（离线重放引擎算得的落盘指标）+ fileUrl（录像文件完整 URL）。",
     params: [{ name: "id", required: true, desc: "逗号分隔的录像 ID，最多 50 个" }],
     request: "GET /api/public/v1/video_info?id=328090",
@@ -142,6 +149,7 @@ const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/user_info",
     title: "玩家详情",
+    brief: "公开信息 + 双体系成绩 + 录像标识列表",
     desc: "公开信息 + 双体系成绩（标准 / NF，各级 time、3bvs 附达成录像 ID）+ 录像标识列表。",
     params: [{ name: "id", required: true, desc: "逗号分隔的玩家 ID，最多 50 个" }],
     request: "GET /api/public/v1/user_info?id=1",
@@ -181,6 +189,7 @@ const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/user_list",
     title: "玩家列表（轻量）",
+    brief: "批量补齐玩家基础信息 + 8 列合计成绩",
     desc: "批量补齐玩家基础信息的轻量版：字段同 user_info 但不含 scoresNf / signatures / 逐级录像指针（scores 为 8 列合计成绩）。",
     params: [{ name: "id", required: true, desc: "逗号分隔的玩家 ID，最多 100 个" }],
     request: "GET /api/public/v1/user_list?id=1,2",
@@ -208,6 +217,81 @@ const APIS: ApiDoc[] = [
     }
   ]
 }`,
+  },
+  {
+    path: "/api/public/v1/post_info",
+    title: "帖子查询",
+    brief: "按 id 批量取帖子基本信息（不含正文）",
+    desc: "按 id 查询帖子基本信息：标题、分类、发布者、发布时间、更新时间、最后回复时间、评论数、点击数、置顶/加精/锁定状态。不含正文——正文请引导用户访问 https://saolei.wang/bbs/{id}。",
+    params: [{ name: "id", required: true, desc: "逗号分隔的帖子 ID，最多 50 个" }],
+    request: "GET /api/public/v1/post_info?id=362,177",
+    response: `{
+  "generatedAt": 1792555560,
+  "items": [
+    {
+      "id": 362,
+      "title": "扫雷定式及变化",
+      "board": 1,
+      "userId": 1,
+      "userName": "张砷镓",
+      "postTime": 1181620008,
+      "updateTime": 1201508595,
+      "lastReplyTime": 1637886023,
+      "replies": 35,
+      "clicks": 187923,
+      "pinned": false,
+      "nice": true,
+      "locked": false
+    }
+  ]
+}`,
+    notes: [
+      "board：0=公告 / 1=技术 / 2=杂谈 / 3=问答",
+      "postTime 发布时间 · updateTime 最后编辑时间（改帖/加精/置顶等写操作，非最后回复）· lastReplyTime 最后回复时间",
+      "pinned 置顶 · nice 加精 · locked 锁定",
+      "只返回正常帖；已删除帖、待审帖（仅本人与管理员站内可见）不返回",
+    ],
+  },
+  {
+    path: "/api/public/v1/post_search",
+    title: "帖子关键词查询",
+    brief: "标题关键词搜索，前 20 条/页，cursor 翻页",
+    desc: "按关键词匹配帖子标题（站内论坛搜索同口径，不含正文与回复），返回前 20 条帖子基本信息（字段同 post_info，不含正文），cursor 断点翻页。",
+    params: [
+      { name: "keyword", required: true, desc: "搜索关键词，限 30 字；匹配帖子标题（包含匹配）" },
+      { name: "cursor", desc: "上次响应的 nextCursor，首次不传；翻页取更早（id 更小）的结果" },
+    ],
+    request: "GET /api/public/v1/post_search?keyword=扫雷",
+    response: `{
+  "cursor": 0,
+  "nextCursor": 23979,
+  "hasMore": true,
+  "keyword": "扫雷",
+  "size": 20,
+  "generatedAt": 1793089487,
+  "items": [
+    {
+      "id": 24361,
+      "title": "予我以扫雷——加入竞速扫雷的一些心路历程",
+      "board": 2,
+      "userId": 33769,
+      "userName": "孙沁晗",
+      "postTime": 1791446702,
+      "updateTime": 1792679104,
+      "lastReplyTime": 1791567522,
+      "replies": 14,
+      "clicks": 364,
+      "pinned": false,
+      "nice": false,
+      "locked": false
+    }
+  ]
+}`,
+    notes: [
+      "按 id 倒序（新帖在前）；每页固定 20 条，hasMore=false 时 nextCursor 为 null",
+      "只搜正常帖；标题匹配为包含匹配，% _ 等通配符按字面处理",
+      "keyword 与站内 /bbs 搜索一致只匹配标题，不匹配正文与作者名",
+    ],
   },
 ];
 
@@ -241,9 +325,39 @@ export default function ApiPage() {
           <li>引用数据时请注明来源：扫雷网 saolei.wang</li>
         </ul>
 
+        {/* 接口导航（2026-10-27 张老师要求）：首屏总表，点击跳到对应接口区块。
+            行数据直接映射 APIS 数组——加减接口只改上面 APIS 一处，此表自动跟随。 */}
+        <h2>接口导航</h2>
+        <table className="api_table">
+          <thead>
+            <tr>
+              <th style={{ width: 64 }}>方法</th>
+              <th style={{ width: 260 }}>接口</th>
+              <th style={{ width: 90 }}>说明</th>
+              <th>功能</th>
+            </tr>
+          </thead>
+          <tbody>
+            {APIS.map((api) => (
+              <tr key={api.path}>
+                <td>
+                  <span className="api_method">GET</span>
+                </td>
+                <td>
+                  <a className="api_nav_link" href={`#api-${api.path.split("/").pop()}`}>
+                    <code>{api.path}</code>
+                  </a>
+                </td>
+                <td>{api.title}</td>
+                <td>{api.brief}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
         <h2>接口详情</h2>
         {APIS.map((api) => (
-          <details key={api.path} className="api_endpoint" open>
+          <details key={api.path} id={`api-${api.path.split("/").pop()}`} className="api_endpoint" open>
             <summary>
               <span className="api_method">GET</span>
               <code>{api.path}</code>

@@ -142,6 +142,50 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 
 `id` = 逗号分隔的玩家 ID，最多 100 个。字段同 user_info 但不含 scoresNf / signatures / 逐级录像指针（`scores` 为 8 列合计成绩），适合批量补齐姓名等基础信息的场景。
 
+### 6. 帖子查询 `GET /api/public/v1/post_info?id=1,2,3`
+
+`id` = 逗号分隔的帖子 ID，最多 50 个。返回帖子基本信息（**不含正文**）：标题、分类、发布者、发布时间、更新时间、最后回复时间、评论数、点击数、置顶/加精/锁定状态。只返回正常帖（已删除、待审不返回）；正文请引导用户访问 `https://saolei.wang/bbs/{id}`。
+
+```json
+{
+  "generatedAt": 1792555560,
+  "items": [
+    { "id": 362, "title": "扫雷定式及变化", "board": 1,
+      "userId": 1, "userName": "张砷镓",
+      "postTime": 1181620008, "updateTime": 1201508595, "lastReplyTime": 1637886023,
+      "replies": 35, "clicks": 187923,
+      "pinned": false, "nice": true, "locked": false }
+  ]
+}
+```
+
+字段：`board` 0=公告 / 1=技术 / 2=杂谈 / 3=问答 · `postTime` 发布时间 · `updateTime` 最后编辑时间（改帖/加精/置顶等写操作，非最后回复）· `lastReplyTime` 最后回复时间 · `pinned` 置顶 · `nice` 加精 · `locked` 锁定。
+
+### 7. 帖子关键词查询 `GET /api/public/v1/post_search?keyword=…&cursor=0`
+
+按关键词匹配帖子**标题**（站内论坛搜索同口径，不含正文与回复），返回前 20 条帖子基本信息（字段同 post_info，不含正文），cursor 断点翻页（id 倒序，新帖在前）。
+
+| 参数 | 说明 |
+|---|---|
+| `keyword` | 必填，搜索关键词，限 30 字；标题包含匹配，`%` `_` 通配符按字面处理 |
+| `cursor` | 上次响应的 `nextCursor`，首次不传；翻页取更早（id 更小）的结果 |
+
+```json
+{
+  "cursor": 0, "nextCursor": 23979, "hasMore": true,
+  "keyword": "扫雷", "size": 20, "generatedAt": 1793089487,
+  "items": [
+    { "id": 24361, "title": "予我以扫雷——加入竞速扫雷的一些心路历程",
+      "board": 2, "userId": 33769, "userName": "孙沁晗",
+      "postTime": 1791446702, "updateTime": 1792679104, "lastReplyTime": 1791567522,
+      "replies": 14, "clicks": 364,
+      "pinned": false, "nice": false, "locked": false }
+  ]
+}
+```
+
+说明：每页固定 20 条；`hasMore=false` 时 `nextCursor` 为 null；只搜正常帖。
+
 ## 三、通用约定
 
 - 所有时间戳均为 Unix 秒；time 类成绩为毫秒，3bvs 为实际值（整数）
@@ -162,6 +206,7 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
+- 2026-10-27：新增 `post_info`（按 id 查帖子基本信息，不含正文）、`post_search`（标题关键词查询，前 20 条/页 + cursor 翻页）。
 - 2026-10-26：`video_list` 不再按审核状态过滤，条目新增 `status` 字段；新增可选参数 `player_id`，用于只拉取指定玩家录像。
 - 2026-10-24：`video_info` 新增 `fileUrl` 字段（录像文件完整 URL）。
 - 2026-10-24：草案重构。`/api/partner/v1/*` → `/api/public/v1/*`；`videos` → `video_list`、`users` → `user_list`；新增 `video_info`（含重放指标）、`user_info`（双体系成绩+标识列表）、`stats`（站点统计+max id）；key 改为后台签发管理（原 .env 草案 key 过渡期兼容）；草案期 rankings 接口废弃。

@@ -11310,6 +11310,21 @@ body #page .word_terms .desc {
   outline-offset: 1px;
 }
 
+/* ---- 开放 API 说明页三轮（2026-10-27）：首屏接口导航表 ----
+   导航行由 APIS 数组自动生成；链接锚到对应 <details> 区块。
+   api_endpoint 加 scroll-margin-top：锚点跳转落点下让位页面吸顶头；
+   api_nav_link 复用 code 金色语汇，hover 下划线提示可点。 */
+.api_endpoint {
+  scroll-margin-top: 24px;
+}
+.api_nav_link {
+  text-decoration: none;
+}
+.api_nav_link:hover code {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ---- 开放 API 说明页二轮（2026-10-24）：接口折叠块 ----
    每个接口一个 <details>（默认展开）：summary 行 = GET 徽标 + 路径 + 标题，
    折叠态有边框卡片感，展开态左缘金线；内部小节标题（输入参数/请求/返回示例）用 .api_sub。 */
