@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>录像全屏回放改版：练习页同款边框计数条 + 点笑脸玩本局（设计稿）| 扫雷网</title>
+<style>
+/* ===== 站点基础样式 ===== */
+body{margin:0;background:#2e2e26;color:#b1b1a4;font:14px/1.6 Arial,Helvetica,sans-serif}
+/* ===== 棋盘（size16 位图规则，素材绝对化到 dev） ===== */
+.board{display:inline-block;border:1px #49483e solid;border-top-color:#7f7f7f;border-left-color:#7f7f7f;border-right-color:#fff;border-bottom-color:#fff;vertical-align:top}
+.board.size16{border-width:2px;background:url(https://dev.saolei.wang/images/common/board16x16.gif?v=5) repeat}
+.board table{border-collapse:collapse}
+.board.size16 td{width:16px;height:16px;min-width:16px;background:url(https://dev.saolei.wang/images/common/block16x16.png?v=5) no-repeat left top}
+.board.size16 td.b0{background-position:0 0}
+.board.size16 td.b1{background-position:0 -16px}
+.board.size16 td.b2{background-position:0 -32px}
+.board.size16 td.b3{background-position:0 -48px}
+.board.size16 td.b4{background-position:0 -64px}
+.board.size16 td.b5{background-position:0 -80px}
+.board.size16 td.b6{background-position:0 -96px}
+.board.size16 td.b7{background-position:0 -112px}
+.board.size16 td.b8{background-position:0 -128px}
+.board.size16 td.bb{background-position:0 -144px}
+.board.size16 td.bf{background-position:0 -160px}
+.board.size16 td.bq{background-position:0 -176px}
+.board.size16 td.bm{background-position:0 -192px}
+.board.size16 td.bn{background-position:0 -208px}
+.board.size16 td.bc{background-position:0 -224px}
+
+/* ===== 全屏回放层（现行规则，摘自 globals.css） ===== */
+.vprfs{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center}
+.vprfs_mask{position:absolute;inset:0;background:rgba(0,0,0,.82);cursor:pointer}
+.vprfs_inner{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:center;gap:18px;margin-top:24px;max-width:calc(100vw - 16px);max-height:calc(100vh - 40px)}
+.vprfs_center{display:flex;flex-direction:column;align-items:stretch;width:max-content;zoom:var(--vfz,1)}
+.vprfs_board_wrap{position:relative;width:fit-content;line-height:0}
+
+/* ===== 【本次新增】练习页同款游戏外框/计数条（从 #online_play 一组移植到 .vprfs 作用域） ===== */
+.vprfs .gwrap{position:relative;display:inline-block;padding:9px;background:silver;border:3px solid;border-color:#fff #7b7b7b #7b7b7b #fff;text-shadow:none}
+.vprfs .gframe{display:inline-block}
+.vprfs .gbar{display:flex;justify-content:space-between;align-items:center;padding:4px;margin-bottom:9px;background:silver;border:2px solid;border-color:#7b7b7b #fff #fff #7b7b7b;width:0;min-width:100%;box-sizing:border-box}
+.vprfs .ledc{display:block;width:41px;height:25px;flex:0 0 auto}
+.vprfs .face{width:26px;height:26px;margin:0;padding:0;border:0;background:transparent;cursor:pointer;line-height:0;flex:0 0 auto}
+.vprfs .face svg{pointer-events:none}
+.vprfs .face:hover svg{filter:brightness(1.08)}
+
+/* ===== 左面板（现行 replay_panel 规则摘抄） ===== */
+.vprfs_panel{zoom:var(--vfz-panel,1.35);box-shadow:0 8px 32px rgba(0,0,0,.6)}
+.replay_panel{width:max-content;background:#49483e;border:1px solid #656355;border-radius:6px;padding:9px 12px;text-align:left}
+.replay_panel .gr_title{font-size:14px;font-weight:bold;color:#e8e8e0;padding-bottom:5px;margin-bottom:5px;border-bottom:1px solid #656355}
+.replay_panel table{border-collapse:collapse;margin:0 -6px}
+.replay_panel td{font:13px/18px Arial,Helvetica,sans-serif;color:#939387;padding:1.5px 5px 1.5px 0;text-align:left;white-space:nowrap}
+.replay_panel td+td{padding-left:8px;text-align:right;color:#e8e8e0}
+
+/* ===== 控制条（现行 replay_bar 规则摘抄） ===== */
+.replay_bar{position:relative;display:flex;align-items:center;margin-top:8px;width:100%;box-sizing:border-box;zoom:calc(1 / var(--vfz,1))}
+.rb_btn{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:5px;min-width:34px;height:34px;padding:0;margin:0 3px 0 0;border:1px solid #49483e;border-radius:6px;background:#33322b;color:#b1b1a4;font-size:14px;cursor:pointer}
+.rb_btn:hover{border-color:#a6e22e;color:#a6e22e;background:#3b3a32}
+.rb_btn svg{display:block}
+.rb_btn.active{border-color:#a6e22e;color:#a6e22e;background:#3b3a32}
+.rb_btn.wide{padding:0 12px;width:auto}
+.replay_bar .rb_time{flex:0 0 auto;margin:0 3px;min-width:56px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid #49483e;border-radius:6px;background:#33322b;padding:0 12px;font:bold 16px/1 "Courier New",Courier,monospace;color:#a6e22e;box-sizing:border-box}
+.rb_track{position:relative;flex:1 1 0;min-width:0;height:34px;margin:0 3px;border:1px solid #49483e;border-radius:6px;background:#33322b;cursor:pointer}
+.rb_rail{position:absolute;left:10px;right:10px;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:#26261f}
+.rb_fill{position:absolute;left:0;top:0;height:6px;border-radius:3px;background:#fdc61d}
+.rb_thumb{position:absolute;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:1px solid #8a6d1a;border-radius:50%;background:#fdc61d;box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:grab}
+/* 【本次新增】试玩态底条中部的提示文字（替代进度轨道） */
+.rb_hint{flex:1 1 0;min-width:0;height:34px;margin:0 3px;display:flex;align-items:center;justify-content:center;border:1px dashed #49483e;border-radius:6px;color:#75715e;font-size:13px;letter-spacing:.5px}
+
+/* 回放光标 */
+.replay_cursor{position:absolute;left:0;top:0;width:12px;height:19px;pointer-events:none;z-index:30}
+.replay_cursor svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+
+/* 设计稿控制条 */
+.mockbar{position:fixed;left:0;right:0;bottom:0;z-index:2000;background:#151515;border-top:1px solid #49483e;padding:8px 16px;font-size:13px;color:#939387;display:flex;gap:18px;align-items:center}
+.mockbar a{color:#a6e22e;text-decoration:none}
+.mockbar a:hover{text-decoration:underline}
+.mockbar .sep{color:#49483e}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="count-0">
+          <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0m100 0v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+          <path d="M30 90v10H20v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10H80V90H70v10H60V90H50v10H40V90H30z" fill="maroon" />
+          <path d="M30 100v10h10v-10H30m20 0v10h10v-10H50m20 0v10h10v-10H70z" />
+          <path d="M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0m100 0v10H90v10H80v50h10v10h10v10h10v-90h-10m-70 70v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+        </symbol>
+<symbol id="count-1">
+          <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0H90v10H80V0H70v10H60V0H50v10H40V0H30v10H20V0H0z" />
+          <path d="M20 0v10h10V0H20m20 0v10h10V0H40m20 0v10h10V0H60m20 0v10h10V0H80M0 10v10h10V10H0m30 0v10h10v10h10V20h10v10h10V20h10V10H70v10H60V10H50v10H40V10H30z" fill="maroon" />
+          <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+          <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0m30 0v10H20v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10H80V90H70v10H60V90H50v10H40V90H30z" fill="maroon" />
+          <path d="M30 100v10h10v-10H30m20 0v10h10v-10H50m20 0v10h10v-10H70z" />
+          <path d="M0 110v10h10v-10H0z" fill="maroon" />
+          <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+          <path d="M10 120v10h10v10H10v10h10v10H10v10h10v10H10v10h10v-10h10v-10H20v-10h10v-10H20v-10h10v-10H20v-10H10M0 130v10h10v-10H0m0 20v10h10v-10H0m0 20v10h10v-10H0m40 10v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40M0 190v10h10v-10H0m20 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+        </symbol>
+<symbol id="count-2">
+          <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10z" fill="red" />
+          <path d="M0 10v10h10V10H0z" fill="maroon" />
+          <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+          <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0z" fill="maroon" />
+          <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0z" fill="red" />
+          <path d="M100 110v10h10v-10h-10m-10 10v10h10v-10H90m-10 10v10h10v-10H80m20 0v10h10v-10h-10m-10 10v10h10v-10H90m-10 10v10h10v-10H80m20 0v10h10v-10h-10m-10 10v10h10v-10H90m-10 10v10h10v-10H80m20 0v10h10v-10h-10z" fill="maroon" />
+          <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+          <path d="M90 180v10h10v-10H90m10 10v10h10v-10h-10z" fill="maroon" />
+        </symbol>
+<symbol id="count-3">
+          <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10z" fill="red" />
+          <path d="M0 10v10h10V10H0z" fill="maroon" />
+          <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+          <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0z" fill="maroon" />
+          <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+          <path d="M0 110v10h10v-10H0z" fill="maroon" />
+          <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+          <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10z" fill="maroon" />
+          <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+          <path d="M0 190v10h10v-10H0z" fill="maroon" />
+        </symbol>
+<symbol id="count-4">
+          <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0H90v10H80V0H70v10H60V0H50v10H40V0H30v10H20V0H0z" />
+          <path d="M20 0v10h10V0H20m20 0v10h10V0H40m20 0v10h10V0H60m20 0v10h10V0H80z" fill="maroon" />
+          <path d="M0 10v90h10V90h10V80h10V30H20V20H10V10H0z" fill="red" />
+          <path d="M30 10v10h10v10h10V20h10v10h10V20h10V10H70v10H60V10H50v10H40V10H30z" fill="maroon" />
+          <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+          <path d="M0 110v10h10v-10H0z" fill="maroon" />
+          <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+          <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10m30 0v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40M0 190v10h10v-10H0m20 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+        </symbol>
+<symbol id="count-5">
+          <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90h10V80h-10V70h10V60h-10V50h10V40h-10V30h10V20h-10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0z" fill="red" />
+          <path d="M100 10v10h10V10h-10M90 20v10H80v10h10v10H80v10h10v10H80v10h10v10h10V80H90V70h10V60H90V50h10V40H90V30h10V20H90m10 10v10h10V30h-10m0 20v10h10V50h-10m0 20v10h10V70h-10z" fill="maroon" />
+          <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+          <path d="M100 90v10h10V90h-10M0 110v10h10v-10H0z" fill="maroon" />
+          <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+          <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10z" fill="maroon" />
+          <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+          <path d="M0 190v10h10v-10H0z" fill="maroon" />
+        </symbol>
+<symbol id="count-6">
+          <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90h10V80h-10V70h10V60h-10V50h10V40h-10V30h10V20h-10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0z" fill="red" />
+          <path d="M100 10v10h10V10h-10M90 20v10H80v10h10v10H80v10h10v10H80v10h10v10h10V80H90V70h10V60H90V50h10V40H90V30h10V20H90m10 10v10h10V30h-10m0 20v10h10V50h-10m0 20v10h10V70h-10z" fill="maroon" />
+          <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+          <path d="M100 90v10h10V90h-10z" fill="maroon" />
+          <path d="M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0m100 0v10H90v10H80v50h10v10h10v10h10v-90h-10m-70 70v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+        </symbol>
+<symbol id="count-7">
+          <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10z" fill="red" />
+          <path d="M0 10v10h10V10H0z" fill="maroon" />
+          <path d="M100 10v10H90v10H80v50h10v10h10v10h10V10h-10z" fill="red" />
+          <path d="M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10M0 30v10h10V30H0m0 20v10h10V50H0m0 20v10h10V70H0m0 20v10h10V90H0m30 0v10H20v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10H80V90H70v10H60V90H50v10H40V90H30z" fill="maroon" />
+          <path d="M30 100v10h10v-10H30m20 0v10h10v-10H50m20 0v10h10v-10H70z" />
+          <path d="M0 110v10h10v-10H0z" fill="maroon" />
+          <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+          <path d="M10 120v10h10v10H10v10h10v10H10v10h10v10H10v10h10v-10h10v-10H20v-10h10v-10H20v-10h10v-10H20v-10H10M0 130v10h10v-10H0m0 20v10h10v-10H0m0 20v10h10v-10H0m40 10v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40M0 190v10h10v-10H0m20 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+        </symbol>
+<symbol id="count-8">
+          <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0m100 0v10H90v10H80v50h10v10h10v10h10V10h-10M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20M0 110v90h10v-10h10v-10h10v-50H20v-10H10v-10H0m100 0v10H90v10H80v50h10v10h10v10h10v-90h-10m-70 70v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+        </symbol>
+<symbol id="count-9">
+          <path d="M0 0v10h10v10h10v10h10v50H20v10H10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v-10h10v-10h10v-10h50v10h10v10h10v10h10v-10h-10v-10H90v-10H80v-50h10v-10h10v-10h10v-10h-10V90H90V80H80V30h10V20h10V10h10V0h-10v10H90v10H80v10H30V20H20V10H10V0H0z" />
+          <path d="M10 0v10h10v10h10v10h50V20h10V10h10V0H10M0 10v90h10V90h10V80h10V30H20V20H10V10H0m100 0v10H90v10H80v50h10v10h10v10h10V10h-10M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+          <path d="M0 110v10h10v-10H0z" fill="maroon" />
+          <path d="M100 110v10H90v10H80v50h10v10h10v10h10v-90h-10z" fill="red" />
+          <path d="M10 120v10h10v-10H10M0 130v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 150v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10M0 170v10h10v-10H0m20 0v10h10v-10H20m-10 10v10h10v-10H10z" fill="maroon" />
+          <path d="M30 180v10H20v10H10v10h90v-10H90v-10H80v-10H30z" fill="red" />
+          <path d="M0 190v10h10v-10H0z" fill="maroon" />
+        </symbol>
+<symbol id="count-minus">
+          <path d="M0 0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h10v10H0v10h20v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h20v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10V90h10V80h-10V70h10V60h-10V50h10V40h-10V30h10V20h-10V10h10V0H90v10H80V0H70v10H60V0H50v10H40V0H30v10H20V0H0z" />
+          <path d="M20 0v10h10V0H20m20 0v10h10V0H40m20 0v10h10V0H60m20 0v10h10V0H80M0 10v10h10V10H0m30 0v10h10v10h10V20h10v10h10V20h10V10H70v10H60V10H50v10H40V10H30m70 0v10h10V10h-10M10 20v10h10v10H10v10h10v10H10v10h10v10H10v10h10V80h10V70H20V60h10V50H20V40h10V30H20V20H10m80 0v10h10V20H90M0 30v10h10V30H0m80 0v10h10V30H80m20 0v10h10V30h-10M90 40v10h10V40H90M0 50v10h10V50H0m80 0v10h10V50H80m20 0v10h10V50h-10M90 60v10h10V60H90M0 70v10h10V70H0m80 0v10h10V70H80m20 0v10h10V70h-10M90 80v10h10V80H90M0 90v10h10V90H0z" fill="maroon" />
+          <path d="M20 90v10H10v10h10v10h70v-10h10v-10H90V90H20z" fill="red" />
+          <path d="M100 90v10h10V90h-10M0 110v10h10v-10H0m100 0v10h10v-10h-10m-90 10v10h10v-10H10m80 0v10h10v-10H90M0 130v10h10v-10H0m20 0v10h10v-10H20m60 0v10h10v-10H80m20 0v10h10v-10h-10m-90 10v10h10v-10H10m80 0v10h10v-10H90M0 150v10h10v-10H0m20 0v10h10v-10H20m60 0v10h10v-10H80m20 0v10h10v-10h-10m-90 10v10h10v-10H10m80 0v10h10v-10H90M0 170v10h10v-10H0m20 0v10h10v-10H20m60 0v10h10v-10H80m20 0v10h10v-10h-10m-90 10v10h10v-10H10m30 0v10H30v10h10v-10h10v10h10v-10h10v10h10v-10H70v-10H60v10H50v-10H40m50 0v10h10v-10H90M0 190v10h10v-10H0m100 0v10h10v-10h-10m-80 10v10h10v-10H20m20 0v10h10v-10H40m20 0v10h10v-10H60m20 0v10h10v-10H80z" fill="maroon" />
+        </symbol>
+<symbol id="top-counters">
+          <path d="M0 0v240h10V10h390V0H0z" fill="gray" />
+          <path d="M400 0v10h10V0h-10z" fill="silver" />
+          <path d="M10 10v230h390V10H10z" />
+          <path d="M400 10v230H10v10h400V10h-10z" fill="white" />
+          <path d="M40 20v10h10v10h10v10h10V40h10v10h10V40h10V30h10V20h-10v10H90V20H80v10H70V20H60v10H50V20H40m130 0v10h10v10h10v10h10V40h10v10h10V40h10V30h10V20h-10v10h-10V20h-10v10h-10V20h-10v10h-10V20h-10m130 0v10h10v10h10v10h10V40h10v10h10V40h10V30h10V20h-10v10h-10V20h-10v10h-10V20h-10v10h-10V20h-10M20 30v10h10v10H20v10h10v10H20v10h10v10H20v10h10v10H20v10h10v-10h10v-10h10V90H40V80h10V70H40V60h10V50H40V40H30V30H20z" fill="maroon" />
+          <path d="M60 30v10h10V30H60m20 0v10h10V30H80z" />
+          <path d="M120 30v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h10V30h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h-10V30h-10z" fill="maroon" />
+          <path d="M190 30v10h10V30h-10m20 0v10h10V30h-10z" />
+          <path d="M250 30v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h10V30h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h-10V30h-10z" fill="maroon" />
+          <path d="M320 30v10h10V30h-10m20 0v10h10V30h-10z" />
+          <path d="M380 30v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10V90h-10V80h10V70h-10V60h10V50h-10V40h10V30h-10z" fill="maroon" />
+          <path d="M30 50v10h10V50H30m80 0v10h10V50h-10m50 0v10h10V50h-10m80 0v10h10V50h-10m50 0v10h10V50h-10m80 0v10h10V50h-10M30 70v10h10V70H30m80 0v10h10V70h-10m50 0v10h10V70h-10m80 0v10h10V70h-10m50 0v10h10V70h-10m80 0v10h10V70h-10M30 90v10h10V90H30m80 0v10h10V90h-10m50 0v10h10V90h-10m80 0v10h10V90h-10m50 0v10h10V90h-10m80 0v10h10V90h-10z" />
+          <path d="M50 110v10H40v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10h-10v-10H90v10H80v-10H70v10H60v-10H50m130 0v10h-10v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10h-10v-10h-10v10h-10v-10h-10v10h-10v-10h-10m130 0v10h-10v10h10v10h10v-10h10v10h10v-10h10v10h10v-10h10v-10h-10v-10h-10v10h-10v-10h-10v10h-10v-10h-10z" fill="maroon" />
+          <path d="M50 120v10h10v-10H50m20 0v10h10v-10H70m20 0v10h10v-10H90m90 0v10h10v-10h-10m20 0v10h10v-10h-10m20 0v10h10v-10h-10m90 0v10h10v-10h-10m20 0v10h10v-10h-10m20 0v10h10v-10h-10z" />
+          <path d="M20 130v10h10v10H20v10h10v10H20v10h10v10H20v10h10v10H20v10h10v-10h10v-10h10v-10H40v-10h10v-10H40v-10h10v-10H40v-10H30v-10H20m100 0v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h-10v-10h-10m100 0v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10m30 0v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h-10v10h10v-10h10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h-10v-10h-10m100 0v10h-10v10h-10v10h10v10h-10v10h10v10h-10v10h10v10h10v10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10v-10h10v-10h-10z" fill="maroon" />
+          <path d="M30 150v10h10v-10H30m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10M30 170v10h10v-10H30m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10M30 190v10h10v-10H30m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10m50 0v10h10v-10h-10m80 0v10h10v-10h-10z" />
+          <path d="M60 200v10H50v10H40v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h-10v-10H90v-10H80v10H70v-10H60m130 0v10h-10v10h-10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h-10v-10h-10v-10h-10v10h-10v-10h-10m130 0v10h-10v10h-10v10h10v-10h10v10h10v-10h10v10h10v-10h10v10h10v-10h-10v-10h-10v-10h-10v10h-10v-10h-10z" fill="maroon" />
+          <path d="M60 210v10h10v-10H60m20 0v10h10v-10H80m110 0v10h10v-10h-10m20 0v10h10v-10h-10m110 0v10h10v-10h-10m20 0v10h10v-10h-10z" />
+          <path d="M0 240v10h10v-10H0z" fill="silver" />
+        </symbol>
+<symbol id="face-normal">
+          <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+          <path d="M250 0v10h10V0h-10z" fill="silver" />
+          <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+          <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+          <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+          <path d="M110 60v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+          <path d="M100 100v20h20v-20h-20m50 0v20h20v-20h-20m-60 50v10h10v10h10v10h50v-10h10v-10h10v-10h-10v10h-10v10h-50v-10h-10v-10H90z" />
+          <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+        </symbol>
+<symbol id="face-press-cell">
+          <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+          <path d="M250 0v10h10V0h-10z" fill="silver" />
+          <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+          <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+          <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+          <path d="M110 60v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+          <path d="M90 90v10h10V90H90z" fill="olive" />
+          <path d="M100 90v10H90v10h10v10h10v-10h10v-10h-10V90h-10z" />
+          <path d="M110 90v10h10V90h-10m40 0v10h10V90h-10z" fill="olive" />
+          <path d="M160 90v10h-10v10h10v10h10v-10h10v-10h-10V90h-10z" />
+          <path d="M170 90v10h10V90h-10m-80 20v10h10v-10H90m20 0v10h10v-10h-10m40 0v10h10v-10h-10m20 0v10h10v-10h-10z" fill="olive" />
+          <path d="M120 140v20h-10v10h10v20h30v-20h10v-10h-10v-20h-30z" />
+          <path d="M110 150v10h10v-10h-10z" fill="olive" />
+          <path d="M130 150v10h-10v10h10v10h10v-10h10v-10h-10v-10h-10z" fill="#ff0" />
+          <path d="M150 150v10h10v-10h-10m-40 20v10h10v-10h-10m40 0v10h10v-10h-10z" fill="olive" />
+          <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+        </symbol>
+<symbol id="face-press-normal">
+          <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+          <path d="M250 0v10h10V0h-10M20 20v230h230V20H20z" fill="silver" />
+          <path d="M120 60v10h-20v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10v-20h-10V90h-10V80h-10V70h-20V60h-50z" />
+          <path d="M120 70v10h-20v10H90v10H80v20H70v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10v-20h-10V90h-10V80h-20V70h-50z" fill="#ff0" />
+          <path d="M110 110v20h20v-20h-20m50 0v20h20v-20h-20m-60 50v10h10v10h10v10h50v-10h10v-10h10v-10h-10v10h-10v10h-50v-10h-10v-10h-10z" />
+          <path d="M0 250v10h10v-10H0z" fill="silver" />
+        </symbol>
+<symbol id="face-lose">
+          <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+          <path d="M250 0v10h10V0h-10z" fill="silver" />
+          <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+          <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+          <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+          <path d="M110 60v10H90v10H80v10H70v20H60v50h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+          <path d="M90 90v10h10v10H90v10h10v-10h10v10h10v-10h-10v-10h10V90h-10v10h-10V90H90m60 0v10h10v10h-10v10h10v-10h10v10h10v-10h-10v-10h10V90h-10v10h-10V90h-10m-40 60v10h-10v10H90v10h10v-10h10v-10h50v10h10v10h10v-10h-10v-10h-10v-10h-50z" />
+          <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+        </symbol>
+<symbol id="face-win">
+          <path d="M0 0v250h10v10h250V10h-10V0H0z" fill="gray" />
+          <path d="M250 0v10h10V0h-10z" fill="silver" />
+          <path d="M10 10v230h10v-10h10V30h200V20h10V10H10z" fill="white" />
+          <path d="M240 10v10h10V10h-10m-10 10v10h10V20h-10M30 30v200h200V30H30z" fill="silver" />
+          <path d="M110 50v10H90v10H80v10H70v10H60v20H50v50h10v20h10v10h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-10h10v-20h10v-50h-10V90h-10V80h-10V70h-10V60h-20V50h-50z" />
+          <path d="M110 60v10H90v10H80v10H70v20H60v20h10v10H60v20h10v20h10v10h10v10h20v10h50v-10h20v-10h10v-10h10v-20h10v-20h-10v-10h10v-20h-10V90h-10V80h-10V70h-20V60h-50z" fill="#ff0" />
+          <path d="M90 100v10H80v10H70v10h10v-10h10v10h10v10h20v-10h10v-20h10v20h10v10h20v-10h10v-10h10v10h10v-10h-10v-10h-10v-10H90z" />
+          <path d="M90 130v10h10v-10H90m80 0v10h10v-10h-10z" fill="olive" />
+          <path d="M100 160v10h10v10h50v-10h10v-10h-10v10h-50v-10h-10z" />
+          <path d="M20 230v10h10v-10H20m-10 10v10h10v-10H10M0 250v10h10v-10H0z" fill="silver" />
+        </symbol>
+<symbol id="cursor-arrow" viewBox="0 0 120 190">
+        <polygon
+          points="119.72,127.46 70.38,127.46 90.64,168.68 61.19,183.61 38.59,137.28 5.00,170.04 5.00,12.12"
+          stroke-width="10"
+          style="fill:#F0F0EA;stroke:#424A52"
+        />
+      </symbol>
+
+</svg>
+
+<div class="vprfs show">
+  <div class="vprfs_mask"></div>
+  <div class="vprfs_inner">
+    <!-- 左：数据统计（回放态=录像实时统计；试玩态=本局试玩实时统计） -->
+    <div class="vprfs_panel replay_panel">
+      <div class="gr_title">数据统计</div>
+      <table><tbody id="stats_body"></tbody></table>
+    </div>
+    <!-- 中：练习页同款外框（计数条+棋盘）+ 底条 -->
+    <div class="vprfs_center">
+      <div class="gwrap">
+        <div class="gbar">
+          <svg class="ledc" id="led_mines" viewBox="0 0 410 250" role="img" aria-label="剩余雷数">
+            <use href="#top-counters" />
+            <use class="d" href="#count-0" x="20" y="20" />
+            <use class="d" href="#count-1" x="150" y="20" />
+            <use class="d" href="#count-0" x="280" y="20" />
+          </svg>
+          <button class="face" id="face_btn" title="自己玩本局" type="button">
+            <svg viewBox="0 0 260 260" width="26" height="26"><use id="face_use" href="#face-normal" /></svg>
+          </button>
+          <svg class="ledc" id="led_time" viewBox="0 0 410 250" role="img" aria-label="计时">
+            <use href="#top-counters" />
+            <use class="d" href="#count-0" x="20" y="20" />
+            <use class="d" href="#count-0" x="150" y="20" />
+            <use class="d" href="#count-0" x="280" y="20" />
+          </svg>
+        </div>
+        <div class="gframe">
+          <div class="vprfs_board_wrap">
+            <div class="board size16" id="mock_board"><table cellpadding="0" cellspacing="0"><tbody id="mock_tbody"></tbody></table></div>
+            <div class="replay_cursor" id="mock_cursor"><svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg></div>
+          </div>
+        </div>
+      </div>
+      <!-- 回放态底条：播放/暂停 + 时间 + 进度轨道 + 退出全屏 -->
+      <div class="replay_bar" id="bar_replay">
+        <button type="button" class="rb_btn" title="暂停" aria-label="暂停">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+        </button>
+        <span class="rb_time">3.42</span>
+        <div class="rb_track" title="拖动跳转进度">
+          <div class="rb_rail"><div class="rb_fill" style="width:37.5%"></div><div class="rb_thumb" style="left:37.5%"></div></div>
+        </div>
+        <button type="button" class="rb_btn active" title="退出全屏" aria-label="退出全屏">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8V5h3" /><path d="M19 8V5h-3" /><path d="M5 16v3h3" /><path d="M19 16v3h-3" /></svg>
+        </button>
+      </div>
+      <!-- 试玩态底条：回到回放 + 提示 + 退出全屏 -->
+      <div class="replay_bar" id="bar_play" style="display:none">
+        <button type="button" class="rb_btn wide" title="回到回放">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" /></svg>
+          <span>回到回放</span>
+        </button>
+        <span class="rb_hint">试玩本局（盘面与本录像相同）· 点笑脸重开</span>
+        <button type="button" class="rb_btn active" title="退出全屏" aria-label="退出全屏">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8V5h3" /><path d="M19 8V5h-3" /><path d="M5 16v3h3" /><path d="M19 16v3h-3" /></svg>
+        </button>
+      </div>
+    </div>
+    <!-- 右：录像评级栏已撤（2026-10-16 张老师定：空间尽可能留给游戏界面） -->
+  </div>
+</div>
+
+<div class="mockbar">
+  <strong>设计稿 · 录像全屏回放改版（2026-10-16）</strong>
+  <span class="sep">|</span>
+  <a href="?mode=replay">回放态</a>
+  <a href="?mode=play">试玩态（点笑脸后）</a>
+  <span class="sep">|</span>
+  <span>变更：① 棋盘加练习页同款银框+计数条（雷数/笑脸/计时）② 撤掉右侧录像评级栏 ③ 点笑脸=自己玩本局（同一盘面），底条变「回到回放」</span>
+</div>
+
+<script>
+(function () {
+  var mode = /[?&]mode=play/.test(location.search) ? "play" : "replay";
+  /* 设计稿固定倍率：初级盘全屏 2.2x，面板 1.35x（与十四期 fitZoom 口径相仿） */
+  var vp = document.querySelector(".vprfs");
+  vp.style.setProperty("--vfz", "2.2");
+  vp.style.setProperty("--vfz-panel", "1.35");
+  /* ---- 8x8 初级盘，10 雷（'*'） ---- */
+  var W = 8, H = 8;
+  var bstr =
+    "........" +
+    ".*...*.." +
+    "...*...." +
+    "*.....*." +
+    "....*..." +
+    ".*.....*" +
+    "...*...." +
+    "....*...";
+  var mines = [], nums = [];
+  for (var i = 0; i < 64; i++) mines[i] = bstr[i] === "*" ? 1 : 0;
+  function nb(i) {
+    var x = i % W, y = (i / W) | 0, r = [];
+    for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      var nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < W && ny >= 0 && ny < H) r.push(ny * W + nx);
+    }
+    return r;
+  }
+  for (i = 0; i < 64; i++) {
+    if (mines[i]) { nums[i] = 0; continue; }
+    var c = 0;
+    nb(i).forEach(function (a) { if (mines[a]) c++; });
+    nums[i] = c;
+  }
+  /* 盘面状态：0 未开 / 1 开 / 2 旗 */
+  var state = new Array(64).fill(0);
+  function flood(s) {
+    var st = [s];
+    while (st.length) {
+      var c = st.pop();
+      if (state[c] !== 0 || mines[c]) continue;
+      state[c] = 1;
+      if (nums[c] === 0) nb(c).forEach(function (a) { if (state[a] === 0) st.push(a); });
+    }
+  }
+  /* 找一个 0 格泛洪开局 */
+  var zero = nums.findIndex(function (n, k) { return n === 0 && !mines[k]; });
+  flood(zero);
+  var flags;
+  if (mode === "replay") {
+    /* 回放中盘：泛洪之外再开一片 + 3 面旗（旗都插真雷上） */
+    var extra = [2, 3, 11, 20, 28, 29, 38, 47, 54, 61, 62, 63, 55, 46, 39];
+    extra.forEach(function (k) { if (!mines[k]) state[k] = 1; });
+    flags = [9, 30, 47];
+  } else {
+    /* 试玩开局不久：只泛洪一片 + 2 面旗（真雷） */
+    flags = [9, 30];
+  }
+  flags.forEach(function (k) { state[k] = 2; });
+  /* 渲染 */
+  var tbody = document.getElementById("mock_tbody");
+  var html = "";
+  for (var y = 0; y < H; y++) {
+    html += "<tr>";
+    for (var x = 0; x < W; x++) {
+      var k = y * W + x, cls = "bb";
+      if (state[k] === 1) cls = "b" + nums[k];
+      else if (state[k] === 2) cls = "bf";
+      html += '<td class="' + cls + '"></td>';
+    }
+    html += "</tr>";
+  }
+  tbody.innerHTML = html;
+  /* LED 数码管 */
+  function led(id, v) {
+    v = Math.max(-99, Math.min(999, Math.round(v)));
+    var a = Math.abs(v);
+    var ds = v < 0 ? ["minus", ((a / 10) | 0) % 10, a % 10] : [((a / 100) | 0) % 10, ((a / 10) | 0) % 10, a % 10];
+    var uses = document.getElementById(id).querySelectorAll("use.d");
+    for (var k = 0; k < 3; k++) uses[k].setAttribute("href", "#count-" + ds[k]);
+  }
+  /* 统计表（回放=录像数据，试玩=本局数据，示意值） */
+  var rowsReplay = [
+    ["RTime", "3.420 (4)"], ["Est RTime", "9.123 (10)"], ["3BV", "12/32"], ["3BV/s", "3.509"],
+    ["Ops", "2/4"], ["Isls", "3/9"], ["Left", "9@2.632"], ["Right", "3@0.877"], ["Double", "2@0.585"],
+    ["Ce", "13@3.801"], ["Cl", "14@4.094"], ["IOE", "0.857"], ["ThrP", "0.923"], ["Corr", "0.929"],
+    ["Path", "1108"], ["Flags", "3"], ["RQP", "2.883"], ["QG", "0.731"], ["STNB", "102.371"]
+  ];
+  var rowsPlay = [
+    ["RTime", "12.050 (13)"], ["Est RTime", "38.552 (39)"], ["3BV", "10/32"], ["3BV/s", "0.830"],
+    ["Ops", "1/4"], ["Isls", "3/9"], ["Left", "14@1.162"], ["Right", "2@0.166"], ["Double", "0@0.000"],
+    ["Ce", "12@0.996"], ["Cl", "16@1.328"], ["IOE", "0.625"], ["ThrP", "0.833"], ["Corr", "0.750"],
+    ["Path", "2401"], ["Flags", "2"], ["RQP", "46.810"], ["QG", "6.846"], ["STNB", "11.204"]
+  ];
+  var rows = mode === "play" ? rowsPlay : rowsReplay;
+  document.getElementById("stats_body").innerHTML = rows.map(function (r) {
+    return '<tr><td class="gt">' + r[0] + '</td><td class="gv">' + r[1] + "</td></tr>";
+  }).join("");
+  var cursor = document.getElementById("mock_cursor");
+  if (mode === "play") {
+    document.getElementById("bar_replay").style.display = "none";
+    document.getElementById("bar_play").style.display = "flex";
+    cursor.style.display = "none";
+    led("led_mines", 10 - 2);
+    led("led_time", 12);
+    document.getElementById("face_btn").title = "重开本局";
+  } else {
+    led("led_mines", 10 - 3);
+    led("led_time", 3);
+    /* 光标落在棋盘内某格（棋盘相对 wrap 偏移：gframe 内 border 2px + wrap padding 等，
+       设计稿直接按表格位置摆放） */
+    var board = document.getElementById("mock_board");
+    var wr = board.parentElement.getBoundingClientRect();
+    var br = board.getBoundingClientRect();
+    cursor.style.left = (br.left - wr.left) / 2.2 + 3 * 16 + 8 + "px";
+    cursor.style.top = (br.top - wr.top) / 2.2 + 5 * 16 + 6 + "px";
+  }
+  /* 笑脸点击：设计稿里只做提示切换 */
+  document.getElementById("face_btn").addEventListener("click", function () {
+    location.search = mode === "play" ? "?mode=replay" : "?mode=play";
+  });
+})();
+</script>
+</body>
+</html>

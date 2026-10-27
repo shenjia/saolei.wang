@@ -345,7 +345,7 @@ export function Donut({
   centerLabel,
   mergeSmall = true,
 }: {
-  items: { label: string; value: number; href?: string }[];
+  items: { label: string; value: number; color?: string; href?: string }[];
   centerLabel?: string;
   /** 小于 0.5% 的段并入「其他」（称号体系偏好这类「每一段都是关键数据」的场景传 false） */
   mergeSmall?: boolean;
@@ -356,7 +356,7 @@ export function Donut({
 
   // 小项合并（渲染前算好；沿用 reduce 累积，不做渲染期副作用）
   const small = items.filter((i) => i.value / total < 0.005);
-  const list: { label: string; value: number; href?: string; merged?: boolean }[] = items.filter(
+  const list: { label: string; value: number; color?: string; href?: string; merged?: boolean }[] = items.filter(
     (i) => i.value / total >= 0.005
   );
   if (!mergeSmall) list.push(...small);
@@ -379,7 +379,7 @@ export function Donut({
           {
             idx,
             key: it.label,
-            color: it.merged ? "#6c6c61" : SERIES_COLORS[idx % SERIES_COLORS.length],
+            color: it.merged ? "#6c6c61" : it.color ?? SERIES_COLORS[idx % SERIES_COLORS.length],
             value: it.value,
             href: it.href,
             frac,

@@ -1,9 +1,11 @@
 // 管理后台 · 练习数据详情（2026-10-27 张老师定）
-// 从仪表盘「今日练习」KPI 点击进入：30 天趋势（总/初/中/高/自）+ 24 小时分布
-// （近 7 天聚合）+ 近 7 天明细列表。
+// 从仪表盘「今日练习」KPI 点击进入：30 天趋势（总/初/中/高/自）+ 级别占比饼图
+// + 24 小时分布（近 7 天聚合）+ 近 7 天明细列表。
+// 配色（张老师定）：总盘亮灰 #b1b1a4、自定义紫 #ae81ff、初中高复用前台
+// 绿 #a6e22e / 橙 #f79646 / 金 #fdc61d（同 admin_tag.lv_* 与前台 hover 配色）。
 
 import { AdminCard } from "@/components/admin/Widgets";
-import { ColumnChart, TrendChart, type Series } from "@/components/admin/Charts";
+import { ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
 import { getPracticeDays, getPracticeHourly, getPracticeTrend, LEVEL_COLS_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
@@ -13,17 +15,23 @@ export default async function AdminPracticePage() {
   const [trend, hourly, days] = await Promise.all([getPracticeTrend(30), getPracticeHourly(7), getPracticeDays(7)]);
 
   const series: Series[] = [
-    { key: "total", label: "总盘数", color: "#a6e22e", values: trend.total },
-    { key: "exp", label: "高级", color: "#f79646", values: trend.exp },
-    { key: "int", label: "中级", color: "#66d9ef", values: trend.int },
-    { key: "beg", label: "初级", color: "#e6db74", values: trend.beg },
+    { key: "total", label: "总盘数", color: "#b1b1a4", values: trend.total },
+    { key: "beg", label: "初级", color: "#a6e22e", values: trend.beg },
+    { key: "int", label: "中级", color: "#f79646", values: trend.int },
+    { key: "exp", label: "高级", color: "#fdc61d", values: trend.exp },
     { key: "cus", label: "自定义", color: "#ae81ff", values: trend.cus },
   ];
 
   const d30Total = trend.total.reduce((a, b) => a + b, 0);
-  const d30Wins = days.reduce((a, d) => a + d.wins, 0); // 近 7 天完成数（列表面板用）
-  void d30Wins;
   const weekPlays = days.reduce((a, d) => a + d.plays, 0);
+  // 近 30 天级别占比（与趋势图同窗口的总量口径）
+  const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+  const levelItems = [
+    { label: "初级", value: sum(trend.beg) },
+    { label: "中级", value: sum(trend.int) },
+    { label: "高级", value: sum(trend.exp) },
+    { label: "自定义", value: sum(trend.cus) },
+  ];
 
   return (
     <>
@@ -34,9 +42,14 @@ export default async function AdminPracticePage() {
         </span>
       </div>
 
-      <AdminCard title="练习趋势（近 30 天，点击图例可切换级别）" more={`「自定义」含 ${LEVEL_COLS_SINCE} 级别列起记前的历史盘`}>
-        <TrendChart dates={trend.dates} series={series} />
-      </AdminCard>
+      <div className="admin_grid trend_pie">
+        <AdminCard title="练习趋势（近 30 天，点击图例可切换级别）" more={`「自定义」含 ${LEVEL_COLS_SINCE} 级别列起记前的历史盘`}>
+          <TrendChart dates={trend.dates} series={series} />
+        </AdminCard>
+        <AdminCard title="级别占比（近 30 天总量）" more="与趋势图同窗口；「自定义」含起记前历史盘">
+          <Donut items={levelItems} centerLabel={`总 ${d30Total.toLocaleString("zh-CN")} 盘`} />
+        </AdminCard>
+      </div>
 
       <div className="admin_grid c2">
         <AdminCard title="24 小时分布（近 7 天聚合）" more="0-23 时按 +08:00，今日起记">

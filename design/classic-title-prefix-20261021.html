@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>旧称号前置渲染「[称号]姓名」：设计稿 | 扫雷网</title>
+<style>
+body{margin:0;padding:45px 0 40px;background:#2e2e26;color:#b1b1a4;font:14px/1.6 Arial,Helvetica,sans-serif}
+a{color:#668cba;text-decoration:none}
+a:hover{color:#a6e22e}
+#header{z-index:900;position:fixed;top:0;left:0;right:0;background:#151515;border-bottom:1px #49483e solid}
+#header .wrapper{max-width:960px;height:44px;margin:0 auto;padding:0 15px;line-height:44px;color:#eee;font-size:22px;font-weight:bold}
+#header .draft{float:right;font-size:12px;font-weight:normal;color:#a6e22e;border:1px solid #a6e22e;border-radius:4px;padding:1px 8px;margin-top:10px}
+#page{margin:0 auto;width:960px}
+.box{background:#3b3a32;border:1px #656355 solid;box-shadow:2px 2px 5px rgba(0,0,0,.25);border-radius:10px;padding:24px 30px;margin:16px 8px;text-shadow:0 2px 2px rgba(0,0,0,.25)}
+h1{margin:0 0 6px;color:#e8e8e0;font-size:22px}
+h2{margin:8px 0 12px;font-size:16px;font-weight:bold;color:#e8e8e0;border-left:4px solid #a6e22e;padding-left:10px}
+h3{margin:14px 0 8px;font-size:14px;font-weight:bold;color:#939387}
+.note{font-size:13px;color:#75715e;line-height:1.8}
+.note b{color:#b1b1a4;font-weight:normal}
+.warn{font-size:13px;color:#fd971f;line-height:1.8}
+.table{border-collapse:collapse;width:100%;margin:6px 0 4px}
+.table th{font-size:13px;font-weight:normal;color:#939387;text-align:left;padding:4px 8px;border-bottom:1px solid #656355}
+.table td{border-bottom:1px solid #49483e;padding:7px 8px;font-size:14px;vertical-align:middle}
+.table tr:last-child td{border-bottom:0}
+.table td.lab{color:#75715e;font-size:13px;white-space:nowrap}
+.tag{display:inline-block;font-size:12px;border-radius:3px;padding:0 6px;margin-left:8px;vertical-align:1px}
+.tag.keep{color:#a6e22e;border:1px solid #a6e22e}
+.tag.now{color:#939387;border:1px solid #939387}
+.tag.new{color:#fd971f;border:1px solid #fd971f}
+/* ---- 人名行内渲染要素（对齐线上） ---- */
+.avatar_link{color:#668cba;font-size:14px}
+.gender{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:5px;vertical-align:0;font-size:0}
+.gender.male{background:#668cba}
+.gender.female{background:#f92672}
+/* 军衔徽章示意（盾形 SVG 内嵌，size=1em） */
+.rank-badge{width:1em;height:1em;margin-right:.18em;vertical-align:-0.14em}
+/* 旧称号彩字：现网 title_classic 12px */
+.title_classic em{font-style:normal;font-size:12px;font-weight:normal;line-height:18px}
+/* 新方案：前置称号 + 方括号 */
+.tp{font-size:12px;line-height:18px;letter-spacing:0}
+.tp .bk{color:#75715e}
+.tp em{font-style:normal}
+/* 场景容器 */
+.scene{background:rgba(0,0,0,.14);border:1px solid #49483e;border-radius:8px;padding:14px 18px;margin:8px 0}
+.scene .cap{font-size:12px;color:#75715e;margin-bottom:10px}
+.time{color:#75715e;font-size:12px}
+.content{color:#bbbbaf}
+/* 论坛楼层 */
+.bbs_meta{color:#939387;font-size:13px;margin:0 0 6px}
+.bbs_meta em{color:#e6db74;font-style:normal}
+/* 排行表 */
+.rt td,.rt th{padding:6px 10px}
+.rt .num{color:#e6db74;font-weight:bold}
+.rt td.rank{color:#bbbbaf}
+/* 用户主页大徽章 */
+.bigname{color:#e8e8e0;font-size:26px;font-weight:bold}
+.bigclassic{font-size:40px;font-weight:bold;line-height:1.3}
+/* 右栏卡片 */
+.ucard{display:flex;gap:12px;background:rgba(0,0,0,.14);border:1px solid #49483e;border-radius:8px;padding:12px;width:300px}
+.ucard .ava{width:64px;height:64px;border-radius:6px;background:linear-gradient(135deg,#49483e,#75715e);flex:none}
+.ucard .nm{font-size:14px}
+.ucard .rk{font-size:13px;color:#888;margin-top:6px}
+.ucard .rk em{color:#e6db74;font-style:normal;font-weight:bold}
+/* 方案选择卡 */
+.opt{display:inline-block;border:1px solid #656355;border-radius:8px;padding:12px 16px;margin:6px 10px 6px 0;background:rgba(0,0,0,.1)}
+.opt b{color:#e8e8e0;font-size:13px;display:block;margin-bottom:6px}
+.todo{list-style:none;padding:0;margin:0}
+.todo li{padding:5px 0 5px 22px;position:relative;border-bottom:1px dashed #49483e;font-size:13.5px;color:#bbbbaf}
+.todo li:last-child{border-bottom:0}
+.todo li::before{content:"?";position:absolute;left:0;top:5px;width:15px;height:15px;border:1px solid #fd971f;color:#fd971f;border-radius:50%;font-size:11px;text-align:center;line-height:14px}
+.todo li b{color:#fd971f;font-weight:normal}
+</style>
+</head>
+<body>
+<div id="header"><div class="wrapper">扫雷网<span class="draft">设计稿 · 2026-10-21 · 旧称号前置渲染</span></div></div>
+<div id="page">
+
+<div class="box">
+<h1>旧称号体系下「[称号]姓名」前置渲染</h1>
+<p class="note">需求：<b>观看者选择旧称号体系（人神界 2008 版）时，全站「人名+称号」的展示由「姓名 称号」（称号在后）改为「[称号]姓名」（称号带方括号前置）</b>，还原 2008 旧站惯例（旧版排行榜/跳转列表即 <b>[雷神] 张三</b> 前置写法）。军衔体系（2026 版默认）下所有页面渲染<b>完全不变</b>。红色 tag 为新方案。</p>
+<p class="warn">⚠ 技术说明：体系切换是纯客户端行为（localStorage + context），称号前置用客户端组件重排 / CSS order 实现，服务端结构与 SSR 不动，无闪烁以外的副作用。仅「榜单删列」类结构性调整需要服务端感知体系（见场景四）。</p>
+</div>
+
+<div class="box">
+<h2>场景一 · 首页动态表 / 消息列表（作者列）</h2>
+<div class="scene">
+<div class="cap">军衔体系（默认，不受影响）</div>
+<table class="table"><tr>
+<td class="lab">现状</td>
+<td>
+<svg class="rank-badge" viewBox="0 0 48 48"><path d="M24 3 L42 8.5 V25 C42 36.5 34.5 42.5 24 45.5 C13.5 42.5 6 36.5 6 25 V8.5 Z" fill="#2e2e26" stroke="#939387" stroke-width="2.4"/></svg><em style="color:#939387;font-style:normal">上等兵</em>
+<a class="avatar_link">周小白</a><span class="gender male"></span>
+</td>
+<td class="time">3 天前</td>
+</tr></table>
+</div>
+<div class="scene">
+<div class="cap">旧称号体系（人神界）</div>
+<table class="table">
+<tr><td class="lab">现状<span class="tag now">当前</span></td><td><a class="avatar_link">周小白</a><span class="gender male"></span> <span class="title_classic"><em style="color:#9bbb59">雷神</em></span></td><td class="time">3 天前</td></tr>
+<tr><td class="lab">新方案<span class="tag new">前置</span></td><td><span class="tp"><span class="bk">[</span><em style="color:#9bbb59">雷神</em><span class="bk">]</span></span><a class="avatar_link">周小白</a><span class="gender male"></span></td><td class="time">3 天前</td></tr>
+</table>
+<p class="note">性别图标跟随姓名（与现网 AvatarCell 结构一致，位置不动）；方括号暗灰 #75715e、称号 12px 彩字不变，hover 条件文案气泡保留。</p>
+</div>
+</div>
+
+<div class="box">
+<h2>场景二 · 录像列表（上传者列）/ 热门录像</h2>
+<div class="scene">
+<table class="table">
+<tr><th>上传者</th><th>级别</th><th>成绩</th></tr>
+<tr><td class="lab">军衔（不变）<span class="tag keep">不动</span></td><td>初级</td><td>10.05 秒</td></tr>
+<tr><td><svg class="rank-badge" viewBox="0 0 48 48"><path d="M24 3 L42 8.5 V25 C42 36.5 34.5 42.5 24 45.5 C13.5 42.5 6 36.5 6 25 V8.5 Z" fill="#2e2e26" stroke="#939387" stroke-width="2.4"/></svg><em style="color:#939387;font-style:normal">上等兵</em> <a class="avatar_link">周小白</a><span class="gender male"></span></td><td>初级</td><td>10.05 秒</td></tr>
+<tr><td class="lab">旧体系·现状<span class="tag now">当前</span></td><td>初级</td><td>10.05 秒</td></tr>
+<tr><td><a class="avatar_link">周小白</a><span class="gender male"></span> <span class="title_classic"><em style="color:#9bbb59">雷神</em></span></td><td>初级</td><td>10.05 秒</td></tr>
+<tr><td class="lab">旧体系·新方案<span class="tag new">前置</span></td><td>初级</td><td>10.05 秒</td></tr>
+<tr><td><span class="tp"><span class="bk">[</span><em style="color:#9bbb59">雷神</em><span class="bk">]</span></span><a class="avatar_link">周小白</a><span class="gender male"></span></td><td>初级</td><td>10.05 秒</td></tr>
+</table>
+</div>
+</div>
+
+<div class="box">
+<h2>场景三 · 评论区 / BBS 楼层 / 私信列表</h2>
+<div class="scene">
+<div class="cap">旧体系下评论区作者行</div>
+<table class="table">
+<tr><td class="lab">现状<span class="tag now">当前</span></td>
+<td class="content"><a class="avatar_link">杨过</a><span class="gender male"></span> <span class="title_classic"><em style="color:#e0e0e0">进士</em></span> <span class="time">2026-10-20 21:34</span><br>这个录像的节奏太稳了，第三行连锁处理值得学习。</td></tr>
+<tr><td class="lab">新方案<span class="tag new">前置</span></td>
+<td class="content"><span class="tp"><span class="bk">[</span><em style="color:#e0e0e0">进士</em><span class="bk">]</span></span><a class="avatar_link">杨过</a><span class="gender male"></span> <span class="time">2026-10-20 21:34</span><br>这个录像的节奏太稳了，第三行连锁处理值得学习。</td></tr>
+</table>
+</div>
+<div class="scene">
+<div class="cap">BBS 楼层 meta 行（旧体系）</div>
+<table class="table">
+<tr><td class="lab">现状<span class="tag now">当前</span></td><td class="bbs_meta"><em>2 楼</em> <a class="avatar_link">小笼包</a><span class="gender female"></span> <span class="title_classic"><em style="color:#FFCCCC">雷仙</em></span> <span class="time">发表于 2026-10-19</span></td></tr>
+<tr><td class="lab">新方案<span class="tag new">前置</span></td><td class="bbs_meta"><em>2 楼</em> <span class="tp"><span class="bk">[</span><em style="color:#FFCCCC">雷仙</em><span class="bk">]</span></span><a class="avatar_link">小笼包</a><span class="gender female"></span> <span class="time">发表于 2026-10-19</span></td></tr>
+</table>
+</div>
+</div>
+
+<div class="box">
+<h2>场景四 · 排行榜 / STNB 榜 / 3BV 榜（军衔列 miltitle）</h2>
+<p class="note">榜单是独立列结构（姓名列 + 军衔列）。2008 旧版排行榜本身就是<b>姓名列 + [称号]列</b>分列、称号带方括号。两个方案：</p>
+<div class="opt">
+<b>方案 A（推荐 · 纯客户端可做）</b>
+<table class="table rt">
+<tr><th>名次</th><th>姓名</th><th>称号</th><th>初级</th></tr>
+<tr><td class="num">1</td><td class="rank"><span class="tp"><span class="bk">[</span><em style="color:#FFCC00">雷帝</em><span class="bk">]</span></span><a class="avatar_link">鞠泽恩</a><span class="gender male"></span></td><td><span class="tp"><span class="bk">[</span><em style="color:#FFCC00">雷帝</em><span class="bk">]</span></span></td><td>10.31 秒</td></tr>
+<tr><td class="num">2</td><td class="rank"><span class="tp"><span class="bk">[</span><em style="color:#9bbb59">雷神</em><span class="bk">]</span></span><a class="avatar_link">周小白</a><span class="gender male"></span></td><td><span class="tp"><span class="bk">[</span><em style="color:#9bbb59">雷神</em><span class="bk">]</span></span></td><td>12.04 秒</td></tr>
+</table>
+<p class="note">姓名列前置「[称号]姓名」，<b>军衔列保留同步显示 [称号]</b>（旧版排行榜原样）。列结构不动，切换即时生效。</p>
+</div>
+<div class="opt">
+<b>方案 B（需服务端感知体系，改动大）</b>
+<table class="table rt">
+<tr><th>名次</th><th>姓名</th><th>初级</th></tr>
+<tr><td class="num">1</td><td class="rank"><span class="tp"><span class="bk">[</span><em style="color:#FFCC00">雷帝</em><span class="bk">]</span></span><a class="avatar_link">鞠泽恩</a><span class="gender male"></span></td><td>10.31 秒</td></tr>
+<tr><td class="num">2</td><td class="rank"><span class="tp"><span class="bk">[</span><em style="color:#9bbb59">雷神</em><span class="bk">]</span></span><a class="avatar_link">周小白</a><span class="gender male"></span></td><td>12.04 秒</td></tr>
+</table>
+<p class="note">称号并入姓名列、<b>删除军衔列</b>（表头动态化）。体系是客户端状态，服务端表格列需双份渲染或整表客户端化——改动与风险显著更大。</p>
+</div>
+</div>
+
+<div class="box">
+<h2>场景五 · 用户主页（大称号区）</h2>
+<p class="note">用户主页姓名在顶部、大称号在下方独立区域（2013 版布局，两者相距较远），不属于行内「人名+称号」场景。大称号（旧体系 40px 彩字）两个处理：</p>
+<div class="opt"><b>方案 A（推荐 · 不带括号）</b><br><br>
+<span class="bigname">鞠泽恩</span><span class="gender male"></span><br><br>
+<span class="bigclassic" style="color:#FFCC00">雷帝</span>
+<p class="note">大称号保持现状纯彩字（40px），不加括号——大字号下括号显得多余。</p></div>
+<div class="opt"><b>方案 B（带括号，与全站统一）</b><br><br>
+<span class="bigname">鞠泽恩</span><span class="gender male"></span><br><br>
+<span class="bigclassic"><span style="color:#75715e">[</span><span style="color:#FFCC00">雷帝</span><span style="color:#75775e">]</span></span>
+<p class="note">大称号也套方括号，视觉与全站惯例完全一致。</p></div>
+</div>
+
+<div class="box">
+<h2>场景六 · 右栏个人卡片（UserCard）</h2>
+<div style="display:flex;gap:20px;flex-wrap:wrap">
+<div class="ucard"><div class="ava"></div><div>
+<div class="nm"><a class="avatar_link">周小白</a><span class="gender male"></span> <span class="title_classic"><em style="color:#9bbb59">雷神</em></span></div>
+<div class="nm" style="margin-top:8px"><span class="tag now">现状</span></div>
+<div class="rk">陕西第 <em>1</em> 名 · 全国第 <em>3</em> 名</div>
+</div></div>
+<div class="ucard"><div class="ava"></div><div>
+<div class="nm"><span class="tp"><span class="bk">[</span><em style="color:#9bbb59">雷神</em><span class="bk">]</span></span><a class="avatar_link">周小白</a><span class="gender male"></span></div>
+<div class="nm" style="margin-top:8px"><span class="tag new">新方案</span></div>
+<div class="rk">陕西第 <em>1</em> 名 · 全国第 <em>3</em> 名</div>
+</div></div>
+</div>
+</div>
+
+<div class="box">
+<h2>特例 · 布衣 / 雷帝</h2>
+<table class="table">
+<tr><th>情形</th><th>现状（旧体系）</th><th>新方案</th></tr>
+<tr><td class="lab">布衣（未加入排行，灰色）</td><td><a class="avatar_link">路人甲</a><span class="gender male"></span> <span class="title_classic"><em style="color:#666666">布衣</em></span></td><td><span class="tp"><span class="bk">[</span><em style="color:#666666">布衣</em><span class="bk">]</span></span><a class="avatar_link">路人甲</a><span class="gender male"></span></td></tr>
+<tr><td class="lab">雷帝（榜首，金色）</td><td><a class="avatar_link">鞠泽恩</a><span class="gender male"></span> <span class="title_classic"><em style="color:#FFCC00">雷帝</em></span></td><td><span class="tp"><span class="bk">[</span><em style="color:#FFCC00">雷帝</em><span class="bk">]</span></span><a class="avatar_link">鞠泽恩</a><span class="gender male"></span></td></tr>
+<tr><td class="lab">无称号数据（老内容快照缺失）</td><td><a class="avatar_link">老玩家</a><span class="gender male"></span>（不显示称号）</td><td><a class="avatar_link">老玩家</a><span class="gender male"></span>（不显示称号，回退逻辑不变）</td></tr>
+</table>
+<p class="note">布衣是否也带方括号前置（2008 旧版排行榜带）请确认——默认<b>带</b>（全站统一），若嫌噪音也可只在非布衣时前置、布衣隐藏或维持现状。</p>
+</div>
+
+<div class="box">
+<h2>待张老师确认的点</h2>
+<ul class="todo">
+<li><b>榜单方案 A / B</b>：A=姓名列前置 + 军衔列保留同步 [称号]（推荐，纯客户端）；B=删军衔列并入姓名（需服务端改造）。</li>
+<li><b>用户主页大称号</b>：带不带方括号（推荐不带，40px 大字保持纯彩字）。</li>
+<li><b>方括号颜色</b>：暗灰 #75775e（2008 原版 Texts 灰，推荐）/ 与称号同色。</li>
+<li><b>布衣</b>：是否同样前置带括号（默认带）。</li>
+<li><b>性别图标位置</b>：跟随姓名之后（推荐，结构不动）。</li>
+<li>涉及范围（传 classic 的 15 处调用点）：首页动态、消息列表、录像列表/热门/详情、评论区、BBS 列表/楼层/回复、排行榜/STNB/3BV、地区榜、用户主页动态、右栏 UserCard；后台页面固定军衔制不受影响。</li>
+</ul>
+</div>
+
+</div>
+</body>
+</html>

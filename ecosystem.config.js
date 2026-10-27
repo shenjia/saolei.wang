@@ -12,7 +12,7 @@ module.exports = {
       script: "node_modules/next/dist/bin/next",
       args: "start -p 3100",
       cwd: __dirname,
-      env: { NEXT_DIST_DIR: ".next-blue" },
+      env: { NEXT_DIST_DIR: ".next-blue", RANKED_MODE_OPEN: "1", RANKED_PENALTY_DELAY: "1" },
       watch: false,
       max_memory_restart: "1G",
       // crash loop 防护（09-27 教训：槽位产物未就绪时 pm2 无限重启 1287 次
@@ -27,7 +27,7 @@ module.exports = {
       script: "node_modules/next/dist/bin/next",
       args: "start -p 3102",
       cwd: __dirname,
-      env: { NEXT_DIST_DIR: ".next-green" },
+      env: { NEXT_DIST_DIR: ".next-green", RANKED_MODE_OPEN: "1", RANKED_PENALTY_DELAY: "1" },
       watch: false,
       max_memory_restart: "1G",
       max_restarts: 5,

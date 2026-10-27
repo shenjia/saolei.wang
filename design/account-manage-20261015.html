@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>账户管理（方案稿）| 扫雷网</title>
+<style>
+/* ===== 站点基础样式（摘自 legacy-2013.css，设计稿内联，与线上一致） ===== */
+body{margin:0;padding:45px 0 0;background:#272822;color:#636359;font-family:"微软雅黑",Arial,"宋体";font-size:14px;line-height:21px}
+a{color:#b1b1a4;text-decoration:none;cursor:pointer}
+a:hover{color:#a6e22e}
+ul{margin:0;padding:0;list-style:none}
+div,h1,h2,h3,p,td,span,em{color:#636359}
+#header{z-index:900;position:fixed;top:0;left:0;right:0;background:#151515;border-bottom:1px #49483e solid}
+#header .wrapper{max-width:960px;height:44px;margin:0 auto;padding:0 15px}
+#header .logo{float:left}
+#header .logo a h1{float:left;margin:0;color:#eee;font-size:22px;line-height:44px;font-weight:bold}
+#header .logo a h2{float:left;margin:0 0 0 5px;color:#b1b1a4;font-size:15px;line-height:44px;font-weight:normal}
+#header .logo a img.logo_icon{float:left;border-radius:6px;width:26px;height:26px;margin:9px 8px 0 0;display:block}
+#header .nav{float:right}
+#header .nav li{float:left}
+#header .nav li a{display:block;padding:0 12px;color:#b1b1a4;font-size:15px;line-height:44px}
+#header .nav li a:hover,#header .nav li a.current{color:#a6e22e}
+#page{max-width:960px;margin:20px auto;padding:0 15px}
+#page.two_columns{width:80%;min-width:620px;max-width:960px}
+.two_columns li.main{float:left;width:70%;min-width:620px}
+.two_columns li.sidebar{float:left;width:222px}
+.two_columns li.sidebar .box{width:192px}
+.box{background:#3b3a32;border:1px #49483e solid;box-shadow:2px 2px 5px rgba(0,0,0,.25);border-radius:10px;padding:20px 20px 30px}
+h1{margin:0 0 19.5px;color:#fdc61a;font-size:26px;line-height:39px;text-shadow:0 2px 2px rgba(0,0,0,.25)}
+h2{margin:19.5px 0 9.75px;color:#b1b1a4;font-size:20px;line-height:30px}
+p{margin:9.75px 0}
+em{font-style:normal;color:#a6e22e}
+hr{border:0;border-top:1px solid #49483e;margin:15px 0}
+#footer{max-width:960px;margin:30px auto;padding:15px;color:#75715e;font-size:13px;border-top:1px solid #49483e}
+#footer .wrapper{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px}
+button{font-family:inherit}
+.button{display:inline-block;border:1px #49483e solid;border-radius:5px;background-color:#434239;background-image:linear-gradient(top,#49483e,#3b3a32);background-image:linear-gradient(to bottom,#49483e,#3b3a32);color:#b1b1a4;font-size:20px;line-height:30px;padding:8px 24px;text-shadow:0 2px 2px rgba(0,0,0,0.25);box-shadow:2px 2px 5px rgba(0,0,0,.25);-webkit-appearance:none;margin-right:8px}
+.button:hover{color:#a6e22e;background-color:#46453c}
+.button:active{color:#8ac21b}
+.button.active{color:#8ac21b}
+.button.active:hover{color:#a6e22e}
+table.form th{padding:.5em 1em .5em 0;color:#75715e;font-size:16px;line-height:24px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;border:0;vertical-align:top}
+table.form td{position:relative;padding:.5em 0;color:#939387;font-size:16px;line-height:24px;vertical-align:top}
+
+/* ===== 账户管理页新增样式（落地时进 globals.css） ===== */
+/* 操作按钮行 */
+#account_manage .manage_actions{margin:5px 0 5px}
+#account_manage .manage_actions .button{margin:0 12px 10px 0}
+/* ===== 侧栏玩家卡片（竖版） ===== */
+.account_card{text-align:center}
+.account_card button.avatar_slot{position:relative;display:block;width:160px;height:160px;margin:4px auto 0;padding:0;font:inherit;color:inherit;text-shadow:none;background:none;border:0;border-radius:0;box-shadow:none;cursor:pointer}
+.account_card button.avatar_slot .avatar{display:block;width:160px;height:160px;object-fit:cover;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04)}
+.account_card .avatar_change{position:absolute;right:1px;bottom:1px;left:1px;height:26px;color:#f8f8f2;font-size:13px;line-height:26px;text-align:center;background:rgba(0,0,0,.68);opacity:0;transition:opacity .15s}
+.account_card .avatar_status{position:absolute;bottom:10px;left:50%;padding:2px 12px;color:#d5d5cc;font-size:12px;line-height:18px;white-space:nowrap;background:rgba(58,58,54,.8);border-radius:10px;transform:translateX(-50%);transition:bottom .15s;pointer-events:none;backdrop-filter:blur(3px)}
+.account_card .avatar_status.ok{color:#a6e22e}
+.account_card button.avatar_slot:hover .avatar_change,
+.account_card button.avatar_slot:focus-visible .avatar_change{opacity:1}
+.account_card button.avatar_slot:hover .avatar_status,
+.account_card button.avatar_slot:focus-visible .avatar_status{bottom:32px}
+/* 登录名（灰、次级） → 中文名（亮、链接进主页） → 军衔 */
+.account_card .login_name{margin:10px 0 0;color:#75715e;font-size:13px;line-height:19.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account_card h2{margin:2px 0 0;font-size:18px;line-height:27px}
+.account_card h2 a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account_card .title_line{margin:6px 0 0;color:#939387;font-size:14px;line-height:21px}
+
+/* ===== 方案稿标注（不落地） ===== */
+.mock_note{max-width:960px;margin:24px auto 0;padding:12px 16px;border:1px dashed #656355;border-radius:8px;color:#75715e;font-size:13px;line-height:22px}
+.mock_note b{color:#a59f85}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="wrapper">
+    <div class="logo"><a href="#">
+      <img class="logo_icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Crect width='26' height='26' rx='5' fill='%23a6e22e'/%3E%3Ccircle cx='9' cy='10' r='2.2' fill='%23272822'/%3E%3Ccircle cx='17' cy='10' r='2.2' fill='%23272822'/%3E%3Crect x='7' y='16' width='12' height='2.4' rx='1.2' fill='%23272822'/%3E%3C/svg%3E" alt="">
+      <h1>扫雷网</h1><h2>Saolei.wang</h2>
+    </a></div>
+    <ul class="nav">
+      <li><a href="#">首页</a></li>
+      <li><a href="#">排行</a></li>
+      <li><a href="#">录像</a></li>
+      <li><a href="#">论坛</a></li>
+    </ul>
+  </div>
+</div>
+
+<div id="page" class="two_columns">
+  <ul id="account_manage">
+    <li class="main">
+      <div class="box">
+        <h1>账户管理</h1>
+        <div class="manage_actions">
+          <a class="button active" href="#">修改资料</a>
+          <a class="button active" href="#">修改密码</a>
+          <a class="button" href="#">绑定邮箱</a>
+        </div>
+        <hr>
+        <h2>我的资料</h2>
+        <table class="form" cellPadding="0" cellSpacing="0">
+          <tbody>
+            <tr><th>中文名</th><td>张砷镓</td></tr>
+            <tr><th>英文名</th><td>zhangshenjia</td></tr>
+            <tr><th>爱好</th><td>编程、游戏</td></tr>
+            <tr><th>QQ</th><td>137516</td></tr>
+            <tr><th>昵称</th><td>老张</td></tr>
+            <tr><th>鼠标</th><td>罗技 G102</td></tr>
+            <tr><th>鼠标垫</th><td>赛睿 QCK</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </li>
+    <li class="sidebar">
+      <div class="box account_card">
+        <button type="button" class="avatar_slot" aria-label="点击更换头像">
+          <img class="avatar" src="../public/images/player/1.jpg" alt="张砷镓"
+               onerror="this.src='../public/images/common/avatar.png'">
+          <span class="avatar_status">审核中</span>
+          <span class="avatar_change">点击更换头像</span>
+        </button>
+        <p class="login_name" title="登录名">zhangshenjia@example.com</p>
+        <h2><a href="#">张砷镓</a></h2>
+        <p class="title_line">神界元老</p>
+      </div>
+    </li>
+  </ul>
+</div>
+
+<div class="mock_note">
+  <b>方案说明（鼠标划过头像可看到更换蒙层效果）：</b><br>
+  ① 标题「账号中心」→「账户管理」，浏览器标签页标题同步改。<br>
+  ② 「修改资料」「修改密码」做成大按钮（绿字高亮，站点 .button.active 同款）；「绑定邮箱」入口保留为同排灰字按钮（未点名，防丢入口——如不需要可去掉）。<br>
+  ③ 右侧玩家卡片竖排：头像（160px，点击直接弹文件选择 → 方形裁剪 → AI 审核，交互与个人主页一致，有待审时显示「审核中」气泡）→ 登录名（灰，超长省略；老用户显示老用户名，新用户显示注册邮箱）→ 中文名（链接进个人主页）→ 军衔（现侧栏已有，保留）。<br>
+  ④ 主栏按钮下方保留「我的资料」只读总览表（现 /account 原有内容）——如只要按钮+卡片、资料表不要了，告诉我。<br>
+  ⑤ 待确认：修改资料 / 修改密码 / 绑定邮箱三个子页面顶部的「账号中心」标题是否也统一改成「账户管理」。
+</div>
+
+<div id="footer">
+  <div class="wrapper">
+    <span>扫雷网 Saolei.wang</span>
+    <span>陕ICP备08100290号</span>
+  </div>
+</div>
+
+</body>
+</html>

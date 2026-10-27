@@ -235,6 +235,19 @@ server {
     location = /favicon.ico    { proxy_pass http://saolei_upstream; }
     location = /apple-icon.png { proxy_pass http://saolei_upstream; }
 
+    # 排名模式权威对局 WS（2026-10-27 上线）：直通 3104 独立进程，不经 Next 蓝绿槽
+    location = /ws/online/ranked {
+        proxy_pass http://127.0.0.1:3104;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
     # 其余 public 静态（logo/表情/军衔图/下载包/皮肤包/练习页 js+css 等）：
     # 均为构建期快照、部署才变 → 长缓存。URL 路径与 public/ 下相对路径一致，用 root 直读
     location ~* \.(gif|jpe?g|png|svg|ico|webp|css|js|woff2?|ttf|eot|zip|rar|7z|apk|exe|mp3|wav)$ {

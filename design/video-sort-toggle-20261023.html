@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>录像表头排序·升降序切换箭头交互稿 20261023</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #2e2f28;
+    color: #f8f8f2;
+    padding: 36px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 34px;
+  }
+  .doc { max-width: 1000px; width: 100%; }
+  .doc h1 { font-size: 18px; font-weight: 600; margin-bottom: 10px; color: #f8f8f2; }
+  .doc p.desc { font-size: 13px; color: #939387; line-height: 1.8; margin-bottom: 18px; }
+  .doc p.desc b { color: #fdc61d; font-weight: 600; }
+
+  /* ================= 舞台（模拟线上 .box 卡片） ================= */
+  .stage {
+    width: 100%;
+    max-width: 1000px;
+    background: rgba(39, 40, 34, 0.92);
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    padding: 18px 20px 22px;
+  }
+  .stage-label {
+    font-size: 12px;
+    color: #75715e;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+  }
+  .stage-label b { color: #a6e22e; font-weight: 600; }
+
+  /* 页头（模拟 page_head：标题 + 级别 tabs + 搜索框占位） */
+  .page_head { display: flex; align-items: flex-end; gap: 20px; margin-bottom: 12px; flex-wrap: wrap; }
+  .page_title { font-size: 22px; font-weight: bold; color: #f8f8f2; }
+  .video_nav { display: flex; align-items: flex-end; gap: 12px; flex: 1; min-width: 380px; }
+  ul.tabs { list-style: none; display: flex; gap: 2px; }
+  ul.tabs li a, ul.tabs li em {
+    display: inline-block;
+    font-size: 13px;
+    font-style: normal;
+    padding: 4px 10px;
+    color: #b1b1a4;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+  }
+  ul.tabs li a:hover { color: #a6e22e; }
+  ul.tabs li.current em { color: #fdc61d; font-weight: bold; border-bottom-color: #fdc61d; }
+  .search_stub {
+    margin-left: auto;
+    font-size: 12px;
+    color: #75715e;
+    border: 1px solid #49483e;
+    border-radius: 3px;
+    padding: 4px 12px;
+    background: #272822;
+  }
+
+  /* ================= 表格（复刻 .ranking_table.video_table 口径） ================= */
+  table { border-collapse: collapse; width: 100%; }
+  .video_table th {
+    padding: 4px 2px;
+    color: #939387;
+    font-size: 12px;
+    font-weight: normal;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid #49483e;
+  }
+  .video_table th a { color: #b1b1a4; text-decoration: none; cursor: pointer; }
+  .video_table th a:hover { color: #a6e22e; }
+  .video_table th a.current { color: #fdc61d; font-weight: bold; }
+  .video_table th a.current:hover { color: #a6e22e; }
+  .video_table td {
+    height: 25px;
+    padding: 4px 2px;
+    font-size: 16px;
+    text-align: left;
+    white-space: nowrap;
+    color: #b1b1a4;
+  }
+  .video_table tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+  .video_table td.name a { color: #f8f8f2; text-decoration: none; }
+  .video_table td.name a:hover { color: #a6e22e; }
+  .video_table td.name .title { color: #939387; font-size: 12px; margin-left: 5px; }
+  #page-mock .video_table td.level { font-size: 14px; font-weight: bold; color: #999994; }
+  .video_table td.score a { color: inherit; font-weight: bold; text-decoration: none; }
+  .video_table td.score.lv_beg { color: #999994; }
+  .video_table td.score.lv_int { color: #bbbbaf; }
+  .video_table td.score.lv_exp { color: #ddddcf; }
+  .video_table td.score .nf {
+    font-size: 10px; color: #a6e22e; vertical-align: super; margin-left: 2px;
+  }
+  .video_table td.c { text-align: center; }
+  .video_table td.c_3bvs { color: #f8f8f2; font-weight: bold; }
+  .video_table td.create_time { font-size: 14px; color: #b1b1a4; }
+  .video_table td.create_time.old { color: #6c6c61; }
+  .video_table td.counters em { font-style: normal; }
+  .video_table td.current, .video_table td.current a { color: #fdc61d; }
+
+  /* ================= 新增：升降序双箭头（核心视觉） ================= */
+  /* 结构：<a>成绩<span class="sa"><i class="up on"></i><i class="down"></i></span></a>
+     上/下两枚小三角纵向堆叠，紧跟文字之后。链接整体改 inline-flex + 垂直居中：
+     文字（字符内容盒）与箭头列互为 flex 子项、align-items:center 真居中，
+     不依赖 baseline 手调（张老师 2026-10-23：双箭头与文字垂直居中对齐）。
+     当前方向金色 #fdc61d，另一枚暗色；仅当前排序列出现（未排序不占宽） */
+  .video_table th a[data-order] {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .sa {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1.5px;
+    line-height: 0;
+  }
+  .sa i {
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+  }
+  .sa i.up { border-bottom: 4.5px solid #49483e; }
+  .sa i.down { border-top: 4.5px solid #49483e; }
+  .sa i.up.on { border-bottom-color: #fdc61d; }
+  .sa i.down.on { border-top-color: #fdc61d; }
+  /* 悬停当前列：暗三角提亮一档，暗示可点击切换方向 */
+  .video_table th:hover .sa i.up:not(.on) { border-bottom-color: #75715e; }
+  .video_table th:hover .sa i.down:not(.on) { border-top-color: #75715e; }
+
+  /* ================= 状态特写卡 ================= */
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .card {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid #49483e;
+    border-radius: 8px;
+    padding: 16px 18px;
+    min-width: 280px;
+    flex: 0 1 auto;
+  }
+  .card h3 { font-size: 13px; color: #f8f8f2; margin-bottom: 4px; font-weight: 600; }
+  .card h3 .step {
+    display: inline-block; font-size: 11px; color: #272822;
+    background: #fdc61d; border-radius: 3px; padding: 1px 6px; margin-right: 6px;
+    font-weight: bold;
+  }
+  .card p { font-size: 12px; color: #939387; line-height: 1.7; margin-bottom: 10px; }
+  .card .cell {
+    display: inline-block;
+    background: rgba(39, 40, 34, 0.92);
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 13px;
+  }
+
+  .footnote { font-size: 12px; color: #75715e; line-height: 1.9; max-width: 1000px; }
+  .footnote b { color: #b1b1a4; }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <h1>录像表头排序 · 升/降序切换 + 方向箭头交互稿</h1>
+  <p class="desc">
+    适用范围：<b>/video 录像列表页 + 个人主页「录像」版块</b>（两处共用同一表头渲染件）。<br>
+    交互规格：① 点击可排序标签 → 标签后出现<b>上/下双箭头</b>，当前排序方向的那枚<b>金色高亮</b>；
+    ② 再次点击同一标签 → 在<b>降序 ⇄ 升序</b>之间切换，箭头高亮随之换向；③ 点击其他标签 → 切到该列的默认方向。
+    下方演示表格<b>可实际点击体验</b>（数据会真实重排）。
+  </p>
+</div>
+
+<!-- ============ 交互演示 ============ -->
+<div class="stage" id="page-mock">
+  <div class="stage-label">▶ 交互演示（点击表头：成绩 / 3BV / 3BV/s / IOE / STNB / 评论 / 点击 / 上传时间 —— 再点同列切换升降序）</div>
+  <div class="page_head">
+    <div class="page_title">录像</div>
+    <div class="video_nav">
+      <ul class="tabs">
+        <li class="current"><em>全部</em></li>
+        <li><a href="javascript:void(0)">初级</a></li>
+        <li><a href="javascript:void(0)">中级</a></li>
+        <li><a href="javascript:void(0)">高级</a></li>
+      </ul>
+      <span class="search_stub">🔍 玩家/成绩/3BV/ID（示意）</span>
+    </div>
+  </div>
+  <table class="ranking_table video_table" id="demo_table">
+    <thead>
+      <tr>
+        <th>上传者</th>
+        <th>级别</th>
+        <th data-order="time"><a>成绩</a></th>
+        <th class="c" data-order="3bv"><a>3BV</a></th>
+        <th class="c" data-order="3bvs"><a>3BV/s</a></th>
+        <th class="c" data-order="ioe"><a>IOE</a></th>
+        <th class="c" data-order="stnb"><a>STNB</a></th>
+        <th data-order="comments" data-sub="comments"><a>评论</a> / <a data-order="clicks">点击</a></th>
+        <th data-order="id"><a>上传时间</a></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<!-- ============ 状态特写 ============ -->
+<div class="cards">
+  <div class="card">
+    <h3><span class="step">初始</span>默认态（未点击任何排序）</h3>
+    <p>默认按上传时间倒序（现状口径），全部表头保持亮灰纯文本，无箭头、无金色。</p>
+    <span class="cell"><span style="color:#b1b1a4">成绩</span></span>
+    <span class="cell"><span style="color:#b1b1a4">上传时间</span></span>
+  </div>
+  <div class="card">
+    <h3><span class="step">①</span>首次点击「成绩」→ 升序（快在前）</h3>
+    <p>标签文字金 + 加粗；右侧出现双箭头，<b style="color:#fdc61d">上箭头金色</b>=升序，下箭头暗色。</p>
+    <span class="cell"><a style="color:#fdc61d;font-weight:bold;text-decoration:none">成绩</a><span class="sa"><i class="up on"></i><i class="down"></i></span></span>
+  </div>
+  <div class="card">
+    <h3><span class="step">②</span>再点一次「成绩」→ 降序（慢在前）</h3>
+    <p>同一标签二次点击切换方向：<b style="color:#fdc61d">下箭头金色</b>=降序，上箭头转暗。数据整表反向重排。</p>
+    <span class="cell"><a style="color:#fdc61d;font-weight:bold;text-decoration:none">成绩</a><span class="sa"><i class="up"></i><i class="down on"></i></span></span>
+  </div>
+  <div class="card">
+    <h3><span class="step">③</span>「STNB」降序态 + 悬停提示</h3>
+    <p>3BV / 3BV/s / IOE / STNB / 评论 / 点击 / 上传时间首次点击均为<b>降序</b>（下箭头金），再点转升序。悬停该列时暗箭头提亮，暗示可切换。</p>
+    <span class="cell"><a style="color:#fdc61d;font-weight:bold;text-decoration:none">STNB</a><span class="sa"><i class="up" style="border-bottom-color:#75715e"></i><i class="down on"></i></span></span>
+  </div>
+</div>
+
+<div class="footnote">
+  <b>交互细节：</b><br>
+  · 各列首次点击的默认方向沿用现有语义——成绩=升序（快在前），3BV / 3BV/s / IOE / STNB / 评论 / 点击 / 上传时间=降序（大/多/新在前）；URL 带方向参数，刷新/分享后方向保留，旧链接（无方向参数）行为不变。<br>
+  · 「评论 / 点击」同列两个独立排序入口，各自独立箭头；行内对应数字同步金色高亮（现状已如此）。<br>
+  · 「上传时间」纳入切换体系：默认倒序（最新在前）→ 再点转正序（最早在前）。初始进页（未点击）仍保持现状的纯文本不高亮。<br>
+  · 箭头仅出现在当前排序列，未排序列不渲染（不占宽，避免表头列宽跳动）；移动端表格横滑不受影响。<br>
+  · 定向视图（3BV 收集页）3BV 列禁排序的现有规则保持不变。
+</div>
+
+<script>
+// ---------- 演示数据（口径同线上：ioe 3 位小数 / stnb 1 位小数） ----------
+var ROWS = [
+  { name:"黄雪彤", lv:"beg", lvName:"初级", time:2.04, nf:true,  bv:10,  bvs:4.902, ioe:0.909, stnb:140.8, cm:0,  ck:0,   up:"1周前",   upTs:7   },
+  { name:"周沉淀", lv:"exp", lvName:"高级", time:39.17,nf:false, bv:187, bvs:4.775, ioe:1.283, stnb:151.9, cm:23, ck:1841, up:"3天前",   upTs:3   },
+  { name:"郭菲特", lv:"exp", lvName:"高级", time:41.50,nf:false, bv:201, bvs:4.843, ioe:1.196, stnb:138.2, cm:9,  ck:963,  up:"2月前",   upTs:60  },
+  { name:"杨过山", lv:"int", lvName:"中级", time:10.94,nf:false, bv:53,  bvs:4.845, ioe:1.042, stnb:126.5, cm:4,  ck:512,  up:"5天前",   upTs:5   },
+  { name:"小白龙", lv:"beg", lvName:"初级", time:1.79, nf:false, bv:10,  bvs:5.587, ioe:0.981, stnb:158.3, cm:12, ck:2207, up:"6小时前", upTs:0.25},
+  { name:"陈默",   lv:"exp", lvName:"高级", time:45.02,nf:true,  bv:176, bvs:3.910, ioe:1.032, stnb:101.7, cm:2,  ck:158,  up:"1年前",   upTs:365 },
+  { name:"南宫问", lv:"int", lvName:"中级", time:12.36,nf:false, bv:60,  bvs:4.854, ioe:1.113, stnb:133.0, cm:7,  ck:804,  up:"2周前",   upTs:14  },
+  { name:"林一秒", lv:"beg", lvName:"初级", time:1.92, nf:false, bv:11,  bvs:5.729, ioe:0.944, stnb:149.6, cm:31, ck:3102, up:"4天前",   upTs:4   }
+];
+// 各列默认方向（沿用现有语义）
+var DEF_DIR = { time:"asc", "3bv":"desc", "3bvs":"desc", ioe:"desc", stnb:"desc", comments:"desc", clicks:"desc", id:"desc" };
+// 排序键：列 → [取值函数, 升序比较]
+var KEY = {
+  time:      function(r){ return r.time; },
+  "3bv":     function(r){ return r.bv; },
+  "3bvs":    function(r){ return r.bvs; },
+  ioe:       function(r){ return r.ioe; },
+  stnb:      function(r){ return r.stnb; },
+  comments:  function(r){ return r.cm; },
+  clicks:    function(r){ return r.ck; },
+  id:        function(r){ return -r.upTs; } // 上传时间倒序=最新在前（ts 越小越新）
+};
+var state = { order: null, dir: null }; // null = 初始默认态（上传时间倒序、无箭头）
+
+var tbody = document.querySelector("#demo_table tbody");
+
+function render() {
+  // 行排序
+  var rows = ROWS.slice();
+  if (state.order) {
+    var k = KEY[state.order], dir = state.dir === "asc" ? 1 : -1;
+    rows.sort(function(a, b){ return (k(a) - k(b)) * dir; });
+  } else {
+    rows.sort(function(a, b){ return a.upTs - b.upTs; }); // 默认：最新在前
+  }
+  // 行渲染
+  tbody.innerHTML = rows.map(function(r) {
+    var lv = "lv_" + r.lv;
+    var hl = function(col, html) {
+      return state.order === col ? ' class="current"' : "";
+    };
+    return "<tr>"
+      + '<td class="name"><a href="javascript:void(0)">' + r.name + '</a><span class="title">中将</span></td>'
+      + '<td class="level ' + lv + '">' + r.lvName + "</td>"
+      + '<td class="score ' + lv + (state.order === "time" ? " current" : "") + '"><a href="javascript:void(0)">' + r.time.toFixed(2) + "</a>" + (r.nf ? '<span class="nf">NF</span>' : "") + "</td>"
+      + '<td class="c c_3bvs' + (state.order === "3bv" ? " current" : "") + '">' + r.bv + "</td>"
+      + '<td class="c c_3bvs' + (state.order === "3bvs" ? " current" : "") + '">' + r.bvs.toFixed(3) + "</td>"
+      + '<td class="c c_3bvs' + (state.order === "ioe" ? " current" : "") + '">' + r.ioe.toFixed(3) + "</td>"
+      + '<td class="c c_3bvs' + (state.order === "stnb" ? " current" : "") + '">' + r.stnb.toFixed(1) + "</td>"
+      + '<td class="counters"><em' + (state.order === "comments" ? ' class="current"' : "") + ">" + r.cm + "</em> / <span" + (state.order === "clicks" ? ' class="current"' : "") + ">" + r.ck + "</span></td>"
+      + '<td class="create_time' + (r.upTs > 30 ? " old" : "") + '"' + (state.order === "id" ? ' style="color:#fdc61d"' : "") + ">" + r.up + "</td>"
+      + "</tr>";
+  }).join("");
+  // 表头箭头（箭头容器在 <a> 内部，随链接 inline-flex 垂直居中）
+  document.querySelectorAll("#demo_table th a").forEach(function(a) {
+    var order = a.dataset.order;
+    var old = a.querySelector(".sa");
+    if (old) old.remove();
+    a.classList.remove("current");
+    if (!order || !state.order || order !== state.order) return;
+    a.classList.add("current");
+    var sa = document.createElement("span");
+    sa.className = "sa";
+    sa.innerHTML = '<i class="up' + (state.dir === "asc" ? " on" : "") + '"></i><i class="down' + (state.dir === "desc" ? " on" : "") + '"></i>';
+    a.appendChild(sa);
+  });
+}
+
+document.querySelector("#demo_table thead").addEventListener("click", function(e) {
+  var a = e.target.closest("a[data-order]");
+  if (!a) return;
+  e.preventDefault();
+  var order = a.dataset.order;
+  if (state.order === order) {
+    state.dir = state.dir === "asc" ? "desc" : "asc"; // 同列切换方向
+  } else {
+    state.order = order;
+    state.dir = DEF_DIR[order]; // 首次点击=该列默认方向
+  }
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
