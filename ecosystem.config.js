@@ -36,12 +36,28 @@ module.exports = {
       time: true,
     },
     {
-      // 排名模式权威对局：独立单进程，内存保存对局；不随 Next 蓝绿槽重启。
-      // 2026-10-27 core 抽私有 submodule 后脚本迁至 src/core/scripts/authority/
-      // （.env 读取在 server.mjs 内做两级探测：主仓根优先、core 根兜底）。
-      name: "saolei-authority",
+      // 排名模式权威对局：**双实例热备**（2026-10-27 张老师定，替代原先的单进程排空）。
+      // 对局状态在各自进程内存里、两槽互不可见，所以不是负载均衡而是热备：
+      //   - nginx 只把新连接给 active 那台（authority-upstream.conf 的 # active 行）
+      //   - 发布时重建备槽（跑新代码）→ 切 nginx → 老槽等存量局 natural 打完再重建
+      //   - 全程不拒新局，玩家无感；两槽都要常驻（standby 挂了切换就没兜底）
+      // ⚠️ gameId 带槽位前缀（a-/b-），Next 侧按前缀把 /finalize 发到对局所在槽。
+      name: "saolei-authority-a",
       script: "src/core/scripts/authority/server.mjs",
       cwd: __dirname,
+      env: { AUTHORITY_SLOT: "a", AUTHORITY_PORT: "3104" },
+      watch: false,
+      max_memory_restart: "256M",
+      max_restarts: 5,
+      restart_delay: 3000,
+      merge_logs: true,
+      time: true,
+    },
+    {
+      name: "saolei-authority-b",
+      script: "src/core/scripts/authority/server.mjs",
+      cwd: __dirname,
+      env: { AUTHORITY_SLOT: "b", AUTHORITY_PORT: "3105" },
       watch: false,
       max_memory_restart: "256M",
       max_restarts: 5,

@@ -162,8 +162,9 @@ server {
     # 切排行 tab 连点即 429；/videos/ 档仍在专属 location 内挂载）
 
     # 排名模式权威对局 WebSocket：独立 Node 服务，仅本机监听；不挂 general 限速。
+    # 2026-10-27 双实例热备：走 authority_upstream（active/backup 由 release 脚本改写）
     location = /ws/online/ranked {
-        proxy_pass http://127.0.0.1:3104;
+        proxy_pass http://authority_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -235,9 +236,10 @@ server {
     location = /favicon.ico    { proxy_pass http://saolei_upstream; }
     location = /apple-icon.png { proxy_pass http://saolei_upstream; }
 
-    # 排名模式权威对局 WS（2026-10-27 上线）：直通 3104 独立进程，不经 Next 蓝绿槽
+    # 排名模式权威对局 WS：走 authority_upstream 双实例热备（2026-10-27），
+    # active/backup 与 Next 的 saolei_upstream 同套路，由 release 脚本改写 + reload
     location = /ws/online/ranked {
-        proxy_pass http://127.0.0.1:3104;
+        proxy_pass http://authority_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -274,6 +276,24 @@ server {
     }
 }
 NGINXEOF
+
+# 权威对局 upstream（双实例热备，2026-10-27）：文件本身由 scripts/server-release.sh
+# 改写（active/backup），这里只保证 conf.d 软链存在 + 首次初始化，否则 nginx 报
+# unknown upstream "authority_upstream"（WS 直接 502）
+AUTH_UP="/home/deploy/nginx-upstream/authority-upstream.conf"
+if [[ ! -f "$AUTH_UP" ]]; then
+  mkdir -p /home/deploy/nginx-upstream
+  cat > "$AUTH_UP" <<'AUTHEOF'
+# 此文件由 scripts/server-release.sh 自动管理，勿手动修改
+# active: a
+upstream authority_upstream {
+    server 127.0.0.1:3104;        # a (active)
+    server 127.0.0.1:3105 backup; # b (standby)
+}
+AUTHEOF
+  chown deploy:deploy "$AUTH_UP"
+fi
+ln -sf "$AUTH_UP" /etc/nginx/conf.d/authority-upstream.conf
 
 nginx -t
 nginx -s reload

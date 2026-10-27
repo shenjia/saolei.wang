@@ -23,6 +23,8 @@ cd "$DEPLOY_DIR"
 
 NGINX_BIN="/usr/sbin/nginx"
 NGINX_UPSTREAM_CONF="$HOME/nginx-upstream/saolei-upstream.conf"
+# 权威对局服务（双实例热备）：a=3104 / b=3105，active 标记与 Next 同套路
+NGINX_AUTH_CONF="$HOME/nginx-upstream/authority-upstream.conf"
 HEALTH_PATH="/api/health"
 HEALTH_TIMEOUT=90
 
@@ -40,10 +42,37 @@ slot_app()   { [[ $1 == blue ]] && echo saolei || echo saolei-green; }
 slot_port()  { [[ $1 == blue ]] && echo 3100 || echo 3102; }
 slot_dir()   { [[ $1 == blue ]] && echo .next-blue || echo .next-green; }
 
+# ---------- 权威对局槽位（a/b 双实例热备，2026-10-27） ----------
+auth_app()   { [[ $1 == a ]] && echo saolei-authority-a || echo saolei-authority-b; }
+auth_port()  { [[ $1 == a ]] && echo 3104 || echo 3105; }
+read_auth_active() { grep -oE 'active: (a|b)' "$NGINX_AUTH_CONF" | head -1 | awk '{print $2}'; }
+write_auth_upstream() {
+  local active=$1 standby
+  if [[ $active == a ]]; then standby=b; else standby=a; fi
+  cat > "$NGINX_AUTH_CONF.tmp" <<EOF
+# 此文件由 scripts/server-release.sh 自动管理，勿手动修改
+# active: $active
+upstream authority_upstream {
+    server 127.0.0.1:$(auth_port "$active");        # $active (active)
+    server 127.0.0.1:$(auth_port "$standby") backup; # $standby (standby)
+}
+EOF
+  cat "$NGINX_AUTH_CONF.tmp" > "$NGINX_AUTH_CONF"   # cp 保 inode（软链不换）
+  rm -f "$NGINX_AUTH_CONF.tmp"
+}
+
 # ---------- 前置检查 ----------
 [[ -f .env ]] || fail "缺少 .env 文件（服务器上应已配置好，rsync 已排除不覆盖）"
 command -v pnpm >/dev/null 2>&1 || fail "pnpm 未安装"
 [[ -f "$NGINX_UPSTREAM_CONF" ]] || fail "缺少 $NGINX_UPSTREAM_CONF（nginx upstream 配置）"
+# authority upstream 自举（新环境/首次部署）：文件不存在就按 a 槽初始化。
+# ⚠️ 还需 root 一次性建软链 /etc/nginx/conf.d/authority-upstream.conf → 本文件，
+#    否则 nginx 不认 authority_upstream（只有 warning，WS 会 502）。
+if [[ ! -f "$NGINX_AUTH_CONF" ]]; then
+  info "初始化 $NGINX_AUTH_CONF（默认 active=a）"
+  mkdir -p "$(dirname "$NGINX_AUTH_CONF")"
+  write_auth_upstream a
+fi
 [[ -d .next-release/server/app ]] || fail "CI 构建产物缺失（.next-release 无 server/app）——CI 构建或 rsync 步骤未完成?"
 
 # ---------- 读取当前主力槽 ----------
@@ -140,47 +169,90 @@ fix_prisma_stub() {
 fix_prisma_stub "$S_DIR"
 
 # ---------- 启动/更新权威对局服务 ----------
-# 独立于 Next 蓝绿槽。对局状态在 authority 进程内存——重启即清空。
-# 2026-10-27 排名模式上线后：有进行中对局（active>0，未结束局；games 含已结束
-# 未过 30min TTL 的历史局不可作判据）则等待其结束（15 分钟上限，覆盖高级局最长
-# 时长；期间 Next 槽已切完、页面正常，对局玩家无感）；无对局或超时才重启
-# （超时兜底：极少见的挂机局不能永远阻塞发布）。
-AUTH_WAITED=0
-if pm2 describe saolei-authority >/dev/null 2>&1; then
-  # 先开排空模式（拒新局——张老师方案，2026-10-27）：消除「新局不断进来
-  # 永等不到 0」的活锁；存量局打完即重启，等待上限可收紧
-  curl -sf --max-time 3 -X POST -H "Content-Type: application/json" \
-    -d '{"on":true}' http://127.0.0.1:3104/drain >/dev/null 2>&1 || true
-  GAMES_DEADLINE=$((SECONDS + 360))
-  while :; do
-    # ⚠️ 脚本头 set -euo pipefail：旧 authority（无 active 字段）grep 无匹配
-    # exit 1 会经命令替换杀掉整个发布——管道尾加 || true 兜底
-    GAMES_NOW=$(curl -sf --max-time 3 http://127.0.0.1:3104/health 2>/dev/null | grep -oE '"active":[0-9]+' | grep -oE '[0-9]+' || true)
-    [ -z "$GAMES_NOW" ] && GAMES_NOW=0
-    if [ "$GAMES_NOW" -eq 0 ] || (( SECONDS >= GAMES_DEADLINE )); then
-      [ "$GAMES_NOW" -gt 0 ] && warn "仍有 $GAMES_NOW 局进行中，等待超时（15min）——强制重启，进行中的对局需重开"
-      break
-    fi
-    if (( AUTH_WAITED == 0 )); then info "排名对局进行中（$GAMES_NOW 局），等待结束（最多 15 分钟）..."; AUTH_WAITED=1; fi
-    sleep 10
-  done
-  info "重启 saolei-authority ..."
-  pm2 restart saolei-authority
-else
-  info "首次启动 saolei-authority ..."
-  pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only saolei-authority
+# 2026-10-27 改「双实例热备」（张老师定，替代单实例排空）：
+# 对局状态在各自进程内存、两槽互不可见 → 不做负载均衡，做热备切换：
+#   ① 重建备槽（delete+start：pm2 restart 不重读 ecosystem env，且要加载新代码）
+#   ② 备槽健康 → 切 nginx（只影响新连接；已建立的 WS 由旧 worker 继续服务到断开）
+#   ③ 老槽等存量局打完（active=0，上限 10min）→ 重建待命（下轮它就是备槽）
+# 全程不拒新局、不弹「正在重启」；老槽重建前它的对局已打完，玩家无感。
+# drain 开关保留作紧急维护闸（带 8 分钟 TTL 自动复位），发布流程不再使用。
+AUTH_ACTIVE="$(read_auth_active)"
+if [[ "$AUTH_ACTIVE" != a && "$AUTH_ACTIVE" != b ]]; then AUTH_ACTIVE=a; fi
+if [[ "$AUTH_ACTIVE" == a ]]; then AUTH_STANDBY=b; else AUTH_STANDBY=a; fi
+SA_APP="$(auth_app "$AUTH_STANDBY")"; SA_PORT="$(auth_port "$AUTH_STANDBY")"
+AA_APP="$(auth_app "$AUTH_ACTIVE")";  AA_PORT="$(auth_port "$AUTH_ACTIVE")"
+info "权威对局: active=$AUTH_ACTIVE($AA_PORT) → 本次切到 $AUTH_STANDBY($SA_PORT)"
+
+# 旧单实例（单实例时期的 saolei-authority，占着 3104）只做**探测**，删除必须等
+# 切流之后——先删会造成 3104 空窗、nginx 主备都连不上（首次迁移的 502 陷阱）。
+LEGACY_AUTH=0
+if pm2 describe saolei-authority >/dev/null 2>&1; then LEGACY_AUTH=1; fi
+if (( LEGACY_AUTH == 1 )); then
+  warn "检测到旧单实例 saolei-authority（占 3104）——先切流到 $AUTH_STANDBY，再迁移"
 fi
-# 权威对局健康检查（2026-10-27 改循环等待）：pm2 restart 到端口可听有几秒延迟，
-# 单发 curl 在发布序列里偶发抢跑（run 4 次 CI 里两次「进程终将 ready 但检查已 fail」）；
-# 沿用 wait_healthy 的循环语义但走 /health 独立路径，60s 上限。
+
+# ---------- ① 重建备槽 ----------
+if pm2 describe "$SA_APP" >/dev/null 2>&1; then
+  info "重建 $SA_APP（delete+start，加载新代码与新 ecosystem env）..."
+  pm2 delete "$SA_APP" >/dev/null 2>&1 || true
+fi
+pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$SA_APP"
 AUTH_DEADLINE=$((SECONDS + 60))
-until curl -sf --max-time 5 http://127.0.0.1:3104/health >/dev/null 2>&1; do
+while :; do
+  if curl -sf --max-time 5 "http://127.0.0.1:$SA_PORT/health" >/dev/null 2>&1; then break; fi
   if (( SECONDS >= AUTH_DEADLINE )); then
-    fail "权威对局服务健康检查超时（60s）。请检查: pm2 logs saolei-authority --lines 50"
+    fail "备槽权威服务健康检查超时（60s）。请检查: pm2 logs $SA_APP --lines 50"
   fi
   sleep 2
 done
-ok "权威对局服务健康 ✓"
+ok "备槽 $AUTH_STANDBY 权威服务健康 ✓"
+
+# ---------- ② 切 nginx（只影响新连接） ----------
+info "切换权威 WS 流量: $AUTH_ACTIVE → $AUTH_STANDBY ..."
+write_auth_upstream "$AUTH_STANDBY"
+sudo -n "$NGINX_BIN" -t || fail "nginx 校验失败，未切权威槽（线上仍由 $AUTH_ACTIVE 服务）"
+sudo -n "$NGINX_BIN" -s reload
+sleep 1
+
+# ---------- ③ 老槽等存量局打完再重建 ----------
+# 此刻老槽已不接新连接（nginx 已切走），它的玩家继续打完手里的局；
+# 不 POST /drain —— 那只会让 backup 兜底路径也开不了新局，没有收益。
+if (( LEGACY_AUTH == 1 )); then
+  # 首次迁移：3104 被旧单实例占着，它不接新连接了（nginx 已切到 $AUTH_STANDBY），
+  # 直接换成正式 a 槽。旧进程里的存量局会断（一次性代价）——客户端重连到新槽后
+  # resume 失败会提示重开一局。
+  warn "迁移旧单实例 → 正式槽 $AA_APP（此刻流量已在 $AUTH_STANDBY，无空窗）"
+  pm2 delete saolei-authority >/dev/null 2>&1 || true
+else
+  AUTH_WAITED=0
+  AUTH_DEADLINE=$((SECONDS + 600))
+  while :; do
+    A_ACTIVE_NOW=$(curl -sf --max-time 3 "http://127.0.0.1:$AA_PORT/health" 2>/dev/null | grep -oE '"active":[0-9]+' | grep -oE '[0-9]+' || true)
+    if [ -z "$A_ACTIVE_NOW" ]; then A_ACTIVE_NOW=0; fi
+    if [ "$A_ACTIVE_NOW" -eq 0 ]; then break; fi
+    if (( SECONDS >= AUTH_DEADLINE )); then
+      warn "老槽仍有 $A_ACTIVE_NOW 局进行中，等待超时（10min）——重建会作废这些局"
+      break
+    fi
+    if (( AUTH_WAITED == 0 )); then
+      info "老槽还有 $A_ACTIVE_NOW 局在打，等打完再重建（最多 10 分钟；这期间新局已走备槽，玩家无感）..."
+      AUTH_WAITED=1
+    fi
+    sleep 5
+  done
+fi
+info "重建老槽 $AA_APP（加载新代码，转待命）..."
+pm2 delete "$AA_APP" >/dev/null 2>&1 || true
+pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$AA_APP"
+AUTH_DEADLINE=$((SECONDS + 60))
+while :; do
+  if curl -sf --max-time 5 "http://127.0.0.1:$AA_PORT/health" >/dev/null 2>&1; then break; fi
+  if (( SECONDS >= AUTH_DEADLINE )); then
+    fail "老槽权威服务重建后健康检查超时（60s）。请检查: pm2 logs $AA_APP --lines 50"
+  fi
+  sleep 2
+done
+ok "权威对局双槽就绪 ✓ active=$AUTH_STANDBY"
 
 # ---------- 重启备槽实例 ----------
 # 单活模式（2026-10-22）下备槽处于 stopped 态。⚠️ 2026-10-27 生产事故教训：
@@ -250,4 +322,4 @@ if ! (crontab -l 2>/dev/null | grep -qF "authority-healthcheck.sh"); then
   ok "已安装 authority 心跳监控 cron（每分钟）"
 fi
 
-ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (active=$STANDBY, 空闲槽 $A_APP 已停)"
+ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 空闲槽 $A_APP 已停; authority active=$AUTH_STANDBY)"
