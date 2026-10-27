@@ -10,6 +10,7 @@
 // 隐私不出：审核人 reviewUser 等；filepath 不单出（已拼进 fileUrl）。
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
 import { rateLimit } from "@/lib/ratelimit";
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
   }
 
   // video + video_info + video_metrics 三表 LEFT JOIN：metrics 缺行（未跑批/重放失败）给 null
-  const rows = await prisma.$queryRawUnsafe<
+  const rows = await prisma.$queryRaw<
     {
       id: bigint; level: string; user: bigint; hash: string; status: number;
       create_time: bigint; review_time: bigint | null;
@@ -43,15 +44,14 @@ export async function GET(req: Request) {
       cl_double: number | null; ce: number | null; path: number | null;
       ioe: number | null; stnb: number | null;
     }[]
-  >(
-    `SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
-            vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version, vi.signature, vi.filepath,
-            m.cl, m.cl_left, m.cl_right, m.cl_double, m.ce, m.path, m.ioe, m.stnb
-     FROM video v
-     JOIN video_info vi ON vi.id = v.id
-     LEFT JOIN video_metrics m ON m.id = v.id
-     WHERE v.id IN (${ids.join(",")}) AND v.status <> 0`
-  );
+  >`
+    SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
+           vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version, vi.signature, vi.filepath,
+           m.cl, m.cl_left, m.cl_right, m.cl_double, m.ce, m.path, m.ioe, m.stnb
+    FROM video v
+    JOIN video_info vi ON vi.id = v.id
+    LEFT JOIN video_metrics m ON m.id = v.id
+    WHERE v.id IN (${Prisma.join(ids)}) AND v.status <> 0`;
 
   const authors = await usersByIds([...new Set(rows.map((r) => Number(r.user)))]);
 

@@ -70,6 +70,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # 裸拼 SQL 护栏（2026-10-27 注入加固配套）：基线钉住现有 67 处
+      # $queryRawUnsafe/$executeRawUnsafe，新增即在构建日志里警告并列出文件。
+      # ⚠️ 故意 continue-on-error（只警告不拦截）——这是流程护栏不是正确性校验，
+      # 不能让一次漏刷新基线卡住发布；真出问题由运行时 assertIdent/占位符兜底。
+      - name: Raw SQL guard (warn only)
+        continue-on-error: true
+        run: node scripts/check-raw-sql.mjs --warn
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

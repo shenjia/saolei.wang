@@ -13,9 +13,10 @@
 // 消费方无需自行换算。
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
 import { rateLimit } from "@/lib/ratelimit";
-import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, assertVideoLevel, type VideoLevel } from "@/lib/config";
+import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 
@@ -40,25 +41,26 @@ export async function GET(req: Request) {
   }
 
   // create_time 为 Unix 秒；cursor 优先，since 作为无 cursor 时的起点过滤
-  const conds: string[] = [];
-  if (cursor > 0) conds.push(`v.id > ${cursor}`);
-  if (cursor === 0 && since > 0) conds.push(`v.create_time >= ${since}`);
-  // 2026-10-27 SQL 注入加固：虽然上面已白名单归一，拼接前仍过 assertVideoLevel 运行时断言
-  if (level) conds.push(`v.level = '${assertVideoLevel(level)}'`);
-  if (playerId !== null) conds.push(`v.user = ${playerId}`);
+  // 2026-10-27 迁移到 $queryRaw 标签模板：条件用 Prisma.sql 片段拼，值全部走 ? 占位符，
+  // 连 level 也不再进 SQL 串（原先是白名单 + assertVideoLevel 双保险，现在结构上就拼不进去）
+  const conds: Prisma.Sql[] = [];
+  if (cursor > 0) conds.push(Prisma.sql`v.id > ${cursor}`);
+  if (cursor === 0 && since > 0) conds.push(Prisma.sql`v.create_time >= ${since}`);
+  if (level) conds.push(Prisma.sql`v.level = ${level}`);
+  if (playerId !== null) conds.push(Prisma.sql`v.user = ${playerId}`);
+  const where = conds.length ? Prisma.sql`WHERE ${Prisma.join(conds, " AND ")}` : Prisma.empty;
 
-  const rows = await prisma.$queryRawUnsafe<{
+  const rows = await prisma.$queryRaw<{
     id: bigint; level: string; user: bigint; hash: string; status: number;
     create_time: bigint; review_time: bigint | null;
     real_time: number; board_3bv: number; noflag: number;
     software: string; version: string;
-  }[]>(
-    `SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
-            vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version
-     FROM video v JOIN video_info vi ON vi.id = v.id
-     ${conds.length ? `WHERE ${conds.filter(Boolean).join(" AND ")}` : ""}
-     ORDER BY v.id ASC LIMIT ${size}`
-  );
+  }[]>`
+    SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
+           vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version
+    FROM video v JOIN video_info vi ON vi.id = v.id
+    ${where}
+    ORDER BY v.id ASC LIMIT ${size}`;
 
   const authors = await usersByIds(rows.map((r) => Number(r.user)));
 

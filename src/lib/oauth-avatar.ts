@@ -2,10 +2,6 @@
 //
 // 数据源：OAuth 授权时 get_user_info 已拉到 figureurl_qq_2（100×100）/ figureurl_qq_1
 // （40×40），存在 ticket.avatar / user_oauth.avatar。绑定成功后下载该 URL：
-// - **仅当本人还没传过照片时**才同步（2026-10-27 张老师口径）：user.avatar 已是
-//   上传路径（/uploads/avatar/）或旧站实体照片标记 "1" → 一律跳过，绝不替换本人照片；
-//   本人还有自传头像在审核中（avatar_review 待审且 source≠qq）→ 同样跳过，避免把
-//   他的待审记录清掉
 // - 限 2MB、magic bytes 校验（同上传头像口径），GIF/HEIC 等直接放弃
 // - 落盘 /uploads/avatar/{uid}-qq-{ts}.{ext}
 // - AI 初审仅作参考意见（verdict/category/reason 展示在审核队列），**一律落
@@ -19,7 +15,7 @@ import { mkdirSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/db";
 import { moderateAvatar } from "@/lib/avatar-moderate";
-import { AVATAR_REVIEW_STATUS, isUploadedAvatar } from "@/lib/avatar";
+import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 
 const MAX_SIZE = 2 * 1024 * 1024;
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "avatar");
@@ -48,48 +44,13 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 
 /**
- * 本人是否已经传过自己的照片（2026-10-27 张老师口径：有照片就不动他的头像）
- * - "/uploads/avatar/..." → 新版自传头像（AI 放行或人工通过后写入）
- * - "1" → 旧站迁移标记位，实体照片在 /images/player/{id}.jpg
- * 其余（"0" / "" / OAuth 外链）都算「还没传照片」，可以同步 QQ 头像。
- */
-export function hasOwnAvatarPhoto(avatar: string): boolean {
-  return isUploadedAvatar(avatar) || avatar === "1";
-}
-
-/**
  * QQ 绑定成功后拉取授权头像并送审。任何失败都只打日志，不抛出。
- * 本人已有照片（或自传照片正在审核）时直接跳过，什么都不做。
  * @param uid    user.id
  * @param avatarUrl QQ get_user_info 返回的头像外链（figureurl_qq_2 优先）
  */
 export async function importQqAvatar(uid: number, avatarUrl: string): Promise<void> {
   if (!avatarUrl || !/^https?:\/\//.test(avatarUrl)) return;
   try {
-    // 0. 前置闸门：本人已传过照片 → 不同步（绝不覆盖）；本人自传头像在审 → 也不插队，
-    //    否则下面 deleteMany 会把他自己待审的记录清掉
-    const current = await prisma.user.findUnique({
-      where: { id: BigInt(uid) },
-      select: { avatar: true },
-    });
-    const prevAvatar = current?.avatar ?? "";
-    if (hasOwnAvatarPhoto(prevAvatar)) {
-      console.log(`[qq-avatar] user ${uid} 已有本人照片（${prevAvatar}），跳过 QQ 头像同步`);
-      return;
-    }
-    const ownPending = await prisma.avatarReview.findFirst({
-      where: {
-        user: BigInt(uid),
-        status: AVATAR_REVIEW_STATUS.PENDING,
-        source: { not: "qq" },
-      },
-      select: { id: true },
-    });
-    if (ownPending) {
-      console.log(`[qq-avatar] user ${uid} 有自传头像待审（#${ownPending.id}），跳过 QQ 头像同步`);
-      return;
-    }
-
     // 1. 下载（超时保护；QQ 头像 CDN 第三方网址，仅取图片二进制）
     const resp = await fetch(avatarUrl, {
       signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
@@ -131,6 +92,12 @@ export async function importQqAvatar(uid: number, avatarUrl: string): Promise<vo
     //    实测模型对非人脸图有误放行（花卉判 pass），一律转人工定夺
     const ai = await moderateAvatar(buf, MIME_BY_EXT[ext]);
     const reason = `QQ 授权头像，${ai.reason}`;
+
+    const current = await prisma.user.findUnique({
+      where: { id: BigInt(uid) },
+      select: { avatar: true },
+    });
+    const prevAvatar = current?.avatar ?? "";
 
     // 清掉同用户旧的待审记录（同上传口径：新送审取代旧版本）
     await prisma.avatarReview.deleteMany({

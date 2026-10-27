@@ -5,6 +5,7 @@
 import { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { prisma } from "./db";
+import { assertIdent } from "./sqlguard";
 import { getTitleDistribution, title } from "./assess";
 import {
   COMMENT_STATUS,
@@ -731,8 +732,9 @@ export async function getRankOfUsers(
   const uniq = [...new Set(ids.filter((i) => Number.isInteger(i) && i > 0))];
   if (!uniq.length) return new Map();
   const { level, order } = byLevelOrder(by);
-  const col = `${level}_${order === "time" ? "time" : "3bvs"}`; // raw SQL 用 snake_case 列名
-  const tbl = nf ? "user_scores_nf" : "user_scores";
+  // 2026-10-27 SQL 注入加固：列名/表名走占位符接不了，只能拼——拼前过 assertIdent 白名单断言
+  const col = assertIdent(`${level}_${order === "time" ? "time" : "3bvs"}`); // raw SQL 用 snake_case 列名
+  const tbl = assertIdent(nf ? "user_scores_nf" : "user_scores");
   const cmp = order === "time" ? "<" : ">"; // time 越小越好、3bvs 越大越好（同分时 id 也按此向排）
   // 地区内页搜索（2026-10-14）：名次限定该地区人口（join `user` 过滤 area），
   // 本人不在该地区的 id 不出现在结果里（前端显示「未加入地区排行」）；area 一律 ? 传参

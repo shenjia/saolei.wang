@@ -8,11 +8,13 @@
 // keyword 经 ?  参数化 +  %/_ 通配符转义，无注入面。
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
 import { rateLimit } from "@/lib/ratelimit";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 import { decodeLegacyEntities } from "@/lib/format";
+import { likeContains } from "@/lib/sqlguard";
 
 /** 每页条数（张老师定 20，固定不可调） */
 const PAGE_SIZE = 20;
@@ -36,24 +38,23 @@ export async function GET(req: Request) {
   const cursor = Math.max(0, parseInt(p.get("cursor") ?? "0", 10) || 0);
 
   // LIKE 转义：%/_ 恢复字面义（ESCAPE '\'），防通配符注入打宽结果集
-  const escaped = keyword.replace(/[\\%_]/g, (c) => "\\" + c);
+  const like = likeContains(keyword);
 
   // keyset 翻页（id DESC）：cursor>0 时取 id < cursor 的下一页
   // 分页遍历量固定 ≤20，主键扫描无深翻页问题，不额外建索引
-  const rows = await prisma.$queryRawUnsafe<{
+  const rows = await prisma.$queryRaw<{
     id: bigint; board: number; user: bigint; title: string;
     replies: number; clicks: number;
     is_pinned: number; is_nice: number; is_locked: number;
     last_reply_time: bigint; create_time: bigint; update_time: bigint;
-  }[]>(
-    `SELECT id, board, user, title, replies, clicks,
-            is_pinned, is_nice, is_locked, last_reply_time, create_time, update_time
-     FROM bbs_post
-     WHERE status = 0 AND title LIKE ? ${cursor > 0 ? "AND id < ?" : ""}
-     ORDER BY id DESC
-     LIMIT ${PAGE_SIZE}`,
-    ...(cursor > 0 ? [`%${escaped}%`, cursor] : [`%${escaped}%`])
-  );
+  }[]>`
+    SELECT id, board, user, title, replies, clicks,
+           is_pinned, is_nice, is_locked, last_reply_time, create_time, update_time
+    FROM bbs_post
+    WHERE status = 0 AND title LIKE ${like}
+    ${cursor > 0 ? Prisma.sql`AND id < ${cursor}` : Prisma.empty}
+    ORDER BY id DESC
+    LIMIT ${PAGE_SIZE}`;
 
   const authors = await usersByIds([...new Set(rows.map((r) => Number(r.user)))]);
   const hasMore = rows.length === PAGE_SIZE;

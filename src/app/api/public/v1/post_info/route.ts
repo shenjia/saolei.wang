@@ -10,6 +10,7 @@
 // 最后回复时间单列 lastReplyTime。
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
 import { rateLimit } from "@/lib/ratelimit";
 import { prisma } from "@/lib/db";
@@ -33,18 +34,17 @@ export async function GET(req: Request) {
   }
 
   // 只取轻量列（不 SELECT content 大字段）；正常帖才返回
-  const rows = await prisma.$queryRawUnsafe<{
+  const rows = await prisma.$queryRaw<{
     id: bigint; board: number; user: bigint; title: string;
     replies: number; clicks: number;
     is_pinned: number; is_nice: number; is_locked: number;
     last_reply_time: bigint; create_time: bigint; update_time: bigint;
-  }[]>(
-    `SELECT id, board, user, title, replies, clicks,
-            is_pinned, is_nice, is_locked, last_reply_time, create_time, update_time
-     FROM bbs_post
-     WHERE status = 0 AND id IN (${ids.join(",")})
-     ORDER BY id DESC`
-  );
+  }[]>`
+    SELECT id, board, user, title, replies, clicks,
+           is_pinned, is_nice, is_locked, last_reply_time, create_time, update_time
+    FROM bbs_post
+    WHERE status = 0 AND id IN (${Prisma.join(ids)})
+    ORDER BY id DESC`;
 
   const authors = await usersByIds([...new Set(rows.map((r) => Number(r.user)))]);
 

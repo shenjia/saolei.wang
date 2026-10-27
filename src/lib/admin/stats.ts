@@ -10,6 +10,7 @@
 import { prisma } from "@/lib/db";
 import { getTitleCounts, rankedOnly } from "@/lib/queries";
 import { TITLES, TITLE_THRESHOLDS, VIDEO_STATUS, VIDEO_LEVELS, MIN_3BV_FOR_3BVS, CONTENT_STATUS } from "@/lib/config";
+import { assertIdent } from "@/lib/sqlguard";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -44,8 +45,9 @@ export type TrendKey = (typeof TREND_METRICS)[number]["key"];
 /** 单表按天计数（只取窗口内、只取需要的列） */
 async function dailyCounts(table: string, since: number, extra = ""): Promise<Map<number, number>> {
   const rows = await prisma.$queryRawUnsafe<{ d: number; c: bigint }[]>(
+    // 2026-10-27 加固：表名占位符接不了，拼前过 assertIdent（调用方传的都是常量表名）
     `SELECT CAST(FLOOR((create_time + 28800) / 86400) AS SIGNED) d, COUNT(*) c
-     FROM ${table} WHERE create_time >= ? ${extra} GROUP BY d`,
+     FROM ${assertIdent(table)} WHERE create_time >= ? ${extra} GROUP BY d`,
     since
   );
   return new Map(rows.map((r) => [N(r.d), N(r.c)]));
