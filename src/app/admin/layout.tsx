@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin/guard";
 import { USER_ROLE, VIDEO_STATUS } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
+import { getGroupBadges } from "@/lib/admin/usergroups";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { ConfirmHost } from "@/components/Confirm";
 import "./admin.css";
@@ -22,8 +23,9 @@ export const metadata: Metadata = {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdmin();
-  // 论坛待审（2026-10-27 张老师要求：与录像/头像同款红点角标）——待审主题 + 待审回复合计
-  const [pending, avatarPending, bbsPending, currentUser] = await Promise.all([
+  // 论坛待审（2026-10-27 张老师要求：与录像/头像同款红点角标）——待审主题 + 待审回复合计；
+  // 用户组 badge 信号（2026-10-27）：组人数 + 最新加入时刻，客户端与 localStorage 基线对比
+  const [pending, avatarPending, bbsPending, currentUser, groupBadges] = await Promise.all([
     prisma.video.count({ where: { status: VIDEO_STATUS.NORMAL } }),
     prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.PENDING } }),
     Promise.all([
@@ -31,6 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       prisma.bbsReply.count({ where: { status: 5 } }),
     ]).then(([a, b]) => a + b),
     prisma.user.findUnique({ where: { id: session.uid }, select: { chineseName: true } }),
+    getGroupBadges(),
   ]);
   const roleTag =
     session.role === USER_ROLE.ADMINISTRATOR ? (
@@ -43,6 +46,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="admin_shell">
       <AdminSidebar
         badges={{ pending, avatar: avatarPending, bbs: bbsPending }}
+        groupBadges={{
+          trusted: { count: groupBadges.trustedCount, maxJoin: groupBadges.trustedMaxJoin },
+          lowtrust: { count: groupBadges.lowTrustCount, maxJoin: groupBadges.lowTrustMaxJoin },
+        }}
         user={{
           uid: session.uid,
           name: currentUser?.chineseName || session.username,
