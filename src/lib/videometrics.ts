@@ -93,6 +93,8 @@ async function compute(videoId: number): Promise<void> {
     corr: m.corr,
     cls: m.cls,
     ppc: m.ppc,
+    thrp: m.thrp,
+    bpp: m.bpp,
     stnb: m.stnb,
     qg: m.qg,
   };

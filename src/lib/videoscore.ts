@@ -12,11 +12,15 @@ import { GRADE_PERCENTS, GRADES } from "./config";
 
 // ---------- 指标定义 ----------
 
-export type MetricKey = "stnb" | "bvs" | "ioe" | "corr" | "cls" | "ppc" | "cmp";
-/** 重放得出、逐盘落库并建分位基准的六项客观事实（cmp 是合成的，不在内） */
+export type MetricKey = "stnb" | "bvs" | "ioe" | "thrp" | "corr" | "cls" | "ppc" | "bpp" | "cmp";
+/** 重放得出、逐盘落库并建分位基准的客观事实（cmp 是合成的，不在内） */
 export type BaseMetricKey = Exclude<MetricKey, "cmp">;
-/** 参与综合加权的四根分项轴 */
-export type AxisMetricKey = "bvs" | "ioe" | "corr" | "cls";
+/**
+ * 雷达分项轴的候选键。「效率」轴按组选指标：FL 用 thrp（chord 收益，组内 r=0.715 优于
+ * IOE 的 0.646）、NF 用 ioe（NF 无 chord，thrp 被钉死 ≤1.0 无区分度）——见 axisMetricsFor。
+ * 「走位」= 3BV/PATH（2026-10-28 张老师定，替换原「精准 corr」轴）。
+ */
+export type AxisMetricKey = "bvs" | "ioe" | "thrp" | "bpp" | "cls";
 
 export interface MetricDef<K extends MetricKey = MetricKey> {
   key: K;
@@ -35,35 +39,42 @@ export interface MetricDef<K extends MetricKey = MetricKey> {
 }
 
 /**
- * 六项落库事实：重放得出的客观指标，逐盘存进 video_metrics，每一项都建分位基准。
- * 注意「移动 ppc」已按张老师 2026-10-14 要求移出雷达图，但值照旧落库留存
- * （重放结果是确定性事实，留着不占成本，将来想恢复随时可用）。
+ * 八项落库事实：重放得出的客观指标，逐盘存进 video_metrics，每一项都建分位基准。
+ * 「移动 ppc」与「精准 corr」已移出雷达，但值照旧落库留存（重放结果是确定性事实，
+ * 留着不占成本，将来想恢复随时可用）。
  */
 export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   // 2026-10-14 晚张老师定：气泡里的「3BV/s」与手速单位都放到数值前/整词化 ——
   // 速度轴 3BV/s 由后缀改前缀（气泡读「3BV/s 4.065」），手速由「次/秒」改「次点击/秒」。
-  // ⚠️ BASE_METRICS 与 AXIS_METRICS 两处定义必须同步改（录像页与练习页都走 formatMetric）。
+  // ⚠️ BASE_METRICS 与 axisMetricsFor 两处定义必须同步改（录像页与练习页都走 formatMetric）。
   { key: "stnb", name: "判雷", desc: "综合评分 STNB", prefix: "STNB", unit: "", digits: 1, highIsBetter: true },
   { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
   { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
+  { key: "thrp", name: "效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
   { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
   { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   { key: "ppc", name: "移动", desc: "每击鼠标行程", prefix: "", unit: "格/次", digits: 2, highIsBetter: false },
+  { key: "bpp", name: "走位", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
 ];
 
 /**
- * 雷达的四根分项轴 —— 自顶部「综合」起顺时针：速度 / 效率 / 精准 / 手速。
- * 综合分就是这四项在（级别 × 模式）组内百分位的加权平均，见 compositeOf。
+ * 雷达的四根分项轴 —— 自顶部「判雷」起顺时针：速度 / 效率 / 走位 / 手速。
+ * 「效率」按组选指标（2026-10-28 张老师定）：FL=ThrP（每次有效操作换回的 3BV，
+ * 即 chord 收益），NF=IOE（每点击换回的 3BV）——NF 无 chord，ThrP 恒 ≤1 无区分度。
+ * 「走位」= 3BV/PATH，替换原「精准」corr 轴（corr 与水平负相关：世界第一 F、纯萌新 SSS）。
  */
-export const AXIS_METRICS: MetricDef<AxisMetricKey>[] = [
-  { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
-  { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true },
-  { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
-  { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
-];
+export function axisMetricsFor(noflag: boolean): MetricDef<AxisMetricKey>[] {
+  return [
+    { key: "bvs", name: "速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
+    noflag
+      ? { key: "ioe", name: "效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true }
+      : { key: "thrp", name: "效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
+    { key: "bpp", name: "走位", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
+    { key: "cls", name: "手速", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
+  ];
+}
 
 export const BASE_METRIC_KEYS: BaseMetricKey[] = BASE_METRICS.map((m) => m.key);
-export const AXIS_METRIC_KEYS: AxisMetricKey[] = AXIS_METRICS.map((m) => m.key);
 
 /** 指标值格式化（气泡展示），如 `STNB 87.0` / `3BV/s 4.065` / `8.50 次点击/秒` */
 export function formatMetric(key: MetricKey, value: number): string {
@@ -104,19 +115,22 @@ export const DIST_BUCKET_ALL = -1;
 export const COMPOSITE_WEIGHTS: Record<MetricKey, number> = {
   bvs: 1,
   ioe: 1,
+  thrp: 1,
+  bpp: 1,
   corr: 1,
   cls: 1,
-  // 不参与加权：stnb 已被本分取代；ppc 已移出雷达；cmp 是本分自身
+  // 不参与加权：stnb 已被本分取代；ppc/corr 已移出雷达；cmp 是本分自身
   stnb: 0,
   ppc: 0,
   cmp: 0,
 };
 
-/** 综合分 = 四轴组内百分位的加权平均（0-100，本身就是百分位量纲，可直接当综合轴的半径） */
-export function compositeOf(percents: Partial<Record<MetricKey, number>>): number {
+/** 综合分 = 四轴组内百分位的加权平均（0-100，本身就是百分位量纲，可直接当综合轴的半径）
+ *  ⚠️ 已无生产调用方（综合轴 2026-10-14 晚起 = STNB 原值），仅为兼容保留。 */
+export function compositeOf(percents: Partial<Record<MetricKey, number>>, noflag = false): number {
   let sum = 0;
   let wsum = 0;
-  for (const def of AXIS_METRICS) {
+  for (const def of axisMetricsFor(noflag)) {
     const w = COMPOSITE_WEIGHTS[def.key] ?? 0;
     if (w <= 0) continue;
     sum += (percents[def.key] ?? 0) * w;
@@ -127,20 +141,24 @@ export function compositeOf(percents: Partial<Record<MetricKey, number>>): numbe
 
 /**
  * 「本局表现」评级（在线玩结算面板标题右侧「评级：S+」）的权重 —— 2026-10-15 张老师定：
- * **综合(STNB) 占一半，速度 / 效率 / 精准 / 手速 各 1/8**。
+ * **判雷(STNB) 占一半，速度 / 效率 / 走位 / 手速 各 1/8**。
+ * （2026-10-28 轴调整：原「精准 corr」换「走位 bpp」；效率轴 FL=thrp / NF=ioe ——
+ * 两组各自只会提供其中一个键，performanceOf 只对**有值的键**加权。）
  *
  * 与 COMPOSITE_WEIGHTS 是两回事：后者是雷达「综合」轴的历史口径（已被 STNB 原值取代），
  * 这里用的是五围图**全部五根轴**的组内分位加权，只在结算面板标题上用，不落库。
  * 要偏重某项直接改数字（不必改逻辑）。
  */
-export const PERFORMANCE_KEYS: MetricKey[] = ["stnb", "bvs", "ioe", "corr", "cls"];
+export const PERFORMANCE_KEYS: MetricKey[] = ["stnb", "bvs", "ioe", "thrp", "bpp", "cls"];
 
-/** 权重（4:1:1:1:1 = 50% + 12.5%×4）；未参与的两项恒 0 */
+/** 权重（4:1:1:1:1 = 50% + 12.5%×4；ioe/thrp 二选一按组提供）；未参与的两项恒 0 */
 export const PERFORMANCE_WEIGHTS: Record<MetricKey, number> = {
   stnb: 4,
   bvs: 1,
   ioe: 1,
-  corr: 1,
+  thrp: 1,
+  bpp: 1,
+  corr: 0,
   cls: 1,
   ppc: 0,
   cmp: 0,
@@ -149,6 +167,8 @@ export const PERFORMANCE_WEIGHTS: Record<MetricKey, number> = {
 /**
  * 本局表现分 = 五围图各轴组内分位的加权平均（0-100）。
  * 它本身就是百分位量纲，可直接过 GRADE_PERCENTS 九档表出等级（gradeFromPercent）。
+ * ⚠️ 只对 percents 里**实际有值**的键加权（无值键不进 wsum）——效率轴 ioe/thrp
+ * 按组二选一，缺的那个不能稀释权重。
  */
 export function performanceOf(percents: Partial<Record<MetricKey, number>>): number {
   let sum = 0;
@@ -156,7 +176,9 @@ export function performanceOf(percents: Partial<Record<MetricKey, number>>): num
   for (const key of PERFORMANCE_KEYS) {
     const w = PERFORMANCE_WEIGHTS[key] ?? 0;
     if (w <= 0) continue;
-    sum += (percents[key] ?? 0) * w;
+    const v = percents[key];
+    if (v == null) continue; // 无值键（如另一打法的效率指标）不进权重分母
+    sum += v * w;
     wsum += w;
   }
   return wsum > 0 ? Math.round((sum / wsum) * 10) / 10 : 0;
@@ -231,11 +253,12 @@ export function gradeOf(value: number, dist: number[], highIsBetter: boolean): s
  * 「容易顶格」指标（2026-10-16 张老师定）：corr / ioe 有理论极限，
  * 新手慢慢玩、零废操作即可满分（本地实证：初级无猜组 20.6% 的盘 corr=1.0，
  * 1.3 万盘并列「全网第一」），说「全网第一」明显不合理。
+ * bpp 同理（2026-10-28 并入）：最短路线有下界，慢速直走的玩家也能逼近顶格。
  * 这些指标达到组内满分时百分位封顶 NO_FIRST_PERCENT（99.99），
  * 气泡显示「超过 99.99% 的玩家」而非「全网第一」；等级仍按原档位评（SSS 保留）。
- * bvs / cls / stnb 无理论上限、组内最大值只有真正最强的一盘，维持「全网第一」。
+ * bvs / cls / stnb / thrp 无固定理论上限、组内最大值只有真正最强的一盘，维持「全网第一」。
  */
-export const NO_FIRST_METRICS: ReadonlySet<MetricKey> = new Set(["corr", "ioe"]);
+export const NO_FIRST_METRICS: ReadonlySet<MetricKey> = new Set(["corr", "ioe", "bpp"]);
 export const NO_FIRST_PERCENT = 99.99;
 
 /** 超越百分比（0-100；corr/ioe 等易顶格指标封顶 99.99，见 NO_FIRST_METRICS） */
@@ -322,19 +345,21 @@ export interface VideoAnalysisPoint {
 }
 
 /**
- * 五轴雷达点组装：综合（STNB 原值）置顶 + 速度 / 效率 / 精准 / 手速。
+ * 五轴雷达点组装：判雷（STNB 原值）置顶 + 速度 / 效率 / 走位 / 手速。
  * 录像详情页右栏、练习页结算面板、全屏试玩「我的评级」**三处共用这一份**——
  * 2026-10-14 副本分叉的教训（OnlinePlay 曾留本地副本，主模块修了口径副本没跟上）。
  *
- * @param values 本局原始指标值（stnb / bvs / ioe / corr / cls）
+ * @param values 本局原始指标值（stnb / bvs / ioe / thrp / bpp / cls）
  * @param group  该组（级别 × 模式）的分位基准：指标 → 9 档边界；缺项 / 空数组 → 该轴冻结为 "?"
  * @param rateable 是否可评级（缺基准 / 零点击 / 完成度过低＝false）
  *   —— false 时全轴 disp "—"、percent 0、grade "?"（雷达收缩到圆心的空图，值仍保留）
+ * @param noflag 打法（2026-10-28 起「效率」轴按组选指标：NF=IOE / FL=ThrP）
  */
 export function radarPointsFrom(
   values: Partial<Record<MetricKey, number>>,
   group: Partial<Record<MetricKey, number[]>> | undefined,
   rateable: boolean,
+  noflag = false,
 ): VideoAnalysisPoint[] {
   const axis = (key: AxisMetricKey | "stnb", name: string, highIsBetter: boolean): VideoAnalysisPoint => {
     const value = values[key] ?? 0;
@@ -350,13 +375,13 @@ export function radarPointsFrom(
   };
   const all: VideoAnalysisPoint[] = [
     axis("stnb", "判雷", true),
-    ...AXIS_METRICS.map((d) => axis(d.key, d.name, d.highIsBetter)),
+    ...axisMetricsFor(noflag).map((d) => axis(d.key, d.name, d.highIsBetter)),
   ];
   return rateable ? all : all.map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
 }
 
 /**
- * 五轴组内分位加权出的**综合评级**（STNB 占一半、四分项各 1/8，见 PERFORMANCE_WEIGHTS）。
+ * 五轴组内分位加权出的**综合评级**（判雷 STNB 占一半、四分项各 1/8，见 PERFORMANCE_WEIGHTS）。
  * 全轴都无可评级（grade 全 "?")→ 返回 "?"（面板显示「—」）。
  */
 export function radarOverall(points: VideoAnalysisPoint[]): string {

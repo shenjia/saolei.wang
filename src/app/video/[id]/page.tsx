@@ -120,6 +120,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
       radarOverall={analysis?.overall}
       radarDists={analysis?.dists}
       level={level}
+      noflag={video.noflag}
       boardStr={board}
     >
     <div id="page" className="two_columns">

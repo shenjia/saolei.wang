@@ -3015,9 +3015,11 @@ export async function getOnlineMetricDists(): Promise<
       out[key][String(r.bucket)] = {
         bvs: parse(r.bvs),
         ioe: parse(r.ioe),
+        thrp: parse(r.thrp),
         corr: parse(r.corr),
         cls: parse(r.cls),
         ppc: parse(r.ppc),
+        bpp: parse(r.bpp),
         stnb: parse(r.stnb),
       };
     }

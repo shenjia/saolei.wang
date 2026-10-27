@@ -3,10 +3,11 @@
 // 缺行兜底：指标缺 → 补算（videometrics.ts，与审核后置钩子同一个幂等入口）；
 //           基准组缺 → 不出雷达盒。
 //
-// 口径（张老师 2026-10-14 定）：
+// 口径（张老师 2026-10-14 定；2026-10-28 轴调整）：
 //   · 分组只按 **级别 × 模式（标雷/无猜）**，不细分 3BV，也不同级别之间比；
-//   · 雷达 **五轴**：判雷（置顶，2026-10-19 张老师定改名，原「综合」）/ 速度 / 效率 / 精准 / 手速
-//     —— 原「移动」轴已去掉；
+//   · 雷达 **五轴**：判雷（置顶，2026-10-19 张老师定改名，原「综合」）/ 速度 / 效率 / 走位 / 手速
+//     —— 原「移动」轴已去掉；原「精准」corr 轴 2026-10-28 换「走位」（3BV/PATH）；
+//     「效率」按组选指标：NF=IOE / FL=ThrP（张老师 2026-10-28 定）；
 //   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
 //     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
 //     video_metrics.composite 的口径同步见 scripts/video-metrics.ts。
@@ -16,8 +17,8 @@
 
 import { prisma } from "./db";
 import {
-  AXIS_METRICS,
   DIST_BUCKET_ALL,
+  axisMetricsFor,
   formatMetric,
   gradeFromPercent,
   gradeOf,
@@ -61,9 +62,11 @@ type DistRow = {
   size: number;
   bvs: string;
   ioe: string;
+  thrp: string;
   corr: string;
   cls: string;
   ppc: string;
+  bpp: string;
   stnb: string;
 };
 
@@ -81,9 +84,11 @@ function distFor(row: DistRow | null, key: MetricKey): number[] {
     stnb: row.stnb,
     bvs: row.bvs,
     ioe: row.ioe,
+    thrp: row.thrp,
     corr: row.corr,
     cls: row.cls,
     ppc: row.ppc,
+    bpp: row.bpp,
     cmp: "", // 综合是合成的，没有自己的分布
   };
   return parseDist(map[key]);
@@ -93,7 +98,7 @@ function distFor(row: DistRow | null, key: MetricKey): number[] {
 async function getBaseline(level: string, noflag: boolean): Promise<DistRow | null> {
   const row = await prisma.videoMetricDist.findUnique({
     where: { level_noflag_bucket: { level, noflag, bucket: DIST_BUCKET_ALL } },
-    select: { size: true, bvs: true, ioe: true, corr: true, cls: true, ppc: true, stnb: true },
+    select: { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true },
   });
   return row && row.size >= MIN_DIST_SIZE ? row : null;
 }
@@ -119,8 +124,9 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     if (!baseline) return null;
 
     // ① 四根分项轴（顺带攒下各轴组内分位，供综合评级加权）
+    //    2026-10-28 轴调整：「效率」按组选指标（NF=IOE / FL=ThrP）、「走位」bpp 替换「精准」corr
     const percents: Partial<Record<MetricKey, number>> = {};
-    const subs: VideoAnalysisPoint[] = AXIS_METRICS.map((def) => {
+    const subs: VideoAnalysisPoint[] = axisMetricsFor(input.noflag).map((def) => {
       const value = Number(row[def.key]);
       const dist = distFor(baseline, def.key);
       const percent = dist.length ? percentOf(value, dist, def.highIsBetter, def.key) : 0;
@@ -167,8 +173,10 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
         stnb: stnbDist,
         bvs: distFor(baseline, "bvs"),
         ioe: distFor(baseline, "ioe"),
+        thrp: distFor(baseline, "thrp"),
         corr: distFor(baseline, "corr"),
         cls: distFor(baseline, "cls"),
+        bpp: distFor(baseline, "bpp"),
       },
     };
   } catch {

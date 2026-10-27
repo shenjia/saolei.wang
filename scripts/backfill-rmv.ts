@@ -61,7 +61,8 @@ async function main() {
       create: {
         id: info.id, level: m.level, noflag: m.noflag, realTime: info.realTime, bbbv: m.bbbv,
         cl: m.cl, clLeft: m.clLeft, clRight: m.clRight, clDouble: m.clDouble, ce: m.ce,
-        unflag: m.unflag, path: m.path, bvs: m.bvs, ioe: m.ioe, corr: m.corr, cls: m.cls, ppc: m.ppc, stnb: m.stnb,
+        unflag: m.unflag, path: m.path, bvs: m.bvs, ioe: m.ioe, corr: m.corr, cls: m.cls, ppc: m.ppc,
+        thrp: m.thrp, bpp: m.bpp, stnb: m.stnb,
         createTime: BigInt(Math.floor(Date.now() / 1000)),
       },
       update: {},

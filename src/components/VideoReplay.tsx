@@ -742,6 +742,8 @@ export interface PlayResult {
   cl: number;
   /** 有效点击（Ce = Cl − wasted） */
   ce: number;
+  /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——「我的评级」走位轴（3BV/PATH）用 */
+  path: number;
 }
 
 /* ---- 试玩引擎（十七期：全屏层点笑脸后「自己玩本局」）----
@@ -900,7 +902,7 @@ function runPlayGame(opts: {
       clRight: cRight,
       clDouble: cDouble,
       ce,
-      path: 0,
+      path: Math.round(playPathPx),
       flags,
     };
   }
@@ -918,6 +920,7 @@ function runPlayGame(opts: {
       board3bv: s.board3bv,
       cl: cLeft + cRight + cDouble,
       ce: s.ce,
+      path: s.path,
     });
   }
   function startTimer() {
@@ -1088,6 +1091,25 @@ function runPlayGame(opts: {
     opts?: AddEventListenerOptions
   ) => el.addEventListener(type, fn as EventListener, opts ? { ...sig, ...opts } : sig);
   on<MouseEvent>(boardDiv, "contextmenu", (e) => e.preventDefault());
+  /* 试玩鼠标行程（2026-10-28）：mousemove 按棋盘 1x 像素累加欧氏距离——
+     rect 已含 zoom，除以 (cols×16) 归一到 1x 口径，与录像引擎 pathPx 同量纲。
+     「我的评级」走位轴（3BV/PATH）的数据源 */
+  const playTable = boardDiv.querySelector("table") ?? (boardDiv.querySelector("tbody")?.parentElement as HTMLTableElement | null);
+  let playPathPx = 0;
+  let lastMX: number | null = null;
+  let lastMY: number | null = null;
+  on<MouseEvent>(boardDiv, "mousemove", (e) => {
+    const table = playTable;
+    if (!table) return;
+    const rect = table.getBoundingClientRect();
+    if (!rect.width) return;
+    const scale = rect.width / (cols * 16);
+    const mx = (e.clientX - rect.left) / scale;
+    const my = (e.clientY - rect.top) / scale;
+    if (lastMX !== null && lastMY !== null) playPathPx += Math.hypot(mx - lastMX, my - lastMY);
+    lastMX = mx;
+    lastMY = my;
+  });
   const eventCell = (e: { target: EventTarget | null }): number => {
     const td = (e.target as HTMLElement).closest("td");
     if (!td || !tbody.contains(td)) return -1;
@@ -1481,6 +1503,7 @@ export function VideoReplayProvider({
   radarOverall,
   radarDists,
   level,
+  noflag,
   boardStr,
   children,
 }: {
@@ -1497,6 +1520,8 @@ export function VideoReplayProvider({
   /** 本录像所属组（级别 × 模式）的分位基准边界——全屏试玩结束时的「我的评级」
    *  用同一组给玩家本局打分（二十期，2026-10-16） */
   radarDists?: Partial<Record<MetricKey, number[]>>;
+  /** 打法（2026-10-28）：「我的评级」效率轴按组选指标（NF=IOE / FL=ThrP）需知 noflag */
+  noflag?: boolean;
   /** 级别与整盘串（renderBoard 后 '*'/数字）——全屏层重画 Board 用 */
   level?: VideoLevel;
   boardStr?: string;
@@ -1781,6 +1806,7 @@ export function VideoReplayProvider({
           radarPoints={radarPoints}
           radarOverall={radarOverall}
           radarDists={radarDists}
+          noflag={noflag}
           autoEnterPlay={autoPlay}
           onAutoEnterDone={autoEnterDone}
           onToggle={togglePlay}
@@ -2115,6 +2141,7 @@ export function ReplayFullscreen({
   radarPoints,
   radarOverall: radarOverallProp,
   radarDists,
+  noflag,
   autoEnterPlay,
   onAutoEnterDone,
   onToggle = () => {},
@@ -2142,6 +2169,8 @@ export function ReplayFullscreen({
   radarOverall?: string;
   /** 本录像所属组（级别 × 模式）的分位基准——试玩结束「我的评级」同基准打分（二十期） */
   radarDists?: Partial<Record<MetricKey, number[]>>;
+  /** 打法（2026-10-28）：「我的评级」效率轴按组选指标（NF=IOE / FL=ThrP） */
+  noflag?: boolean;
   /** 二十一期一键试玩：挂载即自动「点笑脸」进试玩（等价点全屏后点笑脸） */
   autoEnterPlay?: boolean;
   /** 自动试玩一次性 flag 的回收（触发或层卸载时调用） */
@@ -2441,15 +2470,17 @@ export function ReplayFullscreen({
       stnb,
       bvs: hasBv ? playResult.solvedBv / t : 0,
       ioe: playResult.cl > 0 ? playResult.solvedBv / playResult.cl : 0,
+      thrp: playResult.ce > 0 ? playResult.solvedBv / playResult.ce : 0,
       corr: playResult.cl > 0 ? playResult.ce / playResult.cl : 0,
       cls: t > 0 ? playResult.cl / t : 0,
+      bpp: playResult.path > 0 ? playResult.solvedBv / (playResult.path / 16) : 0,
     };
     const lowCompletion = playResult.board3bv <= 0 || playResult.solvedBv / playResult.board3bv < 0.1;
-    const points = radarPointsFrom(values, radarDists, !!radarDists && playResult.cl > 0 && !lowCompletion);
+    const points = radarPointsFrom(values, radarDists, !!radarDists && playResult.cl > 0 && !lowCompletion, noflag);
     /* 预计完成用时（未完成时展示）：Est RTime 口径 = 实际用时 × 3BV ÷ 已完成 3BV */
     const estSec = playResult.solvedBv > 0 ? t * (playResult.board3bv / playResult.solvedBv) : 0;
     return { points, overall: overallGrade(points), estSec };
-  }, [playResult, level, radarDists]);
+  }, [playResult, level, radarDists, noflag]);
 
   /* 自适应基准（十九期：三栏复原——面板 + 游戏窗 + 评级栏）。
      十九期张老师定：全屏右侧恢复「录像评级」，宽度＝数据统计面板的 1.5 倍。

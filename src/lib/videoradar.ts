@@ -62,6 +62,10 @@ export interface VideoMetrics {
   cls: number;
   /** 移动：每击平均行程（格/次，越小越好） */
   ppc: number;
+  /** 吞吐效率：已完成 3BV ÷ 有效点击 Ce（FL 组「效率」轴口径；NF 无 chord 恒 ≤1） */
+  thrp: number;
+  /** 走位：3BV ÷ 鼠标行程（格）——2026-10-28 张老师定上雷达替换「精准」corr 轴 */
+  bpp: number;
   /** 综合：按级别与难度归一化的 STNB 评分 */
   stnb: number;
   /** QG 质量分（越小越好）= (用时秒)^1.7 ÷ 已解 3BV，STNB 的中间量 */
@@ -225,6 +229,8 @@ export function analyzeVideo(
     corr: cl > 0 ? r3(c.ce / cl) : 0,
     cls: valid ? r3(cl / t) : 0,
     ppc: cl > 0 ? r3(path / cl) : 0,
+    thrp: c.ce > 0 ? r3(solved / c.ce) : 0,
+    bpp: path > 0 ? r3(solved / path) : 0,
     stnb: Math.round(stnb * 10) / 10,
     qg: qgOf(solved, timeMs),
   };

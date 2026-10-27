@@ -338,6 +338,10 @@ model VideoMetrics {
   corr       Float  @db.Float
   cls        Float  @db.Float
   ppc        Float  @db.Float
+  // 吞吐效率 = 已完成 3BV ÷ 有效点击 Ce（2026-10-28 轴调整：「效率」轴 FL 组口径；NF 组仍用 ioe）
+  thrp       Float  @db.Float
+  // 走位 = 已完成 3BV ÷ 鼠标行程（格）（2026-10-28 张老师定上雷达替换「精准」corr 轴）
+  bpp        Float  @db.Float
   stnb       Float  @db.Float
   // QG 质量分 = (用时秒)^1.7 ÷ 已解 3BV（STNB 的中间量，越小越好）。
   // 2026-10-20 张老师定落库：此前只在回放/结算面板实时现算。只依赖 real_time×bbbv，
@@ -382,6 +386,8 @@ model VideoMetricDist {
   corr       String @db.VarChar(255)
   cls        String @db.VarChar(255)
   ppc        String @db.VarChar(255)
+  thrp       String @db.VarChar(255)
+  bpp        String @db.VarChar(255)
   stnb       String @db.VarChar(255)
   createTime BigInt @default(0) @map("create_time") @db.BigInt
 

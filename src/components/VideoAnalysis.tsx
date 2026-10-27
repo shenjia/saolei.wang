@@ -2,7 +2,7 @@
 // 视觉沿用侧栏「实力」雷达（RadarChart.tsx）：222 视口 / 68 半径 / 8 环网格 / 等级配色，
 // 只是数据从「长期实力 8 维」换成「单局表现 5 维」，并把明细挪进 hover 气泡。
 //
-// 轴数是跟着 data.length 走的（n 自适应），加减轴只改 lib/videoradar.ts 的 AXIS_METRICS。
+// 轴数是跟着 data.length 走的（n 自适应），加减轴只改 lib/videoscore.ts 的 axisMetricsFor。
 // 2026-10-14 张老师定：去掉「移动」轴（不重要），五围足够；
 // 综合 = 其余四轴在「级别 × 模式」组内百分位的加权平均（不再用 STNB）。
 //

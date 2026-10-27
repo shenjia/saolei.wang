@@ -273,6 +273,8 @@ async function main() {
             corr: 0,
             cls: 0,
             ppc: 0,
+            thrp: 0,
+            bpp: 0,
             stnb,
             qg: qgOf(info.board3bv, info.realTime),
           });
@@ -313,6 +315,8 @@ async function main() {
         corr: m.corr,
         cls: m.cls,
         ppc: m.ppc,
+        thrp: m.thrp,
+        bpp: m.bpp,
         stnb: m.stnb,
         qg: m.qg,
       });
@@ -331,12 +335,14 @@ async function main() {
     bbbv: number;
     bvs: number;
     ioe: number;
+    thrp: number;
     corr: number;
     cls: number;
     ppc: number;
+    bpp: number;
     stnb: number;
   }>>(`
-    SELECT m.level, m.noflag, m.bbbv, m.bvs, m.ioe, m.corr, m.cls, m.ppc, m.stnb
+    SELECT m.level, m.noflag, m.bbbv, m.bvs, m.ioe, m.thrp, m.corr, m.cls, m.ppc, m.bpp, m.stnb
     FROM video_metrics m JOIN video v ON v.id = m.id
     WHERE m.cl > 0 AND v.status = ${VIDEO_STATUS.REVIEWED}
   `);
@@ -350,7 +356,7 @@ async function main() {
   const push = (key: string, row: Record<BaseMetricKey, number>) => {
     let g = groups.get(key);
     if (!g) {
-      g = { size: 0, vals: { stnb: [], bvs: [], ioe: [], corr: [], cls: [], ppc: [] } };
+      g = { size: 0, vals: { stnb: [], bvs: [], ioe: [], thrp: [], corr: [], cls: [], ppc: [], bpp: [] } };
       groups.set(key, g);
     }
     g.size++;
@@ -376,7 +382,7 @@ async function main() {
     await prisma.videoMetricDist.upsert({
       where: { level_noflag_bucket: { level, noflag: nf === "1", bucket: Number(bucket) } },
       create: { ...data, createTime: now } as never,
-      update: { size: g.size, stnb: data.stnb as string, bvs: data.bvs as string, ioe: data.ioe as string, corr: data.corr as string, cls: data.cls as string, ppc: data.ppc as string },
+      update: { size: g.size, stnb: data.stnb as string, bvs: data.bvs as string, ioe: data.ioe as string, thrp: data.thrp as string, corr: data.corr as string, cls: data.cls as string, ppc: data.ppc as string, bpp: data.bpp as string },
     });
     written++;
   }
