@@ -112,7 +112,8 @@ export function ubb(raw: string): string {
     .replace(/\[u\]/gi, "<u>")
     .replace(/\[\/u\]/gi, "</u>");
   // 图片（转义后的引号是 &quot;，URL 中不可能有 < >）
-  text = text.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi, '<img align="top" src="$1">');
+  // 2026-10-27 张老师：正文图片一律 100x100 内小图（class ubb_img，样式见 globals.css），点击看大图（ImageLightbox）
+  text = text.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi, '<img align="top" class="ubb_img" src="$1">');
   // 链接：[url 地址]文字[/url] 与 [url]地址[/url]
   text = text.replace(
     /\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi,

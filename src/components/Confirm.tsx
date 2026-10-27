@@ -22,6 +22,8 @@ export type ConfirmOptions = {
   cancelText?: string;
   /** 危险操作：确认键红色（legacy .button.danger） */
   danger?: boolean;
+  /** 按钮组整体居中 + 确认键居左（2026-10-27 排名模式提示专用；默认右对齐取消居左） */
+  centerActions?: boolean;
 };
 
 type Pending = { options: ConfirmOptions; resolve: (ok: boolean) => void };
@@ -93,7 +95,7 @@ export function ConfirmHost() {
         </a>
         <h1>{o.title}</h1>
         <p className="confirm_desc">{o.message}</p>
-        <div className="confirm_ops">
+        <div className={`confirm_ops${o.centerActions ? " centered" : ""}`}>
           <button type="button" className="button small" onClick={() => finish(false)}>
             {o.cancelText ?? "取消"}
           </button>
@@ -107,6 +109,63 @@ export function ConfirmHost() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// -----------
+// 全站图片灯箱（2026-10-27 张老师要求）：论坛正文图片渲染为 100x100 内小图（.ubb_img），
+// 点击弹出大图查看。事件委托方案——文档级监听 click，命中 img.ubb_img 即弹层；
+// 服务端渲染的 dangerouslySetInnerHTML 内容（bbs_content 等）无法逐图绑 React 事件，
+// 委托是最小改动路径。不局限 .bbs_content：admin 待审列表等同类 img 一并覆盖。
+// 挂载：layout 挂一次 <ImageLightboxHost />（同 ConfirmHost 模式）。
+
+export function ImageLightboxHost() {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      const t = e.target as HTMLElement;
+      if (!(t instanceof HTMLImageElement)) return;
+      // 只响应带 ubb_img 类的图（[img] 标签产物）；表情/雷图/头像等正常图片不拦
+      if (!t.classList.contains("ubb_img")) return;
+      if (!t.src) return;
+      e.preventDefault();
+      setSrc(t.src);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSrc(null);
+    }
+    document.addEventListener("click", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
+  // 打开时锁页面滚动（同 ConfirmHost 口径）
+  useEffect(() => {
+    document.body.style.overflow = src ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [src]);
+
+  if (!src) return null;
+
+  return (
+    <div className="lightbox_overlay" onClick={() => setSrc(null)}>
+      {/* 大图本体：点击遮罩/ESC/× 关闭；点图不关闭（可仔细查看） */}
+      <img className="lightbox_img" src={src} alt="" onClick={(e) => e.stopPropagation()} />
+      <a
+        className="login_close lightbox_close"
+        href="#"
+        aria-label="关闭"
+        onClick={(e) => (e.preventDefault(), setSrc(null))}
+      >
+        ×
+      </a>
     </div>
   );
 }

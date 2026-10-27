@@ -12,7 +12,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { ScrollReset } from "@/components/ScrollReset";
 import { SystemText } from "@/components/SystemText";
 import { ToastHost } from "@/components/Toast";
-import { ConfirmHost } from "@/components/Confirm";
+import { ConfirmHost, ImageLightboxHost } from "@/components/Confirm";
 import TrackPageView from "@/components/TrackPageView";
 import { isManager } from "@/lib/config";
 import { TitleSystemProvider } from "@/components/TitleSystemProvider";
@@ -167,6 +167,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {!session && <LoginModal />}
         <ToastHost />
         <ConfirmHost />
+        {/* 论坛正文小图点击看大图（2026-10-27）：事件委托，全站生效（含 admin） */}
+        <ImageLightboxHost />
         <Suspense fallback={null}>
           <ScrollReset />
         </Suspense>
