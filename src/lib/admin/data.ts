@@ -119,11 +119,21 @@ export async function getUserList(
   const page = Math.max(1, f.page ?? 1);
   const { sql, params } = userWhere(f);
   const order = USER_ORDERS[f.order ?? "reg"] ?? USER_ORDERS.reg;
+  // 纯数字搜索=按 ID 找人（2026-10-27）：ID 精确命中置顶，避免被录像标识/账号模糊命中淹没
+  // （q=1 曾命中 373 人、ID=1 按注册时间排到第 15 页翻不到）
+  const q = (f.q ?? "").trim();
+  let orderSql = order;
+  const orderParams: unknown[] = [];
+  if (/^\d+$/.test(q)) {
+    orderSql = `(u.id = ?) DESC, ${order}`;
+    orderParams.push(BigInt(q));
+  }
 
   const [ids, countRows] = await Promise.all([
     prisma.$queryRawUnsafe<{ id: bigint }[]>(
-      `SELECT u.id ${USER_FROM} ${sql} ORDER BY ${order} LIMIT ? OFFSET ?`,
+      `SELECT u.id ${USER_FROM} ${sql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
       ...params,
+      ...orderParams,
       ADMIN_PAGESIZE,
       (page - 1) * ADMIN_PAGESIZE
     ),
