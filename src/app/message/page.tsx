@@ -10,14 +10,15 @@
 //   切筛选时翻页归 1）
 // 2026-10-27（张老师要求）：加「已发送」筛选——我发出的全部记录（不可删除，
 //   天然不受「清空消息」影响）+ 对方是否已读；表头第二列切「收件人」
+// 2026-10-27 二轮（张老师要求）：页底「全站广播（管理员）」表单下线——后台
+//   /admin/messages 已有同功能入口（超管 ops message.broadcast），前台不再重复
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { isManager } from "@/lib/config";
 import { getMessageList, messageAuthorsWithTitles, MESSAGE_PAGESIZE, type MessageTypeFilter } from "@/lib/message";
 import { MessageFeed } from "@/components/MessageFeed";
 import { Pager, Tabs } from "@/components/Pager";
-import { BroadcastForm, ClearButton, MarkAllReadButton, SendMessageForm } from "@/components/MessageForms";
+import { ClearButton, MarkAllReadButton, SendMessageForm } from "@/components/MessageForms";
 import { StarSpeechAutoDialog } from "@/components/StarSpeechAutoDialog";
 
 export const dynamic = "force-dynamic";
@@ -110,11 +111,6 @@ export default async function MessagePage({
         <div className="box">
           <h2>发消息</h2>
           <SendMessageForm to={to} toName={toName} authorId={session.uid} />
-        </div>
-      )}
-      {isManager(session.role) && (
-        <div className="box">
-          <BroadcastForm authorId={session.uid} />
         </div>
       )}
     </div>

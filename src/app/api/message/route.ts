@@ -1,9 +1,9 @@
-// 站内信 API：发信 / 未读数 / 列表加载更多 / 全部已读 / 清空 / 管理员广播
+// 站内信 API：发信 / 未读数 / 列表加载更多 / 全部已读 / 清空
+// 2026-10-27：前台广播入口下线（后台 /admin/messages 走 ops message.broadcast），
+//   本路由的 broadcast 动作一并移除
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { isManager } from "@/lib/config";
 import {
-  broadcast,
   clearMessages,
   getMessageList,
   getUnreadCount,
@@ -84,19 +84,6 @@ export async function POST(req: NextRequest) {
     return ok
       ? NextResponse.json({ ok: true })
       : NextResponse.json({ error: "消息不存在" }, { status: 404 });
-  }
-
-  if (action === "broadcast") {
-    if (!isManager(session.role)) return NextResponse.json({ error: "无权广播" }, { status: 403 });
-    const content = String(body.content ?? "").trim().slice(0, MESSAGE_CONTENT_LIMIT);
-    if (!content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
-    const hit = checkSensitive(content);
-    if (!hit.ok) {
-      logSensitiveHit("message.broadcast", session.uid, hit);
-      return NextResponse.json({ error: sensitiveRejectMessage(hit, "发送") }, { status: 400 });
-    }
-    const count = await broadcast(session.uid, content);
-    return NextResponse.json({ count });
   }
 
   return NextResponse.json({ error: "未知操作" }, { status: 400 });
