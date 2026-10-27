@@ -1,7 +1,11 @@
 // 敏感词过滤引擎（2026-10-13 张老师需求）
 //
 // 用途：论坛主题（标题+正文）/回复、录像评论、纪事、个人资料、中文名、
-//       录像签名、站内信等 UGC 写库前先过一遍，命中即拒绝（不落库）。
+//       录像签名、站内信、每日一星评语等 UGC 写库前先过一遍，命中即拒绝（不落库）。
+//
+// 拦截口径（2026-10-27 张老师定）：只拦「涉政涉黄 + 人身攻击 + 违法」，
+//   明确不拦广告——拉群带货、代练外挂、留微信QQ、私服等一律放行。
+//   后置 AI 审核（text-moderate.ts）同口径：判 ad 也放行。
 //
 // 设计要点：
 //   1. 纯本地、零依赖、零网络：归一化 + Trie 前缀树扫描，单次判定在微秒级。
@@ -17,11 +21,13 @@
 
 import { SENSITIVE_WORDS } from "./sensitive-words";
 
-export type SensitiveCategory = "ad" | "abuse" | "porn" | "illegal";
+// 2026-10-27 张老师定：前置词库不再拦广告（拉群带货、代练外挂、留微信QQ 一律放行），
+// 只留「涉政涉黄 + 人身攻击 + 违法」三类。故类型里已无 "ad"——想恢复广告拦截需先改类型，
+// 属于口径变更，必先与维护者确认。
+export type SensitiveCategory = "abuse" | "porn" | "illegal";
 
 /** 类别 → 对外提示名（回给用户，粒度粗，不暴露具体词） */
 export const SENSITIVE_CATEGORY_NAMES: Record<SensitiveCategory, string> = {
-  ad: "广告推广",
   abuse: "不当言论",
   porn: "低俗内容",
   illegal: "违规内容",
