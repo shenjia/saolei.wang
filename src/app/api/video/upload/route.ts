@@ -110,6 +110,13 @@ export async function uploadVideo(
   }
   if (!(parsed.level in LEVEL_MIN_3BV)) return fail("只支持初级/中级/高级录像");
   if (parsed.mode !== "classic") return fail("只支持经典模式录像");
+  /* 手机录像拒传（2026-10-27 张老师定）：手机端触屏录像整个事件流只有点击（tap）
+     没有任何 mv 鼠标移动事件（电脑盘只要鼠标动过三种格式必发 mv：avf/evf 事件码
+     直映射、mvf 坐标变化即发；全站 30.8 万盘抽样 9,195 盘零 mv=0 误报）。
+     且本站客户端手机端已在另一线禁入排行——普通上传同样拒收 */
+  if (!parsed.events.some((l) => /^[-\d.]+ mv /.test(l))) {
+    return fail("不能上传手机录像");
+  }
   /* 完成度校验（2026-10-15 张老师要求：只有完成的录像才能上传，堵败局/半截局漏网）：
      MVF 头部自带 Solved3BV，沿用旧版比较；AVF 无该字段（parsed.solved3bv 为 null，
      旧版此分支直接放行——败局正是从这里漏进来的），改为事件流模拟判定胜负 */
