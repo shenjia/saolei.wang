@@ -91,9 +91,9 @@ export function StarSpeechVote({
   const cls = (dir: "up" | "down") => {
     const leading = dir === "up" ? upLeading : downLeading;
     const mine = dir === "up" ? iVotedUp : iVotedDown;
-    if (mine) return `star_vote_link mine-${dir}`; // 我投的：绿（赞）/红（踩）
-    if (done) return "star_vote_link dim"; // 已投后另一侧置灰
-    return `star_vote_link${leading ? " lead" : ""}`; // 默认：领先实心+亮灰
+    if (mine) return `star_vote_link ${dir} mine-${dir}`; // 我投的：绿（赞）/红（踩）
+    if (done) return `star_vote_link ${dir} dim`; // 已投后另一侧置灰
+    return `star_vote_link ${dir}${leading ? " lead" : ""}`; // 默认：领先实心+亮灰
   };
 
   return (

@@ -4392,8 +4392,12 @@ body #page.ranking_old .ranking_box {
 #daily_star .star_speech .star_vote_link.lead {
   color: #a6a699;
 }
-#daily_star .star_speech .star_vote_link:hover:not(.dim):not(.mine-up):not(.mine-down) {
+/* hover：赞绿 / 踩红（张老师四轮定）；已投置灰侧与我投侧不响应 */
+#daily_star .star_speech .star_vote_link.up:hover:not(.dim):not(.mine-up) {
   color: #a6e22e;
+}
+#daily_star .star_speech .star_vote_link.down:hover:not(.dim):not(.mine-down) {
+  color: #f92672;
 }
 /* 已投后未选侧：置灰不可点 */
 #daily_star .star_speech .star_vote_link.dim {
