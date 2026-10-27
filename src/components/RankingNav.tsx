@@ -126,11 +126,41 @@ export function RankingNav({
   }
 
   // 登录态：聚焦/清空输入时下拉推荐自己；回车选中即定位（走既有 pick 流程）
-  const meSuggest = me ? [me] : null;
+  // 名次实时刷新（2026-10-27 修复）：me.bvRank/rank 是页面 SSR 快照——BV/STNB 榜数据
+  // 1 小时缓存再验证后榜单换代（典型：自己新录像过审、名次跳变），页面放旧了下拉名次
+  // 就与列表对不上（实证：快照显示 592，翻到第 30 页找不到人，实榜已到 574）。
+  // 聚焦/清空时按数字 ID 现查搜索接口刷新（接口零重活：缓存数组内存查/索引区间统计）。
+  // meFresh 带榜别上下文键，软导航切榜/切 NF 后只认当前上下文的新查结果，否则回退 SSR 快照。
+  const meCtx = `${current}-${by ?? ""}-${nf ? "1" : "0"}-${areaMode ? area : ""}`;
+  const [meFresh, setMeFresh] = useState<{ key: string; user: SuggestUser } | null>(null);
+  const meSuggest = me ? [meFresh && meFresh.key === meCtx ? meFresh.user : me] : null;
+  async function refreshMeSuggest() {
+    if (!me) return;
+    const qs = new URLSearchParams({ q: String(me.id) });
+    if (boardMode) {
+      qs.set("bvBy", bvBy);
+      if (stnbMode) qs.set("stnb", "1");
+      if (nf) qs.set("nf", "1");
+    } else if (by) {
+      qs.set("by", by);
+      if (nf && !areaMode) qs.set("nf", "1");
+      if (areaMode) qs.set("area", area!);
+    }
+    try {
+      const res = await fetch(`/api/ranking/search?${qs}`);
+      if (!res.ok) return;
+      const { users: list } = (await res.json()) as { users: SuggestUser[] };
+      const hit = list.find((u) => u.id === me.id);
+      if (hit) setMeFresh({ key: meCtx, user: hit });
+    } catch {
+      /* 网络异常静默：保留 SSR 快照 */
+    }
+  }
   function suggestMe() {
     if (!meSuggest) return;
     setUsers(meSuggest);
     setActive(0);
+    void refreshMeSuggest();
   }
 
   // 数字输入也出推荐（按 ID 精确匹配实时推荐玩家）；下拉项的次级文字数字模式显示 ID
