@@ -11476,3 +11476,56 @@ body #page .word_terms .desc {
 .pb_badge.new {
   background: #2e8b57;
 }
+
+/* ---- 排名模式温馨提示浮层（2026-10-27 张老师定，每日一次）---- */
+.ranked_tip_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ranked_tip_card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 26px 30px 22px;
+  width: min(420px, 88vw);
+  text-align: center;
+}
+.ranked_tip_card .rt_title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #c0392b;
+  margin-bottom: 14px;
+}
+.ranked_tip_card .rt_body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #333;
+  margin-bottom: 10px;
+}
+.ranked_tip_card .rt_sub {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 18px;
+}
+.ranked_tip_card .rt_sub a {
+  color: #3477c1;
+  text-decoration: underline;
+}
+.ranked_tip_card .rt_ok {
+  padding: 8px 38px;
+  border: 1px solid #b8860b;
+  background: linear-gradient(135deg, #b8860b, #daa520);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ranked_tip_card .rt_ok:hover {
+  filter: brightness(1.08);
+}

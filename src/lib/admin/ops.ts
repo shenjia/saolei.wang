@@ -262,10 +262,9 @@ async function dispatch(
         where: { id: BigInt(id) },
         data: { resolved: 1 },
       });
-      /* 系统消息（2026-10-27 张老师定：与手动加入低信任同款告知） */
-      try {
-        await sendSystemMessage(Number(report.user), "经系统检测，您在排行模式中存在作弊行为，已将您移入低信任用户组（7 天内上传录像每日限 5 部且需人工审核），排行模式禁用 24 小时。如有异议请联系管理员。");
-      } catch { /* 消息失败不阻断 */ }
+      /* 系统消息暂停（2026-10-27 张老师定：误报概率高，先停发——复核已由
+         管理员人工完成再 confirm，此时玩家已知结果，无需再通知；
+         待误报率稳定后再评估恢复） */
       const pending = await prisma.video.findMany({ where: { user: report.user, status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");
       for (const { id: vid } of pending) await triageVideo(Number(vid));
