@@ -145,6 +145,24 @@ rm -rf "$S_DIR"
 cp -a .next-release "$S_DIR"
 [[ -f "$S_DIR/BUILD_ID" ]] || fail "复制后 $S_DIR/BUILD_ID 缺失（CI 产物不完整）"
 
+# ---------- 共享 unstable_cache（2026-10-28 张老师定） ----------
+# CI 产物 rsync 排除了 cache/，运行时缓存本就每槽从零重建——此前每次发布都把
+# unstable_cache 文件缓存清零，聚合查询（BV 1.6s/STNB/news count 等）被迫全部
+# 冷启动（10-27 部署 79 次时 BV 聚合跑了 156 次，而 1h 缓存理论上限只有 ~48 次）。
+# 方案：两槽的 <distDir>/cache 软链到共享目录 .next-shared-cache/，切槽不清缓存。
+# 本项目 unstable_cache 全部走 TTL/revalidate 过期 + 键名带版本号（如 bv-collection-v6，
+# 改查询逻辑即升版本），**无 ISR**（全项目无 export const revalidate）——跨 build
+# 共享不存在 stale 风险；cacheHandler 未配置 = 默认文件系统 handler，直接可用。
+SHARED_CACHE_DIR="$DEPLOY_DIR/.next-shared-cache"
+link_shared_cache() {
+  local slot_dir=$1
+  rm -rf "${slot_dir:?}/cache"
+  mkdir -p "$SHARED_CACHE_DIR"
+  ln -s "$SHARED_CACHE_DIR" "${slot_dir}/cache"
+}
+link_shared_cache "$S_DIR"
+info "已软链 ${S_DIR}/cache → .next-shared-cache（unstable_cache 跨发布保留）"
+
 # ---------- 修复 @prisma/client stub（rsync 软链实体化坑，2026-09-28） ----------
 # 本地 .next/node_modules/@prisma/client-<hash> 是指向 pnpm store 的软链，
 # require 链经它解析到 .pnpm/.../node_modules/.prisma/client（prisma generate 产物）。

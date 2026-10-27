@@ -19,6 +19,8 @@
 # 蓝绿部署双槽构建产物（next.config.ts distDir 走 NEXT_DIST_DIR，各 6G 级）
 /.next-blue/
 /.next-green/
+# 蓝绿两槽共享的 unstable_cache 文件缓存（槽内 cache/ 软链到此处；见 server-release.sh）
+/.next-shared-cache/
 
 # python 缓存（scripts/sync 等）
 __pycache__/

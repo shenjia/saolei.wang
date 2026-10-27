@@ -164,6 +164,14 @@ if ! NEXT_DIST_DIR="$S_DIR" nice -n 19 ionice -c3 pnpm build; then
   fail "build 失败（备槽已清空，线上不受影响）"
 fi
 
+# ---------- 共享 unstable_cache（2026-10-28，与 server-release.sh 同方案） ----------
+# 服务器兜底构建同样把 <distDir>/cache 软链到共享目录，切槽不清缓存（详见 release 脚本注释）。
+SHARED_CACHE_DIR="$DEPLOY_DIR/.next-shared-cache"
+rm -rf "${S_DIR:?}/cache"
+mkdir -p "$SHARED_CACHE_DIR"
+ln -s "$SHARED_CACHE_DIR" "${S_DIR}/cache"
+info "已软链 ${S_DIR}/cache → .next-shared-cache（unstable_cache 跨发布保留）"
+
 # ---------- 权威对局服务（2026-10-27 双实例热备 a/b） ----------
 # 正式发布走 server-release.sh（含切流与等待存量局）；本脚本只在服务器上重建时兜底。
 for s in a:3104 b:3105; do
