@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { AdminCard } from "@/components/admin/Widgets";
 import { title as milTitle } from "@/lib/assess";
+import { TITLE_COLORS } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "反作弊复核 | 管理后台" };
@@ -51,6 +52,12 @@ export default async function AdminCheatPage() {
   });
   const nameMap = new Map(users.map((u) => [u.id, u.chineseName]));
   const rankMap = new Map(scores.map((i) => [i.id, milTitle(i.expTime)]));
+  /* 复核者名单（已复核表显示「名字（#id）」） */
+  const rids = Array.from(new Set(resolved.map((r) => r.resolver).filter((v) => v > BigInt(0))));
+  const resolvers = rids.length
+    ? await prisma.user.findMany({ where: { id: { in: rids } }, select: { id: true, chineseName: true } })
+    : [];
+  const resolverMap = new Map(resolvers.map((u) => [u.id, u.chineseName]));
 
   const rows = (list: typeof pending) =>
     list.map((r) => {
@@ -62,17 +69,18 @@ export default async function AdminCheatPage() {
       const plainEv = r.evidence.replace(/\[shot:[^\]]*\]\s*/, "");
       return (
         <tr key={r.id}>
-          <td>{r.id}</td>
           <td>
-            <Link href={`/admin/users/${r.user}`} target="_blank">
-              #{r.user}
+            <Link href={`/admin/users/${r.user}`} target="_blank" className="cheat_uid">
+              {r.user}
             </Link>
           </td>
-          <td>
+          <td className="cheat_player">
             <Link href={`/user/${r.user}`} target="_blank">
               {nameMap.get(r.user) ?? "（已注销）"}
             </Link>
-            <span className="cheat_rank">{rankMap.get(r.user) ?? ""}</span>
+            <span className="cheat_rank" style={{ color: TITLE_COLORS[rankMap.get(r.user) ?? ""] ?? "#999" }}>
+              {rankMap.get(r.user) ?? ""}
+            </span>
           </td>
           <td>{REASON_LABEL[r.reason] ?? r.reason}</td>
           <td className="cheat_ev" title={plainEv}>
@@ -104,7 +112,13 @@ export default async function AdminCheatPage() {
               />
             </td>
           ) : (
-            <td>{r.resolved === 1 ? "✅ 已核实（转低信任）" : "↩️ 误报（已解除）"}</td>
+            <>
+              <td>{r.resolved === 1 ? "✅ 已核实" : "↩️ 误报"}</td>
+              <td className="cheat_resolver">
+                {resolverMap.get(r.resolver) ? `${resolverMap.get(r.resolver)}（#${r.resolver}）` : r.resolver > BigInt(0) ? `#${r.resolver}` : "—"}
+              </td>
+              <td>{Number(r.resolvedTime) > 0 ? new Date(Number(r.resolvedTime) * 1000).toLocaleString("zh-CN") : "—"}</td>
+            </>
           )}
         </tr>
       );
@@ -119,8 +133,7 @@ export default async function AdminCheatPage() {
         <table className="admin_table">
           <thead>
             <tr>
-              <th>#</th>
-              <th>玩家ID</th>
+              <th>ID</th>
               <th>玩家</th>
               <th>类型</th>
               <th>证据</th>
@@ -133,7 +146,7 @@ export default async function AdminCheatPage() {
               rows(pending)
             ) : (
               <tr>
-                <td colSpan={7} className="admin_hint">
+                <td colSpan={6} className="admin_hint">
                   暂无待复核报告——探测命中才会产生记录，干净时段为空属正常
                 </td>
               </tr>
@@ -151,13 +164,14 @@ export default async function AdminCheatPage() {
           <table className="admin_table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>玩家ID</th>
+                <th>ID</th>
                 <th>玩家</th>
                 <th>类型</th>
                 <th>证据</th>
                 <th>时间</th>
                 <th>结论</th>
+                <th>复核者</th>
+                <th>复核时间</th>
               </tr>
             </thead>
             <tbody>{rows(resolved)}</tbody>

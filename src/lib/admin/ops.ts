@@ -260,7 +260,7 @@ async function dispatch(
       });
       await prisma.cheatReport.update({
         where: { id: BigInt(id) },
-        data: { resolved: 1 },
+        data: { resolved: 1, resolver: BigInt(actor.uid), resolvedTime: BigInt(t) },
       });
       /* 系统消息暂停（2026-10-27 张老师定：误报概率高，先停发——复核已由
          管理员人工完成再 confirm，此时玩家已知结果，无需再通知；
@@ -285,6 +285,7 @@ async function dispatch(
         where: { id: report.user },
         select: { chineseName: true },
       });
+      const t = now();
       /* 误报＝完全恢复（2026-10-27 张老师定）：排名禁用 + 低信任标记一并清除
          （低信任虽不自动转入，但可能经其它路径存在——统一清零兜底），并发
          系统消息告知玩家已恢复 */
@@ -294,7 +295,7 @@ async function dispatch(
       });
       await prisma.cheatReport.update({
         where: { id: BigInt(id) },
-        data: { resolved: 2 },
+        data: { resolved: 2, resolver: BigInt(actor.uid), resolvedTime: BigInt(t) },
       });
       try {
         await sendSystemMessage(Number(report.user), "经管理员复核，之前您在排行模式中的出现的疑似作弊行为属于误报，现已恢复");
