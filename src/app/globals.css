@@ -8850,6 +8850,13 @@ html:has(#online_play) #footer {
   gap: 5px;
   margin-top: 4px;
 }
+/* 满行按钮（2026-10-27 张老师定·移动端结算布局）：grid 跨双列充满整行——
+   移动端「再来一局」满行、末行「重玩本局/查看回放」并列。
+   仅由 touchUI 的 JS 挂类（桌面 2×2 布局不受影响） */
+#online_play .gresult .gr_btns .grb.grb_full,
+#gr_modal .gr_btns .grb.grb_full {
+  grid-column: 1 / -1;
+}
 /* .grb 复用录像详情页「播放/下载」按钮（legacy .button）的立体感基因：
    上下渐变背景 + box-shadow 投影 + text-shadow 文字阴影，hover 变绿 #a6e22e、
    active 深绿 #8ac21b——与 .button 同一套配色（2026-10-15 十一期张老师定） */
