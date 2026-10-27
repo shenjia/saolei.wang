@@ -58,6 +58,7 @@ PREHEAT_PATHS=(
   "/grow"               # 进步榜：快照已被上面 /ranking 焐热，这里只是填页面缓存
   "/ranking?nf=1"       # NF 成绩榜：user_scores_nf 同构查询
   "/titles"             # 军衔页：20 条索引 count（各档人数）
+  "/records"            # 纪录页（2026-10-28）：九条纪录演变窗口函数曲线 + 八项 TOP1 聚合（10min 缓存）
   "/bbs"                # 论坛首页：索引 count + 分页
   "/team"               # 管理团队：逐管理员 video.count（无 reviewUser 索引，各扫一次 30 万行）
 )

@@ -2699,6 +2699,162 @@ button.msg_reply_link {
   margin-left: 4px;
 }
 
+/* ---------- 纪录页 /records（2026-10-28） ----------
+   左栏三级 × 三图纪录演变（复用后台 Monokai 图表配色），右栏八项 TOP1。
+   版式复用 ul#home 双栏骨架——≤880 单列化由既有规则接管，本节只管卡片内部样式。 */
+.rec_group {
+  margin-bottom: 26px;
+}
+.rec_group > h2 {
+  margin: 0 0 12px;
+}
+.rec_card {
+  background: #1e1f1c;
+  border: 1px solid #3a3a32;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.rec_head {
+  font-size: 13px;
+  line-height: 22px;
+  margin-bottom: 6px;
+  color: #939387;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rec_head .rec_name {
+  color: #b1b1a4;
+}
+.rec_head .rec_val {
+  color: #e6db74;
+  font-weight: bold;
+  font-size: 15px;
+  margin: 0 2px;
+}
+.rec_head .rec_meta {
+  color: #75715e;
+}
+.rec_head .rec_user {
+  color: #939387;
+}
+.rec_head .rec_user:hover {
+  color: #e6db74;
+}
+.rec_chart {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: ew-resize;
+}
+.rec_chart svg {
+  display: block;
+}
+.rec_chart_empty {
+  color: #75715e;
+  padding: 30px 0;
+  text-align: center;
+}
+/* 浮层：定位由组件按滚动容器可视坐标计算（left 仅水平，垂直恒贴顶） */
+.rec_tip {
+  position: absolute;
+  top: 6px;
+  pointer-events: none;
+  z-index: 10;
+  width: 200px;
+  background: rgba(30, 31, 28, 0.96);
+  border: 1px solid #49483e;
+  border-radius: 8px;
+  padding: 7px 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 19px;
+}
+.rec_tip .d {
+  color: #75715e;
+  white-space: nowrap;
+}
+.rec_tip .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.rec_tip .row > span:first-child {
+  color: #75715e;
+  flex: none;
+}
+.rec_tip .who {
+  color: #939387;
+  text-align: right;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rec_tip .who a {
+  color: #939387;
+}
+.rec_tip .who a:hover {
+  color: #e6db74;
+}
+.rec_tip b {
+  color: #e6db74;
+  font-variant-numeric: tabular-nums;
+}
+.rec_tip b.hold {
+  color: #a6e22e;
+}
+/* 右栏八项 */
+.records_tops > h2 {
+  margin: 0 0 12px;
+}
+.records_top {
+  background: #1e1f1c;
+  border: 1px solid #3a3a32;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.records_top .row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.records_top .name {
+  color: #b1b1a4;
+  font-size: 14px;
+  flex: none;
+}
+.records_top .val {
+  color: #e6db74;
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 26px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.records_top .val small {
+  font-size: 12px;
+  color: #75715e;
+  font-weight: normal;
+}
+.records_top .sub {
+  color: #75715e;
+  font-size: 12px;
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.records_top .sub a {
+  color: #939387;
+}
+.records_top .sub a:hover {
+  color: #e6db74;
+}
+
 /* ---------- 用户主页统计（2026-09-24 张老师要求） ----------
    数字（legacy .table em 本为黄 #fdc61a）默认改亮灰 #b1b1a4；
    「今日 +N」属于今日数据，用绿 #a6e22e 高亮（2026-09-27 张老师：全站今日增量统一绿色）。 */
