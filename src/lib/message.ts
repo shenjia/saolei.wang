@@ -25,6 +25,10 @@ export interface MessageItem {
   isSystem: boolean;
   createTime: number;
   from: MessageUserBrief | null;
+  /** 收件人（仅「已发送」视角填充；此时 isRead 语义=对方是否已读） */
+  to?: MessageUserBrief | null;
+  /** true=「已发送」视角（我发出的私信，不可删除；isRead=对方已读与否） */
+  sent?: boolean;
 }
 
 /** usersByIds 之上补双体系称号（当前成绩评定；站内信无快照列，用实时值——
@@ -71,14 +75,43 @@ export async function getMessageCount(userId: number): Promise<number> {
 /**
  * 消息列表（2026-10-14 加类型筛选：all=全部 / system=系统 / private=私信）。
  * total 随筛选联动——「加载更多」的剩余条数按当前筛选口径计算。
+ * 2026-10-27（张老师要求）加 sent=已发送视角：我发出的全部记录（含广播逐条落行，
+ * isSystem 一并保留），isRead 语义转为「对方是否已读」；行按 fromUser=我 查，
+ * 天然不受「清空消息」（只删 toUser=我）影响——发出的记录不可删除。
  */
-export type MessageTypeFilter = "all" | "system" | "private";
+export type MessageTypeFilter = "all" | "system" | "private" | "sent";
 
 export async function getMessageList(
   userId: number,
   page: number,
   type: MessageTypeFilter = "all"
 ): Promise<{ messages: MessageItem[]; total: number; pageSize: number }> {
+  // sent 视角：fromUser=我（含 isSystem=true 的管理员广播行）
+  if (type === "sent") {
+    const where = { fromUser: BigInt(userId) };
+    const total = await prisma.message.count({ where });
+    const rows = await prisma.message.findMany({
+      where,
+      orderBy: { id: "desc" },
+      skip: (page - 1) * MESSAGE_PAGESIZE,
+      take: MESSAGE_PAGESIZE,
+    });
+    const recipients = await messageAuthorsWithTitles([...new Set(rows.map((r) => N(r.toUser)))]);
+    return {
+      messages: rows.map((r) => ({
+        id: N(r.id),
+        content: r.content,
+        isRead: r.isRead,
+        isSystem: r.isSystem,
+        createTime: N(r.createTime),
+        from: null,
+        to: recipients.get(N(r.toUser)) ?? null,
+        sent: true,
+      })),
+      total,
+      pageSize: MESSAGE_PAGESIZE,
+    };
+  }
   const where =
     type === "system"
       ? { toUser: BigInt(userId), isSystem: true }

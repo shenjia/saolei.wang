@@ -7,6 +7,8 @@
 // 评论消息里的《文章标题》内嵌链接可直接点击跳文章页；私信末尾附「回复」入口
 // 2026-10-24（张老师要求）：「回复」由跳 /message?to=N 改为原位弹发信浮窗
 //   （与用户主页对话气泡同款 SendMessageButton variant="text"）；authorId 自页面透传
+// 2026-10-27（张老师要求）：「已发送」视角——发件人列显示收件人、正文尾附
+//   「未读/已读」状态标（对方是否已读）；行不可点不置灰（无「我读没读」语义）
 
 "use client";
 
@@ -44,6 +46,38 @@ export function MessageRow({
   /** 当前登录用户 id：发信浮窗草稿键 pm:{uid}:{to} 与气泡/表单共用一份 */
   authorId: number;
 }) {
+  // 已发送视角：isRead=对方是否已读（正文尾状态标），无未读行交互、无「回复」入口；
+  // 不套 read 类——「已读整行变灰」是收件视角语义，发出的消息行保持常规色
+  if (m.sent) {
+    return (
+      <tr>
+        <td>
+          <span className={`board_tag ${m.isSystem ? "msg_sys" : ""}`}>
+            {m.isSystem ? "系统" : "私信"}
+          </span>
+        </td>
+        <td className="user">
+          {m.isSystem ? (
+            <span className="avatar_link msg_sys">【系统广播】</span>
+          ) : m.to ? (
+            <>
+              <AvatarCell id={m.to.id} name={m.to.chineseName} sex={m.to.sex} gender="small" link />
+              <TitleBadge title={m.to.title} classic={m.to.classic} link />
+            </>
+          ) : (
+            "?"
+          )}
+        </td>
+        <td className={`msg_content ${m.isSystem ? "msg_sys" : ""}`}>
+          <MessageContent content={m.content} />
+          <span className={`msg_read_flag ${m.isRead ? "is_read" : ""}`}>
+            {m.isRead ? "已读" : "未读"}
+          </span>
+        </td>
+        <td className="time">{timeOpposite(m.createTime, TIME_NEVER)}</td>
+      </tr>
+    );
+  }
   return (
     <tr className={m.isRead ? "read" : "unread"}>
       <td>
@@ -87,10 +121,13 @@ export function MessageRow({
 export function MessageFeed({
   initial,
   authorId,
+  sent,
 }: {
   initial: MessageItem[];
   /** 当前登录用户 id（「回复」浮窗草稿键隔离用） */
   authorId: number;
+  /** 已发送视角（空态文案适配） */
+  sent?: boolean;
 }) {
   const [items, setItems] = useState(initial);
 
@@ -121,7 +158,7 @@ export function MessageFeed({
       ))}
       {items.length === 0 && (
         <tr>
-          <td colSpan={4}>还没有消息。</td>
+          <td colSpan={4}>{sent ? "还没有发送过消息。" : "还没有消息。"}</td>
         </tr>
       )}
     </>

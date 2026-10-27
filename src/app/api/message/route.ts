@@ -24,11 +24,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ unread: await getUnreadCount(session.uid) });
   }
   // 消息列表「加载更多」（页码语义，首屏 15 条，模式同 /api/bbs/more）
-  // 2026-10-14 加 type 类型筛选（all/system/private），与列表页 tabs 同口径
+  // 2026-10-14 加 type 类型筛选（all/system/private），与列表页 tabs 同口径；
+  // 2026-10-27 加 sent=已发送视角（与列表页同口径；现网主列表已走 Pager 服务端分页）
   if (action === "more") {
     const page = Math.max(2, parseInt(req.nextUrl.searchParams.get("page") ?? "2", 10) || 2);
     const typeRaw = req.nextUrl.searchParams.get("type");
-    const type = typeRaw === "system" || typeRaw === "private" ? typeRaw : "all";
+    const type = typeRaw === "system" || typeRaw === "private" || typeRaw === "sent" ? typeRaw : "all";
     const { messages, total, pageSize } = await getMessageList(session.uid, page, type);
     return NextResponse.json({ messages, hasMore: page * pageSize < total, total });
   }

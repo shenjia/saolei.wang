@@ -8,6 +8,8 @@
 // 2026-10-24 二轮（张老师要求）：底部换回标准翻页控件（Pager 服务端分页 ?page=，
 //   与录像审核页同款；「加载更多+剩余条数」下线——Tabs 的 page: undefined 保证
 //   切筛选时翻页归 1）
+// 2026-10-27（张老师要求）：加「已发送」筛选——我发出的全部记录（不可删除，
+//   天然不受「清空消息」影响）+ 对方是否已读；表头第二列切「收件人」
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
@@ -36,11 +38,14 @@ export default async function MessagePage({
   const speech = sp.speech === "1";
 
   // 类型筛选（非法值视作全部；params 只透传 type，不给 Tabs 带 to 等无关参数）
-  const type: MessageTypeFilter = sp.type === "system" || sp.type === "private" ? sp.type : "all";
+  // 2026-10-27（张老师要求）加 sent=已发送：我发出的全部记录（不可删除）+ 对方已读状态
+  const type: MessageTypeFilter =
+    sp.type === "system" || sp.type === "private" || sp.type === "sent" ? sp.type : "all";
   // 翻页（2026-10-24 二轮）：标准 Pager 服务端分页，?page= 承载状态
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const { messages, total } = await getMessageList(session.uid, page, type);
+  const sentView = type === "sent";
 
   return (
     <div id="page" className="main message_list">
@@ -59,18 +64,26 @@ export default async function MessagePage({
               ["all", "全部"],
               ["system", "系统"],
               ["private", "私信"],
+              ["sent", "已发送"],
             ]}
           />
-          <div className="msg_head_btns">
-            <MarkAllReadButton />
-            <ClearButton />
-          </div>
+          {/* 已发送视角无「收件」概念：全部已读/清空按钮不适用（发出的记录不可删） */}
+          {!sentView && (
+            <div className="msg_head_btns">
+              <MarkAllReadButton />
+              <ClearButton />
+            </div>
+          )}
         </div>
         <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
           <thead>
             <tr>
               <th className="cat">类型</th>
-              <th className="author">发件人</th>
+              {sentView ? (
+                <th className="author">收件人</th>
+              ) : (
+                <th className="author">发件人</th>
+              )}
               <th className="topic">内容</th>
               <th className="time">时间</th>
             </tr>
@@ -80,6 +93,7 @@ export default async function MessagePage({
               key={`${type}_${page}`}
               initial={messages}
               authorId={session.uid}
+              sent={sentView}
             />
           </tbody>
         </table>
@@ -91,6 +105,7 @@ export default async function MessagePage({
           pageSize={MESSAGE_PAGESIZE}
         />
       </div>
+      {/* 旧链 /message/send.asp?id=N 仍 301 到 ?to=N（proxy.ts），表单保留 */}
       {to && (
         <div className="box">
           <h2>发消息</h2>
