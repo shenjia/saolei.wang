@@ -72,11 +72,19 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
     const map: Record<number, number> = { 1: 1, 3: 2, 5: 3, 9: 4, 17: 5, 33: 6, 65: 7, 11: 9 };
     return map[mouse] ?? null;
   };
+  /* ⚠️ 时间单调钳制（2026-10-27，347943 案）：排名流里点击走 sendEvent 即时上报、
+     mv 走 queueMove 攒批，服务端权威流中攒批 mv 带按下前的旧时间戳 → 事件流
+     出现「1.110 lr → 1.090 mv」式倒退。站内回放引擎按时间分发不怕倒序，flop
+     官方 VideoParser 强制时间单调，直接抛 VideoParserError – Unexpected time
+     flow，后台 flop 播放报错。导出时钳制为不减（最多前移 20ms，肉眼不可察）。 */
+  let lastMs = 0;
   for (const e of input.events) {
     const code = mouseCode(e.mouse);
     if (code === null) throw new Error("Unsupported mouse event");
     u8(code);
-    u24(e.sec * 1000 + e.hun * 10);
+    const ms = Math.max(e.sec * 1000 + e.hun * 10, lastMs);
+    u24(ms);
+    lastMs = ms;
     u16(e.x);
     u16(e.y);
   }
