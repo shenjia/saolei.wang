@@ -300,8 +300,15 @@ export function AdminReviewList({
         </div>
       )}
 
-      {/* 全屏回放播放器（点时间列弹出，Esc/关闭按钮退出） */}
-      <AdminVideoPlayer target={playTarget} onClose={() => setPlayTarget(null)} />
+      {/* 全屏回放播放器（点时间列弹出，Esc/关闭按钮退出）；
+          markWatched 落库成功即把该行置已看（按钮/淡显即时切换，2026-10-27） */}
+      <AdminVideoPlayer
+        target={playTarget}
+        onClose={() => setPlayTarget(null)}
+        onWatched={(id) =>
+          setItems((prev) => prev.map((i) => (i.id === id && !i.watched ? { ...i, watched: true } : i)))
+        }
+      />
 
       <div className="admin_scroll">
         <table className="admin_table">

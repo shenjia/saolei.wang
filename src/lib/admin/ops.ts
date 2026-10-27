@@ -413,16 +413,20 @@ async function dispatch(
 
     case "video.markWatched": {
       // 后台播放器看过即标记（2026-10-19）：防盲审口径认 admin_watched；
-      // 幂等，重复上报无副作用。仅待审录像需要（已审过的不影响）。
+      // 幂等，重复上报无副作用。
+      // 2026-10-27 修正：不再对已审过（status≠待审）早退——已通过录像重审
+      // 屏蔽同样要求「先看过」（reviewVideo 防盲审），早退会让「播放过了却
+      // 不能屏蔽」（实证：#347849 status=20 播放后 admin_watched 仍 0）。
       const id = toId(p.id);
       if (!id) return { ok: false, error: "参数错误：缺少录像 ID" };
-      const video = await prisma.video.findUnique({ where: { id: BigInt(id) }, select: { status: true } });
+      const video = await prisma.video.findUnique({ where: { id: BigInt(id) }, select: { id: true } });
       if (!video) return { ok: false, error: "录像不存在" };
-      if (video.status !== VIDEO_STATUS.NORMAL) return { ok: true, message: "已审过，无需标记" };
       const now = BigInt(Math.floor(Date.now() / 1000));
-      await prisma.videoStat.update({
+      // upsert：老数据可能缺 video_stat 行，update 会 P2025 崩 500
+      await prisma.videoStat.upsert({
         where: { id: BigInt(id) },
-        data: { adminWatched: 1, updateTime: now },
+        create: { id: BigInt(id), adminWatched: 1, createTime: now, updateTime: now },
+        update: { adminWatched: 1, updateTime: now },
       });
       return { ok: true, message: `#${id} 已标记观看` };
     }

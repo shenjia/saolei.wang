@@ -19,11 +19,17 @@ import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
 export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSuper: boolean }) {
   /** 全屏回放播放器（点时间列弹出，Esc/关闭按钮退出） */
   const [playTarget, setPlayTarget] = useState<AdminPlayerTarget | null>(null);
+  /** 本会话内已看过的录像 id（markWatched 落库成功即入集，按钮即时变「已看」，2026-10-27） */
+  const [watchedNow, setWatchedNow] = useState<Set<number>>(new Set());
 
   return (
     <>
       {/* 全屏回放播放器（与审核页同一组件） */}
-      <AdminVideoPlayer target={playTarget} onClose={() => setPlayTarget(null)} />
+      <AdminVideoPlayer
+        target={playTarget}
+        onClose={() => setPlayTarget(null)}
+        onWatched={(id) => setWatchedNow((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))}
+      />
 
       <tbody>
         {rows.map((v) => (
@@ -74,8 +80,8 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
               {v.filepath && v.realTime ? (
                 <button
                   type="button"
-                  className={`admin_btn sm${v.watched ? "" : " primary"}`}
-                  title={v.watched ? "已看过（点击再次播放）" : "点击弹层播放该录像"}
+                  className={`admin_btn sm${v.watched || watchedNow.has(v.id) ? "" : " primary"}`}
+                  title={v.watched || watchedNow.has(v.id) ? "已看过（点击再次播放）" : "点击弹层播放该录像"}
                   onClick={(e) => {
                     e.preventDefault();
                     setPlayTarget({
@@ -91,7 +97,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style={{ verticalAlign: "-1px", marginRight: 3 }}>
                     <path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z" />
                   </svg>
-                  {v.watched ? "已看" : "播放"}
+                  {v.watched || watchedNow.has(v.id) ? "已看" : "播放"}
                 </button>
               ) : (
                 <span className="sub" title="录像文件缺失或无解析信息">
