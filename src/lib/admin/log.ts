@@ -21,6 +21,9 @@ export const OP_LABELS: Record<string, string> = {
   "user.unban": "解封玩家",
   "user.setRole": "调整玩家角色",
   "user.setTrusted": "设置可信用户组",
+  // 低信任组动作标签（2026-10-27 张老师定）：日志页动作列不再裸显英文标识
+  "user.setLowTrust": "设置低信任用户组",
+  "user.clearCheatPenalty": "移出低信任用户组",
   "user.resetPassword": "重置玩家密码",
   "user.delete": "删除玩家",
   "video.review": "审核录像",

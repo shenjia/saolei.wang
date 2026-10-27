@@ -255,7 +255,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                   label="加入低信任用户组"
                   variant="warn"
                   sm={false}
-                  confirm={`确认把「${u.chineseName}」加入低信任用户组？其 7 天内上传限流（每日 5 部）且全部录像需人工审核，待审录像会立即重分拣。`}
+                  confirm={`确认把「${u.chineseName}」加入低信任用户组？其 7 天内上传限流（每日 5 部）且全部录像需人工审核，练习页排名模式同步禁用 24 小时，待审录像会立即重分拣。`}
                 />
               )}
               {d.lowTrustFlagged && (
@@ -301,7 +301,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
               confirm="确认重置该玩家密码？旧密码立即失效。"
             />
             <div className="admin_hint" style={{ marginTop: 8 }}>
-              重置结果（含新密码）会以气泡提示显示，请复制后转告玩家；同时会使所有未过期的找回密码链接失效。
+              重置结果（含新密码）会以气泡提示显示，请复制后转告玩家；同时会使所有未过期的找回密码链接失效。操作日志只留「已重置」事实，不记密码明文。
             </div>
           </AdminCard>
         )}

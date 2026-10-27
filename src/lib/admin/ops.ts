@@ -26,7 +26,9 @@ import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { logAdmin } from "./log";
 import type { AdminLevel } from "./guard";
 
-export type OpResult = { ok: true; message: string } | { ok: false; error: string };
+// logDetail：落 admin_log 的说明与回显 message 不同时给（如签发 key / 重置密码——
+// 日志页管理员（role≥10）可见，明文凭据只能出现在签发/操作人的响应里，不进日志）
+export type OpResult = { ok: true; message: string; logDetail?: string } | { ok: false; error: string };
 
 /** 每个 op 的最低权限要求 */
 export const OP_LEVELS: Record<string, AdminLevel> = {
@@ -94,7 +96,8 @@ export async function runOp(
       action: op,
       target: op.split(".")[0],
       targetId: toId(params.id) ?? toId(params.userId) ?? 0,
-      detail: res.message,
+      // 日志留档脱敏版（2026-10-27）：有 logDetail 用 logDetail，防明文凭据落日志页
+      detail: res.logDetail ?? res.message,
       ip,
     });
   }
@@ -228,14 +231,13 @@ async function dispatch(
       for (const { id: vid } of pending) await triageVideo(Number(vid));
       return {
         ok: true,
-        message: `${user.chineseName}（#${id}）已解除反作弊标记（排名模式与低信任组恢复）${pending.length ? `，已重分拣其待审录像 ${pending.length} 部` : ""}`,
+        message: `${user.chineseName}（#${id}）已移出低信任用户组，排行模式已启用`,
       };
     }
 
     case "user.setLowTrust": {
-      /* 手动加入低信任组（2026-10-27 张老师定）：与探测器命中同口径——
-         7 天低信任（上传限 5/日 + 全量人工审核），不动排名禁用（那是作弊
-         实锤的处置，人工观察用低信任即可） */
+      /* 手动加入低信任组（2026-10-27 张老师定）：7 天低信任（上传限 5/日 + 全量人工审核）+
+         排名模式同步禁 24 小时（与探测器命中同款时长，口径 2026-10-27 张老师定） */
       const id = toId(p.id);
       if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
       const user = await prisma.user.findUnique({
@@ -249,14 +251,14 @@ async function dispatch(
       }
       await prisma.user.update({
         where: { id: BigInt(id) },
-        data: { lowTrustUntil: BigInt(t + 7 * 24 * 3600) },
+        data: { lowTrustUntil: BigInt(t + 7 * 24 * 3600), rankBanUntil: BigInt(t + 24 * 3600) },
       });
       const pending = await prisma.video.findMany({ where: { user: BigInt(id), status: VIDEO_STATUS.NORMAL }, select: { id: true } });
       const { triageVideo } = await import("@/lib/video-triage");
       for (const { id: vid } of pending) await triageVideo(Number(vid));
       return {
         ok: true,
-        message: `${user.chineseName}（#${id}）已加入低信任用户组（7 天，上传限流 + 全量人工审核）${pending.length ? `，已重分拣其待审录像 ${pending.length} 部` : ""}`,
+        message: `${user.chineseName}（#${id}）已加入低信任用户组，排行模式已禁用`,
       };
     }
 
@@ -274,7 +276,12 @@ async function dispatch(
         data: { password: hashPassword(password, auth.salt), updateTime: BigInt(now()) },
       });
       await prisma.passwordToken.deleteMany({ where: { user: BigInt(id) } });
-      return { ok: true, message: `重置 ${auth.username}（#${id}）密码为：${password}` };
+      // 明文密码只回显给操作人（气泡提示）；日志只留事实，不落明文（2026-10-27 修复）
+      return {
+        ok: true,
+        message: `重置 ${auth.username}（#${id}）密码为：${password}`,
+        logDetail: `重置 ${auth.username}（#${id}）的密码`,
+      };
     }
 
     case "user.delete": {
@@ -839,9 +846,13 @@ async function dispatch(
         data: { name, note, keyHash: sha256(key), status: 1, createTime: ts, updateTime: ts },
       });
       invalidateApiKeyCache();
-      // 明文 key 只在 message 里出现这一次（admin_log 会留档这条 message；
-      // 与「重置密码回显」同款先例——后台本身是超管可见面，可接受）
-      return { ok: true, message: `已为「${name}」签发 API key（#${row.id}）：${key} —— 请立即复制保存，明文不再显示` };
+      // 明文 key 只随接口响应回传给签发人弹窗展示（ApiKeyDialog）；
+      // admin_log 留档脱敏版——日志页管理员（role≥10）可见，不能落明文（2026-10-27 修复）
+      return {
+        ok: true,
+        logDetail: `已为「${name}」签发 API key（#${row.id}），明文已在签发弹窗显示`,
+        message: `已为「${name}」签发 API key（#${row.id}）：${key} —— 请立即复制保存，明文不再显示`,
+      };
     }
 
     case "apikey.revoke": {
