@@ -43,7 +43,8 @@ export function Kpi({
   href,
 }: {
   label: string;
-  value: string | number;
+  /** 数字（走 toLocaleString 大字）或 ReactNode（今日练习卡：数字大字 + <small> 灰字「局 / N 人参与」混排） */
+  value: React.ReactNode;
   unit?: string;
   foot?: React.ReactNode;
   tone?: "green" | "yellow" | "orange" | "cyan" | "purple" | "red" | "grey";

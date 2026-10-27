@@ -132,7 +132,12 @@ export default async function AdminDashboard() {
         />
         <Kpi
           label="今日练习"
-          value={`${traffic.practice.today.toLocaleString("zh-CN")} 局 / ${traffic.practice.todayUsers} 人参与`}
+          value={
+            <>
+              {traffic.practice.today.toLocaleString("zh-CN")}
+              <small> 局 / {traffic.practice.todayUsers} 人参与</small>
+            </>
+          }
           tone="cyan"
           trend={traffic.practice.trend}
           foot={
