@@ -248,9 +248,14 @@ body:has(.admin_shell) #footer {
 .admin_grid.ops_notify {
   grid-template-columns: minmax(360px, 2fr) minmax(480px, 3fr);
 }
+/* 练习数据页：趋势图占主 + 级别占比饼图窄列（2026-10-27 张老师定） */
+.admin_grid.trend_pie {
+  grid-template-columns: minmax(480px, 7fr) minmax(300px, 3fr);
+}
 @media (max-width: 1200px) {
   .admin_grid.todo_trend,
-  .admin_grid.ops_notify {
+  .admin_grid.ops_notify,
+  .admin_grid.trend_pie {
     grid-template-columns: 1fr;
   }
 }

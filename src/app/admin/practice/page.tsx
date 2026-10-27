@@ -6,31 +6,32 @@
 
 import { AdminCard } from "@/components/admin/Widgets";
 import { ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
-import { getPracticeDays, getPracticeHourly, getPracticeTrend, LEVEL_COLS_SINCE } from "@/lib/admin/practice";
+import { getPracticeDays, getPracticeHourly, getPracticeTrend, PRACTICE_LEVEL_COLORS, LEVEL_COLS_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "练习数据 | 管理后台" };
 
 export default async function AdminPracticePage() {
   const [trend, hourly, days] = await Promise.all([getPracticeTrend(30), getPracticeHourly(7), getPracticeDays(7)]);
+  const C = PRACTICE_LEVEL_COLORS;
 
   const series: Series[] = [
-    { key: "total", label: "总盘数", color: "#b1b1a4", values: trend.total },
-    { key: "beg", label: "初级", color: "#a6e22e", values: trend.beg },
-    { key: "int", label: "中级", color: "#f79646", values: trend.int },
-    { key: "exp", label: "高级", color: "#fdc61d", values: trend.exp },
-    { key: "cus", label: "自定义", color: "#ae81ff", values: trend.cus },
+    { key: "total", label: "总盘数", color: C.total, values: trend.total },
+    { key: "beg", label: "初级", color: C.beg, values: trend.beg },
+    { key: "int", label: "中级", color: C.int, values: trend.int },
+    { key: "exp", label: "高级", color: C.exp, values: trend.exp },
+    { key: "cus", label: "自定义", color: C.cus, values: trend.cus },
   ];
 
   const d30Total = trend.total.reduce((a, b) => a + b, 0);
   const weekPlays = days.reduce((a, d) => a + d.plays, 0);
-  // 近 30 天级别占比（与趋势图同窗口的总量口径）
+  // 近 30 天级别占比（与趋势图同窗口的总量口径；色值与趋势图序列一致）
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
   const levelItems = [
-    { label: "初级", value: sum(trend.beg) },
-    { label: "中级", value: sum(trend.int) },
-    { label: "高级", value: sum(trend.exp) },
-    { label: "自定义", value: sum(trend.cus) },
+    { label: "初级", value: sum(trend.beg), color: C.beg },
+    { label: "中级", value: sum(trend.int), color: C.int },
+    { label: "高级", value: sum(trend.exp), color: C.exp },
+    { label: "自定义", value: sum(trend.cus), color: C.cus },
   ];
 
   return (
@@ -47,7 +48,7 @@ export default async function AdminPracticePage() {
           <TrendChart dates={trend.dates} series={series} />
         </AdminCard>
         <AdminCard title="级别占比（近 30 天总量）" more="与趋势图同窗口；「自定义」含起记前历史盘">
-          <Donut items={levelItems} centerLabel={`总 ${d30Total.toLocaleString("zh-CN")} 盘`} />
+          <Donut items={levelItems} centerLabel={`总 ${d30Total.toLocaleString("zh-CN")} 盘`} mergeSmall={false} />
         </AdminCard>
       </div>
 

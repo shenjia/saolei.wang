@@ -200,7 +200,7 @@ export default async function AdminStatsPage() {
           title="练习级别分布"
           more={`全量聚合，${LEVEL_COLS_SINCE} 级别列起记（此前只进总数）；「自定义」含历史无级别盘`}
         >
-          <Donut items={practiceLevels.items} centerLabel={`练习盘数 ${practiceLevels.total.toLocaleString("zh-CN")}`} />
+          <Donut items={practiceLevels.items} centerLabel={`练习盘数 ${practiceLevels.total.toLocaleString("zh-CN")}`} mergeSmall={false} />
         </AdminCard>
       </div>
       <div className="admin_grid c2">

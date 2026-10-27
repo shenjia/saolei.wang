@@ -8,6 +8,17 @@ import { prisma } from "@/lib/db";
 
 const N = (v: unknown): number => Number(v ?? 0);
 
+/** 练习级别统一配色（2026-10-27 张老师定）：初中高复用前台色（绿 #a6e22e /
+ *  橙 #f79646 / 金 #fdc61d，同 admin_tag.lv_* 与前台 hover），自定义紫 #ae81ff，
+ *  总盘亮灰 #b1b1a4（仅趋势序列用，不进饼图） */
+export const PRACTICE_LEVEL_COLORS: Record<string, string> = {
+  beg: "#a6e22e",
+  int: "#f79646",
+  exp: "#fdc61d",
+  cus: "#ae81ff",
+  total: "#b1b1a4",
+};
+
 /** 级别三列起记日（2026-10-27 生产 15:10 左右生效；当日三列和>0 的最小 day） */
 const LEVEL_COLS_SINCE = "2026-10-27";
 
@@ -120,29 +131,29 @@ export async function getPracticeDays(days = 7): Promise<PracticeDayRow[]> {
   });
 }
 
-/** 全量级别聚合（数据分析页 Donut）：自三列起记日的次日（20754=2026-10-28）起，
- *  起记日当天下午才生效、三列偏低不含入；此前无级别维度 */
+/** 全量级别聚合（数据分析页 Donut）：自三列起记日（20753=2026-10-27）起——
+ *  起记日下午生效，当日为部分样本但占比真实（分布不受样本时长影响） */
 export async function getPracticeLevelCounts(): Promise<{
-  items: { label: string; value: number }[];
+  items: { label: string; value: number; color?: string }[];
   total: number;
 }> {
   const rows = await prisma.$queryRawUnsafe<{ beg: bigint; intg: bigint; exp: bigint; plays: bigint }[]>(
     `SELECT SUM(plays_beg) beg, SUM(plays_int) intg, SUM(plays_exp) exp, SUM(plays) plays
-     FROM practice_daily WHERE day >= 20754`
+     FROM practice_daily WHERE day >= 20753`
   );
   const r = rows[0];
   const beg = N(r?.beg);
   const int = N(r?.intg);
   const exp = N(r?.exp);
   const plays = N(r?.plays);
-  // 分母含起记日次日全天（今日三列进行中会偏低）；差额=自定义
+  // 起记日（部分样本）计入分母——占比对样本时长不敏感；差额=自定义（含起记前盘）
   const cus = Math.max(0, plays - beg - int - exp);
   return {
     items: [
-      { label: "初级", value: beg },
-      { label: "中级", value: int },
-      { label: "高级", value: exp },
-      { label: "自定义", value: cus },
+      { label: "初级", value: beg, color: PRACTICE_LEVEL_COLORS.beg },
+      { label: "中级", value: int, color: PRACTICE_LEVEL_COLORS.int },
+      { label: "高级", value: exp, color: PRACTICE_LEVEL_COLORS.exp },
+      { label: "自定义", value: cus, color: PRACTICE_LEVEL_COLORS.cus },
     ],
     total: plays,
   };
