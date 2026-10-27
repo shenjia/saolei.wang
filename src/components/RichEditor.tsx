@@ -58,7 +58,8 @@ export function ubbToEditorHtml(raw: string): string {
     .replace(/\[Signest\]/gi, '<span class="Signest">').replace(/\[\/Signest\]/gi, "</span>")
     .replace(/\[b\]/gi, "<strong>").replace(/\[\/b\]/gi, "</strong>")
     .replace(/\[quote\]/gi, "<blockquote>").replace(/\[\/quote\]/gi, "</blockquote>");
-  t = t.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi, '<img src="$1">');
+  // 2026-10-27：编辑画布同款小图（与楼层渲染 .ubb_img 观感一致，所见即所得）；序列化只读 src 不受影响
+  t = t.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi, '<img class="ubb_img" src="$1">');
   t = t.replace(/\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi, '<a href="$1">$2</a>');
   // 表情（编码规则见 lib/faces.ts）：旧数字码 / 新语义 key 码 / Nn 过渡码（归一化为 key，round-trip 升级）
   t = t.replace(/\[face\]([^\[\]]{1,20}?)\[\/face\]/gi, (m, code: string) => {
