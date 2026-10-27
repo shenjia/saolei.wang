@@ -66,7 +66,17 @@ export default async function AdminCheatPage() {
          命中瞬间整页截图供人工分诊——文字只够定性，截图看得到扩展悬浮窗真容） */
       const shotMatch = r.evidence.match(/\[shot:(\/uploads\/cheat\/[^\]]+)\]/);
       const shotUrl = shotMatch ? shotMatch[1] : null;
-      const plainEv = r.evidence.replace(/\[shot:[^\]]*\]\s*/, "");
+      /* 核验状态（2026-10-27 拆列）：新记录读 verified 列（1=通过 / 2=不符）；
+         拆列前的老记录把结果写在证据前缀 `[verified=true] ` 里——回退解析，
+         历史行不丢状态（也保证后台切上线那一刻新旧数据都能看） */
+      const legacyVerified = r.evidence.match(/\[verified=(true|false)\]\s*/);
+      const verifiedState = r.verified > 0 ? r.verified : legacyVerified ? (legacyVerified[1] === "true" ? 1 : 2) : 0;
+      /* 证据正文：只剥标记、不截断——完整内容折行显示（原 slice(0,60) 会把
+         140 字符的「渲染异常 UL…存在 2 个子节点但 ge|tClientRects=0」切成半句） */
+      const plainEv = r.evidence
+        .replace(/\[shot:[^\]]*\]\s*/, "")
+        .replace(/\[verified=(?:true|false)\]\s*/, "")
+        .trim();
       return (
         <tr key={r.id}>
           <td>
@@ -83,15 +93,35 @@ export default async function AdminCheatPage() {
             </span>
           </td>
           <td>{REASON_LABEL[r.reason] ?? r.reason}</td>
-          <td className="cheat_ev" title={plainEv}>
+          <td className="cheat_ev">
             {shotUrl && (
               <a href={shotUrl} target="_blank" rel="noopener noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={shotUrl} alt="命中瞬间截图" className="cheat_shot" />
               </a>
             )}
-            {extSuspect ? "🧩 " : ""}
-            {plainEv.slice(0, 60)}
+            {(verifiedState > 0 || extSuspect) && (
+              <div className="cheat_ev_tags">
+                {verifiedState === 1 && (
+                  <span className="cheat_ev_tag ok" title="权威进程核验通过：对局存在、属于该玩家、事件序未超界">
+                    ✓ 核验通过
+                  </span>
+                )}
+                {verifiedState === 2 && (
+                  <span className="cheat_ev_tag bad" title="权威进程核验不符：对局/玩家/事件序对不上（伪造上报或旧局残留）">
+                    ⚠ 核验不符
+                  </span>
+                )}
+                {extSuspect && (
+                  <span className="cheat_ev_tag warn" title="证据含 chrome-extension:// —— 多为浏览器扩展误报（Grammarly/翻译类）">
+                    🧩 扩展
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="cheat_ev_text" title={plainEv}>
+              {plainEv}
+            </div>
           </td>
           <td>{new Date(Number(r.createTime) * 1000).toLocaleString("zh-CN")}</td>
           {r.resolved === 0 ? (

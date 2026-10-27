@@ -11623,3 +11623,49 @@ body #page .word_terms .desc {
   font-size: 12px;
   white-space: nowrap;
 }
+/* 反作弊复核页：证据列完整折行显示（2026-10-27 张老师定）——原 slice(0, 60)
+   把 140 字符的证据切成半句「…有 2 个子节点但 ge|tClientRects=0」，且
+   `[verified=true] ` 前缀白占 16 字符预算使带核验标记的行断得更早。
+   现：标签（核验状态/扩展）独立一行，正文全量折行，不再有任何字符截断 */
+.cheat_ev {
+  max-width: 520px;
+  min-width: 300px;
+}
+.cheat_ev_tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.cheat_ev_tag {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.cheat_ev_tag.ok {
+  color: #a6e22e;
+  border-color: #48561f;
+  background: rgba(166, 226, 46, 0.08);
+}
+.cheat_ev_tag.bad {
+  color: #f92672;
+  border-color: #6b1e3a;
+  background: rgba(249, 38, 114, 0.08);
+}
+.cheat_ev_tag.warn {
+  color: #e6db74;
+  border-color: #56502f;
+  background: rgba(230, 219, 116, 0.08);
+}
+.cheat_ev_text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b1b1a4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
