@@ -5484,6 +5484,26 @@ body #page.two_columns li.main {
     display: none;
   }
 
+  /* ⑥+ 账户系列页侧栏低宽度隐藏（2026-10-28 张老师要求）：/account、/account/profile、
+     /account/password、/account/email 四页 ≤880 单列带内玩家卡片不显示（与 ⑤⑥ 同思路）。
+     ⚠️ 3358~3380 行的 #page #account_manage 系规则是 2 id 特异性，会压过本块 ② 的
+     1 id 单列化重置（2257 行注释警告过的坑在此复现：手机上主栏保持 calc(100%-290px)
+     窄宽、侧栏 288 挤掉行）——主栏重置必须同样带 2 id 选择器才能赢回来。 */
+  body #page.two_columns #account_manage > li.sidebar,
+  body #page.two_columns #account_profile > li.sidebar,
+  body #page.two_columns #account_password > li.sidebar,
+  body #page.two_columns #account_email > li.sidebar {
+    display: none;
+  }
+  body #page.two_columns #account_manage > li.main,
+  body #page.two_columns #account_profile > li.main,
+  body #page.two_columns #account_password > li.main,
+  body #page.two_columns #account_email > li.main {
+    float: none;
+    width: auto;
+    min-width: 0;
+  }
+
   /* ⑦ 用户主页「实力」雷达换位（2026-10-13 张老师要求）：≤880 单列化后侧栏
      整组落到页面最底，雷达改在主栏「玩家面板下、动态上」显示——主栏副本
      .radar_main（桌面 display:none，见下方全局规则）亮起，侧栏原件隐藏。 */
