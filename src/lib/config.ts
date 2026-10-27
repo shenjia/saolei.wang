@@ -260,6 +260,20 @@ export const GRADE_PERCENTS = [100, 90, 80, 70, 60, 50, 35, 15, 5];
 export const VIDEO_LEVELS = ["beg", "int", "exp"] as const;
 export type VideoLevel = (typeof VIDEO_LEVELS)[number];
 
+/**
+ * 级别运行时断言（2026-10-27 SQL 注入加固）：
+ * 原生 SQL 里凡出现 `v.level = '${level}'` 这类字面量拼接，值一律先用它包一层——
+ * 把「调用方都过了 parseLevel」的口头约定变成运行时自证。传脏值立即抛错（500 进日志、
+ * 一眼能查到调用点），绝不静默拼进 SQL。
+ * 返回类型同时把 string 收窄成 VideoLevel，拼接处免 cast。
+ */
+export function assertVideoLevel(v: string): VideoLevel {
+  if (!(VIDEO_LEVELS as readonly string[]).includes(v)) {
+    throw new Error(`assertVideoLevel: invalid video level ${JSON.stringify(v)}`);
+  }
+  return v as VideoLevel;
+}
+
 // 录像列表排序列（2026-10-15 张老师需求：表头点击排序，去掉右侧排序 tabs）。
 // id=上传时间（默认，倒序）；time=成绩（升序，快在前）；3bv=3BV（降序，大在前）；
 // 3bvs=3BV/s（降序，快在前，排除运气盘：初级 3BV<10、中/高级 3BV<4，见 MIN_3BV_FOR_3BVS）；

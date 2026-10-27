@@ -15,7 +15,7 @@
 import { NextResponse } from "next/server";
 import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
 import { rateLimit } from "@/lib/ratelimit";
-import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
+import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, assertVideoLevel, type VideoLevel } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 
@@ -43,7 +43,8 @@ export async function GET(req: Request) {
   const conds: string[] = [];
   if (cursor > 0) conds.push(`v.id > ${cursor}`);
   if (cursor === 0 && since > 0) conds.push(`v.create_time >= ${since}`);
-  if (level) conds.push(`v.level = '${level}'`);
+  // 2026-10-27 SQL 注入加固：虽然上面已白名单归一，拼接前仍过 assertVideoLevel 运行时断言
+  if (level) conds.push(`v.level = '${assertVideoLevel(level)}'`);
   if (playerId !== null) conds.push(`v.user = ${playerId}`);
 
   const rows = await prisma.$queryRawUnsafe<{

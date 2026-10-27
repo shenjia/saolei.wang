@@ -41,6 +41,7 @@ import {
   VIDEO_LIST_DEFAULT_DIR,
   parseVideoTimeWindow,
   parseVideo3bv,
+  assertVideoLevel,
 } from "./config";
 import { publishNews } from "./news";
 import { rebuildUserRanksOnce } from "./userrank";
@@ -825,7 +826,8 @@ function videoListConds(opts: {
   // NF 筛选（2026-10-20）：needVi 已因 nf=true 走 video_info 驱动/JOIN，
   // 此处统一 vi 列引用安全
   if (nf) conds.push(`vi.noflag = 1`);
-  if (level !== "all") conds.push(`v.level = '${level}'`);
+  // 2026-10-27 SQL 注入加固：级别走 assertVideoLevel 运行时白名单，脏值立即抛错（勿静默拼接）
+  if (level !== "all") conds.push(`v.level = '${assertVideoLevel(level)}'`);
   if (author) conds.push(`v.user = ${BigInt(author)}`);
   if (win) conds.push(`vi.real_time >= ${win[0]} AND vi.real_time < ${win[1]}`);
   if (bv !== null) conds.push(`vi.board_3bv = ${bv}`);
@@ -969,7 +971,7 @@ export async function getVideoList(opts: {
       // 级别默认排序：原走成绩表（video_scores_* create_time 索引序）——10-23 起
       // 待审盘也要出列，成绩表无待审行，改 video (level, create_time) 复合索引反扫
       const conds = [
-        `v.level = '${level}'`,
+        `v.level = '${assertVideoLevel(level)}'`,
         ...(noBanFilter ? [] : [`v.status <> ${VIDEO_STATUS.BANNED}`]),
         ...(author ? [`v.user = ${BigInt(author)}`] : []),
       ].join(" AND ");
@@ -1048,7 +1050,7 @@ export async function getVideoFeed(opts: {
   if (opts.nf) {
     const conds = [
       "v.status <> " + VIDEO_STATUS.BANNED,
-      opts.level !== "all" ? `v.level = '${opts.level}'` : "",
+      opts.level !== "all" ? `v.level = '${assertVideoLevel(opts.level)}'` : "",
       opts.cursor ? `vi.create_time < ${BigInt(opts.cursor)}` : "",
       "vi.noflag = 1",
     ]
@@ -1114,7 +1116,7 @@ const fetchFeedDedupIdsImpl = async (
   base: number,
   limit: number
 ): Promise<number[]> => {
-  const lvCond = level !== "all" ? ` AND v.level = '${level}'` : "";
+  const lvCond = level !== "all" ? ` AND v.level = '${assertVideoLevel(level)}'` : "";
   // nf 视图 join video_info 滤 noflag（vi.create_time 与 v.create_time 全量一致，排序用 v 即可）
   const nfJoin = nf ? " JOIN video_info vi ON vi.id = v.id AND vi.noflag = 1" : "";
   const quota = FEED_USER_LEVEL_QUOTA;
@@ -1142,7 +1144,7 @@ const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v2"
 /** 首页发现流去重总数（与 fetchFeedDedupIds 口径严格一致）：
  *  Σ 每组 (用户,级别) 的 min(非纪录盘数, 配额) + 纪录盘总数。 */
 const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean): Promise<number> => {
-  const lvCond = level !== "all" ? ` AND v.level = '${level}'` : "";
+  const lvCond = level !== "all" ? ` AND v.level = '${assertVideoLevel(level)}'` : "";
   const nfJoin = nf ? " JOIN video_info vi ON vi.id = v.id AND vi.noflag = 1" : "";
   const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`
     SELECT (
@@ -1190,7 +1192,7 @@ const fetchVideoCount = unstable_cache(
     if (opts.nf) {
       const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
         `SELECT COUNT(*) AS c FROM video v JOIN video_info vi ON vi.id = v.id WHERE v.status <> ${VIDEO_STATUS.BANNED}${
-          opts.level && opts.level !== "all" ? ` AND v.level = '${opts.level}'` : ""
+          opts.level && opts.level !== "all" ? ` AND v.level = '${assertVideoLevel(opts.level)}'` : ""
         } AND vi.noflag = 1`
       );
       return N(rows[0]?.c);
