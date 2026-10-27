@@ -1,4 +1,4 @@
-// 管理后台 · 审核管理（2026-09-24）
+// 管理后台 · 录像审核（2026-09-24 建，原名「审核管理」，2026-10-27 张老师更名——该页只审录像）
 // 待审队列 + 批量审核 + 审核积压监控；审核状态变更统一走 lib/review.ts。
 
 import Link from "next/link";
@@ -12,7 +12,7 @@ import { BarList } from "@/components/admin/Charts";
 import { scoreTime, timeOpposite } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "审核管理 | 管理后台" };
+export const metadata = { title: "录像审核 | 管理后台" };
 
 type SP = Record<string, string | undefined>;
 
@@ -56,7 +56,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
   return (
     <div className="admin_review_page">
       <div className="admin_page_head">
-        <h1>审核管理</h1>
+        <h1>录像审核</h1>
         <span className="sub">
           待审 {ov.videoPending} 条
           {ov.oldestPendingTime > 0 && ` · 最老一条上传于 ${timeOpposite(ov.oldestPendingTime, 0, "Y-m-d H:i")}（${pendingDays} 天前）`}

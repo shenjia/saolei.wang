@@ -116,7 +116,7 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
           · <b>通过</b>会按审核管线写入录像成绩表、更新玩家最好成绩并发布纪录动态（与前台审核完全同一套逻辑）。<br />
           · <b>屏蔽</b>会把该录像从成绩表移除；若它是玩家的最好成绩，则自动用次优录像顶替，没有次优才清零。<br />
           · <b>删除</b>（仅超管）先执行屏蔽回退成绩，再清理 video / video_info / video_stat / 评论 / 引用动态，不可恢复。<br />
-          · 审核管线要求「先下载观看再审核」，批量审核请到<Link href="/admin/review"> 审核管理 </Link>（那里带下载按钮与勾选）。
+          · 审核管线要求「先下载观看再审核」，批量审核请到<Link href="/admin/review"> 录像审核 </Link>（那里带下载按钮与勾选）。
         </div>
       </AdminCard>
     </>

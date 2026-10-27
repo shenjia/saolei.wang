@@ -230,7 +230,7 @@ export default async function AdminStatsPage() {
       <AdminCard title="口径说明">
         <div className="admin_note">
           · 「通过率」= 窗口内通过录像数 / 上传录像数，反映的是审核速度而非质量；
-          审核质量请看<Link href="/admin/review"> 审核管理 </Link>的屏蔽量。<br />
+          审核质量请看<Link href="/admin/review"> 录像审核 </Link>的屏蔽量。<br />
           · 纪录演变曲线只取「刷新纪录的那一刻」，因此点数等于历史破纪录次数；
           曲线台阶向下（时间越短越好）为正常。<br />
           · 时段 / 星期分布按 +08:00 折算，使用全量历史数据，不受 30 天窗口影响。<br />

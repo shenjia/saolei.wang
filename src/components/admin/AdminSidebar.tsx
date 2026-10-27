@@ -1,5 +1,6 @@
 // 后台侧栏导航（2026-09-24）
-// 分组：概览 / 内容 / 玩家 / 运营。待审录像数作为红点角标（服务端传入，避免客户端再请求一次）。
+// 分组：概览 / 内容 / 玩家 / 运营。待审录像/头像/论坛数作为红点角标（服务端传入，避免客户端再请求一次）。
+// 2026-10-27 张老师要求：论坛待审同挂 badge；「审核管理」更名「录像审核」（该页只审录像）。
 
 "use client";
 
@@ -11,7 +12,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: string;
-  badgeKey?: "pending" | "avatar";
+  badgeKey?: "pending" | "avatar" | "bbs";
 }
 
 const GROUPS: { title: string; items: NavItem[] }[] = [
@@ -26,10 +27,10 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "内容",
     items: [
-      { href: "/admin/review", label: "审核管理", icon: "✅", badgeKey: "pending" },
+      { href: "/admin/review", label: "录像审核", icon: "✅", badgeKey: "pending" },
       { href: "/admin/videos", label: "录像管理", icon: "🎬" },
       { href: "/admin/comments", label: "评论管理", icon: "💬" },
-      { href: "/admin/bbs", label: "论坛管理", icon: "💭" },
+      { href: "/admin/bbs", label: "论坛管理", icon: "💭", badgeKey: "bbs" },
       { href: "/admin/news", label: "动态管理", icon: "📰" },
       { href: "/admin/messages", label: "站内信广播", icon: "✉️" },
     ],
@@ -58,7 +59,7 @@ export function AdminSidebar({
   badges,
   user,
 }: {
-  badges: { pending: number; avatar: number };
+  badges: { pending: number; avatar: number; bbs: number };
   user: { uid: number; name: string; administrator: boolean };
 }) {
   const pathname = usePathname();

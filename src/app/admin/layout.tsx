@@ -22,9 +22,14 @@ export const metadata: Metadata = {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdmin();
-  const [pending, avatarPending, currentUser] = await Promise.all([
+  // 论坛待审（2026-10-27 张老师要求：与录像/头像同款红点角标）——待审主题 + 待审回复合计
+  const [pending, avatarPending, bbsPending, currentUser] = await Promise.all([
     prisma.video.count({ where: { status: VIDEO_STATUS.NORMAL } }),
     prisma.avatarReview.count({ where: { status: AVATAR_REVIEW_STATUS.PENDING } }),
+    Promise.all([
+      prisma.bbsPost.count({ where: { status: 5 } }),
+      prisma.bbsReply.count({ where: { status: 5 } }),
+    ]).then(([a, b]) => a + b),
     prisma.user.findUnique({ where: { id: session.uid }, select: { chineseName: true } }),
   ]);
   const roleTag =
@@ -37,7 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="admin_shell">
       <AdminSidebar
-        badges={{ pending, avatar: avatarPending }}
+        badges={{ pending, avatar: avatarPending, bbs: bbsPending }}
         user={{
           uid: session.uid,
           name: currentUser?.chineseName || session.username,
@@ -50,6 +55,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span className="sub">
             {pending > 0 ? `待审录像 ${pending} 条` : "待审录像已清空"}
             {avatarPending > 0 ? ` · 待审头像 ${avatarPending} 张` : ""}
+            {bbsPending > 0 ? ` · 论坛待审 ${bbsPending} 条` : ""}
           </span>
           <div className="right">
             {roleTag}
