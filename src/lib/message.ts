@@ -30,6 +30,10 @@ export interface MessageItem {
   to?: MessageUserBrief | null;
   /** true=「已发送」视角（我发出的私信，不可删除；isRead=对方已读与否） */
   sent?: boolean;
+  /** true=评论/回复通知（系统代评论者发的通知，非手写私信——不给「回复」入口） */
+  notice?: boolean;
+  /** true=我在此条之后已给他发过信（仅手写私信有意义：行尾显示灰色「已回复」） */
+  replied?: boolean;
 }
 
 /** usersByIds 之上补双体系称号（当前成绩评定；站内信无快照列，用实时值——
@@ -63,6 +67,41 @@ export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<numbe
     if (b) out.set(id, { ...b, title: p?.m ?? "", classic: p?.c ?? null });
   });
   return out;
+}
+
+/**
+ * 评论/回复通知消息的模板前缀（见 api/bbs/route.ts 发送处）。
+ * 这类消息 is_system=false、寄件人=评论者，但**不是手写私信**：
+ *   · 撤回逻辑（retractReplyNotice / retractPostNotices）靠它区分通知与私信；
+ *   · 消息列表靠它决定不给「回复」入口（2026-10-27 张老师要求）。
+ */
+const REPLY_NOTICE_PREFIXES = ["我评论了你的文章", "我回复了你在"] as const;
+
+/** 是否「评论/回复文章」通知（撤回逻辑专用，护栏必须窄） */
+export function isReplyNotice(content: string): boolean {
+  return REPLY_NOTICE_PREFIXES.some((p) => content.startsWith(p));
+}
+
+/**
+ * 是否「通知类」消息（2026-10-27 张老师要求：只有单独手写的私信才给「回复」入口）。
+ * 覆盖新站模板 + 2008 版迁移来的旧模板——这些全是系统代发通知，
+ * 寄件人要么是评论者本人、要么是审核机器人，回复过去没有意义：
+ *   · 我评论了你的文章… / 我评论了您的高?1.21秒录象!
+ *   · 我回复了你在… / 我回复了您发表的主题"…"
+ *   · 您上传的高级53.36秒录象已经通过审核! / 您上传的高级56秒录像因为【…】被驳回
+ *   · 录像文件损坏：原因是…
+ */
+const NOTICE_PREFIXES = [
+  "我评论了你的文章",
+  "我评论了您",
+  "我回复了你在",
+  "我回复了您",
+  "您上传的",
+  "录像文件损坏",
+] as const;
+
+export function isNoticeMessage(content: string): boolean {
+  return NOTICE_PREFIXES.some((p) => content.startsWith(p));
 }
 
 export async function getUnreadCount(userId: number): Promise<number> {
@@ -127,15 +166,40 @@ export async function getMessageList(
     take: MESSAGE_PAGESIZE,
   });
   const authors = await messageAuthorsWithTitles([...new Set(rows.map((r) => N(r.fromUser)))]);
+
+  // 「已回复」判定（2026-10-27 张老师要求：只有手写私信给「回复」入口，回复过的显示灰色「已回复」）：
+  // 口径＝我在此条消息之后给他发过信——按 id 比（自增序 = 投递序，避开同秒 createTime 平局）；
+  // 对方之后再来新消息则新行重新可回复，老行仍显示「已回复」（一次查询 groupBy 拿每个收件人的最大 id）。
+  const pendingFromIds = [
+    ...new Set(rows.filter((r) => !r.isSystem && !isNoticeMessage(r.content)).map((r) => N(r.fromUser))),
+  ].filter((id) => id > 0);
+  const repliedMaxId = new Map<number, number>();
+  if (pendingFromIds.length) {
+    const grouped = await prisma.message.groupBy({
+      by: ["toUser"],
+      where: { fromUser: BigInt(userId), toUser: { in: pendingFromIds.map(BigInt) } },
+      _max: { id: true },
+    });
+    for (const g of grouped) {
+      if (g._max.id !== null) repliedMaxId.set(N(g.toUser), N(g._max.id));
+    }
+  }
+
   return {
-    messages: rows.map((r) => ({
-      id: N(r.id),
-      content: r.content,
-      isRead: r.isRead,
-      isSystem: r.isSystem,
-      createTime: N(r.createTime),
-      from: authors.get(N(r.fromUser)) ?? null,
-    })),
+    messages: rows.map((r) => {
+      const notice = !r.isSystem && isNoticeMessage(r.content);
+      const fromId = N(r.fromUser);
+      return {
+        id: N(r.id),
+        content: r.content,
+        isRead: r.isRead,
+        isSystem: r.isSystem,
+        createTime: N(r.createTime),
+        from: authors.get(fromId) ?? null,
+        notice,
+        replied: !notice && (repliedMaxId.get(fromId) ?? 0) > N(r.id),
+      };
+    }),
     total,
     pageSize: MESSAGE_PAGESIZE,
   };
@@ -164,8 +228,6 @@ export async function markMessageRead(id: number, userId: number): Promise<boole
  *   ① from_user 锁发送者=评论者本人；② 前缀必须是通知模板「我评论了你的文章」/「我回复了你在」；
  *   ③ 锚点整段匹配。
  */
-const REPLY_NOTICE_PREFIXES = ["我评论了你的文章", "我回复了你在"] as const;
-
 export async function retractReplyNotice(
   fromUserId: number,
   replyId: number,

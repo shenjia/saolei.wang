@@ -44,6 +44,7 @@ export function SendMessageButton({
   name,
   authorId,
   variant = "bubble",
+  onSent,
 }: {
   to: number;
   name: string;
@@ -51,6 +52,8 @@ export function SendMessageButton({
   authorId: number;
   /** bubble＝用户主页气泡图标钮（默认）；text＝消息列表行内文字链（「回复」） */
   variant?: "bubble" | "text";
+  /** 发送成功回调（消息列表用：本行就地转「已回复」） */
+  onSent?: () => void;
 }) {
   // 2026-10-25 十二轮张老师定：按钮全场景常驻——未登录/看自己时灰置不可点，
   // hover 提示原因（msg_btn--disabled + data-tip 复用全站气泡模式）
@@ -90,6 +93,7 @@ export function SendMessageButton({
       setOpen(false);
       draft.clear(); // 发送成功清空草稿
       toast("发送成功", "success", 2000);
+      onSent?.();
     } finally {
       setBusy(false);
     }

@@ -2469,6 +2469,13 @@ button.msg_reply_link {
 .msg_reply_link:hover {
   text-decoration: underline;
 }
+/* 「已回复」静态标（2026-10-27 张老师要求：私信回复过即换成灰色非链接文字，
+   与「回复」链接同位同字号，只是去掉绿色与可点击性） */
+.msg_reply_done {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #75715e;
+}
 
 /* 消息内容列完整显示（2026-10-23 张老师要求：超长消息不再单行省略）：
    解除 .table.bbs_list td 的 nowrap/ellipsis（论坛列表保持单行省略不动），

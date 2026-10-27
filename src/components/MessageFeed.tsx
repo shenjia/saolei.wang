@@ -9,6 +9,9 @@
 //   （与用户主页对话气泡同款 SendMessageButton variant="text"）；authorId 自页面透传
 // 2026-10-27（张老师要求）：「已发送」视角——发件人列显示收件人、正文尾附
 //   「未读/已读」状态标（对方是否已读）；行不可点不置灰（无「我读没读」语义）
+// 2026-10-27 二轮（张老师要求）：只有单独手写的私信才有「回复」入口——
+//   评论/回复通知（含 2008 版迁移来的旧通知模板）不设按钮；已回复过的显示
+//   灰色非链接「已回复」（判定口径见 lib/message.ts getMessageList）
 
 "use client";
 
@@ -39,10 +42,13 @@ function MessageContent({ content }: { content: string }) {
 export function MessageRow({
   m,
   onRead,
+  onReplied,
   authorId,
 }: {
   m: MessageItem;
   onRead: (id: number) => void;
+  /** 从本行浮窗发出回复成功：本行就地转「已回复」（不必等刷新） */
+  onReplied: (id: number) => void;
   /** 当前登录用户 id：发信浮窗草稿键 pm:{uid}:{to} 与气泡/表单共用一份 */
   authorId: number;
 }) {
@@ -104,13 +110,20 @@ export function MessageRow({
       >
         <MessageContent content={m.content} />
         {!m.isRead && <span className="msg_new">新</span>}
-        {!m.isSystem && m.from && (
-          <SendMessageButton
-            variant="text"
-            to={m.from.id}
-            name={m.from.chineseName || `ID ${m.from.id}`}
-            authorId={authorId}
-          />
+        {/* 回复入口（2026-10-27 张老师要求）：只有手写私信才有——
+            评论/回复通知（notice）不设按钮；已回复过的显示灰色非链接「已回复」 */}
+        {!m.isSystem && m.from && !m.notice && (
+          m.replied ? (
+            <span className="msg_reply_done">已回复</span>
+          ) : (
+            <SendMessageButton
+              variant="text"
+              to={m.from.id}
+              name={m.from.chineseName || `ID ${m.from.id}`}
+              authorId={authorId}
+              onSent={() => onReplied(m.id)}
+            />
+          )
         )}
       </td>
       <td className="time">{timeOpposite(m.createTime, TIME_NEVER)}</td>
@@ -151,10 +164,15 @@ export function MessageFeed({
     }
   }
 
+  /** 本行浮窗发出回复成功：就地置「已回复」（灰色静态文字，不需要刷新） */
+  function markReplied(id: number) {
+    setItems((prev) => prev.map((m) => (m.id === id ? { ...m, replied: true } : m)));
+  }
+
   return (
     <>
       {items.map((m) => (
-        <MessageRow key={m.id} m={m} onRead={markRead} authorId={authorId} />
+        <MessageRow key={m.id} m={m} onRead={markRead} onReplied={markReplied} authorId={authorId} />
       ))}
       {items.length === 0 && (
         <tr>
