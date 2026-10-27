@@ -395,10 +395,7 @@ export function AdminReviewList({
             </p>
             <label className="ban_check">
               <input type="checkbox" checked={banLowTrust} onChange={(e) => setBanLowTrust(e.target.checked)} />
-              <span>
-                同时将涉及的上传者加入低信任用户组（此后其上传的录像需人工审核、每日限 5 部；
-                已在组内或账号已封禁的上传者不重复处理）
-              </span>
+              <span>同时将涉及的上传者加入低信任用户组</span>
             </label>
             <div className="ban_ops">
               <button type="button" className="admin_btn" disabled={busy} onClick={() => setBanConfirm(null)}>
@@ -623,15 +620,14 @@ function ReviewRow({
                 message: `确认屏蔽录像 #${v.id}？对应最好成绩会被回退。`,
                 danger: true,
                 confirmText: "确认屏蔽",
-                checkbox: {
-                  label: (
-                    <>
-                      同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
-                      （此后其上传的录像需人工审核、每日限 5 部；上传者已在组内或账号已封禁时不重复处理）
-                    </>
-                  ),
-                  defaultChecked: true,
-                },
+                  checkbox: {
+                    label: (
+                      <>
+                        同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
+                      </>
+                    ),
+                    defaultChecked: true,
+                  },
               });
               if (!ok) return;
               const done = await run("video.review", {

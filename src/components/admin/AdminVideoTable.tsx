@@ -165,7 +165,6 @@ function BanVideoButton({ v }: { v: AdminVideoRow }) {
             label: (
               <>
                 同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
-                （此后其上传的录像需人工审核、每日限 5 部；上传者已在组内或账号已封禁时不重复处理）
               </>
             ),
             defaultChecked: true,
