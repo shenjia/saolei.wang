@@ -70,8 +70,10 @@ export function PracticeToday({
   /** DOM id 前缀：桌面侧栏 "practice_today" / 移动端 "practice_today_top" */
   prefix: string;
   /** 排行模式今日统计行（2026-10-28 张老师定）：今日玩过排行模式才由服务端下发，
-   *  null=不渲染。b/i/e=初/中/高级今日新收集 BV 数、z=今日 PB 次数 */
-  rankedToday: { beg: number; int: number; exp: number; pb: number } | null;
+   *  null=不渲染。ranked=今日是否玩过排行模式（practice_daily.mode_ranked>0；
+   *  false 时整行隐藏，2026-10-29 口径）、b/i/e=初/中/高级今日新收集 BV 数、
+   *  z=今日 PB 次数（0 值降亮灰同 b/i/e） */
+  rankedToday: { ranked: boolean; beg: number; int: number; exp: number; pb: number } | null;
   /** 服务端口径「我的完成盘数」：登录=practice_log 当日 won=1 计数；未登录恒 0 */
   mineWon: number;
   /** 服务端口径「我的尝试盘数」：未登录恒 0 */
@@ -120,11 +122,14 @@ export function PracticeToday({
   const rNet = rate(netWon, net);
   return (
     <div id={prefix} className="practice_today">
-      {/* 排行模式今日统计行（2026-10-28 张老师定）：仅今日玩过排行模式显示。
-          「今日已收集 b / i / e BV 创造 z PB」——b/i/e 按级别三色
-          （初绿 #a6e22e / 中橙 #f79646 / 高金 #fdc61a，与纪录页级别色同源），
-          0 值降亮灰不抢眼；z=今日 PB 次数恒金色 */}
-      {rankedToday && (
+      {/* 排行模式今日统计行（2026-10-28 张老师定）：仅今日玩过排行模式
+          （practice_daily.mode_ranked>0，ranked 标志）才渲染——今天没玩排行
+          模式时整行隐藏（2026-10-29 00:58 张老师重申口径；练习页 op_ranked
+          才是「登录恒显亮灰 0」口径，两处不同）。「今日已收集 b / i / e BV
+          创造 z PB」——b/i/e 按级别三色（初绿 #a6e22e / 中橙 #f79646 /
+          高金 #fdc61a，与纪录页级别色同源），0 值降亮灰不抢眼；z=今日 PB
+          次数，0 值同降亮灰 */}
+      {rankedToday?.ranked && (
         <p className="pt_line pt_ranked">
           <span className="lead">今日已收集</span>
           <b className={`lv lv_beg${rankedToday.beg > 0 ? "" : " zero"}`}>{rankedToday.beg}</b>
@@ -134,7 +139,7 @@ export function PracticeToday({
           <b className={`lv lv_exp${rankedToday.exp > 0 ? "" : " zero"}`}>{rankedToday.exp}</b>
           <span className="lead">BV</span>
           <span className="pbpart">
-            创造 <b className="pbv">{rankedToday.pb}</b> PB
+            创造 <b className={`pbv${rankedToday.pb > 0 ? "" : " zero"}`}>{rankedToday.pb}</b> PB
           </span>
         </p>
       )}

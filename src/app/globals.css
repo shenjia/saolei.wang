@@ -10295,6 +10295,7 @@ html.op-fakefs #header {
 }
 .practice_today .pt_line .lead {
   flex: 0 0 auto;
+  font-size: 13px; /* 非数字文案（今日已收集/BV/今日已完成/局）微缩：15px 略大（2026-10-28 张老师要求），与练习页 op_today 13px 文案同档 */
 }
 .practice_today .pt_line .mine {
   color: #a6e22e; /* 站内标准绿（站点 logo hover 同色），暗底上醒目 */
@@ -10347,11 +10348,17 @@ html.op-fakefs #header {
 .practice_today .pt_line.pt_ranked .pbpart {
   margin-left: auto;
   white-space: nowrap;
+  font-size: 13px; /* 「创造/PB」文案与 .lead 同档微缩（2026-10-28），pbv 数字仍 18px */
 }
 .practice_today .pt_line.pt_ranked .pbv {
   color: #fdc61a;
   font-size: 18px;
   font-weight: bold;
+}
+/* pb=0 降亮灰（2026-10-29 00:53 张老师定，与练习页 .op_ranked .pbv.zero 同口径）：
+   今日没创造 PB 不显金色，与 b/i/e 零值亮灰一致 */
+.practice_today .pt_line.pt_ranked .pbv.zero {
+  color: #b1b1a4;
 }
 .practice_today .pt_sub {
   display: flex;
@@ -10456,7 +10463,18 @@ html.op-fakefs #header {
 #online_play .op_stats {
   display: flex;
   flex-direction: column;
-  align-self: center; /* 标题行 flex-end 底线对齐下自行居中（承 op_today 原位） */
+  align-self: center;
+  /* 水平居中于棋盘中线（2026-10-29 00:53 张老师要求「与全屏一致」）：news_head
+     已有 position:relative（浮窗锚，8314 行），统计块改绝对定位吸附标题行
+     水平中点——全屏态 10513 行同款几何（left:50%+translateX(-50%)），非全屏
+     棋盘 gwrap 在 game_area 内 text-align:center 居中，中心同为板块中线，
+     两态视觉恒一致；脱离 flex 流后不再与 tabs/图标排挤占，窄屏由 ≤880
+     隐藏规则兜底（不参与 flex-wrap 换行堆叠） */
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
+  align-items: stretch; /* pbpart 的 margin-left:auto 靠容器两行宽者定宽撑开（同全屏注释） */
 }
 #online_play .op_ranked {
   display: flex;
@@ -10499,31 +10517,21 @@ html.op-fakefs #header {
   font-size: 16px;
   font-weight: bold;
 }
+/* pb=0 降亮灰（2026-10-29 00:53 张老师定）：paintRanked 的 set() 对四值统一
+   toggle .zero，b/i/e 已有 .lv.zero 规则，pbv 同口径——0 值不显金色 */
+#online_play .op_ranked .pbpart .pbv.zero {
+  color: #b1b1a4;
+}
 @media (max-width: 880px) {
   #online_play .op_ranked {
     display: none; /* 窄屏随完成统计一起隐藏 */
   }
 }
 /* 全屏态（2026-10-23 张老师定）：统计与游戏区域水平居中——全屏宿主铺满视口，
-   棋盘 gwrap 在 #game_area 内 text-align:center 居中（中心＝视口中线），
-   标题行里「跟在 tabs 后」的位置不再对齐盘面中心，改绝对定位吸附到
-   .news_head（补 position:relative 作包含块）水平中点：脱离 flex 流不动
-   tabs/按钮排布局，行宽恒≥视口宽不会与两侧元素相撞（≤880 隐藏规则仍生效） */
-#online_play > div:fullscreen .news_head {
-  position: relative;
-}
-#online_play > div:fullscreen .op_stats {
-  position: absolute;
-  left: 50%;
-  bottom: 3px; /* 行内 align-items:flex-end 底线对齐的近似视觉位 */
-  transform: translateX(-50%);
-  /* pbpart 的 margin-left:auto 在绝对定位收缩宽度下失效——右缘对齐改由
-     统计容器自身宽度撑开（两行都 white-space:nowrap，宽者定容器宽） */
-  align-items: stretch;
-}
-#online_play > div:fullscreen .op_ranked .pbpart {
-  margin-left: auto;
-}
+   棋盘 gwrap 在 #game_area 内 text-align:center 居中（中心＝视口中线）。
+   2026-10-29 起基础态 .op_stats 已改为同款几何（绝对定位吸附 .news_head
+   水平中点，news_head 本就有 position:relative 浮窗锚），两态视觉恒一致，
+   无需全屏专属覆盖——pbpart 右缘对齐由基础态 align-items:stretch 实现 */
 /* 首页右栏「开一局」大按钮（2026-10-14 张老师定）：扁平、与侧栏板块同宽（桌面盒外径 272px），
    样式复用游戏笑脸按钮的经典银灰凸起边框，笑脸图标在前、文字在后 */
 #play_entry {
@@ -12531,9 +12539,15 @@ a.cheat_rep_link:hover {
   width: 16px;
   height: 16px;
   display: block;
+  /* 列表图标一律灰度（2026-10-29 张老师二轮）：配色不抢级别色语言；
+     详情页原色（.sw--detail 豁免，见下） */
+  filter: grayscale(1);
 }
 .video_table .sw_icon.sw--pixel img {
   image-rendering: pixelated;
+}
+.video_table .sw_icon.sw--detail img {
+  filter: none; /* 详情页原色图标（2026-10-29 张老师） */
 }
 .video_table .sw_icon.sw--text {
   font-size: 10px;
