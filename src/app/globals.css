@@ -6724,6 +6724,18 @@ body #video_list .score_3bvs a:hover em {
 #page .video_table td.score.current .banned {
   color: #e60657;
 }
+/* 划线成绩深灰（2026-10-28 张老师要求）：低于限界不被承认的 3BV/s / STNB（del），
+   与正常数字同用 td 默认 #939387 难区分，改深灰 #636359 对齐详情页/用户卡片的
+   划线语言（legacy #page .score_3bvs del 同色）。排序命中列整列黄语义保留
+   （上方 #page .video_table td.c_3bvs.current del (1,3,2) 压过本规则 (0,2,1)） */
+.video_table td del {
+  color: #636359;
+}
+/* 命中列 hover 仍绿：del 显式色截断了 td:hover 的继承，须单独带绿
+   （(1,4,3) 压过上方 (1,3,2) 黄与本条 (0,1,2) 灰） */
+#page .video_table td.c_3bvs.current:hover del {
+  color: #a6e22e;
+}
 
 /* 页头编排（排行页 page_head 同语言）：h1 左、tabs 组占满剩余、搜索框贴行尾 */
 #page .page_head .video_nav {
