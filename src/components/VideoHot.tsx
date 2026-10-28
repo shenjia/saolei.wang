@@ -22,7 +22,7 @@ export function VideoHot({ videos }: { videos: VideoListItem[] }) {
         {/* 选取规则问号（2026-10-26）：与每日一星同图标、同 data-tip 气泡 */}
         <span
           className="star_help"
-          data-tip="选取近30天上传的录像，按“（点击量 + 他人有效评论数 × 20）÷ 发布时长^1.2，再乘 STNB 质量系数（√(STNB/100)，限 0.7~1.4）”计算热度，取前8部：越新、成绩越好越占优。作者自评、待审及已删除评论不计入。"
+          data-tip="选取近30天上传的录像，按“（点击量 + 他人有效评论数 × 20）÷ 发布天数^1.2，再乘 STNB 质量系数（√(STNB/100)，限 0.7~1.4）”计算热度，取前8部：越新、成绩越好越占优。作者自评、待审及已删除评论不计入。"
         >
           <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
             <circle cx="10" cy="10" r="8.4" />

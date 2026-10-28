@@ -1242,9 +1242,8 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boo
 
 const HOT_VIDEO_WINDOW_SECONDS = 30 * 24 * 3600;
 const HOT_VIDEO_COMMENT_WEIGHT = 20;
-/** 时间衰减重力（2026-10-28 张老师先拍 1.5、同日改定 1.2 温和档，HN 式）：
- *  热度 = (点击 + 他人有效评论×20) / (发布小时数+2)^1.2，
- *  老录像分数连续缩水（1.2 档约 3.7 倍/天）取代原「只增不减、到期瞬间消失」的口径。 */
+/** 时间衰减重力（2026-10-28 张老师先拍 1.5、同日改定 1.2 温和档，HN 式；
+ *  同日再令分母改按发布天数+1——当天记 1 天，30 天仅缩水约 56 倍，取代原小时口径） */
 const HOT_VIDEO_GRAVITY = 1.2;
 /** STNB 质量系数（2026-10-28 张老师需求：成绩好的相对得分更高，但不剥夺低成绩上榜可能）：
  *  系数 = clamp(√(STNB/100), 0.7, 1.4)——STNB=100 恰为 1（中性），√ 压平重尾；
@@ -1257,10 +1256,10 @@ const HOT_VIDEO_QUALITY_MAX = 1.4;
 /**
  * 热门录像（现仅首页右栏使用）：近 30 天上传，按点击与他人有效评论综合排序，
  * 乘 STNB 质量系数，并按发布时长做重力衰减。
- * 热度 = (点击量 + 有效评论数 × 20) × clamp(√(STNB/100), 0.7, 1.4) / (发布小时数 + 2)^1.2；
+ * 热度 = (点击量 + 有效评论数 × 20) × clamp(√(STNB/100), 0.7, 1.4) / (发布天数 + 1)^1.2；
  * 评论只计 NORMAL，且 c.user <> v.user，排除作者自评（包括在自己录像下回复他人）对热度的影响。
  * 屏蔽录像仍不进前台。30 天窗口保留（约束候选集规模），衰减到第 30 天时
- * 热度已缩水约 2800 倍，出窗不再产生名次跳变。
+ * 热度已缩水约 56 倍，出窗不再产生名次跳变。
  */
 async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
   const cutoff = BigInt(Math.floor(Date.now() / 1000) - HOT_VIDEO_WINDOW_SECONDS);
@@ -1280,14 +1279,14 @@ async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
     SELECT id FROM hot_candidates
     ORDER BY (clicks + external_comments * ${HOT_VIDEO_COMMENT_WEIGHT})
       * LEAST(GREATEST(SQRT(stnb / ${HOT_VIDEO_STNB_REF}), ${HOT_VIDEO_QUALITY_MIN}), ${HOT_VIDEO_QUALITY_MAX})
-      / POW((UNIX_TIMESTAMP() - create_time) / 3600 + 2, ${HOT_VIDEO_GRAVITY}) DESC,
+      / POW((UNIX_TIMESTAMP() - create_time) / 86400 + 1, ${HOT_VIDEO_GRAVITY}) DESC,
       id DESC
     LIMIT ${safeLimit}`;
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
-// 2026-10-28 v9：热度乘 STNB 质量系数 clamp(√(stnb/100), 0.7, 1.4)（张老师拍板标准档），升键作废旧缓存
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v9"], { revalidate: 60 });
+// 2026-10-28 v10：衰减分母改按发布天数+1（张老师指令），升键作废旧缓存
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v10"], { revalidate: 60 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
