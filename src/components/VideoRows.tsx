@@ -53,19 +53,22 @@ export interface VideoSortSpec {
   explicit?: boolean;
 }
 
-/** 表头（列定义唯一来源，两处共用）。有 sort 时可排序列渲染为链接（排行表头同语言）。
+/** 表头（列定义唯一来源，多处共用）。有 sort 时可排序列渲染为链接（排行表头同语言）。
  *  onSort（2026-10-16）：提供时普通左键点击就地客户端排序（preventDefault 不导航），
  *  修饰键点击/中键仍走真实链接（新标签打开该排序的 URL，URL 即状态兜底）。
  *  2026-10-23 升降序切换：onSort 带方向——同列再点反向（箭头高亮换向），切列取该列默认方向。
- *  noSort3bv（2026-10-20 定向视图）：3BV 列禁排序（整列同值无意义），渲染纯文本 */
+ *  noSort3bv（2026-10-20 定向视图）：3BV 列禁排序（整列同值无意义），渲染纯文本。
+ *  hideIoe（2026-10-28 张老师需求）：首页/用户主页去掉 IOE 列（/video 列表页保持全列） */
 export function VideoHead({
   sort,
   onSort,
   noSort3bv,
+  hideIoe,
 }: {
   sort?: VideoSortSpec;
   onSort?: (order: VideoListOrder, dir: VideoListDir) => void;
   noSort3bv?: boolean;
+  hideIoe?: boolean;
 }) {
   // 各列排序链接（order/dir 进 URL：显式态才带——默认排序 URL 省略 order）
   function col(order: VideoListOrder, label: string, title: string) {
@@ -117,8 +120,9 @@ export function VideoHead({
             需要单独放行 3BV/s 列（globals.css 媒体查询按类名定向隐藏） */}
         <th className="c bv">{noSort3bv ? "3BV" : col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
         <th className="c bvs">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
-        {/* 2026-10-20 张老师需求：新增 IOE（效率）/STNB（判雷）指标列，可点击排序 */}
-        <th className="c ioe">{col("ioe", "IOE", "按效率 IOE 排列（大在前）")}</th>
+        {/* 2026-10-20 张老师需求：新增 IOE（效率）/STNB（判雷）指标列，可点击排序；
+            2026-10-28 hideIoe（张老师需求）：首页/用户主页不输出 IOE 列 */}
+        {!hideIoe && <th className="c ioe">{col("ioe", "IOE", "按效率 IOE 排列（大在前）")}</th>}
         <th className="c stnb">{col("stnb", "STNB", "按判雷 STNB 排列（大在前）")}</th>
         <th>
           {/* 评论/点击同列两个独立排序入口（张老师要求均可触发排序） */}
@@ -142,13 +146,16 @@ export function VideoHead({
 
 /** 单行（<tr>），列宽/配色见 globals.css 的 .video_table
  *  highlight：排序命中列整列黄（2026-09-27 起按成绩/按3BV/s，2026-10-15 扩展全部排序列；
- *  默认排序（上传时间）不高亮——张老师要求） */
+ *  默认排序（上传时间）不高亮——张老师要求）。
+ *  hideIoe（2026-10-28）：与 VideoHead 同开关——不输出 IOE 单元格（首页/用户主页） */
 export function VideoRowLine({
   video: v,
   highlight,
+  hideIoe,
 }: {
   video: VideoListItem;
   highlight?: VideoHighlight;
+  hideIoe?: boolean;
 }) {
   const scores = videoScores(v.board3bv, v.realTime, v.level as VideoLevel);
   const lvCls = LEVEL_CLS[v.level as VideoLevel] ?? "";
@@ -221,16 +228,18 @@ export function VideoRowLine({
       </td>
       {/* 指标列（2026-10-20）：IOE 3 位小数 / STNB 1 位小数（与雷达口径一致，
           见 videoscore BASE_METRICS digits）；无指标行（个别老盘解析失败）显 -。
-          hover 气泡说明指标含义 */}
-      <td className={`c_3bvs ioe c${highlight === "ioe" ? " current" : ""}`}>
-        {v.ioe != null ? (
-          <span data-tip="IOE 效率：每点击换回的 3BV" aria-label="IOE 效率">
-            {v.ioe.toFixed(3)}
-          </span>
-        ) : (
-          <span title="该录像暂无分析数据">-</span>
-        )}
-      </td>
+          hover 气泡说明指标含义。hideIoe（2026-10-28）：首页/用户主页不输出 */}
+      {!hideIoe && (
+        <td className={`c_3bvs ioe c${highlight === "ioe" ? " current" : ""}`}>
+          {v.ioe != null ? (
+            <span data-tip="IOE 效率：每点击换回的 3BV" aria-label="IOE 效率">
+              {v.ioe.toFixed(3)}
+            </span>
+          ) : (
+            <span title="该录像暂无分析数据">-</span>
+          )}
+        </td>
+      )}
       <td className={`c_3bvs stnb c${highlight === "stnb" ? " current" : ""}`}>
         {/* 2026-10-22 张老师定：初级 3BV<10（MIN_3BV_FOR_3BVS，中/高级上传下限本就
             高于 4）的 STNB 与 3BV/s 同口径划线不承认——运气盘虚高值（如 3BV=2 的

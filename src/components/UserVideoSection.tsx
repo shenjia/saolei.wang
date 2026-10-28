@@ -62,6 +62,7 @@ export function UserVideoSection({
     <div className="box" id="user_videos">
       <VideoListFeed
         client
+        hideIoe
         initial={initial}
         total={total}
         pageSize={pageSize}

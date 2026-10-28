@@ -49,6 +49,7 @@ export function VideoListFeed({
   client = false,
   head,
   noSort3bv,
+  hideIoe,
 }: {
   initial: VideoListItem[];
   /** 当前筛选条件下的录像总数 */
@@ -80,6 +81,9 @@ export function VideoListFeed({
   head?: (ctx: VideoListHeadCtx) => ReactNode;
   /** 3BV 列禁排序（2026-10-20 定向视图：整列同值排序无意义），透传 VideoHead.noSort3bv */
   noSort3bv?: boolean;
+  /** 去掉 IOE 列（2026-10-28 张老师需求：用户主页录像版块；/video 列表页保持全列），
+   *  透传 VideoHead/VideoRowLine.hideIoe，空态 colSpan 随列数联动 */
+  hideIoe?: boolean;
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initial.length < total);
@@ -362,6 +366,7 @@ export function VideoListFeed({
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
         <VideoHead
           noSort3bv={noSort3bv}
+          hideIoe={hideIoe}
           sort={
             headSort
               ? {
@@ -386,11 +391,11 @@ export function VideoListFeed({
         />
         <tbody>
           {items.map((v) => (
-            <VideoRowLine key={v.id} video={v} highlight={highlight} />
+            <VideoRowLine key={v.id} video={v} highlight={highlight} hideIoe={hideIoe} />
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={9} style={{ textAlign: "center" }}>
+              <td colSpan={hideIoe ? 8 : 9} style={{ textAlign: "center" }}>
                 暂无数据
               </td>
             </tr>

@@ -223,14 +223,15 @@ export function VideoFeed({
         </div>
       )}
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
-        <VideoHead />
+        {/* hideIoe（2026-10-28 张老师需求）：首页录像区去掉 IOE 列 */}
+        <VideoHead hideIoe />
         <tbody>
           {items.map((v) => (
-            <VideoRowLine key={v.id} video={v} />
+            <VideoRowLine key={v.id} video={v} hideIoe />
           ))}
           {items.length === 0 && (
             <tr>
-              <td className="text" colSpan={7}>
+              <td className="text" colSpan={8}>
                 {switching ? "加载中…" : "还没有记录。"}
               </td>
             </tr>
