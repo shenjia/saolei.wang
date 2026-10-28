@@ -11,6 +11,9 @@
 // · 每点 hover 浮层：日期（距今天数）/ 纪录值 / 创造者（人名+性别+军衔强制同行）/ 保持时长。
 // · 图表横向自适应（三轮张老师要求）：全宽铺开优先，点密时压缩每点横向格宽
 //   （下限 6px），只有 >600 点的极端情况才转横向滚动——中级/高级不再出滚动条。
+// · 移动端触摸（八轮 2026-10-28 张老师反馈）：①气泡垂直位置随触点翻转
+//   （上半区沉底/下半区贴顶），手指不再挡气泡；②触摸选中在松手后保持
+//   （pointerleave 只对鼠标清 hover），滚动或切级别才清除——修「点了没气泡」。
 // · 「距今 N 天」按浏览器本地时间实时算——SSR 与客户端可能跨天差 1，
 //   该 span 挂 suppressHydrationWarning（绝对日期不受影响）。
 
@@ -105,6 +108,9 @@ function ChartCard({
   const [boxW, setBoxW] = useState(600);
   const [hover, setHover] = useState<number | null>(null);
   const [tipLeft, setTipLeft] = useState(0);
+  // 八轮（2026-10-28 张老师反馈移动端）：气泡垂直位置随触点翻转——手指按在图表
+  // 上半区时气泡沉底、下半区时贴顶，避免触点（手指）正好压住气泡
+  const [tipBelow, setTipBelow] = useState(false);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -193,6 +199,10 @@ function ChartCard({
     let tl = visX + 12;
     if (tl + 262 > vw) tl = visX - 262 - 12;
     setTipLeft(Math.min(Math.max(4, tl), Math.max(4, vw - 266)));
+    // 触点在图表上半区 → 气泡放底部；下半区 → 贴顶（鼠标 hover 同样受益：
+    // 光标在顶部时气泡不再盖住光标所指的数据点）
+    const sy = ((e.clientY - rect.top) / rect.height) * H;
+    setTipBelow(sy < H / 2);
     setHover(best);
   };
 
@@ -230,7 +240,12 @@ function ChartCard({
           style={{ touchAction: "pan-y" }}
           onPointerMove={pick}
           onPointerDown={pick}
-          onPointerLeave={() => setHover(null)}
+          // 触摸松手时浏览器会补发 pointerleave（触摸指针随 up 隐式释放），
+          // 直接清掉会让「点一下」的气泡闪现即逝、看起来像根本没出现——
+          // 触摸交互的选中保持到滚动/切换级别才清；鼠标 hover 仍随移出消失
+          onPointerLeave={(e) => {
+            if (e.pointerType !== "touch") setHover(null);
+          }}
         >
           {[0, 0.25, 0.5, 0.75, 1].map((r) => {
             const gy = PAD_T + r * (H - PAD_T - PAD_B);
@@ -294,7 +309,14 @@ function ChartCard({
           )}
         </svg>
         {hp && (
-          <div className="rec_tip" style={{ left: tipLeft }}>
+          <div
+            className="rec_tip"
+            style={{
+              left: tipLeft,
+              top: tipBelow ? "auto" : 6,
+              bottom: tipBelow ? 6 : undefined,
+            }}
+          >
             <div className="d">
               {fmtDate(hp.x)}（距今 <span suppressHydrationWarning>{daysAgo(hp.x)}</span> 天）
             </div>

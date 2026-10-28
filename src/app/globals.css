@@ -2712,15 +2712,22 @@ button.msg_reply_link {
   body #page.records_old #home > li.main {
     width: calc(100% - 302px);
   }
+  /* 页头 flex 只给桌面（2026-10-28 八轮：此前 flex 规则没包断点，移动端被
+     ≤768 的 #page .page_head { flex-direction:column } 命中，而这里的
+     align-items:flex-end 特异性更高压过通用 stretch——column 方向的 flex-end
+     = 水平贴右，标题/筛选器集体缩成内容宽贴右折行（张老师截图实证）。
+     包进 ≥769 后移动端恢复 block 堆叠：标题、筛选器各占一行居左，与排行页移动端同款） */
+  body #page.records_old .records_box .page_head {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-end;
+    gap: 16px;
+  }
 }
 /* 三板块（四轮）：legacy .box 默认 padding 30px 30px 10px 30px（首页新闻同款）；
    板块页头与图表拉开 10px；板块标题用 h2（legacy 20px）与 tabs 同行底对齐 */
 body #page.records_old .records_box .page_head {
   margin: 0 0 10px;
-  display: flex;
-  justify-content: flex-start;
-  align-items: flex-end;
-  gap: 16px;
 }
 .records_sec_title {
   /* 五轮张老师定：与首页左栏板块标题（新闻 h1）同款 26px；
