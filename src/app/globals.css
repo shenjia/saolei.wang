@@ -2701,9 +2701,11 @@ button.msg_reply_link {
 
 /* ---------- 纪录页 /records（2026-10-28 三轮，张老师口径） ----------
    左宽右窄（复用首页 ul#home 双栏骨架；右栏 300px 与排行页一致）。
-   左 = 一个大 .box「纪录」+ page_head（h1 左 + 级别筛选器右，复刻排行页页头，
-   .ranking_tabs 样式直接复用）+ 当前级别三图；级别专属色由组件 inline 传入
-   （总计金/初绿 #a6e22e / 中橙 #f79646 / 高金 #fdc61a）。
+   左 = 三个板块卡（时间/3BV/s/STNB），标题行 = 首页新闻板块同款 .news_head
+   （十轮 2026-10-28 张老师定：参考首页新闻版式，保证标题与筛选器同行——
+   .news_head 是全站组件级 flex wrap，不受 ≤768 通用 .page_head column 堆叠
+   规则影响，此前为 page_head 打的桌面/移动断点补丁已全部退掉）。
+   级别专属色由组件 inline 传入（总计金/初绿 #a6e22e / 中橙 #f79646 / 高金 #fdc61a）。
    右 = 八个标准 .box 板块（h2 与首页右栏同款 legacy 20px）。 */
 @media (min-width: 769px) {
   body #page.records_old #home > li.sidebar {
@@ -2712,40 +2714,6 @@ button.msg_reply_link {
   body #page.records_old #home > li.main {
     width: calc(100% - 302px);
   }
-  /* 页头 flex 只给桌面（2026-10-28 八轮：此前 flex 规则没包断点，移动端被
-     ≤768 的 #page .page_head { flex-direction:column } 命中，而这里的
-     align-items:flex-end 特异性更高压过通用 stretch——column 方向的 flex-end
-     = 水平贴右，标题/筛选器集体缩成内容宽贴右折行（张老师截图实证））
-     九轮改：移动端不再堆叠——张老师要求标题与筛选器同行（见下方 ≤768 块），
-     这里保持桌面同行版式不动 */
-  body #page.records_old .records_box .page_head {
-    display: flex;
-    justify-content: flex-start;
-    align-items: flex-end;
-    gap: 16px;
-  }
-}
-/* 九轮（2026-10-28 张老师要求）：移动端标题与筛选器保持同行（排行页页头同语言：
-   标题左、筛选器紧随、底线对齐）。⚠️ 全站移动端有 #page zoom 缩放体系
-   （≤410 → 0.65 等，页面按 ~600px 布局再整体缩小），媒体查询仍按视口宽命中，
-   但布局宽 ≈ 视口/zoom ≈ 600 —— 标题 104 + 4 tab×66 + gap ≈ 396 恒放得下，
-   无需收 tab 内距；tab 尺寸与排行页桌面完全一致。极窄设备（≤300pt）tabs
-   自身 flex-wrap 兜底折行 */
-@media (max-width: 768px) {
-  body #page.records_old .records_box .page_head {
-    display: flex;
-    /* ⚠️ 必须显式 row：≤768 通用块给所有 page_head 挂了 flex-direction:column
-       （特异性低被反杀的前提是本块声明同名属性——没声明的属性照样命中） */
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: flex-end;
-    gap: 16px;
-  }
-}
-/* 三板块（四轮）：legacy .box 默认 padding 30px 30px 10px 30px（首页新闻同款）；
-   板块页头与图表拉开 10px；板块标题用 h2（legacy 20px）与 tabs 同行底对齐 */
-body #page.records_old .records_box .page_head {
-  margin: 0 0 10px;
 }
 .records_sec_title {
   /* 五轮张老师定：与首页左栏板块标题（新闻 h1）同款 26px；
@@ -6160,7 +6128,7 @@ body #page {
     row-gap: 8px;
   }
   /* 页头行（六轮 title+筛选器同行；七轮排行页移入卡片）：窄屏恢复上下堆叠，title 独占一行不挤。
-     纪录页例外见 records 段 ≤768 块（九轮：标题与筛选器保持同行，特异性更高反杀本条） */
+     纪录页不走 page_head（十轮改用首页新闻同款 .news_head，无此堆叠问题） */
   #page .page_head {
     flex-direction: column;
     align-items: stretch;

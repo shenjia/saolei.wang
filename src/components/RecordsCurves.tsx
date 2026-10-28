@@ -15,6 +15,9 @@
 //   （上半区沉底/下半区贴顶），手指不再挡气泡；②触摸选中在松手后保持
 //   （pointerleave 只对鼠标清 hover），滚动或切级别才清除——修「点了没气泡」。
 // · 九轮（2026-10-28）：移动端标题与筛选器同行（CSS 侧）；窄容器图表加高 220。
+// · 十轮（同日，张老师定）：标题行改首页新闻板块同款 .news_head——保证标题与
+//   筛选器同行的权威实现（组件级 flex wrap，不受 page_head 移动端堆叠规则影响），
+//   桌面/移动断点补丁随之全退，间距用 news_head 自带 19.5px 首页节奏。
 // · 「距今 N 天」按浏览器本地时间实时算——SSR 与客户端可能跨天差 1，
 //   该 span 挂 suppressHydrationWarning（绝对日期不受影响）。
 
@@ -362,7 +365,7 @@ function ChartCard({
   );
 }
 
-/** 「纪录」大板块：page_head（h1 + 级别筛选器）+ 当前级别三图（复刻排行页卡片页头） */
+/** 「纪录」大板块：news_head（h1 + 级别筛选器）+ 当前级别三图（复刻首页新闻板块标题行） */
 /** 左栏三板块数据：一个指标板块 = 一个图卡 × 四级别筛选 */
 export interface MetricSectionData {
   metric: "time" | "3bvs" | "stnb";
@@ -374,7 +377,11 @@ export interface MetricSectionData {
 const LEVEL_ORDER: MetricSectionData["levels"][number]["level"][] = ["total", "beg", "int", "exp"];
 
 /** 单板块：h2 标题 + 级别筛选器 + 当前级别的图表卡（2026-10-28 四轮张老师定：
- *  左栏拆三板块「时间纪录/3BV/s纪录/STNB纪录」，各自带「总计/初级/中级/高级」筛选） */
+ *  左栏拆三板块「时间纪录/3BV/s纪录/STNB纪录」，各自带「总计/初级/中级/高级」筛选。
+ *  十轮（同日）：标题行改首页新闻板块同款 .news_head——张老师明确要求参考首页新闻
+ *  版式且保证标题与筛选器同行。.news_head 是全站组件级 flex wrap 样式，不受
+ *  ≤768 通用 .page_head column 堆叠规则影响，两端天然同行（放不下才 wrap 兜底）；
+ *  之前为 page_head 打的桌面/移动两个断点补丁全部退掉 */
 function MetricSection({ section }: { section: MetricSectionData }) {
   const [level, setLevel] = useState<MetricSectionData["levels"][number]["level"]>("total");
   const byLevel = new Map(section.levels.map((l) => [l.level, l]));
@@ -382,9 +389,9 @@ function MetricSection({ section }: { section: MetricSectionData }) {
 
   return (
     <div className="box records_box">
-      <div className="page_head">
+      <div className="news_head">
         <h1 className={"records_sec_title" + (section.metric === "time" ? " gold" : "")}>{section.metricName}</h1>
-        <nav className="ranking_tabs records_tabs" aria-label={`${section.metricName}级别筛选`}>
+        <div className="news_tabs ranking_tabs" aria-label={`${section.metricName}级别筛选`}>
           {LEVEL_ORDER.map((lv) => {
             const l = byLevel.get(lv);
             if (!l) return null;
@@ -405,7 +412,7 @@ function MetricSection({ section }: { section: MetricSectionData }) {
               </a>
             );
           })}
-        </nav>
+        </div>
       </div>
       <div className="rec_group">
         <ChartCard
