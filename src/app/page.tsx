@@ -42,7 +42,7 @@ import { SiteStats } from "@/components/SiteStats";
 import { FlopSprites } from "@/components/FlopSprites";
 import { VideoHot } from "@/components/VideoHot";
 import { PracticeToday } from "@/components/PracticeToday";
-import { getPracticeToday } from "@/lib/practice";
+import { getPracticeToday, getRankedToday } from "@/lib/practice";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { getThunderKingId } from "@/lib/title-system";
 
@@ -101,8 +101,13 @@ export default async function HomePage() {
   }
 
   // 今日练习（2026-10-22 张老师要求）：「开始练习」上方板块，
-  // 口径与后台仪表盘「今日练习」KPI 一致；未登录 mine=0 只显示全站口径
-  const practice = await getPracticeToday(session?.uid);
+  // 口径与后台仪表盘「今日练习」KPI 一致；未登录 mine=0 只显示全站口径。
+  // 排行模式今日统计行（2026-10-28）：今日玩过排行模式（practice_daily.mode_ranked>0）
+  // 才下发——未登录/没玩排行恒 null，前端不渲染
+  const [practice, rankedToday] = await Promise.all([
+    getPracticeToday(session?.uid),
+    session ? getRankedToday(session.uid) : Promise.resolve(null),
+  ]);
 
   return (
     <>
@@ -125,6 +130,7 @@ export default async function HomePage() {
             管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我/全网双线图 */}
         <PracticeToday
           prefix="practice_today_top"
+          rankedToday={rankedToday}
           mineWon={practice.mineWon}
           mine={practice.mine}
           netWon={practice.todayWon}
@@ -181,6 +187,7 @@ export default async function HomePage() {
             管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我/全网双线图 */}
         <PracticeToday
           prefix="practice_today"
+          rankedToday={rankedToday}
           mineWon={practice.mineWon}
           mine={practice.mine}
           netWon={practice.todayWon}

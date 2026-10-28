@@ -113,6 +113,10 @@ export interface VideoListItem {
   ioe: number | null;
   /** 判雷指标 STNB（video_metrics.stnb，无指标行为 null——2026-10-20 列表列显示用） */
   stnb: number | null;
+  /** 本BV标记（2026-10-28 张老师需求）：首次收集本 BV（3BV 数后小数点角标） */
+  firstBv: boolean;
+  /** 本BV标记：打破本 BV 个人最好成绩（3BV 数后下标感叹号角标） */
+  pbBv: boolean;
 }
 
 // ---------- 通用 ----------
@@ -1407,6 +1411,8 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       authorClassic: p?.c ?? null,
       ioe: m ? m.ioe : null,
       stnb: m ? m.stnb : null,
+      firstBv: v.firstBv === 1,
+      pbBv: v.pbBv === 1,
     });
   }
   return result;
@@ -1474,6 +1480,8 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     authorClassic: p?.c ?? null,
     ioe: metrics ? metrics.ioe : null,
     stnb: metrics ? metrics.stnb : null,
+    firstBv: v.firstBv === 1,
+    pbBv: v.pbBv === 1,
   };
 }
 

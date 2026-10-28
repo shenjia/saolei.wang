@@ -243,6 +243,13 @@ model Video {
   // bit15 排名 evf 签名不符 | bit16 排名局强制转手审标记（临时口径已停用，残留位重跑分拣即清）
   autoReason Int     @default(0) @map("auto_reason") @db.Int
 
+  // ---- 本BV标记（2026-10-28 张老师需求，上传时刻判定落列，列表 3BV 角标用）----
+  // first_bv=1：本玩家首次完成本 BV（同 user+level+board_3bv 此前无 status<>0 录像，口径与收集格同源）
+  // pb_bv=1：打破本玩家本 BV 最好成绩（同池此前已有录像且本盘 real_time 严格更小；
+  //   首盘只记 first_bv 不记 pb_bv——无「旧纪录」可破）
+  firstBv    Int     @default(0) @map("first_bv") @db.TinyInt
+  pbBv       Int     @default(0) @map("pb_bv") @db.TinyInt
+
   // 2026-10-15 上线前性能审计新增：
   // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计
   // （count status / GROUP BY level / 今日按 review_time），原为 30 万行全表扫描；

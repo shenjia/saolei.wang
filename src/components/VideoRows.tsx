@@ -190,7 +190,25 @@ export function VideoRowLine({
           </span>
         )}
       </td>
-      <td className={`c_3bvs bv c${highlight === "3bv" ? " current" : ""}`}>{v.board3bv}</td>
+      {/* 本BV标记（2026-10-28 张老师需求）：首收=小数点角标 / PB=下标感叹号，
+          绝对定位在数字右侧不占排版；hover 数字高亮级别色 + 气泡（样式见 globals.css .bv_marked）。
+          first_bv 与 pb_bv 互斥（首盘无旧纪录可破，上传侧保证） */}
+      <td className={`c_3bvs bv c${highlight === "3bv" ? " current" : ""}`}>
+        {v.firstBv || v.pbBv ? (
+          <span
+            className={`bv_marked ${lvCls}`}
+            data-tip={v.firstBv ? "首次收集本BV" : "本BV最新个人纪录"}
+            aria-label={v.firstBv ? "首次收集本BV" : "本BV最新个人纪录"}
+          >
+            {v.board3bv}
+            <i className={`mk${v.pbBv ? " bang" : ""}`} aria-hidden="true">
+              {v.pbBv ? "!" : "."}
+            </i>
+          </span>
+        ) : (
+          v.board3bv
+        )}
+      </td>
       <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>
         {scores["3bvs"] > 0 ? (
           score3bvs(scores["3bvs"])

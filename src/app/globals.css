@@ -10305,6 +10305,37 @@ html.op-fakefs #header {
 .practice_today .pt_line .rate .ratev {
   color: #a6e22e; /* 胜率数值绿色（与完成盘数同色口径，标签暗灰/数值绿分层） */
 }
+/* 排行模式今日统计行（2026-10-28 张老师定）：仅今日玩过排行模式的登录用户显示
+   （practice_daily.mode_ranked>0 才由服务端下发），插在「今日已完成」行上方。
+   「今日已收集 b / i / e BV 创造 z PB」——b/i/e=初/中/高级今日新收集 BV 数，
+   级别三色（初绿 #a6e22e / 中橙 #f79646 / 高金 #fdc61a，与纪录页级别专属色同源），
+   0 值降亮灰 #b1b1a4 不抢眼；z=今日创造 PB 次数恒金色 #fdc61a，「创造 z PB」
+   右缘对齐（与首行胜率同款 margin-left:auto） */
+.practice_today .pt_line.pt_ranked .lv {
+  font-size: 18px;
+  font-weight: bold;
+}
+.practice_today .pt_line.pt_ranked .lv_beg {
+  color: #a6e22e;
+}
+.practice_today .pt_line.pt_ranked .lv_int {
+  color: #f79646;
+}
+.practice_today .pt_line.pt_ranked .lv_exp {
+  color: #fdc61a;
+}
+.practice_today .pt_line.pt_ranked .lv.zero {
+  color: #b1b1a4; /* 该级别今日没收集到：亮灰（与尝试数同口径），三色只留给有收获的级别 */
+}
+.practice_today .pt_line.pt_ranked .pbpart {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.practice_today .pt_line.pt_ranked .pbv {
+  color: #fdc61a;
+  font-size: 18px;
+  font-weight: bold;
+}
 .practice_today .pt_sub {
   display: flex;
   align-items: baseline;
@@ -12347,6 +12378,62 @@ a.cheat_rep_link:hover {
 .toast_bubble .bbv_wall .wall_hint {
   font-size: 11px;
   color: #939387;
+}
+
+/* ═══ 3BV 本BV标记（2026-10-28 张老师需求，VideoRows.tsx 列表行）═══
+   首次收集本 BV = 3BV 数后小数点角标；打破本 BV 最好成绩 = 下标感叹号。
+   角标绝对定位在数字右侧（left:100%）不占排版；hover 数字高亮级别三色 +
+   data-tip 气泡（首次收集本BV / 本BV最新个人纪录）。级别色与全站口径一致：
+   初 #a6e22e / 中 #f79646 / 高 #fdc61a */
+.video_table .bv_marked {
+  position: relative;
+  cursor: help;
+}
+.video_table .bv_marked .mk {
+  position: absolute;
+  left: 100%;
+  margin-left: 1px;
+  bottom: 0.08em;
+  font-style: normal;
+  font-weight: bold;
+  line-height: 1;
+  font-size: 0.95em;
+}
+/* PB 下标感叹号：更小字号、沉到下标位 */
+.video_table .bv_marked .mk.bang {
+  bottom: -0.12em;
+  font-size: 0.72em;
+}
+/* 角标颜色（级别三色） */
+.video_table .bv_marked.lv_beg .mk { color: #a6e22e; }
+.video_table .bv_marked.lv_int .mk { color: #f79646; }
+.video_table .bv_marked.lv_exp .mk { color: #fdc61a; }
+/* hover 高亮：3BV 数字变级别色 */
+.video_table .bv_marked.lv_beg:hover { color: #a6e22e; }
+.video_table .bv_marked.lv_int:hover { color: #f79646; }
+.video_table .bv_marked.lv_exp:hover { color: #fdc61a; }
+/* hover 气泡（同站内 data-tip 语言：暗底白字，置于数字上方） */
+.video_table .bv_marked::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 155%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 5;
+}
+.video_table .bv_marked:hover::after {
+  opacity: 1;
 }
 
 /* ===== 战果保留确认遮罩（2026-10-28 张老师定） =====

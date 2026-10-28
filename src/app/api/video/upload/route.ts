@@ -170,6 +170,22 @@ export async function uploadVideo(
       }
       // 2026-10-17 称号快照制：上传时刻作者高级成绩 + 是否在榜，内嵌 video 行
       const snap = await userTitleSnapshot(session.uid, tx);
+      // 本BV标记（2026-10-28 张老师需求，口径与 scripts/backfill-bv-marks.sql 完全同源）：
+      // first_bv=本玩家首次完成本 BV（同 user+level+board_3bv 此前无 status<>0 录像）；
+      // pb_bv=打破本BV最好成绩（同池已有且本盘严格更快；首盘无旧纪录可破只记 first_bv）
+      const prevAgg = await tx.$queryRaw<{ c: bigint; mt: number | null }[]>`
+        SELECT COUNT(*) AS c, MIN(vi.real_time) AS mt
+        FROM video v
+        JOIN video_info vi ON vi.id = v.id
+        WHERE v.\`user\` = ${BigInt(session.uid)}
+          AND v.level = ${level}
+          AND vi.board_3bv = ${parsed.bbbv ?? 0}
+          AND v.status <> ${VIDEO_STATUS.BANNED}`;
+      const prevCount = Number(prevAgg[0]?.c ?? 0);
+      const prevBest = prevAgg[0]?.mt ?? null;
+      const firstBv = prevCount === 0 ? 1 : 0;
+      const pbBv =
+        prevCount > 0 && prevBest !== null && parsed.timeMs > 0 && parsed.timeMs < prevBest ? 1 : 0;
       const video = await tx.video.create({
         data: {
           level,
@@ -178,6 +194,8 @@ export async function uploadVideo(
           status: VIDEO_STATUS.NORMAL,
           expTime: BigInt(snap.expTime),
           ranked: snap.ranked ? BigInt(1) : BigInt(0),
+          firstBv,
+          pbBv,
           createTime: nowSec,
           updateTime: nowSec,
         },
