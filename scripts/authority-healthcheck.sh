@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# cron 环境 PATH 极简（2026-10-28 实证：无 /usr/local/bin 时 pm2 找不到，
+# 脚本误判「进程不存在」且拉起失败，每分钟刷错误日志）——顶层钉死 PATH
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # authority 心跳监控（2026-10-27 张老师要求：线上心跳监控+重启方案）。
 # 部署：服务器 crontab 每分钟执行（deploy 用户）：
 #   * * * * * /home/deploy/saolei.wang/scripts/authority-healthcheck.sh >> /tmp/authority-healthcheck.log 2>&1
