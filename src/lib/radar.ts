@@ -64,7 +64,10 @@ async function getDistribution(): Promise<Record<string, number[]>> {
   return result;
 }
 
-/** 移植 Assess::getPosition */
+/** 移植 Assess::getPosition（末尾档位钳位：成绩比最差档还差时按最低档算，
+ *  避免 GRADES[9] = undefined —— 与 lib/videoscore.ts 同款防御，2026-10-28 /user/35534 实证：
+ *  sum_time=1328440 落穿末档边界 1028100 → grade 返回 undefined → gradeColor 内
+ *  undefined.replace 抛 TypeError → 整页 500） */
 function getPosition(score: number, dist: number[], direction: "asc" | "desc"): number {
   for (let i = 0; i < dist.length; i++) {
     if (direction === "desc") {
@@ -73,14 +76,14 @@ function getPosition(score: number, dist: number[], direction: "asc" | "desc"): 
       if (score <= dist[i]) return i;
     }
   }
-  return dist.length;
+  return Math.min(dist.length, GRADES.length - 1);
 }
 
 /** 移植 Assess::grade */
 function grade(dist: number[], direction: "asc" | "desc", score: number): string {
   if (score === 0 || dist.length === 0) return "?";
   const position = getPosition(score, dist, direction);
-  if (position === 0 || position === GRADES.length - 1) return GRADES[position];
+  if (position === 0 || position >= GRADES.length - 1) return GRADES[Math.min(position, GRADES.length - 1)];
 
   const maxScore = dist[position - 1] - 1;
   const minScore = dist[position];
