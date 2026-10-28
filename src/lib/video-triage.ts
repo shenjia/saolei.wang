@@ -40,6 +40,7 @@ import type { ParsedVideo } from "./rawvf";
 import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
 import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
+import { auditRankedGame } from "../core/src/lib/ranked-audit";
 
 export { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER };
 
@@ -282,6 +283,49 @@ function readVideoFile(filepath: string): Uint8Array | null {
   }
 }
 
+/**
+ * 排名局审计复算（2026-10-28）：上传时审计值只经 uploadExtra 透传、不落库，
+ * 存量重分拣拿不到——从库内 evf 重新算（与上传链路 auditRankedGame 同引擎，
+ * 事件还原口径同 core/scripts/audit-one-evf.ts：mr → sc+lr）。
+ * 只对排名录像生效（software=Saolei.wang 或带 evf 签名）；其余返回 null 不判。
+ */
+function recomputeRankedAudit(
+  software: string | null,
+  evfSig: string | null,
+  parsed: ParsedVideo
+): { clicks: number; blindClicks: number } | null {
+  if (software !== RANKED_SOFTWARE && !evfSig) return null;
+  try {
+    const width = parsed.width, height = parsed.height;
+    const mines = new Uint8Array(width * height);
+    for (let i = 0; i < mines.length; i++) mines[i] = parsed.board[i] === "*" ? 1 : 0;
+    // RawVF 事件名 → Online/AVF 鼠标码（auditRankedGame 的编码）；mr（chord）
+    // 还原为 sc+lr 对——与权威原始流在审计状态机下逐格等价（无旗副作用）
+    const CODE: Record<string, number> = { mv: 1, lc: 3, lr: 5, rc: 9, rr: 17, sc: 11, mr: 65 };
+    const events: { mouse: number; x: number; y: number }[] = [];
+    for (const lineStr of parsed.events) {
+      const m = EV_LINE.exec(lineStr);
+      if (!m) continue;
+      const code = CODE[m[2]];
+      if (code === undefined) continue;
+      const x = +m[5], y = +m[6];
+      if (code === 65) {
+        events.push({ mouse: 11, x, y });
+        events.push({ mouse: 5, x, y });
+      } else {
+        events.push({ mouse: code, x, y });
+      }
+    }
+    const stats = auditRankedGame(width, height, parsed.mines, mines, events, {
+      nf: parsed.noflag,
+      questionMarks: parsed.marks,
+    });
+    return stats ? { clicks: stats.clicks, blindClicks: stats.blindClicks } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 排名上传专用的额外信号（调用方算好传入，普通上传不传） */
 export interface TriageUploadExtra {
   /** 本局行为审计：决策点击数与盲区点击数（lib/ranked-audit.ts 重放权威事件流所得） */
@@ -366,14 +410,22 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
       }
     }
 
-    // 盲区率触发器（2026-10-27 张老师定标 2%）：排名局盲区点击率 <2% → 需核定。
-    // 定标依据：高级时间榜 TOP20 真人实测全部 2.6%~10%，2% 线零误伤。
+    // 盲区率触发器（2026-10-27 张老师定标 2%）：排名局盲区点击率 <2% 且 STNB 超线才需核定。
+    // 定标依据：高级时间榜 TOP20 真人实测全部 2.6%~10%，2% 线零误伤且仍兜住机器特征。
     // 双守卫（张老师补充）：整局盲区 <2 个比率无参考意义（初/中级短局天然盲区少，
     // 不应触发）；决策点击太少（<15）同样无统计意义。盲区 ≥2 且 <2% 蕴含点击 >100
-    if (uploadExtra.auditClicks !== undefined && uploadExtra.auditBlindClicks !== undefined &&
-        uploadExtra.auditClicks >= BLIND_RATE_MIN_CLICKS &&
-        uploadExtra.auditBlindClicks >= BLIND_RATE_MIN_BLINDS &&
-        uploadExtra.auditBlindClicks / uploadExtra.auditClicks < BLIND_RATE_TRIGGER) {
+    // STNB 联合门槛（2026-10-28 张老师收窄，348259 案）：新手往往全程不猜雷，
+    // 慢速稳扎局盲区率低是正常行为——只有 STNB 值高（超同级触发线）且盲区率低
+    // 才值得怀疑（快 + 从不盲 = 求解器特征）。STNB 缺行/未知不判本位。
+    const audit = uploadExtra.auditClicks !== undefined && uploadExtra.auditBlindClicks !== undefined
+      ? { clicks: uploadExtra.auditClicks, blindClicks: uploadExtra.auditBlindClicks }
+      : recomputeRankedAudit(info.software, info.evfSig, parsed);
+    if (audit &&
+        audit.clicks >= BLIND_RATE_MIN_CLICKS &&
+        audit.blindClicks >= BLIND_RATE_MIN_BLINDS &&
+        audit.blindClicks / audit.clicks < BLIND_RATE_TRIGGER &&
+        metrics?.stnb !== null && metrics?.stnb !== undefined &&
+        metrics.stnb > (STNB_TRIGGER[video.level] ?? Infinity)) {
       reason |= AUTO_REASON.BLIND_RATE;
       flag = 0;
     }
