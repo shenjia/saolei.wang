@@ -12539,15 +12539,15 @@ a.cheat_rep_link:hover {
   width: 16px;
   height: 16px;
   display: block;
-  /* 列表图标一律灰度（2026-10-29 张老师二轮）：配色不抢级别色语言；
-     详情页原色（.sw--detail 豁免，见下） */
+  /* 图标一律灰度（2026-10-29 张老师二轮）：配色不抢级别色语言，列表详情同口径（三轮定稿） */
   filter: grayscale(1);
 }
 .video_table .sw_icon.sw--pixel img {
   image-rendering: pixelated;
 }
-.video_table .sw_icon.sw--detail img {
-  filter: none; /* 详情页原色图标（2026-10-29 张老师） */
+/* Arbiter 白底图标灰度后仍过亮（2026-10-29 张老师三轮）：brightness 压暗一档 */
+.video_table .sw_icon.sw--dim img {
+  filter: grayscale(1) brightness(0.72);
 }
 .video_table .sw_icon.sw--text {
   font-size: 10px;
@@ -12575,6 +12575,32 @@ a.cheat_rep_link:hover {
 }
 .video_table .sw_icon:hover::after {
   opacity: 1;
+}
+/* 详情页软件名前灰度图标（2026-10-29 张老师二轮；三轮定稿灰度+间距）：
+   「软件」文字 ←留空→ 图标 ‖紧贴‖ <em>软件名</em>——左 margin 隔开文字，
+   右侧 0 间距紧挨名字（margin-right:0 + em 无前置空隙） */
+.video_cell .software .sw_icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  vertical-align: -3px;
+  margin-left: 6px;
+  margin-right: 2px;
+}
+.video_cell .software .sw_icon img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  filter: grayscale(1); /* 详情页同灰度（三轮定稿，与列表一致） */
+}
+.video_cell .software .sw_icon.sw--dim img {
+  filter: grayscale(1) brightness(0.72); /* Arbiter 压暗同列表口径 */
+}
+.video_cell .software .sw_icon.sw--pixel img {
+  image-rendering: pixelated;
 }
 
 /* ===== 战果保留确认遮罩（2026-10-28 张老师定） =====

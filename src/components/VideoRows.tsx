@@ -28,33 +28,74 @@ const LEVEL_CLS: Record<VideoLevel, string> = { beg: "lv_beg", int: "lv_int", ex
 // 软件图标映射（2026-10-29 张老师需求：列表新增「软件」列，级别列之前，图标+hover 全名气泡）。
 // 图标 /images/software/*.png 统一 32×32 原图、16px 展示（retina 2x）；全名口径同下载页。
 // Vienna 原图 16×16 像素风放大展示（sw--pixel 保硬边）；元扫雷按前缀匹配（库值「元扫雷3.3.4」
-// 带版本号）；空值/未知软件（历史数据 25 条）灰色 ? 占位
-const SOFTWARE_ICONS: Record<string, { icon: string; name: string; pixel?: boolean }> = {
-  Arbiter: { icon: "/images/software/arbiter.png", name: "Minesweeper Arbiter" },
+// 带版本号）；空值/未知软件（历史数据 25 条）灰色 ? 占位。
+// 2026-10-29 二轮（张老师）：气泡显「全名+版本号」（逐盘版本：Arbiter 0.49/0.50/0.52 各代）；
+// 图标一律灰度（grayscale，配色不抢级别色语言），列表与详情页同口径（三轮定稿）。
+// Arbiter 白底图标灰度后仍过亮 → dim 追加 brightness 压暗
+const SOFTWARE_ICONS: Record<
+  string,
+  { icon: string; name: string; pixel?: boolean; dim?: boolean }
+> = {
+  Arbiter: { icon: "/images/software/arbiter.png", name: "Minesweeper Arbiter", dim: true },
   Clone: { icon: "/images/software/clone.png", name: "Minesweeper Clone" },
   Vienna: { icon: "/images/software/vienna.png", name: "Viennasweeper", pixel: true },
   "Saolei.wang": { icon: "/images/software/saolei.png", name: "Saolei.wang" },
 };
 
-function softwareIcon(software: string): { icon: string; name: string; pixel?: boolean } | null {
+function softwareIcon(software: string): {
+  icon: string;
+  name: string;
+  pixel?: boolean;
+  dim?: boolean;
+} | null {
   const hit = SOFTWARE_ICONS[software];
   if (hit) return hit;
   if (software.startsWith("元扫雷")) return { icon: "/images/software/yuansaolei.png", name: "元扫雷" };
   return null;
 }
 
-/** 软件列单元格（2026-10-29）：已知软件图标 hover 全名气泡；未知/空值灰色 ? 占位 */
-function SoftwareIcon({ software }: { software: string }) {
+/** 软件名全称（含版本号，2026-10-29 二轮张老师口径）：已知软件「Minesweeper Arbiter 0.52」；
+ *  元扫雷库值本身带版本（「元扫雷3.3.4」）不拼 version（version 0.4 是录像格式版本非软件版本）；
+ *  未知软件回退原值 */
+function softwareFullName(software: string, version: string): string {
+  // 元扫雷：software 本身带版本（「元扫雷3.3.4」），version 列（0.4）是录像格式版本非软件版本，不拼
+  if (software.startsWith("元扫雷")) return software.trim();
+  const hit = SOFTWARE_ICONS[software];
+  if (!hit) return software || "未知软件";
+  return version ? `${hit.name} ${version.trim()}` : hit.name;
+}
+
+/**
+ * 软件图标（2026-10-29）：灰度展示（列表+详情页同口径，三轮定稿）；
+ * detail=true 详情页软件名前缀用（无气泡——全名已在旁边文字里）。
+ * unknown 时列表灰 ? 占位、详情页不渲染
+ */
+export function SoftwareIcon({
+  software,
+  version,
+  detail = false,
+}: {
+  software: string;
+  version: string;
+  detail?: boolean;
+}) {
   const sw = softwareIcon(software);
   if (!sw) {
-    return (
+    return detail ? null : (
       <span className="sw_icon sw--text" data-tip="未知软件" aria-label="未知软件">
         ?
       </span>
     );
   }
+  const cls = ["sw_icon", sw.pixel && "sw--pixel", sw.dim && "sw--dim"]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <span className={`sw_icon${sw.pixel ? " sw--pixel" : ""}`} data-tip={sw.name} aria-label={sw.name}>
+    <span
+      className={cls}
+      data-tip={detail ? undefined : softwareFullName(software, version)}
+      aria-label={detail ? undefined : softwareFullName(software, version)}
+    >
       {/* 16px 定长小图标，不值得 next/image；沿用站内 <img> 直出（同 MobileNav 头像） */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={sw.icon} alt="" width={16} height={16} />
@@ -211,9 +252,9 @@ export function VideoRowLine({
           <span className="avatar_link">?</span>
         )}
       </td>
-      {/* 软件列（2026-10-29）：与表头同步，位置=级别列之前 */}
+      {/* 软件列（2026-10-29）：与表头同步，位置=级别列之前；二轮起灰度+带版本气泡 */}
       <td className="c sw">
-        <SoftwareIcon software={v.software} />
+        <SoftwareIcon software={v.software} version={v.version} />
       </td>
       <td className={`level ${lvCls}`}>{LEVEL_NAMES[v.level as VideoLevel] ?? v.level}</td>
       <td className={`score ${lvCls}${highlight === "time" ? " current" : ""}`}>

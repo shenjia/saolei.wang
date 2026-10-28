@@ -16,6 +16,7 @@ import {
 } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { SoftwareIcon } from "@/components/VideoRows";
 import { UserPanel } from "@/components/UserCard";
 import { CommentSection } from "@/components/Comments";
 // 原地回放（2026-10-15 张老师需求：点播放后棋盘原地重演，复用练习页回放引擎；
@@ -180,8 +181,11 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
               </span>
             </p>
             <p>
+              {/* 2026-10-29 张老师需求：软件名前加原色图标（列表页灰度、详情页原色） */}
               <span className="software">
-                软件<em>{video.software} {video.version}</em>
+                软件
+                <SoftwareIcon software={video.software} version={video.version} detail />
+                <em>{video.software} {video.version}</em>
               </span>
               <span className="signature">
                 签名<em>{video.signature}</em>
