@@ -10466,6 +10466,12 @@ html.op-fakefs #header {
   color: #b1b1a4;
   white-space: nowrap;
 }
+/* 未登录时整行隐藏：display:flex（特异性 1,1,0）压过 UA 对 [hidden] 的
+   display:none（0,1,0）导致 hidden 属性失效（2026-10-29 修复空白行根因），
+   显式补 [hidden] 规则兜底——登录态由 paintRanked 移除 hidden 恒显示（零值亮灰 0） */
+#online_play .op_ranked[hidden] {
+  display: none;
+}
 #online_play .op_ranked .lead {
   color: #b1b1a4; /* 标签亮灰（22:10 张老师定：统计文字标签统一亮灰，数字才显色） */
 }
