@@ -12,6 +12,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { ScrollReset } from "@/components/ScrollReset";
 import { SystemText } from "@/components/SystemText";
 import { ToastHost } from "@/components/Toast";
+import { InlineScript } from "@/components/InlineScript";
 import { ConfirmHost, ImageLightboxHost } from "@/components/Confirm";
 import TrackPageView from "@/components/TrackPageView";
 import { isManager } from "@/lib/config";
@@ -67,10 +68,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             建的那颗，其后 device-width 才落地并以后位胜出）——必须用 MutationObserver
             盯 <head>，任何时刻出现的 viewport meta 都钉成 980，不能只靠
             DOMContentLoaded 一锤子买卖。 */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent))return;if(Math.min(screen.width,screen.height)>=500)return;var pin=function(){var m=document.querySelectorAll('meta[name="viewport"]'),c=0;for(var i=0;i<m.length;i++){if(m[i].getAttribute("content")!=="width=980")m[i].setAttribute("content","width=980");c++}return c};if(!pin()){var n=document.createElement("meta");n.setAttribute("name","viewport");n.setAttribute("content","width=980");(document.head||document.documentElement).appendChild(n)}var mo=new MutationObserver(function(){pin()});mo.observe(document.head||document.documentElement,{childList:true,subtree:true});if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",pin)}catch(e){}})();`,
-          }}
+        <InlineScript
+          html={`(function(){try{if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent))return;if(Math.min(screen.width,screen.height)>=500)return;var pin=function(){var m=document.querySelectorAll('meta[name="viewport"]'),c=0;for(var i=0;i<m.length;i++){if(m[i].getAttribute("content")!=="width=980")m[i].setAttribute("content","width=980");c++}return c};if(!pin()){var n=document.createElement("meta");n.setAttribute("name","viewport");n.setAttribute("content","width=980");(document.head||document.documentElement).appendChild(n)}var mo=new MutationObserver(function(){pin()});mo.observe(document.head||document.documentElement,{childList:true,subtree:true});if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",pin)}catch(e){}})();`}
         />
         <link rel="stylesheet" href="/styles/legacy-2013.css" />
       </head>
