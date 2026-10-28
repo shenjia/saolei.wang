@@ -74,9 +74,12 @@ export async function getClicks(userId: number): Promise<{ total: number; today:
 //      预计算，与进步榜 /grow 同源）。两条件取交集：只破纪录但名次没涨 / 名次涨了
 //      但靠别人掉出榜都不够，要「自己进步 + 名次兑现」。
 //   ③ 头像不再硬性要求（十七轮 2026-10-25 改定）：有合法头像（新版上传 /uploads/avatar/、
-//      OAuth 外链 http / 旧站照片标记 '1'）者在抽签袋中权重 ×2——鼓励上传真人照片，
+//      OAuth 外链 http / 旧站照片标记 '1'）者的入袋份额 ×2——鼓励上传真人照片，
 //      但不阻断无头像者参选。
-//   两路并集，去掉近 30 日内已当选者，按日期哈希确定性随机抽一位（有头像者概率翻倍）。
+//   两路分开计席（十八轮 2026-10-28 张老师定）：两路资格各自独立入袋、不再并集去重——
+//   双命中（SUB50 有登录 且 有进步）先得 2 席，有头像再翻倍 = 入袋 4 份；
+//   抽签份额：单命中无头像 1 / 单命中有头像 2 / 双命中无头像 2 / 双命中有头像 4。
+//   去掉近 30 日内已当选者，按日期哈希确定性随机抽一位。
 //   旧版「当月不复选」收紧为「30 日不复选」——与候选资格的 30 天窗口同拍，
 //   也避免月末/月初边界出现同月二次当选的观感问题。
 
@@ -148,21 +151,23 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
     };
   }
 
-  // 候选池两路并集（十七轮 2026-10-25 张老师定：取消头像硬性限制，改为权重加成）：
+  // 候选池两路分开计席（十八轮 2026-10-28 张老师定）：
   //   ① 少将及以上现役 且 30 天内登录过（2026-10-26 张老师增列 last_login_time 条件——
   //      沉睡老将不参选，只约束①路；②路破纪录本身即活跃证明，不另设登录门槛）；
   //   ② 30 天内破纪录 ∧ 排名上升（delta>0）现役。
+  //   两路**分开计席**：两条都命中的用户入袋 2 份（资格叠加，不再 UNION 去重合一），
+  //   再叠加头像加成——有头像者每份资格 ×2，双命中+头像 = 入袋 4 份。
   // 封禁账号不入池（两路均 JOIN user.status=0；②路 rank_snapshot 残留 delta 的
   // 被封者一并滤掉，与 /grow 进步榜口径一致）。delta 本身已在快照刷新时做封禁修正
   // （ranksnap.ts：扣掉「别人被封白捡的名次」），delta>0 即真实名次上升。
-  // 头像加成：有合法头像（/uploads/avatar/%、http 外链、旧站 '1'）者在抽签袋中
-  // 放两份（选中概率翻倍）——鼓励上传真人照片，但不阻断无头像者参选。
+  // 头像加成：有合法头像（/uploads/avatar/%、http 外链、旧站 '1'）者每份资格翻倍——
+  // 鼓励上传真人照片，但不阻断无头像者参选。
   const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; hasAvatar: number }>>(
     `SELECT s.id, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
        FROM user_scores s
        JOIN \`user\` u ON u.id = s.id AND u.status = 0 AND u.last_login_time >= ?
        WHERE s.exp_time > 0 AND s.exp_time <= ?
-     UNION
+     UNION ALL
      SELECT DISTINCT n.user, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END
        FROM news n
        JOIN rank_snapshot r ON r.user = n.user AND r.delta > 0
@@ -173,20 +178,27 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
     Math.floor(Date.now() / 1000) - 30 * 86400
   );
   const excluded = await recentStarUserIds(today);
-  const seen = new Map<number, number>(); // id → hasAvatar（UNION 去重保首次）
+  // 两路分开计席：同一用户每命中一路 +1 席（UNION ALL 下①路天然一人一行，
+  // ②路已按 DISTINCT 去重到一人一行，故直接累加行数即席位数）
+  const seen = new Map<number, { seats: number; hasAvatar: number }>();
   for (const r of rows) {
     const id = N(r.id);
-    if (!seen.has(id)) seen.set(id, Number(r.hasAvatar));
+    const cur = seen.get(id);
+    if (cur) cur.seats += 1;
+    else seen.set(id, { seats: 1, hasAvatar: Number(r.hasAvatar) });
   }
   const candidates = [...seen.entries()].filter(([id]) => !excluded.has(id));
   if (!candidates.length) return null;
 
-  // 加权抽签袋（十七轮）：有头像者入袋两次（权重×2），无头像者一次；
+  // 加权抽签袋（十七轮头像×2 + 十八轮两路分席）：每份资格入袋一次，有头像再翻倍——
+  // 单命中无头像 1 份 / 单命中有头像 2 份 / 双命中无头像 2 份 / 双命中有头像 4 份；
   // 日期哈希确定性随机（同一天多次请求结果一致，并发重复插入由唯一键兜底）
   const bag: number[] = [];
-  for (const [id, hasAvatar] of candidates) {
-    bag.push(id);
-    if (hasAvatar) bag.push(id);
+  for (const [id, { seats, hasAvatar }] of candidates) {
+    for (let i = 0; i < seats; i++) bag.push(id);
+    if (hasAvatar) {
+      for (let i = 0; i < seats; i++) bag.push(id);
+    }
   }
   let hash = 0;
   for (const ch of today) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
