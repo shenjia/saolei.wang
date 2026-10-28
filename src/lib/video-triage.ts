@@ -13,7 +13,11 @@
 //       2026-10-24 起两路豁免：初级 3BV<10 运气盘不判（与 3BV/s 划线同口径）、可信用户组不判
 //   bit2 cls>10 次/秒（全站真实 max 7.77）
 //   bit3 path=0 且 cl>20（无移动连点）——ppc 阈值暂不启用（回测 min 1.106 远离 0.5，无区分度）
-//   bit4 点击数不足：cl < board_3bv × 0.8
+//   bit4 点击数不足：cl < board_3bv × 0.8（cl 用 video_metrics.cl＝flop 重放口径，
+//       与后台展示的「点击数」同源——2026-10-28 修复：原实现用 pressPairStats 数
+//       事件流按下事件，速旗/连击的自动双击录独立 mr 事件（flop 计 Double++）但
+//       pressPairStats 归入松开分支不计数，双击重度局被系统性少计误触发（生产
+//       348011：3BV=20 flop cl=35，按下计数 15<16 误报）。metrics 缺行回退事件流计数）
 //   bit5 （预留，原「首击延迟」信号已废——录像计时从首事件起算恒 0，无区分度）
 //   bit6 破个人纪录（time / 3bvs 任一将刷新，需调用方传入，见 triageVideo 注释）
 //   bit7 级别 TOP 榜（时间 TOP100 / 3bvs TOP10，同上由调用方判定传入）
@@ -204,14 +208,15 @@ export interface TriageResult {
 
 /**
  * 对已解析的录像跑触发器组（纯函数，不落库）。
- * stnb/cls/path 来自 video_metrics（调用方读库传入；缺行＝按需核定保守处理）。
+ * stnb/cls/path/cl 来自 video_metrics（调用方读库传入；缺行＝按需核定保守处理）。
+ * cl 为 flop 重放总点击（bit4 点击数下限的判定口径，与后台展示同源）。
  * timeMs 为库内权威用时（video_info.real_time，ms）——path 瞬移密度守卫需要。
  * trusted 为上传者是否在可信用户组（组内不检查 STNB 触发器，2026-10-24）。
  */
 export function triageParsed(
   v: ParsedVideo,
   level: string,
-  metrics: { stnb: number | null; cls: number | null; path: number | null } | null,
+  metrics: { stnb: number | null; cls: number | null; path: number | null; cl?: number | null } | null,
   lowTrust: boolean,
   extra: TriageExtra = {},
   timeMs: number = v.timeMs,
@@ -251,7 +256,10 @@ export function triageParsed(
     if (metrics.cls !== null && metrics.cls > CLS_TRIGGER) reason |= AUTO_REASON.CLS;
     if (metrics.path !== null && metrics.path === 0 && ps.cl > 20) reason |= AUTO_REASON.PATH0;
   }
-  if (ps.cl > 0 && v.bbbv !== null && v.bbbv > 0 && ps.cl < v.bbbv * CLICK_FLOOR_RATIO) {
+  // bit4 点击数下限：优先 flop 重放口径（video_metrics.cl，与后台展示同源，
+  // 自动双击 mr 计 Double++ 在内）；metrics 缺行/未传 cl 时回退事件流按下计数。
+  const cl = metrics?.cl ?? ps.cl;
+  if (cl > 0 && v.bbbv !== null && v.bbbv > 0 && cl < v.bbbv * CLICK_FLOOR_RATIO) {
     reason |= AUTO_REASON.CLICK_FLOOR;
   }
 
@@ -318,7 +326,7 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
 
     const metrics = await prisma.videoMetrics.findUnique({
       where: { id },
-      select: { stnb: true, cls: true, path: true },
+      select: { stnb: true, cls: true, path: true, cl: true },
     });
 
     const { lowTrust, trusted } = await getUserTrustInfo(Number(video.user));
