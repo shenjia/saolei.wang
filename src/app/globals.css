@@ -4904,7 +4904,13 @@ body #page.two_columns {
   margin-left: 2px;
 }
 
-@media (min-width: 1188px) {
+/* 两列门槛 1188→961（2026-10-28 张老师要求）：手机 Chrome「桌面版网站」布局视口
+   固定 980px（Chromium 忽略 viewport meta + min-width:980，crbug 586286 by design），
+   原断点下桌面模式命中的是单列降级＝「还是移动式布局」。两列最小需求
+   562+16+300=878 < 980 视口可用 ~944（#page 封顶 960−外距 16），放得下；
+   961 与顶栏导航 960 断点对齐（≥961 桌面导航+两列，≤960 汉堡+单列）。
+   副作用：iPad 横屏 1024/1080/1180 由单列变两列（张老师知情接受） */
+@media (min-width: 961px) {
   .area_top {
     display: grid;
     /* 左轨 562（二轮回原值）：空间临界（本轨下限卡死时 headW=520 恰等于
@@ -4937,8 +4943,8 @@ body #page.two_columns {
   }
 }
 /* 单列形态：右列包装展开为 DOM 顺序（规则在前、地图在后）；
-   ≤1187 全区间统一（769~1187 降级 + ≤768 移动端） */
-@media (max-width: 1187px) {
+   ≤960 全区间统一（769~960 降级 + ≤768 移动端；上界随两列门槛 1188→961 同步） */
+@media (max-width: 960px) {
   .area_top .area_side {
     display: contents;
   }
@@ -4947,8 +4953,8 @@ body #page.two_columns {
     margin: 16px 8px; /* 展开后恢复页级板块外距（.box / .area_map 原口径） */
   }
 }
-/* 769~1187：整宽单列 grid（统一 gap 间距，覆盖上面的 16px 8px 外距） */
-@media (min-width: 769px) and (max-width: 1187px) {
+/* 769~960：整宽单列 grid（统一 gap 间距，覆盖上面的 16px 8px 外距） */
+@media (min-width: 769px) and (max-width: 960px) {
   .area_top {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -5660,6 +5666,17 @@ body #page.two_columns li.main {
 @media (min-width: 881px) {
   body #page.two_columns {
     width: max(80%, 856px);
+  }
+}
+
+/* area_top 容器下限（2026-10-28，随两列门槛 1188→961 配套）：两列最小
+   562+16+300=878，通用 856 下限容器（内容 840）装不下 → 右栏溢出容器 ~38px。
+   ≥961 带内给 /area 页单独抬高下限到 894（内容 878 = 两列最小值，左轨 1fr
+   恰好保持 562 下限；961 视口留 67px 滚动条余量不横滚）。
+   ⚠️ :has 特异性高于上方 856 通用下限，同值时靠源码顺序兜底 */
+@media (min-width: 961px) {
+  body #page.two_columns:has(.area_top) {
+    width: max(80%, 894px);
   }
 }
 
@@ -12163,3 +12180,4 @@ a.cheat_rep_link:hover {
   display: inline-block;
   width: fit-content;
 }
+
