@@ -7012,20 +7012,16 @@ body #page.video_old .page_head {
 }
 
 /* 移动端（≤768）首页 #video / 用户主页 #user_videos 录像表瘦身（2026-10-22 张老师
-   要求，2026-10-28 调整：放行 3BV/s 列——空间够用，IOE/STNB 仍藏）。表头四个数据列
-   靠 th 上的 bv/bvs/ioe/stnb 区分类名（VideoRows.tsx VideoHead）定向隐藏；
-   数据行恰好仅这四格带 td.c_3bvs（VideoRows.tsx）。表格收进屏宽、盒内不再横滑出
-   滚动条。/video 列表页与审核页（#page.video_old）不在此列，保持全列 + 上面 860px
-   min-width 的横滑兜底。 */
+   要求，2026-10-28 两轮调整：放行 3BV 与 3BV/s 列——空间够用，IOE/STNB 仍藏）。
+   表头四个数据列靠 th 上的 bv/bvs/ioe/stnb 区分类名（VideoRows.tsx VideoHead）
+   定向隐藏；数据行恰好仅这四格带 td.c_3bvs（VideoRows.tsx）。表格收进屏宽、
+   盒内不再横滑出滚动条。/video 列表页与审核页（#page.video_old）不在此列，
+   保持全列 + 上面 860px min-width 的横滑兜底。 */
 @media (max-width: 768px) {
-  #video .video_table th.c.bv,
-  #user_videos .video_table th.c.bv,
   #video .video_table th.c.ioe,
   #user_videos .video_table th.c.ioe,
   #video .video_table th.c.stnb,
   #user_videos .video_table th.c.stnb,
-  #video .video_table td.c_3bvs.bv,
-  #user_videos .video_table td.c_3bvs.bv,
   #video .video_table td.c_3bvs.ioe,
   #user_videos .video_table td.c_3bvs.ioe,
   #video .video_table td.c_3bvs.stnb,
