@@ -3021,7 +3021,8 @@ button.msg_reply_link {
 body #header .wrapper {
   margin-left: auto;
   margin-right: auto;
-  width: 80%;
+  /* 2026-10-28 margin 先缩完（与 #page.main 同公式，保证窄视口顶栏与正文对齐） */
+  width: min(960px, calc(100% - 20px));
   min-width: 620px;
   max-width: 960px;
   padding: 0;
@@ -3042,7 +3043,8 @@ body #header .nav ul {
    （legacy 盒子是 content-box，直接加 padding 只会加宽盒子、内容不动。）
    min-width 解除同「① 解除 620px 硬下限」。 */
 body #footer .wrapper {
-  width: 80%;
+  /* 2026-10-28 margin 先缩完（与顶栏/#page.main 同公式，窄视口三件套对齐） */
+  width: min(960px, calc(100% - 20px));
   min-width: 0;
   max-width: 960px;
   padding-left: 0;
@@ -3071,10 +3073,14 @@ body #page.main {
    顶栏窄 200px，明显错位。补齐为与顶栏 wrapper 同几何（80% 流式，
    max 960 已在上条）；⚠️ 必须包进 ≥769：≤768 移动版 #page 有自己的
    整页 zoom + 固定布局宽体系，本条会以更高特异性顶掉它（排行/论坛
-   页有专属宽度覆盖且特异性更高，不受本条影响）。 */
+   页有专属宽度覆盖且特异性更高，不受本条影响）。
+   ── 2026-10-28 张老师定「margin 先缩完再缩内容」：窄视口先把两侧留白吃到各 10px
+   （容器 = 100%−20），≥980 后由 960 上限接管（margin 随视口自然放大，与旧 80% 一致）。
+   此前 80% 流式在 769~1200 区间内容随视口缩、margin 恒 ~10% 不动（桌面模式 1216 实测反馈）。
+   各页带内容下限的（排行/BBS/录像/双栏）同公式加下限，见各自规则。 */
 @media (min-width: 769px) {
   body #page.main {
-    width: 80%;
+    width: min(960px, calc(100% - 20px));
   }
 }
 
@@ -5498,8 +5504,10 @@ body #page.two_columns li.main {
   /* :not(.two_columns)——地区总榜 2026-10-15 起挂 two_columns（地图上右侧双栏，
      宽度走 80%/max 960 口径，见 .area_top 处），不再吃 62% 竖版宽度 */
   body #page.ranking_old.main:not(.two_columns) {
-    /* 最宽的 BV/STNB 表为 823px，加卡片边框/内外距需 881px 才能完整容纳 */
-    width: max(62%, 881px);
+    /* 最宽的 BV/STNB 表为 823px，加卡片边框/内外距需 881px 才能完整容纳；
+       2026-10-28 margin 先缩完：≥901 视口容器贴到 960 上限（margin 10px），
+       881~900 由 881 下限兜底（旧 62% 流式在 769~1548 恒 881、margin 恒 ~170 不缩） */
+    width: min(960px, max(881px, calc(100% - 20px)));
   }
 }
 
@@ -5575,7 +5583,7 @@ body #page.two_columns li.main {
    ⚠️ ①同样必须包进 ≥769：不限定会把 ≤768 移动版 #page 顶到 736 出现横滚。 */
 @media (min-width: 769px) {
   body #page.bbs_old.main {
-    width: max(62%, 736px);
+    width: min(960px, max(736px, calc(100% - 20px)));
   }
 }
 @media (max-width: 1289px) {
@@ -5665,7 +5673,8 @@ body #page.two_columns li.main {
    769~880 由 ② 单列带接管，否则出现整页横滚。 */
 @media (min-width: 881px) {
   body #page.two_columns {
-    width: max(80%, 856px);
+    /* 2026-10-28 margin 先缩完：≥876 视口容器贴 960 上限，881~875 由 856 下限兜底 */
+    width: min(960px, max(856px, calc(100% - 20px)));
   }
 }
 
@@ -5676,7 +5685,17 @@ body #page.two_columns li.main {
    ⚠️ :has 特异性高于上方 856 通用下限，同值时靠源码顺序兜底 */
 @media (min-width: 961px) {
   body #page.two_columns:has(.area_top) {
-    width: max(80%, 894px);
+    /* 2026-10-28 margin 先缩完：≥914 视口容器贴 960 上限（桌面模式 980 → 960 满贴），
+       961~913 由 894 下限兜底（961 视口容器 941，margin 10px，无横滚） */
+    width: min(960px, max(894px, calc(100% - 20px)));
+  }
+}
+
+/* two_columns 769~880（单列带）同公式补齐：此前吃 4873 基础 80%（615~704，
+   margin 恒 ~78 不缩），与顶栏 margins-first 后的 749~860 错位 */
+@media (min-width: 769px) and (max-width: 880px) {
+  body #page.two_columns {
+    width: min(960px, calc(100% - 20px));
   }
 }
 
@@ -5828,14 +5847,8 @@ body #page.two_columns li.main {
   display: none;
 }
 
-/* ③ 顶栏 wrapper 下限（769~880）：曾为防桌面导航掉行而设（下限 656 兜住
-   logo+导航最坏宽度 625）；2026-10-15 汉堡断点提到 960 后该带桌面导航已隐藏，
-   本条仅维持顶栏内容盒宽度（80% 在此段 <656，避免 logo/汉堡过挤）。 */
-@media (min-width: 769px) and (max-width: 880px) {
-  body #header .wrapper {
-    width: max(80%, 656px);
-  }
-}
+/* ③ 顶栏 wrapper 769~880：旧 656 下限已废（2026-10-28 margin 先缩完，基础规则
+   改 min(960, 100%−20) 后该带容器 749~860 恒 ≥656，本块删除，直接吃基础公式） */
 
 /* ④ 宽表盒内横滑（≤1188）：下限后主栏内容 506、80% 流式内容 644 都放不下
    592~594 自然宽的表格，一律盒内横滑、页面本身不横滚（≤768 块同款规则外扩；
@@ -7060,7 +7073,7 @@ body #page.video_old .page_head {
    保持全站 ≤605 整页缩放 + 盒内横滑的组合即可）。 */
 @media (min-width: 769px) {
   body #page.video_old.main {
-    width: max(62%, 720px);
+    width: min(960px, max(720px, calc(100% - 20px)));
   }
 }
 
@@ -12017,7 +12030,7 @@ body #page .word_terms .desc {
   border: 1px solid #ffd700;
   color: #fff8dc;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 /* 数据面板 PB 金标（标签名后） */
 .pb_badge {
