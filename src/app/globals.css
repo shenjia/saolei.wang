@@ -12394,7 +12394,6 @@ a.cheat_rep_link:hover {
    20:44 张老师定稿：颜色统一不分级别——新BV=绿 #a6e22e / 新PB=黄 #fdc61a */
 .video_table .bv_marked {
   position: relative;
-  cursor: help;
 }
 .video_table .bv_marked .mk {
   position: absolute;
