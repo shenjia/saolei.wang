@@ -13,10 +13,9 @@
 //   上传录像 / 发表文章 / 发表评论 / 发表纪事 / 练习盘数 / 审核录像——各取 TOP1。
 //
 // 性能（2026-10-28 张老师定分层）：左侧曲线重查询+基本不变 → 24h 持久缓存
-// （records-curves）；右侧七项轻查询 → 1h 缓存（records-tops）。
-// ⚠️ 2026-10-29 慢 SQL 巡检：TOP1 聚合含两个 video 33 万行全表 GROUP BY
-// （「上传最多」无 WHERE、「审核最多」review_user>0），60s 缓存下日均冷启动
-// 272 次 × avg 3~6s 挤进慢日志 Top5；TOP1 变化极低频（刷新纪录才变），60s→1h。
+// （records-curves）；右侧七项轻查询 → 60s 短缓存（records-tops）。
+// ⚠️ 2026-10-29 慢 SQL 巡检后「上传最多/审核最多」已改单表索引聚合（张老师
+// 「按玩家 ID 直接 count」方案），不再有全表 GROUP BY 挤慢日志的问题。
 // 载荷 ~200 点 + 7 行，远小于 2MB 上限；/records 已进 preheat.sh 预热清单。
 
 import { unstable_cache } from "next/cache";
@@ -255,19 +254,70 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
     };
   })();
 
-  const [views, upload, post, comment, history, review, bv] = await Promise.all([
+  // 上传录像最多：全部上传（含待审/屏蔽）。2026-10-29 张老师点破「按录像的玩家 ID 直接 count」——
+  // 旧形态 JOIN user/user_scores 后才 GROUP BY，33 万行 × JOIN 探测 rowsExam 93 万（avg 5.59s 挤慢日志 Top5）；
+  // 新形态 video 单表 GROUP BY user 取 Top1（FORCE INDEX video_user_level_idx：索引序=分组序免 Sort，
+  // 与 10-23 BV 聚合修复同模式），再单行反查名字/军衔；last_ct 子查询同走该索引的 user 分区。
+  // 生产只读验证与旧形态结果完全一致（uid/val/last_ct 三值同）。
+  const uploadTop = (async (): Promise<SiteTopRow | null> => {
+    const rows = await prisma.$queryRaw<{ uid: bigint; val: bigint; last_ct: bigint }[]>`
+      SELECT t.uid, t.val,
+        (SELECT MAX(v2.create_time) FROM video v2 WHERE v2.\`user\` = t.uid) last_ct
+      FROM (
+        SELECT v.\`user\` uid, COUNT(*) val
+        FROM video v FORCE INDEX (video_user_level_idx)
+        GROUP BY v.\`user\` ORDER BY val DESC LIMIT 1
+      ) t
+    `;
+    const r = rows[0];
+    if (!r) return null;
+    const info = await prisma.$queryRaw<{ name: string; sex: number; ustatus: number; exp_time: bigint | null }[]>`
+      SELECT u.chinese_name name, u.sex, u.status ustatus, s.exp_time
+      FROM \`user\` u LEFT JOIN user_scores s ON s.id = u.id WHERE u.id = ${r.uid}
+    `;
+    const i = info[0];
+    if (!i) return null;
+    return {
+      key: "upload", userId: N(r.uid), name: i.name, sex: N(i.sex),
+      ranked: N(i.ustatus) === 0, expTime: N(i.exp_time), val: N(r.val), lastCt: N(r.last_ct),
+    };
+  })();
+
+  // 审核录像最多：video.review_user 计数（与后台「审核员工作量」同口径）。
+  // 同 2026-10-29 改法：单表 GROUP BY review_user（FORCE INDEX video_review_user_status_idx）取 Top1，
+  // 替代旧 JOIN 放大形态（avg 3.25s）；last_ct 取该审核员最近一次 review_time（同索引分区）。
+  const reviewTop = (async (): Promise<SiteTopRow | null> => {
+    const rows = await prisma.$queryRaw<{ uid: bigint; val: bigint; last_ct: bigint }[]>`
+      SELECT t.uid, t.val,
+        (SELECT MAX(v2.review_time) FROM video v2 WHERE v2.review_user = t.uid) last_ct
+      FROM (
+        SELECT v.review_user uid, COUNT(*) val
+        FROM video v FORCE INDEX (video_review_user_status_idx)
+        WHERE v.review_user > 0
+        GROUP BY v.review_user ORDER BY val DESC LIMIT 1
+      ) t
+    `;
+    const r = rows[0];
+    if (!r) return null;
+    const info = await prisma.$queryRaw<{ name: string; sex: number; ustatus: number; exp_time: bigint | null }[]>`
+      SELECT u.chinese_name name, u.sex, u.status ustatus, s.exp_time
+      FROM \`user\` u LEFT JOIN user_scores s ON s.id = u.id WHERE u.id = ${r.uid}
+    `;
+    const i = info[0];
+    if (!i) return null;
+    return {
+      key: "review", userId: N(r.uid), name: i.name, sex: N(i.sex),
+      ranked: N(i.ustatus) === 0, expTime: N(i.exp_time), val: N(r.val), lastCt: N(r.last_ct),
+    };
+  })();
+
+  const [views, post, comment, history, bv, upload, review] = await Promise.all([
     // 人气最高：总人气（user_stat.clicks 旧站累计镜像，展示 xxx.xW；与用户卡片同源）
     prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
       SELECT u.id uid, u.chinese_name name, u.sex, u.status ustatus, s.exp_time, us.clicks val, 0 last_ct
       FROM user_stat us JOIN \`user\` u ON u.id = us.id LEFT JOIN user_scores s ON s.id = u.id
       WHERE us.clicks > 0
       ORDER BY us.clicks DESC LIMIT 1
-    `,
-    // 上传录像最多：全部上传（含待审/屏蔽）
-    prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
-      SELECT u.id uid, u.chinese_name name, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(v.create_time) last_ct
-      FROM video v JOIN \`user\` u ON u.id = v.\`user\` LEFT JOIN user_scores s ON s.id = u.id
-      GROUP BY v.\`user\` ORDER BY val DESC LIMIT 1
     `,
     // 发表文章最多：论坛主题数
     prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
@@ -287,14 +337,9 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
       FROM history h JOIN \`user\` u ON u.id = h.\`user\` LEFT JOIN user_scores s ON s.id = u.id
       GROUP BY h.\`user\` ORDER BY val DESC LIMIT 1
     `,
-    // 审核录像最多：video.review_user 计数（与后台「审核员工作量」同口径）
-    prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
-      SELECT u.id uid, u.chinese_name name, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(v.review_time) last_ct
-      FROM video v JOIN \`user\` u ON u.id = v.review_user LEFT JOIN user_scores s ON s.id = u.id
-      WHERE v.review_user > 0
-      GROUP BY v.review_user ORDER BY val DESC LIMIT 1
-    `,
     bvTop,
+    uploadTop,
+    reviewTop,
   ]);
 
   const pick = (
@@ -318,11 +363,11 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
   return [
     pick("views", views),
     await bv,
-    pick("upload", upload),
+    upload,
     pick("post", post),
     pick("comment", comment),
     pick("history", history),
-    pick("review", review),
+    review,
   ].filter((r): r is SiteTopRow => r !== null);
 }
 
@@ -335,9 +380,10 @@ export const getRecordCurves = unstable_cache(
   { revalidate: 86400, tags: ["records-curves"] }
 );
 
-/** 右侧七项 TOP1（1h 缓存：TOP1 变化极低频，刷新纪录才变；60s 时期日均 272 次全表聚合冷启动，2026-10-29 巡检后升级） */
-export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v4"], {
-  revalidate: 3600,
+/** 右侧七项 TOP1（60s 短缓存，实时性优先——2026-10-29 上传/审核两项已改单表索引聚合
+ *  （张老师「按玩家 ID 直接 count」方案），TOP1 查询本身已快，不再需要 1h 权宜） */
+export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v5"], {
+  revalidate: 60,
   tags: ["records-tops"],
 });
 
