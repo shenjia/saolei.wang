@@ -213,3 +213,35 @@ export async function getPracticeLevelCounts(): Promise<{
   };
 }
 
+
+export interface RankedLatencyRow {
+  area: string; // 与 user.area / 地图几何同口径（剥后缀省名）
+  players: number; // 7 日内参加排行模式的去重人数
+  games: number; // 有延迟采样的排行局数
+  minRtt: number;
+  maxRtt: number;
+  avgRtt: number;
+}
+
+/** 全国排行延迟地图数据（2026-10-28 张老师需求）：近 N 天 ranked_rtt_log 按省聚合。
+ *  颜色按 avgRtt 绿黄红分级（LatencyMap 组件内插值），悬停给人数与最小/平均/最大。 */
+export async function getRankedLatencyMap(days = 7): Promise<RankedLatencyRow[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const rows = await prisma.$queryRawUnsafe<
+    { area: string; players: bigint; games: bigint; minRtt: number; maxRtt: number; avg: number }[]
+  >(
+    `SELECT area, COUNT(DISTINCT user_id) players, COUNT(*) games,
+            MIN(rtt) minRtt, MAX(rtt) maxRtt, AVG(rtt) avg
+     FROM ranked_rtt_log WHERE rtt > 0 AND area <> '' AND create_time >= ?
+     GROUP BY area ORDER BY players DESC, games DESC`,
+    now - days * 86400
+  );
+  return rows.map((r) => ({
+    area: r.area,
+    players: N(r.players),
+    games: N(r.games),
+    minRtt: N(r.minRtt),
+    maxRtt: N(r.maxRtt),
+    avgRtt: Math.round(N(r.avg)),
+  }));
+}

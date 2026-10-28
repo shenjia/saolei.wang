@@ -941,6 +941,21 @@ model PracticeLog {
   @@map("practice_log")
 }
 
+// 排行模式延迟埋点（2026-10-28 张老师需求）：排行局结束 practice 路由写一行——
+// rtt 来自客户端每秒 WS 探测的最近采样，area 为服务端 user.area 快照（不信任客户端地区）。
+// 供 /admin/practice 全国延迟地图按省聚合（近 7 日：人数/局数/最小·平均·最大）。
+model RankedRttLog {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  userId     BigInt @map("user_id") @db.BigInt
+  area       String @db.VarChar(12) // 与 user.area 同口径（剥后缀省名，空串不落行）
+  rtt        Int // 毫秒
+  createTime BigInt @default(0) @map("create_time") @db.BigInt // Unix 秒
+
+  @@index([createTime]) // 近 7 日窗口扫描
+  @@index([area, createTime]) // 按省聚合
+  @@map("ranked_rtt_log")
+}
+
 // 练习日汇总（2026-10-22 张老师定：不逐盘落行，每局 UPSERT 当日当用户计数）。
 // day = +08:00 切天序号 FLOOR((t+28800)/86400)，与全站日聚合口径一致；
 // user_id=0 为游客聚合行（未登录局无法归属到人，MySQL 唯一索引不认 NULL，用 0 兜底聚合）；

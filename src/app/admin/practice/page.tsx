@@ -6,17 +6,19 @@
 
 import { AdminCard } from "@/components/admin/Widgets";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
-import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
+import { LatencyMap } from "@/components/admin/LatencyMap";
+import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, getRankedLatencyMap, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "练习数据 | 管理后台" };
 
 export default async function AdminPracticePage() {
-  const [trend, hourly, days, modes] = await Promise.all([
+  const [trend, hourly, days, modes, rttMap] = await Promise.all([
     getPracticeTrend(30),
     getPracticeHourly(7),
     getPracticeDays(7),
     getPracticeModes(7),
+    getRankedLatencyMap(7),
   ]);
   const C = PRACTICE_LEVEL_COLORS;
 
@@ -50,6 +52,18 @@ export default async function AdminPracticePage() {
           近 30 天 {d30Total.toLocaleString("zh-CN")} 盘 · 近 7 天 {weekPlays.toLocaleString("zh-CN")} 盘
         </span>
       </div>
+
+      {/* 排行延迟地图（2026-10-28 张老师需求）：置于页面顶部 */}
+      <AdminCard
+        title="排行延迟地图（近 7 天）"
+        more={rttMap.length ? `${rttMap.length} 个地区有数据 · 共 ${rttMap.reduce((a, d) => a + d.games, 0).toLocaleString("zh-CN")} 局` : "数据自今日起记"}
+      >
+        {rttMap.length ? (
+          <LatencyMap data={rttMap} />
+        ) : (
+          <div className="admin_empty">暂无排行延迟数据（排行局结算后自动记入）</div>
+        )}
+      </AdminCard>
 
       <div className="admin_grid trend_pies">
         <AdminCard title="练习趋势（近 30 天，点击图例可切换级别）">

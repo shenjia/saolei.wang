@@ -79,5 +79,21 @@ export async function POST(req: NextRequest) {
         update_time = ${now}
     `;
   } catch { /* ignore：小时分布缺一桶可接受 */ }
+  // 排行延迟埋点（2026-10-28 张老师需求）：排行局带 rtt（客户端每秒 WS 探测的
+  // 最近采样）时落一行 ranked_rtt_log，地区取服务端 user.area 快照（不信任客户端）。
+  // 失败静默——延迟地图是增强数据，缺行可接受。
+  if (ranked && session) {
+    const rtt = Number(body.rtt);
+    if (Number.isInteger(rtt) && rtt > 0 && rtt < 10_000) {
+      try {
+        const u = await prisma.user.findUnique({ where: { id: uid }, select: { area: true } });
+        if (u?.area) {
+          await prisma.rankedRttLog.create({
+            data: { userId: uid, area: u.area, rtt, createTime: BigInt(now) },
+          });
+        }
+      } catch { /* ignore：延迟地图缺行可接受 */ }
+    }
+  }
   return NextResponse.json({ ok: true });
 }
