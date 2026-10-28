@@ -167,7 +167,12 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
   // （ranksnap.ts：扣掉「别人被封白捡的名次」），delta>0 即真实名次上升。
   // 头像加成：有合法头像（/uploads/avatar/%、http 外链、旧站 '1'）者每份席位翻倍——
   // 鼓励上传真人照片，但不阻断无头像者参选。
-  const rankPath = `$.\\"${today}\\"`; // rank_snapshot.ranks JSON 里今日名次的 key
+  // rank_snapshot.ranks JSON 里今日名次的 key（如 $."2026-10-28"）。⚠️ 引号必须真实
+  // 存在于字符串值里且**不带反斜杠**：此处是参数绑定（$queryRawUnsafe 传 ?），
+  // 不走 SQL 字符串转义——原写法 `$.\\"…\\"` 让 MySQL 收到字面 `$.\"2026-10-28\"`，
+  // JSON path 解析器直接报 3143 非法路径（position 16 实证，2026-10-29 线上首页 500）。
+  // 日期 key 含连字符必须引号包裹，故值为带裸双引号的 $."日期"。
+  const rankPath = `$."${today}"`;
   const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; seats: number; hasAvatar: number }>>(
     `SELECT s.id, 1 AS seats, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
        FROM user_scores s
