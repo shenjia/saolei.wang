@@ -12,7 +12,7 @@
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { dayStart } from "@/lib/admin/stats";
-import { LEVEL_MIN_3BV, MIN_3BV_FOR_3BVS, VIDEO_STATUS } from "@/lib/config";
+import { LEVEL_MIN_3BV, VIDEO_STATUS } from "@/lib/config";
 
 export interface PracticeToday {
   /** 今日全网尝试盘数（含踩雷局、游客局；后台 KPI 同口径） */
@@ -138,11 +138,10 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
 //   video JOIN video_info 取 board_3bv，status<>0（待审 10 也算收集，2026-10-28 口径）、
 //   封禁连坐盘（status=0 且本人未封）保留；board_3bv ≥ LEVEL_MIN_3BV（初 2/中 30/高 100）。
 //   「收集时刻」= 该 BV 首个录像的上传时刻（破纪录动态同口径：取上传时间）。
-// · PB 口径与结算 PB 气泡同池：级别 × NF 分池 × 三指标（时间更小 / 3BV/s 更高 /
-//   STNB 更高），任一池首盘也算破（/pb 的 NULL=尚无纪录语义）。站内无 PB 事件流水，
-//   按 video 时间轴窗口函数重放（records.ts「个人纪录事件全在 video 里」同思路）：
-//   上传时刻排序，值严格优于此前运行最优即记 1 次；「创造时刻」同取上传时刻。
-//   3BV/s 与 STNB 受 MIN_3BV_FOR_3BVS 限界（低 3BV 成绩不承认成绩，同站内口径）。
+// · PB 口径（2026-10-28 21:15 张老师澄清定稿）＝列表黄点同源：打破「某级别
+//   特定 BV 下本人最好成绩」的次数，直接计 video.pb_bv=1 的今日盘数
+//   （上传时刻判定落列，NF/FL 不分池；**不是**全局历史纪录重放）。
+//   收集 b/i/e 口径不变（收集格同源）。
 
 export interface RankedToday {
   /** 今日是否玩过排行模式（false 时其余字段无意义，前端不渲染该行） */
@@ -153,7 +152,7 @@ export interface RankedToday {
   int: number;
   /** 高级今日新收集 BV 数 */
   exp: number;
-  /** 今日创造 PB 次数（三指标 × 六池分别计） */
+  /** 今日创造 PB 次数（打破本BV最好成绩，与列表黄点 pb_bv 同源） */
   pb: number;
 }
 
@@ -191,42 +190,15 @@ export async function getRankedToday(uid: number): Promise<RankedToday> {
     else if (r.lv === "exp") out.exp = N(r.c);
   }
 
-  // ② 今日 PB 事件数：每 (级别,NF) 池按上传时刻窗口重放，运行最优取「本行之前」
-  //    （ROWS ... 1 PRECEDING；空帧=NULL=首盘=任何成绩都算破）。3BV/s 与 STNB
-  //    低于级别限界时值为 NULL（该盘不参与这两项比较）
+  // ② 今日 PB 次数：直接计 pb_bv=1 的今日盘（与列表黄点完全同源，
+  //    上传时刻已判定落列；NF/FL 不分池，屏蔽盘不算）
   const pbRows = await prisma.$queryRaw<{ c: bigint }[]>`
-    SELECT COUNT(*) AS c FROM (
-      SELECT
-        v.create_time AS ct,
-        CASE WHEN vi.real_time > 0 THEN vi.real_time END AS tval,
-        MIN(vi.real_time) OVER w AS tprev,
-        CASE WHEN vi.real_time > 0 AND vi.board_3bv >= (CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} ELSE ${MIN_3BV_FOR_3BVS.exp} END)
-          THEN ROUND(vi.board_3bv * 1000000.0 / vi.real_time) END AS bval,
-        MAX(CASE WHEN vi.real_time > 0 AND vi.board_3bv >= (CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} ELSE ${MIN_3BV_FOR_3BVS.exp} END)
-          THEN ROUND(vi.board_3bv * 1000000.0 / vi.real_time) END) OVER w AS bprev,
-        CASE WHEN m.stnb > 0 AND vi.board_3bv >= (CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} ELSE ${MIN_3BV_FOR_3BVS.exp} END)
-          THEN m.stnb END AS sval,
-        MAX(CASE WHEN m.stnb > 0 AND vi.board_3bv >= (CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} ELSE ${MIN_3BV_FOR_3BVS.exp} END)
-          THEN m.stnb END) OVER w AS sprev
-      FROM video v
-      JOIN video_info vi ON vi.id = v.id
-      LEFT JOIN video_metrics m ON m.id = v.id
-      JOIN \`user\` u ON u.id = v.\`user\`
-      WHERE v.\`user\` = ${uidBig}
-        AND (v.status <> ${VIDEO_STATUS.BANNED} OR u.status <> 0)
-        AND vi.real_time > 0
-        AND v.level IN ('beg', 'int', 'exp')
-      WINDOW w AS (
-        PARTITION BY v.level, vi.noflag
-        ORDER BY v.create_time, v.id
-        ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-      )
-    ) t
-    WHERE t.ct >= ${today0} AND (
-      (t.tval IS NOT NULL AND (t.tprev IS NULL OR t.tval < t.tprev)) OR
-      (t.bval IS NOT NULL AND (t.bprev IS NULL OR t.bval > t.bprev)) OR
-      (t.sval IS NOT NULL AND (t.sprev IS NULL OR t.sval > t.sprev))
-    )`;
+    SELECT COUNT(*) AS c FROM video v
+    JOIN \`user\` u ON u.id = v.\`user\`
+    WHERE v.\`user\` = ${uidBig}
+      AND (v.status <> ${VIDEO_STATUS.BANNED} OR u.status <> 0)
+      AND v.pb_bv = 1
+      AND v.create_time >= ${today0}`;
   out.pb = N(pbRows[0]?.c);
 
   return out;
