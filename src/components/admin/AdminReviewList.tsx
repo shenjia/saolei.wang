@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AdminVideoRow } from "@/lib/admin/data";
 import { LevelTag, StatusTag } from "./Widgets";
+import { TitleBadge } from "@/components/TitleBadge";
 import { postOp, useOp } from "./AdminAction";
 import { onPendingCounts, refreshPendingCounts } from "./PendingCounts";
 import { toast } from "@/components/Toast";
@@ -524,7 +525,9 @@ function ReviewRow({
       <td>
         <Link className="link" href={`/admin/users/${v.user}`}>
           {v.author?.chineseName ?? `#${v.user}`}
-        </Link>
+        </Link>{" "}
+        {/* 玩家名后军衔徽章（2026-10-28 张老师需求；后台惯例不传 classic 回退军衔制） */}
+        <TitleBadge title={v.authorTitle} />
       </td>
       <td className="c">
         <LevelTag level={v.level} />

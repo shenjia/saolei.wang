@@ -7,6 +7,7 @@ import { getAuditorWorkload, getOverview } from "@/lib/admin/stats";
 import { usersByIds } from "@/lib/queries";
 import { VIDEO_STATUS } from "@/lib/config";
 import { AdminReviewList } from "@/components/admin/AdminReviewList";
+import { TitleBadge } from "@/components/TitleBadge";
 import { AdminCard, Kpi, StatusTag } from "@/components/admin/Widgets";
 import { BarList } from "@/components/admin/Charts";
 import { scoreTime, timeOpposite } from "@/lib/format";
@@ -170,7 +171,10 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
                         {v.id}
                       </Link>
                     </td>
-                    <td>{v.author?.chineseName ?? `#${v.user}`}</td>
+                    <td>
+                      {v.author?.chineseName ?? `#${v.user}`}{" "}
+                      <TitleBadge title={v.authorTitle} />
+                    </td>
                     <td className="num">{v.realTime ? scoreTime(v.realTime) : "—"}</td>
                     <td className="c">
                       <StatusTag status={v.status} />

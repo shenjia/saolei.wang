@@ -580,6 +580,8 @@ export interface AdminVideoRow {
   id: number;
   user: number;
   author: UserBrief | null;
+  /** 上传者当前军衔（2026-10-28 审核页玩家名后展示；usersWithTitles 同口径） */
+  authorTitle: string;
   level: string;
   status: number;
   noflag: boolean;
@@ -776,7 +778,9 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       select: { id: true, stnb: true, cls: true, cl: true },
     }),
   ]);
-  const authors = await usersByIds(videos.map((v) => N(v.user)));
+  // 上传者带军衔批量取（2026-10-28 审核页玩家名后展示；usersWithTitles 内含
+  // exp_time 换算 + 总司令=雷界第一人特判，每页 ≤25 人开销可忽略）
+  const authors = await usersWithTitles(videos.map((v) => N(v.user)));
   const reviewers = await usersByIds([...new Set(videos.map((v) => N(v.reviewUser)))].filter((x) => x > 0));
   const vMap = new Map(videos.map((v) => [N(v.id), v]));
   const iMap = new Map(infos.map((i) => [N(i.id), i]));
@@ -793,6 +797,7 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       id,
       user: N(v.user),
       author: authors.get(N(v.user)) ?? null,
+      authorTitle: authors.get(N(v.user))?.title ?? "",
       level: v.level,
       status: v.status,
       noflag: info?.noflag ?? false,
@@ -1374,16 +1379,13 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
 
 export async function getLatestVideosBrief(
   limit = 8
-): Promise<(AdminVideoRow & { authorName: string; authorTitle: string })[]> {
+): Promise<(AdminVideoRow & { authorName: string })[]> {
   const ids = await prisma.video.findMany({ orderBy: { id: "desc" }, take: limit, select: { id: true } });
+  // fillVideos 已带上 authorTitle（2026-10-28 上传者批量查询升级 usersWithTitles）
   const rows = await fillVideos(ids.map((r) => N(r.id)));
-  // 玩家列军衔（2026-10-28）：同页「最新注册玩家」称号列同口径（usersWithTitles
-  // 批量补 exp_time + 总司令=雷界第一人特判），仪表盘只 8 行开销可忽略
-  const titles = await usersWithTitles(rows.map((r) => r.user));
   return rows.map((r) => ({
     ...r,
     authorName: r.author?.chineseName ?? `#${r.user}`,
-    authorTitle: titles.get(r.user)?.title ?? "",
   }));
 }
 
