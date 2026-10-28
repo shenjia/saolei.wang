@@ -12576,9 +12576,9 @@ a.cheat_rep_link:hover {
 .video_table .sw_icon:hover::after {
   opacity: 1;
 }
-/* 详情页软件名前灰度图标（2026-10-29 张老师二轮；三轮定稿灰度+间距）：
-   「软件」文字 ←留空→ 图标 ‖紧贴‖ <em>软件名</em>——左 margin 隔开文字，
-   右侧 0 间距紧挨名字（margin-right:0 + em 无前置空隙） */
+/* 详情页软件名前灰度图标（2026-10-29 张老师二轮；四轮定稿）：
+   「软件」文字 ←留空→ 图标 ‖零间距‖ <em>软件名</em>——左 margin 隔开文字，
+   右侧完全贴住名字（张老师四轮：软件名左侧 padding 去掉） */
 .video_cell .software .sw_icon {
   display: inline-flex;
   align-items: center;
@@ -12588,7 +12588,12 @@ a.cheat_rep_link:hover {
   line-height: 1;
   vertical-align: -3px;
   margin-left: 6px;
-  margin-right: 2px;
+  margin-right: 0;
+}
+/* 张老师四轮：软件名左侧间距去掉——全站基础规则 em,strong{margin:0 5px} 给 em 左侧垫了 5px，
+   图标已紧贴时显空隙；只清左 margin（右侧 5px 保留，隔开后面「签名」） */
+.video_cell .software em {
+  margin-left: 0;
 }
 .video_cell .software .sw_icon img {
   width: 16px;
