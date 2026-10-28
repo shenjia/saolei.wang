@@ -10425,7 +10425,7 @@ html.op-fakefs #header {
 }
 #online_play .op_today .rate {
   margin-left: 4px;
-  color: #75715e; /* 标签暗灰（首页首行胜率标签同色口径） */
+  color: #b1b1a4; /* 标签亮灰（22:12 张老师定，统计文字标签统一亮灰；数值绿分层不变） */
   font-size: 12px;
   font-weight: bold;
 }
@@ -10437,6 +10437,57 @@ html.op-fakefs #header {
     display: none; /* 窄屏空间不够：统计隐藏（2026-10-23 张老师定「可隐藏」） */
   }
 }
+/* ---- 练习页标题行「今日已收集 b / i / e BV 创造 z PB」（2026-10-28 21:45 张老师需求） ----
+   与首页 pt_ranked 同款口径与配色：b/i/e=初/中/高级今日新收集 BV 数（级别三色
+   初 #a6e22e / 中 #f79646 / 高 #fdc61a，0 值降亮灰 .zero）、z=今日本BV PB 次数
+   恒金 #fdc61a；「创造 z PB」右缘对齐（同首页 margin-left:auto）。字号/行高与
+   完成统计 .op_today 对齐（数字 16px 加粗 / 标签 13px）；两行包在统计容器
+   .op_stats 纵向堆叠（本行在上、完成统计在下），≤880px 一起隐藏 */
+#online_play .op_stats {
+  display: flex;
+  flex-direction: column;
+  align-self: center; /* 标题行 flex-end 底线对齐下自行居中（承 op_today 原位） */
+}
+#online_play .op_ranked {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 22px;
+  color: #b1b1a4;
+  white-space: nowrap;
+}
+#online_play .op_ranked .lead {
+  color: #b1b1a4; /* 标签亮灰（22:10 张老师定：统计文字标签统一亮灰，数字才显色） */
+}
+#online_play .op_ranked .lv {
+  font-size: 16px;
+  font-weight: bold;
+}
+#online_play .op_ranked .lv_beg { color: #a6e22e; }
+#online_play .op_ranked .lv_int { color: #f79646; }
+#online_play .op_ranked .lv_exp { color: #fdc61a; }
+#online_play .op_ranked .lv.zero { color: #b1b1a4; }
+#online_play .op_ranked .sep {
+  margin: 0 1px;
+  color: #75715e; /* 分隔斜杠暗灰（22:13 张老师定） */
+}
+#online_play .op_ranked .pbpart {
+  margin-left: auto;
+  color: #b1b1a4; /* 「创造」「PB」文字亮灰（数值金不变） */
+  font-size: 12px;
+  font-weight: bold;
+}
+#online_play .op_ranked .pbpart .pbv {
+  color: #fdc61a;
+  font-size: 16px;
+  font-weight: bold;
+}
+@media (max-width: 880px) {
+  #online_play .op_ranked {
+    display: none; /* 窄屏随完成统计一起隐藏 */
+  }
+}
 /* 全屏态（2026-10-23 张老师定）：统计与游戏区域水平居中——全屏宿主铺满视口，
    棋盘 gwrap 在 #game_area 内 text-align:center 居中（中心＝视口中线），
    标题行里「跟在 tabs 后」的位置不再对齐盘面中心，改绝对定位吸附到
@@ -10445,11 +10496,17 @@ html.op-fakefs #header {
 #online_play > div:fullscreen .news_head {
   position: relative;
 }
-#online_play > div:fullscreen .op_today {
+#online_play > div:fullscreen .op_stats {
   position: absolute;
   left: 50%;
   bottom: 3px; /* 行内 align-items:flex-end 底线对齐的近似视觉位 */
   transform: translateX(-50%);
+  /* pbpart 的 margin-left:auto 在绝对定位收缩宽度下失效——右缘对齐改由
+     统计容器自身宽度撑开（两行都 white-space:nowrap，宽者定容器宽） */
+  align-items: stretch;
+}
+#online_play > div:fullscreen .op_ranked .pbpart {
+  margin-left: auto;
 }
 /* 首页右栏「开一局」大按钮（2026-10-14 张老师定）：扁平、与侧栏板块同宽（桌面盒外径 272px），
    样式复用游戏笑脸按钮的经典银灰凸起边框，笑脸图标在前、文字在后 */

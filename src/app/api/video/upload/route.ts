@@ -160,6 +160,10 @@ export async function uploadVideo(
     return fail("录像保存失败", 500);
   }
 
+  // 本BV标记判定结果（事务内计算；提升到外层供响应透传——练习页标题行
+  // 统计实时自增用，2026-10-28 21:45）
+  let firstBv = 0;
+  let pbBv = 0;
   let videoId = 0;
   try {
     await prisma.$transaction(async (tx) => {
@@ -183,8 +187,8 @@ export async function uploadVideo(
           AND v.status <> ${VIDEO_STATUS.BANNED}`;
       const prevCount = Number(prevAgg[0]?.c ?? 0);
       const prevBest = prevAgg[0]?.mt ?? null;
-      const firstBv = prevCount === 0 ? 1 : 0;
-      const pbBv =
+      firstBv = prevCount === 0 ? 1 : 0;
+      pbBv =
         prevCount > 0 && prevBest !== null && parsed.timeMs > 0 && parsed.timeMs < prevBest ? 1 : 0;
       const video = await tx.video.create({
         data: {
@@ -262,5 +266,5 @@ export async function uploadVideo(
       void ensureVideoTriage(videoId, triageExtra);
     }
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, firstBv, pbBv });
 }
