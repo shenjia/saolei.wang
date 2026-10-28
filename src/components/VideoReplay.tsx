@@ -1875,17 +1875,21 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
   );
 }
 
-/** 左侧数据面板（九期；十期 portal 化）：挂 body 直下（.video_cell 的 legacy
+/** 页面态数据面板（九期；十期 portal 化）：挂 body 直下（.video_cell 的 legacy
  *  overflow:hidden 会把盒内绝对定位子元素整块裁掉——面板伸到盒外必被裁，
  *  实测 elementFromPoint 落在 BODY 上，与 #gr_modal 挂 body 的既有教训同源）。
- *  JS 定位：right 锚 .play_board 左缘外 14px、top 与棋盘顶对齐；
- *  宽高自适应（练习页 syncReportZoom 同思路）inline zoom 封顶，下限 0.3 */
+ *  JS 定位：锚 .play_board 左缘外 14px、top 与棋盘顶对齐；
+ *  宽高自适应（练习页 syncReportZoom 同思路）inline zoom 封顶，下限 0.3。
+ *  2026-10-28 张老师需求：移动端横屏左侧空间不足时面板改锚棋盘【右侧】
+ *  （左侧硬塞小字号不可读、真机定位漂移时还会盖住棋盘）；右侧也放不下才隐藏 */
 function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    let raf = 0;
     const fit = () => {
+      raf = 0;
       const wrap = document.querySelector<HTMLElement>("#video_view .play_board");
       if (!wrap) return;
       const wr = wrap.getBoundingClientRect();
@@ -1893,36 +1897,68 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
       el.style.display = "";
       const pr = el.getBoundingClientRect();
       if (pr.width < 1 || pr.height < 1) return;
-      /* 定位：面板右缘（渲染值）贴棋盘左缘 −14px、顶边对齐棋盘顶。
+      /* 定位：面板贴棋盘左缘 −14px（左锚）或棋盘右缘 +14px（右锚）、顶边对齐棋盘顶。
          absolute（2026-10-17 定：随页滚动、与棋盘保持位置关系，不用 fixed）→
          文档坐标 = 视口坐标 + scrollX/Y。
          zoom 语义：CSS left/top 会随 zoom 同步缩放 → 换算成 CSS 值要除回 z；
          宽度在 CSS 域是自然宽 pr.width（不随 left 换算走）——
-         即 CSS left = (wr.left − gap)/z − pr.width（首版把自然宽也除了 z，
+         即左锚 CSS left = (wr.left − gap)/z − pr.width（首版把自然宽也除了 z，
          z<1 时面板向左飞出屏，1920 因 z=1 蒙混过关） */
       const hostRect = wrap.closest(".playable")?.getBoundingClientRect();
       const hostH = hostRect ? hostRect.height : wr.height;
       const gap = 14;
-      const zW = (wr.left - gap - 12) / pr.width;
       const zH = hostH > 1 ? hostH / pr.height : 1;
       /* 十九期张老师定：页面态（未全屏）面板放大 1.25 倍——先按既有约束取 fit
          （宽不重叠棋盘、高不高于「棋盘+控制条」整块），再整体 ×1.25；
-         放大后横向仍不得与棋盘重叠（zW 硬上限，与棋盘贴太近会压住版图），
-         纵向允许向棋盘下方延伸（面板不是棋盘的一部分）。 */
-      const z = Math.max(0.3, Math.min(zW, Math.min(1, zH) * 1.25));
-      /* 左侧空间放到 0.5x 以下（字号 11px×0.5≈5.5px 不可读；视口 ≈1024 时
-         #page 固定 960 居中、左空间只够 0.44x）→ 面板隐藏，宁缺毋滥 */
-      if (zW < 0.5) {
-        el.style.display = "none";
-        return;
+         放大后横向仍不得与棋盘重叠，纵向允许向棋盘下方延伸（面板不是棋盘的一部分）。 */
+      const zCap = Math.min(1, zH) * 1.25;
+      /* 侧别判定（2026-10-28 张老师需求）：移动端横屏（coarse+landscape）一律右锚
+         ——左侧空间小，硬塞会盖棋盘/字号不可读；其余维持左锚，左侧 <0.5x
+         （字号 13px×0.5 不可读的下限，宁缺毋滥）时右侧兜底，两侧都放不下才隐藏 */
+      const zW = (wr.left - gap - 12) / pr.width;
+      const zR = (window.innerWidth - wr.right - gap - 12) / pr.width;
+      const coarseLandscape = window.matchMedia(
+        "(pointer: coarse) and (orientation: landscape)"
+      ).matches;
+      const useRight = coarseLandscape ? zR >= 0.5 : zW < 0.5 && zR >= 0.5;
+      let z: number;
+      let docLeft: number; // 面板视觉左缘（文档坐标）→ CSS left = docLeft / z
+      if (useRight) {
+        z = Math.max(0.3, Math.min(zR, zCap));
+        docLeft = wr.right + window.scrollX + gap;
+      } else {
+        if (zW < 0.5) {
+          el.style.display = "none";
+          return;
+        }
+        z = Math.max(0.3, Math.min(zW, zCap));
+        /* 视觉宽 = pr.width × z（不随 left 换算走）——左锚视觉左缘 =
+           棋盘左缘 − gap − 面板视觉宽（首版把自然宽也除了 z，
+           z<1 时面板向左飞出屏，1920 因 z=1 蒙混过关） */
+        docLeft = wr.left + window.scrollX - gap - pr.width * z;
       }
       el.style.zoom = String(z);
-      el.style.left = (wr.left + window.scrollX - gap) / z - pr.width + "px";
+      el.style.left = docLeft / z + "px";
       el.style.top = (wr.top + window.scrollY) / z + "px";
     };
+    /* 定位失效兜底（2026-10-28）：此前只挂 window resize——真机上棋盘/其上方
+       内容（封面图、标题区）异步就绪会改变棋盘文档位置，回放中统计值变化也
+       会改面板自然宽，均不触发 resize → 面板按过期坐标漂移、盖住棋盘。
+       rAF 合帧后统一重算。 */
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(fit);
+    };
     fit();
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    window.addEventListener("resize", schedule);
+    const ro = new ResizeObserver(schedule);
+    ro.observe(el);
+    const stage = document.querySelector("#video_view");
+    if (stage) ro.observe(stage);
+    return () => {
+      window.removeEventListener("resize", schedule);
+      ro.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
   if (typeof document === "undefined") return null;
   return createPortal(
