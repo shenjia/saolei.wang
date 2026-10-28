@@ -11,6 +11,7 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "html-to-image": "^1.11.13",
+    "ip2region-ts": "^2.0.1",
     "ms-toollib": "1.5.20",
     "next": "16.3.6",
     "nodemailer": "^10.0.10",

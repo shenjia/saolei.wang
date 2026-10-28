@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
   // 会被按 UTF-8 强解，无效字节替换成 U+FFFD 后重编码——原始 GBK 字节直接丢失、无法还原。
   // 开启此项后 proxy 拿到的 req.url 保持原始形态，GBK 参数才能正确解码跳转
   skipProxyUrlNormalize: true,
+
+  // ip2region-ts（IP→省份离线库，排行延迟埋点用）不参与打包：包内 defaultDbFile 依赖
+  // __dirname 定位 data/ip2region.xdb（11MB），bundler 打包后路径失效 → 运行时读不到库
+  serverExternalPackages: ["ip2region-ts"],
 };
 
 export default nextConfig;
