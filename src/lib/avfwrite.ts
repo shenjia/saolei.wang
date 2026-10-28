@@ -139,6 +139,13 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
       if (lp) {
         removePresses(); // 左键按住时 rr=chord：同理只删待定 lc；rc（若有）保留
         out.push({ ...e, mouse: 65 });
+        /* ⚠️ 2026-10-28 修（本局 3.64s 案）：flop 语义里 rr 除了 chord 还会
+           **复位 rp**（rp=false），折叠成 mr 不会复位——「rc 插旗 → 左键 chord →
+           右键先松（rp 应复位）→ 左键后松」的手势导出后 rp 永久残留，
+           后续所有 lr 被 flop 判成 chord 不开格 → 45/54 判「未完成」。
+           解法：折叠 mr 后补一条 rr 原事件（flop 中 rr 在 lp 按住时本身也是
+           chord、无副作用），恢复键态机配对完整性 */
+        out.push(e);
         lcAt = -1;
       } else {
         if (rcAt >= 0) out.push(e);
