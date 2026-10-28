@@ -143,8 +143,9 @@ export async function resolveTitleDisplay(
     const t = classicTitle(expTimeMs, ranked, sex, isKing);
     return { system: "c", name: t.name, color: t.color };
   }
-  // 军衔制：预备役=无成绩或未在榜（旧站口径：未加入排行不显示军衔）
-  if (!ranked || expTimeMs <= 0) return { system: "m", name: "预备役" };
+  // 军衔制：预备役=无高级成绩（2026-10-28 张老师改口径：即便未入排行/封禁，
+  // 有高级成绩也按时间评定军衔——ranked 不再参与军衔制评定，只保留给旧版称号判布衣）
+  if (expTimeMs <= 0) return { system: "m", name: "预备役" };
   return { system: "m", name: militaryTitle(expTimeMs, isKing) };
 }
 
@@ -172,7 +173,8 @@ export function dualTitle(
 ): TitlePair {
   const isKing = king > 0 && king === userId;
   return {
-    m: !ranked || expTime <= 0 ? "预备役" : militaryTitle(expTime, isKing),
+    // 军衔制：预备役=无高级成绩（2026-10-28 张老师改口径，ranked 不再参与军衔制评定）
+    m: expTime <= 0 ? "预备役" : militaryTitle(expTime, isKing),
     c: classicTitle(expTime, ranked, sex, isKing),
   };
 }

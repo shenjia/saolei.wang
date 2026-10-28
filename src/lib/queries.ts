@@ -287,8 +287,10 @@ function feedTypeFilter(opts: {
 /** 首页新闻流类型过滤（2026-10-25 张老师定，2026-10-26 扩口径）：NEWS_HOME_TYPES 白名单内，
  *  再排除破纪录动态（type=20）中的两类：
  *  ① 首创行 or=0 渲染「创造了」——成绩不值得放首页（10-25 原口径）；
- *  ② 预备役用户（快照 exp_time=0 或 ranked=0，与 title-system 预备役判定一致）——
- *    一律不进首页，**含「刷新了」or>0**（2026-10-26 张老师定：预备役的破纪录动态不进首页）。
+ *  ② 快照 ranked=0（未入榜/封禁）或 exp_time=0（无高级成绩）的破纪录动态
+ *    一律不进首页，**含「刷新了」or>0**（2026-10-26 张老师定）。
+ *    注：2026-10-28 起军衔制预备役只看 exp_time（ranked 不再参与军衔评定），
+ *    本过滤是首页内容闸不是军衔口径，ranked=0 排除口径保留不变。
  *  or=0 落库两种形态（新行数字 "or":0 / 同步存量行字符串 "or":"0"，渲染层 "0">0 同判 false），
  *  details_data 是 VarChar 无法做 JSON 路径过滤，用 contains 双标记匹配（形态普查 2026-10-25 全覆盖）。
  *  getNews / getNewsPage / getNewsCount 三处 home 分支共用，保证行集与计数严格一致 */
@@ -299,7 +301,7 @@ function homeNewsTypeFilter() {
       type: NEWS_TYPE.PERSON_RECORD,
       OR: [
         ...NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
-        // 预备役快照：无高级成绩 或 未在榜（news 表 exp_time/ranked 列，写入时定值）
+        // 未入榜/无高级成绩快照（news 表 exp_time/ranked 列，写入时定值；首页内容闸，非军衔口径）
         { expTime: BigInt(0) },
         { ranked: BigInt(0) },
       ],
