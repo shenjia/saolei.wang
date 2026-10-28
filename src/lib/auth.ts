@@ -75,6 +75,10 @@ export async function setSession(user: SessionUser, ip = ""): Promise<void> {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
+    // 父域 cookie（2026-10-28 多地域排行）：跨地域 WS 直连 rank-hk.saolei.wang
+    // 等子域时浏览器才会携带凭据（host-only cookie 不随子域 WS 发送），
+    // authority 握手的 session HMAC 校验才能通过。同一运营者子域，可接受
+    domain: ".saolei.wang",
     maxAge: SESSION_TTL,
     secure: process.env.NODE_ENV === "production",
   });

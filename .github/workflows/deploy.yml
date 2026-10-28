@@ -90,7 +90,12 @@ jobs:
       # 这也是 09-27 服务器上 blue 槽 BUILD_ID 灵异消失 crash loop 的真因。
       # 双槽产物在服务器端由 server-release.sh 用 cp 复制 .next 生成（见 scripts/）。
       - name: Build
+        # NEXT_PUBLIC_RANKED_REGIONS 是构建期内联变量（排行多地域节点表，2026-10-28）：
+        # 形如 "hk=https://rank-hk.saolei.wang"，多个逗号分隔；加节点时同步改这里
+        # 与服务器 .env 的 AUTHORITY_HK_URL/AUTHORITY_HK_TOKEN（运行时键）
         run: pnpm build
+        env:
+          NEXT_PUBLIC_RANKED_REGIONS: hk=https://rank-hk.saolei.wang
 
       # ⚠️ .next 是点开头的隐藏目录，upload-artifact@v4 默认 include-hidden-files: false
       # 会整个跳过它（2026-09-27 实证：build 成功但 artifact 为空）——必须显式开启

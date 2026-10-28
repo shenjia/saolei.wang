@@ -8419,7 +8419,8 @@ button.msg_cancel:hover {
 #online_play .gicon {
   position: relative;
 }
-#online_play .gicon .tip {
+#online_play .gicon .tip,
+#online_play .op_ping .tip {
   display: none;
   position: absolute;
   bottom: calc(100% + 4px);
@@ -8437,7 +8438,8 @@ button.msg_cancel:hover {
   pointer-events: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
-#online_play .gicon .tip::after {
+#online_play .gicon .tip::after,
+#online_play .op_ping .tip::after {
   content: "";
   position: absolute;
   top: 100%;
@@ -8446,18 +8448,21 @@ button.msg_cancel:hover {
   border: 5px solid transparent;
   border-top-color: #656355;
 }
-#online_play .gicon:hover .tip {
+#online_play .gicon:hover .tip,
+#online_play .op_ping:hover .tip {
   display: block;
 }
 /* 窄屏（≤880，与站内移动端断点一致）兜底：按钮贴近视口右缘，居中弹会被裁出屏
    （实测 700px 宽全屏钮溢出 11px）→ 改贴按钮右缘向左展开，保完整可见 */
 @media (max-width: 880px) {
-  #online_play .gicon .tip {
+  #online_play .gicon .tip,
+  #online_play .op_ping .tip {
     left: auto;
     right: 0;
     transform: none;
   }
-  #online_play .gicon .tip::after {
+  #online_play .gicon .tip::after,
+  #online_play .op_ping .tip::after {
     left: auto;
     right: 11px;
     transform: none;
@@ -8465,7 +8470,7 @@ button.msg_cancel:hover {
 }
 /* ---- 网络延迟指示器（2026-10-28 张老师需求）----
    排行模式中出现在排行钮左侧：三格信号条 + 超小字 ms。总高 30px 与 .gicon
-   一致（张老师追定）；档位：<30ms 绿满格 / 30-75ms 黄两格 / ≥75ms 红单格
+   一致（张老师追定）；档位：<35ms 绿满格 / 35-70ms 黄两格 / ≥70ms 红单格
    （色值沿用站内色板 #a6e22e / #fdc61d / #f92672，零新色），未点亮格灰。
    显隐由 hidden 属性控制（syncModeButtons 命令式切换），档位/点亮由
    data-lv + .bar.lit 驱动，全部零 JS 定时器在 CSS 侧 */
@@ -8477,6 +8482,8 @@ button.msg_cancel:hover {
   height: 30px;
   gap: 2px;
   user-select: none;
+  position: relative; /* tip 气泡定位锚 */
+  cursor: default;
 }
 #online_play .op_ping[hidden] {
   display: none;
