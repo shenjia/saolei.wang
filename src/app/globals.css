@@ -8418,6 +8418,43 @@ button.msg_cancel:hover {
     transform: none;
   }
 }
+/* ---- 网络延迟指示器（2026-10-28 张老师需求）----
+   排行模式中出现在排行钮左侧：三格信号条 + 超小字 ms。总高 30px 与 .gicon
+   一致（张老师追定）；档位：<30ms 绿满格 / 30-75ms 黄两格 / ≥75ms 红单格
+   （色值沿用站内色板 #a6e22e / #fdc61d / #f92672，零新色），未点亮格灰。
+   显隐由 hidden 属性控制（syncModeButtons 命令式切换），档位/点亮由
+   data-lv + .bar.lit 驱动，全部零 JS 定时器在 CSS 侧 */
+#online_play .op_ping {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  gap: 2px;
+  user-select: none;
+}
+#online_play .op_ping[hidden] {
+  display: none;
+}
+#online_play .op_ping svg {
+  display: block;
+  width: 17px;
+  height: 12px;
+}
+#online_play .op_ping .bar {
+  fill: #55534a;
+}
+#online_play .op_ping[data-lv="g"] .bar.lit { fill: #a6e22e; }
+#online_play .op_ping[data-lv="y"] .bar.lit { fill: #fdc61d; }
+#online_play .op_ping[data-lv="r"] .bar.lit { fill: #f92672; }
+#online_play .op_ping .ms {
+  font: bold 8px/1 Arial, Helvetica, sans-serif;
+  letter-spacing: normal;
+  color: #8a887b;
+}
+#online_play .op_ping[data-lv="g"] .ms { color: #a6e22e; }
+#online_play .op_ping[data-lv="y"] .ms { color: #fdc61d; }
+#online_play .op_ping[data-lv="r"] .ms { color: #f92672; }
 /* ---- 设置浮窗（2026-10-14 二期）：齿轮点开，绝对定位挂在标题行下缘右侧 ---- */
 #online_play .gsettings {
   display: none;
