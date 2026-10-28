@@ -342,16 +342,19 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
     let flag = baseFlag;
     let reason = baseReason;
 
-    // evf 附加校验（2026-10-24）：ms-toollib is_valid（软件白名单/校验和/公平性/
-    // 完成性/鼠标轨迹特征）→ bit12 不通过 / bit13 可疑。只作分拣信号、不上传硬拒
-    // （库白名单止于元3.3.4，元 3.3.5+ 新版本真录像会误报不通过——见 lib/msvalid.ts）。
-    // 校验失败（null）无信号，不影响原判档。
+    // evf 校验（2026-10-24 引入，2026-10-28 张老师收窄口径）：ms-toollib is_valid
+    // 只跑**元扫雷** evf（库白名单止于元3.3.4，元3.3.5+ 会误报 bit12；软件按
+    // 「元」前缀识别，与后台软件筛选同口径）。本站客户端 evf 不走 ms-toollib——
+    // 白名单外 verdict 恒 1 是预期而非作弊信号，排名/练习 evf 由下方 evf_sig
+    // HMAC 验签自行把关。校验失败（null）无信号，不影响原判档。
     if (ext === "evf") {
-      const { evfIsValid } = await import("./msvalid");
-      const result = await evfIsValid(buf, path.basename(info.filepath));
-      if (result?.verdict === 1) reason |= AUTO_REASON.MSTOOL_FAIL;
-      else if (result?.verdict === 3) reason |= AUTO_REASON.MSTOOL_SUSPECT;
-      flag = reason === 0 ? 1 : 0;
+      if (info.software?.startsWith("元")) {
+        const { evfIsValid } = await import("./msvalid");
+        const result = await evfIsValid(buf, path.basename(info.filepath));
+        if (result?.verdict === 1) reason |= AUTO_REASON.MSTOOL_FAIL;
+        else if (result?.verdict === 3) reason |= AUTO_REASON.MSTOOL_SUSPECT;
+        flag = reason === 0 ? 1 : 0;
+      }
       // 排名 evf 签名校验（2026-10-27 张老师要求）：库内 evf_sig 与文件字节 HMAC 比对。
       // invalid（不一致）= 文件被替换/篡改 → bit15 需核定；unsigned（无签名，历史/普通上传）不判
       if (info.evfSig) {
