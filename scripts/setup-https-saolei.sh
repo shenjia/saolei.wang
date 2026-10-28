@@ -221,7 +221,9 @@ server {
         limit_req zone=saolei_videos burst=6 nodelay;
         alias /home/deploy/saolei.wang/videos/;
         expires 30d;
-        access_log off;
+        # 流量测算（2026-10-29）：独立日志观察回放量，为 CDN 选型提供数据；
+        # 主日志曾因 access_log off 对 videos 全盲
+        access_log /home/deploy/nginx-logs/saolei-videos.access.log spider_saolei;
     }
 
     # 唯一生效样式文件（改动相对频繁，部署即变）：短缓存，隔天全网可见
