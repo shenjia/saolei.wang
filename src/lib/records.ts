@@ -13,7 +13,10 @@
 //   上传录像 / 发表文章 / 发表评论 / 发表纪事 / 练习盘数 / 审核录像——各取 TOP1。
 //
 // 性能（2026-10-28 张老师定分层）：左侧曲线重查询+基本不变 → 24h 持久缓存
-// （records-curves）；右侧七项轻查询实时抓取 → 60s 短缓存（records-tops）。
+// （records-curves）；右侧七项轻查询 → 1h 缓存（records-tops）。
+// ⚠️ 2026-10-29 慢 SQL 巡检：TOP1 聚合含两个 video 33 万行全表 GROUP BY
+// （「上传最多」无 WHERE、「审核最多」review_user>0），60s 缓存下日均冷启动
+// 272 次 × avg 3~6s 挤进慢日志 Top5；TOP1 变化极低频（刷新纪录才变），60s→1h。
 // 载荷 ~200 点 + 7 行，远小于 2MB 上限；/records 已进 preheat.sh 预热清单。
 
 import { unstable_cache } from "next/cache";
@@ -332,9 +335,9 @@ export const getRecordCurves = unstable_cache(
   { revalidate: 86400, tags: ["records-curves"] }
 );
 
-/** 右侧七项 TOP1（轻查询实时性优先：60s 短缓存，热数据近实时可见） */
-export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v3"], {
-  revalidate: 60,
+/** 右侧七项 TOP1（1h 缓存：TOP1 变化极低频，刷新纪录才变；60s 时期日均 272 次全表聚合冷启动，2026-10-29 巡检后升级） */
+export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v4"], {
+  revalidate: 3600,
   tags: ["records-tops"],
 });
 
