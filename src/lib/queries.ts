@@ -1242,18 +1242,18 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boo
 
 const HOT_VIDEO_WINDOW_SECONDS = 30 * 24 * 3600;
 const HOT_VIDEO_COMMENT_WEIGHT = 20;
-/** 时间衰减重力（2026-10-28 张老师确认 g=1.5，HN 式）：
- *  热度 = (点击 + 他人有效评论×20) / (发布小时数+2)^1.5，
- *  老录像分数连续缩水、排名逐渐下沉，替代原「只增不减、到期瞬间消失」的口径。 */
-const HOT_VIDEO_GRAVITY = 1.5;
+/** 时间衰减重力（2026-10-28 张老师先拍 1.5、同日改定 1.2 温和档，HN 式）：
+ *  热度 = (点击 + 他人有效评论×20) / (发布小时数+2)^1.2，
+ *  老录像分数连续缩水（1.2 档约 3.7 倍/天）取代原「只增不减、到期瞬间消失」的口径。 */
+const HOT_VIDEO_GRAVITY = 1.2;
 
 /**
  * 热门录像（现仅首页右栏使用）：近 30 天上传，按点击与他人有效评论综合排序，
  * 并按发布时长做重力衰减。
- * 热度 = (点击量 + 有效评论数 × 20) / (发布小时数 + 2)^1.5；评论只计 NORMAL，
+ * 热度 = (点击量 + 有效评论数 × 20) / (发布小时数 + 2)^1.2；评论只计 NORMAL，
  * 且 c.user <> v.user，排除作者自评（包括在自己录像下回复他人）对热度的影响。
  * 屏蔽录像仍不进前台。30 天窗口保留（约束候选集规模），衰减到第 30 天时
- * 热度已缩水约 2 万倍，出窗不再产生名次跳变。
+ * 热度已缩水约 2800 倍，出窗不再产生名次跳变。
  */
 async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
   const cutoff = BigInt(Math.floor(Date.now() / 1000) - HOT_VIDEO_WINDOW_SECONDS);
@@ -1275,8 +1275,8 @@ async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
-// 2026-10-28 v7：热门改时间衰减排序——按发布时长重力衰减（g=1.5），升键作废旧缓存
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v7"], { revalidate: 60 });
+// 2026-10-28 v8：衰减强度 g 1.5 → 1.2（张老师改温和档），升键作废旧缓存
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v8"], { revalidate: 60 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
