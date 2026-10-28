@@ -12348,3 +12348,73 @@ a.cheat_rep_link:hover {
   font-size: 11px;
   color: #939387;
 }
+
+/* ===== 战果保留确认遮罩（2026-10-28 张老师定） =====
+   排名胜局有未上传的 BV/PB 战果时，重开/笑脸/快捷键等开新局动作先弹此确认：
+   绿「上传」＝走 uploadRankedEvf 等传完再开新局；灰「放弃」/点遮罩＝直接重开。
+   元素由 OnlinePlay 挂全屏宿主或 body 直下（避 #page 页级 zoom），registerOwn 入册 */
+.op_keep_modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10100; /* 压过结算气泡（10000）与 #gr_modal（150） */
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.op_keep_card {
+  background: #1e1f1c;
+  border: 1px solid #49483e;
+  border-radius: 8px;
+  padding: 24px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+  max-width: 86vw;
+}
+.op_keep_msg {
+  color: #b1b1a4; /* 亮灰（legacy h2 全局默认同色），二轮缩小降为辅助文案 */
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: bold;
+  text-align: center;
+}
+/* 元帅金警示行（2026-10-28 张老师定）：主文案上方，色同站内标准金 #e6db74；
+   二轮加大字号（14→17px）作浮层主视觉 */
+.op_keep_warn {
+  color: #e6db74;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: bold;
+  text-align: center;
+}
+.op_keep_btns {
+  display: flex;
+  gap: 14px;
+}
+.op_keep_btns button {
+  min-width: 96px;
+  padding: 9px 22px;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.op_keep_btns .op_keep_yes {
+  background: #a6e22e;
+  color: #1e1f1c;
+}
+.op_keep_btns .op_keep_yes:hover {
+  background: #b8ef46;
+}
+.op_keep_btns .op_keep_no {
+  background: #49483e;
+  color: #c8c8bd;
+}
+.op_keep_btns .op_keep_no:hover {
+  background: #57564a;
+  color: #f8f8f2;
+}
