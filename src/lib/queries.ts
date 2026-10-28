@@ -5,7 +5,7 @@
 import { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { prisma } from "./db";
-import { assertIdent } from "./sqlguard";
+import { assertIdent, escapeLike } from "./sqlguard";
 import { getTitleDistribution, promotedExpTime, title } from "./assess";
 import {
   COMMENT_STATUS,
@@ -2239,26 +2239,40 @@ export async function findUserByName(name: string): Promise<number | null> {
 
 /** 排行榜搜索框模糊匹配推荐（2026-09-24 张老师要求）：中文姓名前缀→包含，
  *  英文名前缀兜底；纯数字按 ID 精确匹配（输入完整 ID 实时推荐该玩家）。
- *  前缀命中优先排序，取前 N 条（user 表 3.4 万行，contains 全扫可接受） */
+ *  2026-10-28 张老师要求：多个候选默认按**全国排行（总计时间榜）名次升序**——
+ *  排名高的在前（张/李等大姓候选多时，强者优先比 id 序更好找）；未上榜（无总计成绩）
+ *  的沉底按 id 升序。改走 LEFT JOIN user_scores 单条 raw SQL（值全 ? 占位 +
+ *  escapeLike 转义，LIMIT 为本函数 clamp 后的整数直插，无注入面；user 3.5 万行
+ *  LIKE 全扫数毫秒，与原 Prisma contains 同量级）。 */
 export async function searchUsers(q: string, limit = 8): Promise<UserBrief[]> {
   const kw = q.trim();
   if (!kw) return [];
-  const where: Prisma.UserWhereInput = /^\d+$/.test(kw)
-    ? { id: BigInt(kw) } // ID 精确匹配（张老师要求：不按前缀）
-    : {
-        OR: [
-          { chineseName: { startsWith: kw } },
-          { chineseName: { contains: kw } },
-          { englishName: { startsWith: kw } },
-        ],
-      };
-  const rows = await prisma.user.findMany({
-    where: { ...where, ...ACTIVE_USER }, // 榜单搜索：封禁账号不在榜，不出现在推荐里
-    select: { id: true, chineseName: true, englishName: true, sex: true },
-    orderBy: { id: "asc" },
-    take: limit,
-  });
-  return rows.map((r) => ({ id: N(r.id), chineseName: r.chineseName, englishName: r.englishName, sex: r.sex }));
+  const take = Math.max(1, Math.min(12, limit));
+  if (/^\d+$/.test(kw)) {
+    // ID 精确匹配（张老师要求：不按前缀）——至多一行，排序无意义，保留轻量查询
+    const rows = await prisma.user.findMany({
+      where: { id: BigInt(kw), ...ACTIVE_USER }, // 榜单搜索：封禁账号不在榜，不出现在推荐里
+      select: { id: true, chineseName: true, englishName: true, sex: true },
+      take: 1,
+    });
+    return rows.map((r) => ({ id: N(r.id), chineseName: r.chineseName, englishName: r.englishName, sex: r.sex }));
+  }
+  // 姓名模糊匹配：中文前缀 / 中文包含 / 英文前缀（与原 Prisma OR 三条件同语义）；
+  // 排序＝上榜者按 sum_time 升序（全国总计时间榜名次序）→ 未上榜者沉底按 id 升序
+  const rows = await prisma.$queryRawUnsafe<{ id: bigint; chinese_name: string; english_name: string; sex: number }[]>(
+    `SELECT u.id, u.chinese_name, u.english_name, u.sex
+     FROM user u
+     LEFT JOIN user_scores s ON s.id = u.id
+     WHERE u.status = 0
+       AND (u.chinese_name LIKE ? OR u.chinese_name LIKE ? OR u.english_name LIKE ?)
+     ORDER BY CASE WHEN s.sum_time IS NULL OR s.sum_time <= 0 THEN 1 ELSE 0 END,
+              s.sum_time ASC, u.id ASC
+     LIMIT ${take}`,
+    `${escapeLike(kw)}%`,
+    `%${escapeLike(kw)}%`,
+    `${escapeLike(kw)}%`
+  );
+  return rows.map((r) => ({ id: N(r.id), chineseName: r.chinese_name, englishName: r.english_name, sex: r.sex }));
 }
 
 // （getUserSumRank 每日一星卡专用，已随每日一星于 2026-10-13 移除）
