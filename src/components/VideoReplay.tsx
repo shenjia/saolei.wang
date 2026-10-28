@@ -1550,6 +1550,26 @@ export function VideoReplayProvider({
     },
     []
   );
+  /* 移动端横屏贴合（2026-10-28 张老师需求）：本页切到横屏时滚动屏幕让棋盘贴顶
+     （站头已在 CSS 改随页滚走，globals.css 移动横屏 :has(#video_view) 组）。
+     旋转后布局/页级 zoom 异步收敛，rAF + 350ms 兜底各滚一次；滚动量按棋盘视口
+     顶差值现算（幂等：已贴顶时差值 0 不再滚），横竖屏来回切只有进横屏才动作 */
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse) and (orientation: landscape)");
+    const onLs = () => {
+      if (!mq.matches) return;
+      const scrollFlush = () => {
+        const board = document.querySelector<HTMLElement>("#video_view .play_board");
+        if (!board) return;
+        const top = board.getBoundingClientRect().top;
+        if (top > 1) window.scrollBy(0, top);
+      };
+      requestAnimationFrame(scrollFlush);
+      window.setTimeout(scrollFlush, 350);
+    };
+    mq.addEventListener("change", onLs);
+    return () => mq.removeEventListener("change", onLs);
+  }, []);
   /* flop 兜底（rmv / 解析失败）：FlopPlayer 懒挂，挂上后再 playFlop。
      子组件 effect 先于本组件 effect 执行 → 届时 window.flop 已建好；
      播放器 iframe 未就绪时 playFlop 的 pendingUri 队列自动兜底 */

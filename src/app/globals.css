@@ -9798,6 +9798,21 @@ html:has(#online_play) #footer {
   /* 宽高封顶由组件 fit() 以 inline zoom 落实（练习页 syncReportZoom 同思路）：
      左侧空间不足或面板高于「棋盘+控制条」整块时整体缩小，宁可小也不越界 */
 }
+
+/* ---- 录像详情页移动端横屏：站头不吸顶（2026-10-28 张老师需求）----
+   fixed 站头在横屏小高度下常驻吃掉 44px、还压在游戏区上；改文档流静态随页滚走，
+   body 顶垫同步清零（否则静态头 + 45px padding 双重占高）。断点口径同练习页
+   移动横屏组（landscape + max-height:520 + coarse，iPad 横屏高 >520 不命中）。
+   切入横屏时滚动让棋盘贴顶由 VideoReplayProvider 的 matchMedia 监听负责 */
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+  body:has(#video_view) {
+    padding-top: 0;
+  }
+  body:has(#video_view) #header {
+    position: static;
+  }
+}
+
 .replay_panel .gr_title {
   font-size: 14px; /* 十六期：12→14px 随正文字号同步上调 */
   font-weight: bold;
