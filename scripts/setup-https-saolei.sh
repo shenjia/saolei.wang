@@ -161,20 +161,6 @@ server {
     # 见下方——server 顶层挂载会把 JS chunk/头像等静态请求也计入 burst，玩家
     # 切排行 tab 连点即 429；/videos/ 档仍在专属 location 内挂载）
 
-    # 排名模式权威对局 WebSocket：独立 Node 服务，仅本机监听；不挂 general 限速。
-    # 2026-10-27 双实例热备：走 authority_upstream（active/backup 由 release 脚本改写）
-    location = /ws/online/ranked {
-        proxy_pass http://authority_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 3600s;
-    }
-
     # ========== 静态缓存（2026-10-20）==========
     # 背景：Next 代理对 public/ 资源一律 max-age=0 每请求回源验证；这里按类型直读磁盘。
     # ^~ 前缀优先于下方正则，防止误劫持。
@@ -238,8 +224,18 @@ server {
     location = /favicon.ico    { proxy_pass http://saolei_upstream; }
     location = /apple-icon.png { proxy_pass http://saolei_upstream; }
 
-    # 排名模式权威对局 WS：走 authority_upstream 双实例热备（2026-10-27），
-    # active/backup 与 Next 的 saolei_upstream 同套路，由 release 脚本改写 + reload
+    # 排名模式权威对局 WS：走 authority_upstream 双实例热备（2026-10-27）。
+    # active/backup 与 Next 的 saolei_upstream 同套路，由 release 脚本改写 + reload；
+    # reload 只影响新连接，已建立的 WS 由旧 worker 继续服务到断开。
+    # 多地域探测端点（2026-10-28）：免 limit_req 直返——/api/ping 原走 location /
+    # 受 saolei_general 限速，浏览密集时 429 会把北京从选路探测里误杀（客户端
+    # 非 200/404 即抛错剔除该节点），把用户偏向香港节点；204 与香港 Caddy 静态
+    # 返回对等，保探测公平
+    location = /api/ping {
+        access_log off;
+        return 204;
+    }
+
     location = /ws/online/ranked {
         proxy_pass http://authority_upstream;
         proxy_http_version 1.1;
@@ -278,6 +274,24 @@ server {
     }
 }
 NGINXEOF
+
+# ── conf.d 软链自愈（2026-10-29）────────────────────────────────────────────
+# 2026-10-27/28 期间 /etc/nginx/conf.d/saolei.conf 软链断裂成独立真身文件，导致
+# ~/nginx-conf 副本与 nginx 实际加载内容脱节（改副本不生效的事故根源）。此处把
+# 软链恢复：真身唯一化到 ~/nginx-conf/saolei.conf（本脚本刚生成的最新内容），
+# 断裂遗留的 /etc 普通文件先备份再移除。幂等：已是软链则直接跳过。
+ETC_CONF="/etc/nginx/conf.d/saolei.conf"
+if [[ -L "$ETC_CONF" ]]; then
+  echo "  [skip] $ETC_CONF 已是软链 -> $(readlink "$ETC_CONF")"
+else
+  if [[ -f "$ETC_CONF" ]]; then
+    cp "$ETC_CONF" "${ETC_CONF}.broken-symlink.bak.$(date +%Y%m%d%H%M%S)"
+    echo "  [bak] 断裂真身已备份: ${ETC_CONF}.broken-symlink.bak.*"
+    rm -f "$ETC_CONF"
+  fi
+  ln -s "$CONF" "$ETC_CONF"
+  echo "  [ok] $ETC_CONF -> $CONF（软链已恢复）"
+fi
 
 # 权威对局 upstream（双实例热备，2026-10-27）：文件本身由 scripts/server-release.sh
 # 改写（active/backup），这里只保证 conf.d 软链存在 + 首次初始化，否则 nginx 报
