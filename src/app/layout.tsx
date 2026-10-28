@@ -56,6 +56,22 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="zh-CN">
       <head>
+        {/* 手机「桌面版网站」视口钉定（2026-10-28 张老师实测：新版 Chrome Android 桌面
+            模式不再强制 980 虚拟视口——顶栏汉堡实证其视口为窗口宽 ~390-850，媒体查询
+            永远命不中桌面断点，全形态单列）。判定「桌面 UA + 手机小屏（短边 <500）」
+            时把 viewport 钉到 width=980：页面按 980 桌面版式渲染、整页缩放、可捏合
+            放大细看。桌面浏览器本就无视 viewport meta（对 PC 零影响）；移动模式 UA
+            带 Mobi/Android 直接跳过维持响应式；平板短边 ≥500 不动（两列 878 也放不下
+            700-900 的折叠屏内屏，留给 769~960 单列带）。⚠️ Next 16 的 viewport meta
+            是 hydration 后异步插入的（Probe 实证 readyState=complete 时仍只有本脚本
+            建的那颗，其后 device-width 才落地并以后位胜出）——必须用 MutationObserver
+            盯 <head>，任何时刻出现的 viewport meta 都钉成 980，不能只靠
+            DOMContentLoaded 一锤子买卖。 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent))return;if(Math.min(screen.width,screen.height)>=500)return;var pin=function(){var m=document.querySelectorAll('meta[name="viewport"]'),c=0;for(var i=0;i<m.length;i++){if(m[i].getAttribute("content")!=="width=980")m[i].setAttribute("content","width=980");c++}return c};if(!pin()){var n=document.createElement("meta");n.setAttribute("name","viewport");n.setAttribute("content","width=980");(document.head||document.documentElement).appendChild(n)}var mo=new MutationObserver(function(){pin()});mo.observe(document.head||document.documentElement,{childList:true,subtree:true});if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",pin)}catch(e){}})();`,
+          }}
+        />
         <link rel="stylesheet" href="/styles/legacy-2013.css" />
       </head>
       <body>
