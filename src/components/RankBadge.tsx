@@ -271,6 +271,9 @@ function RankArt({ title }: { title: string }) {
  * 军衔徽章图标。
  * 不传 size 时为 1em（跟随军衔文字大小，见 globals.css）；
  * 传 size（px）用于用户主页等需要放大的场景。
+ * width/height 属性是保险丝（2026-10-28）：蓝绿切换窗口 globals.css 偶发 404 时，
+ * 无宽高 SVG 会按 viewBox 撑满父容器（玩家截图巨型徽章事故）；属性被 CSS 正常
+ * 覆盖（选择器同值），不影响常规渲染。
  */
 export function RankBadge({ title, size }: { title: string; size?: number }) {
   const art = RankArt({ title });
@@ -278,6 +281,8 @@ export function RankBadge({ title, size }: { title: string; size?: number }) {
   return (
     <svg
       viewBox="0 0 48 48"
+      width="1em"
+      height="1em"
       className="rank-badge"
       aria-hidden="true"
       focusable="false"

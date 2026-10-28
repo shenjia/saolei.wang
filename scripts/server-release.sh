@@ -145,6 +145,18 @@ rm -rf "$S_DIR"
 cp -a .next-release "$S_DIR"
 [[ -f "$S_DIR/BUILD_ID" ]] || fail "复制后 $S_DIR/BUILD_ID 缺失（CI 产物不完整）"
 
+# ---------- 旧哈希静态资源并集（2026-10-28 蓝绿切换 404 窗口修复） ----------
+# 跨切换窗口的页面加载：HTML（no-store）刚从旧槽拿到、引用旧内容哈希的
+# /_next/static/chunks/*.css|js，下一毫秒请求已被 nginx 路由到新槽 → 404
+# （实测单日 1219 次，含真实玩家；症状＝globals.css 全丢、首页军衔徽章巨型化）。
+# 文件名全是内容哈希、永不冲突，把旧主力槽 static/ 并集拷进新槽即可让旧哈希
+# 永久可取（顺带修复部署后老页面站内跳转 JS 404）。单槽 static 仅 ~2.3MB。
+A_DIR="$(slot_dir "$ACTIVE")"
+if [[ -d "$A_DIR/static" ]]; then
+  cp -a "$A_DIR/static/." "$S_DIR/static/"
+  info "已并集旧槽 $A_DIR/static → $S_DIR/static（旧哈希资源跨发布可取）"
+fi
+
 # ---------- 共享 unstable_cache（2026-10-28 张老师定） ----------
 # CI 产物 rsync 排除了 cache/，运行时缓存本就每槽从零重建——此前每次发布都把
 # unstable_cache 文件缓存清零，聚合查询（BV 1.6s/STNB/news count 等）被迫全部

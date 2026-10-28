@@ -164,6 +164,16 @@ if ! NEXT_DIST_DIR="$S_DIR" nice -n 19 ionice -c3 pnpm build; then
   fail "build 失败（备槽已清空，线上不受影响）"
 fi
 
+# ---------- 旧哈希静态资源并集（2026-10-28 蓝绿切换 404 窗口修复） ----------
+# 跨切换窗口的页面加载引用旧内容哈希资源，切换后 404（实测单日 1219 次，含真实
+# 玩家）。文件名全是内容哈希永不冲突，把旧主力槽 static/ 并集拷进新槽即可。
+# （与 server-release.sh 同款；单槽 static 仅 ~2.3MB）
+A_DIR="$(slot_dir "$ACTIVE")"
+if [[ -d "$A_DIR/static" ]]; then
+  cp -a "$A_DIR/static/." "$S_DIR/static/"
+  info "已并集旧槽 $A_DIR/static → $S_DIR/static（旧哈希资源跨发布可取）"
+fi
+
 # ---------- 共享 unstable_cache（2026-10-28，与 server-release.sh 同方案） ----------
 # 服务器兜底构建同样把 <distDir>/cache 软链到共享目录，切槽不清缓存（详见 release 脚本注释）。
 SHARED_CACHE_DIR="$DEPLOY_DIR/.next-shared-cache"
