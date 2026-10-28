@@ -437,7 +437,7 @@ export default async function UserViewPage({
           </div>
         )}
         {detail.stat && (
-          <div className="box">
+          <div className="box stats_box">
             <h2>数据统计</h2>
             {/* 2026-10-13 张老师要求：与首页/录像页「数据统计」统一——数字亮灰加粗右对齐，
                 今日新增独立成列（绿色括号，左对齐），无新增不显示 */}

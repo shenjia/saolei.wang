@@ -3876,6 +3876,19 @@ body #user_view .sidebar .table .delta {
   color: #a6e22e;
 }
 
+/* ---------- 统计盒右内边距收紧（2026-10-28 张老师要求） ----------
+   右侧会出现今日增量「（+N）」的统计盒（首页雷界统计 #site_stats、个人主页
+   数据统计 .stats_box）：legacy .box 右 padding 30px 让增量离盒右缘太远。
+   右 padding 收到 10px；宽改 auto（外径仍 272 = 侧栏 288 − 外距 16，内容自动
+   +20 到 230），不用写死宽度——≤880/≤768 媒体查询的 width:auto 重置天然兼容。
+   ⚠️ 本块 ≥2 id 特异性会压过 ≤768 块 body #page .box（1 id）的 padding 收紧，
+   手机补偿见该块内的 #site_stats / .stats_box 条目。 */
+body #page #home #site_stats.box,
+body #page #user_view > li.sidebar .box.stats_box {
+  width: auto;
+  padding-right: 10px;
+}
+
 /* ---------- 个人资料「标识」列表（2026-10-22 张老师要求） ----------
    user_sig 录像标识文字：一条一行，默认最多 3 条，「…」按钮（翻页控件同款
    卡片样式）点击后就地展开全部。
@@ -6104,6 +6117,13 @@ body #page {
   /* 盒子内边距收紧（桌面 30px 在手机上太奢侈） */
   body #page .box {
     padding: 16px 14px;
+  }
+  /* 2026-10-28 统计盒右 padding 收紧的桌面规则（≥2 id）压过本条 1 id 简写，
+     此处按桌面规则同特异性复写（同特异性、位置靠后者胜）恢复统一 14px 右距；
+     width 无需补——桌面规则本就是 auto */
+  body #page #home #site_stats.box,
+  body #page #user_view > li.sidebar .box.stats_box {
+    padding-right: 14px;
   }
   /* 用户主页 info 盒例外（2026-10-13 张老师反馈窄屏文字重叠 + 顶部错位）：
      .info 同时带 .box 类，上面的 padding 简写与 2054 行 body #user_view .info
