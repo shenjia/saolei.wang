@@ -56,7 +56,9 @@ function softwareIcon(software: string): {
 
 /** 软件名全称（含版本号，2026-10-29 二轮张老师口径）：已知软件「Minesweeper Arbiter 0.52」；
  *  元扫雷库值本身带版本（「元扫雷3.3.4」）不拼 version（version 0.4 是录像格式版本非软件版本）；
- *  未知软件回退原值 */
+ *  未知软件回退原值。
+ *  Saolei.wang 的 version 列＝客户端版本（0.3＝格心录制旧版 / 0.4 起＝真实坐标），
+ *  走默认拼接展示「Saolei.wang 0.4」 */
 function softwareFullName(software: string, version: string): string {
   // 元扫雷：software 本身带版本（「元扫雷3.3.4」），version 列（0.4）是录像格式版本非软件版本，不拼
   if (software.startsWith("元扫雷")) return software.trim();

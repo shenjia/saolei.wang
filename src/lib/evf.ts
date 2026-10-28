@@ -488,16 +488,24 @@ export function parseEvf(buf: Uint8Array): EvfVideo {
  */
 export function evfToRawvf(buf: Uint8Array): string[] {
   const v = parseEvf(buf);
-  // 软件名归一：Metasweeper 在 Software 字段自报「元3.3.4」，展示口径统一为「元扫雷3.3.4」
+  /* 软件名归一：
+     · Metasweeper 自报「元3.3.4」→ 展示口径「元扫雷3.3.4」
+     · 本站客户端 0.4 起（2026-10-29）Software 自报「Saolei.wang 0.4」（张老师定：
+       版本号区分行为代际——0.3 格心录制 / 0.4 真实坐标），拆为 Program=Saolei.wang
+       + Version=0.4——DB software 列判等（triage/upload/图标）全部不变 */
+  const siteMatch = /^(Saolei\.wang)\s+(\d+(?:\.\d+)*)$/.exec(v.software);
   const program =
     v.software.startsWith("元") && !v.software.startsWith("元扫雷")
       ? `元扫雷${v.software.slice(1)}`
-      : v.software;
+      : siteMatch
+        ? siteMatch[1]
+        : v.software;
+  const clientVersion = siteMatch ? siteMatch[2] : null;
   const lines: string[] = [
     "RawVF_Version: Rev5",
     `Program: ${program}`,
-    // Version 行维持「0.EVF格式版本」通用口径（张老师 2026-10-26 定）
-    `Version: 0.${v.version}`,
+    // Version 行：本站客户端写软件版本（0.4）；其余维持「0.EVF格式版本」通用口径（张老师 2026-10-26 定）
+    `Version: ${clientVersion ?? `0.${v.version}`}`,
     // 玩家标识可能为空（靠 UUID 区分身份的录法），逐级兜底防止空签名入库
     `Player: ${v.playerIdentifier || v.uniqueIdentifier || "元扫雷玩家"}`,
     `Level: ${v.level === "beg" ? "beginner" : v.level === "int" ? "intermediate" : v.level === "exp" ? "expert" : "custom"}`,
@@ -536,7 +544,9 @@ export function evfToRawvf(buf: Uint8Array): string[] {
   // 元扫雷录的 evf 仍是「0 点＝首个 lc」口径，照旧平移。
   const SITE_SOFTWARE = "Saolei.wang";
   let t0Ms = 0;
-  if (v.software !== SITE_SOFTWARE) {
+  /* 判等用前缀匹配（2026-10-29 起 Software 自报「Saolei.wang 0.4」带版本号）——
+     严格 !== 会让新版文件误走 t0 平移（双重扣减，347863 案同型 bug） */
+  if (!v.software.startsWith(SITE_SOFTWARE)) {
     const flagged = new Set<number>();
     outer: for (const e of v.events) {
       if (!e.mouse) continue;

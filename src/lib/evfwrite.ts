@@ -6,7 +6,13 @@
 
 import type { OnlineEvent } from "./avfwrite";
 
+/** 站内排名/练习客户端软件名（evf Software 字段 + DB software 列判等值） */
 export const RANKED_SOFTWARE = "Saolei.wang";
+/** 客户端版本（2026-10-29 张老师定：evf Software 字段带版本区分行为代际——
+ *  0.3＝点击坐标归一格心（旧版）；0.4 起＝忠实记录真实点击坐标+格内钳制（af3b40e）。
+ *  evf 头布局不变，仅 Software 字符串变化；evf.ts 归一时拆出「Saolei.wang」+「0.4」，
+ *  DB software 列判等不受影响 */
+export const RANKED_CLIENT_VERSION = "0.4";
 
 export interface RankedEvfInput {
   width: number;
@@ -49,7 +55,7 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
   u16(0); // classic
   u16(input.bbbv);
   u24(input.scoreCsec * 10);
-  cstr(RANKED_SOFTWARE);
+  cstr(`${RANKED_SOFTWARE} ${RANKED_CLIENT_VERSION}`);
   cstr(input.player ?? "");
   cstr(""); // race identifier
   cstr(input.uniqueIdentifier ?? "");
