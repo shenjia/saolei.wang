@@ -202,6 +202,11 @@ jobs:
             .next/ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/.next-release/
 
       - name: Restart services on server
+        # ⚠️ ServerAliveInterval 必配（2026-10-28 实证）：server-release.sh 的
+        # 「老槽对局等待」可静默 ~10 分钟，Azure runner 的 NAT 4 分钟空闲即掐
+        # TCP——脚本死于半途，runner 的 ssh 成孤儿挂着，job 卡死 15+ 分钟。
+        # 20s 心跳保活 NAT；count=10 → 服务器真失联时 200s 内快速失败不悬挂
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+          ssh -o ServerAliveInterval=20 -o ServerAliveCountMax=10 \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "cd ${{ secrets.DEPLOY_PATH }} && bash scripts/server-release.sh && echo -n '${{ github.sha }}' > .deployed-commit"

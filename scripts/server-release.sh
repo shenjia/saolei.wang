@@ -255,6 +255,7 @@ if (( LEGACY_AUTH == 1 )); then
   pm2 delete saolei-authority >/dev/null 2>&1 || true
 else
   AUTH_WAITED=0
+  AUTH_WAIT_START=$SECONDS
   AUTH_DEADLINE=$((SECONDS + 600))
   while :; do
     A_ACTIVE_NOW=$(curl -sf --max-time 3 "http://127.0.0.1:$AA_PORT/health" 2>/dev/null | grep -oE '"active":[0-9]+' | grep -oE '[0-9]+' || true)
@@ -267,6 +268,12 @@ else
     if (( AUTH_WAITED == 0 )); then
       info "老槽还有 $A_ACTIVE_NOW 局在打，等打完再重建（最多 10 分钟；这期间新局已走备槽，玩家无感）..."
       AUTH_WAITED=1
+    fi
+    # 每 30s 打一次进度行（2026-10-28 实证：CI 侧 Azure NAT 4 分钟空闲掐 TCP，
+    # 静默等待会杀死发布 SSH——双保险，客户端另有 ServerAliveInterval=20）
+    AUTH_TICK=$(( ${AUTH_TICK:-0} + 1 ))
+    if (( AUTH_TICK % 6 == 0 )); then
+      info "等待老槽清局中... ${A_ACTIVE_NOW} 局在打（已等 $((SECONDS - AUTH_WAIT_START))s / 上限 600s）"
     fi
     sleep 5
   done
