@@ -2715,10 +2715,28 @@ button.msg_reply_link {
   /* 页头 flex 只给桌面（2026-10-28 八轮：此前 flex 规则没包断点，移动端被
      ≤768 的 #page .page_head { flex-direction:column } 命中，而这里的
      align-items:flex-end 特异性更高压过通用 stretch——column 方向的 flex-end
-     = 水平贴右，标题/筛选器集体缩成内容宽贴右折行（张老师截图实证）。
-     包进 ≥769 后移动端恢复 block 堆叠：标题、筛选器各占一行居左，与排行页移动端同款） */
+     = 水平贴右，标题/筛选器集体缩成内容宽贴右折行（张老师截图实证））
+     九轮改：移动端不再堆叠——张老师要求标题与筛选器同行（见下方 ≤768 块），
+     这里保持桌面同行版式不动 */
   body #page.records_old .records_box .page_head {
     display: flex;
+    justify-content: flex-start;
+    align-items: flex-end;
+    gap: 16px;
+  }
+}
+/* 九轮（2026-10-28 张老师要求）：移动端标题与筛选器保持同行（排行页页头同语言：
+   标题左、筛选器紧随、底线对齐）。⚠️ 全站移动端有 #page zoom 缩放体系
+   （≤410 → 0.65 等，页面按 ~600px 布局再整体缩小），媒体查询仍按视口宽命中，
+   但布局宽 ≈ 视口/zoom ≈ 600 —— 标题 104 + 4 tab×66 + gap ≈ 396 恒放得下，
+   无需收 tab 内距；tab 尺寸与排行页桌面完全一致。极窄设备（≤300pt）tabs
+   自身 flex-wrap 兜底折行 */
+@media (max-width: 768px) {
+  body #page.records_old .records_box .page_head {
+    display: flex;
+    /* ⚠️ 必须显式 row：≤768 通用块给所有 page_head 挂了 flex-direction:column
+       （特异性低被反杀的前提是本块声明同名属性——没声明的属性照样命中） */
+    flex-direction: row;
     justify-content: flex-start;
     align-items: flex-end;
     gap: 16px;
@@ -6141,7 +6159,8 @@ body #page {
     flex-wrap: wrap;
     row-gap: 8px;
   }
-  /* 页头行（六轮 title+筛选器同行；七轮排行页移入卡片）：窄屏恢复上下堆叠，title 独占一行不挤 */
+  /* 页头行（六轮 title+筛选器同行；七轮排行页移入卡片）：窄屏恢复上下堆叠，title 独占一行不挤。
+     纪录页例外见 records 段 ≤768 块（九轮：标题与筛选器保持同行，特异性更高反杀本条） */
   #page .page_head {
     flex-direction: column;
     align-items: stretch;
@@ -6150,8 +6169,9 @@ body #page {
   }
   /* 消息页页头例外（2026-10-13 张老师要求）：h1 与「全部已读 / 清空消息」始终同行，
      不随上方通用规则上下堆叠；h1/按钮组均不收缩、按钮文字不换行，宽度保内容完整可见。
-     ⚠️ display:flex 必须显式给：全站只有 ≥769 块把 .page_head 设为 flex，
-     ≤768 时该盒是 block（flex-direction 声明无效、子级块级堆叠——正是「变形」真凶） */
+     ⚠️ display:flex 必须显式给：≥769 之外只有各页自己的移动端例外块
+     （消息页本条、纪录页九轮）会把 .page_head 设为 flex，其余页面 ≤768 该盒是
+     block（flex-direction 声明无效、子级块级堆叠——正是「变形」真凶） */
   #page.message_list .page_head {
     display: flex;
     flex-direction: row;

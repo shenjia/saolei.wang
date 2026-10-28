@@ -14,6 +14,7 @@
 // · 移动端触摸（八轮 2026-10-28 张老师反馈）：①气泡垂直位置随触点翻转
 //   （上半区沉底/下半区贴顶），手指不再挡气泡；②触摸选中在松手后保持
 //   （pointerleave 只对鼠标清 hover），滚动或切级别才清除——修「点了没气泡」。
+// · 九轮（2026-10-28）：移动端标题与筛选器同行（CSS 侧）；窄容器图表加高 220。
 // · 「距今 N 天」按浏览器本地时间实时算——SSR 与客户端可能跨天差 1，
 //   该 span 挂 suppressHydrationWarning（绝对日期不受影响）。
 
@@ -56,10 +57,10 @@ const LEVEL_COLORS: Record<LevelKey, string> = {
   exp: "#fdc61a",
 };
 
-const H = 150;
 const PAD_T = 14;
 const PAD_B = 22;
 const PAD_X = 8;
+/** 图高：桌面 150 / 窄容器（移动端单列）220——见 ChartCard 内 H 的计算（九轮） */
 /** 自适应压缩下限与滚动兜底（三轮：不许出滚动条；>600 点极罕见才滚） */
 const PER_POINT_MIN = 6;
 const SCROLL_THRESHOLD = 600;
@@ -106,6 +107,10 @@ function ChartCard({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [boxW, setBoxW] = useState(600);
+  // 九轮（2026-10-28 张老师要求）：移动端单列模式图表加高——判据用视口媒体查询，
+  // 不用容器宽：全站移动端有 #page zoom 缩放体系（页面按 ~600px 布局再整体缩小），
+  // 容器宽恒在 ~518 上下浮动，用它会漏判/误判；≤768 与单列化断点同口径
+  const [narrow, setNarrow] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
   const [tipLeft, setTipLeft] = useState(0);
   // 八轮（2026-10-28 张老师反馈移动端）：气泡垂直位置随触点翻转——手指按在图表
@@ -119,11 +124,23 @@ function ChartCard({
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    return () => ro.disconnect();
+    const mq = window.matchMedia("(max-width: 768px)");
+    const mqUpdate = () => setNarrow(mq.matches);
+    mqUpdate();
+    mq.addEventListener("change", mqUpdate);
+    return () => {
+      ro.disconnect();
+      mq.removeEventListener("change", mqUpdate);
+    };
   }, []);
 
   const pts = chart.points;
   const n = pts.length;
+
+  // 九轮（2026-10-28 张老师要求）：移动端单列模式图表加高（150→220），
+  // 手指有更多可操作纵向空间；缩放体系下 220 布局 px 在 0.65~0.76 档
+  // 实际 ≈ 145~165 物理 px（旧 150 → ~100），增益明显。SSR/首帧走桌面高，挂载后校准
+  const H = narrow ? 220 : 150;
 
   if (n < 2) {
     // 单点（总计当前纪录）：完整标题行 + 居中说明（无演变曲线）
