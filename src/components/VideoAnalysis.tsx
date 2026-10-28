@@ -37,6 +37,17 @@ const LABEL_NAME_FS = 10;
 // 轴名基线相对等级基线的下移量（≈ 等级字号，视觉行距与旧版 13/13 一致）
 const LABEL_NAME_DY = 15;
 
+// 分项轴「评级+标签」整体偏移（2026-10-28 张老师定，视口 px；偏移只挪文字，轴顶点/热区不动。
+// 目的：右上/左上两根轴标签下移 10 避让顶部「判雷能力」，右下/左下两根再向外侧推开 10）
+// ⚠️ 操作效率按组选指标（FL=thrp / NF=ioe），两个 key 都要映射；hover 气泡锚点同步用（见下方 effect）
+const LABEL_OFFSETS: Record<string, [number, number]> = {
+  bvs: [10, 10], // 开图速度：右下
+  ioe: [10, 10], // 操作效率：右下
+  thrp: [10, 10], // 操作效率：右下
+  bpp: [-10, 10], // 路线规划：左下
+  cls: [-10, 10], // 点击速度：左下
+};
+
 // 坐标保留两位：Node(SSR) 与 Chrome(水合) 的三角函数末位可能不同，不一致会触发 hydration mismatch
 const f = (v: number) => Math.round(v * 100) / 100;
 
@@ -104,9 +115,11 @@ export function VideoAnalysisRadar({
     if (!wrap || !tip) return;
     const w = wrap.clientWidth; // 定位父级与 SVG 等宽同起点（出血 margin 挪在 .vr_wrap 上的原因）
     const [lx, ly] = polar(hover, data.length, LABEL_RADIUS);
+    // 气泡锚点跟随标签偏移（LABEL_OFFSETS），否则标签挪了气泡留在原位会脱节
+    const [ox, oy] = LABEL_OFFSETS[data[hover].key] ?? [0, 0];
     // 气泡顶 = 轴名基线下方 4px；左右按实测宽钳位不出容器
-    tip.style.top = `${((ly + LABEL_NAME_DY + 4) / SIZE) * w}px`;
-    tip.style.left = `${Math.min(Math.max((lx / SIZE) * w, tip.offsetWidth / 2 + 2), w - tip.offsetWidth / 2 - 2)}px`;
+    tip.style.top = `${((ly + oy + LABEL_NAME_DY + 4) / SIZE) * w}px`;
+    tip.style.left = `${Math.min(Math.max(((lx + ox) / SIZE) * w, tip.offsetWidth / 2 + 2), w - tip.offsetWidth / 2 - 2)}px`;
     tip.style.visibility = "visible";
   }, [hover, data.length]);
 
@@ -167,6 +180,8 @@ export function VideoAnalysisRadar({
           const active = hover === i;
           const [x, y] = points[i];
           const [lx, ly] = polar(i, n, LABEL_RADIUS);
+          // 评级+标签整体偏移（只挪文字；轴顶点圆点/楔块热区不动）
+          const [ox, oy] = LABEL_OFFSETS[d.key] ?? [0, 0];
           return (
             <g
               key={d.key}
@@ -186,8 +201,8 @@ export function VideoAnalysisRadar({
                 }}
               />
               <text
-                x={lx}
-                y={ly - 3}
+                x={lx + ox}
+                y={ly - 3 + oy}
                 textAnchor="middle"
                 style={{
                   transformBox: "fill-box",
@@ -199,7 +214,7 @@ export function VideoAnalysisRadar({
                 <tspan fill={gradeColor(d.grade)} fontSize={LABEL_GRADE_FS} fontWeight="bold">
                   {d.grade}
                 </tspan>
-                <tspan x={lx} dy={LABEL_NAME_DY} fill={active ? "#a6e22e" : "#8a8878"} fontSize={LABEL_NAME_FS}>
+                <tspan x={lx + ox} dy={LABEL_NAME_DY} fill={active ? "#a6e22e" : "#8a8878"} fontSize={LABEL_NAME_FS}>
                   {d.name}
                 </tspan>
               </text>
