@@ -12039,6 +12039,16 @@ body #page .word_terms .desc {
 .cheat_shot:hover {
   border-color: #b8860b;
 }
+/* 反作弊复核页：录像凭据下载链（2026-10-28）——a 标签复用 tag 样式要显式
+   去下划线，hover 恢复提示可点 */
+a.cheat_rep_link {
+  text-decoration: none;
+  cursor: pointer;
+}
+a.cheat_rep_link:hover {
+  text-decoration: underline;
+  background: rgba(166, 226, 46, 0.16);
+}
 /* 反作弊复核页：ID 灰色 + 玩家列不换行 + 复核者小字（2026-10-27 张老师定） */
 .cheat_uid {
   color: #999;

@@ -86,9 +86,15 @@ export default async function AdminCheatPage() {
     list.map((r) => {
       const extSuspect = r.evidence.includes("chrome-extension://");
       /* 证据内嵌截图标记 [shot:/uploads/cheat/x.jpg]（2026-10-27 张老师需求：
-         命中瞬间整页截图供人工分诊——文字只够定性，截图看得到扩展悬浮窗真容） */
-      const shotMatch = r.evidence.match(/\[shot:(\/uploads\/cheat\/[^\]]+)\]/);
-      const shotUrl = shotMatch ? shotMatch[1] : null;
+         命中瞬间整页截图供人工分诊——文字只够定性，截图看得到扩展悬浮窗真容）。
+         2026-10-28 起可能有两张：整页截图 + canvas 涂鸦特写（-board 后缀，
+         canvas_tamper 擦除前的棋盘位图真值），全部渲染 */
+      const shotUrls = Array.from(r.evidence.matchAll(/\[shot:(\/uploads\/cheat\/[^\]]+)\]/g), (m) => m[1]);
+      /* 本局录像凭据 [rep:/uploads/cheat/x.evf]（2026-10-28 张老师需求）：
+         命中时服务端从权威进程取对局快照构建的 EVF——下载后拖入练习页
+         /online 即可回放（站内引擎支持未完成局；flop 不支持，故不放内嵌播放） */
+      const repMatch = r.evidence.match(/\[rep:(\/uploads\/cheat\/[^\]]+\.evf)\]/);
+      const repUrl = repMatch ? repMatch[1] : null;
       /* 核验状态（2026-10-27 拆列）：新记录读 verified 列（1=通过 / 2=不符）；
          拆列前的老记录把结果写在证据前缀 `[verified=true] ` 里——回退解析，
          历史行不丢状态（也保证后台切上线那一刻新旧数据都能看） */
@@ -97,7 +103,8 @@ export default async function AdminCheatPage() {
       /* 证据正文：只剥标记、不截断——完整内容折行显示（原 slice(0,60) 会把
          140 字符的「渲染异常 UL…存在 2 个子节点但 ge|tClientRects=0」切成半句） */
       const plainEv = r.evidence
-        .replace(/\[shot:[^\]]*\]\s*/, "")
+        .replace(/\[shot:[^\]]*\]\s*/g, "")
+        .replace(/\[rep:[^\]]*\]\s*/g, "")
         .replace(/\[verified=(?:true|false)\]\s*/, "")
         .trim();
       return (
@@ -132,17 +139,35 @@ export default async function AdminCheatPage() {
           </td>
           <td>{REASON_LABEL[r.reason] ?? r.reason}</td>
           <td className="cheat_ev">
-            {shotUrl && (
-              <a href={shotUrl} target="_blank" rel="noopener noreferrer">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={shotUrl} alt="命中瞬间截图" className="cheat_shot" />
-              </a>
-            )}
+            {shotUrls.length > 0 &&
+              shotUrls.map((u) => (
+                <a key={u} href={u} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={u}
+                    alt={u.includes("-board") ? "涂鸦擦除前的棋盘位图" : "命中瞬间截图"}
+                    className="cheat_shot"
+                    style={u.includes("-board") ? { borderColor: "#b8860b" } : undefined}
+                  />
+                </a>
+              ))}
             {extSuspect && (
               <div className="cheat_ev_tags">
                 <span className="cheat_ev_tag warn" title="证据含 chrome-extension:// —— 多为浏览器扩展误报（Grammarly/翻译类）">
                   🧩 扩展
                 </span>
+              </div>
+            )}
+            {repUrl && (
+              <div className="cheat_ev_tags">
+                <a
+                  className="cheat_ev_tag ok cheat_rep_link"
+                  href={repUrl}
+                  download
+                  title="命中时刻的对局录像（权威进程快照构建的 EVF）。下载后拖入练习页 /online 即可回放——检查提示标记的格子与操作轨迹是否可疑对应"
+                >
+                  ▶ 本局录像（拖入练习页回放）
+                </a>
               </div>
             )}
             {/* 核验状态标签内联在正文前（2026-10-27 张老师要求）：原来独立一行
