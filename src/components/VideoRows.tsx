@@ -112,12 +112,14 @@ export function VideoHead({
         <th>上传者</th>
         <th>级别</th>
         <th>{col("time", "成绩", "按成绩排列（快在前）")}</th>
-        {/* 定向视图（3BV 精确筛选）下 3BV 整列同值，禁排序纯文本（2026-10-20） */}
-        <th className="c">{noSort3bv ? "3BV" : col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
-        <th className="c">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
+        {/* 定向视图（3BV 精确筛选）下 3BV 整列同值，禁排序纯文本（2026-10-20）。
+            th 上的 bv/bvs/ioe/stnb 区分类名（2026-10-28）：移动端 #video/#user_videos
+            需要单独放行 3BV/s 列（globals.css 媒体查询按类名定向隐藏） */}
+        <th className="c bv">{noSort3bv ? "3BV" : col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
+        <th className="c bvs">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
         {/* 2026-10-20 张老师需求：新增 IOE（效率）/STNB（判雷）指标列，可点击排序 */}
-        <th className="c">{col("ioe", "IOE", "按效率 IOE 排列（大在前）")}</th>
-        <th className="c">{col("stnb", "STNB", "按判雷 STNB 排列（大在前）")}</th>
+        <th className="c ioe">{col("ioe", "IOE", "按效率 IOE 排列（大在前）")}</th>
+        <th className="c stnb">{col("stnb", "STNB", "按判雷 STNB 排列（大在前）")}</th>
         <th>
           {/* 评论/点击同列两个独立排序入口（张老师要求均可触发排序） */}
           {sort ? (
