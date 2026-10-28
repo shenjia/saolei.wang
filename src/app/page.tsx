@@ -43,7 +43,7 @@ import { FlopSprites } from "@/components/FlopSprites";
 import { VideoHot } from "@/components/VideoHot";
 import { PracticeToday } from "@/components/PracticeToday";
 import { getPracticeToday } from "@/lib/practice";
-import { title as assessTitle } from "@/lib/assess";
+import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { getThunderKingId } from "@/lib/title-system";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +80,8 @@ export default async function HomePage() {
   const king = await getThunderKingId();
   const feed: NewsFeedItem[] = news.map((n) => ({
     news: n,
-    title: assessTitle(n.expTime, king > 0 && king === (n.author?.id ?? 0)),
+    // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details), king > 0 && king === (n.author?.id ?? 0)),
     classic: n.authorTitles?.c ?? null,
   }));
   // 入伍新兵按发布者实时高级时间评军衔（2026-10-13 SUB 制）

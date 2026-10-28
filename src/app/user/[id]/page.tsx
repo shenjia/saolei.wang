@@ -51,7 +51,7 @@ import { HistoryBox } from "@/components/HistoryBox";
 import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankLabel } from "@/components/RankLabel";
-import { title as assessTitle } from "@/lib/assess";
+import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { formatDate } from "@/lib/format";
 import { getThunderKingId } from "@/lib/title-system";
 import { getRadarData } from "@/lib/radar";
@@ -196,7 +196,8 @@ export default async function UserViewPage({
   const king = await getThunderKingId();
   const feed: NewsFeedItem[] = news.map((n) => ({
     news: n,
-    title: assessTitle(n.expTime, king > 0 && king === (n.author?.id ?? 0)),
+    // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details), king > 0 && king === (n.author?.id ?? 0)),
     classic: n.authorTitles?.c ?? null,
   }));
 

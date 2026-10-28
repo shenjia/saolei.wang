@@ -5,7 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { getNews, getNewsCount, getNewsPage } from "@/lib/queries";
-import { title as assessTitle } from "@/lib/assess";
+import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { getThunderKingId } from "@/lib/title-system";
 import { NEWS_PAGESIZE, NEWS_TYPE } from "@/lib/config";
 
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
     ]);
     const withTitles = items.map((news) => ({
       news,
-      title: assessTitle(news.expTime, isKing(news.author?.id)),
+      title: assessTitle(recordNewsExpTime(news.expTime, news.details), isKing(news.author?.id)),
       classic: news.authorTitles?.c ?? null,
     }));
     return NextResponse.json({
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
   ]);
   const withTitles = items.map((news) => ({
     news,
-    title: assessTitle(news.expTime, isKing(news.author?.id)),
+    title: assessTitle(recordNewsExpTime(news.expTime, news.details), isKing(news.author?.id)),
     classic: news.authorTitles?.c ?? null,
   }));
   return NextResponse.json({

@@ -57,6 +57,36 @@ export function title(score: number | null | undefined, isKing = false): string 
   return TITLES[TITLES.length - 1] ?? "";
 }
 
+// ---------- 录像语境的军衔评定（2026-10-28 张老师定） ----------
+// 上传后产生军衔变化（从无到有/从低到高）的录像，在录像动态与录像列表中按新军衔显示。
+// 例：高级 51s（大校）上传一盘 49s → 该录像行按 49s 评定显示「少将」。
+
+/**
+ * 录像行的有效评定高级时间：录像行内快照 exp_time（上传时刻、不含本盘）与本盘高级成绩取优。
+ * 军衔只随高级时间变——仅高级（level=exp）录像且成绩严格更优（或快照为 0=从无到有）时
+ * 返回本盘 real_time，其余（初级/中级盘、更差成绩、脏数据）一律维持快照原值。
+ */
+export function promotedExpTime(snapExpTime: number, level: string, realTime: number): number {
+  if (level === "exp" && realTime > 0 && (snapExpTime === 0 || realTime < snapExpTime)) {
+    return realTime;
+  }
+  return snapExpTime;
+}
+
+/**
+ * 破纪录动态行的有效评定高级时间：动态快照 exp_time 为破纪录前旧值（review.ts 写入点
+ * expTimeOverride=original.expTime 口径），details 的 lv/od/cr 记录坐标与新成绩——
+ * 高级时间纪录（lv=exp & od=time）按新成绩 cr 评定。纪录动态只在成绩严格变优（or=0 或
+ * cr<or，or 即快照旧值）时发出，cr<快照恒成立；防御性再判一次，异常时回退快照原值。
+ */
+export function recordNewsExpTime(newsExpTime: number, details: Record<string, unknown>): number {
+  if (details["lv"] === "exp" && details["od"] === "time") {
+    const cr = Number(details["cr"]) || 0;
+    if (cr > 0 && (newsExpTime === 0 || cr < newsExpTime)) return cr;
+  }
+  return newsExpTime;
+}
+
 export interface TitleDistribution {
   /** 各军衔的高级时间上限（毫秒，升序；2026-10-13 起为常量 TITLE_THRESHOLDS；
    *  2026-10-19 总司令改雷界第一人特判，不占阈值档位，本数组=大元帅~上等兵 18 档） */

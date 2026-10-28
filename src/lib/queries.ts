@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { prisma } from "./db";
 import { assertIdent } from "./sqlguard";
-import { getTitleDistribution, title } from "./assess";
+import { getTitleDistribution, promotedExpTime, title } from "./assess";
 import {
   COMMENT_STATUS,
   COMMENT_TOP_NUMBER,
@@ -1358,10 +1358,12 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
   // 不再批量查 user_scores 当前值。Phase 5：批量补算旧版称号
   // 2026-10-27 dualTitles 改行序数组（旧 Map 同用户多行塌缩——个人主页录像区
   // 整页同一人时全部共用同一军衔的根因）：视频下标与称号下标一一配对
+  // 2026-10-28 张老师定：上传后产生军衔变化（从无到有/从低到高）的录像按新军衔显示——
+  // 快照 exp_time 与本盘高级成绩取优（promotedExpTime，仅高级盘且成绩更优时生效）
   const pairList = await dualTitles(
     videos.map((v) => ({
       userId: N(v.user),
-      expTime: N(v.expTime),
+      expTime: promotedExpTime(N(v.expTime), v.level, infoMap.get(N(v.id))?.realTime ?? 0),
       ranked: v.ranked === BigInt(1),
       sex: authors.get(N(v.user))?.sex ?? 1,
     }))
