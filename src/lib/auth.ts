@@ -96,6 +96,36 @@ export async function setSession(user: SessionUser, ip = ""): Promise<void> {
   }
 }
 
+/** 存量会话迁移补种（2026-10-28 多地域排行）：会话 cookie 原为 host-only（无
+ *  Domain 属性），浏览器不会把它发给 rank-hk.saolei.wang 等子域——authority WS
+ *  握手 401 死循环（21:56 香港侧实测同一用户 3-6s 一次 401，前台反复弹「连接
+ *  中断」）。登录已带父域 Domain，但存量会话要等重新登录才迁移。在最高频的
+ *  unread 轮询里回显同值 token 并补上 Domain 属性，存量登录用户几秒内无感
+ *  迁移。不重签不改值：host-only 与父域两枚同名 cookie 共存期值相同，解析
+ *  无歧义；迁移完成后重设为同值无副作用 */
+export async function reissueSessionParentDomain(): Promise<void> {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (!token) return;
+  // 从 JWT payload 读 exp 定 maxAge，与原 token 生命周期精确一致（不滑期）
+  let maxAge = 0;
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"));
+    if (typeof payload.exp === "number") maxAge = Math.floor(payload.exp - Date.now() / 1000);
+  } catch {
+    return;
+  }
+  if (maxAge <= 0) return;
+  jar.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    domain: ".saolei.wang",
+    maxAge,
+    secure: process.env.NODE_ENV === "production",
+  });
+}
+
 export async function getSession(): Promise<SessionUser | null> {
   // 到期限时封禁的节流清扫兜底（60s 一次，2026-10-16）；读会话每页必经，顺便带动全站自动解禁
   await ensureBansLifted();

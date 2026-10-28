@@ -2,7 +2,7 @@
 // 2026-10-27：前台广播入口下线（后台 /admin/messages 走 ops message.broadcast），
 //   本路由的 broadcast 动作一并移除
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, reissueSessionParentDomain } from "@/lib/auth";
 import {
   clearMessages,
   getMessageList,
@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 });
   const action = req.nextUrl.searchParams.get("action");
   if (action === "unread") {
+    // 存量会话迁移补种（2026-10-28）：host-only cookie 补父域 Domain，rank-hk
+    // 子域 WS 握手才能带上凭据；全站轮询接口，存量登录用户几秒内无感迁移
+    await reissueSessionParentDomain();
     return NextResponse.json({ unread: await getUnreadCount(session.uid) });
   }
   // 消息列表「加载更多」（页码语义，首屏 15 条，模式同 /api/bbs/more）
