@@ -56,6 +56,15 @@ const LEGEND = `linear-gradient(90deg,${Array.from({ length: 13 }, (_, i) => {
   return `${ramp(ms)} ${Math.round((i / 12) * 100)}%`;
 }).join(",")})`;
 
+/* 权威服务实例位置红旗（2026-10-28 张老师需求）：坐标由 build-area-map.py 同一
+   LCC 投影（25/47N 双标准纬线、中央经线 105E）算出：北京 116.407,39.904 →
+   (747.7,339.3)；香港 114.169,22.319 → (746.9,743.2)。右侧负载清单见
+   ServerStatusPanel（同页并排） */
+const SERVER_PINS = [
+  { n: "北京", x: 747.7, y: 339.3 },
+  { n: "香港", x: 746.9, y: 743.2 },
+];
+
 export function LatencyMap({ data }: { data: LatencyMapDatum[] }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -135,6 +144,15 @@ export function LatencyMap({ data }: { data: LatencyMapDatum[] }) {
               </g>
             );
           })}
+          {/* 权威服务实例红旗（右侧列负载清单，每 3s 刷新） */}
+          {SERVER_PINS.map((p) => (
+            <g key={p.n} className="srv_pin" style={{ pointerEvents: "none" }}>
+              <title>{`${p.n}（排名服务器）`}</title>
+              <line x1={p.x} y1={p.y} x2={p.x} y2={p.y - 13} stroke="#e24b4a" strokeWidth="1.6" />
+              <path d={`M${p.x},${p.y - 13} L${p.x + 12},${p.y - 9.5} L${p.x},${p.y - 6} Z`} fill="#e24b4a" />
+              <circle cx={p.x} cy={p.y} r="2.4" fill="#e24b4a" stroke="rgba(248,248,242,.7)" strokeWidth="0.7" />
+            </g>
+          ))}
           {/* 南海诸岛附图（标准地图样式，含九段线）——合规必留 */}
           <svg x={MAP_INSET.x} y={MAP_INSET.y} width={MAP_INSET.w} height={MAP_INSET.h} viewBox={`0 0 ${MAP_INSET.w} ${MAP_INSET.h}`}>
             <rect className="inset-box" x="0.5" y="0.5" width={MAP_INSET.w - 1} height={MAP_INSET.h - 1} rx="3" />

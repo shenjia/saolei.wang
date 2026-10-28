@@ -7,6 +7,7 @@
 import { AdminCard } from "@/components/admin/Widgets";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
 import { LatencyMap } from "@/components/admin/LatencyMap";
+import { ServerStatusPanel } from "@/components/admin/ServerStatusPanel";
 import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, getRankedLatencyMap, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
@@ -58,11 +59,18 @@ export default async function AdminPracticePage() {
         title="排行延迟地图（近 7 天）"
         more={rttMap.length ? `${rttMap.length} 个地区有数据 · 共 ${rttMap.reduce((a, d) => a + d.games, 0).toLocaleString("zh-CN")} 局` : "数据自今日起记"}
       >
-        {rttMap.length ? (
-          <LatencyMap data={rttMap} />
-        ) : (
-          <div className="admin_empty">暂无排行延迟数据（排行局结算后自动记入）</div>
-        )}
+        {/* 地图左、服务器负载面板右（2026-10-28 张老师需求）；无数据时面板仍展示
+            （可用性监控不依赖延迟埋点数据） */}
+        <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+            {rttMap.length ? (
+              <LatencyMap data={rttMap} />
+            ) : (
+              <div className="admin_empty">暂无排行延迟数据（排行局结算后自动记入）</div>
+            )}
+          </div>
+          <ServerStatusPanel />
+        </div>
       </AdminCard>
 
       <div className="admin_grid trend_pies">
