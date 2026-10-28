@@ -41,10 +41,12 @@ function subMilestone(od: string | undefined, lv: string | undefined, oldMs: num
 
 /** SUB 大关标签颜色 = 该秒数对应军衔档的文字色（SUB40→元帅金、SUB50→少将亮橙、SUB60→少校暗橙…）。
     从 TITLE_THRESHOLDS 找第一个 ≥ 大关值的军衔，经 TITLE_CLASSES → TITLE_CLASS_COLORS 取色
-    （与军衔体系单一数据源，改阈值/配色自动跟走） */
+    （与军衔体系单一数据源，改阈值/配色自动跟走）。
+    注意与 assess.ts title() 同口径：总司令不占阈值档位，thresholds[i] 对应 TITLES[i + 1]
+    （2026-10-28 修 off-by-one：原 TITLES[i] 错取高一档军衔色，SUB80 少尉绿 → 应为上士灰） */
 function subGateColor(gateSec: number): string {
   const i = TITLE_THRESHOLDS.findIndex((t) => t >= gateSec * 1000);
-  const title = TITLES[i >= 0 ? i : TITLES.length - 1];
+  const title = i >= 0 ? TITLES[i + 1] : TITLES[TITLES.length - 1];
   return TITLE_CLASS_COLORS[TITLE_CLASSES[title] ?? ""] ?? "#b1b1a4";
 }
 

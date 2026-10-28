@@ -554,9 +554,11 @@ export async function getTitleThresholds(): Promise<{
     size: 0,
     // SUB 制颁布时间（2026-10-13 0 点 +08:00）
     createTime: 1791254400,
+    // 与 assess.ts title() 同口径：总司令不占阈值档（雷界第一人特判），thresholds[i] 对应 TITLES[i + 1]
+    // （2026-10-28 修 off-by-one：原 TITLES[i] 对 thresholds[i] 各档错一位，总司令被标 35s）
     rows: TITLES.map((t, i) => ({
       title: t,
-      threshold: thresholds[i] ?? 0,
+      threshold: i >= 1 ? thresholds[i - 1] ?? 0 : 0,
       count: countMap.get(t) ?? 0,
     })),
   };
