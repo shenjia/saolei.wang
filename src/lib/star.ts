@@ -77,8 +77,10 @@ export async function getClicks(userId: number): Promise<{ total: number; today:
 //      OAuth 外链 http / 旧站照片标记 '1'）者的入袋份额 ×2——鼓励上传真人照片，
 //      但不阻断无头像者参选。
 //   两路分开计席（十八轮 2026-10-28 张老师定）：两路资格各自独立入袋、不再并集去重——
-//   双命中（SUB50 有登录 且 有进步）先得 2 席，有头像再翻倍 = 入袋 4 份；
-//   抽签份额：单命中无头像 1 / 单命中有头像 2 / 双命中无头像 2 / 双命中有头像 4。
+//   双命中（SUB50 有登录 且 有进步）席位叠加，有头像再整体翻倍。
+//   ②路席位分级（十九轮 2026-10-28 张老师定：进步多少 + 排位高低都计入）：
+//   席位 = 1 + 进步加成（delta≥200 +2 / delta≥50 +1）+ 排位加成（今日名次≤100 +2 / ≤500 +1），
+//   进步得多 / 排位已高仍进步者席位更多，②路理论最高 5 席。
 //   去掉近 30 日内已当选者，按日期哈希确定性随机抽一位。
 //   旧版「当月不复选」收紧为「30 日不复选」——与候选资格的 30 天窗口同拍，
 //   也避免月末/月初边界出现同月二次当选的观感问题。
@@ -151,47 +153,58 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
     };
   }
 
-  // 候选池两路分开计席（十八轮 2026-10-28 张老师定）：
+  // 候选池两路分开计席（十八轮 2026-10-28 张老师定；十九轮同日加进步席位分级）：
   //   ① 少将及以上现役 且 30 天内登录过（2026-10-26 张老师增列 last_login_time 条件——
-  //      沉睡老将不参选，只约束①路；②路破纪录本身即活跃证明，不另设登录门槛）；
-  //   ② 30 天内破纪录 ∧ 排名上升（delta>0）现役。
-  //   两路**分开计席**：两条都命中的用户入袋 2 份（资格叠加，不再 UNION 去重合一），
-  //   再叠加头像加成——有头像者每份资格 ×2，双命中+头像 = 入袋 4 份。
+  //      沉睡老将不参选，只约束①路；②路破纪录本身即活跃证明，不另设登录门槛）。恒 1 席。
+  //   ② 30 天内破纪录 ∧ 排名上升（delta>0）现役。席位 = 1 + 进步加成 + 排位加成（十九轮）：
+  //      进步加成（delta = 30 天窗口名次差，封禁修正后）：delta≥200 → +2；delta≥50 → +1；
+  //      排位加成（今日总计时间榜名次）：≤100 → +2（百强仍有进步）；≤500 → +1。
+  //      进步得多 / 排位已高仍进步者，席位更多。理论最高 5 席。
+  //   两路**分开计席**：两条都命中的用户席位叠加（不再 UNION 去重合一），
+  //   再叠加头像加成——有头像者全部席位 ×2。
   // 封禁账号不入池（两路均 JOIN user.status=0；②路 rank_snapshot 残留 delta 的
   // 被封者一并滤掉，与 /grow 进步榜口径一致）。delta 本身已在快照刷新时做封禁修正
   // （ranksnap.ts：扣掉「别人被封白捡的名次」），delta>0 即真实名次上升。
-  // 头像加成：有合法头像（/uploads/avatar/%、http 外链、旧站 '1'）者每份资格翻倍——
+  // 头像加成：有合法头像（/uploads/avatar/%、http 外链、旧站 '1'）者每份席位翻倍——
   // 鼓励上传真人照片，但不阻断无头像者参选。
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; hasAvatar: number }>>(
-    `SELECT s.id, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
+  const rankPath = `$.\\"${today}\\"`; // rank_snapshot.ranks JSON 里今日名次的 key
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; seats: number; hasAvatar: number }>>(
+    `SELECT s.id, 1 AS seats, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
        FROM user_scores s
        JOIN \`user\` u ON u.id = s.id AND u.status = 0 AND u.last_login_time >= ?
        WHERE s.exp_time > 0 AND s.exp_time <= ?
      UNION ALL
-     SELECT DISTINCT n.user, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END
+     SELECT DISTINCT n.user,
+            1 + CASE WHEN r.delta >= 200 THEN 2 WHEN r.delta >= 50 THEN 1 ELSE 0 END
+              + CASE WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS UNSIGNED) <= 100 THEN 2
+                     WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS UNSIGNED) <= 500 THEN 1
+                     ELSE 0 END AS seats,
+            CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END
        FROM news n
        JOIN rank_snapshot r ON r.user = n.user AND r.delta > 0
        JOIN \`user\` u ON u.id = n.user AND u.status = 0
        WHERE n.type = 20 AND n.user > 0 AND n.create_time >= ?`,
     Math.floor(Date.now() / 1000) - 30 * 86400,
     MAJOR_GENERAL_MS,
+    rankPath,
+    rankPath,
     Math.floor(Date.now() / 1000) - 30 * 86400
   );
   const excluded = await recentStarUserIds(today);
-  // 两路分开计席：同一用户每命中一路 +1 席（UNION ALL 下①路天然一人一行，
-  // ②路已按 DISTINCT 去重到一人一行，故直接累加行数即席位数）
+  // 两路分开计席：同一用户席位跨路累加（UNION ALL 下①路一人一行恒 1 席，
+  // ②路已按 DISTINCT 去重到一人一行、席位由 SQL 分级算出）
   const seen = new Map<number, { seats: number; hasAvatar: number }>();
   for (const r of rows) {
     const id = N(r.id);
     const cur = seen.get(id);
-    if (cur) cur.seats += 1;
-    else seen.set(id, { seats: 1, hasAvatar: Number(r.hasAvatar) });
+    if (cur) cur.seats += Number(r.seats);
+    else seen.set(id, { seats: Number(r.seats), hasAvatar: Number(r.hasAvatar) });
   }
   const candidates = [...seen.entries()].filter(([id]) => !excluded.has(id));
   if (!candidates.length) return null;
 
-  // 加权抽签袋（十七轮头像×2 + 十八轮两路分席）：每份资格入袋一次，有头像再翻倍——
-  // 单命中无头像 1 份 / 单命中有头像 2 份 / 双命中无头像 2 份 / 双命中有头像 4 份；
+  // 加权抽签袋（十七轮头像×2 + 十八轮两路分席 + 十九轮进步席位分级）：
+  // 全部席位入袋一次，有头像再整体翻倍；②路单命中 1~5 份，双命中再叠加①路 1 份；
   // 日期哈希确定性随机（同一天多次请求结果一致，并发重复插入由唯一键兜底）
   const bag: number[] = [];
   for (const [id, { seats, hasAvatar }] of candidates) {
