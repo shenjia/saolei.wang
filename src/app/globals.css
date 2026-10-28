@@ -8307,6 +8307,16 @@ button.msg_cancel:hover {
 #online_play .ranking_tabs a {
   cursor: pointer;
 }
+/* 级别筛选器间距收紧（2026-10-28 张老师定）：tab 内距 18→10、行 gap 4→2，
+   「今日已完成」统计跟着左移，视觉上尽量与局中笑脸对齐（只收练习页，
+   排行页 tabs 不受影响；:after 高亮线随 padding 自适应） */
+#online_play .ranking_tabs {
+  gap: 2px;
+}
+#online_play .ranking_tabs a,
+#online_play .ranking_tabs span {
+  padding: 9px 10px;
+}
 /* ---- 右上图标按钮组（2026-10-14 二期张老师定：齿轮＋全屏两个） ---- */
 #online_play .gicons {
   margin-left: auto;
@@ -12024,11 +12034,13 @@ body #page .word_terms .desc {
 }
 
 /* ---- 排名局结算气泡与 PB 徽标（2026-10-27 张老师定）---- */
-/* 金色破纪录气泡：站内黄系（与雷达数值金同源 #E6DB74 偏亮） */
+/* 金色破纪录气泡：站内黄系（与雷达数值金同源 #E6DB74 偏亮）。
+   内文字金色（2026-10-28 张老师定），暗金渐变底上用亮金保证可读；
+   前缀金色奖杯 🏆 由 OnlinePlay 自建气泡写入（不走全局 toast） */
 .toast_bubble.toast_gold {
   background: linear-gradient(135deg, #b8860b, #daa520);
   border: 1px solid #ffd700;
-  color: #fff8dc;
+  color: #ffd700;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
@@ -12194,3 +12206,145 @@ a.cheat_rep_link:hover {
   width: fit-content;
 }
 
+/* ===== 结算「新 BV 收集」气泡内的收集墙（2026-10-28 张老师定） =====
+   与个人主页收集墙同款视觉（10px 方格·级别三色，--wall-on 由内联样式按级别注入：
+   初绿 #a6e22e / 中橙 #fd971f / 高黄 #e6db74）。气泡无 hover/链接；
+   本局新 BV 的格子走 flash 动画：白闪两拍后定格级别色（forwards 保亮），
+   动画 1.8s + 亮完停 3s 后气泡淡出（OnlinePlay 里 holdMs=4800 与此对齐） */
+.toast_bubble.toast_html {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 500px;
+}
+.toast_bubble .bbv_wall {
+  --wall-on: #a6e22e;
+}
+/* 墙气泡边缘/光晕随级别色（2026-10-28 张老师定）：.toast_success 基类的绿边
+   写死 #a6e22e，中级橙墙配绿边不伦不类——气泡根挂 wall_lv_<level> class，
+   变量在根上注入，border/box-shadow 全部跟色（光晕 color-mix 透明化级别色） */
+.toast_bubble.toast_html {
+  --wall-on: #a6e22e;
+  border-color: var(--wall-on);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 10px 40px rgba(0, 0, 0, 0.7),
+    0 0 34px -6px color-mix(in srgb, var(--wall-on) 40%, transparent);
+}
+.toast_bubble.toast_html.wall_lv_int {
+  --wall-on: #fd971f;
+}
+.toast_bubble.toast_html.wall_lv_exp {
+  --wall-on: #e6db74;
+}
+.toast_bubble .bbv_wall .wall_msg {
+  /* legacy-2013.css 的元素级规则 div{color:#636359;font-size:14px} 命中墙上
+     每一层 div（含 .bbv_wall 本身），必须显式声明才能压住。颜色用 --wall-on
+     跟随级别色（2026-10-28 张老师定：中级整体橙色渲染——文字/进度条/格子同色，
+     初级绿、高级黄同理），字体保持原气泡排版 */
+  color: var(--wall-on, #a6e22e);
+  font-size: 17px;
+  line-height: 26px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+/* 进度条（2026-10-28 二轮）：与主页收集墙同款语言但略粗（4px，气泡里看得清），
+   收集墙正上方；增长动画从 --w-from（上一局进度）长到行内 width（本局进度），
+   keyframes 只写 from、终点取元素自身 width，省一份 --w-to 传参。
+   上下 margin 与气泡文字/墙的呼吸距一致（2026-10-28 三轮张老师定） */
+.toast_bubble .bbv_wall .wall_bar {
+  width: 240px;
+  height: 4px;
+  margin: 7px 0;
+  background: #49483e;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.toast_bubble .bbv_wall .wall_fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--wall-on);
+  animation: bbv_wall_grow 1.2s ease-out 0.15s backwards; /* backwards：0.15s 延迟内停在起点宽 */
+}
+@keyframes bbv_wall_grow {
+  from {
+    width: var(--w-from, 0%);
+  }
+}
+.toast_bubble .bbv_wall .wall_hint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #939387;
+}
+/* 格子行左对齐（2026-10-28 张老师定）：.toast_bubble 的 text-align:center 会把
+   未满行的格子（末行）居中造成错位——墙内一律从左排 */
+.toast_bubble .bbv_wall .wall_grid {
+  line-height: 0;
+  text-align: left;
+  /* 每行 10 格（2026-10-28 三轮张老师定），格子 22px 大格（2026-10-28 四轮：
+   * 10 格基本占满气泡宽度——首行文字约 215px，格子行 10×(22+2)=240px 成为
+   * 最宽子元素，气泡即按它撑开）。进度条同步同宽；主页侧栏收集墙仍为
+   * 16 格/行 10px 小格，两者独立 */
+  width: 240px;
+}
+.toast_bubble .bbv_wall .wall_sq {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin: 0 4px 4px 0; /* 20px 格 + 4px 间距＝24px 槽位，10 列仍是 240px 整（2026-10-28 五轮：稍小+疏朗） */
+  background: #49483e;
+  border-radius: 3px;
+}
+.toast_bubble .bbv_wall .wall_sq.on {
+  background: var(--wall-on);
+}
+.toast_bubble .bbv_wall .wall_sq.flash {
+  animation: bbv_wall_flash 1.8s ease-out forwards;
+}
+/* 中级/高级墙（2026-10-28 张老师定）：18 格/行、格子略小（16px，槽位 20px＝
+   360px 整）；初级保持 10 格/行 20px 不变 */
+.toast_bubble .bbv_wall.wall_lv_int .wall_bar,
+.toast_bubble .bbv_wall.wall_lv_int .wall_grid,
+.toast_bubble .bbv_wall.wall_lv_exp .wall_bar,
+.toast_bubble .bbv_wall.wall_lv_exp .wall_grid {
+  width: 360px;
+}
+.toast_bubble .bbv_wall.wall_lv_int .wall_sq,
+.toast_bubble .bbv_wall.wall_lv_exp .wall_sq {
+  width: 16px;
+  height: 16px;
+}
+@keyframes bbv_wall_flash {
+  /* 白色描边环（2026-10-28 张老师定）：当前 BV 格整个周期带 2px 白环突出显示，
+     forwards 定格后（100%）也常驻——否则亮完和其他已收集格无区别 */
+  0% {
+    background: #49483e;
+    box-shadow: 0 0 0 2px #ffffff;
+    transform: scale(1);
+  }
+  30% {
+    background: #ffffff;
+    box-shadow: 0 0 0 2px #ffffff, 0 0 6px 2px rgba(255, 255, 255, 0.9);
+    transform: scale(1.45);
+  }
+  55% {
+    background: #ffffff;
+    box-shadow: 0 0 0 2px #ffffff, 0 0 8px 3px rgba(255, 255, 255, 0.85);
+    transform: scale(1.25);
+  }
+  75% {
+    background: var(--wall-on);
+    box-shadow: 0 0 0 2px #ffffff, 0 0 4px 1px rgba(255, 255, 255, 0.5);
+    transform: scale(1.08);
+  }
+  100% {
+    background: var(--wall-on);
+    box-shadow: 0 0 0 2px #ffffff;
+    transform: none;
+  }
+}
+.toast_bubble .bbv_wall .wall_hint {
+  font-size: 11px;
+  color: #939387;
+}
