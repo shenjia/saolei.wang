@@ -190,20 +190,20 @@ export function VideoRowLine({
           </span>
         )}
       </td>
-      {/* 本BV标记（2026-10-28 张老师需求）：首收=小数点角标 / PB=下标感叹号，
-          绝对定位在数字右侧不占排版；hover 数字高亮级别色 + 气泡（样式见 globals.css .bv_marked）。
+      {/* 本BV标记（2026-10-28 张老师需求）：首收=小数点角标 / PB=小数点角标（黄色），
+          绝对定位在数字右侧不占排版；hover 数字高亮 + 气泡（样式见 globals.css .bv_marked）。
+          20:44 张老师两轮定稿：角标统一为小数点字符（PB 不再用感叹号），颜色统一不分级别——
+          新BV=绿 / 新PB=黄（span 上的 first/pb 类控制）。
           first_bv 与 pb_bv 互斥（首盘无旧纪录可破，上传侧保证） */}
       <td className={`c_3bvs bv c${highlight === "3bv" ? " current" : ""}`}>
         {v.firstBv || v.pbBv ? (
           <span
-            className={`bv_marked ${lvCls}`}
+            className={`bv_marked ${v.pbBv ? "pb" : "first"}`}
             data-tip={v.firstBv ? "首次收集本BV" : "本BV最新个人纪录"}
             aria-label={v.firstBv ? "首次收集本BV" : "本BV最新个人纪录"}
           >
             {v.board3bv}
-            <i className={`mk${v.pbBv ? " bang" : ""}`} aria-hidden="true">
-              {v.pbBv ? "!" : "."}
-            </i>
+            <i className="mk" aria-hidden="true">.</i>
           </span>
         ) : (
           v.board3bv

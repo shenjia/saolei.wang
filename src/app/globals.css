@@ -12382,9 +12382,9 @@ a.cheat_rep_link:hover {
 
 /* ═══ 3BV 本BV标记（2026-10-28 张老师需求，VideoRows.tsx 列表行）═══
    首次收集本 BV = 3BV 数后小数点角标；打破本 BV 最好成绩 = 下标感叹号。
-   角标绝对定位在数字右侧（left:100%）不占排版；hover 数字高亮级别三色 +
-   data-tip 气泡（首次收集本BV / 本BV最新个人纪录）。级别色与全站口径一致：
-   初 #a6e22e / 中 #f79646 / 高 #fdc61a */
+   角标绝对定位在数字右侧（left:100%）不占排版；hover 数字高亮 +
+   data-tip 气泡（首次收集本BV / 本BV最新个人纪录）。
+   20:44 张老师定稿：颜色统一不分级别——新BV=绿 #a6e22e / 新PB=黄 #fdc61a */
 .video_table .bv_marked {
   position: relative;
   cursor: help;
@@ -12399,19 +12399,12 @@ a.cheat_rep_link:hover {
   line-height: 1;
   font-size: 0.95em;
 }
-/* PB 下标感叹号：更小字号、沉到下标位 */
-.video_table .bv_marked .mk.bang {
-  bottom: -0.12em;
-  font-size: 0.72em;
-}
-/* 角标颜色（级别三色） */
-.video_table .bv_marked.lv_beg .mk { color: #a6e22e; }
-.video_table .bv_marked.lv_int .mk { color: #f79646; }
-.video_table .bv_marked.lv_exp .mk { color: #fdc61a; }
-/* hover 高亮：3BV 数字变级别色 */
-.video_table .bv_marked.lv_beg:hover { color: #a6e22e; }
-.video_table .bv_marked.lv_int:hover { color: #f79646; }
-.video_table .bv_marked.lv_exp:hover { color: #fdc61a; }
+/* 角标颜色（统一两色：PB 感叹号黄，首收小数点绿） */
+.video_table .bv_marked.first .mk { color: #a6e22e; }
+.video_table .bv_marked.pb .mk { color: #fdc61a; }
+/* hover 高亮：3BV 数字随角标类型同色 */
+.video_table .bv_marked.first:hover { color: #a6e22e; }
+.video_table .bv_marked.pb:hover { color: #fdc61a; }
 /* hover 气泡（同站内 data-tip 语言：暗底白字，置于数字上方） */
 .video_table .bv_marked::after {
   content: attr(data-tip);
