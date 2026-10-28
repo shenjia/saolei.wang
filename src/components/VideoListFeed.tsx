@@ -395,7 +395,8 @@ export function VideoListFeed({
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={hideIoe ? 8 : 9} style={{ textAlign: "center" }}>
+              {/* 列数联动（2026-10-29）：+1 软件列——hideIoe 时 8+1=9、全列 10 */}
+              <td colSpan={hideIoe ? 9 : 10} style={{ textAlign: "center" }}>
                 暂无数据
               </td>
             </tr>

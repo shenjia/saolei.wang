@@ -25,6 +25,43 @@ import { buildUrl } from "./Pager";
 // 2008 版级别配色（.Beg/.Int/.Exp + a.XXX 亮一档链接变体）
 const LEVEL_CLS: Record<VideoLevel, string> = { beg: "lv_beg", int: "lv_int", exp: "lv_exp" };
 
+// 软件图标映射（2026-10-29 张老师需求：列表新增「软件」列，级别列之前，图标+hover 全名气泡）。
+// 图标 /images/software/*.png 统一 32×32 原图、16px 展示（retina 2x）；全名口径同下载页。
+// Vienna 原图 16×16 像素风放大展示（sw--pixel 保硬边）；元扫雷按前缀匹配（库值「元扫雷3.3.4」
+// 带版本号）；空值/未知软件（历史数据 25 条）灰色 ? 占位
+const SOFTWARE_ICONS: Record<string, { icon: string; name: string; pixel?: boolean }> = {
+  Arbiter: { icon: "/images/software/arbiter.png", name: "Minesweeper Arbiter" },
+  Clone: { icon: "/images/software/clone.png", name: "Minesweeper Clone" },
+  Vienna: { icon: "/images/software/vienna.png", name: "Viennasweeper", pixel: true },
+  "Saolei.wang": { icon: "/images/software/saolei.png", name: "Saolei.wang" },
+};
+
+function softwareIcon(software: string): { icon: string; name: string; pixel?: boolean } | null {
+  const hit = SOFTWARE_ICONS[software];
+  if (hit) return hit;
+  if (software.startsWith("元扫雷")) return { icon: "/images/software/yuansaolei.png", name: "元扫雷" };
+  return null;
+}
+
+/** 软件列单元格（2026-10-29）：已知软件图标 hover 全名气泡；未知/空值灰色 ? 占位 */
+function SoftwareIcon({ software }: { software: string }) {
+  const sw = softwareIcon(software);
+  if (!sw) {
+    return (
+      <span className="sw_icon sw--text" data-tip="未知软件" aria-label="未知软件">
+        ?
+      </span>
+    );
+  }
+  return (
+    <span className={`sw_icon${sw.pixel ? " sw--pixel" : ""}`} data-tip={sw.name} aria-label={sw.name}>
+      {/* 16px 定长小图标，不值得 next/image；沿用站内 <img> 直出（同 MobileNav 头像） */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={sw.icon} alt="" width={16} height={16} />
+    </span>
+  );
+}
+
 /** 行高亮列（2026-10-15 扩展：排序命中列）。id 列仅在显式排序态（URL 带 order=id，
  *  2026-10-23 升降序切换）才高亮——默认排序（URL 无 order）不高亮（张老师 2026-10-15 口径） */
 export type VideoHighlight = VideoListOrder;
@@ -113,6 +150,8 @@ export function VideoHead({
     <thead>
       <tr>
         <th>上传者</th>
+        {/* 软件（2026-10-29 张老师需求）：级别列之前，图标+hover 全名气泡（VideoRowLine 同步） */}
+        <th className="c sw">软件</th>
         <th>级别</th>
         <th>{col("time", "成绩", "按成绩排列（快在前）")}</th>
         {/* 定向视图（3BV 精确筛选）下 3BV 整列同值，禁排序纯文本（2026-10-20）。
@@ -171,6 +210,10 @@ export function VideoRowLine({
         ) : (
           <span className="avatar_link">?</span>
         )}
+      </td>
+      {/* 软件列（2026-10-29）：与表头同步，位置=级别列之前 */}
+      <td className="c sw">
+        <SoftwareIcon software={v.software} />
       </td>
       <td className={`level ${lvCls}`}>{LEVEL_NAMES[v.level as VideoLevel] ?? v.level}</td>
       <td className={`score ${lvCls}${highlight === "time" ? " current" : ""}`}>

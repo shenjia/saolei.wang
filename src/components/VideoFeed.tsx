@@ -231,7 +231,7 @@ export function VideoFeed({
           ))}
           {items.length === 0 && (
             <tr>
-              <td className="text" colSpan={8}>
+              <td className="text" colSpan={9}>
                 {switching ? "加载中…" : "还没有记录。"}
               </td>
             </tr>

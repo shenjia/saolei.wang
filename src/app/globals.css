@@ -7049,7 +7049,8 @@ body #page.video_old .page_head {
     margin-left: 0;
   }
   .video_table {
-    min-width: 860px; /* 2026-10-20 新增 IOE/STNB 两列后自然全宽（实测）加余量 */
+    min-width: 890px; /* 2026-10-20 新增 IOE/STNB 两列后自然全宽（实测）加余量；
+                          2026-10-29 新增软件列（16px 图标紧凑列）+30px 余量 */
   }
 }
 
@@ -12504,6 +12505,61 @@ a.cheat_rep_link:hover {
   z-index: 5;
 }
 .video_table .bv_marked:hover::after {
+  opacity: 1;
+}
+
+/* ═══ 软件列（2026-10-29 张老师需求，VideoRows.tsx）：级别列之前，16px 图标 + hover 全名气泡 ═══
+   图标 32×32 原图缩小展示（retina 2x 清晰）；Vienna 原图 16×16 像素风放大保硬边（pixelated）；
+   未知软件（历史空值）灰色 ? 文字占位。气泡同站内 data-tip 语言（暗底白字上方弹出）。 */
+.video_table th.c.sw,
+.video_table td.c.sw {
+  text-align: center;
+  padding: 4px 4px;
+}
+.video_table .sw_icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  vertical-align: -3px;
+  position: relative;
+  cursor: help;
+}
+.video_table .sw_icon img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.video_table .sw_icon.sw--pixel img {
+  image-rendering: pixelated;
+}
+.video_table .sw_icon.sw--text {
+  font-size: 10px;
+  color: #75715e;
+  cursor: help;
+}
+.video_table .sw_icon::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 155%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 5;
+}
+.video_table .sw_icon:hover::after {
   opacity: 1;
 }
 
