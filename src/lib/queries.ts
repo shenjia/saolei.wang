@@ -1242,18 +1242,25 @@ export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boo
 
 const HOT_VIDEO_WINDOW_SECONDS = 30 * 24 * 3600;
 const HOT_VIDEO_COMMENT_WEIGHT = 20;
+/** 时间衰减重力（2026-10-28 张老师确认 g=1.5，HN 式）：
+ *  热度 = (点击 + 他人有效评论×20) / (发布小时数+2)^1.5，
+ *  老录像分数连续缩水、排名逐渐下沉，替代原「只增不减、到期瞬间消失」的口径。 */
+const HOT_VIDEO_GRAVITY = 1.5;
 
 /**
- * 热门录像（现仅首页右栏使用）：近 30 天上传，按点击与他人有效评论综合排序。
- * 热度 = 点击量 + 有效评论数 × 20；评论只计 NORMAL，且 c.user <> v.user，
- * 排除作者自评（包括在自己录像下回复他人）对热度的影响。屏蔽录像仍不进前台。
+ * 热门录像（现仅首页右栏使用）：近 30 天上传，按点击与他人有效评论综合排序，
+ * 并按发布时长做重力衰减。
+ * 热度 = (点击量 + 有效评论数 × 20) / (发布小时数 + 2)^1.5；评论只计 NORMAL，
+ * 且 c.user <> v.user，排除作者自评（包括在自己录像下回复他人）对热度的影响。
+ * 屏蔽录像仍不进前台。30 天窗口保留（约束候选集规模），衰减到第 30 天时
+ * 热度已缩水约 2 万倍，出窗不再产生名次跳变。
  */
 async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
   const cutoff = BigInt(Math.floor(Date.now() / 1000) - HOT_VIDEO_WINDOW_SECONDS);
   const safeLimit = Math.max(1, Math.floor(limit));
   const rows = await prisma.$queryRaw<{ id: bigint }[]>`
     WITH hot_candidates AS (
-      SELECT v.id, vs.clicks,
+      SELECT v.id, v.create_time, vs.clicks,
         (SELECT COUNT(*) FROM comment c
          WHERE c.video = v.id AND c.status = ${COMMENT_STATUS.NORMAL} AND c.user <> v.user
         ) AS external_comments
@@ -1261,13 +1268,15 @@ async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
       WHERE v.status <> ${VIDEO_STATUS.BANNED} AND v.create_time >= ${cutoff}
     )
     SELECT id FROM hot_candidates
-    ORDER BY clicks + external_comments * ${HOT_VIDEO_COMMENT_WEIGHT} DESC, id DESC
+    ORDER BY (clicks + external_comments * ${HOT_VIDEO_COMMENT_WEIGHT})
+      / POW((UNIX_TIMESTAMP() - create_time) / 3600 + 2, ${HOT_VIDEO_GRAVITY}) DESC,
+      id DESC
     LIMIT ${safeLimit}`;
   return getVideosByIds(rows.map((r) => N(r.id)));
 }
 
-// 2026-10-26 v6：热评改热门——限近 30 天，点击 + 他人有效评论 × 20，升键作废旧缓存
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v6"], { revalidate: 60 });
+// 2026-10-28 v7：热门改时间衰减排序——按发布时长重力衰减（g=1.5），升键作废旧缓存
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v7"], { revalidate: 60 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
