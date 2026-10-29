@@ -1677,15 +1677,13 @@ a.avatar_link:hover .pt_bubble,
 /* 录像详情页正文区（作者/审核员）双层裁剪修复（2026-10-29 线上报障）：
    legacy #video_view .video_cell p 是单行省略块（overflow:hidden，气泡无论
    往哪弹都出不了 p），.video_cell 自身还有 overflow:hidden（防棋盘溢出，
-   必须保留）。改法：.info 两段 p 放开裁剪；气泡改在格子内部向下弹、
-   左缘与锚对齐（居中弹会被格子左缘裁掉一截） */
+   必须保留）。改法：.info 两段 p 放开裁剪；气泡照全站惯例向上弹
+   （弹起后仍落在格子内部不会被裁），仅左缘与锚对齐——居中弹会被格子
+   左缘裁掉一截（2026-10-29 15:3x 张老师指正：应向上弹） */
 #video_view .video_cell .info p {
   overflow: visible;
 }
 #video_view .video_cell .info .pt_bubble {
-  bottom: auto;
-  top: 100%;
-  margin-top: 2px;
   left: 0;
   transform: none;
   transition: opacity 0.08s;
