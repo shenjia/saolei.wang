@@ -8,11 +8,22 @@ import type { OnlineEvent } from "./avfwrite";
 
 /** 站内排名/练习客户端软件名（evf Software 字段 + DB software 列判等值） */
 export const RANKED_SOFTWARE = "Saolei.wang";
-/** 客户端版本（2026-10-29 张老师定：evf Software 字段带版本区分行为代际——
- *  0.3＝点击坐标归一格心（旧版）；0.4 起＝忠实记录真实点击坐标+格内钳制（af3b40e）。
- *  evf 头布局不变，仅 Software 字符串变化；evf.ts 归一时拆出「Saolei.wang」+「0.4」，
- *  DB software 列判等不受影响 */
-export const RANKED_CLIENT_VERSION = "0.4";
+/* 客户端代际版本（2026-10-29 张老师二定）：0.3＝点击坐标归一格心（旧版）；
+ * 0.4 起＝忠实记录真实点击坐标+格内钳制（af3b40e）。
+ * ⚠️ 版本号必须由客户端自己上报（上传请求带 clientVersion）——服务端代码没有
+ * 版本可言，绝不能按服务端部署代际盖章（2026-10-29 348342 案：旧页签跑旧
+ * bundle 格心录制，服务端却盖 0.4，标签与行为脱节）。客户端不报＝0.3（旧版）。 */
+export const RANKED_CLIENT_VERSION_DEFAULT = "0.3";
+/** 客户端上报版本的白名单校验（防伪造未来版本；服务端只信自己认识的代际） */
+export const RANKED_CLIENT_VERSIONS = ["0.3", "0.4"] as const;
+export type RankedClientVersion = (typeof RANKED_CLIENT_VERSIONS)[number];
+
+/** 校验客户端自报版本：合法返回原值，非法/缺省回退 0.3 */
+export function normalizeClientVersion(v: unknown): RankedClientVersion {
+  return typeof v === "string" && (RANKED_CLIENT_VERSIONS as readonly string[]).includes(v)
+    ? (v as RankedClientVersion)
+    : RANKED_CLIENT_VERSION_DEFAULT;
+}
 
 export interface RankedEvfInput {
   width: number;
@@ -32,6 +43,11 @@ export interface RankedEvfInput {
   won?: boolean;
   /** 对局时间（AVF 时间戳串，练习页下载携带；仅作日后扩展，v0.3 头不落此字段） */
   timestamp?: string;
+  /** 客户端代际版本（2026-10-29 张老师二定：版本号随客户端代码走，不随服务端走）。
+   *  排名上传＝服务端从请求体 clientVersion 字段取（白名单校验后传入）；
+   *  练习页下载＝客户端自己传常量（OnlinePlay 内联）；
+   *  凭据 evf（cheat report）＝服务端生成，无客户端版本语义，缺省 0.3 */
+  clientVersion?: string;
 }
 
 export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
@@ -55,7 +71,7 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
   u16(0); // classic
   u16(input.bbbv);
   u24(input.scoreCsec * 10);
-  cstr(`${RANKED_SOFTWARE} ${RANKED_CLIENT_VERSION}`);
+  cstr(`${RANKED_SOFTWARE} ${input.clientVersion ?? RANKED_CLIENT_VERSION_DEFAULT}`);
   cstr(input.player ?? "");
   cstr(""); // race identifier
   cstr(input.uniqueIdentifier ?? "");

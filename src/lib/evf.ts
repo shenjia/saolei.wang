@@ -490,17 +490,19 @@ export function evfToRawvf(buf: Uint8Array): string[] {
   const v = parseEvf(buf);
   /* 软件名归一：
      · Metasweeper 自报「元3.3.4」→ 展示口径「元扫雷3.3.4」
-     · 本站客户端 0.4 起（2026-10-29）Software 自报「Saolei.wang 0.4」（张老师定：
-       版本号区分行为代际——0.3 格心录制 / 0.4 真实坐标），拆为 Program=Saolei.wang
-       + Version=0.4——DB software 列判等（triage/upload/图标）全部不变 */
-  const siteMatch = /^(Saolei\.wang)\s+(\d+(?:\.\d+)*)$/.exec(v.software);
+     · 本站客户端 Software 自报「Saolei.wang <客户端代际>」（2026-10-29 张老师二定：
+       版本号由客户端上报、随客户端代码走——0.3＝格心录制（含服务端未收到自报的
+       一切情况）/ 0.4 起＝真实点击坐标），拆为 Program=Saolei.wang + Version=<代际>；
+     · 历史文件 Software 只写「Saolei.wang」（无版本段，2026-10-29 凌晨前生成）——
+       按客户端代际口径记 0.3（格心录制代际）——DB software 列判等不受影响 */
+  const siteMatch = /^Saolei\.wang(?:\s+(\d+(?:\.\d+)*))?$/.exec(v.software);
   const program =
     v.software.startsWith("元") && !v.software.startsWith("元扫雷")
       ? `元扫雷${v.software.slice(1)}`
       : siteMatch
-        ? siteMatch[1]
+        ? "Saolei.wang"
         : v.software;
-  const clientVersion = siteMatch ? siteMatch[2] : null;
+  const clientVersion = siteMatch ? (siteMatch[1] ?? "0.3") : null;
   const lines: string[] = [
     "RawVF_Version: Rev5",
     `Program: ${program}`,
