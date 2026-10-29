@@ -12,7 +12,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
-import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE, countsInTotal } from "@/lib/config";
+import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE, countsInTotal, RANK_BAN_DURATIONS, RANK_BAN_PERMANENT } from "@/lib/config";
 import { decodeLegacyEntities, formatDate } from "@/lib/format";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
@@ -346,8 +346,9 @@ async function dispatch(
     }
 
     case "user.setRankBan": {
-      /* 排名模式开关（2026-10-27 张老师定）：账号处置面板直接管理——
-         on=禁用 24h（与探测命中同款时长），off=手动解禁；不动低信任 */
+      /* 排名模式开关（2026-10-27 张老师定；2026-10-29 时长可选）：账号处置面板直接管理——
+         on=禁用（四档时长：24小时/7天/一个月/永久，缺省 24h 与探测命中同款），
+         off=手动解禁；不动低信任。永久用远期哨兵 RANK_BAN_PERMANENT（0=未禁用） */
       const id = toId(p.id);
       const on = p.on === 1 || p.on === true;
       if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
@@ -358,8 +359,13 @@ async function dispatch(
       if (!user) return { ok: false, error: "玩家不存在" };
       const t = now();
       if (on) {
-        await prisma.user.update({ where: { id: BigInt(id) }, data: { rankBanUntil: BigInt(t + 24 * 3600) } });
-        return { ok: true, message: `${user.chineseName}（#${id}）排名模式已禁用 24 小时` };
+        const key = toText(p.duration ?? "24h", 8) || "24h";
+        const opt = RANK_BAN_DURATIONS.find(([k]) => k === key);
+        if (!opt) return { ok: false, error: "参数错误：非法禁用时长" };
+        const [, label, sec] = opt;
+        const until = sec > 0 ? t + sec : RANK_BAN_PERMANENT;
+        await prisma.user.update({ where: { id: BigInt(id) }, data: { rankBanUntil: BigInt(until) } });
+        return { ok: true, message: `${user.chineseName}（#${id}）排名模式已禁用（${label}）` };
       }
       if (Number(user.rankBanUntil) <= t) {
         return { ok: false, error: "该玩家排名模式未被禁用" };

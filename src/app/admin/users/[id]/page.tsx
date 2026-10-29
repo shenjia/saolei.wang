@@ -4,12 +4,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { USER_ROLE } from "@/lib/config";
+import { USER_ROLE, RANK_BAN_PERMANENT } from "@/lib/config";
 import { getUserDetailAdmin } from "@/lib/admin/data";
 import { opLabel } from "@/lib/admin/log";
 import { AdminAction, AdminForm } from "@/components/admin/AdminAction";
 import { BanUserDialog } from "@/components/admin/BanUserDialog";
 import { LowTrustDialog } from "@/components/admin/LowTrustDialog";
+import { RankBanDialog } from "@/components/admin/RankBanDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, score3bvs, scoreTime, timeOpposite } from "@/lib/format";
@@ -19,10 +20,12 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "玩家详情 | 管理后台" };
 
 
-function rankBanCountdown(secLeft: number): string {
+function rankBanLeftLabel(until: number): string {
+  if (until >= RANK_BAN_PERMANENT) return "永久";
+  const secLeft = until - Math.floor(Date.now() / 1000);
   const h = Math.floor(secLeft / 3600);
   const m = Math.floor((secLeft % 3600) / 60);
-  return h > 0 ? `${h} 小时 ${m} 分` : `${m} 分`;
+  return `剩余 ${h > 0 ? `${h} 小时 ${m} 分` : `${m} 分`}`;
 }
 
 export default async function AdminUserDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -259,12 +262,12 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     : `确认把「${u.chineseName}」加入可信用户组？其上传录像自动分拣时不再检查 STNB 触发器（其余触发器照常），待审录像会立即重分拣。`
                 }
               />
-              {/* 排名模式开关（2026-10-27 张老师定）：禁用中显示倒计时+解禁钮；
-                  未禁用显示禁用钮。与信任组状态独立 */}
+              {/* 排名模式开关（2026-10-27 张老师定；2026-10-29 时长可选）：禁用中显示
+                  倒计时（永久显示「永久」）+解禁钮；未禁用弹窗选时长。与信任组状态独立 */}
               {d.rankBanned ? (
                 <>
                   <span className="admin_tag bad" style={{ alignSelf: "center" }}>
-                    排名禁用中 · 剩余 {rankBanCountdown(d.rankBanUntil - Math.floor(Date.now() / 1000))}
+                    排名禁用中 · {rankBanLeftLabel(d.rankBanUntil)}
                   </span>
                   <AdminAction
                     op="user.setRankBan"
@@ -276,14 +279,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                   />
                 </>
               ) : (
-                <AdminAction
-                  op="user.setRankBan"
-                  params={{ id: u.id, on: 1 }}
-                  label="禁用排名模式"
-                  variant="warn"
-                  sm={false}
-                  confirm={`确认禁用「${u.chineseName}」的排名模式 24 小时？`}
-                />
+                <RankBanDialog userId={u.id} name={u.chineseName} sm={false} />
               )}
               {/* 低信任组（2026-10-27 张老师定）：成员资格与后台组列表同源（lib/lowtrust），
                   在组内就是「移出」（弹窗里可选同时解除名下被屏蔽录像的屏蔽）；

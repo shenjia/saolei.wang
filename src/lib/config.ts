@@ -360,6 +360,22 @@ export const BAN_DURATIONS: [string, string, number][] = [
   ["0", "永久", 0],
 ];
 
+/**
+ * 排名模式禁用时长选项（2026-10-29 张老师定）：[key, 文案, 秒]。
+ * 与 BAN_DURATIONS 不同：rank_ban_until 用 0 表示「未禁用」（各闸按 >now 判定），
+ * 「永久」改用远期哨兵 RANK_BAN_PERMANENT 表示，判定逻辑无需感知差异。
+ * 放在纯常量模块：后台弹窗（客户端组件）与 lib/admin/ops.ts（服务端）共用。
+ */
+export const RANK_BAN_DURATIONS: [string, string, number][] = [
+  ["24h", "24小时", 24 * 3600],
+  ["7d", "7天", 7 * 24 * 3600],
+  ["30d", "一个月", 30 * 24 * 3600],
+  ["0", "永久", 0],
+];
+
+/** 排名模式「永久禁用」哨兵：2100-01-01 00:00:00 UTC（0 = 未禁用，见 RANK_BAN_DURATIONS 注释） */
+export const RANK_BAN_PERMANENT = 4102444800;
+
 export const VIDEO_STATUS_NAMES: Record<number, string> = {
   0: "已屏蔽",
   10: "待审核",
