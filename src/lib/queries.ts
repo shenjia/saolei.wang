@@ -16,6 +16,7 @@ import {
   HOME_TOP_NUMBER,
   LEVEL_MAX_3BV,
   LEVEL_MIN_3BV,
+  LEVEL_NAMES,
   MIN_3BV_FOR_3BVS,
   UNREACHABLE_3BV,
   NEWS_FEED_EXCLUDED,
@@ -46,7 +47,7 @@ import {
 } from "./config";
 import { publishNews } from "./news";
 import { rebuildUserRanksOnce } from "./userrank";
-import { decodeLegacyEntities } from "./format";
+import { decodeLegacyEntities, scoreTime, videoCommentNotice } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
@@ -1713,6 +1714,29 @@ export async function addComment(videoId: number, userId: number, content: strin
     const ownerName =
       (await tx.user.findUnique({ where: { id: video?.user ?? BigInt(0) }, select: { chineseName: true } }))
         ?.chineseName ?? "";
+    // 2026-10-29 张老师要求：评论录像给主人发站内信（补移植旧站 Video_Comment_Add
+    // 存储过程的漏网逻辑；新站上线以来通知一直静默）。与动态同守卫：自评不发；
+    // 模板见 format.videoCommentNotice（含 ?comment=#comment- 锚点，删除时按锚点撤回）。
+    // video 为 null（事务内外极小窗口内录像被删）时跳过发信——通知必须有真实收件人
+    if (video) {
+      await tx.message.create({
+        data: {
+          fromUser: BigInt(userId),
+          toUser: video.user,
+          content: videoCommentNotice(
+            videoId,
+            Number(created.id),
+            LEVEL_NAMES[(video.level ?? "") as VideoLevel] ?? String(video.level ?? ""),
+            scoreTime(info?.realTime ?? 0),
+            !!info?.noflag
+          ),
+          isRead: false,
+          isSystem: false,
+          createTime: now,
+          updateTime: now,
+        },
+      });
+    }
     await publishNews({
       tx,
       type: NEWS_TYPE.COMMENT,

@@ -38,6 +38,11 @@ export async function POST(req: Request) {
   }
 
   const vid = BigInt(id);
+  // 2026-10-29：删除前先取评论行（录像没了评论通知变死链，按锚点逐条撤回）
+  const videoComments = await prisma.comment.findMany({
+    where: { video: vid },
+    select: { id: true, user: true },
+  });
   const deleted = await prisma.$transaction(async (tx) => {
     // 删除时再次带本人+状态条件，避免审核状态在查询后发生变化仍被误删。
     const result = await tx.video.deleteMany({
@@ -75,6 +80,12 @@ export async function POST(req: Request) {
   });
   if (!deleted) {
     return NextResponse.json({ ok: false, error: "录像状态已变化，请刷新后重试" }, { status: 409 });
+  }
+
+  // 撤回该录像全部评论通知（2026-10-29；失败仅留死链，不影响删除结果）
+  const { retractVideoCommentNotice } = await import("@/lib/message");
+  for (const c of videoComments) {
+    await retractVideoCommentNotice(Number(c.user), Number(c.id));
   }
 
   console.log(`[self-delete] 玩家 #${session.uid} 自助删除${video.status === VIDEO_STATUS.NORMAL ? "待审" : "屏蔽"}录像 #${id}`);

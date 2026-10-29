@@ -66,6 +66,24 @@ export function decodeLegacyEntities(s: string): string {
  *  写入 message.content；纯函数（不引 ubb/Prisma），客户端列表/详情均可解析渲染 */
 export const MSG_LINK_RE = /\[url\s+(\/[^\s\[\]]+)\]([^\[\]]*?)\[\/url\]/g;
 
+/** 录像评论通知模板（2026-10-29 张老师要求：评论录像给主人发站内信——旧站
+ *  Video_Comment_Add 存储过程有此逻辑，新站移植时漏掉，10 月中旬后通知静默）。
+ *  锚点 ?comment=<cid>#comment-<cid> 与 BBS ?reply=<id>#reply-<id> 同构：
+ *  两段互为完整锚，撤回按整段子串精确匹配（?comment=55 不会误配 #comment-553）。
+ *  迁移期旧模板「我评论了您的高?1.21秒录象!」无链接，不追撤（历史不回改）。 */
+export function videoCommentNotice(
+  videoId: number,
+  commentId: number,
+  levelName: string,
+  timeText: string,
+  noflag: boolean
+): string {
+  return (
+    `我评论了您的录像[url /video/${videoId}?comment=${commentId}#comment-${commentId}]` +
+    `《${levelName}${noflag ? " NF" : ""} ${timeText}秒》[/url]`
+  ).slice(0, 200);
+}
+
 export interface MsgLinkPart {
   text: string;
   href: string;

@@ -88,6 +88,7 @@ export function isReplyNotice(content: string): boolean {
  * 寄件人要么是评论者本人、要么是审核机器人，回复过去没有意义：
  *   · 我评论了你的文章… / 我评论了您的高?1.21秒录象!
  *   · 我回复了你在… / 我回复了您发表的主题"…"
+ *   · 我评论了您的录像[url /video/…（2026-10-29 新模板，见 format.videoCommentNotice）
  *   · 您上传的高级53.36秒录象已经通过审核! / 您上传的高级56秒录像因为【…】被驳回
  *   · 录像文件损坏：原因是…
  */
@@ -272,6 +273,34 @@ export async function retractPostNotices(
     },
   });
   if (res.count > 0) console.log(`[message-retract] 撤主题 #${postId} 通知：${res.count} 条`);
+  return res.count;
+}
+
+/**
+ * 撤回「评论录像」通知（2026-10-29，评论删除/录像删除联动——口径同 retractReplyNotice）。
+ * 锚点格式（见 format.videoCommentNotice）：`?comment=<cid>#comment-<cid>`，
+ * 整段子串精确匹配；三重护栏防误删私信：① from_user 锁发送者=评论者本人
+ * ② 前缀锁新模板「我评论了您的录像」③ 锚点整段匹配。
+ * 旧站迁移的无链接通知（前缀同样以「我评论了您」开头）不带锚点，
+ * contains 匹配不到，天然不会误删——与「不追撤历史」的方针一致。
+ */
+export async function retractVideoCommentNotice(
+  fromUserId: number,
+  commentId: number,
+  tx?: Prisma.TransactionClient
+): Promise<number> {
+  const db = tx ?? prisma;
+  const res = await db.message.deleteMany({
+    where: {
+      fromUser: BigInt(fromUserId),
+      isSystem: false,
+      content: {
+        startsWith: "我评论了您的录像",
+        contains: `?comment=${commentId}#comment-${commentId}`,
+      },
+    },
+  });
+  if (res.count > 0) console.log(`[message-retract] 撤录像评论 #${commentId} 通知：${res.count} 条`);
   return res.count;
 }
 

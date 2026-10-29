@@ -63,7 +63,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: `${score} ${name}的录像` };
 }
 
-export default async function VideoViewPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function VideoViewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const videoId = parseInt(id, 10);
   if (!videoId) notFound();
@@ -80,6 +86,8 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
   }
   // 2026-10-22：先取 session 再取评论——本人待审行（status=5）按 viewerUid 放行
   const session = await getSession();
+  // ?comment= 深链锚点（2026-10-29 消息通知落地，评论区渐进定位该评论）
+  const anchorComment = parseInt((await searchParams).comment ?? "", 10) || 0;
   const [comments, commentTotal] = await Promise.all([
     getComments(videoId, 0, COMMENT_TOP_NUMBER, session?.uid ?? null),
     // 评论总数（「加载更多」括号内剩余条数口径，按实际行数而非 video_stat 冗余计数）
@@ -232,6 +240,7 @@ export default async function VideoViewPage({ params }: { params: Promise<{ id: 
           initial={comments}
           initialHasMore={comments.length < commentTotal}
           initialTotal={commentTotal}
+          anchorComment={anchorComment}
         />
       </li>
       <li className="sidebar">

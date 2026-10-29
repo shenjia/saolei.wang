@@ -14,7 +14,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMENT_CONTENT_LIMIT, COMMENT_PAGESIZE } from "@/lib/config";
 import { timeOpposite, TIME_MONTH } from "@/lib/format";
@@ -51,13 +51,14 @@ export function CommentCell({
   onDelete?: (c: CommentItem) => void;
 }) {
   return (
-    <div className="comment_cell box">
+    <div className="comment_cell box" id={`comment-${comment.id}`}>
       <p className="meta">
         {comment.author && (
           <>
             <AvatarCell
               id={comment.author.id}
               name={comment.author.chineseName}
+              englishName={comment.author.englishName}
               sex={comment.author.sex}
               className="author"
               gender="small"
@@ -233,6 +234,7 @@ export function CommentSection({
   initial,
   initialHasMore,
   initialTotal,
+  anchorComment = 0,
 }: {
   videoId: number;
   /** 录像上传者 uid（0=异常兑底；用于判定「录像作者删别人评论」权限） */
@@ -244,6 +246,8 @@ export function CommentSection({
   initial: CommentItem[];
   initialHasMore: boolean;
   initialTotal: number;
+  /** ?comment= 深链定位的评论 id（0=无；消息通知「我评论了您的录像…」落地用） */
+  anchorComment?: number;
 }) {
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(initial.length ? initial[initial.length - 1].id : 0);
@@ -254,21 +258,80 @@ export function CommentSection({
   const [deletingId, setDeletingId] = useState(0); // 正在删除的评论 id（驱动行内按钮禁用态）
   const router = useRouter();
 
+  // 渐进定位链专用 ref（2026-10-29）：setTimeout 链式调 loadMore 时闭包里是旧 state，
+  // 用 ref 镜像最新值（batchStep/cursor/hasMore），链与按钮两条路共用同一 loadMore
+  const batchStepRef = useRef(0);
+  const cursorRef = useRef(cursor);
+  const hasMoreRef = useRef(initialHasMore);
+  const anchorPending = useRef(0);
+  const loadingRef = useRef(false);
+  batchStepRef.current = batchStep;
+  cursorRef.current = cursor;
+  hasMoreRef.current = hasMore;
+
+  // 定位到锚点评论：滚到目标行 + 高亮动画（BBS reply_anchor_hit 同款，零新增 CSS）
+  function scrollToAnchor(cid: number) {
+    const el = document.getElementById(`comment-${cid}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("reply_anchor_hit");
+      setTimeout(() => el.classList.remove("reply_anchor_hit"), 2000);
+      return true;
+    }
+    return false;
+  }
+
   async function loadMore() {
+    if (loadingRef.current) return; // 渐进链与手点按钮互斥
+    loadingRef.current = true;
     setLoading(true);
     try {
-      const size = nextBatchSize(batchStep, COMMENT_PAGESIZE);
-      const res = await fetch(`/api/comment/more?video=${videoId}&cursor=${cursor}&size=${size}`);
+      const size = nextBatchSize(batchStepRef.current, COMMENT_PAGESIZE);
+      const res = await fetch(`/api/comment/more?video=${videoId}&cursor=${cursorRef.current}&size=${size}`);
       const data = (await res.json()) as { items: CommentItem[]; cursor: number; count: number; total: number };
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
       setBatchStep((s) => s + 1);
+      batchStepRef.current += 1; // 链式路径不等 re-render，直接同步 ref
+      cursorRef.current = data.cursor;
       if (typeof data.total === "number") setTotal(data.total);
-      if (data.count < size) setHasMore(false);
+      if (data.count < size) {
+        setHasMore(false);
+        hasMoreRef.current = false;
+        anchorPending.current = 0; // 全部加载完仍未命中（目标已删）：静默落回
+        return;
+      }
+      // 渐进定位（2026-10-29）：本批含锚点目标 → 滚动高亮并结束；
+      // 未含 → 链式加载下一批（rAF 等 DOM 挂载后再滚/再拉）
+      const target = anchorPending.current;
+      if (target) {
+        if (data.items.some((c) => c.id === target)) {
+          anchorPending.current = 0;
+          requestAnimationFrame(() => scrollToAnchor(target));
+        } else {
+          requestAnimationFrame(() => void loadMore());
+        }
+      }
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }
+
+  // ?comment= 深链（2026-10-29 消息通知落地）：列表 id 倒序、旧评论在后面——
+  // 首屏命中直接定位；未命中且还有未加载批时自动「加载更多」直到命中或加载完
+  // （渐进定位，不加新接口）；目标已删/被吞则静默落回评论区头部（链接仍落在正确录像页）
+  useEffect(() => {
+    if (!anchorComment) return;
+    if (initial.some((c) => c.id === anchorComment)) {
+      requestAnimationFrame(() => scrollToAnchor(anchorComment));
+      return;
+    }
+    if (!hasMoreRef.current) return;
+    anchorPending.current = anchorComment;
+    requestAnimationFrame(() => void loadMore());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** 发表成功后就地插入：新评论 id 最大、插到列表头；total+1 */
   function onPosted(item: CommentItem) {

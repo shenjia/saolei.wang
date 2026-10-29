@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { countsInTotal, COMMENT_STATUS, NEWS_TYPE, isManager } from "@/lib/config";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
+import { retractVideoCommentNotice } from "@/lib/message";
 import { logAdmin } from "@/lib/admin/log";
 import { clientIp } from "@/lib/stat";
 
@@ -75,6 +76,9 @@ export async function POST(req: Request) {
         detailsData: { contains: `"cid":${id}}` },
       },
     });
+    // 2026-10-29：同步撤回发给录像主人的评论通知（口径同 BBS 删回复撤 retractReplyNotice；
+    // 旧站迁移的无锚点通知匹配不到，天然不误删）
+    await retractVideoCommentNotice(Number(row.user), id, tx);
   });
 
   // 留痕：管理员删除写 admin_log（玩家自助删除不写；身份区分进 detail 文案）

@@ -18,7 +18,7 @@ import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
 import { reviewVideo } from "@/lib/review";
 import { banUntilFromKey, unbanUser } from "@/lib/ban";
-import { broadcast, sendSystemMessage, retractReplyNotice, retractPostNotices } from "@/lib/message";
+import { broadcast, sendSystemMessage, retractReplyNotice, retractPostNotices, retractVideoCommentNotice } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
 import { rankLeave, safeRankOp } from "@/lib/userrank";
 import { setMaintenance } from "@/lib/maintenance";
@@ -586,6 +586,12 @@ async function dispatch(
         if (!r.ok) return { ok: false, error: `成绩回退失败：${r.error}` };
       }
       const vid = BigInt(id);
+      // 2026-10-29：物理删录像前先取评论行——录像删除后评论通知链接变死链，
+      // 通知要按 (评论者, 评论id) 逐条撤回（锚点 ?comment=<cid>）
+      const videoComments = await prisma.comment.findMany({
+        where: { video: vid },
+        select: { id: true, user: true },
+      });
       await prisma.$transaction([
         prisma.video.delete({ where: { id: vid } }),
         prisma.videoInfo.deleteMany({ where: { id: vid } }),
@@ -594,6 +600,10 @@ async function dispatch(
         // 引用该录像的动态一并删除，避免详情页出现悬空链接
         prisma.news.deleteMany({ where: { reference: vid } }),
       ]);
+      // 数组事务外逐条撤通知（物理删极少发生；失败仅留死链，不影响主流程）
+      for (const c of videoComments) {
+        await retractVideoCommentNotice(N(c.user), N(c.id));
+      }
       return { ok: true, message: `彻底删除录像 #${id}（含解析信息 / 评论 / 引用动态）` };
     }
 
@@ -630,6 +640,8 @@ async function dispatch(
               detailsData: { contains: `"cid":${id}}` },
             },
           });
+          // 2026-10-29：删除态联动撤回录像评论通知（口径同前台 comment/delete）
+          await retractVideoCommentNotice(N(row.user), id, tx);
         } else if (status === 0 && row.status !== 0) {
           const exists = await tx.news.findFirst({
             where: {
