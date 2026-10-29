@@ -16,13 +16,13 @@ export default function DonatePage() {
           <div className="pay_card wechat">
             <div className="pay_name">微信收款</div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/images/donate/wechat-qr.jpg" alt="微信收款码" width={210} height={210} />
+            <img src="/images/donate/wechat-qr.png" alt="微信收款码" width={210} height={210} />
             <div className="pay_hint">微信「扫一扫」即可赞助</div>
           </div>
           <div className="pay_card alipay">
             <div className="pay_name">支付宝收款</div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/images/donate/alipay-qr.jpg" alt="支付宝收款码" width={210} height={210} />
+            <img src="/images/donate/alipay-qr.png" alt="支付宝收款码" width={210} height={210} />
             <div className="pay_hint">支付宝「扫一扫」即可赞助</div>
           </div>
         </div>
