@@ -2239,7 +2239,7 @@ async function getTeamImpl(): Promise<TeamMember[]> {
   // 索引、改走 (status,…) 索引扫 30.8 万行且不覆盖 review_user（生产 1~3.5s/次）——
   // 改手写 SQL + FORCE INDEX 钉死覆盖索引（9 个区间 range 扫，毫秒级）
   const counts = await prisma.$queryRawUnsafe<{ review_user: bigint; c: bigint }[]>(
-    `SELECT review_user, COUNT(*) c FROM video
+    `SELECT review_user, COUNT(*) c FROM video FORCE INDEX (video_review_user_status_idx)
      WHERE review_user IN (${auths.map((a) => a.id).join(",")}) AND status = ${VIDEO_STATUS.REVIEWED}
      GROUP BY review_user`,
   );
