@@ -295,6 +295,20 @@ function newsStageFilter(stage: FeedStage): Prisma.NewsWhereInput | null {
 }
 
 /**
+ * 阶段筛选展开片段（getNews / getNewsPage / getNewsCount 三处共用）：
+ * ① 档位条件（newsStageFilter）包进 AND——直接顶层 spread 带 type 键会覆盖
+ *   feedTypeFilter 的 type 口径（in NEWS_HOME_TYPES），Prisma 顶层同键后者胜；
+ * ② 「当选每日一星」动态（STAR=54，2026-10-29 张老师定）只进「全部」tab，
+ *   任何阶段档（将帅/校尉/士兵/神界/人界）一律排除——当选动态与成绩分档无关，
+ *   混进档位列表会打断「按军衔看成绩」的阅读预期。「全部」返回 null 不过滤。
+ */
+function stageWhereCond(stage: FeedStage): Prisma.NewsWhereInput | null {
+  const cond = newsStageFilter(stage);
+  if (!cond) return null;
+  return { AND: [cond, { type: { not: NEWS_TYPE.STAR } }] };
+}
+
+/**
  * 动态流类型口径（getNews / getNewsPage / getNewsCount 三处必须共用，保证行集与计数一致）：
  * ① 显式 type / types（后台、论坛 tab）各自成口径，不叠加；
  * ② home 口径见 homeNewsTypeFilter（已排除评论等非首页类型）；
@@ -371,12 +385,12 @@ export async function getNews(opts: {
     });
     cursorTime = anchor?.createTime;
   }
-  const stageCond = opts.stage ? newsStageFilter(opts.stage) : null;
+  const stageCond = opts.stage ? stageWhereCond(opts.stage) : null;
   const where = {
     // 类型口径统一由 feedTypeFilter 决定（含级别筛选只认成绩类，2026-10-27）
     ...feedTypeFilter(opts),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    // 首页阶段筛选（2026-10-29）：与类型/游标条件并列进 AND
+    // 首页阶段筛选（2026-10-29）：与类型/游标条件并列进 AND（含 STAR 排除，见 stageWhereCond）
     ...(stageCond ?? {}),
     // keyset 游标与级别筛选都是 OR 组，必须并列进 AND——曾因两者都写成顶层 OR
     // 而在「cursor + level」组合下后者覆盖前者（级别筛选静默失效）
@@ -505,7 +519,7 @@ export async function getNewsPage(opts: {
     // 与 getNews 同一口径（含级别筛选只认成绩类，2026-10-27）
     ...feedTypeFilter(opts),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    ...(opts.stage ? (newsStageFilter(opts.stage) ?? {}) : {}),
+    ...(opts.stage ? (stageWhereCond(opts.stage) ?? {}) : {}),
     ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
   };
   const idRows = await prisma.news.findMany({
@@ -571,7 +585,7 @@ async function getNewsCountImpl(opts: {
       // 否则剩余条数 / 翻页条总页数会与实际行集对不上
       ...feedTypeFilter(opts),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-      ...(opts.stage ? (newsStageFilter(opts.stage) ?? {}) : {}),
+      ...(opts.stage ? (stageWhereCond(opts.stage) ?? {}) : {}),
       ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
     },
   });
@@ -582,13 +596,14 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  // v8：2026-10-29 阶段档排除「当选每日一星」动态（STAR 只进「全部」tab，张老师定）。
   // v7：2026-10-29 首页阶段筛选（stage 维度并入键空间：home×stage 5 档，有界）。
   // v6：2026-10-27 级别筛选收窄为「成绩类动态」（录像评论的 lv 不再命中级别 tab）。
   // v5：2026-10-26 home 口径扩「预备役破纪录一律不进首页」（exp_time/ranked=0 并入排除）。
   // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
-  ["news-count-v7"],
+  ["news-count-v8"],
   { revalidate: 300 }
 );
 
