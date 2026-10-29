@@ -8573,17 +8573,16 @@ button.msg_cancel:hover {
 #online_play .op_ping[data-lv="g"] .ms { color: #a6e22e; }
 #online_play .op_ping[data-lv="y"] .ms { color: #fdc61d; }
 #online_play .op_ping[data-lv="r"] .ms { color: #f92672; }
-/* 服务器切换气泡（2026-10-29 张老师需求）：延迟图标可点击——hover 列出全部
-   服务器（当前节点排第一，金色 #ffd700 + 绿对号下标 sub；其余节点按每秒
-   探测的延迟级别定色，阈值同信号条 35/70，未测出灰）。点击＝断开当前连接
-   切到队列下一个服务器 */
-#online_play .op_ping { cursor: pointer; }
-#online_play .op_ping .tip .sv_cur { color: #ffd700; font-weight: bold; }
+/* 排名服务器气泡（2026-10-29 张老师二轮定）：信号图标不可点（cursor 恢复
+   default）；气泡列出全部逻辑服务器——前缀「排名服务器：」暗灰，当前连接
+   节点绿色 + 绿对号下标排第一，其余节点亮灰、hover 变绿提示可点；
+   点击服务器名＝断开当前连接切到该服务器（tip 须放行 pointer-events） */
+#online_play .op_ping .tip { pointer-events: auto; }
+#online_play .op_ping .tip .sv_lead { color: #8a887b; }
+#online_play .op_ping .tip .sv_cur { color: #a6e22e; }
 #online_play .op_ping .tip .sv_ok { color: #a6e22e; font-weight: normal; }
-#online_play .op_ping .tip .sv_g { color: #a6e22e; }
-#online_play .op_ping .tip .sv_y { color: #fdc61d; }
-#online_play .op_ping .tip .sv_r { color: #f92672; }
-#online_play .op_ping .tip .sv_na { color: #8a887b; }
+#online_play .op_ping .tip .sv { color: #b0aea1; cursor: pointer; }
+#online_play .op_ping .tip .sv:hover { color: #a6e22e; }
 /* ---- 设置浮窗（2026-10-14 二期）：齿轮点开，绝对定位挂在标题行下缘右侧 ---- */
 #online_play .gsettings {
   display: none;
