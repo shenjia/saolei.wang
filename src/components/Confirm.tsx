@@ -36,10 +36,18 @@ export type ConfirmOptions = {
     /** 初始勾选态，默认不勾 */
     defaultChecked?: boolean;
   };
+  /** 多勾选框版（2026-10-29 屏蔽录像弹窗：低信任分流 + 批量屏蔽未审录像两个勾选并存）；
+   *  结果经 confirmDialogChecked 的 checks 按 key 取。与 checkbox 互斥，同时传时 checkboxes 优先 */
+  checkboxes?: {
+    key: string;
+    label: React.ReactNode;
+    defaultChecked?: boolean;
+  }[];
 };
 
-/** confirmDialogChecked 的返回：ok=确认/取消；checked=勾选框最终状态（无勾选框恒为 defaultChecked??false） */
-export type ConfirmCheckedResult = { ok: boolean; checked: boolean };
+/** confirmDialogChecked 的返回：ok=确认/取消；checked=单勾选框最终状态（旧字段，无勾选框恒 false）；
+ *  checks=多勾选框按 key 的最终状态（2026-10-29） */
+export type ConfirmCheckedResult = { ok: boolean; checked: boolean; checks: Record<string, boolean> };
 
 type Pending = { options: ConfirmOptions; resolve: (r: ConfirmCheckedResult) => void };
 
@@ -60,7 +68,7 @@ export function confirmDialogChecked(options: ConfirmOptions): Promise<ConfirmCh
     let tries = 0;
     const tick = () => {
       if (emit) return resolve(emit(options));
-      if (++tries > 10) return resolve({ ok: false, checked: options.checkbox?.defaultChecked ?? false });
+      if (++tries > 10) return resolve({ ok: false, checked: options.checkbox?.defaultChecked ?? false, checks: {} });
       setTimeout(tick, 30);
     };
     tick();
@@ -71,8 +79,9 @@ export function ConfirmHost() {
   const [queue, setQueue] = useState<Pending[]>([]);
   const current = queue[0];
   const confirmRef = useRef<HTMLButtonElement>(null);
-  /** 当前弹窗勾选框状态（无勾选框为 undefined；每条队列项打开时初始化，2026-10-28） */
-  const [checked, setChecked] = useState<boolean | undefined>(undefined);
+  /** 当前弹窗各勾选框状态（key → 勾选态；无勾选框为 undefined；每条队列项打开时初始化，2026-10-28）
+   *  2026-10-29 起改为 Record 以支持多勾选框（旧单勾选框内部归一化为 key=""） */
+  const [checks, setChecks] = useState<Record<string, boolean> | undefined>(undefined);
 
   useEffect(() => {
     emit = (options) =>
@@ -86,15 +95,25 @@ export function ConfirmHost() {
 
   function finish(ok: boolean) {
     if (!current) return;
-    current.resolve({ ok, checked: checked ?? current.options.checkbox?.defaultChecked ?? false });
+    current.resolve({
+      ok,
+      checked: checks?.[""] ?? current.options.checkbox?.defaultChecked ?? false,
+      checks: checks ?? {},
+    });
     setQueue((q) => q.slice(1));
-    setChecked(undefined);
+    setChecks(undefined);
   }
 
   // 打开时锁页面滚动 + ESC 取消 + 确认键聚焦 + 勾选框初始化
   useEffect(() => {
     if (!current) return;
-    setChecked(current.options.checkbox ? (current.options.checkbox.defaultChecked ?? false) : undefined);
+    if (current.options.checkboxes) {
+      setChecks(Object.fromEntries(current.options.checkboxes.map((c) => [c.key, c.defaultChecked ?? false])));
+    } else if (current.options.checkbox) {
+      setChecks({ "": current.options.checkbox.defaultChecked ?? false });
+    } else {
+      setChecks(undefined);
+    }
     document.body.style.overflow = "hidden";
     confirmRef.current?.focus();
     function onKey(e: KeyboardEvent) {
@@ -110,6 +129,10 @@ export function ConfirmHost() {
 
   if (!current) return null;
   const o = current.options;
+  /** 渲染用勾选框列表：checkboxes 优先，旧单 checkbox 归一化为 key="" */
+  const boxes =
+    o.checkboxes ??
+    (o.checkbox ? [{ key: "", label: o.checkbox.label, defaultChecked: o.checkbox.defaultChecked }] : []);
 
   return (
     <div className="confirm_overlay" onClick={() => finish(false)}>
@@ -131,16 +154,16 @@ export function ConfirmHost() {
         <h1>{o.title}</h1>
         <p className="confirm_desc">{o.message}</p>
         {o.content && <div className="confirm_content">{o.content}</div>}
-        {o.checkbox && (
-          <label className="ban_check confirm_check">
+        {boxes.map((c) => (
+          <label key={c.key} className="ban_check confirm_check">
             <input
               type="checkbox"
-              checked={checked ?? false}
-              onChange={(e) => setChecked(e.target.checked)}
+              checked={checks?.[c.key] ?? false}
+              onChange={(e) => setChecks((prev) => ({ ...(prev ?? {}), [c.key]: e.target.checked }))}
             />
-            <span>{o.checkbox.label}</span>
+            <span>{c.label}</span>
           </label>
-        )}
+        ))}
         <div className={`confirm_ops${o.centerActions ? " centered" : ""}`}>
           <button type="button" className="button small" onClick={() => finish(false)}>
             {o.cancelText ?? "取消"}

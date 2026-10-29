@@ -150,8 +150,11 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
 }
 
 /** 屏蔽按钮（2026-10-28 张老师需求：录像处理与人处理分开）——
- *  弹通用确认浮窗 + 「同时将上传者加入低信任用户组」勾选（默认勾选），
- *  勾选态随 lowTrust 参数传 video.review，服务端分流（勾＝屏蔽史自然入组；不勾＝写豁免不入组）。 */
+ *  弹通用确认浮窗 + 两个勾选（2026-10-29 起均默认不勾）：
+ *  ①「同时将上传者加入低信任用户组」——勾选态随 lowTrust 参数传 video.review，
+ *    服务端分流（勾＝屏蔽史自然入组；不勾＝写豁免不入组）；
+ *  ②「批量屏蔽该用户所有未审核录像」——勾选后服务端对该用户全部待审录像
+ *    批量屏蔽（banUserPending），跳过防盲审、无需逐盘观看。 */
 function BanVideoButton({ v }: { v: AdminVideoRow }) {
   const { run, busy } = useOp();
   return (
@@ -160,22 +163,37 @@ function BanVideoButton({ v }: { v: AdminVideoRow }) {
       className="admin_btn danger sm"
       disabled={busy}
       onClick={async () => {
-        const { ok, checked } = await confirmDialogChecked({
+        const { ok, checks } = await confirmDialogChecked({
           title: "屏蔽录像",
           message: `确认屏蔽录像 #${v.id}？该录像对应的最好成绩会被回退。`,
           danger: true,
           confirmText: "确认屏蔽",
-          checkbox: {
-            label: (
-              <>
-                同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
-              </>
-            ),
-            defaultChecked: true,
-          },
+          checkboxes: [
+            {
+              key: "lowTrust",
+              label: (
+                <>
+                  同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
+                </>
+              ),
+            },
+            {
+              key: "banUserPending",
+              label: (
+                <>
+                  批量屏蔽该用户<b>所有未审核录像</b>（无需观看）
+                </>
+              ),
+            },
+          ],
         });
         if (!ok) return;
-        await run("video.review", { id: v.id, status: VIDEO_STATUS.BANNED, lowTrust: checked });
+        await run("video.review", {
+          id: v.id,
+          status: VIDEO_STATUS.BANNED,
+          lowTrust: checks.lowTrust ?? false,
+          banUserPending: checks.banUserPending ?? false,
+        });
       }}
     >
       {busy ? "…" : "屏蔽"}

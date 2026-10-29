@@ -477,9 +477,43 @@ async function dispatch(
         return { ok: false, error: "参数错误：非法状态" };
       }
       // 屏蔽 → 低信任分流（2026-10-28 张老师需求：录像处理与人处理分开）。
-      // 前端屏蔽弹窗带「是否将上传者加入低信任用户组」勾选（默认勾选）：
+      // 前端屏蔽弹窗带「是否将上传者加入低信任用户组」勾选（2026-10-29 起默认不勾）：
       // 未传 lowTrust（脚本/内部路径）时维持旧行为（屏蔽史自动入组，从严）。
       const lowTrustParam = status === VIDEO_STATUS.BANNED && "lowTrust" in p ? toBool(p.lowTrust) : null;
+      // 批量屏蔽该用户全部未审录像（2026-10-29 张老师需求）：选中后本次屏蔽 =
+      // 对上传者名下全部待审录像（status=10，含当前这条）批量执行，全部跳过防盲审
+      //（批量处置不再要求逐盘观看）。低信任勾选对整个用户只做一次 pre/post 分流。
+      const banUserPending = status === VIDEO_STATUS.BANNED && "banUserPending" in p && toBool(p.banUserPending);
+      if (banUserPending) {
+        const self = await prisma.video.findUnique({
+          where: { id: BigInt(id) },
+          select: { user: true },
+        });
+        if (!self) return { ok: false, error: "录像不存在" };
+        const uid = N(self.user);
+        const pre = lowTrustParam !== null ? await preBanTrustUser(uid) : null;
+        // 当前这条 + 名下其余全部待审（已通过/已屏蔽的不动）
+        const rest = await prisma.video.findMany({
+          where: { user: BigInt(uid), status: VIDEO_STATUS.NORMAL, id: { not: BigInt(id) } },
+          select: { id: true },
+          orderBy: { id: "asc" },
+        });
+        const targets = [id, ...rest.map((r) => Number(r.id))];
+        let done = 0;
+        const errors: string[] = [];
+        for (const vid of targets) {
+          const r = await reviewVideo(actor.uid, actor.role, vid, status, { skipWatchCheck: true });
+          if (r.ok) done++;
+          else errors.push(`#${vid}: ${r.error}`);
+        }
+        if (!done) return { ok: false, error: errors[0] ?? "全部失败" };
+        const { note } =
+          lowTrustParam !== null ? await postBanTrust(pre, lowTrustParam) : { note: "" };
+        return {
+          ok: true,
+          message: `已批量屏蔽 ${done}/${targets.length} 条未审录像${errors.length ? `（${errors.length} 条失败：${errors[0]}）` : ""}${note}`,
+        };
+      }
       const pre = lowTrustParam !== null ? await preBanTrust(id) : null;
       const r = await reviewVideo(actor.uid, actor.role, id, status);
       if (!r.ok) return { ok: false, error: r.error ?? "审核失败" };
@@ -1092,7 +1126,7 @@ const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
 /* ---------- 屏蔽 → 低信任分流（2026-10-28 张老师需求：录像处理与人处理分开） ----------
  *
- * 后台屏蔽录像弹窗新增「是否将上传者加入低信任用户组」勾选（默认勾选）：
+ * 后台屏蔽录像弹窗新增「是否将上传者加入低信任用户组」勾选（2026-10-29 起默认不勾）：
  * · 勾选 → 屏蔽史自然生效，上传者经 lowtrust.ts 既有推导自动入组（零写入，列表可溯源）；
  * · 不勾 → 屏蔽完成后写 low_trust_exempt=now，把「时刻早于本次屏蔽」的屏蔽史整体豁免，
  *   上传者不进组。判定端（lib/lowtrust.ts / 分拣 / 上传限流）零改动——豁免就是既有

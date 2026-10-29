@@ -175,8 +175,8 @@ export function AdminReviewList({
   const [allMode, setAllMode] = useState(pool === "exempt");
   /** 屏蔽气泡确认（应用内弹窗，不用浏览器模态） */
   const [banConfirm, setBanConfirm] = useState<"page" | "all" | null>(null);
-  /** 批量屏蔽 → 低信任分流勾选（2026-10-28 张老师需求，默认勾选；单条屏蔽走 confirmDialogChecked） */
-  const [banLowTrust, setBanLowTrust] = useState(true);
+  /** 批量屏蔽 → 低信任分流勾选（2026-10-28 张老师需求；2026-10-29 起默认不勾；单条屏蔽走 confirmDialogChecked） */
+  const [banLowTrust, setBanLowTrust] = useState(false);
   /** 全屏回放播放器（2026-10-19 张老师需求：点时间列弹层看录像） */
   const [playTarget, setPlayTarget] = useState<AdminPlayerTarget | null>(null);
 
@@ -330,7 +330,7 @@ export function AdminReviewList({
   };
   // 批量屏蔽：应用内气泡确认（不用 window.confirm 模态）
   const batchBanAsk = () => {
-    setBanLowTrust(true); // 每次打开重置默认勾选
+    setBanLowTrust(false); // 每次打开重置默认勾选（2026-10-29 起默认不勾）
     setBanConfirm(allMode ? "all" : "page");
   };
   const batchBanDo = () => {
@@ -616,27 +616,39 @@ function ReviewRow({
             className="admin_btn danger sm"
             disabled={busy}
             onClick={async () => {
-              // 屏蔽 + 低信任分流确认（2026-10-28 张老师需求）：勾选默认开——
-              // 确认后一并把上传者纳入低信任组；不勾则只屏蔽录像、不动用户
-              const { ok, checked } = await confirmDialogChecked({
+              // 屏蔽 + 低信任分流确认（2026-10-28 张老师需求）：2026-10-29 起默认不勾——
+              // 确认后勾选才把上传者纳入低信任组；另加「批量屏蔽该用户所有未审核录像」勾选
+              //（选中后服务端对其名下全部待审录像批量屏蔽，无需逐盘观看）。
+              const { ok, checks } = await confirmDialogChecked({
                 title: "屏蔽录像",
                 message: `确认屏蔽录像 #${v.id}？对应最好成绩会被回退。`,
                 danger: true,
                 confirmText: "确认屏蔽",
-                  checkbox: {
+                checkboxes: [
+                  {
+                    key: "lowTrust",
                     label: (
                       <>
                         同时将 <b>{v.author?.chineseName ?? `#${v.user}`}</b> 加入低信任用户组
                       </>
                     ),
-                    defaultChecked: true,
                   },
+                  {
+                    key: "banUserPending",
+                    label: (
+                      <>
+                        批量屏蔽该用户<b>所有未审核录像</b>（无需观看）
+                      </>
+                    ),
+                  },
+                ],
               });
               if (!ok) return;
               const done = await run("video.review", {
                 id: v.id,
                 status: VIDEO_STATUS.BANNED,
-                lowTrust: checked,
+                lowTrust: checks.lowTrust ?? false,
+                banUserPending: checks.banUserPending ?? false,
               });
               if (done) onRemoved();
             }}
