@@ -8525,10 +8525,10 @@ button.msg_cancel:hover {
   display: block;
 }
 /* 排行禁用倒计时（2026-10-29 张老师定）：排行钮 hover 气泡禁用文案里
-   ≤24h 的 HH:MM:SS 段用站点标准红（同 .button.danger #e60657）；>1 天
-   只显天数，不带该 span、走常规气泡色 */
+   ≤24h 的 HH:MM:SS 段用亮玫红 #ff0080（15:40 张老师指正 #e60657 太暗）；
+   >1 天只显天数，不带该 span、走常规气泡色 */
 #online_play .gicon .tip .tip_ban_cd {
-  color: #e60657;
+  color: #ff0080;
 }
 /* 窄屏（≤880，与站内移动端断点一致）兜底：按钮贴近视口右缘，居中弹会被裁出屏
    （实测 700px 宽全屏钮溢出 11px）→ 改贴按钮右缘向左展开，保完整可见 */
