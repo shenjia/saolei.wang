@@ -1677,19 +1677,35 @@ a.avatar_link:hover .pt_bubble,
 /* 录像详情页正文区（作者/审核员）双层裁剪修复（2026-10-29 线上报障）：
    legacy #video_view .video_cell p 是单行省略块（overflow:hidden，气泡无论
    往哪弹都出不了 p），.video_cell 自身还有 overflow:hidden（防棋盘溢出，
-   必须保留）。改法：.info 两段 p 放开裁剪；气泡照全站惯例向上弹
-   （弹起后仍落在格子内部不会被裁），仅左缘与锚对齐——居中弹会被格子
-   左缘裁掉一截（2026-10-29 15:3x 张老师指正：应向上弹） */
+   必须保留）。改法：.info 两段 p 放开裁剪。 */
 #video_view .video_cell .info p {
   overflow: visible;
 }
-#video_view .video_cell .info .pt_bubble {
-  left: 0;
-  transform: none;
-  transition: opacity 0.08s;
+/* 气泡对齐（2026-10-29 16:1x 张老师要求与全站一致居中）：作者/审核员名贴
+   格子内容区左缘，居中弹左缘会超出 .video_cell 盒 40~90px 被裁——
+   ≥1189 桌面端把格子 overflow:hidden 升级为 clip + 96px 外扩裁剪边
+   （棋盘裁剪语义不变，最长英文名气泡也能完整显示）；≤1188 因格子是
+   overflow-x:auto 滚动容器无法外扩，维持左对齐防裁 */
+@media (max-width: 1188px) {
+  #video_view .video_cell .info .pt_bubble {
+    left: 0;
+    transform: none;
+    transition: opacity 0.08s;
+  }
+  #video_view .video_cell .info a:hover .pt_bubble {
+    transform: none;
+  }
 }
-#video_view .video_cell .info a:hover .pt_bubble {
-  transform: none;
+@media (min-width: 1189px) {
+  @supports (overflow-clip-margin: 0px) {
+    body #video_view .video_cell {
+      overflow: clip;
+      overflow-clip-margin: 96px;
+      /* ⚠️ overflow:clip 不像 hidden 那样建立 BFC（dev 实测：.info 浮动逃逸、
+         评论区上滑叠进棋盘），flow-root 显式补回浮动包含 */
+      display: flow-root;
+    }
+  }
 }
 .bbs_star::after,
 .bbs_top::after {
