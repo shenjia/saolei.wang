@@ -764,7 +764,7 @@ function runPlayGame(opts: {
   /** 模式开关即时值（二十一期：NF/速旗/连击，与练习页 online_play_settings 同一份；
       引擎每事件入口现读——React 切换即时生效，无需重建引擎（速旗/连击只改行为）。
       2026-10-29 增 leftDbl（左键双击，练习页同款独立开关；速旗收窄为仅右键） */
-  getModes: () => { nf: boolean; quickFlag: boolean; combo: boolean; leftDbl: boolean };
+  getModes: () => { nf: boolean; quickFlag: boolean; combo: boolean; leftDbl: boolean; holdFlag: boolean; holdDelay: number };
   /** 级别（连击开局保护窗时长按级别：初级 0 / 中级 250ms / 高级 500ms，练习页同口径） */
   level: VideoLevel;
   /** NF 模式下右键被拦时的反馈（抖 NF 钮，练习页 shakeModeBtn 同款入口） */
@@ -1343,8 +1343,14 @@ function runPlayGame(opts: {
     touchLastX = bp0.x;
     touchLastY = bp0.y;
     onFace("ooh");
-    /* 连击开：触点不即开（让位长按插旗），点按在 touchend 开、滑动在 touchmove 连开 */
+    /* 连击开：触点不即开（让位长按插旗），点按在 touchend 开、滑动在 touchmove 连开。
+       长按标雷（2026-10-29 练习页口径同步）：m.holdFlag 关＝长按零动作不挂定时器，
+       时长＝m.holdDelay（100-400ms） */
     if (getModes().combo) return;
+    if (!getModes().holdFlag) {
+      touchTimer = null;
+      return;
+    }
     touchTimer = window.setTimeout(() => {
       if (over || touchCell < 0) return;
       const m = getModes();
@@ -1357,7 +1363,7 @@ function runPlayGame(opts: {
       toggleFlag(touchCell);
       pressPaint(touchCell);
       if (m.quickFlag && state[touchCell] === 2) quickChordAround(touchCell);
-    }, 150);
+    }, getModes().holdDelay);
   });
   on<TouchEvent>(boardDiv, "touchmove", (e) => {
     const t = e.changedTouches[0];
@@ -2279,13 +2285,15 @@ export function ReplayFullscreen({
      级别更重，别让试玩的临时偏好污染它）。NF 与速旗互斥（练习页 2026-10-16 口径）。
      ⚠️ localStorage 读取放 lazy 初始化器（react-hooks/set-state-in-effect 禁止
      effect 体内同步 setState；SSR 下 localStorage 不存在须 typeof 守卫） */
-  const readInitModes = (): { nf: boolean; qf: boolean; combo: boolean; ld: boolean } => {
-    if (typeof document === "undefined") return { nf: false, qf: false, combo: false, ld: false };
-    const read = (s: { nf?: boolean; combo?: boolean; autoChord?: boolean; leftDbl?: boolean }) => ({
+  const readInitModes = (): { nf: boolean; qf: boolean; combo: boolean; ld: boolean; hf: boolean; hd: number } => {
+    if (typeof document === "undefined") return { nf: false, qf: false, combo: false, ld: false, hf: false, hd: 150 };
+    const read = (s: { nf?: boolean; combo?: boolean; autoChord?: boolean; leftDbl?: boolean; holdFlag?: boolean; holdDelay?: number }) => ({
       nf: typeof s.nf === "boolean" ? s.nf : false,
       qf: typeof s.autoChord === "boolean" ? s.autoChord : false,
       combo: typeof s.combo === "boolean" ? s.combo : false,
       ld: typeof s.leftDbl === "boolean" ? s.leftDbl : false,
+      hf: typeof s.holdFlag === "boolean" ? s.holdFlag : false,
+      hd: typeof s.holdDelay === "number" && Number.isFinite(s.holdDelay) ? Math.max(100, Math.min(400, Math.round(s.holdDelay))) : 150,
     });
     try {
       /* 优先级：试玩自己的存档 > 练习页设置（首次试玩继承）> 全关 */
@@ -2296,13 +2304,17 @@ export function ReplayFullscreen({
     } catch {
       /* 隐私模式/脏数据：全关 */
     }
-    return { nf: false, qf: false, combo: false, ld: false };
+    return { nf: false, qf: false, combo: false, ld: false, hf: false, hd: 150 };
   };
   const [initModes] = useState(readInitModes);
   const [playNf, setPlayNf] = useState(initModes.nf);
   const [playQuickFlag, setPlayQuickFlag] = useState(initModes.qf);
   const [playCombo, setPlayCombo] = useState(initModes.combo);
   const [playLeftDbl, setPlayLeftDbl] = useState(initModes.ld);
+  /* 长按标雷（2026-10-29 练习页口径同步）：试玩层无独立 UI 入口，
+     跟随练习页设置（继承 initModes 后全程只读镜像进 modesRef） */
+  const [playHoldFlag] = useState(initModes.hf);
+  const [playHoldDelay] = useState(initModes.hd);
   const savePlayModes = useCallback((nf: boolean, qf: boolean, combo: boolean, ld: boolean) => {
     try {
       localStorage.setItem("vprfs_play_modes", JSON.stringify({ nf, qf: qf, combo, ld }));
@@ -2343,10 +2355,10 @@ export function ReplayFullscreen({
   }, [playNf, playQuickFlag, playCombo, playLeftDbl, savePlayModes]);
   /* 引擎模式读数（getModes）：ref 镜像最新 state，事件入口现读即时生效
      （渲染期不写 ref——react-hooks/refs 口径，同步收进 effect） */
-  const modesRef = useRef({ nf: false, quickFlag: false, combo: false, leftDbl: false });
+  const modesRef = useRef({ nf: false, quickFlag: false, combo: false, leftDbl: false, holdFlag: false, holdDelay: 150 });
   useEffect(() => {
-    modesRef.current = { nf: playNf, quickFlag: playQuickFlag, combo: playCombo, leftDbl: playLeftDbl };
-  }, [playNf, playQuickFlag, playCombo, playLeftDbl]);
+    modesRef.current = { nf: playNf, quickFlag: playQuickFlag, combo: playCombo, leftDbl: playLeftDbl, holdFlag: playHoldFlag, holdDelay: playHoldDelay };
+  }, [playNf, playQuickFlag, playCombo, playLeftDbl, playHoldFlag, playHoldDelay]);
   const getModes = useCallback(() => modesRef.current, []);
   /* NF 被拦反馈：抖 NF 钮（练习页 shakeModeBtn 同款视觉） */
   const nfBtnRef = useRef<HTMLButtonElement | null>(null);

@@ -8374,6 +8374,7 @@ button.msg_cancel:hover {
 #online_play .gicon.rank_locked,
 #online_play .gs_row.rank_locked,
 #online_play .gs_bv.rank_locked,
+#online_play .gs_zoom.rank_locked,
 #online_play #level_tabs .rank_locked {
   opacity: 0.42;
   cursor: not-allowed;
