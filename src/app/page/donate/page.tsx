@@ -1,6 +1,4 @@
 // 提供赞助（2026-10-15 重设计：双收款码卡片布局，文案移植 2008 版 About/Donate.asp）
-import Link from "next/link";
-
 export const metadata = { title: "提供赞助" };
 
 export default function DonatePage() {
@@ -26,17 +24,14 @@ export default function DonatePage() {
             <div className="pay_hint">支付宝「扫一扫」即可赞助</div>
           </div>
         </div>
-        <p className="pay_alone">
-          支付宝账号：<em>137516@qq.com</em>（也可转账，请注明「扫雷网+用户ID」）
-        </p>
 
         <h2>【赞助用途】</h2>
         <p>
-          1、服务器租赁、带宽及域名费用
+          1、支付服务器租赁、带宽及域名费用
           <br />
-          2、开发人力成本+AI Token成本
+          2、覆盖开发人力成本+AI Token成本
           <br />
-          3、官方比赛奖金
+          3、如有盈余，将作为官方比赛奖金
         </p>
 
         <h2>【注意事项】</h2>
@@ -47,13 +42,6 @@ export default function DonatePage() {
         <p>
           3、日后本站推出收费项目（如 VIP 会员）时，将对赞助用户充值对应的金额，如果不填写 ID
           则视为匿名赞助，放弃日后等额充值的权利。
-        </p>
-        <p>4、请不要将赞助金额发布在论坛或 QQ 群中，如需核实款项请和站长张砷镓联系。</p>
-
-        <p className="donate_back">
-          <Link href="/page/help" className="button active">
-            返回新手上路
-          </Link>
         </p>
       </div>
     </div>
