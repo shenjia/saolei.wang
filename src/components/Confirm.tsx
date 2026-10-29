@@ -53,6 +53,19 @@ type Pending = { options: ConfirmOptions; resolve: (r: ConfirmCheckedResult) => 
 
 let emit: ((options: ConfirmOptions) => Promise<ConfirmCheckedResult>) | null = null;
 
+/* G12 反作弊自家节点注册表（2026-10-29）：ConfirmHost 渲染的浮层元素在 ref 回调里
+   入册，OnlinePlay 的 isOwnNode 用对象身份判别——confirm_overlay 的 class 会被
+   攻击者模仿，WeakSet 闭包外的元素塞不进来。此前局中弹确认框（如排行切服务器
+   放弃对局）必被 bodyObserver 判 body_overlay 误报（张老师实测）：武装时刻的
+   一次性注册执行时浮层尚未打开，永远扑空。注册容器即可——isOwnNode 爬祖先链，
+   浮层内全部子节点随之放行（与 Toast 气泡注册同语义） */
+const confirmNodes = new WeakSet<Element>();
+
+/** 该元素是否为本模块渲染的真实确认浮层（含历史元素，元素卸载由 WeakSet 自动回收） */
+export function isRegisteredConfirm(el: Element): boolean {
+  return confirmNodes.has(el);
+}
+
 /** 命令式调用：任意客户端组件直接 `if (!(await confirmDialog(...))) return;` */
 export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
   return confirmDialogChecked(options).then((r) => r.ok);
@@ -135,7 +148,11 @@ export function ConfirmHost() {
     (o.checkbox ? [{ key: "", label: o.checkbox.label, defaultChecked: o.checkbox.defaultChecked }] : []);
 
   return (
-    <div className="confirm_overlay" onClick={() => finish(false)}>
+    <div
+      className="confirm_overlay"
+      ref={(el) => { if (el) confirmNodes.add(el); }}
+      onClick={() => finish(false)}
+    >
       <div
         className={`confirm_dialog${o.wide ? " wide" : ""}`}
         role="dialog"
