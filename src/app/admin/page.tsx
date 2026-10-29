@@ -300,25 +300,25 @@ export default async function AdminDashboard() {
           />
         </AdminCard>
 
-        <AdminCard title="称号体系偏好" more="user_info.title_pref · 10 分钟缓存 · 点击图例查看玩家列表">
+        <AdminCard title="称号体系偏好" more="近 30 天登录玩家 · 10 分钟缓存 · 点击图例查看玩家列表">
           <Donut
             items={titlePrefs.map((t) => ({
               ...t,
               href: t.label === "旧版人神界称号" ? "/admin/users?title=c&order=sum" : "/admin/users?title=m&order=sum",
             }))}
-            centerLabel="已存偏好玩家"
+            centerLabel="近30天登录"
             mergeSmall={false}
           />
           <div className="admin_hint" style={{ marginTop: 10 }}>
-            口径：只统计资料保存过的账号（user_info 有行才建偏好；站内无会话表，无法按「已登录」精确圈定）。
+            口径：只统计近 30 天登录过（user.last_login_time）且资料保存过的账号（user_info 有行才建偏好）。
             未设置偏好按军衔制渲染，因此「旧版」占比 = 主动切换旧版称号的玩家比例。
           </div>
         </AdminCard>
 
-        <AdminCard title="录像软件分布" more="按录像解析">
+        <AdminCard title="录像软件分布" more="最近 1000 盘 · 按录像解析">
           <Donut
             items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))}
-            centerLabel="录像总数"
+            centerLabel="最近1000盘"
           />
         </AdminCard>
       </div>

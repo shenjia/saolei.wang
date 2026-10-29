@@ -217,7 +217,7 @@ export default async function AdminStatsPage() {
         <AdminCard title="地区分布 Top 12">
           <BarList items={areas} />
         </AdminCard>
-        <AdminCard title="录像软件分布">
+        <AdminCard title="录像软件分布" more="最近 1000 盘">
           <BarList items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))} color="linear-gradient(90deg,#1f6f8b,#66d9ef)" />
         </AdminCard>
       </div>

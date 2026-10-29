@@ -256,10 +256,15 @@ export async function getAreaCounts(limit = 12): Promise<{ label: string; value:
   return list;
 }
 
-/** 录像软件分布（video_info.software，旧站多为 Windows 扫雷 / 各版本客户端） */
+/** 录像软件分布（video_info.software，旧站多为 Windows 扫雷 / 各版本客户端）
+ *  2026-10-29 张老师定：只统计最近 1000 盘（按上传时间倒序取 1000 条再分组，
+ *  反映当前玩家在用什么软件，而非 2008 年以来的历史累积）。 */
 export async function getSoftwareCounts(limit = 8): Promise<{ label: string; value: number }[]> {
   const rows = await prisma.$queryRawUnsafe<{ software: string; c: bigint }[]>(
-    `SELECT software, COUNT(*) c FROM video_info WHERE software <> '' GROUP BY software ORDER BY c DESC LIMIT ${limit}`
+    `SELECT software, COUNT(*) c FROM (
+       SELECT vi.software software FROM video v JOIN video_info vi ON vi.id = v.id
+       ORDER BY v.create_time DESC, v.id DESC LIMIT 1000
+     ) t WHERE software <> '' GROUP BY software ORDER BY c DESC LIMIT ${limit}`
   );
   return rows.map((r) => ({ label: r.software || "未知", value: N(r.c) }));
 }
@@ -277,13 +282,17 @@ export async function getSexCounts(): Promise<{ label: string; value: number }[]
 
 /**
  * 称号体系偏好分布（2026-10-21 张老师需求：统计新版军衔 vs 旧版人神界称号占比）。
- * 口径：user_info 有行的账号（资料保存过才建行，纯注册无行；站内无 session 表，
- * 「已登录」不可考，这是最接近「用过账号功能的登录玩家」的分母）。
+ * 口径（2026-10-29 收紧）：近 30 天登录过且 user_info 有行的账号（user.last_login_time
+ * 由 setSession 实时刷新；纯注册无 user_info 行不建偏好）。
  * 'm'=军衔制（默认口径，含未主动设置）/ 'c'=旧版称号（主动切换）。
  */
 export async function getTitlePrefCounts(): Promise<{ label: string; value: number }[]> {
+  const since = Math.floor(Date.now() / 1000) - 30 * 86400;
   const rows = await prisma.$queryRawUnsafe<{ pref: string; c: bigint }[]>(
-    `SELECT title_pref pref, COUNT(*) c FROM user_info GROUP BY title_pref`
+    `SELECT ui.title_pref pref, COUNT(*) c
+     FROM user_info ui JOIN \`user\` u ON u.id = ui.id
+     WHERE u.last_login_time >= ? GROUP BY ui.title_pref`,
+    BigInt(since)
   );
   const map = new Map(rows.map((r) => [r.pref, N(r.c)]));
   const classic = map.get("c") ?? 0;

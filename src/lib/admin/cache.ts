@@ -31,11 +31,12 @@ const cache = <T>(fn: () => Promise<T>, key: string) =>
   unstable_cache(fn, [`admin-v1-${key}`], { revalidate: ADMIN_CACHE_TTL, tags: ["admin-stats"] });
 
 /** 仪表盘软件分布 + 称号体系偏好（2026-10-21 加 titlePrefs，载荷结构变更 → key 升 v2 丢弃旧缓存；
- *  2026-10-23 修军衔制双重计数 → key 升 v3；称号/地区分布卡已下线，军衔分布看 /admin/rank、地区看 /admin/stats） */
+ *  2026-10-23 修军衔制双重计数 → key 升 v3；2026-10-29 口径收紧（偏好只算近 30 天登录、
+ *  软件只算最近 1000 盘）→ key 升 v4；称号/地区分布卡已下线，军衔分布看 /admin/rank、地区看 /admin/stats） */
 export const getDashboardDistributionsSoftwares = cache(async () => {
   const [softwares, titlePrefs] = await Promise.all([getSoftwareCounts(6), getTitlePrefCounts()]);
   return { softwares, titlePrefs };
-}, "dashboard-softwares-v3");
+}, "dashboard-softwares-v4");
 
 /** 仪表盘异常检测（4 条全表聚合 ~2.5s，2026-10-21 挂缓存；数据变化频率低，10 分钟足够） */
 export const getCachedAnomalies = cache(() => getAnomalies(), "anomalies");
@@ -51,7 +52,7 @@ export const getStatsDistributions = cache(async () => {
   const boards = await getBoardCounts();
   const softwares = await getSoftwareCounts(8);
   return { hourly, weekday, areas, sex, levels, nf, boards, softwares };
-}, "stats-distributions");
+}, "stats-distributions-v2"); // 2026-10-29 软件分布改「最近 1000 盘」口径 → 升 v2 丢旧缓存
 
 /** 纪录演变曲线（4 条，窗口函数排序开销大） */
 export const getRecordCurves = cache(async () => {
