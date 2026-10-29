@@ -83,6 +83,8 @@ export async function setSession(user: SessionUser, ip = ""): Promise<void> {
     secure: process.env.NODE_ENV === "production",
   });
   // 刷新最近登录时间 + 最近登录 IP（防小号关联，2026-10-19）；失败不阻断登录
+  // （2026-10-30 起 last_login_time 兼作「最近活跃」，日常浏览/UGC 由 touchLastLogin 节流刷新，
+  //  这里只在真正登录时写，保证 last_login_ip 与 last_login_time 同时落）
   try {
     await prisma.user.update({
       where: { id: BigInt(user.uid) },
@@ -126,12 +128,38 @@ export async function reissueSessionParentDomain(): Promise<void> {
   });
 }
 
+// ---------- 活跃度心跳（2026-10-30 张老师口径） ----------
+// last_login_time 语义升级：不再只是「最近一次登录」，而是「最近活跃」——登录用户只要
+// 在站里看过页面（getSession 每页必经）或产生 UGC（传录像 / 发评论 / 在线练习等，全部
+// 要求登录态、必经 getSession），就刷新。进程内 Map 节流，每用户 5 分钟最多一条
+// 主键 UPDATE；fire-and-forget 不 await，不给任何请求增加延迟。
+// last_login_ip 仍只在真正登录（setSession）时刷新，防小号 IP 关联口径不变。
+const TOUCH_INTERVAL = 5 * 60; // 秒
+const lastTouch = new Map<number, number>(); // uid -> 本进程上次刷新 wall clock（ms）
+
+export function touchLastLogin(uid: number): void {
+  const now = Date.now();
+  if (now - (lastTouch.get(uid) ?? 0) < TOUCH_INTERVAL * 1000) return;
+  lastTouch.set(uid, now);
+  prisma.user
+    .update({
+      where: { id: BigInt(uid) },
+      data: { lastLoginTime: BigInt(Math.floor(now / 1000)) },
+    })
+    .catch(() => {
+      /* 活跃刷新失败不阻断请求，下个节流窗口自然重试 */
+    });
+}
+
 export async function getSession(): Promise<SessionUser | null> {
   // 到期限时封禁的节流清扫兜底（60s 一次，2026-10-16）；读会话每页必经，顺便带动全站自动解禁
   await ensureBansLifted();
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  return token ? verify<SessionUser>(token) : null;
+  if (!token) return null;
+  const user = verify<SessionUser>(token);
+  if (user) touchLastLogin(user.uid);
+  return user;
 }
 
 export async function clearSession(): Promise<void> {
