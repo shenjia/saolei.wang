@@ -5,6 +5,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { usersByIds, type UserBrief } from "./queries";
 import { dualTitles } from "./title-system";
+import { notifyUserUnread, notifyAllUnread } from "./message-bus";
+
+// SSE 未读推送（2026-10-29）：运行时写点全部收敛在本文件，写库后 emit 信号，
+// SSE handler 收到后按 uid 自查 getUnreadCount 推送。撤回类函数（retract*）
+// 在事务内且 deleteMany 拿不到受影响 toUser 列表，不 emit——角标短暂滞后，
+// 靠客户端 focus 刷新与后续任意事件校准（低频操作可接受）。
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -215,6 +221,7 @@ export async function markMessageRead(id: number, userId: number): Promise<boole
   if (!row || N(row.toUser) !== userId) return false;
   if (!row.isRead) {
     await prisma.message.update({ where: { id: row.id }, data: { isRead: true, updateTime: nowSec() } });
+    notifyUserUnread(userId);
   }
   return true;
 }
@@ -318,6 +325,7 @@ export async function sendMessage(fromUserId: number, toUserId: number, content:
       updateTime: now,
     },
   });
+  notifyUserUnread(toUserId);
   return N(row.id);
 }
 
@@ -338,10 +346,13 @@ export async function sendSystemMessage(toUserId: number, content: string): Prom
       updateTime: now,
     },
   });
+  notifyUserUnread(toUserId);
 }
 
-/** 清空消息列表（移植 Clear_Action） */export async function clearMessages(userId: number): Promise<number> {
+/** 清空消息列表（移植 Clear_Action） */
+export async function clearMessages(userId: number): Promise<number> {
   const res = await prisma.message.deleteMany({ where: { toUser: BigInt(userId) } });
+  notifyUserUnread(userId);
   return res.count;
 }
 
@@ -351,6 +362,7 @@ export async function markAllRead(userId: number): Promise<number> {
     where: { toUser: BigInt(userId), isRead: false },
     data: { isRead: true, updateTime: nowSec() },
   });
+  notifyUserUnread(userId);
   return res.count;
 }
 
@@ -381,5 +393,6 @@ export async function broadcast(fromUserId: number, content: string): Promise<nu
     sent += users.length;
     if (users.length < BATCH) break;
   }
+  notifyAllUnread();
   return sent;
 }
