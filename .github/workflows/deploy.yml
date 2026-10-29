@@ -99,8 +99,9 @@ jobs:
 
       # ⚠️ .next 是点开头的隐藏目录，upload-artifact@v4 默认 include-hidden-files: false
       # 会整个跳过它（2026-09-27 实证：build 成功但 artifact 为空）——必须显式开启
+      # v6 起 runtime 默认 node24，消 Node 20 弃用告警（2026-10-29）
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: next-builds
           retention-days: 3
@@ -137,8 +138,9 @@ jobs:
       - name: Checkout with submodules
         run: git submodule update --init --recursive
 
+      # v6（node24）；本工作流按 name 下载，不涉及 v5 的 by-ID 路径行为变更
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: next-builds
           # upload 是单一路径 .next（artifact 根即 .next 内容：BUILD_ID/server/...）。

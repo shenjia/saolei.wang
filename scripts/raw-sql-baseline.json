@@ -1,16 +1,15 @@
 {
   "note": "裸拼 SQL 调用点基线（$queryRawUnsafe/$executeRawUnsafe）。新增前请确认值走 ? 占位符、标识符过 assertIdent。",
-  "generatedAt": "2026-10-27",
-  "total": 67,
+  "generatedAt": "2026-10-29",
+  "total": 68,
   "files": {
     "src/app/api/video/lookup/route.ts": 1,
-    "src/core/src/app/api/online/ranked/pb/route.ts": 1,
     "src/lib/admin/data.ts": 17,
-    "src/lib/admin/practice.ts": 5,
+    "src/lib/admin/practice.ts": 6,
     "src/lib/admin/stats.ts": 21,
     "src/lib/admin/system.ts": 2,
     "src/lib/admin/usergroups.ts": 2,
-    "src/lib/queries.ts": 12,
+    "src/lib/queries.ts": 13,
     "src/lib/ranksnap.ts": 6
   }
 }
