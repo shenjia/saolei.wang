@@ -1552,10 +1552,13 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
   ]);
   if (!info) return null;
   // Phase 5 双体系：按录像行内快照评定双套称号（dualTitles 行序数组，2026-10-27）
+  // 2026-10-29 补统一口径：详情页与录像列表同律——快照与本盘高级成绩取优
+  // （promotedExpTime，2026-10-28 张老师定；此前漏接导致详情页比列表多显示旧军衔，
+  //  如 /video/9195 快照 40210=大将、本盘 37820 应评元帅）
   const [p] = await dualTitles([
     {
       userId: N(v.user),
-      expTime: N(v.expTime),
+      expTime: promotedExpTime(N(v.expTime), v.level, info.realTime),
       ranked: v.ranked === BigInt(1),
       sex: author?.sex ?? 1,
     },
