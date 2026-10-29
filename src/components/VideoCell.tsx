@@ -26,7 +26,7 @@ export function VideoDetailCell({ video }: { video: VideoListItem }) {
                 <Score3bvs score={scores["3bvs"]} />
                 <span className="id">
                   ID.
-                  <Link href={`/video/${video.id}`} target="_blank">
+                  <Link href={`/video/${video.id}`} target="_blank" prefetch={false}>
                     <em>{video.id}</em>
                   </Link>
                 </span>

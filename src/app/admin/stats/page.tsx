@@ -120,7 +120,7 @@ export default async function AdminStatsPage() {
                   <tr key={r.level}>
                     <td className="strong">{r.levelName}</td>
                     <td>
-                      <Link className="link" href={`/video/${r.timeVideo}`} target="_blank">
+                      <Link className="link" href={`/video/${r.timeVideo}`} target="_blank" prefetch={false}>
                         {scoreTime(r.time)} 秒
                       </Link>
                     </td>
@@ -138,7 +138,7 @@ export default async function AdminStatsPage() {
                     </td>
                     <td className="sub">{r.timeDate ? timeOpposite(r.timeDate, 0, "Y-m-d") : "—"}</td>
                     <td>
-                      <Link className="link" href={`/video/${r.b3bvsVideo}`} target="_blank">
+                      <Link className="link" href={`/video/${r.b3bvsVideo}`} target="_blank" prefetch={false}>
                         {score3bvs(r.b3bvs)}
                       </Link>
                     </td>

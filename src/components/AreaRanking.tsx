@@ -153,7 +153,7 @@ export function AreaRanking({
                       </Link>
                     </td>
                     <td className="best">
-                      <Link href={`/user/${r.bestId}`} className="avatar_link" target="_blank">
+                      <Link href={`/user/${r.bestId}`} className="avatar_link" target="_blank" prefetch={false}>
                         {r.bestName}
                         <span className="pt_bubble">
                           <PlayerTip id={r.bestId} name={r.bestName} englishName={r.bestEnglishName} />

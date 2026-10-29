@@ -72,7 +72,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
               已封禁{u.banUntil > 0 ? `·至 ${formatDate(u.banUntil, "Y-m-d H:i")}` : "·永久"}
             </span>
           )}
-          <Link className="admin_btn" href={`/user/${u.id}`} target="_blank">
+          <Link className="admin_btn" href={`/user/${u.id}`} target="_blank" prefetch={false}>
             前台主页
           </Link>
           <Link className="admin_btn" href="/admin/users">
@@ -371,7 +371,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
               {d.recentVideos.map((v) => (
                 <tr key={v.id}>
                   <td className="c">
-                    <Link className="link" href={`/video/${v.id}`} target="_blank">
+                    <Link className="link" href={`/video/${v.id}`} target="_blank" prefetch={false}>
                       {v.id}
                     </Link>
                   </td>

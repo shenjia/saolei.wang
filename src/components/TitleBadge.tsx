@@ -36,7 +36,7 @@ export function TitleBadge({
     const tip = CLASSIC_CONDITION[classic.name] ?? "";
     const inner = <em style={{ color: classic.color }}>{classic.name}</em>;
     return link ? (
-      <Link href="/page/titles" className="title title_classic" target="_blank" data-tip={tip || undefined}>
+      <Link href="/page/titles" className="title title_classic" target="_blank" prefetch={false} data-tip={tip || undefined}>
         {inner}
       </Link>
     ) : (
@@ -56,7 +56,7 @@ export function TitleBadge({
     </>
   );
   return link ? (
-    <Link href="/page/titles" className="title" target="_blank" data-tip={tip || undefined}>
+    <Link href="/page/titles" className="title" target="_blank" prefetch={false} data-tip={tip || undefined}>
       {inner}
     </Link>
   ) : (

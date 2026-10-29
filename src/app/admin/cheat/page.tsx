@@ -113,12 +113,12 @@ export default async function AdminCheatPage() {
       return (
         <tr key={r.id}>
           <td>
-            <Link href={`/admin/users/${r.user}`} target="_blank" className="cheat_uid" data-tip={`#${r.user} 详情`}>
+            <Link href={`/admin/users/${r.user}`} target="_blank" prefetch={false} className="cheat_uid" data-tip={`#${r.user} 详情`}>
               {r.user}
             </Link>
           </td>
           <td className="cheat_player">
-            <Link href={`/user/${r.user}`} className="avatar_link" target="_blank">
+            <Link href={`/user/${r.user}`} className="avatar_link" target="_blank" prefetch={false}>
               {nameMap.get(r.user) ?? "（已注销）"}
               <span className="pt_bubble">
                 <PlayerTip

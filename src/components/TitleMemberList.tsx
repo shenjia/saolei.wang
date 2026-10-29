@@ -49,7 +49,7 @@ function ScoreCell({ row, col }: { row: TitleMemberRow; col: (typeof COLS)[numbe
   return (
     <td className={col.cls}>
       {videoId ? (
-        <Link href={`/video/${videoId}`} target="_blank" title={neg ? undefined : "点击查看录像"}>
+        <Link href={`/video/${videoId}`} target="_blank" prefetch={false} title={neg ? undefined : "点击查看录像"}>
           {inner}
         </Link>
       ) : (

@@ -51,6 +51,7 @@ export async function DailyStar() {
           className="avatar_link star_left"
           href={`/user/${card.id}`}
           target="_blank"
+          prefetch={false}
           title={`进入 ${card.chineseName} 的地盘`}
         >
           <img className="star_avatar" src={card.avatarUrl} alt={card.chineseName} />

@@ -58,7 +58,8 @@ export function AvatarCell({
   return (
     <>
       {link ? (
-        <Link href={`/user/${id}`} className={`avatar_link ${className}`} target="_blank">
+        // prefetch={false}：_blank 新标签页用不上预取缓存，Next 16 照发 _rsc 预取白吃 nginx 限速配额（首页 429 根因，同 RankingRows）
+        <Link href={`/user/${id}`} className={`avatar_link ${className}`} target="_blank" prefetch={false}>
           {name}
           <span className="pt_bubble">
             <PlayerTip id={id} name={name} englishName={englishName} />
@@ -149,7 +150,7 @@ export function ScoreTime({
       {score && score > 0 ? (
         <>
           {videoId ? (
-            <Link href={`/video/${videoId}`} target="_blank">
+            <Link href={`/video/${videoId}`} target="_blank" prefetch={false}>
               <em>{scoreTime(score)}</em>
             </Link>
           ) : (
@@ -190,7 +191,7 @@ export function Score3bvs({
       3BV/s
       {score !== null && (score > 0 || (allowZero && score === 0)) ? (
         videoId ? (
-          <Link href={`/video/${videoId}`} target="_blank">
+          <Link href={`/video/${videoId}`} target="_blank" prefetch={false}>
             <em>{score3bvs(score)}</em>
           </Link>
         ) : (

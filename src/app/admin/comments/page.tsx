@@ -73,7 +73,7 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
                     </Link>
                   </td>
                   <td>
-                    <Link className="link" href={`/video/${c.video}`} target="_blank">
+                    <Link className="link" href={`/video/${c.video}`} target="_blank" prefetch={false}>
                       #{c.video}
                     </Link>
                     {c.videoLevel && (

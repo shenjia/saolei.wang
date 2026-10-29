@@ -66,7 +66,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       {r.replyId ? (
                         <div dangerouslySetInnerHTML={{ __html: r.html }} />
                       ) : (
-                        <Link className="link" href={`/bbs/${r.postId}`} target="_blank">
+                        <Link className="link" href={`/bbs/${r.postId}`} target="_blank" prefetch={false}>
                           {r.html}
                         </Link>
                       )}
@@ -196,7 +196,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                     <span className="admin_tag plain">{p.boardName}</span>
                   </td>
                   <td style={{ maxWidth: 320 }}>
-                    <Link className="link" href={`/bbs/${p.id}`} target="_blank">
+                    <Link className="link" href={`/bbs/${p.id}`} target="_blank" prefetch={false}>
                       {p.title}
                     </Link>
                     {p.status === 5 && p.aiReason && <div className="ai_reason">AI 判定：{p.aiReason}</div>}

@@ -82,7 +82,7 @@ function LinkOrScore({ video, time }: { video: VideoListItem; time: string }) {
     </>
   );
   return (
-    <Link href={`/video/${video.id}`} target="_blank" title="点击查看录像">
+    <Link href={`/video/${video.id}`} target="_blank" prefetch={false} title="点击查看录像">
       {inner}
     </Link>
   );

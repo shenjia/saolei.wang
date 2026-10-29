@@ -43,6 +43,7 @@ export function UserCard({
             className="avatar_link"
             href={`/user/${card.id}`}
             target="_blank"
+            prefetch={false}
             title={`进入 ${card.chineseName} 的地盘`}
           >
             <img className="ucd_avatar" src={card.avatarUrl} alt={card.chineseName} />

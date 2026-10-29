@@ -105,7 +105,7 @@ export function BbsRow({
           <Link
             className={"bbs_title" + (isReadKeep(p) ? " keep" : "")}
             href={`/bbs/${p.id}`}
-            target="_blank"
+            target="_blank" prefetch={false}
             onClick={() => markBbsRead(p.id)}
           >
             {hlTitle(p.title, hlKw)}

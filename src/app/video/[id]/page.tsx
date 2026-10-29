@@ -173,7 +173,7 @@ export default async function VideoViewPage({
             <p>
               {video.reviewer && video.reviewTime && (
                 <>
-                  <Link href={`/user/${video.reviewer.id}`} className="avatar_link reviewer" target="_blank">
+                  <Link href={`/user/${video.reviewer.id}`} className="avatar_link reviewer" target="_blank" prefetch={false}>
                     {video.reviewer.chineseName}
                     <span className="pt_bubble">
                       <PlayerTip id={video.reviewer.id} name={video.reviewer.chineseName} englishName={video.reviewer.englishName} />

@@ -16,7 +16,7 @@ export async function BbsLatest() {
   if (!posts.length) return null;
   return (
     <div id="bbs_latest" className="box">
-      <Link href="/bbs" target="_blank">
+      <Link href="/bbs" target="_blank" prefetch={false}>
         <h2>论坛新帖</h2>
       </Link>
       <table cellPadding={0} cellSpacing={0} className="bbs_new">
@@ -41,7 +41,7 @@ export async function BbsLatest() {
                   </span>
                   {/* 2026-10-23（张老师）：取消论坛高亮——首页新帖标题不再加 .high 白显 */}
                   {/* 2026-10-24（张老师）：置顶/精华尾部标记（▲/.精）不再渲染，空间全留给标题 */}
-                  <Link href={`/bbs/${p.id}`} target="_blank" className="t">
+                  <Link href={`/bbs/${p.id}`} target="_blank" prefetch={false} className="t">
                     {p.title}
                   </Link>
                 </div>

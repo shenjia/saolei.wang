@@ -260,7 +260,7 @@ export function VideoRowLine({
       </td>
       <td className={`level ${lvCls}`}>{LEVEL_NAMES[v.level as VideoLevel] ?? v.level}</td>
       <td className={`score ${lvCls}${highlight === "time" ? " current" : ""}`}>
-        <Link href={`/video/${v.id}`} target="_blank" title="点击查看录像">
+        <Link href={`/video/${v.id}`} target="_blank" prefetch={false} title="点击查看录像">
           {scoreTime(scores.time)}
         </Link>
         {v.noflag && (

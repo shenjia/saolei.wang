@@ -167,7 +167,7 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
                 {recent.map((v) => (
                   <tr key={v.id}>
                     <td className="c">
-                      <Link className="link" href={`/video/${v.id}`} target="_blank">
+                      <Link className="link" href={`/video/${v.id}`} target="_blank" prefetch={false}>
                         {v.id}
                       </Link>
                     </td>

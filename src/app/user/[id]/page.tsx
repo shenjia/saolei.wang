@@ -448,22 +448,22 @@ export default async function UserViewPage({
                   <em>{clicks.total}</em>
                 </StatRow>
                 <StatRow label="初级录像" today={todayVideos.beg}>
-                  <Link href={`/video?author=${userId}&level=beg`} target="_blank">
+                  <Link href={`/video?author=${userId}&level=beg`} target="_blank" prefetch={false}>
                     <em>{detail.stat.begVideos}</em>
                   </Link>
                 </StatRow>
                 <StatRow label="中级录像" today={todayVideos.int}>
-                  <Link href={`/video?author=${userId}&level=int`} target="_blank">
+                  <Link href={`/video?author=${userId}&level=int`} target="_blank" prefetch={false}>
                     <em>{detail.stat.intVideos}</em>
                   </Link>
                 </StatRow>
                 <StatRow label="高级录像" today={todayVideos.exp}>
-                  <Link href={`/video?author=${userId}&level=exp`} target="_blank">
+                  <Link href={`/video?author=${userId}&level=exp`} target="_blank" prefetch={false}>
                     <em>{detail.stat.expVideos}</em>
                   </Link>
                 </StatRow>
                 <StatRow label="录像总数" today={todayVideos.total}>
-                  <Link href={`/video?author=${userId}`} target="_blank">
+                  <Link href={`/video?author=${userId}`} target="_blank" prefetch={false}>
                     <em>{detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos}</em>
                   </Link>
                 </StatRow>

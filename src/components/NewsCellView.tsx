@@ -139,7 +139,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
               <>
                 {/* 2026-10-16 张老师定：新成绩在前可点，后跟绝对提升值
                     （formatDelta：时间负=更快、3BV/s +=更高；三轮已去箭头） */}
-                <Link href={`/video/${news.reference}`} target="_blank" className="score record_score">
+                <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
                   {formatScore(d.od ?? "time", d.cr!)}
                 </Link>
                 {/* record_extra：宽度不够时整段隐藏（提升值），只留新成绩避免换行。
@@ -162,7 +162,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                 </span>
               </>
             ) : (
-              <Link href={`/video/${news.reference}`} target="_blank" className="score record_score">
+              <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
                 {formatScore(d.od ?? "time", d.cr!)}
               </Link>
             )}
@@ -173,7 +173,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             {authorCells}
             上传了
             <span className="record person">{LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}录像</span>
-            <Link href={`/video/${news.reference}`} target="_blank" className="score">
+            <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score">
               {scoreTime(d.tm ?? 0)}
             </Link>
           </>
@@ -196,7 +196,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             发表了
             <Link
               href={`/bbs/${news.reference}`}
-              target="_blank"
+              target="_blank" prefetch={false}
               className="score news_article"
               title={d.t ?? undefined}
             >
@@ -215,7 +215,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                     存量无 cid 行不带参数，退回只跳文章 */}
                 <Link
                   href={d.cid ? `/bbs/${news.reference}?reply=${d.cid}#reply-${d.cid}` : `/bbs/${news.reference}`}
-                  target="_blank"
+                  target="_blank" prefetch={false}
                   className="score news_article"
                   title={d.t ?? undefined}
                 >
@@ -260,7 +260,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                     </span>
                     <Link
                       href={`/video/${news.reference}`}
-                      target="_blank"
+                      target="_blank" prefetch={false}
                       className={`score news_vscore lv_${d.lv ?? ""}`}
                     >
                       {formatScore("time", d.tm ?? 0)}

@@ -68,7 +68,7 @@ export function AdminAvatarList({
                   </button>
                 </td>
                 <td>
-                  <Link className="link" href={`/user/${row.user}`} target="_blank">
+                  <Link className="link" href={`/user/${row.user}`} target="_blank" prefetch={false}>
                     {row.author?.chineseName ?? `#${row.user}`}
                     <span className="pt_bubble">
                       <PlayerTip

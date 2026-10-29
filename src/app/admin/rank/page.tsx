@@ -30,10 +30,10 @@ export default async function AdminRankPage() {
         <h1>排行与荣誉</h1>
         <span className="sub">榜单地基数据的体检与人工干预</span>
         <div className="right">
-          <Link className="admin_btn" href="/ranking" target="_blank">
+          <Link className="admin_btn" href="/ranking" target="_blank" prefetch={false}>
             前台排行榜
           </Link>
-          <Link className="admin_btn" href="/grow" target="_blank">
+          <Link className="admin_btn" href="/grow" target="_blank" prefetch={false}>
             进步榜
           </Link>
         </div>

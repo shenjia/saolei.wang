@@ -43,7 +43,7 @@ export default async function AdminAvatarsPage({ searchParams }: { searchParams:
           {stats.pending === 0 && " · 队列已清空"}
         </span>
         <div className="right">
-          <Link className="admin_btn" href="/page/help/avatar" target="_blank">
+          <Link className="admin_btn" href="/page/help/avatar" target="_blank" prefetch={false}>
             头像帮助页
           </Link>
         </div>

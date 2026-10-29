@@ -104,7 +104,7 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
                   <td>{summarize(n.detailsData)}</td>
                   <td>
                     {n.reference ? (
-                      <Link className="link" href={`/video/${n.reference}`} target="_blank">
+                      <Link className="link" href={`/video/${n.reference}`} target="_blank" prefetch={false}>
                         #{n.reference}
                       </Link>
                     ) : (

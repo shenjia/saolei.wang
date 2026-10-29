@@ -37,7 +37,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
         {rows.map((v) => (
           <tr key={v.id} className={v.status === 0 ? "off" : undefined}>
             <td className="c">
-              <Link className="link" href={`/video/${v.id}`} target="_blank">
+              <Link className="link" href={`/video/${v.id}`} target="_blank" prefetch={false}>
                 {v.id}
               </Link>
             </td>

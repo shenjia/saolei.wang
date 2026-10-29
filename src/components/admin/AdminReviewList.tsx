@@ -518,7 +518,7 @@ function ReviewRow({
         <td className="c sub" title="需核定：只能逐条手审">🔒</td>
       )}
       <td className="c">
-        <Link className="link" href={`/video/${v.id}`} target="_blank">
+        <Link className="link" href={`/video/${v.id}`} target="_blank" prefetch={false}>
           {v.id}
         </Link>
       </td>
