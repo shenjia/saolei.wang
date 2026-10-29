@@ -69,7 +69,11 @@ export default async function AdminMessagesPage() {
                 <tr key={`${b.createTime}-${i}`}>
                   <td className="sub">{formatDate(b.createTime, "Y-m-d H:i")}</td>
                   <td>
-                    <Link className="link" href={`/admin/users/${b.fromUser}`}>
+                    <Link
+                      className="link"
+                      href={`/admin/users/${b.fromUser}`}
+                      data-tip={b.author ? `${b.author.chineseName}${b.author.englishName ? `（${b.author.englishName}）` : ""} #${b.fromUser}` : `#${b.fromUser}`}
+                    >
                       {b.author?.chineseName ?? `#${b.fromUser}`}
                     </Link>
                   </td>

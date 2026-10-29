@@ -130,7 +130,11 @@ export default async function AdminIpGroupsPage({ searchParams }: { searchParams
                       <td>
                         {show.map((m) => (
                           <span key={m.id} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
-                            <Link className="link" href={`/admin/users/${m.id}`}>
+                            <Link
+                              className="link"
+                              href={`/admin/users/${m.id}`}
+                              data-tip={`${m.chineseName}${m.englishName ? `（${m.englishName}）` : ""} #${m.id}`}
+                            >
                               {m.chineseName}
                             </Link>
                             {!m.ranked && <span className="sub" title="无成绩">*</span>}
@@ -212,7 +216,11 @@ function ExpandedGroup({ q, data }: { q: string; data: Awaited<ReturnType<typeof
             <tr key={m.id} className={m.status !== 0 ? "off" : undefined}>
               <td className="c sub">{m.id}</td>
               <td>
-                <Link className="link" href={`/admin/users/${m.id}`}>
+                <Link
+                  className="link"
+                  href={`/admin/users/${m.id}`}
+                  data-tip={`${m.chineseName}${m.englishName ? `（${m.englishName}）` : ""} #${m.id}`}
+                >
                   {m.chineseName}
                 </Link>
                 {m.englishName && <span className="sub"> {m.englishName}</span>}

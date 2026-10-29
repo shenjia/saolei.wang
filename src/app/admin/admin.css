@@ -1282,3 +1282,35 @@ table.admin_table .ai_reason {
 .admin_table .title em {
   font-size: 14px;
 }
+
+/* 玩家名 hover 气泡（2026-10-29 张老师要求：全站可点击玩家名显示「姓名（英文名）#ID」）
+   ——后台玩家管理/反作弊复核列表行内链接挂 data-tip；视觉同主站气泡（暗底浅字）。
+   admin.css 在 legacy 之后加载，直接生效。 */
+a[data-tip].link,
+a[data-tip].cheat_uid {
+  position: relative;
+}
+a[data-tip].link::after,
+a[data-tip].cheat_uid::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+a[data-tip].link:hover::after,
+a[data-tip].cheat_uid:hover::after {
+  opacity: 1;
+}

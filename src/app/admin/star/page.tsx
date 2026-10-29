@@ -50,7 +50,11 @@ export default async function AdminStarPage({ searchParams }: { searchParams: Pr
                 <tr key={s.id}>
                   <td className="c">{s.date}</td>
                   <td>
-                    <Link className="link" href={`/admin/users/${s.user}`}>
+                    <Link
+                      className="link"
+                      href={`/admin/users/${s.user}`}
+                      data-tip={s.author ? `${s.author.chineseName}${s.author.englishName ? `（${s.author.englishName}）` : ""} #${s.user}` : `#${s.user}`}
+                    >
                       {s.author?.chineseName ?? `#${s.user}`}
                     </Link>
                   </td>

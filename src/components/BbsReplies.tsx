@@ -260,6 +260,7 @@ export function BbsReplySection({
                   <BbsAuthorName
                     id={r.author.id}
                     name={r.author.chineseName}
+                    englishName={r.author.englishName}
                     sex={r.author.sex}
                     avatar={r.author.avatar}
                   />{" "}

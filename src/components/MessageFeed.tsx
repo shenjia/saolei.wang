@@ -67,7 +67,7 @@ export function MessageRow({
             <span className="avatar_link msg_sys">【系统广播】</span>
           ) : m.to ? (
             <>
-              <AvatarCell id={m.to.id} name={m.to.chineseName} sex={m.to.sex} gender="small" link />
+              <AvatarCell id={m.to.id} name={m.to.chineseName} englishName={m.to.englishName} sex={m.to.sex} gender="small" link />
               <TitleBadge title={m.to.title} classic={m.to.classic} link />
             </>
           ) : (
@@ -96,7 +96,7 @@ export function MessageRow({
           <span className="avatar_link msg_sys">【系统广播】</span>
         ) : m.from ? (
           <>
-            <AvatarCell id={m.from.id} name={m.from.chineseName} sex={m.from.sex} gender="small" link />
+            <AvatarCell id={m.from.id} name={m.from.chineseName} englishName={m.from.englishName} sex={m.from.sex} gender="small" link />
             <TitleBadge title={m.from.title} classic={m.from.classic} link />
           </>
         ) : (

@@ -226,6 +226,7 @@ export default async function HomePage() {
                       <AvatarCell
                         id={n.author.id}
                         name={n.author.chineseName}
+                        englishName={n.author.englishName}
                         sex={n.author.sex}
                         gender="small"
                         link

@@ -126,7 +126,7 @@ export function BbsRow({
       <td className="user">
         {p.author && (
           <>
-            <AvatarCell id={p.author.id} name={p.author.chineseName} sex={p.author.sex} gender="small" link />
+            <AvatarCell id={p.author.id} name={p.author.chineseName} englishName={p.author.englishName} sex={p.author.sex} gender="small" link />
             <TitleBadge title={p.author.title} classic={p.author.old} link />
           </>
         )}

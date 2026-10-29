@@ -106,7 +106,11 @@ export function UserGroupTable({
               <tr key={u.id} className={isNew ? "ug_new" : undefined}>
                 <td className="c sub">{u.id}</td>
                 <td>
-                  <Link className="link" href={`/admin/users/${u.id}`}>
+                  <Link
+                    className="link"
+                    href={`/admin/users/${u.id}`}
+                    data-tip={`${u.chineseName}${u.englishName ? `（${u.englishName}）` : ""} #${u.id}`}
+                  >
                     {u.chineseName}
                   </Link>
                 </td>

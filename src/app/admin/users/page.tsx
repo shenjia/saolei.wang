@@ -210,7 +210,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 <tr key={u.id} className={u.status !== 0 ? "off" : undefined}>
                   <td className="c sub">{u.id}</td>
                   <td>
-                    <Link className="link" href={`/admin/users/${u.id}`}>
+                    <Link
+                      className="link"
+                      href={`/admin/users/${u.id}`}
+                      data-tip={`${u.chineseName}${u.englishName ? `（${u.englishName}）` : ""} #${u.id}`}
+                    >
                       {u.chineseName}
                     </Link>
                     {u.englishName && <span className="sub"> {u.englishName}</span>}

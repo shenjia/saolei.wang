@@ -64,7 +64,11 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
                 <tr key={c.id} className={c.status !== 0 ? "off" : undefined}>
                   <td className="c sub">{c.id}</td>
                   <td>
-                    <Link className="link" href={`/admin/users/${c.user}`}>
+                    <Link
+                      className="link"
+                      href={`/admin/users/${c.user}`}
+                      data-tip={c.author ? `${c.author.chineseName}${c.author.englishName ? `（${c.author.englishName}）` : ""} #${c.user}` : `#${c.user}`}
+                    >
                       {c.author?.chineseName ?? `#${c.user}`}
                     </Link>
                   </td>

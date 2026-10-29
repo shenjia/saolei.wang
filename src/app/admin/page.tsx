@@ -340,7 +340,11 @@ export default async function AdminDashboard() {
                 {latestUsers.map((u) => (
                   <tr key={u.id}>
                     <td>
-                      <Link className="link" href={`/admin/users/${u.id}`}>
+                      <Link
+                        className="link"
+                        href={`/admin/users/${u.id}`}
+                        data-tip={`${u.chineseName}${u.englishName ? `（${u.englishName}）` : ""} #${u.id}`}
+                      >
                         {u.chineseName}
                       </Link>
                       <span className="sub"> #{u.id}</span>
@@ -389,7 +393,11 @@ export default async function AdminDashboard() {
                       </Link>
                     </td>
                     <td>
-                      <Link className="link" href={`/admin/users/${v.user}`}>
+                      <Link
+                        className="link"
+                        href={`/admin/users/${v.user}`}
+                        data-tip={v.author ? `${v.author.chineseName}${v.author.englishName ? `（${v.author.englishName}）` : ""} #${v.user}` : `#${v.user}`}
+                      >
                         {v.authorName}
                       </Link>{" "}
                       <TitleBadge title={v.authorTitle} />

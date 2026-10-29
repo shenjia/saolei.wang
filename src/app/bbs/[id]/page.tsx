@@ -131,6 +131,7 @@ export default async function BbsTitlePage({
                   <BbsAuthorName
                     id={post.author.id}
                     name={post.author.chineseName}
+                    englishName={post.author.englishName}
                     sex={post.author.sex}
                     avatar={post.author.avatar}
                   />{" "}

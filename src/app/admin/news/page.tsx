@@ -93,7 +93,11 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
                     <span className="admin_tag plain">{TYPE_NAMES[n.type] ?? n.type}</span>
                   </td>
                   <td>
-                    <Link className="link" href={`/admin/users/${n.user}`}>
+                    <Link
+                      className="link"
+                      href={`/admin/users/${n.user}`}
+                      data-tip={n.author ? `${n.author.chineseName}${n.author.englishName ? `（${n.author.englishName}）` : ""} #${n.user}` : `#${n.user}`}
+                    >
                       {n.author?.chineseName ?? `#${n.user}`}
                     </Link>
                   </td>

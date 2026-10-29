@@ -23,6 +23,8 @@ const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 export interface GroupRow {
   id: number;
   chineseName: string;
+  /** 英文名（玩家名 hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
+  englishName: string;
   status: number;
   /** 低信任组：反作弊标记截止（0=无标记；「标记到期」列用） */
   lowTrustUntil: number;
@@ -113,6 +115,7 @@ function sortRows(rows: GroupRow[]) {
 interface LowTrustMember {
   id: number;
   chineseName: string;
+  englishName: string;
   status: number;
   state: LowTrustState;
   blocked: LowTrustBlocked | null;
@@ -133,14 +136,14 @@ async function loadLowTrustMembers(): Promise<LowTrustMember[]> {
 
   const users = await prisma.user.findMany({
     where: { id: { in: [...ids].map((x) => BigInt(x)) }, status: { not: -1 } },
-    select: { id: true, chineseName: true, status: true, lowTrustUntil: true, lowTrustExempt: true },
+    select: { id: true, chineseName: true, englishName: true, status: true, lowTrustUntil: true, lowTrustExempt: true },
   });
   const members: LowTrustMember[] = [];
   for (const u of users) {
     const blocked = blockedMap.get(N(u.id)) ?? null;
     const state = lowTrustState(u, blocked, now);
     if (!state.member) continue;
-    members.push({ id: N(u.id), chineseName: u.chineseName, status: u.status, state, blocked });
+    members.push({ id: N(u.id), chineseName: u.chineseName, englishName: u.englishName, status: u.status, state, blocked });
   }
   return members.sort((a, b) => b.id - a.id); // 最终排序在 getLowTrustGroup 按加入时间做
 }
@@ -202,6 +205,7 @@ export async function getTrustedGroup(page: number, q?: string): Promise<GroupLi
     rows.push({
       id: uid,
       chineseName: u.chineseName,
+      englishName: u.englishName,
       status: u.status,
       lowTrustUntil: 0,
       blockedCount: 0,
@@ -237,6 +241,7 @@ export async function getLowTrustGroup(page: number, q?: string): Promise<GroupL
     rows.push({
       id: m.id,
       chineseName: m.chineseName,
+      englishName: m.englishName,
       status: m.status,
       lowTrustUntil: m.state.flagUntil,
       blockedCount: m.state.blockedCount,

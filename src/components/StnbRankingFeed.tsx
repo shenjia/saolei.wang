@@ -349,7 +349,7 @@ export function StnbRankingFeed({
                   第&nbsp;<em>{u.rank}</em>&nbsp;位
                 </td>
                 <td className="name">
-                  <RankingName id={u.id} name={u.chineseName} sex={u.sex} avatar={u.avatar} />
+                  <RankingName id={u.id} name={u.chineseName} englishName={u.englishName} sex={u.sex} avatar={u.avatar} />
                 </td>
                 <td className="miltitle">
                   <TitleBadge title={u.title} classic={u.classic} link />

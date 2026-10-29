@@ -25,7 +25,7 @@ export default async function TeamPage() {
             {team.map((m) => (
               <tr key={m.id}>
                 <td className="user">
-                  <AvatarCell id={m.id} name={m.chineseName} sex={m.sex} link />
+                  <AvatarCell id={m.id} name={m.chineseName} englishName={m.englishName} sex={m.sex} link />
                 </td>
                 <td>{m.role === USER_ROLE.ADMINISTRATOR ? "站长" : "管理员"}</td>
                 <td>

@@ -69,7 +69,11 @@ export default async function AdminLogsPage({ searchParams }: { searchParams: Pr
                   </td>
                   <td>
                     {l.author ? (
-                      <Link className="link" href={`/admin/users/${l.user}`}>
+                      <Link
+                        className="link"
+                        href={`/admin/users/${l.user}`}
+                        data-tip={`${l.author.chineseName}${l.author.englishName ? `（${l.author.englishName}）` : ""} #${l.user}`}
+                      >
                         {l.author.chineseName}
                       </Link>
                     ) : (

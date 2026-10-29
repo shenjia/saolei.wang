@@ -37,6 +37,8 @@ export interface RecordCurveRow {
   userId: number;
   /** 创造者名（chinese_name） */
   name: string;
+  /** 创造者英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
+  englishName: string;
   /** 纪录值原值：time=毫秒；3bvs=×1000 整数；stnb=原值（2 位小数） */
   val: number;
   /** 上传时刻 Unix 秒（=纪录创造时间，与后台曲线同口径） */
@@ -51,6 +53,8 @@ export interface SiteTopRow {
   key: "views" | "bv" | "upload" | "post" | "comment" | "history" | "practice" | "review";
   userId: number;
   name: string;
+  /** 创造者英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
+  englishName: string;
   sex: number;
   ranked: boolean;
   expTime: number;
@@ -68,9 +72,9 @@ const B3BV_CASE = Prisma.sql`(CASE v.level WHEN 'beg' THEN 10 ELSE 4 END)`;
 async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
   // 时间纪录：运行最小 real_time（同值并列也取点，与后台 getRecordCurve 的 `<=` 一致）
   const timeRows = await prisma.$queryRaw<
-    { metric: string; level: string; vid: bigint; uid: bigint; name: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
   >`
-    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
     FROM (
       SELECT 'time' AS metric, v.level, v.id AS vid, v.\`user\` AS uid,
              vi.real_time AS val, v.create_time AS ct,
@@ -85,9 +89,9 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
 
   // 3BV/s 纪录：运行最大（board_3bv×1e6/real_time，×1000 口径；board_3bv 过级别限界）
   const b3bvsRows = await prisma.$queryRaw<
-    { metric: string; level: string; vid: bigint; uid: bigint; name: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
   >`
-    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
     FROM (
       SELECT '3bvs' AS metric, v.level, v.id AS vid, v.\`user\` AS uid,
              ROUND(vi.board_3bv * 1000000.0 / vi.real_time) AS val, v.create_time AS ct,
@@ -102,9 +106,9 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
 
   // STNB 纪录：运行最大 video_metrics.stnb（离线重放引擎算得；board_3bv 同限界口径）
   const stnbRows = await prisma.$queryRaw<
-    { metric: string; level: string; vid: bigint; uid: bigint; name: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
   >`
-    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
     FROM (
       SELECT 'stnb' AS metric, v.level, v.id AS vid, v.\`user\` AS uid,
              m.stnb AS val, v.create_time AS ct,
@@ -191,11 +195,11 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
     metric: "time" | "3bvs" | "stnb",
     pts: { uid: number; vid: number; val: number; ct: number }[]
   ) => {
-    if (!pts.length) return [] as { metric: string; level: string; vid: bigint; uid: bigint; name: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[];
+    if (!pts.length) return [] as { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[];
     const rows = await prisma.$queryRaw<
-      { seq: number; vid: bigint; uid: bigint; name: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+      { seq: number; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
     >`
-      SELECT t.seq, t.vid, u.id uid, u.chinese_name name, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+      SELECT t.seq, t.vid, u.id uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
       FROM (
         ${Prisma.join(
           pts.map((p, i) => Prisma.sql`SELECT ${i} seq, ${p.vid} vid, ${p.uid} uid, ${p.val} val, ${p.ct} ct`),
@@ -220,6 +224,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
     vid: N(r.vid),
     userId: N(r.uid),
     name: r.name,
+    englishName: r.ename ?? "",
     // STNB 浮点尾差（83.40000152…）在展示层统一 2 位小数，这里保留原值
     val: Number(r.val),
     ct: N(r.ct),
@@ -246,6 +251,7 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
       key: "bv" as const,
       userId: top.id,
       name: top.chineseName,
+      englishName: top.englishName ?? "",
       sex: top.sex,
       ranked: true, // fetchBvCollection 已过滤 u.status = 0
       expTime: top.expTime,
@@ -271,14 +277,14 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
     `;
     const r = rows[0];
     if (!r) return null;
-    const info = await prisma.$queryRaw<{ name: string; sex: number; ustatus: number; exp_time: bigint | null }[]>`
-      SELECT u.chinese_name name, u.sex, u.status ustatus, s.exp_time
+    const info = await prisma.$queryRaw<{ name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null }[]>`
+      SELECT u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time
       FROM \`user\` u LEFT JOIN user_scores s ON s.id = u.id WHERE u.id = ${r.uid}
     `;
     const i = info[0];
     if (!i) return null;
     return {
-      key: "upload", userId: N(r.uid), name: i.name, sex: N(i.sex),
+      key: "upload", userId: N(r.uid), name: i.name, englishName: i.ename ?? "", sex: N(i.sex),
       ranked: N(i.ustatus) === 0, expTime: N(i.exp_time), val: N(r.val), lastCt: N(r.last_ct),
     };
   })();
@@ -299,41 +305,41 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
     `;
     const r = rows[0];
     if (!r) return null;
-    const info = await prisma.$queryRaw<{ name: string; sex: number; ustatus: number; exp_time: bigint | null }[]>`
-      SELECT u.chinese_name name, u.sex, u.status ustatus, s.exp_time
+    const info = await prisma.$queryRaw<{ name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null }[]>`
+      SELECT u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time
       FROM \`user\` u LEFT JOIN user_scores s ON s.id = u.id WHERE u.id = ${r.uid}
     `;
     const i = info[0];
     if (!i) return null;
     return {
-      key: "review", userId: N(r.uid), name: i.name, sex: N(i.sex),
+      key: "review", userId: N(r.uid), name: i.name, englishName: i.ename ?? "", sex: N(i.sex),
       ranked: N(i.ustatus) === 0, expTime: N(i.exp_time), val: N(r.val), lastCt: N(r.last_ct),
     };
   })();
 
   const [views, post, comment, history, bv, upload, review] = await Promise.all([
     // 人气最高：总人气（user_stat.clicks 旧站累计镜像，展示 xxx.xW；与用户卡片同源）
-    prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
-      SELECT u.id uid, u.chinese_name name, u.sex, u.status ustatus, s.exp_time, us.clicks val, 0 last_ct
+    prisma.$queryRaw<{ uid: bigint; name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
+      SELECT u.id uid, u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time, us.clicks val, 0 last_ct
       FROM user_stat us JOIN \`user\` u ON u.id = us.id LEFT JOIN user_scores s ON s.id = u.id
       WHERE us.clicks > 0
       ORDER BY us.clicks DESC LIMIT 1
     `,
     // 发表文章最多：论坛主题数
-    prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
-      SELECT u.id uid, u.chinese_name name, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(p.create_time) last_ct
+    prisma.$queryRaw<{ uid: bigint; name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
+      SELECT u.id uid, u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(p.create_time) last_ct
       FROM bbs_post p JOIN \`user\` u ON u.id = p.\`user\` LEFT JOIN user_scores s ON s.id = u.id
       GROUP BY p.\`user\` ORDER BY val DESC LIMIT 1
     `,
     // 发表评论最多：录像评论数
-    prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
-      SELECT u.id uid, u.chinese_name name, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(c2.create_time) last_ct
+    prisma.$queryRaw<{ uid: bigint; name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
+      SELECT u.id uid, u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(c2.create_time) last_ct
       FROM comment c2 JOIN \`user\` u ON u.id = c2.\`user\` LEFT JOIN user_scores s ON s.id = u.id
       GROUP BY c2.\`user\` ORDER BY val DESC LIMIT 1
     `,
     // 发表纪事最多：扫雷纪事条数
-    prisma.$queryRaw<{ uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
-      SELECT u.id uid, u.chinese_name name, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(h.create_time) last_ct
+    prisma.$queryRaw<{ uid: bigint; name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
+      SELECT u.id uid, u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time, COUNT(*) val, MAX(h.create_time) last_ct
       FROM history h JOIN \`user\` u ON u.id = h.\`user\` LEFT JOIN user_scores s ON s.id = u.id
       GROUP BY h.\`user\` ORDER BY val DESC LIMIT 1
     `,
@@ -344,7 +350,7 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
 
   const pick = (
     key: SiteTopRow["key"],
-    rows: { uid: bigint; name: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]
+    rows: { uid: bigint; name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]
   ): SiteTopRow | null => {
     const r = rows[0];
     if (!r) return null;
@@ -352,6 +358,7 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
       key,
       userId: N(r.uid),
       name: r.name,
+      englishName: r.ename ?? "",
       sex: N(r.sex),
       ranked: N(r.ustatus) === 0,
       expTime: N(r.exp_time),

@@ -47,13 +47,15 @@ export default async function AdminCheatPage() {
   const uids = Array.from(new Set([...pending, ...resolved].map((r) => r.user)));
   const users = await prisma.user.findMany({
     where: { id: { in: uids } },
-    select: { id: true, chineseName: true },
+    select: { id: true, chineseName: true, englishName: true },
   });
   const scores = await prisma.userScores.findMany({
     where: { id: { in: uids } },
     select: { id: true, expTime: true },
   });
   const nameMap = new Map(users.map((u) => [u.id, u.chineseName]));
+  // 玩家名 hover 气泡「姓名（英文名）#ID」（2026-10-29 张老师要求全站统一）
+  const enMap = new Map(users.map((u) => [u.id, u.englishName]));
   const rankMap = new Map(scores.map((i) => [i.id, milTitle(i.expTime)]));
   /* 玩家累计复核战绩（2026-10-27 张老师需求）：待复核列表在玩家名下显示
      「n 作弊 n 误报」＝该玩家历史上被核实作弊（resolved=1）/ 判为误报（resolved=2）
@@ -110,12 +112,17 @@ export default async function AdminCheatPage() {
       return (
         <tr key={r.id}>
           <td>
-            <Link href={`/admin/users/${r.user}`} target="_blank" className="cheat_uid">
+            <Link href={`/admin/users/${r.user}`} target="_blank" className="cheat_uid" data-tip={`#${r.user} 详情`}>
               {r.user}
             </Link>
           </td>
           <td className="cheat_player">
-            <Link href={`/user/${r.user}`} target="_blank">
+            <Link
+              href={`/user/${r.user}`}
+              className="avatar_link"
+              target="_blank"
+              data-tip={`${nameMap.get(r.user) ?? "（已注销）"}${enMap.get(r.user) ? `（${enMap.get(r.user)}）` : ""} #${r.user}`}
+            >
               {nameMap.get(r.user) ?? "（已注销）"}
             </Link>
             <span className="cheat_rank" style={{ color: TITLE_COLORS[rankMap.get(r.user) ?? ""] ?? "#999" }}>

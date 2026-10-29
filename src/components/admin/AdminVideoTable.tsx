@@ -41,7 +41,11 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
               </Link>
             </td>
             <td>
-              <Link className="link" href={`/admin/users/${v.user}`}>
+              <Link
+                className="link"
+                href={`/admin/users/${v.user}`}
+                data-tip={v.author ? `${v.author.chineseName}${v.author.englishName ? `（${v.author.englishName}）` : ""} #${v.user}` : `#${v.user}`}
+              >
                 {v.author?.chineseName ?? `#${v.user}`}
               </Link>
             </td>

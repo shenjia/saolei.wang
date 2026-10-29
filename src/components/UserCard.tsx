@@ -52,7 +52,7 @@ export function UserCard({
           {/* 姓名 + 性别 + 军衔：与首页「入伍新兵 / 国内TOP10」同一套组件，显示方式天然一致
               （军衔条件文案由 TitleBadge 的 data-tip 在 hover 时显示） */}
           <p className="ucd_name">
-            <AvatarCell id={card.id} name={card.chineseName} sex={card.sex} gender="small" link />
+            <AvatarCell id={card.id} name={card.chineseName} englishName={card.englishName} sex={card.sex} gender="small" link />
             <TitleBadge title={card.militaryTitle} classic={card.classicTitle} link />
           </p>
           {/* 地区 / 全国排名：与用户主页 #user_view .info .rank_label .ranks 完全同构

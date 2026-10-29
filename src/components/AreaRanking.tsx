@@ -153,7 +153,12 @@ export function AreaRanking({
                       </Link>
                     </td>
                     <td className="best">
-                      <Link href={`/user/${r.bestId}`} target="_blank" title="点击查看个人信息">
+                      <Link
+                        href={`/user/${r.bestId}`}
+                        className="avatar_link"
+                        target="_blank"
+                        data-tip={`${r.bestName}${r.bestEnglishName ? `（${r.bestEnglishName}）` : ""} #${r.bestId}`}
+                      >
                         {r.bestName}
                       </Link>
                       <TitleBadge title={titles[startRow + i] ?? ""} classic={classics?.[startRow + i]} link />

@@ -1630,6 +1630,44 @@ span.title[data-tip]:hover::after,
 span.record[data-tip]:hover::after {
   opacity: 1;
 }
+/* 玩家名气泡（2026-10-29 张老师要求：全站可点击玩家名 hover 显示「姓名（英文名）#ID」）
+   ——AvatarCell / RankingName 的 link 态统一挂 data-tip，视觉复用军衔气泡
+   （暗底浅字、上方弹出、hover 立即显示，替代原生 title 的 1s 延迟）。 */
+a.avatar_link[data-tip],
+.ranking_table td.name .ranking_name a[data-tip] {
+  position: relative;
+}
+a.avatar_link[data-tip]::after,
+.ranking_table td.name .ranking_name a[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+a.avatar_link[data-tip]:hover::after,
+.ranking_table td.name .ranking_name a[data-tip]:hover::after {
+  opacity: 1;
+}
+/* 顶栏用户菜单触发器：气泡向下弹（顶栏贴视口顶，向上弹会出界） */
+body #header a.um_trigger[data-tip]::after {
+  bottom: auto;
+  top: 100%;
+  margin-top: 4px;
+}
 .bbs_star::after,
 .bbs_top::after {
   content: attr(data-tip);

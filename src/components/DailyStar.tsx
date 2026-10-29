@@ -57,7 +57,7 @@ export async function DailyStar() {
         </Link>
         <div className="star_right">
           <p className="star_name">
-            <AvatarCell id={card.id} name={card.chineseName} sex={card.sex} gender="small" link />
+            <AvatarCell id={card.id} name={card.chineseName} englishName={card.englishName} sex={card.sex} gender="small" link />
             {/* 发消息气泡按钮（八轮）：与用户卡片同逻辑——登录且非本人 */}
             <SendMessageButton to={card.id} name={card.chineseName} authorId={session?.uid ?? 0} />
           </p>

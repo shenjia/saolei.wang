@@ -8,10 +8,19 @@ import { score3bvs, scoreTime, timeOpposite, TIME_NEVER } from "@/lib/format";
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
 export { TitleBadge } from "./TitleBadge";
 
-/** 用户名 + 性别图标（移植 _avatarCell） */
+/** 玩家名 hover 气泡文案（2026-10-29 张老师要求：全站可点击玩家名 hover 显示
+ *  「姓名（英文名）#ID」）：英文名缺省（空串/未传）时退「姓名 #ID」。 */
+export function playerTip(name: string, englishName?: string, id?: number): string {
+  const en = englishName?.trim();
+  return `${en ? `${name}（${en}）` : name}${id != null ? ` #${id}` : ""}`;
+}
+
+/** 用户名 + 性别图标（移植 _avatarCell）
+ *  2026-10-29：link 态挂 data-tip 气泡「姓名（英文名）#ID」（未传 englishName 只显 #ID） */
 export function AvatarCell({
   id,
   name,
+  englishName,
   sex,
   link = false,
   className = "",
@@ -19,15 +28,23 @@ export function AvatarCell({
 }: {
   id: number;
   name: string;
+  /** 英文名（气泡用）；缺省/空串时气泡只显示「姓名 #ID」 */
+  englishName?: string;
   sex: number;
   link?: boolean;
   className?: string;
   gender?: string;
 }) {
+  const tip = playerTip(name, englishName, id);
   return (
     <>
       {link ? (
-        <Link href={`/user/${id}`} className={`avatar_link ${className}`} target="_blank">
+        <Link
+          href={`/user/${id}`}
+          className={`avatar_link ${className}`}
+          target="_blank"
+          data-tip={tip}
+        >
           {name}
         </Link>
       ) : (
@@ -42,20 +59,23 @@ export function AvatarCell({
 export function BbsAuthorName({
   id,
   name,
+  englishName,
   sex,
   avatar = "",
 }: {
   id: number;
   name: string;
+  englishName?: string;
   sex: number;
   avatar?: string;
 }) {
   const avatarUrl = resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "");
-  if (!avatarUrl) return <AvatarCell id={id} name={name} sex={sex} gender="small" link />;
+  if (!avatarUrl)
+    return <AvatarCell id={id} name={name} englishName={englishName} sex={sex} gender="small" link />;
   return (
     <span className="bbs_meta_author">
       <img className="bbs_meta_avatar" src={avatarUrl} alt="" width={16} height={16} />
-      <AvatarCell id={id} name={name} sex={sex} gender="small" link />
+      <AvatarCell id={id} name={name} englishName={englishName} sex={sex} gender="small" link />
     </span>
   );
 }
@@ -64,11 +84,13 @@ export function BbsAuthorName({
 export function RankingName({
   id,
   name,
+  englishName,
   sex,
   avatar = "",
 }: {
   id: number;
   name: string;
+  englishName?: string;
   sex: number;
   avatar?: string;
 }) {
@@ -79,7 +101,12 @@ export function RankingName({
     <>
       <span className="ranking_name">
         {avatarUrl && <img className="ranking_avatar" src={avatarUrl} alt="" width={13} height={13} />}
-        <Link href={`/user/${id}`} target="_blank" prefetch={false} title="点击查看个人信息">
+        <Link
+          href={`/user/${id}`}
+          target="_blank"
+          prefetch={false}
+          data-tip={playerTip(name, englishName, id)}
+        >
           {name}
         </Link>
       </span>

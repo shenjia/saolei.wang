@@ -162,7 +162,7 @@ export default async function VideoViewPage({
             <p>
               {video.author && (
                 <>
-                  <AvatarCell id={video.author.id} name={video.author.chineseName} sex={video.author.sex} className="author" link />
+                  <AvatarCell id={video.author.id} name={video.author.chineseName} englishName={video.author.englishName} sex={video.author.sex} className="author" link />
                   <TitleBadge title={video.authorTitle} classic={video.authorClassic} link />
                 </>
               )}
@@ -173,7 +173,12 @@ export default async function VideoViewPage({
             <p>
               {video.reviewer && video.reviewTime && (
                 <>
-                  <Link href={`/user/${video.reviewer.id}`} className="avatar_link reviewer" target="_blank">
+                  <Link
+                    href={`/user/${video.reviewer.id}`}
+                    className="avatar_link reviewer"
+                    target="_blank"
+                    data-tip={`${video.reviewer.chineseName}${video.reviewer.englishName ? `（${video.reviewer.englishName}）` : ""} #${video.reviewer.id}`}
+                  >
                     {video.reviewer.chineseName}
                   </Link>
                   <span className="review_time">

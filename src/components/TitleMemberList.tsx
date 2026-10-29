@@ -173,7 +173,7 @@ export function TitleMemberList({
                 )}
               </td>
               <td className="name">
-                <RankingName id={u.id} name={u.chineseName} sex={u.sex} avatar={u.avatar} />
+                <RankingName id={u.id} name={u.chineseName} englishName={u.englishName} sex={u.sex} avatar={u.avatar} />
               </td>
               <td className="miltitle">
                 <TitleBadge title={memberTitle} classic={u.classic} link />

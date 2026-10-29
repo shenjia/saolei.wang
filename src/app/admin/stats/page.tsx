@@ -125,7 +125,11 @@ export default async function AdminStatsPage() {
                     </td>
                     <td>
                       {tu ? (
-                        <Link className="link" href={`/admin/users/${tu.id}`}>
+                        <Link
+                          className="link"
+                          href={`/admin/users/${tu.id}`}
+                          data-tip={`${tu.chineseName}${tu.englishName ? `（${tu.englishName}）` : ""} #${tu.id}`}
+                        >
                           {tu.chineseName}
                         </Link>
                       ) : (
@@ -140,7 +144,11 @@ export default async function AdminStatsPage() {
                     </td>
                     <td>
                       {bu ? (
-                        <Link className="link" href={`/admin/users/${bu.id}`}>
+                        <Link
+                          className="link"
+                          href={`/admin/users/${bu.id}`}
+                          data-tip={`${bu.chineseName}${bu.englishName ? `（${bu.englishName}）` : ""} #${bu.id}`}
+                        >
                           {bu.chineseName}
                         </Link>
                       ) : (

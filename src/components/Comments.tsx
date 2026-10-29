@@ -58,6 +58,7 @@ export function CommentCell({
             <AvatarCell
               id={comment.author.id}
               name={comment.author.chineseName}
+              englishName={comment.author.englishName}
               sex={comment.author.sex}
               className="author"
               gender="small"

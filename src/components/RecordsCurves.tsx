@@ -33,6 +33,8 @@ export interface CurvePoint {
   /** 创造者 uid（跳 /user/<u>） */
   u: number;
   n: string;
+  /** 创造者英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
+  en?: string;
   /** 创造者性别（0=女 1=男，首页 AvatarCell 同口径） */
   s: number;
   /** 上传时刻 Unix 秒（纪录创造时间） */
@@ -165,7 +167,7 @@ function ChartCard({
                 <span className="rec_val">{fmtVal(chart.metric, only.y)}</span>
               )}
               <span className="rec_meta">　</span>
-              <AvatarCell id={only.u} name={only.n} sex={only.s} link className="rec_user" gender="small" />
+              <AvatarCell id={only.u} name={only.n} englishName={only.en} sex={only.s} link className="rec_user" gender="small" />
               <TitleBadge title={only.t.m} classic={only.t.c} link />
               <span className="rec_meta">
                 　创造于 {fmtDate(only.x)}（距今{" "}
@@ -240,7 +242,7 @@ function ChartCard({
         </Link>
         <span className="rec_meta">　</span>
         {/* 人名+军衔完全复刻首页（AvatarCell 名字链接+性别图标 + TitleBadge 徽章；14px 标准尺寸） */}
-        <AvatarCell id={last.u} name={last.n} sex={last.s} link className="rec_user" gender="small" />
+        <AvatarCell id={last.u} name={last.n} englishName={last.en} sex={last.s} link className="rec_user" gender="small" />
         <TitleBadge title={last.t.m} classic={last.t.c} link />
         <span className="rec_meta">
           　创造于 {fmtDate(last.x)}（距今 <span suppressHydrationWarning>{daysAgo(last.x)}</span> 天）
@@ -348,7 +350,7 @@ function ChartCard({
               <span>创造者</span>
               {/* 强制同行：人名+性别+军衔不换行（三轮张老师要求） */}
               <span className="who">
-                <AvatarCell id={hp.u} name={hp.n} sex={hp.s} link gender="small" />
+                <AvatarCell id={hp.u} name={hp.n} englishName={hp.en} sex={hp.s} link gender="small" />
                 <TitleBadge title={hp.t.m} classic={hp.t.c} />
               </span>
             </div>

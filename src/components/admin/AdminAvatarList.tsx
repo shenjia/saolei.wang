@@ -67,7 +67,12 @@ export function AdminAvatarList({
                   </button>
                 </td>
                 <td>
-                  <Link className="link" href={`/user/${row.user}`} target="_blank">
+                  <Link
+                    className="link"
+                    href={`/user/${row.user}`}
+                    target="_blank"
+                    data-tip={row.author ? `${row.author.chineseName}${row.author.englishName ? `（${row.author.englishName}）` : ""} #${row.user}` : undefined}
+                  >
                     {row.author?.chineseName ?? `#${row.user}`}
                   </Link>
                   <span className="admin_hint"> #{row.user}</span>

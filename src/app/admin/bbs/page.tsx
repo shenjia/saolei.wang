@@ -77,7 +77,11 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       </div>
                     </td>
                     <td>
-                      <Link className="link" href={`/admin/users/${r.user}`}>
+                      <Link
+                        className="link"
+                        href={`/admin/users/${r.user}`}
+                        data-tip={r.author ? `${r.author.chineseName}${r.author.englishName ? `（${r.author.englishName}）` : ""} #${r.user}` : `#${r.user}`}
+                      >
                         {r.author?.chineseName ?? `#${r.user}`}
                       </Link>
                     </td>
@@ -198,7 +202,11 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                     {p.status === 5 && p.aiReason && <div className="ai_reason">AI 判定：{p.aiReason}</div>}
                   </td>
                   <td>
-                    <Link className="link" href={`/admin/users/${p.user}`}>
+                    <Link
+                      className="link"
+                      href={`/admin/users/${p.user}`}
+                      data-tip={p.author ? `${p.author.chineseName}${p.author.englishName ? `（${p.author.englishName}）` : ""} #${p.user}` : `#${p.user}`}
+                    >
                       {p.author?.chineseName ?? `#${p.user}`}
                     </Link>
                   </td>
@@ -311,7 +319,11 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                   <tr key={r.id} className={r.status !== 0 ? "off" : undefined}>
                     <td className="c sub">{r.id}</td>
                     <td>
-                      <Link className="link" href={`/admin/users/${r.user}`}>
+                      <Link
+                        className="link"
+                        href={`/admin/users/${r.user}`}
+                        data-tip={r.author ? `${r.author.chineseName}${r.author.englishName ? `（${r.author.englishName}）` : ""} #${r.user}` : `#${r.user}`}
+                      >
                         {r.author?.chineseName ?? `#${r.user}`}
                       </Link>
                     </td>

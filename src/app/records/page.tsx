@@ -76,6 +76,7 @@ export default async function RecordsPage() {
           v: c.vid,
           u: c.userId,
           n: c.name,
+          en: c.englishName,
           s: c.sex,
           x: c.ct,
           y: c.val,
@@ -106,7 +107,7 @@ export default async function RecordsPage() {
                 <div className="records_top_sub">
                   <span className="records_top_label">纪录保持者</span>
                   <span className="records_top_who">
-                    <AvatarCell id={t.userId} name={t.name} sex={t.sex} link gender="small" />{" "}
+                    <AvatarCell id={t.userId} name={t.name} englishName={t.englishName} sex={t.sex} link gender="small" />{" "}
                     <TitleBadge
                       title={pairs[curves.length + i].m}
                       classic={pairs[curves.length + i].c}

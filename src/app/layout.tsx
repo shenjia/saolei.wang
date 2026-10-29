@@ -123,7 +123,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                       <MessageBadge />
                     </li>
                     <li className="popMenu user_menu">
-                      <Link href={`/user/${session.uid}`} className="um_trigger">
+                      <Link
+                        href={`/user/${session.uid}`}
+                        className="um_trigger"
+                        data-tip={`${displayName}${me?.englishName ? `（${me.englishName}）` : ""} #${session.uid}`}
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img className="um_avatar" src={avatarUrl} alt="" />
                         <span className="um_name">{displayName}</span>

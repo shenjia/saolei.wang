@@ -23,6 +23,8 @@ export interface UserCardScore {
 export interface UserCardData {
   id: number;
   chineseName: string;
+  /** 英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
+  englishName: string;
   sex: number;
   /** 头像 URL（本地 /images/player/{id}.jpg、OAuth 外链或默认 no.jpg） */
   avatarUrl: string;
@@ -79,6 +81,7 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
   return {
     id,
     chineseName: user.chineseName,
+    englishName: user.englishName,
     sex: user.sex,
     avatarUrl: avatarUrl(id, user.avatar),
     militaryTitle: detail.title,
@@ -92,14 +95,14 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
   };
 }
 
-/** 顶部导航右侧用户菜单用：只取姓名 + 头像 URL（不拉成绩/名次，避免每页额外开销） */
+/** 顶部导航右侧用户菜单用：只取姓名 + 英文名 + 头像 URL（不拉成绩/名次，避免每页额外开销） */
 export async function getHeaderUser(
   uid: number,
-): Promise<{ chineseName: string; avatarUrl: string } | null> {
+): Promise<{ chineseName: string; englishName: string; avatarUrl: string } | null> {
   const u = await prisma.user.findUnique({
     where: { id: BigInt(uid) },
-    select: { chineseName: true, avatar: true },
+    select: { chineseName: true, englishName: true, avatar: true },
   });
   if (!u) return null;
-  return { chineseName: u.chineseName, avatarUrl: avatarUrl(uid, u.avatar) };
+  return { chineseName: u.chineseName, englishName: u.englishName, avatarUrl: avatarUrl(uid, u.avatar) };
 }

@@ -45,6 +45,7 @@ export function VideoHot({ videos }: { videos: VideoListItem[] }) {
                       <AvatarCell
                         id={v.author.id}
                         name={v.author.chineseName}
+                        englishName={v.author.englishName}
                         sex={v.author.sex}
                         gender="small"
                         link

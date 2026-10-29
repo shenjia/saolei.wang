@@ -117,7 +117,7 @@ export function RankingRowLine({
       </td>
       <td className="name">
         {/* 2026-10-23 张老师要求：排行表人名新标签页打开，不破坏榜单浏览位置 */}
-        <RankingName id={row.id} name={row.chineseName} sex={row.sex} avatar={row.avatar} />
+        <RankingName id={row.id} name={row.chineseName} englishName={row.englishName} sex={row.sex} avatar={row.avatar} />
       </td>
       <td className="miltitle">
         <TitleBadge title={row.title} classic={row.classic} link />

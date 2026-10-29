@@ -145,21 +145,23 @@ export async function usersByIds(ids: number[]): Promise<Map<number, UserBrief>>
   return new Map(rows.map((r) => [N(r.id), toBrief(r)!]));
 }
 
-/** 当前榜页的真实头像（仅按需查 20 行，避免给 BV/STNB 全量缓存增加头像字段）。 */
-async function rankingAvatarsByIds(ids: number[]): Promise<Map<number, string>> {
+/** 当前榜页的真实头像 + 英文名（仅按需查 20 行，避免给 BV/STNB 全量缓存增加字段）。
+ *  2026-10-29 气泡需求：同时带回英文名（「姓名（英文名）#ID」hover 气泡用），
+ *  更名 rankingUserExtras；返回 Map<uid, {avatar, englishName}>（无头像行 avatar=""）。 */
+async function rankingUserExtras(ids: number[]): Promise<Map<number, { avatar: string; englishName: string }>> {
   if (!ids.length) return new Map();
   const rows = await prisma.user.findMany({
-    where: {
-      id: { in: ids.map(BigInt) },
-      OR: [
-        { avatar: { startsWith: AVATAR_UPLOAD_PREFIX } },
-        { avatar: { startsWith: "http" } },
-        { avatar: "1" }, // 旧站上传头像，实体为 /images/player/{id}.jpg
-      ],
-    },
-    select: { id: true, avatar: true },
+    where: { id: { in: ids.map(BigInt) } },
+    select: { id: true, avatar: true, englishName: true },
   });
-  return new Map(rows.map((r) => [N(r.id), r.avatar]));
+  return new Map(
+    rows.map((r) => {
+      // 与旧 rankingAvatarsByIds 同口径：只有新版上传 / OAuth 外链 / 旧站 "1" 算真头像
+      const real =
+        r.avatar.startsWith(AVATAR_UPLOAD_PREFIX) || r.avatar.startsWith("http") || r.avatar === "1";
+      return [N(r.id), { avatar: real ? r.avatar : "", englishName: r.englishName }];
+    })
+  );
 }
 
 /** 作者信息 + 军衔（2026-10-13：评论区人名后显示军衔徽章用；BBS 作者同源复用） */
@@ -2317,6 +2319,8 @@ export interface AreaRow {
   power: number;
   bestId: number;
   bestName: string;
+  /** 领军人物英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
+  bestEnglishName: string;
   bestExpTime: number;
   bestSumTime: number;
   bestSex: number;
@@ -2340,6 +2344,7 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
       power: bigint;
       best_id: bigint;
       best_name: string;
+      best_english_name: string;
       best_exp_time: number;
       best_sum_time: number;
       best_sex: number;
@@ -2366,7 +2371,8 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
        GROUP BY u.area
      )
      SELECT a.area, a.players, COALESCE(v.active, 0) active, a.best_rank, a.power,
-            r.id best_id, u.chinese_name best_name, s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex
+            r.id best_id, u.chinese_name best_name, u.english_name best_english_name,
+            s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex
      FROM agg a
      JOIN ranked r ON r.area = a.area AND r.rk = a.best_rank
      JOIN user u ON u.id = r.id
@@ -2382,6 +2388,7 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
     power: N(r.power),
     bestId: N(r.best_id),
     bestName: r.best_name,
+    bestEnglishName: r.best_english_name,
     bestExpTime: r.best_exp_time,
     bestSumTime: r.best_sum_time,
     bestSex: r.best_sex,
@@ -2602,6 +2609,8 @@ export async function getUser3bvCollection(
 export interface BvRankingEntry {
   id: number;
   chineseName: string;
+  /** 当前页渲染时补入（气泡用）；全量收集缓存不携带 */
+  englishName?: string;
   sex: number;
   /** 当前页渲染时补入；全量收集缓存不携带 */
   avatar?: string;
@@ -2713,10 +2722,11 @@ export async function getBvRanking(by: BvRankingBy, page: number, take?: number,
   const sorted = sortBv(all, by);
   const size = take ?? RANKING_PAGESIZE;
   const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
-  const avatars = await rankingAvatarsByIds(pageRows.map((e) => e.id));
+  const users = await rankingUserExtras(pageRows.map((e) => e.id));
   const rows = pageRows.map((e, i) => ({
     ...e,
-    avatar: avatars.get(e.id) ?? "",
+    avatar: users.get(e.id)?.avatar ?? "",
+    englishName: users.get(e.id)?.englishName ?? "",
     rank: (page - 1) * RANKING_PAGESIZE + i + 1,
   }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen, ranges };
@@ -2772,6 +2782,8 @@ export interface StnbBestVideo {
 export interface StnbRankingEntry {
   id: number;
   chineseName: string;
+  /** 当前页渲染时补入（气泡用）；紧凑全量缓存不携带，守住 2MB 载荷上限 */
+  englishName?: string;
   sex: number;
   /** 当前页渲染时补入；紧凑全量缓存不携带，守住 2MB 载荷上限 */
   avatar?: string;
@@ -3031,10 +3043,11 @@ export async function getStnbRanking(by: BvRankingBy, page: number, take?: numbe
   const { den, totalDen } = stnbDenoms(all);
   const size = take ?? RANKING_PAGESIZE;
   const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
-  const avatars = await rankingAvatarsByIds(pageRows.map((e) => e.id));
+  const users = await rankingUserExtras(pageRows.map((e) => e.id));
   const rows = pageRows.map((e, i) => ({
     ...e,
-    avatar: avatars.get(e.id) ?? "",
+    avatar: users.get(e.id)?.avatar ?? "",
+    englishName: users.get(e.id)?.englishName ?? "",
     rank: (page - 1) * RANKING_PAGESIZE + i + 1,
   }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen };

@@ -69,7 +69,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
   };
   const authorCells = news.author && (
     <>
-      <AvatarCell id={news.author.id} name={news.author.chineseName} sex={news.author.sex} className="author" gender="small" link />
+      <AvatarCell id={news.author.id} name={news.author.chineseName} englishName={news.author.englishName} sex={news.author.sex} className="author" gender="small" link />
       <TitleBadge title={title} classic={classic} link />
     </>
   );
@@ -239,6 +239,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                         <AvatarCell
                           id={news.videoOwner.id}
                           name={news.videoOwner.chineseName}
+                          englishName={news.videoOwner.englishName}
                           sex={news.videoOwner.sex}
                           className="author"
                           gender="small"
