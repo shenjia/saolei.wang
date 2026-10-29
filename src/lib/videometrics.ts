@@ -88,6 +88,7 @@ async function compute(videoId: number): Promise<void> {
     ce: m.ce,
     unflag: m.unflag,
     path: m.path,
+    cp: m.cp,
     bvs: m.bvs,
     ioe: m.ioe,
     corr: m.corr,

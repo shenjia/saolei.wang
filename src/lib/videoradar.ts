@@ -52,6 +52,8 @@ export interface VideoMetrics {
   unflag: number;
   /** 鼠标行程（按 16px/格折算） */
   path: number;
+  /** 跨格次数：鼠标轨迹跨过格线的次数（replayCounts 光栅化直出，对回报率免疫） */
+  cp: number;
   /** 速度：3BV/s */
   bvs: number;
   /** 效率：3BV / 总点击（最大值 1） */
@@ -64,7 +66,8 @@ export interface VideoMetrics {
   ppc: number;
   /** 吞吐效率：已完成 3BV ÷ 有效点击 Ce（FL 组「效率」轴口径；NF 无 chord 恒 ≤1） */
   thrp: number;
-  /** 走位：3BV ÷ 鼠标行程（格）——2026-10-28 张老师定上雷达替换「精准」corr 轴 */
+  /** 路线规划：3BV ÷ 跨格次数（2026-10-29 张老师定分母由鼠标行程换 crossings，
+   *  对回报率免疫；旧口径 3BV/PATH 的值随全量重放被覆盖） */
   bpp: number;
   /** 综合：按级别与难度归一化的 STNB 评分 */
   stnb: number;
@@ -208,6 +211,9 @@ export function analyzeVideo(
   const solved = bbbv;
   const level = opts?.level ?? v.level;
   const path = Math.round(c.pathPx / CELL_PX);
+  // 路线规划分母（2026-10-29 张老师定）：鼠标行程 → 跨格次数。极短局鼠标未出格时
+  // crossings=0，与 path>0 同款处理记 0（不参与分位基准，cl>0 过滤兜底）
+  const cp = c.crossings;
   // 用时有下界才计算速度类指标（qg 在 t→0 时爆掉）。
   // 下界取 0.01s 而非更保守的值：站内确实有 1534 盘 3BV=2 的极短局（最快 0.09s），是有效成绩
   const valid = solved > 0 && t >= 0.01;
@@ -224,13 +230,14 @@ export function analyzeVideo(
     ce: c.ce,
     unflag: c.unflag,
     path,
+    cp,
     bvs: valid ? r3(solved / t) : 0,
     ioe: cl > 0 ? r3(solved / cl) : 0,
     corr: cl > 0 ? r3(c.ce / cl) : 0,
     cls: valid ? r3(cl / t) : 0,
     ppc: cl > 0 ? r3(path / cl) : 0,
     thrp: c.ce > 0 ? r3(solved / c.ce) : 0,
-    bpp: path > 0 ? r3(solved / path) : 0,
+    bpp: cp > 0 ? r3(solved / cp) : 0,
     stnb: Math.round(stnb * 10) / 10,
     qg: qgOf(solved, timeMs),
   };

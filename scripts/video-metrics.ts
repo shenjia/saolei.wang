@@ -21,6 +21,9 @@
 //    重放引擎 src/lib/videoradar.ts 的口径变了的时候。2026-10-14 修了「按下/松开」判定
 //    （原来按 mouse-down 的格子算，实际应为 mouse-up），Corr/PPC 全线受影响，
 //    此时增补跑批只会保留旧的错误值。
+//    2026-10-29 「路线规划」v2 口径上线（3BV/CP：bpp 分母换 crossings 跨格次数 +
+//    video_metrics 加 cp 列 + 分位基准按 3BV 粗分桶）也属此类——存量 bpp 全是旧口径，
+//    必须全量重放覆盖；dist 会同时写整组行（-1）与桶行。
 //    反过来，正常新增/导入录像不需要全量跑 —— 在线路径已由 lib/review.ts 的 after 钩子
 //    自动生成缺行，这里只需定期兜底。
 
@@ -33,6 +36,8 @@ import {
   BASE_METRIC_KEYS,
   BASE_METRICS,
   DIST_BUCKET_ALL,
+  BV_BUCKETS,
+  bucketOf,
   buildDist,
   MIN_DIST_SIZE,
   percentOf,
@@ -268,6 +273,7 @@ async function main() {
             ce: 0,
             unflag: 0,
             path: 0,
+            cp: 0,
             bvs: Math.round((info.board3bv / (info.realTime / 1000)) * 1000) / 1000,
             ioe: 0,
             corr: 0,
@@ -310,6 +316,7 @@ async function main() {
         ce: m.ce,
         unflag: m.unflag,
         path: m.path,
+        cp: m.cp,
         bvs: m.bvs,
         ioe: m.ioe,
         corr: m.corr,
@@ -363,9 +370,14 @@ async function main() {
     for (const k of rows) g.vals[k].push(row[k]);
   };
   for (const row of all) {
-    // 分组只有「级别 × 模式」一档：bucket 恒为 -1（张老师 2026-10-14 定，不细分 3BV）
+    // 分组 v2（2026-10-29 张老师定）：级别 × 模式 × 3BV 粗桶 + 整组双写。
+    // 桶行 = 同规模盘互比（治 bpp 的 3BV 结构偏置）；整组行 = 兜底回退（桶样本不足）
+    // 与 composite/STNB 榜的取数来源（STNB 已按难度归一，保持整组口径不变）。
     // noflag 走 raw SQL 回来是 0/1 number，转 boolean（groupKey 与 upsert 都按布尔用）
-    push(groupKey(row.level, Number(row.noflag) === 1, DIST_BUCKET_ALL), row);
+    const nf = Number(row.noflag) === 1;
+    push(groupKey(row.level, nf, DIST_BUCKET_ALL), row);
+    const bucket = bucketOf(row.level, row.bbbv);
+    if (bucket !== DIST_BUCKET_ALL) push(groupKey(row.level, nf, bucket), row);
   }
 
   let written = 0;
@@ -386,7 +398,7 @@ async function main() {
     });
     written++;
   }
-  console.log(`分位行写入：${written}`);
+  console.log(`分位行写入：${written}（整组 6 + 3BV 粗桶若干；桶边界 ${JSON.stringify(BV_BUCKETS)}）`);
 
   // ---- 综合分（依赖上面的分位基准） ----
   await rebuildComposite();

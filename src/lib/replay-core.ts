@@ -55,6 +55,14 @@ export interface ReplayCounts {
   unflag: number;
   /** 鼠标行程（像素，事件流坐标欧氏累加） */
   pathPx: number;
+  /**
+   * 跨格次数（2026-10-29）：鼠标轨迹跨过格线的次数——行程段按 0.5px 步长光栅化，
+   * 每进入一个新格 +1（对角跨角也只记 1 次）。格内抖动/噪声一次跨格都不产生，
+   * 对鼠标回报率**构造性免疫**（连续 PATH 逐事件欧氏累加，采样越密抖动进得越多）。
+   * 「路线规划」轴（3BV/CP）的分母；探针实测 6/6 组技能区分度优于 PATH
+   * （scripts/cellpath-probe.ts，与插桩版对账零失败后并入本状态机）。
+   */
+  crossings: number;
   /** 终盘插旗数 */
   flags: number;
 }
@@ -195,6 +203,17 @@ export function replayCounts(
   let lastX: number | null = null;
   let lastY: number | null = null;
 
+  // 跨格计数：与 pathPx 同一坐标链（含哨兵断链语义）。lastCell 是上一个所在格，
+  // 断链（哨兵坐标/首事件）后重置为 -1，从下一个合法坐标重新起算。
+  let crossings = 0;
+  let lastCell = -1;
+  const cellOf = (px: number, py: number): number => {
+    const cx = Math.floor(px / 16);
+    const cy = Math.floor(py / 16);
+    if (cx < 0 || cx >= W || cy < 0 || cy >= H) return -1;
+    return cy * W + cx;
+  };
+
   // flop 状态机（与 videowin.ts 同源；本函数额外产出计数）
   let lp = false,
     lv = false,
@@ -213,12 +232,38 @@ export function replayCounts(
     // 实证 259991 库存 path 8249 格 vs 真实 55 格，133/261 条 rmv 的 path 被污染）——
     // 哨兵本身不计行程，且断开位移链（哨兵前后的正常坐标不跨它连成巨量假位移）
     if ((e.px !== 0 || e.py !== 0) && e.px < 60000 && e.py < 60000) {
-      if (lastX !== null && lastY !== null) pathPx += Math.hypot(e.px - lastX, e.py - lastY);
+      if (lastX !== null && lastY !== null) {
+        const seg = Math.hypot(e.px - lastX, e.py - lastY);
+        pathPx += seg;
+        // 跨格光栅化：段内按 0.5px 步长重走一遍（与探针 replayCells 1:1；0.5px 远小于
+        // 16px 格宽，漏检可忽略），每进入一个与上次不同的格 +1。段首先无脑记一次——
+        // 段与段之间必然换坐标，但「是否跨格」由 prevCell 判定，同格抖动不计。
+        const steps = Math.max(1, Math.ceil(seg * 2));
+        let prevCell = lastCell;
+        for (let t = 0; t <= steps; t++) {
+          const px = lastX + ((e.px - lastX) * t) / steps;
+          const py = lastY + ((e.py - lastY) * t) / steps;
+          const idx = cellOf(px, py);
+          if (idx < 0) {
+            // 出界（窗口边缘甩出去的坐标）：断链，回来后重新起算
+            prevCell = -1;
+            continue;
+          }
+          if (idx !== prevCell) {
+            crossings++;
+            prevCell = idx;
+          }
+        }
+        lastCell = prevCell;
+      } else {
+        lastCell = cellOf(e.px, e.py);
+      }
       lastX = e.px;
       lastY = e.py;
     } else {
       lastX = null;
       lastY = null;
+      lastCell = -1;
     }
     if (e.ev === "mt") {
       marks = !marks;
@@ -309,6 +354,7 @@ export function replayCounts(
     wastedDouble,
     unflag,
     pathPx,
+    crossings,
     flags,
   };
 }

@@ -119,6 +119,7 @@ function replayOld(v: ParsedVideo): ReplayCounts {
     wastedDouble: 0,
     unflag,
     pathPx,
+    crossings: 0,
     flags,
   };
 }

@@ -57,7 +57,12 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
   { key: "cls", name: "点击速度", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   { key: "ppc", name: "移动", desc: "每击鼠标行程", prefix: "", unit: "格/次", digits: 2, highIsBetter: false },
-  { key: "bpp", name: "路线规划", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
+  // 路线规划（2026-10-29 张老师定口径 v2）：3BV/CP = 已完成 3BV ÷ 跨格次数。
+  // v1（3BV/PATH）分母是事件间欧氏累加的鼠标行程，受鼠标回报率影响（采样越密抖动
+  // 进得越多、同一轨迹 Path 越长），且低 3BV 盘结构性吃亏；v2 分母 crossings 只数
+  // 跨格线动作、对回报率构造性免疫（探针 scripts/cellpath-probe.ts 实测 6/6 组
+  // 技能区分度优于 PATH）。3BV 结构依赖由「3BV 分桶基准」治（见 BV_BUCKETS）。
+  { key: "bpp", name: "路线规划", desc: "每跨一次格换回的 3BV", prefix: "3BV/CP", unit: "", digits: 3, highIsBetter: true },
 ];
 
 /**
@@ -65,7 +70,8 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
  * （2026-10-28 晚张老师定四字名；旧名：速度 / 效率 / 走位 / 手速）。
  * 「操作效率」按组选指标（2026-10-28 张老师定）：FL=ThrP（每次有效操作换回的 3BV，
  * 即 chord 收益），NF=IOE（每点击换回的 3BV）——NF 无 chord，ThrP 恒 ≤1 无区分度。
- * 「路线规划」= 3BV/PATH，替换原「精准」corr 轴（corr 与水平负相关：世界第一 F、纯萌新 SSS）。
+ * 「路线规划」= 3BV/CP（2026-10-29 张老师定 v2 口径：分母由鼠标行程换跨格次数
+ * crossings，对回报率免疫），替换原「精准」corr 轴（corr 与水平负相关）。
  */
 export function axisMetricsFor(noflag: boolean): MetricDef<AxisMetricKey>[] {
   return [
@@ -73,7 +79,7 @@ export function axisMetricsFor(noflag: boolean): MetricDef<AxisMetricKey>[] {
     noflag
       ? { key: "ioe", name: "操作效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true }
       : { key: "thrp", name: "操作效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
-    { key: "bpp", name: "路线规划", desc: "每格鼠标行程换回的 3BV", prefix: "3BV/PATH", unit: "", digits: 3, highIsBetter: true },
+    { key: "bpp", name: "路线规划", desc: "每跨一次格换回的 3BV", prefix: "3BV/CP", unit: "", digits: 3, highIsBetter: true },
     { key: "cls", name: "点击速度", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   ];
 }
@@ -94,16 +100,48 @@ export function formatMetric(key: MetricKey, value: number): string {
 export const MIN_DIST_SIZE = 30;
 
 /**
- * 分位分组 = **级别 × 模式（标雷/无猜）**，不细分 3BV（张老师 2026-10-14 定）。
+ * 分位分组 = **级别 × 模式（标雷/无猜）× 3BV 粗桶**（2026-10-29 张老师定，v2）。
  *
- * 历史：初版按「级别 × 模式 × 精确 3BV」分组（bucket = 该盘 3BV 原值，507 行基准）。
- * 后改为只按级别 × 模式：① 不同 3BV 的盘没法横向比（3BV 越小越容易刷高 3BV/s）；
- * ② 细分后稀疏组合样本不足、要回退，口径反而不一致。现在全站只有 6 个组
- * （beg/int/exp × 标雷/无猜），每组样本万级，足够稳。
+ * 历史：初版按「级别 × 模式 × 精确 3BV」分组（bucket = 该盘 3BV 原值，507 行基准），
+ * 后改为只按级别 × 模式（bucket 恒 -1）。2026-10-29 用户反馈「初级路线规划特别低、
+ * 高级小图偏低、大图很难到 S」——实测 bpp 结构性随 3BV 单调上升（3BV 越多岛越密、
+ * 每换回 1 个 3BV 要走的路越短，30.7 万盘实证 beg FL：3BV<5 桶 p50=0.129 vs
+ * 3BV 26-32 桶 p50=0.450），与玩家水平无关；整组分位让低 3BV 盘被高 3BV 盘碾压。
+ * 换公式（宽×高/Path、CPath、Epath）均实测证伪，病灶在分位组未按 3BV 分层——
+ * 故恢复 bucket 分层但改**粗桶**（固定边界，见 BV_BUCKETS），桶内同规模盘互比。
  *
- * video_metric_dist 的 bucket 列保留（唯一键的一部分），**恒写 -1**。
+ * video_metric_dist 跑批**同时写**桶行与整组行（bucket=-1）：
+ *   · 桶行样本 ≥ MIN_DIST_SIZE 才写；
+ *   · 取基准先查桶行，缺行/样本不足回退整组行（getBaseline / computeRadarPoints）；
+ *   · composite（STNB 组内分位）与 STNB 榜仍走整组行（STNB 已按难度归一，无此偏置）。
  */
 export const DIST_BUCKET_ALL = -1;
+
+/**
+ * 3BV 粗桶边界（2026-10-29，与探针 scripts/cellpath-probe.ts 分桶一致）：
+ * 数组是各桶**下界**，升序；桶值 = 不超过该盘 3BV 的最大下界（即 [lo, nextLo) 的 lo），
+ * 最大桶右开到 ∞。边界取自本地库 3BV 分布的中段（桶内样本数千级、桶间 bpp 中位数
+ * 拉得开），极端小 3BV 桶（beg [0,6)）样本也充足；极限大 3BV 桶（beg 27+ / int 85+ /
+ * exp 225+）桶内指标区分度衰减（探针实测 ~0），靠 MIN_DIST_SIZE 不足时自动回退整组。
+ */
+export const BV_BUCKETS: Partial<Record<string, number[]>> = {
+  beg: [0, 6, 9, 12, 15, 18, 22, 27],
+  int: [0, 35, 45, 55, 65, 75, 85],
+  exp: [0, 120, 140, 160, 180, 200, 225],
+};
+
+/**
+ * 该盘 3BV 所属的粗桶（桶值 = 桶下界；未知级别 / 非法 3BV → DIST_BUCKET_ALL 走整组）。
+ * 桶边界三处共用同一份 BV_BUCKETS：跑批建基准、录像详情页 getBaseline、
+ * 练习页 computeRadarPoints —— 改边界只改 BV_BUCKETS 一处，然后重跑跑批。
+ */
+export function bucketOf(level: string, bbbv: number): number {
+  const edges = BV_BUCKETS[level];
+  if (!edges || !Number.isFinite(bbbv) || bbbv <= 0) return DIST_BUCKET_ALL;
+  let lo = DIST_BUCKET_ALL;
+  for (const e of edges) if (bbbv >= e) lo = e;
+  return lo;
+}
 
 /**
  * 综合分的权重（张老师 2026-10-14 定：只在「级别 × 模式」组内做百分位加权，

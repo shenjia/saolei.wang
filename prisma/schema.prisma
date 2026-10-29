@@ -350,6 +350,12 @@ model VideoMetrics {
   thrp       Float  @default(0) @db.Float
   // 走位 = 已完成 3BV ÷ 鼠标行程（格）（2026-10-28 张老师定上雷达替换「精准」corr 轴）
   bpp        Float  @default(0) @db.Float
+  // 跨格次数 = 鼠标轨迹跨过格线的次数（0.5px 步长光栅化，格内抖动不计）。
+  // 2026-10-29 张老师定「路线规划」分母由 path 换 crossings（3BV/CP）：连续 PATH 按
+  // 事件间欧氏累加，鼠标回报率越高 mv 采样越密、抖动噪声进得越多 → 同一轨迹 Path
+  // 系统性偏长；crossings 只数跨格线动作，对回报率**构造性免疫**。探针实测 6/6 组
+  // 与 STNB 的秩相关全面优于 PATH（scripts/cellpath-probe.ts）。
+  cp         Int    @default(0) @db.Int
   stnb       Float  @db.Float
   // QG 质量分 = (用时秒)^1.7 ÷ 已解 3BV（STNB 的中间量，越小越好）。
   // 2026-10-20 张老师定落库：此前只在回放/结算面板实时现算。只依赖 real_time×bbbv，

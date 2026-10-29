@@ -7,7 +7,8 @@
 //   · 分组只按 **级别 × 模式（标雷/无猜）**，不细分 3BV，也不同级别之间比；
 //   · 雷达 **五轴**（2026-10-28 晚张老师定四字名）：判雷能力（置顶，2026-10-19 定改名，
 //     原「综合」）/ 开图速度 / 操作效率 / 路线规划 / 点击速度（旧名：判雷/速度/效率/走位/手速）
-//     —— 原「移动」轴已去掉；原「精准」corr 轴 2026-10-28 换「路线规划」（3BV/PATH）；
+//     —— 原「移动」轴已去掉；原「精准」corr 轴 2026-10-28 换「路线规划」
+//     （2026-10-29 起 v2 口径 = 3BV/CP，分母换跨格次数）；
 //     「操作效率」按组选指标：NF=IOE / FL=ThrP（张老师 2026-10-28 定）；
 //   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
 //     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
@@ -19,6 +20,7 @@
 import { prisma } from "./db";
 import {
   DIST_BUCKET_ALL,
+  bucketOf,
   axisMetricsFor,
   formatMetric,
   gradeFromPercent,
@@ -95,13 +97,27 @@ function distFor(row: DistRow | null, key: MetricKey): number[] {
   return parseDist(map[key]);
 }
 
-/** 取该盘所属「级别 × 模式」组的分位基准（group 内样本不足则不产出行） */
-async function getBaseline(level: string, noflag: boolean): Promise<DistRow | null> {
-  const row = await prisma.videoMetricDist.findUnique({
+/**
+ * 取该盘所属「级别 × 模式 × 3BV 粗桶」的分位基准（2026-10-29 v2）：
+ * 先查该盘 3BV 所属桶行（同规模盘互比，治「初级低/小图低/大图难S」的 3BV 结构偏置），
+ * 桶行不存在或样本不足 MIN_DIST_SIZE → 回退整组行（bucket=-1）。
+ * 跑批对每组**同时写**桶行与整组行，这里不命中桶行只可能是极端 3BV 段（样本 <30）。
+ */
+async function getBaseline(level: string, noflag: boolean, bbbv: number): Promise<DistRow | null> {
+  const select = { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true } as const;
+  const bucket = bucketOf(level, bbbv);
+  if (bucket !== DIST_BUCKET_ALL) {
+    const row = await prisma.videoMetricDist.findUnique({
+      where: { level_noflag_bucket: { level, noflag, bucket } },
+      select,
+    });
+    if (row && row.size >= MIN_DIST_SIZE) return row;
+  }
+  const all = await prisma.videoMetricDist.findUnique({
     where: { level_noflag_bucket: { level, noflag, bucket: DIST_BUCKET_ALL } },
-    select: { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true },
+    select,
   });
-  return row && row.size >= MIN_DIST_SIZE ? row : null;
+  return all && all.size >= MIN_DIST_SIZE ? all : null;
 }
 
 /**
@@ -121,11 +137,12 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     }
     if (!row) return null;
 
-    const baseline = await getBaseline(input.level, input.noflag);
+    const baseline = await getBaseline(input.level, input.noflag, input.bbbv);
     if (!baseline) return null;
 
     // ① 四根分项轴（顺带攒下各轴组内分位，供综合评级加权）
-    //    2026-10-28 轴调整：「效率」按组选指标（NF=IOE / FL=ThrP）、「走位」bpp 替换「精准」corr
+    //    2026-10-28 轴调整：「效率」按组选指标（NF=IOE / FL=ThrP）；「路线规划」bpp
+    //    2026-10-29 起 = 3BV/CP（分母 crossings）；基准按该盘 3BV 选粗桶（getBaseline）
     const percents: Partial<Record<MetricKey, number>> = {};
     const subs: VideoAnalysisPoint[] = axisMetricsFor(input.noflag).map((def) => {
       const value = Number(row[def.key]);

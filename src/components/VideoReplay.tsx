@@ -137,6 +137,8 @@ export interface ReplayStats {
   ce: number;
   /** 鼠标行程（像素） */
   path: number;
+  /** 跨格次数（2026-10-29：「我的评级」路线规划 3BV/CP 分母，与录像引擎 crossings 同口径） */
+  cp: number;
   /** 当前盘面旗数 */
   flags: number;
 }
@@ -353,6 +355,11 @@ export function runReplay(opts: {
   let pathPx = 0;
   let lastPX: number | null = null;
   let lastPY = 0;
+  /* 跨格计数（2026-10-29）：与 lib/replay-core.ts 同一套 0.5px 光栅化口径——
+     「我的评级」路线规划（3BV/CP）分母必须与服务端落库值同源。
+     lastCell 断链语义同 replay-core：出界/首事件后重置 -1 重新起算 */
+  let crossings = 0;
+  let lastCell = -1;
   /* 回放光标：flop 同款箭头（#cursor-arrow，FlopSprites 已内置；练习页同款 .replay_cursor）。
      箭头坐标域 0-120 × 0-190、尖端 (5,12)——事件像素坐标对准尖端。
      渲染尺寸 12×19 = viewBox 的 1/10，尖端显示像素 = (5,12.12)×0.1 ≈ (0.5,1.21)
@@ -516,9 +523,38 @@ export function runReplay(opts: {
     if (won) return;
     /* 鼠标行程（flop mouseMove 口径，videoradar 同法）：所有带坐标事件按时间序累加 */
     if (e.px !== 0 || e.py !== 0) {
-      if (lastPX !== null) pathPx += Math.hypot(e.px - lastPX, e.py - lastPY);
+      if (lastPX !== null) {
+        pathPx += Math.hypot(e.px - lastPX, e.py - lastPY);
+        // 跨格光栅化（0.5px 步长，replay-core 同款）：每进入一个新格 +1
+        const seg = Math.hypot(e.px - lastPX, e.py - lastPY);
+        const steps = Math.max(1, Math.ceil(seg * 2));
+        let prevCell = lastCell;
+        for (let t = 0; t <= steps; t++) {
+          const px = lastPX + ((e.px - lastPX) * t) / steps;
+          const py = lastPY + ((e.py - lastPY) * t) / steps;
+          const cx = Math.floor(px / 16);
+          const cy = Math.floor(py / 16);
+          const idx = cx >= 0 && cx < cols && cy >= 0 && cy < rows ? cy * cols + cx : -1;
+          if (idx < 0) {
+            prevCell = -1;
+            continue;
+          }
+          if (idx !== prevCell) {
+            crossings++;
+            prevCell = idx;
+          }
+        }
+        lastCell = prevCell;
+      } else {
+        const cx = Math.floor(e.px / 16);
+        const cy = Math.floor(e.py / 16);
+        lastCell = cx >= 0 && cx < cols && cy >= 0 && cy < rows ? cy * cols + cx : -1;
+      }
       lastPX = e.px;
       lastPY = e.py;
+    } else {
+      lastPX = null;
+      lastCell = -1;
     }
     if (e.ev === "mt") {
       marks = !marks;
@@ -601,6 +637,7 @@ export function runReplay(opts: {
       clDouble: cDouble,
       ce,
       path: pathPx,
+      cp: crossings,
       flags: playerFlags,
     };
   }
@@ -632,6 +669,8 @@ export function runReplay(opts: {
     playerFlags = 0;
     cLeft = cRight = cDouble = wastedLeft = wastedRight = wastedDouble = 0;
     pathPx = 0;
+    crossings = 0;
+    lastCell = -1;
     lastPX = null;
     for (let i = 0; i < N; i++) paintR(i);
     evIdx = 0;
@@ -742,8 +781,11 @@ export interface PlayResult {
   cl: number;
   /** 有效点击（Ce = Cl − wasted） */
   ce: number;
-  /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——「我的评级」走位轴（3BV/PATH）用 */
+  /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——回放数据面板 Path 行用；
+   *  「我的评级」路线规划轴 2026-10-29 起改用 cp（跨格次数） */
   path: number;
+  /** 跨格次数：轨迹跨格线次数（0.5px 光栅化，replay-core crossings 同口径） */
+  cp: number;
 }
 
 /* ---- 试玩引擎（十七期：全屏层点笑脸后「自己玩本局」）----
@@ -904,6 +946,7 @@ function runPlayGame(opts: {
       clDouble: cDouble,
       ce,
       path: Math.round(playPathPx),
+      cp: playCrossings,
       flags,
     };
   }
@@ -922,6 +965,7 @@ function runPlayGame(opts: {
       cl: cLeft + cRight + cDouble,
       ce: s.ce,
       path: s.path,
+      cp: s.cp,
     });
   }
   function startTimer() {
@@ -1094,9 +1138,12 @@ function runPlayGame(opts: {
   on<MouseEvent>(boardDiv, "contextmenu", (e) => e.preventDefault());
   /* 试玩鼠标行程（2026-10-28）：mousemove 按棋盘 1x 像素累加欧氏距离——
      rect 已含 zoom，除以 (cols×16) 归一到 1x 口径，与录像引擎 pathPx 同量纲。
-     「我的评级」走位轴（3BV/PATH）的数据源 */
+     「我的评级」路线规划轴 2026-10-29 起改用跨格次数（playCrossings，replay-core
+     同款 0.5px 光栅化），行程仅留作数据面板展示 */
   const playTable = boardDiv.querySelector("table") ?? (boardDiv.querySelector("tbody")?.parentElement as HTMLTableElement | null);
   let playPathPx = 0;
+  let playCrossings = 0;
+  let playLastCell = -1;
   let lastMX: number | null = null;
   let lastMY: number | null = null;
   on<MouseEvent>(boardDiv, "mousemove", (e) => {
@@ -1107,7 +1154,31 @@ function runPlayGame(opts: {
     const scale = rect.width / (cols * 16);
     const mx = (e.clientX - rect.left) / scale;
     const my = (e.clientY - rect.top) / scale;
-    if (lastMX !== null && lastMY !== null) playPathPx += Math.hypot(mx - lastMX, my - lastMY);
+    if (lastMX !== null && lastMY !== null) {
+      playPathPx += Math.hypot(mx - lastMX, my - lastMY);
+      const steps = Math.max(1, Math.ceil(Math.hypot(mx - lastMX, my - lastMY) * 2));
+      let prevCell = playLastCell;
+      for (let t = 0; t <= steps; t++) {
+        const px = lastMX + ((mx - lastMX) * t) / steps;
+        const py = lastMY + ((my - lastMY) * t) / steps;
+        const cx = Math.floor(px / 16);
+        const cy = Math.floor(py / 16);
+        const idx = cx >= 0 && cx < cols && cy >= 0 && cy < rows ? cy * cols + cx : -1;
+        if (idx < 0) {
+          prevCell = -1;
+          continue;
+        }
+        if (idx !== prevCell) {
+          playCrossings++;
+          prevCell = idx;
+        }
+      }
+      playLastCell = prevCell;
+    } else {
+      const cx = Math.floor(mx / 16);
+      const cy = Math.floor(my / 16);
+      playLastCell = cx >= 0 && cx < cols && cy >= 0 && cy < rows ? cy * cols + cx : -1;
+    }
     lastMX = mx;
     lastMY = my;
   });
@@ -2543,7 +2614,7 @@ export function ReplayFullscreen({
       thrp: playResult.ce > 0 ? playResult.solvedBv / playResult.ce : 0,
       corr: playResult.cl > 0 ? playResult.ce / playResult.cl : 0,
       cls: t > 0 ? playResult.cl / t : 0,
-      bpp: playResult.path > 0 ? playResult.solvedBv / (playResult.path / 16) : 0,
+      bpp: playResult.cp > 0 ? playResult.solvedBv / playResult.cp : 0,
     };
     const lowCompletion = playResult.board3bv <= 0 || playResult.solvedBv / playResult.board3bv < 0.1;
     const points = radarPointsFrom(values, radarDists, !!radarDists && playResult.cl > 0 && !lowCompletion, noflag);
