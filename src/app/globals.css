@@ -1633,7 +1633,14 @@ span.record[data-tip]:hover::after {
 /* 玩家名气泡（2026-10-29 张老师要求，二轮改版）：可点击玩家名 hover 显示
    「#ID 姓名 英文名」——姓名亮灰 #b1b1a4、ID 与英文名暗灰 #75715e。
    富文本结构（CSS attr() 无法分段着色）：链接内嵌 .pt_bubble（气泡壳，absolute
-   上方弹出、hover 立即显示）+ .pt_id/.pt_name/.pt_en 三段。 */
+   上方弹出、hover 立即显示）+ .pt_id/.pt_name/.pt_en 三段。
+   ⚠️ 锚 <a> 必须显式 relative（2026-10-29 线上报障修复：absolute 气泡缺定位基准，
+   会以更外层定位祖先为基准乱飘到 header 区显示） */
+a.avatar_link:has(.pt_bubble),
+.ranking_table td.name .ranking_name a:has(.pt_bubble),
+body #header a.um_trigger:has(.pt_bubble) {
+  position: relative;
+}
 a.avatar_link .pt_bubble,
 .ranking_table td.name .ranking_name a .pt_bubble {
   position: absolute;

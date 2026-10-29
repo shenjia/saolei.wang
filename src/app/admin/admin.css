@@ -1285,6 +1285,11 @@ table.admin_table .ai_reason {
 
 /* 玩家名 hover 气泡（2026-10-29 张老师要求二轮：#ID 姓名 英文名，姓名亮灰/其余暗灰）
    ——后台玩家链接内嵌 .pt_bubble（同主站 PlayerTip 结构）；富文本双色。 */
+a.link:has(.pt_bubble),
+a.avatar_link:has(.pt_bubble),
+a.cheat_uid:has(.pt_bubble) {
+  position: relative;
+}
 a.link .pt_bubble,
 a.avatar_link .pt_bubble,
 a.cheat_uid .pt_bubble {
