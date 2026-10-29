@@ -8586,12 +8586,12 @@ button.msg_cancel:hover {
 #online_play .op_ping[data-lv="y"] .ms { color: #fdc61d; }
 #online_play .op_ping[data-lv="r"] .ms { color: #f92672; }
 /* 排名服务器气泡（2026-10-29 张老师多轮定）：信号图标不可点（cursor 恢复
-   default）；气泡列出全部逻辑服务器——前缀「排名服务器：」白色，当前连接
-   节点元帅金 #e6db74（与军衔 marshal 档文字同色）+ 绿对号下标排第一，其余
+   default）；气泡列出全部逻辑服务器——前缀「节点：」暗灰，当前连接节点
+   元帅金 #e6db74（与军衔 marshal 档文字同色）+ 绿对号下标排第一，其余
    节点亮灰、hover 变绿提示可点；点击服务器名＝断开当前连接切到该服务器
    （tip 须放行 pointer-events） */
 #online_play .op_ping .tip { pointer-events: auto; }
-#online_play .op_ping .tip .sv_lead { color: #fff; }
+#online_play .op_ping .tip .sv_lead { color: #8a887b; }
 #online_play .op_ping .tip .sv_cur { color: #e6db74; }
 #online_play .op_ping .tip .sv_ok { color: #a6e22e; font-weight: normal; }
 #online_play .op_ping .tip .sv { color: #b0aea1; cursor: pointer; }
