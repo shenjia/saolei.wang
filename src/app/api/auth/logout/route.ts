@@ -1,7 +1,7 @@
 // 退出登录
 
 import { NextResponse } from "next/server";
-import { clearSession } from "@/lib/auth";
+import { clearSessionCookieDirectives } from "@/lib/auth";
 
 /**
  * 退出后不该回去的页面：这些页面自身要求登录（各页面的 `if (!session) redirect("/account/login")`），
@@ -49,8 +49,14 @@ function logoutTarget(req: Request): string {
 }
 
 export async function GET(req: Request) {
-  await clearSession();
-  // 手写相对 Location：不可用 siteUrl() 拼绝对地址——SITE_URL 未配时它回退到
-  // http://localhost:3000，会把浏览器甩到内网/错误 host（2026-09-24 张老师实测踩坑）。
-  return new NextResponse(null, { status: 302, headers: { Location: logoutTarget(req) } });
+  // Location 手写相对地址：不可用 siteUrl() 拼绝对——SITE_URL 未配时回退
+  // http://localhost:3000，nginx 反代下会把浏览器甩到内网（2026-09-24 实测踩坑）。
+  // 双删两条 Set-Cookie（host-only + 父域）必须手写 append——cookies() 内部
+  // Map 以名字为唯一键，jar.delete/set 同名只能留一条（见 auth.ts 注释）
+  const res = new NextResponse(null, {
+    status: 302,
+    headers: { Location: logoutTarget(req) },
+  });
+  for (const sc of clearSessionCookieDirectives()) res.headers.append("set-cookie", sc);
+  return res;
 }

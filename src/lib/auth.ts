@@ -162,9 +162,17 @@ export async function getSession(): Promise<SessionUser | null> {
   return user;
 }
 
-export async function clearSession(): Promise<void> {
-  const jar = await cookies();
-  jar.delete(SESSION_COOKIE);
+/** 退出登录要下发的 Set-Cookie 删除指令（logout route 手写 append 到响应头）。
+ *  2026-10-28 起会话 cookie 带 Domain=.saolei.wang（父域 cookie，多地域排行 WS 跨子域
+ *  携凭据），而浏览器删 cookie 要求 name+domain+path 全匹配——不带 Domain 的删除指令
+ *  只删 host-only 那枚，父域 cookie 原样保留（2026-10-30 张老师实测「退出登录退不出去」
+ *  根因）。cookies().delete()/set() 的内部 Map 以 cookie 名为唯一键，一条响应里
+ *  同名两条 Set-Cookie 只能留一条，无法双删——故改为返回两条序列化字符串由调用方手写。
+ *  存量迁移期 host-only 与父域两枚同名 cookie 可能并存，两条指令全覆盖；
+ *  Domain=saolei.wang（无点）按 RFC6265 与 .saolei.wang 等价，同一指令即删。 */
+export function clearSessionCookieDirectives(): string[] {
+  const base = `${SESSION_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  return [base, `${base}; Domain=.saolei.wang`];
 }
 
 // ---------- OAuth 临时票据 ----------
