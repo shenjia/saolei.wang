@@ -24,10 +24,13 @@ export interface OnlineEvent {
   x: number;
   /** 像素 y */
   y: number;
-  /** 整秒 */
+  /** 整秒（由 ms 派生的兼容字段：floor(ms/1000)；旧数据无 ms 时为权威来源） */
   sec: number;
-  /** 百分之一秒（0-99） */
+  /** 百分之一秒（0-99；由 ms 派生 floor(ms/10)%100，10ms 粒度） */
   hun: number;
+  /** 事件毫秒时间戳（2026-10-29 起 0.5 代客户端/权威服务端提供，1ms 精度；
+   *  缺省＝旧数据，EVF 导出回退 sec*1000+hun*10。AVF 导出恒用 sec/hun 厘秒） */
+  ms?: number;
 }
 
 export interface OnlineAvfInput {
@@ -205,10 +208,14 @@ export function repairWinningEvents(
   };
 
   const out: (OnlineEvent | null)[] = [];
-  const emit = (mouse: number, i: number, time: { sec: number; hun: number }) => {
-    out.push({ mouse, x: (i % w) * 16 + 8, y: ((i / w) | 0) * 16 + 8, sec: time.sec, hun: time.hun });
+  /* 合成事件继承源事件时间（优先 ms，1ms 精度随 0.5 代事件流透传；
+     旧数据无 ms 时回退 sec/hun 折算） */
+  const evMs = (t: { sec: number; hun: number; ms?: number }): { sec: number; hun: number; ms?: number } =>
+    t.ms !== undefined ? t : { sec: t.sec, hun: t.hun };
+  const emit = (mouse: number, i: number, time: { sec: number; hun: number; ms?: number }) => {
+    out.push({ mouse, x: (i % w) * 16 + 8, y: ((i / w) | 0) * 16 + 8, ...evMs(time) });
   };
-  const emitSafeClick = (i: number, time: { sec: number; hun: number }) => {
+  const emitSafeClick = (i: number, time: { sec: number; hun: number; ms?: number }) => {
     emit(3, i, time); openSafe(i); emit(5, i, time);
   };
   let lcAt = -1;
@@ -234,7 +241,7 @@ export function repairWinningEvents(
     }
   }
 
-  const end = { sec: (scoreCsec / 100) | 0, hun: scoreCsec % 100 };
+  const end = { sec: (scoreCsec / 100) | 0, hun: scoreCsec % 100, ms: scoreCsec * 10 };
   for (let i = 0; i < n; i++) {
     if (board[i] || state[i] === 1) continue;
     while (state[i] !== 0) { emit(9, i, end); toggleLabel(i); emit(17, i, end); }

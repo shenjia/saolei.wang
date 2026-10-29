@@ -9,13 +9,16 @@ import type { OnlineEvent } from "./avfwrite";
 /** 站内排名/练习客户端软件名（evf Software 字段 + DB software 列判等值） */
 export const RANKED_SOFTWARE = "Saolei.wang";
 /* 客户端代际版本（2026-10-29 张老师二定）：0.3＝点击坐标归一格心（旧版）；
- * 0.4 起＝忠实记录真实点击坐标+格内钳制（af3b40e）。
+ * 0.4 起＝忠实记录真实点击坐标+格内钳制（af3b40e）；
+ * 0.5 起＝事件时间戳 1ms 精度（2026-10-29 张老师定：点击 ms 时间随
+ * sendEvent/queueMove 上报权威，EVF 导出直写毫秒——旧厘秒网格截断按压
+ * 时长取证，4 次 <20ms 按压在 10ms 网格下无法进一步定界）。
  * ⚠️ 版本号必须由客户端自己上报（上传请求带 clientVersion）——服务端代码没有
  * 版本可言，绝不能按服务端部署代际盖章（2026-10-29 348342 案：旧页签跑旧
  * bundle 格心录制，服务端却盖 0.4，标签与行为脱节）。客户端不报＝0.3（旧版）。 */
 export const RANKED_CLIENT_VERSION_DEFAULT = "0.3";
 /** 客户端上报版本的白名单校验（防伪造未来版本；服务端只信自己认识的代际） */
-export const RANKED_CLIENT_VERSIONS = ["0.3", "0.4"] as const;
+export const RANKED_CLIENT_VERSIONS = ["0.3", "0.4", "0.5"] as const;
 export type RankedClientVersion = (typeof RANKED_CLIENT_VERSIONS)[number];
 
 /** 校验客户端自报版本：合法返回原值，非法/缺省回退 0.3 */
@@ -104,7 +107,9 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
     const code = mouseCode(e.mouse);
     if (code === null) throw new Error("Unsupported mouse event");
     u8(code);
-    const ms = Math.max(e.sec * 1000 + e.hun * 10, lastMs);
+    /* 事件时间：ms 字段优先（0.5 代客户端/权威流，1ms 精度）；
+       旧数据无 ms 回退 sec/hun 厘秒折算。单调钳制对两种来源同样生效 */
+    const ms = Math.max(e.ms ?? e.sec * 1000 + e.hun * 10, lastMs);
     u24(ms);
     lastMs = ms;
     u16(e.x);
