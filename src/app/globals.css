@@ -1637,8 +1637,7 @@ span.record[data-tip]:hover::after {
    ⚠️ 锚 <a> 必须显式 relative（2026-10-29 线上报障修复：absolute 气泡缺定位基准，
    会以更外层定位祖先为基准乱飘到 header 区显示） */
 a.avatar_link:has(.pt_bubble),
-.ranking_table td.name .ranking_name a:has(.pt_bubble),
-body #header a.um_trigger:has(.pt_bubble) {
+.ranking_table td.name .ranking_name a:has(.pt_bubble) {
   position: relative;
 }
 a.avatar_link .pt_bubble,
@@ -1675,15 +1674,24 @@ a.avatar_link:hover .pt_bubble,
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
-/* 顶栏用户菜单触发器：气泡向下弹（顶栏贴视口顶，向上弹会出界） */
-body #header .um_trigger .pt_bubble {
+/* 录像详情页正文区（作者/审核员）双层裁剪修复（2026-10-29 线上报障）：
+   legacy #video_view .video_cell p 是单行省略块（overflow:hidden，气泡无论
+   往哪弹都出不了 p），.video_cell 自身还有 overflow:hidden（防棋盘溢出，
+   必须保留）。改法：.info 两段 p 放开裁剪；气泡改在格子内部向下弹、
+   左缘与锚对齐（居中弹会被格子左缘裁掉一截） */
+#video_view .video_cell .info p {
+  overflow: visible;
+}
+#video_view .video_cell .info .pt_bubble {
   bottom: auto;
   top: 100%;
-  margin-top: 4px;
-  transform: translateX(-50%) translateY(-4px);
+  margin-top: 2px;
+  left: 0;
+  transform: none;
+  transition: opacity 0.08s;
 }
-body #header .um_trigger:hover .pt_bubble {
-  transform: translateX(-50%) translateY(0);
+#video_view .video_cell .info a:hover .pt_bubble {
+  transform: none;
 }
 .bbs_star::after,
 .bbs_top::after {
