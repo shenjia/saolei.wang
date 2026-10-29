@@ -58,7 +58,6 @@ export function CommentCell({
             <AvatarCell
               id={comment.author.id}
               name={comment.author.chineseName}
-              englishName={comment.author.englishName}
               sex={comment.author.sex}
               className="author"
               gender="small"
@@ -258,7 +257,7 @@ export function CommentSection({
   const [deletingId, setDeletingId] = useState(0); // 正在删除的评论 id（驱动行内按钮禁用态）
   const router = useRouter();
 
-  // 渐进定位链专用 ref（2026-10-29）：setTimeout 链式调 loadMore 时闭包里是旧 state，
+  // 渐进定位链专用 ref（2026-10-29）：setTimeout/rAF 链式调 loadMore 时闭包里是旧 state，
   // 用 ref 镜像最新值（batchStep/cursor/hasMore），链与按钮两条路共用同一 loadMore
   const batchStepRef = useRef(0);
   const cursorRef = useRef(cursor);
