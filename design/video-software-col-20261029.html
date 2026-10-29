@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>录像表·软件列（图标+全名气泡）交互稿 20261029</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #2e2f28;
+    color: #f8f8f2;
+    padding: 36px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 34px;
+  }
+  .doc { max-width: 1040px; width: 100%; }
+  .doc h1 { font-size: 18px; font-weight: 600; margin-bottom: 10px; color: #f8f8f2; }
+  .doc p.desc { font-size: 13px; color: #939387; line-height: 1.8; margin-bottom: 18px; }
+  .doc p.desc b { color: #fdc61d; font-weight: 600; }
+  .doc p.desc i { color: #a6e22e; font-style: normal; }
+
+  .stage {
+    width: 100%;
+    max-width: 1040px;
+    background: rgba(39, 40, 34, 0.92);
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    padding: 18px 20px 22px;
+  }
+  .stage-label { font-size: 12px; color: #75715e; letter-spacing: 1px; margin-bottom: 14px; }
+  .stage-label b { color: #a6e22e; font-weight: 600; }
+
+  /* ================= 模拟线上 .video_table（列结构 = 现状 + 新增软件列） ================= */
+  table.ranking_table { width: 100%; border-collapse: collapse; font-size: 16px; }
+  .ranking_table th { text-align: left; color: #75715e; font-size: 14px; padding: 6px 2px; border-bottom: 1px solid #49483e; white-space: nowrap; }
+  .ranking_table td { text-align: left; white-space: nowrap; padding: 4px 2px; color: #939387; }
+  .ranking_table td.name { padding-right: 12px; color: #f8f8f2; }
+  .ranking_table td.name .title { margin-left: 5px; font-size: 14px; color: #75715e; }
+  #page .ranking_table td.level, td.level { font-size: 14px; font-weight: bold; color: #999994; }
+  td.score.lv_beg { color: #999994; }
+  td.score.lv_int { color: #bbbbaf; }
+  td.score.lv_exp { color: #ddddcf; }
+  td.score a { color: inherit; font-weight: bold; text-decoration: none; }
+  td.score .nf { margin-left: 6px; font-size: 11px; color: #fdc61d; }
+  td.score .reviewed { margin-left: 5px; font-size: 10px; color: #a6e22e; }
+  td.c { text-align: center; }
+  td.create_time { font-size: 14px; }
+  td.create_time.time--recent { color: #b1b1a4; }
+  td.counters em { margin: 0; font-style: normal; }
+
+  /* ================= 软件列（本次新增） ================= */
+  th.c.sw, td.c.sw { text-align: center; padding: 4px 4px; }
+  .sw .sw_icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    line-height: 1;
+    vertical-align: -3px;
+    position: relative;
+    cursor: help;
+  }
+  .sw .sw_icon img { width: 16px; height: 16px; display: block; image-rendering: auto; }
+  .sw .sw_icon.sw--pixel img { image-rendering: pixelated; }
+  .sw .sw_icon.sw--text {
+    font-size: 10px; color: #75715e; letter-spacing: 0;
+    font-family: Tahoma, sans-serif;
+  }
+  /* hover 气泡（同站内 data-tip 语言：暗底白字上方弹出） */
+  .sw .sw_icon::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 155%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e1f1c;
+    color: #f8f8f2;
+    border: 1px solid #49483e;
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 5;
+  }
+  .sw .sw_icon:hover::after { opacity: 1; }
+
+  .hint { margin-top: 16px; font-size: 12px; color: #75715e; line-height: 1.8; }
+  .hint b { color: #fdc61d; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <h1>录像表新增「软件」列——图标 + hover 全名气泡</h1>
+  <p class="desc">
+    位置：<b>「级别」列之前</b>（上传者之后第二列）。展示录像所用软件图标，hover 弹<b>软件全名气泡</b>。<br>
+    生效范围：/video 列表页、首页「最新录像」、用户主页录像版块（三处共用行渲染）。未知软件（空值）显示灰色小字占位。
+  </p>
+</div>
+
+<div class="stage">
+  <div class="stage-label">模拟线上表格（把鼠标悬停到 <b>软件列图标</b> 上看气泡）</div>
+  <table class="ranking_table video_table">
+    <thead>
+      <tr>
+        <th>上传者</th>
+        <th class="c sw">软件</th>
+        <th>级别</th>
+        <th>成绩</th>
+        <th class="c bv">3BV</th>
+        <th class="c bvs">3BV/s</th>
+        <th class="c ioe">IOE</th>
+        <th class="c stnb">STNB</th>
+        <th>评论 / 点击</th>
+        <th>上传时间</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="name">张砷镓<span class="title">中校</span></td>
+        <td class="c sw"><span class="sw_icon" data-tip="Minesweeper Arbiter"><img src="../public/images/software/arbiter.png" alt="Minesweeper Arbiter"></span></td>
+        <td class="level">初级</td>
+        <td class="score lv_beg"><a href="#">47.32</a><span class="nf">NF</span><span class="reviewed">✓</span></td>
+        <td class="c">9</td>
+        <td class="c">190.47</td>
+        <td class="c">1.579</td>
+        <td class="c">96.3</td>
+        <td class="counters"><em>5</em> / 128</td>
+        <td class="create_time time--recent">3天前</td>
+      </tr>
+      <tr>
+        <td class="name">张砷镓<span class="title">中校</span></td>
+        <td class="c sw"><span class="sw_icon sw--pixel" data-tip="Minesweeper Clone"><img src="../public/images/software/clone.png" alt="Minesweeper Clone"></span></td>
+        <td class="level">中级</td>
+        <td class="score lv_int"><a href="#">1:47.04</a></td>
+        <td class="c">129</td>
+        <td class="c">72.88</td>
+        <td class="c">1.412</td>
+        <td class="c">54.8</td>
+        <td class="counters"><em>2</em> / 89</td>
+        <td class="create_time time--recent">5天前</td>
+      </tr>
+      <tr>
+        <td class="name">李明<span class="title">上尉</span></td>
+        <td class="c sw"><span class="sw_icon" data-tip="Viennasweeper"><img src="../public/images/software/vienna.png" alt="Viennasweeper"></span></td>
+        <td class="level">高级</td>
+        <td class="score lv_exp"><a href="#">59.74</a><span class="reviewed">✓</span></td>
+        <td class="c">175</td>
+        <td class="c">161.76</td>
+        <td class="c">1.465</td>
+        <td class="c">121.9</td>
+        <td class="counters"><em>12</em> / 450</td>
+        <td class="create_time time--old">2025-3-14</td>
+      </tr>
+      <tr>
+        <td class="name">王五<span class="title">少尉</span></td>
+        <td class="c sw"><span class="sw_icon" data-tip="元扫雷"><img src="../public/images/software/yuansaolei.png" alt="元扫雷"></span></td>
+        <td class="level">初级</td>
+        <td class="score lv_beg"><a href="#">1.99</a></td>
+        <td class="c">2</td>
+        <td class="c"><del>64.32</del></td>
+        <td class="c"><del>4316.9</del></td>
+        <td class="c">96.3</td>
+        <td class="counters"><em>0</em> / 12</td>
+        <td class="create_time time--old">2024-11-2</td>
+      </tr>
+      <tr>
+        <td class="name">张砷镓<span class="title">中校</span></td>
+        <td class="c sw"><span class="sw_icon" data-tip="Saolei.wang"><img src="../public/images/software/saolei.png" alt="Saolei.wang"></span></td>
+        <td class="level">高级</td>
+        <td class="score lv_exp"><a href="#">44.62</a><span class="nf">NF</span></td>
+        <td class="c">166</td>
+        <td class="c">129.72</td>
+        <td class="c">1.502</td>
+        <td class="c">118.7</td>
+        <td class="counters"><em>8</em> / 233</td>
+        <td class="create_time time--recent">12小时前</td>
+      </tr>
+      <tr>
+        <td class="name">老录像<span class="title">列兵</span></td>
+        <td class="c sw"><span class="sw_icon sw--text" data-tip="未知软件">?</span></td>
+        <td class="level">中级</td>
+        <td class="score lv_int"><a href="#">2:11.35</a></td>
+        <td class="c">96</td>
+        <td class="c">44.02</td>
+        <td class="c">1.365</td>
+        <td class="c">38.2</td>
+        <td class="counters"><em>1</em> / 45</td>
+        <td class="create_time time--old">2008-5-20</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="hint">
+    · 图标统一 16×16 展示（原图 32×32，2x retina 清晰）；Vienna 原图为 16×16 像素风，放大后保持硬边（pixelated）<br>
+    · 空软件名（25 条历史数据）显示灰色 <b>?</b> 占位；「元扫雷3.3.4」等个别值按前缀归到对应图标<br>
+    · 气泡文案即软件全名：Minesweeper Arbiter / Minesweeper Clone / Viennasweeper / 元扫雷 / Saolei.wang
+  </div>
+</div>
+
+</body>
+</html>
