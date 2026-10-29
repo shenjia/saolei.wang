@@ -8556,6 +8556,17 @@ button.msg_cancel:hover {
 #online_play .op_ping[data-lv="g"] .ms { color: #a6e22e; }
 #online_play .op_ping[data-lv="y"] .ms { color: #fdc61d; }
 #online_play .op_ping[data-lv="r"] .ms { color: #f92672; }
+/* 服务器切换气泡（2026-10-29 张老师需求）：延迟图标可点击——hover 列出全部
+   服务器（当前节点排第一，金色 #ffd700 + 绿对号下标 sub；其余节点按每秒
+   探测的延迟级别定色，阈值同信号条 35/70，未测出灰）。点击＝断开当前连接
+   切到队列下一个服务器 */
+#online_play .op_ping { cursor: pointer; }
+#online_play .op_ping .tip .sv_cur { color: #ffd700; font-weight: bold; }
+#online_play .op_ping .tip .sv_ok { color: #a6e22e; font-weight: normal; }
+#online_play .op_ping .tip .sv_g { color: #a6e22e; }
+#online_play .op_ping .tip .sv_y { color: #fdc61d; }
+#online_play .op_ping .tip .sv_r { color: #f92672; }
+#online_play .op_ping .tip .sv_na { color: #8a887b; }
 /* ---- 设置浮窗（2026-10-14 二期）：齿轮点开，绝对定位挂在标题行下缘右侧 ---- */
 #online_play .gsettings {
   display: none;
