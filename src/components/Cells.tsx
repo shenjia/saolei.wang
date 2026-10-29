@@ -21,13 +21,14 @@ export function PlayerTip({
   englishName?: string;
 }) {
   const en = englishName?.trim();
+  // 用 <span> 而非 <i>（2026-10-29 张老师要求：不要斜体字——<i> 浏览器默认 italic）
   return (
     <>
-      <i className="pt_id">#{id}</i> <i className="pt_name">{name}</i>
+      <span className="pt_id">#{id}</span> <span className="pt_name">{name}</span>
       {en ? (
         <>
           {" "}
-          <i className="pt_en">{en}</i>
+          <span className="pt_en">{en}</span>
         </>
       ) : null}
     </>
