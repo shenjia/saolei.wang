@@ -1630,43 +1630,53 @@ span.title[data-tip]:hover::after,
 span.record[data-tip]:hover::after {
   opacity: 1;
 }
-/* 玩家名气泡（2026-10-29 张老师要求：全站可点击玩家名 hover 显示「姓名（英文名）#ID」）
-   ——AvatarCell / RankingName 的 link 态统一挂 data-tip，视觉复用军衔气泡
-   （暗底浅字、上方弹出、hover 立即显示，替代原生 title 的 1s 延迟）。 */
-a.avatar_link[data-tip],
-.ranking_table td.name .ranking_name a[data-tip] {
-  position: relative;
-}
-a.avatar_link[data-tip]::after,
-.ranking_table td.name .ranking_name a[data-tip]::after {
-  content: attr(data-tip);
+/* 玩家名气泡（2026-10-29 张老师要求，二轮改版）：可点击玩家名 hover 显示
+   「#ID 姓名 英文名」——姓名亮灰 #b1b1a4、ID 与英文名暗灰 #75715e。
+   富文本结构（CSS attr() 无法分段着色）：链接内嵌 .pt_bubble（气泡壳，absolute
+   上方弹出、hover 立即显示）+ .pt_id/.pt_name/.pt_en 三段。 */
+a.avatar_link .pt_bubble,
+.ranking_table td.name .ranking_name a .pt_bubble {
   position: absolute;
   bottom: 150%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(4px);
   background: #1e1f1c;
-  color: #f8f8f2;
   border: 1px solid #49483e;
   border-radius: 3px;
   padding: 1px 7px;
   font-size: 12px;
-  font-weight: normal;
+  font-style: normal;
   line-height: 1.6;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.08s;
+  transition: opacity 0.08s, transform 0.08s;
   z-index: 9999;
 }
-a.avatar_link[data-tip]:hover::after,
-.ranking_table td.name .ranking_name a[data-tip]:hover::after {
+a.avatar_link .pt_bubble .pt_id,
+a.avatar_link .pt_bubble .pt_en,
+.ranking_table td.name .ranking_name a .pt_bubble .pt_id,
+.ranking_table td.name .ranking_name a .pt_bubble .pt_en {
+  color: #75715e;
+}
+a.avatar_link .pt_bubble .pt_name,
+.ranking_table td.name .ranking_name a .pt_bubble .pt_name {
+  color: #b1b1a4;
+}
+a.avatar_link:hover .pt_bubble,
+.ranking_table td.name .ranking_name a:hover .pt_bubble {
   opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 /* 顶栏用户菜单触发器：气泡向下弹（顶栏贴视口顶，向上弹会出界） */
-body #header a.um_trigger[data-tip]::after {
+body #header .um_trigger .pt_bubble {
   bottom: auto;
   top: 100%;
   margin-top: 4px;
+  transform: translateX(-50%) translateY(-4px);
+}
+body #header .um_trigger:hover .pt_bubble {
+  transform: translateX(-50%) translateY(0);
 }
 .bbs_star::after,
 .bbs_top::after {

@@ -5,6 +5,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { useState } from "react";
 import { useOp } from "./AdminAction";
 import { AVATAR_CATEGORY_NAMES, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
@@ -67,13 +68,15 @@ export function AdminAvatarList({
                   </button>
                 </td>
                 <td>
-                  <Link
-                    className="link"
-                    href={`/user/${row.user}`}
-                    target="_blank"
-                    data-tip={row.author ? `${row.author.chineseName}${row.author.englishName ? `（${row.author.englishName}）` : ""} #${row.user}` : undefined}
-                  >
+                  <Link className="link" href={`/user/${row.user}`} target="_blank">
                     {row.author?.chineseName ?? `#${row.user}`}
+                    <span className="pt_bubble">
+                      <PlayerTip
+                        id={row.user}
+                        name={row.author?.chineseName ?? `#${row.user}`}
+                        englishName={row.author?.englishName}
+                      />
+                    </span>
                   </Link>
                   <span className="admin_hint"> #{row.user}</span>
                 </td>

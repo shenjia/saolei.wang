@@ -4,6 +4,7 @@
 // 「全部玩家」保持原玩家管理（搜索/筛选/排序，行内封禁·解封·改角色）。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { getSession } from "@/lib/auth";
 import { USER_ROLE } from "@/lib/config";
@@ -210,12 +211,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 <tr key={u.id} className={u.status !== 0 ? "off" : undefined}>
                   <td className="c sub">{u.id}</td>
                   <td>
-                    <Link
-                      className="link"
-                      href={`/admin/users/${u.id}`}
-                      data-tip={`${u.chineseName}${u.englishName ? `（${u.englishName}）` : ""} #${u.id}`}
-                    >
+                    <Link className="link" href={`/admin/users/${u.id}`}>
                       {u.chineseName}
+                      <span className="pt_bubble">
+                        <PlayerTip id={u.id} name={u.chineseName} englishName={u.englishName} />
+                      </span>
                     </Link>
                     {u.englishName && <span className="sub"> {u.englishName}</span>}
                     {u.trusted && (

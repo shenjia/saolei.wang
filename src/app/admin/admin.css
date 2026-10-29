@@ -1283,34 +1283,44 @@ table.admin_table .ai_reason {
   font-size: 14px;
 }
 
-/* 玩家名 hover 气泡（2026-10-29 张老师要求：全站可点击玩家名显示「姓名（英文名）#ID」）
-   ——后台玩家管理/反作弊复核列表行内链接挂 data-tip；视觉同主站气泡（暗底浅字）。
-   admin.css 在 legacy 之后加载，直接生效。 */
-a[data-tip].link,
-a[data-tip].cheat_uid {
-  position: relative;
-}
-a[data-tip].link::after,
-a[data-tip].cheat_uid::after {
-  content: attr(data-tip);
+/* 玩家名 hover 气泡（2026-10-29 张老师要求二轮：#ID 姓名 英文名，姓名亮灰/其余暗灰）
+   ——后台玩家链接内嵌 .pt_bubble（同主站 PlayerTip 结构）；富文本双色。 */
+a.link .pt_bubble,
+a.avatar_link .pt_bubble,
+a.cheat_uid .pt_bubble {
   position: absolute;
   bottom: 150%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(4px);
   background: #1e1f1c;
-  color: #f8f8f2;
   border: 1px solid #49483e;
   border-radius: 3px;
   padding: 1px 7px;
   font-size: 12px;
+  font-style: normal;
   line-height: 1.6;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.08s;
+  transition: opacity 0.08s, transform 0.08s;
   z-index: 9999;
 }
-a[data-tip].link:hover::after,
-a[data-tip].cheat_uid:hover::after {
+a.link .pt_bubble .pt_id,
+a.link .pt_bubble .pt_en,
+a.avatar_link .pt_bubble .pt_id,
+a.avatar_link .pt_bubble .pt_en,
+a.cheat_uid .pt_bubble .pt_id,
+a.cheat_uid .pt_bubble .pt_en {
+  color: #75715e;
+}
+a.link .pt_bubble .pt_name,
+a.avatar_link .pt_bubble .pt_name,
+a.cheat_uid .pt_bubble .pt_name {
+  color: #b1b1a4;
+}
+a.link:hover .pt_bubble,
+a.avatar_link:hover .pt_bubble,
+a.cheat_uid:hover .pt_bubble {
   opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }

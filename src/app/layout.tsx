@@ -5,6 +5,7 @@ import "./globals.css";
 import { getSession } from "@/lib/auth";
 import { getHeaderUser } from "@/lib/usercard";
 import { LoginLink } from "@/components/LoginLink";
+import { PlayerTip } from "@/components/Cells";
 import { LoginModal } from "@/components/LoginModal";
 import { MessageBadge } from "@/components/MessageBadge";
 import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "@/components/MenuIcons";
@@ -123,14 +124,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                       <MessageBadge />
                     </li>
                     <li className="popMenu user_menu">
-                      <Link
-                        href={`/user/${session.uid}`}
-                        className="um_trigger"
-                        data-tip={`${displayName}${me?.englishName ? `（${me.englishName}）` : ""} #${session.uid}`}
-                      >
+                      <Link href={`/user/${session.uid}`} className="um_trigger">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img className="um_avatar" src={avatarUrl} alt="" />
                         <span className="um_name">{displayName}</span>
+                        <span className="pt_bubble">
+                          <PlayerTip
+                            id={session.uid}
+                            name={me?.chineseName || displayName}
+                            englishName={me?.englishName}
+                          />
+                        </span>
                       </Link>
                       <ul className="menu">
                         <li>

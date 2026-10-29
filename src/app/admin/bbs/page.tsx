@@ -2,6 +2,7 @@
 // 主题检索 + 置顶/加精/锁定/移动板块/删除；带 ?post= 参数时下钻查看该主题回复并逐条删除。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { BBS_BOARDS } from "@/lib/bbs";
 import { getPendingBbsAdmin, getPostListAdmin, getReplyListAdmin } from "@/lib/admin/data";
@@ -77,12 +78,11 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       </div>
                     </td>
                     <td>
-                      <Link
-                        className="link"
-                        href={`/admin/users/${r.user}`}
-                        data-tip={r.author ? `${r.author.chineseName}${r.author.englishName ? `（${r.author.englishName}）` : ""} #${r.user}` : `#${r.user}`}
-                      >
+                      <Link className="link" href={`/admin/users/${r.user}`}>
                         {r.author?.chineseName ?? `#${r.user}`}
+                        <span className="pt_bubble">
+                          <PlayerTip id={r.user} name={r.author?.chineseName ?? `#${r.user}`} englishName={r.author?.englishName} />
+                        </span>
                       </Link>
                     </td>
                     <td className="sub" style={{ maxWidth: 200 }}>
@@ -202,12 +202,11 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                     {p.status === 5 && p.aiReason && <div className="ai_reason">AI 判定：{p.aiReason}</div>}
                   </td>
                   <td>
-                    <Link
-                      className="link"
-                      href={`/admin/users/${p.user}`}
-                      data-tip={p.author ? `${p.author.chineseName}${p.author.englishName ? `（${p.author.englishName}）` : ""} #${p.user}` : `#${p.user}`}
-                    >
+                    <Link className="link" href={`/admin/users/${p.user}`}>
                       {p.author?.chineseName ?? `#${p.user}`}
+                      <span className="pt_bubble">
+                        <PlayerTip id={p.user} name={p.author?.chineseName ?? `#${p.user}`} englishName={p.author?.englishName} />
+                      </span>
                     </Link>
                   </td>
                   <td className="num">{p.replies}</td>
@@ -319,12 +318,11 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                   <tr key={r.id} className={r.status !== 0 ? "off" : undefined}>
                     <td className="c sub">{r.id}</td>
                     <td>
-                      <Link
-                        className="link"
-                        href={`/admin/users/${r.user}`}
-                        data-tip={r.author ? `${r.author.chineseName}${r.author.englishName ? `（${r.author.englishName}）` : ""} #${r.user}` : `#${r.user}`}
-                      >
+                      <Link className="link" href={`/admin/users/${r.user}`}>
                         {r.author?.chineseName ?? `#${r.user}`}
+                        <span className="pt_bubble">
+                          <PlayerTip id={r.user} name={r.author?.chineseName ?? `#${r.user}`} englishName={r.author?.englishName} />
+                        </span>
                       </Link>
                     </td>
                     {/* 回复内容为 UBB，这里用已解析的 HTML 展示（服务端已转义） */}

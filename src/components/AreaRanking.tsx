@@ -18,7 +18,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import { AreaMap, type AreaMapDatum } from "./AreaMap";
-import { TitleBadge } from "./Cells";
+import { PlayerTip, TitleBadge } from "./Cells";
 import { buildUrl } from "./Pager";
 import { PageSlider, nextBatchSize } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
@@ -153,13 +153,11 @@ export function AreaRanking({
                       </Link>
                     </td>
                     <td className="best">
-                      <Link
-                        href={`/user/${r.bestId}`}
-                        className="avatar_link"
-                        target="_blank"
-                        data-tip={`${r.bestName}${r.bestEnglishName ? `（${r.bestEnglishName}）` : ""} #${r.bestId}`}
-                      >
+                      <Link href={`/user/${r.bestId}`} className="avatar_link" target="_blank">
                         {r.bestName}
+                        <span className="pt_bubble">
+                          <PlayerTip id={r.bestId} name={r.bestName} englishName={r.bestEnglishName} />
+                        </span>
                       </Link>
                       <TitleBadge title={titles[startRow + i] ?? ""} classic={classics?.[startRow + i]} link />
                     </td>

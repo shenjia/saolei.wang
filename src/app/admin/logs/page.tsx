@@ -2,6 +2,7 @@
 // 后台所有写操作的留痕：谁、何时、对谁、做了什么、来源 IP。可按动作与关键词筛。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { getAdminLogs, getLogActions } from "@/lib/admin/data";
 import { opLabel } from "@/lib/admin/log";
@@ -69,12 +70,11 @@ export default async function AdminLogsPage({ searchParams }: { searchParams: Pr
                   </td>
                   <td>
                     {l.author ? (
-                      <Link
-                        className="link"
-                        href={`/admin/users/${l.user}`}
-                        data-tip={`${l.author.chineseName}${l.author.englishName ? `（${l.author.englishName}）` : ""} #${l.user}`}
-                      >
+                      <Link className="link" href={`/admin/users/${l.user}`}>
                         {l.author.chineseName}
+                        <span className="pt_bubble">
+                          <PlayerTip id={l.user} name={l.author.chineseName} englishName={l.author.englishName} />
+                        </span>
                       </Link>
                     ) : (
                       <span className="sub">#{l.user}</span>

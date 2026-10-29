@@ -2,6 +2,7 @@
 // 全站评论检索与处置：删除（status=-1）会同步回退录像评论计数，恢复则加回。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { getCommentListAdmin } from "@/lib/admin/data";
 import { AdminAction } from "@/components/admin/AdminAction";
@@ -64,12 +65,11 @@ export default async function AdminCommentsPage({ searchParams }: { searchParams
                 <tr key={c.id} className={c.status !== 0 ? "off" : undefined}>
                   <td className="c sub">{c.id}</td>
                   <td>
-                    <Link
-                      className="link"
-                      href={`/admin/users/${c.user}`}
-                      data-tip={c.author ? `${c.author.chineseName}${c.author.englishName ? `（${c.author.englishName}）` : ""} #${c.user}` : `#${c.user}`}
-                    >
+                    <Link className="link" href={`/admin/users/${c.user}`}>
                       {c.author?.chineseName ?? `#${c.user}`}
+                      <span className="pt_bubble">
+                        <PlayerTip id={c.user} name={c.author?.chineseName ?? `#${c.user}`} englishName={c.author?.englishName} />
+                      </span>
                     </Link>
                   </td>
                   <td>

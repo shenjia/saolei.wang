@@ -6,6 +6,7 @@
 // 改判（2026-10-28 张老师需求）：已复核行结论列可反向改判（核实↔误报），复用同一对 op。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { prisma } from "@/lib/db";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { SendMessageButton } from "@/components/admin/SendMessageButton";
@@ -117,13 +118,15 @@ export default async function AdminCheatPage() {
             </Link>
           </td>
           <td className="cheat_player">
-            <Link
-              href={`/user/${r.user}`}
-              className="avatar_link"
-              target="_blank"
-              data-tip={`${nameMap.get(r.user) ?? "（已注销）"}${enMap.get(r.user) ? `（${enMap.get(r.user)}）` : ""} #${r.user}`}
-            >
+            <Link href={`/user/${r.user}`} className="avatar_link" target="_blank">
               {nameMap.get(r.user) ?? "（已注销）"}
+              <span className="pt_bubble">
+                <PlayerTip
+                  id={Number(r.user)}
+                  name={nameMap.get(r.user) ?? "（已注销）"}
+                  englishName={enMap.get(r.user)}
+                />
+              </span>
             </Link>
             <span className="cheat_rank" style={{ color: TITLE_COLORS[rankMap.get(r.user) ?? ""] ?? "#999" }}>
               {rankMap.get(r.user) ?? ""}

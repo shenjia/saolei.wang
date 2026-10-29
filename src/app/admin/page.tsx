@@ -4,6 +4,7 @@
 // 一屏掌握：规模指标（KPI）→ 30 天趋势 → 流量统计 → 待办与分布 → 最新动态。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { practiceCusClean } from "@/lib/admin/practice";
@@ -340,12 +341,11 @@ export default async function AdminDashboard() {
                 {latestUsers.map((u) => (
                   <tr key={u.id}>
                     <td>
-                      <Link
-                        className="link"
-                        href={`/admin/users/${u.id}`}
-                        data-tip={`${u.chineseName}${u.englishName ? `（${u.englishName}）` : ""} #${u.id}`}
-                      >
+                      <Link className="link" href={`/admin/users/${u.id}`}>
                         {u.chineseName}
+                        <span className="pt_bubble">
+                          <PlayerTip id={u.id} name={u.chineseName} englishName={u.englishName} />
+                        </span>
                       </Link>
                       <span className="sub"> #{u.id}</span>
                       {u.status !== 0 && (
@@ -393,12 +393,11 @@ export default async function AdminDashboard() {
                       </Link>
                     </td>
                     <td>
-                      <Link
-                        className="link"
-                        href={`/admin/users/${v.user}`}
-                        data-tip={v.author ? `${v.author.chineseName}${v.author.englishName ? `（${v.author.englishName}）` : ""} #${v.user}` : `#${v.user}`}
-                      >
+                      <Link className="link" href={`/admin/users/${v.user}`}>
                         {v.authorName}
+                        <span className="pt_bubble">
+                          <PlayerTip id={v.user} name={v.authorName} englishName={v.author?.englishName} />
+                        </span>
                       </Link>{" "}
                       <TitleBadge title={v.authorTitle} />
                     </td>

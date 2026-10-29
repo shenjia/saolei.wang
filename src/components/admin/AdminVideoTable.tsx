@@ -8,6 +8,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { useState } from "react";
 import type { AdminVideoRow } from "@/lib/admin/data";
 import { LevelTag, StatusTag } from "./Widgets";
@@ -41,12 +42,11 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
               </Link>
             </td>
             <td>
-              <Link
-                className="link"
-                href={`/admin/users/${v.user}`}
-                data-tip={v.author ? `${v.author.chineseName}${v.author.englishName ? `（${v.author.englishName}）` : ""} #${v.user}` : `#${v.user}`}
-              >
+              <Link className="link" href={`/admin/users/${v.user}`}>
                 {v.author?.chineseName ?? `#${v.user}`}
+                <span className="pt_bubble">
+                  <PlayerTip id={v.user} name={v.author?.chineseName ?? `#${v.user}`} englishName={v.author?.englishName} />
+                </span>
               </Link>
             </td>
             <td className="c">

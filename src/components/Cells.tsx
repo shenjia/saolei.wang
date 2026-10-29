@@ -8,15 +8,34 @@ import { score3bvs, scoreTime, timeOpposite, TIME_NEVER } from "@/lib/format";
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
 export { TitleBadge } from "./TitleBadge";
 
-/** 玩家名 hover 气泡文案（2026-10-29 张老师要求：全站可点击玩家名 hover 显示
- *  「姓名（英文名）#ID」）：英文名缺省（空串/未传）时退「姓名 #ID」。 */
-export function playerTip(name: string, englishName?: string, id?: number): string {
+/** 玩家名 hover 气泡内容（2026-10-29 张老师要求二轮：文案改「#ID 姓名 英文名」，
+ *  姓名亮灰、ID 与英文名暗灰——CSS attr() 无法分段着色，改为内嵌 i 元素结构
+ *  （.pt_id/.pt_name/.pt_en），由 .pt_bubble 提供气泡壳。无英文名只显示「#ID 姓名」） */
+export function PlayerTip({
+  id,
+  name,
+  englishName,
+}: {
+  id: number;
+  name: string;
+  englishName?: string;
+}) {
   const en = englishName?.trim();
-  return `${en ? `${name}（${en}）` : name}${id != null ? ` #${id}` : ""}`;
+  return (
+    <>
+      <i className="pt_id">#{id}</i> <i className="pt_name">{name}</i>
+      {en ? (
+        <>
+          {" "}
+          <i className="pt_en">{en}</i>
+        </>
+      ) : null}
+    </>
+  );
 }
 
 /** 用户名 + 性别图标（移植 _avatarCell）
- *  2026-10-29：link 态挂 data-tip 气泡「姓名（英文名）#ID」（未传 englishName 只显 #ID） */
+ *  2026-10-29：link 态挂玩家名气泡（#ID 姓名 英文名，双色富文本） */
 export function AvatarCell({
   id,
   name,
@@ -28,24 +47,21 @@ export function AvatarCell({
 }: {
   id: number;
   name: string;
-  /** 英文名（气泡用）；缺省/空串时气泡只显示「姓名 #ID」 */
+  /** 英文名（气泡用）；缺省/空串时气泡只显示「#ID 姓名」 */
   englishName?: string;
   sex: number;
   link?: boolean;
   className?: string;
   gender?: string;
 }) {
-  const tip = playerTip(name, englishName, id);
   return (
     <>
       {link ? (
-        <Link
-          href={`/user/${id}`}
-          className={`avatar_link ${className}`}
-          target="_blank"
-          data-tip={tip}
-        >
+        <Link href={`/user/${id}`} className={`avatar_link ${className}`} target="_blank">
           {name}
+          <span className="pt_bubble">
+            <PlayerTip id={id} name={name} englishName={englishName} />
+          </span>
         </Link>
       ) : (
         <span className={`avatar_link ${className}`}>{name}</span>
@@ -101,13 +117,11 @@ export function RankingName({
     <>
       <span className="ranking_name">
         {avatarUrl && <img className="ranking_avatar" src={avatarUrl} alt="" width={13} height={13} />}
-        <Link
-          href={`/user/${id}`}
-          target="_blank"
-          prefetch={false}
-          data-tip={playerTip(name, englishName, id)}
-        >
+        <Link href={`/user/${id}`} target="_blank" prefetch={false}>
           {name}
+          <span className="pt_bubble">
+            <PlayerTip id={id} name={name} englishName={englishName} />
+          </span>
         </Link>
       </span>
       <span className={`gender ${sex ? "male" : "female"} small`}></span>

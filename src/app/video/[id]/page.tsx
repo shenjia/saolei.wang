@@ -15,7 +15,7 @@ import {
   type VideoLevel,
 } from "@/lib/config";
 import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
-import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { AvatarCell, PlayerTip, TitleBadge } from "@/components/Cells";
 import { SoftwareIcon } from "@/components/VideoRows";
 import { UserPanel } from "@/components/UserCard";
 import { CommentSection } from "@/components/Comments";
@@ -173,13 +173,11 @@ export default async function VideoViewPage({
             <p>
               {video.reviewer && video.reviewTime && (
                 <>
-                  <Link
-                    href={`/user/${video.reviewer.id}`}
-                    className="avatar_link reviewer"
-                    target="_blank"
-                    data-tip={`${video.reviewer.chineseName}${video.reviewer.englishName ? `（${video.reviewer.englishName}）` : ""} #${video.reviewer.id}`}
-                  >
+                  <Link href={`/user/${video.reviewer.id}`} className="avatar_link reviewer" target="_blank">
                     {video.reviewer.chineseName}
+                    <span className="pt_bubble">
+                      <PlayerTip id={video.reviewer.id} name={video.reviewer.chineseName} englishName={video.reviewer.englishName} />
+                    </span>
                   </Link>
                   <span className="review_time">
                     审核于<em>{timeOpposite(video.reviewTime)}</em>

@@ -2,6 +2,7 @@
 // 增长 / 审核漏斗 / 纪录演变 / 活跃节律 / 分布 / 快照健康度。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { usersByIds } from "@/lib/queries";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { getAuditorWorkload, getGrowth, getSnapshotHealth, getTrend, TREND_METRICS } from "@/lib/admin/stats";
@@ -125,12 +126,11 @@ export default async function AdminStatsPage() {
                     </td>
                     <td>
                       {tu ? (
-                        <Link
-                          className="link"
-                          href={`/admin/users/${tu.id}`}
-                          data-tip={`${tu.chineseName}${tu.englishName ? `（${tu.englishName}）` : ""} #${tu.id}`}
-                        >
+                        <Link className="link" href={`/admin/users/${tu.id}`}>
                           {tu.chineseName}
+                          <span className="pt_bubble">
+                            <PlayerTip id={tu.id} name={tu.chineseName} englishName={tu.englishName} />
+                          </span>
                         </Link>
                       ) : (
                         "—"
@@ -144,12 +144,11 @@ export default async function AdminStatsPage() {
                     </td>
                     <td>
                       {bu ? (
-                        <Link
-                          className="link"
-                          href={`/admin/users/${bu.id}`}
-                          data-tip={`${bu.chineseName}${bu.englishName ? `（${bu.englishName}）` : ""} #${bu.id}`}
-                        >
+                        <Link className="link" href={`/admin/users/${bu.id}`}>
                           {bu.chineseName}
+                          <span className="pt_bubble">
+                            <PlayerTip id={bu.id} name={bu.chineseName} englishName={bu.englishName} />
+                          </span>
                         </Link>
                       ) : (
                         "—"

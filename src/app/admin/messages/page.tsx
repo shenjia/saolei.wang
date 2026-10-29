@@ -3,6 +3,7 @@
 // 注意：广播按「每个玩家一条 message」写入，3 万+ 玩家会产生 3 万+ 行，属于重操作，已做批量分片。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { getBroadcastHistory, getMessageStats } from "@/lib/admin/data";
 import { AdminForm } from "@/components/admin/AdminAction";
 import { AdminCard, Kpi } from "@/components/admin/Widgets";
@@ -69,12 +70,11 @@ export default async function AdminMessagesPage() {
                 <tr key={`${b.createTime}-${i}`}>
                   <td className="sub">{formatDate(b.createTime, "Y-m-d H:i")}</td>
                   <td>
-                    <Link
-                      className="link"
-                      href={`/admin/users/${b.fromUser}`}
-                      data-tip={b.author ? `${b.author.chineseName}${b.author.englishName ? `（${b.author.englishName}）` : ""} #${b.fromUser}` : `#${b.fromUser}`}
-                    >
+                    <Link className="link" href={`/admin/users/${b.fromUser}`}>
                       {b.author?.chineseName ?? `#${b.fromUser}`}
+                      <span className="pt_bubble">
+                        <PlayerTip id={b.fromUser} name={b.author?.chineseName ?? `#${b.fromUser}`} englishName={b.author?.englishName} />
+                      </span>
                     </Link>
                   </td>
                   <td style={{ maxWidth: 460 }}>{b.content}</td>

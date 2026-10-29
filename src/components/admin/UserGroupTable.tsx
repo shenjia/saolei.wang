@@ -8,6 +8,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "@/components/Toast";
 import { confirmDialog } from "@/components/Confirm";
@@ -106,12 +107,11 @@ export function UserGroupTable({
               <tr key={u.id} className={isNew ? "ug_new" : undefined}>
                 <td className="c sub">{u.id}</td>
                 <td>
-                  <Link
-                    className="link"
-                    href={`/admin/users/${u.id}`}
-                    data-tip={`${u.chineseName}${u.englishName ? `（${u.englishName}）` : ""} #${u.id}`}
-                  >
+                  <Link className="link" href={`/admin/users/${u.id}`}>
                     {u.chineseName}
+                    <span className="pt_bubble">
+                      <PlayerTip id={u.id} name={u.chineseName} englishName={u.englishName} />
+                    </span>
                   </Link>
                 </td>
                 {groupKey === "lowtrust" && (

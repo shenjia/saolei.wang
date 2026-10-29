@@ -3,6 +3,7 @@
 // 感言赞/踩计数 2026-10-27 上线起记录（此前历史恒 0）。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { getStarListAdmin } from "@/lib/admin/data";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager } from "@/components/admin/Widgets";
@@ -50,12 +51,11 @@ export default async function AdminStarPage({ searchParams }: { searchParams: Pr
                 <tr key={s.id}>
                   <td className="c">{s.date}</td>
                   <td>
-                    <Link
-                      className="link"
-                      href={`/admin/users/${s.user}`}
-                      data-tip={s.author ? `${s.author.chineseName}${s.author.englishName ? `（${s.author.englishName}）` : ""} #${s.user}` : `#${s.user}`}
-                    >
+                    <Link className="link" href={`/admin/users/${s.user}`}>
                       {s.author?.chineseName ?? `#${s.user}`}
+                      <span className="pt_bubble">
+                        <PlayerTip id={s.user} name={s.author?.chineseName ?? `#${s.user}`} englishName={s.author?.englishName} />
+                      </span>
                     </Link>
                   </td>
                   <td className="sub" style={{ maxWidth: 320 }}>

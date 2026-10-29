@@ -4,6 +4,7 @@
 // 点 IP 进入展开态看该组全量成员；筛选状态全走 URL（可分享、可后退）。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { getSession } from "@/lib/auth";
 import { getIpGroups } from "@/lib/admin/data";
@@ -130,12 +131,11 @@ export default async function AdminIpGroupsPage({ searchParams }: { searchParams
                       <td>
                         {show.map((m) => (
                           <span key={m.id} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
-                            <Link
-                              className="link"
-                              href={`/admin/users/${m.id}`}
-                              data-tip={`${m.chineseName}${m.englishName ? `（${m.englishName}）` : ""} #${m.id}`}
-                            >
+                            <Link className="link" href={`/admin/users/${m.id}`}>
                               {m.chineseName}
+                              <span className="pt_bubble">
+                                <PlayerTip id={m.id} name={m.chineseName} englishName={m.englishName} />
+                              </span>
                             </Link>
                             {!m.ranked && <span className="sub" title="无成绩">*</span>}
                           </span>
@@ -216,12 +216,11 @@ function ExpandedGroup({ q, data }: { q: string; data: Awaited<ReturnType<typeof
             <tr key={m.id} className={m.status !== 0 ? "off" : undefined}>
               <td className="c sub">{m.id}</td>
               <td>
-                <Link
-                  className="link"
-                  href={`/admin/users/${m.id}`}
-                  data-tip={`${m.chineseName}${m.englishName ? `（${m.englishName}）` : ""} #${m.id}`}
-                >
+                <Link className="link" href={`/admin/users/${m.id}`}>
                   {m.chineseName}
+                  <span className="pt_bubble">
+                    <PlayerTip id={m.id} name={m.chineseName} englishName={m.englishName} />
+                  </span>
                 </Link>
                 {m.englishName && <span className="sub"> {m.englishName}</span>}
               </td>

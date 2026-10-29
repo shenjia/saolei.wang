@@ -2,6 +2,7 @@
 // 成绩动态是首页/个人主页的信息流，误发（异常成绩引发）时需要能定位并删除。
 
 import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { NEWS_TYPE } from "@/lib/config";
 import { getNewsListAdmin } from "@/lib/admin/data";
@@ -93,12 +94,11 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
                     <span className="admin_tag plain">{TYPE_NAMES[n.type] ?? n.type}</span>
                   </td>
                   <td>
-                    <Link
-                      className="link"
-                      href={`/admin/users/${n.user}`}
-                      data-tip={n.author ? `${n.author.chineseName}${n.author.englishName ? `（${n.author.englishName}）` : ""} #${n.user}` : `#${n.user}`}
-                    >
+                    <Link className="link" href={`/admin/users/${n.user}`}>
                       {n.author?.chineseName ?? `#${n.user}`}
+                      <span className="pt_bubble">
+                        <PlayerTip id={n.user} name={n.author?.chineseName ?? `#${n.user}`} englishName={n.author?.englishName} />
+                      </span>
                     </Link>
                   </td>
                   <td>{summarize(n.detailsData)}</td>
