@@ -18,6 +18,7 @@ import {
   type VideoLevel,
   type VideoListDir,
 } from "@/lib/config";
+import { parseFeedStage } from "@/lib/stage";
 
 function parseLevel(p: URLSearchParams): VideoLevel | "all" {
   const lv = p.get("level") ?? "";
@@ -88,9 +89,11 @@ export async function GET(req: Request) {
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
     // 2026-10-20：透传 NF 筛选（首页录像版块 NF 开关）
     const nf = p.get("nf") === "1";
+    // 2026-10-29：首页阶段筛选（gen/col/sol/god/man，按录像行内快照分档）；非法值回「全部」
+    const stage = parseFeedStage(p.get("stage"));
     const [items, total] = await Promise.all([
-      getVideoFeedPage({ level, page: feedPage, base, limit: size, nf }),
-      getVideoFeedCount({ level, nf }),
+      getVideoFeedPage({ level, page: feedPage, base, limit: size, nf, stage }),
+      getVideoFeedCount({ level, nf, stage }),
     ]);
     return NextResponse.json({
       items,

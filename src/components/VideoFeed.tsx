@@ -1,11 +1,14 @@
 // 首页「最新录像」版块（2026-09-24 张老师要求）：
-// 顶部标题行右侧级别选择器（全部/初级/中级/高级），底部翻页条（2026-10-14 四轮，
-// 与首页「新闻」版块同款：··· + 滑轨 + 页码；页码模式 ?feedPage=N&base=15，
-// 松手/停顿 500ms 即加载、视口零跳动、零提示——与全站列表交互统一）。
+// 顶部标题行右侧筛选器 + 底部翻页条（2026-10-14 四轮，与首页「新闻」版块同款：
+// ··· + 滑轨 + 页码；页码模式 ?feedPage=N&base=15，松手/停顿 500ms 即加载、
+// 视口零跳动、零提示——与全站列表交互统一）。
 // 行/表头渲染复用 VideoRows（与 /video 列表同源，保证两处版式一致）。
-// 2026-10-20（张老师需求）：级别 tabs 右侧加 NF 筛选开关（NfToggle，样式复用练习页
-// 右上角 NF 快捷钮；默认关，开启只显示 NF 录像）——与切级别同通道重拉第 1 页 +
-// 翻页状态重置；NF 不进 URL（首页无筛选 URL 语义，与级别 tabs 一致均为会话态）。
+// 2026-10-20（张老师需求）：筛选器右侧加 NF 筛选开关（NfToggle，样式复用练习页
+// 右上角 NF 快捷钮；默认关，开启只显示 NF 录像）——与切筛选同通道重拉第 1 页 +
+// 翻页状态重置；NF 不进 URL（首页无筛选 URL 语义）。
+// 2026-10-29 张老师定：级别 tabs 整体替换为「阶段筛选」（随观看者称号体系切换：
+// 军衔 全部/将帅/校尉/士兵；人神界 全部/神界/人界；按录像行内快照分档，
+// 口径见 lib/stage.ts）。
 
 "use client";
 
@@ -16,13 +19,8 @@ import { VideoHead, VideoRowLine } from "./VideoRows";
 import { NfToggle } from "./NfToggle";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-
-const LEVEL_TABS: { key: string; label: string }[] = [
-  { key: "", label: "全部" },
-  { key: "beg", label: "初级" },
-  { key: "int", label: "中级" },
-  { key: "exp", label: "高级" },
-];
+import { useTitleSystem } from "./TitleSystemProvider";
+import { STAGE_TABS_M, STAGE_TABS_C, STAGE_KEYS, type FeedStage } from "@/lib/stage";
 
 export function VideoFeed({
   initial,
@@ -48,9 +46,11 @@ export function VideoFeed({
   const [loading, setLoading] = useState(false);
   const [level, setLevel] = useState("");
   const [switching, setSwitching] = useState(false);
-  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（切级别重置）
-  // NF 筛选开关（2026-10-20）：默认关；开启只显示 NF 录像（与切级别同通道重拉）
+  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（切筛选重置）
+  // NF 筛选开关（2026-10-20）：默认关；开启只显示 NF 录像（与切筛选同通道重拉）
   const [nf, setNf] = useState(false);
+  // 观看者称号体系（2026-10-29）：阶段 tabs 跟随切换（与 TitleBadge 同源同机制）
+  const { system } = useTitleSystem();
 
   // ---- 翻页条状态（2026-10-14 四轮）----
   const [curPage, setPage] = useState(1);
@@ -66,11 +66,12 @@ export function VideoFeed({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 页码模式请求：?feedPage=N&base=pageSize（id 倒序按页取）；nf=1 只取 NF 录像 */
+  /** 页码模式请求：?feedPage=N&base=pageSize（id 倒序按页取）；nf=1 只取 NF 录像；
+   *  stage=阶段筛选 key（2026-10-29，「全部」不传） */
   async function fetchByPage(lv: string, page: number, size?: number, nfOn = false) {
     const url =
       `/api/video/more?feedPage=${page}&base=${pageSize}&size=${size ?? pageSize}` +
-      (lv ? `&level=${lv}` : "") +
+      (lv ? `&stage=${lv}` : "") +
       (nfOn ? "&nf=1" : "");
     const res = await fetch(url);
     return (await res.json()) as {
@@ -162,9 +163,8 @@ export function VideoFeed({
     }
   }
 
-  // 切换筛选（级别/NF）：重置列表并取第一页（批量序列/翻页状态同步重置）。
-  // 2026-10-20：switchLevel/switchNf 收敛为 switchFeed(lv, nfOn)——级别与 NF
-  // 同通道（切级别保 NF 态，切 NF 保级别态）
+  // 切换筛选（阶段/NF）：重置列表并取第一页（批量序列/翻页状态同步重置）。
+  // 2026-10-29：级别 tabs 换阶段 tabs——lv 即阶段 key，与 NF 同通道（切阶段保 NF 态，反之亦然）
   async function switchFeed(lv: string, nfOn: boolean) {
     if ((lv === level && nfOn === nf) || switching) return;
     setSwitching(true);
@@ -185,7 +185,16 @@ export function VideoFeed({
     }
   }
 
-  const tabs = LEVEL_TABS.map((t) =>
+  // 观看者切换称号体系后，当前选中阶段可能不在新 tabs 里（如「将帅」→人神界），回「全部」
+  useEffect(() => {
+    if (level && !STAGE_KEYS.includes(level as FeedStage)) {
+      switchFeed("", nf);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [system]);
+
+  const stageTabs = system === "c" ? STAGE_TABS_C : STAGE_TABS_M;
+  const tabs = stageTabs.map((t) =>
     t.key === level ? (
       <span key={t.key || "all"} className="current">
         {t.label}

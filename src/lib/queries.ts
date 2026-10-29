@@ -52,6 +52,7 @@ import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
 import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
+import { STAGE_EXP, type FeedStage } from "./stage";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
@@ -268,6 +269,32 @@ const NEWS_LEVEL_TYPES: number[] = [
 ];
 
 /**
+ * 首页阶段筛选（2026-10-29 张老师定，整体替换首页级别筛选）：
+ * 按作者**行内快照** exp_time/ranked 分档——与该行动态旁的军衔徽章同一口径
+ * （发布当时值），筛选档与徽章永不错位。分档定义见 lib/stage.ts：
+ *   将帅 = 少将及以上（0<exp<50s）；校尉 = 大校~少尉（50~70s）；
+ *   士兵 = 上士~列兵（≥70s）∪ 预备役（exp=0，张老师定归入士兵）；
+ *   神界 = 旧称号雷帝/雷圣/雷神/雷仙（ranked=1 且 0<exp<60s）；人界 = 其余。
+ * 全部为条件对象（可直接展开进 where），「全部」返回 null 不过滤。
+ */
+function newsStageFilter(stage: FeedStage): Prisma.NewsWhereInput | null {
+  switch (stage) {
+    case "gen":
+      return { expTime: { gt: BigInt(0), lt: BigInt(STAGE_EXP.GENERAL_MAX) } };
+    case "col":
+      return { expTime: { gte: BigInt(STAGE_EXP.GENERAL_MAX), lt: BigInt(STAGE_EXP.FIELD_MAX) } };
+    case "sol":
+      return { OR: [{ expTime: BigInt(0) }, { expTime: { gte: BigInt(STAGE_EXP.FIELD_MAX) } }] };
+    case "god":
+      return { ranked: BigInt(1), expTime: { gt: BigInt(0), lt: BigInt(STAGE_EXP.GOD_MAX) } };
+    case "man":
+      return { NOT: { ranked: BigInt(1), expTime: { gt: BigInt(0), lt: BigInt(STAGE_EXP.GOD_MAX) } } };
+    default:
+      return null;
+  }
+}
+
+/**
  * 动态流类型口径（getNews / getNewsPage / getNewsCount 三处必须共用，保证行集与计数一致）：
  * ① 显式 type / types（后台、论坛 tab）各自成口径，不叠加；
  * ② home 口径见 homeNewsTypeFilter（已排除评论等非首页类型）；
@@ -319,6 +346,8 @@ export async function getNews(opts: {
   userId?: number;
   /** 等级筛选（beg/int/exp）：按 details JSON 的 lv 字段匹配（details_data 全为 {"lv":...} 格式） */
   level?: string;
+  /** 首页阶段筛选（gen/col/sol/god/man）：按行内快照分档，见 newsStageFilter（2026-10-29） */
+  stage?: FeedStage;
   /** keyset 游标：上一批末行的 id，服务端据此查 (create_time,id) 序更早的动态。
    *  2026-10-20 起动态流按 (create_time, id) 倒序（破纪录动态时间=录像上传时间，
    *  id 序不再等于时间序），cursor 单传 id 不再够用——实现上改为先查 cursor 行的
@@ -342,10 +371,13 @@ export async function getNews(opts: {
     });
     cursorTime = anchor?.createTime;
   }
+  const stageCond = opts.stage ? newsStageFilter(opts.stage) : null;
   const where = {
     // 类型口径统一由 feedTypeFilter 决定（含级别筛选只认成绩类，2026-10-27）
     ...feedTypeFilter(opts),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+    // 首页阶段筛选（2026-10-29）：与类型/游标条件并列进 AND
+    ...(stageCond ?? {}),
     // keyset 游标与级别筛选都是 OR 组，必须并列进 AND——曾因两者都写成顶层 OR
     // 而在「cursor + level」组合下后者覆盖前者（级别筛选静默失效）
     ...(() => {
@@ -461,7 +493,10 @@ export async function getNewsPage(opts: {
   types?: number[];
   userId?: number;
   level?: string;
+  /** 首页新闻流口径（NEWS_HOME_TYPES），透传 feedTypeFilter / getNews */
   home?: boolean;
+  /** 首页阶段筛选（2026-10-29），透传 getNews */
+  stage?: FeedStage;
   page: number;
   base: number;
   limit: number;
@@ -470,6 +505,7 @@ export async function getNewsPage(opts: {
     // 与 getNews 同一口径（含级别筛选只认成绩类，2026-10-27）
     ...feedTypeFilter(opts),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+    ...(opts.stage ? (newsStageFilter(opts.stage) ?? {}) : {}),
     ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
   };
   const idRows = await prisma.news.findMany({
@@ -484,6 +520,7 @@ export async function getNewsPage(opts: {
     types: opts.types,
     userId: opts.userId,
     level: opts.level,
+    stage: opts.stage,
     home: opts.home,
     limit: opts.limit,
     ids: idRows.map((r) => r.id),
@@ -525,6 +562,8 @@ async function getNewsCountImpl(opts: {
   level?: string;
   /** 与 getNews 的 home 口径一致（首页「加载更多」剩余条数） */
   home?: boolean;
+  /** 与 getNews 的首页阶段筛选一致（2026-10-29） */
+  stage?: FeedStage;
 }): Promise<number> {
   return prisma.news.count({
     where: {
@@ -532,6 +571,7 @@ async function getNewsCountImpl(opts: {
       // 否则剩余条数 / 翻页条总页数会与实际行集对不上
       ...feedTypeFilter(opts),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+      ...(opts.stage ? (newsStageFilter(opts.stage) ?? {}) : {}),
       ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
     },
   });
@@ -542,12 +582,13 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  // v7：2026-10-29 首页阶段筛选（stage 维度并入键空间：home×stage 5 档，有界）。
   // v6：2026-10-27 级别筛选收窄为「成绩类动态」（录像评论的 lv 不再命中级别 tab）。
   // v5：2026-10-26 home 口径扩「预备役破纪录一律不进首页」（exp_time/ranked=0 并入排除）。
   // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
-  ["news-count-v6"],
+  ["news-count-v7"],
   { revalidate: 300 }
 );
 
@@ -1146,16 +1187,52 @@ const PB_VIDEO_IDS_SQL = `SELECT id FROM (
   UNION SELECT exp_3bvs_video FROM user_scores_nf WHERE exp_3bvs_video IS NOT NULL
 ) pb`;
 
+/** 录像行有效评定高级时间的 SQL 表达（与 assess.promotedExpTime 严格同语义，2026-10-28
+ *  张老师定：上传后军衔变化的录像按新军衔显示——高级盘且本盘成绩严格更优（或快照为 0）
+ *  时取本盘 real_time，否则维持快照）。阶段筛选必须与行内军衔徽章同一口径，否则
+ *  会出现「士兵档里挂着少尉徽章」的错位（dev 实测 345091：快照 72090 → 士兵档，
+ *  徽章按本盘 69340 评少尉）。仅阶段筛选路径 join video_info 后可用。 */
+const VIDEO_PROMOTED_EXP_SQL =
+  "CASE WHEN v.level = 'exp' AND vi.real_time > 0 AND (v.exp_time = 0 OR vi.real_time < v.exp_time) " +
+  "THEN vi.real_time ELSE v.exp_time END";
+
+/** 首页录像阶段筛选 SQL 片段（2026-10-29 张老师定，配额分支与纪录盘保位分支共用）。
+ *  按上式有效评定时间分档，与 newsStageFilter 同档界（见 lib/stage.ts）：
+ *  将帅 0<t<50s / 校尉 50~70s / 士兵 t≥70s ∪ t=0（预备役归士兵）/ 
+ *  神界 ranked=1 且 0<t<60s（雷帝~雷仙）/ 人界=其余。数字为 lib/stage 自有常量，非外部输入。
+ *  ⚠️ 仅在已 JOIN video_info（vi 别名）的路径使用（stage≠"" 或 nf 时由调用方保证）。 */
+function videoStageCond(stage: FeedStage): string {
+  const t = VIDEO_PROMOTED_EXP_SQL;
+  switch (stage) {
+    case "gen":
+      return ` AND ${t} > 0 AND ${t} < ${STAGE_EXP.GENERAL_MAX}`;
+    case "col":
+      return ` AND ${t} >= ${STAGE_EXP.GENERAL_MAX} AND ${t} < ${STAGE_EXP.FIELD_MAX}`;
+    case "sol":
+      return ` AND (${t} = 0 OR ${t} >= ${STAGE_EXP.FIELD_MAX})`;
+    case "god":
+      return ` AND v.ranked = 1 AND ${t} > 0 AND ${t} < ${STAGE_EXP.GOD_MAX}`;
+    case "man":
+      return ` AND NOT (v.ranked = 1 AND ${t} > 0 AND ${t} < ${STAGE_EXP.GOD_MAX})`;
+    default:
+      return "";
+  }
+}
+
 const fetchFeedDedupIdsImpl = async (
   level: VideoLevel | "all",
   nf: boolean,
+  stage: FeedStage,
   page: number,
   base: number,
   limit: number
 ): Promise<number[]> => {
   const lvCond = level !== "all" ? ` AND v.level = '${assertVideoLevel(level)}'` : "";
-  // nf 视图 join video_info 滤 noflag（vi.create_time 与 v.create_time 全量一致，排序用 v 即可）
-  const nfJoin = nf ? " JOIN video_info vi ON vi.id = v.id AND vi.noflag = 1" : "";
+  // 阶段筛选需要 vi.real_time 算有效评定时间；nf 需要 vi.noflag——两者都 JOIN video_info
+  // （vi.create_time 与 v.create_time 全量一致，排序仍用 v），其余路径保持原单表形态（2026-10-29）
+  const needsVi = nf || stage !== "";
+  const viJoin = needsVi ? ` JOIN video_info vi ON vi.id = v.id${nf ? " AND vi.noflag = 1" : ""}` : "";
+  const stCond = stage !== "" ? videoStageCond(stage) : "";
   const quota = FEED_USER_LEVEL_QUOTA;
   // 2026-10-23：status 过滤放宽 <>0（待审放行进首页流，屏蔽仍挡）——待审盘无
   // user_scores 指针、必不在纪录盘集合，自然走配额分支
@@ -1164,45 +1241,52 @@ const fetchFeedDedupIdsImpl = async (
       SELECT q.id, q.create_time FROM (
         SELECT v.id AS id, v.create_time AS create_time,
                ROW_NUMBER() OVER (PARTITION BY v.user, v.level ORDER BY v.create_time DESC, v.id DESC) AS rn
-        FROM video v${nfJoin}
-        WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
+        FROM video v${viJoin}
+        WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
       ) q WHERE q.rn <= ${quota}
       UNION ALL
-      SELECT v.id, v.create_time FROM video v${nfJoin}
-      WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
+      SELECT v.id, v.create_time FROM video v${viJoin}
+      WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
     ) f
     ORDER BY f.create_time DESC, f.id DESC
     LIMIT ${limit} OFFSET ${(page - 1) * base}
   `);
   return rows.map((r) => N(r.id));
 };
-const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v2"], { revalidate: 60 });
+// v3：2026-10-29 阶段筛选维度并入（stage 进参数即进缓存键；home×stage×nf 键空间有界）
+const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], { revalidate: 60 });
 
 /** 首页发现流去重总数（与 fetchFeedDedupIds 口径严格一致）：
  *  Σ 每组 (用户,级别) 的 min(非纪录盘数, 配额) + 纪录盘总数。 */
-const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean): Promise<number> => {
+const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean, stage: FeedStage): Promise<number> => {
   const lvCond = level !== "all" ? ` AND v.level = '${assertVideoLevel(level)}'` : "";
-  const nfJoin = nf ? " JOIN video_info vi ON vi.id = v.id AND vi.noflag = 1" : "";
+  // 与 fetchFeedDedupIdsImpl 完全同款 join/条件口径（保证行集与计数一致）
+  const needsVi = nf || stage !== "";
+  const viJoin = needsVi ? ` JOIN video_info vi ON vi.id = v.id${nf ? " AND vi.noflag = 1" : ""}` : "";
+  const stCond = stage !== "" ? videoStageCond(stage) : "";
   const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`
     SELECT (
       SELECT COALESCE(SUM(q.c), 0) FROM (
-        SELECT LEAST(COUNT(*), ${FEED_USER_LEVEL_QUOTA}) AS c FROM video v${nfJoin}
-        WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
+        SELECT LEAST(COUNT(*), ${FEED_USER_LEVEL_QUOTA}) AS c FROM video v${viJoin}
+        WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
         GROUP BY v.user, v.level
       ) q
     ) + (
-      SELECT COUNT(*) FROM video v${nfJoin}
-      WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
+      SELECT COUNT(*) FROM video v${viJoin}
+      WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
     ) AS c
   `);
   return N(rows[0]?.c);
 };
-const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v2"], { revalidate: 60 });
+// v3：2026-10-29 阶段筛选维度并入（同 feed-dedup-v3）
+const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], { revalidate: 60 });
 
 /** 首页「最新录像」发现流总数（去重口径，2026-10-23）——
  *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。 */
-export async function getVideoFeedCount(opts: { level?: VideoLevel | "all"; nf?: boolean } = {}): Promise<number> {
-  return fetchFeedDedupCount(opts.level ?? "all", opts.nf === true);
+export async function getVideoFeedCount(
+  opts: { level?: VideoLevel | "all"; nf?: boolean; stage?: FeedStage } = {}
+): Promise<number> {
+  return fetchFeedDedupCount(opts.level ?? "all", opts.nf === true, opts.stage ?? "");
 }
 
 export async function getVideoFeedPage(opts: {
@@ -1211,8 +1295,10 @@ export async function getVideoFeedPage(opts: {
   base: number;
   limit: number;
   nf?: boolean;
+  /** 首页阶段筛选（2026-10-29）：按录像行内快照 exp_time/ranked 分档 */
+  stage?: FeedStage;
 }): Promise<VideoListItem[]> {
-  const ids = await fetchFeedDedupIds(opts.level, opts.nf === true, opts.page, opts.base, opts.limit);
+  const ids = await fetchFeedDedupIds(opts.level, opts.nf === true, opts.stage ?? "", opts.page, opts.base, opts.limit);
   return getVideosByIds(ids);
 }
 

@@ -3,6 +3,10 @@
 // 2026-09-24 二轮：底部改左右布局（左=总数 右=按钮），点击加载保持滚动位置
 // 2026-10-14 二轮：用户主页场景（userId 存在）加 PageSlider 翻页条
 //   （页码模式 ?page=N&base=15；首页新闻流保持纯加载更多——无翻页诉求）
+// 2026-10-29 张老师定：首页（homeOnly）筛选整体替换为「阶段筛选」——
+//   军衔体系观看者：全部/将帅/校尉/士兵；人神界观看者：全部/神界/人界
+//   （tabs 随观看者体系即时切换；按作者行内快照分档，口径见 lib/stage.ts）；
+//   用户主页保持原等级/类型 tabs 不变。
 
 "use client";
 
@@ -12,6 +16,8 @@ import type { NewsItem } from "@/lib/queries";
 import { NewsCellView } from "./NewsCellView";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
+import { useTitleSystem } from "./TitleSystemProvider";
+import { STAGE_TABS_M, STAGE_TABS_C, STAGE_KEYS, type FeedStage } from "@/lib/stage";
 
 export interface NewsFeedItem {
   news: NewsItem;
@@ -67,6 +73,8 @@ export function NewsFeed({
   const [level, setLevel] = useState("");
   const [switching, setSwitching] = useState(false);
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14；切筛选重置）
+  // 观看者称号体系（2026-10-29）：首页阶段 tabs 跟随切换（与 TitleBadge 同源同机制）
+  const { system } = useTitleSystem();
 
   // ---- 翻页条状态（2026-10-14 四轮：首页+用户主页统一带翻页条，全走页码模式）----
   const [curPage, setPage] = useState(1);
@@ -86,7 +94,8 @@ export function NewsFeed({
     const url =
       `/api/news/more?cursor=${cur}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      (isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
+      // 首页（homeOnly）：lv 是阶段 key 走 stage 参数；用户主页保持 type/level 语义
+      (homeOnly ? (lv ? `&stage=${lv}` : "") : isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
       (homeOnly ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
@@ -97,7 +106,7 @@ export function NewsFeed({
     const url =
       `/api/news/more?page=${page}&base=${pageSize}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      (isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
+      (homeOnly ? (lv ? `&stage=${lv}` : "") : isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
       (homeOnly ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
@@ -197,8 +206,25 @@ export function NewsFeed({
     }
   }
 
-  // 「发表」「评论」tab 只在用户主页出现：首页新闻流口径（NEWS_HOME_TYPES）本来就不含发帖/评论动态
-  const tabs = (userId ? LEVEL_TABS : LEVEL_TABS.filter((t) => !isTypeTab(t.key))).map((t) =>
+  // 观看者切换称号体系后（如军衔→人神界），当前选中阶段可能不在新 tabs 里
+  // （如「将帅」），回「全部」重新加载（2026-10-29 阶段筛选随体系切换）
+  useEffect(() => {
+    if (homeOnly && level && !STAGE_KEYS.includes(level as FeedStage)) {
+      switchLevel("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [system, homeOnly]);
+
+  // 「发表」「评论」tab 只在用户主页出现：首页新闻流口径（NEWS_HOME_TYPES）本来就不含发帖/评论动态。
+  // 首页（homeOnly）2026-10-29 起用阶段 tabs（随观看者体系切换）；用户主页保持原等级/类型 tabs
+  const tabDefs = homeOnly
+    ? system === "c"
+      ? STAGE_TABS_C
+      : STAGE_TABS_M
+    : userId
+      ? LEVEL_TABS
+      : LEVEL_TABS.filter((t) => !isTypeTab(t.key));
+  const tabs = tabDefs.map((t) =>
     t.key === level ? (
       <span key={t.key || "all"} className="current">
         {t.label}

@@ -8,6 +8,7 @@ import { getNews, getNewsCount, getNewsPage } from "@/lib/queries";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { getThunderKingId } from "@/lib/title-system";
 import { NEWS_PAGESIZE, NEWS_TYPE } from "@/lib/config";
+import { parseFeedStage } from "@/lib/stage";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -28,6 +29,9 @@ export async function GET(req: Request) {
         : undefined;
   // 首页新闻流口径（home=1）：仅 NEWS_HOME_TYPES，注册/头像/发帖/评论动态不进首页
   const home = p.get("home") === "1";
+  // 首页阶段筛选（2026-10-29 张老师定）：gen/col/sol/god/man，按作者行内快照分档；
+  // 仅首页 tabs 传此参数（用户主页不带），非法值回「全部」
+  const stage = parseFeedStage(p.get("stage"));
   // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
   const king = await getThunderKingId();
   const isKing = (id: number | undefined) => king > 0 && king === (id ?? 0);
@@ -38,8 +42,8 @@ export async function GET(req: Request) {
     const page = pageRaw;
     const base = p.get("base") ? parseInt(p.get("base") ?? "", 10) || NEWS_PAGESIZE : NEWS_PAGESIZE;
     const [items, total] = await Promise.all([
-      getNewsPage({ types, userId, level, home, page, base, limit: size }),
-      getNewsCount({ types, userId, level, home }),
+      getNewsPage({ types, userId, level, home, stage, page, base, limit: size }),
+      getNewsCount({ types, userId, level, home, stage }),
     ]);
     const withTitles = items.map((news) => ({
       news,
@@ -55,9 +59,9 @@ export async function GET(req: Request) {
   }
 
   const [items, total] = await Promise.all([
-    getNews({ types, userId, level, cursor: cursor || undefined, limit: size, home }),
+    getNews({ types, userId, level, cursor: cursor || undefined, limit: size, home, stage }),
     // 同条件下的动态总数：「加载更多」括号内显示剩余条数用
-    getNewsCount({ types, userId, level, home }),
+    getNewsCount({ types, userId, level, home, stage }),
   ]);
   const withTitles = items.map((news) => ({
     news,
