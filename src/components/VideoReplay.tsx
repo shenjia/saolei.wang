@@ -1972,7 +1972,9 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
   const f3 = (v: number) => v.toFixed(3);
   const hasBv = s.solvedBv > 0 && t > 0;
   const est = hasBv ? t * (s.board3bv / s.solvedBv) : 0;
-  const qg = hasBv ? Math.pow(t, 1.7) / s.solvedBv : 0;
+  /* QG/STNB 用 Est RTime 代入（2026-10-30 张老师定，与练习页 statsReport 同口径）：
+     败局不再把半成品速度当整盘速度；胜局 est=t 恒等旧值 */
+  const qg = hasBv ? Math.pow(est, 1.7) / s.solvedBv : 0;
   /* STNB 难度系数（标准级别；公式与练习页 statsReport / lib/videoradar stnbOf 同式） */
   const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
   const stnb = hasBv
@@ -1997,7 +1999,7 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
     ["Path", String(Math.round(s.path)), "鼠标移动路径的欧氏距离总和（像素）"],
     ["Flags", String(s.flags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
     ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
-    ["QG", hasBv ? f3(qg) : "*", "质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV"],
+    ["QG", hasBv ? f3(qg) : "*", "质量分 = 估算用时 ^ 1.7 ÷ 已完成 3BV（估算用时 = 实际用时 × 3BV ÷ 已完成 3BV，胜局两者相等）"],
     ["STNB", hasBv ? f3(stnb) : "*", "综合评分（按难度与完成度归一化，越大越好）"],
   ];
   return (
