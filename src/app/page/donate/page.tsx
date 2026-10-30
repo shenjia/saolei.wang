@@ -1,17 +1,20 @@
 // 提供赞助（2026-10-15 重设计：双收款码卡片布局，文案移植 2008 版 About/Donate.asp）
 // 2026-10-30 二轮（张老师）：赞助清单从底部移到右侧独立板块，标题「赞助记录」；
 // 页面骨架改 two_columns 两栏（与用户主页/录像详情/论坛详情同款），左栏保持原文案版式。
+// 2026-10-30 收支管理：赞助记录下方加「支出记录」（时间/用途/金额+票据图标，
+// 点击弹遮罩浮层查看凭据图），数据与后台收支管理同源（lib/donate.ts）。
 
 import Link from "next/link";
 import { PlayerTip } from "@/components/Cells";
-import { getDonateList, donateYuanPlain } from "@/lib/donate";
+import { ExpenseEvidence } from "@/components/ExpenseEvidence";
+import { getDonateList, getExpenseList, donateYuanPlain } from "@/lib/donate";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "提供赞助" };
 
 export default async function DonatePage() {
-  const { rows, totalCents, total } = await getDonateList(200);
+  const [{ rows, totalCents, total }, expense] = await Promise.all([getDonateList(200), getExpenseList(200)]);
 
   return (
     <div id="page" className="two_columns">
@@ -98,6 +101,35 @@ export default async function DonatePage() {
               </>
             ) : (
               <p className="donate_empty">暂无赞助记录</p>
+            )}
+          </div>
+
+          {/* 支出记录（2026-10-30 收支管理）：赞助记录下方同一数据源；复用 donate_side 排版，
+              有凭据的支出带票据图标，点击弹遮罩浮层查看（ExpenseEvidence 客户端组件） */}
+          <div className="box donate_side expense_side">
+            <div className="donate_head">
+              <h2>支出记录</h2>
+              <span className="donate_count">共 {expense.total} 笔</span>
+            </div>
+            {expense.rows.length > 0 ? (
+              <table cellPadding={0} cellSpacing={0} className="table donate_table">
+                <tbody>
+                  {expense.rows.map((r) => (
+                    <tr key={r.id}>
+                      <td className="sub">{formatDate(r.createTime, "Y-m-d")}</td>
+                      <td>
+                        {r.purpose}
+                        {r.evidence && <ExpenseEvidence url={r.evidence} alt={r.purpose} />}
+                      </td>
+                      <td className="donate_amt">
+                        <em>{donateYuanPlain(r.amount)}</em>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="donate_empty">暂无支出记录</p>
             )}
           </div>
         </li>

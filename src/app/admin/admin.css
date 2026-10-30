@@ -1350,3 +1350,29 @@ a.cheat_uid:hover .pt_bubble {
   font-size: 13px;
   line-height: 20px;
 }
+
+/* ---------- 收支管理左右分栏（2026-10-30 二期） ---------- */
+.donate_columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.donate_col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.donate_col .admin_card {
+  margin: 0;
+}
+.expense_form .expense_file {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+@media (max-width: 1100px) {
+  .donate_columns {
+    flex-direction: column;
+  }
+}

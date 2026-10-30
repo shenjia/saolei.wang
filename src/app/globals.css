@@ -11232,6 +11232,59 @@ html.op-fakefs #header {
   color: #75715e;
   font-size: 16px;
 }
+/* 支出记录（2026-10-30 收支管理）：赞助记录下方板块，复用 .donate_side 全套排版，
+   仅补板块间距与票据图标/凭据浮层样式 */
+.expense_side {
+  margin-top: 14px;
+}
+.expense_ticket {
+  border: 0;
+  background: none;
+  padding: 0 0 0 5px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: -2px;
+}
+/* 凭据遮罩浮层：复用 .login_overlay 模式（fixed inset-0 z-9999），背景加深突出图片 */
+.evidence_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.75);
+  cursor: zoom-out;
+}
+.evidence_overlay img {
+  max-width: min(920px, 92vw);
+  max-height: 86vh;
+  box-sizing: border-box;
+  padding: 8px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+.evidence_close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 24px;
+  line-height: 34px;
+  cursor: pointer;
+}
+.evidence_close:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
 
 /* ===== 首页邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层） =====
    遮罩复用 .login_overlay（fixed 9999 半透明黑）；卡片复用登录浮窗暗玻璃视觉

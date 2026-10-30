@@ -19,7 +19,10 @@ interface LookupUser {
 
 export function DonateForm() {
   const router = useRouter();
+  // 登记日期（2026-10-30 张老师）：默认今天，可回填历史到账；sv-SE locale 输出 YYYY-MM-DD
+  const today = new Date().toLocaleDateString("sv-SE");
   const [idText, setIdText] = useState("");
+  const [date, setDate] = useState(today);
   const [amount, setAmount] = useState("");
   const [lookup, setLookup] = useState<{ loading: boolean; user: LookupUser | null; notFound: boolean }>({
     loading: false,
@@ -64,12 +67,13 @@ export function DonateForm() {
       const res = await fetch("/api/admin/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "donate.add", id: idText.trim(), amount: amount.trim() }),
+        body: JSON.stringify({ op: "donate.add", id: idText.trim(), date, amount: amount.trim() }),
       });
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       toast(data.ok ? data.message ?? "已登记" : data.error ?? "登记失败", data.ok ? "success" : "error");
       if (data.ok) {
         setIdText("");
+        setDate(today);
         setAmount("");
         setLookup({ loading: false, user: null, notFound: false });
         router.refresh();
@@ -99,6 +103,17 @@ export function DonateForm() {
           value={idText}
           onChange={(e) => setIdText(e.target.value.replace(/[^\d]/g, ""))}
           style={{ width: 140 }}
+        />
+      </label>
+      <label>
+        日期
+        <input
+          className="admin_input"
+          type="date"
+          max={today}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          style={{ width: 150 }}
         />
       </label>
       <label>

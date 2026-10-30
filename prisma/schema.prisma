@@ -566,6 +566,19 @@ model Donate {
   @@map("donate")
 }
 
+/// 站点支出（2026-10-30 收支管理）：金额单位分（与 donate 同口径）；
+/// evidence 为凭据图片 URL（/uploads/expense/…，空串=未上传）
+model DonateExpense {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  purpose    String @db.VarChar(100)
+  amount     BigInt @default(0) @db.BigInt
+  evidence   String @default("") @db.VarChar(200)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@map("donate_expense")
+}
+
 model Distribution {
   id         BigInt @id @default(autoincrement()) @db.BigInt
   size       BigInt @db.BigInt

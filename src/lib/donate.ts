@@ -96,3 +96,42 @@ export function donateYuanPlain(cents: number): string {
   const s = yuan.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
   return `¥${s}`;
 }
+
+// ---------- 支出（2026-10-30 收支管理） ----------
+
+export interface ExpenseRow {
+  id: number;
+  /** 用途 */
+  purpose: string;
+  /** 金额（分） */
+  amount: number;
+  /** 凭据图片 URL（空串=无） */
+  evidence: string;
+  createTime: number;
+}
+
+export interface ExpenseList {
+  rows: ExpenseRow[];
+  totalCents: number;
+  total: number;
+}
+
+/** 支出清单（时间倒序）。后台与前台支出记录共用。 */
+export async function getExpenseList(limit = 200): Promise<ExpenseList> {
+  const [records, agg, total] = await Promise.all([
+    prisma.donateExpense.findMany({ orderBy: [{ createTime: "desc" }, { id: "desc" }], take: limit }),
+    prisma.donateExpense.aggregate({ _sum: { amount: true } }),
+    prisma.donateExpense.count(),
+  ]);
+  return {
+    rows: records.map((r) => ({
+      id: Number(r.id),
+      purpose: r.purpose,
+      amount: Number(r.amount),
+      evidence: r.evidence,
+      createTime: Number(r.createTime),
+    })),
+    totalCents: Number(agg._sum.amount ?? 0),
+    total,
+  };
+}
