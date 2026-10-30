@@ -77,7 +77,7 @@ export default async function DonatePage() {
               {/* 2026-10-30 张老师：标签「总计收入/支出/结余」深灰；收入数字绿色带 + 号、
                   支出数字带 - 号（玫瑰红）；结余正绿负红 */}
               <div className="stat_row">
-                <span className="stat_label">总计收入</span>
+                <span className="stat_label">赞助收入</span>
                 <em className="stat_val stat_income">+{donateYuanPlain(totalCents)}</em>
               </div>
               <div className="stat_row">
