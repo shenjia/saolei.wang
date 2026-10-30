@@ -65,6 +65,23 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
     out.push(...new TextEncoder().encode(s), 0);
   };
 
+  /* 盘外坐标哨兵化（2026-10-30 修，video 348796 案）：ms-toollib（flop 播放器）
+     step() 断言坐标合法形态仅有两种——盘内 (y<行数,x<列数) 或恰好边界点
+     (行数,列数)（像素即 (W*16, H*16)），其余任何越界形式直接 panic
+     （RuntimeError: unreachable）。旧客户端 recordEvPx 曾把盘外点击记成
+     「(格心x, H*16+8)」＝一排外的格心，flop 全数不可播。此处导出端兜底：
+     点击类事件（lc/lr/rc/rr/mc/mr/cc）越界时收敛到哨兵点；mv 光标事件
+     flop 只渲染不校验（实测 100+ 存量带越界 mv 的文件均正常），原样保留。 */
+  const sentinelX = input.width * 16;
+  const sentinelY = input.height * 16;
+  const CLICK_MOUSE = new Set([3, 5, 9, 17, 33, 65, 11]);
+  for (const e of input.events) {
+    if (CLICK_MOUSE.has(e.mouse) && (e.x >= sentinelX || e.y >= sentinelY || e.x < 0 || e.y < 0)) {
+      e.x = sentinelX;
+      e.y = sentinelY;
+    }
+  }
+
   u8(3); // EVF v0.3
   /* summary：completed 按实况（败局下载不标 completed，与站内胜负判定一致）；
      official + fair 恒置（本站生成即官方公平局）；NF 按模式。 */
