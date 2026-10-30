@@ -4667,9 +4667,11 @@ body #page.ranking_old .ranking_box {
    无需覆盖规则）；问号图标保留 */
 /* 问号圆圈图标（十轮）：标题右侧，hover 显示评选规则气泡。
    气泡复用全站 data-tip 模式但允许换行（文案长，white-space:normal + 定宽）；
-   2026-10-26 热门录像标题复用同款问号与规则气泡 */
+   2026-10-26 热门录像标题复用同款问号与规则气泡；
+   2026-10-30 录像详情页「录像评级」标题复用（气泡讲清比对桶，见 vr_h 注释） */
 #daily_star h2 .star_help,
-#video_hot h2 .star_help {
+#video_hot h2 .star_help,
+#video_view .radar.box h2.vr_h .star_help {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
@@ -4679,11 +4681,13 @@ body #page.ranking_old .ranking_box {
   vertical-align: middle;
 }
 #daily_star h2 .star_help:hover,
-#video_hot h2 .star_help:hover {
+#video_hot h2 .star_help:hover,
+#video_view .radar.box h2.vr_h .star_help:hover {
   color: #b1b1a4;
 }
 #daily_star h2 .star_help::after,
-#video_hot h2 .star_help::after {
+#video_hot h2 .star_help::after,
+#video_view .radar.box h2.vr_h .star_help::after {
   content: attr(data-tip);
   position: absolute;
   top: 160%;
@@ -4705,7 +4709,8 @@ body #page.ranking_old .ranking_box {
   z-index: 9999;
 }
 #daily_star h2 .star_help:hover::after,
-#video_hot h2 .star_help:hover::after {
+#video_hot h2 .star_help:hover::after,
+#video_view .radar.box h2.vr_h .star_help:hover::after {
   opacity: 1;
 }
 #daily_star .star_body {

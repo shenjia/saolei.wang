@@ -119,6 +119,15 @@ export default async function VideoViewPage({
           filepath: video.filepath,
         })
       : null;
+  // 评级问号气泡文案（2026-10-30 张老师需求，原句口径）：「在高级3bv在160-179的
+  // 所有NF录像中进行评比」——讲清实际比对的「级别 × 3BV 粗桶 × 模式」；桶行缺样本
+  // 回退整组（bucketRange=null，如极端 3BV 段或自定义盘）时不带 3BV 区间从句。
+  // 站内习惯口径（OnlinePlay）：NF 打法不写「标雷」，直接省略模式词。
+  const ratingHelpTip = analysis
+    ? analysis.bucketRange
+      ? `在${LEVEL_NAMES[level] ?? video.level}3bv在${analysis.bucketRange}的所有${video.noflag ? "NF" : ""}录像中进行评比。`
+      : `在${LEVEL_NAMES[level] ?? video.level}的所有${video.noflag ? "NF" : ""}录像中进行评比。`
+    : "";
 
   return (
     <VideoReplayProvider
@@ -258,6 +267,16 @@ export default async function VideoViewPage({
                 见 lib/videoscore.ts performanceOf）；标题下一条分割线与雷达图分开 */}
             <h2 className="vr_h">
               录像评级
+              {/* 问号圆圈图标（2026-10-30 张老师需求，与首页每日一星同款 star_help）：
+                  hover 讲清评级的**比对桶**——实际命中的「级别 × 模式 × 3BV 粗桶」，
+                  桶行缺样本回退整组（bucketRange=null）时不带 3BV 限定 */}
+              <span className="star_help" data-tip={ratingHelpTip}>
+                <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <circle cx="10" cy="10" r="8.4" />
+                  <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />
+                  <circle cx="10" cy="14.6" r="0.9" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
               <span className="vr_rate" style={{ color: gradeColor(analysis.overall) }}>
                 {analysis.overall}
               </span>

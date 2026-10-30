@@ -147,6 +147,21 @@ export function bucketOf(level: string, bbbv: number): number {
 }
 
 /**
+ * 桶区间的人话描述（2026-10-30 张老师需求：录像评级标题问号气泡要讲清「在哪个桶里评的」）。
+ * 返回 null＝整组行（bucket=-1 或回退），文案里就不带 3BV 限定；返回 "lo-hi"＝闭区间
+ * （3BV 是整数，[lo, nextLo) 半开即 [lo, nextLo-1]）；最大桶右开 ∞ →「lo以上」。
+ * 纯函数、三处（跑批/录像页/练习页）可共用，桶边界只认 BV_BUCKETS 一份。
+ */
+export function bucketRangeText(level: string, bucket: number): string | null {
+  if (bucket === DIST_BUCKET_ALL) return null;
+  const edges = BV_BUCKETS[level];
+  if (!edges) return null;
+  const i = edges.indexOf(bucket);
+  if (i < 0) return null;
+  return i === edges.length - 1 ? `${bucket}以上` : `${bucket}-${edges[i + 1] - 1}`;
+}
+
+/**
  * 综合分的权重（张老师 2026-10-14 定：只在「级别 × 模式」组内做百分位加权，
  * 不考虑 3BV，且不同级别不能放一起比较）。
  *

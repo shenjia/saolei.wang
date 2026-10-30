@@ -29,6 +29,7 @@ import {
   performanceOf,
   percentOf,
 } from "./videoradar";
+import { bucketRangeText } from "./videoscore";
 import type { MetricKey } from "./videoradar";
 import type { VideoAnalysisPoint } from "./videoscore";
 import { ensureVideoMetrics } from "./videometrics";
@@ -49,6 +50,10 @@ export interface VideoAnalysisResult {
    *  2026-10-16 新增：全屏试玩结束时的「我的评级」要拿**同一个基准组**给玩家本局打分
    *  （与首页录像评级可比），客户端算分必须拿到这份边界数组。 */
   dists: Partial<Record<MetricKey, number[]>>;
+  /** 实际命中的 3BV 粗桶区间文案（如 "120-139"；2026-10-30 张老师需求：
+   *  标题问号气泡要讲清「在哪个桶里评的」）。null＝整组行（桶行缺样本回退 /
+   *  自定义盘等无桶级别），文案不带 3BV 限定。 */
+  bucketRange: string | null;
 }
 
 export interface VideoAnalysisInput {
@@ -102,8 +107,16 @@ function distFor(row: DistRow | null, key: MetricKey): number[] {
  * 先查该盘 3BV 所属桶行（同规模盘互比，治「初级低/小图低/大图难S」的 3BV 结构偏置），
  * 桶行不存在或样本不足 MIN_DIST_SIZE → 回退整组行（bucket=-1）。
  * 跑批对每组**同时写**桶行与整组行，这里不命中桶行只可能是极端 3BV 段（样本 <30）。
+ *
+ * 2026-10-30：带回**实际命中桶的 bucket 值**（问号气泡文案要说清在哪个桶里评的；
+ * 回退整组时为 DIST_BUCKET_ALL）——命中与否必须以这里实际查到的行为准，
+ * 不能拿 bucketOf 的理论值（桶行可能缺样回退）。
  */
-async function getBaseline(level: string, noflag: boolean, bbbv: number): Promise<DistRow | null> {
+async function getBaseline(
+  level: string,
+  noflag: boolean,
+  bbbv: number
+): Promise<{ row: DistRow | null; bucket: number }> {
   const select = { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true } as const;
   const bucket = bucketOf(level, bbbv);
   if (bucket !== DIST_BUCKET_ALL) {
@@ -111,13 +124,13 @@ async function getBaseline(level: string, noflag: boolean, bbbv: number): Promis
       where: { level_noflag_bucket: { level, noflag, bucket } },
       select,
     });
-    if (row && row.size >= MIN_DIST_SIZE) return row;
+    if (row && row.size >= MIN_DIST_SIZE) return { row, bucket };
   }
   const all = await prisma.videoMetricDist.findUnique({
     where: { level_noflag_bucket: { level, noflag, bucket: DIST_BUCKET_ALL } },
     select,
   });
-  return all && all.size >= MIN_DIST_SIZE ? all : null;
+  return { row: all && all.size >= MIN_DIST_SIZE ? all : null, bucket: DIST_BUCKET_ALL };
 }
 
 /**
@@ -138,7 +151,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     if (!row) return null;
 
     const baseline = await getBaseline(input.level, input.noflag, input.bbbv);
-    if (!baseline) return null;
+    if (!baseline.row) return null;
 
     // ① 四根分项轴（顺带攒下各轴组内分位，供综合评级加权）
     //    2026-10-28 轴调整：「效率」按组选指标（NF=IOE / FL=ThrP）；「路线规划」bpp
@@ -146,7 +159,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     const percents: Partial<Record<MetricKey, number>> = {};
     const subs: VideoAnalysisPoint[] = axisMetricsFor(input.noflag).map((def) => {
       const value = Number(row[def.key]);
-      const dist = distFor(baseline, def.key);
+      const dist = distFor(baseline.row, def.key);
       const percent = dist.length ? percentOf(value, dist, def.highIsBetter, def.key) : 0;
       percents[def.key] = percent;
       return {
@@ -165,7 +178,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     //    等级走同一份分布 + gradeOf —— 与其余四轴同一套算法，口径自洽。
     //    STNB 分布列（video_metric_dist.stnb）本来就随跑批一起产出，无需额外数据。
     const stnbValue = Number(row.stnb);
-    const stnbDist = distFor(baseline, "stnb");
+    const stnbDist = distFor(baseline.row, "stnb");
     const stnbPercent = stnbDist.length ? percentOf(stnbValue, stnbDist, true, "stnb") : 0;
     const composite: VideoAnalysisPoint = {
       key: "stnb",
@@ -189,13 +202,15 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
          给玩家本局打分，边界数组必须与首页录像评级完全同源 */
       dists: {
         stnb: stnbDist,
-        bvs: distFor(baseline, "bvs"),
-        ioe: distFor(baseline, "ioe"),
-        thrp: distFor(baseline, "thrp"),
-        corr: distFor(baseline, "corr"),
-        cls: distFor(baseline, "cls"),
-        bpp: distFor(baseline, "bpp"),
+        bvs: distFor(baseline.row, "bvs"),
+        ioe: distFor(baseline.row, "ioe"),
+        thrp: distFor(baseline.row, "thrp"),
+        corr: distFor(baseline.row, "corr"),
+        cls: distFor(baseline.row, "cls"),
+        bpp: distFor(baseline.row, "bpp"),
       },
+      /* 实际命中桶的区间文案（问号气泡用；回退整组＝null，文案不带 3BV 限定） */
+      bucketRange: bucketRangeText(input.level, baseline.bucket),
     };
   } catch {
     return null;
