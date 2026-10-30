@@ -8546,13 +8546,18 @@ button.msg_cancel:hover {
 #online_play .gicon .tip .tip_ban_cd {
   color: #ff0080;
 }
-/* 模式名元帅金（2026-10-30 张老师定）：所有模式开关按钮 hover 气泡里
-   「XX模式」名头用元帅金 #e6db74（与大元帅军衔文字同色）；em 不斜体
-   （站内 em 惯用作色标记） */
+/* 模式名跟按钮主色（2026-10-30 张老师二定）：模式开关 hover 气泡里的
+   「XX模式」名头颜色＝该按钮**激活态**主色——NF/速旗/排行＝站内黄 #fdc61d
+   （.gicon.active 默认），连击/无猜＝站内绿 #a6e22e（gmode_combo/gmode_ng
+   覆盖色）；em 不斜体（站内 em 惯用作色标记） */
 #online_play .gicon .tip em,
 #online_play .op_ping .tip em {
   font-style: normal;
-  color: #e6db74;
+  color: #fdc61d;
+}
+#online_play .gicon.gmode_combo .tip em,
+#online_play .gicon.gmode_ng .tip em {
+  color: #a6e22e;
 }
 /* 窄屏（≤880，与站内移动端断点一致）兜底：按钮贴近视口右缘，居中弹会被裁出屏
    （实测 700px 宽全屏钮溢出 11px）→ 改贴按钮右缘向左展开，保完整可见 */
