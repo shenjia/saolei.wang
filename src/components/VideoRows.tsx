@@ -27,11 +27,12 @@ const LEVEL_CLS: Record<VideoLevel, string> = { beg: "lv_beg", int: "lv_int", ex
 
 // 软件图标映射（2026-10-29 张老师需求：列表新增「软件」列，级别列之前，图标+hover 全名气泡）。
 // 图标 /images/software/*.png 统一 32×32 原图、16px 展示（retina 2x）；全名口径同下载页。
-// Vienna 原图 16×16 像素风放大展示（sw--pixel 保硬边）；元扫雷按前缀匹配（库值「元扫雷3.3.4」
-// 带版本号）；空值/未知软件（历史数据 25 条）灰色 ? 占位。
+// Vienna 原图 16×16 像素风放大展示（sw--pixel 保硬边）；空值/未知软件（历史数据 25 条）灰色 ? 占位。
 // 2026-10-29 二轮（张老师）：气泡显「全名+版本号」（逐盘版本：Arbiter 0.49/0.50/0.52 各代）；
 // 图标一律灰度（grayscale，配色不抢级别色语言），列表与详情页同口径（三轮定稿）。
-// Arbiter 白底图标灰度后仍过亮 → dim 追加 brightness 压暗
+// Arbiter 白底图标灰度后仍过亮 → dim 追加 brightness 压暗。
+// 2026-10-30 拆分（张老师）：元扫雷库值改为纯软件名「元扫雷」+ version=软件版本（3.3.4），
+// 与 Arbiter|0.52 同构；startsWith 兜底保留（防回填前的历史混合值「元扫雷3.3.4」漏图标）。
 const SOFTWARE_ICONS: Record<
   string,
   { icon: string; name: string; pixel?: boolean; dim?: boolean }
@@ -40,6 +41,7 @@ const SOFTWARE_ICONS: Record<
   Clone: { icon: "/images/software/clone.png", name: "Minesweeper Clone" },
   Vienna: { icon: "/images/software/vienna.png", name: "Viennasweeper", pixel: true },
   "Saolei.wang": { icon: "/images/software/saolei.png", name: "Saolei.wang" },
+  "元扫雷": { icon: "/images/software/yuansaolei.png", name: "元扫雷" },
 };
 
 function softwareIcon(software: string): {
@@ -50,18 +52,17 @@ function softwareIcon(software: string): {
 } | null {
   const hit = SOFTWARE_ICONS[software];
   if (hit) return hit;
-  if (software.startsWith("元扫雷")) return { icon: "/images/software/yuansaolei.png", name: "元扫雷" };
+  if (software.startsWith("元扫雷")) return SOFTWARE_ICONS["元扫雷"]!;
   return null;
 }
 
 /** 软件名全称（含版本号，2026-10-29 二轮张老师口径）：已知软件「Minesweeper Arbiter 0.52」；
- *  元扫雷库值本身带版本（「元扫雷3.3.4」）不拼 version（version 0.4 是录像格式版本非软件版本）；
  *  未知软件回退原值。
+ *  2026-10-30 拆分后元扫雷与旧软件同构（software=元扫雷 / version=3.3.4 软件版本），
+ *  走默认拼接展示「元扫雷 3.3.4」。
  *  Saolei.wang 的 version 列＝客户端版本（0.3＝格心录制旧版 / 0.4 起＝真实坐标），
  *  走默认拼接展示「Saolei.wang 0.4」 */
 function softwareFullName(software: string, version: string): string {
-  // 元扫雷：software 本身带版本（「元扫雷3.3.4」），version 列（0.4）是录像格式版本非软件版本，不拼
-  if (software.startsWith("元扫雷")) return software.trim();
   const hit = SOFTWARE_ICONS[software];
   if (!hit) return software || "未知软件";
   return version ? `${hit.name} ${version.trim()}` : hit.name;

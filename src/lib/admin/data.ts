@@ -689,7 +689,8 @@ function videoWhere(f: VideoFilter): {
     conds.push("vi.software = 'Saolei.wang'");
     joinsNeeded = true;
   } else if (f.software === "yuan") {
-    conds.push("vi.software LIKE '元%'");
+    // 2026-10-30 拆分：元扫雷库值为纯软件名「元扫雷」（版本在 version 列）
+    conds.push("vi.software = '元扫雷'");
     joinsNeeded = true;
   } else if (f.software === "none") {
     conds.push("(vi.software IS NULL OR vi.software = '')");

@@ -58,7 +58,8 @@ export function renderBoard(board: string[]): string {
  * 口径说明：
  *   · avf 头部的版本字节只到主次版本（0.49/0.50/0.51/0.52，库内四档分布实证），
  *     补丁号（0.52.x 内的 .3）不在文件里——0.52 系列全放行，0.51 及以下拦。
- *   · evf 的 Software 字段自报「元X.Y.Z」（转换器已归一为「元扫雷X.Y.Z」），带完整补丁号，精确比较。
+ *   · evf 的 Software 字段自报「元X.Y.Z」（转换器已拆为 Program=元扫雷 + Version=X.Y.Z
+ *     软件版本，2026-10-30），带完整补丁号，精确比较。
  *   · 其他软件（Clone/mvf 已有 "<=0.96" 检查、Viennasweeper 转码等）不在此规则内，返回 null 放行。
  * 返回 null = 通过；返回字符串 = 面向用户的拒绝原因。
  */
@@ -80,9 +81,13 @@ export function checkProgramVersion(program: string, version: string): string | 
     }
     return null;
   }
-  const mm = /^元扫雷(\d+(?:\.\d+){1,3})$/.exec(p);
-  if (mm && verCompare(mm[1].split(".").map(Number), [3, 3, 4]) < 0) {
-    return `元扫雷版本过低（${mm[1]}），本站接受 3.3.4 及以上版本生成的录像`;
+  // 元扫雷（2026-10-30 拆分后）：program=「元扫雷」纯软件名，version 参数即软件版本
+  if (p === "元扫雷") {
+    const mv = /^(\d+(?:\.\d+){1,3})$/.exec(version.trim());
+    if (mv && verCompare(mv[1].split(".").map(Number), [3, 3, 4]) < 0) {
+      return `元扫雷版本过低（${mv[1]}），本站接受 3.3.4 及以上版本生成的录像`;
+    }
+    return null;
   }
   return null;
 }

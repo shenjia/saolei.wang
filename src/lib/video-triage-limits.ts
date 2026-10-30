@@ -24,7 +24,8 @@ export const AUTO_REASON = {
   PATH_SPEED: 1 << 11,
   /** ms-toollib is_valid 判定不通过（2026-10-24 接入，口径见 lib/msvalid.ts）：
    *  软件白名单外 / 校验和为测试值 / 软件判定辅助手段 / 鼠标轨迹程序化特征。
-   *  ⚠️ 库白名单止于元3.3.4——元 3.3.5+ 新版本会误报本项，人工复核先看 software */
+   *  ⚠️ 库白名单止于元3.3.4——元 3.3.5+ 新版本会误报本项，人工复核先看 software/version
+   *  （2026-10-30 拆分后 software=「元扫雷」纯软件名、version=软件版本） */
   MSTOOL_FAIL: 1 << 12,
   /** ms-toollib is_valid 判定可疑：操作细节不足（动作数/3BV<10）或鼠标特征达可疑阈值
    *  （按住时长 30~40ms / 极短按 4~10 次 / 轨迹方向熵/转向熵偏低） */
