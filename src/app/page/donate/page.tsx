@@ -112,22 +112,21 @@ export default async function DonatePage() {
               <span className="donate_count">共 {expense.total} 笔</span>
             </div>
             {expense.rows.length > 0 ? (
-              <table cellPadding={0} cellSpacing={0} className="table donate_table">
-                <tbody>
-                  {expense.rows.map((r) => (
-                    <tr key={r.id}>
-                      <td className="sub">{formatDate(r.createTime, "Y-m-d")}</td>
-                      <td>
-                        {r.purpose}
-                        {r.evidence && <ExpenseEvidence url={r.evidence} alt={r.purpose} />}
-                      </td>
-                      <td className="donate_amt">
-                        <em>{donateYuanPlain(r.amount)}</em>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              /* 2026-10-30 三轮（张老师）：每笔两行——日期+用途一行，费用+凭据一行 */
+              <div className="expense_list">
+                {expense.rows.map((r) => (
+                  <div key={r.id} className="expense_item">
+                    <div className="expense_top">
+                      <span className="sub">{formatDate(r.createTime, "Y-m-d")}</span>
+                      <span className="expense_purpose">{r.purpose}</span>
+                    </div>
+                    <div className="expense_bottom">
+                      <em>{donateYuanPlain(r.amount)}</em>
+                      {r.evidence && <ExpenseEvidence url={r.evidence} alt={r.purpose} />}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <p className="donate_empty">暂无支出记录</p>
             )}

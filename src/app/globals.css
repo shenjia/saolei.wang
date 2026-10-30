@@ -11237,6 +11237,30 @@ html.op-fakefs #header {
 .expense_side {
   margin-top: 14px;
 }
+/* 支出记录两行版式（2026-10-30 三轮张老师）：每笔两行——日期+用途一行、
+   费用+凭据一行；条目间用主题分隔色 #49483e（同 thead 下边框） */
+.expense_item {
+  padding: 6px 0;
+}
+.expense_item + .expense_item {
+  border-top: 1px solid #49483e;
+}
+.expense_top {
+  font-size: 16px;
+  line-height: 24px;
+  color: #f8f8f2;
+}
+.expense_top .sub {
+  font-size: 15px;
+  margin-right: 8px;
+}
+.expense_bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  line-height: 24px;
+}
 .expense_ticket {
   border: 0;
   background: none;
