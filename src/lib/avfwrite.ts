@@ -166,7 +166,7 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
  *  正常事件原样保留；危险 chord 改为逐格安全点击，末尾补开遗留非雷格，保证胜局可播完。 */
 export function repairWinningEvents(
   w: number, h: number, board: Uint8Array | number[], questionMarks: boolean,
-  events: OnlineEvent[], scoreCsec: number,
+  events: OnlineEvent[], endMs: number,
 ): OnlineEvent[] {
   const n = w * h;
   const nums = new Int16Array(n);
@@ -241,7 +241,9 @@ export function repairWinningEvents(
     }
   }
 
-  const end = { sec: (scoreCsec / 100) | 0, hun: scoreCsec % 100, ms: scoreCsec * 10 };
+  /* 补洞基准毫秒（2026-10-30 起调用方直传 ms：＝事件流末端，与 flop 显示同源；
+     AVF 侧传 scoreCsec*10 完全兼容）。end 的 sec/hun 仅 AVF 合成事件需要 */
+  const end = { sec: Math.floor(endMs / 1000), hun: Math.floor(endMs / 10) % 100, ms: endMs };
   for (let i = 0; i < n; i++) {
     if (board[i] || state[i] === 1) continue;
     while (state[i] !== 0) { emit(9, i, end); toggleLabel(i); emit(17, i, end); }
@@ -288,7 +290,7 @@ export function buildOnlineAvf(input: OnlineAvfInput): Uint8Array {
     out.push(mouse, (e.x >> 8) & 0xff, raw & 0xff, e.x & 0xff, e.hun, (e.y >> 8) & 0xff, (raw >> 8) & 0xff, e.y & 0xff);
   };
   const canonical = canonicalizeOnlineEvents(events);
-  const exportEvents = won ? repairWinningEvents(w, h, board, qm, canonical, scoreCsec) : canonical;
+  const exportEvents = won ? repairWinningEvents(w, h, board, qm, canonical, scoreCsec * 10) : canonical;
   for (let i = 0; i < exportEvents.length; i++) {
     const e = exportEvents[i];
     /* 站内用 sc+lr 表示「单击已开数字」，用孤立 mr 表示自动双击；AVF/FlopPlayer

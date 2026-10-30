@@ -44,6 +44,9 @@ export interface RankedEvfInput {
   uniqueIdentifier?: string;
   /** 是否胜局（仅影响 summary 位 completed；2026-10-26 张老师定：下载也写实况） */
   won?: boolean;
+  /** 对局用时毫秒（2026-10-30 张老师定：＝事件流末端毫秒，与 flop 播放器显示完全一致）。
+   *  优先于 scoreCsec*10 写入 EVF 头 rtime；不传退回旧口径。 */
+  scoreMs?: number;
   /** 对局时间（AVF 时间戳串，练习页下载携带；仅作日后扩展，v0.3 头不落此字段） */
   timestamp?: string;
   /** 客户端代际版本（2026-10-29 张老师二定：版本号随客户端代码走，不随服务端走）。
@@ -73,7 +76,9 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
   u8(16); // 全站统一 16px 格子坐标
   u16(0); // classic
   u16(input.bbbv);
-  u24(input.scoreCsec * 10);
+  /* 头部 rtime（ms）：2026-10-30 起＝事件流末端毫秒（scoreMs 优先）；
+     旧口径 scoreCsec*10 仍支持（作弊凭据/未适配调用方） */
+  u24(input.scoreMs ?? input.scoreCsec * 10);
   cstr(`${RANKED_SOFTWARE} ${input.clientVersion ?? RANKED_CLIENT_VERSION_DEFAULT}`);
   cstr(input.player ?? "");
   cstr(""); // race identifier
