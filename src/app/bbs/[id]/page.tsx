@@ -10,7 +10,7 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { BBS_BOARD_NAMES, BBS_REPLY_PAGESIZE, getPost, getReplyFeed, locateReply, ubb } from "@/lib/bbs";
-import { timeOpposite, TIME_NEVER, decodeLegacyEntities } from "@/lib/format";
+import { timeOpposite, TIME_YEAR, decodeLegacyEntities } from "@/lib/format";
 import { PostOps } from "@/components/BbsOps";
 import { BbsReplySection } from "@/components/BbsReplies";
 import { BbsAuthorName, TitleBadge } from "@/components/Cells";
@@ -138,7 +138,7 @@ export default async function BbsTitlePage({
                   <TitleBadge title={post.author.title} classic={post.author.old} link />{" "}
                 </>
               )}
-              发表于 {timeOpposite(post.createTime, TIME_NEVER)}　
+              发表于 {timeOpposite(post.createTime, TIME_YEAR)}　
               <span className="bbs_count">
                 {post.clicks}{" "}
                 <span className="bbs_count_unit">次浏览</span>{" "}
