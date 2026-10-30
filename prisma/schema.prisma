@@ -403,6 +403,12 @@ model VideoMetricDist {
   thrp       String @default("") @db.VarChar(255)
   bpp        String @default("") @db.VarChar(255)
   stnb       String @db.VarChar(255)
+  // 2026-10-30 五轴改版（张老师定）：全网池专用列——level='all' 行（NF/FL 各一）用，
+  // 普通行恒空串。「稀有程度」三合一取最高档需要 time/3bvs/stnb 三份全池边界；
+  // 「有效点击」= CES（每秒有效点击）、「移动速度」= crossings/s，均全网评级。
+  time       String @default("") @db.VarChar(255)
+  ces        String @default("") @db.VarChar(255)
+  cps        String @default("") @db.VarChar(255)
   createTime BigInt @default(0) @map("create_time") @db.BigInt
 
   @@unique([level, noflag, bucket])

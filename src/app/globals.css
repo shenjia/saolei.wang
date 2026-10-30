@@ -2303,7 +2303,9 @@ del[data-tip]:hover::after {
 }
 /* 录像评级盒标题行（2026-10-15 张老师定）：左＝「录像评级」，右＝本局综合评级
    （与练习页结算面板「评级：S+」同一个算法）—— 同字号、向右对齐；
-   下面一条分割线与雷达图分开。等级配色走行内 style（videoscore.gradeColor），这里只管排布 */
+   下面一条分割线与雷达图分开。等级配色走行内 style（videoscore.gradeColor），这里只管排布。
+   2026-10-30：左侧结构改为 .vr_h_left（文字 + 紧贴的问号图标）——space-between 下
+   问号不包进左组会被推到行中（张老师点名问号要紧靠标题）。 */
 #page #video_view .radar.box h2.vr_h {
   display: flex;
   align-items: baseline;
@@ -4693,7 +4695,8 @@ body #page.ranking_old .ranking_box {
 /* 问号圆圈图标（十轮）：标题右侧，hover 显示评选规则气泡。
    气泡复用全站 data-tip 模式但允许换行（文案长，white-space:normal + 定宽）；
    2026-10-26 热门录像标题复用同款问号与规则气泡；
-   2026-10-30 录像详情页「录像评级」标题复用（气泡讲清比对桶，见 vr_h 注释） */
+   2026-10-30 录像详情页「录像评级」标题复用（张老师定：问号紧贴标题文字左侧间距为 0，
+   其他板块维持 6px 视觉间隙——用更窄的选择器单独覆盖） */
 #daily_star h2 .star_help,
 #video_hot h2 .star_help,
 #video_view .radar.box h2.vr_h .star_help {
@@ -4704,6 +4707,11 @@ body #page.ranking_old .ranking_box {
   position: relative;
   cursor: help;
   vertical-align: middle;
+}
+/* 2026-10-30 张老师定：录像评级的问号「向左紧靠标题」——间距 6→2（完全 0 会
+   视觉粘连 h2 文字，取 2px 紧贴但不贴死；再小肉眼无差别） */
+#video_view .radar.box h2.vr_h .star_help {
+  margin-left: 2px;
 }
 #daily_star h2 .star_help:hover,
 #video_hot h2 .star_help:hover,

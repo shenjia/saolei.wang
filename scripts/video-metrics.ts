@@ -340,6 +340,9 @@ async function main() {
     level: string;
     noflag: boolean;
     bbbv: number;
+    realTime: number;
+    ce: number;
+    cp: number;
     bvs: number;
     ioe: number;
     thrp: number;
@@ -349,7 +352,8 @@ async function main() {
     bpp: number;
     stnb: number;
   }>>(`
-    SELECT m.level, m.noflag, m.bbbv, m.bvs, m.ioe, m.thrp, m.corr, m.cls, m.ppc, m.bpp, m.stnb
+    SELECT m.level, m.noflag, m.bbbv, m.real_time AS realTime, m.ce, m.cp,
+           m.bvs, m.ioe, m.thrp, m.corr, m.cls, m.ppc, m.bpp, m.stnb
     FROM video_metrics m JOIN video v ON v.id = m.id
     WHERE m.cl > 0 AND v.status = ${VIDEO_STATUS.REVIEWED}
   `);
@@ -360,24 +364,45 @@ async function main() {
   type Group = { size: number; vals: Record<BaseMetricKey, number[]> };
   const groups = new Map<string, Group>();
   const groupKey = (level: string, noflag: boolean, bucket: number) => `${level}|${noflag ? 1 : 0}|${bucket}`;
-  const push = (key: string, row: Record<BaseMetricKey, number>) => {
+  const push = (key: string, row: Record<BaseMetricKey, number> & { cp?: number }) => {
     let g = groups.get(key);
     if (!g) {
-      g = { size: 0, vals: { stnb: [], bvs: [], ioe: [], thrp: [], corr: [], cls: [], ppc: [], bpp: [] } };
+      g = { size: 0, vals: { stnb: [], bvs: [], ioe: [], thrp: [], corr: [], cls: [], ppc: [], bpp: [], time: [], ces: [], cps: [] } };
       groups.set(key, g);
     }
     g.size++;
-    for (const k of rows) g.vals[k].push(row[k]);
+    for (const k of rows) {
+      // crossings 系指标（cps/bpp）只收 cp>0 的值：存量行 cp 列未全量回填前（v2 口径
+      // 全量重放欠账，2026-10-29 上线时标注的前置）cp=0 的零值不能进分位——否则
+      // 30 万零值把边界拉到底，全部评级虚高 SSS。size 仍按行计（其他指标全量有效）。
+      if ((k === "cps" || k === "bpp") && !(Number(row.cp) > 0)) continue;
+      g.vals[k].push(row[k]);
+    }
   };
   for (const row of all) {
-    // 分组 v2（2026-10-29 张老师定）：级别 × 模式 × 3BV 粗桶 + 整组双写。
+    // 分组 v3（2026-10-30 五轴改版）：级别 × 模式 × **3BV 低中高三桶**（BV_BUCKETS 已改
+    // 三桶边界，张老师定：路线规划只分低中高三桶）+ 整组双写。
     // 桶行 = 同规模盘互比（治 bpp 的 3BV 结构偏置）；整组行 = 兜底回退（桶样本不足）
     // 与 composite/STNB 榜的取数来源（STNB 已按难度归一，保持整组口径不变）。
     // noflag 走 raw SQL 回来是 0/1 number，转 boolean（groupKey 与 upsert 都按布尔用）
     const nf = Number(row.noflag) === 1;
-    push(groupKey(row.level, nf, DIST_BUCKET_ALL), row);
+    // 2026-10-30 五轴改版衍生值（全网池行专用；普通行它们也会算进 vals 但普通行
+    // 只消费 bpp 列，多余列不落库不影响）：time 秒 / ces 有效点击每秒 / cps 跨格每秒
+    const sec = Number(row.realTime) / 1000;
+    const enriched = {
+      ...row,
+      time: sec,
+      ces: sec > 0 && row.ce > 0 ? row.ce / sec : 0,
+      cps: sec > 0 && row.cp > 0 ? row.cp / sec : 0,
+    } as unknown as Record<BaseMetricKey, number>;
+    push(groupKey(row.level, nf, DIST_BUCKET_ALL), enriched);
     const bucket = bucketOf(row.level, row.bbbv);
-    if (bucket !== DIST_BUCKET_ALL) push(groupKey(row.level, nf, bucket), row);
+    if (bucket !== DIST_BUCKET_ALL) push(groupKey(row.level, nf, bucket), enriched);
+    // 全网池行（2026-10-30 五轴改版张老师定）：level='all'，NF/FL 各一，bucket 恒 -1——
+    // 「稀有程度」（time/3bvs/stnb 三合一）「移动速度」（cps）「操作效率」（thrp）
+    // 「有效点击」（ces）四轴的全网评级边界。跨级别混合（time/3bvs 天然跨级可比，
+    // 张老师点名「全网」）。
+    push(groupKey("all", nf, DIST_BUCKET_ALL), enriched);
   }
 
   let written = 0;
@@ -390,15 +415,20 @@ async function main() {
         .map((v) => String(Math.round(v * 1000) / 1000))
         .join(",");
     }
+    // 2026-10-30 五轴改版：全网池行（level='all'）的 time/ces/cps 三列必须落库
+    // （四轴取数靠它们；普通行这三列不消费，但写上无害且免分支）。
+    data.time = buildDist(g.vals.time, false).map((v) => String(Math.round(v * 1000) / 1000)).join(",");
+    data.ces = buildDist(g.vals.ces, true).map((v) => String(Math.round(v * 1000) / 1000)).join(",");
+    data.cps = buildDist(g.vals.cps, true).map((v) => String(Math.round(v * 1000) / 1000)).join(",");
     const now = BigInt(Math.floor(Date.now() / 1000));
     await prisma.videoMetricDist.upsert({
       where: { level_noflag_bucket: { level, noflag: nf === "1", bucket: Number(bucket) } },
       create: { ...data, createTime: now } as never,
-      update: { size: g.size, stnb: data.stnb as string, bvs: data.bvs as string, ioe: data.ioe as string, thrp: data.thrp as string, corr: data.corr as string, cls: data.cls as string, ppc: data.ppc as string, bpp: data.bpp as string },
+      update: { size: g.size, stnb: data.stnb as string, bvs: data.bvs as string, ioe: data.ioe as string, thrp: data.thrp as string, corr: data.corr as string, cls: data.cls as string, ppc: data.ppc as string, bpp: data.bpp as string, time: data.time as string, ces: data.ces as string, cps: data.cps as string },
     });
     written++;
   }
-  console.log(`分位行写入：${written}（整组 6 + 3BV 粗桶若干；桶边界 ${JSON.stringify(BV_BUCKETS)}）`);
+  console.log(`分位行写入：${written}（整组 6 + 3BV 三桶 + 全网池 2；桶边界 ${JSON.stringify(BV_BUCKETS)}）`);
 
   // ---- 综合分（依赖上面的分位基准） ----
   await rebuildComposite();

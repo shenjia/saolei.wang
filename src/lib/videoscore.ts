@@ -12,15 +12,21 @@ import { GRADE_PERCENTS, GRADES } from "./config";
 
 // ---------- 指标定义 ----------
 
-export type MetricKey = "stnb" | "bvs" | "ioe" | "thrp" | "corr" | "cls" | "ppc" | "bpp" | "cmp";
+export type MetricKey = "stnb" | "bvs" | "ioe" | "thrp" | "corr" | "cls" | "ppc" | "bpp" | "cmp" | "time" | "ces" | "cps";
 /** 重放得出、逐盘落库并建分位基准的客观事实（cmp 是合成的，不在内） */
 export type BaseMetricKey = Exclude<MetricKey, "cmp">;
 /**
- * 雷达分项轴的候选键。「效率」轴按组选指标：FL 用 thrp（chord 收益，组内 r=0.715 优于
- * IOE 的 0.646）、NF 用 ioe（NF 无 chord，thrp 被钉死 ≤1.0 无区分度）——见 axisMetricsFor。
- * 「走位」= 3BV/PATH（2026-10-28 张老师定，替换原「精准 corr」轴）。
+ * 雷达分项轴的候选键。2026-10-30 五轴改版（张老师定）——五轴全部换新口径：
+ *   ① 稀有程度（顶）：time / 3bvs / stnb 三者各自在全网（全站过审胜局、NF/FL 分池）
+ *      评级后**取最高档**展示（三合一，见 radarPointsFrom）；
+ *   ② 有效点击（左上）：CES = Ce/s 全网评级；
+ *   ③ 移动速度（右上）：crossings/s 全网评级；
+ *   ④ 路线规划（左下）：solved3bv/crossings 在**同级别 3BV 低中高三桶**内评级（BV3 桶）；
+ *   ⑤ 操作效率（右下）：Thrp 全网评级（不再按 NF/FL 组二选一）。
+ * 全网池供数：跑批 video-metrics.ts 写 level='all' 行（NF/FL 各一），列 time/ces/cps
+ * + bvs/stnb（稀有程度三合一用），取数见 videoanalysis distFor 的 'all' 分支。
  */
-export type AxisMetricKey = "bvs" | "ioe" | "thrp" | "bpp" | "cls";
+export type AxisMetricKey = "bvs" | "ioe" | "thrp" | "bpp" | "cls" | "ces" | "cps" | "time";
 
 export interface MetricDef<K extends MetricKey = MetricKey> {
   key: K;
@@ -65,25 +71,35 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   // 「3BV 分桶基准」治（见 BV_BUCKETS）。⚠️ 展示名一律 Crossings（张老师定），
   // 「CPath」是调研期伞名勿用；DB 列 cp 存的即 crossings 值（缩写不动）。
   { key: "bpp", name: "路线规划", desc: "每跨一次格换回的完成 3BV", prefix: "完成3BV/Crossings", unit: "", digits: 3, highIsBetter: true },
+  // 2026-10-30 五轴改版（张老师定）新增的全网评级指标（基准池 = 全站过审胜局，
+  // NF/FL 分开；不入 BASE_METRICS——它们没有「级别×桶」分组基准，由全网池行供数）：
+  // time：用时（秒）——「稀有程度」三合一之一，越小越好（越小越快越稀有）；
+  // ces：有效点击速度 = Ce ÷ 用时秒（CES）——「有效点击」轴；
+  // cps：移动速度 = crossings ÷ 用时秒——「移动速度」轴（crossings 对回报率免疫，
+  //      不用 path：同回报率偏置会虚高，张老师点名 crossings/Rtime）。
+  { key: "time", name: "稀有程度", desc: "用时（秒）", prefix: "", unit: "秒", digits: 2, highIsBetter: false },
+  { key: "ces", name: "有效点击", desc: "每秒有效点击数", prefix: "CES", unit: "", digits: 2, highIsBetter: true },
+  { key: "cps", name: "移动速度", desc: "每秒跨格次数", prefix: "", unit: "次跨格/秒", digits: 2, highIsBetter: true },
 ];
 
 /**
- * 雷达的四根分项轴 —— 自顶部「判雷能力」起顺时针：开图速度 / 操作效率 / 路线规划 / 点击速度
- * （2026-10-28 晚张老师定四字名；旧名：速度 / 效率 / 走位 / 手速）。
- * 「操作效率」按组选指标（2026-10-28 张老师定）：FL=ThrP（每次有效操作换回的 3BV，
- * 即 chord 收益），NF=IOE（每点击换回的 3BV）——NF 无 chord，ThrP 恒 ≤1 无区分度。
- * 「路线规划」= 完成3BV/Crossings（2026-10-29 张老师定 v2 口径：分母由鼠标行程
- * 换跨格次数 crossings，对回报率免疫；2026-10-30 定名），替换原「精准」corr 轴
- * （corr 与水平负相关）。
+ * 雷达的四根分项轴（2026-10-30 五轴改版张老师定）——自顶部「稀有程度」起顺时针：
+ * 右上「移动速度」（cps=Crossings/s）/ 右下「操作效率」（Thrp）/ 左下「路线规划」
+ * （完成3BV/Crossings，同级别 3BV 低中高三桶内评级）/ 左上「有效点击」（CES=Ce/s）。
+ * 除「路线规划」外的三根都走**全网池**（level='all' 行，NF/FL 分池）。
+ * ⚠️ 此数组只描述「分项轴的字面定义」（formatMetric/气泡/标签用）；各轴的取数池
+ * 与等级计算已高度定制（三合一取最高 / 全网池 / 三桶），组装见 radarPointsFrom，
+ * 不再是「一组 dist 逐轴评」的简单模型——axisMetricsFor 的调用方只剩格式化场景。
  */
 export function axisMetricsFor(noflag: boolean): MetricDef<AxisMetricKey>[] {
+  // noflag 参数 2026-10-30 起不再影响轴选择（操作效率恒 ThrP、全网池 NF/FL 分池在取数侧做）；
+  // 保留签名避免破坏三处消费方（radarPointsFrom / videoanalysis / OnlinePlay 的 import）。
+  void noflag;
   return [
-    { key: "bvs", name: "开图速度", desc: "每秒完成 3BV", prefix: "3BV/s", unit: "", digits: 3, highIsBetter: true },
-    noflag
-      ? { key: "ioe", name: "操作效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true }
-      : { key: "thrp", name: "操作效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
+    { key: "cls", name: "有效点击", desc: "每秒有效点击数", prefix: "CES", unit: "", digits: 2, highIsBetter: true },
+    { key: "cps", name: "移动速度", desc: "每秒跨格次数", prefix: "", unit: "次跨格/秒", digits: 2, highIsBetter: true },
+    { key: "thrp", name: "操作效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
     { key: "bpp", name: "路线规划", desc: "每跨一次格换回的完成 3BV", prefix: "完成3BV/Crossings", unit: "", digits: 3, highIsBetter: true },
-    { key: "cls", name: "点击速度", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   ];
 }
 
@@ -121,16 +137,16 @@ export const MIN_DIST_SIZE = 30;
 export const DIST_BUCKET_ALL = -1;
 
 /**
- * 3BV 粗桶边界（2026-10-29，与探针 scripts/cellpath-probe.ts 分桶一致）：
- * 数组是各桶**下界**，升序；桶值 = 不超过该盘 3BV 的最大下界（即 [lo, nextLo) 的 lo），
- * 最大桶右开到 ∞。边界取自本地库 3BV 分布的中段（桶内样本数千级、桶间 bpp 中位数
- * 拉得开），极端小 3BV 桶（beg [0,6)）样本也充足；极限大 3BV 桶（beg 27+ / int 85+ /
- * exp 225+）桶内指标区分度衰减（探针实测 ~0），靠 MIN_DIST_SIZE 不足时自动回退整组。
+ * 3BV 三桶边界（2026-10-30 五轴改版张老师定：路线规划按**同级别 3BV 低中高只分三个桶**）。
+ * 数组是各桶**下界**，升序 [0, midLo, hiLo]：低 [0,midLo) / 中 [midLo,hiLo) / 高 [hiLo,∞)。
+ * 边界取自本地库每级别过审胜局 3BV 的 p33/p67（2026-10-30 实测：
+ * beg 18.5/24.4 → 19/25；int 69.7/81.5 → 70/82；exp 180.8/197.3 → 181/198），
+ * 三桶样本量各占级别内约 1/3（数万级，远超 MIN_DIST_SIZE）。
  */
 export const BV_BUCKETS: Partial<Record<string, number[]>> = {
-  beg: [0, 6, 9, 12, 15, 18, 22, 27],
-  int: [0, 35, 45, 55, 65, 75, 85],
-  exp: [0, 120, 140, 160, 180, 200, 225],
+  beg: [0, 19, 25],
+  int: [0, 70, 82],
+  exp: [0, 181, 198],
 };
 
 /**
@@ -179,10 +195,14 @@ export const COMPOSITE_WEIGHTS: Record<MetricKey, number> = {
   bpp: 1,
   corr: 1,
   cls: 1,
-  // 不参与加权：stnb 已被本分取代；ppc/corr 已移出雷达；cmp 是本分自身
+  // 不参与加权：stnb 已被本分取代；ppc/corr 已移出雷达；cmp 是本分自身；
+  // time/ces/cps 是 2026-10-30 五轴改版的全网池专用键，无「级别×桶」分组基准不参与
   stnb: 0,
   ppc: 0,
   cmp: 0,
+  time: 0,
+  ces: 0,
+  cps: 0,
 };
 
 /** 综合分 = 四轴组内百分位的加权平均（0-100，本身就是百分位量纲，可直接当综合轴的半径）
@@ -201,17 +221,19 @@ export function compositeOf(percents: Partial<Record<MetricKey, number>>, noflag
 
 /**
  * 「本局表现」评级（在线玩结算面板标题右侧「评级：S+」）的权重 —— 2026-10-15 张老师定：
- * **判雷能力(STNB) 占一半，开图速度 / 操作效率 / 路线规划 / 点击速度 各 1/8**。
- * （2026-10-28 轴调整：原「精准 corr」换「走位 bpp」；效率轴 FL=thrp / NF=ioe ——
- * 两组各自只会提供其中一个键，performanceOf 只对**有值的键**加权。）
+ * **判雷能力(STNB) 占一半，其余四轴各 1/8**。
+ * （2026-10-30 五轴改版：五轴换新指标——稀有程度（key 锚 stnb）/ 移动速度 cps /
+ * 操作效率 thrp / 路线规划 bpp / 有效点击 ces。radarOverall 按 points 的 key 收集
+ * percent，稀有程度轴 key=stnb 天然吃 4 权重，其余四轴各 1——**权重结构不变**，
+ * 只是四个分项键换人。ioe/cls/bvs 不再出现在雷达点上，不进加权。）
  *
  * 与 COMPOSITE_WEIGHTS 是两回事：后者是雷达「综合」轴的历史口径（已被 STNB 原值取代），
  * 这里用的是五围图**全部五根轴**的组内分位加权，只在结算面板标题上用，不落库。
  * 要偏重某项直接改数字（不必改逻辑）。
  */
-export const PERFORMANCE_KEYS: MetricKey[] = ["stnb", "bvs", "ioe", "thrp", "bpp", "cls"];
+export const PERFORMANCE_KEYS: MetricKey[] = ["stnb", "bvs", "ioe", "thrp", "bpp", "cls", "cps", "ces"];
 
-/** 权重（4:1:1:1:1 = 50% + 12.5%×4；ioe/thrp 二选一按组提供）；未参与的两项恒 0 */
+/** 权重（4:1:1:1:1 = 50% + 12.5%×4；雷达五轴外的键恒 0 不参与）；未参与的两项恒 0 */
 export const PERFORMANCE_WEIGHTS: Record<MetricKey, number> = {
   stnb: 4,
   bvs: 1,
@@ -222,6 +244,9 @@ export const PERFORMANCE_WEIGHTS: Record<MetricKey, number> = {
   cls: 1,
   ppc: 0,
   cmp: 0,
+  cps: 1,
+  ces: 1,
+  time: 0,
 };
 
 /**
@@ -316,9 +341,11 @@ export function gradeOf(value: number, dist: number[], highIsBetter: boolean): s
  * bpp 同理（2026-10-28 并入）：最短路线有下界，慢速直走的玩家也能逼近顶格。
  * 这些指标达到组内满分时百分位封顶 NO_FIRST_PERCENT（99.99），
  * 气泡显示「超过 99.99% 的玩家」而非「全网第一」；等级仍按原档位评（SSS 保留）。
- * bvs / cls / stnb / thrp 无固定理论上限、组内最大值只有真正最强的一盘，维持「全网第一」。
+ * bvs / cls / stnb / thrp / cps 无固定理论上限、组内最大值只有真正最强的一盘，维持「全网第一」。
+ * （2026-10-30 五轴改版补：ces 与 ioe 同性质——Ce 有理论上限节奏，慢玩零废操作
+ * 即可顶格，封顶不说「全网第一」。）
  */
-export const NO_FIRST_METRICS: ReadonlySet<MetricKey> = new Set(["corr", "ioe", "bpp"]);
+export const NO_FIRST_METRICS: ReadonlySet<MetricKey> = new Set(["corr", "ioe", "bpp", "ces"]);
 export const NO_FIRST_PERCENT = 99.99;
 
 /** 超越百分比（0-100；corr/ioe 等易顶格指标封顶 99.99，见 NO_FIRST_METRICS） */
@@ -405,38 +432,88 @@ export interface VideoAnalysisPoint {
 }
 
 /**
- * 五轴雷达点组装：判雷能力（STNB 原值）置顶 + 开图速度 / 操作效率 / 路线规划 / 点击速度
- * （2026-10-28 晚张老师定四字名，旧名：判雷 / 速度 / 效率 / 走位 / 手速）。
- * 录像详情页右栏、练习页结算面板、全屏试玩「我的评级」**三处共用这一份**——
- * 2026-10-14 副本分叉的教训（OnlinePlay 曾留本地副本，主模块修了口径副本没跟上）。
+ * 五轴雷达点组装（2026-10-30 五轴改版张老师定，三处共用：录像详情页右栏 /
+ * 练习页结算面板 / 全屏试玩「我的评级」——2026-10-14 副本分叉的教训，口径只此一份）：
  *
- * @param values 本局原始指标值（stnb / bvs / ioe / thrp / bpp / cls）
- * @param group  该组（级别 × 模式）的分位基准：指标 → 9 档边界；缺项 / 空数组 → 该轴冻结为 "?"
+ *   ① 稀有程度（顶）：time / 3bvs / stnb 三者各在**全网池**（allDists，NF/FL 分池）
+ *      评出等级后**取最高档**展示（半径用三者的最高 percent；气泡 disp 显示最能代表
+ *      该盘稀有性的那项的数值——按 percent 最高者）；
+ *   ② 移动速度（右上）：cps = crossings ÷ 用时秒，全网池；
+ *   ③ 操作效率（右下）：thrp，全网池（不再按 NF/FL 组二选一）；
+ *   ④ 路线规划（左下）：bpp = 完成3BV ÷ crossings，**同级别 3BV 低中高三桶**内评级
+ *      （group 参数：桶行缺失自动回退整组行，由调用方取好传入）；
+ *   ⑤ 有效点击（左上）：ces = Ce ÷ 用时秒，全网池。
+ *
+ * @param values 本局原始指标值（time 秒 / bvs / stnb / thrp / bpp / cps / ces）
+ * @param group  路线规划轴的分位基准（同级别 × 模式 × 3BV 三桶行，缺 → 整组行）
+ * @param allDists 全网池基准（NF/FL 分池后的那份：time/bvs/stnb/ces/cps/thrp → 9 档边界）
  * @param rateable 是否可评级（缺基准 / 零点击 / 完成度过低＝false）
  *   —— false 时全轴 disp "—"、percent 0、grade "?"（雷达收缩到圆心的空图，值仍保留）
- * @param noflag 打法（2026-10-28 起「效率」轴按组选指标：NF=IOE / FL=ThrP）
+ * @param noflag 打法（选全网池 NF 版 / FL 版）
  */
 export function radarPointsFrom(
   values: Partial<Record<MetricKey, number>>,
   group: Partial<Record<MetricKey, number[]>> | undefined,
   rateable: boolean,
   noflag = false,
+  allDists?: Partial<Record<MetricKey, number[]>>,
 ): VideoAnalysisPoint[] {
-  const axis = (key: AxisMetricKey | "stnb", name: string, highIsBetter: boolean): VideoAnalysisPoint => {
-    const value = values[key] ?? 0;
-    const dist = group?.[key] ?? [];
+  // 单指标轴：从指定池取边界评级
+  const axis = (
+    key: AxisMetricKey,
+    name: string,
+    dist: number[] | undefined,
+    highIsBetter: boolean,
+    valueOverride?: number,
+  ): VideoAnalysisPoint => {
+    const value = valueOverride ?? values[key] ?? 0;
+    const d = dist ?? [];
     return {
       key,
       name,
       value,
-      disp: dist.length ? formatMetric(key, value) : "—",
-      percent: dist.length ? percentOf(value, dist, highIsBetter, key) : 0,
-      grade: dist.length ? gradeOf(value, dist, highIsBetter) : "?",
+      disp: d.length ? formatMetric(key, value) : "—",
+      percent: d.length ? percentOf(value, d, highIsBetter, key) : 0,
+      grade: d.length ? gradeOf(value, d, highIsBetter) : "?",
     };
   };
+  // ① 稀有程度（三合一取最高）：time（反向）/ 3bvs / stnb 各自过全网池评等级，
+  //    取主档最高者展示；radius（percent）取三者最大（雷达画的是「稀有性强度」）；
+  //    disp 取 percent 最高那项的格式化值（最能代表这盘为什么稀有）。
+  //    主档序：SSS(0) 最强 … F(8) 最弱——比较用 GRADES.indexOf(主档)。
+  const rarityParts = [
+    { key: "time" as const, name: "time", dist: allDists?.time, hib: false },
+    { key: "bvs" as const, name: "3bvs", dist: allDists?.bvs, hib: true },
+    { key: "stnb" as const, name: "stnb", dist: allDists?.stnb, hib: true },
+  ].map((p) => ({
+    ...p,
+    value: values[p.key] ?? 0,
+    percent: p.dist?.length ? percentOf(values[p.key] ?? 0, p.dist!, p.hib, p.key) : 0,
+    grade: p.dist?.length ? gradeOf(values[p.key] ?? 0, p.dist!, p.hib) : "?",
+  }));
+  const rated = rarityParts.filter((p) => p.grade !== "?");
+  const best = rated.length
+    ? rated.reduce((a, b) => {
+        const ra = GRADES.indexOf(a.grade.replace(/[+-]$/, "") as (typeof GRADES)[number]);
+        const rb = GRADES.indexOf(b.grade.replace(/[+-]$/, "") as (typeof GRADES)[number]);
+        // 主档相同取 percent 高者（档内更稀有）
+        return rb < ra || (rb === ra && b.percent > a.percent) ? b : a;
+      })
+    : null;
+  const rarity: VideoAnalysisPoint = {
+    key: "stnb", // 语义锚定判雷/综合谱系（复活降档 demoteGrade 仍打在这根轴上）
+    name: "稀有程度",
+    value: best ? best.value : values.stnb ?? 0,
+    disp: best ? formatMetric(best.key, best.value) : "—",
+    percent: best ? Math.max(...rated.map((p) => p.percent)) : 0,
+    grade: best ? best.grade : "?",
+  };
   const all: VideoAnalysisPoint[] = [
-    axis("stnb", "判雷能力", true),
-    ...axisMetricsFor(noflag).map((d) => axis(d.key, d.name, d.highIsBetter)),
+    rarity,
+    axis("cps", "移动速度", allDists?.cps, true), // 右上
+    axis("thrp", "操作效率", allDists?.thrp, true), // 右下
+    axis("bpp", "路线规划", group?.bpp, true), // 左下：同级别 3BV 三桶内
+    axis("ces", "有效点击", allDists?.ces, true), // 左上
   ];
   return rateable ? all : all.map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
 }

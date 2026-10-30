@@ -3213,8 +3213,9 @@ export async function getStnbRankOfUser(
 /**
  * 在线玩结算雷达的分位基准（2026-10-14 五期）：读取 video_metric_dist 全表，
  * 组织成 OnlinePlay 需要的 { `${level}${nf?"_nf":""}`: { bucket: { 指标: number[] } } }。
- * 表很小 —— 2026-10-14 起分组只按「级别 × 模式」、不细分 3BV，**恒 6 行**（bucket 一律 -1），
- * 整表读出内存分组；表不存在/空表时返回空对象（前端不显示雷达，只显示按钮）。
+ * 2026-10-29 起含 3BV 桶行；2026-10-30 五轴改版起含全网池行（level='all'，key 'all'/
+ * 'all_nf'——稀有程度/移动速度/操作效率/有效点击四轴的全网评级边界 time/ces/cps）。
+ * 表不存在/空表时返回空对象（前端不显示雷达，只显示按钮）。
  */
 export async function getOnlineMetricDists(): Promise<
   Record<string, Record<string, Record<string, number[]>>>
@@ -3236,6 +3237,10 @@ export async function getOnlineMetricDists(): Promise<
         ppc: parse(r.ppc),
         bpp: parse(r.bpp),
         stnb: parse(r.stnb),
+        // 2026-10-30 五轴改版：全网池行的专用列（普通行为空数组，不消费）
+        time: parse(r.time),
+        ces: parse(r.ces),
+        cps: parse(r.cps),
       };
     }
     return out;
