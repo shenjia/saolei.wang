@@ -65,6 +65,12 @@ export interface ReplayCounts {
   crossings: number;
   /** 终盘插旗数 */
   flags: number;
+  /**
+   * 已完成 3BV（2026-10-30 张老师定：bpp 分子用完成 3BV 而非总 3BV）：
+   * 重放终态按站内 3BV 构件（region 全开算 1 / singles 开算 1）扫描——
+   * 胜局恒等于全盘 3BV，未完成局只算真实开到的部分
+   */
+  solvedBv: number;
 }
 
 /** AVF 鼠标字节码 → 事件名（与 avf.ts 解析器 / avfwrite.ts 生成器同一约定） */
@@ -339,6 +345,52 @@ export function replayCounts(
 
   let flags = 0;
   for (let i = 0; i < N; i++) if (flagged[i]) flags++;
+  /* 已完成 3BV（2026-10-30 张老师定：路线规划 bpp 分子用完成 3BV 而非总 3BV）：
+     与站内 3BV 构件（VideoReplay buildBvStructures / 练习页 compute3BV）同法——
+     0 格连通域 region（含边界数字格，归属唯一先到先得）全开算 1，其余非雷格
+     （singles）开算 1。胜局天然 = 全盘 3BV，败局/未完成局只算真实开到的 */
+  const region = new Int32Array(N).fill(-1);
+  let regions = 0;
+  const nbList = (c: number): number[] => {
+    const x = c % W, y = (c / W) | 0;
+    const out: number[] = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        out.push(ny * W + nx);
+      }
+    }
+    return out;
+  };
+  for (let i = 0; i < N; i++) {
+    if (mines[i] || nums[i] !== 0 || region[i] !== -1) continue;
+    const stack = [i];
+    region[i] = regions;
+    while (stack.length) {
+      const c = stack.pop()!;
+      for (const a of nbList(c)) {
+        if (mines[a] || region[a] === regions) continue;
+        region[a] = regions;
+        if (nums[a] === 0) stack.push(a);
+      }
+    }
+    regions++;
+  }
+  let solvedBv = 0;
+  for (let r = 0; r < regions; r++) {
+    let ok = true;
+    for (let c = 0; c < N; c++) {
+      if (region[c] !== r) continue;
+      if (state[c] !== 1) { ok = false; break; }
+    }
+    if (ok) solvedBv++;
+  }
+  for (let c = 0; c < N; c++) {
+    if (mines[c] || region[c] >= 0) continue;
+    if (state[c] === 1) solvedBv++;
+  }
   const cl = clLeft + clRight + clDouble;
   const ce = cl - (wastedLeft + wastedRight + wastedDouble);
   return {
@@ -356,5 +408,6 @@ export function replayCounts(
     pathPx,
     crossings,
     flags,
+    solvedBv,
   };
 }

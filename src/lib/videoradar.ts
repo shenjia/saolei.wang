@@ -18,7 +18,8 @@
 //     · rr：lp 按住时＝双击（Double++）；否则 rv 挂起时 Right++（wasted）；
 //     · mr：双击（Double++）；
 //     · Ce ＝ Cl −（wastedLeft + wastedRight + wastedDouble），与 flop Counters 一致。
-//   「胜局 solved3bv = 3BV」口径不变（10-14 实证，AVF NF 盘尾部自动展开不进事件流）。
+//   「胜局 solved3bv = 3BV」口径已于 2026-10-30 改为重放终态实算 solvedBv
+//     （胜局数值恒等不变；未完成局只算真实开到的——张老师定，bpp 分子口径）。
 
 import { mvfToRawvfBest } from "./mvf-best";
 import { avfToRawvf } from "./avf";
@@ -207,8 +208,10 @@ export function analyzeVideo(
   const timeMs = opts?.timeMs && opts.timeMs > 0 ? opts.timeMs : parsedTime;
   const t = timeMs / 1000;
   const cl = c.clLeft + c.clRight + c.clDouble;
-  // 胜局口径：solved3bv = 3BV（见文件头注记）
-  const solved = bbbv;
+  /* 分子用完成 3BV（2026-10-30 张老师定）：重放终态实算（胜局＝全盘 3BV 恒等，
+     三十万胜局数值不变；败局/未完成局只算真实开到的——旧口径 solved=bbbv 把
+     没扫完的局 bpp 顶满盘面值，与实际行程不匹配，评分虚低） */
+  const solved = c.solvedBv;
   const level = opts?.level ?? v.level;
   const path = Math.round(c.pathPx / CELL_PX);
   // 路线规划分母（2026-10-29 张老师定）：鼠标行程 → 跨格次数。极短局鼠标未出格时
