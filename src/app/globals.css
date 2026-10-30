@@ -11191,15 +11191,9 @@ html.op-fakefs #header {
 .donate_back {
   margin-top: 24px;
 }
-/* 赞助记录（2026-10-30 三轮）：赞助页右侧独立板块——只显示人名（无性别标记/军衔）、
-   金额无小数、整体字号调大一档（正文 14px，金额/人名 15px） */
+/* 赞助记录（2026-10-30 四轮）：无表头；「共 x 笔」居右对齐；不显示总金额 */
 .donate_side .donate_table {
-  margin-top: 4px;
-}
-.donate_side .donate_table th {
-  font-size: 14px;
-  line-height: 22px;
-  padding: 3px 4px;
+  margin-top: 2px;
 }
 .donate_side .donate_table td {
   font-size: 14px;
@@ -11219,15 +11213,11 @@ html.op-fakefs #header {
   white-space: nowrap;
 }
 .donate_total {
-  margin-top: 8px;
+  margin-top: 6px;
   color: #939387;
   font-size: 14px;
   line-height: 21px;
-}
-.donate_total em {
-  color: #fdc61a;
-  font-style: normal;
-  font-weight: bold;
+  text-align: right;
 }
 .donate_empty {
   color: #75715e;

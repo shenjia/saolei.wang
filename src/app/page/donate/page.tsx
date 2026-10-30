@@ -64,14 +64,8 @@ export default async function DonatePage() {
             <h2>赞助记录</h2>
             {rows.length > 0 ? (
               <>
+                {/* 2026-10-30 四轮（张老师）：不放表头；「共 x 笔」居右对齐放记录下方；不显示总金额 */}
                 <table cellPadding={0} cellSpacing={0} className="table donate_table">
-                  <thead>
-                    <tr>
-                      <th>时间</th>
-                      <th>雷友</th>
-                      <th>金额</th>
-                    </tr>
-                  </thead>
                   <tbody>
                     {rows.map((r) => (
                       <tr key={r.id}>
@@ -97,9 +91,7 @@ export default async function DonatePage() {
                     ))}
                   </tbody>
                 </table>
-                <p className="donate_total">
-                  共 {total} 笔，累计 <em>{donateYuanPlain(totalCents)}</em>
-                </p>
+                <p className="donate_total">共 {total} 笔</p>
               </>
             ) : (
               <p className="donate_empty">暂无赞助记录</p>
