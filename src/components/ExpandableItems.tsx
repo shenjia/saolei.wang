@@ -1,10 +1,13 @@
 "use client";
 
 // 通用「最近 N 条 + 展开/收起」列表（2026-10-30 张老师：前台赞助/支出记录只显最近 5 条，
-// 下方「…」按钮点击显示全部、按钮变「收起」；逻辑同个人主页标识列表 UserSigs）。
+// 下方按钮展开全部、再点收起；逻辑同个人主页标识列表 UserSigs）。
 // items 由 RSC 以 JSX 数组传入（每项是完整的行元素，含 key），本组件只做裁剪与按钮。
+// 2026-10-30 张老师：按钮样式与首页新闻底部「加载更多」统一（more_loader + legacy .button.small），
+// 「共 x 笔」计数同款 total_count（数字亮灰、文字深灰）。
 
 import { useState } from "react";
+import { TotalCount } from "@/components/TotalCount";
 
 export function ExpandableItems({
   items,
@@ -20,7 +23,7 @@ export function ExpandableItems({
   /** table = 外层 <table><tbody>；list = 外层 <div> */
   mode: "table" | "list";
   wrapClass: string;
-  /** 总条数（2026-10-30 张老师：显示在「…/收起」按钮右侧） */
+  /** 总条数（2026-10-30 张老师：显示在按钮右侧） */
   count?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -36,18 +39,13 @@ export function ExpandableItems({
         <div className={wrapClass}>{show}</div>
       )}
       {(hasMore || count !== undefined) && (
-        <div className="list_foot">
-          {hasMore &&
-            (expanded ? (
-              <button type="button" className="list_more" title="收起" onClick={() => setExpanded(false)}>
-                收起
-              </button>
-            ) : (
-              <button type="button" className="list_more" title="显示全部记录" onClick={() => setExpanded(true)}>
-                …
-              </button>
-            ))}
-          {count !== undefined && <span className="donate_count">共 {count} 笔</span>}
+        <div className="more_loader">
+          {hasMore && (
+            <button type="button" className="button small" onClick={() => setExpanded(!expanded)}>
+              {expanded ? "收起" : "加载更多"}
+            </button>
+          )}
+          {count !== undefined && <TotalCount total={count} unit="笔" />}
         </div>
       )}
     </>

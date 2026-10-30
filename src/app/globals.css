@@ -4020,27 +4020,6 @@ body #user_view .profile .sig_list li {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
-body #user_view .profile .sig_more {
-  display: inline-block;
-  min-width: 34px;
-  height: 26px;
-  line-height: 24px;
-  padding: 0 8px;
-  margin-top: 6px;
-  border: 1px solid #49483e;
-  border-radius: 6px;
-  background: #33322b;
-  color: #b1b1a4;
-  font-size: 14px;
-  font-family: inherit;
-  text-align: center;
-  cursor: pointer;
-}
-body #user_view .profile .sig_more:hover {
-  border-color: #a6e22e;
-  color: #a6e22e;
-  background: #3b3a32;
-}
 
 /* ---------- 用户主页「录像」版块（2026-09-26 张老师要求） ----------
    纪事上方：标题行 h2 左 + 右上角「上传录像」按钮（仅本人可见）；
@@ -11203,26 +11182,6 @@ html.op-fakefs #header {
   margin-bottom: 12px;
   font-size: 22px;
 }
-.donate_side .donate_head .donate_count {
-  color: #939387;
-  font-size: 14px;
-  white-space: nowrap;
-}
-/* 「共 x 笔」随「…/收起」按钮底部一行（2026-10-30 张老师：从标题行移到按钮右侧） */
-.list_foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-.list_foot .list_more {
-  margin-top: 0; /* 间距交给 .list_foot（原按钮自带 margin-top 8px） */
-}
-.list_foot .donate_count {
-  color: #939387;
-  font-size: 14px;
-  white-space: nowrap;
-}
 .donate_side .donate_table {
   margin-top: 2px;
 }
@@ -11250,27 +11209,6 @@ html.op-fakefs #header {
 .donate_empty {
   color: #75715e;
   font-size: 16px;
-}
-/* 展开/收起按钮（2026-10-30 六轮张老师：赞助/支出记录只显最近 5 条，
-   样式沿用个人主页标识列表的「…」卡片按钮，.sig_more scoped 在 #user_view 下故另立类） */
-.donate_side .list_more {
-  display: inline-block;
-  min-width: 34px;
-  height: 26px;
-  line-height: 24px;
-  padding: 0 8px;
-  margin-top: 8px;
-  border: 1px solid #49483e;
-  border-radius: 6px;
-  background: #33322b;
-  color: #b1b1a4;
-  font-size: 14px;
-  font-family: inherit;
-  cursor: pointer;
-}
-.donate_side .list_more:hover {
-  color: #f8f8f2;
-  border-color: #6b6a5e;
 }
 /* 收支统计（2026-10-30 六轮张老师）：右栏顶端板块，三行——收入绿/支出金，
    结余正数绿、负数红；行间用主题分隔色 */
