@@ -62,6 +62,9 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "rank.snapshot": "manager",
   // （star.set 每日一星指定已随功能于 2026-10-13 移除）
   "avatar.review": "manager",
+  // 赞助登记（2026-10-30）：收款线下到账后手动记账，管理员即可；删除笔误记录同权
+  "donate.add": "manager",
+  "donate.delete": "manager",
   "site.setMaintenance": "administrator",
   // API key 管理（2026-10-24 公开 API 体系）：签发/吊销都是超管权限——
   // key 即数据出口凭据，签发对象需张老师把关
@@ -980,6 +983,51 @@ async function dispatch(
       await ensureTodaySnapshot(true);
       const c = await prisma.rankSnapshot.count();
       return { ok: true, message: `已重算排行快照（库内 ${c} 名玩家，30 天窗口名次已刷新）` };
+    }
+
+    // ---------- 赞助登记（2026-10-30 后台赞助管理） ----------
+    // 款项线下到账（微信/支付宝收款码）后手动记账；ID 留空 = 匿名（user=0）。
+    // amount 单位为元（输入框），落库转分（donate.amount BigInt），与 2013 版分口径一致。
+    case "donate.add": {
+      const idRaw = toText(p.id, 12);
+      let uid = 0;
+      if (idRaw) {
+        const n = toId(idRaw);
+        if (!n) return { ok: false, error: "参数错误：玩家 ID 必须是正整数" };
+        uid = n;
+      }
+      if (uid) {
+        const u = await prisma.user.findUnique({ where: { id: BigInt(uid) }, select: { id: true } });
+        if (!u) return { ok: false, error: `玩家 #${uid} 不存在，请核对 ID（留空则为匿名赞助）` };
+      }
+      const cents = Math.round(parseFloat(String(p.amount ?? "").replace(/[,，\s]/g, "")) * 100);
+      if (!Number.isFinite(cents) || cents <= 0 || cents > 100_000_000) {
+        return { ok: false, error: "参数错误：金额必须是 0.01 ~ 1000000 元之间的数值" };
+      }
+      const t = BigInt(now());
+      await prisma.donate.create({ data: { user: BigInt(uid), amount: BigInt(cents), createTime: t, updateTime: t } });
+      const rowUser = uid
+        ? await prisma.user.findUnique({ where: { id: BigInt(uid) }, select: { chineseName: true } })
+        : null;
+      const name = uid ? rowUser?.chineseName ?? `#${uid}` : "匿名雷友";
+      return {
+        ok: true,
+        message: `已登记赞助：${name}${uid ? `（#${uid}）` : ""} ¥${(cents / 100).toFixed(2)}`,
+      };
+    }
+
+    case "donate.delete": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少赞助记录 ID" };
+      const row = await prisma.donate.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "赞助记录不存在" };
+      await prisma.donate.delete({ where: { id: BigInt(id) } });
+      const name =
+        Number(row.user) > 0
+          ? (await prisma.user.findUnique({ where: { id: row.user }, select: { chineseName: true } }))?.chineseName ??
+            `#${Number(row.user)}`
+          : "匿名雷友";
+      return { ok: true, message: `已删除赞助记录 #${id}（${name} ¥${(Number(row.amount) / 100).toFixed(2)}）` };
     }
 
     // ---------- 头像审核（2026-09-24）----------

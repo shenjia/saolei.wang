@@ -1329,3 +1329,24 @@ a.cheat_uid:hover .pt_bubble {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ---------- 赞助管理（2026-10-30） ---------- */
+.donate_form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.donate_form label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #939387;
+}
+.donate_lookup {
+  flex-basis: 100%;
+  min-height: 20px;
+  font-size: 13px;
+  line-height: 20px;
+}

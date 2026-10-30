@@ -11191,6 +11191,22 @@ html.op-fakefs #header {
 .donate_back {
   margin-top: 24px;
 }
+/* 赞助清单（2026-10-30）：赞助页底部，与后台赞助管理同一数据源 */
+.donate_table {
+  margin-top: 6px;
+}
+.donate_table td.sub {
+  color: #75715e;
+}
+.donate_total {
+  margin-top: 10px;
+  color: #939387;
+}
+.donate_total em {
+  color: #fdc61a;
+  font-style: normal;
+  font-weight: bold;
+}
 
 /* ===== 首页邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层） =====
    遮罩复用 .login_overlay（fixed 9999 半透明黑）；卡片复用登录浮窗暗玻璃视觉

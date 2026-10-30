@@ -1,7 +1,16 @@
 // 提供赞助（2026-10-15 重设计：双收款码卡片布局，文案移植 2008 版 About/Donate.asp）
+// 2026-10-30 底部新增赞助清单（后台赞助管理同一数据源，时间/人名+军衔/金额）。
+
+import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { getDonateList, donateYuan } from "@/lib/donate";
+import { formatDate } from "@/lib/format";
+
+export const dynamic = "force-dynamic";
 export const metadata = { title: "提供赞助" };
 
-export default function DonatePage() {
+export default async function DonatePage() {
+  const { rows, totalCents, total } = await getDonateList(200);
+
   return (
     <div id="page" className="main narrow">
       <div className="box text">
@@ -43,6 +52,54 @@ export default function DonatePage() {
           3、日后本站推出收费项目（如 VIP 会员）时，将对赞助用户充值对应的金额，如果不填写 ID
           则视为匿名赞助，放弃日后等额充值的权利。
         </p>
+
+        {/* 赞助清单（2026-10-30）：与后台赞助管理同一数据源 */}
+        <h2>【赞助清单】</h2>
+        {rows.length > 0 ? (
+          <>
+            <table cellPadding={0} cellSpacing={0} className="table donate_table">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>雷友</th>
+                  <th>金额</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="sub">{formatDate(r.createTime, "Y-m-d")}</td>
+                    <td className="user">
+                      {r.user > 0 && r.chineseName ? (
+                        <>
+                          <AvatarCell
+                            id={r.user}
+                            name={r.chineseName}
+                            englishName={r.englishName ?? undefined}
+                            sex={r.sex}
+                            link
+                          />
+                          <TitleBadge title={r.militaryTitle ?? ""} classic={r.classic} link />
+                        </>
+                      ) : (
+                        <span className="sub">{r.user > 0 ? `#${r.user}` : "匿名雷友"}</span>
+                      )}
+                    </td>
+                    <td>
+                      <em>{donateYuan(r.amount)}</em>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="donate_total">
+              共 {total} 笔赞助，累计 <em>{donateYuan(totalCents)}</em>
+              ——感谢各位雷友对扫雷网的支持！
+            </p>
+          </>
+        ) : (
+          <p>暂无赞助记录。扫上方收款码，成为第一位赞助本站的雷友！</p>
+        )}
       </div>
     </div>
   );
