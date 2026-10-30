@@ -11191,39 +11191,38 @@ html.op-fakefs #header {
 .donate_back {
   margin-top: 24px;
 }
-/* 赞助记录（2026-10-30 二轮）：赞助页右侧独立板块，与后台赞助管理同一数据源；
-   侧栏盒宽 192px，三列走紧凑字号，人名+军衔竖排（.donate_who 内 AvatarCell 与
-   TitleBadge 各占一行，避免横排爆宽）；日期只显示月-日（同年）省宽 */
+/* 赞助记录（2026-10-30 三轮）：赞助页右侧独立板块——只显示人名（无性别标记/军衔）、
+   金额无小数、整体字号调大一档（正文 14px，金额/人名 15px） */
 .donate_side .donate_table {
   margin-top: 4px;
 }
 .donate_side .donate_table th {
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 22px;
   padding: 3px 4px;
 }
 .donate_side .donate_table td {
-  font-size: 13px;
-  line-height: 19px;
-  padding: 3px 4px;
+  font-size: 14px;
+  line-height: 21px;
+  padding: 4px 4px;
   vertical-align: top;
 }
 .donate_side .donate_table td.sub {
   color: #75715e;
   white-space: nowrap;
 }
-.donate_side .donate_who {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  min-width: 0;
+.donate_side .donate_table td .avatar_link {
+  font-size: 15px;
+}
+.donate_side .donate_table td.donate_amt {
+  font-size: 15px;
+  white-space: nowrap;
 }
 .donate_total {
   margin-top: 8px;
   color: #939387;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 21px;
 }
 .donate_total em {
   color: #fdc61a;
@@ -11232,7 +11231,7 @@ html.op-fakefs #header {
 }
 .donate_empty {
   color: #75715e;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 /* ===== 首页邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层） =====

@@ -2,8 +2,9 @@
 // 2026-10-30 二轮（张老师）：赞助清单从底部移到右侧独立板块，标题「赞助记录」；
 // 页面骨架改 two_columns 两栏（与用户主页/录像详情/论坛详情同款），左栏保持原文案版式。
 
-import { AvatarCell, TitleBadge } from "@/components/Cells";
-import { getDonateList, donateYuan } from "@/lib/donate";
+import Link from "next/link";
+import { PlayerTip } from "@/components/Cells";
+import { getDonateList, donateYuanPlain } from "@/lib/donate";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -77,29 +78,27 @@ export default async function DonatePage() {
                         <td className="sub">{formatDate(r.createTime, "Y-m-d")}</td>
                         <td>
                           {r.user > 0 && r.chineseName ? (
-                            <span className="donate_who">
-                              <AvatarCell
-                                id={r.user}
-                                name={r.chineseName}
-                                englishName={r.englishName ?? undefined}
-                                sex={r.sex}
-                                link
-                              />
-                              <TitleBadge title={r.militaryTitle ?? ""} classic={r.classic} />
-                            </span>
+                            /* 2026-10-30 三轮（张老师）：只显示人名——不出性别标记与军衔；
+                               人名保留玩家气泡（#ID 姓名 英文名），avatar_link 同站内配色 */
+                            <Link href={`/user/${r.user}`} className="avatar_link" target="_blank" prefetch={false}>
+                              {r.chineseName}
+                              <span className="pt_bubble">
+                                <PlayerTip id={r.user} name={r.chineseName} englishName={r.englishName ?? undefined} />
+                              </span>
+                            </Link>
                           ) : (
                             <span className="sub">{r.user > 0 ? `#${r.user}` : "匿名雷友"}</span>
                           )}
                         </td>
-                        <td>
-                          <em>{donateYuan(r.amount)}</em>
+                        <td className="donate_amt">
+                          <em>{donateYuanPlain(r.amount)}</em>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <p className="donate_total">
-                  共 {total} 笔，累计 <em>{donateYuan(totalCents)}</em>
+                  共 {total} 笔，累计 <em>{donateYuanPlain(totalCents)}</em>
                 </p>
               </>
             ) : (

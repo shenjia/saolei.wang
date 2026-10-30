@@ -88,3 +88,11 @@ export async function getDonateList(limit = 50): Promise<DonateList> {
 export function donateYuan(cents: number): string {
   return `¥${(cents / 100).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+/** 金额格式化（前台赞助记录用，2026-10-30 三轮张老师定）：不显示小数——
+ *  整数金额直接「¥500」；确有小数（如 27.70→¥27.7）去尾零保留。 */
+export function donateYuanPlain(cents: number): string {
+  const yuan = cents / 100;
+  const s = yuan.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  return `¥${s}`;
+}
