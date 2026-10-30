@@ -57,12 +57,14 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   { key: "corr", name: "精准", desc: "有效操作占比", prefix: "Corr", unit: "", digits: 3, highIsBetter: true },
   { key: "cls", name: "点击速度", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   { key: "ppc", name: "移动", desc: "每击鼠标行程", prefix: "", unit: "格/次", digits: 2, highIsBetter: false },
-  // 路线规划（2026-10-29 张老师定口径 v2）：3BV/CP = 已完成 3BV ÷ 跨格次数。
-  // v1（3BV/PATH）分母是事件间欧氏累加的鼠标行程，受鼠标回报率影响（采样越密抖动
-  // 进得越多、同一轨迹 Path 越长），且低 3BV 盘结构性吃亏；v2 分母 crossings 只数
-  // 跨格线动作、对回报率构造性免疫（探针 scripts/cellpath-probe.ts 实测 6/6 组
-  // 技能区分度优于 PATH）。3BV 结构依赖由「3BV 分桶基准」治（见 BV_BUCKETS）。
-  { key: "bpp", name: "路线规划", desc: "每跨一次格换回的 3BV", prefix: "3BV/CP", unit: "", digits: 3, highIsBetter: true },
+  // 路线规划（2026-10-29 张老师定口径 v2；2026-10-30 定名）：完成3BV/Crossings ＝
+  // 已完成 3BV ÷ 跨格次数。v1（3BV/PATH）分母是事件间欧氏累加的鼠标行程，
+  // 受鼠标回报率影响（采样越密抖动进得越多、同一轨迹 Path 越长），且低 3BV 盘
+  // 结构性吃亏；v2 分母 crossings 只数跨格线动作、对回报率构造性免疫（探针
+  // scripts/cellpath-probe.ts 实测 6/6 组技能区分度优于 PATH）。3BV 结构依赖由
+  // 「3BV 分桶基准」治（见 BV_BUCKETS）。⚠️ 展示名一律 Crossings（张老师定），
+  // 「CPath」是调研期伞名勿用；DB 列 cp 存的即 crossings 值（缩写不动）。
+  { key: "bpp", name: "路线规划", desc: "每跨一次格换回的完成 3BV", prefix: "完成3BV/Crossings", unit: "", digits: 3, highIsBetter: true },
 ];
 
 /**
@@ -70,8 +72,9 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
  * （2026-10-28 晚张老师定四字名；旧名：速度 / 效率 / 走位 / 手速）。
  * 「操作效率」按组选指标（2026-10-28 张老师定）：FL=ThrP（每次有效操作换回的 3BV，
  * 即 chord 收益），NF=IOE（每点击换回的 3BV）——NF 无 chord，ThrP 恒 ≤1 无区分度。
- * 「路线规划」= 3BV/CP（2026-10-29 张老师定 v2 口径：分母由鼠标行程换跨格次数
- * crossings，对回报率免疫），替换原「精准」corr 轴（corr 与水平负相关）。
+ * 「路线规划」= 完成3BV/Crossings（2026-10-29 张老师定 v2 口径：分母由鼠标行程
+ * 换跨格次数 crossings，对回报率免疫；2026-10-30 定名），替换原「精准」corr 轴
+ * （corr 与水平负相关）。
  */
 export function axisMetricsFor(noflag: boolean): MetricDef<AxisMetricKey>[] {
   return [
@@ -79,7 +82,7 @@ export function axisMetricsFor(noflag: boolean): MetricDef<AxisMetricKey>[] {
     noflag
       ? { key: "ioe", name: "操作效率", desc: "每点击换回的 3BV", prefix: "IOE", unit: "", digits: 3, highIsBetter: true }
       : { key: "thrp", name: "操作效率", desc: "每次有效操作换回的 3BV（chord 收益）", prefix: "ThrP", unit: "", digits: 3, highIsBetter: true },
-    { key: "bpp", name: "路线规划", desc: "每跨一次格换回的 3BV", prefix: "3BV/CP", unit: "", digits: 3, highIsBetter: true },
+    { key: "bpp", name: "路线规划", desc: "每跨一次格换回的完成 3BV", prefix: "完成3BV/Crossings", unit: "", digits: 3, highIsBetter: true },
     { key: "cls", name: "点击速度", desc: "每秒点击数", prefix: "", unit: "次点击/秒", digits: 2, highIsBetter: true },
   ];
 }

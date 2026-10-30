@@ -137,7 +137,7 @@ export interface ReplayStats {
   ce: number;
   /** 鼠标行程（像素） */
   path: number;
-  /** 跨格次数（2026-10-29：「我的评级」路线规划 3BV/CP 分母，与录像引擎 crossings 同口径） */
+  /** 跨格次数（2026-10-29 起：「我的评级」路线规划「完成3BV/Crossings」分母，与录像引擎 crossings 同口径） */
   cp: number;
   /** 当前盘面旗数 */
   flags: number;
@@ -378,7 +378,7 @@ export function runReplay(opts: {
   let lastPX: number | null = null;
   let lastPY = 0;
   /* 跨格计数（2026-10-29）：与 lib/replay-core.ts 同一套 0.5px 光栅化口径——
-     「我的评级」路线规划（3BV/CP）分母必须与服务端落库值同源。
+     「我的评级」路线规划（完成3BV/Crossings）分母必须与服务端落库值同源。
      lastCell 断链语义同 replay-core：出界/首事件后重置 -1 重新起算 */
   let crossings = 0;
   let lastCell = -1;

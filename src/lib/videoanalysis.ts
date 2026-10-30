@@ -8,7 +8,7 @@
 //   · 雷达 **五轴**（2026-10-28 晚张老师定四字名）：判雷能力（置顶，2026-10-19 定改名，
 //     原「综合」）/ 开图速度 / 操作效率 / 路线规划 / 点击速度（旧名：判雷/速度/效率/走位/手速）
 //     —— 原「移动」轴已去掉；原「精准」corr 轴 2026-10-28 换「路线规划」
-//     （2026-10-29 起 v2 口径 = 3BV/CP，分母换跨格次数）；
+//     （2026-10-29 起 v2 口径 = 完成3BV/Crossings，分母换跨格次数；2026-10-30 定名）；
 //     「操作效率」按组选指标：NF=IOE / FL=ThrP（张老师 2026-10-28 定）；
 //   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
 //     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
@@ -142,7 +142,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
 
     // ① 四根分项轴（顺带攒下各轴组内分位，供综合评级加权）
     //    2026-10-28 轴调整：「效率」按组选指标（NF=IOE / FL=ThrP）；「路线规划」bpp
-    //    2026-10-29 起 = 3BV/CP（分母 crossings）；基准按该盘 3BV 选粗桶（getBaseline）
+    //    2026-10-29 起 = 完成3BV/Crossings（分母 crossings）；基准按该盘 3BV 选粗桶（getBaseline）
     const percents: Partial<Record<MetricKey, number>> = {};
     const subs: VideoAnalysisPoint[] = axisMetricsFor(input.noflag).map((def) => {
       const value = Number(row[def.key]);

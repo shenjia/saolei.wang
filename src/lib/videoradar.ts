@@ -67,8 +67,8 @@ export interface VideoMetrics {
   ppc: number;
   /** 吞吐效率：已完成 3BV ÷ 有效点击 Ce（FL 组「效率」轴口径；NF 无 chord 恒 ≤1） */
   thrp: number;
-  /** 路线规划：3BV ÷ 跨格次数（2026-10-29 张老师定分母由鼠标行程换 crossings，
-   *  对回报率免疫；旧口径 3BV/PATH 的值随全量重放被覆盖） */
+  /** 路线规划：完成3BV ÷ Crossings（2026-10-29 张老师定分母由鼠标行程换 crossings，
+   *  对回报率免疫；2026-10-30 定名。旧口径 3BV/PATH 的值随全量重放被覆盖） */
   bpp: number;
   /** 综合：按级别与难度归一化的 STNB 评分 */
   stnb: number;
