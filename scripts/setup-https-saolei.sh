@@ -10,7 +10,7 @@
 #      location 对应；已签发则等价于续期检查）
 #   2. install-cert 到 /etc/nginx/ssl/saolei/（与 acme 目录解耦，续期后自动 reload nginx）
 #   3. 重写 ~/nginx-conf/saolei.conf：80 留 acme 验证 + 301 到 https；新增 443 server 块
-#      （三个域名同一 server_name 列表，共用上游）
+#      （裸域主站；www/new 别名各自独立 server 块 301 到裸域——2026-10-30 修复 www 自跳转死循环）
 #   4. nginx -t && nginx -s reload
 #
 # ============ 正式切换 www.saolei.wang 操作手册（2026-10-15） ============
@@ -87,7 +87,7 @@ cp "$CONF" "$CONF.pre-san.bak"
 cat > "$CONF" <<'NGINXEOF'
 # saolei.wang 三域名（new / www / 裸域）— 新版扫雷网（Next.js 蓝绿双槽 @ saolei_upstream）
 # 由 scripts/setup-https-saolei.sh 生成。手工改动会被脚本覆盖。
-# 站点主域名 = www.saolei.wang（SITE_URL 与 OAuth 回调同口径）；new.* 为过渡期别名。
+# 站点主域名 = saolei.wang 裸域（SITE_URL 同口径）；www / new.* 均为别名，80/443 整体 301 到裸域。
 
 log_format spider_saolei '$http_x_forwarded_for - $time_iso8601 "$request" $status $body_bytes_sent '
                   '"$http_referer" rt=$request_time "$http_user_agent"';
@@ -127,9 +127,47 @@ server {
     return 301 https://saolei.wang$request_uri;
 }
 
+# ========== www 301 归一化到裸域（2026-10-30 修复 www 死循环）==========
+# 原状：www 与裸域共服一个 server 块，80 块 return 301 https://$host 对 www
+# 而言＝301 到自己；ESA 边缘缓存该自跳转 301（30 天）→ www 无限重定向。
+# 拆独立块显式跳裸域（与 new.* 同模式）；80 块保留 acme 验证目录
+# （SAN 证书续期 http-01 会打 www，挑战请求不能跟着 301 走）。
 server {
     listen 80;
-    server_name www.saolei.wang saolei.wang;
+    server_name www.saolei.wang;
+    access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
+    client_max_body_size 30m;
+
+    # 301 不进 CDN 长缓存（2026-10-30 教训：ESA 把自跳转 301 缓存了 30 天）
+    add_header Cache-Control "no-cache" always;
+
+    # acme http-01 验证目录（证书续期也要走这里，不能跟着 301 走）
+    location /.well-known/acme-challenge/ {
+        root /home/deploy/acme-www;
+    }
+
+    location / {
+        return 301 https://saolei.wang$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name www.saolei.wang;
+    access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
+
+    ssl_certificate     /etc/nginx/ssl/saolei/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/saolei/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    # 301 不进 CDN 长缓存（2026-10-30 教训：ESA 把自跳转 301 缓存了 30 天）
+    add_header Cache-Control "no-cache" always;
+    return 301 https://saolei.wang$request_uri;
+}
+
+server {
+    listen 80;
+    server_name saolei.wang;
     access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
     client_max_body_size 30m;
 
@@ -139,13 +177,13 @@ server {
     }
 
     location / {
-        return 301 https://$host$request_uri;
+        return 301 https://saolei.wang$request_uri;
     }
 }
 
 server {
     listen 443 ssl;
-    server_name www.saolei.wang saolei.wang;
+    server_name saolei.wang;
     access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
     client_max_body_size 30m;
 
