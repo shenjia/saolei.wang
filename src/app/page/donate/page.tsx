@@ -61,10 +61,14 @@ export default async function DonatePage() {
         <li className="sidebar">
           {/* 右侧独立板块：赞助记录（2026-10-30 二轮，与后台赞助管理同一数据源） */}
           <div className="box donate_side">
-            <h2>赞助记录</h2>
+            {/* 五轮（张老师）：「共 x 笔」上移板块标题行右上角（h2 同行，flex 两端对齐）；四轮定的无表头/无总金额维持 */}
+            <div className="donate_head">
+              <h2>赞助记录</h2>
+              <span className="donate_count">共 {total} 笔</span>
+            </div>
             {rows.length > 0 ? (
               <>
-                {/* 2026-10-30 四轮（张老师）：不放表头；「共 x 笔」居右对齐放记录下方；不显示总金额 */}
+                {/* 2026-10-30 四轮（张老师）：不放表头；不显示总金额 */}
                 <table cellPadding={0} cellSpacing={0} className="table donate_table">
                   <tbody>
                     {rows.map((r) => (
@@ -91,7 +95,6 @@ export default async function DonatePage() {
                     ))}
                   </tbody>
                 </table>
-                <p className="donate_total">共 {total} 笔</p>
               </>
             ) : (
               <p className="donate_empty">暂无赞助记录</p>

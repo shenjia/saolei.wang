@@ -11191,14 +11191,30 @@ html.op-fakefs #header {
 .donate_back {
   margin-top: 24px;
 }
-/* 赞助记录（2026-10-30 四轮）：无表头；「共 x 笔」居右对齐；不显示总金额 */
+/* 赞助记录（2026-10-30 五轮）：「共 x 笔」移板块标题行右上角（flex 两端对齐）；
+   正文字号整体再加一档（正文 16px、人名/金额 17px） */
+.donate_side .donate_head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.donate_side .donate_head h2 {
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+.donate_side .donate_head .donate_count {
+  color: #939387;
+  font-size: 14px;
+  white-space: nowrap;
+}
 .donate_side .donate_table {
   margin-top: 2px;
 }
 .donate_side .donate_table td {
-  font-size: 14px;
-  line-height: 21px;
-  padding: 4px 4px;
+  font-size: 16px;
+  line-height: 24px;
+  padding: 5px 4px;
   vertical-align: top;
 }
 .donate_side .donate_table td.sub {
@@ -11206,22 +11222,15 @@ html.op-fakefs #header {
   white-space: nowrap;
 }
 .donate_side .donate_table td .avatar_link {
-  font-size: 15px;
+  font-size: 17px;
 }
 .donate_side .donate_table td.donate_amt {
-  font-size: 15px;
+  font-size: 17px;
   white-space: nowrap;
-}
-.donate_total {
-  margin-top: 6px;
-  color: #939387;
-  font-size: 14px;
-  line-height: 21px;
-  text-align: right;
 }
 .donate_empty {
   color: #75715e;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 /* ===== 首页邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层） =====
