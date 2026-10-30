@@ -8546,6 +8546,14 @@ button.msg_cancel:hover {
 #online_play .gicon .tip .tip_ban_cd {
   color: #ff0080;
 }
+/* 模式名元帅金（2026-10-30 张老师定）：所有模式开关按钮 hover 气泡里
+   「XX模式」名头用元帅金 #e6db74（与大元帅军衔文字同色）；em 不斜体
+   （站内 em 惯用作色标记） */
+#online_play .gicon .tip em,
+#online_play .op_ping .tip em {
+  font-style: normal;
+  color: #e6db74;
+}
 /* 窄屏（≤880，与站内移动端断点一致）兜底：按钮贴近视口右缘，居中弹会被裁出屏
    （实测 700px 宽全屏钮溢出 11px）→ 改贴按钮右缘向左展开，保完整可见 */
 @media (max-width: 880px) {
@@ -9539,6 +9547,27 @@ html:has(#online_play) #footer {
 #gr_modal .grb.grb_upload:hover:not(:disabled) {
   background-image: linear-gradient(to bottom, #4b6530, #374b22);
   color: #bded55;
+}
+/* 「再来一局」金色（2026-10-30 张老师定）：非排行局复活关闭、排行局无上传
+   按钮（败局）或已上传时，主引导动作变金＝复活按钮同款黄系（grb_revive
+   配色基因），但不占独立行——保持 grid 常规布局（排行局由 JS 挂 grb_full
+   跨双列，类并存时 grb_full 管行跨、grb_gold 管配色，互不冲突） */
+#online_play .gresult .grb.grb_gold,
+#gr_modal .grb.grb_gold {
+  border-color: #fdc61d;
+  background-color: #4d4423;
+  background-image: linear-gradient(to bottom, #5a4f28, #453d1f);
+  color: #fdc61d;
+  font-weight: bold;
+}
+#online_play .gresult .grb.grb_gold:hover,
+#gr_modal .grb.grb_gold:hover {
+  background-image: linear-gradient(to bottom, #66592f, #4f4624);
+  color: #ffd94d;
+}
+#online_play .gresult .grb.grb_gold:active,
+#gr_modal .grb.grb_gold:active {
+  color: #f0b511;
 }
 #online_play .gresult .grb:disabled,
 #gr_modal .grb:disabled {
