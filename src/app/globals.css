@@ -11219,6 +11219,7 @@ html.op-fakefs #header {
 }
 .donate_side .donate_table td.sub {
   color: #75715e;
+  font-size: 13px; /* 时间列再小两号（2026-10-30 张老师：15→13） */
   white-space: nowrap;
 }
 .donate_side .donate_table td .avatar_link {
@@ -11231,6 +11232,27 @@ html.op-fakefs #header {
 .donate_empty {
   color: #75715e;
   font-size: 16px;
+}
+/* 展开/收起按钮（2026-10-30 六轮张老师：赞助/支出记录只显最近 5 条，
+   样式沿用个人主页标识列表的「…」卡片按钮，.sig_more scoped 在 #user_view 下故另立类） */
+.donate_side .list_more {
+  display: inline-block;
+  min-width: 34px;
+  height: 26px;
+  line-height: 24px;
+  padding: 0 8px;
+  margin-top: 8px;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #33322b;
+  color: #b1b1a4;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.donate_side .list_more:hover {
+  color: #f8f8f2;
+  border-color: #6b6a5e;
 }
 /* 收支统计（2026-10-30 六轮张老师）：右栏顶端板块，三行——收入绿/支出金，
    结余正数绿、负数红；行间用主题分隔色 */
@@ -11249,7 +11271,7 @@ html.op-fakefs #header {
   border-top: 1px solid #49483e;
 }
 .stat_row .stat_label {
-  color: #f8f8f2;
+  color: #75715e; /* 标签深灰（2026-10-30 张老师） */
 }
 .stat_row .stat_val {
   font-style: normal;
@@ -11257,10 +11279,10 @@ html.op-fakefs #header {
   white-space: nowrap;
 }
 .stat_row .stat_income {
-  color: #a6e22e;
+  color: #a6e22e; /* 收入绿（2026-10-30 张老师） */
 }
 .stat_row .stat_expense {
-  color: #e6b422;
+  color: #f92672;
 }
 .stat_row .stat_balance_pos {
   color: #a6e22e;
@@ -11275,36 +11297,53 @@ html.op-fakefs #header {
 }
 /* 支出记录两行版式（2026-10-30 三轮张老师）：每笔两行——日期+用途一行、
    费用+凭据一行；条目间用主题分隔色 #49483e（同 thead 下边框） */
+/* 支出记录单行版式（2026-10-30 张老师：日期+用途+金额+凭据一行） */
 .expense_item {
   padding: 6px 0;
 }
 .expense_item + .expense_item {
   border-top: 1px solid #49483e;
 }
-.expense_top {
+.expense_line {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
   font-size: 16px;
   line-height: 24px;
-  color: #f8f8f2;
+  white-space: nowrap; /* 恒单行（2026-10-30 张老师） */
 }
-.expense_top .sub {
-  font-size: 15px;
-  margin-right: 8px;
+.expense_line .sub {
+  color: #75715e; /* 日期深灰 */
+  font-size: 14px;
+  flex: none;
 }
-.expense_bottom {
-  display: flex;
+.expense_line .expense_purpose {
+  color: #939387; /* 用途亮灰 */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis; /* 用途过长截断，金额+凭据始终同行贴右 */
+}
+.expense_pay {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 17px;
-  line-height: 24px;
+  gap: 3px; /* 金额与票据图标靠在一起（2026-10-30 张老师） */
+  font-size: 16px;
+  flex: none;
+}
+.expense_amt {
+  color: #f92672; /* 支出金额玫瑰红（2026-10-30 张老师） */
+  font-style: normal;
+  font-weight: bold;
+  white-space: nowrap;
 }
 .expense_ticket {
   border: 0;
   background: none;
-  padding: 0 0 0 5px;
-  font-size: 16px;
+  padding: 0 0 0 2px;
+  font-size: 12px; /* emoji 视觉高度 ≈ 1.3×字号，12px 与 16px 文字等高（2026-10-30 张老师） */
   line-height: 1;
   cursor: pointer;
-  vertical-align: -2px;
 }
 /* 凭据遮罩浮层：复用 .login_overlay 模式（fixed inset-0 z-9999），背景加深突出图片 */
 .evidence_overlay {

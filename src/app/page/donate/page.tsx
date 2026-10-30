@@ -7,8 +7,9 @@
 import Link from "next/link";
 import { PlayerTip } from "@/components/Cells";
 import { ExpenseEvidence } from "@/components/ExpenseEvidence";
+import { ExpandableItems } from "@/components/ExpandableItems";
 import { getDonateList, getExpenseList, donateYuanPlain } from "@/lib/donate";
-import { formatDate } from "@/lib/format";
+import { formatDate, timeOpposite, TIME_YEAR } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "提供赞助" };
@@ -70,16 +71,18 @@ export default async function DonatePage() {
               <h2>收支统计</h2>
             </div>
             <div className="stats_rows">
+              {/* 2026-10-30 张老师：标签「总计收入/支出/结余」深灰；收入数字绿色带 + 号、
+                  支出数字带 - 号（玫瑰红）；结余正绿负红 */}
               <div className="stat_row">
-                <span className="stat_label">收入</span>
-                <em className="stat_val stat_income">{donateYuanPlain(totalCents)}</em>
+                <span className="stat_label">总计收入</span>
+                <em className="stat_val stat_income">+{donateYuanPlain(totalCents)}</em>
               </div>
               <div className="stat_row">
-                <span className="stat_label">支出</span>
-                <em className="stat_val stat_expense">{donateYuanPlain(expense.totalCents)}</em>
+                <span className="stat_label">总计支出</span>
+                <em className="stat_val stat_expense">-{donateYuanPlain(expense.totalCents)}</em>
               </div>
               <div className="stat_row">
-                <span className="stat_label">结余</span>
+                <span className="stat_label">总计结余</span>
                 <em className={`stat_val ${balance >= 0 ? "stat_balance_pos" : "stat_balance_neg"}`}>
                   {balance >= 0 ? donateYuanPlain(balance) : `-${donateYuanPlain(-balance)}`}
                 </em>
@@ -95,35 +98,36 @@ export default async function DonatePage() {
               <span className="donate_count">共 {total} 笔</span>
             </div>
             {rows.length > 0 ? (
-              <>
-                {/* 2026-10-30 四轮（张老师）：不放表头；不显示总金额 */}
-                <table cellPadding={0} cellSpacing={0} className="table donate_table">
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.id}>
-                        <td className="sub">{formatDate(r.createTime, "Y-m-d")}</td>
-                        <td>
-                          {r.user > 0 && r.chineseName ? (
-                            /* 2026-10-30 三轮（张老师）：只显示人名——不出性别标记与军衔；
-                               人名保留玩家气泡（#ID 姓名 英文名），avatar_link 同站内配色 */
-                            <Link href={`/user/${r.user}`} className="avatar_link" target="_blank" prefetch={false}>
-                              {r.chineseName}
-                              <span className="pt_bubble">
-                                <PlayerTip id={r.user} name={r.chineseName} englishName={r.englishName ?? undefined} />
-                              </span>
-                            </Link>
-                          ) : (
-                            <span className="sub">{r.user > 0 ? `#${r.user}` : "匿名雷友"}</span>
-                          )}
-                        </td>
-                        <td className="donate_amt">
-                          <em>{donateYuanPlain(r.amount)}</em>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
+              /* 2026-10-30 四轮（张老师）：不放表头；不显示总金额。
+                 六轮：默认只显最近 5 条，「…」展开全部/「收起」还原（ExpandableItems） */
+              <ExpandableItems
+                mode="table"
+                wrapClass="donate_table"
+                items={rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      {r.user > 0 && r.chineseName ? (
+                        /* 2026-10-30 三轮（张老师）：只显示人名——不出性别标记与军衔；
+                           人名保留玩家气泡（#ID 姓名 英文名），avatar_link 同站内配色 */
+                        <Link href={`/user/${r.user}`} className="avatar_link" target="_blank" prefetch={false}>
+                          {r.chineseName}
+                          <span className="pt_bubble">
+                            <PlayerTip id={r.user} name={r.chineseName} englishName={r.englishName ?? undefined} />
+                          </span>
+                        </Link>
+                      ) : (
+                        <span className="sub">{r.user > 0 ? `#${r.user}` : "匿名雷友"}</span>
+                      )}
+                    </td>
+                    <td className="donate_amt">
+                      {/* 赞助金额带 + 号（2026-10-30 张老师，与支出 - 号对称） */}
+                      <em>+{donateYuanPlain(r.amount)}</em>
+                    </td>
+                    {/* 时间放末尾（2026-10-30 张老师）：一年内相对时间，超过一年显示日期（同动态列表口径） */}
+                    <td className="sub">{timeOpposite(r.createTime, TIME_YEAR, "Y-m-d")}</td>
+                  </tr>
+                ))}
+              />
             ) : (
               <p className="donate_empty">暂无赞助记录</p>
             )}
@@ -137,21 +141,25 @@ export default async function DonatePage() {
               <span className="donate_count">共 {expense.total} 笔</span>
             </div>
             {expense.rows.length > 0 ? (
-              /* 2026-10-30 三轮（张老师）：每笔两行——日期+用途一行，费用+凭据一行 */
-              <div className="expense_list">
-                {expense.rows.map((r) => (
+              /* 2026-10-30 三轮（张老师）：每笔两行——日期+用途一行，费用+凭据一行。
+                 六轮：默认只显最近 5 条，「…」展开全部/「收起」还原（ExpandableItems） */
+              <ExpandableItems
+                mode="list"
+                wrapClass="expense_list"
+                items={expense.rows.map((r) => (
                   <div key={r.id} className="expense_item">
-                    <div className="expense_top">
+                    {/* 2026-10-30 张老师：金额+凭据并到用途后，整条一行 */}
+                    <div className="expense_line">
                       <span className="sub">{formatDate(r.createTime, "Y-m-d")}</span>
                       <span className="expense_purpose">{r.purpose}</span>
-                    </div>
-                    <div className="expense_bottom">
-                      <em>{donateYuanPlain(r.amount)}</em>
-                      {r.evidence && <ExpenseEvidence url={r.evidence} alt={r.purpose} />}
+                      <span className="expense_pay">
+                        <em className="expense_amt">-{donateYuanPlain(r.amount)}</em>
+                        {r.evidence && <ExpenseEvidence url={r.evidence} alt={r.purpose} />}
+                      </span>
                     </div>
                   </div>
                 ))}
-              </div>
+              />
             ) : (
               <p className="donate_empty">暂无支出记录</p>
             )}
