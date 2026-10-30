@@ -47,12 +47,12 @@ const affected = new Set<string>(); // `${user}:${nf}`
 for (const [id, tailMs] of items) {
   const r = rowMap.get(id);
   if (!r) { console.log(`跳过 ${id}：video 行不存在`); continue; }
-  if (r.real_time === tailMs) { console.log(`跳过 ${id}：real_time 已是 ${tailMs}`); continue; }
   const level = r.level as VideoLevel;
   if (!VIDEO_LEVELS.includes(level)) { console.log(`跳过 ${id}：非法 level ${r.level}`); continue; }
   const nf = r.noflag === 1;
   const b3 = calc3bvs(r.board_3bv, tailMs, level);
-  console.log(`${id} ${level}${nf ? "/nf" : ""} status=${r.status} user=${r.user} real_time ${r.real_time} -> ${tailMs}, 3bvs ${Math.max(b3, 0)}`);
+  /* 全幂等直更（SQL 先行/重跑均安全）：video_info/video_scores 已相等时 UPDATE 即 no-op */
+  console.log(`${id} ${level}${nf ? "/nf" : ""} status=${r.status} user=${r.user} real_time ${r.real_time}${r.real_time === tailMs ? "(已等)" : ` -> ${tailMs}`}, 3bvs ${Math.max(b3, 0)}`);
   if (!apply) continue;
   /* 聚合源同 review.ts：video_scores_* 表本身就是登记表（屏蔽时行已删），
      nf 归属以表为准而非录像 noflag —— 免疫脏数据错位。两张表都尝试更新，
