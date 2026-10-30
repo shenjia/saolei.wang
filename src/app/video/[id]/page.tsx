@@ -9,7 +9,9 @@ import { clientIp, uniqueVideoAction } from "@/lib/stat";
 import {
   COMMENT_TOP_NUMBER,
   INVALID_3BVS_TIP,
+  INVALID_STNB_TIP,
   LEVEL_NAMES,
+  MIN_3BV_FOR_3BVS,
   VIDEO_STATUS_NAMES,
   isManager,
   type VideoLevel,
@@ -165,6 +167,22 @@ export default async function VideoViewPage({
                 </del>
               )}
             </span>
+            {/* 2026-10-30 张老师需求：3BV/s 右侧显示 STNB（video_metrics.stnb，与列表
+                STNB 列/雷达判雷轴同源）；运气盘划线与 3BV/s 同口径（MIN_3BV_FOR_3BVS，
+                初 10 / 中 4 / 高 4）——低于限界 del 划掉 + INVALID_STNB_TIP 气泡。
+                无指标行（rmv 旧盘等）不渲染整个 span，与右栏雷达盒「无基准不渲染」同思路 */}
+            {video.stnb != null && video.stnb > 0 && (
+              <span className="score_stnb">
+                STNB
+                {video.board3bv >= MIN_3BV_FOR_3BVS[level] ? (
+                  <em>{video.stnb.toFixed(1)}</em>
+                ) : (
+                  <del data-tip={INVALID_STNB_TIP} aria-label={INVALID_STNB_TIP}>
+                    {video.stnb.toFixed(1)}
+                  </del>
+                )}
+              </span>
+            )}
           </h2>
           <div className="info">
             <VideoReplayBoard id={video.id} level={level} board={board} />

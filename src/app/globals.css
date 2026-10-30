@@ -1790,13 +1790,38 @@ del[data-tip]:hover::after {
   opacity: 1;
 }
 /* 详情页：del 贴右缘 → 右对齐向左展开；宽度优先单行（文案约 306px），窄屏自动换行不溢出 */
-#video_view .video_cell .score_3bvs del[data-tip]::after {
+#video_view .video_cell .score_3bvs del[data-tip]::after,
+#video_view .video_cell .score_stnb del[data-tip]::after {
   left: auto;
   right: 0;
   transform: none;
   white-space: normal;
   width: max-content;
   max-width: min(320px, calc(100vw - 48px));
+}
+/* 详情页 STNB 成绩（2026-10-30 张老师需求：3BV/s 右侧显示 STNB 值，运气盘划线同 3BV/s 口径）。
+   镜像 legacy #page .score_3bvs 三件套（label 灰 14px / 数字 em 亮灰 20px bold / del 深灰划线）——
+   legacy 只按 .score_3bvs 类名出样式，新类名按铁律落 globals.css */
+#page .score_stnb {
+  display: inline-block;
+  margin-right: 8px;
+  color: #636359;
+  font-size: 14px;
+  line-height: 24px;
+}
+#page .score_stnb em {
+  padding-right: 0;
+  color: #b1b1a4;
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: bold;
+}
+#page .score_stnb del {
+  cursor: help;
+  padding: 0 5px;
+  color: #636359;
+  font-size: 20px;
+  line-height: 24px;
 }
 .bbs_flag.locked {
   color: #75715e;
