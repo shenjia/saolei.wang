@@ -11191,21 +11191,48 @@ html.op-fakefs #header {
 .donate_back {
   margin-top: 24px;
 }
-/* 赞助清单（2026-10-30）：赞助页底部，与后台赞助管理同一数据源 */
-.donate_table {
-  margin-top: 6px;
+/* 赞助记录（2026-10-30 二轮）：赞助页右侧独立板块，与后台赞助管理同一数据源；
+   侧栏盒宽 192px，三列走紧凑字号，人名+军衔竖排（.donate_who 内 AvatarCell 与
+   TitleBadge 各占一行，避免横排爆宽）；日期只显示月-日（同年）省宽 */
+.donate_side .donate_table {
+  margin-top: 4px;
 }
-.donate_table td.sub {
+.donate_side .donate_table th {
+  font-size: 13px;
+  line-height: 20px;
+  padding: 3px 4px;
+}
+.donate_side .donate_table td {
+  font-size: 13px;
+  line-height: 19px;
+  padding: 3px 4px;
+  vertical-align: top;
+}
+.donate_side .donate_table td.sub {
   color: #75715e;
+  white-space: nowrap;
+}
+.donate_side .donate_who {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
 }
 .donate_total {
-  margin-top: 10px;
+  margin-top: 8px;
   color: #939387;
+  font-size: 13px;
+  line-height: 20px;
 }
 .donate_total em {
   color: #fdc61a;
   font-style: normal;
   font-weight: bold;
+}
+.donate_empty {
+  color: #75715e;
+  font-size: 13px;
 }
 
 /* ===== 首页邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层） =====

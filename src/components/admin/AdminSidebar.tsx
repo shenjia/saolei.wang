@@ -22,9 +22,10 @@ interface NavItem {
   groupBadge?: boolean;
 }
 
-const GROUPS: { title: string; items: NavItem[] }[] = [
+const GROUPS: { title: string | null; items: NavItem[] }[] = [
   {
-    title: "概览",
+    // 2026-10-30 张老师要求：概览组去标题（导航超高出滚动条，省一行）——三项直接置顶
+    title: null,
     items: [
       { href: "/admin", label: "仪表盘", icon: "📊" },
       { href: "/admin/stats", label: "数据分析", icon: "📈" },
@@ -177,9 +178,9 @@ export function AdminSidebar({
       </div>
 
       <nav className="admin_nav">
-        {GROUPS.map((g) => (
-          <div key={g.title}>
-            <div className="admin_nav_group">{g.title}</div>
+        {GROUPS.map((g, gi) => (
+          <div key={g.title ?? `g${gi}`}>
+            {g.title && <div className="admin_nav_group">{g.title}</div>}
             {g.items.map((it) => {
               const n = it.badgeKey ? liveBadges[it.badgeKey] : 0;
               return (
