@@ -2651,7 +2651,11 @@ export function ReplayFullscreen({
     const t = playResult.csec / 100;
     const hasBv = playResult.solvedBv > 0 && t > 0;
     const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
-    const qg = hasBv ? Math.pow(t, 1.7) / playResult.solvedBv : 0;
+    /* QG/STNB 用 Est RTime 代入（2026-10-30 张老师定，与 ReplayStatsTable/练习页同口径）：
+       est = t × 3BV ÷ 已完成 3BV，败局不再把半成品速度当整盘速度；
+       胜局 est=t 恒等旧值 */
+    const est = hasBv ? t * (playResult.board3bv / playResult.solvedBv) : 0;
+    const qg = hasBv ? Math.pow(est, 1.7) / playResult.solvedBv : 0;
     const stnb = hasBv
       ? ((73.5 * ln * ln - 94.5 * ln + 57) / qg) * Math.sqrt(playResult.solvedBv / playResult.board3bv)
       : 0;
@@ -2666,8 +2670,8 @@ export function ReplayFullscreen({
     };
     const lowCompletion = playResult.board3bv <= 0 || playResult.solvedBv / playResult.board3bv < 0.1;
     const points = radarPointsFrom(values, radarDists, !!radarDists && playResult.cl > 0 && !lowCompletion, noflag);
-    /* 预计完成用时（未完成时展示）：Est RTime 口径 = 实际用时 × 3BV ÷ 已完成 3BV */
-    const estSec = playResult.solvedBv > 0 ? t * (playResult.board3bv / playResult.solvedBv) : 0;
+    /* 预计完成用时（未完成时展示）：与上方 est 同一值 */
+    const estSec = est;
     return { points, overall: overallGrade(points), estSec };
   }, [playResult, level, radarDists, noflag]);
 
