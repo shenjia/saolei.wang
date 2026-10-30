@@ -3,6 +3,8 @@
 // 赞助登记表单（2026-10-30 后台赞助管理）
 // 上半区：玩家 ID（可选，输 ID 自动识别玩家并回显在输入框下方）+ 金额（元）+ 提交。
 // 不输 ID = 匿名赞助（user=0）。提交走统一 /api/admin/action（donate.add）。
+// 编辑模式（2026-10-30 张老师）：清单行「编辑」按钮派发 sl-donate-edit 事件回填，
+// 提交改走 donate.edit；取消恢复登记态。
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,6 +17,15 @@ interface LookupUser {
   sex: number;
   banned: boolean;
   title: string;
+}
+
+/** 编辑模式状态（清单行回填用） */
+interface EditingDonate {
+  id: number;
+  /** 原赞助者 uid（0=匿名） */
+  user: number;
+  /** 原金额（分） */
+  amount: number;
 }
 
 export function DonateForm() {
@@ -31,6 +42,23 @@ export function DonateForm() {
   });
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 编辑模式（null=登记态）；回填由清单行的 sl-donate-edit 事件触发
+  const [editing, setEditing] = useState<EditingDonate | null>(null);
+
+  // 监听清单行「编辑」：回填记录（日期按东八区 Y-m-d、金额分→元字符串）
+  useEffect(() => {
+    const onEdit = (e: Event) => {
+      const d = (e as CustomEvent).detail as { id: number; user: number; amount: number; createTime: number };
+      if (!d || typeof d.id !== "number") return;
+      setEditing({ id: d.id, user: d.user, amount: d.amount });
+      setIdText(d.user > 0 ? String(d.user) : "");
+      setDate(new Date((d.createTime + 8 * 3600) * 1000).toISOString().slice(0, 10));
+      setAmount(String(d.amount / 100));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("sl-donate-edit", onEdit);
+    return () => window.removeEventListener("sl-donate-edit", onEdit);
+  }, []);
 
   // ID 输入防抖识别（400ms）；清空立即复位为匿名态
   useEffect(() => {
@@ -67,12 +95,17 @@ export function DonateForm() {
       const res = await fetch("/api/admin/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "donate.add", id: idText.trim(), date, amount: amount.trim() }),
+        body: JSON.stringify(
+          editing
+            ? { op: "donate.edit", id: editing.id, idText: idText.trim(), date, amount: amount.trim() }
+            : { op: "donate.add", id: idText.trim(), date, amount: amount.trim() }
+        ),
       });
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       toast(data.ok ? data.message ?? "已登记" : data.error ?? "登记失败", data.ok ? "success" : "error");
       if (data.ok) {
-        // 日期保留不重置（2026-10-30 张老师）：方便连续录入同一日的多笔账单
+        // 日期保留不重置（2026-10-30 张老师）：方便连续录入同一日的多笔账单；编辑完成退出编辑态
+        setEditing(null);
         setIdText("");
         setAmount("");
         setLookup({ loading: false, user: null, notFound: false });
@@ -93,6 +126,26 @@ export function DonateForm() {
         if (canSubmit) void submit();
       }}
     >
+      {/* 编辑模式提示条：显示正在改的记录，可取消回到登记态 */}
+      {editing && (
+        <div className="donate_lookup" style={{ color: "#e6b422" }}>
+          正在编辑赞助记录 #{editing.id}（原 {editing.user > 0 ? `#${editing.user}` : "匿名"} ¥
+          {(editing.amount / 100).toFixed(2)}；ID 留空 = 改为匿名）{" "}
+          <button
+            type="button"
+            className="admin_btn sm"
+            onClick={() => {
+              setEditing(null);
+              setIdText("");
+              setAmount("");
+              setLookup({ loading: false, user: null, notFound: false });
+            }}
+          >
+            取消编辑
+          </button>
+        </div>
+      )}
+
       {/* 日期放最左（2026-10-30 张老师） */}
       <label>
         日期
@@ -130,7 +183,7 @@ export function DonateForm() {
         />
       </label>
       <button type="submit" className="admin_btn primary" disabled={!canSubmit}>
-        {busy ? "提交中…" : "登记赞助"}
+        {busy ? "提交中…" : editing ? "保存修改" : "登记赞助"}
       </button>
 
       {/* 识别结果回显（输入框下方） */}

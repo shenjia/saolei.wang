@@ -10,6 +10,7 @@ import { AdminAction } from "@/components/admin/AdminAction";
 import { AdminCard } from "@/components/admin/Widgets";
 import { DonateForm } from "@/components/admin/DonateForm";
 import { ExpenseForm } from "@/components/admin/ExpenseForm";
+import { RowEditButton } from "@/components/admin/RowEditButton";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "收支管理 | 管理后台" };
@@ -76,6 +77,11 @@ export default async function AdminDonatePage() {
                       </td>
                       <td className="num" style={{ color: "#a6e22e" }}>+{donateYuan(r.amount)}</td>
                       <td className="ops">
+                        {/* 编辑：派发事件给上方 DonateForm 回填进入编辑模式 */}
+                        <RowEditButton
+                          event="sl-donate-edit"
+                          detail={{ id: r.id, user: r.user, amount: r.amount, createTime: r.createTime }}
+                        />{" "}
                         <AdminAction
                           op="donate.delete"
                           params={{ id: r.id }}
@@ -138,6 +144,17 @@ export default async function AdminDonatePage() {
                         )}
                       </td>
                       <td className="ops">
+                        {/* 编辑：派发事件给上方 ExpenseForm 回填进入编辑模式 */}
+                        <RowEditButton
+                          event="sl-expense-edit"
+                          detail={{
+                            id: r.id,
+                            purpose: r.purpose,
+                            amount: r.amount,
+                            evidence: r.evidence,
+                            createTime: r.createTime,
+                          }}
+                        />{" "}
                         <AdminAction
                           op="expense.delete"
                           params={{ id: r.id }}

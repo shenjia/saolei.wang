@@ -65,9 +65,12 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   // 赞助登记（2026-10-30）：收款线下到账后手动记账，管理员即可；删除笔误记录同权
   "donate.add": "manager",
   "donate.delete": "manager",
+  // 编辑赞助（2026-10-30 张老师：防备写错日期/金额/人名，两边的记录都要能改）
+  "donate.edit": "manager",
   // 支出登记（2026-10-30 收支管理）：用途+金额+凭据图（图先传 /api/admin/expense-evidence 拿 URL）
   "expense.add": "manager",
   "expense.delete": "manager",
+  "expense.edit": "manager",
   "site.setMaintenance": "administrator",
   // API key 管理（2026-10-24 公开 API 体系）：签发/吊销都是超管权限——
   // key 即数据出口凭据，签发对象需张老师把关
@@ -1036,6 +1039,41 @@ async function dispatch(
       };
     }
 
+    // 编辑赞助（2026-10-30 张老师）：ID 留空 = 改为匿名；金额/日期同人名一样可改
+    case "donate.edit": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少赞助记录 ID" };
+      const row = await prisma.donate.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "赞助记录不存在" };
+      const idRaw = toText(p.idText, 12);
+      let uid = 0;
+      if (idRaw) {
+        const n = toId(idRaw);
+        if (!n) return { ok: false, error: "参数错误：玩家 ID 必须是正整数" };
+        uid = n;
+      }
+      if (uid) {
+        const u = await prisma.user.findUnique({ where: { id: BigInt(uid) }, select: { id: true } });
+        if (!u) return { ok: false, error: `玩家 #${uid} 不存在，请核对 ID（留空则为匿名赞助）` };
+      }
+      const cents = Math.round(parseFloat(String(p.amount ?? "").replace(/[,，\s]/g, "")) * 100);
+      if (!Number.isFinite(cents) || cents <= 0 || cents > 100_000_000) {
+        return { ok: false, error: "参数错误：金额必须是 0.01 ~ 1000000 元之间的数值" };
+      }
+      const rt = resolveRegTime(p.date);
+      if ("error" in rt) return { ok: false, error: rt.error };
+      const t = rt.t;
+      await prisma.donate.update({
+        where: { id: BigInt(id) },
+        data: { user: BigInt(uid), amount: BigInt(cents), createTime: t, updateTime: BigInt(now()) },
+      });
+      const rowUser = uid
+        ? await prisma.user.findUnique({ where: { id: BigInt(uid) }, select: { chineseName: true } })
+        : null;
+      const name = uid ? rowUser?.chineseName ?? `#${uid}` : "匿名雷友";
+      return { ok: true, message: `已修改赞助记录 #${id}：${name} ¥${(cents / 100).toFixed(2)}` };
+    }
+
     case "donate.delete": {
       const id = toId(p.id);
       if (!id) return { ok: false, error: "参数错误：缺少赞助记录 ID" };
@@ -1071,6 +1109,32 @@ async function dispatch(
         data: { purpose, amount: BigInt(cents), evidence, createTime: t, updateTime: t },
       });
       return { ok: true, message: `已登记支出：${purpose} ¥${(cents / 100).toFixed(2)}${evidence ? "（含凭据）" : ""}` };
+    }
+
+    // 编辑支出（2026-10-30 张老师）：用途/金额/日期/凭据均可改；evidence 不传则保留原凭据
+    case "expense.edit": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少支出记录 ID" };
+      const row = await prisma.donateExpense.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "支出记录不存在" };
+      const purpose = toText(p.purpose, 100);
+      if (!purpose) return { ok: false, error: "参数错误：请填写支出用途" };
+      const cents = Math.round(parseFloat(String(p.amount ?? "").replace(/[,，\s]/g, "")) * 100);
+      if (!Number.isFinite(cents) || cents <= 0 || cents > 100_000_000) {
+        return { ok: false, error: "参数错误：金额必须是 0.01 ~ 1000000 元之间的数值" };
+      }
+      const evidence = toText(p.evidence, 200);
+      if (evidence && !evidence.startsWith("/uploads/expense/")) {
+        return { ok: false, error: "参数错误：凭据必须是本站上传的图片" };
+      }
+      const rt = resolveRegTime(p.date);
+      if ("error" in rt) return { ok: false, error: rt.error };
+      const t = rt.t;
+      await prisma.donateExpense.update({
+        where: { id: BigInt(id) },
+        data: { purpose, amount: BigInt(cents), evidence, createTime: t, updateTime: BigInt(now()) },
+      });
+      return { ok: true, message: `已修改支出记录 #${id}：${purpose} ¥${(cents / 100).toFixed(2)}` };
     }
 
     case "expense.delete": {
