@@ -206,6 +206,32 @@ body .tabs > a:hover::after {
 .board.size16 td {
   min-width: 16px;
 }
+/* ---- 矢量棋盘（2026-10-30 张老师需求：录像详情页/回放位图雪碧图在版图非整数
+   zoom（int/exp 1.15、beg 2.6）下逐格重采样，格缘深浅不一＝细微错位）----
+   换练习页 2026-10-14 定稿的「整盘单 SVG 覆盖层」：所有格子共用一张坐标系
+   一次光栅化，任意倍率网格均匀（flop 原版同构）。td 只担布局/命中/语义类，
+   位图背景永久禁用（覆盖层不透明，防透出）。仅详情页/全屏层/后台回放棋盘启用
+   （Board vec prop）；列表缩略图（size8/4）与练习页各自口径不变 */
+.board.vec {
+  position: relative;
+}
+/* ⚠️ globals.css 在 legacy-2013.css 之前注入（layout <link> 在后），同特异性必输——
+   加 .size16/.size8/.size4 抬到 (0,3,1) 压过 legacy 的 .board.size16 td (0,2,1) */
+.board.vec td,
+.board.vec.size16 td,
+.board.vec.size8 td,
+.board.vec.size4 td {
+  background: none;
+}
+.board.vec .vecboard {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
 /* 被踩中的雷（回放/试玩，paintBombCell）：td 内嵌红雷 SVG（#cell-mine-bomb）。
    SVG 是 replaced inline 元素，固有尺寸参与表格 auto 布局会把整列撑宽、
    整行撑高（2026-10-20 张老师截图「踩雷后整个页面乱了」）——
@@ -8442,8 +8468,8 @@ button.msg_cancel:hover {
 }
 /* ---- 模式快捷钮（2026-10-15 九期张老师定）：设置按钮左侧 NF／速旗／连击／无猜四颗 ----
    「外套边框」即 .gicon 自带的底框；未激活沿用灰 #b1b1a4，激活显色：
-   NF/速旗=黄（.gicon.active 的 #fdc61d 正好是站内黄），连击/无猜=站内绿 #a6e22e
-   （单列覆盖；NF 黄/连击绿为 2026-10-19 张老师定） */
+   NF=黄（.gicon.active 的 #fdc61d 正好是站内黄），速旗/连击/无猜=站内绿 #a6e22e
+   （单列覆盖；NF 黄/连击绿为 2026-10-19 张老师定；速旗黄改绿 2026-10-30 定） */
 #online_play .gicon.gmode {
   font: bold 12px/1 Arial, Helvetica, sans-serif;
   letter-spacing: 0.5px;
@@ -8465,6 +8491,12 @@ button.msg_cancel:hover {
   border-color: #a6e22e;
 }
 #online_play .gicon.gmode_ng.active {
+  color: #a6e22e;
+  border-color: #a6e22e;
+}
+/* 速旗改绿（2026-10-30 张老师定：图标/名字都用绿，与连击/无猜同系——
+   速旗语义偏「辅助增益」而非「限制挑战」，归绿组） */
+#online_play .gicon.gmode_sq.active {
   color: #a6e22e;
   border-color: #a6e22e;
 }
@@ -8556,7 +8588,8 @@ button.msg_cancel:hover {
   color: #fdc61d;
 }
 #online_play .gicon.gmode_combo .tip em,
-#online_play .gicon.gmode_ng .tip em {
+#online_play .gicon.gmode_ng .tip em,
+#online_play .gicon.gmode_sq .tip em {
   color: #a6e22e;
 }
 /* 窄屏（≤880，与站内移动端断点一致）兜底：按钮贴近视口右缘，居中弹会被裁出屏
