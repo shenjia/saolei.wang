@@ -1,7 +1,7 @@
-// evf 解析器验证：node --experimental-strip-types scripts/evf-parse-check.ts <file.evf>
+// evf 解析器验证：node_modules/.bin/jiti scripts/evf-parse-check.ts <file.evf>
 // 对照 ms-toollib 口径核验：解析到文件尾、雷数自洽、事件统计、时间与文件名一致
 import { readFileSync } from "node:fs";
-import { parseEvf } from "../src/lib/evf.ts";
+import { parseEvf } from "../src/lib/evf";
 
 const file = process.argv[2];
 if (!file) {
