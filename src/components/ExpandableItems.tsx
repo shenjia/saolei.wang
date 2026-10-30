@@ -40,11 +40,18 @@ export function ExpandableItems({
       )}
       {(hasMore || count !== undefined) && (
         <div className="more_loader">
-          {hasMore && (
-            <button type="button" className="button small" onClick={() => setExpanded(!expanded)}>
-              {expanded ? "收起" : "加载更多"}
-            </button>
-          )}
+          {hasMore &&
+            (expanded ? (
+              <button type="button" className="dots_more" title="收起" onClick={() => setExpanded(false)}>
+                收起
+              </button>
+            ) : (
+              <button type="button" className="dots_more" title="加载更多" onClick={() => setExpanded(true)}>
+                <i />
+                <i />
+                <i />
+              </button>
+            ))}
           {count !== undefined && <TotalCount total={count} unit="笔" />}
         </div>
       )}

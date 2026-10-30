@@ -11210,6 +11210,36 @@ html.op-fakefs #header {
   color: #75715e;
   font-size: 16px;
 }
+/* 三圆点「加载更多」卡片按钮（2026-10-30 张老师：赞助/支出记录与个人主页标识列表
+   与首页新闻滑条三圆点同款；.ps_more scoped 在 .page_slider 下故立通用类）。
+   展开态同款按钮显示「收起」文字 */
+.dots_more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 8px;
+  background: #49483e;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #cfcdc0;
+  font-family: inherit;
+}
+.dots_more i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #cfcdc0;
+  padding: 0;
+}
+.dots_more:hover {
+  background: #56554a;
+  color: #f8f8f2;
+}
 /* 收支统计（2026-10-30 六轮张老师）：右栏顶端板块，三行——收入绿/支出金，
    结余正数绿、负数红；行间用主题分隔色 */
 .stats_rows {

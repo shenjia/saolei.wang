@@ -24,9 +24,9 @@ export default async function AdminDonatePage() {
       <div className="admin_page_head">
         <h1>收支管理</h1>
         <span className="sub">
-          收入 <b style={{ color: "#e6b422" }}>+{donateYuan(totalCents)}</b>（{total} 笔） · 支出{" "}
-          <b style={{ color: "#f92672" }}>-{donateYuan(expense.totalCents)}</b>（{expense.total} 笔） · 结余{" "}
-          <b style={{ color: balance >= 0 ? "#a6e22e" : "#f92672" }}>
+          收入 <b style={{ color: "#7dc94b" }}>+{donateYuan(totalCents)}</b>（{total} 笔） · 支出{" "}
+          <b style={{ color: "#e6b422" }}>-{donateYuan(expense.totalCents)}</b>（{expense.total} 笔） · 结余{" "}
+          <b style={{ color: balance >= 0 ? "#7dc94b" : "#f92672" }}>
             {balance >= 0 ? donateYuan(balance) : `-${donateYuan(-balance)}`}
           </b>
         </span>
@@ -75,7 +75,7 @@ export default async function AdminDonatePage() {
                           <span className="sub">{r.user > 0 ? `#${r.user}（已删号）` : "匿名雷友"}</span>
                         )}
                       </td>
-                      <td className="num" style={{ color: "#e6b422" }}>+{donateYuan(r.amount)}</td>
+                      <td className="num" style={{ color: "#7dc94b" }}>+{donateYuan(r.amount)}</td>
                       <td className="ops">
                         {/* 编辑：派发事件给上方 DonateForm 回填进入编辑模式 */}
                         <RowEditButton
@@ -133,7 +133,7 @@ export default async function AdminDonatePage() {
                       <td className="c sub">{r.id}</td>
                       <td className="sub">{formatDate(r.createTime, "Y-m-d H:i")}</td>
                       <td>{r.purpose}</td>
-                      <td className="num" style={{ color: "#f92672" }}>-{donateYuan(r.amount)}</td>
+                      <td className="num" style={{ color: "#e6b422" }}>-{donateYuan(r.amount)}</td>
                       <td className="c">
                         {r.evidence ? (
                           <a className="link" href={r.evidence} target="_blank" rel="noopener noreferrer" title="查看凭据">

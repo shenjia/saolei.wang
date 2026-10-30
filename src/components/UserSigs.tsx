@@ -2,7 +2,7 @@
 
 // 用户主页侧栏「个人资料」→「标识」列表（2026-10-22 张老师要求）
 // 数据源 user_sig（录像标识文字，上传录像时注册、按此核对归属）。
-// 一个标识一行；默认最多 3 条，超出显示「加载更多」按钮（全站统一 .button.small），
+// 一个标识一行；默认最多 3 条，超出显示「···」三圆点卡片按钮（与首页新闻滑条 .ps_more 同款），
 // 点击后就地展开全部，展开后按钮变「收起」，点击恢复只显示 3 条。
 // 标识整体用小字号 12px（2026-10-22 张老师要求：字体小一些，尽量避免换行）。
 
@@ -23,11 +23,13 @@ export function UserSigs({ items }: { items: string[] }) {
         <li>
           <button
             type="button"
-            className="button small"
-            title="显示全部标识"
+            className="dots_more"
+            title="加载更多"
             onClick={() => setExpanded(true)}
           >
-            加载更多
+            <i />
+            <i />
+            <i />
           </button>
         </li>
       )}
@@ -35,8 +37,8 @@ export function UserSigs({ items }: { items: string[] }) {
         <li>
           <button
             type="button"
-            className="button small"
-            title="收起标识"
+            className="dots_more"
+            title="收起"
             onClick={() => setExpanded(false)}
           >
             收起
