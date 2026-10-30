@@ -93,6 +93,18 @@ export function DonateForm() {
         if (canSubmit) void submit();
       }}
     >
+      {/* 日期放最左（2026-10-30 张老师） */}
+      <label>
+        日期
+        <input
+          className="admin_input"
+          type="date"
+          max={today}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          style={{ width: 150 }}
+        />
+      </label>
       <label>
         玩家 ID
         <input
@@ -103,17 +115,6 @@ export function DonateForm() {
           value={idText}
           onChange={(e) => setIdText(e.target.value.replace(/[^\d]/g, ""))}
           style={{ width: 140 }}
-        />
-      </label>
-      <label>
-        日期
-        <input
-          className="admin_input"
-          type="date"
-          max={today}
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={{ width: 150 }}
         />
       </label>
       <label>

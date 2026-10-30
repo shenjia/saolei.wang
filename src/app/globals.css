@@ -11232,6 +11232,42 @@ html.op-fakefs #header {
   color: #75715e;
   font-size: 16px;
 }
+/* 收支统计（2026-10-30 六轮张老师）：右栏顶端板块，三行——收入绿/支出金，
+   结余正数绿、负数红；行间用主题分隔色 */
+.stats_rows {
+  margin-top: 2px;
+}
+.stat_row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 17px;
+  line-height: 26px;
+}
+.stat_row + .stat_row {
+  border-top: 1px solid #49483e;
+}
+.stat_row .stat_label {
+  color: #f8f8f2;
+}
+.stat_row .stat_val {
+  font-style: normal;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.stat_row .stat_income {
+  color: #a6e22e;
+}
+.stat_row .stat_expense {
+  color: #e6b422;
+}
+.stat_row .stat_balance_pos {
+  color: #a6e22e;
+}
+.stat_row .stat_balance_neg {
+  color: #f92672;
+}
 /* 支出记录（2026-10-30 收支管理）：赞助记录下方板块，复用 .donate_side 全套排版，
    仅补板块间距与票据图标/凭据浮层样式 */
 .expense_side {

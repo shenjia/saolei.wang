@@ -15,6 +15,7 @@ export const metadata = { title: "提供赞助" };
 
 export default async function DonatePage() {
   const [{ rows, totalCents, total }, expense] = await Promise.all([getDonateList(200), getExpenseList(200)]);
+  const balance = totalCents - expense.totalCents;
 
   return (
     <div id="page" className="two_columns">
@@ -62,6 +63,30 @@ export default async function DonatePage() {
           </div>
         </li>
         <li className="sidebar">
+          {/* 收支统计（2026-10-30 六轮张老师）：右栏顶端三行——收入/支出/结余；
+              收入绿色、支出金色，结余正数绿、负数红 */}
+          <div className="box donate_side stats_side">
+            <div className="donate_head">
+              <h2>收支统计</h2>
+            </div>
+            <div className="stats_rows">
+              <div className="stat_row">
+                <span className="stat_label">收入</span>
+                <em className="stat_val stat_income">{donateYuanPlain(totalCents)}</em>
+              </div>
+              <div className="stat_row">
+                <span className="stat_label">支出</span>
+                <em className="stat_val stat_expense">{donateYuanPlain(expense.totalCents)}</em>
+              </div>
+              <div className="stat_row">
+                <span className="stat_label">结余</span>
+                <em className={`stat_val ${balance >= 0 ? "stat_balance_pos" : "stat_balance_neg"}`}>
+                  {balance >= 0 ? donateYuanPlain(balance) : `-${donateYuanPlain(-balance)}`}
+                </em>
+              </div>
+            </div>
+          </div>
+
           {/* 右侧独立板块：赞助记录（2026-10-30 二轮，与后台赞助管理同一数据源） */}
           <div className="box donate_side">
             {/* 五轮（张老师）：「共 x 笔」上移板块标题行右上角（h2 同行，flex 两端对齐）；四轮定的无表头/无总金额维持 */}

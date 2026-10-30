@@ -23,8 +23,11 @@ export default async function AdminDonatePage() {
       <div className="admin_page_head">
         <h1>收支管理</h1>
         <span className="sub">
-          收入 {donateYuan(totalCents)}（{total} 笔） · 支出 {donateYuan(expense.totalCents)}（{expense.total} 笔） · 结余{" "}
-          <b style={{ color: balance >= 0 ? "#a6e22e" : "#f92672" }}>{donateYuan(balance)}</b>
+          收入 <b style={{ color: "#a6e22e" }}>+{donateYuan(totalCents)}</b>（{total} 笔） · 支出{" "}
+          <b style={{ color: "#e6b422" }}>-{donateYuan(expense.totalCents)}</b>（{expense.total} 笔） · 结余{" "}
+          <b style={{ color: balance >= 0 ? "#a6e22e" : "#f92672" }}>
+            {balance >= 0 ? donateYuan(balance) : `-${donateYuan(-balance)}`}
+          </b>
         </span>
       </div>
 
@@ -58,12 +61,12 @@ export default async function AdminDonatePage() {
                       <td>
                         {r.user > 0 && r.chineseName ? (
                           <>
+                            {/* 雷友名前显示 #ID（2026-10-30 张老师）；气泡只留英文名 */}
                             <Link className="link" href={`/admin/users/${r.user}`}>
-                              {r.chineseName}
-                              <span className="pt_bubble">
-                                #{r.user}
-                                {r.englishName ? ` ${r.englishName}` : ""}
-                              </span>
+                              <span className="sub">#{r.user}</span> {r.chineseName}
+                              {r.englishName ? (
+                                <span className="pt_bubble"> {r.englishName}</span>
+                              ) : null}
                             </Link>{" "}
                             <TitleBadge title={r.militaryTitle ?? ""} classic={r.classic} />
                           </>
@@ -71,7 +74,7 @@ export default async function AdminDonatePage() {
                           <span className="sub">{r.user > 0 ? `#${r.user}（已删号）` : "匿名雷友"}</span>
                         )}
                       </td>
-                      <td className="num">{donateYuan(r.amount)}</td>
+                      <td className="num" style={{ color: "#a6e22e" }}>+{donateYuan(r.amount)}</td>
                       <td className="ops">
                         <AdminAction
                           op="donate.delete"
@@ -124,7 +127,7 @@ export default async function AdminDonatePage() {
                       <td className="c sub">{r.id}</td>
                       <td className="sub">{formatDate(r.createTime, "Y-m-d H:i")}</td>
                       <td>{r.purpose}</td>
-                      <td className="num">{donateYuan(r.amount)}</td>
+                      <td className="num" style={{ color: "#e6b422" }}>-{donateYuan(r.amount)}</td>
                       <td className="c">
                         {r.evidence ? (
                           <a className="link" href={r.evidence} target="_blank" rel="noopener noreferrer" title="查看凭据">

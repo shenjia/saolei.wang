@@ -79,6 +79,18 @@ export function ExpenseForm() {
         if (canSubmit) void submit();
       }}
     >
+      {/* 日期放最左（2026-10-30 张老师） */}
+      <label>
+        日期
+        <input
+          className="admin_input"
+          type="date"
+          max={today}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          style={{ width: 150 }}
+        />
+      </label>
       <label className="expense_purpose">
         用途
         <input
@@ -101,17 +113,6 @@ export function ExpenseForm() {
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           style={{ width: 110 }}
-        />
-      </label>
-      <label>
-        日期
-        <input
-          className="admin_input"
-          type="date"
-          max={today}
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={{ width: 150 }}
         />
       </label>
       <label>
