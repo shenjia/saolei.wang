@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     ]);
     const withTitles = items.map((news) => ({
       news,
-      title: assessTitle(recordNewsExpTime(news.expTime, news.details), isKing(news.author?.id)),
+      title: assessTitle(recordNewsExpTime(news.expTime, news.details, news.videoRealTime), isKing(news.author?.id)),
       classic: news.authorTitles?.c ?? null,
     }));
     return NextResponse.json({

@@ -74,6 +74,10 @@ export interface NewsItem {
   ranked: boolean;
   /** 发布时刻高级时间 running best（毫秒，0=无成绩）——军衔按快照评定（2026-10-17 快照制） */
   expTime: number;
+  /** 关联录像 real_time（毫秒；仅成绩类动态带出，0=无关联/未知）——
+   *  破纪录动态（含双破的 3bvs 纪录行，details 不带时间）按「本盘之后实际最好成绩」
+   *  min(快照, 本盘 real_time) 评定军衔用（recordNewsExpTime 第三参，2026-10-30） */
+  videoRealTime: number;
   reference: number;
   details: Record<string, unknown>;
   createTime: number;
@@ -409,6 +413,27 @@ export async function getNews(opts: {
     orderBy: [{ createTime: "desc" }, { id: "desc" }],
     ...(opts.ids ? {} : { take: opts.limit }),
   });
+  // 成绩类动态带出关联录像 real_time（2026-10-30）：双破录像的 3bvs 纪录行动态
+  // details 不带时间成绩，军衔评定需按录像 real_time 判「本盘之后实际最好成绩」
+  const recordVideoRt = new Map<number, number>();
+  {
+    const recordTypes: number[] = [NEWS_TYPE.PERSON_RECORD, NEWS_TYPE.AREA_RECORD, NEWS_TYPE.NATION_RECORD];
+    const recordRefs: number[] = [
+      ...new Set(
+        rows
+          .filter((r) => recordTypes.includes(r.type))
+          .map((r) => N(r.reference))
+          .filter((id) => id > 0)
+      ),
+    ];
+    if (recordRefs.length) {
+      const vids = await prisma.videoInfo.findMany({
+        where: { id: { in: recordRefs.map(BigInt) } },
+        select: { id: true, realTime: true },
+      });
+      for (const v of vids) recordVideoRt.set(N(v.id), v.realTime);
+    }
+  }
   const authors = await usersByIds([...new Set(rows.map((r) => N(r.user)))]);
   // 2026-10-17 称号快照制：军衔按行内 exp_time/ranked 快照评定（写入时定值），
   // 不再按 video_scores_exp 流水重放——入伍/晋升「含同刻」、破纪录「严格早于」的口径
@@ -489,6 +514,7 @@ export async function getNews(opts: {
       type: r.type,
       ranked: r.ranked === BigInt(1),
       expTime: N(r.expTime),
+      videoRealTime: recordVideoRt.get(N(r.reference)) ?? 0,
       reference: N(r.reference),
       details: d,
       createTime: N(r.createTime),

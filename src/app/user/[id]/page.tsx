@@ -197,7 +197,7 @@ export default async function UserViewPage({
   const feed: NewsFeedItem[] = news.map((n) => ({
     news: n,
     // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
-    title: assessTitle(recordNewsExpTime(n.expTime, n.details), king > 0 && king === (n.author?.id ?? 0)),
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime), king > 0 && king === (n.author?.id ?? 0)),
     classic: n.authorTitles?.c ?? null,
   }));
 

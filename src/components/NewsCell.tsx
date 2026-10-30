@@ -11,7 +11,7 @@ export async function NewsCell({ news }: { news: NewsItem }) {
   return (
     <NewsCellView
       news={news}
-      title={await assessTitle(recordNewsExpTime(news.expTime, news.details), king > 0 && king === (news.author?.id ?? 0))}
+      title={await assessTitle(recordNewsExpTime(news.expTime, news.details, news.videoRealTime), king > 0 && king === (news.author?.id ?? 0))}
     />
   );
 }

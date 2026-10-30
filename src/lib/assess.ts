@@ -78,13 +78,27 @@ export function promotedExpTime(snapExpTime: number, level: string, realTime: nu
  * expTimeOverride=original.expTime 口径），details 的 lv/od/cr 记录坐标与新成绩——
  * 高级时间纪录（lv=exp & od=time）按新成绩 cr 评定。纪录动态只在成绩严格变优（or=0 或
  * cr<or，or 即快照旧值）时发出，cr<快照恒成立；防御性再判一次，异常时回退快照原值。
+ *
+ * 2026-10-30 泛化（张老师报告 /video/340425 双破军衔不一致）：同盘录像同时破时间+3bvs
+ * 两条纪录时，3bvs 纪录行 details 只带 3BV/s 不带时间，此前回退快照旧值显示旧军衔——
+ * 与时间纪录行（按新军衔）不一致。统一语义改为「本盘之后实际最好成绩」：
+ * 有效评定时间 = min(快照旧值, 本盘 real_time)——本盘更快则按新军衔，否则维持旧军衔。
+ * od=time 行 cr 即本盘 real_time（videoRealTime 缺省时兜底）；其余行靠调用方传入
+ * videoRealTime（getNews 按关联录像批量带出 NewsItem.videoRealTime）。
  */
-export function recordNewsExpTime(newsExpTime: number, details: Record<string, unknown>): number {
-  if (details["lv"] === "exp" && details["od"] === "time") {
+export function recordNewsExpTime(
+  newsExpTime: number,
+  details: Record<string, unknown>,
+  videoRealTime = 0
+): number {
+  if (details["lv"] !== "exp") return newsExpTime;
+  let eff = newsExpTime;
+  if (details["od"] === "time") {
     const cr = Number(details["cr"]) || 0;
-    if (cr > 0 && (newsExpTime === 0 || cr < newsExpTime)) return cr;
+    if (cr > 0 && (eff === 0 || cr < eff)) eff = cr;
   }
-  return newsExpTime;
+  if (videoRealTime > 0 && (eff === 0 || videoRealTime < eff)) eff = videoRealTime;
+  return eff;
 }
 
 export interface TitleDistribution {
