@@ -11324,9 +11324,6 @@ html.op-fakefs #header {
 .expense_item {
   padding: 6px 0;
 }
-.expense_item + .expense_item {
-  border-top: 1px solid #49483e;
-}
 .expense_line {
   display: flex;
   align-items: baseline;
