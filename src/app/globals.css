@@ -11272,6 +11272,7 @@ html.op-fakefs #header {
 }
 .stat_row .stat_label {
   color: #75715e; /* 标签深灰（2026-10-30 张老师） */
+  font-size: 16px; /* 缩小与左栏正文一致（2026-10-30 张老师） */
 }
 .stat_row .stat_val {
   font-style: normal;
