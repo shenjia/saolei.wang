@@ -11208,6 +11208,21 @@ html.op-fakefs #header {
   font-size: 14px;
   white-space: nowrap;
 }
+/* 「共 x 笔」随「…/收起」按钮底部一行（2026-10-30 张老师：从标题行移到按钮右侧） */
+.list_foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.list_foot .list_more {
+  margin-top: 0; /* 间距交给 .list_foot（原按钮自带 margin-top 8px） */
+}
+.list_foot .donate_count {
+  color: #939387;
+  font-size: 14px;
+  white-space: nowrap;
+}
 .donate_side .donate_table {
   margin-top: 2px;
 }

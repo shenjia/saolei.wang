@@ -95,17 +95,17 @@ export default async function DonatePage() {
 
           {/* 右侧独立板块：赞助记录（2026-10-30 二轮，与后台赞助管理同一数据源） */}
           <div className="box donate_side">
-            {/* 五轮（张老师）：「共 x 笔」上移板块标题行右上角（h2 同行，flex 两端对齐）；四轮定的无表头/无总金额维持 */}
             <div className="donate_head">
               <h2>赞助记录</h2>
-              <span className="donate_count">共 {total} 笔</span>
             </div>
             {rows.length > 0 ? (
               /* 2026-10-30 四轮（张老师）：不放表头；不显示总金额。
-                 六轮：默认只显最近 5 条，「…」展开全部/「收起」还原（ExpandableItems） */
+                 六轮：默认只显最近 5 条，「…」展开全部/「收起」还原（ExpandableItems）；
+                 八轮：「共 x 笔」移到「…/收起」按钮右侧 */
               <ExpandableItems
                 mode="table"
                 wrapClass="donate_table"
+                count={total}
                 items={rows.map((r) => (
                   <tr key={r.id}>
                     {/* 日期移回最前（2026-10-30 张老师），全部显示日期（不做相对时间） */}
@@ -141,14 +141,15 @@ export default async function DonatePage() {
           <div className="box donate_side expense_side">
             <div className="donate_head">
               <h2>支出记录</h2>
-              <span className="donate_count">共 {expense.total} 笔</span>
             </div>
             {expense.rows.length > 0 ? (
               /* 2026-10-30 三轮（张老师）：每笔两行——日期+用途一行，费用+凭据一行。
-                 六轮：默认只显最近 5 条，「…」展开全部/「收起」还原（ExpandableItems） */
+                 六轮：默认只显最近 5 条，「…」展开全部/「收起」还原（ExpandableItems）；
+                 八轮：「共 x 笔」移到「…/收起」按钮右侧 */
               <ExpandableItems
                 mode="list"
                 wrapClass="expense_list"
+                count={expense.total}
                 items={expense.rows.map((r) => (
                   <div key={r.id} className="expense_item">
                     {/* 2026-10-30 张老师：日期移回最前（只显示到月），用途居中，金额+凭据贴右 */}

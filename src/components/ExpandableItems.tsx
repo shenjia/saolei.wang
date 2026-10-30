@@ -11,6 +11,7 @@ export function ExpandableItems({
   preview = 5,
   mode,
   wrapClass,
+  count,
 }: {
   /** 全部条目（RSC 渲染的行元素数组） */
   items: React.ReactNode[];
@@ -19,6 +20,8 @@ export function ExpandableItems({
   /** table = 外层 <table><tbody>；list = 外层 <div> */
   mode: "table" | "list";
   wrapClass: string;
+  /** 总条数（2026-10-30 张老师：显示在「…/收起」按钮右侧） */
+  count?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasMore = items.length > preview;
@@ -32,15 +35,20 @@ export function ExpandableItems({
       ) : (
         <div className={wrapClass}>{show}</div>
       )}
-      {hasMore && !expanded && (
-        <button type="button" className="list_more" title="显示全部记录" onClick={() => setExpanded(true)}>
-          …
-        </button>
-      )}
-      {expanded && (
-        <button type="button" className="list_more" title="收起" onClick={() => setExpanded(false)}>
-          收起
-        </button>
+      {(hasMore || count !== undefined) && (
+        <div className="list_foot">
+          {hasMore &&
+            (expanded ? (
+              <button type="button" className="list_more" title="收起" onClick={() => setExpanded(false)}>
+                收起
+              </button>
+            ) : (
+              <button type="button" className="list_more" title="显示全部记录" onClick={() => setExpanded(true)}>
+                …
+              </button>
+            ))}
+          {count !== undefined && <span className="donate_count">共 {count} 笔</span>}
+        </div>
       )}
     </>
   );
