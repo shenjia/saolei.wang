@@ -11270,6 +11270,10 @@ html.op-fakefs #header {
 .stat_row + .stat_row {
   border-top: 1px solid #49483e;
 }
+/* 收入与支出之间不留分割线（2026-10-30 张老师），支出/结余之间的保留 */
+.stats_rows .stat_row:nth-child(2) {
+  border-top: 0;
+}
 .stat_row .stat_label {
   color: #75715e; /* 标签深灰（2026-10-30 张老师） */
   font-size: 16px; /* 缩小与左栏正文一致（2026-10-30 张老师） */
@@ -11309,7 +11313,7 @@ html.op-fakefs #header {
   display: flex;
   align-items: baseline;
   gap: 5px;
-  font-size: 16px;
+  font-size: 15px; /* 用途/金额缩小一号（2026-10-30 张老师：16→15） */
   line-height: 24px;
   white-space: nowrap; /* 恒单行（2026-10-30 张老师） */
 }
@@ -11329,7 +11333,7 @@ html.op-fakefs #header {
   display: inline-flex;
   align-items: center;
   gap: 3px; /* 金额与票据图标靠在一起（2026-10-30 张老师） */
-  font-size: 16px;
+  font-size: 15px; /* 与用途同步缩小（2026-10-30 张老师） */
   flex: none;
 }
 .expense_amt {

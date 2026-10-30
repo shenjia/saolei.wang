@@ -9,7 +9,7 @@ import { PlayerTip } from "@/components/Cells";
 import { ExpenseEvidence } from "@/components/ExpenseEvidence";
 import { ExpandableItems } from "@/components/ExpandableItems";
 import { getDonateList, getExpenseList, donateYuanPlain } from "@/lib/donate";
-import { formatDate, timeOpposite, TIME_YEAR } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "提供赞助" };
@@ -18,15 +18,8 @@ export default async function DonatePage() {
   const [{ rows, totalCents, total }, expense] = await Promise.all([getDonateList(200), getExpenseList(200)]);
   const balance = totalCents - expense.totalCents;
 
-  // 赞助时间显示（2026-10-30 张老师）：登记只记日期不记时刻，相对时间粒度到「天」为止——
-  // 今天→「今天」、昨天→「昨天」，更早沿用 timeOpposite 的天/周/月级相对时间，超一年显示日期
-  const dayIndex = (t: number) => Math.floor((t + 8 * 3600) / 86400); // 按东八区日期序号
-  const donateTime = (t: number) => {
-    const diff = dayIndex(Date.now() / 1000) - dayIndex(t);
-    if (diff <= 0) return "今天";
-    if (diff === 1) return "昨天";
-    return timeOpposite(t, TIME_YEAR, "Y-m-d");
-  };
+  // 赞助时间显示（2026-10-30 张老师终版）：全部显示日期，不做相对时间
+  const donateTime = (t: number) => formatDate(t, "Y-m-d");
 
   return (
     <div id="page" className="two_columns">
@@ -115,6 +108,8 @@ export default async function DonatePage() {
                 wrapClass="donate_table"
                 items={rows.map((r) => (
                   <tr key={r.id}>
+                    {/* 日期移回最前（2026-10-30 张老师），全部显示日期（不做相对时间） */}
+                    <td className="sub">{donateTime(r.createTime)}</td>
                     <td>
                       {r.user > 0 && r.chineseName ? (
                         /* 2026-10-30 三轮（张老师）：只显示人名——不出性别标记与军衔；
@@ -133,8 +128,6 @@ export default async function DonatePage() {
                       {/* 赞助金额带 + 号（2026-10-30 张老师，与支出 - 号对称） */}
                       <em>+{donateYuanPlain(r.amount)}</em>
                     </td>
-                    {/* 时间放末尾（2026-10-30 张老师）：粒度到天——今天/昨天/n天(周/月)前，超一年显示日期 */}
-                    <td className="sub">{donateTime(r.createTime)}</td>
                   </tr>
                 ))}
               />
@@ -158,14 +151,14 @@ export default async function DonatePage() {
                 wrapClass="expense_list"
                 items={expense.rows.map((r) => (
                   <div key={r.id} className="expense_item">
-                    {/* 2026-10-30 张老师：日期放最后只显示到月；用途在前，金额+凭据居中随用途 */}
+                    {/* 2026-10-30 张老师：日期移回最前（只显示到月），用途居中，金额+凭据贴右 */}
                     <div className="expense_line">
+                      <span className="sub">{formatDate(r.createTime, "Y-m")}</span>
                       <span className="expense_purpose">{r.purpose}</span>
                       <span className="expense_pay">
                         <em className="expense_amt">-{donateYuanPlain(r.amount)}</em>
                         {r.evidence && <ExpenseEvidence url={r.evidence} alt={r.purpose} />}
                       </span>
-                      <span className="sub">{formatDate(r.createTime, "Y-m")}</span>
                     </div>
                   </div>
                 ))}
