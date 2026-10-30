@@ -58,8 +58,8 @@ export function ExpenseForm() {
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       toast(data.ok ? data.message ?? "已登记" : data.error ?? "登记失败", data.ok ? "success" : "error");
       if (data.ok) {
+        // 日期保留不重置（2026-10-30 张老师）：方便连续录入同一日的多笔账单
         setPurpose("");
-        setDate(today);
         setAmount("");
         setEvidence("");
         router.refresh();

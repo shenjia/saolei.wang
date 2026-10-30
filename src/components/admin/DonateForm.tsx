@@ -72,8 +72,8 @@ export function DonateForm() {
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       toast(data.ok ? data.message ?? "已登记" : data.error ?? "登记失败", data.ok ? "success" : "error");
       if (data.ok) {
+        // 日期保留不重置（2026-10-30 张老师）：方便连续录入同一日的多笔账单
         setIdText("");
-        setDate(today);
         setAmount("");
         setLookup({ loading: false, user: null, notFound: false });
         router.refresh();
