@@ -11244,6 +11244,9 @@ html.op-fakefs #header {
   font-size: 17px;
   white-space: nowrap;
 }
+.donate_side .donate_table td.donate_amt em {
+  color: #7dc94b; /* 赞助金额绿（2026-10-30 张老师：压过 legacy .table em 的 #fdc61a 金，与总计收入同色） */
+}
 .donate_empty {
   color: #75715e;
   font-size: 16px;
@@ -11299,13 +11302,13 @@ html.op-fakefs #header {
   white-space: nowrap;
 }
 .stat_row .stat_income {
-  color: #a6e22e; /* 收入绿（2026-10-30 张老师） */
+  color: #7dc94b; /* 收入绿（2026-10-30 张老师：#a6e22e→#7dc94b，与赞助记录金额同色） */
 }
 .stat_row .stat_expense {
-  color: #f92672;
+  color: #e6b422; /* 支出金（2026-10-30 张老师：玫瑰红→金，与支出记录金额同色） */
 }
 .stat_row .stat_balance_pos {
-  color: #a6e22e;
+  color: #7dc94b; /* 结余正数绿（与收入同色，2026-10-30 张老师） */
 }
 .stat_row .stat_balance_neg {
   color: #f92672;
@@ -11352,7 +11355,7 @@ html.op-fakefs #header {
   flex: none;
 }
 .expense_amt {
-  color: #f92672; /* 支出金额玫瑰红（2026-10-30 张老师） */
+  color: #e6b422; /* 支出金额金（2026-10-30 张老师：玫瑰红→金，与总计支出同色） */
   font-style: normal;
   font-weight: bold;
   white-space: nowrap;
