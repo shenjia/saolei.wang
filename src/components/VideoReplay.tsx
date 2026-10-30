@@ -257,17 +257,33 @@ const FACE_MAP: Record<FaceKind | "press", string> = {
   press: "face-press-normal",
 };
 
-/** 被踩中的雷：td 内嵌 flop 原版红底雷（#cell-mine-bomb，与练习页踩雷同图）。
- *  td 位图体系的 bc 贴图是灰调雷（block16x16.png 第 12 行无红色像素），
- *  2026-10-20 张老师定：全屏试玩/回放踩中格一律用带红底的雷图（和练习踩雷一样）。
- *  类名 bmb：globals.css 里 SVG 绝对定位脱流——inline SVG 固有尺寸会参与表格
- *  auto 布局把整列撑宽整行撑高（首版空类名+裸 SVG 的「页面乱了」教训）。
- *  依赖页面内的 FlopSprites（详情页/全屏层/后台播放器均已挂载）；
- *  paintR/paint/stop 恢复路径会重写 className+innerHTML，红雷自然被刷掉。 */
-function paintBombCell(td: HTMLTableCellElement) {
-  td.className = "bmb";
-  td.innerHTML =
-    '<svg viewBox="0 0 168 168" aria-hidden="true"><use href="#cell-mine-bomb" /></svg>';
+/* ---- 矢量覆盖层（2026-10-30 张老师需求：位图雪碧图在版图非整数 zoom 下逐格
+   重采样＝细微错位，换练习页 2026-10-14 定稿的整盘单 SVG 覆盖层）----
+   Board vec 模式下 td 只担布局/命中/语义类，视觉走 .vecboard 的 <use>；
+   引擎态类名 → FlopSprites symbol（与练习页 OnlinePlay VEC_MAP 同源）。 */
+const CELL_VEC_MAP: Record<string, string> = {
+  bb: "cell-normal-solid",
+  bf: "cell-flag-solid",
+  bq: "cell-question-solid",
+  b0: "cell-number-0",
+  b1: "cell-number-1",
+  b2: "cell-number-2",
+  b3: "cell-number-3",
+  b4: "cell-number-4",
+  b5: "cell-number-5",
+  b6: "cell-number-6",
+  b7: "cell-number-7",
+  b8: "cell-number-8",
+  bm: "cell-mine",
+  bn: "cell-flag-wrong",
+  bmb: "cell-mine-bomb",
+};
+
+/** tbody → table → .board → .vecboard 取整盘 <use> 数组（非 vec 棋盘返回空数组） */
+function boardVecUse(tbody: HTMLTableSectionElement): SVGUseElement[] {
+  const svg = (tbody.parentElement?.parentElement as HTMLElement | null)?.querySelector(".vecboard");
+  if (!svg) return [];
+  return Array.from(svg.querySelectorAll(":scope > use")) as SVGUseElement[];
 }
 
 /* 2026-10-19 导出：管理后台审核页全屏播放器（AdminVideoPlayer）复用同一引擎 */
@@ -324,6 +340,10 @@ export function runReplay(opts: {
   const saved = new Array<string>(N);
   const cellTd = (i: number) => tbody.rows[(i / cols) | 0].cells[i % cols];
   for (let i = 0; i < N; i++) saved[i] = cellTd(i).className;
+  /* 矢量覆盖层 use 数组（Board vec 模式；位图棋盘为空数组零影响）——
+     paintR/revealLoss/stop 全部同步切 href，td 类名照旧（语义保留） */
+  const vecUse = boardVecUse(tbody);
+  const vecSet = (i: number, sym: string) => vecUse[i]?.setAttribute("href", "#" + sym);
   let marks = data.marks;
   function paintR(i: number) {
     const td = cellTd(i);
@@ -332,7 +352,9 @@ export function runReplay(opts: {
     else if (rstate[i] === 2) cls = "bf";
     else if (rstate[i] === 3) cls = "bq";
     td.className = cls;
-    /* 清掉可能残留的内嵌红雷 SVG（paintBombCell；重置/seek/重播路径） */
+    /* 覆盖层同步（位图棋盘 vecUse 空，直接跳过）；bmb 红雷也走这里（vecSet） */
+    if (vecUse.length) vecSet(i, CELL_VEC_MAP[cls] ?? "cell-normal-solid");
+    /* 清掉可能残留的内嵌红雷 SVG（旧位图棋盘 paintBombCell 遗留路径；重置/seek/重播） */
     if (td.innerHTML) td.innerHTML = "";
   }
   function floodR(i: number) {
@@ -488,14 +510,21 @@ export function runReplay(opts: {
   function revealLoss() {
     for (let i = 0; i < N; i++) {
       if (mines[i]) {
-        if (rstate[i] !== 2 && rstate[i] !== 3) cellTd(i).className = "bm";
+        if (rstate[i] !== 2 && rstate[i] !== 3) {
+          cellTd(i).className = "bm";
+          if (vecUse.length) vecSet(i, "cell-mine");
+        }
       } else if (rstate[i] === 2) {
         cellTd(i).className = "bn";
+        if (vecUse.length) vecSet(i, "cell-flag-wrong");
       }
     }
     /* 被踩中的雷：flop 原版红底雷（#cell-mine-bomb，与练习页踩雷同图）——
-       td 位图体系的 bc 贴图是灰调雷（无红色像素），2026-10-20 张老师报错纠正 */
-    paintBombCell(cellTd(hitIdx));
+       位图棋盘 bc 贴图是灰调雷（无红色像素），2026-10-20 张老师报错纠正 */
+    const td = cellTd(hitIdx);
+    td.className = "bmb";
+    td.innerHTML = "";
+    if (vecUse.length) vecSet(hitIdx, "cell-mine-bomb");
   }
   /* 胜局检测（十七期：全安全格开完 → win 脸 + 自动补旗揭示，练习页 checkWin 同款；
      胜局录像收尾大多是滑键/chord 收官，事件流天然开满——补旗纯视觉不进事件） */
@@ -732,11 +761,18 @@ export function runReplay(opts: {
     stop() {
       setPlaying(false);
       curEl.remove();
-      /* 静态地图恢复：saved 类名回写 + 清内嵌 SVG（paintBombCell 的红雷） */
+      /* 静态地图恢复：saved 类名回写 + 清内嵌 SVG（旧位图棋盘红雷残留）+
+         覆盖层按初始 board 串恢复贴图（雷=b 未开面，与 Board 静态直出一致） */
       for (let i = 0; i < N; i++) {
         const td = cellTd(i);
         if (td.className !== saved[i]) td.className = saved[i];
         if (td.innerHTML) td.innerHTML = "";
+      }
+      if (vecUse.length) {
+        for (let i = 0; i < N; i++) {
+          const c = data.board[i];
+          vecSet(i, c === "*" ? "cell-normal-solid" : `cell-number-${c}`);
+        }
       }
     },
     pause() {
@@ -844,10 +880,15 @@ function runPlayGame(opts: {
   /* 3BV 与录像面板同一分母（试玩实时统计用） */
   const state = new Uint8Array(N); // 0 未开 / 1 开 / 2 旗 / 3 问号
   const cellTd = (i: number) => tbody.rows[(i / cols) | 0].cells[i % cols];
+  /* 矢量覆盖层（Board vec 模式；位图棋盘空数组零影响）——paint 同步切 use href */
+  const vecUse = boardVecUse(tbody);
+  const vecSet = (i: number, sym: string) => vecUse[i]?.setAttribute("href", "#" + sym);
   function paint(i: number) {
     const td = cellTd(i);
-    td.className = state[i] === 1 ? "b" + nums[i] : state[i] === 2 ? "bf" : state[i] === 3 ? "bq" : "bb";
+    const cls = state[i] === 1 ? "b" + nums[i] : state[i] === 2 ? "bf" : state[i] === 3 ? "bq" : "bb";
+    td.className = cls;
     td.innerHTML = "";
+    if (vecUse.length) vecSet(i, CELL_VEC_MAP[cls] ?? "cell-normal-solid");
   }
   /* 按下态（练习页 pressPaint 同款：平面下沉底 b0） */
   let pressCell: number | null = null;
@@ -856,6 +897,7 @@ function runPlayGame(opts: {
     const td = cellTd(c);
     td.className = "b0";
     td.innerHTML = "";
+    if (vecUse.length) vecSet(c, "cell-number-0");
   }
   function clearPress() {
     if (pressCell !== null && state[pressCell] === 0) paint(pressCell);
@@ -1103,7 +1145,7 @@ function runPlayGame(opts: {
       if (!mines[i] && state[i] === 2) paintCellCls(cellTd(i), "bn");
     }
     /* 被踩中的雷：红底雷（#cell-mine-bomb，与练习页踩雷同图；bc 位图是灰雷） */
-    paintBombCell(cellTd(hit));
+    paintCellCls(cellTd(hit), "bmb");
     onFace("dead");
     emitFinish(false); // 二十期：全屏层据此出「我的评级」
   }
@@ -1124,6 +1166,10 @@ function runPlayGame(opts: {
   function paintCellCls(td: HTMLTableCellElement, cls: string) {
     td.className = cls;
     td.innerHTML = "";
+    if (vecUse.length) {
+      const i = (td.parentElement as HTMLTableRowElement).rowIndex * cols + td.cellIndex;
+      vecSet(i, CELL_VEC_MAP[cls] ?? "cell-normal-solid");
+    }
   }
   /* ---- 事件绑定（练习页 mousedown/mouseover/mouseup 口径 + 三模式） ---- */
   const ac = new AbortController();
@@ -2773,18 +2819,22 @@ export function ReplayFullscreen({
       if (srcTable && dstTable) {
         const srcRows = srcTable.rows;
         const dstRows = dstTable.rows;
+        /* 矢量覆盖层镜像：td 类名变化时同步切 FS 覆盖层的 use href（两侧都是
+           vec 棋盘；取一次 use 数组，60fps 下仅类名变化格发生 attr 写入） */
+        const dstVec = boardVecUse(dstTable);
         for (let r = 0; r < srcRows.length; r++) {
           const sc = srcRows[r].cells;
           const dc = dstRows[r].cells;
           for (let c = 0; c < sc.length; c++) {
-            /* 踩雷格是 bmb 类 + 内嵌红雷 SVG（paintBombCell）：类名变到 bmb 时
-               连 innerHTML 一起抄；反向（红雷→普通格）清掉残留 SVG。
-               正常格 innerHTML 恒空，不逐帧序列化比对（60fps 性能） */
             const scls = sc[c].className;
             if (dc[c].className !== scls) {
               dc[c].className = scls;
               if (scls === "bmb") dc[c].innerHTML = sc[c].innerHTML;
               else if (dc[c].innerHTML) dc[c].innerHTML = "";
+              if (dstVec.length) {
+                const i = r * sc.length + c;
+                dstVec[i]?.setAttribute("href", "#" + (CELL_VEC_MAP[scls] ?? "cell-normal-solid"));
+              }
             }
           }
         }
@@ -2976,6 +3026,7 @@ export function ReplayFullscreen({
                   level={level}
                   board={mode === "play" || standalone ? "b".repeat(boardStr.length) : boardStr}
                   size={16}
+                  vec
                 />
                 {/* 静态光标占位（镜像 rAF 驱动其位置；standalone 不渲染——
                     引擎自建光标直挂本 wrap，静态占位会双影） */}
@@ -3234,7 +3285,7 @@ export function VideoReplayBoard({
             框在版图 zoom 域内随盘同缩（练习页 zoom 挂 gwrap 同款）。回放引擎
             光标定位按运行时量取 table 相对 wrap 偏移，加框自动适应 */}
         <div className="pb_frame">
-          <Board id={id} level={level} board={board} size={16} />
+          <Board id={id} level={level} board={board} size={16} vec />
         </div>
         {!replaying && (
           <button
