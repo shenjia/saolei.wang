@@ -245,3 +245,69 @@ export async function getRankedLatencyMap(days = 7): Promise<RankedLatencyRow[]>
     avgRtt: Math.round(N(r.avg)),
   }));
 }
+
+export interface RegionTodayRow {
+  area: string;
+  plays: number; // 今日练习盘数（尝试，含踩雷）
+  players: number; // 今日去重人数
+  winRate: number; // 胜率 %（wins/plays，1 位小数）
+  avgRtt: number | null; // 平均延迟 ms（排行局采样，无则 null）
+  minRtt: number | null;
+  maxRtt: number | null;
+}
+
+/** 全国各地区今日明细（2026-10-31 张老师需求）：练习盘数/人数/胜率来自
+ *  practice_daily 当天按 user.area 聚合（游客 user_id=0 无地区、空 area 不计）；
+ *  平均延迟/延迟范围来自 ranked_rtt_log 当天（排行局采样，无数据的省显示 —）。
+ *  按盘数从高到低排列。 */
+export async function getRegionToday(): Promise<RegionTodayRow[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const day = Math.floor((now + 28800) / 86400);
+  const dayStart = day * 86400 - 28800;
+  const pRows = await prisma.$queryRawUnsafe<
+    { area: string; players: bigint; plays: bigint; wins: bigint }[]
+  >(
+    `SELECT u.area area, COUNT(DISTINCT pd.user_id) players, SUM(pd.plays) plays, SUM(pd.wins) wins
+     FROM practice_daily pd JOIN user u ON u.id = pd.user_id
+     WHERE pd.day = ? AND pd.user_id <> 0 AND u.area <> ''
+     GROUP BY u.area`,
+    day
+  );
+  const rRows = await prisma.$queryRawUnsafe<
+    { area: string; g: bigint; avg: number; mn: number; mx: number }[]
+  >(
+    `SELECT area, COUNT(*) g, AVG(rtt) avg, MIN(rtt) mn, MAX(rtt) mx
+     FROM ranked_rtt_log WHERE create_time >= ? AND rtt > 0 AND area <> ''
+     GROUP BY area`,
+    dayStart
+  );
+  const rttMap = new Map(rRows.map((r) => [r.area, r]));
+  const rows: RegionTodayRow[] = pRows.map((r) => {
+    const rt = rttMap.get(r.area);
+    const plays = N(r.plays);
+    return {
+      area: r.area,
+      plays,
+      players: N(r.players),
+      winRate: plays ? Math.round((N(r.wins) / plays) * 1000) / 10 : 0,
+      avgRtt: rt ? Math.round(N(rt.avg)) : null,
+      minRtt: rt ? N(rt.mn) : null,
+      maxRtt: rt ? N(rt.mx) : null,
+    };
+  });
+  // 只有延迟采样、无练习盘的省也补一行（延迟数据不丢）
+  for (const [area, rt] of rttMap) {
+    if (!rows.some((r) => r.area === area)) {
+      rows.push({
+        area,
+        plays: 0,
+        players: 0,
+        winRate: 0,
+        avgRtt: Math.round(N(rt.avg)),
+        minRtt: N(rt.mn),
+        maxRtt: N(rt.mx),
+      });
+    }
+  }
+  return rows.sort((a, b) => b.plays - a.plays || b.players - a.players || a.area.localeCompare(b.area));
+}

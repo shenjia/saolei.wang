@@ -8,18 +8,19 @@ import { AdminCard } from "@/components/admin/Widgets";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
 import { LatencyMap } from "@/components/admin/LatencyMap";
 import { ServerStatusPanel } from "@/components/admin/ServerStatusPanel";
-import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, getRankedLatencyMap, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
+import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, getRankedLatencyMap, getRegionToday, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "练习数据 | 管理后台" };
 
 export default async function AdminPracticePage() {
-  const [trend, hourly, days, modes, rttMap] = await Promise.all([
+  const [trend, hourly, days, modes, rttMap, regionToday] = await Promise.all([
     getPracticeTrend(30),
     getPracticeHourly(7),
     getPracticeDays(7),
     getPracticeModes(7),
     getRankedLatencyMap(7),
+    getRegionToday(),
   ]);
   const C = PRACTICE_LEVEL_COLORS;
 
@@ -59,17 +60,54 @@ export default async function AdminPracticePage() {
         title="排行延迟地图（近 7 天）"
         more={rttMap.length ? `${rttMap.length} 个地区有数据 · 共 ${rttMap.reduce((a, d) => a + d.games, 0).toLocaleString("zh-CN")} 局` : "数据自今日起记"}
       >
-        {/* 地图左、服务器负载面板右（2026-10-28 张老师需求）；无数据时面板仍展示
-            （可用性监控不依赖延迟埋点数据） */}
-        <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+        {/* 服务器负载面板左、地图右（2026-10-31 张老师需求）；地图本体 maxWidth 620
+            居中，容器不撑满，整体居中让地图紧贴面板右缘。换位叠在 10-28 布局微调之上。
+            无数据时面板仍展示（可用性监控不依赖延迟埋点数据） */}
+        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+          <ServerStatusPanel />
+          <div style={{ flex: "0 1 660px", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             {rttMap.length ? (
               <LatencyMap data={rttMap} />
             ) : (
               <div className="admin_empty">暂无排行延迟数据（排行局结算后自动记入）</div>
             )}
           </div>
-          <ServerStatusPanel />
+          {/* 今日地区明细（2026-10-31 张老师需求）：地图右侧，按盘数从高到低。
+              盘数/人数/胜率=practice_daily 当天按省聚合；延迟两列=ranked_rtt_log
+              当天采样（无数据的省显示 —） */}
+          <div style={{ flex: "0 0 auto", minWidth: 0 }}>
+            <b style={{ fontSize: 14 }}>今日地区明细</b>
+            {regionToday.length ? (
+              <div className="admin_scroll" style={{ maxHeight: 360, marginTop: 6 }}>
+                <table className="admin_table">
+                  <thead>
+                    <tr>
+                      <th>地区</th>
+                      <th className="num">盘数</th>
+                      <th className="num">人数</th>
+                      <th className="num">胜率</th>
+                      <th className="num">平均延迟</th>
+                      <th className="num">延迟范围</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {regionToday.map((r) => (
+                      <tr key={r.area}>
+                        <td className="strong">{r.area}</td>
+                        <td className="num">{r.plays.toLocaleString("zh-CN")}</td>
+                        <td className="num">{r.players}</td>
+                        <td className="num">{r.plays ? `${r.winRate}%` : "—"}</td>
+                        <td className="num">{r.avgRtt !== null ? `${r.avgRtt}ms` : "—"}</td>
+                        <td className="num">{r.minRtt !== null ? `${r.minRtt}~${r.maxRtt}ms` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="admin_empty" style={{ marginTop: 6 }}>今日暂无地区数据</div>
+            )}
+          </div>
         </div>
       </AdminCard>
 
