@@ -26,6 +26,8 @@ function targets(): Target[] {
   ];
   const hk = process.env.AUTHORITY_HK_URL;
   if (hk) list.push({ name: "香港", url: `${hk.replace(/\/$/, "")}/health` });
+  const hz = process.env.AUTHORITY_HZ_URL;
+  if (hz) list.push({ name: "杭州", url: `${hz.replace(/\/$/, "")}/health` });
   return list;
 }
 
