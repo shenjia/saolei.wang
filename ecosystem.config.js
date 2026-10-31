@@ -42,10 +42,13 @@ module.exports = {
       //   - 发布时重建备槽（跑新代码）→ 切 nginx → 老槽等存量局 natural 打完再重建
       //   - 全程不拒新局，玩家无感；两槽都要常驻（standby 挂了切换就没兜底）
       // ⚠️ gameId 带槽位前缀（a-/b-），Next 侧按前缀把 /finalize 发到对局所在槽。
+      // AUTHORITY_STATS_FILE 必须仓库外绝对路径：server.mjs 把它 path.join 到自身所在目录
+      // （src/core/scripts/authority/），默认 stats.json 会被 CI rsync --delete 删掉（统计清零）；
+      // 且 a/b 必须分文件——tmp+rename 原子写是进程级，共享同路径会互相覆盖丢 uid。
       name: "saolei-authority-a",
       script: "src/core/scripts/authority/server.mjs",
       cwd: __dirname,
-      env: { AUTHORITY_SLOT: "a", AUTHORITY_PORT: "3104" },
+      env: { AUTHORITY_SLOT: "a", AUTHORITY_PORT: "3104", AUTHORITY_STATS_FILE: "/home/deploy/.authority-stats-a.json" },
       watch: false,
       max_memory_restart: "256M",
       max_restarts: 5,
@@ -57,7 +60,7 @@ module.exports = {
       name: "saolei-authority-b",
       script: "src/core/scripts/authority/server.mjs",
       cwd: __dirname,
-      env: { AUTHORITY_SLOT: "b", AUTHORITY_PORT: "3105" },
+      env: { AUTHORITY_SLOT: "b", AUTHORITY_PORT: "3105", AUTHORITY_STATS_FILE: "/home/deploy/.authority-stats-b.json" },
       watch: false,
       max_memory_restart: "256M",
       max_restarts: 5,
