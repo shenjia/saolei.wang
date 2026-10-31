@@ -147,7 +147,9 @@ async function getBaseline(
   noflag: boolean,
   bbbv: number
 ): Promise<{ row: DistRow | null; bucket: number }> {
-  const select = { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true } as const;
+  // time 列 2026-10-31 起消费（稀有程度 time 分项按同级别组比）；ces/cps 仍只在
+  // 全网池行用，但一起带上无害（getOnlineMetricDists 才是练习页取数口）。
+  const select = { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true, time: true } as const;
   const bucket = bucketOf(level, bbbv);
   if (bucket !== DIST_BUCKET_ALL) {
     const row = await prisma.videoMetricDist.findUnique({
@@ -201,7 +203,6 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       cps: sec > 0 && row.cp > 0 ? row.cp / sec : 0,
     };
     const allDists: Partial<Record<MetricKey, number[]>> = {
-      time: distFor(allPool, "time"),
       bvs: distFor(allPool, "bvs"),
       stnb: distFor(allPool, "stnb"),
       thrp: distFor(allPool, "thrp"),
@@ -214,8 +215,12 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       values.cps = 0;
       delete allDists.cps;
     }
+    // group 池（2026-10-31 张老师纠错：稀有程度 time 分项改**同级别组内比**——
+    // 跨级混比被初级秒杀局拉爆边界；级别整组行的 time 列跑批同步写，这里带上）：
+    // bpp = 3BV 三桶行（getBaseline 已按桶取好），time = 同一行的整组 time 边界。
     const groupDists: Partial<Record<MetricKey, number[]>> = {
       bpp: distFor(baseline.row, "bpp"),
+      time: distFor(baseline.row, "time"),
     };
     const rateable = !!(allPool || distFor(baseline.row, "bpp").length);
     const points = radarPointsFrom(values, groupDists, rateable, input.noflag, allDists);
