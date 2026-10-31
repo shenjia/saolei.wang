@@ -44,6 +44,10 @@ interface VideoScoresDelegate {
     where: Record<string, unknown>;
     orderBy: Record<string, string>;
   }): Promise<{ id: bigint } | null>;
+  findMany(args: {
+    where: Record<string, unknown>;
+    select: Record<string, boolean>;
+  }): Promise<{ id: bigint; scoreTime: number; score3bvs: number; createTime: bigint }[]>;
   upsert(args: {
     where: { id: bigint };
     create: Record<string, unknown>;
@@ -269,6 +273,118 @@ async function syncUserStatVideoCount(
   });
 }
 
+// ---------- 纪录动态链一致化（2026-11-01，乱序审倒挂治理） ----------
+//
+// 问题：纪录动态的 or/cr 取「审核时刻」快照，动态时间却取「上传时刻」。当审核顺序 ≠
+// 上传顺序（乱序审/跨池分批/重审翻案）时，动态流里会出现时间倒挂、or 链断裂的纪录对。
+// 方案：以 video_scores_{level}（只含已过审，@index([user]) 单表范围扫描）为唯一真相，
+// 按上传序 (create_time, id) 重放该玩家该级别的 time / 3bvs 两条纪录链，
+// 与库中 PERSON_RECORD 动态对齐（删伪点 / 补缺失点 / 修 or 链）。
+// 性能（张老师 2026-11-01 定：不少玩家录像上千，必须找性能好的解法）：
+// · 快路径：顺序审（含批量按成绩从优到劣排序后）时本录像上传时间恒晚于已有纪录动态，
+//   hasLaterRecordNews（[user, create_time] 索引点查）不命中 → 维持原逐条发布，零重放。
+// · 慢路径（仅乱序审触发）：重放范围=单玩家单级别，单表索引扫描千行级 ~1ms +
+//   该玩家纪录动态 diff（纪录动态数=改进次数，几十行量级）。与全站录像总量无关。
+// 口径：与原发布逻辑一致——严格更优才成点（平手不发），首点 or=0（首创「创造了」）；
+// 已知近似：补发的缺失点快照 exp_time 取当下值（历史精确快照不可重建，仅影响行内称号徽章）。
+
+/** 乱序检测：该玩家是否已有「上传时间不早于本录像」的纪录动态。命中＝本录像按上传序
+ *  插在已有纪录链中间，逐条发布会倒挂 → 走全量重放对齐。[user, create_time] 索引点查。 */
+export async function hasLaterRecordNews(tx: Tx, userId: number, createTime: number): Promise<boolean> {
+  const row = await tx.news.findFirst({
+    where: {
+      user: BigInt(userId),
+      type: NEWS_TYPE.PERSON_RECORD,
+      createTime: { gte: BigInt(createTime) },
+    },
+    select: { id: true },
+  });
+  return row !== null;
+}
+
+/** 按上传序重放该玩家该级别纪录链，与 PERSON_RECORD 动态对齐（删/补/修 or）。 */
+export async function syncRecordNewsChain(
+  tx: Tx,
+  userId: number,
+  level: VideoLevel,
+  snapshot: { expTime: number }
+): Promise<void> {
+  // ① 单表重放数据源：该玩家该级别全部已过审成绩（屏蔽的已从本表删除，天然排除）
+  const rows = await videoScoresTable(tx, level, false).findMany({
+    where: { user: BigInt(userId) },
+    select: { id: true, scoreTime: true, score3bvs: true, createTime: true },
+  });
+  const evs = rows
+    .map((r) => ({ id: Number(r.id), t: r.scoreTime, b: r.score3bvs, ct: Number(r.createTime) }))
+    .sort((a, b) => a.ct - b.ct || a.id - b.id);
+  // ② 重放两条链：key=`${od}:${vid}`，与原发布口径一致（严格更优、首点 or=0）
+  const desired = new Map<string, { or: number; cr: number; ct: number }>();
+  let prevT = 0;
+  let prevB = 0;
+  for (const e of evs) {
+    if (e.t > 0 && (prevT === 0 || e.t < prevT)) {
+      desired.set(`time:${e.id}`, { or: prevT, cr: e.t, ct: e.ct });
+      prevT = e.t;
+    }
+    if (e.b > 0 && e.b > prevB) {
+      desired.set(`3bvs:${e.id}`, { or: prevB, cr: e.b, ct: e.ct });
+      prevB = e.b;
+    }
+  }
+  // ③ 现存本玩家纪录动态（行数=改进次数，量小），按 details 过滤出本级别 flag 链
+  const newsRows = await tx.news.findMany({
+    where: { user: BigInt(userId), type: NEWS_TYPE.PERSON_RECORD },
+    select: { id: true, reference: true, detailsData: true },
+  });
+  type Det = { lv?: string; od?: string; or?: number; cr?: number; nf?: number };
+  const parseDet = (s: string): Det => {
+    try {
+      return JSON.parse(s) as Det;
+    } catch {
+      return {};
+    }
+  };
+  const mine = newsRows
+    .map((r) => ({ id: Number(r.id), ref: Number(r.reference), det: parseDet(r.detailsData) }))
+    .filter((r) => r.det.lv === level && (r.det.od === "time" || r.det.od === "3bvs") && (r.det.nf ?? 0) === 0);
+  // ④ 删：不在期望点集的（历史乱序审产出的伪点 / 撤点残留）
+  const delIds = mine.filter((r) => !desired.has(`${r.det.od}:${r.ref}`)).map((r) => BigInt(r.id));
+  if (delIds.length) await tx.news.deleteMany({ where: { id: { in: delIds } } });
+  // ⑤ 改/补：or 链修正 + 缺失点补发（快照取传入 expTime，近似口径见文件头说明）
+  const u = await tx.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true } });
+  const ranked = BigInt(u?.status === 0 ? 1 : 0);
+  for (const [key, pt] of desired) {
+    const idx = key.indexOf(":");
+    const od = key.slice(0, idx);
+    const vid = Number(key.slice(idx + 1));
+    const ex = mine.find((r) => r.det.od === od && r.ref === vid);
+    if (ex) {
+      // 历史行 details 里 or/cr 可能是字符串（旧站遗留），Number 归一后再比，
+      // 只在值真变时才改写（避免把整条历史链的字符串批量重写成数字）
+      const exOr = ex.det.or == null ? 0 : Number(ex.det.or);
+      const exCr = ex.det.cr == null ? 0 : Number(ex.det.cr);
+      if (exOr !== pt.or || exCr !== pt.cr) {
+        await tx.news.update({
+          where: { id: BigInt(ex.id) },
+          data: { detailsData: JSON.stringify({ ...ex.det, or: pt.or, cr: pt.cr }) },
+        });
+      }
+    } else {
+      await tx.news.create({
+        data: {
+          type: NEWS_TYPE.PERSON_RECORD,
+          user: BigInt(userId),
+          expTime: BigInt(snapshot.expTime),
+          ranked,
+          reference: BigInt(vid),
+          detailsData: JSON.stringify({ lv: level, od, or: pt.or, cr: pt.cr, nf: 0 }),
+          createTime: BigInt(pt.ct),
+        },
+      });
+    }
+  }
+}
+
 // ---------- 审核主流程 ----------
 
 async function loadReviewVideo(tx: Tx, id: number): Promise<ReviewVideo | null> {
@@ -292,7 +408,8 @@ async function loadReviewVideo(tx: Tx, id: number): Promise<ReviewVideo | null> 
  * Review::video —— 审核录像
  * 校验：管理员权限 / 录像存在 / 必须先看过（防盲审）/ 状态合法 / 已审过的仅超管可重审
  * 防盲审口径（2026-10-19 扩展）：下载过（downloads>0）或在后台播放器里看过（admin_watched）
- * 都算「看过」；免核定批量通过由 opts.skipWatchCheck 跳过（池内零触发器命中，分拣闸门保证）。
+ * 都算「看过」；免核定的通过（批量与单个同口径，2026-10-29）由 opts.skipWatchCheck
+ * 跳过（池内零触发器命中，分拣闸门保证）。
  */
 export async function reviewVideo(
   reviewerId: number,
@@ -364,14 +481,19 @@ export async function reviewVideo(
       await refreshUserStnb(rv.user, rv.level, tx);
       if (rv.noflag) await refreshUserStnbNf(rv.user, rv.level, tx);
       // 屏蔽级联（2026-10-22 张老师定）：录像下线时，其评论与引用它的动态一并删除——
-      // 详情页不再有挂空评论/「XX破纪录」动态指向屏蔽录像的问题（video.delete 已同款）
+      // 详情页不再有挂空评论/「XX破纪录」动态指向屏蔽录像的问题（video.delete 已同款）。
+      // 2026-11-01：PERSON_RECORD 单独删并捕获条数——删到纪录动态说明撤掉了一个链上点，
+      // 后继点的 or 会指向已删的 cr（断链）→ 触发 syncRecordNewsChain 重放对齐
+      //（屏蔽后 video_scores 行已删，重放天然不含本录像；链上后继点 or 自动回填为前点 cr）
       await tx.comment.deleteMany({ where: { video: BigInt(videoId) } });
+      const recNewsDel = await tx.news.deleteMany({
+        where: { reference: BigInt(videoId), type: NEWS_TYPE.PERSON_RECORD },
+      });
       await tx.news.deleteMany({
         where: {
           reference: BigInt(videoId),
           type: {
             in: [
-              NEWS_TYPE.PERSON_RECORD,
               NEWS_TYPE.AREA_RECORD,
               NEWS_TYPE.NATION_RECORD,
               NEWS_TYPE.VIDEO,
@@ -382,6 +504,9 @@ export async function reviewVideo(
           },
         },
       });
+      if (recNewsDel.count > 0) {
+        await syncRecordNewsChain(tx, rv.user, rv.level, { expTime: removed.original.expTime ?? 0 });
+      }
     } else if (status === VIDEO_STATUS.REVIEWED) {
       // VideoScores::insertVideo → flag 榜（含动态），NF 录像同时入 NF 榜（不发动态）
       await upsertVideoScores(tx, rv, false);
@@ -407,24 +532,31 @@ export async function reviewVideo(
       // → 2026-10-20 张老师再定改回上传时间（一批补审的动态时间不该全挤在过审时刻），
       // 铁律问题改由消费端解决：动态流排序一律 (create_time, id) 倒序，不再依赖 id 序。
       // 成绩时间语义由 details 的 or/cr（毫秒级成绩）保留；入伍动态仍取审核时间。
-      for (const level of ["beg", "int", "exp"] as VideoLevel[]) {
-        for (const order of ORDERS) {
-          if (Number(updated[F(level, order, "Video")] ?? 0) === rv.id) {
-            await publishNews({
-              tx,
-              type: NEWS_TYPE.PERSON_RECORD,
-              userId: rv.user,
-              expTimeOverride: original.expTime ?? 0,
-              reference: rv.id,
-              details: {
-                lv: level,
-                od: order,
-                or: original[F(level, order)] ?? 0,
-                cr: updated[F(level, order)] ?? 0,
-                nf: 0,
-              },
-              createTime: rv.createTime,
-            });
+      // 2026-11-01 乱序审倒挂治理：顺序审（快路径，[user,create_time] 索引点查不命中）
+      // 维持原逐条链尾追加；乱序审（本录像上传时间早于已有纪录动态）走 syncRecordNewsChain
+      // 全量重放对齐——性能口径见 syncRecordNewsChain 文件头说明。
+      if (await hasLaterRecordNews(tx, rv.user, rv.createTime)) {
+        await syncRecordNewsChain(tx, rv.user, rv.level, { expTime: original.expTime ?? 0 });
+      } else {
+        for (const level of ["beg", "int", "exp"] as VideoLevel[]) {
+          for (const order of ORDERS) {
+            if (Number(updated[F(level, order, "Video")] ?? 0) === rv.id) {
+              await publishNews({
+                tx,
+                type: NEWS_TYPE.PERSON_RECORD,
+                userId: rv.user,
+                expTimeOverride: original.expTime ?? 0,
+                reference: rv.id,
+                details: {
+                  lv: level,
+                  od: order,
+                  or: original[F(level, order)] ?? 0,
+                  cr: updated[F(level, order)] ?? 0,
+                  nf: 0,
+                },
+                createTime: rv.createTime,
+              });
+            }
           }
         }
       }

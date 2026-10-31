@@ -545,7 +545,17 @@ async function dispatch(
         };
       }
       const pre = lowTrustParam !== null ? await preBanTrust(id) : null;
-      const r = await reviewVideo(actor.uid, actor.role, id, status);
+      /* 免核定单个通过同样跳过防盲审（2026-10-29 张老师报：批量能过、单个反被
+         「先看后审」卡住）——口径对齐 video.batchReview：仅 autoFlag=1 且通过时跳过，
+         需核定（0/2/-1）与屏蔽仍要求看过（下架是重动作）。动态导入同上方
+         triageVideo 惯例：video-triage 连带 fs/videoradar 重依赖，不静态引。 */
+      let skipWatch = false;
+      if (status === VIDEO_STATUS.REVIEWED) {
+        const { AUTO_FLAG } = await import("@/lib/video-triage");
+        const row = await prisma.video.findUnique({ where: { id: BigInt(id) }, select: { autoFlag: true } });
+        skipWatch = row?.autoFlag === AUTO_FLAG.EXEMPT;
+      }
+      const r = await reviewVideo(actor.uid, actor.role, id, status, { skipWatchCheck: skipWatch });
       if (!r.ok) return { ok: false, error: r.error ?? "审核失败" };
       const { note } =
         lowTrustParam !== null ? await postBanTrust(pre, lowTrustParam) : { note: "" };
@@ -603,6 +613,19 @@ async function dispatch(
       }
       let done = 0;
       const errors: string[] = [];
+      /* 批量通过按成绩从优到劣过审（2026-11-01 张老师定：时间从快到慢）——
+         同玩家同级别内「先优后劣」保证差成绩被 userScoresOnInsert 比较逻辑拦截不发纪录动态，
+         从源头避免乱序审导致的纪录动态倒挂（or 链断裂/时间倒序）；跨玩家跨级别的相对顺序无关紧要，
+         全局按 real_time 排序自动满足「同玩家同级别内成绩序」。3BV/s 链的交叉角落情形
+         由 review.ts 的 syncRecordNewsChain（乱序触发重放）兜底。排序一次批量查询 + 内存排序，零额外审核开销。 */
+      if (status === VIDEO_STATUS.REVIEWED) {
+        const infos = await prisma.videoInfo.findMany({
+          where: { id: { in: targetIds.map(BigInt) } },
+          select: { id: true, realTime: true },
+        });
+        const rt = new Map(infos.map((r) => [Number(r.id), r.realTime]));
+        targetIds = [...targetIds].sort((a, b) => (rt.get(a) ?? Infinity) - (rt.get(b) ?? Infinity));
+      }
       /* 免核定批量通过跳过防盲审（2026-10-19 张老师报：免核池一键过被 2013 版
          「必须先下载」卡死 73 条）——能走到这里的通过请求必为全免核定：
          poolAll 服务端只取 autoFlag=1；ids 模式非免核定已被上面闸门整体拒绝。
