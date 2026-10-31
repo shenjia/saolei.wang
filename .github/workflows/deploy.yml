@@ -95,7 +95,7 @@ jobs:
         # 与服务器 .env 的 AUTHORITY_HK_URL/AUTHORITY_HK_TOKEN（运行时键）
         run: pnpm build
         env:
-          NEXT_PUBLIC_RANKED_REGIONS: hk=https://rank-hk.saolei.wang,hz=https://rank-hz.saolei.wang
+          NEXT_PUBLIC_RANKED_REGIONS: hk=https://rank-hk.saolei.wang,hz=https://rank-hz.saolei.wang,cd=https://rank-cd.saolei.wang
 
       # ⚠️ .next 是点开头的隐藏目录，upload-artifact@v4 默认 include-hidden-files: false
       # 会整个跳过它（2026-09-27 实证：build 成功但 artifact 为空）——必须显式开启
