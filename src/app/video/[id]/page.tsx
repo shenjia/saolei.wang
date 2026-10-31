@@ -125,6 +125,38 @@ export default async function VideoViewPage({
   const ratingHelpTip =
     "所有级别、NF和FL录像分开评；竞技水准取Time/3BVs/STNB中最强评级；路线规划在3BV相近的录像中横向评比；最终评级以竞技水准为主，五轴评分加权得出。";
 
+  // 录像评级盒内容（2026-11-01 张老师需求：≤880 单列带侧栏整组 display:none，
+  // 评级雷达改在录像主体板块下面显示——与用户主页「实力」雷达换位同模式：
+  // 主栏副本 .radar_main 桌面 display:none，侧栏原件 ≥881 照旧；同一 JSX 两处渲染，
+  // VideoAnalysisRadar 多实例安全（clipId 用 useId，globals.css 同源作用域自动复用））
+  const radarInner = analysis ? (
+    <>
+      {/* 标题行（2026-10-15 张老师定）：左＝「录像评级」，右＝本局**综合评级**
+          （五轴分位加权，与练习页结算面板同一个算法，见 lib/videoscore.ts performanceOf）。
+          2026-10-30 张老师定：问号紧靠标题文字（vr_h 是 space-between，文字与问号
+          必须包进同一左组 span，否则问号会被推到行中） */}
+      <h2 className="vr_h">
+        <span className="vr_h_left">
+          录像评级
+          {/* 问号圆圈图标（2026-10-30，与首页每日一星同款 star_help）：hover 讲清
+              评级规则（NF/FL 分池 + 3BV 相关参数按相近 3BV 分桶比） */}
+          <span className="star_help" data-tip={ratingHelpTip}>
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <circle cx="10" cy="10" r="8.4" />
+              <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />
+              <circle cx="10" cy="14.6" r="0.9" fill="currentColor" stroke="none" />
+            </svg>
+          </span>
+        </span>
+        <span className="vr_rate" style={{ color: gradeColor(analysis.overall) }}>
+          {analysis.overall}
+        </span>
+      </h2>
+      <div className="vr_line" />
+      <VideoAnalysisRadar data={analysis.points} />
+    </>
+  ) : null;
+
   return (
     <VideoReplayProvider
       boardId={video.id}
@@ -254,6 +286,12 @@ export default async function VideoViewPage({
             </p>
           </div>
         </div>
+        {/* 2026-11-01 张老师需求：≤880 单列带把侧栏整组隐藏（评级雷达连带消失），
+            主栏这份副本在录像主体板块下、评论区上亮起（桌面 display:none，
+            globals.css #video_view .radar_main 组；同一 radarInner 两处渲染） */}
+        {radarInner && (
+          <div className="radar box radar_main">{radarInner}</div>
+        )}
         {/* 2026-10-22：评论区收拢为客户端壳——发表后就地插入列表头（张老师要求：
             评论发出后立刻可见，不管有没有过审；本人待审行查询层按登录态放行）
             2026-10-26：新增删除权限——发布者本人可删自己的评论、录像作者可删他人评论
@@ -274,32 +312,8 @@ export default async function VideoViewPage({
             （卡片展示录像上传者；审稿人信息仍在正文区不动）
             2026-10-14：实力雷达下线（hideRadar），下方改挂本局的「录像分析」六维雷达 */}
         {video.author && <UserPanel userId={video.author.id} hideRadar />}
-        {analysis && (
-          <div className="radar box">
-            {/* 标题行（2026-10-15 张老师定）：左＝「录像评级」，右＝本局**综合评级**
-                （五轴分位加权，与练习页结算面板同一个算法，见 lib/videoscore.ts performanceOf）。
-                2026-10-30 张老师定：问号紧靠标题文字（vr_h 是 space-between，文字与问号
-                必须包进同一左组 span，否则问号会被推到行中） */}
-            <h2 className="vr_h">
-              <span className="vr_h_left">
-                录像评级
-                {/* 问号圆圈图标（2026-10-30，与首页每日一星同款 star_help）：hover 讲清
-                    评级规则（NF/FL 分池 + 3BV 相关参数按相近 3BV 分桶比） */}
-                <span className="star_help" data-tip={ratingHelpTip}>
-                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                    <circle cx="10" cy="10" r="8.4" />
-                    <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />
-                    <circle cx="10" cy="14.6" r="0.9" fill="currentColor" stroke="none" />
-                  </svg>
-                </span>
-              </span>
-              <span className="vr_rate" style={{ color: gradeColor(analysis.overall) }}>
-                {analysis.overall}
-              </span>
-            </h2>
-            <div className="vr_line" />
-            <VideoAnalysisRadar data={analysis.points} />
-          </div>
+        {radarInner && (
+          <div className="radar box">{radarInner}</div>
         )}
       </li>
     </ul>

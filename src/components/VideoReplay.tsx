@@ -1701,20 +1701,24 @@ export function VideoReplayProvider({
   );
   /* 移动端横屏贴合（2026-10-28 张老师需求）：本页切到横屏时滚动屏幕让棋盘贴顶
      （站头已在 CSS 改随页滚走，globals.css 移动横屏 :has(#video_view) 组）。
-     旋转后布局/页级 zoom 异步收敛，rAF + 350ms 兜底各滚一次；滚动量按棋盘视口
-     顶差值现算（幂等：已贴顶时差值 0 不再滚），横竖屏来回切只有进横屏才动作 */
+     2026-11-01 张老师需求更新：对齐目标从棋盘 .play_board 改为银框 .pb_frame
+     外缘——「边框顶部和屏幕顶部对齐」（两者静态几何相同，真机上 zoom/工具栏
+     收敛期间可能瞬态漂移，以框为目标语义最直接）。
+     旋转后布局/页级 zoom 异步收敛，rAF + 350ms/900ms 兜底各滚一次（收敛重滚
+     幂等：已贴顶时差值 0 不再滚），横竖屏来回切只有进横屏才动作 */
   useEffect(() => {
     const mq = window.matchMedia("(pointer: coarse) and (orientation: landscape)");
     const onLs = () => {
       if (!mq.matches) return;
       const scrollFlush = () => {
-        const board = document.querySelector<HTMLElement>("#video_view .play_board");
-        if (!board) return;
-        const top = board.getBoundingClientRect().top;
+        const frame = document.querySelector<HTMLElement>("#video_view .play_board .pb_frame");
+        if (!frame) return;
+        const top = frame.getBoundingClientRect().top;
         if (top > 1) window.scrollBy(0, top);
       };
       requestAnimationFrame(scrollFlush);
       window.setTimeout(scrollFlush, 350);
+      window.setTimeout(scrollFlush, 900);
     };
     mq.addEventListener("change", onLs);
     return () => mq.removeEventListener("change", onLs);

@@ -2415,6 +2415,15 @@ del[data-tip]:hover::after {
   width: 210px;
 }
 
+/* ---------- 录像评级雷达主栏副本（2026-11-01 张老师需求） ----------
+   ≤880 单列带侧栏整组 display:none（评级雷达连带消失），改在主栏「录像主体
+   板块下面」亮起——与用户主页 .radar_main 同模式：桌面隐藏副本、侧栏原件
+   ≥881 照旧。盒内样式（vr_h/vr_line/vr_wrap 出血/vr_tip）作用域
+   #page #video_view .radar.box 全套自动复用，副本只需管显隐与宽盒形态。 */
+#page #video_view .radar_main {
+  display: none;
+}
+
 .reply_form textarea,
 .post_form textarea,
 .send_form textarea,
@@ -5860,6 +5869,18 @@ body #page.two_columns li.main {
      论坛页同款 UserPanel 不在 #video_view 内，见 ⑥ 单独处理。 */
   body #page.two_columns #video_view > li.sidebar {
     display: none;
+  }
+
+  /* ⑤+ 录像评级雷达换位（2026-11-01 张老师需求）：侧栏整组隐藏后，评级雷达
+     在主栏「录像主体板块下、评论区上」亮起（主栏副本 .radar_main，桌面隐藏
+     见上方全局规则）。legacy .box{width:192px} 在宽主栏里放开；雷达出血盒
+     234 定宽居中（margin auto，对齐用户主页 .radar_main 主栏形态） */
+  body #page.two_columns #video_view > li.main .radar_main {
+    display: block;
+    width: auto;
+  }
+  body #page.two_columns #video_view > li.main .radar_main .vr_wrap {
+    margin: -12px auto;
   }
 
   /* ⑥ 论坛主题页侧栏低宽度隐藏（2026-10-13 张老师要求）：单列带内不再显示楼主的
