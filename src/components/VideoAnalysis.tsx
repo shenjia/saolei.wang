@@ -250,15 +250,21 @@ export function VideoAnalysisRadar({
             "参考数据不足，无法评级"
           ) : tip.percent >= 100 ? (
             // 「全网第一」整条金色（.tip_first，globals.css，与 radar_tip 统一）；
-            // 2026-10-31 起带池说明（「高级NF玩家中的全网第一」）
+            // 2026-10-31 起带池说明（「高级NF玩家中的最强」）
             <span className="tip_first">{tip.pool ? `${tip.pool}中的最强` : "全网第一"}</span>
           ) : tip.key === "bpp" && tip.pool ? (
+            // 2026-10-31 张老师定：逗号处手动断行（最多两行，nowrap 下不逐字折——
+            // max-width 自动折行会把长句竖排成 8 行窄条，截图实证）
             <>
-              <span className="vr_tip_val">{tip.disp}</span>，在{tip.pool}上超过 <em>{tip.percent}%</em>
+              <span className="vr_tip_val">{tip.disp}</span>
+              <br />
+              在{tip.pool}上超过 <em>{tip.percent}%</em>
             </>
           ) : tip.pool ? (
             <>
-              <span className="vr_tip_val">{tip.disp}</span>，超过 <em>{tip.percent}%</em> 的{tip.pool}
+              <span className="vr_tip_val">{tip.disp}</span>
+              <br />
+              超过 <em>{tip.percent}%</em> 的{tip.pool}
             </>
           ) : (
             <>

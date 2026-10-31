@@ -2336,18 +2336,15 @@ del[data-tip]:hover::after {
   border: 1px solid #49483e;
   border-radius: 3px;
   color: #b1b1a4;
-  /* 单行气泡（2026-10-14 张老师定：数值＋超过 xx% 的玩家），字号与标签名一致
+  /* 气泡正文（2026-10-14 张老师定），字号与标签名一致
      （VideoAnalysis.tsx LABEL_NAME_FS = 10，两处务必同步改）。
-     2026-10-31 张老师定「气泡与标签水平居中，除非出界」：带池描述的文案变长
-     （如「15.58 次跨格/秒，超过 94% 的高级FL玩家」），单行会顶到钳位界导致
-     明显偏心——放开换行（max-width 200px 内两行居中），超宽不再推走气泡。 */
+     2026-10-31 张老师定「与标签水平居中，最多两行」：文案在逗号处手动 <br> 断成
+     两行（一行一句不逐字折），整体恢复 nowrap——此前 max-width 折行会把长句
+     逐字竖排成 8 行窄条（截图实证）。居中锚定由组件 effect 负责，出界才钳位。 */
   font-size: 10px;
   line-height: 1.5;
   text-align: center;
-  white-space: normal;
-  /* 180px ≈ 出血盒 234px 的 77%：带池描述的两段文案在 180 内折两行，
-     气泡中心仍能贴住绝大多数轴标签中心（钳位只发生在最靠边的轴上） */
-  max-width: 180px;
+  white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
