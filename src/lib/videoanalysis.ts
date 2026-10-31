@@ -49,13 +49,12 @@ export interface VideoAnalysisResult {
   overall: string;
   /** 综合评级对应的表现分（0-100，百分位量纲，调试/对账用） */
   overallScore: number;
-  /** 路线规划轴的分位基准（同级别 × 模式 × 3BV 三桶行，缺行回退整组行）。
-   *  全屏试玩结束时的「我的评级」要拿**同一个基准组**给玩家本局打分
-   *  （与首页录像评级可比），客户端算分必须拿到这份边界数组。 */
+  /** 组内基准（2026-10-31 定稿：稀有程度三分项 time/bvs/stnb 走级别×模式整组行 +
+   *  路线规划 bpp 走 3BV 三桶行优先）。全屏试玩结束时的「我的评级」要拿
+   *  **同一个基准组**给玩家本局打分（与首页录像评级可比），客户端算分必须拿到这份边界数组。 */
   dists: Partial<Record<MetricKey, number[]>>;
-  /** 全网池基准（2026-10-30 五轴改版，level='all' 行按 NF/FL 分池后那份：
-   *  time/bvs/stnb/ces/cps/thrp → 9 档边界）——稀有程度三合一 / 移动速度 /
-   *  操作效率 / 有效点击四轴 + 客户端「我的评级」同源用 */
+  /** 全网池基准（2026-10-31 定稿缩为三轴：cps/thrp/ces，level='all' 行按 NF/FL 分池）
+   *  ——移动速度 / 操作效率 / 有效点击三轴 + 客户端「我的评级」同源用 */
   allDists: Partial<Record<MetricKey, number[]>>;
   /** 实际命中的 3BV 粗桶区间文案（如 "120-139"；2026-10-30 张老师需求：
    *  标题问号气泡要讲清「在哪个桶里评的」）。null＝整组行（桶行缺样本回退 /
@@ -202,9 +201,9 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       ces: sec > 0 && row.ce > 0 ? row.ce / sec : 0,
       cps: sec > 0 && row.cp > 0 ? row.cp / sec : 0,
     };
+    // 全网池（2026-10-31 张老师定稿后只剩三轴）：移动速度 cps / 操作效率 thrp / 有效点击 ces。
+    // 稀有程度三分项已全部改组内比（见 groupDists），全网池不再需要 bvs/stnb。
     const allDists: Partial<Record<MetricKey, number[]>> = {
-      bvs: distFor(allPool, "bvs"),
-      stnb: distFor(allPool, "stnb"),
       thrp: distFor(allPool, "thrp"),
       ces: distFor(allPool, "ces"),
       cps: distFor(allPool, "cps"),
@@ -215,12 +214,14 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       values.cps = 0;
       delete allDists.cps;
     }
-    // group 池（2026-10-31 张老师纠错：稀有程度 time 分项改**同级别组内比**——
-    // 跨级混比被初级秒杀局拉爆边界；级别整组行的 time 列跑批同步写，这里带上）：
-    // bpp = 3BV 三桶行（getBaseline 已按桶取好），time = 同一行的整组 time 边界。
+    // group 池（2026-10-31 张老师定稿）：稀有程度三分项 time/bvs/stnb **全部按
+    // 级别×模式组内比**（先分初中高、再分 FL/NF）——全走整组行，跑批本就写这些列；
+    // bpp = 3BV 三桶行（getBaseline 已按桶取好，桶行缺失时它就是整组行，天然回退）。
     const groupDists: Partial<Record<MetricKey, number[]>> = {
       bpp: distFor(baseline.row, "bpp"),
       time: distFor(baseline.row, "time"),
+      bvs: distFor(baseline.row, "bvs"),
+      stnb: distFor(baseline.row, "stnb"),
     };
     const rateable = !!(allPool || distFor(baseline.row, "bpp").length);
     const points = radarPointsFrom(values, groupDists, rateable, input.noflag, allDists);
@@ -236,10 +237,10 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       points,
       overall,
       overallScore,
-      /* 路线规划轴的 9 档边界原样带出：全屏试玩「我的评级」在客户端按同一组
-         给玩家本局打分，边界数组必须与首页录像评级完全同源 */
+      /* 组内边界原样带出（2026-10-31 扩：稀有程度三分项 + 路线规划轴）：全屏试玩
+         「我的评级」在客户端按同一组给玩家本局打分，边界数组必须与首页录像评级完全同源 */
       dists: groupDists,
-      /* 全网池边界同源带出（2026-10-30）：客户端「我的评级」四轴全网评级用 */
+      /* 全网池边界同源带出（2026-10-31 缩：三轴 cps/thrp/ces）：客户端「我的评级」用 */
       allDists,
       /* 实际命中桶的区间文案（问号气泡用；回退整组＝null，文案不带 3BV 限定） */
       bucketRange: bucketRangeText(input.level, baseline.bucket),

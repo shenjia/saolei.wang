@@ -18,15 +18,15 @@ export type BaseMetricKey = Exclude<MetricKey, "cmp">;
 /**
  * 雷达分项轴的候选键。2026-10-30 五轴改版（张老师定）——五轴全部换新口径：
  *   ① 稀有程度（顶）：time / 3bvs / stnb 三者各评级后**取最高档**展示（三合一，
- *      见 radarPointsFrom；2026-10-31 张老师纠错：time 按同级别组比——跨级混比
- *      无意义，3bvs/stnb 难度归一化后全网比）；
+ *      见 radarPointsFrom；2026-10-31 张老师定稿：三分项全部按**级别 × 模式**组内比
+ *      ——先分初中高、再分 FL/NF，跨级混比无意义）；
  *   ② 有效点击（左上）：CES = Ce/s 全网评级；
  *   ③ 移动速度（右上）：crossings/s 全网评级；
  *   ④ 路线规划（左下）：solved3bv/crossings 在**同级别 3BV 低中高三桶**内评级（BV3 桶）；
  *   ⑤ 操作效率（右下）：Thrp 全网评级（不再按 NF/FL 组二选一）。
- * 全网池供数：跑批 video-metrics.ts 写 level='all' 行（NF/FL 各一），列 ces/cps
- * + bvs/stnb（稀有程度的全网分项），取数见 videoanalysis distFor 的 'all' 分支；
- * time 分项走同级别×模式整组行（级别行的 time 列跑批同步写）。
+ * 全网池供数：跑批 video-metrics.ts 写 level='all' 行（NF/FL 各一），列 ces/cps/thrp
+ * （移动速度/操作效率/有效点击三轴），取数见 videoanalysis distFor 的 'all' 分支；
+ * 稀有程度三分项走级别×模式整组行（time/bvs/stnb 列跑批都在写）。
  */
 export type AxisMetricKey = "bvs" | "ioe" | "thrp" | "bpp" | "cls" | "ces" | "cps" | "time";
 
@@ -439,8 +439,9 @@ export interface VideoAnalysisPoint {
  *
  *   ① 稀有程度（顶）：time / 3bvs / stnb 三者各评级后**取最高档**展示（半径用三者
  *      的最高 percent；气泡 disp 显示最能代表该盘稀有性的那项的数值——按 percent
- *      最高者）。池子（2026-10-31 张老师纠错）：time 走**同级别组**（group，跨级
- *      混比被初级秒杀局拉爆边界）；3bvs / stnb 难度归一化、走全网池（allDists）；
+ *      最高者）。池子（2026-10-31 张老师定稿）：三分项全部在**同级别 × 同模式组内**比
+ *      （先分初中高、再分 FL/NF——time/bvs 跨级别混比无意义，stnb 虽难度归一化
+ *      也统一按组内比，口径一致），全部走 group 池（级别×模式整组行）；
  *   ② 移动速度（右上）：cps = crossings ÷ 用时秒，全网池；
  *   ③ 操作效率（右下）：thrp，全网池（不再按 NF/FL 组二选一）；
  *   ④ 路线规划（左下）：bpp = 完成3BV ÷ crossings，**同级别 3BV 低中高三桶**内评级
@@ -448,9 +449,9 @@ export interface VideoAnalysisPoint {
  *   ⑤ 有效点击（左上）：ces = Ce ÷ 用时秒，全网池。
  *
  * @param values 本局原始指标值（time 秒 / bvs / stnb / thrp / bpp / cps / ces）
- * @param group 同级别组基准：路线规划轴（bpp，3BV 三桶行优先）+ 稀有程度 time 分项
- *   （同级别×模式整组行，2026-10-31 起 time 按级别比）都从这里取
- * @param allDists 全网池基准（NF/FL 分池后的那份：bvs/stnb/ces/cps/thrp → 9 档边界）
+ * @param group 同级别×模式组基准：稀有程度三分项（time/bvs/stnb，整组行）+
+ *   路线规划轴（bpp，3BV 三桶行优先）都从这里取
+ * @param allDists 全网池基准（NF/FL 分池后的那份：ces/cps/thrp → 9 档边界）
  * @param rateable 是否可评级（缺基准 / 零点击 / 完成度过低＝false）
  *   —— false 时全轴 disp "—"、percent 0、grade "?"（雷达收缩到圆心的空图，值仍保留）
  * @param noflag 打法（选全网池 NF 版 / FL 版）
@@ -485,15 +486,12 @@ export function radarPointsFrom(
   //    取主档最高者展示；radius（percent）取三者最大（雷达画的是「稀有性强度」）；
   //    disp 取 percent 最高那项的格式化值（最能代表这盘为什么稀有）。
   //    主档序：SSS(0) 最强 … F(8) 最弱——比较用 GRADES.indexOf(主档)。
-  //    ⚠️ 池子（2026-10-31 张老师纠错定稿）：time 必须在**同级别组内**比——time 跨级别
-  //    混比无意义（初级 0.58s 秒杀局把全池边界拉到底，高级 WR 25.1s 只评出 B+，
-  //    三取最高永远轮不到 time；同组内它就是 SSS 顶格），故 time 用 group（级别×模式
-  //    整组行——跑批本来就写 time 列）；3bvs / stnb 已是难度归一化指标、跨级可比，
-  //    维持全网池（allDists）。
+  //    ⚠️ 池子（2026-10-31 张老师定稿）：三分项全部走 group（级别×模式整组行，
+  //    先分初中高再分 FL/NF）——不再用全网池。
   const rarityParts = [
     { key: "time" as const, name: "time", dist: group?.time, hib: false },
-    { key: "bvs" as const, name: "3bvs", dist: allDists?.bvs, hib: true },
-    { key: "stnb" as const, name: "stnb", dist: allDists?.stnb, hib: true },
+    { key: "bvs" as const, name: "3bvs", dist: group?.bvs, hib: true },
+    { key: "stnb" as const, name: "stnb", dist: group?.stnb, hib: true },
   ].map((p) => ({
     ...p,
     value: values[p.key] ?? 0,
