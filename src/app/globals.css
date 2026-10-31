@@ -13073,3 +13073,79 @@ a.cheat_rep_link:hover {
   background: #57564a;
   color: #f8f8f2;
 }
+
+/* ── 后台服务器负载面板：可排序表头（2026-10-31 张老师需求，ServerStatusPanel）
+   视觉语言照前台录像列表表头 .sa 双三角（globals.css 上方 video_table 段）：
+   4px 小三角纵向堆叠、当前方向金色 #fdc61d、悬停暗三角提亮 #75715e */
+.sv_table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+.sv_table th {
+  text-align: left;
+  font-weight: normal;
+  color: #75715e;
+  padding: 4px 6px;
+  border-bottom: 1px solid #3e3d32;
+  white-space: nowrap;
+}
+.sv_table th.c,
+.sv_table td.c {
+  text-align: right;
+}
+.sv_table td {
+  padding: 5px 6px;
+  border-bottom: 1px solid #31302a;
+}
+.sv_table tbody tr:last-child td {
+  border-bottom: none;
+}
+.sv_table th button.sv_sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.sv_table th button.sv_sort.on {
+  color: #fdc61d;
+}
+.sv_table th button.sv_sort:hover {
+  color: #a6e22e;
+}
+.sv_table th .sa {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5px;
+  line-height: 0;
+}
+.sv_table th .sa i {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+}
+.sv_table th .sa i.up {
+  border-bottom: 4.5px solid #49483e;
+}
+.sv_table th .sa i.down {
+  border-top: 4.5px solid #49483e;
+}
+.sv_table th .sa i.up.on {
+  border-bottom-color: #fdc61d;
+}
+.sv_table th .sa i.down.on {
+  border-top-color: #fdc61d;
+}
+.sv_table th:hover .sa i.up:not(.on) {
+  border-bottom-color: #75715e;
+}
+.sv_table th:hover .sa i.down:not(.on) {
+  border-top-color: #75715e;
+}

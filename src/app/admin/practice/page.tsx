@@ -78,7 +78,7 @@ export default async function AdminPracticePage() {
           <div style={{ flex: "0 0 auto", minWidth: 0 }}>
             <b style={{ fontSize: 14 }}>今日地区明细</b>
             {regionToday.length ? (
-              <div className="admin_scroll" style={{ maxHeight: 360, marginTop: 6 }}>
+              <div className="admin_scroll region_today" style={{ marginTop: 6 }}>
                 <table className="admin_table">
                   <thead>
                     <tr>

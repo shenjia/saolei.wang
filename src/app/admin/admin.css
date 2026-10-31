@@ -1376,3 +1376,15 @@ a.cheat_uid:hover .pt_bubble {
     flex-direction: column;
   }
 }
+
+/* 今日地区明细（2026-10-31 张老师需求）：桌面限高内滚；移动端一次展示全部
+   地区行、不做竖向内滚（列宽溢出仍走 admin_scroll 的横向滚动） */
+.region_today {
+  max-height: 360px;
+  overflow-y: auto;
+}
+@media (max-width: 768px) {
+  .region_today {
+    max-height: none;
+  }
+}

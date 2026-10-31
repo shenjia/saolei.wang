@@ -1,8 +1,9 @@
 "use client";
 
-// 服务器负载面板（2026-10-28 张老师需求）：后台练习数据页延迟地图右侧，列出
-// 全部权威服务实例（北京1/北京2/香港），每 3s 轮询 /api/admin/authority-status
-// 刷新：是否可用（红绿点）、在线人数、进行局数、响应耗时、排空状态。
+// 服务器负载面板（2026-10-28 张老师需求）：后台练习数据页，列出全部权威服务
+// 实例，每 3s 轮询 /api/admin/authority-status 刷新。
+// 2026-10-31 张老师需求：卡片改表格 + 可排序表头——默认按在线人数降序，表头
+// 点击切换升/降序（视觉语言照前台录像列表表头 VideoRows 的 .sa 双三角）。
 
 import { useEffect, useRef, useState } from "react";
 
@@ -18,9 +19,34 @@ interface ServerRow {
   draining: boolean;
 }
 
+type SortKey = "name" | "status" | "connections" | "active" | "rtt";
+interface SortSpec {
+  key: SortKey;
+  dir: "asc" | "desc";
+}
+/** 各列默认方向：数值列降序（多在前），名称/状态列升序 */
+const DEFAULT_DIR: Record<SortKey, "asc" | "desc"> = {
+  name: "asc",
+  status: "asc",
+  connections: "desc",
+  active: "desc",
+  rtt: "desc",
+};
+
+/** 升降序双箭头（照抄 VideoRows.SortArrows 视觉：金色=当前方向） */
+function SortArrows({ dir }: { dir: "asc" | "desc" }) {
+  return (
+    <span className="sa" aria-hidden="true">
+      <i className={`up${dir === "asc" ? " on" : ""}`} />
+      <i className={`down${dir === "desc" ? " on" : ""}`} />
+    </span>
+  );
+}
+
 export function ServerStatusPanel() {
   const [rows, setRows] = useState<ServerRow[] | null>(null);
   const [at, setAt] = useState(0);
+  const [sort, setSort] = useState<SortSpec>({ key: "connections", dir: "desc" });
   const alive = useRef(true);
   const hadData = useRef(false);
 
@@ -49,12 +75,51 @@ export function ServerStatusPanel() {
     };
   }, []);
 
+  const clickSort = (key: SortKey) =>
+    setSort((s) =>
+      s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: DEFAULT_DIR[key] },
+    );
+
+  // 排序键取值：状态列按「正常0 < 排空1 < 不可用2」，其余数值列不可用行取 -1 沉底
+  const rank = (r: ServerRow): number =>
+    sort.key === "status"
+      ? !r.ok
+        ? 2
+        : r.draining
+          ? 1
+          : 0
+      : sort.key === "name"
+        ? 0
+        : sort.key === "rtt" && !r.ok
+          ? -1
+          : (r[sort.key] as number);
+  const sorted = [...(rows ?? [])].sort((a, b) => {
+    if (sort.key === "name") {
+      return sort.dir === "asc" ? a.name.localeCompare(b.name, "zh") : b.name.localeCompare(a.name, "zh");
+    }
+    const d = rank(a) - rank(b);
+    return sort.dir === "asc" ? d : -d;
+  });
+
+  const th = (key: SortKey, label: string, tip: string, extra?: object) => (
+    <th {...extra}>
+      <button
+        type="button"
+        className={`sv_sort${sort.key === key ? " on" : ""}`}
+        onClick={() => clickSort(key)}
+        title={tip}
+      >
+        {label}
+        {sort.key === key && <SortArrows dir={sort.dir} />}
+      </button>
+    </th>
+  );
+
   return (
     <div
+      className="sv_panel"
       style={{
-        flex: 1,
-        minWidth: 230,
-        maxWidth: 320,
+        flex: "0 0 316px",
         border: "1px solid #3e3d32",
         borderRadius: 6,
         background: "#272822",
@@ -70,58 +135,66 @@ export function ServerStatusPanel() {
           {rows ? `每 3 秒刷新 · ${at ? new Date(at).toLocaleTimeString("zh-CN", { hour12: false }) : ""}` : "获取中…"}
         </span>
       </div>
-      {(rows ?? []).map((r) => (
-        <div
-          key={r.name}
-          style={{
-            marginTop: 8,
-            padding: "6px 8px",
-            border: "1px solid #3e3d32",
-            borderRadius: 5,
-            background: "#1e1f1c",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ color: "#e24b4a", fontSize: 12 }}>⚑</span>
-            <b>{r.name}</b>
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                flexShrink: 0,
-                background: r.ok ? "#a6e22e" : "#e24b4a",
-              }}
-              aria-label={r.ok ? "可用" : "不可用"}
-            />
-            {r.ok ? (
-              <span style={{ color: "#75715e", fontSize: 12, marginLeft: "auto" }}>{r.rtt}ms</span>
-            ) : (
-              <span style={{ color: "#e24b4a", fontSize: 12, marginLeft: "auto" }}>不可用</span>
-            )}
-          </div>
-          {r.ok && (
-            <div style={{ display: "flex", gap: 12, marginTop: 3, color: "#b1b1a4" }}>
-              <span>
-                在线 <b style={{ color: "#a6e22e" }}>{r.connections}</b> 人
-              </span>
-              <span>
-                进行 <b style={{ color: "#fdc61d" }}>{r.active}</b> 局
-              </span>
-              {r.draining && (
-                <span style={{ color: "#f79646" }} title="发布等待排空中，拒绝新局">
-                  排空中
-                </span>
-              )}
-            </div>
+      <table className="sv_table">
+        <thead>
+          <tr>
+            {th("name", "服务器", "按服务器名称排列")}
+            {th("status", "状态", "按状态排列（正常→排空→不可用）")}
+            {th("connections", "在线", "按在线人数排列（多在前）", { className: "c" })}
+            {th("active", "进行", "按进行局数排列（多在前）", { className: "c" })}
+            {th("rtt", "延迟", "按响应延迟排列（快在前）", { className: "c" })}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <tr key={r.name}>
+              <td>
+                <b style={{ color: "#d6d6cc" }}>{r.name}</b>
+              </td>
+              <td>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    marginRight: 4,
+                    background: r.ok ? (r.draining ? "#f79646" : "#a6e22e") : "#e24b4a",
+                  }}
+                  aria-label={r.ok ? (r.draining ? "排空中" : "可用") : "不可用"}
+                />
+                {r.ok ? (
+                  r.draining ? (
+                    <span style={{ color: "#f79646" }} title="发布等待排空中，拒绝新局">
+                      排空
+                    </span>
+                  ) : (
+                    <span style={{ color: "#75715e" }}>正常</span>
+                  )
+                ) : (
+                  <span style={{ color: "#e24b4a" }}>不可用</span>
+                )}
+              </td>
+              <td className="c">
+                {r.ok ? <b style={{ color: "#a6e22e" }}>{r.connections}</b> : <span style={{ color: "#49483e" }}>—</span>}
+              </td>
+              <td className="c">
+                {r.ok ? <b style={{ color: "#fdc61d" }}>{r.active}</b> : <span style={{ color: "#49483e" }}>—</span>}
+              </td>
+              <td className="c">{r.ok ? `${r.rtt}ms` : <span style={{ color: "#49483e" }}>—</span>}</td>
+            </tr>
+          ))}
+          {rows !== null && rows.length === 0 && (
+            <tr>
+              <td colSpan={5} style={{ color: "#e24b4a", textAlign: "center" }}>
+                全部实例不可达
+              </td>
+            </tr>
           )}
-        </div>
-      ))}
-      {rows !== null && rows.length === 0 && (
-        <div style={{ marginTop: 8, color: "#e24b4a" }}>全部实例不可达</div>
-      )}
+        </tbody>
+      </table>
       <div style={{ marginTop: 8, color: "#75715e", fontSize: 12 }}>
-        在线＝当前 WS 连接数 · 进行＝有活连接的对局
+        在线＝当前 WS 连接数 · 进行＝有活连接的对局 · 点击表头切换排序
       </div>
     </div>
   );
