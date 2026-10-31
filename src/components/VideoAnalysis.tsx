@@ -115,14 +115,23 @@ export function VideoAnalysisRadar({
     const wrap = wrapRef.current;
     const tip = tipRef.current;
     if (!wrap || !tip) return;
-    const w = wrap.clientWidth; // 定位父级与 SVG 等宽同起点（出血 margin 挪在 .vr_wrap 上的原因）
-    const [lx, ly] = polar(hover, data.length, LABEL_RADIUS);
-    // 气泡锚点跟随标签偏移（LABEL_OFFSETS），否则标签挪了气泡留在原位会脱节
-    const [ox, oy] = LABEL_OFFSETS[data[hover].key] ?? [0, 0];
-    // 气泡顶 = 轴名基线下方 4px；左右按实测宽钳位不出容器
-    tip.style.top = `${((ly + oy + LABEL_NAME_DY + 4) / SIZE) * w}px`;
-    tip.style.left = `${Math.min(Math.max(((lx + ox) / SIZE) * w, tip.offsetWidth / 2 + 2), w - tip.offsetWidth / 2 - 2)}px`;
-    tip.style.visibility = "visible";
+    const place = () => {
+      const w = wrap.clientWidth; // 定位父级与 SVG 等宽同起点（出血 margin 挪在 .vr_wrap 上的原因）
+      const [lx, ly] = polar(hover, data.length, LABEL_RADIUS);
+      // 气泡锚点跟随标签偏移（LABEL_OFFSETS），否则标签挪了气泡留在原位会脱节
+      const [ox, oy] = LABEL_OFFSETS[data[hover].key] ?? [0, 0];
+      // 气泡顶 = 轴名基线下方 4px；左右默认**与标签水平居中**（textAnchor=middle 下
+      // lx+ox 即标签中心），只有半宽越出容器时才钳位（2026-10-31 张老师定）。
+      // ⚠️ 换轴时 tip 刚挂载，带 max-width 的折行布局可能在首次读宽后才稳定——
+      //    连续两次量宽（间隔一帧），以最终一次为准，防止按旧宽钳位。
+      const half = tip.getBoundingClientRect().width / 2;
+      tip.style.top = `${((ly + oy + LABEL_NAME_DY + 4) / SIZE) * w}px`;
+      tip.style.left = `${Math.min(Math.max(((lx + ox) / SIZE) * w, half + 2), w - half - 2)}px`;
+      tip.style.visibility = "visible";
+    };
+    place();
+    const raf = requestAnimationFrame(place); // 折行重排后再校一次
+    return () => cancelAnimationFrame(raf);
   }, [hover, data.length]);
 
   /* DOM 挂载即回调（2026-10-21，方案 B 配套）：练习页结算面板在量自然高度前
@@ -234,12 +243,23 @@ export function VideoAnalysisRadar({
           {/* 2026-10-14 张老师定：与「实力」雷达气泡统一口径用「超过」；满分显示「全网第一」。
               数值（实际数据）单独包 span 上金色（.vr_tip_val），百分比 em 维持原色不变。
               2026-10-15 张老师定：无基准分布（grade="?"）时改提示语，
-              不再显示「0.00，超过 0% 的玩家」这种无意义内容 */}
+              不再显示「0.00，超过 0% 的玩家」这种无意义内容。
+              2026-10-31 张老师定：所有轴气泡说明分桶（pool，如「高级NF玩家」）；
+              路线规划额外带 3BV 桶（pool=「高级小图上的NF玩家」，文案带「在…上」）。 */}
           {tip.grade === "?" ? (
             "参考数据不足，无法评级"
           ) : tip.percent >= 100 ? (
-            // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 radar_tip 统一）
-            <span className="tip_first">全网第一</span>
+            // 「全网第一」整条金色（.tip_first，globals.css，与 radar_tip 统一）；
+            // 2026-10-31 起带池说明（「高级NF玩家中的全网第一」）
+            <span className="tip_first">{tip.pool ? `${tip.pool}中的最强` : "全网第一"}</span>
+          ) : tip.key === "bpp" && tip.pool ? (
+            <>
+              <span className="vr_tip_val">{tip.disp}</span>，在{tip.pool}超过 <em>{tip.percent}%</em>
+            </>
+          ) : tip.pool ? (
+            <>
+              <span className="vr_tip_val">{tip.disp}</span>，超过 <em>{tip.percent}%</em> 的{tip.pool}
+            </>
           ) : (
             <>
               <span className="vr_tip_val">{tip.disp}</span>，超过 <em>{tip.percent}%</em> 的玩家

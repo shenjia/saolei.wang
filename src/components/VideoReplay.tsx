@@ -1627,7 +1627,8 @@ export function VideoReplayProvider({
   radarPoints,
   radarOverall,
   radarDists,
-  radarAllDists,
+  radarPoolDesc,
+  radarBppBucketDesc,
   level,
   noflag,
   boardStr,
@@ -1643,13 +1644,14 @@ export function VideoReplayProvider({
   radarPoints?: VideoAnalysisPoint[];
   /** 综合评级字母（analysis.overall，同右栏口径） */
   radarOverall?: string;
-  /** 路线规划轴的分位基准（同级别 × 模式 × 3BV 三桶行）——全屏试玩结束时的
-   *  「我的评级」用同一组给玩家本局打分（二十期，2026-10-16） */
+  /** 组内分位基准（2026-10-31 定稿全轴组内比：time/bvs/stnb/thrp/ces/cps 整组行 +
+   *  bpp 3BV 三桶行）——全屏试玩结束时的「我的评级」用同一组给玩家本局打分（二十期） */
   radarDists?: Partial<Record<MetricKey, number[]>>;
-  /** 全网池基准（2026-10-30 五轴改版）：稀有程度/移动速度/操作效率/有效点击
-   *  四轴的全网评级边界（level='all' 行，NF/FL 分池），客户端「我的评级」同源用 */
-  radarAllDists?: Partial<Record<MetricKey, number[]>>;
-  /** 打法（2026-10-28）：「我的评级」效率轴按组选指标（NF=IOE / FL=ThrP）需知 noflag */
+  /** 气泡池描述（如「高级NF玩家」，2026-10-31）：客户端「我的评级」气泡同源 */
+  radarPoolDesc?: string;
+  /** 路线规划桶描述（如「高级小图上的NF玩家」；null=整组回退）——客户端同源 */
+  radarBppBucketDesc?: string | null;
+  /** 打法（2026-10-31 起：池描述按 NF/FL 拼词用） */
   noflag?: boolean;
   /** 级别与整盘串（renderBoard 后 '*'/数字）——全屏层重画 Board 用 */
   level?: VideoLevel;
@@ -1955,7 +1957,8 @@ export function VideoReplayProvider({
           radarPoints={radarPoints}
           radarOverall={radarOverall}
           radarDists={radarDists}
-          radarAllDists={radarAllDists}
+          radarPoolDesc={radarPoolDesc}
+          radarBppBucketDesc={radarBppBucketDesc}
           noflag={noflag}
           autoEnterPlay={autoPlay}
           onAutoEnterDone={autoEnterDone}
@@ -2329,7 +2332,8 @@ export function ReplayFullscreen({
   radarPoints,
   radarOverall: radarOverallProp,
   radarDists,
-  radarAllDists,
+  radarPoolDesc,
+  radarBppBucketDesc,
   noflag,
   autoEnterPlay,
   onAutoEnterDone,
@@ -2356,11 +2360,13 @@ export function ReplayFullscreen({
   /** 全屏右栏「录像评级」数据（十九期恢复；与详情页右栏同源） */
   radarPoints?: VideoAnalysisPoint[];
   radarOverall?: string;
-  /** 本录像所属组（级别 × 模式 × 3BV 三桶）的分位基准——试玩结束「我的评级」路线规划轴同基准打分（二十期） */
+  /** 组内分位基准（2026-10-31 定稿全轴组内比）——试玩结束「我的评级」同基准打分（二十期） */
   radarDists?: Partial<Record<MetricKey, number[]>>;
-  /** 全网池基准（2026-10-30 五轴改版）：稀有程度/移动速度/操作效率/有效点击四轴用 */
-  radarAllDists?: Partial<Record<MetricKey, number[]>>;
-  /** 打法（2026-10-28）：全网池按 NF/FL 选行 */
+  /** 气泡池描述（如「高级NF玩家」，2026-10-31）：「我的评级」气泡同源 */
+  radarPoolDesc?: string;
+  /** 路线规划桶描述（如「高级小图上的NF玩家」；null=整组回退）——「我的评级」同源 */
+  radarBppBucketDesc?: string | null;
+  /** 打法（2026-10-31 起：池描述按 NF/FL 拼词用） */
   noflag?: boolean;
   /** 二十一期一键试玩：挂载即自动「点笑脸」进试玩（等价点全屏后点笑脸） */
   autoEnterPlay?: boolean;
@@ -2650,10 +2656,11 @@ export function ReplayFullscreen({
   }, []);
 
   /* 试玩结束的「我的评级」（二十期 2026-10-16 张老师定）：级别 + 本录像所属的分位基准
-     （radarDists/ radarAllDists props）在客户端算出与「录像评级」同一套五轴点 ——
+     （radarDists prop，全轴组内比）在客户端算出与「录像评级」同一套五轴点 ——
      组装与评级全部走 lib/videoscore 的共享件，本文件不自造口径。
-     2026-10-30 五轴改版：五轴 = 稀有程度（time/3bvs/stnb 三合一全网）/ 移动速度（cps）/
-     操作效率（thrp）/ 路线规划（bpp，3BV 三桶）/ 有效点击（ces）。
+     2026-10-30 五轴改版：五轴 = 稀有程度（time/3bvs/stnb 三合一组内取最高）/
+     移动速度（cps）/ 操作效率（thrp）/ 路线规划（bpp，3BV 三桶）/ 有效点击（ces），
+     2026-10-31 定稿：全部按级别×模式组内比。
      可评级的门槛（零点击 / 完成度 < 10%）同练习页。 */
   const mineRating = useMemo(() => {
     if (!playResult) return null;
@@ -2669,9 +2676,10 @@ export function ReplayFullscreen({
       ? ((73.5 * ln * ln - 94.5 * ln + 57) / qg) * Math.sqrt(playResult.solvedBv / playResult.board3bv)
       : 0;
     const values: Partial<Record<MetricKey, number>> = {
-      // 2026-10-30 五轴改版：time/ces/cps 三项新值（稀有程度三合一用 time、
-      // 有效点击 = Ce÷t、移动速度 = crossings÷t；bvs 败局按 Est 折算见上）
-      time: t,
+      // 2026-10-30 五轴改版：time/ces/cps 三项新值；**time 用 Est RTime**（2026-10-31
+      // 张老师定：败局半截用时直接进组内比会个个「全网第一」，est 折算后可比；
+      // 胜局 est=t 恒等）、有效点击 = Ce÷t、移动速度 = crossings÷t、bvs 按 Est 折算
+      time: hasBv ? est : 0,
       bvs: hasBv ? playResult.solvedBv / est : 0,
       stnb,
       thrp: playResult.ce > 0 ? playResult.solvedBv / playResult.ce : 0,
@@ -2683,14 +2691,16 @@ export function ReplayFullscreen({
     const points = radarPointsFrom(
       values,
       radarDists,
-      (!!radarDists || !!radarAllDists) && playResult.cl > 0 && !lowCompletion,
+      !!radarDists && playResult.cl > 0 && !lowCompletion,
       noflag,
-      radarAllDists,
+      undefined,
+      radarPoolDesc,
+      radarBppBucketDesc,
     );
     /* 预计完成用时（未完成时展示）：与上方 est 同一值 */
     const estSec = est;
     return { points, overall: overallGrade(points), estSec };
-  }, [playResult, level, radarDists, radarAllDists, noflag]);
+  }, [playResult, level, radarDists, noflag, radarPoolDesc, radarBppBucketDesc]);
 
   /* 自适应基准（十九期：三栏复原——面板 + 游戏窗 + 评级栏）。
      十九期张老师定：全屏右侧恢复「录像评级」，宽度＝数据统计面板的 1.5 倍。

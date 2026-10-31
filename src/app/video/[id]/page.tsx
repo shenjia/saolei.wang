@@ -121,10 +121,9 @@ export default async function VideoViewPage({
           filepath: video.filepath,
         })
       : null;
-  // 评级问号气泡文案（2026-10-30 张老师定稿句）：讲清两条规则——NF/FL 分池、
-  // 3BV 相关参数按相近 3BV 分桶比。不再罗列具体命中桶区间（五轴里只有路线规划
-  // 用桶，全网轴跨全部级别，逐轴说明放各轴 hover 气泡更合适）。
-  const ratingHelpTip = "NF和FL录像分开评级；和3BV相关的参数，在相近3BV的录像中进行比较评分";
+  // 评级问号气泡文案（2026-10-31 张老师定稿句）：评级规则总述。
+  const ratingHelpTip =
+    "所有级别、NF和FL录像分开评；稀有程度取Time/3BVs/STNB中最强评级；路线规划在3BV相近的录像中横向评比；最终评级以稀有程度为主，五轴评分加权得出。";
 
   return (
     <VideoReplayProvider
@@ -134,7 +133,8 @@ export default async function VideoViewPage({
       radarPoints={analysis?.points}
       radarOverall={analysis?.overall}
       radarDists={analysis?.dists}
-      radarAllDists={analysis?.allDists}
+      radarPoolDesc={analysis?.poolDesc}
+      radarBppBucketDesc={analysis?.bppBucketDesc}
       level={level}
       noflag={video.noflag}
       boardStr={board}

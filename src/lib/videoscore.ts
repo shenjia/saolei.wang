@@ -180,6 +180,21 @@ export function bucketRangeText(level: string, bucket: number): string | null {
 }
 
 /**
+ * 3BV 三桶的口语名（2026-10-31 张老师定：路线规划 hover 气泡要带「在高级**小图**上
+ * 超过 xx% 的 NF 玩家」这类分桶说明）。桶值 = BV_BUCKETS 下界：0=低（小图）/
+ * 中段=中 / 最大下界=高（大图）；无桶级别 / 整组回退返回 null（气泡不带限定）。
+ */
+export function bucketName(level: string, bucket: number): string | null {
+  if (bucket === DIST_BUCKET_ALL) return null;
+  const edges = BV_BUCKETS[level];
+  if (!edges) return null;
+  const i = edges.indexOf(bucket);
+  if (i < 0) return null;
+  if (i === edges.length - 1) return "大图";
+  return i === 0 ? "小图" : "中图";
+}
+
+/**
  * 综合分的权重（张老师 2026-10-14 定：只在「级别 × 模式」组内做百分位加权，
  * 不考虑 3BV，且不同级别不能放一起比较）。
  *
@@ -222,12 +237,10 @@ export function compositeOf(percents: Partial<Record<MetricKey, number>>, noflag
 }
 
 /**
- * 「本局表现」评级（在线玩结算面板标题右侧「评级：S+」）的权重 —— 2026-10-15 张老师定：
- * **判雷能力(STNB) 占一半，其余四轴各 1/8**。
- * （2026-10-30 五轴改版：五轴换新指标——稀有程度（key 锚 stnb）/ 移动速度 cps /
- * 操作效率 thrp / 路线规划 bpp / 有效点击 ces。radarOverall 按 points 的 key 收集
- * percent，稀有程度轴 key=stnb 天然吃 4 权重，其余四轴各 1——**权重结构不变**，
- * 只是四个分项键换人。ioe/cls/bvs 不再出现在雷达点上，不进加权。）
+ * 「本局表现」评级（在线玩结算面板标题右侧「评级：S+」）的权重 —— 2026-10-31 张老师定稿：
+ * **稀有程度为主占四份，其余四轴各一份**（4:1:1:1:1 = 稀有 4/8=50%，四维各 1/8），
+ * 加权平均后过九档表出等级。稀有程度轴 key 锚 stnb（吃 4 权重），移动 cps / 操作 thrp /
+ * 路线 bpp / 有效 ces 各 1。ioe/cls/bvs/time 不出现在雷达点上，不进加权。
  *
  * 与 COMPOSITE_WEIGHTS 是两回事：后者是雷达「综合」轴的历史口径（已被 STNB 原值取代），
  * 这里用的是五围图**全部五根轴**的组内分位加权，只在结算面板标题上用，不落库。
@@ -235,7 +248,7 @@ export function compositeOf(percents: Partial<Record<MetricKey, number>>, noflag
  */
 export const PERFORMANCE_KEYS: MetricKey[] = ["stnb", "bvs", "ioe", "thrp", "bpp", "cls", "cps", "ces"];
 
-/** 权重（4:1:1:1:1 = 50% + 12.5%×4；雷达五轴外的键恒 0 不参与）；未参与的两项恒 0 */
+/** 权重（4:1:1:1:1 = 稀有为主 50% + 四维各 12.5%；雷达五轴外的键恒 0 不参与）；未参与的两项恒 0 */
 export const PERFORMANCE_WEIGHTS: Record<MetricKey, number> = {
   stnb: 4,
   bvs: 1,
@@ -431,6 +444,10 @@ export interface VideoAnalysisPoint {
   percent: number;
   /** 等级（SSS~F，含 +/-） */
   grade: string;
+  /** 气泡「超过 xx% 的 XX玩家」里的比对池描述（2026-10-31 张老师定：所有轴气泡要
+   *  说明分桶——如「高级NF玩家」；路线规划额外带 3BV 桶「高级小图上的NF玩家」。
+   *  组件层拼文案，这里只给池名（levelName + nf 后缀 + 可选桶名由调用方传入拼好）。 */
+  pool?: string;
 }
 
 /**
@@ -442,19 +459,23 @@ export interface VideoAnalysisPoint {
  *      最高者）。池子（2026-10-31 张老师定稿）：三分项全部在**同级别 × 同模式组内**比
  *      （先分初中高、再分 FL/NF——time/bvs 跨级别混比无意义，stnb 虽难度归一化
  *      也统一按组内比，口径一致），全部走 group 池（级别×模式整组行）；
- *   ② 移动速度（右上）：cps = crossings ÷ 用时秒，全网池；
- *   ③ 操作效率（右下）：thrp，全网池（不再按 NF/FL 组二选一）；
+ *   ② 移动速度（右上）：cps = crossings ÷ 用时秒；
+ *   ③ 操作效率（右下）：thrp；
  *   ④ 路线规划（左下）：bpp = 完成3BV ÷ crossings，**同级别 3BV 低中高三桶**内评级
  *      （group 参数：桶行缺失自动回退整组行，由调用方取好传入）；
- *   ⑤ 有效点击（左上）：ces = Ce ÷ 用时秒，全网池。
+ *   ⑤ 有效点击（左上）：ces = Ce ÷ 用时秒。
+ *   ⚠️ 池子（2026-10-31 张老师定稿）：**全部五轴都在同级别 × 同模式组内比**
+ *   （「所有级别、NF和FL录像分开评」）——cps/thrp/ces 也从 group 池取（整组行），
+ *   全网池（allDists）已无消费方、参数保留仅为兼容旧调用签名。
  *
  * @param values 本局原始指标值（time 秒 / bvs / stnb / thrp / bpp / cps / ces）
- * @param group 同级别×模式组基准：稀有程度三分项（time/bvs/stnb，整组行）+
- *   路线规划轴（bpp，3BV 三桶行优先）都从这里取
- * @param allDists 全网池基准（NF/FL 分池后的那份：ces/cps/thrp → 9 档边界）
+ * @param group 同级别×模式组基准：五轴全部从这里取——稀有程度三分项与 cps/thrp/ces
+ *   用整组行，路线规划 bpp 用 3BV 三桶行优先（缺行即整组行回退）
+ * @param poolDesc 气泡池描述（如「高级NF玩家」）；bppBucketDesc 路线规划的桶描述
+ *   （如「高级小图上的NF玩家」，null=桶行回退整组时不带限定）——组件层拼气泡用
  * @param rateable 是否可评级（缺基准 / 零点击 / 完成度过低＝false）
  *   —— false 时全轴 disp "—"、percent 0、grade "?"（雷达收缩到圆心的空图，值仍保留）
- * @param noflag 打法（选全网池 NF 版 / FL 版）
+ * @param noflag 打法（保留签名兼容；池选择已收敛到 group，不再分 NF/FL 全网池）
  */
 export function radarPointsFrom(
   values: Partial<Record<MetricKey, number>>,
@@ -462,16 +483,20 @@ export function radarPointsFrom(
   rateable: boolean,
   noflag = false,
   allDists?: Partial<Record<MetricKey, number[]>>,
+  poolDesc?: string,
+  bppBucketDesc?: string | null,
 ): VideoAnalysisPoint[] {
-  // 单指标轴：从指定池取边界评级
+  void noflag;
+  void allDists; // 2026-10-31 定稿后无消费（全轴组内）；参数保留防三处调用方连锁改签名
+  // 单指标轴：从 group 池取边界评级
   const axis = (
     key: AxisMetricKey,
     name: string,
     dist: number[] | undefined,
     highIsBetter: boolean,
-    valueOverride?: number,
+    pool: string | undefined,
   ): VideoAnalysisPoint => {
-    const value = valueOverride ?? values[key] ?? 0;
+    const value = values[key] ?? 0;
     const d = dist ?? [];
     return {
       key,
@@ -480,6 +505,7 @@ export function radarPointsFrom(
       disp: d.length ? formatMetric(key, value) : "—",
       percent: d.length ? percentOf(value, d, highIsBetter, key) : 0,
       grade: d.length ? gradeOf(value, d, highIsBetter) : "?",
+      pool,
     };
   };
   // ① 稀有程度（三合一取最高）：time（反向）/ 3bvs / stnb 各自评级，
@@ -514,20 +540,23 @@ export function radarPointsFrom(
     disp: best ? formatMetric(best.key, best.value) : "—",
     percent: best ? Math.max(...rated.map((p) => p.percent)) : 0,
     grade: best ? best.grade : "?",
+    pool: poolDesc,
   };
   const all: VideoAnalysisPoint[] = [
     rarity,
-    axis("cps", "移动速度", allDists?.cps, true), // 右上
-    axis("thrp", "操作效率", allDists?.thrp, true), // 右下
-    axis("bpp", "路线规划", group?.bpp, true), // 左下：同级别 3BV 三桶内
-    axis("ces", "有效点击", allDists?.ces, true), // 左上
+    axis("cps", "移动速度", group?.cps, true, poolDesc), // 右上
+    axis("thrp", "操作效率", group?.thrp, true, poolDesc), // 右下
+    // 左下：同级别 3BV 三桶内；气泡池带桶描述（null=整组回退，用通用池描述）
+    axis("bpp", "路线规划", group?.bpp, true, bppBucketDesc ?? poolDesc ?? undefined),
+    axis("ces", "有效点击", group?.ces, true, poolDesc), // 左上
   ];
   return rateable ? all : all.map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));
 }
 
 /**
- * 五轴组内分位加权出的**综合评级**（判雷 STNB 占一半、四分项各 1/8，见 PERFORMANCE_WEIGHTS）。
- * 全轴都无可评级（grade 全 "?")→ 返回 "?"（面板显示「—」）。
+ * 五轴组内分位加权出的**综合评级**（2026-10-31 张老师定稿：稀有程度为主占四份、
+ * 其余四轴各一份，见 PERFORMANCE_WEIGHTS）。全轴都无可评级（grade 全 "?")→ 返回
+ * "?"（面板显示「—」）。
  */
 export function radarOverall(points: VideoAnalysisPoint[]): string {
   if (!points.some((p) => p.grade !== "?")) return "?";

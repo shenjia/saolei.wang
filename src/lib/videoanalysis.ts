@@ -3,19 +3,14 @@
 // 缺行兜底：指标缺 → 补算（videometrics.ts，与审核后置钩子同一个幂等入口）；
 //           基准组缺 → 不出雷达盒。
 //
-// 口径（张老师 2026-10-14 定；2026-10-28 轴调整）：
-//   · 分组只按 **级别 × 模式（标雷/无猜）**，不细分 3BV，也不同级别之间比；
-//   · 雷达 **五轴**（2026-10-28 晚张老师定四字名）：判雷能力（置顶，2026-10-19 定改名，
-//     原「综合」）/ 开图速度 / 操作效率 / 路线规划 / 点击速度（旧名：判雷/速度/效率/走位/手速）
-//     —— 原「移动」轴已去掉；原「精准」corr 轴 2026-10-28 换「路线规划」
-//     （2026-10-29 起 v2 口径 = 完成3BV/Crossings，分母换跨格次数；2026-10-30 定名）；
-//     「操作效率」按组选指标：NF=IOE / FL=ThrP（张老师 2026-10-28 定）；
-//   · 综合轴 = **STNB 原值**（2026-10-14 晚张老师定：数值与评级都回到 STNB 组内分位）。
-//     历史：中间版本曾用「四轴百分位加权平均（compositeOf）」，已弃；排行榜落库字段
-//     video_metrics.composite 的口径同步见 scripts/video-metrics.ts。
-//   · 盒标题右侧的**综合评级**（2026-10-15 张老师定）走 PERFORMANCE_WEIGHTS 五轴加权
-//     （STNB 占一半、四分项各 1/8）——**与练习页结算面板「评级：S+」同一个算法**
-//     （lib/videoscore.ts performanceOf + gradeFromPercent），两处不许各写一份。
+// 口径（2026-10-31 张老师定稿）：
+//   · **所有级别、NF 和 FL 录像分开评**——五轴全部在「级别 × 模式」组内比；
+//   · 五轴：稀有程度（顶，time/3bvs/stnb 三合一取最强）/ 移动速度（cps，右上）/
+//     操作效率（thrp，右下）/ 路线规划（bpp，左下，同级别 3BV 低中高三桶）/
+//     有效点击（ces，左上）；
+//   · 综合评级：**稀有程度为主（4 份）+ 四维各 1 份**加权（PERFORMANCE_WEIGHTS），
+//     与练习页结算面板「评级：S+」同一个算法（lib/videoscore.ts performanceOf +
+//     gradeFromPercent），两处不许各写一份。
 
 import { prisma } from "./db";
 import {
@@ -31,7 +26,8 @@ import {
   radarOverall,
   radarPointsFrom,
 } from "./videoradar";
-import { bucketRangeText } from "./videoscore";
+import { bucketName, bucketRangeText } from "./videoscore";
+import { LEVEL_NAMES } from "./config";
 import type { MetricKey } from "./videoradar";
 import type { VideoAnalysisPoint } from "./videoscore";
 import { ensureVideoMetrics } from "./videometrics";
@@ -42,20 +38,23 @@ export type { VideoAnalysisPoint };
 
 /** 录像评级盒的取数结果 */
 export interface VideoAnalysisResult {
-  /** 五根轴（2026-10-30 改版）：稀有程度（三合一，key 锚 stnb）置顶 + 移动速度（右上）/
-   *  操作效率（右下）/ 路线规划（左下，3BV 三桶）/ 有效点击（左上） */
+  /** 五根轴（2026-10-30 改版；2026-10-31 定稿全轴组内比）：稀有程度（三合一，
+   *  key 锚 stnb）置顶 + 移动速度（右上）/ 操作效率（右下）/ 路线规划（左下，
+   *  3BV 三桶）/ 有效点击（左上） */
   points: VideoAnalysisPoint[];
-  /** 综合评级（S+/A-…）：五轴分位加权，与练习页结算面板同算法 */
+  /** 综合评级（S+/A-…）：稀有为主 4 份 + 四维各 1 份加权，与练习页结算面板同算法 */
   overall: string;
   /** 综合评级对应的表现分（0-100，百分位量纲，调试/对账用） */
   overallScore: number;
-  /** 组内基准（2026-10-31 定稿：稀有程度三分项 time/bvs/stnb 走级别×模式整组行 +
-   *  路线规划 bpp 走 3BV 三桶行优先）。全屏试玩结束时的「我的评级」要拿
+  /** 组内基准（2026-10-31 定稿：**全轴**走级别×模式组——time/bvs/stnb/thrp/ces/cps
+   *  整组行 + bpp 3BV 三桶行优先）。全屏试玩结束时的「我的评级」要拿
    *  **同一个基准组**给玩家本局打分（与首页录像评级可比），客户端算分必须拿到这份边界数组。 */
   dists: Partial<Record<MetricKey, number[]>>;
-  /** 全网池基准（2026-10-31 定稿缩为三轴：cps/thrp/ces，level='all' 行按 NF/FL 分池）
-   *  ——移动速度 / 操作效率 / 有效点击三轴 + 客户端「我的评级」同源用 */
-  allDists: Partial<Record<MetricKey, number[]>>;
+  /** 气泡池描述（2026-10-31 张老师定，如「高级NF玩家」）——轴 hover 气泡与
+   *  客户端「我的评级」同源用 */
+  poolDesc: string;
+  /** 路线规划桶描述（如「高级小图上的NF玩家」）——null＝桶行回退整组（不带限定） */
+  bppBucketDesc: string | null;
   /** 实际命中的 3BV 粗桶区间文案（如 "120-139"；2026-10-30 张老师需求：
    *  标题问号气泡要讲清「在哪个桶里评的」）。null＝整组行（桶行缺样本回退 /
    *  自定义盘等无桶级别），文案不带 3BV 限定。 */
@@ -116,16 +115,16 @@ function distFor(row: DistRow | null, key: MetricKey): number[] {
 }
 
 /**
- * 全网池基准（2026-10-30 五轴改版）：level='all' 行（NF/FL 各一，跑批写）——
- * 「稀有程度」（time/3bvs/stnb 三合一）/「移动速度」（cps）/「操作效率」（thrp）/
- * 「有效点击」（ces）四轴的全网评级边界。行缺失（跑批未升级前）返回空对象，
- * 对应轴显示 "?"（详情页兜底不炸，只是那几轴暂无评级）。
+ * 级别×模式整组行（2026-10-31 张老师定稿：**所有轴**按组内比——time/bvs/stnb/thrp/
+ * ces/cps 全走这行的边界；桶行只服务 bpp）。行缺失返回 null（对应轴 "?"）。
  */
-async function getAllPool(noflag: boolean): Promise<DistRow | null> {
+async function getWholeRow(level: string, noflag: boolean): Promise<DistRow | null> {
   try {
-    return await prisma.videoMetricDist.findUnique({
-      where: { level_noflag_bucket: { level: "all", noflag, bucket: DIST_BUCKET_ALL } },
+    const row = await prisma.videoMetricDist.findUnique({
+      where: { level_noflag_bucket: { level, noflag, bucket: DIST_BUCKET_ALL } },
+      select: { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true, time: true, ces: true, cps: true } as const,
     });
+    return row && row.size >= MIN_DIST_SIZE ? row : null;
   } catch {
     return null;
   }
@@ -183,50 +182,62 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
 
     const baseline = await getBaseline(input.level, input.noflag, input.bbbv);
     if (!baseline.row) return null;
-    // 全网池行（2026-10-30 五轴改版）：跑批未升级 / 行缺失时为 null——
-    // 走全网池的四轴（稀有程度/移动速度/操作效率/有效点击）显示 "?"，页面不炸
-    const allPool = await getAllPool(input.noflag);
 
-    // ① 五轴组装全部移交共享件 radarPointsFrom（2026-10-30 改版：三合一取最高 /
-    //    全网池 / 3BV 三桶都在里面）；本函数只负责把原始值与两份基准备齐。
-    //    values：time 秒 / bvs / stnb / thrp / bpp 来自 video_metrics 落库事实；
+    // ① 五轴组装全部移交共享件 radarPointsFrom（2026-10-30 改版；2026-10-31 定稿
+    //    **全轴组内比**）；本函数只负责把原始值与基准备齐。
+    //    values：bvs / stnb / thrp / bpp 来自 video_metrics 落库事实；
     //    ces = Ce÷秒、cps = crossings÷秒 现算（列未落库，纯除法）。
+    //    ⚠️ time 用 **Est RTime**（2026-10-31 张老师定）——败局的半截用时不能直接
+    //    进组内比 time（否则未完成局个个「全网第一」）。est = t × 3BV ÷ 已完成 3BV；
+    //    落库 bvs = solved÷t（analyzeVideo 口径）⇒ est = bbbv÷bvs 一除即得。
+    //    **胜局识别**（video 表无胜负列，bvs 舍入反推有 ~0.01% 噪声——328090 实测
+    //    25.102 vs 25.100 恰好跌破 SSS 边界 25.1）：est 与 t 相对偏差 <0.5% 视为胜局，
+    //    直接用原值 t（精确等于成绩口径）；败局偏差大、用 est 折算值。
+    //    dist 的 time 列样本本就只含胜局（跑批 status=20），基准是胜局分布。
     const sec = input.realTime / 1000;
+    const bvsVal = Number(row.bvs);
+    const estRaw = bvsVal > 0 ? input.bbbv / bvsVal : sec;
+    const estSec = Math.abs(estRaw - sec) / sec < 0.005 ? sec : estRaw;
     const values: Partial<Record<MetricKey, number>> = {
-      time: sec,
-      bvs: Number(row.bvs),
+      time: estSec,
+      bvs: bvsVal,
       stnb: Number(row.stnb),
       thrp: Number(row.thrp),
       bpp: Number(row.bpp),
       ces: sec > 0 && row.ce > 0 ? row.ce / sec : 0,
       cps: sec > 0 && row.cp > 0 ? row.cp / sec : 0,
     };
-    // 全网池（2026-10-31 张老师定稿后只剩三轴）：移动速度 cps / 操作效率 thrp / 有效点击 ces。
-    // 稀有程度三分项已全部改组内比（见 groupDists），全网池不再需要 bvs/stnb。
-    const allDists: Partial<Record<MetricKey, number[]>> = {
-      thrp: distFor(allPool, "thrp"),
-      ces: distFor(allPool, "ces"),
-      cps: distFor(allPool, "cps"),
+    // group 池（2026-10-31 张老师定稿：**所有轴**按级别×模式组内比）：
+    // 整组行带全 time/bvs/stnb/thrp/ces/cps（跑批都在写）；bpp 用 3BV 三桶行
+    // （getBaseline 已按桶取好，桶行缺失时它就是整组行，天然回退）。
+    const whole = await getWholeRow(input.level, input.noflag);
+    const groupDists: Partial<Record<MetricKey, number[]>> = {
+      bpp: distFor(baseline.row, "bpp"),
+      time: distFor(whole, "time"),
+      bvs: distFor(whole, "bvs"),
+      stnb: distFor(whole, "stnb"),
+      thrp: distFor(whole, "thrp"),
+      ces: distFor(whole, "ces"),
+      cps: distFor(whole, "cps"),
     };
     // crossings 未回填的存量行（cp=0，全量重放欠账期）：移动速度轴没有真实值——
     // 该轴 dist 也撤掉（dist 缺 → disp「—」+ ?），避免「0.00 次跨格/秒」配 ? 档的怪形态
     if (!(Number(row.cp) > 0)) {
       values.cps = 0;
-      delete allDists.cps;
+      delete groupDists.cps;
     }
-    // group 池（2026-10-31 张老师定稿）：稀有程度三分项 time/bvs/stnb **全部按
-    // 级别×模式组内比**（先分初中高、再分 FL/NF）——全走整组行，跑批本就写这些列；
-    // bpp = 3BV 三桶行（getBaseline 已按桶取好，桶行缺失时它就是整组行，天然回退）。
-    const groupDists: Partial<Record<MetricKey, number[]>> = {
-      bpp: distFor(baseline.row, "bpp"),
-      time: distFor(baseline.row, "time"),
-      bvs: distFor(baseline.row, "bvs"),
-      stnb: distFor(baseline.row, "stnb"),
-    };
-    const rateable = !!(allPool || distFor(baseline.row, "bpp").length);
-    const points = radarPointsFrom(values, groupDists, rateable, input.noflag, allDists);
+    // 气泡池描述（2026-10-31 张老师定）：「高级NF玩家」式分桶说明——NF/FL 都显式
+    // 带模式词（例句「超过72%的高级NF玩家」；FL 局写「高级FL玩家」，分开评要说清）；
+    // 路线规划额外带 3BV 桶名「高级小图上的NF玩家」（桶行回退整组＝null 不带限定）
+    const lvName = LEVEL_NAMES[input.level as keyof typeof LEVEL_NAMES] ?? input.level;
+    const modeName = input.noflag ? "NF" : "FL";
+    const poolDesc = `${lvName}${modeName}玩家`;
+    const bkName = bucketName(input.level, baseline.bucket);
+    const bppBucketDesc = bkName ? `${lvName}${bkName}上的${modeName}玩家` : null;
+    const rateable = !!Object.values(groupDists).some((d) => d && d.length);
+    const points = radarPointsFrom(values, groupDists, rateable, input.noflag, undefined, poolDesc, bppBucketDesc);
 
-    // ② 盒标题右侧的「综合评级」：五轴分位加权（稀有程度 key=stnb 占一半）——
+    // ② 盒标题右侧的「综合评级」（2026-10-31 定稿：稀有为主 4 份 + 四维各 1 份）——
     //    与练习页同算法（radarOverall），此处直接复用 points。
     const overall = radarOverall(points);
     const percents: Partial<Record<MetricKey, number>> = {};
@@ -237,13 +248,15 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       points,
       overall,
       overallScore,
-      /* 组内边界原样带出（2026-10-31 扩：稀有程度三分项 + 路线规划轴）：全屏试玩
-         「我的评级」在客户端按同一组给玩家本局打分，边界数组必须与首页录像评级完全同源 */
+      /* 组内边界原样带出（全轴组内比）：全屏试玩「我的评级」在客户端按同一组
+         给玩家本局打分，边界数组必须与首页录像评级完全同源 */
       dists: groupDists,
-      /* 全网池边界同源带出（2026-10-31 缩：三轴 cps/thrp/ces）：客户端「我的评级」用 */
-      allDists,
+      /* 气泡池描述（轴气泡 + 客户端「我的评级」同源） */
+      poolDesc,
       /* 实际命中桶的区间文案（问号气泡用；回退整组＝null，文案不带 3BV 限定） */
       bucketRange: bucketRangeText(input.level, baseline.bucket),
+      /* 路线规划桶描述（客户端「我的评级」气泡同源用；整组回退＝null） */
+      bppBucketDesc,
     };
   } catch {
     return null;
