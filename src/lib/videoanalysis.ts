@@ -228,12 +228,14 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     }
     // 气泡池描述（2026-10-31 张老师定）：「高级NF玩家」式分桶说明——NF/FL 都显式
     // 带模式词（例句「超过72%的高级NF玩家」；FL 局写「高级FL玩家」，分开评要说清）；
-    // 路线规划额外带 3BV 桶名「高级小图上的NF玩家」（桶行回退整组＝null 不带限定）
+    // 路线规划另配**纯桶名**「高级小图」（组件模板拼「在{桶名}上超过 xx%」——
+    // 2026-10-31 二修：桶串不再带「上的玩家」，否则语序错乱成「在高级中图上的
+    // FL玩家超过66%」；桶行回退整组＝null，该轴用通用池描述）
     const lvName = LEVEL_NAMES[input.level as keyof typeof LEVEL_NAMES] ?? input.level;
     const modeName = input.noflag ? "NF" : "FL";
     const poolDesc = `${lvName}${modeName}玩家`;
     const bkName = bucketName(input.level, baseline.bucket);
-    const bppBucketDesc = bkName ? `${lvName}${bkName}上的${modeName}玩家` : null;
+    const bppBucketDesc = bkName ? `${lvName}${bkName}` : null;
     const rateable = !!Object.values(groupDists).some((d) => d && d.length);
     const points = radarPointsFrom(values, groupDists, rateable, input.noflag, undefined, poolDesc, bppBucketDesc);
 

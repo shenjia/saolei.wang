@@ -254,7 +254,7 @@ export function VideoAnalysisRadar({
             <span className="tip_first">{tip.pool ? `${tip.pool}中的最强` : "全网第一"}</span>
           ) : tip.key === "bpp" && tip.pool ? (
             <>
-              <span className="vr_tip_val">{tip.disp}</span>，在{tip.pool}超过 <em>{tip.percent}%</em>
+              <span className="vr_tip_val">{tip.disp}</span>，在{tip.pool}上超过 <em>{tip.percent}%</em>
             </>
           ) : tip.pool ? (
             <>
