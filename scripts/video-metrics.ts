@@ -30,7 +30,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "../src/lib/db";
-import { VIDEO_STATUS } from "../src/lib/config";
+import { VIDEO_STATUS, MIN_3BV_FOR_3BVS } from "../src/lib/config";
 import {
   analyzeVideo,
   BASE_METRIC_KEYS,
@@ -364,7 +364,7 @@ async function main() {
   type Group = { size: number; vals: Record<BaseMetricKey, number[]> };
   const groups = new Map<string, Group>();
   const groupKey = (level: string, noflag: boolean, bucket: number) => `${level}|${noflag ? 1 : 0}|${bucket}`;
-  const push = (key: string, row: Record<BaseMetricKey, number> & { cp?: number }) => {
+  const push = (key: string, row: Record<BaseMetricKey, number> & { cp?: number }, begLuck = false) => {
     let g = groups.get(key);
     if (!g) {
       g = { size: 0, vals: { stnb: [], bvs: [], ioe: [], thrp: [], corr: [], cls: [], ppc: [], bpp: [], time: [], ces: [], cps: [] } };
@@ -376,6 +376,10 @@ async function main() {
       // 全量重放欠账，2026-10-29 上线时标注的前置）cp=0 的零值不能进分位——否则
       // 30 万零值把边界拉到底，全部评级虚高 SSS。size 仍按行计（其他指标全量有效）。
       if ((k === "cps" || k === "bpp") && !(Number(row.cp) > 0)) continue;
+      // 初级运气盘（3BV<10）的 3bvs / STNB 不进分位（2026-10-31 张老师定：beg 组这两列
+      // 基准只收 3BV≥10 的盘，与 MIN_3BV_FOR_3BVS.beg=10 成绩划线同口径）——
+      // 稀疏盘 STNB 爆表（beg FL 组 SSS 边界曾被拉到 649），把正常盘的档内插值压偏。
+      if (begLuck && (k === "bvs" || k === "stnb")) continue;
       g.vals[k].push(row[k]);
     }
   };
@@ -395,14 +399,15 @@ async function main() {
       ces: sec > 0 && row.ce > 0 ? row.ce / sec : 0,
       cps: sec > 0 && row.cp > 0 ? row.cp / sec : 0,
     } as unknown as Record<BaseMetricKey, number>;
-    push(groupKey(row.level, nf, DIST_BUCKET_ALL), enriched);
+    const begLuck = row.level === "beg" && Number(row.bbbv) < MIN_3BV_FOR_3BVS.beg;
+    push(groupKey(row.level, nf, DIST_BUCKET_ALL), enriched, begLuck);
     const bucket = bucketOf(row.level, row.bbbv);
-    if (bucket !== DIST_BUCKET_ALL) push(groupKey(row.level, nf, bucket), enriched);
+    if (bucket !== DIST_BUCKET_ALL) push(groupKey(row.level, nf, bucket), enriched, begLuck);
     // 全网池行（2026-10-30 五轴改版张老师定）：level='all'，NF/FL 各一，bucket 恒 -1——
     // 「稀有程度」（time/3bvs/stnb 三合一）「移动速度」（cps）「操作效率」（thrp）
     // 「有效点击」（ces）四轴的全网评级边界。跨级别混合（time/3bvs 天然跨级可比，
     // 张老师点名「全网」）。
-    push(groupKey("all", nf, DIST_BUCKET_ALL), enriched);
+    push(groupKey("all", nf, DIST_BUCKET_ALL), enriched, begLuck);
   }
 
   let written = 0;
@@ -411,9 +416,14 @@ async function main() {
     const [level, nf, bucket] = key.split("|");
     const data: Record<string, string | number | boolean> = { level, noflag: nf === "1", bucket: Number(bucket), size: g.size };
     for (const def of BASE_METRICS) {
-      data[def.key] = buildDist(g.vals[def.key], def.highIsBetter)
-        .map((v) => String(Math.round(v * 1000) / 1000))
-        .join(",");
+      const vals = g.vals[def.key];
+      // 组内全被过滤（如初级 3BV<10 桶行的 bvs/stnb）→ 落空串（消费侧 parseDist →
+      // [] → "?"）。绝不能落 buildDist([]) 的全 0 边界——那会把该指标全员评成顶格/垫底。
+      data[def.key] = vals.length
+        ? buildDist(vals, def.highIsBetter)
+            .map((v) => String(Math.round(v * 1000) / 1000))
+            .join(",")
+        : "";
     }
     // 2026-10-30 五轴改版：全网池行（level='all'）的 time/ces/cps 三列必须落库
     // （四轴取数靠它们；普通行这三列不消费，但写上无害且免分支）。

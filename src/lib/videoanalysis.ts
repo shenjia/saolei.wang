@@ -27,7 +27,7 @@ import {
   radarPointsFrom,
 } from "./videoradar";
 import { bucketName, bucketRangeText } from "./videoscore";
-import { LEVEL_NAMES } from "./config";
+import { LEVEL_NAMES, MIN_3BV_FOR_3BVS } from "./config";
 import type { MetricKey } from "./videoradar";
 import type { VideoAnalysisPoint } from "./videoscore";
 import { ensureVideoMetrics } from "./videometrics";
@@ -225,6 +225,15 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     if (!(Number(row.cp) > 0)) {
       values.cps = 0;
       delete groupDists.cps;
+    }
+    // 初级运气盘（3BV<10）自身：3bvs / STNB 成绩不被承认（2026-10-31 张老师定，
+    // 与跑批基准划线 MIN_3BV_FOR_3BVS.beg=10 同口径）——两分项不评级（dist 撤掉
+    // → ?），稀有程度三合一里 time 仍正常参与；试玩「我的评级」复用本 dists 自动跟随
+    if (input.level === "beg" && input.bbbv < MIN_3BV_FOR_3BVS.beg) {
+      values.bvs = 0;
+      values.stnb = 0;
+      delete groupDists.bvs;
+      delete groupDists.stnb;
     }
     // 气泡池描述（2026-10-31 张老师定）：「高级NF玩家」式分桶说明——NF/FL 都显式
     // 带模式词（例句「超过72%的高级NF玩家」）；路线规划在「超过……」前加桶前缀
