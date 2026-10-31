@@ -3214,7 +3214,7 @@ export async function getStnbRankOfUser(
  * 在线玩结算雷达的分位基准（2026-10-14 五期）：读取 video_metric_dist 全表，
  * 组织成 OnlinePlay 需要的 { `${level}${nf?"_nf":""}`: { bucket: { 指标: number[] } } }。
  * 2026-10-29 起含 3BV 桶行；2026-10-30 五轴改版起含全网池行（level='all'，key 'all'/
- * 'all_nf'——稀有程度/移动速度/操作效率/有效点击四轴的全网评级边界 time/ces/cps）。
+ * 'all_nf'——竞技水准/移动速度/操作效率/有效点击四轴的全网评级边界 time/ces/cps）。
  * 表不存在/空表时返回空对象（前端不显示雷达，只显示按钮）。
  */
 export async function getOnlineMetricDists(): Promise<

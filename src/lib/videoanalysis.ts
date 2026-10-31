@@ -5,10 +5,10 @@
 //
 // 口径（2026-10-31 张老师定稿）：
 //   · **所有级别、NF 和 FL 录像分开评**——五轴全部在「级别 × 模式」组内比；
-//   · 五轴：稀有程度（顶，time/3bvs/stnb 三合一取最强）/ 移动速度（cps，右上）/
+//   · 五轴：竞技水准（顶，time/3bvs/stnb 三合一取最强）/ 移动速度（cps，右上）/
 //     操作效率（thrp，右下）/ 路线规划（bpp，左下，同级别 3BV 低中高三桶）/
 //     有效点击（ces，左上）；
-//   · 综合评级：**稀有程度为主（4 份）+ 四维各 1 份**加权（PERFORMANCE_WEIGHTS），
+//   · 综合评级：**竞技水准为主（4 份）+ 四维各 1 份**加权（PERFORMANCE_WEIGHTS），
 //     与练习页结算面板「评级：S+」同一个算法（lib/videoscore.ts performanceOf +
 //     gradeFromPercent），两处不许各写一份。
 
@@ -38,11 +38,11 @@ export type { VideoAnalysisPoint };
 
 /** 录像评级盒的取数结果 */
 export interface VideoAnalysisResult {
-  /** 五根轴（2026-10-30 改版；2026-10-31 定稿全轴组内比）：稀有程度（三合一，
+  /** 五根轴（2026-10-30 改版；2026-10-31 定稿全轴组内比）：竞技水准（三合一，
    *  key 锚 stnb）置顶 + 移动速度（右上）/ 操作效率（右下）/ 路线规划（左下，
    *  3BV 三桶）/ 有效点击（左上） */
   points: VideoAnalysisPoint[];
-  /** 综合评级（S+/A-…）：稀有为主 4 份 + 四维各 1 份加权，与练习页结算面板同算法 */
+  /** 综合评级（S+/A-…）：竞技为主 4 份 + 四维各 1 份加权，与练习页结算面板同算法 */
   overall: string;
   /** 综合评级对应的表现分（0-100，百分位量纲，调试/对账用） */
   overallScore: number;
@@ -145,7 +145,7 @@ async function getBaseline(
   noflag: boolean,
   bbbv: number
 ): Promise<{ row: DistRow | null; bucket: number }> {
-  // time 列 2026-10-31 起消费（稀有程度 time 分项按同级别组比）；ces/cps 仍只在
+  // time 列 2026-10-31 起消费（竞技水准 time 分项按同级别组比）；ces/cps 仍只在
   // 全网池行用，但一起带上无害（getOnlineMetricDists 才是练习页取数口）。
   const select = { size: true, bvs: true, ioe: true, thrp: true, corr: true, cls: true, ppc: true, bpp: true, stnb: true, time: true } as const;
   const bucket = bucketOf(level, bbbv);
@@ -228,7 +228,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     }
     // 初级运气盘（3BV<10）自身：3bvs / STNB 成绩不被承认（2026-10-31 张老师定，
     // 与跑批基准划线 MIN_3BV_FOR_3BVS.beg=10 同口径）——两分项不评级（dist 撤掉
-    // → ?），稀有程度三合一里 time 仍正常参与；试玩「我的评级」复用本 dists 自动跟随
+    // → ?），竞技水准三合一里 time 仍正常参与；试玩「我的评级」复用本 dists 自动跟随
     if (input.level === "beg" && input.bbbv < MIN_3BV_FOR_3BVS.beg) {
       values.bvs = 0;
       values.stnb = 0;
@@ -247,7 +247,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
     const rateable = !!Object.values(groupDists).some((d) => d && d.length);
     const points = radarPointsFrom(values, groupDists, rateable, input.noflag, undefined, poolDesc, bppBucketPrefix);
 
-    // ② 盒标题右侧的「综合评级」（2026-10-31 定稿：稀有为主 4 份 + 四维各 1 份）——
+    // ② 盒标题右侧的「综合评级」（2026-10-31 定稿：竞技为主 4 份 + 四维各 1 份）——
     //    与练习页同算法（radarOverall），此处直接复用 points。
     const overall = radarOverall(points);
     const percents: Partial<Record<MetricKey, number>> = {};

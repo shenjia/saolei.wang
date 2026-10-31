@@ -121,9 +121,9 @@ export default async function VideoViewPage({
           filepath: video.filepath,
         })
       : null;
-  // 评级问号气泡文案（2026-10-31 张老师定稿句）：评级规则总述。
+  // 评级问号气泡文案（2026-10-31 张老师定稿句；同日「稀有程度」更名「竞技水准」）：评级规则总述。
   const ratingHelpTip =
-    "所有级别、NF和FL录像分开评；稀有程度取Time/3BVs/STNB中最强评级；路线规划在3BV相近的录像中横向评比；最终评级以稀有程度为主，五轴评分加权得出。";
+    "所有级别、NF和FL录像分开评；竞技水准取Time/3BVs/STNB中最强评级；路线规划在3BV相近的录像中横向评比；最终评级以竞技水准为主，五轴评分加权得出。";
 
   return (
     <VideoReplayProvider

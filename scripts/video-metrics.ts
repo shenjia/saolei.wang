@@ -404,7 +404,7 @@ async function main() {
     const bucket = bucketOf(row.level, row.bbbv);
     if (bucket !== DIST_BUCKET_ALL) push(groupKey(row.level, nf, bucket), enriched, begLuck);
     // 全网池行（2026-10-30 五轴改版张老师定）：level='all'，NF/FL 各一，bucket 恒 -1——
-    // 「稀有程度」（time/3bvs/stnb 三合一）「移动速度」（cps）「操作效率」（thrp）
+    // 「竞技水准」（time/3bvs/stnb 三合一）「移动速度」（cps）「操作效率」（thrp）
     // 「有效点击」（ces）四轴的全网评级边界。跨级别混合（time/3bvs 天然跨级可比，
     // 张老师点名「全网」）。
     push(groupKey("all", nf, DIST_BUCKET_ALL), enriched, begLuck);

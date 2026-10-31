@@ -17,7 +17,7 @@ export type MetricKey = "stnb" | "bvs" | "ioe" | "thrp" | "corr" | "cls" | "ppc"
 export type BaseMetricKey = Exclude<MetricKey, "cmp">;
 /**
  * 雷达分项轴的候选键。2026-10-30 五轴改版（张老师定）——五轴全部换新口径：
- *   ① 稀有程度（顶）：time / 3bvs / stnb 三者各评级后**取最高档**展示（三合一，
+ *   ① 竞技水准（顶）：time / 3bvs / stnb 三者各评级后**取最高档**展示（三合一，
  *      见 radarPointsFrom；2026-10-31 张老师定稿：三分项全部按**级别 × 模式**组内比
  *      ——先分初中高、再分 FL/NF，跨级混比无意义）；
  *   ② 有效点击（左上）：CES = Ce/s 全网评级；
@@ -26,7 +26,7 @@ export type BaseMetricKey = Exclude<MetricKey, "cmp">;
  *   ⑤ 操作效率（右下）：Thrp 全网评级（不再按 NF/FL 组二选一）。
  * 全网池供数：跑批 video-metrics.ts 写 level='all' 行（NF/FL 各一），列 ces/cps/thrp
  * （移动速度/操作效率/有效点击三轴），取数见 videoanalysis distFor 的 'all' 分支；
- * 稀有程度三分项走级别×模式整组行（time/bvs/stnb 列跑批都在写）。
+ * 竞技水准三分项走级别×模式整组行（time/bvs/stnb 列跑批都在写）。
  */
 export type AxisMetricKey = "bvs" | "ioe" | "thrp" | "bpp" | "cls" | "ces" | "cps" | "time";
 
@@ -75,17 +75,17 @@ export const BASE_METRICS: MetricDef<BaseMetricKey>[] = [
   { key: "bpp", name: "路线规划", desc: "每跨一次格换回的完成 3BV", prefix: "完成3BV/Crossings", unit: "", digits: 3, highIsBetter: true },
   // 2026-10-30 五轴改版（张老师定）新增的全网评级指标（基准池 = 全站过审胜局，
   // NF/FL 分开；不入 BASE_METRICS——它们没有「级别×桶」分组基准，由全网池行供数）：
-  // time：用时（秒）——「稀有程度」三合一之一，越小越好（越小越快越稀有）；
+  // time：用时（秒）——「竞技水准」三合一之一，越小越好（越小越快越稀有）；
   // ces：有效点击速度 = Ce ÷ 用时秒（CES）——「有效点击」轴；
   // cps：移动速度 = crossings ÷ 用时秒——「移动速度」轴（crossings 对回报率免疫，
   //      不用 path：同回报率偏置会虚高，张老师点名 crossings/Rtime）。
-  { key: "time", name: "稀有程度", desc: "用时（秒）", prefix: "", unit: "秒", digits: 2, highIsBetter: false },
+  { key: "time", name: "竞技水准", desc: "用时（秒）", prefix: "", unit: "秒", digits: 2, highIsBetter: false },
   { key: "ces", name: "有效点击", desc: "每秒有效点击数", prefix: "CES", unit: "", digits: 2, highIsBetter: true },
   { key: "cps", name: "移动速度", desc: "每秒跨格次数", prefix: "", unit: "次跨格/秒", digits: 2, highIsBetter: true },
 ];
 
 /**
- * 雷达的四根分项轴（2026-10-30 五轴改版张老师定）——自顶部「稀有程度」起顺时针：
+ * 雷达的四根分项轴（2026-10-30 五轴改版张老师定）——自顶部「竞技水准」起顺时针：
  * 右上「移动速度」（cps=Crossings/s）/ 右下「操作效率」（Thrp）/ 左下「路线规划」
  * （完成3BV/Crossings，同级别 3BV 低中高三桶内评级）/ 左上「有效点击」（CES=Ce/s）。
  * 除「路线规划」外的三根都走**全网池**（level='all' 行，NF/FL 分池）。
@@ -239,8 +239,8 @@ export function compositeOf(percents: Partial<Record<MetricKey, number>>, noflag
 
 /**
  * 「本局表现」评级（在线玩结算面板标题右侧「评级：S+」）的权重 —— 2026-10-31 张老师定稿：
- * **稀有程度为主占四份，其余四轴各一份**（4:1:1:1:1 = 稀有 4/8=50%，四维各 1/8），
- * 加权平均后过九档表出等级。稀有程度轴 key 锚 stnb（吃 4 权重），移动 cps / 操作 thrp /
+ * **竞技水准为主占四份，其余四轴各一份**（4:1:1:1:1 = 稀有 4/8=50%，四维各 1/8），
+ * 加权平均后过九档表出等级。竞技水准轴 key 锚 stnb（吃 4 权重），移动 cps / 操作 thrp /
  * 路线 bpp / 有效 ces 各 1。ioe/cls/bvs/time 不出现在雷达点上，不进加权。
  *
  * 与 COMPOSITE_WEIGHTS 是两回事：后者是雷达「综合」轴的历史口径（已被 STNB 原值取代），
@@ -457,7 +457,7 @@ export interface VideoAnalysisPoint {
  * 五轴雷达点组装（2026-10-30 五轴改版张老师定，三处共用：录像详情页右栏 /
  * 练习页结算面板 / 全屏试玩「我的评级」——2026-10-14 副本分叉的教训，口径只此一份）：
  *
- *   ① 稀有程度（顶）：time / 3bvs / stnb 三者各评级后**取最高档**展示（半径用三者
+ *   ① 竞技水准（顶）：time / 3bvs / stnb 三者各评级后**取最高档**展示（半径用三者
  *      的最高 percent；气泡 disp 显示最能代表该盘稀有性的那项的数值——按 percent
  *      最高者）。池子（2026-10-31 张老师定稿）：三分项全部在**同级别 × 同模式组内**比
  *      （先分初中高、再分 FL/NF——time/bvs 跨级别混比无意义，stnb 虽难度归一化
@@ -472,7 +472,7 @@ export interface VideoAnalysisPoint {
  *   全网池（allDists）已无消费方、参数保留仅为兼容旧调用签名。
  *
  * @param values 本局原始指标值（time 秒 / bvs / stnb / thrp / bpp / cps / ces）
- * @param group 同级别×模式组基准：五轴全部从这里取——稀有程度三分项与 cps/thrp/ces
+ * @param group 同级别×模式组基准：五轴全部从这里取——竞技水准三分项与 cps/thrp/ces
  *   用整组行，路线规划 bpp 用 3BV 三桶行优先（缺行即整组行回退）
  * @param poolDesc 气泡池描述（如「高级NF玩家」）——组件层拼气泡用
  * @param bppBucketPrefix 路线规划的桶前缀（「在小图上」/「在中图上」/「在大图上」，
@@ -515,7 +515,7 @@ export function radarPointsFrom(
       prefix,
     };
   };
-  // ① 稀有程度（三合一取最高）：time（反向）/ 3bvs / stnb 各自评级，
+  // ① 竞技水准（三合一取最高）：time（反向）/ 3bvs / stnb 各自评级，
   //    取主档最高者展示；radius（percent）取三者最大（雷达画的是「稀有性强度」）；
   //    disp 取 percent 最高那项的格式化值（最能代表这盘为什么稀有）。
   //    主档序：SSS(0) 最强 … F(8) 最弱——比较用 GRADES.indexOf(主档)。
@@ -542,7 +542,7 @@ export function radarPointsFrom(
     : null;
   const rarity: VideoAnalysisPoint = {
     key: "stnb", // 语义锚定判雷/综合谱系（复活降档 demoteGrade 仍打在这根轴上）
-    name: "稀有程度",
+    name: "竞技水准",
     value: best ? best.value : values.stnb ?? 0,
     disp: best ? formatMetric(best.key, best.value) : "—",
     percent: best ? Math.max(...rated.map((p) => p.percent)) : 0,
@@ -562,7 +562,7 @@ export function radarPointsFrom(
 }
 
 /**
- * 五轴组内分位加权出的**综合评级**（2026-10-31 张老师定稿：稀有程度为主占四份、
+ * 五轴组内分位加权出的**综合评级**（2026-10-31 张老师定稿：竞技水准为主占四份、
  * 其余四轴各一份，见 PERFORMANCE_WEIGHTS）。全轴都无可评级（grade 全 "?")→ 返回
  * "?"（面板显示「—」）。
  */
