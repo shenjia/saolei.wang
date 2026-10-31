@@ -53,8 +53,8 @@ export interface VideoAnalysisResult {
   /** 气泡池描述（2026-10-31 张老师定，如「高级NF玩家」）——轴 hover 气泡与
    *  客户端「我的评级」同源用 */
   poolDesc: string;
-  /** 路线规划桶描述（如「高级小图上的NF玩家」）——null＝桶行回退整组（不带限定） */
-  bppBucketDesc: string | null;
+  /** 路线规划桶前缀（「在小图上」等，统一模板「在…上超过 xx% 的池」）；null＝整组回退 */
+  bppBucketPrefix: string | null;
   /** 实际命中的 3BV 粗桶区间文案（如 "120-139"；2026-10-30 张老师需求：
    *  标题问号气泡要讲清「在哪个桶里评的」）。null＝整组行（桶行缺样本回退 /
    *  自定义盘等无桶级别），文案不带 3BV 限定。 */
@@ -227,17 +227,16 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       delete groupDists.cps;
     }
     // 气泡池描述（2026-10-31 张老师定）：「高级NF玩家」式分桶说明——NF/FL 都显式
-    // 带模式词（例句「超过72%的高级NF玩家」；FL 局写「高级FL玩家」，分开评要说清）；
-    // 路线规划另配**纯桶名**「高级小图」（组件模板拼「在{桶名}上超过 xx%」——
-    // 2026-10-31 二修：桶串不再带「上的玩家」，否则语序错乱成「在高级中图上的
-    // FL玩家超过66%」；桶行回退整组＝null，该轴用通用池描述）
+    // 带模式词（例句「超过72%的高级NF玩家」）；路线规划在「超过……」前加桶前缀
+    // 「在小图上/在中图上/在大图上」（与其他轴统一模板，2026-10-31 定稿；
+    // 桶行回退整组＝null 不带）
     const lvName = LEVEL_NAMES[input.level as keyof typeof LEVEL_NAMES] ?? input.level;
     const modeName = input.noflag ? "NF" : "FL";
     const poolDesc = `${lvName}${modeName}玩家`;
     const bkName = bucketName(input.level, baseline.bucket);
-    const bppBucketDesc = bkName ? `${lvName}${bkName}` : null;
+    const bppBucketPrefix = bkName ? `在${bkName}上` : null;
     const rateable = !!Object.values(groupDists).some((d) => d && d.length);
-    const points = radarPointsFrom(values, groupDists, rateable, input.noflag, undefined, poolDesc, bppBucketDesc);
+    const points = radarPointsFrom(values, groupDists, rateable, input.noflag, undefined, poolDesc, bppBucketPrefix);
 
     // ② 盒标题右侧的「综合评级」（2026-10-31 定稿：稀有为主 4 份 + 四维各 1 份）——
     //    与练习页同算法（radarOverall），此处直接复用 points。
@@ -258,7 +257,7 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
       /* 实际命中桶的区间文案（问号气泡用；回退整组＝null，文案不带 3BV 限定） */
       bucketRange: bucketRangeText(input.level, baseline.bucket),
       /* 路线规划桶描述（客户端「我的评级」气泡同源用；整组回退＝null） */
-      bppBucketDesc,
+      bppBucketPrefix,
     };
   } catch {
     return null;

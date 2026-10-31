@@ -445,9 +445,11 @@ export interface VideoAnalysisPoint {
   /** 等级（SSS~F，含 +/-） */
   grade: string;
   /** 气泡「超过 xx% 的 XX玩家」里的比对池描述（2026-10-31 张老师定：所有轴气泡要
-   *  说明分桶——如「高级NF玩家」；路线规划额外带 3BV 桶「高级小图上的NF玩家」。
-   *  组件层拼文案，这里只给池名（levelName + nf 后缀 + 可选桶名由调用方传入拼好）。 */
+   *  说明分桶——如「高级NF玩家」）。组件层拼文案，这里只给池名（levelName + nf 后缀） */
   pool?: string;
+  /** 路线规划轴专用的桶前缀（「在小图上」/「在中图上」/「在大图上」，2026-10-31
+   *  张老师定稿：与其他轴统一模板，仅在「超过……」前加桶限定；普通轴 undefined） */
+  prefix?: string;
 }
 
 /**
@@ -471,8 +473,10 @@ export interface VideoAnalysisPoint {
  * @param values 本局原始指标值（time 秒 / bvs / stnb / thrp / bpp / cps / ces）
  * @param group 同级别×模式组基准：五轴全部从这里取——稀有程度三分项与 cps/thrp/ces
  *   用整组行，路线规划 bpp 用 3BV 三桶行优先（缺行即整组行回退）
- * @param poolDesc 气泡池描述（如「高级NF玩家」）；bppBucketDesc 路线规划的桶描述
- *   （如「高级小图上的NF玩家」，null=桶行回退整组时不带限定）——组件层拼气泡用
+ * @param poolDesc 气泡池描述（如「高级NF玩家」）——组件层拼气泡用
+ * @param bppBucketPrefix 路线规划的桶前缀（「在小图上」/「在中图上」/「在大图上」，
+ *   2026-10-31 张老师定稿：与其他轴统一模板，只在「超过……」前加桶限定；
+ *   null/undefined=桶行回退整组时不带）
  * @param rateable 是否可评级（缺基准 / 零点击 / 完成度过低＝false）
  *   —— false 时全轴 disp "—"、percent 0、grade "?"（雷达收缩到圆心的空图，值仍保留）
  * @param noflag 打法（保留签名兼容；池选择已收敛到 group，不再分 NF/FL 全网池）
@@ -484,7 +488,7 @@ export function radarPointsFrom(
   noflag = false,
   allDists?: Partial<Record<MetricKey, number[]>>,
   poolDesc?: string,
-  bppBucketDesc?: string | null,
+  bppBucketPrefix?: string | null,
 ): VideoAnalysisPoint[] {
   void noflag;
   void allDists; // 2026-10-31 定稿后无消费（全轴组内）；参数保留防三处调用方连锁改签名
@@ -495,6 +499,7 @@ export function radarPointsFrom(
     dist: number[] | undefined,
     highIsBetter: boolean,
     pool: string | undefined,
+    prefix?: string,
   ): VideoAnalysisPoint => {
     const value = values[key] ?? 0;
     const d = dist ?? [];
@@ -506,6 +511,7 @@ export function radarPointsFrom(
       percent: d.length ? percentOf(value, d, highIsBetter, key) : 0,
       grade: d.length ? gradeOf(value, d, highIsBetter) : "?",
       pool,
+      prefix,
     };
   };
   // ① 稀有程度（三合一取最高）：time（反向）/ 3bvs / stnb 各自评级，
@@ -546,8 +552,9 @@ export function radarPointsFrom(
     rarity,
     axis("cps", "移动速度", group?.cps, true, poolDesc), // 右上
     axis("thrp", "操作效率", group?.thrp, true, poolDesc), // 右下
-    // 左下：同级别 3BV 三桶内；气泡池带桶描述（null=整组回退，用通用池描述）
-    axis("bpp", "路线规划", group?.bpp, true, bppBucketDesc ?? poolDesc ?? undefined),
+    // 左下：同级别 3BV 三桶内；气泡统一模板 + prefix「在小图上」等桶限定
+    //（2026-10-31 张老师定稿；桶行回退整组＝不带 prefix）
+    axis("bpp", "路线规划", group?.bpp, true, poolDesc, bppBucketPrefix ?? undefined),
     axis("ces", "有效点击", group?.ces, true, poolDesc), // 左上
   ];
   return rateable ? all : all.map((p) => ({ ...p, disp: "—", percent: 0, grade: "?" }));

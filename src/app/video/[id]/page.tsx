@@ -134,7 +134,7 @@ export default async function VideoViewPage({
       radarOverall={analysis?.overall}
       radarDists={analysis?.dists}
       radarPoolDesc={analysis?.poolDesc}
-      radarBppBucketDesc={analysis?.bppBucketDesc}
+      radarBppBucketPrefix={analysis?.bppBucketPrefix}
       level={level}
       noflag={video.noflag}
       boardStr={board}

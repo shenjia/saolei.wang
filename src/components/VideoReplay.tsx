@@ -1628,7 +1628,7 @@ export function VideoReplayProvider({
   radarOverall,
   radarDists,
   radarPoolDesc,
-  radarBppBucketDesc,
+  radarBppBucketPrefix,
   level,
   noflag,
   boardStr,
@@ -1650,7 +1650,7 @@ export function VideoReplayProvider({
   /** 气泡池描述（如「高级NF玩家」，2026-10-31）：客户端「我的评级」气泡同源 */
   radarPoolDesc?: string;
   /** 路线规划桶描述（如「高级小图上的NF玩家」；null=整组回退）——客户端同源 */
-  radarBppBucketDesc?: string | null;
+  radarBppBucketPrefix?: string | null;
   /** 打法（2026-10-31 起：池描述按 NF/FL 拼词用） */
   noflag?: boolean;
   /** 级别与整盘串（renderBoard 后 '*'/数字）——全屏层重画 Board 用 */
@@ -1958,7 +1958,7 @@ export function VideoReplayProvider({
           radarOverall={radarOverall}
           radarDists={radarDists}
           radarPoolDesc={radarPoolDesc}
-          radarBppBucketDesc={radarBppBucketDesc}
+          radarBppBucketPrefix={radarBppBucketPrefix}
           noflag={noflag}
           autoEnterPlay={autoPlay}
           onAutoEnterDone={autoEnterDone}
@@ -2333,7 +2333,7 @@ export function ReplayFullscreen({
   radarOverall: radarOverallProp,
   radarDists,
   radarPoolDesc,
-  radarBppBucketDesc,
+  radarBppBucketPrefix,
   noflag,
   autoEnterPlay,
   onAutoEnterDone,
@@ -2365,7 +2365,7 @@ export function ReplayFullscreen({
   /** 气泡池描述（如「高级NF玩家」，2026-10-31）：「我的评级」气泡同源 */
   radarPoolDesc?: string;
   /** 路线规划桶描述（如「高级小图上的NF玩家」；null=整组回退）——「我的评级」同源 */
-  radarBppBucketDesc?: string | null;
+  radarBppBucketPrefix?: string | null;
   /** 打法（2026-10-31 起：池描述按 NF/FL 拼词用） */
   noflag?: boolean;
   /** 二十一期一键试玩：挂载即自动「点笑脸」进试玩（等价点全屏后点笑脸） */
@@ -2695,12 +2695,12 @@ export function ReplayFullscreen({
       noflag,
       undefined,
       radarPoolDesc,
-      radarBppBucketDesc,
+      radarBppBucketPrefix,
     );
     /* 预计完成用时（未完成时展示）：与上方 est 同一值 */
     const estSec = est;
     return { points, overall: overallGrade(points), estSec };
-  }, [playResult, level, radarDists, noflag, radarPoolDesc, radarBppBucketDesc]);
+  }, [playResult, level, radarDists, noflag, radarPoolDesc, radarBppBucketPrefix]);
 
   /* 自适应基准（十九期：三栏复原——面板 + 游戏窗 + 评级栏）。
      十九期张老师定：全屏右侧恢复「录像评级」，宽度＝数据统计面板的 1.5 倍。
