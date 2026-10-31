@@ -17,7 +17,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "./db";
-import { analyzeVideo, parseVideoBinary } from "./videoradar";
+import { analyzeVideo, parseVideoBinary, replayEvents } from "./videoradar";
 import { VIDEO_STATUS } from "./config";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
@@ -153,6 +153,8 @@ export function ensureVideoTriage(videoId: number, uploadExtra?: { auditClicks?:
  * 确保该录像的棋盘串（video_info.board）存在——空则从文件现解析并回写。
  * 背景：RMV 上传时期站内无解析器，board 落库为空串（地图不显示）；
  * rmv.ts 上线后可现解析。详情页调用；解析不出/失败返回 null（棋盘留空，页面不 500）。
+ * 2026-10-31：现解析回写时合成含旗串（F=雷+旗/X=非雷旗，见 lib/videoflags.ts），
+ * 与新上传链路同口径。
  */
 export async function ensureVideoBoard(videoId: number): Promise<string | null> {
   try {
@@ -166,11 +168,19 @@ export async function ensureVideoBoard(videoId: number): Promise<string | null> 
     const ext = info.filepath.split(".").pop()?.toLowerCase() ?? "";
     const v = parseVideoBinary(buf, ext);
     if (!v || !v.board || v.board.length !== v.width * v.height) return null;
+    // 含旗串合成（重放终态旗位；失败回退纯雷位串，功能降级不阻塞）
+    let boardOut = v.board;
+    try {
+      const { applyFlags } = await import("./videoflags");
+      boardOut = applyFlags(v.board, replayEvents(v).flagged);
+    } catch {
+      /* 保持纯雷位串 */
+    }
     await prisma.videoInfo.update({
       where: { id: BigInt(videoId) },
-      data: { board: v.board },
+      data: { board: boardOut },
     });
-    return v.board;
+    return boardOut;
   } catch {
     return null;
   }

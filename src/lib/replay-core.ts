@@ -66,6 +66,12 @@ export interface ReplayCounts {
   /** 终盘插旗数 */
   flags: number;
   /**
+   * 终态旗位图（2026-10-31 张老师需求：录像封面显示玩家标过的雷）：
+   * 1＝终局仍插旗（纯玩家行为——胜局引擎自动补旗不经事件流，不会虚高）。
+   * 调用方据此合成含旗 board 串（雷上旗=F / 非雷旗=X）落库 video_info.board。
+   */
+  flagged: Uint8Array;
+  /**
    * 已完成 3BV（2026-10-30 张老师定：bpp 分子用完成 3BV 而非总 3BV）：
    * 重放终态按站内 3BV 构件（region 全开算 1 / singles 开算 1）扫描——
    * 胜局恒等于全盘 3BV，未完成局只算真实开到的部分
@@ -408,6 +414,7 @@ export function replayCounts(
     pathPx,
     crossings,
     flags,
+    flagged,
     solvedBv,
   };
 }

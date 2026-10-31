@@ -7,9 +7,14 @@ import { BOARD_SIZE, type VideoLevel } from "@/lib/config";
    2026-10-14 二次返工定稿的「整盘单 SVG 覆盖层」：所有格子共用一张坐标系一次
    光栅化，任意倍率网格完全均匀（flop 原版同构）。
    静态字符（数字 0-8 / b＝雷→未开面）→ FlopSprites symbol id；
-   回放动态类（bb/bf/bq/bm/bn/bmb）映射在 VideoReplay 的 CELL_VEC_MAP。 */
+   回放动态类（bb/bf/bq/bm/bn/bmb）映射在 VideoReplay 的 CELL_VEC_MAP。
+   2026-10-31 封面含旗编码（张老师需求：封面显示玩家标过的雷，等长合并在
+   video_info.board 里）：F＝雷+玩家旗→红旗、X＝非雷格+玩家旗→错旗；
+   td 类与 vec 查表统一转小写（f/n，对齐 legacy 雪碧图 td.bf/td.bn）。 */
 const VEC_SYM: Record<string, string> = {
   b: "cell-normal-solid",
+  f: "cell-flag-solid",
+  n: "cell-flag-wrong",
   "0": "cell-number-0",
   "1": "cell-number-1",
   "2": "cell-number-2",
@@ -40,8 +45,14 @@ export function Board({
   vec?: boolean;
 }) {
   const dim = BOARD_SIZE[level] ?? BOARD_SIZE.beg;
-  // * 表示雷，映射为 b（移植 board.js 的 replace(/\*/g, 'b')）
-  const cells = board.replace(/\*/g, "b").split("");
+  // * 表示雷，映射为 b（移植 board.js 的 replace(/\*/g, 'b')）；
+  // F/X 为含旗编码（雷+旗/非雷+旗）——td 类映射到 legacy 雪碧图的 bf（旗）/bn（错旗），
+  // 位图类是小写（CSS 类大小写敏感），vec 覆盖层用大写 F/X 查 VEC_SYM
+  const cells = board
+    .replace(/\*/g, "b")
+    .replace(/F/g, "f")
+    .replace(/X/g, "n")
+    .split("");
   const rows: string[][] = [];
   for (let y = 0; y < dim.y; y++) {
     rows.push(cells.slice(y * dim.x, (y + 1) * dim.x));

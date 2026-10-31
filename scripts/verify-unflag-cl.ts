@@ -121,6 +121,7 @@ function replayOld(v: ParsedVideo): ReplayCounts {
     pathPx,
     crossings: 0,
     flags,
+    flagged: new Uint8Array(0), // 旧口径复刻不含此量（2026-10-31 加字段，占位不参与对账）
     solvedBv: 0, // 旧口径复刻不含此量（2026-10-30 加字段，占位不参与对账）
   };
 }

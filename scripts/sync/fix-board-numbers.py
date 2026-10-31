@@ -63,6 +63,11 @@ def main() -> None:
         if not dims:
             bad_len += 1
             continue
+        # 2026-10-31 起库内 board 可含旗编码（F=雷+旗/X=非雷旗，等长替换）：
+        # 本脚本的数字重算会把 F 当数字格破坏编码——含编码行跳过（该修复已完成
+        # 历史使命，此防呆只为防误跑）
+        if "F" in board or "X" in board:
+            continue
         fixed = recompute(board, *dims)
         if fixed != board:
             changed.append((fixed, vid))

@@ -14,6 +14,8 @@ import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { evfToRawvf } from "@/lib/evf";
 import { formatRawvf, checkProgramVersion } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
+import { applyFlags } from "@/lib/videoflags";
+import { replayEvents } from "@/lib/videoradar";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { RANKED_SOFTWARE } from "@/lib/evfwrite";
 import { evfSignature } from "@/core/src/lib/evf-sign";
@@ -136,6 +138,16 @@ export async function uploadVideo(
   const minBbbv = LEVEL_MIN_3BV[level];
   if ((parsed.bbbv ?? 0) < minBbbv) return fail(`该录像的3BV小于${minBbbv}`);
 
+  /* 封面含旗串（2026-10-31 张老师需求：封面显示玩家标过的雷，F/X 等长编码进
+     board）：重放事件流取终态旗位（flop 状态机，单盘 ~2.4ms）。NF 局旗位图
+     全零、FL 局错旗也如实编码；重放抛错回退纯雷位串（封面功能降级不阻塞上传） */
+  let boardWithFlags = parsed.board;
+  try {
+    boardWithFlags = applyFlags(parsed.board, replayEvents(parsed).flagged);
+  } catch {
+    /* 保持纯雷位串 */
+  }
+
   // 录像标识文字会公开展示在录像页，并写入 user_sig。命中则不注册签名、不落文件
   const sigHit = checkSensitive(parsed.player);
   if (!sigHit.ok) {
@@ -212,7 +224,7 @@ export async function uploadVideo(
           software: parsed.program,
           version: parsed.version,
           noflag: parsed.noflag,
-          board: parsed.board,
+          board: boardWithFlags,
           board3bv: parsed.bbbv ?? 0,
           realTime: parsed.timeMs,
           // 排名局录像签名（2026-10-27 张老师要求）：对实际存储字节算 HMAC 存库，

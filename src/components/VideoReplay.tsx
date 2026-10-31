@@ -302,8 +302,12 @@ export function runReplay(opts: {
    *  .vprfs_center，wrap 量不到 → 调用方传 getter（值变化时 off 重量取，
    *  滚轮改 --vfz 后光标锚点自动跟进） */
   getHostZoom?: () => number;
+  /** 静态封面串（2026-10-31 含旗编码）：stop() 恢复静态地图时优先用它而非
+   *  解析器输出的 data.board（后者是纯雷位形态，无 F/X 旗编码——详情页封面
+   *  已升级为玩家旗位版，退出回放必须恢复同款）；缺省回退 data.board（老行为） */
+  coverBoard?: string;
 }): Engine {
-  const { wrap, tbody, rows, cols, data, onEnd, onStats, onFace, getHostZoom } = opts;
+  const { wrap, tbody, rows, cols, data, onEnd, onStats, onFace, getHostZoom, coverBoard } = opts;
   const N = rows * cols;
   const mines = new Uint8Array(N);
   const nums = new Uint8Array(N);
@@ -769,9 +773,21 @@ export function runReplay(opts: {
         if (td.innerHTML) td.innerHTML = "";
       }
       if (vecUse.length) {
+        /* 恢复静态封面：优先 coverBoard（DB 含旗串，F/X 旗编码），回退解析器
+           输出 data.board（纯雷位）。雷=b 未开面、F=红旗、X=错旗，数字照旧 */
+        const cover = coverBoard && coverBoard.length === N ? coverBoard : data.board;
         for (let i = 0; i < N; i++) {
-          const c = data.board[i];
-          vecSet(i, c === "*" ? "cell-normal-solid" : `cell-number-${c}`);
+          const c = cover[i];
+          vecSet(
+            i,
+            c === "*" || c === "b"
+              ? "cell-normal-solid"
+              : c === "F"
+                ? "cell-flag-solid"
+                : c === "X"
+                  ? "cell-flag-wrong"
+                  : `cell-number-${c}`
+          );
         }
       }
     },
@@ -1653,7 +1669,9 @@ export function VideoReplayProvider({
   radarBppBucketPrefix?: string | null;
   /** 打法（2026-10-31 起：池描述按 NF/FL 拼词用） */
   noflag?: boolean;
-  /** 级别与整盘串（renderBoard 后 '*'/数字）——全屏层重画 Board 用 */
+  /** 级别与整盘串——全屏层重画 Board 用。
+   *  2026-10-31 含旗编码：DB 落库串可能带 F（雷+旗）/X（非雷+旗）编码，
+   *  静态封面与 stop() 恢复都按含旗版渲染（coverBoard 同源传引擎） */
   level?: VideoLevel;
   boardStr?: string;
   children: ReactNode;
@@ -1782,6 +1800,8 @@ export function VideoReplayProvider({
         onEnd: () => setStatus("ended"),
         onStats: setStats,
         onFace: setFace,
+        /* 静态封面恢复用 DB 含旗串（2026-10-31）：与页面封面同源 */
+        coverBoard: boardStr,
       });
       /* 解析产物留 state 一份：全屏层试玩引擎的布雷数据源（渲染期可读） */
       setReplayData(data);
@@ -2567,6 +2587,8 @@ export function ReplayFullscreen({
         onStats: setFsStats,
         onFace: setFsFace,
         getHostZoom: () => zoomRef.current ?? 1,
+        /* 静态封面恢复用 DB 含旗串（2026-10-31）：boardStr 即本 FS 层的封面骨架 */
+        coverBoard: boardStr,
       });
       setFsStatus("playing");
     },
