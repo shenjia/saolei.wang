@@ -1388,3 +1388,55 @@ a.cheat_uid:hover .pt_bubble {
     max-height: none;
   }
 }
+
+/* 今日地区明细可排序表头（2026-10-31 张老师需求，RegionTodayTable）：
+   视觉照 ServerStatusPanel 的 .sv_table 双三角——当前方向金色 #fdc61d、
+   悬停提亮、当前列名金色；admin_table 的 th 基础样式保持不变 */
+.region_today th button.sv_sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.region_today th button.sv_sort.on {
+  color: #fdc61d;
+}
+.region_today th button.sv_sort:hover {
+  color: #a6e22e;
+}
+.region_today th .sa {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5px;
+  line-height: 0;
+}
+.region_today th .sa i {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+}
+.region_today th .sa i.up {
+  border-bottom: 4.5px solid #49483e;
+}
+.region_today th .sa i.down {
+  border-top: 4.5px solid #49483e;
+}
+.region_today th .sa i.up.on {
+  border-bottom-color: #fdc61d;
+}
+.region_today th .sa i.down.on {
+  border-top-color: #fdc61d;
+}
+.region_today th:hover .sa i.up:not(.on) {
+  border-bottom-color: #75715e;
+}
+.region_today th:hover .sa i.down:not(.on) {
+  border-top-color: #75715e;
+}

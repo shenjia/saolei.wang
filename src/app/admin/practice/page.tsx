@@ -7,6 +7,7 @@
 import { AdminCard } from "@/components/admin/Widgets";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
 import { LatencyMap } from "@/components/admin/LatencyMap";
+import { RegionTodayTable } from "@/components/admin/RegionTodayTable";
 import { ServerStatusPanel } from "@/components/admin/ServerStatusPanel";
 import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, getRankedLatencyMap, getRegionToday, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
@@ -72,38 +73,13 @@ export default async function AdminPracticePage() {
               <div className="admin_empty">暂无排行延迟数据（排行局结算后自动记入）</div>
             )}
           </div>
-          {/* 今日地区明细（2026-10-31 张老师需求）：地图右侧，按盘数从高到低。
+          {/* 今日地区明细（2026-10-31 张老师需求）：地图右侧，默认按盘数从高到低。
               盘数/人数/胜率=practice_daily 当天按省聚合；延迟两列=ranked_rtt_log
-              当天采样（无数据的省显示 —） */}
+              当天采样（无数据的省显示 —）。表头每列可双向排序（客户端组件） */}
           <div style={{ flex: "0 0 auto", minWidth: 0 }}>
             <b style={{ fontSize: 14 }}>今日地区明细</b>
             {regionToday.length ? (
-              <div className="admin_scroll region_today" style={{ marginTop: 6 }}>
-                <table className="admin_table">
-                  <thead>
-                    <tr>
-                      <th>地区</th>
-                      <th className="num">盘数</th>
-                      <th className="num">人数</th>
-                      <th className="num">胜率</th>
-                      <th className="num">平均延迟</th>
-                      <th className="num">延迟范围</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {regionToday.map((r) => (
-                      <tr key={r.area}>
-                        <td className="strong">{r.area}</td>
-                        <td className="num">{r.plays.toLocaleString("zh-CN")}</td>
-                        <td className="num">{r.players}</td>
-                        <td className="num">{r.plays ? `${r.winRate}%` : "—"}</td>
-                        <td className="num">{r.avgRtt !== null ? `${r.avgRtt}ms` : "—"}</td>
-                        <td className="num">{r.minRtt !== null ? `${r.minRtt}~${r.maxRtt}ms` : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <RegionTodayTable rows={regionToday} />
             ) : (
               <div className="admin_empty" style={{ marginTop: 6 }}>今日暂无地区数据</div>
             )}
