@@ -67,8 +67,8 @@ function reasonTagList(v: AdminVideoRow) {
   }
   if (r & (1 << 4)) {
     tags.push({
-      text: `点击数 ${v.cl ?? "?"} 过少`,
-      title: `总点击低于盘面 3BV×0.8 的理论下限，通关操作量不足`,
+      text: `点击数 ${v.cl ?? "?"} 低于下限`,
+      title: `总点击数低于该盘 ZiNi 理论下限（已知全部雷位时贪心最优解的最少点击数，人类不可能比它更少）——事件流疑似被剪辑或盘面被篡改，物理不可能`,
       cls: "bad",
     });
   }

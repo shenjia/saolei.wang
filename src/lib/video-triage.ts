@@ -13,11 +13,13 @@
 //       2026-10-24 起两路豁免：初级 3BV<10 运气盘不判（与 3BV/s 划线同口径）、可信用户组不判
 //   bit2 cls>10 次/秒（全站真实 max 7.77）
 //   bit3 path=0 且 cl>20（无移动连点）——ppc 阈值暂不启用（回测 min 1.106 远离 0.5，无区分度）
-//   bit4 点击数不足：cl < board_3bv × 0.8（cl 用 video_metrics.cl＝flop 重放口径，
-//       与后台展示的「点击数」同源——2026-10-28 修复：原实现用 pressPairStats 数
-//       事件流按下事件，速旗/连击的自动双击录独立 mr 事件（flop 计 Double++）但
-//       pressPairStats 归入松开分支不计数，双击重度局被系统性少计误触发（生产
-//       348011：3BV=20 flop cl=35，按下计数 15<16 误报）。metrics 缺行回退事件流计数）
+//   bit4 点击数低于 ZiNi 下界：cl < zini（2026-10-31 张老师提议，cl 用 video_metrics.cl
+//       ＝flop 重放口径与后台「点击数」同源；zini 由 lib/zini.ts calZini 按盘面现算＝
+//       已知雷位贪心最优解的最少点击估计，左/右/chord 各计 1——人类不可能比它更少，
+//       低于即事件流被剪辑或盘面被篡改，物理不可能。替代旧口径 cl<0.8×3BV：旧线是
+//       统计近似，天然低 zini 盘（高 chord 效率）被误伤（349311：3BV=25 zini=16 cl=18
+//       正常局被标记）；全站 1200 盘过审抽检 cl<zini 零命中、历史 bit4 命中 801 盘中
+//       740 盘在新口径下自动解除。盘面缺失（board 解析不出）回退旧 0.8×3BV 规则兜底）
 //   bit5 （预留，原「首击延迟」信号已废——录像计时从首事件起算恒 0，无区分度）
 //   bit6 破个人纪录（time / 3bvs 任一将刷新，需调用方传入，见 triageVideo 注释）
 //   bit7 级别 TOP 榜（时间 TOP100 / 3bvs TOP10，同上由调用方判定传入）
@@ -37,6 +39,7 @@ import { prisma } from "./db";
 import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
+import { calZini } from "./zini";
 import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
 import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
@@ -48,7 +51,7 @@ export { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER };
 const PRESS_MIN_PAIRS = 30;
 /** cls 手速阈值（次/秒，全站真实 max 7.77） */
 const CLS_TRIGGER = 10;
-/** 点击数下限系数：cl < bbbv × 该系数 → 命中 */
+/** 点击数下限系数（board 缺失回退口径）：cl < bbbv × 该系数 → 命中 */
 const CLICK_FLOOR_RATIO = 0.8;
 
 /** auto_flag 取值 */
@@ -257,11 +260,20 @@ export function triageParsed(
     if (metrics.cls !== null && metrics.cls > CLS_TRIGGER) reason |= AUTO_REASON.CLS;
     if (metrics.path !== null && metrics.path === 0 && ps.cl > 20) reason |= AUTO_REASON.PATH0;
   }
-  // bit4 点击数下限：优先 flop 重放口径（video_metrics.cl，与后台展示同源，
-  // 自动双击 mr 计 Double++ 在内）；metrics 缺行/未传 cl 时回退事件流按下计数。
+  // bit4 点击数低于 ZiNi 下界（2026-10-31 张老师提议）：cl < zini＝物理不可能。
+  // cl 优先 flop 重放口径（video_metrics.cl，与后台展示同源，自动双击 mr 计
+  // Double++ 在内）；metrics 缺行/未传 cl 时回退事件流按下计数。
+  // zini 由盘面现算（确定性贪心，同盘恒等值）；盘面缺失/长度不符时回退旧
+  // cl<0.8×3BV 统计线兜底（宁可多捞不可漏放）。
   const cl = metrics?.cl ?? ps.cl;
-  if (cl > 0 && v.bbbv !== null && v.bbbv > 0 && cl < v.bbbv * CLICK_FLOOR_RATIO) {
-    reason |= AUTO_REASON.CLICK_FLOOR;
+  if (cl > 0 && v.bbbv !== null && v.bbbv > 0) {
+    const boardOk = v.board && v.board.length === v.width * v.height;
+    if (boardOk) {
+      const zini = calZini(v.board, v.width, v.height);
+      if (zini > 0 && cl < zini) reason |= AUTO_REASON.CLICK_FLOOR;
+    } else if (cl < v.bbbv * CLICK_FLOOR_RATIO) {
+      reason |= AUTO_REASON.CLICK_FLOOR;
+    }
   }
 
   if (extra.personRecord) reason |= AUTO_REASON.PERSON_RECORD;
