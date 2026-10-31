@@ -980,11 +980,13 @@ model RankedRttLog {
   id         BigInt @id @default(autoincrement()) @db.BigInt
   userId     BigInt @map("user_id") @db.BigInt
   area       String @db.VarChar(12) // 与 user.area 同口径（剥后缀省名，空串不落行）
+  region     String @default("") @db.VarChar(8) // 客户端所连节点（gameId 首段：a/b=北京双实例，hk/hz/cd）；2026-11-01 前历史行空串
   rtt        Int // 毫秒
   createTime BigInt @default(0) @map("create_time") @db.BigInt // Unix 秒
 
   @@index([createTime]) // 近 7 日窗口扫描
   @@index([area, createTime]) // 按省聚合
+  @@index([region, createTime]) // 按节点聚合（负载面板玩家实测延迟）
   @@map("ranked_rtt_log")
 }
 

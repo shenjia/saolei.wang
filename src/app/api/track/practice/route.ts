@@ -91,8 +91,12 @@ export async function POST(req: NextRequest) {
       try {
         const area = await ipToArea(getClientIp(req));
         if (area) {
+          // 节点标识（2026-11-01）：客户端从 gameId 首段解析（a/b=北京双实例槽位，
+          // hk/hz/cd=地域节点）；白名单粗校验——埋点数据不信任客户端，脏值宁可丢
+          const regionRaw = String(body.region ?? "");
+          const region = ["a", "b", "hk", "hz", "cd"].includes(regionRaw) ? regionRaw : "";
           await prisma.rankedRttLog.create({
-            data: { userId: uid, area, rtt, createTime: BigInt(now) },
+            data: { userId: uid, area, region, rtt, createTime: BigInt(now) },
           });
         }
       } catch { /* ignore：延迟地图缺行可接受 */ }

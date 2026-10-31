@@ -4,6 +4,9 @@
 // 实例，每 3s 轮询 /api/admin/authority-status 刷新。
 // 2026-10-31 张老师需求：卡片改表格 + 可排序表头——默认按在线人数降序，表头
 // 点击切换升/降序（视觉语言照前台录像列表表头 VideoRows 的 .sa 双三角）。
+// 2026-11-01 张老师需求：①「进行」改「对局」，在线/对局合并一列（照录像列表
+// 评论/点击的「N / M」双数字形态）；②列首加「连接」＝累计去重连接人数；
+// ③延迟列弃后台探测值，改玩家实测（ranked_rtt_log 近 7 天按节点聚合）。
 
 import { useEffect, useRef, useState } from "react";
 
@@ -17,20 +20,24 @@ interface ServerRow {
   active: number;
   games: number;
   draining: boolean;
+  connsUsers: number;
+  rttAvg: number | null;
+  rttN: number;
 }
 
-type SortKey = "name" | "status" | "connections" | "active" | "rtt";
+type SortKey = "name" | "status" | "connsUsers" | "connections" | "active" | "rttAvg";
 interface SortSpec {
   key: SortKey;
   dir: "asc" | "desc";
 }
-/** 各列默认方向：数值列降序（多在前），名称/状态列升序 */
+/** 各列默认方向：计数列降序（多在前），延迟列升序（快在前），名称/状态列升序 */
 const DEFAULT_DIR: Record<SortKey, "asc" | "desc"> = {
   name: "asc",
   status: "asc",
+  connsUsers: "desc",
   connections: "desc",
   active: "desc",
-  rtt: "desc",
+  rttAvg: "asc",
 };
 
 /** 升降序双箭头（照抄 VideoRows.SortArrows 视觉：金色=当前方向） */
@@ -80,19 +87,14 @@ export function ServerStatusPanel() {
       s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: DEFAULT_DIR[key] },
     );
 
-  // 排序键取值：状态列按「正常0 < 排空1 < 不可用2」，其余数值列不可用行取 -1 沉底
-  const rank = (r: ServerRow): number =>
-    sort.key === "status"
-      ? !r.ok
-        ? 2
-        : r.draining
-          ? 1
-          : 0
-      : sort.key === "name"
-        ? 0
-        : sort.key === "rtt" && !r.ok
-          ? -1
-          : (r[sort.key] as number);
+  // 排序键取值：状态列按「正常0 < 排空1 < 不可用2」，数值列不可用行 -1 沉底，
+  // 无延迟样本（null）在延迟列恒沉底
+  const rank = (r: ServerRow): number => {
+    if (sort.key === "status") return !r.ok ? 2 : r.draining ? 1 : 0;
+    if (sort.key === "name") return 0;
+    if (sort.key === "rttAvg") return r.rttAvg !== null && r.ok ? r.rttAvg : -1;
+    return r.ok ? (r[sort.key] as number) : -1;
+  };
   const sorted = [...(rows ?? [])].sort((a, b) => {
     if (sort.key === "name") {
       return sort.dir === "asc" ? a.name.localeCompare(b.name, "zh") : b.name.localeCompare(a.name, "zh");
@@ -101,25 +103,24 @@ export function ServerStatusPanel() {
     return sort.dir === "asc" ? d : -d;
   });
 
-  const th = (key: SortKey, label: string, tip: string, extra?: object) => (
-    <th {...extra}>
-      <button
-        type="button"
-        className={`sv_sort${sort.key === key ? " on" : ""}`}
-        onClick={() => clickSort(key)}
-        title={tip}
-      >
-        {label}
-        {sort.key === key && <SortArrows dir={sort.dir} />}
-      </button>
-    </th>
+  /** 表头排序按钮（合并列直接拼两个，不包 th——th 由调用方控制） */
+  const thInner = (key: SortKey, label: string, tip: string) => (
+    <button
+      type="button"
+      className={`sv_sort${sort.key === key ? " on" : ""}`}
+      onClick={() => clickSort(key)}
+      title={tip}
+    >
+      {label}
+      {sort.key === key && <SortArrows dir={sort.dir} />}
+    </button>
   );
 
   return (
     <div
       className="sv_panel"
       style={{
-        flex: "0 0 316px",
+        flex: "0 0 380px",
         border: "1px solid #3e3d32",
         borderRadius: 6,
         background: "#272822",
@@ -138,11 +139,16 @@ export function ServerStatusPanel() {
       <table className="sv_table">
         <thead>
           <tr>
-            {th("name", "服务器", "按服务器名称排列")}
-            {th("status", "状态", "按状态排列（正常→排空→不可用）")}
-            {th("connections", "在线", "按在线人数排列（多在前）", { className: "c" })}
-            {th("active", "进行", "按进行局数排列（多在前）", { className: "c" })}
-            {th("rtt", "延迟", "按响应延迟排列（快在前）", { className: "c" })}
+            <th>{thInner("name", "服务器", "按服务器名称排列")}</th>
+            <th>{thInner("status", "状态", "按状态排列（正常→排空→不可用）")}</th>
+            <th className="c">{thInner("connsUsers", "连接", "按累计去重连接人数排列（多在前）")}</th>
+            {/* 在线/对局同列两个独立排序入口（照录像列表评论/点击形态，2026-11-01） */}
+            <th className="c">
+              {thInner("connections", "在线", "按在线连接数排列（多在前）")}
+              {" / "}
+              {thInner("active", "对局", "按进行中对局数排列（多在前）")}
+            </th>
+            <th className="c">{thInner("rttAvg", "平均延迟", "按玩家实测平均延迟排列（快在前；近 7 天采样）")}</th>
           </tr>
         </thead>
         <tbody>
@@ -175,13 +181,24 @@ export function ServerStatusPanel() {
                   <span style={{ color: "#e24b4a" }}>不可用</span>
                 )}
               </td>
-              <td className="c">
-                {r.ok ? <b style={{ color: "#a6e22e" }}>{r.connections}</b> : <span style={{ color: "#49483e" }}>—</span>}
+              <td className="c" title="累计去重连接人数（进程重启不清零）">
+                {r.ok ? r.connsUsers.toLocaleString("zh-CN") : <span style={{ color: "#49483e" }}>—</span>}
               </td>
+              {/* 在线 / 对局双数字（照录像列表 counters 形态，2026-11-01） */}
               <td className="c">
-                {r.ok ? <b style={{ color: "#fdc61d" }}>{r.active}</b> : <span style={{ color: "#49483e" }}>—</span>}
+                {r.ok ? (
+                  <>
+                    <b style={{ color: "#a6e22e" }}>{r.connections}</b>
+                    <span style={{ color: "#49483e" }}> / </span>
+                    <b style={{ color: "#fdc61d" }}>{r.active}</b>
+                  </>
+                ) : (
+                  <span style={{ color: "#49483e" }}>—</span>
+                )}
               </td>
-              <td className="c">{r.ok ? `${r.rtt}ms` : <span style={{ color: "#49483e" }}>—</span>}</td>
+              <td className="c" title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本` : undefined}>
+                {r.ok && r.rttAvg !== null ? `${r.rttAvg}ms` : <span style={{ color: "#49483e" }}>—</span>}
+              </td>
             </tr>
           ))}
           {rows !== null && rows.length === 0 && (
@@ -194,7 +211,8 @@ export function ServerStatusPanel() {
         </tbody>
       </table>
       <div style={{ marginTop: 8, color: "#75715e", fontSize: 12 }}>
-        在线＝当前 WS 连接数 · 进行＝有活连接的对局 · 点击表头切换排序
+        连接＝累计去重连接人数 · 在线＝当前 WS 连接 / 对局＝进行中且有活连接 ·
+        平均延迟＝玩家实测近 7 天均值 · 点击表头切换排序
       </div>
     </div>
   );

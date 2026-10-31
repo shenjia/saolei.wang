@@ -7,6 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/guard";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +44,31 @@ interface Row {
   active: number;
   games: number;
   draining: boolean;
+  /** 累计去重连接人数（server.mjs 内存累计+落盘持久化，重启不清零） */
+  connsUsers: number;
+  /** 玩家实测平均延迟（ranked_rtt_log 近 7 天按节点聚合，null=无样本） */
+  rttAvg: number | null;
+  /** 延迟样本数 */
+  rttN: number;
 }
 
 export async function GET() {
   const guard = await requireAdminApi();
   if ("error" in guard) return guard.error;
+
+  // 玩家实测延迟（2026-11-01 张老师定：面板延迟列不再用后台探测值，改
+  // ranked_rtt_log 近 7 天按节点聚合——客户端每秒 WS 探测采样随局上报）。
+  // 失败静默：聚合挂了面板延迟列显示 —，不影响健康状态展示
+  let rttByRegion = new Map<string, { avg: number; n: number }>();
+  try {
+    const since = Math.floor(Date.now() / 1000) - 7 * 86400;
+    const rows = await prisma.$queryRawUnsafe<{ region: string; n: bigint; avg: number }[]>(
+      `SELECT region, COUNT(*) n, AVG(rtt) avg FROM ranked_rtt_log
+       WHERE create_time >= ? AND rtt > 0 AND region <> '' GROUP BY region`,
+      since,
+    );
+    rttByRegion = new Map(rows.map((r) => [r.region, { avg: Math.round(r.avg), n: Number(r.n) }]));
+  } catch { /* ignore */ }
 
   const servers = await Promise.all(
     targets().map(async (t): Promise<Row> => {
@@ -61,7 +82,10 @@ export async function GET() {
           active?: number;
           games?: number;
           draining?: boolean;
+          connsUsers?: number;
         };
+        // 上报 region 键＝gameId 首段：北京（REGION 空串）走槽位 a/b，其他地域走 region
+        const rkey = j.region || j.slot || "";
         return {
           name: t.name,
           region: j.region ?? "",
@@ -72,9 +96,12 @@ export async function GET() {
           active: j.active ?? 0,
           games: j.games ?? 0,
           draining: Boolean(j.draining),
+          connsUsers: j.connsUsers ?? 0,
+          rttAvg: rttByRegion.get(rkey)?.avg ?? null,
+          rttN: rttByRegion.get(rkey)?.n ?? 0,
         };
       } catch {
-        return { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, active: 0, games: 0, draining: false };
+        return { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, active: 0, games: 0, draining: false, connsUsers: 0, rttAvg: null, rttN: 0 };
       }
     }),
   );
