@@ -14,7 +14,10 @@
 //   人界 = 其余（状元~童生、布衣、预备役）
 //
 // 纯模块：不 import prisma/@prisma/client，客户端组件可直接引用。
-// 服务端过滤片段在 queries.ts（newsStageFilter / videoStageCond）。
+// 服务端过滤片段在 queries.ts（newsStageSqlCond / videoStageCond）。
+// 2026-10-31 张老师报告档错位（张子豪 69.89 破纪录动态：徽章少尉、档在士兵）：
+// 动态阶段筛选改按「有效评定时间」分档（快照与关联录像 real_time 取优，与徽章
+// recordNewsExpTime 同口径），录像流此前的 VIDEO_PROMOTED_EXP_SQL 同理。
 
 export type FeedStage = "" | "gen" | "col" | "sol" | "god" | "man";
 

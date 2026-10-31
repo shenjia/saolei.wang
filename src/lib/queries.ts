@@ -273,43 +273,121 @@ const NEWS_LEVEL_TYPES: number[] = [
 ];
 
 /**
- * 首页阶段筛选（2026-10-29 张老师定，整体替换首页级别筛选）：
- * 按作者**行内快照** exp_time/ranked 分档——与该行动态旁的军衔徽章同一口径
- * （发布当时值），筛选档与徽章永不错位。分档定义见 lib/stage.ts：
- *   将帅 = 少将及以上（0<exp<50s）；校尉 = 大校~少尉（50~70s）；
- *   士兵 = 上士~列兵（≥70s）∪ 预备役（exp=0，张老师定归入士兵）；
- *   神界 = 旧称号雷帝/雷圣/雷神/雷仙（ranked=1 且 0<exp<60s）；人界 = 其余。
- * 全部为条件对象（可直接展开进 where），「全部」返回 null 不过滤。
+ * 纪录动态行的有效评定高级时间 SQL（2026-10-31，与 assess.recordNewsExpTime 严格同语义）：
+ * 纪录类动态（type 20/21/22）且 details lv=exp（LIKE 双形态匹配，同 newsLevelFilter 口径）时
+ * eff = min(非零快照 exp_time, 关联录像 real_time)；其余行一律维持快照原值。
+ * 背景（张老师 2026-10-31 报告）：张子豪 69.89 破高级时间纪录动态（news 1228072，
+ * 快照 exp_time=73924 → 士兵档），徽章按本盘 real_time=69889 评少尉——阶段筛选若只看
+ * 裸快照就会出现「徽章少尉、档在士兵」错位。阶段筛选必须与徽章同口径（recordNewsExpTime
+ * = 快照与 rt 取优），故档位条件必须进 SQL（Prisma 无跨表标量比较）。
+ * COALESCE/NULLIF 串联处理零值：任一方为 0 视为缺席取另一方，双方皆 0 → 0（预备役→士兵）。
+ * ⚠️ 仅在已 LEFT JOIN video_info vi（ON vi.id = n.reference）的查询里可用。
+ * od=time 行 cr 恒等于本盘 real_time，rt 缺席的孤儿动态（脏数据）按快照评定，微差可接受。
  */
-function newsStageFilter(stage: FeedStage): Prisma.NewsWhereInput | null {
+const NEWS_RECORD_TYPE_SQL = `${NEWS_TYPE.PERSON_RECORD},${NEWS_TYPE.AREA_RECORD},${NEWS_TYPE.NATION_RECORD}`;
+const NEWS_PROMOTED_EXP_SQL =
+  `CASE WHEN n.type IN (${NEWS_RECORD_TYPE_SQL}) ` +
+  `AND (n.details_data LIKE '%"lv":"exp"%' OR n.details_data LIKE '%"lv": "exp"%') ` +
+  `THEN COALESCE(LEAST(NULLIF(n.exp_time, 0), NULLIF(vi.real_time, 0)), NULLIF(n.exp_time, 0), NULLIF(vi.real_time, 0), 0) ` +
+  `ELSE n.exp_time END`;
+
+/**
+ * 首页动态阶段筛选 SQL 条件（2026-10-29 张老师定，2026-10-31 改按有效评定时间分档）。
+ * 档界与 videoStageCond 同（见 lib/stage.ts）：
+ *   将帅 0<t<50s / 校尉 50~70s / 士兵 t≥70s ∪ t=0（预备役归士兵）/
+ *   神界 ranked=1 且 0<t<60s（雷帝~雷仙）/ 人界=其余。
+ * STAR（54）只进「全部」tab，任何档一律排除（原 stageWhereCond 口径随迁）。
+ */
+function newsStageSqlCond(stage: FeedStage): string {
+  const t = NEWS_PROMOTED_EXP_SQL;
   switch (stage) {
     case "gen":
-      return { expTime: { gt: BigInt(0), lt: BigInt(STAGE_EXP.GENERAL_MAX) } };
+      return `n.type <> ${NEWS_TYPE.STAR} AND ${t} > 0 AND ${t} < ${STAGE_EXP.GENERAL_MAX}`;
     case "col":
-      return { expTime: { gte: BigInt(STAGE_EXP.GENERAL_MAX), lt: BigInt(STAGE_EXP.FIELD_MAX) } };
+      return `n.type <> ${NEWS_TYPE.STAR} AND ${t} >= ${STAGE_EXP.GENERAL_MAX} AND ${t} < ${STAGE_EXP.FIELD_MAX}`;
     case "sol":
-      return { OR: [{ expTime: BigInt(0) }, { expTime: { gte: BigInt(STAGE_EXP.FIELD_MAX) } }] };
+      return `n.type <> ${NEWS_TYPE.STAR} AND (${t} = 0 OR ${t} >= ${STAGE_EXP.FIELD_MAX})`;
     case "god":
-      return { ranked: BigInt(1), expTime: { gt: BigInt(0), lt: BigInt(STAGE_EXP.GOD_MAX) } };
+      return `n.type <> ${NEWS_TYPE.STAR} AND n.ranked = 1 AND ${t} > 0 AND ${t} < ${STAGE_EXP.GOD_MAX}`;
     case "man":
-      return { NOT: { ranked: BigInt(1), expTime: { gt: BigInt(0), lt: BigInt(STAGE_EXP.GOD_MAX) } } };
+      return `n.type <> ${NEWS_TYPE.STAR} AND NOT (n.ranked = 1 AND ${t} > 0 AND ${t} < ${STAGE_EXP.GOD_MAX})`;
     default:
-      return null;
+      return "";
   }
 }
 
+/** newsFeedSqlParts 的筛选维度（与 getNews/getNewsPage/getNewsCount 的 opts 对齐） */
+interface NewsFeedSqlOpts {
+  type?: number;
+  types?: number[];
+  userId?: number;
+  level?: string;
+  home?: boolean;
+  stage?: FeedStage;
+  cursorTime?: bigint;
+  cursor?: number;
+}
+
 /**
- * 阶段筛选展开片段（getNews / getNewsPage / getNewsCount 三处共用）：
- * ① 档位条件（newsStageFilter）包进 AND——直接顶层 spread 带 type 键会覆盖
- *   feedTypeFilter 的 type 口径（in NEWS_HOME_TYPES），Prisma 顶层同键后者胜；
- * ② 「当选每日一星」动态（STAR=54，2026-10-29 张老师定）只进「全部」tab，
- *   任何阶段档（将帅/校尉/士兵/神界/人界）一律排除——当选动态与成绩分档无关，
- *   混进档位列表会打断「按军衔看成绩」的阅读预期。「全部」返回 null 不过滤。
+ * 阶段筛选路径（stage≠""）的动态查询 SQL 条件组装（getNews / getNewsPage / getNewsCount 三处共用）：
+ * 类型/用户/级别/游标各条件与 Prisma 路径的 feedTypeFilter / newsLevelFilter 严格同义，
+ * 行集与计数一致性由三处共用本函数保证。FROM 一律
+ * `news n LEFT JOIN video_info vi ON vi.id = n.reference`（阶段档要按 rt 求有效评定时间）。
+ * home 口径含首创行（or=0 双标记）与 exp_time/ranked=0 排除，同 homeNewsTypeFilter。
  */
-function stageWhereCond(stage: FeedStage): Prisma.NewsWhereInput | null {
-  const cond = newsStageFilter(stage);
-  if (!cond) return null;
-  return { AND: [cond, { type: { not: NEWS_TYPE.STAR } }] };
+function newsFeedSqlParts(opts: NewsFeedSqlOpts): { conds: string[]; params: unknown[] } {
+  const conds: string[] = [];
+  const params: unknown[] = [];
+  // 类型口径（与 feedTypeFilter 同义：显式 type/types 各自成口径，home 白名单，级别只认成绩类）
+  if (opts.type !== undefined) {
+    conds.push("n.type = ?");
+    params.push(opts.type);
+  } else if (opts.types) {
+    conds.push(`n.type IN (${opts.types.map((t) => Number(t)).join(",")})`);
+  } else if (opts.home) {
+    const marks = NEWS_RECORD_FIRST_MARKS.map((m) => `n.details_data LIKE '%${m}%'`).join(" OR ");
+    conds.push(
+      `n.type IN (${NEWS_HOME_TYPES.map(Number).join(",")})` +
+        ` AND NOT (n.type = ${NEWS_TYPE.PERSON_RECORD} AND (${marks} OR n.exp_time = 0 OR n.ranked = 0))`
+    );
+  } else if (opts.level) {
+    conds.push(`n.type IN (${NEWS_LEVEL_TYPES.join(",")})`);
+  } else {
+    conds.push(`n.type NOT IN (${NEWS_FEED_EXCLUDED.map(Number).join(",")})`);
+  }
+  if (opts.userId) {
+    conds.push("n.`user` = ?");
+    params.push(BigInt(opts.userId));
+  }
+  // 阶段档（含 STAR 排除，见 newsStageSqlCond）
+  if (opts.stage) conds.push(newsStageSqlCond(opts.stage));
+  // 级别筛选（details JSON lv 字段，双形态 LIKE 匹配；assertVideoLevel 白名单防注入）
+  if (opts.level) {
+    const lv = assertVideoLevel(opts.level);
+    conds.push(`(n.details_data LIKE '%"lv":"${lv}"%' OR n.details_data LIKE '%"lv": "${lv}"%')`);
+  }
+  // keyset 游标（同刻按 id 分先后，与 Prisma 路径同款）
+  if (opts.cursorTime !== undefined && opts.cursor) {
+    conds.push("(n.create_time < ? OR (n.create_time = ? AND n.id < ?))");
+    params.push(opts.cursorTime, opts.cursorTime, BigInt(opts.cursor));
+  }
+  return { conds, params };
+}
+
+/** 阶段筛选路径的公共 FROM（vi 别名供 NEWS_PROMOTED_EXP_SQL 使用） */
+const NEWS_STAGE_FROM = "news n LEFT JOIN video_info vi ON vi.id = n.reference";
+
+/** getNews 行装配所需的最小字段：Prisma 行与 stage 路径 raw 行的公共形状
+ *  （raw SELECT 用 AS 别名对齐 camelCase；BIGINT 列 $queryRawUnsafe 回 bigint） */
+interface NewsFeedRow {
+  id: bigint;
+  type: number;
+  user: bigint;
+  reference: bigint;
+  expTime: bigint;
+  ranked: bigint;
+  detailsData: string;
+  createTime: bigint;
 }
 
 /**
@@ -364,7 +442,8 @@ export async function getNews(opts: {
   userId?: number;
   /** 等级筛选（beg/int/exp）：按 details JSON 的 lv 字段匹配（details_data 全为 {"lv":...} 格式） */
   level?: string;
-  /** 首页阶段筛选（gen/col/sol/god/man）：按行内快照分档，见 newsStageFilter（2026-10-29） */
+  /** 首页阶段筛选（gen/col/sol/god/man）：按有效评定时间分档（快照与关联录像 real_time
+   *  取优，与徽章 recordNewsExpTime 同口径），走 raw SQL 路径，见 newsStageSqlCond（2026-10-31） */
   stage?: FeedStage;
   /** keyset 游标：上一批末行的 id，服务端据此查 (create_time,id) 序更早的动态。
    *  2026-10-20 起动态流按 (create_time, id) 倒序（破纪录动态时间=录像上传时间，
@@ -389,13 +468,11 @@ export async function getNews(opts: {
     });
     cursorTime = anchor?.createTime;
   }
-  const stageCond = opts.stage ? stageWhereCond(opts.stage) : null;
   const where = {
     // 类型口径统一由 feedTypeFilter 决定（含级别筛选只认成绩类，2026-10-27）
+    // （stage≠"" 时本 where 整体不参与——阶段档走下方 raw SQL 路径）
     ...feedTypeFilter(opts),
     ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    // 首页阶段筛选（2026-10-29）：与类型/游标条件并列进 AND（含 STAR 排除，见 stageWhereCond）
-    ...(stageCond ?? {}),
     // keyset 游标与级别筛选都是 OR 组，必须并列进 AND——曾因两者都写成顶层 OR
     // 而在「cursor + level」组合下后者覆盖前者（级别筛选静默失效）
     ...(() => {
@@ -408,11 +485,26 @@ export async function getNews(opts: {
       return and.length ? { AND: and } : {};
     })(),
   };
-  const rows = await prisma.news.findMany({
-    where: opts.ids ? { id: { in: opts.ids } } : where,
-    orderBy: [{ createTime: "desc" }, { id: "desc" }],
-    ...(opts.ids ? {} : { take: opts.limit }),
-  });
+  // 阶段筛选（stage≠""）走 raw SQL：档位条件要按关联录像 real_time 求有效评定时间
+  // （NEWS_PROMOTED_EXP_SQL，与徽章 recordNewsExpTime 同口径），Prisma where 表达不了。
+  // SELECT 别名对齐 Prisma 行形状，下方装配逻辑两路共用。
+  const rows = opts.stage && !opts.ids
+    ? await (async () => {
+        const { conds, params } = newsFeedSqlParts({ ...opts, cursorTime, cursor: opts.cursor });
+        return prisma.$queryRawUnsafe<NewsFeedRow[]>(
+          `SELECT n.id, n.type, n.\`user\` AS user, n.reference,` +
+            ` n.exp_time AS expTime, n.ranked, n.details_data AS detailsData, n.create_time AS createTime` +
+            ` FROM ${NEWS_STAGE_FROM} WHERE ${conds.join(" AND ")}` +
+            ` ORDER BY n.create_time DESC, n.id DESC LIMIT ?`,
+          ...params,
+          opts.limit
+        );
+      })()
+    : await prisma.news.findMany({
+        where: opts.ids ? { id: { in: opts.ids } } : where,
+        orderBy: [{ createTime: "desc" }, { id: "desc" }],
+        ...(opts.ids ? {} : { take: opts.limit }),
+      });
   // 成绩类动态带出关联录像 real_time（2026-10-30）：双破录像的 3bvs 纪录行动态
   // details 不带时间成绩，军衔评定需按录像 real_time 判「本盘之后实际最好成绩」
   const recordVideoRt = new Map<number, number>();
@@ -541,26 +633,39 @@ export async function getNewsPage(opts: {
   base: number;
   limit: number;
 }): Promise<NewsItem[]> {
-  const where = {
-    // 与 getNews 同一口径（含级别筛选只认成绩类，2026-10-27）
-    ...feedTypeFilter(opts),
-    ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-    ...(opts.stage ? (stageWhereCond(opts.stage) ?? {}) : {}),
-    ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
-  };
-  const idRows = await prisma.news.findMany({
-    where,
-    select: { id: true },
-    orderBy: [{ createTime: "desc" }, { id: "desc" }],
-    skip: (opts.page - 1) * opts.base,
-    take: opts.limit,
-  });
+  // 阶段筛选（2026-10-29）：id 预查走 raw SQL（档位条件需按关联录像 real_time 求有效
+  // 评定时间，见 newsFeedSqlParts）；行装配复用 getNews 的 ids 路径（ids 已按档滤过，
+  // 不再向 getNews 传 stage，避免重复条件）
+  let idRows: { id: bigint }[];
+  if (opts.stage) {
+    const { conds, params } = newsFeedSqlParts(opts);
+    idRows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
+      `SELECT n.id FROM ${NEWS_STAGE_FROM} WHERE ${conds.join(" AND ")}` +
+        ` ORDER BY n.create_time DESC, n.id DESC LIMIT ? OFFSET ?`,
+      ...params,
+      opts.limit,
+      (opts.page - 1) * opts.base
+    );
+  } else {
+    const where = {
+      // 与 getNews 同一口径（含级别筛选只认成绩类，2026-10-27）
+      ...feedTypeFilter(opts),
+      ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+      ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
+    };
+    idRows = await prisma.news.findMany({
+      where,
+      select: { id: true },
+      orderBy: [{ createTime: "desc" }, { id: "desc" }],
+      skip: (opts.page - 1) * opts.base,
+      take: opts.limit,
+    });
+  }
   if (!idRows.length) return [];
   return getNews({
     types: opts.types,
     userId: opts.userId,
     level: opts.level,
-    stage: opts.stage,
     home: opts.home,
     limit: opts.limit,
     ids: idRows.map((r) => r.id),
@@ -605,13 +710,23 @@ async function getNewsCountImpl(opts: {
   /** 与 getNews 的首页阶段筛选一致（2026-10-29） */
   stage?: FeedStage;
 }): Promise<number> {
+  // 阶段筛选走 raw SQL count（档位条件需按关联录像 real_time 求有效评定时间，
+  // 与 getNews / getNewsPage 共用 newsFeedSqlParts，保证行集与计数严格一致）。
+  // LEFT JOIN video_info 按 PK 至多一行，不会放大计数。
+  if (opts.stage) {
+    const { conds, params } = newsFeedSqlParts(opts);
+    const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*) AS c FROM ${NEWS_STAGE_FROM} WHERE ${conds.join(" AND ")}`,
+      ...params
+    );
+    return N(rows[0]?.c);
+  }
   return prisma.news.count({
     where: {
       // 与 getNews / getNewsPage 严格同一类型口径（级别筛选只认成绩类，2026-10-27），
-      // 否则剩余条数 / 翻页条总页数会与实际行集对不上
+      // 否则剩余条数 / 翻页条总页数会与实际行集对不上（stage≠"" 已在上方 raw SQL 分支返回）
       ...feedTypeFilter(opts),
       ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-      ...(opts.stage ? (stageWhereCond(opts.stage) ?? {}) : {}),
       ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
     },
   });
@@ -622,6 +737,8 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  // v9：2026-10-31 阶段档改按「有效评定时间」分档（快照与关联录像 real_time 取优，
+  //  与徽章 recordNewsExpTime 同口径，张老师报告张子豪 69.89 破纪录动态档错位）。
   // v8：2026-10-29 阶段档排除「当选每日一星」动态（STAR 只进「全部」tab，张老师定）。
   // v7：2026-10-29 首页阶段筛选（stage 维度并入键空间：home×stage 5 档，有界）。
   // v6：2026-10-27 级别筛选收窄为「成绩类动态」（录像评论的 lv 不再命中级别 tab）。
@@ -629,7 +746,7 @@ const fetchNewsCountNoUser = unstable_cache(
   // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
-  ["news-count-v8"],
+  ["news-count-v9"],
   { revalidate: 300 }
 );
 
