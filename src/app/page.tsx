@@ -26,7 +26,7 @@
 // 移动端置顶大按钮不参与（仍由 #play_entry_top 全宽接管，上传走顶栏菜单）。
 
 import Link from "next/link";
-import { IconUpload } from "@/components/MenuIcons";
+import { IconUploadTray } from "@/components/MenuIcons";
 import {
   getHomeNews,
   getHotVideos,
@@ -190,7 +190,8 @@ export default async function HomePage() {
             绿色「录像」钮跳 /video/upload；未登录保持原全宽钮。
             二轮反馈：等比缩小后太矮、字太小——宽度保留 61.8%，高度/字号/图标恢复原版
             （高 50/字 18/图标 24/边框 3），右侧按钮同高。
-            三轮反馈：右钮文字黑色。四轮反馈：文案「录像」+ 前置黑色上传图标 */}
+            三轮反馈：右钮文字黑色。四轮反馈：文案「录像」+ 前置上传图标。
+            五轮反馈：图标换张老师指定的绿箭头+灰托盘填充图标（IconUploadTray） */}
         {session ? (
           <div id="play_row">
             <Link id="play_entry" href="/online">
@@ -200,7 +201,7 @@ export default async function HomePage() {
               <span>开始练习</span>
             </Link>
             <Link id="upload_entry" href="/video/upload">
-              <IconUpload />
+              <IconUploadTray />
               <span>录像</span>
             </Link>
           </div>
