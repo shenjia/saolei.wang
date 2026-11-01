@@ -74,7 +74,8 @@ export function SiteUpdateForm() {
   return (
     <form
       className="donate_form"
-      style={{ display: "flex", flexDirection: "column", gap: 10 }}
+      /* alignItems:stretch 压过 .donate_form 的 center——否则内容列收缩成 textarea 固有宽（~195px） */
+      style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" }}
       onSubmit={(e) => {
         e.preventDefault();
         if (canSubmit) void submit();
@@ -105,12 +106,13 @@ export function SiteUpdateForm() {
           style={{ width: 160 }}
         />
       </label>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "#939387" }}>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start", fontSize: 13, color: "#939387" }}>
         更新内容
         <textarea
           className="admin_textarea"
-          rows={3}
+          rows={6}
           maxLength={500}
+          style={{ minHeight: 160 }}
           placeholder="一句话概括本次上线的功能（前台展示为「日期　内容」）"
           value={content}
           onChange={(e) => setContent(e.target.value)}

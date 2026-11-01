@@ -28,6 +28,9 @@ body:has(.admin_shell) #footer {
 }
 
 /* ---------- 侧栏 ---------- */
+/* 滚动条细条暗色（2026-11-02 张老师反馈「内容没撑出边界却出滚动条」）：
+   内容总高 932px，窗口高 <932 才真溢出，此时细条不突兀；
+   932~981 的「假溢出带」已通过条目/组标题内边距收紧消除 */
 .admin_side {
   width: 208px;
   flex: 0 0 208px;
@@ -36,6 +39,8 @@ body:has(.admin_shell) #footer {
   background: #1e1f1c;
   border-right: 1px solid #3a3a32;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #49483e transparent;
 }
 /* 品牌区（2026-10-22 张老师要求）：换成与前台统一的 LOGO 与站名——
    「扫雷网」用前台站名金 #fdc61a，点击新标签页回首页 */
@@ -82,14 +87,14 @@ body:has(.admin_shell) #footer {
   color: #63635a;
   font-size: 11px;
   line-height: 18px;
-  padding: 12px 8px 4px;
+  padding: 10px 8px 4px;
   letter-spacing: 1px;
 }
 .admin_nav a {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   margin-bottom: 2px;
   border-radius: 6px;
   color: #939387;
