@@ -110,7 +110,84 @@ function avfTimestamps(endText: string, scoreCsec: number): { start: string; end
  *  回放里 chord 全哑、终局靠 repairWinningEvents 合成点击补洞（347849 6.46s
  *  一瞬间开出一片的怪象）。同理 rr 分支：rc 保留后 rr 也要配对保留，否则
  *  rp 状态残留污染下一手势（rc 在 flop 语义里 rp=true 会吞后续真插旗）。 */
-export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
+/** 盘面上下文（2026-11-01 352535 案）：提供后 canonicalize 进入盘面感知模式——
+ *  内部维护权威引擎盘面镜像，孤立 lr 是否合成 lc+lr 对按真实盘面效果决策。 */
+export interface CanonicalizeCtx {
+  width: number;
+  height: number;
+  /** 雷区数组（0/1，行优先；长度 = w*h） */
+  board: Uint8Array | number[];
+  questionMarks: boolean;
+}
+
+/** 权威引擎盘面镜像（与 server.mjs openCell/chord/toggleFlag 同语义）。
+ *  只为导出端决策服务：不改变键态折叠逻辑，仅在「孤立 lr 是否合成 lc+lr」
+ *  这一处参考真实盘面效果。 */
+function makeBoardSim(ctx: CanonicalizeCtx) {
+  const w = ctx.width, h = ctx.height, n = w * h;
+  const mines = new Uint8Array(n);
+  for (let i = 0; i < n; i++) mines[i] = ctx.board[i] ? 1 : 0;
+  const nums = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    if (mines[i]) { nums[i] = -1; continue; }
+    const x = i % w, y = (i / w) | 0;
+    let c = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < w && ny >= 0 && ny < h && mines[ny * w + nx]) c++;
+    }
+    nums[i] = c;
+  }
+  const state = new Uint8Array(n); // 0 未开 / 1 已开 / 2 旗 / 3 问号
+  let over = false;
+  const around = (i: number): number[] => {
+    const cells: number[] = [], x = i % w, y = (i / w) | 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < w && ny >= 0 && ny < h) cells.push(ny * w + nx);
+    }
+    return cells;
+  };
+  /** 权威 openCell：返回本次真实开出的格数（踩雷＝对局已终，返回 0） */
+  const openCell = (i: number): number => {
+    if (over || i < 0 || i >= n || state[i] === 1 || state[i] === 2) return 0;
+    if (mines[i]) { over = true; return 0; } // 权威端踩雷即终局，后续不再有盘面动作
+    let cnt = 0;
+    const stack = [i];
+    while (stack.length) {
+      const c = stack.pop() as number;
+      if (state[c] === 1 || state[c] === 2 || mines[c]) continue;
+      state[c] = 1;
+      cnt++;
+      if (nums[c] === 0) for (const a of around(c)) if (state[a] === 0) stack.push(a);
+    }
+    return cnt;
+  };
+  /** 权威 chord：仅已开数字且旗数吻合时展开 */
+  const chord = (i: number) => {
+    if (over || i < 0 || i >= n || state[i] !== 1 || nums[i] === 0) return;
+    const aroundCells = around(i);
+    let flags = 0;
+    for (const a of aroundCells) if (state[a] === 2) flags++;
+    if (flags !== nums[i]) return;
+    for (const a of aroundCells) if (state[a] === 0) openCell(a);
+  };
+  const toggleLabel = (i: number) => {
+    if (over || i < 0 || i >= n || state[i] === 1) return;
+    if (state[i] === 0) state[i] = 2;
+    else if (state[i] === 2) state[i] = ctx.questionMarks ? 3 : 0;
+  };
+  const cellIndex = (e: OnlineEvent): number => {
+    const x = (e.x / 16) | 0, y = (e.y / 16) | 0;
+    if (x < 0 || y < 0 || x >= w || y >= h) return -1;
+    return y * w + x;
+  };
+  return { openCell, chord, toggleLabel, cellIndex };
+}
+
+export function canonicalizeOnlineEvents(events: OnlineEvent[], ctx?: CanonicalizeCtx): OnlineEvent[] {
   const out: (OnlineEvent | null)[] = [];
   let lp = false, rp = false, sv = false;
   let lcAt = -1, rcAt = -1;
@@ -118,30 +195,42 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
     if (lcAt >= 0) out[lcAt] = null;
     lcAt = -1;
   };
+  const sim = ctx ? makeBoardSim(ctx) : null;
   for (const e of events) {
+    const i = sim ? sim.cellIndex(e) : -1;
     if (e.mouse === 3) {
       lp = true;
       if (!rp) { lcAt = out.length; out.push(e); }
     } else if (e.mouse === 9) {
       rp = true;
-      if (!lp) { rcAt = out.length; out.push(e); }
+      if (!lp) { rcAt = out.length; out.push(e); sim?.toggleLabel(i); }
     } else if (e.mouse === 11) {
       lp = sv = true; // 随后的 lr 统一收成 mr
     } else if (e.mouse === 5) {
       if (rp || sv) {
         removePresses(); // 只删待定的 lc；rc 是已生效插旗，保留
         out.push({ ...e, mouse: 65 });
+        sim?.chord(i);
         // flop：另一键仍按住，后续可连续 chord；其闭合松开已被抑制。
         // 右键按住场景：rc 已在流中，rp 保持 true 直到 rr 配对闭合（见 mouse===17）
       } else {
         if (lcAt < 0) {
-          /* ⚠️ 2026-11-01 修（5138 案 B）：孤立 lr（无配对 lc）在权威端语义是
-             openCell——真实开格已发生（server.mjs mouse 5 无 rp 无 sc 分支），
-             旧逻辑按 flop 语义直接丢弃，导出流开格丢失 → 重放分叉判「未完成」。
-             权威 openCell 只在安全格生效（踩雷局当场结束），补 lc+lr 对保真重放。 */
-          out.push({ ...e, mouse: 3 });
+          /* ⚠️ 孤立 lr（无配对 lc）——2026-11-01 352535 案改为盘面感知决策：
+             权威端 mouse 5 无 rp 无 sc 分支是 openCell，5138 案「真开格已发生、
+             旧逻辑丢弃 → 重放分叉判未完成」仍成立，合成 lc+lr 保真；但权威端
+             「右先松 chord」的尾随 lr（rr 已触发 chord、rp 复位）也走 openCell，
+             352535 实测 27 次全部 changed=0（格早被 chord 开掉）——一律合成
+             每次虚高 +1 clLeft。现按盘面镜像判定：真会开出未开格才合成，
+             无效开格直接丢弃（flop 中孤立 lr 本就零副作用、不计数）。 */
+          const opened = sim ? sim.openCell(i) : 1; // 无盘面上下文＝保持旧行为（一律合成）
+          if (opened > 0) {
+            out.push({ ...e, mouse: 3 });
+            out.push(e);
+          }
+        } else {
+          out.push(e);
+          sim?.openCell(i);
         }
-        out.push(e);
         lcAt = -1;
       }
       lp = sv = false;
@@ -149,6 +238,7 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
       if (lp) {
         removePresses(); // 左键按住时 rr=chord：同理只删待定 lc；rc（若有）保留
         out.push({ ...e, mouse: 65 });
+        sim?.chord(i);
         /* ⚠️ 2026-10-28 修（本局 3.64s 案）：flop 语义里 rr 除了 chord 还会
            **复位 rp**（rp=false），折叠成 mr 不会复位——「rc 插旗 → 左键 chord →
            右键先松（rp 应复位）→ 左键后松」的手势导出后 rp 永久残留，
@@ -164,6 +254,7 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
       rp = false;
     } else {
       out.push(e);
+      if (e.mouse === 65) sim?.chord(i); // 练习流原生自动双击＝chord 盘面效果
     }
   }
   /* ⚠️ 2026-11-01 修（5138 案 A）：胜局瞬间 over 拦截录制，右键按住收尾时 rr
@@ -312,7 +403,7 @@ export function buildOnlineAvf(input: OnlineAvfInput): Uint8Array {
     const raw = e.sec + 1; // 编码 +1，解码 -1（AVF 惯例）
     out.push(mouse, (e.x >> 8) & 0xff, raw & 0xff, e.x & 0xff, e.hun, (e.y >> 8) & 0xff, (raw >> 8) & 0xff, e.y & 0xff);
   };
-  const canonical = canonicalizeOnlineEvents(events);
+  const canonical = canonicalizeOnlineEvents(events, { width: w, height: h, board, questionMarks: qm });
   const exportEvents = won ? repairWinningEvents(w, h, board, qm, canonical, scoreCsec * 10) : canonical;
   for (let i = 0; i < exportEvents.length; i++) {
     const e = exportEvents[i];
