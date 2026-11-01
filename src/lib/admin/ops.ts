@@ -542,6 +542,16 @@ async function dispatch(
           const clash = await tx.starVote.findFirst({ where: { user: tgt, date: v.date }, select: { id: true } });
           if (clash) await tx.starVote.delete({ where: { id: v.id } });
         }
+        //    地盘人气 click（user+ip+date 唯一）：同一人两账户常在同一天同 IP 访问过——撞键源行删除
+        //    （目标保留自己的访问计数），其余行随 updateMany 搬迁（2026-11-01 生产 P2002 实证）
+        const [srcClicks, tgtClicks] = await Promise.all([
+          tx.click.findMany({ where: { user: src }, select: { ip: true, date: true } }),
+          tx.click.findMany({ where: { user: tgt }, select: { ip: true, date: true } }),
+        ]);
+        const clickKeys = new Set(tgtClicks.map((c) => `${c.ip}|${c.date}`));
+        const clickClashes = srcClicks.filter((c) => clickKeys.has(`${c.ip}|${c.date}`));
+        if (clickClashes.length)
+          await tx.click.deleteMany({ where: { user: src, OR: clickClashes.map((c) => ({ ip: c.ip, date: c.date })) } });
 
         // ③ 数据归属搬迁（video.reviewUser 审核人指位保留——那是后台审计事实，不随账户走）
         await tx.video.updateMany({ where: { user: src }, data: { user: tgt } });
@@ -566,8 +576,10 @@ async function dispatch(
         await tx.history.updateMany({ where: { user: src }, data: { user: tgt } });
         await tx.starVote.updateMany({ where: { user: src }, data: { user: tgt } });
 
-        // ④ 邮箱绑定：目标未绑邮箱时随迁（目标已绑则不覆盖，源邮箱随凭据注销释放）
+        // ④ 邮箱绑定：目标未绑邮箱时随迁（目标已绑则不覆盖，源邮箱随凭据注销释放）。
+        //    email / emailToken 均 @unique——必须先清源行再设目标行，否则唯一键互撞（P2002）
         if (srcAuth.email && !tgtAuth.email) {
+          await tx.userAuth.update({ where: { id: src }, data: { email: null, emailVerified: BigInt(0), emailToken: null } });
           await tx.userAuth.update({
             where: { id: tgt },
             data: { email: srcAuth.email, emailVerified: srcAuth.emailVerified, emailToken: srcAuth.emailToken },
