@@ -31,6 +31,8 @@ function targets(): Target[] {
   if (hz) list.push({ name: "杭州", url: `${hz.replace(/\/$/, "")}/health` });
   const cd = process.env.AUTHORITY_CD_URL;
   if (cd) list.push({ name: "成都", url: `${cd.replace(/\/$/, "")}/health` });
+  const gz = process.env.AUTHORITY_GZ_URL;
+  if (gz) list.push({ name: "广州", url: `${gz.replace(/\/$/, "")}/health` });
   return list;
 }
 
