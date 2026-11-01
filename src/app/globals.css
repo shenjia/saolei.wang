@@ -1424,6 +1424,11 @@ body #page.bbs_old .page_head {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 时间列放行剪裁（2026-11-02 张老师反馈 hover 气泡被挡）：上面的 overflow:hidden(省略号)
+   会把 .reltime 绝对定位气泡整个剪掉；时间内容恒短于列宽无需截断，放行让气泡浮出 */
+.table.bbs_list td.time {
+  overflow: visible;
+}
 #page.message_list .table.bbs_list td:first-child {
   padding: 8px 0;
   text-align: center;
