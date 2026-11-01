@@ -1097,3 +1097,16 @@ model RankedAuditStat {
 
   @@map("ranked_audit_stat")
 }
+
+// 更新历史（2026-11-02 张老师需求：/page/history 落库，后台 /admin/updates 可编辑）
+// date 存展示串「Y.M.D」（月/日不补零，沿用 2006-2026 存量条目风格）；
+// 排序与按年分组在读取层解析 date 计算，数据量小（几十条）无需落排序键
+model SiteUpdate {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  date       String @db.VarChar(20)
+  content    String @db.VarChar(500)
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@map("site_update")
+}

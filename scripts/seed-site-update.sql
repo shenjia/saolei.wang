@@ -1,0 +1,56 @@
+-- 更新历史种子数据（2026-11-02 /page/history 落库一次性灌入）
+-- 纯 INSERT（铁律：mysqldump/补导 SQL 一律先纯 INSERT 化）；create_time=事件日 12:00 CST
+-- 幂等性：目标表须为空表；重复执行前先 TRUNCATE site_update
+
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.29', '开通ESA加速，恢复评论录像通知，排名服务器节点可切换，重排练习设置', 1793246400, 1793246400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.28', '开通香港排名服务器，排行模式BV和PB纪录弹窗，手机桌面版，优化热门录像和每日一星算法', 1793160000, 1793160000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.27', '在线练习排行模式上线，纪录板块上线，PB墙上线，支持QQ绑定', 1793073600, 1793073600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.26', '域名正式切换，用户头像列表显示，恢复每日一星（可发感言）', 1792987200, 1792987200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.25', '支持元扫雷evf录像，列表可切换升降序，首页录像限额', 1792900800, 1792900800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.22', '旧站转只读，在线练习统计，录像标识列表，翻页控件重做', 1792641600, 1792641600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.21', '新版开始公测，NF筛选开关，录像搜索（按成绩 / 3BV / ID），自定义摆雷，录像试玩', 1792555200, 1792555200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.20', '录像列表页改版：通栏布局，新增 IOE / STNB 指标列（可排序），搜索支持按 3BV 查找；首页新增「热门录像」板块', 1792468800, 1792468800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.19', '练习新手提示，复活功能，连击模式', 1792382400, 1792382400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.18', '军衔体系和人神界体系并存', 1792296000, 1792296000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.16', '练习速旗模式，无猜模式', 1792123200, 1792123200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.15', '录像详情页原地回放、地区总榜增加地图、录像评级上线（五维雷达）、账户管理页改版并支持绑定邮箱', 1792036800, 1792036800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.14', '练习功能上线、优化翻页组件、结算面板、录像雷达图、BV榜搜索定位', 1791950400, 1791950400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.10.13', '军衔改版，BV榜上线、3BV收集墙、地区榜中国地图、活跃人数显示、搜索定位优化、内容安全审核', 1791864000, 1791864000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.9.26', '论坛编辑器升级', 1790395200, 1790395200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.9.24', '在线上传头像、首页改版、规划管理后台', 1790222400, 1790222400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.9.23', '历史数据导入调试', 1790136000, 1790136000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.9.22', '旧站功能移植', 1790049600, 1790049600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2026.9.21', '重启新版开发', 1789963200, 1789963200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2013.12.12', 'Saolei.net被封，启用 Saolei.wang 域名，新版开发暂停', 1386820800, 1386820800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2013.12.1', '实力雷达图（多维度能力对比，替代旧版 Highcharts 极坐标图）', 1385870400, 1385870400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2013.8.15', '启用暗色 Monokai 视觉风格，完成 2008→2013 全站改版', 1376539200, 1376539200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2013.6.1', '设计18 级军衔评级体系', 1370059200, 1370059200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2013.4.1', '邮箱注册 / 登录账号体系（密码 md5+salt）', 1364788800, 1364788800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2013.2.1', '录像上传 MVF/AVF 自动解析、审核流', 1359691200, 1359691200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2013.1.1', '开始用PHP + MySQL 重写网站', 1357012800, 1357012800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2008.7.28', '添加 管理团队查看统计 功能 / 自动显示SUB整数 功能', 1217217600, 1217217600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2008.4.23', '添加 上传照片标示 功能 / 本日人气统计 功能', 1208923200, 1208923200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2008.2.24', '添加 人气排行 功能', 1203825600, 1203825600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2008.2.2', '添加 论坛分类 功能', 1201924800, 1201924800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2008.1.21', '添加 性别及照片 属性', 1200888000, 1200888000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2008.1.1', '2008新版推出！', 1199160000, 1199160000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.9.25', '网站访问量突破50W大关', 1190692800, 1190692800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.9.15', '开通 按姓名定位/查询排行 功能', 1189828800, 1189828800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.9.7', '推出 地区排行 栏目', 1189137600, 1189137600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.8.15', '推出 名人堂 栏目', 1187150400, 1187150400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.8.12', '开通 对战平台 功能', 1186891200, 1186891200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.7.28', '第一次全国雷友聚会', 1185595200, 1185595200);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.7.20', '发布 分辨率调整工具', 1184904000, 1184904000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.7.17', '发布 中国扫雷网宣传T恤', 1184644800, 1184644800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.5.21', '推出 进步排行榜 栏目', 1179720000, 1179720000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.5.1', '开通 技术统计 功能', 1177992000, 1177992000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.4.30', '开通 技术数据统计 功能', 1177905600, 1177905600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.4.28', '开通 在线扫雷 功能', 1177732800, 1177732800);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.4.27', '推出 扫雷教程 栏目', 1177646400, 1177646400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.4.25', '开通 查看他人录像 功能', 1177473600, 1177473600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.4.22', '推出 论坛 栏目', 1177214400, 1177214400);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.4.21', '开通 帮助中心 功能', 1177128000, 1177128000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.2.9', '开通 站内短消息 功能', 1170993600, 1170993600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.1.31', '开通 排行提示 功能', 1170216000, 1170216000);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2007.1.5', '2007版推出，使用Saolei.net域名', 1167969600, 1167969600);
+INSERT INTO `site_update` (`date`, `content`, `create_time`, `update_time`) VALUES ('2006.11.23', '网站成立', 1164254400, 1164254400);

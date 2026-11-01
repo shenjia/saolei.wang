@@ -41,6 +41,7 @@ const GROUPS: { title: string | null; items: NavItem[] }[] = [
       { href: "/admin/bbs", label: "论坛管理", icon: "💭", badgeKey: "bbs" },
       { href: "/admin/news", label: "动态管理", icon: "📰" },
       { href: "/admin/messages", label: "站内信广播", icon: "✉️" },
+      { href: "/admin/updates", label: "更新历史", icon: "🕘" },
     ],
   },
   {

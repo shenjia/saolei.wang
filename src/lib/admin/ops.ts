@@ -23,6 +23,7 @@ import { ensureTodaySnapshot } from "@/lib/ranksnap";
 import { rankEnter, rankLeave, safeRankOp } from "@/lib/userrank";
 import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
+import { normalizeSiteUpdateDate } from "@/lib/site-updates";
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
 import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
@@ -74,6 +75,10 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "expense.add": "manager",
   "expense.delete": "manager",
   "expense.edit": "manager",
+  // 更新历史维护（2026-11-02 /page/history 落库）：管理员即可增删改
+  "siteupdate.add": "manager",
+  "siteupdate.edit": "manager",
+  "siteupdate.delete": "manager",
   "site.setMaintenance": "administrator",
   // API key 管理（2026-10-24 公开 API 体系）：签发/吊销都是超管权限——
   // key 即数据出口凭据，签发对象需张老师把关
@@ -1322,6 +1327,42 @@ async function dispatch(
       if (!row) return { ok: false, error: "支出记录不存在" };
       await prisma.donateExpense.delete({ where: { id: BigInt(id) } });
       return { ok: true, message: `已删除支出记录 #${id}（${row.purpose} ¥${(Number(row.amount) / 100).toFixed(2)}）` };
+    }
+
+    // ---------- 更新历史（2026-11-02 /page/history 落库，后台可编辑）----------
+    case "siteupdate.add": {
+      const date = normalizeSiteUpdateDate(String(p.date ?? ""));
+      if (!date) return { ok: false, error: "参数错误：日期格式应为 YYYY-MM-DD 或 Y.M.D" };
+      const content = toText(p.content, 500);
+      if (!content) return { ok: false, error: "参数错误：请填写更新内容" };
+      const t = BigInt(now());
+      await prisma.siteUpdate.create({ data: { date, content, createTime: t, updateTime: t } });
+      return { ok: true, message: `已登记更新历史：${date} ${content}` };
+    }
+
+    case "siteupdate.edit": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少更新历史 ID" };
+      const date = normalizeSiteUpdateDate(String(p.date ?? ""));
+      if (!date) return { ok: false, error: "参数错误：日期格式应为 YYYY-MM-DD 或 Y.M.D" };
+      const content = toText(p.content, 500);
+      if (!content) return { ok: false, error: "参数错误：请填写更新内容" };
+      const row = await prisma.siteUpdate.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "更新历史记录不存在" };
+      await prisma.siteUpdate.update({
+        where: { id: BigInt(id) },
+        data: { date, content, updateTime: BigInt(now()) },
+      });
+      return { ok: true, message: `已修改更新历史 #${id}：${date} ${content}` };
+    }
+
+    case "siteupdate.delete": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少更新历史 ID" };
+      const row = await prisma.siteUpdate.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "更新历史记录不存在" };
+      await prisma.siteUpdate.delete({ where: { id: BigInt(id) } });
+      return { ok: true, message: `已删除更新历史 #${id}（${row.date} ${row.content}）` };
     }
 
     // ---------- 头像审核（2026-09-24）----------
