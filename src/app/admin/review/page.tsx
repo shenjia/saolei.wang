@@ -142,18 +142,18 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
       </AdminCard>
 
       <div className="admin_grid c2">
-        <AdminCard title="审核员工作量 Top 6">
-          <BarList
-            items={workload.map((w) => ({ label: auditors.get(w.user)?.chineseName ?? `#${w.user}`, value: w.count }))}
-            color="linear-gradient(90deg,#8a5a1f,#f79646)"
-          />
-        </AdminCard>
-
-        <AdminCard title="最近7天审核量" tight>
+        <AdminCard title="最近7天审核量">
           <BarList
             items={workload7.map((w) => ({ label: auditors.get(w.user)?.chineseName ?? `#${w.user}`, value: w.count }))}
             color="linear-gradient(90deg,#1f6f8a,#66d9ef)"
             emptyText="近7天无审核记录"
+          />
+        </AdminCard>
+
+        <AdminCard title="累计审核数量">
+          <BarList
+            items={workload.map((w) => ({ label: auditors.get(w.user)?.chineseName ?? `#${w.user}`, value: w.count }))}
+            color="linear-gradient(90deg,#8a5a1f,#f79646)"
           />
         </AdminCard>
       </div>
