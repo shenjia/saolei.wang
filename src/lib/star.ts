@@ -84,6 +84,10 @@ export async function getClicks(userId: number): Promise<{ total: number; today:
 //   去掉近 30 日内已当选者，按日期哈希确定性随机抽一位。
 //   旧版「当月不复选」收紧为「30 日不复选」——与候选资格的 30 天窗口同拍，
 //   也避免月末/月初边界出现同月二次当选的观感问题。
+//   2026-11-02 张老师再定：在「30 天内当选过的不参选」后新增一条全局排除——
+//   「7 日内未登录过的不参选」（last_login_time < 今日-7 天者滤掉）。
+//   ①路原有 30 天登录条件之上再收紧到 7 天；②路此前以破纪录为活跃证明不设登录门槛，
+//   现一并补上（沉睡者即使破纪录也不参选）。
 
 import { publishNews } from "./news";
 import { sendSystemMessage } from "./message";
@@ -118,6 +122,12 @@ async function recentStarUserIds(today: string): Promise<Set<number>> {
   return new Set(rows.map((r) => N(r.user)));
 }
 
+/** 7 日内登录过的 user id 集合过滤（2026-11-02 张老师定：7 日内未登录过的不参选） */
+function isLoggedInWithin7Days(lastLoginTime: bigint | null): boolean {
+  if (!lastLoginTime) return false; // 0=未记录，视同从未登录
+  return lastLoginTime >= BigInt(Math.floor(Date.now() / 1000) - 7 * 86400);
+}
+
 /** 今日感言投票明细补充：SSR 带出「我投过什么」（跨设备一致；未登录/未投=null） */
 async function getMyVote(date: string, viewerUid: number | null): Promise<"up" | "down" | null> {
   if (!viewerUid) return null;
@@ -131,7 +141,8 @@ async function getMyVote(date: string, viewerUid: number | null): Promise<"up" |
 /**
  * 取今日之星，没有则评选（并发安全：确定性哈希 + star.date 唯一键兜底）：
  * 候选 =（少将及以上现役 且 近 30 天登录过）∪（近 30 日破纪录 且 名次上升者），
- * 排除近 30 日已当选者；同一天多次请求结果一致（日期哈希），无候选返回 null。
+ * 排除近 30 日已当选者与 7 日内未登录者（2026-11-02 张老师定）；同一天多次请求结果一致
+ * （日期哈希），无候选返回 null。
  * viewerUid：当前登录用户（用于带出 myVote；可不传）。
  */
 export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null> {
@@ -160,6 +171,7 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
   //      进步加成（delta = 30 天窗口名次差，封禁修正后）：delta≥200 → +2；delta≥50 → +1；
   //      排位加成（今日总计时间榜名次）：≤100 → +2（百强仍有进步）；≤500 → +1。
   //      进步得多 / 排位已高仍进步者，席位更多。理论最高 5 席。
+  //      （登录门槛：②路原不设，2026-11-02 张老师定统一走「7 日内未登录不参选」全局排除。）
   //   两路**分开计席**：两条都命中的用户席位叠加（不再 UNION 去重合一），
   //   再叠加头像加成——有头像者全部席位 ×2。
   // 封禁账号不入池（两路均 JOIN user.status=0；②路 rank_snapshot 残留 delta 的
@@ -173,8 +185,9 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
   // JSON path 解析器直接报 3143 非法路径（position 16 实证，2026-10-29 线上首页 500）。
   // 日期 key 含连字符必须引号包裹，故值为带裸双引号的 $."日期"。
   const rankPath = `$."${today}"`;
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; seats: number; hasAvatar: number }>>(
-    `SELECT s.id, 1 AS seats, CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; seats: number; hasAvatar: number; lastLogin: bigint }>>(
+    `SELECT s.id, 1 AS seats, u.last_login_time AS lastLogin,
+            CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
        FROM user_scores s
        JOIN \`user\` u ON u.id = s.id AND u.status = 0 AND u.last_login_time >= ?
        WHERE s.exp_time > 0 AND s.exp_time <= ?
@@ -184,6 +197,7 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
               + CASE WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS UNSIGNED) <= 100 THEN 2
                      WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS UNSIGNED) <= 500 THEN 1
                      ELSE 0 END AS seats,
+            u.last_login_time AS lastLogin,
             CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END
        FROM news n
        JOIN rank_snapshot r ON r.user = n.user AND r.delta > 0
@@ -198,14 +212,17 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
   const excluded = await recentStarUserIds(today);
   // 两路分开计席：同一用户席位跨路累加（UNION ALL 下①路一人一行恒 1 席，
   // ②路已按 DISTINCT 去重到一人一行、席位由 SQL 分级算出）
-  const seen = new Map<number, { seats: number; hasAvatar: number }>();
+  const seen = new Map<number, { seats: number; hasAvatar: number; lastLogin: bigint }>();
   for (const r of rows) {
     const id = N(r.id);
     const cur = seen.get(id);
     if (cur) cur.seats += Number(r.seats);
-    else seen.set(id, { seats: Number(r.seats), hasAvatar: Number(r.hasAvatar) });
+    else seen.set(id, { seats: Number(r.seats), hasAvatar: Number(r.hasAvatar), lastLogin: r.lastLogin });
   }
-  const candidates = [...seen.entries()].filter(([id]) => !excluded.has(id));
+  // 全局排除（2026-11-02 张老师定）：30 天内当选过的不参选 + 7 日内未登录过的不参选
+  const candidates = [...seen.entries()].filter(
+    ([id, { lastLogin }]) => !excluded.has(id) && isLoggedInWithin7Days(lastLogin)
+  );
   if (!candidates.length) return null;
 
   // 加权抽签袋（十七轮头像×2 + 十八轮两路分席 + 十九轮进步席位分级）：
