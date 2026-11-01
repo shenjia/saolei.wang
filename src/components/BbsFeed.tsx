@@ -142,8 +142,18 @@ export function BbsRow({
         <span className="bbs_count"> / </span>
         <span className={"bbs_clicks" + (order === "clicks" ? " sort_on" : "")}>{p.clicks}</span>
       </td>
-      {/* 发布排序时本列改显发布时间（列头即「发布」语义，2026-10-26） */}
-      <td className="time"><RelTime time={order === "post" ? p.createTime : p.lastReplyTime} max={TIME_NEVER} /></td>
+      {/* 2026-11-01 张老师要求：更新/发布两个时间都显示（hover 各自出详细时间气泡），
+          当前列排序命中的一行时间金色 .on 高亮（同评论/阅读数字 .sort_on 口径） */}
+      <td className="time">
+        <span className={"t_line" + (order === "post" ? "" : " on")}>
+          <em className="t_label">更新</em>
+          <RelTime time={p.lastReplyTime} max={TIME_NEVER} />
+        </span>
+        <span className={"t_line" + (order === "post" ? " on" : "")}>
+          <em className="t_label">发布</em>
+          <RelTime time={p.createTime} max={TIME_NEVER} />
+        </span>
+      </td>
     </tr>
   );
 }
