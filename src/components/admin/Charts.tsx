@@ -277,11 +277,14 @@ export function BarList({
   items,
   emptyText = "暂无数据",
   color,
+  unit,
 }: {
   items: { label: string; value: number; hint?: string; href?: string; color?: string }[];
   emptyText?: string;
   /** 统一条色（item.color 优先）；刻意用字符串而非回调——客户端组件不能接服务端传的函数 */
   color?: string;
+  /** 数值后缀（2026-11-01：开关占比模块 val 列直接显百分比，如 "83%"） */
+  unit?: string;
 }) {
   if (!items.length) return <div className="admin_empty">{emptyText}</div>;
   const max = Math.max(...items.map((i) => i.value), 1);
@@ -301,7 +304,7 @@ export function BarList({
               }}
             />
           </span>
-          <span className="val">{it.value.toLocaleString("zh-CN")}</span>
+          <span className="val">{it.value.toLocaleString("zh-CN")}{unit}</span>
           {it.hint !== undefined && <span className="hint">{it.hint}</span>}
         </div>
       ))}

@@ -115,16 +115,22 @@ export default async function AdminPracticePage() {
               <div className="admin_empty">暂无模式数据</div>
             )}
           </AdminCard>
-          {/* 开关占比（2026-11-01 张老师定）：设置浮窗六开关的打开盘数比例，
-              分母=同期总盘数（老客户端缺省关，起记日前旧局稀释占比） */}
+          {/* 开关占比（2026-11-01 张老师定）：设置浮窗六开关打开比例——
+              val 列直接显百分比（22:56 定稿：去掉名称后缀的括号百分比，档位配色
+              >66% 绿 / >33% 黄 / 其余红）；分母=同期总盘数（老客户端缺省关，
+              起记日前旧局稀释占比） */}
           <AdminCard title="开关占比（近 7 天）" className="h100">
             {switches.total > 0 ? (
               <BarList
-                items={switches.items.map((s) => ({
-                  label: `${s.label}（${Math.round((s.value / switches.total) * 100)}%）`,
-                  value: s.value,
-                }))}
-                color="linear-gradient(90deg,#75715e,#66d9ef)"
+                items={switches.items.map((s) => {
+                  const pct = Math.round((s.value / switches.total) * 100);
+                  return {
+                    label: s.label,
+                    value: pct,
+                    color: pct > 66 ? "#a6e22e" : pct > 33 ? "#fdc61d" : "#f92672",
+                  };
+                })}
+                unit="%"
               />
             ) : (
               <div className="admin_empty">暂无开关数据（自今日起记）</div>
