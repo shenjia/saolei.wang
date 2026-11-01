@@ -7,10 +7,9 @@ import { getAuditorWorkload, getOverview } from "@/lib/admin/stats";
 import { usersByIds } from "@/lib/queries";
 import { VIDEO_STATUS } from "@/lib/config";
 import { AdminReviewList } from "@/components/admin/AdminReviewList";
-import { TitleBadge } from "@/components/TitleBadge";
-import { AdminCard, Kpi, StatusTag } from "@/components/admin/Widgets";
+import { AdminCard, Kpi } from "@/components/admin/Widgets";
 import { BarList } from "@/components/admin/Charts";
-import { scoreTime, timeOpposite } from "@/lib/format";
+import { timeOpposite } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "录像审核 | 管理后台" };
@@ -43,16 +42,15 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
   }
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const [list, ov, workload] = await Promise.all([
+  const [list, ov, workload, workload7] = await Promise.all([
     getVideoListAdmin({ status: String(status), order: status === VIDEO_STATUS.NORMAL ? "old" : "new", page, pool }),
     getOverview(),
     getAuditorWorkload(6),
+    getAuditorWorkload(10, 7),
   ]);
-  const auditors = await usersByIds(workload.map((w) => w.user));
+  const auditors = await usersByIds([...new Set([...workload, ...workload7].map((w) => w.user))]);
 
   const pendingDays = ov.oldestPendingDays;
-
-  const recent = list.rows.slice(0, 5);
 
   return (
     <div className="admin_review_page">
@@ -151,47 +149,12 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           />
         </AdminCard>
 
-        <AdminCard title="本页最近条目" tight>
-          <div className="admin_scroll">
-            <table className="admin_table">
-              <thead>
-                <tr>
-                  <th className="c">ID</th>
-                  <th>玩家</th>
-                  <th className="num">时间</th>
-                  <th className="c">状态</th>
-                  <th>上传</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((v) => (
-                  <tr key={v.id}>
-                    <td className="c">
-                      <Link className="link" href={`/video/${v.id}`} target="_blank" prefetch={false}>
-                        {v.id}
-                      </Link>
-                    </td>
-                    <td>
-                      {v.author?.chineseName ?? `#${v.user}`}{" "}
-                      <TitleBadge title={v.authorTitle} />
-                    </td>
-                    <td className="num">{v.realTime ? scoreTime(v.realTime) : "—"}</td>
-                    <td className="c">
-                      <StatusTag status={v.status} />
-                    </td>
-                    <td className="sub">{timeOpposite(v.createTime)}</td>
-                  </tr>
-                ))}
-                {recent.length === 0 && (
-                  <tr>
-                    <td colSpan={5}>
-                      <div className="admin_empty">暂无</div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <AdminCard title="最近7天审核量" tight>
+          <BarList
+            items={workload7.map((w) => ({ label: auditors.get(w.user)?.chineseName ?? `#${w.user}`, value: w.count }))}
+            color="linear-gradient(90deg,#1f6f8a,#66d9ef)"
+            emptyText="近7天无审核记录"
+          />
         </AdminCard>
       </div>
 

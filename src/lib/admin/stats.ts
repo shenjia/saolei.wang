@@ -440,11 +440,14 @@ export async function getWeekdayCounts(): Promise<{ label: string; value: number
   return names.map((label, i) => ({ label, value: map.get(i) ?? 0 }));
 }
 
-/** 审核员工作量（有留痕的审核记录） */
-export async function getAuditorWorkload(limit = 10): Promise<{ user: number; count: number }[]> {
+/** 审核员工作量（有留痕的审核记录）；days 传窗口天数（按 review_time 落在最近 days 天，本地 +08:00 切天） */
+export async function getAuditorWorkload(limit = 10, days?: number): Promise<{ user: number; count: number }[]> {
+  const since = days ? dayStart(days - 1) : 0;
   const rows = await prisma.$queryRawUnsafe<{ review_user: bigint; c: bigint }[]>(
     `SELECT review_user, COUNT(*) c FROM video WHERE review_user IS NOT NULL AND review_user > 0
-     GROUP BY review_user ORDER BY c DESC LIMIT ${limit}`
+     ${since ? "AND review_time >= ? " : ""}
+     GROUP BY review_user ORDER BY c DESC LIMIT ${limit}`,
+    ...(since ? [BigInt(since)] : [])
   );
   return rows.map((r) => ({ user: N(r.review_user), count: N(r.c) }));
 }
