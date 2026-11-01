@@ -12729,6 +12729,11 @@ body #page .word_terms .desc {
 .pb_badge.new {
   background: #2e8b57;
 }
+/* 败局估算灰标（2026-11-02 张老师定）：Est RTime 行灰 PB / 3BV 行灰 New——
+   败局不上传、成绩不作数，用灰色与胜局金 PB / 绿 New 区分 */
+.pb_badge.gray {
+  background: #808080;
+}
 
 /* 排名模式温馨提示：复用站内 Confirm 浮窗（confirmDialog）——rt_sub_inline 为正文内小字 */
 .rt_sub_inline {
