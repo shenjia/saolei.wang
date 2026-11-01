@@ -1,12 +1,13 @@
 // 管理后台 · 仪表盘（2026-09-24；2026-10-16 加流量统计区块；2026-10-21 加称号体系偏好 + 占比图全面换环形 Donut；
 // 2026-10-23 张老师定：KPI 首行收敛为 6 卡——流量同比只留百分比、练习两行（人参与/近7天盘数）、
-// 注册两行（今日/近7天）、活跃只留今日、「上传录像」只留今日、论坛主题卡下线）
+// 注册两行（今日/近7天）、活跃只留今日、「上传录像」只留今日、论坛主题卡下线；
+// 2026-11-01 张老师定：首行加第 7 卡「API 调用」；PV/UV 剔除爬虫（零行为访客，口径见 traffic.ts 头注））
 // 一屏掌握：规模指标（KPI）→ 30 天趋势 → 流量统计 → 待办与分布 → 最新动态。
 
 import Link from "next/link";
 import { PlayerTip } from "@/components/Cells";
 import { getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
-import { getTrafficOverview, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
+import { getTrafficOverview, getApiUsage, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { practiceCusClean } from "@/lib/admin/practice";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies } from "@/lib/admin/cache";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
@@ -21,11 +22,12 @@ export const metadata = { title: "仪表盘 | 管理后台" };
 export default async function AdminDashboard() {
   // 分两波取数：重的全表聚合走缓存且在内部串行，轻的实时查询并行
   // （2026-10-21 称号/地区分布卡下线，dashboard-distributions 只剩软件分布 + 称号偏好）
-  const [ov, trend, dist, traffic] = await Promise.all([
+  const [ov, trend, dist, traffic, api] = await Promise.all([
     getOverview(),
     getTrend(30),
     getDashboardDistributionsSoftwares(),
     getTrafficOverview(),
+    getApiUsage(),
   ]);
   const [anomalies, latestUsers, latestVideos] = await Promise.all([
     getCachedAnomalies(),
@@ -116,7 +118,7 @@ export default async function AdminDashboard() {
         </span>
       </div>
 
-      {/* ---------- 规模指标（2026-10-16 张老师定：第一行七卡全带走势线） ---------- */}
+      {/* ---------- 规模指标（2026-10-16 张老师定：第一行全带走势线；2026-11-01 加第 7 卡 API 调用） ---------- */}
       <div className="admin_kpis">
         <Kpi
           label="今日 PV"
@@ -208,6 +210,22 @@ export default async function AdminDashboard() {
             </>
           }
         />
+        {/* API 调用（2026-11-01 张老师定）：合作方 API 分时用量，与 PV/UV 口径互不相干
+            （埋点端拒收 /api/ 路径，API 从不进 page_view）；走势 30 天，foot 同比 + 在用 key 数 */}
+        <Kpi
+          label="API 调用"
+          href="/admin/apikeys"
+          value={api.today}
+          tone="grey"
+          trend={api.trend}
+          foot={
+            <>
+              {cmpFoot(api.today, api.lastWeek)}
+              <br />
+              {api.todayKeys} 个 key 在用
+            </>
+          }
+        />
       </div>
 
       {/* ---------- 待人工审核（2026-10-16 张老师定：第二行只放需人工处理的队列，无则整行不显示） ---------- */}
@@ -247,7 +265,7 @@ export default async function AdminDashboard() {
             ))}
           </div>
           <div className="admin_hint" style={{ marginTop: 10 }}>
-            提示：待审录像必须「先下载观看再审核」（防盲审），系统会拒绝未下载的审核请求。
+            提示：待审录像必须「先下载观看再审核」（防盲审），系统会拒绝未下载的审核请求；免核定录像通过除外（批量/单个均免看）。
           </div>
         </AdminCard>
 
@@ -256,7 +274,7 @@ export default async function AdminDashboard() {
           title="近 30 天趋势"
           more={
             <>
-              <span className="sub">PV/UV 为 page_view 埋点 · 已剔除管理员浏览</span>
+              <span className="sub">PV/UV 为 page_view 埋点 · 已剔除管理员与爬虫（零行为访客）</span>
               <Link href="/admin/stats">深入分析 →</Link>
             </>
           }

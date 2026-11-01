@@ -1,10 +1,16 @@
 // 后台流量统计（2026-10-16 仪表盘 UV/PV，参考 01xue.com /api/admin/stats/overview；
-// 2026-10-26 张老师定：同比基数为「上周同一日同时段」，避免 weekday/weekend 流量差异干扰）
+// 2026-10-26 张老师定：同比基数为「上周同一日同时段」，避免 weekday/weekend 流量差异干扰；
+// 2026-11-01 张老师定：剔除「零行为」爬虫访客 + 新增 API 调用量聚合）
 //
 // 口径约定（与 stats.ts 一致）：
 // · page_view.create_time 为 Unix 秒；「按天」聚合一律 +08:00 切天（FLOOR((t+28800)/86400)），
 //   不依赖服务器时区。
 // · PV = page_view 行数（排除 isAdmin）；UV = 按日去重 visitorId。
+// · 爬虫剔除（2026-11-01）：假 UA 分布式爬虫不存 cookie，每次请求生成新 vid，当日全部 PV
+//   无 dwell 回写也无点击（真人 dwell 覆盖率 ~96%，爬虫 ≈ 0%），把 UV 刷高数倍。
+//   按「访客×日」判：该访客当日所有 PV 零 dwell 且零 click → 判爬虫剔除。
+//   宽限窗 30 分钟：dwell 要等离开页面才回写，近期行无法判定一律保留，
+//   故「今日」最多含半小时内的未判定爬虫（≈十几个 UV），随缓存刷新收敛。
 // · 同比口径：今日 00:00~取数时刻 vs 上周同一日 00:00~上周同一时刻（窗口秒数对齐）；
 //   缓存 300s，「此刻」最多滞后 5 分钟。
 // · 30 天流水一次拉全量内存聚合（个人站量级，上线初期即全量）。
@@ -238,7 +244,23 @@ async function aggregate(): Promise<TrafficOverview> {
   // 按时间序处理（流失统计取会话末页依赖顺序）
   const sorted = [...rows].sort((a, b) => N(a.createTime) - N(b.createTime));
 
-  for (const r of sorted) {
+  // ---- 爬虫剔除（2026-11-01 张老师定，口径见文件头）----
+  const BEHAVIOR_GRACE = 30 * 60;
+  const graceCut = now - BEHAVIOR_GRACE;
+  // 有行为回写（dwell 或点击）的「访客×日」集合；其余超过宽限窗的访客判爬虫
+  const behaved = new Set<string>();
+  for (const r of rows) {
+    if (r.dwellMs !== null || r.clicked) {
+      behaved.add(`${r.visitorId}|${Math.floor((N(r.createTime) + 28800) / 86400)}`);
+    }
+  }
+  const real = sorted.filter((r) => {
+    const t = N(r.createTime);
+    if (t >= graceCut) return true; // 宽限窗内无法判定，保留
+    return behaved.has(`${r.visitorId}|${Math.floor((t + 28800) / 86400)}`);
+  });
+
+  for (const r of real) {
     const t = N(r.createTime);
     const idx = Math.floor((t + 28800) / 86400);
     const bucket = trendMap.get(idx);
@@ -331,7 +353,7 @@ async function aggregate(): Promise<TrafficOverview> {
     }
     const sessionMap = new Map<string, SessionLast>();
     const pathPv = new Map<string, number>();
-    for (const r of sorted) {
+    for (const r of real) {
       const t = N(r.createTime);
       if (t < start) continue;
       pathPv.set(r.path, (pathPv.get(r.path) ?? 0) + 1);
@@ -467,7 +489,7 @@ async function aggregate(): Promise<TrafficOverview> {
       pv: trendMap.get(todayIdx - 1)?.pv ?? 0,
       uv: yesterdayFullUv.size,
     },
-    d30: { pv: rows.length, uv: d30Uv.size },
+    d30: { pv: real.length, uv: d30Uv.size },
     trend: { dates, pv: pvSeries, uv: uvSeries },
     referrers: [...refMap.entries()]
       .map(([source, visits]) => ({ source, visits }))
@@ -504,8 +526,67 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v10"],
+  ["admin-traffic", "v11"],
   { revalidate: 300 }
 );
+
+// ---------- API 调用量（2026-11-01 张老师定：仪表盘首行加卡；数据源 api_key_usage 分时桶）----------
+
+export interface ApiUsageOverview {
+  now: number;
+  /** 今日调用（当前未满小时桶按已累计值计） */
+  today: number;
+  /** 上周同一日同时段（小时桶精确对齐，同比基数） */
+  lastWeek: number;
+  /** 近 30 天合计 */
+  d30: number;
+  /** 近 30 天分日趋势（与 trend.dates 对齐） */
+  trend: number[];
+  /** 今日有调用的 key 数 */
+  todayKeys: number;
+}
+
+async function aggregateApiUsage(): Promise<ApiUsageOverview> {
+  const now = Math.floor(Date.now() / 1000);
+  const today0 = dayStart(0);
+  const d30 = dayStart(29);
+  const todayH = Math.floor((today0 + 28800) / 3600);
+  const rows = await prisma.apiKeyUsage.findMany({
+    where: { hour: { gte: Math.floor((d30 + 28800) / 3600) } },
+    select: { hour: true, calls: true, key: true },
+  });
+  const dayCalls = new Map<number, number>();
+  const hourCalls = new Map<number, number>();
+  const todayKeys = new Set<bigint>();
+  for (const r of rows) {
+    const h = N(r.hour);
+    const c = N(r.calls);
+    hourCalls.set(h, (hourCalls.get(h) ?? 0) + c);
+    const d = Math.floor(h / 24);
+    dayCalls.set(d, (dayCalls.get(d) ?? 0) + c);
+    if (h >= todayH) todayKeys.add(r.key);
+  }
+  // 上周同日同时段：今日小时窗口 [todayH, nowH] 平移 -168（API 调用无 weekday 差异担忧，
+  // 但与其他 KPI 同构更直观）
+  const nowH = todayH + Math.floor((now - today0) / 3600);
+  let lastWeek = 0;
+  for (let h = todayH - 168; h <= nowH - 168; h++) lastWeek += hourCalls.get(h) ?? 0;
+  const todayIdx = Math.floor((today0 + 28800) / 86400);
+  const trend: number[] = [];
+  for (let i = 29; i >= 0; i--) trend.push(dayCalls.get(todayIdx - i) ?? 0);
+  return {
+    now,
+    today: trend[29],
+    lastWeek,
+    d30: trend.reduce((a, b) => a + b, 0),
+    trend,
+    todayKeys: todayKeys.size,
+  };
+}
+
+/** 缓存版（同铁律） */
+export const getApiUsage = unstable_cache(aggregateApiUsage, ["admin-api-usage", "v1"], {
+  revalidate: 300,
+});
 
 export { DEVICE_NAMES, REFERRER_NAMES };
