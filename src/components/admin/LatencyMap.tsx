@@ -8,15 +8,16 @@
 // 填色绿 ≤30ms → 黄 60ms → 红 ≥90ms 分段线性插值；悬停气泡：人数/盘数/延迟区间。
 // 省界几何复用 /area 同一份静态数据（src/lib/area-map-geo.ts，DataV 标准边界，
 // 含台湾省与南海诸岛九段线），样式复用 .area_map 族；只看不点（无跳转）。
-// 2026-11-02 改版（张老师需求）：静态红旗撤下，改「每服务器一颗 PIN 钉」——
-// 钉按 authority-status 的实例行动态渲染（无坐标的节点自动跳过）；与负载面板
-// 双向联动：hover 服务器名 → 钉高亮放大，hover 钉 → 气泡显示该服务器数据
-// （在线/对局 x/y、平均延迟三色、样本数）。坐标与省界同一 LCC 投影
+// 2026-11-02 改版（张老师需求）：静态红旗撤下，改「每服务器一颗 18×18 服务器
+// 机架图标」（public/images/server.png，HTML overlay 百分比锚定城市坐标，尺寸
+// 不随地图缩放；无坐标/无图标的节点自动跳过）；与负载面板双向联动：hover
+// 服务器名 → 图标高亮放大，hover 图标 → 气泡显示该服务器数据（在线/对局 x/y、
+// 平均延迟三色、样本数）。坐标与省界同一 LCC 投影
 // （25/47N 双标准纬线、中央经线 105E）：北京 (747.7,339.3) 杭州 (846.4,546.2)
 // 成都 (531.2,562.6) 广州 (725.9,726.2)——加节点跑 build-area-map.py 的
 // lcc+to_svg 公式补坐标即可。
 
-import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { areaDisplay } from "@/lib/config";
 import { type RegionTodayRow } from "./RegionTodayTable";
 import { type ServerRow } from "./ServerStatusPanel";
@@ -60,23 +61,30 @@ const LEGEND = `linear-gradient(90deg,${Array.from({ length: 13 }, (_, i) => {
   return `${ramp(ms)} ${Math.round((i / 12) * 100)}%`;
 }).join(",")})`;
 
-/* 服务器钉坐标（键 = authority-status targets() 的 name）：北京双实例同城
-   左右错开各 ±6；坐标由 build-area-map.py 同一 LCC 投影算出。香港已下线不设。 */
-const SERVER_GEO: Record<string, { x: number; y: number }> = {
-  北京1: { x: 741.7, y: 339.3 },
-  北京2: { x: 753.7, y: 339.3 },
+/* 服务器图标坐标（键 = authority-status targets() 的 name）：dx 为像素级
+   水平偏移（HTML overlay 层用 calc 拼进 left），北京双实例同城左右错开。
+   城市坐标与省界同一 LCC 投影。香港已下线不设。 */
+const SERVER_GEO: Record<string, { x: number; y: number; dx?: number }> = {
+  北京1: { x: 747.7, y: 339.3, dx: -9 },
+  北京2: { x: 747.7, y: 339.3, dx: 9 },
   杭州: { x: 846.4, y: 546.2 },
   成都: { x: 531.2, y: 562.6 },
   广州: { x: 725.9, y: 726.2 },
 };
 
+/** 图标层定位：SVG 坐标 → stage 百分比（am_svg 宽 100% 高自动，盒比例恒 1000:870，
+    百分比定位与渲染宽度无关） */
+function pos(g: { x: number; y: number; dx?: number }): CSSProperties {
+  return {
+    left: `calc(${(g.x / MAP_W) * 100}% + ${g.dx ?? 0}px)`,
+    top: `${(g.y / MAP_H) * 100}%`,
+  };
+}
+
 /** 钉状态色（与负载面板状态点同口径）：正常绿 / 排空橙 / 不可用红 */
 function pinColor(s: ServerRow): string {
   return s.ok ? (s.draining ? "#f79646" : "#a6e22e") : "#e24b4a";
 }
-
-/** PIN 钉形状（脚在 0,0，圆头中心约 0,-9.6 r5.4；放大时脚不动向上长） */
-const PIN_PATH = "M0,0C-3.8,-4.6 -5.4,-7 -5.4,-9.6A5.4,5.4 0 1 1 5.4,-9.6C5.4,-7 3.8,-4.6 0,0Z";
 
 export function LatencyMap({
   data,
@@ -252,42 +260,6 @@ export function LatencyMap({
               </g>
             );
           })}
-          {/* 服务器 PIN 钉（动态：与右侧负载面板同源数据，双向联动 hover）。
-              高亮钉最后渲染保证盖在其他钉上层 */}
-          {servers
-            .filter((s) => SERVER_GEO[s.name])
-            .map((s) => ({ s, hl: hoverServer === s.name }))
-            .sort((a, b) => Number(a.hl) - Number(b.hl))
-            .map(({ s, hl }) => {
-              const p = SERVER_GEO[s.name];
-              return (
-                <g
-                  key={s.name}
-                  ref={(el) => {
-                    if (el) shapeRefs.current.set(s.name, el);
-                    else shapeRefs.current.delete(s.name);
-                  }}
-                  className="srv_pin"
-                  style={{ cursor: "help" }}
-                  onMouseEnter={enterSrv(s.name)}
-                  onMouseLeave={() => {
-                    onHoverServer(null);
-                    onSrvTip(null);
-                  }}
-                >
-                  <g transform={`translate(${p.x},${p.y}) scale(${hl ? 1.35 : 1})`}>
-                    <path
-                      d={PIN_PATH}
-                      fill={pinColor(s)}
-                      stroke={hl ? "#f8f8f2" : "rgba(248,248,242,.7)"}
-                      strokeWidth={hl ? 1.1 : 0.7}
-                    />
-                    <circle cx="0" cy="-9.6" r="1.9" fill="rgba(0,0,0,.35)" />
-                  </g>
-                  <title>{`${s.name}（排名服务器）`}</title>
-                </g>
-              );
-            })}
           {/* 南海诸岛附图（标准地图样式，含九段线）——合规必留 */}
           <svg x={MAP_INSET.x} y={MAP_INSET.y} width={MAP_INSET.w} height={MAP_INSET.h} viewBox={`0 0 ${MAP_INSET.w} ${MAP_INSET.h}`}>
             <rect className="inset-box" x="0.5" y="0.5" width={MAP_INSET.w - 1} height={MAP_INSET.h - 1} rx="3" />
@@ -300,6 +272,35 @@ export function LatencyMap({
             <path className="island" d={GEO_INSET_ISLAND} />
           </svg>
         </svg>
+        {/* 服务器图标层（2026-11-02 张老师：SVG 钉太小看不见，换 32×32 服务器图标。
+            HTML overlay 百分比锚定城市坐标，尺寸不随地图缩放；hover 联动/气泡同前） */}
+        <div className="srv_icons">
+          {servers
+            .filter((s) => SERVER_GEO[s.name])
+            .map((s) => {
+              const g = SERVER_GEO[s.name];
+              const hl = hoverServer === s.name;
+              return (
+                <img
+                  key={s.name}
+                  ref={(el) => {
+                    if (el) shapeRefs.current.set(s.name, el);
+                    else shapeRefs.current.delete(s.name);
+                  }}
+                  src="/images/server.png"
+                  alt={s.name}
+                  draggable={false}
+                  className={`srv_icon${hl ? " hl" : ""}`}
+                  style={pos(g)}
+                  onMouseEnter={enterSrv(s.name)}
+                  onMouseLeave={() => {
+                    onHoverServer(null);
+                    onSrvTip(null);
+                  }}
+                />
+              );
+            })}
+        </div>
         <div className={`am_tip${hot || hotSrv ? " show" : ""}`} ref={tipRef}>
           {hotSrv ? (
             <>

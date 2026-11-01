@@ -5196,6 +5196,28 @@ body #page.two_columns {
 .am_stage {
   position: relative;
 }
+/* 服务器图标层（2026-11-02 张老师：SVG 钉太小，换服务器图标 overlay，18×18。
+   百分比锚定城市坐标，尺寸不随地图缩放；hl=负载行/图标 hover 联动放大） */
+.srv_icons {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.srv_icon {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px; /* 中心锚定在城市坐标点 */
+  pointer-events: auto;
+  cursor: help;
+  transition: transform 0.12s ease, filter 0.12s ease;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+.srv_icon.hl {
+  transform: scale(1.25);
+  filter: drop-shadow(0 0 4px rgba(248, 248, 242, 0.9));
+  z-index: 5;
+}
 .am_svg {
   display: block;
   width: 100%;
