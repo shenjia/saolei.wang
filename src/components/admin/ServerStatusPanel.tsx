@@ -13,8 +13,11 @@
 // 2026-11-01 三次（张老师定稿）：⑤累计值（y）一律暗灰，当前对局数金色（当前
 // 在线保持绿）；⑥表头只显「在线」「对局」单词，点击按累计值排序，默认按累计
 // 连接人数降序。
+// 2026-11-01 四次（张老师）：平均延迟列三色渲染（35/75 分界），口径与今日地区表
+// 同源（rttColor.ts）。
 
 import { useEffect, useRef, useState } from "react";
+import { rttColor, RTT_LEGEND } from "./rttColor";
 
 interface ServerRow {
   name: string;
@@ -193,8 +196,15 @@ export function ServerStatusPanel() {
               <td title="x＝进行中对局数 · y＝累计开局面数（重启不清零；点击表头按累计排序）">
                 {pair(r, r.active, "#fdc61d", r.gamesServed)}
               </td>
-              <td className="c" title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本` : undefined}>
-                {r.ok && r.rttAvg !== null ? `${r.rttAvg}ms` : <span style={{ color: "#49483e" }}>—</span>}
+              <td
+                className="c"
+                title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本 · ${RTT_LEGEND}` : undefined}
+              >
+                {r.ok && r.rttAvg !== null ? (
+                  <b style={{ color: rttColor(r.rttAvg) }}>{r.rttAvg}ms</b>
+                ) : (
+                  <span style={{ color: "#49483e" }}>—</span>
+                )}
               </td>
             </tr>
           ))}
@@ -211,7 +221,8 @@ export function ServerStatusPanel() {
         <span style={{ color: "#a6e22e" }}>●</span> 正常 ·{" "}
         <span style={{ color: "#f79646" }}>●</span> 排空 ·{" "}
         <span style={{ color: "#e24b4a" }}>●</span> 不可用 · 在线＝当前连接 / 累计人数（灰） ·
-        对局＝进行中 / 累计局数（灰） · 平均延迟＝玩家实测近 7 天均值 · 点击表头按累计排序
+        对局＝进行中 / 累计局数（灰） · 平均延迟＝玩家实测近 7 天均值（{RTT_LEGEND}） ·
+        点击表头按累计排序
       </div>
     </div>
   );

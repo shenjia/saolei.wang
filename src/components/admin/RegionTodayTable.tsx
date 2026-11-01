@@ -8,6 +8,7 @@
 // 悬停行上报 area（地图省份高亮），地图悬停省份时本表对应行加 .hl 高亮。
 
 import { useState } from "react";
+import { rttColor, RTT_LEGEND } from "./rttColor";
 
 export interface RegionTodayRow {
   area: string;
@@ -20,15 +21,6 @@ export interface RegionTodayRow {
 }
 
 type SortKey = "area" | "plays" | "players" | "winRate" | "avgRtt" | "range";
-
-/** 平均延迟三色（2026-11-01 张老师定，分界 35/75ms）：绿=快、金=中、红=慢（站内 Monokai 三色） */
-const RTT_GOOD = 35;
-const RTT_MID = 75;
-function rttColor(avg: number): string {
-  if (avg <= RTT_GOOD) return "#a6e22e";
-  if (avg <= RTT_MID) return "#fdc61d";
-  return "#e24b4a";
-}
 interface SortSpec {
   key: SortKey;
   dir: "asc" | "desc";
@@ -133,7 +125,7 @@ export function RegionTodayTable({
               <td className="num">{r.plays.toLocaleString("zh-CN")}</td>
               <td className="num">{r.players}</td>
               <td className="num">{r.plays ? `${r.winRate}%` : "—"}</td>
-              <td className="num" title="≤35ms 绿（快）· 35-75ms 金（中）· >75ms 红（慢）">
+              <td className="num" title={RTT_LEGEND}>
                 {r.avgRtt !== null ? <b style={{ color: rttColor(r.avgRtt) }}>{r.avgRtt}ms</b> : "—"}
               </td>
               <td className="num">{r.minRtt !== null ? `${r.minRtt}~${r.maxRtt}ms` : "—"}</td>
