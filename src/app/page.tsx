@@ -18,7 +18,12 @@
 // xxx/yyy 局」（xxx=我的局数绿显）+灰字「xx位雷友参与」+30 天走势图铺满模块宽，
 // 口径与后台仪表盘「今日练习」KPI 一致（practice_log，含踩雷局与游客局）。
 
+// 2026-11-01 张老师要求：登录态桌面侧栏「开始练习」按钮缩到 61.8%（黄金分割），
+// 右侧补绿色「上传」按钮（带上传图标，跳 /video/upload）；未登录保持原全宽按钮。
+// 移动端置顶大按钮不参与（仍由 #play_entry_top 全宽接管，上传走顶栏菜单）。
+
 import Link from "next/link";
+import { IconUpload } from "@/components/MenuIcons";
 import {
   getHomeNews,
   getHotVideos,
@@ -31,7 +36,8 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EmailBindNotice } from "@/components/EmailBindNotice";
 import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, VIDEO_STATUS, isManager } from "@/lib/config";
-import { timeOpposite, TIME_NEVER, isRecent } from "@/lib/format";
+import { TIME_NEVER, isRecent } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoFeed } from "@/components/VideoFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
@@ -177,12 +183,30 @@ export default async function HomePage() {
             位于入伍新兵之上；为腾出其高度，论坛新帖由 8 条减为 6 条，保持左右栏底部基本对齐。
             仅桌面（≥881）显示；移动端由主栏顶部 #play_entry_top 接管（2026-10-15） */}
         <FlopSprites />
-        <Link id="play_entry" href="/online">
-          <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
-            <use href="#face-flat" />
-          </svg>
-          <span>开始练习</span>
-        </Link>
+        {/* 2026-11-01 张老师要求：登录态一行双钮——「开始练习」缩至 61.8% +
+            绿色「上传」钮（IconUpload 图标）跳 /video/upload；未登录保持原全宽钮。
+            侧栏按钮缩放值（padding 6/字号 11/图标 15/边框 2）均为原尺寸 ×0.618 */}
+        {session ? (
+          <div id="play_row">
+            <Link id="play_entry" href="/online">
+              <svg viewBox="0 0 260 260" width="15" height="15" aria-hidden="true">
+                <use href="#face-flat" />
+              </svg>
+              <span>开始练习</span>
+            </Link>
+            <Link id="upload_entry" href="/video/upload">
+              <IconUpload />
+              <span>上传</span>
+            </Link>
+          </div>
+        ) : (
+          <Link id="play_entry" href="/online">
+            <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
+              <use href="#face-flat" />
+            </svg>
+            <span>开始练习</span>
+          </Link>
+        )}
         {/* 今日练习（2026-10-22 五轮张老师要求）：桌面侧栏副本，置于「开始练习」按钮下方、
             管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我/全网双线图 */}
         <PracticeToday
@@ -235,7 +259,7 @@ export default async function HomePage() {
                     <TitleBadge title={n.title} classic={n.classic} link />
                   </td>
                   <td className={"time " + (isRecent(n.createTime) ? "time--recent" : "time--old")}>
-                    {timeOpposite(n.createTime, TIME_NEVER)}
+                    <RelTime time={n.createTime} max={TIME_NEVER} />
                   </td>
                 </tr>
               ))}
