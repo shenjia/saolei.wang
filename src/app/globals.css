@@ -10802,10 +10802,12 @@ html.op-fakefs #header {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
 /* 登录态一行双钮（2026-11-01 张老师要求）：「开始练习」宽度缩到 61.8%（黄金分割），
-   右侧绿色「上传录像」按钮占余宽（≈38.2%）跳 /video/upload。
+   右侧绿色「录像」按钮占余宽（≈38.2%）跳 /video/upload。
    二轮反馈修正：只缩宽度——高度/字号/图标/边框恢复原版尺寸（等比缩后太矮、字太小），
    两钮同高（stretch），右钮字号随左钮。
-   三轮反馈修正：右钮去图标、文案定「上传录像」、文字黑色（#333 同左钮字色）。
+   三轮反馈修正：文字黑色（#333 同左钮字色）。
+   四轮反馈修正：文案「上传录像」→「录像」，前置黑色上传图标（IconUpload，
+   stroke currentColor 随字色 #333，CSS 放大到 24px 与笑脸一致，gap 10 对齐左钮）。
    绿色取站内「上传」语义绿 #8ac21b（legacy .button.active 字色 / 排名胜局上传钮边色），
    凸起边框沿用笑脸按钮的 3D 语言换绿色调；未登录不渲染此行（page.tsx 把关）。
    ≤880 整行退役：移动端入口由置顶大按钮接管（上传走顶栏菜单） */
@@ -10825,6 +10827,7 @@ html.op-fakefs #header {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
   border: 3px solid;
   border-color: #c4e88a #55801a #55801a #c4e88a;
@@ -10833,6 +10836,10 @@ html.op-fakefs #header {
   font-size: 18px;
   font-weight: bold;
   text-shadow: none;
+}
+#play_row #upload_entry svg {
+  width: 24px;
+  height: 24px;
 }
 #play_row #upload_entry:hover {
   color: #000;

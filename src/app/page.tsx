@@ -19,12 +19,14 @@
 // 口径与后台仪表盘「今日练习」KPI 一致（practice_log，含踩雷局与游客局）。
 
 // 2026-11-01 张老师要求：登录态桌面侧栏「开始练习」宽度缩到 61.8%（黄金分割），
-// 右侧补绿色「上传录像」按钮跳 /video/upload；未登录保持原全宽按钮。
+// 右侧补绿色按钮跳 /video/upload；未登录保持原全宽按钮。
 // 二轮反馈修正：高度/字号/图标恢复原版（等比缩 61.8% 后太矮、字太小），仅缩宽度。
-// 三轮反馈修正：右钮去图标、文案定「上传录像」、文字黑色。
+// 三轮反馈修正：右钮文案定「上传录像」、文字黑色。
+// 四轮反馈修正：文案「上传录像」→「录像」，前置黑色上传图标（currentColor 随字色 #333）。
 // 移动端置顶大按钮不参与（仍由 #play_entry_top 全宽接管，上传走顶栏菜单）。
 
 import Link from "next/link";
+import { IconUpload } from "@/components/MenuIcons";
 import {
   getHomeNews,
   getHotVideos,
@@ -185,10 +187,10 @@ export default async function HomePage() {
             仅桌面（≥881）显示；移动端由主栏顶部 #play_entry_top 接管（2026-10-15） */}
         <FlopSprites />
         {/* 2026-11-01 张老师要求：登录态一行双钮——「开始练习」宽度缩至 61.8%（黄金分割）+
-            绿色「上传录像」钮跳 /video/upload；未登录保持原全宽钮。
+            绿色「录像」钮跳 /video/upload；未登录保持原全宽钮。
             二轮反馈：等比缩小后太矮、字太小——宽度保留 61.8%，高度/字号/图标恢复原版
             （高 50/字 18/图标 24/边框 3），右侧按钮同高。
-            三轮反馈：右钮去图标、文案定「上传录像」、文字黑色 */}
+            三轮反馈：右钮文字黑色。四轮反馈：文案「录像」+ 前置黑色上传图标 */}
         {session ? (
           <div id="play_row">
             <Link id="play_entry" href="/online">
@@ -198,7 +200,8 @@ export default async function HomePage() {
               <span>开始练习</span>
             </Link>
             <Link id="upload_entry" href="/video/upload">
-              <span>上传录像</span>
+              <IconUpload />
+              <span>录像</span>
             </Link>
           </div>
         ) : (
