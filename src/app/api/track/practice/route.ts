@@ -31,6 +31,13 @@ export async function POST(req: NextRequest) {
   const ngOn = body.ng === true;
   const sqOn = body.sq === true;
   const comboOn = body.combo === true;
+  // 设置开关（2026-11-01）：同上缺省 false——老客户端不带，起记日前旧局稀释占比
+  const swQmark = body.qmark === true;
+  const swStats = body.showStats === true;
+  const swSndfb = body.sndFb === true;
+  const swShot = body.autoShot === true;
+  const swQretry = body.quickRetry === true;
+  const swWheel = body.wheelZoom === true;
   if (
     !LEVELS.has(level) ||
     !Number.isFinite(csec) || csec <= 0 || csec > 3_600_000 || // 10 小时封顶
@@ -52,9 +59,11 @@ export async function POST(req: NextRequest) {
   // 原子 UPSERT：当日当用户无行则新建，有行则计数自增（并发局也安全）
   await prisma.$executeRaw`
     INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp,
-      mode_ranked, mode_nf, mode_ng, mode_sq, mode_combo, create_time, update_time)
+      mode_ranked, mode_nf, mode_ng, mode_sq, mode_combo,
+      sw_qmark, sw_stats, sw_sndfb, sw_shot, sw_qretry, sw_wheel, create_time, update_time)
     VALUES (${day}, ${uid}, 1, ${wonInt}, ${begInc}, ${intInc}, ${expInc},
-      ${ranked ? 1 : 0}, ${nfOn ? 1 : 0}, ${ngOn ? 1 : 0}, ${sqOn ? 1 : 0}, ${comboOn ? 1 : 0}, ${now}, ${now})
+      ${ranked ? 1 : 0}, ${nfOn ? 1 : 0}, ${ngOn ? 1 : 0}, ${sqOn ? 1 : 0}, ${comboOn ? 1 : 0},
+      ${swQmark ? 1 : 0}, ${swStats ? 1 : 0}, ${swSndfb ? 1 : 0}, ${swShot ? 1 : 0}, ${swQretry ? 1 : 0}, ${swWheel ? 1 : 0}, ${now}, ${now})
     ON DUPLICATE KEY UPDATE
       plays = plays + 1,
       wins = wins + ${wonInt},
@@ -66,6 +75,12 @@ export async function POST(req: NextRequest) {
       mode_ng = mode_ng + ${ngOn ? 1 : 0},
       mode_sq = mode_sq + ${sqOn ? 1 : 0},
       mode_combo = mode_combo + ${comboOn ? 1 : 0},
+      sw_qmark = sw_qmark + ${swQmark ? 1 : 0},
+      sw_stats = sw_stats + ${swStats ? 1 : 0},
+      sw_sndfb = sw_sndfb + ${swSndfb ? 1 : 0},
+      sw_shot = sw_shot + ${swShot ? 1 : 0},
+      sw_qretry = sw_qretry + ${swQretry ? 1 : 0},
+      sw_wheel = sw_wheel + ${swWheel ? 1 : 0},
       update_time = ${now}
   `;
   // 小时分布桶（2026-10-27 /admin/practice 24h 图）：与主计数独立 UPSERT，

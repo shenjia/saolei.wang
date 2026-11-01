@@ -9,17 +9,18 @@ import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/componen
 import { LatencyMap } from "@/components/admin/LatencyMap";
 import { RegionTodayTable } from "@/components/admin/RegionTodayTable";
 import { ServerStatusPanel } from "@/components/admin/ServerStatusPanel";
-import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeTrend, getRankedLatencyMap, getRegionToday, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
+import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeSwitches, getPracticeTrend, getRankedLatencyMap, getRegionToday, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "练习数据 | 管理后台" };
 
 export default async function AdminPracticePage() {
-  const [trend, hourly, days, modes, rttMap, regionToday] = await Promise.all([
+  const [trend, hourly, days, modes, switches, rttMap, regionToday] = await Promise.all([
     getPracticeTrend(30),
     getPracticeHourly(7),
     getPracticeDays(7),
     getPracticeModes(7),
+    getPracticeSwitches(7),
     getRankedLatencyMap(7),
     getRegionToday(),
   ]);
@@ -112,6 +113,21 @@ export default async function AdminPracticePage() {
               />
             ) : (
               <div className="admin_empty">暂无模式数据</div>
+            )}
+          </AdminCard>
+          {/* 开关占比（2026-11-01 张老师定）：设置浮窗六开关的打开盘数比例，
+              分母=同期总盘数（老客户端缺省关，起记日前旧局稀释占比） */}
+          <AdminCard title="开关占比（近 7 天）" className="h100">
+            {switches.total > 0 ? (
+              <BarList
+                items={switches.items.map((s) => ({
+                  label: `${s.label}（${Math.round((s.value / switches.total) * 100)}%）`,
+                  value: s.value,
+                }))}
+                color="linear-gradient(90deg,#75715e,#66d9ef)"
+              />
+            ) : (
+              <div className="admin_empty">暂无开关数据（自今日起记）</div>
             )}
           </AdminCard>
         </div>

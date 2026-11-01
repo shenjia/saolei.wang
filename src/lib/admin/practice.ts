@@ -111,6 +111,38 @@ export async function getPracticeModes(days = 7): Promise<{
   };
 }
 
+/** 设置开关打开比例（2026-11-01 张老师定：后台「开关占比」模块，模式占比下方）。
+ *  六列自上线起即真值；分母=同期总盘数（老客户端不带开关字段缺省 0，起记日前的
+ *  旧局会稀释占比，明天起分母全干净）；开关各自独立，之和可 >100% */
+export async function getPracticeSwitches(days = 7): Promise<{
+  items: { label: string; value: number }[];
+  total: number;
+}> {
+  const now = Math.floor(Date.now() / 1000);
+  const todayIdx = Math.floor((now + 28800) / 86400);
+  const fromIdx = Math.max(todayIdx - (days - 1), LEVEL_CLEAN_SINCE_DAY);
+  const rows = await prisma.$queryRawUnsafe<{
+    qmark: bigint; stats: bigint; sndfb: bigint; shot: bigint; qretry: bigint; wheel: bigint; plays: bigint;
+  }[]>(
+    `SELECT SUM(sw_qmark) qmark, SUM(sw_stats) stats, SUM(sw_sndfb) sndfb, SUM(sw_shot) shot,
+            SUM(sw_qretry) qretry, SUM(sw_wheel) wheel, SUM(plays) plays
+     FROM practice_daily WHERE day >= ?`,
+    fromIdx
+  );
+  const r = rows[0];
+  return {
+    items: [
+      { label: "问号标记", value: N(r?.qmark) },
+      { label: "数据统计", value: N(r?.stats) },
+      { label: "声音反馈", value: N(r?.sndfb) },
+      { label: "自动截屏", value: N(r?.shot) },
+      { label: "快速重开", value: N(r?.qretry) },
+      { label: "滚轮缩放", value: N(r?.wheel) },
+    ],
+    total: N(r?.plays),
+  };
+}
+
 /** 24 小时分布（近 N 天 practice_hourly 聚合；自起记日起有数据） */export async function getPracticeHourly(days = 7): Promise<{ label: string; value: number }[]> {
   const now = Math.floor(Date.now() / 1000);
   const fromIdx = Math.floor((now + 28800) / 86400) - (days - 1);

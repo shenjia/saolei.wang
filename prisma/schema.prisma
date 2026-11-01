@@ -1012,6 +1012,14 @@ model PracticeDaily {
   modeNg     Int @default(0) @map("mode_ng") // 无猜（默认开）
   modeSq     Int @default(0) @map("mode_sq") // 速旗
   modeCombo  Int @default(0) @map("mode_combo") // 连击
+  // 设置开关打开盘数（2026-11-01 张老师定：后台「开关占比」模块；六列之和可 > plays，
+  // 可叠加；老客户端不带开关字段缺省 0，起记日 2026-11-01 前旧局稀释占比）
+  swQmark    Int @default(0) @map("sw_qmark") // 问号标记
+  swStats    Int @default(0) @map("sw_stats") // 数据统计
+  swSndfb    Int @default(0) @map("sw_sndfb") // 声音反馈
+  swShot     Int @default(0) @map("sw_shot") // 自动截屏
+  swQretry   Int @default(0) @map("sw_qretry") // 快速重开
+  swWheel    Int @default(0) @map("sw_wheel") // 滚轮缩放
   createTime BigInt @default(0) @map("create_time") @db.BigInt // 当日首盘 Unix 秒
   updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近一盘 Unix 秒
 
