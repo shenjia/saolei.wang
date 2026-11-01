@@ -46,6 +46,8 @@ interface Row {
   draining: boolean;
   /** 累计去重连接人数（server.mjs 内存累计+落盘持久化，重启不清零） */
   connsUsers: number;
+  /** 累计开局面数（server.mjs 内存累计+落盘持久化，重启不清零） */
+  gamesServed: number;
   /** 玩家实测平均延迟（ranked_rtt_log 近 7 天按节点聚合，null=无样本） */
   rttAvg: number | null;
   /** 延迟样本数 */
@@ -83,6 +85,7 @@ export async function GET() {
           games?: number;
           draining?: boolean;
           connsUsers?: number;
+          gamesServed?: number;
         };
         // 上报 region 键＝gameId 首段：北京（REGION 空串）走槽位 a/b，其他地域走 region
         const rkey = j.region || j.slot || "";
@@ -97,11 +100,12 @@ export async function GET() {
           games: j.games ?? 0,
           draining: Boolean(j.draining),
           connsUsers: j.connsUsers ?? 0,
+          gamesServed: j.gamesServed ?? 0,
           rttAvg: rttByRegion.get(rkey)?.avg ?? null,
           rttN: rttByRegion.get(rkey)?.n ?? 0,
         };
       } catch {
-        return { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, active: 0, games: 0, draining: false, connsUsers: 0, rttAvg: null, rttN: 0 };
+        return { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, active: 0, games: 0, draining: false, connsUsers: 0, gamesServed: 0, rttAvg: null, rttN: 0 };
       }
     }),
   );

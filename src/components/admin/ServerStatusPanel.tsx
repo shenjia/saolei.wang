@@ -5,8 +5,14 @@
 // 2026-10-31 张老师需求：卡片改表格 + 可排序表头——默认按在线人数降序，表头
 // 点击切换升/降序（视觉语言照前台录像列表表头 VideoRows 的 .sa 双三角）。
 // 2026-11-01 张老师需求：①「进行」改「对局」，在线/对局合并一列（照录像列表
-// 评论/点击的「N / M」双数字形态）；②列首加「连接」＝累计去重连接人数；
-// ③延迟列弃后台探测值，改玩家实测（ranked_rtt_log 近 7 天按节点聚合）。
+// 评论/点击的「N / M」双数字形态）；②延迟列弃后台探测值，改玩家实测
+// （ranked_rtt_log 近 7 天按节点聚合）。
+// 2026-11-01 二次（张老师定稿）：③隐藏状态列，状态色点移到服务器名前；
+// ④在线/对局各独立一列，均显「x / y」双数字——在线 x＝当前在线连接数 /
+// y＝累计去重连接人数；对局 x＝进行中对局数 / y＝累计开局面数（gamesServed）。
+// 2026-11-01 三次（张老师定稿）：⑤累计值（y）一律暗灰，当前对局数金色（当前
+// 在线保持绿）；⑥表头只显「在线」「对局」单词，点击按累计值排序，默认按累计
+// 连接人数降序。
 
 import { useEffect, useRef, useState } from "react";
 
@@ -21,22 +27,22 @@ interface ServerRow {
   games: number;
   draining: boolean;
   connsUsers: number;
+  gamesServed: number;
   rttAvg: number | null;
   rttN: number;
 }
 
-type SortKey = "name" | "status" | "connsUsers" | "connections" | "active" | "rttAvg";
+type SortKey = "name" | "connsUsers" | "gamesServed" | "rttAvg";
 interface SortSpec {
   key: SortKey;
   dir: "asc" | "desc";
 }
-/** 各列默认方向：计数列降序（多在前），延迟列升序（快在前），名称/状态列升序 */
+/** 各列默认方向：计数列降序（多在前），延迟列升序（快在前），名称列升序。
+    在线/对局表头单词化（2026-11-01 三次），排序键=累计值 */
 const DEFAULT_DIR: Record<SortKey, "asc" | "desc"> = {
   name: "asc",
-  status: "asc",
   connsUsers: "desc",
-  connections: "desc",
-  active: "desc",
+  gamesServed: "desc",
   rttAvg: "asc",
 };
 
@@ -53,7 +59,7 @@ function SortArrows({ dir }: { dir: "asc" | "desc" }) {
 export function ServerStatusPanel() {
   const [rows, setRows] = useState<ServerRow[] | null>(null);
   const [at, setAt] = useState(0);
-  const [sort, setSort] = useState<SortSpec>({ key: "connections", dir: "desc" });
+  const [sort, setSort] = useState<SortSpec>({ key: "connsUsers", dir: "desc" });
   const alive = useRef(true);
   const hadData = useRef(false);
 
@@ -87,10 +93,8 @@ export function ServerStatusPanel() {
       s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: DEFAULT_DIR[key] },
     );
 
-  // 排序键取值：状态列按「正常0 < 排空1 < 不可用2」，数值列不可用行 -1 沉底，
-  // 无延迟样本（null）在延迟列恒沉底
+  // 排序键取值：数值列不可用行 -1 沉底，无延迟样本（null）在延迟列恒沉底
   const rank = (r: ServerRow): number => {
-    if (sort.key === "status") return !r.ok ? 2 : r.draining ? 1 : 0;
     if (sort.key === "name") return 0;
     if (sort.key === "rttAvg") return r.rttAvg !== null && r.ok ? r.rttAvg : -1;
     return r.ok ? (r[sort.key] as number) : -1;
@@ -103,7 +107,7 @@ export function ServerStatusPanel() {
     return sort.dir === "asc" ? d : -d;
   });
 
-  /** 表头排序按钮（合并列直接拼两个，不包 th——th 由调用方控制） */
+  /** 表头排序按钮（双数字列的两个数字各自独立排序入口） */
   const thInner = (key: SortKey, label: string, tip: string) => (
     <button
       type="button"
@@ -116,11 +120,40 @@ export function ServerStatusPanel() {
     </button>
   );
 
+  /** 状态色点（2026-11-01 二次：状态列隐藏，色点移到服务器名前） */
+  const dot = (r: ServerRow) => (
+    <span
+      style={{
+        display: "inline-block",
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 5,
+        verticalAlign: "middle",
+        background: r.ok ? (r.draining ? "#f79646" : "#a6e22e") : "#e24b4a",
+      }}
+      aria-label={r.ok ? (r.draining ? "排空中" : "可用") : "不可用"}
+      title={r.ok ? (r.draining ? "排空中（拒绝新局）" : "正常") : "不可用"}
+    />
+  );
+
+  /** 「x / y」双数字单元格（2026-11-01 三次：当前在线绿、当前对局金、累计一律暗灰） */
+  const pair = (r: ServerRow, now: number, nowColor: string, total: number) =>
+    r.ok ? (
+      <>
+        <b style={{ color: nowColor }}>{now}</b>
+        <span style={{ color: "#49483e" }}> / </span>
+        <b style={{ color: "#75715e" }}>{total.toLocaleString("zh-CN")}</b>
+      </>
+    ) : (
+      <span style={{ color: "#49483e" }}>—</span>
+    );
+
   return (
     <div
       className="sv_panel"
       style={{
-        flex: "0 0 380px",
+        flex: "0 0 400px",
         border: "1px solid #3e3d32",
         borderRadius: 6,
         background: "#272822",
@@ -140,14 +173,9 @@ export function ServerStatusPanel() {
         <thead>
           <tr>
             <th>{thInner("name", "服务器", "按服务器名称排列")}</th>
-            <th>{thInner("status", "状态", "按状态排列（正常→排空→不可用）")}</th>
-            <th className="c">{thInner("connsUsers", "连接", "按累计去重连接人数排列（多在前）")}</th>
-            {/* 在线/对局同列两个独立排序入口（照录像列表评论/点击形态，2026-11-01） */}
-            <th className="c">
-              {thInner("connections", "在线", "按在线连接数排列（多在前）")}
-              {" / "}
-              {thInner("active", "对局", "按进行中对局数排列（多在前）")}
-            </th>
+            {/* 在线/对局表头单词化（2026-11-01 三次），点击按累计值排序 */}
+            <th className="c">{thInner("connsUsers", "在线", "按累计去重连接人数排列（多在前）")}</th>
+            <th className="c">{thInner("gamesServed", "对局", "按累计开局面数排列（多在前）")}</th>
             <th className="c">{thInner("rttAvg", "平均延迟", "按玩家实测平均延迟排列（快在前；近 7 天采样）")}</th>
           </tr>
         </thead>
@@ -155,46 +183,14 @@ export function ServerStatusPanel() {
           {sorted.map((r) => (
             <tr key={r.name}>
               <td>
+                {dot(r)}
                 <b style={{ color: "#d6d6cc" }}>{r.name}</b>
               </td>
-              <td>
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    marginRight: 4,
-                    background: r.ok ? (r.draining ? "#f79646" : "#a6e22e") : "#e24b4a",
-                  }}
-                  aria-label={r.ok ? (r.draining ? "排空中" : "可用") : "不可用"}
-                />
-                {r.ok ? (
-                  r.draining ? (
-                    <span style={{ color: "#f79646" }} title="发布等待排空中，拒绝新局">
-                      排空
-                    </span>
-                  ) : (
-                    <span style={{ color: "#75715e" }}>正常</span>
-                  )
-                ) : (
-                  <span style={{ color: "#e24b4a" }}>不可用</span>
-                )}
+              <td className="c" title="x＝当前在线连接数 · y＝累计去重连接人数（重启不清零；点击表头按累计排序）">
+                {pair(r, r.connections, "#a6e22e", r.connsUsers)}
               </td>
-              <td className="c" title="累计去重连接人数（进程重启不清零）">
-                {r.ok ? r.connsUsers.toLocaleString("zh-CN") : <span style={{ color: "#49483e" }}>—</span>}
-              </td>
-              {/* 在线 / 对局双数字（照录像列表 counters 形态，2026-11-01） */}
-              <td className="c">
-                {r.ok ? (
-                  <>
-                    <b style={{ color: "#a6e22e" }}>{r.connections}</b>
-                    <span style={{ color: "#49483e" }}> / </span>
-                    <b style={{ color: "#fdc61d" }}>{r.active}</b>
-                  </>
-                ) : (
-                  <span style={{ color: "#49483e" }}>—</span>
-                )}
+              <td className="c" title="x＝进行中对局数 · y＝累计开局面数（重启不清零；点击表头按累计排序）">
+                {pair(r, r.active, "#fdc61d", r.gamesServed)}
               </td>
               <td className="c" title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本` : undefined}>
                 {r.ok && r.rttAvg !== null ? `${r.rttAvg}ms` : <span style={{ color: "#49483e" }}>—</span>}
@@ -203,7 +199,7 @@ export function ServerStatusPanel() {
           ))}
           {rows !== null && rows.length === 0 && (
             <tr>
-              <td colSpan={5} style={{ color: "#e24b4a", textAlign: "center" }}>
+              <td colSpan={4} style={{ color: "#e24b4a", textAlign: "center" }}>
                 全部实例不可达
               </td>
             </tr>
@@ -211,8 +207,10 @@ export function ServerStatusPanel() {
         </tbody>
       </table>
       <div style={{ marginTop: 8, color: "#75715e", fontSize: 12 }}>
-        连接＝累计去重连接人数 · 在线＝当前 WS 连接 / 对局＝进行中且有活连接 ·
-        平均延迟＝玩家实测近 7 天均值 · 点击表头切换排序
+        <span style={{ color: "#a6e22e" }}>●</span> 正常 ·{" "}
+        <span style={{ color: "#f79646" }}>●</span> 排空 ·{" "}
+        <span style={{ color: "#e24b4a" }}>●</span> 不可用 · 在线＝当前连接 / 累计人数（灰） ·
+        对局＝进行中 / 累计局数（灰） · 平均延迟＝玩家实测近 7 天均值 · 点击表头按累计排序
       </div>
     </div>
   );
