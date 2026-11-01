@@ -6,22 +6,20 @@
 
 import { AdminCard } from "@/components/admin/Widgets";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
-import { LatencyMap } from "@/components/admin/LatencyMap";
-import { RegionTodayTable } from "@/components/admin/RegionTodayTable";
+import { PracticeRegionBoard } from "@/components/admin/PracticeRegionBoard";
 import { ServerStatusPanel } from "@/components/admin/ServerStatusPanel";
-import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeSwitches, getPracticeTrend, getRankedLatencyMap, getRegionToday, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
+import { getPracticeDays, getPracticeHourly, getPracticeModes, getPracticeSwitches, getPracticeTrend, getRegionToday, PRACTICE_LEVEL_COLORS, LEVEL_CLEAN_SINCE } from "@/lib/admin/practice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "练习数据 | 管理后台" };
 
 export default async function AdminPracticePage() {
-  const [trend, hourly, days, modes, switches, rttMap, regionToday] = await Promise.all([
+  const [trend, hourly, days, modes, switches, regionToday] = await Promise.all([
     getPracticeTrend(30),
     getPracticeHourly(7),
     getPracticeDays(7),
     getPracticeModes(7),
     getPracticeSwitches(7),
-    getRankedLatencyMap(7),
     getRegionToday(),
   ]);
   const C = PRACTICE_LEVEL_COLORS;
@@ -58,44 +56,12 @@ export default async function AdminPracticePage() {
       </div>
 
       {/* 2026-11-01 张老师定稿：大板块＝左列「地图/负载」竖排 + 右列「地区明细」通高；
-          大板块右侧竖排「级别占比/模式占比」；下面「练习趋势 + 24 小时分布」一行 */}
+          大板块右侧竖排「级别占比/模式占比」；下面「练习趋势 + 24 小时分布」一行。
+          地图/明细双向联动壳在 PracticeRegionBoard（hover 状态客户端持有） */}
       <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 840px", minWidth: 0, display: "flex" }}>
           <AdminCard className="h100 pc_big">
-            {/* 两列 40/60（张老师定稿）：basis 0 + grow 2:3 等比分配，明细为空也保持列宽 */}
-            <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
-              <div style={{ flex: "2 1 0", minWidth: 300, display: "flex", flexDirection: "column", gap: 12 }}>
-                <div>
-                  <b style={{ fontSize: 14 }}>
-                    排行延迟地图（近 7 天）
-                    <span style={{ color: "#75715e", fontSize: 12, marginLeft: 8 }}>
-                      {rttMap.length ? `${rttMap.length} 个地区有数据 · 共 ${rttMap.reduce((a, d) => a + d.games, 0).toLocaleString("zh-CN")} 局` : "数据自今日起记"}
-                    </span>
-                  </b>
-                  <div style={{ marginTop: 6 }}>
-                    {rttMap.length ? (
-                      <LatencyMap data={rttMap} />
-                    ) : (
-                      <div className="admin_empty">暂无排行延迟数据（排行局结算后自动记入）</div>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <ServerStatusPanel />
-                </div>
-              </div>
-              {/* 右列：明细撑满大板块高度（pc_big 作用域放开 max-height，表头吸顶） */}
-              <div style={{ flex: "3 1 0", minWidth: 300, display: "flex", flexDirection: "column" }}>
-                <b style={{ fontSize: 14 }}>今日地区明细</b>
-                <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
-                  {regionToday.length ? (
-                    <RegionTodayTable rows={regionToday} />
-                  ) : (
-                    <div className="admin_empty">今日暂无地区数据</div>
-                  )}
-                </div>
-              </div>
-            </div>
+            <PracticeRegionBoard rows={regionToday} />
           </AdminCard>
         </div>
         <div style={{ flex: "0 0 300px", minWidth: 280, display: "flex", flexDirection: "column", gap: 14 }}>

@@ -1457,3 +1457,9 @@ a.cheat_uid:hover .pt_bubble {
   top: 0;
   z-index: 1;
 }
+
+/* 地图↔明细双向联动（2026-11-01 张老师需求）：地图悬停省份时右表对应行
+   加 .hl 高亮（底色同 tr:hover），表格悬停行时地图省份走 .prov.hovering */
+.region_today tbody tr.hl td {
+  background: #33322b;
+}

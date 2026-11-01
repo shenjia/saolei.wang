@@ -4,6 +4,8 @@
 // 可点击双向排序，默认按盘数降序。视觉/交互照 ServerStatusPanel 的
 // .sv_sort + .sa 双三角（样式在 admin.css 的 .region_today 作用域段）。
 // 数据由 RSC 页面传入（getRegionToday），纯客户端排序不回源。
+// 2026-11-01 双向联动：hoverArea/onHover 由 PracticeRegionBoard 统一持有，
+// 悬停行上报 area（地图省份高亮），地图悬停省份时本表对应行加 .hl 高亮。
 
 import { useState } from "react";
 
@@ -50,7 +52,15 @@ function SortArrows({ dir }: { dir: "asc" | "desc" }) {
   );
 }
 
-export function RegionTodayTable({ rows }: { rows: RegionTodayRow[] }) {
+export function RegionTodayTable({
+  rows,
+  hoverArea,
+  onHover,
+}: {
+  rows: RegionTodayRow[];
+  hoverArea: string | null;
+  onHover: (area: string | null) => void;
+}) {
   const [sort, setSort] = useState<SortSpec>({ key: "plays", dir: "desc" });
 
   const clickSort = (key: SortKey) =>
@@ -113,7 +123,12 @@ export function RegionTodayTable({ rows }: { rows: RegionTodayRow[] }) {
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <tr key={r.area}>
+            <tr
+              key={r.area}
+              className={hoverArea === r.area ? "hl" : undefined}
+              onMouseEnter={() => onHover(r.area)}
+              onMouseLeave={() => onHover(null)}
+            >
               <td className="strong">{r.area}</td>
               <td className="num">{r.plays.toLocaleString("zh-CN")}</td>
               <td className="num">{r.players}</td>
