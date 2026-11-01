@@ -25,6 +25,7 @@ import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/s
 import { userTitleSnapshot } from "@/lib/queries";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 import { getRankPenalty, countRecentUploads, LOW_TRUST_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
+import { countTodayUploads, DAILY_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -63,6 +64,15 @@ export async function uploadVideo(
     if (recent >= LOW_TRUST_UPLOAD_LIMIT) {
       return fail(`低信任用户 24 小时内最多上传 ${LOW_TRUST_UPLOAD_LIMIT} 个录像`, 429);
     }
+  }
+
+  // 每日上传上限（2026-11-02 张老师定：每人每天限传 500 盘；+08:00 自然日口径）。
+  // 背景：赵元祥 2 分钟 1022 盘、杨雨鑫两天 2803 盘匀速批量全过审入榜——前台去重
+  // 只治展示不治源头，本闸从上传入口硬限。排在格式校验前，伪造请求同吃限额。
+  const today = await countTodayUploads(session.uid);
+  if (today >= DAILY_UPLOAD_LIMIT) {
+    console.warn(`[upload-limit] uid=${session.uid} 当日上传达上限 ${DAILY_UPLOAD_LIMIT}，已拦截`);
+    return fail(`每天最多上传 ${DAILY_UPLOAD_LIMIT} 个录像，请明天再试`, 429);
   }
 
   let file: File | null;

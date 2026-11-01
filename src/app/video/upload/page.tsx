@@ -30,6 +30,8 @@ export default async function VideoUploadPage() {
         </p>
         <p>上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。</p>
         <p>※ 可接受的初级最低 3BV 为 2，中级最低 3BV 为 30，高级最低 3BV 为 100。</p>
+        {/* 每日上传上限（2026-11-02 张老师定）：与 /api/video/upload 的 DAILY_UPLOAD_LIMIT 同步 */}
+        <p>※ 每人每天最多上传 500 个录像。</p>
         <hr />
         <UploadForm />
       </div>

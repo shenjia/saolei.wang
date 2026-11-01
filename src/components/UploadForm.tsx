@@ -260,7 +260,7 @@ export function UploadForm() {
           {dragOver ? "松开鼠标即可添加" : "点击选择录像文件，或将文件拖拽到页面任意位置"}
         </span>
         <span style={{ display: "block", color: "#49483e", fontSize: 12, lineHeight: "20px" }}>
-          支持 mvf / avf / evf，可批量选择，单个文件不超过 500KB
+          支持 mvf / avf / evf，可批量选择，单个文件不超过 500KB，每人每天限传 500 个
         </span>
       </div>
       <input
