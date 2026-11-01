@@ -10813,14 +10813,15 @@ html.op-fakefs #header {
 #play_entry:active {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
-/* 登录态一行双钮（2026-11-01 张老师要求）：「开始练习」宽度缩到 61.8%（黄金分割），
-   右侧「录像」按钮占余宽（≈38.2%）跳 /video/upload。
+/* 登录态一行双钮（2026-11-01 张老师要求）：登录态「开始练习」与「传录像」55/45 分，
+   右钮跳 /video/upload。
    二轮反馈修正：只缩宽度——高度/字号/图标/边框恢复原版尺寸（等比缩后太矮、字太小）。
    三轮反馈修正：文字黑色。四轮反馈：文案「录像」+ 前置上传图标。
    五轮反馈：图标换张老师指定绿箭头+灰托盘填充图标（IconUploadTray）。
-   六轮反馈定稿（2026-11-02）：右钮样式与「开始练习」完全统一——同款银灰凸起边框、
-   黑字（#333/hover #000/active 反转），不再用绿色底；两钮共用 #play_row a 规则。
-   图标保留 IconUploadTray（银灰底上绿箭头/灰托盘对比清晰，同笑脸图标逻辑）。
+   六轮反馈：右钮与「开始练习」统一银灰凸起。
+   七轮反馈（2026-11-02）：样式恢复绿色版，图标最终定稿为张老师指定 PNG
+   （深蓝视频方块+黄色上传角标，public/images/upload-folder-icon.png），
+   文案定「传录像」，宽度改 55/45 分（放弃 61.8% 黄金分割）。
    未登录不渲染此行（page.tsx 把关）；≤880 整行退役（移动端入口由置顶大按钮接管） */
 #play_row {
   display: flex;
@@ -10851,15 +10852,26 @@ html.op-fakefs #header {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
 #play_row #play_entry {
-  width: 61.8%;
+  width: 55%;
   margin: 0;
 }
+/* 右钮占余宽 45%（七轮恢复绿色版）：绿底渐变 + 绿色调凸起 3D 边框，黑字同左钮 */
 #play_row #upload_entry {
   flex: 1;
+  background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
+  border-color: #c4e88a #55801a #55801a #c4e88a;
 }
-#play_row #upload_entry svg {
+#play_row #upload_entry:hover {
+  color: #000;
+  background: #8ac21b linear-gradient(to bottom, #96cf2c, #79b018);
+}
+#play_row #upload_entry:active {
+  border-color: #55801a #c4e88a #c4e88a #55801a;
+}
+#play_row #upload_entry img {
+  display: block;
   width: 24px;
-  height: 24px;
+  height: auto; /* 图标非正方形（517×490），只锁宽防拉伸变形 */
 }
 @media (max-width: 880px) {
   #play_row {

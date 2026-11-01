@@ -26,7 +26,6 @@
 // 移动端置顶大按钮不参与（仍由 #play_entry_top 全宽接管，上传走顶栏菜单）。
 
 import Link from "next/link";
-import { IconUploadTray } from "@/components/MenuIcons";
 import {
   getHomeNews,
   getHotVideos,
@@ -186,12 +185,10 @@ export default async function HomePage() {
             位于入伍新兵之上；为腾出其高度，论坛新帖由 8 条减为 6 条，保持左右栏底部基本对齐。
             仅桌面（≥881）显示；移动端由主栏顶部 #play_entry_top 接管（2026-10-15） */}
         <FlopSprites />
-        {/* 2026-11-01 张老师要求：登录态一行双钮——「开始练习」宽度缩至 61.8%（黄金分割）+
-            绿色「录像」钮跳 /video/upload；未登录保持原全宽钮。
-            二轮反馈：等比缩小后太矮、字太小——宽度保留 61.8%，高度/字号/图标恢复原版
-            （高 50/字 18/图标 24/边框 3），右侧按钮同高。
-            三轮反馈：右钮文字黑色。四轮反馈：文案「录像」+ 前置上传图标。
-            五轮反馈：图标换张老师指定的绿箭头+灰托盘填充图标（IconUploadTray） */}
+        {/* 2026-11-01 张老师要求：登录态一行双钮——「开始练习」55% +「传录像」45%，
+            右钮（绿色+上传图标）跳 /video/upload；未登录保持原全宽钮。
+            演进：等比缩 61.8% 太矮字太小→恢复原版高度只缩宽度→50% 对半分→
+            2026-11-02 定稿：55/45 分 + 绿色版样式 + 指定 PNG 图标 + 文案「传录像」 */}
         {session ? (
           <div id="play_row">
             <Link id="play_entry" href="/online">
@@ -201,8 +198,9 @@ export default async function HomePage() {
               <span>开始练习</span>
             </Link>
             <Link id="upload_entry" href="/video/upload">
-              <IconUploadTray />
-              <span>录像</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/upload-folder-icon.png" alt="" width={24} />
+              <span>传录像</span>
             </Link>
           </div>
         ) : (
