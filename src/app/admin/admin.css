@@ -1463,3 +1463,9 @@ a.cheat_uid:hover .pt_bubble {
 .region_today tbody tr.hl td {
   background: #33322b;
 }
+
+/* 地图↔负载面板联动（2026-11-02 张老师需求）：hover 地图 PIN 钉时负载表对应
+   行 .hl 高亮（同 region_today 口径）；反向 hover 行 → 钉高亮放大在组件内实现 */
+.sv_table tbody tr.hl td {
+  background: #33322b;
+}

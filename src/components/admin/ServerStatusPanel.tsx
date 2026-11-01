@@ -15,11 +15,14 @@
 // 连接人数降序。
 // 2026-11-01 四次（张老师）：平均延迟列三色渲染（35/75 分界），口径与今日地区表
 // 同源（rttColor.ts）。
+// 2026-11-02 改版（张老师需求）：轮询提升到 PracticeRegionBoard（服务器数据同时
+// 喂地图 PIN 钉），本组件变纯展示；行 hover 上报 onHoverServer 与地图钉联动
+// （hover 行 → 钉高亮放大；hover 钉 → 行 .hl 高亮）。
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
 
-interface ServerRow {
+export interface ServerRow {
   name: string;
   region: string;
   slot: string;
@@ -59,37 +62,18 @@ function SortArrows({ dir }: { dir: "asc" | "desc" }) {
   );
 }
 
-export function ServerStatusPanel() {
-  const [rows, setRows] = useState<ServerRow[] | null>(null);
-  const [at, setAt] = useState(0);
+export function ServerStatusPanel({
+  servers,
+  at,
+  hoverServer,
+  onHoverServer,
+}: {
+  servers: ServerRow[] | null;
+  at: number;
+  hoverServer: string | null;
+  onHoverServer: (name: string | null) => void;
+}) {
   const [sort, setSort] = useState<SortSpec>({ key: "connsUsers", dir: "desc" });
-  const alive = useRef(true);
-  const hadData = useRef(false);
-
-  useEffect(() => {
-    alive.current = true;
-    const load = async () => {
-      try {
-        const res = await fetch("/api/admin/authority-status", { cache: "no-store" });
-        if (!res.ok) throw new Error(String(res.status));
-        const j = (await res.json()) as { servers: ServerRow[] };
-        if (!alive.current) return;
-        hadData.current = true;
-        setRows(j.servers);
-        setAt(Date.now());
-      } catch {
-        /* 拉取失败保留上一次数据（行内 ok=false 已表达不可用）；首次失败置空
-           数组让面板显示「全部不可用」而不是永远转圈 */
-        if (alive.current && !hadData.current) setRows([]);
-      }
-    };
-    load();
-    const t = window.setInterval(load, 3000);
-    return () => {
-      alive.current = false;
-      window.clearInterval(t);
-    };
-  }, []);
 
   const clickSort = (key: SortKey) =>
     setSort((s) =>
@@ -102,7 +86,7 @@ export function ServerStatusPanel() {
     if (sort.key === "rttAvg") return r.rttAvg !== null && r.ok ? r.rttAvg : -1;
     return r.ok ? (r[sort.key] as number) : -1;
   };
-  const sorted = [...(rows ?? [])].sort((a, b) => {
+  const sorted = [...(servers ?? [])].sort((a, b) => {
     if (sort.key === "name") {
       return sort.dir === "asc" ? a.name.localeCompare(b.name, "zh") : b.name.localeCompare(a.name, "zh");
     }
@@ -169,7 +153,7 @@ export function ServerStatusPanel() {
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <b style={{ fontSize: 14 }}>服务器负载</b>
         <span style={{ color: "#75715e", fontSize: 12 }}>
-          {rows ? `每 3 秒刷新 · ${at ? new Date(at).toLocaleTimeString("zh-CN", { hour12: false }) : ""}` : "获取中…"}
+          {servers ? `每 3 秒刷新 · ${at ? new Date(at).toLocaleTimeString("zh-CN", { hour12: false }) : ""}` : "获取中…"}
         </span>
       </div>
       <table className="sv_table">
@@ -185,7 +169,12 @@ export function ServerStatusPanel() {
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <tr key={r.name}>
+            <tr
+              key={r.name}
+              className={hoverServer === r.name ? "hl" : ""}
+              onMouseEnter={() => onHoverServer(r.name)}
+              onMouseLeave={() => onHoverServer(null)}
+            >
               <td>
                 {dot(r)}
                 <b style={{ color: "#d6d6cc" }}>{r.name}</b>
@@ -208,7 +197,7 @@ export function ServerStatusPanel() {
               </td>
             </tr>
           ))}
-          {rows !== null && rows.length === 0 && (
+          {servers !== null && servers.length === 0 && (
             <tr>
               <td colSpan={4} style={{ color: "#e24b4a", textAlign: "center" }}>
                 全部实例不可达
