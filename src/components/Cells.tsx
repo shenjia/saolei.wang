@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { INVALID_3BVS_TIP } from "@/lib/config";
 import { resolveAvatarUrl } from "@/lib/avatar";
-import { score3bvs, scoreTime, timeOpposite, TIME_NEVER } from "@/lib/format";
+import { score3bvs, scoreTime, TIME_NEVER } from "@/lib/format";
+import { RelTime } from "./RelTime";
 
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
 export { TitleBadge } from "./TitleBadge";
@@ -166,7 +167,7 @@ export function ScoreTime({
       )}
       {noflag && <ins title="仅用左键点击完成游戏，全程不用右键标雷">NF</ins>}
       {/* 2026-10-13 张老师要求：日期包 .score_date，用户主页窄屏（≤768）整体隐藏 */}
-      {date ? <span className="score_date">({timeOpposite(date, TIME_NEVER)})</span> : null}
+      {date ? <span className="score_date">(<RelTime time={date} max={TIME_NEVER} />)</span> : null}
     </span>
   );
 }
@@ -208,7 +209,7 @@ export function Score3bvs({
           ?
         </em>
       )}
-      {date ? <span className="score_date">({timeOpposite(date, TIME_NEVER)})</span> : null}
+      {date ? <span className="score_date">(<RelTime time={date} max={TIME_NEVER} />)</span> : null}
     </span>
   );
 }

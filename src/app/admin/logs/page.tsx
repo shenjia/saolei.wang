@@ -8,7 +8,7 @@ import { getAdminLogs, getLogActions } from "@/lib/admin/data";
 import { opLabel } from "@/lib/admin/log";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager } from "@/components/admin/Widgets";
-import { formatDate, timeOpposite } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "操作日志 | 管理后台" };
@@ -65,8 +65,8 @@ export default async function AdminLogsPage({ searchParams }: { searchParams: Pr
               {rows.map((l) => (
                 <tr key={l.id}>
                   <td className="c sub">{l.id}</td>
-                  <td className="sub" title={formatDate(l.createTime, "Y-m-d H:i:s")}>
-                    {timeOpposite(l.createTime, 7 * 86400, "Y-m-d H:i")}
+                  <td className="sub">
+                    <RelTime time={l.createTime} max={7 * 86400} format="Y-m-d H:i" />
                   </td>
                   <td>
                     {l.author ? (

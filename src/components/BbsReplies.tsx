@@ -15,7 +15,8 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { BBS_REPLY_PAGESIZE } from "@/lib/bbs";
 import type { BbsReplyItem } from "@/lib/bbs";
-import { timeOpposite, TIME_NEVER } from "@/lib/format";
+import { TIME_NEVER } from "@/lib/format";
+import { RelTime } from "./RelTime";
 import { BbsAuthorName, TitleBadge } from "./Cells";
 import { LoginLink } from "./LoginLink";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
@@ -267,7 +268,7 @@ export function BbsReplySection({
                   <TitleBadge title={r.author.title} classic={r.author.old} link />{" "}
                 </>
               )}
-              {timeOpposite(r.createTime, TIME_NEVER)}
+              <RelTime time={r.createTime} max={TIME_NEVER} />
               {/* 2026-10-27 张老师定：待审楼层对所有人可见；「审核中」徽章仅作者本人/管理员视角 */}
               {r.status === 5 && (isAdmin || viewerUid === r.author?.id) && (
                 <span className="review_pending" data-tip="回复已公开展示，AI 存疑转人工复核中">

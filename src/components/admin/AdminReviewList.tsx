@@ -20,7 +20,8 @@ import { TitleBadge } from "@/components/TitleBadge";
 import { postOp, useOp } from "./AdminAction";
 import { onPendingCounts, refreshPendingCounts } from "./PendingCounts";
 import { toast } from "@/components/Toast";
-import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { score3bvs, scoreTime } from "@/lib/format";
+import { RelTime } from "../RelTime";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { PRESS_AVG_MS, STNB_TRIGGER } from "@/lib/video-triage-limits";
 import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
@@ -592,7 +593,7 @@ function ReviewRow({
       <td className="c">
         <StatusTag status={v.status} />
       </td>
-      <td className="sub">{v.createTime ? timeOpposite(v.createTime) : "—"}</td>
+      <td className="sub">{v.createTime ? <RelTime time={v.createTime} /> : "—"}</td>
       <td className="ops">
         <a className="admin_btn sm" href={`/video/download/${v.id}`} title="下载录像文件（兜底：播放器放不了的格式用这个）">
           文件

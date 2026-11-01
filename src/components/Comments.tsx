@@ -17,7 +17,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMENT_CONTENT_LIMIT, COMMENT_PAGESIZE } from "@/lib/config";
-import { timeOpposite, TIME_MONTH } from "@/lib/format";
+import { TIME_MONTH } from "@/lib/format";
+import { RelTime } from "./RelTime";
 import type { CommentItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { LoginLink } from "./LoginLink";
@@ -68,7 +69,7 @@ export function CommentCell({
           </>
         )}
         {/* 2026-10-13 张老师要求：时间前加「评论于」；一个月以内显示相对时间，超过一个月显示具体日期 */}
-        <span className="create_time">评论于 {timeOpposite(comment.createTime, TIME_MONTH)}</span>{" "}
+        <span className="create_time">评论于 <RelTime time={comment.createTime} max={TIME_MONTH} /></span>{" "}
         {isOwn && comment.status === 5 && <PendingBadge />}
         {/* 2026-10-26：删除按钮浮右（跟评论区 meta 同行，录像作者/发布者本人可见） */}
         {canDelete && (

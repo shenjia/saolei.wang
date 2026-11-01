@@ -14,7 +14,8 @@ import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
 import { TrendChart, BarList, Donut, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi, LevelTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
-import { formatDate, scoreTime, timeOpposite } from "@/lib/format";
+import { formatDate, scoreTime } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "仪表盘 | 管理后台" };
@@ -380,7 +381,7 @@ export default async function AdminDashboard() {
                     </td>
                     <td className="num">{u.sumTime ? scoreTime(u.sumTime) : "—"}</td>
                     <td>
-                      <span className="sub">{u.createTime ? timeOpposite(u.createTime, 0, "Y-m-d") : "—"}</span>
+                      <span className="sub">{u.createTime ? <RelTime time={u.createTime} max={0} format="Y-m-d" /> : "—"}</span>
                     </td>
                   </tr>
                 ))}
@@ -427,7 +428,7 @@ export default async function AdminDashboard() {
                       <StatusTag status={v.status} />
                     </td>
                     <td>
-                      <span className="sub">{v.createTime ? timeOpposite(v.createTime) : "—"}</span>
+                      <span className="sub">{v.createTime ? <RelTime time={v.createTime} /> : "—"}</span>
                     </td>
                   </tr>
                 ))}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { videoScores, type VideoListItem } from "@/lib/queries";
 import { LEVEL_NAMES, VIDEO_STATUS_NAMES, type VideoLevel } from "@/lib/config";
-import { timeOpposite } from "@/lib/format";
+import { RelTime } from "./RelTime";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { Board } from "./Board";
 
@@ -38,7 +38,7 @@ export function VideoDetailCell({ video }: { video: VideoListItem }) {
                 )}
                 <TitleBadge title={video.authorTitle} classic={video.authorClassic} />
                 <span className="create_time">
-                  上传于<em>{timeOpposite(video.createTime)}</em>
+                  上传于<em><RelTime time={video.createTime} /></em>
                 </span>
               </p>
               <br />

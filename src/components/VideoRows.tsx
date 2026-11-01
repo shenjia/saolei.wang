@@ -18,7 +18,8 @@ import {
   type VideoListOrder,
   type VideoListDir,
 } from "@/lib/config";
-import { score3bvs, scoreTime, videoScores, formatDate, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
+import { score3bvs, scoreTime, videoScores, TIME_YEAR, isRecent } from "@/lib/format";
+import { RelTime } from "./RelTime";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { buildUrl } from "./Pager";
 
@@ -351,11 +352,9 @@ export function VideoRowLine({
         {" / "}
         <span className={highlight === "clicks" ? "current" : undefined}>{v.clicks}</span>
       </td>
-      <td
-        className={`create_time ${isRecent(v.createTime) ? "time--recent" : "time--old"}`}
-        title={formatDate(v.createTime, "Y年n月j日 H:i:s")}
-      >
-        {timeOpposite(v.createTime, TIME_YEAR, "Y-n-j")}
+      <td className={`create_time ${isRecent(v.createTime) ? "time--recent" : "time--old"}`}>
+        {/* 2026-11-01 张老师要求：hover 气泡显示详细时间（RelTime，替代原生 title 延迟） */}
+        <RelTime time={v.createTime} max={TIME_YEAR} format="Y-n-j" />
       </td>
     </tr>
   );

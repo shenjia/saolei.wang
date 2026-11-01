@@ -14,7 +14,8 @@ import { LowTrustDialog } from "@/components/admin/LowTrustDialog";
 import { RankBanDialog } from "@/components/admin/RankBanDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
 import { TitleBadge } from "@/components/Cells";
-import { formatDate, score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { formatDate, score3bvs, scoreTime } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 import { MESSAGE_CONTENT_LIMIT } from "@/lib/message";
 
 export const dynamic = "force-dynamic";
@@ -388,7 +389,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                   <td className="c">
                     <StatusTag status={v.status} />
                   </td>
-                  <td className="sub">{v.createTime ? timeOpposite(v.createTime) : "—"}</td>
+                  <td className="sub">{v.createTime ? <RelTime time={v.createTime} /> : "—"}</td>
                   <td className="ops">
                     <Link className="admin_btn sm" href={`/admin/videos?q=${v.id}`}>
                       管理

@@ -9,7 +9,8 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLES, TITLE_CLASSES, TITLE_CLASS_COLORS, TITLE_THRESHOLDS, type Level } from "@/lib/config";
-import { score3bvs, scoreTime, timeOpposite, TIME_YEAR, isRecent } from "@/lib/format";
+import { score3bvs, scoreTime, TIME_YEAR, isRecent } from "@/lib/format";
+import { RelTime } from "./RelTime";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { DeltaArrow } from "./RankingRows";
@@ -285,7 +286,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
         )}
       </td>
       <td className={"time " + (isRecent(news.createTime) ? "time--recent" : "time--old")}>
-        {timeOpposite(news.createTime, TIME_YEAR, "Y-n-j")}
+        <RelTime time={news.createTime} max={TIME_YEAR} format="Y-n-j" />
       </td>
     </tr>
   );

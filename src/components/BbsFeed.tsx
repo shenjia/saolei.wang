@@ -22,7 +22,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import { BBS_BOARDS, BBS_BOARD_NAMES, BBS_ORDERS, type BbsOrder } from "@/lib/bbs";
-import { timeOpposite, TIME_NEVER } from "@/lib/format";
+import { TIME_NEVER } from "@/lib/format";
+import { RelTime } from "./RelTime";
 import type { BbsPostItem } from "@/lib/bbs";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { NfToggle } from "./NfToggle";
@@ -142,7 +143,7 @@ export function BbsRow({
         <span className={"bbs_clicks" + (order === "clicks" ? " sort_on" : "")}>{p.clicks}</span>
       </td>
       {/* 发布排序时本列改显发布时间（列头即「发布」语义，2026-10-26） */}
-      <td className="time">{timeOpposite(order === "post" ? p.createTime : p.lastReplyTime, TIME_NEVER)}</td>
+      <td className="time"><RelTime time={order === "post" ? p.createTime : p.lastReplyTime} max={TIME_NEVER} /></td>
     </tr>
   );
 }

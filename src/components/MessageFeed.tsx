@@ -17,7 +17,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { timeOpposite, TIME_NEVER, parseMessageParts } from "@/lib/format";
+import { TIME_NEVER, parseMessageParts } from "@/lib/format";
+import { RelTime } from "./RelTime";
 import type { MessageItem } from "@/lib/message";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { SendMessageButton } from "./SendMessageButton";
@@ -80,7 +81,7 @@ export function MessageRow({
             {m.isRead ? "已读" : "未读"}
           </span>
         </td>
-        <td className="time">{timeOpposite(m.createTime, TIME_NEVER)}</td>
+        <td className="time"><RelTime time={m.createTime} max={TIME_NEVER} /></td>
       </tr>
     );
   }
@@ -126,7 +127,7 @@ export function MessageRow({
           )
         )}
       </td>
-      <td className="time">{timeOpposite(m.createTime, TIME_NEVER)}</td>
+      <td className="time"><RelTime time={m.createTime} max={TIME_NEVER} /></td>
     </tr>
   );
 }

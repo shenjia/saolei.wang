@@ -16,7 +16,8 @@ import {
   isManager,
   type VideoLevel,
 } from "@/lib/config";
-import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { score3bvs, scoreTime } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 import { AvatarCell, PlayerTip, TitleBadge } from "@/components/Cells";
 import { SoftwareIcon } from "@/components/VideoRows";
 import { UserPanel } from "@/components/UserCard";
@@ -222,7 +223,7 @@ export default async function VideoViewPage({
                 </>
               )}
               <span className="create_time">
-                上传于<em>{timeOpposite(video.createTime)}</em>
+                上传于<em><RelTime time={video.createTime} /></em>
               </span>
             </p>
             <p>
@@ -235,7 +236,7 @@ export default async function VideoViewPage({
                     </span>
                   </Link>
                   <span className="review_time">
-                    审核于<em>{timeOpposite(video.reviewTime)}</em>
+                    审核于<em><RelTime time={video.reviewTime} /></em>
                   </span>
                 </>
               )}

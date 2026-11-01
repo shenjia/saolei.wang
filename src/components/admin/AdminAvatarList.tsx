@@ -9,7 +9,7 @@ import { PlayerTip } from "@/components/Cells";
 import { useState } from "react";
 import { useOp } from "./AdminAction";
 import { AVATAR_CATEGORY_NAMES, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
-import { timeOpposite } from "@/lib/format";
+import { RelTime } from "../RelTime";
 import type { AdminAvatarRow } from "@/lib/admin/data";
 
 /** 驳回原因默认文案（2026-10-23 张老师指定：最常见驳回场景预填，管理员可改） */
@@ -80,7 +80,7 @@ export function AdminAvatarList({
                   </Link>
                   <span className="admin_hint"> #{row.user}</span>
                 </td>
-                <td className="c sub">{timeOpposite(row.createTime)}</td>
+                <td className="c sub"><RelTime time={row.createTime} /></td>
                 <td>
                   <AiVerdict row={row} />
                 </td>
@@ -92,7 +92,7 @@ export function AdminAvatarList({
                       <>
                         {row.reviewerName || `#${row.reviewer}`}
                         <br />
-                        <span className="admin_hint">{timeOpposite(row.reviewTime)}</span>
+                        <span className="admin_hint"><RelTime time={row.reviewTime} /></span>
                       </>
                     )}
                   </td>
@@ -167,7 +167,7 @@ export function AdminAvatarList({
             <img src={zoom.filepath} alt={`#${zoom.user} 的头像`} />
             <div className="meta">
               <b>{zoom.author?.chineseName ?? `#${zoom.user}`}</b>
-              <span> 上传于 {timeOpposite(zoom.createTime)}</span>
+              <span> 上传于 <RelTime time={zoom.createTime} /></span>
               {zoom.verdict && (
                 <span>
                   {" "}

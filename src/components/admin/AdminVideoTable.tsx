@@ -13,7 +13,8 @@ import { useState } from "react";
 import type { AdminVideoRow } from "@/lib/admin/data";
 import { LevelTag, StatusTag } from "./Widgets";
 import { AdminAction, useOp } from "./AdminAction";
-import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { score3bvs, scoreTime } from "@/lib/format";
+import { RelTime } from "../RelTime";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
 import { confirmDialogChecked } from "@/components/Confirm";
@@ -74,7 +75,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
                 <>
                   {v.reviewer.chineseName}
                   <br />
-                  {v.reviewTime ? timeOpposite(v.reviewTime) : ""}
+                  {v.reviewTime ? <RelTime time={v.reviewTime} /> : ""}
                 </>
               ) : (
                 "—"
@@ -113,7 +114,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
             <td className="num">{v.clicks || "—"}</td>
             <td className="num">{v.downloads || "—"}</td>
             <td className="num">{v.comments || "—"}</td>
-            <td className="sub">{v.createTime ? timeOpposite(v.createTime) : "—"}</td>
+            <td className="sub">{v.createTime ? <RelTime time={v.createTime} /> : "—"}</td>
             <td className="ops">
               {v.status !== VIDEO_STATUS.REVIEWED && (
                 <AdminAction

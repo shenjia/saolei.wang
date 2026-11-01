@@ -9,7 +9,8 @@ import { getPendingBbsAdmin, getPostListAdmin, getReplyListAdmin } from "@/lib/a
 import { AdminAction, AdminSelect } from "@/components/admin/AdminAction";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager } from "@/components/admin/Widgets";
-import { formatDate, timeOpposite } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "论坛管理 | 管理后台" };
@@ -229,7 +230,7 @@ export default async function AdminBbsPage({ searchParams }: { searchParams: Pro
                       <span className="admin_tag bad">已删除</span>
                     )}
                   </td>
-                  <td className="sub">{p.lastReplyTime ? timeOpposite(p.lastReplyTime) : "—"}</td>
+                  <td className="sub">{p.lastReplyTime ? <RelTime time={p.lastReplyTime} /> : "—"}</td>
                   <td className="sub">{formatDate(p.createTime, "Y-m-d H:i")}</td>
                   <td className="ops">
                     <Link className="admin_btn sm" href={`/admin/bbs?post=${p.id}`}>

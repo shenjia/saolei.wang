@@ -1656,6 +1656,34 @@ span.title[data-tip]:hover::after,
 span.record[data-tip]:hover::after {
   opacity: 1;
 }
+/* 相对时间 hover 详细时间气泡（2026-11-01 张老师要求）：新闻/录像/评论/论坛/消息等
+   所有相对时间处由 RelTime 组件输出 .reltime[data-tip]，hover 立即弹出「Y年n月j日 H:i:s」。
+   视觉复用上方军衔徽章同款（暗底 #1e1f1c / #49483e 边 / 12px），置于元素上方弹出 */
+span.reltime[data-tip] {
+  position: relative;
+}
+span.reltime[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+span.reltime[data-tip]:hover::after {
+  opacity: 1;
+}
 /* 玩家名气泡（2026-10-29 张老师要求，二轮改版）：可点击玩家名 hover 显示
    「#ID 姓名 英文名」——姓名亮灰 #b1b1a4、ID 与英文名暗灰 #75715e。
    富文本结构（CSS attr() 无法分段着色）：链接内嵌 .pt_bubble（气泡壳，absolute

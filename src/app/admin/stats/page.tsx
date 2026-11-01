@@ -10,7 +10,8 @@ import { getPracticeLevelCounts } from "@/lib/admin/practice";
 import { getCachedCurrentRecords, getRecordCurves, getStatsDistributions } from "@/lib/admin/cache";
 import { BarList, ColumnChart, Donut, TrendChart, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi } from "@/components/admin/Widgets";
-import { score3bvs, scoreTime, timeOpposite } from "@/lib/format";
+import { score3bvs, scoreTime } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "数据分析 | 管理后台" };
@@ -136,7 +137,7 @@ export default async function AdminStatsPage() {
                         "—"
                       )}
                     </td>
-                    <td className="sub">{r.timeDate ? timeOpposite(r.timeDate, 0, "Y-m-d") : "—"}</td>
+                    <td className="sub">{r.timeDate ? <RelTime time={r.timeDate} max={0} format="Y-m-d" /> : "—"}</td>
                     <td>
                       <Link className="link" href={`/video/${r.b3bvsVideo}`} target="_blank" prefetch={false}>
                         {score3bvs(r.b3bvs)}

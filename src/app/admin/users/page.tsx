@@ -17,7 +17,8 @@ import { AdminCard, AdminPager, RoleTag } from "@/components/admin/Widgets";
 import { UserGroupTable } from "@/components/admin/UserGroupTable";
 import { UserGroupTabs } from "@/components/admin/UserGroupTabs";
 import { TitleBadge } from "@/components/Cells";
-import { formatDate, scoreTime, timeOpposite } from "@/lib/format";
+import { formatDate, scoreTime } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "玩家管理 | 管理后台" };
@@ -250,8 +251,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                       </span>
                     )}
                   </td>
-                  <td className="sub">{u.createTime ? timeOpposite(u.createTime, 0, "Y-m-d") : "—"}</td>
-                  <td className="sub">{u.lastLoginTime ? timeOpposite(u.lastLoginTime, 0, "Y-m-d H:i") : "—"}</td>
+                  <td className="sub">{u.createTime ? <RelTime time={u.createTime} max={0} format="Y-m-d" /> : "—"}</td>
+                  <td className="sub">{u.lastLoginTime ? <RelTime time={u.lastLoginTime} max={0} format="Y-m-d H:i" /> : "—"}</td>
                   <td className="ops">
                     <Link className="admin_btn sm" href={`/admin/users/${u.id}`}>
                       详情
