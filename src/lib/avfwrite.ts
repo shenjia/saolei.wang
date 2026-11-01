@@ -134,7 +134,14 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
         // flop：另一键仍按住，后续可连续 chord；其闭合松开已被抑制。
         // 右键按住场景：rc 已在流中，rp 保持 true 直到 rr 配对闭合（见 mouse===17）
       } else {
-        if (lcAt >= 0) out.push(e);
+        if (lcAt < 0) {
+          /* ⚠️ 2026-11-01 修（5138 案 B）：孤立 lr（无配对 lc）在权威端语义是
+             openCell——真实开格已发生（server.mjs mouse 5 无 rp 无 sc 分支），
+             旧逻辑按 flop 语义直接丢弃，导出流开格丢失 → 重放分叉判「未完成」。
+             权威 openCell 只在安全格生效（踩雷局当场结束），补 lc+lr 对保真重放。 */
+          out.push({ ...e, mouse: 3 });
+        }
+        out.push(e);
         lcAt = -1;
       }
       lp = sv = false;
@@ -158,6 +165,22 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[]): OnlineEvent[] {
     } else {
       out.push(e);
     }
+  }
+  /* ⚠️ 2026-11-01 修（5138 案 A）：胜局瞬间 over 拦截录制，右键按住收尾时 rr
+     不进流（本局 rc 22 / rr 21），rp 悬空——repairWinningEvents 合成的补洞
+     lc/lr 被 flop 判成 chord（rp 按住）哑火，196/216 判「未完成」。尾部检测
+     rp 悬空补一条合成 rr（flop 中 rr 无 lp＝纯松开，零副作用）恢复键态配对。
+     时间/坐标继承流尾事件，不外溢成绩；lp 若也悬空随后补 lr（repair 侧对
+     踩雷 lc 有防误差导出，胜局下安全格开格与真实手势一致）。 */
+  if (rp) {
+    let last: OnlineEvent | null = null;
+    for (let i = out.length - 1; i >= 0 && !last; i--) {
+      const t = out[i];
+      if (t) last = t;
+    }
+    const t = last ?? { mouse: 0, x: 0, y: 0, sec: 0, hun: 0 };
+    out.push({ mouse: 17, x: t.x, y: t.y, sec: t.sec, hun: t.hun, ...(t.ms !== undefined ? { ms: t.ms } : {}) });
+    if (lp) out.push({ mouse: 5, x: t.x, y: t.y, sec: t.sec, hun: t.hun, ...(t.ms !== undefined ? { ms: t.ms } : {}) });
   }
   return out.filter((e): e is OnlineEvent => e !== null);
 }
