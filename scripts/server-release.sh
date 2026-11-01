@@ -206,12 +206,18 @@ fix_prisma_stub "$S_DIR"
 #   ③ 老槽等存量局打完（active=0，上限 10min）→ 重建待命（下轮它就是备槽）
 # 全程不拒新局、不弹「正在重启」；老槽重建前它的对局已打完，玩家无感。
 # drain 开关保留作紧急维护闸（带 8 分钟 TTL 自动复位），发布流程不再使用。
+#
+# 2026-11-02 增「指纹跳过」（张老师提出）：权威代码变更频率很低，而无条件轮换
+# 要等老槽存量局清零（最长 600s），平时 CI 不该陪绑。server.mjs 自包含
+# （仅依赖 node 内置 + ws 包 + <deploy>/.env 启动补 env），指纹 = server.mjs 哈希
+# + .env 哈希 + ws 版本 + ecosystem 两个 authority app 配置（含 env）。
+# 指纹未变且双槽健在 → 完全跳过轮换（不重建、不切 nginx、无清局等待）。
+# 指纹状态存 $HOME（仓库外，CI rsync --delete 碰不到）。
 AUTH_ACTIVE="$(read_auth_active)"
 if [[ "$AUTH_ACTIVE" != a && "$AUTH_ACTIVE" != b ]]; then AUTH_ACTIVE=a; fi
 if [[ "$AUTH_ACTIVE" == a ]]; then AUTH_STANDBY=b; else AUTH_STANDBY=a; fi
 SA_APP="$(auth_app "$AUTH_STANDBY")"; SA_PORT="$(auth_port "$AUTH_STANDBY")"
 AA_APP="$(auth_app "$AUTH_ACTIVE")";  AA_PORT="$(auth_port "$AUTH_ACTIVE")"
-info "权威对局: active=$AUTH_ACTIVE($AA_PORT) → 本次切到 $AUTH_STANDBY($SA_PORT)"
 
 # 旧单实例（单实例时期的 saolei-authority，占着 3104）只做**探测**，删除必须等
 # 切流之后——先删会造成 3104 空窗、nginx 主备都连不上（首次迁移的 502 陷阱）。
@@ -220,6 +226,33 @@ if pm2 describe saolei-authority >/dev/null 2>&1; then LEGACY_AUTH=1; fi
 if (( LEGACY_AUTH == 1 )); then
   warn "检测到旧单实例 saolei-authority（占 3104）——先切流到 $AUTH_STANDBY，再迁移"
 fi
+
+AUTH_STATE_FILE="$HOME/.authority-fingerprint"
+# 指纹计算失败（理论上不该发生）降级为空串 → 不匹配 → 走全量轮换，绝不中止发布
+AUTH_FINGERPRINT="$(
+  {
+    sha256sum "$DEPLOY_DIR/src/core/scripts/authority/server.mjs" | awk '{print $1}'
+    sha256sum "$DEPLOY_DIR/.env" | awk '{print $1}'
+    node -p "require('$DEPLOY_DIR/node_modules/ws/package.json').version" 2>/dev/null || echo "ws-version-unknown"
+    node -p "JSON.stringify(require('$DEPLOY_DIR/ecosystem.config.js').apps.filter(function(a){return /^saolei-authority-[ab]$/.test(a.name)}))" 2>/dev/null || echo "ecosystem-read-failed"
+  } | sha256sum | awk '{print $1}'
+)" || AUTH_FINGERPRINT=""
+
+AUTH_SKIP=0
+if [[ "$LEGACY_AUTH" == 0 ]] \
+   && [[ -f "$AUTH_STATE_FILE" ]] \
+   && [[ "$(cat "$AUTH_STATE_FILE" 2>/dev/null || true)" == "$AUTH_FINGERPRINT" ]] \
+   && pm2 describe "$AA_APP" >/dev/null 2>&1 \
+   && pm2 describe "$SA_APP" >/dev/null 2>&1 \
+   && curl -sf --max-time 5 "http://127.0.0.1:$AA_PORT/health" >/dev/null 2>&1 \
+   && curl -sf --max-time 5 "http://127.0.0.1:$SA_PORT/health" >/dev/null 2>&1; then
+  AUTH_SKIP=1
+fi
+
+if (( AUTH_SKIP == 1 )); then
+  info "权威对局: server.mjs/.env/ws/ecosystem 指纹未变且双槽健在 → 跳过轮换（active=$AUTH_ACTIVE 不动，无清局等待）"
+else
+info "权威对局: active=$AUTH_ACTIVE($AA_PORT) → 本次切到 $AUTH_STANDBY($SA_PORT)"
 
 # ---------- ① 重建备槽 ----------
 if pm2 describe "$SA_APP" >/dev/null 2>&1; then
@@ -290,6 +323,10 @@ while :; do
   sleep 2
 done
 ok "权威对局双槽就绪 ✓ active=$AUTH_STANDBY"
+
+# 轮换成功才落指纹：失败路径（fail 退出）不落，下次发布自动重试轮换
+printf '%s\n' "$AUTH_FINGERPRINT" > "$AUTH_STATE_FILE"
+fi
 
 # ---------- 重启备槽实例 ----------
 # 单活模式（2026-10-22）下备槽处于 stopped 态。⚠️ 2026-10-27 生产事故教训：
