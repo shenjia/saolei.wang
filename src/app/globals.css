@@ -1500,21 +1500,6 @@ body #page.bbs_old .page_head {
 .bbs_list .bbs_clicks.sort_on {
   color: #fdc61a;
 }
-/* 时间列双行（2026-11-01 张老师要求）：更新/发布两个时间都显示，hover 各自出
-   .reltime 详细时间气泡；列头排序命中的一行时间金色 .on（同上方 sort_on 口径），
-   「更新/发布」小标签暗灰退后。96px 列宽 nowrap 不折行 */
-.bbs_list td.time .t_line {
-  display: block;
-  white-space: nowrap;
-}
-.bbs_list td.time .t_label {
-  color: #75715e;
-  margin-right: 3px;
-  font-size: 12px;
-}
-.bbs_list td.time .t_line.on .reltime {
-  color: #fdc61a;
-}
 /* 分类标签：与正文同字号（legacy .level 是 20px，不可用）。
    七轮：并入主题列后作为行内标签，flex 不收缩（标题负责收缩出省略号）。
    八轮（2026-09-25 张老师）：公告标签醒目黄（#fdc61a 与消息页系统广播/

@@ -142,17 +142,10 @@ export function BbsRow({
         <span className="bbs_count"> / </span>
         <span className={"bbs_clicks" + (order === "clicks" ? " sort_on" : "")}>{p.clicks}</span>
       </td>
-      {/* 2026-11-01 张老师要求：更新/发布两个时间都显示（hover 各自出详细时间气泡），
-          当前列排序命中的一行时间金色 .on 高亮（同评论/阅读数字 .sort_on 口径） */}
+      {/* 2026-11-02 张老师：只显示一个时间，跟随表头当前排序选择
+          （更新排序→最后更新时间，发布排序→发布时间），hover 出详细时间气泡 */}
       <td className="time">
-        <span className={"t_line" + (order === "post" ? "" : " on")}>
-          <em className="t_label">更新</em>
-          <RelTime time={p.lastReplyTime} max={TIME_NEVER} />
-        </span>
-        <span className={"t_line" + (order === "post" ? " on" : "")}>
-          <em className="t_label">发布</em>
-          <RelTime time={p.createTime} max={TIME_NEVER} />
-        </span>
+        <RelTime time={order === "post" ? p.createTime : p.lastReplyTime} max={TIME_NEVER} />
       </td>
     </tr>
   );
