@@ -10801,10 +10801,10 @@ html.op-fakefs #header {
 #play_entry:active {
   border-color: #7b7b7b #fff #fff #7b7b7b;
 }
-
-/* 登录态一行双钮（2026-11-01 张老师要求）：「开始练习」等比缩到 61.8%（黄金分割，
-   各值＝原尺寸 ×0.618：宽 168/高 31/padding 6/字号 11/图标 15/边框 2），
-   右侧绿色「上传」按钮占余宽（≈38.2%），带 IconUpload 图标跳 /video/upload。
+/* 登录态一行双钮（2026-11-01 张老师要求）：「开始练习」宽度缩到 61.8%（黄金分割），
+   右侧绿色「传录像」按钮占余宽（≈38.2%），带 IconUpload 图标跳 /video/upload。
+   二轮反馈修正：只缩宽度——高度/字号/图标/边框恢复原版尺寸（等比缩后太矮、字太小），
+   两钮同高（stretch），右钮字号/图标随左钮（svg 由 CSS 放大到 24px 与笑脸一致）。
    绿色取站内「上传」语义绿 #8ac21b（legacy .button.active 字色 / 排名胜局上传钮边色），
    凸起边框沿用笑脸按钮的 3D 语言换绿色调；未登录不渲染此行（page.tsx 把关）。
    ≤880 整行退役：移动端入口由置顶大按钮接管（上传走顶栏菜单） */
@@ -10818,27 +10818,25 @@ html.op-fakefs #header {
 #play_row #play_entry {
   width: 61.8%;
   margin: 0;
-  gap: 6px;
-  padding: 6px 0;
-  border-width: 2px;
-  font-size: 11px;
-  line-height: 1; /* 压掉正文 21px 行高继承（否则行盒撑高按钮：31 → 37px） */
 }
 #play_row #upload_entry {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  line-height: 1;
+  gap: 10px;
   background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
-  border: 2px solid;
+  border: 3px solid;
   border-color: #c4e88a #55801a #55801a #c4e88a;
   box-sizing: border-box;
   color: #fff;
-  font-size: 11px;
+  font-size: 18px;
   font-weight: bold;
   text-shadow: none;
+}
+#play_row #upload_entry svg {
+  width: 24px;
+  height: 24px;
 }
 #play_row #upload_entry:hover {
   color: #fff;
