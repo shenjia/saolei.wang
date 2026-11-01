@@ -190,7 +190,7 @@ export function ServerStatusPanel({
                 title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本 · ${RTT_LEGEND}` : undefined}
               >
                 {r.ok && r.rttAvg !== null ? (
-                  <b style={{ color: rttColor(r.rttAvg) }}>{r.rttAvg}ms</b>
+                  <span style={{ color: rttColor(r.rttAvg) }}>{r.rttAvg}ms</span>
                 ) : (
                   <span style={{ color: "#49483e" }}>—</span>
                 )}

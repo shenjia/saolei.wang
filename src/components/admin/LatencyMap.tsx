@@ -330,9 +330,9 @@ export function LatencyMap({
               </div>
               <div className="tp_row">
                 <i>平均延迟</i>
-                <b style={hotSrv.rttAvg !== null ? { color: rttColor(hotSrv.rttAvg) } : undefined}>
+                <span style={hotSrv.rttAvg !== null ? { color: rttColor(hotSrv.rttAvg) } : undefined}>
                   {hotSrv.rttAvg !== null ? `${hotSrv.rttAvg}ms` : "--"}
-                </b>
+                </span>
               </div>
               <div className="tp_row">
                 <i>样本数</i>
@@ -368,7 +368,7 @@ export function LatencyMap({
               </div>
               <div className="tp_row">
                 <i>延迟区间</i>
-                <b>
+                <span>
                   {hot.minRtt !== null ? `${hot.minRtt} – ${hot.maxRtt}` : "--"}
                   {hot.minRtt !== null && (
                     <em className="unit">
@@ -376,7 +376,7 @@ export function LatencyMap({
                       ms
                     </em>
                   )}
-                </b>
+                </span>
               </div>
               <div className="tp_foot">今日数据 · 分级 绿≤30 黄60 红≥90</div>
             </>

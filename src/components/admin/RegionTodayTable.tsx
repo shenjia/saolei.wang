@@ -126,7 +126,7 @@ export function RegionTodayTable({
               <td className="num">{r.players}</td>
               <td className="num">{r.plays ? `${r.winRate}%` : "—"}</td>
               <td className="num" title={RTT_LEGEND}>
-                {r.avgRtt !== null ? <b style={{ color: rttColor(r.avgRtt) }}>{r.avgRtt}ms</b> : "—"}
+                {r.avgRtt !== null ? <span style={{ color: rttColor(r.avgRtt) }}>{r.avgRtt}ms</span> : "—"}
               </td>
               <td className="num">{r.minRtt !== null ? `${r.minRtt}~${r.maxRtt}ms` : "—"}</td>
             </tr>

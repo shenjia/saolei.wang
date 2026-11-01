@@ -5406,6 +5406,10 @@ body #page.two_columns {
   font-weight: 600;
   color: #b1b1a4;
 }
+/* 延迟数字不加粗（2026-11-02 张老师：太刺眼）——span 保持同色正常字重 */
+.tp_row span {
+  color: #b1b1a4;
+}
 .tp_row b.gold {
   color: #fdc61d;
 }
