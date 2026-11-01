@@ -12,15 +12,16 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
-import { USER_ROLE, VIDEO_STATUS, isManager, NEWS_TYPE, countsInTotal, RANK_BAN_DURATIONS, RANK_BAN_PERMANENT } from "@/lib/config";
+import { USER_ROLE, VIDEO_STATUS, VIDEO_LEVELS, isManager, NEWS_TYPE, countsInTotal, RANK_BAN_DURATIONS, RANK_BAN_PERMANENT } from "@/lib/config";
 import { decodeLegacyEntities, formatDate } from "@/lib/format";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
-import { reviewVideo } from "@/lib/review";
+import { reviewVideo, syncRecordNewsChain } from "@/lib/review";
 import { banUntilFromKey, unbanUser } from "@/lib/ban";
 import { broadcast, sendSystemMessage, retractReplyNotice, retractPostNotices, retractVideoCommentNotice } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
-import { rankLeave, safeRankOp } from "@/lib/userrank";
+import { rankEnter, rankLeave, safeRankOp } from "@/lib/userrank";
+import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
@@ -38,6 +39,8 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "user.setRole": "administrator",
   "user.resetPassword": "administrator",
   "user.delete": "administrator",
+  // 账户合并（2026-11-01 张老师需求）：全数据并入目标账户后注销源账户；不可逆重操作，超管专属
+  "user.merge": "administrator",
   // 可信用户组（2026-10-24）：组内用户录像分拣不检查 STNB 触发器；超管把关
   "user.setTrusted": "administrator",
   "user.clearCheatPenalty": "administrator",
@@ -476,6 +479,146 @@ async function dispatch(
         prisma.passwordToken.deleteMany({ where: { user: BigInt(id) } }),
       ]);
       return { ok: true, message: `注销账号 ${auth.username}（#${id}），账号数据保留、无法再登录` };
+    }
+
+    case "user.merge": {
+      /* 账户合并（2026-11-01 张老师需求）：把源账户的全部数据并入目标账户，然后注销源账户。
+         搬迁范围：录像（含 video_scores_* 六池成绩）、评论、论坛主题/回复、动态、
+         站内信（收发双方）、第三方绑定（QQ/微信）、邮箱绑定（目标未绑时随迁）、
+         赞助记录、每日一星及感言投票、扫雷历程、地盘人气、bbs 最后回复人指位。
+         衍生重算（各自口径对齐）：
+         · user_scores(_nf) 六池：源行（含老站遗产无录像纪录）与目标行逐格取优合并，源行清零防双计；
+         · 名次落盘：源账户出榜，目标账户出旧位后按合并成绩回榜（rankLeave/rankEnter 契约）；
+         · STNB 榜：目标 3 级×flag/NF 重算，源行清除；
+         · 纪录动态链：以合并后的 video_scores 为真相重放目标 flag 链（对齐 or/cr）；
+         · user_stat 录像计数：按前台可见口径（status<>0）重算。
+         最后与 user.delete 同口径注销源账户（删登录凭据/找回链接、置封禁、保留 user 行与 user_sig）。 */
+      const id = toId(p.id);
+      const targetId = toId(p.targetId);
+      if (!id || !targetId) return { ok: false, error: "参数错误：缺少玩家 ID 或目标 ID" };
+      if (id === targetId) return { ok: false, error: "目标账户不能是当前账户自己" };
+      if (id === actor.uid) return { ok: false, error: "不能合并自己当前登录的账号" };
+      const [srcUser, tgtUser, srcAuth, tgtAuth] = await Promise.all([
+        prisma.user.findUnique({ where: { id: BigInt(id) } }),
+        prisma.user.findUnique({ where: { id: BigInt(targetId) } }),
+        prisma.userAuth.findUnique({ where: { id: BigInt(id) } }),
+        prisma.userAuth.findUnique({ where: { id: BigInt(targetId) } }),
+      ]);
+      if (!srcUser) return { ok: false, error: "玩家不存在" };
+      if (!tgtUser) return { ok: false, error: `目标玩家 #${targetId} 不存在` };
+      if (!srcAuth) return { ok: false, error: "该玩家没有登录凭据（已注销），无需合并" };
+      if (!tgtAuth) return { ok: false, error: `目标账户 #${targetId} 没有登录凭据，无法作为合并目标` };
+      if (srcAuth.role >= USER_ROLE.MANAGER) return { ok: false, error: "管理员账号不能执行账户合并" };
+      if (tgtUser.status !== 0) return { ok: false, error: "目标账户处于封禁状态，无法作为合并目标" };
+
+      // 结果消息用计数（事务外并行取）
+      const [videoCount, commentCount, postCount, replyCount, newsCount, oauthCount] = await Promise.all([
+        prisma.video.count({ where: { user: BigInt(id) } }),
+        prisma.comment.count({ where: { user: BigInt(id) } }),
+        prisma.bbsPost.count({ where: { user: BigInt(id) } }),
+        prisma.bbsReply.count({ where: { user: BigInt(id) } }),
+        prisma.news.count({ where: { user: BigInt(id) } }),
+        prisma.userOauth.count({ where: { userId: BigInt(id) } }),
+      ]);
+
+      const src = BigInt(id);
+      const tgt = BigInt(targetId);
+      const ts = BigInt(now());
+      await prisma.$transaction(async (tx) => {
+        // ① 名次：双方先出榜（源账户永久出榜；目标账户合并后按新成绩回榜）
+        await rankLeave(tx, src);
+        await rankLeave(tx, tgt);
+
+        // ② 唯一键冲突预处理：扫雷历程（user+month 唯一）/ 感言投票（date+user 唯一）——
+        //    与目标撞键的源行直接删除（目标保留自己的记录，源行无搬移价值），
+        //    其余源行随后统一搬迁（下方 updateMany）
+        const srcHistory = await tx.history.findMany({ where: { user: src }, select: { id: true, month: true } });
+        for (const h of srcHistory) {
+          const clash = await tx.history.findFirst({ where: { user: tgt, month: h.month }, select: { id: true } });
+          if (clash) await tx.history.delete({ where: { id: h.id } });
+        }
+        const srcVotes = await tx.starVote.findMany({ where: { user: src }, select: { id: true, date: true } });
+        for (const v of srcVotes) {
+          const clash = await tx.starVote.findFirst({ where: { user: tgt, date: v.date }, select: { id: true } });
+          if (clash) await tx.starVote.delete({ where: { id: v.id } });
+        }
+
+        // ③ 数据归属搬迁（video.reviewUser 审核人指位保留——那是后台审计事实，不随账户走）
+        await tx.video.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.videoScoresBeg.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.videoScoresBegNf.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.videoScoresInt.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.videoScoresIntNf.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.videoScoresExp.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.videoScoresExpNf.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.comment.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.bbsPost.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.bbsReply.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.bbsPost.updateMany({ where: { lastReplyUser: src }, data: { lastReplyUser: tgt } });
+        await tx.news.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.message.updateMany({ where: { fromUser: src }, data: { fromUser: tgt } });
+        await tx.message.updateMany({ where: { toUser: src }, data: { toUser: tgt } });
+        await tx.star.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.donate.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.click.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.userOauth.updateMany({ where: { userId: src }, data: { userId: tgt } });
+        // 历程 / 感言投票：冲突行已删，剩余行安全搬迁（不与目标撞唯一键）
+        await tx.history.updateMany({ where: { user: src }, data: { user: tgt } });
+        await tx.starVote.updateMany({ where: { user: src }, data: { user: tgt } });
+
+        // ④ 邮箱绑定：目标未绑邮箱时随迁（目标已绑则不覆盖，源邮箱随凭据注销释放）
+        if (srcAuth.email && !tgtAuth.email) {
+          await tx.userAuth.update({
+            where: { id: tgt },
+            data: { email: srcAuth.email, emailVerified: srcAuth.emailVerified, emailToken: srcAuth.emailToken },
+          });
+        }
+
+        // ⑤ 成绩六池 best-of 合并（flag + NF）：源行并入目标行、源行清零；返回目标 expTime 供纪录链快照
+        const expSnapshot = await mergeUserScores(tx, false, id, targetId);
+        await mergeUserScores(tx, true, id, targetId);
+
+        // ⑥ 目标回榜（rankEnter 自查 status=0 与 sumTime>0，不满足即 no-op）
+        await rankEnter(tx, tgt);
+
+        // ⑦ STNB 榜落盘：目标按合并后的录像重算；源行清除（录像已全部迁走）
+        for (const lv of VIDEO_LEVELS) {
+          await refreshUserStnb(targetId, lv, tx);
+          await refreshUserStnbNf(targetId, lv, tx);
+        }
+        await tx.userStnbBest.deleteMany({ where: { user: src } });
+        await tx.userStnbBestNf.deleteMany({ where: { user: src } });
+
+        // ⑧ user_stat 录像计数：目标按前台可见口径重算；源计数清零
+        await recomputeUserStatVideos(tx, targetId);
+        await tx.userStat.updateMany({ where: { id: src }, data: { begVideos: 0, intVideos: 0, expVideos: 0 } });
+
+        // ⑨ 纪录动态链对齐：以合并后的 video_scores 为真相，重放目标三个级别的 flag 链
+        for (const lv of VIDEO_LEVELS) {
+          await syncRecordNewsChain(tx, targetId, lv, { expTime: expSnapshot });
+        }
+
+        // ⑩ 注销源账户（user.delete 同口径：保留 user 行与 user_sig，删凭据/找回链接、置封禁）
+        await tx.userAuth.delete({ where: { id: src } });
+        await tx.passwordToken.deleteMany({ where: { user: src } });
+        await tx.user.update({ where: { id: src }, data: { status: -1, updateTime: ts } });
+      });
+
+      // 知会目标账户（失败不阻断）
+      try {
+        await sendSystemMessage(
+          targetId,
+          `管理员已将账号「${srcUser.chineseName}」（#${id}）合并到你的账号，其全部数据（录像、成绩、文章、评论等）已归入你的名下。`
+        );
+      } catch { /* 通知失败不阻断 */ }
+
+      return {
+        ok: true,
+        message:
+          `已将 ${srcUser.chineseName}（#${id}）合并到 ${tgtUser.chineseName}（#${targetId}）：` +
+          `录像 ${videoCount} 部、评论 ${commentCount} 条、主题 ${postCount} 篇 / 回复 ${replyCount} 条、` +
+          `动态 ${newsCount} 条、第三方绑定 ${oauthCount} 个；源账户已注销`,
+      };
     }
 
     case "video.markWatched": {
@@ -1316,6 +1459,132 @@ function now(): number {
 }
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
+
+/** 事务客户端类型（与 userstnb.ts 同款推导） */
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+// ---------- 账户合并：成绩六池 best-of 合并（user.merge 专用） ----------
+
+const MERGE_LEVELS = ["beg", "int", "exp"] as const;
+const sField = (lv: string, order: "Time" | "3bvs", suffix = "") => `${lv}${order}${suffix}`;
+
+/** user_scores(_nf) 委托联合的公共面（TS2349 → cast 委托接口，见 MEMORY 铁律） */
+interface ScoresTbl {
+  findUnique(args: { where: { id: bigint } }): Promise<Record<string, bigint | number | null> | null>;
+  upsert(args: {
+    where: { id: bigint };
+    create: Record<string, unknown>;
+    update: Record<string, unknown>;
+  }): Promise<unknown>;
+  update(args: { where: { id: bigint }; data: Record<string, unknown> }): Promise<unknown>;
+}
+
+/** 行 → 数值视图（去 id，BigInt→Number） */
+function scoreRowNums(row: Record<string, bigint | number | null> | null): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  if (row) {
+    for (const [k, v] of Object.entries(row)) {
+      if (k === "id" || k === "createTime" || k === "updateTime") continue;
+      out[k] = v == null ? null : Number(v);
+    }
+  }
+  return out;
+}
+
+/** review.ts withSum 同款：时间三级齐全才合计；3BV/s 允许「有初级成绩但未达限界」按 0 参与合计 */
+function withScoreSum(row: Record<string, number | null>): void {
+  const hasBeg = (row[sField("beg", "Time")] ?? 0) > 0;
+  if (hasBeg && row[sField("beg", "3bvs")] == null) row[sField("beg", "3bvs")] = 0;
+  if (!hasBeg && row[sField("beg", "3bvs")] === 0) row[sField("beg", "3bvs")] = null;
+  const t = MERGE_LEVELS.map((l) => row[sField(l, "Time")] ?? 0);
+  const b = MERGE_LEVELS.map((l) => row[sField(l, "3bvs")] ?? 0);
+  row.sumTime = t.every((x) => x > 0) ? t.reduce((a, c) => a + c, 0) : 0;
+  row.sum3bvs = hasBeg && b[1] > 0 && b[2] > 0 ? b.reduce((a, c) => a + c, 0) : 0;
+}
+
+/** 数值视图 → 写库 data（BigInt 转换；时间戳列不写） */
+function scoreData(row: Record<string, number | null>): Record<string, bigint | number | null> {
+  const data: Record<string, bigint | number | null> = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (v == null) {
+      data[k] = null;
+      continue;
+    }
+    data[k] = k.endsWith("Video") || k.endsWith("Date") ? BigInt(v) : v;
+  }
+  return data;
+}
+
+/** user_scores(_nf) 六池 best-of 合并：源行并入目标行（逐格取优）后源行清零，返回目标合并后 expTime。
+ *  比较语义与 review.ts userScoresOnInsert 完全一致：时间更小 / 3BV/s 更大才覆盖；
+ *  源行的老站遗产无录像纪录（无指针）同样参与取优——真值来源以行值为准，与
+ *  repair-user-scores.ts「保留优于录像真值的遗产值」口径兼容。 */
+async function mergeUserScores(tx: Tx, nf: boolean, srcId: number, tgtId: number): Promise<number> {
+  const table = (nf ? tx.userScoresNf : tx.userScores) as unknown as ScoresTbl;
+  const a = scoreRowNums(await table.findUnique({ where: { id: BigInt(srcId) } }));
+  const b = scoreRowNums(await table.findUnique({ where: { id: BigInt(tgtId) } }));
+  const merged: Record<string, number | null> = b ?? {};
+  for (const lv of MERGE_LEVELS) {
+    for (const order of ["Time", "3bvs"] as const) {
+      const f = sField(lv, order);
+      const av = a[f] ?? 0;
+      if (av <= 0) continue;
+      const cur = merged[f] ?? 0;
+      const better = order === "Time" ? cur === 0 || av < cur : cur === 0 || av > cur;
+      if (!better) continue;
+      merged[f] = av;
+      merged[sField(lv, order, "Video")] = a[sField(lv, order, "Video")] ?? null;
+      merged[sField(lv, order, "Date")] = a[sField(lv, order, "Date")] ?? null;
+    }
+  }
+  withScoreSum(merged);
+  const ts = BigInt(now());
+  await table.upsert({
+    where: { id: BigInt(tgtId) },
+    create: { id: BigInt(tgtId), ...scoreData(merged), createTime: ts, updateTime: ts },
+    update: { ...scoreData(merged), updateTime: ts },
+  });
+  // 源行清零防双计：值格与指针格全部置空、合计归零（行不存在则无事发生）
+  if (Object.keys(a).length) {
+    const blank: Record<string, bigint | number | null> = {};
+    for (const lv of MERGE_LEVELS) {
+      for (const order of ["Time", "3bvs"] as const) {
+        blank[sField(lv, order)] = null;
+        blank[sField(lv, order, "Video")] = null;
+        blank[sField(lv, order, "Date")] = null;
+      }
+    }
+    blank.sumTime = 0;
+    blank.sum3bvs = 0;
+    await table.update({ where: { id: BigInt(srcId) }, data: blank });
+  }
+  return merged.expTime ?? 0;
+}
+
+/** user_stat 录像计数重算（前台可见口径 status<>0：待审 10 + 通过 20 计，屏蔽 0 不计）。
+ *  upsert：行可能缺失（review.ts syncUserStatVideoCount 同款兜底） */
+async function recomputeUserStatVideos(tx: Tx, userId: number): Promise<void> {
+  const rows = await tx.video.groupBy({
+    by: ["level"],
+    where: { user: BigInt(userId), status: { not: VIDEO_STATUS.BANNED } },
+    _count: { _all: true },
+  });
+  const c: Record<string, number> = { beg: 0, int: 0, exp: 0 };
+  for (const r of rows) c[r.level] = r._count._all;
+  const ts = BigInt(now());
+  await tx.userStat.upsert({
+    where: { id: BigInt(userId) },
+    create: {
+      id: BigInt(userId),
+      begVideos: c.beg,
+      intVideos: c.int,
+      expVideos: c.exp,
+      createTime: ts,
+      updateTime: ts,
+    },
+    update: { begVideos: c.beg, intVideos: c.int, expVideos: c.exp, updateTime: ts },
+  });
+}
 
 /* ---------- 屏蔽 → 低信任分流（2026-10-28 张老师需求：录像处理与人处理分开） ----------
  *

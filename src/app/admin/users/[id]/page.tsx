@@ -9,6 +9,7 @@ import { getUserDetailAdmin } from "@/lib/admin/data";
 import { opLabel } from "@/lib/admin/log";
 import { AdminAction, AdminForm } from "@/components/admin/AdminAction";
 import { BanUserDialog } from "@/components/admin/BanUserDialog";
+import { MergeUserDialog } from "@/components/admin/MergeUserDialog";
 import { LowTrustDialog } from "@/components/admin/LowTrustDialog";
 import { RankBanDialog } from "@/components/admin/RankBanDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
@@ -327,6 +328,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     该玩家已有 {u.videos} 部录像、{d.postTotal} 篇论坛主题，不能注销账号（如需禁止登录请用「封禁账号」）
                   </span>
                 ))}
+              {/* 账户合并（2026-11-01）：有内容的账号走这条路——全数据并入目标账户后注销源账户；
+                  本人视角隐藏（isSelf 与注销同一自伤守卫） */}
+              {!isSelf && <MergeUserDialog userId={u.id} name={u.chineseName} sm={false} />}
             </div>
 
             <AdminForm
