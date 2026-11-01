@@ -1444,3 +1444,16 @@ a.cheat_uid:hover .pt_bubble {
 /* 练习数据页左右分栏：左侧「今日地区明细」通栏等高（2026-11-01） */
 /* flex:1 让卡片在三栏 flex 包裹列里撑满宽度（否则按 max-content 收缩） */
 .admin_card.h100 { height: 100%; flex: 1 1 auto; }
+
+/* 大板块内明细表撑满右列高度（2026-11-01 张老师：不要下面全空），放开 360 限高；
+   滚动时表头吸顶（th 自带不透明底色）。移动端原本 max-height:none，不受影响 */
+.pc_big .region_today {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.pc_big .region_today thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}

@@ -60,7 +60,7 @@ export default async function AdminPracticePage() {
           大板块右侧竖排「级别占比/模式占比」；下面「练习趋势 + 24 小时分布」一行 */}
       <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 840px", minWidth: 0, display: "flex" }}>
-          <AdminCard className="h100">
+          <AdminCard className="h100 pc_big">
             {/* 两列 40/60（张老师定稿）：basis 0 + grow 2:3 等比分配，明细为空也保持列宽 */}
             <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
               <div style={{ flex: "2 1 0", minWidth: 300, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -83,9 +83,10 @@ export default async function AdminPracticePage() {
                   <ServerStatusPanel />
                 </div>
               </div>
-              <div style={{ flex: "3 1 0", minWidth: 300 }}>
+              {/* 右列：明细撑满大板块高度（pc_big 作用域放开 max-height，表头吸顶） */}
+              <div style={{ flex: "3 1 0", minWidth: 300, display: "flex", flexDirection: "column" }}>
                 <b style={{ fontSize: 14 }}>今日地区明细</b>
-                <div style={{ marginTop: 6 }}>
+                <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
                   {regionToday.length ? (
                     <RegionTodayTable rows={regionToday} />
                   ) : (
