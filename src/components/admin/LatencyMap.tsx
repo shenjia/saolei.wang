@@ -9,7 +9,7 @@
 // 省界几何复用 /area 同一份静态数据（src/lib/area-map-geo.ts，DataV 标准边界，
 // 含台湾省与南海诸岛九段线），样式复用 .area_map 族；只看不点（无跳转）。
 
-import { useRef, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { areaDisplay } from "@/lib/config";
 import { type RegionTodayRow } from "./RegionTodayTable";
 import {
@@ -71,11 +71,42 @@ export function LatencyMap({
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
+  /* 各省图形元素（省份 path + 港澳 mini 圆点）：表格联动时按其 bbox 锚定气泡 */
+  const shapeRefs = useRef<Map<string, Element>>(new Map());
+  /* 区分 hover 来源：地图本体 hover 时 move 跟鼠标即可，跳过锚定（防闪跳） */
+  const localHover = useRef(false);
 
   const byName = new Map(data.map((d) => [d.area, d]));
   const hot = hoverArea ? byName.get(hoverArea) : undefined;
 
-  const enter = (area: string | null) => () => onHover(area);
+  const enter = (area: string | null) => () => {
+    localHover.current = area !== null;
+    onHover(area);
+  };
+
+  /* 表格行联动（hoverArea 变化且非地图本体触发）：气泡锚定到对应省份下方
+     （2026-11-01 张老师需求）；省份 bbox 底部放不下气泡时翻到上方 */
+  useEffect(() => {
+    if (!hoverArea) return;
+    if (localHover.current) {
+      localHover.current = false;
+      return;
+    }
+    const stage = stageRef.current;
+    const tip = tipRef.current;
+    const el = shapeRefs.current.get(hoverArea);
+    if (!stage || !tip || !el) return;
+    const r = stage.getBoundingClientRect();
+    const pr = el.getBoundingClientRect();
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    let x = pr.left - r.left + pr.width / 2 - tw / 2;
+    x = Math.max(4, Math.min(x, r.width - tw - 4));
+    let y = pr.bottom - r.top + 8;
+    if (y + th > r.height - 4) y = pr.top - r.top - th - 8;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
+  }, [hoverArea]);
 
   /* 气泡跟随鼠标（与 /area AreaMap 同手法：直接改样式避免整图重渲染） */
   const move = (e: ReactMouseEvent) => {
@@ -117,6 +148,10 @@ export function LatencyMap({
               return (
                 <path
                   key={p.n}
+                  ref={(el) => {
+                    if (el) shapeRefs.current.set(p.n, el);
+                    else shapeRefs.current.delete(p.n);
+                  }}
                   className={`prov${avg !== null ? "" : " nodata"}${hoverArea === p.n ? " hovering" : ""}`}
                   style={{ cursor: d ? "help" : "default" }}
                   d={p.d}
@@ -135,6 +170,10 @@ export function LatencyMap({
             return (
               <g key={m.n} className="mini" onMouseEnter={enter(d ? m.n : null)}>
                 <circle
+                  ref={(el) => {
+                    if (el) shapeRefs.current.set(m.n, el);
+                    else shapeRefs.current.delete(m.n);
+                  }}
                   cx={m.x}
                   cy={m.y}
                   r={hotMini ? 3.6 : 2.2}
