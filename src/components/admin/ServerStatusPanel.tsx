@@ -174,8 +174,9 @@ export function ServerStatusPanel() {
           <tr>
             <th>{thInner("name", "服务器", "按服务器名称排列")}</th>
             {/* 在线/对局表头单词化（2026-11-01 三次），点击按累计值排序 */}
-            <th className="c">{thInner("connsUsers", "在线", "按累计去重连接人数排列（多在前）")}</th>
-            <th className="c">{thInner("gamesServed", "对局", "按累计开局面数排列（多在前）")}</th>
+            {/* 在线/对局表头单词化（2026-11-01 三次），点击按累计值排序；内容左对齐（11-01 张老师） */}
+            <th>{thInner("connsUsers", "在线", "按累计去重连接人数排列（多在前）")}</th>
+            <th>{thInner("gamesServed", "对局", "按累计开局面数排列（多在前）")}</th>
             <th className="c">{thInner("rttAvg", "平均延迟", "按玩家实测平均延迟排列（快在前；近 7 天采样）")}</th>
           </tr>
         </thead>
@@ -186,10 +187,10 @@ export function ServerStatusPanel() {
                 {dot(r)}
                 <b style={{ color: "#d6d6cc" }}>{r.name}</b>
               </td>
-              <td className="c" title="x＝当前在线连接数 · y＝累计去重连接人数（重启不清零；点击表头按累计排序）">
+              <td title="x＝当前在线连接数 · y＝累计去重连接人数（重启不清零；点击表头按累计排序）">
                 {pair(r, r.connections, "#a6e22e", r.connsUsers)}
               </td>
-              <td className="c" title="x＝进行中对局数 · y＝累计开局面数（重启不清零；点击表头按累计排序）">
+              <td title="x＝进行中对局数 · y＝累计开局面数（重启不清零；点击表头按累计排序）">
                 {pair(r, r.active, "#fdc61d", r.gamesServed)}
               </td>
               <td className="c" title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本` : undefined}>
