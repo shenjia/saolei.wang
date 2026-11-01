@@ -64,20 +64,18 @@ export function PracticeRegionBoard({ rows }: { rows: RegionTodayRow[] }) {
             </span>
           </b>
           <div style={{ marginTop: 6 }}>
-            {rows.length ? (
-              <LatencyMap
-                data={rows}
-                hoverArea={hoverArea}
-                onHover={setHoverArea}
-                servers={servers ?? []}
-                hoverServer={hoverServer}
-                onHoverServer={setHoverServer}
-                srvTip={srvTip}
-                onSrvTip={setSrvTip}
-              />
-            ) : (
-              <div className="admin_empty">今日暂无延迟数据（排行局结算后自动记入）</div>
-            )}
+            {/* 地图永远渲染（2026-11-02 张老师）：空数据时省份灰底 + 钉照常显示，
+                内部对空 data 健壮（.nodata 分支） */}
+            <LatencyMap
+              data={rows}
+              hoverArea={hoverArea}
+              onHover={setHoverArea}
+              servers={servers ?? []}
+              hoverServer={hoverServer}
+              onHoverServer={setHoverServer}
+              srvTip={srvTip}
+              onSrvTip={setSrvTip}
+            />
           </div>
         </div>
         <div>
