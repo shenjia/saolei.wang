@@ -13442,11 +13442,3 @@ a.cheat_rep_link:hover {
   font-size: 12px;
   line-height: normal;
 }
-
-/* 上传页配额行「提供赞助」链接（2026-11-02 张老师定）：亮灰常态，hover 变活跃绿 */
-.upload_quota_sponsor {
-  color: #b1b1a4;
-}
-.upload_quota_sponsor:hover {
-  color: #a6e22e;
-}

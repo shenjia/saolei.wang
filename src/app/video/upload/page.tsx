@@ -30,6 +30,18 @@ export default async function VideoUploadPage() {
     <div id="page" className="main">
       <div className="video_upload box center">
         <h1>上传录像</h1>
+        {/* 支持格式说明（2026-11-02 张老师：从规则板块拿回标题下作正文，原样式） */}
+        <p>
+          本站现接受{" "}
+          <a href="/download/Arbiter_0.52.3.zip" download>
+            <em>Minesweeper Arbiter 0.52.3</em>
+          </a>{" "}
+          生成的 <em>avf</em> 录像，以及{" "}
+          <a href="/download/Metasweeper_3.3.4.exe" download>
+            <em>元扫雷 3.3.4</em>
+          </a>{" "}
+          生成的 <em>evf</em> 录像。
+        </p>
         <UploadForm />
       </div>
       {/* 上传规则板块（2026-11-02 张老师：说明文字沉底，形态同排行页底部排行规则）；
@@ -39,29 +51,19 @@ export default async function VideoUploadPage() {
         footer={<UploadQuota initialRemaining={remaining} />}
         items={[
           <>
-            <b>支持格式</b>：本站现接受{" "}
-            <a href="/download/Arbiter_0.52.3.zip" download>
-              <em>Minesweeper Arbiter 0.52.3</em>
-            </a>{" "}
-            生成的 <em>avf</em> 录像，以及{" "}
-            <a href="/download/Metasweeper_3.3.4.exe" download>
-              <em>元扫雷 3.3.4</em>
-            </a>{" "}
-            生成的 <em>evf</em> 录像。
+            <b>先审后排</b>：上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。
           </>,
           <>
-            <b>审核</b>：上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。
-          </>,
-          <>
-            <b>3BV 下限</b>：可接受的初级最低 3BV 为 <i>2</i>，中级最低 <i>30</i>，高级最低 <i>100</i>。
+            <b>3BV限制</b>：排行可接受的初级最低 3BV 为 <i>2</i>，中级最低 <i>30</i>，高级最低 <i>100</i>
+            。低于以上3BV的录像仍可上传，但成绩不能加入排行。
           </>,
           <>
             <b>录像来源</b>：在线练习产生的录像无法上传（排行模式录像将由服务器生成，不支持外部上传）。
           </>,
           <>
             <b>每周限额</b>：每账户每周最多上传<i>100</i>个录像，对本站
-            {/* 亮灰常态、hover 变绿（globals.css .upload_quota_sponsor） */}
-            <Link href="/page/donate" className="upload_quota_sponsor">
+            {/* 绿色链接（2026-11-02 张老师二改：不再亮灰 hover） */}
+            <Link href="/page/donate" style={{ color: "#a6e22e" }}>
               提供赞助
             </Link>
             可大大提升上传限额。
