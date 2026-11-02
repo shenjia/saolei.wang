@@ -22,7 +22,9 @@ export function UploadQuota({ initialRemaining }: { initialRemaining: number }) 
 
   return (
     <p>
-      您今天还能上传 <b>{remaining}</b> 个录像，对本站
+      您今天还能上传{" "}
+      {/* 剩余数字绿色（2026-11-02 张老师要求）——站内活跃绿 */}
+      <b style={{ color: "#a6e22e" }}>{remaining}</b> 个录像，对本站
       {/* 绿色沿用站内活跃绿（globals.css .tp_row b.green 同源） */}
       <Link href="/page/donate" style={{ color: "#a6e22e" }}>
         提供赞助

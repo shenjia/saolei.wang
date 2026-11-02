@@ -67,8 +67,8 @@ export async function uploadVideo(
   }
 
   // 每日上传上限（2026-11-02 张老师定）：默认每人每天 20 盘，赞助每 1 元 +10（1000 封顶）。
-  // 排名局服务端自动入库（rankedInternal）不占用户上传额度——排名玩法是本站核心业务，
-  // 不应被上传闸误伤；但其录像仍计入当日已传数（countTodayUploads 全量口径）。
+  // 排名局服务端自动入库（rankedInternal）不占额度也不计入当日已传数
+  // （countTodayUploads 已排除 RANKED_SOFTWARE）——排名玩法是本站核心业务，不被上传闸误伤。
   // 排在格式校验前，伪造请求同吃限额。
   const donateCents = await sumDonateCents(session.uid);
   const dailyLimit = dailyUploadLimit(donateCents);
