@@ -8499,6 +8499,11 @@ button.msg_cancel:hover {
   font-style: normal;
   color: #fdc61d;
 }
+/* 气泡第一行右侧「出现概率」（2026-11-02 张老师要求）：常规字重灰字，跟在 3BV 值后同行 */
+#user_3bv .tip b .prob {
+  font-weight: normal;
+  color: #b1b1a4;
+}
 #user_3bv .tip::after {
   content: "";
   position: absolute;
@@ -8936,6 +8941,10 @@ button.msg_cancel:hover {
 #online_play .op_ping .ping_suggest em {
   font-style: normal;
   color: #fdc61d;
+}
+/* 延迟数字绿色（2026-11-02 张老师三改：与 .sv hover 站内绿同色） */
+#online_play .op_ping .ping_suggest .rtt {
+  color: #a6e22e;
 }
 /* 悬停桥（2026-10-29 张老师反馈）：tip 悬在图标上方 4px，间隙里只有 10px 宽的
    小三角接得住鼠标——斜向上移动错过三角即落进空隙，:hover 断、气泡闪没，
