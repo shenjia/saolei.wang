@@ -344,7 +344,7 @@ export default async function AdminDashboard() {
           </div>
         </AdminCard>
 
-        <AdminCard title="录像软件分布" more="最近 1000 盘 · 按录像解析">
+        <AdminCard title="录像软件分布" more="近 7 天 · 按录像解析">
           <Donut
             items={softwares.map((s) => ({ ...s, label: s.label || "未记录" }))}
             centerLabel="最近1000盘"

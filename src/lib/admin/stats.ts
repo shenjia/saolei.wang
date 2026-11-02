@@ -294,14 +294,14 @@ export async function getAreaCounts(limit = 12): Promise<{ label: string; value:
 }
 
 /** 录像软件分布（video_info.software，旧站多为 Windows 扫雷 / 各版本客户端）
- *  2026-10-29 张老师定：只统计最近 1000 盘（按上传时间倒序取 1000 条再分组，
- *  反映当前玩家在用什么软件，而非 2008 年以来的历史累积）。 */
+ *  2026-11-02 张老师定：只统计近 7 天（此前为最近 1000 盘——数据量上来后窗口被
+ *  快速拉长，近 7 天更能反映当前玩家在用什么软件，而非历史累积）。 */
 export async function getSoftwareCounts(limit = 8): Promise<{ label: string; value: number }[]> {
+  const since = Math.floor(Date.now() / 1000) - 7 * 86400;
   const rows = await prisma.$queryRawUnsafe<{ software: string; c: bigint }[]>(
-    `SELECT software, COUNT(*) c FROM (
-       SELECT vi.software software FROM video v JOIN video_info vi ON vi.id = v.id
-       ORDER BY v.create_time DESC, v.id DESC LIMIT 1000
-     ) t WHERE software <> '' GROUP BY software ORDER BY c DESC LIMIT ${limit}`
+    `SELECT software, COUNT(*) c FROM video v JOIN video_info vi ON vi.id = v.id
+     WHERE v.create_time >= ? AND software <> '' GROUP BY software ORDER BY c DESC LIMIT ${limit}`,
+    BigInt(since)
   );
   return rows.map((r) => ({ label: r.software || "未知", value: N(r.c) }));
 }
