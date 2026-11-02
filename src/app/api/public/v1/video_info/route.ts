@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     {
       id: bigint; level: string; user: bigint; hash: string; status: number;
       create_time: bigint; review_time: bigint | null;
-      real_time: number; board_3bv: number; noflag: number;
+      real_time: number; board_3bv: number; noflag: number; no_record: number;
       filepath: string;
       software: string; version: string; signature: string;
       cl: number | null; cl_left: number | null; cl_right: number | null;
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     }[]
   >`
     SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
-           vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version, vi.signature, vi.filepath,
+           vi.real_time, vi.board_3bv, vi.noflag, vi.no_record, vi.software, vi.version, vi.signature, vi.filepath,
            m.cl, m.cl_left, m.cl_right, m.cl_double, m.ce, m.path, m.ioe, m.stnb
     FROM video v
     JOIN video_info vi ON vi.id = v.id
@@ -62,7 +62,10 @@ export async function GET(req: Request) {
     const brief = authors.get(Number(r.user));
     const bv = Number(r.board_3bv);
     const rt = Number(r.real_time);
-    const sign = rt > 0 && bv >= MIN_3BV_FOR_3BVS[r.level as VideoLevel] ? 1 : -1;
+    // 运气盘（no_record=1，2026-11-02）与 3BV 低于 MIN_3BV_FOR_3BVS 同口径记负值
+    // （与 video_list 完全一致，消费方按负值识别「成绩不被承认」）
+    const sign =
+      rt > 0 && Number(r.no_record) === 0 && bv >= MIN_3BV_FOR_3BVS[r.level as VideoLevel] ? 1 : -1;
     return {
       id: Number(r.id),
       level: (VIDEO_LEVELS as readonly string[]).includes(r.level) ? r.level : r.level,
@@ -76,6 +79,9 @@ export async function GET(req: Request) {
       board3bv: bv,
       "3bvs": rt > 0 ? sign * Math.round((bv * 1000000) / rt) : 0,
       nf: Number(r.noflag) === 1,
+      // 运气盘（2026-11-02 张老师定）：上传时低于级别 3BV 下限（初 2/中 30/高 100），
+      // 允许上传但所有成绩不被站内承认（3bvs 记负值同口径），不入排行/纪录
+      noRecord: Number(r.no_record) === 1,
       // 录像文件完整 URL（/videos{filepath}，同站内回放页口径；直接 GET 即下载，Content-Type octet-stream）
       fileUrl: `${base}/videos${r.filepath}`,
       software: r.software,

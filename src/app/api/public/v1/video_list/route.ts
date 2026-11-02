@@ -85,6 +85,9 @@ export async function GET(req: Request) {
       board3bv: bv,
       "3bvs": rt > 0 ? sign * Math.round((bv * 1000000) / rt) : 0,
       nf: Number(r.noflag) === 1,
+      // 运气盘（2026-11-02 张老师定）：上传时低于级别 3BV 下限（初 2/中 30/高 100），
+      // 允许上传但所有成绩不被站内承认（3bvs 记负值同口径），不入排行/纪录
+      noRecord: Number(r.no_record) === 1,
       software: r.software,
       version: r.version,
     };
