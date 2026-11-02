@@ -450,8 +450,10 @@ export default async function UserViewPage({
           <div className="box stats_box">
             <h2>数据统计</h2>
             {/* 2026-10-13 张老师要求：与首页/录像页「数据统计」统一——数字亮灰加粗右对齐，
-                今日新增独立成列（绿色括号，左对齐），无新增不显示 */}
-            <table className="table full">
+                今日新增独立成列（绿色括号，左对齐），无新增不显示。
+                2026-11-02 张老师反馈：补 cellPadding/cellSpacing=0（全站其他表都有，
+                独漏本表——浏览器默认 border-spacing 2px 让 hover 行背景被列间细线隔断） */}
+            <table className="table full" cellPadding={0} cellSpacing={0}>
               <tbody>
                 <StatRow label="累计人气" today={clicks.today}>
                   <em>{clicks.total}</em>
