@@ -110,9 +110,7 @@ export default async function RecordsPage() {
                   </span>
                 </div>
                 <div className="records_top_sub">
-                  <span className="records_top_label">
-                    {t.key === "donate" ? "赞助者" : "纪录保持者"}
-                  </span>
+                  <span className="records_top_label">纪录保持者</span>
                   <span className="records_top_who">
                     <AvatarCell id={t.userId} name={t.name} englishName={t.englishName} sex={t.sex} link gender="small" />{" "}
                     <TitleBadge
