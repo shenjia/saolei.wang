@@ -395,6 +395,13 @@ export const INVALID_3BVS_TIP = "因为3BV太小，运气成分过高，该3BV/s
 // 划线不承认——运气盘虚高值如 3BV=2 的 4316 不该当真成绩展示；与 INVALID_3BVS_TIP 同款）。
 export const INVALID_STNB_TIP = "因为3BV太小，运气成分过高，该STNB成绩不被承认";
 
+// 录像详情页头部术语 hover 气泡（2026-11-02 张老师需求：NF/3BV/3BV/s/STNB hover 时
+// 言简意赅向新手解释含义；口径与 /help/word 术语页一致，只做精简）
+export const TERM_NF_TIP = "No Flag：不标雷、仅用左键点开全部格子的玩法。";
+export const TERM_3BV_TIP = "点开全盘所有非雷方块所需的最少左键数，代表这盘的工作量。";
+export const TERM_3BVS_TIP = "平均每秒完成的 3BV，衡量扫雷速度。";
+export const TERM_STNB_TIP = "综合用时与 3BV 完成度的竞速评分，越大越好。";
+
 // 棋盘尺寸（移植 board.js）
 export const BOARD_SIZE: Record<VideoLevel, { x: number; y: number }> = {
   beg: { x: 8, y: 8 },

@@ -12,6 +12,10 @@ import {
   INVALID_STNB_TIP,
   LEVEL_NAMES,
   MIN_3BV_FOR_3BVS,
+  TERM_3BVS_TIP,
+  TERM_3BV_TIP,
+  TERM_NF_TIP,
+  TERM_STNB_TIP,
   VIDEO_STATUS_NAMES,
   isManager,
   type VideoLevel,
@@ -176,16 +180,20 @@ export default async function VideoViewPage({
     <ul id="video_view">
       <li className="main">
         <div className="video_cell box">
+          {/* 术语 hover 说明气泡（2026-11-02 张老师需求：新手向解释 NF/3BV/3BV/s/STNB；
+              文案在 config.ts TERM_*_TIP。data-tip 只挂术语文字（.term），不挂整个成绩
+              span——无效成绩时 del 自带的「不承认」气泡不能被整 span 气泡连带触发重叠 */}
           <h1>
             {LEVEL_NAMES[level] ?? video.level}
-            <em className={lvCls}>{scoreTime(scores.time)}</em>秒 {video.noflag && <ins>NF</ins>}
+            <em className={lvCls}>{scoreTime(scores.time)}</em>秒 {video.noflag && <ins data-tip={TERM_NF_TIP}>NF</ins>}
           </h1>
           <h2>
             <span className="board_3bv">
-              3BV<em>{video.board3bv}</em>
+              <span className="term" data-tip={TERM_3BV_TIP}>3BV</span>
+              <em>{video.board3bv}</em>
             </span>
             <span className="score_3bvs">
-              3BV/s
+              <span className="term" data-tip={TERM_3BVS_TIP}>3BV/s</span>
               {scores["3bvs"] > 0 ? (
                 <em>{score3bvs(scores["3bvs"])}</em>
               ) : (
@@ -202,7 +210,7 @@ export default async function VideoViewPage({
                 无指标行（rmv 旧盘等）不渲染整个 span，与右栏雷达盒「无基准不渲染」同思路 */}
             {video.stnb != null && video.stnb > 0 && (
               <span className="score_stnb">
-                STNB
+                <span className="term" data-tip={TERM_STNB_TIP}>STNB</span>
                 {video.board3bv >= MIN_3BV_FOR_3BVS[level] ? (
                   <em>{video.stnb.toFixed(1)}</em>
                 ) : (
