@@ -1834,8 +1834,8 @@ del[data-tip]:hover::after {
 }
 /* 详情页头部术语气泡（2026-11-02 张老师需求）：NF / 3BV / 3BV/s / STNB 的术语文字
    （page.tsx .term 与 h1 ins）hover 弹新手向说明，文案见 config.ts TERM_*_TIP。
-   视觉与上方 del[data-tip] 同语言；定位沿用其结论——h1 浮左、h2 浮右且贴卡片右缘
-   （.video_cell overflow:hidden）：h1 NF 居中弹；h2 三个术语统一右对齐向左展开防右缘裁切 */
+   视觉与上方 del[data-tip] 同语言；位置（同日张老师定）：术语上方弹出、与术语水平居中——
+   ≥1189 桌面端 .video_cell 是 clip + 96px 外扩裁剪边（同 10-29 作者名气泡机制），上方弹不被裁 */
 #video_view .video_cell h1 ins[data-tip],
 #video_view .video_cell .term[data-tip] {
   position: relative;
@@ -1845,7 +1845,7 @@ del[data-tip]:hover::after {
 #video_view .video_cell .term[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
-  top: 160%;
+  bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
   background: #1e1f1c;
@@ -1858,7 +1858,7 @@ del[data-tip]:hover::after {
   line-height: 1.6;
   white-space: normal;
   width: max-content;
-  max-width: min(300px, calc(100vw - 48px));
+  max-width: min(360px, calc(100vw - 48px));
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.08s;
@@ -1868,11 +1868,19 @@ del[data-tip]:hover::after {
 #video_view .video_cell .term[data-tip]:hover::after {
   opacity: 1;
 }
-/* h2 浮右贴卡片右缘（overflow:hidden）→ 术语气泡右对齐向左展开（同 del 覆盖思路） */
-#video_view .video_cell .term[data-tip]::after {
-  left: auto;
-  right: 0;
-  transform: none;
+/* ≤1188：格子是 overflow-x:auto 滚动容器（无外扩裁剪边），上弹会被卡片顶缘裁、
+   居中弹会被右缘裁——回退向下弹形态：h1 NF 居中、h2 术语右对齐向左展开（同 del 覆盖思路） */
+@media (max-width: 1188px) {
+  #video_view .video_cell h1 ins[data-tip]::after,
+  #video_view .video_cell .term[data-tip]::after {
+    bottom: auto;
+    top: 160%;
+  }
+  #video_view .video_cell .term[data-tip]::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
 }
 /* 详情页 STNB 成绩（2026-10-30 张老师需求：3BV/s 右侧显示 STNB 值，运气盘划线同 3BV/s 口径）。
    镜像 legacy #page .score_3bvs 三件套（label 灰 14px / 数字 em 亮灰 20px bold / del 深灰划线）——
