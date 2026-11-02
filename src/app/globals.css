@@ -8834,13 +8834,15 @@ button.msg_cancel:hover {
    （实测 700px 宽全屏钮溢出 11px）→ 改贴按钮右缘向左展开，保完整可见 */
 @media (max-width: 880px) {
   #online_play .gicon .tip,
-  #online_play .op_ping .tip {
+  #online_play .op_ping .tip,
+  #online_play .op_ping .ping_suggest {
     left: auto;
     right: 0;
     transform: none;
   }
   #online_play .gicon .tip::after,
-  #online_play .op_ping .tip::after {
+  #online_play .op_ping .tip::after,
+  #online_play .op_ping .ping_suggest::after {
     left: auto;
     right: 11px;
     transform: none;
@@ -8896,6 +8898,45 @@ button.msg_cancel:hover {
 #online_play .op_ping .tip .sv_ok { color: #a6e22e; font-weight: normal; }
 #online_play .op_ping .tip .sv { color: #b0aea1; cursor: pointer; }
 #online_play .op_ping .tip .sv:hover { color: #a6e22e; }
+/* 建议切换气泡（2026-11-02 张老师需求）：非对局中且当前节点 >40ms、探测到
+   <35ms 的其他节点时提示「建议您切换到「xx」服务器」。观感同 .tip（暗底/
+   描边/小三角）弹在信号图标正上方；纯提示不可点（pointer-events:none），
+   与 hover 服务器清单互斥——鼠标移入信号区 JS 即收起本气泡，不会同屏叠弹。
+   服务器名走「xx」内嵌 <em> 站内黄，与 .tip em 口径一致 */
+#online_play .op_ping .ping_suggest {
+  display: block;
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: #272822;
+  border: 1px solid #656355;
+  border-radius: 5px;
+  color: #f8f8f2;
+  font: 12px/18px Arial, Helvetica, sans-serif;
+  letter-spacing: normal; /* 抵消 gicons 区继承的 0.5px */
+  padding: 5px 10px;
+  z-index: 5;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+#online_play .op_ping .ping_suggest::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #656355;
+}
+#online_play .op_ping .ping_suggest[hidden] {
+  display: none;
+}
+#online_play .op_ping .ping_suggest em {
+  font-style: normal;
+  color: #fdc61d;
+}
 /* 悬停桥（2026-10-29 张老师反馈）：tip 悬在图标上方 4px，间隙里只有 10px 宽的
    小三角接得住鼠标——斜向上移动错过三角即落进空隙，:hover 断、气泡闪没，
    永远够不到服务器名。::before 铺一条与气泡同宽的隐形桥盖住间隙（含图标顶缘
