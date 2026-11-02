@@ -44,6 +44,8 @@ export default async function VideoUploadPage() {
           ，中级最低 3BV 为 <b style={{ color: "#b1b1a4" }}>30</b>
           ，高级最低 3BV 为 <b style={{ color: "#b1b1a4" }}>100</b>。
         </p>
+        {/* 在线练习/排行模式来源说明（2026-11-02 张老师定） */}
+        <p>在线练习产生的录像无法上传（排行模式录像将由服务器生成，不支持外部上传）。</p>
         {/* 剩余额度实时行（客户端组件，随上传结果递减） */}
         <UploadQuota initialRemaining={remaining} />
         <hr />
