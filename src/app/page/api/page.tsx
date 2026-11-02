@@ -7,6 +7,7 @@
 // 生成，**今后加减接口只改 APIS 数组一处**，导航表自动跟随，无需单独维护。
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 export const metadata = { title: "开放 API" };
 
@@ -299,6 +300,54 @@ const APIS: ApiDoc[] = [
   },
 ];
 
+// ---- notes 参数名自动高亮（2026-11-02 张老师）----
+// 参数说明里出现的字段名（返回示例 JSON 键名 + 输入参数名）包 .api_note_key
+// （亮灰等宽），与 legacy 继承的暗灰正文（#636359）区分，否则参数名淹没在说明文字里。
+// 正则按键名长度降序交替，避免短名吃掉长名前缀（如 id/userId——\w 边界本身已隔开，
+// 降序是双保险）；每条 API 只编译一次（APIS 为模块常量）。
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const NOTE_KEY_RES = new Map<string, RegExp | null>();
+for (const api of APIS) {
+  const keys = new Set<string>();
+  for (const m of api.response.matchAll(/"([A-Za-z0-9_]+)":/g)) keys.add(m[1]);
+  for (const p of api.params) keys.add(p.name);
+  NOTE_KEY_RES.set(
+    api.path,
+    keys.size
+      ? new RegExp(
+          `(^|[^A-Za-z0-9_])(${[...keys]
+            .sort((a, b) => b.length - a.length)
+            .map(escapeRegExp)
+            .join("|")})(?![A-Za-z0-9_])`,
+          "g"
+        )
+      : null
+  );
+}
+
+/** 把 note 里命中键名的片段包亮灰 span，其余原样输出 */
+function renderNote(note: string, re: RegExp | null): ReactNode {
+  if (!re) return note;
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of note.matchAll(re)) {
+    const start = m.index + m[1].length; // m[1]=边界前缀（空或一个非\w字符），不参与高亮
+    const key = m[2];
+    if (start > last) out.push(note.slice(last, start));
+    out.push(
+      <span key={out.length} className="api_note_key">
+        {key}
+      </span>
+    );
+    last = start + key.length;
+  }
+  if (last < note.length) out.push(note.slice(last));
+  return out;
+}
+
 export default function ApiPage() {
   return (
     <div id="page" className="main">
@@ -411,7 +460,7 @@ export default function ApiPage() {
               {api.notes && (
                 <ul className="api_brief">
                   {api.notes.map((n, i) => (
-                    <li key={i}>{n}</li>
+                    <li key={i}>{renderNote(n, NOTE_KEY_RES.get(api.path) ?? null)}</li>
                   ))}
                 </ul>
               )}
