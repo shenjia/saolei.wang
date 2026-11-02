@@ -1603,6 +1603,34 @@ export async function getUserActivity(
   return { posts, postsToday, comments, commentsToday };
 }
 
+/**
+ * 某用户练习盘数（/online 全部局）+ 今日盘数（2026-11-02 张老师要求，
+ * 用户主页「数据统计」在「录像总数」下新增「练习盘数」行，今日数绿色括号）。
+ * 数据源 = practice_daily 落盘日汇总（每局结束 /api/track/practice UPSERT，胜/负都记）：
+ *   总盘数 = 该用户全部日行 plays 求和；今日 = 当日（+08:00 切天序号）行 plays。
+ * 起记日 2026-10-16（原逐盘 practice_log 明细 2026-10-22 迁移汇总后清理，
+ * 历史已并入日汇总）——此前的练习局无数据。排行局也走同一上报计入 plays
+ * （mode_ranked 列另计排行局数，需要剔除时用 plays−mode_ranked）。
+ */
+export async function getUserPracticePlays(
+  userId: number
+): Promise<{ total: number; today: number }> {
+  const uid = BigInt(userId);
+  const nowSec = Math.floor(new Date().getTime() / 1000);
+  const day = Math.floor((nowSec + 28800) / 86400); // +08:00 切天序号（与上报路由同算法）
+  const [agg, todayRow] = await Promise.all([
+    prisma.practiceDaily.aggregate({
+      where: { userId: uid },
+      _sum: { plays: true },
+    }),
+    prisma.practiceDaily.findUnique({
+      where: { day_userId: { day, userId: uid } },
+      select: { plays: true },
+    }),
+  ]);
+  return { total: agg._sum.plays ?? 0, today: todayRow?.plays ?? 0 };
+}
+
 // 成绩表物理表名（raw SQL 用）：原 3BVS 榜分支使用，2026-10-15 排序统一改 video ⋈ video_info
 // 计算序后不再需要；2026-10-22 起默认排序级别路径也改 raw SQL（JOIN video 滤
 // status=20，屏蔽不进前台）——ScoresDelegate/scoresTable 已无调用方，随之移除

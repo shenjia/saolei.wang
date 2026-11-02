@@ -23,6 +23,7 @@ import {
   getNewsCount,
   getUserTodayVideos,
   getUserActivity,
+  getUserPracticePlays,
   getVideoList,
   getLevel3bvRanges,
   getUser3bvCollection,
@@ -171,7 +172,7 @@ export default async function UserViewPage({
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, ranks, userVideos, todayVideos, activity, bbvRanges, bbvCollection] = await Promise.all([
+  const [history, ranks, userVideos, todayVideos, activity, practicePlays, bbvRanges, bbvCollection] = await Promise.all([
     getHistory(userId),
     getUserRanks(userId),
   // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
@@ -189,6 +190,8 @@ export default async function UserViewPage({
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
     getUserActivity(userId),
+    // 练习盘数 + 今日练习（2026-11-02 张老师要求，统计盒「录像总数」下新增一行）
+    getUserPracticePlays(userId),
     // 「3BV 收集」版块：全站区间（level_3bv_range 小表）+ 本人已收集集合（走索引，毫秒级）
     getLevel3bvRanges(),
     getUser3bvCollection(userId),
@@ -496,6 +499,11 @@ export default async function UserViewPage({
                   <Link href={`/video?author=${userId}`} target="_blank" prefetch={false}>
                     <em>{detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos}</em>
                   </Link>
+                </StatRow>
+                {/* 2026-11-02 张老师要求：录像总数下新增「练习盘数」，括号内今日练习；
+                    数据源 practice_daily 落盘（/online 每局上报，含排行局），不加链接 */}
+                <StatRow label="练习盘数" today={practicePlays.today}>
+                  <em>{practicePlays.total}</em>
                 </StatRow>
                 {/* 2026-10-13 张老师要求：新增发表文章（论坛主题）/ 发表评论两行，
                     口径与首页「数据统计」的论坛主题/录像评论一致（2026-10-22 首页行名更新） */}
