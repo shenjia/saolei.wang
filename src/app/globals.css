@@ -13364,3 +13364,9 @@ a.cheat_rep_link:hover {
 .sv_table th:hover .sa i.down:not(.on) {
   border-top-color: #75715e;
 }
+/* 负载面板在线玩家列表（2026-11-02 四次张老师）：军衔文字与玩家名同字号
+   （12px 子表字号），压过 legacy-2013.css 里 .title em 的 16/20px 大字规则 */
+.sv_panel .title em {
+  font-size: 12px;
+  line-height: normal;
+}

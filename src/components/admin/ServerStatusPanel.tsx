@@ -273,7 +273,7 @@ export function ServerStatusPanel({
                                   href={`/user/${p.uid}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  style={{ color: "#66d9ef", textDecoration: "none" }}
+                                  style={{ color: "#f8f8f2", textDecoration: "none" }}
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   {p.name}
