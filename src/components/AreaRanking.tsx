@@ -8,28 +8,21 @@
 //   表格与地图共用 hover 态（双向联动），二者必须留在同一 client 组件里，故由本组件
 //   直接渲染「双栏顶部区 + 规则插槽」；页头与规则是服务端内容，以 props 传入
 //   （RSC 序列化，正规用法）。
-// 2026-10-15 三轮（张老师要求）：左侧地区表改 20 条/页 + 底部标准翻页组件（PageSlider，
-//   窗口语义与 RankingFeed/WorldTop100Table 同款：··· 递增批量追加、窗口内滚动定位、
-//   窗口外整页替换，数据本就全量在内存，全程零请求）——左表高度与右地图基本齐平。
-//   地图配色/气泡仍用全量 34 地区数据（mapData 不随翻页窗口裁剪）。
+// 2026-10-15 三轮（张老师要求）：左侧地区表改 20 条/页 + 底部标准翻页组件。
 // 2026-11-02 张老师要求：「综合排行指数」列改称「战力指数」，新增「活跃指数」列
 //   （落盘表 area_activity，每小时重算），且活跃指数为默认排序；地图气泡 title 随
 //   当前排序列在「战力排行第x位 / 活跃排行第x位」间切换（见 AreaMap）。
+// 2026-11-02 二轮（张老师要求）：全量一共就 2 页——撤下翻页组件完整显示所有地区。
 // 军衔（title）由服务端按高级时间评好，与 rows 同序传入。
 
-import { useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AreaMap, type AreaMapDatum } from "./AreaMap";
 import { PlayerTip, TitleBadge } from "./Cells";
 import { buildUrl } from "./Pager";
-import { PageSlider, nextBatchSize } from "./PageSlider";
-import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { AREA_ORDERS, areaDisplay, type AreaOrder } from "@/lib/config";
 import { areaActivity, areaPower } from "@/lib/format";
 import type { AreaRow } from "@/lib/queries";
-
-const PAGE = 18;
 
 export function AreaRanking({
   rows,
@@ -51,52 +44,6 @@ export function AreaRanking({
   rules?: ReactNode;
 }) {
   const [hover, setHover] = useState<string | null>(null);
-
-  // 窗口语义与 RankingFeed / WorldTop100Table 对齐（本地数据版，全程零请求）：
-  // ··· 加载更多 = 窗口末尾按递增批量追加（20 → +30 → …，全量 34 地区两批内到顶）；
-  // 滑条换页 = 窗口内滚动定位（不换表），窗口外严格一页整表替换（批量序列重置）
-  const tableRef = useRef<HTMLTableElement>(null);
-  const maxPage = Math.max(1, Math.ceil(rows.length / PAGE));
-  const [winStart, setWinStart] = useState(1);
-  const [winEnd, setWinEnd] = useState(1);
-  const [curPage, setCurPage] = useState(1);
-  const [batchStep, setBatchStep] = useState(0);
-
-  const startRow = (winStart - 1) * PAGE;
-  const endRow = Math.min(rows.length, winEnd * PAGE);
-
-  function scrollToRowIdx(idx: number) {
-    const tr = tableRef.current?.querySelectorAll("tbody tr")[idx];
-    tr?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  function loadMore() {
-    const lastLoaded = Math.min(rows.length, winEnd * PAGE);
-    const appended = Math.min(nextBatchSize(batchStep, PAGE), rows.length - lastLoaded);
-    if (appended <= 0) return;
-    setWinEnd(Math.min(maxPage, Math.ceil((lastLoaded + appended) / PAGE)));
-    setBatchStep((s) => s + 1);
-  }
-
-  function gotoPage(p: number) {
-    p = Math.min(maxPage, Math.max(1, p));
-    if (p === curPage) return;
-    // 窗口内：滚动定位（不换表）
-    if (p >= winStart && p <= winEnd) {
-      setCurPage(p);
-      scrollToRowIdx(p - winStart);
-      return;
-    }
-    // 窗口外：严格一页整表替换（flushSync 保视口锚点还原有效），批量序列重置
-    const anchor = captureViewportAnchor(tableRef.current);
-    flushSync(() => {
-      setWinStart(p);
-      setWinEnd(p);
-      setCurPage(p);
-    });
-    restoreViewportAnchor(tableRef.current, anchor);
-    setBatchStep(0);
-  }
 
   const mapData: AreaMapDatum[] = rows.map((r, i) => ({
     area: r.area,
@@ -123,9 +70,9 @@ export function AreaRanking({
       <div className="area_top">
         <div className="box ranking_box">
           {head}
-          {/* rank_scroll：表格与翻页页脚同宽容器（与 RankingFeed 等同款），窄屏盒内横滑一起滚 */}
+          {/* rank_scroll：窄屏盒内横滑容器（与 RankingFeed 等同款） */}
           <div className="rank_scroll">
-            <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table area_table">
+            <table cellPadding={0} cellSpacing={0} className="ranking_table area_table">
               <thead>
                 <tr>
                   <th>排名</th>
@@ -143,7 +90,7 @@ export function AreaRanking({
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(startRow, endRow).map((r, i) => (
+                {rows.map((r, i) => (
                   <tr
                     key={r.area}
                     className={hover === r.area ? "hl" : ""}
@@ -151,7 +98,7 @@ export function AreaRanking({
                     onMouseLeave={() => setHover(null)}
                   >
                     <td className="rank">
-                      第&nbsp;<em>{startRow + i + 1}</em>&nbsp;位
+                      第&nbsp;<em>{i + 1}</em>&nbsp;位
                     </td>
                     <td className="name">
                       <Link href={buildUrl("/area", { name: r.area })} title={`查看${areaDisplay(r.area)}雷友排行`}>
@@ -165,7 +112,7 @@ export function AreaRanking({
                           <PlayerTip id={r.bestId} name={r.bestName} englishName={r.bestEnglishName} />
                         </span>
                       </Link>
-                      <TitleBadge title={titles[startRow + i] ?? ""} classic={classics?.[startRow + i]} link />
+                      <TitleBadge title={titles[i] ?? ""} classic={classics?.[i]} link />
                     </td>
                     <td className={order === "activity" ? "num current act_cur" : "num"}>{areaActivity(r.activity)}</td>
                     <td className={order === "power" ? "num current" : "num"}>{areaPower(r.power)}</td>
@@ -180,18 +127,6 @@ export function AreaRanking({
                 )}
               </tbody>
             </table>
-            {/* 标准翻页页脚（2026-10-15 张老师要求）：滑条 + 左侧「···加载更多」，
-                数据全量在内存，翻页/追加零请求 */}
-            <div className="list_footer">
-              <PageSlider
-                page={curPage}
-                pages={maxPage}
-                loading={false}
-                onGoto={gotoPage}
-                hasMore={winEnd < maxPage}
-                onMore={loadMore}
-              />
-            </div>
           </div>
         </div>
         {/* 右列（2026-10-15 六轮）：DOM 顺序＝规则在前、地图在后；双栏由 CSS

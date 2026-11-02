@@ -1,10 +1,10 @@
 "use client";
 
 // 地区榜 · 交互式中国地图（2026-10-13 张老师需求）
-// 位于排行表下方，按当前排序列（战力指数 / 活跃指数）给各省填色（开方归一：越高越黄、
-// 越低越灰）；悬停省份高亮 + 气泡（头部右侧当前榜名次 / 活跃人数 / 排行人数 /
-// 7 日练习·录像 / 战力·活跃指数 / 领军人物），点击跳转该地区排行。
-// 2026-11-02 张老师要求：气泡加「7 日练习」「7 日录像」两行；头部名次 title 随
+// 位于排行表下方，按当前排序列给各省填色（开方归一：越高越亮、越低越灰暗；
+// 战力指数=灰→金，活跃指数=深绿→亮绿，2026-11-02 张老师定）；悬停省份高亮 + 气泡（头部右侧当前榜名次 / 活跃人数 / 排行人数 /
+// 本周练习·录像 / 战力·活跃指数 / 领军人物），点击跳转该地区排行。
+// 2026-11-02 张老师要求：气泡加「本周练习」「本周录像」两行（初版叫 7 日，同日改本周口径）；头部名次 title 随
 // 排序列在「战力排行第x位 / 活跃排行第x位」间切换；填色跟随当前排序列。
 // 省界几何是静态数据（src/lib/area-map-geo.ts，由 scripts/build-area-map.py 生成）：
 // 无第三方地图服务、无 Key、可离线；含台湾省与南海诸岛九段线（标准地图口径）。
@@ -24,17 +24,29 @@ import {
   MAP_W,
 } from "@/lib/area-map-geo";
 
-// 填色配色：开方归一后 #4B4A41（灰）→ #FDC61D（站点金）线性插值
-const C0 = [0x4b, 0x4a, 0x41];
-const C1 = [0xfd, 0xc6, 0x1d];
+// 填色配色（随当前排序列切换，开方归一线性插值：越高越亮、越低越灰暗）：
+// 战力指数：#4B4A41（灰）→ #FDC61D（站点金）；活跃指数：#2F4A2B（深绿）→ #A6E22E（站点亮绿）
+const RAMPS: Record<"power" | "activity", [number[], number[]]> = {
+  power: [
+    [0x4b, 0x4a, 0x41],
+    [0xfd, 0xc6, 0x1d],
+  ],
+  activity: [
+    [0x2f, 0x4a, 0x2b],
+    [0xa6, 0xe2, 0x2e],
+  ],
+};
 
-function ramp(t: number): string {
+function ramp(t: number, mode: "power" | "activity"): string {
+  const [c0, c1] = RAMPS[mode];
   const k = Math.max(0, Math.min(1, t));
-  const c = C0.map((v, i) => Math.round(v + (C1[i] - v) * k));
+  const c = c0.map((v, i) => Math.round(v + (c1[i] - v) * k));
   return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
-const LEGEND = `linear-gradient(90deg,${Array.from({ length: 7 }, (_, i) => `${ramp(i / 6)} ${Math.round((i / 6) * 100)}%`).join(",")})`;
+function legendFor(mode: "power" | "activity"): string {
+  return `linear-gradient(90deg,${Array.from({ length: 7 }, (_, i) => `${ramp(i / 6, mode)} ${Math.round((i / 6) * 100)}%`).join(",")})`;
+}
 
 export interface AreaMapDatum {
   /** 数据库原值（链接参数用它，显示走 areaDisplay） */
@@ -74,6 +86,9 @@ export function AreaMap({
   const [tipArea, setTipArea] = useState<string | null>(null);
 
   const byActivity = order === "activity";
+  // 填色模式：活跃指数榜=深绿→亮绿，其余（战力指数）=灰→站点金
+  const fillMode: "power" | "activity" = byActivity ? "activity" : "power";
+  const legend = legendFor(fillMode);
   const metric = (d: AreaMapDatum) => (byActivity ? d.activity : d.power);
   const maxMetric = data.reduce((m, d) => Math.max(m, metric(d)), 0) || 1;
   const byName = new Map(data.map((d) => [d.area, d]));
@@ -109,7 +124,7 @@ export function AreaMap({
         {/* 图例（2026-10-15 张老师要求）：去掉「综合排行指数」名称，低/高改弱/强 */}
         <div className="am_legend">
           <span>弱</span>
-          <span className="lg_bar" style={{ background: LEGEND }}></span>
+          <span className="lg_bar" style={{ background: legend }}></span>
           <span>强</span>
         </div>
       </div>
@@ -133,7 +148,7 @@ export function AreaMap({
                   key={p.n}
                   className={`prov${d ? "" : " nodata"}${hover === p.n ? " hovering" : ""}`}
                   d={p.d}
-                  fill={d ? ramp(Math.sqrt(metric(d) / maxMetric)) : undefined}
+                  fill={d ? ramp(Math.sqrt(metric(d) / maxMetric), fillMode) : undefined}
                   onMouseEnter={enter(d ? p.n : null)}
                   onClick={d ? go(p.n) : undefined}
                   aria-label={`${areaDisplay(p.n)}${d ? `：第 ${d.rank} 位 · ${d.players} 人` : "：暂无成绩数据"}`}
@@ -155,7 +170,7 @@ export function AreaMap({
                   cx={m.x}
                   cy={m.y}
                   r="2.2"
-                  fill={d ? ramp(Math.sqrt(metric(d) / maxMetric)) : "#302f28"}
+                  fill={d ? ramp(Math.sqrt(metric(d) / maxMetric), fillMode) : "#302f28"}
                   stroke="rgba(248,248,242,.55)"
                   strokeWidth=".7"
                 />
@@ -204,13 +219,13 @@ export function AreaMap({
                 </b>
               </div>
               <div className="tp_row">
-                <i>7 日练习</i>
+                <i>本周练习</i>
                 <b>
                   {hot.plays7d} <em className="unit">盘</em>
                 </b>
               </div>
               <div className="tp_row">
-                <i>7 日录像</i>
+                <i>本周录像</i>
                 <b>
                   {hot.videos7d} <em className="unit">条</em>
                 </b>
