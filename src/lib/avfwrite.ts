@@ -174,10 +174,12 @@ function makeBoardSim(ctx: CanonicalizeCtx) {
     if (flags !== nums[i]) return;
     for (const a of aroundCells) if (state[a] === 0) openCell(a);
   };
-  const toggleLabel = (i: number) => {
-    if (over || i < 0 || i >= n || state[i] === 1) return;
+  /** 权威 toggleLabel：返回是否真实动了格子（flop 口径——已开格返回 false，状态机据此挂 rv） */
+  const toggleLabel = (i: number): boolean => {
+    if (over || i < 0 || i >= n || state[i] === 1) return false;
     if (state[i] === 0) state[i] = 2;
     else if (state[i] === 2) state[i] = ctx.questionMarks ? 3 : 0;
+    return true;
   };
   const cellIndex = (e: OnlineEvent): number => {
     const x = (e.x / 16) | 0, y = (e.y / 16) | 0;
@@ -191,6 +193,10 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[], ctx?: Canonicali
   const out: (OnlineEvent | null)[] = [];
   let lp = false, rp = false, sv = false;
   let lcAt = -1, rcAt = -1;
+  /* toggle 失败挂 rv 的已保留 rc（out 下标）：flop 语义里它的 rv 会被中间的 lr 清掉、
+     rr 不再补记 Right；一旦随后被 chord 折叠（lc/lr 收成 mr），rv 失去被清机会，
+     尾随 rr 就会虚增 Right++ + wastedRight++（353011 案实测 +8）——折叠时须连 rc 带配对 rr 一并移除 */
+  let rcHangAt = -1;
   const removePresses = () => {
     if (lcAt >= 0) out[lcAt] = null;
     lcAt = -1;
@@ -203,12 +209,26 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[], ctx?: Canonicali
       if (!rp) { lcAt = out.length; out.push(e); }
     } else if (e.mouse === 9) {
       rp = true;
-      if (!lp) { rcAt = out.length; out.push(e); sim?.toggleLabel(i); }
+      if (!lp) {
+        rcAt = out.length;
+        out.push(e);
+        /* 无盘面上下文＝保持旧行为（视作 toggle 成功、不挂起）；有 sim 才据实判定 */
+        const changed = sim ? sim.toggleLabel(i) : true;
+        rcHangAt = changed ? -1 : rcAt;
+      }
     } else if (e.mouse === 11) {
       lp = sv = true; // 随后的 lr 统一收成 mr
     } else if (e.mouse === 5) {
       if (rp || sv) {
         removePresses(); // 只删待定的 lc；rc 是已生效插旗，保留
+        if (rcHangAt >= 0) {
+          /* 例外：这个 rc 没插上旗（落在已开格/盘外，挂 rv）——原始流里本次 lr 已把
+             rv 清掉，flop 对整条手势计 0 Right；折叠后必须连 rc 带配对 rr 一并移除，
+             否则尾随 rr 补记一次幻影 Right+wasted（353011 案） */
+          out[rcHangAt] = null;
+          rcAt = -1;
+          rcHangAt = -1;
+        }
         out.push({ ...e, mouse: 65 });
         sim?.chord(i);
         // flop：另一键仍按住，后续可连续 chord；其闭合松开已被抑制。
@@ -237,6 +257,13 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[], ctx?: Canonicali
     } else if (e.mouse === 17) {
       if (lp) {
         removePresses(); // 左键按住时 rr=chord：同理只删待定 lc；rc（若有）保留
+        if (rcHangAt >= 0) {
+          /* 挂 rv 的 rc 同样随折叠移除（353011 案同款幻影）：canonical 流里 lc 已删、
+             状态机 lp=false，尾随 rr 会给挂起 rv 补记 Right+wasted；原始流里本次 rr
+             （lp 按住）本身清掉 rv、计 0 Right——连 rc 带配对 rr 一并移除才 parity */
+          out[rcHangAt] = null;
+          rcAt = -1;
+        }
         out.push({ ...e, mouse: 65 });
         sim?.chord(i);
         /* ⚠️ 2026-10-28 修（本局 3.64s 案）：flop 语义里 rr 除了 chord 还会
@@ -247,9 +274,11 @@ export function canonicalizeOnlineEvents(events: OnlineEvent[], ctx?: Canonicali
            chord、无副作用），恢复键态机配对完整性 */
         out.push(e);
         lcAt = -1;
+        rcHangAt = -1; // 标记已消费（该分支其余口径是独立议题，此处不动）
       } else {
         if (rcAt >= 0) out.push(e);
         rcAt = -1;
+        rcHangAt = -1; // 挂起的 rc 被本次 rr 正常闭合（裸误点，flop 照计 wasted，两侧口径一致）
       }
       rp = false;
     } else {
