@@ -34,7 +34,7 @@ const LEVEL_TAG: Record<Meta["level"], { label: string; color: string }> = {
 };
 
 // fetch 不带上传进度，用 XHR 拿 progress 事件驱动 .progress 宽度。
-// 服务端成功/限流响应都带 remaining（当日剩余额度），回传给页面配额行实时刷新
+// 服务端成功/限流响应都带 remaining（每周剩余额度权威值），用于校准本地配额推算
 function uploadOne(
   file: File,
   onProgress: (pct: number) => void
@@ -64,7 +64,7 @@ function uploadOne(
   });
 }
 
-export function UploadForm() {
+export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
   const [items, setItems] = useState<Item[]>([]);
@@ -72,6 +72,21 @@ export function UploadForm() {
   const [busy, setBusy] = useState(false);
   const [seq, setSeq] = useState<[number, number] | null>(null); // [已完成, 总数]
   const [dragOver, setDragOver] = useState(false);
+  // 每周上传额度（2026-11-02 张老师定）：服务端权威值 + 列表待传数实时推算显示值。
+  // 加文件即扣、删文件即还（queued 模型天然实现）；每传完一个用服务端返回的
+  // remaining 校准 serverRemaining，消除本地推算与服务端的漂移。
+  const [serverRemaining, setServerRemaining] = useState(initialRemaining);
+  const [quotaBubble, setQuotaBubble] = useState(false); // 超配额红色气泡
+  const bubbleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showQuotaBubble = useCallback(() => {
+    setQuotaBubble(true);
+    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    bubbleTimer.current = setTimeout(() => setQuotaBubble(false), 3000);
+  }, []);
+  useEffect(() => () => {
+    if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+  }, []);
 
   // 所有 items 变更统一走这里，保持 ref 镜像同步
   const applyItems = useCallback((next: Item[]) => {
@@ -133,6 +148,13 @@ export function UploadForm() {
         added.push({ key: `${Date.now()}-${seqRef.current++}`, file, status, progress: 0, message });
       }
       if (added.length === 0) return;
+      // 超配额提示（2026-11-02 张老师）：本次加入会使待传数超过剩余额度时弹红色气泡；
+      // 文件照常入列（服务端仍是权威闸门），不阻断操作
+      const queuedBefore = itemsRef.current.filter(
+        (i) => i.status === "pending" || i.status === "uploading"
+      ).length;
+      const addedPending = added.filter((i) => i.status === "pending").length;
+      if (queuedBefore + addedPending > serverRemaining) showQuotaBubble();
       applyItems([...itemsRef.current, ...added]);
       for (const item of added) {
         if (item.status !== "pending") continue;
@@ -140,7 +162,7 @@ export function UploadForm() {
         parseMeta(item.key, item.file, ext);
       }
     },
-    [applyItems, parseMeta]
+    [applyItems, parseMeta, serverRemaining, showQuotaBubble]
   );
 
   const update = useCallback(
@@ -181,10 +203,9 @@ export function UploadForm() {
     for (const item of targets) {
       update(item.key, { status: "uploading", progress: 0, message: "" });
       const res = await uploadOne(item.file, (pct) => update(item.key, { progress: pct }));
-      // 剩余额度实时刷新（成功与限流响应都带 remaining）
-      if (typeof res.remaining === "number") {
-        window.dispatchEvent(new CustomEvent("upload-remaining", { detail: res.remaining }));
-      }
+      // 服务端权威校准（成功与限流响应都带 remaining）；列表待传数随状态流转
+      // 自动增减，显示值无需在此额外扣减
+      if (typeof res.remaining === "number") setServerRemaining(res.remaining);
       if (res.ok) {
         // 运气盘（2026-11-02 张老师定）：低于级别 3BV 下限允许上传但成绩划线不入排行，
         // 行内提示与普通成功区分
@@ -211,6 +232,10 @@ export function UploadForm() {
   }
 
   const plusColor = dragOver ? "#a6e22e" : "#75715e";
+
+  // 列表待传数（pending + uploading）：加文件即扣、删/传完即还
+  const queued = items.filter((i) => i.status === "pending" || i.status === "uploading").length;
+  const remaining = Math.max(0, serverRemaining - queued);
 
   return (
     <div id="upload-form">
@@ -344,8 +369,52 @@ export function UploadForm() {
           </div>
         ))}
       </div>
-      {/* 开始上传常驻（无文件 / 上传中置灰）；清空列表仅在列表有文件时出现 */}
-      <p style={{ textAlign: "center" }}>
+      {/* 开始上传常驻（无文件 / 上传中置灰）；清空列表仅在列表有文件时出现。
+          左侧实时配额行（2026-11-02 张老师：从规则板块挪到按钮左） */}
+      <p
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 16,
+        }}
+      >
+        <span style={{ position: "relative", color: "#939387", fontSize: 13 }}>
+          {/* 超配额红色气泡（3 秒自动消隐） */}
+          {quotaBubble && (
+            <span
+              style={{
+                position: "absolute",
+                bottom: "calc(100% + 8px)",
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "#f92672",
+                color: "#fff",
+                fontSize: 12,
+                lineHeight: "18px",
+                padding: "4px 10px",
+                borderRadius: 4,
+                whiteSpace: "nowrap",
+                boxShadow: "0 2px 8px rgba(0,0,0,.4)",
+                zIndex: 10,
+              }}
+            >
+              你本周的录像上传额度已用完
+              <span
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  border: "5px solid transparent",
+                  borderTopColor: "#f92672",
+                }}
+              />
+            </span>
+          )}
+          您现在还能上传 <b style={{ color: "#a6e22e" }}>{remaining}</b> 个录像
+        </span>
         <button
           type="button"
           className={`button big ${!busy && uploadable.length > 0 ? "active" : "disabled"}`}
@@ -375,7 +444,6 @@ export function UploadForm() {
           <button
             type="button"
             className={`button big ${busy ? "disabled" : ""}`}
-            style={{ marginLeft: 12 }}
             disabled={busy}
             onClick={() => applyItems([])}
           >

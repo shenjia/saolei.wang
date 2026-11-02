@@ -8,7 +8,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { UploadForm } from "@/components/UploadForm";
-import { UploadQuota } from "@/components/UploadQuota";
 import { RankingRules } from "@/components/RankingRules";
 import { countWeeklyUploads, weeklyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
 
@@ -42,13 +41,12 @@ export default async function VideoUploadPage() {
           </a>{" "}
           生成的 <em>evf</em> 录像。
         </p>
-        <UploadForm />
+        <UploadForm initialRemaining={remaining} />
       </div>
       {/* 上传规则板块（2026-11-02 张老师：说明文字沉底，形态同排行页底部排行规则）；
-          实时剩余行作板块 footer，紧贴每周限额条目 */}
+          实时剩余行 14:22 改移「开始上传」按钮左（UploadForm 内），板块不再带 footer */}
       <RankingRules
         title="上传规则"
-        footer={<UploadQuota initialRemaining={remaining} />}
         items={[
           <>
             <b>先审后排</b>：上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。
