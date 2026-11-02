@@ -194,13 +194,28 @@ export default async function UserViewPage({
     getUser3bvCollection(userId),
   ]);
   // 赞助金额（2026-11-02 张老师要求）：数据统计「发表评论」行下新增「赞助金额」，
-  // 金额金色显示（legacy .table em 同款 #fdc61a）；没赞助过（合计 0）不显示整行。
-  // ID 1（站长）特殊逻辑：显示全站支出总额（donate_expense 合计），
+  // 金额金色显示（donate_amt 例外类，压过统计盒数字亮灰）；没赞助过（合计 0）不显示整行。
+  // ID 1（站长）特殊逻辑（2026-11-02 二次修订）：显示 max(−结余, 0)——
+  // 结余 = 全站赞助收入（donate 合计）− 全站支出（donate_expense 合计）；
+  // 结余为负（支出超收）取其负数为站长垫付额，结余 ≥ 0（转整）不显示。
   // 其余玩家显示本人赞助合计（donate，金额单位分）
-  const donateAgg = userId === 1
-    ? await prisma.donateExpense.aggregate({ _sum: { amount: true } })
-    : await prisma.donate.aggregate({ where: { user: BigInt(userId) }, _sum: { amount: true } });
-  const donateCents = Number(donateAgg._sum.amount ?? 0);
+  let donateCents = 0;
+  if (userId === 1) {
+    const [income, expense] = await Promise.all([
+      prisma.donate.aggregate({ _sum: { amount: true } }),
+      prisma.donateExpense.aggregate({ _sum: { amount: true } }),
+    ]);
+    donateCents = Math.max(
+      Number(expense._sum.amount ?? 0) - Number(income._sum.amount ?? 0),
+      0,
+    );
+  } else {
+    const agg = await prisma.donate.aggregate({
+      where: { user: BigInt(userId) },
+      _sum: { amount: true },
+    });
+    donateCents = Number(agg._sum.amount ?? 0);
+  }
   // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
   const king = await getThunderKingId();
   const feed: NewsFeedItem[] = news.map((n) => ({
@@ -487,7 +502,7 @@ export default async function UserViewPage({
                   <em>{activity.comments}</em>
                 </StatRow>
                 {/* 2026-11-02 张老师要求：发表评论下新增「赞助金额」（金色）；
-                    没赞助过不显示；ID 1 显示全站支出总额（查询见上方 donateAgg） */}
+                    没赞助过不显示；ID 1 显示 max(−结余, 0)（查询见上方 donateCents） */}
                 {donateCents > 0 && (
                   <StatRow label="赞助金额">
                     {/* 点击跳赞助页 /page/donate（2026-11-02 张老师要求）；
