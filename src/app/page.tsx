@@ -145,6 +145,7 @@ export default async function HomePage() {
           net={practice.today}
           users={practice.todayUsers}
           trendNet={practice.trend}
+          trendNetEstimate={practice.todayEst}
           trendMine={practice.mineTrend}
           logged={!!session}
         />
@@ -222,6 +223,7 @@ export default async function HomePage() {
           net={practice.today}
           users={practice.todayUsers}
           trendNet={practice.trend}
+          trendNetEstimate={practice.todayEst}
           trendMine={practice.mineTrend}
           logged={!!session}
         />

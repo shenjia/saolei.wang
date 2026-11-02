@@ -511,16 +511,19 @@ export function Donut({
 
 // ---------- 迷你走势线（KPI 卡内嵌） ----------
 
-export function Sparkline({ values, color = "#a6e22e", width = 96, height = 26 }: {
+export function Sparkline({ values, color = "#a6e22e", width = 96, height = 26, estimate }: {
   values: number[];
   color?: string;
   width?: number;
   height?: number;
+  /** 末点（今日）预估全天值（2026-11-02）：有值时末点按预估落笔，趋势线不被未满一天的真实值拽出假跌 */
+  estimate?: number | null;
 }) {
   if (values.length < 2) return null;
-  const max = Math.max(...values, 1);
-  const step = width / (values.length - 1);
-  const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${i * step},${height - (v / max) * (height - 3) - 1.5}`).join(" ");
+  const plot = estimate != null && values.length > 1 ? [...values.slice(0, -1), estimate] : values;
+  const max = Math.max(...plot, 1);
+  const step = width / (plot.length - 1);
+  const d = plot.map((v, i) => `${i === 0 ? "M" : "L"}${i * step},${height - (v / max) * (height - 3) - 1.5}`).join(" ");
   return (
     <svg viewBox={`0 0 ${width} ${height}`} style={{ width, height }} aria-hidden="true">
       <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.85" />

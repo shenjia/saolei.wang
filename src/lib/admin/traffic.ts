@@ -92,6 +92,9 @@ export interface TrafficOverview {
     today: number; todayUsers: number;
     yesterday: number; yesterdayUsers: number;
     lastWeek: number;
+    /** 今日预估全天局数（2026-11-02）：与同比同构的线性外推（today × 上周同日全天 / 上周同时段折算值）；
+     *  practice_daily 是日汇总无逐盘时刻，只能线性折算；null = 上周同日无数据 */
+    todayEst: number | null;
     d30: number; d30Users: number;
     trend: number[]; trendUsers: number[];
     todayLevels: { beg: number; int: number; exp: number };
@@ -243,6 +246,12 @@ async function aggregate(): Promise<TrafficOverview> {
   // 同比折算：上周同日全天 × 今日已过时长占比（now 恒 ≥ today0，比例 ∈ (0,1]）
   const lastWeekFull = practiceLastWeekMap.get(lastWeekIdx) ?? 0;
   practiceLastWeek = Math.round(lastWeekFull * ((now - today0) / 86400));
+  // 练习预估全天（2026-11-02）：与同比同构——today × 上周同日全天 / 上周同时段折算值；
+  // 折算基数为线性，外推也恒为线性（today × 86400/已过秒数），口径与 foot 同比一致
+  const practiceTodayEst =
+    lastWeekFull > 0 && practiceLastWeek > 0
+      ? Math.max(practiceToday, Math.round((practiceToday * lastWeekFull) / practiceLastWeek))
+      : null;
 
   // 按时间序处理（流失统计取会话末页依赖顺序）
   const sorted = [...rows].sort((a, b) => N(a.createTime) - N(b.createTime));
@@ -529,6 +538,7 @@ async function aggregate(): Promise<TrafficOverview> {
       yesterday: practiceYesterday,
       yesterdayUsers: yesterdayPracticeUsers.size,
       lastWeek: practiceLastWeek,
+      todayEst: practiceTodayEst,
       d30: practiceSeries.reduce((a, b) => a + b, 0),
       d30Users: d30PracticeUsers.size,
       trend: practiceSeries,
@@ -541,7 +551,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v12"],
+  ["admin-traffic", "v13"],
   { revalidate: 300 }
 );
 
@@ -553,6 +563,8 @@ export interface ApiUsageOverview {
   today: number;
   /** 上周同一日同时段（小时桶精确对齐，同比基数） */
   lastWeek: number;
+  /** 今日预估全天（2026-11-02）：今日至今 × 上周同日全天 / 上周同日同时段；null = 上周同时段无调用 */
+  todayEst: number | null;
   /** 近 30 天合计 */
   d30: number;
   /** 近 30 天分日趋势（与 trend.dates 对齐） */
@@ -586,13 +598,20 @@ async function aggregateApiUsage(): Promise<ApiUsageOverview> {
   const nowH = todayH + Math.floor((now - today0) / 3600);
   let lastWeek = 0;
   for (let h = todayH - 168; h <= nowH - 168; h++) lastWeek += hourCalls.get(h) ?? 0;
+  // 今日预估全天（2026-11-02）：小时桶口径与同比一致，外推同构
+  let lastWeekFullDay = 0;
+  for (let h = todayH - 168; h < todayH - 168 + 24; h++) lastWeekFullDay += hourCalls.get(h) ?? 0;
   const todayIdx = Math.floor((today0 + 28800) / 86400);
   const trend: number[] = [];
   for (let i = 29; i >= 0; i--) trend.push(dayCalls.get(todayIdx - i) ?? 0);
+  const today = trend[29];
+  const todayEst =
+    lastWeek > 0 ? Math.max(today, Math.round((today * lastWeekFullDay) / lastWeek)) : null;
   return {
     now,
     today: trend[29],
     lastWeek,
+    todayEst,
     d30: trend.reduce((a, b) => a + b, 0),
     trend,
     todayKeys: todayKeys.size,
@@ -600,7 +619,7 @@ async function aggregateApiUsage(): Promise<ApiUsageOverview> {
 }
 
 /** 缓存版（同铁律） */
-export const getApiUsage = unstable_cache(aggregateApiUsage, ["admin-api-usage", "v1"], {
+export const getApiUsage = unstable_cache(aggregateApiUsage, ["admin-api-usage", "v2"], {
   revalidate: 300,
 });
 

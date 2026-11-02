@@ -27,6 +27,9 @@ export interface PracticeToday {
   mine: number;
   /** 近 30 天全网尝试盘数走势（+08:00 切天，末位=今日已被实时数覆盖） */
   trend: number[];
+  /** 今日预估全天盘数（2026-11-02 张老师定）：practice_daily 是日汇总无逐盘时刻，
+   *  与后台同比口径同构的线性外推——today × 86400/今日已过秒数（不低于已发生值） */
+  todayEst: number;
   /** 近 30 天全网完成盘数走势（与 trend 同轴对齐） */
   trendWon: number[];
   /** 近 30 天我的尝试盘数走势（登录才有；末位=今日实时数。绿线数据源） */
@@ -118,6 +121,9 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
   const todayUsers = N(usersAgg[0]?.c);
   const mine = uid && mineRow ? mineRow.plays : 0;
   const mineWon = uid && mineRow ? mineRow.wins : 0;
+  // 今日预估全天（2026-11-02）：首页练习折线今日点取预估，免得未满一天的数据画出假跌
+  const elapsed = Math.max(1, Math.floor(Date.now() / 1000) - dayStart(0));
+  const todayEst = Math.max(today, Math.round((today * 86400) / elapsed));
   return {
     today,
     todayWon,
@@ -126,6 +132,7 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
     mineWon,
     trend: [...trend30.p, today],
     trendWon: [...trend30.w, todayWon],
+    todayEst,
     mineTrend: uid ? [...mineTrendBase, mine] : [],
   };
 }

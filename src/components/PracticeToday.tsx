@@ -23,8 +23,20 @@ const YELLOW = "#e6db74"; // 站内标准黄（后台趋势「新玩家」序列
 
 /** 双线叠加图：黄=全网按自身最大值顶格归一；绿=我同样归一但峰值封顶 0.618 倍绘图高——
  *  量级悬殊时两条线靠高度差拉开，不再因「各画各的顶格」而重合 */
-function DoubleLine({ mine, net, height }: { mine: number[]; net: number[]; height: number }) {
+function DoubleLine({
+  mine,
+  net,
+  netEstimate,
+  height,
+}: {
+  mine: number[];
+  net: number[];
+  /** 全网线末点（今日）预估全天值（2026-11-02）：有值时末点按预估落笔 */
+  netEstimate?: number | null;
+  height: number;
+}) {
   if (mine.length < 2 || net.length < 2) return null;
+  const netPlot = netEstimate != null && net.length > 1 ? [...net.slice(0, -1), netEstimate] : net;
   const path = (values: number[], top: number): string => {
     const max = Math.max(...values, 1);
     const step = 100 / (values.length - 1);
@@ -35,7 +47,7 @@ function DoubleLine({ mine, net, height }: { mine: number[]; net: number[]; heig
   return (
     <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height }} aria-hidden="true">
       {/* 黄（全网）画在下层：参与人数/大盘量级通常高于个人 */}
-      <path d={path(net, 1)} fill="none" stroke={YELLOW} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
+      <path d={path(netPlot, 1)} fill="none" stroke={YELLOW} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
       <path d={path(mine, 0.618)} fill="none" stroke={GREEN} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
     </svg>
   );
@@ -64,6 +76,7 @@ export function PracticeToday({
   net,
   users,
   trendNet,
+  trendNetEstimate,
   trendMine,
   logged,
 }: {
@@ -85,6 +98,8 @@ export function PracticeToday({
   users: number;
   /** 近 30 天全网尝试走势（末位=今日） */
   trendNet: number[];
+  /** 全网线末点（今日）预估全天值（2026-11-02）：仅折线取预估，文字数字仍是真实值 */
+  trendNetEstimate?: number | null;
   /** 近 30 天我的尝试走势（登录=practice_log 分日；未登录由 localStorage 趋势替代） */
   trendMine: number[];
   /** 登录态：true=信任服务端；false=读 localStorage */
@@ -161,7 +176,7 @@ export function PracticeToday({
         <b className="netb">{net}</b>局{rNet !== null && <span className="rate">胜率 <b className="ratev">{rNet}%</b></span>}
       </p>
       <div className="pt_chart">
-        <DoubleLine mine={myTrend} net={trendNet} height={38} />
+        <DoubleLine mine={myTrend} net={trendNet} netEstimate={trendNetEstimate} height={38} />
       </div>
     </div>
   );

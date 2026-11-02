@@ -40,6 +40,7 @@ export function Kpi({
   foot,
   tone = "green",
   trend,
+  trendEstimate,
   href,
 }: {
   label: string;
@@ -50,6 +51,8 @@ export function Kpi({
   tone?: "green" | "yellow" | "orange" | "cyan" | "purple" | "red" | "grey";
   /** 近 30 天走势（有则右下角画迷你折线） */
   trend?: number[];
+  /** 走势末点（今日）预估全天值（2026-11-02）：卡面数字仍是真实值，仅趋势线末点取预估 */
+  trendEstimate?: number | null;
   href?: string;
 }) {
   const body = (
@@ -62,7 +65,7 @@ export function Kpi({
       <div className="foot" style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ flex: 1 }}>{foot}</span>
         {trend && trend.length > 1 && (
-          <Sparkline values={trend} color={TONE_COLORS[tone]} />
+          <Sparkline values={trend} color={TONE_COLORS[tone]} estimate={trendEstimate} />
         )}
       </div>
     </>

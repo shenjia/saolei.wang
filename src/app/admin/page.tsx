@@ -128,6 +128,7 @@ export default async function AdminDashboard() {
           value={traffic.today.pv}
           tone="cyan"
           trend={traffic.trend.pv}
+          trendEstimate={traffic.todayEst.pv}
           foot={cmpFoot(traffic.today.pv, traffic.lastWeek.pv)}
         />
         <Kpi
@@ -135,6 +136,7 @@ export default async function AdminDashboard() {
           value={traffic.today.uv}
           tone="purple"
           trend={traffic.trend.uv}
+          trendEstimate={traffic.todayEst.uv}
           foot={cmpFoot(traffic.today.uv, traffic.lastWeek.uv)}
         />
         <Kpi
@@ -148,6 +150,7 @@ export default async function AdminDashboard() {
           }
           tone="cyan"
           trend={traffic.practice.trend}
+          trendEstimate={traffic.practice.todayEst}
           foot={
             <>
               {cmpFoot(traffic.practice.today, traffic.practice.lastWeek)}
@@ -180,6 +183,7 @@ export default async function AdminDashboard() {
           value={ov.userTotal}
           tone="green"
           trend={trend.series.users}
+          trendEstimate={trend.estimates.users}
           href="/admin/users"
           foot={
             <>
@@ -206,6 +210,7 @@ export default async function AdminDashboard() {
           value={ov.videoTotal}
           tone="yellow"
           trend={trend.series.videos}
+          trendEstimate={trend.estimates.videos}
           href="/admin/videos"
           foot={
             <>
@@ -221,6 +226,7 @@ export default async function AdminDashboard() {
           value={api.today}
           tone="grey"
           trend={api.trend}
+          trendEstimate={api.todayEst}
           foot={
             <>
               {cmpFoot(api.today, api.lastWeek)}
