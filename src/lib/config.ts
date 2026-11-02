@@ -536,8 +536,8 @@ export type AreaOrder = "power" | "players" | "active" | "best" | "activity";
 
 export const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
   { key: "best", label: "领军人物" },
-  { key: "power", label: "战力指数" },
   { key: "activity", label: "活跃指数" },
+  { key: "power", label: "战力指数" },
   { key: "players", label: "排行人数" },
   { key: "active", label: "活跃人数" },
 ];

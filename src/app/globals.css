@@ -5091,6 +5091,11 @@ body #page.ranking_old .ranking_box {
 .area_table td.num.current {
   color: #fdc61d;
 }
+/* 活跃指数命中列整列绿色（2026-11-02 张老师要求；战力指数仍金色） */
+.area_table th a.current.act_cur,
+.area_table td.num.current.act_cur {
+  color: #a6e22e;
+}
 
 /* ---------- 地区榜 · 交互式中国地图（2026-10-13 张老师需求） ----------
    省界为纯静态 SVG（无第三方地图服务 / 无 Key，含台湾省与南海诸岛九段线，标准地图口径），

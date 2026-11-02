@@ -134,7 +134,7 @@ export function AreaRanking({
                     <th key={o.key}>
                       <Link
                         href={buildUrl("/area", { order: o.key === "activity" ? undefined : o.key })}
-                        className={o.key === order ? "current" : ""}
+                        className={o.key === order ? (o.key === "activity" ? "current act_cur" : "current") : ""}
                       >
                         {o.label}
                       </Link>
@@ -167,8 +167,8 @@ export function AreaRanking({
                       </Link>
                       <TitleBadge title={titles[startRow + i] ?? ""} classic={classics?.[startRow + i]} link />
                     </td>
+                    <td className={order === "activity" ? "num current act_cur" : "num"}>{areaActivity(r.activity)}</td>
                     <td className={order === "power" ? "num current" : "num"}>{areaPower(r.power)}</td>
-                    <td className={order === "activity" ? "num current" : "num"}>{areaActivity(r.activity)}</td>
                   </tr>
                 ))}
                 {rows.length === 0 && (

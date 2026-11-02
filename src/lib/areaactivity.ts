@@ -1,9 +1,8 @@
 // 地区活跃指数（2026-11-02 张老师需求）：area_activity 落盘表的唯一写入方。
 //
-// 权重口径（张老师未定具体权重，取可解释的整数档；调整只改本常量、重跑刷新脚本即生效）：
-//   活跃指数 = 活跃人数 × 10 + 近 7 日练习盘数 × 0.2 + 近 7 日上传录像数 × 10
-//   —— 1 个活跃用户 ≈ 5 盘练习 ≈ 1 条录像 的量级折算：练习盘数基数大（单人一天可上百盘）
-//      压到 0.2 权重防止刷盘淹没人数信号；录像门槛高与「人」同权。
+// 权重口径（2026-11-02 二轮张老师定稿）：
+//   活跃指数 = 活跃人数 × 100 + 近 7 日练习盘数 + 近 7 日上传录像数
+//   调整只改本常量、重跑刷新脚本即生效。
 //
 // 三源口径（均限定 u.status=0、有效单地区 area<>'' 且不含 &）：
 //   活跃人数 = 近 30 天登录过的人数（与地区榜「活跃人数」列同口径）
@@ -16,7 +15,7 @@
 
 import { prisma } from "./db";
 
-export const ACTIVITY_WEIGHTS = { active: 10, plays: 0.2, videos: 10 } as const;
+export const ACTIVITY_WEIGHTS = { active: 100, plays: 1, videos: 1 } as const;
 
 export function activityScore(activeUsers: number, plays7d: number, videos7d: number): number {
   return Math.round(

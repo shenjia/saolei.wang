@@ -36,9 +36,9 @@ export function areaPower(power: number): string {
   return power >= 10000 ? `${(power / 10000).toFixed(1)}万` : String(power);
 }
 
-/** 地区榜「活跃指数」显示：量级与战力指数同档，复用万位折算 */
+/** 地区榜「活跃指数」显示：< 10 万显示完整数字，≥ 10 万按 xx.x万（2026-11-02 张老师要求） */
 export function areaActivity(score: number): string {
-  return areaPower(score);
+  return score >= 100000 ? `${(score / 10000).toFixed(1)}万` : String(score);
 }
 
 /** 老 ASP 站入库时做的一次 HTML 转义解码（2026-10-15：修 bbs/5264 评论显示 &gt;.&lt; 字面量）。
