@@ -81,6 +81,9 @@ interface ReviewVideo {
   noflag: boolean;
   board3bv: number;
   realTime: number;
+  /** 运气盘（2026-11-02 张老师定）：上传时低于级别 3BV 下限，不记成绩——
+   *  过审时不入 video_scores、user_scores、名次、纪录动态、STNB 榜（video_info.no_record） */
+  noRecord: boolean;
 }
 
 /** VideoScores::update —— 把录像写入对应级别成绩表 */
@@ -401,6 +404,7 @@ async function loadReviewVideo(tx: Tx, id: number): Promise<ReviewVideo | null> 
     noflag: info.noflag,
     board3bv: info.board3bv,
     realTime: info.realTime,
+    noRecord: info.noRecord,
   };
 }
 
@@ -507,8 +511,12 @@ export async function reviewVideo(
       if (recNewsDel.count > 0) {
         await syncRecordNewsChain(tx, rv.user, rv.level, { expTime: removed.original.expTime ?? 0 });
       }
-    } else if (status === VIDEO_STATUS.REVIEWED) {
-      // VideoScores::insertVideo → flag 榜（含动态），NF 录像同时入 NF 榜（不发动态）
+    } else if (status === VIDEO_STATUS.REVIEWED && !rv.noRecord) {
+      // VideoScores::insertVideo → flag 榜（含动态），NF 录像同时入 NF 榜（不发动态）。
+      // 运气盘（noRecord，2026-11-02 张老师定）整个分支跳过：不入 video_scores_*/
+      // user_scores/名次落盘/STNB 榜/破纪录/入伍动态/收集区间——录像本体照常过审展示。
+      //（收集区间扩展随分支跳过：运气盘 bv 恒被钳在级别下限，对已有行是 no-op）
+      // 屏蔽分支无需特判：运气盘从无成绩行，deleteMany/OnRemove 天然 no-op
       await upsertVideoScores(tx, rv, false);
       const { original, updated } = await userScoresOnInsert(tx, rv, false);
       // 名次落盘（2026-10-22 张老师定）：破纪录 sum_time 变小 / 首次入伍进榜，增量搬位
@@ -579,7 +587,8 @@ export async function reviewVideo(
       // level_3bv_range 上下限时扩边，只扩不缩（屏蔽不回缩）；
       // INSERT ... ON DUPLICATE KEY UPDATE 幂等——行不存在时顺便播种。
       // 2026-10-14 张老师：下限按现行排行规则钳到 LEVEL_MIN_3BV（初 2 / 中 30 / 高 100），
-      // 低于下限的 3BV 不拉低统计区间（新上传已被上传校验拦住，此处防旧数据路径）
+      // 低于下限的 3BV 不拉低统计区间（2026-11-02 起新上传不再拒收低 3BV 盘，
+      // 但运气盘整个跳过本分支，本钳制只防旧数据路径）
       const bv = Math.max(rv.board3bv, LEVEL_MIN_3BV[rv.level as VideoLevel]);
       await tx.$executeRaw`
         INSERT INTO level_3bv_range (level, min_3bv, max_3bv, create_time, update_time)

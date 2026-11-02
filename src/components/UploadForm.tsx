@@ -38,7 +38,7 @@ const LEVEL_TAG: Record<Meta["level"], { label: string; color: string }> = {
 function uploadOne(
   file: File,
   onProgress: (pct: number) => void
-): Promise<{ ok: boolean; error?: string; remaining?: number }> {
+): Promise<{ ok: boolean; error?: string; remaining?: number; noRecord?: boolean }> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/video/upload");
@@ -46,14 +46,15 @@ function uploadOne(
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => {
-      let data: { ok?: boolean; error?: string; remaining?: number } = {};
+      let data: { ok?: boolean; error?: string; remaining?: number; noRecord?: boolean } = {};
       try {
         data = JSON.parse(xhr.responseText);
       } catch {
         // 非 JSON 响应按失败处理
       }
       const remaining = typeof data.remaining === "number" ? data.remaining : undefined;
-      if (xhr.status >= 200 && xhr.status < 300 && data.ok) resolve({ ok: true, remaining });
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok)
+        resolve({ ok: true, remaining, noRecord: data.noRecord === true });
       else resolve({ ok: false, error: data.error ?? `上传失败（HTTP ${xhr.status}）`, remaining });
     };
     xhr.onerror = () => resolve({ ok: false, error: "网络错误，上传中断" });
@@ -185,7 +186,15 @@ export function UploadForm() {
         window.dispatchEvent(new CustomEvent("upload-remaining", { detail: res.remaining }));
       }
       if (res.ok) {
-        update(item.key, { status: "success", progress: 100, message: "上传成功，等待审核" });
+        // 运气盘（2026-11-02 张老师定）：低于级别 3BV 下限允许上传但成绩划线不入排行，
+        // 行内提示与普通成功区分
+        update(item.key, {
+          status: "success",
+          progress: 100,
+          message: res.noRecord
+            ? "上传成功，等待审核（3BV 低于级别下限，成绩不计入排行）"
+            : "上传成功，等待审核",
+        });
         okCount++;
       } else update(item.key, { status: "error", message: res.error ?? "上传失败" });
       done++;

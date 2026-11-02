@@ -151,8 +151,10 @@ export async function uploadVideo(
     if (outcome === "incomplete") return fail("该录像未完成");
   }
   const level = parsed.level as VideoLevel;
-  const minBbbv = LEVEL_MIN_3BV[level];
-  if ((parsed.bbbv ?? 0) < minBbbv) return fail(`该录像的3BV小于${minBbbv}`);
+  /* 运气盘改口径（2026-11-02 张老师定）：低于级别下限（初 2/中 30/高 100）不再拒收，
+     改打 video_info.no_record=1——允许上传但所有成绩划掉、不入排行/纪录/聚合/本BV标记，
+     录像本体照常展示。历史录像不受追溯（库内标记制，非现算） */
+  const noRecord = (parsed.bbbv ?? 0) < LEVEL_MIN_3BV[level];
 
   /* 封面含旗串（2026-10-31 张老师需求：封面显示玩家标过的雷，F/X 等长编码进
      board）：重放事件流取终态旗位（flop 状态机，单盘 ~2.4ms）。NF 局旗位图
@@ -189,7 +191,7 @@ export async function uploadVideo(
   }
 
   // 本BV标记判定结果（事务内计算；提升到外层供响应透传——练习页标题行
-  // 统计实时自增用，2026-10-28 21:45）
+  // 统计实时自增用，2026-10-28 21:45）。运气盘（noRecord）不参与：恒 0
   let firstBv = 0;
   let pbBv = 0;
   let videoId = 0;
@@ -204,20 +206,23 @@ export async function uploadVideo(
       const snap = await userTitleSnapshot(session.uid, tx);
       // 本BV标记（2026-10-28 张老师需求，口径与 scripts/backfill-bv-marks.sql 完全同源）：
       // first_bv=本玩家首次完成本 BV（同 user+level+board_3bv 此前无 status<>0 录像）；
-      // pb_bv=打破本BV最好成绩（同池已有且本盘严格更快；首盘无旧纪录可破只记 first_bv）
-      const prevAgg = await tx.$queryRaw<{ c: bigint; mt: number | null }[]>`
-        SELECT COUNT(*) AS c, MIN(vi.real_time) AS mt
-        FROM video v
-        JOIN video_info vi ON vi.id = v.id
-        WHERE v.\`user\` = ${BigInt(session.uid)}
-          AND v.level = ${level}
-          AND vi.board_3bv = ${parsed.bbbv ?? 0}
-          AND v.status <> ${VIDEO_STATUS.BANNED}`;
-      const prevCount = Number(prevAgg[0]?.c ?? 0);
-      const prevBest = prevAgg[0]?.mt ?? null;
-      firstBv = prevCount === 0 ? 1 : 0;
-      pbBv =
-        prevCount > 0 && prevBest !== null && parsed.timeMs > 0 && parsed.timeMs < prevBest ? 1 : 0;
+      // pb_bv=打破本BV最好成绩（同池已有且本盘严格更快；首盘无旧纪录可破只记 first_bv）。
+      // 运气盘（noRecord）跳过判定与查询——不入收集/PB 体系（2026-11-02）
+      if (!noRecord) {
+        const prevAgg = await tx.$queryRaw<{ c: bigint; mt: number | null }[]>`
+          SELECT COUNT(*) AS c, MIN(vi.real_time) AS mt
+          FROM video v
+          JOIN video_info vi ON vi.id = v.id
+          WHERE v.\`user\` = ${BigInt(session.uid)}
+            AND v.level = ${level}
+            AND vi.board_3bv = ${parsed.bbbv ?? 0}
+            AND v.status <> ${VIDEO_STATUS.BANNED}`;
+        const prevCount = Number(prevAgg[0]?.c ?? 0);
+        const prevBest = prevAgg[0]?.mt ?? null;
+        firstBv = prevCount === 0 ? 1 : 0;
+        pbBv =
+          prevCount > 0 && prevBest !== null && parsed.timeMs > 0 && parsed.timeMs < prevBest ? 1 : 0;
+      }
       const video = await tx.video.create({
         data: {
           level,
@@ -243,6 +248,8 @@ export async function uploadVideo(
           board: boardWithFlags,
           board3bv: parsed.bbbv ?? 0,
           realTime: parsed.timeMs,
+          // 运气盘标记（2026-11-02 张老师定）：低于级别 3BV 下限允许上传但不记成绩
+          noRecord,
           // 排名局录像签名（2026-10-27 张老师要求）：对实际存储字节算 HMAC 存库，
           // 之后分拣/巡检可随时比对——文件被篡改即验出。普通上传为 null
           ...(options?.rankedInternal
@@ -296,5 +303,6 @@ export async function uploadVideo(
   }
   // 剩余额度（回传给上传页实时刷新）：countWeeklyUploads 此刻已含刚落的这条
   const remaining = Math.max(0, weeklyLimit - (await countWeeklyUploads(session.uid)));
-  return NextResponse.json({ ok: true, firstBv, pbBv, remaining });
+  // noRecord 透传（2026-11-02）：运气盘上传成功但成绩划线，前端可提示
+  return NextResponse.json({ ok: true, firstBv, pbBv, noRecord, remaining });
 }

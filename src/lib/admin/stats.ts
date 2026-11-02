@@ -398,7 +398,7 @@ export async function getAnomalies(): Promise<Anomalies> {
     ),
     prisma.$queryRawUnsafe<{ c: bigint }[]>(
       `SELECT COUNT(*) c FROM video v JOIN video_info vi ON vi.id = v.id
-       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND (
+       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.no_record = 0 AND (
          (v.level = 'beg' AND vi.board_3bv < 2) OR
          (v.level = 'int' AND vi.board_3bv < 30) OR
          (v.level = 'exp' AND vi.board_3bv < 100))`
@@ -441,6 +441,7 @@ export async function getRecordCurve(
               ${agg}(${expr}) OVER (ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) run
        FROM video v JOIN video_info vi ON vi.id = v.id
        WHERE v.level = ? AND v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0
+         AND vi.no_record = 0
          ${order === "3bvs" ? `AND vi.board_3bv >= ${MIN_3BV_FOR_3BVS[level]}` : ""}
      ) t WHERE val ${cmp} run ORDER BY ct`,
     level

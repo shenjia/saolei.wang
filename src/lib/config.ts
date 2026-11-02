@@ -392,6 +392,11 @@ export const MIN_3BV_FOR_3BVS: Record<VideoLevel, number> = { beg: 10, int: 4, e
 // 录像详情页与排行表共用同一条文案，改文案只改这里。
 export const INVALID_3BVS_TIP = "因为3BV太小，运气成分过高，该3BV/s成绩不被承认";
 
+// 运气盘（video_info.no_record=1，2026-11-02 张老师定）时间成绩划线气泡：
+// 低于级别下限（初 2/中 30/高 100）的录像允许上传但所有成绩都不被承认，与
+// INVALID_3BVS_TIP / INVALID_STNB_TIP 同款机制，只做 hover 说明。
+export const INVALID_TIME_TIP = "因为3BV太小，运气成分过高，该成绩不被承认";
+
 // 无效 STNB 的 hover 气泡文案（2026-10-22 张老师定：初级 3BV<10 的 STNB 同 3BV/s
 // 划线不承认——运气盘虚高值如 3BV=2 的 4316 不该当真成绩展示；与 INVALID_3BVS_TIP 同款）。
 export const INVALID_STNB_TIP = "因为3BV太小，运气成分过高，该STNB成绩不被承认";
@@ -431,7 +436,9 @@ export const WECHAT_OAUTH_ENABLED = false;
 // 任一 provider 开放即视为第三方登录开放（认领/注册等流程共用此开关）
 export const OAUTH_ENABLED = QQ_OAUTH_ENABLED || WECHAT_OAUTH_ENABLED;
 
-// 上传录像各级别最小 3BV（移植 VideoConfig::$level_min_3bv）
+// 各级别 3BV「不记成绩」下限（2026-11-02 张老师定，语义变更：原为上传拒收线——
+// 低于限界的录像现在允许上传，只打 video_info.no_record=1 标记，所有成绩划掉、
+// 不入排行/纪录/聚合；录像本体照常展示。历史录像不受追溯，如 76668 高级 95BV）
 export const LEVEL_MIN_3BV: Record<VideoLevel, number> = { beg: 2, int: 30, exp: 100 };
 
 // 各级别 3BV 理论上限（2026-10-22 张老师定：初级棋盘 8×8、10 雷 → 非雷格 54，

@@ -287,6 +287,12 @@ model VideoInfo {
   // 2026-10-27 排名录像服务端签名（张老师要求）：排名局 evf 的 HMAC-SHA256（hex 64 位），
   // 密钥只在服务端（lib/evf-sign.ts 派生自 AUTH_SECRET）——文件被篡改即可验出。普通上传为 null
   evfSig     String? @map("evf_sig") @db.VarChar(64)
+  // no_record=1：运气盘/不记成绩（2026-11-02 张老师定）。上传时 board_3bv 低于该级别
+  // 下限（LEVEL_MIN_3BV：初 2/中 30/高 100）不再拒收，改打本标记——所有成绩（时间/
+  // 3BV/s/STNB）划掉展示，不入 video_scores_*/user_scores/排行/纪录链/本BV标记；
+  // 录像本体照常展示。只在上传时刻判定落列——历史录像恒 0 不受追溯
+  // （如 76668 高级 95BV 老盘成绩照旧有效）
+  noRecord   Boolean @default(false) @map("no_record")
   createTime BigInt @default(0) @map("create_time") @db.BigInt
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 

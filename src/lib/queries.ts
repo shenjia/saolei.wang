@@ -123,6 +123,9 @@ export interface VideoListItem {
   firstBv: boolean;
   /** 本BV标记：打破本 BV 个人最好成绩（3BV 数后下标感叹号角标） */
   pbBv: boolean;
+  /** 运气盘/不记成绩（2026-11-02 张老师定）：上传时低于级别 3BV 下限（初 2/中 30/高 100），
+   *  所有成绩（时间/3BV/s/STNB）划掉展示、不入排行/纪录/聚合；历史录像恒 false */
+  noRecord: boolean;
 }
 
 // ---------- 通用 ----------
@@ -1080,6 +1083,10 @@ function videoListConds(opts: {
     );
   if (order === "comments") conds.push(`vs.comments > 0`);
   if (order === "clicks") conds.push(`vs.clicks > 0`);
+  // 运气盘不按成绩排序（2026-11-02 张老师定）：no_record=1 的盘所有成绩划线无效，
+  // 按时间/3BV/s/STNB 排序的列表不出现（3BV 精确搜索/上传时间序照常可见）
+  if (order === "time" || order === "3bvs" || order === "stnb")
+    conds.push(`vi.no_record = 0`);
   return { joins, where: conds.length ? `WHERE ${conds.join(" AND ")}` : "", selectId };
 }
 
@@ -1097,7 +1104,9 @@ function videoListConds(opts: {
  *  v9（2026-10-23：待审放行进前台，过滤放宽 v.status<>0——旧缓存计数不含
  *  待审行，必须失效）；
  *  v10（2026-10-25：FORCE INDEX 收窄到无 author 路径 + ioe 排序改反扫 ioe 索引，
- *  查询计划形态变——旧缓存计数值仍正确但为彻底失效重来） */
+ *  查询计划形态变——旧缓存计数值仍正确但为彻底失效重来）；
+ *  v11（2026-11-02：运气盘 no_record=1 不进按成绩排序的列表——旧缓存计数含
+ *  运气盘行（当前为 0 行，防患未然），必须失效重来） */
 const getVideoListJoinCount = unstable_cache(
   async (
     level: string,
@@ -1119,7 +1128,7 @@ const getVideoListJoinCount = unstable_cache(
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v10"],
+  ["video-list-join-count", "v11"],
   { revalidate: 60 }
 );
 
@@ -1662,6 +1671,7 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       stnb: m ? m.stnb : null,
       firstBv: v.firstBv === 1,
       pbBv: v.pbBv === 1,
+      noRecord: info.noRecord,
     });
   }
   return result;
@@ -1734,6 +1744,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     stnb: metrics ? metrics.stnb : null,
     firstBv: v.firstBv === 1,
     pbBv: v.pbBv === 1,
+    noRecord: info.noRecord,
   };
 }
 
@@ -3247,7 +3258,7 @@ const fetchStnbCompact = unstable_cache(
         FROM video_metrics m
           JOIN video v ON v.id = m.id
           JOIN video_info vi ON vi.id = m.id
-        WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
+        WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0 AND vi.no_record = 0
           ${nf ? Prisma.sql`AND vi.noflag = 1` : Prisma.empty}
           AND vi.board_3bv >= CASE v.level
             WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg}
@@ -3277,7 +3288,7 @@ const fetchStnbCompact = unstable_cache(
       ] satisfies StnbCompactRow;
     });
   },
-  ["stnb-collection-v4"],
+  ["stnb-collection-v5"],
   { revalidate: 3600, tags: ["stnb-collection"] }
 );
 

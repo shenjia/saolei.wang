@@ -53,11 +53,11 @@ export async function GET(req: Request) {
   const rows = await prisma.$queryRaw<{
     id: bigint; level: string; user: bigint; hash: string; status: number;
     create_time: bigint; review_time: bigint | null;
-    real_time: number; board_3bv: number; noflag: number;
+    real_time: number; board_3bv: number; noflag: number; no_record: number;
     software: string; version: string;
   }[]>`
     SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
-           vi.real_time, vi.board_3bv, vi.noflag, vi.software, vi.version
+           vi.real_time, vi.board_3bv, vi.noflag, vi.no_record, vi.software, vi.version
     FROM video v JOIN video_info vi ON vi.id = v.id
     ${where}
     ORDER BY v.id ASC LIMIT ${size}`;
@@ -68,7 +68,10 @@ export async function GET(req: Request) {
     const brief = authors.get(Number(r.user));
     const bv = Number(r.board_3bv);
     const rt = Number(r.real_time);
-    const sign = rt > 0 && bv >= MIN_3BV_FOR_3BVS[r.level as VideoLevel] ? 1 : -1;
+    // 运气盘（no_record=1，2026-11-02）与 3BV 低于 MIN_3BV_FOR_3BVS 同口径记负值，
+    // 消费方按负值识别「成绩不被承认」
+    const sign =
+      rt > 0 && Number(r.no_record) === 0 && bv >= MIN_3BV_FOR_3BVS[r.level as VideoLevel] ? 1 : -1;
     return {
       id: Number(r.id),
       level: r.level,

@@ -10,6 +10,7 @@ import {
   COMMENT_TOP_NUMBER,
   INVALID_3BVS_TIP,
   INVALID_STNB_TIP,
+  INVALID_TIME_TIP,
   LEVEL_NAMES,
   MIN_3BV_FOR_3BVS,
   TERM_3BVS_TIP,
@@ -185,7 +186,15 @@ export default async function VideoViewPage({
               span——无效成绩时 del 自带的「不承认」气泡不能被整 span 气泡连带触发重叠 */}
           <h1>
             {LEVEL_NAMES[level] ?? video.level}
-            <em className={lvCls}>{scoreTime(scores.time)}</em>秒 {video.noflag && <ins data-tip={TERM_NF_TIP}>NF</ins>}
+            {/* 运气盘（noRecord，2026-11-02 张老师定）：时间成绩同 3BV/s/STNB 划线不承认 */}
+            {video.noRecord ? (
+              <del data-tip={INVALID_TIME_TIP} aria-label={INVALID_TIME_TIP}>
+                <em className={lvCls}>{scoreTime(scores.time)}</em>秒
+              </del>
+            ) : (
+              <em className={lvCls}>{scoreTime(scores.time)}</em>
+            )}
+            {video.noflag && <ins data-tip={TERM_NF_TIP}>NF</ins>}
           </h1>
           <h2>
             <span className="board_3bv">
@@ -194,13 +203,14 @@ export default async function VideoViewPage({
             </span>
             <span className="score_3bvs">
               <span className="term" data-tip={TERM_3BVS_TIP}>3BV/s</span>
-              {scores["3bvs"] > 0 ? (
+              {scores["3bvs"] > 0 && !video.noRecord ? (
                 <em>{score3bvs(scores["3bvs"])}</em>
               ) : (
                 // 无效成绩：hover 弹自定义气泡说明原因（2026-10-13 张老师要求，
-                // 原生 title 有 1s 延迟且是系统灰样式，故走 data-tip）
+                // 原生 title 有 1s 延迟且是系统灰样式，故走 data-tip）；
+                // 运气盘即使 3BV/s 值达标也整个划线（2026-11-02）
                 <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
-                  {score3bvs(-scores["3bvs"])}
+                  {score3bvs(Math.abs(scores["3bvs"]))}
                 </del>
               )}
             </span>
@@ -211,7 +221,7 @@ export default async function VideoViewPage({
             {video.stnb != null && video.stnb > 0 && (
               <span className="score_stnb">
                 <span className="term" data-tip={TERM_STNB_TIP}>STNB</span>
-                {video.board3bv >= MIN_3BV_FOR_3BVS[level] ? (
+                {video.board3bv >= MIN_3BV_FOR_3BVS[level] && !video.noRecord ? (
                   <em>{video.stnb.toFixed(1)}</em>
                 ) : (
                   <del data-tip={INVALID_STNB_TIP} aria-label={INVALID_STNB_TIP}>

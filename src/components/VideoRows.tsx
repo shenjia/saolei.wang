@@ -11,6 +11,7 @@ import type { VideoListItem } from "@/lib/queries";
 import {
   INVALID_3BVS_TIP,
   INVALID_STNB_TIP,
+  INVALID_TIME_TIP,
   LEVEL_NAMES,
   MIN_3BV_FOR_3BVS,
   VIDEO_LIST_DEFAULT_DIR,
@@ -243,6 +244,8 @@ export function VideoRowLine({
 }) {
   const scores = videoScores(v.board3bv, v.realTime, v.level as VideoLevel);
   const lvCls = LEVEL_CLS[v.level as VideoLevel] ?? "";
+  // 运气盘（noRecord，2026-11-02 张老师定）：所有成绩划掉——时间/3BV/s/STNB 三个
+  // 成绩列 del + 气泡；IOE/3BV 属盘面分析指标照常展示。历史录像恒 false 不受影响
   return (
     <tr>
       <td className="name">
@@ -263,7 +266,11 @@ export function VideoRowLine({
       <td className={`level ${lvCls}`}>{LEVEL_NAMES[v.level as VideoLevel] ?? v.level}</td>
       <td className={`score ${lvCls}${highlight === "time" ? " current" : ""}`}>
         <Link href={`/video/${v.id}`} target="_blank" prefetch={false} title="点击查看录像">
-          {scoreTime(scores.time)}
+          {v.noRecord ? (
+            <del data-tip={INVALID_TIME_TIP} aria-label={INVALID_TIME_TIP}>{scoreTime(scores.time)}</del>
+          ) : (
+            scoreTime(scores.time)
+          )}
         </Link>
         {v.noflag && (
           <span className="nf" title="仅用左键点击完成游戏，全程不用右键标雷">
@@ -305,12 +312,13 @@ export function VideoRowLine({
         )}
       </td>
       <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>
-        {scores["3bvs"] > 0 ? (
+        {scores["3bvs"] > 0 && !v.noRecord ? (
           score3bvs(scores["3bvs"])
         ) : (
-          // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页）
+          // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页）；
+          // 运气盘即使 3BV/s 值达标也整个划线（2026-11-02）
           <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
-            {score3bvs(-scores["3bvs"])}
+            {score3bvs(Math.abs(scores["3bvs"]))}
           </del>
         )}
       </td>
@@ -331,9 +339,10 @@ export function VideoRowLine({
       <td className={`c_3bvs stnb c${highlight === "stnb" ? " current" : ""}`}>
         {/* 2026-10-22 张老师定：初级 3BV<10（MIN_3BV_FOR_3BVS，中/高级上传下限本就
             高于 4）的 STNB 与 3BV/s 同口径划线不承认——运气盘虚高值（如 3BV=2 的
-            4316）不当真成绩展示，也不参与排行（排行侧限界 2026-10-20 已上线） */}
+            4316）不当真成绩展示，也不参与排行（排行侧限界 2026-10-20 已上线）；
+            2026-11-02 运气盘（noRecord）无论 3BV 多大都整个划线 */}
         {v.stnb != null ? (
-          v.board3bv >= MIN_3BV_FOR_3BVS[v.level as VideoLevel] ? (
+          v.board3bv >= MIN_3BV_FOR_3BVS[v.level as VideoLevel] && !v.noRecord ? (
             <span data-tip="STNB 判雷：综合评分（越高越强）" aria-label="STNB 判雷">
               {v.stnb.toFixed(1)}
             </span>

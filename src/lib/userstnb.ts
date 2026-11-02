@@ -6,6 +6,7 @@
 //
 // 口径与原实时聚合（fetchStnbCollection，2026-10-20 前形态）完全同源：
 //   · 参与条件：v.status=20（过审胜局）+ m.stnb>0 + board_3bv ≥ MIN_3BV_FOR_3BVS（初10/中4/高4）
+//     + vi.no_record=0（运气盘不记成绩，2026-11-02 张老师定）
 //   · 组内排序：stnb DESC, id ASC（同分取 id 小者——注册序影像）
 //   · 用户须正常（u.status=0，重算时 JOIN 过滤）
 //
@@ -47,7 +48,7 @@ export async function refreshUserStnb(user: number, level: string, db: Db = pris
         JOIN video_info vi ON vi.id = m.id
       WHERE v.user = ${uid} AND v.level = ${level}
         AND v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
-        AND vi.board_3bv >= ${lim}
+        AND vi.board_3bv >= ${lim} AND vi.no_record = 0
       ORDER BY m.stnb DESC, m.id ASC
       LIMIT 1
     ) t
@@ -72,7 +73,7 @@ export async function refreshUserStnbNf(user: number, level: string, db: Db = pr
         JOIN video_info vi ON vi.id = m.id
       WHERE v.user = ${uid} AND v.level = ${level}
         AND v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
-        AND vi.board_3bv >= ${lim} AND vi.noflag = 1
+        AND vi.board_3bv >= ${lim} AND vi.no_record = 0 AND vi.noflag = 1
       ORDER BY m.stnb DESC, m.id ASC
       LIMIT 1
     ) t
@@ -96,6 +97,7 @@ export async function rebuildUserStnbBest(db: Db = prisma): Promise<{ rows: numb
           WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg}
           WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int}
           ELSE ${MIN_3BV_FOR_3BVS.exp} END
+        AND vi.no_record = 0
       GROUP BY v.user, v.level
     )
   `;
@@ -113,7 +115,7 @@ export async function rebuildUserStnbBest(db: Db = prisma): Promise<{ rows: numb
           JOIN video_info vi ON vi.id = m.id
         WHERE v.level = ${lv}
           AND v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
-          AND vi.board_3bv >= ${lim(lv)}
+          AND vi.board_3bv >= ${lim(lv)} AND vi.no_record = 0
       ) t
       JOIN user u ON u.id = t.user AND u.status = 0
       WHERE t.rn = 1
@@ -141,7 +143,7 @@ export async function rebuildUserStnbBestNf(db: Db = prisma): Promise<{ rows: nu
           WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg}
           WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int}
           ELSE ${MIN_3BV_FOR_3BVS.exp} END
-        AND vi.noflag = 1
+        AND vi.no_record = 0 AND vi.noflag = 1
       GROUP BY v.user, v.level
     )
   `;
@@ -157,7 +159,7 @@ export async function rebuildUserStnbBestNf(db: Db = prisma): Promise<{ rows: nu
           JOIN video_info vi ON vi.id = m.id
         WHERE v.level = ${lv}
           AND v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0
-          AND vi.board_3bv >= ${lim(lv)} AND vi.noflag = 1
+          AND vi.board_3bv >= ${lim(lv)} AND vi.no_record = 0 AND vi.noflag = 1
       ) t
       JOIN user u ON u.id = t.user AND u.status = 0
       WHERE t.rn = 1

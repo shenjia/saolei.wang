@@ -68,6 +68,10 @@ export interface SiteTopRow {
  *  裸字符串会被当值传参导致 `board_3bv >= 'CASE...'` 语义错误 */
 const B3BV_CASE = Prisma.sql`(CASE v.level WHEN 'beg' THEN 10 ELSE 4 END)`;
 
+/** 运气盘排除（2026-11-02 张老师定）：video_info.no_record=1（上传时低于级别 3BV 下限
+ *  初 2/中 30/高 100 的盘）不记成绩，不进任何纪录链。历史录像恒 0 不受影响 */
+const NO_RECORD_EXCLUDED = Prisma.sql`vi.no_record = 0`;
+
 /** 九条纪录演变曲线（+总计当前纪录单点）：窗口查询逐级算，总计走快照单点 */
 async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
   // 时间纪录：运行最小 real_time（同值并列也取点，与后台 getRecordCurve 的 `<=` 一致）
@@ -80,7 +84,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
              vi.real_time AS val, v.create_time AS ct,
              MIN(vi.real_time) OVER (PARTITION BY v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) AS run
       FROM video v JOIN video_info vi ON vi.id = v.id
-      WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0
+      WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0 AND ${NO_RECORD_EXCLUDED}
     ) t
     JOIN \`user\` u ON u.id = t.uid
     LEFT JOIN user_scores s ON s.id = t.uid
@@ -98,6 +102,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
              MAX(ROUND(vi.board_3bv * 1000000.0 / vi.real_time)) OVER (PARTITION BY v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) AS run
       FROM video v JOIN video_info vi ON vi.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0 AND vi.board_3bv >= ${B3BV_CASE}
+        AND ${NO_RECORD_EXCLUDED}
     ) t
     JOIN \`user\` u ON u.id = t.uid
     LEFT JOIN user_scores s ON s.id = t.uid
@@ -115,6 +120,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
              MAX(m.stnb) OVER (PARTITION BY v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) AS run
       FROM video v JOIN video_info vi ON vi.id = v.id JOIN video_metrics m ON m.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0 AND vi.board_3bv >= ${B3BV_CASE}
+        AND ${NO_RECORD_EXCLUDED}
     ) t
     JOIN \`user\` u ON u.id = t.uid
     LEFT JOIN user_scores s ON s.id = t.uid
@@ -162,6 +168,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
              MIN(vi.real_time) OVER (PARTITION BY v.\`user\`, v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) run
       FROM video v JOIN video_info vi ON vi.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0 AND v.level IN ('beg','int','exp')
+        AND ${NO_RECORD_EXCLUDED}
     ) t WHERE t.val <= t.run`;
   const totalTimePts = mkReplay(timeEvents, (b) => b.beg + b.int + b.exp, (a, b) => a < b);
 
@@ -173,7 +180,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
              MAX(ROUND(vi.board_3bv * 1000000.0 / vi.real_time)) OVER (PARTITION BY v.\`user\`, v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) run
       FROM video v JOIN video_info vi ON vi.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0 AND v.level IN ('beg','int','exp')
-        AND vi.board_3bv >= ${B3BV_CASE}
+        AND vi.board_3bv >= ${B3BV_CASE} AND ${NO_RECORD_EXCLUDED}
     ) t WHERE t.val >= t.run`;
   const totalB3Pts = mkReplay(b3Events, (b) => b.beg + b.int + b.exp, (a, b) => a > b);
 
@@ -185,7 +192,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
              MAX(m.stnb) OVER (PARTITION BY v.\`user\`, v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) run
       FROM video v JOIN video_info vi ON vi.id = v.id JOIN video_metrics m ON m.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0 AND v.level IN ('beg','int','exp')
-        AND vi.board_3bv >= ${B3BV_CASE}
+        AND vi.board_3bv >= ${B3BV_CASE} AND ${NO_RECORD_EXCLUDED}
     ) t WHERE t.val >= t.run`;
 
   const totalStnbPts = mkReplay(stnbEvents, (b) => b.beg + b.int + b.exp, (a, b) => a > b);
@@ -425,10 +432,10 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
 
 /** 左侧纪录曲线（2026-10-28 张老师定：持久化缓存——重查询+基本不变：
  *  全站纪录只有被打破才变，24h TTL 已远超实际变化频率；即便有新纪录，
- *  一天内旧曲线展示完全可接受。⚠️ 改曲线口径必须升版本号（v5 起）。 */
+ *  一天内旧曲线展示完全可接受。⚠️ 改曲线口径必须升版本号（v6 起：运气盘排除） */
 export const getRecordCurves = unstable_cache(
   fetchRecordCurves,
-  ["records-curves-v5"],
+  ["records-curves-v6"],
   { revalidate: 86400, tags: ["records-curves"] }
 );
 
