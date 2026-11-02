@@ -16,6 +16,7 @@ import { SelfAvatar } from "@/components/SelfAvatar";
 import { UserPanel } from "@/components/UserCard";
 import { QqBindLink } from "@/components/QqLogin";
 import { QqAvatarPrompt } from "@/components/QqAvatarPrompt";
+import { DonateVisibilityToggle } from "@/components/DonateVisibilityToggle";
 import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
@@ -157,6 +158,9 @@ export default async function AccountManagePage({
                 </tbody>
               </table>
             </div>
+            {/* 公开赞助金额开关（2026-11-02 张老师）：账户设置最下面；
+                关闭后个人主页数据统计隐藏赞助金额行 */}
+            <DonateVisibilityToggle initialHidden={user.donateHidden} />
             {/* 绑定结果反馈（弹窗授权完成后主窗跳回 /account?bound=1 / ?error=taken） */}
             {sp.bound === "1" && <p className="account_flash ok">QQ 绑定成功，今后点登录框的企鹅图标即可登录</p>}
             {sp.error === "taken" && <p className="account_flash err">该 QQ 已绑定其他账号，请换一个试试</p>}

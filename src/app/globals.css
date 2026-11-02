@@ -3806,6 +3806,70 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 .account_flash.err {
   color: #f92672;
 }
+/* ---- 公开赞助金额开关（2026-11-02，账户设置主盒最底部；滑块样式照练习页 .gsw 同款） ---- */
+#account_manage .acct_donate_row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+#account_manage .acct_gsw {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  /* 压过 legacy 全局 label{overflow:hidden; line-height:38.4px; …} */
+  overflow: visible;
+  line-height: normal;
+  white-space: normal;
+}
+#account_manage .acct_gsw input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+#account_manage .acct_gsw .track {
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: #555550;
+  position: relative;
+  flex: 0 0 auto;
+  transition: background 0.15s;
+}
+#account_manage .acct_gsw .track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e8e8e0;
+  transition: left 0.15s;
+}
+#account_manage .acct_gsw input:checked + .track {
+  background: #34c759;
+}
+#account_manage .acct_gsw input:checked + .track::after {
+  left: 16px;
+}
+#account_manage .acct_gsw input:disabled + .track {
+  opacity: 0.5;
+}
+#account_manage .acct_gsw .txt {
+  color: #bbbbbb;
+  font-size: 14px;
+}
+#account_manage .acct_donate_row .hint {
+  color: #75715e;
+  font-size: 12px;
+}
 /* 侧栏几何与首页/录像详情页统一（五轮张老师要求）：legacy 默认 sidebar 222 / 盒 192，
    统一为 288 / 盒内容 210（外径 272，与 #home、#video_view 右栏完全一致）；
    main 相应收窄并留 2px 防子像素舍入掉行（同 2296 行 #home 注释口径）。 */

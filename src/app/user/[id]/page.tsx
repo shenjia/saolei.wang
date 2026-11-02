@@ -199,8 +199,12 @@ export default async function UserViewPage({
   // 结余 = 全站赞助收入（donate 合计）− 全站支出（donate_expense 合计）；
   // 结余为负（支出超收）取其负数为站长垫付额，结余 ≥ 0（转整）不显示。
   // 其余玩家显示本人赞助合计（donate，金额单位分）
+  // 公开赞助金额开关（2026-11-02 张老师）：账户设置关闭（donate_hidden=1）后
+  // 不查不显示——个人主页数据统计隐藏赞助金额行
   let donateCents = 0;
-  if (userId === 1) {
+  if (detail.user.donateHidden) {
+    // 已关闭公开：跳过查询，整行不渲染
+  } else if (userId === 1) {
     const [income, expense] = await Promise.all([
       prisma.donate.aggregate({ _sum: { amount: true } }),
       prisma.donateExpense.aggregate({ _sum: { amount: true } }),

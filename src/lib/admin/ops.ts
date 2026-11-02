@@ -1338,6 +1338,15 @@ async function dispatch(
       if ("error" in rt) return { ok: false, error: rt.error };
       const t = rt.t;
       await prisma.donate.create({ data: { user: BigInt(uid), amount: BigInt(cents), createTime: t, updateTime: t } });
+      // 实名赞助给本人发系统通知（2026-11-02 张老师）：金额按元口语化（去尾零）；
+      // 「账户设置」用站内信链接标记（MSG_LINK_RE 渲染可点击跳 /account）；匿名赞助不发
+      if (uid) {
+        const yuan = (cents / 100).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+        await sendSystemMessage(
+          uid,
+          `已收到您的赞助款${yuan}元，感谢您支持扫雷网！您的个人资料页已展示赞助金额，如您不想展示金额，可到[url /account]账户设置[/url]中关闭。`
+        );
+      }
       const rowUser = uid
         ? await prisma.user.findUnique({ where: { id: BigInt(uid) }, select: { chineseName: true } })
         : null;

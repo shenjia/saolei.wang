@@ -1740,7 +1740,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 // ---------- 用户主页 ----------
 
 export interface UserDetail {
-  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number };
+  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number; donateHidden: boolean };
   info: { nickname: string; interest: string | null; qq: string; mouse: string; pad: string } | null;
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
@@ -1780,6 +1780,8 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
       lastLoginTime: N(u.lastLoginTime),
       // 账号状态（0 正常 / -1 封禁）：主页排名区对封禁用户显示红字提示用（2026-10-16 张老师要求）
       status: u.status,
+      // 公开赞助金额开关（2026-11-02）：true=账户设置关闭公开，主页隐藏赞助金额行
+      donateHidden: u.donateHidden,
     },
     info: info
       ? {
