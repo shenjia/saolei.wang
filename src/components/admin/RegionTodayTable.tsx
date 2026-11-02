@@ -133,8 +133,8 @@ export function RegionTodayTable({
         <thead>
           <tr>
             {th("area", "地区", "按地区名排列")}
-            {th("plays", "盘数", "按盘数排列（多在前）")}
             {th("players", "人数", "按人数排列（多在前）")}
+            {th("plays", "盘数", "按盘数排列（多在前）")}
             {th("winRate", "胜率", "按胜率排列（高在前）")}
             {th("avgRtt", "平均延迟", "按平均延迟排列（快在前）")}
             {th("range", "延迟范围", "按延迟范围排列（快在前）")}
@@ -152,8 +152,8 @@ export function RegionTodayTable({
                 onClick={() => toggleExpand(r.area)}
               >
                 <td className="strong">{r.area}</td>
-                <td className="num">{r.plays.toLocaleString("zh-CN")}</td>
                 <td className="num">{r.players}</td>
+                <td className="num">{r.plays.toLocaleString("zh-CN")}</td>
                 <td className="num">{r.plays ? `${r.winRate}%` : "—"}</td>
                 <td className="num" title={RTT_LEGEND}>
                   {r.avgRtt !== null ? <span style={{ color: rttColor(r.avgRtt) }}>{r.avgRtt}ms</span> : "—"}
@@ -170,6 +170,8 @@ export function RegionTodayTable({
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, lineHeight: 1.7 }}>
                         <thead>
                           <tr style={{ color: "#75715e", textAlign: "left" }}>
+                            {/* 首列空（2026-11-02 六次）：与主表「地区」列对位，玩家对齐「人数」列 */}
+                            <th style={SUB_TH} aria-hidden="true" />
                             <th style={SUB_TH}>玩家</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }}>盘数</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }}>胜率</th>
@@ -180,6 +182,7 @@ export function RegionTodayTable({
                         <tbody>
                           {r.detail.map((p) => (
                             <tr key={p.uid}>
+                              <td />
                               <td style={SUB_TD}>
                                 <a
                                   href={`/user/${p.uid}`}
