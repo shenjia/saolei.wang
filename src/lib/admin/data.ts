@@ -222,6 +222,8 @@ export interface AdminUserDetail {
   mouse: string;
   pad: string;
   interest: string;
+  /** 生日（Unix 秒，0=未填写）——后台「编辑玩家资料」表单回显用（2026-11-02） */
+  birthday: number;
   loginTimes: number;
   loginIp: string;
   /** 防小号（2026-10-19）：注册 IP（落库一次）与最近登录 IP（setSession 实时刷新） */
@@ -335,6 +337,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     mouse: info?.mouse ?? "",
     pad: info?.pad ?? "",
     interest: info?.interest ?? "",
+    birthday: N(info?.birthday),
     loginTimes: N(stat?.loginTimes),
     loginIp: stat?.loginIp ?? "",
     registerIp: user.registerIp,

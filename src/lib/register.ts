@@ -22,9 +22,10 @@ export interface RegisterInput {
 }
 
 const EMAIL_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
-const CHINESE_NAME_RE = /^[\u4e00-\u9fa5]{2,6}$/;
+// 2026-11-02 导出：后台「编辑玩家资料」与注册同一套姓名校验
+export const CHINESE_NAME_RE = /^[\u4e00-\u9fa5]{2,6}$/;
 // 2013 版：([A-Z][a-z]{0,5}\s?){2,6}，每词首字母大写，词间单个空格
-const ENGLISH_NAME_RE = /^([A-Z][a-z]{0,5} ?){2,6}$/;
+export const ENGLISH_NAME_RE = /^([A-Z][a-z]{0,5} ?){2,6}$/;
 
 // 保留字（2026-10-19 防假冒官方号）：中文名含即拦（「我是管理员」也不行），
 // 英文名按词全等比对（避免 Madison 之类误伤）

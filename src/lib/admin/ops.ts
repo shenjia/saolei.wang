@@ -12,15 +12,16 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import type { SessionUser } from "@/lib/auth";
-import { USER_ROLE, VIDEO_STATUS, VIDEO_LEVELS, isManager, NEWS_TYPE, countsInTotal, RANK_BAN_DURATIONS, RANK_BAN_PERMANENT } from "@/lib/config";
+import { USER_ROLE, VIDEO_STATUS, VIDEO_LEVELS, isManager, NEWS_TYPE, countsInTotal, RANK_BAN_DURATIONS, RANK_BAN_PERMANENT, AREA_LIST } from "@/lib/config";
 import { decodeLegacyEntities, formatDate } from "@/lib/format";
+import { CHINESE_NAME_RE, ENGLISH_NAME_RE } from "@/lib/register";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { publishNews } from "@/lib/news";
 import { reviewVideo, syncRecordNewsChain } from "@/lib/review";
 import { banUntilFromKey, unbanUser } from "@/lib/ban";
 import { broadcast, sendSystemMessage, retractReplyNotice, retractPostNotices, retractVideoCommentNotice } from "@/lib/message";
 import { ensureTodaySnapshot } from "@/lib/ranksnap";
-import { rankEnter, rankLeave, safeRankOp } from "@/lib/userrank";
+import { rankEnter, rankLeave, safeRankOp, applyRankAreaChange } from "@/lib/userrank";
 import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
 import { normalizeSiteUpdateDate } from "@/lib/site-updates";
@@ -49,6 +50,8 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "cheat.confirm": "administrator",
   "cheat.dismiss": "administrator",
   "user.setRankBan": "administrator",
+  // 编辑玩家资料（2026-11-02 张老师需求）：处置面板可改玩家填写的资料（中文名/英文名等），超管专属
+  "user.editProfile": "administrator",
   // 给单个玩家发系统消息（2026-10-23）：manager 可用——与头像审核通知同级触达能力；
   // 全站广播 message.broadcast 仍是超管专属
   "user.sendSystemMessage": "manager",
@@ -457,6 +460,129 @@ async function dispatch(
         message: `重置 ${auth.username}（#${id}）密码为：${password}`,
         logDetail: `重置 ${auth.username}（#${id}）的密码`,
       };
+    }
+
+    case "user.editProfile": {
+      /* 编辑玩家资料（2026-11-02 张老师需求）：后台处置面板可修改玩家填写的全部资料——
+         中文名/英文名/性别/地区（user 表）+ 昵称/QQ/鼠标/鼠标垫/爱好/生日（user_info 表）。
+         校验口径：姓名与注册同规（2~6 汉字 + 拼音格式/词数），文本字段长度与前台
+         「编辑资料」同限，地区白名单同 /api/account/profile（历史遗留值视为不改）。
+         地区变化时 user 与 user_rank 同事务搬位（applyRankAreaChange，口径同前台）；
+         变更摘要只列有变化的字段，全部一致则不刷库不落日志。 */
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
+      const [user, info] = await Promise.all([
+        prisma.user.findUnique({ where: { id: BigInt(id) } }),
+        prisma.userInfo.findUnique({ where: { id: BigInt(id) } }),
+      ]);
+      if (!user) return { ok: false, error: "玩家不存在" };
+
+      // 中文名/英文名：与注册同一套规则
+      const chineseName = toText(p.chineseName, 12);
+      const englishName = toText(p.englishName, 32);
+      if (!CHINESE_NAME_RE.test(chineseName))
+        return { ok: false, error: "参数错误：中文姓名不合法（2~6 个汉字）" };
+      if (!ENGLISH_NAME_RE.test(englishName))
+        return { ok: false, error: "参数错误：姓名拼音格式不合法（每词首字母大写，如 Chen Yi Ning）" };
+      if (englishName.trim().split(/\s+/).length !== [...chineseName].length)
+        return { ok: false, error: "参数错误：拼音词数与姓名字数不一致" };
+
+      const sex = parseInt(String(p.sex ?? ""), 10);
+      if (sex !== 0 && sex !== 1) return { ok: false, error: "参数错误：性别不合法" };
+
+      // 地区：白名单内才可写；不在白名单但等于库中现值（历史遗留「xx&xx」）视为不修改
+      const areaRaw = toText(p.area, 12);
+      const areaLegal = (AREA_LIST as readonly string[]).includes(areaRaw);
+      if (!areaLegal && areaRaw !== user.area) return { ok: false, error: "参数错误：地区不合法" };
+
+      // user_info 文本字段：上限与前台「编辑资料」同口径
+      const profileLimits = { nickname: 10, qq: 15, mouse: 30, pad: 30, interest: 50 } as const;
+      const profileLabels = { nickname: "昵称", qq: "QQ", mouse: "鼠标", pad: "鼠标垫", interest: "爱好" };
+      const profile: Record<string, string> = {};
+      for (const [key, limit] of Object.entries(profileLimits)) {
+        const v = toText(p[key], limit + 10);
+        if ([...v].length > limit)
+          return { ok: false, error: `参数错误：${profileLabels[key as keyof typeof profileLimits]} 不能超过 ${limit} 个字` };
+        profile[key] = v;
+      }
+
+      // 生日：留空=不修改；填写须为合法且不晚于今天的日期
+      let birthday: bigint | undefined;
+      const birthdayRaw = toText(p.birthday, 10);
+      if (birthdayRaw) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdayRaw))
+          return { ok: false, error: "参数错误：生日格式应为 YYYY-MM-DD" };
+        const d = new Date(`${birthdayRaw}T12:00:00+08:00`);
+        if (Number.isNaN(d.getTime()) || d.getFullYear() !== parseInt(birthdayRaw.slice(0, 4), 10))
+          return { ok: false, error: "参数错误：生日不是有效日期" };
+        if (d.getTime() > Date.now()) return { ok: false, error: "参数错误：生日不能是将来的日期" };
+        birthday = BigInt(Math.floor(d.getTime() / 1000));
+      }
+
+      // 变更摘要：只列有变化的字段；全部一致则不刷库不落日志
+      const changes: string[] = [];
+      const diff = (name: string, prev: string | number, next: string | number) => {
+        if (String(prev) !== String(next)) changes.push(`${name}「${prev || "空"}」→「${next || "空"}」`);
+      };
+      diff("中文名", user.chineseName, chineseName);
+      diff("英文名", user.englishName, englishName);
+      diff("性别", user.sex ? "男" : "女", sex ? "男" : "女");
+      diff("地区", user.area, areaRaw);
+      diff("昵称", info?.nickname ?? "", profile.nickname);
+      diff("QQ", info?.qq ?? "", profile.qq);
+      diff("鼠标", info?.mouse ?? "", profile.mouse);
+      diff("鼠标垫", info?.pad ?? "", profile.pad);
+      diff("爱好", info?.interest ?? "", profile.interest);
+      const prevBirthday = info?.birthday ?? BigInt(0);
+      if (birthday !== undefined) {
+        if (birthday === prevBirthday) birthday = undefined;
+        else
+          changes.push(
+            `生日「${prevBirthday ? formatDate(Number(prevBirthday), "Y-m-d") : "空"}」→「${formatDate(Number(birthday), "Y-m-d")}」`
+          );
+      }
+      if (!changes.length) return { ok: false, error: "提交内容与当前资料一致，无需保存" };
+
+      const ts = BigInt(now());
+      const areaChanged = areaLegal && areaRaw !== user.area;
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: BigInt(id) },
+          data: {
+            chineseName,
+            englishName,
+            sex,
+            ...(areaChanged ? { area: areaRaw } : {}),
+            updateTime: ts,
+          },
+        });
+        await tx.userInfo.upsert({
+          where: { id: BigInt(id) },
+          create: {
+            id: BigInt(id),
+            nickname: profile.nickname,
+            qq: profile.qq,
+            mouse: profile.mouse,
+            pad: profile.pad,
+            interest: profile.interest,
+            ...(birthday !== undefined ? { birthday } : {}),
+            createTime: ts,
+            updateTime: ts,
+          },
+          update: {
+            nickname: profile.nickname,
+            qq: profile.qq,
+            mouse: profile.mouse,
+            pad: profile.pad,
+            interest: profile.interest,
+            ...(birthday !== undefined ? { birthday } : {}),
+            updateTime: ts,
+          },
+        });
+        // 地区变化：user_rank 同事务搬位（名次落盘的 area/area_pos 跟着走，口径同前台改资料）
+        if (areaChanged) await applyRankAreaChange(tx, id, user.area, areaRaw);
+      });
+      return { ok: true, message: `已更新 ${chineseName}（#${id}）的资料：${changes.join("、")}` };
     }
 
     case "user.delete": {
