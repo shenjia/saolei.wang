@@ -21,9 +21,13 @@
 // 2026-11-02 二次（张老师需求）：点击服务器行展开/收起该服在线玩家列表
 // （地区/玩家名/性别/军衔/本服累计对局数），数据随 3s 轮询同源自
 // /api/admin/authority-status（Next 侧查库补齐展示字段）；再点行收起。
+// 2026-11-02 三次（张老师）：①性别/军衔不单独成列——玩家名后放性别小标记
+// （.gender.small）+ 军衔徽章（TitleBadge 小号）+军衔名；②对局列后加在线
+// 时长列（本轮连接建立起算，core /players 出 secs，同 uid 多标签页取最早）。
 
 import { Fragment, useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
+import { TitleBadge } from "../Cells";
 
 /* 展开子表单元格样式（紧凑小字号，暗底与主表区分） */
 const SUB_TH: React.CSSProperties = { fontWeight: 400, padding: "1px 10px 3px 0", borderBottom: "1px solid #3e3d32" };
@@ -37,6 +41,15 @@ export interface PlayerBrief {
   sex: number;
   rank: string;
   games: number;
+  /** 本轮在线时长（秒，连接建立起算） */
+  online: number;
+}
+
+/** 在线时长折算（2026-11-02 三次：对局列后加在线时长列） */
+function fmtOnline(s: number): string {
+  if (s < 60) return `${s}秒`;
+  if (s < 3600) return `${Math.floor(s / 60)}分`;
+  return `${Math.floor(s / 3600)}小时${Math.floor((s % 3600) / 60)}分`;
 }
 
 export interface ServerRow {
@@ -245,9 +258,8 @@ export function ServerStatusPanel({
                           <tr style={{ color: "#75715e", textAlign: "left" }}>
                             <th style={SUB_TH}>地区</th>
                             <th style={SUB_TH}>玩家</th>
-                            <th style={SUB_TH}>性别</th>
-                            <th style={SUB_TH}>军衔</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }} title="该玩家在本服务器的累计开局面数（重启不清零）">对局</th>
+                            <th style={{ ...SUB_TH, textAlign: "right" }} title="本轮连上本服务器起的在线时长（刷新/断线重连重新计；同 uid 多标签页取最早连接）">在线时长</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -266,10 +278,18 @@ export function ServerStatusPanel({
                                 >
                                   {p.name}
                                 </a>
+                                {/* 性别小标记 + 军衔徽章（2026-11-02 三次：并入玩家列，不单独成列） */}
+                                <span
+                                  className={`gender ${p.sex ? "male" : "female"} small`}
+                                  style={{ margin: "0 4px 0 5px" }}
+                                  title={p.sex ? "男" : "女"}
+                                />
+                                <TitleBadge title={p.rank} badgeSize={13} />
                               </td>
-                              <td style={SUB_TD}>{p.sex === 1 ? "男" : "女"}</td>
-                              <td style={SUB_TD}>{p.rank}</td>
                               <td style={{ ...SUB_TD, textAlign: "right" }} className="num">{p.games.toLocaleString("zh-CN")}</td>
+                              <td style={{ ...SUB_TD, textAlign: "right" }} className="num" title="本轮连上本服务器起的在线时长">
+                                {fmtOnline(p.online)}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

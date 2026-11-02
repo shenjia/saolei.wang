@@ -74,6 +74,8 @@ export interface PlayerRow {
   rank: string;
   /** 在该实例上的累计开局面数（server.mjs 落盘统计，重启不清零） */
   games: number;
+  /** 本轮在线时长（秒，连接建立起算；同 uid 多标签页取最早连接） */
+  online: number;
 }
 
 export async function GET() {
@@ -121,11 +123,11 @@ export async function GET() {
         try {
           const pres = await fetch(`${t.base}/players`, { cache: "no-store", headers, signal: AbortSignal.timeout(2000) });
           if (pres.ok) {
-            const pj = (await pres.json()) as { players?: { uid: number; name?: string; games?: number }[] };
+            const pj = (await pres.json()) as { players?: { uid: number; name?: string; games?: number; secs?: number }[] };
             players = (pj.players ?? []).map((p): PlayerRow => {
               const uid = Number(p.uid);
               if (typeof p.name === "string" && p.name) loginNames.set(uid, p.name);
-              return { uid, name: "", area: "", sex: 1, rank: "预备役", games: Number(p.games) || 0 };
+              return { uid, name: "", area: "", sex: 1, rank: "预备役", games: Number(p.games) || 0, online: Math.max(0, Number(p.secs) || 0) };
             });
           }
         } catch { /* players 拉取失败：该行显示获取失败，不影响负载展示 */ }
