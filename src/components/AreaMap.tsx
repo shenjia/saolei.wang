@@ -1,15 +1,18 @@
 "use client";
 
 // 地区榜 · 交互式中国地图（2026-10-13 张老师需求）
-// 位于排行表下方，按「综合排行指数」给各省填色（开方归一：越高越黄、越低越灰）；
-// 悬停省份高亮 + 气泡（头部右侧综合排行名次 / 活跃人数 / 排行人数 / 综合排行指数 / 领军人物），点击跳转该地区排行。
+// 位于排行表下方，按当前排序列（战力指数 / 活跃指数）给各省填色（开方归一：越高越黄、
+// 越低越灰）；悬停省份高亮 + 气泡（头部右侧当前榜名次 / 活跃人数 / 排行人数 /
+// 7 日练习·录像 / 战力·活跃指数 / 领军人物），点击跳转该地区排行。
+// 2026-11-02 张老师要求：气泡加「7 日练习」「7 日录像」两行；头部名次 title 随
+// 排序列在「战力排行第x位 / 活跃排行第x位」间切换；填色跟随当前排序列。
 // 省界几何是静态数据（src/lib/area-map-geo.ts，由 scripts/build-area-map.py 生成）：
 // 无第三方地图服务、无 Key、可离线；含台湾省与南海诸岛九段线（标准地图口径）。
 
 import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { buildUrl } from "@/components/Pager";
-import { areaDisplay, TITLE_COLORS } from "@/lib/config";
+import { areaDisplay, TITLE_COLORS, type AreaOrder } from "@/lib/config";
 import {
   GEO_INSET_ISLAND,
   GEO_INSET_NINE,
@@ -20,7 +23,7 @@ import {
   MAP_W,
 } from "@/lib/area-map-geo";
 
-// 综合排行指数配色：开方归一后 #4B4A41（灰）→ #FDC61D（站点金）线性插值
+// 填色配色：开方归一后 #4B4A41（灰）→ #FDC61D（站点金）线性插值
 const C0 = [0x4b, 0x4a, 0x41];
 const C1 = [0xfd, 0xc6, 0x1d];
 
@@ -40,6 +43,12 @@ export interface AreaMapDatum {
   players: number;
   active: number;
   power: number;
+  /** 活跃指数（area_activity 落盘表，2026-11-02） */
+  activity: number;
+  /** 近 7 日练习尝试盘数（落盘表快照） */
+  plays7d: number;
+  /** 近 7 日上传录像数（落盘表快照） */
+  videos7d: number;
   bestName: string;
   /** 领军人物的军衔（按高级时间评定，服务端算好传入） */
   title: string;
@@ -47,11 +56,13 @@ export interface AreaMapDatum {
 
 export function AreaMap({
   data,
+  order,
   hover,
   onHover,
 }: {
   data: AreaMapDatum[];
-  /** 当前高亮的地区（地图与表格双向联动共用） */
+  /** 当前榜序（气泡 title 切换 + 填色指标跟随排序列） */
+  order: AreaOrder;
   hover: string | null;
   onHover: (area: string | null) => void;
 }) {
@@ -61,7 +72,9 @@ export function AreaMap({
   // 气泡只由地图自身的悬停驱动（表格行悬停只高亮省份，不在鼠标旧位置弹气泡）
   const [tipArea, setTipArea] = useState<string | null>(null);
 
-  const maxPower = data.reduce((m, d) => Math.max(m, d.power), 0) || 1;
+  const byActivity = order === "activity";
+  const metric = (d: AreaMapDatum) => (byActivity ? d.activity : d.power);
+  const maxMetric = data.reduce((m, d) => Math.max(m, metric(d)), 0) || 1;
   const byName = new Map(data.map((d) => [d.area, d]));
   const hot = tipArea ? byName.get(tipArea) : undefined;
 
@@ -119,7 +132,7 @@ export function AreaMap({
                   key={p.n}
                   className={`prov${d ? "" : " nodata"}${hover === p.n ? " hovering" : ""}`}
                   d={p.d}
-                  fill={d ? ramp(Math.sqrt(d.power / maxPower)) : undefined}
+                  fill={d ? ramp(Math.sqrt(metric(d) / maxMetric)) : undefined}
                   onMouseEnter={enter(d ? p.n : null)}
                   onClick={d ? go(p.n) : undefined}
                   aria-label={`${areaDisplay(p.n)}${d ? `：第 ${d.rank} 位 · ${d.players} 人` : "：暂无成绩数据"}`}
@@ -141,7 +154,7 @@ export function AreaMap({
                   cx={m.x}
                   cy={m.y}
                   r="2.2"
-                  fill={d ? ramp(Math.sqrt(d.power / maxPower)) : "#302f28"}
+                  fill={d ? ramp(Math.sqrt(metric(d) / maxMetric)) : "#302f28"}
                   stroke="rgba(248,248,242,.55)"
                   strokeWidth=".7"
                 />
@@ -170,7 +183,11 @@ export function AreaMap({
               <div className="tp_head">
                 <b>{areaDisplay(hot.area)}</b>
                 <span>
-                  综合排行第&nbsp;<em>{hot.rank}</em>&nbsp;位
+                  {byActivity ? (
+                    <>活跃排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>
+                  ) : (
+                    <>战力排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>
+                  )}
                 </span>
               </div>
               <div className="tp_row">
@@ -186,10 +203,29 @@ export function AreaMap({
                 </b>
               </div>
               <div className="tp_row">
-                <i>综合排行指数</i>
+                <i>7 日练习</i>
+                <b>
+                  {hot.plays7d} <em className="unit">盘</em>
+                </b>
+              </div>
+              <div className="tp_row">
+                <i>7 日录像</i>
+                <b>
+                  {hot.videos7d} <em className="unit">条</em>
+                </b>
+              </div>
+              <div className="tp_row">
+                <i>战力指数</i>
                 <b className="gold">
                   {hot.power >= 10000 ? (hot.power / 10000).toFixed(1) : hot.power}
                   {hot.power >= 10000 && <em className="unit">万</em>}
+                </b>
+              </div>
+              <div className="tp_row">
+                <i>活跃指数</i>
+                <b className="gold">
+                  {hot.activity >= 10000 ? (hot.activity / 10000).toFixed(1) : hot.activity}
+                  {hot.activity >= 10000 && <em className="unit">万</em>}
                 </b>
               </div>
               <div className="tp_row">

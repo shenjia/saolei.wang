@@ -1045,6 +1045,22 @@ model PracticeHourly {
   @@map("practice_hourly")
 }
 
+// 地区活跃指数落盘（2026-11-02 张老师需求）：地区榜新增「活跃指数」排序列（默认排序），
+// 由活跃人数（近 30 天登录）、近 7 日练习盘数（practice_daily）、近 7 日上传录像数
+// 加权计算（权重口径见 src/lib/areaactivity.ts），每小时 crontab 全量重算覆盖。
+// 页面查询只 LEFT JOIN 本表，不再实时聚合练习/录像两源。
+model AreaActivity {
+  area        String @id @db.VarChar(12) // 与 user.area 同口径（剥后缀省名）
+  activeUsers Int    @default(0) @map("active_users") // 近 30 天登录人数
+  plays7d     Int    @default(0) @map("plays_7d") // 近 7 日练习尝试盘数（登录用户）
+  videos7d    Int    @default(0) @map("videos_7d") // 近 7 日上传录像数（status<>0 含待审）
+  score       Int    @default(0) // 活跃指数（加权四舍五入取整）
+  updateTime  BigInt @default(0) @map("update_time") @db.BigInt // 本轮重算 Unix 秒
+
+  @@index([score]) // 榜序 activity：ORDER BY score DESC
+  @@map("area_activity")
+}
+
 // 站点运行时开关（2026-10-22，新旧站数据合并）：key/value 单表。
 // 首个键 maintenance_mode——维护模式期间所有产生新数据的用户入口
 // （注册/上传录像/发帖回帖/评论/私信）统一返回气泡提示，管理员不受影响。

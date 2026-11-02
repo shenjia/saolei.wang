@@ -12,6 +12,9 @@
 //   窗口语义与 RankingFeed/WorldTop100Table 同款：··· 递增批量追加、窗口内滚动定位、
 //   窗口外整页替换，数据本就全量在内存，全程零请求）——左表高度与右地图基本齐平。
 //   地图配色/气泡仍用全量 34 地区数据（mapData 不随翻页窗口裁剪）。
+// 2026-11-02 张老师要求：「综合排行指数」列改称「战力指数」，新增「活跃指数」列
+//   （落盘表 area_activity，每小时重算），且活跃指数为默认排序；地图气泡 title 随
+//   当前排序列在「战力排行第x位 / 活跃排行第x位」间切换（见 AreaMap）。
 // 军衔（title）由服务端按高级时间评好，与 rows 同序传入。
 
 import { useRef, useState, type ReactNode } from "react";
@@ -23,7 +26,7 @@ import { buildUrl } from "./Pager";
 import { PageSlider, nextBatchSize } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { AREA_ORDERS, areaDisplay, type AreaOrder } from "@/lib/config";
-import { areaPower } from "@/lib/format";
+import { areaActivity, areaPower } from "@/lib/format";
 import type { AreaRow } from "@/lib/queries";
 
 const PAGE = 18;
@@ -101,6 +104,9 @@ export function AreaRanking({
     players: r.players,
     active: r.active,
     power: r.power,
+    activity: r.activity,
+    plays7d: r.plays7d,
+    videos7d: r.videos7d,
     bestName: r.bestName,
     title: titles[i] ?? "",
   }));
@@ -124,10 +130,10 @@ export function AreaRanking({
                 <tr>
                   <th>排名</th>
                   <th>地区</th>
-                  {AREA_ORDERS.filter((o) => o.key === "best" || o.key === "power").map((o) => (
+                  {AREA_ORDERS.filter((o) => o.key === "best" || o.key === "power" || o.key === "activity").map((o) => (
                     <th key={o.key}>
                       <Link
-                        href={buildUrl("/area", { order: o.key === "power" ? undefined : o.key })}
+                        href={buildUrl("/area", { order: o.key === "activity" ? undefined : o.key })}
                         className={o.key === order ? "current" : ""}
                       >
                         {o.label}
@@ -162,11 +168,12 @@ export function AreaRanking({
                       <TitleBadge title={titles[startRow + i] ?? ""} classic={classics?.[startRow + i]} link />
                     </td>
                     <td className={order === "power" ? "num current" : "num"}>{areaPower(r.power)}</td>
+                    <td className={order === "activity" ? "num current" : "num"}>{areaActivity(r.activity)}</td>
                   </tr>
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ textAlign: "center" }}>
+                    <td colSpan={5} style={{ textAlign: "center" }}>
                       暂无数据
                     </td>
                   </tr>
@@ -193,7 +200,7 @@ export function AreaRanking({
             「表 → 规则 → 地图」（五轮要求：排行板块第一位）。hover 联动不变 */}
         <div className="area_side">
           {rules}
-          <AreaMap data={mapData} hover={hover} onHover={setHover} />
+          <AreaMap data={mapData} order={order} hover={hover} onHover={setHover} />
         </div>
       </div>
     </>

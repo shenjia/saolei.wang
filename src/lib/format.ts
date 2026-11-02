@@ -31,9 +31,14 @@ export function score3bvs(score: number | null | undefined, negative = false): s
   return (score / 1000).toFixed(3);
 }
 
-/** 地区榜「综合排行指数」：1 万以上按 xx.x万 显示（精确到一位小数），否则原样输出（2026-10-14 W→万） */
+/** 地区榜「战力指数」（原综合排行指数，2026-11-02 改称）：1 万以上按 xx.x万 显示（精确到一位小数），否则原样输出（2026-10-14 W→万） */
 export function areaPower(power: number): string {
   return power >= 10000 ? `${(power / 10000).toFixed(1)}万` : String(power);
+}
+
+/** 地区榜「活跃指数」显示：量级与战力指数同档，复用万位折算 */
+export function areaActivity(score: number): string {
+  return areaPower(score);
 }
 
 /** 老 ASP 站入库时做的一次 HTML 转义解码（2026-10-15：修 bbs/5264 评论显示 &gt;.&lt; 字面量）。

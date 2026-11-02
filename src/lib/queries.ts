@@ -2564,6 +2564,12 @@ export interface AreaRow {
   active: number;
   bestRank: number;
   power: number;
+  /** 活跃指数（area_activity 落盘表，每小时重算；2026-11-02 张老师需求） */
+  activity: number;
+  /** 近 7 日练习尝试盘数（落盘表快照，hover 气泡展示用） */
+  plays7d: number;
+  /** 近 7 日上传录像数（落盘表快照，hover 气泡展示用） */
+  videos7d: number;
   bestId: number;
   bestName: string;
   /** 领军人物英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
@@ -2573,7 +2579,7 @@ export interface AreaRow {
   bestSex: number;
 }
 
-async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]> {
+async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRow[]> {
   const orderBy =
     order === "players"
       ? "players + 0.0001 * a.avg_rank DESC"
@@ -2581,7 +2587,9 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
         ? "active DESC, a.power DESC"
         : order === "best"
           ? "best_rank ASC"
-          : "power DESC";
+          : order === "activity"
+            ? "act_score DESC, a.power DESC"
+            : "power DESC";
   const rows = await prisma.$queryRawUnsafe<
     {
       area: string;
@@ -2589,6 +2597,9 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
       active: bigint;
       best_rank: bigint;
       power: bigint;
+      act_score: bigint;
+      plays_7d: bigint;
+      videos_7d: bigint;
       best_id: bigint;
       best_name: string;
       best_english_name: string;
@@ -2618,6 +2629,8 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
        GROUP BY u.area
      )
      SELECT a.area, a.players, COALESCE(v.active, 0) active, a.best_rank, a.power,
+            COALESCE(aa.score, 0) act_score, COALESCE(aa.plays_7d, 0) plays_7d,
+            COALESCE(aa.videos_7d, 0) videos_7d,
             r.id best_id, u.chinese_name best_name, u.english_name best_english_name,
             s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex
      FROM agg a
@@ -2625,6 +2638,7 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
      JOIN user u ON u.id = r.id
      JOIN user_scores s ON s.id = r.id
      LEFT JOIN act v ON v.area = a.area
+     LEFT JOIN area_activity aa ON aa.area = a.area
      ORDER BY ${orderBy}`,
   );
   return rows.map((r) => ({
@@ -2633,6 +2647,9 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
     active: N(r.active),
     bestRank: N(r.best_rank),
     power: N(r.power),
+    activity: N(r.act_score),
+    plays7d: N(r.plays_7d),
+    videos7d: N(r.videos_7d),
     bestId: N(r.best_id),
     bestName: r.best_name,
     bestEnglishName: r.best_english_name,
@@ -2646,11 +2663,13 @@ async function getAreaRankingImpl(order: AreaOrder = "power"): Promise<AreaRow[]
 // × 30 天活跃子查询），地区榜一天变不了几次，缓存 5 分钟（按 order 参数分键）
 // 2026-10-15 海外条目：地区榜含「海外」（张老师同日改主意——海外也进地区榜表），
 // 查询恢复不含排除；缓存键升 v3
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v3"], {
+// 2026-11-02 活跃指数：LEFT JOIN area_activity 落盘表（每小时重算，见 lib/areaactivity.ts），
+// 缓存键升 v4
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v4"], {
   revalidate: 300,
 });
 
-export async function getAreaRanking(order: AreaOrder = "power"): Promise<AreaRow[]> {
+export async function getAreaRanking(order: AreaOrder = "activity"): Promise<AreaRow[]> {
   return fetchAreaRanking(order);
 }
 

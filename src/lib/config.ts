@@ -529,16 +529,20 @@ export function areaDisplay(name: string): string {
 
 // ---------- 地区榜榜序（地区排行页表头 + URL 参数解析；服务端与客户端组件共用） ----------
 // 2026-10-13 张老师要求：去掉「平均排行」（平均全国名次意义不大），换成「活跃人数」（近 30 天登录人数）
-export type AreaOrder = "power" | "players" | "active" | "best";
+// 2026-11-02 张老师要求：「综合排行指数」改称「战力指数」；新增「活跃指数」排序列
+//   （落盘表 area_activity，每小时重算）并作为默认排序；players/active 不进表头、
+//   仅保留旧 URL 兼容（?order=players / active 仍可解析）
+export type AreaOrder = "power" | "players" | "active" | "best" | "activity";
 
 export const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
   { key: "best", label: "领军人物" },
+  { key: "power", label: "战力指数" },
+  { key: "activity", label: "活跃指数" },
   { key: "players", label: "排行人数" },
   { key: "active", label: "活跃人数" },
-  { key: "power", label: "综合排行指数" },
 ];
 
-/** 榜序参数解析（未知/缺省一律回落到综合排行指数） */
+/** 榜序参数解析（未知/缺省一律回落到活跃指数；2026-11-02 张老师定默认切换为活跃指数排行） */
 export function parseAreaOrder(v?: string): AreaOrder {
-  return AREA_ORDERS.find((o) => o.key === v)?.key ?? "power";
+  return AREA_ORDERS.find((o) => o.key === v)?.key ?? "activity";
 }
