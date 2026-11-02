@@ -38,7 +38,12 @@ export default async function VideoUploadPage() {
           生成的 <em>evf</em> 录像。
         </p>
         <p>上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。</p>
-        <p>※ 可接受的初级最低 3BV 为 2，中级最低 3BV 为 30，高级最低 3BV 为 100。</p>
+        {/* 3BV 数字亮灰（2026-11-02 张老师定，同「提供赞助」链接常态灰） */}
+        <p>
+          ※ 可接受的初级最低 3BV 为 <b style={{ color: "#b1b1a4" }}>2</b>
+          ，中级最低 3BV 为 <b style={{ color: "#b1b1a4" }}>30</b>
+          ，高级最低 3BV 为 <b style={{ color: "#b1b1a4" }}>100</b>。
+        </p>
         {/* 剩余额度实时行（客户端组件，随上传结果递减） */}
         <UploadQuota initialRemaining={remaining} />
         <hr />

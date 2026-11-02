@@ -22,11 +22,11 @@ export function UploadQuota({ initialRemaining }: { initialRemaining: number }) 
 
   return (
     <p>
-      您最近 7 天还能上传{" "}
-      {/* 剩余数字绿色（2026-11-02 张老师要求）——站内活跃绿 */}
+      {/* 2026-11-02 张老师定稿文案：固定规则句 + 实时剩余（数字绿色，随上传递减） */}
+      每账户每周最多上传100个录像，您现在还能上传{" "}
       <b style={{ color: "#a6e22e" }}>{remaining}</b> 个录像，对本站
-      {/* 绿色沿用站内活跃绿（globals.css .tp_row b.green 同源） */}
-      <Link href="/page/donate" style={{ color: "#a6e22e" }}>
+      {/* 亮灰常态、hover 变绿（globals.css .upload_quota_sponsor） */}
+      <Link href="/page/donate" className="upload_quota_sponsor">
         提供赞助
       </Link>
       可大大提升上传限额。
