@@ -8765,7 +8765,8 @@ button.msg_cancel:hover {
    像甩水珠——NF 下右键抖 NF 钮（不然像右键坏了）、无猜触雷被重排救回抖雨伞钮；
    .gshake 由 JS 挂上（shakeModeBtn：先摘类强制 reflow 再挂回，连续触发可重放） */
 #online_play .gicon.gmode_ng.gshake,
-#online_play .gicon.gmode.gshake {
+#online_play .gicon.gmode.gshake,
+#online_play .gicon.gshake {
   animation: op_shake 0.45s ease-in-out;
   transform-origin: 50% 85%;
 }
@@ -8815,6 +8816,12 @@ button.msg_cancel:hover {
 }
 #online_play .gicon:hover .tip,
 #online_play .op_ping:hover .tip {
+  display: block;
+}
+/* 全屏引导（2026-11-02 张老师定）：比例已到顶仍尝试放大时，全屏钮抖动
+   （gshake，见上）并强制弹出 hover 气泡引导全屏——JS 挂 gfs_hint，2.5s 后
+   摘除还原；形态与 hover 态完全一致 */
+#online_play .gicon.gfs_hint .tip {
   display: block;
 }
 /* 排行禁用倒计时（2026-10-29 张老师定）：排行钮 hover 气泡禁用文案里
