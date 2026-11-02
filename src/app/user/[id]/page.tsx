@@ -488,7 +488,8 @@ export default async function UserViewPage({
                     没赞助过不显示；ID 1 显示全站支出总额（查询见上方 donateAgg） */}
                 {donateCents > 0 && (
                   <StatRow label="赞助金额">
-                    <em>{donateYuanPlain(donateCents)}</em>
+                    {/* 金色例外类 donate_amt（globals.css，压过统计盒数字亮灰规则） */}
+                    <em className="donate_amt">{donateYuanPlain(donateCents)}</em>
                   </StatRow>
                 )}
                 {/* 2026-10-28 张老师要求：末尾补 注册时间 / 最近登录（yyyy-mm-dd）；

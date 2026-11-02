@@ -3092,6 +3092,10 @@ button.msg_reply_link {
   color: #b1b1a4;
   font-weight: bold;
 }
+/* 赞助金额行（2026-11-02 张老师要求）：例外走 legacy 金 #fdc61a */
+#user_view .sidebar .table em.donate_amt {
+  color: #fdc61a;
+}
 #user_view .sidebar .table .stat_today {
   color: #a6e22e;
 }
