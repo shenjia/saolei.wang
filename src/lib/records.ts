@@ -50,7 +50,7 @@ export interface RecordCurveRow {
 
 /** 右侧「其他纪录」TOP1 行 */
 export interface SiteTopRow {
-  key: "views" | "bv" | "upload" | "post" | "comment" | "history" | "practice" | "review";
+  key: "views" | "bv" | "upload" | "post" | "comment" | "history" | "practice" | "review" | "donate";
   userId: number;
   name: string;
   /** 创造者英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
@@ -236,6 +236,50 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
 
 /** 右侧八项 TOP1（每项一条 GROUP BY 取第一名 + 最近发生时间） */
 async function fetchSiteTops(): Promise<SiteTopRow[]> {
+  // 最多赞助（2026-11-02 张老师要求，纪录页右栏置顶）：每人 = donate 按 user 合计（分）；
+  // ID 1（站长）特殊口径与个人主页一致 = max(−结余, 0)，
+  // 结余 = 全站赞助收入（donate 全表合计，含匿名）− 全站支出（donate_expense 合计），
+  // 垫付额为 0（结余转整）时不参与夺魁；last_ct 取其最近一次支出时刻。
+  // donate 表行数量级极小，全表 GROUP BY 无性能顾虑。
+  const donateTop = (async (): Promise<SiteTopRow | null> => {
+    const [incomeAgg, expenseAgg] = await Promise.all([
+      prisma.donate.aggregate({ _sum: { amount: true } }),
+      prisma.donateExpense.aggregate({ _sum: { amount: true } }),
+    ]);
+    const bossVal = Math.max(
+      N(expenseAgg._sum.amount) - N(incomeAgg._sum.amount),
+      0,
+    );
+    const rows = await prisma.$queryRaw<{ uid: bigint; val: bigint; last_ct: bigint }[]>`
+      SELECT d.\`user\` uid, SUM(d.amount) val, MAX(d.create_time) last_ct
+      FROM donate d WHERE d.\`user\` > 0 GROUP BY d.\`user\`
+    `;
+    type Cand = { uid: number; val: number; lastCt: number };
+    const cands: Cand[] = rows.map((r) => ({
+      uid: N(r.uid), val: N(r.val), lastCt: N(r.last_ct),
+    }));
+    if (bossVal > 0) {
+      const bossLast = await prisma.donateExpense.aggregate({ _max: { createTime: true } });
+      const boss = { uid: 1, val: bossVal, lastCt: N(bossLast._max.createTime) };
+      const i = cands.findIndex((c) => c.uid === 1);
+      if (i >= 0) cands[i] = boss;
+      else cands.push(boss);
+    }
+    cands.sort((a, b) => b.val - a.val || a.uid - b.uid);
+    const top = cands[0];
+    if (!top) return null;
+    const info = await prisma.$queryRaw<{ name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null }[]>`
+      SELECT u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time
+      FROM \`user\` u LEFT JOIN user_scores s ON s.id = u.id WHERE u.id = ${top.uid}
+    `;
+    const i = info[0];
+    if (!i) return null;
+    return {
+      key: "donate", userId: top.uid, name: i.name, englishName: i.ename ?? "", sex: N(i.sex),
+      ranked: N(i.ustatus) === 0, expTime: N(i.exp_time), val: top.val, lastCt: top.lastCt,
+    };
+  })();
+
   // 收集BV最多 = BV 榜第一（2026-10-28 张老师定口径）：直接复用排行页 getBvRanking
   // （total 列，COUNT DISTINCT board_3bv 聚合 + 1 小时缓存，与 BV 榜零口径差），
   // 日期取该用户最近一次通过审核的上传时刻（=最近一次收集发生时间）
@@ -368,6 +412,7 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
   };
 
   return [
+    await donateTop,
     pick("views", views),
     await bv,
     upload,
@@ -387,9 +432,10 @@ export const getRecordCurves = unstable_cache(
   { revalidate: 86400, tags: ["records-curves"] }
 );
 
-/** 右侧七项 TOP1（60s 短缓存，实时性优先——2026-10-29 上传/审核两项已改单表索引聚合
- *  （张老师「按玩家 ID 直接 count」方案），TOP1 查询本身已快，不再需要 1h 权宜） */
-export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v5"], {
+/** 右侧 TOP1（60s 短缓存，实时性优先——2026-10-29 上传/审核两项已改单表索引聚合
+ *  （张老师「按玩家 ID 直接 count」方案），TOP1 查询本身已快，不再需要 1h 权宜；
+ *  2026-11-02 新增最多赞助（v6）：站长按结余负数参与，口径变更升版本 */
+export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v6"], {
   revalidate: 60,
   tags: ["records-tops"],
 });

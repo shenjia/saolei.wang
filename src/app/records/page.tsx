@@ -20,6 +20,7 @@ import { dualTitles } from "@/lib/title-system";
 import { RecordsCurves, type MetricSectionData } from "@/components/RecordsCurves";
 import { AvatarCell } from "@/components/Cells";
 import { TitleBadge } from "@/components/TitleBadge";
+import { donateYuanPlain } from "@/lib/donate";
 
 export const metadata = { title: "纪录" };
 
@@ -39,6 +40,9 @@ function fmtWan(v: number): string {
 
 /** 右栏七项的标题/单位（2026-10-28 四轮张老师定名；val 由 lib/records.ts 归一化为 number） */
 const TOP_META: Record<string, { label: string; unit: string; fmt?: (v: number) => string }> = {
+  // 最多赞助（2026-11-02 张老师要求，右栏置顶）：val 为分，donateYuanPlain 出「¥xx」；
+  // 站长按结余负数参与（口径在 lib/records.ts donateTop，与个人主页一致）
+  donate: { label: "最多赞助", unit: "", fmt: donateYuanPlain },
   views: { label: "最高人气", unit: "万", fmt: fmtWan },
   bv: { label: "最多收集", unit: "个BV", fmt: (v) => v.toLocaleString("zh-CN") },
   upload: { label: "最多录像", unit: "部", fmt: (v) => v.toLocaleString("zh-CN") },
@@ -101,11 +105,14 @@ export default async function RecordsPage() {
                   <h2>{meta.label}</h2>
                   <span className="records_top_val">
                     {val}
-                    <small> {meta.unit}</small>
+                    {/* 金额自带 ¥ 前缀无单位后缀（2026-11-02 最多赞助） */}
+                    {meta.unit && <small> {meta.unit}</small>}
                   </span>
                 </div>
                 <div className="records_top_sub">
-                  <span className="records_top_label">纪录保持者</span>
+                  <span className="records_top_label">
+                    {t.key === "donate" ? "赞助者" : "纪录保持者"}
+                  </span>
                   <span className="records_top_who">
                     <AvatarCell id={t.userId} name={t.name} englishName={t.englishName} sex={t.sex} link gender="small" />{" "}
                     <TitleBadge
