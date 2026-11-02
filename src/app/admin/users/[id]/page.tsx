@@ -4,12 +4,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { USER_ROLE, RANK_BAN_PERMANENT, AREA_LIST } from "@/lib/config";
+import { USER_ROLE, RANK_BAN_PERMANENT } from "@/lib/config";
 import { getUserDetailAdmin } from "@/lib/admin/data";
 import { opLabel } from "@/lib/admin/log";
 import { AdminAction, AdminForm } from "@/components/admin/AdminAction";
 import { BanUserDialog } from "@/components/admin/BanUserDialog";
 import { MergeUserDialog } from "@/components/admin/MergeUserDialog";
+import { EditProfileDialog } from "@/components/admin/EditProfileDialog";
 import { LowTrustDialog } from "@/components/admin/LowTrustDialog";
 import { RankBanDialog } from "@/components/admin/RankBanDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
@@ -42,10 +43,6 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
   /* 2026-10-27 张老师实测：看自己的详情页也要能解除反作弊标记——处置面板本人也渲染，
      但隐藏自伤性操作（封禁/改管理员/注销），防自杀式误操作守卫收窄到操作级 */
   const isSelf = u.id === session?.uid;
-  // 「编辑玩家资料」地区下拉：历史遗留「xx&xx」等不在白名单的现值保留为「保持现状」选项
-  const areaOptions: [string, string][] = (AREA_LIST as readonly string[]).includes(u.area)
-    ? AREA_LIST.map((a) => [a, a] as [string, string])
-    : [[u.area, `${u.area}（保持现状）`], ...AREA_LIST.map((a) => [a, a] as [string, string])];
 
   return (
     <>
@@ -336,6 +333,22 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
               {/* 账户合并（2026-11-01）：有内容的账号走这条路——全数据并入目标账户后注销源账户；
                   本人视角隐藏（isSelf 与注销同一自伤守卫） */}
               {!isSelf && <MergeUserDialog userId={u.id} name={u.chineseName} sm={false} />}
+              {/* 编辑玩家资料（2026-11-02 张老师定稿）：处置区按钮弹浮层编辑，本人也可用（无自伤面） */}
+              <EditProfileDialog
+                userId={u.id}
+                name={u.chineseName}
+                chineseName={u.chineseName}
+                englishName={u.englishName}
+                sex={u.sex}
+                area={u.area}
+                nickname={d.nickname}
+                qq={d.qq}
+                mouse={d.mouse}
+                pad={d.pad}
+                interest={d.interest}
+                birthday={d.birthday}
+                sm={false}
+              />
             </div>
 
             <AdminForm
@@ -356,51 +369,6 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             <div className="admin_hint" style={{ marginTop: 8 }}>
               重置结果（含新密码）会以气泡提示显示，请复制后转告玩家；同时会使所有未过期的找回密码链接失效。操作日志只留「已重置」事实，不记密码明文。
             </div>
-
-            {/* ---------- 编辑玩家资料（2026-11-02 张老师需求）：处置面板内可改玩家填写的
-                全部资料（中文名/英文名/性别/地区/昵称/QQ/鼠标/鼠标垫/爱好/生日）。
-                姓名校验与注册同规（拼音词数=姓名字数），文本字段上限与前台「编辑资料」
-                同口径，地区变化同步搬 user_rank 名次；变更摘要记入后台日志 ---------- */}
-            <div
-              className="admin_hint"
-              style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #49483e", marginBottom: 10 }}
-            >
-              编辑玩家资料——保存后立即生效并记入操作日志；拼音词数须与姓名字数一致（如「陈一宁」= Chen Yi Ning）。
-            </div>
-            <AdminForm
-              op="user.editProfile"
-              params={{ id: u.id }}
-              layout="stack"
-              resetAfterSubmit={false}
-              fields={[
-                { name: "chineseName", label: "中文名", defaultValue: u.chineseName, required: true },
-                { name: "englishName", label: "英文名（姓名拼音）", defaultValue: u.englishName, required: true },
-                {
-                  name: "sex",
-                  label: "性别",
-                  type: "select",
-                  options: [
-                    ["1", "男"],
-                    ["0", "女"],
-                  ],
-                  defaultValue: String(u.sex),
-                },
-                { name: "area", label: "地区", type: "select", options: areaOptions, defaultValue: u.area },
-                { name: "nickname", label: "昵称", defaultValue: d.nickname },
-                { name: "qq", label: "QQ", defaultValue: d.qq },
-                { name: "mouse", label: "鼠标", defaultValue: d.mouse },
-                { name: "pad", label: "鼠标垫", defaultValue: d.pad },
-                { name: "interest", label: "爱好", defaultValue: d.interest },
-                {
-                  name: "birthday",
-                  label: "生日（留空=不修改）",
-                  type: "date",
-                  defaultValue: d.birthday ? formatDate(d.birthday, "Y-m-d") : "",
-                },
-              ]}
-              submitLabel="保存资料"
-              confirm={`确认保存对「${u.chineseName}」的资料修改？变更内容将记入后台操作日志。`}
-            />
           </AdminCard>
         )}
       </div>
