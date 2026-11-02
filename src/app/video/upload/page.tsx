@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { UploadForm } from "@/components/UploadForm";
 import { UploadQuota } from "@/components/UploadQuota";
-import { countTodayUploads, dailyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
+import { countWeeklyUploads, weeklyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "上传录像" };
@@ -15,10 +15,10 @@ export default async function VideoUploadPage() {
   const session = await getSession();
   if (!session) redirect("/account/login");
 
-  // 当日剩余额度（2026-11-02 张老师定：默认 20/天，赞助每 1 元 +10、1000 封顶）
+  // 滚动 7 天剩余额度（2026-11-02 张老师定：默认 100/周，赞助每 1 元 +20、2000 封顶）
   const [limit, used] = await Promise.all([
-    sumDonateCents(session.uid).then(dailyUploadLimit),
-    countTodayUploads(session.uid),
+    sumDonateCents(session.uid).then(weeklyUploadLimit),
+    countWeeklyUploads(session.uid),
   ]);
   const remaining = Math.max(0, limit - used);
 

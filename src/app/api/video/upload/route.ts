@@ -25,7 +25,7 @@ import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/s
 import { userTitleSnapshot } from "@/lib/queries";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 import { getRankPenalty, countRecentUploads, LOW_TRUST_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
-import { countTodayUploads, dailyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
+import { countWeeklyUploads, weeklyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -66,17 +66,17 @@ export async function uploadVideo(
     }
   }
 
-  // 每日上传上限（2026-11-02 张老师定）：默认每人每天 20 盘，赞助每 1 元 +10（1000 封顶）。
-  // 排名局服务端自动入库（rankedInternal）不占额度也不计入当日已传数
-  // （countTodayUploads 已排除 RANKED_SOFTWARE）——排名玩法是本站核心业务，不被上传闸误伤。
-  // 排在格式校验前，伪造请求同吃限额。
+  // 每周上传上限（2026-11-02 张老师定，12:36 二改）：默认每 7 天 100 盘（滚动窗口），
+  // 赞助每 1 元 +20（2000 封顶）。排名局服务端自动入库（rankedInternal）不占额度
+  // 也不计数（countWeeklyUploads 已排除 RANKED_SOFTWARE）——排名玩法是本站核心业务，
+  // 不被上传闸误伤。排在格式校验前，伪造请求同吃限额。
   const donateCents = await sumDonateCents(session.uid);
-  const dailyLimit = dailyUploadLimit(donateCents);
-  const today = await countTodayUploads(session.uid);
-  if (!options?.rankedInternal && today >= dailyLimit) {
-    console.warn(`[upload-limit] uid=${session.uid} 当日上传达上限 ${dailyLimit}，已拦截`);
+  const weeklyLimit = weeklyUploadLimit(donateCents);
+  const used = await countWeeklyUploads(session.uid);
+  if (!options?.rankedInternal && used >= weeklyLimit) {
+    console.warn(`[upload-limit] uid=${session.uid} 近 7 天上传达上限 ${weeklyLimit}，已拦截`);
     return NextResponse.json(
-      { error: "您今天还能上传的录像额度已用完，请明天再试", remaining: 0 },
+      { error: "您最近 7 天还能上传的录像额度已用完，请明天再试", remaining: 0 },
       { status: 429 }
     );
   }
@@ -294,7 +294,7 @@ export async function uploadVideo(
       void ensureVideoTriage(videoId, triageExtra);
     }
   }
-  // 剩余额度（回传给上传页实时刷新）：countTodayUploads 此刻已含刚落的这条
-  const remaining = Math.max(0, dailyLimit - (await countTodayUploads(session.uid)));
+  // 剩余额度（回传给上传页实时刷新）：countWeeklyUploads 此刻已含刚落的这条
+  const remaining = Math.max(0, weeklyLimit - (await countWeeklyUploads(session.uid)));
   return NextResponse.json({ ok: true, firstBv, pbBv, remaining });
 }
