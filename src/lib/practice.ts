@@ -168,7 +168,12 @@ export async function getRankedToday(uid: number): Promise<RankedToday> {
   const today0 = dayStart(0);
   const uidBig = BigInt(uid);
 
-  // ① 今日新收集 BV（按级别分组去重计数）——收集格同源可见集合，单用户索引点查
+  // ① 今日新收集 BV（按级别分组去重计数）——收集格同源可见集合，单用户索引点查。
+  //    口径＝「该 BV 首次收集发生在今天」：对 (level, board_3bv) 全历史取
+  //    MIN(create_time) 作收集时刻（收集格同口径），HAVING 过滤——不能只看
+  //    今天上传的录像里出现过哪些 3BV（旧版把以前收集过、今天重刷出 PB 的
+  //    同值 3BV 也误计为「新收集」，2026-11-02 张老师报「刷了一堆初级 PB
+  //    却显示收集 9 个初级 BV」实锤，生产验证 9→0）。
   const collected = await prisma.$queryRaw<{ lv: string; c: bigint }[]>`
     SELECT t.lv, COUNT(*) AS c FROM (
       SELECT v.level AS lv, vi.board_3bv
@@ -181,8 +186,8 @@ export async function getRankedToday(uid: number): Promise<RankedToday> {
           WHEN 'beg' THEN ${LEVEL_MIN_3BV.beg}
           WHEN 'int' THEN ${LEVEL_MIN_3BV.int}
           ELSE ${LEVEL_MIN_3BV.exp} END
-        AND v.create_time >= ${today0}
       GROUP BY v.level, vi.board_3bv
+      HAVING MIN(v.create_time) >= ${today0}
     ) t GROUP BY t.lv`;
   for (const r of collected) {
     if (r.lv === "beg") out.beg = N(r.c);
