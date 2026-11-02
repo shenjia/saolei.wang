@@ -8499,8 +8499,10 @@ button.msg_cancel:hover {
   font-style: normal;
   color: #fdc61d;
 }
-/* 气泡第一行右侧「出现概率」（2026-11-02 张老师要求）：常规字重灰字，跟在 3BV 值后同行 */
+/* 气泡第一行右侧「出现概率」（2026-11-02 张老师要求）：常规字重灰字，跟在 3BV 值后同行。
+   ⚠️ 必须显式 display:inline——上面 `#user_3bv .tip span` 的 display:block 会命中 .prob 把它压成换行 */
 #user_3bv .tip b .prob {
+  display: inline;
   font-weight: normal;
   color: #b1b1a4;
 }
