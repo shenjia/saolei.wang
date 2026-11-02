@@ -1710,6 +1710,8 @@ async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
 export interface VideoDetail extends VideoListItem {
   hash: string;
   filepath: string;
+  /** video_info.update_time：录像文件版本号，回放页 fetch 用它绕 CDN 缓存（2026-11-02） */
+  fileVer: number;
   signature: string;
   reviewUser: number | null;
   reviewTime: number | null;
@@ -1760,6 +1762,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     software: info.software,
     version: info.version,
     filepath: info.filepath,
+    fileVer: N(info.updateTime),
     signature: info.signature,
     clicks: stat?.clicks ?? 0,
     comments: stat?.comments ?? 0,

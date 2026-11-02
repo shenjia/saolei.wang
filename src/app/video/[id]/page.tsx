@@ -167,6 +167,7 @@ export default async function VideoViewPage({
     <VideoReplayProvider
       boardId={video.id}
       filepath={video.filepath}
+      fileVer={video.fileVer}
       realTimeMs={video.realTime}
       radarPoints={analysis?.points}
       radarOverall={analysis?.overall}

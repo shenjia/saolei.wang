@@ -224,7 +224,11 @@ function detectPhantomSafe(parsed, id) {
 
 console.log(`\n== 扫描 ${scanned} 个 evf（跳过非 v0.3 ${skippedVer}）| 含幻影 ${changed} 个 | 共 ${totalPairs} 对 | 尾毫秒变化 ${tailChanged} ==`);
 if (apply) {
-  if (sqlArg && sqlLines.length) { writeFileSync(sqlArg, sqlLines.join("\n") + "\n"); console.log(`SQL 已产出: ${sqlArg}（${sqlLines.length} 行）`); }
+  if (sqlArg && sqlLines.length) {
+    const sqlPath = sqlArg.slice("--sql=".length); // 剥前缀（2026-11-02 服务器实证：原样把 "--sql=..." 当路径写文件报 EACCES）
+    writeFileSync(sqlPath, sqlLines.join("\n") + "\n");
+    console.log(`SQL 已产出: ${sqlPath}（${sqlLines.length} 行）`);
+  }
   if (metricsIds.length) { writeFileSync("/tmp/evf-phantom-ids.txt", metricsIds.join("\n") + "\n"); console.log("ids 清单: /tmp/evf-phantom-ids.txt（供 video-metrics --ids-file）"); }
   if (tailList.length) { writeFileSync("/tmp/evf-phantom-tail.tsv", tailList.join("\n") + "\n"); console.log("尾毫秒变化清单: /tmp/evf-phantom-tail.tsv（供 recalc-ranked-rtime --list）"); }
   console.log("备份目录: /tmp/evf-phantom-backup/");

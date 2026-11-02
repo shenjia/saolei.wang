@@ -1639,6 +1639,7 @@ class FetchError extends Error {
 export function VideoReplayProvider({
   boardId,
   filepath,
+  fileVer,
   realTimeMs,
   radarPoints,
   radarOverall,
@@ -1653,6 +1654,8 @@ export function VideoReplayProvider({
   /** Board 组件渲染的 id="board_{boardId}"，play() 时据此定位棋盘 DOM */
   boardId: number;
   filepath: string;
+  /** 文件版本号（video_info.update_time）：文件被服务端重写（统计回填类）后据此绕开 CDN 缓存 */
+  fileVer?: number;
   /** 库内权威用时（毫秒，video_info.real_time）：进度条总长与播放终点以库为准 */
   realTimeMs?: number;
   /** 服务端算好的本局五轴雷达数据（详情页右栏同源）——全屏层右侧「录像评级」用
@@ -1734,6 +1737,11 @@ export function VideoReplayProvider({
   const loadingRef = useRef(false);
 
   const uri = `/videos${filepath}`;
+  /* 数据拉取专用缓存破坏参数（2026-11-02，353011 案）：文件被服务端重写（统计回填类）后
+     ESA 边缘缓存（/videos/ expires 30d）会长时间供旧文件，站内统计面板跟着错——
+     带 video_info.update_time 作版本参数精准绕开；flop 兜底播放器 uri 保持不带查询串
+     （铁律：flop 播放 URL 绝不能带查询串，拼进扩展名直接报错） */
+  const dataUri = fileVer ? `${uri}?v=${fileVer}` : uri;
 
   useEffect(() => {
     if (flopUri && window.flop) playFlop(flopUri);
@@ -1770,7 +1778,7 @@ export function VideoReplayProvider({
     setStatus("loading");
     try {
       if (dataRef.current === undefined) {
-        const res = await fetch(uri);
+        const res = await fetch(dataUri);
         if (!res.ok) throw new FetchError(res.status);
         dataRef.current = parseReplayData(
           new Uint8Array(await res.arrayBuffer()),
