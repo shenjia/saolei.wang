@@ -33,8 +33,12 @@ const LEVEL_TAG: Record<Meta["level"], { label: string; color: string }> = {
   exp: { label: "高级", color: "#fdc61d" },
 };
 
-// fetch 不带上传进度，用 XHR 拿 progress 事件驱动 .progress 宽度
-function uploadOne(file: File, onProgress: (pct: number) => void): Promise<{ ok: boolean; error?: string }> {
+// fetch 不带上传进度，用 XHR 拿 progress 事件驱动 .progress 宽度。
+// 服务端成功/限流响应都带 remaining（当日剩余额度），回传给页面配额行实时刷新
+function uploadOne(
+  file: File,
+  onProgress: (pct: number) => void
+): Promise<{ ok: boolean; error?: string; remaining?: number }> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/video/upload");
@@ -42,14 +46,15 @@ function uploadOne(file: File, onProgress: (pct: number) => void): Promise<{ ok:
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => {
-      let data: { ok?: boolean; error?: string } = {};
+      let data: { ok?: boolean; error?: string; remaining?: number } = {};
       try {
         data = JSON.parse(xhr.responseText);
       } catch {
         // 非 JSON 响应按失败处理
       }
-      if (xhr.status >= 200 && xhr.status < 300 && data.ok) resolve({ ok: true });
-      else resolve({ ok: false, error: data.error ?? `上传失败（HTTP ${xhr.status}）` });
+      const remaining = typeof data.remaining === "number" ? data.remaining : undefined;
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok) resolve({ ok: true, remaining });
+      else resolve({ ok: false, error: data.error ?? `上传失败（HTTP ${xhr.status}）`, remaining });
     };
     xhr.onerror = () => resolve({ ok: false, error: "网络错误，上传中断" });
     const form = new FormData();
@@ -175,6 +180,10 @@ export function UploadForm() {
     for (const item of targets) {
       update(item.key, { status: "uploading", progress: 0, message: "" });
       const res = await uploadOne(item.file, (pct) => update(item.key, { progress: pct }));
+      // 剩余额度实时刷新（成功与限流响应都带 remaining）
+      if (typeof res.remaining === "number") {
+        window.dispatchEvent(new CustomEvent("upload-remaining", { detail: res.remaining }));
+      }
       if (res.ok) {
         update(item.key, { status: "success", progress: 100, message: "上传成功，等待审核" });
         okCount++;
@@ -260,7 +269,7 @@ export function UploadForm() {
           {dragOver ? "松开鼠标即可添加" : "点击选择录像文件，或将文件拖拽到页面任意位置"}
         </span>
         <span style={{ display: "block", color: "#49483e", fontSize: 12, lineHeight: "20px" }}>
-          支持 mvf / avf / evf，可批量选择，单个文件不超过 500KB，每人每天限传 500 个
+          支持 mvf / avf / evf，可批量选择，单个文件不超过 500KB
         </span>
       </div>
       <input

@@ -25,7 +25,7 @@ import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/s
 import { userTitleSnapshot } from "@/lib/queries";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 import { getRankPenalty, countRecentUploads, LOW_TRUST_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
-import { countTodayUploads, DAILY_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
+import { countTodayUploads, dailyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -66,13 +66,19 @@ export async function uploadVideo(
     }
   }
 
-  // 每日上传上限（2026-11-02 张老师定：每人每天限传 500 盘；+08:00 自然日口径）。
-  // 背景：赵元祥 2 分钟 1022 盘、杨雨鑫两天 2803 盘匀速批量全过审入榜——前台去重
-  // 只治展示不治源头，本闸从上传入口硬限。排在格式校验前，伪造请求同吃限额。
+  // 每日上传上限（2026-11-02 张老师定）：默认每人每天 20 盘，赞助每 1 元 +10（1000 封顶）。
+  // 排名局服务端自动入库（rankedInternal）不占用户上传额度——排名玩法是本站核心业务，
+  // 不应被上传闸误伤；但其录像仍计入当日已传数（countTodayUploads 全量口径）。
+  // 排在格式校验前，伪造请求同吃限额。
+  const donateCents = await sumDonateCents(session.uid);
+  const dailyLimit = dailyUploadLimit(donateCents);
   const today = await countTodayUploads(session.uid);
-  if (today >= DAILY_UPLOAD_LIMIT) {
-    console.warn(`[upload-limit] uid=${session.uid} 当日上传达上限 ${DAILY_UPLOAD_LIMIT}，已拦截`);
-    return fail(`每天最多上传 ${DAILY_UPLOAD_LIMIT} 个录像，请明天再试`, 429);
+  if (!options?.rankedInternal && today >= dailyLimit) {
+    console.warn(`[upload-limit] uid=${session.uid} 当日上传达上限 ${dailyLimit}，已拦截`);
+    return NextResponse.json(
+      { error: "您今天还能上传的录像额度已用完，请明天再试", remaining: 0 },
+      { status: 429 }
+    );
   }
 
   let file: File | null;
@@ -288,5 +294,7 @@ export async function uploadVideo(
       void ensureVideoTriage(videoId, triageExtra);
     }
   }
-  return NextResponse.json({ ok: true, firstBv, pbBv });
+  // 剩余额度（回传给上传页实时刷新）：countTodayUploads 此刻已含刚落的这条
+  const remaining = Math.max(0, dailyLimit - (await countTodayUploads(session.uid)));
+  return NextResponse.json({ ok: true, firstBv, pbBv, remaining });
 }

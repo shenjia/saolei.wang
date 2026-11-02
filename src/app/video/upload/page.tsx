@@ -5,6 +5,8 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { UploadForm } from "@/components/UploadForm";
+import { UploadQuota } from "@/components/UploadQuota";
+import { countTodayUploads, dailyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "上传录像" };
@@ -12,6 +14,13 @@ export const metadata = { title: "上传录像" };
 export default async function VideoUploadPage() {
   const session = await getSession();
   if (!session) redirect("/account/login");
+
+  // 当日剩余额度（2026-11-02 张老师定：默认 20/天，赞助每 1 元 +10、1000 封顶）
+  const [limit, used] = await Promise.all([
+    sumDonateCents(session.uid).then(dailyUploadLimit),
+    countTodayUploads(session.uid),
+  ]);
+  const remaining = Math.max(0, limit - used);
 
   return (
     <div id="page" className="main">
@@ -30,8 +39,8 @@ export default async function VideoUploadPage() {
         </p>
         <p>上传成功后的录像，需要通过管理员的审核，成绩才能计入排行。</p>
         <p>※ 可接受的初级最低 3BV 为 2，中级最低 3BV 为 30，高级最低 3BV 为 100。</p>
-        {/* 每日上传上限（2026-11-02 张老师定）：与 /api/video/upload 的 DAILY_UPLOAD_LIMIT 同步 */}
-        <p>※ 每人每天最多上传 500 个录像。</p>
+        {/* 剩余额度实时行（客户端组件，随上传结果递减） */}
+        <UploadQuota initialRemaining={remaining} />
         <hr />
         <UploadForm />
       </div>
