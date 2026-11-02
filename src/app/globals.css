@@ -8940,12 +8940,12 @@ button.msg_cancel:hover {
 }
 #online_play .op_ping .ping_suggest em {
   font-style: normal;
-  color: #fdc61d;
 }
-/* 延迟数字绿色（2026-11-02 张老师三改：与 .sv hover 站内绿同色） */
-#online_play .op_ping .ping_suggest .rtt {
-  color: #a6e22e;
-}
+/* 服务器名/延迟数字按各自延迟档位配色（2026-11-02 张老师四改）：当前服务器名
+   随当前延迟、推荐服务器名与延迟数字随推荐延迟；阈值与色值同信号条三档 */
+#online_play .op_ping .ping_suggest .g { color: #a6e22e; }
+#online_play .op_ping .ping_suggest .y { color: #fdc61d; }
+#online_play .op_ping .ping_suggest .r { color: #f92672; }
 /* 悬停桥（2026-10-29 张老师反馈）：tip 悬在图标上方 4px，间隙里只有 10px 宽的
    小三角接得住鼠标——斜向上移动错过三角即落进空隙，:hover 断、气泡闪没，
    永远够不到服务器名。::before 铺一条与气泡同宽的隐形桥盖住间隙（含图标顶缘
