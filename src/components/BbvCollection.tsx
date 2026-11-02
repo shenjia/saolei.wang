@@ -17,8 +17,9 @@
 // JS 不可用时降级为整页跳转、服务端按 ?bbv= 直接渲染对应配色；为免首屏闪一下 3BV 配色，
 // box 内第一段内联脚本在解析到格子之前就把 data-mode 改好（URL 参数优先于 localStorage）。
 //
-// 悬停出 CSS 气泡：3BV 值 + 最好成绩与评级（2026-10-27 加）+ 该 3BV 录像数与点击提示
-// （2026-10-20 张老师要求）；未收集的格子显示「暂无录像」。
+// 悬停出 CSS 气泡：3BV 值 + 出现概率（第一行右侧，2026-11-02 张老师提供 3BV概率.xlsx，
+// 数据与格式化见 lib/bbv-probability.ts）+ 最好成绩与评级（2026-10-27 加）+ 该 3BV 录像数与
+// 点击提示（2026-10-20 张老师要求）；未收集的格子显示「暂无录像」。
 // 已收集方格点击跳该 3BV 定向录像列表 /video?author=..&level=..&3bv=..&order=time
 // （2026-10-20 张老师需求：筛该玩家该级别该 3BV 全部录像，默认按成绩升序）。
 // 除两个内联脚本外无客户端 JS、无 hydration、无 API 路由。
@@ -28,6 +29,7 @@ import { LEVEL_NAMES, VIDEO_LEVELS, UNREACHABLE_3BV, type VideoLevel } from "@/l
 import { gradeColor } from "@/lib/videoscore";
 import { scoreTime } from "@/lib/format";
 import type { BbvCell } from "@/lib/queries";
+import { bbvProbabilityPercent } from "@/lib/bbv-probability";
 import { BbvModeSync } from "./BbvModeSync";
 
 /** localStorage 键：全站共用（张老师 2026-10-27：看任何人的主页都是自己选的那个模式） */
@@ -120,9 +122,14 @@ export function BbvCollection({
               {values.map((b) => {
                 // 已收集 = 该 3BV 有录像（cell），未收集 = undefined
                 const cell = map.get(b);
+                // 该 3BV 出现概率（2026-11-02 张老师：第一行右侧；源表无数据则不显示）
+                const prob = bbvProbabilityPercent(level, b);
                 const tip = (
                   <i className="tip">
-                    <b>3BV = {b}</b>
+                    <b>
+                      3BV = {b}
+                      {prob != null && <span className="prob">　出现概率：{prob}%</span>}
+                    </b>
                     {cell ? (
                       <>
                         {/* 2026-10-27 张老师要求：3BV 行下加「最好成绩 + 评级」 */}
