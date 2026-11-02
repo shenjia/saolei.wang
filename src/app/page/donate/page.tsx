@@ -85,7 +85,7 @@ export default async function DonatePage() {
                 <em className="stat_val stat_expense">-{donateYuanPlain(expense.totalCents)}</em>
               </div>
               <div className="stat_row">
-                <span className="stat_label">总计结余</span>
+                <span className="stat_label">资金结余</span>
                 <em className={`stat_val ${balance >= 0 ? "stat_balance_pos" : "stat_balance_neg"}`}>
                   {balance >= 0 ? donateYuanPlain(balance) : `-${donateYuanPlain(-balance)}`}
                 </em>

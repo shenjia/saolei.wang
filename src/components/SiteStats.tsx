@@ -13,17 +13,30 @@
 // 2026-10-22 三轮（张老师要求）：行名「在线练习」改「练习盘数」，行位由「论坛主题」下
 //   移至「排行人数」之下（与上传录像等 UGC 行分区分开，紧跟人数类指标）。
 // 排行人数无「今日」增量——user_scores.create_time 是注册时间非上榜时间，历史数据不干净。
+// 2026-11-02 张老师要求：底部新增「资金结余」行——赞助页同口径结余（donate 合计 −
+// donate_expense 合计），正数金色、负数红色，点击跳赞助页 /page/donate。
 
+import Link from "next/link";
 import { getSiteStats } from "@/lib/queries";
+import { donateYuanPlain } from "@/lib/donate";
 
-function StatRow({ label, total, today }: { label: string; total: number; today?: number }) {
+function StatRow({
+  label,
+  total,
+  today,
+  children,
+}: {
+  label: string;
+  total?: number;
+  today?: number;
+  /** 自定义数值单元格（如资金结余的彩色 Link）；提供时忽略 total */
+  children?: React.ReactNode;
+}) {
   const hasDelta = today !== undefined && today > 0;
   return (
     <tr>
       <td className="label">{label}</td>
-      <td className="num">
-        <em>{total}</em>
-      </td>
+      <td className="num">{children ?? <em>{total}</em>}</td>
       <td className="delta">{hasDelta ? `（+${today}）` : ""}</td>
     </tr>
   );
@@ -48,6 +61,17 @@ export async function SiteStats() {
           <StatRow label="论坛主题" total={s.bbsTotal} today={s.bbsToday} />
           {/* 论坛评论固定在最底行（2026-10-13 张老师要求；2026-10-22 换数据源 bbs_reply） */}
           <StatRow label="论坛评论" total={s.bbsReplyTotal} today={s.bbsReplyToday} />
+          {/* 2026-11-02 张老师要求：底部新增「资金结余」行（赞助页同口径结余）；
+              正数金色、负数红色；点击跳赞助页——target=_blank 必配 prefetch=false（铁律） */}
+          <StatRow label="资金结余">
+            <Link href="/page/donate" target="_blank" prefetch={false}>
+              <em className={s.donateBalanceCents >= 0 ? "balance_pos" : "balance_neg"}>
+                {s.donateBalanceCents >= 0
+                  ? donateYuanPlain(s.donateBalanceCents)
+                  : `-${donateYuanPlain(-s.donateBalanceCents)}`}
+              </em>
+            </Link>
+          </StatRow>
         </tbody>
       </table>
     </div>

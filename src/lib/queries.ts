@@ -2028,6 +2028,9 @@ export interface SiteStats {
   // （口径同「今日练习」板块/后台 KPI：胜负都算、游客局也计）
   practiceTotal: number;
   practiceToday: number;
+  // 2026-11-02 张老师要求：新增「资金结余」行——赞助页同口径结余（分）：
+  // 全站赞助收入（donate 合计）− 全站支出（donate_expense 合计）
+  donateBalanceCents: number;
 }
 
 async function getSiteStatsImpl(): Promise<SiteStats> {
@@ -2044,6 +2047,7 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     bbsTotal, bbsToday,
     bbsReplyTotal, bbsReplyToday,
     practiceTotal, practiceToday,
+    donateSumCents, expenseSumCents,
   ] = await Promise.all([
     // 2026-10-14：注册人数按旧站口径排除封禁账号（旧站 @All_Number = count(...Player_IsLive='1')）
     prisma.user.count({ where: ACTIVE_USER }),
@@ -2068,6 +2072,10 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
       SELECT COALESCE(SUM(plays),0) AS p FROM practice_daily
       WHERE day = ${Math.floor((Number(dayStart) + 28800) / 86400)}
     `,
+    // 资金结余（2026-11-02 张老师要求）：赞助页同口径——donate 合计 − donate_expense 合计；
+    // 两个 aggregate 与赞助页 getDonateList/getExpenseList 的合计完全同源
+    prisma.donate.aggregate({ _sum: { amount: true } }),
+    prisma.donateExpense.aggregate({ _sum: { amount: true } }),
   ]);
   return {
     userTotal,
@@ -2084,12 +2092,13 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     // $queryRaw SUM 返回 bigint → number
     practiceTotal: Number(practiceTotal[0]?.p ?? 0),
     practiceToday: Number(practiceToday[0]?.p ?? 0),
+    donateBalanceCents: Number(donateSumCents._sum.amount ?? 0) - Number(expenseSumCents._sum.amount ?? 0),
   };
 }
 
 // 2026-10-15 性能审计：首页右栏「站点统计」9 个 count，其中 video/news/comment 三项
 // 在 20 万级表上全表扫描（EXPLAIN 证实 ALL），是全站最重的单点。缓存 60s
-const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v1"], { revalidate: 60 });
+const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v2"], { revalidate: 60 });
 
 export async function getSiteStats(): Promise<SiteStats> {
   return fetchSiteStats();

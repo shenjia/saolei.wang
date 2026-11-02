@@ -3203,6 +3203,14 @@ button.msg_reply_link {
 .stat_today {
   color: #a6e22e;
 }
+/* 「资金结余」行（2026-11-02 张老师要求）：正数金色、负数红色，点击跳赞助页；
+   同款金色 #e6b422 / 红色 #f92672 与赞助页收支统计一致 */
+#site_stats .table em.balance_pos {
+  color: #e6b422;
+}
+#site_stats .table em.balance_neg {
+  color: #f92672;
+}
 
 /* ---------- 录像页右栏「数据统计」（2026-10-13 张老师要求） ----------
    ①标题「统计」→「数据统计」；②增初级/中级/高级录像细分行（口径＝仅已通过）；
