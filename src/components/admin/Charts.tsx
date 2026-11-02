@@ -20,6 +20,9 @@ export interface Series {
   label: string;
   color: string;
   values: number[];
+  /** 末点（今日）全天预估值（2026-11-02）：有值时末点按预估落笔（前实后虚），
+   *  气泡里同时给「实际 + 预估」两个数；null/缺省 = 不预估 */
+  estimate?: number | null;
 }
 
 // ---------- 折线 / 面积图（多序列 + 图例开关 + 悬浮明细） ----------
@@ -72,7 +75,11 @@ export function TrendChart({
     return () => ro.disconnect();
   }, []);
 
-  const max = Math.max(1, ...series.flatMap((s) => s.values));
+  // 末点预估（2026-11-02）：画图用预估落笔，真实值留在 values 里供气泡对照
+  const plotOf = (s: Series): number[] =>
+    s.estimate != null && s.values.length > 1 ? [...s.values.slice(0, -1), s.estimate] : s.values;
+
+  const max = Math.max(1, ...series.flatMap((s) => plotOf(s)));
   const step = n > 1 ? (W - padX * 2) / (n - 1) : 0;
   const x = (i: number) => padX + i * step;
   const y = (v: number) => padTop + (1 - v / max) * (H - padTop - padBottom);
@@ -102,8 +109,10 @@ export function TrendChart({
   const scale = boxW / W;
   const boxH = H * scale;
   const tipRows = series.length;
-  // 实测高度公式：border 2 + padding 14 + 日期行 16 + 每行 (19 行高 + 2 间距)
-  const TIP_H = 32 + tipRows * 21;
+  // 末点带预估的序列多一行「实际 x」小字（19+2 行高 + 13 副行）——按当前 hover 态动态算
+  const estRows =
+    hovered !== null && hovered === n - 1 ? series.filter((s) => s.estimate != null).length : 0;
+  const TIP_H = 32 + tipRows * 21 + estRows * 14;
   const px = cursorPx ?? x(hover ?? 0) * scale;
   const toLeft = px < boxW / 2;
   const tipLeft = Math.min(Math.max(toLeft ? px + 14 : px - 14 - TIP_OUTER_W, 4), Math.max(4, boxW - TIP_OUTER_W - 4));
@@ -179,7 +188,16 @@ export function TrendChart({
           })}
 
           {series.map((s) => {
-            const line = s.values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ");
+            const plot = plotOf(s);
+            const line = plot.map((v, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ");
+            // 前实后虚：最后一段（今日 = 预估）用虚线，与真实数据段区分
+            const dashed =
+              s.estimate != null && plot.length > 1
+                ? `M${x(plot.length - 2)},${y(plot[plot.length - 2])} L${x(plot.length - 1)},${y(plot[plot.length - 1])}`
+                : "";
+            const solid = s.estimate != null && plot.length > 1
+              ? plot.slice(0, -1).map((v, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ")
+              : line;
             return (
               <g key={s.key}>
                 {series.length === 1 && (
@@ -189,7 +207,10 @@ export function TrendChart({
                     fillOpacity="0.13"
                   />
                 )}
-                <path d={line} fill="none" stroke={s.color} strokeWidth="2" strokeLinejoin="round" />
+                <path d={solid} fill="none" stroke={s.color} strokeWidth="2" strokeLinejoin="round" />
+                {dashed && (
+                  <path d={dashed} fill="none" stroke={s.color} strokeWidth="2" strokeLinejoin="round" strokeDasharray="5 4" />
+                )}
               </g>
             );
           })}
@@ -208,7 +229,7 @@ export function TrendChart({
                 <circle
                   key={s.key}
                   cx={x(hovered)}
-                  cy={y(s.values[hovered] ?? 0)}
+                  cy={y(plotOf(s)[hovered] ?? 0)}
                   r="3.5"
                   fill={s.color}
                   stroke="#272822"
@@ -251,19 +272,37 @@ export function TrendChart({
               boxShadow: "0 6px 18px rgba(0,0,0,.45)",
             }}
           >
-            <div style={{ color: "#75715e", fontSize: 11, lineHeight: "16px" }}>{dates[hovered]}</div>
-            {series.map((s) => (
-              <div key={s.key} style={{ display: "flex", gap: 8, fontSize: 12, lineHeight: "19px", marginTop: 2 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#939387", flex: 1 }}>
-                  <i style={{ width: 8, height: 8, borderRadius: 4, background: s.color, display: "inline-block" }} />
-                  {s.label}
-                </span>
-                <b style={{ color: s.color, fontVariantNumeric: "tabular-nums" }}>
-                  {fmt(s.values[hovered] ?? 0)}
-                  {unit}
-                </b>
-              </div>
-            ))}
+            <div style={{ color: "#75715e", fontSize: 11, lineHeight: "16px" }}>
+              {dates[hovered]}
+              {hovered === n - 1 && series.some((s) => s.estimate != null) && " · 今日为预估"}
+            </div>
+            {series.map((s) => {
+              const isEst = hovered === n - 1 && s.estimate != null;
+              return (
+                <div key={s.key} style={{ display: "flex", gap: 8, fontSize: 12, lineHeight: "19px", marginTop: 2 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#939387", flex: 1 }}>
+                    <i style={{ width: 8, height: 8, borderRadius: 4, background: s.color, display: "inline-block" }} />
+                    {s.label}
+                  </span>
+                  {isEst ? (
+                    <span style={{ textAlign: "right" }}>
+                      <b style={{ color: s.color, fontVariantNumeric: "tabular-nums" }}>
+                        ≈{fmt(s.estimate!)}
+                        {unit}
+                      </b>
+                      <span style={{ display: "block", fontSize: 10, lineHeight: "13px", color: "#939387", fontVariantNumeric: "tabular-nums" }}>
+                        实际 {fmt(s.values[hovered] ?? 0)}
+                      </span>
+                    </span>
+                  ) : (
+                    <b style={{ color: s.color, fontVariantNumeric: "tabular-nums" }}>
+                      {fmt(s.values[hovered] ?? 0)}
+                      {unit}
+                    </b>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

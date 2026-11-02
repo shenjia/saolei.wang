@@ -39,13 +39,15 @@ export default async function AdminDashboard() {
 
   const series: Series[] = [
     // 流量两序列排最前（2026-10-16 张老师定：与业务趋势合并为一张图，默认只亮 UV/PV/新玩家/新录像）
-    { key: "uv", label: "UV", color: "#ae81ff", values: traffic.trend.uv },
-    { key: "pv", label: "PV", color: "#f8f8f2", values: traffic.trend.pv },
+    // 2026-11-02 加末点预估：今日未满一天按上周同时段占比外推全天，免得趋势图天天假跌
+    { key: "uv", label: "UV", color: "#ae81ff", values: traffic.trend.uv, estimate: traffic.todayEst.uv },
+    { key: "pv", label: "PV", color: "#f8f8f2", values: traffic.trend.pv, estimate: traffic.todayEst.pv },
     ...TREND_METRICS.map((m) => ({
       key: m.key,
       label: m.label,
       color: m.color,
       values: trend.series[m.key],
+      estimate: trend.estimates[m.key],
     })),
   ];
   // 默认只激活 UV / PV / 新增玩家 / 上传录像，其余序列图例可手动点亮
@@ -275,7 +277,9 @@ export default async function AdminDashboard() {
           title="近 30 天趋势"
           more={
             <>
-              <span className="sub">PV/UV 为 page_view 埋点 · 已剔除管理员与爬虫（零行为访客）</span>
+              <span className="sub">
+                PV/UV 为 page_view 埋点 · 已剔除管理员与爬虫（零行为访客）· 今日点为按上周同时段预估（虚线）
+              </span>
               <Link href="/admin/stats">深入分析 →</Link>
             </>
           }

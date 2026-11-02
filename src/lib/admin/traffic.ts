@@ -65,6 +65,9 @@ export interface TrafficOverview {
   /** 取数时刻（Unix 秒） */
   now: number;
   today: { pv: number; uv: number };
+  /** 今日预估全天（2026-11-02 张老师定）：同比外推法——
+   *  今日至今 × 上周同日全天 / 上周同日同时段；null = 上周同时段无数据不可估 */
+  todayEst: { pv: number | null; uv: number | null };
   /** 昨日全天 PV（趋势图当日桶，保留给未来用） */
   yesterdayFull: { pv: number; uv: number };
   /** 上周同一日同时段（上周同一日 00:00 ~ 上周 now 同一时刻，同比基数） */
@@ -478,9 +481,21 @@ async function aggregate(): Promise<TrafficOverview> {
     metaFor(topN(videoPvD30)),
   ]);
 
+  // ---- 今日预估全天（2026-11-02 张老师定）：趋势图末点未满一天总显得断崖下跌，
+  // 按上周同一日同时段占比外推。上周同日全天取趋势桶（同为剔除爬虫后的口径）。
+  const estFor = (today: number, lwFull: number, lwSame: number): number | null => {
+    if (lwSame <= 0) return null;
+    return Math.max(today, Math.round((today * lwFull) / lwSame));
+  };
+  const lwBucket = trendMap.get(lastWeekIdx);
+
   return {
     now,
     today: { pv: trendMap.get(todayIdx)?.pv ?? 0, uv: todayUv.size },
+    todayEst: {
+      pv: estFor(trendMap.get(todayIdx)?.pv ?? 0, lwBucket?.pv ?? 0, lastWeekSamePv),
+      uv: estFor(todayUv.size, lwBucket?.uv.size ?? 0, lastWeekUv.size),
+    },
     lastWeek: {
       pv: lastWeekSamePv,
       uv: lastWeekUv.size,
@@ -526,7 +541,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v11"],
+  ["admin-traffic", "v12"],
   { revalidate: 300 }
 );
 

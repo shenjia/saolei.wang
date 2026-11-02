@@ -42,39 +42,59 @@ export const TREND_METRICS = [
 
 export type TrendKey = (typeof TREND_METRICS)[number]["key"];
 
-/** 单表按天计数（只取窗口内、只取需要的列） */
-async function dailyCounts(table: string, since: number, extra = ""): Promise<Map<number, number>> {
-  const rows = await prisma.$queryRawUnsafe<{ d: number; c: bigint }[]>(
+/** 单表按天计数（只取窗口内、只取需要的列）
+ *  2026-11-02 加 partialBefore：同一条 SQL 多取一列 SUM(create_time < ?)，
+ *  得到「上周同日同时段」计数，供仪表盘趋势图今日预估（同比外推法），不加查不加扫。 */
+async function dailyCounts(
+  table: string,
+  since: number,
+  extra = "",
+  partialBefore = 0
+): Promise<{ full: Map<number, number>; partial: Map<number, number> }> {
+  const rows = await prisma.$queryRawUnsafe<{ d: number; c: bigint; p: bigint | null }[]>(
     // 2026-10-27 加固：表名占位符接不了，拼前过 assertIdent（调用方传的都是常量表名）
-    `SELECT CAST(FLOOR((create_time + 28800) / 86400) AS SIGNED) d, COUNT(*) c
+    `SELECT CAST(FLOOR((create_time + 28800) / 86400) AS SIGNED) d, COUNT(*) c, SUM(create_time < ?) p
      FROM ${assertIdent(table)} WHERE create_time >= ? ${extra} GROUP BY d`,
+    partialBefore,
     since
   );
-  return new Map(rows.map((r) => [N(r.d), N(r.c)]));
+  const full = new Map<number, number>();
+  const partial = new Map<number, number>();
+  for (const r of rows) {
+    full.set(N(r.d), N(r.c));
+    partial.set(N(r.d), N(r.p));
+  }
+  return { full, partial };
 }
 
 export interface TrendData {
   /** YYYY-MM-DD，长度 = days */
   dates: string[];
-  /** 各指标每日值，与 dates 等长 */
+  /** 各指标每日值，与 dates 等长（末位 = 今日，未满一天的真实值） */
   series: Record<TrendKey, number[]>;
   /** 各指标窗口内合计 */
   totals: Record<TrendKey, number>;
+  /** 今日预估全天值（2026-11-02 张老师定）：同比外推法——
+   *  今日至今 × 上周同日全天 / 上周同日同时段，且不低于今日已发生值；
+   *  null = 上周同时段无数据，不可估。 */
+  estimates: Record<TrendKey, number | null>;
 }
 
 /** 近 N 天多指标趋势（仪表盘 / 数据分析页共用） */
 export async function getTrend(days = 30): Promise<TrendData> {
   const since = dayStart(days - 1);
   const from = Math.floor((since + 28800) / 86400);
+  // 今日预估的同比窗口右端点：上周此刻（今日已过秒数平移 -7 天）
+  const lastWeekEnd = Math.floor(Date.now() / 1000) - 7 * 86400;
   const [users, videos, reviewed, banned, news, comments, bbs, clicks] = await Promise.all([
-    dailyCounts("user", since),
-    dailyCounts("video", since),
-    dailyCounts("video", since, `AND status = ${VIDEO_STATUS.REVIEWED}`),
-    dailyCounts("video", since, `AND status = ${VIDEO_STATUS.BANNED}`),
-    dailyCounts("news", since),
-    dailyCounts("comment", since),
-    dailyCounts("bbs_post", since),
-    dailyCounts("click", since),
+    dailyCounts("user", since, "", lastWeekEnd),
+    dailyCounts("video", since, "", lastWeekEnd),
+    dailyCounts("video", since, `AND status = ${VIDEO_STATUS.REVIEWED}`, lastWeekEnd),
+    dailyCounts("video", since, `AND status = ${VIDEO_STATUS.BANNED}`, lastWeekEnd),
+    dailyCounts("news", since, "", lastWeekEnd),
+    dailyCounts("comment", since, "", lastWeekEnd),
+    dailyCounts("bbs_post", since, "", lastWeekEnd),
+    dailyCounts("click", since, "", lastWeekEnd),
   ]);
 
   const dates: string[] = [];
@@ -83,7 +103,12 @@ export async function getTrend(days = 30): Promise<TrendData> {
   };
   const totals = Object.fromEntries(TREND_METRICS.map((m) => [m.key, 0])) as unknown as Record<TrendKey, number>;
   const maps: Record<TrendKey, Map<number, number>> = {
-    users, videos, reviewed, banned, news, comments, bbs, clicks,
+    users: users.full, videos: videos.full, reviewed: reviewed.full, banned: banned.full,
+    news: news.full, comments: comments.full, bbs: bbs.full, clicks: clicks.full,
+  };
+  const partials: Record<TrendKey, Map<number, number>> = {
+    users: users.partial, videos: videos.partial, reviewed: reviewed.partial, banned: banned.partial,
+    news: news.partial, comments: comments.partial, bbs: bbs.partial, clicks: clicks.partial,
   };
 
   for (let i = 0; i < days; i++) {
@@ -95,7 +120,19 @@ export async function getTrend(days = 30): Promise<TrendData> {
       totals[m.key] += v;
     }
   }
-  return { dates, series, totals };
+  // 今日预估（2026-11-02 张老师定）：今日数据未满一天，趋势图末点总显得断崖下跌；
+  // 按上周同一日同时段占比外推全天。上周同日的 day 桶 = 末位往前推 7 格（days > 7 恒成立）。
+  const lastWeekIdx = from + days - 1 - 7;
+  const estimates = Object.fromEntries(
+    TREND_METRICS.map((m) => {
+      const today = series[m.key][days - 1] ?? 0;
+      const lwFull = series[m.key][days - 1 - 7] ?? 0;
+      const lwSame = partials[m.key].get(lastWeekIdx) ?? 0;
+      const est = lwSame > 0 ? Math.round((today * lwFull) / lwSame) : null;
+      return [m.key, est === null ? null : Math.max(est, today)];
+    })
+  ) as unknown as Record<TrendKey, number | null>;
+  return { dates, series, totals, estimates };
 }
 
 // ---------- 概览指标 ----------
@@ -456,7 +493,7 @@ export async function getAuditorWorkload(limit = 10, days?: number): Promise<{ u
 export async function getGrowth(days = 90): Promise<{ dates: string[]; daily: number[]; cumulative: number[] }> {
   const since = dayStart(days - 1);
   const from = Math.floor((since + 28800) / 86400);
-  const map = await dailyCounts("user", since);
+  const map = (await dailyCounts("user", since)).full;
   const before = await prisma.user.count({ where: { createTime: { lt: BigInt(since) } } });
 
   const dates: string[] = [];
