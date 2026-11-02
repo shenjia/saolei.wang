@@ -53,6 +53,7 @@ import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankLabel } from "@/components/RankLabel";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { formatDate } from "@/lib/format";
+import { donateYuanPlain } from "@/lib/donate";
 import { getThunderKingId } from "@/lib/title-system";
 import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
@@ -192,6 +193,14 @@ export default async function UserViewPage({
     getLevel3bvRanges(),
     getUser3bvCollection(userId),
   ]);
+  // 赞助金额（2026-11-02 张老师要求）：数据统计「发表评论」行下新增「赞助金额」，
+  // 金额金色显示（legacy .table em 同款 #fdc61a）；没赞助过（合计 0）不显示整行。
+  // ID 1（站长）特殊逻辑：显示全站支出总额（donate_expense 合计），
+  // 其余玩家显示本人赞助合计（donate，金额单位分）
+  const donateAgg = userId === 1
+    ? await prisma.donateExpense.aggregate({ _sum: { amount: true } })
+    : await prisma.donate.aggregate({ where: { user: BigInt(userId) }, _sum: { amount: true } });
+  const donateCents = Number(donateAgg._sum.amount ?? 0);
   // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
   const king = await getThunderKingId();
   const feed: NewsFeedItem[] = news.map((n) => ({
@@ -475,6 +484,13 @@ export default async function UserViewPage({
                 <StatRow label="发表评论" today={activity.commentsToday}>
                   <em>{activity.comments}</em>
                 </StatRow>
+                {/* 2026-11-02 张老师要求：发表评论下新增「赞助金额」（金色）；
+                    没赞助过不显示；ID 1 显示全站支出总额（查询见上方 donateAgg） */}
+                {donateCents > 0 && (
+                  <StatRow label="赞助金额">
+                    <em>{donateYuanPlain(donateCents)}</em>
+                  </StatRow>
+                )}
                 {/* 2026-10-28 张老师要求：末尾补 注册时间 / 最近登录（yyyy-mm-dd）；
                     lastLoginTime=0（从未登录过）显示 — */}
                 <StatRow label="注册时间">
