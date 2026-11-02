@@ -13,7 +13,6 @@ import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { buildUrl } from "@/components/Pager";
 import { areaDisplay, TITLE_COLORS, type AreaOrder } from "@/lib/config";
-import { areaActivity } from "@/lib/format";
 import {
   GEO_INSET_ISLAND,
   GEO_INSET_NINE,
@@ -239,9 +238,10 @@ export function AreaMap({
               </div>
               <div className="tp_row">
                 <i>活跃指数</i>
-                <b className="gold">
-                  {areaActivity(hot.activity)}
-                  {hot.activity >= 100000 && <em className="unit">万</em>}
+                {/* 2026-11-02 张老师定：气泡内恒以 x.xx万 展示（两位小数），绿色 */}
+                <b className="green">
+                  {(hot.activity / 10000).toFixed(2)}
+                  <em className="unit">万</em>
                 </b>
               </div>
               <div className="tp_row">
