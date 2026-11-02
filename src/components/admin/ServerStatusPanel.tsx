@@ -29,9 +29,9 @@ import { Fragment, useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
 import { TitleBadge } from "../Cells";
 
-/* 展开子表单元格样式（紧凑小字号，暗底与主表区分） */
-const SUB_TH: React.CSSProperties = { fontWeight: 400, padding: "1px 10px 3px 0", borderBottom: "1px solid #3e3d32" };
-const SUB_TD: React.CSSProperties = { padding: "1px 10px 1px 0", color: "#d6d6cc", whiteSpace: "nowrap" };
+/* 展开子表单元格样式（紧凑小字号，暗底与主表区分；导出供今日地区明细行展开复用） */
+export const SUB_TH: React.CSSProperties = { fontWeight: 400, padding: "1px 10px 3px 0", borderBottom: "1px solid #3e3d32" };
+export const SUB_TD: React.CSSProperties = { padding: "1px 10px 1px 0", color: "#d6d6cc", whiteSpace: "nowrap" };
 
 /** 在线玩家行（与 /api/admin/authority-status 的 PlayerRow 同形） */
 export interface PlayerBrief {
@@ -43,6 +43,10 @@ export interface PlayerBrief {
   games: number;
   /** 本轮在线时长（秒，连接建立起算） */
   online: number;
+  /** 本节点 ranked 局实测平均延迟（近 7 天，null=无样本） */
+  rttAvg: number | null;
+  /** 本节点延迟样本数 */
+  rttN: number;
 }
 
 /** 在线时长折算（2026-11-02 三次：对局列后加在线时长列） */
@@ -260,6 +264,7 @@ export function ServerStatusPanel({
                             <th style={SUB_TH}>玩家</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }} title="该玩家在本服务器的累计开局面数（重启不清零）">对局</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }} title="本轮连上本服务器起的在线时长（刷新/断线重连重新计；同 uid 多标签页取最早连接）">在线时长</th>
+                            <th style={{ ...SUB_TH, textAlign: "right" }} title={`该玩家近 7 天在本节点排行局实测平均延迟（随局上报采样）· ${RTT_LEGEND}`}>延迟</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -289,6 +294,18 @@ export function ServerStatusPanel({
                               <td style={{ ...SUB_TD, textAlign: "right" }} className="num">{p.games.toLocaleString("zh-CN")}</td>
                               <td style={{ ...SUB_TD, textAlign: "right" }} className="num" title="本轮连上本服务器起的在线时长">
                                 {fmtOnline(p.online)}
+                              </td>
+                              {/* 延迟列（2026-11-02 五次：三色同主表 rttColor 口径，无样本显 —） */}
+                              <td
+                                style={{ ...SUB_TD, textAlign: "right" }}
+                                className="num"
+                                title={p.rttAvg !== null ? `近 7 天 ${p.rttN} 个实测样本 · ${RTT_LEGEND}` : "暂无实测样本"}
+                              >
+                                {p.rttAvg !== null ? (
+                                  <span style={{ color: rttColor(p.rttAvg) }}>{p.rttAvg}ms</span>
+                                ) : (
+                                  <span style={{ color: "#49483e" }}>—</span>
+                                )}
                               </td>
                             </tr>
                           ))}

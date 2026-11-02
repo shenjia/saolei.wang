@@ -5,6 +5,8 @@
 // 2026-10-28（day 20754）起算，之前计 0**；总量 plays 任意日期都准。
 
 import { prisma } from "@/lib/db";
+import { title } from "@/lib/assess";
+import { getThunderKingId } from "@/lib/title-system";
 
 const N = (v: unknown): number => Number(v ?? 0);
 
@@ -245,6 +247,21 @@ export async function getPracticeLevelCounts(): Promise<{
   };
 }
 
+export interface RegionTodayPlayer {
+  uid: number;
+  /** 展示名：中文名优先，退英文名/#uid */
+  name: string;
+  /** 1=男 0=女 */
+  sex: number;
+  /** 军衔（高级时间阈值评定，雷界第一人特判） */
+  rank: string;
+  plays: number; // 今日该地区练习盘数
+  winRate: number; // 胜率 %（1 位小数）
+  avgRtt: number | null; // 今日排行局采样平均延迟（无则 null）
+  minRtt: number | null;
+  maxRtt: number | null;
+}
+
 export interface RegionTodayRow {
   area: string;
   plays: number; // 今日练习盘数（尝试，含踩雷）
@@ -253,6 +270,8 @@ export interface RegionTodayRow {
   avgRtt: number | null; // 平均延迟 ms（排行局采样，无则 null）
   minRtt: number | null;
   maxRtt: number | null;
+  /** 行展开玩家明细（2026-11-02 五次张老师：盘数/胜率/平均延迟/延迟范围，盘数多在前） */
+  detail: RegionTodayPlayer[];
 }
 
 /** 全国各地区今日明细（2026-10-31 张老师需求）：练习盘数/人数/胜率来自
@@ -280,6 +299,75 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
      GROUP BY area`,
     dayStart
   );
+  // 行展开玩家明细（2026-11-02 五次张老师）：同日按 (user_id, area) 聚合，
+  // 盘数/胜率来自 practice_daily，延迟三值来自 ranked_rtt_log；姓名/性别/军衔查库
+  const pdRows = await prisma.$queryRawUnsafe<
+    { user_id: bigint; area: string; plays: bigint; wins: bigint }[]
+  >(
+    `SELECT pd.user_id, u.area area, SUM(pd.plays) plays, SUM(pd.wins) wins
+     FROM practice_daily pd JOIN user u ON u.id = pd.user_id
+     WHERE pd.day = ? AND pd.user_id <> 0 AND u.area <> ''
+     GROUP BY pd.user_id, u.area`,
+    day
+  );
+  const prRows = await prisma.$queryRawUnsafe<
+    { user_id: bigint; area: string; g: bigint; avg: number; mn: number; mx: number }[]
+  >(
+    `SELECT user_id, area, COUNT(*) g, AVG(rtt) avg, MIN(rtt) mn, MAX(rtt) mx
+     FROM ranked_rtt_log WHERE create_time >= ? AND rtt > 0 AND area <> ''
+     GROUP BY user_id, area`,
+    dayStart
+  );
+  type Merge = { uid: number; area: string; plays: number; wins: number; avg: number | null; mn: number | null; mx: number | null };
+  const merge = new Map<string, Merge>();
+  for (const r of pdRows) {
+    const uid = N(r.user_id);
+    merge.set(`${uid}:${r.area}`, { uid, area: r.area, plays: N(r.plays), wins: N(r.wins), avg: null, mn: null, mx: null });
+  }
+  for (const r of prRows) {
+    const uid = N(r.user_id);
+    const k = `${uid}:${r.area}`;
+    const m = merge.get(k) ?? { uid, area: r.area, plays: 0, wins: 0, avg: null, mn: null, mx: null };
+    m.avg = Math.round(N(r.avg));
+    m.mn = N(r.mn);
+    m.mx = N(r.mx);
+    merge.set(k, m);
+  }
+  // 批量补姓名/性别/军衔（军衔=高级时间阈值 + 雷界第一人特判，同负载面板口径）
+  const detailUids = [...new Set([...merge.values()].map((m) => m.uid))];
+  const detailMap = new Map<string, RegionTodayPlayer[]>();
+  if (detailUids.length) {
+    const [users, scores, kingId] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: detailUids.map(BigInt) } },
+        select: { id: true, chineseName: true, englishName: true, sex: true },
+      }),
+      prisma.userScores.findMany({
+        where: { id: { in: detailUids.map(BigInt) } },
+        select: { id: true, expTime: true },
+      }),
+      getThunderKingId().catch(() => 0),
+    ]);
+    const uMap = new Map(users.map((u) => [Number(u.id), u]));
+    const eMap = new Map(scores.map((s) => [Number(s.id), s.expTime ?? 0]));
+    for (const m of merge.values()) {
+      const u = uMap.get(m.uid);
+      const list = detailMap.get(m.area) ?? [];
+      list.push({
+        uid: m.uid,
+        name: u?.chineseName || u?.englishName || `#${m.uid}`,
+        sex: u?.sex ?? 1,
+        rank: title(eMap.get(m.uid) ?? 0, kingId > 0 && kingId === m.uid),
+        plays: m.plays,
+        winRate: m.plays ? Math.round((m.wins / m.plays) * 1000) / 10 : 0,
+        avgRtt: m.avg,
+        minRtt: m.mn,
+        maxRtt: m.mx,
+      });
+      detailMap.set(m.area, list);
+    }
+    for (const list of detailMap.values()) list.sort((a, b) => b.plays - a.plays || a.uid - b.uid); // 盘数多在前
+  }
   const rttMap = new Map(rRows.map((r) => [r.area, r]));
   const rows: RegionTodayRow[] = pRows.map((r) => {
     const rt = rttMap.get(r.area);
@@ -292,6 +380,7 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
       avgRtt: rt ? Math.round(N(rt.avg)) : null,
       minRtt: rt ? N(rt.mn) : null,
       maxRtt: rt ? N(rt.mx) : null,
+      detail: detailMap.get(r.area) ?? [],
     };
   });
   // 只有延迟采样、无练习盘的省也补一行（延迟数据不丢）
@@ -305,6 +394,7 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
         avgRtt: Math.round(N(rt.avg)),
         minRtt: N(rt.mn),
         maxRtt: N(rt.mx),
+        detail: detailMap.get(area) ?? [],
       });
     }
   }
