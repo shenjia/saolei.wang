@@ -18,7 +18,6 @@
 
 import Link from "next/link";
 import { getSiteStats } from "@/lib/queries";
-import { donateYuanPlain } from "@/lib/donate";
 
 function StatRow({
   label,
@@ -62,13 +61,15 @@ export async function SiteStats() {
           {/* 论坛评论固定在最底行（2026-10-13 张老师要求；2026-10-22 换数据源 bbs_reply） */}
           <StatRow label="论坛评论" total={s.bbsReplyTotal} today={s.bbsReplyToday} />
           {/* 2026-11-02 张老师要求：底部新增「资金结余」行（赞助页同口径结余）；
-              正数金色、负数红色；点击跳赞助页——target=_blank 必配 prefetch=false（铁律） */}
+              正数金色、负数红色；点击跳赞助页——target=_blank 必配 prefetch=false（铁律）。
+              2026-11-02 二轮（张老师要求）：不显示小数——四舍五入取整到元，与整列整数对齐；
+              赞助页 donateYuanPlain 口径不变 */}
           <StatRow label="资金结余">
             <Link href="/page/donate" target="_blank" prefetch={false}>
               <em className={s.donateBalanceCents >= 0 ? "balance_pos" : "balance_neg"}>
-                {s.donateBalanceCents >= 0
-                  ? donateYuanPlain(s.donateBalanceCents)
-                  : `-${donateYuanPlain(-s.donateBalanceCents)}`}
+                {`${s.donateBalanceCents < 0 ? "-" : ""}¥${Math.round(
+                  Math.abs(s.donateBalanceCents) / 100
+                ).toLocaleString("zh-CN")}`}
               </em>
             </Link>
           </StatRow>
