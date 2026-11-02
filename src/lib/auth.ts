@@ -151,6 +151,34 @@ export function touchLastLogin(uid: number): void {
     });
 }
 
+// ---------- 封禁即断会话（2026-11-02 张老师定） ----------
+// 封禁只拦新登录（login 403）不够：被封玩家手里封禁前已发的会话 cookie（7 天 JWT）
+// 照常全站访问、玩排行、上传。getSession 在此对 user.status 做节流查库校验——
+// per-uid 60s 进程内缓存，命中 status=-1 一律按未登录处理（封禁 ≤1 分钟全站生效，
+// 与 ensureBansLifted 清扫节流同级）。查库失败沿用上次判定不阻断请求；
+// 解禁后缓存窗口内（≤60s）仍按封禁处理，可接受。
+const banProbeCache = new Map<number, { banned: boolean; at: number }>(); // uid -> 判定快照
+const BAN_PROBE_TTL_MS = 60_000;
+
+async function isSessionBanned(uid: number): Promise<boolean> {
+  const hit = banProbeCache.get(uid);
+  const now = Date.now();
+  if (hit && now - hit.at < BAN_PROBE_TTL_MS) return hit.banned;
+  let banned = false;
+  try {
+    const row = await prisma.user.findUnique({
+      where: { id: BigInt(uid) },
+      select: { status: true },
+    });
+    banned = row?.status === -1;
+  } catch {
+    /* 查库失败沿用旧判定，下个节流窗口自然重试 */
+  }
+  if (banProbeCache.size > 10000) banProbeCache.clear(); // 防膨胀：粗暴清空即可，误清只是多一次查库
+  banProbeCache.set(uid, { banned, at: now });
+  return banned;
+}
+
 export async function getSession(): Promise<SessionUser | null> {
   // 到期限时封禁的节流清扫兜底（60s 一次，2026-10-16）；读会话每页必经，顺便带动全站自动解禁
   await ensureBansLifted();
@@ -158,7 +186,11 @@ export async function getSession(): Promise<SessionUser | null> {
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const user = verify<SessionUser>(token);
-  if (user) touchLastLogin(user.uid);
+  if (user) {
+    // 封禁即断会话：status=-1 即使 JWT 有效也按未登录处理（不刷新活跃心跳）
+    if (await isSessionBanned(user.uid)) return null;
+    touchLastLogin(user.uid);
+  }
   return user;
 }
 
