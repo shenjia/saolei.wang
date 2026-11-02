@@ -310,28 +310,32 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
      GROUP BY pd.user_id, u.area`,
     day
   );
+  // 延迟三值按 user_id 聚合（2026-11-02 六次张老师：注册地区≠IP 归属省时键错位——
+  // 本人 rtt 样本记在 IP 省（如河南）、练习盘数记在注册省（如陕西），此前按
+  // uid:area 连接永远对不上，展开列表恒 —。延迟是「这个人的」，挂进他
+  // practice_daily 所在省的行展示更合理；省份行级延迟仍按 IP 省口径（rRows）不动）
   const prRows = await prisma.$queryRawUnsafe<
-    { user_id: bigint; area: string; g: bigint; avg: number; mn: number; mx: number }[]
+    { user_id: bigint; g: bigint; avg: number; mn: number; mx: number }[]
   >(
-    `SELECT user_id, area, COUNT(*) g, AVG(rtt) avg, MIN(rtt) mn, MAX(rtt) mx
+    `SELECT user_id, COUNT(*) g, AVG(rtt) avg, MIN(rtt) mn, MAX(rtt) mx
      FROM ranked_rtt_log WHERE create_time >= ? AND rtt > 0 AND area <> ''
-     GROUP BY user_id, area`,
+     GROUP BY user_id`,
     dayStart
   );
+  const rttByUid = new Map(prRows.map((r) => [N(r.user_id), { avg: Math.round(N(r.avg)), mn: N(r.mn), mx: N(r.mx) }]));
   type Merge = { uid: number; area: string; plays: number; wins: number; avg: number | null; mn: number | null; mx: number | null };
   const merge = new Map<string, Merge>();
   for (const r of pdRows) {
     const uid = N(r.user_id);
     merge.set(`${uid}:${r.area}`, { uid, area: r.area, plays: N(r.plays), wins: N(r.wins), avg: null, mn: null, mx: null });
   }
-  for (const r of prRows) {
-    const uid = N(r.user_id);
-    const k = `${uid}:${r.area}`;
-    const m = merge.get(k) ?? { uid, area: r.area, plays: 0, wins: 0, avg: null, mn: null, mx: null };
-    m.avg = Math.round(N(r.avg));
-    m.mn = N(r.mn);
-    m.mx = N(r.mx);
-    merge.set(k, m);
+  for (const m of merge.values()) {
+    const rt = rttByUid.get(m.uid);
+    if (rt) {
+      m.avg = rt.avg;
+      m.mn = rt.mn;
+      m.mx = rt.mx;
+    }
   }
   // 批量补姓名/性别/军衔（军衔=高级时间阈值 + 雷界第一人特判，同负载面板口径）
   const detailUids = [...new Set([...merge.values()].map((m) => m.uid))];
