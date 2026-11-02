@@ -4,35 +4,38 @@
 // 进行中且有活连接的局数、games=内存局总数、draining=排空中、region/slot）。
 // 北京双实例走本机回环（Next 与 authority 同机）；香港走 AUTHORITY_HK_URL
 // 公网回调。单实例 override（AUTHORITY_INTERNAL_URL，本地开发）时只列一条。
+// 2026-11-02 张老师需求：负载行可展开在线玩家列表——同轮再透传各实例
+// /players（Bearer 鉴权端点，返回 uid/会话名/本实例累计开局面数），本接口
+// 查库补齐展示字段（地区/姓名/性别/军衔）。/players 拉取失败该行 players=null。
 
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/guard";
 import { prisma } from "@/lib/db";
+import { title } from "@/lib/assess";
+import { getThunderKingId } from "@/lib/title-system";
 
 export const dynamic = "force-dynamic";
 
 interface Target {
   name: string;
-  url: string;
+  base: string;
+  /** 该实例的 Bearer token env 名（与 authority-endpoint.ts 同一套密钥） */
+  tokenEnv?: string;
 }
 
 function targets(): Target[] {
   const override = process.env.AUTHORITY_INTERNAL_URL;
-  if (override) return [{ name: "北京", url: `${override.replace(/\/$/, "")}/health` }];
+  if (override) return [{ name: "北京", base: override.replace(/\/$/, "") }];
   const a = process.env.AUTHORITY_PORT_A || "3104";
   const b = process.env.AUTHORITY_PORT_B || "3105";
   const list = [
-    { name: "北京1", url: `http://127.0.0.1:${a}/health` },
-    { name: "北京2", url: `http://127.0.0.1:${b}/health` },
+    { name: "北京1", base: `http://127.0.0.1:${a}`, tokenEnv: "AUTHORITY_HTTP_TOKEN" },
+    { name: "北京2", base: `http://127.0.0.1:${b}`, tokenEnv: "AUTHORITY_HTTP_TOKEN" },
   ];
-  const hk = process.env.AUTHORITY_HK_URL;
-  if (hk) list.push({ name: "香港", url: `${hk.replace(/\/$/, "")}/health` });
-  const hz = process.env.AUTHORITY_HZ_URL;
-  if (hz) list.push({ name: "杭州", url: `${hz.replace(/\/$/, "")}/health` });
-  const cd = process.env.AUTHORITY_CD_URL;
-  if (cd) list.push({ name: "成都", url: `${cd.replace(/\/$/, "")}/health` });
-  const gz = process.env.AUTHORITY_GZ_URL;
-  if (gz) list.push({ name: "广州", url: `${gz.replace(/\/$/, "")}/health` });
+  if (process.env.AUTHORITY_HK_URL) list.push({ name: "香港", base: process.env.AUTHORITY_HK_URL.replace(/\/$/, ""), tokenEnv: "AUTHORITY_HK_TOKEN" });
+  if (process.env.AUTHORITY_HZ_URL) list.push({ name: "杭州", base: process.env.AUTHORITY_HZ_URL.replace(/\/$/, ""), tokenEnv: "AUTHORITY_HZ_TOKEN" });
+  if (process.env.AUTHORITY_CD_URL) list.push({ name: "成都", base: process.env.AUTHORITY_CD_URL.replace(/\/$/, ""), tokenEnv: "AUTHORITY_CD_TOKEN" });
+  if (process.env.AUTHORITY_GZ_URL) list.push({ name: "广州", base: process.env.AUTHORITY_GZ_URL.replace(/\/$/, ""), tokenEnv: "AUTHORITY_GZ_TOKEN" });
   return list;
 }
 
@@ -54,6 +57,23 @@ interface Row {
   rttAvg: number | null;
   /** 延迟样本数 */
   rttN: number;
+  /** 在线玩家（null=/players 拉取失败；[]＝无在线玩家） */
+  players: PlayerRow[] | null;
+}
+
+/** 在线玩家行（展示字段由本接口查库补齐） */
+export interface PlayerRow {
+  uid: number;
+  /** 展示名：中文名优先，退会话登录名 */
+  name: string;
+  /** 所属地区（user.area，空串=未填） */
+  area: string;
+  /** 1=男 0=女 */
+  sex: number;
+  /** 军衔（按高级时间阈值评定，总司令=雷界第一人特判） */
+  rank: string;
+  /** 在该实例上的累计开局面数（server.mjs 落盘统计，重启不清零） */
+  games: number;
 }
 
 export async function GET() {
@@ -74,11 +94,17 @@ export async function GET() {
     rttByRegion = new Map(rows.map((r) => [r.region, { avg: Math.round(r.avg), n: Number(r.n) }]));
   } catch { /* ignore */ }
 
-  const servers = await Promise.all(
-    targets().map(async (t): Promise<Row> => {
+  // 先拉各实例 /health + /players，再对去重 uid 集合一次查库补齐展示字段。
+  // loginNames=各实例会话登录名兜底（user 行被删等异常时姓名不至于空）
+  const loginNames = new Map<number, string>();
+  const fetched = await Promise.all(
+    targets().map(async (t) => {
       const t0 = Date.now();
+      const headers: Record<string, string> = {};
+      const token = t.tokenEnv ? process.env[t.tokenEnv] : undefined;
+      if (token) headers.Authorization = `Bearer ${token}`;
       try {
-        const res = await fetch(t.url, { cache: "no-store", signal: AbortSignal.timeout(2000) });
+        const res = await fetch(`${t.base}/health`, { cache: "no-store", signal: AbortSignal.timeout(2000) });
         const j = (await res.json()) as {
           region?: string;
           slot?: string;
@@ -91,7 +117,19 @@ export async function GET() {
         };
         // 上报 region 键＝gameId 首段：北京（REGION 空串）走槽位 a/b，其他地域走 region
         const rkey = j.region || j.slot || "";
-        return {
+        let players: PlayerRow[] | null = null;
+        try {
+          const pres = await fetch(`${t.base}/players`, { cache: "no-store", headers, signal: AbortSignal.timeout(2000) });
+          if (pres.ok) {
+            const pj = (await pres.json()) as { players?: { uid: number; name?: string; games?: number }[] };
+            players = (pj.players ?? []).map((p): PlayerRow => {
+              const uid = Number(p.uid);
+              if (typeof p.name === "string" && p.name) loginNames.set(uid, p.name);
+              return { uid, name: "", area: "", sex: 1, rank: "预备役", games: Number(p.games) || 0 };
+            });
+          }
+        } catch { /* players 拉取失败：该行显示获取失败，不影响负载展示 */ }
+        const row: Row = {
           name: t.name,
           region: j.region ?? "",
           slot: j.slot ?? "",
@@ -105,12 +143,45 @@ export async function GET() {
           gamesServed: j.gamesServed ?? 0,
           rttAvg: rttByRegion.get(rkey)?.avg ?? null,
           rttN: rttByRegion.get(rkey)?.n ?? 0,
+          players,
         };
+        return row;
       } catch {
-        return { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, active: 0, games: 0, draining: false, connsUsers: 0, gamesServed: 0, rttAvg: null, rttN: 0 };
+        const row: Row = { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, active: 0, games: 0, draining: false, connsUsers: 0, gamesServed: 0, rttAvg: null, rttN: 0, players: null };
+        return row;
       }
     }),
   );
+
+  // 查库补齐玩家展示字段：地区/姓名/性别 + 军衔（高级时间阈值 + 雷界第一人特判）
+  const allUids = [...new Set(fetched.flatMap((r) => (r.players ?? []).map((p) => p.uid)))].filter((n) => Number.isInteger(n) && n > 0);
+  if (allUids.length) {
+    const [users, scores, kingId] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: allUids.map(BigInt) } },
+        select: { id: true, chineseName: true, englishName: true, sex: true, area: true },
+      }),
+      prisma.userScores.findMany({
+        where: { id: { in: allUids.map(BigInt) } },
+        select: { id: true, expTime: true },
+      }),
+      getThunderKingId().catch(() => 0),
+    ]);
+    const uMap = new Map(users.map((u) => [Number(u.id), u]));
+    const eMap = new Map(scores.map((s) => [Number(s.id), s.expTime ?? 0]));
+    for (const row of fetched) {
+      if (!row.players) continue;
+      for (const p of row.players) {
+        const u = uMap.get(p.uid);
+        p.name = u?.chineseName || u?.englishName || loginNames.get(p.uid) || `#${p.uid}`;
+        p.area = u?.area ?? "";
+        p.sex = u?.sex ?? 1;
+        p.rank = title(eMap.get(p.uid) ?? 0, kingId > 0 && kingId === p.uid);
+      }
+      row.players.sort((a, b) => b.games - a.games || a.uid - b.uid); // 对局多在前
+    }
+  }
+
   // 后台监控轮询，禁任何缓存
-  return NextResponse.json({ servers }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ servers: fetched }, { headers: { "Cache-Control": "no-store" } });
 }

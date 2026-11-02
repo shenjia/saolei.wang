@@ -18,9 +18,26 @@
 // 2026-11-02 改版（张老师需求）：轮询提升到 PracticeRegionBoard（服务器数据同时
 // 喂地图 PIN 钉），本组件变纯展示；行 hover 上报 onHoverServer 与地图钉联动
 // （hover 行 → 钉高亮放大；hover 钉 → 行 .hl 高亮）。
+// 2026-11-02 二次（张老师需求）：点击服务器行展开/收起该服在线玩家列表
+// （地区/玩家名/性别/军衔/本服累计对局数），数据随 3s 轮询同源自
+// /api/admin/authority-status（Next 侧查库补齐展示字段）；再点行收起。
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
+
+/* 展开子表单元格样式（紧凑小字号，暗底与主表区分） */
+const SUB_TH: React.CSSProperties = { fontWeight: 400, padding: "1px 10px 3px 0", borderBottom: "1px solid #3e3d32" };
+const SUB_TD: React.CSSProperties = { padding: "1px 10px 1px 0", color: "#d6d6cc", whiteSpace: "nowrap" };
+
+/** 在线玩家行（与 /api/admin/authority-status 的 PlayerRow 同形） */
+export interface PlayerBrief {
+  uid: number;
+  name: string;
+  area: string;
+  sex: number;
+  rank: string;
+  games: number;
+}
 
 export interface ServerRow {
   name: string;
@@ -36,6 +53,8 @@ export interface ServerRow {
   gamesServed: number;
   rttAvg: number | null;
   rttN: number;
+  /** 在线玩家（null=获取失败；[]＝无在线玩家） */
+  players: PlayerBrief[] | null;
 }
 
 type SortKey = "name" | "connsUsers" | "gamesServed" | "rttAvg";
@@ -74,6 +93,16 @@ export function ServerStatusPanel({
   onHoverServer: (name: string | null) => void;
 }) {
   const [sort, setSort] = useState<SortSpec>({ key: "connsUsers", dir: "desc" });
+  /* 展开的服务器名集合（2026-11-02 二次：点击行展开在线玩家，再点收起） */
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (name: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
 
   const clickSort = (key: SortKey) =>
     setSort((s) =>
@@ -169,33 +198,87 @@ export function ServerStatusPanel({
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <tr
-              key={r.name}
-              className={hoverServer === r.name ? "hl" : ""}
-              onMouseEnter={() => onHoverServer(r.name)}
-              onMouseLeave={() => onHoverServer(null)}
-            >
-              <td>
-                {dot(r)}
-                <b style={{ color: "#d6d6cc" }}>{r.name}</b>
-              </td>
-              <td title="x＝当前在线连接数 · y＝累计去重连接人数（重启不清零；点击表头按累计排序）">
-                {pair(r, r.connections, "#a6e22e", r.connsUsers)}
-              </td>
-              <td title="x＝进行中对局数 · y＝累计开局面数（重启不清零；点击表头按累计排序）">
-                {pair(r, r.active, "#fdc61d", r.gamesServed)}
-              </td>
-              <td
-                className="c"
-                title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本 · ${RTT_LEGEND}` : undefined}
+            <Fragment key={r.name}>
+              <tr
+                className={`${hoverServer === r.name ? "hl" : ""}${expanded.has(r.name) ? " sv_open" : ""}`}
+                style={{ cursor: "pointer" }}
+                title="点击展开/收起该服在线玩家列表"
+                onMouseEnter={() => onHoverServer(r.name)}
+                onMouseLeave={() => onHoverServer(null)}
+                onClick={() => toggleExpand(r.name)}
               >
-                {r.ok && r.rttAvg !== null ? (
-                  <span style={{ color: rttColor(r.rttAvg) }}>{r.rttAvg}ms</span>
-                ) : (
-                  <span style={{ color: "#49483e" }}>—</span>
-                )}
-              </td>
-            </tr>
+                <td>
+                  {dot(r)}
+                  <b style={{ color: "#d6d6cc" }}>{r.name}</b>
+                </td>
+                <td title="x＝当前在线连接数 · y＝累计去重连接人数（重启不清零；点击表头按累计排序）">
+                  {pair(r, r.connections, "#a6e22e", r.connsUsers)}
+                </td>
+                <td title="x＝进行中对局数 · y＝累计开局面数（重启不清零；点击表头按累计排序）">
+                  {pair(r, r.active, "#fdc61d", r.gamesServed)}
+                </td>
+                <td
+                  className="c"
+                  title={r.ok && r.rttAvg !== null ? `近 7 天 ${r.rttN} 个玩家实测样本 · ${RTT_LEGEND}` : undefined}
+                >
+                  {r.ok && r.rttAvg !== null ? (
+                    <span style={{ color: rttColor(r.rttAvg) }}>{r.rttAvg}ms</span>
+                  ) : (
+                    <span style={{ color: "#49483e" }}>—</span>
+                  )}
+                </td>
+              </tr>
+              {/* 在线玩家列表（2026-11-02 二次）：点击行展开，再点收起。
+                  players=null=获取失败；空数组=无在线玩家；数据随 3s 轮询刷新 */}
+              {expanded.has(r.name) && (
+                <tr>
+                  <td colSpan={4} style={{ background: "#1e1f1a", padding: "6px 10px 8px 23px" }}>
+                    {!r.ok ? (
+                      <span style={{ color: "#49483e" }}>实例不可用</span>
+                    ) : r.players === null ? (
+                      <span style={{ color: "#e24b4a" }}>在线玩家获取失败</span>
+                    ) : r.players.length === 0 ? (
+                      <span style={{ color: "#75715e" }}>当前无在线玩家</span>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, lineHeight: 1.7 }}>
+                        <thead>
+                          <tr style={{ color: "#75715e", textAlign: "left" }}>
+                            <th style={SUB_TH}>地区</th>
+                            <th style={SUB_TH}>玩家</th>
+                            <th style={SUB_TH}>性别</th>
+                            <th style={SUB_TH}>军衔</th>
+                            <th style={{ ...SUB_TH, textAlign: "right" }} title="该玩家在本服务器的累计开局面数（重启不清零）">对局</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {r.players.map((p) => (
+                            <tr key={p.uid}>
+                              <td style={SUB_TD} title={p.area ? undefined : "未填写地区"}>
+                                {p.area || <span style={{ color: "#49483e" }}>未知</span>}
+                              </td>
+                              <td style={SUB_TD}>
+                                <a
+                                  href={`/user/${p.uid}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: "#66d9ef", textDecoration: "none" }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {p.name}
+                                </a>
+                              </td>
+                              <td style={SUB_TD}>{p.sex === 1 ? "男" : "女"}</td>
+                              <td style={SUB_TD}>{p.rank}</td>
+                              <td style={{ ...SUB_TD, textAlign: "right" }} className="num">{p.games.toLocaleString("zh-CN")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
           {servers !== null && servers.length === 0 && (
             <tr>
@@ -211,7 +294,7 @@ export function ServerStatusPanel({
         <span style={{ color: "#f79646" }}>●</span> 排空 ·{" "}
         <span style={{ color: "#e24b4a" }}>●</span> 不可用 · 在线＝当前连接 / 累计人数（灰） ·
         对局＝进行中 / 累计局数（灰） · 平均延迟＝玩家实测近 7 天均值（{RTT_LEGEND}） ·
-        点击表头按累计排序
+        点击表头按累计排序 · 点击行展开在线玩家
       </div>
     </div>
   );
