@@ -76,6 +76,10 @@ export interface PlayerRow {
   games: number;
   /** 本轮在线时长（秒，连接建立起算；同 uid 多标签页取最早连接） */
   online: number;
+  /** 该玩家在本节点 ranked 局实测平均延迟（ranked_rtt_log 近 7 天，null=无样本） */
+  rttAvg: number | null;
+  /** 该玩家在本节点的延迟样本数 */
+  rttN: number;
 }
 
 export async function GET() {
@@ -94,6 +98,20 @@ export async function GET() {
       since,
     );
     rttByRegion = new Map(rows.map((r) => [r.region, { avg: Math.round(r.avg), n: Number(r.n) }]));
+  } catch { /* ignore */ }
+
+  // 玩家个体延迟（2026-11-02 五次张老师：玩家列表尾列，三色同主表口径）——
+  // ranked_rtt_log 近 7 天按 (user_id, region) 聚合；rtt 是排行局结束时上报的
+  // 采样，所以是「近期打过的局的实测」，不是实时探针。失败静默显示 —
+  let rttByUserRegion = new Map<string, { avg: number; n: number }>();
+  try {
+    const since = Math.floor(Date.now() / 1000) - 7 * 86400;
+    const rows = await prisma.$queryRawUnsafe<{ user_id: bigint; region: string; n: bigint; avg: number }[]>(
+      `SELECT user_id, region, COUNT(*) n, AVG(rtt) avg FROM ranked_rtt_log
+       WHERE create_time >= ? AND rtt > 0 AND region <> '' GROUP BY user_id, region`,
+      since,
+    );
+    rttByUserRegion = new Map(rows.map((r) => [`${r.user_id}:${r.region}`, { avg: Math.round(r.avg), n: Number(r.n) }]));
   } catch { /* ignore */ }
 
   // 先拉各实例 /health + /players，再对去重 uid 集合一次查库补齐展示字段。
@@ -127,7 +145,8 @@ export async function GET() {
             players = (pj.players ?? []).map((p): PlayerRow => {
               const uid = Number(p.uid);
               if (typeof p.name === "string" && p.name) loginNames.set(uid, p.name);
-              return { uid, name: "", area: "", sex: 1, rank: "预备役", games: Number(p.games) || 0, online: Math.max(0, Number(p.secs) || 0) };
+              const rtt = rttByUserRegion.get(`${uid}:${rkey}`) ?? null;
+              return { uid, name: "", area: "", sex: 1, rank: "预备役", games: Number(p.games) || 0, online: Math.max(0, Number(p.secs) || 0), rttAvg: rtt?.avg ?? null, rttN: rtt?.n ?? 0 };
             });
           }
         } catch { /* players 拉取失败：该行显示获取失败，不影响负载展示 */ }
