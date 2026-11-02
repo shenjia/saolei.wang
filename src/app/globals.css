@@ -10848,7 +10848,9 @@ html.op-fakefs #header {
    七轮反馈（2026-11-02）：样式恢复绿色版，图标最终定稿为张老师指定 PNG
    （深蓝视频方块+黄色上传角标，public/images/upload-folder-icon.png），
    文案定「传录像」，宽度改 55/45 分（放弃 61.8% 黄金分割）。
-   未登录不渲染此行（page.tsx 把关）；≤880 整行退役（移动端入口由置顶大按钮接管） */
+   八轮反馈（2026-11-02）：默认态两钮统一银灰（原「开始练习」样式），
+   hover 态统一绿色（原「传录像」默认绿——绿底渐变+绿色调凸起边框），
+   active 态为绿色按下边框。未登录不渲染此行（page.tsx 把关）；≤880 整行退役（移动端入口由置顶大按钮接管） */
 #play_row {
   display: flex;
   align-items: stretch;
@@ -10873,26 +10875,23 @@ html.op-fakefs #header {
 }
 #play_row a:hover {
   color: #000;
+  /* 八轮：hover 统一绿色（原「传录像」默认绿） */
+  background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
+  border-color: #c4e88a #55801a #55801a #c4e88a;
 }
 #play_row a:active {
-  border-color: #7b7b7b #fff #fff #7b7b7b;
+  /* 八轮：按下为绿色调凹陷边框 */
+  border-color: #55801a #c4e88a #c4e88a #55801a;
 }
 #play_row #play_entry {
   width: 55%;
   margin: 0;
 }
-/* 右钮占余宽 45%（七轮恢复绿色版）：绿底渐变 + 绿色调凸起 3D 边框，黑字同左钮 */
+/* 右钮占余宽 45%（八轮默认态与左钮统一银灰，绿色只留 hover/active；
+   九轮：文字与图标间 10px gap 收为 7px） */
 #play_row #upload_entry {
   flex: 1;
-  background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
-  border-color: #c4e88a #55801a #55801a #c4e88a;
-}
-#play_row #upload_entry:hover {
-  color: #000;
-  background: #8ac21b linear-gradient(to bottom, #96cf2c, #79b018);
-}
-#play_row #upload_entry:active {
-  border-color: #55801a #c4e88a #c4e88a #55801a;
+  gap: 7px;
 }
 #play_row #upload_entry img {
   display: block;
