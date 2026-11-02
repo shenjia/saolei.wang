@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   await sendMail(
     email,
     "扫雷网邮箱绑定验证",
-    `您正在为扫雷网账号绑定邮箱：${email}\n\n请点击以下链接完成验证（24 小时内有效）：\n\n${url}\n\n如果这不是您的操作，请忽略本邮件。`,
+    `您正在为扫雷网账号绑定邮箱：${email}\n\n请点击以下链接完成验证（24 小时内有效）：\n\n${url}\n\n如果点击链接无法打开（部分邮箱 App 内置浏览器可能拦截站外链接），请复制该链接到手机或电脑浏览器中打开。\n\n如果这不是您的操作，请忽略本邮件。`,
   );
 
   return NextResponse.json({ ok: true });

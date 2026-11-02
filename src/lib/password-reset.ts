@@ -47,7 +47,7 @@ export async function sendResetEmail(email: string, resetUrl: string): Promise<b
   await sendMail(
     email,
     "扫雷网密码重置",
-    `您申请了扫雷网密码重置，请点击以下链接（30 分钟内有效）：\n\n${resetUrl}\n\n如果这不是您的操作，请忽略本邮件。`,
+    `您申请了扫雷网密码重置，请点击以下链接（30 分钟内有效）：\n\n${resetUrl}\n\n如果点击链接无法打开（部分邮箱 App 内置浏览器可能拦截站外链接），请复制该链接到手机或电脑浏览器中打开。\n\n如果这不是您的操作，请忽略本邮件。`,
   );
   return true;
 }
