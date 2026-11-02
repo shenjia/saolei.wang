@@ -130,6 +130,13 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
   const addFiles = useCallback(
     (files: FileList | File[]) => {
       const seen = new Set(itemsRef.current.map((i) => `${i.file.name}|${i.file.size}|${i.file.lastModified}`));
+      // 剩余可入列的待传名额（2026-11-02 张老师定：超配额文件直接拦下不让入列，
+      // 不只提示）。invalid 文件不占额度，照常入列展示错误。
+      const queuedBefore = itemsRef.current.filter(
+        (i) => i.status === "pending" || i.status === "uploading"
+      ).length;
+      let slots = Math.max(0, serverRemaining - queuedBefore);
+      let blocked = 0;
       const added: Item[] = [];
       for (const file of Array.from(files)) {
         const id = `${file.name}|${file.size}|${file.lastModified}`;
@@ -145,16 +152,20 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
           status = "invalid";
           message = "文件大小不能超过 500KB";
         }
+        if (status === "pending") {
+          if (slots <= 0) {
+            blocked++;
+            continue; // 超出额度：不入列
+          }
+          slots--;
+        }
         added.push({ key: `${Date.now()}-${seqRef.current++}`, file, status, progress: 0, message });
       }
-      if (added.length === 0) return;
-      // 超配额提示（2026-11-02 张老师）：本次加入会使待传数超过剩余额度时弹红色气泡；
-      // 文件照常入列（服务端仍是权威闸门），不阻断操作
-      const queuedBefore = itemsRef.current.filter(
-        (i) => i.status === "pending" || i.status === "uploading"
-      ).length;
-      const addedPending = added.filter((i) => i.status === "pending").length;
-      if (queuedBefore + addedPending > serverRemaining) showQuotaBubble();
+      if (added.length === 0) {
+        if (blocked > 0) showQuotaBubble();
+        return;
+      }
+      if (blocked > 0) showQuotaBubble();
       applyItems([...itemsRef.current, ...added]);
       for (const item of added) {
         if (item.status !== "pending") continue;
@@ -370,25 +381,24 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
         ))}
       </div>
       {/* 开始上传常驻（无文件 / 上传中置灰）；清空列表仅在列表有文件时出现。
-          左侧实时配额行（2026-11-02 张老师：从规则板块挪到按钮左） */}
-      <p
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 16,
-        }}
-      >
-        <span style={{ position: "relative", color: "#939387", fontSize: 13 }}>
+          配额行绝对定位左侧（2026-11-02 张老师：不影响按钮排版），正文字号 14px */}
+      <p style={{ textAlign: "center", position: "relative" }}>
+        <span
+          style={{
+            position: "absolute",
+            left: 12,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color: "#939387",
+          }}
+        >
           {/* 超配额红色气泡（3 秒自动消隐） */}
           {quotaBubble && (
             <span
               style={{
                 position: "absolute",
                 bottom: "calc(100% + 8px)",
-                left: "50%",
-                transform: "translateX(-50%)",
+                left: 0,
                 background: "#f92672",
                 color: "#fff",
                 fontSize: 12,
@@ -444,6 +454,7 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
           <button
             type="button"
             className={`button big ${busy ? "disabled" : ""}`}
+            style={{ marginLeft: 12 }}
             disabled={busy}
             onClick={() => applyItems([])}
           >
