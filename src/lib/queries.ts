@@ -240,12 +240,28 @@ export { videoScores } from "./format";
 
 // ---------- 首页 ----------
 
+// 2026-11-03 首页缓存永续化（张老师报告「点首页经常卡几秒」）：这两条此前裸查，
+// 每次首页请求都直打 DB；挂 5 分钟缓存后配合生产 cron 常态预热
+// （scripts/preheat-cron.sh，每分钟对活跃槽跑 slim 清单），缓存条目永不过期，
+// 重建成本全部由预热请求承担、访客永远命中热缓存。改查询逻辑须升版本号。
+const fetchHomeNews = unstable_cache(
+  async (limit: number) => getNews({ limit, home: true }),
+  ["home-news-v1"],
+  { revalidate: 300 }
+);
+
+const fetchNewbies = unstable_cache(
+  async (limit: number) => getNews({ type: NEWS_TYPE.NEWBIE, limit }),
+  ["home-newbies-v1"],
+  { revalidate: 300 }
+);
+
 export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
-  return getNews({ limit, home: true });
+  return fetchHomeNews(limit);
 }
 
 export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]> {
-  return getNews({ type: NEWS_TYPE.NEWBIE, limit });
+  return fetchNewbies(limit);
 }
 
 /**
@@ -777,7 +793,8 @@ const fetchBannedUserIds = unstable_cache(
     return rows.map((r) => N(r.id));
   },
   ["banned-user-ids-v1"],
-  { revalidate: 60 }
+  // 2026-11-03 首页缓存永续化：60→300（配合 cron 常态预热，过期重建由预热承担）
+  { revalidate: 300 }
 );
 
 /** 「上榜」口径通用排除条件（无封禁用户时返回空对象，可直接展开进 where） */
@@ -832,7 +849,7 @@ async function getTopUsersImpl(
 }
 
 // 2026-10-15 性能审计：首页右栏排行前十，榜内成员极少变动，缓存 60s
-const fetchTopUsers = unstable_cache(getTopUsersImpl, ["top-users-v2"], { revalidate: 60 });
+const fetchTopUsers = unstable_cache(getTopUsersImpl, ["top-users-v2"], { revalidate: 300 });
 
 export async function getTopUsers(
   limit = HOME_TOP_NUMBER
@@ -1431,7 +1448,7 @@ const fetchFeedDedupIdsImpl = async (
   return rows.map((r) => N(r.id));
 };
 // v3：2026-10-29 阶段筛选维度并入（stage 进参数即进缓存键；home×stage×nf 键空间有界）
-const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], { revalidate: 60 });
+const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], { revalidate: 300 });
 
 /** 首页发现流去重总数（与 fetchFeedDedupIds 口径严格一致）：
  *  Σ 每组 (用户,级别) 的 min(非纪录盘数, 配额) + 纪录盘总数。 */
@@ -1456,7 +1473,7 @@ const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean, s
   return N(rows[0]?.c);
 };
 // v3：2026-10-29 阶段筛选维度并入（同 feed-dedup-v3）
-const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], { revalidate: 60 });
+const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], { revalidate: 300 });
 
 /** 首页「最新录像」发现流总数（去重口径，2026-10-23）——
  *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。 */
@@ -1505,7 +1522,7 @@ const fetchVideoCount = unstable_cache(
     });
   },
   ["video-count-v4"],
-  { revalidate: 60 }
+  { revalidate: 300 }
 );
 
 export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boolean } = {}): Promise<number> {
@@ -1558,7 +1575,8 @@ async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
 }
 
 // 2026-10-28 v10：衰减分母改按发布天数+1（张老师指令），升键作废旧缓存
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v10"], { revalidate: 60 });
+// 2026-11-03 首页缓存永续化：60→300
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v10"], { revalidate: 300 });
 
 export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
@@ -2152,7 +2170,8 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
 
 // 2026-10-15 性能审计：首页右栏「站点统计」9 个 count，其中 video/news/comment 三项
 // 在 20 万级表上全表扫描（EXPLAIN 证实 ALL），是全站最重的单点。缓存 60s
-const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v2"], { revalidate: 60 });
+// 2026-11-03 首页缓存永续化：60→300
+const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v2"], { revalidate: 300 });
 
 export async function getSiteStats(): Promise<SiteStats> {
   return fetchSiteStats();

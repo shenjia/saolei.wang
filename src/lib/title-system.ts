@@ -89,7 +89,8 @@ const fetchThunderKingId = unstable_cache(
     return rows.length ? Number(rows[0].id) : 0;
   },
   ["thunder-king-id-v1"],
-  { revalidate: 60 }
+  // 2026-11-03 首页缓存永续化：60→300（配合 cron 常态预热）
+  { revalidate: 300 }
 );
 
 /** 当前雷界第一人 user id（总计时间最小者；0=无人）。

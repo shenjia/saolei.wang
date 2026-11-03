@@ -37,6 +37,9 @@ PREHEAT_HOST="${PREHEAT_HOST:-127.0.0.1}"
 
 # ── 预热清单（按 DB 压力从高到低，最重的放最前，保证预算不够时先焐热关键页）──
 # 每条都注明成本依据，日后路由/查询变化时按注释维护。
+# 2026-11-03 起 cron 常态预热（scripts/preheat-cron.sh）以 PREHEAT_SLIM=1 调本脚本：
+#   slim 模式剔除清单末尾两个**无缓存**的实时重页（/area 实时窗口函数、/team 逐管理员
+#   全表 count）——它们没有缓存可保温，每分钟打一次纯烧 DB；仅发布预热（全量）时跑。
 PREHEAT_PATHS=(
   "/ranking?view=bv"       # 最重：30 万行 video⋈video_info 全量聚合（1h 缓存）+ level_3bv_range 惰性补种
   "/ranking?view=bv&nf=1"  # NF BV：独立缓存键，避免切流后首击承担第二次全量聚合
@@ -44,6 +47,7 @@ PREHEAT_PATHS=(
   "/ranking?view=stnb&nf=1" # NF STNB：独立落盘表与缓存键
   "/"                   # 首页：6 条并发 + SiteStats 9 条 count（video 两条件全表扫 30 万行）
                         #   └ 2026-10-23 随之焐热录像发现流去重键 page1/all（窗口函数全量排序 ~2.1s/键）
+                        #   └ 2026-11-03 首页链路缓存统一 300s（queries.ts/title-system.ts），新闻/新兵流也挂缓存
   # 录像发现流去重缓存补键（2026-10-23）：级别 tabs 与 NF 开关的第 1 页——
   # 窗口函数 (用户,级别) 配额 + 纪录盘保位全量排序，冷键 ~2.1s，避免切流后首击承担
   "/api/video/more?feedPage=1&base=18&size=18&level=beg"
@@ -53,15 +57,27 @@ PREHEAT_PATHS=(
   "/video"              # 录像列表：video.count 全表 + getVideoBoxStats 两个 groupBy（各扫 30 万行）
   "/video?order=stnb"   # STNB 排序列表页：stnb 索引反扫行查询 + 单表化 count（2026-10-20 进清单；FORCE INDEX 后 <0.5s，预热顺手）
   "/ranking"            # 雷界榜：顺带触发 rank_snapshot 当日惰性快照（全表窗口函数写入，每天一次）
-  "/area"               # 地区排行：实时窗口函数大 SQL（user⋈user_scores + 活跃用户全表扫），无缓存
+  "/area"               # 地区排行：实时窗口函数大 SQL（user⋈user_scores + 活跃用户全表扫），无缓存【slim 剔除】
   "/ranking?view=world" # 世界榜：外部抓取 minesweepergame.com（1 天缓存，已加 8s 超时）
   "/grow"               # 进步榜：快照已被上面 /ranking 焐热，这里只是填页面缓存
   "/ranking?nf=1"       # NF 成绩榜：user_scores_nf 同构查询
   "/titles"             # 军衔页：20 条索引 count（各档人数）
   "/records"            # 纪录页：曲线窗口函数 + 八项 TOP1（unstable_cache 10min）
   "/bbs"                # 论坛首页：索引 count + 分页
-  "/team"               # 管理团队：逐管理员 video.count（无 reviewUser 索引，各扫一次 30 万行）
+  "/team"               # 管理团队：逐管理员 video.count（无 reviewUser 索引，各扫一次 30 万行）【slim 剔除】
 )
+
+# slim 模式：剔除无缓存的实时重页（见上 2026-11-03 注）
+if [[ "${PREHEAT_SLIM:-0}" == "1" ]]; then
+  SLIM_SKIP=("/area" "/team")
+  FILTERED=()
+  for p in "${PREHEAT_PATHS[@]}"; do
+    skip=0
+    for s in "${SLIM_SKIP[@]}"; do [[ "$p" == "$s" ]] && skip=1; done
+    (( skip == 0 )) && FILTERED+=("$p")
+  done
+  PREHEAT_PATHS=("${FILTERED[@]}")
+fi
 
 printf "${BLUE}[PREHEAT]${NC} 预热备槽 ${PREHEAT_HOST}:%s（%s 个一级页面，串行，失败不阻断发布）\n" \
   "$PORT" "${#PREHEAT_PATHS[@]}"
