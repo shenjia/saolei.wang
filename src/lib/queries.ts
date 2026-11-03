@@ -1017,8 +1017,15 @@ function videoListConds(opts: {
   bv: number | null;
   /** NF 筛选（2026-10-20 张老师要求）：只显示 NF 录像（vi.noflag=1） */
   nf: boolean;
+  /** COUNT 路径（2026-11-03 慢 SQL 巡检修复）：true 时 vm 不加 FORCE INDEX——
+   *  FORCE(stnb_idx) 是给行查询 ORDER BY stnb 索引序免 filesort 用的（2026-10-20
+   *  「STNB 排序 10~12s」修复主力），COUNT 无排序需求，被钉死的 vm 索引全扫
+   *  31.5 万行 + 每行两次 PK 回表（62.5 万 lookup）纯浪费；生产 EXPLAIN ANALYZE
+   *  实测去 FORCE 后优化器自选 video 覆盖索引驱动 2.86s→1.48s（快一倍）。
+   *  ioe 同理（行查询反扫 ioe_idx 只取前 N 行，COUNT 全量数行用不上索引序）。 */
+  forCount?: boolean;
 }): { joins: string; where: string; selectId: string } {
-  const { level, order, author, win, bv, nf } = opts;
+  const { level, order, author, win, bv, nf, forCount } = opts;
   const needVi =
     !!win || !!bv || nf || order === "time" || order === "3bv" || order === "3bvs" || order === "stnb";
   const needVs = order === "comments" || order === "clicks";
@@ -1038,7 +1045,7 @@ function videoListConds(opts: {
   // 匹配：ioe 排序反扫 ioe 索引——原两排序共用 stnb_idx 是笔误，[ioe] 索引建了却被
   // FORCE 废掉（全站 IOE 排序同样在吃全表扫 + filesort）。
   const table = needVm
-    ? author
+    ? author || forCount
       ? "video_metrics vm"
       : `video_metrics vm FORCE INDEX (${
           order === "ioe" ? "video_metrics_ioe_idx" : "video_metrics_stnb_idx"
@@ -1106,7 +1113,9 @@ function videoListConds(opts: {
  *  v10（2026-10-25：FORCE INDEX 收窄到无 author 路径 + ioe 排序改反扫 ioe 索引，
  *  查询计划形态变——旧缓存计数值仍正确但为彻底失效重来）；
  *  v11（2026-11-02：运气盘 no_record=1 不进按成绩排序的列表——旧缓存计数含
- *  运气盘行（当前为 0 行，防患未然），必须失效重来） */
+ *  运气盘行（当前为 0 行，防患未然），必须失效重来）；
+ *  v12（2026-11-03：COUNT 路径去 FORCE INDEX——stnb/ioe 计数不再钉 stnb_idx/
+ *  ioe_idx 全扫（优化器自选计划生产实测快一倍）+ revalidate 60→300s 摊薄冷启动） */
 const getVideoListJoinCount = unstable_cache(
   async (
     level: string,
@@ -1124,12 +1133,13 @@ const getVideoListJoinCount = unstable_cache(
       win,
       bv: bv || null,
       nf,
+      forCount: true,
     });
     const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) AS c ${joins} ${where}`);
     return N(rows[0]?.c);
   },
-  ["video-list-join-count", "v11"],
-  { revalidate: 60 }
+  ["video-list-join-count", "v12"],
+  { revalidate: 300 }
 );
 
 /**
