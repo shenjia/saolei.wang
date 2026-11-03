@@ -129,7 +129,10 @@ export function RankingRowLine({
         <td className="delta">
           {showDelta &&
             (delta === null || delta === undefined ? (
-              <span className="new" title="新上榜，暂未超越进榜名次">新</span>
+              <span className="new" title="新上榜，暂未超越进榜名次">
+                {/* 2026-11-04 张老师要求：显示「新」时前面也带上行箭头（新=未来可提升的起点） */}
+                <DeltaArrow dir="up" />新
+              </span>
             ) : delta === 0 ? (
               <span className="flat" title="与昨日持平">→</span>
             ) : delta > 0 ? (
