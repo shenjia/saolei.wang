@@ -410,6 +410,13 @@ table.admin_table td {
   border-bottom: 1px solid #3a3a32;
   vertical-align: middle;
 }
+/* 玩家列不按字折行（2026-11-03 张老师手机审核反馈）：手机是 980 桌面版式视口，
+   15 列宽表里 nowrap 列（表头/数字/操作）占死后弹性列被压到一字宽，
+   中文玩家名没有断词点就折成竖条。给玩家列整体 nowrap：名字+军衔徽章同行不拆，
+   列宽由内容撑开，超出部分走 admin_scroll 横向滑动（全站桌面版式口径下无断点可用）。 */
+table.admin_table td.player {
+  white-space: nowrap;
+}
 table.admin_table tbody tr:hover {
   background: #33322b;
 }

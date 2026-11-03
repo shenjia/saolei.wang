@@ -42,7 +42,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
                 {v.id}
               </Link>
             </td>
-            <td>
+            <td className="player">
               <Link className="link" href={`/admin/users/${v.user}`}>
                 {v.author?.chineseName ?? `#${v.user}`}
                 <span className="pt_bubble">
