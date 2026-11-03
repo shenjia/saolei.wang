@@ -388,8 +388,15 @@ const MASK_EXIT_SCRIPT = `
 })();
 `;
 
- export function FlopPlayer() {
-  const frameRef = useRef<HTMLIFrameElement>(null);
+ export function FlopPlayer({
+  onFrame,
+}: {
+  /** iframe 挂载/卸载回调（2026-11-03 反作弊入册用）：练习页排名局经此把
+      全屏 iframe 注册进 ownNodes 白名单——懒挂时机晚于探测器一次性注册，
+      不入册会被 overlay_scan 误判成「外挂提示层」（盖满棋盘 100%）。 */
+  onFrame?: (el: HTMLIFrameElement | null) => void;
+}) {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -436,7 +443,10 @@ const MASK_EXIT_SCRIPT = `
 
   return (
     <iframe
-      ref={frameRef}
+      ref={(el) => {
+        frameRef.current = el;
+        onFrame?.(el);
+      }}
       className="flop-player-iframe flop-player-display-none"
       src="/play/index.html"
       title="录像播放器"
