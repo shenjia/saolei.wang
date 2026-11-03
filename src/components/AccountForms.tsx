@@ -55,9 +55,10 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
         setMessage({ ok: false, text: data.error ?? "保存失败" });
         return;
       }
-      setMessage({ ok: true, text: "保存成功" });
+      // 2026-11-03 张老师：按钮旁不再显示「保存成功」文字（与居中气泡重复）；
+      // 气泡走完停留+淡出（success 1s + 0.36s）后跳回账户设置页
       toast("资料已保存", "success");
-      router.refresh();
+      setTimeout(() => router.push("/account"), 1400);
     } finally {
       setSubmitting(false);
     }

@@ -1839,7 +1839,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 
 export interface UserDetail {
   user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number; donateHidden: boolean };
-  info: { nickname: string; interest: string | null; qq: string; mouse: string; pad: string } | null;
+  info: { nickname: string; interest: string | null; qq: string; mouse: string; pad: string; birthday: number } | null;
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
   title: string;
@@ -1888,6 +1888,8 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
           qq: info.qq,
           mouse: info.mouse,
           pad: info.pad,
+          // 生日（Unix 秒，2026-11-03）：账户设置/个人主页显示年龄+星座用
+          birthday: N(info.birthday),
         }
       : null,
     stat: stat
