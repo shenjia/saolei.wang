@@ -22,9 +22,16 @@ function toInputDate(d: string): string {
   return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
 }
 
+/** date input 用的当天 YYYY-MM-DD（本地时区补零） */
+function todayStr(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
 export function SiteUpdateForm() {
   const router = useRouter();
-  const [date, setDate] = useState("");
+  // 日期默认选中当天（本地时区）
+  const [date, setDate] = useState(todayStr);
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<EditingRow | null>(null);
@@ -62,6 +69,7 @@ export function SiteUpdateForm() {
       if (data.ok) {
         setEditing(null);
         setContent("");
+        setDate(todayStr());
         router.refresh();
       }
     } catch {
@@ -90,6 +98,7 @@ export function SiteUpdateForm() {
             onClick={() => {
               setEditing(null);
               setContent("");
+              setDate(todayStr());
             }}
           >
             取消编辑
