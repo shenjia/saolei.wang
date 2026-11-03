@@ -8824,6 +8824,13 @@ button.msg_cancel:hover {
 #online_play .gicon.gfs_hint .tip {
   display: block;
 }
+/* NF 标雷提示（2026-11-03 张老师定）：NF 模式下尝试右键标雷（含连击右键、
+   触屏长按）时，NF 钮抖动（gshake）并强制弹出 hover 气泡（文案「NF 模式：
+   不能插旗，右键已禁用」）+ 播放错误提示音——JS 挂 gnf_hint，2.5s 后摘除，
+   形态与 hover 态完全一致（同 gfs_hint 全屏引导口径） */
+#online_play .gicon.gnf_hint .tip {
+  display: block;
+}
 /* 排行禁用倒计时（2026-10-29 张老师定）：排行钮 hover 气泡禁用文案里
    ≤24h 的 HH:MM:SS 段用亮玫红 #ff0080（15:40 张老师指正 #e60657 太暗）；
    >1 天只显天数，不带该 span、走常规气泡色 */
