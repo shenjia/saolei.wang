@@ -4057,10 +4057,26 @@ body #user_view .info .gender.big {
   background-size: 16px 32px;
 }
 /* info_body 保持 flex：nowrap 成绩表在头像右侧空间不足时会被整表挤到头像下方
-   （鞠泽恩这类长内容实测触发），flex + table-layout:fixed 强制其贴右排列并省略号截断 */
+   （鞠泽恩这类长内容实测触发），flex + table-layout:fixed 强制其贴右排列并省略号截断。
+   2026-11-04 容器查询锚点：配合下方 @container 在成绩表空间不足时按需隐藏纪录日期
+   （张老师要求「空间不够时隐去破纪录时间，而不是文字重叠」）——按容器宽而非视口断点，
+   精准命中两栏窄段（视口 881~1023，可用 195~255px）；气泡定位不受影响
+   （del[data-tip]/.reltime 均 position:relative 锚在自身，containment 不建立包含块） */
 body #user_view .info .info_body {
   display: flex;
   align-items: flex-start;
+  container-type: inline-size;
+}
+/* 纪录日期按需隐藏（2026-11-04）：带日期的成级行自然宽实测 263~275px（样本：老玩家
+   「(19年前)」45px 日期 + 最宽数字 130px），阈值取 260——容器 ≥260 显示日期
+   （视口 ≥1024 两栏满血 275px 放得下、余量 23px+；769~880 单栏 365~465px 富余）；
+   <260 隐藏（连括号），只留成绩本体（最宽 194px），杜绝 11-01 放行 td overflow 后
+   日期溢出叠到 3BV/s 列（881~1023 段实测叠 3~10px）。宽度回升自动恢复显示；
+   ≤768 媒体查询的全局隐藏仍兜底（双保险）。不支持容器查询的老浏览器整条丢弃，维持现状 */
+@container (max-width: 259px) {
+  #user_view .info .scores .score_date {
+    display: none;
+  }
 }
 body #user_view .info .scores {
   flex: 1;
