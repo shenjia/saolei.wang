@@ -129,7 +129,7 @@ export function RankingRowLine({
         <td className="delta">
           {showDelta &&
             (delta === null || delta === undefined ? (
-              <span className="new" title="昨日新上榜">新</span>
+              <span className="new" title="今日新上榜">新</span>
             ) : delta === 0 ? (
               <span className="flat" title="与昨日持平">→</span>
             ) : delta > 0 ? (
