@@ -123,10 +123,11 @@ export function VideoSearch({
   const isTimeInput = VIDEO_TIME_INPUT_RE.test(kw);
   const isPureInt = /^\d+$/.test(kw);
 
-  /** 时间项的展示值（归一化，如 37 → 37.00） */
+  /** 时间项的展示值（归一化，如 37 → 37.00）。窗口为 10ms 截断格 [ms, ms+10)，
+   *  代表值取格内任意值截断显示都相同，直接用窗起点（2026-11-04 截断口径） */
   function timeItem(): Item {
     const win = parseVideoTimeWindow(kw)!;
-    return { kind: "time", value: scoreTime(win[0] + 5) };
+    return { kind: "time", value: scoreTime(win[0]) };
   }
 
   /** 3BV 项（2026-10-20）：输入是合法 3BV 整数时给出 */
@@ -299,7 +300,7 @@ export function VideoSearch({
     if (!key) return;
     if (!hash && VIDEO_TIME_INPUT_RE.test(key)) {
       const win = parseVideoTimeWindow(key);
-      if (win) pickTime(scoreTime(win[0] + 5));
+      if (win) pickTime(scoreTime(win[0]));
       return;
     }
     if (hash || /^\d+$/.test(key)) {

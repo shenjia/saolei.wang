@@ -346,13 +346,14 @@ export function parseVideo3bv(v?: string): number | null {
 
 /**
  * 时间成绩搜索输入 → 匹配窗口 [lo, hi)（毫秒）。
- * 「匹配所有时间相同的成绩」= 显示值相同（scoreTime 按 2 位小数四舍五入），
- * 故窗口取显示舍入半径 ±5ms：输入 37.29 → [37285, 37295)，覆盖所有显示为 37.29 的成绩。
+ * 「匹配所有时间相同的成绩」= 显示值相同（scoreTime 按 2 位小数**截断**，
+ * 2026-11-04 口径同改），故窗口取 10ms 截断格：输入 37.29 → [37290, 37300)，
+ * 覆盖所有显示为 37.29 的成绩（37299 截断后仍显示 37.29）。
  */
 export function parseVideoTimeWindow(t?: string): [number, number] | null {
   if (!t || !VIDEO_TIME_INPUT_RE.test(t)) return null;
   const ms = Math.round(parseFloat(t) * 1000);
-  return [ms - 5, ms + 5];
+  return [ms, ms + 10];
 }
 
 export const VIDEO_STATUS = {

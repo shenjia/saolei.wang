@@ -19,10 +19,12 @@ export function videoScores(
   };
 }
 
-/** 时间成绩：存储为毫秒，显示为秒（2 位小数） */
+/** 时间成绩：存储为毫秒，显示为秒（2 位小数）。
+ *  2026-11-04 张老师定：第三位小数**截去不四舍五入**（37.299 → 37.29 而非 37.30）——
+ *  先 floor 到 10ms 再除回，避免浮点除法直接 toFixed 引入的进位。 */
 export function scoreTime(score: number | null | undefined): string {
   if (!score || score <= 0) return "";
-  return (score / 1000).toFixed(2);
+  return (Math.floor(score / 10) / 100).toFixed(2);
 }
 
 /** 3BV/s 成绩：存储为实际值×1000，显示 3 位小数 */

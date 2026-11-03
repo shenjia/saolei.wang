@@ -70,9 +70,9 @@ const PAD_X = 8;
 const PER_POINT_MIN = 6;
 const SCROLL_THRESHOLD = 600;
 
-/** 纪录值显示：与全站口径一致（time 2 位小数秒 / 3bvs 3 位小数 / stnb 1 位小数=STNB 榜同款） */
+/** 纪录值显示：与全站口径一致（time 2 位小数秒**截断**（2026-11-04 口径）/ 3bvs 3 位小数 / stnb 1 位小数=STNB 榜同款） */
 function fmtVal(metric: CurveChart["metric"], v: number): string {
-  if (metric === "time") return (v / 1000).toFixed(2);
+  if (metric === "time") return (Math.floor(v / 10) / 100).toFixed(2);
   if (metric === "3bvs") return (v / 1000).toFixed(3);
   return v.toFixed(1);
 }
