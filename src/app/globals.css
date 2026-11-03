@@ -8818,6 +8818,28 @@ button.msg_cancel:hover {
 #online_play .op_ping:hover .tip {
   display: block;
 }
+/* 全屏态气泡改弹按钮**下方**（2026-11-03 张老师定）：mac 全屏时鼠标移到上边缘
+   会触发系统菜单栏弹出，盖住上弹气泡（尤其信号图标的服务器清单要点点击）→
+   全屏宿主内五颗图标钮与信号图标的 hover 气泡、建议切换气泡一律翻到正下方，
+   小三角指向上、悬停桥同步翻到气泡上缘与按钮下缘之间；退出全屏自动还原 */
+#online_play > div:fullscreen .gicon .tip,
+#online_play > div:fullscreen .op_ping .tip,
+#online_play > div:fullscreen .op_ping .ping_suggest {
+  bottom: auto;
+  top: calc(100% + 4px);
+}
+#online_play > div:fullscreen .gicon .tip::after,
+#online_play > div:fullscreen .op_ping .tip::after,
+#online_play > div:fullscreen .op_ping .ping_suggest::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: #656355;
+}
+#online_play > div:fullscreen .op_ping .tip::before {
+  top: auto;
+  bottom: 100%;
+}
 /* 全屏引导（2026-11-02 张老师定）：比例已到顶仍尝试放大时，全屏钮抖动
    （gshake，见上）并强制弹出 hover 气泡引导全屏——JS 挂 gfs_hint，2.5s 后
    摘除还原；形态与 hover 态完全一致 */
