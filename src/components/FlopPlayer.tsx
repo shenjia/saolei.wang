@@ -144,6 +144,8 @@ const ZOOM_SCRIPT = `
   window.__flopZoom = true;
   var K_MIN = 0.5, K_MAX = 3;
   var k = 1;
+  var lastNatKey = "";   // 上次自适应的棋盘自然尺寸（换盘面=尺寸变化→重新 fit）
+  var userK = false;     // 用户手动滚轮/双击后，本盘面内不再自动 fit
 
   function playerWin() {
     var menu = document.querySelector(".game-menu");
@@ -154,6 +156,10 @@ const ZOOM_SCRIPT = `
     var win = menu;
     while (win.parentElement && win.parentElement !== root) win = win.parentElement;
     return win === menu ? null : win;
+  }
+  /* 窗口层生效 zoom（FIT_PLAYER_SCRIPT 窄屏适配会 zoom 窗口节点，须计入换算） */
+  function winZoom(win) {
+    return (win && win.style && parseFloat(win.style.zoom)) || 1;
   }
   /* 棋盘 SVG＝win 内带非零 viewBox 且可见尺寸可观的 svg（defs symbol svg viewBox 为 0 被排除） */
   function findArea() {
@@ -166,6 +172,13 @@ const ZOOM_SCRIPT = `
       if (svgs[i].getBoundingClientRect().width > 100) return svgs[i];
     }
     return null;
+  }
+  /* 游戏区自然尺寸（去除窗口层 zoom 与本区 zoom 后的 1x 布局尺寸） */
+  function natOf(svg) {
+    var area = svg.parentElement;
+    var z = winZoom(playerWin()) * (parseFloat(area.style.zoom) || 1);
+    var r = area.getBoundingClientRect();
+    return { w: r.width / z, h: r.height / z };
   }
   /* 数据面板＝游戏区容器的父级下「含 table 且非游戏区」的那个子块 */
   function findStats(area) {
@@ -180,21 +193,91 @@ const ZOOM_SCRIPT = `
   function setZoom(el, z) {
     if (el) el.style.zoom = z === 1 ? "" : String(z);
   }
+  /* 窗口层 zoom 自愈＋宽度兜底：本脚本改 zoom 只触发属性变更，FIT 脚本的
+     childList MutationObserver 看不见（样式级变更漏报，缩过的窗永不复位——
+     2026-11-03 初始 fit 实测放大档暴露）。数学：视觉宽 = 布局宽 × wz，布局宽
+     = Σ(子块自然宽 × 各自语义倍率)，与 wz 无关——超宽时 wz = 视口/布局宽，
+     放得下则清 1（与 FIT 同口径但每次精确求解，不会像 FIT 那样 sqrt 收敛） */
+  function syncWinZoom() {
+    var win = playerWin();
+    if (!win || !win.style) return;
+    var wz = parseFloat(win.style.zoom) || 1;
+    var layoutW = win.getBoundingClientRect().width / wz;
+    var vw = window.innerWidth;
+    if (!vw || !layoutW) return;
+    if (layoutW > vw + 1) {
+      var z = vw / layoutW;
+      if (Math.abs(wz - z) > 0.001) win.style.zoom = String(z);
+    } else if (wz !== 1) {
+      win.style.zoom = "";
+    }
+  }
   function apply() {
     var svg = findArea();
     if (!svg) return;
     var area = svg.parentElement;
+    /* ⚠️ 子层 style 一律存语义倍率本身（不除窗口层 wz）：wz 只作窗口级宽度
+       兜底钳制（syncWinZoom），两层相乘即视觉尺寸——若子层除以 wz，wz 与
+       子层 style 互相抵消又互相放大（wz 缩→子层涨），视觉宽恒定且发散。 */
     setZoom(area, k);
     var stats = findStats(area);
     if (!stats) return;
-    if (k === 1) { setZoom(stats, 1); return; }
-    /* 自然高度＝当前视觉高度 ÷ 已施加的 zoom（getBoundingClientRect 含 zoom） */
-    var gz = parseFloat(area.style.zoom) || 1;
+    if (k === 1) { setZoom(stats, 1); syncWinZoom(); return; }
+    /* 自然高度＝当前视觉高度 ÷ 生效 zoom 链（窗口层 × 本区层） */
+    var wz = winZoom(playerWin());
+    var gz = wz * (parseFloat(area.style.zoom) || 1);
     var gNat = area.getBoundingClientRect().height / gz;
     var sz = parseFloat(stats.style.zoom) || 1;
     var sNat = stats.getBoundingClientRect().height / sz;
+    /* 面板跟涨是「视觉等高」：面板视觉高 ≥ 游戏区视觉高 */
     setZoom(stats, Math.max(1, (gNat * k) / sNat));
+    syncWinZoom();
   }
+  /* 初始视口自适应（2026-11-03 张老师定：初始比例不得低于全屏内置播放器——
+     内置 fitZoom 口径即「视口减固定 chrome 拉满」，flop 照做＝高度/宽度双向
+     fit 拉满；flop 侧栏仅统计面板无评级栏，同视口下不会低于内置）。
+     高度预算＝视口 − 窗口开销（控制条+内衬，实测 winRect−areaNat）− 呼吸；
+     宽度预算＝统计面板按跟涨规则计入（pz>1 时面板渲染宽同步变大）。 */
+  function fitInitial() {
+    var svg = findArea();
+    if (!svg) return;
+    var area = svg.parentElement;
+    var stats = findStats(area);
+    var win = playerWin();
+    var n = natOf(svg);
+    if (n.w < 50 || n.h < 50) return;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var chromeY = win ? win.getBoundingClientRect().height / winZoom(win) - n.h : 120;
+    var breathe = 32;
+    var kH = (vh - chromeY - breathe) / n.h;
+    var sNatW = 0, sNatH = 0;
+    if (stats) {
+      var sz = parseFloat(stats.style.zoom) || 1;
+      var sr = stats.getBoundingClientRect();
+      sNatW = sr.width / sz; sNatH = sr.height / sz;
+    }
+    /* 直写外层全局倍率 k（此处绝不能声明 var/let 局部变量遮蔽它） */
+    k = Math.min(K_MAX, Math.max(1, kH));
+    /* 宽度收敛：面板跟涨（pz>1）后总宽 = natW×k + sNatW×max(1, natH×k/sNatH) */
+    var totalW = function (kk) {
+      var pz = stats && sNatH > 0 ? Math.max(1, (n.h * kk) / sNatH) : 1;
+      return n.w * kk + sNatW * pz;
+    };
+    var maxW = vw - breathe;
+    if (totalW(k) > maxW) k = maxW / (n.w + (stats && sNatH > 0 ? sNatW * n.h / sNatH : 0));
+    k = Math.min(K_MAX, Math.max(1, k));
+    apply();
+  }
+  /* 轻量轮询：棋盘自然尺寸变化（新录像/换级别）且用户未手动干预 → 重新 fit */
+  window.setInterval(function () {
+    var svg = findArea();
+    if (!svg) return;
+    var n = natOf(svg);
+    var key = Math.round(n.w) + "x" + Math.round(n.h);
+    if (key === lastNatKey) return;
+    lastNatKey = key;
+    if (!userK) { k = 1; fitInitial(); }
+  }, 300);
   function inArea(t) {
     if (!(t instanceof Element)) return false;
     var svg = findArea();
@@ -204,11 +287,13 @@ const ZOOM_SCRIPT = `
     if (!inArea(e.target)) return;
     e.preventDefault();
     e.stopPropagation();
+    userK = true; // 手动干预后本盘面内不再自动 fit（换盘面自然尺寸变化时重置）
     k = Math.min(K_MAX, Math.max(K_MIN, k * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
     apply();
   }, { passive: false, capture: true });
   document.addEventListener("dblclick", function (e) {
     if (!inArea(e.target)) return;
+    userK = true;
     k = 1;
     apply();
   });
