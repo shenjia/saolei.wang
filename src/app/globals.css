@@ -11561,6 +11561,21 @@ html.op-fakefs #header {
 }
 /* 赞助记录（2026-10-30 五轮）：「共 x 笔」移板块标题行右上角（flex 两端对齐）；
    正文字号整体再加一档（正文 16px、人名/金额 17px） */
+/* legacy .box 左右 padding 30px → 内容仅 210px。日期/金额两列 nowrap，
+   Windows 微软雅黑字宽更大，两列 max-content 之和超 210 时 auto 布局的缺口
+   全砸进唯一可收缩的人名列 → 三字名第三字折行（2026-11-03 Edge 报障）。
+   左右收到 18px、width 210→234 补平（box 为 content-box，外径 272 不变），
+   内容 +24px 兜住字宽差。
+   ⚠️ 特异性：必须带 #page #home > li.sidebar 压过 #page #home > li.sidebar .box{width:210px}；
+   padding 同理压过 legacy .box{padding:30px}（同 (0,1,0) 打源码顺序 globals 输，实测过）。
+   只挂 ≥881 双栏带——≤880 单列带 .box 是 width:auto（6048 行），不受此挤压 */
+@media (min-width: 881px) {
+  #page #home > li.sidebar .box.donate_side {
+    width: 234px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
 .donate_side .donate_head {
   display: flex;
   align-items: baseline;
@@ -11584,6 +11599,10 @@ html.op-fakefs #header {
   color: #75715e;
   font-size: 13px; /* 时间列再小两号（2026-10-30 张老师：15→13） */
   white-space: nowrap;
+  /* auto 布局下 width:1px 让 nowrap 列按内容收缩（同 #site_stats 增量列先例）：
+     否则富余宽度按 max-content 比例塞给日期/金额列，人名列被挤到 2 字宽，
+     Windows 微软雅黑字体更宽时三字名第三字折行（2026-11-03 Edge 报障修复） */
+  width: 1px;
 }
 .donate_side .donate_table td .avatar_link {
   font-size: 17px;
@@ -11591,6 +11610,7 @@ html.op-fakefs #header {
 .donate_side .donate_table td.donate_amt {
   font-size: 17px;
   white-space: nowrap;
+  width: 1px; /* 同 td.sub：按内容收缩，富余让给人名列（2026-11-03 Edge 折行修复） */
 }
 .donate_side .donate_table td.donate_amt em {
   color: #7dc94b; /* 赞助金额绿（2026-10-30 张老师：压过 legacy .table em 的 #fdc61a 金，与总计收入同色） */
