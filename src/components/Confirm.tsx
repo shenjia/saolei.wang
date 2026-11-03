@@ -10,6 +10,7 @@
 // 交互：打开锁页面滚动；确认键自动聚焦（回车即确认）；多个确认请求按队列串行弹出。
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type ConfirmOptions = {
   /** 浮窗标题（如「清空消息」「删除录像」） */
@@ -92,9 +93,22 @@ export function ConfirmHost() {
   const [queue, setQueue] = useState<Pending[]>([]);
   const current = queue[0];
   const confirmRef = useRef<HTMLButtonElement>(null);
+  /** 全屏宿主（2026-11-03 张老师报障）：元素全屏下浏览器只渲染 fullscreenElement
+   *  子树，body 直下的确认浮层整体不可见（全屏局中切服务器弹窗被「盖住」实证）。
+   *  弹层改 portal 挂进全屏宿主，退出全屏自动回 body——与 #gr_modal 搬家 /
+   *  全屏 Toast 改挂同一先例。iOS 伪全屏（html.op-fakefs）无 fullscreenElement，
+   *  走 body 常规渲染不受影响 */
+  const [fsHost, setFsHost] = useState<Element | null>(null);
   /** 当前弹窗各勾选框状态（key → 勾选态；无勾选框为 undefined；每条队列项打开时初始化，2026-10-28）
    *  2026-10-29 起改为 Record 以支持多勾选框（旧单勾选框内部归一化为 key=""） */
   const [checks, setChecks] = useState<Record<string, boolean> | undefined>(undefined);
+
+  useEffect(() => {
+    const sync = () => setFsHost(document.fullscreenElement);
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
 
   useEffect(() => {
     emit = (options) =>
@@ -138,7 +152,7 @@ export function ConfirmHost() {
       window.removeEventListener("keydown", onKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current]);
+  }, [current, fsHost]); // fsHost 变化＝portal 重挂（remount 丢焦点），重跑补聚焦
 
   if (!current) return null;
   const o = current.options;
@@ -147,7 +161,7 @@ export function ConfirmHost() {
     o.checkboxes ??
     (o.checkbox ? [{ key: "", label: o.checkbox.label, defaultChecked: o.checkbox.defaultChecked }] : []);
 
-  return (
+  const overlay = (
     <div
       className="confirm_overlay"
       ref={(el) => { if (el) confirmNodes.add(el); }}
@@ -197,6 +211,9 @@ export function ConfirmHost() {
       </div>
     </div>
   );
+  /* 全屏中 portal 进 fullscreenElement 子树（否则浮层不可见）；常规态直挂 body。
+     ref 回调随 remount 重新入册 confirmNodes，反作弊 isOwnNode 判定不受搬家影响 */
+  return fsHost ? createPortal(overlay, fsHost) : overlay;
 }
 
 // -----------
