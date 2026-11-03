@@ -160,8 +160,9 @@ export async function ensureTodaySnapshot(force = false): Promise<void> {
 /**
  * 排行榜升降列（总计时间榜专用）：直读预计算 delta。
  * 返回 Map<userId, delta|null>——正=进步名次数，负=下降，0=持平，
- * null=首日进榜无基准（ranks 只有今日一键、base=今日；2026-11-03 张老师报告：
- * 当日进榜被 force/惰性刷新捕获的新玩家 base=今日、delta=0，此前被误显示成持平「→」）。
+ * null=「新」（2026-11-04 张老师定口径：按快照顶格窗口判断——窗口内没有任何
+ * 快照成绩就算新。base_date=窗口内最早快照（旧键随滚动淘汰），故 base=今日
+ * ⟺ 前 30 天无快照；无快照行（进榜后未被任何刷新捕获）同理为 null）。
  */
 export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, number | null>> {
   const map = new Map<number, number | null>();
@@ -172,7 +173,7 @@ export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, numbe
     select: { user: true, delta: true, baseDate: true, ranks: true },
   });
   for (const r of rows) {
-    // 首日进榜：快照基准日=今日 → 无对比基准，升降列显示「新」
+    // 「新」：窗口内无任何快照成绩（base=今日，因旧键已被 30 天滚动淘汰）
     if (r.baseDate === today) {
       map.set(N(r.user), null);
       continue;
