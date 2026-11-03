@@ -86,7 +86,10 @@ export function playFlop(uri: string) {
 /* 注入播放器 iframe 的窄屏适配脚本：
    播放器窗口（统计表 + 游戏窗 + 控制条）按桌面宽度排布（高级 ~582px），
    手机视口装不下会被裁掉。iframe 同源，注入脚本在内容超出视口时把窗口整体
-   zoom 缩放到视口宽（SVG 矢量缩放无损），桌面端宽裕时不做任何缩放。 */
+   zoom 缩放到视口宽（SVG 矢量缩放无损），桌面端宽裕时不做任何缩放。
+   ⚠️ 2026-11-03 起**不含播放器窗口**（含 .game-menu 的节点跳过）：窗口层
+   zoom 唯一 owner 是 ZOOM_SCRIPT.syncWinZoom——本脚本 set/clear 交替与
+   ZOOM 争抢同一属性曾致回放期间尺寸持续振荡（详见 fit() 内注释）。 */
 const FIT_PLAYER_SCRIPT = `
 (function () {
   if (window.__flopFit) return;
@@ -106,6 +109,12 @@ const FIT_PLAYER_SCRIPT = `
       var tag = node.tagName;
       if (tag === "SCRIPT" || tag === "NOSCRIPT" || tag === "STYLE" || tag === "LINK") continue;
       if (node.classList && node.classList.contains("fullscreen")) continue;
+      /* ⚠️ 播放器窗口（含 .game-menu 的 root/win 两层）不归本脚本管（2026-11-03
+         尺寸跳动事故）：本脚本 set/clear 交替（measure 含 zoom → 缩到刚好放下 →
+         下次 mutation 又 clear → 又溢出），与 ZOOM_SCRIPT 的 syncWinZoom 争抢
+         同一个 win.style.zoom，回放期间 childList 变更不断触发即持续振荡。
+         窗口缩放唯一 owner = ZOOM_SCRIPT（其 syncWinZoom 乘法修正按构造收敛） */
+      if (node.querySelector && node.querySelector(".game-menu")) continue;
       var rect = node.getBoundingClientRect();
       var w = Math.max(rect.width, node.scrollWidth);
       if (w > vw + 1) {
@@ -194,21 +203,24 @@ const ZOOM_SCRIPT = `
     if (el) el.style.zoom = z === 1 ? "" : String(z);
   }
   /* 窗口层 zoom 自愈＋宽度兜底：本脚本改 zoom 只触发属性变更，FIT 脚本的
-     childList MutationObserver 看不见（样式级变更漏报，缩过的窗永不复位——
-     2026-11-03 初始 fit 实测放大档暴露）。数学：视觉宽 = 布局宽 × wz，布局宽
-     = Σ(子块自然宽 × 各自语义倍率)，与 wz 无关——超宽时 wz = 视口/布局宽，
-     放得下则清 1（与 FIT 同口径但每次精确求解，不会像 FIT 那样 sqrt 收敛） */
+     childList MutationObserver 看不见（样式级变更漏报）。
+     ⚠️ 乘法修正而非除法求解（2026-11-03 尺寸跳动事故）：除法 wz = vw/(rect/wz)
+     隐含「rect 随 wz 乘法缩放」假设——Chrome 102 等 legacy zoom 实现下 rect
+     不随自身 zoom 缩放，除法解会发散/振荡；乘法修正 wz ×= vw/rect 在两种
+     语义下都单调收敛（标准语义一步到位，legacy 语义几何收敛）。
+     迟滞：复位要求有余量（rect < vw-2），防贴边 ±1px 抖动。 */
   function syncWinZoom() {
     var win = playerWin();
     if (!win || !win.style) return;
-    var wz = parseFloat(win.style.zoom) || 1;
-    var layoutW = win.getBoundingClientRect().width / wz;
     var vw = window.innerWidth;
-    if (!vw || !layoutW) return;
-    if (layoutW > vw + 1) {
-      var z = vw / layoutW;
-      if (Math.abs(wz - z) > 0.001) win.style.zoom = String(z);
-    } else if (wz !== 1) {
+    if (!vw) return;
+    var wz = parseFloat(win.style.zoom) || 1;
+    var rect = win.getBoundingClientRect().width;
+    if (!rect) return;
+    if (rect > vw + 1) {
+      var z = (wz * vw) / rect;
+      if (Math.abs(wz - z) > 0.002) win.style.zoom = String(z);
+    } else if (wz !== 1 && rect < vw - 2) {
       win.style.zoom = "";
     }
   }
@@ -268,16 +280,31 @@ const ZOOM_SCRIPT = `
     k = Math.min(K_MAX, Math.max(1, k));
     apply();
   }
-  /* 轻量轮询：棋盘自然尺寸变化（新录像/换级别）且用户未手动干预 → 重新 fit */
+  /* 轻量轮询：棋盘自然尺寸变化（新录像/换级别）且用户未手动干预 → 重新 fit。
+     ⚠️ 防抖（2026-11-03 尺寸跳动事故）：key 须连续两 tick 一致才认——窗口层
+     zoom 变化会让 natOf 测量翻转（rect 含 wz），单 tick 确认会把瞬态测量当
+     「换盘面」触发连环 refit，与窗口层修正互相放大成持续振荡 */
+  var pendKey = "";
   window.setInterval(function () {
     var svg = findArea();
-    if (!svg) return;
+    if (!svg) { pendKey = ""; return; }
     var n = natOf(svg);
     var key = Math.round(n.w) + "x" + Math.round(n.h);
-    if (key === lastNatKey) return;
+    if (key === lastNatKey) { pendKey = ""; return; }
+    if (key !== pendKey) { pendKey = key; return; }
     lastNatKey = key;
     if (!userK) { k = 1; fitInitial(); }
   }, 300);
+  /* 视口变化：未手动干预 → 整体重 fit；手动干预过 → 仅宽度兜底钳制 */
+  var rsRaf = 0;
+  window.addEventListener("resize", function () {
+    if (rsRaf) return;
+    rsRaf = requestAnimationFrame(function () {
+      rsRaf = 0;
+      if (!userK) fitInitial();
+      else syncWinZoom();
+    });
+  });
   function inArea(t) {
     if (!(t instanceof Element)) return false;
     var svg = findArea();
