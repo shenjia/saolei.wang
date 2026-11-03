@@ -151,10 +151,14 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
                 </select>
                 <select value={form.birthDay} onChange={set("birthDay")}>
                   <option value={0}>　</option>
-                  {days.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
+                {days.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
                 </select>
+                {/* 2026-11-03 张老师：生日只对外显示星座，深灰说明打消隐私顾虑 */}
+                <span style={{ color: "#75715e", fontSize: 13, marginLeft: 12 }}>
+                  对外只显示星座，不显示具体日期
+                </span>
               </div>
             </td>
           </tr>

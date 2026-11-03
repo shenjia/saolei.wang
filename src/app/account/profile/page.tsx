@@ -8,6 +8,7 @@ import { AccountHeader } from "@/components/AccountHeader";
 import { ProfileForm, type AvatarSlot } from "@/components/AccountForms";
 import { UserPanel } from "@/components/UserCard";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
+import { LEGACY_DEFAULT_BIRTHDAY } from "@/lib/birth";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "修改资料" };
@@ -45,7 +46,10 @@ export default async function AccountProfilePage() {
   };
 
   const birthday = Number(info?.birthday ?? 0);
-  const d = birthday > 0 ? new Date(birthday * 1000) : null;
+  // 1980-01-01 是旧站默认值（未填生日的用户被批量写入，2026-11-03 张老师确认）：
+  // 表单按未填处理——三个下拉显示空白，而不是 1980/1/1
+  const d =
+    birthday > 0 && birthday !== LEGACY_DEFAULT_BIRTHDAY ? new Date(birthday * 1000) : null;
 
   return (
     <div id="page" className="two_columns">
