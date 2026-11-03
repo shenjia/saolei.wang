@@ -8800,7 +8800,10 @@ button.msg_cancel:hover {
   font: 12px/18px Arial, Helvetica, sans-serif;
   letter-spacing: normal; /* 抵消按钮 .gmode 的 0.5px（会被 span 继承） */
   padding: 5px 10px;
-  z-index: 5;
+  /* z6（2026-11-03 张老师定）：hover 气泡优先级高于结算面板/数据面板（均 z5，
+     DOM 在标题行之后同层会盖住气泡——全屏态气泡下弹正落在面板区域实证）；
+     仍低于设置浮窗 gsettings(z30) 与各模态 */
+  z-index: 6;
   pointer-events: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
@@ -8960,7 +8963,7 @@ button.msg_cancel:hover {
   font: 12px/18px Arial, Helvetica, sans-serif;
   letter-spacing: normal; /* 抵消 gicons 区继承的 0.5px */
   padding: 5px 10px;
-  z-index: 5;
+  z-index: 6; /* 同 gicon .tip 提档（2026-11-03）：压过结算面板/数据面板 z5 */
   pointer-events: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
