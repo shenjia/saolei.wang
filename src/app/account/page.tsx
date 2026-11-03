@@ -18,7 +18,7 @@ import { QqBindLink } from "@/components/QqLogin";
 import { QqAvatarPrompt } from "@/components/QqAvatarPrompt";
 import { DonateVisibilityToggle } from "@/components/DonateVisibilityToggle";
 import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
-import { ageConstellationText } from "@/lib/birth";
+import { ageOf, constellationText } from "@/lib/birth";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
@@ -76,8 +76,9 @@ export default async function AccountManagePage({
 
   const accountName = auth?.username ?? session.username ?? "";
   const needBindEmail = !!auth && !isEmail(accountName);
-  // 年龄+星座（2026-11-03 张老师）：英文名行后显示；未填生日整行不显示
-  const ageText = ageConstellationText(info?.birthday);
+  // 年龄+星座（2026-11-03 张老师）：英文名后各占独立一行；未填生日不显示
+  const age = ageOf(info?.birthday);
+  const constellation = constellationText(info?.birthday);
 
   // 头像优先级与个人主页一致：新版上传 → OAuth 外链 → 本地照片墙 → 默认图
   const photo = resolveAvatarUrl(
@@ -139,12 +140,20 @@ export default async function AccountManagePage({
                       <div>{user.englishName}</div>
                     </td>
                   </tr>
-                  {/* 年龄+星座（2026-11-03 张老师）：英文名后；未填生日整行不显示 */}
-                  {ageText && (
+                  {/* 年龄 / 星座（2026-11-03 张老师二改）：各占独立一行；未填生日不显示 */}
+                  {age !== null && (
                     <tr>
                       <th>年龄</th>
                       <td>
-                        <div>{ageText}</div>
+                        <div>{age}</div>
+                      </td>
+                    </tr>
+                  )}
+                  {constellation && (
+                    <tr>
+                      <th>星座</th>
+                      <td>
+                        <div>{constellation}</div>
                       </td>
                     </tr>
                   )}

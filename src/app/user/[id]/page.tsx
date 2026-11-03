@@ -56,7 +56,7 @@ import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { formatDate } from "@/lib/format";
 import { donateYuanPlain } from "@/lib/donate";
 import { getThunderKingId } from "@/lib/title-system";
-import { ageConstellationText } from "@/lib/birth";
+import { ageOf, constellationText } from "@/lib/birth";
 import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { prisma } from "@/lib/db";
@@ -254,10 +254,13 @@ export default async function UserViewPage({
   // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
   // 2026-10-22「标识」行（user_sig 录像标识文字）也算可展示内容——
   // 有标识但没填资料的老用户，个人资料版块同样显示
-  // 2026-11-03 生日也算（填了生日就显示「年龄+星座」行）
-  const ageText = ageConstellationText(info?.birthday);
+  // 2026-11-03 生日也算（填了生日就显示「年龄」「星座」两个独立行）
+  const age = ageOf(info?.birthday);
+  const constellation = constellationText(info?.birthday);
   const hasProfileFields =
-    (!!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info])) || !!ageText;
+    (!!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info])) ||
+    age !== null ||
+    constellation !== null;
 
   // 标识列表（user_sig，按注册先后 id 升序；过滤空串脏数据，2026-10-22）
   const sigs = (
@@ -447,11 +450,17 @@ export default async function UserViewPage({
           <hr />
           <table className="form">
             <tbody>
-              {/* 昵称没填但填了生日：年龄+星座行顶到第一行 */}
-              {!info?.nickname && ageText && (
+              {/* 昵称没填但填了生日：年龄/星座两行顶到最前（2026-11-03 张老师：星座独立成行） */}
+              {!info?.nickname && age !== null && (
                 <tr>
                   <th>年龄</th>
-                  <td>{ageText}</td>
+                  <td>{age}</td>
+                </tr>
+              )}
+              {!info?.nickname && constellation && (
+                <tr>
+                  <th>星座</th>
+                  <td>{constellation}</td>
                 </tr>
               )}
               {PROFILE_FIELDS.map(([key, label]) => {
@@ -463,11 +472,17 @@ export default async function UserViewPage({
                       <th>{label}</th>
                       <td>{value}</td>
                     </tr>
-                    {/* 年龄+星座（2026-11-03 张老师）：昵称行下显示 */}
-                    {key === "nickname" && ageText && (
+                    {/* 年龄 / 星座（2026-11-03 张老师二改）：昵称行下各占独立一行 */}
+                    {key === "nickname" && age !== null && (
                       <tr>
                         <th>年龄</th>
-                        <td>{ageText}</td>
+                        <td>{age}</td>
+                      </tr>
+                    )}
+                    {key === "nickname" && constellation && (
+                      <tr>
+                        <th>星座</th>
+                        <td>{constellation}</td>
                       </tr>
                     )}
                   </Fragment>

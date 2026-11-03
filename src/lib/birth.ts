@@ -1,9 +1,11 @@
 // 生日（user_info.birthday，Unix 秒）→ 年龄 / 星座（2026-11-03 张老师要求）：
-//   账户设置页英文名后、个人主页「个人资料」昵称行下显示「39 天蝎座」样式。
-// 未填生日（0）/ 生日异常（未来日期、超龄）返回 null，调用方整行不渲染。
+//   账户设置页英文名后、个人主页「个人资料」昵称行下、后台玩家详情「个人资料」卡
+//   各显示「年龄」「星座」两个独立行（2026-11-03 二改：星座独立成行，不与年龄同格）。
+// 未填生日（0）/ 旧站默认 1980-01-01 / 生日异常（超界年份）一律视为未填，
+// 返回 null，调用方整行不渲染（后台显示「—」）。
 
 /** 旧站默认生日＝1980-01-01（北京时间零点，315504000）：未填生日的用户被旧站批量写入该值
- *  （生产 553 人，2026-11-03 张老师确认），一律视为「未填」——年龄星座不显示、表单空白 */
+ *  （生产 553 人，2026-11-03 张老师确认并已全部清零），保留判定兜底同步管线带回的旧值 */
 export const LEGACY_DEFAULT_BIRTHDAY = 315504000;
 
 /** 星座边界表：[月, 日, 星座名]——生日在该日（含）之前属该星座，之后属下一个 */
@@ -30,11 +32,20 @@ export function constellationOf(month: number, day: number): string {
   return "摩羯座";
 }
 
-/** 周岁（当年生日未过减一）；未填/旧站默认 1980-01-01/异常返回 null */
-export function ageFromBirthday(ts: bigint | number | null | undefined, now = new Date()): number | null {
+/** 有效生日 Date；未填/旧站默认/异常返回 null */
+function birthDateOf(ts: bigint | number | null | undefined): Date | null {
   const sec = Number(ts ?? 0);
   if (!sec || sec === LEGACY_DEFAULT_BIRTHDAY) return null;
   const d = new Date(sec * 1000);
+  const year = d.getFullYear();
+  if (!Number.isFinite(year) || year < 1900 || year > 2100) return null;
+  return d;
+}
+
+/** 周岁（当年生日未过减一）；未填/异常返回 null */
+export function ageOf(ts: bigint | number | null | undefined, now = new Date()): number | null {
+  const d = birthDateOf(ts);
+  if (!d) return null;
   const age =
     now.getFullYear() - d.getFullYear() -
     (now.getMonth() < d.getMonth() ||
@@ -44,10 +55,9 @@ export function ageFromBirthday(ts: bigint | number | null | undefined, now = ne
   return age >= 0 && age < 130 ? age : null;
 }
 
-/** 「39 天蝎座」组合文本；未填/异常返回 null */
-export function ageConstellationText(ts: bigint | number | null | undefined): string | null {
-  const age = ageFromBirthday(ts);
-  if (age === null) return null;
-  const d = new Date(Number(ts) * 1000);
-  return `${age} ${constellationOf(d.getMonth() + 1, d.getDate())}`;
+/** 星座名（如「射手座」）；未填/异常返回 null */
+export function constellationText(ts: bigint | number | null | undefined): string | null {
+  const d = birthDateOf(ts);
+  if (!d) return null;
+  return constellationOf(d.getMonth() + 1, d.getDate());
 }

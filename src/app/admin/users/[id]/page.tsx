@@ -18,6 +18,7 @@ import { TitleBadge } from "@/components/Cells";
 import { formatDate, score3bvs, scoreTime } from "@/lib/format";
 import { RelTime } from "@/components/RelTime";
 import { MESSAGE_CONTENT_LIMIT } from "@/lib/message";
+import { ageOf, constellationText } from "@/lib/birth";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "玩家详情 | 管理后台" };
@@ -181,6 +182,11 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
 
         <AdminCard title="个人资料">
           <dl className="admin_kv">
+            {/* 年龄 / 星座（2026-11-03 张老师：星座独立成行，前后台一致；未填显示 —） */}
+            <dt>年龄</dt>
+            <dd>{ageOf(d.birthday) ?? "—"}</dd>
+            <dt>星座</dt>
+            <dd>{constellationText(d.birthday) ?? "—"}</dd>
             <dt>QQ</dt>
             <dd>{d.qq || "—"}</dd>
             <dt>鼠标</dt>
