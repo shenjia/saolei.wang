@@ -12,6 +12,8 @@ import { useEffect, useRef } from "react";
 
 declare global {
   interface Window {
+    /** 已注入宿主脚本的文档标记（以文档为单位防重入，跨文档不误判） */
+    __flopHostedDoc?: Document;
     flop?: {
       playVideo?: (
         uri: string,
@@ -126,6 +128,93 @@ const FIT_PLAYER_SCRIPT = `
 })();
 `;
 
+/* 注入播放器 iframe 的「游戏区滚轮缩放」脚本（2026-11-03 张老师需求）：
+   滚轮悬停游戏区（棋盘 SVG + 其上的菜单条）→ 整块按 zoom 缩放（SVG 矢量无损，
+   zoom 影响布局让窗口自动回流重排，且 FIT_PLAYER_SCRIPT 已证明 zoom 不破坏
+   棋盘指针交互）。口径：
+   - 数据面板、控制条不随滚轮缩放；
+   - 游戏区缩放后高度超过数据面板自然高度时，数据面板 zoom 跟涨到与游戏区等高
+     （张老师补充口径：面板「可以随着游戏界面一起缩放」）；
+   - 控制条永不缩放；
+   - 缩放范围 0.5–3，双击游戏区复位 1；换录像后缩放倍率保留（挂在新棋盘的
+     父容器上，父容器不随回放重建）。 */
+const ZOOM_SCRIPT = `
+(function () {
+  if (window.__flopZoom) return;
+  window.__flopZoom = true;
+  var K_MIN = 0.5, K_MAX = 3;
+  var k = 1;
+
+  function playerWin() {
+    var menu = document.querySelector(".game-menu");
+    if (!menu) return null;
+    var root = menu;
+    while (root.parentElement && root.parentElement !== document.body) root = root.parentElement;
+    if (root === menu) return null;
+    var win = menu;
+    while (win.parentElement && win.parentElement !== root) win = win.parentElement;
+    return win === menu ? null : win;
+  }
+  /* 棋盘 SVG＝win 内带非零 viewBox 且可见尺寸可观的 svg（defs symbol svg viewBox 为 0 被排除） */
+  function findArea() {
+    var win = playerWin();
+    if (!win) return null;
+    var svgs = win.querySelectorAll("svg[viewBox]");
+    for (var i = 0; i < svgs.length; i++) {
+      var vb = svgs[i].viewBox && svgs[i].viewBox.baseVal;
+      if (!vb || vb.width <= 0) continue;
+      if (svgs[i].getBoundingClientRect().width > 100) return svgs[i];
+    }
+    return null;
+  }
+  /* 数据面板＝游戏区容器的父级下「含 table 且非游戏区」的那个子块 */
+  function findStats(area) {
+    var parent = area.parentElement;
+    if (!parent) return null;
+    for (var i = 0; i < parent.children.length; i++) {
+      var el = parent.children[i];
+      if (el !== area && el.querySelector && el.querySelector("table")) return el;
+    }
+    return null;
+  }
+  function setZoom(el, z) {
+    if (el) el.style.zoom = z === 1 ? "" : String(z);
+  }
+  function apply() {
+    var svg = findArea();
+    if (!svg) return;
+    var area = svg.parentElement;
+    setZoom(area, k);
+    var stats = findStats(area);
+    if (!stats) return;
+    if (k === 1) { setZoom(stats, 1); return; }
+    /* 自然高度＝当前视觉高度 ÷ 已施加的 zoom（getBoundingClientRect 含 zoom） */
+    var gz = parseFloat(area.style.zoom) || 1;
+    var gNat = area.getBoundingClientRect().height / gz;
+    var sz = parseFloat(stats.style.zoom) || 1;
+    var sNat = stats.getBoundingClientRect().height / sz;
+    setZoom(stats, Math.max(1, (gNat * k) / sNat));
+  }
+  function inArea(t) {
+    if (!(t instanceof Element)) return false;
+    var svg = findArea();
+    return !!svg && svg.parentElement.contains(t);
+  }
+  document.addEventListener("wheel", function (e) {
+    if (!inArea(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    k = Math.min(K_MAX, Math.max(K_MIN, k * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    apply();
+  }, { passive: false, capture: true });
+  document.addEventListener("dblclick", function (e) {
+    if (!inArea(e.target)) return;
+    k = 1;
+    apply();
+  });
+})();
+`;
+
 /* 注入播放器 iframe 的「光标换色」样式（2026-10-14 张老师定：蓝色不好看，改亮灰）：
    cursor-arrow 箭头的 fill 是内联 style，普通 CSS 盖不住，须 !important；
    颜色与在线玩自研回放一致（#D6D6CE 填充、原深灰描边保留）。 */
@@ -232,19 +321,32 @@ const MASK_EXIT_SCRIPT = `
       }
     };
 
-    // 注入窄屏适配 + 点遮罩退出 + 光标换色脚本。
-    // ⚠️ iframe 是 SSR 直出的，load 事件往往在 React 水合前就已发完——
-    // React 的 onLoad 此时收不到；必须主动查 readyState 补注入
-    const inject = () => {
+    // 注入窄屏适配 + 点遮罩退出 + 光标换色 + 游戏区滚轮缩放脚本。
+    // ⚠️ 同源 iframe 的初始 about:blank 与正式文档共享同一 Window 对象：
+    // 挂在 Window 上的防重入标记跨文档存活，但挂 在 Document 上的监听随旧
+    // 文档作废——React effect 先于 /play 加载完成执行时，旧判定（查 window
+    // flag）会把注入落进 about:blank 且永不补注（2026-11-03 实测：flag 为真
+    // 而暗区退出/缩放监听全死）。因此判定必须以「文档」为单位：
+    // window.__flopHostedDoc !== 当前 doc 才注入，且跳过 about:blank；
+    // load 事件 + 轻量轮询双通道兜底（旧注释所述「load 先于水合发完」同样覆盖）。
+    const ensureInject = () => {
       const doc = frame.contentDocument;
-      if (!doc || !doc.body || !doc.defaultView || "__flopFit" in doc.defaultView) return;
+      if (!doc || !doc.body || !doc.defaultView) return;
+      if (doc.location.href === "about:blank") return; // 初始空文档：监听会随文档替换作废，不注入
+      if (doc.readyState !== "complete") return; // 未加载完，等 load 事件/下轮轮询
+      if (doc.defaultView.__flopHostedDoc === doc) return; // 该文档已注入
+      doc.defaultView.__flopHostedDoc = doc;
       const script = doc.createElement("script");
-      script.textContent = FIT_PLAYER_SCRIPT + MASK_EXIT_SCRIPT + CURSOR_COLOR_SCRIPT;
+      script.textContent = FIT_PLAYER_SCRIPT + MASK_EXIT_SCRIPT + CURSOR_COLOR_SCRIPT + ZOOM_SCRIPT;
       doc.body.appendChild(script);
     };
-    if (frame.contentDocument?.readyState === "complete") inject();
-    else frame.addEventListener("load", inject, { once: true });
-    return () => frame.removeEventListener("load", inject);
+    ensureInject();
+    frame.addEventListener("load", ensureInject);
+    const poll = window.setInterval(ensureInject, 500);
+    return () => {
+      frame.removeEventListener("load", ensureInject);
+      window.clearInterval(poll);
+    };
   }, []);
 
   return (
