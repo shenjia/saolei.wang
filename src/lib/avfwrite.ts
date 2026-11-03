@@ -432,8 +432,10 @@ export function buildOnlineAvf(input: OnlineAvfInput): Uint8Array {
     const raw = e.sec + 1; // 编码 +1，解码 -1（AVF 惯例）
     out.push(mouse, (e.x >> 8) & 0xff, raw & 0xff, e.x & 0xff, e.hun, (e.y >> 8) & 0xff, (raw >> 8) & 0xff, e.y & 0xff);
   };
-  const canonical = canonicalizeOnlineEvents(events, { width: w, height: h, board, questionMarks: qm });
-  const exportEvents = won ? repairWinningEvents(w, h, board, qm, canonical, scoreCsec * 10) : canonical;
+  /* 2026-11-03 张老师定：导出一律存原始事件流，不再 canonicalize 折叠——
+     mr 折叠（chord 收拢点）会让 flop 键态机失步丢旗（三份导出 EVF 实证：
+     raw 完全配对 39/39，导出后 rc 20/rr 29/mr 38）。胜局补洞（repair）保留。 */
+  const exportEvents = won ? repairWinningEvents(w, h, board, qm, events, scoreCsec * 10) : events;
   for (let i = 0; i < exportEvents.length; i++) {
     const e = exportEvents[i];
     /* 站内用 sc+lr 表示「单击已开数字」，用孤立 mr 表示自动双击；AVF/FlopPlayer

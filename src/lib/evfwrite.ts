@@ -1,8 +1,9 @@
 // 本站 EVF v0.3 生成器：排名模式「上传录像」（服务端调用）与练习页「下载录像」
 // （客户端调用，2026-10-26 张老师定统一 EVF 下载）共用。
 // 使用绝对毫秒时间戳 + 绝对像素坐标的鼠标事件流，复用 lib/evf.ts 解析器与全站 RawVF 管线；
-// 事件流须先过 avfwrite 的 canonicalizeOnlineEvents / repairWinningEvents（won 时），
-// 否则 ms-toollib（FlopPlayer）重放终盘雷格数 ≠ 雷数，报「不能播放没有扫完的录像」。
+// 事件流为原始流（2026-11-03 张老师定：不 canonicalize 折叠，mr 折叠会让 flop 键态机
+// 失步丢旗）；won 时仍须过 avfwrite 的 repairWinningEvents，否则 ms-toollib（FlopPlayer）
+// 重放终盘雷格数 ≠ 雷数，报「不能播放没有扫完的录像」。
 
 import type { OnlineEvent } from "./avfwrite";
 
