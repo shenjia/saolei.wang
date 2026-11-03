@@ -9811,6 +9811,59 @@ html:has(#online_play) #footer {
 #gr_modal .gr_btns .grb.grb_full {
   grid-column: 1 / -1;
 }
+/* ---- 结算面板「使用Flop Player播放」气泡（2026-11-03 张老师需求）----
+   hover「查看回放」按钮时下方弹深灰气泡，点击弹 flop 播放器放本局 EVF——
+   交互与录像详情页播放按钮气泡一致（#video_view .tip_host 同款视觉）。
+   span.tip_host 在 .gr_btns 2 列 grid 里占原按钮的格子，display:grid 让
+   内部 .grb 拉满单元格（不扰动 2×2 布局）；侧边浮窗（#online_play .gresult）
+   与遮罩卡片（#gr_modal .gresult）两处宿主都要给。
+   气泡绝对定位悬挂在按钮下方，宿主无 overflow:hidden 不裁切 */
+#online_play .gresult .tip_host,
+#gr_modal .gresult .tip_host {
+  position: relative;
+  display: grid; /* 内部 .grb 作为 grid 项默认 stretch，占满原格子宽 */
+}
+#online_play .gresult .tip_host .tip_bubble,
+#gr_modal .gresult .tip_host .tip_bubble {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  background: #3d3d38; /* 深灰底（张老师定），文字站内惯用灰 #b1b1a4 */
+  color: #b1b1a4;
+  font: 13px/1.4 Arial, Helvetica, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+}
+#online_play .gresult .tip_host .tip_bubble::before,
+#gr_modal .gresult .tip_host .tip_bubble::before {
+  /* 透明 hover 桥：覆盖按钮→气泡 6px 间隙（真间隙会掉 hover） */
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: -6px;
+  right: -6px;
+  height: 8px;
+  background: transparent;
+}
+#online_play .gresult .tip_host .tip_bubble:hover,
+#gr_modal .gresult .tip_host .tip_bubble:hover {
+  background: #52524b;
+  color: #d6d6ce;
+}
+#online_play .gresult .tip_host:hover .tip_bubble,
+#gr_modal .gresult .tip_host:hover .tip_bubble {
+  visibility: visible;
+  opacity: 1;
+}
 /* .grb 复用录像详情页「播放/下载」按钮（legacy .button）的立体感基因：
    上下渐变背景 + box-shadow 投影 + text-shadow 文字阴影，hover 变绿 #a6e22e、
    active 深绿 #8ac21b——与 .button 同一套配色（2026-10-15 十一期张老师定） */
