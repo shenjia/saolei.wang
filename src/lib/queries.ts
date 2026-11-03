@@ -11,9 +11,12 @@ import {
   COMMENT_STATUS,
   COMMENT_TOP_NUMBER,
   FEED_USER_LEVEL_QUOTA,
+  HOME_HOT_VIDEO_NUMBER,
   HOME_NEWS_NUMBER,
   HOME_NEWBIE_NUMBER,
   HOME_TOP_NUMBER,
+  HOME_VIDEO_NUMBER,
+  REVALIDATE_HOME_CACHE,
   LEVEL_MAX_3BV,
   LEVEL_MIN_3BV,
   LEVEL_NAMES,
@@ -50,6 +53,7 @@ import { rebuildUserRanksOnce } from "./userrank";
 import { decodeLegacyEntities, scoreTime, videoCommentNotice } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
+import { registerPreheat } from "./preheat";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
 import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
 import { STAGE_EXP, type FeedStage } from "./stage";
@@ -247,13 +251,13 @@ export { videoScores } from "./format";
 const fetchHomeNews = unstable_cache(
   async (limit: number) => getNews({ limit, home: true }),
   ["home-news-v1"],
-  { revalidate: 300 }
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 const fetchNewbies = unstable_cache(
   async (limit: number) => getNews({ type: NEWS_TYPE.NEWBIE, limit }),
   ["home-newbies-v1"],
-  { revalidate: 300 }
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
@@ -263,6 +267,11 @@ export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]>
 export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]> {
   return fetchNewbies(limit);
 }
+
+// 首页访客路径自驱预热：注册行紧跟查询定义（新增首页查询时在同一处补一行即可，
+// TTL 引用与条目 revalidate 同一个常量，改缓存时长时预热提前量自动跟随）
+registerPreheat("home-news", REVALIDATE_HOME_CACHE, () => getHomeNews());
+registerPreheat("home-newbies", REVALIDATE_HOME_CACHE, () => getNewbies());
 
 /**
  * 动态级别筛选的 where 片段（展开到 where 顶层）。
@@ -766,13 +775,19 @@ const fetchNewsCountNoUser = unstable_cache(
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
   ["news-count-v9"],
-  { revalidate: 300 }
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 export async function getNewsCount(opts: Parameters<typeof getNewsCountImpl>[0]): Promise<number> {
   if (opts.userId) return getNewsCountImpl(opts);
   return fetchNewsCountNoUser(opts);
 }
+
+/** 首页新闻总数（固定 home 口径）：page.tsx 与预热注册共用此零参形态，参数不可能漂移 */
+export function getHomeNewsCount(): Promise<number> {
+  return getNewsCount({ home: true });
+}
+registerPreheat("news-count", REVALIDATE_HOME_CACHE, () => getHomeNewsCount());
 
 // ---------- 封禁用户（旧站「停用」）与「上榜」口径 ----------
 // 移植 2008 口径：旧站**所有「上榜」查询都带 `Player_IsLive=1`**（database/mssql/procedures.sql
@@ -793,8 +808,8 @@ const fetchBannedUserIds = unstable_cache(
     return rows.map((r) => N(r.id));
   },
   ["banned-user-ids-v1"],
-  // 2026-11-03 首页缓存永续化：60→300（配合 cron 常态预热，过期重建由预热承担）
-  { revalidate: 300 }
+  // 2026-11-03 首页缓存永续化：60→REVALIDATE_HOME_CACHE（配合预热自驱，过期重建由预热承担）
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 /** 「上榜」口径通用排除条件（无封禁用户时返回空对象，可直接展开进 where） */
@@ -849,7 +864,7 @@ async function getTopUsersImpl(
 }
 
 // 2026-10-15 性能审计：首页右栏排行前十，榜内成员极少变动，缓存 60s
-const fetchTopUsers = unstable_cache(getTopUsersImpl, ["top-users-v2"], { revalidate: 300 });
+const fetchTopUsers = unstable_cache(getTopUsersImpl, ["top-users-v2"], { revalidate: REVALIDATE_HOME_CACHE });
 
 export async function getTopUsers(
   limit = HOME_TOP_NUMBER
@@ -1156,7 +1171,7 @@ const getVideoListJoinCount = unstable_cache(
     return N(rows[0]?.c);
   },
   ["video-list-join-count", "v12"],
-  { revalidate: 300 }
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 /**
@@ -1448,7 +1463,7 @@ const fetchFeedDedupIdsImpl = async (
   return rows.map((r) => N(r.id));
 };
 // v3：2026-10-29 阶段筛选维度并入（stage 进参数即进缓存键；home×stage×nf 键空间有界）
-const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], { revalidate: 300 });
+const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], { revalidate: REVALIDATE_HOME_CACHE });
 
 /** 首页发现流去重总数（与 fetchFeedDedupIds 口径严格一致）：
  *  Σ 每组 (用户,级别) 的 min(非纪录盘数, 配额) + 纪录盘总数。 */
@@ -1473,7 +1488,7 @@ const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean, s
   return N(rows[0]?.c);
 };
 // v3：2026-10-29 阶段筛选维度并入（同 feed-dedup-v3）
-const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], { revalidate: 300 });
+const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], { revalidate: REVALIDATE_HOME_CACHE });
 
 /** 首页「最新录像」发现流总数（去重口径，2026-10-23）——
  *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。 */
@@ -1495,6 +1510,17 @@ export async function getVideoFeedPage(opts: {
   const ids = await fetchFeedDedupIds(opts.level, opts.nf === true, opts.stage ?? "", opts.page, opts.base, opts.limit);
   return getVideosByIds(ids);
 }
+
+/** 首页发现流第 1 页 / 总数（2026-10-23 去重口径）：page.tsx 与预热注册共用的零参形态，
+ *  首页参数（base/limit/level）只在这里写一份 */
+export function getHomeVideoFeedPage(): Promise<VideoListItem[]> {
+  return getVideoFeedPage({ level: "all", page: 1, base: HOME_VIDEO_NUMBER, limit: HOME_VIDEO_NUMBER });
+}
+export function getHomeVideoFeedCount(): Promise<number> {
+  return getVideoFeedCount({ level: "all" });
+}
+registerPreheat("video-feed-page1", REVALIDATE_HOME_CACHE, () => getHomeVideoFeedPage());
+registerPreheat("video-feed-count", REVALIDATE_HOME_CACHE, () => getHomeVideoFeedCount());
 
 /** 录像总数（「加载更多」括号内剩余条数口径，过滤条件与 getVideoFeed 严格一致）
  *  2026-10-15 性能审计：键空间仅 all/beg/int/exp 四档，缓存 60s（video 30 万行 count 走主键扫描）
@@ -1522,7 +1548,7 @@ const fetchVideoCount = unstable_cache(
     });
   },
   ["video-count-v4"],
-  { revalidate: 300 }
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boolean } = {}): Promise<number> {
@@ -1575,12 +1601,14 @@ async function getHotVideosImpl(limit = 10): Promise<VideoListItem[]> {
 }
 
 // 2026-10-28 v10：衰减分母改按发布天数+1（张老师指令），升键作废旧缓存
-// 2026-11-03 首页缓存永续化：60→300
-const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v10"], { revalidate: 300 });
+// 2026-11-03 首页缓存永续化：60→REVALIDATE_HOME_CACHE
+const fetchHotVideos = unstable_cache(getHotVideosImpl, ["hot-videos-v10"], { revalidate: REVALIDATE_HOME_CACHE });
 
-export async function getHotVideos(limit = 10): Promise<VideoListItem[]> {
+/** 席位数默认值即 config.HOME_HOT_VIDEO_NUMBER（page 与预热零参调用天然同参） */
+export async function getHotVideos(limit = HOME_HOT_VIDEO_NUMBER): Promise<VideoListItem[]> {
   return fetchHotVideos(limit);
 }
+registerPreheat("hot-videos", REVALIDATE_HOME_CACHE, () => getHotVideos());
 
 // （2026-10-20 张老师要求 /video 列表改通栏、右栏「统计」板块下线——
 //  getVideoBoxStats 与 VideoBoxStats 接口已随板块一并删除，无调用方）
@@ -2170,12 +2198,13 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
 
 // 2026-10-15 性能审计：首页右栏「站点统计」9 个 count，其中 video/news/comment 三项
 // 在 20 万级表上全表扫描（EXPLAIN 证实 ALL），是全站最重的单点。缓存 60s
-// 2026-11-03 首页缓存永续化：60→300
-const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v2"], { revalidate: 300 });
+// 2026-11-03 首页缓存永续化：60→REVALIDATE_HOME_CACHE
+const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v2"], { revalidate: REVALIDATE_HOME_CACHE });
 
 export async function getSiteStats(): Promise<SiteStats> {
   return fetchSiteStats();
 }
+registerPreheat("site-stats", REVALIDATE_HOME_CACHE, () => getSiteStats());
 
 // ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 

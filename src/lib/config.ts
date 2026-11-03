@@ -66,6 +66,11 @@ export const HOME_NEWS_NUMBER = 18;
 // 2026-10-15 张老师要求 15 → 17 → 16；2026-10-22 张老师要求 16 → 18；
 // 2026-10-25 张老师要求 18 → 20；2026-11-02 张老师要求 20 → 24）
 export const HOME_VIDEO_NUMBER = 24;
+/** 首页「热门录像」席位数（2026-10-25 张老师定 8；签名默认值即此，page 与预热零参调用同参） */
+export const HOME_HOT_VIDEO_NUMBER = 8;
+/** 首页访客链路缓存 TTL（秒）：preheat.ts 在 TTL−60s 前自驱刷新对应条目，
+ *  各 unstable_cache 条目与预热注册行必须引用本常量（禁止写字面量），改动一处全局生效 */
+export const REVALIDATE_HOME_CACHE = 300;
 // 首页「最新录像」防刷屏配额（2026-10-23 张老师定）：发现流按 (用户, 级别) 分区，
 // 每人每级别最多露最新 N 盘；纪录盘（user_scores(_nf) 12 个 *_video 指针指向的
 // 当前个人最好成绩）不占配额、永不被挤。仅首页发现流生效，/video 列表保持全量。

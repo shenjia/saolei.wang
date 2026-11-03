@@ -17,7 +17,8 @@
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "./db";
-import { OLD_TITLES } from "./config";
+import { OLD_TITLES, REVALIDATE_HOME_CACHE } from "./config";
+import { registerPreheat } from "./preheat";
 import { title as militaryTitle } from "./assess";
 
 // ---------- 体系定义 ----------
@@ -89,8 +90,8 @@ const fetchThunderKingId = unstable_cache(
     return rows.length ? Number(rows[0].id) : 0;
   },
   ["thunder-king-id-v1"],
-  // 2026-11-03 首页缓存永续化：60→300（配合 cron 常态预热）
-  { revalidate: 300 }
+  // 2026-11-03 首页缓存永续化：60→REVALIDATE_HOME_CACHE（配合预热自驱）
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 /** 当前雷界第一人 user id（总计时间最小者；0=无人）。
@@ -98,6 +99,7 @@ const fetchThunderKingId = unstable_cache(
 export async function getThunderKingId(): Promise<number> {
   return fetchThunderKingId();
 }
+registerPreheat("thunder-king", REVALIDATE_HOME_CACHE, () => getThunderKingId());
 
 // ---------- 观看者偏好解析 ----------
 

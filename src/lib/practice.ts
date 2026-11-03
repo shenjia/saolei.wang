@@ -12,7 +12,8 @@
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { dayStart } from "@/lib/admin/stats";
-import { LEVEL_MIN_3BV, VIDEO_STATUS } from "@/lib/config";
+import { LEVEL_MIN_3BV, REVALIDATE_HOME_CACHE, VIDEO_STATUS } from "@/lib/config";
+import { registerPreheat } from "@/lib/preheat";
 
 export interface PracticeToday {
   /** 今日全网尝试盘数（含踩雷局、游客局；后台 KPI 同口径） */
@@ -64,7 +65,7 @@ const getTrendCached = unstable_cache(
     return { p, w };
   },
   ["home-practice-trend", "v3"],
-  { revalidate: 300 }
+  { revalidate: REVALIDATE_HOME_CACHE }
 );
 
 /** 近 30 天我的分日尝试盘数（不含今天；uid 参与缓存 key，每人一份不串） */
@@ -136,6 +137,10 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
     mineTrend: uid ? [...mineTrendBase, mine] : [],
   };
 }
+
+// 首页访客路径自驱预热：null=全站口径，级联刷新重缓存 getTrendCached（300s 走势聚合）；
+// 今日实时数与按人 mine 走势是毫秒级点查/每用户键，无需也无法预热
+registerPreheat("practice-today", REVALIDATE_HOME_CACHE, () => getPracticeToday(null));
 
 // ---------- 首页「今日已收集 b / i / e BV 创造 z PB」行（2026-10-28 张老师定） ----------
 // 仅今日玩过排行模式（practice_daily.mode_ranked > 0）的登录用户显示，插在

@@ -14,9 +14,10 @@
 //   也只是 300s 档的一次重建，与本模块互不干扰）；
 // · 进程刚起时 __incrementalCache 可能未挂、CI 构建期不应碰库——两种情况都不调度。
 //
-// ⚠️ ttlSec 必须与底层 unstable_cache 的 revalidate 一致（preheat-jobs.ts 注册处对齐）；
-//    改某条目 revalidate 时同步改注册值，否则提前量失准。
-// 任务清单见 src/lib/preheat-jobs.ts（由 src/instrumentation.ts 在服务启动时加载）。
+// ⚠️ ttlSec 必须与底层 unstable_cache 的 revalidate 一致——约定两条都要引用
+//    config.REVALIDATE_HOME_CACHE 同一常量（注册行紧跟查询定义处），禁止写字面量。
+// 任务注册分散在查询定义处：queries.ts / title-system.ts / practice.ts 各自紧跟对应
+// 缓存条目调用 registerPreheat()（src/instrumentation.ts 启动时 import 触发）。
 
 type PreheatJob = {
   run: () => Promise<unknown>;

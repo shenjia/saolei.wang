@@ -28,11 +28,11 @@
 import Link from "next/link";
 import {
   getHomeNews,
+  getHomeNewsCount,
+  getHomeVideoFeedCount,
+  getHomeVideoFeedPage,
   getHotVideos,
   getNewbies,
-  getNewsCount,
-  getVideoFeedCount,
-  getVideoFeedPage,
 } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -76,13 +76,15 @@ export default async function HomePage() {
     // 同日再调：论坛新帖 6 → 5 腾位置，热门录像 9 → 10 收回；
     // 2026-10-25 张老师要求：10 → 8，减 2 个席位对冲主栏新闻/录像各 +2；
     // 2026-10-26 更名回「热门录像」，改按近 30 天点击 + 他人有效评论排序）
-    getHotVideos(8),
+    // 席位数收敛在 getHotVideos 签名默认值（config.HOME_HOT_VIDEO_NUMBER），与预热注册天然同参
+    getHotVideos(),
     // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
-    getNewsCount({ home: true }),
+    getHomeNewsCount(),
     // 首页「最新录像」发现流（2026-10-23 起走去重口径：首页 feed 与 /api/video/more
     // feedPage 分支共用 getVideoFeedPage 的 (用户,级别) 配额 + 纪录盘保位；翻页 API 同源）
-    getVideoFeedPage({ level: "all", page: 1, base: HOME_VIDEO_NUMBER, limit: HOME_VIDEO_NUMBER }),
-    getVideoFeedCount({ level: "all" }),
+    // 首页参数收敛在 getHomeVideoFeedPage/getHomeVideoFeedCount 零参包装（queries.ts 单点维护）
+    getHomeVideoFeedPage(),
+    getHomeVideoFeedCount(),
   ]);
   // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
   const king = await getThunderKingId();
