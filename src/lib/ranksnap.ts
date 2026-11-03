@@ -159,10 +159,12 @@ export async function ensureTodaySnapshot(force = false): Promise<void> {
 
 /**
  * 排行榜升降列（总计时间榜专用）：直读预计算 delta。
- * 返回 Map<userId, delta|null>——正=进步名次数，负=下降，0=持平，
- * null=「新」（2026-11-04 张老师定口径：按快照顶格窗口判断——窗口内没有任何
- * 快照成绩就算新。base_date=窗口内最早快照（旧键随滚动淘汰），故 base=今日
- * ⟺ 前 30 天无快照；无快照行（进榜后未被任何刷新捕获）同理为 null）。
+ * 返回 Map<userId, delta|null>——正=进步名次数，负=下降，0=持平，null=「新」。
+ * 「新」口径（2026-11-04 张老师两轮定稿）：
+ *   ① 窗口内没有任何快照成绩（base=今日，含进榜当天即被刷新捕获的行）→ 新；
+ *   ② 新用户（基准=进榜首日快照，用 create_time=行首次 INSERT 时间识别，ON DUPLICATE
+ *      不覆盖）只有提升才显示提升值，持平/下降没有可显的有意义对比 → 仍显示「新」；
+ *   ③ 老用户（30 天窗口基准）维持 ↑/→/↓ 全量显示。
  */
 export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, number | null>> {
   const map = new Map<number, number | null>();
@@ -170,17 +172,23 @@ export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, numbe
   const today = dateStr();
   const rows = await prisma.rankSnapshot.findMany({
     where: { user: { in: ids.map(BigInt) } },
-    select: { user: true, delta: true, baseDate: true, ranks: true },
+    select: { user: true, delta: true, baseDate: true, createTime: true, ranks: true },
   });
   for (const r of rows) {
-    // 「新」：窗口内无任何快照成绩（base=今日，因旧键已被 30 天滚动淘汰）
+    const d = N(r.delta);
+    // ① 进榜首日（base=今日，旧键淘汰后窗口内无其他快照）
     if (r.baseDate === today) {
       map.set(N(r.user), null);
       continue;
     }
-    // 今日未刷新（cron 失败且惰性兜底前的短暂窗口）→ 按持平 0 处理
+    // ② 新用户：基准=进榜首日快照 → 有提升显示提升值，持平/下降显示「新」
+    if (r.baseDate === dateStr(new Date(N(r.createTime) * 1000))) {
+      map.set(N(r.user), d > 0 ? d : null);
+      continue;
+    }
+    // ③ 老用户；今日未刷新（cron 失败且惰性兜底前的短暂窗口）按持平 0 处理
     const ranks = (r.ranks ?? {}) as Record<string, number>;
-    map.set(N(r.user), ranks[today] === undefined ? 0 : r.delta);
+    map.set(N(r.user), ranks[today] === undefined ? 0 : d);
   }
   return map;
 }
