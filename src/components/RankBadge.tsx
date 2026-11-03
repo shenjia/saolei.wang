@@ -1,5 +1,6 @@
-// 19 级军衔徽章（原创矢量，设计稿 design/rank-badges.html 定稿；
-// 总司令 2026-10-16 新增，定稿 design/supreme-commander-20261016.html）
+// 22 级军衔徽章（原创矢量，设计稿 design/rank-badges.html 定稿；
+// 总司令 2026-10-16 新增，定稿 design/supreme-commander-20261016.html；
+// 2026-11-03 张老师扩档：士兵段拆五档，新增一等兵/二等兵/新兵徽章）
 // 全部图形为自绘盾形/五角星/V拐/地雷/月桂/皇冠，不仿制真实军衔肩章。
 // 默认 1em 尺寸跟随军衔文字（globals.css .title .rank-badge），
 // 用户主页等场景可传 size（px）放大。
@@ -243,7 +244,9 @@ function RankArt({ title }: { title: string }) {
           <Chevron y={26} s={1} color={SERGEANT} />
         </>
       );
-    // ---- 士兵：扫雷主题 ----
+    // ---- 士兵：扫雷主题（2026-11-03 扩五档） ----
+    // 递进语义：新兵=淡雷（未授衔）→ 列兵=整雷 → 二等兵=雷下 1 拐 → 一等兵=雷下 2 拐
+    // → 上等兵=雷上 1 拐（晋升感：拐从雷下挪到雷上）
     case "上等兵":
       return (
         <>
@@ -252,11 +255,37 @@ function RankArt({ title }: { title: string }) {
           <Mine x={24} y={28} s={0.95} color={PRIVATE} />
         </>
       );
+    case "一等兵":
+      return (
+        <>
+          <path d={SHIELD_D} fill={DARK} stroke={PRIVATE} strokeWidth={2.2} />
+          <Mine x={24} y={18} s={0.9} color={PRIVATE} />
+          <Chevron y={31} s={0.85} color={PRIVATE} />
+          <Chevron y={38} s={0.85} color={PRIVATE} />
+        </>
+      );
+    case "二等兵":
+      return (
+        <>
+          <path d={SHIELD_D} fill={DARK} stroke={PRIVATE} strokeWidth={2.2} />
+          <Mine x={24} y={20} s={0.95} color={PRIVATE} />
+          <Chevron y={34} s={0.9} color={PRIVATE} />
+        </>
+      );
     case "列兵":
       return (
         <>
           <path d={SHIELD_D} fill={DARK} stroke={PRIVATE} strokeWidth={2.2} />
           <Mine x={24} y={24} s={1} color={PRIVATE} />
+        </>
+      );
+    case "新兵":
+      return (
+        <>
+          <path d={SHIELD_D} fill={DARK} stroke={PRIVATE} strokeWidth={2.2} />
+          <g opacity={0.5}>
+            <Mine x={24} y={24} s={1} color={PRIVATE} />
+          </g>
         </>
       );
     // ---- 预备役：未加入排行的玩家，空徽章 ----

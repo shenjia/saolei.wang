@@ -1,7 +1,8 @@
 // 称号体系（2026-10-17 Phase 5 双体系，张老师定）
 //
-// 体系 A「军衔制」（默认）：总司令/大元帅/…/列兵 19 档 + 预备役。
-//   大元帅~列兵按高级时间绝对阈值评定；总司令=雷界排行第一人（总计时间 TOP1）特判
+// 体系 A「军衔制」（默认）：总司令/大元帅/…/新兵 22 档 + 预备役
+//   （2026-11-03 张老师扩档：士兵段拆五档上等兵/一等兵/二等兵/列兵/新兵，改善新手升级体验）。
+//   大元帅~新兵按高级时间绝对阈值评定；总司令=雷界排行第一人（总计时间 TOP1）特判
 //   （2026-10-19 张老师改口径，原 SUB30 绝对阈值；与旧体系「雷帝」同一判定源）——
 //   定义在 config.ts（TITLES/TITLE_THRESHOLDS/TITLE_CONDITIONS）与 assess.ts（title()），
 //   未登录与用户未设置偏好时固定渲染这套。
@@ -26,7 +27,7 @@ import { title as militaryTitle } from "./assess";
 export type TitleSystem = "m" | "c";
 
 export const TITLE_SYSTEMS: { key: TitleSystem; name: string; desc: string }[] = [
-  { key: "m", name: "军衔体系（2026版）", desc: "总司令 · 大元帅 · … · 列兵（19 级军阶）" },
+  { key: "m", name: "军衔体系（2026版）", desc: "总司令 · 大元帅 · … · 新兵（22 级军阶）" },
   { key: "c", name: "人神界体系（2008版）", desc: "雷帝 · 雷圣 · 雷神 · … · 童生（2008 版科举称号）" },
 ];
 

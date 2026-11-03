@@ -109,7 +109,7 @@ export default async function AdminRankPage() {
 
       <AdminCard title="说明">
         <div className="admin_note">
-          · 2026-10-13 起军衔按<strong>高级时间绝对阈值（SUB 制）</strong>评定（SUB35=大元帅…150+=列兵），阈值存于代码常量 <code>TITLE_THRESHOLDS</code>，改阈值需发版。<br />
+          · 2026-10-13 起军衔按<strong>高级时间绝对阈值（SUB 制）</strong>评定（SUB35=大元帅…300+=新兵；2026-11-03 士兵段扩五档：上等兵&lt;120s、一等兵&lt;150s、二等兵&lt;200s、列兵&lt;300s），阈值存于代码常量 <code>TITLE_THRESHOLDS</code>，改阈值需发版。<br />
           · <code>distribution</code> 表不再驱动军衔（评级 grade/percent 阈值仍读它，按总计时间的旧军衔数据保留作历史参考）。<br />
           · 无高级成绩的玩家统一显示「预备役」。<br />
           · 每日一星已于 2026-10-13 下线（star 表保留历史数据，不再读写）。

@@ -50,7 +50,7 @@ export function TitlePrefSwitch({ loggedIn }: { loggedIn: boolean }) {
           disabled={saving}
         >
           <span className="name">军衔体系（2026版）</span>
-          <span className="desc">总司令 · 大元帅 · … · 列兵</span>
+          <span className="desc">总司令 · 大元帅 · … · 新兵</span>
         </button>
         <button
           type="button"

@@ -2211,11 +2211,12 @@ registerPreheat("site-stats", REVALIDATE_HOME_CACHE, () => getSiteStats());
 // ---------- 军衔页（移植 2008 版 World/World.asp：各军衔人数分布） ----------
 
 /** 各军衔人数（thresholds 与 TITLES[1..] 按下标对应，升序数组：
- *  TITLES[i] 档 = (thresholds[i-2], thresholds[i-1]]（i≥1），列兵 = > 150s 无上界。
+ *  TITLES[i] 档 = (thresholds[i-2], thresholds[i-1]]（i≥1），新兵 = > 300s 无上界。
  *  总司令不占阈值档位：2026-10-19 张老师改口径=雷界排行第一人（getThunderKingId），
  *  恒 1 人（无人上榜时 0），并从其高级成绩所在档位中摘出。
  *  2026-10-18 张老师定：人神界体系撤销、军衔制回归 19 档（10-16 定稿版），缓存键升 v3；
- *  2026-10-19 总司令改口径，缓存键升 v4 */
+ *  2026-10-19 总司令改口径，缓存键升 v4；
+ *  2026-11-03 士兵段扩五档（上等兵/一等兵/二等兵/列兵/新兵），缓存键升 v5 */
 async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]> {
   const thresholds = getTitleDistribution().thresholds;
   if (!thresholds.length) return [];
@@ -2257,8 +2258,9 @@ async function getTitleCountsImpl(): Promise<{ title: string; count: number }[]>
 
 // 2026-10-15 性能审计：军衔页每次请求 18 次 user_scores count（合计≈全索引扫一遍），
 // 军衔人数变化极慢，缓存 60s
-// 2026-10-17 人神界改版（阈值全换 24 档）：缓存键升 v2；10-18 回退升 v3；10-19 总司令改口径升 v4
-const fetchTitleCounts = unstable_cache(getTitleCountsImpl, ["title-counts-v4"], {
+// 2026-10-17 人神界改版（阈值全换 24 档）：缓存键升 v2；10-18 回退升 v3；10-19 总司令改口径升 v4；
+// 2026-11-03 士兵段扩五档升 v5
+const fetchTitleCounts = unstable_cache(getTitleCountsImpl, ["title-counts-v5"], {
   revalidate: 60,
 });
 
