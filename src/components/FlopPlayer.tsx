@@ -138,7 +138,9 @@ const FIT_PLAYER_SCRIPT = `
 `;
 
 /* 注入播放器 iframe 的「游戏区滚轮缩放」脚本（2026-11-03 张老师需求；
-   2026-11-04 改口径：打开不再自动 fit 拉满，直接默认 1 倍）：
+   2026-11-04 改口径：打开不再自动 fit 拉满，直接默认 1 倍；
+   2026-11-05 改口径：打开/换盘直接是记忆倍率，不许默认尺寸先闪现——
+   childList 观察到棋盘（重）出现时在微任务里（绘制前）立刻 apply）：
    滚轮悬停游戏区（棋盘 SVG + 其上的菜单条）→ 整块按 zoom 缩放（SVG 矢量无损，
    zoom 影响布局让窗口自动回流重排，且 FIT_PLAYER_SCRIPT 已证明 zoom 不破坏
    棋盘指针交互）。口径：
@@ -276,6 +278,28 @@ const ZOOM_SCRIPT = `
     lastNatKey = key;
     apply();
   }, 300);
+  /* 首帧即记忆倍率（2026-11-05 张老师需求：打开/换盘不许默认尺寸先闪现）：
+     轮询要连续两 tick 确认「换盘面」（≈600ms），棋盘会先以 1 倍画出来再跳
+     记忆倍率。改为 childList 观察到棋盘容器（重）出现时，在**微任务**里
+     （本轮渲染步骤、首帧绘制之前）立刻 apply——棋盘第一帧就是记忆倍率。
+     已挂倍率（cur===k）时什么都不做：回放期间的海量 DOM 变更零布局开销；
+     换录像/换级别重建容器致 zoom 归零时同样由这里即刻补挂。
+     300ms 轮询保留作兜底（覆盖棋盘出现后无后续 childList 变更等边角）。
+     ⚠️ 只观察 childList 不观察 attributes：本脚本/FIT 改 style.zoom 不会
+     反向触发本观察器（无反馈环路，2026-11-03 尺寸跳动事故不复发）。 */
+  var applyQueued = false;
+  function queueApply() {
+    if (applyQueued) return;
+    applyQueued = true;
+    Promise.resolve().then(function () {
+      applyQueued = false;
+      var svg = findArea();
+      if (!svg) return;
+      var cur = parseFloat(svg.parentElement.style.zoom) || 1;
+      if (Math.abs(cur - k) > 0.001) apply();
+    });
+  }
+  new MutationObserver(queueApply).observe(document.documentElement, { childList: true, subtree: true });
   /* 视口变化：倍率是语义比例、与视口无关，只需重跑 apply（尾部含
      syncWinZoom 窗口层宽度兜底钳制，窄屏溢出照旧处理） */
   var rsRaf = 0;
