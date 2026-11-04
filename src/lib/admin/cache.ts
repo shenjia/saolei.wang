@@ -10,6 +10,7 @@
 // 注意：缓存键带版本前缀，改口径时记得升 key 版本丢弃旧缓存。
 
 import { unstable_cache } from "next/cache";
+import { registerPreheat } from "../preheat";
 import {
   getAnomalies,
   getAreaCounts,
@@ -44,13 +45,22 @@ export const getDashboardDistributionsSoftwares = cache(async () => {
 /** 仪表盘异常检测（4 条全表聚合 ~2.5s，2026-10-21 挂缓存；数据变化频率低，10 分钟足够） */
 export const getCachedAnomalies = cache(() => getAnomalies(), "anomalies");
 
+/** 仪表盘两个大缓存统一 TTL（preheat 注册必须与底层 unstable_cache revalidate 同源，禁写字面量分叉） */
+const DASHBOARD_TTL = 300;
+
 /** 仪表盘概览 KPI（2026-11-04：约 25 条 COUNT/聚合 + 审核耗时全表扫，冷跑数秒 → 挂 5 分钟缓存。
  *  ov.now 即缓存填充时刻，「数据截至」展示仍准确；审核页 /admin/review 仍用实时 getOverview 不受影响） */
-export const getCachedOverview = cache(() => getOverview(), "overview-v1", 300);
+export const getCachedOverview = cache(() => getOverview(), "overview-v1", DASHBOARD_TTL);
 
 /** 仪表盘 30 天趋势（2026-11-04：8 张表按天 GROUP BY → 挂 5 分钟缓存；
  *  缓存内含今日预估的同比快照，5 分钟窗口内偏差可忽略。数据分析页 /admin/stats 仍实时取数） */
-export const getCachedTrend30 = cache(() => getTrend(30), "trend-30d-v1", 300);
+export const getCachedTrend30 = cache(() => getTrend(30), "trend-30d-v1", DASHBOARD_TTL);
+
+// TTL 前 60s 自驱动预热（2026-11-04 张老师要求：与前台首页同待遇，访客永不撞过期重建）。
+// 本模块在管理后台首次渲染时被 import → 注册即接入 preheat 自驱动，此后进程内每
+// TTL−60s（=4 分钟）自动重建一次；刚部署后首次访问仍是实时查询填缓存（一次性）。
+registerPreheat("admin-overview", DASHBOARD_TTL, () => getCachedOverview());
+registerPreheat("admin-trend30", DASHBOARD_TTL, () => getCachedTrend30());
 
 /** 数据分析页：全表扫描类分布（串行，减少并发连接占用） */
 export const getStatsDistributions = cache(async () => {
