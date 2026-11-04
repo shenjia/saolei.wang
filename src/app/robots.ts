@@ -3,17 +3,18 @@
 // 站点地址与 sitemap 一致取 SITE_URL（生产 .env 切主域时配 https://saolei.wang）。
 // 2026-10-29 增补：AI 训练/数据采集爬虫全站禁抓（nginx 层已 403，此处为君子协定双保险，
 // 守 robots 的（GPTBot/CCBot/Bytespider 等）会自查退出，省源站渲染）。
+// 2026-11-04 增补：Applebot / meta-webindexer / Amzn-SearchBot（nginx UA 黑名单同日通配拦截）。
 import type { MetadataRoute } from "next";
 
 // 无引流价值的采集/AI 爬虫（2026-10-28 生产日志实测清单：合计 ~120 万请求/月）
 const AI_BOTS = [
   "GPTBot", "OAI-SearchBot", "ChatGPT-User", // OpenAI
   "ClaudeBot", "Claude-Web", "anthropic-ai", // Anthropic
-  "meta-externalagent", "FacebookBot", // Meta
+  "meta-externalagent", "FacebookBot", "meta-webindexer", // Meta
   "Google-Extended", "GoogleOther", // Google AI/内部（≠Googlebot）
   "Bytespider", // 字节
   "CCBot", // Common Crawl
-  "Amazonbot", "Applebot-Extended", "PerplexityBot", "YouBot",
+  "Amazonbot", "Amzn-SearchBot", "Applebot", "Applebot-Extended", "PerplexityBot", "YouBot",
   "Diffbot", "PanguBot", "Xianguo", "SocketLabs",
   "SemrushBot", "AhrefsBot", "DataForSeoBot", "MJ12bot", "DotBot", // SEO 采集
   "Reflectionbot", "KeenableBot", "WebSiphon", "TLM-Audit-Scanner", "KakaoBot", // 数据公司
