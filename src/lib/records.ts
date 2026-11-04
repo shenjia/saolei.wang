@@ -287,29 +287,10 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
     };
   })();
 
-  // 收集BV最多 = BV 榜第一（2026-10-28 张老师定口径）：直接复用排行页 getBvRanking
-  // （total 列，COUNT DISTINCT board_3bv 聚合 + 1 小时缓存，与 BV 榜零口径差），
-  // 日期取该用户最近一次通过审核的上传时刻（=最近一次收集发生时间）
-  const bvTop = (async () => {
-    const bv = await getBvRanking("total", 1, 1);
-    const top = bv.rows[0];
-    if (!top) return null;
-    const last = await prisma.$queryRaw<{ ct: bigint | null }[]>`
-      SELECT MAX(v.create_time) ct
-      FROM video v WHERE v.\`user\` = ${top.id} AND v.status = ${VIDEO_STATUS.REVIEWED}
-    `;
-    return {
-      key: "bv" as const,
-      userId: top.id,
-      name: top.chineseName,
-      englishName: top.englishName ?? "",
-      sex: top.sex,
-      ranked: true, // fetchBvCollection 已过滤 u.status = 0
-      expTime: top.expTime,
-      val: top.total,
-      lastCt: N(last[0]?.ct ?? 0),
-    };
-  })();
+  // （收集BV最多已拆出 fetchSiteTops，见 getBvTopRow——2026-11-05 慢 SQL 巡检：
+  // unstable_cache 嵌套调用会 bypass 内层缓存（unstable-cache.js isNestedUnstableCache
+  // 分支直接跳过 get），本回调原先每 60s 重建一次就把 30 万行 fetchBvCollection 聚合
+  // 直打 DB ~777 次/日；拆成顶层薄缓存后与 BV 榜同 1h 节奏，~24 次/日）
 
   // 上传录像最多：全部上传（含待审/屏蔽）。2026-10-29 张老师点破「按录像的玩家 ID 直接 count」——
   // 旧形态 JOIN user/user_scores 后才 GROUP BY，33 万行 × JOIN 探测 rowsExam 93 万（avg 5.59s 挤慢日志 Top5）；
@@ -368,7 +349,7 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
     };
   })();
 
-  const [views, post, comment, history, bv, upload, review] = await Promise.all([
+  const [views, post, comment, history, upload, review] = await Promise.all([
     // 人气最高：总人气（user_stat.clicks 旧站累计镜像，展示 xxx.xW；与用户卡片同源）
     prisma.$queryRaw<{ uid: bigint; name: string; ename: string; sex: number; ustatus: number; exp_time: bigint | null; val: bigint; last_ct: bigint }[]>`
       SELECT u.id uid, u.chinese_name name, u.english_name ename, u.sex, u.status ustatus, s.exp_time, us.clicks val, 0 last_ct
@@ -394,7 +375,6 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
       FROM history h JOIN \`user\` u ON u.id = h.\`user\` LEFT JOIN user_scores s ON s.id = u.id
       GROUP BY h.\`user\` ORDER BY val DESC LIMIT 1
     `,
-    bvTop,
     uploadTop,
     reviewTop,
   ]);
@@ -421,7 +401,6 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
   return [
     await donateTop,
     pick("views", views),
-    await bv,
     upload,
     pick("post", post),
     pick("comment", comment),
@@ -439,16 +418,59 @@ export const getRecordCurves = unstable_cache(
   { revalidate: 86400, tags: ["records-curves"] }
 );
 
-/** 右侧 TOP1（60s 短缓存，实时性优先——2026-10-29 上传/审核两项已改单表索引聚合
- *  （张老师「按玩家 ID 直接 count」方案），TOP1 查询本身已快，不再需要 1h 权宜；
- *  2026-11-02 新增最多赞助（v6）：站长按结余负数参与，口径变更升版本 */
-export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v6"], {
-  revalidate: 60,
+/** 右侧 TOP1（原 60s 短缓存；2026-11-05 慢 SQL 巡检后 v7：60→300s——预热 cron 每分钟
+ *  打 /records，60s TTL 意味着几乎每次预热都全量重建八项查询；TOP1 排名变化本就低频
+ *  （与曲线 24h、BV 1h 同向），300s 足够「准实时」。⚠️ 改 TOP1 口径必须升版本号。
+ *  注意：BV 项已拆出本缓存（见 getBvTopRow）——unstable_cache 嵌套调用会 bypass
+ *  内层缓存直查 DB（2026-11-05 实证：60s 重建 × fetchBvCollection 30 万行聚合
+ *  = 慢日志 mixed 变体 777 次/日），任何想往 fetchSiteTops 里塞缓存查询的改动
+ *  都要先想清楚这层嵌套 bypass 语义。 */
+export const getSiteTops = unstable_cache(fetchSiteTops, ["records-tops-v7"], {
+  revalidate: 300,
   tags: ["records-tops"],
 });
 
-/** 纪录页数据入口（分层缓存出口；页面层勿再包 unstable_cache） */
+/** 收集BV最多 = BV 榜第一（2026-10-28 张老师定口径；2026-11-05 从 fetchSiteTops
+ *  拆出为顶层缓存调用）：getBvRanking 顶层调用时 fetchBvCollection 的 1h 缓存
+ *  正常生效（嵌套时被 bypass，见上）；本缓存只罩「MAX(create_time) 单行反查」，
+ *  与 BV 榜同 1h 节奏，口径变更（升 v）仅在取数逻辑改动时需要。 */
+export const getBvTopRow = unstable_cache(
+  async (): Promise<SiteTopRow | null> => {
+    const bv = await getBvRanking("total", 1, 1);
+    const top = bv.rows[0];
+    if (!top) return null;
+    const last = await prisma.$queryRaw<{ ct: bigint | null }[]>`
+      SELECT MAX(v.create_time) ct
+      FROM video v WHERE v.\`user\` = ${top.id} AND v.status = ${VIDEO_STATUS.REVIEWED}
+    `;
+    return {
+      key: "bv",
+      userId: top.id,
+      name: top.chineseName,
+      englishName: top.englishName ?? "",
+      sex: top.sex,
+      ranked: true, // fetchBvCollection 已过滤 u.status = 0
+      expTime: top.expTime,
+      val: top.total,
+      lastCt: N(last[0]?.ct ?? 0),
+    };
+  },
+  ["records-bv-top-v1"],
+  { revalidate: 3600, tags: ["records-tops"] }
+);
+
+/** 纪录页数据入口（分层缓存出口；页面层勿再包 unstable_cache）。
+ *  2026-11-05：BV 项独立缓存（getBvTopRow）——三个顶层 unstable_cache 并行调用，
+ *  bv 按「views 之后、upload 之前」插回，保持右栏渲染顺序与拆分前完全一致
+ *  （页面 pairs[curves.length + i] 按索引对齐军衔，顺序不能乱）。 */
 export async function getRecordsPageData(): Promise<{ curves: RecordCurveRow[]; tops: SiteTopRow[] }> {
-  const [curves, tops] = await Promise.all([getRecordCurves(), getSiteTops()]);
-  return { curves, tops };
+  const [curves, tops, bvTop] = await Promise.all([getRecordCurves(), getSiteTops(), getBvTopRow()]);
+  const withBv: SiteTopRow[] = [];
+  for (const row of tops) {
+    withBv.push(row);
+    if (bvTop && row.key === "views") withBv.push(bvTop);
+  }
+  // 兜底：views 项意外缺失时 BV 追加到队首之后（donate 恒存在，不至于丢失 BV 项）
+  if (bvTop && !withBv.includes(bvTop) && withBv.length > 0) withBv.splice(1, 0, bvTop);
+  return { curves, tops: withBv };
 }
