@@ -1191,6 +1191,7 @@ body #video_view .video_cell .playable {
   font-size: 14px;
   color: #b1b1a4; /* 2026-09-27 张老师要求：正文不用纯白，用亮灰（与 meta 同色系） */
   word-break: break-all;
+  overflow-wrap: anywhere; /* 连续全角标点（！！！…）break-all 断不动（EX 类禁止前断），实测撑破容器；anywhere 才收得住（同 star_speech 十一轮修法） */
   white-space: pre-wrap;
 }
 #comment-form .error {
