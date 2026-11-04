@@ -1,13 +1,23 @@
 "use client";
 
-// 公开赞助金额开关（2026-11-02 张老师）：账户设置页最下方的滑块开关。
-// 开=公开（个人主页数据统计展示赞助金额行，默认）；关=隐藏。
-// 提交 /api/account/donate-visibility，失败回弹原状态并 toast。
+// 账户设置通用滑块开关（2026-11-04）：由公开赞助金额开关泛化而来（交互/样式同款）。
+// 开=公开（默认）；关=隐藏。提交 POST { hidden } 到指定 endpoint，失败回弹原状态并 toast。
+// 现有两个实例：显示年龄与星座（/api/account/birth-visibility）、公开赞助金额（/api/account/donate-visibility）。
 
 import { useState } from "react";
 import { toast } from "@/components/Toast";
 
-export function DonateVisibilityToggle({ initialHidden }: { initialHidden: boolean }) {
+export function AccountVisibilityToggle({
+  endpoint,
+  label,
+  hint,
+  initialHidden,
+}: {
+  endpoint: string;
+  label: string;
+  hint: string;
+  initialHidden: boolean;
+}) {
   const [hidden, setHidden] = useState(initialHidden);
   const [busy, setBusy] = useState(false);
 
@@ -18,7 +28,7 @@ export function DonateVisibilityToggle({ initialHidden }: { initialHidden: boole
     // 乐观更新：先切 UI，失败回弹
     setHidden(next);
     try {
-      const res = await fetch("/api/account/donate-visibility", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hidden: next }),
@@ -28,7 +38,7 @@ export function DonateVisibilityToggle({ initialHidden }: { initialHidden: boole
         setHidden(!next);
         toast(data.error ?? "保存失败，请重试", "error");
       } else {
-        toast(next ? "已关闭公开赞助金额" : "已开启公开赞助金额", "success");
+        toast(next ? `已关闭${label}` : `已开启${label}`, "success");
       }
     } catch {
       setHidden(!next);
@@ -43,9 +53,9 @@ export function DonateVisibilityToggle({ initialHidden }: { initialHidden: boole
       <label className="acct_gsw">
         <input type="checkbox" checked={!hidden} disabled={busy} onChange={() => void toggle()} />
         <span className="track" />
-        <span className="txt">公开赞助金额</span>
+        <span className="txt">{label}</span>
       </label>
-      <span className="hint">开启后您的个人主页数据统计中将展示赞助金额</span>
+      <span className="hint">{hint}</span>
     </div>
   );
 }

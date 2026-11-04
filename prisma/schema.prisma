@@ -35,6 +35,9 @@ model User {
   // 公开赞助金额开关（2026-11-02 张老师）：false=公开（默认，个人主页数据统计展示赞助金额行）；
   // true=账户设置里关闭后个人主页隐藏该行。存 User 表（行恒存在，免 user_info upsert 判断）
   donateHidden Boolean @default(false) @map("donate_hidden")
+  // 显示年龄与星座开关（2026-11-04 张老师）：false=公开（默认，个人主页资料显示年龄/星座行）；
+  // true=账户设置里关闭后个人主页资料不再显示年龄和星座。存 User 表（行恒存在，免 user_info upsert 判断）
+  birthHidden  Boolean @default(false) @map("birth_hidden")
 
   // ---- 反作弊处置（2026-10-27）：客户端探测命中（__op 蜜罐/棋盘注入/整页标记浮层）----
   // 排名模式禁用截止 Unix 秒：命中后 24 小时内无法开启排名模式（WS/上传/入口三处闸）

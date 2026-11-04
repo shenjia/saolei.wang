@@ -16,7 +16,7 @@ import { SelfAvatar } from "@/components/SelfAvatar";
 import { UserPanel } from "@/components/UserCard";
 import { QqBindLink } from "@/components/QqLogin";
 import { QqAvatarPrompt } from "@/components/QqAvatarPrompt";
-import { DonateVisibilityToggle } from "@/components/DonateVisibilityToggle";
+import { AccountVisibilityToggle } from "@/components/AccountVisibilityToggle";
 import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { ageOf, constellationText } from "@/lib/birth";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
@@ -179,9 +179,20 @@ export default async function AccountManagePage({
                 </tbody>
               </table>
             </div>
-            {/* 公开赞助金额开关（2026-11-02 张老师）：账户设置最下面；
-                关闭后个人主页数据统计隐藏赞助金额行 */}
-            <DonateVisibilityToggle initialHidden={user.donateHidden} />
+            {/* 资料可见性开关（2026-11-04 张老师）：「显示年龄与星座」在上、
+                「公开赞助金额」在下；关闭后个人主页不再显示对应行 */}
+            <AccountVisibilityToggle
+              endpoint="/api/account/birth-visibility"
+              label="显示年龄与星座"
+              hint="开启后您的个人主页资料中将显示年龄与星座"
+              initialHidden={user.birthHidden}
+            />
+            <AccountVisibilityToggle
+              endpoint="/api/account/donate-visibility"
+              label="公开赞助金额"
+              hint="开启后您的个人主页数据统计中将展示赞助金额"
+              initialHidden={user.donateHidden}
+            />
             {/* 绑定结果反馈（弹窗授权完成后主窗跳回 /account?bound=1 / ?error=taken） */}
             {sp.bound === "1" && <p className="account_flash ok">QQ 绑定成功，今后点登录框的企鹅图标即可登录</p>}
             {sp.error === "taken" && <p className="account_flash err">该 QQ 已绑定其他账号，请换一个试试</p>}

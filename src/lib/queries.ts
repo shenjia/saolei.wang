@@ -1838,7 +1838,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 // ---------- 用户主页 ----------
 
 export interface UserDetail {
-  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number; donateHidden: boolean };
+  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number; donateHidden: boolean; birthHidden: boolean };
   info: { nickname: string; interest: string | null; qq: string; mouse: string; pad: string; birthday: number } | null;
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
@@ -1880,6 +1880,8 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
       status: u.status,
       // 公开赞助金额开关（2026-11-02）：true=账户设置关闭公开，主页隐藏赞助金额行
       donateHidden: u.donateHidden,
+      // 显示年龄与星座开关（2026-11-04）：true=账户设置关闭，主页资料不显示年龄/星座
+      birthHidden: u.birthHidden,
     },
     info: info
       ? {
