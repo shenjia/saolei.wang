@@ -4758,6 +4758,14 @@ body #page.ranking_old .ranking_box {
   text-overflow: ellipsis;
   vertical-align: middle;
 }
+/* 气泡被省略号裁剪修复（2026-11-05 线上报障）：rank_fixed 长名省略号的
+   overflow:hidden 会把 absolute 气泡（弹到锚点盒外）整个裁掉——气泡自
+   10-29 上线起在 rank_fixed 表（雷界/BV/STNB 主榜）从未显示过。
+   锚点退回 static，气泡定位基准升到 .ranking_name（relative、无裁剪）。
+   几何不变：头像走 absolute 不占宽，ranking_name 宽度=锚点宽度。 */
+.ranking_table.rank_fixed td.name .ranking_name a:has(.pt_bubble) {
+  position: static;
+}
 
 /* 升降矢量小三角：与数字基线对齐 */
 .ranking_table td.delta .up,
