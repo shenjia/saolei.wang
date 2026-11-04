@@ -142,10 +142,14 @@ export async function uploadVideo(
   }
   /* 完成度校验（2026-10-15 张老师要求：只有完成的录像才能上传，堵败局/半截局漏网）：
      MVF 头部自带 Solved3BV，沿用旧版比较；AVF 无该字段（parsed.solved3bv 为 null，
-     旧版此分支直接放行——败局正是从这里漏进来的），改为事件流模拟判定胜负 */
+     旧版此分支直接放行——败局正是从这里漏进来的），改为事件流模拟判定胜负。
+     排行局（rankedInternal + RANKED_SOFTWARE）跳过模拟：胜负已由权威服务判定、
+     只有 won=true 才走到这里；且 gestureReset/断线 resume 清手势位不进事件流，
+     事件流重放与服务端真实执行会分叉，模拟复判必然误杀
+     （2026-11-04 #35598 实证：真实胜局被两条语义重放同时判 loss） */
   if (parsed.solved3bv !== null) {
     if (parsed.solved3bv < (parsed.bbbv ?? 0)) return fail("该录像尚未完成");
-  } else {
+  } else if (!(options?.rankedInternal && parsed.program === RANKED_SOFTWARE)) {
     const outcome = judgeVideoOutcome(parsed);
     if (outcome === "loss") return fail("该录像未完成（踩雷败局不能上传）");
     if (outcome === "incomplete") return fail("该录像未完成");
