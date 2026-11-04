@@ -342,6 +342,162 @@ const CURSOR_COLOR_SCRIPT = `
 })();
 `;
 
+/* 回放矢量鼠标（2026-11-05）：读取 Flop 自身 Vuex 的播放毫秒与事件流，
+   按当前时间重建按键态，倍速/暂停/seek 都不另造计时器。位置锚在
+   游戏区域右侧，鼠标底部与 .svg-game 底边对齐；游戏区未渲染时退到视口右下。
+   hover 默认向右，右侧不足 196px 时翻到上方。 */
+const REPLAY_MOUSE_SCRIPT = `
+(function () {
+  if (window.__flopReplayMouse) return;
+  window.__flopReplayMouse = true;
+  var host = document.createElement("div");
+  host.className = "replay_mouse_flop";
+  host.id = "flop_replay_mouse";
+  host.tabIndex = 0;
+  host.setAttribute("role", "img");
+  host.setAttribute("aria-label", "鼠标按键状态；悬停查看最近按键事件");
+  host.innerHTML = '<svg viewBox="0 0 64 88" aria-hidden="true">' +
+    '<defs>' +
+    '<linearGradient id="flop_rm_body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5c5b50"/><stop offset=".45" stop-color="#3e3d35"/><stop offset="1" stop-color="#272822"/></linearGradient>' +
+    '<linearGradient id="flop_rm_button" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a887b"/><stop offset="1" stop-color="#555449"/></linearGradient>' +
+    '<linearGradient id="flop_rm_gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".48" stop-color="#e8e8e2"/><stop offset="1" stop-color="#b9b9b0"/></linearGradient>' +
+    '<linearGradient id="flop_rm_wheel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6f941f"/><stop offset=".5" stop-color="#b9ec46"/><stop offset="1" stop-color="#729a21"/></linearGradient>' +
+    '</defs>' +
+    '<path d="M32 3C15 3 5 15 5 33v23c0 18 11 29 27 29s27-11 27-29V33C59 15 49 3 32 3Z" fill="url(#flop_rm_body)" stroke="#9a998d" stroke-width="1.4"/>' +
+    '<path d="M32 5C17 5 8 16 8 32" fill="none" stroke="#d6d6c8" stroke-opacity=".45" stroke-width="1.2" stroke-linecap="round"/>' +
+    '<path d="M6 36h52M32 4v32" fill="none" stroke="#20211c" stroke-width="1.6"/>' +
+    '<path d="M12 66c4 10 11 15 20 15s16-5 20-15" fill="none" stroke="#161713" stroke-opacity=".55" stroke-width="1.2"/>' +
+    '<rect x="27.5" y="13" width="9" height="18" rx="4.5" fill="#1c1d18" stroke="#777568"/>' +
+    '<rect x="29.5" y="15" width="5" height="13" rx="2.5" fill="url(#flop_rm_wheel)"/>' +
+    '<path d="M32 17v8" stroke="#d3f693" stroke-opacity=".5" stroke-width=".8"/>' +
+    '<path class="rm_left" d="M31 5C16 5 7 16 7 33v2h24V5Z" fill="url(#flop_rm_button)" fill-opacity=".72"/>' +
+    '<path class="rm_right" d="M33 5c15 0 24 11 24 28v2H33V5Z" fill="url(#flop_rm_button)" fill-opacity=".72"/>' +
+    '</svg><div class="replay_mouse_events" hidden></div>';
+  var style = document.createElement("style");
+  style.textContent = '.replay_mouse_flop{position:fixed;width:44px;height:60px;z-index:10020;line-height:0;cursor:help;outline:none;display:none}' +
+    '.replay_mouse_flop>svg{display:block;width:44px;height:60px;overflow:visible;filter:drop-shadow(0 5px 5px rgba(0,0,0,.38))}' +
+    '.replay_mouse_flop:focus-visible>svg{filter:drop-shadow(0 0 3px #a6e22e)}' +
+    '.replay_mouse_flop .replay_mouse_events{position:fixed;width:184px;box-sizing:border-box;padding:6px 9px;border:1px solid #656355;border-radius:5px;background:#272822;color:#d6d6c8;box-shadow:0 5px 18px rgba(0,0,0,.52);z-index:10021;pointer-events:none;font:12px/20px Arial,Helvetica,sans-serif;text-align:left;white-space:nowrap}' +
+    '.replay_mouse_flop .rme_row{display:flex;gap:10px;height:20px;overflow:hidden}' +
+    '.replay_mouse_flop .rme_time{width:48px;flex:0 0 48px;color:#939387;font-family:"Courier New",monospace}' +
+    '.replay_mouse_flop .rme_row.down{color:#f0f0ea}.replay_mouse_flop .rme_empty{color:#939387;text-align:center}';
+  document.head.appendChild(style);
+  document.body.appendChild(host);
+  var tip = host.querySelector(".replay_mouse_events");
+  var hovering = false, lastButtonKey = "", lastTipHtml = "";
+  var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起" };
+  /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
+     推进；录像指示器必须按 gameElapsedTime 自行重放左右键事件。游标增量前进，
+     seek 回退时从流首重建，倍速与暂停都沿用 Flop 自己的播放时钟。 */
+  var mouseEvents = null, mouseEventIndex = 0, mouseNow = -1;
+  var replayLeft = false, replayRight = false;
+  function store() {
+    var roots = document.body.children;
+    for (var i = 0; i < roots.length; i++) {
+      var app = roots[i].__vue_app__;
+      var provides = app && app._context && app._context.provides;
+      if (provides && provides.store) return provides.store;
+    }
+    return null;
+  }
+  function placeHost() {
+    var game = document.querySelector("svg.svg-game");
+    var gr = game && game.getBoundingClientRect();
+    var left, top;
+    if (gr && gr.width > 0 && gr.height > 0) {
+      /* 垂直只认游戏区自身底边，不能锚父页评级卡（窗口变倍/缩放后两者
+         底边并不一致）。水平放在游戏区右侧，不覆盖任何棋盘格。 */
+      left = gr.right + 16;
+      top = gr.bottom - host.offsetHeight;
+    } else {
+      left = window.innerWidth - 64;
+      top = window.innerHeight - 82;
+    }
+    host.style.left = Math.max(8, Math.min(left, window.innerWidth - 52)) + "px";
+    host.style.top = Math.max(8, Math.min(top, window.innerHeight - 70)) + "px";
+  }
+  function placeTip() {
+    if (!hovering) return;
+    var r = host.getBoundingClientRect();
+    if (window.innerWidth - r.right >= 196) {
+      tip.style.left = (r.right + 12) + "px";
+      tip.style.top = Math.max(8, Math.min(r.top, window.innerHeight - 158)) + "px";
+      tip.setAttribute("data-placement", "right");
+    } else {
+      tip.style.left = Math.max(8, Math.min(r.right - 184, window.innerWidth - 192)) + "px";
+      tip.style.top = Math.max(8, r.top - 150) + "px";
+      tip.setAttribute("data-placement", "top");
+    }
+  }
+  function renderTip(evs, nowMs) {
+    if (!hovering) return;
+    evs = evs || [];
+    var recent = [];
+    for (var i = 0; i < evs.length; i++) {
+      var e = evs[i];
+      if (labels[e.name] && e.time <= nowMs + 0.01) recent.push(e);
+    }
+    recent = recent.slice(-5);
+    var html = "";
+    for (var j = 0; j < recent.length; j++) {
+      var ev = recent[j];
+      html += '<div class="rme_row' + (ev.name === "LeftPress" || ev.name === "RightPress" ? " down" : "") + '"><span class="rme_time">' + (ev.time / 1000).toFixed(3) + '</span><span>' + labels[ev.name] + '</span></div>';
+    }
+    if (!html) html = '<div class="rme_empty">暂无按键事件</div>';
+    if (html !== lastTipHtml) { tip.innerHTML = html; lastTipHtml = html; }
+    placeTip();
+  }
+  function update() {
+    var st = store();
+    var state = st && st.state;
+    var vp = state && state.videoParser;
+    if (!vp || !Array.isArray(state.gameEvents)) { host.style.display = "none"; return; }
+    host.style.display = "block";
+    placeHost();
+    var left = replayLeft, right = replayRight;
+    var nowMs = Number(state.gameElapsedTime) || 0;
+    var evs = state.gameEvents;
+    if (evs !== mouseEvents || nowMs < mouseNow) {
+      mouseEvents = evs;
+      mouseEventIndex = 0;
+      replayLeft = replayRight = false;
+    }
+    while (mouseEventIndex < evs.length && Number(evs[mouseEventIndex].time) <= nowMs + 0.01) {
+      var name = evs[mouseEventIndex].name;
+      if (name === "LeftPress") replayLeft = true;
+      else if (name === "LeftRelease") replayLeft = false;
+      else if (name === "RightPress") replayRight = true;
+      else if (name === "RightRelease") replayRight = false;
+      mouseEventIndex++;
+    }
+    mouseNow = nowMs;
+    left = replayLeft;
+    right = replayRight;
+    var key = left + "|" + right;
+    if (key !== lastButtonKey) {
+      lastButtonKey = key;
+      host.setAttribute("data-left", String(left));
+      host.setAttribute("data-right", String(right));
+      var lp = host.querySelector(".rm_left"), rp = host.querySelector(".rm_right");
+      lp.setAttribute("fill", left ? "url(#flop_rm_gold)" : "url(#flop_rm_button)");
+      rp.setAttribute("fill", right ? "url(#flop_rm_gold)" : "url(#flop_rm_button)");
+      lp.setAttribute("fill-opacity", left ? "1" : ".72");
+      rp.setAttribute("fill-opacity", right ? "1" : ".72");
+      host.setAttribute("aria-label", "鼠标按键状态：" + (left && right ? "左右键按下" : left ? "左键按下" : right ? "右键按下" : "未按下"));
+    }
+    renderTip(evs, nowMs);
+  }
+  host.addEventListener("mouseenter", function () { hovering = true; tip.hidden = false; lastTipHtml = ""; update(); });
+  host.addEventListener("mouseleave", function () { hovering = false; tip.hidden = true; });
+  host.addEventListener("focus", function () { hovering = true; tip.hidden = false; lastTipHtml = ""; update(); });
+  host.addEventListener("blur", function () { hovering = false; tip.hidden = true; });
+  window.addEventListener("resize", function () { placeHost(); placeTip(); });
+  try { parent.window.addEventListener("scroll", function () { placeHost(); placeTip(); }, true); } catch (e) {}
+  window.setInterval(update, 32);
+  update();
+})();
+`;
+
 /* 注入播放器 iframe 的「点击暗区退出」脚本：
    播放器的 background 选项渲染的遮罩层 z-index:-9999（负值），真实点击
    落在 Vue 根容器而不是遮罩上。因此按点击位置判定，窗口可视 UI 外直接
@@ -390,6 +546,8 @@ const MASK_EXIT_SCRIPT = `
   window.addEventListener("pointerdown", function (e) {
     var t = e.target;
     if (!(t instanceof Element)) return;
+    // 回放鼠标及其事件层是自有 UI，点击/悬停不按暗区退出。
+    if (t.closest(".replay_mouse_flop, .replay_mouse_events")) return;
     // Ant Design 的下拉菜单/弹层挂在 body 下、位于玩家窗口之外，
     // 但它们仍是播放器自身 UI（尤其「选择本地文件」），不能按暗区退出。
     if (t.closest(".ant-menu-dropdown, .ant-menu-submenu-popup, .ant-select-dropdown, .ant-picker-dropdown, .ant-modal-root, .ant-popover, .ant-tooltip, .ant-message, input[type=file]")) return;
@@ -458,7 +616,7 @@ const MASK_EXIT_SCRIPT = `
       if (doc.defaultView.__flopHostedDoc === doc) return; // 该文档已注入
       doc.defaultView.__flopHostedDoc = doc;
       const script = doc.createElement("script");
-      script.textContent = FIT_PLAYER_SCRIPT + MASK_EXIT_SCRIPT + CURSOR_COLOR_SCRIPT + ZOOM_SCRIPT;
+      script.textContent = FIT_PLAYER_SCRIPT + MASK_EXIT_SCRIPT + CURSOR_COLOR_SCRIPT + ZOOM_SCRIPT + REPLAY_MOUSE_SCRIPT;
       doc.body.appendChild(script);
     };
     ensureInject();

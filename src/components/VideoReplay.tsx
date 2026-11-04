@@ -38,6 +38,7 @@ import { createPortal } from "react-dom";
 import { Board } from "./Board";
 import { FlopSprites } from "./FlopSprites";
 import { FlopPlayer, playFlop } from "./FlopPlayer";
+import { ReplayMouseIndicator } from "./ReplayMouse";
 import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvfBest } from "@/lib/mvf-best";
@@ -297,6 +298,8 @@ export function runReplay(opts: {
   onStats: (s: ReplayStats) => void;
   /** 笑脸状态变化（练习页口径；全屏层计数条消费，页面态无消费者） */
   onFace?: (k: FaceKind) => void;
+  /** 左右键按下态（矢量鼠标指示器；事件发生时即回传，不走统计的 100ms 节流） */
+  onButtons?: (left: boolean, right: boolean) => void;
   /** 宿主生效 zoom 读取器（2026-10-22 standalone 模式）：默认量 wrap 自身
    *  computed zoom（页面态 .play_board 自带 zoom 类）；FS 层 zoom 挂祖先
    *  .vprfs_center，wrap 量不到 → 调用方传 getter（值变化时 off 重量取，
@@ -307,7 +310,7 @@ export function runReplay(opts: {
    *  已升级为玩家旗位版，退出回放必须恢复同款）；缺省回退 data.board（老行为） */
   coverBoard?: string;
 }): Engine {
-  const { wrap, tbody, rows, cols, data, onEnd, onStats, onFace, getHostZoom, coverBoard } = opts;
+  const { wrap, tbody, rows, cols, data, onEnd, onStats, onFace, onButtons, getHostZoom, coverBoard } = opts;
   const N = rows * cols;
   const mines = new Uint8Array(N);
   const nums = new Uint8Array(N);
@@ -649,6 +652,9 @@ export function runReplay(opts: {
         lp = lv = sv = true; // chord 在其后的 lr 生效
         break;
     }
+    if (e.ev === "lc" || e.ev === "lr" || e.ev === "rc" || e.ev === "rr" || e.ev === "sc") {
+      onButtons?.(lp, rp);
+    }
   }
   /* 统计快照（solved 系按 rstate 现算，≤480 格零开销；派生值 Est/QG/STNB 由面板组件算） */
   function buildStats(): ReplayStats {
@@ -709,6 +715,7 @@ export function runReplay(opts: {
     evIdx = 0;
     curCsec = 0;
     moveCursor(0, 0);
+    onButtons?.(false, false);
   }
   /* 光标插值（练习页同款，治一顿一顿）：每帧在「最近已应用事件」与「下一事件」间线性补间 */
   function interpCursor(csec: number) {
@@ -1607,6 +1614,10 @@ export type Status = "idle" | "loading" | "playing" | "paused" | "ended";
 interface ReplayCtxValue {
   status: Status;
   stats: ReplayStats | null;
+  /** 矢量鼠标的即时按键态与 hover 事件流（不经过统计节流） */
+  leftPressed: boolean;
+  rightPressed: boolean;
+  replayData: ReplayData | null;
   fullscreen: boolean;
   play: () => void;
   /** 一键全屏试玩（二十一期）：等价于「点全屏按钮 + 点笑脸」两步 */
@@ -1681,6 +1692,7 @@ export function VideoReplayProvider({
 }) {
   const [status, setStatus] = useState<Status>("idle");
   const [stats, setStats] = useState<ReplayStats | null>(null);
+  const [mouseButtons, setMouseButtons] = useState({ left: false, right: false });
   const [fullscreen, setFullscreen] = useState(false);
   /* 笑脸状态（十七期）：回放引擎 onFace 直通——全屏层计数条消费；
      页面态无消费者不渲染，state 变更开销可忽略（每事件至多一次） */
@@ -1812,6 +1824,7 @@ export function VideoReplayProvider({
         onEnd: () => setStatus("ended"),
         onStats: setStats,
         onFace: setFace,
+        onButtons: (left, right) => setMouseButtons((old) => old.left === left && old.right === right ? old : { left, right }),
         /* 静态封面恢复用 DB 含旗串（2026-10-31）：与页面封面同源 */
         coverBoard: boardStr,
       });
@@ -1845,6 +1858,7 @@ export function VideoReplayProvider({
     engineRef.current?.stop();
     engineRef.current = null;
     setStats(null);
+    setMouseButtons({ left: false, right: false });
     setStatus("idle");
     setFace("smile");
     setReplayData(null);
@@ -1955,6 +1969,9 @@ export function VideoReplayProvider({
       value={{
         status,
         stats,
+        leftPressed: mouseButtons.left,
+        rightPressed: mouseButtons.right,
+        replayData,
         fullscreen,
         play,
         playGame,
@@ -1985,6 +2002,8 @@ export function VideoReplayProvider({
           stats={stats}
           status={status}
           replayData={replayData}
+          leftPressed={mouseButtons.left}
+          rightPressed={mouseButtons.right}
           engineFace={face}
           radarPoints={radarPoints}
           radarOverall={radarOverall}
@@ -2360,6 +2379,8 @@ export function ReplayFullscreen({
   stats = null,
   status = "idle",
   replayData = null,
+  leftPressed = false,
+  rightPressed = false,
   engineFace = "smile",
   radarPoints,
   radarOverall: radarOverallProp,
@@ -2385,8 +2406,11 @@ export function ReplayFullscreen({
   stats?: ReplayStats | null;
   /** Provider 的回放状态（standalone 下不传，用内部 fsStatus） */
   status?: Status;
-  /** Provider 持有的解析产物（试玩引擎锁定同盘布雷的数据源） */
+  /** Provider 持有的解析产物（试玩引擎锁定同盘布雷的数据源；鼠标 hover 事件流同源） */
   replayData?: ReplayData | null;
+  /** 矢量鼠标的即时按键态（引擎 onButtons 直通，不经统计节流） */
+  leftPressed?: boolean;
+  rightPressed?: boolean;
   /** 回放引擎的笑脸状态（十七期：按下 ooh / 松开 smile / 终局 win·dead） */
   engineFace?: FaceKind;
   /** 全屏右栏「录像评级」数据（十九期恢复；与详情页右栏同源） */
@@ -2441,6 +2465,7 @@ export function ReplayFullscreen({
      Provider，本组件自持同构状态机（引擎 onStats/onFace/onEnd 驱动）。 */
   const [fsStatus, setFsStatus] = useState<Status>("idle");
   const [fsStats, setFsStats] = useState<ReplayStats | null>(null);
+  const [fsButtons, setFsButtons] = useState({ left: false, right: false });
   const [fsFace, setFsFace] = useState<FaceKind>("smile");
   const fsEngineRef = useRef<Engine | null>(null);
   /* 四模式开关（二十一期 NF/速旗/连击 + 2026-10-29 左键双击），行为与
@@ -2598,6 +2623,7 @@ export function ReplayFullscreen({
         onEnd: () => setFsStatus("ended"),
         onStats: setFsStats,
         onFace: setFsFace,
+        onButtons: (left, right) => setFsButtons((old) => old.left === left && old.right === right ? old : { left, right }),
         getHostZoom: () => zoomRef.current ?? 1,
         /* 静态封面恢复用 DB 含旗串（2026-10-31）：boardStr 即本 FS 层的封面骨架 */
         coverBoard: boardStr,
@@ -2747,7 +2773,7 @@ export function ReplayFullscreen({
     const vh = window.innerHeight;
     const pad = 16 * 2; // 内衬
     const showPanel = vw >= 900; // 极窄藏左面板（CSS 断点同步）
-    const showSide = !standalone && vw >= 1180; // 更窄藏右评级（CSS 断点同步；standalone 无右栏）
+    const showSide = vw >= 1180; // 更窄藏右栏（评级卡 / 鼠标；standalone 也有鼠标）
     const gapTotal = 18 * ((showPanel ? 1 : 0) + (showSide ? 1 : 0)); // 栏间 gap 18/个
     const dim = { beg: [8, 8], int: [16, 16], exp: [30, 16] }[level] ?? [30, 16];
     const bw = dim[0] * 16 + 4 + GWRAP_OVERHEAD_X;
@@ -2772,7 +2798,7 @@ export function ReplayFullscreen({
         ? availW0 / (bw + span / R) // 段 1：z ≥ zFloor，面板/评级随 z/R 等比
         : (availW0 - span * PANEL_MIN_Z) / bw; // 段 2：宽度吃紧，面板/评级钉在最小倍率
     return clamp(Math.min(zByW, zByH));
-  }, [level, standalone]);
+  }, [level]);
 
   /* 统一 zoom 施加（十八期重构）：地板/上限/面板 zoom 收敛到一处。
      十八期张老师定「全屏时游戏版图至少要和数据统计栏高度相同」——
@@ -3237,8 +3263,10 @@ export function ReplayFullscreen({
              宽度＝数据统计面板渲染宽的 1.5 倍（.vprfs_side 的 width，与面板同缩放域）；
              窄屏（<1180）CSS 隐藏；
              standalone（后台审核）不渲染——审核场景不需要评级卡 */}
-        {!standalone && mode === "play" && playResult && mineRating ? (
-          <div className="vprfs_side vprfs_mine">
+        {(
+          <div className="vprfs_right">
+            {!standalone && mode === "play" && playResult && mineRating ? (
+              <div className="vprfs_side vprfs_mine">
             <h2 className="vr_h">
               我的评级
               <span className="vr_rate" style={{ color: gradeColor(mineRating.overall) }}>
@@ -3293,21 +3321,33 @@ export function ReplayFullscreen({
                 下载录像
               </a>
             </div>
+              </div>
+            ) : !standalone && radarPoints ? (
+              <div className="vprfs_side">
+                <h2 className="vr_h">
+                  录像评级
+                  <span className="vr_rate" style={{ color: gradeColor(radarOverallProp ?? "?") }}>
+                    {radarOverallProp ?? "—"}
+                  </span>
+                </h2>
+                <div className="vr_line" />
+                <div className="vr_wrap">
+                  <VideoAnalysisRadar data={radarPoints} />
+                </div>
+              </div>
+            ) : null}
+            {/* 回放鼠标固定在右侧评级/结算卡正下方，独立于中栏棋盘 zoom。 */}
+            {mode === "replay" && (standalone ? fsStats && fsData : stats && replayData) && (
+              <ReplayMouseIndicator
+                left={standalone ? fsButtons.left : leftPressed}
+                right={standalone ? fsButtons.right : rightPressed}
+                events={(standalone ? fsData : replayData)!.evs}
+                csec={(standalone ? fsStats : stats)!.csec}
+                className="replay_mouse_fs"
+              />
+            )}
           </div>
-        ) : !standalone && radarPoints ? (
-          <div className="vprfs_side">
-            <h2 className="vr_h">
-              录像评级
-              <span className="vr_rate" style={{ color: gradeColor(radarOverallProp ?? "?") }}>
-                {radarOverallProp ?? "—"}
-              </span>
-            </h2>
-            <div className="vr_line" />
-            <div className="vr_wrap">
-              <VideoAnalysisRadar data={radarPoints} />
-            </div>
-          </div>
-        ) : null}
+        )}
       </div>
     </div>,
     document.body
@@ -3386,6 +3426,16 @@ export function VideoReplayBoard({
           />
         )}
       </div>
+      {/* 三个级别统一落在游戏区域右侧底部；宿主在 .play_board 外，不覆盖格子。 */}
+      {replaying && ctx.stats && ctx.replayData && (
+        <ReplayMouseIndicator
+          left={ctx.leftPressed}
+          right={ctx.rightPressed}
+          events={ctx.replayData.evs}
+          csec={ctx.stats.csec}
+          className={`replay_mouse_page replay_mouse_page_side replay_mouse_${level}`}
+        />
+      )}
     </div>
   );
 }

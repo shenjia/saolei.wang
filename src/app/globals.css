@@ -10425,6 +10425,97 @@ html:has(#online_play) #footer {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
 
+/* ---- 回放矢量鼠标（2026-11-05）：石墨机身 / 站绿滚轮 / 亮灰按键。
+   页内、全屏与在线练习共用组件；Flop 注入同款 SVG。所有落位都在棋盘外。 ---- */
+.replay_mouse {
+  position: relative;
+  width: 44px;
+  height: 60px;
+  z-index: 20;
+  line-height: 0;
+  cursor: help;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.replay_mouse > svg {
+  display: block;
+  width: 44px;
+  height: 60px;
+  overflow: visible;
+  /* 阴影挂 SVG，不挂宿主：filter 会让非 portal 的 fixed 事件层改以宿主为包含块。 */
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.38));
+}
+.replay_mouse:focus-visible > svg {
+  filter: drop-shadow(0 0 3px #a6e22e);
+}
+.replay_mouse_page_side {
+  position: absolute;
+  bottom: 68px;
+}
+/* 左缘＝当前级别棋盘的实际渲染宽 + 14px，紧跟游戏区而非整栏右缘。 */
+.replay_mouse_page_side.replay_mouse_beg {
+  left: 420px; /* (128 + 4 + 24) × 2.6 + 14 ≈ 420 */
+}
+.replay_mouse_page_side.replay_mouse_int {
+  left: 341px; /* (256 + 4 + 24) × 1.15 + 14 ≈ 341 */
+}
+.replay_mouse_page_side.replay_mouse_exp {
+  left: 598px; /* (480 + 4 + 24) × 1.15 + 14 ≈ 598 */
+}
+#online_play .replay_mouse_online_host {
+  position: absolute;
+  width: 44px;
+  height: 60px;
+  z-index: 20;
+}
+.replay_mouse_events {
+  position: fixed;
+  width: 184px;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid #656355;
+  border-radius: 5px;
+  background: #272822;
+  color: #d6d6c8;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.52);
+  z-index: 1400;
+  pointer-events: none;
+  font: 12px/20px Arial, Helvetica, sans-serif;
+  text-align: left;
+  white-space: nowrap;
+}
+.replay_mouse_events .rme_row {
+  display: flex;
+  gap: 10px;
+  height: 20px;
+  overflow: hidden;
+}
+.replay_mouse_events .rme_time {
+  width: 48px;
+  flex: 0 0 48px;
+  color: #939387;
+  font-family: "Courier New", Courier, monospace;
+}
+.replay_mouse_events .rme_row.down {
+  color: #f0f0ea;
+}
+.replay_mouse_events .rme_empty {
+  color: #939387;
+  text-align: center;
+}
+@media (max-width: 768px) {
+  /* 窄屏没有稳定侧空时，初/中级也改为游戏区下方独立位，避免遮格。 */
+  .replay_mouse_page_side {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    clear: both;
+    float: right;
+    margin: 0 12px 4px 0;
+  }
+}
+
 /* ---- 录像详情页原地回放：左侧数据面板 + 控制条（2026-10-16 九期张老师需求；
    设计稿 design/video-replay-panel-20261016.html）。
    面板规则与练习页 .greport 一组同源（深底/圆角/阴影/hover 气泡），
@@ -12201,6 +12292,19 @@ html.op-fakefs #header {
    border-box 让 padding/border 计入总宽。
    （二十期曾整体缩 0.75，2026-10-16 张老师改回原尺寸，系数已移除）
    断点：<1180 隐藏评级（宽度不够，与十六期口径一致） */
+.vprfs_right {
+  box-sizing: border-box;
+  width: calc(1.5 * var(--vprfs-pw, 248px));
+  flex: 0 0 auto;
+  zoom: var(--vfz-panel, 1.35);
+}
+.vprfs_right .vprfs_side {
+  width: 100%;
+  zoom: 1; /* 缩放统一挂右栏，避免评级卡与下方鼠标比例不一致 */
+}
+.replay_mouse_fs {
+  margin: 14px auto 0 12px; /* 评级卡下方靠左，贴近游戏区域一侧 */
+}
 .vprfs_side {
   zoom: var(--vfz-panel, 1.35); /* 与数据统计面板同一缩放域（由 JS 写在 .vprfs 上） */
   box-sizing: border-box;
@@ -12285,6 +12389,7 @@ html.op-fakefs #header {
   height: auto;
 }
 @media (max-width: 1179px) {
+  .vprfs_right,
   .vprfs_side {
     display: none;
   }
