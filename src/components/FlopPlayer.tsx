@@ -137,7 +137,8 @@ const FIT_PLAYER_SCRIPT = `
 })();
 `;
 
-/* 注入播放器 iframe 的「游戏区滚轮缩放」脚本（2026-11-03 张老师需求）：
+/* 注入播放器 iframe 的「游戏区滚轮缩放」脚本（2026-11-03 张老师需求；
+   2026-11-04 改口径：打开不再自动 fit 拉满，直接默认 1 倍）：
    滚轮悬停游戏区（棋盘 SVG + 其上的菜单条）→ 整块按 zoom 缩放（SVG 矢量无损，
    zoom 影响布局让窗口自动回流重排，且 FIT_PLAYER_SCRIPT 已证明 zoom 不破坏
    棋盘指针交互）。口径：
@@ -145,16 +146,30 @@ const FIT_PLAYER_SCRIPT = `
    - 游戏区缩放后高度超过数据面板自然高度时，数据面板 zoom 跟涨到与游戏区等高
      （张老师补充口径：面板「可以随着游戏界面一起缩放」）；
    - 控制条永不缩放；
-   - 缩放范围 0.5–3，双击游戏区复位 1；换录像后缩放倍率保留（挂在新棋盘的
-     父容器上，父容器不随回放重建）。 */
+   - 缩放范围 0.5–3，双击游戏区复位 1；
+   - 手动调整（滚轮/双击）后的倍率写入 localStorage（同源 iframe 与站点共享），
+     下次打开播放器直接复用；换录像/换级别倍率同样保留（挂在新棋盘的父容器上，
+     父容器不随回放重建，轮询在新盘面出现后重挂）。 */
 const ZOOM_SCRIPT = `
 (function () {
   if (window.__flopZoom) return;
   window.__flopZoom = true;
   var K_MIN = 0.5, K_MAX = 3;
-  var k = 1;
-  var lastNatKey = "";   // 上次自适应的棋盘自然尺寸（换盘面=尺寸变化→重新 fit）
-  var userK = false;     // 用户手动滚轮/双击后，本盘面内不再自动 fit
+  var LS_KEY = "flopPlayerZoom";
+  var lastNatKey = "";   // 上次应用的棋盘自然尺寸（换盘面=尺寸变化→重挂倍率）
+  /* 初始倍率＝上次手动调整的持久值（2026-11-04 改口径：打开不再自动 fit 拉满，
+     直接用默认/记忆倍率；异常值一律回落 1） */
+  function loadK() {
+    try {
+      var v = parseFloat(localStorage.getItem(LS_KEY));
+      if (v >= K_MIN && v <= K_MAX) return v;
+    } catch (e) {}
+    return 1;
+  }
+  function saveK() {
+    try { localStorage.setItem(LS_KEY, String(k)); } catch (e) {}
+  }
+  var k = loadK();
 
   function playerWin() {
     var menu = document.querySelector(".game-menu");
@@ -245,42 +260,8 @@ const ZOOM_SCRIPT = `
     setZoom(stats, Math.max(1, (gNat * k) / sNat));
     syncWinZoom();
   }
-  /* 初始视口自适应（2026-11-03 张老师定：初始比例不得低于全屏内置播放器——
-     内置 fitZoom 口径即「视口减固定 chrome 拉满」，flop 照做＝高度/宽度双向
-     fit 拉满；flop 侧栏仅统计面板无评级栏，同视口下不会低于内置）。
-     高度预算＝视口 − 窗口开销（控制条+内衬，实测 winRect−areaNat）− 呼吸；
-     宽度预算＝统计面板按跟涨规则计入（pz>1 时面板渲染宽同步变大）。 */
-  function fitInitial() {
-    var svg = findArea();
-    if (!svg) return;
-    var area = svg.parentElement;
-    var stats = findStats(area);
-    var win = playerWin();
-    var n = natOf(svg);
-    if (n.w < 50 || n.h < 50) return;
-    var vw = window.innerWidth, vh = window.innerHeight;
-    var chromeY = win ? win.getBoundingClientRect().height / winZoom(win) - n.h : 120;
-    var breathe = 32;
-    var kH = (vh - chromeY - breathe) / n.h;
-    var sNatW = 0, sNatH = 0;
-    if (stats) {
-      var sz = parseFloat(stats.style.zoom) || 1;
-      var sr = stats.getBoundingClientRect();
-      sNatW = sr.width / sz; sNatH = sr.height / sz;
-    }
-    /* 直写外层全局倍率 k（此处绝不能声明 var/let 局部变量遮蔽它） */
-    k = Math.min(K_MAX, Math.max(1, kH));
-    /* 宽度收敛：面板跟涨（pz>1）后总宽 = natW×k + sNatW×max(1, natH×k/sNatH) */
-    var totalW = function (kk) {
-      var pz = stats && sNatH > 0 ? Math.max(1, (n.h * kk) / sNatH) : 1;
-      return n.w * kk + sNatW * pz;
-    };
-    var maxW = vw - breathe;
-    if (totalW(k) > maxW) k = maxW / (n.w + (stats && sNatH > 0 ? sNatW * n.h / sNatH : 0));
-    k = Math.min(K_MAX, Math.max(1, k));
-    apply();
-  }
-  /* 轻量轮询：棋盘自然尺寸变化（新录像/换级别）且用户未手动干预 → 重新 fit。
+  /* 轻量轮询：棋盘自然尺寸变化（新录像/换级别）→ 重挂记忆倍率（新棋盘的
+     父容器若被重建，style.zoom 归零，须重新 apply）。
      ⚠️ 防抖（2026-11-03 尺寸跳动事故）：key 须连续两 tick 一致才认——窗口层
      zoom 变化会让 natOf 测量翻转（rect 含 wz），单 tick 确认会把瞬态测量当
      「换盘面」触发连环 refit，与窗口层修正互相放大成持续振荡 */
@@ -293,17 +274,14 @@ const ZOOM_SCRIPT = `
     if (key === lastNatKey) { pendKey = ""; return; }
     if (key !== pendKey) { pendKey = key; return; }
     lastNatKey = key;
-    if (!userK) { k = 1; fitInitial(); }
+    apply();
   }, 300);
-  /* 视口变化：未手动干预 → 整体重 fit；手动干预过 → 仅宽度兜底钳制 */
+  /* 视口变化：倍率是语义比例、与视口无关，只需重跑 apply（尾部含
+     syncWinZoom 窗口层宽度兜底钳制，窄屏溢出照旧处理） */
   var rsRaf = 0;
   window.addEventListener("resize", function () {
     if (rsRaf) return;
-    rsRaf = requestAnimationFrame(function () {
-      rsRaf = 0;
-      if (!userK) fitInitial();
-      else syncWinZoom();
-    });
+    rsRaf = requestAnimationFrame(function () { rsRaf = 0; apply(); });
   });
   function inArea(t) {
     if (!(t instanceof Element)) return false;
@@ -314,14 +292,14 @@ const ZOOM_SCRIPT = `
     if (!inArea(e.target)) return;
     e.preventDefault();
     e.stopPropagation();
-    userK = true; // 手动干预后本盘面内不再自动 fit（换盘面自然尺寸变化时重置）
     k = Math.min(K_MAX, Math.max(K_MIN, k * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    saveK();
     apply();
   }, { passive: false, capture: true });
   document.addEventListener("dblclick", function (e) {
     if (!inArea(e.target)) return;
-    userK = true;
     k = 1;
+    saveK();
     apply();
   });
 })();
