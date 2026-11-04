@@ -212,15 +212,19 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
     }
     u8(ev.code);
     u8(gap);
-    /* 坐标增量 i16：按模 65536 折算（负坐标包装域与 v0.3 的 u16 绝对值域一致），
-       解析端 (last + i16) & 0xffff 精确还原原值 */
-    const dx = (ev.x - lastX) & 0xffff;
-    const dy = (ev.y - lastY) & 0xffff;
+    /* 坐标先按 u16 绝对值独立量化，再求 i16 增量；lastX/Y 必须记录量化后的值。
+       不能直接对小数差值做位运算、却把原始小数存入 lastX/Y——每次舍弃的小数会
+       累计到后续所有事件，末段点击可漂移数格（353635：原始 (114,116) 被解成
+       (113,113)，35/54 格导致内置与 flop 都判未完成）。 */
+    const x = ev.x & 0xffff;
+    const y = ev.y & 0xffff;
+    const dx = (x - lastX) & 0xffff;
+    const dy = (y - lastY) & 0xffff;
     u16(dx);
     u16(dy);
     lastMs = ev.ms;
-    lastX = ev.x;
-    lastY = ev.y;
+    lastX = x;
+    lastY = y;
   }
   u8(0); // 事件流结束符
   u16(0); // 校验码长度＝0（标准未规定校验算法，外部无法验证，留空段）
