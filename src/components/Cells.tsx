@@ -5,21 +5,31 @@ import { INVALID_3BVS_TIP } from "@/lib/config";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { score3bvs, scoreTime, TIME_NEVER } from "@/lib/format";
 import { RelTime } from "./RelTime";
+import { ActLine } from "./ActLine";
 
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
 export { TitleBadge } from "./TitleBadge";
 
 /** 玩家名 hover 气泡内容（2026-10-29 张老师要求二轮：文案改「#ID 姓名 英文名」，
  *  姓名亮灰、ID 与英文名暗灰——CSS attr() 无法分段着色，改为内嵌 i 元素结构
- *  （.pt_id/.pt_name/.pt_en），由 .pt_bubble 提供气泡壳。无英文名只显示「#ID 姓名」） */
+ *  （.pt_id/.pt_name/.pt_en），由 .pt_bubble 提供气泡壳。无英文名只显示「#ID 姓名」。
+ *  2026-11-05 全站加第三段「最近活跃状态」（括号行，颜色与排行榜活跃度点同套）：
+ *  调用点显式传 act/actTip 时服务端直渲（排行榜），缺省走 ActLine 客户端懒加载
+ *  （同页自动合并成一次批量请求）——31 处调用点零改动。 */
 export function PlayerTip({
   id,
   name,
   englishName,
+  act,
+  actTip,
 }: {
   id: number;
   name: string;
   englishName?: string;
+  /** 活跃度等级（1~6）；缺省时走 ActLine 懒加载 */
+  act?: number;
+  /** 气泡第二行括号内文案（如「已2月未登录」） */
+  actTip?: string;
 }) {
   const en = englishName?.trim();
   // 用 <span> 而非 <i>（2026-10-29 张老师要求：不要斜体字——<i> 浏览器默认 italic）
@@ -32,6 +42,7 @@ export function PlayerTip({
           <span className="pt_en">{en}</span>
         </>
       ) : null}
+      {act ? <span className={`pt_act act_${act}`}>（{actTip}）</span> : <ActLine uid={id} />}
     </>
   );
 }
@@ -132,8 +143,7 @@ export function RankingName({
         <Link href={`/user/${id}`} target="_blank" prefetch={false}>
           {name}
           <span className="pt_bubble">
-            <PlayerTip id={id} name={name} englishName={englishName} />
-            {act ? <span className={`pt_act act_${act}`}>（{actTip}）</span> : null}
+            <PlayerTip id={id} name={name} englishName={englishName} act={act} actTip={actTip} />
           </span>
         </Link>
       </span>

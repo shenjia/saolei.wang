@@ -13648,14 +13648,22 @@ a.cheat_rep_link:hover {
   line-height: 1;
   cursor: help;
 }
-.pt_act {
+/* .pt_bubble 作用域升级（2026-11-05）：裸 .pt_act / .act_N 会被 legacy
+   `.video_cell span {display:inline-block;margin-right:8px;color:#636359;
+   font-size:14px;line-height:24px}`（特异性 0,1,1 且 legacy 后加载）压掉——
+   录像页/录像列表第二行不换行、颜色失真。统一升到 0,2,0 全局制胜，
+   并重置 legacy 注入的 margin/字号/行高。 */
+.pt_bubble .pt_act {
   display: block;
   font-style: normal;
   white-space: nowrap;
+  margin-right: 0;
+  font-size: inherit;
+  line-height: inherit;
 }
-.act_6 { color: #fdc61d; } /* 金：7 天内破过纪录 */
-.act_5 { color: #a6e22e; } /* 绿：7 天内传过录像 */
-.act_4 { color: #ffffff; } /* 白：7 天内登录过 */
-.act_3 { color: #b1b1a4; } /* 亮灰：7~30 天未登录 */
-.act_2 { color: #75715e; } /* 浅灰：30~60 天未登录 */
-.act_1 { color: #4a4944; } /* 深灰：60 天以上未登录 */
+.act_6, .pt_act.act_6 { color: #fdc61d; } /* 金：7 天内破过纪录 */
+.act_5, .pt_act.act_5 { color: #a6e22e; } /* 绿：7 天内传过录像 */
+.act_4, .pt_act.act_4 { color: #ffffff; } /* 白：7 天内登录过 */
+.act_3, .pt_act.act_3 { color: #b1b1a4; } /* 亮灰：7~30 天未登录 */
+.act_2, .pt_act.act_2 { color: #75715e; } /* 浅灰：30~60 天未登录 */
+.act_1, .pt_act.act_1 { color: #4a4944; } /* 深灰：60 天以上未登录 */
