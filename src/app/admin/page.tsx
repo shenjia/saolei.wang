@@ -1,15 +1,16 @@
 // 管理后台 · 仪表盘（2026-09-24；2026-10-16 加流量统计区块；2026-10-21 加称号体系偏好 + 占比图全面换环形 Donut；
 // 2026-10-23 张老师定：KPI 首行收敛为 6 卡——流量同比只留百分比、练习两行（人参与/近7天盘数）、
 // 注册两行（今日/近7天）、活跃只留今日、「上传录像」只留今日、论坛主题卡下线；
-// 2026-11-01 张老师定：首行加第 7 卡「API 调用」；PV/UV 剔除爬虫（零行为访客，口径见 traffic.ts 头注））
+// 2026-11-01 张老师定：首行加第 7 卡「API 调用」；PV/UV 剔除爬虫（零行为访客，口径见 traffic.ts 头注）；
+// 2026-11-04 概览 KPI + 30 天趋势挂 5 分钟缓存（getOverview/getTrend 冷跑数秒是进页慢的根因））
 // 一屏掌握：规模指标（KPI）→ 30 天趋势 → 流量统计 → 待办与分布 → 最新动态。
 
 import Link from "next/link";
 import { PlayerTip } from "@/components/Cells";
-import { getOverview, getTrend, TREND_METRICS } from "@/lib/admin/stats";
+import { TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, getApiUsage, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { practiceCusClean } from "@/lib/admin/practice";
-import { getDashboardDistributionsSoftwares, getCachedAnomalies } from "@/lib/admin/cache";
+import { getDashboardDistributionsSoftwares, getCachedAnomalies, getCachedOverview, getCachedTrend30 } from "@/lib/admin/cache";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
 import { TrendChart, BarList, Donut, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi, LevelTag, StatusTag } from "@/components/admin/Widgets";
@@ -23,9 +24,11 @@ export const metadata = { title: "仪表盘 | 管理后台" };
 export default async function AdminDashboard() {
   // 分两波取数：重的全表聚合走缓存且在内部串行，轻的实时查询并行
   // （2026-10-21 称号/地区分布卡下线，dashboard-distributions 只剩软件分布 + 称号偏好）
+  // 2026-11-04 张老师要求：仪表盘进页要几秒 → 概览 KPI + 30 天趋势也挂 5 分钟缓存，
+  // 与分布/流量/API/异常一致；轻量「最新注册/最新上传」仍实时
   const [ov, trend, dist, traffic, api] = await Promise.all([
-    getOverview(),
-    getTrend(30),
+    getCachedOverview(),
+    getCachedTrend30(),
     getDashboardDistributionsSoftwares(),
     getTrafficOverview(),
     getApiUsage(),
@@ -117,7 +120,7 @@ export default async function AdminDashboard() {
       <div className="admin_page_head">
         <h1>仪表盘</h1>
         <span className="sub">
-          数据截至 {formatDate(ov.now, "Y-m-d H:i")} · 全部指标实时查询
+          数据截至 {formatDate(ov.now, "Y-m-d H:i")} · KPI 与趋势缓存 5 分钟
         </span>
       </div>
 

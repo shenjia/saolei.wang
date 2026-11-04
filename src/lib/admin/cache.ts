@@ -18,17 +18,19 @@ import {
   getHourlyCounts,
   getLevelCounts,
   getNfCounts,
+  getOverview,
   getRecordCurve,
   getSexCounts,
   getSoftwareCounts,
   getTitlePrefCounts,
+  getTrend,
   getWeekdayCounts,
 } from "./stats";
 
 export const ADMIN_CACHE_TTL = 600; // 10 分钟
 
-const cache = <T>(fn: () => Promise<T>, key: string) =>
-  unstable_cache(fn, [`admin-v1-${key}`], { revalidate: ADMIN_CACHE_TTL, tags: ["admin-stats"] });
+const cache = <T>(fn: () => Promise<T>, key: string, ttl = ADMIN_CACHE_TTL) =>
+  unstable_cache(fn, [`admin-v1-${key}`], { revalidate: ttl, tags: ["admin-stats"] });
 
 /** 仪表盘软件分布 + 称号体系偏好（2026-10-21 加 titlePrefs，载荷结构变更 → key 升 v2 丢弃旧缓存；
  *  2026-10-23 修军衔制双重计数 → key 升 v3；2026-10-29 口径收紧（偏好只算近 30 天登录、
@@ -41,6 +43,14 @@ export const getDashboardDistributionsSoftwares = cache(async () => {
 
 /** 仪表盘异常检测（4 条全表聚合 ~2.5s，2026-10-21 挂缓存；数据变化频率低，10 分钟足够） */
 export const getCachedAnomalies = cache(() => getAnomalies(), "anomalies");
+
+/** 仪表盘概览 KPI（2026-11-04：约 25 条 COUNT/聚合 + 审核耗时全表扫，冷跑数秒 → 挂 5 分钟缓存。
+ *  ov.now 即缓存填充时刻，「数据截至」展示仍准确；审核页 /admin/review 仍用实时 getOverview 不受影响） */
+export const getCachedOverview = cache(() => getOverview(), "overview-v1", 300);
+
+/** 仪表盘 30 天趋势（2026-11-04：8 张表按天 GROUP BY → 挂 5 分钟缓存；
+ *  缓存内含今日预估的同比快照，5 分钟窗口内偏差可忽略。数据分析页 /admin/stats 仍实时取数） */
+export const getCachedTrend30 = cache(() => getTrend(30), "trend-30d-v1", 300);
 
 /** 数据分析页：全表扫描类分布（串行，减少并发连接占用） */
 export const getStatsDistributions = cache(async () => {
