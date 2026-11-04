@@ -9,7 +9,8 @@
 //
 // 「加入时间 / 操作管理员」没有落库字段，从 admin_log 反查最新一条加组动作
 // （user.setTrusted 加入 / user.setLowTrust）；探测器自动加入走 cheat_report（操作者=反作弊系统）；
-// 屏蔽史取该玩家最近一次被屏蔽的时刻与审核人（video.review_time / review_user）。
+// 屏蔽史取该玩家**入组那次**屏蔽（豁免后最早一次，见 lowtrust.ts blockedJoin）的审核人——
+// 老成员再被屏蔽不刷新加入时间（2026-11-04 张老师：不重复添加、玩家管理不重复亮红点）。
 // 建组前的历史屏蔽无法溯源审核人时，joinBy=null。
 
 import { prisma } from "@/lib/db";
@@ -174,8 +175,10 @@ async function resolveJoinInfo(members: LowTrustMember[]): Promise<Map<number, {
       const ct = cheats.get(m.id) ?? 0;
       if (ct) cands.push({ time: ct, by: null }); // 探测器：by=null 显示「反作弊系统」
     }
-    if (m.state.blockedLast > 0) {
-      cands.push({ time: m.state.blockedLast, by: m.blocked?.lastUser || null });
+    // 加入时间＝入组时刻（豁免后最早一次屏蔽），不是最近一次——
+    // 老成员名下再被屏蔽不得刷新加入时间，否则玩家管理红点跟着重复亮（2026-11-04）
+    if (m.state.blockedJoin > 0) {
+      cands.push({ time: m.state.blockedJoin, by: m.state.blockedJoinUser || null });
     }
     if (!cands.length) {
       out.set(m.id, { time: 0, by: null });

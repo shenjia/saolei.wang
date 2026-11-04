@@ -17,6 +17,9 @@
 //   封禁连坐（status_bak=原状态）不算：解禁时会自动恢复，不该留下永久低信任。
 // · 屏蔽时刻口径：COALESCE(review_time, create_time)——人工审核一定写 review_time，
 //   历史迁移数据缺失时退回上传时间。
+// · 「加入时间」＝入组时刻（blockedJoin）＝上次人工移出后**最早**一次屏蔽，不是最近一次
+//  （2026-11-04 张老师：老成员名下再封录像不重复添加——加入时间与玩家管理红点基线不刷新；
+//   成员资格仍看最近一次 blockedLast，移出后再犯依然重新入组）。
 //
 // 调用方：后台低信任组列表 / 玩家详情页处置面板 / 录像自动分拣 getUserTrustInfo。
 
@@ -37,6 +40,8 @@ export interface LowTrustBlocked {
   lastTime: number;
   /** 最近一次屏蔽的操作者（admin id；0=历史数据无记录） */
   lastUser: number;
+  /** 全部独立屏蔽（按屏蔽时刻升序）——「加入时间」取豁免时刻之后最早一次（见 lowTrustState.blockedJoin） */
+  entries: { time: number; user: number }[];
 }
 
 /** 低信任判定结果（成员资格 + 各源明细） */
@@ -50,6 +55,12 @@ export interface LowTrustState {
   blockedCount: number;
   /** 计入成员资格的最近屏蔽时刻（≤exemptAt 时为 0＝已被豁免） */
   blockedLast: number;
+  /** 入组屏蔽时刻＝上次人工移出（exemptAt）之后最早一次屏蔽（0=无）。
+   *  与 blockedLast（成员资格口径=最近一次）刻意不同：老成员名下再被屏蔽不推进该值，
+   *  「加入时间」与组 badge 基线据此保持稳定（2026-11-04 张老师：已在组内不重复添加） */
+  blockedJoin: number;
+  /** 入组那次屏蔽的操作管理员（0=历史数据无记录） */
+  blockedJoinUser: number;
   /** 来源标签，无源＝空数组（非成员） */
   sources: string[];
 }
@@ -69,15 +80,22 @@ function aggregate(
     const t = blockTime(r);
     const cur = map.get(uid);
     if (!cur) {
-      map.set(uid, { count: 1, lastTime: t, lastUser: N(r.reviewUser) });
+      map.set(uid, {
+        count: 1,
+        lastTime: t,
+        lastUser: N(r.reviewUser),
+        entries: [{ time: t, user: N(r.reviewUser) }],
+      });
       continue;
     }
     cur.count += 1;
+    cur.entries.push({ time: t, user: N(r.reviewUser) });
     if (t > cur.lastTime) {
       cur.lastTime = t;
       cur.lastUser = N(r.reviewUser);
     }
   }
+  for (const cur of map.values()) cur.entries.sort((a, b) => a.time - b.time);
   return map;
 }
 
@@ -114,6 +132,9 @@ export function lowTrustState(
   const flagUntil = N(user?.lowTrustUntil);
   const exemptAt = N(user?.lowTrustExempt);
   const blockedLast = blocked && blocked.lastTime > exemptAt ? blocked.lastTime : 0;
+  // 入组时刻：成员资格成立时取豁免后最早一次屏蔽（entries 升序，首个命中即最早）；
+  // 之后名下再被屏蔽，blockedJoin 不动——加入时间/红点基线不因重复封禁刷新
+  const joinEntry = blockedLast ? blocked?.entries.find((e) => e.time > exemptAt) : undefined;
   const sources: string[] = [];
   if (flagUntil > now) sources.push(LOW_TRUST_SOURCE.FLAG);
   if (blockedLast) sources.push(LOW_TRUST_SOURCE.BLOCKED);
@@ -123,6 +144,8 @@ export function lowTrustState(
     exemptAt,
     blockedCount: blocked?.count ?? 0,
     blockedLast,
+    blockedJoin: joinEntry?.time ?? 0,
+    blockedJoinUser: joinEntry?.user ?? 0,
     sources,
   };
 }
