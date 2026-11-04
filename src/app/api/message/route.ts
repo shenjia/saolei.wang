@@ -11,6 +11,7 @@ import {
   markMessageRead,
   sendMessage,
   MESSAGE_CONTENT_LIMIT,
+  MESSAGE_PAGESIZE,
 } from "@/lib/message";
 import { prisma } from "@/lib/db";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
@@ -29,12 +30,16 @@ export async function GET(req: NextRequest) {
   // 消息列表「加载更多」（页码语义，首屏 15 条，模式同 /api/bbs/more）
   // 2026-10-14 加 type 类型筛选（all/system/private），与列表页 tabs 同口径；
   // 2026-10-27 加 sent=已发送视角（与列表页同口径；现网主列表已走 Pager 服务端分页）
+  // 2026-11-04 加 size 递增批量（全站通用 PageSlider 加载更多，铁律 82ff927）：
+  //   page 恒按 base(15) 页锚定，size 只是本批 take 行数——取整页倍数、100 封顶
   if (action === "more") {
-    const page = Math.max(2, parseInt(req.nextUrl.searchParams.get("page") ?? "2", 10) || 2);
     const typeRaw = req.nextUrl.searchParams.get("type");
     const type = typeRaw === "system" || typeRaw === "private" || typeRaw === "sent" ? typeRaw : "all";
-    const { messages, total, pageSize } = await getMessageList(session.uid, page, type);
-    return NextResponse.json({ messages, hasMore: page * pageSize < total, total });
+    const page = Math.max(1, parseInt(req.nextUrl.searchParams.get("page") ?? "1", 10) || 1);
+    const sizeRaw = parseInt(req.nextUrl.searchParams.get("size") ?? "", 10) || MESSAGE_PAGESIZE;
+    const size = Math.min(Math.ceil(sizeRaw / MESSAGE_PAGESIZE) * MESSAGE_PAGESIZE, 100);
+    const { messages, total, pageSize } = await getMessageList(session.uid, page, type, size);
+    return NextResponse.json({ messages, hasMore: (page - 1) * pageSize + messages.length < total, total, pageSize });
   }
   return NextResponse.json({ error: "未知操作" }, { status: 400 });
 }

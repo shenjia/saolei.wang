@@ -11,10 +11,16 @@
 //     释放），抢到即无缝升级 leader；
 //   · 降级链：SSE 断开（readyState CLOSED）→ 30s 轮询（与旧版同频）；浏览器无
 //     Web Locks（Safari <16.4）→ 直接 30s 轮询（与旧版完全一致，不劣化）；
-//   · 未登录（401）：全部停止（旧版会永远每 30s 打一发 401，纯浪费）。
+//   · 未登录（401）：全部停止（旧版会永远每 30s 打一发 401，纯浪费）；
+//   · 预热（2026-11-04 张老师要求）：有未读时 router.prefetch("/message") 拉取整页 RSC
+//     ——/message 是 force-dynamic 且无 loading.js，Link auto 预取拿不到页面数据，
+//     手动 prefetch 的产物走 staleTimes.static 5 分钟客户端缓存，点角标秒开；
+//     模块级节流 3 分钟（< 5min TTL，持续未读期间始终保持热）+ 新未读到达立即重热，
+//     桌面角标/移动导航双实例同挂载、SSE 推送风暴均靠该时间戳去重。
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 /** 桌面端轮询谓词（>960px 桌面横向导航可见时；模块级定义保证引用稳定、effect 不重跑） */
 export function pollWhenDesktop() {
@@ -33,8 +39,13 @@ const ACQUIRE_MS = 30_000; // follower 抢锁/故障转移尝试间隔
 const LEADER_BROADCAST_MS = 60_000; // leader 存活心跳广播
 const STALE_MS = 130_000; // 广播停滞阈值（> 心跳间隔 + 余量才兜底自查）
 
+// 消息页预热节流（模块级：MessageBadge 与 MobileNav 两个 hook 实例共享去重）
+const WARM_GAP_MS = 3 * 60_000;
+let lastWarmAt = 0;
+
 export function useUnreadMessages(shouldPoll: () => boolean): number {
   const [unread, setUnread] = useState(0);
+  const router = useRouter();
 
   useEffect(() => {
     const locks = navigator.locks;
@@ -51,6 +62,12 @@ export function useUnreadMessages(shouldPoll: () => boolean): number {
     const apply = (n: number) => {
       latest = n;
       setUnread(n);
+      // 有未读 → 预热消息页 RSC（点击角标秒开）；节流窗口内只打一发，
+      // 新未读到达（SSE/轮询推高计数）越过节流窗会再次重热保持数据新鲜
+      if (n > 0 && Date.now() - lastWarmAt >= WARM_GAP_MS) {
+        lastWarmAt = Date.now();
+        router.prefetch("/message");
+      }
     };
 
     type PollOutcome = "unauth" | "ok" | "fail" | "skip";

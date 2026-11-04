@@ -12,12 +12,15 @@
 //   天然不受「清空消息」影响）+ 对方是否已读；表头第二列切「收件人」
 // 2026-10-27 二轮（张老师要求）：页底「全站广播（管理员）」表单下线——后台
 //   /admin/messages 已有同功能入口（超管 ops message.broadcast），前台不再重复
+// 2026-11-04（张老师要求）：底部换全站通用「页码滑条+加载更多」控件（PageSlider，
+//   与排行/录像/论坛同款）——表格移交 MessageFeed 持有（同 RankingFeed 模式），
+//   服务端 Pager 下线；?page= 深链仍支持（SSR 初始页），客户端翻页不改 URL
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getMessageList, messageAuthorsWithTitles, MESSAGE_PAGESIZE, type MessageTypeFilter } from "@/lib/message";
 import { MessageFeed } from "@/components/MessageFeed";
-import { Pager, Tabs } from "@/components/Pager";
+import { Tabs } from "@/components/Pager";
 import { ClearButton, MarkAllReadButton, SendMessageForm } from "@/components/MessageForms";
 import { StarSpeechAutoDialog } from "@/components/StarSpeechAutoDialog";
 
@@ -76,33 +79,13 @@ export default async function MessagePage({
             </div>
           )}
         </div>
-        <table cellPadding={0} cellSpacing={0} className="table full bbs_list">
-          <thead>
-            <tr>
-              <th className="cat">类型</th>
-              {sentView ? (
-                <th className="author">收件人</th>
-              ) : (
-                <th className="author">发件人</th>
-              )}
-              <th className="topic">内容</th>
-              <th className="time">时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <MessageFeed
-              key={`${type}_${page}`}
-              initial={messages}
-              authorId={session.uid}
-              sent={sentView}
-            />
-          </tbody>
-        </table>
-        <Pager
-          base="/message"
-          params={type === "all" ? {} : { type }}
-          page={page}
+        <MessageFeed
+          key={type}
+          initial={messages}
+          authorId={session.uid}
+          type={type}
           total={total}
+          page={page}
           pageSize={MESSAGE_PAGESIZE}
         />
       </div>

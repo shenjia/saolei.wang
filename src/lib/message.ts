@@ -131,7 +131,10 @@ export type MessageTypeFilter = "all" | "system" | "private" | "sent";
 export async function getMessageList(
   userId: number,
   page: number,
-  type: MessageTypeFilter = "all"
+  type: MessageTypeFilter = "all",
+  /** 本批行数（2026-11-04「加载更多」递增批量，铁律 82ff927）：skip 恒按 base 页锚定，
+   *  size 只是 take 行数（整页倍数、调用方封顶）；默认一页 = 服务端分页语义 */
+  size: number = MESSAGE_PAGESIZE
 ): Promise<{ messages: MessageItem[]; total: number; pageSize: number }> {
   // sent 视角：fromUser=我（含 isSystem=true 的管理员广播行）
   if (type === "sent") {
@@ -141,7 +144,7 @@ export async function getMessageList(
       where,
       orderBy: { id: "desc" },
       skip: (page - 1) * MESSAGE_PAGESIZE,
-      take: MESSAGE_PAGESIZE,
+      take: size,
     });
     const recipients = await messageAuthorsWithTitles([...new Set(rows.map((r) => N(r.toUser)))]);
     return {
@@ -170,7 +173,7 @@ export async function getMessageList(
     where,
     orderBy: { id: "desc" },
     skip: (page - 1) * MESSAGE_PAGESIZE,
-    take: MESSAGE_PAGESIZE,
+    take: size,
   });
   const authors = await messageAuthorsWithTitles([...new Set(rows.map((r) => N(r.fromUser)))]);
 
