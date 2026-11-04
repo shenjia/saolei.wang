@@ -700,7 +700,10 @@ body #video_view .video_cell .playable {
 .play_board {
   position: relative;
   float: left;
-  margin: 5px 20px 20px 0;
+  /* 下外边距按版图倍率反向折算（2026-11-05）：zoom 会连 margin 一起放大，
+     初级 2.6 倍时原 20px 实际占 52px，再叠作者行 12px 上间距形成大空档；
+     折算后各级别棋盘下方都保持视觉 20px（与播放按钮/控制条的 --pbz 口径一致） */
+  margin: 5px 20px calc(20px / var(--pbz, 1)) 0;
   /* 点击热区＝棋盘本体（点击播放已移到 .play_board，2026-09-26），给手型光标 */
   cursor: pointer;
   /* 禁文本选择（2026-10-24，玩家报错）：回放中按住拖动会发起原生选择/拖拽，
@@ -718,6 +721,9 @@ body #video_view .video_cell .playable {
    回放引擎光标定位按运行时量取 table 相对 wrap 偏移，加框自动适应 */
 #video_view .play_board .pb_frame {
   display: inline-block;
+  /* 顶对齐去掉 inline-block 基线下的 descender 空隙（初级 zoom 2.6 时约 16px）；
+     与上方 margin 反折算配合，棋盘银框到作者行只保留 20+12=32px 设计间距 */
+  vertical-align: top;
   padding: 9px;
   background: silver;
   border: 3px solid;
