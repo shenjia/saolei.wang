@@ -56,6 +56,7 @@ import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { registerPreheat } from "./preheat";
 import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
 import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
+import { activityInfo } from "./activity";
 import { STAGE_EXP, type FeedStage } from "./stage";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
@@ -2286,6 +2287,10 @@ export interface TitleMemberRow extends UserBrief {
   scores: Record<string, number>;
   /** 各级别成绩对应录像 id（sum 无录像=0） */
   videos: Record<string, number>;
+  /** 活跃度等级（1~6，lib/activity.ts；缺省=不渲染活跃度点） */
+  act?: number;
+  /** 活跃度 hover 气泡第二行文案（括号内文字，颜色与 act 对应） */
+  actTip?: string;
 }
 
 /** 军衔→user_scores 查询条件（与 getTitleCounts 同口径，升序 thresholds：
@@ -2356,21 +2361,31 @@ export async function getTitleMembers(
       select: { id: true, chineseName: true, englishName: true, sex: true, avatar: true, createTime: true },
     });
     const hasMore = rows.length > take;
+    const memberRows: TitleMemberRow[] = rows.slice(0, take).map((u) => ({
+      id: N(u.id),
+      chineseName: u.chineseName,
+      englishName: u.englishName,
+      sex: u.sex,
+      avatar: u.avatar,
+      createTime: N(u.createTime),
+      rank: cursor + 1, // 预备役序号=行号（1 起）
+      sumTime: 0,
+      scores: {},
+      videos: {},
+      // Phase 5：未加入排行 → 旧体系「布衣」
+      classic: classicTitle(0, false, u.sex),
+    }));
+    // 活跃度（2026-11-04 张老师需求）：性别标记后彩点 + 气泡第二行
+    const acts = await activityInfo(memberRows.map((r) => r.id));
+    for (const r of memberRows) {
+      const a = acts.get(r.id);
+      if (a) {
+        r.act = a.act;
+        r.actTip = a.tip;
+      }
+    }
     return {
-      rows: rows.slice(0, take).map((u) => ({
-        id: N(u.id),
-        chineseName: u.chineseName,
-        englishName: u.englishName,
-        sex: u.sex,
-        avatar: u.avatar,
-        createTime: N(u.createTime),
-        rank: cursor + 1, // 预备役序号=行号（1 起）
-        sumTime: 0,
-        scores: {},
-        videos: {},
-        // Phase 5：未加入排行 → 旧体系「布衣」
-        classic: classicTitle(0, false, u.sex),
-      })),
+      rows: memberRows,
       hasMore,
     };
   }
@@ -2391,26 +2406,36 @@ export async function getTitleMembers(
   const memberPairs = await dualTitles(
     page.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: authors.get(N(r.id))?.sex ?? 1 }))
   );
+  const memberRows: TitleMemberRow[] = page.map((r, i) => {
+    const rec = r as unknown as Record<string, bigint | number | null>;
+    const scores: Record<string, number> = {};
+    const videos: Record<string, number> = {};
+    for (const b of RANKING_BYS) {
+      const lo = byLevelOrder(b);
+      scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
+      videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
+    }
+    return {
+      ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
+      createTime: 0,
+      rank: ranks.get(N(r.id)) ?? 0,
+      sumTime: N(r.sumTime),
+      scores,
+      videos,
+      classic: memberPairs[i]?.c ?? null,
+    };
+  });
+  // 活跃度（2026-11-04 张老师需求）：性别标记后彩点 + 气泡第二行
+  const acts = await activityInfo(memberRows.map((r) => r.id));
+  for (const r of memberRows) {
+    const a = acts.get(r.id);
+    if (a) {
+      r.act = a.act;
+      r.actTip = a.tip;
+    }
+  }
   return {
-    rows: page.map((r, i) => {
-      const rec = r as unknown as Record<string, bigint | number | null>;
-      const scores: Record<string, number> = {};
-      const videos: Record<string, number> = {};
-      for (const b of RANKING_BYS) {
-        const lo = byLevelOrder(b);
-        scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
-        videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
-      }
-      return {
-        ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
-        createTime: 0,
-        rank: ranks.get(N(r.id)) ?? 0,
-        sumTime: N(r.sumTime),
-        scores,
-        videos,
-        classic: memberPairs[i]?.c ?? null,
-      };
-    }),
+    rows: memberRows,
     hasMore,
   };
 }
@@ -2546,6 +2571,10 @@ export interface RankingRow extends UserBrief {
   videos: Record<string, number>;
   /** 主榜高级时间（军衔评定用；仅 NF 榜时与 scores.exp_time 不同，需额外回填） */
   overallExpTime?: number;
+  /** 活跃度等级（1~6，lib/activity.ts；缺省=不渲染活跃度点） */
+  act?: number;
+  /** 活跃度 hover 气泡第二行文案（括号内文字，颜色与 act 对应） */
+  actTip?: string;
 }
 
 /**
@@ -2608,6 +2637,15 @@ export async function getRankingTable(
       ...(overall ? { overallExpTime: overall.get(N(r.id)) ?? 0 } : null),
     };
   });
+  // 活跃度（2026-11-04 张老师需求）：性别标记后彩点 + 气泡第二行，随当页实时计算
+  const acts = await activityInfo(result.map((r) => r.id));
+  for (const r of result) {
+    const a = acts.get(r.id);
+    if (a) {
+      r.act = a.act;
+      r.actTip = a.tip;
+    }
+  }
   return { rows: result, total, pageSize: RANKING_PAGESIZE };
 }
 
@@ -3006,6 +3044,10 @@ export interface BvRankingEntry {
 
 export interface BvRankingRow extends BvRankingEntry {
   rank: number;
+  /** 活跃度等级（1~6，lib/activity.ts；当前页渲染时补入，全量缓存不携带） */
+  act?: number;
+  /** 活跃度 hover 气泡第二行文案（括号内文字，颜色与 act 对应） */
+  actTip?: string;
 }
 
 export interface BvRankingResult {
@@ -3106,11 +3148,15 @@ export async function getBvRanking(by: BvRankingBy, page: number, take?: number,
   const size = take ?? RANKING_PAGESIZE;
   const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
   const users = await rankingUserExtras(pageRows.map((e) => e.id));
+  // 活跃度（2026-11-04 张老师需求）：随当页实时算，不进 1h 全量缓存
+  const acts = await activityInfo(pageRows.map((e) => e.id));
   const rows = pageRows.map((e, i) => ({
     ...e,
     avatar: users.get(e.id)?.avatar ?? "",
     englishName: users.get(e.id)?.englishName ?? "",
     rank: (page - 1) * RANKING_PAGESIZE + i + 1,
+    act: acts.get(e.id)?.act,
+    actTip: acts.get(e.id)?.tip,
   }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen, ranges };
 }
@@ -3180,6 +3226,10 @@ export interface StnbRankingEntry {
 
 export interface StnbRankingRow extends StnbRankingEntry {
   rank: number;
+  /** 活跃度等级（1~6，lib/activity.ts；当前页渲染时补入，全量缓存不携带） */
+  act?: number;
+  /** 活跃度 hover 气泡第二行文案（括号内文字，颜色与 act 对应） */
+  actTip?: string;
 }
 
 export interface StnbRankingResult {
@@ -3427,11 +3477,15 @@ export async function getStnbRanking(by: BvRankingBy, page: number, take?: numbe
   const size = take ?? RANKING_PAGESIZE;
   const pageRows = sorted.slice((page - 1) * RANKING_PAGESIZE, (page - 1) * RANKING_PAGESIZE + size);
   const users = await rankingUserExtras(pageRows.map((e) => e.id));
+  // 活跃度（2026-11-04 张老师需求）：随当页实时算，不进 1h/60s 全量缓存
+  const acts = await activityInfo(pageRows.map((e) => e.id));
   const rows = pageRows.map((e, i) => ({
     ...e,
     avatar: users.get(e.id)?.avatar ?? "",
     englishName: users.get(e.id)?.englishName ?? "",
     rank: (page - 1) * RANKING_PAGESIZE + i + 1,
+    act: acts.get(e.id)?.act,
+    actTip: acts.get(e.id)?.tip,
   }));
   return { rows, total: sorted.length, pageSize: RANKING_PAGESIZE, den, totalDen };
 }

@@ -99,19 +99,28 @@ export function BbsAuthorName({
   );
 }
 
-/** 排行榜姓名：上传头像绝对定位在左侧预留区，不参与名字与性别图标的居中排版。 */
+/** 排行榜姓名：上传头像绝对定位在左侧预留区，不参与名字与性别图标的居中排版。
+ *  2026-11-04 活跃度标记（张老师需求）：性别图标后加彩色「.」；
+ *  hover 气泡（与首页同款「#ID 姓名 英文名」）下加第二行括号文案，
+ *  颜色与点一致（act 1~6 见 lib/activity.ts，颜色在 globals.css .act_*） */
 export function RankingName({
   id,
   name,
   englishName,
   sex,
   avatar = "",
+  act,
+  actTip,
 }: {
   id: number;
   name: string;
   englishName?: string;
   sex: number;
   avatar?: string;
+  /** 活跃度等级（1~6）；缺省=不渲染点与气泡第二行 */
+  act?: number;
+  /** 气泡第二行括号内文案（如「已2月未登录」「7天内传过录像」） */
+  actTip?: string;
 }) {
   // 与主页/用户卡片同口径：新版上传、OAuth 外链、旧站 "1"（照片墙实体）；
   // 无头像时 fallback 为空，绝不把默认 no.jpg 混进排行榜。
@@ -124,10 +133,16 @@ export function RankingName({
           {name}
           <span className="pt_bubble">
             <PlayerTip id={id} name={name} englishName={englishName} />
+            {act ? <span className={`pt_act act_${act}`}>（{actTip}）</span> : null}
           </span>
         </Link>
       </span>
       <span className={`gender ${sex ? "male" : "female"} small`}></span>
+      {act ? (
+        <span className={`act_dot act_${act}`} title={actTip}>
+          .
+        </span>
+      ) : null}
     </>
   );
 }

@@ -13630,3 +13630,23 @@ a.cheat_rep_link:hover {
   font-size: 12px;
   line-height: normal;
 }
+
+/* 排行榜活跃度标记（2026-11-04 张老师需求）：人名性别图标后的彩色「.」 +
+   hover 气泡第二行括号文案（.pt_act，与首页人名气泡同壳）。
+   六档：金=7天内破纪录 / 绿=7天内传录像 / 白=7天内登录 / 亮灰·浅灰·深灰=未登录分档 */
+.act_dot {
+  font-weight: bold;
+  line-height: 1;
+  cursor: help;
+}
+.pt_act {
+  display: block;
+  font-style: normal;
+  white-space: nowrap;
+}
+.act_6 { color: #fdc61d; } /* 金：7 天内破过纪录 */
+.act_5 { color: #a6e22e; } /* 绿：7 天内传过录像 */
+.act_4 { color: #ffffff; } /* 白：7 天内登录过 */
+.act_3 { color: #b1b1a4; } /* 亮灰：7~30 天未登录 */
+.act_2 { color: #75715e; } /* 浅灰：30~60 天未登录 */
+.act_1 { color: #4a4944; } /* 深灰：60 天以上未登录 */
