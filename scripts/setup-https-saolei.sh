@@ -112,7 +112,12 @@ server {
     location /.well-known/acme-challenge/ {
         root /home/deploy/acme-www;
     }
+    # UA 黑名单（2026-11-04）：别名域跳转块也挂——11-03 meta-webindexer 4.4 万次
+    # 全部打在 www/new 跳转块吃 301（主域黑名单管不到这里）。80 块的 if 必须放
+    # location / 内：server 级 if 在 rewrite 阶段先于 location 匹配执行，会把
+    # acme 挑战请求一并 403（证书续期会炸）。443 块无 acme location 不受影响。
     location / {
+        if ($saolei_bad_ua) { return 403; }
         return 301 https://saolei.wang$request_uri;
     }
 }
@@ -124,6 +129,7 @@ server {
     ssl_certificate_key /etc/nginx/ssl/saolei/key.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_session_cache   shared:SSL:10m;
+    if ($saolei_bad_ua) { return 403; }
     return 301 https://saolei.wang$request_uri;
 }
 
@@ -146,7 +152,9 @@ server {
         root /home/deploy/acme-www;
     }
 
+    # UA 黑名单（2026-11-04，同 new 80 块）：if 放 location / 内保 acme 挑战不被 403
     location / {
+        if ($saolei_bad_ua) { return 403; }
         return 301 https://saolei.wang$request_uri;
     }
 }
@@ -162,6 +170,7 @@ server {
     ssl_session_cache   shared:SSL:10m;
     # 301 不进 CDN 长缓存（2026-10-30 教训：ESA 把自跳转 301 缓存了 30 天）
     add_header Cache-Control "no-cache" always;
+    if ($saolei_bad_ua) { return 403; }
     return 301 https://saolei.wang$request_uri;
 }
 

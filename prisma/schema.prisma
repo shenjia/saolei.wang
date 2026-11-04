@@ -955,11 +955,14 @@ model PageView {
   // (sessionId)：流失统计按会话聚流水
   // (isEntry, createTime)：落地页 Top 按档期聚合
   // (createTime)：30 天流水全量拉取
+  // (clientId)：dwell 回写 UPDATE WHERE client_id（2026-11-04 前缺索引全表扫 6.8 万行，
+  //   慢日志 31 次/日 avg 1.15s + Lock 0.5-1.1s 行锁竞争）
   @@index([visitorId, createTime])
   @@index([path, visitorId, createTime])
   @@index([sessionId])
   @@index([isEntry, createTime])
   @@index([createTime])
+  @@index([clientId])
   @@map("page_view")
 }
 
