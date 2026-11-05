@@ -10460,7 +10460,7 @@ html:has(#online_play) #footer {
   left: 420px; /* (128 + 4 + 24) × 2.6 + 14 ≈ 420 */
 }
 .replay_mouse_page_side.replay_mouse_int {
-  left: 341px; /* (256 + 4 + 24) × 1.15 + 14 ≈ 341 */
+  left: 440px; /* (256 + 4 + 24) × 1.5 + 14 = 440（中级棋盘 2026-11-05 加到 1.5 倍） */
 }
 .replay_mouse_page_side.replay_mouse_exp {
   left: 598px; /* (480 + 4 + 24) × 1.15 + 14 ≈ 598 */
