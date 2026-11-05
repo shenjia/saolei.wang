@@ -27,7 +27,7 @@ import {
   radarPointsFrom,
 } from "./videoradar";
 import { bucketName, bucketRangeText } from "./videoscore";
-import { LEVEL_NAMES, MIN_3BV_FOR_3BVS } from "./config";
+import { LEVEL_NAMES, MIN_3BV_FOR_3BVS, type VideoLevel } from "./config";
 import type { MetricKey } from "./videoradar";
 import type { VideoAnalysisPoint } from "./videoscore";
 import { ensureVideoMetrics } from "./videometrics";
@@ -271,4 +271,54 @@ export async function getVideoAnalysis(input: VideoAnalysisInput): Promise<Video
   } catch {
     return null;
   }
+}
+
+// ---------- 「个人发挥」板块取数（2026-11-05 张老师需求） ----------
+// 详情页右栏「录像评级」下方：本局 Time / 3BV/s / STNB 与录像作者**个人最好成绩**之比。
+// 口径：
+//   · NF / FL 分池——NF 录像比 user_scores_nf / user_stnb_best_nf，FL 比
+//     user_scores / user_stnb_best（与纪录指针 / STNB 榜同一套来源）；
+//   · Time / 3BV/s 取 user_scores(_nf) 的 {lv}_time / {lv}_3bvs（审核管线自动维护
+//     的「当前有效个人最好成绩」，见 queries.ts PB_VIDEO_IDS_SQL 注）；
+//   · STNB 取 user_stnb_best(_nf) 落盘表（与 STNB 榜同源）；
+//   · 任一项缺失（作者此级此模式从未上榜 / 无成绩行）→ null，前端整行不渲染。
+// 查询全是主键 / 联合主键点查（两行），无需缓存。
+
+/** 作者个人最好成绩（毫秒 / ×1000 / 1 位小数，与页面展示同量纲） */
+export interface VideoPerformanceBests {
+  time: number | null;
+  bvs: number | null;
+  stnb: number | null;
+}
+
+export async function getVideoPerformance(
+  userId: number,
+  level: VideoLevel,
+  nf: boolean
+): Promise<VideoPerformanceBests> {
+  if (!userId) return { time: null, bvs: null, stnb: null };
+  const lv: VideoLevel = level === "beg" || level === "int" ? level : "exp";
+  const uid = BigInt(userId);
+  const [scores, stnbRow] = await Promise.all([
+    nf
+      ? prisma.userScoresNf.findUnique({ where: { id: uid } })
+      : prisma.userScores.findUnique({ where: { id: uid } }),
+    nf
+      ? prisma.userStnbBestNf.findUnique({
+          where: { user_level: { user: uid, level: lv } },
+        })
+      : prisma.userStnbBest.findUnique({
+          where: { user_level: { user: uid, level: lv } },
+        }),
+  ]);
+  // 动态键取列（ beg/int/exp × time/3bvs ）；0 或缺列视同无成绩
+  type ScoresRow = { begTime: number | null; beg3bvs: number | null; intTime: number | null; int3bvs: number | null; expTime: number | null; exp3bvs: number | null };
+  const s = scores as ScoresRow | null;
+  const t = s ? s[`${lv}Time` as "begTime" | "intTime" | "expTime"] : null;
+  const b = s ? s[`${lv}3bvs` as "beg3bvs" | "int3bvs" | "exp3bvs"] : null;
+  return {
+    time: t != null && t > 0 ? t : null,
+    bvs: b != null && b > 0 ? b : null,
+    stnb: stnbRow?.stnb && stnbRow.stnb > 0 ? stnbRow.stnb : null,
+  };
 }

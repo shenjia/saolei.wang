@@ -32,7 +32,7 @@ import { CommentSection } from "@/components/Comments";
 import { VideoReplayProvider, VideoReplayBoard, VideoReplayButton } from "@/components/VideoReplay";
 import { VideoSelfDeleteButton } from "@/components/VideoSelfDeleteButton";
 import { VideoAnalysisRadar } from "@/components/VideoAnalysis";
-import { getVideoAnalysis } from "@/lib/videoanalysis";
+import { getVideoAnalysis, getVideoPerformance } from "@/lib/videoanalysis";
 import { ensureVideoBoard } from "@/lib/videometrics";
 // 综合评级的等级配色（与雷达图同一份，统一在 videoscore.ts 维护）
 import { gradeColor } from "@/lib/videoscore";
@@ -130,6 +130,65 @@ export default async function VideoViewPage({
   // 评级问号气泡文案（2026-10-31 张老师定稿句；同日「稀有程度」更名「竞技水准」）：评级规则总述。
   const ratingHelpTip =
     "所有级别、NF和FL录像分开评；竞技水准取Time/3BVs/STNB中最强评级；路线规划在3BV相近的录像中横向评比；最终评级以竞技水准为主，五轴评分加权得出。";
+
+  // ---------- 「个人发挥」板块（2026-11-05 张老师需求） ----------
+  // 右栏「录像评级」下方：三根绿色进度条＝本局 Time / 3BV/s / STNB 与录像作者
+  // 个人最好成绩之比。Time 反比（最好/本局），3BV/s、STNB 正比（本局/最好）。
+  // 置灰口径与标题区 del 划线完全一致：运气盘（noRecord）划掉 Time/3BV/s/STNB，
+  // 3BV 低于 MIN_3BV_FOR_3BVS 划掉 3BV/s/STNB——被划掉项进度条置灰。
+  // NF/FL 分池比较（getVideoPerformance 内处理）；作者该级该模式无最好成绩的项整行不渲染。
+  const perf = video.author
+    ? await getVideoPerformance(video.author.id, level, video.noflag)
+    : null;
+  const perfValid3bvs =
+    !video.noRecord && video.board3bv >= MIN_3BV_FOR_3BVS[level] && scores["3bvs"] > 0;
+  const perfValidStnb =
+    video.stnb != null && video.stnb > 0 &&
+    !video.noRecord && video.board3bv >= MIN_3BV_FOR_3BVS[level];
+  const perfPct = (ratio: number) => {
+    const p = ratio * 100;
+    return (p >= 99.95 && p < 100.05 ? 100 : Math.round(p * 10) / 10).toFixed(1);
+  };
+  const perfRows: {
+    key: string;
+    ratio: number;
+    off: boolean;
+    cur: string;
+    best: string;
+  }[] = [];
+  if (perf) {
+    if (perf.time != null && video.realTime > 0) {
+      perfRows.push({
+        key: "Time",
+        ratio: perf.time / video.realTime,
+        off: !!video.noRecord,
+        cur: scoreTime(video.realTime),
+        best: scoreTime(perf.time),
+      });
+    }
+    if (perf.bvs != null) {
+      perfRows.push({
+        key: "3BV/s",
+        ratio: scores["3bvs"] / perf.bvs,
+        off: !perfValid3bvs,
+        cur: score3bvs(Math.abs(scores["3bvs"])),
+        best: score3bvs(perf.bvs),
+      });
+    }
+    if (perf.stnb != null && video.stnb != null && video.stnb > 0) {
+      perfRows.push({
+        key: "STNB",
+        ratio: video.stnb / perf.stnb,
+        off: !perfValidStnb,
+        cur: video.stnb.toFixed(1),
+        best: perf.stnb.toFixed(1),
+      });
+    }
+  }
+  // 气泡「个人最佳」文案（2026-11-05 张老师定）：NF 录像比 NF 最好 →「个人最佳NF纪录」，
+  // FL 录像 →「个人最佳纪录」
+  const perfBestLabel = video.noflag ? "个人最佳NF纪录" : "个人最佳纪录";
+
 
   // 录像评级盒内容（2026-11-01 张老师需求：≤880 单列带侧栏整组 display:none，
   // 评级雷达改在录像主体板块下面显示——与用户主页「实力」雷达换位同模式：
@@ -334,6 +393,37 @@ export default async function VideoViewPage({
         {video.author && <UserPanel userId={video.author.id} hideRadar />}
         {radarInner && (
           <div className="radar box">{radarInner}</div>
+        )}
+        {/* 「个人发挥」（2026-11-05 张老师需求）：三根绿色进度条＝本局成绩与作者
+            个人最好成绩之比（Time 反比最好/本局，3BV/s、STNB 正比本局/最好）。
+            行 hover 出气泡「xx = 当前值 个人最佳(NF)纪录 y」（后者元帅金 #e6db74）；
+            被划线成绩（运气盘 / 3BV 低于限界）进度条置灰。仅桌面右栏（≤880 侧栏
+            整组隐藏，如需移动端副本照 radar_main 模式另行挂） */}
+        {perfRows.length > 0 && (
+          <div className="perf box">
+            {/* 标题无问号（2026-11-05 张老师定：疑义不多） */}
+            <h2 className="vr_h">
+              <span className="vr_h_left">个人发挥</span>
+            </h2>
+            <div className="vr_line" />
+            {perfRows.map((r) => {
+              const pct = Math.round(r.ratio * 1000) / 10;
+              const width = Math.min(100, Math.max(0, pct));
+              return (
+                <div className={`perf_row${r.off ? " off" : ""}`} key={r.key}>
+                  <span className="perf_label">{r.key}</span>
+                  <span className="perf_bar">
+                    <em style={{ width: `${width}%` }} />
+                  </span>
+                  <span className="perf_pct">{perfPct(r.ratio)}%</span>
+                  <span className="perf_tip">
+                    {r.key} = {r.cur}
+                    <b>{perfBestLabel} {r.best}</b>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </li>
     </ul>
