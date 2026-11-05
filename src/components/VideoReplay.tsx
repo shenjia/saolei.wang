@@ -2671,8 +2671,16 @@ function TrajLayer({
  *  拖拽：按住即暂停（记住原播放态），拖动中按帧 seek 实时预览，松手定位——
  *  拖前在播则松手续播；点轨道任意位置＝单次跳转（同语义）。
  *  当前时间＝站绿 #a6e22e（十期张老师定）；总时间已去（标题上有）。
- *  倍速钮（2026-11-05 张老师需求）：播放钮右侧，向上弹菜单，默认永远 1x。 */
-const SPEED_OPTIONS = [0.01, 0.1, 0.5, 1, 2, 4, 16];
+ *  倍速钮（2026-11-05 张老师需求）：播放钮右侧，向上弹出速度滑条（复刻 flop），默认永远 1x。 */
+/** 速度档位（2026-11-05 复刻 flop 控制条 SPEED_ARRAY，1:1 共 41 档）：
+ *  0.01 + 0.05–0.95（步进 0.05）+ 1–1.9（步进 0.1）+ 2–10（步进 1）+ 15 + 20 */
+const SPEED_GEARS = [
+  0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6,
+  0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6,
+  1.7, 1.8, 1.9, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20,
+];
+/** 速度文案（flop 同款）：toFixed(2) 截 4 字符——0.01x / 1.00x / 20.0x */
+const fmtSpeed = (v: number) => `${v.toFixed(2).slice(0, 4)}x`;
 function ReplayBar({
   status,
   stats,
@@ -2769,8 +2777,9 @@ function ReplayBar({
           </svg>
         )}
       </button>
-      {/* 倍速钮（2026-11-05 张老师需求）：播放钮右侧「1x」，点按向上弹菜单选速
-          （0.01/0.1/0.5/1/2/4/16）；默认永远为 1x，选中非默认倍速时按钮高亮 */}
+      {/* 倍速钮（2026-11-05 张老师需求）：播放钮右侧「1x」，点按向上弹出速度滑条
+          （复刻 flop 控制条：SPEED_ARRAY 41 档 + 复位钮）；默认永远为 1x，
+          选中非默认倍速时按钮高亮 */}
       {onSpeed && (
         <div className="rb_speed" ref={speedWrapRef}>
           <button
@@ -2783,23 +2792,32 @@ function ReplayBar({
               setSpeedOpen((o) => !o);
             }}
           >
-            {speed}x
+            {fmtSpeed(speed)}
           </button>
           {speedOpen && (
-            <div className="rs_menu" onClick={(e) => e.stopPropagation()}>
-              {SPEED_OPTIONS.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  className={v === speed ? "on" : ""}
-                  onClick={() => {
-                    onSpeed(v);
-                    setSpeedOpen(false);
-                  }}
-                >
-                  {v}x
-                </button>
-              ))}
+            <div className="rs_pop" onClick={(e) => e.stopPropagation()}>
+              {/* 滑条＝档位索引（flop speedSlider 同款：value=index、max=len-1），
+                  拖动即时生效；speed 恒取自档位数组，indexOf 兜底钳 0 */}
+              <input
+                type="range"
+                className="rs_slider"
+                min={0}
+                max={SPEED_GEARS.length - 1}
+                step={1}
+                value={Math.max(0, SPEED_GEARS.indexOf(speed))}
+                aria-label="播放速度"
+                onChange={(e) => onSpeed(SPEED_GEARS[Number(e.target.value)])}
+              />
+              {/* 复位钮（flop resetSpeed 同款）：显示当前速度，点按回 1x */}
+              <button
+                type="button"
+                className="rs_reset"
+                title="复位速度"
+                aria-label="复位速度"
+                onClick={() => onSpeed(1)}
+              >
+                {fmtSpeed(speed)}
+              </button>
             </div>
           )}
         </div>

@@ -10915,8 +10915,8 @@ html:has(#online_play) #footer {
   border-color: #fdc61d;
   color: #fdc61d;
 }
-/* 倍速按钮（2026-11-05 张老师需求）：播放钮右侧「1x」，点按向上弹菜单选速
-   （0.01/0.1/0.5/1/2/4/16）；默认永远为 1x。文案钮随倍速值自适应宽（0.01x 五字符） */
+/* 倍速按钮（2026-11-05 张老师需求）：播放钮右侧速度文案，点按向上弹出速度滑条
+   （复刻 flop 41 档）；默认永远为 1x。文案钮随倍速值自适应宽（0.01x 五字符） */
 .rb_speed {
   position: relative;
   flex: 0 0 auto;
@@ -10931,41 +10931,77 @@ html:has(#online_play) #footer {
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
-/* 向上弹出菜单：锚 .rb_speed 底缘，卡片同款色板（#33322b/#49483e/6px 圆角） */
-.rs_menu {
+/* 向上弹出速度滑条（2026-11-05 复刻 flop 控制条）：锚 .rb_speed 底缘，卡片同款
+   色板（#33322b/#49483e/6px 圆角）；滑条 41 档拖动即时生效，复位钮点按回 1x */
+.rs_pop {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 6px);
   transform: translateX(-50%);
   display: flex;
-  flex-direction: column;
-  min-width: 76px;
-  padding: 4px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
   border: 1px solid #49483e;
   border-radius: 6px;
   background: #33322b;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   z-index: 40;
+  white-space: nowrap;
 }
-.rs_menu button {
-  display: block;
-  width: 100%;
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 4px;
+/* 滑条：flop 同款 80px 宽、档位索引步进；轨道 4px #49483e，thumb 站绿方块
+   （3px 圆角微缩版进度条 thumb 口径） */
+.rs_pop .rs_slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
   background: transparent;
-  color: #b1b1a4;
-  font: 13px/1 "Courier New", Courier, monospace;
-  text-align: center;
   cursor: pointer;
 }
-.rs_menu button:hover {
-  background: #3b3a32;
-  color: #a6e22e;
+.rs_pop .rs_slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #49483e;
 }
-.rs_menu button.on {
+.rs_pop .rs_slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 3px;
+  background: #a6e22e;
+}
+.rs_pop .rs_slider:focus {
+  outline: none;
+}
+.rs_pop .rs_slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #49483e;
+}
+.rs_pop .rs_slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 3px;
+  background: #a6e22e;
+}
+/* 复位钮（flop resetSpeed 同款）：显示当前速度文案，点按回 1x */
+.rs_pop .rs_reset {
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
   color: #a6e22e;
-  font-weight: bold;
+  font: bold 12px/1 "Courier New", Courier, monospace;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.rs_pop .rs_reset:hover {
+  color: #d0f76a;
 }
 /* 当前时间：站绿（2026-10-16 十期张老师定）；总时间已去（标题上有）。
    ⚠️ (0,2,1) 提权：legacy .video_cell span (0,1,1) 且 legacy 后加载，平级必输 */
