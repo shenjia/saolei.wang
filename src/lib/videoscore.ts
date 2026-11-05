@@ -111,11 +111,11 @@ export const BASE_METRIC_KEYS: BaseMetricKey[] = BASE_METRICS.map((m) => m.key);
 export function formatMetric(key: MetricKey, value: number): string {
   const def = BASE_METRICS.find((m) => m.key === key);
   if (!def) return String(value);
-  // 用时轴（2026-11-05）：与 scoreTime 同口径——第三位小数截去不四舍五入
-  // （2.797 显示 2.79 而非 2.80；其余指标无成绩认证语义，保持 toFixed 四舍五入）
+  // 用时轴（2026-11-05 与 scoreTime 同口径升级 3 位小数）：毫秒精确显示，
+  // 10ms 精度历史成绩第三位挂 0；其余指标无成绩认证语义，保持 toFixed 四舍五入
   const num =
     key === "time"
-      ? (Math.floor(Math.round(value * 1000) / 10) / 100).toFixed(2)
+      ? (Math.round(value * 1000) / 1000).toFixed(3)
       : value.toFixed(def.digits);
   return [def.prefix, num, def.unit].filter((s) => s !== "").join(" ");
 }

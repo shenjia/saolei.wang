@@ -480,8 +480,8 @@ export function onlineAvfFilename(input: {
 }): string {
   const { level, csec, nf, bbbv, user, date = new Date(), ext = "avf" } = input;
   const lv = level[0].toUpperCase() + level.slice(1);
-  /* 用时口径与 lib/format 的 scoreTime 一致：毫秒 ÷ 1000 → 两位小数 */
-  const secs = (csec / 100).toFixed(2);
+  /* 用时口径与 lib/format 的 scoreTime 一致：3 位小数（csec 厘秒 ÷100，第三位挂 0） */
+  const secs = (csec / 100).toFixed(3);
   const p2 = (n: number) => String(n).padStart(2, "0");
   const day = `${date.getFullYear()}-${p2(date.getMonth() + 1)}-${p2(date.getDate())}`;
   return (

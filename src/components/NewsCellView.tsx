@@ -20,11 +20,10 @@ function formatScore(order: string, value: number): string {
 }
 
 /** 提升值（2026-10-16 破纪录动态改版，张老师定）：|新-旧| 绝对量，正负号由箭头方向表达
-    （五轮：去括号去+-，值前放小三角箭头）；时间 2 位小数**截断**（2026-11-04 口径与 scoreTime 同步）、
-    3BV/s 3 位小数 */
+    （五轮：去括号去+-，值前放小三角箭头）；时间与 3BV/s 均 3 位小数（2026-11-05 与全站 scoreTime 升级口径同步） */
 function formatDelta(order: string, oldScore: number, newScore: number): string {
   const dv = Math.abs(newScore - oldScore);
-  return order === "time" ? (Math.floor(dv / 10) / 100).toFixed(2) : (dv / 1000).toFixed(3);
+  return (dv / 1000).toFixed(3);
 }
 
 /** 高级时间破纪录突破整数大关（SUB30~SUB100，2026-10-16 张老师定；2026-10-25 张老师定 SUB60 以下改 5s 一档）：

@@ -41,7 +41,7 @@ function summarize(raw: string): string {
     const d = JSON.parse(raw) as Record<string, unknown>;
     if (d && typeof d === "object" && "lv" in d) {
       const lv: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
-      const fmt = (v: unknown) => (Number(v) ? (Number(v) / 1000).toFixed(2) : "—");
+      const fmt = (v: unknown) => (Number(v) ? (Number(v) / 1000).toFixed(3) : "—");
       return `${lv[String(d.lv)] ?? d.lv} ${String(d.od) === "3bvs" ? "3BV/s" : "时间"}：${fmt(d.or)} → ${fmt(d.cr)}${Number(d.nf) ? "（NF）" : ""}`;
     }
   } catch {
@@ -111,7 +111,7 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
                       <span className="sub">—</span>
                     )}
                   </td>
-                  <td className="num sub">{n.expTime ? (n.expTime / 1000).toFixed(2) : "—"}</td>
+                  <td className="num sub">{n.expTime ? (n.expTime / 1000).toFixed(3) : "—"}</td>
                   <td className="sub">{formatDate(n.createTime, "Y-m-d H:i")}</td>
                   <td className="ops">
                     <AdminAction

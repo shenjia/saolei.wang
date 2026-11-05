@@ -3576,7 +3576,7 @@ export function ReplayFullscreen({
               {playResult.won ? (
                 <>
                   <span>{LEVEL_NAMES[level] ?? level}</span>
-                  <em className={"lv_" + level}>{(playResult.csec / 100).toFixed(2)}</em>
+                  <em className={"lv_" + level}>{(playResult.csec / 100).toFixed(3)}</em>
                   <span>秒</span>
                 </>
               ) : (
