@@ -246,6 +246,9 @@ interface Engine {
   resume: () => void;
   /** 跳转：重置盘面后快进到目标时刻（counters 随 applyEv 重建） */
   seek: (csec: number) => void;
+  /** 播放倍速（2026-11-05 张老师需求）：0.01–16 即时生效；回放时钟仍是权威时间域，
+   *  只是 dt 按倍速缩放——事件应用/插值/统计口径全部不变 */
+  setSpeed: (v: number) => void;
 }
 
 /** 笑脸状态（十七期：练习页同款语义——按下 ooh / 松开 smile / 终局 win·dead）。
@@ -787,6 +790,9 @@ export function runReplay(opts: {
   let rafId: number | null = null;
   let lastFrame = 0;
   let lastStatTs = 0;
+  /* 播放倍速（2026-11-05 张老师需求）：tick 的 dt 按倍速缩放，默认恒为 1x；
+     回放时钟 csec 仍是唯一权威时间域（事件/插值/统计/进度条口径不变） */
+  let speed = 1;
   function setPlaying(v: boolean) {
     playing = v;
     if (v) {
@@ -944,7 +950,7 @@ export function runReplay(opts: {
   }
   function tick(ts: number) {
     if (!playing) return;
-    const dt = lastFrame ? (ts - lastFrame) / 10 : 0; // ms → 百分秒
+    const dt = lastFrame ? ((ts - lastFrame) / 10) * speed : 0; // ms → 百分秒（×倍速）
     lastFrame = ts;
     const target = Math.min(data.totalCsec, curCsec + dt);
     while (evIdx < evs.length) {
@@ -1116,6 +1122,9 @@ export function runReplay(opts: {
         };
         if (!startGlide(gFromX, gFromY, path, target, null, null, landTarget)) landTarget();
       }
+    },
+    setSpeed(v: number) {
+      speed = Number.isFinite(v) && v > 0 ? v : 1;
     },
   };
 }
@@ -1927,6 +1936,9 @@ interface ReplayCtxValue {
   togglePlay: () => void;
   /** 跳转到指定百分秒（引擎重置盘面后快进，统计随发） */
   seek: (csec: number) => void;
+  /** 播放倍速（2026-11-05 张老师需求）：控制条「1x」钮；stop 后复位 1x（默认永远为 1x） */
+  speed: number;
+  setSpeed: (v: number) => void;
   /** 进入/退出全屏回放层 */
   setFullscreen: (v: boolean) => void;
 }
@@ -2158,6 +2170,7 @@ export function VideoReplayProvider({
     setStatus("idle");
     setFace("smile");
     setReplayData(null);
+    setSpeedState(1); // 倍速复位（默认永远为 1x，下次起播不残留）
   }, []);
 
   /* 一键全屏试玩（二十一期，2026-10-21 张老师需求）：等价于依次点
@@ -2212,6 +2225,14 @@ export function VideoReplayProvider({
     if (status === "playing") pause();
     else if (status === "paused" || status === "ended") resume();
   }, [status, pause, resume]);
+
+  /* 播放倍速（2026-11-05 张老师需求）：state 驱动控制条钮文案，引擎即时 setSpeed；
+     默认永远为 1x——stop（退出回放）即复位，下次起播回到 1x（不落盘不记忆） */
+  const [speed, setSpeedState] = useState(1);
+  const setSpeed = useCallback((v: number) => {
+    setSpeedState(v);
+    engineRef.current?.setSpeed(v);
+  }, []);
 
   const seek = useCallback(
     (csec: number) => {
@@ -2277,6 +2298,8 @@ export function VideoReplayProvider({
         resume,
         togglePlay,
         seek,
+        speed,
+        setSpeed,
         setFullscreen,
       }}
     >
@@ -2313,6 +2336,8 @@ export function VideoReplayProvider({
           onPause={pause}
           onSeek={seek}
           onResume={resume}
+          speed={speed}
+          onSpeed={setSpeed}
           onExit={() => setFullscreen(false)}
         />
       )}
@@ -2474,7 +2499,9 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
 /** 控制条（九期；十期改版）：暂停/播放 + 全屏按钮 + 可拖拽进度条，
  *  拖拽：按住即暂停（记住原播放态），拖动中按帧 seek 实时预览，松手定位——
  *  拖前在播则松手续播；点轨道任意位置＝单次跳转（同语义）。
- *  当前时间＝站绿 #a6e22e（十期张老师定）；总时间已去（标题上有）。 */
+ *  当前时间＝站绿 #a6e22e（十期张老师定）；总时间已去（标题上有）。
+ *  倍速钮（2026-11-05 张老师需求）：播放钮右侧，向上弹菜单，默认永远 1x。 */
+const SPEED_OPTIONS = [0.01, 0.1, 0.5, 1, 2, 4, 16];
 function ReplayBar({
   status,
   stats,
@@ -2484,6 +2511,8 @@ function ReplayBar({
   onResume,
   onFullscreen,
   fsActive = false,
+  speed = 1,
+  onSpeed,
 }: {
   status: Status;
   stats: ReplayStats;
@@ -2495,8 +2524,22 @@ function ReplayBar({
   onFullscreen?: () => void;
   /** 全屏态：按钮高亮、title 变「退出全屏」 */
   fsActive?: boolean;
+  /** 播放倍速与切换回调（2026-11-05 张老师需求）；onSpeed 缺省＝不渲染倍速钮 */
+  speed?: number;
+  onSpeed?: (v: number) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
+  /* 倍速菜单开合：点钮切换，点外部（pointerdown 捕获早于 click）或选中后关闭 */
+  const [speedOpen, setSpeedOpen] = useState(false);
+  const speedWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!speedOpen) return;
+    const close = (e: PointerEvent) => {
+      if (!speedWrapRef.current?.contains(e.target as Node)) setSpeedOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [speedOpen]);
   const dragRef = useRef({ active: false, wasPlaying: false, raf: 0, lastCsec: 0 });
   const total = stats.totalCsec;
   const pct = total > 0 ? Math.max(0, Math.min(1, stats.csec / total)) : 0;
@@ -2552,6 +2595,41 @@ function ReplayBar({
           </svg>
         )}
       </button>
+      {/* 倍速钮（2026-11-05 张老师需求）：播放钮右侧「1x」，点按向上弹菜单选速
+          （0.01/0.1/0.5/1/2/4/16）；默认永远为 1x，选中非默认倍速时按钮高亮 */}
+      {onSpeed && (
+        <div className="rb_speed" ref={speedWrapRef}>
+          <button
+            type="button"
+            className={"rb_btn" + (speedOpen || speed !== 1 ? " active" : "")}
+            title="播放速度"
+            aria-label="播放速度"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSpeedOpen((o) => !o);
+            }}
+          >
+            {speed}x
+          </button>
+          {speedOpen && (
+            <div className="rs_menu" onClick={(e) => e.stopPropagation()}>
+              {SPEED_OPTIONS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  className={v === speed ? "on" : ""}
+                  onClick={() => {
+                    onSpeed(v);
+                    setSpeedOpen(false);
+                  }}
+                >
+                  {v}x
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {onFullscreen && (
         <button
           type="button"
@@ -2690,6 +2768,8 @@ export function ReplayFullscreen({
   onPause = () => {},
   onSeek = () => {},
   onResume = () => {},
+  speed = 1,
+  onSpeed,
   onExit,
   standalone = false,
   fsData = null,
@@ -2728,6 +2808,10 @@ export function ReplayFullscreen({
   onPause?: () => void;
   onSeek?: (csec: number) => void;
   onResume?: () => void;
+  /** 播放倍速与切换回调（2026-11-05 张老师需求）：Provider 链路直通；
+   *  standalone（后台审核）不传——用内部自持 fsSpeed 直连 fsEngine */
+  speed?: number;
+  onSpeed?: (v: number) => void;
   onExit: () => void;
   /** 独立模式（2026-10-22 后台审核播放器）：无页面棋盘可镜像，回放引擎直接
    *  跑在 FS 棋盘上；试玩与右栏评级不开放（审核场景只看）。status/stats/
@@ -2763,6 +2847,8 @@ export function ReplayFullscreen({
   const [fsStats, setFsStats] = useState<ReplayStats | null>(null);
   const [fsButtons, setFsButtons] = useState({ left: false, right: false });
   const [fsFace, setFsFace] = useState<FaceKind>("smile");
+  /* standalone 播放倍速（2026-11-05 张老师需求）：与 fsEngine setSpeed 直连 */
+  const [fsSpeed, setFsSpeed] = useState(1);
   const fsEngineRef = useRef<Engine | null>(null);
   /* 四模式开关（二十一期 NF/速旗/连击 + 2026-10-29 左键双击），行为与
      练习页同口径；初始值**继承练习页设置**（online_play_settings 的
@@ -3319,6 +3405,10 @@ export function ReplayFullscreen({
     fsEngineRef.current.seek(csec);
     setFsStatus(csec >= fsStats.totalCsec ? "ended" : "paused");
   };
+  const fsSetSpeed = (v: number) => {
+    setFsSpeed(v);
+    fsEngineRef.current?.setSpeed(v);
+  };
   return createPortal(
     <div
       className={"vprfs" + (mounted ? " show" : "")}
@@ -3438,6 +3528,8 @@ export function ReplayFullscreen({
               onPause={fsPause}
               onSeek={fsSeek}
               onResume={fsResume}
+              speed={fsSpeed}
+              onSpeed={fsSetSpeed}
               onFullscreen={onExit}
               fsActive
             />
@@ -3450,6 +3542,8 @@ export function ReplayFullscreen({
               onPause={onPause}
               onSeek={onSeek}
               onResume={onResume}
+              speed={speed}
+              onSpeed={onSpeed}
               onFullscreen={onExit}
               fsActive
             />
@@ -3720,6 +3814,8 @@ export function VideoReplayBoard({
             onPause={ctx.pause}
             onSeek={ctx.seek}
             onResume={ctx.resume}
+            speed={ctx.speed}
+            onSpeed={ctx.setSpeed}
             onFullscreen={() => ctx.setFullscreen(true)}
           />
         )}

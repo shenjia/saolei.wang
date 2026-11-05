@@ -10816,6 +10816,58 @@ html:has(#online_play) #footer {
   color: #a6e22e;
   background: #3b3a32;
 }
+/* 倍速按钮（2026-11-05 张老师需求）：播放钮右侧「1x」，点按向上弹菜单选速
+   （0.01/0.1/0.5/1/2/4/16）；默认永远为 1x。文案钮随倍速值自适应宽（0.01x 五字符） */
+.rb_speed {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0 3px 0 0;
+}
+.rb_speed .rb_btn {
+  margin: 0;
+  width: auto;
+  min-width: 34px;
+  padding: 0 8px;
+  font: bold 12px/1 "Courier New", Courier, monospace;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+/* 向上弹出菜单：锚 .rb_speed 底缘，卡片同款色板（#33322b/#49483e/6px 圆角） */
+.rs_menu {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  min-width: 76px;
+  padding: 4px;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #33322b;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+.rs_menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #b1b1a4;
+  font: 13px/1 "Courier New", Courier, monospace;
+  text-align: center;
+  cursor: pointer;
+}
+.rs_menu button:hover {
+  background: #3b3a32;
+  color: #a6e22e;
+}
+.rs_menu button.on {
+  color: #a6e22e;
+  font-weight: bold;
+}
 /* 当前时间：站绿（2026-10-16 十期张老师定）；总时间已去（标题上有）。
    ⚠️ (0,2,1) 提权：legacy .video_cell span (0,1,1) 且 legacy 后加载，平级必输 */
 body .replay_bar .rb_time {
