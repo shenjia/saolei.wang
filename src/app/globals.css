@@ -14105,31 +14105,18 @@ a.cheat_rep_link:hover {
 #page #video_view .perf.box .perf_row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   padding: 5px 0;
   position: relative;
   cursor: default;
 }
 #page #video_view .perf.box .perf_label {
-  flex: 0 0 62px;
+  flex: 0 0 44px;
   font-size: 12px;
   color: #b1b1a4;
 }
-/* 100% 行的金 PB 小标签（2026-11-05 张老师需求）：元帅金描边徽，缀在标签名后；
-   标签列随之放宽到 62px，各行条形起点保持对齐 */
-#page #video_view .perf.box .perf_pb {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 0 3px;
-  font-size: 10px;
-  line-height: 13px;
-  font-style: normal;
-  font-weight: bold;
-  color: #e6db74;
-  border: 1px solid #a08a3c;
-  border-radius: 3px;
-  vertical-align: 1px;
-}
+/* 100% 行的百分比位换成金 PB 标签（2026-11-05 张老师需求）：样式直接复用
+   排行模式数据面板的 .pb_badge（金底白字，globals.css 上方已定义），无需新样式 */
 #page #video_view .perf.box .perf_bar {
   flex: 1 1 auto;
   height: 8px;
@@ -14145,7 +14132,7 @@ a.cheat_rep_link:hover {
 }
 #page #video_view .perf.box .perf_pct {
   flex: 0 0 44px;
-  text-align: right;
+  text-align: center;
   font-size: 12px;
   color: #b1b1a4;
   font-variant-numeric: tabular-nums;

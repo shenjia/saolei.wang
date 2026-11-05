@@ -188,8 +188,6 @@ export default async function VideoViewPage({
   // 气泡「个人最佳」文案（2026-11-05 张老师定）：NF 录像比 NF 最好 →「个人最佳NF纪录」，
   // FL 录像 →「个人最佳纪录」
   const perfBestLabel = video.noflag ? "个人最佳NF纪录" : "个人最佳纪录";
-
-
   // 录像评级盒内容（2026-11-01 张老师需求：≤880 单列带侧栏整组 display:none，
   // 评级雷达改在录像主体板块下面显示——与用户主页「实力」雷达换位同模式：
   // 主栏副本 .radar_main 桌面 display:none，侧栏原件 ≥881 照旧；同一 JSX 两处渲染，
@@ -418,19 +416,19 @@ export default async function VideoViewPage({
             {perfRows.map((r) => {
               const pct = Math.round(r.ratio * 1000) / 10;
               const width = Math.min(100, Math.max(0, pct));
-              // 100% 行加金 PB 小标签（2026-11-05 张老师需求）：与百分比显示口径
-              // 一致（99.95–100.05 视作 100，见 perfPct）；置灰行不发牌
+              // 100% 行：进度条右侧的百分比换成金 PB 标签（2026-11-05 张老师需求，
+              // 样式复刻排行模式数据面板 .pb_badge）；口径与百分比显示一致
+              // （99.95–100.05 视作 100，见 perfPct）；置灰行不发牌
               const pb = !r.off && perfPct(r.ratio) === "100.0";
               return (
                 <div className={`perf_row${r.off ? " off" : ""}`} key={r.key}>
-                  <span className="perf_label">
-                    {r.key}
-                    {pb && <i className="perf_pb">PB</i>}
-                  </span>
+                  <span className="perf_label">{r.key}</span>
                   <span className="perf_bar">
                     <em style={{ width: `${width}%` }} />
                   </span>
-                  <span className="perf_pct">{perfPct(r.ratio)}%</span>
+                  <span className="perf_pct">
+                    {pb ? <i className="pb_badge">PB</i> : `${perfPct(r.ratio)}%`}
+                  </span>
                   <span className="perf_tip">
                     {r.key} = {r.cur}
                     <b>{perfBestLabel} {r.best}</b>
