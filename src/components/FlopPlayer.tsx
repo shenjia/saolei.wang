@@ -393,7 +393,8 @@ const REPLAY_MOUSE_SCRIPT = `
     '.replay_mouse_flop:focus-visible>svg{filter:drop-shadow(0 0 3px #a6e22e)}' +
     '.replay_mouse_tip_flop{position:fixed;width:194px;box-sizing:border-box;padding:6px 9px;border:1px solid #656355;border-radius:4px;background:#272822;color:#f8f8f2;box-shadow:0 4px 12px rgba(0,0,0,.45);z-index:10022;pointer-events:none;font:11px/18px Arial,"PingFang SC",sans-serif;text-align:center;white-space:nowrap}' +
     '.replay_key_panel_flop{position:fixed;width:250px;box-sizing:border-box;display:flex;flex-direction:column;padding:9px 10px;border:1px solid #656355;border-radius:6px;background:#49483e;color:#b1b1a4;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10021;text-align:left}' +
-    '.replay_key_panel_flop .gr_title{flex:0 0 auto;margin:0 2px 5px;padding:0 0 5px;border-bottom:1px solid #656355;color:#e8e8e0;font-size:14px;font-weight:bold;line-height:20px}' +
+    '.replay_key_panel_flop .gr_title{flex:0 0 auto;margin:0 2px 5px;padding:0 0 5px;border-bottom:1px solid #656355;color:#e8e8e0;font-size:14px;font-weight:bold;line-height:20px;display:flex;align-items:baseline;justify-content:space-between}' +
+    '.replay_key_panel_flop .gr_hint{font-size:11px;font-weight:normal;color:#7b7a6f;white-space:nowrap}' +
     '.replay_key_panel_flop .rk_list{flex:1;min-height:0;overflow:hidden;position:relative;font:12px/23px Arial,"PingFang SC",sans-serif}' +
     '.replay_key_panel_flop .rk_row{display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);column-gap:4px;align-items:center;height:23px;box-sizing:border-box;padding:0 4px;border-left:1px solid transparent;border-radius:3px;color:#939387;white-space:nowrap}' +
     '.replay_key_panel_flop .rk_row.pair{border-left-color:#656355}' +
@@ -417,7 +418,7 @@ const REPLAY_MOUSE_SCRIPT = `
   var panel = document.createElement("div");
   panel.className = "replay_key_panel_flop";
   panel.setAttribute("data-testid", "replay-key-panel");
-  panel.innerHTML = '<div class="gr_title">按键记录</div><div class="rk_list"></div>';
+  panel.innerHTML = '<div class="gr_title"><span>按键记录</span><span class="gr_hint">↑↓浏览 ←→翻页</span></div><div class="rk_list"></div>';
   panel.hidden = !panelOpen;
   document.body.appendChild(panel);
   var list = panel.querySelector(".rk_list");
