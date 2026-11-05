@@ -10562,7 +10562,7 @@ html:has(#online_play) #footer {
 }
 .replay_mouse_tip {
   position: fixed;
-  width: 194px;
+  width: 110px;
   box-sizing: border-box;
   padding: 6px 9px;
   border: 1px solid #656355;

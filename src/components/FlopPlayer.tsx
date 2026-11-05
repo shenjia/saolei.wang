@@ -391,7 +391,7 @@ const REPLAY_MOUSE_SCRIPT = `
   style.textContent = '.replay_mouse_flop{position:fixed;width:44px;height:60px;z-index:10020;line-height:0;cursor:pointer;outline:none;display:none}' +
     '.replay_mouse_flop>svg{display:block;width:44px;height:60px;overflow:visible;filter:drop-shadow(0 5px 5px rgba(0,0,0,.38))}' +
     '.replay_mouse_flop:focus-visible>svg{filter:drop-shadow(0 0 3px #a6e22e)}' +
-    '.replay_mouse_tip_flop{position:fixed;width:194px;box-sizing:border-box;padding:6px 9px;border:1px solid #656355;border-radius:4px;background:#272822;color:#f8f8f2;box-shadow:0 4px 12px rgba(0,0,0,.45);z-index:10022;pointer-events:none;font:11px/18px Arial,"PingFang SC",sans-serif;text-align:center;white-space:nowrap}' +
+    '.replay_mouse_tip_flop{position:fixed;width:110px;box-sizing:border-box;padding:6px 9px;border:1px solid #656355;border-radius:4px;background:#272822;color:#f8f8f2;box-shadow:0 4px 12px rgba(0,0,0,.45);z-index:10022;pointer-events:none;font:11px/18px Arial,"PingFang SC",sans-serif;text-align:center;white-space:nowrap}' +
     '.replay_key_panel_flop{position:fixed;width:250px;box-sizing:border-box;display:flex;flex-direction:column;padding:9px 10px;border:1px solid #656355;border-radius:6px;background:#49483e;color:#b1b1a4;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10021;text-align:left}' +
     '.replay_key_panel_flop .gr_title{flex:0 0 auto;margin:0 2px 5px;padding:0 0 5px;border-bottom:1px solid #656355;color:#e8e8e0;font-size:14px;font-weight:bold;line-height:20px;display:flex;align-items:baseline;justify-content:space-between}' +
     '.replay_key_panel_flop .gr_hint{font-size:11px;font-weight:normal;color:#7b7a6f;white-space:nowrap}' +
@@ -459,7 +459,7 @@ const REPLAY_MOUSE_SCRIPT = `
     if (!hovering) return;
     var r = host.getBoundingClientRect();
     tip.textContent = "点击" + (panelOpen ? "关闭" : "打开") + "按键记录";
-    tip.style.left = Math.max(8, Math.min(r.left + r.width / 2 - 97, window.innerWidth - 202)) + "px";
+    tip.style.left = Math.max(8, Math.min(r.left + r.width / 2 - 55, window.innerWidth - 118)) + "px";
     tip.style.top = Math.max(8, r.top - 38) + "px";
   }
   function placePanel() {

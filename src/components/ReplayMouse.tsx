@@ -238,7 +238,7 @@ export function ReplayMouseIndicator({
   const positionTip = () => {
     const r = hostRef.current?.getBoundingClientRect();
     if (!r) return;
-    const width = 194;
+    const width = 110;
     setTip({
       left: Math.max(8, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 8)),
       top: Math.max(8, r.top - 38),
