@@ -452,8 +452,21 @@ export function runReplay(opts: {
   }
   const TIP_X = 0.5,
     TIP_Y = 1.21;
+  /* 光标当前逻辑位置（moveCursor 每次更新；seek 滑行起点/连打续滑用）。
+     noDraw＝seek 应用事件期间抑制 DOM 写入（只记逻辑坐标）——否则 applyEv
+     逐事件 moveCursor 会在滑行首帧前把光标瞬移到目标位闪一帧 */
+  let curX = 0;
+  let curY = 0;
+  let noDraw = false;
+  let lastDrawX = 0; // 光标当前视觉位置（实际画到 DOM 的坐标）——滑行起点用它，
+  let lastDrawY = 0; // 连打/拖滑条取消上段动画后从所见位置续滑，不从逻辑坐标瞬跳
   function moveCursor(px: number, py: number) {
+    curX = px;
+    curY = py;
+    if (noDraw) return;
     ensureZoom();
+    lastDrawX = px;
+    lastDrawY = py;
     curEl.style.left = px + off.x - TIP_X + "px";
     curEl.style.top = py + off.y - TIP_Y + "px";
   }
@@ -777,6 +790,7 @@ export function runReplay(opts: {
   function setPlaying(v: boolean) {
     playing = v;
     if (v) {
+      cancelGlide(); // 播放接管光标：滑行动画立即让位（tick 每帧 interpCursor）
       if (curCsec >= data.totalCsec) resetReplay();
       lastFrame = 0;
       rafId = requestAnimationFrame(tick);
@@ -822,6 +836,62 @@ export function runReplay(opts: {
       next.csec > prev.csec ? Math.max(0, Math.min(1, (csec - prev.csec) / (next.csec - prev.csec))) : 1;
     moveCursor(prev.px + (next.px - prev.px) * t, prev.py + (next.py - prev.py) * t);
   }
+  /* ---- seek 光标滑行（2026-11-05 张老师需求：↑/↓ 换行时两行之间的鼠标移动
+     过程要渲染出来，不能直接跳到新位置）---- 盘面事件照旧瞬时应用到目标（seek
+     语义不变），光标则从当前动画位置出发、沿本次跨过的真实事件坐标序列（mv 拖
+     动中间点全保留）缓动滑到目标位；时长按路径长度 140–400ms。连打方向键/拖滑
+     条时每次 seek 取消上一段动画、从当前动画位置续滑（平滑追赶不瞬跳）；
+     resume/restart/stop 取消动画回落原生插值。FS 全屏镜像逐帧拷光标位置，
+     滑行自动透传。 */
+  let glideRaf: number | null = null;
+  function cancelGlide() {
+    if (glideRaf !== null) {
+      cancelAnimationFrame(glideRaf);
+      glideRaf = null;
+    }
+  }
+  /** path 为扁平 [x,y,...] 航点（不含起点）；滑不动（空/零长）返回 false 由调用方原地定位 */
+  function startGlide(fromX: number, fromY: number, path: number[], target: number) {
+    cancelGlide();
+    let len = 0;
+    let ax = fromX;
+    let ay = fromY;
+    for (let i = 0; i < path.length; i += 2) {
+      len += Math.hypot(path[i] - ax, path[i + 1] - ay);
+      ax = path[i];
+      ay = path[i + 1];
+    }
+    if (!(len > 0)) return false;
+    const dur = Math.min(400, Math.max(140, len * 0.7));
+    const t0 = performance.now();
+    const glideTick = (ts: number) => {
+      const t = Math.min(1, (ts - t0) / dur);
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
+      let rem = ease * len;
+      let x = fromX;
+      let y = fromY;
+      for (let i = 0; i < path.length; i += 2) {
+        const seg = Math.hypot(path[i] - x, path[i + 1] - y);
+        if (seg > 0 && rem <= seg) {
+          x += ((path[i] - x) * rem) / seg;
+          y += ((path[i + 1] - y) * rem) / seg;
+          break;
+        }
+        rem -= seg;
+        x = path[i];
+        y = path[i + 1];
+      }
+      moveCursor(x, y);
+      if (t < 1) {
+        glideRaf = requestAnimationFrame(glideTick);
+      } else {
+        glideRaf = null;
+        interpCursor(target); // 滑完锚回正常插值域（与播放续接无缝）
+      }
+    };
+    glideRaf = requestAnimationFrame(glideTick);
+    return true;
+  }
   function tick(ts: number) {
     if (!playing) return;
     const dt = lastFrame ? (ts - lastFrame) / 10 : 0; // ms → 百分秒
@@ -860,6 +930,7 @@ export function runReplay(opts: {
     },
     stop() {
       setPlaying(false);
+      cancelGlide();
       curEl.remove();
       /* 静态地图恢复：saved 类名回写 + 清内嵌 SVG（旧位图棋盘红雷残留）+
          覆盖层按初始 board 串恢复贴图（雷=b 未开面，与 Board 静态直出一致） */
@@ -898,6 +969,11 @@ export function runReplay(opts: {
     },
     seek(csec: number) {
       setPlaying(false);
+      cancelGlide();
+      const gFromX = lastDrawX;
+      const gFromY = lastDrawY;
+      const fromIdx = evIdx;
+      noDraw = true; // 应用事件期间不动光标 DOM（防滑行首帧前的瞬移闪烁）
       resetReplay();
       onFace?.("smile"); // seek 重置盘面：笑脸同步复位（快进中若过终局会再落 win/dead）
       const target = Math.max(0, Math.min(data.totalCsec, Math.round(csec)));
@@ -907,7 +983,31 @@ export function runReplay(opts: {
         evIdx++;
       }
       curCsec = target;
-      interpCursor(target);
+      /* 收集本次跨过事件的坐标序列作滑行航点（去连续重复；(0,0)＝无坐标语义、
+         与引擎 pathPx 同口径跳过，但末点照收保证落点与盘面逻辑精确一致） */
+      const path: number[] = [];
+      let lx = gFromX;
+      let ly = gFromY;
+      const pushPt = (k: number, isEnd: boolean) => {
+        const p = evs[k];
+        if (p.px === 0 && p.py === 0 && !isEnd) return;
+        if (p.px !== lx || p.py !== ly) {
+          path.push(p.px, p.py);
+          lx = p.px;
+          ly = p.py;
+        }
+      };
+      if (fromIdx <= evIdx) {
+        // 前进：新应用事件 fromIdx..evIdx-1，末点＝evs[evIdx-1]
+        for (let k = fromIdx; k < evIdx; k++) pushPt(k, k === evIdx - 1);
+      } else {
+        // 反向（↑/←）：沿来路倒序滑回，末点＝evs[evIdx-1]（新逻辑光标位；evIdx=0 时再补 (0,0)）
+        for (let k = fromIdx - 1; k >= evIdx - 1 && k >= 0; k--) pushPt(k, k === evIdx - 1);
+        if (evIdx === 0 && (lx !== 0 || ly !== 0)) path.push(0, 0);
+      }
+      const gliding = startGlide(gFromX, gFromY, path, target);
+      noDraw = false;
+      if (!gliding) interpCursor(target);
       onStats(buildStats());
     },
   };
