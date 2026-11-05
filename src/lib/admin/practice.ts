@@ -277,6 +277,9 @@ export interface RegionTodayRow {
 /** 全国各地区今日明细（2026-10-31 张老师需求）：练习盘数/人数/胜率来自
  *  practice_daily 当天按 user.area 聚合（游客 user_id=0 无地区、空 area 不计）；
  *  平均延迟/延迟范围来自 ranked_rtt_log 当天（排行局采样，无数据的省显示 —）。
+ *  2026-11-05 张老师定：排行模式是练习里的一个模式，地区级延迟不再按上报 IP 省
+ *  （10-28 旧口径）归属——统一 JOIN user 按注册省聚合，与盘数口径一致；
+ *  否则注册省≠IP 省的玩家会把延迟落进无练习盘的省，产出「0 人 0 盘却有延迟」的行。
  *  按盘数从高到低排列。 */
 export async function getRegionToday(): Promise<RegionTodayRow[]> {
   const now = Math.floor(Date.now() / 1000);
@@ -294,9 +297,13 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
   const rRows = await prisma.$queryRawUnsafe<
     { area: string; g: bigint; avg: number; mn: number; mx: number }[]
   >(
-    `SELECT area, COUNT(*) g, AVG(rtt) avg, MIN(rtt) mn, MAX(rtt) mx
-     FROM ranked_rtt_log WHERE create_time >= ? AND rtt > 0 AND area <> ''
-     GROUP BY area`,
+    // 2026-11-05 张老师定：地区级延迟改按玩家注册省聚合（原 10-28 IP 省口径废止，
+    // 与 practice_daily 的 user.area 盘数口径对齐——排行模式是练习的一个模式，
+    // 延迟必须落进玩家练习盘所在的省，杜绝 0 人 0 盘却有延迟的行）
+    `SELECT u.area area, COUNT(*) g, AVG(rtt) avg, MIN(rtt) mn, MAX(rtt) mx
+     FROM ranked_rtt_log r JOIN user u ON u.id = r.user_id
+     WHERE r.create_time >= ? AND r.rtt > 0 AND u.area <> ''
+     GROUP BY u.area`,
     dayStart
   );
   // 行展开玩家明细（2026-11-02 五次张老师）：同日按 (user_id, area) 聚合，
@@ -387,20 +394,8 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
       detail: detailMap.get(r.area) ?? [],
     };
   });
-  // 只有延迟采样、无练习盘的省也补一行（延迟数据不丢）
-  for (const [area, rt] of rttMap) {
-    if (!rows.some((r) => r.area === area)) {
-      rows.push({
-        area,
-        plays: 0,
-        players: 0,
-        winRate: 0,
-        avgRtt: Math.round(N(rt.avg)),
-        minRtt: N(rt.mn),
-        maxRtt: N(rt.mx),
-        detail: detailMap.get(area) ?? [],
-      });
-    }
-  }
+  // 延迟已改按注册省聚合（2026-11-05），与盘数同口径：排行局上报与练习计数同在
+  // 一个请求里（同一 uid、同一 day），有延迟样本的玩家必然有当日 practice_daily
+  // 行，且两侧都过滤空 area——不再存在「只有延迟、无练习盘」的省，无需补行
   return rows.sort((a, b) => b.plays - a.plays || b.players - a.players || a.area.localeCompare(b.area));
 }
