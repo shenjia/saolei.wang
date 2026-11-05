@@ -3665,8 +3665,8 @@ export function VideoReplayBoard({
   const ctx = useContext(ReplayCtx);
   if (!ctx) return null;
   const replaying = ctx.status !== "idle";
-  /* 十期（2026-10-16 张老师需求）：高级盘充分使用左栏版图宽度、中级复用同比例；
-     初级默认 1.5 倍（同日十三期张老师改定，原 beg 2.4 对齐高度口径作废）。
+  /* 十期（2026-10-16 张老师需求）：高级盘充分使用左栏版图宽度；
+     中级 1.25 倍（2026-11-05 张老师定，放大逻辑同初级）、初级 2.6 倍（十七期）。
      比例口径与依据见 globals.css .zoom_* 注释 */
   const zoomCls = level === "exp" ? "zoom_exp" : level === "int" ? "zoom_int" : "zoom_beg";
   return (
