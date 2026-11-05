@@ -415,20 +415,38 @@ export function runReplay(opts: {
     return Number.isFinite(z) && z > 0 ? z : 1;
   };
   let wrapZoom = readZoom();
-  const off = (() => {
+  /* off 是布局域坐标差，但 rect 差是视觉坐标——除数必须是**全链路 zoom**
+     （版图 zoom × #page 页级 zoom）。旧写法只除 wrap 自身 zoom，桌面页级
+     zoom=1 无感；移动端 ≤605 页级 zoom 0.65 档下 off 缩水 35%，光标尖端
+     左上偏约 1/3 格（视觉上箭头身子盖住格子中心＝「中心对齐」——
+     2026-11-05 张老师报）。总 zoom 用 (0,0) 格 td 视觉宽反推（td 布局宽恒
+     16px，引擎坐标域同源），与练习页 OnlinePlay gboardOff 同口径
+     （video 348523 教训：人工算 zoom×pageZoom 有浏览器差异） */
+  let offZ = wrapZoom;
+  const off = { x: 0, y: 0 };
+  const measureOff = () => {
     const tr = table.getBoundingClientRect();
     const wr = wrap.getBoundingClientRect();
-    return { x: (tr.left - wr.left) / wrapZoom, y: (tr.top - wr.top) / wrapZoom };
-  })();
-  /* 每帧光标移动前校验 zoom 漂移（滚轮缩放）：变了就重量 off——便宜且自愈 */
-  function ensureZoom() {
-    const z = readZoom();
-    if (z === wrapZoom) return;
-    wrapZoom = z;
-    const tr = table.getBoundingClientRect();
-    const wr = wrap.getBoundingClientRect();
+    const td0 = tbody.rows[0]?.cells[0]?.getBoundingClientRect();
+    const z = td0 && td0.width > 0 ? td0.width / 16 : wrapZoom;
+    offZ = z;
     off.x = (tr.left - wr.left) / z;
     off.y = (tr.top - wr.top) / z;
+  };
+  measureOff();
+  /* 每帧光标移动前校验 zoom 漂移（滚轮缩放/页级 zoom 档位变化）：变了就重量
+     off——便宜且自愈 */
+  function ensureZoom() {
+    const z = readZoom();
+    const td0 = tbody.rows[0]?.cells[0]?.getBoundingClientRect();
+    const zTotal = td0 && td0.width > 0 ? td0.width / 16 : z;
+    if (z === wrapZoom && zTotal === offZ) return;
+    wrapZoom = z;
+    offZ = zTotal;
+    const tr = table.getBoundingClientRect();
+    const wr = wrap.getBoundingClientRect();
+    off.x = (tr.left - wr.left) / zTotal;
+    off.y = (tr.top - wr.top) / zTotal;
   }
   const TIP_X = 0.5,
     TIP_Y = 1.21;
