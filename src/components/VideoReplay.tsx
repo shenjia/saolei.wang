@@ -2796,6 +2796,8 @@ function ReplayBar({
           </button>
           {speedOpen && (
             <div className="rs_pop" onClick={(e) => e.stopPropagation()}>
+              {/* 左侧深灰标签「播放速度」（2026-11-05 张老师需求） */}
+              <span className="rs_label">播放速度</span>
               {/* 滑条＝档位索引（flop speedSlider 同款：value=index、max=len-1），
                   拖动即时生效；speed 恒取自档位数组，indexOf 兜底钳 0 */}
               <input

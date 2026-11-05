@@ -10949,6 +10949,13 @@ html:has(#online_play) #footer {
   z-index: 40;
   white-space: nowrap;
 }
+/* 左侧深灰标签「播放速度」（2026-11-05 张老师需求）：口径同 .gr_hint（#7b7a6f 11px） */
+.rs_pop .rs_label {
+  color: #7b7a6f;
+  font: 11px/1 "Courier New", Courier, monospace;
+  white-space: nowrap;
+  user-select: none;
+}
 /* 滑条：flop 同款 80px 宽、档位索引步进；轨道 4px #49483e，thumb 站绿方块
    （3px 圆角微缩版进度条 thumb 口径） */
 .rs_pop .rs_slider {
