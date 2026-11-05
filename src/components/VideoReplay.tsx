@@ -1941,7 +1941,7 @@ interface ReplayCtxValue {
   setSpeed: (v: number) => void;
   /** 进入/退出全屏回放层 */
   setFullscreen: (v: boolean) => void;
-}  /** 鼠标轨迹层开关（2026-11-05 张老师需求）：控制条轨迹钮切换；
+  /** 鼠标轨迹层开关（2026-11-05 张老师需求）：控制条轨迹钮切换；
  *  打开后页面态/全屏层棋盘上蒙 25% 黑遮罩并绘制轨迹与三色点击圆点 */
   traj: boolean;
   toggleTraj: () => void;
