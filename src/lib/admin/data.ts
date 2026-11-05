@@ -238,7 +238,8 @@ export interface AdminUserDetail {
   messageCount: number;
   /** 总计时间名次（0 = 未上榜） */
   sumRank: number;
-  ranks: { beg: number; int: number; exp: number };
+  /** 三级别录像数（2026-11-06 张老师定，原此处误挂三级别名次）：不分状态，与卡面总数同口径 */
+  videosByLevel: { beg: number; int: number; exp: number };
   recentVideos: { id: number; level: string; status: number; createTime: number; realTime: number; board3bv: number }[];
   oauth: { provider: string; nickname: string; createTime: number }[];
   recentLogs: { action: string; detail: string; createTime: number; user: number }[];
@@ -257,7 +258,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
   ]);
   if (!user) return null;
 
-  const [newsCount, commentCount, bbsCount, postTotal, messageCount, clicks, videos, oauth, logs, sigs] = await Promise.all([
+  const [newsCount, commentCount, bbsCount, postTotal, messageCount, clicks, videos, oauth, logs, sigs, videoLevels] = await Promise.all([
     prisma.news.count({ where: { user: uid } }),
     prisma.comment.count({ where: { user: uid, status: 0 } }),
     prisma.bbsPost.count({ where: { user: uid, status: 0 } }),
@@ -273,6 +274,12 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     prisma.userOauth.findMany({ where: { userId: uid }, select: { provider: true, nickname: true, createTime: true } }),
     prisma.adminLog.findMany({ where: { target: "user", targetId: uid }, orderBy: { id: "desc" }, take: 10 }),
     prisma.userSig.findMany({ where: { user: uid, signature: { not: "" } }, orderBy: { id: "asc" }, select: { signature: true } }),
+    /* 三级别录像数（2026-11-06 张老师定）：详情页「录像数」卡 foot 用，
+        与卡面总数同口径（不分状态）；原三级别名次查询已删（该行此前误挂名次） */
+    prisma.$queryRawUnsafe<{ level: string; c: bigint }[]>(
+      `SELECT level, COUNT(*) c FROM video WHERE user = ? GROUP BY level`,
+      uid
+    ),
   ]);
 
   const infos = videos.length
@@ -291,25 +298,14 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       )
     : [];
 
-  // 名次 = 成绩更好的人数 + 1（同分并列取小）；SQL 里必须用 snake_case 列名（Prisma 字段是 camelCase）
-  const [begRank, intRank, expRank] = await Promise.all(
-    (
-      [
-        ["beg_time", score?.begTime],
-        ["int_time", score?.intTime],
-        ["exp_time", score?.expTime],
-      ] as [string, number | null | undefined][]
-    ).map(async ([col, raw]) => {
-      const v = N(raw);
-      if (!v) return 0;
-      const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
-        `SELECT COUNT(*) c FROM user_scores s JOIN \`user\` u ON u.id = s.id AND u.status = 0
-          WHERE s.${col} > 0 AND s.${col} < ?`,
-        v
-      );
-      return N(rows[0]?.c) + 1;
-    })
-  );
+  // 名次 = 成绩更好的人数 + 1（同分并列取小）；封禁账号不上榜，故 join user.status = 0
+  const sumRank = sumTime ? N(rankRows[0]?.c) + 1 : 0;
+
+  /* 三级别录像数聚合（不分状态，与卡面总数同口径） */
+  const levelCount = { beg: 0, int: 0, exp: 0 } as Record<"beg" | "int" | "exp", number>;
+  for (const r of videoLevels) {
+    if (r.level === "beg" || r.level === "int" || r.level === "exp") levelCount[r.level] = N(r.c);
+  }
 
   const brief = (await usersByIds([id])).get(id) ?? {
     id,
@@ -363,8 +359,8 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       const { summarizeRankedAudit } = await import("@/core/src/lib/admin-audit-secret");
       return summarizeRankedAudit({ games: s.games, clicks: s.clicks, blindClicks: s.blindClicks, flags: s.flags, blindFlags: s.blindFlags });
     })(),
-    sumRank: sumTime ? N(rankRows[0]?.c) + 1 : 0,
-    ranks: { beg: begRank, int: intRank, exp: expRank },
+    sumRank,
+    videosByLevel: levelCount,
     recentVideos: videos.map((v) => ({
       id: N(v.id),
       level: v.level,

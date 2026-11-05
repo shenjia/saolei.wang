@@ -103,7 +103,8 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
           <div className="label">录像数</div>
           <div className="value">{u.videos}</div>
           <div className="foot">
-            初 {d.ranks.beg || "—"} / 中 {d.ranks.int || "—"} / 高 {d.ranks.exp || "—"} 名
+            {/* 三级别录像数（2026-11-06 张老师定，原误挂三级别名次）：与卡面总数同口径（不分状态） */}
+            初 {d.videosByLevel.beg} / 中 {d.videosByLevel.int} / 高 {d.videosByLevel.exp} 盘
           </div>
         </div>
         <div className="admin_kpi purple">
