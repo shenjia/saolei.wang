@@ -1,7 +1,11 @@
 // 存量修复（2026-11-01 352535 案）：5673ca5（14:41）部署后上传的排名录像被
 // canonicalize 案 B「孤立 lr 一律合成 lc+lr」注入幽灵左键对（chord 尾随无效开格）。
-// 本脚本用权威快照（7 天保留）+ 盘面感知 canonicalize（真开格才合成）重新导出 evf，
-// 改名换 hash、evf_sig 重签、删旧文件；metrics 由 video-metrics --ids-file 定点重算。
+// 本脚本用权威快照（7 天保留）重新导出 evf，改名换 hash、evf_sig 重签、删旧文件；
+// metrics 由 video-metrics --ids-file 定点重算。
+// 2026-11-05 张老师定：导出管线对齐排名上传路由——不 canonicalize、不过
+// repairWinningEvents，原生事件流直出（353971 案：原生流在权威/flop 两口径下
+// 重放均精确到终盘，repair 系假洞污染）；同时补上 Video.hash 同步更新
+//（10-28 铁律：修补必须改名换 hash，Video.hash 与文件名 md5 必须一致）。
 //
 // 用法（生产机 /home/deploy/saolei.wang，需先载入 .env 的 AUTH_SECRET/DATABASE_URL）：
 //   set -a && source .env && set +a
@@ -14,7 +18,6 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "
 import path from "path";
 import { createHash } from "crypto";
 import { prisma } from "../src/lib/db";
-import { canonicalizeOnlineEvents, repairWinningEvents } from "../src/lib/avfwrite";
 import { buildRankedEvf, RANKED_SOFTWARE } from "../src/lib/evfwrite";
 import { evfSignature } from "../src/core/src/lib/evf-sign";
 import { authorityBaseFor, authorityAuthHeaders } from "../src/core/src/lib/authority-endpoint";
@@ -43,23 +46,42 @@ async function loadSnapshot(gameId: string, uid: number) {
   return await res.json();
 }
 
-/** 解析 EVF v0.3 头部：15B 定长 + 8 个 cstr（software/player/race/uid/start/end/country/uuid） */
+/** 解析 EVF 头部：v0.3＝15B 定长 + 8 cstr；v0.4＝变长头（国家 2B + u64×2 时间戳 +
+ *  cstr 串 + u16 前缀 UUID）。两种版本均返回 software/player/gameId */
 function parseEvfHeader(buf: Buffer) {
-  if (buf[0] !== 3) throw new Error("非 EVF v0.3");
-  let pos = 15;
-  const strs: string[] = [];
-  for (let k = 0; k < 8; k++) {
+  const version = buf[0];
+  if (version !== 3 && version !== 4) throw new Error(`非 EVF v0.3/v0.4（version=${version}）`);
+  const summary = buf[1];
+  let pos: number;
+  if (version === 4) {
+    // 定长段：ver1+sum1+set1+h1+w1+mines2+cell1+mode2+bbbv2+rtime4 = 16B，后接国家 2B + u64×2
+    pos = 16 + 2 + 8 + 8;
+  } else {
+    pos = 15;
+  }
+  const cstr = (): string => {
     let end = pos;
     while (end < buf.length && buf[end] !== 0) end++;
-    strs.push(buf.slice(pos, end).toString("utf8"));
+    const s = buf.slice(pos, end).toString("utf8");
     pos = end + 1;
+    return s;
+  };
+  let software: string, player: string, gameId: string;
+  if (version === 4) {
+    software = cstr();
+    if ((summary & 0b0000_1000) !== 0) { cstr(); cstr(); } // 转码软件/原编码，跳过
+    player = cstr();
+    cstr(); // raceIdentifier
+    gameId = cstr();
+  } else {
+    software = cstr();
+    player = cstr();
+    cstr(); // raceIdentifier
+    gameId = cstr();
   }
-  const [software, player, , gameId] = strs;
-  const clientVersion = software.startsWith(`${RANKED_SOFTWARE} `)
-    ? software.slice(RANKED_SOFTWARE.length + 1)
-    : undefined;
   if (!gameId) throw new Error("头部无 uniqueIdentifier(gameId)");
-  return { player, gameId, clientVersion };
+  return { player, gameId, clientVersion: software.startsWith(`${RANKED_SOFTWARE} `)
+    ? software.slice(RANKED_SOFTWARE.length + 1) : undefined };
 }
 
 async function main() {
@@ -93,17 +115,12 @@ async function main() {
       const ex = await loadSnapshot(gameId, Number(video.user));
       if (!ex) { console.log(`SKIP ${id}: 快照缺失 ${gameId}`); missing++; continue; }
 
-      /* 与排名上传路由同管线：canonicalize（盘面感知）→ repair → buildRankedEvf */
-      const canon = canonicalizeOnlineEvents(ex.events, {
-        width: ex.width, height: ex.height, board: ex.board, questionMarks: ex.questionMarks,
-      });
-      const exportEvents = repairWinningEvents(
-        ex.width, ex.height, ex.board, ex.questionMarks, canon, ex.scoreMs,
-      );
+      /* 与排名上传路由同管线（2026-11-05 张老师定）：不 canonicalize、不过 repair，
+         原生事件流直出 buildRankedEvf */
       const evf = buildRankedEvf({
         width: ex.width, height: ex.height, mines: ex.mines, board: ex.board,
         questionMarks: ex.questionMarks, nf: ex.nf, bbbv: ex.bbbv,
-        scoreCsec: ex.scoreCsec, scoreMs: ex.scoreMs, events: exportEvents,
+        scoreCsec: ex.scoreCsec, scoreMs: ex.scoreMs, events: ex.events,
         player, uniqueIdentifier: gameId, won: ex.won, clientVersion,
       });
       const newBuf = Buffer.from(evf);
@@ -121,10 +138,17 @@ async function main() {
       }
       mkdirSync(path.dirname(newDiskPath), { recursive: true });
       writeFileSync(newDiskPath, newBuf);
-      await prisma.videoInfo.update({
-        where: { id: BigInt(id) },
-        data: { filepath: newFilepath, evfSig: evfSignature(new Uint8Array(newBuf)) },
-      });
+      await prisma.$transaction([
+        prisma.videoInfo.update({
+          where: { id: BigInt(id) },
+          data: { filepath: newFilepath, evfSig: evfSignature(new Uint8Array(newBuf)) },
+        }),
+        // Video.hash 与文件名 md5 同步（10-28 铁律：修补必须改名换 hash）
+        prisma.video.update({
+          where: { id: BigInt(id) },
+          data: { hash: createHash("md5").update(newBuf).digest("hex") },
+        }),
+      ]);
       if (newDiskPath !== oldPath) unlinkSync(oldPath);
       rebuilt++;
       console.log(`OK ${id}: ${info.filepath} -> ${newFilepath} (-${removed}B)`);

@@ -4,8 +4,9 @@
 // + 增量坐标（i16）+ uint64 微秒起止时间戳 + u16 长度前缀校验和段（本站写零长）。
 // 复用 lib/evf.ts 解析器（v4 分支已就绪）与全站 RawVF 管线；
 // 事件流为原始流（2026-11-03 张老师定：不 canonicalize 折叠，mr 折叠会让 flop 键态机
-// 失步丢旗）；won 时仍须过 avfwrite 的 repairWinningEvents，否则 ms-toollib（FlopPlayer）
-// 重放终盘雷格数 ≠ 雷数，报「不能播放没有扫完的录像」。
+// 失步丢旗；2026-11-05 张老师再定：排名链亦不过 repairWinningEvents——原生流在权威
+// 与 flop 两口径下重放均精确到终盘，353971 案 216/216 实证，合成补洞系假洞污染）。
+// 练习页导出链（avfwrite buildOnlineAvf / OnlinePlay）仍保留 repair，与本链无关。
 
 import type { OnlineEvent } from "./avfwrite";
 
