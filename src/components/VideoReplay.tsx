@@ -2006,7 +2006,6 @@ export function VideoReplayProvider({
   const [stats, setStats] = useState<ReplayStats | null>(null);
   const [mouseButtons, setMouseButtons] = useState({ left: false, right: false });
   const [fullscreen, setFullscreen] = useState(false);
-
   /* 鼠标轨迹层开关（2026-11-05 张老师需求）：控制条轨迹钮切换；退出回放不重置
      （再播同一盘直接恢复上次的开关状态，与倍速跨次保留同思路，但倍速有铁律
      要复位而轨迹只是观图辅助——保留更顺手） */
@@ -2314,7 +2313,6 @@ export function VideoReplayProvider({
         traj,
         toggleTraj,
       }}
-
     >
       {children}
       {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
@@ -2562,9 +2560,10 @@ function TrajLayer({
     };
   }, [measure]);
   /* 事件一次性分类（per data）：轨迹折线点（mv 微动 <3px 折叠，点击事件恒保留）
-     + 三类点击位置。按键态机与引擎/flop 口径一致：
-     lc 按下→lr 松开＝左键单击（点标按下位）；rc 即右键单击（引擎 rc→toggleLabel
-     即时生效）；lr 时右/Shift 按住、rr 时左键按住、mr 松开＝chord 双击。 */
+     + 三类点击位置。按键态机与引擎 buildStats 口径严格一致（2026-11-05 修正：
+     引擎 case "mr" 无条件计双击——转码文件存在无 mc 配对的 mr，mp 守卫会漏标）：
+     lc 按下→lr 松开＝左键单击（点标按下位）；rc 在 lp 按住时＝chord 预备不标右、
+     否则右键单击；lr 时右/Shift 按住、rr 时左键按住、mr 松开＝chord 双击。 */
   const { path, lefts, rights, doubles } = useMemo(() => {
     const path: { t: number; x: number; y: number }[] = [];
     const lefts: { t: number; x: number; y: number }[] = [];
@@ -2598,7 +2597,7 @@ function TrajLayer({
           break;
         case "rc":
           rp = true;
-          rights.push({ t: e.csec, x: e.px, y: e.py });
+          if (!lp) rights.push({ t: e.csec, x: e.px, y: e.py }); // lp 按住＝chord 预备（引擎不计数）
           break;
         case "rr":
           if (lp) doubles.push({ t: e.csec, x: e.px, y: e.py });
@@ -2608,8 +2607,8 @@ function TrajLayer({
           mp = true;
           break;
         case "mr":
-          if (mp) doubles.push({ t: e.csec, x: e.px, y: e.py });
           mp = false;
+          doubles.push({ t: e.csec, x: e.px, y: e.py }); // 引擎口径：mr 无条件计双击
           break;
         case "sc":
           sv = true;
@@ -2639,7 +2638,7 @@ function TrajLayer({
   const dots = (arr: { t: number; x: number; y: number }[], fill: string) =>
     arr.map((p, i) =>
       p.t <= csec + 0.01 ? (
-        <circle key={i} cx={p.x} cy={p.y} r={4} fill={fill} stroke="rgba(0,0,0,.5)" strokeWidth={1} />
+        <circle key={i} cx={p.x} cy={p.y} r={2.8} fill={fill} stroke="rgba(0,0,0,.5)" strokeWidth={0.7} />
       ) : null
     );
   return (
@@ -2659,10 +2658,10 @@ function TrajLayer({
             strokeLinejoin="round"
           />
         )}
-        {/* 三色点击点：青=左键单击 绿=右键单击 玫红=双击 */}
-        {dots(lefts, "#2BD9E0")}
-        {dots(rights, "#3BD55F")}
-        {dots(doubles, "#F2568F")}
+        {/* 三色点击点：绿=左键单击 玫红=右键单击 青=双击 */}
+        {dots(lefts, "#3BD55F")}
+        {dots(rights, "#F2568F")}
+        {dots(doubles, "#2BD9E0")}
       </svg>
     </div>
   );
