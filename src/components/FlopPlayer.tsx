@@ -361,13 +361,15 @@ const REPLAY_MOUSE_SCRIPT = `
 (function () {
   if (window.__flopReplayMouse) return;
   window.__flopReplayMouse = true;
+  /* 面板开关跨会话记忆，与自研回放共享同一个 localStorage key。 */
+  var panelOpen = (function () { try { return window.localStorage.getItem("replayKeyPanelOpen") === "1"; } catch (e) { return false; } })();
   var host = document.createElement("div");
   host.className = "replay_mouse_flop";
   host.id = "flop_replay_mouse";
   host.tabIndex = 0;
   host.setAttribute("role", "button");
-  host.setAttribute("aria-expanded", "false");
-  host.setAttribute("aria-label", "鼠标按键状态；点击打开按键记录");
+  host.setAttribute("aria-expanded", String(panelOpen));
+  host.setAttribute("aria-label", "鼠标按键状态；点击" + (panelOpen ? "关闭" : "打开") + "按键记录");
   host.innerHTML = '<svg viewBox="0 0 64 88" aria-hidden="true">' +
     '<defs>' +
     '<linearGradient id="flop_rm_body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5c5b50"/><stop offset=".45" stop-color="#3e3d35"/><stop offset="1" stop-color="#272822"/></linearGradient>' +
@@ -390,14 +392,21 @@ const REPLAY_MOUSE_SCRIPT = `
     '.replay_mouse_flop>svg{display:block;width:44px;height:60px;overflow:visible;filter:drop-shadow(0 5px 5px rgba(0,0,0,.38))}' +
     '.replay_mouse_flop:focus-visible>svg{filter:drop-shadow(0 0 3px #a6e22e)}' +
     '.replay_mouse_tip_flop{position:fixed;width:194px;box-sizing:border-box;padding:6px 9px;border:1px solid #656355;border-radius:4px;background:#272822;color:#f8f8f2;box-shadow:0 4px 12px rgba(0,0,0,.45);z-index:10022;pointer-events:none;font:11px/18px Arial,"PingFang SC",sans-serif;text-align:center;white-space:nowrap}' +
-    '.replay_key_panel_flop{position:fixed;width:230px;box-sizing:border-box;display:flex;flex-direction:column;padding:9px 10px;border:1px solid #656355;border-radius:6px;background:#49483e;color:#b1b1a4;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10021;text-align:left}' +
+    '.replay_key_panel_flop{position:fixed;width:250px;box-sizing:border-box;display:flex;flex-direction:column;padding:9px 10px;border:1px solid #656355;border-radius:6px;background:#49483e;color:#b1b1a4;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10021;text-align:left}' +
     '.replay_key_panel_flop .gr_title{flex:0 0 auto;margin:0 2px 5px;padding:0 0 5px;border-bottom:1px solid #656355;color:#e8e8e0;font-size:14px;font-weight:bold;line-height:20px}' +
     '.replay_key_panel_flop .rk_list{flex:1;min-height:0;overflow:hidden;position:relative;font:12px/23px Arial,"PingFang SC",sans-serif}' +
-    '.replay_key_panel_flop .rk_row{display:flex;align-items:center;height:23px;box-sizing:border-box;padding:0 6px;border-radius:3px;color:#939387;white-space:nowrap}' +
-    '.replay_key_panel_flop .rk_time{flex:0 0 52px;color:#b1b1a4;font-family:"Courier New",monospace;font-variant-numeric:tabular-nums}' +
-    '.replay_key_panel_flop .rk_row.down .rk_action{color:#e8e8e0}.replay_key_panel_flop .rk_hold{color:#77776c}' +
-    '.replay_key_panel_flop .rk_row.current{color:#f8f8f2;background:#707068;box-shadow:inset 2px 0 #d6d6c8}' +
-    '.replay_key_panel_flop .rk_row.current .rk_time,.replay_key_panel_flop .rk_row.current .rk_action{color:#f8f8f2}.replay_key_panel_flop .rk_row.current .rk_hold{color:#cfcfc5}' +
+    '.replay_key_panel_flop .rk_row{display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);column-gap:4px;align-items:center;height:23px;box-sizing:border-box;padding:0 4px;border-left:1px solid transparent;border-radius:3px;color:#939387;white-space:nowrap}' +
+    '.replay_key_panel_flop .rk_row.pair{border-left-color:#656355}' +
+    '.replay_key_panel_flop .rk_action{position:relative;min-width:0;overflow:hidden;text-overflow:ellipsis}.replay_key_panel_flop .rk_left{text-align:left;padding-left:5px}.replay_key_panel_flop .rk_right{text-align:left;padding-left:5px}' +
+    '.replay_key_panel_flop .rk_row.pair_l .rk_left::before,.replay_key_panel_flop .rk_row.pair_r .rk_right::before{content:"";position:absolute;left:0;width:1px}' +
+    '.replay_key_panel_flop .rk_row.pair_l .rk_left::before{background:#7fb414}.replay_key_panel_flop .rk_row.pair_r .rk_right::before{background:#e06c9f}' +
+    '.replay_key_panel_flop .rk_row.pair_l_start .rk_left::before,.replay_key_panel_flop .rk_row.pair_r_start .rk_right::before{top:2px;bottom:0}' +
+    '.replay_key_panel_flop .rk_row.pair_l_mid .rk_left::before,.replay_key_panel_flop .rk_row.pair_r_mid .rk_right::before{top:0;bottom:0}' +
+    '.replay_key_panel_flop .rk_row.pair_l_end .rk_left::before,.replay_key_panel_flop .rk_row.pair_r_end .rk_right::before{top:0;bottom:2px}' +
+    '.replay_key_panel_flop .rk_time{color:#b1b1a4;font-family:"Courier New",monospace;font-variant-numeric:tabular-nums;text-align:center}' +
+    '.replay_key_panel_flop .rk_row.down .rk_action{color:#e8e8e0}' +
+    '.replay_key_panel_flop .rk_row.current{background:#707068}' +
+    '.replay_key_panel_flop .rk_row.current .rk_time{color:#fdc61d}' +
     '.replay_key_panel_flop .rk_empty{padding:10px 0;color:#939387;text-align:center}';
   document.head.appendChild(style);
   document.body.appendChild(host);
@@ -409,10 +418,10 @@ const REPLAY_MOUSE_SCRIPT = `
   panel.className = "replay_key_panel_flop";
   panel.setAttribute("data-testid", "replay-key-panel");
   panel.innerHTML = '<div class="gr_title">按键记录</div><div class="rk_list"></div>';
-  panel.hidden = true;
+  panel.hidden = !panelOpen;
   document.body.appendChild(panel);
   var list = panel.querySelector(".rk_list");
-  var hovering = false, panelOpen = false, lastButtonKey = "";
+  var hovering = false, lastButtonKey = "";
   var records = [], selected = -1, lastCurrent = -2, visibleRows = 1, seeking = false, navigatedIndex = -1;
   var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起" };
   /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
@@ -459,7 +468,8 @@ const REPLAY_MOUSE_SCRIPT = `
     var hr = host.getBoundingClientRect();
     if (!gr || gr.height < 1) return;
     var left = hr.right + 12;
-    if (left + 230 > window.innerWidth - 8) left = gr.left - 242;
+    var width = panel.offsetWidth || 250;
+    if (left + width > window.innerWidth - 8) left = gr.left - width - 12;
     panel.style.left = Math.max(8, left) + "px";
     panel.style.top = gr.top + "px";
     panel.style.height = gr.height + "px";
@@ -476,19 +486,54 @@ const REPLAY_MOUSE_SCRIPT = `
   }
   function buildRecords(evs) {
     records = [];
-    for (var i = 0; i < evs.length; i++) if (labels[evs[i].name]) records.push({ name: evs[i].name, time: Number(evs[i].time) || 0, holdMs: null });
+    var lDown = false, rDown = false;
+    for (var i = 0; i < evs.length; i++) {
+      var e = evs[i];
+      if (!labels[e.name]) continue;
+      var ev = { name: e.name, time: Number(e.time) || 0, holdMs: null, paired: false, lPos: null, rPos: null, missing: false };
+      if (e.name === "LeftPress") lDown = true;
+      else if (e.name === "RightPress") rDown = true;
+      else if (e.name === "LeftRelease" && !lDown) {
+        records.push({ name: "LeftPress", time: ev.time, holdMs: null, paired: false, lPos: null, rPos: null, missing: true });
+        lDown = true;
+      } else if (e.name === "RightRelease" && !rDown) {
+        records.push({ name: "RightPress", time: ev.time, holdMs: null, paired: false, lPos: null, rPos: null, missing: true });
+        rDown = true;
+      }
+      records.push(ev);
+    }
     var lr = -1, rr = -1;
+    var coverL = new Array(records.length + 1).fill(0), coverR = new Array(records.length + 1).fill(0);
     for (var j = records.length - 1; j >= 0; j--) {
       var name = records[j].name;
       if (name === "LeftRelease") lr = j;
       else if (name === "RightRelease") rr = j;
       else if (name === "LeftPress") {
-        if (lr > j) records[j].holdMs = Math.max(0, records[lr].time - records[j].time);
+        if (lr > j) {
+          records[lr].holdMs = Math.max(0, records[lr].time - records[j].time);
+          records[lr].paired = true;
+          records[j].paired = true;
+          coverL[j]++;
+          coverL[lr + 1]--;
+        }
         lr = -1;
       } else if (name === "RightPress") {
-        if (rr > j) records[j].holdMs = Math.max(0, records[rr].time - records[j].time);
+        if (rr > j) {
+          records[rr].holdMs = Math.max(0, records[rr].time - records[j].time);
+          records[rr].paired = true;
+          records[j].paired = true;
+          coverR[j]++;
+          coverR[rr + 1]--;
+        }
         rr = -1;
       }
+    }
+    var runL = 0, runR = 0;
+    for (var k = 0; k < records.length; k++) {
+      runL += coverL[k];
+      runR += coverR[k];
+      if (runL > 0) records[k].lPos = records[k].name === "LeftPress" && records[k].paired ? "start" : records[k].name === "LeftRelease" && records[k].paired ? "end" : "mid";
+      if (runR > 0) records[k].rPos = records[k].name === "RightPress" && records[k].paired ? "start" : records[k].name === "RightRelease" && records[k].paired ? "end" : "mid";
     }
     lastCurrent = -2;
   }
@@ -508,8 +553,14 @@ const REPLAY_MOUSE_SCRIPT = `
     var html = "";
     for (var i = 0; i < records.length; i++) {
       var e = records[i], down = e.name === "LeftPress" || e.name === "RightPress";
-      html += '<div class="rk_row' + (down ? " down" : "") + '" data-index="' + i + '"><span class="rk_time">' + (e.time / 1000).toFixed(3) + '</span><span class="rk_action">' + labels[e.name] + '</span>' +
-        (down ? '<span class="rk_hold">（持续' + (e.holdMs === null ? "—" : Math.round(e.holdMs) + "ms") + '）</span>' : "") + '</div>';
+      var isLeft = e.name === "LeftPress" || e.name === "LeftRelease";
+      var action = down
+        ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : labels[e.name]
+        : e.holdMs === null ? "抬起" : "持续" + Math.round(e.holdMs) + "ms";
+      html += '<div class="rk_row' + (e.lPos ? " pair_l pair_l_" + e.lPos : "") + (e.rPos ? " pair_r pair_r_" + e.rPos : "") + (down ? " down" : "") + '" data-index="' + i + '">' +
+        '<span class="rk_action rk_left">' + (isLeft ? action : "") + '</span>' +
+        '<span class="rk_time">' + (e.time / 1000).toFixed(3) + '</span>' +
+        '<span class="rk_action rk_right">' + (isLeft ? "" : action) + '</span></div>';
     }
     list.innerHTML = html || '<div class="rk_empty">暂无按键事件</div>';
     placePanel();
@@ -544,6 +595,7 @@ const REPLAY_MOUSE_SCRIPT = `
   }
   function togglePanel() {
     panelOpen = !panelOpen;
+    try { window.localStorage.setItem("replayKeyPanelOpen", panelOpen ? "1" : "0"); } catch (e) {}
     panel.hidden = !panelOpen;
     host.setAttribute("aria-expanded", String(panelOpen));
     if (panelOpen) { buildPanel(); placePanel(); }

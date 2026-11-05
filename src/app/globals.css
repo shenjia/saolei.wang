@@ -10433,7 +10433,7 @@ html:has(#online_play) #footer {
   height: 60px;
   z-index: 20;
   line-height: 0;
-  cursor: help;
+  cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -10468,38 +10468,130 @@ html:has(#online_play) #footer {
   height: 60px;
   z-index: 20;
 }
-.replay_mouse_events {
+.replay_mouse_tip {
   position: fixed;
-  width: 184px;
+  width: 194px;
   box-sizing: border-box;
   padding: 6px 9px;
   border: 1px solid #656355;
-  border-radius: 5px;
+  border-radius: 4px;
   background: #272822;
-  color: #d6d6c8;
-  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.52);
-  z-index: 1400;
+  color: #f8f8f2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  z-index: 1410;
   pointer-events: none;
-  font: 12px/20px Arial, Helvetica, sans-serif;
-  text-align: left;
+  font: 11px/18px Arial, "PingFang SC", sans-serif;
+  text-align: center;
   white-space: nowrap;
 }
-.replay_mouse_events .rme_row {
+/* 固定按键记录：与数据统计同底、同边框、同标题；absolute 文档坐标随页滚动。 */
+.replay_key_panel {
+  position: absolute;
+  width: 250px;
+  box-sizing: border-box;
   display: flex;
-  gap: 10px;
-  height: 20px;
+  flex-direction: column;
+  padding: 9px 10px;
+  border: 1px solid #656355;
+  border-radius: 6px;
+  background: #49483e;
+  color: #b1b1a4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1400;
+  text-align: left;
+}
+.replay_key_panel .gr_title {
+  flex: 0 0 auto;
+  margin: 0 2px 5px;
+  padding: 0 0 5px;
+  border-bottom: 1px solid #656355;
+  color: #e8e8e0;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 20px;
+}
+.rk_list {
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
+  position: relative;
+  font: 12px/23px Arial, "PingFang SC", sans-serif;
 }
-.replay_mouse_events .rme_time {
-  width: 48px;
-  flex: 0 0 48px;
+.rk_row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr);
+  column-gap: 4px;
+  align-items: center;
+  height: 23px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border-radius: 3px;
   color: #939387;
+  white-space: nowrap;
+}
+.rk_action {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 完整动作的彩色线画在事件所属列文字左侧：左键绿色、右键玫瑰红。
+   组首=按下（顶部缩 2px）、组尾=抬起（底部缩 2px）、组中=间隔行全高：
+   同组整段连通，相邻组之间留出 4px 空隙以示动作分开。 */
+.rk_row.pair_l .rk_left::before,
+.rk_row.pair_r .rk_right::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 1px;
+}
+.rk_row.pair_l .rk_left::before {
+  background: #7fb414;
+}
+.rk_row.pair_r .rk_right::before {
+  background: #e06c9f;
+}
+.rk_row.pair_l_start .rk_left::before,
+.rk_row.pair_r_start .rk_right::before {
+  top: 2px;
+  bottom: 0;
+}
+.rk_row.pair_l_mid .rk_left::before,
+.rk_row.pair_r_mid .rk_right::before {
+  top: 0;
+  bottom: 0;
+}
+.rk_row.pair_l_end .rk_left::before,
+.rk_row.pair_r_end .rk_right::before {
+  top: 0;
+  bottom: 2px;
+}
+.rk_left {
+  text-align: left;
+  padding-left: 5px; /* 竖线 1px + 4px 空隙，避免贴字 */
+}
+.rk_right {
+  text-align: left;
+  padding-left: 5px;
+}
+.rk_time {
+  color: #b1b1a4;
   font-family: "Courier New", Courier, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
-.replay_mouse_events .rme_row.down {
-  color: #f0f0ea;
+.rk_row.down .rk_action {
+  color: #e8e8e0;
 }
-.replay_mouse_events .rme_empty {
+.rk_row.current {
+  background: #707068;
+}
+/* 高亮行只让中间时间列变金色；左右文字保持按下亮灰 / 抬起次灰原色。 */
+.rk_row.current .rk_time {
+  color: #fdc61d;
+}
+.rk_empty {
+  padding: 10px 0;
   color: #939387;
   text-align: center;
 }

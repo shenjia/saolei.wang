@@ -3361,6 +3361,8 @@ export function ReplayFullscreen({
                 right={standalone ? fsButtons.right : rightPressed}
                 events={(standalone ? fsData : replayData)!.evs}
                 csec={(standalone ? fsStats : stats)!.csec}
+                onSeek={standalone ? fsSeek : onSeek}
+                panelAnchorSelector=".vprfs_center"
                 className="replay_mouse_fs"
               />
             )}
@@ -3445,12 +3447,14 @@ export function VideoReplayBoard({
         )}
       </div>
       {/* 三个级别统一落在游戏区域右侧底部；宿主在 .play_board 外，不覆盖格子。 */}
-      {replaying && ctx.stats && ctx.replayData && (
+      {replaying && !ctx.fullscreen && ctx.stats && ctx.replayData && (
         <ReplayMouseIndicator
           left={ctx.leftPressed}
           right={ctx.rightPressed}
           events={ctx.replayData.evs}
           csec={ctx.stats.csec}
+          onSeek={ctx.seek}
+          panelAnchorSelector="#video_view .play_board"
           className={`replay_mouse_page replay_mouse_page_side replay_mouse_${level}`}
         />
       )}
