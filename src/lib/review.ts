@@ -26,6 +26,7 @@ import { refreshUserStnb, refreshUserStnbNf } from "./userstnb";
 import { applyRankScoreChange } from "./userrank";
 import { LEVEL_NAMES } from "./config";
 import { scoreTime } from "./format";
+import { syncTitleSnapshots } from "./titlesnapshots";
 
 type Tx = Prisma.TransactionClient;
 
@@ -510,6 +511,11 @@ export async function reviewVideo(
       });
       if (recNewsDel.count > 0) {
         await syncRecordNewsChain(tx, rv.user, rv.level, { expTime: removed.original.expTime ?? 0 });
+        // 行内军衔快照统一重放（2026-11-05）：撤掉链上点＝当且仅当被封的是纪录录像——
+        // 屏蔽后军衔重放基底（video_scores_exp）变化，news/comment/bbs/video 行内
+        // exp_time 不重放会残留由已封成绩派生的旧值（/user/28321「大徽章上士、
+        // 行内全上尉」事故）；口径见 lib/titlesnapshots.ts
+        await syncTitleSnapshots(tx, rv.user);
       }
     } else if (status === VIDEO_STATUS.REVIEWED && !rv.noRecord) {
       // VideoScores::insertVideo → flag 榜（含动态），NF 录像同时入 NF 榜（不发动态）。
