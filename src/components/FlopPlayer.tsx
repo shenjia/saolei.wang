@@ -397,7 +397,7 @@ const REPLAY_MOUSE_SCRIPT = `
     '.replay_key_panel_flop .rk_list{flex:1;min-height:0;overflow:hidden;position:relative;font:12px/23px Arial,"PingFang SC",sans-serif}' +
     '.replay_key_panel_flop .rk_row{display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);column-gap:4px;align-items:center;height:23px;box-sizing:border-box;padding:0 4px;border-left:1px solid transparent;border-radius:3px;color:#939387;white-space:nowrap}' +
     '.replay_key_panel_flop .rk_row.pair{border-left-color:#656355}' +
-    '.replay_key_panel_flop .rk_action{position:relative;min-width:0;overflow:hidden;text-overflow:ellipsis}.replay_key_panel_flop .rk_left{text-align:left;padding-left:5px}.replay_key_panel_flop .rk_right{text-align:left;padding-left:5px}' +
+    '.replay_key_panel_flop .rk_action{position:relative;align-self:stretch;min-width:0;overflow:hidden;text-overflow:ellipsis}.replay_key_panel_flop .rk_left{text-align:left;padding-left:5px}.replay_key_panel_flop .rk_right{text-align:left;padding-left:5px}' +
     '.replay_key_panel_flop .rk_row.pair_l .rk_left::before,.replay_key_panel_flop .rk_row.pair_r .rk_right::before{content:"";position:absolute;left:0;width:1px}' +
     '.replay_key_panel_flop .rk_row.pair_l .rk_left::before{background:#7fb414}.replay_key_panel_flop .rk_row.pair_r .rk_right::before{background:#e06c9f}' +
     '.replay_key_panel_flop .rk_row.pair_l_start .rk_left::before,.replay_key_panel_flop .rk_row.pair_r_start .rk_right::before{top:2px;bottom:0}' +
@@ -422,7 +422,7 @@ const REPLAY_MOUSE_SCRIPT = `
   document.body.appendChild(panel);
   var list = panel.querySelector(".rk_list");
   var hovering = false, lastButtonKey = "";
-  var records = [], selected = -1, lastCurrent = -2, visibleRows = 1, seeking = false, navigatedIndex = -1;
+  var records = [], selected = -1, lastCurrent = -2, visibleRows = 1, seeking = false, navigatedIndex = -1, navigatedTime = -1;
   var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起" };
   /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
      推进；录像指示器必须按 gameElapsedTime 自行重放左右键事件。游标增量前进，
@@ -486,9 +486,12 @@ const REPLAY_MOUSE_SCRIPT = `
   }
   function buildRecords(evs) {
     records = [];
+    /* 行序只由时间决定；同刻事件稳定保留原顺序，左右列穿插也逐行导航。 */
+    var ordered = evs.filter(function (e) { return !!labels[e.name]; }).slice();
+    ordered.sort(function (a, b) { return (Number(a.time) || 0) - (Number(b.time) || 0); });
     var lDown = false, rDown = false;
-    for (var i = 0; i < evs.length; i++) {
-      var e = evs[i];
+    for (var i = 0; i < ordered.length; i++) {
+      var e = ordered[i];
       if (!labels[e.name]) continue;
       var ev = { name: e.name, time: Number(e.time) || 0, holdMs: null, paired: false, lPos: null, rPos: null, missing: false };
       if (e.name === "LeftPress") lDown = true;
@@ -642,15 +645,12 @@ const REPLAY_MOUSE_SCRIPT = `
       host.setAttribute("aria-label", "鼠标按键状态：" + (left && right ? "左右键按下" : left ? "左键按下" : right ? "右键按下" : "未按下") + "；点击" + (panelOpen ? "关闭" : "打开") + "按键记录");
     }
     var current = currentRecord(nowMs);
-    if (current !== lastCurrent) {
-      /* 同刻连发事件 seek 后都会生效，但高亮仍停在用户选中的那一条；
-         时间进入下一刻后再恢复播放自动跟随。 */
-      if (navigatedIndex >= 0 && current >= 0 && records[current].time === records[navigatedIndex].time) {
-        selected = navigatedIndex;
-      } else {
-        selected = current;
-        navigatedIndex = -1;
-      }
+    /* seek 后相邻另一侧事件可能成为 current，但不能顶掉键盘选中的行；
+       恢复播放、时钟离开目标后才返回自动跟随。 */
+    if (navigatedIndex >= 0 && Math.abs(nowMs - navigatedTime) > 0.02) navigatedIndex = -1;
+    var nextSelected = navigatedIndex >= 0 ? navigatedIndex : current;
+    if (nextSelected !== selected || current !== lastCurrent) {
+      selected = nextSelected;
       lastCurrent = current;
       if (panelOpen) paintSelection();
     }
@@ -674,8 +674,9 @@ const REPLAY_MOUSE_SCRIPT = `
     var delta = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" ? -visibleRows : visibleRows;
     selected = Math.max(0, Math.min(records.length - 1, base + delta));
     navigatedIndex = selected;
+    navigatedTime = records[selected].time + 1;
     paintSelection();
-    seekMs(records[selected].time + 1);
+    seekMs(navigatedTime);
   }, true);
   window.addEventListener("resize", function () { placeHost(); placeTip(); placePanel(); });
   try { parent.window.addEventListener("scroll", function () { placeHost(); placeTip(); placePanel(); }, true); } catch (e) {}

@@ -35,7 +35,8 @@ const PANEL_OPEN_KEY = "replayKeyPanelOpen";
 /** 反向扫描一次完成按下→下一次同键抬起配对，避免长录像 O(n²)；
     动作区间用差分标记，按下→抬起之间隔着的行也归入同组连线。 */
 function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
-  const raw: KeyRecord[] = events.filter((e) => EVENT_LABELS[e.ev]).map((e) => ({ ...e, holdCsec: null, paired: false, lPos: null, rPos: null, missing: false }));
+  /* 行序只由时间决定；同刻事件保持原始先后顺序，左右列穿插的行不能跳过。 */
+  const raw: KeyRecord[] = events.filter((e) => EVENT_LABELS[e.ev]).map((e) => ({ ...e, holdCsec: null, paired: false, lPos: null, rPos: null, missing: false })).sort((a, b) => a.csec - b.csec);
   /* 录像起始已是按住态时，首个抬起前补一条「缺失按下」，时长从它起算。 */
   const rows: KeyRecord[] = [];
   let lDown = false;
@@ -145,16 +146,15 @@ export function ReplayMouseIndicator({
     if (typeof window === "undefined") return false;
     try { return window.localStorage.getItem(PANEL_OPEN_KEY) === "1"; } catch { return false; }
   });
-  const [manual, setManual] = useState<{ index: number; from: number } | null>(null);
+  const [manual, setManual] = useState<{ index: number; targetCsec: number } | null>(null);
   const [tip, setTip] = useState<{ left: number; top: number } | null>(null);
   const records = useMemo(() => buildRecords(events), [events]);
   const currentIndex = useMemo(() => currentEventIndex(records, csec), [records, csec]);
-  /* 键盘选择只在 seek 尚未回传的短暂间隙覆盖当前行；播放时钟一旦前进，
-     自动回到实时事件，无需 effect 同步 state，也不会多渲染一次。 */
-  const selected = manual && (
-    manual.from === currentIndex ||
-    (currentIndex >= 0 && records[currentIndex].csec === records[manual.index].csec)
-  ) ? manual.index : currentIndex;
+  /* seek 可能让相邻的另一侧事件也成为「当前最后事件」，但键盘选中的行
+     必须保持；只有恢复播放、时钟离开本次 seek 目标后才回到自动跟随。 */
+  const selected = manual && (!onSeek || Math.abs(csec - manual.targetCsec) < 0.0001)
+    ? manual.index
+    : currentIndex;
 
   /* 面板用文档坐标跟随页面滚动；顶底严格锚游戏区域，水平落在鼠标右侧。 */
   useEffect(() => {
@@ -227,8 +227,9 @@ export function ReplayMouseIndicator({
       const delta = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 :
         e.key === "ArrowLeft" ? -visibleRowsRef.current : visibleRowsRef.current;
       const next = Math.max(0, Math.min(records.length - 1, base + delta));
-      setManual({ index: next, from: currentIndex });
-      onSeek?.(records[next].csec + 1);
+      const targetCsec = records[next].csec + 1;
+      setManual({ index: next, targetCsec });
+      onSeek?.(targetCsec);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

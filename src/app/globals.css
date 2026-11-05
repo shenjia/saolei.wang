@@ -10531,6 +10531,8 @@ html:has(#online_play) #footer {
 }
 .rk_action {
   position: relative;
+  /* 空白间隔行也必须撑满 23px 行高，否则伪元素竖线会塌成 0 高而断开。 */
+  align-self: stretch;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
