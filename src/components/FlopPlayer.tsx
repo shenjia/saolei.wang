@@ -418,7 +418,7 @@ const REPLAY_MOUSE_SCRIPT = `
   var panel = document.createElement("div");
   panel.className = "replay_key_panel_flop";
   panel.setAttribute("data-testid", "replay-key-panel");
-  panel.innerHTML = '<div class="gr_title"><span>按键记录</span><span class="gr_hint">↑↓浏览 ←→翻页</span></div><div class="rk_list"></div>';
+  panel.innerHTML = '<div class="gr_title"><span>按键记录</span><span class="gr_hint">可按方向键进行导航</span></div><div class="rk_list"></div>';
   panel.hidden = !panelOpen;
   document.body.appendChild(panel);
   var list = panel.querySelector(".rk_list");
