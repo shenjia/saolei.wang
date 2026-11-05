@@ -315,20 +315,26 @@ function ChartCard({
               />
             </g>
           )}
-          {pts.map((p, i) =>
-            (i % labelStep === 0 && i !== n - 2) || i === n - 1 ? (
+          {pts.map((p, i) => {
+            const isLast = i === n - 1;
+            if (!isLast && !(i % labelStep === 0 && i !== n - 2)) return null;
+            // 十一轮（2026-11-05 张老师反馈）：最右侧只放最新纪录日期——末标签右对齐
+            // 锚在右缘（"26-11-05" 约 50px 宽），倒数第二个刻度标签居中锚若伸进它的
+            // 区间就叠字（时间/STNB 图实测复现）；按像素距离让位，一律给末标签腾空
+            if (!isLast && x(i) + 26 > W - PAD_X - 56) return null;
+            return (
               <text
                 key={i}
                 x={x(i)}
                 y={H - 7}
                 fontSize="10"
                 fill="#75715e"
-                textAnchor={i === n - 1 ? "end" : i === 0 ? "start" : "middle"}
+                textAnchor={isLast ? "end" : i === 0 ? "start" : "middle"}
               >
                 {fmtDate(p.x).slice(2)}
               </text>
-            ) : null
-          )}
+            );
+          })}
         </svg>
         {hp && (
           <div
