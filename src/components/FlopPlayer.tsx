@@ -183,10 +183,6 @@ const ZOOM_SCRIPT = `
     while (win.parentElement && win.parentElement !== root) win = win.parentElement;
     return win === menu ? null : win;
   }
-  /* 窗口层生效 zoom（FIT_PLAYER_SCRIPT 窄屏适配会 zoom 窗口节点，须计入换算） */
-  function winZoom(win) {
-    return (win && win.style && parseFloat(win.style.zoom)) || 1;
-  }
   /* 棋盘 SVG＝win 内带非零 viewBox 且可见尺寸可观的 svg（defs symbol svg viewBox 为 0 被排除） */
   function findArea() {
     var win = playerWin();
@@ -198,13 +194,6 @@ const ZOOM_SCRIPT = `
       if (svgs[i].getBoundingClientRect().width > 100) return svgs[i];
     }
     return null;
-  }
-  /* 游戏区自然尺寸（去除窗口层 zoom 与本区 zoom 后的 1x 布局尺寸） */
-  function natOf(svg) {
-    var area = svg.parentElement;
-    var z = winZoom(playerWin()) * (parseFloat(area.style.zoom) || 1);
-    var r = area.getBoundingClientRect();
-    return { w: r.width / z, h: r.height / z };
   }
   /* 数据面板＝游戏区容器的父级下「含 table 且非游戏区」的那个子块 */
   function findStats(area) {
@@ -219,25 +208,45 @@ const ZOOM_SCRIPT = `
   function setZoom(el, z) {
     if (el) el.style.zoom = z === 1 ? "" : String(z);
   }
-  /* 窗口层 zoom 自愈＋宽度兜底：本脚本改 zoom 只触发属性变更，FIT 脚本的
-     childList MutationObserver 看不见（样式级变更漏报）。
-     ⚠️ 乘法修正而非除法求解（2026-11-03 尺寸跳动事故）：除法 wz = vw/(rect/wz)
-     隐含「rect 随 wz 乘法缩放」假设——Chrome 102 等 legacy zoom 实现下 rect
-     不随自身 zoom 缩放，除法解会发散/振荡；乘法修正 wz ×= vw/rect 在两种
-     语义下都单调收敛（标准语义一步到位，legacy 语义几何收敛）。
-     迟滞：复位要求有余量（rect < vw-2），防贴边 ±1px 抖动。 */
+  /* 窗口层 zoom 自愈＋宽度兜底。
+     ⚠️ 语义无关实现（2026-11-05 手机 Safari 持续缩小事故）：Safari/WebKit
+     （标准化 zoom 前的版本）的 getBoundingClientRect 完全不含 zoom——自身与
+     祖先的 zoom 都不影响 rect（playwright webkit 实测：582px 元素 zoom=0.5
+     时 rect 仍 582，视觉渲染却是 291）；Chrome 标准语义 rect = natural ×
+     全链 zoom。旧乘法修正 wz ×= vw/rect 隐含「rect 随 zoom 收缩」——WebKit
+     下 rect 恒为自然宽，每轮都再乘 vw/rect < 1，zoom 指数发散到 0（用户
+     实拍：窗口每 300ms 缩一档直至不可见）。
+     修复：不再按实测 rect 迭代，改为「清 zoom 链测自然宽 → 目标一步直达
+     z = vw/nat」。zoom 清空状态下两种语义 rect 都 = natural（语义无关点），
+     通式「视觉宽 = natural × 链上 zoom 之积」两边实测均成立。
+     清/恢复在同步 JS 内完成，无中间绘制不闪烁；调用频率低（缩放操作/
+     换盘/resize），强制 reflow 可承受。
+     迟滞：复位要求有余量（nat×wz < vw-2），防贴边 ±1px 抖动。 */
+  function natSize(el) {
+    var chain = [];
+    for (var n = el; n && n !== document.body; n = n.parentElement) {
+      if (n.style && n.style.zoom) chain.push([n, n.style.zoom]);
+    }
+    for (var i = 0; i < chain.length; i++) chain[i][0].style.zoom = "";
+    var r = el.getBoundingClientRect();
+    for (var j = 0; j < chain.length; j++) chain[j][0].style.zoom = chain[j][1];
+    return { w: r.width, h: r.height };
+  }
   function syncWinZoom() {
     var win = playerWin();
     if (!win || !win.style) return;
-    var vw = window.innerWidth;
+    /* vw 用 clientWidth 与 FIT_PLAYER_SCRIPT 同源：iOS 部分 WebView 里 iframe 的
+       window.innerWidth 会报页面级视口（仿真实测 980），clientWidth 才是
+       iframe 文档真实视口宽 */
+    var vw = document.documentElement.clientWidth || window.innerWidth;
     if (!vw) return;
     var wz = parseFloat(win.style.zoom) || 1;
-    var rect = win.getBoundingClientRect().width;
-    if (!rect) return;
-    if (rect > vw + 1) {
-      var z = (wz * vw) / rect;
+    var nat = natSize(win).w;
+    if (!nat) return;
+    if (nat * wz > vw + 1) {
+      var z = vw / nat;
       if (Math.abs(wz - z) > 0.002) win.style.zoom = String(z);
-    } else if (wz !== 1 && rect < vw - 2) {
+    } else if (wz !== 1 && nat * wz < vw - 2) {
       win.style.zoom = "";
     }
   }
@@ -252,27 +261,29 @@ const ZOOM_SCRIPT = `
     var stats = findStats(area);
     if (!stats) return;
     if (k === 1) { setZoom(stats, 1); syncWinZoom(); return; }
-    /* 自然高度＝当前视觉高度 ÷ 生效 zoom 链（窗口层 × 本区层） */
-    var wz = winZoom(playerWin());
-    var gz = wz * (parseFloat(area.style.zoom) || 1);
-    var gNat = area.getBoundingClientRect().height / gz;
-    var sz = parseFloat(stats.style.zoom) || 1;
-    var sNat = stats.getBoundingClientRect().height / sz;
-    /* 面板跟涨是「视觉等高」：面板视觉高 ≥ 游戏区视觉高 */
-    setZoom(stats, Math.max(1, (gNat * k) / sNat));
+    /* 语义无关测量（2026-11-05）：natSize 清链测自然高，两种 zoom 语义同值。
+       窗口层 wz 同乘面板与游戏区双方，视觉等高比较中约掉——
+       条件即 sNat × sz ≥ aNat × gz（旧 rect÷zoom 链还原在 WebKit 下必错，
+       是用户实拍「数据面板缩成高窄柱」的同源根因）。 */
+    var gz = parseFloat(area.style.zoom) || 1;
+    var aNat = natSize(area).h;
+    var sNat = natSize(stats).h;
+    setZoom(stats, Math.max(1, (aNat * gz) / sNat));
     syncWinZoom();
   }
-  /* 轻量轮询：棋盘自然尺寸变化（新录像/换级别）→ 重挂记忆倍率（新棋盘的
+  /* 轻量轮询：棋盘尺寸变化（新录像/换级别）→ 重挂记忆倍率（新棋盘的
      父容器若被重建，style.zoom 归零，须重新 apply）。
-     ⚠️ 防抖（2026-11-03 尺寸跳动事故）：key 须连续两 tick 一致才认——窗口层
-     zoom 变化会让 natOf 测量翻转（rect 含 wz），单 tick 确认会把瞬态测量当
-     「换盘面」触发连环 refit，与窗口层修正互相放大成持续振荡 */
+     ⚠️ key 用原始 rect 不用 natSize：轮询 300ms 一跳，清链测量会周期性
+     强制 reflow；key 只需「稳定 + 换盘变化」——WebKit 下 rect 恒为自然值
+     天然稳定，Chrome 下 wz/k 变化时 key 漂移一次 → 触发一次幂等 apply。
+     ⚠️ 防抖（2026-11-03 尺寸跳动事故）：key 须连续两 tick 一致才认——
+     单 tick 确认会把瞬态测量当「换盘面」触发连环 refit。 */
   var pendKey = "";
   window.setInterval(function () {
     var svg = findArea();
     if (!svg) { pendKey = ""; return; }
-    var n = natOf(svg);
-    var key = Math.round(n.w) + "x" + Math.round(n.h);
+    var r = svg.parentElement.getBoundingClientRect();
+    var key = Math.round(r.width) + "x" + Math.round(r.height);
     if (key === lastNatKey) { pendKey = ""; return; }
     if (key !== pendKey) { pendKey = key; return; }
     lastNatKey = key;
@@ -344,8 +355,8 @@ const CURSOR_COLOR_SCRIPT = `
 
 /* 回放矢量鼠标（2026-11-05）：读取 Flop 自身 Vuex 的播放毫秒与事件流，
    按当前时间重建按键态，倍速/暂停/seek 都不另造计时器。位置锚在
-   游戏区域右侧，鼠标底部与 .svg-game 底边对齐；游戏区未渲染时退到视口右下。
-   hover 默认向右，右侧不足 196px 时翻到上方。 */
+   游戏区域右侧，鼠标底部与 .svg-game 底边对齐；点击切换固定「按键记录」面板，
+   面板与游戏区同高；hover 只提示开关，方向键选择/翻页并经原生进度滑块 seek。 */
 const REPLAY_MOUSE_SCRIPT = `
 (function () {
   if (window.__flopReplayMouse) return;
@@ -354,8 +365,9 @@ const REPLAY_MOUSE_SCRIPT = `
   host.className = "replay_mouse_flop";
   host.id = "flop_replay_mouse";
   host.tabIndex = 0;
-  host.setAttribute("role", "img");
-  host.setAttribute("aria-label", "鼠标按键状态；悬停查看最近按键事件");
+  host.setAttribute("role", "button");
+  host.setAttribute("aria-expanded", "false");
+  host.setAttribute("aria-label", "鼠标按键状态；点击打开按键记录");
   host.innerHTML = '<svg viewBox="0 0 64 88" aria-hidden="true">' +
     '<defs>' +
     '<linearGradient id="flop_rm_body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5c5b50"/><stop offset=".45" stop-color="#3e3d35"/><stop offset="1" stop-color="#272822"/></linearGradient>' +
@@ -372,19 +384,36 @@ const REPLAY_MOUSE_SCRIPT = `
     '<path d="M32 17v8" stroke="#d3f693" stroke-opacity=".5" stroke-width=".8"/>' +
     '<path class="rm_left" d="M31 5C16 5 7 16 7 33v2h24V5Z" fill="url(#flop_rm_button)" fill-opacity=".72"/>' +
     '<path class="rm_right" d="M33 5c15 0 24 11 24 28v2H33V5Z" fill="url(#flop_rm_button)" fill-opacity=".72"/>' +
-    '</svg><div class="replay_mouse_events" hidden></div>';
+    '</svg>';
   var style = document.createElement("style");
-  style.textContent = '.replay_mouse_flop{position:fixed;width:44px;height:60px;z-index:10020;line-height:0;cursor:help;outline:none;display:none}' +
+  style.textContent = '.replay_mouse_flop{position:fixed;width:44px;height:60px;z-index:10020;line-height:0;cursor:pointer;outline:none;display:none}' +
     '.replay_mouse_flop>svg{display:block;width:44px;height:60px;overflow:visible;filter:drop-shadow(0 5px 5px rgba(0,0,0,.38))}' +
     '.replay_mouse_flop:focus-visible>svg{filter:drop-shadow(0 0 3px #a6e22e)}' +
-    '.replay_mouse_flop .replay_mouse_events{position:fixed;width:184px;box-sizing:border-box;padding:6px 9px;border:1px solid #656355;border-radius:5px;background:#272822;color:#d6d6c8;box-shadow:0 5px 18px rgba(0,0,0,.52);z-index:10021;pointer-events:none;font:12px/20px Arial,Helvetica,sans-serif;text-align:left;white-space:nowrap}' +
-    '.replay_mouse_flop .rme_row{display:flex;gap:10px;height:20px;overflow:hidden}' +
-    '.replay_mouse_flop .rme_time{width:48px;flex:0 0 48px;color:#939387;font-family:"Courier New",monospace}' +
-    '.replay_mouse_flop .rme_row.down{color:#f0f0ea}.replay_mouse_flop .rme_empty{color:#939387;text-align:center}';
+    '.replay_mouse_tip_flop{position:fixed;width:194px;box-sizing:border-box;padding:6px 9px;border:1px solid #656355;border-radius:4px;background:#272822;color:#f8f8f2;box-shadow:0 4px 12px rgba(0,0,0,.45);z-index:10022;pointer-events:none;font:11px/18px Arial,"PingFang SC",sans-serif;text-align:center;white-space:nowrap}' +
+    '.replay_key_panel_flop{position:fixed;width:230px;box-sizing:border-box;display:flex;flex-direction:column;padding:9px 10px;border:1px solid #656355;border-radius:6px;background:#49483e;color:#b1b1a4;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:10021;text-align:left}' +
+    '.replay_key_panel_flop .gr_title{flex:0 0 auto;margin:0 2px 5px;padding:0 0 5px;border-bottom:1px solid #656355;color:#e8e8e0;font-size:14px;font-weight:bold;line-height:20px}' +
+    '.replay_key_panel_flop .rk_list{flex:1;min-height:0;overflow:hidden;position:relative;font:12px/23px Arial,"PingFang SC",sans-serif}' +
+    '.replay_key_panel_flop .rk_row{display:flex;align-items:center;height:23px;box-sizing:border-box;padding:0 6px;border-radius:3px;color:#939387;white-space:nowrap}' +
+    '.replay_key_panel_flop .rk_time{flex:0 0 52px;color:#b1b1a4;font-family:"Courier New",monospace;font-variant-numeric:tabular-nums}' +
+    '.replay_key_panel_flop .rk_row.down .rk_action{color:#e8e8e0}.replay_key_panel_flop .rk_hold{color:#77776c}' +
+    '.replay_key_panel_flop .rk_row.current{color:#f8f8f2;background:#707068;box-shadow:inset 2px 0 #d6d6c8}' +
+    '.replay_key_panel_flop .rk_row.current .rk_time,.replay_key_panel_flop .rk_row.current .rk_action{color:#f8f8f2}.replay_key_panel_flop .rk_row.current .rk_hold{color:#cfcfc5}' +
+    '.replay_key_panel_flop .rk_empty{padding:10px 0;color:#939387;text-align:center}';
   document.head.appendChild(style);
   document.body.appendChild(host);
-  var tip = host.querySelector(".replay_mouse_events");
-  var hovering = false, lastButtonKey = "", lastTipHtml = "";
+  var tip = document.createElement("div");
+  tip.className = "replay_mouse_tip_flop";
+  tip.hidden = true;
+  document.body.appendChild(tip);
+  var panel = document.createElement("div");
+  panel.className = "replay_key_panel_flop";
+  panel.setAttribute("data-testid", "replay-key-panel");
+  panel.innerHTML = '<div class="gr_title">按键记录</div><div class="rk_list"></div>';
+  panel.hidden = true;
+  document.body.appendChild(panel);
+  var list = panel.querySelector(".rk_list");
+  var hovering = false, panelOpen = false, lastButtonKey = "";
+  var records = [], selected = -1, lastCurrent = -2, visibleRows = 1, seeking = false, navigatedIndex = -1;
   var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起" };
   /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
      推进；录像指示器必须按 gameElapsedTime 自行重放左右键事件。游标增量前进，
@@ -419,45 +448,120 @@ const REPLAY_MOUSE_SCRIPT = `
   function placeTip() {
     if (!hovering) return;
     var r = host.getBoundingClientRect();
-    if (window.innerWidth - r.right >= 196) {
-      tip.style.left = (r.right + 12) + "px";
-      tip.style.top = Math.max(8, Math.min(r.top, window.innerHeight - 158)) + "px";
-      tip.setAttribute("data-placement", "right");
-    } else {
-      tip.style.left = Math.max(8, Math.min(r.right - 184, window.innerWidth - 192)) + "px";
-      tip.style.top = Math.max(8, r.top - 150) + "px";
-      tip.setAttribute("data-placement", "top");
-    }
+    tip.textContent = "点击" + (panelOpen ? "关闭" : "打开") + "按键记录";
+    tip.style.left = Math.max(8, Math.min(r.left + r.width / 2 - 97, window.innerWidth - 202)) + "px";
+    tip.style.top = Math.max(8, r.top - 38) + "px";
   }
-  function renderTip(evs, nowMs) {
-    if (!hovering) return;
-    evs = evs || [];
-    var recent = [];
-    for (var i = 0; i < evs.length; i++) {
-      var e = evs[i];
-      if (labels[e.name] && e.time <= nowMs + 0.01) recent.push(e);
+  function placePanel() {
+    if (!panelOpen) return;
+    var game = document.querySelector("svg.svg-game");
+    var gr = game && game.getBoundingClientRect();
+    var hr = host.getBoundingClientRect();
+    if (!gr || gr.height < 1) return;
+    var left = hr.right + 12;
+    if (left + 230 > window.innerWidth - 8) left = gr.left - 242;
+    panel.style.left = Math.max(8, left) + "px";
+    panel.style.top = gr.top + "px";
+    panel.style.height = gr.height + "px";
+    visibleRows = Math.max(1, Math.floor(list.clientHeight / 23));
+  }
+  function currentRecord(nowMs) {
+    var lo = 0, hi = records.length;
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      if (Number(records[mid].time) <= nowMs + 0.01) lo = mid + 1;
+      else hi = mid;
     }
-    recent = recent.slice(-5);
+    return lo - 1;
+  }
+  function buildRecords(evs) {
+    records = [];
+    for (var i = 0; i < evs.length; i++) if (labels[evs[i].name]) records.push({ name: evs[i].name, time: Number(evs[i].time) || 0, holdMs: null });
+    var lr = -1, rr = -1;
+    for (var j = records.length - 1; j >= 0; j--) {
+      var name = records[j].name;
+      if (name === "LeftRelease") lr = j;
+      else if (name === "RightRelease") rr = j;
+      else if (name === "LeftPress") {
+        if (lr > j) records[j].holdMs = Math.max(0, records[lr].time - records[j].time);
+        lr = -1;
+      } else if (name === "RightPress") {
+        if (rr > j) records[j].holdMs = Math.max(0, records[rr].time - records[j].time);
+        rr = -1;
+      }
+    }
+    lastCurrent = -2;
+  }
+  function paintSelection() {
+    if (!panelOpen) return;
+    var old = list.querySelector(".rk_row.current");
+    if (old) old.classList.remove("current");
+    var row = list.querySelector('[data-index="' + selected + '"]');
+    if (!row) return;
+    row.classList.add("current");
+    var top = row.offsetTop, bottom = top + row.offsetHeight;
+    if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+    else if (top < list.scrollTop) list.scrollTop = top;
+  }
+  function buildPanel() {
+    if (!panelOpen) return;
     var html = "";
-    for (var j = 0; j < recent.length; j++) {
-      var ev = recent[j];
-      html += '<div class="rme_row' + (ev.name === "LeftPress" || ev.name === "RightPress" ? " down" : "") + '"><span class="rme_time">' + (ev.time / 1000).toFixed(3) + '</span><span>' + labels[ev.name] + '</span></div>';
+    for (var i = 0; i < records.length; i++) {
+      var e = records[i], down = e.name === "LeftPress" || e.name === "RightPress";
+      html += '<div class="rk_row' + (down ? " down" : "") + '" data-index="' + i + '"><span class="rk_time">' + (e.time / 1000).toFixed(3) + '</span><span class="rk_action">' + labels[e.name] + '</span>' +
+        (down ? '<span class="rk_hold">（持续' + (e.holdMs === null ? "—" : Math.round(e.holdMs) + "ms") + '）</span>' : "") + '</div>';
     }
-    if (!html) html = '<div class="rme_empty">暂无按键事件</div>';
-    if (html !== lastTipHtml) { tip.innerHTML = html; lastTipHtml = html; }
+    list.innerHTML = html || '<div class="rk_empty">暂无按键事件</div>';
+    placePanel();
+    paintSelection();
+  }
+  function seekMs(ms) {
+    /* 复用 Flop 自己的进度滑块，原生完成盘面重建、播放态保持与事件索引推进。 */
+    var sliders = document.querySelectorAll(".ant-slider");
+    var slider = null, max = 0;
+    for (var i = 0; i < sliders.length; i++) {
+      var h = sliders[i].querySelector(".ant-slider-handle");
+      var m = h && Number(h.getAttribute("aria-valuemax"));
+      if (m > max) { max = m; slider = sliders[i]; }
+    }
+    var rail = slider && slider.querySelector(".ant-slider-rail");
+    if (!rail || !(max > 0)) return;
+    var r = rail.getBoundingClientRect();
+    var x = r.left + Math.max(0, Math.min(1, ms / max)) * r.width;
+    var y = r.top + r.height / 2;
+    seeking = true;
+    slider.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: x, clientY: y, button: 0 }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: x, clientY: y, button: 0 }));
+    /* 滑块一像素可跨数十毫秒；在粗定位后的极小窗口内，用原生逐事件
+       变更校准盘面与事件索引，最后只把时钟推进到事件后的目标毫秒。 */
+    var st = store(), target = Math.round(ms), guard = 0;
+    if (st) {
+      while (Number(st.state.gameElapsedTime) < target && guard++ < 2000) st.commit("performNextEvent");
+      while (Number(st.state.gameElapsedTime) > target && guard++ < 4000) st.commit("performPreviousEvent");
+      if (Number(st.state.gameElapsedTime) !== target) st.commit("setGameElapsedTime", target);
+    }
+    seeking = false;
+  }
+  function togglePanel() {
+    panelOpen = !panelOpen;
+    panel.hidden = !panelOpen;
+    host.setAttribute("aria-expanded", String(panelOpen));
+    if (panelOpen) { buildPanel(); placePanel(); }
     placeTip();
   }
   function update() {
     var st = store();
     var state = st && st.state;
     var vp = state && state.videoParser;
-    if (!vp || !Array.isArray(state.gameEvents)) { host.style.display = "none"; return; }
+    if (!vp || !Array.isArray(state.gameEvents)) { host.style.display = "none"; panel.hidden = true; return; }
     host.style.display = "block";
+    panel.hidden = !panelOpen;
     placeHost();
     var left = replayLeft, right = replayRight;
     var nowMs = Number(state.gameElapsedTime) || 0;
     var evs = state.gameEvents;
     if (evs !== mouseEvents || nowMs < mouseNow) {
+      if (evs !== mouseEvents) { buildRecords(evs); if (panelOpen) buildPanel(); }
       mouseEvents = evs;
       mouseEventIndex = 0;
       replayLeft = replayRight = false;
@@ -483,16 +587,46 @@ const REPLAY_MOUSE_SCRIPT = `
       rp.setAttribute("fill", right ? "url(#flop_rm_gold)" : "url(#flop_rm_button)");
       lp.setAttribute("fill-opacity", left ? "1" : ".72");
       rp.setAttribute("fill-opacity", right ? "1" : ".72");
-      host.setAttribute("aria-label", "鼠标按键状态：" + (left && right ? "左右键按下" : left ? "左键按下" : right ? "右键按下" : "未按下"));
+      host.setAttribute("aria-label", "鼠标按键状态：" + (left && right ? "左右键按下" : left ? "左键按下" : right ? "右键按下" : "未按下") + "；点击" + (panelOpen ? "关闭" : "打开") + "按键记录");
     }
-    renderTip(evs, nowMs);
+    var current = currentRecord(nowMs);
+    if (current !== lastCurrent) {
+      /* 同刻连发事件 seek 后都会生效，但高亮仍停在用户选中的那一条；
+         时间进入下一刻后再恢复播放自动跟随。 */
+      if (navigatedIndex >= 0 && current >= 0 && records[current].time === records[navigatedIndex].time) {
+        selected = navigatedIndex;
+      } else {
+        selected = current;
+        navigatedIndex = -1;
+      }
+      lastCurrent = current;
+      if (panelOpen) paintSelection();
+    }
+    if (panelOpen) placePanel();
   }
-  host.addEventListener("mouseenter", function () { hovering = true; tip.hidden = false; lastTipHtml = ""; update(); });
+  host.addEventListener("click", function (e) { e.stopPropagation(); togglePanel(); });
+  host.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); togglePanel(); }
+  });
+  host.addEventListener("mouseenter", function () { hovering = true; tip.hidden = false; placeTip(); });
   host.addEventListener("mouseleave", function () { hovering = false; tip.hidden = true; });
-  host.addEventListener("focus", function () { hovering = true; tip.hidden = false; lastTipHtml = ""; update(); });
+  host.addEventListener("focus", function () { hovering = true; tip.hidden = false; placeTip(); });
   host.addEventListener("blur", function () { hovering = false; tip.hidden = true; });
-  window.addEventListener("resize", function () { placeHost(); placeTip(); });
-  try { parent.window.addEventListener("scroll", function () { placeHost(); placeTip(); }, true); } catch (e) {}
+  window.addEventListener("keydown", function (e) {
+    if (seeking || !panelOpen || !records.length || ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) < 0) return;
+    var t = e.target;
+    if (t instanceof Element && t.closest("input, textarea, select, [contenteditable=true]")) return;
+    e.preventDefault(); e.stopPropagation();
+    var base = selected >= 0 ? selected : currentRecord(Number(store().state.gameElapsedTime) || 0);
+    if (base < 0) base = e.key === "ArrowDown" || e.key === "ArrowRight" ? -1 : 0;
+    var delta = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" ? -visibleRows : visibleRows;
+    selected = Math.max(0, Math.min(records.length - 1, base + delta));
+    navigatedIndex = selected;
+    paintSelection();
+    seekMs(records[selected].time + 1);
+  }, true);
+  window.addEventListener("resize", function () { placeHost(); placeTip(); placePanel(); });
+  try { parent.window.addEventListener("scroll", function () { placeHost(); placeTip(); placePanel(); }, true); } catch (e) {}
   window.setInterval(update, 32);
   update();
 })();
@@ -546,8 +680,8 @@ const MASK_EXIT_SCRIPT = `
   window.addEventListener("pointerdown", function (e) {
     var t = e.target;
     if (!(t instanceof Element)) return;
-    // 回放鼠标及其事件层是自有 UI，点击/悬停不按暗区退出。
-    if (t.closest(".replay_mouse_flop, .replay_mouse_events")) return;
+    // 回放鼠标、按键记录与提示是自有 UI，点击/悬停不按暗区退出。
+    if (t.closest(".replay_mouse_flop, .replay_key_panel_flop, .replay_mouse_tip_flop")) return;
     // Ant Design 的下拉菜单/弹层挂在 body 下、位于玩家窗口之外，
     // 但它们仍是播放器自身 UI（尤其「选择本地文件」），不能按暗区退出。
     if (t.closest(".ant-menu-dropdown, .ant-menu-submenu-popup, .ant-select-dropdown, .ant-picker-dropdown, .ant-modal-root, .ant-popover, .ant-tooltip, .ant-message, input[type=file]")) return;
