@@ -135,7 +135,8 @@ export default async function VideoViewPage({
   // 右栏「录像评级」下方：三根绿色进度条＝本局 Time / 3BV/s / STNB 与录像作者
   // 个人最好成绩之比。Time 反比（最好/本局），3BV/s、STNB 正比（本局/最好）。
   // 置灰口径与标题区 del 划线完全一致：运气盘（noRecord）划掉 Time/3BV/s/STNB，
-  // 3BV 低于 MIN_3BV_FOR_3BVS 划掉 3BV/s/STNB——被划掉项进度条置灰。
+  // 3BV 低于 MIN_3BV_FOR_3BVS 划掉 3BV/s/STNB——被划掉项进度条置灰且固定填满，
+  // 右侧比例换「无效」（2026-11-05 张老师定）。
   // NF/FL 分池比较（getVideoPerformance 内处理）；作者该级该模式无最好成绩的项整行不渲染。
   const perf = video.author
     ? await getVideoPerformance(video.author.id, level, video.noflag)
@@ -415,7 +416,8 @@ export default async function VideoViewPage({
             <div className="vr_line" />
             {perfRows.map((r) => {
               const pct = Math.round(r.ratio * 1000) / 10;
-              const width = Math.min(100, Math.max(0, pct));
+              // 置灰行（划线成绩）不按比例：条固定填满，右侧比例换「无效」（2026-11-05 张老师定）
+              const width = r.off ? 100 : Math.min(100, Math.max(0, pct));
               // 100% 行：进度条右侧的百分比换成金 PB 标签（2026-11-05 张老师需求，
               // 样式复刻排行模式数据面板 .pb_badge）；口径与百分比显示一致
               // （99.95–100.05 视作 100，见 perfPct）；置灰行不发牌
@@ -427,10 +429,10 @@ export default async function VideoViewPage({
                     <em style={{ width: `${width}%` }} />
                   </span>
                   <span className="perf_pct">
-                    {pb ? <i className="pb_badge">PB</i> : `${perfPct(r.ratio)}%`}
+                    {pb ? <i className="pb_badge">PB</i> : r.off ? "无效" : `${perfPct(r.ratio)}%`}
                   </span>
                   <span className="perf_tip">
-                    {r.key} = {r.cur}
+                    {r.key} = {r.off ? <s className="perf_tip_cur">{r.cur}</s> : r.cur}
                     <b>{perfBestLabel} {r.best}</b>
                   </span>
                 </div>

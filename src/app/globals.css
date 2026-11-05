@@ -14178,6 +14178,7 @@ a.cheat_rep_link:hover {
 #page #video_view .perf.box .perf_bar em {
   display: block;
   height: 100%;
+  margin: 0; /* legacy-2013.css 的 em,strong{margin:0 5px} 会把填充条顶出空槽，必须清掉 */
   border-radius: 4px;
   background: #5fb860;
 }
@@ -14222,4 +14223,9 @@ a.cheat_rep_link:hover {
   color: #e6db74;
   font-weight: normal;
   margin-left: 8px;
+}
+/* 置灰行气泡里当前成绩数字：深灰 + 删除线（2026-11-05 张老师定） */
+#page #video_view .perf.box .perf_tip s {
+  color: #75715e;
+  text-decoration: line-through;
 }
