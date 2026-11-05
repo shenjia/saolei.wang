@@ -291,51 +291,72 @@ export default async function VideoViewPage({
               </span>
             )}
           </h2>
+          {/* .info 只包棋盘（float 收缩宽）：meta 区/横线曾在其内部，右缘跟着
+              盘面宽度走（初级盘缩到 726、高级盘溢出到 884），无法与成绩行
+              STNB 右缘（恒 863）对齐——2026-11-05 张老师定搬出（见下条注释） */}
           <div className="info">
             <VideoReplayBoard id={video.id} level={level} board={board} />
-            <p>
-              {video.author && (
-                <>
-                  <AvatarCell id={video.author.id} name={video.author.chineseName} englishName={video.author.englishName} sex={video.author.sex} className="author" link />
-                  <TitleBadge title={video.authorTitle} classic={video.authorClassic} link />
-                </>
-              )}
-              <span className="create_time">
-                上传于<em><RelTime time={video.createTime} /></em>
+          </div>
+          {/* meta 区（2026-11-05 张老师需求定稿）：grid 两列三行——左列固定三行
+              （作者/上传、审核/状态、软件/签名；p 原是 inline-block 收缩宽，名字短时
+              行2行3会挤上同排，grid 化后各占一行固定），右列浏览/评论/下载各一行、
+              与左列逐行对齐、右对齐。clear:both 落到棋盘浮层之下、拿满 cell 内容盒宽
+              （右缘 871），再让 8px（同 STNB span 的 margin-right）→ 右缘 863 与
+              STNB 右边缘齐平，不随盘面宽窄漂移 */}
+          <div className="meta_area">
+              <p className="meta">
+                {video.author && (
+                  <>
+                    <AvatarCell id={video.author.id} name={video.author.chineseName} englishName={video.author.englishName} sex={video.author.sex} className="author" link />
+                    <TitleBadge title={video.authorTitle} classic={video.authorClassic} link />
+                  </>
+                )}
+                <span className="create_time">
+                  上传于<em><RelTime time={video.createTime} /></em>
+                </span>
+              </p>
+              <span className="counters">
+                <em>{video.clicks}</em>次浏览
               </span>
-            </p>
-            <p>
-              {video.reviewer && video.reviewTime && (
-                <>
-                  <Link href={`/user/${video.reviewer.id}`} className="avatar_link reviewer" target="_blank" prefetch={false}>
-                    {video.reviewer.chineseName}
-                    <span className="pt_bubble">
-                      <PlayerTip id={video.reviewer.id} name={video.reviewer.chineseName} englishName={video.reviewer.englishName} />
+              <p>
+                {video.reviewer && video.reviewTime && (
+                  <>
+                    <Link href={`/user/${video.reviewer.id}`} className="avatar_link reviewer" target="_blank" prefetch={false}>
+                      {video.reviewer.chineseName}
+                      <span className="pt_bubble">
+                        <PlayerTip id={video.reviewer.id} name={video.reviewer.chineseName} englishName={video.reviewer.englishName} />
+                      </span>
+                    </Link>
+                    <span className="review_time">
+                      审核于<em><RelTime time={video.reviewTime} /></em>
                     </span>
-                  </Link>
-                  <span className="review_time">
-                    审核于<em><RelTime time={video.reviewTime} /></em>
-                  </span>
-                </>
-              )}
-              {/* 2026-10-23 张老师需求：已通过（st20）文字后放 ✓（继承 st20 绿）；
-                  待审核（st10）橙色显示（globals.css 提权覆盖 legacy 绿） */}
-              <span className={`status st${video.status}`}>
-                {VIDEO_STATUS_NAMES[video.status] ?? video.status}
-                {video.status === VIDEO_STATUS.REVIEWED && <em className="ok">✓</em>}
+                  </>
+                )}
+                {/* 2026-10-23 张老师需求：已通过（st20）文字后放 ✓（继承 st20 绿）；
+                    待审核（st10）橙色显示（globals.css 提权覆盖 legacy 绿） */}
+                <span className={`status st${video.status}`}>
+                  {VIDEO_STATUS_NAMES[video.status] ?? video.status}
+                  {video.status === VIDEO_STATUS.REVIEWED && <em className="ok">✓</em>}
+                </span>
+              </p>
+              <span className="counters">
+                <em>{video.comments}</em>条评论
               </span>
-            </p>
-            <p>
-              {/* 2026-10-29 张老师需求：软件名前加原色图标（列表页灰度、详情页原色） */}
-              <span className="software">
-                软件
-                <SoftwareIcon software={video.software} version={video.version} detail />
-                <em>{video.software} {video.version}</em>
+              <p>
+                {/* 2026-10-29 张老师需求：软件名前加原色图标（列表页灰度、详情页原色） */}
+                <span className="software">
+                  软件
+                  <SoftwareIcon software={video.software} version={video.version} detail />
+                  <em>{video.software} {video.version}</em>
+                </span>
+                <span className="signature">
+                  签名<em>{video.signature}</em>
+                </span>
+              </p>
+              <span className="counters">
+                <em>{video.downloads}</em>次下载
               </span>
-              <span className="signature">
-                签名<em>{video.signature}</em>
-              </span>
-            </p>
+            </div>
             <hr />
             <VideoReplayButton />
             <a className="button" href={`/video/download/${video.id}`}>
@@ -352,18 +373,6 @@ export default async function VideoViewPage({
               session && session.uid === video.author?.id && (
                 <VideoSelfDeleteButton videoId={video.id} userId={session.uid} />
               )}
-            <p className="counters">
-              <span className="clicks">
-                点击<em>{video.clicks}</em>
-              </span>
-              <span className="comments">
-                评论<em>{video.comments}</em>
-              </span>
-              <span className="downloads">
-                下载<em>{video.downloads}</em>
-              </span>
-            </p>
-          </div>
         </div>
         {/* 2026-11-01 张老师需求：≤880 单列带把侧栏整组隐藏（评级雷达连带消失），
             主栏这份副本在录像主体板块下、评论区上亮起（桌面 display:none，
@@ -409,9 +418,15 @@ export default async function VideoViewPage({
             {perfRows.map((r) => {
               const pct = Math.round(r.ratio * 1000) / 10;
               const width = Math.min(100, Math.max(0, pct));
+              // 100% 行加金 PB 小标签（2026-11-05 张老师需求）：与百分比显示口径
+              // 一致（99.95–100.05 视作 100，见 perfPct）；置灰行不发牌
+              const pb = !r.off && perfPct(r.ratio) === "100.0";
               return (
                 <div className={`perf_row${r.off ? " off" : ""}`} key={r.key}>
-                  <span className="perf_label">{r.key}</span>
+                  <span className="perf_label">
+                    {r.key}
+                    {pb && <i className="perf_pb">PB</i>}
+                  </span>
                   <span className="perf_bar">
                     <em style={{ width: `${width}%` }} />
                   </span>

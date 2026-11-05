@@ -645,23 +645,82 @@ body .tabs > a:hover::after {
   margin-right: 7px;
 }
 
-/* 录像页计数行与左侧按钮垂直对齐（2026-09-26 张老师要求）：
-   legacy #video_view .video_cell .counters{float:right;margin-top:15px;line-height:39px}
-   按钮高 48px（文字行 30px 居中）：计数行高压回 30、margin 收到 (48-30)/2=9，
-   计数文字行与按钮文字行垂直居中重合。
+/* 录像页 meta 区（2026-11-05 张老师需求定稿）：grid 两列三行——
+   左列固定三行（作者/上传、审核/状态、软件/签名）：p 原是 inline-block 收缩宽，
+   名字短时行2行3会挤上同排，grid 化（block 化）后各占一行固定；
+   右列浏览/评论/下载各一行、与左列逐行对齐、右对齐（右缘＝棋盘右缘）。
+   计数配色：文字同「上传于」深灰 #636359（.video_cell span 自带），
+   数字同人名亮灰 #b1b1a4（压过 legacy .video_cell em 的 #939387）。
+   ⚠️ legacy #video_view .video_cell .counters{float:right;margin-top:15px;
+   line-height:39px} 是当年跟按钮行对齐用的，必须全数压掉；
+   #video_view .video_cell p{margin:12px 0 0 0} 改由 row-gap 接管。
    ⚠️ 与 legacy 同特异性会被加载顺序压掉，必须加 body 前缀提权 */
-body #video_view .video_cell .counters {
-  margin-top: 9px;
-  line-height: 30px;
-  /* 内容字号加大（2026-09-27 张老师反馈 14px 太小）：label 14→16、数字 em 20→22 */
-  font-size: 16px;
+/* 录像详情 meta 区（2026-11-05 张老师需求定稿）：从 .info 内部搬出、作为
+   .video_cell 的块级子元素——.info 是 float 收缩宽，右缘跟着盘面宽窄漂移
+   （初级盘缩到 726、高级盘溢出到 884），meta 区/横线在其内部无法与成绩行
+   STNB 右缘（cell 内容盒右缘 871 - span margin 8 = 863）恒对齐。
+   clear:both 落到棋盘浮层之下、恒拿满内容盒宽；再 padding-right:8px
+   （同 STNB span 的 margin-right:8px）→ 计数右缘、横线右缘 = 863。
+   grid 两列三行：左列固定三行（作者/上传、审核/状态、软件/签名；p 原是
+   inline-block 收缩宽，名字短时行2行3会挤上同排，block 化后各占一行固定），
+   右列浏览/评论/下载各一行、与左列逐行对齐、右对齐。
+   计数配色：文字同「上传于」深灰 #636359（.video_cell span 自带），
+   数字同人名亮灰 #b1b1a4（压过 legacy .video_cell em 的 #939387）。
+   ⚠️ legacy #video_view .video_cell .counters{float:right;margin-top:15px;
+   line-height:39px} 是当年跟按钮行对齐用的，必须全数压掉；
+   #video_view .video_cell p{margin:12px 0 0 0} 改由 row-gap 接管。
+   ⚠️ 与 legacy 同特异性会被加载顺序压掉，必须加 body 前缀提权 */
+body #video_view .video_cell .info {
+  max-width: 100%;
+}
+body #video_view .video_cell .meta_area {
+  clear: both;
+  padding-right: 8px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 16px;
+  row-gap: 12px;
+  align-items: center;
+}
+body #video_view .video_cell .meta_area p {
+  display: block;
+  margin: 0;
+  /* 审核员/作者名贴 hover 气泡要出格（原 .info p 规则迁来，压 legacy
+     .video_cell p 的 overflow:hidden 单行省略裁剪） */
+  overflow: visible;
+}
+body #video_view .video_cell .meta_area .counters {
+  float: none;
+  margin: 0;
+  line-height: 24px;
+  text-align: right;
+  white-space: nowrap;
 }
 body #video_view .video_cell .counters em {
-  font-size: 22px;
-}
-/* label 被 .video_cell span{font-size:14px} 压住，须 body 前缀提权 */
-body #video_view .video_cell .counters span {
+  padding: 0 3px;
   font-size: 16px;
+  color: #b1b1a4;
+}
+/* 横线顶格：右缘同 STNB（871 - 8 = 863），不随盘面宽窄漂移 */
+body #video_view .video_cell > hr {
+  margin-right: 8px;
+}
+/* h2 成绩行间距（2026-11-05 张老师定）：标签与数字间 12px、每组标签前 24px。
+   两处叠加源须清零：①globals 给 em 的 margin:0 5px；②legacy .video_cell em
+   的 padding:0 5px——都在 h2 内归零（h1 成绩行不受影响）。
+   组间距的构成：组 span margin-left 16 + 上一组 span 的 legacy margin-right 8
+   ＝ 24；组 span 的 margin-right:8 保留——STNB 右缘 863 的对齐基准不动。
+   第一组 3BV 前不留（与行首对齐） */
+body #video_view .video_cell h2 .term {
+  margin-right: 12px;
+}
+body #video_view .video_cell h2 em {
+  padding: 0;
+  margin: 0;
+}
+body #video_view .video_cell h2 .score_3bvs,
+body #video_view .video_cell h2 .score_stnb {
+  margin-left: 16px;
 }
 
 /* 录像详情页状态标签（2026-10-23 张老师需求）：
@@ -1746,22 +1805,20 @@ a.avatar_link:hover .pt_bubble,
 /* 录像详情页正文区（作者/审核员）双层裁剪修复（2026-10-29 线上报障）：
    legacy #video_view .video_cell p 是单行省略块（overflow:hidden，气泡无论
    往哪弹都出不了 p），.video_cell 自身还有 overflow:hidden（防棋盘溢出，
-   必须保留）。改法：.info 两段 p 放开裁剪。 */
-#video_view .video_cell .info p {
-  overflow: visible;
-}
+   必须保留）。改法：放开裁剪。2026-11-05 meta 区从 .info 搬出为
+   .meta_area，overflow:visible 规则随迁（见上方 meta_area p 组） */
 /* 气泡对齐（2026-10-29 16:1x 张老师要求与全站一致居中）：作者/审核员名贴
    格子内容区左缘，居中弹左缘会超出 .video_cell 盒 40~90px 被裁——
    ≥1189 桌面端把格子 overflow:hidden 升级为 clip + 96px 外扩裁剪边
    （棋盘裁剪语义不变，最长英文名气泡也能完整显示）；≤1188 因格子是
    overflow-x:auto 滚动容器无法外扩，维持左对齐防裁 */
 @media (max-width: 1188px) {
-  #video_view .video_cell .info .pt_bubble {
+  #video_view .video_cell .meta_area .pt_bubble {
     left: 0;
     transform: none;
     transition: opacity 0.08s;
   }
-  #video_view .video_cell .info a:hover .pt_bubble {
+  #video_view .video_cell .meta_area a:hover .pt_bubble {
     transform: none;
   }
 }
@@ -14054,9 +14111,24 @@ a.cheat_rep_link:hover {
   cursor: default;
 }
 #page #video_view .perf.box .perf_label {
-  flex: 0 0 44px;
+  flex: 0 0 62px;
   font-size: 12px;
   color: #b1b1a4;
+}
+/* 100% 行的金 PB 小标签（2026-11-05 张老师需求）：元帅金描边徽，缀在标签名后；
+   标签列随之放宽到 62px，各行条形起点保持对齐 */
+#page #video_view .perf.box .perf_pb {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 3px;
+  font-size: 10px;
+  line-height: 13px;
+  font-style: normal;
+  font-weight: bold;
+  color: #e6db74;
+  border: 1px solid #a08a3c;
+  border-radius: 3px;
+  vertical-align: 1px;
 }
 #page #video_view .perf.box .perf_bar {
   flex: 1 1 auto;
