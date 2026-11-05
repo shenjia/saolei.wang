@@ -17,6 +17,8 @@
 //   rr → 左键按住＝单格 chord；复位 rp/lv/rv/sv 不动 lp；mc/mr 中键（mr 松开时单格 chord）；
 //   sc → 置位 shift，chord 在其后的 lr 生效；mt → 切问号开关；
 //   开格：opened/flagged 跳过、questioned 可开、0 号泛洪、踩雷 Blast 即时揭示。
+//   按下视觉（2026-11-05 补齐 flop 同款）：lc/mc 按住期间光标下未开格下沉（b0），
+//   双键/shift/中键 chord 预备时 3x3 邻域一起下沉，mv 跟随，松开先撤按压再落子。
 //
 // 九期（2026-10-16 张老师需求）：回放时左侧弹「数据统计」面板（复用练习页 greport
 // 形态与口径，随回放实时刷新）+ 棋盘下方控制条（暂停/播放按钮 + 可拖拽进度条，
@@ -462,6 +464,7 @@ export function runReplay(opts: {
   let rp = false; // rightPressed
   let rv = false; // rightValid
   let sv = false; // shiftValid
+  let mp = false; // middlePressed（中键按压，仅视觉）
   let dead = false; // 踩雷：对局即时结束（雷区已揭示），后续事件只动光标
   let hitIdx = -1;
   const inb = (px: number, py: number) => px >= 0 && py >= 0 && px < cols * 16 && py < rows * 16;
@@ -566,6 +569,62 @@ export function runReplay(opts: {
       }
     onFace?.("win");
   }
+  /* ---- 按下态视觉（2026-11-05 张老师报「内置播放器没渲染鼠标按下事件，flop 渲染了」）----
+     flop 同款：lc/mc 按住期间光标下未开格平面下沉（b0/cell-number-0，练习页 pressPaint
+     同图）；双键同按 / shift+左键 / 中键＝chord 预备，3x3 邻域未开格一起下沉；
+     松开（lr/rr/mr）必须**先撤按压再落子**——否则踩雷 revealLoss 画的 bm/bmb 会被
+     按压恢复的 paintR 覆盖掉。右键单独按下不按压（插旗即刻生效，flop 同款）。
+     按压跟随 mv 移动逐格刷新（applyEv 的 mv 分支调 syncPress）。 */
+  const pressMark = new Uint8Array(N);
+  let pressList: number[] = [];
+  function pressPaintV(i: number) {
+    const td = cellTd(i);
+    td.className = "b0";
+    td.innerHTML = "";
+    if (vecUse.length) vecSet(i, "cell-number-0");
+  }
+  function clearPressV() {
+    for (const i of pressList) {
+      pressMark[i] = 0;
+      if (rstate[i] === 0) paintR(i); // 已开/插旗的按压格由 open/toggle 自己画，跳过
+    }
+    pressList = [];
+  }
+  function syncPress(px: number, py: number) {
+    if (dead || won) {
+      clearPressV();
+      return;
+    }
+    const want: number[] = [];
+    if ((lp || mp) && inb(px, py)) {
+      const chordMode = mp || sv || (lp && rp); // 双键/shift/中键＝chord 预备
+      const ci = idxOf(px, py);
+      if (chordMode) {
+        const cx = ci % cols,
+          cy = (ci / cols) | 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = cx + dx,
+              ny = cy + dy;
+            if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+            const a = ny * cols + nx;
+            if (rstate[a] === 0) want.push(a);
+          }
+      } else if (rstate[ci] === 0) want.push(ci);
+    }
+    /* diff 更新：撤掉不再按压的格、画上新按压的格（rstate 已变的格子不回写） */
+    for (const i of pressList)
+      if (!want.includes(i)) {
+        pressMark[i] = 0;
+        if (rstate[i] === 0) paintR(i);
+      }
+    for (const i of want)
+      if (!pressMark[i]) {
+        pressMark[i] = 1;
+        pressPaintV(i);
+      }
+    pressList = want;
+  }
   function applyEv(k: number) {
     const e = evs[k];
     moveCursor(e.px, e.py);
@@ -612,9 +671,13 @@ export function runReplay(opts: {
     }
     if (e.ev === "mt") {
       marks = !marks;
+      syncPress(e.px, e.py);
       return;
     }
-    if (e.ev === "mv") return;
+    if (e.ev === "mv") {
+      syncPress(e.px, e.py); // 按住拖动：按压高亮跟随光标（flop 同款）
+      return;
+    }
     /* 笑脸联动（十七期，练习页口径）：按下（lc/rc/sc）→ ooh、松开（lr/rr/mr）→ smile；
        终局 win/dead 落定后不再回 smile（dead 早退在上面拦截） */
     if (!dead && !won) {
@@ -627,6 +690,8 @@ export function runReplay(opts: {
         break;
       case "lr":
         // flop leftRelease：rp||sv → 双击；否则 lv → 左键开格（松开坐标）
+        // 先撤按压再落子：若本次开格踩雷，revealLoss 画的 bm/bmb 才不会被按压恢复覆盖
+        clearPressV();
         if (rp || sv) {
           cDouble++;
           if (!openAroundR(e.px, e.py)) wastedDouble++;
@@ -650,6 +715,7 @@ export function runReplay(opts: {
         break;
       case "rr":
         // flop rightRelease：lp 按住时＝双击；否则 rv 挂起补记一次 wasted 右键
+        clearPressV(); // 同 lr：先撤按压（chord 展开遇雷时保护 revealLoss）
         if (lp) {
           cDouble++;
           if (!openAroundR(e.px, e.py)) wastedDouble++;
@@ -660,9 +726,11 @@ export function runReplay(opts: {
         rp = lv = rv = sv = false; // 不动 lp（flop 原样）
         break;
       case "mc":
-        // mp = true（仅视觉按压）
+        mp = true; // 中键按下：chord 预备按压（纯视觉）
         break;
       case "mr":
+        mp = false;
+        clearPressV();
         cDouble++;
         if (!openAroundR(e.px, e.py)) wastedDouble++;
         break;
@@ -670,6 +738,7 @@ export function runReplay(opts: {
         lp = lv = sv = true; // chord 在其后的 lr 生效
         break;
     }
+    syncPress(e.px, e.py); // 每事件末同步按压视觉（按下画上、松开撤下）
     if (e.ev === "lc" || e.ev === "lr" || e.ev === "rc" || e.ev === "rr" || e.ev === "sc") {
       onButtons?.(lp, rp);
     }
@@ -718,7 +787,7 @@ export function runReplay(opts: {
   }
   function resetReplay() {
     rstate.fill(0);
-    lp = lv = rp = rv = sv = false;
+    lp = lv = rp = rv = sv = mp = false;
     marks = data.marks;
     dead = false;
     won = false;
@@ -729,6 +798,8 @@ export function runReplay(opts: {
     crossings = 0;
     lastCell = -1;
     lastPX = null;
+    pressList = [];
+    pressMark.fill(0);
     for (let i = 0; i < N; i++) paintR(i);
     evIdx = 0;
     curCsec = 0;
