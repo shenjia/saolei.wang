@@ -27,7 +27,7 @@ export default async function AdminSiteUpdatesPage() {
         <div className="admin_note" style={{ marginBottom: 10 }}>
           站点重大新功能上线后在此登记一条（日常修 bug 不登记）；日期按事件当天填写，清单与前台均按日期倒序排列。
         </div>
-        <SiteUpdateForm />
+        <SiteUpdateForm rows={rows} />
       </AdminCard>
 
       <AdminCard title="更新清单" tight>

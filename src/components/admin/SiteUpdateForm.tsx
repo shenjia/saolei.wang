@@ -4,10 +4,17 @@
 // 日期（date input，提交前归一为 Y.M.D 展示串）+ 内容 textarea，
 // 提交走统一 /api/admin/action（siteupdate.add / siteupdate.edit）。
 // 编辑模式：清单行「编辑」按钮派发 sl-siteupdate-edit 事件回填，可取消。
+// 同日回填（2026-11-05）：选定日期已有记录时自动回填进入编辑模式，避免登记重复条目。
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toast";
+
+interface RowLike {
+  id: number;
+  date: string;
+  content: string;
+}
 
 interface EditingRow {
   id: number;
@@ -28,13 +35,20 @@ function todayStr(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 
-export function SiteUpdateForm() {
+export function SiteUpdateForm({ rows }: { rows: RowLike[] }) {
   const router = useRouter();
   // 日期默认选中当天（本地时区）
   const [date, setDate] = useState(todayStr);
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<EditingRow | null>(null);
+
+  // 日期（YYYY-MM-DD）→ 已有记录索引，用于同日回填
+  const byDate = useMemo(() => {
+    const m = new Map<string, EditingRow>();
+    for (const r of rows) m.set(toInputDate(r.date), { id: r.id, date: r.date, content: r.content });
+    return m;
+  }, [rows]);
 
   // 监听清单行「编辑」：回填记录（日期转 YYYY-MM-DD 供 date input）
   useEffect(() => {
@@ -49,6 +63,26 @@ export function SiteUpdateForm() {
     window.addEventListener("sl-siteupdate-edit", onEdit);
     return () => window.removeEventListener("sl-siteupdate-edit", onEdit);
   }, []);
+
+  // 挂载时当天已有记录 → 直接回填进入编辑模式
+  useEffect(() => {
+    const hit = byDate.get(todayStr());
+    if (hit) {
+      setEditing(hit);
+      setContent(hit.content);
+    }
+  }, [byDate]);
+
+  /** 切换日期：命中已有记录 → 回填进编辑模式（含清单编辑按钮改日期时换目标记录） */
+  const changeDate = (d: string) => {
+    setDate(d);
+    const hit = byDate.get(d);
+    if (hit && hit.id !== editing?.id) {
+      setEditing(hit);
+      setContent(hit.content);
+      toast(`该日期已有记录（#${hit.id}），已回填内容，可直接编辑`, "info");
+    }
+  };
 
   const canSubmit = !busy && !!date.trim() && !!content.trim();
 
@@ -69,7 +103,14 @@ export function SiteUpdateForm() {
       if (data.ok) {
         setEditing(null);
         setContent("");
-        setDate(todayStr());
+        const t = todayStr();
+        setDate(t);
+        // 重置回当天后，若当天已有记录则继续回填编辑（表单始终反映所选日期）
+        const hit = byDate.get(t);
+        if (hit) {
+          setEditing(hit);
+          setContent(hit.content);
+        }
         router.refresh();
       }
     } catch {
@@ -111,7 +152,7 @@ export function SiteUpdateForm() {
           className="admin_input"
           type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => changeDate(e.target.value)}
           style={{ width: 160 }}
         />
       </label>
