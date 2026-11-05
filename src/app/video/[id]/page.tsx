@@ -96,13 +96,16 @@ export default async function VideoViewPage({
   const session = await getSession();
   // ?comment= 深链锚点（2026-10-29 消息通知落地，评论区渐进定位该评论）
   const anchorComment = parseInt((await searchParams).comment ?? "", 10) || 0;
-  const [comments, commentTotal] = await Promise.all([
+  const [comments, commentTotal, clicksNow] = await Promise.all([
     getComments(videoId, 0, COMMENT_TOP_NUMBER, session?.uid ?? null),
     // 评论总数（「加载更多」括号内剩余条数口径，按实际行数而非 video_stat 冗余计数）
     getCommentsCount(videoId, session?.uid ?? null),
-    // 点击计数（移植 actionView 的 uniqueAction('click')）
+    // 点击计数（移植 actionView 的 uniqueAction('click')）——返回计数后最新值，
+    // 页面显示用它兜底（2026-11-05 张老师：浏览永远不应为 0，首访即显示 1）
     (async () => uniqueVideoAction(videoId, "click", clientIp(await headers())))(),
   ]);
+  // 显示口径：本次计数后的最新值；stat 行缺失（null）才退回读取时快照
+  const clicksShown = clicksNow ?? video.clicks;
 
   const level = video.level as VideoLevel;
   const scores = videoScores(video.board3bv, video.realTime, level);
@@ -315,7 +318,7 @@ export default async function VideoViewPage({
                 </span>
               </p>
               <span className="counters">
-                <em>{video.clicks}</em>次浏览
+                <em>{clicksShown}</em>次浏览
               </span>
               <p>
                 {video.reviewer && video.reviewTime && (
