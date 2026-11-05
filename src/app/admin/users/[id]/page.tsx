@@ -17,6 +17,7 @@ import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widg
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, score3bvs, scoreTime } from "@/lib/format";
 import { RelTime } from "@/components/RelTime";
+import { UserSigs } from "@/components/UserSigs";
 import { MESSAGE_CONTENT_LIMIT } from "@/lib/message";
 import { ageOf, constellationText } from "@/lib/birth";
 
@@ -195,6 +196,10 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             <dd>{d.pad || "—"}</dd>
             <dt>爱好</dt>
             <dd>{d.interest || "—"}</dd>
+            {/* 录像标识（user_sig，2026-11-05 张老师要求）：复用前台主页 UserSigs——
+                默认最多 3 条、超出「···」展开 /「收起」，交互完全同款 */}
+            <dt>标识</dt>
+            <dd>{d.sigs.length ? <UserSigs items={d.sigs} /> : "—"}</dd>
           </dl>
         </AdminCard>
       </div>
@@ -329,7 +334,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     label="注销账号"
                     variant="danger"
                     sm={false}
-                    confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（操作不可撤销）。`}
+                    confirm={`⚠️ 注销「${u.chineseName}」的登录凭据？该账号将永久无法登录（操作不可撤销），其占用的录像标识将全部释放。`}
                   />
                 ) : (
                   <span className="admin_hint" style={{ alignSelf: "center" }}>

@@ -242,6 +242,8 @@ export interface AdminUserDetail {
   recentVideos: { id: number; level: string; status: number; createTime: number; realTime: number; board3bv: number }[];
   oauth: { provider: string; nickname: string; createTime: number }[];
   recentLogs: { action: string; detail: string; createTime: number; user: number }[];
+  /** 录像标识（user_sig.signature，按注册先后 id 升序；过滤空串脏数据，口径同前台主页，2026-11-05） */
+  sigs: string[];
 }
 
 export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | null> {
@@ -255,7 +257,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
   ]);
   if (!user) return null;
 
-  const [newsCount, commentCount, bbsCount, postTotal, messageCount, clicks, videos, oauth, logs] = await Promise.all([
+  const [newsCount, commentCount, bbsCount, postTotal, messageCount, clicks, videos, oauth, logs, sigs] = await Promise.all([
     prisma.news.count({ where: { user: uid } }),
     prisma.comment.count({ where: { user: uid, status: 0 } }),
     prisma.bbsPost.count({ where: { user: uid, status: 0 } }),
@@ -270,6 +272,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     }),
     prisma.userOauth.findMany({ where: { userId: uid }, select: { provider: true, nickname: true, createTime: true } }),
     prisma.adminLog.findMany({ where: { target: "user", targetId: uid }, orderBy: { id: "desc" }, take: 10 }),
+    prisma.userSig.findMany({ where: { user: uid, signature: { not: "" } }, orderBy: { id: "asc" }, select: { signature: true } }),
   ]);
 
   const infos = videos.length
@@ -372,6 +375,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
     })),
     oauth: oauth.map((o) => ({ provider: o.provider, nickname: o.nickname, createTime: N(o.createTime) })),
     recentLogs: logs.map((l) => ({ action: l.action, detail: l.detail, createTime: N(l.createTime), user: N(l.user) })),
+    sigs: sigs.map((s) => s.signature),
   };
 }
 

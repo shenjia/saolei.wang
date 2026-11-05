@@ -602,14 +602,21 @@ async function dispatch(
           error: `不能注销：该玩家已有 ${videoCount} 部录像、${postCount} 篇论坛主题；请改用「封禁账号」`,
         };
       }
-      // 仅注销登录凭据（保留 user/成绩/录像，避免破坏排行与历史引用），并封禁
+      // 仅注销登录凭据（保留 user/成绩/录像，避免破坏排行与历史引用），并封禁；
+      // 录像标识一并释放（2026-11-05 张老师要求）：user_sig.signature 唯一索引管归属，
+      // 删掉后该标识文字即可被其他玩家重新注册
+      const sigCount = await prisma.userSig.count({ where: { user: BigInt(id) } });
       await prisma.$transaction([
         prisma.userAuth.delete({ where: { id: BigInt(id) } }),
         prisma.user.update({ where: { id: BigInt(id) }, data: { status: -1, updateTime: BigInt(now()) } }),
         prisma.userOauth.deleteMany({ where: { userId: BigInt(id) } }),
         prisma.passwordToken.deleteMany({ where: { user: BigInt(id) } }),
+        prisma.userSig.deleteMany({ where: { user: BigInt(id) } }),
       ]);
-      return { ok: true, message: `注销账号 ${auth.username}（#${id}），账号数据保留、无法再登录` };
+      return {
+        ok: true,
+        message: `注销账号 ${auth.username}（#${id}），账号数据保留、无法再登录；释放录像标识 ${sigCount} 条`,
+      };
     }
 
     case "user.merge": {
@@ -623,7 +630,8 @@ async function dispatch(
          · STNB 榜：目标 3 级×flag/NF 重算，源行清除；
          · 纪录动态链：以合并后的 video_scores 为真相重放目标 flag 链（对齐 or/cr）；
          · user_stat 录像计数：按前台可见口径（status<>0）重算。
-         最后与 user.delete 同口径注销源账户（删登录凭据/找回链接、置封禁、保留 user 行与 user_sig）。 */
+         最后与 user.delete 同口径注销源账户（删登录凭据/找回链接、置封禁、保留 user 行；
+         录像标识 user_sig 随合并迁至目标账户，撞唯一键的源行删除）。 */
       const id = toId(p.id);
       const targetId = toId(p.targetId);
       if (!id || !targetId) return { ok: false, error: "参数错误：缺少玩家 ID 或目标 ID" };
@@ -706,6 +714,17 @@ async function dispatch(
         // 历程 / 感言投票：冲突行已删，剩余行安全搬迁（不与目标撞唯一键）
         await tx.history.updateMany({ where: { user: src }, data: { user: tgt } });
         await tx.starVote.updateMany({ where: { user: src }, data: { user: tgt } });
+        // 录像标识随迁（2026-11-05 张老师要求）：signature 唯一——与目标撞名的源行
+        // 直接删除（目标已持有同名标识，无需重复注册），其余随 updateMany 搬迁
+        const srcSigs = await tx.userSig.findMany({ where: { user: src }, select: { id: true, signature: true } });
+        if (srcSigs.length) {
+          const tgtSigSet = new Set(
+            (await tx.userSig.findMany({ where: { user: tgt }, select: { signature: true } })).map((s) => s.signature)
+          );
+          const sigClash = srcSigs.filter((s) => tgtSigSet.has(s.signature));
+          if (sigClash.length) await tx.userSig.deleteMany({ where: { id: { in: sigClash.map((s) => s.id) } } });
+          await tx.userSig.updateMany({ where: { user: src }, data: { user: tgt } });
+        }
 
         // ④ 邮箱绑定：目标未绑邮箱时随迁（目标已绑则不覆盖，源邮箱随凭据注销释放）。
         //    email / emailToken 均 @unique——必须先清源行再设目标行，否则唯一键互撞（P2002）
@@ -741,7 +760,8 @@ async function dispatch(
           await syncRecordNewsChain(tx, targetId, lv, { expTime: expSnapshot });
         }
 
-        // ⑩ 注销源账户（user.delete 同口径：保留 user 行与 user_sig，删凭据/找回链接、置封禁）
+        // ⑩ 注销源账户（user.delete 同口径：删凭据/找回链接、置封禁、保留 user 行；
+        //    user_sig 已随合并迁走，源账户不再持有任何标识）
         await tx.userAuth.delete({ where: { id: src } });
         await tx.passwordToken.deleteMany({ where: { user: src } });
         await tx.user.update({ where: { id: src }, data: { status: -1, updateTime: ts } });

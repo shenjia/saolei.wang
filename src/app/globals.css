@@ -4312,6 +4312,21 @@ body #user_view .profile .sig_list li {
   overflow-wrap: anywhere;
 }
 
+/* 后台玩家详情「个人资料」标识行（2026-11-05）：复用前台 UserSigs 组件，
+   小字号口径与前台一致；后台配色跟随 admin_kv，不套用前台灰 */
+.admin_kv .sig_list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+.admin_kv .sig_list li {
+  font-size: 12px;
+  line-height: 19px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- 用户主页「录像」版块（2026-09-26 张老师要求） ----------
    纪事上方：标题行 h2 左 + 右上角「上传录像」按钮（仅本人可见）；
    列表复用 /video 的 VideoListFeed（紧凑行 video_table + 加载更多）。 */
