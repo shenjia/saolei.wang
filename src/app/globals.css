@@ -7415,9 +7415,10 @@ body #page.video_old .page_head {
   padding-left: 5px;
 }
 /* 级别/成绩列小一号（侧栏窄列，16px 灰 #page .level 语义在此并不需要提权——
-   下方 #page #video_hot 前缀 (1,2,1) 压过 legacy #page .level (1,1,0)） */
+   下方 #page #video_hot 前缀 (1,2,1) 压过 legacy #page .level (1,1,0)）；
+   2026-11-05 内容整体缩号：级别名 14→13 */
 #page #video_hot td.level {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: bold;
   color: #999994; /* 级别名统一初级样式（同 .video_table，2026-10-13） */
 }
@@ -7479,7 +7480,7 @@ body #page.video_old .page_head {
   margin-left: 5px;
 }
 #video_hot td.user .title em {
-  font-size: 14px;
+  font-size: 12px; /* 2026-11-05 内容整体缩号：徽章 14→12，随作者名 16→14 保持比例 */
 }
 /* 统计盒：沿用雷界统计口径（标签不折行、数值右对齐黄字） */
 #video_stats .table td {
@@ -10515,7 +10516,6 @@ html:has(#online_play) #footer {
   display: block;
   overflow: hidden;
 }
-
 
 /* ---- 回放矢量鼠标（2026-11-05）：石墨机身 / 站绿滚轮 / 亮灰按键。
    页内、全屏与在线练习共用组件；Flop 注入同款 SVG。所有落位都在棋盘外。 ---- */
@@ -14079,6 +14079,7 @@ a.cheat_rep_link:hover {
 .act_3, .pt_act.act_3 { color: #b1b1a4; } /* 亮灰：7~30 天未登录 */
 .act_2, .pt_act.act_2 { color: #75715e; } /* 浅灰：30~60 天未登录 */
 .act_1, .pt_act.act_1 { color: #4a4944; } /* 深灰：60 天以上未登录 */
+
 /* ---------- 练习页游客注册邀请浮层（2026-11-05） ---------- */
 /* 视觉与 confirm_dialog 同款暗玻璃卡片；z-index 9998 略低于确认浮层（9999），
    全屏态 portal 进 fullscreenElement 子树仍适用（fixed 定位随宿主） */
@@ -14235,4 +14236,11 @@ a.cheat_rep_link:hover {
 #page #video_view .perf.box .perf_tip s {
   color: #75715e;
   text-decoration: line-through;
+}
+
+/* ---- 热门录像板块内容字体整体缩小（2026-11-05 张老师需求）----
+   侧栏窄列原继承 .table td 的 16px 偏大：内容行统一降到 14px，
+   级别名 14→13、军衔徽章 14→12（保持原有比例关系），NF 小标 11px 不动。 */
+#video_hot .video_hot_table td {
+  font-size: 14px;
 }
