@@ -424,7 +424,10 @@ const REPLAY_MOUSE_SCRIPT = `
   var list = panel.querySelector(".rk_list");
   var hovering = false, lastButtonKey = "";
   var records = [], selected = -1, lastCurrent = -2, visibleRows = 1, seeking = false, navigatedIndex = -1, navigatedTime = -1;
-  var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起" };
+  /* MiddleRelease＝双击/chord（导出流折叠产物：双键 chord、sc+lr 与自动双击统一折叠成
+     mr，flop 解析为 MiddleRelease——353011 案：右键按住期间左键点下＝双击，面板不显示
+     会让 chord 在按键记录里完全不可见。原始按下时刻已随折叠丢失，只显示单个「双击」行）。 */
+  var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起", MiddleRelease: "双击" };
   /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
      推进；录像指示器必须按 gameElapsedTime 自行重放左右键事件。游标增量前进，
      seek 回退时从流首重建，倍速与暂停都沿用 Flop 自己的播放时钟。 */
@@ -557,9 +560,11 @@ const REPLAY_MOUSE_SCRIPT = `
     var html = "";
     for (var i = 0; i < records.length; i++) {
       var e = records[i], down = e.name === "LeftPress" || e.name === "RightPress";
-      var isLeft = e.name === "LeftPress" || e.name === "LeftRelease";
+      var isLeft = e.name === "LeftPress" || e.name === "LeftRelease" || e.name === "MiddleRelease";
       var action = down
         ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : labels[e.name]
+        : e.name === "MiddleRelease"
+        ? labels.MiddleRelease
         : e.holdMs === null ? "抬起" : "持续" + Math.round(e.holdMs) + "ms";
       html += '<div class="rk_row' + (e.lPos ? " pair_l pair_l_" + e.lPos : "") + (e.rPos ? " pair_r pair_r_" + e.rPos : "") + (down ? " down" : "") + '" data-index="' + i + '">' +
         '<span class="rk_action rk_left">' + (isLeft ? action : "") + '</span>' +

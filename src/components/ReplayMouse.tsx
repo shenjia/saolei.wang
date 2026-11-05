@@ -27,6 +27,11 @@ const EVENT_LABELS: Record<string, string> = {
   lr: "左键抬起",
   rc: "右键按下",
   rr: "右键抬起",
+  /* mr＝双击/chord（导出流折叠产物：双键 chord、sc+lr 与自动双击统一折叠成
+     mr，原始 lc 被删、lr 改写为 mr——353011 案：右键按住期间左键点下＝双击，
+     面板不显示 mr 会让 chord 在按键记录里完全不可见，只剩裸的右键按下/抬起）。
+     按下时刻已随折叠丢失，只显示单个「双击」行，不合成按下/抬起对（会伪造 0ms 配对）。 */
+  mr: "双击",
 };
 
 /** 按键记录面板开关跨会话记忆；自研回放与 Flop 注入脚本共用。 */
@@ -258,9 +263,11 @@ export function ReplayMouseIndicator({
       <div className="rk_list" ref={listRef}>
         {records.length ? records.map((e, i) => {
           const down = e.ev === "lc" || e.ev === "rc";
-          const isLeft = e.ev === "lc" || e.ev === "lr";
+          const isLeft = e.ev === "lc" || e.ev === "lr" || e.ev === "mr";
           const action = down
             ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : EVENT_LABELS[e.ev]
+            : e.ev === "mr"
+            ? EVENT_LABELS.mr
             : e.holdCsec === null
             ? "抬起"
             : `持续${Math.round(e.holdCsec * 10)}ms`;
