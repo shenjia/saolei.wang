@@ -13695,7 +13695,7 @@ a.cheat_rep_link:hover {
 
 /* ===== 战果保留确认遮罩（2026-10-28 张老师定） =====
    排名胜局有未上传的 BV/PB 战果时，重开/笑脸/快捷键等开新局动作先弹此确认：
-   绿「上传」＝走 uploadRankedEvf 等传完再开新局；灰「放弃」/点遮罩＝直接重开。
+   绿「上传」＝走 uploadRankedEvf 等传完再开新局；红字「放弃」/点遮罩＝直接重开。
    元素由 OnlinePlay 挂全屏宿主或 body 直下（避 #page 页级 zoom），registerOwn 入册 */
 .op_keep_modal {
   position: fixed;
@@ -13756,11 +13756,11 @@ a.cheat_rep_link:hover {
 }
 .op_keep_btns .op_keep_no {
   background: #49483e;
-  color: #c8c8bd;
+  color: #f92672; /* 文本红色（2026-11-05 张老师定）：警示放弃将丢失纪录 */
 }
 .op_keep_btns .op_keep_no:hover {
   background: #57564a;
-  color: #f8f8f2;
+  color: #ff5c85;
 }
 
 /* ── 后台服务器负载面板：可排序表头（2026-10-31 张老师需求，ServerStatusPanel）
