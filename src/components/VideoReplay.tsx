@@ -1941,6 +1941,10 @@ interface ReplayCtxValue {
   setSpeed: (v: number) => void;
   /** 进入/退出全屏回放层 */
   setFullscreen: (v: boolean) => void;
+}  /** 鼠标轨迹层开关（2026-11-05 张老师需求）：控制条轨迹钮切换；
+ *  打开后页面态/全屏层棋盘上蒙 25% 黑遮罩并绘制轨迹与三色点击圆点 */
+  traj: boolean;
+  toggleTraj: () => void;
 }
 
 const ReplayCtx = createContext<ReplayCtxValue | null>(null);
@@ -2002,6 +2006,12 @@ export function VideoReplayProvider({
   const [stats, setStats] = useState<ReplayStats | null>(null);
   const [mouseButtons, setMouseButtons] = useState({ left: false, right: false });
   const [fullscreen, setFullscreen] = useState(false);
+
+  /* 鼠标轨迹层开关（2026-11-05 张老师需求）：控制条轨迹钮切换；退出回放不重置
+     （再播同一盘直接恢复上次的开关状态，与倍速跨次保留同思路，但倍速有铁律
+     要复位而轨迹只是观图辅助——保留更顺手） */
+  const [traj, setTraj] = useState(false);
+  const toggleTraj = useCallback(() => setTraj((v) => !v), []);
   /* 笑脸状态（十七期）：回放引擎 onFace 直通——全屏层计数条消费；
      页面态无消费者不渲染，state 变更开销可忽略（每事件至多一次） */
   const [face, setFace] = useState<FaceKind>("smile");
@@ -2301,7 +2311,10 @@ export function VideoReplayProvider({
         speed,
         setSpeed,
         setFullscreen,
+        traj,
+        toggleTraj,
       }}
+
     >
       {children}
       {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
@@ -2496,6 +2509,165 @@ function ReplayStatsPanel({ level, s }: { level: VideoLevel; s: ReplayStats }) {
   );
 }
 
+/** 鼠标轨迹覆盖层（2026-11-05 张老师需求）：回放时在游戏地图上蒙 25% 黑遮罩，
+ *  亮灰画出鼠标已走过的轨迹，三色圆点标注点击位置——青=左键单击、绿=右键单击、
+ *  玫红=双击（双键/Shift/中键 chord，与统计口径的 Double 同义；chord 位置只标
+ *  玫红不再叠青点）。数据全部来自解析事件流（16px/格 坐标域＝svg viewBox 域），
+ *  随回放时钟只增不减；seek 回退同步收缩（前缀截取按 csec 二分）。
+ *  宿主须是 position:relative 的棋盘容器（页面态 .play_board / 全屏 .vprfs_board_wrap）：
+ *  覆盖层 absolute 定位，量取 table 相对宿主偏移并除以全链 zoom 折回布局域
+ *  （与回放引擎光标 measureOff 同手法，zoom 挂宿主/祖先两种形态都成立），
+ *  事件像素坐标在 svg 内 1:1 直用，宿主 zoom 整体等比缩放。 */
+function TrajLayer({
+  boardDomId,
+  csec,
+  data,
+}: {
+  /** Board 渲染的 DOM id（board_{id} / fs_board_{id}），据此定位 table 量偏移 */
+  boardDomId: string;
+  /** 回放时钟（百分秒）：统计 100ms 节流粒度足够——轨迹只增长不追帧 */
+  csec: number;
+  data: ReplayData;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [off, setOff] = useState({ x: 0, y: 0 });
+  const measure = useCallback(() => {
+    const host = hostRef.current;
+    const op = (host?.offsetParent as HTMLElement | null) ?? null;
+    const table = document.getElementById(boardDomId)?.querySelector("table");
+    if (!host || !op || !table) return;
+    const tr = table.getBoundingClientRect();
+    const or = op.getBoundingClientRect();
+    /* 全链 zoom＝table 视觉宽 / 布局宽（td 布局宽恒 16px 同源，2026-11-05 教训：
+       人工算 zoom×pageZoom 有浏览器差异，用实测宽反推） */
+    const z = table.offsetWidth > 0 ? tr.width / table.offsetWidth : 1;
+    if (!(z > 0)) return;
+    const x = (tr.left - or.left) / z;
+    const y = (tr.top - or.top) / z;
+    setOff((o) => (Math.abs(o.x - x) < 0.5 && Math.abs(o.y - y) < 0.5 ? o : { x, y }));
+  }, [boardDomId]);
+  /* 量取时机：挂载（rAF）+ 布局收敛兜底（350/900ms，横竖屏/页级 zoom 档位
+     异步收敛的实测窗口）+ resize；csec 变化不影响布局不重测 */
+  useEffect(() => {
+    measure();
+    const raf = requestAnimationFrame(measure);
+    const t1 = window.setTimeout(measure, 350);
+    const t2 = window.setTimeout(measure, 900);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.removeEventListener("resize", measure);
+    };
+  }, [measure]);
+  /* 事件一次性分类（per data）：轨迹折线点（mv 微动 <3px 折叠，点击事件恒保留）
+     + 三类点击位置。按键态机与引擎/flop 口径一致：
+     lc 按下→lr 松开＝左键单击（点标按下位）；rc 即右键单击（引擎 rc→toggleLabel
+     即时生效）；lr 时右/Shift 按住、rr 时左键按住、mr 松开＝chord 双击。 */
+  const { path, lefts, rights, doubles } = useMemo(() => {
+    const path: { t: number; x: number; y: number }[] = [];
+    const lefts: { t: number; x: number; y: number }[] = [];
+    const rights: { t: number; x: number; y: number }[] = [];
+    const doubles: { t: number; x: number; y: number }[] = [];
+    let lp = false,
+      rp = false,
+      sv = false,
+      mp = false;
+    let pendL: { x: number; y: number } | null = null;
+    let lx = NaN,
+      ly = NaN;
+    for (const e of data.evs) {
+      const click = e.ev !== "mv";
+      if (click || !(Math.abs(e.px - lx) < 3 && Math.abs(e.py - ly) < 3)) {
+        path.push({ t: e.csec, x: e.px, y: e.py });
+        lx = e.px;
+        ly = e.py;
+      }
+      switch (e.ev) {
+        case "lc":
+          lp = true;
+          pendL = { x: e.px, y: e.py };
+          break;
+        case "lr":
+          if (rp || sv) doubles.push({ t: e.csec, x: e.px, y: e.py });
+          else lefts.push({ t: e.csec, x: pendL ? pendL.x : e.px, y: pendL ? pendL.y : e.py });
+          lp = false;
+          sv = false;
+          pendL = null;
+          break;
+        case "rc":
+          rp = true;
+          rights.push({ t: e.csec, x: e.px, y: e.py });
+          break;
+        case "rr":
+          if (lp) doubles.push({ t: e.csec, x: e.px, y: e.py });
+          rp = false;
+          break;
+        case "mc":
+          mp = true;
+          break;
+        case "mr":
+          if (mp) doubles.push({ t: e.csec, x: e.px, y: e.py });
+          mp = false;
+          break;
+        case "sc":
+          sv = true;
+          break;
+      }
+    }
+    return { path, lefts, rights, doubles };
+  }, [data]);
+  /* 前缀截取：path 按 csec 有序，二分找当前时钟前的点数 */
+  const upto = useMemo(() => {
+    let lo = 0,
+      hi = path.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (path[mid].t <= csec + 0.01) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }, [path, csec]);
+  const ptsStr = useMemo(() => {
+    let s = "";
+    for (let i = 0; i < upto; i++) s += (i ? " " : "") + path[i].x + "," + path[i].y;
+    return s;
+  }, [path, upto]);
+  const W = data.w * 16;
+  const H = data.h * 16;
+  const dots = (arr: { t: number; x: number; y: number }[], fill: string) =>
+    arr.map((p, i) =>
+      p.t <= csec + 0.01 ? (
+        <circle key={i} cx={p.x} cy={p.y} r={4} fill={fill} stroke="rgba(0,0,0,.5)" strokeWidth={1} />
+      ) : null
+    );
+  return (
+    <div ref={hostRef} className="traj_layer" style={{ left: off.x, top: off.y }} aria-hidden="true">
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+        {/* 25% 黑遮罩：只蒙地图本体 */}
+        <rect width={W} height={H} fill="rgba(0,0,0,.25)" />
+        {/* 亮灰轨迹（与回放光标同色系 #D6D6CE） */}
+        {upto > 1 && (
+          <polyline
+            points={ptsStr}
+            fill="none"
+            stroke="#D6D6CE"
+            strokeOpacity={0.9}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+        {/* 三色点击点：青=左键单击 绿=右键单击 玫红=双击 */}
+        {dots(lefts, "#2BD9E0")}
+        {dots(rights, "#3BD55F")}
+        {dots(doubles, "#F2568F")}
+      </svg>
+    </div>
+  );
+}
+
 /** 控制条（九期；十期改版）：暂停/播放 + 全屏按钮 + 可拖拽进度条，
  *  拖拽：按住即暂停（记住原播放态），拖动中按帧 seek 实时预览，松手定位——
  *  拖前在播则松手续播；点轨道任意位置＝单次跳转（同语义）。
@@ -2541,6 +2713,9 @@ function ReplayBar({
     return () => document.removeEventListener("pointerdown", close);
   }, [speedOpen]);
   const dragRef = useRef({ active: false, wasPlaying: false, raf: 0, lastCsec: 0 });
+  /* 轨迹钮（2026-11-05 张老师需求）：全屏按钮左侧；开关在 Provider（页面态与
+     全屏层共用同一状态），standalone（后台审核）无 Provider 不渲染 */
+  const trajCtx = useContext(ReplayCtx);
   const total = stats.totalCsec;
   const pct = total > 0 ? Math.max(0, Math.min(1, stats.csec / total)) : 0;
   const posToCsec = (clientX: number) => {
@@ -2629,6 +2804,23 @@ function ReplayBar({
             </div>
           )}
         </div>
+      )}
+      {trajCtx && (
+        <button
+          type="button"
+          className={"rb_btn" + (trajCtx.traj ? " traj_on" : "")}
+          title={trajCtx.traj ? "关闭鼠标轨迹" : "显示鼠标轨迹"}
+          aria-label={trajCtx.traj ? "关闭鼠标轨迹" : "显示鼠标轨迹"}
+          onClick={(e) => {
+            e.stopPropagation(); /* 同上：不冒泡到棋盘退出 */
+            trajCtx.toggleTraj();
+          }}
+        >
+          {/* 从左上到右下的绕圈折线：直线进入→右侧绕圈→甩尾到右下 */}
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 5h8a4.5 4.5 0 1 1 0 9c0 4 3 5 8 5" />
+          </svg>
+        </button>
       )}
       {onFullscreen && (
         <button
@@ -2840,6 +3032,9 @@ export function ReplayFullscreen({
      不启动（否则把页面回放引擎已重演几帧的开格抄进 FS 污染干净盘面），
      FS 棋盘也从空盘渲染（boardStr 是录像终局图，见 Board 处注释） */
   const [mode, setMode] = useState<"replay" | "play">(autoEnterPlay ? "play" : "replay");
+  /* 轨迹层开关（2026-11-05 张老师需求）：读 Provider（standalone 无 Provider
+     自动隐藏，后台审核不开放该功能） */
+  const trajCtx = useContext(ReplayCtx);
   /* ---- standalone 自持状态（2026-10-22 后台审核播放器）----
      页面态的 status/stats/engineFace 来自 Provider props；standalone 下没有
      Provider，本组件自持同构状态机（引擎 onStats/onFace/onEnd 驱动）。 */
@@ -3514,6 +3709,12 @@ export function ReplayFullscreen({
                     <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><use href="#cursor-arrow" /></svg>
                   </div>
                 )}
+                {/* 鼠标轨迹层（2026-11-05 张老师需求）：仅回放态；standalone
+                    （后台审核）无 Provider 不开放。宿主 .vprfs_board_wrap 是
+                    position:relative，量取偏移同页面态 */}
+                {!standalone && mode === "replay" && trajCtx?.traj && replayData && stats && (
+                  <TrajLayer boardDomId={"fs_board_" + boardId} csec={stats.csec} data={replayData} />
+                )}
               </div>
             </div>
           </div>
@@ -3786,6 +3987,11 @@ export function VideoReplayBoard({
         <div className="pb_frame">
           <Board id={id} level={level} board={board} size={16} vec />
         </div>
+        {/* 鼠标轨迹层（2026-11-05 张老师需求）：控制条轨迹钮开启后蒙地图绘制；
+            回放光标 z30 仍在其上，遮罩不压光标 */}
+        {replaying && ctx.traj && ctx.replayData && ctx.stats && (
+          <TrajLayer boardDomId={`board_${id}`} csec={ctx.stats.csec} data={ctx.replayData} />
+        )}
         {!replaying && (
           <button
             type="button"

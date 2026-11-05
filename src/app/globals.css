@@ -10427,6 +10427,21 @@ html:has(#online_play) #footer {
   overflow: visible; /* symbol 描边 10 单位粗，贴图边缘略出血 */
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
+/* 鼠标轨迹覆盖层（2026-11-05 张老师需求）：absolute 锚宿主（页面态 .play_board /
+   全屏 .vprfs_board_wrap，均 position:relative），left/top 由 JS 量取 table 偏移；
+   zoom 挂宿主或祖先都随棋盘等比缩放。z-index 25＝压过棋盘矢量层、低于回放
+   光标（30）——遮罩不压光标 */
+.traj_layer {
+  position: absolute;
+  pointer-events: none;
+  z-index: 25;
+  line-height: 0;
+}
+.traj_layer > svg {
+  display: block;
+  overflow: hidden;
+}
+
 
 /* ---- 回放矢量鼠标（2026-11-05）：石墨机身 / 站绿滚轮 / 亮灰按键。
    页内、全屏与在线练习共用组件；Flop 注入同款 SVG。所有落位都在棋盘外。 ---- */
@@ -10815,6 +10830,16 @@ html:has(#online_play) #footer {
   border-color: #a6e22e;
   color: #a6e22e;
   background: #3b3a32;
+}
+/* 轨迹按钮激活态（2026-11-05 张老师需求）：金色，区别于全屏态的站绿 */
+.rb_btn.traj_on {
+  border-color: #fdc61d;
+  color: #fdc61d;
+  background: #3b3a32;
+}
+.rb_btn.traj_on:hover {
+  border-color: #fdc61d;
+  color: #fdc61d;
 }
 /* 倍速按钮（2026-11-05 张老师需求）：播放钮右侧「1x」，点按向上弹菜单选速
    （0.01/0.1/0.5/1/2/4/16）；默认永远为 1x。文案钮随倍速值自适应宽（0.01x 五字符） */
