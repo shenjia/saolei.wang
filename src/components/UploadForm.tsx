@@ -206,7 +206,18 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
 
   async function startUpload() {
     if (busy || uploadable.length === 0) return;
-    const targets = items.filter((i) => i.status === "pending" || i.status === "error");
+    // 上传顺序（2026-11-05 张老师定）：先传慢的后传快的——首页信息流按上传时间倒序
+    // 展示，成绩最好的几盘最后传才能排在信息流最前面；未解析出成绩的排最前面
+    const targets = items
+      .filter((i) => i.status === "pending" || i.status === "error")
+      .sort((a, b) => {
+        const ta = a.meta?.timeMs;
+        const tb = b.meta?.timeMs;
+        if (ta === undefined && tb === undefined) return 0;
+        if (ta === undefined) return -1;
+        if (tb === undefined) return 1;
+        return tb - ta; // 耗时大（慢）在前
+      });
     setBusy(true);
     let done = 0;
     let okCount = 0;
