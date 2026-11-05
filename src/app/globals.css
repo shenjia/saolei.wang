@@ -10951,7 +10951,7 @@ html:has(#online_play) #footer {
 }
 /* 左侧深灰标签「播放速度」（2026-11-05 张老师需求）：口径同 .gr_hint（#7b7a6f 11px） */
 .rs_pop .rs_label {
-  color: #7b7a6f;
+  color: #b1b1a4;
   font: 11px/1 "Courier New", Courier, monospace;
   white-space: nowrap;
   user-select: none;
