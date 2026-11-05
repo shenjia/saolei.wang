@@ -11,6 +11,12 @@
 //   按「访客×日」判：该访客当日所有 PV 零 dwell 且零 click → 判爬虫剔除。
 //   宽限窗 30 分钟：dwell 要等离开页面才回写，近期行无法判定一律保留，
 //   故「今日」最多含半小时内的未判定爬虫（≈十几个 UV），随缓存刷新收敛。
+// · 伪装流量剔除（2026-11-05 张老师定，v14）：新版刷量会执行 JS 回写极短 dwell
+//   逃过上一条——特征是 referrer 全 direct（无站内跳转行）、当日累计 dwell<10s、
+//   全程零点击。生产实证（11-04/11-05 落地 /video 的刷量）：96% dwell<10s、
+//   661/670 会话单页、点击率 2%，占当日 UV 一半。真人「直达短停 8 秒即走」会被
+//   误伤剔除，属拍板接受的可接受代价；访客当日只要有一点站内跳转/点击/足量
+//   停留即整访客保留。宽限窗语义同上。
 // · 同比口径：今日 00:00~取数时刻 vs 上周同一日 00:00~上周同一时刻（窗口秒数对齐）；
 //   缓存 300s，「此刻」最多滞后 5 分钟。
 // · 30 天流水一次拉全量内存聚合（个人站量级，上线初期即全量）。
@@ -256,20 +262,40 @@ async function aggregate(): Promise<TrafficOverview> {
   // 按时间序处理（流失统计取会话末页依赖顺序）
   const sorted = [...rows].sort((a, b) => N(a.createTime) - N(b.createTime));
 
-  // ---- 爬虫剔除（2026-11-01 张老师定，口径见文件头）----
+  // ---- 爬虫/伪装流量剔除（2026-11-01 首版 + 2026-11-05 升级，口径见文件头）----
+  // 两层口径都按「访客×日」聚合，且只对最近一条 PV 已超出 30min 宽限窗的访客生效：
+  // ① 零行为：当日累计 dwell=0 且零点击；② 伪装流量：累计 dwell<10s、零点击、
+  // 且当日没有任何站内跳转行（referral 全 direct）。两条都不命中 → 整访客保留。
   const BEHAVIOR_GRACE = 30 * 60;
+  const FAKE_DWELL_MS = 10_000;
   const graceCut = now - BEHAVIOR_GRACE;
-  // 有行为回写（dwell 或点击）的「访客×日」集合；其余超过宽限窗的访客判爬虫
-  const behaved = new Set<string>();
+  const vdAgg = new Map<
+    string,
+    { dwell: number; clicked: boolean; internal: boolean; latest: number }
+  >();
   for (const r of rows) {
-    if (r.dwellMs !== null || r.clicked) {
-      behaved.add(`${r.visitorId}|${Math.floor((N(r.createTime) + 28800) / 86400)}`);
+    const t = N(r.createTime);
+    const key = `${r.visitorId}|${Math.floor((t + 28800) / 86400)}`;
+    let a = vdAgg.get(key);
+    if (!a) {
+      a = { dwell: 0, clicked: false, internal: false, latest: 0 };
+      vdAgg.set(key, a);
+    }
+    a.dwell += r.dwellMs ?? 0;
+    if (r.clicked) a.clicked = true;
+    if (r.referrer === "internal") a.internal = true;
+    if (t > a.latest) a.latest = t;
+  }
+  const fake = new Set<string>();
+  for (const [key, a] of vdAgg) {
+    if (a.latest < graceCut && a.dwell < FAKE_DWELL_MS && !a.clicked && !a.internal) {
+      fake.add(key);
     }
   }
   const real = sorted.filter((r) => {
     const t = N(r.createTime);
     if (t >= graceCut) return true; // 宽限窗内无法判定，保留
-    return behaved.has(`${r.visitorId}|${Math.floor((t + 28800) / 86400)}`);
+    return !fake.has(`${r.visitorId}|${Math.floor((t + 28800) / 86400)}`);
   });
 
   for (const r of real) {
@@ -551,7 +577,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v13"],
+  ["admin-traffic", "v14"],
   { revalidate: 300 }
 );
 
