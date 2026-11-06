@@ -14311,10 +14311,10 @@ a.cheat_rep_link:hover {
   line-height: 1;
   text-align: center;
 }
-/* 历史列表：flex 纵向撑满剩余高度，超出滚动 */
+/* 历史列表：窗口固定只显示 ~10 行文字（2026-11-06 二轮张老师要求：窗口缩小），
+   条目折行超出即在窗内滚动，滚到最底部露出「查看全部」链接 */
 .update_notice_modal .un_list {
-  flex: 1;
-  min-height: 0;
+  height: 310px;
   overflow-y: auto;
   padding-right: 12px;
   /* 简洁滚动条：Firefox 用原生 thin，WebKit 用 6px 半透明圆角 */
@@ -14345,6 +14345,18 @@ a.cheat_rep_link:hover {
   color: #e6c07b;
   font-style: normal;
   font-weight: 700;
+}
+/* 滚动到底部的「查看全部」→ /page/history */
+.update_notice_modal .un_all {
+  display: block;
+  padding: 4px 0 2px;
+  color: #b1b1a4;
+  font-size: 13px;
+  text-align: center;
+  transition: color 0.15s;
+}
+.update_notice_modal .un_all:hover {
+  color: #a6e22e;
 }
 /* 发信面板 */
 .update_notice_modal .un_to {

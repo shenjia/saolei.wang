@@ -9,6 +9,7 @@
 // fixed 遮罩做在里面会随缩放失真铺不满屏（同 EmailBindNotice 口径）。
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useDraft } from "./useDraft";
 
 const LS_KEY = "update_notice_seen"; // 值 = 最新更新日期的可比数值（yyyymmdd）
@@ -102,6 +103,10 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
                   {u.content}
                 </p>
               ))}
+              {/* 滚到最底部露出：完整历史在更新历史页（2026-11-06 二轮张老师要求） */}
+              <Link href="/page/history" className="un_all">
+                查看全部
+              </Link>
             </div>
             <div className="btns">
               <button type="button" className="btn_primary" onClick={onGotIt}>
