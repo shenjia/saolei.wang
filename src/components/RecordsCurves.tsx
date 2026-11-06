@@ -84,6 +84,22 @@ function fmtAxis(metric: CurveChart["metric"], v: number): string {
   return (v / 1000).toFixed(2);
 }
 
+/** 坐标系变换（2026-11-06 张老师定）：time 用倒数坐标系（1/毫秒——时间越小变换值越大，
+ *  趋势自然向上爬）；stnb 用 1.7 次方坐标系（v^1.7——低分差异压缩、高分差异放大，
+ *  进步曲线后期更陡）；3bvs 线性。统一口径：变换值越大 = 成绩越好 = 越靠图顶 */
+function transformY(metric: CurveChart["metric"], v: number): number {
+  if (metric === "time") return 1 / v;
+  if (metric === "stnb") return Math.pow(v, 1.7);
+  return v;
+}
+
+/** 变换值 → 原值（网格线标签反解用） */
+function invertY(metric: CurveChart["metric"], t: number): number {
+  if (metric === "time") return 1 / t;
+  if (metric === "stnb") return Math.pow(t, 1 / 1.7);
+  return t;
+}
+
 /** +08:00 日期（与全站切天口径一致） */
 function fmtDate(ts: number): string {
   return new Date((ts + 28800) * 1000).toISOString().slice(0, 10);
@@ -189,15 +205,16 @@ export function ChartCard({
   // 用户主页点密的 3BV/s/STNB 曲线实测出横向滚动条）；仅 >600 点极端情况
   // 保留横向滚动兜底
   const W = n > SCROLL_THRESHOLD ? n * 26 : boxW;
-  const vals = pts.map((p) => p.y);
-  const mn = Math.min(...vals);
-  const mx = Math.max(...vals);
-  const span = mx - mn || 1;
-  // Time 纪录纵轴翻转（2026-11-06 张老师定）：时间越小越好，翻转后趋势向上爬
-  //（最好成绩在图表顶部，视觉=一步步逼近纪录）；3BV/s 与 STNB 本就越大越好，不翻转
-  const flip = chart.metric === "time";
-  const y = (v: number) =>
-    PAD_T + (flip ? (v - mn) / span : 1 - (v - mn) / span) * (H - PAD_T - PAD_B);
+  // 纵轴坐标系（2026-11-06 张老师定）：time 倒数 / stnb 1.7 次方 / 3bvs 线性——
+  // 统一「变换值越大越靠顶」，顶部恒为最好成绩
+  const ts = pts.map((p) => transformY(chart.metric, p.y));
+  const tmin = Math.min(...ts);
+  const tmax = Math.max(...ts);
+  const tspan = tmax - tmin || 1;
+  const y = (v: number) => {
+    const t = transformY(chart.metric, v);
+    return PAD_T + (1 - (t - tmin) / tspan) * (H - PAD_T - PAD_B);
+  };
   const x = (i: number) => PAD_X + (W - PAD_X * 2) * (i / (n - 1));
   const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.y)}`).join(" ");
 
@@ -275,8 +292,8 @@ export function ChartCard({
         >
           {[0, 0.25, 0.5, 0.75, 1].map((r) => {
             const gy = PAD_T + r * (H - PAD_T - PAD_B);
-            // 网格线标签取「该位置对应的值」：翻转后顶部=最小（最好）时间
-            const gv = flip ? mn + (mx - mn) * r : mx - (mx - mn) * r;
+            // 网格线标签取「该位置对应的值」：屏幕 y 线性映射变换值，反解回原值标注
+            const gv = invertY(chart.metric, tmax - r * tspan);
             return (
               <g key={r}>
                 <line
