@@ -6,7 +6,6 @@
 import { NextResponse } from "next/server";
 import { getNews, getNewsCount, getNewsPage } from "@/lib/queries";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
-import { getThunderKingId } from "@/lib/title-system";
 import { NEWS_PAGESIZE, NEWS_TYPE } from "@/lib/config";
 import { parseFeedStage } from "@/lib/stage";
 
@@ -32,9 +31,7 @@ export async function GET(req: Request) {
   // 首页阶段筛选（2026-10-29 张老师定）：gen/col/sol/god/man，按作者行内快照分档；
   // 仅首页 tabs 传此参数（用户主页不带），非法值回「全部」
   const stage = parseFeedStage(p.get("stage"));
-  // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
-  const king = await getThunderKingId();
-  const isKing = (id: number | undefined) => king > 0 && king === (id ?? 0);
+  // 2026-11-06 张老师定方案 A：动态行内军衔一律按快照阈值评定（总司令特判只留大徽章/榜单）
 
   // 页码模式（2026-10-14 用户主页动态翻页条）：?page=N 从头数第 N 页
   const pageRaw = parseInt(p.get("page") ?? "", 10);
@@ -47,7 +44,7 @@ export async function GET(req: Request) {
     ]);
     const withTitles = items.map((news) => ({
       news,
-      title: assessTitle(recordNewsExpTime(news.expTime, news.details, news.videoRealTime), isKing(news.author?.id)),
+      title: assessTitle(recordNewsExpTime(news.expTime, news.details, news.videoRealTime)),
       classic: news.authorTitles?.c ?? null,
     }));
     return NextResponse.json({
@@ -65,7 +62,7 @@ export async function GET(req: Request) {
   ]);
   const withTitles = items.map((news) => ({
     news,
-    title: assessTitle(recordNewsExpTime(news.expTime, news.details), isKing(news.author?.id)),
+    title: assessTitle(recordNewsExpTime(news.expTime, news.details)),
     classic: news.authorTitles?.c ?? null,
   }));
   return NextResponse.json({

@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   // 军衔应按主榜评定——与 RankingTable 同口径，优先主榜回填的 overallExpTime（2026-10-14 修复：NF 榜加载更多误评预备役）
   // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
   const king = await getThunderKingId();
-  const pairs = await dualTitles(rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex })));
+  const pairs = await dualTitles(rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex })), true);
   const titled = rows.map((u, i) => ({
     ...u,
     title: assessTitle(u.overallExpTime ?? u.scores.exp_time, king > 0 && king === Number(u.id)),

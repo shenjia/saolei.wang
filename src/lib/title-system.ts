@@ -6,6 +6,8 @@
 //   （2026-10-19 张老师改口径，原 SUB30 绝对阈值；与旧体系「雷帝」同一判定源）——
 //   定义在 config.ts（TITLES/TITLE_THRESHOLDS/TITLE_CONDITIONS）与 assess.ts（title()），
 //   未登录与用户未设置偏好时固定渲染这套。
+//   2026-11-06 张老师定方案 A：总司令/雷帝特判只用于个人主页大徽章与榜单；
+//   行内（录像/动态/评论/BBS/消息）一律按快照阈值评定，让军衔进步曲线可见。
 // 体系 B「旧版称号」：雷帝/雷圣/雷神(GG)/雷仙(mm)/状元/榜眼/…/童生 + 布衣，
 //   移植 2008 版 Help/Title.asp 规则（oldtitle.ts 同源），阈值独立于军衔制。
 //
@@ -165,15 +167,16 @@ export interface TitlePair {
 }
 
 /**
- * dualTitle：单行「快照 → 双体系称号对」（雷帝/总司令判定由调用方一次性取 TOP1 后逐行传入；
- * 2026-10-19 起总司令=雷界第一人，两体系 TOP1 恒同一人）
+ * dualTitle：单行「快照 → 双体系称号对」（2026-11-06 张老师定方案 A：
+ * 行内军衔一律按快照阈值评定——总司令/雷帝特判只留给个人主页大徽章与榜单，
+ * 本函数默认不套 king；榜单调用方经 dualTitles(…, true) 或自行传 king）
  */
 export function dualTitle(
   userId: number,
   expTime: number,
   ranked: boolean,
   sex: number,
-  king: number
+  king = 0
 ): TitlePair {
   const isKing = king > 0 && king === userId;
   return {
@@ -183,8 +186,14 @@ export function dualTitle(
   };
 }
 
-/** 服务端批量换算「快照 → 双体系称号对」（雷帝/总司令判定一次性取 TOP1；
- *  2026-10-19 起总司令=雷界第一人，两体系 TOP1 恒同一人）
+/** 服务端批量换算「快照 → 双体系称号对」
+ *
+ * ⚠️ withKing 默认 **false**（2026-11-06 张老师定方案 A）：行内军衔（录像列表/详情/
+ * 动态/评论/BBS/消息等）一律按快照阈值评定，总司令/雷帝不套行——否则现任第一人
+ * 名下所有历史行全塌缩成「总司令」（/user/18290 实证：快照 48 档进步曲线被盖住）。
+ * 只有**榜单/徽章**类调用点显式传 true（排行/进步/地区/STNB/BV/军衔墙/首页TOP10/
+ * 纪录页/用户主页大徽章 classic）。直调 assessTitle 的行内点（NewsCell/首页流/
+ * api/news/more）同口径去掉 king。
  *
  * ⚠️ 返回**与传入行序严格对齐的数组**（2026-10-27 修复），不再返回 Map：
  * 旧 Map 以 userId 为键，同一用户多行（各带各的上传时刻快照——如个人主页录像区、
@@ -192,8 +201,9 @@ export function dualTitle(
  * 同一军衔的根因）。调用方一律 `dualTitles(rows)[i]` 按下标取本行称号。
  * 每行数据互不依赖（king 单次查询），无共享状态。 */
 export async function dualTitles(
-  rows: { userId: number; expTime: number; ranked: boolean; sex: number }[]
+  rows: { userId: number; expTime: number; ranked: boolean; sex: number }[],
+  withKing = false
 ): Promise<TitlePair[]> {
-  const king = await getThunderKingId();
+  const king = withKing ? await getThunderKingId() : 0;
   return rows.map((r) => dualTitle(r.userId, r.expTime, r.ranked, r.sex, king));
 }

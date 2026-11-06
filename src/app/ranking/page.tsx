@@ -244,7 +244,7 @@ export default async function RankingPage({
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；Phase 5 补旧版称号备选（BV 榜全在榜）
     // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
     const bvKing = await getThunderKingId();
-    const bvPairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
+    const bvPairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })), true);
     const titled = rows.map((u, i) => ({
       ...u,
       title: assessTitle(u.expTime, bvKing > 0 && bvKing === u.id),
@@ -347,7 +347,8 @@ export default async function RankingPage({
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；总司令=雷界第一人特判（两体系共用）
     const stnbKing = await getThunderKingId();
     const stnbPairs = await dualTitles(
-      rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex }))
+      rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })),
+      true
     );
     const titled = rows.map((u, i) => ({
       ...u,
@@ -463,7 +464,8 @@ export default async function RankingPage({
   // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
   const king = await getThunderKingId();
   const rankPairs = await dualTitles(
-    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
+    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex })),
+    true
   );
   const titled = await Promise.all(
     rows.map(async (u, i) => ({

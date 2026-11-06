@@ -52,7 +52,6 @@ import { VideoHot } from "@/components/VideoHot";
 import { PracticeToday } from "@/components/PracticeToday";
 import { getPracticeToday, getRankedToday } from "@/lib/practice";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
-import { getThunderKingId } from "@/lib/title-system";
 
 export const dynamic = "force-dynamic";
 
@@ -86,18 +85,17 @@ export default async function HomePage() {
     getHomeVideoFeedPage(),
     getHomeVideoFeedCount(),
   ]);
-  // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
-  const king = await getThunderKingId();
+  // 2026-11-06 张老师定方案 A：动态行内军衔一律按快照阈值评定（总司令特判只留大徽章/榜单）
   const feed: NewsFeedItem[] = news.map((n) => ({
     news: n,
     // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
-    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime), king > 0 && king === (n.author?.id ?? 0)),
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime)),
     classic: n.authorTitles?.c ?? null,
   }));
   // 入伍新兵按发布者实时高级时间评军衔（2026-10-13 SUB 制）
   const newbieRows = newbies.map((n) => ({
     ...n,
-    title: assessTitle(n.expTime, king > 0 && king === (n.author?.id ?? 0)),
+    title: assessTitle(n.expTime),
     classic: n.authorTitles?.c ?? null,
   }));
 

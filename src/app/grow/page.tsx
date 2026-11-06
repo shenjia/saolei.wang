@@ -47,7 +47,8 @@ export default async function GrowPage({
   const { rows, total, pageSize } = await getGrowRanking(page);
   // Phase 5：补旧版称号备选（进步榜行全部在榜）
   const growPairs = await dualTitles(
-    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
+    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex })),
+    true
   );
   // 2026-10-19 总司令=雷界第一人特判
   const king = await getThunderKingId();

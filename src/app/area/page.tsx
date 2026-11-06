@@ -113,7 +113,8 @@ export default async function AreaPage({
     // 2026-10-19 总司令=雷界第一人特判
     const king = await getThunderKingId();
     const areaPairs = await dualTitles(
-      rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex }))
+      rows.map((u) => ({ userId: Number(u.id), expTime: u.overallExpTime ?? u.scores.exp_time, ranked: true, sex: u.sex })),
+      true
     );
     const titledRows = await Promise.all(
       rows.map((u, i) => ({
@@ -173,7 +174,7 @@ export default async function AreaPage({
   // 领军人物的军衔按高级时间评定（2026-10-13 SUB 制）；Phase 5 补旧版称号备选
   // 2026-10-19 总司令=雷界第一人特判
   const leadKing = await getThunderKingId();
-  const leadPairs = await dualTitles(rows.map((r) => ({ userId: r.bestId, expTime: r.bestExpTime, ranked: true, sex: r.bestSex })));
+  const leadPairs = await dualTitles(rows.map((r) => ({ userId: r.bestId, expTime: r.bestExpTime, ranked: true, sex: r.bestSex })), true);
   const titles = await Promise.all(rows.map((r) => assessTitle(r.bestExpTime, leadKing > 0 && leadKing === r.bestId)));
 
   return (

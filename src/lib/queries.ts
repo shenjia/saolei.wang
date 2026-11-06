@@ -846,7 +846,8 @@ async function getTopUsersImpl(
   const kingId = rows.length ? N(rows[0].id) : 0;
   // dualTitles 行序数组（2026-10-27）：与 rows 下标一一对应
   const topPairs = await dualTitles(
-    rows.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: byId.get(N(r.id))?.sex ?? 1 }))
+    rows.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: byId.get(N(r.id))?.sex ?? 1 })),
+    true // 榜单（首页国内TOP10）保留总司令特判（2026-11-06 方案 A：行内去 king、榜单保留）
   );
   return rows.map((r, i) => {
     const u = byId.get(N(r.id));
@@ -1912,9 +1913,12 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
     // Phase 5：旧版称号备选（在榜=user.status===0 且有高级成绩；含雷帝 TOP1 判定）
     classicTitle:
       (
-        await dualTitles([
-          { userId: N(u.id), expTime: N(scores?.expTime ?? 0), ranked: u.status === 0 && (scores?.expTime ?? 0) > 0, sex: u.sex },
-        ])
+        await dualTitles(
+          [
+            { userId: N(u.id), expTime: N(scores?.expTime ?? 0), ranked: u.status === 0 && (scores?.expTime ?? 0) > 0, sex: u.sex },
+          ],
+          true // 用户主页大徽章保留雷帝/总司令特判（2026-11-06 方案 A）
+        )
       )[0]?.c ?? null,
   };
 }
@@ -2405,7 +2409,8 @@ export async function getTitleMembers(
   // Phase 5：批量补旧版称号备选（成员各按高级成绩；本列表恒在榜）
   // dualTitles 行序数组（2026-10-27）：与 page 下标一一对应
   const memberPairs = await dualTitles(
-    page.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: authors.get(N(r.id))?.sex ?? 1 }))
+    page.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: authors.get(N(r.id))?.sex ?? 1 })),
+    true // 军衔墙成员页=榜单，保留总司令特判（2026-11-06 方案 A）
   );
   const memberRows: TitleMemberRow[] = page.map((r, i) => {
     const rec = r as unknown as Record<string, bigint | number | null>;
