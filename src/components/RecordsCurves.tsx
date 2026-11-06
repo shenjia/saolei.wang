@@ -84,19 +84,19 @@ function fmtAxis(metric: CurveChart["metric"], v: number): string {
   return (v / 1000).toFixed(2);
 }
 
-/** 坐标系变换（2026-11-06 张老师定）：time 用倒数坐标系（1/毫秒——时间越小变换值越大，
- *  趋势自然向上爬）；stnb 用 1.7 次方坐标系（v^1.7——低分差异压缩、高分差异放大，
- *  进步曲线后期更陡）；3bvs 线性。统一口径：变换值越大 = 成绩越好 = 越靠图顶 */
+/** 坐标系变换（2026-11-06 张老师定，当日二次修订）：time 用倒数坐标系（1/毫秒——时间越小变换值越大，
+ *  趋势自然向上爬）；stnb 用 10/17 次方坐标系（v^(10/17)≈v^0.588——高分差异压缩、低分差异放大，
+ *  曲线前中期爬坡更陡）；3bvs 线性。统一口径：变换值越大 = 成绩越好 = 越靠图顶 */
 function transformY(metric: CurveChart["metric"], v: number): number {
   if (metric === "time") return 1 / v;
-  if (metric === "stnb") return Math.pow(v, 1.7);
+  if (metric === "stnb") return Math.pow(v, 10 / 17);
   return v;
 }
 
 /** 变换值 → 原值（网格线标签反解用） */
 function invertY(metric: CurveChart["metric"], t: number): number {
   if (metric === "time") return 1 / t;
-  if (metric === "stnb") return Math.pow(t, 1 / 1.7);
+  if (metric === "stnb") return Math.pow(t, 17 / 10);
   return t;
 }
 
@@ -205,7 +205,7 @@ export function ChartCard({
   // 用户主页点密的 3BV/s/STNB 曲线实测出横向滚动条）；仅 >600 点极端情况
   // 保留横向滚动兜底
   const W = n > SCROLL_THRESHOLD ? n * 26 : boxW;
-  // 纵轴坐标系（2026-11-06 张老师定）：time 倒数 / stnb 1.7 次方 / 3bvs 线性——
+  // 纵轴坐标系（2026-11-06 张老师定，当日二次修订）：time 倒数 / stnb 10/17 次方 / 3bvs 线性——
   // 统一「变换值越大越靠顶」，顶部恒为最好成绩
   const ts = pts.map((p) => transformY(chart.metric, p.y));
   const tmin = Math.min(...ts);
