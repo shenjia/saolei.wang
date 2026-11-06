@@ -429,8 +429,10 @@ const REPLAY_MOUSE_SCRIPT = `
   /* MiddleRelease＝双击/chord（导出流折叠产物：双键 chord、sc+lr 与自动双击统一折叠成
      mr，flop 解析为 MiddleRelease——353011 案：右键按住期间左键点下＝双击，面板不显示
      会让 chord 在按键记录里完全不可见。原始按下时刻已随折叠丢失，只显示单个「双击」行）。 */
-  /* LeftPressWithShift＝元扫雷 cc（双击按下）经 sc 的 flop 派发，双击的按压事件：
-     手势＝按下键 → sc → 松开；354037 案：过滤它会让其后 LeftRelease 变成「缺按下+裸抬起」。 */
+  /* LeftPressWithShift＝元扫雷 cc（双击的第二击按下，按钮未知）经 sc 的 flop
+     派发。按钮可由当时按键态唯一判定（双击＝两键同按）：buildRecords 里
+     改写成真实按钮（只左按着→RightPress，只右按着→LeftPress），异常流才
+     保留原名 fallback。边线用轨迹双击标志同款青色（.dbl）。 */
   var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起", MiddleRelease: "双击", LeftPressWithShift: "双击" };
   /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
      推进；录像指示器必须按 gameElapsedTime 自行重放左右键事件。游标增量前进，
@@ -498,20 +500,31 @@ const REPLAY_MOUSE_SCRIPT = `
     var ordered = evs.filter(function (e) { return !!labels[e.name]; }).slice();
     ordered.sort(function (a, b) { return (Number(a.time) || 0) - (Number(b.time) || 0); });
     var lDown = false, rDown = false;
+    /* 真实按住态（抬起回落）：仅用于 cc 按钮判定；lDown/rDown 只置不清
+       （服务于「缺失按下」补行），到 LPS 时往往两侧都 true，不能用。 */
+    var lHeld = false, rHeld = false;
     for (var i = 0; i < ordered.length; i++) {
       var e = ordered[i];
       if (!labels[e.name]) continue;
-      var ev = { name: e.name, time: Number(e.time) || 0, holdMs: null, paired: false, lPos: null, rPos: null, missing: false };
-      if (e.name === "LeftPress") lDown = true;
-      else if (e.name === "LeftPressWithShift") lDown = true; /* 双击按压＝左键语义，其后 LeftRelease 不补「缺按下」 */
-      else if (e.name === "RightPress") rDown = true;
+      var ev = { name: e.name, time: Number(e.time) || 0, holdMs: null, paired: false, lPos: null, rPos: null, missing: false, inferred: false };
+      if (e.name === "LeftPress") { lDown = true; lHeld = true; }
+      else if (e.name === "LeftPressWithShift") {
+        /* 元 cc 按钮判定：只有左键按着→实为 RightPress，只有右键按着→实为
+           LeftPress（改写后同键抬起自然配对）；异常流保留原名「双击」，仅置态。 */
+        if (lHeld && !rHeld) { ev.name = "RightPress"; ev.inferred = true; rDown = true; rHeld = true; }
+        else if (rHeld && !lHeld) { ev.name = "LeftPress"; ev.inferred = true; lDown = true; lHeld = true; }
+        else if (lHeld) { rDown = true; rHeld = true; }
+        else { lDown = true; lHeld = true; }
+      }
+      else if (e.name === "RightPress") { rDown = true; rHeld = true; }
       else if (e.name === "LeftRelease" && !lDown) {
-        records.push({ name: "LeftPress", time: ev.time, holdMs: null, paired: false, lPos: null, rPos: null, missing: true });
+        records.push({ name: "LeftPress", time: ev.time, holdMs: null, paired: false, lPos: null, rPos: null, missing: true, inferred: false });
         lDown = true;
       } else if (e.name === "RightRelease" && !rDown) {
-        records.push({ name: "RightPress", time: ev.time, holdMs: null, paired: false, lPos: null, rPos: null, missing: true });
+        records.push({ name: "RightPress", time: ev.time, holdMs: null, paired: false, lPos: null, rPos: null, missing: true, inferred: false });
         rDown = true;
-      }
+      } else if (e.name === "LeftRelease") lHeld = false;
+      else if (e.name === "RightRelease") rHeld = false;
       records.push(ev);
     }
     var lr = -1, rr = -1;
@@ -530,8 +543,8 @@ const REPLAY_MOUSE_SCRIPT = `
         }
         lr = -1;
       } else if (name === "LeftPressWithShift") {
-        /* 双击按压归领后续 LeftRelease（backward 扫描天然左键优先：中间有 LeftPress
-           时它已先配对并清 lr）。只配对算时长，不进 cover——双击行走独立青色边线。 */
+        /* 仅异常流 fallback（孤立 LPS，正常元流已在 forward 改写成真实按钮
+           走标准配对）：按左键语义归领后续 LeftRelease，不进 cover。 */
         if (lr > j) {
           records[lr].holdMs = Math.max(0, records[lr].time - records[j].time);
           records[lr].paired = true;
@@ -575,7 +588,7 @@ const REPLAY_MOUSE_SCRIPT = `
     for (var i = 0; i < records.length; i++) {
       var e = records[i], down = e.name === "LeftPress" || e.name === "RightPress" || e.name === "LeftPressWithShift";
       var isLeft = e.name === "LeftPress" || e.name === "LeftRelease" || e.name === "MiddleRelease" || e.name === "LeftPressWithShift";
-      var dbl = e.name === "MiddleRelease" || e.name === "LeftPressWithShift" ? " dbl" : "";
+      var dbl = e.inferred || e.name === "MiddleRelease" || e.name === "LeftPressWithShift" ? " dbl" : "";
       var action = down
         ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : labels[e.name]
         : e.name === "MiddleRelease"

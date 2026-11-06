@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /** 回放按键指示器消费的最小事件结构（VideoReplay.ReplayEv 可直接传入）。 */
@@ -20,6 +20,8 @@ interface KeyRecord extends ReplayMouseEvent {
   rPos: "start" | "mid" | "end" | null;
   /** 录像起始就处于按住态时补的「缺失按下」行。 */
   missing: boolean;
+  /** 由元扫雷 cc（按钮未知）判定还原的按下行，渲染时加青色边线。 */
+  inferred: boolean;
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -32,10 +34,10 @@ const EVENT_LABELS: Record<string, string> = {
      面板不显示 mr 会让 chord 在按键记录里完全不可见，只剩裸的右键按下/抬起）。
      按下时刻已随折叠丢失，只显示单个「双击」行，不合成按下/抬起对（会伪造 0ms 配对）。 */
   mr: "双击",
-  /* sc＝元扫雷 cc（双击按下，按钮未知）经 evfToRawvf 的映射，双击的按压事件：
-     手势＝按下键(lc/rc) → sc → 松开(lr/rr)。354037 案：面板过滤 sc 后，其后的
-     lr 变成「左键按下(缺)+裸抬起」。sc 按左键按压处理：可与无 lc 认领的后续
-     lr 配对显示双击第二击按住时长，边线用轨迹双击标志同款青色。 */
+  /* sc＝元扫雷 cc（双击的第二击按下，按钮未知）经 evfToRawvf 的映射。
+     按钮可由当时按键态唯一判定（双击＝两键同按，cc 前必有一键还按着）：
+     只有左键按着→实为右键按下，只有右键按着→实为左键按下（forward 循环
+     里改写）。双键都已按住/都未按的异常流才保留 sc fallback 显示「双击」。 */
   sc: "双击",
 };
 
@@ -46,22 +48,34 @@ const PANEL_OPEN_KEY = "replayKeyPanelOpen";
     动作区间用差分标记，按下→抬起之间隔着的行也归入同组连线。 */
 function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
   /* 行序只由时间决定；同刻事件保持原始先后顺序，左右列穿插的行不能跳过。 */
-  const raw: KeyRecord[] = events.filter((e) => EVENT_LABELS[e.ev]).map((e) => ({ ...e, holdCsec: null, paired: false, lPos: null, rPos: null, missing: false })).sort((a, b) => a.csec - b.csec);
+  const raw: KeyRecord[] = events.filter((e) => EVENT_LABELS[e.ev]).map((e) => ({ ...e, holdCsec: null, paired: false, lPos: null, rPos: null, missing: false, inferred: false })).sort((a, b) => a.csec - b.csec);
   /* 录像起始已是按住态时，首个抬起前补一条「缺失按下」，时长从它起算。 */
   const rows: KeyRecord[] = [];
   let lDown = false;
   let rDown = false;
+  /* 真实按住态（抬起回落）：仅用于 cc 按钮判定。lDown/rDown 只置不清
+     （服务于「缺失按下」补行，见下），到 sc 时往往两侧都 true，不能用。 */
+  let lHeld = false;
+  let rHeld = false;
   for (const e of raw) {
-    if (e.ev === "lc") lDown = true;
-    else if (e.ev === "sc") lDown = true; // 双击按压＝左键语义：其后 lr 不再补「左键按下(缺)」
-    else if (e.ev === "rc") rDown = true;
+    if (e.ev === "lc") { lDown = true; lHeld = true; }
+    else if (e.ev === "sc") {
+      /* 元 cc 按钮判定：只有左键按着→实为右键按下，只有右键按着→实为左键
+         按下。改写后同键抬起自然配对（354037：rc→sc→lr → rc、lc(青)、lr）。 */
+      if (lHeld && !rHeld) { e.ev = "rc"; e.inferred = true; rDown = true; rHeld = true; }
+      else if (rHeld && !lHeld) { e.ev = "lc"; e.inferred = true; lDown = true; lHeld = true; }
+      else if (lHeld) { rDown = true; rHeld = true; } // 双键都已按住的异常流：保留「双击」显示
+      else { lDown = true; lHeld = true; }
+    }
+    else if (e.ev === "rc") { rDown = true; rHeld = true; }
     else if (e.ev === "lr" && !lDown) {
-      rows.push({ ...e, ev: "lc", paired: false, lPos: null, rPos: null, missing: true });
+      rows.push({ ...e, ev: "lc", paired: false, lPos: null, rPos: null, missing: true, inferred: false });
       lDown = true;
     } else if (e.ev === "rr" && !rDown) {
-      rows.push({ ...e, ev: "rc", paired: false, lPos: null, rPos: null, missing: true });
+      rows.push({ ...e, ev: "rc", paired: false, lPos: null, rPos: null, missing: true, inferred: false });
       rDown = true;
-    }
+    } else if (e.ev === "lr") lHeld = false;
+    else if (e.ev === "rr") rHeld = false;
     rows.push(e);
   }
   let leftRelease = -1;
@@ -82,9 +96,8 @@ function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
       }
       leftRelease = -1;
     } else if (ev === "sc") {
-      /* 双击按压归领后续 lr：backward 扫描先遇到的 lc 已优先配对并清 leftRelease，
-         走到 sc 时 leftRelease 仍挂着＝中间无 lc（元的右键按住双击 rc→sc→lr）。
-         只配对算时长（抬起行显「持续xxms」），不进 cover——双击行用独立青色边线。 */
+      /* 仅异常流 fallback（孤立 sc，见 forward 判定）：按左键语义归领后续 lr。
+         正常元流已在 forward 改写成 lc/rc，走上方标准配对。 */
       if (leftRelease > i) {
         rows[leftRelease].holdCsec = Math.max(0, rows[leftRelease].csec - rows[i].csec);
         rows[leftRelease].paired = true;
@@ -112,6 +125,41 @@ function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
   }
   return rows;
 }
+
+/** 单行组件 memo 化（2026-11-06 回放卡顿修复）：面板随回放统计 ~100ms 重渲染
+ *  10Hz，长录像几百行全量 diff 每次都有可感知卡顿峰。records 是 useMemo 产物
+ *  引用稳定，memo 后每 tick 只 touch selected 变化的两行。 */
+const KeyRow = memo(function KeyRow({
+  e,
+  index,
+  selected,
+}: {
+  e: KeyRecord;
+  index: number;
+  selected: boolean;
+}) {
+  const down = e.ev === "lc" || e.ev === "rc" || e.ev === "sc";
+  const isLeft = e.ev === "lc" || e.ev === "lr" || e.ev === "mr" || e.ev === "sc";
+  const dbl = e.ev === "mr" || e.ev === "sc" || e.inferred ? " dbl" : "";
+  const action = down
+    ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : EVENT_LABELS[e.ev]
+    : e.ev === "mr"
+    ? EVENT_LABELS.mr
+    : e.holdCsec === null
+    ? "抬起"
+    : `持续${Math.round(e.holdCsec * 10)}ms`;
+  return (
+    <div
+      className={"rk_row" + dbl + (e.lPos ? ` pair_l pair_l_${e.lPos}` : "") + (e.rPos ? ` pair_r pair_r_${e.rPos}` : "") + (down ? " down" : "") + (selected ? " current" : "")}
+      data-index={index}
+      aria-current={selected ? "true" : undefined}
+    >
+      <span className="rk_action rk_left">{isLeft ? action : ""}</span>
+      <span className="rk_time">{(e.csec / 100).toFixed(3)}</span>
+      <span className="rk_action rk_right">{isLeft ? "" : action}</span>
+    </div>
+  );
+});
 
 /** 最后一个已经发生的事件；开局尚未有按键时返回 -1。 */
 function currentEventIndex(rows: KeyRecord[], csec: number) {
@@ -277,30 +325,9 @@ export function ReplayMouseIndicator({
         <span className="gr_hint">可按方向键进行导航</span>
       </div>
       <div className="rk_list" ref={listRef}>
-        {records.length ? records.map((e, i) => {
-          const down = e.ev === "lc" || e.ev === "rc" || e.ev === "sc";
-          const isLeft = e.ev === "lc" || e.ev === "lr" || e.ev === "mr" || e.ev === "sc";
-          const dbl = e.ev === "mr" || e.ev === "sc" ? " dbl" : "";
-          const action = down
-            ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : EVENT_LABELS[e.ev]
-            : e.ev === "mr"
-            ? EVENT_LABELS.mr
-            : e.holdCsec === null
-            ? "抬起"
-            : `持续${Math.round(e.holdCsec * 10)}ms`;
-          return (
-            <div
-              className={"rk_row" + dbl + (e.lPos ? ` pair_l pair_l_${e.lPos}` : "") + (e.rPos ? ` pair_r pair_r_${e.rPos}` : "") + (down ? " down" : "") + (i === selected ? " current" : "")}
-              data-index={i}
-              key={`${e.csec}-${e.ev}-${i}`}
-              aria-current={i === selected ? "true" : undefined}
-            >
-              <span className="rk_action rk_left">{isLeft ? action : ""}</span>
-              <span className="rk_time">{(e.csec / 100).toFixed(3)}</span>
-              <span className="rk_action rk_right">{isLeft ? "" : action}</span>
-            </div>
-          );
-        }) : <div className="rk_empty">暂无按键事件</div>}
+        {records.length ? records.map((e, i) => (
+          <KeyRow e={e} index={i} selected={i === selected} key={`${e.csec}-${e.ev}-${i}`} />
+        )) : <div className="rk_empty">暂无按键事件</div>}
       </div>
     </div>
   ) : null;
