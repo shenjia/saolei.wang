@@ -14,6 +14,10 @@ declare global {
   interface Window {
     /** 已注入宿主脚本的文档标记（以文档为单位防重入，跨文档不误判） */
     __flopHostedDoc?: Document;
+    /** 已注入脚本的版本号：脚本内容更新后重载 iframe 文档重注（否则防重入
+        标记会让常驻 iframe 永远跑旧脚本——2026-11-05 后台方向键修完仍失灵
+        即此因：HMR 不换 iframe 文档，旧监听没有父窗口补挂） */
+    __flopHostScriptVer?: number;
     flop?: {
       playVideo?: (
         uri: string,
@@ -297,8 +301,8 @@ const ZOOM_SCRIPT = `
      换录像/换级别重建容器致 zoom 归零时同样由这里即刻补挂。
      300ms 轮询保留作兜底（覆盖棋盘出现后无后续 childList 变更等边角）。
      ⚠️ 只观察 childList 不观察 attributes：本脚本/FIT 改 style.zoom 不会
-     反向触发本观察器（无反馈环路，2026-11-03 尺寸跳动事故不复发）。 */
-  /* ⚠️ 快路径必须零布局（2026-11-06 回放卡顿修复）：回放期 flop Vue 每个
+     反向触发本观察器（无反馈环路，2026-11-03 尺寸跳动事故不复发）。
+     ⚠️ 快路径必须零布局（2026-11-06 回放卡顿修复）：回放期 flop Vue 每个
      变更批次（开格/插旗/计时文本刷新）都会进一次微任务，findArea() 的
      getBoundingClientRect 每批强制一次全文档布局＝每秒几十上百次 reflow，
      是「录像没原来流畅」的主因之一。改为缓存 svg 引用：isConnected 成立
@@ -429,7 +433,7 @@ const REPLAY_MOUSE_SCRIPT = `
   var panel = document.createElement("div");
   panel.className = "replay_key_panel_flop";
   panel.setAttribute("data-testid", "replay-key-panel");
-  panel.innerHTML = '<div class="gr_title"><span>按键记录</span><span class="gr_hint">可按方向键进行导航</span></div><div class="rk_list"></div>';
+  panel.innerHTML = '<div class="gr_title"><span>按键记录</span><span class="gr_hint">支持鼠标滚轮/方向键导航</span></div><div class="rk_list"></div>';
   panel.hidden = !panelOpen;
   document.body.appendChild(panel);
   var list = panel.querySelector(".rk_list");
@@ -437,11 +441,11 @@ const REPLAY_MOUSE_SCRIPT = `
   var records = [], selected = -1, lastCurrent = -2, visibleRows = 1, seeking = false, navigatedIndex = -1, navigatedTime = -1;
   /* MiddleRelease＝双击/chord（导出流折叠产物：双键 chord、sc+lr 与自动双击统一折叠成
      mr，flop 解析为 MiddleRelease——353011 案：右键按住期间左键点下＝双击，面板不显示
-     会让 chord 在按键记录里完全不可见。原始按下时刻已随折叠丢失，只显示单个「双击」行）。 */
-  /* LeftPressWithShift＝元扫雷 cc（双击的第二击按下，按钮未知）经 sc 的 flop
+     会让 chord 在按键记录里完全不可见。原始按下时刻已随折叠丢失，只显示单个「双击」行）。
+     LeftPressWithShift＝元扫雷 cc（双击的第二击按下，按钮未知）经 sc 的 flop
      派发。按钮可由当时按键态唯一判定（双击＝两键同按）：buildRecords 里
      改写成真实按钮（只左按着→RightPress，只右按着→LeftPress），异常流才
-     保留原名 fallback。边线用轨迹双击标志同款青色（.dbl）。 */
+     保留原名 fallback。两者边线都用轨迹双击标志同款青色（.dbl）。 */
   var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起", MiddleRelease: "双击", LeftPressWithShift: "双击" };
   /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
      推进；录像指示器必须按 gameElapsedTime 自行重放左右键事件。游标增量前进，
@@ -613,7 +617,23 @@ const REPLAY_MOUSE_SCRIPT = `
     paintSelection();
   }
   function seekMs(ms) {
-    /* 复用 Flop 自己的进度滑块，原生完成盘面重建、播放态保持与事件索引推进。 */
+    /* 直接走 Flop 的 setGameElapsedTime：设时钟 + 双向推/撤事件到与时刻
+       严格一致（前进补应用、回退按快照撤销，gameMousePoints 同步增减），
+       一条 commit 完成，无整窗重建、无闪烁。
+       ⚠️ 绝不能用 performNext/PreviousEvent 写「步进到目标时钟」的循环：
+       这两个 mutation 只推/撤事件索引、从不改 gameElapsedTime，按时钟判
+       循环条件永远不满足 → 空转打满 guard，把索引狂推几千条，轨迹远远
+       超前于时钟、下次 seek 又拉回＝轨迹一伸一缩（2026-11-05 张老师
+       「一闪一闪」的真正根因；旧滑块路径的校准循环同样中招）。
+       落位即暂停（滑块 seek 既有语义）：时钟停住选行才不会被自动跟随顶掉。 */
+    var target = Math.max(0, Math.round(ms));
+    var st = store();
+    if (st) {
+      st.commit("setVideoPaused", true);
+      st.commit("setGameElapsedTime", target);
+      return;
+    }
+    /* store 未就绪的兜底：走滑块粗定位（无法精确校准，可容忍）。 */
     var sliders = document.querySelectorAll(".ant-slider");
     var slider = null, max = 0;
     for (var i = 0; i < sliders.length; i++) {
@@ -624,20 +644,15 @@ const REPLAY_MOUSE_SCRIPT = `
     var rail = slider && slider.querySelector(".ant-slider-rail");
     if (!rail || !(max > 0)) return;
     var r = rail.getBoundingClientRect();
-    var x = r.left + Math.max(0, Math.min(1, ms / max)) * r.width;
+    var x = r.left + Math.max(0, Math.min(1, target / max)) * r.width;
     var y = r.top + r.height / 2;
     seeking = true;
-    slider.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: x, clientY: y, button: 0 }));
-    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: x, clientY: y, button: 0 }));
-    /* 滑块一像素可跨数十毫秒；在粗定位后的极小窗口内，用原生逐事件
-       变更校准盘面与事件索引，最后只把时钟推进到事件后的目标毫秒。 */
-    var st = store(), target = Math.round(ms), guard = 0;
-    if (st) {
-      while (Number(st.state.gameElapsedTime) < target && guard++ < 2000) st.commit("performNextEvent");
-      while (Number(st.state.gameElapsedTime) > target && guard++ < 4000) st.commit("performPreviousEvent");
-      if (Number(st.state.gameElapsedTime) !== target) st.commit("setGameElapsedTime", target);
+    try {
+      slider.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: x, clientY: y, button: 0 }));
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: x, clientY: y, button: 0 }));
+    } finally {
+      seeking = false; /* 合成事件链路抛错也必须复位，否则键盘/滚轮全被 seek 标志卡死 */
     }
-    seeking = false;
   }
   function togglePanel() {
     panelOpen = !panelOpen;
@@ -713,20 +728,62 @@ const REPLAY_MOUSE_SCRIPT = `
   host.addEventListener("mouseleave", function () { hovering = false; tip.hidden = true; });
   host.addEventListener("focus", function () { hovering = true; tip.hidden = false; placeTip(); });
   host.addEventListener("blur", function () { hovering = false; tip.hidden = true; });
-  window.addEventListener("keydown", function (e) {
-    if (seeking || !panelOpen || !records.length || ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) < 0) return;
-    var t = e.target;
-    if (t instanceof Element && t.closest("input, textarea, select, [contenteditable=true]")) return;
-    e.preventDefault(); e.stopPropagation();
+  function stepRow(delta) {
     var base = selected >= 0 ? selected : currentRecord(Number(store().state.gameElapsedTime) || 0);
-    if (base < 0) base = e.key === "ArrowDown" || e.key === "ArrowRight" ? -1 : 0;
-    var delta = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" ? -visibleRows : visibleRows;
+    if (base < 0) base = delta > 0 ? -1 : 0;
     selected = Math.max(0, Math.min(records.length - 1, base + delta));
     navigatedIndex = selected;
     navigatedTime = records[selected].time + 1;
     paintSelection();
     seekMs(navigatedTime);
-  }, true);
+  }
+  /* 方向键导航。⚠️ 键盘事件只派发给焦点所在文档：后台审核从列表点「播放」
+     打开播放器后，焦点常留在宿主页、从未进入 iframe，只挂 iframe window 时
+     方向键永远收不到（2026-11-05 后台实测；前台因开面板必须点击 iframe 内
+     鼠标图标、焦点被顺带带入才碰巧可用）。同源父窗口补挂同一份监听；焦点在
+     iframe 内时父窗口收不到该事件，不会双触发。播放器隐藏（display:none，
+     class 由播放器退出链路切换）时一律放行，不劫持宿主页方向键。 */
+  function playerVisible() {
+    var fe = window.frameElement;
+    return !!fe && !fe.classList.contains("flop-player-display-none");
+  }
+  function canNavigate(e) {
+    if (seeking || !panelOpen || !records.length || !playerVisible()) return false;
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.key) < 0) return false;
+    var t = e.target;
+    if (t instanceof Element && t.closest("input, textarea, select, [contenteditable=true]")) return false;
+    return true;
+  }
+  function onKey(e) {
+    if (!canNavigate(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    stepRow(e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" ? -visibleRows : visibleRows);
+  }
+  window.addEventListener("keydown", onKey, true);
+  try {
+    /* 版本守卫 reload iframe 时旧脚本的定时器随旧 Window 销毁、自清逻辑
+       跑不到，但它补挂在 parent.window 的 keydown 会残留成僵尸监听。
+       挂 marker 先摘旧的再挂新的，保证任何时刻父窗口只有一份 onKey。 */
+    if (parent.window.__flopOnKey) parent.window.removeEventListener("keydown", parent.window.__flopOnKey, true);
+    parent.window.__flopOnKey = onKey;
+    parent.window.addEventListener("keydown", onKey, true);
+  } catch (e) {}
+  /* 悬停按键记录面板滚轮＝逐行上/下（复用方向键导航链路，带自动 seek）。
+     preventDefault + stopPropagation 拦掉默认滚动与冒泡：面板在游戏区外、
+     ZOOM_SCRIPT 的 inArea 本就不会命中，这里主要防 iframe/父页跟着滚。
+     一格滚轮（deltaY=120）＝一行：120px 累计折算（deltaMode=1 行模式 1 行
+     也记 120），触控板小步增量平滑累计，到端点清积压防回程空放。 */
+  var wheelAcc = 0;
+  panel.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (seeking || !panelOpen || !records.length) return;
+    wheelAcc += (Number(e.deltaY) || 0) * (e.deltaMode === 1 ? 120 : 1);
+    var before = selected;
+    while (wheelAcc >= 120 && selected < records.length - 1) { wheelAcc -= 120; stepRow(1); }
+    while (wheelAcc <= -120 && selected > 0) { wheelAcc += 120; stepRow(-1); }
+    if (selected === before) wheelAcc = 0;
+  }, { passive: false });
   /* 定位统一入口：resize/父页滚动/换录像/250ms 兜底轮询共用。placePanel
      内部自带 panelOpen 守卫，placeTip 自带 hovering 守卫。 */
   function relocate() {
@@ -736,8 +793,20 @@ const REPLAY_MOUSE_SCRIPT = `
   }
   window.addEventListener("resize", relocate);
   try { parent.window.addEventListener("scroll", relocate, true); } catch (e) {}
-  window.setInterval(update, 32);
-  window.setInterval(function () { relocate(); }, 250);
+  var updateTimer = window.setInterval(function () {
+    /* iframe 被宿主卸载（frameElement 归 null）时自清：停轮询 + 摘掉补挂的
+       父窗口监听，防 detached 闭包常驻宿主页（2026-11-05）。 */
+    if (!window.frameElement) {
+      window.clearInterval(updateTimer);
+      try { parent.window.removeEventListener("keydown", onKey, true); } catch (e) {}
+      return;
+    }
+    update();
+  }, 32);
+  var relocateTimer = window.setInterval(function () {
+    if (!window.frameElement) { window.clearInterval(relocateTimer); return; }
+    relocate();
+  }, 250);
   update();
 })();
 `;
@@ -852,16 +921,33 @@ const MASK_EXIT_SCRIPT = `
     // 而暗区退出/缩放监听全死）。因此判定必须以「文档」为单位：
     // window.__flopHostedDoc !== 当前 doc 才注入，且跳过 about:blank；
     // load 事件 + 轻量轮询双通道兜底（旧注释所述「load 先于水合发完」同样覆盖）。
+    // ⚠️ 脚本内容有改动时必须递增 HOST_SCRIPT_VER：常驻 iframe（后台审核页
+    // 整个 SPA 会话不卸载）的旧脚本会带着旧监听一直跑，HMR 只重跑 effect、
+    // 防重入标记仍在 → 永不重注。版本不符时重载 iframe 文档强制换新脚本
+    // （dev/HMR 场景；生产新 bundle 只随页面刷新加载，不会走到这里）。
+    const HOST_SCRIPT_VER = 11;
     const ensureInject = () => {
       const doc = frame.contentDocument;
       if (!doc || !doc.body || !doc.defaultView) return;
       if (doc.location.href === "about:blank") return; // 初始空文档：监听会随文档替换作废，不注入
       if (doc.readyState !== "complete") return; // 未加载完，等 load 事件/下轮轮询
-      if (doc.defaultView.__flopHostedDoc === doc) return; // 该文档已注入
+      if (doc.defaultView.__flopHostedDoc === doc) {
+        if (doc.defaultView.__flopHostScriptVer !== HOST_SCRIPT_VER) {
+          doc.defaultView.__flopHostScriptVer = HOST_SCRIPT_VER;
+          doc.defaultView.location.reload();
+        }
+        return; // 该文档已注入
+      }
       doc.defaultView.__flopHostedDoc = doc;
-      const script = doc.createElement("script");
-      script.textContent = FIT_PLAYER_SCRIPT + MASK_EXIT_SCRIPT + CURSOR_COLOR_SCRIPT + ZOOM_SCRIPT + REPLAY_MOUSE_SCRIPT;
-      doc.body.appendChild(script);
+      doc.defaultView.__flopHostScriptVer = HOST_SCRIPT_VER;
+      /* 五段脚本各自独立 <script> 注入：模板串手工维护，任何一段出语法错误
+         （2026-11-06 实证：掉一个 } → appendChild 抛 SyntaxError）都不再殃及
+         后面各段——面板/键盘/滚轮/缩放互不连坐。 */
+      for (const seg of [FIT_PLAYER_SCRIPT, MASK_EXIT_SCRIPT, CURSOR_COLOR_SCRIPT, ZOOM_SCRIPT, REPLAY_MOUSE_SCRIPT]) {
+        const script = doc.createElement("script");
+        script.textContent = seg;
+        doc.body.appendChild(script);
+      }
     };
     ensureInject();
     frame.addEventListener("load", ensureInject);

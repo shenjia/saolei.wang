@@ -304,6 +304,37 @@ export function ReplayMouseIndicator({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, records, onSeek, selected, currentIndex]);
 
+  /* 面板滚轮＝逐行上/下，与方向键同一 seek 链路（前台录像原地回放/练习回放/
+     Flop 注入版三处口径一致：一格 deltaY=120 记一行，deltaMode=1 行模式同行；
+     触控板小步平滑累计，到端点清积压防回程空放）。selected 走 ref 镜像，
+     监听只挂一次不随导航重挂。面板在游戏区外，不影响棋盘滚轮缩放。 */
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  useEffect(() => {
+    if (!open || !records.length) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    let acc = 0;
+    const go = (index: number) => {
+      const targetCsec = records[index].csec + 1;
+      setManual({ index, targetCsec });
+      onSeek?.(targetCsec);
+    };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      acc += (Number(e.deltaY) || 0) * (e.deltaMode === 1 ? 120 : 1);
+      /* sel 为闭包内同步镜像：setManual 的重渲染是异步的，循环里读 ref 会死循环。 */
+      let sel = selectedRef.current;
+      const before = sel;
+      while (acc >= 120 && sel < records.length - 1) { acc -= 120; sel++; go(sel); }
+      while (acc <= -120 && sel > 0) { acc += 120; sel--; go(sel); }
+      if (sel === before) acc = 0;
+    };
+    panel.addEventListener("wheel", onWheel, { passive: false });
+    return () => panel.removeEventListener("wheel", onWheel);
+  }, [open, records, onSeek]);
+
   const positionTip = () => {
     const r = hostRef.current?.getBoundingClientRect();
     if (!r) return;
@@ -322,7 +353,7 @@ export function ReplayMouseIndicator({
     <div className="replay_key_panel" ref={panelRef} data-testid="replay-key-panel" onClick={(e) => e.stopPropagation()}>
       <div className="gr_title">
         <span>按键记录</span>
-        <span className="gr_hint">可按方向键进行导航</span>
+        <span className="gr_hint">支持鼠标滚轮/方向键导航</span>
       </div>
       <div className="rk_list" ref={listRef}>
         {records.length ? records.map((e, i) => (
