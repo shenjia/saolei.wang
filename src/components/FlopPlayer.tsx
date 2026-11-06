@@ -298,13 +298,22 @@ const ZOOM_SCRIPT = `
      300ms 轮询保留作兜底（覆盖棋盘出现后无后续 childList 变更等边角）。
      ⚠️ 只观察 childList 不观察 attributes：本脚本/FIT 改 style.zoom 不会
      反向触发本观察器（无反馈环路，2026-11-03 尺寸跳动事故不复发）。 */
+  /* ⚠️ 快路径必须零布局（2026-11-06 回放卡顿修复）：回放期 flop Vue 每个
+     变更批次（开格/插旗/计时文本刷新）都会进一次微任务，findArea() 的
+     getBoundingClientRect 每批强制一次全文档布局＝每秒几十上百次 reflow，
+     是「录像没原来流畅」的主因之一。改为缓存 svg 引用：isConnected 成立
+     （元素读不触发布局）直接用缓存判 cur——style.zoom 读同样零布局；
+     只有缓存断链（盘面重建）才重新 querySelectorAll+测量。极端的「旧 svg
+     仍连接但已非游戏区」误判有 300ms 轮询兜底（lastNatKey 变化→apply），
+     且滚轮/双击/resize 路径本就直接调 apply 不经此处。 */
+  var lastAreaSvg = null;
   var applyQueued = false;
   function queueApply() {
     if (applyQueued) return;
     applyQueued = true;
     Promise.resolve().then(function () {
       applyQueued = false;
-      var svg = findArea();
+      var svg = lastAreaSvg && lastAreaSvg.isConnected ? lastAreaSvg : (lastAreaSvg = findArea());
       if (!svg) return;
       var cur = parseFloat(svg.parentElement.style.zoom) || 1;
       if (Math.abs(cur - k) > 0.001) apply();
@@ -645,12 +654,11 @@ const REPLAY_MOUSE_SCRIPT = `
     if (!vp || !Array.isArray(state.gameEvents)) { host.style.display = "none"; panel.hidden = true; return; }
     host.style.display = "block";
     panel.hidden = !panelOpen;
-    placeHost();
     var left = replayLeft, right = replayRight;
     var nowMs = Number(state.gameElapsedTime) || 0;
     var evs = state.gameEvents;
     if (evs !== mouseEvents || nowMs < mouseNow) {
-      if (evs !== mouseEvents) { buildRecords(evs); if (panelOpen) buildPanel(); }
+      if (evs !== mouseEvents) { buildRecords(evs); if (panelOpen) buildPanel(); relocate(); }
       mouseEvents = evs;
       mouseEventIndex = 0;
       replayLeft = replayRight = false;
@@ -688,7 +696,14 @@ const REPLAY_MOUSE_SCRIPT = `
       lastCurrent = current;
       if (panelOpen) paintSelection();
     }
-    if (panelOpen) placePanel();
+    /* ⚠️ 定位不得进本 32ms 轮询（2026-11-06 回放卡顿修复）：placeHost 的
+       getBoundingClientRect 每跳强制一次全文档布局、面板打开时 placePanel
+       读写交错再加一次＝每秒 60~90 次 reflow，与 ZOOM 观察器叠加是「录像
+       没原来流畅」的主因。播放/回放期间游戏区矩形本就不动，定位改事件
+       驱动（relocate：resize/父页滚动/换录像/面板开关）+ 250ms 低频兜底
+       轮询（覆盖 ZOOM 改倍率、iframe 显示切换、字体加载等边角）。
+       本轮询只留零布局逻辑：store 遍历、事件推进、按键态与选中行变化时
+       才写 DOM 属性。 */
   }
   host.addEventListener("click", function (e) { e.stopPropagation(); togglePanel(); });
   host.addEventListener("keydown", function (e) {
@@ -712,9 +727,17 @@ const REPLAY_MOUSE_SCRIPT = `
     paintSelection();
     seekMs(navigatedTime);
   }, true);
-  window.addEventListener("resize", function () { placeHost(); placeTip(); placePanel(); });
-  try { parent.window.addEventListener("scroll", function () { placeHost(); placeTip(); placePanel(); }, true); } catch (e) {}
+  /* 定位统一入口：resize/父页滚动/换录像/250ms 兜底轮询共用。placePanel
+     内部自带 panelOpen 守卫，placeTip 自带 hovering 守卫。 */
+  function relocate() {
+    placeHost();
+    if (panelOpen) placePanel();
+    if (hovering) placeTip();
+  }
+  window.addEventListener("resize", relocate);
+  try { parent.window.addEventListener("scroll", relocate, true); } catch (e) {}
   window.setInterval(update, 32);
+  window.setInterval(function () { relocate(); }, 250);
   update();
 })();
 `;
