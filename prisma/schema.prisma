@@ -1021,6 +1021,13 @@ model PracticeDaily {
   playsBeg   Int @default(0) @map("plays_beg") // 初级尝试盘数
   playsInt   Int @default(0) @map("plays_int") // 中级尝试盘数
   playsExp   Int @default(0) @map("plays_exp") // 高级尝试盘数
+  // 完成盘数分级别（2026-11-06 张老师定：地区活跃指数/个人主页练习盘数改按完成口径，
+  // 且按难度加权 初级×1 中级×2 高级×10；自定义×1（无固定难度，防小盘刷高权重）。
+  // 起记日 2026-11-06，此前历史无分级别数据（既往不咎，7 日窗口一周后自然补齐）
+  winsBeg    Int @default(0) @map("wins_beg") // 初级完成盘数
+  winsInt    Int @default(0) @map("wins_int") // 中级完成盘数
+  winsExp    Int @default(0) @map("wins_exp") // 高级完成盘数
+  winsCus    Int @default(0) @map("wins_cus") // 自定义完成盘数（活跃指数按初级权重计）
   // 模式使用盘数（2026-10-27 张老师定：后台模式使用比例柱状图；可叠加，五列之和可 > plays）
   modeRanked Int @default(0) @map("mode_ranked") // 排名模式
   modeNf     Int @default(0) @map("mode_nf") // NF（无标）
@@ -1067,7 +1074,8 @@ model PracticeHourly {
 model AreaActivity {
   area        String @id @db.VarChar(12) // 与 user.area 同口径（剥后缀省名）
   activeUsers Int    @default(0) @map("active_users") // 近 30 天登录人数
-  plays7d     Int    @default(0) @map("plays_7d") // 近 7 日练习尝试盘数（登录用户）
+  plays7d     Int    @default(0) @map("plays_7d") // 近 7 日练习尝试盘数（登录用户；2026-11-06 起展示/计分改用 wins_7d，本列保留备查）
+  wins7d      Int    @default(0) @map("wins_7d") // 近 7 日练习完成盘数（2026-11-06 张老师定：尝试可刷、完成要付出努力）
   videos7d    Int    @default(0) @map("videos_7d") // 近 7 日上传录像数（status<>0 含待审）
   score       Int    @default(0) // 活跃指数（加权四舍五入取整）
   updateTime  BigInt @default(0) @map("update_time") @db.BigInt // 本轮重算 Unix 秒

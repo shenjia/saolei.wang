@@ -52,7 +52,7 @@ export function AreaRanking({
     active: r.active,
     power: r.power,
     activity: r.activity,
-    plays7d: r.plays7d,
+    wins7d: r.wins7d,
     videos7d: r.videos7d,
     bestName: r.bestName,
     title: titles[i] ?? "",

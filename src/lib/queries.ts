@@ -1661,15 +1661,16 @@ export async function getUserActivity(
 }
 
 /**
- * 某用户练习盘数（/online 全部局）+ 今日盘数（2026-11-02 张老师要求，
- * 用户主页「数据统计」在「录像总数」下新增「练习盘数」行，今日数绿色括号）。
+ * 某用户练习完成盘数（/online 全部胜局）+ 今日完成盘数（2026-11-02 张老师要求，
+ * 用户主页「数据统计」在「录像总数」下新增「练习盘数」行，今日数绿色括号；
+ * 2026-11-06 张老师定改按完成口径——尝试可以刷，完成需要付出努力）。
  * 数据源 = practice_daily 落盘日汇总（每局结束 /api/track/practice UPSERT，胜/负都记）：
- *   总盘数 = 该用户全部日行 plays 求和；今日 = 当日（+08:00 切天序号）行 plays。
+ *   总盘数 = 该用户全部日行 wins 求和；今日 = 当日（+08:00 切天序号）行 wins。
  * 起记日 2026-10-16（原逐盘 practice_log 明细 2026-10-22 迁移汇总后清理，
- * 历史已并入日汇总）——此前的练习局无数据。排行局也走同一上报计入 plays
- * （mode_ranked 列另计排行局数，需要剔除时用 plays−mode_ranked）。
+ * 历史已并入日汇总）——此前的练习局无数据。排行局也走同一上报计入 wins
+ * （mode_ranked 列另计排行局数）。
  */
-export async function getUserPracticePlays(
+export async function getUserPracticeWins(
   userId: number
 ): Promise<{ total: number; today: number }> {
   const uid = BigInt(userId);
@@ -1678,14 +1679,14 @@ export async function getUserPracticePlays(
   const [agg, todayRow] = await Promise.all([
     prisma.practiceDaily.aggregate({
       where: { userId: uid },
-      _sum: { plays: true },
+      _sum: { wins: true },
     }),
     prisma.practiceDaily.findUnique({
       where: { day_userId: { day, userId: uid } },
-      select: { plays: true },
+      select: { wins: true },
     }),
   ]);
-  return { total: agg._sum.plays ?? 0, today: todayRow?.plays ?? 0 };
+  return { total: agg._sum.wins ?? 0, today: todayRow?.wins ?? 0 };
 }
 
 // 成绩表物理表名（raw SQL 用）：原 3BVS 榜分支使用，2026-10-15 排序统一改 video ⋈ video_info
@@ -2721,8 +2722,8 @@ export interface AreaRow {
   power: number;
   /** 活跃指数（area_activity 落盘表，每小时重算；2026-11-02 张老师需求） */
   activity: number;
-  /** 近 7 日练习尝试盘数（落盘表快照，hover 气泡展示用） */
-  plays7d: number;
+  /** 近 7 日练习完成盘数（落盘表快照，hover 气泡展示用；2026-11-06 张老师定改按完成口径） */
+  wins7d: number;
   /** 近 7 日上传录像数（落盘表快照，hover 气泡展示用） */
   videos7d: number;
   bestId: number;
@@ -2753,7 +2754,7 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
       best_rank: bigint;
       power: bigint;
       act_score: bigint;
-      plays_7d: bigint;
+      wins_7d: bigint;
       videos_7d: bigint;
       best_id: bigint;
       best_name: string;
@@ -2784,7 +2785,7 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
        GROUP BY u.area
      )
      SELECT a.area, a.players, COALESCE(v.active, 0) active, a.best_rank, a.power,
-            COALESCE(aa.score, 0) act_score, COALESCE(aa.plays_7d, 0) plays_7d,
+            COALESCE(aa.score, 0) act_score, COALESCE(aa.wins_7d, 0) wins_7d,
             COALESCE(aa.videos_7d, 0) videos_7d,
             r.id best_id, u.chinese_name best_name, u.english_name best_english_name,
             s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex
@@ -2803,7 +2804,7 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
     bestRank: N(r.best_rank),
     power: N(r.power),
     activity: N(r.act_score),
-    plays7d: N(r.plays_7d),
+    wins7d: N(r.wins_7d),
     videos7d: N(r.videos_7d),
     bestId: N(r.best_id),
     bestName: r.best_name,
@@ -2820,7 +2821,8 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
 // 查询恢复不含排除；缓存键升 v3
 // 2026-11-02 活跃指数：LEFT JOIN area_activity 落盘表（每小时重算，见 lib/areaactivity.ts），
 // 缓存键升 v4
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v4"], {
+// 2026-11-06 气泡练习数改完成口径（wins_7d），缓存键升 v5
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v5"], {
   revalidate: 300,
 });
 

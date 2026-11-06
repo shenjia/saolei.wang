@@ -4,6 +4,8 @@
 // 未登录归入 user_id=0 游客聚合行。字段粗校验仅防畸形请求（粉丝站轻量方案）。
 // 2026-10-27 加级别三列 plays_beg/int/exp 同步自增（后台「今日练习」KPI 显示
 // 初/中/高占比）；自定义盘（cus）只进 plays 总数，不进三列。
+// 2026-11-06 加完成盘数分级别四列 wins_beg/int/exp/cus：胜局按 level 自增对应列
+// （地区活跃指数/个人主页练习盘数改按完成口径并按难度加权，见 lib/areaactivity.ts）。
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -56,12 +58,19 @@ export async function POST(req: NextRequest) {
   const begInc = level === "beg" ? 1 : 0;
   const intInc = level === "int" ? 1 : 0;
   const expInc = level === "exp" ? 1 : 0;
+  // 完成盘数分级别（2026-11-06）：胜局按各自列自增（含 cus 专列，供活跃指数加权）
+  const winBegInc = wonInt && level === "beg" ? 1 : 0;
+  const winIntInc = wonInt && level === "int" ? 1 : 0;
+  const winExpInc = wonInt && level === "exp" ? 1 : 0;
+  const winCusInc = wonInt && level === "cus" ? 1 : 0;
   // 原子 UPSERT：当日当用户无行则新建，有行则计数自增（并发局也安全）
   await prisma.$executeRaw`
     INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp,
+      wins_beg, wins_int, wins_exp, wins_cus,
       mode_ranked, mode_nf, mode_ng, mode_sq, mode_combo,
       sw_qmark, sw_stats, sw_sndfb, sw_shot, sw_qretry, sw_wheel, create_time, update_time)
     VALUES (${day}, ${uid}, 1, ${wonInt}, ${begInc}, ${intInc}, ${expInc},
+      ${winBegInc}, ${winIntInc}, ${winExpInc}, ${winCusInc},
       ${ranked ? 1 : 0}, ${nfOn ? 1 : 0}, ${ngOn ? 1 : 0}, ${sqOn ? 1 : 0}, ${comboOn ? 1 : 0},
       ${swQmark ? 1 : 0}, ${swStats ? 1 : 0}, ${swSndfb ? 1 : 0}, ${swShot ? 1 : 0}, ${swQretry ? 1 : 0}, ${swWheel ? 1 : 0}, ${now}, ${now})
     ON DUPLICATE KEY UPDATE
@@ -70,6 +79,10 @@ export async function POST(req: NextRequest) {
       plays_beg = plays_beg + ${begInc},
       plays_int = plays_int + ${intInc},
       plays_exp = plays_exp + ${expInc},
+      wins_beg = wins_beg + ${winBegInc},
+      wins_int = wins_int + ${winIntInc},
+      wins_exp = wins_exp + ${winExpInc},
+      wins_cus = wins_cus + ${winCusInc},
       mode_ranked = mode_ranked + ${ranked ? 1 : 0},
       mode_nf = mode_nf + ${nfOn ? 1 : 0},
       mode_ng = mode_ng + ${ngOn ? 1 : 0},

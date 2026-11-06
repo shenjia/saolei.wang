@@ -57,8 +57,8 @@ export interface AreaMapDatum {
   power: number;
   /** 活跃指数（area_activity 落盘表，2026-11-02） */
   activity: number;
-  /** 近 7 日练习尝试盘数（落盘表快照） */
-  plays7d: number;
+  /** 近 7 日练习完成盘数（落盘表快照；2026-11-06 张老师定改按完成口径——尝试可刷、完成要努力） */
+  wins7d: number;
   /** 近 7 日上传录像数（落盘表快照） */
   videos7d: number;
   bestName: string;
@@ -220,7 +220,7 @@ export function AreaMap({
               <div className="tp_row">
                 <i>本周练习</i>
                 <b>
-                  {hot.plays7d} <em className="unit">盘</em>
+                  {hot.wins7d} <em className="unit">盘</em>
                 </b>
               </div>
               <div className="tp_row">
