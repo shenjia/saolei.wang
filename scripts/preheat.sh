@@ -40,72 +40,138 @@ PREHEAT_HOST="${PREHEAT_HOST:-127.0.0.1}"
 # 2026-11-03 起 cron 常态预热（scripts/preheat-cron.sh）以 PREHEAT_SLIM=1 调本脚本：
 #   slim 模式剔除清单末尾两个**无缓存**的实时重页（/area 实时窗口函数、/team 逐管理员
 #   全表 count）——它们没有缓存可保温，每分钟打一次纯烧 DB；仅发布预热（全量）时跑。
-PREHEAT_PATHS=(
-  "/ranking?view=bv"       # 最重：30 万行 video⋈video_info 全量聚合（1h 缓存）+ level_3bv_range 惰性补种
-  "/ranking?view=bv&nf=1"  # NF BV：独立缓存键，避免切流后首击承担第二次全量聚合
-  "/ranking?view=stnb"     # STNB 落盘表全量读取（60s 缓存紧凑元组）
-  "/ranking?view=stnb&nf=1" # NF STNB：独立落盘表与缓存键
-  "/"                   # 首页：6 条并发 + SiteStats 9 条 count（video 两条件全表扫 30 万行）
-                        #   └ 2026-10-23 随之焐热录像发现流去重键 page1/all（窗口函数全量排序 ~2.1s/键）
-                        #   └ 2026-11-03 首页链路缓存统一 300s（queries.ts/title-system.ts），新闻/新兵流也挂缓存
-  # 录像发现流去重缓存补键（2026-10-23）：级别 tabs 与 NF 开关的第 1 页——
-  # 窗口函数 (用户,级别) 配额 + 纪录盘保位全量排序，冷键 ~2.1s，避免切流后首击承担
-  "/api/video/more?feedPage=1&base=18&size=18&level=beg"
-  "/api/video/more?feedPage=1&base=18&size=18&level=int"
-  "/api/video/more?feedPage=1&base=18&size=18&level=exp"
-  "/api/video/more?feedPage=1&base=18&size=18&nf=1"
-  "/video"              # 录像列表：video.count 全表 + getVideoBoxStats 两个 groupBy（各扫 30 万行）
-  "/video?order=stnb"   # STNB 排序列表页：stnb 索引反扫行查询 + 单表化 count（2026-10-20 进清单；FORCE INDEX 后 <0.5s，预热顺手）
-  "/ranking"            # 雷界榜：顺带触发 rank_snapshot 当日惰性快照（全表窗口函数写入，每天一次）
-  "/area"               # 地区排行：实时窗口函数大 SQL（user⋈user_scores + 活跃用户全表扫），无缓存【slim 剔除】
-  "/ranking?view=world" # 世界榜：外部抓取 minesweepergame.com（1 天缓存，已加 8s 超时）
-  "/grow"               # 进步榜：快照已被上面 /ranking 焐热，这里只是填页面缓存
-  "/ranking?nf=1"       # NF 成绩榜：user_scores_nf 同构查询
-  "/titles"             # 军衔页：20 条索引 count（各档人数）
-  "/records"            # 纪录页：曲线窗口函数 + 八项 TOP1（unstable_cache 10min）
-  "/bbs"                # 论坛首页：索引 count + 分页
-  "/team"               # 管理团队：逐管理员 video.count（无 reviewUser 索引，各扫一次 30 万行）【slim 剔除】
+# ── 到期感知调度（2026-11-06 张老师定：距到期还有 5 分钟才刷，没到不刷）────────
+# 清单不剔除：每条以「path|TTL」登记——TTL=该页链路**最短重缓存键**的 revalidate 秒数
+# （逐键核实于 2026-11-06，来源见行尾注释；改缓存时长必须同步改这里）。
+# · PREHEAT_STATE_FILE 存在时启用到期感知：按「上次完成重建时刻」记账，距
+#   (上次 + TTL) 不足 PREHEAT_REFRESH_WINDOW（默认 300s）才打该路径——长缓存页
+#   平时跳过，仅在到期前 5 分钟窗口内由每分钟 cron 完成重建，其余时间零 DB 成本。
+# · 状态文件按槽位端口分片（preheat-cron.sh 传入）：蓝绿切槽后新槽无状态 ⇒ 首轮全量
+#   （等价发布预热），且不会误用旧槽的记账时刻。
+# · 完成一轮的判定：命中且响应耗时 ≥ TTL（说明真实发生了到期重建——unstable_cache
+#   新鲜命中不重置 TTL，秒回=没重建）⇒ 记账时刻前移为本次，进入下一个周期；秒回则
+#   记账不动，保持「到期后第一击由 cron 承担」——访客至多撞 ≤60s 过期窗，与原方案一致。
+# · 无记账（新槽/新路径）＝冷启动：curl 成功即锚定该时刻，之后按 TTL 周期轮转
+#   （避免「记 0 恒进窗」导致冷启动后每分钟空打到首次真实重建为止）。
+# · 短 TTL 页（60s/300s 档）窗口恒成立，行为与原每分钟保温完全相同。
+# · 发布预热（server-release.sh 全量路径）不设状态文件，行为不变。
+PREHEAT_PATHS_TTL=(
+  "/ranking?view=bv|3600"        # fetchBvCollection（bv-collection，1h；d1318f2 后顶层调用缓存生效）
+  "/ranking?view=bv&nf=1|3600"   # NF BV：独立缓存键（同上，参数区分）
+  "/ranking?view=stnb|60"        # stnb-table-v2 落盘表（60s）
+  "/ranking?view=stnb&nf=1|60"   # NF STNB：同上（参数区分）
+  "/|300"                        # 首页链路 9 键统一 REVALIDATE_HOME_CACHE=300（config.ts；含发现流去重键）
+  "/api/video/more?feedPage=1&base=18&size=18&level=beg|300"  # feed-dedup-v3 系（REVALIDATE_HOME_CACHE）
+  "/api/video/more?feedPage=1&base=18&size=18&level=int|300"
+  "/api/video/more?feedPage=1&base=18&size=18&level=exp|300"
+  "/api/video/more?feedPage=1&base=18&size=18&nf=1|300"
+  "/video|300"                   # video-list-join-count v12（REVALIDATE_HOME_CACHE，2026-11-03 起 300s）
+  "/video?order=stnb|300"        # 同上（排序参数区分键，行查询 <0.5s 顺手）
+  "/ranking|60"                  # 主榜读取无 unstable_cache（rank_snapshot 快查），保守 60s 档
+  "/area|0"                      # 无缓存实时页【slim 剔除；0=强制不跳过】
+  "/ranking?view=world|86400"    # world-top100-v5（1 天）
+  "/grow|60"                     # rank_snapshot 快查无缓存（借 /ranking 同源焐热），保守 60s 档
+  "/ranking?nf=1|60"             # 主榜 NF：user_scores_nf 同构读取
+  "/titles|60"                   # title-counts-v5（60s）
+  "/records|300"                 # records-tops-v7（300s）+ bv-top-v1（1h）+ curves（24h）——最短键 300s
+  "/bbs|60"                      # 论坛列表索引 count/分页：无 unstable_cache，查询轻，60s 保守档
+  "/team|0"                      # 无缓存实时页【slim 剔除；0=强制不跳过】
 )
+# 到期感知参数与状态读入（PREHEAT_STATE_FILE 空=禁用，发布预热路径不受影响）
+PREHEAT_STATE_FILE="${PREHEAT_STATE_FILE:-}"
+PREHEAT_REFRESH_WINDOW="${PREHEAT_REFRESH_WINDOW:-300}"
+declare -A lastHit=()
+if [[ -n "$PREHEAT_STATE_FILE" && -f "$PREHEAT_STATE_FILE" ]]; then
+  while IFS=$'\t' read -r p t; do
+    [[ -n "$p" && -n "$t" ]] && lastHit["$p"]="$t"
+  done < "$PREHEAT_STATE_FILE"
+fi
 
-# slim 模式：剔除无缓存的实时重页（见上 2026-11-03 注）
+# slim 模式：剔除无缓存的实时重页（见上 2026-11-03 注）——在 TTL 表上按 path 部分过滤
 if [[ "${PREHEAT_SLIM:-0}" == "1" ]]; then
   SLIM_SKIP=("/area" "/team")
   FILTERED=()
-  for p in "${PREHEAT_PATHS[@]}"; do
+  for entry in "${PREHEAT_PATHS_TTL[@]}"; do
+    p="${entry%%|*}"
     skip=0
     for s in "${SLIM_SKIP[@]}"; do [[ "$p" == "$s" ]] && skip=1; done
-    (( skip == 0 )) && FILTERED+=("$p")
+    (( skip == 0 )) && FILTERED+=("$entry")
   done
-  PREHEAT_PATHS=("${FILTERED[@]}")
+  PREHEAT_PATHS_TTL=("${FILTERED[@]}")
 fi
+PREHEAT_PATHS=("${PREHEAT_PATHS_TTL[@]%%|*}")
 
 printf "${BLUE}[PREHEAT]${NC} 预热备槽 ${PREHEAT_HOST}:%s（%s 个一级页面，串行，失败不阻断发布）\n" \
   "$PORT" "${#PREHEAT_PATHS[@]}"
 
 ok_count=0
 fail_count=0
+skip_count=0
 start_all=$SECONDS
+NOW=$(date +%s)
+declare -A newState=()   # 本轮结束后的记账（未跳过的路径保留旧值或写入新值）
 
-for path in "${PREHEAT_PATHS[@]}"; do
+for entry in "${PREHEAT_PATHS_TTL[@]}"; do
+  path="${entry%%|*}"
+  ttl="${entry##*|}"
+
+  # 到期感知：距预估到期不足窗口秒数才刷；ttl=0 或未记账（新槽/新路径）恒刷
+  last="${lastHit[$path]:-0}"
+  if [[ -n "$PREHEAT_STATE_FILE" && "$ttl" != "0" ]]; then
+    if (( last > 0 && NOW < last + ttl - PREHEAT_REFRESH_WINDOW )); then
+      newState["$path"]="$last"
+      skip_count=$((skip_count + 1))
+      continue
+    fi
+  fi
+
   t0=$SECONDS
+  t0e=$(date +%s)   # epoch 记账基准（SECONDS 是脚本内相对秒，不能当锚点）
   rc=0
-  curl -sf --max-time "$PAGE_TIMEOUT" -o /dev/null "http://${PREHEAT_HOST}:${PORT}${path}" || rc=$?
+  curl -sf --noproxy '*' --max-time "$PAGE_TIMEOUT" -o /dev/null "http://${PREHEAT_HOST}:${PORT}${path}" || rc=$?
   dt=$((SECONDS - t0))
   if (( rc == 0 )); then
     printf "  ${GREEN}✓${NC} %-22s %ss\n" "$path" "$dt"
     ok_count=$((ok_count + 1))
+    # 记账规则：响应耗时 ≥ TTL ⇒ 真实发生了到期重建（unstable_cache 秒回不重置
+    # TTL），本轮完成、锚点前移；秒回（仍在窗口内重试）记账不动，下分钟再来。
+    # 无记账（新槽/新路径）＝冷启动场景，curl 成功即说明重建完成（或已热），直接锚定。
+    if [[ -n "$PREHEAT_STATE_FILE" ]]; then
+      if [[ "$ttl" == "0" ]]; then
+        # 无缓存页：不打周期锚点（无 TTL 可轮转），仅回写旧值保住行
+        newState["$path"]="${lastHit[$path]:-0}"
+      elif (( last == 0 )); then
+        newState["$path"]="$(( t0e ))"
+      elif (( dt >= ttl )); then
+        newState["$path"]="$(( t0e ))"
+      else
+        newState["$path"]="$last"
+      fi
+    fi
   else
     printf "  ${YELLOW}✗${NC} %-22s rc=%s %ss （已跳过，不阻断发布）\n" "$path" "$rc" "$dt"
     fail_count=$((fail_count + 1))
+    # 失败保留旧记账（若有），让重试继续留在窗口内
+    [[ -n "$PREHEAT_STATE_FILE" && -n "${lastHit[$path]:-}" ]] && newState["$path"]="${lastHit[$path]}"
   fi
 done
 
+# 状态落盘（原子写：先临时文件再 mv；目录不存在则建）
+if [[ -n "$PREHEAT_STATE_FILE" ]]; then
+  mkdir -p "$(dirname "$PREHEAT_STATE_FILE")"
+  tmp="${PREHEAT_STATE_FILE}.tmp.$$"
+  # 上次写入的路径本轮未出现在清单（路径下线）→ 丢弃；全部路径以本轮清单为准
+  for p in "${!newState[@]}"; do printf '%s\t%s\n' "$p" "${newState[$p]}"; done | sort > "$tmp"
+  mv -f "$tmp" "$PREHEAT_STATE_FILE"
+fi
+
 total_dt=$((SECONDS - start_all))
 if (( fail_count > 0 )); then
-  printf "${YELLOW}[PREHEAT]${NC} 预热完成：成功 %s / 失败 %s，共 %ss（失败的页面切流后由访客首访承担，功能不受影响）\n" \
-    "$ok_count" "$fail_count" "$total_dt"
+  printf "${YELLOW}[PREHEAT]${NC} 预热完成：成功 %s / 跳过 %s / 失败 %s，共 %ss（失败的页面切流后由访客首访承担，功能不受影响）\n" \
+    "$ok_count" "$skip_count" "$fail_count" "$total_dt"
 else
-  printf "${GREEN}[PREHEAT]${NC} 预热全部成功：%s 个页面，共 %ss\n" "$ok_count" "$total_dt"
+  printf "${GREEN}[PREHEAT]${NC} 预热全部成功：%s 个页面（跳过 %s 个未到期），共 %ss\n" \
+    "$ok_count" "$skip_count" "$total_dt"
 fi
 
 exit 0

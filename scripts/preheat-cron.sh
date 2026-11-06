@@ -19,6 +19,10 @@
 # · 直连 pm2 端口，不过 nginx：不占限速配额、不进访问日志、不被 UA 黑名单拦。
 # · 打的是当前活跃槽＝访客同款缓存；请求无登录态（游客路径与登录态共享全部
 #   数据缓存），仪表盘 PV/UV 口径会将其作为零行为访客剔除，不污染统计。
+# · 到期感知（2026-11-06 张老师定：距到期还有 5 分钟才刷，没到不刷）：状态文件
+#   按槽位端口分片 ~/logs/preheat-state.<port>.tsv——蓝绿切槽后新槽无状态自动全量
+#   （等价发布预热）；长缓存页（BV 1h/世界榜 24h 等）平时零请求，仅在最后 5 分钟
+#   窗口内由每分钟 cron 完成到期重建。TTL 表与记账规则见 preheat.sh 注释。
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +32,8 @@ CONF="$HOME/nginx-upstream/saolei-upstream.conf"
 PORT=$(grep -E 'server 127\.0\.0\.1:[0-9]+' "$CONF" | grep -v backup | head -1 | sed -E 's/.*127\.0\.0\.1:([0-9]+).*/\1/')
 [[ "$PORT" =~ ^[0-9]+$ ]] || exit 0
 
-OUT=$(PREHEAT_SLIM=1 bash "$SCRIPT_DIR/preheat.sh" "$PORT" 2>&1)
+OUT=$(PREHEAT_SLIM=1 PREHEAT_STATE_FILE="$HOME/logs/preheat-state.$PORT.tsv" \
+  bash "$SCRIPT_DIR/preheat.sh" "$PORT" 2>&1)
 
 if ! grep -q "预热全部成功" <<<"$OUT"; then
   echo "[$(date '+%F %T')] PORT=$PORT 预热存在失败项："
