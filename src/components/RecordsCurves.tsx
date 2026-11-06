@@ -23,8 +23,13 @@
 // · 十三轮（2026-11-06）：修手机端「点击位置和高亮位置不一样」——根因是
 //   WebKit（zoom 标准化前）gBCR 不含 zoom 而 clientX 是视觉坐标，混算错位；
 //   改为每点铺透明命中竖条，命中交给浏览器 hit-test，组件内零坐标换算。
+// · 十四轮（2026-11-06 张老师需求）：鼠标点击已 hover 的点→打开该纪录对应录像
+//   /video/<v>（router.push 本页跳转）；触摸端保持「选中+气泡保持」语义不跳转
+//   （手指场景误触代价高）；总计等无录像点（v=0）不跳。按下与松开须落在同一点，
+//   拖拽扫过不触发。有录像可跳时 hover 点显示 pointer 手势光标。
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AvatarCell } from "./Cells";
 import { TitleBadge } from "./TitleBadge";
@@ -131,6 +136,8 @@ export function ChartCard({
   color: string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const downIdxRef = useRef<number | null>(null);
+  const router = useRouter();
   const [boxW, setBoxW] = useState(600);
   // 九轮（2026-10-28 张老师要求）：移动端单列模式图表加高——判据用视口媒体查询，
   // 不用容器宽：全站移动端有 #page zoom 缩放体系（页面按 ~600px 布局再整体缩小），
@@ -234,11 +241,15 @@ export function ChartCard({
   // （fill=transparent 可命中、全高无缝覆盖），命中判定交给浏览器 hit-test
   //（天然含 zoom），直接从 target 读 data-idx——组件内不再有任何事件坐标换算。
   // 浮层在滚动容器内定位：可视 x = 图形 x - scrollLeft；近右缘翻向左侧
-  const pick = (e: React.PointerEvent<SVGSVGElement>) => {
+  const idxFromEvent = (e: React.PointerEvent<SVGSVGElement>): number => {
     const hit = (e.target as Element | null)?.closest?.("[data-idx]") as SVGElement | null;
-    if (!hit) return;
+    if (!hit) return -1;
     const i = Number(hit.getAttribute("data-idx"));
-    if (!(i >= 0 && i < n)) return;
+    return i >= 0 && i < n ? i : -1;
+  };
+  const pick = (e: React.PointerEvent<SVGSVGElement>) => {
+    const i = idxFromEvent(e);
+    if (i < 0) return;
     const el = wrapRef.current;
     if (!el) return;
     const vw = el.clientWidth;
@@ -285,9 +296,29 @@ export function ChartCard({
           viewBox={`0 0 ${W} ${H}`}
           role="img"
           aria-label={`${levelName}${chart.metricName}演变`}
-          style={{ touchAction: "pan-y" }}
+          style={{
+            touchAction: "pan-y",
+            // 十四轮：hover 点有对应录像时显示可点击手势（光标语义跟随选中点，非全局可点）
+            cursor: hp && hp.v > 0 ? "pointer" : "default",
+          }}
           onPointerMove={pick}
-          onPointerDown={pick}
+          onPointerDown={(e) => {
+            // 记录按下命中的点：十四轮要求「按下与松开同一点」才算点击，拖拽扫过不误开录像
+            downIdxRef.current = idxFromEvent(e);
+            pick(e);
+          }}
+          onPointerUp={(e) => {
+            const di = downIdxRef.current;
+            downIdxRef.current = null;
+            // 十四轮（张老师需求）：鼠标点击当前 hover 点→打开对应录像；
+            // 触摸端只选中不跳转（保留八轮的「松手保持气泡」交互）；
+            // v=0（总计快照点等）无录像不跳
+            if (e.pointerType !== "mouse") return;
+            const i = idxFromEvent(e);
+            if (di === null || di !== i || i < 0) return;
+            const p = pts[i];
+            if (p.v > 0) router.push(`/video/${p.v}`);
+          }}
           // 触摸松手时浏览器会补发 pointerleave（触摸指针随 up 隐式释放），
           // 直接清掉会让「点一下」的气泡闪现即逝、看起来像根本没出现——
           // 触摸交互的选中保持到滚动/切换级别才清；鼠标 hover 仍随移出消失
