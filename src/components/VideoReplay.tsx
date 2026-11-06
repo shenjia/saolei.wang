@@ -3451,10 +3451,17 @@ export function ReplayFullscreen({
   useEffect(() => {
     const el = panelRef.current;
     if (!el || el.offsetParent === null) return; // 窄屏 display:none 跳过
-    const pz = panelZRef.current || PANEL_MIN_Z;
+    /* natural 实测改「清链测 natural」（2026-11-06 OPPO 案同源修法）：旧 rect/pz
+       假设 rect 已含 zoom（Chromium≥128 标准语义）；legacy 内核 rect 不含 zoom
+       → natH/natW 低估 pz 倍 → fit 地板/面板封顶全歪（桌面老 Chrome 同病）。
+       清自身 zoom 测量在三种语义下都＝自然尺寸（面板祖先 .vprfs_inner 无 zoom，
+       清自身即清全链）；读 rect 强制同步布局两次/渲染，仅桌面窄屏外执行可接受 */
+    const prevZoom = el.style.zoom;
+    el.style.zoom = "1";
     const rect = el.getBoundingClientRect();
-    const h = rect.height / pz;
-    const w = rect.width / pz;
+    el.style.zoom = prevZoom;
+    const h = rect.height;
+    const w = rect.width;
     if (w > 0 && Math.abs(w - panelNatWRef.current) > 1) {
       panelNatWRef.current = w;
       wrapRef.current?.style.setProperty("--vprfs-pw", `${w.toFixed(1)}px`);
@@ -3545,10 +3552,18 @@ export function ReplayFullscreen({
              则偏移自消。FS 光标在 zoom 容器内：CSS left/top 会被 zoom 放大，
              换算回 CSS 域除以 zoom（每帧实时取，滚轮缩放后自动同步）；
              尖端锚 (0.5,1.21) 与页面引擎 TIP 口径一致。 */
-          const z = zoomRef.current ?? 1;
+          /* 换算系数改 FS td 视觉宽反推（2026-11-06 OPPO 案）：旧硬除 zoomRef 假设
+             rect 已含 zoom（Chromium≥128 标准语义）；OPPO 自带浏览器等 legacy 内核
+             （Chromium<128，与 2026-11-03 Chrome 102 flop 案同源）rect 不含 zoom，
+             dt.width 量到自然宽再除 z → left/top 放大 1/z 倍 ≈ 光标甩出棋盘右下。
+             td 实测比值在标准语义＝z、legacy＝1（rect 与 offsetWidth 同语义域），
+             与引擎 measureOff / TrajLayer 同手法，三种 zoom 语义统一成立 */
           const srcTable = srcBoard.querySelector("table");
           const dstTableEl = dstBoard.querySelector("table");
           if (!srcTable || !dstTableEl) return;
+          const td0 = dstTableEl.querySelector("td");
+          const tdR = td0?.getBoundingClientRect();
+          const z = tdR && tdR.width > 0 ? tdR.width / 16 : (zoomRef.current ?? 1);
           const st = srcTable.getBoundingClientRect();
           const dt = dstTableEl.getBoundingClientRect();
           const tipX = cr.left + 0.5 * (cr.width / 12); // 尖端（宽=12×页面侧缩放）
