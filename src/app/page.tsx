@@ -128,8 +128,11 @@ export default async function HomePage() {
     {/* 邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层 + 以后再说 24h）。
         渲染在 #page 之外：≤605px #page 有整页 zoom，fixed 遮罩做在里面会缩放失真 */}
     {showEmailNotice && <EmailBindNotice />}
-    {/* 更新通告浮层（2026-11-06 张老师要求）：登录态且有更新历史才挂载；渲染在 #page 外同邮箱提醒口径 */}
-    {session && updates.length > 0 && <UpdateNotice updates={updates} uid={session.uid} />}
+    {/* 更新通告浮层（2026-11-06 张老师要求；同日二轮：标题改「最近更新」、
+        内容收敛到最新 10 条）：登录态且有更新历史才挂载；渲染在 #page 外同邮箱提醒口径 */}
+    {session && updates.length > 0 && (
+      <UpdateNotice updates={updates.slice(0, 10)} uid={session.uid} />
+    )}
     <div id="page" className="two_columns">
     <ul id="home">
       <li className="main">

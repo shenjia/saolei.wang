@@ -94,7 +94,7 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
       <div className="update_notice_modal">
         {view === "list" ? (
           <>
-            <h3>更新历史</h3>
+            <h3>最近更新</h3>
             <div className="un_list">
               {updates.map((u) => (
                 <p key={u.id}>
