@@ -643,13 +643,14 @@ export function runReplay(opts: {
   }
   function applyEv(k: number) {
     const e = evs[k];
+    /* 胜局＝终点（2026-11-06 张老师定「播放以胜局事件为终点，前端补雷，不用事件」）：
+       盘面定格 + 光标定格——补雷已由 checkWinR 完成（自动补旗纯视觉不进事件），
+       胜局后残余事件（历史 repair 合成段 / 上游异常流）一概无效，moveCursor
+       也拦，防「终局光标乱扫」复现（353971 报障观感）。
+       败局不同：雷区已揭示，后续事件仍动光标（录像事实，flop 同款）。 */
+    if (won) return;
     moveCursor(e.px, e.py);
     if (dead) return;
-    /* 胜局后事件全无效（flop performEvent 守卫；同 videowin.ts 主循环）：
-       不拦的话残余 rc 会拔走 rstate 旗——虽不再污染 playerFlags（rc 分支
-       需 toggleLabelR 命中才计数，而拔的是自动补的旗），但 smile 联动与
-       光标后挂事件会继续走，与 flop 终局定格不符 */
-    if (won) return;
     /* 鼠标行程（flop mouseMove 口径，videoradar 同法）：所有带坐标事件按时间序累加 */
     if (e.px !== 0 || e.py !== 0) {
       if (lastPX !== null) {
@@ -826,8 +827,10 @@ export function runReplay(opts: {
     moveCursor(0, 0);
     onButtons?.(false, false);
   }
-  /* 光标插值（练习页同款，治一顿一顿）：每帧在「最近已应用事件」与「下一事件」间线性补间 */
+  /* 光标插值（练习页同款，治一顿一顿）：每帧在「最近已应用事件」与「下一事件」间线性补间。
+     胜局后定格：evIdx 仍会推进过胜局后残余事件，但插值不再跟随（终点语义） */
   function interpCursor(csec: number) {
+    if (won) return;
     const prev = evIdx > 0 ? evs[evIdx - 1] : null;
     const next = evIdx < evs.length ? evs[evIdx] : null;
     if (!prev) {
