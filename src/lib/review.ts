@@ -8,6 +8,7 @@
 
 import { Prisma } from "@prisma/client";
 import { after } from "next/server";
+import { revalidateTag } from "next/cache";
 import { prisma } from "./db";
 import { ensureVideoMetrics } from "./videometrics";
 import {
@@ -620,6 +621,19 @@ export async function reviewVideo(
       );
     } catch (e) {
       console.warn("[review] 屏蔽通知发送失败", videoId, e);
+    }
+  }
+
+  // 个人纪录进步历程缓存（2026-11-06 张老师定）：过审加点 / 屏蔽撤点都会改本人的
+  // 纪录链——打掉 per-user 曲线缓存（tag: user-records-curves，独立于全站曲线的
+  // records-curves），主页「纪录」图表不再等 24h TTL。运气盘不入链但无效打掉无害，
+  // 从简不特判。放事务外；try/catch 兜「脚本直调不在请求上下文」的场景（TTL 兜底）。
+  if (status === VIDEO_STATUS.REVIEWED || status === VIDEO_STATUS.BANNED) {
+    try {
+      // Next 16：revalidateTag 必须带 cacheLife profile 第二参（"max"=立即过期口径）
+      revalidateTag("user-records-curves", "max");
+    } catch {
+      // 非请求上下文（批量脚本直调 reviewVideo）静默跳过
     }
   }
 

@@ -610,10 +610,13 @@ async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]>
 
 /** 个人纪录进步历程（uid 参与缓存 key 每人一份，24h TTL；与全站曲线同向——
  *  新纪录一天内上图延迟可接受。⚠️ 改口径必须升版本号（v2：点带 video 行内
- *  上传时刻称号快照 et/rk——hover 军衔=传那盘录像时的军衔，2026-11-06） */
+ *  上传时刻称号快照 et/rk——hover 军衔=传那盘录像时的军衔，2026-11-06）。
+ *  tag 用独立 user-records-curves（2026-11-06）：审核过审/屏蔽时 review.ts 会
+ *  revalidateTag 精准打掉本缓存——绝不能与全站曲线共用 records-curves tag，
+ *  否则每次审核都会连带打掉全站 24h 重查询缓存（全站曲线仍靠 TTL 兜底） */
 export const getUserRecordCurves = (userId: number) =>
   unstable_cache(
     async () => fetchUserRecordCurves(userId),
     ["user-records-curves-v2", String(userId)],
-    { revalidate: 86400, tags: ["records-curves"] }
+    { revalidate: 86400, tags: ["user-records-curves"] }
   )();
