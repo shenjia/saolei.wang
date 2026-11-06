@@ -24,12 +24,12 @@
 //   WebKit（zoom 标准化前）gBCR 不含 zoom 而 clientX 是视觉坐标，混算错位；
 //   改为每点铺透明命中竖条，命中交给浏览器 hit-test，组件内零坐标换算。
 // · 十四轮（2026-11-06 张老师需求）：鼠标点击已 hover 的点→打开该纪录对应录像
-//   /video/<v>（router.push 本页跳转）；触摸端保持「选中+气泡保持」语义不跳转
+//   /video/<v>；十五轮（2026-11-07 张老师反馈）：PC 端改为**新标签页**打开
+//   （window.open），与全站录像链接口径一致；触摸端保持「选中+气泡保持」语义不跳转
 //   （手指场景误触代价高）；总计等无录像点（v=0）不跳。按下与松开须落在同一点，
 //   拖拽扫过不触发。有录像可跳时 hover 点显示 pointer 手势光标。
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AvatarCell } from "./Cells";
 import { TitleBadge } from "./TitleBadge";
@@ -137,7 +137,6 @@ export function ChartCard({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const downIdxRef = useRef<number | null>(null);
-  const router = useRouter();
   const [boxW, setBoxW] = useState(600);
   // 九轮（2026-10-28 张老师要求）：移动端单列模式图表加高——判据用视口媒体查询，
   // 不用容器宽：全站移动端有 #page zoom 缩放体系（页面按 ~600px 布局再整体缩小），
@@ -187,7 +186,7 @@ export function ChartCard({
           {only ? (
             <>
               {only.v > 0 ? (
-                <Link className="rec_val" href={`/video/${only.v}`} title="点击查看该录像">
+                <Link className="rec_val" href={`/video/${only.v}`} target="_blank" prefetch={false} title="点击查看该录像（新标签页）">
                   {fmtVal(chart.metric, only.y)}
                 </Link>
               ) : (
@@ -274,7 +273,7 @@ export function ChartCard({
           {levelName}
           {chart.metricName}：
         </span>
-        <Link className="rec_val" href={`/video/${last.v}`} title="点击查看该录像">
+        <Link className="rec_val" href={`/video/${last.v}`} target="_blank" prefetch={false} title="点击查看该录像（新标签页）">
           {fmtVal(chart.metric, last.y)}
         </Link>
         <span className="rec_meta">　</span>
@@ -310,14 +309,15 @@ export function ChartCard({
           onPointerUp={(e) => {
             const di = downIdxRef.current;
             downIdxRef.current = null;
-            // 十四轮（张老师需求）：鼠标点击当前 hover 点→打开对应录像；
+            // 十四/十五轮（张老师需求）：鼠标点击当前 hover 点→**新标签页**打开对应录像
+            // （与全站录像链接 target=_blank 口径一致）；
             // 触摸端只选中不跳转（保留八轮的「松手保持气泡」交互）；
             // v=0（总计快照点等）无录像不跳
             if (e.pointerType !== "mouse") return;
             const i = idxFromEvent(e);
             if (di === null || di !== i || i < 0) return;
             const p = pts[i];
-            if (p.v > 0) router.push(`/video/${p.v}`);
+            if (p.v > 0) window.open(`/video/${p.v}`, "_blank", "noopener");
           }}
           // 触摸松手时浏览器会补发 pointerleave（触摸指针随 up 隐式释放），
           // 直接清掉会让「点一下」的气泡闪现即逝、看起来像根本没出现——
