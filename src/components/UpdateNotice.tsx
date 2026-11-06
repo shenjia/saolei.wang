@@ -9,7 +9,6 @@
 // fixed 遮罩做在里面会随缩放失真铺不满屏（同 EmailBindNotice 口径）。
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useDraft } from "./useDraft";
 
 const LS_KEY = "update_notice_seen"; // 值 = 最新更新日期的可比数值（yyyymmdd）
@@ -36,6 +35,8 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  // 列表展示条数：首屏 10 条，「加载更多」每次 +10（数据全量随 props 传入，纯客户端切片）
+  const [shown, setShown] = useState(10);
   const isWebmaster = uid === WEBMASTER_ID;
   // 草稿与消息页/主页气泡浮窗共用同一份（按 发件人+收件人 隔离）；站长本人无草稿
   const draft = useDraft(isWebmaster ? null : `pm:${uid}:${WEBMASTER_ID}`);
@@ -97,16 +98,31 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
           <>
             <h3>最近更新</h3>
             <div className="un_list">
-              {updates.map((u) => (
+              {updates.slice(0, shown).map((u) => (
                 <p key={u.id}>
                   <em>{u.date}</em>
                   {u.content}
                 </p>
               ))}
-              {/* 滚到最底部露出：完整历史在更新历史页（2026-11-06 二轮张老师要求） */}
-              <Link href="/page/history" className="un_all">
-                查看全部
-              </Link>
+              {/* 滚到最底部：标准翻页控件同款三圆点「加载更多」+ 剩余条数
+                  （2026-11-06 三轮张老师要求，替代原「查看全部」链接） */}
+              {shown < updates.length && (
+                <div className="un_more">
+                  <button
+                    type="button"
+                    className="dots_more"
+                    title="加载更多"
+                    onClick={() => setShown(Math.min(shown + 10, updates.length))}
+                  >
+                    <i />
+                    <i />
+                    <i />
+                  </button>
+                  <span className="un_more_txt">
+                    还有 <b>{updates.length - shown}</b> 条更新日志
+                  </span>
+                </div>
+              )}
             </div>
             <div className="btns">
               <button type="button" className="btn_primary" onClick={onGotIt}>

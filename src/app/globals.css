@@ -14346,17 +14346,21 @@ a.cheat_rep_link:hover {
   font-style: normal;
   font-weight: 700;
 }
-/* 滚动到底部的「查看全部」→ /page/history */
-.update_notice_modal .un_all {
-  display: block;
-  padding: 4px 0 2px;
+/* 滚动到底部的「加载更多」行：标准翻页控件同款三圆点按钮（.dots_more 通用类）
+   + 剩余条数（2026-11-06 三轮张老师要求，替代原「查看全部」链接） */
+.update_notice_modal .un_more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+.update_notice_modal .un_more_txt {
   color: #b1b1a4;
   font-size: 13px;
-  text-align: center;
-  transition: color 0.15s;
 }
-.update_notice_modal .un_all:hover {
-  color: #a6e22e;
+.update_notice_modal .un_more_txt b {
+  color: #e6c07b;
 }
 /* 发信面板 */
 .update_notice_modal .un_to {
