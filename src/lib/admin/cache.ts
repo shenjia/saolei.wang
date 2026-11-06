@@ -19,7 +19,7 @@ import {
   getHourlyCounts,
   getLevelCounts,
   getNfCounts,
-  getOverview,
+  getOverviewCore,
   getRecordCurve,
   getSexCounts,
   getSoftwareCounts,
@@ -49,8 +49,11 @@ export const getCachedAnomalies = cache(() => getAnomalies(), "anomalies");
 const DASHBOARD_TTL = 300;
 
 /** 仪表盘概览 KPI（2026-11-04：约 25 条 COUNT/聚合 + 审核耗时全表扫，冷跑数秒 → 挂 5 分钟缓存。
- *  ov.now 即缓存填充时刻，「数据截至」展示仍准确；审核页 /admin/review 仍用实时 getOverview 不受影响） */
-export const getCachedOverview = cache(() => getOverview(), "overview-v1", DASHBOARD_TTL);
+ *  ov.now 即缓存填充时刻，「数据截至」展示仍准确；审核页 /admin/review 仍用实时 getOverview 不受影响。
+ *  2026-11-06 张老师定：待审类「审核即消费」的数据（录像/评论/论坛/头像待审 + 最老积压）绝不进缓存，
+ *  否则审完回仪表盘 5 分钟内数字不消——拆到 getPendingOverview 实时取，缓存只包核心 KPI 聚合；
+ *  载荷结构变更 → key 升 v2 丢弃旧缓存） */
+export const getCachedOverview = cache(() => getOverviewCore(), "overview-v2", DASHBOARD_TTL);
 
 /** 仪表盘 30 天趋势（2026-11-04：8 张表按天 GROUP BY → 挂 5 分钟缓存；
  *  缓存内含今日预估的同比快照，5 分钟窗口内偏差可忽略。数据分析页 /admin/stats 仍实时取数） */

@@ -176,7 +176,51 @@ export interface Overview {
   avgAuditSeconds: number;
 }
 
-export async function getOverview(): Promise<Overview> {
+/** 待审类子集（2026-11-06 张老师定：这些是「审核即消费」的数据，绝不进缓存——
+ *  否则审完回到仪表盘，5 分钟内数字纹丝不动，看起来像没审掉） */
+export type PendingOverview = Pick<
+  Overview,
+  "videoPending" | "commentPending" | "bbsPending" | "avatarPending" | "oldestPendingTime" | "oldestPendingDays"
+>;
+
+/** 概览 KPI 中除待审类以外的核心聚合（可缓存部分） */
+export type OverviewCoreData = Omit<Overview, keyof PendingOverview>;
+
+/** 待审类实时查询（轻查询：状态列计数 + 最老一条待审，毫秒级；仪表盘与审核页共用口径） */
+export async function getPendingOverview(): Promise<PendingOverview> {
+  const now = Math.floor(Date.now() / 1000);
+  const [videoPending, commentPending, bbsPending, avatarPending, oldest] = await Promise.all([
+    prisma.video.count({ where: { status: VIDEO_STATUS.NORMAL } }),
+    // 待人工复核队列（AI 后置审核存疑 → status=5；2026-10-27 论坛口径=主题+回复合计，
+    // 与 admin/layout.tsx 侧栏 badge 一致，仪表盘卡片不再漏算回复）
+    prisma.comment.count({ where: { status: CONTENT_STATUS.PENDING } }),
+    Promise.all([
+      prisma.bbsPost.count({ where: { status: CONTENT_STATUS.PENDING } }),
+      prisma.bbsReply.count({ where: { status: CONTENT_STATUS.PENDING } }),
+    ]).then(([a, b]) => a + b),
+    prisma.avatarReview.count({ where: { status: 10 } }),
+    // 待审积压最老一条
+    prisma.video.findFirst({
+      where: { status: VIDEO_STATUS.NORMAL },
+      orderBy: { createTime: "asc" },
+      select: { createTime: true },
+    }),
+  ]);
+  return {
+    videoPending,
+    commentPending,
+    bbsPending,
+    avatarPending,
+    oldestPendingTime: N(oldest?.createTime),
+    oldestPendingDays:
+      oldest?.createTime && N(oldest.createTime) > 0
+        ? Math.max(0, Math.floor((now - N(oldest.createTime)) / 86400))
+        : 0,
+  };
+}
+
+/** 概览核心聚合（不含待审类；2026-11-06 从 getOverview 拆出，供仪表盘挂缓存） */
+export async function getOverviewCore(): Promise<OverviewCoreData> {
   const now = Math.floor(Date.now() / 1000);
   const today = dayStart(0);
   const week = dayStart(6);
@@ -185,10 +229,9 @@ export async function getOverview(): Promise<Overview> {
 
   const [
     userTotal, userToday, userWeek, rankedTotal,
-    videoTotal, videoReviewed, videoPending, videoBanned, videoToday,
+    videoTotal, videoReviewed, videoBanned, videoToday,
     newsTotal, newsToday, commentTotal, commentToday, bbsPostTotal, bbsPostToday, bbsReplyTotal,
     clickTotal, messageTotal, donateAgg, act7, act30,
-    commentPending, bbsPending, avatarPending,
   ] = await Promise.all([
     // 2026-10-14：人数口径与前台上榜口径统一——封禁账号（旧站「停用」）不计入
     prisma.user.count({ where: { status: 0 } }),
@@ -197,7 +240,6 @@ export async function getOverview(): Promise<Overview> {
     prisma.userScores.count({ where: { sumTime: { gt: 0 }, ...(await rankedOnly()) } }),
     prisma.video.count(),
     prisma.video.count({ where: { status: VIDEO_STATUS.REVIEWED } }),
-    prisma.video.count({ where: { status: VIDEO_STATUS.NORMAL } }),
     prisma.video.count({ where: { status: VIDEO_STATUS.BANNED } }),
     prisma.video.count({ where: { createTime: { gte: BigInt(today) } } }),
     prisma.news.count(),
@@ -212,22 +254,9 @@ export async function getOverview(): Promise<Overview> {
     prisma.donate.aggregate({ _sum: { amount: true } }),
     activeUploaders(d7),
     activeUploaders(d30),
-    // 待人工复核队列（AI 后置审核存疑 → status=5；2026-10-27 论坛口径=主题+回复合计，
-    // 与 admin/layout.tsx 侧栏 badge 一致，仪表盘卡片不再漏算回复）
-    prisma.comment.count({ where: { status: CONTENT_STATUS.PENDING } }),
-    Promise.all([
-      prisma.bbsPost.count({ where: { status: CONTENT_STATUS.PENDING } }),
-      prisma.bbsReply.count({ where: { status: CONTENT_STATUS.PENDING } }),
-    ]).then(([a, b]) => a + b),
-    prisma.avatarReview.count({ where: { status: 10 } }),
   ]);
 
-  // 待审积压最老一条 + 平均审核耗时（新站才写 review_time）
-  const oldest = await prisma.video.findFirst({
-    where: { status: VIDEO_STATUS.NORMAL },
-    orderBy: { createTime: "asc" },
-    select: { createTime: true },
-  });
+  // 平均审核耗时（新站才写 review_time）
   const audit = await prisma.$queryRawUnsafe<{ avg_gap: number | null; c: bigint }[]>(
     `SELECT AVG(review_time - create_time) avg_gap, COUNT(*) c
      FROM video WHERE review_time > 0 AND review_time >= create_time`
@@ -243,7 +272,6 @@ export async function getOverview(): Promise<Overview> {
     rankedTotal,
     videoTotal,
     videoReviewed,
-    videoPending,
     videoBanned,
     videoToday,
     newsTotal,
@@ -256,19 +284,17 @@ export async function getOverview(): Promise<Overview> {
     clickTotal,
     messageTotal,
     donateTotal: N(donateAgg._sum.amount),
-    commentPending,
-    bbsPending,
-    avatarPending,
     activeUploaders7d: act7,
     activeUploaders30d: act30,
-    oldestPendingTime: N(oldest?.createTime),
-    oldestPendingDays:
-      oldest?.createTime && N(oldest.createTime) > 0
-        ? Math.max(0, Math.floor((now - N(oldest.createTime)) / 86400))
-        : 0,
     passRate: videoTotal ? Math.round((videoReviewed / videoTotal) * 1000) / 10 : 0,
     avgAuditSeconds: auditCount && auditGap != null ? Math.round(Number(auditGap)) : 0,
   };
+}
+
+/** 完整概览 = 核心 KPI + 待审类，全实时（审核页 /admin/review 用） */
+export async function getOverview(): Promise<Overview> {
+  const [core, pending] = await Promise.all([getOverviewCore(), getPendingOverview()]);
+  return { ...core, ...pending };
 }
 
 /** 窗口内有上传行为的去重玩家数（活跃度） */
