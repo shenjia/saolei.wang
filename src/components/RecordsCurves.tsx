@@ -20,6 +20,9 @@
 //   桌面/移动断点补丁随之全退，间距用 news_head 自带 19.5px 首页节奏。
 // · 「距今 N 天」按浏览器本地时间实时算——SSR 与客户端可能跨天差 1，
 //   该 span 挂 suppressHydrationWarning（绝对日期不受影响）。
+// · 十三轮（2026-11-06）：修手机端「点击位置和高亮位置不一样」——根因是
+//   WebKit（zoom 标准化前）gBCR 不含 zoom 而 clientX 是视觉坐标，混算错位；
+//   改为每点铺透明命中竖条，命中交给浏览器 hit-test，组件内零坐标换算。
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -216,37 +219,39 @@ export function ChartCard({
     return PAD_T + (1 - (t - tmin) / tspan) * (H - PAD_T - PAD_B);
   };
   const x = (i: number) => PAD_X + (W - PAD_X * 2) * (i / (n - 1));
+  /** 命中竖条宽（十三轮）= 相邻点中心距；+1px 重叠消相邻条间缝隙 */
+  const colw = (W - PAD_X * 2) / (n - 1) + 1;
   const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.y)}`).join(" ");
 
   const labelStep = Math.max(1, Math.ceil(n / 8));
   const last = pts[n - 1];
 
+  // 十三轮（2026-11-06 张老师反馈：手机端点击位置和高亮位置不一样）：触点→数据点
+  // 不再用 clientX/rect 换算——移动端 #page zoom 下 WebKit（zoom 标准化前）的
+  // getBoundingClientRect 完全不含 zoom（flop 事故 7ea1014 实证语义），而 clientX
+  // 是视觉坐标（含 zoom），两套参考系混算在 zoom<1 时换算值系统性偏小、越靠右
+  // 偏得越多，高亮竖线/圆点因此偏离触点。改为每个数据点铺一条透明命中竖条
+  // （fill=transparent 可命中、全高无缝覆盖），命中判定交给浏览器 hit-test
+  //（天然含 zoom），直接从 target 读 data-idx——组件内不再有任何事件坐标换算。
+  // 浮层在滚动容器内定位：可视 x = 图形 x - scrollLeft；近右缘翻向左侧
   const pick = (e: React.PointerEvent<SVGSVGElement>) => {
+    const hit = (e.target as Element | null)?.closest?.("[data-idx]") as SVGElement | null;
+    if (!hit) return;
+    const i = Number(hit.getAttribute("data-idx"));
+    if (!(i >= 0 && i < n)) return;
     const el = wrapRef.current;
     if (!el) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const sx = ((e.clientX - rect.left) / rect.width) * W;
-    let best = 0;
-    let bd = Infinity;
-    for (let i = 0; i < n; i++) {
-      const d = Math.abs(x(i) - sx);
-      if (d < bd) {
-        bd = d;
-        best = i;
-      }
-    }
-    // 浮层在滚动容器内定位：可视 x = 图形 x - scrollLeft；近右缘翻向左侧
     const vw = el.clientWidth;
-    const visX = x(best) - el.scrollLeft;
+    const visX = x(i) - el.scrollLeft;
     // 浮层宽度 auto（min 200 / max 260），右缘防裁按 262 估算
     let tl = visX + 12;
     if (tl + 262 > vw) tl = visX - 262 - 12;
     setTipLeft(Math.min(Math.max(4, tl), Math.max(4, vw - 266)));
-    // 触点在图表上半区 → 气泡放底部；下半区 → 贴顶（鼠标 hover 同样受益：
-    // 光标在顶部时气泡不再盖住光标所指的数据点）
-    const sy = ((e.clientY - rect.top) / rect.height) * H;
-    setTipBelow(sy < H / 2);
-    setHover(best);
+    // 气泡垂直翻转按「选中点」位置：点在上半区→气泡沉底、下半区→贴顶
+    // （原按触点 clientY 判断，同样依赖视觉坐标换算，一并改掉——且手指
+    // 挡不住气泡的诉求本质是避开高亮点，按选中点翻更贴切）
+    setTipBelow(y(pts[i].y) < H / 2);
+    setHover(i);
   };
 
   const hp = hover !== null ? pts[hover] : null;
@@ -357,6 +362,20 @@ export function ChartCard({
               </text>
             );
           })}
+          {/* 命中竖条层（十三轮）：必须最后渲染（最顶层）才能截住所有 pointer 事件；
+              fill=transparent 在默认 pointer-events:visiblePainted 下可命中。
+              事件 target 恒为竖条，pick 从 data-idx 读点索引 */}
+          {pts.map((_, i) => (
+            <rect
+              key={`hit${i}`}
+              data-idx={i}
+              x={x(i) - colw / 2}
+              y={0}
+              width={colw}
+              height={H}
+              fill="transparent"
+            />
+          ))}
         </svg>
         {hp && (
           <div
