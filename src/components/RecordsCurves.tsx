@@ -28,6 +28,10 @@
 //   （window.open），与全站录像链接口径一致；触摸端保持「选中+气泡保持」语义不跳转
 //   （手指场景误触代价高）；总计等无录像点（v=0）不跳。按下与松开须落在同一点，
 //   拖拽扫过不触发。有录像可跳时 hover 点显示 pointer 手势光标。
+// · 十六轮（2026-11-07 张老师定）：手机端没有 hover 层——触摸端第一次点按仅选中
+//   （移动高亮+出气泡），**再点同一个数据点**才新标签打开该点录像页。「同一个点」
+//   按数据点判定而非屏幕像素（手指精度低）；判定用「本次按下前选中的点」
+//   （downPrevRef，否则首 tap 即跳）；滚动清选中后首次 tap 恒只选中。
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -147,6 +151,15 @@ export function ChartCard({
   // 八轮（2026-10-28 张老师反馈移动端）：气泡垂直位置随触点翻转——手指按在图表
   // 上半区时气泡沉底、下半区时贴顶，避免触点（手指）正好压住气泡
   const [tipBelow, setTipBelow] = useState(false);
+  // hover 的同步副本（ref）：判「二次点按」读的是 pointerdown 前的选中态，
+  // state 异步刷新不可靠，一律走 ref
+  const hoverRef = useRef<number | null>(null);
+  // 十六轮（2026-11-07 张老师定移动端跳转交互）：手机端没有 hover 层——
+  // 第一次点按仅选中数据点（移动高亮+出气泡），再点同一个点才跳转该点录像页。
+  // 「同一个点」按数据点判定（不按屏幕像素——手指精度低按不住同一像素）。
+  // downPrevRef=本次按下前选中的点（pointerdown 时从 hoverRef 快照），
+  // pointerup 触摸分支判 downPrev===按下命中点 → 二次点按成立
+  const downPrevRef = useRef<number | null>(null);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -261,6 +274,7 @@ export function ChartCard({
     // （原按触点 clientY 判断，同样依赖视觉坐标换算，一并改掉——且手指
     // 挡不住气泡的诉求本质是避开高亮点，按选中点翻更贴切）
     setTipBelow(y(pts[i].y) < H / 2);
+    hoverRef.current = i;
     setHover(i);
   };
 
@@ -287,7 +301,11 @@ export function ChartCard({
       <div
         className="rec_chart"
         ref={wrapRef}
-        onScroll={() => setHover(null)}
+        onScroll={() => {
+          hoverRef.current = null;
+          downPrevRef.current = null;
+          setHover(null);
+        }}
       >
         <svg
           width={W}
@@ -302,8 +320,10 @@ export function ChartCard({
           }}
           onPointerMove={pick}
           onPointerDown={(e) => {
-            // 记录按下命中的点：十四轮要求「按下与松开同一点」才算点击，拖拽扫过不误开录像
+            // 记录按下命中的点：十四轮要求「按下与松开同一点」才算点击，拖拽扫过不误开录像；
+            // 同时快照「按下前选中的点」供十六轮触摸二次点按判定
             downIdxRef.current = idxFromEvent(e);
+            downPrevRef.current = hoverRef.current;
             pick(e);
           }}
           onPointerUp={(e) => {
@@ -311,9 +331,18 @@ export function ChartCard({
             downIdxRef.current = null;
             // 十四/十五轮（张老师需求）：鼠标点击当前 hover 点→**新标签页**打开对应录像
             // （与全站录像链接 target=_blank 口径一致）；
-            // 触摸端只选中不跳转（保留八轮的「松手保持气泡」交互）；
+            // 十六轮（2026-11-07 张老师定）：触摸端二次点按同一数据点→同样新标签打开——
+            // 手机端没有 hover 层，第一次点按仅选中（移动高亮+出气泡），再点同一个点
+            // 才跳转；判定用「按下前选中的点」（downPrevRef）而非「本次选中」，否则
+            // 第一次 tap 就会跳。滚动会先清选中（onScroll），滚动后的首次 tap 恒只选中；
             // v=0（总计快照点等）无录像不跳
-            if (e.pointerType !== "mouse") return;
+            if (e.pointerType !== "mouse") {
+              if (e.pointerType === "touch" && di !== null && downPrevRef.current === di) {
+                const tp = pts[di];
+                if (tp.v > 0) window.open(`/video/${tp.v}`, "_blank", "noopener");
+              }
+              return;
+            }
             const i = idxFromEvent(e);
             if (di === null || di !== i || i < 0) return;
             const p = pts[i];
@@ -323,7 +352,10 @@ export function ChartCard({
           // 直接清掉会让「点一下」的气泡闪现即逝、看起来像根本没出现——
           // 触摸交互的选中保持到滚动/切换级别才清；鼠标 hover 仍随移出消失
           onPointerLeave={(e) => {
-            if (e.pointerType !== "touch") setHover(null);
+            if (e.pointerType !== "touch") {
+              hoverRef.current = null;
+              setHover(null);
+            }
           }}
         >
           {[0, 0.25, 0.5, 0.75, 1].map((r) => {
