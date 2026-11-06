@@ -8,6 +8,10 @@
 //   未登录与用户未设置偏好时固定渲染这套。
 //   2026-11-06 张老师定方案 A：总司令/雷帝特判只用于个人主页大徽章与榜单；
 //   行内（录像/动态/评论/BBS/消息）一律按快照阈值评定，让军衔进步曲线可见。
+//   2026-11-06 二次迭代（张老师终版口径）：isKing 身份特判整体下线，总司令改为
+//   动态阈值档（getThunderKingThreshold，≈现役第二名高级最好成绩）——全场景
+//   统一 score<阈值 → 总司令；现任第一人的历史行自然呈现进步曲线+现任段，
+//   阈值不对外显示，军衔墙摘人仍按 getThunderKingId（两口径恒自洽）。
 // 体系 B「旧版称号」：雷帝/雷圣/雷神(GG)/雷仙(mm)/状元/榜眼/…/童生 + 布衣，
 //   移植 2008 版 Help/Title.asp 规则（oldtitle.ts 同源），阈值独立于军衔制。
 //
@@ -98,11 +102,44 @@ const fetchThunderKingId = unstable_cache(
 );
 
 /** 当前雷界第一人 user id（总计时间最小者；0=无人）。
- *  旧体系「雷帝」与军衔制「总司令」（2026-10-19 改口径）渲染时实时判，共用本源 */
+ *  军衔墙摘人/总司令人数判定用；行内与榜单的军衔评定统一走
+ *  getThunderKingThreshold 动态阈值（2026-11-06 张老师定，isKing 身份特判已下线） */
 export async function getThunderKingId(): Promise<number> {
   return fetchThunderKingId();
 }
 registerPreheat("thunder-king", REVALIDATE_HOME_CACHE, () => getThunderKingId());
+
+// ---------- 总司令动态阈值（2026-11-06 张老师定） ----------
+//
+// 阈值 =「现任第一人回溯仍能保持第一的最慢高级成绩」≈ 现役（status=0）非第一人
+// 的最好高级成绩 MIN(exp_time)：持有快于该点的成绩即在现役全员之上＝雷界第一。
+// 军衔评定全场景（行内/榜单/徽章）统一 score < 阈值 → 总司令，不再按用户身份特判；
+// 阈值不对外显示（TITLE_CONDITIONS 总司令仍写「雷界排行第一人」说明）。
+// 现役恰好只有第一人一人 score<阈值（第二名不可能快于自己的最好成绩），
+// 与军衔墙按 getThunderKingId 摘人恒自洽；无第二名 → MAX_SAFE_INTEGER（任何
+// 正成绩都保持第一）；无第一人 → 0（总司令档停用）。
+
+const fetchKingThreshold = unstable_cache(
+  async (): Promise<number> => {
+    const king = await getThunderKingId();
+    if (king <= 0) return 0;
+    const rows = await prisma.$queryRaw<Array<{ m: bigint | null }>>`
+      SELECT MIN(s.exp_time) AS m FROM user_scores s
+      JOIN \`user\` u ON u.id = s.id AND u.status = 0
+      WHERE s.exp_time > 0 AND s.id != ${king}
+    `;
+    const m = rows.length ? rows[0].m : null;
+    return m != null ? Number(m) : Number.MAX_SAFE_INTEGER;
+  },
+  ["thunder-king-threshold-v1"],
+  { revalidate: REVALIDATE_HOME_CACHE }
+);
+
+/** 总司令动态阈值（毫秒；0=无第一人/总司令档停用） */
+export async function getThunderKingThreshold(): Promise<number> {
+  return fetchKingThreshold();
+}
+registerPreheat("thunder-king-threshold", REVALIDATE_HOME_CACHE, () => getThunderKingThreshold());
 
 // ---------- 观看者偏好解析 ----------
 
@@ -133,8 +170,8 @@ export interface TitleDisplay {
 
 /**
  * 按观看者体系把「高级成绩快照 + 是否在榜」换算为称号。
- * 军衔制走 assess.title（总司令=雷界第一人特判）；旧版走 classicTitle（含雷帝实时判定）。
- * 两者同一判定源 getThunderKingId（2026-10-19 起总司令与雷帝恒为同一人）。
+ * 军衔制走 assess.title（总司令=动态阈值档，getThunderKingThreshold）；
+ * 旧版走 classicTitle（雷帝与总司令同阈值：快照快于阈值=雷帝）。
  */
 export async function resolveTitleDisplay(
   system: TitleSystem,
@@ -143,16 +180,16 @@ export async function resolveTitleDisplay(
   sex: number,
   userId: number
 ): Promise<TitleDisplay> {
-  const king = await getThunderKingId();
-  const isKing = king > 0 && king === userId;
+  const kTh = await getThunderKingThreshold();
+  const isLeader = kTh > 0 && expTimeMs > 0 && expTimeMs < kTh;
   if (system === "c") {
-    const t = classicTitle(expTimeMs, ranked, sex, isKing);
+    const t = classicTitle(expTimeMs, ranked, sex, isLeader);
     return { system: "c", name: t.name, color: t.color };
   }
   // 军衔制：预备役=无高级成绩（2026-10-28 张老师改口径：即便未入排行/封禁，
   // 有高级成绩也按时间评定军衔——ranked 不再参与军衔制评定，只保留给旧版称号判布衣）
   if (expTimeMs <= 0) return { system: "m", name: "预备役" };
-  return { system: "m", name: militaryTitle(expTimeMs, isKing) };
+  return { system: "m", name: militaryTitle(expTimeMs, kTh) };
 }
 
 // ---------- 双体系 DTO 工厂（服务端换算点共用） ----------
@@ -167,43 +204,36 @@ export interface TitlePair {
 }
 
 /**
- * dualTitle：单行「快照 → 双体系称号对」（2026-11-06 张老师定方案 A：
- * 行内军衔一律按快照阈值评定——总司令/雷帝特判只留给个人主页大徽章与榜单，
- * 本函数默认不套 king；榜单调用方经 dualTitles(…, true) 或自行传 king）
+ * dualTitle：单行「快照 → 双体系称号对」（2026-11-06 张老师定：总司令/雷帝为
+ * 动态阈值档——快照快于 getThunderKingThreshold 阈值即评定，全场景统一，
+ * 不再按用户身份 isKing 特判；kingThreshold 由调用方取好传入，0=不启用）
  */
 export function dualTitle(
   userId: number,
   expTime: number,
   ranked: boolean,
   sex: number,
-  king = 0
+  kingThreshold = 0
 ): TitlePair {
-  const isKing = king > 0 && king === userId;
+  const isLeader = kingThreshold > 0 && expTime > 0 && expTime < kingThreshold;
   return {
     // 军衔制：预备役=无高级成绩（2026-10-28 张老师改口径，ranked 不再参与军衔制评定）
-    m: expTime <= 0 ? "预备役" : militaryTitle(expTime, isKing),
-    c: classicTitle(expTime, ranked, sex, isKing),
+    m: expTime <= 0 ? "预备役" : militaryTitle(expTime, kingThreshold),
+    c: classicTitle(expTime, ranked, sex, isLeader),
   };
 }
 
-/** 服务端批量换算「快照 → 双体系称号对」
- *
- * ⚠️ withKing 默认 **false**（2026-11-06 张老师定方案 A）：行内军衔（录像列表/详情/
- * 动态/评论/BBS/消息等）一律按快照阈值评定，总司令/雷帝不套行——否则现任第一人
- * 名下所有历史行全塌缩成「总司令」（/user/18290 实证：快照 48 档进步曲线被盖住）。
- * 只有**榜单/徽章**类调用点显式传 true（排行/进步/地区/STNB/BV/军衔墙/首页TOP10/
- * 纪录页/用户主页大徽章 classic）。直调 assessTitle 的行内点（NewsCell/首页流/
- * api/news/more）同口径去掉 king。
+/** 服务端批量换算「快照 → 双体系称号对」（总司令/雷帝动态阈值单次取，逐行评定；
+ *  2026-11-06 张老师定：阈值制全场景统一，行内与榜单不再区分）
  *
  * ⚠️ 返回**与传入行序严格对齐的数组**（2026-10-27 修复），不再返回 Map：
  * 旧 Map 以 userId 为键，同一用户多行（各带各的上传时刻快照——如个人主页录像区、
  * 评论区、BBS 楼层流）时后行覆盖前行，整批塌缩成同一称号（个人主页录像整页
  * 同一军衔的根因）。调用方一律 `dualTitles(rows)[i]` 按下标取本行称号。
- * 每行数据互不依赖（king 单次查询），无共享状态。 */
+ * 每行数据互不依赖（阈值单次查询），无共享状态。 */
 export async function dualTitles(
-  rows: { userId: number; expTime: number; ranked: boolean; sex: number }[],
-  withKing = false
+  rows: { userId: number; expTime: number; ranked: boolean; sex: number }[]
 ): Promise<TitlePair[]> {
-  const king = withKing ? await getThunderKingId() : 0;
-  return rows.map((r) => dualTitle(r.userId, r.expTime, r.ranked, r.sex, king));
+  const kTh = await getThunderKingThreshold();
+  return rows.map((r) => dualTitle(r.userId, r.expTime, r.ranked, r.sex, kTh));
 }

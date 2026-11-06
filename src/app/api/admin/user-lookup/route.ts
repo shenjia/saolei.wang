@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/admin/guard";
-import { getThunderKingId } from "@/lib/title-system";
+import { getThunderKingThreshold } from "@/lib/title-system";
 import { title as assessTitle } from "@/lib/assess";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       select: { id: true, chineseName: true, englishName: true, sex: true, status: true },
     }),
     prisma.userScores.findUnique({ where: { id: BigInt(id) }, select: { expTime: true } }),
-    getThunderKingId(),
+    getThunderKingThreshold(),
   ]);
   if (!user) return NextResponse.json({ ok: true, found: false });
 
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
       sex: user.sex,
       banned: user.status === -1,
       // 军衔按实时高级成绩评定（与玩家管理列表同口径）
-      title: await assessTitle(Number(score?.expTime ?? 0), king > 0 && king === id),
+      title: await assessTitle(Number(score?.expTime ?? 0), king),
     },
   });
 }

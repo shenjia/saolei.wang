@@ -6,7 +6,7 @@
 
 import { prisma } from "@/lib/db";
 import { title } from "@/lib/assess";
-import { getThunderKingId } from "@/lib/title-system";
+import { getThunderKingThreshold } from "@/lib/title-system";
 
 const N = (v: unknown): number => Number(v ?? 0);
 
@@ -357,7 +357,7 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
         where: { id: { in: detailUids.map(BigInt) } },
         select: { id: true, expTime: true },
       }),
-      getThunderKingId().catch(() => 0),
+      getThunderKingThreshold().catch(() => 0),
     ]);
     const uMap = new Map(users.map((u) => [Number(u.id), u]));
     const eMap = new Map(scores.map((s) => [Number(s.id), s.expTime ?? 0]));
@@ -368,7 +368,7 @@ export async function getRegionToday(): Promise<RegionTodayRow[]> {
         uid: m.uid,
         name: u?.chineseName || u?.englishName || `#${m.uid}`,
         sex: u?.sex ?? 1,
-        rank: title(eMap.get(m.uid) ?? 0, kingId > 0 && kingId === m.uid),
+        rank: title(eMap.get(m.uid) ?? 0, kingId),
         plays: m.plays,
         winRate: m.plays ? Math.round((m.wins / m.plays) * 1000) / 10 : 0,
         avgRtt: m.avg,

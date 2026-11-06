@@ -5,7 +5,7 @@
 
 import type { RankingRow } from "@/lib/queries";
 import { title as assessTitle } from "@/lib/assess";
-import { getThunderKingId } from "@/lib/title-system";
+import { getThunderKingThreshold } from "@/lib/title-system";
 import type { RankingBy } from "@/lib/config";
 import { RankingHead, RankingRowLine, RankingEmpty } from "./RankingRows";
 
@@ -30,10 +30,10 @@ export async function RankingTable({
   const showDelta = by === "sum_time" && deltas !== undefined;
   // 军衔 SUB 制按高级时间评定（2026-10-13）；NF 榜行数据本身来自 NF 表，exp_time 同样是 NF 口径，
   // 但军衔应按主榜评定——getRankingTable 已把主榜成绩回填进 overall（NF 时），此处优先主榜值；
-  // 2026-10-19 总司令=雷界第一人特判
-  const king = await getThunderKingId();
+  // 2026-11-06 总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
+  const kingTh = await getThunderKingThreshold();
   const titles = await Promise.all(
-    rows.map((u) => assessTitle(u.overallExpTime ?? u.scores.exp_time, king > 0 && king === u.id))
+    rows.map((u) => assessTitle(u.overallExpTime ?? u.scores.exp_time, kingTh))
   );
   return (
     <table cellPadding={0} cellSpacing={0} className="ranking_table">

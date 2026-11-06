@@ -12,7 +12,7 @@ import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
 import { parseRankingBy, byLevelOrder, parseBvRankingBy, type VideoLevel } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles, getThunderKingId } from "@/lib/title-system";
+import { dualTitles, getThunderKingThreshold } from "@/lib/title-system";
 import { RANKING_COL_WIDTHS } from "@/components/RankingRows";
 import { getSession } from "@/lib/auth";
 import { RankingNav } from "@/components/RankingNav";
@@ -242,12 +242,12 @@ export default async function RankingPage({
 
     const { rows, total, pageSize, den, totalDen } = bvData;
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；Phase 5 补旧版称号备选（BV 榜全在榜）
-    // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
-    const bvKing = await getThunderKingId();
-    const bvPairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })), true);
+    // 2026-11-06 总司令=动态阈值档（快照快于阈值即评定）
+    const kingTh = await getThunderKingThreshold();
+    const bvPairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
     const titled = rows.map((u, i) => ({
       ...u,
-      title: assessTitle(u.expTime, bvKing > 0 && bvKing === u.id),
+      title: assessTitle(u.expTime, kingTh),
       classic: bvPairs[i]?.c ?? null,
     }));
 
@@ -345,14 +345,13 @@ export default async function RankingPage({
 
     const { rows, total, pageSize, den, totalDen } = stnbData;
     // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；总司令=雷界第一人特判（两体系共用）
-    const stnbKing = await getThunderKingId();
+    const kingTh = await getThunderKingThreshold();
     const stnbPairs = await dualTitles(
-      rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })),
-      true
+      rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex }))
     );
     const titled = rows.map((u, i) => ({
       ...u,
-      title: assessTitle(u.expTime, stnbKing > 0 && stnbKing === u.id),
+      title: assessTitle(u.expTime, kingTh),
       classic: stnbPairs[i]?.c ?? null,
     }));
 
@@ -461,16 +460,15 @@ export default async function RankingPage({
 
   // 军衔列在服务端预算（Feed 客户端零成本渲染）——SUB 制按高级时间评定（2026-10-13）
   // Phase 5：补旧版称号备选（榜单行全部在榜 ranked=true）
-  // 2026-10-19 总司令=雷界第一人特判（两体系共用 king 判定）
-  const king = await getThunderKingId();
+  // 2026-11-06 总司令=动态阈值档
+  const kingTh = await getThunderKingThreshold();
   const rankPairs = await dualTitles(
-    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex })),
-    true
+    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
   );
   const titled = await Promise.all(
     rows.map(async (u, i) => ({
       ...u,
-      title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
+      title: await assessTitle(u.scores.exp_time, kingTh),
       classic: rankPairs[i]?.c ?? null,
     }))
   );

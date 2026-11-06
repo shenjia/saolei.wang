@@ -7,7 +7,7 @@
 
 import { prisma } from "@/lib/db";
 import { title as assessTitle } from "@/lib/assess";
-import { getThunderKingId } from "@/lib/title-system";
+import { getThunderKingThreshold } from "@/lib/title-system";
 import { usersByIds, usersWithTitles, type UserBrief } from "@/lib/queries";
 import { BBS_BOARD_NAMES, BBS_BOARDS, ubb } from "@/lib/bbs";
 import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
@@ -164,8 +164,8 @@ export async function getUserList(
   const authMap = new Map(auths.map((a) => [N(a.id), a]));
   const scoreMap = new Map(scores.map((s) => [N(s.id), s]));
   const vcMap = new Map(videoCounts.map((v) => [N(v.user), N(v.c)]));
-  // 2026-10-19 总司令=雷界第一人特判（后台实时视角）
-  const king = await getThunderKingId();
+  // 2026-11-06 总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
+  const kingTh = await getThunderKingThreshold();
 
   const rows: AdminUserRow[] = [];
   for (const id of uidList) {
@@ -188,7 +188,7 @@ export async function getUserList(
       banUntil: N(u.banUntil),
       rankBanUntil: N(u.rankBanUntil),
       lowTrustUntil: N(u.lowTrustUntil),
-      title: await assessTitle(expTime, king > 0 && king === id),
+      title: await assessTitle(expTime, kingTh),
       sumTime,
       videos: vcMap.get(id) ?? 0,
       trusted: u.trusted,
@@ -326,7 +326,7 @@ export async function getUserDetailAdmin(id: number): Promise<AdminUserDetail | 
       banUntil: N(user.banUntil),
       rankBanUntil: N(user.rankBanUntil),
       lowTrustUntil: N(user.lowTrustUntil),
-      title: await assessTitle(expTime, (await getThunderKingId()) === id),
+      title: await assessTitle(expTime, await getThunderKingThreshold()),
       sumTime,
       videos: await prisma.video.count({ where: { user: uid } }),
       trusted: user.trusted,
@@ -1356,7 +1356,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
   ]);
   const aMap = new Map(auths.map((a) => [N(a.id), a]));
   const sMap = new Map(scores.map((s) => [N(s.id), s]));
-  const king = await getThunderKingId(); // 2026-10-19 总司令=雷界第一人特判
+  const kingTh = await getThunderKingThreshold(); // 2026-11-06 总司令=动态阈值档
   const rows: AdminUserRow[] = [];
   for (const u of users) {
     const id = N(u.id);
@@ -1376,7 +1376,7 @@ export async function getLatestUsers(limit = 8): Promise<AdminUserRow[]> {
       banUntil: N(u.banUntil),
       rankBanUntil: N(u.rankBanUntil),
       lowTrustUntil: N(u.lowTrustUntil),
-      title: await assessTitle(expTime, king > 0 && king === id),
+      title: await assessTitle(expTime, kingTh),
       sumTime,
       videos: 0,
       trusted: u.trusted,

@@ -54,7 +54,7 @@ import { decodeLegacyEntities, scoreTime, videoCommentNotice } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { registerPreheat } from "./preheat";
-import { dualTitles, classicTitle, getThunderKingId, type TitlePair } from "./title-system";
+import { dualTitles, classicTitle, getThunderKingId, getThunderKingThreshold, type TitlePair } from "./title-system";
 import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
 import { activityInfo } from "./activity";
 import { STAGE_EXP, type FeedStage } from "./stage";
@@ -186,9 +186,9 @@ export interface UserBriefWithTitle extends UserBrief {
 }
 
 /** usersByIds 之上补军衔（批量：BBS 楼层作者、录像评论作者共用；
- *  2026-10-19 总司令=雷界第一人特判） */
+ *  2026-11-06 总司令=动态阈值档，按当前成绩评定） */
 export async function usersWithTitles(ids: number[]): Promise<Map<number, UserBriefWithTitle>> {
-  const [briefs, scores, king] = await Promise.all([
+  const [briefs, scores, kingTh] = await Promise.all([
     usersByIds(ids),
     ids.length
       ? prisma.userScores.findMany({
@@ -196,13 +196,13 @@ export async function usersWithTitles(ids: number[]): Promise<Map<number, UserBr
           select: { id: true, expTime: true },
         })
       : Promise.resolve([]),
-    getThunderKingId(),
+    getThunderKingThreshold(),
   ]);
   const expMap = new Map(scores.map((s) => [N(s.id), s.expTime ?? 0]));
   const out = new Map<number, UserBriefWithTitle>();
   for (const [id, b] of briefs) {
     const exp = expMap.get(id) ?? 0;
-    out.set(id, { ...b, title: title(exp, king > 0 && king === id), expTime: exp });
+    out.set(id, { ...b, title: title(exp, kingTh), expTime: exp });
   }
   return out;
 }
@@ -841,13 +841,11 @@ async function getTopUsersImpl(
   });
   const users = await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.id) } } });
   const byId = new Map(users.map((u) => [N(u.id), u]));
-  // Phase 5：批量补旧版称号备选（榜首即雷帝 TOP1，与 getThunderKingId 同源）
-  // 2026-10-19：军衔制总司令=雷界第一人（rows 按 sum_time 升序，榜首即 king，取 0 位行）
-  const kingId = rows.length ? N(rows[0].id) : 0;
+  // Phase 5：批量补旧版称号备选（2026-11-06 总司令/雷帝=动态阈值档，dualTitles 内部统一评定）
+  const kingTh = await getThunderKingThreshold();
   // dualTitles 行序数组（2026-10-27）：与 rows 下标一一对应
   const topPairs = await dualTitles(
-    rows.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: byId.get(N(r.id))?.sex ?? 1 })),
-    true // 榜单（首页国内TOP10）保留总司令特判（2026-11-06 方案 A：行内去 king、榜单保留）
+    rows.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: byId.get(N(r.id))?.sex ?? 1 }))
   );
   return rows.map((r, i) => {
     const u = byId.get(N(r.id));
@@ -857,7 +855,7 @@ async function getTopUsersImpl(
       englishName: u?.englishName ?? "",
       sex: u?.sex ?? 1,
       area: u?.area ?? "",
-      title: title(r.expTime, N(r.id) === kingId),
+      title: title(r.expTime, kingTh),
       classic: topPairs[i]?.c ?? null,
       // 获得军衔的时间（近似值）：三项最好成绩日期中的最新一个
       titleDate: Math.max(N(r.begTimeDate), N(r.intTimeDate), N(r.expTimeDate)),
@@ -918,7 +916,7 @@ export async function getRanking(
     take: RANKING_PAGESIZE,
   });
   const authors = await usersByIds(rows.map((r) => N(r.id)));
-  const king = await getThunderKingId(); // 2026-10-19 总司令=雷界第一人特判
+  const kingTh = await getThunderKingThreshold(); // 2026-11-06 总司令=动态阈值档
   const vField = VIDEO_FIELD(level, order);
   const dField = DATE_FIELD(level, order);
   const users: RankingUser[] = await Promise.all(
@@ -931,7 +929,7 @@ export async function getRanking(
         score: N(rec[field] as number),
         videoId: N(rec[vField] as bigint),
         date: N(rec[dField] as bigint),
-        title: title(rec.expTime as number | null, king > 0 && king === N(r.id)),
+        title: title(rec.expTime as number | null, kingTh),
       };
     })
   );
@@ -1908,17 +1906,14 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
         }
       : null,
     scores: scoreMap,
-    // 2026-10-19 总司令=雷界第一人特判（与雷帝同一判定源）
-    title: title(scores?.expTime, (await getThunderKingId()) === id),
-    // Phase 5：旧版称号备选（在榜=user.status===0 且有高级成绩；含雷帝 TOP1 判定）
+    // 2026-11-06 总司令=动态阈值档（与雷帝同一阈值源）
+    title: title(scores?.expTime, await getThunderKingThreshold()),
+    // Phase 5：旧版称号备选（在榜=user.status===0 且有高级成绩；雷帝同阈值判定）
     classicTitle:
       (
-        await dualTitles(
-          [
-            { userId: N(u.id), expTime: N(scores?.expTime ?? 0), ranked: u.status === 0 && (scores?.expTime ?? 0) > 0, sex: u.sex },
-          ],
-          true // 用户主页大徽章保留雷帝/总司令特判（2026-11-06 方案 A）
-        )
+        await dualTitles([
+          { userId: N(u.id), expTime: N(scores?.expTime ?? 0), ranked: u.status === 0 && (scores?.expTime ?? 0) > 0, sex: u.sex },
+        ])
       )[0]?.c ?? null,
   };
 }
@@ -2409,8 +2404,7 @@ export async function getTitleMembers(
   // Phase 5：批量补旧版称号备选（成员各按高级成绩；本列表恒在榜）
   // dualTitles 行序数组（2026-10-27）：与 page 下标一一对应
   const memberPairs = await dualTitles(
-    page.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: authors.get(N(r.id))?.sex ?? 1 })),
-    true // 军衔墙成员页=榜单，保留总司令特判（2026-11-06 方案 A）
+    page.map((r) => ({ userId: N(r.id), expTime: N(r.expTime), ranked: true, sex: authors.get(N(r.id))?.sex ?? 1 }))
   );
   const memberRows: TitleMemberRow[] = page.map((r, i) => {
     const rec = r as unknown as Record<string, bigint | number | null>;

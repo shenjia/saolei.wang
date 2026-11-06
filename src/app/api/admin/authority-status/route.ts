@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/guard";
 import { prisma } from "@/lib/db";
 import { title } from "@/lib/assess";
-import { getThunderKingId } from "@/lib/title-system";
+import { getThunderKingThreshold } from "@/lib/title-system";
 
 export const dynamic = "force-dynamic";
 
@@ -186,7 +186,7 @@ export async function GET() {
         where: { id: { in: allUids.map(BigInt) } },
         select: { id: true, expTime: true },
       }),
-      getThunderKingId().catch(() => 0),
+      getThunderKingThreshold().catch(() => 0),
     ]);
     const uMap = new Map(users.map((u) => [Number(u.id), u]));
     const eMap = new Map(scores.map((s) => [Number(s.id), s.expTime ?? 0]));
@@ -197,7 +197,7 @@ export async function GET() {
         p.name = u?.chineseName || u?.englishName || loginNames.get(p.uid) || `#${p.uid}`;
         p.area = u?.area ?? "";
         p.sex = u?.sex ?? 1;
-        p.rank = title(eMap.get(p.uid) ?? 0, kingId > 0 && kingId === p.uid);
+        p.rank = title(eMap.get(p.uid) ?? 0, kingId);
       }
       row.players.sort((a, b) => b.games - a.games || a.uid - b.uid); // 对局多在前
     }

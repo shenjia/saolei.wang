@@ -6,7 +6,7 @@ import { getGrowRanking } from "@/lib/ranksnap";
 import { getRankingPageOfUser } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles, getThunderKingId } from "@/lib/title-system";
+import { dualTitles, getThunderKingThreshold } from "@/lib/title-system";
 import { RankingNav } from "@/components/RankingNav";
 import { GrowFeed } from "@/components/GrowFeed";
 import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
@@ -47,15 +47,14 @@ export default async function GrowPage({
   const { rows, total, pageSize } = await getGrowRanking(page);
   // Phase 5：补旧版称号备选（进步榜行全部在榜）
   const growPairs = await dualTitles(
-    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex })),
-    true
+    rows.map((u) => ({ userId: Number(u.id), expTime: u.scores.exp_time, ranked: true, sex: u.sex }))
   );
-  // 2026-10-19 总司令=雷界第一人特判
-  const king = await getThunderKingId();
+  // 2026-11-06 总司令=动态阈值档
+  const kingTh = await getThunderKingThreshold();
   const titled = await Promise.all(
     rows.map(async (u, i) => ({
       ...u,
-      title: await assessTitle(u.scores.exp_time, king > 0 && king === Number(u.id)),
+      title: await assessTitle(u.scores.exp_time, kingTh),
       classic: growPairs[i]?.c ?? null,
     }))
   );

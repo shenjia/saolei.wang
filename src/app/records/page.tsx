@@ -60,7 +60,7 @@ export default async function RecordsPage() {
     ...curves.map((c) => ({ userId: c.userId, expTime: c.expTime, ranked: c.ranked, sex: c.sex })),
     ...tops.map((t) => ({ userId: t.userId, expTime: t.expTime, ranked: t.ranked, sex: t.sex })),
   ];
-  const pairs = await dualTitles(titleRows, true); // 纪录页=榜单性质，保留总司令特判（2026-11-06 方案 A）
+  const pairs = await dualTitles(titleRows); // 2026-11-06 总司令/雷帝=动态阈值档，dualTitles 内部统一评定
 
   // 曲线行与称号按下标对齐（titleRows 前段=curves 原序），先钉住再筛分组
   const curveRows = curves.map((c, i) => ({ ...c, pair: pairs[i] }));

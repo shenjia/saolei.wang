@@ -12,6 +12,7 @@ import { AdminAction } from "@/components/admin/AdminAction";
 import { SendMessageButton } from "@/components/admin/SendMessageButton";
 import { AdminCard } from "@/components/admin/Widgets";
 import { title as milTitle } from "@/lib/assess";
+import { getThunderKingThreshold } from "@/lib/title-system";
 import { TITLE_COLORS } from "@/lib/config";
 import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
 
@@ -57,7 +58,9 @@ export default async function AdminCheatPage() {
   const nameMap = new Map(users.map((u) => [u.id, u.chineseName]));
   // 玩家名 hover 气泡「姓名（英文名）#ID」（2026-10-29 张老师要求全站统一）
   const enMap = new Map(users.map((u) => [u.id, u.englishName]));
-  const rankMap = new Map(scores.map((i) => [i.id, milTitle(i.expTime)]));
+  // 2026-11-06 总司令=动态阈值档（快照快于阈值即评定）
+  const kingTh = await getThunderKingThreshold();
+  const rankMap = new Map(scores.map((i) => [i.id, milTitle(i.expTime, kingTh)]));
   /* 玩家累计复核战绩（2026-10-27 张老师需求）：待复核列表在玩家名下显示
      「n 作弊 n 误报」＝该玩家历史上被核实作弊（resolved=1）/ 判为误报（resolved=2）
      的次数。分组聚合一次取全量历史，供人工分诊：惯犯多命中即实锤，首次命中更可能

@@ -42,15 +42,19 @@ function getPosition(score: number, distribution: number[], direction: 0 | 1): n
   return i;
 }
 
-/** 军衔：总司令=雷界排行第一人特判（2026-10-19 张老师改口径，原 SUB30 绝对阈值），
- *  其余按高级时间绝对阈值评定（2026-10-13 张老师改版，原按总计时间相对阈值）
+/** 军衔：按高级时间绝对阈值评定（2026-10-13 张老师改版，原按总计时间相对阈值）
  *  TITLE_THRESHOLDS 与 TITLES 同序（严→宽降序）：取第一个 score <= threshold 的档；
  *  全部超过（>300s）→ 新兵；无成绩 → 预备役。
- *  @param isKing 是否雷界排行第一人（总计时间 TOP1，调用方经 getThunderKingId 判定；
- *                不传/未知时按 SUB35 起评——king 不会掉出大元帅档，保守显示） */
-export function title(score: number | null | undefined, isKing = false): string {
-  if (isKing) return "总司令";
+ *
+ *  总司令=动态阈值档（2026-11-06 张老师定，替代 10-19 的 isKing 身份特判）：
+ *  阈值 =「现任第一人回溯仍能保持第一的最慢高级成绩」（title-system
+ *  getThunderKingThreshold ≈ 现役第二名的高级最好成绩）——持有快于该点的成绩
+ *  即雷界第一。阈值不对外显示（TITLE_CONDITIONS 总司令仍写「雷界排行第一人」），
+ *  军衔墙摘人仍按 getThunderKingId（现役恰好一人 score<阈值，两口径自洽）。
+ *  @param kingThreshold 总司令动态阈值（毫秒；0/缺省=不启用总司令档） */
+export function title(score: number | null | undefined, kingThreshold = 0): string {
   if (!score) return "预备役";
+  if (kingThreshold > 0 && score < kingThreshold) return "总司令";
   for (let i = 0; i < TITLE_THRESHOLDS.length; i++) {
     if (score <= TITLE_THRESHOLDS[i]) return TITLES[i + 1] ?? "";
   }

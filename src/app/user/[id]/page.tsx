@@ -58,7 +58,7 @@ import type { MetricSectionData } from "@/components/RecordsCurves";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { formatDate } from "@/lib/format";
 import { donateYuanPlain } from "@/lib/donate";
-import { getThunderKingId, dualTitles } from "@/lib/title-system";
+import { getThunderKingThreshold, dualTitles } from "@/lib/title-system";
 import { ageOf, constellationText } from "@/lib/birth";
 import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
@@ -245,12 +245,12 @@ export default async function UserViewPage({
     });
     donateCents = Number(agg._sum.amount ?? 0);
   }
-  // 2026-10-19 总司令=雷界第一人特判（快照口径：按发布时刻是否榜首评定）
-  const king = await getThunderKingId();
+  // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
+  const kingTh = await getThunderKingThreshold();
   const feed: NewsFeedItem[] = news.map((n) => ({
     news: n,
     // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
-    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime), king > 0 && king === (n.author?.id ?? 0)),
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime), kingTh),
     classic: n.authorTitles?.c ?? null,
   }));
 

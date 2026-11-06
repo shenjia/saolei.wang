@@ -37,6 +37,7 @@ import {
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EmailBindNotice } from "@/components/EmailBindNotice";
+import { UpdateNotice } from "@/components/UpdateNotice";
 import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, VIDEO_STATUS, isManager } from "@/lib/config";
 import { TIME_NEVER, isRecent } from "@/lib/format";
 import { RelTime } from "@/components/RelTime";
@@ -51,7 +52,9 @@ import { FlopSprites } from "@/components/FlopSprites";
 import { VideoHot } from "@/components/VideoHot";
 import { PracticeToday } from "@/components/PracticeToday";
 import { getPracticeToday, getRankedToday } from "@/lib/practice";
+import { getSiteUpdates } from "@/lib/site-updates";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
+import { getThunderKingThreshold } from "@/lib/title-system";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +70,7 @@ export default async function HomePage() {
     showEmailNotice = !auth || Number(auth.emailVerified) === 0;
   }
 
-  const [news, newbies, hot, newsTotal, videos, videoTotal] = await Promise.all([
+  const [news, newbies, hot, newsTotal, videos, videoTotal, updates] = await Promise.all([
     getHomeNews(),
     getNewbies(),
     // 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块，数据源原 /video 右栏同款；
@@ -84,18 +87,21 @@ export default async function HomePage() {
     // 首页参数收敛在 getHomeVideoFeedPage/getHomeVideoFeedCount 零参包装（queries.ts 单点维护）
     getHomeVideoFeedPage(),
     getHomeVideoFeedCount(),
+    // 更新历史（2026-11-06 更新通告浮层）：仅登录态取（未登录不弹浮层，省一次查询）
+    session ? getSiteUpdates() : Promise.resolve([]),
   ]);
-  // 2026-11-06 张老师定方案 A：动态行内军衔一律按快照阈值评定（总司令特判只留大徽章/榜单）
+  // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
+  const kingTh = await getThunderKingThreshold();
   const feed: NewsFeedItem[] = news.map((n) => ({
     news: n,
     // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
-    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime)),
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime), kingTh),
     classic: n.authorTitles?.c ?? null,
   }));
   // 入伍新兵按发布者实时高级时间评军衔（2026-10-13 SUB 制）
   const newbieRows = newbies.map((n) => ({
     ...n,
-    title: assessTitle(n.expTime),
+    title: assessTitle(n.expTime, kingTh),
     classic: n.authorTitles?.c ?? null,
   }));
 
@@ -122,6 +128,8 @@ export default async function HomePage() {
     {/* 邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层 + 以后再说 24h）。
         渲染在 #page 之外：≤605px #page 有整页 zoom，fixed 遮罩做在里面会缩放失真 */}
     {showEmailNotice && <EmailBindNotice />}
+    {/* 更新通告浮层（2026-11-06 张老师要求）：登录态且有更新历史才挂载；渲染在 #page 外同邮箱提醒口径 */}
+    {session && updates.length > 0 && <UpdateNotice updates={updates} uid={session.uid} />}
     <div id="page" className="two_columns">
     <ul id="home">
       <li className="main">

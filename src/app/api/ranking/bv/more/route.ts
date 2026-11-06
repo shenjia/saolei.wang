@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import { getBvRanking } from "@/lib/queries";
 import { parseBvRankingBy } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
-import { dualTitles, getThunderKingId } from "@/lib/title-system";
+import { dualTitles, getThunderKingThreshold } from "@/lib/title-system";
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
@@ -27,12 +27,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "bv_unavailable" }, { status: 503 });
   }
   const { rows, total, pageSize } = data;
-  // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；2026-10-19 总司令=雷界第一人特判
-  const king = await getThunderKingId();
-  const pairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })), true);
+  // 军衔 SUB 制按高级时间评定（与成绩榜同口径）；2026-11-06 总司令=动态阈值档
+  const kingTh = await getThunderKingThreshold();
+  const pairs = await dualTitles(rows.map((u) => ({ userId: u.id, expTime: u.expTime, ranked: true, sex: u.sex })));
   const titled = rows.map((u, i) => ({
     ...u,
-    title: assessTitle(u.expTime, king > 0 && king === u.id),
+    title: assessTitle(u.expTime, kingTh),
     classic: pairs[i]?.c ?? null,
   }));
 
