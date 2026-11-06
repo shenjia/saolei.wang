@@ -55,11 +55,10 @@ import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankLabel } from "@/components/RankLabel";
 import { UserRecordsSection } from "@/components/UserRecordsSection";
 import type { MetricSectionData } from "@/components/RecordsCurves";
-import type { TitlePair } from "@/lib/title-system";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { formatDate } from "@/lib/format";
 import { donateYuanPlain } from "@/lib/donate";
-import { getThunderKingId } from "@/lib/title-system";
+import { getThunderKingId, dualTitles } from "@/lib/title-system";
 import { ageOf, constellationText } from "@/lib/birth";
 import { getRadarData } from "@/lib/radar";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
@@ -259,10 +258,15 @@ export default async function UserViewPage({
   const radar = await getRadarData(scores);
 
   // 「纪录」板块数据组装（2026-11-06）：12 条曲线 → 3 指标板块 × 4 级别点集。
-  // 点的创造者恒为本人（n/en/s/t 全取 detail 快照——title/classicTitle 与
-  // dualTitle 同判定源，直接复用免二次换算）；全部无点（从未刷新过任何个人纪录）
-  // 时整块隐藏，与动态/雷达板块同规则
-  const recordTitlePair: TitlePair = { m: detail.title, c: detail.classicTitle };
+  // 点的创造者恒为本人（n/en/s 取 detail）；军衔 hover 必须是「传那盘录像时」的
+  // 军衔（2026-11-06 张老师指正）——每点用曲线数据层带回的 video 行内上传时刻
+  // 快照（et/rk）dualTitles 批量换算，绝不能用当前 user_scores 快照（那会让
+  // 整条曲线 hover 全显示最新军衔，就显示不出进步过程了）；全部无点时整块隐藏
+  const recordPts = userCurves.flatMap((c) => c.points);
+  const recordPairs = await dualTitles(
+    recordPts.map((p) => ({ userId, expTime: p.et, ranked: p.rk === 1, sex: user.sex }))
+  );
+  const recordPairByPoint = new Map(recordPts.map((p, i) => [p, recordPairs[i]]));
   const recordSections: MetricSectionData[] = (["time", "3bvs", "stnb"] as const).map((metric) => ({
     metric,
     metricName: RECORD_METRIC_NAMES[metric],
@@ -277,7 +281,7 @@ export default async function UserViewPage({
         s: user.sex,
         x: p.ct,
         y: p.val,
-        t: recordTitlePair,
+        t: recordPairByPoint.get(p) ?? { m: "", c: null },
       })),
     })),
   }));

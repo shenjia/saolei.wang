@@ -29,7 +29,7 @@ const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 export type RecordMetric = "time" | "3bvs" | "stnb";
 export type RecordLevel = "beg" | "int" | "exp" | "total";
 
-/** 破纪录点（值/时间为原值，称号在页面层批量换算后合成 DTO 传客户端） */
+/** 破纪录点（值/时间为原值；称号为上传时刻 video 行内快照，页面层批量换算后合成 DTO） */
 export interface RecordCurveRow {
   metric: RecordMetric;
   level: RecordLevel;
@@ -44,7 +44,10 @@ export interface RecordCurveRow {
   /** 上传时刻 Unix 秒（=纪录创造时间，与后台曲线同口径） */
   ct: number;
   sex: number;
+  /** 上传时刻是否在榜（video.ranked 行内快照，称号快照制口径） */
   ranked: boolean;
+  /** 上传时刻高级成绩 ms（video.exp_time 行内快照——hover 军衔=传那盘录像时的军衔，
+   *  2026-11-06 张老师指正；此前误取 user_scores 当前值致整条曲线 hover 全显最新军衔） */
   expTime: number;
 }
 
@@ -75,55 +78,56 @@ const NO_RECORD_EXCLUDED = Prisma.sql`vi.no_record = 0`;
 /** 九条纪录演变曲线（+总计当前纪录单点）：窗口查询逐级算，总计走快照单点 */
 async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
   // 时间纪录：运行最小 real_time（同值并列也取点，与后台 getRecordCurve 的 `<=` 一致）
+  // 称号快照（2026-11-06 张老师指正：hover 军衔必须是「传那盘录像时」的军衔）：
+  // 取 video 行内快照 v.exp_time/v.ranked（上传时刻高级成绩+是否在榜，称号快照制口径），
+  // 绝不取 user_scores 当前值——那会让整条曲线的 hover 全显示最新军衔
   const timeRows = await prisma.$queryRaw<
-    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; vrk: bigint; et: bigint }[]
   >`
-    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, t.vrk, t.et
     FROM (
       SELECT 'time' AS metric, v.level, v.id AS vid, v.\`user\` AS uid,
-             vi.real_time AS val, v.create_time AS ct,
+             vi.real_time AS val, v.create_time AS ct, v.exp_time AS et, v.ranked AS vrk,
              MIN(vi.real_time) OVER (PARTITION BY v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) AS run
       FROM video v JOIN video_info vi ON vi.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0 AND ${NO_RECORD_EXCLUDED}
     ) t
     JOIN \`user\` u ON u.id = t.uid
-    LEFT JOIN user_scores s ON s.id = t.uid
     WHERE t.val <= t.run
   `;
 
   // 3BV/s 纪录：运行最大（board_3bv×1e6/real_time，×1000 口径；board_3bv 过级别限界）
   const b3bvsRows = await prisma.$queryRaw<
-    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; vrk: bigint; et: bigint }[]
   >`
-    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, t.vrk, t.et
     FROM (
       SELECT '3bvs' AS metric, v.level, v.id AS vid, v.\`user\` AS uid,
              ROUND(vi.board_3bv * 1000000.0 / vi.real_time) AS val, v.create_time AS ct,
+             v.exp_time AS et, v.ranked AS vrk,
              MAX(ROUND(vi.board_3bv * 1000000.0 / vi.real_time)) OVER (PARTITION BY v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) AS run
       FROM video v JOIN video_info vi ON vi.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.real_time > 0 AND vi.board_3bv >= ${B3BV_CASE}
         AND ${NO_RECORD_EXCLUDED}
     ) t
     JOIN \`user\` u ON u.id = t.uid
-    LEFT JOIN user_scores s ON s.id = t.uid
     WHERE t.val >= t.run
   `;
 
   // STNB 纪录：运行最大 video_metrics.stnb（离线重放引擎算得；board_3bv 同限界口径）
   const stnbRows = await prisma.$queryRaw<
-    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+    { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; vrk: bigint; et: bigint }[]
   >`
-    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+    SELECT t.metric, t.level, t.vid, t.uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, t.vrk, t.et
     FROM (
       SELECT 'stnb' AS metric, v.level, v.id AS vid, v.\`user\` AS uid,
-             m.stnb AS val, v.create_time AS ct,
+             m.stnb AS val, v.create_time AS ct, v.exp_time AS et, v.ranked AS vrk,
              MAX(m.stnb) OVER (PARTITION BY v.level ORDER BY v.create_time, v.id ROWS UNBOUNDED PRECEDING) AS run
       FROM video v JOIN video_info vi ON vi.id = v.id JOIN video_metrics m ON m.id = v.id
       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND m.stnb > 0 AND vi.board_3bv >= ${B3BV_CASE}
         AND ${NO_RECORD_EXCLUDED}
     ) t
     JOIN \`user\` u ON u.id = t.uid
-    LEFT JOIN user_scores s ON s.id = t.uid
     WHERE t.val >= t.run
   `;
 
@@ -197,16 +201,19 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
 
   const totalStnbPts = mkReplay(stnbEvents, (b) => b.beg + b.int + b.exp, (a, b) => a > b);
 
-  // 曲线点创造者信息（三级各取点集批量补名字；点集小）
+  // 曲线点创造者信息（三级各取点集批量补名字；点集小）。
+  // 称号快照同级别曲线口径：JOIN video 取行内 v.exp_time/v.ranked（上传时刻），
+  // 不取 user_scores 当前值（2026-11-06 张老师指正）
   const hydrate = async (
     metric: "time" | "3bvs" | "stnb",
     pts: { uid: number; vid: number; val: number; ct: number }[]
   ) => {
-    if (!pts.length) return [] as { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[];
+    if (!pts.length)
+      return [] as { metric: string; level: string; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; vrk: bigint; et: bigint }[];
     const rows = await prisma.$queryRaw<
-      { seq: number; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; ustatus: number; exp_time: bigint | null }[]
+      { seq: number; vid: bigint; uid: bigint; name: string; ename: string; val: number; ct: bigint; sex: number; vrk: bigint; et: bigint }[]
     >`
-      SELECT t.seq, t.vid, u.id uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, u.status ustatus, s.exp_time
+      SELECT t.seq, t.vid, u.id uid, u.chinese_name name, u.english_name ename, t.val, t.ct, u.sex, vv.exp_time et, vv.ranked vrk
       FROM (
         ${Prisma.join(
           pts.map((p, i) => Prisma.sql`SELECT ${i} seq, ${p.vid} vid, ${p.uid} uid, ${p.val} val, ${p.ct} ct`),
@@ -214,7 +221,7 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
         )}
       ) t
       JOIN \`user\` u ON u.id = t.uid
-      LEFT JOIN user_scores s ON s.id = t.uid
+      JOIN video vv ON vv.id = t.vid
       ORDER BY t.seq`;
     return rows.map((r) => ({ ...r, metric, level: "total" }));
   };
@@ -236,8 +243,9 @@ async function fetchRecordCurves(): Promise<RecordCurveRow[]> {
     val: Number(r.val),
     ct: N(r.ct),
     sex: N(r.sex),
-    ranked: N(r.ustatus) === 0,
-    expTime: N(r.exp_time),
+    // ranked=video 行内快照（上传时刻在榜态），不再是 user.status 当前值
+    ranked: N(r.vrk) === 1,
+    expTime: N(r.et),
   }));
 }
 
@@ -411,10 +419,12 @@ async function fetchSiteTops(): Promise<SiteTopRow[]> {
 
 /** 左侧纪录曲线（2026-10-28 张老师定：持久化缓存——重查询+基本不变：
  *  全站纪录只有被打破才变，24h TTL 已远超实际变化频率；即便有新纪录，
- *  一天内旧曲线展示完全可接受。⚠️ 改曲线口径必须升版本号（v6 起：运气盘排除） */
+ *  一天内旧曲线展示完全可接受。⚠️ 改曲线口径必须升版本号（v6：运气盘排除；
+ *  v7：称号快照改 video 行内上传时刻快照——hover 军衔=传那盘录像时的军衔，
+ *  2026-11-06 张老师指正） */
 export const getRecordCurves = unstable_cache(
   fetchRecordCurves,
-  ["records-curves-v6"],
+  ["records-curves-v7"],
   { revalidate: 86400, tags: ["records-curves"] }
 );
 
@@ -498,6 +508,11 @@ export interface UserRecordPoint {
   ct: number;
   /** 纪录值原值：time=毫秒；3bvs=×1000 整数；stnb=原值 */
   val: number;
+  /** 上传时刻高级成绩 ms（video.exp_time 行内快照——hover 军衔=传那盘录像时的
+   *  军衔，2026-11-06 张老师指正；页面层 dualTitles 换算，勿用当前 user_scores） */
+  et: number;
+  /** 上传时刻是否在榜（video.ranked 行内快照，1=在榜） */
+  rk: number;
 }
 
 export interface UserRecordCurve {
@@ -508,10 +523,11 @@ export interface UserRecordCurve {
 
 async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]> {
   const rows = await prisma.$queryRaw<
-    { level: string; vid: bigint; ct: bigint; rt: number; b3: number; nr: number; st: number | null }[]
+    { level: string; vid: bigint; ct: bigint; rt: number; b3: number; nr: number; st: number | null; et: bigint; rk: bigint }[]
   >`
     SELECT v.level, v.id vid, v.create_time ct,
-           vi.real_time rt, vi.board_3bv b3, vi.no_record nr, m.stnb st
+           vi.real_time rt, vi.board_3bv b3, vi.no_record nr, m.stnb st,
+           v.exp_time et, v.ranked rk
     FROM video v
     JOIN video_info vi ON vi.id = v.id
     LEFT JOIN video_metrics m ON m.id = v.id
@@ -527,6 +543,8 @@ async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]>
     b3: N(r.b3),
     nr: N(r.nr),
     st: r.st === null ? 0 : Number(r.st),
+    et: N(r.et),
+    rk: N(r.rk),
   }));
   const LEVELS3 = ["beg", "int", "exp"] as const;
 
@@ -549,12 +567,12 @@ async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]>
       const lv = r.level;
       if (best[lv] !== null && !better(v, best[lv]!)) continue;
       best[lv] = v;
-      pts[lv].push({ vid: r.vid, ct: r.ct, val: v });
+      pts[lv].push({ vid: r.vid, ct: r.ct, val: v, et: r.et, rk: r.rk });
       if (best.beg !== null && best.int !== null && best.exp !== null) {
         const sum = best.beg + best.int + best.exp;
         if (tSum === null || better(sum, tSum)) {
           tSum = sum;
-          total.push({ vid: r.vid, ct: r.ct, val: sum });
+          total.push({ vid: r.vid, ct: r.ct, val: sum, et: r.et, rk: r.rk });
         }
       }
     }
@@ -591,10 +609,11 @@ async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]>
 }
 
 /** 个人纪录进步历程（uid 参与缓存 key 每人一份，24h TTL；与全站曲线同向——
- *  新纪录一天内上图延迟可接受）。⚠️ 改口径必须升版本号 v1 → v2 */
+ *  新纪录一天内上图延迟可接受。⚠️ 改口径必须升版本号（v2：点带 video 行内
+ *  上传时刻称号快照 et/rk——hover 军衔=传那盘录像时的军衔，2026-11-06） */
 export const getUserRecordCurves = (userId: number) =>
   unstable_cache(
     async () => fetchUserRecordCurves(userId),
-    ["user-records-curves-v1", String(userId)],
+    ["user-records-curves-v2", String(userId)],
     { revalidate: 86400, tags: ["records-curves"] }
   )();
