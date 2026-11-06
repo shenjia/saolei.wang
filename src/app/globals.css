@@ -12340,13 +12340,16 @@ html.op-fakefs #header {
 .email_bind_modal .text b {
   color: #e6c07b;
 }
-.email_bind_modal .btns {
+.email_bind_modal .btns,
+.update_notice_modal .btns {
   display: flex;
   gap: 12px;
   margin-top: 24px;
 }
 .email_bind_modal .btn_primary,
-.email_bind_modal .btn_later {
+.email_bind_modal .btn_later,
+.update_notice_modal .btn_primary,
+.update_notice_modal .btn_later {
   box-sizing: border-box;
   flex: 1;
   display: flex;
@@ -12367,7 +12370,8 @@ html.op-fakefs #header {
   transition: box-shadow 0.15s, filter 0.15s, border-color 0.15s, color 0.15s;
 }
 /* 马上绑定：登录按钮同款渐变黄（#account_login .lp_submit） */
-.email_bind_modal .btn_primary {
+.email_bind_modal .btn_primary,
+.update_notice_modal .btn_primary {
   background: linear-gradient(180deg, #ffd23e, #f0b70a);
   color: #2b2a20;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
@@ -12376,18 +12380,21 @@ html.op-fakefs #header {
    都会把黄底深字染成绿色（张老师 2026-10-16 报）——锁色豁免规则已挂到站级链
    （body .email_bind_overlay a.btn_primary:hover）旁边就近压制。
    hover/active 完整口径与登录按钮 #account_login .lp_submit 一致（仅多锁 color） */
-.email_bind_modal .btn_primary:hover {
+.email_bind_modal .btn_primary:hover,
+.update_notice_modal .btn_primary:hover {
   color: #2b2a20;
   filter: brightness(1.06);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
 }
-.email_bind_modal .btn_primary:active {
+.email_bind_modal .btn_primary:active,
+.update_notice_modal .btn_primary:active {
   color: #2b2a20;
   filter: brightness(0.96);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
 }
 /* 以后再说：legacy a.button 同款（录像页下载按钮）——灰渐变底 + 亮灰字，hover 变绿 */
-.email_bind_modal .btn_later {
+.email_bind_modal .btn_later,
+.update_notice_modal .btn_later {
   background: linear-gradient(180deg, #49483e, #3b3a32);
   border: 1px solid #49483e;
   border-radius: 5px;
@@ -12395,11 +12402,13 @@ html.op-fakefs #header {
   text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
 }
-.email_bind_modal .btn_later:hover {
+.email_bind_modal .btn_later:hover,
+.update_notice_modal .btn_later:hover {
   color: #a6e22e;
   background: linear-gradient(180deg, #4c4b40, #3e3d34);
 }
-.email_bind_modal .btn_later:active {
+.email_bind_modal .btn_later:active,
+.update_notice_modal .btn_later:active {
   color: #8ac21b;
 }
 
@@ -14271,4 +14280,111 @@ a.cheat_rep_link:hover {
    级别名 14→13、军衔徽章 14→12（保持原有比例关系），NF 小标 11px 不动。 */
 #video_hot .video_hot_table td {
   font-size: 14px;
+}
+
+/* ===== 首页更新通告浮层（2026-11-06 张老师要求）=====
+   遮罩复用 .login_overlay；卡片沿用 .email_bind_modal 暗玻璃视觉（按钮样式
+   已把选择器并到 .email_bind_modal 一组，零新色）。列表区细滚动条，
+   「知道了」记 localStorage、「提交意见建议」切发站内信面板（UpdateNotice.tsx）。 */
+.update_notice_modal {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 500px;
+  max-width: calc(100vw - 40px);
+  max-height: min(78vh, 640px);
+  padding: 26px 28px 24px;
+  border-radius: 14px;
+  background: rgba(39, 40, 34, 0.82);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+  box-shadow:
+    inset 0 1px 0 rgba(248, 248, 242, 0.1),
+    inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+    0 32px 64px -16px rgba(0, 0, 0, 0.8),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.update_notice_modal h3 {
+  margin: 0 0 14px;
+  color: #f8f8f2;
+  font-size: 20px;
+  line-height: 1;
+  text-align: center;
+}
+/* 历史列表：flex 纵向撑满剩余高度，超出滚动 */
+.update_notice_modal .un_list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 12px;
+  /* 简洁滚动条：Firefox 用原生 thin，WebKit 用 6px 半透明圆角 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(248, 248, 242, 0.28) transparent;
+}
+.update_notice_modal .un_list::-webkit-scrollbar {
+  width: 6px;
+}
+.update_notice_modal .un_list::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(248, 248, 242, 0.28);
+}
+.update_notice_modal .un_list::-webkit-scrollbar-thumb:hover {
+  background: rgba(248, 248, 242, 0.45);
+}
+.update_notice_modal .un_list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.update_notice_modal .un_list p {
+  margin: 0 0 10px;
+  color: #d6d6c9;
+  font-size: 13px;
+  line-height: 21px;
+}
+.update_notice_modal .un_list em {
+  margin-right: 8px;
+  color: #e6c07b;
+  font-style: normal;
+  font-weight: 700;
+}
+/* 发信面板 */
+.update_notice_modal .un_to {
+  margin: 0 0 12px;
+  color: #b1b1a4;
+  font-size: 13px;
+  text-align: center;
+}
+.update_notice_modal .un_to em {
+  color: #e6c07b;
+  font-style: normal;
+}
+.update_notice_modal .un_input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 248, 242, 0.15);
+  border-radius: 9px;
+  background: rgba(248, 248, 242, 0.08);
+  color: #f8f8f2;
+  font-size: 14px;
+  line-height: 22px;
+  font-family: inherit;
+  resize: none;
+  transition: border-color 0.15s;
+}
+.update_notice_modal .un_input:focus {
+  outline: none;
+  border-color: rgba(230, 192, 123, 0.6);
+}
+.update_notice_modal .un_done {
+  margin: 0;
+  padding: 14px 0 4px;
+  color: #a6e22e;
+  font-size: 15px;
+  text-align: center;
+}
+.update_notice_modal .un_error {
+  margin: 8px 0 0;
+  color: #f92672;
+  font-size: 13px;
+  text-align: center;
 }
