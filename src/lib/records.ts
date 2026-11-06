@@ -474,3 +474,127 @@ export async function getRecordsPageData(): Promise<{ curves: RecordCurveRow[]; 
   if (bvTop && !withBv.includes(bvTop) && withBv.length > 0) withBv.splice(1, 0, bvTop);
   return { curves, tops: withBv };
 }
+
+// ==================== 个人纪录进步历程（2026-11-06 用户主页「纪录」板块） ====================
+//
+// 单玩家口径的「个人纪录刷新链」：该玩家每次把自己的个人最好成绩刷优，出一个点——
+// 与 /records 全站纪录曲线同构，但运行极值窗口按「本人」计（不跨玩家）。
+// · beg/int/exp：该级别个人最优（时间运行最小 / 3BV·s 与 STNB 运行最大）；
+//   与全站曲线的差异：并列不计点（全站要记录「另一人追平」，个人追平自己不是进步）。
+// · total：三级个人最优之和的重放（复用 fetchRecordCurves 的 mkReplay 语义，
+//   三级齐全后总和严格变优才出点），触发点 = 引起刷新的那盘录像。
+// · 口径与全站一致：status=REVIEWED、no_record=0（运气盘不入链）、
+//   3BV 限界（初 10 / 中高 4）、3bvs=ROUND(board_3bv×1e6/real_time) ×1000 值。
+//
+// 查询：video+video_info+video_metrics 单玩家一次取全（按 user 索引，行数=本人录像数，
+// 上限千级），三个指标的事件过滤与重放全在 TS 内存做（<1ms）。uid 参与缓存 key
+// 每人一份，24h TTL——个人纪录只在过审刷新时变化，与全站曲线同向；
+// ⚠️ 改口径（过滤条件/限界/并列语义）必须升版本号 v1 → v2。
+
+export interface UserRecordPoint {
+  /** 触发录像 id（点击跳 /video/<v>） */
+  vid: number;
+  /** 刷新时刻 Unix 秒 */
+  ct: number;
+  /** 纪录值原值：time=毫秒；3bvs=×1000 整数；stnb=原值 */
+  val: number;
+}
+
+export interface UserRecordCurve {
+  metric: RecordMetric;
+  level: RecordLevel;
+  points: UserRecordPoint[];
+}
+
+async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]> {
+  const rows = await prisma.$queryRaw<
+    { level: string; vid: bigint; ct: bigint; rt: number; b3: number; nr: number; st: number | null }[]
+  >`
+    SELECT v.level, v.id vid, v.create_time ct,
+           vi.real_time rt, vi.board_3bv b3, vi.no_record nr, m.stnb st
+    FROM video v
+    JOIN video_info vi ON vi.id = v.id
+    LEFT JOIN video_metrics m ON m.id = v.id
+    WHERE v.\`user\` = ${BigInt(userId)} AND v.status = ${VIDEO_STATUS.REVIEWED}
+      AND v.level IN ('beg','int','exp')
+    ORDER BY v.create_time, v.id
+  `;
+  const evs = rows.map((r) => ({
+    level: r.level as "beg" | "int" | "exp",
+    vid: N(r.vid),
+    ct: N(r.ct),
+    rt: N(r.rt),
+    b3: N(r.b3),
+    nr: N(r.nr),
+    st: r.st === null ? 0 : Number(r.st),
+  }));
+  const LEVELS3 = ["beg", "int", "exp"] as const;
+
+  /**
+   * 三指标通用重放：按时间序扫本人过审录像，个人最优严格变优出点；
+   * 三级齐全后总和（time 取和=越小越好 / 3bvs·stnb 取和=越大越好）
+   * 严格变优出总计点（复用 fetchRecordCurves mkReplay 的语义）。
+   */
+  const build = (
+    getVal: (r: (typeof evs)[number]) => number | null,
+    better: (a: number, b: number) => boolean
+  ): Record<RecordLevel, UserRecordPoint[]> => {
+    const pts: Record<"beg" | "int" | "exp", UserRecordPoint[]> = { beg: [], int: [], exp: [] };
+    const best: Record<"beg" | "int" | "exp", number | null> = { beg: null, int: null, exp: null };
+    const total: UserRecordPoint[] = [];
+    let tSum: number | null = null;
+    for (const r of evs) {
+      const v = getVal(r);
+      if (v === null) continue;
+      const lv = r.level;
+      if (best[lv] !== null && !better(v, best[lv]!)) continue;
+      best[lv] = v;
+      pts[lv].push({ vid: r.vid, ct: r.ct, val: v });
+      if (best.beg !== null && best.int !== null && best.exp !== null) {
+        const sum = best.beg + best.int + best.exp;
+        if (tSum === null || better(sum, tSum)) {
+          tSum = sum;
+          total.push({ vid: r.vid, ct: r.ct, val: sum });
+        }
+      }
+    }
+    return { beg: pts.beg, int: pts.int, exp: pts.exp, total };
+  };
+
+  // 时间：运气盘排除 + real_time>0；运行最小（严格变小）
+  const time = build(
+    (r) => (r.nr === 0 && r.rt > 0 ? r.rt : null),
+    (a, b) => a < b
+  );
+  // 3BV/s：同上 + 3BV 限界（初 10 / 中高 4）；×1000 口径与全站一致
+  const b3bvs = build(
+    (r) => (r.nr === 0 && r.rt > 0 && r.b3 >= (r.level === "beg" ? 10 : 4) ? Math.round((r.b3 * 1e6) / r.rt) : null),
+    (a, b) => a > b
+  );
+  // STNB：video_metrics.stnb>0 + 限界 + 运气盘排除；运行最大
+  const stnb = build(
+    (r) => (r.nr === 0 && r.st > 0 && r.b3 >= (r.level === "beg" ? 10 : 4) ? r.st : null),
+    (a, b) => a > b
+  );
+
+  const out: UserRecordCurve[] = [];
+  for (const [metric, byLevel] of [
+    ["time", time],
+    ["3bvs", b3bvs],
+    ["stnb", stnb],
+  ] as [RecordMetric, Record<RecordLevel, UserRecordPoint[]>][]) {
+    for (const level of [...LEVELS3, "total"] as RecordLevel[]) {
+      out.push({ metric, level, points: byLevel[level] });
+    }
+  }
+  return out;
+}
+
+/** 个人纪录进步历程（uid 参与缓存 key 每人一份，24h TTL；与全站曲线同向——
+ *  新纪录一天内上图延迟可接受）。⚠️ 改口径必须升版本号 v1 → v2 */
+export const getUserRecordCurves = (userId: number) =>
+  unstable_cache(
+    async () => fetchUserRecordCurves(userId),
+    ["user-records-curves-v1", String(userId)],
+    { revalidate: 86400, tags: ["records-curves"] }
+  )();

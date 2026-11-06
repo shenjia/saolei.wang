@@ -6759,6 +6759,23 @@ body #page {
   margin: 0;
   color: #b1b1a4;
 }
+/* 用户主页「纪录」板块 h1（2026-11-06）：与动态板块同款形态——
+   压掉 legacy #user_view h1 的 inline-block + 10px 底距（flex 对齐同一坑），
+   灰色走全局 h1.gray 规则 */
+#user_view #user_records .news_head h1 {
+  display: block;
+  margin: 0;
+}
+/* 「纪录」板块指标筛选器（Time/3BV/s/STNB）靠右：级别筛选紧贴标题，
+   指标筛选 margin-left:auto 推到行尾；窄屏两排 tabs 换行堆叠时回落左对齐 */
+.user_record_metric_tabs {
+  margin-left: auto;
+}
+@media (max-width: 768px) {
+  .user_record_metric_tabs {
+    margin-left: 0;
+  }
+}
 /* 通用灰色次级 h1（26px 大字不变色）：首页「录像」用 .news_head h1.gray 已有规则，
    用户页「录像」「纪事」标题不在 .news_head 内，这里给全局兜底 */
 h1.gray {

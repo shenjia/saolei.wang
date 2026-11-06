@@ -25,9 +25,9 @@ import { donateYuanPlain } from "@/lib/donate";
 export const metadata = { title: "纪录" };
 
 const LEVEL_NAMES: Record<string, string> = { total: "总计", beg: "初级", int: "中级", exp: "高级" };
-// 图表小标题口径（张老师 2026-10-28 四轮起「XX纪录」）
+// 图表小标题口径（张老师 2026-10-28 四轮起「XX纪录」；2026-11-06 「时间」→「Time」）
 const METRIC_NAMES: Record<string, string> = {
-  time: "时间纪录",
+  time: "Time纪录",
   "3bvs": "3BV/s纪录",
   stnb: "STNB纪录",
 };

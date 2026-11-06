@@ -28,6 +28,7 @@ import {
   getLevel3bvRanges,
   getUser3bvCollection,
 } from "@/lib/queries";
+import { getUserRecordCurves } from "@/lib/records";
 import { getClicks, recordClick } from "@/lib/star";
 import { getHistory } from "@/lib/history";
 import {
@@ -52,6 +53,9 @@ import { HistoryBox } from "@/components/HistoryBox";
 import { RadarChart } from "@/components/RadarChart";
 import { Score3bvs, ScoreTime } from "@/components/Cells";
 import { RankLabel } from "@/components/RankLabel";
+import { UserRecordsSection } from "@/components/UserRecordsSection";
+import type { MetricSectionData } from "@/components/RecordsCurves";
+import type { TitlePair } from "@/lib/title-system";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { formatDate } from "@/lib/format";
 import { donateYuanPlain } from "@/lib/donate";
@@ -94,6 +98,20 @@ const PROFILE_FIELDS: [string, string][] = [
   ["mouse", "鼠标"],
   ["pad", "鼠标垫"],
 ];
+
+/** 「纪录」板块筛选命名（2026-11-06）：级别口径与纪录页同款；图表小标题
+ *  沿用纪录页「XX纪录」命名（指标 tab 标签 Time/3BV/s/STNB 在组件内定义） */
+const RECORD_LEVEL_NAMES: Record<string, string> = {
+  total: "总计",
+  beg: "初级",
+  int: "中级",
+  exp: "高级",
+};
+const RECORD_METRIC_NAMES: Record<string, string> = {
+  time: "Time纪录",
+  "3bvs": "3BV/s纪录",
+  stnb: "STNB纪录",
+};
 
 /** 录像版块级别筛选 tabs（2026-09-27 张老师要求，与动态筛选同款 ranking_tabs 大号版）；
  *  2026-10-16 移入客户端壳 UserVideoSection（就地切换不导航），此处不再需要 */
@@ -173,7 +191,7 @@ export default async function UserViewPage({
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, ranks, userVideos, todayVideos, activity, practiceWins, bbvRanges, bbvCollection] = await Promise.all([
+  const [history, ranks, userVideos, todayVideos, activity, practiceWins, bbvRanges, bbvCollection, userCurves] = await Promise.all([
     getHistory(userId),
     getUserRanks(userId),
   // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
@@ -197,6 +215,9 @@ export default async function UserViewPage({
     // 「3BV 收集」版块：全站区间（level_3bv_range 小表）+ 本人已收集集合（走索引，毫秒级）
     getLevel3bvRanges(),
     getUser3bvCollection(userId),
+    // 「纪录」板块（2026-11-06）：个人纪录进步历程 12 条曲线（3 指标×4 级别），
+    // uid 参与缓存 key 每人一份 24h TTL（lib/records.ts），无点时整块隐藏
+    getUserRecordCurves(userId),
   ]);
   // 赞助金额（2026-11-02 张老师要求）：数据统计「发表评论」行下新增「赞助金额」，
   // 金额金色显示（donate_amt 例外类，压过统计盒数字亮灰）；没赞助过（合计 0）不显示整行。
@@ -236,6 +257,31 @@ export default async function UserViewPage({
 
   const { user, info, scores } = detail;
   const radar = await getRadarData(scores);
+
+  // 「纪录」板块数据组装（2026-11-06）：12 条曲线 → 3 指标板块 × 4 级别点集。
+  // 点的创造者恒为本人（n/en/s/t 全取 detail 快照——title/classicTitle 与
+  // dualTitle 同判定源，直接复用免二次换算）；全部无点（从未刷新过任何个人纪录）
+  // 时整块隐藏，与动态/雷达板块同规则
+  const recordTitlePair: TitlePair = { m: detail.title, c: detail.classicTitle };
+  const recordSections: MetricSectionData[] = (["time", "3bvs", "stnb"] as const).map((metric) => ({
+    metric,
+    metricName: RECORD_METRIC_NAMES[metric],
+    levels: (["total", "beg", "int", "exp"] as const).map((lv) => ({
+      level: lv,
+      levelName: RECORD_LEVEL_NAMES[lv],
+      points: (userCurves.find((c) => c.metric === metric && c.level === lv)?.points ?? []).map((p) => ({
+        v: p.vid,
+        u: userId,
+        n: user.chineseName,
+        en: user.englishName,
+        s: user.sex,
+        x: p.ct,
+        y: p.val,
+        t: recordTitlePair,
+      })),
+    })),
+  }));
+  const hasRecordCurves = recordSections.some((s) => s.levels.some((l) => l.points.length > 0));
 
   // 是不是「我自己的主页」——决定头像能不能点（2026-09-24 张老师需求：
   // 点击直接弹上传窗口 + 方形裁剪预览 + 待审气泡）
@@ -386,6 +432,10 @@ export default async function UserViewPage({
               <RadarChart data={radar} />
             </div>
           )}
+        {/* 「纪录」板块（2026-11-06 张老师需求，11-37 二改：放动态板块上面）——个人纪录进步历程，
+            级别筛选靠 title（默认总计）+ 指标筛选靠右（默认 Time），图表复刻
+            /records 页 ChartCard；无任何个人纪录点时整块隐藏 */}
+        {hasRecordCurves && <UserRecordsSection sections={recordSections} />}
         {news.length > 0 && (
           <div id="news" className="box">
             {/* 2026-09-27 张老师要求：动态/录像/纪事板块标题与其他页面同款 26px 大字，

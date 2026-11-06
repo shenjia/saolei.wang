@@ -54,8 +54,9 @@ export interface CurveChart {
 /** 级别 key（四轮：总计/初级/中级/高级四档筛选） */
 type LevelKey = "total" | "beg" | "int" | "exp";
 
-/** 级别专属色（2026-10-28 张老师定：绿橙金；总计=金） */
-const LEVEL_COLORS: Record<LevelKey, string> = {
+/** 级别专属色（2026-10-28 张老师定：绿橙金；总计=金）。
+ *  导出给用户主页「纪录」板块（UserRecordsSection）复用同套配色 */
+export const LEVEL_COLORS: Record<LevelKey, string> = {
   total: "#fdc61a",
   beg: "#a6e22e",
   int: "#f79646",
@@ -66,8 +67,7 @@ const PAD_T = 14;
 const PAD_B = 22;
 const PAD_X = 8;
 /** 图高：桌面 150 / 窄容器（移动端单列）220——见 ChartCard 内 H 的计算（九轮） */
-/** 自适应压缩下限与滚动兜底（三轮：不许出滚动条；>600 点极罕见才滚） */
-const PER_POINT_MIN = 6;
+/** 滚动兜底阈值（三轮：≤600 点一律压缩进容器宽不出滚动条；>600 点极罕见才滚） */
 const SCROLL_THRESHOLD = 600;
 
 /** 纪录值显示：与全站口径一致（time 3 位小数秒精确显示（2026-11-05 口径）/ 3bvs 3 位小数 / stnb 1 位小数=STNB 榜同款） */
@@ -101,7 +101,8 @@ function holdText(fromTs: number, toTs: number): string {
   return `${d} 天`;
 }
 
-function ChartCard({
+/** 单图卡（纪录页 MetricSection 与用户主页「纪录」板块共用；2026-11-06 导出） */
+export function ChartCard({
   chart,
   levelName,
   color,
@@ -183,17 +184,20 @@ function ChartCard({
     );
   }
 
-  // 横向自适应：全宽铺开优先；点密时压缩格宽（≥6px/点）；仅极端点数才横向滚动
-  const fitPer = boxW / n;
-  const W =
-    n > SCROLL_THRESHOLD
-      ? n * 26
-      : Math.max(boxW, Math.min(n * 26, n * Math.max(PER_POINT_MIN, fitPer)));
+  // 横向自适应（2026-11-06 张老师纠偏：图表必须全限制在板块以内）：
+  // ≤600 点一律压缩进容器宽（不再有 6px/点下限——原下限会令 W=n×6>容器宽，
+  // 用户主页点密的 3BV/s/STNB 曲线实测出横向滚动条）；仅 >600 点极端情况
+  // 保留横向滚动兜底
+  const W = n > SCROLL_THRESHOLD ? n * 26 : boxW;
   const vals = pts.map((p) => p.y);
   const mn = Math.min(...vals);
   const mx = Math.max(...vals);
   const span = mx - mn || 1;
-  const y = (v: number) => PAD_T + (1 - (v - mn) / span) * (H - PAD_T - PAD_B);
+  // Time 纪录纵轴翻转（2026-11-06 张老师定）：时间越小越好，翻转后趋势向上爬
+  //（最好成绩在图表顶部，视觉=一步步逼近纪录）；3BV/s 与 STNB 本就越大越好，不翻转
+  const flip = chart.metric === "time";
+  const y = (v: number) =>
+    PAD_T + (flip ? (v - mn) / span : 1 - (v - mn) / span) * (H - PAD_T - PAD_B);
   const x = (i: number) => PAD_X + (W - PAD_X * 2) * (i / (n - 1));
   const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.y)}`).join(" ");
 
@@ -271,7 +275,8 @@ function ChartCard({
         >
           {[0, 0.25, 0.5, 0.75, 1].map((r) => {
             const gy = PAD_T + r * (H - PAD_T - PAD_B);
-            const gv = mx - (mx - mn) * r;
+            // 网格线标签取「该位置对应的值」：翻转后顶部=最小（最好）时间
+            const gv = flip ? mn + (mx - mn) * r : mx - (mx - mn) * r;
             return (
               <g key={r}>
                 <line
@@ -385,7 +390,7 @@ export interface MetricSectionData {
 const LEVEL_ORDER: MetricSectionData["levels"][number]["level"][] = ["total", "beg", "int", "exp"];
 
 /** 单板块：h2 标题 + 级别筛选器 + 当前级别的图表卡（2026-10-28 四轮张老师定：
- *  左栏拆三板块「时间纪录/3BV/s纪录/STNB纪录」，各自带「总计/初级/中级/高级」筛选。
+ *  左栏拆三板块「Time纪录/3BV/s纪录/STNB纪录」，各自带「总计/初级/中级/高级」筛选。
  *  十轮（同日）：标题行改首页新闻板块同款 .news_head——张老师明确要求参考首页新闻
  *  版式且保证标题与筛选器同行。.news_head 是全站组件级 flex wrap 样式，不受
  *  ≤768 通用 .page_head column 堆叠规则影响，两端天然同行（放不下才 wrap 兜底）；
