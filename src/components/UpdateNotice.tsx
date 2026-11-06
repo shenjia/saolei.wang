@@ -1,7 +1,8 @@
 "use client";
 
-// 首页更新通告浮层（2026-11-06 张老师要求）：登录用户进首页弹出最近更新历史，
-// 列表带细滚动条可下滚查看更多历史。「知道了」关闭浮层并把最新更新日期写入
+// 首页更新通告浮层（2026-11-06 张老师要求）：用户进首页弹出最近更新历史，
+// 同日五轮：未登录也弹（uid=0 传入）；「提交意见建议」发信需登录，
+// 未登录态改显登录提示。列表带细滚动条可下滚查看更多历史。「知道了」关闭浮层并把最新更新日期写入
 // localStorage（yyyymmdd 数值），此后仅当出现更大日期的新纪录才再次弹出；
 // 「提交意见建议」就地切换给站长（张砷镓 id:1）发站内信的面板，走 /api/message
 // send 通道（敏感词 / 维护模式 / 收件人校验与消息页同源）。
@@ -37,9 +38,11 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
   const [sent, setSent] = useState(false);
   // 列表展示条数：首屏 10 条，「加载更多」每次 +10（数据全量随 props 传入，纯客户端切片）
   const [shown, setShown] = useState(10);
+  // uid=0 = 未登录（2026-11-06 五轮：未登录也弹浮层）
+  const isGuest = uid <= 0;
   const isWebmaster = uid === WEBMASTER_ID;
-  // 草稿与消息页/主页气泡浮窗共用同一份（按 发件人+收件人 隔离）；站长本人无草稿
-  const draft = useDraft(isWebmaster ? null : `pm:${uid}:${WEBMASTER_ID}`);
+  // 草稿与消息页/主页气泡浮窗共用同一份（按 发件人+收件人 隔离）；站长/未登录无草稿
+  const draft = useDraft(isGuest || isWebmaster ? null : `pm:${uid}:${WEBMASTER_ID}`);
 
   useEffect(() => {
     try {
@@ -150,6 +153,9 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
               <p className="un_done">✓ 已发送，感谢您的反馈！</p>
             ) : isWebmaster ? (
               <p className="un_done">站长本人登录，无需提交反馈</p>
+            ) : isGuest ? (
+              // 未登录不能发站内信（/api/message 需登录态），就地给登录提示
+              <p className="un_done">登录后即可给站长提交反馈</p>
             ) : (
               <textarea
                 className="un_input"
@@ -160,9 +166,9 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
                 onChange={(e) => draft.set(e.target.value)}
               />
             )}
-            {!sent && !isWebmaster && <p className="un_error">{error}</p>}
+            {!sent && !isWebmaster && !isGuest && <p className="un_error">{error}</p>}
             <div className="btns">
-              {sent ? (
+              {sent || isGuest || isWebmaster ? (
                 <button type="button" className="btn_primary" onClick={onGotIt}>
                   知道了
                 </button>

@@ -87,8 +87,8 @@ export default async function HomePage() {
     // 首页参数收敛在 getHomeVideoFeedPage/getHomeVideoFeedCount 零参包装（queries.ts 单点维护）
     getHomeVideoFeedPage(),
     getHomeVideoFeedCount(),
-    // 更新历史（2026-11-06 更新通告浮层）：仅登录态取（未登录不弹浮层，省一次查询）
-    session ? getSiteUpdates() : Promise.resolve([]),
+    // 更新历史（2026-11-06 更新通告浮层；同日五轮张老师要求：未登录也弹，恒取）
+    getSiteUpdates(),
   ]);
   // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
   const kingTh = await getThunderKingThreshold();
@@ -129,8 +129,9 @@ export default async function HomePage() {
         渲染在 #page 之外：≤605px #page 有整页 zoom，fixed 遮罩做在里面会缩放失真 */}
     {showEmailNotice && <EmailBindNotice />}
     {/* 更新通告浮层（2026-11-06 张老师要求；同日演进：标题「最近更新」、首屏 10 条
-        + 「···加载更多」递增 +10）：登录态且有更新历史才挂载；渲染在 #page 外同邮箱提醒口径 */}
-    {session && updates.length > 0 && <UpdateNotice updates={updates} uid={session.uid} />}
+        + 「···加载更多」递增 +10、五轮起未登录也弹——uid=0 组件内只给登录提示）：
+        有更新历史才挂载；渲染在 #page 外同邮箱提醒口径 */}
+    {updates.length > 0 && <UpdateNotice updates={updates} uid={session?.uid ?? 0} />}
     <div id="page" className="two_columns">
     <ul id="home">
       <li className="main">
