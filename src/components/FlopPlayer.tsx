@@ -404,6 +404,8 @@ const REPLAY_MOUSE_SCRIPT = `
     '.replay_key_panel_flop .rk_row.pair_l_start .rk_left::before,.replay_key_panel_flop .rk_row.pair_r_start .rk_right::before{top:2px;bottom:0}' +
     '.replay_key_panel_flop .rk_row.pair_l_mid .rk_left::before,.replay_key_panel_flop .rk_row.pair_r_mid .rk_right::before{top:0;bottom:0}' +
     '.replay_key_panel_flop .rk_row.pair_l_end .rk_left::before,.replay_key_panel_flop .rk_row.pair_r_end .rk_right::before{top:0;bottom:2px}' +
+    /* 双击行（MiddleRelease＝折叠产物 / LeftPressWithShift＝元 cc 双击按下）＝青色短竖线，轨迹双击标志同色 */
+    '.replay_key_panel_flop .rk_row.dbl .rk_left::before{content:"";position:absolute;left:0;width:1px;top:2px;bottom:2px;background:#2BD9E0}' +
     '.replay_key_panel_flop .rk_time{color:#b1b1a4;font-family:"Courier New",monospace;font-variant-numeric:tabular-nums;text-align:center}' +
     '.replay_key_panel_flop .rk_row.down .rk_action{color:#e8e8e0}' +
     '.replay_key_panel_flop .rk_row.current{background:#707068}' +
@@ -427,7 +429,9 @@ const REPLAY_MOUSE_SCRIPT = `
   /* MiddleRelease＝双击/chord（导出流折叠产物：双键 chord、sc+lr 与自动双击统一折叠成
      mr，flop 解析为 MiddleRelease——353011 案：右键按住期间左键点下＝双击，面板不显示
      会让 chord 在按键记录里完全不可见。原始按下时刻已随折叠丢失，只显示单个「双击」行）。 */
-  var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起", MiddleRelease: "双击" };
+  /* LeftPressWithShift＝元扫雷 cc（双击按下）经 sc 的 flop 派发，双击的按压事件：
+     手势＝按下键 → sc → 松开；354037 案：过滤它会让其后 LeftRelease 变成「缺按下+裸抬起」。 */
+  var labels = { LeftPress: "左键按下", LeftRelease: "左键抬起", RightPress: "右键按下", RightRelease: "右键抬起", MiddleRelease: "双击", LeftPressWithShift: "双击" };
   /* videoParser.leftPressed/rightPressed 是播放器交互层的按键态，不随录像事件
      推进；录像指示器必须按 gameElapsedTime 自行重放左右键事件。游标增量前进，
      seek 回退时从流首重建，倍速与暂停都沿用 Flop 自己的播放时钟。 */
@@ -499,6 +503,7 @@ const REPLAY_MOUSE_SCRIPT = `
       if (!labels[e.name]) continue;
       var ev = { name: e.name, time: Number(e.time) || 0, holdMs: null, paired: false, lPos: null, rPos: null, missing: false };
       if (e.name === "LeftPress") lDown = true;
+      else if (e.name === "LeftPressWithShift") lDown = true; /* 双击按压＝左键语义，其后 LeftRelease 不补「缺按下」 */
       else if (e.name === "RightPress") rDown = true;
       else if (e.name === "LeftRelease" && !lDown) {
         records.push({ name: "LeftPress", time: ev.time, holdMs: null, paired: false, lPos: null, rPos: null, missing: true });
@@ -524,6 +529,15 @@ const REPLAY_MOUSE_SCRIPT = `
           coverL[lr + 1]--;
         }
         lr = -1;
+      } else if (name === "LeftPressWithShift") {
+        /* 双击按压归领后续 LeftRelease（backward 扫描天然左键优先：中间有 LeftPress
+           时它已先配对并清 lr）。只配对算时长，不进 cover——双击行走独立青色边线。 */
+        if (lr > j) {
+          records[lr].holdMs = Math.max(0, records[lr].time - records[j].time);
+          records[lr].paired = true;
+          records[j].paired = true;
+          lr = -1;
+        }
       } else if (name === "RightPress") {
         if (rr > j) {
           records[rr].holdMs = Math.max(0, records[rr].time - records[j].time);
@@ -559,14 +573,15 @@ const REPLAY_MOUSE_SCRIPT = `
     if (!panelOpen) return;
     var html = "";
     for (var i = 0; i < records.length; i++) {
-      var e = records[i], down = e.name === "LeftPress" || e.name === "RightPress";
-      var isLeft = e.name === "LeftPress" || e.name === "LeftRelease" || e.name === "MiddleRelease";
+      var e = records[i], down = e.name === "LeftPress" || e.name === "RightPress" || e.name === "LeftPressWithShift";
+      var isLeft = e.name === "LeftPress" || e.name === "LeftRelease" || e.name === "MiddleRelease" || e.name === "LeftPressWithShift";
+      var dbl = e.name === "MiddleRelease" || e.name === "LeftPressWithShift" ? " dbl" : "";
       var action = down
         ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : labels[e.name]
         : e.name === "MiddleRelease"
         ? labels.MiddleRelease
         : e.holdMs === null ? "抬起" : "持续" + Math.round(e.holdMs) + "ms";
-      html += '<div class="rk_row' + (e.lPos ? " pair_l pair_l_" + e.lPos : "") + (e.rPos ? " pair_r pair_r_" + e.rPos : "") + (down ? " down" : "") + '" data-index="' + i + '">' +
+      html += '<div class="rk_row' + dbl + (e.lPos ? " pair_l pair_l_" + e.lPos : "") + (e.rPos ? " pair_r pair_r_" + e.rPos : "") + (down ? " down" : "") + '" data-index="' + i + '">' +
         '<span class="rk_action rk_left">' + (isLeft ? action : "") + '</span>' +
         '<span class="rk_time">' + (e.time / 1000).toFixed(3) + '</span>' +
         '<span class="rk_action rk_right">' + (isLeft ? "" : action) + '</span></div>';

@@ -32,6 +32,11 @@ const EVENT_LABELS: Record<string, string> = {
      面板不显示 mr 会让 chord 在按键记录里完全不可见，只剩裸的右键按下/抬起）。
      按下时刻已随折叠丢失，只显示单个「双击」行，不合成按下/抬起对（会伪造 0ms 配对）。 */
   mr: "双击",
+  /* sc＝元扫雷 cc（双击按下，按钮未知）经 evfToRawvf 的映射，双击的按压事件：
+     手势＝按下键(lc/rc) → sc → 松开(lr/rr)。354037 案：面板过滤 sc 后，其后的
+     lr 变成「左键按下(缺)+裸抬起」。sc 按左键按压处理：可与无 lc 认领的后续
+     lr 配对显示双击第二击按住时长，边线用轨迹双击标志同款青色。 */
+  sc: "双击",
 };
 
 /** 按键记录面板开关跨会话记忆；自研回放与 Flop 注入脚本共用。 */
@@ -48,6 +53,7 @@ function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
   let rDown = false;
   for (const e of raw) {
     if (e.ev === "lc") lDown = true;
+    else if (e.ev === "sc") lDown = true; // 双击按压＝左键语义：其后 lr 不再补「左键按下(缺)」
     else if (e.ev === "rc") rDown = true;
     else if (e.ev === "lr" && !lDown) {
       rows.push({ ...e, ev: "lc", paired: false, lPos: null, rPos: null, missing: true });
@@ -75,6 +81,16 @@ function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
         coverL[leftRelease + 1]--;
       }
       leftRelease = -1;
+    } else if (ev === "sc") {
+      /* 双击按压归领后续 lr：backward 扫描先遇到的 lc 已优先配对并清 leftRelease，
+         走到 sc 时 leftRelease 仍挂着＝中间无 lc（元的右键按住双击 rc→sc→lr）。
+         只配对算时长（抬起行显「持续xxms」），不进 cover——双击行用独立青色边线。 */
+      if (leftRelease > i) {
+        rows[leftRelease].holdCsec = Math.max(0, rows[leftRelease].csec - rows[i].csec);
+        rows[leftRelease].paired = true;
+        rows[i].paired = true;
+        leftRelease = -1;
+      }
     } else if (ev === "rc") {
       if (rightRelease > i) {
         rows[rightRelease].holdCsec = Math.max(0, rows[rightRelease].csec - rows[i].csec);
@@ -262,8 +278,9 @@ export function ReplayMouseIndicator({
       </div>
       <div className="rk_list" ref={listRef}>
         {records.length ? records.map((e, i) => {
-          const down = e.ev === "lc" || e.ev === "rc";
-          const isLeft = e.ev === "lc" || e.ev === "lr" || e.ev === "mr";
+          const down = e.ev === "lc" || e.ev === "rc" || e.ev === "sc";
+          const isLeft = e.ev === "lc" || e.ev === "lr" || e.ev === "mr" || e.ev === "sc";
+          const dbl = e.ev === "mr" || e.ev === "sc" ? " dbl" : "";
           const action = down
             ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : EVENT_LABELS[e.ev]
             : e.ev === "mr"
@@ -273,7 +290,7 @@ export function ReplayMouseIndicator({
             : `持续${Math.round(e.holdCsec * 10)}ms`;
           return (
             <div
-              className={"rk_row" + (e.lPos ? ` pair_l pair_l_${e.lPos}` : "") + (e.rPos ? ` pair_r pair_r_${e.rPos}` : "") + (down ? " down" : "") + (i === selected ? " current" : "")}
+              className={"rk_row" + dbl + (e.lPos ? ` pair_l pair_l_${e.lPos}` : "") + (e.rPos ? ` pair_r pair_r_${e.rPos}` : "") + (down ? " down" : "") + (i === selected ? " current" : "")}
               data-index={i}
               key={`${e.csec}-${e.ev}-${i}`}
               aria-current={i === selected ? "true" : undefined}
