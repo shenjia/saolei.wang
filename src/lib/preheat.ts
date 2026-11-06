@@ -18,6 +18,15 @@
 //    config.REVALIDATE_HOME_CACHE 同一常量（注册行紧跟查询定义处），禁止写字面量。
 // 任务注册分散在查询定义处：queries.ts / title-system.ts / practice.ts 各自紧跟对应
 // 缓存条目调用 registerPreheat()（src/instrumentation.ts 启动时 import 触发）。
+//
+// kickPreheat（2026-11-06 张老师需求）：事件驱动的即时刷新——管理员批量审核完录像
+// 后首页动态缓存应立刻失效+重建，不等 TTL（等 4 分钟自驱 = 批量过审的动态 4 分钟
+// 不上首页）。与 registerPreheat 的定时自驱互补：
+// · trailing 合并窗口（1s）：审核管线逐条 reviewVideo 反复触发时，只在最后一次
+//   调用 1s 后重建一次，避免批量 100 条打 100 次重建；
+// · 重建直接复用注册的 run 闭包（无请求上下文走 __incrementalCache 兜底分支），
+//   成本由本次审核请求的后台任务承担，访客永远命中热缓存；
+// · 与自驱 tick 撞车（busy）时把 last 清零交给下一次 tick 兜底，不会漏刷。
 
 type PreheatJob = {
   run: () => Promise<unknown>;
@@ -63,6 +72,74 @@ function startTicker(): void {
   }, TICK_MS);
   // 不阻止进程退出（CI 构建 / 误 import 场景也能干净结束）
   timer.unref?.();
+}
+
+// trailing 合并窗口的挂起定时器（同一任务多次 kick 只保留最后一个）
+const kickTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const KICK_DEBOUNCE_MS = 1000;
+
+/** 事件驱动即时刷新：标记对应预热任务在合并窗口后立刻重建一次（不等 TTL）。
+ *  未注册同名任务时为 no-op；调用方通常配合 revalidateTag 先把条目标脏。 */
+export function kickPreheat(name: string): void {
+  const prev = kickTimers.get(name);
+  if (prev) clearTimeout(prev);
+  const timer = setTimeout(() => {
+    kickTimers.delete(name);
+    const j = jobs.get(name);
+    if (!j) return;
+    // 就绪门（与 tick 同款）：__incrementalCache 未挂时 kick 硬跑只会 E469——
+    // 清零 last/nextTry 交给就绪后的下一次 tick 兜底
+    if (
+      process.env.NEXT_PHASE === "phase-production-build" ||
+      !(globalThis as { __incrementalCache?: unknown }).__incrementalCache
+    ) {
+      j.last = 0;
+      j.nextTry = 0;
+      return;
+    }
+    if (j.busy) {
+      // 与自驱 tick 撞车：清零 last 让下一次 tick 强制重跑兜底，不漏刷
+      j.last = 0;
+      j.nextTry = 0;
+      return;
+    }
+    j.busy = true;
+    void j
+      .run()
+      .then(() => {
+        j.last = Date.now();
+        j.fails = 0;
+        j.nextTry = 0;
+      })
+      .catch((e: unknown) => {
+        // 失败交还自驱调度按退避重试（与 tick 内同款口径）
+        j.fails += 1;
+        const wait = Math.min(TICK_MS * 2 ** j.fails, MAX_BACKOFF_MS);
+        j.nextTry = Date.now() + wait;
+        console.error(
+          `[preheat] ${name} 即时刷新失败（第 ${j.fails} 次，${Math.round(wait / 1000)}s 后自驱重试）:`,
+          e instanceof Error ? e.message : e
+        );
+      })
+      .finally(() => {
+        j.busy = false;
+      });
+  }, KICK_DEBOUNCE_MS);
+  timer.unref?.();
+  kickTimers.set(name, timer);
+}
+
+/** 运维观察用快照（只读）：任务状态 + 挂起中的 kick */
+export function preheatDebug(): {
+  jobs: Record<string, { last: number; nextTry: number; busy: boolean; fails: number }>;
+  pendingKicks: string[];
+} {
+  return {
+    jobs: Object.fromEntries(
+      [...jobs].map(([k, v]) => [k, { last: v.last, nextTry: v.nextTry, busy: v.busy, fails: v.fails }])
+    ),
+    pendingKicks: [...kickTimers.keys()],
+  };
 }
 
 async function tick(): Promise<void> {

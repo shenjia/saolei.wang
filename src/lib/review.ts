@@ -21,6 +21,7 @@ import {
   type VideoLevel,
 } from "./config";
 import { videoScores } from "./queries";
+import { refreshHomeNewsCache } from "./homenews-refresh";
 import { publishNews } from "./news";
 import { sendSystemMessage } from "./message";
 import { refreshUserStnb, refreshUserStnbNf } from "./userstnb";
@@ -650,5 +651,13 @@ export async function reviewVideo(
       void ensureVideoMetrics(videoId);
     }
   }
+
+  // 首页动态缓存主动刷新（2026-11-06 张老师需求）：审核动作（通过发纪录/入伍动态、
+  // 屏蔽撤动态、重审翻案）都会即时改写 news 表，首页动态流/新兵/总数缓存挂了
+  // "home-news" tag——此处标脏 + 合并窗口后后台重建，动态不等 5 分钟 TTL 即上首页。
+  // 批量审核（video.batchReview）逐条走本函数，重建由 kickPreheat 的 1s trailing
+  // 合并窗口收敛为一次。放 try 外调用自身已吞非请求上下文异常（refreshHomeNewsCache 内部处理）。
+  refreshHomeNewsCache();
+
   return { ok: true };
 }

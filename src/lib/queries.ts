@@ -53,7 +53,7 @@ import { rebuildUserRanksOnce } from "./userrank";
 import { decodeLegacyEntities, scoreTime, videoCommentNotice } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
-import { registerPreheat } from "./preheat";
+import { registerPreheat, kickPreheat } from "./preheat";
 import { dualTitles, classicTitle, getThunderKingId, getThunderKingThreshold, type TitlePair } from "./title-system";
 import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
 import { activityInfo } from "./activity";
@@ -249,16 +249,18 @@ export { videoScores } from "./format";
 // 每次首页请求都直打 DB；挂 5 分钟缓存后配合生产 cron 常态预热
 // （scripts/preheat-cron.sh，每分钟对活跃槽跑 slim 清单），缓存条目永不过期，
 // 重建成本全部由预热请求承担、访客永远命中热缓存。改查询逻辑须升版本号。
+// 2026-11-06 张老师需求：管理员批量审核完录像后首页动态要立刻可见——挂 "home-news"
+// tag，审核管线经 refreshHomeNewsCache() 主动失效+即时重建，不等 5 分钟 TTL。
 const fetchHomeNews = unstable_cache(
   async (limit: number) => getNews({ limit, home: true }),
   ["home-news-v1"],
-  { revalidate: REVALIDATE_HOME_CACHE }
+  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
 const fetchNewbies = unstable_cache(
   async (limit: number) => getNews({ type: NEWS_TYPE.NEWBIE, limit }),
   ["home-newbies-v1"],
-  { revalidate: REVALIDATE_HOME_CACHE }
+  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
 export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
@@ -776,7 +778,7 @@ const fetchNewsCountNoUser = unstable_cache(
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
   ["news-count-v9"],
-  { revalidate: REVALIDATE_HOME_CACHE }
+  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
 export async function getNewsCount(opts: Parameters<typeof getNewsCountImpl>[0]): Promise<number> {
@@ -789,6 +791,11 @@ export function getHomeNewsCount(): Promise<number> {
   return getNewsCount({ home: true });
 }
 registerPreheat("news-count", REVALIDATE_HOME_CACHE, () => getHomeNewsCount());
+
+// 首页动态缓存主动失效+即时重建的入口在 ./homenews-refresh（2026-11-06 张老师需求）：
+// 不能放本文件——queries.ts 会被客户端 bundle 引到（BbsFeed → bbs.ts → 本文件
+// 的 videoScores re-export），revalidateTag 顶层 import 直接炸 Pages/Client 编译
+// （dev 实证 500）。tag 名 "home-news" 的挂点在本文件三个条目 + homenews-refresh。
 
 // ---------- 封禁用户（旧站「停用」）与「上榜」口径 ----------
 // 移植 2008 口径：旧站**所有「上榜」查询都带 `Player_IsLive=1`**（database/mssql/procedures.sql
