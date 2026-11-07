@@ -43,13 +43,15 @@ export default async function VideoUploadPage() {
           </a>{" "}
           生成的{" "}
           <em style={{ color: "#fdc61d", fontSize: 14 }}>evf</em> 录像
-          {"　"}
+          {" "}
+          <span style={{ color: "#ccc" }}>/</span>{" "}
           <a href="/download/Arbiter_0.52.3.zip" download>
             <em style={{ color: "#b1b1a4" }}>Minesweeper Arbiter 0.52.3</em>
           </a>{" "}
           生成的{" "}
           <em style={{ color: "#fdc61d", fontSize: 14 }}>avf</em> 录像
-          {"　"}
+          {" "}
+          <span style={{ color: "#ccc" }}>/</span>{" "}
           <a href="/download/Viennasweeper_4.0.0.zip" download>
             <em style={{ color: "#b1b1a4" }}>Viennasweeper 4.0.0</em>
           </a>{" "}
