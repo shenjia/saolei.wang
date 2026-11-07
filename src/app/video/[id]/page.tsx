@@ -423,8 +423,10 @@ export default async function VideoViewPage({
               const width = r.off ? 100 : Math.min(100, Math.max(0, pct));
               // 100% 行：进度条右侧的百分比换成金 PB 标签（2026-11-05 张老师需求，
               // 样式复刻排行模式数据面板 .pb_badge）；口径与百分比显示一致
-              // （99.95–100.05 视作 100，见 perfPct）；置灰行不发牌
-              const pb = !r.off && perfPct(r.ratio) === "100.0";
+              // （99.95–100.05 视作 100，见 perfPct）；置灰行不发牌。
+              // 2026-11-07 张老师补充：超过 100%（打破个人最佳）同样发 PB——
+              // ratio ≥ 1 或落进 100 显示带（浮点容差）都算
+              const pb = !r.off && (r.ratio >= 1 || perfPct(r.ratio) === "100.0");
               return (
                 <div className={`perf_row${r.off ? " off" : ""}`} key={r.key}>
                   <span className="perf_label">{r.key}</span>
