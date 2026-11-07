@@ -205,16 +205,17 @@ export function AreaMap({
                   )}
                 </span>
               </div>
+              {/* 2026-11-07 张老师要求：活跃指数提到气泡第一行（活跃人数上面） */}
+              <div className="tp_row">
+                <i>活跃指数</i>
+                <b className="green">
+                  {hot.activity} <em className="unit">点</em>
+                </b>
+              </div>
               <div className="tp_row">
                 <i>活跃人数</i>
                 <b className="green">
                   {hot.active} <em className="unit">人</em>
-                </b>
-              </div>
-              <div className="tp_row">
-                <i>排行人数</i>
-                <b>
-                  {hot.players} <em className="unit">人</em>
                 </b>
               </div>
               <div className="tp_row">
@@ -230,18 +231,16 @@ export function AreaMap({
                 </b>
               </div>
               <div className="tp_row">
+                <i>排行人数</i>
+                <b>
+                  {hot.players} <em className="unit">人</em>
+                </b>
+              </div>
+              <div className="tp_row">
                 <i>战力指数</i>
                 <b className="gold">
                   {hot.power >= 10000 ? (hot.power / 10000).toFixed(1) : hot.power}
                   {hot.power >= 10000 && <em className="unit">万</em>}
-                </b>
-              </div>
-              <div className="tp_row">
-                <i>活跃指数</i>
-                {/* 2026-11-02 张老师定：气泡内恒以 x.xx万 展示（两位小数），绿色 */}
-                <b className="green">
-                  {(hot.activity / 10000).toFixed(2)}
-                  <em className="unit">万</em>
                 </b>
               </div>
               <div className="tp_row">
