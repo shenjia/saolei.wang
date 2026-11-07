@@ -6,10 +6,10 @@ export const metadata = { title: "软件下载" };
 const SOFTWARE: [string, string, [string, string][]?][] = [
   ["元扫雷 3.3.4", "Metasweeper_3.3.4.exe"],
   ["Minesweeper Arbiter 0.52.3", "Arbiter_0.52.3.zip", [["教程", "/page/guide"], ["中文插件", "/download/Arbiter_cn.zip"]]],
+  ["Viennasweeper 4.0.0", "Viennasweeper_4.0.0.zip"],
   ["Minesweeper Clone 0.97", "Minesweeper_Clone_0.97.exe", [["使用说明", "/page/guide"], ["常见问题", "/page/help/clone-faq"]]],
   ["Minesweeper Clone 2007", "Minesweeper_Clone_2007.exe"],
   ["Minesweeper X 1.15", "MinesweeperX_1.15.zip"],
-  ["Viennasweeper 4.0.0", "Viennasweeper_4.0.0.zip"],
   ["Minesweeper 2000/XP", "Minesweeper_2000XP.exe"],
   ["Minesweeper Solver", "MineSweeper_Solver.exe"],
   ["扫雷网分辨率调整工具", "分辨率调整工具.exe"],
@@ -18,16 +18,20 @@ const SOFTWARE: [string, string, [string, string][]?][] = [
   ["Android雷感训练器 1.0.19", "NotMinesweeper_V1.0.19.apk"],
 ];
 
+/** 可参与排行的前三（2026-11-07 张老师定）：名字后缀绿色「（可参与排行）」 */
+const RANKABLE_COUNT = 3;
+
 export default function DownloadPage() {
   return (
     <div id="page" className="main">
       <div className="box text">
         <h1>软件下载</h1>
-        {SOFTWARE.map(([name, file, extra]) => (
+        {SOFTWARE.map(([name, file, extra], i) => (
           <p key={name}>
             <a href={`/download/${encodeURIComponent(file)}`} download>
               {name}
             </a>
+            {i < RANKABLE_COUNT && <span style={{ color: "#a6e22e" }}>（可参与排行）</span>}
             {extra?.map(([label, href]) => (
               <span key={label}>
                 {" "}
