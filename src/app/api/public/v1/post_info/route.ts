@@ -11,16 +11,16 @@
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 import { decodeLegacyEntities } from "@/lib/format";
 
 // id → 基本信息字段集（post_info / post_search 共用形状，2026-10-27）
 export async function GET(req: Request) {
-  const partner = await requirePartner(req);
+  const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
-  if (!partnerRateLimitByName(partner, "pub-post-info")) return rateLimited(getPartnerRatePerMin(partner));
+  if (!partnerRateLimit(partner, "pub-post-info")) return rateLimited(partner.ratePerMin);
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

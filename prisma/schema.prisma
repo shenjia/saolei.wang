@@ -256,6 +256,15 @@ model Video {
   firstBv    Int     @default(0) @map("first_bv") @db.TinyInt
   pbBv       Int     @default(0) @map("pb_bv") @db.TinyInt
 
+  // ---- 外站同步来源（2026-11-07 张老师定）：from_site=api_key.id；NULL=站内原生上传 ----
+  // ①防递归：开源站按 video_list(id>cursor) 轮询抓雷网录像，外站同步落库的录像
+  //   id 恒大于其游标水位，必须在轮询通道按调用方 key 过滤掉自家来源（video_list 路由内实现）；
+  // ②from_id=对方站录像ID（2026-11-07 补：from_site 只答「哪个站」，ID 幂等键在此），
+  //   (from_site, from_id) 唯一＝同步幂等键——worker 每轮重放按此等值查跳过已处理
+  //   条目（开源站 query_by_id 列表不含 hash，无此键则每轮得重下载才算 md5，5/min 限速不可接受）
+  fromSite BigInt? @map("from_site") @db.BigInt
+  fromId   BigInt? @map("from_id") @db.BigInt
+
   // 2026-10-15 上线前性能审计新增：
   // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计
   // （count status / GROUP BY level / 今日按 review_time），原为 30 万行全表扫描；
@@ -274,6 +283,8 @@ model Video {
   // (review_user, status) 2026-10-22 迁移收尾索引排查：团队页 getTeam 逐管理员 count
   // （WHERE review_user=N AND status=20）原走 (status,…) 索引扫 15 万条目，实测 1.4s/人
   @@index([reviewUser, status])
+  // 外站同步幂等键（2026-11-07）：同站同 remote id 唯一；NULL 行（站内原生）MySQL 不参与唯一约束
+  @@unique([fromSite, fromId])
   @@map("video")
 }
 
@@ -863,6 +874,9 @@ model ApiKey {
   keyHash    String  @unique @map("key_hash") @db.Char(64)
   status     Int     @default(1) @db.TinyInt // 1=启用 0=吊销
   note       String  @default("") @db.VarChar(200)
+  // 合作方 LOGO（2026-11-07）：站内路径或完整 URL；外站同步录像详情页「上传于」后
+  // 灰度小图标 hover 显示「来自XX」，取自 from_site 对应 key 的本字段
+  logo       String  @default("") @db.VarChar(200)
   // 单 key 限速（2026-11-07）：每分钟请求上限，0=不限速；默认 60 与原全站口径一致
   ratePerMin Int     @default(60) @map("rate_per_min") @db.SmallInt
   requestCount BigInt @default(0) @map("request_count") @db.BigInt
@@ -1150,4 +1164,23 @@ model SiteUpdate {
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
   @@map("site_update")
+}
+
+// 开源扫雷网（openms.top）绑定与历史录像同步表态（2026-11-07 张老师需求）
+// 绑定名单由 worker 从开源站 GET /api/userprofile/query?platform=c 灌入
+// （upsert，绝不覆盖已表态用户的 consent）；user=雷网用户ID，profile=开源站用户ID
+// consent：0=未表态（11-13 截止仍无表态视为默认同意）1=同意 2=不同意（同步跳过）
+model OpenmsLink {
+  user        BigInt @id @db.BigInt
+  /// 开源站 userprofile.id（其 /api/video/query_by_id 的 id 参数）
+  profile     Int
+  /// 0=未表态 1=同意 2=不同意
+  consent     Int    @default(0) @db.TinyInt
+  /// 表态时刻（Unix 秒；0=未表态）
+  consentTime BigInt @default(0) @map("consent_time") @db.BigInt
+  createTime  BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime  BigInt @default(0) @map("update_time") @db.BigInt
+
+  @@index([consent])
+  @@map("openms_link")
 }

@@ -13936,6 +13936,54 @@ a.cheat_rep_link:hover {
 .video_cell .software .sw_icon.sw--pixel img {
   image-rendering: pixelated;
 }
+/* 详情页「上传于」后的外站来源 LOGO（2026-11-07 张老师需求）：像软件图标一样变灰，
+   hover 气泡「来自XX」——气泡语言与 .video_table .sw_icon::after 同款（暗底白字上方弹出） */
+/* 「上传于」与左侧称号徽标隔开（2026-11-07 张老师：JSX 文本空格被 inline 渲染
+   折叠实测 0 宽，改 margin——量级对齐全局 em 的 5px+常规空格） */
+.video_cell .create_time {
+  margin-left: 9px;
+}
+.video_cell .create_time .site_icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  vertical-align: -3px;
+  margin-left: 6px;
+  position: relative;
+  cursor: help;
+}
+.video_cell .create_time .site_icon img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  /* 灰度+压暗（2026-11-07 张老师二轮：与 Arbiter 软件图标 sw--dim 同逻辑） */
+  filter: grayscale(1) brightness(0.72);
+}
+.video_cell .create_time .site_icon::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 155%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 5;
+}
+.video_cell .create_time .site_icon:hover::after {
+  opacity: 1;
+}
 
 /* ===== 战果保留确认遮罩（2026-10-28 张老师定） =====
    排名胜局有未上传的 BV/PB 战果时，重开/笑脸/快捷键等开新局动作先弹此确认：

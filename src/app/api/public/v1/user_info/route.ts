@@ -9,13 +9,13 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { areaDisplay } from "@/lib/config";
 
 export async function GET(req: Request) {
-  const partner = await requirePartner(req);
+  const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
-  if (!partnerRateLimitByName(partner, "pub-user-info")) return rateLimited(getPartnerRatePerMin(partner));
+  if (!partnerRateLimit(partner, "pub-user-info")) return rateLimited(partner.ratePerMin);
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

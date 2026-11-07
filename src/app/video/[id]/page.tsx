@@ -314,7 +314,16 @@ export default async function VideoViewPage({
                   </>
                 )}
                 <span className="create_time">
-                  上传于<em><RelTime time={video.createTime} /></em>
+                  {/* 2026-11-07 张老师：与称号徽标隔开（CSS margin 实现——JSX 文本空格会被
+                      inline 渲染折叠，实测 0 宽）；site logo 紧跟「上传于」后面、时间之前 */}
+                  上传于
+                  {video.fromSite && video.fromSite.logo && (
+                    <span className="site_icon" data-tip={`来自${video.fromSite.name}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={video.fromSite.logo} alt={video.fromSite.name} width={16} height={16} />
+                    </span>
+                  )}
+                  <em><RelTime time={video.createTime} /></em>
                 </span>
               </p>
               <span className="counters">

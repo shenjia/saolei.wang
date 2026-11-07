@@ -1781,12 +1781,14 @@ export interface VideoDetail extends VideoListItem {
   reviewTime: number | null;
   reviewer: UserBrief | null;
   downloads: number;
+  /** 外站同步来源（2026-11-07）：from_site 对应 api_key 的名称与 LOGO；站内原生=null */
+  fromSite: { name: string; logo: string } | null;
 }
 
 export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
   const v = await prisma.video.findUnique({ where: { id: BigInt(id) } });
   if (!v) return null;
-  const [info, stat, author, reviewer, metrics] = await Promise.all([
+  const [info, stat, author, reviewer, metrics, fromKey] = await Promise.all([
     prisma.videoInfo.findUnique({ where: { id: v.id } }),
     prisma.videoStat.findUnique({ where: { id: v.id } }),
     prisma.user.findUnique({ where: { id: v.user } }),
@@ -1796,6 +1798,10 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
       where: { id: v.id },
       select: { ioe: true, stnb: true },
     }),
+    // 外站同步来源（2026-11-07）：站点名+LOGO 供详情页「上传于」后灰度小图标展示
+    v.fromSite
+      ? prisma.apiKey.findUnique({ where: { id: v.fromSite }, select: { name: true, logo: true } })
+      : null,
   ]);
   if (!info) return null;
   // Phase 5 双体系：按录像行内快照评定双套称号（dualTitles 行序数组，2026-10-27）
@@ -1840,6 +1846,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     firstBv: v.firstBv === 1,
     pbBv: v.pbBv === 1,
     noRecord: info.noRecord,
+    fromSite: fromKey ? { name: fromKey.name, logo: fromKey.logo } : null,
   };
 }
 

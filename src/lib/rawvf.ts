@@ -151,7 +151,16 @@ export function formatRawvf(result: string[]): ParsedVideo {
     level: String(formatted.level ?? "").slice(0, 3).toLowerCase(),
     // PHP 在此做 gb2312→utf-8；我们在二进制解析阶段已解码，这里直接透传
     player: String(formatted.player ?? ""),
-    program: String(formatted.program ?? "").replace("Minesweeper ", ""),
+    // 归一：Minesweeper Arbiter→Arbiter / Minesweeper Clone→Clone；
+    // Vienna 自报「Vienna Minesweeper」（rmv）/「Viennasweeper」（evf）→ 统一短名「Vienna」，
+    // 与 video_info.software 存量（='Vienna'）及 checkProgramVersion 的 4.0.0 闸匹配
+    // （2026-11-07 修：原仅 replace("Minesweeper ") 剥前缀，「Vienna Minesweeper」不带尾空格漏归一，
+    //  致 Vienna 3.0H 旧版绕过站内 4.0.0 版本闸）
+    program: (() => {
+      const p0 = String(formatted.program ?? "");
+      if (p0 === "Vienna Minesweeper" || p0 === "Viennasweeper") return "Vienna";
+      return p0.replace("Minesweeper ", "");
+    })(),
     version: String(formatted.version ?? ""),
     mode: String(formatted.mode ?? ""),
     width: Number(formatted.width),

@@ -8,14 +8,14 @@
 // 封禁用户（status!=0）返回 banned: true 且不给成绩，与站内「封禁不在榜」口径一致。
 
 import { NextResponse } from "next/server";
-import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { prisma } from "@/lib/db";
 import { areaDisplay } from "@/lib/config";
 
 export async function GET(req: Request) {
-  const partner = await requirePartner(req);
+  const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
-  if (!partnerRateLimitByName(partner, "pub-user-list")) return rateLimited(getPartnerRatePerMin(partner));
+  if (!partnerRateLimit(partner, "pub-user-list")) return rateLimited(partner.ratePerMin);
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

@@ -18,6 +18,8 @@ import TrackPageView from "@/components/TrackPageView";
 import { isManager } from "@/lib/config";
 import { TitleSystemProvider } from "@/components/TitleSystemProvider";
 import { resolveTitleSystem, getThunderKingId } from "@/lib/title-system";
+import { getOpenmsLink } from "@/lib/openms";
+import { OpenmsConsentModal } from "@/components/OpenmsConsentModal";
 
 export const metadata: Metadata = {
   /* 站点标题模板（2026-10-15 张老师要求）：所有子页面统一「XXX | 扫雷网 Saolei.wang」 */
@@ -54,6 +56,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const me = session ? await getHeaderUser(session.uid) : null;
   const displayName = me?.chineseName || session?.username || "";
   const avatarUrl = me?.avatarUrl || "/images/player/no.jpg";
+  // 开源扫雷网同步征求（2026-11-07）：绑定且未表态才弹提醒条（主键点查，未绑定用户 null 零成本）
+  const openmsLink = session ? await getOpenmsLink(session.uid) : null;
   return (
     <html lang="zh-CN">
       <head>
@@ -183,6 +187,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </div>
         {children}
+        {openmsLink && openmsLink.consent === 0 && <OpenmsConsentModal />}
         {!session && <LoginModal />}
         <ToastHost />
         <ConfirmHost />

@@ -12,14 +12,14 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { usersByIds } from "@/lib/queries";
 import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 
 export async function GET(req: Request) {
-  const partner = await requirePartner(req);
+  const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
-  if (!partnerRateLimitByName(partner, "pub-video-info")) return rateLimited(getPartnerRatePerMin(partner));
+  if (!partnerRateLimit(partner, "pub-video-info")) return rateLimited(partner.ratePerMin);
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

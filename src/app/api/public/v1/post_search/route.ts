@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 import { decodeLegacyEntities } from "@/lib/format";
@@ -19,9 +19,9 @@ import { likeContains } from "@/lib/sqlguard";
 const PAGE_SIZE = 20;
 
 export async function GET(req: Request) {
-  const partner = await requirePartner(req);
+  const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
-  if (!partnerRateLimitByName(partner, "pub-post-search")) return rateLimited(getPartnerRatePerMin(partner));
+  if (!partnerRateLimit(partner, "pub-post-search")) return rateLimited(partner.ratePerMin);
 
   const p = new URL(req.url).searchParams;
 

@@ -21,11 +21,24 @@ import { rateLimit } from "@/lib/ratelimit";
 /** 未配置限速的 key（含 env 草案 key）的默认上限 */
 export const DEFAULT_API_RATE_PER_MIN = 60;
 
-/** 内存缓存：hash → { name, keyId, ratePerMin }，30s 过期（吊销/限速变更最迟 30s 生效） */
-const cache = new Map<string, { name: string; keyId: number; ratePerMin: number; at: number }>();
-/** 合作方名 → 每分钟上限（鉴权成功时刷新；供路由按 name 取限速值） */
-const rateIndex = new Map<string, number>();
+/** 内存缓存：hash → { name, keyId, logo, ratePerMin }，30s 过期（吊销/限速变更最迟 30s 生效） */
+const cache = new Map<
+  string,
+  { name: string; keyId: number; logo: string; ratePerMin: number; at: number }
+>();
 const CACHE_TTL = 30_000;
+
+/** 鉴权完整结果：requirePartner 只要 name，需要 keyId/logo 的路由（如 video_list
+ *  按调用方过滤自家来源录像、外站同步落库打来源标）用 requirePartnerEx */
+export interface PartnerIdentity {
+  name: string;
+  /** api_key.id；env 草案 key 为 0 */
+  keyId: number;
+  /** api_key.logo，未配置为空串 */
+  logo: string;
+  /** 每分钟请求上限（api_key.rate_per_min，0=不限速）；env 草案 key 走默认 60 */
+  ratePerMin: number;
+}
 
 export function sha256(s: string): string {
   return createHash("sha256").update(s).digest("hex");
@@ -54,6 +67,14 @@ function envPartnerName(key: string): string | null {
  * 命中即异步累计 request_count / last_used_at（失败忽略，不阻塞主流程）。
  */
 export async function requirePartner(req: Request): Promise<string | null> {
+  const id = await requirePartnerEx(req);
+  return id ? id.name : null;
+}
+
+/** 完整版鉴权（2026-11-07）：在 requirePartner 基础上多返回 keyId 与 logo。
+ *  keyId 供 video_list 过滤调用方自家来源录像（防同步递归）、外站同步落库打 from_site 标；
+ *  logo 供详情页展示「来自XX」站点小图标。 */
+export async function requirePartnerEx(req: Request): Promise<PartnerIdentity | null> {
   const provided = req.headers.get("x-api-key")?.trim() ?? "";
   if (!provided) return null;
   const h = sha256(provided);
@@ -64,45 +85,39 @@ export async function requirePartner(req: Request): Promise<string | null> {
 
   const hit = cache.get(h);
   if (hit && now - hit.at < CACHE_TTL) {
-    rateIndex.set(hit.name, hit.ratePerMin);
     void touchUsage(hit.keyId, endpoint);
-    return hit.name;
+    return { name: hit.name, keyId: hit.keyId, logo: hit.logo, ratePerMin: hit.ratePerMin };
   }
 
   try {
     const row = await prisma.apiKey.findUnique({ where: { keyHash: h } });
     if (row && row.status === 1) {
-      const ratePerMin = row.ratePerMin;
-      cache.set(h, { name: row.name, keyId: Number(row.id), ratePerMin, at: now });
-      rateIndex.set(row.name, ratePerMin);
-      void touchUsage(Number(row.id), endpoint);
-      return row.name;
+      const ident: PartnerIdentity = {
+        name: row.name,
+        keyId: Number(row.id),
+        logo: row.logo ?? "",
+        ratePerMin: row.ratePerMin,
+      };
+      cache.set(h, { ...ident, at: now });
+      void touchUsage(ident.keyId, endpoint);
+      return ident;
     }
   } catch {
     /* 查库异常走 env 兜底 */
   }
   const envName = envPartnerName(provided);
   // env 草案 key 也记用量（key=0），今日走势图才能覆盖过渡期流量
-  if (envName) {
-    rateIndex.set(envName, DEFAULT_API_RATE_PER_MIN);
-    void bumpUsage(0, Math.floor(Date.now() / 1000), endpoint);
-  }
-  return envName;
-}
-
-/** 取合作方当前每分钟请求上限（未鉴权过/未配置时回默认 60；0=不限速） */
-export function getPartnerRatePerMin(name: string): number {
-  return rateIndex.get(name) ?? DEFAULT_API_RATE_PER_MIN;
+  if (envName) void bumpUsage(0, Math.floor(Date.now() / 1000), endpoint);
+  return envName ? { name: envName, keyId: 0, logo: "", ratePerMin: DEFAULT_API_RATE_PER_MIN } : null;
 }
 
 /**
  * 合作方维度限速判定（2026-11-07）：窗口 60s，上限取该 key 的 rate_per_min
  *（0=不限速直接放行），各接口独立维度。返回 false=超限，路由应回 429。
  */
-export function partnerRateLimitByName(name: string, dim: string): boolean {
-  const limit = getPartnerRatePerMin(name);
-  if (limit <= 0) return true;
-  return rateLimit(`${dim}:${name}`, limit, 60_000);
+export function partnerRateLimit(p: PartnerIdentity, dim: string): boolean {
+  if (p.ratePerMin <= 0) return true;
+  return rateLimit(`${dim}:${p.name}`, p.ratePerMin, 60_000);
 }
 
 /** 用量累计：异步 fire-and-forget，失败不影响请求 */
@@ -145,8 +160,7 @@ export function rateLimited(limit?: number): Response {
   );
 }
 
-/** 吊销/新建/限速变更后清缓存，让变更立即生效 */
+/** 吊销/新建后清缓存，让变更立即生效 */
 export function invalidateApiKeyCache(): void {
   cache.clear();
-  rateIndex.clear();
 }

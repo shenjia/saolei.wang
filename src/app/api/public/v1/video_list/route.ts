@@ -11,18 +11,23 @@
 //
 // 3bvs 字段已按站内口径（ROUND(board_3bv×1e6/real_time)，运气盘记负值）算好直接给，
 // 消费方无需自行换算。
+//
+// 来源过滤（2026-11-07 防同步递归）：video.from_site=来源 api_key.id（NULL=站内原生）。
+// 外站同步落库的录像 id 恒大于合作方轮询游标，若不过滤会被对方按增量抓回形成递归
+// （对方把抓到的录像存回自己站 → 又因绑定关系被同步回本站）。故对每个调用方过滤掉
+// 「自家 key 来源」的录像：开源站永远看不到经开源站进来的录像，其余合作方来源不受影响。
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 
 export async function GET(req: Request) {
-  const partner = await requirePartner(req);
+  const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
-  if (!partnerRateLimitByName(partner, "pub-video-list")) return rateLimited(getPartnerRatePerMin(partner));
+  if (!partnerRateLimit(partner, "pub-video-list")) return rateLimited(partner.ratePerMin);
 
   const p = new URL(req.url).searchParams;
   const cursor = Math.max(0, parseInt(p.get("cursor") ?? "0", 10) || 0);
@@ -47,6 +52,11 @@ export async function GET(req: Request) {
   if (cursor === 0 && since > 0) conds.push(Prisma.sql`v.create_time >= ${since}`);
   if (level) conds.push(Prisma.sql`v.level = ${level}`);
   if (playerId !== null) conds.push(Prisma.sql`v.user = ${playerId}`);
+  // 防同步递归（2026-11-07）：过滤掉调用方自家 key 来源的录像（NULL=站内原生，不过滤；
+  // env 草案 key keyId=0 不会命中任何 from_site 值，天然不滤）
+  if (partner.keyId > 0) {
+    conds.push(Prisma.sql`(v.from_site IS NULL OR v.from_site <> ${BigInt(partner.keyId)})`);
+  }
   const where = conds.length ? Prisma.sql`WHERE ${Prisma.join(conds, " AND ")}` : Prisma.empty;
 
   const rows = await prisma.$queryRaw<{

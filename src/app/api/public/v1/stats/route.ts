@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { getSiteStats } from "@/lib/queries";
 import { unstable_cache } from "next/cache";
 
@@ -26,9 +26,9 @@ const fetchMaxIds = unstable_cache(
 );
 
 export async function GET(req: Request) {
-  const partner = await requirePartner(req);
+  const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
-  if (!partnerRateLimitByName(partner, "pub-stats")) return rateLimited(getPartnerRatePerMin(partner));
+  if (!partnerRateLimit(partner, "pub-stats")) return rateLimited(partner.ratePerMin);
 
   const [stats, maxIds] = await Promise.all([getSiteStats(), fetchMaxIds()]);
 
