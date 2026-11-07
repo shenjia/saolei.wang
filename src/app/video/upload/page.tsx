@@ -2,7 +2,8 @@
 // 2026-10-24 补版本号与低版本拦截口径——检查实现在 rawvf.checkProgramVersion。
 // 注意 mvf 仍在上传白名单内——文案是给用户看的重点，不代表格式支持面收窄。
 // 2026-11-02 张老师：说明文字整体沉底为「上传规则」独立板块（复用 RankingRules，
-// 同排行页底部规则板块形态），页面主体只留上传表单）
+// 同排行页底部规则板块形态），页面主体只留上传表单。
+// 2026-11-07 张老师：正文补列 Viennasweeper 4.0.0b2 生成的 rmv 录像）
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -29,17 +30,18 @@ export default async function VideoUploadPage() {
     <div id="page" className="main">
       <div className="video_upload box center">
         <h1>上传录像</h1>
-        {/* 支持格式说明（2026-11-02 张老师：从规则板块拿回标题下作正文，原样式） */}
+        {/* 支持格式说明（2026-11-02 张老师：从规则板块拿回标题下作正文，原样式；
+            2026-11-07 补 Viennasweeper 4.0.0b2 rmv——版本闸见 rawvf.checkProgramVersion） */}
         <p>
           本站现接受{" "}
           <a href="/download/Arbiter_0.52.3.zip" download>
             <em>Minesweeper Arbiter 0.52.3</em>
           </a>{" "}
-          生成的 <em>avf</em> 录像，以及{" "}
+          生成的 <em>avf</em> 录像，{" "}
           <a href="/download/Metasweeper_3.3.4.exe" download>
             <em>元扫雷 3.3.4</em>
           </a>{" "}
-          生成的 <em>evf</em> 录像。
+          生成的 <em>evf</em> 录像，以及 <em>Viennasweeper 4.0.0b2</em> 生成的 <em>rmv</em> 录像。
         </p>
         <UploadForm initialRemaining={remaining} />
       </div>
