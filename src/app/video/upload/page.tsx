@@ -38,6 +38,12 @@ export default async function VideoUploadPage() {
             仅格式名保持基准 14px） */}
         <p>本站目前支持以下录像格式上传：</p>
         <p style={{ fontSize: 13 }}>
+          <a href="/download/Metasweeper_3.3.4.exe" download>
+            <em style={{ color: "#b1b1a4" }}>元扫雷 3.3.4</em>
+          </a>{" "}
+          生成的{" "}
+          <em style={{ color: "#fdc61d", fontSize: 14 }}>evf</em> 录像
+          {"　"}
           <a href="/download/Arbiter_0.52.3.zip" download>
             <em style={{ color: "#b1b1a4" }}>Minesweeper Arbiter 0.52.3</em>
           </a>{" "}
@@ -49,12 +55,6 @@ export default async function VideoUploadPage() {
           </a>{" "}
           生成的{" "}
           <em style={{ color: "#fdc61d", fontSize: 14 }}>rmv</em> 录像
-          {"　"}
-          <a href="/download/Metasweeper_3.3.4.exe" download>
-            <em style={{ color: "#b1b1a4" }}>元扫雷 3.3.4</em>
-          </a>{" "}
-          生成的{" "}
-          <em style={{ color: "#fdc61d", fontSize: 14 }}>evf</em> 录像
         </p>
         <UploadForm initialRemaining={remaining} />
       </div>
