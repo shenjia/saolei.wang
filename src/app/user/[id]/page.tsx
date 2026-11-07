@@ -385,45 +385,51 @@ export default async function UserViewPage({
                 })}
               </tbody>
             </table>
-            <div className="rank_label">
-              {/* Phase 5 双体系：跟随观看者切换（旧体系=大号彩字无徽章） */}
-              <RankLabel
-                militaryTitle={detail.title}
-                militaryColor={TITLE_COLORS[detail.title]}
-                classic={detail.classicTitle}
-              />
-              {/* 封禁用户（2026-10-16 张老师要求）：不参与排行，原排名位置显示红色
-                  「此用户已被封禁」；军衔徽章照常认定保留（上方 RankLabel 不受影响）；
-                  海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
-                  口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」；
-                  省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求） */}
-              {user.status !== 0 ? (
-                <div className="ranks">
-                  <span className="rank_line ranks_banned">此用户已被封禁</span>
-                </div>
-              ) : ranks && (ranks.area === AREA_OVERSEAS ? (
-                <div className="ranks">
-                  {ranks.areaPos !== null ? (
-                    <span className="rank_line">
-                      海外第 <em>{ranks.areaPos}</em> 名
-                    </span>
-                  ) : (
-                    <span className="rank_line ranks_overseas">海外玩家</span>
-                  )}
-                </div>
-              ) : (
-                <div className="ranks">
-                  {ranks.areaPos !== null && (
-                    <span className="rank_line">
-                      {areaDisplay(ranks.area)}第 <em>{ranks.areaPos}</em> 名
-                    </span>
-                  )}
+          </div>
+          {/* 军衔大徽章区（绝对定位 .info 右上角）。⚠️ 必须是 .info 直接子元素、
+              不能放进 .info_body：info_body 带 container-type: inline-size（11-04
+              容器查询锚点），老 Blink（OPPO 自带浏览器等 Chromium 105~127）会把
+              containment 当 abs 包含块 → 徽章相对 info_body 定位，整个砸在成绩表
+              上（2026-11-07 张老师报手机端称号版式乱根因）；新 Blink/WebKit 无此
+              行为。挪出后包含块恒为 .info(position:relative)，全引擎一致。 */}
+          <div className="rank_label">
+            {/* Phase 5 双体系：跟随观看者切换（旧体系=大号彩字无徽章） */}
+            <RankLabel
+              militaryTitle={detail.title}
+              militaryColor={TITLE_COLORS[detail.title]}
+              classic={detail.classicTitle}
+            />
+            {/* 封禁用户（2026-10-16 张老师要求）：不参与排行，原排名位置显示红色
+                「此用户已被封禁」；军衔徽章照常认定保留（上方 RankLabel 不受影响）；
+                海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
+                口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」；
+                省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求） */}
+            {user.status !== 0 ? (
+              <div className="ranks">
+                <span className="rank_line ranks_banned">此用户已被封禁</span>
+              </div>
+            ) : ranks && (ranks.area === AREA_OVERSEAS ? (
+              <div className="ranks">
+                {ranks.areaPos !== null ? (
                   <span className="rank_line">
-                    全国第 <em>{ranks.national}</em> 名
+                    海外第 <em>{ranks.areaPos}</em> 名
                   </span>
-                </div>
-              ))}
-            </div>
+                ) : (
+                  <span className="rank_line ranks_overseas">海外玩家</span>
+                )}
+              </div>
+            ) : (
+              <div className="ranks">
+                {ranks.areaPos !== null && (
+                  <span className="rank_line">
+                    {areaDisplay(ranks.area)}第 <em>{ranks.areaPos}</em> 名
+                  </span>
+                )}
+                <span className="rank_line">
+                  全国第 <em>{ranks.national}</em> 名
+                </span>
+              </div>
+            ))}
           </div>
         </div>
         {/* 2026-10-13 张老师要求：窄屏（≤880 单列化）时「实力」雷达移到玩家面板下、

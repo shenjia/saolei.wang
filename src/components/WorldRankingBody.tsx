@@ -39,19 +39,23 @@ export function WorldRankingBody({
     <>
       {/* id 保留：globals.css #world_top 列内距等选择器仍挂此卡片；
           平级结构＝#page 直接子元素，窄版 > 直接子选择器样式全部恢复生效 */}
+      {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染）。
+          ⚠️ FlopPlayer 必须在 #world_top 卡外：卡带 container-type: inline-size
+          （日期按需隐藏），containment 对 position:fixed 的 iframe 同样成立包含块
+          ——老 Blink（OPPO 自带浏览器等 Chromium 105~127）下全屏 flop 播放器会被
+          劫持到卡内定位（2026-11-07 用户主页称号区同根因案）。挪出后 fixed 恒对
+          viewport，全引擎一致。 */}
+      {rows.length > 0 && <FlopPlayer />}
       <div id="world_top" className="box ranking_box">
         {head}
-        {rows.length > 0 ? (
-          <>
-            <WorldTop100Table
-              rows={rows}
-              hoverIso={stats ? hover : undefined}
-              onHoverIso={stats ? setHover : undefined}
-            />
-            {/* 纪录点击播放（原站 avf 经 /api/world/video 代理，站内 flop 播放器渲染） */}
-            <FlopPlayer />
-          </>
-        ) : (
+        {rows.length > 0 && (
+          <WorldTop100Table
+            rows={rows}
+            hoverIso={stats ? hover : undefined}
+            onHoverIso={stats ? setHover : undefined}
+          />
+        )}
+        {rows.length === 0 && (
           <p className="world_fail">暂时无法获取世界排行，请稍后再试。</p>
         )}
       </div>
