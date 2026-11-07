@@ -5,8 +5,10 @@
 # B1 架构（2026-09-27 起）：构建在 GitHub Actions 完成，本脚本只做：
 #   pnpm install（生产依赖）→ prisma generate → prisma db push → pm2 重启备槽
 #   → 健康检查 → 切 nginx 主备 → 终检（失败自动回滚）
-# B2 单活模式（2026-10-22 起）：发布成功后 pm2 stop 旧主力槽（回滚失败路径亦然），
-#   常驻只留一个 Next 实例省 ~300MB 内存；回滚 = pm2 start 旧槽 + 切 upstream，秒级。
+# B2 单活模式（2026-10-22 起）：发布成功后 pm2 stop 旧主力槽，常驻只留一个 Next 实例。
+# B3 双活模式（2026-11-08 起，替代单活）：旧主力槽保持运行做 nginx backup 真兜底——
+#   2026-11-07 全站 502 事故证明「backup 槽停止 + max_fails=1」会把主力单次抖动放大成全站 502。
+#   代价：常驻两个 Next 实例（~1.1GB），需 2026-11-08 服务器升配配合。
 #
 # ⚠️ 本脚本绝不运行 next build（旧机教训：服务器 build 触发 SWC 崩溃 + OOM + 内核 hang）
 # ⚠️ CI 只构建一次（标准 .next，Turbopack 二次构建会互删产物），rsync 到 .next-release/；
@@ -53,8 +55,8 @@ write_auth_upstream() {
 # 此文件由 scripts/server-release.sh 自动管理，勿手动修改
 # active: $active
 upstream authority_upstream {
-    server 127.0.0.1:$(auth_port "$active");        # $active (active)
-    server 127.0.0.1:$(auth_port "$standby") backup; # $standby (standby)
+    server 127.0.0.1:$(auth_port "$active") max_fails=3 fail_timeout=10s;        # $active (active)
+    server 127.0.0.1:$(auth_port "$standby") backup max_fails=3 fail_timeout=10s; # $standby (standby)
 }
 EOF
   cat "$NGINX_AUTH_CONF.tmp" > "$NGINX_AUTH_CONF"   # cp 保 inode（软链不换）
@@ -86,15 +88,18 @@ A_APP="$(slot_app "$ACTIVE")"
 info "当前主力: $ACTIVE  → 本次发布备槽: $STANDBY (app=$S_APP port=$S_PORT dir=$S_DIR)"
 
 # ---------- 生成 upstream 配置（$1 = 主力色） ----------
+# max_fails=3 fail_timeout=10s（2026-11-08 加固）：nginx 默认 max_fails=1，主力槽单次
+# connection reset 即被全站拉黑 10s（备槽若又不在 = 「no live upstreams」全站 502，
+# 2026-11-07 11:33–12:35 事故根因之一）。改为 3 次失败才拉黑，单次抖动只损失单个请求。
 write_upstream() {
   local active=$1
   local primary_line backup_line
   if [[ $active == blue ]]; then
-    primary_line="server 127.0.0.1:3100;"
-    backup_line="server 127.0.0.1:3102 backup;"
+    primary_line="server 127.0.0.1:3100 max_fails=3 fail_timeout=10s;"
+    backup_line="server 127.0.0.1:3102 backup max_fails=3 fail_timeout=10s;"
   else
-    primary_line="server 127.0.0.1:3102;"
-    backup_line="server 127.0.0.1:3100 backup;"
+    primary_line="server 127.0.0.1:3102 max_fails=3 fail_timeout=10s;"
+    backup_line="server 127.0.0.1:3100 backup max_fails=3 fail_timeout=10s;"
   fi
   cat > "$NGINX_UPSTREAM_CONF.tmp" <<EOF
 # 此文件由 scripts/server-release.sh 自动管理，勿手动修改
@@ -329,11 +334,12 @@ printf '%s\n' "$AUTH_FINGERPRINT" > "$AUTH_STATE_FILE"
 fi
 
 # ---------- 重启备槽实例 ----------
-# 单活模式（2026-10-22）下备槽处于 stopped 态。⚠️ 2026-10-27 生产事故教训：
+# 备槽是 nginx backup（双活下常驻运行，但几乎不接流量——仅主力失败时兜底）。
+# ⚠️ 2026-10-27 生产事故教训：
 # pm2 restart **不重读 ecosystem.config.js 的新 env**（RANKED_MODE_OPEN 加进
 # ecosystem 后，老进程 restart 仍是旧 env——排名入口在生产消失 22 分钟）。
-# 备槽此刻不在服务（nginx 指向主力槽），delete + start 重建无流量损失，
-# 且保证每次发布后两槽都是最新 ecosystem env。
+# 所以仍 delete + start 重建：重建窗口内 backup 短暂不可用（此时 nginx 指向主力槽，
+# 无流量损失），且保证每次发布后两槽都是最新 ecosystem env。
 if pm2 describe "$S_APP" >/dev/null 2>&1; then
   info "重建 $S_APP（delete+start，确保加载最新 ecosystem env）..."
   pm2 delete "$S_APP" >/dev/null 2>&1
@@ -370,19 +376,19 @@ final_check() {
 }
 if final_check; then
   ok "经 nginx 终检通过 ✓  新主力: $STANDBY"
-  # ---------- 单活模式（2026-10-22）：停掉旧主力槽，释放常驻内存 ----------
-  # 3.5G 内存机上空闲槽常驻 ~300MB 是颠簸挂机事故的诱因之一（见 .workbuddy/memory/2026-10-22.md）。
-  # 回滚 = pm2 start 旧槽 + write_upstream 切回 + reload，秒级。upstream 里的 backup 行保留，
-  # 空闲槽停止后 nginx 在主力故障时只是少一层兜底，属单活模式的已知取舍。
-  info "单活模式: 停止旧主力槽 $A_APP ..."
-  pm2 stop "$A_APP" || warn "pm2 stop $A_APP 失败（不阻断发布，请人工检查 pm2 ls）"
+  # ---------- 双活模式（2026-11-08，替代 B2 单活）----------
+  # 2026-11-07 11:33–12:35 全站 502 事故后改为双活：发布成功后旧主力槽**不再 stop**，
+  # 继续跑旧版本代码作为 nginx backup 真兜底（~550MB，张老师升配服务器后内存充裕）。
+  # 旧槽磁盘上的 .next-<旧色> 产物不会被本次发布覆盖（发布只重建备槽 dir），旧代码完整可跑。
+  # 手工回滚仍可用：pm2 delete 新槽 → 恢复旧槽为主力（write_upstream + reload）。
+  info "双活模式: 旧主力槽 $A_APP 保持运行，作为 backup 兜底"
 else
   warn "终检失败！自动回滚到 $ACTIVE ..."
   write_upstream "$ACTIVE"
   sudo -n "$NGINX_BIN" -t && sudo -n "$NGINX_BIN" -s reload
-  # 回滚同样维持单活：停掉本次刚拉起的新槽
-  pm2 stop "$S_APP" || true
-  fail "已回滚。请查: pm2 logs $S_APP --lines 50 / pm2 ls"
+  # 双活：回滚不停刚拉起的新槽，保留它作为 backup（旧槽已恢复主力服务）
+  warn "已回滚到 $ACTIVE，新槽 $S_APP 保留为 backup。请查: pm2 logs $S_APP --lines 50 / pm2 ls"
+  exit 1
 fi
 
 pm2 save
@@ -396,4 +402,4 @@ if ! (crontab -l 2>/dev/null | grep -qF "authority-healthcheck.sh"); then
   ok "已安装 authority 心跳监控 cron（每分钟）"
 fi
 
-ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 空闲槽 $A_APP 已停; authority active=$AUTH_STANDBY)"
+ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 旧主力 $A_APP 保持运行兜底; authority active=$AUTH_STANDBY)"
