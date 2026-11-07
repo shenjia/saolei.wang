@@ -88,6 +88,7 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "apikey.create": "administrator",
   "apikey.revoke": "administrator",
   "apikey.restore": "administrator",
+  "apikey.setRateLimit": "administrator",
 };
 
 // ---------- 参数工具 ----------
@@ -1653,6 +1654,29 @@ async function dispatch(
       });
       invalidateApiKeyCache();
       return { ok: true, message: `已恢复「${row.name}」的 API key（#${id}）` };
+    }
+
+    // 手动个别限速（2026-11-07）：每分钟请求上限，0=不限速；变更最迟 30 秒生效（鉴权缓存）
+    case "apikey.setRateLimit": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少 key ID" };
+      const limit = Math.floor(Number(p.ratePerMin));
+      if (!Number.isFinite(limit) || limit < 0 || limit > 6000) {
+        return { ok: false, error: "限速值需为 0–6000 的整数（0=不限速）" };
+      }
+      const row = await prisma.apiKey.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "key 不存在" };
+      await prisma.apiKey.update({
+        where: { id: BigInt(id) },
+        data: { ratePerMin: limit, updateTime: BigInt(now()) },
+      });
+      invalidateApiKeyCache();
+      const desc = limit === 0 ? "不限速" : `${limit} 次/分钟`;
+      return {
+        ok: true,
+        logDetail: `已将「${row.name}」（#${id}）的 API 限速设为 ${desc}`,
+        message: `已将「${row.name}」限速设为 ${desc}，最迟 30 秒生效`,
+      };
     }
 
     default:

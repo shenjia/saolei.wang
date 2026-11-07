@@ -7,7 +7,8 @@
 //   · 内存缓存 30s：key 表变更（吊销）最迟 30s 生效；request_count 异步累加不阻塞响应
 //   · 兼容期：env PARTNER_API_KEYS 仍可用（老草案 key 不至于全断），查库优先
 //
-// 限速：沿用 lib/ratelimit.ts 进程内滑动窗口，60 次/分/合作方（各接口独立维度）。
+// 限速：沿用 lib/ratelimit.ts 进程内滑动窗口，窗口 60s；上限按 key 各自配置
+//（api_key.rate_per_min，默认 60，0=不限速；2026-11-07 起支持手动个别限速），各接口独立维度。
 //
 // 2026-10-25 新增分时用量：鉴权通过即按 +08:00 小时桶 × 接口短名 UPSERT api_key_usage
 // （env 草案 key 记 key=0），/admin/apikeys 据此画今日调用走势折线图与合作方分接口统计；
@@ -15,9 +16,15 @@
 
 import { createHash, randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
+import { rateLimit } from "@/lib/ratelimit";
 
-/** 内存缓存：hash → { name, keyId }，30s 过期（吊销最迟 30s 生效） */
-const cache = new Map<string, { name: string; keyId: number; at: number }>();
+/** 未配置限速的 key（含 env 草案 key）的默认上限 */
+export const DEFAULT_API_RATE_PER_MIN = 60;
+
+/** 内存缓存：hash → { name, keyId, ratePerMin }，30s 过期（吊销/限速变更最迟 30s 生效） */
+const cache = new Map<string, { name: string; keyId: number; ratePerMin: number; at: number }>();
+/** 合作方名 → 每分钟上限（鉴权成功时刷新；供路由按 name 取限速值） */
+const rateIndex = new Map<string, number>();
 const CACHE_TTL = 30_000;
 
 export function sha256(s: string): string {
@@ -57,6 +64,7 @@ export async function requirePartner(req: Request): Promise<string | null> {
 
   const hit = cache.get(h);
   if (hit && now - hit.at < CACHE_TTL) {
+    rateIndex.set(hit.name, hit.ratePerMin);
     void touchUsage(hit.keyId, endpoint);
     return hit.name;
   }
@@ -64,7 +72,9 @@ export async function requirePartner(req: Request): Promise<string | null> {
   try {
     const row = await prisma.apiKey.findUnique({ where: { keyHash: h } });
     if (row && row.status === 1) {
-      cache.set(h, { name: row.name, keyId: Number(row.id), at: now });
+      const ratePerMin = row.ratePerMin;
+      cache.set(h, { name: row.name, keyId: Number(row.id), ratePerMin, at: now });
+      rateIndex.set(row.name, ratePerMin);
       void touchUsage(Number(row.id), endpoint);
       return row.name;
     }
@@ -73,8 +83,26 @@ export async function requirePartner(req: Request): Promise<string | null> {
   }
   const envName = envPartnerName(provided);
   // env 草案 key 也记用量（key=0），今日走势图才能覆盖过渡期流量
-  if (envName) void bumpUsage(0, Math.floor(Date.now() / 1000), endpoint);
+  if (envName) {
+    rateIndex.set(envName, DEFAULT_API_RATE_PER_MIN);
+    void bumpUsage(0, Math.floor(Date.now() / 1000), endpoint);
+  }
   return envName;
+}
+
+/** 取合作方当前每分钟请求上限（未鉴权过/未配置时回默认 60；0=不限速） */
+export function getPartnerRatePerMin(name: string): number {
+  return rateIndex.get(name) ?? DEFAULT_API_RATE_PER_MIN;
+}
+
+/**
+ * 合作方维度限速判定（2026-11-07）：窗口 60s，上限取该 key 的 rate_per_min
+ *（0=不限速直接放行），各接口独立维度。返回 false=超限，路由应回 429。
+ */
+export function partnerRateLimitByName(name: string, dim: string): boolean {
+  const limit = getPartnerRatePerMin(name);
+  if (limit <= 0) return true;
+  return rateLimit(`${dim}:${name}`, limit, 60_000);
 }
 
 /** 用量累计：异步 fire-and-forget，失败不影响请求 */
@@ -108,15 +136,17 @@ export function unauthorized(): Response {
   );
 }
 
-/** 统一的 429 响应 */
-export function rateLimited(): Response {
+/** 统一的 429 响应（limit 用于文案；不传按默认 60） */
+export function rateLimited(limit?: number): Response {
+  const shown = limit && limit > 0 ? limit : DEFAULT_API_RATE_PER_MIN;
   return new Response(
-    JSON.stringify({ error: "rate_limited", message: "请求过频，请降低频率（限 60 次/分钟）" }),
+    JSON.stringify({ error: "rate_limited", message: `请求过频，请降低频率（限 ${shown} 次/分钟）` }),
     { status: 429, headers: { "content-type": "application/json; charset=utf-8" } }
   );
 }
 
-/** 吊销/新建后清缓存，让变更立即生效 */
+/** 吊销/新建/限速变更后清缓存，让变更立即生效 */
 export function invalidateApiKeyCache(): void {
   cache.clear();
+  rateIndex.clear();
 }

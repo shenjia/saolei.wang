@@ -1,6 +1,6 @@
 // 公开 API · 玩家详情（2026-10-24）
 // GET /api/public/v1/user_info?id=1,2,3（逗号分隔，最多 50 个）
-// 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
 //
 // 返回玩家公开信息 + 双体系成绩（标准/NF 各级 time/3bvs 附达成录像 ID）
 // + 录像标识列表（user_sig，站内「录像标识」版块口径，本站特有数据）。
@@ -9,14 +9,13 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
-import { rateLimit } from "@/lib/ratelimit";
+import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
 import { areaDisplay } from "@/lib/config";
 
 export async function GET(req: Request) {
   const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`pub-user-info:${partner}`, 60, 60_000)) return rateLimited();
+  if (!partnerRateLimitByName(partner, "pub-user-info")) return rateLimited(getPartnerRatePerMin(partner));
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

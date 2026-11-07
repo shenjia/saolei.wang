@@ -1,6 +1,6 @@
 // 公开 API · 帖子基本信息查询（2026-10-27）
 // GET /api/public/v1/post_info?id=1,2,3（逗号分隔，最多 50 个）
-// 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
 //
 // 字段对齐 post_search（标题/分类/发布者/发布时间/更新时间/评论数/点击数/
 // 置顶/加精/锁定/最后回复），**不含正文**——正文请引导用户访问
@@ -11,8 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
-import { rateLimit } from "@/lib/ratelimit";
+import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 import { decodeLegacyEntities } from "@/lib/format";
@@ -21,7 +20,7 @@ import { decodeLegacyEntities } from "@/lib/format";
 export async function GET(req: Request) {
   const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`pub-post-info:${partner}`, 60, 60_000)) return rateLimited();
+  if (!partnerRateLimitByName(partner, "pub-post-info")) return rateLimited(getPartnerRatePerMin(partner));
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

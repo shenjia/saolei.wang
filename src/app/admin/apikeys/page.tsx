@@ -98,10 +98,11 @@ export default async function AdminApiKeysPage() {
         <table className="admin_table">
           <thead>
             <tr>
-              <th>#</th>
-              <th>合作方</th>
-              <th>状态</th>
-              <th>调用次数</th>
+                <th>#</th>
+                <th>合作方</th>
+                <th>状态</th>
+                <th>限速</th>
+                <th>调用次数</th>
               <th>最近使用</th>
               <th>签发时间</th>
               <th>备注</th>
@@ -117,6 +118,9 @@ export default async function AdminApiKeysPage() {
                 </td>
                 <td>
                   {k.status === 1 ? <span className="admin_tag ok">启用</span> : <span className="admin_tag bad">已吊销</span>}
+                </td>
+                <td className="sub" style={{ whiteSpace: "nowrap" }}>
+                  {k.ratePerMin === 0 ? "不限" : `${k.ratePerMin}/分`}
                 </td>
                 <td>{Number(k.requestCount).toLocaleString("zh-CN")}</td>
                 <td className="sub">
@@ -143,7 +147,7 @@ export default async function AdminApiKeysPage() {
             ))}
             {!keys.length && (
               <tr>
-                <td colSpan={8} className="sub" style={{ textAlign: "center", padding: 24 }}>
+                <td colSpan={9} className="sub" style={{ textAlign: "center", padding: 24 }}>
                   尚未签发任何 key
                 </td>
               </tr>
@@ -155,7 +159,7 @@ export default async function AdminApiKeysPage() {
       <AdminCard title="口径说明">
         <ul className="admin_tips">
           <li>接口清单与字段文档见 <code>docs/partner-api-openms.md</code>；接口基础路径 <code>/api/public/v1/</code>。</li>
-          <li>限速 60 次/分钟/合作方（进程内滑动窗口）；nginx 侧另有全站兜底限速。</li>
+          <li>限速为进程内滑动窗口，每 key 每分钟上限可单独设置（默认 60，0=不限速，key 详情页可改，最迟 30 秒生效）；nginx 侧另有全站兜底限速。</li>
           <li>吊销为软删（保留审计轨迹），可随时恢复；明文不可找回，丢失只能重新签发。</li>
           <li>历史 .env 里的 PARTNER_API_KEYS 草案 key 在过渡期仍可用（查库优先），建议尽快迁到本表管理；草案 key 的调用以「草案 key（env）」计入走势图。</li>
           <li>走势图数据来自 2026-10-25 新增的分时用量表（api_key_usage，按小时累加），此前的历史调用无分时记录。</li>

@@ -863,6 +863,8 @@ model ApiKey {
   keyHash    String  @unique @map("key_hash") @db.Char(64)
   status     Int     @default(1) @db.TinyInt // 1=启用 0=吊销
   note       String  @default("") @db.VarChar(200)
+  // 单 key 限速（2026-11-07）：每分钟请求上限，0=不限速；默认 60 与原全站口径一致
+  ratePerMin Int     @default(60) @map("rate_per_min") @db.SmallInt
   requestCount BigInt @default(0) @map("request_count") @db.BigInt
   lastUsedAt BigInt  @default(0) @map("last_used_at") @db.BigInt
   createTime BigInt  @default(0) @map("create_time") @db.BigInt

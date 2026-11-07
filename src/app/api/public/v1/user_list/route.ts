@@ -1,6 +1,6 @@
 // 公开 API · 玩家公开信息批量查询（2026-10-24，由 partner/v1/users 更名迁移）
 // GET /api/public/v1/user_list?id=1,2,3（最多 100 个）
-// 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
 //
 // 轻量版：id/姓名/英文名/性别/地区/注册时间/封禁标记 + 8 列合计成绩。
 // 要双体系分成绩、录像指针、标识列表请用 user_info（更全但更重）。
@@ -8,15 +8,14 @@
 // 封禁用户（status!=0）返回 banned: true 且不给成绩，与站内「封禁不在榜」口径一致。
 
 import { NextResponse } from "next/server";
-import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
-import { rateLimit } from "@/lib/ratelimit";
+import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
 import { prisma } from "@/lib/db";
 import { areaDisplay } from "@/lib/config";
 
 export async function GET(req: Request) {
   const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`pub-user-list:${partner}`, 60, 60_000)) return rateLimited();
+  if (!partnerRateLimitByName(partner, "pub-user-list")) return rateLimited(getPartnerRatePerMin(partner));
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

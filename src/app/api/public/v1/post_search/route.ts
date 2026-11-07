@@ -1,6 +1,6 @@
 // 公开 API · 帖子关键词搜索（2026-10-27）
 // GET /api/public/v1/post_search?keyword=xx&cursor=0
-// 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
 //
 // 标题 LIKE %kw% 匹配（站内 /bbs 搜索同口径，不含正文/回复），固定 20 条/页，
 // keyset cursor 翻页（id DESC：cursor=上次响应 nextCursor，取「id < cursor」的下一页）。
@@ -9,8 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
-import { rateLimit } from "@/lib/ratelimit";
+import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
 import { decodeLegacyEntities } from "@/lib/format";
@@ -22,7 +21,7 @@ const PAGE_SIZE = 20;
 export async function GET(req: Request) {
   const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`pub-post-search:${partner}`, 60, 60_000)) return rateLimited();
+  if (!partnerRateLimitByName(partner, "pub-post-search")) return rateLimited(getPartnerRatePerMin(partner));
 
   const p = new URL(req.url).searchParams;
 

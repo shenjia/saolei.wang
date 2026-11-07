@@ -1,6 +1,6 @@
 // 公开 API · 录像元数据增量同步（2026-10-24，由 partner/v1/videos 更名迁移）
 // GET /api/public/v1/video_list?cursor=<录像id>&since=<Unix秒>&level=<beg|int|exp>&player_id=<玩家id>&size=200
-// 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
 //
 // 同步语义（增量）：
 //  - 首次全量：不传 cursor，从 id=1 起按 id 升序拉完（循环到 hasMore=false）
@@ -14,8 +14,7 @@
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
-import { rateLimit } from "@/lib/ratelimit";
+import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
 import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { usersByIds } from "@/lib/queries";
@@ -23,7 +22,7 @@ import { usersByIds } from "@/lib/queries";
 export async function GET(req: Request) {
   const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`pub-video-list:${partner}`, 60, 60_000)) return rateLimited();
+  if (!partnerRateLimitByName(partner, "pub-video-list")) return rateLimited(getPartnerRatePerMin(partner));
 
   const p = new URL(req.url).searchParams;
   const cursor = Math.max(0, parseInt(p.get("cursor") ?? "0", 10) || 0);

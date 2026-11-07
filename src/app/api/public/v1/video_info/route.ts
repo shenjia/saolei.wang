@@ -1,6 +1,6 @@
 // 公开 API · 录像详情（2026-10-24）
 // GET /api/public/v1/video_info?id=1,2,3（逗号分隔，最多 50 个）
-// 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
 //
 // 返回录像全部**已落盘公开字段**（video + video_info + video_metrics 落盘部分），
 // 含 userId / userName（原 partner 草案 videos 接口不含逐盘指标，本接口补齐）。
@@ -12,15 +12,14 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
-import { rateLimit } from "@/lib/ratelimit";
+import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
 import { usersByIds } from "@/lib/queries";
 import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
 
 export async function GET(req: Request) {
   const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`pub-video-info:${partner}`, 60, 60_000)) return rateLimited();
+  if (!partnerRateLimitByName(partner, "pub-video-info")) return rateLimited(getPartnerRatePerMin(partner));
 
   const p = new URL(req.url).searchParams;
   const ids = (p.get("id") ?? "")

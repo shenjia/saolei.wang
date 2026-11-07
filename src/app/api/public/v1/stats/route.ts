@@ -1,6 +1,6 @@
 // 公开 API · 站点基础统计（2026-10-24）
 // GET /api/public/v1/stats
-// 鉴权：X-Api-Key（lib/partner.ts），限速 60 次/分/合作方。
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
 //
 // 与首页「站点统计」版块同口径（getSiteStats，unstable_cache 60s 复用），
 // 外加 maxVideoId / maxUserId（openms 机器人确定抓取范围用——2026-10-24 需求表）。
@@ -8,8 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requirePartner, unauthorized, rateLimited } from "@/lib/partner";
-import { rateLimit } from "@/lib/ratelimit";
+import { requirePartner, unauthorized, rateLimited, partnerRateLimitByName, getPartnerRatePerMin } from "@/lib/partner";
 import { getSiteStats } from "@/lib/queries";
 import { unstable_cache } from "next/cache";
 
@@ -29,7 +28,7 @@ const fetchMaxIds = unstable_cache(
 export async function GET(req: Request) {
   const partner = await requirePartner(req);
   if (!partner) return unauthorized();
-  if (!rateLimit(`pub-stats:${partner}`, 60, 60_000)) return rateLimited();
+  if (!partnerRateLimitByName(partner, "pub-stats")) return rateLimited(getPartnerRatePerMin(partner));
 
   const [stats, maxIds] = await Promise.all([getSiteStats(), fetchMaxIds()]);
 

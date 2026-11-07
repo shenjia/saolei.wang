@@ -12,7 +12,7 @@ import { AdminCard, Kpi } from "@/components/admin/Widgets";
 import { TrendChart, type Series } from "@/components/admin/Charts";
 import { dayStart } from "@/lib/admin/stats";
 import { formatDate } from "@/lib/format";
-import { AdminAction } from "@/components/admin/AdminAction";
+import { AdminAction, AdminForm } from "@/components/admin/AdminAction";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,7 @@ export default async function ApiKeyDetailPage({ params }: { params: Promise<{ i
     requestCount: BigInt(0),
     lastUsedAt: BigInt(0),
     createTime: BigInt(0),
+    ratePerMin: 60,
   };
   const row = keyId === 0 ? draft : await prisma.apiKey.findUnique({ where: { id: BigInt(keyId) } });
   if (!row) notFound();
@@ -174,6 +175,26 @@ export default async function ApiKeyDetailPage({ params }: { params: Promise<{ i
               <tr>
                 <td className="sub">备注</td>
                 <td>{row.note || "—"}</td>
+              </tr>
+              <tr>
+                <td className="sub">限速</td>
+                <td>
+                  <AdminForm
+                    op="apikey.setRateLimit"
+                    params={{ id: keyId }}
+                    resetAfterSubmit={false}
+                    fields={[
+                      {
+                        name: "ratePerMin",
+                        label: "每分钟请求上限",
+                        type: "number",
+                        defaultValue: String(row.ratePerMin),
+                        hint: `当前 ${row.ratePerMin === 0 ? "不限速" : row.ratePerMin + " 次/分钟"}；0=不限速，变更最迟 30 秒生效`,
+                      },
+                    ]}
+                    submitLabel="保存限速"
+                  />
+                </td>
               </tr>
               <tr>
                 <td className="sub">状态操作</td>
