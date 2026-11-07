@@ -265,7 +265,7 @@ export function ServerStatusPanel({
                           <tr style={{ color: "#75715e", textAlign: "left" }}>
                             <th style={SUB_TH}>地区</th>
                             <th style={SUB_TH}>玩家</th>
-                            <th style={{ ...SUB_TH, textAlign: "right" }} title="该玩家在本服务器的累计开局面数（重启不清零）">对局</th>
+                            <th style={{ ...SUB_TH, textAlign: "right" }} title="该玩家今日在本服务器开局面数（北京时间零点清零，重启不清零）">对局</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }} title="本轮连上本服务器起的在线时长（刷新/断线重连重新计；同 uid 多标签页取最早连接）">在线时长</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }} title={`该玩家近 7 天在本节点排行局实测平均延迟（随局上报采样）· ${RTT_LEGEND}`}>延迟</th>
                           </tr>

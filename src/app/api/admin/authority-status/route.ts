@@ -72,7 +72,7 @@ export interface PlayerRow {
   sex: number;
   /** 军衔（按高级时间阈值评定，总司令=雷界第一人特判） */
   rank: string;
-  /** 在该实例上的累计开局面数（server.mjs 落盘统计，重启不清零） */
+  /** 在该实例上的今日开局面数（server.mjs 北京时间零点清零；旧版实例回退累计值） */
   games: number;
   /** 本轮在线时长（秒，连接建立起算；同 uid 多标签页取最早连接） */
   online: number;
