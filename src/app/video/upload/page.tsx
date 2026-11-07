@@ -39,21 +39,21 @@ export default async function VideoUploadPage() {
         <p>本站目前支持以下录像格式上传：</p>
         <p style={{ fontSize: 13 }}>
           <a href="/download/Metasweeper_3.3.4.exe" download>
-            <em style={{ color: "#b1b1a4" }}>元扫雷 3.3.4</em>
+            <em style={{ color: "#b1b1a4" }}>元扫雷 3.3.4+</em>
           </a>{" "}
           生成的{" "}
           <em style={{ color: "#fdc61d", fontSize: 14 }}>evf</em> 录像
           {" "}
-          <span style={{ color: "#ccc" }}>/</span>{" "}
+          <span style={{ color: "#636359" }}>/</span>{" "}
           <a href="/download/Arbiter_0.52.3.zip" download>
-            <em style={{ color: "#b1b1a4" }}>Minesweeper Arbiter 0.52.3</em>
+            <em style={{ color: "#b1b1a4" }}>Minesweeper Arbiter 0.52.3+</em>
           </a>{" "}
           生成的{" "}
           <em style={{ color: "#fdc61d", fontSize: 14 }}>avf</em> 录像
           {" "}
-          <span style={{ color: "#ccc" }}>/</span>{" "}
+          <span style={{ color: "#636359" }}>/</span>{" "}
           <a href="/download/Viennasweeper_4.0.0.zip" download>
-            <em style={{ color: "#b1b1a4" }}>Viennasweeper 4.0.0</em>
+            <em style={{ color: "#b1b1a4" }}>Viennasweeper 4.0.0+</em>
           </a>{" "}
           生成的{" "}
           <em style={{ color: "#fdc61d", fontSize: 14 }}>rmv</em> 录像
