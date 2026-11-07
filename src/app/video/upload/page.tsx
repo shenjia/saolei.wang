@@ -33,23 +33,28 @@ export default async function VideoUploadPage() {
         {/* 支持格式说明（2026-11-02 张老师：从规则板块拿回标题下作正文，原样式；
             2026-11-07 补 Viennasweeper 4.0.0b2 rmv——版本闸见 rawvf.checkProgramVersion；
             11:35 张老师改版式：一行三项（元扫雷殿后），ul 换回段落（li 字号偏小），
-            格式名 avf/evf/rmv 用站点黄 #fdc61d） */}
+            格式名 avf/evf/rmv 用站点黄 #fdc61d；
+            12:20 张老师定：软件名亮灰 #b1b1a4（站点次级标题同灰），整行字号 13，
+            仅格式名保持基准 14px） */}
         <p>本站目前支持以下录像格式上传：</p>
-        <p>
+        <p style={{ fontSize: 13 }}>
           <a href="/download/Arbiter_0.52.3.zip" download>
-            <em>Minesweeper Arbiter 0.52.3</em>
+            <em style={{ color: "#b1b1a4" }}>Minesweeper Arbiter 0.52.3</em>
           </a>{" "}
-          生成的 <em style={{ color: "#fdc61d" }}>avf</em> 录像
+          生成的{" "}
+          <em style={{ color: "#fdc61d", fontSize: 14 }}>avf</em> 录像
           {"　"}
           <a href="/download/Viennasweeper_4.0.0.zip" download>
-            <em>Viennasweeper 4.0.0</em>
+            <em style={{ color: "#b1b1a4" }}>Viennasweeper 4.0.0</em>
           </a>{" "}
-          生成的 <em style={{ color: "#fdc61d" }}>rmv</em> 录像
+          生成的{" "}
+          <em style={{ color: "#fdc61d", fontSize: 14 }}>rmv</em> 录像
           {"　"}
           <a href="/download/Metasweeper_3.3.4.exe" download>
-            <em>元扫雷 3.3.4</em>
+            <em style={{ color: "#b1b1a4" }}>元扫雷 3.3.4</em>
           </a>{" "}
-          生成的 <em style={{ color: "#fdc61d" }}>evf</em> 录像
+          生成的{" "}
+          <em style={{ color: "#fdc61d", fontSize: 14 }}>evf</em> 录像
         </p>
         <UploadForm initialRemaining={remaining} />
       </div>
