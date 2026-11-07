@@ -31,18 +31,26 @@ export default async function VideoUploadPage() {
       <div className="video_upload box center">
         <h1>上传录像</h1>
         {/* 支持格式说明（2026-11-02 张老师：从规则板块拿回标题下作正文，原样式；
-            2026-11-07 补 Viennasweeper 4.0.0b2 rmv——版本闸见 rawvf.checkProgramVersion） */}
-        <p>
-          本站现接受{" "}
-          <a href="/download/Arbiter_0.52.3.zip" download>
-            <em>Minesweeper Arbiter 0.52.3</em>
-          </a>{" "}
-          生成的 <em>avf</em> 录像，{" "}
-          <a href="/download/Metasweeper_3.3.4.exe" download>
-            <em>元扫雷 3.3.4</em>
-          </a>{" "}
-          生成的 <em>evf</em> 录像，以及 <em>Viennasweeper 4.0.0b2</em> 生成的 <em>rmv</em> 录像。
-        </p>
+            2026-11-07 补 Viennasweeper 4.0.0b2 rmv——版本闸见 rawvf.checkProgramVersion；
+            11:29 张老师改版式：引导句 + 列表） */}
+        <p>本站目前支持以下录像格式上传：</p>
+        <ul>
+          <li>
+            <a href="/download/Arbiter_0.52.3.zip" download>
+              <em>Minesweeper Arbiter 0.52.3</em>
+            </a>{" "}
+            生成的 <em>avf</em> 录像
+          </li>
+          <li>
+            <a href="/download/Metasweeper_3.3.4.exe" download>
+              <em>元扫雷 3.3.4</em>
+            </a>{" "}
+            生成的 <em>evf</em> 录像
+          </li>
+          <li>
+            <em>Viennasweeper 4.0.0b2</em> 生成的 <em>rmv</em> 录像
+          </li>
+        </ul>
         <UploadForm initialRemaining={remaining} />
       </div>
       {/* 上传规则板块（2026-11-02 张老师：说明文字沉底，形态同排行页底部排行规则）；
