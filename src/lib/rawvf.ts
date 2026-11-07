@@ -106,6 +106,20 @@ export function checkProgramVersion(program: string, version: string): string | 
     }
     return null;
   }
+  // 软件白名单硬闸（2026-11-07 张老师定）：只接受已知客户端生成的录像。
+  // 各格式可达值：avf 自报 Arbiter/Clone、mvf 固定 Minesweeper Clone（归一为 Clone）、
+  // rmv 自报 Vienna/Viennasweeper、evf 归一后 元扫雷/Saolei.wang（排名局）。
+  // 未知软件名（如「微信小游戏 - 95经典扫雷」这类第三方 EVF 实现，#348840 等 3 盘
+  // 由此混入——版本闸对未知软件名 fall-through 放行）一律拒收：格式合规不代表
+  // 录制语义（时间戳/坐标口径）可信。
+  // 「saolei.wang」前缀放给 ONLINE_PROGRAM_MARKER（saolei.wang Online）——
+  // 在线玩录像由路由层专属检查给出精确文案，不在这里被白名单抢先拦成「不支持」
+  if (
+    !["Arbiter", "Clone", "Vienna", "Viennasweeper", "元扫雷", "Saolei.wang"].includes(p) &&
+    !p.startsWith("saolei.wang")
+  ) {
+    return `暂不支持该客户端（${p || "未知软件"}）生成的录像，本站只接受 Arbiter / Minesweeper Clone / Viennasweeper / 元扫雷 生成的录像`;
+  }
   return null;
 }
 
