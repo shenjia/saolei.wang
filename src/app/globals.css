@@ -12340,6 +12340,11 @@ html.op-fakefs #header {
 .email_bind_modal .text b {
   color: #e6c07b;
 }
+/* 开源网同步征求弹窗：文案比邮箱提醒长，加宽到不折行（440=最长行360+左右padding60+余量；
+   移动端仍走 .email_bind_modal 的 max-width: calc(100vw - 40px) 回退折行） */
+.openms_consent_overlay .email_bind_modal {
+  width: 440px;
+}
 .email_bind_modal .btns,
 .update_notice_modal .btns {
   display: flex;
