@@ -690,6 +690,25 @@ export async function deleteReply(id: number, userId: number, isAdmin: boolean):
   return true;
 }
 
+/** 编辑回复（2026-11-07 张老师要求：本人可编辑自己的评论，管理员可编辑所有人的）
+ *  口径同删除——可见（status 0/5）即可改；锁定帖不挡编辑（删回复同样不受锁限制）；
+ *  编辑不动主题的 lastReplyTime/replies（编辑不是回帖，不该抬帖） */
+export async function updateReply(
+  id: number,
+  userId: number,
+  isAdmin: boolean,
+  content: string
+): Promise<boolean> {
+  const row = await prisma.bbsReply.findFirst({ where: { id: BigInt(id), status: { in: [0, 5] } } });
+  if (!row) return false;
+  if (!isAdmin && N(row.user) !== userId) return false;
+  await prisma.bbsReply.update({
+    where: { id: row.id },
+    data: { content, updateTime: nowSec() },
+  });
+  return true;
+}
+
 /** 管理员：置顶/精华/锁定/移动板块（置顶=isPinned；2026-10-23 取消高亮——isTop 不再可写） */
 export async function adminSetPost(
   id: number,

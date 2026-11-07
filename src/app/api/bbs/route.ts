@@ -1,11 +1,16 @@
-// BBS API：发帖/编辑/删除/回帖/删回复/管理操作
+// BBS API：发帖/编辑/删除/回帖/删回复/编辑回复/管理操作
+// 2026-11-07（张老师要求）：①回复可编辑——本人编辑自己的楼层，管理员编辑所有人的；
+// ②管理员在前台对用户数据的一切操作（编辑主题/编辑回复/删主题/删回复/置顶精华锁定移动）
+//   全量写 admin_log 留痕（本人自助操作不进管理日志，口径同 comment.selfDelete）
 import { NextRequest, NextResponse, after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isManager } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { runContentReview } from "@/lib/content-review";
 import { sendMessage } from "@/lib/message";
-import { decodeLegacyEntities } from "@/lib/format";
+import { decodeLegacyEntities, ubbExcerpt } from "@/lib/format";
+import { logAdmin } from "@/lib/admin/log";
+import { clientIp } from "@/lib/stat";
 import {
   adminSetPost,
   BBS_BOARD_NAMES,
@@ -16,7 +21,10 @@ import {
   createReply,
   deletePost,
   deleteReply,
+  REPLY_QUOTE_LIMIT,
+  ubb,
   updatePost,
+  updateReply,
 } from "@/lib/bbs";
 import {
   checkSensitive,
@@ -28,10 +36,10 @@ import {
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 
 export async function POST(req: NextRequest) {
-  // 维护模式：挡产生新内容/新楼层的入口（post/reply/edit）；delete/admin 是收敛操作，放行
+  // 维护模式：挡产生新内容/新楼层的入口（post/reply/edit/edit_reply）；delete/admin 是收敛操作，放行
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "");
-  if (["post", "reply", "edit"].includes(action) && (await isMaintenanceOn())) {
+  if (["post", "reply", "edit", "edit_reply"].includes(action) && (await isMaintenanceOn())) {
     return maintenanceReject() as unknown as NextResponse;
   }
   const session = await getSession();
@@ -119,8 +127,24 @@ export async function POST(req: NextRequest) {
     // 移动板块是管理员特权
     const data: { title?: string; content?: string; board?: number } = { title, content };
     if (board !== undefined && admin && board in BBS_BOARD_NAMES) data.board = board;
+    // 管理员前台编辑留痕（2026-11-07）：预取作者，本人编辑不进管理日志
+    let editOwner: number | null = null;
+    if (admin) {
+      const row = await prisma.bbsPost.findUnique({ where: { id: BigInt(id) }, select: { user: true } });
+      if (row) editOwner = Number(row.user);
+    }
     const ok = await updatePost(id, session.uid, admin, data);
     if (!ok) return NextResponse.json({ error: "无权编辑" }, { status: 403 });
+    if (editOwner !== null && editOwner !== session.uid) {
+      await logAdmin({
+        user: session.uid,
+        action: "bbs.editPost",
+        target: "bbs",
+        targetId: id,
+        detail: `管理员前台编辑主题 #${id}（作者 #${editOwner}）`,
+        ip: clientIp(req.headers),
+      });
+    }
     // 编辑同样送 AI 复审（取库内最终标题+正文，防止「先发正常内容、AI 放行后再改回敏感」）
     const cur = await prisma.bbsPost.findUnique({
       where: { id: BigInt(id) },
@@ -132,14 +156,95 @@ export async function POST(req: NextRequest) {
 
   if (action === "delete") {
     if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
+    // 管理员前台删主题留痕（2026-11-07）：预取作者/标题，本人删除不进管理日志
+    let delOwner: number | null = null;
+    let delTitle = "";
+    if (admin) {
+      const row = await prisma.bbsPost.findUnique({
+        where: { id: BigInt(id) },
+        select: { user: true, title: true },
+      });
+      if (row) {
+        delOwner = Number(row.user);
+        delTitle = decodeLegacyEntities(row.title).slice(0, 50);
+      }
+    }
     const ok = await deletePost(id, session.uid, admin);
-    return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "无权删除" }, { status: 403 });
+    if (!ok) return NextResponse.json({ error: "无权删除" }, { status: 403 });
+    if (admin && delOwner !== null && delOwner !== session.uid) {
+      await logAdmin({
+        user: session.uid,
+        action: "bbs.deletePost",
+        target: "bbs",
+        targetId: id,
+        detail: `管理员前台删除主题 #${id}《${delTitle}》（作者 #${delOwner}）`,
+        ip: clientIp(req.headers),
+      });
+    }
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "delete_reply") {
     if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
+    // 管理员前台删回复留痕（2026-11-07）：预取作者与所在主题，本人/楼主删除不进管理日志
+    let rOwner: number | null = null;
+    let rPost = 0;
+    let rPostOwner = 0;
+    if (admin) {
+      const row = await prisma.bbsReply.findUnique({
+        where: { id: BigInt(id) },
+        select: { user: true, post: true },
+      });
+      if (row) {
+        rOwner = Number(row.user);
+        rPost = Number(row.post);
+        const post = await prisma.bbsPost.findUnique({ where: { id: row.post }, select: { user: true } });
+        rPostOwner = post ? Number(post.user) : 0;
+      }
+    }
     const ok = await deleteReply(id, session.uid, admin);
-    return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "无权删除" }, { status: 403 });
+    if (!ok) return NextResponse.json({ error: "无权删除" }, { status: 403 });
+    if (admin && rOwner !== null && rOwner !== session.uid && rPostOwner !== session.uid) {
+      await logAdmin({
+        user: session.uid,
+        action: "bbs.deleteReply",
+        target: "bbs",
+        targetId: id,
+        detail: `管理员前台删除回复 #${id}（作者 #${rOwner}，主题 #${rPost}）`,
+        ip: clientIp(req.headers),
+      });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "edit_reply") {
+    const content = String(body.content ?? "").trim().slice(0, BBS_CONTENT_LIMIT);
+    if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
+    if (!content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
+    // 编辑同样过滤（防「先发正常内容、再改回敏感内容」绕过发布拦截）
+    const hit = checkSensitive(content);
+    if (!hit.ok) return reject(hit, "bbs.editReply");
+    // 归属预取（留痕用：管理员编辑他人回复需进管理日志）
+    const reply = await prisma.bbsReply.findUnique({
+      where: { id: BigInt(id) },
+      select: { user: true, post: true },
+    });
+    const ok = await updateReply(id, session.uid, admin, content);
+    if (!ok) return NextResponse.json({ error: "无权编辑" }, { status: 403 });
+    if (admin && reply && Number(reply.user) !== session.uid) {
+      await logAdmin({
+        user: session.uid,
+        action: "bbs.editReply",
+        target: "bbs",
+        targetId: id,
+        detail: `管理员前台编辑回复 #${id}（作者 #${Number(reply.user)}，主题 #${Number(reply.post)}）`,
+        ip: clientIp(req.headers),
+      });
+    }
+    // 编辑同样送 AI 复审（口径同主题编辑：防「先发正常内容、AI 放行后再改回敏感」）
+    after(() => runContentReview("bbs_reply", id, content));
+    // 返回服务端重渲染结果（与楼层流首屏同一 ubb/ubbExcerpt 管线），客户端就地替换
+    return NextResponse.json({ ok: true, html: ubb(content), excerpt: ubbExcerpt(content, REPLY_QUOTE_LIMIT) });
   }
 
   if (action === "admin") {
@@ -156,8 +261,46 @@ export async function POST(req: NextRequest) {
       data.board = board;
     }
     await adminSetPost(id, data);
+    // 留痕（2026-11-07 张老师要求）：置顶/精华/锁定/移动全量进管理日志
+    const flags = [
+      data.isPinned !== undefined ? (data.isPinned ? "置顶" : "取消置顶") : "",
+      data.isNice !== undefined ? (data.isNice ? "加精" : "取消精华") : "",
+      data.isLocked !== undefined ? (data.isLocked ? "锁定" : "解锁") : "",
+      data.board !== undefined ? `移动到「${BBS_BOARD_NAMES[data.board]}」板块` : "",
+    ]
+      .filter(Boolean)
+      .join("、");
+    await logAdmin({
+      user: session.uid,
+      action: "bbs.setPost",
+      target: "bbs",
+      targetId: id,
+      detail: `管理员前台调整主题 #${id}：${flags}`,
+      ip: clientIp(req.headers),
+    });
     return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: "未知操作" }, { status: 400 });
+}
+
+// 编辑预载（2026-11-07 回复编辑）：取楼层原始 UBB——本人或管理员；他人/未登录一律拒绝
+export async function GET(req: NextRequest) {
+  const p = new URL(req.url).searchParams;
+  if (p.get("action") !== "reply_raw") {
+    return NextResponse.json({ error: "未知操作" }, { status: 400 });
+  }
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 });
+  const id = parseInt(p.get("id") ?? "", 10) || 0;
+  if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
+  const row = await prisma.bbsReply.findUnique({
+    where: { id: BigInt(id) },
+    select: { user: true, status: true, content: true },
+  });
+  if (!row || row.status === -1) return NextResponse.json({ error: "回复不存在" }, { status: 404 });
+  if (!isManager(session.role) && Number(row.user) !== session.uid) {
+    return NextResponse.json({ error: "无权编辑" }, { status: 403 });
+  }
+  return NextResponse.json({ content: row.content });
 }

@@ -212,6 +212,79 @@ export function PostOps({
   );
 }
 
+/** 编辑回复（2026-11-07 张老师要求：本人/管理员可编辑楼层）
+ *  内嵌 RichEditor 载入原始 UBB（编辑预载走 GET /api/bbs?action=reply_raw，调用方负责取），
+ *  保存走 POST action=edit_reply：服务端敏感词过滤 + AI 复审，返回重渲染 html/excerpt 就地替换 */
+export function ReplyEdit({
+  replyId,
+  initialContent,
+  onSaved,
+  onCancel,
+}: {
+  replyId: number;
+  /** 原始 UBB（预载） */
+  initialContent: string;
+  onSaved: (r: { html: string; excerpt: string }) => void;
+  onCancel: () => void;
+}) {
+  const [content, setContent] = useState(initialContent);
+  const [busy, setBusy] = useState(false);
+  const areaRef = useRef<HTMLDivElement>(null);
+
+  async function onSave() {
+    if (!content.trim()) {
+      toast("内容不能为空", "error");
+      areaRef.current?.querySelector<HTMLElement>(".wys")?.focus();
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/bbs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "edit_reply", id: replyId, content }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast(data.error ?? "保存失败", "error");
+        return;
+      }
+      toast("回复已更新", "success");
+      onSaved({ html: data.html ?? "", excerpt: data.excerpt ?? "" });
+    } catch {
+      toast("网络异常，请重试", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="reply_edit" ref={areaRef}>
+      <RichEditor
+        initialContent={initialContent}
+        minHeight={160}
+        placeholder="编辑回复内容"
+        onChange={setContent}
+        notify={toast}
+      />
+      <p className="submit_row">
+        <button className="lp_submit_btn" disabled={busy} onClick={onSave}>
+          保存
+        </button>{" "}
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            onCancel();
+          }}
+        >
+          取消
+        </a>
+      </p>
+    </div>
+  );
+}
+
 /** 删楼层（详情页楼层流为客户端状态：传 onDeleted 时先就地摘除，再刷新服务端计数） */
 export function ReplyDelete({ replyId, onDeleted }: { replyId: number; onDeleted?: () => void }) {
   const router = useRouter();

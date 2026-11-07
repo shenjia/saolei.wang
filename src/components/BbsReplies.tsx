@@ -21,7 +21,8 @@ import { BbsAuthorName, TitleBadge } from "./Cells";
 import { LoginLink } from "./LoginLink";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-import { ReplyDelete, ReplyForm } from "./BbsOps";
+import { ReplyDelete, ReplyEdit, ReplyForm } from "./BbsOps";
+import { toast } from "./Toast";
 
 export function BbsReplySection({
   postId,
@@ -59,6 +60,10 @@ export function BbsReplySection({
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动 ··· 批量，2026-10-22）
   /** 引用目标楼层（2026-10-15）：null = 普通回复 */
   const [quote, setQuote] = useState<BbsReplyItem | null>(null);
+  // ---- 楼层编辑（2026-11-07 张老师要求：本人可编辑自己的评论，管理员可编辑所有）----
+  const [editingId, setEditingId] = useState(0);
+  /** 原始 UBB 预载缓存（点击「编辑」时 GET /api/bbs?action=reply_raw 取一次） */
+  const [rawMap, setRawMap] = useState<Record<number, string>>({});
 
   // ---- 滑条窗口状态（2026-10-22；BBS_REPLY_PAGESIZE=10，楼层流为 div 流参照 NewsFeed）----
   const pageSize = BBS_REPLY_PAGESIZE;
@@ -241,6 +246,44 @@ export function BbsReplySection({
     return isAdmin || viewerUid === r.author?.id || viewerUid === postAuthorId;
   }
 
+  /** 可编辑 = 本人或管理员（2026-11-07）；锁定帖不挡编辑（与删回复同口径） */
+  function canEdit(r: BbsReplyItem) {
+    if (!viewerUid) return false;
+    return isAdmin || viewerUid === r.author?.id;
+  }
+
+  /** 点击「编辑」：预载原始 UBB 后进入内嵌编辑态（再点收起；缓存后二次点击直接展开） */
+  async function onEdit(r: BbsReplyItem) {
+    if (editingId === r.id) {
+      setEditingId(0);
+      return;
+    }
+    if (rawMap[r.id] !== undefined) {
+      setEditingId(r.id);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/bbs?action=reply_raw&id=${r.id}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast(data.error ?? "加载失败", "error");
+        return;
+      }
+      setRawMap((m) => ({ ...m, [r.id]: data.content ?? "" }));
+      setEditingId(r.id);
+    } catch {
+      /* 网络异常静默：可重试 */
+    }
+  }
+
+  /** 编辑保存成功：就地替换渲染结果（html 服务端同管线重渲染） */
+  function onReplySaved(id: number, r: { html: string; excerpt: string }) {
+    setItems((prev) =>
+      prev.map((x) => (x.id === id ? { ...x, html: r.html, excerpt: r.excerpt } : x))
+    );
+    setEditingId(0);
+  }
+
   /** 点击「回复」：设引用目标并滚到底部表单（表单容器带 id 锚点；游客不渲染该链接） */
   function onQuoteReply(r: BbsReplyItem) {
     setQuote(r);
@@ -289,6 +332,20 @@ export function BbsReplySection({
                   </a>
                 </span>
               )}
+              {canEdit(r) && (
+                <span className="bbs_ops">
+                  {" "}
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onEdit(r);
+                    }}
+                  >
+                    {editingId === r.id ? "收起" : "编辑"}
+                  </a>
+                </span>
+              )}
               {canDelete(r) && (
                 <span className="bbs_ops">
                   {" "}
@@ -296,7 +353,18 @@ export function BbsReplySection({
                 </span>
               )}
             </p>
-            <div className="bbs_content" dangerouslySetInnerHTML={{ __html: r.html }} />
+            {editingId === r.id && rawMap[r.id] !== undefined ? (
+              <div className="bbs_content">
+                <ReplyEdit
+                  replyId={r.id}
+                  initialContent={rawMap[r.id]}
+                  onSaved={(v) => onReplySaved(r.id, v)}
+                  onCancel={() => setEditingId(0)}
+                />
+              </div>
+            ) : (
+              <div className="bbs_content" dangerouslySetInnerHTML={{ __html: r.html }} />
+            )}
           </div>
         ))}
       </div>

@@ -35,6 +35,8 @@ export const OP_LABELS: Record<string, string> = {
   "comment.setStatus": "处理评论",
   "comment.selfDelete": "前台删除评论",
   "bbs.setPost": "调整主题属性",
+  "bbs.editPost": "编辑主题",
+  "bbs.editReply": "编辑回复",
   "bbs.deletePost": "删除主题",
   "bbs.deleteReply": "删除回复",
   "bbs.setReplyStatus": "处理回复",
