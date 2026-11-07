@@ -24,6 +24,9 @@
 // 2026-11-02 三次（张老师）：①性别/军衔不单独成列——玩家名后放性别小标记
 // （.gender.small）+ 军衔徽章（TitleBadge 小号）+军衔名；②对局列后加在线
 // 时长列（本轮连接建立起算，core /players 出 secs，同 uid 多标签页取最早）。
+// 2026-11-08 张老师需求：灰色累计值改「仅限今天」——在线 y＝今日去重连接
+// 人数、对局 y＝今日开局面数（core server.mjs 北京时间零点清零，stats.json
+// 落盘重启不清零），排序同步按今日值。
 
 import { Fragment, useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
@@ -208,8 +211,8 @@ export function ServerStatusPanel({
             <th>{thInner("name", "服务器", "按服务器名称排列")}</th>
             {/* 在线/对局表头单词化（2026-11-01 三次），点击按累计值排序 */}
             {/* 在线/对局表头单词化（2026-11-01 三次），点击按累计值排序；内容左对齐（11-01 张老师） */}
-            <th>{thInner("connsUsers", "在线", "按累计去重连接人数排列（多在前）")}</th>
-            <th>{thInner("gamesServed", "对局", "按累计开局面数排列（多在前）")}</th>
+            <th>{thInner("connsUsers", "在线", "按今日去重连接人数排列（多在前）")}</th>
+            <th>{thInner("gamesServed", "对局", "按今日开局面数排列（多在前）")}</th>
             <th className="c">{thInner("rttAvg", "平均延迟", "按玩家实测平均延迟排列（快在前；近 7 天采样）")}</th>
           </tr>
         </thead>
@@ -228,10 +231,10 @@ export function ServerStatusPanel({
                   {dot(r)}
                   <b style={{ color: "#d6d6cc" }}>{r.name}</b>
                 </td>
-                <td title="x＝当前在线连接数 · y＝累计去重连接人数（重启不清零；点击表头按累计排序）">
+                <td title="x＝当前在线连接数 · y＝今日去重连接人数（北京时间零点清零，重启不清零；点击表头按今日值排序）">
                   {pair(r, r.connections, "#a6e22e", r.connsUsers)}
                 </td>
-                <td title="x＝进行中对局数 · y＝累计开局面数（重启不清零；点击表头按累计排序）">
+                <td title="x＝进行中对局数 · y＝今日开局面数（北京时间零点清零，重启不清零；点击表头按今日值排序）">
                   {pair(r, r.active, "#fdc61d", r.gamesServed)}
                 </td>
                 <td
@@ -329,9 +332,9 @@ export function ServerStatusPanel({
       <div style={{ marginTop: 8, color: "#75715e", fontSize: 12 }}>
         <span style={{ color: "#a6e22e" }}>●</span> 正常 ·{" "}
         <span style={{ color: "#f79646" }}>●</span> 排空 ·{" "}
-        <span style={{ color: "#e24b4a" }}>●</span> 不可用 · 在线＝当前连接 / 累计人数（灰） ·
-        对局＝进行中 / 累计局数（灰） · 平均延迟＝玩家实测近 7 天均值（{RTT_LEGEND}） ·
-        点击表头按累计排序 · 点击行展开在线玩家
+        <span style={{ color: "#e24b4a" }}>●</span> 不可用 · 在线＝当前连接 / 今日人数（灰） ·
+        对局＝进行中 / 今日局数（灰） · 平均延迟＝玩家实测近 7 天均值（{RTT_LEGEND}） ·
+        点击表头按今日值排序 · 点击行展开在线玩家
       </div>
     </div>
   );
