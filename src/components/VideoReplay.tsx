@@ -2565,8 +2565,10 @@ function TrajLayer({
   /* 事件一次性分类（per data）：轨迹折线点（mv 微动 <3px 折叠，点击事件恒保留）
      + 三类点击位置。按键态机与引擎 buildStats 口径严格一致（2026-11-05 修正：
      引擎 case "mr" 无条件计双击——转码文件存在无 mc 配对的 mr，mp 守卫会漏标）：
-     lc 按下→lr 松开＝左键单击（点标按下位）；rc 在 lp 按住时＝chord 预备不标右、
-     否则右键单击；lr 时右/Shift 按住、rr 时左键按住、mr 松开＝chord 双击。 */
+     lc 按下→lr 松开＝左键单击（点标松开位——开格/光标都在松开坐标，flop 同款，
+     2026-11-07 张老师定；按下位失真不取）；rc 在 lp 按住时＝chord 预备不标右、
+     否则右键单击（插旗在按下即刻生效，点标按下位＝生效位）；lr 时右/Shift 按住、
+     rr 时左键按住、mr 松开＝chord 双击（chord 生效在松开，点标松开位）。 */
   const { path, lefts, rights, doubles } = useMemo(() => {
     const path: { t: number; x: number; y: number }[] = [];
     const lefts: { t: number; x: number; y: number }[] = [];
@@ -2576,7 +2578,6 @@ function TrajLayer({
       rp = false,
       sv = false,
       mp = false;
-    let pendL: { x: number; y: number } | null = null;
     let lx = NaN,
       ly = NaN;
     for (const e of data.evs) {
@@ -2589,14 +2590,12 @@ function TrajLayer({
       switch (e.ev) {
         case "lc":
           lp = true;
-          pendL = { x: e.px, y: e.py };
           break;
         case "lr":
           if (rp || sv) doubles.push({ t: e.csec, x: e.px, y: e.py });
-          else lefts.push({ t: e.csec, x: pendL ? pendL.x : e.px, y: pendL ? pendL.y : e.py });
+          else lefts.push({ t: e.csec, x: e.px, y: e.py });
           lp = false;
           sv = false;
-          pendL = null;
           break;
         case "rc":
           rp = true;
