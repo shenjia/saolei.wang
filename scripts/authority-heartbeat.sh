@@ -32,8 +32,12 @@ TARGETS=(
   "北京a|http://127.0.0.1:${AUTHORITY_PORT_A:-3104}/health"
   "北京b|http://127.0.0.1:${AUTHORITY_PORT_B:-3105}/health"
 )
-for r in HK HZ CD; do
-  eval "u=\$AUTHORITY_${r}_URL"
+# 从已 source 进环境的变量中动态发现 AUTHORITY_<R>_URL（11-01 香港迁广州后 .env 无 HK 键，
+# 旧版硬编码 for r in HK HZ CD 在 set -u 下 eval 未定义变量直接炸——2026-11-08 修复：
+# 区域列表跟着 .env 走，节点增删/改名只改 .env，脚本零改动，与本文件头部注释宣称的设计一致）
+for var in $(compgen -A variable 2>/dev/null | grep -E '^AUTHORITY_[A-Z0-9]+_URL$' | sort); do
+  r=${var#AUTHORITY_}; r=${r%_URL}
+  u=${!var}
   [[ -n "${u:-}" ]] && TARGETS+=("${r,,}|${u%/}/health")
 done
 
