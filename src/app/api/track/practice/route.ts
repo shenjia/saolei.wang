@@ -6,6 +6,10 @@
 // 初/中/高占比）；自定义盘（cus）只进 plays 总数，不进三列。
 // 2026-11-06 加完成盘数分级别四列 wins_beg/int/exp/cus：胜局按 level 自增对应列
 // （地区活跃指数/个人主页练习盘数改按完成口径并按难度加权，见 lib/areaactivity.ts）。
+// 2026-11-08 加活跃点累计列 act_points：地区活跃指数练习侧改按 3BV 完成情况逐盘点数
+// （张老师定稿：初级胜=1 败=0；中级胜=2、败局完成率≥50%=1；高级完成率≥20% 按
+// floor(率×10)，胜局恒=10；自定义胜=1。录像口径不变）。服务端逐盘计点后累加落库，
+// 不信任客户端算好的分；floor 逐盘取整不可反推，故不存 solvedBv/bbbv 原始和。
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -14,6 +18,19 @@ import { getClientIp, ipToArea } from "@/lib/ip2area";
 export const runtime = "nodejs";
 
 const LEVELS = new Set(["beg", "int", "exp", "cus"]);
+
+/** 逐盘活跃点（2026-11-08 张老师定稿，见文件头）。整数运算防浮点取整误差。 */
+function activityPoints(level: string, won: boolean, bbbv: number, solvedBv: number): number {
+  if (level === "exp") {
+    // 高级：完成率≥20% 给 floor(率×10)（2~10 点）；胜局 solvedBv=bbbv 恒得 10
+    return solvedBv * 10 >= bbbv * 2 ? Math.floor((solvedBv * 10) / bbbv) : 0;
+  }
+  if (level === "int") {
+    if (won) return 2; // 中级完成=2
+    return solvedBv * 2 >= bbbv ? 1 : 0; // 败局完成率≥50% 给 1
+  }
+  return won ? 1 : 0; // 初级/自定义：完成=1 不成=0（自定义无固定难度防刷）
+}
 
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
@@ -63,14 +80,16 @@ export async function POST(req: NextRequest) {
   const winIntInc = wonInt && level === "int" ? 1 : 0;
   const winExpInc = wonInt && level === "exp" ? 1 : 0;
   const winCusInc = wonInt && level === "cus" ? 1 : 0;
+  // 活跃点（2026-11-08）：服务端逐盘计点，败局也按 3BV 完成情况可能得分
+  const pts = activityPoints(level, wonInt === 1, bbbv, solvedBv);
   // 原子 UPSERT：当日当用户无行则新建，有行则计数自增（并发局也安全）
   await prisma.$executeRaw`
     INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp,
-      wins_beg, wins_int, wins_exp, wins_cus,
+      wins_beg, wins_int, wins_exp, wins_cus, act_points,
       mode_ranked, mode_nf, mode_ng, mode_sq, mode_combo,
       sw_qmark, sw_stats, sw_sndfb, sw_shot, sw_qretry, sw_wheel, create_time, update_time)
     VALUES (${day}, ${uid}, 1, ${wonInt}, ${begInc}, ${intInc}, ${expInc},
-      ${winBegInc}, ${winIntInc}, ${winExpInc}, ${winCusInc},
+      ${winBegInc}, ${winIntInc}, ${winExpInc}, ${winCusInc}, ${pts},
       ${ranked ? 1 : 0}, ${nfOn ? 1 : 0}, ${ngOn ? 1 : 0}, ${sqOn ? 1 : 0}, ${comboOn ? 1 : 0},
       ${swQmark ? 1 : 0}, ${swStats ? 1 : 0}, ${swSndfb ? 1 : 0}, ${swShot ? 1 : 0}, ${swQretry ? 1 : 0}, ${swWheel ? 1 : 0}, ${now}, ${now})
     ON DUPLICATE KEY UPDATE
@@ -83,6 +102,7 @@ export async function POST(req: NextRequest) {
       wins_int = wins_int + ${winIntInc},
       wins_exp = wins_exp + ${winExpInc},
       wins_cus = wins_cus + ${winCusInc},
+      act_points = act_points + ${pts},
       mode_ranked = mode_ranked + ${ranked ? 1 : 0},
       mode_nf = mode_nf + ${nfOn ? 1 : 0},
       mode_ng = mode_ng + ${ngOn ? 1 : 0},

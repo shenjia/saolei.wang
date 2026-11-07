@@ -1044,6 +1044,12 @@ model PracticeDaily {
   winsInt    Int @default(0) @map("wins_int") // 中级完成盘数
   winsExp    Int @default(0) @map("wins_exp") // 高级完成盘数
   winsCus    Int @default(0) @map("wins_cus") // 自定义完成盘数（活跃指数按初级权重计）
+  // 活跃点累计（2026-11-08 张老师定：地区活跃指数练习侧改按 3BV 完成情况计点，
+  // 服务端逐盘算好落库累计——floor 逐盘取整不可从聚合和反推，故不存 solvedBv/bbbv 原始和。
+  // 口径：初级胜=1 败=0；中级胜=2、败局完成率≥50%=1；高级完成率≥20% 按 floor(率×10)
+  // （胜局恒=10）；自定义胜=1（无固定难度防刷）。起记日 2026-11-08，7 日窗口一周自然补齐。
+  // 调口径只需改 track/practice 计点函数，存量不重算（与 wins 分级列同先例）。
+  actPoints  Int @default(0) @map("act_points") // 当日活跃点累计（逐盘累加）
   // 模式使用盘数（2026-10-27 张老师定：后台模式使用比例柱状图；可叠加，五列之和可 > plays）
   modeRanked Int @default(0) @map("mode_ranked") // 排名模式
   modeNf     Int @default(0) @map("mode_nf") // NF（无标）
