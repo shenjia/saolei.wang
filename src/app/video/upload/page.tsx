@@ -48,7 +48,10 @@ export default async function VideoUploadPage() {
             生成的 <em>evf</em> 录像
           </li>
           <li>
-            <em>Viennasweeper 4.0.0b2</em> 生成的 <em>rmv</em> 录像
+            <a href="/download/Viennasweeper_4.0.0.zip" download>
+              <em>Viennasweeper 4.0.0</em>
+            </a>{" "}
+            生成的 <em>rmv</em> 录像
           </li>
         </ul>
         <UploadForm initialRemaining={remaining} />

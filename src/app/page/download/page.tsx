@@ -9,7 +9,7 @@ const SOFTWARE: [string, string, [string, string][]?][] = [
   ["Minesweeper Clone 0.97", "Minesweeper_Clone_0.97.exe", [["使用说明", "/page/guide"], ["常见问题", "/page/help/clone-faq"]]],
   ["Minesweeper Clone 2007", "Minesweeper_Clone_2007.exe"],
   ["Minesweeper X 1.15", "MinesweeperX_1.15.zip"],
-  ["Viennasweeper 3.0", "Viennasweeper_3.0.zip"],
+  ["Viennasweeper 4.0.0", "Viennasweeper_4.0.0.zip"],
   ["Minesweeper 2000/XP", "Minesweeper_2000XP.exe"],
   ["Minesweeper Solver", "MineSweeper_Solver.exe"],
   ["扫雷网分辨率调整工具", "分辨率调整工具.exe"],
