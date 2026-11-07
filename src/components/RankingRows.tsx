@@ -53,9 +53,9 @@ function ScoreCell({
   // 其他列的 0 仍表示无成绩。
   if (!v && !(col.by === "beg_3bvs" && row.scores.beg_time > 0)) return <td className={cls}>-</td>;
   // 3BV/s 负值 = 3BV 太小不被承认（删除线，对齐 Score3bvs 语义）
-  // 排行表内 3BV/s 按 2008 版 FormatNumber(...,2) 显示两位小数
+  // 2026-11-07 起排行表 3BV/s 显示 3 位小数（张老师要求，与全站时间 3 位小数口径对齐）
   const neg = !isTime && v < 0;
-  const text = isTime ? scoreTime(v) : ((neg ? -v : v) / 1000).toFixed(2);
+  const text = isTime ? scoreTime(v) : ((neg ? -v : v) / 1000).toFixed(3);
   const videoId = row.videos[col.by];
   // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页文案）；
   // 此时不再挂 <a> 的「点击查看录像」原生 title，免得两种提示叠在一起

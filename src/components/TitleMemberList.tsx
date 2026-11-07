@@ -35,7 +35,7 @@ function ScoreCell({ row, col }: { row: TitleMemberRow; col: (typeof COLS)[numbe
   // 有初级时间但 3BV 未达限界时，初级 3BV/s=0 是有效零纪录
   if (!v && !(col.by === "beg_3bvs" && row.scores.beg_time > 0)) return <td className={col.cls}>-</td>;
   const neg = !isTime && v < 0;
-  const text = isTime ? scoreTime(v) : ((neg ? -v : v) / 1000).toFixed(2);
+  const text = isTime ? scoreTime(v) : ((neg ? -v : v) / 1000).toFixed(3);
   const videoId = row.videos[col.by];
   // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页文案）；
   // neg 时不再挂 <a> 的「点击查看录像」原生 title，免得两种提示叠在一起
