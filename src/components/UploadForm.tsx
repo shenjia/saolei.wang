@@ -7,6 +7,7 @@ import { toast } from "./Toast";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvf } from "@/lib/mvf";
 import { evfToRawvf } from "@/lib/evf";
+import { rmvToRawvf } from "@/lib/rmv";
 import { formatRawvf, checkProgramVersion } from "@/lib/rawvf";
 import { scoreTime } from "@/lib/format";
 
@@ -102,7 +103,13 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
         .then((ab) => {
           const bytes = new Uint8Array(ab);
           const lines =
-            ext === "avf" ? avfToRawvf(bytes) : ext === "evf" ? evfToRawvf(bytes) : mvfToRawvf(bytes);
+            ext === "avf"
+              ? avfToRawvf(bytes)
+              : ext === "evf"
+                ? evfToRawvf(bytes)
+                : ext === "rmv"
+                  ? rmvToRawvf(bytes)
+                  : mvfToRawvf(bytes);
           if (!lines) return;
           const { level, timeMs, bbbv, noflag, program, version } = formatRawvf(lines);
           // 最低软件版本（与服务端 checkProgramVersion 同源）：低于即直接标红拦下，不给上传
@@ -145,9 +152,9 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
         const ext = file.name.slice(file.name.lastIndexOf(".") + 1).toLowerCase();
         let status: ItemStatus = "pending";
         let message = "";
-        if (ext !== "mvf" && ext !== "avf" && ext !== "evf") {
+        if (ext !== "mvf" && ext !== "avf" && ext !== "evf" && ext !== "rmv") {
           status = "invalid";
-          message = "只支持 mvf / avf / evf 格式的录像";
+          message = "只支持 mvf / avf / evf / rmv 格式的录像";
         } else if (file.size > MAX_SIZE) {
           status = "invalid";
           message = "文件大小不能超过 500KB";
@@ -325,13 +332,13 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
           {dragOver ? "松开鼠标即可添加" : "点击选择录像文件，或将文件拖拽到页面任意位置"}
         </span>
         <span style={{ display: "block", color: "#49483e", fontSize: 12, lineHeight: "20px" }}>
-          支持 mvf / avf / evf，可批量选择，单个文件不超过 500KB
+          支持 mvf / avf / evf / rmv，可批量选择，单个文件不超过 500KB
         </span>
       </div>
       <input
         ref={inputRef}
         type="file"
-        accept=".mvf,.avf,.evf"
+        accept=".mvf,.avf,.evf,.rmv"
         multiple
         style={{ display: "none" }}
         onChange={(e) => {

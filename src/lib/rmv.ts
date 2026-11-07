@@ -44,6 +44,8 @@ class RmvParser {
   private player = "";
   private board: number[] = [];
   private events: Array<{ ev: number; time: number; x: number; y: number }> = [];
+  /** 事件流末端毫秒（最后一个鼠标事件的时间戳）＝全站成绩口径 real_time */
+  private lastEvTime = 0;
 
   constructor(buf: Uint8Array) {
     this.data = buf;
@@ -179,6 +181,7 @@ class RmvParser {
         this.num();
         const x = this.int2() - 12;
         const y = this.int2() - 56;
+        this.lastEvTime = time;
         if (first) {
           // flop：首事件拆成 press(ev 改 2=lr)+release 对——无 press 的首事件引擎无法生效
           this.events.push({ ev: 2, time, x, y });
@@ -198,6 +201,12 @@ class RmvParser {
         throw new RmvParseError("Invalid event");
       }
     }
+
+    // 版本串归一：实为版权串「Home Edition - Release 4.0.0b2 Copyright...」——
+    // 提取 Release 号（3.0H / 3.0.2H / 4.0.0b2，与 video_info.version 及
+    // scripts/backfill-rmv-meta.ts 回填口径一致）；无 Release 号保留原文
+    const rel = /Release\s+([\w.]+)/.exec(this.version);
+    if (rel) this.version = rel[1];
     return true;
   }
 
@@ -216,8 +225,9 @@ class RmvParser {
       `Mines: ${this.m}`,
       "Mode: classic",
     ];
-    // 用时：RMV 无文件内成绩字段（SCORE 在主串里但不可靠），置 0 由上层以库 real_time 为准
-    lines.push("Time: 0.00");
+    // 用时：RMV 文件内无可靠 SCORE 字段，按全站成绩口径取事件流末端毫秒
+    // （2026-11-07 恢复 RMV 上传：置 0 会让 real_time 落库为 0，毁排行/STNB）
+    lines.push(`Time: ${(this.lastEvTime / 1000).toFixed(3)}`);
     if (this.bbbv !== null) lines.push(`3BV: ${this.bbbv}`);
     if (this.qm) lines.push("QuestionMarks: on");
     if (this.nf) lines.push("NF: on");

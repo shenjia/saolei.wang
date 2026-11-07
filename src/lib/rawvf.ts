@@ -60,7 +60,11 @@ export function renderBoard(board: string[]): string {
  *     补丁号（0.52.x 内的 .3）不在文件里——0.52 系列全放行，0.51 及以下拦。
  *   · evf 的 Software 字段自报「元X.Y.Z」（转换器已拆为 Program=元扫雷 + Version=X.Y.Z
  *     软件版本，2026-10-30），带完整补丁号，精确比较。
- *   · 其他软件（Clone/mvf 已有 "<=0.96" 检查、Viennasweeper 转码等）不在此规则内，返回 null 放行。
+ *   · Viennasweeper（2026-11-07 恢复 RMV 上传）：只接受 4.0.0 及以上版本生成的录像
+ *     （库内存量 259 条 3.x 为历史数据不受追溯，版本闸只作用新上传）；
+ *     RMV 版本串经 rmv.ts 归一为 Release 号（3.0H / 3.0.2H / 4.0.0b2），
+ *     取数字前缀比较——「4.0.0b2」的数字前缀是 4.0.0，达标放行。
+ *   · 其他软件（Clone/mvf 已有 "<=0.96" 检查）不在此规则内，返回 null 放行。
  * 返回 null = 通过；返回字符串 = 面向用户的拒绝原因。
  */
 export function checkProgramVersion(program: string, version: string): string | null {
@@ -86,6 +90,19 @@ export function checkProgramVersion(program: string, version: string): string | 
     const mv = /^(\d+(?:\.\d+){1,3})$/.exec(version.trim());
     if (mv && verCompare(mv[1].split(".").map(Number), [3, 3, 4]) < 0) {
       return `元扫雷版本过低（${mv[1]}），本站接受 3.3.4 及以上版本生成的录像`;
+    }
+    return null;
+  }
+  // Viennasweeper（2026-11-07 恢复 RMV 上传，张老师定 4.0.0 闸）：
+  // formatRawvf 已把「Vienna Minesweeper」剥成短名「Vienna」；版本号为 Release 号
+  if (p === "Vienna" || p === "Viennasweeper") {
+    const vStr = version.trim();
+    const nv = /^(\d+(?:\.\d+)*)/.exec(vStr); // 数字前缀：4.0.0b2→4.0.0、3.0H→3.0
+    if (!nv) {
+      return `无法识别 Viennasweeper 版本（${vStr || "空"}），本站只接受 4.0.0 及以上版本生成的录像`;
+    }
+    if (verCompare(nv[1].split(".").map(Number), [4, 0, 0]) < 0) {
+      return `Viennasweeper 版本过低（${vStr}），本站只接受 4.0.0 及以上版本生成的录像`;
     }
     return null;
   }

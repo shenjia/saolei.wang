@@ -12,6 +12,7 @@ import { getSession } from "@/lib/auth";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { evfToRawvf } from "@/lib/evf";
+import { rmvToRawvf } from "@/lib/rmv";
 import { formatRawvf, checkProgramVersion } from "@/lib/rawvf";
 import { judgeVideoOutcome } from "@/lib/videowin";
 import { applyFlags } from "@/lib/videoflags";
@@ -94,7 +95,8 @@ export async function uploadVideo(
   if (buf.length > MAX_SIZE) return fail("文件大小不能超过 500KB");
 
   const ext = path.extname(file.name ?? "").slice(1).toLowerCase();
-  if (ext !== "mvf" && ext !== "avf" && ext !== "evf") return fail("只支持 mvf / avf / evf 格式的录像");
+  if (ext !== "mvf" && ext !== "avf" && ext !== "evf" && ext !== "rmv")
+    return fail("只支持 mvf / avf / evf / rmv 格式的录像");
 
   // md5 去重（移植 Video::hashExists）
   const hash = createHash("md5").update(buf).digest("hex");
@@ -110,7 +112,9 @@ export async function uploadVideo(
         ? avfToRawvf(buf)
         : ext === "evf"
           ? evfToRawvf(buf) // evf（元扫雷）：转换器内部完成 16px 口径折算与非标准码消歧
-          : (mvfToRawvfBest(buf)?.lines ?? null);
+          : ext === "rmv"
+            ? rmvToRawvf(buf) // rmv（Viennasweeper，2026-11-07 恢复；版本闸 4.0.0 在 checkProgramVersion）
+            : (mvfToRawvfBest(buf)?.lines ?? null);
   } catch {
     return fail("录像文件解析失败");
   }
