@@ -13013,6 +13013,11 @@ html.op-fakefs #header {
   color: #fdc61a;
 }
 
+/* guide 页教程条目作者署名（2026-11-08）：整页「作者:」统一暗灰弱化 */
+#guide p em {
+  color: #888;
+}
+
 /* 弹窗遮罩：全屏半透明黑，与站内 toast/lightbox 同顶层 */
 .faq_mask {
   position: fixed;
