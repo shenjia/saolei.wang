@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CaptchaAction } from "@/core/src/lib/captcha-board";
 import { FlopSprites } from "./FlopSprites";
+import { LoginLink } from "./LoginLink";
 
 type Cell = { state: number; num: number | null };
 type Board = {
@@ -166,9 +167,16 @@ export function BotChallengeGate() {
     <div className="mscap_overlay" role="presentation">
       <section className="mscap_modal" role="dialog" aria-modal="true" aria-labelledby="mscap_title">
         <button type="button" className="mscap_close" onClick={close} aria-label="关闭验证">×</button>
-        <h2 id="mscap_title">扫一盘，继续访问</h2>
+        <h2 id="mscap_title">扫一盘，证明你是真人</h2>
         {/* 换局按钮：首页「开始练习」同款扁平笑脸银灰凸起（flop 四态笑脸：胜=墨镜/负=僵尸） */}
-        <button type="button" className="mscap_face" onClick={() => void load()} disabled={busy}>
+        {/* 宽度与游戏区域一致：棋盘渲染宽 = cols×16 + 左右 2px 边框，zoom 1.5 等比 */}
+        <button
+          type="button"
+          className="mscap_face"
+          style={board ? { width: (board.width * 16 + 4) * 1.5 } : undefined}
+          onClick={() => void load()}
+          disabled={busy}
+        >
           <svg viewBox="0 0 260 260" width={24} height={24} aria-hidden="true">
             <use href={`#${face}`} />
           </svg>
@@ -254,7 +262,11 @@ export function BotChallengeGate() {
         )}
         {busy && !board && <p className="mscap_status">正在取一张预生成盘面…</p>}
         {error && <p className="mscap_error">{error}</p>}
-        <p className="mscap_note">通过后 2 小时内免验证</p>
+        <p className="mscap_note">
+          完成后2小时免验证
+          <br />
+          <LoginLink>登录</LoginLink>后不再出现此提示
+        </p>
       </section>
     </div>
   );

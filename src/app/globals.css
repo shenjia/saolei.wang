@@ -14638,18 +14638,21 @@ body #page.rating_page .rating_standard .rating_note {
   font-size: 25px;
   cursor: pointer;
 }
-/* 换局按钮：首页「开始练习」(#play_entry) 同款扁平笑脸银灰凸起，置于游戏区域上方 */
+/* 换局按钮：首页「开始练习」(#play_entry) 同款扁平笑脸银灰凸起，置于游戏区域上方；
+   无圆角、宽度与游戏区域等宽（组件按棋盘渲染宽内联覆写，222px 为 9 列兜底） */
 .mscap_face {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  width: 100%;
-  margin: 0 0 14px;
+  width: 222px;
+  margin: 0 auto 14px;
   padding: 8px 0;
   background: silver;
   border: 3px solid;
   border-color: #fff #7b7b7b #7b7b7b #fff;
+  border-radius: 0;
+  box-sizing: border-box;
   color: #333;
   font-size: 16px;
   font-weight: bold;
@@ -14657,9 +14660,12 @@ body #page.rating_page .rating_standard .rating_note {
 }
 .mscap_face:hover {
   color: #000;
+  /* hover 变绿：与首页「开始练习/传录像」hover 统一绿（#play_row a:hover 口径） */
+  background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
+  border-color: #c4e88a #55801a #55801a #c4e88a;
 }
 .mscap_face:active {
-  border-color: #7b7b7b #fff #fff #7b7b7b;
+  border-color: #55801a #c4e88a #c4e88a #55801a;
 }
 .mscap_face:disabled {
   cursor: default;
@@ -14674,7 +14680,7 @@ body #page.rating_page .rating_standard .rating_note {
   user-select: none;
   -webkit-user-select: none;
 }
-.mscap_board td { cursor: pointer; }
+.mscap_board td { cursor: default; }
 .mscap_board td.b0,
 .mscap_board.won td,
 .mscap_board.lost td { cursor: default; }
@@ -14686,7 +14692,15 @@ body #page.rating_page .rating_standard .rating_note {
   margin: 0;
   color: #8f8e82;
   font-size: 12px;
+  line-height: 1.7;
   text-align: center;
+}
+.mscap_note a {
+  color: #a6e22e;
+  text-decoration: underline;
+}
+.mscap_note a:hover {
+  color: #fdc61a;
 }
 @media (max-width: 380px) {
   .mscap_modal { padding-left: 12px; padding-right: 12px; }
