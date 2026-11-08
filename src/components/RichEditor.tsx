@@ -237,7 +237,7 @@ export interface RichEditorProps {
   /** 内容变化回调（UBB） */
   onChange?: (ubb: string) => void;
   /** toast 通知（复用站内 Toast） */
-  notify?: (msg: string, type?: "success" | "error") => void;
+  notify?: (msg: string, type?: "success" | "error" | "info") => void;
 }
 
 export function RichEditor({
@@ -738,6 +738,23 @@ export function RichEditor({
   };
 
   const onPaste = (e: React.ClipboardEvent) => {
+    // 2026-11-09 张老师：支持粘贴图片自动上传（截图 Ctrl+V 即贴）——
+    // 剪贴板带图片文件时逐张走压缩上传插入（复用选图链路），否则维持原纯文本粘贴
+    const files = Array.from(e.clipboardData.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (files.length) {
+      e.preventDefault();
+      notify?.("正在上传粘贴的图片…", "info");
+      (async () => {
+        for (const f of files) {
+          try {
+            await uploadAndInsert(f);
+          } catch {
+            notify?.("图片读取失败", "error");
+          }
+        }
+      })();
+      return;
+    }
     e.preventDefault();
     const text = e.clipboardData.getData("text/plain");
     if (!text) return;
@@ -749,28 +766,35 @@ export function RichEditor({
     fileRef.current?.click();
   };
 
+  /** 单张图压缩/直传 + 插入画布（选图按钮与粘贴共用；2026-11-09 粘贴贴图抽出） */
+  const uploadAndInsert = async (file: File) => {
+    if (file.type === "image/gif") {
+      if (file.size > 204800) {
+        notify?.(`GIF 超过 200K（${Math.round(file.size / 1024)}K），请先手动压缩`, "error");
+        return;
+      }
+      await insertUploaded(file, file.type);
+      notify?.(`GIF ${Math.round(file.size / 1024)}K，无需压缩，已插入`, "success");
+      return;
+    }
+    setUploading(true);
+    try {
+      const r = await compressToBudget(file);
+      await insertUploaded(r.blob, "image/jpeg");
+      notify?.(`已压缩 ${Math.round(file.size / 1024)}K → ${Math.round(r.blob.size / 1024)}K（${r.w}×${r.h}），已插入`, "success");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     try {
-      if (file.type === "image/gif") {
-        if (file.size > 204800) {
-          notify?.(`GIF 超过 200K（${Math.round(file.size / 1024)}K），请先手动压缩`, "error");
-          return;
-        }
-        await insertUploaded(file, file.type);
-        notify?.(`GIF ${Math.round(file.size / 1024)}K，无需压缩，已插入`, "success");
-        return;
-      }
-      setUploading(true);
-      const r = await compressToBudget(file);
-      await insertUploaded(r.blob, "image/jpeg");
-      notify?.(`已压缩 ${Math.round(file.size / 1024)}K → ${Math.round(r.blob.size / 1024)}K（${r.w}×${r.h}），已插入`, "success");
+      await uploadAndInsert(file);
     } catch {
       notify?.("图片读取失败", "error");
-    } finally {
-      setUploading(false);
     }
   };
 
