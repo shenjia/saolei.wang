@@ -7,8 +7,11 @@
 // 失步丢旗；2026-11-05 张老师再定：排名链亦不过 repairWinningEvents——原生流在权威
 // 与 flop 两口径下重放均精确到终盘，353971 案 216/216 实证，合成补洞系假洞污染）。
 // 练习页导出链（avfwrite buildOnlineAvf / OnlinePlay）仍保留 repair，与本链无关。
+// 2026-11-08：buildRankedEvf 统一在发布前重新解析并做事件级/终局语义校验；
+// 失败先从 validationEvents 权威原流重导一次，仍失败则抛出，坏字节不得发布。
 
 import type { OnlineEvent } from "./avfwrite";
+import { EvfExportValidationError, validateRankedEvfExport } from "./evf-export-guard";
 
 /** 站内排名/练习客户端软件名（evf Software 字段 + DB software 列判等值） */
 export const RANKED_SOFTWARE = "Saolei.wang";
@@ -68,6 +71,11 @@ export interface RankedEvfInput {
    *  练习页下载＝客户端自己传常量（OnlinePlay 内联）；
    *  凭据 evf（cheat report）＝服务端生成，无客户端版本语义，缺省 0.3 */
   clientVersion?: string;
+  /** 导出语义校验的权威原始流（2026-11-08，353969 案）。
+   *  缺省与 events 相同；若 events 经过 canonicalize/repair 等预处理，必须在这里
+   *  另传预处理前的原始流，防止拿已经转换坏的结果自证正确。只参与校验，不写文件；
+   *  首次产物校验失败时，第二次会绕过预处理、直接从这份原始流重导。 */
+  validationEvents?: OnlineEvent[];
 }
 
 /** AVF 时间戳串「D.M.YYYY.HH:MM:SS:mmmm」→ 本机时区 epoch 毫秒；解析失败返回 null */
@@ -79,7 +87,7 @@ function parseAvfTimestamp(s: string): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
-export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
+function encodeRankedEvf(input: RankedEvfInput): Uint8Array {
   const out: number[] = [];
   const u8 = (v: number) => out.push(v & 0xff);
   const u16 = (v: number) => out.push((v >>> 8) & 0xff, v & 0xff);
@@ -230,4 +238,25 @@ export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
   u8(0); // 事件流结束符
   u16(0); // 校验码长度＝0（标准未规定校验算法，外部无法验证，留空段）
   return new Uint8Array(out);
+}
+
+/**
+ * EVF 唯一发布出口：编码后重新解析并做语义校验，失败自动重导一次；仍失败则抛出，
+ * 调用方不得把返回值以外的旧候选文件发布出去（353969 漏 lc 致中段摘旗案）。
+ * 重导只用于防御非确定性写出；若编码逻辑本身有错，两次都会失败并 fail closed，
+ * 绝不靠无限重试碰运气。
+ */
+export function buildRankedEvf(input: RankedEvfInput): Uint8Array {
+  let lastErrors: string[] = [];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // 第二次不再重复可能出错的预处理结果，直接回退权威原始流直出。
+    const attemptInput = attempt === 1 && input.validationEvents
+      ? { ...input, events: input.validationEvents }
+      : input;
+    const bytes = encodeRankedEvf(attemptInput);
+    const checked = validateRankedEvfExport(input, bytes);
+    if (checked.ok) return bytes;
+    lastErrors = checked.errors;
+  }
+  throw new EvfExportValidationError(lastErrors);
 }

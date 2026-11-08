@@ -121,6 +121,7 @@ async function main() {
         width: ex.width, height: ex.height, mines: ex.mines, board: ex.board,
         questionMarks: ex.questionMarks, nf: ex.nf, bbbv: ex.bbbv,
         scoreCsec: ex.scoreCsec, scoreMs: ex.scoreMs, events: ex.events,
+        validationEvents: ex.events,
         player, uniqueIdentifier: gameId, won: ex.won, clientVersion,
       });
       const newBuf = Buffer.from(evf);
