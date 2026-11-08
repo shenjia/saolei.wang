@@ -143,8 +143,13 @@ info "同步数据库 schema (prisma db push)..."
 pnpm exec prisma db push --skip-generate
 
 # ---------- 生成备槽构建产物 ----------
-# CI 的单一 .next 产物复制成本次备槽目录（rm+cp 原子性足够：备槽此刻不在服务，
-# 主力槽目录不动；Turbopack 产物无绝对路径依赖，cp 即可用）
+# CI 的单一 .next 产物复制成本次备槽目录。B3 双活下备槽也常驻运行并写缓存，
+# 直接 rm 会与缓存文件创建竞争（2026-11-08 实测 Directory not empty），先暂停备槽；
+# 当前主力槽不受影响，后面的 delete+start 会重新拉起备槽并加载新 env。
+if pm2 describe "$S_APP" >/dev/null 2>&1; then
+  info "暂停备槽 $S_APP，避免替换 $S_DIR 时缓存写入竞争..."
+  pm2 stop "$S_APP" >/dev/null
+fi
 info "复制 CI 构建产物 → 备槽 ${S_DIR}..."
 rm -rf "$S_DIR"
 cp -a .next-release "$S_DIR"
