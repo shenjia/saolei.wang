@@ -14556,18 +14556,24 @@ body #page.rating_page .rating_standard .rating_note {
 }
 .rating_table .range_col {
   width: 82px;
-  color: #b1b1a4;
+  color: #929288;
+}
+.rating_table .range_number {
+  color: #d6d6cb;
+  font-weight: bold;
 }
 .rating_table .threshold_operator {
   color: #62625c;
 }
-.rating_table .time_number {
-  color: #d6d6cb;
-  font-weight: bold;
-}
+.rating_table .time_number,
 .rating_table .bvs_number {
   color: #929288;
   font-weight: bold;
+}
+.rating_table tbody tr:hover .range_number,
+.rating_table tbody tr:hover .time_number,
+.rating_table tbody tr:hover .bvs_number {
+  color: #d6d6cb;
 }
 .rating_table tbody tr:nth-child(even) {
   background: rgba(248, 248, 242, 0.025);
@@ -14579,7 +14585,7 @@ body #page.rating_page .rating_standard .rating_note {
   font-weight: bold;
 }
 .rating_table thead .grade_col {
-  text-align: center;
+  text-align: left;
 }
 .rating_pending {
   color: #e6db74;

@@ -45,10 +45,12 @@ function thresholdParts(dist: number[], index: number, order: Order): { operator
 export default async function RatingStandardPage() {
   const { distribution, total } = await getRatingStandardData();
   const ranks = total > 0 ? radarDistributionRanks(total) : [];
-  const rangeLabels = RADAR_GRADES.map((_, index) => {
-    if (index < RADAR_FIXED_RANKS.length) return `前${RADAR_FIXED_RANKS[index]}名`;
-    if (!ranks.length) return "—";
-    return `前${((ranks[index] / total) * 100).toFixed(2)}%`;
+  const rangeParts = RADAR_GRADES.map((_, index) => {
+    if (index < RADAR_FIXED_RANKS.length) {
+      return { prefix: "前", value: String(RADAR_FIXED_RANKS[index]), suffix: "名" };
+    }
+    if (!ranks.length) return { prefix: "", value: "—", suffix: "" };
+    return { prefix: "前", value: ((ranks[index] / total) * 100).toFixed(2), suffix: "%" };
   });
   const ready = COLUMNS.every((column) => distribution[column.key]?.length === RADAR_GRADES.length);
   return (
@@ -77,7 +79,11 @@ export default async function RatingStandardPage() {
                     <th className="grade_col" style={{ color: gradeColor(grade) }}>
                       {grade}
                     </th>
-                    <td className="range_col">{rangeLabels[index]}</td>
+                    <td className="range_col">
+                      {rangeParts[index].prefix}{" "}
+                      <span className="range_number">{rangeParts[index].value}</span>{" "}
+                      {rangeParts[index].suffix}
+                    </td>
                     {COLUMNS.map((column) => {
                       const threshold = thresholdParts(distribution[column.key], index, column.order);
                       const isTime = ORDER_DIRECTION[column.order] === "asc";
