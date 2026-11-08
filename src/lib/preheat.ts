@@ -13,6 +13,9 @@
 // · 失败指数退避（15s×2^n 封顶 5min），成功即恢复；退避中访客请求照常兜底（撞过期
 //   也只是 300s 档的一次重建，与本模块互不干扰）；
 // · 进程刚起时 __incrementalCache 可能未挂、CI 构建期不应碰库——两种情况都不调度。
+// · ⚠️ 状态必须挂 globalThis：Next 会把同一模块打进多个服务端 bundle，模块级 Map
+//   不是进程单例（2026-11-08 生产实证同槽同任务出现 44～47 份注册表）。
+//   所有副本共享同一份 jobs / ticker / kickTimers，杜绝重复预热打满 Next 与 MySQL。
 //
 // ⚠️ ttlSec 必须与底层 unstable_cache 的 revalidate 一致——约定两条都要引用
 //    config.REVALIDATE_HOME_CACHE 同一常量（注册行紧跟查询定义处），禁止写字面量。
@@ -39,12 +42,27 @@ type PreheatJob = {
   fails: number;
 };
 
-const jobs = new Map<string, PreheatJob>();
+type PreheatState = {
+  jobs: Map<string, PreheatJob>;
+  started: boolean;
+  kickTimers: Map<string, ReturnType<typeof setTimeout>>;
+};
+
+// 用进程全局状态而不是模块状态：同一文件被不同服务端 bundle 各加载一次时也只有一个调度器。
+const processState = globalThis as typeof globalThis & {
+  __saoleiPreheatStateV1?: PreheatState;
+};
+const state = (processState.__saoleiPreheatStateV1 ??= {
+  jobs: new Map<string, PreheatJob>(),
+  started: false,
+  kickTimers: new Map<string, ReturnType<typeof setTimeout>>(),
+});
+const { jobs, kickTimers } = state;
+
 const MARGIN_MS = 60_000; // 张老师口径：过期前 1 分钟刷新
 const TICK_MS = 15_000;
 const MAX_BACKOFF_MS = 5 * 60_000;
 const FIRST_RUN_STAGGER_MS = 2500; // 首跑逐个错峰，避免启动瞬间 9 个任务同打连接池
-let started = false;
 
 export function registerPreheat(
   name: string,
@@ -65,8 +83,8 @@ export function registerPreheat(
 }
 
 function startTicker(): void {
-  if (started) return;
-  started = true;
+  if (state.started) return;
+  state.started = true;
   const timer = setInterval(() => {
     void tick();
   }, TICK_MS);
@@ -75,7 +93,6 @@ function startTicker(): void {
 }
 
 // trailing 合并窗口的挂起定时器（同一任务多次 kick 只保留最后一个）
-const kickTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const KICK_DEBOUNCE_MS = 1000;
 
 /** 事件驱动即时刷新：标记对应预热任务在合并窗口后立刻重建一次（不等 TTL）。
