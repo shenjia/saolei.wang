@@ -189,9 +189,9 @@ export default async function VideoViewPage({
       });
     }
   }
-  // 气泡「个人最佳」文案（2026-11-05 张老师定）：NF 录像比 NF 最好 →「个人最佳NF纪录」，
-  // FL 录像 →「个人最佳纪录」
-  const perfBestLabel = video.noflag ? "个人最佳NF纪录" : "个人最佳纪录";
+  // 气泡「个人最佳」文案（2026-11-08 张老师定）：带上当前录像级别，
+  // 如「个人初级最佳纪录」；NF 紧跟级别，如「个人高级NF最佳纪录」。
+  const perfBestLabel = `个人${LEVEL_NAMES[level] ?? level}${video.noflag ? "NF" : ""}最佳纪录`;
   // 录像评级盒内容（2026-11-01 张老师需求：≤880 单列带侧栏整组 display:none，
   // 评级雷达改在录像主体板块下面显示——与用户主页「实力」雷达换位同模式：
   // 主栏副本 .radar_main 桌面 display:none，侧栏原件 ≥881 照旧；同一 JSX 两处渲染，
