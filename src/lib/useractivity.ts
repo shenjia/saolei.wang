@@ -1,0 +1,101 @@
+// 用户近 7 日活跃快照（2026-11-08）：唯一刷新入口。
+//
+// 事实源与计分口径：
+//   练习 = practice_daily 近 7 个 +08:00 自然日；
+//   录像/评论/回复 = 滚动 7×86400 秒；全部来源只计 user.status=0。
+//   初/中/高列 = 录像上传数 + 练习完成盘数；活跃总分 = 练习点 + 录像加权 + 评论数。
+//
+// 每分钟全量重算并单事务替换快照。审核、屏蔽、恢复、删除、数据修复均在下一轮
+// 自动纠正，避免逐事件增量冲正漂移。读取方由 MVCC 看到完整旧版或新版；
+// 刷新失败回滚并保留旧快照，不在页面请求里回退实时聚合。
+
+import { prisma } from "./db";
+
+/** 四源分别按用户聚合后再合并；参数依次为 dayW、tsW、tsW、tsW。 */
+function unionSql(): string {
+  return `SELECT g.uid uid,
+         COALESCE(SUM(g.cb), 0) cb, COALESCE(SUM(g.ci), 0) ci, COALESCE(SUM(g.ce), 0) ce,
+         COALESCE(SUM(g.cc), 0) cc, COALESCE(SUM(g.pts), 0) pts, COALESCE(SUM(g.vs), 0) vs
+       FROM (
+         SELECT p.user_id uid, SUM(p.wins_beg) cb, SUM(p.wins_int) ci, SUM(p.wins_exp) ce,
+                0 cc, SUM(p.act_points) pts, 0 vs
+         FROM practice_daily p JOIN user u ON u.id = p.user_id AND u.status = 0
+         WHERE p.user_id > 0 AND p.day >= ?
+         GROUP BY p.user_id
+         UNION ALL
+         SELECT v.user uid, SUM(v.level = 'beg') cb, SUM(v.level = 'int') ci, SUM(v.level = 'exp') ce,
+                0 cc, 0 pts, SUM(v.level = 'beg') + 2 * SUM(v.level = 'int') + 10 * SUM(v.level = 'exp') vs
+         FROM video v JOIN user u ON u.id = v.user AND u.status = 0
+         WHERE v.status <> 0 AND v.create_time >= ?
+         GROUP BY v.user
+         UNION ALL
+         SELECT c.user uid, 0 cb, 0 ci, 0 ce, COUNT(*) cc, 0 pts, 0 vs
+         FROM comment c JOIN user u ON u.id = c.user AND u.status = 0
+         WHERE c.status = 0 AND c.create_time >= ?
+         GROUP BY c.user
+         UNION ALL
+         SELECT r.user uid, 0 cb, 0 ci, 0 ce, COUNT(*) cc, 0 pts, 0 vs
+         FROM bbs_reply r JOIN user u ON u.id = r.user AND u.status = 0
+         WHERE r.status = 0 AND r.create_time >= ?
+         GROUP BY r.user
+       ) g
+       GROUP BY g.uid`;
+}
+
+export interface ActivityRefreshResult {
+  /** 另一刷新进程持锁时跳过，不排队叠加数据库压力 */
+  skipped: boolean;
+  rows: number;
+  ms: number;
+}
+
+/** 全量重建近 7 日活跃快照；可在 cron 或手工对账时调用。 */
+export async function refreshUserActivitySnapshot(): Promise<ActivityRefreshResult> {
+  const t0 = Date.now();
+  const nowSec = Math.floor(t0 / 1000);
+  const dayW = Math.floor((nowSec + 28800) / 86400) - 6;
+  const tsW = nowSec - 7 * 86400;
+
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const lockRows = await tx.$queryRawUnsafe<{ got: number | bigint }[]>(
+        `SELECT GET_LOCK('user_activity_snapshot_refresh', 0) got`,
+      );
+      const locked = Number(lockRows[0]?.got ?? 0) === 1;
+      if (!locked) return { skipped: true, rows: 0 };
+
+      try {
+        await tx.$executeRawUnsafe(`DELETE FROM user_activity_snapshot`);
+        const rows = await tx.$executeRawUnsafe(
+          `INSERT INTO user_activity_snapshot
+             (user_id, beg_count, int_count, exp_count, comment_count,
+              practice_points, video_points, active_points,
+              window_start, window_end, update_time)
+           SELECT t.uid, t.cb, t.ci, t.ce, t.cc, t.pts, t.vs, t.pts + t.vs + t.cc,
+                  0, 0, 0
+           FROM (${unionSql()}) t`,
+          dayW,
+          tsW,
+          tsW,
+          tsW,
+        );
+        // 窗口元数据与指标分两条写，避免 INSERT SELECT 派生表内外占位符顺序歧义；
+        // 同事务执行，读取方不会看到元数据为 0 的中间态。
+        await tx.$executeRawUnsafe(
+          `UPDATE user_activity_snapshot
+           SET window_start = ?, window_end = ?, update_time = ?`,
+          tsW,
+          nowSec,
+          nowSec,
+        );
+        return { skipped: false, rows };
+      } finally {
+        // 命名锁不随事务回滚；必须在同一事务连接内显式释放。
+        await tx.$queryRawUnsafe(`SELECT RELEASE_LOCK('user_activity_snapshot_refresh')`);
+      }
+    },
+    { maxWait: 5000, timeout: 30000 },
+  );
+
+  return { ...result, ms: Date.now() - t0 };
+}

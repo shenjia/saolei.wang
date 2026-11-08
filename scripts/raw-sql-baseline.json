@@ -4,12 +4,13 @@
   "generatedAt": "2026-11-08",
   "interpolatedTotal": 38,
   "interpolatedFiles": {
-    "src/lib/activerank.ts": 2,
+    "src/lib/activerank.ts": 1,
     "src/lib/activity.ts": 2,
     "src/lib/admin/data.ts": 11,
     "src/lib/admin/practice.ts": 1,
     "src/lib/admin/stats.ts": 7,
-    "src/lib/queries.ts": 15
+    "src/lib/queries.ts": 15,
+    "src/lib/useractivity.ts": 1
   },
-  "allTotal": 82
+  "allTotal": 88
 }

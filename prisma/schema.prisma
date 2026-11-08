@@ -801,6 +801,8 @@ model BbsReply {
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
   @@index([post, status, id])
+  // 活跃快照每分钟重算：近 7 日正常回复按时间窗扫描（2026-11-08）
+  @@index([status, createTime])
   @@map("bbs_reply")
 }
 
@@ -1104,6 +1106,27 @@ model AreaActivity {
 
   @@index([score]) // 榜序 activity：ORDER BY score DESC
   @@map("area_activity")
+}
+
+// 用户近 7 日活跃快照（2026-11-08）：活跃排行与用户主页活跃指数共用。
+// 原始四表仍是事实源；scripts/user-activity-snapshot-refresh.ts 每分钟全量重算，
+// 单事务整表替换，审核/屏蔽/恢复/删除等变化下一轮自动纠正，不做逐事件增量冲正。
+// 读取时仍 JOIN user.status=0，保证封禁立即生效；快照刷新失败继续读旧版。
+model UserActivitySnapshot {
+  userId         BigInt @id @map("user_id") @db.BigInt
+  begCount       Int    @default(0) @map("beg_count") @db.UnsignedInt
+  intCount       Int    @default(0) @map("int_count") @db.UnsignedInt
+  expCount       Int    @default(0) @map("exp_count") @db.UnsignedInt
+  commentCount   Int    @default(0) @map("comment_count") @db.UnsignedInt
+  practicePoints Int    @default(0) @map("practice_points") @db.UnsignedInt
+  videoPoints    Int    @default(0) @map("video_points") @db.UnsignedInt
+  activePoints   Int    @default(0) @map("active_points") @db.UnsignedInt
+  windowStart    BigInt @map("window_start") @db.BigInt
+  windowEnd      BigInt @map("window_end") @db.BigInt
+  updateTime     BigInt @map("update_time") @db.BigInt
+
+  @@index([activePoints(sort: Desc), userId])
+  @@map("user_activity_snapshot")
 }
 
 // 站点运行时开关（2026-10-22，新旧站数据合并）：key/value 单表。
