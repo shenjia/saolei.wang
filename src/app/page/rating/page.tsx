@@ -5,8 +5,14 @@ import { score3bvs, scoreTime } from "@/lib/format";
 import { getRadarDistribution } from "@/lib/radar";
 import { RADAR_GRADES } from "@/lib/radar-standard.mjs";
 import { gradeColor } from "@/lib/videoscore";
+import { unstable_cache } from "next/cache";
 
 export const metadata = { title: "评级标准" };
+
+// 仅缓存本页正文数据 1 小时；全站顶栏读取登录态，不能 force-static 整页以免串用户。
+const getRatingDistribution = unstable_cache(getRadarDistribution, ["rating-standard-page-v1"], {
+  revalidate: 3600,
+});
 
 const LEVELS: Level[] = ["beg", "int", "exp", "sum"];
 const ORDERS: Order[] = ["time", "3bvs"];
@@ -26,7 +32,7 @@ function thresholdText(dist: number[], index: number, order: Order): string {
 }
 
 export default async function RatingStandardPage() {
-  const distribution = await getRadarDistribution();
+  const distribution = await getRatingDistribution();
   const ready = COLUMNS.every((column) => distribution[column.key]?.length === RADAR_GRADES.length);
   return (
     <div id="page" className="rating_page">

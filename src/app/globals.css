@@ -14498,6 +14498,10 @@ a.cheat_rep_link:hover {
 #user_view .radar.box h2 a.star_help {
   text-decoration: none;
 }
+#user_view .radar.box h2 .star_help::after {
+  width: max-content;
+  white-space: nowrap;
+}
 body #page.rating_page {
   width: min(960px, calc(100% - 20px));
   max-width: 960px;

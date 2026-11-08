@@ -341,7 +341,14 @@ export default async function UserViewPage({
 
   // 「实力」标题问号：与每日一星同图标同气泡；主栏/侧栏两处响应式副本共用。
   const ratingHelpLink = (
-    <Link className="star_help" href="/page/rating" data-tip="点击查看评级标准" aria-label="点击查看评级标准">
+    <Link
+      className="star_help"
+      href="/page/rating"
+      target="_blank"
+      prefetch={false}
+      data-tip="点击查看评级标准"
+      aria-label="点击查看评级标准"
+    >
       <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <circle cx="10" cy="10" r="8.4" />
         <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />
