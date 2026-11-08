@@ -177,8 +177,10 @@ export function proxy(req: NextRequest) {
   // （命中缓存的请求根本不进 Next），登录态/2h 通行证（canUseRsc）直接放行。
   // 覆盖此前仅 RSC 层 + /video?author|3bv 设闸的缺口——/bbs 等文档遍历曾完全绕过验证。
   // 非 GET（表单提交等）不拦；豁免路径见 config.matcher 负向前瞻（登录/激活/静态/爬虫文件）。
+  // 首页永不设闸（2026-11-09 张老师补充：游客必须始终有免费入口；且 307 不落 nginx
+  // 缓存，设闸会让首页缓存过期后无法被匿名流量回填——豁免后游客流量可自愈缓存）。
   if (!isLegacyUrl) {
-    if (req.method === "GET" && !canUseRsc(req)) {
+    if (req.method === "GET" && url.pathname !== "/" && !canUseRsc(req)) {
       const next = `${url.pathname}${url.search}`;
       return movedTo(req, `/bot/challenge?next=${encodeURIComponent(next)}`, 307);
     }
