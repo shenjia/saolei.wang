@@ -5,10 +5,13 @@
 // 提交走统一 /api/admin/action（siteupdate.add / siteupdate.edit）。
 // 编辑模式：清单行「编辑」按钮派发 sl-siteupdate-edit 事件回填，可取消。
 // 同日回填（2026-11-05）：选定日期已有记录时自动回填进入编辑模式，避免登记重复条目。
+// 草稿秒级备份（2026-11-09 张老师要求，同评论框）：键入即备份 localStorage，
+// 误关页面后重开自动恢复，提交成功清空当前键；新增按 uid、编辑按 uid+记录 id 隔离。
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toast";
+import { useDraft, useHydrated } from "@/components/useDraft";
 
 interface RowLike {
   id: number;
@@ -35,13 +38,34 @@ function todayStr(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 
-export function SiteUpdateForm({ rows }: { rows: RowLike[] }) {
+export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: number }) {
   const router = useRouter();
   // 日期默认选中当天（本地时区）
   const [date, setDate] = useState(todayStr);
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<EditingRow | null>(null);
+
+  // 草稿键：新增按 uid、编辑按 uid+记录 id 隔离（同 HistoryBox 口径）
+  const draftKey = editing ? `siteupdate:${authorId}:${editing.id}` : `siteupdate:${authorId}`;
+  const draft = useDraft(draftKey);
+
+  // 水合 / 草稿键切换后一次性回落（渲染期调整 state——React 官方模式，同 HistoryBox）：
+  // 有草稿恢复草稿（新增态恢复未提交内容、编辑态恢复上次未保存的修改）；
+  // 无草稿回落已保存内容（不被旧草稿覆盖）。mergedKey 只挡同键重复合并。
+  const hydrated = useHydrated();
+  const [mergedKey, setMergedKey] = useState<string | null>(null);
+  if (hydrated && mergedKey !== draftKey) {
+    setMergedKey(draftKey);
+    setContent(draft.has ? draft.value : editing ? editing.content : "");
+  }
+
+  // 合并完成后键入即写盘（秒级备份）
+  useEffect(() => {
+    if (mergedKey !== draftKey) return;
+    draft.set(content);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergedKey, draftKey, content]);
 
   // 日期（YYYY-MM-DD）→ 已有记录索引，用于同日回填
   const byDate = useMemo(() => {
@@ -57,20 +81,17 @@ export function SiteUpdateForm({ rows }: { rows: RowLike[] }) {
       if (!d || typeof d.id !== "number") return;
       setEditing(d);
       setDate(toInputDate(d.date));
-      setContent(d.content);
+      // 内容由草稿键切换后的一次性回落补上（草稿优先，无草稿回落已保存内容）
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
     window.addEventListener("sl-siteupdate-edit", onEdit);
     return () => window.removeEventListener("sl-siteupdate-edit", onEdit);
   }, []);
 
-  // 挂载时当天已有记录 → 直接回填进入编辑模式
+  // 挂载时当天已有记录 → 直接回填进入编辑模式（内容走回落）
   useEffect(() => {
     const hit = byDate.get(todayStr());
-    if (hit) {
-      setEditing(hit);
-      setContent(hit.content);
-    }
+    if (hit) setEditing(hit);
   }, [byDate]);
 
   /** 切换日期：命中已有记录 → 回填进编辑模式（含清单编辑按钮改日期时换目标记录） */
@@ -79,7 +100,6 @@ export function SiteUpdateForm({ rows }: { rows: RowLike[] }) {
     const hit = byDate.get(d);
     if (hit && hit.id !== editing?.id) {
       setEditing(hit);
-      setContent(hit.content);
       toast(`该日期已有记录（#${hit.id}），已回填内容，可直接编辑`, "info");
     }
   };
@@ -101,16 +121,15 @@ export function SiteUpdateForm({ rows }: { rows: RowLike[] }) {
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       toast(data.ok ? data.message ?? "已登记" : data.error ?? "登记失败", data.ok ? "success" : "error");
       if (data.ok) {
+        draft.clear(); // 提交成功清空当前键草稿
         setEditing(null);
         setContent("");
         const t = todayStr();
         setDate(t);
-        // 重置回当天后，若当天已有记录则继续回填编辑（表单始终反映所选日期）
+        // 重置回当天后，若当天已有记录则继续回填编辑（表单始终反映所选日期；
+        // 草稿键切到该记录后内容由一次性回落补上）
         const hit = byDate.get(t);
-        if (hit) {
-          setEditing(hit);
-          setContent(hit.content);
-        }
+        if (hit) setEditing(hit);
         router.refresh();
       }
     } catch {
@@ -138,8 +157,8 @@ export function SiteUpdateForm({ rows }: { rows: RowLike[] }) {
             className="admin_btn sm"
             onClick={() => {
               setEditing(null);
-              setContent("");
               setDate(todayStr());
+              // 内容由草稿键切回新增键后的一次性回落补上（恢复此前未提交的新增草稿）
             }}
           >
             取消编辑

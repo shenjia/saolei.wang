@@ -1,6 +1,7 @@
 // 管理后台 · 更新历史维护（2026-11-02：/page/history 落库 site_update 表）
 // 登记（日期 + 内容）+ 清单（编辑/删除）；前台更新历史页读同一份数据。
 
+import { getSession } from "@/lib/auth";
 import { getSiteUpdates } from "@/lib/site-updates";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { RowEditButton } from "@/components/admin/RowEditButton";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "更新历史 | 管理后台" };
 
 export default async function AdminSiteUpdatesPage() {
-  const rows = await getSiteUpdates();
+  const [rows, session] = await Promise.all([getSiteUpdates(), getSession()]);
 
   return (
     <>
@@ -27,7 +28,7 @@ export default async function AdminSiteUpdatesPage() {
         <div className="admin_note" style={{ marginBottom: 10 }}>
           站点重大新功能上线后在此登记一条（日常修 bug 不登记）；日期按事件当天填写，清单与前台均按日期倒序排列。
         </div>
-        <SiteUpdateForm rows={rows} />
+        <SiteUpdateForm rows={rows} authorId={session?.uid ?? 0} />
       </AdminCard>
 
       <AdminCard title="更新清单" tight>
