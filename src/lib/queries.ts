@@ -9,6 +9,7 @@ import { assertIdent, escapeLike } from "./sqlguard";
 import { getTitleDistribution, promotedExpTime, title } from "./assess";
 import {
   COMMENT_STATUS,
+  CONTENT_STATUS,
   COMMENT_TOP_NUMBER,
   FEED_USER_LEVEL_QUOTA,
   HOME_HOT_VIDEO_NUMBER,
@@ -1664,6 +1665,55 @@ export async function getUserActivity(
     }),
   ]);
   return { posts, postsToday, comments, commentsToday };
+}
+
+/**
+ * 用户「活跃指数」（2026-11-08 张老师要求）：近 7 日活跃值合计，
+ * 显示在用户主页「数据统计」「发表评论」行下（赞助金额之上）。计分：
+ *   练习 = practice_daily 近 7 个自然日 act_points 之和
+ *         （3BV 完成情况逐盘点数，口径同地区活跃指数 lib/areaactivity.ts）
+ *   录像 = 近 7 天上传且 status<>0，按级别加权 初×1 中×2 高×10（未知级别×1 兜底）
+ *   评论 = 近 7 天录像评论（comment，status 正常）×1 + 论坛回复（bbs_reply，status 正常）×1
+ *   （2026-11-08 二次修订：发表文章不计活跃值——避免灌水）
+ * 窗口：练习按 +08:00 自然日（同 p7 口径）；其余按滚动 7×86400（同地区活跃指数 v7）。
+ */
+export async function getUserActivityIndex(
+  userId: number
+): Promise<{
+  total: number;
+  practice: number;
+  videos: number;
+  comments: number;
+}> {
+  const uid = BigInt(userId);
+  const nowSec = Math.floor(new Date().getTime() / 1000);
+  const day = Math.floor((nowSec + 28800) / 86400); // +08:00 切天序号（同上报路由）
+  const w7 = BigInt(nowSec - 7 * 86400);
+  const [pAgg, vGroups, vComments, bReplies] = await Promise.all([
+    prisma.practiceDaily.aggregate({
+      where: { userId: uid, day: { gte: day - 6 } },
+      _sum: { actPoints: true },
+    }),
+    prisma.video.groupBy({
+      by: ["level"],
+      where: { user: uid, status: { not: 0 }, createTime: { gte: w7 } },
+      _count: { _all: true },
+    }),
+    prisma.comment.count({
+      where: { user: uid, status: COMMENT_STATUS.NORMAL, createTime: { gte: w7 } },
+    }),
+    prisma.bbsReply.count({
+      where: { user: uid, status: CONTENT_STATUS.NORMAL, createTime: { gte: w7 } },
+    }),
+  ]);
+  const practice = pAgg._sum.actPoints ?? 0;
+  let videos = 0;
+  for (const g of vGroups) {
+    const w = g.level === "beg" ? 1 : g.level === "int" ? 2 : g.level === "exp" ? 10 : 1;
+    videos += w * g._count._all;
+  }
+  const comments = vComments + bReplies; // 录像评论与论坛回复均按 1 点/条
+  return { total: practice + videos + comments, practice, videos, comments };
 }
 
 /**

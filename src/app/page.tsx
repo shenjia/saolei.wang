@@ -116,8 +116,8 @@ export default async function HomePage() {
 
   // 今日练习（2026-10-22 张老师要求）：「开始练习」上方板块，
   // 口径与后台仪表盘「今日练习」KPI 一致；未登录 mine=0 只显示全站口径。
-  // 排行模式今日统计行（2026-10-28）：今日玩过排行模式（practice_daily.mode_ranked>0）
-  // 才下发——未登录/没玩排行恒 null，前端不渲染
+  // 首行统计（2026-11-08 张老师改版）：登录恒下发（含活跃值），未登录 null 不渲染——
+  // 原口径仅今日玩过排行模式才下发（2026-10-28），活跃值入行后改登录恒显
   const [practice, rankedToday] = await Promise.all([
     getPracticeToday(session?.uid),
     session ? getRankedToday(session.uid) : Promise.resolve(null),

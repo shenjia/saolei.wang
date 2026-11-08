@@ -17,6 +17,7 @@ import {
   getLocalPracticeToday,
   practiceLocalKey,
 } from "@/lib/practice-local";
+import { RankedTodayLine } from "@/components/RankedTodayLine";
 
 const GREEN = "#a6e22e"; // 站内标准绿（.logo a h1 hover / Sparkline 默认色）
 const YELLOW = "#e6db74"; // 站内标准黄（后台趋势「新玩家」序列同色）
@@ -82,11 +83,11 @@ export function PracticeToday({
 }: {
   /** DOM id 前缀：桌面侧栏 "practice_today" / 移动端 "practice_today_top" */
   prefix: string;
-  /** 排行模式今日统计行（2026-10-28 张老师定）：今日玩过排行模式才由服务端下发，
-   *  null=不渲染。ranked=今日是否玩过排行模式（practice_daily.mode_ranked>0；
-   *  false 时整行隐藏，2026-10-29 口径）、b/i/e=初/中/高级今日新收集 BV 数、
-   *  z=今日 PB 次数（0 值降亮灰同 b/i/e） */
-  rankedToday: { ranked: boolean; beg: number; int: number; exp: number; pb: number } | null;
+  /** 首行统计（2026-11-08 张老师改版）：登录恒下发（未登录 null 不渲染）。
+   *  ranked=今日是否玩过排行模式（不再控制显隐）；b/i/e=初/中/高级今日新收集
+   *  BV 数（合计单值展示）、pb=今日 PB 次数（0 值降亮灰）、act=今日活跃值
+   *  （practice_daily.act_points，>0 绿色） */
+  rankedToday: { ranked: boolean; beg: number; int: number; exp: number; pb: number; act: number } | null;
   /** 服务端口径「我的完成盘数」：登录=practice_log 当日 won=1 计数；未登录恒 0 */
   mineWon: number;
   /** 服务端口径「我的尝试盘数」：未登录恒 0 */
@@ -137,25 +138,19 @@ export function PracticeToday({
   const rNet = rate(netWon, net);
   return (
     <div id={prefix} className="practice_today">
-      {/* 排行模式今日统计行（2026-10-28 张老师定）：仅今日玩过排行模式
-          （practice_daily.mode_ranked>0，ranked 标志）才渲染——今天没玩排行
-          模式时整行隐藏（2026-10-29 00:58 张老师重申口径；练习页 op_ranked
-          才是「登录恒显亮灰 0」口径，两处不同）。「今日已收集 b / i / e BV
-          创造 z PB」——b/i/e 按级别三色（初绿 #a6e22e / 中橙 #f79646 /
-          高金 #fdc61a，与纪录页级别色同源），0 值降亮灰不抢眼；z=今日 PB
-          次数，0 值同降亮灰 */}
-      {rankedToday?.ranked && (
+      {/* 首行统计（2026-11-08 张老师改版）：登录恒显（原口径仅今日玩过排行模式才渲染，
+          活跃值入行后无收获也亮灰展示——「活跃>0 绿色」意味着 0 也占位）。
+          版式（BV 合计单值 / 连接 PB / 活跃+z 右锚定）与练习页 op_ranked 共用
+          RankedTodayLine 组件；本页字号 18px、标签暗灰 #75715e（胜率同款） */}
+      {rankedToday && (
         <p className="pt_line pt_ranked">
-          <span className="lead">今日已收集</span>
-          <b className={`lv lv_beg${rankedToday.beg > 0 ? "" : " zero"}`}>{rankedToday.beg}</b>
-          <span className="sep">/</span>
-          <b className={`lv lv_int${rankedToday.int > 0 ? "" : " zero"}`}>{rankedToday.int}</b>
-          <span className="sep">/</span>
-          <b className={`lv lv_exp${rankedToday.exp > 0 ? "" : " zero"}`}>{rankedToday.exp}</b>
-          <span className="lead">BV</span>
-          <span className="pbpart">
-            创造 <b className={`pbv${rankedToday.pb > 0 ? "" : " zero"}`}>{rankedToday.pb}</b> PB
-          </span>
+          <RankedTodayLine
+            beg={rankedToday.beg}
+            int={rankedToday.int}
+            exp={rankedToday.exp}
+            pb={rankedToday.pb}
+            act={rankedToday.act}
+          />
         </p>
       )}
       <p className="pt_line">

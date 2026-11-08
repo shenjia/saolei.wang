@@ -22,13 +22,14 @@ import { useRouter } from "next/navigation";
 import { toast, toastLoading } from "./Toast";
 import { NfToggle } from "./NfToggle";
 
-export type RankingView = "all" | "bv" | "stnb" | "grow" | "area" | "world";
+export type RankingView = "all" | "bv" | "stnb" | "grow" | "active" | "area" | "world";
 
 const TABS: { key: RankingView; label: string; href: string }[] = [
   { key: "all", label: "雷界", href: "/ranking" },
   { key: "bv", label: "BV", href: "/ranking?view=bv" },
   { key: "stnb", label: "STNB", href: "/ranking?view=stnb" },
   { key: "grow", label: "进步", href: "/grow" },
+  { key: "active", label: "活跃", href: "/active" },
   { key: "area", label: "地区", href: "/area" },
   { key: "world", label: "世界", href: "/ranking?view=world" },
 ];

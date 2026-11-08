@@ -23,6 +23,7 @@ import {
   getNewsCount,
   getUserTodayVideos,
   getUserActivity,
+  getUserActivityIndex,
   getUserPracticeWins,
   getVideoList,
   getLevel3bvRanges,
@@ -190,7 +191,7 @@ export default async function UserViewPage({
     // 该玩家动态总数（「加载更多」括号内剩余条数口径）
     getNewsCount({ userId }),
   ]);
-  const [history, ranks, userVideos, todayVideos, activity, practiceWins, bbvRanges, bbvCollection, userCurves] = await Promise.all([
+  const [history, ranks, userVideos, todayVideos, activity, actIndex, practiceWins, bbvRanges, bbvCollection, userCurves] = await Promise.all([
     getHistory(userId),
     getUserRanks(userId),
   // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
@@ -208,6 +209,9 @@ export default async function UserViewPage({
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
     getUserActivity(userId),
+    // 活跃指数（2026-11-08 张老师要求）：近 7 日活跃值（练习点数＋录像加权＋评论×1，
+    // 发表文章不计——避免灌水），「发表评论」行下新增；口径见 lib/queries.ts
+    getUserActivityIndex(userId),
     // 练习完成盘数 + 今日完成（2026-11-02 张老师要求，统计盒「录像总数」下新增一行；
     // 2026-11-06 改按完成口径——尝试可以刷，完成需要付出努力）
     getUserPracticeWins(userId),
@@ -610,6 +614,17 @@ export default async function UserViewPage({
                 </StatRow>
                 <StatRow label="发表评论" today={activity.commentsToday}>
                   <em>{activity.comments}</em>
+                </StatRow>
+                {/* 2026-11-08 张老师要求：发表评论下新增「活跃指数」——近 7 日活跃值合计
+                    （练习 3BV 计点＋录像级别加权＋评论×1；发表文章不计——避免灌水），
+                    hover 显示构成明细；7 日窗口实时查询不缓存，无「今日增量」列 */}
+                <StatRow label="活跃指数">
+                  <em
+                    className="green"
+                    title={`近7日：练习 ${actIndex.practice} ＋ 录像 ${actIndex.videos} ＋ 评论 ${actIndex.comments}×1`}
+                  >
+                    {actIndex.total}
+                  </em>
                 </StatRow>
                 {/* 2026-11-02 张老师要求：发表评论下新增「赞助金额」（金色）；
                     没赞助过不显示；ID 1 显示 max(−结余, 0)（查询见上方 donateCents） */}

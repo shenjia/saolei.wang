@@ -4266,6 +4266,12 @@ body #user_view .sidebar .table td:first-child {
 body #user_view .sidebar .table .num {
   text-align: right;
 }
+/* 用户主页「活跃指数」行数字绿色（2026-11-08 13:54 张老师要求）：em 默认
+   亮灰 #b1b1a4（legacy em 规则），.green 提为站内标准绿；特异性 4 类 1 id
+   稳压 legacy (0,0,1)。 */
+body #user_view .stats_box .num em.green {
+  color: #a6e22e;
+}
 /* 今日增量列：与 #site_stats / #video_stats 的 .delta 同款（绿色、左对齐、不折行） */
 body #user_view .sidebar .table .delta {
   width: 3.2em;
@@ -11331,30 +11337,21 @@ html.op-fakefs #header {
 .practice_today .pt_line .rate .ratev {
   color: #a6e22e; /* 胜率数值绿色（与完成盘数同色口径，标签暗灰/数值绿分层） */
 }
-/* 排行模式今日统计行（2026-10-28 张老师定）：仅今日玩过排行模式的登录用户显示
-   （practice_daily.mode_ranked>0 才由服务端下发），插在「今日已完成」行上方。
-   「今日已收集 b / i / e BV 创造 z PB」——b/i/e=初/中/高级今日新收集 BV 数，
-   级别三色（初绿 #a6e22e / 中橙 #f79646 / 高金 #fdc61a，与纪录页级别专属色同源），
-   0 值降亮灰 #b1b1a4 不抢眼；z=今日创造 PB 次数恒金色 #fdc61a，「创造 z PB」
-   右缘对齐（与首行胜率同款 margin-left:auto） */
-.practice_today .pt_line.pt_ranked .lv {
+/* 首行统计（2026-11-08 张老师改版）：登录恒显（原仅今日玩过排行模式才显示）。
+   「今日已收集 x BV / 创造 y PB　活跃+z」——BV/PB 两段用 / 连接（13:36 张老师
+   要求，.sep 同款暗灰）；x=初/中/高今日新收集合计单值（>0 绿色 #a6e22e，0 亮灰
+   #b1b1a4，不再按级别三色分列）；y=今日 PB 次数恒金色 #fdc61a（颜色逻辑不变）；
+   z=今日活跃值独立段，「活跃+z」右锚定与两行胜率左边缘对齐（13:50 张老师），
+   + 号与数字同色（13:52 张老师要求） */
+.practice_today .pt_line.pt_ranked .bv {
   font-size: 18px;
   font-weight: bold;
-}
-.practice_today .pt_line.pt_ranked .lv_beg {
   color: #a6e22e;
 }
-.practice_today .pt_line.pt_ranked .lv_int {
-  color: #f79646;
-}
-.practice_today .pt_line.pt_ranked .lv_exp {
-  color: #fdc61a;
-}
-.practice_today .pt_line.pt_ranked .lv.zero {
-  color: #b1b1a4; /* 该级别今日没收集到：亮灰（与尝试数同口径），三色只留给有收获的级别 */
+.practice_today .pt_line.pt_ranked .bv.zero {
+  color: #b1b1a4; /* 今日没收集到：亮灰（与尝试数同口径） */
 }
 .practice_today .pt_line.pt_ranked .pbpart {
-  margin-left: auto;
   white-space: nowrap;
   font-size: 13px; /* 「创造/PB」文案与 .lead 同档微缩（2026-10-28），pbv 数字仍 18px */
 }
@@ -11364,9 +11361,24 @@ html.op-fakefs #header {
   font-weight: bold;
 }
 /* pb=0 降亮灰（2026-10-29 00:53 张老师定，与练习页 .op_ranked .pbv.zero 同口径）：
-   今日没创造 PB 不显金色，与 b/i/e 零值亮灰一致 */
+   今日没创造 PB 不显金色 */
 .practice_today .pt_line.pt_ranked .pbv.zero {
   color: #b1b1a4;
+}
+.practice_today .pt_line.pt_ranked .actpart {
+  margin-left: auto; /* 右锚定（2026-11-08 13:50 张老师：活跃值与两行胜率左对齐） */
+  width: 72px; /* 与两行胜率同款定宽：三段左边缘对齐；容下「活跃+999」不折行 */
+  white-space: nowrap;
+  text-align: left;
+  color: #75715e; /* 标签暗灰——整段字体与胜率同款（12px bold，2026-11-08 13:50 张老师要求） */
+  font-size: 12px;
+  font-weight: bold;
+}
+.practice_today .pt_line.pt_ranked .actv {
+  color: #a6e22e; /* 活跃值>0 绿色（与胜率数值 .ratev 同款绿） */
+}
+.practice_today .pt_line.pt_ranked .actv.zero {
+  color: #b1b1a4; /* 0 值亮灰同其余零值 */
 }
 .practice_today .pt_sub {
   display: flex;
@@ -11462,12 +11474,14 @@ html.op-fakefs #header {
     display: none; /* 窄屏空间不够：统计隐藏（2026-10-23 张老师定「可隐藏」） */
   }
 }
-/* ---- 练习页标题行「今日已收集 b / i / e BV 创造 z PB」（2026-10-28 21:45 张老师需求） ----
-   与首页 pt_ranked 同款口径与配色：b/i/e=初/中/高级今日新收集 BV 数（级别三色
-   初 #a6e22e / 中 #f79646 / 高 #fdc61a，0 值降亮灰 .zero）、z=今日本BV PB 次数
-   恒金 #fdc61a；「创造 z PB」右缘对齐（同首页 margin-left:auto）。字号/行高与
-   完成统计 .op_today 对齐（数字 16px 加粗 / 标签 13px）；两行包在统计容器
-   .op_stats 纵向堆叠（本行在上、完成统计在下），≤880px 一起隐藏 */
+/* ---- 练习页标题行「今日已收集 x BV / 创造 y PB　活跃+z」（2026-11-08 张老师
+   统一版式，与首页共用 RankedTodayLine 组件）----
+   x=初/中/高今日新收集合计单值（>0 绿 #a6e22e，0 降亮灰 .zero，不再级别三色分列）、
+   y=今日 PB 次数恒金 #fdc61a（0 降亮灰）；「活跃+z」独立段右锚定（margin-left:auto），
+   标签亮灰 #b1b1a4 与本页标签口径一致（首页为暗灰 #75715e，各页跟随各页灰阶）；
+   + 号在 actv 内与数字同色。字号/行高与完成统计 .op_today 对齐（数字 16px 加粗 /
+   标签 13px）；两行包在统计容器 .op_stats 纵向堆叠（本行在上、完成统计在下），
+   ≤880px 一起隐藏 */
 #online_play .op_stats {
   display: flex;
   flex-direction: column;
@@ -11502,20 +11516,19 @@ html.op-fakefs #header {
 #online_play .op_ranked .lead {
   color: #b1b1a4; /* 标签亮灰（22:10 张老师定：统计文字标签统一亮灰，数字才显色） */
 }
-#online_play .op_ranked .lv {
+#online_play .op_ranked .bv {
   font-size: 16px;
   font-weight: bold;
+  color: #a6e22e; /* 今日收集 BV 合计 >0 绿（0 降亮灰 .zero，2026-11-08 统一版式） */
 }
-#online_play .op_ranked .lv_beg { color: #a6e22e; }
-#online_play .op_ranked .lv_int { color: #f79646; }
-#online_play .op_ranked .lv_exp { color: #fdc61a; }
-#online_play .op_ranked .lv.zero { color: #b1b1a4; }
+#online_play .op_ranked .bv.zero {
+  color: #b1b1a4;
+}
 #online_play .op_ranked .sep {
   margin: 0 1px;
   color: #75715e; /* 分隔斜杠暗灰（22:13 张老师定） */
 }
 #online_play .op_ranked .pbpart {
-  margin-left: auto;
   color: #b1b1a4; /* 「创造」「PB」文字亮灰（数值金不变） */
   font-size: 12px;
   font-weight: bold;
@@ -11528,6 +11541,23 @@ html.op-fakefs #header {
 /* pb=0 降亮灰（2026-10-29 00:53 张老师定）：paintRanked 的 set() 对四值统一
    toggle .zero，b/i/e 已有 .lv.zero 规则，pbv 同口径——0 值不显金色 */
 #online_play .op_ranked .pbpart .pbv.zero {
+  color: #b1b1a4;
+}
+/* 「活跃+N」段（2026-11-08 张老师统一版式）：右锚定接棒原 pbpart 的
+   margin-left:auto；标签亮灰 12px bold（本页标签口径），数字 16px 加粗与本页
+   数字档一致；>0 绿 / 0 亮灰，+ 号在 .actv 内与数字同色 */
+#online_play .op_ranked .actpart {
+  margin-left: auto;
+  color: #b1b1a4;
+  font-size: 12px;
+  font-weight: bold;
+}
+#online_play .op_ranked .actv {
+  color: #a6e22e;
+  font-size: 16px;
+  font-weight: bold;
+}
+#online_play .op_ranked .actv.zero {
   color: #b1b1a4;
 }
 @media (max-width: 880px) {
@@ -12607,10 +12637,11 @@ html.op-fakefs #header {
    ellipsis 只能保行尾，左端也被裁；改左对齐 + ellipsis，长句从右端优雅截断 */
 .vprfs_center .rb_hint {
   position: absolute;
-  /* 二十一期：左侧让开「回到回放」+ 三模式开关（34px×4 + 3px×4 间隔 + 8px）；
-     右侧退出全屏 46px 不变 */
-  left: 162px;
-  right: 46px;
+  /* 2026-11-07 张老师定（三轮收敛）：按钮全集中左侧——回到回放 + NF/速旗/连击
+     + 退出全屏共 5 颗（34×5 + 3×5 = 185px），left 让足；右端已无控件，
+     right 只留 8px 边距。文案收敛为「试玩模式」 */
+  left: 200px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   height: 34px;

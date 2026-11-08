@@ -142,10 +142,11 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
 // 今日实时数与按人 mine 走势是毫秒级点查/每用户键，无需也无法预热
 registerPreheat("practice-today", REVALIDATE_HOME_CACHE, () => getPracticeToday(null));
 
-// ---------- 首页「今日已收集 b / i / e BV 创造 z PB」行（2026-10-28 张老师定） ----------
-// 仅今日玩过排行模式（practice_daily.mode_ranked > 0）的登录用户显示，插在
-// 「今日已完成」行上方；b/i/e=初/中/高级今日新收集 BV 数（级别三色，0 值亮灰）、
-// z=今日创造 PB 次数（金色）。
+// ---------- 首页「今日已收集 x BV 创造 y PB 活跃值 z」行（2026-11-08 张老师改版） ----------
+// 登录用户恒显（2026-11-08 改：原口径仅今日玩过排行模式才显示，活跃值入行后登录恒显，
+// 无收获各项亮灰 0）。x=今日新收集 BV 总数（初/中/高合计，>0 绿色）、y=今日创造 PB 次数
+// （金色，0 亮灰，颜色逻辑不变）、z=今日活跃值（practice_daily.act_points，练习 3BV
+// 计点逐盘累加，>0 绿色）。
 // · 收集口径与个人主页收集格 / PB 核查路由完全同源（getUser3bvCollection）：
 //   video JOIN video_info 取 board_3bv，status<>0（待审 10 也算收集，2026-10-28 口径）、
 //   封禁连坐盘（status=0 且本人未封）保留；board_3bv ≥ LEVEL_MIN_3BV（初 2/中 30/高 100）。
@@ -154,9 +155,12 @@ registerPreheat("practice-today", REVALIDATE_HOME_CACHE, () => getPracticeToday(
 //   特定 BV 下本人最好成绩」的次数，直接计 video.pb_bv=1 的今日盘数
 //   （上传时刻判定落列，NF/FL 不分池；**不是**全局历史纪录重放）。
 //   收集 b/i/e 口径不变（收集格同源）。
+// · 活跃值口径同地区活跃指数练习侧（lib/areaactivity.ts）：初级胜=1 败=0；
+//   中级胜=2/过半 1；高级 ≥20% 按 floor(率×10)；自定义胜=1。游客行（user_id=0）
+//   不归属个人，登录用户只读本人当日行。
 
 export interface RankedToday {
-  /** 今日是否玩过排行模式（false 时其余字段无意义，前端不渲染该行） */
+  /** 今日是否玩过排行模式（首页行已登录恒显后仅作数据完整性标志，不再控制显隐） */
   ranked: boolean;
   /** 初级今日新收集 BV 数 */
   beg: number;
@@ -166,15 +170,19 @@ export interface RankedToday {
   exp: number;
   /** 今日创造 PB 次数（打破本BV最好成绩，与列表黄点 pb_bv 同源） */
   pb: number;
+  /** 今日活跃值（practice_daily.act_points，2026-11-08 首页行新增展示项） */
+  act: number;
 }
 
 export async function getRankedToday(uid: number): Promise<RankedToday> {
-  const out: RankedToday = { ranked: false, beg: 0, int: 0, exp: 0, pb: 0 };
+  const out: RankedToday = { ranked: false, beg: 0, int: 0, exp: 0, pb: 0, act: 0 };
   const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
   const row = await prisma.practiceDaily.findUnique({
     where: { day_userId: { day: todayIdx, userId: BigInt(uid) } },
-    select: { modeRanked: true },
+    select: { modeRanked: true, actPoints: true },
   });
+  // 今日活跃值与是否玩过排行模式无关（练习 3BV 计点含所有模式），登录恒取
+  out.act = Number(row?.actPoints ?? 0);
   if (!row || row.modeRanked <= 0) return out;
   out.ranked = true;
   const today0 = dayStart(0);

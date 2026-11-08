@@ -14,23 +14,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getClientIp, ipToArea } from "@/lib/ip2area";
+import { practiceActPoints } from "@/lib/actpoints";
 
 export const runtime = "nodejs";
 
 const LEVELS = new Set(["beg", "int", "exp", "cus"]);
-
-/** 逐盘活跃点（2026-11-08 张老师定稿，见文件头）。整数运算防浮点取整误差。 */
-function activityPoints(level: string, won: boolean, bbbv: number, solvedBv: number): number {
-  if (level === "exp") {
-    // 高级：完成率≥20% 给 floor(率×10)（2~10 点）；胜局 solvedBv=bbbv 恒得 10
-    return solvedBv * 10 >= bbbv * 2 ? Math.floor((solvedBv * 10) / bbbv) : 0;
-  }
-  if (level === "int") {
-    if (won) return 2; // 中级完成=2
-    return solvedBv * 2 >= bbbv ? 1 : 0; // 败局完成率≥50% 给 1
-  }
-  return won ? 1 : 0; // 初级/自定义：完成=1 不成=0（自定义无固定难度防刷）
-}
 
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
@@ -80,8 +68,9 @@ export async function POST(req: NextRequest) {
   const winIntInc = wonInt && level === "int" ? 1 : 0;
   const winExpInc = wonInt && level === "exp" ? 1 : 0;
   const winCusInc = wonInt && level === "cus" ? 1 : 0;
-  // 活跃点（2026-11-08）：服务端逐盘计点，败局也按 3BV 完成情况可能得分
-  const pts = activityPoints(level, wonInt === 1, bbbv, solvedBv);
+  // 活跃点（2026-11-08）：服务端逐盘计点（口径单一来源 lib/actpoints.ts，
+  // 与练习页客户端实时 +N 共用同一函数），败局也按 3BV 完成情况可能得分
+  const pts = practiceActPoints(level, wonInt === 1, bbbv, solvedBv);
   // 原子 UPSERT：当日当用户无行则新建，有行则计数自增（并发局也安全）
   await prisma.$executeRaw`
     INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp,
