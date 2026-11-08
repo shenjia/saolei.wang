@@ -136,7 +136,7 @@ export default async function AdminDashboard() {
       <div className="admin_kpis">
         <Kpi
           label="开源网表态"
-          href="/admin/apikeys"
+          href="/admin/openms-consent"
           value={
             <>
               {openmsConsent.answered.toLocaleString("zh-CN")}
