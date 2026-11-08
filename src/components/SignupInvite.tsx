@@ -60,7 +60,11 @@ export default function SignupInvite({ logged, players }: { logged: boolean; pla
     <div className="si_mask" role="dialog" aria-modal="true" aria-label="邀请注册" onClick={() => setOpen(false)}>
       <div className="si_card" onClick={(e) => e.stopPropagation()}>
         <div className="si_title">喜欢扫雷吗？那就快加入我们吧！</div>
-        <div className="si_desc">你在线玩的成绩可以被记录，并加入排行，和{players}位玩家一起进步。</div>
+        <div className="si_desc">
+          你在线玩的成绩可以被记录，并加入排行
+          <br />
+          和 <span style={{ color: "#fdc61a", fontWeight: 600 }}>{players}</span> 位扫雷爱好者们一起进步！
+        </div>
         <div className="si_btns">
           <button type="button" className="si_yes" onClick={() => router.push("/account/register")}>
             马上注册
