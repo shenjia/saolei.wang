@@ -1,8 +1,8 @@
 // 个人主页「实力」雷达的 23 档评级唯一口径（2026-11-08 张老师定）。
 // 与录像详情页五轴评级（src/lib/videoscore.ts 的 9 主档 + 档内插值）完全独立，互不改用。
 //
-// 名次边界：SSS 前 10；SS+ 前 20；SS 前 30；SS- 前 40；
-// S+ 前 60；S 前 80；S- 前 100。第 100 名后的玩家再均分为
+// 名次边界：SSS 前 3；SS+ 前 10；SS 前 20；SS- 前 30；
+// S+ 前 50；S 前 70；S- 前 100。第 100 名后的玩家再均分为
 // A+ / A / A- … E+ / E / E- / F 共 16 档。每列 distribution 按此顺序存 23 个阈值。
 
 export const RADAR_GRADES = [
@@ -17,7 +17,7 @@ export const RADAR_GRADES = [
   "F",
 ];
 
-export const RADAR_FIXED_RANKS = [10, 20, 30, 40, 60, 80, 100];
+export const RADAR_FIXED_RANKS = [3, 10, 20, 30, 50, 70, 100];
 export const RADAR_REMAINING_GRADES = 16;
 
 // 绘图半径：保留原九主档锚点（SSS100 / SS90 / S80 / A70 / B60 / C50 / D35 / E15 / F5），
@@ -36,7 +36,7 @@ export const RADAR_GRADE_PERCENTS = [
 
 /**
  * 由该维度有成绩人数生成 23 档的名次下界（1 基，含末位）。
- * 例：SSS 取第 10 名成绩；A+ 取第 100 + floor((N-100)/16) 名成绩。
+ * 例：SSS 取第 3 名成绩；A+ 取第 100 + floor((N-100)/16) 名成绩。
  * 不足 100 人时后续边界钳到 N，重复阈值对应空档，判级仍稳定落在可达到的最高档。
  */
 export function radarDistributionRanks(total) {

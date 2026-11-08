@@ -14499,13 +14499,13 @@ a.cheat_rep_link:hover {
   text-decoration: none;
 }
 body #page.rating_page {
-  width: 1400px;
+  width: 1100px;
   max-width: calc(100% - 24px);
 }
 body #page.rating_page .rating_standard {
   box-sizing: border-box;
   width: 100%;
-  padding: 24px 26px;
+  padding: 24px 20px;
 }
 body #page.rating_page .rating_standard h1 {
   margin: 0 0 18px;
@@ -14523,9 +14523,9 @@ body #page.rating_page .rating_standard .rating_note {
 }
 .rating_table {
   width: 100%;
-  min-width: 1320px;
+  min-width: 960px;
   table-layout: fixed;
-  font-size: 12px;
+  font-size: 13px;
 }
 .rating_table th,
 .rating_table td {
