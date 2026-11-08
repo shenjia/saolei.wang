@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CaptchaAction } from "@/core/src/lib/captcha-board";
+import { FlopSprites } from "./FlopSprites";
 
 type Cell = { state: number; num: number | null };
 type Board = {
@@ -15,6 +16,21 @@ type Board = {
 };
 type BoardResponse = Board & { token: string };
 
+/* 格子 → FlopSprites symbol（与 Board.tsx VEC_SYM / 练习页 VEC_MAP 同源口径）：
+   未开=cell-normal-solid、旗=cell-flag-solid、已开=cell-number-N；
+   按住未开格下沉＝cell-number-0（flop/练习页 pressPaint 同语义） */
+function cellSymbol(cell: Cell, pressed: boolean): string {
+  if (cell.state === 1) return `cell-number-${cell.num ?? 0}`;
+  if (cell.state === 2) return "cell-flag-solid";
+  return pressed ? "cell-number-0" : "cell-normal-solid";
+}
+/* td 语义类（对齐 legacy 雪碧图 td.bb/bf/b0-b8；vec 模式下只担命中与光标形态） */
+function cellClass(cell: Cell): string {
+  if (cell.state === 1) return `b${cell.num ?? 0}`;
+  if (cell.state === 2) return "bf";
+  return "bb";
+}
+
 export function BotChallengeGate() {
   const [open, setOpen] = useState(false);
   const [board, setBoard] = useState<Board | null>(null);
@@ -25,6 +41,15 @@ export function BotChallengeGate() {
   const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false);
   const redirect = useRef<string | null>(null);
+  /* 按压视觉：鼠标左键按住的未开格（flop 同款下沉），mouseup 全局释放 */
+  const [press, setPress] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (press === null) return;
+    const clear = () => setPress(null);
+    window.addEventListener("mouseup", clear);
+    return () => window.removeEventListener("mouseup", clear);
+  }, [press]);
 
   function settle(ok: boolean) {
     for (const resolve of waiters.current.splice(0)) resolve(ok);
@@ -44,7 +69,7 @@ export function BotChallengeGate() {
   async function load() {
     setBusy(true);
     setError("");
-    setBoard(null);
+    // 不清空旧盘面：换局时旧局原地保留，新局到达后整盘替换（避免弹窗高度塌缩跳动）
     try {
       const res = await fetch("/api/bot/challenge", { method: "POST", cache: "no-store" });
       if (!res.ok) throw new Error("开局失败，请重试");
@@ -136,69 +161,100 @@ export function BotChallengeGate() {
   }
 
   if (!open) return null;
+  const face = board?.won ? "face-win" : board?.lost ? "face-lose" : "face-flat";
   return (
     <div className="mscap_overlay" role="presentation">
       <section className="mscap_modal" role="dialog" aria-modal="true" aria-labelledby="mscap_title">
         <button type="button" className="mscap_close" onClick={close} aria-label="关闭验证">×</button>
         <h2 id="mscap_title">扫一盘，继续访问</h2>
-        <p className="mscap_desc">初级微型局，已自动 opening。扫完全部安全格即通过；可无限换局。</p>
-        {board && (
-          <div className="mscap_meta">
-            <span>3BV {board.board3bv}</span>
-            <span>10 雷</span>
-            <span>{board.won ? "验证通过" : board.lost ? "踩雷了，换一局再试" : "左键开格 / 右键插旗 / 点数字 chord"}</span>
-          </div>
-        )}
+        {/* 换局按钮：首页「开始练习」同款扁平笑脸银灰凸起（flop 四态笑脸：胜=墨镜/负=僵尸） */}
+        <button type="button" className="mscap_face" onClick={() => void load()} disabled={busy}>
+          <svg viewBox="0 0 260 260" width={24} height={24} aria-hidden="true">
+            <use href={`#${face}`} />
+          </svg>
+          <span>换一局</span>
+        </button>
         {board && (
           <div
-            className={"mscap_board" + (board.won ? " won" : board.lost ? " lost" : "")}
-            style={{ gridTemplateColumns: `repeat(${board.width}, 28px)` }}
+            className={
+              "mscap_board board size16 vec" +
+              (board.won ? " won" : board.lost ? " lost" : "")
+            }
             onContextMenu={(e) => e.preventDefault()}
           >
-            {board.cells.map((cell, i) => (
-              <button
-                type="button"
-                key={i}
-                className={`mscap_cell s${cell.state} n${cell.num ?? "x"}`}
-                disabled={busy || board.won || board.lost}
-                aria-label={`${Math.floor(i / board.width) + 1} 行 ${(i % board.width) + 1} 列`}
-                onClick={() => {
-                  if (suppressClick.current) {
-                    suppressClick.current = false;
-                    return;
-                  }
-                  void act(cell.state === 1 ? "chord" : "open", i);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  void act("flag", i);
-                }}
-                onTouchStart={() => {
-                  longPress.current = setTimeout(() => {
-                    suppressClick.current = true;
-                    void act("flag", i);
-                  }, 480);
-                }}
-                onTouchEnd={() => {
-                  if (longPress.current) clearTimeout(longPress.current);
-                  longPress.current = null;
-                }}
-                onTouchCancel={() => {
-                  if (longPress.current) clearTimeout(longPress.current);
-                  longPress.current = null;
-                }}
-              >
-                {cell.state === 1 ? (cell.num === 0 ? "" : cell.num) : cell.state === 2 ? "F" : ""}
-              </button>
-            ))}
+            <table cellPadding={0} cellSpacing={0}>
+              <tbody>
+                {Array.from({ length: board.height }, (_, y) => (
+                  <tr key={y}>
+                    {board.cells.slice(y * board.width, (y + 1) * board.width).map((cell, x) => {
+                      const i = y * board.width + x;
+                      const dead = busy || board.won || board.lost;
+                      return (
+                        <td
+                          key={x}
+                          className={cellClass(cell)}
+                          aria-label={`${y + 1} 行 ${x + 1} 列`}
+                          onClick={() => {
+                            if (suppressClick.current) {
+                              suppressClick.current = false;
+                              return;
+                            }
+                            void act(cell.state === 1 ? "chord" : "open", i);
+                          }}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            void act("flag", i);
+                          }}
+                          onMouseDown={(e) => {
+                            if (e.button === 0 && cell.state === 0 && !dead) setPress(i);
+                          }}
+                          onTouchStart={() => {
+                            longPress.current = setTimeout(() => {
+                              suppressClick.current = true;
+                              void act("flag", i);
+                            }, 480);
+                          }}
+                          onTouchEnd={() => {
+                            if (longPress.current) clearTimeout(longPress.current);
+                            longPress.current = null;
+                          }}
+                          onTouchCancel={() => {
+                            if (longPress.current) clearTimeout(longPress.current);
+                            longPress.current = null;
+                          }}
+                        ></td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* 整盘单 SVG 覆盖层（详情页/回放 vec 同构）：FlopSprites 贴图一次光栅化，
+                zoom 放大下网格仍均匀；贴图随弹窗自带（gate 挂根 layout，宿主页未必有） */}
+            <svg
+              className="vecboard"
+              viewBox={`0 0 ${board.width * 16} ${board.height * 16}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <rect x="0" y="0" width="100%" height="100%" fill="#808080" />
+              {board.cells.map((cell, i) => (
+                <use
+                  key={i}
+                  href={`#${cellSymbol(cell, press === i)}`}
+                  x={(i % board.width) * 16}
+                  y={((i / board.width) | 0) * 16}
+                  width={16}
+                  height={16}
+                />
+              ))}
+            </svg>
+            <FlopSprites />
           </div>
         )}
         {busy && !board && <p className="mscap_status">正在取一张预生成盘面…</p>}
         {error && <p className="mscap_error">{error}</p>}
-        <div className="mscap_actions">
-          <button type="button" onClick={() => void load()} disabled={busy}>换一局</button>
-          <span>通过后 2 小时内免验证</span>
-        </div>
+        <p className="mscap_note">通过后 2 小时内免验证</p>
       </section>
     </div>
   );

@@ -14638,87 +14638,56 @@ body #page.rating_page .rating_standard .rating_note {
   font-size: 25px;
   cursor: pointer;
 }
-.mscap_desc {
-  margin: 0 0 12px;
-  color: #aaa99a;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.mscap_meta {
+/* 换局按钮：首页「开始练习」(#play_entry) 同款扁平笑脸银灰凸起，置于游戏区域上方 */
+.mscap_face {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 5px 12px;
-  margin-bottom: 10px;
-  color: #c4c3b5;
-  font-size: 12px;
-}
-.mscap_board {
-  display: grid;
-  gap: 2px;
-  justify-content: center;
-  width: max-content;
-  margin: 0 auto 14px;
-  padding: 7px;
-  border: 2px inset #d0d0c8;
-  background: #808080;
-  touch-action: manipulation;
-  user-select: none;
-}
-.mscap_cell {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 2px outset #f0f0ea;
-  border-radius: 0;
-  background: #bdbdbd;
-  color: #222;
-  font-family: Arial, sans-serif;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 8px 0;
+  background: silver;
+  border: 3px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+  color: #333;
   font-size: 16px;
   font-weight: bold;
-  line-height: 24px;
-  text-align: center;
   cursor: pointer;
-  opacity: 1;
-  -webkit-tap-highlight-color: transparent;
 }
-.mscap_cell.s1 {
-  border: 1px solid #909090;
-  background: #c6c6c6;
+.mscap_face:hover {
+  color: #000;
+}
+.mscap_face:active {
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+}
+.mscap_face:disabled {
   cursor: default;
 }
-.mscap_cell.s2 {
-  color: #c00;
+/* 棋盘容器：复用 .board.size16.vec（legacy 立体边框 + vec 单 SVG 覆盖层贴图，
+   与录像详情页/回放同一渲染）；zoom 整体放大 1.5（vec 覆盖层任意倍率网格均匀） */
+.mscap_board {
+  width: max-content;
+  margin: 0 auto 14px;
+  zoom: 1.5;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.mscap_cell.n1 { color: #0000c8; }
-.mscap_cell.n2 { color: #087b08; }
-.mscap_cell.n3 { color: #d00000; }
-.mscap_cell.n4 { color: #000080; }
-.mscap_cell.n5 { color: #800000; }
-.mscap_cell.n6 { color: #008080; }
-.mscap_cell.n7 { color: #111; }
-.mscap_cell.n8 { color: #666; }
+.mscap_board td { cursor: pointer; }
+.mscap_board td.b0,
+.mscap_board.won td,
+.mscap_board.lost td { cursor: default; }
 .mscap_board.won { outline: 2px solid #639922; }
 .mscap_board.lost { outline: 2px solid #a32d2d; }
 .mscap_status { color: #aaa99a; font-size: 13px; }
 .mscap_error { color: #ff9b8f; font-size: 13px; }
-.mscap_actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.mscap_note {
+  margin: 0;
   color: #8f8e82;
   font-size: 12px;
-}
-.mscap_actions button {
-  padding: 5px 14px;
-  border: 1px solid #777465;
-  border-radius: 5px;
-  background: #444239;
-  color: #e2e1d4;
-  cursor: pointer;
+  text-align: center;
 }
 @media (max-width: 380px) {
   .mscap_modal { padding-left: 12px; padding-right: 12px; }
-  .mscap_actions span { max-width: 135px; text-align: right; }
 }
