@@ -204,6 +204,21 @@ fix_prisma_stub() {
 fix_prisma_stub "$S_DIR"
 
 # ---------- 启动/更新权威对局服务 ----------
+# 2026-11-08 北京 active 拆到独立服务器：.env 配 AUTHORITY_URL_A 后，网站发布
+# 绝不再轮换/重建本机 a，也不许把 nginx 写回 127.0.0.1:3104。这里只检查
+# 双端健康，保持当前 active 不动；主备切换由独立迁移/发布步骤显式执行，
+# 避免新 Next 尚未加载 AUTHORITY_URL_A 时就提前把新局切走。
+REMOTE_AUTH_A="$(sed -n 's/^AUTHORITY_URL_A=//p' .env | tail -n 1)"
+if [[ -n "$REMOTE_AUTH_A" ]]; then
+  [[ "$REMOTE_AUTH_A" =~ ^http://[0-9.]+:[0-9]+$ ]] || fail "AUTHORITY_URL_A 仅支持内网 http://IP:端口（当前值不合法）"
+  info "北京 authority a 为独立节点 ${REMOTE_AUTH_A}，本机仅保留 backup b；当前 active=$(read_auth_active) 保持不变"
+  if ! curl -sf --max-time 5 "$REMOTE_AUTH_A/health" >/dev/null 2>&1; then
+    warn "远端 authority a 暂不健康；保持 nginx 当前主备，不自动切流"
+  fi
+  pm2 describe saolei-authority-b >/dev/null 2>&1 || fail "本机 authority backup b 不存在"
+  curl -sf --max-time 5 http://127.0.0.1:3105/health >/dev/null 2>&1 || fail "本机 authority backup b 不健康，禁止发布期间改动它"
+else
+# 以下为本机 a/b 双实例模式（未配置 AUTHORITY_URL_A 时沿用）。
 # 2026-10-27 改「双实例热备」（张老师定，替代单实例排空）：
 # 对局状态在各自进程内存、两槽互不可见 → 不做负载均衡，做热备切换：
 #   ① 重建备槽（delete+start：pm2 restart 不重读 ecosystem env，且要加载新代码）
@@ -332,6 +347,7 @@ ok "权威对局双槽就绪 ✓ active=$AUTH_STANDBY"
 # 轮换成功才落指纹：失败路径（fail 退出）不落，下次发布自动重试轮换
 printf '%s\n' "$AUTH_FINGERPRINT" > "$AUTH_STATE_FILE"
 fi
+fi
 
 # ---------- 重启备槽实例 ----------
 # 备槽是 nginx backup（双活下常驻运行，但几乎不接流量——仅主力失败时兜底）。
@@ -410,4 +426,4 @@ if ! (crontab -l 2>/dev/null | grep -qF "reset-distribution.mjs"); then
   ok "已安装 distribution 每日重算 cron（00:30）"
 fi
 
-ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 旧主力 $A_APP 保持运行兜底; authority active=$AUTH_STANDBY)"
+ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 旧主力 $A_APP 保持运行兜底; authority active=$(read_auth_active))"

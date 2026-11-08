@@ -54,5 +54,10 @@ check_slot() {
   fi
 }
 
-check_slot a saolei-authority-a 3104
+# 北京 active 拆到独立服务器后，本机只守护 backup b；否则 cron 会把已退役的
+# 本机 a 每分钟重新拉起。远端 a 由其自身 systemd Restart=always 守护。
+REMOTE_AUTH_A="$(sed -n 's/^AUTHORITY_URL_A=//p' "$DEPLOY_DIR/.env" | tail -n 1)"
+if [[ -z "$REMOTE_AUTH_A" ]]; then
+  check_slot a saolei-authority-a 3104
+fi
 check_slot b saolei-authority-b 3105
