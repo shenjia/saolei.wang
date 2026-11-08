@@ -627,6 +627,8 @@ async function dispatch(
          邮箱绑定（目标未绑时随迁；源未绑邮箱但登录名本身是邮箱时，随迁为未验证草稿——
          2026-11-09 张老师明确口径，35627→12699 实证：登录名邮箱不随迁会凭空丢失）、
          第三方绑定（按 provider 逐类随迁；目标已绑同类型则该类不迁，源行按注销口径删除）。
+         可选步骤（弹窗勾选，默认不选）：登录凭据同步——勾选后目标账户改用源账户的
+         登录名/密码/邮箱绑定登录（2026-11-09 张老师需求：用户忘记目标密码注册新号的场景）。
          衍生重算（各自口径对齐）：
          · user_scores(_nf) 六池：源行（含老站遗产无录像纪录）与目标行逐格取优合并，源行清零防双计；
          · 名次落盘：源账户出榜，目标账户出旧位后按合并成绩回榜（rankLeave/rankEnter 契约）；
@@ -637,6 +639,9 @@ async function dispatch(
          录像标识 user_sig 随合并迁至目标账户，撞唯一键的源行删除）。 */
       const id = toId(p.id);
       const targetId = toId(p.targetId);
+      // 登录凭据同步（2026-11-09 张老师需求）：弹窗勾选项，默认不选。勾选后目标账户改用
+      // 源账户的登录名与密码登录（含邮箱绑定状态）——典型场景：用户忘记目标密码注册了新号
+      const syncCred = toBool(p.syncCredentials);
       if (!id || !targetId) return { ok: false, error: "参数错误：缺少玩家 ID 或目标 ID" };
       if (id === targetId) return { ok: false, error: "目标账户不能是当前账户自己" };
       if (id === actor.uid) return { ok: false, error: "不能合并自己当前登录的账号" };
@@ -794,6 +799,29 @@ async function dispatch(
         // ⑩ 注销源账户（user.delete 同口径：删凭据/找回链接、置封禁、保留 user 行；
         //    user_sig 已随合并迁走，源账户不再持有任何标识）
         await tx.userAuth.delete({ where: { id: src } });
+        // ⑪ 登录凭据同步（弹窗勾选，默认不选）：把源账户的登录名/密码/邮箱绑定整体
+        //    同步给目标账户。必须在源凭据行删除之后执行——username/email 均 @unique，
+        //    源行删除即释放两个唯一键，目标才可安全接管。
+        if (syncCred) {
+          await tx.userAuth.update({
+            where: { id: tgt },
+            data: {
+              username: srcAuth.username,
+              password: srcAuth.password,
+              salt: srcAuth.salt,
+              updateTime: ts,
+              // 源有邮箱绑定（或登录名本身是邮箱）时连同绑定状态一起同步，覆盖目标原有绑定；
+              // 源完全没有邮箱时保留目标自己的邮箱不动
+              ...(srcEmail
+                ? {
+                    email: srcEmail,
+                    emailVerified: srcAuth.email ? srcAuth.emailVerified : BigInt(0),
+                    emailToken: srcAuth.emailToken,
+                  }
+                : {}),
+            },
+          });
+        }
         await tx.passwordToken.deleteMany({ where: { user: src } });
         await tx.user.update({ where: { id: src }, data: { status: -1, updateTime: ts } });
       });
@@ -813,7 +841,8 @@ async function dispatch(
           `录像 ${videoCount} 部、评论 ${commentCount} 条、主题 ${postCount} 篇 / 回复 ${replyCount} 条、` +
           `动态 ${newsCount} 条、第三方绑定 ${oauthCount - oauthDropped} 个` +
           (oauthDropped ? `（目标已绑同类型，${oauthDropped} 个未迁、随注销释放）` : "") +
-          `；${emailNote}`,
+          `；${emailNote}` +
+          (syncCred ? "；登录凭据已同步（目标账户改用源账户的登录名与密码登录）" : ""),
       };
     }
 

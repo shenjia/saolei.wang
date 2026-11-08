@@ -24,6 +24,7 @@ export function MergeUserDialog({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [targetId, setTargetId] = useState("");
+  const [syncCred, setSyncCred] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -39,13 +40,14 @@ export function MergeUserDialog({
     if (
       !(await confirmMerge(
         `⚠️ 不可逆操作：确认把「${name}」（#${userId}）的全部数据（录像、成绩、文章、评论、动态、站内信、第三方与邮箱绑定等）` +
-          `合并到玩家 #${tid} 名下，随后注销「${name}」的账号？合并后源账户无法登录、无法恢复。`
+          `合并到玩家 #${tid} 名下，随后注销「${name}」的账号？合并后源账户无法登录、无法恢复。` +
+          (syncCred ? `\n已勾选「同步登录凭据」：合并后 #${tid} 将改用「${name}」的登录名与密码登录。` : "")
       ))
     ) {
       return;
     }
     setBusy(true);
-    const res = await postOp("user.merge", { id: userId, targetId: tid });
+    const res = await postOp("user.merge", { id: userId, targetId: tid, syncCredentials: syncCred });
     setBusy(false);
     toast(res.ok ? res.message ?? "已合并" : res.error ?? "操作失败", res.ok ? "success" : "error");
     if (res.ok) {
@@ -82,11 +84,17 @@ export function MergeUserDialog({
             />
 
             <p className="ban_hint">
-              搬迁范围：录像与成绩榜、录像标识、评论、论坛主题/回复、动态、站内信、QQ/微信绑定、邮箱绑定（目标未绑时随迁）、
+              搬迁范围：录像与成绩榜、录像标识、评论、论坛主题/回复、动态、站内信、QQ/微信绑定（目标已绑同类型则该类不迁）、
+              邮箱绑定（目标未绑时随迁；源登录名本身是邮箱时随迁为未验证草稿）、
               赞助记录、每日一星、扫雷历程、地盘人气。
               成绩按双方最优合并（源行清零防双计），名次 / STNB 榜 / 纪录动态 / 录像计数自动重算；
               反作弊标记与后台审计记录不随迁。
             </p>
+
+            <label className="ban_check">
+              <input type="checkbox" checked={syncCred} onChange={(e) => setSyncCred(e.target.checked)} disabled={busy} />
+              <span>将登录凭据同步给目标账户（合并后目标账户改用「{name}」的登录名与密码登录；默认不勾选，仅同步数据）</span>
+            </label>
 
             <div className="ban_ops">
               <button type="button" className="admin_btn" disabled={busy} onClick={() => setOpen(false)}>
