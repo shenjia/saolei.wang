@@ -14,7 +14,7 @@ module.exports = {
       cwd: __dirname,
       env: { NEXT_DIST_DIR: ".next-blue", RANKED_MODE_OPEN: "1", RANKED_PENALTY_DELAY: "1" },
       watch: false,
-      max_memory_restart: "1G",
+      max_memory_restart: "1536M",
       // crash loop 防护（09-27 教训：槽位产物未就绪时 pm2 无限重启 1287 次
       // 持续烧 CPU/IO，30 秒内连挂 5 次即停手等人工介入）
       max_restarts: 5,
@@ -29,7 +29,7 @@ module.exports = {
       cwd: __dirname,
       env: { NEXT_DIST_DIR: ".next-green", RANKED_MODE_OPEN: "1", RANKED_PENALTY_DELAY: "1" },
       watch: false,
-      max_memory_restart: "1G",
+      max_memory_restart: "1536M",
       max_restarts: 5,
       restart_delay: 30000,
       merge_logs: true,
