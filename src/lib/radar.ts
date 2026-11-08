@@ -1,16 +1,16 @@
-// 实力雷达图数据：移植 2013 版 logic/Assess.php + logic/Distribution.php
-// 8 个维度 = 排序(time/3bvs) × 级别(sum/exp/int/beg)，按全服成绩分布评定百分比与等级
+// 实力雷达图数据：8 维 = 排序(time/3bvs) × 级别(sum/exp/int/beg)。
+// 2026-11-08 起改 23 个显式名次档（radar-standard.mjs），不再用九主档档内插值推 +/-。
 //
 // ⚠️ 两个「百分比」语义不同（2026-10-15 张老师指出气泡逻辑漏洞后明确区分）：
-//   percent  = 等级档位插值（A 档映射 69~79% 等，2013 原版 Assess::percent 语义），
-//              只用作雷达绘图半径——等级体系设计使顶尖玩家不至于全贴满圆，保留形状区分度；
+//   percent  = 23 个显式子档各自的固定绘图半径（非真实排位），只用于雷达形状区分；
 //   beatPct  = 真实排位百分位（全服该维度成绩严格更差者 / 上榜人口，与 getUserRanks
 //              全国名次同口径：JOIN user status=0），气泡「超过 xx% 的玩家」只认这个。
 
 import { prisma } from "@/lib/db";
-import { GRADES, GRADE_PERCENTS, ORDER_DIRECTION, type Level, type Order } from "@/lib/config";
+import { ORDER_DIRECTION, type Level, type Order } from "@/lib/config";
 import { score3bvs, scoreTime } from "@/lib/format";
 import { SCORE_FIELD, rankedOnly } from "@/lib/queries";
+import { radarGrade, radarPercent } from "@/lib/radar-standard.mjs";
 import { unstable_cache } from "next/cache";
 
 export interface RadarPoint {
@@ -18,7 +18,7 @@ export interface RadarPoint {
   name: string;
   /** 格式化后的成绩，如 46.65 / 5.832 */
   score: string;
-  /** 0-100 的等级档位插值（绘图半径用，非真实排位） */
+  /** 0-100 的子档固定绘图半径（非真实排位） */
   percent: number;
   /** 真实排位百分位：超过全服该维度多少百分比的玩家（0=无成绩/无基准；100=全网第一） */
   beatPct: number;
@@ -41,11 +41,8 @@ const ORDER_NAMES: Record<Order, string> = {
   "3bvs": "3BV/s",
 };
 
-// 分布缓存（对应 PHP 的 Distribution::$distribution 静态缓存）
-let distributionCache: Record<string, number[]> | null = null;
-
-async function getDistribution(): Promise<Record<string, number[]>> {
-  if (distributionCache) return distributionCache;
+// 每日 00:30 重算后无需重启：最新快照最多 5 分钟自动接替旧快照（双活各槽独立缓存亦然）。
+async function getDistributionImpl(): Promise<Record<string, number[]>> {
   const row = await prisma.distribution.findFirst({ orderBy: { id: "desc" } });
   const result: Record<string, number[]> = {};
   if (row) {
@@ -60,59 +57,12 @@ async function getDistribution(): Promise<Record<string, number[]>> {
       }
     }
   }
-  distributionCache = result;
   return result;
 }
 
-/** 移植 Assess::getPosition（末尾档位钳位：成绩比最差档还差时按最低档算，
- *  避免 GRADES[9] = undefined —— 与 lib/videoscore.ts 同款防御，2026-10-28 /user/35534 实证：
- *  sum_time=1328440 落穿末档边界 1028100 → grade 返回 undefined → gradeColor 内
- *  undefined.replace 抛 TypeError → 整页 500） */
-function getPosition(score: number, dist: number[], direction: "asc" | "desc"): number {
-  for (let i = 0; i < dist.length; i++) {
-    if (direction === "desc") {
-      if (score >= dist[i]) return i;
-    } else {
-      if (score <= dist[i]) return i;
-    }
-  }
-  return Math.min(dist.length, GRADES.length - 1);
-}
-
-/** 移植 Assess::grade */
-function grade(dist: number[], direction: "asc" | "desc", score: number): string {
-  if (score === 0 || dist.length === 0) return "?";
-  const position = getPosition(score, dist, direction);
-  if (position === 0 || position >= GRADES.length - 1) return GRADES[Math.min(position, GRADES.length - 1)];
-
-  const maxScore = dist[position - 1] - 1;
-  const minScore = dist[position];
-  const range = Math.abs(maxScore - minScore);
-  if (range === 0) return GRADES[position];
-
-  const rate = Math.abs(maxScore - score) / range;
-  if (rate > 0.6666) return GRADES[position] + "-";
-  if (rate < 0.3333) return GRADES[position] + "+";
-  return GRADES[position];
-}
-
-/** 移植 Assess::percent */
-function percent(dist: number[], direction: "asc" | "desc", score: number): number {
-  if (score === 0 || dist.length === 0) return 0;
-  const position = getPosition(score, dist, direction);
-  if (position === 0) return GRADE_PERCENTS[0];
-
-  const maxPercent = GRADE_PERCENTS[position - 1] - 1;
-  const minPercent = GRADE_PERCENTS[position];
-  const maxScore = dist[position - 1] - 1;
-  const minScore = dist[position];
-  const rangeScore = Math.abs(maxScore - minScore);
-  if (rangeScore === 0) return minPercent;
-
-  const offset = Math.abs(maxScore - score);
-  const fix = Math.floor((offset * (maxPercent - minPercent)) / rangeScore);
-  return Math.max(maxPercent - fix, 0);
-}
+export const getRadarDistribution = unstable_cache(getDistributionImpl, ["radar-distribution-v2"], {
+  revalidate: 300,
+});
 
 /**
  * 真实排位百分位（2026-10-15 修气泡逻辑漏洞新增）：
@@ -164,7 +114,7 @@ export async function getRadarData(
   scores: Record<string, { score: number | null }>
 ): Promise<RadarPoint[]> {
   const [distribution, beatPct] = await Promise.all([
-    getDistribution(),
+    getRadarDistribution(),
     getBeatPct(scores),
   ]);
   const points: RadarPoint[] = [];
@@ -182,9 +132,9 @@ export async function getRadarData(
               ? scoreTime(raw)
               : score3bvs(raw)
             : "无",
-        percent: percent(dist, direction, raw),
+        percent: radarPercent(raw, dist, direction),
         beatPct: beatPct[`${level}_${order}`] ?? 0,
-        grade: grade(dist, direction, raw),
+        grade: radarGrade(raw, dist, direction),
       });
     }
   }

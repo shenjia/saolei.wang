@@ -4992,6 +4992,7 @@ body #page.ranking_old .ranking_box {
    其他板块维持 6px 视觉间隙——用更窄的选择器单独覆盖） */
 #daily_star h2 .star_help,
 #video_hot h2 .star_help,
+#user_view .radar.box h2 .star_help,
 #video_view .radar.box h2.vr_h .star_help {
   display: inline-flex;
   align-items: center;
@@ -5008,11 +5009,13 @@ body #page.ranking_old .ranking_box {
 }
 #daily_star h2 .star_help:hover,
 #video_hot h2 .star_help:hover,
+#user_view .radar.box h2 .star_help:hover,
 #video_view .radar.box h2.vr_h .star_help:hover {
   color: #b1b1a4;
 }
 #daily_star h2 .star_help::after,
 #video_hot h2 .star_help::after,
+#user_view .radar.box h2 .star_help::after,
 #video_view .radar.box h2.vr_h .star_help::after {
   content: attr(data-tip);
   position: absolute;
@@ -5036,6 +5039,7 @@ body #page.ranking_old .ranking_box {
 }
 #daily_star h2 .star_help:hover::after,
 #video_hot h2 .star_help:hover::after,
+#user_view .radar.box h2 .star_help:hover::after,
 #video_view .radar.box h2.vr_h .star_help:hover::after {
   opacity: 1;
 }
@@ -14484,4 +14488,76 @@ a.cheat_rep_link:hover {
   color: #f92672;
   font-size: 13px;
   text-align: center;
+}
+
+/* 玩家主页「实力」评级入口 + 独立评级标准页（2026-11-08 张老师定）。 */
+#user_view .radar.box h2 {
+  position: relative;
+  z-index: 3; /* 雷达扇形热区会外扩到标题区，问号链接必须压在它上面 */
+}
+#user_view .radar.box h2 a.star_help {
+  text-decoration: none;
+}
+body #page.rating_page {
+  width: 1400px;
+  max-width: calc(100% - 24px);
+}
+body #page.rating_page .rating_standard {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 24px 26px;
+}
+body #page.rating_page .rating_standard h1 {
+  margin: 0 0 18px;
+}
+body #page.rating_page .rating_standard p {
+  line-height: 1.9;
+}
+body #page.rating_page .rating_standard .rating_note {
+  color: #b1b1a4;
+  font-size: 13px;
+}
+.rating_table_wrap {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+.rating_table {
+  width: 100%;
+  min-width: 1320px;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.rating_table th,
+.rating_table td {
+  padding: 6px 7px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rating_table thead th {
+  color: #b1b1a4;
+  border-bottom: 1px solid #565549;
+}
+.rating_table tbody td {
+  color: #f8f8f2;
+}
+.rating_table tbody tr:nth-child(even) {
+  background: rgba(248, 248, 242, 0.025);
+}
+.rating_table .grade_col {
+  width: 64px;
+  text-align: left;
+  font-weight: bold;
+}
+.rating_pending {
+  color: #e6db74;
+}
+@media (max-width: 768px) {
+  body #page.rating_page {
+    width: 100%;
+    max-width: calc(100% - 16px);
+  }
+  body #page.rating_page .rating_standard {
+    padding: 18px 14px;
+  }
 }

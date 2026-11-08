@@ -402,4 +402,12 @@ if ! (crontab -l 2>/dev/null | grep -qF "authority-healthcheck.sh"); then
   ok "已安装 authority 心跳监控 cron（每分钟）"
 fi
 
+# ---------- 实力图 distribution 每日重算（2026-11-08 张老师要求）----------
+# 23 档名次阈值每天 00:30 全量重算并追加快照；radar.ts 5 分钟 TTL 自动接手，无需重启双槽。
+DIST_CRON_LINE="30 0 * * * cd $DEPLOY_DIR && /usr/bin/env -u NODE_OPTIONS node scripts/reset-distribution.mjs --apply >> /home/deploy/logs/distribution.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "reset-distribution.mjs"); then
+  (crontab -l 2>/dev/null; echo "$DIST_CRON_LINE") | crontab -
+  ok "已安装 distribution 每日重算 cron（00:30）"
+fi
+
 ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 旧主力 $A_APP 保持运行兜底; authority active=$AUTH_STANDBY)"

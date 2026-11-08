@@ -3,15 +3,8 @@
 // 军衔（title）2026-10-13 起改为高级时间绝对阈值制（TITLE_THRESHOLDS 常量），不再读 distribution.title
 
 import { prisma } from "./db";
-import {
-  GRADE_PERCENTS,
-  GRADES,
-  ORDER_DIRECTION,
-  TITLE_THRESHOLDS,
-  TITLES,
-  type Level,
-  type Order,
-} from "./config";
+import { ORDER_DIRECTION, TITLE_THRESHOLDS, TITLES, type Level, type Order } from "./config";
+import { radarGrade, radarPercent } from "./radar-standard.mjs";
 
 type DistributionRow = Record<string, string | null> & { id: bigint };
 
@@ -27,19 +20,6 @@ async function getDistribution(): Promise<DistributionRow | null> {
 function parseThresholds(raw: string | null | undefined): number[] {
   if (!raw) return [];
   return raw.split(",").map((s) => parseInt(s, 10));
-}
-
-/** 在阈值数组中定位（移植 Assess::getPosition） */
-function getPosition(score: number, distribution: number[], direction: 0 | 1): number {
-  let i = 0;
-  for (; i < distribution.length; i++) {
-    if (direction === 1) {
-      if (score >= distribution[i]) return i;
-    } else {
-      if (score <= distribution[i]) return i;
-    }
-  }
-  return i;
 }
 
 /** 军衔：按高级时间绝对阈值评定（2026-10-13 张老师改版，原按总计时间相对阈值）
@@ -121,50 +101,20 @@ export function getTitleDistribution(): TitleDistribution {
   return { thresholds: TITLE_THRESHOLDS, size: 0, createTime: 0 };
 }
 
-/** 评级：SSS~F（移植 Assess::grade） */
+/** 评级：个人主页实力图 23 档（兼容旧调用签名；生产主链路在 lib/radar.ts）。 */
 export async function grade(level: Level, order: Order, score: number | null | undefined): Promise<string> {
   if (!score) return "?";
   const dist = await getDistribution();
   if (!dist) return "?";
   const thresholds = parseThresholds(dist[`${level}_${order}`]);
-  if (!thresholds.length) return "?";
-  const direction = ORDER_DIRECTION[order] === "desc" ? 1 : 0;
-  const position = getPosition(score, thresholds, direction);
-
-  if (position === 0 || position >= GRADES.length - 1) return GRADES[Math.min(position, GRADES.length - 1)];
-
-  const maxScore = thresholds[position - 1] - 1;
-  const minScore = thresholds[position];
-  const range = Math.abs(maxScore - minScore);
-  if (range === 0) return GRADES[position];
-  const rate = Math.abs(maxScore - score) / range;
-
-  if (rate > 0.6666) return GRADES[position] + "-";
-  if (rate < 0.3333) return GRADES[position] + "+";
-  return GRADES[position];
+  return radarGrade(score, thresholds, ORDER_DIRECTION[order]);
 }
 
-/** 评级百分比（移植 Assess::percent） */
+/** 评级绘图半径（23 档固定子档锚点，非真实排位百分位）。 */
 export async function percent(level: Level, order: Order, score: number | null | undefined): Promise<number> {
   if (!score) return 0;
   const dist = await getDistribution();
   if (!dist) return 0;
   const thresholds = parseThresholds(dist[`${level}_${order}`]);
-  if (!thresholds.length) return 0;
-  const direction = ORDER_DIRECTION[order] === "desc" ? 1 : 0;
-  const position = getPosition(score, thresholds, direction);
-  if (position === 0) return GRADE_PERCENTS[0];
-
-  const maxPercent = GRADE_PERCENTS[position - 1] - 1;
-  const minPercent = GRADE_PERCENTS[position];
-  const rangePercent = maxPercent - minPercent;
-
-  const maxScore = thresholds[position - 1] - 1;
-  const minScore = thresholds[position];
-  const rangeScore = Math.abs(maxScore - minScore);
-  if (rangeScore === 0) return maxPercent;
-
-  const offset = Math.abs(maxScore - score);
-  const fix = Math.floor((offset * rangePercent) / rangeScore);
-  return Math.max(maxPercent - fix, 0);
+  return radarPercent(score, thresholds, ORDER_DIRECTION[order]);
 }
