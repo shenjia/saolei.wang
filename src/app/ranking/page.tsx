@@ -4,13 +4,15 @@
 // + 全级别成绩表 + 「加载更多」（替代老式分页）；右上角查找框无按钮化（模糊推荐）；
 // 登录态下搜索框空输入推荐「自己」，回车定位（2026-10-13 替代原底部「我在哪里」按钮）。
 // 世界榜作为一个排行种类并入 tabs（minesweepergame.com 实时抓取，1 天缓存）。
+// 2026-11-08 URI 统一（张老师要求）：进步/活跃/地区榜并入本路由（view=grow|active|area），
+// 旧独立路由 /grow /active /area 308 重定向到 /ranking?view=xxx。
 // 兼容旧 URL 参数 level/order/nf；page 参数保留兼容旧链接（首次渲染对应页）。
 
 import { redirect } from "next/navigation";
 import { getRankingTable, getRankingPageOfUser, getBvRanking, getBvRankOfUser, getStnbRanking, getStnbRankOfUser, getRankOfUsers } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { ensureTodaySnapshot, getSumTimeDeltas } from "@/lib/ranksnap";
-import { parseRankingBy, byLevelOrder, parseBvRankingBy, type VideoLevel } from "@/lib/config";
+import { parseRankingBy, byLevelOrder, parseBvRankingBy, areaDisplay, type VideoLevel } from "@/lib/config";
 import { title as assessTitle } from "@/lib/assess";
 import { dualTitles, getThunderKingThreshold } from "@/lib/title-system";
 import { RANKING_COL_WIDTHS } from "@/components/RankingRows";
@@ -21,6 +23,9 @@ import { WorldTop100 } from "@/components/WorldTop100";
 import { BvRankingFeed } from "@/components/BvRankingFeed";
 import { StnbRankingFeed } from "@/components/StnbRankingFeed";
 import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
+import { GrowRankingView } from "@/components/GrowRankingView";
+import { ActiveRankingView } from "@/components/ActiveRankingView";
+import { AreaRankingView } from "@/components/AreaRankingView";
 
 export const dynamic = "force-dynamic";
 
@@ -137,6 +142,8 @@ function bvRules(den: Record<VideoLevel, number>, totalDen: number, nf = false) 
 }
 
 // 页面 title 统一「xx排行」命名（2026-09-24 张老师要求：不再用「xx榜」）
+// 2026-11-08 URI 统一：进步/活跃/地区榜并入本路由（view=grow|active|area），
+// title 随 view 切换；地区内页仍带「（地区名）」后缀（原 /area 同口径）
 export async function generateMetadata({
   searchParams,
 }: {
@@ -144,14 +151,11 @@ export async function generateMetadata({
 }) {
   const sp = await searchParams;
   // NF 开关不参与 title（2026-10-26 张老师要求：开启 NF 不改标题）
+  const raw = sp.view ?? "";
   const view =
-    sp.view === "world"
-      ? "world"
-      : sp.view === "bv"
-        ? "bv"
-        : sp.view === "stnb"
-          ? "stnb"
-          : "all";
+    raw === "world" || raw === "bv" || raw === "stnb" || raw === "grow" || raw === "active" || raw === "area"
+      ? raw
+      : "all";
   const name =
     view === "world"
       ? "世界排行"
@@ -159,7 +163,15 @@ export async function generateMetadata({
         ? "BV排行"
         : view === "stnb"
           ? "STNB排行"
-          : "雷界排行";
+          : view === "grow"
+            ? "进步排行"
+            : view === "active"
+              ? "活跃排行"
+              : view === "area"
+                ? (sp.name ?? "").trim()
+                  ? `地区排行（${areaDisplay((sp.name ?? "").trim())}）`
+                  : "地区排行"
+                : "雷界排行";
   return { title: name };
 }
 
@@ -179,6 +191,8 @@ export default async function RankingPage({
     redirect(`/ranking?${qs.toString()}`);
   }
   // 新参数 view/by；兼容旧参数（level/order/nf → by/view）
+  // 2026-11-08 URI 统一：进步/活跃/地区榜由独立路由 /grow /active /area 并入本路由，
+  // view 取值扩展 grow|active|area（旧路径已改为 308 重定向到 /ranking?view=xxx）
   let view =
     sp.view === "world"
       ? "world"
@@ -186,7 +200,13 @@ export default async function RankingPage({
         ? "bv"
         : sp.view === "stnb"
           ? "stnb"
-          : "all";
+          : sp.view === "grow"
+            ? "grow"
+            : sp.view === "active"
+              ? "active"
+              : sp.view === "area"
+                ? "area"
+                : "all";
   const nf = sp.view === "nf" || sp.nf === "1";
   let by = sp.by;
   if (!sp.view && !sp.by && (sp.level || sp.order || sp.nf)) {
@@ -204,6 +224,12 @@ export default async function RankingPage({
       </div>
     );
   }
+
+  // 进步/活跃/地区榜（2026-11-08 URI 统一）：渲染逻辑在各自视图组件
+  // （由原 /grow /active /area 页面整体迁移，行为零变化）
+  if (view === "grow") return <GrowRankingView sp={sp} />;
+  if (view === "active") return <ActiveRankingView sp={sp} />;
+  if (view === "area") return <AreaRankingView sp={sp} />;
 
   // BV 收集榜（2026-10-13 张老师需求）：独立服务端渲染——列结构（进度条）与成绩榜
   // 差异大，不进 RankingFeed；数据 1 小时缓存（见 queries.getBvRanking）。

@@ -33,7 +33,7 @@ export default async function AdminRankPage() {
           <Link className="admin_btn" href="/ranking" target="_blank" prefetch={false}>
             前台排行榜
           </Link>
-          <Link className="admin_btn" href="/grow" target="_blank" prefetch={false}>
+          <Link className="admin_btn" href="/ranking?view=grow" target="_blank" prefetch={false}>
             进步榜
           </Link>
         </div>

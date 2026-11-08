@@ -114,7 +114,8 @@ export function AreaMap({
     tip.style.top = `${y}px`;
   };
 
-  const go = (area: string) => () => router.push(buildUrl("/area", { name: area }));
+  // 2026-11-08 URI 统一：地区内页入口统一 /ranking?view=area（原 /area?name=xx）
+  const go = (area: string) => () => router.push(buildUrl("/ranking", { view: "area", name: area }));
 
   return (
     <div className="area_map">

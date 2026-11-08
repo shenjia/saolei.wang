@@ -14,6 +14,10 @@
 // 的名次均为地区内名次（搜索接口带 area），定位不走 ranking:locate 事件（地区内页是
 // 服务端分页、无 RankingFeed 监听），改为轻量探测后整页导航 whereami（302 回 /area 带 page+hl）。
 
+// 2026-11-08 URI 统一（张老师要求）：进步/活跃/地区三个 tab 的 href 统一为
+// /ranking?view=xxx（grow/active/area），与雷界/BV/STNB/世界同构；旧路由 /grow
+// /active /area 已改为 308 重定向到新 URI。
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -28,9 +32,9 @@ const TABS: { key: RankingView; label: string; href: string }[] = [
   { key: "all", label: "雷界", href: "/ranking" },
   { key: "bv", label: "BV", href: "/ranking?view=bv" },
   { key: "stnb", label: "STNB", href: "/ranking?view=stnb" },
-  { key: "grow", label: "进步", href: "/grow" },
-  { key: "active", label: "活跃", href: "/active" },
-  { key: "area", label: "地区", href: "/area" },
+  { key: "grow", label: "进步", href: "/ranking?view=grow" },
+  { key: "active", label: "活跃", href: "/ranking?view=active" },
+  { key: "area", label: "地区", href: "/ranking?view=area" },
   { key: "world", label: "世界", href: "/ranking?view=world" },
 ];
 

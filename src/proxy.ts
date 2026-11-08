@@ -308,7 +308,8 @@ export function proxy(req: NextRequest) {
     return movedTo(req, "/titles");
   }
   if (path === "/ranking/ranking_grow.asp" || path === "/ranking/top10_grow.asp") {
-    return movedTo(req, "/grow");
+    // 2026-11-08 URI 统一：进步榜并入 /ranking?view=grow
+    return movedTo(req, withPage("/ranking", page(), { view: "grow" }));
   }
   if (path === "/ranking/ranking_click.asp") {
     // 人气排行已于 2026-09-27 按张老师要求移除（个人地盘的人气计数仍在），旧链接落主榜
@@ -319,11 +320,12 @@ export function proxy(req: NextRequest) {
     return movedTo(req, "/ranking");
   }
   if (path === "/ranking/ranking_area.asp") {
-    return movedTo(req, "/area");
+    // 2026-11-08 URI 统一：地区榜并入 /ranking?view=area
+    return movedTo(req, "/ranking?view=area");
   }
   if (path === "/ranking/ranking_areas.asp") {
     const area = q("area");
-    return movedTo(req, withPage("/area", page(), area ? { name: area } : undefined));
+    return movedTo(req, withPage("/ranking", page(), { view: "area", ...(area ? { name: area } : {}) }));
   }
   if (path === "/ranking/top10_world.asp" || path === "/ranking/top10_world_help.asp") {
     return movedTo(req, "/ranking?view=world");

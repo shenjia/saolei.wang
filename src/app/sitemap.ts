@@ -24,8 +24,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     page("/ranking?nf=1", 0.6),
     page("/ranking?view=bv", 0.6),
     page("/ranking?view=world", 0.7, "daily"),
-    page("/area", 0.7, "weekly"),
-    page("/grow", 0.6, "daily"),
+    page("/ranking?view=area", 0.7, "weekly"),
+    page("/ranking?view=active", 0.6, "daily"),
+    page("/ranking?view=grow", 0.6, "daily"),
     page("/titles", 0.6),
     // 录像域
     page("/video", 0.9, "daily"),

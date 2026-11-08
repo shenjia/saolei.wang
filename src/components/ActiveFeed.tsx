@@ -169,7 +169,7 @@ export function ActiveFeed({
             {ACTIVE_COLS.map((c) => (
               <th key={c.by}>
                 <Link
-                  href={buildUrl("/active", { by: c.by === "act" ? undefined : c.by })}
+                  href={buildUrl("/ranking", { view: "active", by: c.by === "act" ? undefined : c.by })}
                   className={c.by === by ? "current" : ""}
                   title={`按${c.label}排列`}
                 >

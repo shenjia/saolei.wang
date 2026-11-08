@@ -80,7 +80,7 @@ export function AreaRanking({
                   {AREA_ORDERS.filter((o) => o.key === "best" || o.key === "power" || o.key === "activity").map((o) => (
                     <th key={o.key}>
                       <Link
-                        href={buildUrl("/area", { order: o.key === "activity" ? undefined : o.key })}
+                        href={buildUrl("/ranking", { view: "area", order: o.key === "activity" ? undefined : o.key })}
                         className={o.key === order ? (o.key === "activity" ? "current act_cur" : "current") : ""}
                       >
                         {o.label}
@@ -101,7 +101,7 @@ export function AreaRanking({
                       第&nbsp;<em>{i + 1}</em>&nbsp;位
                     </td>
                     <td className="name">
-                      <Link href={buildUrl("/area", { name: r.area })} title={`查看${areaDisplay(r.area)}雷友排行`}>
+                      <Link href={buildUrl("/ranking", { view: "area", name: r.area })} title={`查看${areaDisplay(r.area)}雷友排行`}>
                         {areaDisplay(r.area)}
                       </Link>
                     </td>
