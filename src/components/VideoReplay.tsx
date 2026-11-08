@@ -1150,8 +1150,8 @@ export interface PlayResult {
   cl: number;
   /** 有效点击（Ce = Cl − wasted） */
   ce: number;
-  /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——回放数据面板 Path 行经共享件
-   *  statsRows 按 16px/格折算成格数展示（2026-11-08 全站统一格数口径）；
+  /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——回放数据面板 Path 行原值（像素）展示，
+   *  CPath 行由共享件 statsRows 按 16px/格折算成格数（2026-11-08 张老师定）；
    *  「我的评级」路线规划轴 2026-10-29 起改用 cp（跨格次数） */
   path: number;
   /** 跨格次数：轨迹跨格线次数（0.5px 光栅化，replay-core crossings 同口径） */
@@ -3055,20 +3055,21 @@ export function ReplayFullscreen({
   /* standalone 播放倍速（2026-11-05 张老师需求）：与 fsEngine setSpeed 直连 */
   const [fsSpeed, setFsSpeed] = useState(1);
   const fsEngineRef = useRef<Engine | null>(null);
-  /* 四模式开关（二十一期 NF/速旗/连击 + 2026-10-29 左键双击），行为与
-     练习页同口径；初始值**继承练习页设置**（online_play_settings 的
-     nf/combo/autoChord/leftDbl 四键——张老师定的「试玩模式开关跟随练习页」）；
-     写回**独立键** vprfs_play_modes（不动练习页存档——练习页那份数据
-     级别更重，别让试玩的临时偏好污染它）。NF 与速旗互斥（练习页 2026-10-16 口径）。
+  /* 三模式开关（NF/速旗/连击），行为与练习页快捷钮同口径（练习页快捷钮
+     就这三颗——「左键双击」在练习页只是设置浮窗项，试玩底条 2026-11-07
+     张老师定不再放独立开关，引擎 leftDbl 能力保留、恒 false）；
+     初始值**继承练习页设置**（online_play_settings 的 nf/combo/autoChord——
+     张老师定的「试玩模式开关跟随练习页」）；写回**独立键** vprfs_play_modes
+     （不动练习页存档——练习页那份数据级别更重，别让试玩的临时偏好污染它）。
+     NF 与速旗互斥（练习页 2026-10-16 口径）。
      ⚠️ localStorage 读取放 lazy 初始化器（react-hooks/set-state-in-effect 禁止
      effect 体内同步 setState；SSR 下 localStorage 不存在须 typeof 守卫） */
-  const readInitModes = (): { nf: boolean; qf: boolean; combo: boolean; ld: boolean; hf: boolean; hd: number } => {
-    if (typeof document === "undefined") return { nf: false, qf: false, combo: false, ld: false, hf: false, hd: 150 };
-    const read = (s: { nf?: boolean; combo?: boolean; autoChord?: boolean; leftDbl?: boolean; holdFlag?: boolean; holdDelay?: number }) => ({
+  const readInitModes = (): { nf: boolean; qf: boolean; combo: boolean; hf: boolean; hd: number } => {
+    if (typeof document === "undefined") return { nf: false, qf: false, combo: false, hf: false, hd: 150 };
+    const read = (s: { nf?: boolean; combo?: boolean; autoChord?: boolean; holdFlag?: boolean; holdDelay?: number }) => ({
       nf: typeof s.nf === "boolean" ? s.nf : false,
       qf: typeof s.autoChord === "boolean" ? s.autoChord : false,
       combo: typeof s.combo === "boolean" ? s.combo : false,
-      ld: typeof s.leftDbl === "boolean" ? s.leftDbl : false,
       hf: typeof s.holdFlag === "boolean" ? s.holdFlag : false,
       hd: typeof s.holdDelay === "number" && Number.isFinite(s.holdDelay) ? Math.max(100, Math.min(400, Math.round(s.holdDelay))) : 150,
     });
@@ -3081,20 +3082,19 @@ export function ReplayFullscreen({
     } catch {
       /* 隐私模式/脏数据：全关 */
     }
-    return { nf: false, qf: false, combo: false, ld: false, hf: false, hd: 150 };
+    return { nf: false, qf: false, combo: false, hf: false, hd: 150 };
   };
   const [initModes] = useState(readInitModes);
   const [playNf, setPlayNf] = useState(initModes.nf);
   const [playQuickFlag, setPlayQuickFlag] = useState(initModes.qf);
   const [playCombo, setPlayCombo] = useState(initModes.combo);
-  const [playLeftDbl, setPlayLeftDbl] = useState(initModes.ld);
   /* 长按标雷（2026-10-29 练习页口径同步）：试玩层无独立 UI 入口，
      跟随练习页设置（继承 initModes 后全程只读镜像进 modesRef） */
   const [playHoldFlag] = useState(initModes.hf);
   const [playHoldDelay] = useState(initModes.hd);
-  const savePlayModes = useCallback((nf: boolean, qf: boolean, combo: boolean, ld: boolean) => {
+  const savePlayModes = useCallback((nf: boolean, qf: boolean, combo: boolean) => {
     try {
-      localStorage.setItem("vprfs_play_modes", JSON.stringify({ nf, qf: qf, combo, ld }));
+      localStorage.setItem("vprfs_play_modes", JSON.stringify({ nf, qf: qf, combo }));
     } catch {
       /* 隐私模式 */
     }
@@ -3108,34 +3108,29 @@ export function ReplayFullscreen({
     const nq = nv ? false : playQuickFlag; // NF 与速旗互斥
     setPlayNf(nv);
     setPlayQuickFlag(nq);
-    savePlayModes(nv, nq, playCombo, playLeftDbl);
+    savePlayModes(nv, nq, playCombo);
     if (mode === "play") startPlayRef.current(); // NF 切换重开本局
-  }, [playNf, playQuickFlag, playCombo, playLeftDbl, mode, savePlayModes]);
+  }, [playNf, playQuickFlag, playCombo, mode, savePlayModes]);
   const togglePlayQuickFlag = useCallback(() => {
     const nv = !playQuickFlag;
     const nn = nv ? false : playNf; // 互斥：开速旗关 NF
     setPlayQuickFlag(nv);
     setPlayNf(nn);
-    savePlayModes(nn, nv, playCombo, playLeftDbl);
-  }, [playNf, playQuickFlag, playCombo, playLeftDbl, savePlayModes]);
+    savePlayModes(nn, nv, playCombo);
+  }, [playNf, playQuickFlag, playCombo, savePlayModes]);
   const togglePlayCombo = useCallback(() => {
     const nv = !playCombo;
     setPlayCombo(nv);
-    savePlayModes(playNf, playQuickFlag, nv, playLeftDbl);
-  }, [playNf, playQuickFlag, playLeftDbl, savePlayModes]);
-  /* 「左键双击」（2026-10-29 练习页口径同步）：左键点击已开数字视为双击；
-     独立开关、不互斥不重开（速旗收窄为仅右键后从速旗移交出来） */
-  const togglePlayLeftDbl = useCallback(() => {
-    const nv = !playLeftDbl;
-    setPlayLeftDbl(nv);
-    savePlayModes(playNf, playQuickFlag, playCombo, nv);
-  }, [playNf, playQuickFlag, playCombo, playLeftDbl, savePlayModes]);
+    savePlayModes(playNf, playQuickFlag, nv);
+  }, [playNf, playQuickFlag, savePlayModes]);
   /* 引擎模式读数（getModes）：ref 镜像最新 state，事件入口现读即时生效
-     （渲染期不写 ref——react-hooks/refs 口径，同步收进 effect） */
+     （渲染期不写 ref——react-hooks/refs 口径，同步收进 effect）。
+     leftDbl 恒 false（2026-11-07 张老师定：底条撤「左键双击」开关，
+     引擎能力保留） */
   const modesRef = useRef({ nf: false, quickFlag: false, combo: false, leftDbl: false, holdFlag: false, holdDelay: 150 });
   useEffect(() => {
-    modesRef.current = { nf: playNf, quickFlag: playQuickFlag, combo: playCombo, leftDbl: playLeftDbl, holdFlag: playHoldFlag, holdDelay: playHoldDelay };
-  }, [playNf, playQuickFlag, playCombo, playLeftDbl, playHoldFlag, playHoldDelay]);
+    modesRef.current = { nf: playNf, quickFlag: playQuickFlag, combo: playCombo, leftDbl: false, holdFlag: playHoldFlag, holdDelay: playHoldDelay };
+  }, [playNf, playQuickFlag, playCombo, playHoldFlag, playHoldDelay]);
   const getModes = useCallback(() => modesRef.current, []);
   /* NF 被拦反馈：抖 NF 钮（练习页 shakeModeBtn 同款视觉） */
   const nfBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -3789,11 +3784,11 @@ export function ReplayFullscreen({
                   <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
                 </svg>
               </button>
-              {/* 四模式开关（二十一期 NF/速旗/连击 + 2026-10-29 左键双击），
-                  行为与练习页同口径（互斥、重开、连点 chord 等）；初始继承练习页
-                  设置（online_play_settings），此后试玩自己的偏好独立落盘
-                  （vprfs_play_modes）。图标与练习页快捷钮同款（NF 文本钮 /
-                  小旗 / 左键小旗 / 连击手势） */}
+              {/* 三模式开关（NF/速旗/连击），行为与练习页快捷钮同口径（互斥、
+                  重开、连点 chord 等）；初始继承练习页设置（online_play_settings），
+                  此后试玩自己的偏好独立落盘（vprfs_play_modes）。「左键双击」
+                  2026-11-07 张老师定撤底条开关（练习页快捷钮本就没有它）。
+                  图标与练习页快捷钮同款（NF 文本钮 / 小旗 / 连击手势） */}
               <div className="vprfs_modes">
                 <button
                   ref={nfBtnRef}
@@ -3823,20 +3818,6 @@ export function ReplayFullscreen({
                 </button>
                 <button
                   type="button"
-                  className={"rb_btn rb_mode" + (playLeftDbl ? " active" : "")}
-                  title="左键双击：左键点击已打开的数字，视为双击操作"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePlayLeftDbl();
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M11 4.5v7.6" />
-                    <path d="M11 4.5h7l-2.4 2.8L18 10.1h-7z" fill="currentColor" stroke="none" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
                   className={"rb_btn rb_mode" + (playCombo ? " active" : "")}
                   title="连击模式：按下即触发，按住左/右键滑动连续点击滑过的格子"
                   onClick={(e) => {
@@ -3851,7 +3832,8 @@ export function ReplayFullscreen({
                   </svg>
                 </button>
               </div>
-              <span className="rb_hint">试玩本局 · 点笑脸重开 · 不计成绩不上传</span>
+              {/* 退出全屏（2026-11-07 张老师定：按钮集中在左侧——排在连击右边，
+                  不再推条右端；.rb_hint 浮层 left 偏移按本组 5 颗预留） */}
               <button
                 type="button"
                 className="rb_btn active"
@@ -3869,6 +3851,7 @@ export function ReplayFullscreen({
                   <path d="M19 16v3h-3" />
                 </svg>
               </button>
+              <span className="rb_hint">试玩模式</span>
             </div>
           )}
         </div>

@@ -23,6 +23,7 @@ import { getRadarData } from "@/lib/radar";
 import { getSession } from "@/lib/auth";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { RadarChart } from "./RadarChart";
+import ClickTracker from "./ClickTracker";
 import { SendMessageButton } from "./SendMessageButton";
 import { areaDisplay, AREA_OVERSEAS, LEVELS, LEVEL_NAMES } from "@/lib/config";
 import { formatDate } from "@/lib/format";
@@ -163,19 +164,15 @@ export async function UserPanel({
 }) {
   const card = await getUserCard(userId);
   if (!card) return null;
-  // 卡片展示计人气（十五轮 2026-10-25 张老师定）：同 IP 同日跨来源去重，失败不阻断渲染
-  try {
-    const { headers } = await import("next/headers");
-    const h = await headers();
-    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
-    const { recordClick } = await import("@/lib/star");
-    await recordClick(userId, ip, "card");
-  } catch {}
+  // 卡片展示计人气（十五轮 2026-10-25；2026-11-09 剥离到客户端）：渲染期计数
+  // 改由 ClickTracker 异步上报 /api/track/click，服务端 recordClick 闸门不变
+  // （同 IP 同日跨来源去重）；不带 JS 的爬虫天然不计
   const radar = card.hasVideos && !hideRadar ? await getRadarData(card.scores) : [];
   // 发消息按钮（2026-10-25）：登录且非本人时渲染（本人卡片不渲染，与用户主页同口径）
   const session = await getSession();
   return (
     <>
+      <ClickTracker userId={userId} source="card" />
       <div id={cardId} className="box">
         <UserCard card={card} viewerId={session?.uid ?? 0} />
       </div>

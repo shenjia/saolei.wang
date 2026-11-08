@@ -12,7 +12,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Metadata } from "next";
 import { Fragment, type ReactNode } from "react";
-import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
@@ -30,7 +29,8 @@ import {
   getUser3bvCollection,
 } from "@/lib/queries";
 import { getUserRecordCurves } from "@/lib/records";
-import { getClicks, recordClick } from "@/lib/star";
+import { getClicks } from "@/lib/star";
+import ClickTracker from "@/components/ClickTracker";
 import { getHistory } from "@/lib/history";
 import {
   VIDEO_LEVELS,
@@ -175,10 +175,9 @@ export default async function UserViewPage({
   const detail = await getUserDetail(userId);
   if (!detail) notFound();
 
-  // 计人气：同一 IP 同一天只计一次（十五轮起 ip 列带来源标记 |home，与卡片/每日一星跨来源去重）
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
-  await recordClick(userId, ip, "home");
+  // 人气计数（2026-11-09 张老师定：剥离到客户端 ClickTracker 异步上报
+  // /api/track/click，服务端 recordClick 闸门不变；本页将挂 nginx 整页缓存，
+  // 渲染期计数会被缓存命中吞掉且拿不到真实访客 IP——展示值照常服务端查询）
   const clicks = await getClicks(userId);
 
   // session 提前取（2026-10-23）：本人主页录像版块要放行自己的屏蔽盘（includeBanned），
@@ -359,6 +358,8 @@ export default async function UserViewPage({
 
   return (
     <div id="page" className="two_columns">
+    {/* 人气异步上报（2026-11-09）：见组件注释——渲染期计数已剥离，服务端闸门不变 */}
+    <ClickTracker userId={userId} source="home" />
     <ul id="user_view">
       <li className="main">
         <div className="info box">

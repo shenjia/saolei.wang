@@ -7,8 +7,7 @@
 //   管理员登录态感言旁「删除」入口（删两次本人永久不能再发，delStarSpeech 计数）。
 
 import Link from "next/link";
-import { getTodayStar, recordClick } from "@/lib/star";
-import { headers } from "next/headers";
+import { getTodayStar } from "@/lib/star";
 import { getUserCard } from "@/lib/usercard";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { areaDisplay, AREA_OVERSEAS, isManager } from "@/lib/config";
@@ -17,24 +16,22 @@ import { SendMessageButton } from "@/components/SendMessageButton";
 import { StarSpeechBar } from "@/components/StarSpeechBar";
 import { StarSpeechDeleteButton } from "@/components/StarSpeechDeleteButton";
 import { StarSpeechVote } from "@/components/StarSpeechVote";
+import ClickTracker from "@/components/ClickTracker";
 
 export async function DailyStar() {
   // 先取 session（getTodayStar 带上 viewer，SSR 顺带查出 myVote——跨设备一致的已投态）
   const session = await getSession();
   const star = await getTodayStar(session?.uid);
   if (!star?.user) return null;
-  // 卡片展示计人气（十五轮）：同 IP 同日跨来源去重，失败不阻断渲染
-  try {
-    const h = await headers();
-    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "";
-    await recordClick(star.user.id, ip, "star");
-  } catch {}
+  // 卡片展示计人气（十五轮；2026-11-09 剥离到客户端 ClickTracker 异步上报，
+  // 服务端 recordClick 闸门不变——首页也要挂 nginx 整页缓存，渲染期计数会被缓存吞掉）
   const card = await getUserCard(star.user.id);
   if (!card) return null;
   const own = !!session && session.uid === card.id;
   const manager = !!session && isManager(session.role);
   return (
     <div id="daily_star" className="box">
+    <ClickTracker userId={star.user.id} source="star" />
       <h2>
         每日一星
         {/* 问号圆圈图标（十轮 04:17）：hover 显示评选规则气泡（data-tip 复用全站模式） */}
