@@ -25,6 +25,11 @@
 #   窗口内由每分钟 cron 完成到期重建。TTL 表与记账规则见 preheat.sh 注释。
 set -uo pipefail
 
+# 冷启动/慢查询时单批可能超过 1 分钟：后续 cron 直接退出，绝不叠批压垮双槽。
+# 2026-11-08 实证：发布冷缓存期叠加 6 批预热，双 Next + MySQL 满载导致全站 502。
+exec 9>"$HOME/logs/preheat-cron.lock"
+flock -n 9 || exit 0
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF="$HOME/nginx-upstream/saolei-upstream.conf"
 
