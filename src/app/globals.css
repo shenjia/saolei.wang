@@ -14529,7 +14529,7 @@ body #page.rating_page .rating_standard .rating_note {
 }
 .rating_table {
   width: 100%;
-  min-width: 800px;
+  min-width: 900px;
   table-layout: fixed;
   font-size: 12px;
 }
@@ -14543,9 +14543,26 @@ body #page.rating_page .rating_standard .rating_note {
 .rating_table thead th {
   color: #b1b1a4;
   border-bottom: 1px solid #565549;
+  font-size: 16px;
+  font-weight: bold;
 }
 .rating_table tbody td {
   color: #f8f8f2;
+}
+.rating_table .range_col {
+  width: 82px;
+  color: #b1b1a4;
+}
+.rating_table .threshold_operator {
+  color: #62625c;
+}
+.rating_table .time_number {
+  color: #d6d6cb;
+  font-weight: bold;
+}
+.rating_table .bvs_number {
+  color: #929288;
+  font-weight: bold;
 }
 .rating_table tbody tr:nth-child(even) {
   background: rgba(248, 248, 242, 0.025);
@@ -14555,6 +14572,9 @@ body #page.rating_page .rating_standard .rating_note {
   text-align: left;
   font-size: 16px;
   font-weight: bold;
+}
+.rating_table thead .grade_col {
+  text-align: center;
 }
 .rating_pending {
   color: #e6db74;
