@@ -14697,7 +14697,7 @@ body #page.rating_page .rating_standard .rating_note {
 }
 .mscap_note a {
   color: #a6e22e;
-  text-decoration: underline;
+  text-decoration: none;
 }
 .mscap_note a:hover {
   color: #fdc61a;

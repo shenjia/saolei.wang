@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CaptchaAction } from "@/core/src/lib/captcha-board";
 import { FlopSprites } from "./FlopSprites";
 import { LoginLink } from "./LoginLink";
+import { toast } from "./Toast";
 
 type Cell = { state: number; num: number | null };
 type Board = {
@@ -105,7 +106,11 @@ export function BotChallengeGate() {
       }
       setOpen(true);
       const passed = await new Promise<boolean>((resolve) => waiters.current.push(resolve));
-      return passed ? original(input, init) : response;
+      if (passed) return original(input, init);
+      // 关闭＝当无事发生：绝不能把 403 还给路由——Next 对非 200 的 RSC 响应会
+      // doMpaNavigation 整页跳到目的页（文档请求不设闸，等于关掉弹窗就绕过验证）。
+      // 在此 reject：navigateToUnknownRoute 的 catch 会吞掉错误，导航静默中止、留在当前页。
+      throw new DOMException("challenge dismissed", "AbortError");
     };
     return () => {
       window.fetch = original;
@@ -143,6 +148,7 @@ export function BotChallengeGate() {
       token.current = data.token;
       setBoard(data);
       if (data.won) {
+        toast("验证成功", "success");
         const target = redirect.current;
         redirect.current = null;
         settle(true);
@@ -167,7 +173,7 @@ export function BotChallengeGate() {
     <div className="mscap_overlay" role="presentation">
       <section className="mscap_modal" role="dialog" aria-modal="true" aria-labelledby="mscap_title">
         <button type="button" className="mscap_close" onClick={close} aria-label="关闭验证">×</button>
-        <h2 id="mscap_title">扫一盘，证明你是真人</h2>
+        <h2 id="mscap_title">扫盘初级，证明你是真人</h2>
         {/* 换局按钮：首页「开始练习」同款扁平笑脸银灰凸起（flop 四态笑脸：胜=墨镜/负=僵尸） */}
         {/* 宽度与游戏区域一致：棋盘渲染宽 = cols×16 + 左右 2px 边框，zoom 1.5 等比 */}
         <button
