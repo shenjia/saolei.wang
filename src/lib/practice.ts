@@ -156,7 +156,7 @@ registerPreheat("practice-today", REVALIDATE_HOME_CACHE, () => getPracticeToday(
 //   （上传时刻判定落列，NF/FL 不分池；**不是**全局历史纪录重放）。
 //   收集 b/i/e 口径不变（收集格同源）。
 // · 活跃值口径同地区活跃指数练习侧（lib/areaactivity.ts）：初级胜=1 败=0；
-//   中级胜=2/过半 1；高级 ≥20% 按 floor(率×10)；自定义胜=1。游客行（user_id=0）
+//   中级胜=2/过半 1；高级过半按 floor(率×10)；自定义胜=1。游客行（user_id=0）
 //   不归属个人，登录用户只读本人当日行。
 
 export interface RankedToday {
