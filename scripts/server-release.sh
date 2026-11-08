@@ -380,6 +380,16 @@ wait_healthy "$S_PORT" "$STANDBY 槽"
 # 失败只告警——预热是优化手段，不该有能力阻断发布。清单见 scripts/preheat.sh。
 bash "$DEPLOY_DIR/scripts/preheat.sh" "$S_PORT" || warn "预热脚本异常（不阻断发布）"
 
+# ---------- 页缓存预热器（2026-11-09 匿名扫雷闸配套） ----------
+# nginx 页缓存（saolei_pages）常暖进程：307 不落缓存，匿名流量无法回填过期条目，
+# 由本进程持通行证 cookie 周期回源保关键列表页恒命中（详见 scripts/preheat-pages.mjs）。
+# 脚本随部署同步，此处重启加载新版；首次部署自动拉起。
+if pm2 describe "saolei-preheat" >/dev/null 2>&1; then
+  pm2 restart "saolei-preheat" >/dev/null
+else
+  pm2 start "$DEPLOY_DIR/scripts/preheat-pages.mjs" --name saolei-preheat >/dev/null
+fi
+
 # ---------- 切换 nginx 主备（平滑 reload，不断连接） ----------
 info "切换 nginx 主力: $ACTIVE → $STANDBY ..."
 write_upstream "$STANDBY"
