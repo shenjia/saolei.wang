@@ -2391,6 +2391,7 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
     ["ThrP", s.ce > 0 ? f3(s.solvedBv / s.ce) : "*", "吞吐效率 = 已完成 3BV ÷ 有效点击次数"],
     ["Corr", cl > 0 ? f3(s.ce / cl) : "*", "准确率 = 有效点击 ÷ 总点击次数"],
     ["Path", String(Math.round(s.path)), "鼠标移动路径的欧氏距离总和（像素）"],
+    ["Crossings", String(s.cp), "鼠标轨迹跨过格线的次数（跨格计数，路线规划「完成3BV/Crossings」的分母；对鼠标回报率免疫）"],
     ["Flags", String(s.flags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
     ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
     ["QG", hasBv ? f3(qg) : "*", "质量分 = 估算用时 ^ 1.7 ÷ 已完成 3BV（估算用时 = 实际用时 × 3BV ÷ 已完成 3BV，胜局两者相等）"],
