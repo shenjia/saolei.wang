@@ -9949,8 +9949,8 @@ html:has(#online_play) #footer {
   display: flex;
   justify-content: center;
 }
-/* 四按钮分两行（六期）：2 列 grid——DOM 顺序即「左上→右上→左下→右下」，
-   「再来一局/重玩本局」在上排，「查看回放/下载录像」在下排。
+/* 次级按钮 2 列 grid（2026-11-08 调整）：「再来一局」与可选「复活/上传」
+   已在雷达上方独占整行；这里只放「重玩本局 / 查看回放 / 下载录像」。
    桌面面板宽 196 − 左右 padding 20 = 174，两列各 84.5px：图标 14 + 间距 6 + 四字 48 = 68，
    放得下不折行；移动浮层卡片更宽，同样两列。
    二十期起第三处宿主＝全屏回放的「我的评级」卡（只有两颗按钮，同两列；见 .vprfs_side） */
@@ -9961,13 +9961,6 @@ html:has(#online_play) #footer {
   grid-template-columns: 1fr 1fr;
   gap: 5px;
   margin-top: 4px;
-}
-/* 满行按钮（2026-10-27 张老师定·移动端结算布局）：grid 跨双列充满整行——
-   移动端「再来一局」满行、末行「重玩本局/查看回放」并列。
-   仅由 touchUI 的 JS 挂类（桌面 2×2 布局不受影响） */
-#online_play .gresult .gr_btns .grb.grb_full,
-#gr_modal .gr_btns .grb.grb_full {
-  grid-column: 1 / -1;
 }
 /* ---- 结算面板「使用Flop Player播放」气泡（2026-11-03 张老师需求）----
    hover「查看回放」按钮时下方弹深灰气泡，点击弹 flop 播放器放本局 EVF——
@@ -10062,34 +10055,38 @@ html:has(#online_play) #footer {
 .vprfs_side .grb:active {
   color: #8ac21b;
 }
-/* ---- 原地复活按钮（2026-10-19 张老师定）：雷达图下方独占一行的黄色按钮 ----
-   仅踩雷结算态渲染（胜局无）。黄色系＝站内强调色 #fdc61d：文字/图标恒黄
-   （hover 不变绿——复活是「救回」动作，绿色留给常规按钮），描边与渐变底
-   同步黄阶；宽度顶满面板内容宽（两颗常规按钮宽度），与 .gr_btns 留 4px 间距 */
+/* ---- 结算主按钮（2026-11-08 张老师定）----
+   金色「再来一局」置顶并恒保持金色；绿色「原地复活」若出现紧随其后。
+   两者均独占整行，雷达与次级按钮排在其后。 */
+#online_play .gresult .grb.grb_new_game,
+#gr_modal .grb.grb_new_game {
+  width: 100%;
+  margin: 0 0 4px;
+}
 #online_play .gresult .grb.grb_revive,
 #gr_modal .grb.grb_revive {
   width: 100%;
-  margin-top: 4px;
-  border-color: #fdc61d;
-  background-color: #4d4423;
-  background-image: linear-gradient(to bottom, #5a4f28, #453d1f);
-  color: #fdc61d;
+  margin: 0 0 4px;
+  border-color: #8ac21b;
+  background-color: #35471f;
+  background-image: linear-gradient(to bottom, #405628, #2e401b);
+  color: #a6e22e;
   font-weight: bold;
 }
 #online_play .gresult .grb.grb_revive:hover,
 #gr_modal .grb.grb_revive:hover {
-  background-image: linear-gradient(to bottom, #66592f, #4f4624);
-  color: #ffd94d;
+  background-image: linear-gradient(to bottom, #4b6530, #374b22);
+  color: #bded55;
 }
 #online_play .gresult .grb.grb_revive:active,
 #gr_modal .grb.grb_revive:active {
-  color: #f0b511;
+  color: #8ac21b;
 }
-/* 排名胜局「上传录像」：与原复活按钮同独占行位置，绿色强调可上传动作。 */
+/* 排名胜局「上传录像」：同样位于「再来一局」下方，绿色强调可上传动作。 */
 #online_play .gresult .grb.grb_upload,
 #gr_modal .grb.grb_upload {
   width: 100%;
-  margin-top: 4px;
+  margin: 0 0 4px;
   border-color: #8ac21b;
   background-color: #35471f;
   background-image: linear-gradient(to bottom, #405628, #2e401b);
@@ -10101,10 +10098,7 @@ html:has(#online_play) #footer {
   background-image: linear-gradient(to bottom, #4b6530, #374b22);
   color: #bded55;
 }
-/* 「再来一局」金色（2026-10-30 张老师定）：非排行局复活关闭、排行局无上传
-   按钮（败局）或已上传时，主引导动作变金＝复活按钮同款黄系（grb_revive
-   配色基因），但不占独立行——保持 grid 常规布局（排行局由 JS 挂 grb_full
-   跨双列，类并存时 grb_full 管行跨、grb_gold 管配色，互不冲突） */
+/* 「再来一局」恒金色：胜败局、是否可复活、排行局是否待上传均不改变。 */
 #online_play .gresult .grb.grb_gold,
 #gr_modal .grb.grb_gold {
   border-color: #fdc61d;
@@ -10142,7 +10136,7 @@ html:has(#online_play) #footer {
    按钮内容只剩「键帽 + 四字」≈71px，列宽 ≥85px 即放得下 → 阈值降到 170px
    （容器宽 = 2 列 + 5px gap）——侧边 196px 窄面板（容器 ~174px）也能显示；
    移动浮层卡片（≥248px）恒显示。
-   复活按钮独占整行不进 .gr_btns，其「空格」键帽恒显示 */
+   再来一局/复活按钮独占整行不进 .gr_btns，其键帽恒显示 */
 #online_play .gresult .grb kbd,
 #gr_modal .grb kbd {
   font: bold 10px/1 Arial, Helvetica, sans-serif;
@@ -10382,13 +10376,14 @@ html:has(#online_play) #footer {
     width: 18px;
     height: 18px;
   }
+  #gr_modal .gresult .grb.grb_new_game,
   #gr_modal .gresult .grb.grb_revive {
     flex: 0 0 46px;
     margin: 0;
     font-size: 19px;
   }
   #gr_modal .gresult .gr_btns {
-    flex: 0 0 100px;
+    flex: 0 0 46px; /* 再来一局已置顶，触屏次级按钮只剩一行 */
     gap: 8px 10px;
     margin: 0;
   }
@@ -10434,12 +10429,13 @@ html:has(#online_play) #footer {
     min-height: 40px;
     font-size: 15px;
   }
+  #gr_modal .gresult .grb.grb_new_game,
   #gr_modal .gresult .grb.grb_revive {
     flex-basis: 40px;
     font-size: 17px;
   }
   #gr_modal .gresult .gr_btns {
-    flex-basis: 88px;
+    flex-basis: 40px;
   }
 }
 @media (orientation: landscape) and (max-height: 340px) and (pointer: coarse) {
@@ -10485,12 +10481,13 @@ html:has(#online_play) #footer {
     min-height: 34px;
     font-size: 13px;
   }
+  #gr_modal .gresult .grb.grb_new_game,
   #gr_modal .gresult .grb.grb_revive {
     flex-basis: 36px;
     font-size: 15px;
   }
   #gr_modal .gresult .gr_btns {
-    flex-basis: 76px;
+    flex-basis: 34px;
     gap: 6px 8px;
   }
 }
