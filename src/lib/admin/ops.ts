@@ -623,8 +623,10 @@ async function dispatch(
     case "user.merge": {
       /* 账户合并（2026-11-01 张老师需求）：把源账户的全部数据并入目标账户，然后注销源账户。
          搬迁范围：录像（含 video_scores_* 六池成绩）、评论、论坛主题/回复、动态、
-         站内信（收发双方）、第三方绑定（QQ/微信）、邮箱绑定（目标未绑时随迁）、
-         赞助记录、每日一星及感言投票、扫雷历程、地盘人气、bbs 最后回复人指位。
+         站内信（收发双方）、赞助记录、每日一星及感言投票、扫雷历程、地盘人气、bbs 最后回复人指位、
+         邮箱绑定（目标未绑时随迁；源未绑邮箱但登录名本身是邮箱时，随迁为未验证草稿——
+         2026-11-09 张老师明确口径，35627→12699 实证：登录名邮箱不随迁会凭空丢失）、
+         第三方绑定（按 provider 逐类随迁；目标已绑同类型则该类不迁，源行按注销口径删除）。
          衍生重算（各自口径对齐）：
          · user_scores(_nf) 六池：源行（含老站遗产无录像纪录）与目标行逐格取优合并，源行清零防双计；
          · 名次落盘：源账户出榜，目标账户出旧位后按合并成绩回榜（rankLeave/rankEnter 契约）；
@@ -652,14 +654,29 @@ async function dispatch(
       if (tgtUser.status !== 0) return { ok: false, error: "目标账户处于封禁状态，无法作为合并目标" };
 
       // 结果消息用计数（事务外并行取）
-      const [videoCount, commentCount, postCount, replyCount, newsCount, oauthCount] = await Promise.all([
+      const [videoCount, commentCount, postCount, replyCount, newsCount, srcOauthRows, tgtOauthRows] = await Promise.all([
         prisma.video.count({ where: { user: BigInt(id) } }),
         prisma.comment.count({ where: { user: BigInt(id) } }),
         prisma.bbsPost.count({ where: { user: BigInt(id) } }),
         prisma.bbsReply.count({ where: { user: BigInt(id) } }),
         prisma.news.count({ where: { user: BigInt(id) } }),
-        prisma.userOauth.count({ where: { userId: BigInt(id) } }),
+        prisma.userOauth.findMany({ where: { userId: BigInt(id) }, select: { provider: true } }),
+        prisma.userOauth.findMany({ where: { userId: BigInt(targetId) }, select: { provider: true } }),
       ]);
+      const oauthCount = srcOauthRows.length;
+      const oauthDropped = srcOauthRows.filter((o) => tgtOauthRows.some((t) => t.provider === o.provider)).length;
+      // 邮箱随迁判定（2026-11-09 张老师明确）：优先取绑定邮箱；未绑但登录名本身是邮箱
+      // （老站口径：登录名=邮箱，找回密码同认）时按草稿随迁。目标已绑则一律不迁。
+      const srcEmail = srcAuth.email ?? (EMAIL_RE.test(srcAuth.username) ? srcAuth.username : null);
+      const emailNote = !srcEmail
+        ? tgtAuth.email
+          ? "源账户未绑邮箱"
+          : "双方均未绑邮箱"
+        : tgtAuth.email
+          ? "目标已绑邮箱，源邮箱未迁"
+          : srcAuth.email
+            ? "邮箱已随迁"
+            : "邮箱已随迁为未验证草稿（源登录名即邮箱）";
 
       const src = BigInt(id);
       const tgt = BigInt(targetId);
@@ -711,7 +728,15 @@ async function dispatch(
         await tx.star.updateMany({ where: { user: src }, data: { user: tgt } });
         await tx.donate.updateMany({ where: { user: src }, data: { user: tgt } });
         await tx.click.updateMany({ where: { user: src }, data: { user: tgt } });
-        await tx.userOauth.updateMany({ where: { userId: src }, data: { userId: tgt } });
+        // 第三方绑定随迁（2026-11-09 张老师明确）：按 provider 逐类判断——目标已绑该类
+        // （如已绑 QQ）则该类源行不迁、按注销口径删除；未绑的类整类搬迁
+        for (const provider of new Set(srcOauthRows.map((o) => o.provider))) {
+          if (tgtOauthRows.some((t) => t.provider === provider)) {
+            await tx.userOauth.deleteMany({ where: { userId: src, provider } });
+          } else {
+            await tx.userOauth.updateMany({ where: { userId: src, provider }, data: { userId: tgt } });
+          }
+        }
         // 历程 / 感言投票：冲突行已删，剩余行安全搬迁（不与目标撞唯一键）
         await tx.history.updateMany({ where: { user: src }, data: { user: tgt } });
         await tx.starVote.updateMany({ where: { user: src }, data: { user: tgt } });
@@ -727,13 +752,18 @@ async function dispatch(
           await tx.userSig.updateMany({ where: { user: src }, data: { user: tgt } });
         }
 
-        // ④ 邮箱绑定：目标未绑邮箱时随迁（目标已绑则不覆盖，源邮箱随凭据注销释放）。
+        // ④ 邮箱绑定随迁（2026-11-09 张老师明确）：目标未绑邮箱时随迁（目标已绑则不覆盖，
+        //    源邮箱随凭据注销释放）。源绑定邮箱按原验证状态迁；源未绑邮箱但登录名本身是
+        //    邮箱时，随迁为未验证草稿（email_verified=0，找回密码不认草稿，用户可走正常
+        //    流程验证——验证通过后登录名会同步换成邮箱）。
         //    email / emailToken 均 @unique——必须先清源行再设目标行，否则唯一键互撞（P2002）
-        if (srcAuth.email && !tgtAuth.email) {
+        if (srcEmail && !tgtAuth.email) {
           await tx.userAuth.update({ where: { id: src }, data: { email: null, emailVerified: BigInt(0), emailToken: null } });
           await tx.userAuth.update({
             where: { id: tgt },
-            data: { email: srcAuth.email, emailVerified: srcAuth.emailVerified, emailToken: srcAuth.emailToken },
+            data: srcAuth.email
+              ? { email: srcAuth.email, emailVerified: srcAuth.emailVerified, emailToken: srcAuth.emailToken }
+              : { email: srcEmail, emailVerified: BigInt(0), emailToken: null },
           });
         }
 
@@ -781,7 +811,9 @@ async function dispatch(
         message:
           `已将 ${srcUser.chineseName}（#${id}）合并到 ${tgtUser.chineseName}（#${targetId}）：` +
           `录像 ${videoCount} 部、评论 ${commentCount} 条、主题 ${postCount} 篇 / 回复 ${replyCount} 条、` +
-          `动态 ${newsCount} 条、第三方绑定 ${oauthCount} 个；源账户已注销`,
+          `动态 ${newsCount} 条、第三方绑定 ${oauthCount - oauthDropped} 个` +
+          (oauthDropped ? `（目标已绑同类型，${oauthDropped} 个未迁、随注销释放）` : "") +
+          `；${emailNote}`,
       };
     }
 
@@ -1696,6 +1728,9 @@ const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 // ---------- 账户合并：成绩六池 best-of 合并（user.merge 专用） ----------
+
+// 登录名是否本身是邮箱（与 src/app/api/account/email/route.ts 同一口径）
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const MERGE_LEVELS = ["beg", "int", "exp"] as const;
 const sField = (lv: string, order: "Time" | "3bvs", suffix = "") => `${lv}${order}${suffix}`;
