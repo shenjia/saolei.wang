@@ -47,6 +47,8 @@ import { mvfToRawvfBest } from "@/lib/mvf-best";
 import { rmvToRawvf } from "@/lib/rmv";
 import { evfToRawvf } from "@/lib/evf";
 import { formatRawvf } from "@/lib/rawvf";
+/* 结算面板行定义（共享件，2026-11-08 与练习页统一） */
+import { statsRows } from "@/lib/replay-core";
 import { LEVEL_NAMES, type VideoLevel } from "@/lib/config";
 import type { MetricKey, VideoAnalysisPoint } from "@/lib/videoscore";
 /* 五轴评级算法（共享件）；别名避开本文件里的 radarOverall 同名 prop */
@@ -1148,7 +1150,8 @@ export interface PlayResult {
   cl: number;
   /** 有效点击（Ce = Cl − wasted） */
   ce: number;
-  /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——回放数据面板 Path 行用；
+  /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——回放数据面板 Path 行经共享件
+   *  statsRows 按 16px/格折算成格数展示（2026-11-08 全站统一格数口径）；
    *  「我的评级」路线规划轴 2026-10-29 起改用 cp（跨格次数） */
   path: number;
   /** 跨格次数：轨迹跨格线次数（0.5px 光栅化，replay-core crossings 同口径） */
@@ -2359,44 +2362,29 @@ export function VideoReplayProvider({
   );
 }
 
-/** 数据统计面板内容（十期拆出）：行集/口径/气泡＝练习页 statsReport 同款，
- *  行值派生公式勿改。页面模式与全屏层共用。 */
+/** 数据统计面板内容（十期拆出）：行集/口径/气泡＝共享件 statsRows（2026-11-08
+ *  统一，与练习页 statsReport 同源，口径永不分叉）。页面模式与全屏层共用。 */
 function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
-  const t = s.csec / 100;
-  const f3 = (v: number) => v.toFixed(3);
-  const hasBv = s.solvedBv > 0 && t > 0;
-  const est = hasBv ? t * (s.board3bv / s.solvedBv) : 0;
-  /* QG/STNB 用 Est RTime 代入（2026-10-30 张老师定，与练习页 statsReport 同口径）：
-     败局不再把半成品速度当整盘速度；胜局 est=t 恒等旧值 */
-  const qg = hasBv ? Math.pow(est, 1.7) / s.solvedBv : 0;
-  /* STNB 难度系数（标准级别；公式与练习页 statsReport / lib/videoradar stnbOf 同式） */
+  /* 难度档：录像页只会出现标准级别（beg/int/exp），ln 直取 1/2/3；
+     练习页自定义盘在 core 侧按雷密度折算后传入同一共享件 */
   const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
-  const stnb = hasBv
-    ? ((73.5 * ln * ln - 94.5 * ln + 57) / qg) * Math.sqrt(s.solvedBv / s.board3bv)
-    : 0;
-  const cl = s.clLeft + s.clRight + s.clDouble;
-  const rows: [string, string, string][] = [
-    ["RTime", f3(t) + " (" + (Math.floor(t) + 1) + ")", "本局实际用时（秒），括号内为按秒进位的录像计分时间"],
-    ["Est RTime", hasBv ? f3(est) + " (" + (Math.floor(est) + 1) + ")" : "* (*)", "按完成度折算的估算用时 = 实际用时 × 3BV ÷ 已完成 3BV"],
-    ["3BV", s.solvedBv + "/" + s.board3bv, "盘面理论最少点击次数（Bechtel 基准值），显示为 已完成 / 全盘总量"],
-    ["3BV/s", hasBv ? f3(s.solvedBv / t) : "*", "每秒完成的 3BV 数 = 已完成 3BV ÷ 实际用时，衡量操作效率"],
-    ["Ops", s.solvedOps + "/" + s.totalOps, "开空区域（opening）的完成数 / 全盘总数"],
-    ["Isls", s.solvedIsls + "/" + s.totalIsls, "孤立数字块（island）的完成数 / 全盘总数"],
-    ["Left", s.clLeft + "@" + (t > 0 ? f3(s.clLeft / t) : "0.000"), "左键点击次数 @ 每秒点击频率"],
-    ["Right", s.clRight + "@" + (t > 0 ? f3(s.clRight / t) : "0.000"), "右键点击次数 @ 每秒点击频率"],
-    ["Double", s.clDouble + "@" + (t > 0 ? f3(s.clDouble / t) : "0.000"), "左右同按（和弦双击）次数 @ 每秒频率"],
-    ["Ce", s.ce + "@" + (t > 0 ? f3(s.ce / t) : "0.000"), "有效点击次数（真正开出新格或完成 3BV 的点击）@ 每秒频率"],
-    ["Cl", cl + "@" + (t > 0 ? f3(cl / t) : "0.000"), "总点击次数（左键 + 右键 + 双击）@ 每秒频率"],
-    ["IOE", cl > 0 ? f3(s.solvedBv / cl) : "*", "效率指数 = 已完成 3BV ÷ 总点击次数"],
-    ["ThrP", s.ce > 0 ? f3(s.solvedBv / s.ce) : "*", "吞吐效率 = 已完成 3BV ÷ 有效点击次数"],
-    ["Corr", cl > 0 ? f3(s.ce / cl) : "*", "准确率 = 有效点击 ÷ 总点击次数"],
-    ["Path", String(Math.round(s.path)), "鼠标移动路径的欧氏距离总和（像素）"],
-    ["Crossings", String(s.cp), "鼠标轨迹跨过格线的次数（跨格计数，路线规划「完成3BV/Crossings」的分母；对鼠标回报率免疫）"],
-    ["Flags", String(s.flags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
-    ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
-    ["QG", hasBv ? f3(qg) : "*", "质量分 = 估算用时 ^ 1.7 ÷ 已完成 3BV（估算用时 = 实际用时 × 3BV ÷ 已完成 3BV，胜局两者相等）"],
-    ["STNB", hasBv ? f3(stnb) : "*", "综合评分（按难度与完成度归一化，越大越好）"],
-  ];
+  const rows = statsRows({
+    t: s.csec / 100,
+    board3bv: s.board3bv,
+    solvedBv: s.solvedBv,
+    solvedOps: s.solvedOps,
+    totalOps: s.totalOps,
+    solvedIsls: s.solvedIsls,
+    totalIsls: s.totalIsls,
+    clLeft: s.clLeft,
+    clRight: s.clRight,
+    clDouble: s.clDouble,
+    ce: s.ce,
+    pathPx: s.path,
+    crossings: s.cp,
+    flags: s.flags,
+    ln,
+  });
   return (
     <>
       <div className="gr_title">数据统计</div>

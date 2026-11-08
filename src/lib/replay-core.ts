@@ -418,3 +418,74 @@ export function replayCounts(
     solvedBv,
   };
 }
+
+/* ---- 结算数据面板行定义（2026-11-08 统一）--------------------------------
+ * 练习页 OnlinePlay.statsReport 与录像页 VideoReplay.ReplayStatsTable 此前各写
+ * 一份 rows，纯靠注释互标「同款」维持同步，已现漂移（Path 一边格数一边像素）。
+ * 现统一为本共享件：行集/口径/气泡文案唯一来源，两侧只喂原始计数。
+ * 派生值（Cl/est/qg/stnb）在本函数内统一计算——公式与 flop counters 逐项对齐
+ * （Est=RT×(3BV/solved)；IOE=solved/Cl；ThrP=solved/Ce；Corr=Ce/Cl；
+ * RQP=Est×(Est+1)/3BV；QG=RT^1.7/solved；
+ * STNB=(73.5L²−94.5L+57)/QG×(solved/3BV)^0.5，QG/STNB 用 Est RTime 代入——
+ * 2026-10-30 张老师定败局修正，胜局 est=t 恒等旧值；
+ * RTime 后缀 (n)=floor(RT)+1 录像秒数口径）。
+ * Path 展示口径全站统一为**格数**（16px/格折算）——与 ppc「格/次」单位一致、
+ * 与盘面尺寸无关（2026-11-08 张老师定，录像页由像素口径掰齐过来）。
+ * 仍须零依赖：练习页在客户端引用。 */
+export interface StatsRowSource {
+  /** 实际用时（秒） */
+  t: number;
+  board3bv: number;
+  solvedBv: number;
+  solvedOps: number;
+  totalOps: number;
+  solvedIsls: number;
+  totalIsls: number;
+  clLeft: number;
+  clRight: number;
+  clDouble: number;
+  /** 有效点击（Ce = Cl − wasted，两侧各自来自重放引擎/对局计数） */
+  ce: number;
+  /** 鼠标行程（棋盘 1x 像素，展示按 16px/格折算成格数） */
+  pathPx: number;
+  /** 跨格次数（0.5px 光栅化口径） */
+  crossings: number;
+  /** 玩家实际插旗数（胜局自动补旗不含） */
+  flags: number;
+  /** STNB 难度档：标准级别 beg=1/int=2/exp=3；自定义盘按雷密度折算后传入 */
+  ln: number;
+}
+
+export function statsRows(s: StatsRowSource): [string, string, string][] {
+  const f3 = (v: number) => v.toFixed(3);
+  const cl = s.clLeft + s.clRight + s.clDouble;
+  const hasBv = s.solvedBv > 0 && s.t > 0;
+  const est = hasBv ? s.t * (s.board3bv / s.solvedBv) : 0;
+  const qg = hasBv ? Math.pow(est, 1.7) / s.solvedBv : 0;
+  const stnb = hasBv
+    ? ((73.5 * s.ln * s.ln - 94.5 * s.ln + 57) / qg) * Math.sqrt(s.solvedBv / s.board3bv)
+    : 0;
+  const freq = (n: number) => (s.t > 0 ? f3(n / s.t) : "0.000");
+  return [
+    ["RTime", f3(s.t) + " (" + (Math.floor(s.t) + 1) + ")", "本局实际用时（秒），括号内为按秒进位的录像计分时间"],
+    ["Est RTime", hasBv ? f3(est) + " (" + (Math.floor(est) + 1) + ")" : "* (*)", "按完成度折算的估算用时 = 实际用时 × 3BV ÷ 已完成 3BV"],
+    ["3BV", s.solvedBv + "/" + s.board3bv, "盘面理论最少点击次数（Bechtel 基准值），显示为 已完成 / 全盘总量"],
+    ["3BV/s", hasBv ? f3(s.solvedBv / s.t) : "*", "每秒完成的 3BV 数 = 已完成 3BV ÷ 实际用时，衡量操作效率"],
+    ["Ops", s.solvedOps + "/" + s.totalOps, "开空区域（opening）的完成数 / 全盘总数"],
+    ["Isls", s.solvedIsls + "/" + s.totalIsls, "孤立数字块（island）的完成数 / 全盘总数"],
+    ["Left", s.clLeft + "@" + freq(s.clLeft), "左键点击次数 @ 每秒点击频率"],
+    ["Right", s.clRight + "@" + freq(s.clRight), "右键点击次数 @ 每秒点击频率"],
+    ["Double", s.clDouble + "@" + freq(s.clDouble), "双击（左右同按/中键/单击数字/速旗等 chord 手势）次数 @ 每秒频率"],
+    ["Ce", s.ce + "@" + freq(s.ce), "有效点击次数（真正开出新格或完成 3BV 的点击）@ 每秒频率"],
+    ["Cl", cl + "@" + freq(cl), "总点击次数（左键 + 右键 + 双击）@ 每秒频率"],
+    ["IOE", cl > 0 ? f3(s.solvedBv / cl) : "*", "效率指数 = 已完成 3BV ÷ 总点击次数"],
+    ["ThrP", s.ce > 0 ? f3(s.solvedBv / s.ce) : "*", "吞吐效率 = 已完成 3BV ÷ 有效点击次数"],
+    ["Corr", cl > 0 ? f3(s.ce / cl) : "*", "准确率 = 有效点击 ÷ 总点击次数"],
+    ["Path", String(Math.round(s.pathPx / 16)), "鼠标移动路径总长（按 16px/格折算的格数，全站统一口径）"],
+    ["Crossings", String(s.crossings), "鼠标轨迹跨过格线的次数（跨格计数，路线规划「完成3BV/Crossings」的分母；对鼠标回报率免疫）"],
+    ["Flags", String(s.flags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
+    ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
+    ["QG", hasBv ? f3(qg) : "*", "质量分 = 估算用时 ^ 1.7 ÷ 已完成 3BV（估算用时 = 实际用时 × 3BV ÷ 已完成 3BV，胜局两者相等）"],
+    ["STNB", hasBv ? f3(stnb) : "*", "综合评分（按难度与完成度归一化，越大越好；自定义盘按雷密度折算难度）"],
+  ];
+}
