@@ -14599,3 +14599,126 @@ body #page.rating_page .rating_standard .rating_note {
     padding: 18px 14px;
   }
 }
+
+/* ---------- 扫雷人机验证：复用练习的开格/插旗语义，轻量 modal ---------- */
+.mscap_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.68);
+}
+.mscap_modal {
+  position: relative;
+  width: 340px;
+  max-width: 100%;
+  padding: 22px 20px 18px;
+  border: 1px solid #6a6858;
+  border-radius: 10px;
+  background: #2b2a24;
+  color: #d8d8cc;
+  text-align: center;
+}
+.mscap_modal h2 {
+  margin: 0 24px 8px;
+  color: #f0f0e6;
+  font-size: 18px;
+  font-weight: 500;
+}
+.mscap_close {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  border: 0;
+  background: transparent;
+  color: #aaa99a;
+  font-size: 25px;
+  cursor: pointer;
+}
+.mscap_desc {
+  margin: 0 0 12px;
+  color: #aaa99a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.mscap_meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px 12px;
+  margin-bottom: 10px;
+  color: #c4c3b5;
+  font-size: 12px;
+}
+.mscap_board {
+  display: grid;
+  gap: 2px;
+  justify-content: center;
+  width: max-content;
+  margin: 0 auto 14px;
+  padding: 7px;
+  border: 2px inset #d0d0c8;
+  background: #808080;
+  touch-action: manipulation;
+  user-select: none;
+}
+.mscap_cell {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px outset #f0f0ea;
+  border-radius: 0;
+  background: #bdbdbd;
+  color: #222;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 24px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+.mscap_cell.s1 {
+  border: 1px solid #909090;
+  background: #c6c6c6;
+  cursor: default;
+}
+.mscap_cell.s2 {
+  color: #c00;
+}
+.mscap_cell.n1 { color: #0000c8; }
+.mscap_cell.n2 { color: #087b08; }
+.mscap_cell.n3 { color: #d00000; }
+.mscap_cell.n4 { color: #000080; }
+.mscap_cell.n5 { color: #800000; }
+.mscap_cell.n6 { color: #008080; }
+.mscap_cell.n7 { color: #111; }
+.mscap_cell.n8 { color: #666; }
+.mscap_board.won { outline: 2px solid #639922; }
+.mscap_board.lost { outline: 2px solid #a32d2d; }
+.mscap_status { color: #aaa99a; font-size: 13px; }
+.mscap_error { color: #ff9b8f; font-size: 13px; }
+.mscap_actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #8f8e82;
+  font-size: 12px;
+}
+.mscap_actions button {
+  padding: 5px 14px;
+  border: 1px solid #777465;
+  border-radius: 5px;
+  background: #444239;
+  color: #e2e1d4;
+  cursor: pointer;
+}
+@media (max-width: 380px) {
+  .mscap_modal { padding-left: 12px; padding-right: 12px; }
+  .mscap_actions span { max-width: 135px; text-align: right; }
+}

@@ -20,6 +20,7 @@ import { TitleSystemProvider } from "@/components/TitleSystemProvider";
 import { resolveTitleSystem, getThunderKingId } from "@/lib/title-system";
 import { getOpenmsLink } from "@/lib/openms";
 import { OpenmsConsentModal } from "@/components/OpenmsConsentModal";
+import { BotChallengeGate } from "@/components/BotChallengeGate";
 
 export const metadata: Metadata = {
   /* 站点标题模板（2026-10-15 张老师要求）：所有子页面统一「XXX | 扫雷网 Saolei.wang」 */
@@ -83,7 +84,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <div id="header">
           <div className="wrapper">
             <div className="logo">
-              <Link href="/">
+              <Link prefetch={false} href="/">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img className="logo_icon" src="/icon.svg" alt="" width={26} height={26} />
                 <h1>扫雷网</h1>
@@ -93,33 +94,33 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <div className="nav">
               <ul id="header_nav">
                 <li>
-                  <Link href="/">首页</Link>
+                  <Link prefetch={false} href="/">首页</Link>
                 </li>
                 <li>
-                  <Link href="/ranking">排行</Link>
+                  <Link prefetch={false} href="/ranking">排行</Link>
                 </li>
                 <li>
-                  <Link href="/video">录像</Link>
+                  <Link prefetch={false} href="/video">录像</Link>
                 </li>
                 <li>
-                  <Link href="/bbs">论坛</Link>
+                  <Link prefetch={false} href="/bbs">论坛</Link>
                 </li>
                 <li>
-                  <Link href="/page/guide">教程</Link>
+                  <Link prefetch={false} href="/page/guide">教程</Link>
                 </li>
                 <li>
-                  <Link href="/online">练习</Link>
+                  <Link prefetch={false} href="/online">练习</Link>
                 </li>
                 <li>
-                  <Link href="/titles">
+                  <Link prefetch={false} href="/titles">
                     <SystemText />
                   </Link>
                 </li>
                 <li>
-                  <Link href="/records">纪录</Link>
+                  <Link prefetch={false} href="/records">纪录</Link>
                 </li>
                 <li>
-                  <Link href="/page/download">下载</Link>
+                  <Link prefetch={false} href="/page/download">下载</Link>
                 </li>
                 {session ? (
                   <>
@@ -127,7 +128,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                       <MessageBadge />
                     </li>
                     <li className="popMenu user_menu">
-                      <Link href={`/user/${session.uid}`} className="um_trigger">
+                      <Link prefetch={false} href={`/user/${session.uid}`} className="um_trigger">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img className="um_avatar" src={avatarUrl} alt="" />
                         <span className="um_name">{displayName}</span>
@@ -135,26 +136,26 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                       </Link>
                       <ul className="menu">
                         <li>
-                          <Link href={`/user/${session.uid}`}>
+                          <Link prefetch={false} href={`/user/${session.uid}`}>
                             <IconPerson />
                             个人主页
                           </Link>
                         </li>
                         <li>
-                          <Link href="/video/upload">
+                          <Link prefetch={false} href="/video/upload">
                             <IconUpload />
                             上传录像
                           </Link>
                         </li>
                         <li>
-                          <Link href="/account">
+                          <Link prefetch={false} href="/account">
                             <IconGear />
                             账户设置
                           </Link>
                         </li>
                         {isManager(session.role) && (
                           <li>
-                            <Link href="/admin">
+                            <Link prefetch={false} href="/admin">
                               <IconAdmin />
                               管理后台
                             </Link>
@@ -189,6 +190,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         {openmsLink && openmsLink.consent === 0 && <OpenmsConsentModal />}
         {!session && <LoginModal />}
+        {!session && <BotChallengeGate />}
         <ToastHost />
         <ConfirmHost />
         {/* 论坛正文小图点击看大图（2026-10-27）：事件委托，全站生效（含 admin） */}
@@ -204,11 +206,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               Copyright &copy; {new Date().getFullYear()} 扫雷网Saolei.wang
             </p>
             <p className="footer-nav">
-              <Link href="/page/about">关于本站</Link> ·{" "}
-              <Link href="/page/history">更新历史</Link> ·{" "}
-              <Link href="/team">管理团队</Link> ·{" "}
-              <Link href="/page/donate">提供赞助</Link> ·{" "}
-              <Link href="/page/api">开放API</Link> ·{" "}
+              <Link prefetch={false} href="/page/about">关于本站</Link> ·{" "}
+              <Link prefetch={false} href="/page/history">更新历史</Link> ·{" "}
+              <Link prefetch={false} href="/team">管理团队</Link> ·{" "}
+              <Link prefetch={false} href="/page/donate">提供赞助</Link> ·{" "}
+              <Link prefetch={false} href="/page/api">开放API</Link> ·{" "}
               <a href="http://www.miibeian.gov.cn" target="_blank" rel="noopener noreferrer">
                 陕ICP备19026089号-1
               </a>

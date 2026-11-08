@@ -99,7 +99,7 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
             {SITE_LINKS.map((l) => (
               <li key={l.href}>
                 {/* /titles 文案随观看者称号体系切换（军衔/称号） */}
-                <Link href={l.href}>{l.href === "/titles" ? <SystemText /> : l.label}</Link>
+                <Link prefetch={false} href={l.href}>{l.href === "/titles" ? <SystemText /> : l.label}</Link>
               </li>
             ))}
             {!user && (
@@ -112,7 +112,7 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
       </div>
       {user && (
         <div className="mn_item">
-          <Link href="/message" className="mn_msg_btn" aria-label="消息">
+          <Link prefetch={false} href="/message" className="mn_msg_btn" aria-label="消息">
             <BubbleIcon />
             {unread > 0 && <sup className="mn_msg_badge">{unread}</sup>}
           </Link>
@@ -133,26 +133,26 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
           {userOpen && (
             <ul className="mn_menu mn_user_menu">
               <li>
-                <Link href={`/user/${user.uid}`}>
+                <Link prefetch={false} href={`/user/${user.uid}`}>
                   <IconPerson />
                   个人主页
                 </Link>
               </li>
               <li>
-                <Link href="/video/upload">
+                <Link prefetch={false} href="/video/upload">
                   <IconUpload />
                   上传录像
                 </Link>
               </li>
               <li>
-                <Link href="/account">
+                <Link prefetch={false} href="/account">
                   <IconGear />
                   账户设置
                 </Link>
               </li>
               {isManager(user.role) && (
                 <li>
-                  <Link href="/admin">
+                  <Link prefetch={false} href="/admin">
                     <IconAdmin />
                     管理后台
                   </Link>

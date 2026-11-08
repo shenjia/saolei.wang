@@ -14,6 +14,7 @@
 //   - 分页参数 Page、排序参数 By、目标 Id：能映射的尽量透传
 
 import { NextResponse, type NextRequest } from "next/server";
+import { canUseRsc } from "@/lib/bot-challenge";
 
 export const config = {
   // 拦截旧站路径。三类：
@@ -27,6 +28,10 @@ export const config = {
   // ③ 旧站静态资源热链（/Models/** /Download/** /Play/**）：论坛外链图片/下载直链，
   //    新站静态树在 /models /download /play（Linux 生产环境大小写敏感，须改写）
   matcher: [
+    // 全站 RSC 入口；普通 HTML、静态文件与 API 不因这两条额外进入 proxy。
+    { source: "/:path*", has: [{ type: "header", key: "rsc" }] },
+    { source: "/:path*", has: [{ type: "query", key: "_rsc" }] },
+    "/video",
     "/((?:.*\\.[aA][sS][pP]))",
     "/((?:.*\\.[aA][sS][aA]))",
     "/BBS",
@@ -97,11 +102,11 @@ function param(req: NextRequest, name: string): string | undefined {
  *  相对路径直接 ERR_INVALID_URL（route handler 里可行的相对 Location 写法在这里 500）。
  *  绝对地址取 nginx 传来的 Host / X-Forwarded-Proto（dev=dev.saolei.wang，生产=线上域名），
  *  不用 req.url（那是内部 localhost:3100，会泄内部 host，见项目记忆重定向坑）。 */
-function movedTo(req: NextRequest, location: string): NextResponse {
+function movedTo(req: NextRequest, location: string, status = 301): NextResponse {
   const host = req.headers.get("host");
   const proto = req.headers.get("x-forwarded-proto") ?? "http";
   const base = host ? `${proto}://${host}` : req.url;
-  return NextResponse.redirect(new URL(location, base), 301);
+  return NextResponse.redirect(new URL(location, base), status);
 }
 
 /** 数字参数解析（Id/Page/Rank 等），非法返回 undefined */
@@ -130,6 +135,29 @@ function withPage(base: string, page: number | undefined, extra?: Record<string,
 
 export function proxy(req: NextRequest) {
   const url = req.nextUrl;
+  const isRsc = req.headers.get("rsc") === "1" || url.searchParams.has("_rsc");
+  if (isRsc) {
+    const path = url.pathname;
+    // API、WS、静态资源有自己鉴权/缓存口径，不能套页面 RSC 通行证。
+    if (path.startsWith("/api/") || path.startsWith("/ws/") || path.startsWith("/_next/") || path.startsWith("/videos/")) {
+      return NextResponse.next();
+    }
+    if (!canUseRsc(req)) {
+      return NextResponse.json(
+        { error: "minesweeper challenge required" },
+        { status: 403, headers: { "x-saolei-challenge": "minesweeper", "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.next();
+  }
+  if (url.pathname === "/video") {
+    const filtered = url.searchParams.has("author") || url.searchParams.has("3bv");
+    if (req.method === "GET" && filtered && !canUseRsc(req)) {
+      const next = `${url.pathname}${url.search}`;
+      return movedTo(req, `/bot/challenge?next=${encodeURIComponent(next)}`, 307);
+    }
+    return NextResponse.next();
+  }
   // IIS 路径大小写不敏感，统一小写匹配
   const path = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
   const q = (n: string) => param(req, n);
