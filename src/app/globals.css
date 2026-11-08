@@ -284,7 +284,7 @@ body .tabs > a:hover::after {
 .login_overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999; /* 与吸顶 header(900)/toast 同层顶层 */
+  z-index: 10030; /* 高于人机验证弹窗 mscap(10020)：验证弹窗内点「登录」要浮在其上（2026-11-09） */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14701,6 +14701,9 @@ body #page.rating_page .rating_standard .rating_note {
 }
 .mscap_note a:hover {
   color: #fdc61a;
+}
+.mscap_gold {
+  color: #fdc61a; /* 前台站名金口径 */
 }
 @media (max-width: 380px) {
   .mscap_modal { padding-left: 12px; padding-right: 12px; }

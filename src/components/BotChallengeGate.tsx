@@ -269,8 +269,7 @@ export function BotChallengeGate() {
         {busy && !board && <p className="mscap_status">正在取一张预生成盘面…</p>}
         {error && <p className="mscap_error">{error}</p>}
         <p className="mscap_note">
-          完成后2小时免验证
-          <br />
+          完成后<span className="mscap_gold"> 2 </span>小时免验证，
           <LoginLink>登录</LoginLink>后不再出现此提示
         </p>
       </section>
