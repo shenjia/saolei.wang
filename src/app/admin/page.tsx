@@ -12,7 +12,7 @@ import { TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, getApiUsage, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { practiceCusClean } from "@/lib/admin/practice";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies, getCachedOverview, getCachedTrend30 } from "@/lib/admin/cache";
-import { getPendingOverview } from "@/lib/admin/stats";
+import { getOpenmsConsentOverview, getPendingOverview } from "@/lib/admin/stats";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
 import { TrendChart, BarList, Donut, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi, LevelTag, StatusTag } from "@/components/admin/Widgets";
@@ -30,13 +30,14 @@ export default async function AdminDashboard() {
   // 与分布/流量/API/异常一致；轻量「最新注册/最新上传」仍实时
   // 2026-11-06 张老师定：待审类「审核即消费」的数字（录像/评论/论坛/头像待审 + 最老积压）
   // 不进缓存，getPendingOverview 实时取后与缓存核心合并——审完回页数字立即消
-  const [core, trend, dist, traffic, api, pending] = await Promise.all([
+  const [core, trend, dist, traffic, api, pending, openmsConsent] = await Promise.all([
     getCachedOverview(),
     getCachedTrend30(),
     getDashboardDistributionsSoftwares(),
     getTrafficOverview(),
     getApiUsage(),
     getPendingOverview(),
+    getOpenmsConsentOverview(),
   ]);
   const ov = { ...core, ...pending };
   const [anomalies, latestUsers, latestVideos] = await Promise.all([
@@ -130,8 +131,27 @@ export default async function AdminDashboard() {
         </span>
       </div>
 
-      {/* ---------- 规模指标（2026-10-16 张老师定：第一行全带走势线；2026-11-01 加第 7 卡 API 调用） ---------- */}
+      {/* ---------- 规模指标（2026-10-16 张老师定：第一行全带走势线；2026-11-01 加第 7 卡 API 调用；
+          2026-11-08 张老师定：最上加「开源网表态」卡——openms_link 96 绑定用户的征求表态进度，实时取） ---------- */}
       <div className="admin_kpis">
+        <Kpi
+          label="开源网表态"
+          href="/admin/apikeys"
+          value={
+            <>
+              {openmsConsent.answered.toLocaleString("zh-CN")}
+              <small> / {openmsConsent.total.toLocaleString("zh-CN")} 人已表态</small>
+            </>
+          }
+          tone="cyan"
+          foot={
+            <>
+              同意 <b>{openmsConsent.agreed}</b> · 不同意 <b>{openmsConsent.disagreed}</b>
+              <br />
+              未表态 {openmsConsent.unans}（视为同意）
+            </>
+          }
+        />
         <Kpi
           label="今日 PV"
           value={traffic.today.pv}

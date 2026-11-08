@@ -186,6 +186,17 @@ export type PendingOverview = Pick<
 /** 概览 KPI 中除待审类以外的核心聚合（可缓存部分） */
 export type OverviewCoreData = Omit<Overview, keyof PendingOverview>;
 
+/** 开源网（openms）同步征求表态概况（2026-11-08 张老师定：仪表盘最上加卡实时展示）。
+ *  openms_link 仅 ~96 行，count×4 毫秒级，不进缓存——表态后回页数字立即变 */
+export async function getOpenmsConsentOverview() {
+  const [total, agreed, disagreed] = await Promise.all([
+    prisma.openmsLink.count(),
+    prisma.openmsLink.count({ where: { consent: 1 } }),
+    prisma.openmsLink.count({ where: { consent: 2 } }),
+  ]);
+  return { total, answered: agreed + disagreed, agreed, disagreed, unans: total - agreed - disagreed };
+}
+
 /** 待审类实时查询（轻查询：状态列计数 + 最老一条待审，毫秒级；仪表盘与审核页共用口径） */
 export async function getPendingOverview(): Promise<PendingOverview> {
   const now = Math.floor(Date.now() / 1000);
