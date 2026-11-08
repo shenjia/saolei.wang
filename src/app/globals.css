@@ -14499,8 +14499,10 @@ a.cheat_rep_link:hover {
   text-decoration: none;
 }
 body #page.rating_page {
-  width: 1100px;
-  max-width: calc(100% - 24px);
+  width: min(960px, calc(100% - 20px));
+  max-width: 960px;
+  margin-right: auto;
+  margin-left: auto;
 }
 body #page.rating_page .rating_standard {
   box-sizing: border-box;
@@ -14523,14 +14525,14 @@ body #page.rating_page .rating_standard .rating_note {
 }
 .rating_table {
   width: 100%;
-  min-width: 960px;
+  min-width: 800px;
   table-layout: fixed;
-  font-size: 13px;
+  font-size: 12px;
 }
 .rating_table th,
 .rating_table td {
-  padding: 6px 7px;
-  text-align: right;
+  padding: 5px 4px;
+  text-align: center;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -14547,6 +14549,7 @@ body #page.rating_page .rating_standard .rating_note {
 .rating_table .grade_col {
   width: 64px;
   text-align: left;
+  font-size: 16px;
   font-weight: bold;
 }
 .rating_pending {

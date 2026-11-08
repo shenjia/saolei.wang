@@ -8,12 +8,12 @@ import { gradeColor } from "@/lib/videoscore";
 
 export const metadata = { title: "评级标准" };
 
-const LEVELS: Level[] = ["sum", "exp", "int", "beg"];
+const LEVELS: Level[] = ["beg", "int", "exp", "sum"];
 const ORDERS: Order[] = ["time", "3bvs"];
 const LEVEL_NAMES: Record<Level, string> = { sum: "总计", exp: "高级", int: "中级", beg: "初级" };
 const ORDER_NAMES: Record<Order, string> = { time: "时间", "3bvs": "3BV/s" };
-const COLUMNS = ORDERS.flatMap((order) =>
-  LEVELS.map((level) => ({ key: `${level}_${order}`, level, order, name: LEVEL_NAMES[level] + ORDER_NAMES[order] })),
+const COLUMNS = LEVELS.flatMap((level) =>
+  ORDERS.map((order) => ({ key: `${level}_${order}`, level, order, name: LEVEL_NAMES[level] + ORDER_NAMES[order] })),
 );
 
 /** 每格只列一个临界值：SSS～E+ 列本档过线值，F 列进入末档的反向临界值。 */
