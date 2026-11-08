@@ -429,8 +429,8 @@ export function replayCounts(
  * STNB=(73.5L²−94.5L+57)/QG×(solved/3BV)^0.5，QG/STNB 用 Est RTime 代入——
  * 2026-10-30 张老师定败局修正，胜局 est=t 恒等旧值；
  * RTime 后缀 (n)=floor(RT)+1 录像秒数口径）。
- * Path=像素 / CPath=格数（16px/格折算）双行展示（2026-11-08 张老师定：
- * Path 口径统一为像素——与录像页原口径一致；练习页原来的折算格数拆出为 CPath 行）。
+ * Path 展示口径全站统一为**格数**（16px/格折算）——与 ppc「格/次」单位一致、
+ * 与盘面尺寸无关（2026-11-08 张老师定，录像页由像素口径掰齐过来）。
  * 仍须零依赖：练习页在客户端引用。 */
 export interface StatsRowSource {
   /** 实际用时（秒） */
@@ -446,7 +446,7 @@ export interface StatsRowSource {
   clDouble: number;
   /** 有效点击（Ce = Cl − wasted，两侧各自来自重放引擎/对局计数） */
   ce: number;
-  /** 鼠标行程（棋盘 1x 像素；Path 行原值展示，CPath 行按 16px/格折算） */
+  /** 鼠标行程（棋盘 1x 像素，展示按 16px/格折算成格数） */
   pathPx: number;
   /** 跨格次数（0.5px 光栅化口径） */
   crossings: number;
@@ -481,8 +481,7 @@ export function statsRows(s: StatsRowSource): [string, string, string][] {
     ["IOE", cl > 0 ? f3(s.solvedBv / cl) : "*", "效率指数 = 已完成 3BV ÷ 总点击次数"],
     ["ThrP", s.ce > 0 ? f3(s.solvedBv / s.ce) : "*", "吞吐效率 = 已完成 3BV ÷ 有效点击次数"],
     ["Corr", cl > 0 ? f3(s.ce / cl) : "*", "准确率 = 有效点击 ÷ 总点击次数"],
-    ["Path", String(Math.round(s.pathPx)), "鼠标移动路径的欧氏距离总和（像素）"],
-    ["CPath", String(Math.round(s.pathPx / 16)), "鼠标经过的格子数"],
+    ["Path", String(Math.round(s.pathPx / 16)), "鼠标移动路径总长（按 16px/格折算的格数，全站统一口径）"],
     ["Crossings", String(s.crossings), "鼠标轨迹跨过格线的次数（跨格计数，路线规划「完成3BV/Crossings」的分母；对鼠标回报率免疫）"],
     ["Flags", String(s.flags), "玩家实际插旗数量（胜利时自动补的旗不计）"],
     ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],

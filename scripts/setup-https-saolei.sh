@@ -305,28 +305,6 @@ server {
 
     # ========== 静态缓存段结束 ==========
 
-    # ========== L7 攻击闸门（2026-11-09 应急上线，实战拦截验证有效）==========
-    # 攻击画像：11 万分布式消费级 IP、轮换 Chrome UA、专打 /user/<id>?order/dir/level
-    # 随机参数组合穿透缓存（打瘫 Node SSR 造成 28 万次 502）；攻击请求 100% 无
-    # Referer（实测 4361/4361）。闸门：/user/<id> 带查询参数 且 无 Referer → 444。
-    # 注意：nginx location 只匹配不含查询串的 URI，是否带参数须用 $args 判断。
-    # 真实用户路径不受影响：站内点排序必带 Referer；外部分享裸链无参数。
-    location ~ ^/user/[0-9]+$ {
-        set $ddos_gate "";
-        if ($http_referer = "") { set $ddos_gate "noref"; }
-        if ($args != "") { set $ddos_gate "${ddos_gate}_args"; }
-        if ($ddos_gate = "noref_args") { return 444; }
-        limit_req zone=saolei_general burst=20 nodelay;
-        proxy_pass http://saolei_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
     location / {
         # general 限速下沉至此（2026-10-23）：只管动态路径（HTML/RSC/API）；
         # 静态 location 各自成块不带 limit_req 即天然不限速（server 顶层挂载会把
