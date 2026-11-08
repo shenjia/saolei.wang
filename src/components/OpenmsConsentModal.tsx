@@ -59,7 +59,7 @@ export function OpenmsConsentModal() {
           是否同意把开源网上未收录的历史录像<b>同步到扫雷网</b>？
           <br />
           <span style={{ fontSize: 13, color: "#b1b1a4" }}>
-            同步计划在11月13日进行，如届时您仍未表态，视为默认同意。
+            同步计划在11月13日进行，如届时您仍未表态，视为默认不同意。
           </span>
         </p>
         <div className="btns">

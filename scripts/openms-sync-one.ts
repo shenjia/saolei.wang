@@ -120,13 +120,13 @@ async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response
 }
 
 async function main() {
-  // 不同意名单跳过（2026-11-07 张老师需求：openms_link.consent=2 的用户不同步）
+  // 仅明确同意才同步（2026-11-08 张老师需求：未表态默认不同意）
   const link = await prisma.openmsLink.findUnique({
     where: { user: BigInt(leiUid) },
     select: { consent: true },
   });
-  if (link?.consent === 2) {
-    log(`用户 ${leiUid} 已表态不同意同步，跳过`);
+  if (link?.consent !== 1) {
+    log(`用户 ${leiUid} 未明确同意同步（consent=${link?.consent ?? "无绑定"}），跳过`);
     return;
   }
   log(`拉取开源站用户目录 profile=${profileId}（雷网 uid=${leiUid}）`);

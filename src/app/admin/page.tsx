@@ -148,7 +148,7 @@ export default async function AdminDashboard() {
             <>
               同意 <b>{openmsConsent.agreed}</b> · 不同意 <b>{openmsConsent.disagreed}</b>
               <br />
-              未表态 {openmsConsent.unans}（视为同意）
+              未表态 {openmsConsent.unans}（视为不同意）
             </>
           }
         />

@@ -1,7 +1,7 @@
 // 管理后台 · 开源网表态明细（2026-11-08 张老师需求）
 // 仪表盘「开源网表态」卡点击进入：分「同意 / 不同意 / 未表态」三组列出
 // openms_link 全部绑定用户（96 人量级，一页全量，无分页）。
-// 未表态在 2026-11-13 同步执行时视为同意（口径同前台 OpenmsConsentModal / lib/openms.ts）。
+// 未表态在 2026-11-13 同步执行时视为不同意（口径同前台 OpenmsConsentModal / 同步脚本）。
 // guard 在 admin/layout.tsx（requireAdmin），本页不重复。
 
 import Link from "next/link";
@@ -104,9 +104,9 @@ export default async function AdminOpenmsConsentPage() {
 
       <div className="admin_kpis">
         <Kpi label="已表态" value={agreed.length + disagreed.length} tone="cyan" foot={`共 ${links.length} 人绑定`} />
-        <Kpi label="同意" value={agreed.length} tone="green" foot="含未表态视为同意的潜在票" />
+        <Kpi label="同意" value={agreed.length} tone="green" foot="仅明确同意才同步" />
         <Kpi label="不同意" value={disagreed.length} tone="red" foot="历史录像不同步" />
-        <Kpi label="未表态" value={unans.length} tone="grey" foot="11-13 同步时视为同意" />
+        <Kpi label="未表态" value={unans.length} tone="grey" foot="11-13 同步时视为不同意" />
       </div>
 
       <AdminCard title={`同意（${agreed.length}）`}>
@@ -117,7 +117,7 @@ export default async function AdminOpenmsConsentPage() {
         <ListTable rows={disagreed} timeLabel="表态时间" timeOf={(r) => r.consentTime} />
       </AdminCard>
 
-      <AdminCard title={`未表态（${unans.length}）· 11-13 同步时视为同意`}>
+      <AdminCard title={`未表态（${unans.length}）· 11-13 同步时视为不同意`}>
         <ListTable rows={unans} timeLabel="绑定时间" timeOf={(r) => r.createTime} />
       </AdminCard>
     </>
