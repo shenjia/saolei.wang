@@ -339,6 +339,17 @@ export default async function UserViewPage({
   );
   const photoImg = <img className="avatar" src={photo} alt={user.chineseName} />;
 
+  // 「实力」标题问号：与每日一星同图标同气泡；主栏/侧栏两处响应式副本共用。
+  const ratingHelpLink = (
+    <Link className="star_help" href="/page/rating" data-tip="点击查看评级标准" aria-label="点击查看评级标准">
+      <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.4" />
+        <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />
+        <circle cx="10" cy="14.6" r="0.9" fill="currentColor" stroke="none" />
+      </svg>
+    </Link>
+  );
+
   return (
     <div id="page" className="two_columns">
     <ul id="user_view">
@@ -442,7 +453,7 @@ export default async function UserViewPage({
         {detail.stat &&
           detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
             <div className="radar box radar_main">
-              <h2>实力</h2>
+              <h2>实力{ratingHelpLink}</h2>
               <RadarChart data={radar} />
             </div>
           )}
@@ -493,7 +504,7 @@ export default async function UserViewPage({
         {detail.stat &&
           detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
             <div className="radar box">
-              <h2>实力</h2>
+              <h2>实力{ratingHelpLink}</h2>
               <RadarChart data={radar} />
             </div>
           )}
@@ -617,7 +628,7 @@ export default async function UserViewPage({
                 </StatRow>
                 {/* 2026-11-08 张老师要求：发表评论下新增「活跃指数」——近 7 日活跃值合计
                     （练习 3BV 计点＋录像级别加权＋评论×1；发表文章不计——避免灌水），
-                    hover 显示构成明细；7 日窗口实时查询不缓存，无「今日增量」列 */}
+                    hover 显示构成明细；读每分钟重算的活跃快照（user_activity_snapshot），无「今日增量」列 */}
                 <StatRow label="活跃指数">
                   <em
                     className="green"
