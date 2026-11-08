@@ -64,8 +64,13 @@ export function BotChallengeGate() {
     setOpen(false);
     setBoard(null);
     setError("");
-    // 独立验证页关闭后不能停在空壳页；回 canonical 列表，避免筛选地址再次跳转形成循环。
-    if (standalone) window.location.replace("/video");
+    // 独立验证页关闭后不能停在空壳页；也不能去可能再撞闸的固定地址（全站文档
+    // 已设匿名闸）——回上一页＝「当无事发生」，无历史（新标签直达）才回首页
+    // （首页预热常暖，不再触发闸）。
+    if (standalone) {
+      if (window.history.length > 1) window.history.back();
+      else window.location.replace("/");
+    }
   }
 
   async function load() {

@@ -54,6 +54,11 @@ export const config = {
     "/Play/:path*",
     "/Models/:path*",
     "/Software/:path*",
+    // 新站文档兜底（2026-11-09 张老师定：匿名穿透页缓存的 GET 走扫雷验证）：
+    // 负向前瞻剔除系统/静态/豁免路径——API、WS、Next 资源、录像/上传/图片/样式/脚本
+    // 静态树、旧站静态目标（小写）、验证页自身、账号与激活链路、爬虫文件。
+    // 其余页面文档请求一律进 proxy 参与匿名闸判定（登录态/有通行证无感放行）。
+    "/((?!api/|ws/|_next/|videos/|uploads/|images/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|account|active|favicon\\.ico|robots\\.txt|sitemap).*)",
   ],
 };
 
@@ -150,19 +155,35 @@ export function proxy(req: NextRequest) {
     }
     return NextResponse.next();
   }
-  if (url.pathname === "/video") {
-    const filtered = url.searchParams.has("author") || url.searchParams.has("3bv");
-    if (req.method === "GET" && filtered && !canUseRsc(req)) {
-      const next = `${url.pathname}${url.search}`;
-      return movedTo(req, `/bot/challenge?next=${encodeURIComponent(next)}`, 307);
-    }
-    return NextResponse.next();
-  }
   // IIS 路径大小写不敏感，统一小写匹配
   const path = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
   const q = (n: string) => param(req, n);
   const id = () => num(q("id"));
   const page = () => num(q("page"));
+
+  // ---------- 旧站形态判定（大小写敏感，勿动）----------
+  // .asp/.asa 后缀，或旧站 CamelCase 目录前缀——小写同名路径（/bbs /video /ranking…）
+  // 是新站自己的路由，绝不能当旧站处理（原 matcher 只拦 CamelCase，扩兜底后须在此区分）
+  const LEGACY_PREFIXES = [
+    "/BBS", "/Video", "/Player", "/Ranking", "/News", "/Message", "/About",
+    "/Download", "/Guide", "/Help", "/Hero", "/Team", "/World", "/Update",
+    "/History", "/Online", "/Main", "/Play", "/Models", "/Software",
+  ];
+  const isLegacyUrl = /\.(asp|asa)$/i.test(url.pathname) ||
+    LEGACY_PREFIXES.some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`));
+
+  // ---------- 新站文档：匿名扫雷闸（2026-11-09 张老师定） ----------
+  // 「所有穿透页缓存又未登录的请求启用验证」：能到达 proxy 即 nginx 页缓存未命中
+  // （命中缓存的请求根本不进 Next），登录态/2h 通行证（canUseRsc）直接放行。
+  // 覆盖此前仅 RSC 层 + /video?author|3bv 设闸的缺口——/bbs 等文档遍历曾完全绕过验证。
+  // 非 GET（表单提交等）不拦；豁免路径见 config.matcher 负向前瞻（登录/激活/静态/爬虫文件）。
+  if (!isLegacyUrl) {
+    if (req.method === "GET" && !canUseRsc(req)) {
+      const next = `${url.pathname}${url.search}`;
+      return movedTo(req, `/bot/challenge?next=${encodeURIComponent(next)}`, 307);
+    }
+    return NextResponse.next();
+  }
 
   // ---------- 裸目录路径（旧站目录浏览形态 /BBS /Video 等，外链与手输常见） ----------
   // matcher 已按旧站 CamelCase 原样拦截（小写是新站路由不能拦），这里小写后归一分发
