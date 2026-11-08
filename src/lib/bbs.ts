@@ -538,7 +538,9 @@ export async function updatePost(
   isAdmin: boolean,
   data: { title?: string; content?: string; board?: number }
 ): Promise<boolean> {
-  const row = await prisma.bbsPost.findFirst({ where: { id: BigInt(id), status: 0 } });
+  // 2026-11-09：待审主题（status=5，AI 复审命中）同样可编辑——可见即可改，口径同
+  // deletePost/updateReply（此前只认 status=0，管理员/本人编辑待审帖误报「无权编辑」）
+  const row = await prisma.bbsPost.findFirst({ where: { id: BigInt(id), status: { in: [0, 5] } } });
   if (!row) return false;
   if (!isAdmin && N(row.user) !== userId) return false;
   await prisma.bbsPost.update({
@@ -560,7 +562,9 @@ export async function createReply(
   isAdmin = false,
   quoteOf = 0
 ): Promise<{ id: number; quotedUserId: number | null } | "locked" | null> {
-  const post = await prisma.bbsPost.findFirst({ where: { id: BigInt(postId), status: 0 } });
+  // 2026-11-09：待审主题（status=5）同样可回——可见即可回，口径同 deletePost
+  // （此前只认 status=0，回帖误报「主题不存在」——24413 案例）
+  const post = await prisma.bbsPost.findFirst({ where: { id: BigInt(postId), status: { in: [0, 5] } } });
   if (!post) return null;
   if (post.isLocked && !isAdmin) return "locked";
   let full = content;
