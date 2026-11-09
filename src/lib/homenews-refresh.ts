@@ -5,9 +5,13 @@
 // queries.ts 的 videoScores re-export），revalidateTag 顶层 import 会炸
 // Pages/Client 编译（dev 实证 500，E394）。本模块只允许服务端链路 import。
 //
-// 覆盖三个条目（tag "home-news"，挂点在 queries.ts）：首页动态流（home-news-v1）、
-// 新兵动态（home-newbies-v1）、首页动态总数（news-count-v9；板块计数条目一并
-// 标脏、访问时按原 TTL 语义重建，无额外成本）。
+// 覆盖条目：
+// · tag "home-news"（挂点在 queries.ts）：首页动态流（home-news-v1）、新兵动态
+//   （home-newbies-v1）、首页动态总数（news-count-v9；板块计数条目一并标脏、
+//   访问时按原 TTL 语义重建，无额外成本）。
+// · tag "home-video-feed"（挂点在 queries.ts，2026-11-09 张老师需求：一键过后首页
+//   录像流自动更新）：发现流 id 集（feed-dedup-v3）、发现流总数（feed-dedup-count-v3）、
+//   录像总数（video-count-v4）——屏蔽改变流成员/总数，必须随审核即时打脏。
 // 流程 = revalidateTag 标脏（Next 16 两参形式，profile="max" = SWR 语义：
 // 访客拿旧内容、重建走后台，永不阻塞）→ kickPreheat 合并窗口后后台重建
 // （批量审核逐条触发只在最后一次 1s 后重建一次）。
@@ -20,10 +24,13 @@ import { kickPreheat } from "./preheat";
 export function refreshHomeNewsCache(): void {
   try {
     revalidateTag("home-news", "max");
+    revalidateTag("home-video-feed", "max");
   } catch {
     // 非请求上下文（脚本直调 reviewVideo）无 work store，忽略
   }
   kickPreheat("home-news");
   kickPreheat("home-newbies");
   kickPreheat("news-count");
+  kickPreheat("video-feed-page1");
+  kickPreheat("video-feed-count");
 }

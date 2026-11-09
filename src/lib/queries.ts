@@ -1470,7 +1470,12 @@ const fetchFeedDedupIdsImpl = async (
   return rows.map((r) => N(r.id));
 };
 // v3：2026-10-29 阶段筛选维度并入（stage 进参数即进缓存键；home×stage×nf 键空间有界）
-const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], { revalidate: REVALIDATE_HOME_CACHE });
+const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], {
+  revalidate: REVALIDATE_HOME_CACHE,
+  // 审核联动（2026-11-09）：一键过/屏蔽后审核收口 revalidateTag("home-video-feed")
+  // 即时打脏 + kick 预热重建，不等 300s TTL（屏蔽录像最长 5 分钟仍挂首页的根因）
+  tags: ["home-video-feed"],
+});
 
 /** 首页发现流去重总数（与 fetchFeedDedupIds 口径严格一致）：
  *  Σ 每组 (用户,级别) 的 min(非纪录盘数, 配额) + 纪录盘总数。 */
@@ -1495,7 +1500,10 @@ const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean, s
   return N(rows[0]?.c);
 };
 // v3：2026-10-29 阶段筛选维度并入（同 feed-dedup-v3）
-const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], { revalidate: REVALIDATE_HOME_CACHE });
+const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], {
+  revalidate: REVALIDATE_HOME_CACHE,
+  tags: ["home-video-feed"], // 同 fetchFeedDedupIds：审核收口即时打脏
+});
 
 /** 首页「最新录像」发现流总数（去重口径，2026-10-23）——
  *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。 */
@@ -1555,7 +1563,7 @@ const fetchVideoCount = unstable_cache(
     });
   },
   ["video-count-v4"],
-  { revalidate: REVALIDATE_HOME_CACHE }
+  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-video-feed"] } // 屏蔽改变总数，审核收口即时打脏
 );
 
 export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boolean } = {}): Promise<number> {

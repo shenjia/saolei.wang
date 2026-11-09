@@ -111,6 +111,13 @@ export default async function HomePage() {
     classic: n.authorTitles?.c ?? null,
   }));
 
+  // 审核联动重挂载签名（2026-11-09 张老师需求：一键过后首页录像流/新闻流自动更新）。
+  // 客户端 Feed 的 initial 态不随 router.refresh 重置（软导航铁律），服务端重渲再新鲜
+  // 也到不了已挂载的列表——以内容签名作 key：内容无变化时 key 稳定（翻页/筛选态保留），
+  // 审核改变行状态（✓ 下标）或流成员（新动态/屏蔽出流）时 key 变化强制重挂载吃新数据。
+  const newsFeedKey = news.map((n) => String(n.id)).join("-");
+  const videoFeedKey = videos.map((v) => `${v.id}:${v.status}`).join("-");
+
   // 待审录像分池计数（2026-10-22 张老师要求：仅管理员登录态查一次；
   // 2026-11-09 张老师要求拆免核定/需核定双池——免核定可首页一键过，见 ReviewEntry）
   const poolCounts =
@@ -170,6 +177,7 @@ export default async function HomePage() {
         )}
         <div id="news" className="box">
           <NewsFeed
+            key={newsFeedKey}
             title="新闻"
             homeOnly
             initial={feed}
@@ -180,6 +188,7 @@ export default async function HomePage() {
         </div>
         <div id="video" className="box">
           <VideoFeed
+            key={videoFeedKey}
             title="录像"
             titleClassName="gray"
             initial={videos}
