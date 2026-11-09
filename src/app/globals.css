@@ -2434,14 +2434,16 @@ del[data-tip]:hover::after {
    2 id 特异性压过 legacy 的 #user_view .radar .chart（222 定宽 + margin -15，
    在 210 盒内左右出血不对称）；max-width 234 兜住 ≤880 单列带 auto 宽盒 */
 #page #home .radar .radar_tip_wrap,
-#page #user_view .radar .radar_tip_wrap {
+#page #user_view .radar .radar_tip_wrap,
+#page .vs_radar .radar_tip_wrap {
   position: relative;
   margin: -12px;
   width: calc(100% + 24px);
   max-width: 234px;
 }
 #page #home .radar .radar_tip_wrap .chart,
-#page #user_view .radar .radar_tip_wrap .chart {
+#page #user_view .radar .radar_tip_wrap .chart,
+#page .vs_radar .radar_tip_wrap .chart {
   display: block;
   margin: 0;
   width: 100%;
@@ -2454,7 +2456,8 @@ del[data-tip]:hover::after {
    「超过 xx% 的玩家」（percent=100 → 「全网第一」，无成绩维度 grade「?」→ 「暂无成绩」）。
    视觉与录像分析 vr_tip 同款：#1e1f1c 底 / #49483e 边 / 圆角 3px；
    字号与标签名一致（RadarChart.tsx LABEL_NAME_FS = 10，与 vr_tip 同步，勿单独改） */
-#page .radar .radar_tip {
+#page .radar .radar_tip,
+#page .vs_radar .radar_tip {
   position: absolute;
   z-index: 20;
   padding: 4px 9px;
@@ -2469,7 +2472,8 @@ del[data-tip]:hover::after {
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
-#page .radar .radar_tip em {
+#page .radar .radar_tip em,
+#page .vs_radar .radar_tip em {
   padding: 0 1px;
   font-style: normal;
   font-weight: bold;
@@ -2478,6 +2482,7 @@ del[data-tip]:hover::after {
 /* 「全网第一」整条金色（2026-10-15 张老师定）：与 .vr_tip_val / 雷达最高等级 SSS 同色 #E6DB74，
    实力雷达与录像分析（vr_tip）两处统一，加粗与 em 口径一致 */
 #page .radar .radar_tip .tip_first,
+#page .vs_radar .radar_tip .tip_first,
 #page #video_view .vr_tip .tip_first,
 #page #online_play .vr_tip .tip_first,
 #gr_modal .vr_tip .tip_first {
@@ -5431,6 +5436,10 @@ body #page.ranking_old .ranking_box {
 .area_table td.best .title {
   margin-left: 4px;
 }
+/* 领军人物缺位（无人活跃，2026-11-09）：弱灰文本，不带链接 */
+.area_table td.best .best_none {
+  color: #939387;
+}
 .area_table td.num {
   color: #bbbbaf; /* 数字淡一档（2026-09-24 张老师要求：太亮眼），排序命中列仍黄 */
   font-weight: bold;
@@ -5778,6 +5787,15 @@ body #page.two_columns {
 .am_tip.show {
   opacity: 1;
   transform: translateY(0);
+}
+/* 行 hover 联动气泡（2026-11-09）：无鼠标坐标，钉在地图右上角；left/top 内联样式
+   可能残留地图悬停时的旧值，pinned 下用 !important 覆盖并撤掉位移动画 */
+.am_tip.pinned {
+  left: auto !important;
+  top: 8px !important;
+  right: 8px;
+  transform: none;
+  animation: none;
 }
 .tp_head {
   display: flex;
@@ -8419,12 +8437,15 @@ button.msg_btn {
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
-  transition: color 0.15s, background 0.15s;
+  transform: scale(1);
+  /* 跳动缓动与 .vs_btn 同款（back-out 回弹）；色/底保持原 0.15s */
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.15s, background 0.15s;
 }
 button.msg_btn:hover {
   color: #a6e22e;
   background: rgba(166, 226, 46, 0.1);
   background-image: none;
+  transform: scale(1.25); /* hover 尺寸跳动一下（2026-11-09 三轮，与对战按钮同交互） */
 }
 button.msg_btn:active {
   color: #8ac21b;
@@ -8446,6 +8467,7 @@ button.msg_btn.msg_btn--disabled:hover {
   color: #4a4a41;
   background: transparent;
   background-image: none;
+  transform: scale(1); /* 不可用不跳动 */
 }
 button.msg_btn.msg_btn--disabled[data-tip] {
   position: relative;
@@ -14961,7 +14983,11 @@ body #page.rating_page .rating_standard .rating_note {
    阵营式 BV 网格：我胜的 BV 绿色升序靠左 / 对方胜的玫瑰红升序靠右 / 独有与平局居中；
    全页主色：我方绿 #a6e22e、对方玫瑰红 #e34f8c、胜者金 #fdc61a。 */
 
-/* 入口按钮：20px 交叉双剑，与 .msg_btn 同族；hover 金色（气泡按钮 hover 全站绿，对战用金色区分） */
+/* 入口按钮（2026-11-09 三轮定）：loading.io 交叉双剑彩色原图标，默认灰度变暗——
+   可用时≈亮灰 #b1b1a4、不可用时≈暗灰 #4a4a41；hover 恢复彩色并「尺寸跳动一下」
+   （back-out 回弹缓动的 scale 放大），与对话气泡按钮同交互。
+   ⚠️ transform 只加在按钮本体：发信浮窗遮罩 .msg_overlay 是按钮的兄弟节点，
+   不受按钮 transform 影响（.ucd_msg 包装 span 仍禁 transform，理由见 2391 注释） */
 a.vs_btn,
 span.vs_btn {
   display: inline-flex;
@@ -14974,9 +15000,11 @@ span.vs_btn {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #b1b1a4;
   vertical-align: middle;
-  transition: color 0.15s, background 0.15s;
+  cursor: pointer;
+  filter: grayscale(1) brightness(0.92); /* 彩色图标灰度化后≈亮灰 */
+  transform: scale(1);
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s;
 }
 a.vs_btn svg,
 span.vs_btn svg {
@@ -14985,12 +15013,17 @@ span.vs_btn svg {
   display: block;
 }
 a.vs_btn:hover {
-  color: #fdc61a;
-  background: rgba(253, 198, 26, 0.1);
+  filter: none; /* hover 恢复彩色 */
+  transform: scale(1.25); /* 尺寸跳动一下 */
+  background: transparent;
 }
 span.vs_btn--disabled {
-  color: #49483e;
+  filter: grayscale(1) brightness(0.42); /* 不可用≈暗灰 */
   cursor: default;
+}
+span.vs_btn--disabled:hover {
+  filter: grayscale(1) brightness(0.42);
+  transform: scale(1);
 }
 
 /* ① 对战主视觉（2026-11-09 二轮改版）：#page.main 标准宽度下，左右两个独立
@@ -14998,10 +15031,12 @@ span.vs_btn--disabled {
 #vs_hero {
   display: flex;
   align-items: stretch;
+  justify-content: center; /* 面板收缩后整组居中 */
   gap: 10px;
 }
+/* 面板收缩到雷达图（222+出血 24）能完整显示的最小宽度：随内容自适应，不均分撑满 */
 .vs_panel {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
 }
 /* 面板内 .user_card 已 width:100%（玩家卡片原样式）；雷达横线以下居中 */
@@ -15097,31 +15132,45 @@ span.vs_btn--disabled {
 .vs_rec td.vs_half.half_plain {
   color: #f8f8f2;
 }
+/* 板块尾部得分行（纪录比较）：加粗提亮 */
+.vs_rec tr.vs_rec_total td.vs_half {
+  color: #f8f8f2;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.05);
+}
+.vs_rec tr.vs_rec_total td.vs_half .vs_score {
+  font-weight: bold;
+}
+/* 图例/规则独立小板块（各BV比拼尾部） */
+.vs_bv_meta {
+  margin-top: 16px;
+}
 .vs_rule_note {
   margin-top: 10px;
   color: #636359;
   font-size: 12px;
 }
 
-/* ③ 各BV比拼：阵营式行布局 */
-.vs_lv {
-  margin-top: 18px;
+/* ③ 各BV比拼（2026-11-09 三轮改版）：初级/中级/高级各一个独立板块盒；
+   行宽随内容收缩不填满盒宽；格子之间无缝隙（去 gap 去圆角，连续色带） */
+.vs_lvbox {
+  padding-bottom: 22px;
 }
-.vs_lv_head {
-  margin-bottom: 6px;
-  font-size: 15px;
+.vs_lvbox h1 {
+  margin-bottom: 12px;
 }
 .vs_lv_cnt {
   color: #888;
   font-size: 13px;
-  margin-left: 6px;
+  margin-left: 10px;
 }
 .vs_bandrow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-top: 6px;
   min-height: 28px;
+  width: max-content; /* 表格不填满板块 */
 }
 .vs_band {
   width: 64px;
@@ -15135,16 +15184,17 @@ span.vs_btn--disabled {
   white-space: nowrap;
 }
 .vs_mid {
-  flex: 1 1 auto;
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
 }
 .vs_grp {
   display: inline-flex;
-  gap: 4px;
+  gap: 0; /* 格子无缝隙 */
   flex-wrap: wrap;
+}
+.vs_midgrp {
+  margin: 0 20px; /* 独有/平局组与左右阵营的间距 */
 }
 .vs_c {
   display: inline-flex;
@@ -15154,7 +15204,7 @@ span.vs_btn--disabled {
   justify-content: center;
   font-size: 12px;
   font-weight: bold;
-  border-radius: 3px;
+  border-radius: 0; /* 无缝隙：去圆角成连续色带 */
   cursor: default;
 }
 .vs_seg {
@@ -15176,6 +15226,11 @@ span.vs_btn--disabled {
 }
 .vs_seg .s2 {
   color: #e874ab;
+}
+/* 板块尾部「本级得分」：单行「x : y」 */
+.vs_seg_inline .s1,
+.vs_seg_inline .s2 {
+  display: inline;
 }
 .vs_lv_total .vs_band {
   color: #b1b1a4;

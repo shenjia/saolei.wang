@@ -20,10 +20,14 @@ import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
 
 // 地区榜页底规则板块（2026-10-14 张老师要求；口径见 queries.getAreaRanking）
 // 2026-10-15 张老师要求：去掉「全国名次」条目（表中已无此列，领军人物全国名次走用户卡）
+// 2026-11-09 张老师定：补「领军人物」条目——口径随排序切换（战力=历史第一，其余=活跃最高名次/「无」）
 // 配色（2026-10-15 张老师定）：金只留小标题，正文数字 <i> 亮灰
 const AREA_RULES = [
   <>
     <b>地区归属</b>：按注册资料中的地区统计；未填写地区或填写了多个地区的玩家不计入地区榜。
+  </>,
+  <>
+    <b>领军人物</b>：按<i>战力指数</i>排序时为该地区历史排行第一人；其余排序为该地区活跃雷友（近 <i>30</i> 天登录过的上榜者）中全国名次最高者——无人活跃则为「无」。
   </>,
   <>
     <b>战力指数</b>：地区内每位有成绩雷友贡献（全国有成绩总人数 −
@@ -156,11 +160,21 @@ export async function AreaRankingView({
 
   const order = parseAreaOrder(sp.order);
   const rows = await getAreaRanking(order);
-  // 领军人物的军衔按高级时间评定（2026-10-13 SUB 制）；Phase 5 补旧版称号备选
-  // 2026-11-06 总司令/雷帝=动态阈值档
+  // 领军人物口径（2026-11-09 张老师定）：仅战力指数排序=历史第一人；其余排序=活跃
+  // （近 30 天登录）上榜雷友中全国名次最高者，无人活跃为「无」（bestId=0，前端纯文本）。
+  // 军衔按高级时间评定（2026-10-13 SUB 制）；Phase 5 补旧版称号备选；
+  // 2026-11-06 总司令/雷帝=动态阈值档。缺位行不评称号（titles/classics 置空）。
   const leadTh = await getThunderKingThreshold();
-  const leadPairs = await dualTitles(rows.map((r) => ({ userId: r.bestId, expTime: r.bestExpTime, ranked: true, sex: r.bestSex })));
-  const titles = await Promise.all(rows.map((r) => assessTitle(r.bestExpTime, leadTh)));
+  const leadPairs = await dualTitles(
+    rows.map((r) =>
+      r.noActiveLeader
+        ? { userId: r.bestId, expTime: Number(r.bestExpTime) || 0, ranked: false, sex: r.bestSex }
+        : { userId: r.bestId, expTime: Number(r.bestExpTime), ranked: true, sex: r.bestSex }
+    )
+  );
+  const titles = await Promise.all(
+    rows.map((r) => (r.noActiveLeader ? "" : assessTitle(r.bestExpTime, leadTh)))
+  );
 
   return (
     <div id="page" className="main ranking_old two_columns">

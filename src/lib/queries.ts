@@ -54,6 +54,7 @@ import { decodeLegacyEntities, scoreTime, videoCommentNotice } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { registerPreheat, kickPreheat } from "./preheat";
+import { getNewsWatermark, getVideoWatermark } from "./feedsalt";
 import { dualTitles, classicTitle, getThunderKingId, getThunderKingThreshold, type TitlePair } from "./title-system";
 import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
 import { activityInfo } from "./activity";
@@ -263,13 +264,33 @@ const fetchNewbies = unstable_cache(
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
+// 2026-11-09 张老师需求：登录态首页动态流实时化。访客路径零变化（盐=""，键与原完全
+// 一致，预热体系照常保温）；登录态带水位盐（feedsalt 探测，5s 微缓存）——内容无变化
+// 命中原热缓存键，有新动态换键阻塞重建一次，登录即所见即所得。入口签名不带盐参数
+// （调用方 page.tsx 无感知），盐在函数内取：本模块只被服务端链路引用。
 export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
-  return fetchHomeNews(limit);
+  const salt = await getNewsWatermark();
+  return fetchHomeNewsCached(salt, limit);
 }
 
+// 盐进键（keyArgs）：键空间有界——盐只随真实内容变化，无法被请求参数伪造
+const fetchHomeNewsCached = unstable_cache(
+  async (salt: string, limit: number) => fetchHomeNews(limit),
+  ["home-news-live-v1"],
+  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
+);
+
 export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]> {
-  return fetchNewbies(limit);
+  const salt = await getNewsWatermark();
+  return fetchNewbiesCached(salt, limit);
 }
+
+// 入伍新兵随动态流水位同步刷新（2026-10-13 定：不单独走实时，复用 news 盐零探测成本）
+const fetchNewbiesCached = unstable_cache(
+  async (salt: string, limit: number) => fetchNewbies(limit),
+  ["home-newbies-live-v1"],
+  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
+);
 
 // 首页访客路径自驱预热：注册行紧跟查询定义（新增首页查询时在同一处补一行即可，
 // TTL 引用与条目 revalidate 同一个常量，改缓存时长时预热提前量自动跟随）
@@ -2795,7 +2816,10 @@ export interface AreaRow {
   bestExpTime: number;
   bestSumTime: number;
   bestSex: number;
+  /** 无人活跃时领军人物缺位（仅非战力排序；bestId=0、bestName=「无」） */
+  noActiveLeader: boolean;
 }
+
 
 async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRow[]> {
   const orderBy =
@@ -2804,10 +2828,15 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
       : order === "active"
         ? "active DESC, a.power DESC"
         : order === "best"
-          ? "best_rank ASC"
+          ? "(abest_rank = 0) ASC, abest_rank ASC"
           : order === "activity"
             ? "act_score DESC, a.power DESC"
             : "power DESC";
+  // 领军人物口径（2026-11-09 张老师定）：只有按战力指数排序时领军人物=该地区历史排行
+  // 第一人；其余排序（含默认活跃指数）领军人物=该地区近 30 天登录过的上榜雷友中
+  // 全国名次最高者（活跃值>0），无人活跃则为「无」（bestId=0，前端渲染纯文本）。
+  // 「领军人物」表头排序键同步改为活跃领军的全国名次（无人活跃沉底），保持列内一致
+  const useActiveLeader = order !== "power";
   const rows = await prisma.$queryRawUnsafe<
     {
       area: string;
@@ -2824,6 +2853,13 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
       best_exp_time: number;
       best_sum_time: number;
       best_sex: number;
+      abest_rank: bigint;
+      abest_id: bigint;
+      abest_name: string;
+      abest_english_name: string;
+      abest_exp_time: number;
+      abest_sum_time: number;
+      abest_sex: number;
     }[]
   >(
     `WITH ranked AS (
@@ -2832,6 +2868,13 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
               COUNT(*) OVER () total
        FROM user_scores s JOIN user u ON u.id = s.id
        WHERE s.sum_time > 0 AND u.status = 0 AND u.area <> '' AND u.area NOT LIKE '%&%'
+     ),
+     ranked_act AS (
+       SELECT ra.id, ra.area, ra.rk,
+              ROW_NUMBER() OVER (PARTITION BY ra.area ORDER BY ra.rk ASC) ark
+       FROM ranked ra
+       JOIN user u2 ON u2.id = ra.id
+       WHERE u2.last_login_time > UNIX_TIMESTAMP() - 30 * 86400
      ),
      agg AS (
        SELECT area, COUNT(*) players, ROUND(AVG(rk)) avg_rank, MIN(rk) best_rank,
@@ -2850,13 +2893,23 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
             COALESCE(aa.score, 0) act_score, COALESCE(aa.wins_7d, 0) wins_7d,
             COALESCE(aa.videos_7d, 0) videos_7d,
             r.id best_id, u.chinese_name best_name, u.english_name best_english_name,
-            s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex
+            s.exp_time best_exp_time, s.sum_time best_sum_time, u.sex best_sex,
+            CAST(COALESCE(ar.ark, 0) AS UNSIGNED) abest_rank,
+            CAST(COALESCE(ar.id, 0) AS UNSIGNED) abest_id,
+            COALESCE(u3.chinese_name, '无') abest_name,
+            COALESCE(u3.english_name, '') abest_english_name,
+            CAST(COALESCE(s3.exp_time, 0) AS UNSIGNED) abest_exp_time,
+            CAST(COALESCE(s3.sum_time, 0) AS UNSIGNED) abest_sum_time,
+            COALESCE(u3.sex, 0) abest_sex
      FROM agg a
      JOIN ranked r ON r.area = a.area AND r.rk = a.best_rank
      JOIN user u ON u.id = r.id
      JOIN user_scores s ON s.id = r.id
      LEFT JOIN act v ON v.area = a.area
      LEFT JOIN area_activity aa ON aa.area = a.area
+     LEFT JOIN ranked_act ar ON ar.area = a.area AND ar.ark = 1
+     LEFT JOIN user u3 ON u3.id = ar.id
+     LEFT JOIN user_scores s3 ON s3.id = ar.id
      ORDER BY ${orderBy}`,
   );
   return rows.map((r) => ({
@@ -2868,12 +2921,24 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
     activity: N(r.act_score),
     wins7d: N(r.wins_7d),
     videos7d: N(r.videos_7d),
-    bestId: N(r.best_id),
-    bestName: r.best_name,
-    bestEnglishName: r.best_english_name,
-    bestExpTime: r.best_exp_time,
-    bestSumTime: r.best_sum_time,
-    bestSex: r.best_sex,
+    ...(useActiveLeader
+      ? {
+          bestId: N(r.abest_id),
+          bestName: r.abest_name,
+          bestEnglishName: r.abest_english_name,
+          bestExpTime: r.abest_exp_time,
+          bestSumTime: r.abest_sum_time,
+          bestSex: r.abest_sex,
+        }
+      : {
+          bestId: N(r.best_id),
+          bestName: r.best_name,
+          bestEnglishName: r.best_english_name,
+          bestExpTime: r.best_exp_time,
+          bestSumTime: r.best_sum_time,
+          bestSex: r.best_sex,
+        }),
+    noActiveLeader: useActiveLeader && N(r.abest_id) === 0,
   }));
 }
 
@@ -2884,7 +2949,9 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
 // 2026-11-02 活跃指数：LEFT JOIN area_activity 落盘表（每小时重算，见 lib/areaactivity.ts），
 // 缓存键升 v4
 // 2026-11-06 气泡练习数改完成口径（wins_7d），缓存键升 v5
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v5"], {
+// 2026-11-09 领军人物口径随排序切换（战力=历史第一，其余=活跃最高名次/「无」），
+// 缓存键升 v6
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v6"], {
   revalidate: 300,
 });
 

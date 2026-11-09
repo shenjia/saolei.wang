@@ -8,8 +8,11 @@
 // 排序列在「战力排行第x位 / 活跃排行第x位」间切换；填色跟随当前排序列。
 // 省界几何是静态数据（src/lib/area-map-geo.ts，由 scripts/build-area-map.py 生成）：
 // 无第三方地图服务、无 Key、可离线；含台湾省与南海诸岛九段线（标准地图口径）。
+// 2026-11-09 张老师要求：hover 左侧表格行时视为同时 hover 地图——气泡同步弹出，
+//   钉在地图右上角（行 hover 无鼠标坐标可跟随，取固定锚点）；
+//   领军人物为「无」（无人活跃）时只显示文本、不渲染称号 em。
 
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { buildUrl } from "@/components/Pager";
 import { areaDisplay, TITLE_COLORS, type AreaOrder } from "@/lib/config";
@@ -43,6 +46,20 @@ function ramp(t: number, mode: "power" | "activity"): string {
   return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
+// 行 hover 联动（2026-11-09）：AreaRanking（表格）与 AreaMap（地图）是兄弟组件，
+// 表格行 hover 事件要驱动地图弹气泡。单页面单实例，走模块级登记表最省事：
+// AreaMap 渲染时把自己的 enterRow 写进 rowLinkRef；AreaRanking 的行事件
+// 经 rowLinkRef.current?.(area) 调进来。导出 setter 供 AreaMap 挂载时登记
+type RowLinkFn = (area: string | null) => void;
+let rowLinkRef: RowLinkFn | null = null;
+export function registerRowLink(fn: RowLinkFn | null) {
+  rowLinkRef = fn;
+}
+/** 表格侧调用：行 onMouseEnter 传 area、onMouseLeave 传 null */
+export function rowHoverLink(area: string | null) {
+  rowLinkRef?.(area);
+}
+
 function legendFor(mode: "power" | "activity"): string {
   return `linear-gradient(90deg,${Array.from({ length: 7 }, (_, i) => `${ramp(i / 6, mode)} ${Math.round((i / 6) * 100)}%`).join(",")})`;
 }
@@ -62,6 +79,8 @@ export interface AreaMapDatum {
   /** 近 7 日上传录像数（落盘表快照） */
   videos7d: number;
   bestName: string;
+  /** 领军人物缺位（无人活跃，2026-11-09）：为 true 时领军人物只显示「无」，无称号 */
+  noLeader?: boolean;
   /** 领军人物的军衔（按高级时间评定，服务端算好传入） */
   title: string;
 }
@@ -71,18 +90,25 @@ export function AreaMap({
   order,
   hover,
   onHover,
+  onHoverSource,
 }: {
   data: AreaMapDatum[];
   /** 当前榜序（气泡 title 切换 + 填色指标跟随排序列） */
   order: AreaOrder;
   hover: string | null;
   onHover: (area: string | null) => void;
+  /** hover 来源上报（2026-11-09 行联动）：area=null 时带第二参清除行来源标记，
+   *  地图自身悬停/移出会立即覆盖该标记，勿在外部管理 */
+  onHoverSource?: (area: string | null, fromRow: boolean) => void;
 }) {
   const router = useRouter();
   const stageRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   // 气泡只由地图自身的悬停驱动（表格行悬停只高亮省份，不在鼠标旧位置弹气泡）
   const [tipArea, setTipArea] = useState<string | null>(null);
+  // 气泡来源：'map'=地图悬停（跟随鼠标） / 'row'=左侧表格行悬停（钉在右上角，
+  // 2026-11-09 张老师要求：hover 表格行视为同时 hover 地图）；两种来源互斥切换
+  const [tipFrom, setTipFrom] = useState<"map" | "row" | null>(null);
 
   const byActivity = order === "activity";
   // 填色模式：活跃指数榜=深绿→亮绿，其余（战力指数）=灰→站点金
@@ -93,17 +119,44 @@ export function AreaMap({
   const byName = new Map(data.map((d) => [d.area, d]));
   const hot = tipArea ? byName.get(tipArea) : undefined;
 
+  /** 表格行 hover 联动（2026-11-09）：高亮省份 + 弹气泡（钉右上角）。
+   *  经模块级登记表暴露给 AreaRanking（兄弟组件，props 传不到） */
+  const rowApiRef = useRef<(area: string | null) => void>(() => {});
+  rowApiRef.current = (area: string | null) => {
+    if (area) {
+      onHover(area);
+      setTipArea(area);
+      setTipFrom("row");
+    } else {
+      // 行移出只收「行来源」的气泡（地图自身悬停态不被行移出打断）
+      onHover(null);
+      setTipFrom((f) => {
+        if (f === "row") setTipArea(null);
+        return f === "row" ? null : f;
+      });
+    }
+  };
+  // 挂载登记 / 卸载解除（页面卸载后残留引用会指向已卸载组件的 setState）
+  useEffect(() => {
+    registerRowLink((a) => rowApiRef.current(a));
+    return () => registerRowLink(null);
+  }, []);
+
   /** 地图内悬停：同时驱动高亮（外传）与气泡（内部） */
   const enter = (area: string | null) => () => {
     onHover(area);
     setTipArea(area);
+    setTipFrom(area ? "map" : null);
   };
 
-  // 气泡跟随鼠标（直接改样式，避免每帧重渲染整张地图）
+  // 气泡跟随鼠标（直接改样式，避免每帧重渲染整张地图）；row 来源气泡钉在右上角，
+  // 由 CSS 类 .am_tip.pinned 定位（无鼠标坐标可跟随）
   const move = (e: ReactMouseEvent) => {
-    const stage = stageRef.current;
     const tip = tipRef.current;
+    if (tipFrom === "row") return;
+    const stage = stageRef.current;
     if (!stage || !tip) return;
+    tip.classList.remove("pinned");
     const r = stage.getBoundingClientRect();
     const tw = tip.offsetWidth;
     const th = tip.offsetHeight;
@@ -135,6 +188,7 @@ export function AreaMap({
         onMouseLeave={() => {
           onHover(null);
           setTipArea(null);
+          setTipFrom(null);
         }}
       >
         <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="am_svg" role="img" aria-label="中国地区排行地图">
@@ -193,7 +247,7 @@ export function AreaMap({
             <path className="island" d={GEO_INSET_ISLAND} />
           </svg>
         </svg>
-        <div className={`am_tip${hot ? " show" : ""}`} ref={tipRef}>
+        <div className={`am_tip${hot ? " show" : ""}${tipFrom === "row" ? " pinned" : ""}`} ref={tipRef}>
           {hot && (
             <>
               <div className="tp_head">
@@ -248,7 +302,8 @@ export function AreaMap({
                 <i>领军人物</i>
                 <b>
                   {hot.bestName}
-                  <em style={{ color: TITLE_COLORS[hot.title] ?? "#b1b1a4" }}>{hot.title}</em>
+                  {/* 无人活跃（2026-11-09）：「无」不带称号着色 */}
+                  {hot.title && <em style={{ color: TITLE_COLORS[hot.title] ?? "#b1b1a4" }}>{hot.title}</em>}
                 </b>
               </div>
               <div className="tp_foot">点击查看{areaDisplay(hot.area)}排行 →</div>

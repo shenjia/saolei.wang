@@ -13,11 +13,14 @@
 //   （落盘表 area_activity，每小时重算），且活跃指数为默认排序；地图气泡 title 随
 //   当前排序列在「战力排行第x位 / 活跃排行第x位」间切换（见 AreaMap）。
 // 2026-11-02 二轮（张老师要求）：全量一共就 2 页——撤下翻页组件完整显示所有地区。
+// 2026-11-09 张老师定：领军人物口径随排序切换（战力=历史第一，其余=活跃最高名次/「无」）；
+//   无人活跃时领军人物列渲染纯文本「无」（noActiveLeader，不带链接/气泡/徽章）；
+//   hover 表格行时右侧地图同步弹气泡（气泡钉在地图右上角，见 AreaMap tipFromRow）
 // 军衔（title）由服务端按高级时间评好，与 rows 同序传入。
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AreaMap, type AreaMapDatum } from "./AreaMap";
+import { AreaMap, rowHoverLink, type AreaMapDatum } from "./AreaMap";
 import { PlayerTip, TitleBadge } from "./Cells";
 import { buildUrl } from "./Pager";
 import { AREA_ORDERS, areaDisplay, type AreaOrder } from "@/lib/config";
@@ -55,6 +58,7 @@ export function AreaRanking({
     wins7d: r.wins7d,
     videos7d: r.videos7d,
     bestName: r.bestName,
+    noLeader: r.noActiveLeader,
     title: titles[i] ?? "",
   }));
 
@@ -94,8 +98,16 @@ export function AreaRanking({
                   <tr
                     key={r.area}
                     className={hover === r.area ? "hl" : ""}
-                    onMouseEnter={() => setHover(r.area)}
-                    onMouseLeave={() => setHover(null)}
+                    onMouseEnter={() => {
+                      setHover(r.area);
+                      // 行 hover 视为同时 hover 地图（2026-11-09 张老师要求）：
+                      // 高亮省份 + 地图右上角弹气泡；移出行时收起
+                      rowHoverLink(r.area);
+                    }}
+                    onMouseLeave={() => {
+                      setHover(null);
+                      rowHoverLink(null);
+                    }}
                   >
                     <td className="rank">
                       第&nbsp;<em>{i + 1}</em>&nbsp;位
@@ -106,13 +118,20 @@ export function AreaRanking({
                       </Link>
                     </td>
                     <td className="best">
-                      <Link href={`/user/${r.bestId}`} className="avatar_link" target="_blank" prefetch={false}>
-                        {r.bestName}
-                        <span className="pt_bubble">
-                          <PlayerTip id={r.bestId} name={r.bestName} englishName={r.bestEnglishName} />
-                        </span>
-                      </Link>
-                      <TitleBadge title={titles[i] ?? ""} classic={classics?.[i]} link />
+                      {r.noActiveLeader ? (
+                        // 领军人物缺位（无人活跃，2026-11-09 张老师定）：纯文本「无」
+                        <span className="best_none">无</span>
+                      ) : (
+                        <>
+                          <Link href={`/user/${r.bestId}`} className="avatar_link" target="_blank" prefetch={false}>
+                            {r.bestName}
+                            <span className="pt_bubble">
+                              <PlayerTip id={r.bestId} name={r.bestName} englishName={r.bestEnglishName} />
+                            </span>
+                          </Link>
+                          <TitleBadge title={titles[i] ?? ""} classic={classics?.[i]} link />
+                        </>
+                      )}
                     </td>
                     <td className={order === "activity" ? "num current act_cur" : "num"}>{areaActivity(r.activity)}</td>
                     <td className={order === "power" ? "num current" : "num"}>{areaPower(r.power)}</td>
