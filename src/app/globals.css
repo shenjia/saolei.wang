@@ -6952,6 +6952,11 @@ body #page {
 .ranking_table td.c_3bvs {
   color: #939387;
 }
+/* 活跃列（2026-11-10 地区内页）：7 日活跃值，绿色档（与活跃指数语义呼应）；
+   排序命中列走通用 .current 黄 */
+.ranking_table td.c_act {
+  color: #a6e22e;
+}
 /* 排序命中列整列黄（覆盖上面的默认色）；hover 一律绿（压过列色） */
 .ranking_table td.current,
 .ranking_table td.current a {

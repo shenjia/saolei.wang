@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
   // ---- 地区内页分支（2026-10-14 张老师要求：地区排行也支持搜索）----
   // 页码/名次限定该地区人口（getRankingPageOfUser 的 area 参数）；地区内页只有雷界口径（无 NF）
   // 2026-11-08 URI 统一：落地 URL 由 /area?... 改为 /ranking?view=area&...
+  // 2026-11-10：by=act（活跃值排序）同走本分支——getRankingPageOfUser level=act 内部切快照表
   const area = (p.get("area") ?? "").trim().slice(0, 12);
   if (area) {
     const aqs = new URLSearchParams({ view: "area", name: area });

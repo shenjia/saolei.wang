@@ -2,6 +2,9 @@
 
 export const LEVELS = ["beg", "int", "exp", "sum"] as const;
 export type Level = (typeof LEVELS)[number];
+/** 2026-11-10 地区内页「活跃」列虚拟级别：byLevelOrder 把 by=act 映射为 level="act"，
+ *  数据源切 user_activity_snapshot（快照表），不落 user_scores 字段映射 */
+export type RankLevel = Level | "act";
 
 export const ORDERS = ["time", "3bvs"] as const;
 export type Order = (typeof ORDERS)[number];
@@ -28,11 +31,15 @@ export const ORDER_NAMES: Record<Order, string> = {
 export const RANKING_PAGESIZE = 20;
 
 // ---------- 排行榜排序列（2008 版 By 参数：级别×成绩类型合成一列） ----------
+// 2026-11-10 张老师要求：新增「活跃」列（by=act，7 日活跃值 user_activity_snapshot.
+// active_points，每分钟刷新）——地区内页（/ranking?view=area&name=xx）按活跃值排序，
+// 数据源/口径与用户主页活跃值、领军人物判定同源；不受 8 列成绩快照/落盘链路影响。
 export const RANKING_BYS = [
   "beg_time", "beg_3bvs",
   "int_time", "int_3bvs",
   "exp_time", "exp_3bvs",
   "sum_time", "sum_3bvs",
+  "act",
 ] as const;
 export type RankingBy = (typeof RANKING_BYS)[number];
 
@@ -40,8 +47,10 @@ export function parseRankingBy(v?: string): RankingBy {
   return (RANKING_BYS as readonly string[]).includes(v ?? "") ? (v as RankingBy) : "sum_time";
 }
 
-/** by 拆成级别 + 成绩类型（复用 SCORE_FIELD 命名规则） */
-export function byLevelOrder(by: RankingBy): { level: Level; order: Order } {
+/** by 拆成级别 + 成绩类型（复用 SCORE_FIELD 命名规则）；act 是快照表特列（level="act"），
+ *  调用方（queries 榜单三函数）据此切数据源，不落 user_scores 字段映射 */
+export function byLevelOrder(by: RankingBy): { level: RankLevel; order: Order } {
+  if (by === "act") return { level: "act", order: "time" };
   const [level, order] = by.split("_") as [Level, Order];
   return { level, order };
 }
@@ -553,8 +562,6 @@ export function areaDisplay(name: string): string {
 // 2026-11-02 张老师要求：「综合排行指数」改称「战力指数」；新增「活跃指数」排序列
 //   （落盘表 area_activity，每小时重算）并作为默认排序；players/active 不进表头、
 //   仅保留旧 URL 兼容（?order=players / active 仍可解析）
-// 2026-11-09 张老师要求：地区总榜表尾新增「活跃」列（近 30 天登录人数），active
-//   转正为表头排序列、列名定「活跃」；players 仍仅 URL 兼容
 export type AreaOrder = "power" | "players" | "active" | "best" | "activity";
 
 export const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
@@ -562,7 +569,7 @@ export const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
   { key: "activity", label: "活跃指数" },
   { key: "power", label: "战力指数" },
   { key: "players", label: "排行人数" },
-  { key: "active", label: "活跃" },
+  { key: "active", label: "活跃人数" },
 ];
 
 /** 榜序参数解析（未知/缺省一律回落到活跃指数；2026-11-02 张老师定默认切换为活跃指数排行） */

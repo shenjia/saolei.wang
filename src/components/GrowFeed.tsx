@@ -166,7 +166,7 @@ export function GrowFeed({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={12} style={{ textAlign: "center" }}>
+              <td colSpan={13} style={{ textAlign: "center" }}>
                 当前窗口内暂无名次上升的玩家（快照基准至少需要积累两天数据）。
               </td>
             </tr>

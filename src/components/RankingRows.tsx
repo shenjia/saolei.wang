@@ -22,6 +22,8 @@ export const RANKING_COLS: { by: RankingBy; label: string; cls: string }[] = [
   { by: "exp_3bvs", label: "3BV/s", cls: "c_3bvs" },
   { by: "sum_time", label: "总计", cls: "c_sum" },
   { by: "sum_3bvs", label: "3BV/s", cls: "c_3bvs" },
+  // 活跃（2026-11-10 张老师要求，地区内页）：7 日活跃值；0=7 日无活跃显示「-」
+  { by: "act", label: "活跃", cls: "c_act" },
 ];
 
 // 雷界/地区榜列宽钉死（2026-10-26 张老师要求：NF 开关/换页/加载更多列宽零变化）。
@@ -29,7 +31,8 @@ export const RANKING_COLS: { by: RankingBy; label: string; cls: string }[] = [
 // （1px 钉宽 + scrollWidth 实测：[71,74,85,33,42,33,39,42,39,42,42,30]），
 // 名字列给足 6 字中文名 + 性别图标（实测最长 ~94px）；2026-10-28 张老师再要求收紧
 // （118→108，超长名走 ellipsis 兜底），余量由 fixed 布局按比例摊。
-export const RANKING_COL_WIDTHS = [73, 108, 105, 54, 62, 54, 60, 58, 60, 58, 60, 32];
+// 2026-11-10：末位增活跃列 42（3 位数字宽，与 3BV/s 列同档）。
+export const RANKING_COL_WIDTHS = [73, 108, 105, 54, 62, 54, 60, 58, 60, 58, 60, 32, 42];
 
 // 军衔列预评：服务端（RankingTable）/ API 侧先算好随行传入，客户端零成本渲染
 export type TitledRow = RankingRow & { title: string; classic?: { name: string; color: string } | null };
@@ -45,6 +48,10 @@ function ScoreCell({
 }) {
   const v = row.scores[col.by];
   const isTime = col.by.endsWith("_time");
+  // 活跃列（2026-11-10 地区内页）：7 日活跃值，纯数字无录像链接；0=7 日无活跃
+  if (col.by === "act") {
+    return <td className={`${col.cls}${current ? " current" : ""}`}>{v ? v : "-"}</td>;
+  }
   // hover 按级别变色（2026-10-13 张老师要求，与录像列表同逻辑）：初级绿、中级橙、高级金；
   // 总计列（sum）保持全站 hover 绿
   const lvCls = col.by.startsWith("beg") ? "hv_beg" : col.by.startsWith("int") ? "hv_int" : col.by.startsWith("exp") ? "hv_exp" : "";
@@ -185,7 +192,7 @@ export function RankingHead({
                 page: undefined,
               })}
               className={c.by === by ? "current" : ""}
-              title={`按${c.label === "3BV/s" ? "3BV/s" : c.label + "时间"}排列`}
+              title={`按${c.by === "act" ? "活跃值" : c.label === "3BV/s" ? "3BV/s" : c.label + "时间"}排列`}
             >
               {c.label}
             </Link>
@@ -203,7 +210,8 @@ export function RankingHead({
 export function RankingEmpty({ showDelta, deltaCol }: { showDelta: boolean; deltaCol?: boolean }) {
   return (
     <tr>
-      <td colSpan={showDelta || deltaCol ? 12 : 11} style={{ textAlign: "center" }}>
+      {/* 2026-11-10 活跃列后基准 11→12 列 */}
+      <td colSpan={(showDelta || deltaCol ? 1 : 0) + 12} style={{ textAlign: "center" }}>
         暂无数据
       </td>
     </tr>

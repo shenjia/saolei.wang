@@ -265,9 +265,16 @@ export async function getGrowRanking(
       const scores: Record<string, number> = {};
       const videos: Record<string, number> = {};
       for (const b of RANKING_BYS) {
+        if (b === "act") {
+          // 活跃列（2026-11-10 地区内页新增）：进步榜行不带（rec 是 user_scores 记录，
+          // 无 act 字段）——置 0 渲染端按无数据处理
+          scores[b] = 0;
+          videos[b] = 0;
+          continue;
+        }
         const lo = byLevelOrder(b);
-        scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
-        videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
+        scores[b] = N(rec[SCORE_FIELD(lo.level === "act" ? "sum" : lo.level, lo.order)] as number);
+        videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level === "act" ? "sum" : lo.level, lo.order)] as bigint);
       }
       return {
         ...brief,

@@ -42,8 +42,9 @@ export async function GET(req: Request) {
     });
   }
 
-  // 成绩榜（雷界 / NF）：附带名次（下拉「第 N 位」用）
+  // 成绩榜（雷界 / NF / 地区内页活跃值排序）：附带名次（下拉「第 N 位」用）
   // 2026-10-14 地区内页搜索：带 area 时名次限定该地区人口（缺失＝未加入地区排行）
+  // 2026-11-10：by=act（活跃值）走 getRankOfUsers 内部 act 分支（快照表口径）
   const byRaw = p.get("by") ?? "";
   if ((RANKING_BYS as readonly string[]).includes(byRaw)) {
     const area = (p.get("area") ?? "").trim().slice(0, 12) || undefined;
