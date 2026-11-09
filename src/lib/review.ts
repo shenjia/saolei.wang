@@ -631,8 +631,10 @@ export async function reviewVideo(
   // 从简不特判。放事务外；try/catch 兜「脚本直调不在请求上下文」的场景（TTL 兜底）。
   if (status === VIDEO_STATUS.REVIEWED || status === VIDEO_STATUS.BANNED) {
     try {
-      // Next 16：revalidateTag 必须带 cacheLife profile 第二参（"max"=立即过期口径）
-      revalidateTag("user-records-curves", "max");
+      // ⚠️ 必须 { expire: 0 }（立即过期）不能用 "max"——"max" 是 SWR 标脏语义，
+      // 下次读缓存立即返回旧曲线、重建走后台（2026-11-09 源码实证，与首页新闻流
+      // 不更新同根因，详见 homenews-refresh.ts 长注）。阻塞重建才有「审完即新」。
+      revalidateTag("user-records-curves", { expire: 0 });
     } catch {
       // 非请求上下文（批量脚本直调 reviewVideo）静默跳过
     }
