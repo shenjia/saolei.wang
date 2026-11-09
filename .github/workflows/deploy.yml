@@ -191,6 +191,7 @@ jobs:
             --filter='protect videos/***' \
             --filter='protect public/uploads/***' \
             --filter='protect public/bbs-img/***' \
+            --filter='protect public/download/Metasweeper-*.dmg' \
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
 
       - name: Sync build artifacts
