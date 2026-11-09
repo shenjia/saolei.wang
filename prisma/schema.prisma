@@ -1198,44 +1198,18 @@ model SiteUpdate {
 // 开源扫雷网（openms.top）绑定与历史录像同步表态（2026-11-07 张老师需求）
 // 绑定名单由 worker 从开源站 GET /api/userprofile/query?platform=c 灌入
 // （upsert，绝不覆盖已表态用户的 consent）；user=雷网用户ID，profile=开源站用户ID
-// consent：0=未表态（默认不同意，2026-11-08 张老师定）1=同意 2=不同意——worker 仅 consent===1 才同步
-// syncToOpenms：雷网录像自动同步到开源网的开关（0=关 1=开，默认关）——开源站 worker 拉取时我方 API 按此过滤
+// consent：0=未表态（11-13 截止仍无表态视为默认同意）1=同意 2=不同意（同步跳过）
 model OpenmsLink {
-  user         BigInt @id @db.BigInt
+  user        BigInt @id @db.BigInt
   /// 开源站 userprofile.id（其 /api/video/query_by_id 的 id 参数）
-  profile      Int
+  profile     Int
   /// 0=未表态 1=同意 2=不同意
-  consent      Int    @default(0) @db.TinyInt
-  /// 0=不同步 1=同步（默认 0，2026-11-09 绑定协议 v2）
-  syncToOpenms Int    @default(0) @map("sync_to_openms") @db.TinyInt
+  consent     Int    @default(0) @db.TinyInt
   /// 表态时刻（Unix 秒；0=未表态）
-  consentTime  BigInt @default(0) @map("consent_time") @db.BigInt
-  createTime   BigInt @default(0) @map("create_time") @db.BigInt
-  updateTime   BigInt @default(0) @map("update_time") @db.BigInt
+  consentTime BigInt @default(0) @map("consent_time") @db.BigInt
+  createTime  BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime  BigInt @default(0) @map("update_time") @db.BigInt
 
   @@index([consent])
   @@map("openms_link")
-}
-
-// 绑定申请（2026-11-09 绑定协议 v2：跳转确认+回来核销，无服务端互调）
-// 雷网用户发起绑定 → 生成 token → 用户到开源站授权页登录确认 → 回雷网核销。
-// status：0=待确认 1=已核销（绑定完成）2=已取消
-model OpenmsBindRequest {
-  id           BigInt @id @default(autoincrement())
-  /// 发起人（雷网用户ID）
-  user         BigInt
-  /// 一次性令牌（发给开源站授权页，核销凭据）
-  token        String @unique @db.VarChar(64)
-  /// 开源站 userprofile.id（核销时由开源站 API 回填；未核销为 0）
-  profile      Int    @default(0)
-  /// 发起时勾选的「雷网录像自动同步到开源网」（0/1，核销时写入 openms_link.sync_to_openms）
-  syncToOpenms Int    @default(0) @map("sync_to_openms") @db.TinyInt
-  /// 发起时勾选的「开源网录像自动同步到雷网」（0/1，核销时折算 openms_link.consent：1→1 否→2）
-  consent      Int    @default(0) @db.TinyInt
-  status       Int    @default(0) @db.TinyInt
-  createTime   BigInt @default(0) @map("create_time") @db.BigInt
-  updateTime   BigInt @default(0) @map("update_time") @db.BigInt
-
-  @@index([user])
-  @@map("openms_bind_request")
 }
