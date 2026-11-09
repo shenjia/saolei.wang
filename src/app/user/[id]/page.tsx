@@ -66,7 +66,6 @@ import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { SendMessageButton } from "@/components/SendMessageButton";
-import { VsButton } from "@/components/VsButton";
 import { BbvCollection } from "@/components/BbvCollection";
 import { UserSigs } from "@/components/UserSigs";
 
@@ -379,7 +378,6 @@ export default async function UserViewPage({
               点击弹带遮罩的发信浮窗（输入框同录像评论），成功后屏中弹「发送成功」气泡 */}
           {/* 十二轮（2026-10-25）：按钮常驻——未登录/看自己灰置 + hover 提示 */}
           <SendMessageButton to={userId} name={user.chineseName} authorId={session?.uid ?? 0} />
-          <VsButton to={userId} viewerId={session?.uid ?? 0} />
           <div className="info_body">
             <table className="scores" cellPadding={0} cellSpacing={0}>
               <tbody>
