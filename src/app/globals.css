@@ -902,6 +902,26 @@ body #video_view .video_cell .playable {
   opacity: 1;
 }
 
+/* ---- 触屏端 flop 入口常显（2026-11-09 张老师反馈手机端「入口显示不全」）----
+   气泡 absolute 挂按钮下方、hover 才亮：手机无 hover，点「播放/重播」的粘滞
+   hover 只弹出半截，还被 .video_cell 横滑容器（≤1188 overflow-x:auto 连带把
+   overflow-y 也变 auto）裁掉底部。触屏（无 hover + 粗指针）改为流程内常显
+   小按钮：并入按钮行完整可点，不依赖 hover、不再被裁切。桌面 hover 行为不变 */
+@media (hover: none) and (pointer: coarse) {
+  #video_view .tip_host .tip_bubble {
+    position: static;
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 0 0 8px;
+  }
+  #video_view .tip_host .tip_bubble::before {
+    content: none; /* hover 桥只在真 hover 设备有意义 */
+  }
+}
+
 /* ---------- 新增：加载更多按钮 ----------
    2026-09-24 四轮（张老师）：整体居中——「加载更多」按钮 + 右侧灰字总数（数字微亮）
    2026-09-25（张老师）：按钮弃用自绘扁平样式，全站统一吃 legacy .button.small
