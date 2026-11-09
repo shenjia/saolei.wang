@@ -54,7 +54,6 @@ import { decodeLegacyEntities, scoreTime, videoCommentNotice } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
 import { registerPreheat, kickPreheat } from "./preheat";
-import { getNewsWatermark, getVideoWatermark } from "./feedsalt";
 import { dualTitles, classicTitle, getThunderKingId, getThunderKingThreshold, type TitlePair } from "./title-system";
 import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
 import { activityInfo } from "./activity";
@@ -264,33 +263,13 @@ const fetchNewbies = unstable_cache(
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
-// 2026-11-09 张老师需求：登录态首页动态流实时化。访客路径零变化（盐=""，键与原完全
-// 一致，预热体系照常保温）；登录态带水位盐（feedsalt 探测，5s 微缓存）——内容无变化
-// 命中原热缓存键，有新动态换键阻塞重建一次，登录即所见即所得。入口签名不带盐参数
-// （调用方 page.tsx 无感知），盐在函数内取：本模块只被服务端链路引用。
 export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
-  const salt = await getNewsWatermark();
-  return fetchHomeNewsCached(salt, limit);
+  return fetchHomeNews(limit);
 }
-
-// 盐进键（keyArgs）：键空间有界——盐只随真实内容变化，无法被请求参数伪造
-const fetchHomeNewsCached = unstable_cache(
-  async (salt: string, limit: number) => fetchHomeNews(limit),
-  ["home-news-live-v1"],
-  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
-);
 
 export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]> {
-  const salt = await getNewsWatermark();
-  return fetchNewbiesCached(salt, limit);
+  return fetchNewbies(limit);
 }
-
-// 入伍新兵随动态流水位同步刷新（2026-10-13 定：不单独走实时，复用 news 盐零探测成本）
-const fetchNewbiesCached = unstable_cache(
-  async (salt: string, limit: number) => fetchNewbies(limit),
-  ["home-newbies-live-v1"],
-  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
-);
 
 // 首页访客路径自驱预热：注册行紧跟查询定义（新增首页查询时在同一处补一行即可，
 // TTL 引用与条目 revalidate 同一个常量，改缓存时长时预热提前量自动跟随）
