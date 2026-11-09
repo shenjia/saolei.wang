@@ -5,6 +5,10 @@
 //   录像/评论/回复 = 滚动 7×86400 秒；全部来源只计 user.status=0。
 //   初/中/高列 = 录像上传数 + 练习完成盘数；活跃总分 = 练习点 + 录像加权 + 评论数。
 //
+// 2026-11-09 张老师反馈：活跃榜翻到最后出现整行全空（活跃指数等八列全 0）的人——
+// 成因＝近 7 日玩过练习但全是低完成率败局（逐盘计点全 0），评论/录像也无，
+// 四源聚合得分 0 仍进快照。修复：HAVING 过滤零活跃用户不入快照（榜单与 total 同步收敛）。
+//
 // 每分钟全量重算并单事务替换快照。审核、屏蔽、恢复、删除、数据修复均在下一轮
 // 自动纠正，避免逐事件增量冲正漂移。读取方由 MVCC 看到完整旧版或新版；
 // 刷新失败回滚并保留旧快照，不在页面请求里回退实时聚合。
@@ -39,7 +43,8 @@ function unionSql(): string {
          WHERE r.status = 0 AND r.create_time >= ?
          GROUP BY r.user
        ) g
-       GROUP BY g.uid`;
+       GROUP BY g.uid
+       HAVING SUM(g.pts) + SUM(g.vs) + SUM(g.cc) > 0`;
 }
 
 export interface ActivityRefreshResult {
