@@ -184,12 +184,10 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
 export function PasswordForm() {
   const router = useRouter();
   const [form, setForm] = useState({ password: "", newPassword: "", newRepeat: "" });
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setMessage(null);
     setSubmitting(true);
     try {
       const res = await fetch("/api/account/password", {
@@ -199,10 +197,11 @@ export function PasswordForm() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ ok: false, text: data.error ?? "修改失败" });
+        // 2026-11-09 张老师：错误一律全局居中气泡（按钮旁不再渲染错误文字）
+        toast(data.error ?? "修改失败", "error");
         return;
       }
-      setMessage({ ok: true, text: "密码修改成功" });
+      // 与 ProfileForm 同口径：气泡走完停留+淡出即表达成功，按钮旁不重复显示文字
       toast("密码修改成功", "success");
       setForm({ password: "", newPassword: "", newRepeat: "" });
       router.refresh();
@@ -243,11 +242,6 @@ export function PasswordForm() {
               <button type="submit" className="button active" disabled={submitting}>
                 保存
               </button>
-              {message && (
-                <div className={message.ok ? "hint" : "error"} style={{ marginTop: 8 }}>
-                  {message.text}
-                </div>
-              )}
             </td>
           </tr>
         </tbody>
