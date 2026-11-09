@@ -29,14 +29,14 @@ export type TitledActiveRow = ActiveRow & {
 /** 可排序数据列（表头点击切换 ?by=；by=act 为默认不显式入链）。
  *  tip = 表头 hover 气泡（2026-11-10 张老师定文案：初中高级「7日内练习次数 + 7日内
  *  上传录像数」、评论「7日内发表录像评论 / 文章评论」、观看「7日内观看录像时长
- *  （分钟）」、登录「7日内登录次数」、活跃指数为全口径汇总）。 */
+ *  （分钟）」、登录「7日内累计登录天数」、活跃指数为全口径汇总）。 */
 const ACTIVE_COLS: { by: "act" | "beg" | "int" | "exp" | "cmt" | "watch" | "login"; label: string; tip: string }[] = [
   { by: "beg", label: "初级", tip: "7日内练习次数 + 7日内上传录像数（初级）" },
   { by: "int", label: "中级", tip: "7日内练习次数 + 7日内上传录像数（中级）" },
   { by: "exp", label: "高级", tip: "7日内练习次数 + 7日内上传录像数（高级）" },
   { by: "watch", label: "观看", tip: "7日内观看录像时长（分钟）" },
   { by: "cmt", label: "评论", tip: "7日内发表录像评论 / 文章评论" },
-  { by: "login", label: "登录", tip: "7日内登录次数" },
+  { by: "login", label: "登录", tip: "7日内累计登录天数" },
   { by: "act", label: "活跃指数", tip: "练习3BV计点＋录像级别加权分＋观看时长＋评论数＋登录点" },
 ];
 
