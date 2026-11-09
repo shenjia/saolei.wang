@@ -16,8 +16,7 @@
 // 2026-11-09 张老师定：领军人物=活跃（7 日活跃值>0）上榜者中全国名次最高者/「无」；
 //   同日晚改统一口径——不随排序切换（战力排序也是活跃领军）；
 //   无人活跃时领军人物列渲染纯文本「无」（noActiveLeader，不带链接/气泡/徽章）；
-//   hover 表格行时右侧地图同步弹气泡（气泡钉在地图右上角，见 AreaMap tipFromRow）；
-//   同日：表尾新增「活跃」列（近 30 天登录人数），可点击表头按活跃人数排序（order=active）
+//   hover 表格行时右侧地图同步弹气泡（气泡钉在地图右上角，见 AreaMap tipFromRow）
 // 军衔（title）由服务端按高级时间评好，与 rows 同序传入。
 
 import { useState, type ReactNode } from "react";
@@ -83,9 +82,7 @@ export function AreaRanking({
                 <tr>
                   <th>排名</th>
                   <th>地区</th>
-                  {/* 2026-11-09 张老师要求：表尾新增「活跃」列（近 30 天登录人数）——
-                      players 仍是旧 URL 兼容不进表头，其余（含 active）都渲染 */}
-                  {AREA_ORDERS.filter((o) => o.key !== "players").map((o) => (
+                  {AREA_ORDERS.filter((o) => o.key === "best" || o.key === "power" || o.key === "activity").map((o) => (
                     <th key={o.key}>
                       <Link
                         href={buildUrl("/ranking", { view: "area", order: o.key === "activity" ? undefined : o.key })}
@@ -139,13 +136,11 @@ export function AreaRanking({
                     </td>
                     <td className={order === "activity" ? "num current act_cur" : "num"}>{areaActivity(r.activity)}</td>
                     <td className={order === "power" ? "num current" : "num"}>{areaPower(r.power)}</td>
-                    {/* 活跃（2026-11-09 张老师要求）：近 30 天登录人数，表尾最后一列 */}
-                    <td className={order === "active" ? "num current" : "num"}>{r.active}</td>
                   </tr>
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center" }}>
+                    <td colSpan={5} style={{ textAlign: "center" }}>
                       暂无数据
                     </td>
                   </tr>
