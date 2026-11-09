@@ -19,7 +19,6 @@ import { getRadarData, type RadarPoint } from "./radar";
 import {
   LEVELS,
   LEVEL_MIN_3BV,
-  TITLE_COLORS,
   type VideoLevel,
 } from "./config";
 import { score3bvs, scoreTime } from "./format";
@@ -79,7 +78,8 @@ export interface VsPlayer {
   sex: number;
   avatarUrl: string;
   militaryTitle: string;
-  titleColor: string;
+  /** 旧版称号备选（TitleBadge classic 双体系渲染，与玩家卡片一致） */
+  classicTitle: { name: string; color: string } | null;
   area: string;
   areaRank: number | null;
   natRank: number | null;
@@ -108,7 +108,7 @@ function toVsPlayer(card: UserCardData, radar: RadarPoint[]): VsPlayer {
     sex: card.sex,
     avatarUrl: card.avatarUrl,
     militaryTitle: card.militaryTitle,
-    titleColor: TITLE_COLORS[card.militaryTitle] ?? "#f8f8f2",
+    classicTitle: card.classicTitle,
     area: card.area,
     areaRank: card.areaPos,
     natRank: card.rank,

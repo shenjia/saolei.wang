@@ -14983,82 +14983,27 @@ span.vs_btn--disabled {
   cursor: default;
 }
 
-/* ① 对战主视觉：左卡片（+雷达）｜金 VS｜右卡片（+雷达） */
+/* ① 对战主视觉（2026-11-09 二轮改版）：#page.main 标准宽度下，左右两个独立
+   .box 玩家面板（内部结构=侧栏玩家卡片 .user_card 原样式，不另造类），中间金 VS */
 #vs_hero {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: 10px;
 }
-.vs_card {
+.vs_panel {
   flex: 1 1 0;
   min-width: 0;
 }
-.vs_card_top {
-  display: flex;
-  gap: 12px;
-}
-.vs_avatar {
-  width: 84px;
-  height: 84px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-.vs_card_right {
-  min-width: 0;
-}
-.vs_name {
-  margin: 0;
-  font-size: 22px;
-  font-weight: bold;
-}
-.vs_name a {
-  color: #f8f8f2;
-  text-decoration: none;
-}
-.vs_name a:hover {
-  color: #fdc61a;
-}
-.vs_en {
-  margin: 0;
-  color: #75715e;
-  font-size: 13px;
-}
-.vs_title {
-  display: inline-block;
-  margin-top: 4px;
-  padding: 1px 8px;
-  border: 1px solid;
-  border-radius: 3px;
-  font-size: 12px;
-}
-.vs_ranks {
-  margin-top: 6px;
-  font-size: 13px;
-  color: #888;
-}
-.vs_ranks .rank_line {
-  display: block;
-}
-.vs_ranks em,
-.vs_ranks .vs_null {
-  color: #e6db74;
-  font-style: normal;
-  font-weight: bold;
-}
-.vs_ranks .vs_null {
-  color: #75715e;
-  font-weight: normal;
-}
-.vs_radar {
+/* 面板内 .user_card 已 width:100%（玩家卡片原样式）；雷达横线以下居中 */
+.vs_panel .vs_radar {
   text-align: center;
 }
-.vs_radar h3 {
-  margin: 4px 0 0;
-  font-size: 14px;
-  color: #8a8878;
-  font-weight: normal;
+.vs_panel .vs_radar svg {
+  display: block;
+  margin: 0 auto;
 }
 .vs_vs {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -15072,44 +15017,75 @@ span.vs_btn--disabled {
   letter-spacing: 2px;
 }
 
-/* ② 各项记录比拼 + ④ 统计表共用 */
+/* ② 纪录比较 + ④ 统计表共用（2026-11-09 二轮改版）：
+   三列＝左成绩半行｜项目（亮灰居中）｜右成绩半行；成绩字号参照用户主页头部
+   （数字 16px / 行高 22px）；每行左右半行放胜负——胜者半行深绿底、负者半行
+   浅玫瑰红底，「胜/负」用绿/玫瑰红；无「胜负」表头。 */
 .vs_rec {
   width: 100%;
-  max-width: 640px;
+  border-collapse: separate;
+  border-spacing: 0 4px; /* 行间留缝，半行底色不粘连 */
 }
 .vs_rec th,
 .vs_rec td {
-  padding: 5px 10px;
-  border-bottom: 1px solid #3e3d32;
-  text-align: right;
-  font-size: 13px;
-}
-.vs_rec tr > th:first-child,
-.vs_rec td.mk {
-  text-align: left;
+  padding: 0;
+  border: 0;
+  font-size: 16px;
+  line-height: 22px;
 }
 .vs_rec tr.vs_head th {
+  padding-bottom: 6px;
   color: #75715e;
   font-weight: normal;
+  font-size: 14px;
   border-bottom: 1px solid #565549;
 }
-.vs_rec td.win {
-  color: #fdc61a;
-  font-weight: bold;
-}
-.vs_rec td.mk {
-  color: #888;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.vs_rec td.tie_mk {
-  color: #e6db74;
-}
-.vs_rec th.c1 {
+.vs_rec tr.vs_head th.c1 {
   color: #a6e22e;
 }
-.vs_rec th.c2 {
+.vs_rec tr.vs_head th.c2 {
   color: #e874ab;
+}
+/* 项目列（居中、亮灰 #b1b1a4） */
+.vs_rec th.vs_item {
+  width: 150px;
+  text-align: center;
+  color: #b1b1a4;
+  font-size: 13px;
+  font-weight: normal;
+  white-space: nowrap;
+}
+/* 成绩半行：每行左右各一块，胜/负字标 + 成绩 */
+.vs_rec td.vs_half {
+  padding: 5px 12px;
+  border-radius: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+.vs_rec td.vs_half.half_win {
+  background: rgba(166, 226, 46, 0.25); /* 深绿 */
+}
+.vs_rec td.vs_half.half_lose {
+  background: rgba(232, 116, 171, 0.12); /* 浅玫瑰红 */
+}
+.vs_rec td.vs_half .vs_vd {
+  margin-right: 10px;
+  font-weight: bold;
+}
+.vs_rec td.vs_half .win_vd {
+  color: #a6e22e;
+}
+.vs_rec td.vs_half .lose_vd {
+  color: #e874ab;
+}
+.vs_rec td.vs_half .tie_vd {
+  color: #e6db74;
+}
+.vs_rec td.vs_half .vs_score {
+  color: #f8f8f2;
+}
+.vs_rec td.vs_half.half_plain {
+  color: #f8f8f2;
 }
 .vs_rule_note {
   margin-top: 10px;
@@ -15203,13 +15179,17 @@ span.vs_btn--disabled {
   font-size: 12.5px;
   color: #b1b1a4;
 }
+/* 图例（2026-11-09 二轮）：色块上直接显示该类局数「N局」，后跟归属文案 */
 .vs_legend .lg i {
   display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-right: 4px;
-  border-radius: 2px;
-  vertical-align: -2px;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: bold;
+  line-height: 16px;
+  vertical-align: -1px;
 }
 
 /* ④ 胜负结果 */

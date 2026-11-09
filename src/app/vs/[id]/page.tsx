@@ -1,12 +1,15 @@
 // 玩家对战 PK 页（2026-11-09 张老师需求）：
 // 入口 = 用户主页性别图标+对话气泡右侧、侧栏玩家卡片对话气泡正下方的对战按钮。
-// 布局（design/vs-page.html 设计稿定稿）：
-//   ① 对战主视觉：左=发起者卡片（头像/姓名/军衔/名次）+ 实力雷达，右=被挑战者，
-//      中间金色 VS；
-//   ② 各项记录比拼（4 级别 × 时间/3BV/s）：与 BV 同规则计分（胜 1.00 / 独有 0.25 / 平 0），
-//      胜方成绩金色 + 胜负列；
+// 布局（二轮改版 2026-11-09 张老师反馈定稿）：
+//   ① 对战主视觉：#page.main 主站标准宽度；左右两个独立 .box 玩家面板（结构严格
+//      照抄侧栏玩家卡片 .user_card：头像/AvatarCell 姓名+性别/TitleBadge 军衔/ranks），
+//      横线以下放实力雷达（无标题），中间金色 VS；
+//   ② 纪录比较（4 级别 × 时间/3BV/s）：三列＝左成绩｜项目（亮灰居中）｜右成绩，
+//      成绩字号参照用户主页头部（16px）；每行左右半行放胜负——胜者半行深绿背景、
+//      负者半行浅玫瑰红背景，「胜/负」用绿/玫瑰红；无「胜负」表头；
 //   ③ 各BV比拼：阵营式行布局——我胜的 BV 绿色升序靠左、对方胜的玫瑰红升序靠右、
-//      独有/平局居中；行 = BV 十位段（初级首段 2-9），行右分段得分，段内 hover 显示双方时间；
+//      独有/平局居中；行 = BV 十位段（初级首段 2-9），行右分段得分，段内 hover
+//      显示双方时间；图例色块上显示该类局数（N局）；
 //   ④ 胜负结果：总得分（记录得分 + 三级别 BV 得分）大字 + 详细得分统计表。
 // 得分规则（张老师 2026-11-09 定）：同 3BV 对抗快者 1.00，独有 0.25，平局各 0。
 
@@ -16,6 +19,8 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getVsData, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";
 import { scoreTime } from "@/lib/format";
+import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
+import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { RadarChart } from "@/components/RadarChart";
 
 export const dynamic = "force-dynamic";
@@ -109,56 +114,88 @@ function VsGrid({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2: str
   );
 }
 
-function VsCard({ p, accent }: { p: VsPlayer; accent: string }) {
+/** 玩家面板：结构严格照抄侧栏玩家卡片 .user_card 上半部（横线以上），
+    横线以下放实力雷达（2026-11-09 二轮：去掉「实力」二字标题） */
+function VsPanel({ p, accent }: { p: VsPlayer; accent: string }) {
   return (
-    <div className="vs_card">
-      <div className="vs_card_top">
-        <img className="vs_avatar" src={p.avatarUrl} alt={p.name} />
-        <div className="vs_card_right">
-          <p className="vs_name">
-            <Link href={`/user/${p.id}`} target="_blank" prefetch={false}>
-              {p.name}
+    <div className="box vs_panel">
+      <div className="user_card">
+        <div className="ucd_top">
+          <div className="ucd_left">
+            <Link
+              className="avatar_link"
+              href={`/user/${p.id}`}
+              target="_blank"
+              prefetch={false}
+              title={`进入 ${p.name} 的地盘`}
+            >
+              <img className="ucd_avatar" src={p.avatarUrl} alt={p.name} />
             </Link>
-            <span className={`gender small ${p.sex ? "male" : "female"}`}></span>
-          </p>
-          <p className="vs_en">({p.en})</p>
-          <span className="vs_title" style={{ color: p.titleColor, borderColor: p.titleColor }}>
-            {p.militaryTitle}
-          </span>
-          <div className="vs_ranks">
-            {p.natRank === null && p.areaRank === null ? (
-              <span className="rank_line vs_null">未加入排行</span>
-            ) : (
-              <>
-                {p.areaRank !== null && (
+          </div>
+          <div className="ucd_right">
+            {/* 姓名 + 性别 + 军衔：与侧栏卡片同一套 AvatarCell + TitleBadge 组件 */}
+            <p className="ucd_name">
+              <AvatarCell id={p.id} name={p.name} englishName={p.en} sex={p.sex} gender="small" link />
+              <TitleBadge title={p.militaryTitle} classic={p.classicTitle} link />
+            </p>
+            {/* 地区 / 全国排名：与玩家卡片 .ranks 同构（海外玩家口径一致） */}
+            <div className="ranks">
+              {p.area === AREA_OVERSEAS ? (
+                p.areaRank !== null ? (
                   <span className="rank_line">
-                    {p.area}第 <em>{p.areaRank}</em> 名
+                    海外第 <em>{p.areaRank}</em> 名
                   </span>
-                )}
-                {p.natRank !== null && (
-                  <span className="rank_line">
-                    全国第 <em>{p.natRank}</em> 名
-                  </span>
-                )}
-              </>
-            )}
+                ) : (
+                  <span className="rank_line ranks_overseas">海外玩家</span>
+                )
+              ) : (
+                <>
+                  {p.areaRank !== null ? (
+                    <span className="rank_line">
+                      {areaDisplay(p.area)}第 <em>{p.areaRank}</em> 名
+                    </span>
+                  ) : (
+                    <span className="rank_line ucd_null">未加入地区排行</span>
+                  )}
+                  {p.natRank !== null ? (
+                    <span className="rank_line">
+                      全国第 <em>{p.natRank}</em> 名
+                    </span>
+                  ) : (
+                    <span className="rank_line ucd_null">未加入排行</span>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
+        <hr className="ucd_hr" />
+        {p.radar.length > 0 && (
+          <div className="vs_radar">
+            <RadarChart data={p.radar} accent={accent} />
+          </div>
+        )}
       </div>
-      {p.radar.length > 0 && (
-        <div className="vs_radar">
-          <h3>实力</h3>
-          <RadarChart data={p.radar} accent={accent} />
-        </div>
-      )}
     </div>
   );
 }
 
-function RecMark({ row, name1, name2 }: { row: VsRecRow; name1: string; name2: string }) {
-  if (row.mark === "tie") return <td className="mk tie_mk">平</td>;
-  if (row.mark === "none") return <td className="mk">—</td>;
-  return <td className="mk">{row.mark === "p1" ? name1 : name2} 胜</td>;
+/** 纪录比较行：左成绩半行｜项目（亮灰居中）｜右成绩半行；
+    每侧半行带胜负底色（胜=深绿、负=浅玫瑰红）与「胜/负」字标 */
+function HalfCell({ mark, side, score }: { mark: VsRecRow["mark"]; side: "l" | "r"; score: string }) {
+  const win = side === "l" ? "p1" : "p2";
+  const lose = side === "l" ? "p2" : "p1";
+  let cls = "vs_half";
+  let vd: React.ReactNode = null;
+  if (mark === win) { cls += " half_win"; vd = <span className="vs_vd win_vd">胜</span>; }
+  else if (mark === lose) { cls += " half_lose"; vd = <span className="vs_vd lose_vd">负</span>; }
+  else if (mark === "tie") { vd = <span className="vs_vd tie_vd">平</span>; }
+  return (
+    <td className={cls}>
+      {vd}
+      <span className="vs_score">{score}</span>
+    </td>
+  );
 }
 
 export default async function VsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -172,7 +209,7 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
   // 不能和自己比拼：入口按钮已灰置，直连 URL 兜底提示
   if (session.uid === targetId) {
     return (
-      <div id="page">
+      <div id="page" className="main">
         <div className="box vs_self">
           <h1>不能和自己比拼</h1>
           <p>换一个对手试试？</p>
@@ -189,40 +226,48 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
   const total2 = rec2 + bv2;
   const winner = total1 === total2 ? 0 : total1 > total2 ? 1 : 2;
 
+  // 图例局数（三级别合计）：胜 / 独有 / 平
+  const sum = (f: (l: VsLevelPk) => number) => levels.reduce((s, l) => s + f(l), 0);
+  const legend = [
+    { bg: CELL_BG.p1, fg: CELL_FG.p1, n: sum((l) => l.win1), label: `${p1.name}胜` },
+    { bg: CELL_BG.u1, fg: CELL_FG.u1, n: sum((l) => l.u1), label: `${p1.name}独有` },
+    { bg: CELL_BG.tie, fg: CELL_FG.tie, n: sum((l) => l.tie), label: "平局" },
+    { bg: CELL_BG.u2, fg: CELL_FG.u2, n: sum((l) => l.u2), label: `${p2.name}独有` },
+    { bg: CELL_BG.p2, fg: CELL_FG.p2, n: sum((l) => l.win2), label: `${p2.name}胜` },
+  ];
+
   const statsRow = (label: string, v1: React.ReactNode, v2: React.ReactNode) => (
     <tr key={label}>
-      <th>{label}</th>
-      <td>{v1}</td>
-      <td>{v2}</td>
+      <td className="vs_half half_plain">{v1}</td>
+      <th className="vs_item">{label}</th>
+      <td className="vs_half half_plain">{v2}</td>
     </tr>
   );
 
   return (
-    <div id="page">
-      {/* ① 对战主视觉 */}
-      <div className="box" id="vs_hero">
-        <VsCard p={p1} accent="#a6e22e" />
+    <div id="page" className="main">
+      {/* ① 对战主视觉：两个独立玩家面板 + 金色 VS */}
+      <div id="vs_hero">
+        <VsPanel p={p1} accent="#a6e22e" />
         <div className="vs_vs"><span>VS</span></div>
-        <VsCard p={p2} accent="#e34f8c" />
+        <VsPanel p={p2} accent="#e34f8c" />
       </div>
 
-      {/* ② 各项记录比拼 */}
+      {/* ② 纪录比较：左成绩｜项目（亮灰）｜右成绩，半行胜负底色，无胜负表头 */}
       <div className="box" id="vs_records">
-        <h1 className="gray">各项记录比拼</h1>
+        <h1 className="gray">纪录比较</h1>
         <table className="vs_rec" cellPadding={0} cellSpacing={0}>
           <tbody>
             <tr className="vs_head">
-              <th>项目</th>
               <th className="c1">{p1.name}</th>
+              <th className="vs_item"></th>
               <th className="c2">{p2.name}</th>
-              <th className="mk">胜负</th>
             </tr>
             {recRows.map((row) => (
               <tr key={row.label}>
-                <th>{row.label}</th>
-                <td className={"c1" + (row.mark === "p1" ? " win" : "")}>{row.s1}</td>
-                <td className={"c2" + (row.mark === "p2" ? " win" : "")}>{row.s2}</td>
-                <RecMark row={row} name1={p1.name} name2={p2.name} />
+                <HalfCell mark={row.mark} side="l" score={row.s1} />
+                <th className="vs_item">{row.label}</th>
+                <HalfCell mark={row.mark} side="r" score={row.s2} />
               </tr>
             ))}
           </tbody>
@@ -237,11 +282,12 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
         <h1 className="gray">各BV比拼</h1>
         {levels.map((pk) => <VsGrid key={pk.level} pk={pk} name1={p1.name} name2={p2.name} />)}
         <div className="vs_legend">
-          <span className="lg"><i style={{ background: CELL_BG.p1 }}></i>{p1.name}胜</span>
-          <span className="lg"><i style={{ background: CELL_BG.u1 }}></i>{p1.name}独有</span>
-          <span className="lg"><i style={{ background: CELL_BG.tie }}></i>平局</span>
-          <span className="lg"><i style={{ background: CELL_BG.u2 }}></i>{p2.name}独有</span>
-          <span className="lg"><i style={{ background: CELL_BG.p2 }}></i>{p2.name}胜</span>
+          {legend.map((g) => (
+            <span className="lg" key={g.label}>
+              <i style={{ background: g.bg, color: g.fg }}>{g.n}局</i>
+              {g.label}
+            </span>
+          ))}
         </div>
         <p className="vs_rule_note">
           得分规则：同一 3BV 双方都有纪录，快者得 1.00 分（同毫秒平局各 0 分）；只有一方有的 3BV（独有）得 0.25 分。悬停格子可看双方该 BV 的最快时间。
@@ -271,7 +317,9 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
               levels.reduce((s, l) => s + l.cnt1, 0),
               levels.reduce((s, l) => s + l.cnt2, 0)
             )}
-            {levels.map((pk) => statsRow(`${LEVEL_CN[pk.level]}对抗 BV 数`, pk.contest, pk.contest))}
+            {levels.map((pk) =>
+              statsRow(`${LEVEL_CN[pk.level]}对抗 BV 数`, pk.contest, pk.contest)
+            )}
             {levels.map((pk) =>
               statsRow(
                 `${LEVEL_CN[pk.level]}胜 / 平 / 负`,
