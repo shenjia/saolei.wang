@@ -423,19 +423,6 @@ export default function ApiPage() {
           <li>引用数据时请注明来源：扫雷网 saolei.wang</li>
         </ul>
 
-        <h2>用户登录（用户侧 API）</h2>
-        <p>
-          <code>login</code> 接口同样需要 X-Api-Key（防止非法客户端借公开端点探测用户密码）：
-          以扫雷网账号密码换取用户 token（7 天有效），客户端保存 token，之后<b>所有用户侧请求</b>携带请求头：
-        </p>
-        <pre className="api_code">
-          <code>Authorization: Bearer 你的token</code>
-        </pre>
-        <ul className="api_brief">
-          <li>token 无效 / 过期 / 被吊销：<code>401</code>，需重新登录获取</li>
-          <li>Bearer token 是<b>用户</b>登录态，X-Api-Key 是<b>调用方</b>凭据；login 之后调用用户侧接口只需 Bearer，两种凭据互不通用</li>
-        </ul>
-
         {/* 接口导航（2026-10-27 张老师要求）：首屏总表，点击跳到对应接口区块。
             行数据直接映射 APIS 数组——加减接口只改上面 APIS 一处，此表自动跟随。
             配色（张老师 16:37 定）：说明列白、功能列亮灰（.api_nav 修饰类区分参数表）。 */}
