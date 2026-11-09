@@ -255,14 +255,14 @@ export function FlopSprites({ innerRef }: { innerRef?: Ref<SVGSVGElement> } = {}
         <path d="M40 30v10H30v30h10v20H30v30h10v10h80v-10h10V90h-10V70h10V40h-10V30H40z" fill="gray" />
         <path d="M60 50v20h40V50H60m0 40v20h40V90H60z" fill="silver" />
       </symbol>
-      {/* ---- 像素风格数字（2026-11-09 张老师定，默认关）：「像素风格」开关打开时
-          经 numSym() 接管 b1..b8 的高清矢量字形，其余贴图不变；关/默认维持上方
-          flop 原版字形。字形 1:1 取自 Metasweeper（github.com/eee555/Metasweeper，
-          GPL-3.0 附加商业限制；本站非商业使用）src/media/cell1..8.svg——平滑曲线/
-          折线重制字形，任意倍率不发虚，对比 flop 从位图逐像素描边提取的阶梯路径
-          明显干净。坐标系零换算直接内联：metasweeper 160 视框的开格面区（10..160）
-          与站内 cell-press 面区（168 视框内 10..160）完全重合，字形均落 30..130；
-          格底沿用站内 cell-press，凹凸 bevel 与全站一致 */}
+      {/* ---- 高清数字（2026-11-09 张老师定，默认启用）：「像素风格」开关关闭时
+          经 numSym() 接管 b1..b8 的高清矢量字形；开关打开（像素风格）时回落上方
+          flop 原版字形（位图描边提取的阶梯路径，像素感）。字形 1:1 取自 Metasweeper
+          （github.com/eee555/Metasweeper，GPL-3.0 附加商业限制；本站非商业使用）
+          src/media/cell1..8.svg——平滑曲线/折线重制字形，任意倍率不发虚。坐标系零
+          换算直接内联：metasweeper 160 视框的开格面区（10..160）与站内 cell-press
+          面区（168 视框内 10..160）完全重合，字形均落 30..130；格底沿用站内
+          cell-press，凹凸 bevel 与全站一致 */}
       <symbol id="cell-number-1-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
         <polygon points="50,110 50,130 120,130 120,110 100,110 100,30 85,30 50,65 50,70 70,70 70,110" fill="#0000ff" />
