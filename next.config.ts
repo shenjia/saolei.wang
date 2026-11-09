@@ -22,6 +22,18 @@ const nextConfig: NextConfig = {
   // ip2region-ts（IP→省份离线库，排行延迟埋点用）不参与打包：包内 defaultDbFile 依赖
   // __dirname 定位 data/ip2region.xdb（11MB），bundler 打包后路径失效 → 运行时读不到库
   serverExternalPackages: ["ip2region-ts"],
+
+  // metadata 图标路由（src/app/ 下的 icon.svg / apple-icon.png / favicon.ico，URL 形如
+  // /icon.svg?icon.<hash>.svg）默认响应 cache-control: max-age=0, must-revalidate 且无
+  // ETag/Last-Modified → 浏览器每次导航都完整重下载；layout.tsx 顶部 logo 的裸 /icon.svg
+  // 同样命中此规则。设 1 天缓存（裸路径无 content-hash，取保守值：改图标最多 1 天生效）；
+  // headers() 的 query 参与忽略，带 hash 的 metadata URL 与裸 URL 一并覆盖
+  headers: async () => [
+    {
+      source: "/:file(icon.svg|apple-icon.png|favicon.ico)",
+      headers: [{ key: "Cache-Control", value: "public, max-age=86400" }],
+    },
+  ],
 };
 
 export default nextConfig;
