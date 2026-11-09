@@ -1,5 +1,7 @@
 // 公开 API · 用户登录换 token（2026-11-09）
 // POST /api/public/v1/login
+// 鉴权：X-Api-Key（2026-11-09 张老师要求——本接口面向持有 Key 的合作方客户端，
+// 防止非法客户端借公开端点探测用户密码）；IP 维度 10 次/分限速再防在线爆破。
 // 请求体 JSON：{ "username": "...", "password": "..." }
 // 校验通过 → 签发 7 天用户 token（落库 sha256），客户端保存后随请求带
 // `Authorization: Bearer <token>`，作为该用户的登录态调用后续用户侧 API。
@@ -15,9 +17,15 @@ import { verifyPassword } from "@/lib/auth";
 import { unbanUser } from "@/lib/ban";
 import { formatDate } from "@/lib/format";
 import { getClientIp } from "@/lib/net";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { issueUserToken, userTokenRateLimit, USER_TOKEN_TTL } from "@/lib/usertoken";
 
 export async function POST(req: Request) {
+  // 合作方鉴权：无/错 X-Api-Key 一律 401（不透露 key 是否存在）
+  const partner = await requirePartnerEx(req);
+  if (!partner) return unauthorized();
+  if (!partnerRateLimit(partner, "pub-login")) return rateLimited(partner.ratePerMin);
+
   // 防爆破：同 IP 每分钟最多 10 次
   const ip = getClientIp(req);
   if (!userTokenRateLimit(ip)) {

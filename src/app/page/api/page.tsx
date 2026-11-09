@@ -36,8 +36,9 @@ const APIS: ApiDoc[] = [
     path: "/api/public/v1/login",
     title: "用户登录",
     brief: "账号密码换 7 天 Bearer token（用户侧 API 登录态）",
-    desc: "以扫雷网账号密码换取用户登录令牌：校验通过签发 7 天 token，客户端保存后所有用户侧请求携带 Authorization: Bearer <token>，即视为该用户的登录态。校验口径与站内登录完全一致。",
+    desc: "以扫雷网账号密码换取用户登录令牌：校验通过签发 7 天 token，客户端保存后所有用户侧请求携带 Authorization: Bearer <token>，即视为该用户的登录态。校验口径与站内登录完全一致。需 X-Api-Key（防非法客户端探测密码）。",
     params: [
+      { name: "X-Api-Key", required: true, desc: "请求头，合作方凭据（同数据接口）" },
       { name: "username", required: true, desc: "用户名（请求体 JSON 字段；绑定邮箱的账号请用邮箱作为用户名）" },
       { name: "password", required: true, desc: "密码（请求体 JSON 字段）" },
     ],
@@ -50,7 +51,7 @@ const APIS: ApiDoc[] = [
 }`,
     notes: [
       "token 有效期 7 天（expiresIn 秒），到期需重新登录换取；重登签发的新 token 不顶掉旧 token（多端并存）",
-      "无需 X-Api-Key；用户名或密码错误 401；账号封禁 403（含解封时间提示）；同 IP 每分钟最多 10 次，超限 429",
+      "需 X-Api-Key：无/错 Key 401；用户名或密码错误 401；账号封禁 403（含解封时间提示）；同 IP 每分钟最多 10 次，超限 429",
       "token 只存 sha256 哈希，请妥善保管明文；疑似泄露可联系管理员吊销",
     ],
     method: "POST",
@@ -394,8 +395,8 @@ export default function ApiPage() {
         <h1>开放 API</h1>
         <p>
           扫雷网对外提供结构化数据接口，供机器人、数据分析等第三方服务接入。
-          数据接口凭 <b>API Key</b> 调用；用户侧接口（登录及后续需登录态的接口）凭用户
-          <b> Bearer token</b> 调用。请勿抓取站内页面（已有限速与反爬措施，页面抓取方式不可用或极慢）。
+          所有接口均需凭 <b>API Key</b> 调用；用户登录等用户侧接口在 Key 之上再凭用户
+          <b> Bearer token</b> 标识身份。请勿抓取站内页面（已有限速与反爬措施，页面抓取方式不可用或极慢）。
         </p>
 
         <h2>申请 Key</h2>
@@ -424,15 +425,15 @@ export default function ApiPage() {
 
         <h2>用户登录（用户侧 API）</h2>
         <p>
-          <code>login</code> 接口无需 API Key：以扫雷网账号密码换取用户 token（7 天有效），
-          客户端保存 token，之后<b>所有用户侧请求</b>携带请求头：
+          <code>login</code> 接口同样需要 X-Api-Key（防止非法客户端借公开端点探测用户密码）：
+          以扫雷网账号密码换取用户 token（7 天有效），客户端保存 token，之后<b>所有用户侧请求</b>携带请求头：
         </p>
         <pre className="api_code">
           <code>Authorization: Bearer 你的token</code>
         </pre>
         <ul className="api_brief">
           <li>token 无效 / 过期 / 被吊销：<code>401</code>，需重新登录获取</li>
-          <li>仅 <code>login</code> 与用户侧接口使用 Bearer；数据接口仍走 X-Api-Key，两种凭据互不通用</li>
+          <li>Bearer token 是<b>用户</b>登录态，X-Api-Key 是<b>调用方</b>凭据；login 之后调用用户侧接口只需 Bearer，两种凭据互不通用</li>
         </ul>
 
         {/* 接口导航（2026-10-27 张老师要求）：首屏总表，点击跳到对应接口区块。
