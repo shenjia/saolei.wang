@@ -34,12 +34,175 @@ const LEVEL_TAG: Record<Meta["level"], { label: string; color: string }> = {
   exp: { label: "高级", color: "#fdc61d" },
 };
 
+/* ---- 庆祝气泡（2026-11-10 张老师需求）----
+   上传录像若收集到新 BV / 打破本BV最好成绩，弹排行模式那种庆祝气泡（串行
+   排队）并播放提示音；批量上传逐个结算，循环到所有提示都显示完。
+   口径：服务端上传路由以收集墙同源判定（firstBv/pbBv/celebrate 随响应下发）。
+   视觉：新 BV 走排行模式同款收集墙气泡（.toast_html 收集墙 + wall_fast 加速
+   动画——队列节奏 2 秒/条，原版 1.8s 点亮 + 3s 停留放不下）；破本BV纪录走
+   金色奖杯气泡 3 秒。声音复用练习页同款音源 bv.mp3 / record.mp3，Audio 单例
+   缓存 + 串行队列（一条 ended 后隔 80ms 泵下一条，不叠音不卡死）。 */
+
+type Celebrate = {
+  newBv: number;
+  wall: { values: number[]; collected: number[] } | null;
+  progress: number;
+  total: number;
+};
+
+/** 结算提示音版本号（与练习页 OnlinePlay SND_VER 同步维护；换音频内容必递增） */
+const SND_VER = "2";
+const sndCache = new Map<string, HTMLAudioElement>();
+const sndQueue: string[] = [];let sndBusy = false;
+function sndStart(src: string) {
+  sndBusy = true;
+  try {
+    let a = sndCache.get(src);
+    if (!a) {
+      a = new Audio(`${src}?v=${SND_VER}`);
+      a.preload = "auto";
+      sndCache.set(src, a);
+    } else {
+      a.currentTime = 0;
+    }
+    const done = () => {
+      sndBusy = false;
+      window.setTimeout(pumpSnd, 80);
+    };
+    a.addEventListener("ended", done, { once: true });
+    a.addEventListener("error", done, { once: true });
+    void a.play().catch(() => done()); // 自动播放策略拒绝也放行队列
+  } catch {
+    sndBusy = false;
+    window.setTimeout(pumpSnd, 0);
+  }
+}
+function pumpSnd() {
+  if (sndBusy || !sndQueue.length) return;
+  sndStart(sndQueue.shift()!);
+}
+function playSoundQueued(src: string) {
+  sndQueue.push(src);
+  pumpSnd();
+}
+
+/** 收集墙气泡 HTML（与练习页 buildWallToastHtml 同款结构；级别三色内联注入
+ *  --wall-on，墙根挂 wall_fast 走加速动画。内容全是数字/固定文案，无注入面） */
+function buildWallHtml(c: Celebrate, level: Meta["level"]): string {
+  const wall = c.wall;
+  if (!wall || !Array.isArray(wall.values) || wall.values.length === 0) return "";
+  const color = level === "int" ? "#fd971f" : level === "exp" ? "#e6db74" : "#a6e22e";
+  const collectedSet = new Set(wall.collected ?? []);
+  // ⚠️ flash 优先于 on：上传路由下发的 collected 已含本局新 BV（本盘先入库再取墙），
+  // 与练习页（排名局核查时录像未上传、collected 不含 newBv）不同——不优先判定的话
+  // 新格子直接落 on，丢失「闪亮点亮」动画。flash keyframes 终态即级别色+白框定格，
+  // 语义正好是「刚收的格子亮起来并保持」
+  const cells = wall.values
+    .map((b) => `<span class="wall_sq${b === c.newBv ? " flash" : collectedSet.has(b) ? " on" : ""}"></span>`)
+    .join("");
+  const bar =
+    c.progress > 0 && c.total > 0
+      ? `<div class="wall_bar"><div class="wall_fill" style="width:${((c.progress / c.total) * 100).toFixed(2)}%;--w-from:${(((c.progress - 1) / c.total) * 100).toFixed(2)}%"></div></div>`
+      : "";
+  return (
+    `<div class="bbv_wall wall_fast wall_lv_${level}" style="--wall-on:${color}">` +
+    `<div class="wall_msg">恭喜收集到了${LEVEL_TAG[level].label} ${c.newBv} BV！</div>` +
+    `<div class="wall_hint">已自动点亮收集墙</div>` +
+    bar +
+    `<div class="wall_grid">${cells}</div>` +
+    `</div>`
+  );
+}
+
+/** 庆祝队列项：cls gold=金色奖杯 / green=收集墙；holdMs 为在屏停留（淡出另加 380ms）；
+ *  html 有值走自建 HTML 气泡（收集墙），否则走全局 toast。 */
+type CelebrateItem = { msg: string; cls: "gold" | "green"; holdMs: number; html?: string };
+const celebrateQueue: CelebrateItem[] = [];
+let celebrateBusy = false;
+function enqueueCelebrate(item: CelebrateItem) {
+  celebrateQueue.push(item);
+  void drainCelebrate();
+}
+async function drainCelebrate() {
+  if (celebrateBusy) return;
+  celebrateBusy = true;
+  while (celebrateQueue.length) {
+    const item = celebrateQueue.shift()!;
+    await showCelebrateBubble(item);
+  }
+  celebrateBusy = false;
+}
+function showCelebrateBubble(item: CelebrateItem): Promise<void> {
+  return new Promise((resolve) => {
+    if (item.html) {
+      // HTML 气泡（收集墙）：自建元素（全局 toast 只支持纯文本），fixed 居中
+      // 样式全在 globals.css（.toast_bubble.toast_html 收集墙系列）
+      const bubble = document.createElement("div");
+      bubble.className = "toast_bubble toast_success toast_html";
+      bubble.setAttribute("role", "status");
+      bubble.innerHTML = item.html;
+      document.body.appendChild(bubble);
+      window.setTimeout(() => bubble.classList.add("toast_leave"), item.holdMs);
+      window.setTimeout(() => {
+        bubble.remove();
+        resolve();
+      }, item.holdMs + 380);
+    } else {
+      // 金色奖杯气泡（cls gold）/ 绿色普通项（汇总）：走全局 toast（同屏单条、居中）
+      toast((item.cls === "gold" ? "🏆 " : "✓ ") + item.msg, "success", item.holdMs);
+      window.setTimeout(resolve, item.holdMs + 380);
+    }
+  });
+}
+
+/** 上传成功结算：按服务端判定组装庆祝队列。声音随气泡同步入队（音效短于
+ *  气泡 hold，天然串行不重叠）。运气盘（noRecord）不庆祝——成绩划线不入排行 */
+function queueCelebrations(
+  meta: Meta | undefined,
+  res: { firstBv?: number; pbBv?: number; pbPrev?: number; celebrate?: Celebrate | null },
+  okCount: number,
+  total: number
+) {
+  if (!meta) return;
+  const lvName = LEVEL_TAG[meta.level].label;
+  if (res.firstBv === 1 && res.celebrate) {
+    playSoundQueued("/sounds/bv.mp3");
+    const msg = `恭喜收集到了${lvName} ${res.celebrate.newBv} BV！`;
+    const html = buildWallHtml(res.celebrate, meta.level);
+    if (html) enqueueCelebrate({ msg, cls: "green", holdMs: 2000, html });
+    else enqueueCelebrate({ msg, cls: "green", holdMs: 2000 }); // 墙数据缺失兜底：纯文本
+  }
+  if (res.pbBv === 1) {
+    playSoundQueued("/sounds/record.mp3");
+    const oldT = ((res.pbPrev ?? 0) / 1000).toFixed(3);
+    const newT = (meta.timeMs / 1000).toFixed(3);
+    enqueueCelebrate({
+      msg: `恭喜打破${lvName}${meta.bbbv}BV的时间记录！${oldT} -> ${newT}`,
+      cls: "gold",
+      holdMs: 3000,
+    });
+  }
+  if (okCount > 0 && total > 0 && okCount === total) {
+    // 全部传完的汇总气泡垫底（绿）：只报成功总数，失败的走行内红字 + 汇总红气泡
+    enqueueCelebrate({ msg: `成功上传 ${okCount} 个录像，等待审核`, cls: "green", holdMs: 1000 });
+  }
+}
+
 // fetch 不带上传进度，用 XHR 拿 progress 事件驱动 .progress 宽度。
 // 服务端成功/限流响应都带 remaining（每周剩余额度权威值），用于校准本地配额推算
 function uploadOne(
   file: File,
   onProgress: (pct: number) => void
-): Promise<{ ok: boolean; error?: string; remaining?: number; noRecord?: boolean }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  remaining?: number;
+  noRecord?: boolean;
+  firstBv?: number;
+  pbBv?: number;
+  pbPrev?: number;
+  celebrate?: Celebrate | null;
+}> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/video/upload");
@@ -47,7 +210,16 @@ function uploadOne(
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => {
-      let data: { ok?: boolean; error?: string; remaining?: number; noRecord?: boolean } = {};
+      let data: {
+        ok?: boolean;
+        error?: string;
+        remaining?: number;
+        noRecord?: boolean;
+        firstBv?: number;
+        pbBv?: number;
+        pbPrev?: number;
+        celebrate?: Celebrate | null;
+      } = {};
       try {
         data = JSON.parse(xhr.responseText);
       } catch {
@@ -55,7 +227,15 @@ function uploadOne(
       }
       const remaining = typeof data.remaining === "number" ? data.remaining : undefined;
       if (xhr.status >= 200 && xhr.status < 300 && data.ok)
-        resolve({ ok: true, remaining, noRecord: data.noRecord === true });
+        resolve({
+          ok: true,
+          remaining,
+          noRecord: data.noRecord === true,
+          firstBv: data.firstBv,
+          pbBv: data.pbBv,
+          pbPrev: data.pbPrev,
+          celebrate: data.celebrate ?? null,
+        });
       else resolve({ ok: false, error: data.error ?? `上传失败（HTTP ${xhr.status}）`, remaining });
     };
     xhr.onerror = () => resolve({ ok: false, error: "网络错误，上传中断" });
@@ -228,6 +408,7 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
     setBusy(true);
     let done = 0;
     let okCount = 0;
+    let failCount = 0;
     setSeq([done, targets.length]);
     for (const item of targets) {
       update(item.key, { status: "uploading", progress: 0, message: "" });
@@ -246,17 +427,26 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
             : "上传成功，等待审核",
         });
         okCount++;
-      } else update(item.key, { status: "error", message: res.error ?? "上传失败" });
+        // 庆祝气泡（2026-11-10 张老师需求）：新收集 BV / 破本BV最好成绩，
+        // 排行模式同款串行气泡 + 提示音（运气盘 noRecord 不庆祝）
+        if (!res.noRecord) {
+          const cur = item; // 闭包内捕获（meta 解析是异步的，取此刻卡片元数据）
+          queueCelebrations(cur.meta, res, okCount, targets.length);
+        }
+      } else {
+        update(item.key, { status: "error", message: res.error ?? "上传失败" });
+        failCount++;
+      }
       done++;
       setSeq([done, targets.length]);
     }
     setBusy(false);
     setSeq(null);
-    // 汇总气泡：全成功绿、有失败红（行内逐条状态保留）
-    if (okCount === targets.length) {
+    // 汇总气泡：全成功绿（已并入庆祝队列尾，见 queueCelebrations）、有失败红（行内逐条状态保留）
+    if (failCount > 0) {
+      toast(`${okCount} 个上传成功，${failCount} 个失败`, "error");
+    } else if (okCount === 0) {
       toast(`成功上传 ${okCount} 个录像，等待审核`, "success");
-    } else {
-      toast(`${okCount} 个上传成功，${targets.length - okCount} 个失败`, "error");
     }
   }
 

@@ -21,7 +21,8 @@ import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { RANKED_SOFTWARE } from "@/lib/evfwrite";
 import { evfSignature } from "@/core/src/lib/evf-sign";
 import { ensureVideoTriage } from "@/lib/videometrics";
-import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
+import { LEVEL_MIN_3BV, VIDEO_STATUS, UNREACHABLE_3BV, type VideoLevel } from "@/lib/config";
+import { getUser3bvCollection } from "@/lib/queries";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { userTitleSnapshot } from "@/lib/queries";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
@@ -202,7 +203,18 @@ export async function uploadVideo(
   // 统计实时自增用，2026-10-28 21:45）。运气盘（noRecord）不参与：恒 0
   let firstBv = 0;
   let pbBv = 0;
+  /* 破本BV最好成绩时的旧纪录（毫秒；pbBv=1 时有效）——上传页气泡文案
+     「xx.xxx -> yy.yyy」与排名局金气泡同款（2026-11-10 张老师需求） */
+  let pbPrev = 0;
   let videoId = 0;
+  /* 庆祝信息（2026-11-10 张老师需求）：上传页也要弹排行模式那种庆祝气泡——
+     新收集 BV / 打破本BV最好成绩，事务后补齐墙数据随响应下发（见函数尾） */
+  let celebrate: {
+    newBv: number;
+    wall: { values: number[]; collected: number[] } | null;
+    progress: number;
+    total: number;
+  } | null = null;
   try {
     await prisma.$transaction(async (tx) => {
       if (!sig) {
@@ -230,6 +242,7 @@ export async function uploadVideo(
         firstBv = prevCount === 0 ? 1 : 0;
         pbBv =
           prevCount > 0 && prevBest !== null && parsed.timeMs > 0 && parsed.timeMs < prevBest ? 1 : 0;
+        pbPrev = pbBv === 1 ? (prevBest ?? 0) : 0;
       }
       const video = await tx.video.create({
         data: {
@@ -311,6 +324,39 @@ export async function uploadVideo(
   }
   // 剩余额度（回传给上传页实时刷新）：countWeeklyUploads 此刻已含刚落的这条
   const remaining = Math.max(0, weeklyLimit - (await countWeeklyUploads(session.uid)));
+
+  // 庆祝信息补齐（2026-11-10 张老师需求）：新收集 BV 时事务后取收集墙数据
+  //（此刻本盘已入库且 status<>0，getUser3bvCollection 的收集口径必然包含它——
+  //  不用手工并集；progress/total 口径与排名局核查路由完全同源：区间钳
+  //  LEVEL_MIN、剔除数学不可达值）。pbBv=1（破本BV最好成绩）无附加数据，前端
+  //  拿 firstBv/pbBv 即可组文案。仅普通上传通道下发（排名局内部入库不走 UI）
+  if (videoId > 0 && !noRecord && firstBv === 1) {
+    try {
+      const collection = await getUser3bvCollection(session.uid);
+      const collected = collection[level];
+      const range = await prisma.level3bvRange.findUnique({ where: { level } });
+      if (range) {
+        const lo = Math.max(range.min3bv, LEVEL_MIN_3BV[level]);
+        const hi = range.max3bv;
+        const deadSet = new Set(UNREACHABLE_3BV[level] ?? []);
+        const values: number[] = [];
+        for (let v = lo; v <= hi; v++) if (!deadSet.has(v)) values.push(v);
+        const total = values.length;
+        let progress = 0;
+        const collectedArr: number[] = [];
+        for (const [bv] of collected) {
+          if (bv >= lo && bv <= hi && !deadSet.has(bv)) {
+            progress++;
+            collectedArr.push(bv);
+          }
+        }
+        celebrate = { newBv: parsed.bbbv ?? 0, wall: { values, collected: collectedArr }, progress, total };
+      }
+    } catch {
+      celebrate = null; // 墙数据失败不阻塞上传——前端退化为纯文本气泡
+    }
+  }
+
   // noRecord 透传（2026-11-02）：运气盘上传成功但成绩划线，前端可提示
-  return NextResponse.json({ ok: true, firstBv, pbBv, noRecord, remaining });
+  return NextResponse.json({ ok: true, firstBv, pbBv, pbPrev, noRecord, remaining, celebrate });
 }

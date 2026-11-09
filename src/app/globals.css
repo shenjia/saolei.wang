@@ -14171,6 +14171,16 @@ a.cheat_rep_link:hover {
   font-size: 11px;
   color: #939387;
 }
+/* ===== 上传页庆祝气泡的加速收集墙（2026-11-10 张老师需求） =====
+   上传成功也可能连收多个 BV，气泡队列要 2 秒/条走完——墙动画整体加速：
+   点亮 flash 1.8s→1.2s、进度条 1.2s→0.7s（2 秒 hold 内完整呈现，含 300ms 亮完停留）。
+   选择器压过基础版（同特异性靠后位），页面根挂 .wall_fast 即生效 */
+.toast_bubble .bbv_wall.wall_fast .wall_sq.flash {
+  animation-duration: 1.2s;
+}
+.toast_bubble .bbv_wall.wall_fast .wall_fill {
+  animation-duration: 0.7s;
+}
 
 /* ═══ 3BV 本BV标记（2026-10-28 张老师需求，VideoRows.tsx 列表行）═══
    首次收集本 BV = 3BV 数后小数点角标；打破本 BV 最好成绩 = 下标感叹号。
