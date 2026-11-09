@@ -6,8 +6,9 @@
 // 含 userId / userName（原 partner 草案 videos 接口不含逐盘指标，本接口补齐）。
 // 只出口站内公开展示口径：屏蔽(0)录像 404 不返回；待审(10)/已通过(20)可查
 // （status 字段如实返回，2026-10-23 张老师定的前台口径：待审即上传即可见）。
-// fileUrl：录像文件完整 URL（/videos{filepath}，同站内回放页口径，2026-10-24 张老师指令）。
-// 隐私不出：审核人 reviewUser 等；filepath 不单出（已拼进 fileUrl）。
+// fileUrl：前台同款文件下载地址（/video/download/{id}，2026-11-09 张老师指令：
+// 静态 URL /videos/… 不应暴露，改走前台下载口——下载计数与前台按钮同口径）。
+// 隐私不出：审核人 reviewUser 等；filepath 一律不出（不 SELECT）。
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
@@ -37,7 +38,6 @@ export async function GET(req: Request) {
       id: bigint; level: string; user: bigint; hash: string; status: number;
       create_time: bigint; review_time: bigint | null;
       real_time: number; board_3bv: number; noflag: number; no_record: number;
-      filepath: string;
       software: string; version: string; signature: string;
       cl: number | null; cl_left: number | null; cl_right: number | null;
       cl_double: number | null; ce: number | null; path: number | null;
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
     }[]
   >`
     SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
-           vi.real_time, vi.board_3bv, vi.noflag, vi.no_record, vi.software, vi.version, vi.signature, vi.filepath,
+           vi.real_time, vi.board_3bv, vi.noflag, vi.no_record, vi.software, vi.version, vi.signature,
            m.cl, m.cl_left, m.cl_right, m.cl_double, m.ce, m.path, m.ioe, m.stnb
     FROM video v
     JOIN video_info vi ON vi.id = v.id
@@ -81,8 +81,9 @@ export async function GET(req: Request) {
       // 运气盘（2026-11-02 张老师定）：上传时低于级别 3BV 下限（初 2/中 30/高 100），
       // 允许上传但所有成绩不被站内承认（3bvs 记负值同口径），不入排行/纪录
       noRecord: Number(r.no_record) === 1,
-      // 录像文件完整 URL（/videos{filepath}，同站内回放页口径；直接 GET 即下载，Content-Type octet-stream）
-      fileUrl: `${base}/videos${r.filepath}`,
+      // 前台同款文件下载地址（/video/download/{id}；不暴露 /videos 静态 URL。
+      // GET 即下载文件本体 application/octet-stream，每次访问计一次下载（同前台按钮口径））
+      fileUrl: `${base}/video/download/${Number(r.id)}`,
       software: r.software,
       version: r.version,
       // 玩家标识（录像内嵌签名，站内「录像标识」版块口径）

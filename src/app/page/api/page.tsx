@@ -173,9 +173,9 @@ const APIS: ApiDoc[] = [
   },
   {
     path: "/api/public/v1/video_info",
-    title: "录像详情（含重放指标 + 录像文件 URL）",
+    title: "录像详情（含重放指标 + 录像文件下载地址）",
     brief: "单个/批量录像全量公开数据 + 重放指标 + 文件下载地址",
-    desc: "返回录像全部已落盘公开数据：video_list 全部字段 + signature（录像内嵌玩家标识）+ metrics（离线重放引擎算得的落盘指标）+ fileUrl（录像文件完整 URL）。",
+    desc: "返回录像全部已落盘公开数据：video_list 全部字段 + signature（录像内嵌玩家标识）+ metrics（离线重放引擎算得的落盘指标）+ fileUrl（前台同款文件下载地址）。",
     params: [{ name: "id", required: true, desc: "逗号分隔的录像 ID，最多 50 个" }],
     request: "GET /api/public/v1/video_info?id=328090",
     response: `{
@@ -195,7 +195,7 @@ const APIS: ApiDoc[] = [
       "3bvs": 4900,
       "nf": false,
       "noRecord": false,
-      "fileUrl": "https://saolei.wang/videos/2025/07/31/6d58634fbe0987003dda90f4a68944a7.avf",
+      "fileUrl": "https://saolei.wang/video/download/328090",
       "software": "Arbiter",
       "version": "0.52",
       "signature": "Ju Ze En",
@@ -215,7 +215,7 @@ const APIS: ApiDoc[] = [
     notes: [
       "status：10=待审 / 20=已通过（屏蔽 0 不返回）",
       "noRecord: true = 运气盘（上传时 3BV 低于级别下限：初级<2、中级<30、高级<100），允许上传但所有成绩不被站内承认、不入排行/纪录（3bvs 恒为负值）",
-      "fileUrl：录像文件（MVF/EVF 等）完整下载地址，直接 GET 即得文件本体；该类文件全站限速 3 次/秒，批量拉取请自行排队",
+      "fileUrl：录像文件（MVF/EVF 等）下载地址，前台「下载」按钮同款入口，直接 GET 即得文件本体（application/octet-stream），每次访问计一次下载；该路径全站限速 10 次/秒，批量拉取请自行排队",
       "metrics：cl 总点击（左+右+双）· ce 有效点击 · path 鼠标行程（16px/格折算）· ioe 效率（3BV/总点击）· stnb 判雷指标；null = 该录像重放指标尚未落盘",
       "点击计数为站内 flop 引擎口径，与其他站点的派生口径可能不同，请勿混用",
     ],

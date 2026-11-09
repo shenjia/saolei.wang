@@ -126,7 +126,7 @@ X-Api-Key: <你的专用 key>
 
 ### 3. 录像详情（含重放指标）`GET /api/public/v1/video_info?id=1,2,3`
 
-`id` = 逗号分隔的录像 ID，最多 50 个。返回录像全部**已落盘公开数据**：video_list 全部字段 + `signature`（录像内嵌玩家标识）+ `metrics`（离线重放引擎算得的落盘指标）+ `fileUrl`（录像文件完整 URL）；`status` 仅含 10=待审 / 20=已通过，屏蔽录像不返回。
+`id` = 逗号分隔的录像 ID，最多 50 个。返回录像全部**已落盘公开数据**：video_list 全部字段 + `signature`（录像内嵌玩家标识）+ `metrics`（离线重放引擎算得的落盘指标）+ `fileUrl`（前台同款文件下载地址）；`status` 仅含 10=待审 / 20=已通过，屏蔽录像不返回。
 
 ```json
 {
@@ -138,7 +138,7 @@ X-Api-Key: <你的专用 key>
       "realTime": 25100, "board3bv": 152, "3bvs": 6055,
       "nf": false, "software": "Arbiter", "version": "0.52.3",
       "signature": "JuZeEn",
-      "fileUrl": "https://saolei.wang/videos/2025/09/28/xxx.evf",
+      "fileUrl": "https://saolei.wang/video/download/328090",
       "metrics": {
         "cl": 185,
         "clLeft": 120, "clRight": 40, "clDouble": 25,
@@ -155,7 +155,7 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 
 说明：
 - 屏蔽（status=0）录像不返回；待审（10）/已通过（20）均可查
-- `fileUrl` = 录像文件（MVF/EVF 等）完整下载地址，直接 GET 即得文件本体（`application/octet-stream`）；注意全站对该类静态文件限速 3 req/s，批量拉取请自行排队，勿并发打爆
+- `fileUrl` = 录像文件（MVF/EVF 等）下载地址（前台「下载」按钮同款入口 `/video/download/{id}`），直接 GET 即得文件本体（`application/octet-stream`），每次访问计一次下载（同站内下载计数）；该路径全站限速 10 req/s，批量拉取请自行排队，勿并发打爆
 - `metrics` 为 null 表示该录像重放指标尚未落盘（老录像跑批覆盖中）
 - 点击计数为站内 flop 引擎口径（2026-10-16 定稿）：左/右/双按事件语义归类，`ce` = 有效点击，与其他站点的派生口径可能不同，请勿混用
 
@@ -329,6 +329,7 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
+- 2026-11-09（6）：`video_info.fileUrl` 改为前台同款下载地址 `/video/download/{id}`（不再暴露 `/videos/…` 静态文件直链；GET 语义不变，直接下载文件本体，每次访问计一次下载，限速档由文件静态 3 req/s 改为通用 10 req/s）。
 - 2026-11-09（5）：新增 `user_search`（姓名关键词搜玩家，返回 id/name/area/avatar/title）与 `ranking`（view=rank/bv/stnb/area 覆盖除世界排行外全部榜单，20 条/页 cursor 翻页，order/nf/area/size 参数；聚合榜失败 503）。
 - 2026-11-09（4）：login 接口改为**需要 X-Api-Key**（张老师定：防止非法客户端借公开端点探测用户密码）；me 及后续用户侧接口仍仅凭 Bearer token。
 - 2026-11-09（3）：新增用户登录体系——`POST /api/public/v1/login`（账号密码换 7 天 Bearer token，落库 sha256）+ `GET /api/public/v1/me`（登录态自检）；后续用户侧 API 均凭 `Authorization: Bearer <token>` 鉴权。
