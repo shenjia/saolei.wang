@@ -16,8 +16,10 @@
 // 2026-11-09 张老师定：领军人物=活跃（7 日活跃值>0）上榜者中全国名次最高者/「无」；
 //   同日晚改统一口径——不随排序切换（战力排序也是活跃领军）；
 //   无人活跃时领军人物列渲染纯文本「无」（noActiveLeader，不带链接/气泡/徽章）；
-//   hover 表格行时右侧地图同步弹气泡（气泡钉在地图右上角，见 AreaMap tipFromRow）
-// 军衔（title）由服务端按高级时间评好，与 rows 同序传入。
+//   hover 表格行时右侧地图同步弹气泡（气泡钉在地图右上角，见 AreaMap tipFromRow）；
+// 2026-11-10 张老师改回随排序切换：战力指数排行时=该地区全国名次最高者（powerLead*，
+//   不管活跃不活跃），其余=活跃领军；「无」仅活跃排行且无人活跃时出现。
+// 军衔（title）由服务端按高级时间评好（随当前口径的领军评定），与 rows 同序传入。
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -48,6 +50,9 @@ export function AreaRanking({
   rules?: ReactNode;
 }) {
   const [hover, setHover] = useState<string | null>(null);
+  // 领军人物口径（2026-11-10 张老师改）：随排序切换——战力指数排行时=该地区全国名次
+  // 最高者（powerLead*，不管活跃不活跃）；其余（活跃指数 / 领军表头）=活跃领军（best*）
+  const usePowerLead = order === "power";
 
   const mapData: AreaMapDatum[] = rows.map((r, i) => ({
     area: r.area,
@@ -58,8 +63,8 @@ export function AreaRanking({
     activity: r.activity,
     wins7d: r.wins7d,
     videos7d: r.videos7d,
-    bestName: r.bestName,
-    noLeader: r.noActiveLeader,
+    bestName: usePowerLead ? r.powerLeadName : r.bestName,
+    noLeader: !usePowerLead && r.noActiveLeader,
     title: titles[i] ?? "",
   }));
 
@@ -119,15 +124,25 @@ export function AreaRanking({
                       </Link>
                     </td>
                     <td className="best">
-                      {r.noActiveLeader ? (
-                        // 领军人物缺位（无人 7 日活跃，2026-11-09 张老师定）：纯文本「无」
+                      {!usePowerLead && r.noActiveLeader ? (
+                        // 领军人物缺位（活跃排行且地区内无人 7 日活跃）：纯文本「无」；
+                        // 战力排行的领军=全国名次最高者恒在位，无缺位
                         <span className="best_none">无</span>
                       ) : (
                         <>
-                          <Link href={`/user/${r.bestId}`} className="avatar_link" target="_blank" prefetch={false}>
-                            {r.bestName}
+                          <Link
+                            href={`/user/${usePowerLead ? r.powerLeadId : r.bestId}`}
+                            className="avatar_link"
+                            target="_blank"
+                            prefetch={false}
+                          >
+                            {usePowerLead ? r.powerLeadName : r.bestName}
                             <span className="pt_bubble">
-                              <PlayerTip id={r.bestId} name={r.bestName} englishName={r.bestEnglishName} />
+                              <PlayerTip
+                                id={usePowerLead ? r.powerLeadId : r.bestId}
+                                name={usePowerLead ? r.powerLeadName : r.bestName}
+                                englishName={usePowerLead ? r.powerLeadEnglishName : r.bestEnglishName}
+                              />
                             </span>
                           </Link>
                           <TitleBadge title={titles[i] ?? ""} classic={classics?.[i]} link />

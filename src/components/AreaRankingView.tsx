@@ -23,13 +23,15 @@ import { AREA_COL_WIDTHS } from "@/components/RankingRows";
 // 2026-10-15 张老师要求：去掉「全国名次」条目（表中已无此列，领军人物全国名次走用户卡）
 // 2026-11-09 张老师定：补「领军人物」条目；同日晚改统一口径——7 日活跃值>0 的上榜者
 // 中全国名次最高者（不再随排序切换）
+// 2026-11-10 张老师改回随排序切换：战力指数排行=该地区全国名次最高者（不管活跃）
 // 配色（2026-10-15 张老师定）：金只留小标题，正文数字 <i> 亮灰
 const AREA_RULES = [
   <>
     <b>地区归属</b>：按注册资料中的地区统计；未填写地区或填写了多个地区的玩家不计入地区榜。
   </>,
   <>
-    <b>领军人物</b>：该地区雷友中 7 日活跃值大于 <i>0</i> 者里全国名次最高的一位；地区内无人活跃时为「无」。
+    <b>领军人物</b>：随排序切换——<i>战力指数</i>排行时为该地区全国名次最高的雷友；<i>活跃指数</i>排行时为
+    7 日活跃值大于 <i>0</i> 的上榜雷友中全国名次最高的一位（地区内无人活跃时为「无」）。
   </>,
   <>
     <b>战力指数</b>：地区内每位有成绩雷友贡献（全国有成绩总人数 −
@@ -170,20 +172,30 @@ export async function AreaRankingView({
 
   const order = parseAreaOrder(sp.order);
   const rows = await getAreaRanking(order);
-  // 领军人物口径（2026-11-09 晚统一）：7 日活跃值>0（user_activity_snapshot）的上榜
-  // 雷友中全国名次最高者，不再随排序切换；无人活跃为「无」（bestId=0，前端纯文本）。
-  // 军衔按高级时间评定（2026-10-13 SUB 制）；Phase 5 补旧版称号备选；
+  // 领军人物口径（2026-11-10 张老师改，随排序切换）：战力指数排行=该地区全国名次最高者
+  // （powerLead*，不管活跃不活跃）；其余（活跃指数/领军表头）=7 日活跃值>0 的上榜雷友中
+  // 全国名次最高者（best*），无人活跃为「无」（缺位不评军衔）。
+  // 军衔按高级时间评定（2026-10-13 SUB 制）——对当前口径的领军评定；
   // 2026-11-06 总司令/雷帝=动态阈值档。缺位行不评称号（titles/classics 置空）。
+  const usePowerLead = order === "power";
   const leadTh = await getThunderKingThreshold();
   const leadPairs = await dualTitles(
-    rows.map((r) =>
-      r.noActiveLeader
-        ? { userId: r.bestId, expTime: Number(r.bestExpTime) || 0, ranked: false, sex: r.bestSex }
-        : { userId: r.bestId, expTime: Number(r.bestExpTime), ranked: true, sex: r.bestSex }
-    )
+    rows.map((r) => {
+      const missing = !usePowerLead && r.noActiveLeader;
+      return {
+        userId: usePowerLead ? r.powerLeadId : r.bestId,
+        expTime: missing ? 0 : Number(usePowerLead ? r.powerLeadExpTime : r.bestExpTime) || 0,
+        ranked: !missing,
+        sex: usePowerLead ? r.powerLeadSex : r.bestSex,
+      };
+    })
   );
   const titles = await Promise.all(
-    rows.map((r) => (r.noActiveLeader ? "" : assessTitle(r.bestExpTime, leadTh)))
+    rows.map((r) => {
+      const missing = !usePowerLead && r.noActiveLeader;
+      if (missing) return "";
+      return assessTitle(Number(usePowerLead ? r.powerLeadExpTime : r.bestExpTime), leadTh);
+    })
   );
 
   return (

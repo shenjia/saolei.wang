@@ -10,7 +10,9 @@
 // 无第三方地图服务、无 Key、可离线；含台湾省与南海诸岛九段线（标准地图口径）。
 // 2026-11-09 张老师要求：hover 左侧表格行时视为同时 hover 地图——气泡同步弹出，
 //   钉在地图右上角（行 hover 无鼠标坐标可跟随，取固定锚点）；
-//   领军人物为「无」（无人 7 日活跃，2026-11-09 统一口径）时只显示文本、不渲染称号 em。
+//   领军人物为「无」时只显示文本、不渲染称号 em。
+// 2026-11-10 领军人物改随排序切换（战力排行=该地区全国名次最高者，其余=活跃领军）——
+//   气泡收到的 bestName/noLeader/title 已由上游 AreaRanking 按 order 选好，此处不变。
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";

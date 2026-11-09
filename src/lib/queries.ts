@@ -2966,6 +2966,14 @@ export interface AreaRow {
   bestSex: number;
   /** 领军人物缺位（地区内无人 7 日活跃值>0；bestId=0、bestName=「无」，2026-11-09 晚统一口径） */
   noActiveLeader: boolean;
+  /** 战力领军（2026-11-10 张老师改口径：领军人物随排序切换——战力指数排行时=该地区
+   *  全国名次最高者，不管活跃；即 ranked CTE 的 MIN(rk)，与 bestRank 同源） */
+  powerLeadId: number;
+  powerLeadName: string;
+  powerLeadEnglishName: string;
+  powerLeadExpTime: number;
+  powerLeadSumTime: number;
+  powerLeadSex: number;
 }
 
 
@@ -3074,6 +3082,12 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
     bestSumTime: r.abest_sum_time,
     bestSex: r.abest_sex,
     noActiveLeader: N(r.abest_id) === 0,
+    powerLeadId: N(r.best_id),
+    powerLeadName: r.best_name,
+    powerLeadEnglishName: r.best_english_name,
+    powerLeadExpTime: r.best_exp_time,
+    powerLeadSumTime: r.best_sum_time,
+    powerLeadSex: r.best_sex,
   }));
 }
 
@@ -3088,7 +3102,10 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
 // 缓存键升 v6
 // 2026-11-09 晚 领军人物统一口径：7 日活跃值>0（user_activity_snapshot）的上榜者中
 // 全国名次最高者，不再随排序切换（战力排序也是活跃领军），缓存键升 v7
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v7"], {
+// 2026-11-10 领军人物改回随排序切换（张老师：战力指数排行时领军应为该地区排行第一名，
+// 不管活跃不活跃）——战力=全国名次最高（best_*，数据本就在 SELECT 里，仅透出），
+// 其余（活跃指数/领军表头）=活跃领军；缓存键升 v8
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v8"], {
   revalidate: 300,
 });
 
