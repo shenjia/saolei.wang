@@ -1,7 +1,7 @@
 // 地区活跃指数（2026-11-02 张老师需求）：area_activity 落盘表的唯一写入方。
 //
-// 权重口径（2026-11-08 四轮张老师定稿）：
-//   活跃指数 = 活跃人数 × 100
+// 权重口径（2026-11-08 四轮张老师定稿；2026-11-09 五轮：活跃人数权重 100→20）：
+//   活跃指数 = 活跃人数 × 20
 //            + 近 7 日练习活跃点（practice_daily.act_points 逐盘累计，口径见
 //              track/practice 计点函数：初级胜=1 败=0；中级胜=2、败局完成率≥50%=1；
 //              高级完成率≥50% 按 floor(率×10)，胜局恒=10；自定义胜=1。
@@ -27,8 +27,8 @@ import { prisma } from "./db";
 
 /** 录像级别权重（初×1 中×2 高×10，2026-11-06 定，录像侧不动） */
 export const LEVEL_WEIGHTS = { beg: 1, int: 2, exp: 10, cus: 1 } as const;
-/** 活跃人数权重 */
-export const ACTIVE_WEIGHT = 100;
+/** 活跃人数权重（2026-11-09 张老师定：100→20，防人数因子压过练习/录像点数） */
+export const ACTIVE_WEIGHT = 20;
 
 /** 录像条数分级别加权计分（未知级别按初级×1 兜底，不炸分数） */
 export function videosWeighted(videosBeg: number, videosInt: number, videosExp: number): number {

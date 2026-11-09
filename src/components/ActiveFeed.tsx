@@ -170,7 +170,7 @@ export function ActiveFeed({
               <th key={c.by}>
                 <Link
                   href={buildUrl("/ranking", { view: "active", by: c.by === "act" ? undefined : c.by })}
-                  className={c.by === by ? "current" : ""}
+                  className={c.by === by ? `current${c.by === "act" ? " act_cur" : ""}` : ""}
                   title={`按${c.label}排列`}
                 >
                   {c.label}
@@ -192,7 +192,11 @@ export function ActiveFeed({
                 <TitleBadge title={u.title} classic={u.classic} link />
               </td>
               {ACTIVE_COLS.map((c) => (
-                <td key={c.by} className={`num${c.by === by ? " current" : ""}`} title={c.tip}>
+                <td
+                  key={c.by}
+                  className={`num${c.by === by ? ` current${c.by === "act" ? " act_cur" : ""}` : ""}`}
+                  title={c.tip}
+                >
                   {(c.by === "act" ? u.act : u[c.by]) || "-"}
                 </td>
               ))}
