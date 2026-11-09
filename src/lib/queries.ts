@@ -39,6 +39,7 @@ import {
   type BvRankingBy,
   type Level,
   type Order,
+  type RankLevel,
   type RankingBy,
   type VideoLevel,
   type VideoListOrder,
@@ -924,6 +925,18 @@ function userScoresTable(nf: boolean): UserScoresDelegate {
   return (nf ? prisma.userScoresNf : prisma.userScores) as unknown as UserScoresDelegate;
 }
 
+/** 批量取 7 日活跃值（2026-11-10 地区内页「活跃」列）：user_activity_snapshot 点查，
+ *  与用户主页活跃值/领军人物判定同源（每分钟刷新）。查无快照行（或活跃值 0）不入 Map。 */
+export async function getActPoints(ids: number[]): Promise<Map<number, number>> {
+  const uniq = [...new Set(ids.filter((i) => Number.isInteger(i) && i > 0))].map((v) => BigInt(v));
+  if (!uniq.length) return new Map();
+  const rows = await prisma.userActivitySnapshot.findMany({
+    where: { userId: { in: uniq }, activePoints: { gt: 0 } },
+    select: { userId: true, activePoints: true },
+  });
+  return new Map(rows.map((r) => [N(r.userId), N(r.activePoints)]));
+}
+
 export async function getRanking(
   level: Level,
   order: Order,
@@ -963,14 +976,47 @@ export async function getRanking(
 }
 
 /** 「我在哪里」：计算用户在排行榜的页码（移植 Ranking::getPage，同分时从粗定位逐页扫描找到本人）。
- *  带 area 时限定该地区人口（2026-10-14 地区内页搜索定位；本人不在该地区返回 -1） */
+ *  带 area 时限定该地区人口（2026-10-14 地区内页搜索定位；本人不在该地区返回 -1）。
+ *  2026-11-10：level=act（7 日活跃值）分支——数据源 user_activity_snapshot，
+ *  排序 active_points DESC / 同值 userId ASC（与榜单 act 列同口径）。 */
 export async function getRankingPageOfUser(
   id: number,
-  level: Level,
+  level: RankLevel,
   order: Order,
   nf = false,
   area?: string
 ): Promise<number> {
+  // act 列（地区内页「活跃」排序定位）：快照表活跃值页码，无成绩表参与
+  if (level === "act") {
+    const snap = await prisma.userActivitySnapshot.findUnique({
+      where: { userId: BigInt(id) },
+      select: { activePoints: true },
+    });
+    const score = snap ? N(snap.activePoints) : 0;
+    if (score <= 0) return -1;
+    const areaUsers = area
+      ? await prisma.user.findMany({ where: { area, ...ACTIVE_USER }, select: { id: true } })
+      : null;
+    if (area && !areaUsers!.some((u) => N(u.id) === id)) return -1;
+    const where = {
+      activePoints: { gt: 0 },
+      ...(areaUsers ? { userId: { in: areaUsers!.map((u) => u.id) } } : {}),
+    };
+    const better = await prisma.userActivitySnapshot.count({ where: { ...where, activePoints: { gt: score } } });
+    let offset = better - (better % RANKING_PAGESIZE);
+    for (;;) {
+      const rows = await prisma.userActivitySnapshot.findMany({
+        where,
+        select: { userId: true },
+        orderBy: [{ activePoints: "desc" }, { userId: "asc" }],
+        skip: offset,
+        take: RANKING_PAGESIZE,
+      });
+      if (!rows.length) return -1;
+      if (rows.some((r) => N(r.userId) === id)) return Math.floor(offset / RANKING_PAGESIZE) + 1;
+      offset += RANKING_PAGESIZE;
+    }
+  }
   const field = SCORE_FIELD(level, order);
   const table = userScoresTable(nf);
   if (!(await isRankedUser(id))) return -1; // 封禁用户不在榜
@@ -1027,6 +1073,28 @@ export async function getRankOfUsers(
   const uniq = [...new Set(ids.filter((i) => Number.isInteger(i) && i > 0))];
   if (!uniq.length) return new Map();
   const { level, order } = byLevelOrder(by);
+  // act 列（2026-11-10 地区内页「活跃」排序）：名次口径=快照表活跃值降序、同值 userId
+  // 升序（与榜单 act 列完全一致）；活跃值 0 / 无快照行=未加入该排序。
+  // area 来源=whereami/search 的 URL 参数（slice(0,12) 截断），值走 ? 占位符（$queryRaw 变参）
+  if (level === "act") {
+    const idList = uniq.join(",");
+    const rows = area
+      ? await prisma.$queryRaw<{ id: bigint; rk: bigint }[]>`SELECT a.user_id id, 1 + (SELECT COUNT(*) FROM user_activity_snapshot b
+              JOIN \`user\` ub ON ub.id = b.user_id AND ub.status = 0 AND ub.area = ${area}
+            WHERE b.active_points > 0 AND (b.active_points > a.active_points
+              OR (b.active_points = a.active_points AND b.user_id < a.user_id))) AS rk
+          FROM user_activity_snapshot a
+          JOIN \`user\` ua ON ua.id = a.user_id AND ua.status = 0 AND ua.area = ${area}
+          WHERE a.active_points > 0 AND a.user_id IN (${idList})`
+      : await prisma.$queryRaw<{ id: bigint; rk: bigint }[]>`SELECT a.user_id id, 1 + (SELECT COUNT(*) FROM user_activity_snapshot b
+              JOIN \`user\` ub ON ub.id = b.user_id AND ub.status = 0
+            WHERE b.active_points > 0 AND (b.active_points > a.active_points
+              OR (b.active_points = a.active_points AND b.user_id < a.user_id))) AS rk
+          FROM user_activity_snapshot a
+          JOIN \`user\` ua ON ua.id = a.user_id AND ua.status = 0
+          WHERE a.active_points > 0 AND a.user_id IN (${idList})`;
+    return new Map(rows.map((r) => [N(r.id), N(r.rk)]));
+  }
   // 2026-10-27 SQL 注入加固：列名/表名走占位符接不了，只能拼——拼前过 assertIdent 白名单断言
   const col = assertIdent(`${level}_${order === "time" ? "time" : "3bvs"}`); // raw SQL 用 snake_case 列名
   const tbl = assertIdent(nf ? "user_scores_nf" : "user_scores");
@@ -2522,11 +2590,17 @@ export async function getTitleMembers(
     const rec = r as unknown as Record<string, bigint | number | null>;
     const scores: Record<string, number> = {};
     const videos: Record<string, number> = {};
-    for (const b of RANKING_BYS) {
-      const lo = byLevelOrder(b);
-      scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
-      videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
+  for (const b of RANKING_BYS) {
+    if (b === "act") {
+      // 活跃列（2026-11-10 地区内页）：军衔成员页 rec 是 user_scores 记录无 act 字段，置 0
+      scores[b] = 0;
+      videos[b] = 0;
+      continue;
     }
+    const lo = byLevelOrder(b);
+    scores[b] = N(rec[SCORE_FIELD(lo.level === "act" ? "sum" : lo.level, lo.order)] as number);
+    videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level === "act" ? "sum" : lo.level, lo.order)] as bigint);
+  }
     return {
       ...(authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 }),
       createTime: 0,
@@ -2691,7 +2765,7 @@ export interface RankingRow extends UserBrief {
 
 /**
  * 全级别排行表（移植 2008 版 Ranking_All：按 By 列排序，其余列随行带出）
- * @param by   排序列（beg_time…sum_3bvs）
+ * @param by   排序列（beg_time…sum_3bvs；2026-11-10 增 act=7 日活跃值）
  * @param nf   true 走 NF（无标雷）成绩表
  * @param area 限定地区（地区榜内页用）
  */
@@ -2705,48 +2779,92 @@ export async function getRankingTable(
 ): Promise<{ rows: RankingRow[]; total: number; pageSize: number }> {
   const { level, order } = byLevelOrder(by);
   const size = take ?? RANKING_PAGESIZE;
-  const field = SCORE_FIELD(level, order);
+  // act 列（2026-11-10 地区内页「活跃」排序）：数据源切 user_activity_snapshot
+  // （7 日活跃值>0 才上榜，按活跃值降序、同值 id 升序——与活跃榜 ORDER_BY.act 同款），
+  // 其余列仍走 user_scores(_nf) 成绩字段；nf 与 act 互斥（parseRankingBy 层不产生组合，
+  // 防御性归退 sum_time）
+  if (level === "act") nf = false;
+  // act 虚拟级别不落成绩表字段映射（上面已切快照表分支）
+  const field = SCORE_FIELD(level === "act" ? "sum" : level, order);
   const table = userScoresTable(nf);
-  let idsWhere: Record<string, unknown> = { [field]: { gt: 0 }, ...(await rankedOnly()) };
-  if (area) {
-    const areaUsers = await prisma.user.findMany({ where: { area, ...ACTIVE_USER }, select: { id: true } });
-    idsWhere = { ...idsWhere, id: { in: areaUsers.map((u) => u.id) } };
+  const ranked = await rankedOnly();
+  // 地区人口（2026-10-14）：act 列同样限定该地区注册用户
+  const areaUsers = area
+    ? await prisma.user.findMany({ where: { area, ...ACTIVE_USER }, select: { id: true } })
+    : null;
+  let total: number;
+  let rows: Record<string, bigint | number | null>[];
+  if (level === "act") {
+    const baseWhere = { userId: { in: (areaUsers ?? []).map((u) => u.id) }, activePoints: { gt: 0 } };
+    total = await prisma.userActivitySnapshot.count({ where: baseWhere });
+    rows = (await prisma.userActivitySnapshot.findMany({
+      where: baseWhere,
+      orderBy: [{ activePoints: "desc" }, { userId: "asc" }],
+      select: { userId: true, activePoints: true },
+      skip: (page - 1) * RANKING_PAGESIZE, // 页锚点恒按 base 20（页码语义不变）
+      take: size,
+    })) as unknown as Record<string, bigint | number | null>[];
+  } else {
+    const idsWhere: Record<string, unknown> = {
+      [field]: { gt: 0 },
+      ...ranked,
+      ...(areaUsers ? { id: { in: areaUsers.map((u) => u.id) } } : {}),
+    };
+    total = await table.count({ where: idsWhere });
+    rows = await table.findMany({
+      where: idsWhere,
+      orderBy: { [field]: ORDER_DIRECTION[order] },
+      skip: (page - 1) * RANKING_PAGESIZE, // 页锚点恒按 base 20（页码语义不变）
+      take: size, // 本批行数（「加载更多」递增批量可 > 20）
+    });
   }
-  const total = await table.count({ where: idsWhere });
-  const rows = await table.findMany({
-    where: idsWhere,
-    orderBy: { [field]: ORDER_DIRECTION[order] },
-    skip: (page - 1) * RANKING_PAGESIZE, // 页锚点恒按 base 20（页码语义不变）
-    take: size, // 本批行数（「加载更多」递增批量可 > 20）
-  });
-  const authors = await usersByIds(rows.map((r) => N(r.id)));
+  // act 列行主键在 userId（快照表），其余在 id（成绩表）——归一成 id 列表
+  const rowIds = rows.map((r) => N((r as { id?: bigint | number; userId?: bigint | number }).userId ?? (r as { id: bigint | number }).id));
+  const authors = await usersByIds(rowIds);
+  // act 列：仅快照内有成绩的用户在榜（LEFT JOIN 语义），成绩列仍要主表回填 → 单独批量取
+  const scoreRows =
+    level === "act"
+      ? await prisma.userScores.findMany({ where: { id: { in: rowIds.map((v) => BigInt(v)) } } })
+      : rows;
   // NF 榜：军衔按主榜高级时间评定（与榜单口径无关），需额外回填主榜 exp_time（2026-10-13 SUB 制）
   const overall = nf
     ? new Map(
         (
           await prisma.userScores.findMany({
-            where: { id: { in: rows.map((r) => BigInt(N(r.id))) } },
+            where: { id: { in: rowIds.map((v) => BigInt(v)) } },
             select: { id: true, expTime: true },
           })
         ).map((s) => [N(s.id), N(s.expTime)])
       )
     : null;
+  const actMap = level === "act" ? new Map(rows.map((r) => [N((r as { userId: bigint }).userId), N((r as { activePoints: number }).activePoints)])) : null;
+  const scoreRecById = new Map(scoreRows.map((s) => [N(s.id), s as unknown as Record<string, bigint | number | null>]));
   const result: RankingRow[] = rows.map((r, i) => {
-    const rec = r as unknown as Record<string, bigint | number | null>;
-    const brief = authors.get(N(r.id)) ?? { id: N(r.id), chineseName: "?", englishName: "", sex: 1 };
+    const uid = rowIds[i];
+    const rec =
+      level === "act"
+        ? (scoreRecById.get(uid) ?? ({} as Record<string, bigint | number | null>))
+        : (r as unknown as Record<string, bigint | number | null>);
+    const brief = authors.get(uid) ?? { id: uid, chineseName: "?", englishName: "", sex: 1 };
     const scores: Record<string, number> = {};
     const videos: Record<string, number> = {};
     for (const b of RANKING_BYS) {
+      if (b === "act") {
+        // 活跃值只在排序命中时展示值有意义，但列固定渲染 → 全行带出（快照点查批量，无逐行开销）
+        scores[b] = actMap?.get(uid) ?? 0;
+        videos[b] = 0;
+        continue;
+      }
       const lo = byLevelOrder(b);
-      scores[b] = N(rec[SCORE_FIELD(lo.level, lo.order)] as number);
-      videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level, lo.order)] as bigint);
+      scores[b] = N(rec[SCORE_FIELD(lo.level === "act" ? "sum" : lo.level, lo.order)] as number);
+      videos[b] = lo.level === "sum" ? 0 : N(rec[VIDEO_FIELD(lo.level === "act" ? "sum" : lo.level, lo.order)] as bigint);
     }
     return {
       ...brief,
       rank: (page - 1) * RANKING_PAGESIZE + i + 1,
       scores,
       videos,
-      ...(overall ? { overallExpTime: overall.get(N(r.id)) ?? 0 } : null),
+      ...(overall ? { overallExpTime: overall.get(uid) ?? 0 } : null),
     };
   });
   // 活跃度（2026-11-04 张老师需求）：性别标记后彩点 + 气泡第二行，随当页实时计算
