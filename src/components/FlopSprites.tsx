@@ -255,6 +255,46 @@ export function FlopSprites({ innerRef }: { innerRef?: Ref<SVGSVGElement> } = {}
         <path d="M40 30v10H30v30h10v20H30v30h10v10h80v-10h10V90h-10V70h10V40h-10V30H40z" fill="gray" />
         <path d="M60 50v20h40V50H60m0 40v20h40V90H60z" fill="silver" />
       </symbol>
+      {/* ---- 像素风格数字（2026-11-09 张老师定，默认关）：「像素风格」开关打开时
+          经 numSym() 接管 b1..b8 的高清矢量字形，其余贴图不变；关/默认维持上方
+          flop 原版字形。字形 1:1 取自 Metasweeper（github.com/eee555/Metasweeper，
+          GPL-3.0 附加商业限制；本站非商业使用）src/media/cell1..8.svg——平滑曲线/
+          折线重制字形，任意倍率不发虚，对比 flop 从位图逐像素描边提取的阶梯路径
+          明显干净。坐标系零换算直接内联：metasweeper 160 视框的开格面区（10..160）
+          与站内 cell-press 面区（168 视框内 10..160）完全重合，字形均落 30..130；
+          格底沿用站内 cell-press，凹凸 bevel 与全站一致 */}
+      <symbol id="cell-number-1-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <polygon points="50,110 50,130 120,130 120,110 100,110 100,30 85,30 50,65 50,70 70,70 70,110" fill="#0000ff" />
+      </symbol>
+      <symbol id="cell-number-2-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <path d="M 30 60 Q 30 30, 65 30 H 95 Q 130 30, 130 60 C 130 85, 70 100, 60 110 H 130 V 130 H 30 V 115 C 30 80, 100 80, 100 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60" fill="#008000" />
+      </symbol>
+      <symbol id="cell-number-3-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <path d="M 30 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 Q 130 85, 130 100 Q 130 130, 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 60 V 70 H 90 Q 100 70, 100 60 T 90 50 H 30" fill="#ff0000" />
+      </symbol>
+      <symbol id="cell-number-4-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <polygon points="55,30 30,80 30,90 90,90 90,130 120,130 120,90 130,90 130,70 120,70 120,30 90,30 90,70 65,70 85,30" fill="#000080" />
+      </symbol>
+      <symbol id="cell-number-5-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <path d="M 30 30 H 130 V 50 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 30" fill="#800000" />
+      </symbol>
+      <symbol id="cell-number-6-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <path d="M 120 30 V 50 H 80 Q 60 50, 60 60 V 100 Q 60 110, 80 110 T 100 100 T 80 90 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 65 Q 30 130, 30 100 V 60 Q 30 30, 65 30" fill="#008080" />
+      </symbol>
+      <symbol id="cell-number-7-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <path d="M 30 30 H 130 V 60 L 95 130 H 65 L 100 60 V 50 H 30" fill="#000000" />
+      </symbol>
+      <symbol id="cell-number-8-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <path d="M 65 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 H 100 V 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60 T 70 70 H 90 Q 100 70, 100 60 V 100 Q 100 90, 90 90 H 70 Q 60 90, 60 100 T 70 110 H 90 Q 100 110, 100 100 V 80 H 115 Q 130 85, 130 100 Q 130 130, 95 130 H 65 Q 30 130, 30 100 Q 30 85, 45 80 Q 30 75, 30 60 Q 30 30, 65 30" fill="#808080" />
+      </symbol>
       <symbol id="cell-flag" viewBox="0 0 168 168">
         <use href="#cell-normal" />
         <path d="M70 30v10H50v10H40v10h10v10h20v10h20V30H70z" fill="red" />
