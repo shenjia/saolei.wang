@@ -11744,8 +11744,9 @@ html.op-fakefs #header {
   color: #b1b1a4;
 }
 /* 「活跃+N」段（2026-11-08 张老师统一版式）：右锚定接棒原 pbpart 的
-   margin-left:auto；标签亮灰 12px bold（本页标签口径），数字 16px 加粗与本页
-   数字档一致；>0 绿 / 0 亮灰，+ 号在 .actv 内与数字同色 */
+   margin-left:auto；标签亮灰 12px bold（本页标签口径），数字 12px 与胜率
+   同款小字（2026-11-09 张老师要求：活跃值和胜率一样用小字体，原 16px 大字）；
+   >0 绿 / 0 亮灰，+ 号在 .actv 内与数字同色 */
 #online_play .op_ranked .actpart {
   margin-left: auto;
   color: #b1b1a4;
@@ -11754,7 +11755,7 @@ html.op-fakefs #header {
 }
 #online_play .op_ranked .actv {
   color: #a6e22e;
-  font-size: 16px;
+  font-size: 12px; /* 2026-11-09 张老师要求：活跃值数值改小字（原 16px） */
   font-weight: bold;
 }
 #online_play .op_ranked .actv.zero {
