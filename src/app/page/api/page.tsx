@@ -338,6 +338,78 @@ const APIS: ApiDoc[] = [
       "keyword 与站内 /bbs 搜索一致只匹配标题，不匹配正文与作者名",
     ],
   },
+  {
+    path: "/api/public/v1/user_search",
+    title: "玩家搜索",
+    brief: "姓名关键词搜玩家（id/name/area/avatar/title）",
+    desc: "按姓名关键词搜索玩家：中文姓名前缀/包含模糊 + 英文名前缀（站内排行搜索框同口径），纯数字关键词按玩家 ID 精确匹配；封禁账号不返回。排序＝上榜者按全国总计时间榜名次序在前，未上榜沉底按 id 升序。",
+    params: [
+      { name: "keyword", required: true, desc: "搜索关键词，限 12 字" },
+      { name: "limit", desc: "返回条数上限，默认 10，上限 20" },
+    ],
+    request: "GET /api/public/v1/user_search?keyword=张&limit=3",
+    response: `{
+  "generatedAt": 1794310000,
+  "keyword": "张",
+  "size": 1,
+  "users": [
+    {
+      "id": 1,
+      "name": "张砷镓",
+      "englishName": "Zhang Shen Jia",
+      "area": "陕西",
+      "avatar": "https://saolei.wang/images/player/1.jpg",
+      "title": "总司令"
+    }
+  ]
+}`,
+    notes: [
+      "area 地区合规显示名（香港 → 中国香港）；avatar 头像完整 URL，空串 = 无头像（请用调用方默认图占位）",
+      "title 军衔制称号（总司令=动态阈值档，与站内榜单徽章同口径）",
+      "隐私不出：QQ / 邮箱 / IP / 登录时间等一律不返回",
+    ],
+  },
+  {
+    path: "/api/public/v1/ranking",
+    title: "排行榜查询",
+    brief: "成绩/BV/STNB/地区榜，20 条/页 cursor 翻页",
+    desc: "覆盖线上排行页除「世界排行」外的全部榜单（站内「加载更多」同一查询函数与排序口径）：view=rank 成绩榜 / bv BV 收集榜 / stnb STNB 榜 / area 地区榜。每页锚点 20 条，cursor 整数页码翻页，size 可放大本批（20–100）；hasMore = cursor×20 < total。",
+    params: [
+      { name: "view", desc: "rank 成绩榜（默认）/ bv / stnb / area" },
+      { name: "order", desc: "排序列：rank 用 beg_time…sum_3bvs（缺省 sum_time）；bv/stnb 用 total/beg/int/exp（缺省 total）；area 用 activity（缺省）/power/players/active/best" },
+      { name: "cursor", desc: "上次响应的 nextCursor，首次不传（整数页码）" },
+      { name: "size", desc: "本批行数，20–100，默认 20；页锚点恒按 20" },
+      { name: "nf", desc: "1 = NF（无标雷）榜；仅 rank / bv / stnb 支持" },
+      { name: "area", desc: "限定地区（数据库原值，如 陕西）；仅 rank 支持" },
+    ],
+    request: "GET /api/public/v1/ranking?view=stnb&order=beg",
+    response: `{
+  "view": "stnb", "order": "beg", "nf": false,
+  "cursor": 1, "nextCursor": 2, "hasMore": true, "total": 7142, "size": 20,
+  "generatedAt": 1794310000,
+  "den": { "beg": 473.7, "int": 302.1, "exp": 252.7 },
+  "totalDen": 1028.5,
+  "rows": [
+    {
+      "rank": 1, "id": 18290, "name": "鞠泽恩", "englishName": "", "sex": 1,
+      "title": "总司令",
+      "beg": 473.7, "int": 302.1, "exp": 252.7, "total": 0,
+      "best": {
+        "beg": { "vid": 317006, "timeMs": 900, "nf": false, "ct": 1737978486 },
+        "int": null, "exp": null
+      },
+      "classic": null
+    }
+  ]
+}`,
+    notes: [
+      "rank 行：scores 8 列（time=毫秒、3bvs=×1000、0=无成绩）+ videos 达成录像 id + delta（仅 sum_time 主榜：数字=较昨日升降，null=今日新进榜）",
+      "bv 行：beg/int/exp/total 收集数；stnb 行：各级历史最高 STNB（1 位小数）+ best 各级最优盘 { vid, timeMs, nf, ct }，vid 可链 /video/{id}",
+      "bv/stnb 响应带 den 与 totalDen 进度条分母；聚合榜数据源失败返回 503，请退避重试",
+      "area 行为地区维度：{ rank, area, players, active, power, activity, bestRank, wins7d, videos7d, best }",
+      "title 军衔制称号；封禁账号不出现在任何玩家榜；隐私字段一律不出",
+    ],
+  },
 ];
 
 // ---- notes 参数名自动高亮（2026-11-02 张老师）----

@@ -231,7 +231,85 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 
 说明：每页固定 20 条；`hasMore=false` 时 `nextCursor` 为 null；只搜正常帖。
 
-## 三、通用约定
+### 8. 玩家搜索 `GET /api/public/v1/user_search?keyword=…`（2026-11-09 新增）
+
+按姓名关键词搜索玩家：中文姓名**前缀 / 包含**模糊 + 英文名**前缀**（站内排行搜索框同口径）；纯数字关键词按**玩家 ID 精确匹配**。返回最多 `limit` 条（默认 10，上限 20），封禁账号不返回。
+
+| 参数 | 说明 |
+|---|---|
+| `keyword` | 必填，搜索关键词，限 12 字 |
+| `limit` | 可选，返回条数上限，默认 10，上限 20 |
+
+```json
+{
+  "generatedAt": 1794310000,
+  "keyword": "张",
+  "size": 1,
+  "users": [
+    { "id": 1, "name": "张砷镓", "englishName": "Zhang Shen Jia",
+      "area": "陕西",
+      "avatar": "https://saolei.wang/images/player/1.jpg",
+      "title": "总司令" }
+  ]
+}
+```
+
+字段：`name` 中文姓名 · `englishName` 英文名 · `area` 地区（合规显示名，香港 → 中国香港）· `avatar` 头像完整 URL（**空串 = 无头像**，请用调用方默认图占位）· `title` 军衔制称号（总司令=动态阈值档，与站内榜单徽章同口径）。排序＝上榜者按全国总计时间榜名次序在前，未上榜沉底按 id 升序。
+
+### 9. 排行榜查询 `GET /api/public/v1/ranking?view=…&order=…`（2026-11-09 新增）
+
+覆盖线上排行页除「世界排行」外的全部榜单（站内「加载更多」同一查询函数与排序口径）。每页固定锚点 20 条，`cursor` 整数页码游标翻页（首次不传 = 第 1 页），`size` 可放大本批行数（20–100，页锚点仍按 20）；`hasMore = cursor×20 < total`。
+
+| 参数 | 说明 |
+|---|---|
+| `view` | `rank` 成绩榜（默认）/ `bv` BV 收集榜 / `stnb` STNB 榜 / `area` 地区榜 |
+| `order` | 排序列，随 view 不同（见下） |
+| `cursor` | 上次响应的 `nextCursor`，首次不传 |
+| `size` | 本批行数，20–100，默认 20 |
+| `nf` | `1` = NF（无标雷）榜；仅 rank / bv / stnb 支持 |
+| `area` | 限定地区（数据库原值，如 `陕西`）；仅 rank 支持 |
+
+`order` 合法值：
+
+- `rank`：`beg_time` `beg_3bvs` `int_time` `int_3bvs` `exp_time` `exp_3bvs` `sum_time` `sum_3bvs`（缺省 `sum_time`）
+- `bv` / `stnb`：`total` `beg` `int` `exp`（缺省 `total`）
+- `area`：`activity`（缺省）`power` `players` `active` `best`
+
+**rank 响应示例**（`?view=rank&order=sum_time`）：
+
+```json
+{
+  "view": "rank", "order": "sum_time", "nf": false,
+  "cursor": 1, "nextCursor": 2, "hasMore": true, "total": 7371, "size": 20,
+  "generatedAt": 1794310000,
+  "rows": [
+    { "rank": 1, "id": 18290, "name": "鞠泽恩", "englishName": "", "sex": 1,
+      "title": "总司令",
+      "scores": { "beg_time": 980, "beg_3bvs": 7289000, "int_time": 10310, "int_3bvs": 5301000,
+                  "exp_time": 37820, "exp_3bvs": 4226000, "sum_time": 49110, "sum_3bvs": 16816000 },
+      "videos": { "beg_time": 154, "beg_3bvs": 4807, "int_time": 15129, "int_3bvs": 9262,
+                  "exp_time": 9195, "exp_3bvs": 8212, "sum_time": 0, "sum_3bvs": 0 },
+      "delta": 0,
+      "classic": { "name": "雷圣", "color": "#ff0000" } }
+  ]
+}
+```
+
+- `scores` 8 列存储值：time 类=毫秒，3bvs=×1000；`0` 通常=无成绩（初级 3BV/s 有初级时间时为例外零纪录）
+- `videos` 各列达成录像 id（`0` = 无；`sum_*` 恒 0）
+- `delta` 仅 `order=sum_time` 且无 nf/area 时提供：数字=较昨日升降名次，`null` = 今日新进榜（无基准）
+- `title` 军衔制称号（动态阈值总司令口径）；`classic` 旧版称号对（`null` = 未算）
+- `area` 参数提供时响应带 `"area": "地区显示名"`，rows 仅该地区人口，无 `delta`
+
+**bv 响应示例**（`?view=bv&order=total`）：rows 每行为 `{ rank, id, name, englishName, sex, title, beg, int, exp, total, classic }`（各级收集数与总计），响应额外带 `den`（各级 3BV 可达区间跨度）与 `totalDen`（进度条分母）。
+
+**stnb 响应示例**（`?view=stnb&order=beg`）：rows 每行为 `{ rank, id, name, englishName, sex, title, beg, int, exp, total, best, classic }`——beg/int/exp=各级历史最高 STNB（1 位小数，0=无有效成绩），total 仅三级齐全时非 0；`best` = `{ beg, int, exp }` 各级最优盘 `{ vid, timeMs, nf, ct }`（null=无；`vid` 可链 `https://saolei.wang/video/{id}`）；响应额外带 `den`（各级全站最高 STNB）与 `totalDen`。
+
+**area 响应示例**（`?view=area&order=activity`）：rows 每行为 `{ rank, area, players, active, power, activity, bestRank, wins7d, videos7d, best: { id, name, englishName, expTime, sumTime } }`——地区维度（非玩家），`best` = 该地区领军人物。
+
+通用说明：聚合榜（bv/stnb）数据源失败时返回 `503`（附 `error` 标识），请调用方退避重试；封禁账号不出现在任何玩家榜（地区榜 `players/active` 口径与站内一致）。
+
+## 四、通用约定
 
 - 所有时间戳均为 Unix 秒；time 类成绩为毫秒（精确到小数点第三位秒），3bvs 为实际值（整数）；展示两位小数时第三位截去不四舍五入（2026-11-04 站内口径）
 - 录像文件本体不随 `video_list` 出（列表接口轻量）；需要文件时用 `video_info` 的 `fileUrl` 下载
@@ -240,7 +318,7 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 - 接口变更会尽量保持向后兼容；重大变更提前通知
 - 网页回放请引导用户访问 `https://saolei.wang/video/{id}`
 
-## 四、快速验证
+## 五、快速验证
 
 ```bash
 curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
@@ -251,6 +329,7 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
+- 2026-11-09（5）：新增 `user_search`（姓名关键词搜玩家，返回 id/name/area/avatar/title）与 `ranking`（view=rank/bv/stnb/area 覆盖除世界排行外全部榜单，20 条/页 cursor 翻页，order/nf/area/size 参数；聚合榜失败 503）。
 - 2026-11-09（4）：login 接口改为**需要 X-Api-Key**（张老师定：防止非法客户端借公开端点探测用户密码）；me 及后续用户侧接口仍仅凭 Bearer token。
 - 2026-11-09（3）：新增用户登录体系——`POST /api/public/v1/login`（账号密码换 7 天 Bearer token，落库 sha256）+ `GET /api/public/v1/me`（登录态自检）；后续用户侧 API 均凭 `Authorization: Bearer <token>` 鉴权。
 - 2026-11-04：文档补充时间成绩展示口径说明（两位小数、第三位截去不四舍五入）；接口数据本身无变化（realTime 仍为毫秒整数）。
