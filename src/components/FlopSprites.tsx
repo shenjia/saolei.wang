@@ -259,41 +259,45 @@ export function FlopSprites({ innerRef }: { innerRef?: Ref<SVGSVGElement> } = {}
           经 numSym() 接管 b1..b8 的高清矢量字形；开关打开（像素风格）时回落上方
           flop 原版字形（位图描边提取的阶梯路径，像素感）。字形 1:1 取自 Metasweeper
           （github.com/eee555/Metasweeper，GPL-3.0 附加商业限制；本站非商业使用）
-          src/media/cell1..8.svg——平滑曲线/折线重制字形，任意倍率不发虚。坐标系零
-          换算直接内联：metasweeper 160 视框的开格面区（10..160）与站内 cell-press
-          面区（168 视框内 10..160）完全重合，字形均落 30..130；格底沿用站内
-          cell-press，凹凸 bevel 与全站一致 */}
+          src/media/cell1..8.svg——平滑曲线/折线重制字形。坐标系零换算直接内联：
+          metasweeper 160 视框的开格面区（10..160）与站内 cell-press 面区（168 视框
+          内 10..160）完全重合，字形均落 30..130；格底沿用站内 cell-press，凹凸
+          bevel 与全站一致。
+          锐化（2026-11-09 张老师报「关闭像素开关后数字边缘发虚」）：数字 path 加
+          stroke 同色 4 单位描边——曲线/斜段的抗锯齿过渡带在 zoom1.71×dpr2 下有
+          2-3px，占细笔画（20-30 单位）比例大＝视觉发虚；同色描边把笔画加粗 ~13%
+          并吃掉过渡带外半段，观感显著变实。直线段边缘本就 1px 过渡，几乎不受影响 */}
       <symbol id="cell-number-1-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <polygon points="50,110 50,130 120,130 120,110 100,110 100,30 85,30 50,65 50,70 70,70 70,110" fill="#0000ff" />
+        <polygon points="50,110 50,130 120,130 120,110 100,110 100,30 85,30 50,65 50,70 70,70 70,110" fill="#0000ff" stroke="#0000ff" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-number-2-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 60 Q 30 30, 65 30 H 95 Q 130 30, 130 60 C 130 85, 70 100, 60 110 H 130 V 130 H 30 V 115 C 30 80, 100 80, 100 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60" fill="#008000" />
+        <path d="M 30 60 Q 30 30, 65 30 H 95 Q 130 30, 130 60 C 130 85, 70 100, 60 110 H 130 V 130 H 30 V 115 C 30 80, 100 80, 100 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60" fill="#008000" stroke="#008000" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-number-3-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 Q 130 85, 130 100 Q 130 130, 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 60 V 70 H 90 Q 100 70, 100 60 T 90 50 H 30" fill="#ff0000" />
+        <path d="M 30 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 Q 130 85, 130 100 Q 130 130, 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 60 V 70 H 90 Q 100 70, 100 60 T 90 50 H 30" fill="#ff0000" stroke="#ff0000" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-number-4-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <polygon points="55,30 30,80 30,90 90,90 90,130 120,130 120,90 130,90 130,70 120,70 120,30 90,30 90,70 65,70 85,30" fill="#000080" />
+        <polygon points="55,30 30,80 30,90 90,90 90,130 120,130 120,90 130,90 130,70 120,70 120,30 90,30 90,70 65,70 85,30" fill="#000080" stroke="#000080" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-number-5-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 30 H 130 V 50 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 30" fill="#800000" />
+        <path d="M 30 30 H 130 V 50 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 30" fill="#800000" stroke="#800000" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-number-6-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 120 30 V 50 H 80 Q 60 50, 60 60 V 100 Q 60 110, 80 110 T 100 100 T 80 90 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 65 Q 30 130, 30 100 V 60 Q 30 30, 65 30" fill="#008080" />
+        <path d="M 120 30 V 50 H 80 Q 60 50, 60 60 V 100 Q 60 110, 80 110 T 100 100 T 80 90 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 65 Q 30 130, 30 100 V 60 Q 30 30, 65 30" fill="#008080" stroke="#008080" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-number-7-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 30 H 130 V 60 L 95 130 H 65 L 100 60 V 50 H 30" fill="#000000" />
+        <path d="M 30 30 H 130 V 60 L 95 130 H 65 L 100 60 V 50 H 30" fill="#000000" stroke="#000000" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-number-8-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 65 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 H 100 V 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60 T 70 70 H 90 Q 100 70, 100 60 V 100 Q 100 90, 90 90 H 70 Q 60 90, 60 100 T 70 110 H 90 Q 100 110, 100 100 V 80 H 115 Q 130 85, 130 100 Q 130 130, 95 130 H 65 Q 30 130, 30 100 Q 30 85, 45 80 Q 30 75, 30 60 Q 30 30, 65 30" fill="#808080" />
+        <path d="M 65 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 H 100 V 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60 T 70 70 H 90 Q 100 70, 100 60 V 100 Q 100 90, 90 90 H 70 Q 60 90, 60 100 T 70 110 H 90 Q 100 110, 100 100 V 80 H 115 Q 130 85, 130 100 Q 130 130, 95 130 H 65 Q 30 130, 30 100 Q 30 85, 45 80 Q 30 75, 30 60 Q 30 30, 65 30" fill="#808080" stroke="#808080" strokeWidth="4" strokeLinejoin="round" />
       </symbol>
       <symbol id="cell-flag" viewBox="0 0 168 168">
         <use href="#cell-normal" />
