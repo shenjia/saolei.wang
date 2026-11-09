@@ -903,23 +903,25 @@ body #video_view .video_cell .playable {
 }
 
 /* ---- 触屏端 flop 入口弹出裁切修复（2026-11-09 张老师反馈手机端「入口显示不全」）----
-   行为保持与桌面一致：默认隐藏、hover/点按才在播放按钮下方出现。裁切根因：
-   触屏无 hover，点按钮的粘滞 hover 让气泡弹出时往下伸 ~32px，而 .video_cell
-   padding-bottom 仅 16px，超出 padding box（overflow 裁切边界）的部分被裁半；
-   且 ≤1188 .video_cell overflow-x:auto 连带 overflow-y 收敛，伸出部分还计入
-   scrollable overflow。修法：①触屏给盒底加预留（padding-bottom 16→44px），
-   气泡整个落在 padding 区内不再被裁；②隐藏态 display:none（visibility:hidden
-   的 absolute 盒仍占 scrollable overflow，display:none 才彻底不占，避免凭空
-   出竖向滚动）；③点按（粘滞 hover）时照常 absolute 弹出。桌面 hover 行为不变 */
+   行为保持与桌面一致：默认隐藏、hover/点按才在播放按钮下方出现。气泡是
+   浮动层（absolute），弹出时直接绘到盒外盖住下方内容，不给它预留盒内空间
+   （预留版 033e136 被张老师否掉：盒底留白偏大没必要）。裁切根因＝.video_cell
+   在 ≤1188 是横滑容器（overflow-x:auto 连带 overflow-y 收敛），浮动气泡伸出
+   盒底的部分被裁——手机端（≤768，#page zoom 体系保证棋盘恒适配视口、无横向
+   溢出需求）直接放开 overflow:visible 让气泡浮出；隐藏态仍 display:none
+   （visibility:hidden 的 absolute 盒仍占 scrollable overflow）。769~1188 平板
+   保持横滑（棋盘可能超宽），气泡在该段回落为盒内裁切（罕见场景不动） */
 @media (hover: none) and (pointer: coarse) {
-  body #page #video_view .video_cell {
-    padding-bottom: 44px; /* 原 16px + 气泡伸出 ~28px */
-  }
   #video_view .tip_host .tip_bubble {
     display: none; /* 隐藏态不占 scrollable overflow */
   }
   #video_view .tip_host:hover .tip_bubble {
     display: block; /* 点按（粘滞 hover）原位弹出 */
+  }
+}
+@media (hover: none) and (pointer: coarse) and (max-width: 768px) {
+  body #page #video_view .video_cell {
+    overflow: visible; /* 气泡浮出盒外盖住下方内容，不再裁切也不留白 */
   }
 }
 
