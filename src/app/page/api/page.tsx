@@ -58,16 +58,45 @@ const APIS: ApiDoc[] = [
   },
   {
     path: "/api/public/v1/me",
-    title: "登录态自检",
-    brief: "验证 Bearer token 并取回当前用户身份",
-    desc: "验证当前 Bearer token 并取回身份。后续将提供一系列要求登录态的用户侧 API，均按此方式鉴权。",
+    title: "登录态自检（个人资料）",
+    brief: "验证 Bearer token 并取回当前用户身份与公开资料",
+    desc: "验证当前 Bearer token 并取回当前用户身份：公开资料（中文名/英文名/性别/地区/头像 URL/军衔/最近登录时间）、三级别双体系最好成绩（time/3bvs 附达成录像 ID）、各级历史最高 STNB（附达成录像 ID）、全国排行名次。后续将提供一系列要求登录态的用户侧 API，均按此方式鉴权。",
     params: [],
     request: "GET /api/public/v1/me\n\nAuthorization: Bearer ut-xxxxxxxx…（login 返回的 token）",
     response: `{
-  "user": { "id": 1, "username": "your-username", "role": 0 }
+  "user": {
+    "id": 1,
+    "username": "your-username",
+    "role": 0,
+    "chineseName": "张砷镓",
+    "englishName": "Zhang Shen Jia",
+    "sex": 1,
+    "area": "陕西",
+    "avatarUrl": "https://saolei.wang/images/player/1.jpg",
+    "militaryTitle": "大元帅",
+    "lastLoginTime": 1794188128,
+    "rank": 3,
+    "scores": {
+      "beg": { "time": 980, "timeVideoId": 12345, "3bvs": 7289, "3bvsVideoId": 23456 },
+      "int": { "time": 10310, "timeVideoId": 12346, "3bvs": 5301, "3bvsVideoId": 23457 },
+      "exp": { "time": 37820, "timeVideoId": 12347, "3bvs": 4226, "3bvsVideoId": 23458 },
+      "sum": { "time": 49110, "3bvs": 16816 }
+    },
+    "scoresNf": { "beg": …, "int": …, "exp": …, "sum": … },
+    "stnb": {
+      "beg": { "stnb": 5.2, "videoId": 12345, "time": 980, "nf": false },
+      "int": { "stnb": 4.1, "videoId": 12346, "time": 10310, "nf": false },
+      "exp": null
+    },
+    "stnbNf": { "beg": …, "int": …, "exp": … }
+  }
 }`,
     notes: [
       "无效 / 过期 / 被吊销的 token 返回 401，应重新 login",
+      "militaryTitle 军衔与站内军衔徽章同口径（高级时间阈值评定）；rank 全国主榜名次（总时间升序），未上榜为 null",
+      "scores / scoresNf 与 user_info 接口完全同构（标准 / NF 体系，毫秒与 ×1000 值，sum 汇总无录像 ID）",
+      "stnb / stnbNf 各级历史最高 STNB（STNB 榜同源），该级无记录为 null；time 为该盘成绩（毫秒）",
+      "隐私字段（QQ / 邮箱 / 注册 IP / 登录 IP）一律不出",
     ],
   },
   {
