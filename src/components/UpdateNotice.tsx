@@ -2,7 +2,7 @@
 
 // 首页更新通告浮层（2026-11-06 张老师要求）：用户进首页弹出最近更新历史，
 // 同日五轮：未登录也弹（uid=0 传入）；「提交意见建议」发信需登录，
-// 未登录态改显登录提示。列表带细滚动条可下滚查看更多历史。「知道了」关闭浮层并把最新更新日期写入
+// 未登录态改显登录提示。列表带细滚动条可下滚查看更多历史。「我知道了」关闭浮层并把最新更新日期写入
 // localStorage（yyyymmdd 数值），此后仅当出现更大日期的新纪录才再次弹出；
 // 「提交意见建议」就地切换给站长（张砷镓 id:1）发站内信的面板，走 /api/message
 // send 通道（敏感词 / 维护模式 / 收件人校验与消息页同源）。
@@ -63,7 +63,7 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
     };
   }, [view]);
 
-  /** 「知道了」：把最新更新日期计入 localStorage 后关闭 */
+  /** 「我知道了」：把最新更新日期计入 localStorage 后关闭 */
   const onGotIt = useCallback(() => {
     try {
       const latest = Math.max(...updates.map((u) => dateNum(u.date)));
@@ -135,7 +135,7 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
             </div>
             <div className="btns">
               <button type="button" className="btn_primary" onClick={onGotIt}>
-                知道了
+                我知道了
               </button>
               <button
                 type="button"
@@ -176,7 +176,7 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
             <div className="btns">
               {sent || isGuest || isWebmaster ? (
                 <button type="button" className="btn_primary" onClick={onGotIt}>
-                  知道了
+                  我知道了
                 </button>
               ) : (
                 <button

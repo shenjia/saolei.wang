@@ -14773,8 +14773,10 @@ a.cheat_rep_link:hover {
    每条日期前的线上挂圆点；最新一条金点（元帅金描边 #e6db74），其余亮灰点暗灰描边。
    纵线挂 .un_timeline（内容层）不挂 .un_list（滚动层）——滚动层上 top/bottom
    定位只覆盖可视高，内容滚下去线就断了；挂在内容层则高度=内容总高，随滚动自然延伸。
-   坐标口径：timeline 左留 26px 槽；圆点 8px 挂 em::before（left:-18 → 圆心 x=12），
-   线宽 2 挂 timeline::before（left:11 → 圆心 x=12），两者同轴。 */
+   坐标口径：timeline 左留 26px 槽；线宽 2 挂 timeline::before（left:11 → 中心 x=12）；
+   圆点 8px 挂 .un_item::before（left:-18 → 圆心 x=12，与线同心叠在线上；
+   02:12 张老师指出圆点偏右——em 有 legacy 附加偏移（实测 +31px ≠ 假设 26px），
+   故圆点改挂 p（.un_item）自身盒，坐标不受 em 干扰） */
 .update_notice_modal .un_timeline {
   position: relative;
   padding-left: 26px;
@@ -14783,15 +14785,14 @@ a.cheat_rep_link:hover {
   content: "";
   position: absolute;
   left: 11px;
-  top: 10px;   /* 首条圆点圆心（首行 line-height 21 → 圆心 ~10.5） */
+  top: 10.5px; /* 首行圆点圆心（首行 line-height 21 → 圆心 10.5） */
   bottom: 12px;
   width: 2px;
   background: rgba(248, 248, 242, 0.14);
   border-radius: 1px;
 }
 /* 日期列：flex 两列布局——日期列固定 72px（「2026.12.31」粗体 13px ≈ 65px，
-   62px 会溢出折行），内容列 .un_txt 独立占余宽、折行不绕回日期下方。
-   align-items: flex-start 保 em 恒单行高，圆点 top:50% 恒锚定首行居中 */
+   62px 会溢出折行），内容列 .un_txt 独立占余宽、折行不绕回日期下方 */
 .update_notice_modal .un_item {
   display: flex;
   align-items: flex-start;
@@ -14799,27 +14800,30 @@ a.cheat_rep_link:hover {
 .update_notice_modal .un_item em {
   flex: 0 0 72px;
   margin-right: 10px;
-  position: relative;
 }
 .update_notice_modal .un_txt {
   flex: 1;
   min-width: 0;
 }
-.update_notice_modal .un_item em::before {
+/* 圆点：挂条目 p 自身盒（left:-18 → 圆心落在纵线 x=12 上，同心叠加）；
+   垂直按首行行高锚定 top:6.5px（21px 行高圆心 10.5 - 半径 4），折行条目不漂移 */
+.update_notice_modal .un_item::before {
   content: "";
   position: absolute;
   left: -18px;
-  top: 50%;
+  top: 6.5px;
   width: 8px;
   height: 8px;
-  margin-top: -4px;
   border-radius: 50%;
   background: #b9b9ad; /* 亮灰实心 */
   border: 1px solid #55544a; /* 暗灰描边 */
   box-sizing: border-box;
 }
+.update_notice_modal .un_item {
+  position: relative;
+}
 /* 最新一条：金色实心 + 元帅金描边（与军衔 marshal 档同色 #e6db74） */
-.update_notice_modal .un_item.un_latest em::before {
+.update_notice_modal .un_item.un_latest::before {
   background: #e6db74;
   border-color: #a89a3e;
 }
