@@ -58,7 +58,9 @@ export const config = {
     // 负向前瞻剔除系统/静态/豁免路径——API、WS、Next 资源、录像/上传/图片/样式/脚本
     // 静态树、旧站静态目标（小写）、验证页自身、账号与激活链路、爬虫文件。
     // 其余页面文档请求一律进 proxy 参与匿名闸判定（登录态/有通行证无感放行）。
-    "/((?!api/|ws/|_next/|videos/|uploads/|images/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|account|active|favicon\\.ico|robots\\.txt|sitemap).*)",
+    // 2026-11-09 补 icon.svg/apple-icon.png：metadata 图标也是 Next 路由（非 public 静态树），
+    // 漏豁免会被匿名闸 307 到验证页 → 页头 logo 裂图（匿名访客首访必现，登录/有通行证正常）。
+    "/((?!api/|ws/|_next/|videos/|uploads/|images/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|account|active|favicon\\.ico|icon\\.svg|apple-icon\\.png|robots\\.txt|sitemap).*)",
   ],
 };
 
