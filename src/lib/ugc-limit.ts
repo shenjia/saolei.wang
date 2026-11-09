@@ -6,7 +6,8 @@
 // 未上榜用户权限（2026-11-09 张老师定稿）：
 //   · 论坛主题：24h 内 1 个（写入行计数，被屏蔽/待审行也计入防删帖重发绕过）；
 //   · 论坛回复：只能回复「自己发布的主题」（不限次数——在自己帖子里答复楼层是正常互动）；
-//   · 录像评论：禁用（「新手评高手录像有何意义」）；
+//   · 录像评论：按级别解锁（2026-11-19 张老师改口径，原「未上榜全禁」废止）——
+//     上传过某级别录像（status<>0 有效件）才能评论该级别录像（checkCommentLevel）；
 //   · 私信：只能发给管理员，或回复「对方 7 天内先发来的」消息（isSystem=false，含评论/回复
 //     通知模板——新手被评论后可回复，构成正常对话回路）。
 // 已有闸门不变：前置词库 checkSensitive + AI 后审 runContentReview + 私信反群发三闸门。
@@ -62,6 +63,26 @@ export async function checkReplyOwnPost(userId: number, postId: number): Promise
   if (!post) return null; // 主题不存在走后续 createReply 的 404 通道，不在此拦截
   if (N(post.user) === userId) return null;
   return "未上榜用户只能回复自己发布的主题（上传任一级别成绩加入排行后不受限）";
+}
+
+/**
+ * 录像评论级别限制（2026-11-09 张老师要求）：上传过该级别录像（status<>0，待审 10/
+ * 通过 20 均算，屏蔽 0 不算）才能评论该级别录像——评高级先打高级，评初级先打初级。
+ * 对全体用户生效（不限未上榜）；管理员/信任用户豁免。返回 null=放行，否则拒绝文案。
+ */
+export async function checkCommentLevel(
+  userId: number,
+  role: number | undefined,
+  level: string
+): Promise<string | null> {
+  if (role !== undefined && isManager(role)) return null;
+  const u = await prisma.user.findUnique({ where: { id: BigInt(userId) }, select: { trusted: true } });
+  if (u?.trusted) return null;
+  const uploaded = await prisma.video.count({
+    where: { user: BigInt(userId), level, status: { not: 0 } },
+  });
+  if (uploaded > 0) return null;
+  return "上传过该级别录像后才能评论该级别录像";
 }
 
 /**

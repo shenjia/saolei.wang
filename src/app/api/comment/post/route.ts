@@ -8,7 +8,7 @@ import { COMMENT_CONTENT_LIMIT } from "@/lib/config";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { runContentReview } from "@/lib/content-review";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
-import { ugcRestricted } from "@/lib/ugc-limit";
+import { checkCommentLevel } from "@/lib/ugc-limit";
 
 export async function POST(req: Request) {
   if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
@@ -35,10 +35,6 @@ export async function POST(req: Request) {
   if ([...content].length > COMMENT_CONTENT_LIMIT) {
     return NextResponse.json({ error: `评论不能超过${COMMENT_CONTENT_LIMIT}个字` }, { status: 400 });
   }
-  // 未上榜限制（2026-11-09 张老师要求）：未上榜用户禁评录像，管理员/信任用户豁免
-  if (await ugcRestricted(session.uid, session.role)) {
-    return NextResponse.json({ error: "上传任一级别成绩加入排行后才能评论录像" }, { status: 403 });
-  }
   // 敏感词过滤（2026-10-13 张老师需求）：命中直接拒绝，不落库、不发动态
   const hit = checkSensitive(content);
   if (!hit.ok) {
@@ -46,9 +42,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: sensitiveRejectMessage(hit) }, { status: 400 });
   }
 
-  const video = await prisma.video.findUnique({ where: { id: BigInt(videoId) }, select: { id: true } });
+  const video = await prisma.video.findUnique({ where: { id: BigInt(videoId) }, select: { id: true, level: true } });
   if (!video) {
     return NextResponse.json({ error: "录像不存在" }, { status: 404 });
+  }
+  // 评论级别限制（2026-11-09 张老师要求）：上传过该级别录像才能评论该级别录像，管理员/信任用户豁免
+  const levelErr = await checkCommentLevel(session.uid, session.role, video.level);
+  if (levelErr) {
+    return NextResponse.json({ error: levelErr }, { status: 403 });
   }
 
   const commentId = await addComment(videoId, session.uid, content);
