@@ -25,6 +25,10 @@
 // 四轮反馈修正：文案「上传录像」→「录像」，前置黑色上传图标（currentColor 随字色 #333）。
 // 移动端置顶大按钮不参与（仍由 #play_entry_top 全宽接管，上传走顶栏菜单）。
 
+// 2026-11-09 张老师要求：管理员审核提醒升级「一键过 / 需手审」双按钮（ReviewEntry 客户端组件，
+// 计数按分拣池 getPoolCounts 拆分）——免核定池（绿钮）在首页就地批量过审不必进后台，
+// 需核定池（玫瑰红钮）仍进后台逐条手审；一键过完成后气泡提示 + 板块按剩余手审数更新/消失。
+
 import Link from "next/link";
 import {
   getHomeNews,
@@ -34,11 +38,12 @@ import {
   getHotVideos,
   getNewbies,
 } from "@/lib/queries";
+import { getPoolCounts } from "@/lib/admin/data";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EmailBindNotice } from "@/components/EmailBindNotice";
 import { UpdateNotice } from "@/components/UpdateNotice";
-import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, VIDEO_STATUS, isManager } from "@/lib/config";
+import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, isManager } from "@/lib/config";
 import { TIME_NEVER, isRecent } from "@/lib/format";
 import { RelTime } from "@/components/RelTime";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
@@ -51,6 +56,7 @@ import { SiteStats } from "@/components/SiteStats";
 import { FlopSprites } from "@/components/FlopSprites";
 import { VideoHot } from "@/components/VideoHot";
 import { PracticeToday } from "@/components/PracticeToday";
+import { ReviewEntry } from "@/components/ReviewEntry";
 import { getPracticeToday, getRankedToday } from "@/lib/practice";
 import { getSiteUpdates } from "@/lib/site-updates";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
@@ -105,14 +111,12 @@ export default async function HomePage() {
     classic: n.authorTitles?.c ?? null,
   }));
 
-  // 待审录像数（2026-10-22 张老师要求）：仅管理员登录态查一次，
-  // 侧栏「开始练习」按钮下方显示「N 部录像待审核」+「去审核」直达 /admin/review
-  let pendingReview = 0;
-  if (session && isManager(session.role)) {
-    pendingReview = await prisma.video.count({
-      where: { status: VIDEO_STATUS.NORMAL },
-    });
-  }
+  // 待审录像分池计数（2026-10-22 张老师要求：仅管理员登录态查一次；
+  // 2026-11-09 张老师要求拆免核定/需核定双池——免核定可首页一键过，见 ReviewEntry）
+  const poolCounts =
+    session && isManager(session.role)
+      ? await getPoolCounts()
+      : { exempt: 0, need: 0 };
 
   // 今日练习（2026-10-22 张老师要求）：「开始练习」上方板块，
   // 口径与后台仪表盘「今日练习」KPI 一致；未登录 mine=0 只显示全站口径。
@@ -159,16 +163,10 @@ export default async function HomePage() {
           trendMine={practice.mineTrend}
           logged={!!session}
         />
-        {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方 */}
-        {pendingReview > 0 && (
-          <div id="review_entry_top">
-            <span className="n">
-              <b>{pendingReview}</b> 部录像待审核
-            </span>
-            <Link className="go" href="/admin/review">
-              去审核
-            </Link>
-          </div>
+        {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方。
+            2026-11-09 升级一键过/需手审双按钮，桌面与移动同组件两处挂载 */}
+        {poolCounts.exempt + poolCounts.need > 0 && (
+          <ReviewEntry mobile exempt={poolCounts.exempt} need={poolCounts.need} />
         )}
         <div id="news" className="box">
           <NewsFeed
@@ -237,17 +235,10 @@ export default async function HomePage() {
           trendMine={practice.mineTrend}
           logged={!!session}
         />
-        {/* 管理员待审提示行（2026-10-22 张老师要求）：待审录像数金色 +
-            「去审核」小按钮直达后台审核页；仅待审>0 时渲染 */}
-        {pendingReview > 0 && (
-          <div id="review_entry">
-            <span className="n">
-              <b>{pendingReview}</b> 部录像待审核
-            </span>
-            <Link className="go" href="/admin/review">
-              去审核
-            </Link>
-          </div>
+        {/* 管理员待审提示行（2026-10-22 张老师要求）：2026-11-09 升级一键过/需手审双按钮
+            （计数金色 + 绿钮免核定池就地批量过审 + 玫瑰红钮直达后台需核定池） */}
+        {poolCounts.exempt + poolCounts.need > 0 && (
+          <ReviewEntry exempt={poolCounts.exempt} need={poolCounts.need} />
         )}
         {/* 每日一星（2026-10-25 恢复）：评选在 getTodayStar 内完成（无今日行才选），
             首页首访即触发的旧模式不复活——右栏展示于入伍新兵之上 */}

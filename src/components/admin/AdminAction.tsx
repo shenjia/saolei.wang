@@ -18,6 +18,8 @@ import { confirmDialog } from "@/components/Confirm";
 export interface OpResponse {
   ok: boolean;
   message?: string;
+  /** 批量类操作的实际成功条数（2026-11-09 首页一键过气泡用） */
+  done?: number;
   error?: string;
 }
 

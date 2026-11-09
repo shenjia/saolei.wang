@@ -33,7 +33,7 @@ import type { AdminLevel } from "./guard";
 
 // logDetail：落 admin_log 的说明与回显 message 不同时给（如签发 key / 重置密码——
 // 日志页管理员（role≥10）可见，明文凭据只能出现在签发/操作人的响应里，不进日志）
-export type OpResult = { ok: true; message: string; logDetail?: string } | { ok: false; error: string };
+export type OpResult = { ok: true; message: string; logDetail?: string; done?: number } | { ok: false; error: string };
 
 /** 每个 op 的最低权限要求 */
 export const OP_LEVELS: Record<string, AdminLevel> = {
@@ -1026,6 +1026,8 @@ async function dispatch(
       }
       return {
         ok: true,
+        // 实际成功条数（2026-11-09 首页一键过用：部分失败时气泡不虚报）
+        done,
         message: `批量${statusName(status)} ${done}/${targetIds.length} 条${errors.length ? `（${errors.length} 条失败）` : ""}${trustNote}`,
       };
     }

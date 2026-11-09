@@ -11789,6 +11789,59 @@ html.op-fakefs #header {
     display: none;
   }
 }
+/* 双按钮形态（2026-11-09 张老师要求）：审核提醒从单「去审核」升级为
+   「一键过」（免核定池，绿）+「需手审」（需核定池，玫瑰红）两钮。
+   变体选择器两 id 并置，元素本体各自由上方桌面/媒体查询规则显隐。
+   绿色用站内绿（#play_row hover 同款渐变），玫瑰红为本次新增色。
+   一键过是 <button>（需显式继承字体；Link 版天然继承），处理中禁用态压暗。 */
+#review_entry button.go,
+#review_entry_top button.go {
+  font-family: inherit;
+  cursor: pointer;
+}
+#review_entry .go--ok,
+#review_entry_top .go--ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #6da116 linear-gradient(to bottom, #8ac21b, #6da116);
+  border-color: #c4e88a #55801a #55801a #c4e88a;
+  color: #fff;
+}
+#review_entry .go--ok:hover,
+#review_entry_top .go--ok:hover {
+  color: #fff;
+  border-color: #c4e88a #55801a #55801a #c4e88a;
+  filter: brightness(1.06);
+}
+#review_entry .go--ok:disabled,
+#review_entry_top .go--ok:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+#review_entry .go--need,
+#review_entry_top .go--need {
+  background: #c73a62 linear-gradient(to bottom, #e0567e, #c73a62);
+  border-color: #f394b3 #a02548 #a02548 #f394b3;
+  color: #fff;
+}
+#review_entry .go--need:hover,
+#review_entry_top .go--need:hover {
+  color: #fff;
+  border-color: #f394b3 #a02548 #a02548 #f394b3;
+  filter: brightness(1.06);
+}
+/* 钮内转圈（复用 toast_spin 关键帧；白环配实底钮） */
+#review_entry .rv_spin,
+#review_entry_top .rv_spin {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: toast_spin 0.72s linear infinite;
+}
 @media (max-width: 880px) {
   /* 移动端侧栏盒子解除固定宽，按钮同步铺满 */
   #play_entry {
