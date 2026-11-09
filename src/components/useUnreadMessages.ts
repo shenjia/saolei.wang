@@ -12,6 +12,10 @@
 //   · 降级链：SSE 断开（readyState CLOSED）→ 30s 轮询（与旧版同频）；浏览器无
 //     Web Locks（Safari <16.4）→ 直接 30s 轮询（与旧版完全一致，不劣化）；
 //   · 未登录（401）：全部停止（旧版会永远每 30s 打一发 401，纯浪费）；
+//   · 未登录不发请求（2026-11-10）：enabled=false（如 MobileNav 传 user!==null）时
+//     挂载即全停——不连 SSE、不轮询、不发任何 /api/message*（此前未登录访客
+//     每次整页加载也白打 2 发 401：leader SSE 握手 + 降级轮询各一；攻击期间
+//     401 量被放大至 6.2 万/日）；
 //   · 预热（2026-11-04 张老师要求）：有未读时 router.prefetch("/message") 拉取整页 RSC
 //     ——/message 是 force-dynamic 且无 loading.js，Link auto 预取拿不到页面数据，
 //     手动 prefetch 的产物走 staleTimes.static 5 分钟客户端缓存，点角标秒开；
@@ -43,11 +47,16 @@ const STALE_MS = 130_000; // 广播停滞阈值（> 心跳间隔 + 余量才兜�
 const WARM_GAP_MS = 3 * 60_000;
 let lastWarmAt = 0;
 
-export function useUnreadMessages(shouldPoll: () => boolean): number {
+/** 未登录/无需角标时传 false：不发任何请求（见文件头注释 2026-11-10 条目） */
+export function useUnreadMessages(
+  shouldPoll: () => boolean,
+  enabled: boolean = true,
+): number {
   const [unread, setUnread] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
+    if (!enabled) return; // 未登录：不连 SSE、不轮询、不发任何 /api/message*
     const locks = navigator.locks;
     const chan = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CHANNEL_NAME) : null;
     let stopped = false;

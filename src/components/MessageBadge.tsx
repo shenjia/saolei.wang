@@ -9,7 +9,8 @@ import { BubbleIcon } from "./SendMessageButton";
 import { pollWhenDesktop, useUnreadMessages } from "./useUnreadMessages";
 
 export function MessageBadge() {
-  const unread = useUnreadMessages(pollWhenDesktop);
+  // 挂载点在 layout 的 {session ? ...} 内，未登录不渲染；true 显式化保持签名一致
+  const unread = useUnreadMessages(pollWhenDesktop, true);
 
   return (
     <Link href="/message" className="msg_icon_btn" aria-label="消息" title="消息">

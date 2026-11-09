@@ -61,8 +61,9 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
   const [userOpen, setUserOpen] = useState(false);
   const siteRef = useOutsideClose(() => setSiteOpen(false));
   const userRef = useOutsideClose(() => setUserOpen(false));
-  // 未读消息角标：与桌面 MessageBadge 共享轮询（移动端只在 ≤768px 轮询）
-  const unread = useUnreadMessages(pollWhenMobile);
+  // 未读消息角标：与桌面 MessageBadge 共享轮询（移动端只在 ≤768px 轮询）。
+  // 未登录不发任何 /api/message* 请求（2026-11-10：此前未登录也挂载即连 SSE 白打 401）
+  const unread = useUnreadMessages(pollWhenMobile, user !== null);
   // 路由切换后收起菜单：渲染期对比上次 pathname（软导航即视为已离开菜单，
   // 不用 useEffect——项目 react-hooks/set-state-in-effect 规则禁止 effect 内同步 setState）
   const pathname = usePathname();
