@@ -54,13 +54,15 @@ function unionSql(): string {
          GROUP BY r.user
          UNION ALL
          SELECT w.user_id uid, 0 cb, 0 ci, 0 ce, 0 cc, 0 pts, 0 vs, COUNT(*) lp, 0 wp
-         FROM user_daily_visit w JOIN user u ON u.id = w.user_id AND u.status = 0
+         FROM user_daily_visit w FORCE INDEX (user_daily_visit_day_user_id_idx)
+         JOIN user u ON u.id = w.user_id AND u.status = 0
          WHERE w.day >= ?
          GROUP BY w.user_id
          UNION ALL
          SELECT t.user_id uid, 0 cb, 0 ci, 0 ce, 0 cc, 0 pts, 0 vs, 0 lp,
                 ROUND(SUM(t.watch_ms) / 60000) wp
-         FROM user_watch_daily t JOIN user u ON u.id = t.user_id AND u.status = 0
+         FROM user_watch_daily t FORCE INDEX (user_watch_daily_day_user_id_watch_ms_idx)
+         JOIN user u ON u.id = t.user_id AND u.status = 0
          WHERE t.day >= ?
          GROUP BY t.user_id
        ) g

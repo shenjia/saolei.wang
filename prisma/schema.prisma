@@ -1164,7 +1164,9 @@ model UserDailyVisit {
   updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近访问 Unix 秒
 
   @@id([userId, day])
-  @@index([day])
+  // 覆盖索引（2026-11-10 张老师要求：别扫全表）：快照聚合 WHERE day>=? COUNT(*) 直接
+  // 数索引叶子（叶子含 PK 列 userId），零回表
+  @@index([day, userId])
   @@map("user_daily_visit")
 }
 
@@ -1182,7 +1184,10 @@ model UserWatchDaily {
   updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近上报 Unix 秒
 
   @@id([userId, day, videoId])
-  @@index([day])
+  // 覆盖索引（2026-11-10 张老师要求：别扫全表）：快照聚合 WHERE day>=? GROUP BY user_id
+  // + SUM(watch_ms) 全部走本索引叶子（InnoDB 叶子含 PK 列），零回表；历史增长后
+  // 7 日窗口恒为索引区间扫，不随表体积线性变慢
+  @@index([day, userId, watchMs])
   @@map("user_watch_daily")
 }
 
