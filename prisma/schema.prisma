@@ -97,7 +97,8 @@ model UserAuth {
   emailToken    String?  @unique @db.Char(32) @map("email_token")
 
   // 2026-11-09：绑定验证成功换名时保留原登录名（首次绑定时的 username，重绑不覆盖）。
-  // 登录时 username 查不到则按 old_username 兜底——「很多人绑定邮箱后用旧名登录不上」的修复。
+  // 登录时 username 查不到按 old_username 识别并黄色提示引导用邮箱登录（不放行——
+  // 旧站被爆过库，旧凭据不可信）——「很多人绑定邮箱后用旧名登录不上」的修复。
   oldUsername String? @map("old_username") @db.Char(64)
 
   @@index([oldUsername])

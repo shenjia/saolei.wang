@@ -68,6 +68,8 @@ export default function LoginPanel({
   const [password, setPassword] = useState("");
   const username = draftUser ?? savedUser;
   const [error, setError] = useState(initialError ? (ERROR_TEXT[initialError] ?? "登录失败，请重试") : "");
+  // 黄色引导提示（2026-11-09）：旧登录名已换成绑定邮箱等「非失败性引导」，与红色错误分开
+  const [hint, setHint] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   // 密码框 ref：已保存用户名时挂载后把焦点从用户名框（autoFocus）接到密码框
@@ -88,6 +90,7 @@ export default function LoginPanel({
   async function submitPassword(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setHint("");
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -97,7 +100,12 @@ export default function LoginPanel({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "登录失败");
+        if (data.hint === "oldUsername") {
+          // 绑定过邮箱：黄色提示引导用邮箱登录（不放行）
+          setHint(data.error ?? "");
+        } else {
+          setError(data.error ?? "登录失败");
+        }
         return;
       }
       // 登录成功：居中绿色气泡（浮窗/独立页/绑定跳转三种去向都提示）
@@ -152,6 +160,12 @@ export default function LoginPanel({
             ref={passRef}
           />
         </div>
+        {hint && (
+          <p className="lp_hint">
+            <i>!</i>
+            {hint}
+          </p>
+        )}
         {error && (
           <p className="lp_error">
             <i>!</i>

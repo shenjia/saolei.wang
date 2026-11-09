@@ -377,6 +377,29 @@ body .tabs > a:hover::after {
   line-height: 14px;
   flex: 0 0 auto;
 }
+/* 黄色引导提示（2026-11-09）：绑定过邮箱的用户拿旧登录名登录——非失败性引导，
+   结构与 .lp_error 同款仅换色（黄=登录按钮主色，与红错误区分） */
+#account_login .lp_hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #ffd23e;
+}
+#account_login .lp_hint i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffd23e;
+  color: #272822;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+  line-height: 14px;
+  flex: 0 0 auto;
+}
 #account_login .lp_submit {
   box-sizing: border-box;
   /* flex 居中 + line-height:1：断掉 legacy 给 button 的 line-height（实测算出 30px，
