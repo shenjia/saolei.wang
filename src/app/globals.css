@@ -2576,6 +2576,15 @@ del[data-tip]:hover::after {
   display: none;
 }
 
+/* ---------- 个人发挥主栏副本（2026-11-09 张老师需求） ----------
+   ≤880 时侧栏整组隐藏，个人发挥此前彻底消失；照 radar_main 模式挂主栏副本
+   （page.tsx .radar_perf_row 内，桌面隐藏），≤880 与录像评级雷达并排一行。
+   盒内样式（vr_h/vr_line/perf_row/perf_bar/perf_pct/perf_tip）作用域
+   #page #video_view .perf.box 全套自动复用，副本只管显隐与并排形态。 */
+#page #video_view .perf_main {
+  display: none;
+}
+
 .reply_form textarea,
 .post_form textarea,
 .send_form textarea,
@@ -6197,6 +6206,25 @@ body #page.two_columns li.main {
   }
   body #page.two_columns #video_view > li.main .radar_main .vr_wrap {
     margin: -12px auto;
+  }
+
+  /* ⑤++ 录像评级 + 个人发挥并排（2026-11-09 张老师需求）：此前主栏评级雷达独占
+     一整行显空。.radar_perf_row 包两份主栏副本（.radar_main / .perf_main），≤880
+     转 flex 并排；桌面该行两子盒都 display:none，包裹层自身无样式不渲染任何东西。
+     两盒各自 flex:1：雷达盒 min-width:auto 顶到雷达图 234 出血盒的自然宽，
+     个人发挥吃剩余宽度；只渲染一份时另一份缺席自然独占整行（等价旧行为）。
+     盒间不留 gap——.box 自带 margin:16px 8px，两盒相邻共 16px 已够。 */
+  body #page.two_columns #video_view > li.main .radar_perf_row {
+    display: flex;
+    align-items: stretch;
+  }
+  body #page.two_columns #video_view > li.main .radar_perf_row .radar_main,
+  body #page.two_columns #video_view > li.main .radar_perf_row .perf_main {
+    flex: 1 1 0;
+    width: auto;
+  }
+  body #page.two_columns #video_view > li.main .radar_perf_row .perf_main {
+    display: block;
   }
 
   /* ⑥ 论坛主题页侧栏低宽度隐藏（2026-10-13 张老师要求）：单列带内不再显示楼主的

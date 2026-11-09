@@ -192,6 +192,43 @@ export default async function VideoViewPage({
   // 气泡「个人最佳」文案（2026-11-08 张老师定）：带上当前录像级别，
   // 如「个人初级最佳纪录」；NF 紧跟级别，如「个人高级NF最佳纪录」。
   const perfBestLabel = `个人${LEVEL_NAMES[level] ?? level}${video.noflag ? "NF" : ""}最佳纪录`;
+  // 个人发挥盒内层（2026-11-09 张老师需求：与 radarInner 同模式抽成常量，侧栏原件 +
+  // 主栏副本 .perf_main 两处渲染，≤880 主栏副本与录像评级雷达并排一行）
+  const perfBody = perfRows.length > 0 ? (
+    <>
+      {/* 标题无问号（2026-11-05 张老师定：疑义不多） */}
+      <h2 className="vr_h">
+        <span className="vr_h_left">个人发挥</span>
+      </h2>
+      <div className="vr_line" />
+      {perfRows.map((r) => {
+        const pct = Math.round(r.ratio * 1000) / 10;
+        // 置灰行（划线成绩）不按比例：条固定填满，右侧比例换「无效」（2026-11-05 张老师定）
+        const width = r.off ? 100 : Math.min(100, Math.max(0, pct));
+        // 100% 行：进度条右侧的百分比换成金 PB 标签（2026-11-05 张老师需求，
+        // 样式复刻排行模式数据面板 .pb_badge）；口径与百分比显示一致
+        // （99.95–100.05 视作 100，见 perfPct）；置灰行不发牌。
+        // 2026-11-07 张老师补充：超过 100%（打破个人最佳）同样发 PB——
+        // ratio ≥ 1 或落进 100 显示带（浮点容差）都算
+        const pb = !r.off && (r.ratio >= 1 || perfPct(r.ratio) === "100.0");
+        return (
+          <div className={`perf_row${r.off ? " off" : ""}`} key={r.key}>
+            <span className="perf_label">{r.key}</span>
+            <span className="perf_bar">
+              <em style={{ width: `${width}%` }} />
+            </span>
+            <span className="perf_pct">
+              {pb ? <i className="pb_badge">PB</i> : r.off ? "无效" : `${perfPct(r.ratio)}%`}
+            </span>
+            <span className="perf_tip">
+              {r.key} = {r.off ? <s className="perf_tip_cur">{r.cur}</s> : r.cur}
+              <b>{perfBestLabel} {r.best}</b>
+            </span>
+          </div>
+        );
+      })}
+    </>
+  ) : null;
   // 录像评级盒内容（2026-11-01 张老师需求：≤880 单列带侧栏整组 display:none，
   // 评级雷达改在录像主体板块下面显示——与用户主页「实力」雷达换位同模式：
   // 主栏副本 .radar_main 桌面 display:none，侧栏原件 ≥881 照旧；同一 JSX 两处渲染，
@@ -387,9 +424,14 @@ export default async function VideoViewPage({
         </div>
         {/* 2026-11-01 张老师需求：≤880 单列带把侧栏整组隐藏（评级雷达连带消失），
             主栏这份副本在录像主体板块下、评论区上亮起（桌面 display:none，
-            globals.css #video_view .radar_main 组；同一 radarInner 两处渲染） */}
-        {radarInner && (
-          <div className="radar box radar_main">{radarInner}</div>
+            globals.css #video_view .radar_main 组；同一 radarInner 两处渲染）。
+            2026-11-09 张老师需求：≤880 时「个人发挥」也照 radar_main 模式挂主栏
+            副本 .perf_main，与「录像评级」并排一行（桌面两份副本都 display:none） */}
+        {(radarInner || perfBody) && (
+          <div className="radar_perf_row">
+            {radarInner && <div className="radar box radar_main">{radarInner}</div>}
+            {perfBody && <div className="perf box perf_main">{perfBody}</div>}
+          </div>
         )}
         {/* 2026-10-22：评论区收拢为客户端壳——发表后就地插入列表头（张老师要求：
             评论发出后立刻可见，不管有没有过审；本人待审行查询层按登录态放行）
@@ -418,42 +460,8 @@ export default async function VideoViewPage({
             个人最好成绩之比（Time 反比最好/本局，3BV/s、STNB 正比本局/最好）。
             行 hover 出气泡「xx = 当前值 个人最佳(NF)纪录 y」（后者元帅金 #e6db74）；
             被划线成绩（运气盘 / 3BV 低于限界）进度条置灰。仅桌面右栏（≤880 侧栏
-            整组隐藏，如需移动端副本照 radar_main 模式另行挂） */}
-        {perfRows.length > 0 && (
-          <div className="perf box">
-            {/* 标题无问号（2026-11-05 张老师定：疑义不多） */}
-            <h2 className="vr_h">
-              <span className="vr_h_left">个人发挥</span>
-            </h2>
-            <div className="vr_line" />
-            {perfRows.map((r) => {
-              const pct = Math.round(r.ratio * 1000) / 10;
-              // 置灰行（划线成绩）不按比例：条固定填满，右侧比例换「无效」（2026-11-05 张老师定）
-              const width = r.off ? 100 : Math.min(100, Math.max(0, pct));
-              // 100% 行：进度条右侧的百分比换成金 PB 标签（2026-11-05 张老师需求，
-              // 样式复刻排行模式数据面板 .pb_badge）；口径与百分比显示一致
-              // （99.95–100.05 视作 100，见 perfPct）；置灰行不发牌。
-              // 2026-11-07 张老师补充：超过 100%（打破个人最佳）同样发 PB——
-              // ratio ≥ 1 或落进 100 显示带（浮点容差）都算
-              const pb = !r.off && (r.ratio >= 1 || perfPct(r.ratio) === "100.0");
-              return (
-                <div className={`perf_row${r.off ? " off" : ""}`} key={r.key}>
-                  <span className="perf_label">{r.key}</span>
-                  <span className="perf_bar">
-                    <em style={{ width: `${width}%` }} />
-                  </span>
-                  <span className="perf_pct">
-                    {pb ? <i className="pb_badge">PB</i> : r.off ? "无效" : `${perfPct(r.ratio)}%`}
-                  </span>
-                  <span className="perf_tip">
-                    {r.key} = {r.off ? <s className="perf_tip_cur">{r.cur}</s> : r.cur}
-                    <b>{perfBestLabel} {r.best}</b>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+            整组隐藏，移动端由主栏副本 .perf_main 与录像评级并排补位） */}
+        {perfBody && <div className="perf box">{perfBody}</div>}
       </li>
     </ul>
     </div>
