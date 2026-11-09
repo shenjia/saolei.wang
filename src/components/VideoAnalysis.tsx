@@ -211,24 +211,22 @@ export function VideoAnalysisRadar({
                   filter: active ? "drop-shadow(0 0 4px #66d9ef)" : undefined,
                 }}
               />
-              <text
-                x={lx + ox}
-                y={ly - 3 + oy}
-                textAnchor="middle"
-                style={{
-                  // ⚠️ 不用 fill-box+center（2026-11-09 手机端标签飞出板块，与 RadarChart.tsx 同根源）：
-                  // WebKit(iOS Safari) 对 SVG text 的 fill-box 参照框 origin 解析有 bug，
-                  // scale(1.25) 激活时标签飞出雷达圈外。改 view-box + 显式锚点 origin，全引擎一致
-                  transformBox: "view-box",
-                  transformOrigin: `${lx + ox}px ${ly + oy}px`,
-                  transform: active ? "scale(1.25)" : "none",
-                  transition: "transform .15s ease",
-                }}
-              >
-                <tspan fill={gradeColor(d.grade)} fontSize={LABEL_GRADE_FS} fontWeight="bold">
+              {/* ⚠️ 同 RadarChart.tsx：SVG text 放大禁用一切 CSS transform（真机 iOS Safari
+                  必位移），终版用 font-size 缩放，textAnchor=middle 水平恒居中 */}
+              <text x={lx + ox} y={ly - 3 + oy} textAnchor="middle">
+                <tspan
+                  fill={gradeColor(d.grade)}
+                  fontWeight="bold"
+                  style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS, transition: "font-size .15s ease" }}
+                >
                   {d.grade}
                 </tspan>
-                <tspan x={lx + ox} dy={LABEL_NAME_DY} fill={active ? "#a6e22e" : "#8a8878"} fontSize={LABEL_NAME_FS}>
+                <tspan
+                  x={lx + ox}
+                  dy={LABEL_NAME_DY}
+                  fill={active ? "#a6e22e" : "#8a8878"}
+                  style={{ fontSize: active ? LABEL_NAME_FS * 1.25 : LABEL_NAME_FS, transition: "font-size .15s ease" }}
+                >
                   {d.name}
                 </tspan>
               </text>

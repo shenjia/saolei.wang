@@ -138,25 +138,24 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
                 filter: active ? `drop-shadow(0 0 4px ${accent})` : undefined,
               }}
             />
-            <text
-              x={lx}
-              y={ly - 3}
-              textAnchor="middle"
-              style={{
-                // ⚠️ 不用 fill-box+center（2026-11-09 张老师反馈手机端标签飞出板块）：
-                // WebKit(iOS Safari) 对 SVG text 的 fill-box 参照框 origin 解析有 bug，
-                // scale(1.25) 激活时标签飞出雷达圈外（气泡按标签锚点定位、跟着一起飞）。
-                // 改 view-box + 显式锚点 origin，全引擎一致；origin 取 (lx, ly)≈两行块视觉中心
-                transformBox: "view-box",
-                transformOrigin: `${lx}px ${ly}px`,
-                transform: active ? "scale(1.25)" : "none",
-                transition: "transform .15s ease",
-              }}
-            >
-              <tspan fill={gradeColor(d.grade)} fontSize={LABEL_GRADE_FS} fontWeight="bold">
+            {/* ⚠️ SVG text 放大禁用一切 CSS transform（2026-11-09 两轮真机实证）：
+                fill-box+center、view-box+显式 origin 在真机 iOS Safari 下激活放大都会位移
+                （无头 WebKit 复现不了真机 paint 层差异）。终版方案：font-size 缩放——
+                布局驱动，与 transform-origin/zoom 全解耦，textAnchor=middle 水平恒居中 */}
+            <text x={lx} y={ly - 3} textAnchor="middle">
+              <tspan
+                fill={gradeColor(d.grade)}
+                fontWeight="bold"
+                style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS, transition: "font-size .15s ease" }}
+              >
                 {d.grade}
               </tspan>
-              <tspan x={lx} dy={LABEL_NAME_DY} fill={active ? "#a6e22e" : "#8a8878"} fontSize={LABEL_NAME_FS}>
+              <tspan
+                x={lx}
+                dy={LABEL_NAME_DY}
+                fill={active ? "#a6e22e" : "#8a8878"}
+                style={{ fontSize: active ? LABEL_NAME_FS * 1.25 : LABEL_NAME_FS, transition: "font-size .15s ease" }}
+              >
                 {d.name}
               </tspan>
             </text>
