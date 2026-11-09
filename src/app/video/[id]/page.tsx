@@ -267,6 +267,7 @@ export default async function VideoViewPage({
       filepath={video.filepath}
       fileVer={video.fileVer}
       realTimeMs={video.realTime}
+      videoId={video.id}
       radarPoints={analysis?.points}
       radarOverall={analysis?.overall}
       radarDists={analysis?.dists}

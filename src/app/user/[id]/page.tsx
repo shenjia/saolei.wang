@@ -208,8 +208,9 @@ export default async function UserViewPage({
     getUserTodayVideos(userId),
     // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
     getUserActivity(userId),
-    // 活跃指数（2026-11-08 张老师要求）：近 7 日活跃值（练习点数＋录像加权＋评论×1，
+    // 活跃指数（2026-11-08 张老师要求）：近 7 日活跃值（练习点数＋录像加权＋评论×1＋登录点，
     // 发表文章不计——避免灌水），「发表评论」行下新增；口径见 lib/queries.ts
+    // 2026-11-10 登录点并入：每日访问记 1 点（user_daily_visit 打卡，每日唯一键去重）
     getUserActivityIndex(userId),
     // 练习完成盘数 + 今日完成（2026-11-02 张老师要求，统计盒「录像总数」下新增一行；
     // 2026-11-06 改按完成口径——尝试可以刷，完成需要付出努力）
@@ -635,12 +636,13 @@ export default async function UserViewPage({
                   <em>{activity.comments}</em>
                 </StatRow>
                 {/* 2026-11-08 张老师要求：发表评论下新增「活跃指数」——近 7 日活跃值合计
-                    （练习 3BV 计点＋录像级别加权＋评论×1；发表文章不计——避免灌水），
-                    hover 显示构成明细；读每分钟重算的活跃快照（user_activity_snapshot），无「今日增量」列 */}
+                    （练习 3BV 计点＋录像级别加权＋评论×1＋登录点；发表文章不计——避免灌水），
+                    hover 显示构成明细；读每分钟重算的活跃快照（user_activity_snapshot），无「今日增量」列。
+                    2026-11-10 登录点并入：每日访问雷网记 1 点（user_daily_visit 打卡） */}
                 <StatRow label="活跃指数">
                   <em
                     className="green"
-                    title={`近7日：练习 ${actIndex.practice} ＋ 录像 ${actIndex.videos} ＋ 评论 ${actIndex.comments}×1`}
+                    title={`近7日：练习 ${actIndex.practice} ＋ 录像 ${actIndex.videos} ＋ 评论 ${actIndex.comments}×1 ＋ 登录 ${actIndex.login}×1 ＋ 观看 ${actIndex.watch}×1`}
                   >
                     {actIndex.total}
                   </em>

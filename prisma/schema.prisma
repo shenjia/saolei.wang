@@ -14,37 +14,37 @@ datasource db {
 // ---------- 用户 ----------
 
 model User {
-  id          BigInt  @id @default(autoincrement()) @db.BigInt
-  chineseName String  @map("chinese_name") @db.VarChar(12)
-  englishName String  @map("english_name") @db.Char(32)
-  sex         Int     @default(1) @db.TinyInt
-  avatar      String  @default("") @db.Char(255)
-  area        String  @default("") @db.VarChar(12)
-  status      Int     @default(0) @db.SmallInt
-  createTime  BigInt  @default(0) @map("create_time") @db.BigInt
-  updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
+  id            BigInt  @id @default(autoincrement()) @db.BigInt
+  chineseName   String  @map("chinese_name") @db.VarChar(12)
+  englishName   String  @map("english_name") @db.Char(32)
+  sex           Int     @default(1) @db.TinyInt
+  avatar        String  @default("") @db.Char(255)
+  area          String  @default("") @db.VarChar(12)
+  status        Int     @default(0) @db.SmallInt
+  createTime    BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime    BigInt  @default(0) @map("update_time") @db.BigInt
   // 最近登录（2026-09-23 个人信息卡片新增，登录时刷新；0=未记录）
-  lastLoginTime BigInt @default(0) @map("last_login_time") @db.BigInt
+  lastLoginTime BigInt  @default(0) @map("last_login_time") @db.BigInt
   // 防小号关联（2026-10-19）：注册 IP 注册时落一次；最近登录 IP 每次 setSession 刷新（存量账号空串，随登录逐步积累）
-  registerIp  String @default("") @map("register_ip") @db.VarChar(45)
-  lastLoginIp String @default("") @map("last_login_ip") @db.VarChar(45)
+  registerIp    String  @default("") @map("register_ip") @db.VarChar(45)
+  lastLoginIp   String  @default("") @map("last_login_ip") @db.VarChar(45)
   // 封禁截止 Unix 秒（2026-10-16 限时封禁）：仅 status=-1 时有意义；0=永久封禁；到期自动解禁
-  banUntil BigInt @default(0) @map("ban_until") @db.BigInt
+  banUntil      BigInt  @default(0) @map("ban_until") @db.BigInt
   // 可信用户组（2026-10-24）：组内用户上传录像自动分拣时不检查 STNB 触发器（后台 /admin/users/[id] 超管维护）
-  trusted Boolean @default(false)
+  trusted       Boolean @default(false)
   // 公开赞助金额开关（2026-11-02 张老师）：false=公开（默认，个人主页数据统计展示赞助金额行）；
   // true=账户设置里关闭后个人主页隐藏该行。存 User 表（行恒存在，免 user_info upsert 判断）
-  donateHidden Boolean @default(false) @map("donate_hidden")
+  donateHidden  Boolean @default(false) @map("donate_hidden")
   // 显示年龄与星座开关（2026-11-04 张老师）：false=公开（默认，个人主页资料显示年龄/星座行）；
   // true=账户设置里关闭后个人主页资料不再显示年龄和星座。存 User 表（行恒存在，免 user_info upsert 判断）
-  birthHidden  Boolean @default(false) @map("birth_hidden")
+  birthHidden   Boolean @default(false) @map("birth_hidden")
 
   // ---- 反作弊处置（2026-10-27）：客户端探测命中（__op 蜜罐/棋盘注入/整页标记浮层）----
   // 排名模式禁用截止 Unix 秒：命中后 24 小时内无法开启排名模式（WS/上传/入口三处闸）
-  rankBanUntil BigInt @default(0) @map("rank_ban_until") @db.BigInt
+  rankBanUntil   BigInt @default(0) @map("rank_ban_until") @db.BigInt
   // 低信任标记截止 Unix 秒：并入 getUserTrustInfo 低信任口径（video.auto_reason bit9
   // 影响后台审核），且 24h 内上传录像数 ≤5；命中后 7 天
-  lowTrustUntil BigInt @default(0) @map("low_trust_until") @db.BigInt
+  lowTrustUntil  BigInt @default(0) @map("low_trust_until") @db.BigInt
   // 人工移出低信任组时刻 Unix 秒（2026-10-27）：后台「移出低信任用户组」写入。
   // 屏蔽史只在「最近一次屏蔽时刻 > 本值」时算入组依据——之后再有新录像被屏蔽会自动重新入组。
   // 口径见 src/lib/lowtrust.ts（列表 / 详情页 / 录像分拣三处共用，禁单边漂移）
@@ -92,9 +92,9 @@ model UserAuth {
 
   // 邮箱绑定（2026-10-15）：老用户登录名非邮箱，忘记密码无法自助找回。
   // email 未验证前只存草稿（email_verified=0）；找回密码只认已验证邮箱或本身是邮箱的登录名。
-  email         String?  @db.VarChar(64) @unique
-  emailVerified BigInt   @default(0) @map("email_verified")
-  emailToken    String?  @unique @db.Char(32) @map("email_token")
+  email         String? @unique @db.VarChar(64)
+  emailVerified BigInt  @default(0) @map("email_verified")
+  emailToken    String? @unique @map("email_token") @db.Char(32)
 
   // 2026-11-09：绑定验证成功换名时保留原登录名（首次绑定时的 username，重绑不覆盖）。
   // 登录时 username 查不到按 old_username 识别并黄色提示引导用邮箱登录（不放行——
@@ -107,15 +107,15 @@ model UserAuth {
 
 // 用户最好成绩（flag 模式）
 model UserScores {
-  id           BigInt @id @default(autoincrement()) @db.BigInt
-  begTime      Int?   @map("beg_time") @db.Int
-  beg3bvs      Int?   @map("beg_3bvs") @db.Int
-  intTime      Int?   @map("int_time") @db.Int
-  int3bvs      Int?   @map("int_3bvs") @db.Int
-  expTime      Int?   @map("exp_time") @db.Int
-  exp3bvs      Int?   @map("exp_3bvs") @db.Int
-  sumTime      Int?   @map("sum_time") @db.Int
-  sum3bvs      Int?   @map("sum_3bvs") @db.Int
+  id           BigInt  @id @default(autoincrement()) @db.BigInt
+  begTime      Int?    @map("beg_time") @db.Int
+  beg3bvs      Int?    @map("beg_3bvs") @db.Int
+  intTime      Int?    @map("int_time") @db.Int
+  int3bvs      Int?    @map("int_3bvs") @db.Int
+  expTime      Int?    @map("exp_time") @db.Int
+  exp3bvs      Int?    @map("exp_3bvs") @db.Int
+  sumTime      Int?    @map("sum_time") @db.Int
+  sum3bvs      Int?    @map("sum_3bvs") @db.Int
   begTimeVideo BigInt? @map("beg_time_video") @db.BigInt
   beg3bvsVideo BigInt? @map("beg_3bvs_video") @db.BigInt
   intTimeVideo BigInt? @map("int_time_video") @db.BigInt
@@ -128,8 +128,8 @@ model UserScores {
   int3bvsDate  BigInt? @map("int_3bvs_date") @db.BigInt
   expTimeDate  BigInt? @map("exp_time_date") @db.BigInt
   exp3bvsDate  BigInt? @map("exp_3bvs_date") @db.BigInt
-  createTime   BigInt @default(0) @map("create_time") @db.BigInt
-  updateTime   BigInt @default(0) @map("update_time") @db.BigInt
+  createTime   BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime   BigInt  @default(0) @map("update_time") @db.BigInt
 
   @@index([begTime])
   @@index([beg3bvs])
@@ -144,15 +144,15 @@ model UserScores {
 
 // 用户最好成绩（NF 无标模式）
 model UserScoresNf {
-  id           BigInt @id @default(autoincrement()) @db.BigInt
-  begTime      Int?   @map("beg_time") @db.Int
-  beg3bvs      Int?   @map("beg_3bvs") @db.Int
-  intTime      Int?   @map("int_time") @db.Int
-  int3bvs      Int?   @map("int_3bvs") @db.Int
-  expTime      Int?   @map("exp_time") @db.Int
-  exp3bvs      Int?   @map("exp_3bvs") @db.Int
-  sumTime      Int?   @map("sum_time") @db.Int
-  sum3bvs      Int?   @map("sum_3bvs") @db.Int
+  id           BigInt  @id @default(autoincrement()) @db.BigInt
+  begTime      Int?    @map("beg_time") @db.Int
+  beg3bvs      Int?    @map("beg_3bvs") @db.Int
+  intTime      Int?    @map("int_time") @db.Int
+  int3bvs      Int?    @map("int_3bvs") @db.Int
+  expTime      Int?    @map("exp_time") @db.Int
+  exp3bvs      Int?    @map("exp_3bvs") @db.Int
+  sumTime      Int?    @map("sum_time") @db.Int
+  sum3bvs      Int?    @map("sum_3bvs") @db.Int
   begTimeVideo BigInt? @map("beg_time_video") @db.BigInt
   beg3bvsVideo BigInt? @map("beg_3bvs_video") @db.BigInt
   intTimeVideo BigInt? @map("int_time_video") @db.BigInt
@@ -165,8 +165,8 @@ model UserScoresNf {
   int3bvsDate  BigInt? @map("int_3bvs_date") @db.BigInt
   expTimeDate  BigInt? @map("exp_time_date") @db.BigInt
   exp3bvsDate  BigInt? @map("exp_3bvs_date") @db.BigInt
-  createTime   BigInt @default(0) @map("create_time") @db.BigInt
-  updateTime   BigInt @default(0) @map("update_time") @db.BigInt
+  createTime   BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime   BigInt  @default(0) @map("update_time") @db.BigInt
 
   @@index([begTime])
   @@index([beg3bvs])
@@ -259,8 +259,8 @@ model Video {
   // first_bv=1：本玩家首次完成本 BV（同 user+level+board_3bv 此前无 status<>0 录像，口径与收集格同源）
   // pb_bv=1：打破本玩家本 BV 最好成绩（同池此前已有录像且本盘 real_time 严格更小；
   //   首盘只记 first_bv 不记 pb_bv——无「旧纪录」可破）
-  firstBv    Int     @default(0) @map("first_bv") @db.TinyInt
-  pbBv       Int     @default(0) @map("pb_bv") @db.TinyInt
+  firstBv Int @default(0) @map("first_bv") @db.TinyInt
+  pbBv    Int @default(0) @map("pb_bv") @db.TinyInt
 
   // ---- 外站同步来源（2026-11-07 张老师定）：from_site=api_key.id；NULL=站内原生上传 ----
   // ①防递归：开源站按 video_list(id>cursor) 轮询抓雷网录像，外站同步落库的录像
@@ -271,6 +271,8 @@ model Video {
   fromSite BigInt? @map("from_site") @db.BigInt
   fromId   BigInt? @map("from_id") @db.BigInt
 
+  // 外站同步幂等键（2026-11-07）：同站同 remote id 唯一；NULL 行（站内原生）MySQL 不参与唯一约束
+  @@unique([fromSite, fromId])
   // 2026-10-15 上线前性能审计新增：
   // (status, level, review_time) 一个索引覆盖 getVideoBoxStats/getSiteStats 的三项统计
   // （count status / GROUP BY level / 今日按 review_time），原为 30 万行全表扫描；
@@ -289,21 +291,19 @@ model Video {
   // (review_user, status) 2026-10-22 迁移收尾索引排查：团队页 getTeam 逐管理员 count
   // （WHERE review_user=N AND status=20）原走 (status,…) 索引扫 15 万条目，实测 1.4s/人
   @@index([reviewUser, status])
-  // 外站同步幂等键（2026-11-07）：同站同 remote id 唯一；NULL 行（站内原生）MySQL 不参与唯一约束
-  @@unique([fromSite, fromId])
   @@map("video")
 }
 
 model VideoInfo {
-  id         BigInt @id @default(autoincrement()) @db.BigInt
-  filepath   String @db.VarChar(100)
-  signature  String @db.VarChar(50)
-  software   String @db.VarChar(20)
-  version    String @db.VarChar(20)
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  filepath   String  @db.VarChar(100)
+  signature  String  @db.VarChar(50)
+  software   String  @db.VarChar(20)
+  version    String  @db.VarChar(20)
   noflag     Boolean
-  board      String @db.VarChar(500)
-  board3bv   Int    @map("board_3bv") @db.Int
-  realTime   Int    @map("real_time") @db.Int
+  board      String  @db.VarChar(500)
+  board3bv   Int     @map("board_3bv") @db.Int
+  realTime   Int     @map("real_time") @db.Int
   // 2026-10-27 排名录像服务端签名（张老师要求）：排名局 evf 的 HMAC-SHA256（hex 64 位），
   // 密钥只在服务端（lib/evf-sign.ts 派生自 AUTH_SECRET）——文件被篡改即可验出。普通上传为 null
   evfSig     String? @map("evf_sig") @db.VarChar(64)
@@ -313,8 +313,8 @@ model VideoInfo {
   // 录像本体照常展示。只在上传时刻判定落列——历史录像恒 0 不受追溯
   // （如 76668 高级 95BV 老盘成绩照旧有效）
   noRecord   Boolean @default(false) @map("no_record")
-  createTime BigInt @default(0) @map("create_time") @db.BigInt
-  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
   // 2026-10-15 录像页表头排序/时间成绩搜索（张老师需求）：
   // real_time 支撑按成绩排序（索引序扫描免 30 万行 filesort）与时间搜索窗口过滤；
@@ -333,17 +333,17 @@ model VideoInfo {
 }
 
 model VideoStat {
-  id         BigInt  @id @default(autoincrement()) @db.BigInt
-  clicks     Int     @default(0) @db.Int
-  clicker    String? @db.Char(40)
-  downloads  Int     @default(0) @db.Int
-  downloader String? @db.Char(40)
-  comments   Int     @default(0) @db.Int
+  id           BigInt  @id @default(autoincrement()) @db.BigInt
+  clicks       Int     @default(0) @db.Int
+  clicker      String? @db.Char(40)
+  downloads    Int     @default(0) @db.Int
+  downloader   String? @db.Char(40)
+  comments     Int     @default(0) @db.Int
   // 管理员在后台播放器里看过（2026-10-19：防盲审口径=downloads>0 或 admin_watched；
   // 免核定批量通过不查此列——池内零触发器命中，由分拣闸门保证）
-  adminWatched Int   @default(0) @map("admin_watched") @db.TinyInt
-  createTime BigInt  @default(0) @map("create_time") @db.BigInt
-  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+  adminWatched Int     @default(0) @map("admin_watched") @db.TinyInt
+  createTime   BigInt  @default(0) @map("create_time") @db.BigInt
+  updateTime   BigInt  @default(0) @map("update_time") @db.BigInt
 
   // 2026-10-15 上线前性能审计新增：热评/热门录像列表按 comments/clicks 过滤排序，
   // 原为 30 万行全表或长程主键扫描
@@ -357,52 +357,52 @@ model VideoStat {
 // id 直接用 video.id（不自增），跑批幂等 upsert；详情页缺行时即时重放补写。
 // 六维：速度 bvs / 效率 ioe / 精准 corr / 手速 cls / 移动 ppc（越小越好）/ 综合 stnb。
 model VideoMetrics {
-  id         BigInt @id @db.BigInt
-  level      String @db.Char(3)
+  id         BigInt  @id @db.BigInt
+  level      String  @db.Char(3)
   noflag     Boolean
-  realTime   Int    @map("real_time") @db.Int
-  bbbv       Int    @db.Int
-  cl         Int    @db.Int
-  clLeft     Int    @map("cl_left") @db.Int
-  clRight    Int    @map("cl_right") @db.Int
-  clDouble   Int    @map("cl_double") @db.Int
-  ce         Int    @db.Int
-  unflag     Int    @db.Int
-  path       Int    @db.Int
-  bvs        Float  @db.Float
-  ioe        Float  @db.Float
-  corr       Float  @db.Float
-  cls        Float  @db.Float
-  ppc        Float  @db.Float
+  realTime   Int     @map("real_time") @db.Int
+  bbbv       Int     @db.Int
+  cl         Int     @db.Int
+  clLeft     Int     @map("cl_left") @db.Int
+  clRight    Int     @map("cl_right") @db.Int
+  clDouble   Int     @map("cl_double") @db.Int
+  ce         Int     @db.Int
+  unflag     Int     @db.Int
+  path       Int     @db.Int
+  bvs        Float   @db.Float
+  ioe        Float   @db.Float
+  corr       Float   @db.Float
+  cls        Float   @db.Float
+  ppc        Float   @db.Float
   // 吞吐效率 = 已完成 3BV ÷ 有效点击 Ce（2026-10-28 轴调整：「效率」轴 FL 组口径；NF 组仍用 ioe）
   // ⚠️ 必须带 @default：线上 30 万行，无默认值的必填列会让 CI 的非交互 db push 拒绝执行（2026-10-28 实证）
-  thrp       Float  @default(0) @db.Float
+  thrp       Float   @default(0) @db.Float
   // 走位 = 已完成 3BV ÷ 鼠标行程（格）（2026-10-28 张老师定上雷达替换「精准」corr 轴）
-  bpp        Float  @default(0) @db.Float
+  bpp        Float   @default(0) @db.Float
   // 跨格次数 = 鼠标轨迹跨过格线的次数（0.5px 步长光栅化，格内抖动不计）。
   // 2026-10-29 张老师定「路线规划」分母由 path 换 crossings（3BV/CP）：连续 PATH 按
   // 事件间欧氏累加，鼠标回报率越高 mv 采样越密、抖动噪声进得越多 → 同一轨迹 Path
   // 系统性偏长；crossings 只数跨格线动作，对回报率**构造性免疫**。探针实测 6/6 组
   // 与 STNB 的秩相关全面优于 PATH（scripts/cellpath-probe.ts）。
-  cp         Int    @default(0) @db.Int
-  stnb       Float  @db.Float
+  cp         Int     @default(0) @db.Int
+  stnb       Float   @db.Float
   // QG 质量分 = (用时秒)^1.7 ÷ 已解 3BV（STNB 的中间量，越小越好）。
   // 2026-10-20 张老师定落库：此前只在回放/结算面板实时现算。只依赖 real_time×bbbv，
   // 故历史行回填免重放（跑批 --qg-only 一条 SQL 从本表两列直接算）。
-  qg         Float  @default(0) @db.Float
+  qg         Float   @default(0) @db.Float
   // 综合分（0-100）= **STNB 在「级别×模式」组内的分位**（2026-10-14 晚张老师改口径；
   // 旧口径「速度/效率/精准/手速四轴百分位加权平均」已弃）。与雷达「综合」轴读数一致。
   // 它依赖分位基准，所以不是一算永逸：基准一变就要全量重算（跑批里几十秒）。
-  composite   Float  @default(0) @db.Float
+  composite  Float   @default(0) @db.Float
   // 排名类**相对值**：新录像进来会挤动别人的名次，不能像事实字段那样一算永逸，
   // 由跑批每次用窗口函数全量重刷（30 万行几秒，不必重放进文件）。
   // rankAll 已停用：张老师 2026-10-14 定「不同级别不能放一起比较」，全站榜无意义，
   // 列保留（避免动生产表），跑批恒写 0。现只维护 rankGroup（级别×模式组内名次）
   // 与 beatPct（组内超越百分比，直接取 composite，与雷达气泡读数一致）。
-  rankAll    Int    @default(0) @map("rank_all") @db.Int
-  rankGroup  Int    @default(0) @map("rank_group") @db.Int
-  beatPct    Float  @default(0) @map("beat_pct") @db.Float
-  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  rankAll    Int     @default(0) @map("rank_all") @db.Int
+  rankGroup  Int     @default(0) @map("rank_group") @db.Int
+  beatPct    Float   @default(0) @map("beat_pct") @db.Float
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
 
   @@index([rankAll])
   @@index([level, noflag, rankGroup])
@@ -419,26 +419,26 @@ model VideoMetrics {
 // bucket 存该组盘的 3BV 原值；bucket=-1 是「该级别该模式全组」兜底行，
 // 单 3BV 样本不足 30 时回退用它。ppc（移动）是反向指标，边界按升序存（越小越好）。
 model VideoMetricDist {
-  id         BigInt @id @default(autoincrement()) @db.BigInt
-  level      String @db.Char(3)
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  level      String  @db.Char(3)
   noflag     Boolean
-  bucket     Int    @db.Int
-  size       Int    @db.Int
-  bvs        String @db.VarChar(255)
-  ioe        String @db.VarChar(255)
-  corr       String @db.VarChar(255)
-  cls        String @db.VarChar(255)
-  ppc        String @db.VarChar(255)
-  thrp       String @default("") @db.VarChar(255)
-  bpp        String @default("") @db.VarChar(255)
-  stnb       String @db.VarChar(255)
+  bucket     Int     @db.Int
+  size       Int     @db.Int
+  bvs        String  @db.VarChar(255)
+  ioe        String  @db.VarChar(255)
+  corr       String  @db.VarChar(255)
+  cls        String  @db.VarChar(255)
+  ppc        String  @db.VarChar(255)
+  thrp       String  @default("") @db.VarChar(255)
+  bpp        String  @default("") @db.VarChar(255)
+  stnb       String  @db.VarChar(255)
   // 2026-10-30 五轴改版（张老师定）：全网池专用列——level='all' 行（NF/FL 各一）用，
   // 普通行恒空串。「稀有程度」三合一取最高档需要 time/3bvs/stnb 三份全池边界；
   // 「有效点击」= CES（每秒有效点击）、「移动速度」= crossings/s，均全网评级。
-  time       String @default("") @db.VarChar(255)
-  ces        String @default("") @db.VarChar(255)
-  cps        String @default("") @db.VarChar(255)
-  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  time       String  @default("") @db.VarChar(255)
+  ces        String  @default("") @db.VarChar(255)
+  cps        String  @default("") @db.VarChar(255)
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
 
   @@unique([level, noflag, bucket])
   @@map("video_metric_dist")
@@ -458,16 +458,16 @@ model VideoMetricDist {
 //   ④ 全量重建命令（幂等重建，对账用）
 model UserStnbBest {
   // user id（非 FK 约束，与 video_scores_* 同惯例——同步管线灌表顺序不保证）
-  user      BigInt @db.BigInt
-  level     String @db.Char(3)
+  user       BigInt  @db.BigInt
+  level      String  @db.Char(3)
   // 该级历史最高 STNB（1 位小数，与 video_metrics.stnb 同精度）
-  stnb      Float  @db.Float
+  stnb       Float   @db.Float
   // 最优盘快照：点击跳 /video/<bestVideo> + hover 气泡「高级 xx.xx 秒 NF 3月前」
-  bestVideo BigInt @map("best_video") @db.BigInt
-  bestTime  Int    @map("best_time") @db.Int
-  bestNf    Boolean @map("best_nf")
-  bestCt    BigInt @map("best_ct") @db.BigInt
-  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+  bestVideo  BigInt  @map("best_video") @db.BigInt
+  bestTime   Int     @map("best_time") @db.Int
+  bestNf     Boolean @map("best_nf")
+  bestCt     BigInt  @map("best_ct") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
   @@id([user, level])
   @@index([level, stnb])
@@ -476,14 +476,14 @@ model UserStnbBest {
 
 // NF STNB 榜落盘：与 user_stnb_best 同构，仅统计 noflag=1 的已过审录像。
 model UserStnbBestNf {
-  user      BigInt @db.BigInt
-  level     String @db.Char(3)
-  stnb      Float  @db.Float
-  bestVideo BigInt @map("best_video") @db.BigInt
-  bestTime  Int    @map("best_time") @db.Int
-  bestNf    Boolean @map("best_nf")
-  bestCt    BigInt @map("best_ct") @db.BigInt
-  updateTime BigInt @default(0) @map("update_time") @db.BigInt
+  user       BigInt  @db.BigInt
+  level      String  @db.Char(3)
+  stnb       Float   @db.Float
+  bestVideo  BigInt  @map("best_video") @db.BigInt
+  bestTime   Int     @map("best_time") @db.Int
+  bestNf     Boolean @map("best_nf")
+  bestCt     BigInt  @map("best_ct") @db.BigInt
+  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 
   @@id([user, level])
   @@index([level, stnb])
@@ -642,8 +642,8 @@ model News {
   //   入伍/晋升动态写「含同刻」值（显示晋升后军衔），破纪录动态写覆盖前旧值（张老师 10-13/10-16 口径）。
   //   原 user_score（sum_time 快照，2013 军衔制遗留）已随本改版删除——新体系下无消费者。
   // ranked：发布时用户是否在榜（user.status=0）。旧版称号「布衣」与未来自选体系用它判「未加入排行」
-  expTime    BigInt @default(0) @map("exp_time") @db.BigInt
-  ranked     BigInt @default(0) @map("ranked") @db.BigInt
+  expTime     BigInt @default(0) @map("exp_time") @db.BigInt
+  ranked      BigInt @default(0) @map("ranked") @db.BigInt
   createTime  BigInt @default(0) @map("create_time") @db.BigInt
 
   // 2026-10-15 上线前性能审计新增：动态 count 按 type 过滤。
@@ -701,15 +701,15 @@ model Click {
 // speechUp/speechDown：感言赞/踩计数（2026-10-27 张老师定）——登录用户可投，
 //   明细去重落 star_vote 表（同日同人一票，服务端硬闸门）；删除感言/重发时清零
 model Star {
-  id          BigInt  @id @default(autoincrement()) @db.BigInt
-  user        BigInt  @db.BigInt
-  date        String  @db.Char(10)
-  speech      String  @default("") @db.VarChar(84)
-  speechDel   Int     @default(0) @map("speech_del") @db.Int
-  speechUp    Int     @default(0) @map("speech_up") @db.Int
-  speechDown  Int     @default(0) @map("speech_down") @db.Int
-  createTime  BigInt  @default(0) @map("create_time") @db.BigInt
-  updateTime  BigInt  @default(0) @map("update_time") @db.BigInt
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt
+  date       String @db.Char(10)
+  speech     String @default("") @db.VarChar(84)
+  speechDel  Int    @default(0) @map("speech_del") @db.Int
+  speechUp   Int    @default(0) @map("speech_up") @db.Int
+  speechDown Int    @default(0) @map("speech_down") @db.Int
+  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt
 
   @@unique([date])
   @@map("star")
@@ -718,11 +718,11 @@ model Star {
 // 感言赞/踩投票明细（2026-10-27 二轮：登录闸 + 服务端按用户硬去重——
 // 防匿名无限刷：同一天同一用户只能投一次，赞/踩二选一，唯一键兜底并发）
 model StarVote {
-  id         BigInt @id @default(autoincrement()) @db.BigInt
-  date       String @db.Char(10)
-  user       BigInt @db.BigInt
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  date       String  @db.Char(10)
+  user       BigInt  @db.BigInt
   dir        Boolean // true=赞 false=踩
-  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt
 
   @@unique([date, user])
   @@map("star_vote")
@@ -893,20 +893,20 @@ model UserToken {
 // key 只存 sha256 哈希——明文仅创建时回显一次，后台不可再查；
 // 吊销=软删（status=0），保留审计轨迹；每 key 限速维度用 name。
 model ApiKey {
-  id         BigInt  @id @default(autoincrement()) @db.BigInt
-  name       String  @db.VarChar(50)
-  keyHash    String  @unique @map("key_hash") @db.Char(64)
-  status     Int     @default(1) @db.TinyInt // 1=启用 0=吊销
-  note       String  @default("") @db.VarChar(200)
+  id           BigInt @id @default(autoincrement()) @db.BigInt
+  name         String @db.VarChar(50)
+  keyHash      String @unique @map("key_hash") @db.Char(64)
+  status       Int    @default(1) @db.TinyInt // 1=启用 0=吊销
+  note         String @default("") @db.VarChar(200)
   // 合作方 LOGO（2026-11-07）：站内路径或完整 URL；外站同步录像详情页「上传于」后
   // 灰度小图标 hover 显示「来自XX」，取自 from_site 对应 key 的本字段
-  logo       String  @default("") @db.VarChar(200)
+  logo         String @default("") @db.VarChar(200)
   // 单 key 限速（2026-11-07）：每分钟请求上限，0=不限速；默认 60 与原全站口径一致
-  ratePerMin Int     @default(60) @map("rate_per_min") @db.SmallInt
+  ratePerMin   Int    @default(60) @map("rate_per_min") @db.SmallInt
   requestCount BigInt @default(0) @map("request_count") @db.BigInt
-  lastUsedAt BigInt  @default(0) @map("last_used_at") @db.BigInt
-  createTime BigInt  @default(0) @map("create_time") @db.BigInt
-  updateTime BigInt  @default(0) @map("update_time") @db.BigInt
+  lastUsedAt   BigInt @default(0) @map("last_used_at") @db.BigInt
+  createTime   BigInt @default(0) @map("create_time") @db.BigInt
+  updateTime   BigInt @default(0) @map("update_time") @db.BigInt
 
   @@index([status])
   @@map("api_key")
@@ -975,23 +975,23 @@ model AvatarReview {
 // - 会话：同 visitorId 30 分钟内视为同一会话；会话首条 PV 标 isEntry（= 落地页）
 // - /video/:id 不单列：聚合时按 path 正则归类，明细行保留原始 path 即可
 model PageView {
-  id            BigInt  @id @default(autoincrement()) @db.BigInt
-  path          String  @db.VarChar(255)
-  visitorId     String  @map("visitor_id") @db.Char(32) // 长期 cookie（1 年），访客去重身份
-  ip            String  @default("") @db.VarChar(40)
-  ua            String? @db.VarChar(255)
-  uaClass       String  @default("") @map("ua_class") @db.VarChar(20) // desktop / mobile / tablet / bot / unknown
-  referrer      String? @db.VarChar(100) // direct / internal / 外站域名
-  isEntry       Boolean @default(false) @map("is_entry") // 会话首条 PV（落地页统计）
-  sessionId     String? @map("session_id") @db.VarChar(64)
-  isAdmin       Boolean @default(false) @map("is_admin")
-  userId        BigInt? @map("user_id") @db.BigInt // 登录态访问的用户 id（活跃玩家趋势用；未登录为 NULL）
-  clientId      String? @map("client_id") @db.VarChar(24) // 页面实例 id（前端生成），dwell 回写关联键
-  dwellMs       Int?    @map("dwell_ms") // 前台可见停留毫秒（切后台不计）
-  scrollPct     Int?    @map("scroll_pct") // 最大滚动深度 0-100
-  clicked       Boolean @default(false)
+  id             BigInt  @id @default(autoincrement()) @db.BigInt
+  path           String  @db.VarChar(255)
+  visitorId      String  @map("visitor_id") @db.Char(32) // 长期 cookie（1 年），访客去重身份
+  ip             String  @default("") @db.VarChar(40)
+  ua             String? @db.VarChar(255)
+  uaClass        String  @default("") @map("ua_class") @db.VarChar(20) // desktop / mobile / tablet / bot / unknown
+  referrer       String? @db.VarChar(100) // direct / internal / 外站域名
+  isEntry        Boolean @default(false) @map("is_entry") // 会话首条 PV（落地页统计）
+  sessionId      String? @map("session_id") @db.VarChar(64)
+  isAdmin        Boolean @default(false) @map("is_admin")
+  userId         BigInt? @map("user_id") @db.BigInt // 登录态访问的用户 id（活跃玩家趋势用；未登录为 NULL）
+  clientId       String? @map("client_id") @db.VarChar(24) // 页面实例 id（前端生成），dwell 回写关联键
+  dwellMs        Int?    @map("dwell_ms") // 前台可见停留毫秒（切后台不计）
+  scrollPct      Int?    @map("scroll_pct") // 最大滚动深度 0-100
+  clicked        Boolean @default(false)
   firstClickHref String? @map("first_click_href") @db.VarChar(255) // 页内首个 <a> 点击目标
-  createTime    BigInt  @default(0) @map("create_time") @db.BigInt // Unix 秒
+  createTime     BigInt  @default(0) @map("create_time") @db.BigInt // Unix 秒
 
   // (visitorId, createTime)：会话判定 findFirst（30 分钟窗口倒序第一条）
   // (path, visitorId, createTime)：10 秒刷新去重 findFirst
@@ -1017,7 +1017,7 @@ model PracticeLog {
   level      String  @db.VarChar(8) // beg / int / exp / cus
   won        Boolean // 胜局 true / 踩雷 false
   csec       Int // 用时（百分秒）
-  bbbv       Int @map("bbbv") // 全盘 3BV
+  bbbv       Int     @map("bbbv") // 全盘 3BV
   solvedBv   Int     @map("solved_bv") // 已完成 3BV（败局 < bbbv）
   nf         Boolean // 无旗局
   clicks     Int // 总点击（cl，含双击）
@@ -1058,36 +1058,36 @@ model PracticeDaily {
   userId     BigInt @default(0) @map("user_id") @db.BigInt // 0=游客聚合
   plays      Int // 尝试盘数
   wins       Int // 完成盘数
-  playsBeg   Int @default(0) @map("plays_beg") // 初级尝试盘数
-  playsInt   Int @default(0) @map("plays_int") // 中级尝试盘数
-  playsExp   Int @default(0) @map("plays_exp") // 高级尝试盘数
+  playsBeg   Int    @default(0) @map("plays_beg") // 初级尝试盘数
+  playsInt   Int    @default(0) @map("plays_int") // 中级尝试盘数
+  playsExp   Int    @default(0) @map("plays_exp") // 高级尝试盘数
   // 完成盘数分级别（2026-11-06 张老师定：地区活跃指数/个人主页练习盘数改按完成口径，
   // 且按难度加权 初级×1 中级×2 高级×10；自定义×1（无固定难度，防小盘刷高权重）。
   // 起记日 2026-11-06，此前历史无分级别数据（既往不咎，7 日窗口一周后自然补齐）
-  winsBeg    Int @default(0) @map("wins_beg") // 初级完成盘数
-  winsInt    Int @default(0) @map("wins_int") // 中级完成盘数
-  winsExp    Int @default(0) @map("wins_exp") // 高级完成盘数
-  winsCus    Int @default(0) @map("wins_cus") // 自定义完成盘数（活跃指数按初级权重计）
+  winsBeg    Int    @default(0) @map("wins_beg") // 初级完成盘数
+  winsInt    Int    @default(0) @map("wins_int") // 中级完成盘数
+  winsExp    Int    @default(0) @map("wins_exp") // 高级完成盘数
+  winsCus    Int    @default(0) @map("wins_cus") // 自定义完成盘数（活跃指数按初级权重计）
   // 活跃点累计（2026-11-08 张老师定：地区活跃指数练习侧改按 3BV 完成情况计点，
   // 服务端逐盘算好落库累计——floor 逐盘取整不可从聚合和反推，故不存 solvedBv/bbbv 原始和。
   // 口径：初级胜=1 败=0；中级胜=2、败局完成率≥50%=1；高级完成率≥20% 按 floor(率×10)
   // （胜局恒=10）；自定义胜=1（无固定难度防刷）。起记日 2026-11-08，7 日窗口一周自然补齐。
   // 调口径只需改 track/practice 计点函数，存量不重算（与 wins 分级列同先例）。
-  actPoints  Int @default(0) @map("act_points") // 当日活跃点累计（逐盘累加）
+  actPoints  Int    @default(0) @map("act_points") // 当日活跃点累计（逐盘累加）
   // 模式使用盘数（2026-10-27 张老师定：后台模式使用比例柱状图；可叠加，五列之和可 > plays）
-  modeRanked Int @default(0) @map("mode_ranked") // 排名模式
-  modeNf     Int @default(0) @map("mode_nf") // NF（无标）
-  modeNg     Int @default(0) @map("mode_ng") // 无猜（默认开）
-  modeSq     Int @default(0) @map("mode_sq") // 速旗
-  modeCombo  Int @default(0) @map("mode_combo") // 连击
+  modeRanked Int    @default(0) @map("mode_ranked") // 排名模式
+  modeNf     Int    @default(0) @map("mode_nf") // NF（无标）
+  modeNg     Int    @default(0) @map("mode_ng") // 无猜（默认开）
+  modeSq     Int    @default(0) @map("mode_sq") // 速旗
+  modeCombo  Int    @default(0) @map("mode_combo") // 连击
   // 设置开关打开盘数（2026-11-01 张老师定：后台「开关占比」模块；六列之和可 > plays，
   // 可叠加；老客户端不带开关字段缺省 0，起记日 2026-11-01 前旧局稀释占比）
-  swQmark    Int @default(0) @map("sw_qmark") // 问号标记
-  swStats    Int @default(0) @map("sw_stats") // 数据统计
-  swSndfb    Int @default(0) @map("sw_sndfb") // 声音反馈
-  swShot     Int @default(0) @map("sw_shot") // 自动截屏
-  swQretry   Int @default(0) @map("sw_qretry") // 快速重开
-  swWheel    Int @default(0) @map("sw_wheel") // 滚轮缩放
+  swQmark    Int    @default(0) @map("sw_qmark") // 问号标记
+  swStats    Int    @default(0) @map("sw_stats") // 数据统计
+  swSndfb    Int    @default(0) @map("sw_sndfb") // 声音反馈
+  swShot     Int    @default(0) @map("sw_shot") // 自动截屏
+  swQretry   Int    @default(0) @map("sw_qretry") // 快速重开
+  swWheel    Int    @default(0) @map("sw_wheel") // 滚轮缩放
   createTime BigInt @default(0) @map("create_time") @db.BigInt // 当日首盘 Unix 秒
   updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近一盘 Unix 秒
 
@@ -1142,6 +1142,8 @@ model UserActivitySnapshot {
   commentCount   Int    @default(0) @map("comment_count") @db.UnsignedInt
   practicePoints Int    @default(0) @map("practice_points") @db.UnsignedInt
   videoPoints    Int    @default(0) @map("video_points") @db.UnsignedInt
+  loginPoints    Int    @default(0) @map("login_points") @db.UnsignedInt
+  watchPoints    Int    @default(0) @map("watch_points") @db.UnsignedInt
   activePoints   Int    @default(0) @map("active_points") @db.UnsignedInt
   windowStart    BigInt @map("window_start") @db.BigInt
   windowEnd      BigInt @map("window_end") @db.BigInt
@@ -1149,6 +1151,39 @@ model UserActivitySnapshot {
 
   @@index([activePoints(sort: Desc), userId])
   @@map("user_activity_snapshot")
+}
+
+// 每日访问打卡（2026-11-10 张老师定：每日访问雷网记 1 点活跃值）。
+// 写入点 = getSession 活跃心跳（lib/auth.ts touchLastLogin，每页必经；5 分钟节流内
+// 顺带 UPSERT 本行，唯一键 user×日 去重，每日最多记 1 次）。活跃快照聚合第五源：
+// login_points = 近 7 个 +08:00 自然日的访问天数（每日 1 点，计入 active_points）。
+model UserDailyVisit {
+  userId     BigInt @map("user_id") @db.BigInt
+  day        Int // +08:00 切天序号（同 practice_daily 口径）
+  createTime BigInt @default(0) @map("create_time") @db.BigInt // 当日首次访问 Unix 秒
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近访问 Unix 秒
+
+  @@id([userId, day])
+  @@index([day])
+  @@map("user_daily_visit")
+}
+
+// 录像观看时长日累计（2026-11-10 张老师定：每累计观看 1 分钟记 1 点活跃值）。
+// 写入点 = 录像详情页原地回放引擎 playing 时长（VideoReplayProvider 前台可见
+// 计时，visibilitychange 切后台不计），页面隐藏/卸载/暂停时上报
+// /api/track/watch；登录态才落库（未登录不记），按 用户×日×录像 唯一键累加。
+// 活跃快照聚合第六源：watch_points = ROUND(近 7 日 watch_ms 合计 / 60000)。
+model UserWatchDaily {
+  userId     BigInt @map("user_id") @db.BigInt
+  day        Int // +08:00 切天序号（同 practice_daily 口径）
+  videoId    BigInt @map("video_id") @db.BigInt
+  watchMs    BigInt @default(0) @map("watch_ms") @db.BigInt // 当日累计观看毫秒（多次上报累加）
+  createTime BigInt @default(0) @map("create_time") @db.BigInt // 当日首次观看 Unix 秒
+  updateTime BigInt @default(0) @map("update_time") @db.BigInt // 当日最近上报 Unix 秒
+
+  @@id([userId, day, videoId])
+  @@index([day])
+  @@map("user_watch_daily")
 }
 
 // 站点运行时开关（2026-10-22，新旧站数据合并）：key/value 单表。
@@ -1166,15 +1201,15 @@ model SiteFlag {
 // reason 口径：op_bait=读取 __op 蜜罐 / dom_inject=棋盘子树外来节点 /
 // body_overlay=覆盖棋盘的整页标记浮层
 model CheatReport {
-  id         BigInt @id @default(autoincrement()) @db.BigInt
-  user       BigInt @db.BigInt
-  reason     String @db.VarChar(32)
-  evidence   String @db.VarChar(500)
+  id           BigInt @id @default(autoincrement()) @db.BigInt
+  user         BigInt @db.BigInt
+  reason       String @db.VarChar(32)
+  evidence     String @db.VarChar(500)
   /// 权威进程交叉核验结果（2026-10-27 拆列）：0=未核验（无 gameId/seq 或权威不可达）
   /// 1=核验通过 2=核验不符。拆列前以 `[verified=true] ` 前缀写在 evidence 里，
   /// 16 字符白占 500 证据预算、后台展示还要靠正则剥——状态本就该是独立字段
-  verified   Int    @default(0) @db.TinyInt
-  createTime BigInt @default(0) @map("create_time") @db.BigInt
+  verified     Int    @default(0) @db.TinyInt
+  createTime   BigInt @default(0) @map("create_time") @db.BigInt
   /// 人工复核状态（2026-10-27 张老师定：探测只禁排名，核实才转低信任）：
   /// 0=待复核 1=确认作弊（已转低信任）2=误报（已解除排名禁用）
   resolved     Int    @default(0) @db.TinyInt

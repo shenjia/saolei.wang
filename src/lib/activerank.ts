@@ -1,10 +1,12 @@
 // 活跃排行（2026-11-08 张老师需求）：近 7 日活跃玩家榜，排行导航「进步」后新增「活跃」tab。
 //
-// 列口径（张老师 01:35 定）：
+// 列口径（张老师 01:35 定；2026-11-10 增「登录」「观看」列）：
 //   初级/中级/高级 = 近 7 日该级别（录像上传数 + 练习完成盘数）合计
 //   评论           = 近 7 日（录像评论 + 论坛回复）条数
-//   活跃指数       = 练习 3BV 计点 + 录像级别加权分（初×1 中×2 高×10）+ 评论数
-//   默认按活跃指数降序；初级/中级/高级/评论列可点击表头单独排序。
+//   观看           = 近 7 日观看录像时长折点（每满 1 分钟记 1 点，原地回放口径）
+//   登录           = 近 7 日访问天数（每日访问雷网记 1 点，2026-11-10 张老师定）
+//   活跃指数       = 练习 3BV 计点 + 录像级别加权分（初×1 中×2 高×10）+ 评论数 + 登录点 + 观看点
+//   默认按活跃指数降序；数据列可点击表头单独排序。
 //
 // 2026-11-08 性能改造：不再在每次页面请求中聚合 practice_daily/video/comment/bbs_reply。
 // scripts/user-activity-snapshot-refresh.ts 每分钟全量刷新 user_activity_snapshot；
@@ -14,8 +16,8 @@
 import { prisma } from "./db";
 
 /** 排序键白名单 */
-export type ActiveBy = "act" | "beg" | "int" | "exp" | "cmt";
-export const ACTIVE_BYS: ActiveBy[] = ["act", "beg", "int", "exp", "cmt"];
+export type ActiveBy = "act" | "beg" | "int" | "exp" | "cmt" | "watch" | "login";
+export const ACTIVE_BYS: ActiveBy[] = ["act", "beg", "int", "exp", "cmt", "watch", "login"];
 
 export const ACTIVE_PAGE_SIZE = 20;
 
@@ -26,6 +28,8 @@ const ORDER_BY: Record<ActiveBy, string> = {
   int: "ORDER BY t.int_count DESC, t.user_id ASC",
   exp: "ORDER BY t.exp_count DESC, t.user_id ASC",
   cmt: "ORDER BY t.comment_count DESC, t.user_id ASC",
+  watch: "ORDER BY t.watch_points DESC, t.user_id ASC",
+  login: "ORDER BY t.login_points DESC, t.user_id ASC",
 };
 
 export interface ActiveRow {
@@ -46,7 +50,11 @@ export interface ActiveRow {
   exp: number;
   /** 评论：7 日录像评论 + 论坛回复条数 */
   cmt: number;
-  /** 活跃指数（练习点数 + 录像加权分 + 评论数） */
+  /** 观看：7 日观看录像时长折点（每满 1 分钟 1 点，2026-11-10 张老师定） */
+  watch: number;
+  /** 登录：7 日访问天数（每日访问记 1 点，2026-11-10 张老师定） */
+  login: number;
+  /** 活跃指数（练习点数 + 录像加权分 + 评论数 + 登录点 + 观看点） */
   act: number;
 }
 
@@ -56,6 +64,8 @@ interface AggRow {
   ci: number;
   ce: number;
   cc: number;
+  wp: number;
+  lp: number;
   act: number;
   chinese_name: string;
   english_name: string;
@@ -66,7 +76,7 @@ interface AggRow {
 }
 
 /**
- * 活跃排行分页查询。by：排序键（act 默认 / beg / int / exp / cmt）。
+ * 活跃排行分页查询。by：排序键（act 默认 / beg / int / exp / cmt / watch / login）。
  * 返回 rows（带显示字段与各分项）、total（快照内有效活跃总人数）、pageSize。
  */
 export async function getActiveRanking(
@@ -80,7 +90,7 @@ export async function getActiveRanking(
   const [rows, countRows] = await Promise.all([
     prisma.$queryRawUnsafe<AggRow[]>(
       `SELECT t.user_id uid, t.beg_count cb, t.int_count ci, t.exp_count ce,
-              t.comment_count cc, t.active_points act,
+              t.comment_count cc, t.watch_points wp, t.login_points lp, t.active_points act,
               u.chinese_name, u.english_name, u.sex, u.avatar, u.area, sc.exp_time
        FROM user_activity_snapshot t
        JOIN user u ON u.id = t.user_id AND u.status = 0
@@ -109,6 +119,8 @@ export async function getActiveRanking(
       int: Number(r.ci),
       exp: Number(r.ce),
       cmt: Number(r.cc),
+      watch: Number(r.wp),
+      login: Number(r.lp),
       act: Number(r.act),
     })),
     total: Number(countRows[0]?.c ?? 0),

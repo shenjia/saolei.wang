@@ -4925,6 +4925,33 @@ body #page.ranking_old .ranking_box {
 .ranking_table th a.current:hover {
   color: #a6e22e;
 }
+/* 排行榜表头 hover 说明气泡（2026-11-10 张老师要求：活跃榜各排序列说明口径，
+   视觉复用军衔徽章同款暗底气泡 #1e1f1c/#49483e/12px，置于文字上方弹出） */
+.ranking_table th a[data-tip] {
+  position: relative;
+}
+.ranking_table th a[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 140%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+.ranking_table th a[data-tip]:hover::after {
+  opacity: 1;
+}
 /* 纯文本表头命中（进步榜「升降」列：榜序所在列，非链接不可点击） */
 .ranking_table th.current {
   color: #fdc61d;

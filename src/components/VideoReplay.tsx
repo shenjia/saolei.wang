@@ -1983,6 +1983,7 @@ export function VideoReplayProvider({
   filepath,
   fileVer,
   realTimeMs,
+  videoId,
   radarPoints,
   radarOverall,
   radarDists,
@@ -2000,6 +2001,8 @@ export function VideoReplayProvider({
   fileVer?: number;
   /** 库内权威用时（毫秒，video_info.real_time）：进度条总长与播放终点以库为准 */
   realTimeMs?: number;
+  /** 录像 id（2026-11-10 观看活跃值上报用；缺省不挂观看计时） */
+  videoId?: number;
   /** 服务端算好的本局五轴雷达数据（详情页右栏同源）——全屏层右侧「录像评级」用
    *  （十九期恢复，2026-10-16 张老师定） */
   radarPoints?: VideoAnalysisPoint[];
@@ -2308,6 +2311,55 @@ export function VideoReplayProvider({
     },
     []
   );
+
+  /* 观看时长上报（2026-11-10 张老师定：每累计观看 1 分钟记 1 点活跃值）。
+     计时口径＝原地回放引擎 playing 且页面前台可见（visibilitychange 切后台
+     不计，与 TrackPageView dwell 同款）；暂停/结束/停止不计。上报时机＝
+     状态离开 playing、页面隐藏、路由卸载——累计值一次性 beacon（服务端累加）。
+     仅登录态有效：接口侧 getSession 判定，未登录静默忽略。
+     ⚠️ videoId 缺省不传时不挂计时（Provider 也被非录像页场景复用兜底）。 */
+  useEffect(() => {
+    if (!videoId) return;
+    if (status !== "playing") return;
+    let visibleSince = document.visibilityState === "visible" ? performance.now() : 0;
+    let visibleMs = 0;
+    let flushed = false;
+    const currentMs = () => (visibleSince ? visibleMs + (performance.now() - visibleSince) : visibleMs);
+    const report = () => {
+      if (flushed) return;
+      flushed = true;
+      const ms = Math.round(currentMs());
+      if (ms < 1000) return; // 不足 1 秒不上报（误点/瞬开不计）
+      const payload = JSON.stringify({ videoId, watchMs: ms });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon("/api/track/watch", new Blob([payload], { type: "text/plain;charset=UTF-8" }));
+      } else {
+        fetch("/api/track/watch", {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        if (visibleSince) {
+          visibleMs += performance.now() - visibleSince;
+          visibleSince = 0;
+        }
+        report(); // 切后台即上报已看部分（防关标签页丢失）
+      } else if (document.visibilityState === "visible" && !visibleSince) {
+        visibleSince = performance.now();
+        flushed = false; // 回前台继续累计，允许再次上报
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      report(); // 暂停/结束/停止/卸载（effect cleanup）= 本段观看结束
+    };
+  }, [status, videoId]);
 
   return (
     <ReplayCtx.Provider

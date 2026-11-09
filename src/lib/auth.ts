@@ -134,6 +134,9 @@ export async function reissueSessionParentDomain(): Promise<void> {
 // 要求登录态、必经 getSession），就刷新。进程内 Map 节流，每用户 5 分钟最多一条
 // 主键 UPDATE；fire-and-forget 不 await，不给任何请求增加延迟。
 // last_login_ip 仍只在真正登录（setSession）时刷新，防小号 IP 关联口径不变。
+// 2026-11-10 张老师定：每日访问雷网记 1 点活跃值——同一节流窗口内顺带 UPSERT
+// user_daily_visit 打卡（唯一键 user×日 去重，每日最多 1 行），活跃快照第五源
+// login_points = 近 7 日访问天数（见 lib/useractivity.ts）。
 const TOUCH_INTERVAL = 5 * 60; // 秒
 const lastTouch = new Map<number, number>(); // uid -> 本进程上次刷新 wall clock（ms）
 
@@ -141,13 +144,31 @@ export function touchLastLogin(uid: number): void {
   const now = Date.now();
   if (now - (lastTouch.get(uid) ?? 0) < TOUCH_INTERVAL * 1000) return;
   lastTouch.set(uid, now);
+  const nowSec = Math.floor(now / 1000);
+  const day = Math.floor((nowSec + 28800) / 86400); // +08:00 切天序号（同 practice_daily/上报路由算法）
   prisma.user
     .update({
       where: { id: BigInt(uid) },
-      data: { lastLoginTime: BigInt(Math.floor(now / 1000)) },
+      data: { lastLoginTime: BigInt(nowSec) },
     })
     .catch(() => {
       /* 活跃刷新失败不阻断请求，下个节流窗口自然重试 */
+    });
+  // 每日访问打卡（每 5 分钟节流窗口最多一次 UPSERT；唯一键冲突=今日已记，静默忽略）。
+  // 不用 upsert（Prisma 复合主键 upsert 对 P2002 冲突重读仍可能竞态报错），直接
+  // INSERT IGNORE 语义：当日已存在则跳过，首次访问时间保留不动。
+  prisma
+    .$executeRawUnsafe(
+      `INSERT INTO user_daily_visit (user_id, day, create_time, update_time)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE update_time = VALUES(update_time)`,
+      BigInt(uid),
+      day,
+      nowSec,
+      nowSec,
+    )
+    .catch(() => {
+      /* 打卡失败不阻断请求，下个节流窗口自然重试 */
     });
 }
 

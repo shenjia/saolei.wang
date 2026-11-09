@@ -1,5 +1,5 @@
 // 活跃排行「加载更多」增量接口（2026-11-08 张老师需求，结构同 /api/grow/more）：
-// GET /api/active/more?page=N[&size=M][&by=act|beg|int|exp|cmt] → { rows, total, pageSize }
+// GET /api/active/more?page=N[&size=M][&by=act|beg|int|exp|cmt|watch|login] → { rows, total, pageSize }
 // 行与 /ranking?view=active SSR 同构（ActiveRow + 地区 + 军衔双体系），客户端零成本渲染。
 // size（递增批量）：本批行数，skip 恒按 20/页锚点；不传=一页 20。
 
