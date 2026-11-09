@@ -1,7 +1,7 @@
 // 首页管理员审核提醒（2026-11-09 张老师要求）：原「N 部录像待审核 + 去审核」单行升级为双按钮——
-// · 一键过（绿）：就地批量通过当前「免核定池」（video.batchReview ids=["all"] + pool=exempt，
+// · 一键过（绿字中空钮）：就地批量通过当前「免核定池」（video.batchReview ids=["all"] + pool=exempt，
 //   服务端只取 autoFlag=1，闸门保证需核定混不进来）——全是免核定时不必再进后台；
-// · 需手审（玫瑰红）：直达 /admin/review?status=10&pool=need（需核定池只能逐条手审）。
+// · 需手审（玫瑰红字中空钮）：直达 /admin/review?status=10&pool=need（需核定池只能逐条手审）。
 // 点击一键过 → 按钮禁用、文案「处理中」+ 转圈动画；完成出绿色气泡「已通过xxx个录像」
 // （条数取服务端回传 done，防部分失败时虚报），随后 router.refresh 重查 getPoolCounts——
 // 还剩手审录像则板块继续显示（总数自动缩为需手审数），没有则整块消失（page.tsx 服务端把关）。
