@@ -34,6 +34,7 @@ import {
   type SensitiveResult,
 } from "@/lib/sensitive";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
+import { checkUgcPostQuota, checkReplyOwnPost } from "@/lib/ugc-limit";
 
 export async function POST(req: NextRequest) {
   // 维护模式：挡产生新内容/新楼层的入口（post/reply/edit/edit_reply）；delete/admin 是收敛操作，放行
@@ -62,8 +63,11 @@ export async function POST(req: NextRequest) {
     if (board === 0 && !admin) return NextResponse.json({ error: "公告板块仅管理员可发" }, { status: 403 });
     if (!title) return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
     if (!content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
+    // 未上榜限额（2026-11-09 张老师要求）：原「加入排行后才能发布主题」放宽为 24h 1 主题，
+    // 新手求助通道保留；上榜用户（canPost 通过）不受限
     if (!admin && !(await canPost(session.uid))) {
-      return NextResponse.json({ error: "加入排行后才能发布主题" }, { status: 403 });
+      const quotaErr = await checkUgcPostQuota(session.uid);
+      if (quotaErr) return NextResponse.json({ error: quotaErr }, { status: 403 });
     }
     const hit = checkSensitiveAll([title, content]);
     if (!hit.ok) return reject(hit, "bbs.post");
@@ -79,8 +83,10 @@ export async function POST(req: NextRequest) {
     const replyTo = parseInt(String(body.replyTo ?? ""), 10) || 0;
     if (!id) return NextResponse.json({ error: "参数错误" }, { status: 400 });
     if (!content) return NextResponse.json({ error: "内容不能为空" }, { status: 400 });
+    // 未上榜限制（2026-11-09 张老师要求）：只能回复自己发布的主题（不限次数），上榜用户不受限
     if (!admin && !(await canPost(session.uid))) {
-      return NextResponse.json({ error: "加入排行后才能回复" }, { status: 403 });
+      const ownErr = await checkReplyOwnPost(session.uid, id);
+      if (ownErr) return NextResponse.json({ error: ownErr }, { status: 403 });
     }
     const hit = checkSensitive(content);
     if (!hit.ok) return reject(hit, "bbs.reply");
