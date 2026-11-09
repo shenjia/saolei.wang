@@ -10786,7 +10786,7 @@ html:has(#online_play) #footer {
   background: #272822;
   color: #f8f8f2;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-  z-index: 1410;
+  z-index: 891; /* 页面态沉到页头(#header z900)之下——导航菜单第一优先级（2026-11-09 张老师）；全屏回放层打开时由 body:has(.vprfs.show) 提回 1510 */
   pointer-events: none;
   font: 11px/18px Arial, "PingFang SC", sans-serif;
   text-align: center;
@@ -10805,8 +10805,15 @@ html:has(#online_play) #footer {
   background: #49483e;
   color: #b1b1a4;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 1400;
+  z-index: 890; /* 页面态沉到页头(#header z900)之下——用户下拉菜单永远压过面板（2026-11-09 张老师：菜单第一优先级，首页实证面板盖住菜单）；全屏回放层打开时由 body:has(.vprfs.show) 提回 1500 压过 .vprfs(z1200) */
   text-align: left;
+}
+/* 全屏回放层（.vprfs z1200）打开期间：按键记录/提示必须压过遮罩层，整体提回高层。 */
+body:has(.vprfs.show) .replay_key_panel {
+  z-index: 1500;
+}
+body:has(.vprfs.show) .replay_mouse_tip {
+  z-index: 1510;
 }
 .replay_key_panel .gr_title {
   flex: 0 0 auto;
