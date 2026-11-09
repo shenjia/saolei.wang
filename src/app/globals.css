@@ -6352,6 +6352,18 @@ body #page.two_columns li.main {
     overflow-x: auto;
   }
 }
+  /* 玩家卡片盒排除横滑（2026-11-09 张老师反馈 1027px 卡片底部出水平滚动条）：
+     卡片盒定宽内容 210，.scores min-content 214 仅溢出 4px、落入 30px 右 padding
+     （≥1189 桌面 overflow:visible 本就如此，无观感差异）；
+     真正的滚动条来源是卡内 hover 气泡（军衔条件 title[data-tip]::after、玩家名
+     .pt_bubble 等）——absolute + opacity:0 常驻占位伪元素，盒一变横滑容器它们的
+     scrollable overflow 就被计入（1027 实测 scrollWidth 285 vs clientWidth 270，
+     真实元素最右仅 245）→ 凭空出 15px 滚动条。卡片盒禁横滑后气泡照常溢出盒外、
+     与桌面 hover 行为一致。放在上面通用规则之后，同特异性后者胜。 */
+  body #page .box:has(.user_card) {
+    overflow-x: visible;
+  }
+}
 
 /* ---------- iOS Safari 文本自动放大（text autosizing）禁用（2026-10-28 玩家反馈） ----------
    玩家 iPhone Safari 看排行页文字整体膨胀无法阅读（首页正常）。机理：Mobile Safari 对
