@@ -59,6 +59,7 @@ import { PracticeToday } from "@/components/PracticeToday";
 import { ReviewEntry } from "@/components/ReviewEntry";
 import { getPracticeToday, getRankedToday } from "@/lib/practice";
 import { getSiteUpdates } from "@/lib/site-updates";
+import { getFeedSalts } from "@/lib/feedsalt";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { getThunderKingThreshold } from "@/lib/title-system";
 
@@ -76,9 +77,15 @@ export default async function HomePage() {
     showEmailNotice = !auth || Number(auth.emailVerified) === 0;
   }
 
+  // 登录态实时盐（2026-11-09 张老师需求）：已登录访问首页时，动态流/录像发现流不走
+  // 5 分钟缓存——盐=内容水位探测（feedsalt，亚毫秒探测+5s 微缓存），内容无变化命中
+  // 同键热缓存（零开销），有新内容换键阻塞重建一次，登录即所见即所得。
+  // 访客（未登录）盐为空串，键空间与预热体系完全一致，路径零变化。
+  const salts = await getFeedSalts();
+
   const [news, newbies, hot, newsTotal, videos, videoTotal, updates] = await Promise.all([
-    getHomeNews(),
-    getNewbies(),
+    getHomeNews(salts.news),
+    getNewbies(salts.news),
     // 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块，数据源原 /video 右栏同款；
     // 2026-10-22 张老师要求：10 → 9，少占一个位置；
     // 同日再调：论坛新帖 6 → 5 腾位置，热门录像 9 → 10 收回；
@@ -87,12 +94,13 @@ export default async function HomePage() {
     // 席位数收敛在 getHotVideos 签名默认值（config.HOME_HOT_VIDEO_NUMBER），与预热注册天然同参
     getHotVideos(),
     // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
-    getHomeNewsCount(),
+    getHomeNewsCount(salts.news),
     // 首页「最新录像」发现流（2026-10-23 起走去重口径：首页 feed 与 /api/video/more
     // feedPage 分支共用 getVideoFeedPage 的 (用户,级别) 配额 + 纪录盘保位；翻页 API 同源）
     // 首页参数收敛在 getHomeVideoFeedPage/getHomeVideoFeedCount 零参包装（queries.ts 单点维护）
-    getHomeVideoFeedPage(),
-    getHomeVideoFeedCount(),
+    // 2026-11-09：登录态传盐实时化（访客空盐=原键）
+    getHomeVideoFeedPage(salts.video),
+    getHomeVideoFeedCount(salts.video),
     // 更新历史（2026-11-06 更新通告浮层；同日五轮张老师要求：未登录也弹，恒取）
     getSiteUpdates(),
   ]);
@@ -115,6 +123,8 @@ export default async function HomePage() {
   // 客户端 Feed 的 initial 态不随 router.refresh 重置（软导航铁律），服务端重渲再新鲜
   // 也到不了已挂载的列表——以内容签名作 key：内容无变化时 key 稳定（翻页/筛选态保留），
   // 审核改变行状态（✓ 下标）或流成员（新动态/屏蔽出流）时 key 变化强制重挂载吃新数据。
+  // 2026-11-09 登录态实时盐：盐已让 SSR 每次拿到最新行集，签名 key 机制保留兜底
+  // （访客路径审核联动依旧依赖它）。
   const newsFeedKey = news.map((n) => String(n.id)).join("-");
   const videoFeedKey = videos.map((v) => `${v.id}:${v.status}`).join("-");
 

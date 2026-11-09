@@ -251,28 +251,35 @@ export { videoScores } from "./format";
 // 重建成本全部由预热请求承担、访客永远命中热缓存。改查询逻辑须升版本号。
 // 2026-11-06 张老师需求：管理员批量审核完录像后首页动态要立刻可见——挂 "home-news"
 // tag，审核管线经 refreshHomeNewsCache() 主动失效+即时重建，不等 5 分钟 TTL。
-const fetchHomeNews = unstable_cache(
-  async (limit: number) => getNews({ limit, home: true }),
-  ["home-news-v1"],
+// 2026-11-09 张老师需求：登录态首页动态流实时化。访客路径零变化（salt=""，键与原
+// 条目等价，预热体系照常保温）；登录态带水位盐（feedsalt 探测，page.tsx 传入）——
+// 内容无变化命中同键热缓存，有新动态换键阻塞重建一次，登录即所见即所得。
+// 盐作普通字符串参数（非函数内自取）：queries.ts 会被客户端 bundle 引到（BbsFeed 链），
+// 静态 import feedsalt→auth→next/headers 会炸 Client 编译（E394 同源陷阱）。
+export async function getHomeNews(salt = "", limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
+  return fetchHomeNewsCached(salt, limit);
+}
+
+// 盐进键（keyArgs）：键空间有界——盐只随真实内容变化，无法被请求参数伪造
+const fetchHomeNewsCached = unstable_cache(
+  async (salt: string, limit: number) => getNews({ limit, home: true }),
+  ["home-news-live-v1"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
-const fetchNewbies = unstable_cache(
-  async (limit: number) => getNews({ type: NEWS_TYPE.NEWBIE, limit }),
-  ["home-newbies-v1"],
+export async function getNewbies(salt = "", limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]> {
+  return fetchNewbiesCached(salt, limit);
+}
+
+// 入伍新兵随动态流水位同步刷新（2026-10-13 定：不单独走实时，复用 news 盐零探测成本）
+const fetchNewbiesCached = unstable_cache(
+  async (salt: string, limit: number) => getNews({ type: NEWS_TYPE.NEWBIE, limit }),
+  ["home-newbies-live-v1"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
-export async function getHomeNews(limit = HOME_NEWS_NUMBER): Promise<NewsItem[]> {
-  return fetchHomeNews(limit);
-}
-
-export async function getNewbies(limit = HOME_NEWBIE_NUMBER): Promise<NewsItem[]> {
-  return fetchNewbies(limit);
-}
-
-// 首页访客路径自驱预热：注册行紧跟查询定义（新增首页查询时在同一处补一行即可，
-// TTL 引用与条目 revalidate 同一个常量，改缓存时长时预热提前量自动跟随）
+// 预热注册传空盐＝访客键（2026-11-09 登录态实时化后：预热体系服务访客路径，
+// 登录态热键由登录访问自然保温；访客站多数，热键命中结构不变）
 registerPreheat("home-news", REVALIDATE_HOME_CACHE, () => getHomeNews());
 registerPreheat("home-newbies", REVALIDATE_HOME_CACHE, () => getNewbies());
 
@@ -740,6 +747,8 @@ async function getNewsCountImpl(opts: {
   home?: boolean;
   /** 与 getNews 的首页阶段筛选一致（2026-10-29） */
   stage?: FeedStage;
+  /** 登录态实时盐（2026-11-09）：仅作 unstable_cache 键成分，非筛选条件；impl 直查路径忽略 */
+  salt?: string;
 }): Promise<number> {
   // 阶段筛选走 raw SQL count（档位条件需按关联录像 real_time 求有效评定时间，
   // 与 getNews / getNewsPage 共用 newsFeedSqlParts，保证行集与计数严格一致）。
@@ -752,6 +761,7 @@ async function getNewsCountImpl(opts: {
     );
     return N(rows[0]?.c);
   }
+  void opts.salt;
   return prisma.news.count({
     where: {
       // 与 getNews / getNewsPage 严格同一类型口径（级别筛选只认成绩类，2026-10-27），
@@ -781,14 +791,23 @@ const fetchNewsCountNoUser = unstable_cache(
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
+// 登录态实时盐版（2026-11-09）：首页计数条随水位变化即时重建；访客键=salt""
+const fetchNewsCountLive = unstable_cache(
+  async (salt: string, opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) =>
+    getNewsCountImpl(opts),
+  ["news-count-live-v1"],
+  { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
+);
+
 export async function getNewsCount(opts: Parameters<typeof getNewsCountImpl>[0]): Promise<number> {
   if (opts.userId) return getNewsCountImpl(opts);
+  if (opts.home && opts.salt) return fetchNewsCountLive(opts.salt, opts);
   return fetchNewsCountNoUser(opts);
 }
 
 /** 首页新闻总数（固定 home 口径）：page.tsx 与预热注册共用此零参形态，参数不可能漂移 */
-export function getHomeNewsCount(): Promise<number> {
-  return getNewsCount({ home: true });
+export function getHomeNewsCount(salt = ""): Promise<number> {
+  return getNewsCount({ home: true, ...(salt ? { salt } : {}) });
 }
 registerPreheat("news-count", REVALIDATE_HOME_CACHE, () => getHomeNewsCount());
 
@@ -1441,8 +1460,11 @@ const fetchFeedDedupIdsImpl = async (
   stage: FeedStage,
   page: number,
   base: number,
-  limit: number
+  limit: number,
+  /** 登录态实时盐（2026-11-09）：仅作 unstable_cache 键成分，SQL 逻辑不使用 */
+  salt = ""
 ): Promise<number[]> => {
+  void salt;
   const lvCond = level !== "all" ? ` AND v.level = '${assertVideoLevel(level)}'` : "";
   // 阶段筛选需要 vi.real_time 算有效评定时间；nf 需要 vi.noflag——两者都 JOIN video_info
   // （vi.create_time 与 v.create_time 全量一致，排序仍用 v），其余路径保持原单表形态（2026-10-29）
@@ -1469,8 +1491,8 @@ const fetchFeedDedupIdsImpl = async (
   `);
   return rows.map((r) => N(r.id));
 };
-// v3：2026-10-29 阶段筛选维度并入（stage 进参数即进缓存键；home×stage×nf 键空间有界）
-const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"], {
+// 2026-11-09 登录态实时化：salt 进键（访客 "" = 原键空间），缓存条目复用原实现（v3 逻辑零变化）
+const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v4"], {
   revalidate: REVALIDATE_HOME_CACHE,
   // 审核联动（2026-11-09）：一键过/屏蔽后审核收口 revalidateTag("home-video-feed")
   // 即时打脏 + kick 预热重建，不等 300s TTL（屏蔽录像最长 5 分钟仍挂首页的根因）
@@ -1479,7 +1501,14 @@ const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v3"
 
 /** 首页发现流去重总数（与 fetchFeedDedupIds 口径严格一致）：
  *  Σ 每组 (用户,级别) 的 min(非纪录盘数, 配额) + 纪录盘总数。 */
-const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean, stage: FeedStage): Promise<number> => {
+const fetchFeedDedupCountImpl = async (
+  level: VideoLevel | "all",
+  nf: boolean,
+  stage: FeedStage,
+  /** 登录态实时盐（2026-11-09）：仅作 unstable_cache 键成分，SQL 逻辑不使用 */
+  salt = ""
+): Promise<number> => {
+  void salt;
   const lvCond = level !== "all" ? ` AND v.level = '${assertVideoLevel(level)}'` : "";
   // 与 fetchFeedDedupIdsImpl 完全同款 join/条件口径（保证行集与计数一致）
   const needsVi = nf || stage !== "";
@@ -1499,18 +1528,19 @@ const fetchFeedDedupCountImpl = async (level: VideoLevel | "all", nf: boolean, s
   `);
   return N(rows[0]?.c);
 };
-// v3：2026-10-29 阶段筛选维度并入（同 feed-dedup-v3）
-const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v3"], {
+// v4：2026-11-09 登录态实时化（salt 进键，同 feed-dedup-v4）
+const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v4"], {
   revalidate: REVALIDATE_HOME_CACHE,
   tags: ["home-video-feed"], // 同 fetchFeedDedupIds：审核收口即时打脏
 });
 
 /** 首页「最新录像」发现流总数（去重口径，2026-10-23）——
- *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。 */
+ *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。
+ *  salt（2026-11-09 登录态实时盐，服务端取，不信客户端参数）：登录态随水位即时重建。 */
 export async function getVideoFeedCount(
-  opts: { level?: VideoLevel | "all"; nf?: boolean; stage?: FeedStage } = {}
+  opts: { level?: VideoLevel | "all"; nf?: boolean; stage?: FeedStage; salt?: string } = {}
 ): Promise<number> {
-  return fetchFeedDedupCount(opts.level ?? "all", opts.nf === true, opts.stage ?? "");
+  return fetchFeedDedupCount(opts.level ?? "all", opts.nf === true, opts.stage ?? "", opts.salt ?? "");
 }
 
 export async function getVideoFeedPage(opts: {
@@ -1521,18 +1551,29 @@ export async function getVideoFeedPage(opts: {
   nf?: boolean;
   /** 首页阶段筛选（2026-10-29）：按录像行内快照 exp_time/ranked 分档 */
   stage?: FeedStage;
+  /** 登录态实时盐（2026-11-09，仅首页 feedPage=1 与 SSR 同源时由调用方传入） */
+  salt?: string;
 }): Promise<VideoListItem[]> {
-  const ids = await fetchFeedDedupIds(opts.level, opts.nf === true, opts.stage ?? "", opts.page, opts.base, opts.limit);
+  const ids = await fetchFeedDedupIds(
+    opts.level,
+    opts.nf === true,
+    opts.stage ?? "",
+    opts.page,
+    opts.base,
+    opts.limit,
+    opts.salt ?? ""
+  );
   return getVideosByIds(ids);
 }
 
 /** 首页发现流第 1 页 / 总数（2026-10-23 去重口径）：page.tsx 与预热注册共用的零参形态，
- *  首页参数（base/limit/level）只在这里写一份 */
-export function getHomeVideoFeedPage(): Promise<VideoListItem[]> {
-  return getVideoFeedPage({ level: "all", page: 1, base: HOME_VIDEO_NUMBER, limit: HOME_VIDEO_NUMBER });
+ *  首页参数（base/limit/level）只在这里写一份。salt（2026-11-09 登录态实时盐）：
+ *  访客 "" 键与预热同键；登录态换键阻塞重建一次，实时 */
+export function getHomeVideoFeedPage(salt = ""): Promise<VideoListItem[]> {
+  return getVideoFeedPage({ level: "all", page: 1, base: HOME_VIDEO_NUMBER, limit: HOME_VIDEO_NUMBER, salt });
 }
-export function getHomeVideoFeedCount(): Promise<number> {
-  return getVideoFeedCount({ level: "all" });
+export function getHomeVideoFeedCount(salt = ""): Promise<number> {
+  return getVideoFeedCount({ level: "all", salt });
 }
 registerPreheat("video-feed-page1", REVALIDATE_HOME_CACHE, () => getHomeVideoFeedPage());
 registerPreheat("video-feed-count", REVALIDATE_HOME_CACHE, () => getHomeVideoFeedCount());
@@ -1546,7 +1587,8 @@ registerPreheat("video-feed-count", REVALIDATE_HOME_CACHE, () => getHomeVideoFee
  *  旧缓存计数含 1285 部屏蔽行，必须失效重来；
  *  2026-10-23 v4：待审放行进前台——过滤放宽 v.status<>0，旧缓存计数不含待审行，失效 */
 const fetchVideoCount = unstable_cache(
-  async (opts: { level?: VideoLevel | "all"; nf?: boolean } = {}) => {
+  async (opts: { level?: VideoLevel | "all"; nf?: boolean; salt?: string } = {}) => {
+    void opts.salt; // 登录态实时盐：仅作键成分（见 unstable_cache 包装处），SQL 逻辑不使用
     if (opts.nf) {
       const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
         `SELECT COUNT(*) AS c FROM video v JOIN video_info vi ON vi.id = v.id WHERE v.status <> ${VIDEO_STATUS.BANNED}${
@@ -1562,11 +1604,11 @@ const fetchVideoCount = unstable_cache(
       },
     });
   },
-  ["video-count-v4"],
+  ["video-count-v5"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-video-feed"] } // 屏蔽改变总数，审核收口即时打脏
 );
 
-export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boolean } = {}): Promise<number> {
+export async function getVideoCount(opts: { level?: VideoLevel | "all"; nf?: boolean; salt?: string } = {}): Promise<number> {
   return fetchVideoCount(opts);
 }
 

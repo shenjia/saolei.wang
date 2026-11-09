@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { getNews, getNewsCount, getNewsPage } from "@/lib/queries";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { getThunderKingThreshold } from "@/lib/title-system";
+import { getFeedSalts } from "@/lib/feedsalt";
 import { NEWS_PAGESIZE, NEWS_TYPE } from "@/lib/config";
 import { parseFeedStage } from "@/lib/stage";
 
@@ -34,6 +35,9 @@ export async function GET(req: Request) {
   const stage = parseFeedStage(p.get("stage"));
   // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
   const kingTh = await getThunderKingThreshold();
+  // 2026-11-09 登录态实时化：home 口径的「剩余条数」计数走缓存，服务端按 session 取盐
+  // 与首页 SSR 同键（getNews 行查询本身无缓存恒实时，盐只影响 total 口径一致性）
+  const homeSalt = home ? (await getFeedSalts()).news : "";
 
   // 页码模式（2026-10-14 用户主页动态翻页条）：?page=N 从头数第 N 页
   const pageRaw = parseInt(p.get("page") ?? "", 10);
@@ -42,7 +46,7 @@ export async function GET(req: Request) {
     const base = p.get("base") ? parseInt(p.get("base") ?? "", 10) || NEWS_PAGESIZE : NEWS_PAGESIZE;
     const [items, total] = await Promise.all([
       getNewsPage({ types, userId, level, home, stage, page, base, limit: size }),
-      getNewsCount({ types, userId, level, home, stage }),
+      getNewsCount({ types, userId, level, home, stage, ...(homeSalt ? { salt: homeSalt } : {}) }),
     ]);
     const withTitles = items.map((news) => ({
       news,
@@ -60,7 +64,7 @@ export async function GET(req: Request) {
   const [items, total] = await Promise.all([
     getNews({ types, userId, level, cursor: cursor || undefined, limit: size, home, stage }),
     // 同条件下的动态总数：「加载更多」括号内显示剩余条数用
-    getNewsCount({ types, userId, level, home, stage }),
+    getNewsCount({ types, userId, level, home, stage, ...(homeSalt ? { salt: homeSalt } : {}) }),
   ]);
   const withTitles = items.map((news) => ({
     news,

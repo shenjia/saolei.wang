@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoFeedCount, getVideoList } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
+import { getFeedSalts } from "@/lib/feedsalt";
 import {
   VIDEO_PAGESIZE,
   VIDEO_LEVELS,
@@ -81,7 +82,9 @@ export async function GET(req: Request) {
 
   // ③ 首页页码模式（feedPage）：id 倒序第 N 页起 size 条
   //  2026-10-23：首页发现流去重口径——(用户,级别) 配额 + 纪录盘保位（getVideoFeedPage 内实现），
-  //  total 同步换 getVideoFeedCount 去重口径（与首页 SSR 同源同键，共享 60s 缓存）
+  //  total 同步换 getVideoFeedCount 去重口径（与首页 SSR 同源同键，共享缓存）
+  //  2026-11-09：登录态实时盐由服务端按 session 自取（feedsalt），与首页 SSR 同键同源；
+  //  不信客户端参数（防止伪造盐把缓存键空间打爆）。盐=登录态水位探测，5s 微缓存
   const feedPage = parseInt(p.get("feedPage") ?? "", 10);
   if (feedPage >= 1) {
     const level = parseLevel(p);
@@ -91,9 +94,10 @@ export async function GET(req: Request) {
     const nf = p.get("nf") === "1";
     // 2026-10-29：首页阶段筛选（gen/col/sol/god/man，按录像行内快照分档）；非法值回「全部」
     const stage = parseFeedStage(p.get("stage"));
+    const salt = (await getFeedSalts()).video;
     const [items, total] = await Promise.all([
-      getVideoFeedPage({ level, page: feedPage, base, limit: size, nf, stage }),
-      getVideoFeedCount({ level, nf, stage }),
+      getVideoFeedPage({ level, page: feedPage, base, limit: size, nf, stage, salt }),
+      getVideoFeedCount({ level, nf, stage, salt }),
     ]);
     return NextResponse.json({
       items,
