@@ -55,9 +55,20 @@ export default async function EmailVerifyPage({
           // 2026-10-23 张老师口径：占坑成立 → 整个绑定失败，清掉草稿（含 email 字段）让用户换邮箱重来
           const clash = await prisma.userAuth.findUnique({ where: { username: auth.email } });
           if (!clash || clash.id === auth.id) {
+            // 保留原登录名（2026-11-09）：首次绑定换名时把旧 username 存入 old_username，
+            // 供登录兜底（旧名 + 密码正确可直接登录）；重绑换邮箱不覆盖首次旧名。
+            // 登录名本身已是该邮箱（新站注册用户补绑定）则无需记录。
+            const keepOld =
+              auth.oldUsername ?? (auth.username !== auth.email ? auth.username : null);
             await prisma.userAuth.update({
               where: { id: auth.id },
-              data: { username: auth.email, emailVerified: now, emailToken: null, updateTime: now },
+              data: {
+                username: auth.email,
+                oldUsername: keepOld,
+                emailVerified: now,
+                emailToken: null,
+                updateTime: now,
+              },
             });
             ok = true;
             email = auth.email;

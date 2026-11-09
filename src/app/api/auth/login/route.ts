@@ -23,7 +23,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "请输入用户名和密码" }, { status: 400 });
   }
 
-  const auth = await prisma.userAuth.findUnique({ where: { username } });
+  // 主查当前登录名；查不到再按 old_username 兜底（2026-11-09：绑定邮箱换名后，
+  // 用户拿旧登录名登录不再报「用户名或密码错误」——密码正确即放行，无额外信息泄露）
+  let auth = await prisma.userAuth.findUnique({ where: { username } });
+  if (!auth) {
+    auth = await prisma.userAuth.findFirst({ where: { oldUsername: username } });
+  }
   if (!auth || !verifyPassword(password, auth.salt, auth.password)) {
     return NextResponse.json({ error: "用户名或密码错误" }, { status: 401 });
   }
