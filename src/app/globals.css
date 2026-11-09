@@ -5496,11 +5496,14 @@ body #page.ranking_old .ranking_box {
 .area_table td.num.current {
   color: #fdc61d;
 }
-/* 活跃指数命中列整列绿色（2026-11-02 张老师要求；战力指数仍金色；2026-11-09 活跃榜同口径） */
+/* 活跃指数命中列整列绿色（2026-11-02 张老师要求；战力指数仍金色；2026-11-09 活跃榜同口径；
+   2026-11-10 地区内页活跃列 c_act 命中同口径——绿压金） */
 .area_table th a.current.act_cur,
 .area_table td.num.current.act_cur,
 .active_table th a.current.act_cur,
-.active_table td.num.current.act_cur {
+.active_table td.num.current.act_cur,
+.ranking_table th a.current.act_cur,
+.ranking_table td.c_act.current.act_cur {
   color: #a6e22e;
 }
 
@@ -6990,7 +6993,7 @@ body #page {
   color: #939387;
 }
 /* 活跃列（2026-11-10 地区内页）：7 日活跃值，绿色档（与活跃指数语义呼应）；
-   排序命中列走通用 .current 黄 */
+   排序命中挂 act_cur 保持绿色（2026-11-10 张老师要求，规则在上方 5500 区） */
 .ranking_table td.c_act {
   color: #a6e22e;
 }

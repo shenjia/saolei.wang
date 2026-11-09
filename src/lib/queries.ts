@@ -2837,7 +2837,9 @@ export async function getRankingTable(
         ).map((s) => [N(s.id), N(s.expTime)])
       )
     : null;
-  const actMap = level === "act" ? new Map(rows.map((r) => [N((r as { userId: bigint }).userId), N((r as { activePoints: number }).activePoints)])) : null;
+  // 活跃值（2026-11-10 张老师要求）：**任何排序都带出**——地区内页活跃列常驻，
+  // 不能只在 by=act 时有值（切列后龚浩然们的活跃值变「-」）；按行批量点查快照表
+  const actMap = await getActPoints(rowIds);
   const scoreRecById = new Map(scoreRows.map((s) => [N(s.id), s as unknown as Record<string, bigint | number | null>]));
   const result: RankingRow[] = rows.map((r, i) => {
     const uid = rowIds[i];
@@ -2850,8 +2852,8 @@ export async function getRankingTable(
     const videos: Record<string, number> = {};
     for (const b of RANKING_BYS) {
       if (b === "act") {
-        // 活跃值只在排序命中时展示值有意义，但列固定渲染 → 全行带出（快照点查批量，无逐行开销）
-        scores[b] = actMap?.get(uid) ?? 0;
+        // 活跃值任何排序都带出（actMap 批量点查）；0=近 7 日无活跃，渲染端显示「-」
+        scores[b] = actMap.get(uid) ?? 0;
         videos[b] = 0;
         continue;
       }

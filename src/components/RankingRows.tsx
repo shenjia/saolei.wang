@@ -50,9 +50,10 @@ function ScoreCell({
 }) {
   const v = row.scores[col.by];
   const isTime = col.by.endsWith("_time");
-  // 活跃列（2026-11-10 地区内页）：7 日活跃值，纯数字无录像链接；0=7 日无活跃
+  // 活跃列（2026-11-10 地区内页）：7 日活跃值，纯数字无录像链接；0=7 日无活跃；
+  // 排序命中挂 act_cur 保绿色（2026-11-10 张老师要求：命中列也绿，同活跃指数口径）
   if (col.by === "act") {
-    return <td className={`${col.cls}${current ? " current" : ""}`}>{v ? v : "-"}</td>;
+    return <td className={`${col.cls}${current ? " current act_cur" : ""}`}>{v ? v : "-"}</td>;
   }
   // hover 按级别变色（2026-10-13 张老师要求，与录像列表同逻辑）：初级绿、中级橙、高级金；
   // 总计列（sum）保持全站 hover 绿
@@ -203,7 +204,7 @@ export function RankingHead({
                 by: c.by === "sum_time" ? undefined : c.by,
                 page: undefined,
               })}
-              className={c.by === by ? "current" : ""}
+              className={c.by === by ? `current${c.by === "act" ? " act_cur" : ""}` : ""}
               title={`按${c.by === "act" ? "活跃值" : c.label === "3BV/s" ? "3BV/s" : c.label + "时间"}排列`}
             >
               {c.label}
