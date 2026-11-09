@@ -60,7 +60,12 @@ export const config = {
     // 其余页面文档请求一律进 proxy 参与匿名闸判定（登录态/有通行证无感放行）。
     // 2026-11-09 补 icon.svg/apple-icon.png：metadata 图标也是 Next 路由（非 public 静态树），
     // 漏豁免会被匿名闸 307 到验证页 → 页头 logo 裂图（匿名访客首访必现，登录/有通行证正常）。
-    "/((?!api/|ws/|_next/|videos/|uploads/|images/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|account|active|favicon\\.ico|icon\\.svg|apple-icon\\.png|robots\\.txt|sitemap).*)",
+    // 2026-11-09 补 openms-logo.svg：绑定授权页示意图的合作站 LOGO（public 静态树），同理无需过闸。
+    // 2026-11-09 补 page/api：开放 API 说明页（footer 链接 + 外部开发者从搜索引擎直达），
+    // 目标读者就是机器人/第三方服务，过扫雷闸自相矛盾，直接豁免。
+    // 2026-11-09 补 page/download：软件下载页（/download 301 落点，游客免费资源获取设闸自断
+    // 入口——小写 /download/** 旧站 .zip/.exe 直链静态树本就有豁免，勿混淆）。
+    "/((?!api/|ws/|_next/|videos/|uploads/|images/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|page/api|page/download|account|active|favicon\\.ico|icon\\.svg|apple-icon\\.png|openms-logo\\.svg|robots\\.txt|sitemap).*)",
   ],
 };
 
@@ -146,7 +151,9 @@ export function proxy(req: NextRequest) {
   if (isRsc) {
     const path = url.pathname;
     // API、WS、静态资源有自己鉴权/缓存口径，不能套页面 RSC 通行证。
-    if (path.startsWith("/api/") || path.startsWith("/ws/") || path.startsWith("/_next/") || path.startsWith("/videos/")) {
+    // /page/api 开放 API 说明页已过闸豁免（见 matcher 注释），RSC 导航同步放行。
+    // /page/download 软件下载页同批豁免（2026-11-09），切页导航同步放行。
+    if (path.startsWith("/api/") || path.startsWith("/ws/") || path.startsWith("/_next/") || path.startsWith("/videos/") || path.startsWith("/page/api") || path.startsWith("/page/download")) {
       return NextResponse.next();
     }
     if (!canUseRsc(req)) {
