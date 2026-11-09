@@ -901,7 +901,6 @@ body #video_view .video_cell .playable {
   visibility: visible;
   opacity: 1;
 }
-
 /* ---- 触屏端 flop 入口弹出裁切修复（2026-11-09 张老师反馈手机端「入口显示不全」）----
    行为保持与桌面一致：默认隐藏、hover/点按才在播放按钮下方出现。气泡是
    浮动层（absolute），弹出时直接绘到盒外盖住下方内容，不给它预留盒内空间
@@ -2377,6 +2376,15 @@ del[data-tip]:hover::after {
   right: 0;
   top: 50%;
   margin-top: -11px; /* 按钮高 22px 的半高上移，与两行排名中线对齐（禁 transform，理由见上） */
+  line-height: 0;
+}
+/* 用户卡片「和TA比拼一下」对战按钮（2026-11-09 张老师需求）：发消息气泡正下方，
+   同右缘绝对定位、垂直落到气泡下方（气泡半高 11px + 间隙 2px）；禁 transform 同上 */
+.user_card .ucd_vs {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  margin-top: 13px;
   line-height: 0;
 }
 /* 无数据占位（未加入地区排行 / 未加入排行）：压过排行文字色，须写在最后 */
@@ -3970,6 +3978,103 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 #account_manage .acct_donate_row .hint {
   color: #75715e;
   font-size: 12px;
+}
+/* 开源扫雷网绑定授权页的滑块开关（2026-11-09）：同款复制自 #account_manage .acct_gsw，
+   差异点（张老师要求）：开关后的文字随开关态变色——开=亮灰 #bbbbbb，关=暗灰 #75715e。 */
+#account_openms_bind .acct_gsw {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: visible;
+  line-height: normal;
+  white-space: normal;
+}
+#account_openms_bind .acct_gsw input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+#account_openms_bind .acct_gsw .track {
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: #555550;
+  position: relative;
+  flex: 0 0 auto;
+  transition: background 0.15s;
+}
+#account_openms_bind .acct_gsw .track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e8e8e0;
+  transition: left 0.15s;
+}
+#account_openms_bind .acct_gsw input:checked + .track {
+  background: #34c759;
+}
+#account_openms_bind .acct_gsw input:checked + .track::after {
+  left: 16px;
+}
+#account_openms_bind .acct_gsw input:disabled + .track {
+  opacity: 0.5;
+}
+#account_openms_bind .acct_gsw .txt {
+  color: #75715e; /* 关=暗灰 */
+  font-size: 14px;
+  transition: color 0.15s;
+}
+#account_openms_bind .acct_gsw input:checked ~ .txt {
+  color: #bbbbbb; /* 开=亮灰 */
+}
+/* 绑定示意图（2026-11-09 张老师要求）：分割线下方，左扫雷网、右开源扫雷网，
+   各含 LOGO/站点名/域名，中间箭头（发起模式向右、确认模式向左）。
+   站点块配方同军衔页 title_card（.box 暗底上叠半透明白：4% 白填充 / 9% 白边 / r8）；
+   站名亮灰、域名暗灰；箭头加粗加大绿色（同开关 #34c759）。 */
+#account_openms_bind .bind_diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  margin: 20px 0 4px;
+}
+#account_openms_bind .bind_diagram .side {
+  text-align: center;
+  min-width: 120px;
+  padding: 12px 18px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+}
+#account_openms_bind .bind_diagram .side img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 8px;
+  border-radius: 10px;
+}
+#account_openms_bind .bind_diagram .side .name {
+  font-weight: bold;
+  font-size: 14px;
+  color: #bbbbbb; /* 站名=亮灰 */
+}
+#account_openms_bind .bind_diagram .side .domain {
+  font-size: 12px;
+  color: #75715e; /* 域名=暗灰 */
+}
+#account_openms_bind .bind_diagram .arrow {
+  font-size: 44px;
+  font-weight: bold;
+  color: #34c759;
+  flex: 0 0 auto;
 }
 /* 侧栏几何与首页/录像详情页统一（五轮张老师要求）：legacy 默认 sidebar 222 / 盒 192，
    统一为 288 / 盒内容 210（外径 272，与 #home、#video_view 右栏完全一致）；
@@ -14817,4 +14922,313 @@ body #page.rating_page .rating_standard .rating_note {
 }
 @media (max-width: 380px) {
   .mscap_modal { padding-left: 12px; padding-right: 12px; }
+}
+
+/* ---------- 玩家对战 PK 页 /vs/[id]（2026-11-09 张老师需求，设计稿 design/vs-page.html） ----------
+   阵营式 BV 网格：我胜的 BV 绿色升序靠左 / 对方胜的玫瑰红升序靠右 / 独有与平局居中；
+   全页主色：我方绿 #a6e22e、对方玫瑰红 #e34f8c、胜者金 #fdc61a。 */
+
+/* 入口按钮：20px 交叉双剑，与 .msg_btn 同族；hover 金色（气泡按钮 hover 全站绿，对战用金色区分） */
+a.vs_btn,
+span.vs_btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0 0 0 2px; /* 与 button.msg_btn 的 margin-left 一致，性别图标右侧成组 */
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #b1b1a4;
+  vertical-align: middle;
+  transition: color 0.15s, background 0.15s;
+}
+a.vs_btn svg,
+span.vs_btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+a.vs_btn:hover {
+  color: #fdc61a;
+  background: rgba(253, 198, 26, 0.1);
+}
+span.vs_btn--disabled {
+  color: #49483e;
+  cursor: default;
+}
+
+/* ① 对战主视觉：左卡片（+雷达）｜金 VS｜右卡片（+雷达） */
+#vs_hero {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+.vs_card {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.vs_card_top {
+  display: flex;
+  gap: 12px;
+}
+.vs_avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.vs_card_right {
+  min-width: 0;
+}
+.vs_name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: bold;
+}
+.vs_name a {
+  color: #f8f8f2;
+  text-decoration: none;
+}
+.vs_name a:hover {
+  color: #fdc61a;
+}
+.vs_en {
+  margin: 0;
+  color: #75715e;
+  font-size: 13px;
+}
+.vs_title {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.vs_ranks {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #888;
+}
+.vs_ranks .rank_line {
+  display: block;
+}
+.vs_ranks em,
+.vs_ranks .vs_null {
+  color: #e6db74;
+  font-style: normal;
+  font-weight: bold;
+}
+.vs_ranks .vs_null {
+  color: #75715e;
+  font-weight: normal;
+}
+.vs_radar {
+  text-align: center;
+}
+.vs_radar h3 {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #8a8878;
+  font-weight: normal;
+}
+.vs_vs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vs_vs span {
+  font-size: 64px;
+  font-weight: 900;
+  font-style: italic;
+  color: #fdc61a;
+  text-shadow: 0 0 18px rgba(253, 198, 26, 0.45), 2px 2px 0 #7a5c00;
+  letter-spacing: 2px;
+}
+
+/* ② 各项记录比拼 + ④ 统计表共用 */
+.vs_rec {
+  width: 100%;
+  max-width: 640px;
+}
+.vs_rec th,
+.vs_rec td {
+  padding: 5px 10px;
+  border-bottom: 1px solid #3e3d32;
+  text-align: right;
+  font-size: 13px;
+}
+.vs_rec tr > th:first-child,
+.vs_rec td.mk {
+  text-align: left;
+}
+.vs_rec tr.vs_head th {
+  color: #75715e;
+  font-weight: normal;
+  border-bottom: 1px solid #565549;
+}
+.vs_rec td.win {
+  color: #fdc61a;
+  font-weight: bold;
+}
+.vs_rec td.mk {
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.vs_rec td.tie_mk {
+  color: #e6db74;
+}
+.vs_rec th.c1 {
+  color: #a6e22e;
+}
+.vs_rec th.c2 {
+  color: #e874ab;
+}
+.vs_rule_note {
+  margin-top: 10px;
+  color: #636359;
+  font-size: 12px;
+}
+
+/* ③ 各BV比拼：阵营式行布局 */
+.vs_lv {
+  margin-top: 18px;
+}
+.vs_lv_head {
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+.vs_lv_cnt {
+  color: #888;
+  font-size: 13px;
+  margin-left: 6px;
+}
+.vs_bandrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  min-height: 28px;
+}
+.vs_band {
+  width: 64px;
+  flex: none;
+  color: #8a8878;
+  font-size: 12.5px;
+  background: #2b2b26;
+  border: 1px solid #3e3d32;
+  text-align: center;
+  padding: 4px 0;
+  white-space: nowrap;
+}
+.vs_mid {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.vs_grp {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.vs_c {
+  display: inline-flex;
+  width: 27px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 3px;
+  cursor: default;
+}
+.vs_seg {
+  width: 86px;
+  flex: none;
+  background: #2b2b26;
+  border: 1px solid #3e3d32;
+  padding: 2px 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+.vs_seg .s1,
+.vs_seg .s2 {
+  display: block;
+  font-weight: bold;
+}
+.vs_seg .s1 {
+  color: #a6e22e;
+}
+.vs_seg .s2 {
+  color: #e874ab;
+}
+.vs_lv_total .vs_band {
+  color: #b1b1a4;
+}
+.vs_legend {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  font-size: 12.5px;
+  color: #b1b1a4;
+}
+.vs_legend .lg i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: -2px;
+}
+
+/* ④ 胜负结果 */
+.vs_big {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin: 14px 0 18px;
+}
+.vs_big_s1,
+.vs_big_s2 {
+  font-size: 44px;
+  font-weight: bold;
+}
+.vs_big_s1 {
+  color: #a6e22e;
+}
+.vs_big_s2 {
+  color: #e874ab;
+}
+.vs_big .win_big {
+  color: #fdc61a;
+  text-shadow: 0 0 14px rgba(253, 198, 26, 0.4);
+}
+.vs_big_vs {
+  font-size: 28px;
+  color: #75715e;
+}
+.vs_verdict {
+  font-size: 18px;
+  color: #f8f8f2;
+  margin-left: 12px;
+}
+
+/* 看自己（直连 /vs/自己的 id）兜底提示 */
+.vs_self {
+  text-align: center;
+  padding: 40px 0;
+}
+.vs_self h1 {
+  font-size: 26px;
+}
+.vs_self p {
+  color: #75715e;
 }

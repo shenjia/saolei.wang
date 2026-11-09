@@ -15,6 +15,7 @@ const LOGIN_REQUIRED_PREFIXES = [
   "/admin",
   "/bbs/post",
   "/bbs/edit",
+  "/vs",
 ];
 
 /**

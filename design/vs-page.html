@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>玩家对战 PK 页 · 设计稿</title>
+<link rel="stylesheet" href="../public/styles/legacy-2013.css">
+<style>
+/* ===== 拟新增样式（设计稿内联预览，确认后落 globals.css） ===== */
+/* 入口按钮：20px 交叉双剑，与 .msg_btn 同族；hover 金色（气泡按钮 hover 全站绿，对战用金色区分） */
+.vs_btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+  padding:0; border:0; background:none; color:#75715e; cursor:pointer; vertical-align:middle; }
+.vs_btn svg { width:20px; height:20px; }
+.vs_btn:hover { color:#fdc61a; }
+.vs_btn--disabled { color:#49483e; cursor:default; }
+/* 主页 info 区入口：与 SendMessageButton 同排 */
+#user_view .info .vs_btn { margin-left:6px; }
+/* 卡片入口：气泡按钮正下方（气泡 right:0 top:50% margin-top:-11px 居中于排名块，
+   对战按钮同右缘、落到气泡下方：气泡半高 11px + 间隙 2px） */
+/* ⚠️ globals 里 .ucd_msg 定位限定在 .user_card .ranks 下，示意区无 .user_card 包裹，此处补等效定位 */
+.vs_demo_card .ucd_msg { position:absolute; right:0; top:50%; margin-top:-11px; line-height:0; }
+/* 示意区没引 globals.css：复刻 button.msg_btn 外观（22×22 透明底，hover 全站绿） */
+.vs_entry_demo button.msg_btn { width:22px; height:22px; margin:0 0 0 2px; padding:0; border:0;
+  border-radius:6px; background:transparent; background-image:none; box-shadow:none;
+  color:#b1b1a4; font-size:0; line-height:0; vertical-align:middle; }
+.vs_entry_demo button.msg_btn:hover { color:#a6e22e; background:rgba(166,226,46,.1); }
+.ucd_vs { position:absolute; right:0; top:50%; margin-top:13px; }
+.vs_demo_card { position:relative; display:inline-block; padding-right:40px; }
+.vs_demo_gender { color:#a6e22e; font-size:18px; font-weight:bold; }
+/* ===== PK 页 ===== */
+#vs_hero { display:flex; align-items:stretch; gap:12px; }
+.vs_card { flex:1 1 0; min-width:0; }
+.vs_card_top { display:flex; gap:12px; }
+.vs_avatar { width:84px; height:84px; border-radius:6px; object-fit:cover; }
+.vs_card_right { min-width:0; }
+.vs_name { margin:0; font-size:22px; font-weight:bold; }
+.vs_name a { color:#f8f8f2; text-decoration:none; }
+.vs_name a:hover { color:#fdc61a; }
+.vs_en { margin:0; color:#75715e; font-size:13px; }
+.vs_title { display:inline-block; margin-top:4px; padding:1px 8px; border:1px solid; border-radius:3px; font-size:12px; }
+.vs_ranks { margin-top:6px; font-size:13px; color:#888; }
+.vs_ranks .rank_line { display:block; }
+.vs_ranks em { color:#e6db74; font-weight:bold; font-style:normal; }
+.vs_radar { text-align:center; }
+.vs_radar h3 { margin:4px 0 0; font-size:14px; color:#8a8878; font-weight:normal; }
+.vs_vs { display:flex; align-items:center; justify-content:center; }
+.vs_vs span { font-size:64px; font-weight:900; font-style:italic; color:#fdc61a;
+  text-shadow:0 0 18px rgba(253,198,26,.45), 2px 2px 0 #7a5c00; letter-spacing:2px; }
+#vs_records table, #vs_result table { width:100%; max-width:640px; }
+.vs_rec th, .vs_rec td { padding:5px 10px; border-bottom:1px solid #3e3d32; text-align:right; font-size:13px; }
+.vs_rec tr > th:first-child, .vs_rec tr > td.mk { text-align:left; }
+.vs_rec thead th, .vs_rec tr.vs_head th { color:#75715e; font-weight:normal; border-bottom:1px solid #565549; }
+.vs_rec td.win { color:#fdc61a; font-weight:bold; }
+.vs_rec td.mk { color:#888; font-size:12px; white-space:nowrap; }
+.vs_rec td.tie_mk { color:#e6db74; }
+.vs_rec th.c1 { color:#9fc9e2; } .vs_rec th.c2 { color:#d9a8c0; }
+/* BV 网格 */
+.vs_lv { margin-top:18px; }
+.vs_lv_head { margin-bottom:6px; font-size:15px; }
+.vs_lv_cnt { color:#888; font-size:13px; margin-left:6px; }
+.vs_rec th.c1 { color:#a6e22e; } .vs_rec th.c2 { color:#e874ab; }
+/* BV 网格：阵营式行布局（我胜靠左 / 独有居中 / 对方胜靠右） */
+.vs_bandrow { display:flex; align-items:center; gap:10px; margin-top:6px; min-height:28px; }
+.vs_band { width:64px; flex:none; color:#8a8878; font-size:12.5px; background:#2b2b26;
+  border:1px solid #3e3d32; text-align:center; padding:4px 0; white-space:nowrap; }
+.vs_mid { flex:1 1 auto; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.vs_grp { display:inline-flex; gap:4px; flex-wrap:wrap; }
+.vs_c { display:inline-flex; width:27px; height:24px; align-items:center; justify-content:center;
+  font-size:12px; font-weight:bold; border-radius:3px; cursor:default; }
+.vs_seg { width:86px; flex:none; background:#2b2b26; border:1px solid #3e3d32;
+  padding:2px 4px; text-align:center; white-space:nowrap; }
+.vs_seg .s1, .vs_seg .s2 { display:block; font-weight:bold; }
+.vs_seg .s1 { color:#a6e22e; } .vs_seg .s2 { color:#e874ab; }
+.vs_lv_total .vs_band { color:#b1b1a4; }
+.vs_lv_total th { color:#b1b1a4; }
+.vs_legend { margin-top:14px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:12.5px; color:#b1b1a4; }
+.vs_legend .lg i { display:inline-block; width:14px; height:14px; margin-right:4px; border-radius:2px; vertical-align:-2px; }
+.vs_update { color:#75715e; margin-left:auto; }
+.vs_rule_note { margin-top:10px; color:#636359; font-size:12px; }
+/* 胜负结果 */
+.vs_big { display:flex; align-items:baseline; gap:16px; margin:14px 0 18px; }
+.vs_big_s1, .vs_big_s2 { font-size:44px; font-weight:bold; }
+.vs_big_s1 { color:#a6e22e; } .vs_big_s2 { color:#e874ab; }
+.vs_big .win_big { color:#fdc61a; text-shadow:0 0 14px rgba(253,198,26,.4); }
+.vs_big_vs { font-size:28px; color:#75715e; }
+.vs_verdict { font-size:18px; color:#f8f8f2; margin-left:12px; }
+/* 设计稿演示区 */
+.vs_entry_demo { margin-bottom:16px; }
+.vs_demo_row { margin:10px 0; display:flex; gap:40px; flex-wrap:wrap; align-items:center; }
+.vs_demo_label { color:#939387; font-size:13px; margin-right:12px; }
+.vs_demo_card .ranks { position:relative; display:inline-block; padding-right:44px; }
+body { overflow:auto; }
+</style>
+</head>
+<body>
+<div class="mock_note">设计稿 · PK 对战页 <b>/vs/[id]</b> · 真实数据（郭锦洋 9672 vs 濮天羿 9952）·
+BV 网格：<b>我胜的 BV 绿色升序靠左 / 对方胜的玫瑰红升序靠右 / 独有与平局居中</b>（2026-11-09 张老师定）·
+得分规则：同 BV 对抗快者 1.00 / 独有 0.25 / 平局各 0（张老师定）·
+各项记录比拼同规则计分（胜 1.00 / 独有 0.25 / 平 0）·
+入口：主页气泡右侧 + 侧栏卡片气泡下方 · 未登录/看自己灰置</div>
+
+  <div class="mock_note"><b>入口示意</b>（两处新增对战按钮，20px 交叉双剑图标，hover 文案「和TA比拼一下」，未登录/看自己灰置）：</div>
+  <div class="box vs_entry_demo">
+    <div class="vs_demo_row">
+      <span class="vs_demo_label">① 用户主页 · 性别图标 + 对话气泡右侧新增：</span>
+      <span class="vs_demo_gender">♂</span>
+      <button class="msg_btn" type="button"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="20" height="20"><path d="M10 3.2c-4.1 0-7.4 2.8-7.4 6.3 0 1.9 1 3.7 2.6 4.9l-.7 3 3.1-1.7c.77.2 1.57.3 2.4.3 4.1 0 7.4-2.9 7.4-6.5S14.1 3.2 10 3.2z" stroke-linejoin="round"/><circle cx="6.9" cy="9.5" r="0.95" fill="currentColor" stroke="none"/><circle cx="10" cy="9.5" r="0.95" fill="currentColor" stroke="none"/><circle cx="13.1" cy="9.5" r="0.95" fill="currentColor" stroke="none"/></svg></button>
+      <button class="vs_btn" type="button" title="和TA比拼一下"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 3.5 L14.5 14 M16 3.5 L5.5 14" stroke-linecap="round"/><path d="M12.6 13.1 L15.5 16 M7.4 13.1 L4.5 16" stroke-linecap="round"/><path d="M3 16.2 L5.2 14" stroke-linecap="round"/><path d="M17 16.2 L14.8 14" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="vs_demo_row">
+      <span class="vs_demo_label">② 侧栏玩家卡片 · 对话气泡按钮下方新增：</span>
+      <div class="ranks vs_demo_card">
+        <span class="rank_line">山东第 <em>3</em> 名</span>
+        <span class="rank_line">全国第 <em>17</em> 名</span>
+        <span class="ucd_msg"><button class="msg_btn" type="button"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="20" height="20"><path d="M10 3.2c-4.1 0-7.4 2.8-7.4 6.3 0 1.9 1 3.7 2.6 4.9l-.7 3 3.1-1.7c.77.2 1.57.3 2.4.3 4.1 0 7.4-2.9 7.4-6.5S14.1 3.2 10 3.2z" stroke-linejoin="round"/><circle cx="6.9" cy="9.5" r="0.95" fill="currentColor" stroke="none"/><circle cx="10" cy="9.5" r="0.95" fill="currentColor" stroke="none"/><circle cx="13.1" cy="9.5" r="0.95" fill="currentColor" stroke="none"/></svg></button></span>
+        <span class="ucd_vs"><button class="vs_btn" type="button" title="和TA比拼一下"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 3.5 L14.5 14 M16 3.5 L5.5 14" stroke-linecap="round"/><path d="M12.6 13.1 L15.5 16 M7.4 13.1 L4.5 16" stroke-linecap="round"/><path d="M3 16.2 L5.2 14" stroke-linecap="round"/><path d="M17 16.2 L14.8 14" stroke-linecap="round"/></svg></button></span>
+      </div>
+    </div>
+  </div>
+<div id="page">
+  <div class="box" id="vs_hero">
+    
+  <div class="vs_card">
+    <div class="vs_card_top">
+      <img class="vs_avatar" src="../public/images/player/9672.jpg" alt="郭锦洋" />
+      <div class="vs_card_right">
+        <p class="vs_name">
+          <a href="/user/9672" target="_blank" prefetch="false">郭锦洋</a>
+          <span class="gender small male"></span>
+        </p>
+        <p class="vs_en">(Guo Jin Yang)</p>
+        <span class="vs_title" style="color:#e6db74;border-color:#e6db74">元帅</span>
+        <div class="vs_ranks"><span class="rank_line">江苏第 <em>3</em> 名</span>
+         <span class="rank_line">全国第 <em>32</em> 名</span></div>
+      </div>
+    </div>
+    <div class="vs_radar">
+      <h3>实力</h3>
+      <svg width="222" height="222" viewBox="0 0 222 222" role="img" aria-label="实力雷达图"><polygon points="111,100.8 118.21,103.79 121.2,111 118.21,118.21 111,121.2 103.79,118.21 100.8,111 103.79,103.79" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,87.2 127.83,94.17 134.8,111 127.83,127.83 111,134.8 94.17,127.83 87.2,111 94.17,94.17" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,77 135.04,86.96 145,111 135.04,135.04 111,145 86.96,135.04 77,111 86.96,86.96" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,70.2 139.85,82.15 151.8,111 139.85,139.85 111,151.8 82.15,139.85 70.2,111 82.15,82.15" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,63.4 144.66,77.34 158.6,111 144.66,144.66 111,158.6 77.34,144.66 63.4,111 77.34,77.34" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,56.6 149.47,72.53 165.4,111 149.47,149.47 111,165.4 72.53,149.47 56.6,111 72.53,72.53" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,49.8 154.27,67.73 172.2,111 154.27,154.27 111,172.2 67.73,154.27 49.8,111 67.73,67.73" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,43 159.08,62.92 179,111 159.08,159.08 111,179 62.92,159.08 43,111 62.92,62.92" fill="none" stroke="#6a685c" stroke-width="1.2" /><line x1="111" y1="111" x2="111" y2="43" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="159.08" y2="62.92" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="179" y2="111" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="159.08" y2="159.08" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="111" y2="179" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="62.92" y2="159.08" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="43" y2="111" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="62.92" y2="62.92" stroke="#565549" stroke-width="0.7" /><polygon points="111,54.36 151.05,70.95 172.2,111 149.47,149.47 111,167.64 70.95,151.05 54.36,111 70.95,70.95" fill="#a6e22e22" stroke="#a6e22e" stroke-width="1.5" stroke-linejoin="round" /><circle cx="111" cy="54.36" r="2.5" fill="#a6e22e" /><text x="111" y="20" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S+</tspan><tspan x="111" dy="14" fill="#8a8878" font-size="9">总计时间</tspan></text><circle cx="151.05" cy="70.95" r="2.5" fill="#a6e22e" /><text x="173.23" y="45.77" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S+</tspan><tspan x="173.23" dy="14" fill="#8a8878" font-size="9">高级时间</tspan></text><circle cx="172.2" cy="111" r="2.5" fill="#a6e22e" /><text x="199" y="108" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">SS</tspan><tspan x="199" dy="14" fill="#8a8878" font-size="9">中级时间</tspan></text><circle cx="149.47" cy="149.47" r="2.5" fill="#a6e22e" /><text x="173.23" y="170.23" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S</tspan><tspan x="173.23" dy="14" fill="#8a8878" font-size="9">初级时间</tspan></text><circle cx="111" cy="167.64" r="2.5" fill="#a6e22e" /><text x="111" y="196" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S+</tspan><tspan x="111" dy="14" fill="#8a8878" font-size="9">总计3BV/s</tspan></text><circle cx="70.95" cy="151.05" r="2.5" fill="#a6e22e" /><text x="48.77" y="170.23" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S+</tspan><tspan x="48.77" dy="14" fill="#8a8878" font-size="9">高级3BV/s</tspan></text><circle cx="54.36" cy="111" r="2.5" fill="#a6e22e" /><text x="23" y="108" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S+</tspan><tspan x="23" dy="14" fill="#8a8878" font-size="9">中级3BV/s</tspan></text><circle cx="70.95" cy="70.95" r="2.5" fill="#a6e22e" /><text x="48.77" y="45.77" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S+</tspan><tspan x="48.77" dy="14" fill="#8a8878" font-size="9">初级3BV/s</tspan></text></svg>
+    </div>
+  </div>
+    <div class="vs_vs"><span>VS</span></div>
+    
+  <div class="vs_card">
+    <div class="vs_card_top">
+      <img class="vs_avatar" src="../public/images/common/avatar.png" alt="濮天羿" />
+      <div class="vs_card_right">
+        <p class="vs_name">
+          <a href="/user/9952" target="_blank" prefetch="false">濮天羿</a>
+          <span class="gender small male"></span>
+        </p>
+        <p class="vs_en">(Pu Tian Yi)</p>
+        <span class="vs_title" style="color:#e6db74;border-color:#e6db74">元帅</span>
+        <div class="vs_ranks"><span class="rank_line">湖北第 <em>1</em> 名</span>
+         <span class="rank_line">全国第 <em>21</em> 名</span></div>
+      </div>
+    </div>
+    <div class="vs_radar">
+      <h3>实力</h3>
+      <svg width="222" height="222" viewBox="0 0 222 222" role="img" aria-label="实力雷达图"><polygon points="111,100.8 118.21,103.79 121.2,111 118.21,118.21 111,121.2 103.79,118.21 100.8,111 103.79,103.79" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,87.2 127.83,94.17 134.8,111 127.83,127.83 111,134.8 94.17,127.83 87.2,111 94.17,94.17" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,77 135.04,86.96 145,111 135.04,135.04 111,145 86.96,135.04 77,111 86.96,86.96" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,70.2 139.85,82.15 151.8,111 139.85,139.85 111,151.8 82.15,139.85 70.2,111 82.15,82.15" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,63.4 144.66,77.34 158.6,111 144.66,144.66 111,158.6 77.34,144.66 63.4,111 77.34,77.34" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,56.6 149.47,72.53 165.4,111 149.47,149.47 111,165.4 72.53,149.47 56.6,111 72.53,72.53" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,49.8 154.27,67.73 172.2,111 154.27,154.27 111,172.2 67.73,154.27 49.8,111 67.73,67.73" fill="none" stroke="#565549" stroke-width="0.7" /><polygon points="111,43 159.08,62.92 179,111 159.08,159.08 111,179 62.92,159.08 43,111 62.92,62.92" fill="none" stroke="#6a685c" stroke-width="1.2" /><line x1="111" y1="111" x2="111" y2="43" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="159.08" y2="62.92" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="179" y2="111" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="159.08" y2="159.08" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="111" y2="179" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="62.92" y2="159.08" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="43" y2="111" stroke="#565549" stroke-width="0.7" /><line x1="111" y1="111" x2="62.92" y2="62.92" stroke="#565549" stroke-width="0.7" /><polygon points="111,52.04 154.27,67.73 169.96,111 147.88,147.88 111,169.96 67.73,154.27 54.36,111 69.31,69.31" fill="#e34f8c22" stroke="#e34f8c" stroke-width="1.5" stroke-linejoin="round" /><circle cx="111" cy="52.04" r="2.5" fill="#e34f8c" /><text x="111" y="20" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">SS-</tspan><tspan x="111" dy="14" fill="#8a8878" font-size="9">总计时间</tspan></text><circle cx="154.27" cy="67.73" r="2.5" fill="#e34f8c" /><text x="173.23" y="45.77" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">SS</tspan><tspan x="173.23" dy="14" fill="#8a8878" font-size="9">高级时间</tspan></text><circle cx="169.96" cy="111" r="2.5" fill="#e34f8c" /><text x="199" y="108" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">SS-</tspan><tspan x="199" dy="14" fill="#8a8878" font-size="9">中级时间</tspan></text><circle cx="147.88" cy="147.88" r="2.5" fill="#e34f8c" /><text x="173.23" y="170.23" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S-</tspan><tspan x="173.23" dy="14" fill="#8a8878" font-size="9">初级时间</tspan></text><circle cx="111" cy="169.96" r="2.5" fill="#e34f8c" /><text x="111" y="196" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">SS-</tspan><tspan x="111" dy="14" fill="#8a8878" font-size="9">总计3BV/s</tspan></text><circle cx="67.73" cy="154.27" r="2.5" fill="#e34f8c" /><text x="48.77" y="170.23" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">SS</tspan><tspan x="48.77" dy="14" fill="#8a8878" font-size="9">高级3BV/s</tspan></text><circle cx="54.36" cy="111" r="2.5" fill="#e34f8c" /><text x="23" y="108" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">S+</tspan><tspan x="23" dy="14" fill="#8a8878" font-size="9">中级3BV/s</tspan></text><circle cx="69.31" cy="69.31" r="2.5" fill="#e34f8c" /><text x="48.77" y="45.77" text-anchor="middle"><tspan fill="#E6DB74" font-size="13" font-weight="bold">SS-</tspan><tspan x="48.77" dy="14" fill="#8a8878" font-size="9">初级3BV/s</tspan></text></svg>
+    </div>
+  </div>
+  </div>
+  
+  <div class="box" id="vs_records">
+    <h1 class="gray">各项记录比拼</h1>
+    <table class="vs_rec" cellPadding="0" cellSpacing="0"><tbody>
+      <tr><th>项目</th><th class="c1">郭锦洋</th><th class="c2">濮天羿</th><th class="mk">胜负</th></tr>
+      <tr><th>初级时间</th><td class="c1 win">0.240</td><td class="c2">0.300</td><td class="mk">郭锦洋 胜</td></tr><tr><th>中级时间</th><td class="c1 win">8.460</td><td class="c2">8.800</td><td class="mk">郭锦洋 胜</td></tr><tr><th>高级时间</th><td class="c1">37.540</td><td class="c2 win">35.090</td><td class="mk">濮天羿 胜</td></tr><tr><th>总计时间</th><td class="c1">46.240</td><td class="c2 win">44.190</td><td class="mk">濮天羿 胜</td></tr><tr><th>初级 3BV/s</th><td class="c1">8.072</td><td class="c2 win">8.559</td><td class="mk">濮天羿 胜</td></tr><tr><th>中级 3BV/s</th><td class="c1">5.556</td><td class="c2 win">5.686</td><td class="mk">濮天羿 胜</td></tr><tr><th>高级 3BV/s</th><td class="c1">4.444</td><td class="c2 win">4.666</td><td class="mk">濮天羿 胜</td></tr><tr><th>总计 3BV/s</th><td class="c1">18.072</td><td class="c2 win">18.911</td><td class="mk">濮天羿 胜</td></tr>
+    </tbody></table>
+  </div>
+  
+  <div class="box" id="vs_bv">
+    <h1 class="gray">各BV比拼</h1>
+    <div class="vs_lv">
+    <div class="vs_lv_head"><span class="vs_lv_name" style="color:#a6e22e">初级</span>
+      <span class="vs_lv_cnt">(总bv数: 42 : 41)</span></div><div class="vs_bandrow">
+      <div class="vs_band">2-9</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=2&#10;郭锦洋 0.240s&#10;濮天羿 0.300s" style="background:#a6e22e;color:#272822">2</span><span class="vs_c" title="3BV=3&#10;郭锦洋 0.240s&#10;濮天羿 0.320s" style="background:#a6e22e;color:#272822">3</span><span class="vs_c" title="3BV=4&#10;郭锦洋 0.460s&#10;濮天羿 0.830s" style="background:#a6e22e;color:#272822">4</span><span class="vs_c" title="3BV=5&#10;郭锦洋 0.730s&#10;濮天羿 0.840s" style="background:#a6e22e;color:#272822">5</span><span class="vs_c" title="3BV=6&#10;郭锦洋 0.890s&#10;濮天羿 0.980s" style="background:#a6e22e;color:#272822">6</span><span class="vs_c" title="3BV=7&#10;郭锦洋 1.080s&#10;濮天羿 1.160s" style="background:#a6e22e;color:#272822">7</span><span class="vs_c" title="3BV=8&#10;郭锦洋 0.820s&#10;濮天羿 1.270s" style="background:#a6e22e;color:#272822">8</span><span class="vs_c" title="3BV=9&#10;郭锦洋 1.180s&#10;濮天羿 1.390s" style="background:#a6e22e;color:#272822">9</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"></span>
+      </div>
+      <div class="vs_seg"><span class="s1">8.00</span><span class="s2">0.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">10-19</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=10&#10;郭锦洋 1.380s&#10;濮天羿 1.460s" style="background:#a6e22e;color:#272822">10</span><span class="vs_c" title="3BV=11&#10;郭锦洋 1.420s&#10;濮天羿 1.600s" style="background:#a6e22e;color:#272822">11</span><span class="vs_c" title="3BV=12&#10;郭锦洋 1.600s&#10;濮天羿 1.840s" style="background:#a6e22e;color:#272822">12</span><span class="vs_c" title="3BV=13&#10;郭锦洋 1.690s&#10;濮天羿 1.920s" style="background:#a6e22e;color:#272822">13</span><span class="vs_c" title="3BV=14&#10;郭锦洋 1.800s&#10;濮天羿 2.070s" style="background:#a6e22e;color:#272822">14</span><span class="vs_c" title="3BV=16&#10;郭锦洋 2.120s&#10;濮天羿 2.230s" style="background:#a6e22e;color:#272822">16</span><span class="vs_c" title="3BV=18&#10;郭锦洋 2.230s&#10;濮天羿 2.500s" style="background:#a6e22e;color:#272822">18</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=15&#10;郭锦洋 2.050s&#10;濮天羿 1.830s" style="background:#e34f8c;color:#ffffff">15</span><span class="vs_c" title="3BV=17&#10;郭锦洋 2.290s&#10;濮天羿 2.210s" style="background:#e34f8c;color:#ffffff">17</span><span class="vs_c" title="3BV=19&#10;郭锦洋 2.420s&#10;濮天羿 2.220s" style="background:#e34f8c;color:#ffffff">19</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">7.00</span><span class="s2">3.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">20-29</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=20&#10;郭锦洋 2.580s&#10;濮天羿 2.895s" style="background:#a6e22e;color:#272822">20</span><span class="vs_c" title="3BV=22&#10;郭锦洋 2.890s&#10;濮天羿 2.970s" style="background:#a6e22e;color:#272822">22</span><span class="vs_c" title="3BV=24&#10;郭锦洋 3.090s&#10;濮天羿 3.410s" style="background:#a6e22e;color:#272822">24</span><span class="vs_c" title="3BV=25&#10;郭锦洋 3.510s&#10;濮天羿 3.690s" style="background:#a6e22e;color:#272822">25</span><span class="vs_c" title="3BV=27&#10;郭锦洋 3.600s&#10;濮天羿 3.620s" style="background:#a6e22e;color:#272822">27</span><span class="vs_c" title="3BV=28&#10;郭锦洋 3.670s&#10;濮天羿 4.130s" style="background:#a6e22e;color:#272822">28</span><span class="vs_c" title="3BV=29&#10;郭锦洋 3.860s&#10;濮天羿 3.940s" style="background:#a6e22e;color:#272822">29</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=21&#10;郭锦洋 2.850s&#10;濮天羿 2.567s" style="background:#e34f8c;color:#ffffff">21</span><span class="vs_c" title="3BV=23&#10;郭锦洋 3.050s&#10;濮天羿 2.770s" style="background:#e34f8c;color:#ffffff">23</span><span class="vs_c" title="3BV=26&#10;郭锦洋 3.550s&#10;濮天羿 3.392s" style="background:#e34f8c;color:#ffffff">26</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">7.00</span><span class="s2">3.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">30-39</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=31&#10;郭锦洋 4.140s&#10;濮天羿 4.490s" style="background:#a6e22e;color:#272822">31</span><span class="vs_c" title="3BV=32&#10;郭锦洋 4.410s&#10;濮天羿 4.590s" style="background:#a6e22e;color:#272822">32</span><span class="vs_c" title="3BV=33&#10;郭锦洋 4.450s&#10;濮天羿 4.640s" style="background:#a6e22e;color:#272822">33</span><span class="vs_c" title="3BV=34&#10;郭锦洋 4.630s&#10;濮天羿 5.190s" style="background:#a6e22e;color:#272822">34</span><span class="vs_c" title="3BV=36&#10;郭锦洋 5.100s&#10;濮天羿 5.390s" style="background:#a6e22e;color:#272822">36</span><span class="vs_c" title="3BV=37&#10;郭锦洋 4.970s&#10;濮天羿 5.130s" style="background:#a6e22e;color:#272822">37</span><span class="vs_c" title="3BV=38&#10;郭锦洋 5.250s&#10;濮天羿 5.970s" style="background:#a6e22e;color:#272822">38</span><span class="vs_c" title="3BV=39&#10;郭锦洋 5.920s&#10;濮天羿 7.093s" style="background:#a6e22e;color:#272822">39</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=30&#10;郭锦洋 3.970s&#10;濮天羿 3.780s" style="background:#e34f8c;color:#ffffff">30</span><span class="vs_c" title="3BV=35&#10;郭锦洋 5.170s&#10;濮天羿 4.790s" style="background:#e34f8c;color:#ffffff">35</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">8.00</span><span class="s2">2.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">40-49</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=41&#10;郭锦洋 6.230s&#10;濮天羿 9.030s" style="background:#a6e22e;color:#272822">41</span></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=42&#10;仅濮天羿 10.700s" style="background:#46222f;color:#e874ab">42</span><span class="vs_c" title="3BV=43&#10;仅郭锦洋 6.740s" style="background:#2e3d1a;color:#a6e22e">43</span><span class="vs_c" title="3BV=44&#10;仅郭锦洋 7.710s" style="background:#2e3d1a;color:#a6e22e">44</span></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=40&#10;郭锦洋 5.790s&#10;濮天羿 5.660s" style="background:#e34f8c;color:#ffffff">40</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">1.50</span><span class="s2">1.25</span></div>
+    </div><div class="vs_bandrow vs_lv_total">
+      <div class="vs_band">本级得分</div>
+      <div class="vs_mid"></div>
+      <div class="vs_seg"><span class="s1">31.50</span><span class="s2">9.25</span></div>
+    </div></div><div class="vs_lv">
+    <div class="vs_lv_head"><span class="vs_lv_name" style="color:#fd971f">中级</span>
+      <span class="vs_lv_cnt">(总bv数: 89 : 76)</span></div><div class="vs_bandrow">
+      <div class="vs_band">30-39</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=31&#10;郭锦洋 8.460s&#10;濮天羿 11.280s" style="background:#a6e22e;color:#272822">31</span><span class="vs_c" title="3BV=32&#10;郭锦洋 8.710s&#10;濮天羿 9.510s" style="background:#a6e22e;color:#272822">32</span><span class="vs_c" title="3BV=34&#10;郭锦洋 8.870s&#10;濮天羿 10.440s" style="background:#a6e22e;color:#272822">34</span><span class="vs_c" title="3BV=35&#10;郭锦洋 9.710s&#10;濮天羿 9.830s" style="background:#a6e22e;color:#272822">35</span><span class="vs_c" title="3BV=37&#10;郭锦洋 8.800s&#10;濮天羿 10.240s" style="background:#a6e22e;color:#272822">37</span><span class="vs_c" title="3BV=39&#10;郭锦洋 9.750s&#10;濮天羿 9.880s" style="background:#a6e22e;color:#272822">39</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=30&#10;郭锦洋 9.500s&#10;濮天羿 8.800s" style="background:#e34f8c;color:#ffffff">30</span><span class="vs_c" title="3BV=33&#10;郭锦洋 9.460s&#10;濮天羿 9.300s" style="background:#e34f8c;color:#ffffff">33</span><span class="vs_c" title="3BV=36&#10;郭锦洋 9.770s&#10;濮天羿 9.570s" style="background:#e34f8c;color:#ffffff">36</span><span class="vs_c" title="3BV=38&#10;郭锦洋 9.630s&#10;濮天羿 9.470s" style="background:#e34f8c;color:#ffffff">38</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">6.00</span><span class="s2">4.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">40-49</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=40&#10;郭锦洋 9.750s&#10;濮天羿 10.420s" style="background:#a6e22e;color:#272822">40</span><span class="vs_c" title="3BV=41&#10;郭锦洋 9.350s&#10;濮天羿 9.850s" style="background:#a6e22e;color:#272822">41</span><span class="vs_c" title="3BV=42&#10;郭锦洋 9.950s&#10;濮天羿 10.110s" style="background:#a6e22e;color:#272822">42</span><span class="vs_c" title="3BV=43&#10;郭锦洋 9.940s&#10;濮天羿 10.140s" style="background:#a6e22e;color:#272822">43</span><span class="vs_c" title="3BV=45&#10;郭锦洋 10.180s&#10;濮天羿 10.380s" style="background:#a6e22e;color:#272822">45</span><span class="vs_c" title="3BV=46&#10;郭锦洋 10.510s&#10;濮天羿 11.150s" style="background:#a6e22e;color:#272822">46</span><span class="vs_c" title="3BV=47&#10;郭锦洋 10.800s&#10;濮天羿 10.980s" style="background:#a6e22e;color:#272822">47</span><span class="vs_c" title="3BV=48&#10;郭锦洋 10.900s&#10;濮天羿 11.350s" style="background:#a6e22e;color:#272822">48</span><span class="vs_c" title="3BV=49&#10;郭锦洋 10.450s&#10;濮天羿 11.290s" style="background:#a6e22e;color:#272822">49</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=44&#10;郭锦洋 10.470s&#10;濮天羿 10.030s" style="background:#e34f8c;color:#ffffff">44</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">9.00</span><span class="s2">1.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">50-59</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=50&#10;郭锦洋 10.610s&#10;濮天羿 11.150s" style="background:#a6e22e;color:#272822">50</span><span class="vs_c" title="3BV=51&#10;郭锦洋 10.410s&#10;濮天羿 10.880s" style="background:#a6e22e;color:#272822">51</span><span class="vs_c" title="3BV=52&#10;郭锦洋 10.740s&#10;濮天羿 11.300s" style="background:#a6e22e;color:#272822">52</span><span class="vs_c" title="3BV=53&#10;郭锦洋 10.680s&#10;濮天羿 11.450s" style="background:#a6e22e;color:#272822">53</span><span class="vs_c" title="3BV=54&#10;郭锦洋 10.350s&#10;濮天羿 11.010s" style="background:#a6e22e;color:#272822">54</span><span class="vs_c" title="3BV=55&#10;郭锦洋 11.430s&#10;濮天羿 11.990s" style="background:#a6e22e;color:#272822">55</span><span class="vs_c" title="3BV=58&#10;郭锦洋 11.900s&#10;濮天羿 12.330s" style="background:#a6e22e;color:#272822">58</span><span class="vs_c" title="3BV=59&#10;郭锦洋 11.650s&#10;濮天羿 11.780s" style="background:#a6e22e;color:#272822">59</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=56&#10;郭锦洋 11.510s&#10;濮天羿 11.240s" style="background:#e34f8c;color:#ffffff">56</span><span class="vs_c" title="3BV=57&#10;郭锦洋 11.890s&#10;濮天羿 11.650s" style="background:#e34f8c;color:#ffffff">57</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">8.00</span><span class="s2">2.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">60-69</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=60&#10;郭锦洋 11.140s&#10;濮天羿 12.044s" style="background:#a6e22e;color:#272822">60</span><span class="vs_c" title="3BV=61&#10;郭锦洋 11.930s&#10;濮天羿 12.960s" style="background:#a6e22e;color:#272822">61</span><span class="vs_c" title="3BV=62&#10;郭锦洋 12.840s&#10;濮天羿 13.180s" style="background:#a6e22e;color:#272822">62</span><span class="vs_c" title="3BV=64&#10;郭锦洋 12.350s&#10;濮天羿 12.700s" style="background:#a6e22e;color:#272822">64</span><span class="vs_c" title="3BV=67&#10;郭锦洋 12.990s&#10;濮天羿 13.193s" style="background:#a6e22e;color:#272822">67</span><span class="vs_c" title="3BV=68&#10;郭锦洋 13.330s&#10;濮天羿 13.640s" style="background:#a6e22e;color:#272822">68</span><span class="vs_c" title="3BV=69&#10;郭锦洋 13.430s&#10;濮天羿 14.120s" style="background:#a6e22e;color:#272822">69</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=63&#10;郭锦洋 12.720s&#10;濮天羿 12.695s" style="background:#e34f8c;color:#ffffff">63</span><span class="vs_c" title="3BV=65&#10;郭锦洋 13.030s&#10;濮天羿 12.920s" style="background:#e34f8c;color:#ffffff">65</span><span class="vs_c" title="3BV=66&#10;郭锦洋 12.660s&#10;濮天羿 12.630s" style="background:#e34f8c;color:#ffffff">66</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">7.00</span><span class="s2">3.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">70-79</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=70&#10;郭锦洋 13.780s&#10;濮天羿 14.280s" style="background:#a6e22e;color:#272822">70</span><span class="vs_c" title="3BV=71&#10;郭锦洋 13.760s&#10;濮天羿 14.200s" style="background:#a6e22e;color:#272822">71</span><span class="vs_c" title="3BV=72&#10;郭锦洋 14.080s&#10;濮天羿 14.280s" style="background:#a6e22e;color:#272822">72</span><span class="vs_c" title="3BV=74&#10;郭锦洋 14.230s&#10;濮天羿 15.350s" style="background:#a6e22e;color:#272822">74</span><span class="vs_c" title="3BV=75&#10;郭锦洋 14.300s&#10;濮天羿 14.540s" style="background:#a6e22e;color:#272822">75</span><span class="vs_c" title="3BV=76&#10;郭锦洋 14.210s&#10;濮天羿 15.480s" style="background:#a6e22e;color:#272822">76</span><span class="vs_c" title="3BV=77&#10;郭锦洋 14.720s&#10;濮天羿 15.320s" style="background:#a6e22e;color:#272822">77</span><span class="vs_c" title="3BV=78&#10;郭锦洋 14.780s&#10;濮天羿 15.140s" style="background:#a6e22e;color:#272822">78</span><span class="vs_c" title="3BV=79&#10;郭锦洋 14.950s&#10;濮天羿 16.290s" style="background:#a6e22e;color:#272822">79</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=73&#10;郭锦洋 14.200s&#10;濮天羿 14.160s" style="background:#e34f8c;color:#ffffff">73</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">9.00</span><span class="s2">1.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">80-89</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=81&#10;郭锦洋 15.420s&#10;濮天羿 15.650s" style="background:#a6e22e;color:#272822">81</span><span class="vs_c" title="3BV=82&#10;郭锦洋 15.490s&#10;濮天羿 16.030s" style="background:#a6e22e;color:#272822">82</span><span class="vs_c" title="3BV=83&#10;郭锦洋 15.510s&#10;濮天羿 16.070s" style="background:#a6e22e;color:#272822">83</span><span class="vs_c" title="3BV=84&#10;郭锦洋 15.160s&#10;濮天羿 16.180s" style="background:#a6e22e;color:#272822">84</span><span class="vs_c" title="3BV=85&#10;郭锦洋 15.980s&#10;濮天羿 16.490s" style="background:#a6e22e;color:#272822">85</span><span class="vs_c" title="3BV=86&#10;郭锦洋 15.510s&#10;濮天羿 17.100s" style="background:#a6e22e;color:#272822">86</span><span class="vs_c" title="3BV=87&#10;郭锦洋 16.860s&#10;濮天羿 17.570s" style="background:#a6e22e;color:#272822">87</span><span class="vs_c" title="3BV=88&#10;郭锦洋 16.830s&#10;濮天羿 17.720s" style="background:#a6e22e;color:#272822">88</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=80&#10;郭锦洋 15.220s&#10;濮天羿 14.790s" style="background:#e34f8c;color:#ffffff">80</span><span class="vs_c" title="3BV=89&#10;郭锦洋 17.530s&#10;濮天羿 16.970s" style="background:#e34f8c;color:#ffffff">89</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">8.00</span><span class="s2">2.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">90-99</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=90&#10;郭锦洋 16.860s&#10;濮天羿 17.660s" style="background:#a6e22e;color:#272822">90</span><span class="vs_c" title="3BV=92&#10;郭锦洋 17.400s&#10;濮天羿 18.430s" style="background:#a6e22e;color:#272822">92</span><span class="vs_c" title="3BV=93&#10;郭锦洋 17.430s&#10;濮天羿 19.560s" style="background:#a6e22e;color:#272822">93</span><span class="vs_c" title="3BV=94&#10;郭锦洋 16.920s&#10;濮天羿 19.340s" style="background:#a6e22e;color:#272822">94</span><span class="vs_c" title="3BV=95&#10;郭锦洋 18.160s&#10;濮天羿 19.560s" style="background:#a6e22e;color:#272822">95</span><span class="vs_c" title="3BV=97&#10;郭锦洋 19.000s&#10;濮天羿 21.130s" style="background:#a6e22e;color:#272822">97</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=91&#10;郭锦洋 17.670s&#10;濮天羿 16.840s" style="background:#e34f8c;color:#ffffff">91</span><span class="vs_c" title="3BV=96&#10;郭锦洋 18.750s&#10;濮天羿 18.220s" style="background:#e34f8c;color:#ffffff">96</span><span class="vs_c" title="3BV=98&#10;郭锦洋 18.330s&#10;濮天羿 17.830s" style="background:#e34f8c;color:#ffffff">98</span><span class="vs_c" title="3BV=99&#10;郭锦洋 18.830s&#10;濮天羿 17.410s" style="background:#e34f8c;color:#ffffff">99</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">6.00</span><span class="s2">4.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">100-109</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=100&#10;郭锦洋 18.990s&#10;濮天羿 22.560s" style="background:#a6e22e;color:#272822">100</span><span class="vs_c" title="3BV=101&#10;郭锦洋 18.310s&#10;濮天羿 18.490s" style="background:#a6e22e;color:#272822">101</span><span class="vs_c" title="3BV=102&#10;郭锦洋 18.360s&#10;濮天羿 19.570s" style="background:#a6e22e;color:#272822">102</span><span class="vs_c" title="3BV=107&#10;郭锦洋 20.030s&#10;濮天羿 22.160s" style="background:#a6e22e;color:#272822">107</span></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=103&#10;仅郭锦洋 19.230s" style="background:#2e3d1a;color:#a6e22e">103</span><span class="vs_c" title="3BV=104&#10;仅郭锦洋 19.590s" style="background:#2e3d1a;color:#a6e22e">104</span><span class="vs_c" title="3BV=105&#10;仅郭锦洋 19.850s" style="background:#2e3d1a;color:#a6e22e">105</span><span class="vs_c" title="3BV=106&#10;仅郭锦洋 20.480s" style="background:#2e3d1a;color:#a6e22e">106</span><span class="vs_c" title="3BV=108&#10;仅郭锦洋 22.660s" style="background:#2e3d1a;color:#a6e22e">108</span><span class="vs_c" title="3BV=109&#10;仅郭锦洋 21.960s" style="background:#2e3d1a;color:#a6e22e">109</span></span>
+        <span class="vs_grp"></span>
+      </div>
+      <div class="vs_seg"><span class="s1">5.50</span><span class="s2">0.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">110-119</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=111&#10;郭锦洋 21.320s&#10;濮天羿 22.553s" style="background:#a6e22e;color:#272822">111</span></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=110&#10;仅郭锦洋 21.030s" style="background:#2e3d1a;color:#a6e22e">110</span><span class="vs_c" title="3BV=112&#10;仅濮天羿 28.580s" style="background:#46222f;color:#e874ab">112</span><span class="vs_c" title="3BV=113&#10;仅郭锦洋 24.720s" style="background:#2e3d1a;color:#a6e22e">113</span><span class="vs_c" title="3BV=114&#10;仅郭锦洋 21.560s" style="background:#2e3d1a;color:#a6e22e">114</span><span class="vs_c" title="3BV=115&#10;仅郭锦洋 22.690s" style="background:#2e3d1a;color:#a6e22e">115</span><span class="vs_c" title="3BV=116&#10;仅郭锦洋 23.810s" style="background:#2e3d1a;color:#a6e22e">116</span><span class="vs_c" title="3BV=117&#10;仅郭锦洋 22.650s" style="background:#2e3d1a;color:#a6e22e">117</span><span class="vs_c" title="3BV=118&#10;仅郭锦洋 22.720s" style="background:#2e3d1a;color:#a6e22e">118</span></span>
+        <span class="vs_grp"></span>
+      </div>
+      <div class="vs_seg"><span class="s1">2.75</span><span class="s2">0.25</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">120-129</div>
+      <div class="vs_mid">
+        <span class="vs_grp"></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=122&#10;仅郭锦洋 23.820s" style="background:#2e3d1a;color:#a6e22e">122</span></span>
+        <span class="vs_grp"></span>
+      </div>
+      <div class="vs_seg"><span class="s1">0.25</span><span class="s2">0.00</span></div>
+    </div><div class="vs_bandrow vs_lv_total">
+      <div class="vs_band">本级得分</div>
+      <div class="vs_mid"></div>
+      <div class="vs_seg"><span class="s1">61.50</span><span class="s2">17.25</span></div>
+    </div></div><div class="vs_lv">
+    <div class="vs_lv_head"><span class="vs_lv_name" style="color:#e6db74">高级</span>
+      <span class="vs_lv_cnt">(总bv数: 134 : 130)</span></div><div class="vs_bandrow">
+      <div class="vs_band">100-109</div>
+      <div class="vs_mid">
+        <span class="vs_grp"></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=107&#10;仅濮天羿 36.290s" style="background:#46222f;color:#e874ab">107</span><span class="vs_c" title="3BV=108&#10;仅濮天羿 40.440s" style="background:#46222f;color:#e874ab">108</span></span>
+        <span class="vs_grp"></span>
+      </div>
+      <div class="vs_seg"><span class="s1">0.00</span><span class="s2">0.50</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">110-119</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=119&#10;郭锦洋 39.220s&#10;濮天羿 56.900s" style="background:#a6e22e;color:#272822">119</span></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=110&#10;仅郭锦洋 37.670s" style="background:#2e3d1a;color:#a6e22e">110</span><span class="vs_c" title="3BV=112&#10;仅濮天羿 40.610s" style="background:#46222f;color:#e874ab">112</span><span class="vs_c" title="3BV=113&#10;仅郭锦洋 41.650s" style="background:#2e3d1a;color:#a6e22e">113</span><span class="vs_c" title="3BV=114&#10;仅郭锦洋 42.010s" style="background:#2e3d1a;color:#a6e22e">114</span><span class="vs_c" title="3BV=115&#10;仅郭锦洋 39.630s" style="background:#2e3d1a;color:#a6e22e">115</span><span class="vs_c" title="3BV=117&#10;仅郭锦洋 38.390s" style="background:#2e3d1a;color:#a6e22e">117</span></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=111&#10;郭锦洋 85.030s&#10;濮天羿 37.060s" style="background:#e34f8c;color:#ffffff">111</span><span class="vs_c" title="3BV=116&#10;郭锦洋 45.770s&#10;濮天羿 40.010s" style="background:#e34f8c;color:#ffffff">116</span><span class="vs_c" title="3BV=118&#10;郭锦洋 39.020s&#10;濮天羿 38.330s" style="background:#e34f8c;color:#ffffff">118</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">2.25</span><span class="s2">3.25</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">120-129</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=121&#10;郭锦洋 39.820s&#10;濮天羿 53.300s" style="background:#a6e22e;color:#272822">121</span><span class="vs_c" title="3BV=122&#10;郭锦洋 37.540s&#10;濮天羿 97.460s" style="background:#a6e22e;color:#272822">122</span><span class="vs_c" title="3BV=124&#10;郭锦洋 43.160s&#10;濮天羿 44.980s" style="background:#a6e22e;color:#272822">124</span><span class="vs_c" title="3BV=126&#10;郭锦洋 40.140s&#10;濮天羿 40.790s" style="background:#a6e22e;color:#272822">126</span><span class="vs_c" title="3BV=128&#10;郭锦洋 38.800s&#10;濮天羿 41.640s" style="background:#a6e22e;color:#272822">128</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=120&#10;郭锦洋 43.510s&#10;濮天羿 40.930s" style="background:#e34f8c;color:#ffffff">120</span><span class="vs_c" title="3BV=123&#10;郭锦洋 37.970s&#10;濮天羿 37.650s" style="background:#e34f8c;color:#ffffff">123</span><span class="vs_c" title="3BV=125&#10;郭锦洋 38.740s&#10;濮天羿 37.900s" style="background:#e34f8c;color:#ffffff">125</span><span class="vs_c" title="3BV=127&#10;郭锦洋 39.100s&#10;濮天羿 35.910s" style="background:#e34f8c;color:#ffffff">127</span><span class="vs_c" title="3BV=129&#10;郭锦洋 40.930s&#10;濮天羿 37.940s" style="background:#e34f8c;color:#ffffff">129</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">5.00</span><span class="s2">5.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">130-139</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=133&#10;郭锦洋 38.140s&#10;濮天羿 38.310s" style="background:#a6e22e;color:#272822">133</span><span class="vs_c" title="3BV=134&#10;郭锦洋 41.430s&#10;濮天羿 41.570s" style="background:#a6e22e;color:#272822">134</span><span class="vs_c" title="3BV=136&#10;郭锦洋 40.560s&#10;濮天羿 40.720s" style="background:#a6e22e;color:#272822">136</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=130&#10;郭锦洋 39.100s&#10;濮天羿 38.350s" style="background:#e34f8c;color:#ffffff">130</span><span class="vs_c" title="3BV=131&#10;郭锦洋 38.910s&#10;濮天羿 37.910s" style="background:#e34f8c;color:#ffffff">131</span><span class="vs_c" title="3BV=132&#10;郭锦洋 38.610s&#10;濮天羿 35.090s" style="background:#e34f8c;color:#ffffff">132</span><span class="vs_c" title="3BV=135&#10;郭锦洋 41.020s&#10;濮天羿 38.970s" style="background:#e34f8c;color:#ffffff">135</span><span class="vs_c" title="3BV=137&#10;郭锦洋 41.540s&#10;濮天羿 39.180s" style="background:#e34f8c;color:#ffffff">137</span><span class="vs_c" title="3BV=138&#10;郭锦洋 39.950s&#10;濮天羿 39.280s" style="background:#e34f8c;color:#ffffff">138</span><span class="vs_c" title="3BV=139&#10;郭锦洋 39.940s&#10;濮天羿 38.650s" style="background:#e34f8c;color:#ffffff">139</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">3.00</span><span class="s2">7.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">140-149</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=140&#10;郭锦洋 39.790s&#10;濮天羿 40.880s" style="background:#a6e22e;color:#272822">140</span><span class="vs_c" title="3BV=146&#10;郭锦洋 38.990s&#10;濮天羿 39.370s" style="background:#a6e22e;color:#272822">146</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=141&#10;郭锦洋 41.200s&#10;濮天羿 38.450s" style="background:#e34f8c;color:#ffffff">141</span><span class="vs_c" title="3BV=142&#10;郭锦洋 42.520s&#10;濮天羿 40.070s" style="background:#e34f8c;color:#ffffff">142</span><span class="vs_c" title="3BV=143&#10;郭锦洋 39.650s&#10;濮天羿 37.910s" style="background:#e34f8c;color:#ffffff">143</span><span class="vs_c" title="3BV=144&#10;郭锦洋 40.480s&#10;濮天羿 37.260s" style="background:#e34f8c;color:#ffffff">144</span><span class="vs_c" title="3BV=145&#10;郭锦洋 41.730s&#10;濮天羿 38.080s" style="background:#e34f8c;color:#ffffff">145</span><span class="vs_c" title="3BV=147&#10;郭锦洋 40.920s&#10;濮天羿 40.430s" style="background:#e34f8c;color:#ffffff">147</span><span class="vs_c" title="3BV=148&#10;郭锦洋 40.920s&#10;濮天羿 40.290s" style="background:#e34f8c;color:#ffffff">148</span><span class="vs_c" title="3BV=149&#10;郭锦洋 40.790s&#10;濮天羿 40.230s" style="background:#e34f8c;color:#ffffff">149</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">2.00</span><span class="s2">8.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">150-159</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=157&#10;郭锦洋 38.720s&#10;濮天羿 40.170s" style="background:#a6e22e;color:#272822">157</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=150&#10;郭锦洋 41.490s&#10;濮天羿 40.880s" style="background:#e34f8c;color:#ffffff">150</span><span class="vs_c" title="3BV=151&#10;郭锦洋 42.300s&#10;濮天羿 40.000s" style="background:#e34f8c;color:#ffffff">151</span><span class="vs_c" title="3BV=152&#10;郭锦洋 43.080s&#10;濮天羿 41.160s" style="background:#e34f8c;color:#ffffff">152</span><span class="vs_c" title="3BV=153&#10;郭锦洋 40.740s&#10;濮天羿 40.430s" style="background:#e34f8c;color:#ffffff">153</span><span class="vs_c" title="3BV=154&#10;郭锦洋 41.800s&#10;濮天羿 39.520s" style="background:#e34f8c;color:#ffffff">154</span><span class="vs_c" title="3BV=155&#10;郭锦洋 42.400s&#10;濮天羿 40.530s" style="background:#e34f8c;color:#ffffff">155</span><span class="vs_c" title="3BV=156&#10;郭锦洋 42.410s&#10;濮天羿 41.430s" style="background:#e34f8c;color:#ffffff">156</span><span class="vs_c" title="3BV=158&#10;郭锦洋 39.280s&#10;濮天羿 39.270s" style="background:#e34f8c;color:#ffffff">158</span><span class="vs_c" title="3BV=159&#10;郭锦洋 42.940s&#10;濮天羿 39.780s" style="background:#e34f8c;color:#ffffff">159</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">1.00</span><span class="s2">9.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">160-169</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=164&#10;郭锦洋 41.020s&#10;濮天羿 41.620s" style="background:#a6e22e;color:#272822">164</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=160&#10;郭锦洋 42.520s&#10;濮天羿 42.070s" style="background:#e34f8c;color:#ffffff">160</span><span class="vs_c" title="3BV=161&#10;郭锦洋 42.840s&#10;濮天羿 40.780s" style="background:#e34f8c;color:#ffffff">161</span><span class="vs_c" title="3BV=162&#10;郭锦洋 43.610s&#10;濮天羿 41.120s" style="background:#e34f8c;color:#ffffff">162</span><span class="vs_c" title="3BV=163&#10;郭锦洋 43.210s&#10;濮天羿 42.300s" style="background:#e34f8c;color:#ffffff">163</span><span class="vs_c" title="3BV=165&#10;郭锦洋 44.140s&#10;濮天羿 40.820s" style="background:#e34f8c;color:#ffffff">165</span><span class="vs_c" title="3BV=166&#10;郭锦洋 43.710s&#10;濮天羿 40.940s" style="background:#e34f8c;color:#ffffff">166</span><span class="vs_c" title="3BV=167&#10;郭锦洋 43.130s&#10;濮天羿 41.100s" style="background:#e34f8c;color:#ffffff">167</span><span class="vs_c" title="3BV=168&#10;郭锦洋 43.750s&#10;濮天羿 39.430s" style="background:#e34f8c;color:#ffffff">168</span><span class="vs_c" title="3BV=169&#10;郭锦洋 43.680s&#10;濮天羿 37.170s" style="background:#e34f8c;color:#ffffff">169</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">1.00</span><span class="s2">9.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">170-179</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=178&#10;郭锦洋 44.490s&#10;濮天羿 45.140s" style="background:#a6e22e;color:#272822">178</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=170&#10;郭锦洋 45.260s&#10;濮天羿 42.290s" style="background:#e34f8c;color:#ffffff">170</span><span class="vs_c" title="3BV=171&#10;郭锦洋 44.180s&#10;濮天羿 42.390s" style="background:#e34f8c;color:#ffffff">171</span><span class="vs_c" title="3BV=172&#10;郭锦洋 44.070s&#10;濮天羿 42.000s" style="background:#e34f8c;color:#ffffff">172</span><span class="vs_c" title="3BV=173&#10;郭锦洋 44.310s&#10;濮天羿 42.190s" style="background:#e34f8c;color:#ffffff">173</span><span class="vs_c" title="3BV=174&#10;郭锦洋 44.730s&#10;濮天羿 41.730s" style="background:#e34f8c;color:#ffffff">174</span><span class="vs_c" title="3BV=175&#10;郭锦洋 44.400s&#10;濮天羿 43.910s" style="background:#e34f8c;color:#ffffff">175</span><span class="vs_c" title="3BV=176&#10;郭锦洋 44.320s&#10;濮天羿 42.670s" style="background:#e34f8c;color:#ffffff">176</span><span class="vs_c" title="3BV=177&#10;郭锦洋 46.220s&#10;濮天羿 42.900s" style="background:#e34f8c;color:#ffffff">177</span><span class="vs_c" title="3BV=179&#10;郭锦洋 45.760s&#10;濮天羿 43.970s" style="background:#e34f8c;color:#ffffff">179</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">1.00</span><span class="s2">9.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">180-189</div>
+      <div class="vs_mid">
+        <span class="vs_grp"></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=180&#10;郭锦洋 44.450s&#10;濮天羿 44.290s" style="background:#e34f8c;color:#ffffff">180</span><span class="vs_c" title="3BV=181&#10;郭锦洋 45.820s&#10;濮天羿 42.120s" style="background:#e34f8c;color:#ffffff">181</span><span class="vs_c" title="3BV=182&#10;郭锦洋 45.040s&#10;濮天羿 43.060s" style="background:#e34f8c;color:#ffffff">182</span><span class="vs_c" title="3BV=183&#10;郭锦洋 45.490s&#10;濮天羿 45.330s" style="background:#e34f8c;color:#ffffff">183</span><span class="vs_c" title="3BV=184&#10;郭锦洋 45.300s&#10;濮天羿 43.820s" style="background:#e34f8c;color:#ffffff">184</span><span class="vs_c" title="3BV=185&#10;郭锦洋 47.100s&#10;濮天羿 46.890s" style="background:#e34f8c;color:#ffffff">185</span><span class="vs_c" title="3BV=186&#10;郭锦洋 46.370s&#10;濮天羿 44.860s" style="background:#e34f8c;color:#ffffff">186</span><span class="vs_c" title="3BV=187&#10;郭锦洋 47.220s&#10;濮天羿 43.910s" style="background:#e34f8c;color:#ffffff">187</span><span class="vs_c" title="3BV=188&#10;郭锦洋 46.810s&#10;濮天羿 46.500s" style="background:#e34f8c;color:#ffffff">188</span><span class="vs_c" title="3BV=189&#10;郭锦洋 47.080s&#10;濮天羿 45.290s" style="background:#e34f8c;color:#ffffff">189</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">0.00</span><span class="s2">10.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">190-199</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=199&#10;郭锦洋 48.100s&#10;濮天羿 48.740s" style="background:#a6e22e;color:#272822">199</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=190&#10;郭锦洋 48.480s&#10;濮天羿 45.640s" style="background:#e34f8c;color:#ffffff">190</span><span class="vs_c" title="3BV=191&#10;郭锦洋 48.440s&#10;濮天羿 43.530s" style="background:#e34f8c;color:#ffffff">191</span><span class="vs_c" title="3BV=192&#10;郭锦洋 46.140s&#10;濮天羿 44.570s" style="background:#e34f8c;color:#ffffff">192</span><span class="vs_c" title="3BV=193&#10;郭锦洋 47.910s&#10;濮天羿 43.470s" style="background:#e34f8c;color:#ffffff">193</span><span class="vs_c" title="3BV=194&#10;郭锦洋 48.110s&#10;濮天羿 46.750s" style="background:#e34f8c;color:#ffffff">194</span><span class="vs_c" title="3BV=195&#10;郭锦洋 47.530s&#10;濮天羿 45.190s" style="background:#e34f8c;color:#ffffff">195</span><span class="vs_c" title="3BV=196&#10;郭锦洋 49.170s&#10;濮天羿 44.080s" style="background:#e34f8c;color:#ffffff">196</span><span class="vs_c" title="3BV=197&#10;郭锦洋 49.250s&#10;濮天羿 46.820s" style="background:#e34f8c;color:#ffffff">197</span><span class="vs_c" title="3BV=198&#10;郭锦洋 49.020s&#10;濮天羿 46.700s" style="background:#e34f8c;color:#ffffff">198</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">1.00</span><span class="s2">9.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">200-209</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=205&#10;郭锦洋 49.280s&#10;濮天羿 51.610s" style="background:#a6e22e;color:#272822">205</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=200&#10;郭锦洋 49.740s&#10;濮天羿 45.630s" style="background:#e34f8c;color:#ffffff">200</span><span class="vs_c" title="3BV=201&#10;郭锦洋 48.130s&#10;濮天羿 47.090s" style="background:#e34f8c;color:#ffffff">201</span><span class="vs_c" title="3BV=202&#10;郭锦洋 49.530s&#10;濮天羿 49.420s" style="background:#e34f8c;color:#ffffff">202</span><span class="vs_c" title="3BV=203&#10;郭锦洋 50.690s&#10;濮天羿 50.170s" style="background:#e34f8c;color:#ffffff">203</span><span class="vs_c" title="3BV=204&#10;郭锦洋 50.360s&#10;濮天羿 50.260s" style="background:#e34f8c;color:#ffffff">204</span><span class="vs_c" title="3BV=206&#10;郭锦洋 49.960s&#10;濮天羿 45.780s" style="background:#e34f8c;color:#ffffff">206</span><span class="vs_c" title="3BV=207&#10;郭锦洋 50.410s&#10;濮天羿 48.380s" style="background:#e34f8c;color:#ffffff">207</span><span class="vs_c" title="3BV=208&#10;郭锦洋 50.990s&#10;濮天羿 47.240s" style="background:#e34f8c;color:#ffffff">208</span><span class="vs_c" title="3BV=209&#10;郭锦洋 52.430s&#10;濮天羿 50.530s" style="background:#e34f8c;color:#ffffff">209</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">1.00</span><span class="s2">9.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">210-219</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=219&#10;郭锦洋 50.060s&#10;濮天羿 51.460s" style="background:#a6e22e;color:#272822">219</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=210&#10;郭锦洋 52.520s&#10;濮天羿 50.040s" style="background:#e34f8c;color:#ffffff">210</span><span class="vs_c" title="3BV=211&#10;郭锦洋 51.910s&#10;濮天羿 49.320s" style="background:#e34f8c;color:#ffffff">211</span><span class="vs_c" title="3BV=212&#10;郭锦洋 49.960s&#10;濮天羿 47.200s" style="background:#e34f8c;color:#ffffff">212</span><span class="vs_c" title="3BV=213&#10;郭锦洋 51.930s&#10;濮天羿 47.810s" style="background:#e34f8c;color:#ffffff">213</span><span class="vs_c" title="3BV=214&#10;郭锦洋 53.170s&#10;濮天羿 47.870s" style="background:#e34f8c;color:#ffffff">214</span><span class="vs_c" title="3BV=215&#10;郭锦洋 51.760s&#10;濮天羿 49.370s" style="background:#e34f8c;color:#ffffff">215</span><span class="vs_c" title="3BV=216&#10;郭锦洋 54.690s&#10;濮天羿 51.840s" style="background:#e34f8c;color:#ffffff">216</span><span class="vs_c" title="3BV=217&#10;郭锦洋 54.080s&#10;濮天羿 48.620s" style="background:#e34f8c;color:#ffffff">217</span><span class="vs_c" title="3BV=218&#10;郭锦洋 49.050s&#10;濮天羿 46.720s" style="background:#e34f8c;color:#ffffff">218</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">1.00</span><span class="s2">9.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">220-229</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=220&#10;郭锦洋 52.380s&#10;濮天羿 52.630s" style="background:#a6e22e;color:#272822">220</span><span class="vs_c" title="3BV=222&#10;郭锦洋 54.820s&#10;濮天羿 57.130s" style="background:#a6e22e;color:#272822">222</span><span class="vs_c" title="3BV=224&#10;郭锦洋 53.850s&#10;濮天羿 63.690s" style="background:#a6e22e;color:#272822">224</span><span class="vs_c" title="3BV=225&#10;郭锦洋 57.480s&#10;濮天羿 58.550s" style="background:#a6e22e;color:#272822">225</span><span class="vs_c" title="3BV=226&#10;郭锦洋 56.350s&#10;濮天羿 62.890s" style="background:#a6e22e;color:#272822">226</span><span class="vs_c" title="3BV=227&#10;郭锦洋 56.140s&#10;濮天羿 74.720s" style="background:#a6e22e;color:#272822">227</span><span class="vs_c" title="3BV=229&#10;郭锦洋 56.950s&#10;濮天羿 59.920s" style="background:#a6e22e;color:#272822">229</span></span>
+        <span class="vs_grp vs_midgrp"></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=221&#10;郭锦洋 54.840s&#10;濮天羿 49.790s" style="background:#e34f8c;color:#ffffff">221</span><span class="vs_c" title="3BV=223&#10;郭锦洋 56.970s&#10;濮天羿 51.990s" style="background:#e34f8c;color:#ffffff">223</span><span class="vs_c" title="3BV=228&#10;郭锦洋 57.590s&#10;濮天羿 50.720s" style="background:#e34f8c;color:#ffffff">228</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">7.00</span><span class="s2">3.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">230-239</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=230&#10;郭锦洋 59.640s&#10;濮天羿 60.910s" style="background:#a6e22e;color:#272822">230</span><span class="vs_c" title="3BV=231&#10;郭锦洋 57.810s&#10;濮天羿 57.850s" style="background:#a6e22e;color:#272822">231</span><span class="vs_c" title="3BV=232&#10;郭锦洋 54.630s&#10;濮天羿 56.150s" style="background:#a6e22e;color:#272822">232</span><span class="vs_c" title="3BV=234&#10;郭锦洋 53.460s&#10;濮天羿 56.820s" style="background:#a6e22e;color:#272822">234</span><span class="vs_c" title="3BV=235&#10;郭锦洋 56.940s&#10;濮天羿 58.790s" style="background:#a6e22e;color:#272822">235</span><span class="vs_c" title="3BV=239&#10;郭锦洋 57.640s&#10;濮天羿 72.320s" style="background:#a6e22e;color:#272822">239</span></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=233&#10;仅郭锦洋 57.770s" style="background:#2e3d1a;color:#a6e22e">233</span><span class="vs_c" title="3BV=236&#10;仅郭锦洋 53.490s" style="background:#2e3d1a;color:#a6e22e">236</span></span>
+        <span class="vs_grp"><span class="vs_c" title="3BV=237&#10;郭锦洋 56.740s&#10;濮天羿 52.340s" style="background:#e34f8c;color:#ffffff">237</span><span class="vs_c" title="3BV=238&#10;郭锦洋 61.040s&#10;濮天羿 53.240s" style="background:#e34f8c;color:#ffffff">238</span></span>
+      </div>
+      <div class="vs_seg"><span class="s1">6.50</span><span class="s2">2.00</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">240-249</div>
+      <div class="vs_mid">
+        <span class="vs_grp"><span class="vs_c" title="3BV=240&#10;郭锦洋 56.980s&#10;濮天羿 66.900s" style="background:#a6e22e;color:#272822">240</span><span class="vs_c" title="3BV=246&#10;郭锦洋 59.210s&#10;濮天羿 72.900s" style="background:#a6e22e;color:#272822">246</span></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=241&#10;仅郭锦洋 67.070s" style="background:#2e3d1a;color:#a6e22e">241</span><span class="vs_c" title="3BV=243&#10;仅濮天羿 82.850s" style="background:#46222f;color:#e874ab">243</span><span class="vs_c" title="3BV=245&#10;仅濮天羿 57.330s" style="background:#46222f;color:#e874ab">245</span><span class="vs_c" title="3BV=248&#10;仅郭锦洋 101.340s" style="background:#2e3d1a;color:#a6e22e">248</span></span>
+        <span class="vs_grp"></span>
+      </div>
+      <div class="vs_seg"><span class="s1">2.50</span><span class="s2">0.50</span></div>
+    </div><div class="vs_bandrow">
+      <div class="vs_band">250-259</div>
+      <div class="vs_mid">
+        <span class="vs_grp"></span>
+        <span class="vs_grp vs_midgrp"><span class="vs_c" title="3BV=252&#10;仅濮天羿 64.140s" style="background:#46222f;color:#e874ab">252</span><span class="vs_c" title="3BV=258&#10;仅郭锦洋 68.140s" style="background:#2e3d1a;color:#a6e22e">258</span></span>
+        <span class="vs_grp"></span>
+      </div>
+      <div class="vs_seg"><span class="s1">0.25</span><span class="s2">0.25</span></div>
+    </div><div class="vs_bandrow vs_lv_total">
+      <div class="vs_band">本级得分</div>
+      <div class="vs_mid"></div>
+      <div class="vs_seg"><span class="s1">34.50</span><span class="s2">93.50</span></div>
+    </div></div>
+    <div class="vs_legend">
+      <span class="lg"><i style="background:#a6e22e"></i>郭锦洋胜</span>
+      <span class="lg"><i style="background:#2e3d1a"></i>郭锦洋独有</span>
+      <span class="lg"><i style="background:#e6db74"></i>平局</span>
+      <span class="lg"><i style="background:#46222f"></i>濮天羿独有</span>
+      <span class="lg"><i style="background:#e34f8c"></i>濮天羿胜</span>
+      <span class="vs_update">更新:11-09 14:43</span>
+    </div>
+    <p class="vs_rule_note">得分规则：同一 3BV 双方都有纪录，快者得 1.00 分（同毫秒平局各 0 分）；只有一方有的 3BV（独有）得 0.25 分。各项记录比拼同规则计分（胜 1.00 / 独有 0.25 / 平 0）。</p>
+  </div>
+  
+  <div class="box" id="vs_result">
+    <h1 class="gray">胜负结果</h1>
+    <div class="vs_big">
+      <span class="vs_big_s1 win_big">129.50</span>
+      <span class="vs_big_vs">:</span>
+      <span class="vs_big_s2 ">126.00</span>
+      <span class="vs_verdict">郭锦洋 胜出</span>
+    </div>
+    <table class="vs_rec" cellPadding="0" cellSpacing="0"><tbody>
+      <tr><th>总得分</th><td>129.50</td><td>126.00</td></tr>
+      <tr><th>记录得分</th><td>2.00</td><td>6.00</td></tr>
+      <tr><th>初级BV得分</th><td>31.50</td><td>9.25</td></tr><tr><th>中级BV得分</th><td>61.50</td><td>17.25</td></tr><tr><th>高级BV得分</th><td>34.50</td><td>93.50</td></tr>
+      <tr><th>收集 BV 数</th><td>265</td><td>247</td></tr>
+      <tr><th>初级对抗 BV 数</th><td>40</td><td>40</td></tr><tr><th>中级对抗 BV 数</th><td>75</td><td>75</td></tr><tr><th>高级对抗 BV 数</th><td>124</td><td>124</td></tr>
+      <tr><th>初级胜 / 平 / 负</th><td>31 / 0 / 9</td><td>9 / 0 / 31</td></tr><tr><th>中级胜 / 平 / 负</th><td>58 / 0 / 17</td><td>17 / 0 / 58</td></tr><tr><th>高级胜 / 平 / 负</th><td>32 / 0 / 92</td><td>92 / 0 / 32</td></tr>
+      <tr><th>初级独有 BV 数</th><td>2</td><td>1</td></tr><tr><th>中级独有 BV 数</th><td>14</td><td>1</td></tr><tr><th>高级独有 BV 数</th><td>10</td><td>6</td></tr>
+    </tbody></table>
+  </div>
+</div>
+</body>
+</html>

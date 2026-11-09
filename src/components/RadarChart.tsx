@@ -60,7 +60,7 @@ function polygonPoints(n: number, r: number): string {
   return Array.from({ length: n }, (_, i) => polar(i, n, r).join(",")).join(" ");
 }
 
-export function RadarChart({ data }: { data: RadarPoint[] }) {
+export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /** 多边形描边/顶点色（PK 页左绿右玫瑰红，默认主页同款青色） */ accent?: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const n = data.length;
   const points = data.map((d, i) => polar(i, n, (d.percent / 100) * RADIUS));
@@ -108,8 +108,8 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
       {/* 数据多边形 */}
       <polygon
         points={points.map((p) => p.join(",")).join(" ")}
-        fill="rgba(102,217,239,0.18)"
-        stroke="#66d9ef"
+        fill={`${accent}2e`}
+        stroke={accent}
         strokeWidth={1.5}
         strokeLinejoin="round"
       />
@@ -132,10 +132,10 @@ export function RadarChart({ data }: { data: RadarPoint[] }) {
               cx={x}
               cy={y}
               r={active ? 4 : 2.5}
-              fill={active ? "#9cecff" : "#66d9ef"}
+              fill={active ? "#9cecff" : accent}
               style={{
                 transition: "r .15s ease, fill .15s ease",
-                filter: active ? "drop-shadow(0 0 4px #66d9ef)" : undefined,
+                filter: active ? `drop-shadow(0 0 4px ${accent})` : undefined,
               }}
             />
             <text

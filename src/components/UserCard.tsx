@@ -25,6 +25,7 @@ import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
 import { RadarChart } from "./RadarChart";
 import ClickTracker from "./ClickTracker";
 import { SendMessageButton } from "./SendMessageButton";
+import { VsButton } from "./VsButton";
 import { areaDisplay, AREA_OVERSEAS, LEVELS, LEVEL_NAMES } from "@/lib/config";
 import { formatDate } from "@/lib/format";
 
@@ -95,6 +96,11 @@ export function UserCard({
             {/* 十二轮（2026-10-25）：按钮常驻——未登录/看自己灰置 + hover 提示 */}
             <span className="ucd_msg">
               <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
+            </span>
+            {/* 2026-11-09 张老师需求：对话气泡按钮正下方新增「和TA比拼一下」对战按钮
+                （同 .ucd_msg 绝对定位钉在排行块右缘，垂直落到气泡下方） */}
+            <span className="ucd_vs">
+              <VsButton to={card.id} viewerId={viewerId} />
             </span>
           </div>
         </div>
