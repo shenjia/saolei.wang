@@ -20,6 +20,7 @@ import { AccountVisibilityToggle } from "@/components/AccountVisibilityToggle";
 import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { ageOf, constellationText } from "@/lib/birth";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
+import { getOpenmsLink } from "@/lib/openms";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "账户设置" };
@@ -39,7 +40,7 @@ export default async function AccountManagePage({
 
   const sp = await searchParams;
   const uid = BigInt(session.uid);
-  const [detail, auth, latestAvatar, me, qqBinding] = await Promise.all([
+  const [detail, auth, latestAvatar, me, qqBinding, openmsLink] = await Promise.all([
     getUserDetail(session.uid),
     // 账户名 + 邮箱绑定状态：绑定入口跟在账户名后面（2026-10-15）
     prisma.userAuth.findUnique({
@@ -59,6 +60,8 @@ export default async function AccountManagePage({
       where: { userId: uid, provider: "qq" },
       select: { nickname: true, avatar: true },
     }),
+    // 开源扫雷网绑定状态（2026-11-09 绑定协议 v2：QQ 行后加「开源扫雷网」行）
+    getOpenmsLink(session.uid),
   ]);
   if (!detail) redirect("/account/login");
   const { user, info } = detail;
@@ -176,6 +179,23 @@ export default async function AccountManagePage({
                       </td>
                     </tr>
                   ))}
+                  {/* 开源扫雷网绑定（2026-11-09 绑定协议 v2：入口行，流程走 /account/openms/bind） */}
+                  <tr>
+                    <th>开源扫雷网</th>
+                    <td>
+                      <div>
+                        {openmsLink ? (
+                          <span className="bind_email_btn qq_bound">
+                            已绑定 #{openmsLink.profile}
+                          </span>
+                        ) : (
+                          <Link href="/account/openms/bind" className="bind_email_btn">
+                            绑定开源网
+                          </Link>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
