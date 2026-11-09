@@ -34,6 +34,8 @@ export interface ActiveRow {
   englishName: string;
   sex: number;
   avatar: string;
+  /** 地区（user.area 原值；展示层经 areaDisplay 合规化，2026-11-09 张老师要求加地区列） */
+  area: string;
   /** 高级最好成绩秒（军衔评估用；无成绩 0） */
   expTime: number;
   /** 初级：7 日录像上传数 + 练习完成盘数 */
@@ -59,6 +61,7 @@ interface AggRow {
   english_name: string;
   sex: number;
   avatar: string;
+  area: string;
   exp_time: number | null;
 }
 
@@ -78,7 +81,7 @@ export async function getActiveRanking(
     prisma.$queryRawUnsafe<AggRow[]>(
       `SELECT t.user_id uid, t.beg_count cb, t.int_count ci, t.exp_count ce,
               t.comment_count cc, t.active_points act,
-              u.chinese_name, u.english_name, u.sex, u.avatar, sc.exp_time
+              u.chinese_name, u.english_name, u.sex, u.avatar, u.area, sc.exp_time
        FROM user_activity_snapshot t
        JOIN user u ON u.id = t.user_id AND u.status = 0
        LEFT JOIN user_scores sc ON sc.id = t.user_id
@@ -100,6 +103,7 @@ export async function getActiveRanking(
       englishName: r.english_name,
       sex: r.sex,
       avatar: r.avatar,
+      area: r.area ?? "",
       expTime: r.exp_time ?? 0,
       beg: Number(r.cb),
       int: Number(r.ci),

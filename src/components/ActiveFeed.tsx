@@ -1,5 +1,6 @@
 // 活跃排行「加载更多 + 页码滑条」交互（2026-11-08 张老师需求，复用进步榜同款骨架）：
-// 列：排名 | 姓名 | 军衔 | 初级 | 中级 | 高级 | 评论 | 活跃指数。
+// 列：排名 | 地区 | 姓名 | 军衔 | 初级 | 中级 | 高级 | 评论 | 活跃指数。
+// 地区 = user.area（展示经 areaDisplay 合规化，2026-11-09 张老师要求加在姓名前）；
 // 初级/中级/高级 = 7 日（录像上传数 + 练习完成盘数）；评论 = 7 日评论条数；
 // 活跃指数 = 练习 3BV 计点 + 录像级别加权分 + 评论数。默认按活跃指数降序，
 // 初级/中级/高级/评论（及活跃指数）列点击表头切换排序（?by= 服务端重排，整页换 key 重挂）。
@@ -10,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import type { ActiveRow } from "@/lib/activerank";
+import { areaDisplay } from "@/lib/config";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { RankingName, TitleBadge } from "./Cells";
@@ -162,6 +164,7 @@ export function ActiveFeed({
         <thead>
           <tr>
             <th>排名</th>
+            <th>地区</th>
             <th className="name">姓名</th>
             <th>
               <SystemText />
@@ -185,6 +188,18 @@ export function ActiveFeed({
               <td className="rank">
                 第&nbsp;<em>{(winStart - 1) * pageSize + i + 1}</em>&nbsp;位
               </td>
+              <td className="ucell_area">
+                {u.area ? (
+                  <Link
+                    href={buildUrl("/ranking", { view: "area", name: u.area })}
+                    title={`查看${areaDisplay(u.area)}雷友排行`}
+                  >
+                    {areaDisplay(u.area)}
+                  </Link>
+                ) : (
+                  "-"
+                )}
+              </td>
               <td className="name">
                 <RankingName id={u.id} name={u.chineseName} englishName={u.englishName} sex={u.sex} avatar={u.avatar} />
               </td>
@@ -204,7 +219,7 @@ export function ActiveFeed({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={8} style={{ textAlign: "center" }}>
+              <td colSpan={9} style={{ textAlign: "center" }}>
                 近 7 天还没有活跃数据（上传录像、练习、发表评论都会计入）。
               </td>
             </tr>

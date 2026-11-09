@@ -4985,6 +4985,15 @@ body #page.ranking_old .ranking_box {
 .ranking_table td.oldtitle a:hover span {
   text-decoration: underline;
 }
+/* 活跃榜地区列（2026-11-09 张老师要求，姓名前）：暗灰弱化，链接同色、hover 亮绿
+   （链接色必须显式覆盖——上面 td a{color:inherit} 只作用于无类名的 td） */
+.ranking_table td.ucell_area,
+.ranking_table td.ucell_area a {
+  color: #939387;
+}
+.ranking_table td.ucell_area a:hover {
+  color: #a6e22e;
+}
 /* 成绩灰阶（2008 版 .Beg/.Int/.Exp 语义）+ 总计黄 */
 .ranking_table td.c_beg { color: #999994; font-weight: bold; }
 .ranking_table td.c_int { color: #bbbbaf; font-weight: bold; }
