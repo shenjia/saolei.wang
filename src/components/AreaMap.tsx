@@ -11,6 +11,8 @@
 // 2026-11-09 张老师要求：hover 左侧表格行时视为同时 hover 地图——气泡同步弹出，
 //   钉在地图右上角（行 hover 无鼠标坐标可跟随，取固定锚点）；
 //   领军人物为「无」（无人活跃）时只显示文本、不渲染称号 em。
+//   同日：地区总榜新增「活跃」列（近 30 天登录人数）后，气泡头部名次行随排序在
+//   活跃/战力/活跃指数三种口径间切换（order=active 时也按活跃人数口径显示）。
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -113,6 +115,9 @@ export function AreaMap({
   const byActivity = order === "activity";
   // 填色模式：活跃指数榜=深绿→亮绿，其余（战力指数）=灰→站点金
   const fillMode: "power" | "activity" = byActivity ? "activity" : "power";
+  // 气泡头部名次口径：活跃人数排序=「活跃人数排行第x位」（2026-11-09 新增活跃列），
+  // 填色仍随 byActivity/其他口径
+  const byActive = order === "active";
   const legend = legendFor(fillMode);
   const metric = (d: AreaMapDatum) => (byActivity ? d.activity : d.power);
   const maxMetric = data.reduce((m, d) => Math.max(m, metric(d)), 0) || 1;
@@ -253,7 +258,10 @@ export function AreaMap({
               <div className="tp_head">
                 <b>{areaDisplay(hot.area)}</b>
                 <span>
-                  {byActivity ? (
+                  {/* 名次口径随排序列切换（2026-11-09 新增活跃列后三选一） */}
+                  {byActive ? (
+                    <>活跃人数排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>
+                  ) : byActivity ? (
                     <>活跃排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>
                   ) : (
                     <>战力排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>

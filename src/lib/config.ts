@@ -553,6 +553,8 @@ export function areaDisplay(name: string): string {
 // 2026-11-02 张老师要求：「综合排行指数」改称「战力指数」；新增「活跃指数」排序列
 //   （落盘表 area_activity，每小时重算）并作为默认排序；players/active 不进表头、
 //   仅保留旧 URL 兼容（?order=players / active 仍可解析）
+// 2026-11-09 张老师要求：地区总榜表尾新增「活跃」列（近 30 天登录人数），active
+//   转正为表头排序列、列名定「活跃」；players 仍仅 URL 兼容
 export type AreaOrder = "power" | "players" | "active" | "best" | "activity";
 
 export const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
@@ -560,7 +562,7 @@ export const AREA_ORDERS: { key: AreaOrder; label: string }[] = [
   { key: "activity", label: "活跃指数" },
   { key: "power", label: "战力指数" },
   { key: "players", label: "排行人数" },
-  { key: "active", label: "活跃人数" },
+  { key: "active", label: "活跃" },
 ];
 
 /** 榜序参数解析（未知/缺省一律回落到活跃指数；2026-11-02 张老师定默认切换为活跃指数排行） */
