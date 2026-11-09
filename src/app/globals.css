@@ -5454,7 +5454,7 @@ body #page.ranking_old .ranking_box {
 .area_table td.best .title {
   margin-left: 4px;
 }
-/* 领军人物缺位（无人活跃，2026-11-09）：弱灰文本，不带链接 */
+/* 领军人物缺位（无人 7 日活跃，2026-11-09）：弱灰文本，不带链接 */
 .area_table td.best .best_none {
   color: #939387;
 }

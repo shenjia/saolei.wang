@@ -2837,7 +2837,7 @@ export interface AreaRow {
   bestExpTime: number;
   bestSumTime: number;
   bestSex: number;
-  /** 无人活跃时领军人物缺位（仅非战力排序；bestId=0、bestName=「无」） */
+  /** 领军人物缺位（地区内无人 7 日活跃值>0；bestId=0、bestName=「无」，2026-11-09 晚统一口径） */
   noActiveLeader: boolean;
 }
 
@@ -2853,11 +2853,10 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
           : order === "activity"
             ? "act_score DESC, a.power DESC"
             : "power DESC";
-  // 领军人物口径（2026-11-09 张老师定）：只有按战力指数排序时领军人物=该地区历史排行
-  // 第一人；其余排序（含默认活跃指数）领军人物=该地区近 30 天登录过的上榜雷友中
-  // 全国名次最高者（活跃值>0），无人活跃则为「无」（bestId=0，前端渲染纯文本）。
-  // 「领军人物」表头排序键同步改为活跃领军的全国名次（无人活跃沉底），保持列内一致
-  const useActiveLeader = order !== "power";
+  // 领军人物口径（2026-11-09 晚张老师改）：不随排序切换——一律取该地区上榜雷友中
+  // 7 日活跃值>0（user_activity_snapshot.active_points，每分钟刷新，即用户主页活跃值）
+  // 的全国名次最高者，无人活跃则为「无」（bestId=0，前端渲染纯文本）。
+  // 「领军人物」表头排序键=活跃领军的全国名次（无人活跃沉底），保持列内一致
   const rows = await prisma.$queryRawUnsafe<
     {
       area: string;
@@ -2894,8 +2893,7 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
        SELECT ra.id, ra.area, ra.rk,
               ROW_NUMBER() OVER (PARTITION BY ra.area ORDER BY ra.rk ASC) ark
        FROM ranked ra
-       JOIN user u2 ON u2.id = ra.id
-       WHERE u2.last_login_time > UNIX_TIMESTAMP() - 30 * 86400
+       JOIN user_activity_snapshot s2 ON s2.user_id = ra.id AND s2.active_points > 0
      ),
      agg AS (
        SELECT area, COUNT(*) players, ROUND(AVG(rk)) avg_rank, MIN(rk) best_rank,
@@ -2942,24 +2940,13 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
     activity: N(r.act_score),
     wins7d: N(r.wins_7d),
     videos7d: N(r.videos_7d),
-    ...(useActiveLeader
-      ? {
-          bestId: N(r.abest_id),
-          bestName: r.abest_name,
-          bestEnglishName: r.abest_english_name,
-          bestExpTime: r.abest_exp_time,
-          bestSumTime: r.abest_sum_time,
-          bestSex: r.abest_sex,
-        }
-      : {
-          bestId: N(r.best_id),
-          bestName: r.best_name,
-          bestEnglishName: r.best_english_name,
-          bestExpTime: r.best_exp_time,
-          bestSumTime: r.best_sum_time,
-          bestSex: r.best_sex,
-        }),
-    noActiveLeader: useActiveLeader && N(r.abest_id) === 0,
+    bestId: N(r.abest_id),
+    bestName: r.abest_name,
+    bestEnglishName: r.abest_english_name,
+    bestExpTime: r.abest_exp_time,
+    bestSumTime: r.abest_sum_time,
+    bestSex: r.abest_sex,
+    noActiveLeader: N(r.abest_id) === 0,
   }));
 }
 
@@ -2972,7 +2959,9 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
 // 2026-11-06 气泡练习数改完成口径（wins_7d），缓存键升 v5
 // 2026-11-09 领军人物口径随排序切换（战力=历史第一，其余=活跃最高名次/「无」），
 // 缓存键升 v6
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v6"], {
+// 2026-11-09 晚 领军人物统一口径：7 日活跃值>0（user_activity_snapshot）的上榜者中
+// 全国名次最高者，不再随排序切换（战力排序也是活跃领军），缓存键升 v7
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v7"], {
   revalidate: 300,
 });
 
