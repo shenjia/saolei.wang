@@ -143,8 +143,12 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
               y={ly - 3}
               textAnchor="middle"
               style={{
-                transformBox: "fill-box",
-                transformOrigin: "center",
+                // ⚠️ 不用 fill-box+center（2026-11-09 张老师反馈手机端标签飞出板块）：
+                // WebKit(iOS Safari) 对 SVG text 的 fill-box 参照框 origin 解析有 bug，
+                // scale(1.25) 激活时标签飞出雷达圈外（气泡按标签锚点定位、跟着一起飞）。
+                // 改 view-box + 显式锚点 origin，全引擎一致；origin 取 (lx, ly)≈两行块视觉中心
+                transformBox: "view-box",
+                transformOrigin: `${lx}px ${ly}px`,
                 transform: active ? "scale(1.25)" : "none",
                 transition: "transform .15s ease",
               }}

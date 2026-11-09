@@ -216,8 +216,11 @@ export function VideoAnalysisRadar({
                 y={ly - 3 + oy}
                 textAnchor="middle"
                 style={{
-                  transformBox: "fill-box",
-                  transformOrigin: "center",
+                  // ⚠️ 不用 fill-box+center（2026-11-09 手机端标签飞出板块，与 RadarChart.tsx 同根源）：
+                  // WebKit(iOS Safari) 对 SVG text 的 fill-box 参照框 origin 解析有 bug，
+                  // scale(1.25) 激活时标签飞出雷达圈外。改 view-box + 显式锚点 origin，全引擎一致
+                  transformBox: "view-box",
+                  transformOrigin: `${lx + ox}px ${ly + oy}px`,
                   transform: active ? "scale(1.25)" : "none",
                   transition: "transform .15s ease",
                 }}
