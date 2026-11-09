@@ -31,8 +31,10 @@ export const RANKING_COLS: { by: RankingBy; label: string; cls: string }[] = [
 // （1px 钉宽 + scrollWidth 实测：[71,74,85,33,42,33,39,42,39,42,42,30]），
 // 名字列给足 6 字中文名 + 性别图标（实测最长 ~94px）；2026-10-28 张老师再要求收紧
 // （118→108，超长名走 ellipsis 兜底），余量由 fixed 布局按比例摊。
-// 2026-11-10：末位增活跃列 42（3 位数字宽，与 3BV/s 列同档）。
-export const RANKING_COL_WIDTHS = [73, 108, 105, 54, 62, 54, 60, 58, 60, 58, 60, 32, 42];
+// 2026-11-10 张老师要求：活跃列仅地区内页显示——AREA_COL_WIDTHS=雷界 12 列 + 活跃 42；
+// 全国/NF 榜（deltaCol 在位）用原 12 列宽。
+export const RANKING_COL_WIDTHS = [73, 108, 105, 54, 62, 54, 60, 58, 60, 58, 60, 32];
+export const AREA_COL_WIDTHS = [...RANKING_COL_WIDTHS, 42];
 
 // 军衔列预评：服务端（RankingTable）/ API 侧先算好随行传入，客户端零成本渲染
 export type TitledRow = RankingRow & { title: string; classic?: { name: string; color: string } | null };
@@ -98,7 +100,8 @@ export function DeltaArrow({ dir }: { dir: "up" | "down" }) {
   );
 }
 
-/** 一行（含锚点 id_{uid}，供「我在哪里」/搜索定位；hl=定位落地行持续高亮） */
+/** 一行（含锚点 id_{uid}，供「我在哪里」/搜索定位；hl=定位落地行持续高亮）。
+ *  showAct（2026-11-10 张老师要求）：活跃列仅地区内页显示，雷界/NF/进步榜隐藏 */
 export function RankingRowLine({
   row,
   by,
@@ -106,6 +109,7 @@ export function RankingRowLine({
   showDelta,
   deltaCol,
   hl,
+  showAct = false,
 }: {
   row: TitledRow;
   /** 排序命中列；null=无成绩列命中（进步榜等非成绩排序场景） */
@@ -116,7 +120,10 @@ export function RankingRowLine({
   /** 升降列是否占位（2026-10-14 张老师需求：雷界榜切其它排序列时保留空列，版式不跳动） */
   deltaCol?: boolean;
   hl?: boolean;
+  /** 活跃列显隐（2026-11-10 地区内页专属）：默认隐藏 */
+  showAct?: boolean;
 }) {
+  const cols = showAct ? RANKING_COLS : RANKING_COLS.filter((c) => c.by !== "act");
   return (
     <tr id={`id_${row.id}`} className={hl ? "hl" : undefined}>
       <td className="rank">
@@ -129,7 +136,7 @@ export function RankingRowLine({
       <td className="miltitle">
         <TitleBadge title={row.title} classic={row.classic} link />
       </td>
-      {RANKING_COLS.map((c) => (
+      {cols.map((c) => (
         <ScoreCell key={c.by} row={row} col={c} current={c.by === by} />
       ))}
       {(showDelta || deltaCol) && (
@@ -159,13 +166,15 @@ export function RankingRowLine({
   );
 }
 
-/** 表头（列头点击切换排序列） */
+/** 表头（列头点击切换排序列）。
+ *  showAct（2026-11-10）：活跃列仅地区内页显示 */
 export function RankingHead({
   by,
   base,
   params,
   showDelta,
   deltaCol,
+  showAct = false,
 }: {
   by: RankingBy;
   /** 列头排序链接的 base 与固定参数（view/nf、area 等） */
@@ -174,7 +183,10 @@ export function RankingHead({
   showDelta: boolean;
   /** 升降列占位（同 RankingRowLine.deltaCol）：占位时表头文字 visibility:hidden 保宽 */
   deltaCol?: boolean;
+  /** 活跃列显隐（2026-11-10 地区内页专属）：默认隐藏 */
+  showAct?: boolean;
 }) {
+  const cols = showAct ? RANKING_COLS : RANKING_COLS.filter((c) => c.by !== "act");
   return (
     <thead>
       <tr>
@@ -183,7 +195,7 @@ export function RankingHead({
         <th>
           <SystemText />
         </th>
-        {RANKING_COLS.map((c) => (
+        {cols.map((c) => (
           <th key={c.by}>
             <Link
               href={buildUrl(base, {
@@ -207,11 +219,11 @@ export function RankingHead({
 }
 
 /** 空数据占位行（须包在 tbody 内） */
-export function RankingEmpty({ showDelta, deltaCol }: { showDelta: boolean; deltaCol?: boolean }) {
+export function RankingEmpty({ showDelta, deltaCol, showAct = false }: { showDelta: boolean; deltaCol?: boolean; showAct?: boolean }) {
   return (
     <tr>
-      {/* 2026-11-10 活跃列后基准 11→12 列 */}
-      <td colSpan={(showDelta || deltaCol ? 1 : 0) + 12} style={{ textAlign: "center" }}>
+      {/* 基准 11 列（排名/姓名/军衔/8 成绩列）+ 升降 +活跃（2026-11-10 地区内页专属） */}
+      <td colSpan={(showDelta || deltaCol ? 1 : 0) + (showAct ? 1 : 0) + 11} style={{ textAlign: "center" }}>
         暂无数据
       </td>
     </tr>

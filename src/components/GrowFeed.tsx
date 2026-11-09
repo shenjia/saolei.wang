@@ -152,7 +152,8 @@ export function GrowFeed({
             <th>
               <SystemText />
             </th>
-            {RANKING_COLS.map((c) => (
+            {/* 2026-11-10 张老师要求：活跃列仅地区内页显示，进步榜剔除 act */}
+            {RANKING_COLS.filter((c) => c.by !== "act").map((c) => (
               <th key={c.by}>{c.label}</th>
             ))}
             {/* 榜序按日升降幅度（非成绩列排序），升降表头黄标 */}
@@ -166,7 +167,7 @@ export function GrowFeed({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={13} style={{ textAlign: "center" }}>
+              <td colSpan={12} style={{ textAlign: "center" }}>
                 当前窗口内暂无名次上升的玩家（快照基准至少需要积累两天数据）。
               </td>
             </tr>

@@ -43,6 +43,8 @@ export interface RankingFeedProps {
   /** 列宽钉死（2026-10-26 张老师要求：NF 开关列宽零变化）。传 RANKING_COL_WIDTHS；
       仅升降列在位（deltaCol）时生效，列数才与 colgroup 一致 */
   colWidths?: number[];
+  /** 活跃列显隐（2026-11-10 张老师要求：仅地区内页显示，雷界/NF 隐藏） */
+  showAct?: boolean;
   /** 页脚右侧扩展按钮（2026-10-15 地区内页「返回地区排行」）：有值时页脚转 flex 行，
       滑条吃余量、按钮贴右缘（同世界榜 world_pager 口径，CSS 见 globals.css pager_extra） */
   footerExtra?: ReactNode;
@@ -56,7 +58,7 @@ interface MoreJson {
 const NEARBY_PAGES = 30; // 未加载时最多并发拉取的页数（每页 20 行 ×30 = 600 行上限）
 
 export function RankingFeed(props: RankingFeedProps) {
-  const { by, base, params, total, pageSize, reserveDelta, colWidths } = props;
+  const { by, base, params, total, pageSize, reserveDelta, colWidths, showAct } = props;
   const [rows, setRows] = useState(props.initial);
   const [deltas, setDeltas] = useState<Map<number, number | null> | undefined>(props.initialDeltas);
   const nextPage = useRef(Math.floor((props.initial.at(-1)?.rank ?? 0) / pageSize) + 1);
@@ -89,8 +91,9 @@ export function RankingFeed(props: RankingFeedProps) {
 
   const showDelta = by === "sum_time" && deltas !== undefined;
   const deltaCol = reserveDelta === true;
-  // fixed 布局：列宽只由 colgroup 决定（与行内容无关），NF 开关/翻页零跳列
-  const colGroup = colWidths && deltaCol ? colWidths : undefined;
+  // fixed 布局：列宽只由 colgroup 决定（与行内容无关），NF 开关/翻页零跳列。
+  // 地区内页（showAct，13 列）colgroup 在升降列缺席时也生效——活跃列同样需要钉宽
+  const colGroup = colWidths && (deltaCol || showAct) ? colWidths : undefined;
 
   function scrollToRow(id: number) {
     const el = document.getElementById(`id_${id}`);
@@ -335,7 +338,7 @@ export function RankingFeed(props: RankingFeedProps) {
             ))}
           </colgroup>
         )}
-        <RankingHead by={by} base={base} params={params} showDelta={showDelta} deltaCol={deltaCol} />
+        <RankingHead by={by} base={base} params={params} showDelta={showDelta} deltaCol={deltaCol} showAct={showAct} />
         <tbody>
           {rows.map((u) => (
             <RankingRowLine
@@ -346,9 +349,10 @@ export function RankingFeed(props: RankingFeedProps) {
               showDelta={showDelta}
               deltaCol={deltaCol}
               hl={u.id === hlUid}
+              showAct={showAct}
             />
           ))}
-          {rows.length === 0 && <RankingEmpty showDelta={showDelta} deltaCol={deltaCol} />}
+          {rows.length === 0 && <RankingEmpty showDelta={showDelta} deltaCol={deltaCol} showAct={showAct} />}
         </tbody>
       </table>
       <div className={"list_footer" + (props.footerExtra ? " pager_extra" : "")}>

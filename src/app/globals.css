@@ -5540,6 +5540,16 @@ body #page.two_columns {
   line-height: 30px;
   color: #b1b1a4;
 }
+/* 地区内页标题「XX地区排行」+ 标题右侧「返回地区排行」按钮（2026-11-10 张老师要求：
+   括号样式弃用、按钮从页脚右侧移到标题旁）——吃 legacy .button.small（16px/24px、
+   4px 12px），文字亮灰 hover 变绿（同账户管理页标题旁按钮先例）；
+   h1 39px 行高底线对齐补偿 5px；h1 是 page_head flex-end 对齐成员，按钮保持内联基线 */
+.area_back_btn {
+  margin-left: 12px;
+  color: #b1b1a4;
+  position: relative;
+  top: -5px;
+}
 /* 排行规则板块 h2 同款括号（「地区排行规则（xx）」，仅地区内页用到） */
 .rank_rules h2 .page_title_sub {
   font-size: 14px;

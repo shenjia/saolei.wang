@@ -17,6 +17,7 @@ import { AreaRanking } from "@/components/AreaRanking";
 import { RankingNav } from "@/components/RankingNav";
 import { RankingFeed } from "@/components/RankingFeed";
 import { RankingRules, JoinRankingHelp } from "@/components/RankingRules";
+import { AREA_COL_WIDTHS } from "@/components/RankingRows";
 
 // 地区榜页底规则板块（2026-10-14 张老师要求；口径见 queries.getAreaRanking）
 // 2026-10-15 张老师要求：去掉「全国名次」条目（表中已无此列，领军人物全国名次走用户卡）
@@ -120,21 +121,28 @@ export async function AreaRankingView({
       <div id="page" className="main ranking_old">
         <div className="box ranking_box">
           {/* head_dense：地区内页标记——页头容器查询空间不足时收紧 tabs 间距的
-              最深档（标题带「（地区名）」比其他排行页长 ~80px，2026-10-15 张老师
-              「空间不够时缩小筛选项间距」二轮方案） */}
+              最深档（2026-10-15 张老师「空间不够时缩小筛选项间距」方案） */}
           <div className="page_head head_dense">
-            {/* 2026-10-15 张老师要求：地区名移到「地区排行」后括号内、字号小一档 */}
+            {/* 2026-11-10 张老师要求：标题改「XX地区排行」（原「地区排行（XX）」括号样
+                式弃用）；「返回地区排行」按钮从页脚右侧移到标题右侧 */}
             <h1 className="page_title">
-              地区排行<span className="page_title_sub">（{areaDisplay(area)}）</span>
+              {areaDisplay(area)}地区排行
+              <Link
+                href="/ranking?view=area"
+                className="button small area_back_btn"
+                title="回到带地图的地区排行总榜"
+              >
+                返回地区排行
+              </Link>
             </h1>
             <RankingNav current="area" by={by} area={area} me={me} />
           </div>
           {/* 2026-10-15 张老师要求：老式分页（首页/上一页/末页）换成全站统一的
-              「页码滑条 + 加载更多」（RankingFeed，增量走 /api/ranking/more?area=）；
-              页脚右侧「返回地区排行」按钮——进入地区内页后原路回到带地图的地区总榜。
+              「页码滑条 + 加载更多」（RankingFeed，增量走 /api/ranking/more?area=）。
               key 含 by/page/hl：软导航（排序切换、whereami 302 回跳）时强制重挂载，
               否则 Feed 的 useState(initial) 保留旧页数据、表格显示错页。
-              2026-11-08 URI 统一：base 由 /area 改为 /ranking（params 带 view=area） */}
+              2026-11-08 URI 统一：base 由 /area 改为 /ranking（params 带 view=area）
+              2026-11-10 张老师要求：showAct=活跃列仅地区内页显示（AREA_COL_WIDTHS 13 列） */}
           <RankingFeed
             key={`${page}-${by}-${hl ?? 0}`}
             initial={titledRows}
@@ -144,11 +152,8 @@ export async function AreaRankingView({
             total={total}
             pageSize={pageSize}
             initialHl={hl}
-            footerExtra={
-              <Link href="/ranking?view=area" className="button small pager_full_btn" title="回到带地图的地区排行总榜">
-                返回地区排行
-              </Link>
-            }
+            showAct
+            colWidths={AREA_COL_WIDTHS}
           />
         </div>
         {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求，与各排行页同口径）。
