@@ -10,6 +10,7 @@ import {
   markAllRead,
   markMessageRead,
   sendMessage,
+  checkDmRateLimit,
   MESSAGE_CONTENT_LIMIT,
   MESSAGE_PAGESIZE,
 } from "@/lib/message";
@@ -69,6 +70,14 @@ export async function POST(req: NextRequest) {
     }
     const target = await prisma.userAuth.findUnique({ where: { id: BigInt(to) }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "收件人不存在" }, { status: 404 });
+    // 反群发限制（2026-11-09 张老师要求）：仅手写私信；管理员豁免
+    if (session.role < 10) {
+      const blocked = await checkDmRateLimit(session.uid, to, content);
+      if (blocked) {
+        console.log(`[dm-ratelimit] uid=${session.uid} to=${to} blocked: ${blocked}`);
+        return NextResponse.json({ error: blocked }, { status: 429 });
+      }
+    }
     const id = await sendMessage(session.uid, to, content);
     return NextResponse.json({ id });
   }

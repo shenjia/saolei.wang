@@ -314,6 +314,61 @@ export async function retractVideoCommentNotice(
   return res.count;
 }
 
+/**
+ * 手写私信反群发限制（2026-11-09：李浩宇 48 条同文群号广告事件，张老师要求）。
+ * 只约束 api/message 的手写 send；评论/回复等系统代发通知（isSystem 或通知模板）不受限，
+ * 管理员（role>=10）在路由层豁免。三条闸门（按序判，命中即拒）：
+ *   ① 最小间隔——两次手写私信间隔 < DM_MIN_INTERVAL_SEC 秒（挡秒级脚本群发）；
+ *   ② 24h 滚动窗口内私信对象（distinct to_user）达 DM_MAX_RECIPIENTS_PER_DAY 上限，
+ *      且本次收件人不在其中（给老对话留通道：正常聊天不受人数上限影响）；
+ *   ③ 24h 内相同内容已发给 DM_MAX_SAME_CONTENT_PER_DAY 个不同人，且本次收件人未收过
+ *      （同文模板群发的核心特征；逐条手写的正常用户几乎不可能命中）。
+ * 返回 null=放行；否则返回给用户看的拒绝文案。
+ */
+export const DM_MIN_INTERVAL_SEC = 10;
+export const DM_MAX_RECIPIENTS_PER_DAY = 10;
+export const DM_MAX_SAME_CONTENT_PER_DAY = 2;
+const DM_WINDOW_SEC = 86400;
+
+export async function checkDmRateLimit(
+  fromUserId: number,
+  toUserId: number,
+  content: string
+): Promise<string | null> {
+  const now = Math.floor(Date.now() / 1000);
+  const rows = await prisma.message.findMany({
+    where: {
+      fromUser: BigInt(fromUserId),
+      isSystem: false,
+      createTime: { gte: BigInt(now - DM_WINDOW_SEC) },
+    },
+    select: { toUser: true, content: true, createTime: true },
+    take: 1000,
+  });
+  if (!rows.length) return null;
+
+  // ① 最小间隔
+  const lastSend = rows.reduce((m, r) => Math.max(m, Number(r.createTime)), 0);
+  const waitSec = lastSend + DM_MIN_INTERVAL_SEC - now;
+  if (waitSec > 0) return `发送太频繁，请 ${waitSec} 秒后再试`;
+
+  // ② 24h 私信对象上限（收过信的老对象不占名额）
+  const messagedTargetBefore = rows.some((r) => N(r.toUser) === toUserId);
+  const distinctRecipients = new Set(rows.map((r) => N(r.toUser)));
+  if (!messagedTargetBefore && distinctRecipients.size >= DM_MAX_RECIPIENTS_PER_DAY) {
+    return `24 小时内私信对象已达上限（${DM_MAX_RECIPIENTS_PER_DAY} 人），请明天再试`;
+  }
+
+  // ③ 相同内容群发限制
+  const sameContentTargets = new Set(
+    rows.filter((r) => r.content === content).map((r) => N(r.toUser))
+  );
+  if (!sameContentTargets.has(toUserId) && sameContentTargets.size >= DM_MAX_SAME_CONTENT_PER_DAY) {
+    return "相同内容发送过于频繁，已被限制，请更换内容或明天再试";
+  }
+  return null;
+}
+
 /** 发信 */
 export async function sendMessage(fromUserId: number, toUserId: number, content: string): Promise<number> {
   const now = nowSec();
