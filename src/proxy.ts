@@ -188,6 +188,12 @@ export function proxy(req: NextRequest) {
   // 非 GET（表单提交等）不拦；豁免路径见 config.matcher 负向前瞻（登录/激活/静态/爬虫文件）。
   // 首页永不设闸（2026-11-09 张老师补充：游客必须始终有免费入口；且 307 不落 nginx
   // 缓存，设闸会让首页缓存过期后无法被匿名流量回填——豁免后游客流量可自愈缓存）。
+  // 裸 /download（2026-11-09 张老师指令豁免软件下载页）：不匹配 matcher 的 download/
+  // （带斜缀，旧站直链静态树）也不在 LEGACY_PREFIXES（那是 CamelCase /Download），
+  // 会先被闸拦、永远走不到 bareDirs 的 301——闸前显式 301 到已豁免的 /page/download。
+  if (url.pathname === "/download") {
+    return movedTo(req, "/page/download");
+  }
   if (!isLegacyUrl) {
     if (req.method === "GET" && url.pathname !== "/" && !canUseRsc(req)) {
       const next = `${url.pathname}${url.search}`;
