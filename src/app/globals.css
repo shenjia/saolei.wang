@@ -902,23 +902,24 @@ body #video_view .video_cell .playable {
   opacity: 1;
 }
 
-/* ---- 触屏端 flop 入口常显（2026-11-09 张老师反馈手机端「入口显示不全」）----
-   气泡 absolute 挂按钮下方、hover 才亮：手机无 hover，点「播放/重播」的粘滞
-   hover 只弹出半截，还被 .video_cell 横滑容器（≤1188 overflow-x:auto 连带把
-   overflow-y 也变 auto）裁掉底部。触屏（无 hover + 粗指针）改为流程内常显
-   小按钮：并入按钮行完整可点，不依赖 hover、不再被裁切。桌面 hover 行为不变 */
+/* ---- 触屏端 flop 入口弹出裁切修复（2026-11-09 张老师反馈手机端「入口显示不全」）----
+   行为保持与桌面一致：默认隐藏、hover/点按才在播放按钮下方出现。裁切根因：
+   触屏无 hover，点按钮的粘滞 hover 让气泡弹出时往下伸 ~32px，而 .video_cell
+   padding-bottom 仅 16px，超出 padding box（overflow 裁切边界）的部分被裁半；
+   且 ≤1188 .video_cell overflow-x:auto 连带 overflow-y 收敛，伸出部分还计入
+   scrollable overflow。修法：①触屏给盒底加预留（padding-bottom 16→44px），
+   气泡整个落在 padding 区内不再被裁；②隐藏态 display:none（visibility:hidden
+   的 absolute 盒仍占 scrollable overflow，display:none 才彻底不占，避免凭空
+   出竖向滚动）；③点按（粘滞 hover）时照常 absolute 弹出。桌面 hover 行为不变 */
 @media (hover: none) and (pointer: coarse) {
-  #video_view .tip_host .tip_bubble {
-    position: static;
-    visibility: visible;
-    opacity: 1;
-    transform: none;
-    display: inline-block;
-    vertical-align: middle;
-    margin: 0 0 0 8px;
+  body #page #video_view .video_cell {
+    padding-bottom: 44px; /* 原 16px + 气泡伸出 ~28px */
   }
-  #video_view .tip_host .tip_bubble::before {
-    content: none; /* hover 桥只在真 hover 设备有意义 */
+  #video_view .tip_host .tip_bubble {
+    display: none; /* 隐藏态不占 scrollable overflow */
+  }
+  #video_view .tip_host:hover .tip_bubble {
+    display: block; /* 点按（粘滞 hover）原位弹出 */
   }
 }
 
