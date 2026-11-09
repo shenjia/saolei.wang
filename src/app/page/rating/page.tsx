@@ -19,7 +19,9 @@ const getRatingStandardData = unstable_cache(
     ]);
     return { distribution, total: Number(snapshot?.size ?? 0) };
   },
-  ["rating-standard-page-v2"],
+  // key v3（2026-11-09）：v2 缓存快照了评级边界改版重算前的旧 distribution 值（TTL 1h），
+  // 换 key 强制重取；此后日常重算无需再动 key（本页读的永远是最快照行）。
+  ["rating-standard-page-v3"],
   { revalidate: 3600 },
 );
 
