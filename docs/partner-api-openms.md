@@ -22,6 +22,42 @@ key 由扫雷网管理员在后台签发（格式 `sk-…`），请勿泄露、�
 
 ## 二、接口清单
 
+### 0. 用户登录 `POST /api/public/v1/login`（2026-11-09 新增）
+
+以扫雷网账号密码换取用户登录令牌（token），用于后续用户侧 API 的身份验证。
+
+请求体（JSON）：
+
+```json
+{ "username": "your-username", "password": "your-password" }
+```
+
+成功响应：
+
+```json
+{
+  "token": "ut-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "tokenType": "Bearer",
+  "expiresIn": 604800,
+  "user": { "id": 1, "username": "your-username" }
+}
+```
+
+- `token` 有效期 **7 天**（`expiresIn` 秒），到期需重新登录换取新 token；重登签发的新 token 不顶掉旧 token（多端并存）
+- 客户端保存 token，之后**所有用户侧请求**携带请求头 `Authorization: Bearer <token>`，即视为该用户的登录态
+- 校验口径与站内登录完全一致（兼容旧站账号）；用户名或密码错误 `401`；账号封禁 `403`（含解封时间提示）；同 IP 每分钟最多 10 次，超限 `429`
+- token 只存 sha256 哈希，请妥善保管明文；疑似泄露可联系管理员吊销
+
+### 0.1 登录态自检 `GET /api/public/v1/me`
+
+验证当前 Bearer token 并取回身份。后续将提供一系列要求登录态的用户侧 API，均按此方式鉴权。
+
+```json
+{ "user": { "id": 1, "username": "your-username", "role": 0 } }
+```
+
+- 无效/过期/被吊销的 token：`401`（应重新 login）
+
 ### 1. 站点统计 `GET /api/public/v1/stats`
 
 无参数。返回首页「站点统计」版块同口径数据 + 两个最大 ID（确定增量抓取范围用）。
@@ -209,6 +245,7 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
+- 2026-11-09（3）：新增用户登录体系——`POST /api/public/v1/login`（账号密码换 7 天 Bearer token，落库 sha256）+ `GET /api/public/v1/me`（登录态自检）；后续用户侧 API 均凭 `Authorization: Bearer <token>` 鉴权。
 - 2026-11-04：文档补充时间成绩展示口径说明（两位小数、第三位截去不四舍五入）；接口数据本身无变化（realTime 仍为毫秒整数）。
 - 2026-10-27：新增 `post_info`（按 id 查帖子基本信息，不含正文）、`post_search`（标题关键词查询，前 20 条/页 + cursor 翻页）。
 - 2026-10-26：`video_list` 不再按审核状态过滤，条目新增 `status` 字段；新增可选参数 `player_id`，用于只拉取指定玩家录像。

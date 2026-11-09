@@ -873,6 +873,22 @@ model AdminLog {
   @@map("admin_log")
 }
 
+// 用户侧 API 登录令牌（2026-11-09）：公开 API 新增用户登录（POST 用户名密码换 token），
+// 客户端保存后随请求带 Bearer token，后续用户侧 API 凭此验证身份。
+// token 只存 sha256 哈希（同 api_key 口径）——明文仅 login 响应时可见，库被拖走也无法冒用；
+// 有效期 7 天（不滑动续期），过期/封禁/吊销即失效；重登签发新 token 不顶掉旧 token。
+model UserToken {
+  id         BigInt @id @default(autoincrement()) @db.BigInt
+  user       BigInt @db.BigInt // user.id
+  tokenHash  String @unique @map("token_hash") @db.Char(64) // sha256(token) hex
+  status     Int    @default(1) @db.TinyInt // 1=有效 0=吊销
+  createTime BigInt @default(0) @map("create_time") @db.BigInt // 签发时刻 Unix 秒
+  expireTime BigInt @map("expire_time") @db.BigInt // 过期时刻 Unix 秒
+
+  @@index([user])
+  @@map("user_token")
+}
+
 // 对外开放 API 的调用凭据（2026-10-24 公开 API 体系）
 // key 只存 sha256 哈希——明文仅创建时回显一次，后台不可再查；
 // 吊销=软删（status=0），保留审计轨迹；每 key 限速维度用 name。
