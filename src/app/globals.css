@@ -6351,7 +6351,6 @@ body #page.two_columns li.main {
   body #page .video_cell {
     overflow-x: auto;
   }
-}
   /* 玩家卡片盒排除横滑（2026-11-09 张老师反馈 1027px 卡片底部出水平滚动条）：
      卡片盒定宽内容 210，.scores min-content 214 仅溢出 4px、落入 30px 右 padding
      （≥1189 桌面 overflow:visible 本就如此，无观感差异）；
