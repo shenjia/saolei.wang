@@ -101,12 +101,18 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
           <>
             <h3>最近更新</h3>
             <div className="un_list">
-              {updates.slice(0, shown).map((u) => (
-                <p key={u.id}>
-                  <em>{u.date}</em>
-                  {u.content}
-                </p>
-              ))}
+              {/* 时间线两列布局（2026-11-10 张老师要求）：日期/内容分两列，左纵线 +
+                  日期前圆点；updates 按日期倒序传入（getSiteUpdates），首位=最新，
+                  挂 un_latest 金点，其余灰点。纵线挂 .un_timeline（不能挂 .un_list
+                  本身——滚动容器上 top/bottom 定位只覆盖可视高，滚下去线会断） */}
+              <div className="un_timeline">
+                {updates.slice(0, shown).map((u, i) => (
+                  <p key={u.id} className={i === 0 ? "un_item un_latest" : "un_item"}>
+                    <em>{u.date}</em>
+                    <span className="un_txt">{u.content}</span>
+                  </p>
+                ))}
+              </div>
               {/* 滚到最底部：标准翻页控件同款三圆点「加载更多」+ 剩余条数
                   （2026-11-06 三轮张老师要求，替代原「查看全部」链接） */}
               {shown < updates.length && (

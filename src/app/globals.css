@@ -14769,6 +14769,60 @@ a.cheat_rep_link:hover {
   font-style: normal;
   font-weight: 700;
 }
+/* 时间线两列布局（2026-11-10 张老师要求）：日期/内容分两列，左侧一条纵线，
+   每条日期前的线上挂圆点；最新一条金点（元帅金描边 #e6db74），其余亮灰点暗灰描边。
+   纵线挂 .un_timeline（内容层）不挂 .un_list（滚动层）——滚动层上 top/bottom
+   定位只覆盖可视高，内容滚下去线就断了；挂在内容层则高度=内容总高，随滚动自然延伸。
+   坐标口径：timeline 左留 26px 槽；圆点 8px 挂 em::before（left:-18 → 圆心 x=12），
+   线宽 2 挂 timeline::before（left:11 → 圆心 x=12），两者同轴。 */
+.update_notice_modal .un_timeline {
+  position: relative;
+  padding-left: 26px;
+}
+.update_notice_modal .un_timeline::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 10px;   /* 首条圆点圆心（首行 line-height 21 → 圆心 ~10.5） */
+  bottom: 12px;
+  width: 2px;
+  background: rgba(248, 248, 242, 0.14);
+  border-radius: 1px;
+}
+/* 日期列：flex 两列布局——日期列固定 72px（「2026.12.31」粗体 13px ≈ 65px，
+   62px 会溢出折行），内容列 .un_txt 独立占余宽、折行不绕回日期下方。
+   align-items: flex-start 保 em 恒单行高，圆点 top:50% 恒锚定首行居中 */
+.update_notice_modal .un_item {
+  display: flex;
+  align-items: flex-start;
+}
+.update_notice_modal .un_item em {
+  flex: 0 0 72px;
+  margin-right: 10px;
+  position: relative;
+}
+.update_notice_modal .un_txt {
+  flex: 1;
+  min-width: 0;
+}
+.update_notice_modal .un_item em::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #b9b9ad; /* 亮灰实心 */
+  border: 1px solid #55544a; /* 暗灰描边 */
+  box-sizing: border-box;
+}
+/* 最新一条：金色实心 + 元帅金描边（与军衔 marshal 档同色 #e6db74） */
+.update_notice_modal .un_item.un_latest em::before {
+  background: #e6db74;
+  border-color: #a89a3e;
+}
 /* 滚动到底部的「加载更多」行：标准翻页控件同款三圆点按钮（.dots_more 通用类）
    + 剩余条数（2026-11-06 三轮张老师要求，替代原「查看全部」链接） */
 .update_notice_modal .un_more {
