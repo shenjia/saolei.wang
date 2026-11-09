@@ -428,6 +428,9 @@ export function replayCounts(
  * RQP=Est×(Est+1)/3BV；QG=RT^1.7/solved；
  * STNB=(73.5L²−94.5L+57)/QG×(solved/3BV)^0.5，QG/STNB 用 Est RTime 代入——
  * 2026-10-30 张老师定败局修正，胜局 est=t 恒等旧值；
+ * Est STNB=(73.5L²−94.5L+57)÷(Est^1.7/3BV)，整盘等效不打完成度折扣——
+ * 2026-11-09 张老师定：未完成局（solved<3BV）在 STNB 行下追加，完整局不显示
+ * （录像页全是完整局，该行天然不出现）；
  * RTime 后缀 (n)=floor(RT)+1 录像秒数口径）。
  * Path=像素 / CPath=格数（16px/格折算）双行展示（2026-11-08 张老师定：
  * Path 口径统一为像素——与录像页原口径一致；练习页原来的折算格数拆出为 CPath 行）。
@@ -462,9 +465,12 @@ export function statsRows(s: StatsRowSource): [string, string, string][] {
   const hasBv = s.solvedBv > 0 && s.t > 0;
   const est = hasBv ? s.t * (s.board3bv / s.solvedBv) : 0;
   const qg = hasBv ? Math.pow(est, 1.7) / s.solvedBv : 0;
-  const stnb = hasBv
-    ? ((73.5 * s.ln * s.ln - 94.5 * s.ln + 57) / qg) * Math.sqrt(s.solvedBv / s.board3bv)
-    : 0;
+  const cc = 73.5 * s.ln * s.ln - 94.5 * s.ln + 57;
+  const stnb = hasBv ? (cc / qg) * Math.sqrt(s.solvedBv / s.board3bv) : 0;
+  /* 整盘等效 STNB（2026-11-09 张老师定）：完成度按 1 代入（不打 p^1.5 折扣），
+     仅未完成局显示——胜局两者相等，录像页全是完整局故该行天然不出现 */
+  const unfinished = hasBv && s.solvedBv < s.board3bv;
+  const estStnb = unfinished ? (cc / Math.pow(est, 1.7)) * s.board3bv : 0;
   const freq = (n: number) => (s.t > 0 ? f3(n / s.t) : "0.000");
   return [
     ["RTime", f3(s.t) + " (" + (Math.floor(s.t) + 1) + ")", "本局实际用时（秒），括号内为按秒进位的录像计分时间"],
@@ -488,5 +494,8 @@ export function statsRows(s: StatsRowSource): [string, string, string][] {
     ["RQP", hasBv ? f3((est * (est + 1)) / s.board3bv) : "*", "性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV"],
     ["QG", hasBv ? f3(qg) : "*", "质量分 = 估算用时 ^ 1.7 ÷ 已完成 3BV（估算用时 = 实际用时 × 3BV ÷ 已完成 3BV，胜局两者相等）"],
     ["STNB", hasBv ? f3(stnb) : "*", "综合评分（按难度与完成度归一化，越大越好；自定义盘按雷密度折算难度）"],
+    ...(unfinished
+      ? ([["Est STNB", f3(estStnb), "整盘等效综合评分 = 假设按 Est RTime 完成全盘 3BV 的 STNB（上方 STNB 行带完成度折扣，本行不打折，可与录像页完整局直接对比；完整局两者相等故不显示）"]] as [string, string, string][])
+      : []),
   ];
 }
