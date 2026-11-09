@@ -139,22 +139,26 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
               }}
             />
             {/* ⚠️ SVG text 放大禁用一切 CSS transform（2026-11-09 两轮真机实证）：
-                fill-box+center、view-box+显式 origin 在真机 iOS Safari 下激活放大都会位移
-                （无头 WebKit 复现不了真机 paint 层差异）。终版方案：font-size 缩放——
-                布局驱动，与 transform-origin/zoom 全解耦，textAnchor=middle 水平恒居中 */}
+                fill-box+center、view-box+显式 origin 在真机 iOS Safari 下激活放大都会位移。
+                终版方案：font-size 缩放——布局驱动，与 transform-origin/zoom 全解耦，
+                textAnchor=middle 水平恒居中。⚠️ 过渡动画也不能内联（真机 zoom 子树里
+                font-size 过渡起始值错乱会「先变小再变大」），改 .radar_lbl_fs 类 +
+                globals.css @media (hover:hover) 门控：PC 平滑、触屏瞬时切换 */}
             <text x={lx} y={ly - 3} textAnchor="middle">
               <tspan
+                className="radar_lbl_fs"
                 fill={gradeColor(d.grade)}
                 fontWeight="bold"
-                style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS, transition: "font-size .15s ease" }}
+                style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS }}
               >
                 {d.grade}
               </tspan>
               <tspan
+                className="radar_lbl_fs"
                 x={lx}
                 dy={LABEL_NAME_DY}
                 fill={active ? "#a6e22e" : "#8a8878"}
-                style={{ fontSize: active ? LABEL_NAME_FS * 1.25 : LABEL_NAME_FS, transition: "font-size .15s ease" }}
+                style={{ fontSize: active ? LABEL_NAME_FS * 1.25 : LABEL_NAME_FS }}
               >
                 {d.name}
               </tspan>

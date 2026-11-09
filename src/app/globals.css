@@ -2452,6 +2452,15 @@ del[data-tip]:hover::after {
   /* 标签加大（13/8→15/10）后 hover 放大会略越出 222 视口（~7px，盒 padding 内），不裁 */
   overflow: visible;
 }
+/* 雷达激活标签字号过渡（2026-11-09 三轮修）：只在有悬停能力的设备启用。
+   真机 iOS Safari 在 zoom 子树里 font-size 过渡起始值解析错乱，插值从极小值起步
+   → 激活/失活都「先变小再变大」；触屏（hover:none）瞬时切换、无插值无错乱。
+   font-size 方案本身见 RadarChart.tsx / VideoAnalysis.tsx 注释（CSS transform 全弃用） */
+@media (hover: hover) and (pointer: fine) {
+  .radar_lbl_fs {
+    transition: font-size 0.15s ease;
+  }
+}
 /* 「实力」雷达 hover 气泡（2026-10-14 张老师要求）：hover 维度在标签处弹
    「超过 xx% 的玩家」（percent=100 → 「全网第一」，无成绩维度 grade「?」→ 「暂无成绩」）。
    视觉与录像分析 vr_tip 同款：#1e1f1c 底 / #49483e 边 / 圆角 3px；

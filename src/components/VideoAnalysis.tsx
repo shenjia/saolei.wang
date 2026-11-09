@@ -211,21 +211,24 @@ export function VideoAnalysisRadar({
                   filter: active ? "drop-shadow(0 0 4px #66d9ef)" : undefined,
                 }}
               />
-              {/* ⚠️ 同 RadarChart.tsx：SVG text 放大禁用一切 CSS transform（真机 iOS Safari
-                  必位移），终版用 font-size 缩放，textAnchor=middle 水平恒居中 */}
+              {/* ⚠️ 同 RadarChart.tsx：SVG text 放大禁用一切 CSS transform（真机必位移），
+                  终版 font-size 缩放；过渡动画走 .radar_lbl_fs 类（globals.css hover 门控，
+                  触屏瞬时切换——真机 zoom 子树内联 font-size 过渡会先变小再变大） */}
               <text x={lx + ox} y={ly - 3 + oy} textAnchor="middle">
                 <tspan
+                  className="radar_lbl_fs"
                   fill={gradeColor(d.grade)}
                   fontWeight="bold"
-                  style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS, transition: "font-size .15s ease" }}
+                  style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS }}
                 >
                   {d.grade}
                 </tspan>
                 <tspan
+                  className="radar_lbl_fs"
                   x={lx + ox}
                   dy={LABEL_NAME_DY}
                   fill={active ? "#a6e22e" : "#8a8878"}
-                  style={{ fontSize: active ? LABEL_NAME_FS * 1.25 : LABEL_NAME_FS, transition: "font-size .15s ease" }}
+                  style={{ fontSize: active ? LABEL_NAME_FS * 1.25 : LABEL_NAME_FS }}
                 >
                   {d.name}
                 </tspan>
