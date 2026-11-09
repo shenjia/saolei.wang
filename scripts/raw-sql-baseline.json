@@ -1,9 +1,10 @@
 {
   "note": "裸拼 SQL 基线 v2：只盯含 ${} 插值或动态传入 SQL 的调用点（静态+?占位符不设限）。新增插值点前请确认标识符过 assertIdent、LIKE 参数用 likeContains。",
   "version": 2,
-  "generatedAt": "2026-11-08",
-  "interpolatedTotal": 38,
+  "generatedAt": "2026-11-09",
+  "interpolatedTotal": 39,
   "interpolatedFiles": {
+    "src/app/api/public/v1/user_search/route.ts": 1,
     "src/lib/activerank.ts": 1,
     "src/lib/activity.ts": 2,
     "src/lib/admin/data.ts": 11,
@@ -12,5 +13,5 @@
     "src/lib/queries.ts": 15,
     "src/lib/useractivity.ts": 1
   },
-  "allTotal": 88
+  "allTotal": 89
 }
