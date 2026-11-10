@@ -7083,18 +7083,47 @@ body #page {
   body #video_view .playable {
     overflow-x: auto;
   }
-  /* 账户设置外站绑定区（2026-11-10 张老师报移动版乱套）：桌面版为与上方资料表
-     左缘对齐给 .outer_bind_sec 右移 margin-left: calc(25% + 18px)（头像列宽+gap），
-     ≤768 单列后头像列窄、25% 缩不多，但标签列定宽 129px 仍在——360px 视口下
-     值单元格只剩 ~148px，装不下「已绑定+同步开关」(~160px) 三段内容竖着堆
-     （已绑定→开关→提示小字各占一行，整行挤乱）。复位：缩进取消 + th 定宽解除，
-     标签列回归内容宽，值单元格拿回整行宽，一行放得下；320px 极窄仍折行时
-     标签在上一行、内容顺排下移，不再挤压错位 */
+  /* 账户设置外站绑定区移动端（2026-11-10 张老师二报「局右好」）：左缘恢复与上方
+     资料表对齐（同桌面 calc(25% + 18px) 公式），配合防折行收紧——标签列自适应宽
+     （继承首轮修复）+ 开关左间距 14→8（!important 压组件 inline margin，组件在
+     OpenmsBind.tsx 的行内样式）+ 开关文字 14→13px。预算（layout px）：已绑定 39
+     + 间距 8 + 开关(30 滑块+8 gap+文字 13×10=121) ≈ 206，对齐后 360 档（zoom 0.65，
+     布局宽 554）值列 ~240 放得下，402 档（zoom 0.7，布局宽 574）~262 富余 */
   #page #account_manage .outer_bind_sec {
-    margin-left: 0;
+    margin-left: calc(25% + 18px);
   }
   #page #account_manage .outer_bind_sec table.form th {
     width: auto;
+  }
+  #page #account_manage .openms_bound_cell > div {
+    margin-left: 8px !important;
+  }
+  #page #account_manage .openms_bound_cell .acct_gsw .txt {
+    font-size: 13px;
+  }
+  /* 提示小字缩进随间距收紧（原 56 = 标签 42 + 间距 14，现 42 + 8 = 50，对齐开关） */
+  #page #account_manage .outer_bind_note {
+    margin-left: 50px;
+  }
+  /* ≤340 极窄带（320 视口 zoom 0.65 布局宽 ~492）最后兜底：比例缩进（25%+18≈127）
+     吃掉过多——改固定 84px（≈头像列实际宽 80+gap），标签列保持自适应（75），
+     值列拿 ~157 > 预算 134，单行稳定放下 */
+  @media (max-width: 340px) {
+    #page #account_manage .outer_bind_sec {
+      margin-left: 84px;
+    }
+    #page #account_manage .openms_bound_cell .acct_gsw {
+      gap: 6px;
+    }
+    #page #account_manage .openms_bound_cell .acct_gsw .txt {
+      font-size: 12px;
+    }
+    #page #account_manage .openms_bound_cell > div {
+      margin-left: 4px !important;
+    }
+    #page #account_manage .outer_bind_note {
+      margin-left: 38px;
+    }
   }
 }
 
