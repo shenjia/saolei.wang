@@ -241,6 +241,9 @@ export function VsScoreBoard({
   const shotRef = useRef<HTMLAudioElement>(null);
   useEffect(() => {
     if (phase !== "done") return;
+    // 03:59 张老师：移动端不启用截图也不出气泡——移动端浏览器无法写剪贴板
+    //（ClipboardItem/Safari iOS 均不可用），静默跳过整个截屏 effect
+    if (window.matchMedia("(max-width: 768px)").matches) return;
     let cancelled = false;
     const doneAt = Date.now(); // 跑分结束时刻，3s/1s 延迟基准
     const run = async () => {
