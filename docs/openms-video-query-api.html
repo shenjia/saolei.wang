@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>开源扫雷网绑定用户录像查询 API 约定（草案）</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --paper: #ffffff;
+      --text: #20242a;
+      --muted: #667085;
+      --line: #e4e7ec;
+      --head: #f8fafc;
+      --accent: #087f5b;
+      --code: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      padding: 12px 20px;
+      background: rgba(244, 246, 248, .94);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+    }
+    button {
+      border: 0;
+      border-radius: 7px;
+      padding: 9px 20px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #066c4c; }
+    main {
+      max-width: 1080px;
+      margin: 28px auto 48px;
+      padding: 48px 56px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 4px 18px rgba(16, 24, 40, .04);
+    }
+    h1 { margin: 0 0 28px; font-size: 27px; line-height: 1.4; text-align: center; }
+    h2 { margin: 34px 0 14px; padding-bottom: 8px; font-size: 20px; border-bottom: 2px solid var(--line); }
+    p { margin: 10px 0; }
+    ul { margin: 10px 0; padding-left: 24px; }
+    table { width: 100%; margin: 14px 0 20px; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--head); font-weight: 650; white-space: nowrap; }
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      color: #b42318;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: .92em;
+    }
+    pre {
+      overflow: auto;
+      margin: 14px 0 20px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--code);
+      line-height: 1.6;
+    }
+    pre code { padding: 0; background: transparent; color: #24292f; }
+    .note { color: var(--muted); }
+    @media (max-width: 760px) {
+      main { margin: 0; padding: 28px 18px; border: 0; border-radius: 0; }
+      h1 { font-size: 23px; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+      td { white-space: normal; min-width: 110px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      main { margin: 0; padding: 0; border: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><button id="copyButton" type="button">复制全文</button></div>
+  <main id="document">
+    <h1>开源扫雷网绑定用户录像查询 API 约定（草案）</h1>
+
+    <h2>1. 接口定义</h2>
+    <pre><code>GET /api/accountlink/saolei/videos/</code></pre>
+    <p>用途：扫雷网同步指定绑定账户在开源扫雷网的历史及新增录像。</p>
+    <ul>
+      <li>无需用户密码或登录 token，暂不新增 API Key。</li>
+      <li>开源扫雷网必须校验 <code>profile</code> 与 <code>saolei_uid</code> 当前存在有效绑定：存在对应 <code>AccountSaolei</code>，且存在对应 <code>AccountLinkQueue(verified=True)</code>。</li>
+      <li><strong>本接口用于「开源扫雷网 → 扫雷网」方向，不检查 <code>AccountSaolei.auto_sync</code></strong>；该开关控制反方向。</li>
+      <li>扫雷网是否实际拉取，由扫雷网侧的 <code>openms_link.consent</code> 决定。</li>
+    </ul>
+
+    <h2>2. 请求参数</h2>
+    <table>
+      <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>默认值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>profile</code></td><td>integer</td><td>是</td><td>—</td><td>开源扫雷网用户 ID</td></tr>
+        <tr><td><code>saolei_uid</code></td><td>integer</td><td>是</td><td>—</td><td>绑定的扫雷网用户 ID，用于核验绑定归属</td></tr>
+        <tr><td><code>cursor</code></td><td>integer</td><td>否</td><td><code>0</code></td><td>上次响应的 <code>next_cursor</code>；返回 <code>id &gt; cursor</code> 的录像</td></tr>
+        <tr><td><code>size</code></td><td>integer</td><td>否</td><td><code>200</code></td><td>本页条数，范围 1–1000</td></tr>
+      </tbody>
+    </table>
+    <p>结果按<strong>录像 <code>id</code> 升序</strong>返回。首次全量同步不传 <code>cursor</code>，之后保存 <code>next_cursor</code> 续拉。</p>
+
+    <h2>3. 响应外层字段</h2>
+    <table>
+      <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>profile</code></td><td>integer</td><td>是</td><td>回显开源扫雷网用户 ID</td></tr>
+        <tr><td><code>saolei_uid</code></td><td>integer</td><td>是</td><td>回显扫雷网用户 ID</td></tr>
+        <tr><td><code>next_cursor</code></td><td>integer/null</td><td>是</td><td>本页最后一条录像 ID；无下一页时为 <code>null</code></td></tr>
+        <tr><td><code>has_more</code></td><td>boolean</td><td>是</td><td>是否还有下一页</td></tr>
+        <tr><td><code>count</code></td><td>integer</td><td>是</td><td>本页实际返回条数</td></tr>
+        <tr><td><code>generated_at</code></td><td>string</td><td>是</td><td>响应生成时间，ISO 8601，必须带时区</td></tr>
+        <tr><td><code>items</code></td><td>array</td><td>是</td><td>录像列表，无数据时返回 <code>[]</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>4. items[] 录像字段</h2>
+    <table>
+      <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>来源</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>integer</td><td>是</td><td>现有</td><td>开源扫雷网录像 ID；扫雷网以 <code>(from_site, from_id)</code> 作为幂等键</td></tr>
+        <tr><td><code>upload_time</code></td><td>string</td><td>是</td><td>现有</td><td>上传时间，ISO 8601，必须带时区</td></tr>
+        <tr><td><code>level</code></td><td>string</td><td>是</td><td>现有</td><td><code>b</code>=初级、<code>i</code>=中级、<code>e</code>=高级</td></tr>
+        <tr><td><code>mode</code></td><td>string</td><td>是</td><td>现有</td><td>开源扫雷网原始模式编码，如 <code>"00"</code>、<code>"05"</code>；必须保留前导零</td></tr>
+        <tr><td><code>state</code></td><td>string</td><td>是</td><td>现有</td><td><code>a</code>=待审、<code>b</code>=冻结、<code>c</code>=通过、<code>d</code>=标识不匹配、<code>e</code>=外站导入</td></tr>
+        <tr><td><code>software</code></td><td>string</td><td>是</td><td>现有</td><td><code>a</code>=AVF、<code>e</code>=EVF、<code>m</code>=MVF</td></tr>
+        <tr><td><code>timems</code></td><td>integer</td><td>是</td><td>现有</td><td>开源扫雷网记录的完成时间，单位毫秒</td></tr>
+        <tr><td><code>bv</code></td><td>integer</td><td>是</td><td>现有</td><td>本局 3BV</td></tr>
+        <tr><td><code>file_ext</code></td><td>string</td><td>是</td><td><strong>新增</strong></td><td>原始文件后缀，不带点：<code>avf</code> / <code>evf</code> / <code>mvf</code></td></tr>
+        <tr><td><code>file_size</code></td><td>integer</td><td>是</td><td><strong>新增</strong></td><td>原始文件字节数，用于下载前排除超限文件</td></tr>
+        <tr><td><code>file_md5</code></td><td>string</td><td>是</td><td><strong>新增</strong></td><td>原始文件字节的 MD5，32 位小写 hex，用于下载前查重</td></tr>
+        <tr><td><code>download_url</code></td><td>string</td><td>是</td><td><strong>新增</strong></td><td>原文件完整下载 URL，例如 <code>https://openms.top/api/video/download/12345</code></td></tr>
+      </tbody>
+    </table>
+    <p>其中 <code>timems</code>、<code>bv</code>、<code>level</code>、<code>mode</code> 用于列表展示和预筛选；<strong>扫雷网最终落库仍以原始录像文件的解析结果为准</strong>。</p>
+
+    <h2>5. 响应示例</h2>
+    <pre><code>{
+  "profile": 4,
+  "saolei_uid": 30872,
+  "next_cursor": 12345,
+  "has_more": true,
+  "count": 1,
+  "generated_at": "2026-11-09T22:00:00+08:00",
+  "items": [
+    {
+      "id": 12345,
+      "upload_time": "2026-11-09T12:34:56+08:00",
+      "level": "e",
+      "mode": "00",
+      "state": "c",
+      "software": "e",
+      "timems": 25100,
+      "bv": 152,
+      "file_ext": "evf",
+      "file_size": 34567,
+      "file_md5": "4cd9e3e261f76888be8d8919f06d0428",
+      "download_url": "https://openms.top/api/video/download/12345"
+    }
+  ]
+}</code></pre>
+
+    <h2>6. 错误约定</h2>
+    <table>
+      <thead><tr><th>HTTP 状态</th><th>场景</th></tr></thead>
+      <tbody>
+        <tr><td><code>400</code></td><td>参数缺失或格式错误</td></tr>
+        <tr><td><code>403</code></td><td><code>profile</code> 与 <code>saolei_uid</code> 不存在有效绑定</td></tr>
+        <tr><td><code>429</code></td><td>请求超过限速，响应携带 <code>Retry-After</code></td></tr>
+        <tr><td><code>500/502/503</code></td><td>临时服务异常，调用方稍后重试</td></tr>
+      </tbody>
+    </table>
+
+    <h2>7. 同步口径</h2>
+    <ul>
+      <li>列表返回全部 <code>state</code>；扫雷网只导入 <code>a/c/d</code>，排除 <code>b/e</code>，其中 <code>e</code> 用于防止外站录像递归同步。</li>
+      <li>下载前先用 <code>file_md5</code> 查重，再按 <code>file_size</code> 和 <code>file_ext</code> 预筛选，避免无效下载。</li>
+      <li><code>download_url</code> 必须返回<strong>未经转码的原始文件</strong>，并支持直接 GET。</li>
+      <li>ID 游标负责新增录像；建议每天进行一次 <code>cursor=0</code> 全量对账，覆盖审核状态后改等情况。</li>
+      <li>不提供联系方式、IP 等隐私字段。</li>
+    </ul>
+  </main>
+  <script>
+    const button = document.getElementById("copyButton");
+    button.addEventListener("click", async () => {
+      const text = document.getElementById("document").innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "已复制全文";
+      } catch {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById("document"));
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = "已全选，请按 Ctrl/Cmd+C";
+      }
+      window.setTimeout(() => { button.textContent = "复制全文"; }, 2500);
+    });
+  </script>
+</body>
+</html>

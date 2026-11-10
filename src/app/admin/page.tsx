@@ -132,10 +132,10 @@ export default async function AdminDashboard() {
       </div>
 
       {/* ---------- 规模指标（2026-10-16 张老师定：第一行全带走势线；2026-11-01 加第 7 卡 API 调用；
-          2026-11-08 张老师定：最上加「开源网表态」卡——openms_link 96 绑定用户的征求表态进度，实时取） ---------- */}
+          2026-11-08 张老师定：最上加「开源扫雷网表态」卡——openms_link 96 绑定用户的征求表态进度，实时取） ---------- */}
       <div className="admin_kpis">
         <Kpi
-          label="开源网表态"
+          label="开源扫雷网表态"
           href="/admin/openms-consent"
           value={
             <>

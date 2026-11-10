@@ -309,6 +309,89 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 
 通用说明：聚合榜（bv/stnb）数据源失败时返回 `503`（附 `error` 标识），请调用方退避重试；封禁账号不出现在任何玩家榜（地区榜 `players/active` 口径与站内一致）。
 
+## 三、绑定协议 v2（2026-11-09：跳转确认+回来核销，无服务端互调）
+
+> 双方对齐定案（2026-11-08~09）：绑定流程「一边发起、另一边确认」；确认以登录态授权页完成，取代人工审核。
+> **不做 API KEY、不做服务端互调**——凭一次性令牌 + 双方各自公开查询接口完成核验与核销。
+> **同步开关各站落点、默认勾选**（2026-11-09 张老师定）：「开源网→扫雷网」开关在扫雷网授权页
+> （openms_link.consent，默认勾选=1），扫雷网 worker 按它过滤；「扫雷网→开源网」开关在开源站授权页
+> （AccountSaolei.auto_sync，默认 True），开源站 worker 按它过滤。各站管各站方向的同步。
+
+### 3.1 流程
+
+**方向 A：扫雷网发起 → 开源站授权页确认（主力方向）**
+
+1. 用户在扫雷网账户设置点「绑定开源网」→ 授权页勾「开源网录像同步到扫雷网」开关（默认勾选）→ 生成 48 字符一次性 token
+2. 用户跳开源站授权页 `https://openms.top/#/bind/saolei?token=<token>`（开源站 SPA 为 hash 路由；授权页展示申请者的扫雷网用户名，用户登录后勾「扫雷网录像同步到开源网」开关（默认勾选）并确认）
+3. 用户回扫雷网点「我已在开源站确认，完成绑定」→ 扫雷网调开源站状态 API（见 3.3③）→ `status=="confirmed"` 则取回 profile 落绑定
+4. 开源站侧凭 `links` 列表（见 3.2②）拿到 profile↔uid 映射，维护本站绑定关系
+
+**方向 B：开源网发起 → 扫雷网授权页确认**
+
+1. 用户在开源站生成一次性 token 并记录申请（profile 关联）
+2. 跳转扫雷网授权页 `https://saolei.wang/account/openms/bind?token=<token>`
+3. 用户登录扫雷网 → 页面核验 token（调开源站 API，见 3.3①）→ 展示申请者 → 用户勾选「开源网录像同步到扫雷网」开关（默认勾选）→ 点「确认绑定」→ 扫雷网落绑定关系
+4. 开源站侧核销：定时拉 `GET /api/public/v1/openms/links`，出现自己的 profile 即写入本站绑定关系
+
+### 3.2 扫雷网提供的接口（无需 key）
+
+**① `GET /api/public/v1/openms/bind-request?token=<48位hex>`**
+开源站授权页展示「谁在申请」用。
+
+```json
+{ "status": 0, "uid": 35545, "username": "许欣怡" }
+```
+
+`status`：0=待确认 · 1=已核销 · 2=已取消（2/1 时授权页应提示申请已失效）。令牌错误/失效：404。
+
+**② `GET /api/public/v1/openms/links`**
+绑定关系列表（开源站维护 link 表 + 方向 B 核销依据）。
+
+```json
+{
+  "generatedAt": 1794188128,
+  "links": [
+    { "profile": 103, "uid": 2051, "username": "cphq1" }
+  ]
+}
+```
+
+全量当前 96 人量级，建议 5~10 分钟拉一次。是否抓取某用户的扫雷网录像由开源站自己的 `AccountSaolei.auto_sync` 决定，本列表不携带同步开关。
+
+### 3.3 开源站接口（已实现，随授权页前端同 PR；按其路由惯例挂在 /api/accountlink/saolei/bind/ 下）
+
+**① 申请信息查询（方向 A：开源站授权页展示「谁在申请」用）**
+`GET https://openms.top/api/accountlink/saolei/bind/request?token=<token>`
+
+后端代理扫雷网 `bind-request`（3.2①）透传，无需开源站建申请表：
+
+```json
+{ "status": 0, "uid": 35545, "username": "许欣怡" }
+```
+
+`status` 为扫雷网侧语义（0=待确认 · 1=已核销 · 2=已取消）；token 无效返回 404。方向 B（开源站发起）需要单独的申请表与发起接口，暂未实现——现 `request` 语义已定为透传，方向 B 落地时另定端点。
+
+**② 授权页确认（方向 A：开源站授权页「确认绑定」按钮调用，需登录态）**
+`POST https://openms.top/api/accountlink/saolei/bind/confirm`（JSON：`token`、`sync`=扫雷网录像同步到开源网开关，默认 true）
+
+行为：后端凭 token 调扫雷网 `bind-request`（3.2①）核验（非 pending 返回 404）并取回 uid → 在同一业务事务内建 `AccountSaolei(id=uid, parent=当前用户, name=扫雷网用户名, auto_sync=sync)` + `AccountLinkQueue(platform=SAOLEI, identifier=uid, verified=True)`（绑定生效判定两行都要有）；同 uid 已被其他开源站用户绑定、或当前用户已绑定其他扫雷网账户返回 409；同一对绑定重复确认幂等（刷新 name/auto_sync）。事务提交后写入本次令牌的确认凭据（含确认者 ID，TTL 24h）。未登录返回 403。
+
+**③ 申请状态查询（方向 A：扫雷网核销用）**
+`GET https://openms.top/api/accountlink/saolei/bind/status?token=<token>`
+
+```json
+{ "profile": 103, "status": "confirmed" }
+```
+
+实现：先按扫雷网 `bind-request` 处理已取消（status=2，直接 pending）；随后读取本次令牌的确认凭据，只有 uid 与远端一致、且 `AccountSaolei(id=uid).parent_id` 仍等于凭据中的确认者 ID 时才返回 `confirmed`（profile=确认者 ID）。历史绑定、换绑后的旧凭据、无凭据的已核销申请均返回 `{ "profile": null, "status": "pending" }`，无需另建申请表。
+
+### 3.4 通用约定（绑定相关）
+
+- token 为 48 位 hex 一次性令牌，重复发起自动顶掉旧申请（旧 token 即失效）
+- 绑定关系唯一：一个开源站 profile 只能绑定一个扫雷网账户（冲突时双方各自拒绝并提示）
+- 绑定/解绑只影响本站是否抓取（2026-11-08 定案）：解绑需用户在两边分别操作，任一侧保留绑定关系即视为绑定
+- 历史存量 96 人由扫雷网直接灌入绑定关系，不走本协议流程
+
 ## 四、通用约定
 
 - 所有时间戳均为 Unix 秒；time 类成绩为毫秒（精确到小数点第三位秒），3bvs 为实际值（整数）；展示两位小数时第三位截去不四舍五入（2026-11-04 站内口径）
@@ -333,6 +416,8 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 - 2026-11-09（5）：新增 `user_search`（姓名关键词搜玩家，返回 id/name/area/avatar/title）与 `ranking`（view=rank/bv/stnb/area 覆盖除世界排行外全部榜单，20 条/页 cursor 翻页，order/nf/area/size 参数；聚合榜失败 503）。
 - 2026-11-09（4）：login 接口改为**需要 X-Api-Key**（张老师定：防止非法客户端借公开端点探测用户密码）；me 及后续用户侧接口仍仅凭 Bearer token。
 - 2026-11-09（3）：新增用户登录体系——`POST /api/public/v1/login`（账号密码换 7 天 Bearer token，落库 sha256）+ `GET /api/public/v1/me`（登录态自检）；后续用户侧 API 均凭 `Authorization: Bearer <token>` 鉴权。
+- 2026-11-09（2）：绑定协议 v2 修订——同步开关改为**各站落点、默认勾选**：开源网→扫雷网开关在扫雷网授权页（默认勾选），扫雷网→开源网开关在开源站授权页（AccountSaolei.auto_sync，默认 True）；`links` 不再携带 syncToOpenms（开源站按自身 auto_sync 过滤）；开源站契约新增 ③授权页确认接口（confirm）。
+- 2026-11-09：新增「三、绑定协议 v2」——绑定流程改版（跳转确认+回来核销）、bind-request/links 两个免 key 接口、开源站侧契约（request/status）；`links.syncToOpenms` 为开源站 worker 抓取过滤依据（默认 0 不抓）。
 - 2026-11-04：文档补充时间成绩展示口径说明（两位小数、第三位截去不四舍五入）；接口数据本身无变化（realTime 仍为毫秒整数）。
 - 2026-10-27：新增 `post_info`（按 id 查帖子基本信息，不含正文）、`post_search`（标题关键词查询，前 20 条/页 + cursor 翻页）。
 - 2026-10-26：`video_list` 不再按审核状态过滤，条目新增 `status` 字段；新增可选参数 `player_id`，用于只拉取指定玩家录像。

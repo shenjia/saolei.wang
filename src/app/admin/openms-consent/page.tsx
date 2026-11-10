@@ -1,5 +1,5 @@
-// 管理后台 · 开源网表态明细（2026-11-08 张老师需求）
-// 仪表盘「开源网表态」卡点击进入：分「同意 / 不同意 / 未表态」三组列出
+// 管理后台 · 开源扫雷网表态明细（2026-11-08 张老师需求）
+// 仪表盘「开源扫雷网表态」卡点击进入：分「同意 / 不同意 / 未表态」三组列出
 // openms_link 全部绑定用户（96 人量级，一页全量，无分页）。
 // 未表态在 2026-11-13 同步执行时视为不同意（口径同前台 OpenmsConsentModal / 同步脚本）。
 // guard 在 admin/layout.tsx（requireAdmin），本页不重复。
@@ -11,7 +11,7 @@ import { AdminCard, Kpi } from "@/components/admin/Widgets";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "开源网表态明细 | 管理后台" };
+export const metadata = { title: "开源扫雷网表态明细 | 管理后台" };
 
 export default async function AdminOpenmsConsentPage() {
   const links = await prisma.openmsLink.findMany({
@@ -93,7 +93,7 @@ export default async function AdminOpenmsConsentPage() {
   return (
     <>
       <div className="admin_page_head">
-        <h1>开源网表态明细</h1>
+        <h1>开源扫雷网表态明细</h1>
         <span className="sub">
           开源扫雷网（openms.top）绑定用户的录像同步征求表态 · 共 {links.length} 人 · 实时数据 ·{" "}
           <Link className="link" href="/admin">
