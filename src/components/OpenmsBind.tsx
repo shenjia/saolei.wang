@@ -42,12 +42,15 @@ async function postBind(body: Record<string, unknown>): Promise<{
 
 /** 同步开关（三处复用；本页唯一开关＝开源扫雷网→扫雷网方向）。
  * 滑块样式复用账户设置页 acct_gsw（样式块见 globals.css #account_openms_bind 段）；
- * 文字随开关态变色：开=亮灰，关=暗灰（2026-11-09 张老师要求）。 */
+ * 文字随开关态变色：开=亮灰，关=暗灰（2026-11-09 张老师要求）。
+ * inline=true（2026-11-10 张老师：账户设置页挪进「开源扫雷网」行内）：
+ * 容器改 inline-flex 紧跟「已绑定」标签，压过 legacy .form td div{float:left} 换行浮动。 */
 function SyncToggle({
   consent,
   onChange,
   label,
   hint,
+  inline,
 }: {
   consent: boolean;
   onChange: (v: boolean) => void;
@@ -56,9 +59,17 @@ function SyncToggle({
   /** 开关下方提示语（可选；确认模式=可在账户设置调整，发起/偏好=开源扫雷网授权页可设反方向；
    * 账户设置页传空串不渲染） */
   hint?: string;
+  /** 行内形态：开关容器 inline-flex + 左间距，与「已绑定」标签同排 */
+  inline?: boolean;
 }) {
   return (
-    <div style={{ margin: "14px 0" }}>
+    <div
+      style={
+        inline
+          ? { display: "inline-flex", alignItems: "center", margin: "0 0 0 14px", verticalAlign: "middle" }
+          : { margin: "14px 0" }
+      }
+    >
       <label className="acct_gsw">
         <input
           type="checkbox"
@@ -262,11 +273,14 @@ export function OpenmsBindPrefs({
   initialConsent,
   label,
   hint,
+  inline,
 }: {
   initialConsent: boolean;
-  /** 自定义开关文字/提示（默认授权页口径；账户设置页复用时传「从开源扫雷网同步录像」） */
+  /** 自定义开关文字/提示（默认授权页口径；账户设置页复用时传「自动同步录像到扫雷网」） */
   label?: string;
   hint?: string;
+  /** 行内形态（2026-11-10）：容器 inline-flex，与「已绑定」标签同排（透传 SyncToggle） */
+  inline?: boolean;
 }) {
   const [consent, setConsent] = useState(initialConsent);
   const [busy, setBusy] = useState(false);
@@ -291,6 +305,7 @@ export function OpenmsBindPrefs({
       onChange={save}
       label={label ?? "开源扫雷网录像自动同步到扫雷网（包括历史录像和今后上传录像）"}
       hint={hint ?? "开源扫雷网的授权确认页，可以设置是否将扫雷网的录像同步到开源扫雷网"}
+      inline={inline}
     />
   );
 }

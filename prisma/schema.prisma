@@ -32,12 +32,16 @@ model User {
   banUntil      BigInt  @default(0) @map("ban_until") @db.BigInt
   // 可信用户组（2026-10-24）：组内用户上传录像自动分拣时不检查 STNB 触发器（后台 /admin/users/[id] 超管维护）
   trusted       Boolean @default(false)
-  // 公开赞助金额开关（2026-11-02 张老师）：false=公开（默认，个人主页数据统计展示赞助金额行）；
+  // 赞助金额主页展示开关（2026-11-02 张老师定开关；2026-11-10 改为跟行内开关）：
+  // false=公开（默认，个人主页数据统计展示赞助金额行）；
   // true=账户设置里关闭后个人主页隐藏该行。存 User 表（行恒存在，免 user_info upsert 判断）
   donateHidden  Boolean @default(false) @map("donate_hidden")
-  // 显示年龄与星座开关（2026-11-04 张老师）：false=公开（默认，个人主页资料显示年龄/星座行）；
-  // true=账户设置里关闭后个人主页资料不再显示年龄和星座。存 User 表（行恒存在，免 user_info upsert 判断）
-  birthHidden   Boolean @default(false) @map("birth_hidden")
+  // 年龄主页展示开关（2026-11-10 张老师：原「显示年龄与星座」开关分拆为年龄/星座两个独立开关，
+  // 由年龄、星座行后的「在我的主页展示」开关控制；存量 birth_hidden 已回填后删除）：
+  // false=公开（默认）；true=个人主页资料不显示年龄行。存 User 表（行恒存在）
+  ageHidden           Boolean @default(false) @map("age_hidden")
+  // 星座主页展示开关（同上，控制个人主页星座行）
+  constellationHidden Boolean @default(false) @map("constellation_hidden")
 
   // ---- 反作弊处置（2026-10-27）：客户端探测命中（__op 蜜罐/棋盘注入/整页标记浮层）----
   // 排名模式禁用截止 Unix 秒：命中后 24 小时内无法开启排名模式（WS/上传/入口三处闸）

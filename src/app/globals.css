@@ -3954,6 +3954,68 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   cursor: default;
   text-decoration: none;
 }
+/* 开源扫雷网已绑定标签（2026-11-10 张老师）：绿色「已绑定」，hover 出气泡
+   「开源扫雷网用户 #编号」（气泡样式照 star_help 的 data-tip 方案，单行窄版） */
+#account_manage .openms_bound_tag {
+  position: relative;
+  color: #34c759;
+  font-size: 14px;
+  line-height: 24px;
+  white-space: nowrap;
+  cursor: default;
+}
+#account_manage .openms_bound_tag::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 160%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+#account_manage .openms_bound_tag:hover::after {
+  opacity: 1;
+}
+/* 已绑定单元格容器：压过 legacy .form td div{float:left} 的浮动（浮动会把内联
+   开关挤到下一行，2026-11-10 实测踩坑），回归普通流式排列。
+   直接子 div（行内同步开关容器）同样中招 float:left——左浮动会插到「已绑定」
+   文字前面把 span 挤到右边（实测 DOM 顺序对、渲染反了），一并去浮动 */
+#account_manage .openms_bound_cell {
+  float: none;
+}
+#account_manage .openms_bound_cell > div {
+  float: none;
+}
+/* 资料表撑满 .account_identity 剩余宽度（2026-11-10 张老师：行内「在主页展示xx」
+   开关要贴盒子右缘对齐——表格原为收缩宽 281px，贴不到边；flex:1 吃掉头像列外全部余量，
+   行内 float:right 的开关即落在盒子右缘线上） */
+#account_manage .account_identity table.form {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* 带行内开关的资料行（2026-11-10 张老师）：值居左、开关一律靠右对齐。
+   float:none 压过 legacy .form td div{float:left} 的收缩浮动，让容器撑满单元格；
+   开关用 float:right 靠右（width:100% 在自适应表格单元里解析不出，实测弃用） */
+#account_manage table.form td div.acct_vis_cell {
+  float: none;
+}
+#account_manage .acct_vis_cell .acct_row_gsw {
+  float: right;
+}
+/* 赞助金额行值：同个人主页统计盒金色口径（legacy 金 #fdc61a，2026-11-10 张老师） */
+#account_manage table.form td .donate_gold {
+  color: #fdc61a;
+}
 /* 绑定结果反馈（弹窗授权后主窗跳回 /account?bound=1 / ?error=taken） */
 .account_flash {
   margin: 10px 0 0;

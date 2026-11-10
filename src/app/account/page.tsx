@@ -23,6 +23,7 @@ import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 import { avatarUrlFor } from "@/lib/small-avatar";
 import { getOpenmsLink } from "@/lib/openms";
 import { OpenmsBindPrefs } from "@/components/OpenmsBind";
+import { donateYuanPlain } from "@/lib/donate";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "账户设置" };
@@ -42,7 +43,7 @@ export default async function AccountManagePage({
 
   const sp = await searchParams;
   const uid = BigInt(session.uid);
-  const [detail, auth, latestAvatar, me, qqBinding, openmsLink] = await Promise.all([
+  const [detail, auth, latestAvatar, me, qqBinding, openmsLink, donateAgg] = await Promise.all([
     getUserDetail(session.uid),
     // 账户名 + 邮箱绑定状态：绑定入口跟在账户名后面（2026-10-15）
     prisma.userAuth.findUnique({
@@ -64,6 +65,9 @@ export default async function AccountManagePage({
     }),
     // 开源扫雷网绑定状态（2026-11-09 绑定协议 v2：QQ 行后加「开源扫雷网」行）
     getOpenmsLink(session.uid),
+    // 本人赞助合计（2026-11-10 张老师：鼠标垫行后加「赞助金额」行，仅赞助过才显示；
+    // 金额单位分，与个人主页数据统计口径一致）
+    prisma.donate.aggregate({ where: { user: uid }, _sum: { amount: true } }),
   ]);
   if (!detail) redirect("/account/login");
   const { user, info } = detail;
@@ -84,6 +88,8 @@ export default async function AccountManagePage({
   // 年龄+星座（2026-11-03 张老师）：英文名后各占独立一行；未填生日不显示
   const age = ageOf(info?.birthday);
   const constellation = constellationText(info?.birthday);
+  // 赞助金额（2026-11-10 张老师）：鼠标垫行后独立一行，仅赞助过（合计>0）才显示
+  const donateCents = Number(donateAgg._sum.amount ?? 0);
 
   // 头像优先级与个人主页一致：新版上传 → OAuth 外链 → 本地照片墙 → 默认图
   const photo = resolveAvatarUrl(
@@ -148,12 +154,22 @@ export default async function AccountManagePage({
                       <div>{user.englishName}</div>
                     </td>
                   </tr>
-                  {/* 年龄 / 星座（2026-11-03 张老师二改）：各占独立一行；未填生日不显示 */}
+                  {/* 年龄 / 星座（2026-11-03 张老师二改）：各占独立一行；未填生日不显示。
+                      行尾「在主页展示xx」开关（2026-11-10 张老师：原页面底部合并开关分拆为两个；
+                      二改：文案分列 + 一律靠右对齐） */}
                   {age !== null && (
                     <tr>
                       <th>年龄</th>
                       <td>
-                        <div>{age}</div>
+                        <div className="acct_vis_cell">
+                          {age}
+                          <AccountVisibilityToggle
+                            field="age"
+                            label="年龄"
+                            switchText="在主页展示年龄"
+                            initialHidden={user.ageHidden}
+                          />
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -161,7 +177,15 @@ export default async function AccountManagePage({
                     <tr>
                       <th>星座</th>
                       <td>
-                        <div>{constellation}</div>
+                        <div className="acct_vis_cell">
+                          {constellation}
+                          <AccountVisibilityToggle
+                            field="constellation"
+                            label="星座"
+                            switchText="在主页展示星座"
+                            initialHidden={user.constellationHidden}
+                          />
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -184,15 +208,47 @@ export default async function AccountManagePage({
                       </td>
                     </tr>
                   ))}
-                  {/* 开源扫雷网绑定（2026-11-09 绑定协议 v2：入口行，流程走 /account/openms/bind） */}
+                  {/* 赞助金额（2026-11-10 张老师）：鼠标垫行后独立一行，仅赞助过才显示；
+                      行尾「在主页展示金额」开关控制个人主页数据统计的赞助金额行 */}
+                  {donateCents > 0 && (
+                    <tr>
+                      <th>赞助金额</th>
+                      <td>
+                        <div className="acct_vis_cell">
+                          {/* 金色（2026-11-10 张老师）：同个人主页统计盒赞助金额口径 */}
+                          <span className="donate_gold">{donateYuanPlain(donateCents)}</span>
+                          <AccountVisibilityToggle
+                            field="donate"
+                            label="赞助金额"
+                            switchText="在主页展示金额"
+                            initialHidden={user.donateHidden}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {/* 开源扫雷网绑定（2026-11-09 绑定协议 v2：入口行，流程走 /account/openms/bind）。
+                      2026-11-10 张老师：已绑定态改绿色「已绑定」+ hover 气泡（开源扫雷网用户 #编号），
+                      同步开关挪进行内，文案改「自动同步录像到扫雷网」 */}
                   <tr>
                     <th>开源扫雷网</th>
                     <td>
                       <div>
                         {openmsLink ? (
-                          <span className="bind_email_btn qq_bound">
-                            已绑定 #{openmsLink.profile}
-                          </span>
+                          <div className="openms_bound_cell">
+                            <span
+                              className="openms_bound_tag"
+                              data-tip={`开源扫雷网用户 #${openmsLink.profile}`}
+                            >
+                              已绑定
+                            </span>
+                            <OpenmsBindPrefs
+                              initialConsent={openmsLink.consent === 1}
+                              label="自动同步录像到扫雷网"
+                              hint=""
+                              inline
+                            />
+                          </div>
                         ) : (
                           <Link href="/account/openms/bind" className="bind_email_btn">
                             绑定开源扫雷网
@@ -201,37 +257,11 @@ export default async function AccountManagePage({
                       </div>
                     </td>
                   </tr>
-                  {/* 绑定后的同步开关（2026-11-09 张老师要求：绑定成功后出现「从开源扫雷网同步录像」；
-                      开关落 openms_link.consent，走 /api/openms/bind update） */}
-                  {openmsLink && (
-                    <tr>
-                      <th>&nbsp;</th>
-                      <td>
-                        <OpenmsBindPrefs
-                          initialConsent={openmsLink.consent === 1}
-                          label="从开源扫雷网同步录像"
-                          hint=""
-                        />
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
-            {/* 资料可见性开关（2026-11-04 张老师）：「显示年龄与星座」在上、
-                「公开赞助金额」在下；关闭后个人主页不再显示对应行 */}
-            <AccountVisibilityToggle
-              endpoint="/api/account/birth-visibility"
-              label="显示年龄与星座"
-              hint="开启后您的个人主页资料中将显示年龄与星座"
-              initialHidden={user.birthHidden}
-            />
-            <AccountVisibilityToggle
-              endpoint="/api/account/donate-visibility"
-              label="公开赞助金额"
-              hint="开启后您的个人主页数据统计中将展示赞助金额"
-              initialHidden={user.donateHidden}
-            />
+            {/* （2026-11-10 张老师：原页面底部「显示年龄与星座」「公开赞助金额」两个独立开关
+                已移入年龄/星座/赞助金额行尾的「在我的主页展示」行内开关） */}
             {/* 绑定结果反馈（弹窗授权完成后主窗跳回 /account?bound=1 / ?error=taken） */}
             {sp.bound === "1" && <p className="account_flash ok">QQ 绑定成功，今后点登录框的企鹅图标即可登录</p>}
             {sp.error === "taken" && <p className="account_flash err">该 QQ 已绑定其他账号，请换一个试试</p>}

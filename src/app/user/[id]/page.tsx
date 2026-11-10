@@ -310,10 +310,11 @@ export default async function UserViewPage({
   // 2026-10-22「标识」行（user_sig 录像标识文字）也算可展示内容——
   // 有标识但没填资料的老用户，个人资料版块同样显示
   // 2026-11-03 生日也算（填了生日就显示「年龄」「星座」两个独立行）
-  // 2026-11-04 显示年龄与星座开关：账户设置关闭（user.birthHidden）后视为未填，
+  // 2026-11-04 显示年龄与星座开关：账户设置关闭后视为未填，
   //   两个独立行与「版块是否显示」判定一并隐藏（账户设置页/后台玩家详情不受影响）
-  const age = user.birthHidden ? null : ageOf(info?.birthday);
-  const constellation = user.birthHidden ? null : constellationText(info?.birthday);
+  // 2026-11-10 张老师：开关分拆为年龄（ageHidden）/星座（constellationHidden）两个独立开关
+  const age = user.ageHidden ? null : ageOf(info?.birthday);
+  const constellation = user.constellationHidden ? null : constellationText(info?.birthday);
   const hasProfileFields =
     (!!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info])) ||
     age !== null ||

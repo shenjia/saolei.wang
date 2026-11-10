@@ -1,21 +1,26 @@
 "use client";
 
-// 账户设置通用滑块开关（2026-11-04）：由公开赞助金额开关泛化而来（交互/样式同款）。
-// 开=公开（默认）；关=隐藏。提交 POST { hidden } 到指定 endpoint，失败回弹原状态并 toast。
-// 现有两个实例：显示年龄与星座（/api/account/birth-visibility）、公开赞助金额（/api/account/donate-visibility）。
+// 账户设置行内滑块开关（2026-11-10 张老师）：年龄/星座/赞助金额行尾各一个
+// 「在主页展示xx」开关（由 2026-11-04 页面底部两个独立开关改造而来，交互同款；
+// 2026-11-10 二改：文案分列为「在主页展示年龄/星座/金额」，一律靠右对齐）。
+// 开=在我的主页展示（默认）；关=隐藏。提交 POST { field, hidden } 到
+// /api/account/visibility，失败回弹原状态并 toast。
 
 import { useState } from "react";
 import { toast } from "@/components/Toast";
 
 export function AccountVisibilityToggle({
-  endpoint,
+  field,
   label,
-  hint,
+  switchText,
   initialHidden,
 }: {
-  endpoint: string;
+  /** age | constellation | donate（对应 /api/account/visibility 的 field） */
+  field: "age" | "constellation" | "donate";
+  /** toast 文案里的行名（如「年龄」） */
   label: string;
-  hint: string;
+  /** 开关右侧文案（2026-11-10 二改：在主页展示年龄 / 在主页展示星座 / 在主页展示金额） */
+  switchText: string;
   initialHidden: boolean;
 }) {
   const [hidden, setHidden] = useState(initialHidden);
@@ -28,17 +33,17 @@ export function AccountVisibilityToggle({
     // 乐观更新：先切 UI，失败回弹
     setHidden(next);
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/account/visibility", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hidden: next }),
+        body: JSON.stringify({ field, hidden: next }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!data.ok) {
         setHidden(!next);
         toast(data.error ?? "保存失败，请重试", "error");
       } else {
-        toast(next ? `已关闭${label}` : `已开启${label}`, "success");
+        toast(next ? `已关闭「${switchText}」` : `已开启「${switchText}」`, "success");
       }
     } catch {
       setHidden(!next);
@@ -49,13 +54,10 @@ export function AccountVisibilityToggle({
   };
 
   return (
-    <div className="acct_donate_row">
-      <label className="acct_gsw">
-        <input type="checkbox" checked={!hidden} disabled={busy} onChange={() => void toggle()} />
-        <span className="track" />
-        <span className="txt">{label}</span>
-      </label>
-      <span className="hint">{hint}</span>
-    </div>
+    <label className="acct_gsw acct_row_gsw">
+      <input type="checkbox" checked={!hidden} disabled={busy} onChange={() => void toggle()} />
+      <span className="track" />
+      <span className="txt">{switchText}</span>
+    </label>
   );
 }
