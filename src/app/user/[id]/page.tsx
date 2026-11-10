@@ -377,7 +377,7 @@ export default async function UserViewPage({
           {/* 2026-10-13 张老师定稿：原「发消息」灰色大按钮改为性别图标右侧的对话气泡小按钮，
               点击弹带遮罩的发信浮窗（输入框同录像评论），成功后屏中弹「发送成功」气泡 */}
           {/* 十二轮（2026-10-25）：按钮常驻——未登录/看自己灰置 + hover 提示 */}
-          <SendMessageButton to={userId} name={user.chineseName} authorId={session?.uid ?? 0} />
+          <SendMessageButton to={userId} name={user.chineseName} authorId={session?.uid ?? 0} sex={user.sex} />
           <div className="info_body">
             <table className="scores" cellPadding={0} cellSpacing={0}>
               <tbody>

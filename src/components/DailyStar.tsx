@@ -64,7 +64,7 @@ export async function DailyStar() {
           <p className="star_name">
             <AvatarCell id={card.id} name={card.chineseName} englishName={card.englishName} sex={card.sex} gender="small" link />
             {/* 发消息气泡按钮（八轮）：与用户卡片同逻辑——登录且非本人 */}
-            <SendMessageButton to={card.id} name={card.chineseName} authorId={session?.uid ?? 0} />
+            <SendMessageButton to={card.id} name={card.chineseName} authorId={session?.uid ?? 0} sex={card.sex} />
           </p>
           <p className="star_title">
             <TitleBadge title={card.militaryTitle} classic={card.classicTitle} link />

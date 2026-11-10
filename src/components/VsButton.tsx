@@ -26,21 +26,30 @@ export function SwordsIcon() {
 export function VsButton({
   to,
   viewerId,
+  sex,
 }: {
   /** 被挑战玩家 id */
   to: number;
   /** 当前登录用户 id（0=未登录：灰置；等于 to=看自己：灰置） */
   viewerId: number;
+  /** 被挑战玩家性别（真值=男，假值=女；缺省回退「TA」）——2026-11-10 张老师要求气泡文案性别化 */
+  sex?: number | boolean | null;
 }) {
   const disabled = viewerId <= 0 || viewerId === to;
+  // 2026-11-10 张老师要求：hover 气泡文案性别化（他/她，缺省回退 TA）；可用态文案「和他比较一下」
+  const pronoun = sex == null ? "TA" : sex ? "他" : "她";
   const tip =
-    viewerId <= 0 ? "登录后可和TA比拼一下" : viewerId === to ? "不能和自己比拼" : undefined;
+    viewerId <= 0
+      ? `登录后可和${pronoun}比拼一下`
+      : viewerId === to
+        ? "不能和自己比拼"
+        : undefined;
   if (disabled) {
     return (
       <span
         className="vs_btn vs_btn--disabled"
         data-tip={tip}
-        aria-label="和TA比拼一下（不可用）"
+        aria-label={`和${pronoun}比拼一下（不可用）`}
         aria-disabled={true}
       >
         <SwordsIcon />
@@ -52,8 +61,8 @@ export function VsButton({
       className="vs_btn"
       href={`/vs/${to}`}
       prefetch={false}
-      title="和TA比拼一下"
-      aria-label="和TA比拼一下"
+      data-tip={`和${pronoun}比较一下`}
+      aria-label={`和${pronoun}比较一下`}
     >
       <SwordsIcon />
     </Link>

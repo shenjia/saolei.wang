@@ -94,7 +94,7 @@ export function UserCard({
                 登录且非本人时渲染——不参与文字流、不挤占排名文字 */}
             {/* 十二轮（2026-10-25）：按钮常驻——未登录/看自己灰置 + hover 提示 */}
             <span className="ucd_msg">
-              <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} />
+              <SendMessageButton to={card.id} name={card.chineseName} authorId={viewerId} sex={card.sex} />
             </span>
           </div>
         </div>

@@ -43,6 +43,7 @@ export function SendMessageButton({
   to,
   name,
   authorId,
+  sex,
   variant = "bubble",
   onSent,
 }: {
@@ -50,6 +51,8 @@ export function SendMessageButton({
   name: string;
   /** 0=未登录（按钮灰置，hover「登录后可发消息」）；等于 to=看自己（「不能给自己发消息」） */
   authorId: number;
+  /** 收件人性别（真值=男，假值=女；缺省回退「TA」）——2026-11-10 张老师要求气泡文案性别化 */
+  sex?: number | boolean | null;
   /** bubble＝用户主页气泡图标钮（默认）；text＝消息列表行内文字链（「回复」） */
   variant?: "bubble" | "text";
   /** 发送成功回调（消息列表用：本行就地转「已回复」） */
@@ -57,9 +60,11 @@ export function SendMessageButton({
 }) {
   // 2026-10-25 十二轮张老师定：按钮全场景常驻——未登录/看自己时灰置不可点，
   // hover 提示原因（msg_btn--disabled + data-tip 复用全站气泡模式）
-  // 2026-11-10 张老师要求：可用态 hover 同样弹即时气泡「给TA发消息」——两态统一
-  // 走 data-tip（全站 12px 暗底气泡语言），下线浏览器原生 title（延迟大、样式不统一）
+  // 2026-11-10 张老师要求：可用态 hover 同样弹即时气泡——两态统一走 data-tip
+  // （全站 12px 暗底气泡语言），下线浏览器原生 title（延迟大、样式不统一）；
+  // 文案性别化（我们知道用户性别）：他/她，缺省回退「TA」
   const disabled = authorId <= 0 || authorId === to;
+  const pronoun = sex == null ? "TA" : sex ? "他" : "她";
   const [open, setOpen] = useState(false);
   // 草稿秒级备份：受控直绑 draft.value（浮窗挂载即恢复）；按作者 uid + 收件人 id 隔离，
   // 与消息页发信表单共用同一份草稿——气泡里没发完就关掉，去消息页接着写也能接上
@@ -116,7 +121,7 @@ export function SendMessageButton({
         <button
           type="button"
           className={"msg_btn" + (disabled ? " msg_btn--disabled" : "")}
-          data-tip={disabled ? (authorId <= 0 ? "登录后可发消息" : "不能给自己发消息") : `给TA发消息`}
+          data-tip={disabled ? (authorId <= 0 ? "登录后可发消息" : "不能给自己发消息") : `给${pronoun}发消息`}
           aria-label={disabled ? "发消息（不可用）" : `给 ${name} 发消息`}
           aria-disabled={disabled}
           onClick={() => {

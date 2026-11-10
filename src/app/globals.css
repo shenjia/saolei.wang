@@ -8544,16 +8544,17 @@ button.msg_btn.msg_btn--disabled:hover {
   background-image: none;
   transform: scale(1); /* 不可用不跳动 */
 }
-/* hover 即时气泡（2026-11-10 张老师要求）：可用态「给TA发消息」、灰置态提示原因——
+/* hover 即时气泡（2026-11-10 张老师要求）：可用态「给他/她发消息」、灰置态提示原因——
    两态统一 data-tip 全站气泡视觉（暗底浅字小气泡，同军衔徽章/加载更多），
-   下线可用态的浏览器原生 title（延迟大、样式不统一） */
+   下线可用态的浏览器原生 title（延迟大、样式不统一）；
+   同日二轮：气泡离按钮太远，位置整体下调 10px */
 button.msg_btn[data-tip] {
   position: relative;
 }
 button.msg_btn[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: 150%;
+  bottom: calc(150% - 10px);
   left: 50%;
   transform: translateX(-50%);
   background: #1e1f1c;
@@ -8570,6 +8571,37 @@ button.msg_btn[data-tip]::after {
   z-index: 9999;
 }
 button.msg_btn[data-tip]:hover::after {
+  opacity: 1;
+}
+
+/* 对战按钮 hover 气泡（2026-11-10 张老师要求）：与 msg_btn 同语言同款位置（下调 10px 口径）——
+   可用态「和他/她比较一下」，灰置态提示原因（此前 vs_btn 的 data-tip 无 ::after 样式，从未显示过） */
+a.vs_btn[data-tip],
+span.vs_btn[data-tip] {
+  position: relative;
+}
+a.vs_btn[data-tip]::after,
+span.vs_btn[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(150% - 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+a.vs_btn[data-tip]:hover::after,
+span.vs_btn[data-tip]:hover::after {
   opacity: 1;
 }
 
