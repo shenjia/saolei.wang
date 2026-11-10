@@ -12,6 +12,10 @@
 //         不循环；音短于 3s 动画，末尾约 0.85s 是静默段。
 //   赛后：「胜」「败」两字同时渐变出现；图标下方换成亮灰赛后评价（再下移 25px）；
 //         下面各板块淡入出现；并播放结算音。平局：两边 2s 同步涨完，不变金、不显字、不播结算音。
+//   赛后自动截屏（2026-11-11 张老师需求）：跑分完成后把 960 内容列（#page +
+//         顶部 header 条带站名 logo）截成 PNG 复制到剪贴板，绿色气泡「已截图并
+//         复制到剪贴板」；声音开＝跑分结束 3s 后播截屏音（capture.mp3，在线练习
+//         同款）+ 出气泡，声音关＝1s 后直接出气泡（03:26 张老师定，不等声音放完）。
 //
 // 下方板块是服务端渲染的 RSC，作为 below prop 传进本客户端组件，由 phase 控制挂载，
 // 因此首帧（含 SSR）的可见 DOM 里完全没有它们。
@@ -20,6 +24,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { toCanvas } from "html-to-image";
+import { toast } from "./Toast";
 
 /** 第一阶段：两边同色同速，涨到败方分数（张老师 18:12：2s） */
 const CLIMB_MS = 2000;
@@ -220,6 +226,119 @@ export function VsScoreBoard({
     };
   }, [phase, tie]);
 
+  // 赛后自动截屏（2026-11-11 张老师需求）：决出胜负后把 960 内容列截成 PNG 复制
+  // 到剪贴板，绿色气泡「已截图并复制到剪贴板」。
+  // 构图（03:18/03:29 张老师定）：截 #page（960 水平居中内容列，从英雄区到高级
+  // 板块从头到尾）+ 顶部拼 #header .wrapper（同为 960 对齐，带站名 logo）；
+  // 克隆 body 整宽渲染会把 margin:auto 居中丢掉（内容挤左、右侧空白、header 歪），
+  // 而克隆 #page 又丢 body 深底 → backgroundColor 显式补背景色。
+  // 时序（03:26 张老师定，不等声音放完）：声音开＝跑分结束 3s 后播截屏音
+  // （capture.mp3，在线练习同款）+ 出气泡；声音关＝剪贴板一落就出气泡
+  // （截图本体渲染约 1~2s，「1s 出气泡」时剪贴板还写不完，气泡必须真有其事）。
+  // 截图本体在「页面元素停止变化」的瞬间即开截（03:38 张老师定）：rAF 轮询
+  // .vs_below（0.55s 淡入）与胜/败字（0.6s 渐显）的 opacity，全部到位立刻
+  // 渲染落盘（transient activation 窗口内），气泡/截屏音按上述时刻延后。
+  const shotRef = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    if (phase !== "done") return;
+    let cancelled = false;
+    const doneAt = Date.now(); // 跑分结束时刻，3s/1s 延迟基准
+    const run = async () => {
+      // 元素停止变化即开截：等所有渐显元素 opacity 到 1（1.5s 兜底防卡死）
+      await new Promise<void>((res) => {
+        const t0 = Date.now();
+        const tick = () => {
+          const els = [
+            document.querySelector(".vs_below"),
+            ...Array.from(document.querySelectorAll(".vs_mark")),
+          ];
+          const settled =
+            els.every((e) => e && parseFloat(getComputedStyle(e).opacity) >= 1) &&
+            els.length > 0;
+          if (settled || Date.now() - t0 > 1500) return res();
+          requestAnimationFrame(tick);
+        };
+        tick();
+      });
+      if (cancelled) return;
+      try {
+        const pg = document.getElementById("page") ?? document.body;
+        const wrap = document.querySelector<HTMLElement>("#header .wrapper");
+        const bg = getComputedStyle(document.body).backgroundColor || "#151515";
+        const baseOpts = {
+          pixelRatio: 2, // 与在线练习 renderShotPart 同款 2 倍清晰度
+          backgroundColor: bg,
+          style: {
+            zoom: "1",
+            transform: "none",
+            margin: "0",
+            position: "relative",
+            left: "0",
+            top: "0",
+            boxSizing: "border-box", // offsetWidth/Height 含 padding+border，避免右下被挤出
+          },
+        };
+        const shotOpts = (el: HTMLElement) => ({
+          ...baseOpts,
+          width: el.offsetWidth,
+          height: Math.max(1, el.offsetHeight),
+          canvasWidth: Math.max(1, Math.round(el.offsetWidth)),
+          canvasHeight: Math.max(1, Math.round(el.offsetHeight)),
+        });
+        const [pageCv, headCv] = await Promise.all([
+          toCanvas(pg, shotOpts(pg)),
+          wrap ? toCanvas(wrap, shotOpts(wrap)) : Promise.resolve(null),
+        ]);
+        // 拼接：header 条置顶（居中），#page 接其下；左右各扩 40px 逻辑留白
+        //（03:39 张老师：960 截出来太满，左右扩上 40px）
+        const GUTTER = 40; // 逻辑 px
+        const scale = pageCv.width / Math.max(1, pg.offsetWidth);
+        const gutter = Math.round(GUTTER * scale);
+        const out = document.createElement("canvas");
+        out.width = pageCv.width + gutter * 2;
+        out.height = (headCv ? headCv.height : 0) + pageCv.height;
+        const cx = out.getContext("2d");
+        let final = pageCv;
+        if (cx) {
+          cx.fillStyle = bg;
+          cx.fillRect(0, 0, out.width, out.height);
+          if (headCv) cx.drawImage(headCv, Math.round((out.width - headCv.width) / 2), 0);
+          cx.drawImage(pageCv, gutter, headCv ? headCv.height : 0);
+          final = out;
+        }
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          final.toBlob((b) => (b ? resolve(b) : reject(new Error("png encode failed"))), "image/png");
+        });
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        if (cancelled) return;
+        // 气泡/截屏音：声音开＝done+3s 播截屏音+气泡；声音关＝剪贴板一落就出气泡
+        //（截图本体渲染约 1~2s，1s 内物理上写不完剪贴板，气泡必须真有其事）
+        const finish = () => {
+          if (cancelled) return;
+          if (sndRef.current) {
+            const shot = shotRef.current;
+            if (shot) {
+              shot.currentTime = 0;
+              shot.volume = RISE_VOLUME;
+              void shot.play().catch(() => {});
+            }
+          }
+          toast("已截图并复制到剪贴板", "success");
+        };
+        setTimeout(
+          finish,
+          sndRef.current ? Math.max(0, doneAt + 3000 - Date.now()) : 0,
+        );
+      } catch {
+        if (!cancelled) toast("截图失败或剪贴板被拒绝", "error");
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
+
   // 01:18 张老师：赛后分割线宽度与两边玩家卡片边缘平齐——测量首尾 .vs_panel
   // 的跨度，inline 写到 divider 上（PC 端 absolute 定位用）；移动端卡片本就全宽，
   // 清空 inline 让 CSS 的 width:100% 生效。resize 时重算。
@@ -292,6 +411,8 @@ export function VsScoreBoard({
           {/* 两个 audio 留在 DOM 里（display:none 不影响播放），便于观察播放状态 */}
           {/* 张老师 18:12 + 19:07：数字滚动音只播一次，绝不加 loop */}
           <audio ref={riseRef} src={`${RISE_SOUND}?v=${SND_VER}`} preload="auto" />
+          {/* 赛后自动截屏提示音（与在线练习 capture.mp3 同款，只播一次） */}
+          <audio ref={shotRef} src={`/sounds/capture.mp3?v=${SND_VER}`} preload="auto" />
           {!tie && (
             <audio
               ref={resultRef}
