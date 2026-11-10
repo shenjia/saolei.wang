@@ -21,8 +21,6 @@ import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { ageOf, constellationText } from "@/lib/birth";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
 import { avatarUrlFor } from "@/lib/small-avatar";
-import { getOpenmsLink } from "@/lib/openms";
-import { OpenmsBindPrefs } from "@/components/OpenmsBind";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "账户设置" };
@@ -42,7 +40,7 @@ export default async function AccountManagePage({
 
   const sp = await searchParams;
   const uid = BigInt(session.uid);
-  const [detail, auth, latestAvatar, me, qqBinding, openmsLink] = await Promise.all([
+  const [detail, auth, latestAvatar, me, qqBinding] = await Promise.all([
     getUserDetail(session.uid),
     // 账户名 + 邮箱绑定状态：绑定入口跟在账户名后面（2026-10-15）
     prisma.userAuth.findUnique({
@@ -62,8 +60,6 @@ export default async function AccountManagePage({
       where: { userId: uid, provider: "qq" },
       select: { nickname: true, avatar: true },
     }),
-    // 开源扫雷网绑定状态（2026-11-09 绑定协议 v2：QQ 行后加「开源扫雷网」行）
-    getOpenmsLink(session.uid),
   ]);
   if (!detail) redirect("/account/login");
   const { user, info } = detail;
@@ -184,37 +180,8 @@ export default async function AccountManagePage({
                       </td>
                     </tr>
                   ))}
-                  {/* 开源扫雷网绑定（2026-11-09 绑定协议 v2：入口行，流程走 /account/openms/bind） */}
-                  <tr>
-                    <th>开源扫雷网</th>
-                    <td>
-                      <div>
-                        {openmsLink ? (
-                          <span className="bind_email_btn qq_bound">
-                            已绑定 #{openmsLink.profile}
-                          </span>
-                        ) : (
-                          <Link href="/account/openms/bind" className="bind_email_btn">
-                            绑定开源扫雷网
-                          </Link>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {/* 绑定后的同步开关（2026-11-09 张老师要求：绑定成功后出现「从开源扫雷网同步录像」；
-                      开关落 openms_link.consent，走 /api/openms/bind update） */}
-                  {openmsLink && (
-                    <tr>
-                      <th>&nbsp;</th>
-                      <td>
-                        <OpenmsBindPrefs
-                          initialConsent={openmsLink.consent === 1}
-                          label="从开源扫雷网同步录像"
-                          hint=""
-                        />
-                      </td>
-                    </tr>
-                  )}
+                  {/* 开源扫雷网绑定入口（2026-11-09 绑定协议 v2）暂缓上线：bind 页与
+                      OpenmsBind 组件尚在开发未提交，入口先摘除，待功能完整后随 openms 线一并恢复 */}
                 </tbody>
               </table>
             </div>
