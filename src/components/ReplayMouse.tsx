@@ -41,9 +41,6 @@ const EVENT_LABELS: Record<string, string> = {
   sc: "双击",
 };
 
-/** 按键记录面板开关跨会话记忆；自研回放与 Flop 注入脚本共用。 */
-const PANEL_OPEN_KEY = "replayKeyPanelOpen";
-
 /** 反向扫描一次完成按下→下一次同键抬起配对，避免长录像 O(n²)；
     动作区间用差分标记，按下→抬起之间隔着的行也归入同组连线。 */
 function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
@@ -211,10 +208,8 @@ export function ReplayMouseIndicator({
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const visibleRowsRef = useRef(1);
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try { return window.localStorage.getItem(PANEL_OPEN_KEY) === "1"; } catch { return false; }
-  });
+  /* 面板默认隐藏，每次进入都需手动开启（2026-11-10 张老师定）。 */
+  const [open, setOpen] = useState(false);
   const [manual, setManual] = useState<{ index: number; targetCsec: number } | null>(null);
   const [tip, setTip] = useState<{ left: number; top: number } | null>(null);
   const records = useMemo(() => buildRecords(events), [events]);
@@ -345,10 +340,7 @@ export function ReplayMouseIndicator({
     });
   };
   const stateText = left && right ? "左右键按下" : left ? "左键按下" : right ? "右键按下" : "未按下";
-  const toggle = () => setOpen((v) => {
-    try { window.localStorage.setItem(PANEL_OPEN_KEY, v ? "0" : "1"); } catch { /* 隐私模式仅本次生效 */ }
-    return !v;
-  });
+  const toggle = () => setOpen((v) => !v);
   const panel = open && typeof document !== "undefined" ? (
     <div className="replay_key_panel" ref={panelRef} data-testid="replay-key-panel" onClick={(e) => e.stopPropagation()}>
       <div className="gr_title">

@@ -374,8 +374,8 @@ const REPLAY_MOUSE_SCRIPT = `
 (function () {
   if (window.__flopReplayMouse) return;
   window.__flopReplayMouse = true;
-  /* 面板开关跨会话记忆，与自研回放共享同一个 localStorage key。 */
-  var panelOpen = (function () { try { return window.localStorage.getItem("replayKeyPanelOpen") === "1"; } catch (e) { return false; } })();
+  /* 面板默认隐藏，每次进入都需手动开启（2026-11-10 张老师定）。 */
+  var panelOpen = false;
   var host = document.createElement("div");
   host.className = "replay_mouse_flop";
   host.id = "flop_replay_mouse";
@@ -656,7 +656,6 @@ const REPLAY_MOUSE_SCRIPT = `
   }
   function togglePanel() {
     panelOpen = !panelOpen;
-    try { window.localStorage.setItem("replayKeyPanelOpen", panelOpen ? "1" : "0"); } catch (e) {}
     panel.hidden = !panelOpen;
     host.setAttribute("aria-expanded", String(panelOpen));
     if (panelOpen) { buildPanel(); placePanel(); }
