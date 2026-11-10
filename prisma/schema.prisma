@@ -42,6 +42,10 @@ model User {
   ageHidden           Boolean @default(false) @map("age_hidden")
   // 星座主页展示开关（同上，控制个人主页星座行）
   constellationHidden Boolean @default(false) @map("constellation_hidden")
+  // ⚠️ 过渡列（2026-11-10）：旧「显示年龄与星座」开关，代码已不再读写；
+  // 生产库待手工回填 age/constellation_hidden 后 DROP，届时同步摘除本定义
+  // （先摘定义会让 CI db push 判定破坏性变更而中止部署）
+  birthHidden   Boolean @default(false) @map("birth_hidden")
 
   // ---- 反作弊处置（2026-10-27）：客户端探测命中（__op 蜜罐/棋盘注入/整页标记浮层）----
   // 排名模式禁用截止 Unix 秒：命中后 24 小时内无法开启排名模式（WS/上传/入口三处闸）
@@ -1277,6 +1281,12 @@ model OpenmsLink {
   syncToOpenms Int    @default(0) @map("sync_to_openms") @db.TinyInt
   /// 表态时刻（Unix 秒；0=未表态）
   consentTime  BigInt @default(0) @map("consent_time") @db.BigInt
+  /// 开源扫雷网→雷网同步游标（2026-11-10）：本用户已处理过的最大开源站录像 ID。
+  /// 每次同步完一批即落库，下一轮以此 ID 作为 API 的 cursor，避免重复爬取。
+  /// 0=尚未同步过（首次请求按 API 约定传 cursor=1）。
+  syncCursor   BigInt @default(0) @map("sync_cursor") @db.BigInt
+  /// 上次同步结束时刻（Unix 秒；0=从未同步），仅用于监控与排障
+  syncTime     BigInt @default(0) @map("sync_time") @db.BigInt
   createTime   BigInt @default(0) @map("create_time") @db.BigInt
   updateTime   BigInt @default(0) @map("update_time") @db.BigInt
 
