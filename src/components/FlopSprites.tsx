@@ -264,40 +264,48 @@ export function FlopSprites({ innerRef }: { innerRef?: Ref<SVGSVGElement> } = {}
           内 10..160）完全重合，字形均落 30..130；格底沿用站内 cell-press，凹凸
           bevel 与全站一致。
           锐化（2026-11-09 张老师报「关闭像素开关后数字边缘发虚」）：数字 path 加
-          stroke 同色 4 单位描边——曲线/斜段的抗锯齿过渡带在 zoom1.71×dpr2 下有
-          2-3px，占细笔画（20-30 单位）比例大＝视觉发虚；同色描边把笔画加粗 ~13%
-          并吃掉过渡带外半段，观感显著变实。直线段边缘本就 1px 过渡，几乎不受影响 */}
+          stroke 同色描边——曲线/斜段的抗锯齿过渡带在 zoom1.71×dpr2 下有
+          2-3px，占细笔画（20-30 单位）比例大＝视觉发虚；同色描边吃掉过渡带外半段。
+          锐化三代（2026-11-10 张老师问「矢量为什么还要描边」→ 定论：彻底去描边）：
+          描边两代实测均是「涂黑过渡带」的治标法，几何外扩＝必然变粗（4 单位墨水
+          +15~19%、自适应 2 单位仍 +2~14%），与像素版（+0~3%）始终有肉眼差。
+          病根是抗锯齿：矢量曲线边缘落在像素中间 → 浏览器画半透明过渡带＝发虚；
+          像素版阶梯边缘横平竖直踩整数像素才不虚。正解＝SVG 专用开关
+          shape-rendering="crispEdges"：对数字图形关掉抗锯齿，边缘按整数设备
+          像素硬切——粗细＝纯字形（与像素版同墨水），锐度＝像素版同级；曲线斜段
+          的阶梯发生在设备像素级（dpr2 下 0.5 物理像素/级，远细于像素版 1.6px
+          阶梯）。无需任何运行时剂量换算，全消费方（练习/排行 canvas/录像）零适配 */}
       <symbol id="cell-number-1-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <polygon points="50,110 50,130 120,130 120,110 100,110 100,30 85,30 50,65 50,70 70,70 70,110" fill="#0000ff" stroke="#0000ff" strokeWidth="4" strokeLinejoin="round" />
+        <polygon points="50,110 50,130 120,130 120,110 100,110 100,30 85,30 50,65 50,70 70,70 70,110" fill="#0000ff" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-number-2-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 60 Q 30 30, 65 30 H 95 Q 130 30, 130 60 C 130 85, 70 100, 60 110 H 130 V 130 H 30 V 115 C 30 80, 100 80, 100 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60" fill="#008000" stroke="#008000" strokeWidth="4" strokeLinejoin="round" />
+        <path d="M 30 60 Q 30 30, 65 30 H 95 Q 130 30, 130 60 C 130 85, 70 100, 60 110 H 130 V 130 H 30 V 115 C 30 80, 100 80, 100 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60" fill="#008000" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-number-3-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 Q 130 85, 130 100 Q 130 130, 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 60 V 70 H 90 Q 100 70, 100 60 T 90 50 H 30" fill="#ff0000" stroke="#ff0000" strokeWidth="4" strokeLinejoin="round" />
+        <path d="M 30 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 Q 130 85, 130 100 Q 130 130, 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 60 V 70 H 90 Q 100 70, 100 60 T 90 50 H 30" fill="#ff0000" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-number-4-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <polygon points="55,30 30,80 30,90 90,90 90,130 120,130 120,90 130,90 130,70 120,70 120,30 90,30 90,70 65,70 85,30" fill="#000080" stroke="#000080" strokeWidth="4" strokeLinejoin="round" />
+        <polygon points="55,30 30,80 30,90 90,90 90,130 120,130 120,90 130,90 130,70 120,70 120,30 90,30 90,70 65,70 85,30" fill="#000080" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-number-5-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 30 H 130 V 50 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 30" fill="#800000" stroke="#800000" strokeWidth="4" strokeLinejoin="round" />
+        <path d="M 30 30 H 130 V 50 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 30 V 110 H 90 Q 100 110, 100 100 T 90 90 H 30" fill="#800000" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-number-6-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 120 30 V 50 H 80 Q 60 50, 60 60 V 100 Q 60 110, 80 110 T 100 100 T 80 90 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 65 Q 30 130, 30 100 V 60 Q 30 30, 65 30" fill="#008080" stroke="#008080" strokeWidth="4" strokeLinejoin="round" />
+        <path d="M 120 30 V 50 H 80 Q 60 50, 60 60 V 100 Q 60 110, 80 110 T 100 100 T 80 90 H 60 V 70 H 95 Q 130 70, 130 100 T 95 130 H 65 Q 30 130, 30 100 V 60 Q 30 30, 65 30" fill="#008080" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-number-7-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 30 30 H 130 V 60 L 95 130 H 65 L 100 60 V 50 H 30" fill="#000000" stroke="#000000" strokeWidth="4" strokeLinejoin="round" />
+        <path d="M 30 30 H 130 V 60 L 95 130 H 65 L 100 60 V 50 H 30" fill="#000000" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-number-8-hd" viewBox="0 0 168 168">
         <use href="#cell-press" />
-        <path d="M 65 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 H 100 V 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60 T 70 70 H 90 Q 100 70, 100 60 V 100 Q 100 90, 90 90 H 70 Q 60 90, 60 100 T 70 110 H 90 Q 100 110, 100 100 V 80 H 115 Q 130 85, 130 100 Q 130 130, 95 130 H 65 Q 30 130, 30 100 Q 30 85, 45 80 Q 30 75, 30 60 Q 30 30, 65 30" fill="#808080" stroke="#808080" strokeWidth="4" strokeLinejoin="round" />
+        <path d="M 65 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 H 100 V 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60 T 70 70 H 90 Q 100 70, 100 60 V 100 Q 100 90, 90 90 H 70 Q 60 90, 60 100 T 70 110 H 90 Q 100 110, 100 100 V 80 H 115 Q 130 85, 130 100 Q 130 130, 95 130 H 65 Q 30 130, 30 100 Q 30 85, 45 80 Q 30 75, 30 60 Q 30 30, 65 30" fill="#808080" shapeRendering="crispEdges" />
       </symbol>
       <symbol id="cell-flag" viewBox="0 0 168 168">
         <use href="#cell-normal" />
