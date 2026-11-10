@@ -141,7 +141,11 @@ export function ChartCard({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const downIdxRef = useRef<number | null>(null);
-  const [boxW, setBoxW] = useState(600);
+  // ≤600 点的布局宽直接用 CSS 撑满容器（见 svg style），boxW 只用来钉 viewBox/maxWidth；
+  // 初始 0（SSR/首帧）→ ||600 兜底。首帧 SVG 宽度恒贴合容器，不依赖 measure，
+  // 消除「SSR 固定 600 > 容器实际 ~556-570 → 首帧溢出闪横滚条 → ResizeObserver
+  // 校准后消失」的闪现窗口（张老师 2026-11-10 报：个人主页/纪录页刷新闪现横线滚动条）
+  const [boxW, setBoxW] = useState(0);
   // 九轮（2026-10-28 张老师要求）：移动端单列模式图表加高——判据用视口媒体查询，
   // 不用容器宽：全站移动端有 #page zoom 缩放体系（页面按 ~600px 布局再整体缩小），
   // 容器宽恒在 ~518 上下浮动，用它会漏判/误判；≤768 与单列化断点同口径
@@ -226,7 +230,12 @@ export function ChartCard({
   // ≤600 点一律压缩进容器宽（不再有 6px/点下限——原下限会令 W=n×6>容器宽，
   // 用户主页点密的 3BV/s/STNB 曲线实测出横向滚动条）；仅 >600 点极端情况
   // 保留横向滚动兜底
-  const W = n > SCROLL_THRESHOLD ? n * 26 : boxW;
+  // ≤600 点：viewBox 用容器宽，首帧未量到（boxW=0）时 600 兜底——元素宽已由 CSS
+  // width:100% 贴合容器，viewBox 600 vs 容器 ~560 只会让首帧内容等比微缩 ~7%
+  // （一帧后 ResizeObserver 校准，肉眼不可见），**不再溢出容器出滚动条**；
+  // >600 点：W 固定 n×26，横向滚动从首帧就存在（稳定状态，非闪现）
+  const W = n > SCROLL_THRESHOLD ? n * 26 : (boxW || 600);
+  const scrollMode = n > SCROLL_THRESHOLD;
   // 纵轴坐标系（2026-11-06 张老师定，当日二次修订）：time 倒数 / stnb 10/17 次方 / 3bvs 线性——
   // 统一「变换值越大越靠顶」，顶部恒为最好成绩
   const ts = pts.map((p) => transformY(chart.metric, p.y));
@@ -315,6 +324,11 @@ export function ChartCard({
           aria-label={`${levelName}${chart.metricName}演变`}
           style={{
             touchAction: "pan-y",
+            // 刷新闪横滚条修复（张老师 2026-11-10 报）：非滚动模式（≤600 点）SVG 宽度
+            // 直接 100% 跟随容器、maxWidth 钉住坐标系宽——首帧到校准全程贴合容器，
+            // 不再有「固定 600 > 容器 ~560 → 出滚动条 → 校准后消失」的闪现窗口；
+            // 滚动模式（>600 点）保持 width=W 像素值不变
+            ...(scrollMode ? {} : { width: "100%", maxWidth: W }),
             // 十四轮：hover 点有对应录像时显示可点击手势（光标语义跟随选中点，非全局可点）
             cursor: hp && hp.v > 0 ? "pointer" : "default",
           }}
