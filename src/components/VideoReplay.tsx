@@ -54,6 +54,32 @@ import type { MetricKey, VideoAnalysisPoint } from "@/lib/videoscore";
 /* 五轴评级算法（共享件）；别名避开本文件里的 radarOverall 同名 prop */
 import { gradeColor, radarOverall as overallGrade, radarPointsFrom } from "@/lib/videoscore";
 
+/* ---- 回放音效（2026-11-10 张老师需求：控制条声音开关，全屏钮左侧，默认开）----
+   出声口径＝练习模式定稿（2026-10-30 张老师定，2026-11-06 含排行复核）：
+   开空＝pop1..7 循环（开一片同走循环）、插旗一声 flag（仅插上时，拔旗不播）、
+   chord 有效开格收尾一声 chord；踩雷/胜局不播音效。
+   开关落模块级单例 replaySndOn：页面态引擎/全屏层/后台审核 standalone 三处
+   引擎共用同一开关（同一时刻只有一处回放在跑）；Audio 按src单例缓存复用同一
+   元素（快速连发 currentTime=0 从头重放，无叠加爆音），play() 被拒（自动播放
+   策略）时静默。sndPopIdx 模块级循环（不落盘，每次进页从 pop1 起步） */
+let replaySndOn = true;
+let sndPopIdx = 0;
+const sndCache = new Map<string, HTMLAudioElement>();
+function playSnd(src: string) {
+  if (!replaySndOn) return;
+  let a = sndCache.get(src);
+  if (!a) {
+    a = new Audio(src);
+    sndCache.set(src, a);
+  }
+  try {
+    a.currentTime = 0;
+  } catch {
+    /* 已在播等异常忽略 */
+  }
+  void a.play().catch(() => {});
+}
+
 /* RawVF 事件行 → 紧凑事件（csec 统一百分秒；px/py 为 16px/格 像素坐标） */
 interface ReplayEv {
   csec: number;
@@ -738,9 +764,11 @@ export function runReplay(opts: {
         if (rp || sv) {
           cDouble++;
           if (!openAroundR(e.px, e.py)) wastedDouble++;
+          else if (!dead) sndChord(); // 声音反馈：chord 有效开格收尾一声（踩雷不播，练习口径）
         } else if (lv) {
           cLeft++;
           if (!openR(e.px, e.py)) wastedLeft++;
+          else if (!dead) sndPop(); // 开空 pop 循环（开一片同走循环）；踩雷不播
         }
         lp = lv = rv = sv = false; // 不动 rp（flop 原样）
         break;
@@ -750,6 +778,9 @@ export function runReplay(opts: {
           if (toggleLabelR(e.px, e.py)) {
             cRight++;
             rv = false;
+            // 声音反馈：插上旗才出声（拔旗/转问号不播，练习 toggleFlag 口径）——
+            // toggleLabelR 各转移里只有「未标→旗」的终态是 2
+            if (rstate[idxOf(e.px, e.py)] === 2) sndFlag();
           } else {
             rv = true;
           }
@@ -762,6 +793,7 @@ export function runReplay(opts: {
         if (lp) {
           cDouble++;
           if (!openAroundR(e.px, e.py)) wastedDouble++;
+          else if (!dead) sndChord();
         } else if (rv) {
           cRight++;
           wastedRight++;
@@ -776,6 +808,7 @@ export function runReplay(opts: {
         clearPressV();
         cDouble++;
         if (!openAroundR(e.px, e.py)) wastedDouble++;
+        else if (!dead) sndChord();
         break;
       case "sc":
         lp = lv = sv = true; // chord 在其后的 lr 生效
@@ -820,6 +853,22 @@ export function runReplay(opts: {
   /* 播放倍速（2026-11-05 张老师需求）：tick 的 dt 按倍速缩放，默认恒为 1x；
      回放时钟 csec 仍是唯一权威时间域（事件/插值/统计/进度条口径不变） */
   let speed = 1;
+  /* ---- 回放音效（2026-11-10 张老师需求）：练习口径三声（开空 pop 循环/
+     插旗 flag/chord 收尾一声），踩雷不播。sndMute＝seek 跳转期间静音——
+     跳转是定位动作，前进滑行逐航点落盘会 machine-gun 连响，一概静音；
+     finalize（滑完/取消/原地落定）统一解除 */
+  let sndMute = false;
+  function sndPop() {
+    if (sndMute) return;
+    sndPopIdx = (sndPopIdx % 7) + 1;
+    playSnd(`/sounds/pop${sndPopIdx}.mp3`);
+  }
+  function sndFlag() {
+    if (!sndMute) playSnd("/sounds/flag.mp3");
+  }
+  function sndChord() {
+    if (!sndMute) playSnd("/sounds/chord.mp3");
+  }
   function setPlaying(v: boolean) {
     playing = v;
     if (v) {
@@ -1048,6 +1097,7 @@ export function runReplay(opts: {
     seek(csec: number) {
       setPlaying(false);
       cancelGlide();
+      sndMute = true; // 跳转静音：瞬时重放/滑行落盘的补声全免（finalize 统一解除）
       const gFromX = lastDrawX;
       const gFromY = lastDrawY;
       const fromIdx = evIdx;
@@ -1097,6 +1147,7 @@ export function runReplay(opts: {
         }
         noDraw = false;
         const gliding = startGlide(gFromX, gFromY, path, target, wpEv, () => onStats(buildStats()), () => {
+          sndMute = false; // 滑完/取消落定：解除跳转静音
           interpCursor(target); // 滑完锚回正常插值域（与播放续接无缝）
           onStats(buildStats());
         });
@@ -1108,6 +1159,7 @@ export function runReplay(opts: {
           }
           interpCursor(target);
           onStats(buildStats());
+          sndMute = false;
         }
       } else {
         /* 反向（↑/←）：盘面保持旧态沿来路倒序滑回，到位后一次性落到目标态
@@ -1140,6 +1192,7 @@ export function runReplay(opts: {
           noDraw = false;
           interpCursor(target);
           onStats(buildStats());
+          sndMute = false; // 反向滑回落定：解除跳转静音（滑行 finalize 与直落两路都经此）
         };
         if (!startGlide(gFromX, gFromY, path, target, null, null, landTarget)) landTarget();
       }
@@ -1973,6 +2026,11 @@ interface ReplayCtxValue {
  *  打开后页面态/全屏层棋盘上蒙 25% 黑遮罩并绘制轨迹与三色点击圆点 */
   traj: boolean;
   toggleTraj: () => void;
+  /** 回放音效开关（2026-11-10 张老师需求）：控制条声音钮切换，默认开；
+ *  开着时回放按练习口径出声（开空 pop 循环/插旗/双开）。写模块级
+ *  replaySndOn（引擎读），页面态与全屏层共用同一份 */
+  snd: boolean;
+  toggleSnd: () => void;
 }
 
 const ReplayCtx = createContext<ReplayCtxValue | null>(null);
@@ -2042,6 +2100,17 @@ export function VideoReplayProvider({
      要复位而轨迹只是观图辅助——保留更顺手） */
   const [traj, setTraj] = useState(false);
   const toggleTraj = useCallback(() => setTraj((v) => !v), []);
+  /* 回放音效开关（2026-11-10 张老师需求）：默认开（默认永远为打开，不落盘）；
+     初始读模块级 replaySndOn（同会话软导航重挂时保留上次选择）；切换即写
+     模块变量，引擎事件入口现读即时生效。消费侧（ReplayBar 按钮）只在回放中
+     渲染（用户交互后），SSR 水印无差 */
+  const [snd, setSnd] = useState(replaySndOn);
+  const toggleSnd = useCallback(() => {
+    /* 模块变量在 updater 外同步写：回放引擎 rAF 帧随时可能出声，setState 的
+       updater 要等 React 调度，竞态窗口会漏一声（实测关声音瞬间多播一次旗声） */
+    replaySndOn = !replaySndOn;
+    setSnd(replaySndOn);
+  }, []);
   /* 笑脸状态（十七期）：回放引擎 onFace 直通——全屏层计数条消费；
      页面态无消费者不渲染，state 变更开销可忽略（每事件至多一次） */
   const [face, setFace] = useState<FaceKind>("smile");
@@ -2392,6 +2461,8 @@ export function VideoReplayProvider({
         setFullscreen,
         traj,
         toggleTraj,
+        snd,
+        toggleSnd,
       }}
     >
       {children}
@@ -2757,6 +2828,8 @@ function ReplayBar({
   fsActive = false,
   speed = 1,
   onSpeed,
+  snd,
+  onSndToggle,
 }: {
   status: Status;
   stats: ReplayStats;
@@ -2771,6 +2844,10 @@ function ReplayBar({
   /** 播放倍速与切换回调（2026-11-05 张老师需求）；onSpeed 缺省＝不渲染倍速钮 */
   speed?: number;
   onSpeed?: (v: number) => void;
+  /** 声音开关（2026-11-10 张老师需求）：全屏按钮左侧，默认开；standalone
+   *  （后台审核）无 Provider 时走 props——缺省读 ReplayCtx */
+  snd?: boolean;
+  onSndToggle?: () => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   /* 倍速菜单开合：点钮切换，点外部（pointerdown 捕获早于 click）或选中后关闭 */
@@ -2788,6 +2865,11 @@ function ReplayBar({
   /* 轨迹钮（2026-11-05 张老师需求）：全屏按钮左侧；开关在 Provider（页面态与
      全屏层共用同一状态），standalone（后台审核）无 Provider 不渲染 */
   const trajCtx = useContext(ReplayCtx);
+  /* 声音开关（2026-11-10 张老师需求）：全屏按钮左侧；Provider 模式状态存
+     ReplayCtx（页面态与全屏层共用一份），standalone（后台审核）走 props；
+     开＝亮灰（.rb_btn 默认钮色）、关＝暗灰（.snd_off） */
+  const sndVal = snd !== undefined ? snd : trajCtx?.snd;
+  const sndToggleFn = onSndToggle ?? trajCtx?.toggleSnd;
   const total = stats.totalCsec;
   const pct = total > 0 ? Math.max(0, Math.min(1, stats.csec / total)) : 0;
   const posToCsec = (clientX: number) => {
@@ -2904,6 +2986,34 @@ function ReplayBar({
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 5h8a4.5 4.5 0 1 1 0 9c0 4 3 5 8 5" />
           </svg>
+        </button>
+      )}
+      {sndVal !== undefined && sndToggleFn && (
+        <button
+          type="button"
+          className={"rb_btn" + (sndVal ? "" : " snd_off")}
+          title={sndVal ? "关闭声音" : "开启声音"}
+          aria-label={sndVal ? "关闭声音" : "开启声音"}
+          onClick={(e) => {
+            e.stopPropagation(); /* 同上：不冒泡到棋盘退出 */
+            sndToggleFn();
+          }}
+        >
+          {sndVal ? (
+            /* 开：喇叭 + 声波 */
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19" fill="currentColor" />
+              <path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M19 5.8a10 10 0 0 1 0 12.4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          ) : (
+            /* 关：喇叭 + 叉 */
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19" fill="currentColor" />
+              <path d="m16.5 9.5 5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="m21.5 9.5-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          )}
         </button>
       )}
       {onFullscreen && (
@@ -3128,6 +3238,15 @@ export function ReplayFullscreen({
   const [fsFace, setFsFace] = useState<FaceKind>("smile");
   /* standalone 播放倍速（2026-11-05 张老师需求）：与 fsEngine setSpeed 直连 */
   const [fsSpeed, setFsSpeed] = useState(1);
+  /* standalone 声音开关（2026-11-10 张老师需求）：无 Provider 自持一份，
+     初始读模块级 replaySndOn（默认开），切换即写模块变量（引擎现读生效）。
+     fullscreen 层只在用户交互后渲染，SSR 水印无差 */
+  const [fsSnd, setFsSnd] = useState(replaySndOn);
+  const fsToggleSnd = useCallback(() => {
+    /* 同 Provider toggleSnd：模块变量 updater 外同步写，防 rAF 抢跑漏声 */
+    replaySndOn = !replaySndOn;
+    setFsSnd(replaySndOn);
+  }, []);
   const fsEngineRef = useRef<Engine | null>(null);
   /* 三模式开关（NF/速旗/连击），行为与练习页快捷钮同口径（练习页快捷钮
      就这三颗——「左键双击」在练习页只是设置浮窗项，试玩底条 2026-11-07
@@ -3825,6 +3944,8 @@ export function ReplayFullscreen({
               onResume={fsResume}
               speed={fsSpeed}
               onSpeed={fsSetSpeed}
+              snd={fsSnd}
+              onSndToggle={fsToggleSnd}
               onFullscreen={onExit}
               fsActive
             />

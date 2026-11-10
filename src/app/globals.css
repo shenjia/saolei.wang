@@ -11380,6 +11380,13 @@ body:has(.vprfs.show) .replay_mouse_tip {
   border-color: #fdc61d;
   color: #fdc61d;
 }
+/* 声音关闭态（2026-11-10 张老师需求）：暗灰；开启态沿用 .rb_btn 默认亮灰
+   （#b1b1a4），不加高亮色——声音开关不是激活语义，只是明暗两态 */
+.rb_btn.snd_off {
+  border-color: #3f3e35;
+  color: #6f6e62;
+  background: #2e2d27;
+}
 /* 倍速按钮（2026-11-05 张老师需求）：播放钮右侧速度文案，点按向上弹出速度滑条
    （复刻 flop 41 档）；默认永远为 1x。文案钮随倍速值自适应宽（0.01x 五字符） */
 .rb_speed {
