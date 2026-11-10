@@ -1,25 +1,20 @@
-// 「和TA比拼一下」对战入口按钮（2026-11-09 张老师需求）：
-// 用户主页性别图标 + 对话气泡右侧、侧栏玩家卡片对话气泡正下方各一处。
-// 20px 交叉双剑图标（色随 currentColor，hover 金色），点击进 /vs/[id] PK 页。
+// 「和他/她一决胜负」对战入口按钮（2026-11-09 张老师需求，文案 11-10 终版）：
+// 仅用户主页性别图标 + 对话气泡右侧一处（2026-11-10 张老师要求：侧栏玩家卡片
+// 的 VS 图标下线，比较只能在玩家主页发起）。
+// 图标＝双人对撞爆炸（2026-11-10 张老师指定，复刻其 PNG）；默认灰度变暗（可用≈亮灰、
+// 不可用≈暗灰），hover 恢复彩色 + 尺寸跳动一下——与对话气泡按钮同交互。
 // 与 SendMessageButton 同族：未登录/看自己灰置 + data-tip 说明原因。
 // 纯服务端组件（无状态无事件，禁用态直接渲染 span 防导航）。
 
 import Link from "next/link";
 
-/** 对战图标：交叉双剑，色随 currentColor（20px 与性别 big 图标/对话气泡等高） */
-export function SwordsIcon() {
+/** 对战图标：VS 战斗字标（2026-11-10 张老师指定 pngtree versus battle 原图，4000×4000 透明底）。
+ *  流程：alpha bbox 裁留白（2318×2466）→ LANCZOS 保比例缩至 96×102 落 public/icons/clash.png，
+ *  20px 宽展示（hover 1.25 倍 / 2x retina 下仍清晰），灰度态由 CSS filter 控制。 */
+export function ClashIcon() {
   return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      aria-hidden="true"
-    >
-      <path d="M4 3.5 L14.5 14 M16 3.5 L5.5 14" strokeLinecap="round" />
-      <path d="M12.6 13.1 L15.5 16 M7.4 13.1 L4.5 16" strokeLinecap="round" />
-      <path d="M3 16.2 L5.2 14 M17 16.2 L14.8 14" strokeLinecap="round" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element -- 固定静态资源，无需 next/image 优化管线
+    <img src="/icons/clash.png" alt="" width={96} height={102} draggable={false} />
   );
 }
 
@@ -36,23 +31,24 @@ export function VsButton({
   sex?: number | boolean | null;
 }) {
   const disabled = viewerId <= 0 || viewerId === to;
-  // 2026-11-10 张老师要求：hover 气泡文案性别化（他/她，缺省回退 TA）；可用态文案「和他比较一下」
+  // 2026-11-10 张老师终版：hover 文案「和TA一决胜负」，其中 TA 按被挑战者性别
+  // 换成「他/她」（user.sex 真值=男），性别缺失才回退字面 TA
   const pronoun = sex == null ? "TA" : sex ? "他" : "她";
   const tip =
     viewerId <= 0
-      ? `登录后可和${pronoun}比拼一下`
+      ? `登录后可和${pronoun}一决胜负`
       : viewerId === to
-        ? "不能和自己比较"
+        ? "不能和自己一决胜负"
         : undefined;
   if (disabled) {
     return (
       <span
         className="vs_btn vs_btn--disabled"
         data-tip={tip}
-        aria-label={`和${pronoun}比拼一下（不可用）`}
+        aria-label={`和${pronoun}一决胜负（不可用）`}
         aria-disabled={true}
       >
-        <SwordsIcon />
+        <ClashIcon />
       </span>
     );
   }
@@ -61,10 +57,10 @@ export function VsButton({
       className="vs_btn"
       href={`/vs/${to}`}
       prefetch={false}
-      data-tip={`和${pronoun}比较一下`}
-      aria-label={`和${pronoun}比较一下`}
+      data-tip={`和${pronoun}一决胜负`}
+      aria-label={`和${pronoun}一决胜负`}
     >
-      <SwordsIcon />
+      <ClashIcon />
     </Link>
   );
 }

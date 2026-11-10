@@ -2401,15 +2401,8 @@ del[data-tip]:hover::after {
   margin-top: -11px; /* 按钮高 22px 的半高上移，与两行排名中线对齐（禁 transform，理由见上） */
   line-height: 0;
 }
-/* 用户卡片「和TA比拼一下」对战按钮（2026-11-09 张老师需求）：发消息气泡正下方，
-   同右缘绝对定位、垂直落到气泡下方（气泡半高 11px + 间隙 2px）；禁 transform 同上 */
-.user_card .ucd_vs {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  margin-top: 13px;
-  line-height: 0;
-}
+/* 用户卡片「和TA比拼一下」对战按钮已于 2026-11-10 下线（张老师要求：
+   VS 入口只保留玩家主页，侧栏卡片不再提供）——.ucd_vs 样式一并移除 */
 /* 无数据占位（未加入地区排行 / 未加入全国排行）：压过排行文字色，须写在最后 */
 .user_card .ranks .ucd_null {
   color: #75715e;
@@ -2504,16 +2497,20 @@ del[data-tip]:hover::after {
   font-weight: bold;
   color: #E6DB74;
 }
-/* 活跃雷达气泡数值颜色（2026-11-10 张老师定）：有值绿 tip_green（与折线同色 #a6e22e）、
-   0 值亮灰 tip_zero（#b1b1a4）；实力雷达 hover 数据行记录值元帅金 tip_gold（#e6db74） */
+/* 活跃雷达气泡数值绿色（2026-11-10 张老师定）：「本周完成 13 盘」的数字用绿
+   （#a6e22e 与活跃雷达折线同色），压过 em 白色默认；文案前缀/单位保持气泡默认色 */
 #page .radar .radar_tip em.tip_green,
 #page .vs_radar .radar_tip em.tip_green {
   color: #a6e22e;
 }
+/* 活跃雷达气泡 0 值数字亮灰（2026-11-10 20:40 张老师定）：「本周完成 0 盘」的 0
+   与气泡默认文字同色系但保持数字身份（#b1b1a4，比 em 白暗、比无样式亮） */
 #page .radar .radar_tip em.tip_zero,
 #page .vs_radar .radar_tip em.tip_zero {
   color: #b1b1a4;
 }
+/* 实力雷达 hover 数据行记录值元帅金（2026-11-10 20:40 张老师定）：「初级Time 46.650」
+   的 46.650 用元帅金 #e6db74（与军衔 marshal 档同色），加粗与 em 口径一致 */
 #page .radar .radar_tip em.tip_gold,
 #page .vs_radar .radar_tip em.tip_gold {
   color: #e6db74;
@@ -3968,8 +3965,8 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   cursor: default;
   text-decoration: none;
 }
-/* 外站绑定区（2026-11-10 张老师）：资料表下方独立分区。整体右移与「赞助金额」
-   标签列左缘对齐（头像列 25% + 18px gap = 资料表左缘），标题/分割线/内容一起缩进 */
+/* 外站绑定区（2026-11-10 张老师）：资料表下方独立分区。整体右移与照片右缘对齐
+   （头像列 25% + 18px gap = 资料表左缘），标题/分割线/内容一起缩进 */
 #account_manage .outer_bind_sec {
   margin-top: 15px;
   margin-left: calc(25% + 18px);
@@ -6706,6 +6703,46 @@ body #page.two_columns li.main {
   }
 }
 
+/* ---------- 用户主页「纪事」移动端换位（2026-11-10 张老师要求，方案 A） ----------
+   单列化（≤880）后 li.main 整组在前、li.sidebar 整组在后，纪事原本压在侧栏
+   「收集墙 / 个人资料 / 数据统计」之上；现改为纪事紧跟「个人资料」之下。
+   做法：#user_view 转 flex column，两个 li 用 display:contents 消盒，让所有 .box
+   直接成为 flex 子项再用 order 插队——不改 JSX、不复制组件，桌面双栏完全不受影响
+   （规则全部圈在 ≤880 媒体查询内，≥881 一处不生效）。
+   ⚠️ 外边距校准：legacy .box{margin:16px 8px} 在块级兄弟间上下外边距折叠成
+   16px；转 flex 后不再折叠会变 32px（整页凭空长高 ~80px）。给所有 .box 去掉
+   margin-bottom，间距回到 16px——实测换位前后前 5 块 top 完全一致
+   （55 / 208 / 409 / 698 / 1038），仅页尾少约 10px 空白。
+   实测：Chrome + WebKit（390 / 768，zoom 0.65 / 1）顺序正确、无横向溢出；
+   桌面 1280 注入同一段 CSS 后双栏坐标一字不差。 */
+@media (max-width: 880px) {
+  body #page.two_columns #user_view {
+    display: flex;
+    flex-direction: column;
+  }
+  body #page.two_columns #user_view > li.main,
+  body #page.two_columns #user_view > li.sidebar {
+    display: contents;
+  }
+  body #page.two_columns #user_view > li > .box {
+    margin-bottom: 0;
+  }
+  /* 主栏前 5 块（玩家面板 / 实力 / 纪录 / 动态 / 录像）保持默认 order:0 原顺序；
+     收集墙、个人资料插到其后，纪事再落到个人资料之下，数据统计压尾 */
+  body #page.two_columns #user_view > li.sidebar > #user_3bv {
+    order: 2;
+  }
+  body #page.two_columns #user_view > li.sidebar > .profile {
+    order: 3;
+  }
+  body #page.two_columns #user_view > li.main > #history {
+    order: 4;
+  }
+  body #page.two_columns #user_view > li.sidebar > .stats_box {
+    order: 5;
+  }
+}
+
 /* 用户主页「实力」雷达主栏副本：桌面端隐藏（≥881 雷达在侧栏顶部）；
    ≤880 单列化时亮起、侧栏原件隐藏（见上面 ≤880 块 ⑦） */
 #user_view .radar_main {
@@ -8686,7 +8723,7 @@ button.msg_btn {
   color: #b1b1a4;
   font-size: 0;
   line-height: 0;
-  vertical-align: text-bottom;
+  vertical-align: middle; /* 2026-11-10：原 text-bottom 与 a.vs_btn 的 middle 差 4px 视觉不居中，统一 middle */
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
@@ -8752,7 +8789,7 @@ button.msg_btn[data-tip]:hover::after {
 }
 
 /* 对战按钮 hover 气泡（2026-11-10 张老师要求）：与 msg_btn 同语言同款位置（下调 10px 口径）——
-   可用态「和他/她比较一下」，灰置态提示原因（此前 vs_btn 的 data-tip 无 ::after 样式，从未显示过） */
+   可用态「和他/她一决胜负」，灰置态提示原因（此前 vs_btn 的 data-tip 无 ::after 样式，从未显示过） */
 a.vs_btn[data-tip],
 span.vs_btn[data-tip] {
   position: relative;
@@ -15349,8 +15386,14 @@ body #page.rating_page .rating_standard .rating_note {
 }
 
 /* ---------- 玩家对战 PK 页 /vs/[id]（2026-11-09 张老师需求，设计稿 design/vs-page.html） ----------
-   阵营式 BV 网格：我胜的 BV 绿色升序靠左 / 对方胜的玫瑰红升序靠右 / 独有与平局居中；
-   全页主色：我方绿 #a6e22e、对方玫瑰红 #e34f8c、胜者金 #fdc61a。 */
+   阵营式 BV 网格：我胜的 BV 蓝色升序靠左 / 对方胜的玫瑰红升序靠右 / 独有与平局居中；
+   全页主色：我方蓝 #66d9ef、对方玫瑰红 #e34f8c、胜者金 #fdc61a。
+   2026-11-10 18:01 张老师：评级 A 色 #ff0080 太鲜艳，对方色回退原玫瑰红系。 */
+
+/* 站头显隐（2026-11-10 19:57 张老师要沉浸式，23:29 改口径：PC 端 header 要显示，
+   隐藏站头只保留在移动端 ≤768——规则圈进文末移动端 @media 块，桌面零影响）。
+   移动端隐藏时 body 的 padding-top 同步清零（原 35px 顶留白是隐藏站头的补位，
+   移动端顶部本就有 15px 评价卡片上 margin，见文末 media 覆盖）。 */
 
 /* 入口按钮（2026-11-10 四轮定）：VS 战斗字标原图（public/icons/clash.png），默认
    灰度+半透明降对比（白字≈中灰、黑色投影块软化），hover 恢复彩色并「尺寸跳动一下」
@@ -15402,7 +15445,7 @@ a.vs_btn:hover {
 }
 a.vs_btn:hover img {
   filter: none; /* hover 恢复彩色 */
-  opacity: 1;
+  opacity: 0.15; /* 00:13 张老师：hover 透明度改 15% */
 }
 span.vs_btn--disabled {
   cursor: not-allowed; /* 2026-11-10 张老师要求：与对话气泡按钮灰置态一致，hover 出禁用标记 */
@@ -15459,263 +15502,694 @@ span.vs_btn--disabled:hover img {
    .box 玩家面板（内部结构=侧栏玩家卡片 .user_card 原样式，不另造类），中间金 VS */
 #vs_hero {
   display: flex;
-  align-items: stretch;
+  align-items: center; /* 00:26 张老师：卡片**不拉伸**——各自自然高、垂直居中 */
   justify-content: center; /* 面板收缩后整组居中 */
   gap: 10px;
+  /* 2026-11-10 第六轮（张老师）：赛前两卡片离中间再近 35%。实测卡片内缘到中线
+     208px（左内缘 591.9 / 中线 800），35% ≈ 73px；点「决出胜负」后 data-close 置 0，
+     两卡片分别向左右滑回原位，滑完（SPREAD_MS=650ms）才跑分 */
+  --vs_close: 73px;
 }
 /* 面板收缩到雷达图（222+出血 24）能完整显示的最小宽度：随内容自适应，不均分撑满 */
 .vs_panel {
   flex: 0 1 auto;
   min-width: 0;
+  transition: transform 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-/* 面板内 .user_card 已 width:100%（玩家卡片原样式）；雷达横线以下居中 */
+#vs_hero[data-close="1"] > .vs_panel:first-child {
+  transform: translateX(var(--vs_close));
+}
+#vs_hero[data-close="1"] > .vs_panel:last-child {
+  transform: translateX(calc(-1 * var(--vs_close)));
+}
+/* 面板内 .user_card 已 width:100%（玩家卡片原样式）；雷达横线以下居中。
+   2026-11-10：雷达与上方横线留 15px（张老师定）——radar_tip_wrap 自带 -12px
+   上提出血，故 margin-top 需给足 27px 才有 15px 视觉间距 */
 .vs_panel .vs_radar {
   text-align: center;
+  margin-top: 27px;
 }
 .vs_panel .vs_radar svg {
   display: block;
   margin: 0 auto;
 }
+/* 2026-11-10 第六轮（张老师）：中间列纵向布局。01:01 张老师定稿（全固定间距）：
+   气泡(margin-top 111，顶=头像顶) →21px→ VS 行 →21px→ 动作槽（PC：按钮+喇叭正下方；
+   移动端三列 [喇叭|按钮|返回]）→ 日期 →（done）分割线。
+   ① VS 图标中心 = 玩家卡片中心：卡片自然高 372 垂直居中于 hero（上下空白 87px，
+      与 00:39 张老师认可的观感一致）；恒等式「气泡顶−图标中心 = 头像顶−卡片中心
+      = 155px」使两条对齐要求天然相容；
+   ② 间距对称：气泡底→图标顶 65px = 图标底→按钮顶 65px（00:39「按钮上移和其对称」）；
+   ③ date 独立行：PC 在「还是算了」下方，移动端拆箱后落 grid 末行（页面最底部）；
+   ④ 各阶段行高不变（action min-height）→ 跑分/赛后零跳动。 */
 .vs_vs {
   flex: none;
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  justify-items: center;
+  align-self: center; /* 中间列自然高，垂直居中于 hero（卡片同样居中） */
+  margin: 0 25px; /* 2026-11-10：左右再加 25px（张老师定），避开两侧面板 */
+  position: relative;
+  z-index: 2; /* 赛前两卡片收拢时，保证评价与按钮盖在面板之上 */
+}
+/* row1：预测气泡——顶段与玩家头像顶段对齐（方程解 m=103，实测校准 -22px） */
+.vs_prewrap {
+  grid-row: 1;
+  margin: 111px 0 21px;
+  max-width: 100%;
+  transition: opacity 0.4s ease;
+}
+/* 卡片式评语框：沿用 legacy-2013.css 标准 .box 的 #3b3a32 底 / #49483e 边 /
+   10px 圆角 / 投影 / text-shadow，只把 padding 收紧成一条评语条（不用 .box 的
+   30px padding 与 16px 8px 外边距）。2026-11-10 20:44 张老师：「结束评价和预测
+   评价一样加背景框，PC 端也复刻预测评价的边框」——两态共用同一套框，PC 与
+   移动端同时生效，颜色档位（占优绿/不利玫红/均势金、终局胜局金）不受影响。 */
+.vs_pre,
+.vs_post {
+  background: #3b3a32;
+  border: 1px solid #49483e;
+  border-radius: 10px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
+  padding: 8px 22px;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+.vs_pre {
+  color: #b1b1a4; /* 兜底；正常路径由档位类覆盖 */
+  font-size: 16px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  text-align: center;
+  width: fit-content; /* 00:18 张老师：气泡适合文案尺寸，不要通栏 */
+  transition: opacity 0.4s ease; /* 点开始后渐隐消失 */
+}
+/* 2026-11-10 张老师：占优绿 / 不利玫瑰红 / 势均力敌金 */
+.vs_pre_adv { color: #a6e22e; }
+.vs_pre_dis { color: #e34f8c; }
+.vs_pre_even { color: #fdc61a; }
+.vs_pre_out { opacity: 0; }
+/* row4：日期时间——PC 在动作槽（喇叭开关）下方；移动端拆箱后落
+   grid 末行（页面最底部，00:45 张老师「挺好」）。持续显示不渐隐。
+   ⚠️ SSR 首帧 dateStr 为空不占位，挂载后填入（客户端组件，无水合冲突） */
+.vs_date {
+  grid-row: 4;
+  color: #75715e;
+  font-size: 13px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  line-height: 1;
+  padding: 8px 0 12px;
+}
+/* 01:02 张老师：跑完分后在日期下方加分割线，上下 40px 留白。
+   01:18 张老师：①宽度与两边玩家卡片边缘平齐——inline width/left 由
+   VsScoreBoard 测量首尾 .vs_panel 跨度写入（两端恰好对齐卡片外缘）；
+   ②**absolute 悬浮不占流**——若占流会把中列撑高 69px，hero 随之变高，
+   垂直居中的玩家卡片被推下 34.5px（01:18 实测的「跑完分卡片下移」根因）。
+   top 以 vs_vs 高度（= date 行底）为基准：+28px 补 date 的 12px 下内边距 →
+   文字到线 40px。移动端覆盖回 static 占 row7（卡片在其上方不受影响）。 */
+.vs_divider {
+  position: absolute;
+  top: calc(100% + 28px);
+  height: 1px;
+  background: #49483e;
+}
+/* 分割线悬出 hero 底部（线下缘 = hero 底 + 29px），下方板块让出空间保持
+   线下 40px 留白：margin-top 69 - 29 = 40（.vs_below 只在 done 渲染，赛前无影响） */
+.vs_below {
+  margin-top: 69px;
+}
+/* 00:04 张老师：hover 出气泡「音效打开/关闭」（按当前状态显示即将成的状态文案）。
+   02:04 张老师：改用全站统一 data-tip hover 气泡样式（同军衔徽章/相对时间气泡：
+   #1e1f1c 暗底 / #49483e 边 / 12px / 上方弹出），不再用自制大号气泡 */
+#page .vs_snd_gsw[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+#page .vs_snd_gsw[data-tip]:hover::after {
+  opacity: 1;
+}
+.vs_scoreline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: center;
+  width: 330px; /* 与收拢前实测 330.2px 一致，不改整组宽度 */
+  padding: 44px 0;
+}
+/* row3：动作槽——PC 纵向排：黄色「决出胜负」→ 灰色「还是算了」（00:39）；
+   喇叭音效开关浮动在按钮左侧（absolute 不占排版空间，00:39）；
+   margin-top:21px 与气泡侧 21px 对称（间距 65px 恒等，00:39「按钮上移和其对称」）。
+   赛后槽内是终局评价（原「返回」按钮位置，顶部=按钮原位）。
+   ⚠️ min-height 122 钉死行高：跑分/赛后槽内内容变化（渐隐占位/终局评价替换）
+   都不改行高 → VS 图标零跳动 */
+.vs_action {
+  grid-row: 3;
+  width: 100%;
+  margin-top: 21px;
+  padding-bottom: 16px;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 122px;
+  position: relative; /* 锚定浮动的喇叭开关 */
+}
+/* 01:01 张老师：灰色「返回」（原「还是算了」）——点击返回对手主页；盒型同「返回」
+   灰系。**仅移动端显示**（居右），PC 端隐藏（页面底部已有 .vs_back_end 返回） */
+#page .vs_cancel {
+  display: none; /* PC 隐藏；移动端 media 块覆盖为 inline-block 并做 grid 定位 */
+  padding: 9px 26px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #b1b1a4;
+  background: #4a493f;
+  border: 1px solid #5c5b4f;
+  border-radius: 9px;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  transition: filter 0.15s;
+}
+#page .vs_cancel:hover {
+  color: #d5d5c8;
+  filter: brightness(1.12);
+}
+/* 01:01 张老师：喇叭音效开关改到「决出胜负」按钮**正下方**（动作槽纵向流内，
+   不再 absolute 浮动）——position:relative 仅为锚定 hover 气泡 snd_tip */
+#page .vs_snd_gsw {
+  position: relative;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 4px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: #fdc61a; /* 开：黄色 */
+  line-height: 0;
+  transition: color 0.15s;
 }
-.vs_vs span {
-  font-size: 64px;
-  font-weight: 900;
-  font-style: italic;
-  color: #fdc61a;
-  text-shadow: 0 0 18px rgba(253, 198, 26, 0.45), 2px 2px 0 #7a5c00;
+/* 02:19 张老师：音效关闭时图标置灰 */
+#page .vs_snd_gsw.vs_snd_off {
+  color: #6b6a60;
+}
+/* 黄色「决出胜负」：点击后先渐变消失（400ms），再启动跑分。
+   2026-11-10 张老师：hover 不该变黑底，与登录窗口「登录」按钮
+   （#account_login .lp_submit / .lp_submit_btn）同款——固定渐变黄底深字，
+   只做 brightness 提亮 + 光晕增强，不做位移。legacy 的 button:hover(0,1,1)
+   会把 <button> 染成暗底绿字，所以 hover/active/disabled 三态都显式锁
+   background 与 color（照 .lp_submit_btn 踩过的坑）。 */
+.vs_fight {
+  margin: 0; /* 覆盖全站 button 的 margin-right:8px，否则按钮比图标左偏 4px */
+  padding: 9px 26px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
   letter-spacing: 2px;
+  color: #2b2a20;
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
+  transition: opacity 0.4s ease, filter 0.15s, box-shadow 0.15s;
+}
+.vs_fight:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  color: #2b2a20;
+  filter: brightness(1.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
+}
+.vs_fight:active:not(:disabled) {
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  color: #2b2a20;
+  filter: brightness(0.96);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.28);
+}
+.vs_fight:disabled {
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  color: #2b2a20;
+  cursor: default;
+}
+.vs_fight_out {
+  opacity: 0;
+  pointer-events: none; /* 跑分中喇叭保留透明占位——不可点击 */
+}
+/* 灰色「返回」按钮（22:36 张老师）：比拼结束后替换「决出胜负」，原地跳回对手
+   用户主页；盒型与 vs_fight 同（padding/圆角/字号），底色换灰系（暗灰底、亮灰字），
+   hover 只提亮不变色。 */
+/* ⚠️ 必须带 #page 提权：legacy 的 #page a 链接绿会压过裸类选择器 */
+#page .vs_back {
+  display: inline-block;
+  padding: 9px 26px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #b1b1a4;
+  background: #4a493f;
+  border: 1px solid #5c5b4f;
+  border-radius: 9px;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  transition: filter 0.15s;
+}
+#page .vs_back:hover {
+  color: #d5d5c8;
+  filter: brightness(1.12);
+}
+/* 00:18 张老师：PC/移动端「返回」统一移到页面最底部（VsScoreBoard 在 below 之后
+   渲染 .vs_back_end），按钮加大一号 */
+.vs_back_end {
+  display: block;
+  text-align: center;
+}
+#page .vs_back_end .vs_back {
+  display: inline-block;
+  margin: 30px auto 25px;
+  padding: 12px 36px;
+  font-size: 18px;
+}
+/* 赛后评价：亮灰字。01:28 张老师：放到日期上面一点的位置——动作槽是 flex 纵列，
+   margin-top:auto 把评价压到槽底（槽 padding-bottom 16 + date padding-top 8
+   → 距日期 24px），不再悬在槽顶（原「返回」按钮位置）；移动端 margin 覆盖不受影响。
+   「返回」移页面最底部（.vs_back_end）。金色类 vs_post_win 见下 */
+.vs_post {
+  margin: auto 0 0;
+  color: #b1b1a4;
+  font-size: 17px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  animation: vsPostIn 0.7s ease both;
+}
+/* 2026-11-10 19:10 张老师：我方胜利时终局评价用金色（#fdc61a，与胜方分数/胜字同款）；
+   失败与平局保持亮灰 #b1b1a4 */
+.vs_post.vs_post_win {
+  color: #fdc61a;
+}
+@keyframes vsPostIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* 赛前不显示数字（隐藏占位 .vs_ghost 仍撑住宽度） */
+.vs_num {
+  transition: opacity 0.25s ease;
+}
+.vs_num_hide {
+  opacity: 0;
+}
+/* 跑分完成后下方所有板块淡入 */
+.vs_below {
+  animation: vsBelowIn 0.55s ease both;
+}
+@keyframes vsBelowIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* 2026-11-10：中间金 VS 文字改为 VS 战斗字标图标（public/icons/clash.png，与入口同源），
+   96px 宽展示，原色不灰度；23:29 张老师：图标太亮——23:39 定稿：15% 透明（基本原色） */
+.vs_vs img {
+  width: 96px;
+  height: auto;
+  display: block;
+  opacity: 0.85;
 }
 
-/* ② 纪录比较 + ④ 统计表共用（2026-11-09 二轮改版）：
-   三列＝左成绩半行｜项目（亮灰居中）｜右成绩半行；成绩字号参照用户主页头部
-   （数字 16px / 行高 22px）；每行左右半行放胜负——胜者半行深绿底、负者半行
-   浅玫瑰红底，「胜/负」用绿/玫瑰红；无「胜负」表头。 */
+/* ② 纪录表格（2026-11-10 21:53 张老师定稿，22:49/22:51/22:57 三轮更新）：
+   三列＝左成绩｜项目（居中、加大字号、按胜方色渲染）｜右成绩。
+   ⚠️ 结果列（胜/负/平字）22:57 整列删除；胜方成绩格改加
+   自己的阵营实底（我蓝 #66d9ef / 对手玫红 #e34f8c，与 BV 格同色）；底部
+   「记录得分」行删除，得分与胜数移到头部 .vs_lv_head 三列汇总（与初/中/高级
+   板块同款，只是没有「独有」段）。 */
 .vs_rec {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0 4px; /* 行间留缝，半行底色不粘连 */
+  border-spacing: 0 4px; /* 行间留缝，成绩底色不粘连 */
 }
 .vs_rec th,
 .vs_rec td {
   padding: 0;
   border: 0;
-  font-size: 16px;
-  line-height: 22px;
+  font-size: 20px; /* 22:51 张老师：纪录成绩字号与「胜/负/平」一致（20px） */
+  line-height: 28px;
 }
-.vs_rec tr.vs_head th {
-  padding-bottom: 6px;
-  color: #75715e;
-  font-weight: normal;
-  font-size: 14px;
-  border-bottom: 1px solid #565549;
-}
-.vs_rec tr.vs_head th.c1 {
-  color: #a6e22e;
-}
-.vs_rec tr.vs_head th.c2 {
-  color: #e874ab;
-}
-/* 项目列（居中、亮灰 #b1b1a4） */
+/* 项目列：21:53「纪录名加大字号」13→18px，22:49 张老师再加大 18→22px；
+   中列宽度收窄＝文字 + 左右各一个字（1em）的空间，**不要自适应拉伸**——
+   width:1px + nowrap 让 auto 布局把该列压到内容宽，剩余空间全给成绩列。 */
 .vs_rec th.vs_item {
-  width: 150px;
+  width: 1px;
+  padding: 0 1em;
   text-align: center;
   color: #b1b1a4;
-  font-size: 13px;
+  font-size: 22px;
+  line-height: 30px;
   font-weight: normal;
   white-space: nowrap;
 }
-/* 成绩半行：每行左右各一块，胜/负字标 + 成绩 */
+/* 成绩格：默认无底色，只有胜方那一侧加阵营实底；
+   22:49 张老师：蓝方数字居右、红方数字居左（各自贴向中间的纪录名列）。 */
 .vs_rec td.vs_half {
   padding: 5px 12px;
   border-radius: 4px;
-  text-align: center;
   white-space: nowrap;
 }
-.vs_rec td.vs_half.half_win {
-  background: rgba(166, 226, 46, 0.25); /* 深绿 */
+.vs_rec td.vs_half.vs_half_l {
+  text-align: right;
 }
-.vs_rec td.vs_half.half_lose {
-  background: rgba(232, 116, 171, 0.12); /* 浅玫瑰红 */
-}
-.vs_rec td.vs_half .vs_vd {
-  margin-right: 10px;
-  font-weight: bold;
-}
-.vs_rec td.vs_half .win_vd {
-  color: #a6e22e;
-}
-.vs_rec td.vs_half .lose_vd {
-  color: #e874ab;
-}
-.vs_rec td.vs_half .tie_vd {
-  color: #e6db74;
+.vs_rec td.vs_half.vs_half_r {
+  text-align: left;
 }
 .vs_rec td.vs_half .vs_score {
   color: #f8f8f2;
+  /* 23:41 张老师：纪录板块双方成绩再加大一个字号 20→21（纪录名仍 22） */
+  font-size: 21px;
 }
-.vs_rec td.vs_half.half_plain {
-  color: #f8f8f2;
+.vs_rec td.vs_half.half_p1 {
+  background: #66d9ef;
+  /* 23:09 张老师：蓝方格与纪录名格连通，圆角只留外侧（左） */
+  border-radius: 4px 0 0 4px;
 }
-/* 板块尾部得分行（纪录比较）：加粗提亮 */
-.vs_rec tr.vs_rec_total td.vs_half {
-  color: #f8f8f2;
-  font-weight: bold;
-  background: rgba(255, 255, 255, 0.05);
+.vs_rec td.vs_half.half_p1 .vs_score {
+  color: #272822;
 }
-.vs_rec tr.vs_rec_total td.vs_half .vs_score {
-  font-weight: bold;
+.vs_rec td.vs_half.half_p2 {
+  background: #e34f8c;
+  /* 红方格同理，圆角只留外侧（右） */
+  border-radius: 0 4px 4px 0;
 }
-/* 图例/规则独立小板块（各BV比拼尾部） */
-.vs_bv_meta {
-  margin-top: 16px;
+.vs_rec td.vs_half.half_p2 .vs_score {
+  color: #ffffff;
 }
-.vs_rule_note {
-  margin-top: 10px;
-  color: #636359;
-  font-size: 12px;
+/* 22:57 张老师：结果列（胜/负/平字）整列删除，胜负信息改由中间纪录名
+   按胜方色渲染。23:09 再改：胜方纪录名格与同侧成绩格连通——直接铺同色
+   实底（蓝黑字 / 红白字），不显示表格线，圆角移到纪录名格外侧。 */
+.vs_rec th.vs_item.item_p1 {
+  background: #66d9ef;
+  color: #272822;
+  border-radius: 0 4px 4px 0;
 }
-
-/* ③ 各BV比拼（2026-11-09 三轮改版）：初级/中级/高级各一个独立板块盒；
-   行宽随内容收缩不填满盒宽；格子之间无缝隙（去 gap 去圆角，连续色带） */
+.vs_rec th.vs_item.item_p2 {
+  background: #e34f8c;
+  color: #ffffff;
+  border-radius: 4px 0 0 4px;
+}
+.vs_rec th.vs_item.item_tie {
+  color: #fdc61a;
+}
+/* ③ 各BV比拼（2026-11-10 21:16 张老师第六轮）：初级/中级/高级各一个独立板块盒。
+   格子＝收集墙式：统一 2px 间距 + 圆角，双方都没有的 BV 也画空格（暗底）。
+   20:46 去掉饼图后 .vs_lvbody 改单列块；21:16 再去掉行首 BV 范围（64px）、
+   行尾分段比分（86px）、「本级得分」行与底部图例/得分规则模块，格子区独占整行
+   宽度、充分占满板块；标题居中，左右两端改放本级 A/B 汇总统计。 */
 .vs_lvbox {
   padding-bottom: 22px;
 }
-.vs_lvbox h1 {
-  margin-bottom: 12px;
+.vs_lvbody {
+  display: block;
 }
-.vs_lv_cnt {
-  color: #888;
-  font-size: 13px;
-  margin-left: 10px;
+.vs_lvmain {
+  width: 100%;
 }
+/* 页面最下方「计分规则」（22:02 张老师定文案，22:20 改为合并成唯一一份）：
+   此前四个板块（纪录/初/中/高级）各内嵌一份相同说明、占用板块内部空间，
+   现只在 below 末尾渲染一份独立段落（不带 .box 盒），随赛后板块一起出现。
+   「规则：」亮灰 #b1b1a4、后面规则正文暗灰 #75715e；整行居中（22:59 张老师），
+   窄屏自然折行。文案逐字来自 VS_RULE_TEXT，不在此处复制第二份。 */
+.vs_rule {
+  /* 02:06 张老师：声明行上下空白对称——规则↔声明 6px、声明↔下方 6px */
+  margin: 20px 0 6px;
+  font-size: 15px; /* 00:18 张老师：加大两号（13→15） */
+  line-height: 1.6;
+  text-align: center; /* 22:59 张老师：页面底部规则行居中显示 */
+}
+/* 02:00 张老师：规则行下加致谢声明行；两行同为居中，声明行颜色与规则正文一致 */
+.vs_rule_line {
+  margin: 0;
+}
+.vs_declare {
+  color: #75715e;
+  margin-top: 6px;
+}
+.vs_rule_label {
+  color: #b1b1a4;
+}
+.vs_rule_text {
+  color: #75715e;
+}
+/* 板块标题行（22:24 张老师：标题 + 双方统计整行移出板块盒，在 .box 上方独立一行；
+   .vs_lvblk 包住「头部行 + 板块盒」控制板块间上下间距）。
+   三列 grid：左我方汇总 / 中 Title（居中）/ 右对方汇总；
+   两侧统计加省略号截断防止长姓名挤掉中间标题（完整名走 title）。 */
+.vs_lvblk {
+  /* 01:26 张老师：margin-top 加上 25px（24→49），板块之间太挤 */
+  margin-top: 49px;
+}
+.vs_lv_head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  /* 22:43 张老师：左右统计文字往内收，与下方板块盒左右边缘（圆角末端）对齐——
+     盒子自带 margin:16px 8px，头部行此前占满全宽比盒边宽出 8px */
+  margin: 0 8px 10px;
+}
+.vs_lv_head h1 {
+  margin: 0;
+  text-align: center;
+  white-space: nowrap;
+  /* 01:26 张老师：板块标题再大两号（26→28）；02:07 再放大（28→30）；
+     02:10 张老师：纪录/初/中/高级标题放到 40px */
+  font-size: 40px;
+}
+/* 21:36 / 21:45 张老师字号阶梯（项目「小两号」= 2px，参照 15→13 口径）：
+   标题 26px → 玩家名/分数 24px → 胜数/独有数 22px → 单位 20px。
+   21:45：玩家名与分数同用该玩家阵营色（我蓝／对手玫红，分数不再亮灰）；
+   胜数统一金色 #fdc61a（弃原绿）；独有数亮灰；单位一律暗灰；单位前留一空格。 */
+.vs_lv_stat {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 24px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.vs_lv_stat_a {
+  justify-self: start;
+}
+.vs_lv_stat_b {
+  justify-self: end;
+}
+/* 22:33 张老师：得分不要背景框了，恢复玩家色文字（我蓝 / 对手玫红），
+   22:23 的 .vs_score_box 系列规则随之删除。 */
+.vs_lv_stat .vs_lv_name,
+.vs_lv_stat .vs_lv_score {
+  font-size: 24px;
+  font-weight: bold;
+}
+.vs_lv_stat_a .vs_lv_name {
+  color: #66d9ef;
+}
+.vs_lv_stat_b .vs_lv_name {
+  color: #e874ab;
+}
+.vs_lv_stat_a .vs_lv_score {
+  color: #66d9ef; /* 22:33 张老师：分数恢复玩家对应色（我方蓝） */
+}
+.vs_lv_stat_b .vs_lv_score {
+  color: #e874ab; /* 对手玫瑰红 */
+}
+.vs_lv_stat .vs_lv_win,
+.vs_lv_stat .vs_lv_solo {
+  font-size: 22px; /* 比玩家名小两号 */
+}
+.vs_lv_stat .vs_lv_win {
+  color: #fdc61a; /* 21:45 张老师：胜数统一金色（原绿 #a6e22e 弃用） */
+}
+/* 22:34 张老师：胜数为 0 时数字用亮灰显示 */
+.vs_lv_stat .vs_lv_win.vs_lv_win_zero {
+  color: #b1b1a4;
+}
+.vs_lv_stat .vs_lv_solo {
+  color: #b1b1a4; /* 独有数亮灰 */
+}
+.vs_lv_stat .vs_lv_unit {
+  font-size: 20px; /* 比数字再小两号 */
+  font-style: normal;
+  color: #75715e; /* 分/胜/独有 单位暗灰 */
+}
+/* 22:24 张老师：标题行已移出板块盒，h1 统一由 .vs_lv_head 居中（原
+   .vs_lvmain > h1 居中规则随结构删除）。 */
 .vs_bandrow {
   display: flex;
   align-items: center;
-  gap: 12px;
   margin-top: 6px;
-  min-height: 28px;
-  width: max-content; /* 表格不填满板块 */
+  width: 100%;
 }
-.vs_band {
-  width: 64px;
-  flex: none;
-  color: #8a8878;
-  font-size: 12.5px;
-  background: #2b2b26;
-  border: 1px solid #3e3d32;
-  text-align: center;
-  padding: 4px 0;
-  white-space: nowrap;
-}
+/* 格子区（21:16 张老师）：行首 BV 范围与行尾分段比分已删，.vs_mid 独占整行宽度。
+   所有行共用「本级别最多格子数」套等宽列（--vs_cols 由 VsLevelBox 注入），
+   列宽＝板块可用宽 / 列数，格子按 27:24 等比放大、充分占满板块。
+   行内顺序由 orderCells 按「我胜/我独有/都没有/对方独有/对方胜」重排，
+   .vs_c 直接作为 grid item（原 .vs_grp 拆箱层已删），全行统一 2px 间距。 */
 .vs_mid {
-  flex: none;
-  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--vs_cols, 10), minmax(0, 1fr));
+  gap: 2px;
   align-items: center;
-}
-.vs_grp {
-  display: inline-flex;
-  gap: 0; /* 格子无缝隙 */
-  flex-wrap: wrap;
-}
-.vs_midgrp {
-  margin: 0 20px; /* 独有/平局组与左右阵营的间距 */
 }
 .vs_c {
   display: inline-flex;
-  width: 27px;
-  height: 24px;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: 27 / 24; /* 宽度自适应后等比放大 */
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 28px; /* 22:02 张老师：格内数字再放大一档（14→18→22→28） */
   font-weight: bold;
-  border-radius: 0; /* 无缝隙：去圆角成连续色带 */
-  cursor: default;
-}
-.vs_seg {
-  width: 86px;
-  flex: none;
-  background: #2b2b26;
-  border: 1px solid #3e3d32;
-  padding: 2px 4px;
-  text-align: center;
-  white-space: nowrap;
-}
-.vs_seg .s1,
-.vs_seg .s2 {
-  display: block;
-  font-weight: bold;
-}
-.vs_seg .s1 {
-  color: #a6e22e;
-}
-.vs_seg .s2 {
-  color: #e874ab;
-}
-/* 板块尾部「本级得分」：单行「x : y」 */
-.vs_seg_inline .s1,
-.vs_seg_inline .s2 {
-  display: inline;
-}
-.vs_lv_total .vs_band {
-  color: #b1b1a4;
-}
-.vs_legend {
-  margin-top: 14px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  font-size: 12.5px;
-  color: #b1b1a4;
-}
-/* 图例（2026-11-09 二轮）：色块上直接显示该类局数「N局」，后跟归属文案 */
-.vs_legend .lg i {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 1px 7px;
   border-radius: 3px;
-  font-size: 12px;
+  cursor: default;
+  position: relative; /* hover 气泡定位参照 */
+}
+/* BV 格 hover 气泡（21:46 张老师定稿）：格子正上方居中、暗底描边 + 下指小三角，
+   沿用收集墙 #user_3bv .tip 观感；三行「BV = n / 我方玩家名：xx.xx / 对方玩家名：xx.xx」，
+   A/B 为玩家名占位符不能字面输出。首行「BV = 」暗灰 #75715e、数字亮灰 #b1b1a4；
+   胜方整行金色 #fdc61a、负方整行亮灰 #b1b1a4（不再挂绿色「胜」字）；
+   等号左右各留一个空格。桌面 :hover，移动端 tap 走 :focus（tabIndex=0）。
+   21:46 张老师：由「格子下方」改回「格子上方」；首行气泡会浮在头部汇总之上
+   （z-index 60 提层，移开即恢复），这是明确指定的呈现方式。 */
+.vs_tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 6px 10px;
+  background: #1f201b;
+  border: 1px solid #656355;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   font-style: normal;
-  font-weight: bold;
-  line-height: 16px;
-  vertical-align: -1px;
+  font-size: 15px; /* 23:36 张老师：PC 端气泡字体整体加大两号 13→15（移动端 22px 另行覆盖） */
+  line-height: 1.6;
+  white-space: nowrap;
+  text-align: left;
+  color: #f8f8f2;
+  text-shadow: none;
+  pointer-events: none;
 }
+.vs_tip > span {
+  display: block;
+}
+.vs_tip .vs_tip_bv {
+  color: #75715e; /* 「BV = 」暗灰退后一档 */
+}
+.vs_tip .vs_tip_bv b {
+  color: #b1b1a4; /* BV 数字亮灰 */
+  font-weight: bold;
+}
+.vs_tip .vs_tip_rec {
+  color: #b1b1a4; /* 负方 / 无胜负：整行亮灰 */
+}
+.vs_tip .vs_tip_rec.vs_tip_gold {
+  color: #fdc61a; /* 胜方：整行金色（全站高亮金，与胜利评价同色） */
+}
+.vs_tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #1f201b; /* 气泡在格子上方 → 三角朝下指 */
+}
+/* 桌面 hover / 键盘 focus 显示；移动端 tap 由 VsScoreBoard 的 pointerdown
+   委托加 .vs_tip_on（移动端 media 会关掉不可控的残留 hover/focus）。 */
+.vs_c:hover .vs_tip,
+.vs_c:focus .vs_tip,
+.vs_c.vs_tip_on .vs_tip {
+  display: block;
+}
+/* outline 不占布局，格子不位移；提档压住相邻行格子 */
+.vs_c:hover,
+.vs_c.vs_tip_on {
+  outline: 1px solid #f8f8f2;
+  z-index: 61;
+}
+/* 2026-11-10 20:46 饼图（.vs_pie*）与 21:16 图例/得分规则（.vs_legend /
+   .vs_bv_meta / .vs_rule_note）、行首范围（.vs_band）、行尾比分（.vs_seg）
+   全部删除：DOM 与 CSS 同步清理，不留死代码。 */
 
-/* ④ 胜负结果 */
-.vs_big {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  margin: 14px 0 18px;
+/* VS 两侧总分（2026-11-10：结果板块删除后总分挪到这里；胜方黄、败方亮灰） */
+.vs_vs audio {
+  display: none; /* 音效元素不参与 .vs_vs 的 flex 布局（隐藏不影响音频播放） */
 }
-.vs_big_s1,
-.vs_big_s2 {
-  font-size: 44px;
-  font-weight: bold;
+.vs_total {
+  font-size: 34px;
+  font-weight: 900;
+  font-style: italic;
+  color: #b1b1a4; /* 败方/默认：亮灰，也是动画期两分数同色 */
+  margin: 0; /* 间距由 .vs_scoreline 的 column-gap:16px 统一给出 */
+  line-height: 1;
+  position: relative; /* 胜/败大字的定位参照 */
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  display: grid; /* 滚动数字与隐藏占位叠放，宽度由最终分数钉死 */
+  place-items: center;
 }
-.vs_big_s1 {
-  color: #a6e22e;
-}
-.vs_big_s2 {
-  color: #e874ab;
-}
-.vs_big .win_big {
-  color: #fdc61a;
+.vs_total.vs_total_win {
+  color: #fdc61a; /* 动画第二阶段起胜方：金黄 */
   text-shadow: 0 0 14px rgba(253, 198, 26, 0.4);
 }
-.vs_big_vs {
-  font-size: 28px;
-  color: #75715e;
+.vs_ghost,
+.vs_num {
+  grid-area: 1 / 1;
 }
-.vs_verdict {
-  font-size: 18px;
-  color: #f8f8f2;
-  margin-left: 12px;
+.vs_ghost {
+  visibility: hidden; /* 只撑宽度，不显示 */
+}
+/* 2026-11-10 三轮（张老师）：胜方分数「上方」金色大「胜」、败方分数「下方」亮灰大「败」。
+   绝对定位挂在分数盒上，分数本身仍与 VS 图标保持同一水平中线；字由客户端动画渐变出现。 */
+.vs_mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-style: normal;
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0; /* 首帧（含 SSR）不显示，动画结束后 fade in */
+  transition: opacity 0.6s ease;
+}
+.vs_mark_show {
+  opacity: 1;
+}
+/* 偏移 = 字高 56px + 与分数留白 12px（2026-11-10 张老师定） */
+/* 2026-11-10 16:56 张老师定：胜/败两字「同时」渐变出现，不设错开延迟 */
+.vs_mark_win {
+  top: -68px;
+  color: #fdc61a;
+  text-shadow: 0 0 18px rgba(253, 198, 26, 0.45);
+}
+.vs_mark_lose {
+  bottom: -68px;
+  color: #b1b1a4; /* 亮灰：与败方分数同色（张老师 16:41 由暗灰改为亮灰） */
 }
 
 /* 看自己（直连 /vs/自己的 id）兜底提示 */
@@ -15728,4 +16202,280 @@ span.vs_btn--disabled:hover img {
 }
 .vs_self p {
   color: #75715e;
+}
+
+/* ---------- 移动端 PK 主视觉重排（2026-11-10 19:33 张老师定稿，取代 19:15 并列版） ----------
+   目标：① 两张玩家卡片「上下分置」；② VS 战斗字标（连同两侧总分）单独占一行，
+   夹在两卡片「正中间」；③ 卡片内部左列＝头像在上、人名＋军衔＋名次依次在下，
+   右列＝实力雷达图；头像按空间放大到 112px，与 222px 雷达视觉平衡；
+   ④ 2026-11-10 20:08 张老师改：预估评价放到「最上面」（两卡片之前），上下各留 15px 空；
+      按钮仍在主视觉最下面；⑤ 主视觉整体放大 1.5 倍。
+   实现要点（踩过的坑都记在这里）：
+   - 全站 #page 已按视口宽阶梯 zoom（≤410px 为 0.65，布局宽恒定 ≈592 CSS px）。
+     #vs_hero 再叠一层 zoom:1.5 —— WebKit zoom 语义下「子元素坐标系」按 1/zoom
+     收窄（≈400 CSS px），width:100% 才铺满；改 width:66.67% 只占 2/3 屏。
+   - 纵向顺序用 grid 五行 + .vs_vs{display:contents}：DOM 原本是
+     左卡片 / .vs_vs(评价,audio,scoreline,按钮) / 右卡片，把 .vs_vs 拆箱后
+     其子元素直接成为 grid item，用 grid-row 重排（20:08 张老师：预估评价提到最上面）：
+     评价第 1 行、左卡片第 2 行、scoreline 第 3 行（两卡片之间）、右卡片第 4 行、
+     按钮第 5 行。⚠️ 两个 <audio> 必须 display:none，否则会各占一行。
+     display:contents 后 .vs_vs 的 pointer-events/z-index 失效，按钮与人名链接均可点
+     （已用 elementFromPoint 命中测试验证）。
+   - 卡片内 .user_card 改两列 grid：左列 .ucd_top 由横排改纵列、右列 .vs_radar。
+     ⚠️ 雷达 SVG 宽度由 globals.css 更高特异性的
+     `#page .vs_radar .radar_tip_wrap .chart{width:100%}` 控制，改 .vs_radar svg
+     的 width 不生效；容器 200px + wrapper 自带 +24px 出血正好 ≈222px，别再缩放。
+     .ucd_hr 横线在两列布局里无处安放，隐藏。
+   - .pt_bubble 是人名 hover 气泡（absolute + opacity:0 常驻占位），移动端无 hover
+     却仍把 document.scrollWidth 撑出 9~16px，必须 display:none；隐藏后 Chrome /
+     WebKit 在 360 / 390 / 414 三档视口横向溢出均为 0。
+   - --vs_close 归零：移动端不做赛前收拢/滑开动画。20:10 张老师要求五个板块
+     （预测 / 玩家A / VS / 玩家B / 按钮）之间的**可见空隙全部相同＝15px**：
+     预测上方与下方各 15px（margin）、VS 行 padding 36→15px（图标到上下卡片各
+     15px）、按钮 margin-top 15px（卡片B 到按钮 15px），gap 恒 0 不叠加。
+     ⚠️ VS 行 padding 收到 15px 后行高只有 119px，原本 44px / ±56px 的胜败大字会
+     捅出盒外压到卡片上，故同步缩到 36px / ±44px——字仍完整落在盒内。
+   - 20:12 张老师：①「左侧的胜负固定显示在上面、右侧的胜负固定显示在下面」——
+     不再按胜负把字分到分数上/下方，改按左右固定方向（第 1 个 span 的字恒 top、
+     最后一个 span 的字恒 bottom），用更高特异性覆盖 .vs_mark_win/.vs_mark_lose
+     的 top/bottom，并把另一侧清成 auto；颜色仍按胜负（胜金/败亮灰）。
+     ②「终局评价放在顶部预测文案的位置」——.vs_action 也 display:contents 拆箱，
+     按钮落 row5、.vs_post 落 row1 与透明占位的 .vs_pre 叠同一格（DOM 后者在上），
+     零布局跳动；赛后按钮被 React 卸载，row5 用 minmax(15px,auto) 保住与下方
+     板块的 15px 间距。赛后评价取消桌面 translateY(25px)。
+   - 20:23 张老师三条：①「VS 按钮上下各增加 15px 空」——决出胜负按钮上 margin
+     15→30、下 margin 8→30（补齐到上下对称，视觉各 ≈30px），row5 的 min 15→30px，
+     保证赛后按钮卸载后与下方板块仍有同样空隙；其余板块之间的 15px 不动。
+     ②「玩家卡片内 padding 缩小一半」——⚠️ 实测此前 #vs_hero > .vs_panel 写的
+     12px 一直**没生效**：被全局移动端 `body #page .box{padding:16px 14px}` 以
+     (1,1,1) 压过 (1,1,0)，真实值是 16px 14px。故按真实值减半 → 8px 7px，
+     并把选择器提到 `body #page #vs_hero > .box.vs_panel` (2,2,1) 确保生效。
+     ③「玩家名下面增加 12px 空」——.ucd_name 加 margin-bottom:12px（原仅 .ranks
+     margin-top:1px，故名字与名次之间 ≈13px）。
+   - 20:31 张老师二轮：①「卡片 padding 左边太多、上下有点少」——8px 7px → 16px 4px。
+     ⚠️ 但实测「左边太多」主因**不是 padding**：.ucd_top 撑满左列(≈153px) 且
+     align-items:center，头像 111px 在列内居中白留 ≈21px，缩 padding 会被 1fr
+     列宽自动抵消（头像左边距恒 31px）。故同时给 .ucd_top 固定 124px +
+     justify-self:start，头像左边距 31→≈10px，名字/军衔/名次仍居中在头像正下方
+     （中心偏差 0，单行不折行），中间与雷达列空隙 ≈40px。
+     ②「VS 板块上下与卡片距离不够、胜败字快压住卡片」——实测改前胜败字离卡片
+     仅 1~2px（顶到卡片边），.vs_scoreline padding 15→36px 后离卡片 21~23px、
+     图标到卡片 35~36px；胜败字仍保持 36px / ±44px（空间已够，不再放大）。
+   - 下方板块 .vs_below 不放大（表格/BV 格子按 #page 原布局宽设计，放大必溢出）。 */
+@media (max-width: 768px) {
+  #vs_hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    /* 20:23：按钮上下各增 15px，末行最小同步 15→30px —— 赛后按钮卸载时
+       仍保住卡片B 与下方板块的 30px 空隙，赛前赛后不跳动 */
+    grid-template-rows: auto auto auto auto minmax(30px, auto);
+    align-items: center;
+    justify-items: stretch;
+    gap: 0;
+    zoom: 1.5;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 auto;
+    /* 2026-11-10 19:57 张老师：两张卡片左右各收 5px，与屏幕边缘留出背景缝。
+       ⚠️ 必须配 box-sizing:border-box，否则 width:100% + padding 会横向溢出 */
+    padding: 0 5px;
+    --vs_close: 0px;
+  }
+  /* 20:31 张老师：上下加厚、左右收窄（8px 7px → 16px 4px）。
+     ⚠️ 选择器必须带 body #page + .box：全局移动端 `body #page .box{padding:16px 14px}`
+     特异性 (1,1,1) 会压过 `#vs_hero > .vs_panel` (1,1,0)，旧值 12px 一直未生效 */
+  body #page #vs_hero > .box.vs_panel {
+    width: 100%;
+    box-sizing: border-box;
+    /* 20:44 张老师：卡片内部左侧再加 5px 空（4px→9px），上下 16px 不变 */
+    padding: 16px 4px 16px 9px;
+    margin: 0;
+    flex: none;
+  }
+  /* ⚠️ 必须显式 grid-column:1：只写 grid-row 会被 Grid 自动放置算法塞进隐式
+     第 2 列，把卡片挤成半宽（20:12 实测踩过） */
+  #vs_hero > .vs_panel:first-child { grid-row: 2; grid-column: 1; }
+  #vs_hero > .vs_panel:last-child { grid-row: 4; grid-column: 1; }
+  #vs_hero .pt_bubble { display: none; }
+
+  /* 卡片内部：左＝头像在上、人名/军衔/名次在下；右＝实力雷达 */
+  .vs_panel .user_card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 200px;
+    align-items: center;
+    column-gap: 8px;
+    width: 100%;
+  }
+  .vs_panel .ucd_top {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    text-align: center;
+    /* 20:31：不再撑满 1fr 左列再居中（那会白留 ≈21px，看起来「左边 padding 太多」）。
+       固定 124px 并靠左：头像左边距 31→≈10px，名字/军衔/名次仍在头像正下方 */
+    width: 124px;
+    justify-self: start;
+  }
+  .vs_panel .ucd_left { width: auto; flex: none; }
+  .vs_panel .ucd_avatar { width: 112px; height: 112px; }
+  .vs_panel .ucd_right {
+    width: 100%;
+    height: auto;
+    align-self: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+  }
+  /* 20:23 张老师：玩家名下面增加 12px 空（名字行 → 地区/全国名次） */
+  .vs_panel .ucd_name { text-align: center; margin-bottom: 12px; }
+  .vs_panel .ranks { margin-top: 1px; text-align: center; }
+  .vs_panel .rank_line { line-height: 1.7; }
+  .vs_panel .ucd_hr { display: none; }
+  /* 20:44 张老师：实力图向左移 10px，且不能超出卡片右边线。
+     ⚠️ 用 position:relative + left 而不用 transform：SVG 标签在 WebKit zoom 子树里
+     对 transform 敏感（雷达标签位移老坑）；relative 只做视觉位移、不参与 grid 布局，
+     右侧 SVG 出血由 +6.8px 溢出变成 -3px 收进边框内。 */
+  .vs_panel .vs_radar {
+    grid-column: 2;
+    position: relative;
+    left: -10px;
+    margin: 0;
+    text-align: center;
+  }
+
+  /* 中间列拆箱：预估评价在最上面，VS 行夹在两卡片之间，按钮在最下面。
+     2026-11-10 20:08：站头隐藏后 body 的 35px 顶部留白归零，改由评价卡片自身的
+     15px 上 margin 承担（hero 内 zoom 链 1.5×0.65≈0.975，15px 视觉≈15px），
+     否则顶部会变成 35+15=50px，与「上下留 15px」不符。桌面仍保留 35px。 */
+  body:has(#page.vs_page) { padding-top: 0; }
+  /* 23:29 张老师三条：①PC 端 header 要显示——站头隐藏收进本块只影响移动端；
+     ②底部 footer 不显示；③「返回」移到页面最底部：动作槽里的返回隐藏（终局
+     评价仍叠顶部预测位），改显示 below 之后的 .vs_back_end */
+  body:has(#page.vs_page) #header { display: none; }
+  body:has(#page.vs_page) #footer { display: none; }
+  /* 00:18：返回全端统一走 .vs_back_end（见基础段），动作槽内不再渲染返回 */
+  /* 00:45 行链：气泡(1) 卡片A(2) VS行(3) 卡片B(4) 动作槽(5) 日期(6,页面最底部)
+     ——动作槽不拆箱：row-reverse 把 DOM [决出胜负, 还是算了, 喇叭] 排成
+     [喇叭 | 决出胜负 | 还是算了]（00:26 喇叭靠左 + 00:39 算了在按钮右侧） */
+  .vs_vs { display: contents; }
+  .vs_vs > audio { display: none; }
+  .vs_prewrap { grid-row: 1; grid-column: 1; margin: 0; }
+  .vs_pre { margin: 15px auto; font-size: 15px; width: fit-content; }
+  .vs_scoreline {
+    grid-row: 3;
+    grid-column: 1;
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: 360px;
+    justify-self: center;
+    /* 20:31 张老师：15px 时胜败字离卡片仅 1~2px（快压住卡片），放宽到 36px，
+       图标到上下卡片各 35~36px、胜败字离卡片 21~23px */
+    padding: 36px 0;
+    margin: 0;
+  }
+  .vs_scoreline img { width: 84px; height: 89px; }
+  .vs_total { font-size: 28px; }
+  /* 20:12：胜败字方向按左右固定，不再随胜负上下浮动；字号/偏移保持 36px / ±44px */
+  .vs_mark { font-size: 36px; }
+  .vs_scoreline > span:first-child .vs_mark { top: -44px; bottom: auto; }
+  .vs_scoreline > span:last-child .vs_mark { bottom: -44px; top: auto; }
+  /* 动作槽：01:01 张老师改三列 grid → [喇叭 | 决出胜负(居中) | 返回(居右)]，
+     两侧 1fr 等宽保证按钮严格居中；终局评价 done 时居中单独占槽 */
+  .vs_action {
+    grid-row: 5;
+    grid-column: 1;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+  }
+  /* 20:23 张老师：决出胜负按钮上下各增 15px 空（上 15→30、下 8→30 补齐对称）。
+     ⚠️ 三者都必须显式 grid-row:1：auto-placement 会让后面定列的 item 掉到
+     隐式第二行（01:05 实测喇叭掉行） */
+  .vs_fight { grid-row: 1; grid-column: 2; justify-self: center; margin: 30px auto; }
+  /* 01:01：「返回」居右（PC 端 display:none，此处覆盖显示并做 grid 定位） */
+  #page .vs_cancel {
+    display: inline-block;
+    grid-row: 1;
+    grid-column: 3;
+    /* 02:21 张老师：在自己所在列内水平居中（原 justify-self:end 贴边） */
+    justify-self: center;
+    margin: 30px 0;
+  }
+  /* 01:01：喇叭回流行内靠左——⚠️ 必须 #page 提权，否则被基础段压过。
+     02:04 张老师：左右空隙对称——喇叭自带 4px 内 padding，margin-left 清零后
+     图标视觉距边 4px，与右侧「返回」的 4px 镜像对称。
+     02:21 张老师：在自己所在列内水平居中（原 justify-self:start 贴边） */
+  #page .vs_snd_gsw {
+    position: static;
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: center;
+    margin: 30px 0 30px 0;
+  }
+  .vs_snd_gsw svg { width: 38px; height: 38px; }
+  /* 移动端无 hover，tap 即切换——统一气泡也一并隐藏 */
+  #page .vs_snd_gsw[data-tip]::after { display: none !important; }
+  /* 00:45：日期时间在页面最底部（动作槽下面一行） */
+  .vs_date { grid-row: 6; grid-column: 1; margin: 0 auto 15px; padding: 0; }
+  /* 01:02：跑完分后日期下方分割线——date 的 15px 下 margin + 25px = 40px 上留白。
+     覆盖 PC 的 absolute 悬浮回 static 占 row7（移动端 divider 在卡片之后，
+     不影响卡片位置；宽度全宽本就与卡片边缘平齐，清不掉的 inline 由 JS 端
+     matchMedia 跳过写入，这里 !important 双保险）。
+     移动端 divider 占流不悬出，PC 给 .vs_below 的 45px 补偿在此抵消 */
+  .vs_divider {
+    grid-row: 7;
+    grid-column: 1;
+    position: static;
+    width: 100% !important;
+    left: auto !important;
+    margin: 25px 0 40px;
+  }
+  .vs_below { margin-top: 0; }
+  /* 02:10 张老师：「纪录」标题上方到分割线的空白应与日期↔分割线距离（40px）一致。
+     divider 下 margin 40px 已给足，首个板块的 49px margin-top 额外叠加出 89px，
+     移动端清零（PC 端板块间距不受影响） */
+  .vs_below .vs_lvblk:first-child { margin-top: 0; }
+  /* 01:18 张老师：终局评价气泡居中——三列 grid 的 auto-placement 会把它塞进
+     col1 靠左（实测踩过），显式横跨全列居中 */
+  .vs_post {
+    grid-column: 1 / -1;
+    justify-self: center;
+    margin: 30px auto;
+    font-size: 15px;
+  }
+  /* 21:46 张老师：① 移动端隐藏 BV 板块头部的「玩家名：」，只留统计数字与单位
+     （左右仍靠分数阵营色区分）；② tap 格子显示 hover 气泡——由 VsScoreBoard 的
+     pointerdown 委托切 .vs_tip_on class，触屏残留 :hover/:focus 会常驻且 iOS 对
+     span 聚焦不可靠，移动端一律关掉，只认委托 class（点格子开、再点关、点别处关）。
+     ⚠️ 气泡是绝对定位宽块，在 zoom 子树里居中会撑出横向滚动条：最左/最右格子
+     的气泡改贴板块左右边缘（left:0 / right:0），三角对齐格子中心（≈半格 43px）。 */
+  .vs_lv_name { display: none; }
+  /* 22:25→22:33 张老师：移动端 BV 格内字号先降 13px、再「大上 2 个字号」（项目
+     2px 口径）到 15px——390 视口高级 16 列格子 ≈21px，15px 三位数 ≈23px 仍以
+     grid minmax(0,1fr) 等分不撑破（实测 cellOverflow=0）。 */
+  .vs_c { font-size: 17px; }
+  /* 22:05 张老师：移动端 zoom 子树里气泡 13px 会被整体缩小到看不清，
+     字号整体加大到 22px（三行同比例放大，子 span 无独立字号自动继承），
+     padding 同步放宽；页面最下方那份规则说明也从 13px 放大到 18px。 */
+  .vs_tip { font-size: 22px; padding: 8px 12px; }
+  .vs_rule { font-size: 18px; }
+  .vs_c:hover .vs_tip,
+  .vs_c:focus .vs_tip { display: none; }
+  .vs_c.vs_tip_on .vs_tip { display: block; }
+  .vs_mid > .vs_c:first-child .vs_tip { left: 0; transform: none; }
+  .vs_mid > .vs_c:first-child .vs_tip::after { left: 43px; }
+  .vs_mid > .vs_c:last-child .vs_tip { left: auto; right: 0; transform: none; }
+  .vs_mid > .vs_c:last-child .vs_tip::after {
+    left: auto;
+    right: 43px;
+    transform: translateX(50%);
+  }
 }
