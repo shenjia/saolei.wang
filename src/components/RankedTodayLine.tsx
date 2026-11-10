@@ -20,7 +20,8 @@ export function RankedTodayLine({
   exp: number;
   /** 今日创造 PB 次数（打破本BV最好成绩，与列表黄点 pb_bv 同源） */
   pb: number;
-  /** 今日活跃值（practice_daily.act_points） */
+  /** 今日活跃值（活跃榜 active_points 同口径的当日值：练习点+登录 1+观看+录像+评论，
+   *  2026-11-11 张老师定：恒 ≥1 不可能加 0） */
   act: number;
   /** 练习页命令式直写挂点 id（首页不传） */
   idBv?: string;

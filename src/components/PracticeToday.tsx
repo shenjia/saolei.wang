@@ -86,7 +86,8 @@ export function PracticeToday({
   /** 首行统计（2026-11-08 张老师改版）：登录恒下发（未登录 null 不渲染）。
    *  ranked=今日是否玩过排行模式（不再控制显隐）；b/i/e=初/中/高级今日新收集
    *  BV 数（合计单值展示）、pb=今日 PB 次数（0 值降亮灰）、act=今日活跃值
-   *  （practice_daily.act_points，>0 绿色） */
+   *  （2026-11-11 张老师定：活跃榜 active_points 同口径的当日值，登录 1 点打底恒 ≥1，
+   *  >0 绿色） */
   rankedToday: { ranked: boolean; beg: number; int: number; exp: number; pb: number; act: number } | null;
   /** 服务端口径「我的完成盘数」：登录=practice_log 当日 won=1 计数；未登录恒 0 */
   mineWon: number;

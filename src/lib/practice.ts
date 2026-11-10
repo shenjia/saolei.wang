@@ -145,8 +145,8 @@ registerPreheat("practice-today", REVALIDATE_HOME_CACHE, () => getPracticeToday(
 // ---------- 首页「今日已收集 x BV 创造 y PB 活跃值 z」行（2026-11-08 张老师改版） ----------
 // 登录用户恒显（2026-11-08 改：原口径仅今日玩过排行模式才显示，活跃值入行后登录恒显，
 // 无收获各项亮灰 0）。x=今日新收集 BV 总数（初/中/高合计，>0 绿色）、y=今日创造 PB 次数
-// （金色，0 亮灰，颜色逻辑不变）、z=今日活跃值（practice_daily.act_points，练习 3BV
-// 计点逐盘累加，>0 绿色）。
+// （金色，0 亮灰，颜色逻辑不变）、z=今日活跃值（2026-11-11 张老师定改活跃榜
+// active_points 同口径的当日值，恒 ≥1，>0 绿色）。
 // · 收集口径与个人主页收集格 / PB 核查路由完全同源（getUser3bvCollection）：
 //   video JOIN video_info 取 board_3bv，status<>0（待审 10 也算收集，2026-10-28 口径）、
 //   封禁连坐盘（status=0 且本人未封）保留；board_3bv ≥ LEVEL_MIN_3BV（初 2/中 30/高 100）。
@@ -155,9 +155,10 @@ registerPreheat("practice-today", REVALIDATE_HOME_CACHE, () => getPracticeToday(
 //   特定 BV 下本人最好成绩」的次数，直接计 video.pb_bv=1 的今日盘数
 //   （上传时刻判定落列，NF/FL 不分池；**不是**全局历史纪录重放）。
 //   收集 b/i/e 口径不变（收集格同源）。
-// · 活跃值口径同地区活跃指数练习侧（lib/areaactivity.ts）：初级胜=1 败=0；
-//   中级胜=2/过半 1；高级过半按 floor(率×10)；自定义胜=1。游客行（user_id=0）
-//   不归属个人，登录用户只读本人当日行。
+// · 活跃值口径（2026-11-11 张老师定：恒 ≥1 不可能为 0——能看到本行必然当日已登录，
+//   登录源至少 1 点打底）＝活跃榜 active_points 的当日单日口径（lib/useractivity.ts
+//   六源去双计后五源）：练习点 + 登录 1 + 观看点 + 录像加权点 + 评论/回复条数。
+//   游客不渲染本行，无归属问题。
 
 export interface RankedToday {
   /** 今日是否玩过排行模式（首页行已登录恒显后仅作数据完整性标志，不再控制显隐） */
@@ -170,23 +171,65 @@ export interface RankedToday {
   exp: number;
   /** 今日创造 PB 次数（打破本BV最好成绩，与列表黄点 pb_bv 同源） */
   pb: number;
-  /** 今日活跃值（practice_daily.act_points，2026-11-08 首页行新增展示项） */
+  /** 今日活跃值（2026-11-08 首页行新增展示项；2026-11-11 张老师定改活跃榜
+   *  active_points 同口径的当日值：练习点+登录 1+观看点+录像点+评论/回复数，恒 ≥1） */
   act: number;
 }
 
 export async function getRankedToday(uid: number): Promise<RankedToday> {
   const out: RankedToday = { ranked: false, beg: 0, int: 0, exp: 0, pb: 0, act: 0 };
   const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
-  const row = await prisma.practiceDaily.findUnique({
-    where: { day_userId: { day: todayIdx, userId: BigInt(uid) } },
-    select: { modeRanked: true, actPoints: true },
-  });
-  // 今日活跃值与是否玩过排行模式无关（练习 3BV 计点含所有模式），登录恒取
-  out.act = Number(row?.actPoints ?? 0);
-  if (!row || row.modeRanked <= 0) return out;
-  out.ranked = true;
   const today0 = dayStart(0);
   const uidBig = BigInt(uid);
+
+  // 练习当日行 + 活跃值其余四源并行点查（全部单用户索引点查，毫秒级）
+  const [row, watchRow, videoRow, cmtRow, replyRow] = await Promise.all([
+    prisma.practiceDaily.findUnique({
+      where: { day_userId: { day: todayIdx, userId: uidBig } },
+      select: { modeRanked: true, actPoints: true },
+    }),
+    // 观看点：当日观看毫秒每满 1 分钟记 1（与活跃快照 watch_points 同口径）
+    prisma.$queryRaw<{ wp: bigint | null }[]>`
+      SELECT ROUND(SUM(watch_ms) / 60000) AS wp FROM user_watch_daily
+      WHERE user_id = ${uidBig} AND day = ${todayIdx}
+    `,
+    // 录像加权点：初×1 中×2 高×10，剔 Saolei.wang 排行局在线录像（排行局终局
+    // 已照发练习埋点计过练习点，上传再计即双计——与活跃快照 video_points 同口径）
+    prisma.$queryRaw<{ vs: bigint }[]>`
+      SELECT COALESCE(SUM(v.level = 'beg') + 2 * SUM(v.level = 'int') + 10 * SUM(v.level = 'exp'), 0) AS vs
+      FROM video v
+      JOIN video_info vi ON vi.id = v.id AND vi.software <> 'Saolei.wang'
+      WHERE v.\`user\` = ${uidBig}
+        AND v.status <> ${VIDEO_STATUS.BANNED}
+        AND v.create_time >= ${today0}
+    `,
+    // 评论/回复条数（活跃快照 comment_count 同口径：comment + bbs_reply 各计 1）
+    prisma.$queryRaw<{ cc: bigint }[]>`
+      SELECT COUNT(*) AS cc FROM comment
+      WHERE \`user\` = ${uidBig} AND status = 0 AND create_time >= ${today0}
+    `,
+    prisma.$queryRaw<{ cc: bigint }[]>`
+      SELECT COUNT(*) AS cc FROM bbs_reply
+      WHERE \`user\` = ${uidBig} AND status = 0 AND create_time >= ${today0}
+    `,
+  ]);
+
+  // ③ 今日活跃值 z（2026-11-11 张老师定：不可能加 0——能看到本行就必然当日登录了，
+  //     至少记登录 1 点）＝活跃榜 active_points 的当日单日口径：
+  //     练习点(practice_daily.act_points) + 登录 1 点 + 观看点 + 录像加权点 + 评论/回复数。
+  //     登录点不查表无条件计入：本请求 getSession 的 touchLastLogin 心跳正在异步
+  //     UPSERT 当日 user_daily_visit 打卡行，查表有竞态（当日首访读不到行会误显 0），
+  //     而「正在看页面」本身就是当日访问的铁证。
+  out.act =
+    Number(row?.actPoints ?? 0) +
+    1 +
+    Number(watchRow[0]?.wp ?? 0) +
+    Number(videoRow[0]?.vs ?? 0) +
+    Number(cmtRow[0]?.cc ?? 0) +
+    Number(replyRow[0]?.cc ?? 0);
+
+  if (!row || row.modeRanked <= 0) return out;
+  out.ranked = true;
 
   // ① 今日新收集 BV（按级别分组去重计数）——收集格同源可见集合，单用户索引点查。
   //    口径＝「该 BV 首次收集发生在今天」：对 (level, board_3bv) 全历史取
