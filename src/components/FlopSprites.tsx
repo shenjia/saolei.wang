@@ -307,6 +307,64 @@ export function FlopSprites({ innerRef }: { innerRef?: Ref<SVGSVGElement> } = {}
         <use href="#cell-press" />
         <path d="M 65 30 H 95 Q 130 30, 130 60 Q 130 75, 115 80 H 100 V 60 Q 100 50, 90 50 H 70 Q 60 50, 60 60 T 70 70 H 90 Q 100 70, 100 60 V 100 Q 100 90, 90 90 H 70 Q 60 90, 60 100 T 70 110 H 90 Q 100 110, 100 100 V 80 H 115 Q 130 85, 130 100 Q 130 130, 95 130 H 65 Q 30 130, 30 100 Q 30 85, 45 80 Q 30 75, 30 60 Q 30 30, 65 30" fill="#808080" shapeRendering="crispEdges" />
       </symbol>
+      {/* ---- 高清标物图（2026-11-10 张老师定）：「像素风格」开关关闭（默认高清）时
+          经 numSym() 接管 bf（旗）/bm（雷）/bn（错雷）与 bomb（踩到的雷，paintBomb/
+          drawCellCls 直取 cell-mine-bomb-hd）；开关打开回落 flop 原版。图形 1:1 取自
+          Metasweeper（github.com/eee555/Metasweeper，GPL-3.0 附加商业限制；本站
+          非商业使用）src/media/cellflag.svg、mine.svg、blast.svg、falsemine.svg
+          ——平滑几何图形（圆/多边形/粗条带）重制，任意倍率不发虚。坐标系零换算
+          直接内联（与上方高清数字同法）：Metasweeper 160 视框的开格面区（10..160）
+          与站内 168 视框 cell-press 面区完全重合，雷中心 (85,85) 恰为面区中心。
+          格底沿用站内体系（旗=cell-normal-solid 凸起面、雷/错雷=cell-press、
+          炸雷=base-cell-border-press+红面），bevel 与全站一致。
+          ⚠️ 源文件 mine.svg 的第二条对角刺 line 属性笔误（x2 写两遍，浏览器取首
+          值会画出 (0,40)→(40,130) 的歪线），按米字八刺口径修复为反对角
+          (130,40)→(40,130)——与 flop 原版雷、Windows 经典雷刺型一致 */}
+      {/* 高清旗（Metasweeper cellflag.svg 面区图形，黑杆黑底座 + 左指红三角旗）：
+          底面沿用 cell-normal-solid 凸起银面（旗格未开，与 flop 版 cell-flag 同构） */}
+      <symbol id="cell-flag-hd" viewBox="0 0 168 168">
+        <use href="#cell-normal-solid" />
+        <rect x="40" y="110" width="80" height="20" fill="#000000" />
+        <rect x="60" y="100" width="40" height="10" fill="#000000" />
+        <rect x="80" y="40" width="10" height="60" fill="#000000" />
+        <path d="M 90 30 L 35 57 L 90 84" fill="#ff0000" />
+      </symbol>
+      {/* 高清雷（Metasweeper mine.svg，圆雷体 + 米字八刺 + 白高光）：
+          底面 cell-press 银面（雷格已揭示，与 flop 版 cell-mine 同构） */}
+      <symbol id="cell-mine-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <circle cx="85" cy="85" r="45" fill="#000000" />
+        <rect x="20" y="80" width="130" height="10" fill="#000000" />
+        <rect x="80" y="20" width="10" height="130" fill="#000000" />
+        <line x1="40" y1="40" x2="130" y2="130" stroke="#000000" strokeWidth="10" />
+        <line x1="130" y1="40" x2="40" y2="130" stroke="#000000" strokeWidth="10" />
+        <circle cx="70" cy="70" r="11" fill="#ffffff" />
+      </symbol>
+      {/* 高清踩雷格（Metasweeper blast.svg：红面 + 同款雷）。paintBomb 的 ranked
+          分支与 drawCellCls("bomb") 取名 cell-mine-bomb-hd；DOM 分支写死
+          href="#cell-mine-bomb"（见 OnlinePlay bombSym() 收口） */}
+      <symbol id="cell-mine-bomb-hd" viewBox="0 0 168 168">
+        <use href="#base-cell-border-press" />
+        <rect x="10" y="10" width="150" height="150" fill="#ff0000" />
+        <circle cx="85" cy="85" r="45" fill="#000000" />
+        <rect x="20" y="80" width="130" height="10" fill="#000000" />
+        <rect x="80" y="20" width="10" height="130" fill="#000000" />
+        <line x1="40" y1="40" x2="130" y2="130" stroke="#000000" strokeWidth="10" />
+        <line x1="130" y1="40" x2="40" y2="130" stroke="#000000" strokeWidth="10" />
+        <circle cx="70" cy="70" r="11" fill="#ffffff" />
+      </symbol>
+      {/* 高清标错的雷（Metasweeper falsemine.svg：银面 + 同款雷 + 贯格红叉） */}
+      <symbol id="cell-flag-wrong-hd" viewBox="0 0 168 168">
+        <use href="#cell-press" />
+        <circle cx="85" cy="85" r="45" fill="#000000" />
+        <rect x="20" y="80" width="130" height="10" fill="#000000" />
+        <rect x="80" y="20" width="10" height="130" fill="#000000" />
+        <line x1="40" y1="40" x2="130" y2="130" stroke="#000000" strokeWidth="10" />
+        <line x1="130" y1="40" x2="40" y2="130" stroke="#000000" strokeWidth="10" />
+        <circle cx="70" cy="70" r="11" fill="#ffffff" />
+        <polygon points="15,30 35,30 155,150 135,150" fill="#ff0000" />
+        <polygon points="155,30 135,30 15,150 35,150" fill="#ff0000" />
+      </symbol>
       <symbol id="cell-flag" viewBox="0 0 168 168">
         <use href="#cell-normal" />
         <path d="M70 30v10H50v10H40v10h10v10h20v10h20V30H70z" fill="red" />

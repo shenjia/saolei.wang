@@ -55,13 +55,14 @@ function applyDelta(base: Board, data: DeltaResponse): Board {
 }
 
 /* 格子 → FlopSprites symbol（与 Board.tsx VEC_SYM / 练习页 VEC_MAP 同源口径）：
-   未开=cell-normal-solid、旗=cell-flag-solid、已开=cell-number-N；
+   未开=cell-normal-solid、旗=cell-flag-hd（2026-11-10 高清）、已开=cell-number-N-hd；
    按住未开格下沉＝cell-number-0（flop/练习页 pressPaint 同语义）；
-   踩雷触发格＝cell-mine-bomb 红底炸雷（2026-11-10 张老师：外框变红不够醒目） */
+   踩雷触发格＝cell-mine-bomb-hd 红底高清雷（2026-11-10 张老师：外框变红不够醒目；
+   同日高清化——本闸无像素开关，恒高清） */
 function cellSymbol(cell: Cell, i: number, mineCell: number, pressed: boolean): string {
-  if (cell.state === 1) return `cell-number-${cell.num ?? 0}`;
-  if (i === mineCell) return "cell-mine-bomb";
-  if (cell.state === 2) return "cell-flag-solid";
+  if (cell.state === 1) return cell.num ? `cell-number-${cell.num}-hd` : "cell-number-0";
+  if (i === mineCell) return "cell-mine-bomb-hd";
+  if (cell.state === 2) return "cell-flag-hd";
   return pressed ? "cell-number-0" : "cell-normal-solid";
 }
 /* td 语义类（对齐 legacy 雪碧图 td.bb/bf/b0-b8；vec 模式下只担命中与光标形态） */

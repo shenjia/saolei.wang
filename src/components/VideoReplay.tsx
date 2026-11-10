@@ -270,10 +270,11 @@ const FACE_MAP: Record<FaceKind | "press", string> = {
    Board vec 模式下 td 只担布局/命中/语义类，视觉走 .vecboard 的 <use>；
    引擎态类名 → FlopSprites symbol（与练习页 OnlinePlay VEC_MAP 同源）。
    2026-11-09 张老师定：数字 1-8 默认 Metasweeper 高清字形（-hd，与练习页
-   「像素风格」关=高清同口径）；0（按下空面）/旗/问号/雷等贴图不变。 */
+   「像素风格」关=高清同口径）；2026-11-10 二期：旗/雷/错雷/踩雷格一并高清
+   （cell-flag-hd/cell-mine-hd/cell-flag-wrong-hd/cell-mine-bomb-hd）。 */
 const CELL_VEC_MAP: Record<string, string> = {
   bb: "cell-normal-solid",
-  bf: "cell-flag-solid",
+  bf: "cell-flag-hd",
   bq: "cell-question-solid",
   b0: "cell-number-0",
   b1: "cell-number-1-hd",
@@ -284,19 +285,20 @@ const CELL_VEC_MAP: Record<string, string> = {
   b6: "cell-number-6-hd",
   b7: "cell-number-7-hd",
   b8: "cell-number-8-hd",
-  bm: "cell-mine",
-  bn: "cell-flag-wrong",
-  bmb: "cell-mine-bomb",
+  bm: "cell-mine-hd",
+  bn: "cell-flag-wrong-hd",
+  bmb: "cell-mine-bomb-hd",
 };
 
 /* 封面字符（Board 静态直出同款：* / b＝雷→未开面、F=旗、X=错旗、0-8 数字）→
    symbol。stop() 恢复静态封面与 Board.tsx VEC_SYM 共用此口径（2026-11-09：
-   数字 1-8 走 -hd 高清；* 与 b 都映射未开面，兼容解析器输出与含旗封面串） */
+   数字 1-8 走 -hd 高清；2026-11-10：F/X 旗与错旗一并 -hd 高清；
+   * 与 b 都映射未开面，兼容解析器输出与含旗封面串） */
 const VEC_SYM_CHAR: Record<string, string> = {
   "*": "cell-normal-solid",
   b: "cell-normal-solid",
-  F: "cell-flag-solid",
-  X: "cell-flag-wrong",
+  F: "cell-flag-hd",
+  X: "cell-flag-wrong-hd",
   "0": "cell-number-0",
   "1": "cell-number-1-hd",
   "2": "cell-number-2-hd",
@@ -573,25 +575,26 @@ export function runReplay(opts: {
     paintR(i);
     return true;
   }
-  /* 败局雷区揭示（踩雷瞬间；位图类：bm=雷 / bn=错旗） */
+  /* 败局雷区揭示（踩雷瞬间；位图类：bm=雷 / bn=错旗）——2026-11-10 高清化：
+     vec 贴图与 CELL_VEC_MAP 同源（bm→cell-mine-hd、bn→cell-flag-wrong-hd） */
   function revealLoss() {
     for (let i = 0; i < N; i++) {
       if (mines[i]) {
         if (rstate[i] !== 2 && rstate[i] !== 3) {
           cellTd(i).className = "bm";
-          if (vecUse.length) vecSet(i, "cell-mine");
+          if (vecUse.length) vecSet(i, CELL_VEC_MAP.bm);
         }
       } else if (rstate[i] === 2) {
         cellTd(i).className = "bn";
-        if (vecUse.length) vecSet(i, "cell-flag-wrong");
+        if (vecUse.length) vecSet(i, CELL_VEC_MAP.bn);
       }
     }
-    /* 被踩中的雷：flop 原版红底雷（#cell-mine-bomb，与练习页踩雷同图）——
+    /* 被踩中的雷：红底雷（#cell-mine-bomb-hd，与练习页踩雷同图）——
        位图棋盘 bc 贴图是灰调雷（无红色像素），2026-10-20 张老师报错纠正 */
     const td = cellTd(hitIdx);
     td.className = "bmb";
     td.innerHTML = "";
-    if (vecUse.length) vecSet(hitIdx, "cell-mine-bomb");
+    if (vecUse.length) vecSet(hitIdx, CELL_VEC_MAP.bmb);
   }
   /* 胜局检测（十七期：全安全格开完 → win 脸 + 自动补旗揭示，练习页 checkWin 同款；
      胜局录像收尾大多是滑键/chord 收官，事件流天然开满——补旗纯视觉不进事件） */
