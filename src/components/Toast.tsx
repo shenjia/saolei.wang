@@ -6,6 +6,11 @@
 // 2026-10-13 张老师要求：成功气泡文字前统一加「✓」标记（改这一处，全站成功提示全覆盖）。
 // 2026-10-27 张老师要求：搜索跳转等待态——toastLoading() 绿色气泡「搜索中」+ 文字后 CSS 转圈，
 // 跳转完成（URL 变化）自动渐隐，或调用方 toastLoadingDone() 显式关闭；详见下方注释。
+// 2026-11-10 张老师报的排行搜索 BUG：目标就在已加载页内时，「搜索中」气泡要 8 秒才消失——
+// 根因是 RankingNav 先 toastLoading() 再同步 dispatch ranking:locate，Feed 命中已加载行后
+// 同步调 toastLoadingDone()，此刻 loading 气泡还没渲染提交（closeLoading 尚未注册），
+// 显式关闭静默落空，只能等 8 秒 LOADING_MAX 兜底。修复：提交前到达的 toastLoadingDone
+// 走「同步取消」通道——气泡从未上屏即被抑制（张老师：定位到立刻消失，甚至就不应该出现）。
 
 "use client";
 
@@ -97,6 +102,12 @@ export function ToastHost() {
   const closeLoading = useRef<(() => void) | null>(null);
   /** 在屏 loading 气泡的 id（普通 toast 顶替后置 0，防止迟到的 toastLoadingDone 误关新气泡） */
   const loadingId = useRef(0);
+  /** 当前 loading 气泡是否已渲染提交（loading effect 注册 closeLoading 后置 true）。
+      toastLoadingDone 与 toastLoading 在同一同步事件里先后调用时，气泡尚未提交——
+      closeLoading 还是 null，显式关闭会静默落空（2026-11-10 排行搜索 8 秒气泡 BUG 根因） */
+  const loadingCommitted = useRef(false);
+  /** 提交前到达的 toastLoadingDone：整个气泡不渲染、不显示，effect 里直接复位 */
+  const loadingSuppressed = useRef(false);
 
   useEffect(() => {
     const push = (message: string, type: ToastType, hold?: number) => {
@@ -108,6 +119,8 @@ export function ToastHost() {
     const pushLoading = (message: string) => {
       seq.current += 1;
       loadingId.current = seq.current;
+      loadingCommitted.current = false; // 新气泡待提交；提交前到达的 done 走同步取消
+      loadingSuppressed.current = false;
       setLeaving(false);
       setItem({
         id: seq.current,
@@ -120,7 +133,15 @@ export function ToastHost() {
     };
     emit = push; // 注册命令式入口
     emitLoading = pushLoading;
-    emitLoadingDone = () => closeLoading.current?.();
+    emitLoadingDone = () => {
+      if (!loadingCommitted.current) {
+        // 气泡尚未上屏（同一同步事件里先 toastLoading 后 toastLoadingDone）：同步取消，
+        // 渲染层直接不输出、effect 里复位状态——气泡完全不出现（2026-11-10）
+        loadingSuppressed.current = true;
+        return;
+      }
+      closeLoading.current?.();
+    };
     function onToast(e: Event) {
       const d = (e as CustomEvent<{ message: string; type?: ToastType; hold?: number }>).detail;
       push(d.message, d.type ?? "info", d.hold);
@@ -139,6 +160,14 @@ export function ToastHost() {
   useEffect(() => {
     if (item === null) return;
     if (item.type === "loading") {
+      // 同步取消（toastLoadingDone 在提交前到达）：气泡从未显示，直接复位卸载
+      if (loadingSuppressed.current) {
+        loadingSuppressed.current = false;
+        loadingId.current = 0;
+        setItem(null);
+        return;
+      }
+      loadingCommitted.current = true;
       let closed = false;
       let fire: ReturnType<typeof setTimeout> | undefined;
       let remove: ReturnType<typeof setTimeout> | undefined;
@@ -192,6 +221,8 @@ export function ToastHost() {
   }, [item]);
 
   if (item === null) return null;
+  // 同步取消的 loading 气泡：渲染层直接不输出（零上屏），effect 随后复位状态
+  if (item.type === "loading" && loadingSuppressed.current) return null;
 
   return (
     <div
