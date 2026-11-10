@@ -273,14 +273,16 @@ export function ActiveFeed({
   return (
     <div className="rank_scroll">
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table active_table">
-        {/* 全列定宽（2026-11-10 张老师要求：切排序表宽不跳；二轮定「各列均匀」）——
+        {/* 全列定宽（2026-11-10 张老师要求：切排序表宽不跳；二轮定「各列均匀」；
+            三轮：地区加宽容 5 字（中国香港）、排名加宽、姓名缩短）——
             table-layout:fixed 下列宽只由 col 决定，与单元格内容解耦；数据列统一 64px
-            （预留 4 位数字 31.2px 绰绰有余，与原摊宽 70 观感接近），排名 72（容 4 位
-            名次「第 9999 位」实测 70.9）、地区 64、军衔 116；姓名列不设宽吃剩余空间
-            （桌面 ~222），min-width 780（globals）保证窄屏横滑时姓名不压没 */}
+            （td 实际字号 16px，4 位数字实测 35.6px 绰绰有余），排名 88（「第 9999 位」
+            16px 实测 76.5）、地区 84（容 5 个全角字 80+padding，中国香港 64）、
+            军衔 116；姓名列不设宽吃剩余空间（桌面 902 宽下 ~166），min-width 820
+            （globals）保证窄屏横滑时姓名不压没 */}
         <colgroup>
-          <col style={{ width: 72 }} />
-          <col style={{ width: 64 }} />
+          <col style={{ width: 88 }} />
+          <col style={{ width: 84 }} />
           <col />
           <col style={{ width: 116 }} />
           {ACTIVE_COLS.filter((c) => c.by !== "act").map((c) => (
