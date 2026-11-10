@@ -62,6 +62,7 @@ import { donateYuanPlain } from "@/lib/donate";
 import { getThunderKingThreshold, dualTitles } from "@/lib/title-system";
 import { ageOf, constellationText } from "@/lib/birth";
 import { getRadarData } from "@/lib/radar";
+import { getActiveRadar } from "@/lib/activerank";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
@@ -259,7 +260,14 @@ export default async function UserViewPage({
   }));
 
   const { user, info, scores } = detail;
-  const radar = await getRadarData(scores);
+  const [radar, activeRadar] = await Promise.all([
+    getRadarData(scores),
+    // 「活跃」雷达（2026-11-10 张老师需求）：近 7 日活跃排行六维（初中高/观看/评论/登录），
+    // 按列名次走实力雷达同款 23 档评级；无活跃值恒 F。口径见 lib/activerank.ts
+    getActiveRadar(userId),
+  ]);
+  // 六维全 0（近 7 日无任何活跃）时整块隐藏
+  const actHasAny = activeRadar.some((p) => p.grade !== "F");
 
   // 「纪录」板块数据组装（2026-11-06）：12 条曲线 → 3 指标板块 × 4 级别点集。
   // 点的创造者恒为本人（n/en/s 取 detail）；军衔 hover 必须是「传那盘录像时」的
@@ -476,6 +484,13 @@ export default async function UserViewPage({
               <RadarChart data={radar} />
             </div>
           )}
+
+        {actHasAny && (
+          <div className="radar box radar_main">
+            <h2>活跃</h2>
+            <RadarChart data={activeRadar} accent="#a6e22e" />
+          </div>
+        )}
         {/* 「纪录」板块（2026-11-06 张老师需求，11-37 二改：放动态板块上面）——个人纪录进步历程，
             级别筛选靠 title（默认总计）+ 指标筛选靠右（默认 Time），图表复刻
             /records 页 ChartCard；无任何个人纪录点时整块隐藏 */}
@@ -527,6 +542,13 @@ export default async function UserViewPage({
               <RadarChart data={radar} />
             </div>
           )}
+
+        {actHasAny && (
+          <div className="radar box">
+            <h2>活跃</h2>
+            <RadarChart data={activeRadar} accent="#a6e22e" />
+          </div>
+        )}
         {/* 2026-10-13 张老师方案：侧栏「3BV 收集」版块（设计稿 v3 已确认），
             位置在实力雷达之下、个人资料之上；显示条件与雷达一致（有上传过录像才显示） */}
         {detail.stat &&

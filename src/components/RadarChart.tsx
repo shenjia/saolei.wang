@@ -8,11 +8,28 @@
 //    出血尺寸因此挪到 .radar_tip_wrap 上（globals.css），svg 本体 width:100%。
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { RadarPoint } from "@/lib/radar";
 // 等级配色（移植 _radar.php 的 initScript，+/- 后缀共用基础色）：
 // 与录像分析 VideoAnalysis.tsx、在线玩 OnlinePlay.tsx 同一份，统一在 lib/videoscore.ts 维护
 import { gradeColor } from "@/lib/videoscore";
+
+/** 活跃雷达数据点：在实力雷达 RadarPoint 上加气泡具体数据（tipLabel/tipValue 可选，
+ *  不传时走实力雷达原「超过 xx%」分支，两者共用同一组件互不影响）；
+ *  labelValue=轴标签顶行活跃值（21:24 张老师定，不带单位取整） */
+export type ActiveRadarPoint = RadarPoint & {
+  tipLabel?: string;
+  tipValue?: string;
+  labelValue?: string;
+};
+
+/** 实力雷达 hover 数据行（2026-11-10 20:40 张老师定）：time 轴显示「初级Time 46.650」
+ *  （记录数字元帅金）、3bvs 轴显示「初级3BV/s 5.832」——由 lib/radar.ts 组装，
+ *  这里只声明字段；tipPrefix 缺省用轴名 */
+export type ScoreRadarPoint = RadarPoint & {
+  tipPrefix?: string;
+  tipScore?: string;
+};
 
 const SIZE = 222;
 const CENTER = SIZE / 2;
@@ -60,11 +77,13 @@ function polygonPoints(n: number, r: number): string {
   return Array.from({ length: n }, (_, i) => polar(i, n, r).join(",")).join(" ");
 }
 
-export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /** 多边形描边/顶点色（PK 页左绿右玫瑰红，默认主页同款青色） */ accent?: string }) {
+export function RadarChart({ data, accent = "#66d9ef" }: { data: (RadarPoint | ActiveRadarPoint | ScoreRadarPoint)[]; /** 多边形描边/顶点色（PK 页左默认蓝、右玫瑰红，默认主页同款青色） */ accent?: string }) {
   const [hover, setHover] = useState<number | null>(null);
+  // 扇形热区裁剪 id：useId 保证同页多实例（PK 页左右两块雷达）不冲突
+  const clipId = `radar_clip_${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const n = data.length;
   const points = data.map((d, i) => polar(i, n, (d.percent / 100) * RADIUS));
-  const tip = hover === null ? null : data[hover];
+  const tip = hover === null ? null : (data[hover] as ActiveRadarPoint & ScoreRadarPoint);
   // 气泡定位：锚在外侧标签（等级+维度名两行整体），**恒在标签下方**（2026-10-14 张老师定：
   // 所有气泡固定在标签下面，不再翻上方；底部标签气泡会略出盒，见 globals.css 说明）。
   // 横向与标签中心严格居中对齐（张老师要求）。锚点=标签，与录像分析 vr_tip 恒下方形态一致。
@@ -90,6 +109,16 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
         role="img"
         aria-label="实力雷达图"
       >
+      {/* ⚠️ 扇形热区必须裁到视口内（2026-11-10）：wedgePath 半径=SIZE（2× 视口），
+          原「超出视口会被裁掉」的假设在 .chart overflow:visible（10-14 标签出血）后失效——
+          透明楔块溢出视口 111px，把上方玩家名字等可点元素全吞掉（PK 页实证）。
+          clipPath 只裁热区命中范围，标签/圆点不在组内不受影响；视口内仍全铺满 */
+      }
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={0} y={0} width={SIZE} height={SIZE} />
+        </clipPath>
+      </defs>
       {/* 网格环（八边形） */}
       {GRID_RINGS.map((p) => (
         <polygon
@@ -114,7 +143,8 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
         strokeLinejoin="round"
       />
       {/* 顶点：圆点 + 标签块（等级 + 维度名两行一体，hover 整体放大高亮） */}
-      {data.map((d, i) => {
+      {data.map((dRaw, i) => {
+        const d = dRaw as ActiveRadarPoint & ScoreRadarPoint;
         const active = hover === i;
         const [x, y] = points[i];
         const [lx, ly] = polar(i, n, LABEL_RADIUS);
@@ -126,8 +156,9 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
             onMouseLeave={() => setHover(null)}
           >
             {/* 原生 <title> 已删（2026-10-14）：hover 信息改由气泡承担，避免双重提示 */}
-            {/* 扇形热区：进入该维度对应角度范围即触发，不必精确对准点或标签 */}
-            <path d={wedgePath(i, n)} fill="transparent" pointerEvents="all" />
+            {/* 扇形热区：进入该维度对应角度范围即触发，不必精确对准点或标签。
+                clipPath 裁到视口内——视口外部分不再拦截点击（见上方 defs 注释） */}
+            <path d={wedgePath(i, n)} fill="transparent" pointerEvents="all" clipPath={`url(#${clipId})`} />
             <circle
               cx={x}
               cy={y}
@@ -145,14 +176,27 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
                 font-size 过渡起始值错乱会「先变小再变大」），改 .radar_lbl_fs 类 +
                 globals.css @media (hover:hover) 门控：PC 平滑、触屏瞬时切换 */}
             <text x={lx} y={ly - 3} textAnchor="middle">
-              <tspan
-                className="radar_lbl_fs"
-                fill={gradeColor(d.grade)}
-                fontWeight="bold"
-                style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS }}
-              >
-                {d.grade}
-              </tspan>
+              {d.labelValue !== undefined ? (
+                // 活跃雷达（2026-11-10 21:24 张老师定）：顶行不显示 SSS~F 等级也不带
+                // 单位，显示该维换算后活跃值取整（全绿 #a6e22e 与折线同色），下行轴名
+                <tspan
+                  className="radar_lbl_fs"
+                  fill="#a6e22e"
+                  fontWeight="bold"
+                  style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS }}
+                >
+                  {d.labelValue}
+                </tspan>
+              ) : (
+                <tspan
+                  className="radar_lbl_fs"
+                  fill={gradeColor(d.grade)}
+                  fontWeight="bold"
+                  style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS }}
+                >
+                  {d.grade}
+                </tspan>
+              )}
               <tspan
                 className="radar_lbl_fs"
                 x={lx}
@@ -169,17 +213,50 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: RadarPoint[]; /
       </svg>
       {tip && (
         <div className="radar_tip" style={tipStyle}>
-          {tip.grade === "?" ? (
-            "暂无成绩"
-          ) : tip.beatPct >= 100 ? (
-            // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 vr_tip 统一）；
-            // 判定用真实排位（beatPct：无人更优），非绘图用的档位插值 percent
-            <span className="tip_first">全网第一</span>
-          ) : (
-            <>
-              超过 <em>{tip.beatPct}%</em> 的玩家
-            </>
-          )}
+          {(() => {
+            // hover 数据行（2026-11-10 20:40 张老师定）：有 tipValue（活跃雷达）或
+            // tipScore（实力雷达）时在「超过 xx%」上方显示具体数据行。
+            // 活跃雷达数值绿 tip_green、0 值亮灰 tip_zero；实力雷达记录数字元帅金 tip_gold
+            const hasData = tip.tipValue !== undefined || tip.tipScore !== undefined;
+            const beatLine =
+              tip.grade === "?" ? (
+                "暂无成绩"
+              ) : tip.beatPct >= 100 ? (
+                // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 vr_tip 统一）；
+                // 判定用真实排位（beatPct：无人更优），非绘图用的档位插值 percent
+                <span className="tip_first">全网第一</span>
+              ) : (
+                <>
+                  超过 <em>{tip.beatPct}%</em> 的玩家
+                </>
+              );
+            if (!hasData) {
+              // 老形态（无数据行）：实力雷达无成绩/纯百分位（兼容历史调用方）
+              return tip.grade === "?" ? "暂无成绩" : beatLine;
+            }
+            // 两行形态：数据行 + 恒显的下排行（0% 也是真实百分位，2026-11-10 20:41 张老师
+            // 点名「并列 0% 也要显示第二行」——beatPct>0 条件已删）；下排 <br/> 分隔，
+            // 两行各自 nowrap 永不折行
+            return (
+              <>
+                {tip.tipValue !== undefined ? (
+                  <>
+                    {tip.tipLabel}{" "}
+                    <em className={tip.tipValue.split(" ")[0] === "0" ? "tip_zero" : "tip_green"}>
+                      {tip.tipValue.split(" ")[0]}
+                    </em>{" "}
+                    {tip.tipValue.split(" ")[1]}
+                  </>
+                ) : (
+                  <>
+                    {tip.tipPrefix ?? tip.name} <em className="tip_gold">{tip.tipScore}</em>
+                  </>
+                )}
+                <br />
+                {tip.grade === "?" ? "暂无成绩" : beatLine}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

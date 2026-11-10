@@ -73,14 +73,19 @@ export async function POST(req: NextRequest) {
   // 活跃点（2026-11-08）：服务端逐盘计点（口径单一来源 lib/actpoints.ts，
   // 与练习页客户端实时 +N 共用同一函数），败局也按 3BV 完成情况可能得分
   const pts = practiceActPoints(level, wonInt === 1, bbbv, solvedBv);
+  // 分级别活跃点（2026-11-10 21:28 张老师定：活跃雷达初/中/高标签对齐活跃指数总分；
+  // 自定义胜局与初级同权重进 ptsBeg——地区活跃指数同口径）
+  const ptsBeg = level === "beg" || level === "cus" ? pts : 0;
+  const ptsInt = level === "int" ? pts : 0;
+  const ptsExp = level === "exp" ? pts : 0;
   // 原子 UPSERT：当日当用户无行则新建，有行则计数自增（并发局也安全）
   await prisma.$executeRaw`
     INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp,
-      wins_beg, wins_int, wins_exp, wins_cus, act_points,
+      wins_beg, wins_int, wins_exp, wins_cus, act_points, pts_beg, pts_int, pts_exp,
       mode_ranked, mode_nf, mode_ng, mode_sq, mode_combo,
       sw_qmark, sw_stats, sw_sndfb, sw_shot, sw_qretry, sw_wheel, sw_pixel, create_time, update_time)
     VALUES (${day}, ${uid}, 1, ${wonInt}, ${begInc}, ${intInc}, ${expInc},
-      ${winBegInc}, ${winIntInc}, ${winExpInc}, ${winCusInc}, ${pts},
+      ${winBegInc}, ${winIntInc}, ${winExpInc}, ${winCusInc}, ${pts}, ${ptsBeg}, ${ptsInt}, ${ptsExp},
       ${ranked ? 1 : 0}, ${nfOn ? 1 : 0}, ${ngOn ? 1 : 0}, ${sqOn ? 1 : 0}, ${comboOn ? 1 : 0},
       ${swQmark ? 1 : 0}, ${swStats ? 1 : 0}, ${swSndfb ? 1 : 0}, ${swShot ? 1 : 0}, ${swQretry ? 1 : 0}, ${swWheel ? 1 : 0}, ${swPixel ? 1 : 0}, ${now}, ${now})
     ON DUPLICATE KEY UPDATE
@@ -94,6 +99,9 @@ export async function POST(req: NextRequest) {
       wins_exp = wins_exp + ${winExpInc},
       wins_cus = wins_cus + ${winCusInc},
       act_points = act_points + ${pts},
+      pts_beg = pts_beg + ${ptsBeg},
+      pts_int = pts_int + ${ptsInt},
+      pts_exp = pts_exp + ${ptsExp},
       mode_ranked = mode_ranked + ${ranked ? 1 : 0},
       mode_nf = mode_nf + ${nfOn ? 1 : 0},
       mode_ng = mode_ng + ${ngOn ? 1 : 0},

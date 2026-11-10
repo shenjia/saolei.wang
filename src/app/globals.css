@@ -2504,6 +2504,20 @@ del[data-tip]:hover::after {
   font-weight: bold;
   color: #E6DB74;
 }
+/* 活跃雷达气泡数值颜色（2026-11-10 张老师定）：有值绿 tip_green（与折线同色 #a6e22e）、
+   0 值亮灰 tip_zero（#b1b1a4）；实力雷达 hover 数据行记录值元帅金 tip_gold（#e6db74） */
+#page .radar .radar_tip em.tip_green,
+#page .vs_radar .radar_tip em.tip_green {
+  color: #a6e22e;
+}
+#page .radar .radar_tip em.tip_zero,
+#page .vs_radar .radar_tip em.tip_zero {
+  color: #b1b1a4;
+}
+#page .radar .radar_tip em.tip_gold,
+#page .vs_radar .radar_tip em.tip_gold {
+  color: #e6db74;
+}
 
 /* 录像详情页「录像分析」六维雷达（2026-10-14）
    气泡走 HTML 绝对定位（SVG 内元素不支持 ::after，用不了 data-tip 那套 content: attr()），

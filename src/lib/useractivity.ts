@@ -35,40 +35,47 @@ function unionSql(): string {
   return `SELECT g.uid uid,
          COALESCE(SUM(g.cb), 0) cb, COALESCE(SUM(g.ci), 0) ci, COALESCE(SUM(g.ce), 0) ce,
          COALESCE(SUM(g.cc), 0) cc, COALESCE(SUM(g.pts), 0) pts, COALESCE(SUM(g.vs), 0) vs,
-         COALESCE(SUM(g.lp), 0) lp, COALESCE(SUM(g.wp), 0) wp
+         COALESCE(SUM(g.lp), 0) lp, COALESCE(SUM(g.wp), 0) wp,
+         COALESCE(SUM(g.pb), 0) pb, COALESCE(SUM(g.pi), 0) pi, COALESCE(SUM(g.pe), 0) pe,
+         COALESCE(SUM(g.vb), 0) vb, COALESCE(SUM(g.vi), 0) vi, COALESCE(SUM(g.ve), 0) ve
        FROM (
          SELECT p.user_id uid, SUM(p.wins_beg) cb, SUM(p.wins_int) ci, SUM(p.wins_exp) ce,
-                0 cc, SUM(p.act_points) pts, 0 vs, 0 lp, 0 wp
+                0 cc, SUM(p.pts_beg) + SUM(p.pts_int) + SUM(p.pts_exp) pts, 0 vs, 0 lp, 0 wp,
+                SUM(p.pts_beg) pb, SUM(p.pts_int) pi, SUM(p.pts_exp) pe,
+                0 vb, 0 vi, 0 ve
          FROM practice_daily p JOIN user u ON u.id = p.user_id AND u.status = 0
          WHERE p.user_id > 0 AND p.day >= ?
          GROUP BY p.user_id
          UNION ALL
          SELECT v.user uid, SUM(v.level = 'beg') cb, SUM(v.level = 'int') ci, SUM(v.level = 'exp') ce,
-                0 cc, 0 pts, SUM(v.level = 'beg') + 2 * SUM(v.level = 'int') + 10 * SUM(v.level = 'exp') vs, 0 lp, 0 wp
+                0 cc, 0 pts, SUM(v.level = 'beg') + 2 * SUM(v.level = 'int') + 10 * SUM(v.level = 'exp') vs, 0 lp, 0 wp,
+                0 pb, 0 pi, 0 pe,
+                SUM(v.level = 'beg') vb, SUM(v.level = 'int') vi, SUM(v.level = 'exp') ve
          FROM video v
          JOIN video_info vi ON vi.id = v.id AND vi.software <> 'Saolei.wang'
          JOIN user u ON u.id = v.user AND u.status = 0
          WHERE v.status <> 0 AND v.create_time >= ?
          GROUP BY v.user
          UNION ALL
-         SELECT c.user uid, 0 cb, 0 ci, 0 ce, COUNT(*) cc, 0 pts, 0 vs, 0 lp, 0 wp
+         SELECT c.user uid, 0 cb, 0 ci, 0 ce, COUNT(*) cc, 0 pts, 0 vs, 0 lp, 0 wp, 0 pb, 0 pi, 0 pe, 0 vb, 0 vi, 0 ve
          FROM comment c JOIN user u ON u.id = c.user AND u.status = 0
          WHERE c.status = 0 AND c.create_time >= ?
          GROUP BY c.user
          UNION ALL
-         SELECT r.user uid, 0 cb, 0 ci, 0 ce, COUNT(*) cc, 0 pts, 0 vs, 0 lp, 0 wp
+         SELECT r.user uid, 0 cb, 0 ci, 0 ce, COUNT(*) cc, 0 pts, 0 vs, 0 lp, 0 wp, 0 pb, 0 pi, 0 pe, 0 vb, 0 vi, 0 ve
          FROM bbs_reply r JOIN user u ON u.id = r.user AND u.status = 0
          WHERE r.status = 0 AND r.create_time >= ?
          GROUP BY r.user
          UNION ALL
-         SELECT w.user_id uid, 0 cb, 0 ci, 0 ce, 0 cc, 0 pts, 0 vs, COUNT(*) lp, 0 wp
+         SELECT w.user_id uid, 0 cb, 0 ci, 0 ce, 0 cc, 0 pts, 0 vs, COUNT(*) lp, 0 wp, 0 pb, 0 pi, 0 pe, 0 vb, 0 vi, 0 ve
          FROM user_daily_visit w FORCE INDEX (user_daily_visit_day_user_id_idx)
          JOIN user u ON u.id = w.user_id AND u.status = 0
          WHERE w.day >= ?
          GROUP BY w.user_id
          UNION ALL
          SELECT t.user_id uid, 0 cb, 0 ci, 0 ce, 0 cc, 0 pts, 0 vs, 0 lp,
-                ROUND(SUM(t.watch_ms) / 60000) wp
+                ROUND(SUM(t.watch_ms) / 60000) wp,
+                0 pb, 0 pi, 0 pe, 0 vb, 0 vi, 0 ve
          FROM user_watch_daily t FORCE INDEX (user_watch_daily_day_user_id_watch_ms_idx)
          JOIN user u ON u.id = t.user_id AND u.status = 0
          WHERE t.day >= ?
@@ -106,9 +113,11 @@ export async function refreshUserActivitySnapshot(): Promise<ActivityRefreshResu
           `INSERT INTO user_activity_snapshot
              (user_id, beg_count, int_count, exp_count, comment_count,
               practice_points, video_points, login_points, watch_points, active_points,
+              beg_pts, int_pts, exp_pts,
               window_start, window_end, update_time)
            SELECT t.uid, t.cb, t.ci, t.ce, t.cc, t.pts, t.vs, t.lp, t.wp,
                   t.pts + t.vs + t.cc + t.lp + t.wp,
+                  t.pb + t.vb, t.pi + 2 * t.vi, t.pe + 10 * t.ve,
                   0, 0, 0
            FROM (${unionSql()}) t`,
           dayW,

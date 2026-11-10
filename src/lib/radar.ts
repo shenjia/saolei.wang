@@ -24,6 +24,10 @@ export interface RadarPoint {
   beatPct: number;
   /** 等级，如 SSS / A+ / B- / ? */
   grade: string;
+  /** hover 数据行前缀（2026-11-10 20:40 张老师定）：如「初级Time」——缺省用轴名 */
+  tipPrefix?: string;
+  /** hover 数据行记录值（元帅金 #e6db74 显示）：如 46.650 / 5.832；无成绩不传 */
+  tipScore?: string;
 }
 
 const RADAR_LEVELS: Level[] = ["sum", "exp", "int", "beg"];
@@ -35,9 +39,10 @@ const LEVEL_NAMES: Record<Level, string> = {
   exp: "高级",
   sum: "总计",
 };
-// 雷达图维度名从简（张老师 2026-09-23：去掉「记录」二字），与 config.ORDER_NAMES 区分
+// 雷达图维度名从简（张老师 2026-09-23：去掉「记录」二字），与 config.ORDER_NAMES 区分。
+// 2026-11-10 20:40 张老师定：「时间」→「Time」（轴名与 hover 数据行前缀同源）
 const ORDER_NAMES: Record<Order, string> = {
-  time: "时间",
+  time: "Time",
   "3bvs": "3BV/s",
 };
 
@@ -124,17 +129,19 @@ export async function getRadarData(
       const raw = scores[`${level}_${order}`]?.score ?? 0;
       const dist = distribution[`${level}_${order}`] ?? [];
       const direction = ORDER_DIRECTION[order];
+      // beg 3bvs=0 合法（allowZero），有 beg time 成绩即有数据行
+      const hasScore =
+        raw > 0 || (level === "beg" && order === "3bvs" && (scores.beg_time?.score ?? 0) > 0);
+      const scoreText = order === "time" ? scoreTime(raw) : score3bvs(raw);
       points.push({
         name: LEVEL_NAMES[level] + ORDER_NAMES[order],
-        score:
-          raw > 0 || (level === "beg" && order === "3bvs" && (scores.beg_time?.score ?? 0) > 0)
-            ? order === "time"
-              ? scoreTime(raw)
-              : score3bvs(raw)
-            : "无",
+        score: hasScore ? scoreText : "无",
         percent: radarPercent(raw, dist, direction),
         beatPct: beatPct[`${level}_${order}`] ?? 0,
         grade: radarGrade(raw, dist, direction),
+        // hover 数据行（2026-11-10 20:40 张老师定）：格式「初级Time 46.650」
+        tipPrefix: LEVEL_NAMES[level] + ORDER_NAMES[order],
+        tipScore: hasScore ? scoreText : undefined,
       });
     }
   }

@@ -1080,6 +1080,12 @@ model PracticeDaily {
   // （胜局恒=10）；自定义胜=1（无固定难度防刷）。起记日 2026-11-08，7 日窗口一周自然补齐。
   // 调口径只需改 track/practice 计点函数，存量不重算（与 wins 分级列同先例）。
   actPoints  Int    @default(0) @map("act_points") // 当日活跃点累计（逐盘累加）
+  // 分级别活跃点（2026-11-10 21:28 张老师定：活跃雷达初/中/高标签点数须与活跃指数
+  // 总分严格对齐——败局完成率折扣点（actpoints.ts）无法从 wins/plays 反推，逐盘分级落列。
+  // 初级列含自定义胜局 1 点（同权重）；历史行已回填（胜局点+折扣点按级别归集）
+  ptsBeg     Int    @default(0) @map("pts_beg")
+  ptsInt     Int    @default(0) @map("pts_int")
+  ptsExp     Int    @default(0) @map("pts_exp")
   // 模式使用盘数（2026-10-27 张老师定：后台模式使用比例柱状图；可叠加，五列之和可 > plays）
   modeRanked Int    @default(0) @map("mode_ranked") // 排名模式
   modeNf     Int    @default(0) @map("mode_nf") // NF（无标）
@@ -1152,10 +1158,24 @@ model UserActivitySnapshot {
   loginPoints    Int    @default(0) @map("login_points") @db.UnsignedInt
   watchPoints    Int    @default(0) @map("watch_points") @db.UnsignedInt
   activePoints   Int    @default(0) @map("active_points") @db.UnsignedInt
+  // 练习分级别活跃点数（2026-11-10 21:28 张老师定：活跃雷达初/中/高标签显示
+  // 「该级别练习点 + 录像加权点」，与活跃指数总分严格对齐；败局完成率折扣点
+  // 无法从盘数反推（actpoints.ts 口径），必须落列）
+  begPts         Int    @default(0) @map("beg_pts") @db.UnsignedInt
+  intPts         Int    @default(0) @map("int_pts") @db.UnsignedInt
+  expPts         Int    @default(0) @map("exp_pts") @db.UnsignedInt
   windowStart    BigInt @map("window_start") @db.BigInt
   windowEnd      BigInt @map("window_end") @db.BigInt
   updateTime     BigInt @map("update_time") @db.BigInt
 
+  // 2026-11-10 张老师需求「个人主页活跃雷达」：六数据列名次评级（getActiveRadar
+  // COUNT/SUM 走索引）。active_points 索引为榜单默认序，本组为活跃雷达专用。
+  @@index([begCount(sort: Desc), userId])
+  @@index([intCount(sort: Desc), userId])
+  @@index([expCount(sort: Desc), userId])
+  @@index([commentCount(sort: Desc), userId])
+  @@index([watchPoints(sort: Desc), userId])
+  @@index([loginPoints(sort: Desc), userId])
   @@index([activePoints(sort: Desc), userId])
   @@map("user_activity_snapshot")
 }
