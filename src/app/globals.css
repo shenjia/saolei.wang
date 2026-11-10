@@ -5627,7 +5627,7 @@ body #page.ranking_old .ranking_box {
    数据列预留 4 位数字宽，姓名列吃剩余空间；min-width 保证窄屏横滑时姓名列不压没 */
 .active_table {
   table-layout: fixed;
-  min-width: 700px;
+  min-width: 780px;
 }
 /* 活跃指数命中列整列绿色（2026-11-02 张老师要求；战力指数仍金色；2026-11-09 活跃榜同口径；
    2026-11-10 地区内页活跃列 c_act 命中同口径——绿压金） */

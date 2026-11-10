@@ -273,20 +273,20 @@ export function ActiveFeed({
   return (
     <div className="rank_scroll">
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table active_table">
-        {/* 全列定宽（2026-11-10 张老师要求：切排序表宽不跳）——table-layout:fixed 下
-            列宽只由 col 决定，与单元格内容解耦；数据列预留 4 位数字宽（9999 实测 31.2px，
-            +单元格左右 padding 4px，取 44px 留余量）；活跃指数列由表头 4 字（56+4）定 60；
-            排名列按 4 位名次「第 9999 位」实测 70.9 定 72；地区 64 容 3 字地区名；
-            姓名列不设宽吃剩余空间，min-width 700（globals）保证窄屏横滑时姓名不压没 */}
+        {/* 全列定宽（2026-11-10 张老师要求：切排序表宽不跳；二轮定「各列均匀」）——
+            table-layout:fixed 下列宽只由 col 决定，与单元格内容解耦；数据列统一 64px
+            （预留 4 位数字 31.2px 绰绰有余，与原摊宽 70 观感接近），排名 72（容 4 位
+            名次「第 9999 位」实测 70.9）、地区 64、军衔 116；姓名列不设宽吃剩余空间
+            （桌面 ~222），min-width 780（globals）保证窄屏横滑时姓名不压没 */}
         <colgroup>
           <col style={{ width: 72 }} />
           <col style={{ width: 64 }} />
           <col />
           <col style={{ width: 116 }} />
           {ACTIVE_COLS.filter((c) => c.by !== "act").map((c) => (
-            <col key={c.by} style={{ width: 44 }} />
+            <col key={c.by} style={{ width: 64 }} />
           ))}
-          <col style={{ width: 60 }} />
+          <col style={{ width: 64 }} />
         </colgroup>
         <thead>
           <tr>
