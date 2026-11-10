@@ -6630,6 +6630,21 @@ body #page.two_columns li.main {
     display: none;
   }
 
+  /* ⑦+ 实力+活跃并排一行（2026-11-10 张老师要求）：此前两图上下各占一行显空。
+     .radar_pair 包两份主栏副本（与录像页 ⑤++ .radar_perf_row 同思路），≤880
+     转 flex 并排：实力左、活跃右（DOM 顺序即视觉顺序），各 flex:1；实力副本
+     按门槛条件渲染，缺席时活跃自然独占整行（等价旧行为）。
+     盒间不留 gap——.box 自带 margin:16px 8px，两盒相邻共 16px 已够；
+     两盒 .radar_tip_wrap 234 出血盒在半宽盒内放得下（盒内容 ≈230，出血吃 padding）。 */
+  body #page.two_columns #user_view .radar_pair {
+    display: flex;
+    align-items: stretch;
+  }
+  body #page.two_columns #user_view .radar_pair .radar_main {
+    flex: 1 1 0;
+    width: auto;
+  }
+
   /* ⑧ 录像列表页「热门录像」低宽度隐藏（2026-10-13 张老师要求）：≤880 单列带内
      侧栏落到主栏下方，热门录像不再显示；「统计」板块保留。
      用 .video_old 与录像详情页（two_columns 无 .video_old）、论坛/首页隔离开。 */
@@ -15330,8 +15345,8 @@ body #page.rating_page .rating_standard .rating_note {
    阵营式 BV 网格：我胜的 BV 绿色升序靠左 / 对方胜的玫瑰红升序靠右 / 独有与平局居中；
    全页主色：我方绿 #a6e22e、对方玫瑰红 #e34f8c、胜者金 #fdc61a。 */
 
-/* 入口按钮（2026-11-09 三轮定）：loading.io 交叉双剑彩色原图标，默认灰度变暗——
-   可用时≈亮灰 #b1b1a4、不可用时≈暗灰 #4a4a41；hover 恢复彩色并「尺寸跳动一下」
+/* 入口按钮（2026-11-10 四轮定）：VS 战斗字标原图（public/icons/clash.png），默认
+   灰度+半透明降对比（白字≈中灰、黑色投影块软化），hover 恢复彩色并「尺寸跳动一下」
    （back-out 回弹缓动的 scale 放大），与对话气泡按钮同交互。
    ⚠️ transform 只加在按钮本体：发信浮窗遮罩 .msg_overlay 是按钮的兄弟节点，
    不受按钮 transform 影响（.ucd_msg 包装 span 仍禁 transform，理由见 2391 注释） */
@@ -15352,33 +15367,85 @@ span.vs_btn {
   transform: scale(1);
   transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
   /* filter/opacity 只放图标本体：放按钮本体会把 ::after hover 气泡一起滤灰
-     （2026-11-10 张老师对比：msg_btn 气泡色正常、vs_btn 气泡发暗） */
+     （2026-11-10 张老师对比：msg_btn 气泡色正常、vs_btn 气泡发暗）。
+     2026-11-10 VS 字标：非 hover 灰度+半透明（白字压成中灰、黑色投影块边缘软化），
+     hover 恢复原色原亮度——张老师反馈「黑色部分灰度也挺刺眼，非 hover 需降低对比度」 */
 }
 a.vs_btn svg,
 span.vs_btn svg {
   width: 20px;
   height: 20px;
   display: block;
-  filter: grayscale(1) brightness(0.92); /* 彩色图标灰度化后≈亮灰 */
-  transition: filter 0.15s;
 }
-a.vs_btn:hover svg,
+/* 2026-11-10：图标改用原图 PNG（public/icons/clash.png，裁留白保比例版），
+   20px 宽展示，height:auto 防拉伸变形；灰度/半透明与 hover 恢复都在图标上做
+   （filter 在按钮本体时会连带伪元素气泡一起被滤，2026-11-10 张老师实测） */
+a.vs_btn img,
+span.vs_btn img {
+  width: 20px;
+  height: auto;
+  display: block;
+  filter: grayscale(1);
+  opacity: 0.55;
+  transition: filter 0.15s, opacity 0.15s;
+}
+a.vs_btn:hover {
+  transform: scale(1.25); /* hover 尺寸跳动一下（back-out 回弹），与对话气泡按钮同交互；
+                             ::after 气泡属按钮子树，随按钮一起放大（2026-11-10 张老师要求） */
+}
 a.vs_btn:hover img {
   filter: none; /* hover 恢复彩色 */
+  opacity: 1;
 }
 span.vs_btn--disabled {
-  cursor: default;
+  cursor: not-allowed; /* 2026-11-10 张老师要求：与对话气泡按钮灰置态一致，hover 出禁用标记 */
 }
-span.vs_btn--disabled svg,
+/* 看自己（2026-11-10 张老师要求）：尽可能不显眼——不加深（brightness 会发黑），
+   改用低透明度弱化到几乎隐入背景；hover 不变色不跳动，指针给禁用标记 */
 span.vs_btn--disabled img {
-  filter: grayscale(1) brightness(0.42); /* 不可用≈暗灰 */
+  filter: grayscale(1);
+  opacity: 0.2; /* 2026-11-10 张老师定：0.20 弱化 */
 }
 span.vs_btn--disabled:hover {
   transform: scale(1);
 }
-span.vs_btn--disabled:hover svg,
 span.vs_btn--disabled:hover img {
-  filter: grayscale(1) brightness(0.42);
+  filter: grayscale(1);
+  opacity: 0.2;
+}
+
+/* 用户主页「实力」雷达右上角 VS 入口（2026-11-10 张老师要求）：从玩家面板气泡右侧
+   迁来，图标加大（20→28）更明显。绝对定位钉在盒右上角，与 title（h2）视觉对称：
+   右边距 30px = .box padding 30（= title 左边距）；垂直方向按钮中心对齐 h2 盒中心
+   （实测 h2 盒中心 ≈50.5，按钮 34 高 → top 33）。
+   z-index 3 与 h2 star_help 同级——雷达扇形热区会外扩到标题区，入口必须压在其上。
+   data-tip hover 气泡沿用 8771 起的 ::after（向上弹，雷达盒上方是页间空隙不裁切）。
+   主栏副本（≤880 .radar_main）与侧栏原件同规则生效 */
+#user_view .radar.box {
+  position: relative;
+}
+#user_view .radar.box .vs_btn {
+  position: absolute;
+  top: 33px;
+  right: 30px;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+}
+/* 雷达角标态图标更大 + 更淡（2026-11-10 张老师要求：透明度较基础态 0.55 再降一半
+   ≈0.28，灰度底上不再刺眼）；⚠️ 本规则特异性压过基础/hover/灰置全部 img 规则，
+   hover 恢复彩色与灰置更淡必须在此同特异性重写，否则被 0.28 恒压 */
+#user_view .radar.box .vs_btn img {
+  width: 28px;
+  opacity: 0.28;
+}
+#user_view .radar.box a.vs_btn:hover img {
+  filter: none;
+  opacity: 0.5; /* 2026-11-10 张老师要求：hover 也太亮，亮度降一半（保留彩色恢复+回弹放大） */
+}
+#user_view .radar.box span.vs_btn--disabled img {
+  opacity: 0.14;
 }
 
 /* ① 对战主视觉（2026-11-09 二轮改版）：#page.main 标准宽度下，左右两个独立

@@ -67,6 +67,8 @@ import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { SendMessageButton } from "@/components/SendMessageButton";
+// VS 对战入口（2026-11-10 张老师定：实力板块右上角，桌面/移动双副本同款）
+import { VsButton } from "@/components/VsButton";
 import { BbvCollection } from "@/components/BbvCollection";
 import { UserSigs } from "@/components/UserSigs";
 
@@ -473,20 +475,30 @@ export default async function UserViewPage({
             )}
           </div>
         </div>
-        {/* 2026-10-13 张老师要求：窄屏（≤880 单列化）时「实力」雷达移到玩家面板下、
-            动态上——主栏这份副本桌面端 display:none，≤880 显示并隐藏侧栏原件
-            （globals.css .radar_main 规则）；桌面端仍在侧栏顶部 */}
-        {detail.stat &&
-          detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
-            <div className="radar box radar_main">
-              <h2>实力{ratingHelpLink}</h2>
-              <RadarChart data={radar} />
-            </div>
-          )}
-
-        <div className="radar box radar_main">
-          <h2>活跃</h2>
-          <RadarChart data={activeRadar} accent="#a6e22e" />
+        {/* 2026-10-13 张老师要求：窄屏（≤880 单列化）时「实力」「活跃」雷达移到玩家面板下、
+            动态上——主栏这两份副本桌面端 display:none，≤880 显示并隐藏侧栏原件
+            （globals.css .radar_main 规则）。
+            2026-11-10 张老师要求：两图并排一行（实力左、活跃右），.radar_pair 包裹转 flex；
+            桌面两子盒都隐藏，包裹层不渲染任何东西。 */}
+        <div className="radar_pair">
+          {detail.stat &&
+            detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
+              <div className="radar box radar_main">
+                {/* VS 入口（2026-11-10 张老师要求）：实力板块右上角，桌面/移动双副本同款 */}
+                <VsButton to={userId} viewerId={session?.uid ?? 0} sex={user.sex} />
+                <h2>实力{ratingHelpLink}</h2>
+                <RadarChart data={radar} />
+              </div>
+            )}
+          {/* 「活跃」雷达（2026-11-10 张老师需求）：实力板块右侧并排；六维=活跃排行六个
+              数据列（初中高盘数/观看/评论/登录，近 7 日快照），按列名次 23 档评级，无活跃值恒 F。
+              与「实力」同款双副本机制：本份主栏副本桌面 display:none（globals.css .radar_main
+              规则对 #user_view 通用），≤880 单列化时在玩家面板下方亮起、侧栏原件隐藏；
+              六维全 0 也恒显示（22:30 张老师定） */}
+          <div className="radar box radar_main">
+            <h2>活跃</h2>
+            <RadarChart data={activeRadar} accent="#a6e22e" />
+          </div>
         </div>
         {/* 「纪录」板块（2026-11-06 张老师需求，11-37 二改：放动态板块上面）——个人纪录进步历程，
             级别筛选靠 title（默认总计）+ 指标筛选靠右（默认 Time），图表复刻
@@ -531,10 +543,12 @@ export default async function UserViewPage({
         <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
       </li>
       <li className="sidebar">
-        {/* 2026-09-24 张老师要求：没有上传过录像的玩家不显示「实力」雷达板块 */}
+        {/* 2026-09-24 张老师要求：没有上传过录像的玩家不显示「实力」雷达板块。
+            VS 入口（2026-11-10 张老师要求）：实力板块右上角，与主栏副本同款 */}
         {detail.stat &&
           detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
             <div className="radar box">
+              <VsButton to={userId} viewerId={session?.uid ?? 0} sex={user.sex} />
               <h2>实力{ratingHelpLink}</h2>
               <RadarChart data={radar} />
             </div>
