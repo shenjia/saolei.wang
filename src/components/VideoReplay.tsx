@@ -61,8 +61,28 @@ import { gradeColor, radarOverall as overallGrade, radarPointsFrom } from "@/lib
    开关落模块级单例 replaySndOn：页面态引擎/全屏层/后台审核 standalone 三处
    引擎共用同一开关（同一时刻只有一处回放在跑）；Audio 按src单例缓存复用同一
    元素（快速连发 currentTime=0 从头重放，无叠加爆音），play() 被拒（自动播放
-   策略）时静默。sndPopIdx 模块级循环（不落盘，每次进页从 pop1 起步） */
-let replaySndOn = true;
+   策略）时静默。sndPopIdx 模块级循环（不落盘，每次进页从 pop1 起步）。
+   持久化（2026-11-10 张老师需求：开关存 localStorage，每个录像都生效）：
+   全局一份 video_replay_snd（与 video_replay_fs_zoom 同风格），初始读、切换写；
+   SSR（localStorage 不存在）/隐私模式/脏值一律回退默认开 */
+const SND_LS_KEY = "video_replay_snd";
+function readSndPref(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  try {
+    return localStorage.getItem(SND_LS_KEY) !== "0";
+  } catch {
+    return true; /* 隐私模式等：默认开 */
+  }
+}
+function writeSndPref(v: boolean) {
+  replaySndOn = v;
+  try {
+    localStorage.setItem(SND_LS_KEY, v ? "1" : "0");
+  } catch {
+    /* 隐私模式/超限：内存态仍生效，仅不持久化 */
+  }
+}
+let replaySndOn = readSndPref();
 let sndPopIdx = 0;
 const sndCache = new Map<string, HTMLAudioElement>();
 function playSnd(src: string) {
@@ -2126,15 +2146,16 @@ export function VideoReplayProvider({
      要复位而轨迹只是观图辅助——保留更顺手） */
   const [traj, setTraj] = useState(false);
   const toggleTraj = useCallback(() => setTraj((v) => !v), []);
-  /* 回放音效开关（2026-11-10 张老师需求）：默认开（默认永远为打开，不落盘）；
-     初始读模块级 replaySndOn（同会话软导航重挂时保留上次选择）；切换即写
-     模块变量，引擎事件入口现读即时生效。消费侧（ReplayBar 按钮）只在回放中
+  /* 回放音效开关（2026-11-10 张老师需求）：默认开；初始读模块级 replaySndOn
+     （首挂载即 localStorage 值——全局一份开关，每个录像都生效，同会话软导航
+     重挂也保留上次选择）；切换即写模块变量+localStorage（跨录像跨会话持久），
+     引擎事件入口现读即时生效。消费侧（ReplayBar 按钮）只在回放中
      渲染（用户交互后），SSR 水印无差 */
   const [snd, setSnd] = useState(replaySndOn);
   const toggleSnd = useCallback(() => {
     /* 模块变量在 updater 外同步写：回放引擎 rAF 帧随时可能出声，setState 的
        updater 要等 React 调度，竞态窗口会漏一声（实测关声音瞬间多播一次旗声） */
-    replaySndOn = !replaySndOn;
+    writeSndPref(!replaySndOn);
     setSnd(replaySndOn);
   }, []);
   /* 笑脸状态（十七期）：回放引擎 onFace 直通——全屏层计数条消费；
@@ -3271,12 +3292,13 @@ export function ReplayFullscreen({
   /* standalone 播放倍速（2026-11-05 张老师需求）：与 fsEngine setSpeed 直连 */
   const [fsSpeed, setFsSpeed] = useState(1);
   /* standalone 声音开关（2026-11-10 张老师需求）：无 Provider 自持一份，
-     初始读模块级 replaySndOn（默认开），切换即写模块变量（引擎现读生效）。
+     初始读模块级 replaySndOn（＝localStorage 持久值，默认开），切换即写
+     模块变量+localStorage（跨录像跨会话生效）。
      fullscreen 层只在用户交互后渲染，SSR 水印无差 */
   const [fsSnd, setFsSnd] = useState(replaySndOn);
   const fsToggleSnd = useCallback(() => {
     /* 同 Provider toggleSnd：模块变量 updater 外同步写，防 rAF 抢跑漏声 */
-    replaySndOn = !replaySndOn;
+    writeSndPref(!replaySndOn);
     setFsSnd(replaySndOn);
   }, []);
   const fsEngineRef = useRef<Engine | null>(null);
