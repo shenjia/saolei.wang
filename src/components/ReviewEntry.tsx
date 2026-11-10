@@ -4,9 +4,14 @@
 // · 需手审（玫瑰红字中空钮）：直达 /admin/review?status=10&pool=need（需核定池只能逐条手审）。
 // 点击一键过 → 按钮禁用、文案「处理中」+ 转圈动画；完成出绿色气泡「已通过xxx个录像」
 // （条数取服务端回传 done，防部分失败时虚报），随后 router.refresh 重查 getPoolCounts——
-// 还剩手审录像则板块继续显示（总数自动缩为需手审数），没有则整块消失（page.tsx 服务端把关）。
+// 还剩手审录像则板块继续显示（总数自动缩为需手审数），没有则整块消失（组件 total<=0 渲 null）。
 // 桌面 #review_entry 与移动端 #review_entry_top 是同组件两处挂载（CSS 按断点显隐），
 // 处理中状态经 window 事件互相同步，避免一个在转另一个还能点。
+//
+// 2026-11-10 张老师要求：管理员停在首页不必手动刷新——组件恒挂载（page.tsx 管理员登录态
+// 无条件渲染，初值 0 也挂），客户端每 60s（+标签页回到前台时）拉 /api/admin/pending-count
+// 校准 exempt/need 分池计数：有新待审自动出现、清零自动消失。轮询器模块级单例，
+// 桌面/移动两副本只发一个请求；接口 401/403/5xx 时保持上次值不闪零（同后台 PendingCounts 口径）。
 
 "use client";
 
@@ -19,6 +24,57 @@ import { VIDEO_STATUS } from "@/lib/config";
 
 /** 任意副本进入处理中 → 广播给全部副本一起禁用 */
 const BUSY_EVENT = "review-entry-busy";
+/** 分池计数广播事件名（轮询器 → 全部副本） */
+const SYNC_EVENT = "review-entry-counts";
+/** 轮询间隔：与后台外壳校准口径一致（60s） */
+const POLL_MS = 60_000;
+
+/** 分池计数轮询（模块级单例 + 副本引用计数：全部副本卸载即停表，
+ *  管理员客户端导航离开首页后不留孤儿定时器） */
+let polling = false;
+let pollTimer = 0;
+let visHandler: (() => void) | null = null;
+let mounted = 0;
+
+function ensurePolling() {
+  if (polling) return;
+  polling = true;
+  const tick = async () => {
+    try {
+      const res = await fetch("/api/admin/pending-count", { cache: "no-store" });
+      if (!res.ok) return; // 401/403/5xx：保持上次值，不闪归零
+      const d = await res.json();
+      window.dispatchEvent(
+        new CustomEvent(SYNC_EVENT, {
+          detail: { exempt: Number(d.exempt ?? 0), need: Number(d.need ?? 0) },
+        })
+      );
+    } catch {
+      /* 离线 / 网关抖动：静默保留旧值 */
+    }
+  };
+  pollTimer = window.setInterval(() => void tick(), POLL_MS);
+  // 从别的标签页切回来立即校准一次（后台标签 setInterval 被浏览器节流）
+  visHandler = () => {
+    if (document.visibilityState === "visible") void tick();
+  };
+  document.addEventListener("visibilitychange", visHandler);
+}
+
+/** 最后一个副本卸载 → 停轮询、摘监听、复位单例（下回挂载重启） */
+function releasePolling() {
+  mounted -= 1;
+  if (mounted > 0 || !polling) return;
+  polling = false;
+  if (pollTimer) {
+    window.clearInterval(pollTimer);
+    pollTimer = 0;
+  }
+  if (visHandler) {
+    document.removeEventListener("visibilitychange", visHandler);
+    visHandler = null;
+  }
+}
 
 export function ReviewEntry({
   mobile = false,
@@ -41,6 +97,20 @@ export function ReviewEntry({
   useEffect(() => {
     setCounts({ exempt, need });
   }, [exempt, need]);
+
+  // 轮询校准：挂载即启动（引用计数单例），接口回传分池数 → 全副本同步显隐/计数；
+  // 全部副本卸载（离开首页）即停表
+  useEffect(() => {
+    const onSync = (e: Event) =>
+      setCounts((e as CustomEvent<{ exempt: number; need: number }>).detail);
+    window.addEventListener(SYNC_EVENT, onSync);
+    mounted += 1;
+    ensurePolling();
+    return () => {
+      window.removeEventListener(SYNC_EVENT, onSync);
+      releasePolling();
+    };
+  }, []);
 
   // 任一副本开始处理 → 本副本同步禁用
   useEffect(() => {

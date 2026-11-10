@@ -129,11 +129,11 @@ export default async function HomePage() {
   const videoFeedKey = videos.map((v) => `${v.id}:${v.status}`).join("-");
 
   // 待审录像分池计数（2026-10-22 张老师要求：仅管理员登录态查一次；
-  // 2026-11-09 张老师要求拆免核定/需核定双池——免核定可首页一键过，见 ReviewEntry）
-  const poolCounts =
-    session && isManager(session.role)
-      ? await getPoolCounts()
-      : { exempt: 0, need: 0 };
+  // 2026-11-09 张老师要求拆免核定/需核定双池——免核定可首页一键过，见 ReviewEntry；
+  // 2026-11-10 张老师要求：管理员登录态恒挂载 ReviewEntry（初值 0 也挂），组件内
+  // 每 60s 轮询分池计数自动显隐——停在首页不必手动刷新，有新待审自动出现）
+  const isMgr = !!session && isManager(session.role);
+  const poolCounts = isMgr ? await getPoolCounts() : { exempt: 0, need: 0 };
 
   // 今日练习（2026-10-22 张老师要求）：「开始练习」上方板块，
   // 口径与后台仪表盘「今日练习」KPI 一致；未登录 mine=0 只显示全站口径。
@@ -181,10 +181,9 @@ export default async function HomePage() {
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方。
-            2026-11-09 升级一键过/需手审双按钮，桌面与移动同组件两处挂载 */}
-        {poolCounts.exempt + poolCounts.need > 0 && (
-          <ReviewEntry mobile exempt={poolCounts.exempt} need={poolCounts.need} />
-        )}
+            2026-11-09 升级一键过/需手审双按钮，桌面与移动同组件两处挂载；
+            2026-11-10 起管理员登录态恒挂载（初值 0 组件自隐），轮询自动显隐 */}
+        {isMgr && <ReviewEntry mobile exempt={poolCounts.exempt} need={poolCounts.need} />}
         <div id="news" className="box">
           <NewsFeed
             key={newsFeedKey}
@@ -255,10 +254,9 @@ export default async function HomePage() {
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22 张老师要求）：2026-11-09 升级一键过/需手审双按钮
-            （计数金色 + 绿钮免核定池就地批量过审 + 玫瑰红钮直达后台需核定池） */}
-        {poolCounts.exempt + poolCounts.need > 0 && (
-          <ReviewEntry exempt={poolCounts.exempt} need={poolCounts.need} />
-        )}
+            （计数金色 + 绿钮免核定池就地批量过审 + 玫瑰红钮直达后台需核定池）；
+            2026-11-10 起管理员登录态恒挂载（初值 0 组件自隐），每 60s 轮询自动显隐 */}
+        {isMgr && <ReviewEntry exempt={poolCounts.exempt} need={poolCounts.need} />}
         {/* 每日一星（2026-10-25 恢复）：评选在 getTodayStar 内完成（无今日行才选），
             首页首访即触发的旧模式不复活——右栏展示于入伍新兵之上 */}
         <DailyStar />
