@@ -247,7 +247,7 @@ export function CommentSection({
   initial: CommentItem[];
   initialHasMore: boolean;
   initialTotal: number;
-  /** ?comment= 深链定位的评论 id（0=无；消息通知「我评论了您的录像…」落地用） */
+  /** ?comment= 深链定位的评论 id（0=无；消息通知「我评论了你的录像…」落地用） */
   anchorComment?: number;
 }) {
   const [items, setItems] = useState(initial);

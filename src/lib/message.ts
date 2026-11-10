@@ -83,6 +83,12 @@ export async function messageAuthorsWithTitles(ids: number[]): Promise<Map<numbe
  */
 const REPLY_NOTICE_PREFIXES = ["我评论了你的文章", "我回复了你在"] as const;
 
+/** 「评论录像」通知前缀（2026-11-10 张老师要求：新模板「您」改「你」）。
+ *  旧前缀保留兼容改动前已发出的通知与旧站迁移文案（历史消息不回改）；
+ *  通知识别（isNoticeMessage）与撤回（retractVideoCommentNotice）共用此单一来源，
+ *  改文案时漏改其中一处会导致「通知被当私信给回复入口」或「删评论撤不回消息」。 */
+const VIDEO_COMMENT_NOTICE_PREFIXES = ["我评论了你的录像", "我评论了您的录像"] as const;
+
 /** 是否「评论/回复文章」通知（撤回逻辑专用，护栏必须窄） */
 export function isReplyNotice(content: string): boolean {
   return REPLY_NOTICE_PREFIXES.some((p) => content.startsWith(p));
@@ -94,13 +100,15 @@ export function isReplyNotice(content: string): boolean {
  * 寄件人要么是评论者本人、要么是审核机器人，回复过去没有意义：
  *   · 我评论了你的文章… / 我评论了您的高?1.21秒录象!
  *   · 我回复了你在… / 我回复了您发表的主题"…"
- *   · 我评论了您的录像[url /video/…（2026-10-29 新模板，见 format.videoCommentNotice）
+ *   · 我评论了你的录像[url /video/…（2026-11-10 起新模板，见 format.videoCommentNotice；
+ *     改动前的「我评论了您的录像…」同样按通知处理）
  *   · 您上传的高级53.36秒录象已经通过审核! / 您上传的高级56秒录像因为【…】被驳回
  *   · 录像文件损坏：原因是…
  */
 const NOTICE_PREFIXES = [
   "我评论了你的文章",
   "我评论了您",
+  ...VIDEO_COMMENT_NOTICE_PREFIXES,
   "我回复了你在",
   "我回复了您",
   "您上传的",
@@ -290,7 +298,8 @@ export async function retractPostNotices(
  * 撤回「评论录像」通知（2026-10-29，评论删除/录像删除联动——口径同 retractReplyNotice）。
  * 锚点格式（见 format.videoCommentNotice）：`?comment=<cid>#comment-<cid>`，
  * 整段子串精确匹配；三重护栏防误删私信：① from_user 锁发送者=评论者本人
- * ② 前缀锁新模板「我评论了您的录像」③ 锚点整段匹配。
+ * ② 前缀锁录像评论模板（VIDEO_COMMENT_NOTICE_PREFIXES，2026-11-10 改文案前后的两版都认，
+ *    否则改动前发出的通知在删评论时撤不回）③ 锚点整段匹配。
  * 旧站迁移的无链接通知（前缀同样以「我评论了您」开头）不带锚点，
  * contains 匹配不到，天然不会误删——与「不追撤历史」的方针一致。
  */
@@ -304,10 +313,12 @@ export async function retractVideoCommentNotice(
     where: {
       fromUser: BigInt(fromUserId),
       isSystem: false,
-      content: {
-        startsWith: "我评论了您的录像",
-        contains: `?comment=${commentId}#comment-${commentId}`,
-      },
+      OR: VIDEO_COMMENT_NOTICE_PREFIXES.map((prefix) => ({
+        content: {
+          startsWith: prefix,
+          contains: `?comment=${commentId}#comment-${commentId}`,
+        },
+      })),
     },
   });
   if (res.count > 0) console.log(`[message-retract] 撤录像评论 #${commentId} 通知：${res.count} 条`);
