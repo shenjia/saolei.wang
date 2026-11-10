@@ -313,16 +313,17 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 
 > 双方对齐定案（2026-11-08~09）：绑定流程「一边发起、另一边确认」；确认以登录态授权页完成，取代人工审核。
 > **不做 API KEY、不做服务端互调**——凭一次性令牌 + 双方各自公开查询接口完成核验与核销。
-> **同步开关各站落点、默认勾选**（2026-11-09 张老师定）：「开源网→扫雷网」开关在扫雷网授权页
-> （openms_link.consent，默认勾选=1），扫雷网 worker 按它过滤；「扫雷网→开源网」开关在开源站授权页
-> （AccountSaolei.auto_sync，默认 True），开源站 worker 按它过滤。各站管各站方向的同步。
+> **同步口径：两站各抓各的**（2026-11-10 张老师定）：每站只控制自己方面的抓取，管不到另一方。
+> 雷网只存「开源扫雷网录像→雷网」开关（`openms_link.consent`，默认勾选=1），雷网 worker 按它过滤；
+> 开源站是否抓取雷网录像由开源站自己决定，雷网不读写、不存储、不向对方发送该设定，
+> 雷网提供的 `bind-request` / `links` 等接口均不携带任何反方向开关。
 
 ### 3.1 流程
 
 **方向 A：扫雷网发起 → 开源扫雷网授权页确认（主力方向）**
 
 1. 用户在扫雷网账户设置点「绑定开源扫雷网」→ 授权页勾「开源扫雷网录像同步到扫雷网」开关（默认勾选）→ 点「发起绑定」，扫雷网落一行 48 字符一次性 token 的待确认申请（`openms_bind_request`，status=0）
-2. 扫雷网**本页不跳转**：在用户点击的同步栈里新开一个标签页加载 `https://openms.top/#/bind/saolei?token=<token>`（开源扫雷网 SPA 为 hash 路由；授权页凭 3.3① 读取申请者信息，用户登录后勾「扫雷网录像同步到开源扫雷网」开关（默认勾选）并确认）
+2. 扫雷网**本页不跳转**：在用户点击的同步栈里新开一个标签页加载 `https://openms.top/#/bind/saolei?token=<token>`（开源扫雷网 SPA 为 hash 路由；授权页凭 3.3① 读取申请者信息，用户登录后确认。开源站授权页自身的抓取开关属开源站内部设定，雷网不参与、不感知）
 3. 扫雷网发起页同时切为等待态（转圈动画 +「等待开源扫雷网确认授权...」），每 5 秒调一次本站 `POST /api/openms/bind {action:"settle"}`，内部反查开源扫雷网状态 API（见 3.3③）；`status=="confirmed"` 才取回 profile 落 `openms_link` 并把申请置为已核销，其余状态继续等待，申请失效/冲突则终止轮询并提示
 4. 核销成功后显示「绑定成功」并返回扫雷网账户管理页 `/account`；开源扫雷网侧凭 `links` 列表（见 3.2②）拿到 profile↔uid 映射，维护本站绑定关系
 
@@ -332,7 +333,7 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 
 1. 用户在开源站生成一次性 token 并记录申请（profile 关联）
 2. 跳转扫雷网授权页 `https://saolei.wang/account/openms/bind?token=<token>`
-3. 用户登录扫雷网 → 页面核验 token（调开源站 API，见 3.3①）→ 展示申请者 → 用户勾选「开源网录像同步到扫雷网」开关（默认勾选）→ 点「确认绑定」→ 扫雷网落绑定关系
+3. 用户登录扫雷网 → 页面核验 token（调开源站 API，见 3.3①）→ 展示申请者 → 用户勾选「开源扫雷网录像同步到扫雷网」开关（默认勾选）→ 点「确认绑定」→ 扫雷网落绑定关系
 4. 开源站侧核销：定时拉 `GET /api/public/v1/openms/links`，出现自己的 profile 即写入本站绑定关系
 
 ### 3.2 扫雷网提供的接口（无需 key）
@@ -358,7 +359,7 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 }
 ```
 
-全量当前 96 人量级，建议 5~10 分钟拉一次。是否抓取某用户的扫雷网录像由开源站自己的 `AccountSaolei.auto_sync` 决定，本列表不携带同步开关。
+全量当前 96 人量级，建议 5~10 分钟拉一次。是否抓取某用户的扫雷网录像由开源站自行决定（雷网管不到），本列表不携带任何同步开关。
 
 ### 3.3 开源站接口（已实现，随授权页前端同 PR；按其路由惯例挂在 /api/accountlink/saolei/bind/ 下）
 
@@ -374,7 +375,7 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 `status` 为扫雷网侧语义（0=待确认 · 1=已核销 · 2=已取消）；token 无效返回 404。方向 B（开源站发起）需要单独的申请表与发起接口，暂未实现——现 `request` 语义已定为透传，方向 B 落地时另定端点。
 
 **② 授权页确认（方向 A：开源站授权页「确认绑定」按钮调用，需登录态）**
-`POST https://openms.top/api/accountlink/saolei/bind/confirm`（JSON：`token`、`sync`=扫雷网录像同步到开源网开关，默认 true）
+`POST https://openms.top/api/accountlink/saolei/bind/confirm`（JSON：`token`、`sync`=开源站自身「是否抓取该用户扫雷网录像」的开关，默认 true；该参数仅由开源站授权页传给开源站后端，属开源站内部设定，雷网不参与、不感知）
 
 行为：后端凭 token 调扫雷网 `bind-request`（3.2①）核验（非 pending 返回 404）并取回 uid → 在同一业务事务内建 `AccountSaolei(id=uid, parent=当前用户, name=扫雷网用户名, auto_sync=sync)` + `AccountLinkQueue(platform=SAOLEI, identifier=uid, verified=True)`（绑定生效判定两行都要有）；同 uid 已被其他开源站用户绑定、或当前用户已绑定其他扫雷网账户返回 409；同一对绑定重复确认幂等（刷新 name/auto_sync）。事务提交后写入本次令牌的确认凭据（含确认者 ID，TTL 24h）。未登录返回 403。
 
@@ -414,6 +415,9 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
+- 2026-11-10（4）：台账 `openms_video_map` 增加 `attempts` 计数与「放弃」终态（state=3）。临时失败（429/5xx/网络/落库异常）首次后最多再重试 3 次（`--max-retries`），累计 4 次失败即落定放弃、写原因并越过该 ID，避免一条坏录像永久卡住流水线；终态 1/2/3 一律按 video_id 跳过。另：schema 仍保留 `sync_to_openms` 两处字段映射**仅为兼容生产残留列**（代码／API／UI 已零引用）——CI 的 `prisma db push` 遇删列会中止部署、旧 Prisma Client 也会 SELECT 全列；DROP 两列须待新 Client 上线后按「先手工 DROP 生产列、再删 schema 字段」顺序执行。
+- 2026-11-10（3）：方向 A 后台录像同步接入对方定稿接口 `GET /api/accountlink/saolei/unmapped_videos?user_id=&cursor=&count=`（cursor 为 **inclusive** 下界、继续须传 last_id+1；`user_id` 为开源站 UserProfile.id，省略会 504；列表限速 1/2s、下载限速 5/m）；雷网新增 `openms_video_map` 台账，扫到的 video_id 一律入库，已有终态（已导入/已拒收）按 ID 过滤不再重复下载。实现见 `scripts/openms-sync-all.ts`。
+- 2026-11-10（2）：同步口径定为「两站各抓各的、只控制自己方面的抓取」——摘除雷网侧 `sync_to_openms` 设定（`openms_link` / `openms_bind_request` 两列及全部读写、UI 引导），雷网只保留 `openms_link.consent`；反方向由开源站自行决定，雷网不读写、不存储、不发送。
 - 2026-11-10：方向 A 改为「新标签页打开授权页 + 发起页每 5 秒轮询核销」，成功后提示并返回账户管理页；开源扫雷网授权页无需回跳，雷网凭状态 API 反查判定授权结果；settle 增加申请者本人校验。
 - 2026-11-09（6）：`video_info.fileUrl` 改为前台同款下载地址 `/video/download/{id}`（不再暴露 `/videos/…` 静态文件直链；GET 语义不变，直接下载文件本体，每次访问计一次下载，限速档由文件静态 3 req/s 改为通用 10 req/s）。
 - 2026-11-09（5）：新增 `user_search`（姓名关键词搜玩家，返回 id/name/area/avatar/title）与 `ranking`（view=rank/bv/stnb/area 覆盖除世界排行外全部榜单，20 条/页 cursor 翻页，order/nf/area/size 参数；聚合榜失败 503）。

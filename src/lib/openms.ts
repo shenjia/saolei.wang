@@ -48,8 +48,8 @@ export async function setOpenmsConsent(
   return row.count > 0;
 }
 
-/** 绑定后调整同步开关（授权页的开关区；consentOn=false 折算为不同意）。
- * 「扫雷网→开源网」的开关在开源扫雷网侧（其 AccountSaolei.auto_sync），本站不存。 */
+/** 绑定后调整本站唯一的同步开关（consentOn=false 折算为不同意）。
+ * 只管「开源扫雷网录像→雷网」；反方向由开源扫雷网自行决定，本站不存。 */
 export async function setOpenmsPrefs(uid: number, consentOn: boolean): Promise<boolean> {
   const now = BigInt(Math.floor(Date.now() / 1000));
   const row = await prisma.openmsLink.updateMany({
@@ -66,9 +66,10 @@ export async function setOpenmsPrefs(uid: number, consentOn: boolean): Promise<b
 // ---------- 绑定协议 v2（2026-11-09：跳转确认+回来核销，无服务端互调） ----------
 // 雷网发起：账户设置 → 授权页勾开关生成 token → 跳开源扫雷网授权页确认 → 回雷网核销。
 // 开源扫雷网发起：开源扫雷网生成 token → 跳雷网授权页登录确认 → 直接写 openms_link。
-// 开关各站落点（2026-11-09 张老师定，默认勾选）：「开源网→扫雷网」在雷网（openms_link.consent），
-// 「扫雷网→开源网」在开源扫雷网（其 AccountSaolei.auto_sync，默认 True）——本站的 sync_to_openms 列
-// 仅作历史保留，不再写入。协议契约文档：docs/partner-api-openms.md
+// 同步口径（2026-11-10 张老师定）：两站各抓各的、只控制自己方面的抓取。
+// 雷网只存「开源扫雷网录像→雷网」开关（openms_link.consent），由雷网 worker 按它过滤；
+// 开源站是否抓取雷网录像由开源站自己的开关决定，雷网管不到、不读写、不存储、不向对方发送该设定。
+// 协议契约文档：docs/partner-api-openms.md
 
 /** 发起绑定申请：顶掉同用户旧的待确认申请，返回新 token */
 export async function createBindRequest(uid: number, consentOn: boolean): Promise<string> {

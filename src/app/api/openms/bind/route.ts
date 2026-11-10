@@ -1,12 +1,12 @@
 // 绑定协议 v2 · 雷网侧绑定操作（2026-11-09，需登录）
 // POST /api/openms/bind  { action, ... }
-//   create  { consent }            → 发起申请（雷网→开源网方向），返回 token 与开源扫雷网授权页地址
+//   create  { consent }            → 发起绑定申请，返回 token 与开源扫雷网授权页地址
 //   settle  { token }              → 回来核销：查开源扫雷网状态 API，confirmed 则落绑定
 //   confirm { token, consent }     → 确认开源扫雷网发起的申请（雷网授权页确认模式）
 //   update  { consent }            → 已绑定用户调整同步开关
 //
-// 开关口径（2026-11-09 张老师定）：本站唯一开关「开源网→扫雷网」（consent），默认勾选；
-// 「扫雷网→开源网」的开关在开源扫雷网（其 AccountSaolei.auto_sync），本站不收不发。
+// 开关口径（2026-11-10 张老师定）：两站各抓各的，本站唯一开关「开源扫雷网录像→扫雷网」（consent），
+// 默认勾选；反方向由开源扫雷网自行决定，本站不收不发、不存储。
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
