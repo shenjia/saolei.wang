@@ -335,7 +335,16 @@ export default async function UserViewPage({
           {/* 自己的主页：头像可点，点击直接弹文件选择 + 方形裁剪浮窗（不跳账号中心）。
               别人的主页保持原样（裸 <img>，无链接无蒙层），不改动既有 DOM 与样式。 */}
           {isSelf ? (
-            <SelfAvatar src={photo} alt={user.chineseName} pending={avatarPending} defaultSex={user.sex} />
+            <SelfAvatar
+              src={photo}
+              alt={user.chineseName}
+              pending={avatarPending}
+              // ⚠️ 只在解析后确实落到默认图时才传 defaultSex（2026-11-11 修复：
+              //   此前无条件传 sex，军衔制下 SelfAvatar 会拿军装默认头像顶掉
+              //   真实上传头像——自己看自己主页头像「消失」，人神体系正常）。
+              //   与 account/profile 的 isDefaultAvatar 门控同语义。
+              defaultSex={photo === DEFAULT_AVATAR ? user.sex : undefined}
+            />
           ) : (
             photoImg
           )}
