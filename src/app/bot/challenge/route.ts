@@ -80,13 +80,19 @@ faceEl.style.width=(w*16+4)*1.5+"px"}
 function repaint(){if(!B)return;var u=vec.getElementsByTagName("use");
 for(var j=0;j<u.length;j++)u[j].setAttribute("href",sym(+u[j].dataset.i))}
 function showErr(m){errEl.textContent=m||""}
+/* 增量协议 v2（2026-11-10）：走子请求带 base（当前 64 格状态串），响应优先
+   diff 形态；apply 兼容全量回落。省流量：每步 2.4KB → ~1.1KB。 */
+function states(){var s="";for(var k=0;k<B.cells.length;k++)s+=B.cells[k].state;return s}
+function apply(d){if(d.cells){B=d;return}
+for(var k=0;k<d.diff.length;k++){var c=d.diff[k];B.cells[c.i]={state:c.s,num:c.n}}
+B.won=d.won;B.lost=d.lost;B.moves=d.moves}
 async function load(){busy=true;faceEl.disabled=true;showErr("");
 try{var r=await fetch("/api/bot/challenge",{method:"POST",cache:"no-store"});
 if(!r.ok)throw 0;var d=await r.json();token=d.token;B=d;mineCell=-1;render()}catch(e){showErr("开局失败，请重试")}finally{busy=false;faceEl.disabled=false}}async function act(a,i){if(!B||busy||B.won||B.lost)return;busy=true;showErr("");
 try{var r=await fetch("/api/bot/challenge",{method:"PUT",headers:{"Content-Type":"application/json"},
-body:JSON.stringify({token:token,action:a,cell:i}),cache:"no-store"});
+body:JSON.stringify({token:token,action:a,cell:i,base:states()}),cache:"no-store"});
 if(r.status===410){await load();return}
-if(!r.ok)throw 0;var d=await r.json();token=d.token;B=d;mineCell=typeof d.mineCell==="number"?d.mineCell:-1;render();
+if(!r.ok)throw 0;var d=await r.json();token=d.token;apply(d);mineCell=typeof d.mineCell==="number"?d.mineCell:-1;render();
 if(B.won){winEl.style.display="block";setTimeout(function(){location.replace(NEXT)},650)}}catch(e){showErr("操作失败，请重试")}finally{busy=false}}
 boardEl.addEventListener("click",function(e){var t=e.target.closest("td");if(!t)return;
 if(suppress){suppress=false;return}

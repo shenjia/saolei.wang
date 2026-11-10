@@ -19,6 +19,40 @@ type Board = {
   mineCell?: number;
 };
 type BoardResponse = Board & { token: string };
+/* 增量协议 v2（2026-11-10 张老师：每步 2.8KB 太费）：PUT 带 base 状态串，
+   响应 diff 形态时本地合并；全量（无 diff 字段）直接整体替换（回落兼容）。 */
+type DeltaResponse = {
+  token: string;
+  width: number;
+  height: number;
+  board3bv: number;
+  won: boolean;
+  lost: boolean;
+  moves: number;
+  diff?: Array<{ i: number; s: number; n: number | null }>;
+  mineCell?: number;
+} & Partial<Board>;
+
+function applyDelta(base: Board, data: DeltaResponse): Board {
+  if (!data.diff || !data.cells === false) {
+    // 全量形态：cells 存在（或 diff 缺失）→ 整体替换
+    const full = data as BoardResponse & { cells: Cell[] };
+    if (full.cells) return full;
+  }
+  if (!data.diff) throw new Error("响应缺 diff");
+  const cells = base.cells.slice();
+  for (const c of data.diff) cells[c.i] = { state: c.s, num: c.n };
+  return {
+    width: data.width,
+    height: data.height,
+    board3bv: data.board3bv,
+    won: data.won,
+    lost: data.lost,
+    moves: data.moves,
+    cells,
+    ...(data.mineCell !== undefined ? { mineCell: data.mineCell } : {}),
+  };
+}
 
 /* 格子 → FlopSprites symbol（与 Board.tsx VEC_SYM / 练习页 VEC_MAP 同源口径）：
    未开=cell-normal-solid、旗=cell-flag-solid、已开=cell-number-N；
@@ -190,10 +224,11 @@ export function BotChallengeGate() {
     setBusy(true);
     setError("");
     try {
+      const base = board.cells.map((c) => c.state).join("");
       const res = await fetch("/api/bot/challenge", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: token.current, action, cell }),
+        body: JSON.stringify({ token: token.current, action, cell, base }),
         cache: "no-store",
       });
       if (res.status === 410) {
@@ -201,10 +236,12 @@ export function BotChallengeGate() {
         return;
       }
       if (!res.ok) throw new Error("操作失败，请重试");
-      const data = await res.json() as BoardResponse;
+      const data = await res.json() as DeltaResponse;
       token.current = data.token;
-      setBoard(data);
-      if (data.won) {
+      const next = applyDelta(board, data);
+      if (next.lost && data.mineCell === undefined) next.mineCell = board.mineCell;
+      setBoard(next);
+      if (next.won) {
         toast("验证成功", "success");
         const target = redirect.current;
         redirect.current = null;
