@@ -427,14 +427,17 @@ export default async function UserViewPage({
                 「此用户已被封禁」；军衔徽章照常认定保留（上方 RankLabel 不受影响）；
                 海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
                 口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」；
-                省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求） */}
+                省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求）。
+                2026-11-10 张老师要求：未入排行者（无成绩 getUserRanks=null）也渲染
+                两行灰占位「未加入地区排行 / 未加入全国排行」（与侧栏卡片同口径）；
+                海外识别兜底 user.area（无成绩外国人 getUserRanks 返 null，同卡片逻辑） */}
             {user.status !== 0 ? (
               <div className="ranks">
                 <span className="rank_line ranks_banned">此用户已被封禁</span>
               </div>
-            ) : ranks && (ranks.area === AREA_OVERSEAS ? (
+            ) : (ranks?.area ?? user.area) === AREA_OVERSEAS ? (
               <div className="ranks">
-                {ranks.areaPos !== null ? (
+                {ranks?.areaPos != null ? (
                   <span className="rank_line">
                     海外第 <em>{ranks.areaPos}</em> 名
                   </span>
@@ -444,16 +447,22 @@ export default async function UserViewPage({
               </div>
             ) : (
               <div className="ranks">
-                {ranks.areaPos !== null && (
+                {ranks?.areaPos != null ? (
                   <span className="rank_line">
                     {areaDisplay(ranks.area)}第 <em>{ranks.areaPos}</em> 名
                   </span>
+                ) : (
+                  <span className="rank_line ranks_null">未加入地区排行</span>
                 )}
-                <span className="rank_line">
-                  全国第 <em>{ranks.national}</em> 名
-                </span>
+                {ranks ? (
+                  <span className="rank_line">
+                    全国第 <em>{ranks.national}</em> 名
+                  </span>
+                ) : (
+                  <span className="rank_line ranks_null">未加入全国排行</span>
+                )}
               </div>
-            ))}
+            )}
           </div>
         </div>
         {/* 2026-10-13 张老师要求：窄屏（≤880 单列化）时「实力」雷达移到玩家面板下、

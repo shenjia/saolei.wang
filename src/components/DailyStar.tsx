@@ -86,7 +86,7 @@ export async function DailyStar() {
                     全国第 <em>{card.rank}</em> 名
                   </span>
                 ) : (
-                  <span className="rank_line star_null">未加入排行</span>
+                  <span className="rank_line star_null">未加入全国排行</span>
                 )}
               </>
             )}

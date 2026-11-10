@@ -2410,7 +2410,7 @@ del[data-tip]:hover::after {
   margin-top: 13px;
   line-height: 0;
 }
-/* 无数据占位（未加入地区排行 / 未加入排行）：压过排行文字色，须写在最后 */
+/* 无数据占位（未加入地区排行 / 未加入全国排行）：压过排行文字色，须写在最后 */
 .user_card .ranks .ucd_null {
   color: #75715e;
   font-weight: normal;
@@ -2418,6 +2418,12 @@ del[data-tip]:hover::after {
 /* 海外玩家（外国人，2026-10-15）：不参与地区排行、不显示全国名——灰色一行，
    用户主页 #user_view .ranks 与侧栏玩家卡片 .user_card .ranks 共用 */
 .ranks .ranks_overseas {
+  color: #75715e;
+}
+
+/* 未入排行占位（2026-11-10 张老师要求）：用户主页军衔徽章下补两行灰占位
+   「未加入地区排行 / 未加入全国排行」，与侧栏卡片 ucd_null / 今日之星 star_null 同色同口径 */
+.ranks .ranks_null {
   color: #75715e;
 }
 

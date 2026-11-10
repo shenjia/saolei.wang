@@ -162,7 +162,7 @@ function VsPanel({ p, accent }: { p: VsPlayer; accent: string }) {
                       全国第 <em>{p.natRank}</em> 名
                     </span>
                   ) : (
-                    <span className="rank_line ucd_null">未加入排行</span>
+                    <span className="rank_line ucd_null">未加入全国排行</span>
                   )}
                 </>
               )}
