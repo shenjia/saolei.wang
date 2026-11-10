@@ -42,7 +42,7 @@ export function VsButton({
     viewerId <= 0
       ? `登录后可和${pronoun}比拼一下`
       : viewerId === to
-        ? "不能和自己比拼"
+        ? "不能和自己比较"
         : undefined;
   if (disabled) {
     return (

@@ -15180,28 +15180,36 @@ span.vs_btn {
   background: transparent;
   vertical-align: middle;
   cursor: pointer;
-  filter: grayscale(1) brightness(0.92); /* 彩色图标灰度化后≈亮灰 */
   transform: scale(1);
-  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* filter/opacity 只放图标本体：放按钮本体会把 ::after hover 气泡一起滤灰
+     （2026-11-10 张老师对比：msg_btn 气泡色正常、vs_btn 气泡发暗） */
 }
 a.vs_btn svg,
 span.vs_btn svg {
   width: 20px;
   height: 20px;
   display: block;
+  filter: grayscale(1) brightness(0.92); /* 彩色图标灰度化后≈亮灰 */
+  transition: filter 0.15s;
 }
-a.vs_btn:hover {
+a.vs_btn:hover svg,
+a.vs_btn:hover img {
   filter: none; /* hover 恢复彩色 */
-  transform: scale(1.25); /* 尺寸跳动一下 */
-  background: transparent;
 }
 span.vs_btn--disabled {
-  filter: grayscale(1) brightness(0.42); /* 不可用≈暗灰 */
   cursor: default;
 }
+span.vs_btn--disabled svg,
+span.vs_btn--disabled img {
+  filter: grayscale(1) brightness(0.42); /* 不可用≈暗灰 */
+}
 span.vs_btn--disabled:hover {
-  filter: grayscale(1) brightness(0.42);
   transform: scale(1);
+}
+span.vs_btn--disabled:hover svg,
+span.vs_btn--disabled:hover img {
+  filter: grayscale(1) brightness(0.42);
 }
 
 /* ① 对战主视觉（2026-11-09 二轮改版）：#page.main 标准宽度下，左右两个独立
