@@ -3738,6 +3738,28 @@ async function fetchStnbCollection(nf = false): Promise<StnbRankingEntry[]> {
   return compact.map(inflateStnbRow);
 }
 
+/** 指定用户的三级 STNB + 总 STNB（2026-11-10 22:02 张老师：PK 页纪录板块
+ *  新增「初级/中级/高级 STNB」三行；战前预估仍用总计列）。
+ *  口径＝STNB 榜 beg/int/exp/total 四列：beg/int/exp 为该级历史最高 STNB（0＝无有效
+ *  成绩），total 仅在三级齐全时为三者之和、否则 0（与 inflateStnbRow 同源，绝不另算）。
+ *  复用 STNB 榜 60s 缓存全量数据，一次读取同时供「战前预估 + 三行 STNB」使用，
+ *  零新增 SQL / 零新增缓存条目。 */
+export interface StnbProfile {
+  beg: number;
+  int: number;
+  exp: number;
+  total: number;
+}
+export async function getStnbProfiles(ids: number[]): Promise<Map<number, StnbProfile>> {
+  const wanted = new Set(ids);
+  const all = await fetchStnbCollection();
+  const out = new Map<number, StnbProfile>();
+  for (const e of all) {
+    if (wanted.has(e.id)) out.set(e.id, { beg: e.beg, int: e.int, exp: e.exp, total: e.total });
+  }
+  return out;
+}
+
 /** 榜人口随排序列变化（与成绩榜同语义，异于 BV 榜恒定人口）：
  *  按总计 = 三级齐全；按级别 = 该级有有效成绩。 */
 function stnbPopulation(all: StnbRankingEntry[], by: BvRankingBy): StnbRankingEntry[] {
