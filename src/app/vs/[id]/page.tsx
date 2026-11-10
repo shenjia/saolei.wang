@@ -30,7 +30,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getHeaderUser } from "@/lib/usercard";
-import { getVsData, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";
+import { getVsData, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";
 import { scoreTime } from "@/lib/format";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
@@ -370,6 +370,11 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
   const total1 = rec1 + bv1;
   const total2 = rec2 + bv2;
   const winner = total1 === total2 ? 0 : total1 > total2 ? 1 : 2;
+
+  // 对决记录落库（2026-11-11 张老师定：后台「今日胜负」KPI + /admin/vs 对决统计页）：
+  // 每次有效访问一行，比分/结果为本次渲染快照；10 分钟窗口去重在函数内，失败静默
+  await recordVsDuel(session.uid, targetId, total1, total2);
+
   // 21:55 张老师：纪录板块头部「胜数」＝该方占优的纪录行数（mark=p1/p2，含独有局）
   const recWin1 = recRows.filter((r) => r.mark === "p1").length;
   const recWin2 = recRows.filter((r) => r.mark === "p2").length;

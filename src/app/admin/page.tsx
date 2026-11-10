@@ -13,6 +13,7 @@ import { getTrafficOverview, getApiUsage, DEVICE_NAMES, REFERRER_NAMES, type Exi
 import { practiceCusClean } from "@/lib/admin/practice";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies, getCachedOverview, getCachedTrend30 } from "@/lib/admin/cache";
 import { getPendingOverview } from "@/lib/admin/stats";
+import { getVsDuelsOverview } from "@/lib/admin/vsstats";
 import { getOpenmsSyncStatus } from "@/lib/admin/openms-sync";
 import { OpenmsSyncCard } from "@/components/admin/OpenmsSyncCard";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
@@ -32,13 +33,15 @@ export default async function AdminDashboard() {
   // 与分布/流量/API/异常一致；轻量「最新注册/最新上传」仍实时
   // 2026-11-06 张老师定：待审类「审核即消费」的数字（录像/评论/论坛/头像待审 + 最老积压）
   // 不进缓存，getPendingOverview 实时取后与缓存核心合并——审完回页数字立即消
-  const [core, trend, dist, traffic, api, pending, openmsSync] = await Promise.all([
+  const [core, trend, dist, traffic, api, pending, vsDuels, openmsSync] = await Promise.all([
     getCachedOverview(),
     getCachedTrend30(),
     getDashboardDistributionsSoftwares(),
     getTrafficOverview(),
     getApiUsage(),
     getPendingOverview(),
+    // VS 对决 KPI（2026-11-11 张老师定）：vs_duel 权威表口径，见 lib/admin/vsstats.ts
+    getVsDuelsOverview(),
     // 2026-11-10 张老师定：同步状态卡实时取（不进 unstable_cache），首帧 RSC + 客户端 10s 轮询校准
     getOpenmsSyncStatus(),
   ]);
@@ -193,20 +196,22 @@ export default async function AdminDashboard() {
             </>
           }
         />
-        {/* 今日胜负（2026-11-11 张老师定）：VS 板块对决统计——一次 /vs/:id 页访问
-            = 一次对决，参与人数 = 发起者 + 被挑战者去重；同比与趋势同 PV 口径 */}
+        {/* 今日胜负（2026-11-11 张老师定）：VS 板块对决统计——一次 /vs/:id 页有效
+            访问 = 一次对决（vs_duel 表，10 分钟窗口去重）；发起人数=去重发起者；
+            点击进 /admin/vs 对决统计页 */}
         <Kpi
           label="今日胜负"
+          href="/admin/vs"
           value={
             <>
-              {traffic.vs.today.toLocaleString("zh-CN")}
-              <small> 次对决 / {traffic.vs.todayPlayers} 人参与</small>
+              {vsDuels.today.toLocaleString("zh-CN")}
+              <small> 次对决 / {vsDuels.todayLaunchers} 人发起</small>
             </>
           }
           tone="purple"
-          trend={traffic.vs.trend}
-          trendEstimate={traffic.vs.todayEst}
-          foot={cmpFoot(traffic.vs.today, traffic.vs.lastWeek)}
+          trend={vsDuels.trend}
+          trendEstimate={vsDuels.todayEst}
+          foot={cmpFoot(vsDuels.today, vsDuels.lastWeek)}
         />
         <Kpi
           label="注册玩家"

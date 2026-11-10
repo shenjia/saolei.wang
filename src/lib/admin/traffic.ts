@@ -105,16 +105,9 @@ export interface TrafficOverview {
     trend: number[]; trendUsers: number[];
     todayLevels: { beg: number; int: number; exp: number };
   };
-  /** VS 对决（2026-11-11 张老师定：仪表盘「今日胜负」KPI）。口径：一次 /vs/:id
-   *  页面访问 = 一次对决（page_view 埋点，登录态访问）；players=对决参与人数，
-   *  发起者（userId）+ 被挑战者（path 里的 id）合并去重；同比与预估与 PV 同构
-   *  （逐行精确窗口，上周同一日同时段） */
-  vs: {
-    today: number; todayPlayers: number;
-    lastWeek: number;
-    todayEst: number | null;
-    trend: number[];
-  };
+  // VS 对决统计（2026-11-11 张老师定「今日胜负」KPI）已迁独立数据源 vs_duel
+  // 权威表（/vs/:id 页落行，带比分/结果），见 lib/admin/vsstats.ts——
+  // 不再走 page_view 埋点口径（本聚合是对「访问」的统计，对决是业务事件）
   /** 高流失页（会话末页占该页 PV 比；录像详情页看完即走正常，排除；三档） */
   exits: { today: ExitPage[]; d7: ExitPage[]; d30: ExitPage[] };
   /** 热门录像页（/video/:id 三档 Top 10，带玩家名/级别） */
@@ -126,9 +119,6 @@ export interface TrafficOverview {
 /** /video/123 → /video/:id（落地页/流失聚合过滤自增 ID） */
 const VIDEO_RE = /^\/video\/(\d+)$/;
 const normalizePath = (p: string): string => p.replace(VIDEO_RE, "/video/:id");
-
-/** /vs/14433（VS 对决页，2026-11-11「今日胜负」KPI 数据源） */
-const VS_RE = /^\/vs\/(\d+)$/;
 
 const DEVICE_NAMES: Record<string, string> = {
   desktop: "桌面端",
@@ -235,12 +225,6 @@ async function aggregate(): Promise<TrafficOverview> {
   const todayPracticeUsers = new Set<string>();
   const yesterdayPracticeUsers = new Set<string>();
   const d30PracticeUsers = new Set<string>();
-  // VS 对决（「今日胜负」KPI，2026-11-11 张老师定）：一次 /vs/:id 页访问=一次对决。
-  // 分日 PV + 今日参与玩家（发起者 userId + 被挑战者 path id 合并去重）+
-  // 上周同日同时段 PV（同比基数，page_view 逐行精确窗口，与 PV/UV 同构）
-  const vsDayMap = new Map<number, number>();
-  const vsTodayPlayers = new Set<string>();
-  let vsLastWeekSame = 0;
   const lastWeekIdx = Math.floor((lastWeek0 + 28800) / 86400); // 上周同一日的 day 桶
   for (const p of practiceRows) {
     const idx = N(p.day);
@@ -375,18 +359,6 @@ async function aggregate(): Promise<TrafficOverview> {
       if (t >= d7) bump(videoPvD7);
       if (t >= today0) bump(videoPvToday);
     }
-
-    // VS 对决记账（2026-11-11）：/vs/:id 页访问=一次对决，参与人=发起者(userId，
-    // VS 页未登录跳登录故恒有)+被挑战者(path id)，合并去重；同比走精确窗口
-    const vm = r.path.match(VS_RE);
-    if (vm) {
-      vsDayMap.set(idx, (vsDayMap.get(idx) ?? 0) + 1);
-      if (t >= today0) {
-        vsTodayPlayers.add(String(N(r.userId) || r.visitorId)); // 发起者（恒登录）
-        vsTodayPlayers.add(vm[1]); // 被挑战者
-      }
-      if (t >= lastWeek0 && t < lastWeekEnd) vsLastWeekSame += 1;
-    }
   }
 
   const dates: string[] = [];
@@ -395,7 +367,6 @@ async function aggregate(): Promise<TrafficOverview> {
   const activeSeries: number[] = [];
   const practiceSeries: number[] = [];
   const practiceUserSeries: number[] = [];
-  const vsSeries: number[] = [];
   for (let i = 0; i < 30; i++) {
     const b = trendMap.get(fromIdx + i)!;
     dates.push(new Date((fromIdx + i) * 86400000).toISOString().slice(0, 10));
@@ -404,7 +375,6 @@ async function aggregate(): Promise<TrafficOverview> {
     activeSeries.push(activeMap.get(fromIdx + i)?.size ?? 0);
     practiceSeries.push(practiceMap.get(fromIdx + i) ?? 0);
     practiceUserSeries.push(practiceUserMap.get(fromIdx + i)?.size ?? 0);
-    vsSeries.push(vsDayMap.get(fromIdx + i) ?? 0);
   }
 
   const entryTop = (map: Map<string, number>) =>
@@ -557,11 +527,6 @@ async function aggregate(): Promise<TrafficOverview> {
   };
   const lwBucket = trendMap.get(lastWeekIdx);
 
-  // VS 对决今日预估（2026-11-11）：与 PV/UV 同构——今日至今 × 上周同日全天 /
-  // 上周同日同时段（estFor 同一函数，vsDayMap 同为剔除爬虫后口径）
-  const vsToday = vsDayMap.get(todayIdx) ?? 0;
-  const vsTodayEst = estFor(vsToday, vsDayMap.get(lastWeekIdx) ?? 0, vsLastWeekSame);
-
   return {
     now,
     today: { pv: trendMap.get(todayIdx)?.pv ?? 0, uv: todayUv.size },
@@ -608,13 +573,6 @@ async function aggregate(): Promise<TrafficOverview> {
       trend: practiceSeries,
       trendUsers: practiceUserSeries,
       todayLevels,
-    },
-    vs: {
-      today: vsToday,
-      todayPlayers: vsTodayPlayers.size,
-      lastWeek: vsLastWeekSame,
-      todayEst: vsTodayEst,
-      trend: vsSeries,
     },
   };
 }

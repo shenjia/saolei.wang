@@ -1417,3 +1417,23 @@ model OpenmsBindRequest {
   @@index([user])
   @@map("openms_bind_request")
 }
+
+// VS 对决记录（2026-11-11 张老师定：仪表盘「今日胜负」KPI + /admin/vs 对决统计页）。
+// /vs/:id 页每次有效访问落一行（同对手 10 分钟窗口去重，防刷新虚高）：
+// 发起者=登录用户（未登录 redirect 不会走到落库），target=被挑战者；
+// 比分/结果为渲染时实时算得的口径快照（rec+BV 总分）；result 1=发起者胜 2=对方胜 0=平。
+// 回填行（page_view 历史导入）比分/结果为 NULL，展示层亮灰 —。
+model VsDuel {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  userId     BigInt  @map("user_id") @db.BigInt // 发起者
+  targetId   BigInt  @map("target_id") @db.BigInt // 被挑战者
+  s1         Float?  // 发起者总分（纪录+BV）
+  s2         Float?  // 被挑战者总分
+  result     Int?    @db.TinyInt // 1=发起者胜 2=对方胜 0=平；NULL=历史回填未算
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt // 发起时刻 Unix 秒
+
+  @@index([createTime]) // 趋势/记录列表
+  @@index([userId, createTime]) // 发起 Top10 / 个人维度
+  @@index([targetId, createTime]) // 被对决 Top10
+  @@map("vs_duel")
+}

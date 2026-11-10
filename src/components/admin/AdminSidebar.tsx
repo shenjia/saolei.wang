@@ -30,6 +30,8 @@ const GROUPS: { title: string | null; items: NavItem[] }[] = [
       { href: "/admin", label: "仪表盘", icon: "📊" },
       { href: "/admin/stats", label: "数据分析", icon: "📈" },
       { href: "/admin/practice", label: "练习数据", icon: "🎮" },
+      // 2026-11-11 张老师定：VS 板块对决统计（/vs/:id 落库 vs_duel）
+      { href: "/admin/vs", label: "对决统计", icon: "⚔️" },
     ],
   },
   {

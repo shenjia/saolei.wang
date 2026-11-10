@@ -19,6 +19,7 @@ import { getUser3bvCollection, getLevel3bvRanges, getStnbProfiles, type BbvCell,
 import { getRadarData, type RadarPoint } from "./radar";
 import { LEVEL_MIN_3BV, UNREACHABLE_3BV, type VideoLevel } from "./config";
 import { score3bvs, scoreTime } from "./format";
+import { prisma } from "./db";
 
 const VIDEO_LEVELS: VideoLevel[] = ["beg", "int", "exp"];
 const LEVEL_AXIS_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
@@ -341,3 +342,34 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
 }
 
 // ---------- 渲染辅助（纯函数，供页面组件用） ----------
+
+// ---------- 对决记录落库（2026-11-11 张老师定） ----------
+// /vs/:id 页每次有效访问落一行 vs_duel（比分/结果为本次渲染快照）；
+// 同一 (发起者, 被挑战者) 10 分钟窗口去重——刷新/反复打开不重复计数。
+// 失败静默：统计缺行可接受，绝不能影响 PK 页渲染。
+
+const N = (v: unknown): number => Number(v ?? 0);
+
+export async function recordVsDuel(uid: number, targetId: number, s1: number, s2: number): Promise<void> {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const recent = await prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT COUNT(*) AS n FROM vs_duel
+      WHERE user_id = ${BigInt(uid)} AND target_id = ${BigInt(targetId)}
+        AND create_time >= ${now - 600}
+    `;
+    if (N(recent[0]?.n) > 0) return;
+    await prisma.vsDuel.create({
+      data: {
+        userId: BigInt(uid),
+        targetId: BigInt(targetId),
+        s1,
+        s2,
+        result: s1 === s2 ? 0 : s1 > s2 ? 1 : 2,
+        createTime: BigInt(now),
+      },
+    });
+  } catch {
+    /* ignore：对决统计缺一行可接受 */
+  }
+}
