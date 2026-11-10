@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { prisma } from "./db";
 import { assertIdent, escapeLike } from "./sqlguard";
-import { getTitleDistribution, promotedExpTime, title } from "./assess";
+import { getTitleDistribution, promotedExpTime, recordNewsExpTime, title } from "./assess";
 import {
   COMMENT_STATUS,
   COMMENT_TOP_NUMBER,
@@ -571,10 +571,15 @@ export async function getNews(opts: {
   // 已固化在写入点（review.ts publishNews expTimeOverride），历史行为一次性回填迁移。
   // Phase 5 双体系：批量补算旧版称号（TitlePair），TitleBadge 按观看者体系渲染
   // 2026-10-27 dualTitles 改行序数组（旧 Map 同用户多行塌缩）：按下标配对
+  // 2026-11-10 张老师报告（吴宜放 SUB60 动态人神界显示旧称号）：双体系称号都必须按
+  // 「破纪录后」口径评定——纪录类动态（type 20/21/22）的行内快照是破纪录前旧值
+  // （写入点 expTimeOverride=original.expTime），与军衔侧渲染点 recordNewsExpTime
+  // （min(快照,本盘 real_time)，2026-10-30 泛化）严格同口径在此处取有效评定时间，
+  // 军衔/人神界两体系自同一 TitlePair 评定，杜绝「军衔已按新档、旧版称号还是旧档」错位
   const pairList = await dualTitles(
     rows.map((r) => ({
       userId: N(r.user),
-      expTime: N(r.expTime),
+      expTime: recordNewsExpTime(N(r.expTime), safeJson(r.detailsData), recordVideoRt.get(N(r.reference)) ?? 0),
       ranked: r.ranked === BigInt(1),
       sex: authors.get(N(r.user))?.sex ?? 1,
     }))

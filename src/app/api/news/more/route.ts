@@ -68,7 +68,9 @@ export async function GET(req: Request) {
   ]);
   const withTitles = items.map((news) => ({
     news,
-    title: assessTitle(recordNewsExpTime(news.expTime, news.details), kingTh),
+    // videoRealTime 与页码模式同参（2026-11-10 补漏：cursor 模式此前漏传第三参，
+    // 双破录像的 3bvs 纪录行军衔会按裸快照错档）
+    title: assessTitle(recordNewsExpTime(news.expTime, news.details, news.videoRealTime), kingTh),
     classic: news.authorTitles?.c ?? null,
   }));
   return NextResponse.json({
