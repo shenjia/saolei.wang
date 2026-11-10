@@ -42,8 +42,11 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
   }
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
+  // 2026-11-10 张老师定：审核队列一律按「上传时间」倒序，最新在最前，三个状态页签同口径。
+  // 原口径是待审用 old（id 升序清积压）、已审用 new（id 降序），都是 id 序；
+  // 历史同步/补导录像的 id 与上传时间不一致，按 id 排会让「上传时间」列看着乱序。
   const [list, ov, workload, workload7] = await Promise.all([
-    getVideoListAdmin({ status: String(status), order: status === VIDEO_STATUS.NORMAL ? "old" : "new", page, pool }),
+    getVideoListAdmin({ status: String(status), order: "upload", page, pool }),
     getOverview(),
     getAuditorWorkload(6),
     getAuditorWorkload(10, 7),

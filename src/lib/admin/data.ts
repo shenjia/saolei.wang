@@ -627,6 +627,11 @@ export interface AdminVideoRow {
 const VIDEO_ORDERS: Record<string, string> = {
   new: "v.id DESC",
   old: "v.id ASC",
+  // 审核队列专用（2026-11-10 张老师定）：按上传时间倒序，最新在最前。
+  // 不能沿用 new/old 的 id 序——历史同步/补导数据的 id 序 ≠ create_time 序
+  //（schema 2026-10-22 注释：全站 27.8 万处相邻逆序），行内「上传时间」列会看着乱序。
+  // 次键 id DESC：同一秒上传的录像分页不抖。
+  upload: "v.create_time DESC, v.id DESC",
   time: "vi.real_time ASC",
   board: "vi.board_3bv DESC",
   click: "t.clicks DESC",
