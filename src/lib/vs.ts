@@ -335,9 +335,10 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
     rec2,
     bv1,
     bv2,
-    preComment: pre.text,
+    // 2026-11-11 张老师：预测/终局评价正文前后加中文引号「“”」
+    preComment: `“${pre.text}”`,
     preTone: pre.tone,
-    postComment: postMatchComment(rec1 + bv1, rec2 + bv2),
+    postComment: `“${postMatchComment(rec1 + bv1, rec2 + bv2)}”`,
   };
 }
 
