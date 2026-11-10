@@ -37,6 +37,24 @@ function cellClass(cell: Cell): string {
   return "bb";
 }
 
+/* chord 按压集合：数字格 i 周围 8 格中未开且未插旗的（旗保持原样） */
+function chordSet(board: Board, i: number): Set<number> {
+  const next = new Set<number>();
+  const x = i % board.width;
+  const y = Math.floor(i / board.width);
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= board.width || ny < 0 || ny >= board.height) continue;
+      const j = ny * board.width + nx;
+      if (board.cells[j].state === 0) next.add(j);
+    }
+  }
+  return next;
+}
+
 export function BotChallengeGate() {
   const [open, setOpen] = useState(false);
   const [board, setBoard] = useState<Board | null>(null);
@@ -49,14 +67,41 @@ export function BotChallengeGate() {
   const redirect = useRef<string | null>(null);
   /* 按压视觉（2026-11-10 张老师：chord 按压预览对齐经典扫雷）：左键按住
      未开格＝该格下沉；按住已开数字格＝周围 8 格中未开且未插旗的同步下沉
-     （已标旗保持原样），mouseup 全局释放后 click 才走 chord */
+     （已标旗保持原样）。按住期间在数字格间移动光标，按压区域随落点重算
+     （落点不是数字格则全部释放）；mouseup 释放后 click 才走 chord */
   const [press, setPress] = useState<ReadonlySet<number>>(new Set());
+  const dragChord = useRef(false);
+  /* mousemove 闭包要读最新盘面（换局后 board 引用变），用 ref 镜像 */
+  const boardRef = useRef<Board | null>(null);
+  boardRef.current = board;
 
   useEffect(() => {
     if (press.size === 0) return;
-    const clear = () => setPress(new Set());
+    const clear = () => {
+      dragChord.current = false;
+      setPress(new Set());
+    };
+    const move = (e: MouseEvent) => {
+      if (!dragChord.current) return;
+      /* ⚠️ WebKit zoom 子树 gBCR 不可信（项目铁律）——落点判定用
+         elementFromPoint，坐标来自 MouseEvent 本身不经 gBCR */
+      const t = document.elementFromPoint(e.clientX, e.clientY);
+      const td = t?.closest?.("#mscap_board td");
+      if (!td) {
+        setPress(new Set());
+        return;
+      }
+      const i = Number((td as HTMLTableCellElement).dataset.i);
+      if (!boardRef.current) return;
+      const b = boardRef.current;
+      setPress(b.cells[i].state === 1 ? chordSet(b, i) : new Set<number>());
+    };
     window.addEventListener("mouseup", clear);
-    return () => window.removeEventListener("mouseup", clear);
+    window.addEventListener("mousemove", move);
+    return () => {
+      window.removeEventListener("mouseup", clear);
+      window.removeEventListener("mousemove", move);
+    };
   }, [press]);
 
   function settle(ok: boolean) {
@@ -233,24 +278,14 @@ export function BotChallengeGate() {
                           onMouseDown={(e) => {
                             if (e.button !== 0 || dead) return;
                             if (cell.state === 0) {
+                              dragChord.current = false;
                               setPress(new Set([i]));
                               return;
                             }
-                            /* 按住已开数字格＝chord 按压预览：周围 8 格中未开且
-                               未插旗的同步下沉（经典扫雷口径，旗保持原样） */
+                            /* 按住已开数字格＝chord 按压预览，开启拖拽跟踪 */
                             if (cell.state === 1) {
-                              const next = new Set<number>();
-                              for (let dy = -1; dy <= 1; dy++) {
-                                for (let dx = -1; dx <= 1; dx++) {
-                                  if (!dx && !dy) continue;
-                                  const nx = x + dx;
-                                  const ny = y + dy;
-                                  if (nx < 0 || nx >= board.width || ny < 0 || ny >= board.height) continue;
-                                  const j = ny * board.width + nx;
-                                  if (board.cells[j].state === 0) next.add(j);
-                                }
-                              }
-                              setPress(next);
+                              dragChord.current = true;
+                              setPress(chordSet(board, i));
                             }
                           }}
                           onTouchStart={() => {

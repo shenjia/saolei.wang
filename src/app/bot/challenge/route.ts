@@ -92,15 +92,29 @@ boardEl.addEventListener("click",function(e){var t=e.target.closest("td");if(!t)
 if(suppress){suppress=false;return}
 var i=+t.dataset.i;if(B.cells[i].state===1)act("chord",i);else act("open",i)});
 boardEl.addEventListener("contextmenu",function(e){e.preventDefault();var t=e.target.closest("td");if(t)act("flag",+t.dataset.i)});
-boardEl.addEventListener("mousedown",function(e){if(e.button!==0)return;var t=e.target.closest("td");if(!t)return;var i=+t.dataset.i;
-if(!B||B.won||B.lost||busy)return;
-if(B.cells[i].state===0){pressed={};pressed[i]=1;repaint();return}
-if(B.cells[i].state===1){pressed={};var w=B.width,x=i%w,y=(i/w)|0;
+/* 按压预览 + 拖拽跟踪（2026-11-10 张老师）：左键按住未开格＝单格下沉；
+   按住已开数字格＝chord 预览（周围未开未插旗格下沉）。按住期间在数字格间
+   移动光标，按压区域随落点重算（落点不是数字格则全部释放，经典扫雷口径）。 */
+var drag=false;
+function chordSet(i){var s={},w=B.width,x=i%w,y=(i/w)|0;
 for(var dy=-1;dy<=1;dy++)for(var dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;
 var nx=x+dx,ny=y+dy;if(nx<0||nx>=w||ny<0||ny>=B.height)continue;
-var j=ny*w+nx;if(B.cells[j].state===0)pressed[j]=1}
-repaint()}});
-document.addEventListener("mouseup",function(){if(Object.keys(pressed).length){pressed={};repaint()}});
+var j=ny*w+nx;if(B.cells[j].state===0)s[j]=1}
+return s}
+function applyPress(p){var same=true,ka=Object.keys(pressed),kp=Object.keys(p);
+if(ka.length!==kp.length)same=false;else for(var k=0;k<ka.length;k++)if(!p[ka[k]]){same=false;break}
+if(same)return;pressed=p;repaint()}
+boardEl.addEventListener("mousedown",function(e){if(e.button!==0)return;var t=e.target.closest("td");if(!t)return;var i=+t.dataset.i;
+if(!B||B.won||B.lost||busy)return;
+if(B.cells[i].state===0){drag=false;var p={};p[i]=1;applyPress(p);return}
+if(B.cells[i].state===1){drag=true;applyPress(chordSet(i))}});
+document.addEventListener("mousemove",function(e){if(!drag||!B)return;
+var t=document.elementFromPoint(e.clientX,e.clientY);
+var td=t&&t.closest?t.closest("#board td"):null;
+if(!td){applyPress({});return}
+var i=+td.dataset.i;
+applyPress(B.cells[i].state===1?chordSet(i):{})});
+document.addEventListener("mouseup",function(){drag=false;if(Object.keys(pressed).length){pressed={};repaint()}});
 boardEl.addEventListener("touchstart",function(e){var t=e.target.closest("td");if(!t)return;var i=+t.dataset.i;
 longT=setTimeout(function(){suppress=true;act("flag",i)},480)},{passive:true});
 boardEl.addEventListener("touchend",function(){if(longT){clearTimeout(longT);longT=null}});
