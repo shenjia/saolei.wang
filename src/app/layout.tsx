@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import "./globals.css";
+import "./pull-to-refresh.css";
 import { getSession } from "@/lib/auth";
 import { getHeaderUser } from "@/lib/usercard";
 import { LoginLink } from "@/components/LoginLink";
@@ -10,6 +11,7 @@ import { MessageBadge } from "@/components/MessageBadge";
 import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "@/components/MenuIcons";
 import { MobileNav } from "@/components/MobileNav";
 import { ScrollReset } from "@/components/ScrollReset";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { SystemText } from "@/components/SystemText";
 import { ToastHost } from "@/components/Toast";
 import { InlineScript } from "@/components/InlineScript";
@@ -198,6 +200,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={null}>
           <ScrollReset />
         </Suspense>
+        {/* iOS 主屏幕 Web App（standalone）没有系统下拉刷新，全站补一份手势模拟；
+            普通 Safari 自动跳过，详见组件注释。纯 effect，无 DOM 输出 */}
+        <PullToRefresh />
         {/* 全站访问埋点（/admin 与 /api 由 track API 拒绝） */}
         <TrackPageView />
         <div id="footer">
