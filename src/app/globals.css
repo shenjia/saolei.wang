@@ -15880,6 +15880,13 @@ span.vs_btn--disabled:hover img {
   /* 23:41 张老师：纪录板块双方成绩再加大一个字号 20→21（纪录名仍 22） */
   font-size: 21px;
 }
+/* 2026-11-11 张老师：纪录成绩格改为链接（新标签页开对应录像页）——
+   a.vs_score 直接顶替 span.vs_score（颜色/字号由上一条规则复用），只补下划线与指针 */
+.vs_rec td.vs_half a.vs_score,
+.vs_rec td.vs_half a.vs_score:hover {
+  text-decoration: none;
+  cursor: pointer;
+}
 .vs_rec td.vs_half.half_p1 {
   background: #66d9ef;
   /* 23:09 张老师：蓝方格与纪录名格连通，圆角只留外侧（左） */
@@ -16067,6 +16074,13 @@ span.vs_btn--disabled:hover img {
   border-radius: 3px;
   cursor: default;
   position: relative; /* hover 气泡定位参照 */
+}
+/* 2026-11-11 张老师：有录像的 BV 格改为链接（新标签页开对应录像页）——
+   a 形态去下划线、手型指针；配色仍由 page.tsx inline style 提供 */
+a.vs_c,
+a.vs_c:hover {
+  text-decoration: none;
+  cursor: pointer;
 }
 /* BV 格 hover 气泡（21:46 张老师定稿）：格子正上方居中、暗底描边 + 下指小三角，
    沿用收集墙 #user_3bv .tip 观感；三行「BV = n / 我方玩家名：xx.xx / 对方玩家名：xx.xx」，

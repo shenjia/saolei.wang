@@ -118,25 +118,58 @@ function orderCells(cells: VsCell[]): VsCell[] {
  *  「BV = n / 我方玩家名：xx.xx / 对方玩家名：xx.xx」——A/B 是玩家名占位符，
  *  不是字面 A/B。首行「BV = 」暗灰、数字亮灰（等号左右各一空格）；
  *  胜方整行金色 #fdc61a、负方整行亮灰 #b1b1a4；平局/双方都没有时两行均亮灰。
- *  纯 CSS :hover 显隐（收集墙 .tip 同款暗底描边气泡），零客户端 JS。 */
+ *  纯 CSS :hover 显隐（收集墙 .tip 同款暗底描边气泡），零客户端 JS。
+ *  2026-11-11 张老师：有录像的格子改为链接（新标签页开对应录像页）——
+ *  我胜/我独有开我方录像、对方胜/对方独有开对方录像、**平局开对方录像**（张老师指定）；
+ *  双方都没有的空格仍是不带链接的 span。 */
+function cellVideo(c: VsCell): number {
+  if (c.out === "p1" || c.out === "u1") return c.v1;
+  if (c.out === "p2" || c.out === "u2") return c.v2;
+  if (c.out === "tie") return c.v2; // 平局：打开对方的录像页
+  return 0;
+}
 function VsCellSpan({ c, name1, name2 }: { c: VsCell; name1: string; name2: string }) {
   // 22:44 张老师：气泡里没有成绩的一侧显示「无录像」（原「—」弃用）
   const a = c.t1 !== null ? scoreTime(c.t1) : "无录像";
   const b = c.t2 !== null ? scoreTime(c.t2) : "无录像";
   const aWin = c.out === "p1" || c.out === "u1";
   const bWin = c.out === "p2" || c.out === "u2";
-  return (
-    <span
-      className="vs_c"
-      tabIndex={0} /* 21:46：移动端 tap 聚焦后由 :focus 显示气泡，点另一格自动转移 */
-      style={{ background: CELL_BG[c.out], color: CELL_FG[c.out] }}
-    >
+  const vid = cellVideo(c);
+  const style = { background: CELL_BG[c.out], color: CELL_FG[c.out] };
+  const body = (
+    <>
       {c.bv}
       <i className="vs_tip">
         <span className="vs_tip_bv">BV{" "}={" "}<b>{c.bv}</b></span>
         <span className={aWin ? "vs_tip_rec vs_tip_gold" : "vs_tip_rec"}>{name1}：{a}</span>
         <span className={bWin ? "vs_tip_rec vs_tip_gold" : "vs_tip_rec"}>{name2}：{b}</span>
       </i>
+    </>
+  );
+  if (vid > 0) {
+    return (
+      // target=_blank 必配 prefetch={false}（全站铁律）；移动端 tap 后新标签页打开，
+      // 本页保留，pointerdown 委托的 .vs_tip_on 切换照常生效
+      <Link
+        className="vs_c"
+        href={`/video/${vid}`}
+        target="_blank"
+        rel="noopener"
+        prefetch={false}
+        style={style}
+        title="查看对应录像"
+      >
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <span
+      className="vs_c"
+      tabIndex={0} /* 21:46：移动端 tap 聚焦后由 :focus 显示气泡，点另一格自动转移 */
+      style={style}
+    >
+      {body}
     </span>
   );
 }
@@ -281,13 +314,28 @@ function VsPanel({ p, accent }: { p: VsPlayer; accent?: string }) {
 }
 
 /** 纪录行成绩格（21:53 张老师）：格内不再放「胜/负/平」字标，也不再用旧的
- *  深绿/浅玫红半行底色；只有胜方那一侧加自己的阵营实底（我蓝 / 对手玫红）。 */
-function RecScore({ mark, side, score }: { mark: VsRecRow["mark"]; side: "l" | "r"; score: string }) {
+ *  深绿/浅玫红半行底色；只有胜方那一侧加自己的阵营实底（我蓝 / 对手玫红）。
+ *  2026-11-11 张老师：纪录中所有成绩格都可点击，新标签页打开对应录像页
+ *  （time/3bvs 六项=user_scores 纪录盘、STNB 三行=user_stnb_best 最优盘）。 */
+function RecScore({ mark, side, score, video }: { mark: VsRecRow["mark"]; side: "l" | "r"; score: string; video: number }) {
   const winSide = side === "l" ? "p1" : "p2";
   const bg = mark === winSide ? (side === "l" ? "half_p1" : "half_p2") : "";
   return (
     <td className={`vs_half vs_half_${side} ${bg}`}>
-      <span className="vs_score">{score}</span>
+      {video > 0 ? (
+        <Link
+          className="vs_score"
+          href={`/video/${video}`}
+          target="_blank"
+          rel="noopener"
+          prefetch={false}
+          title="查看对应录像"
+        >
+          {score}
+        </Link>
+      ) : (
+        <span className="vs_score">{score}</span>
+      )}
     </td>
   );
 }
@@ -348,9 +396,9 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
                 <tbody>
                   {recRows.map((row) => (
                     <tr key={row.label}>
-                      <RecScore mark={row.mark} side="l" score={row.s1} />
+                      <RecScore mark={row.mark} side="l" score={row.s1} video={row.v1} />
                       <th className={`vs_item item_${row.mark}`}>{row.label}</th>
-                      <RecScore mark={row.mark} side="r" score={row.s2} />
+                      <RecScore mark={row.mark} side="r" score={row.s2} video={row.v2} />
                     </tr>
                   ))}
                 </tbody>

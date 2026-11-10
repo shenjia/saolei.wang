@@ -15,7 +15,7 @@
 //    不得进客户端 bundle（与 lib/queries 同一约束）。
 
 import { getUserCard, type UserCardData } from "./usercard";
-import { getUser3bvCollection, getLevel3bvRanges, getStnbProfiles, type BbvCell } from "./queries";
+import { getUser3bvCollection, getLevel3bvRanges, getStnbProfiles, type BbvCell, type StnbProfile } from "./queries";
 import { getRadarData, type RadarPoint } from "./radar";
 import { LEVEL_MIN_3BV, UNREACHABLE_3BV, type VideoLevel } from "./config";
 import { score3bvs, scoreTime } from "./format";
@@ -39,6 +39,9 @@ export interface VsCell {
   /** 双方该 BV 最快时间（毫秒；独有侧为 null） */
   t1: number | null;
   t2: number | null;
+  /** 双方该 BV 最快成绩录像 id（0=无；2026-11-11 张老师：有录像的格子可点进录像页） */
+  v1: number;
+  v2: number;
 }
 
 export interface VsBand {
@@ -78,6 +81,9 @@ export interface VsRecRow {
   s1: string;
   s2: string;
   mark: VsOutcome | "none";
+  /** 双方该纪录对应录像 id（0=无；2026-11-11 张老师：纪录成绩格可点进录像页） */
+  v1: number;
+  v2: number;
 }
 
 export interface VsPlayer {
@@ -217,8 +223,12 @@ function computeLevelPk(level: VideoLevel, b1: Map<number, BbvCell>, b2: Map<num
       // 低于下限（初级 0/1）与数学不可达（初级 50/52/53）＝补位空格：
       // 强制按「都没有」处理，即使历史数据里偶然有该 BV 也不参与比拼/计分
       const blank = dead.has(bv) || bv < LEVEL_MIN_3BV[level];
-      const t1 = blank ? null : b1.get(bv)?.bestTime ?? null;
-      const t2 = blank ? null : b2.get(bv)?.bestTime ?? null;
+      const c1 = blank ? null : b1.get(bv);
+      const c2 = blank ? null : b2.get(bv);
+      const t1 = c1?.bestTime ?? null;
+      const t2 = c2?.bestTime ?? null;
+      const v1 = c1?.bestVideo ?? 0;
+      const v2 = c2?.bestVideo ?? 0;
       let out: VsOutcome;
       if (blank) { out = "none"; pk.none++; }
       else if (t1 !== null && t2 !== null) {
@@ -229,7 +239,7 @@ function computeLevelPk(level: VideoLevel, b1: Map<number, BbvCell>, b2: Map<num
       } else if (t1 !== null) { out = "u1"; pk.u1++; band.s1 += SOLO_SCORE; }
       else if (t2 !== null) { out = "u2"; pk.u2++; band.s2 += SOLO_SCORE; }
       else { out = "none"; pk.none++; } // 双方都没有：空格，不计分
-      band.cells.push({ bv, out, t1, t2 });
+      band.cells.push({ bv, out, t1, t2, v1, v2 });
     }
     if (band.cells.length) pk.bands.push(band);
     pk.total1 += band.s1;
@@ -266,7 +276,7 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
   // 榜该级历史最高（0＝无有效成绩，显示「—」，数值越高越好，与 3BV/s 同向）。
   // 计分按 23:50 口径：纪录优者拿级别权重（1/2/10）、独有一律 0.25 分、平局各 0 分
   // （BV 格固定每胜 1 分，不按级别加权）
-  const STNB_ZERO = { beg: 0, int: 0, exp: 0, total: 0 };
+  const STNB_ZERO: StnbProfile = { beg: 0, int: 0, exp: 0, total: 0, videos: { beg: 0, int: 0, exp: 0 } };
   const stnb1 = stnbProfiles.get(id1) ?? STNB_ZERO;
   const stnb2 = stnbProfiles.get(id2) ?? STNB_ZERO;
   let rec1 = 0;
@@ -293,11 +303,20 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
         if (order === "stnb") return v.toFixed(1); // 与 STNB 榜 / 录像详情页同为 1 位小数
         return (order === "time" ? scoreTime(v) : score3bvs(v)) || "—";
       };
+      // 纪录对应录像 id（2026-11-11 张老师：纪录成绩格可点进录像页）：
+      // time/3bvs 六项来自 user_scores 的 *_video 列（UserCardScore.videoId），
+      // STNB 三行来自 user_stnb_best.best_video（getStnbProfiles.videos）
+      const rec1v =
+        order === "stnb" ? stnb1.videos[lv] : card1.scores[`${lv}_${order}`]?.videoId ?? 0;
+      const rec2v =
+        order === "stnb" ? stnb2.videos[lv] : card2.scores[`${lv}_${order}`]?.videoId ?? 0;
       return {
         label: `${LEVEL_AXIS_CN[lv]}${order === "time" ? "时间" : order === "3bvs" ? " 3BV/s" : " STNB"}`,
         s1: fmt(v1),
         s2: fmt(v2),
         mark,
+        v1: rec1v,
+        v2: rec2v,
       };
     })
   );

@@ -3743,20 +3743,38 @@ async function fetchStnbCollection(nf = false): Promise<StnbRankingEntry[]> {
  *  口径＝STNB 榜 beg/int/exp/total 四列：beg/int/exp 为该级历史最高 STNB（0＝无有效
  *  成绩），total 仅在三级齐全时为三者之和、否则 0（与 inflateStnbRow 同源，绝不另算）。
  *  复用 STNB 榜 60s 缓存全量数据，一次读取同时供「战前预估 + 三行 STNB」使用，
- *  零新增 SQL / 零新增缓存条目。 */
+ *  零新增 SQL / 零新增缓存条目。
+ *  2026-11-11 张老师：PK 页纪录行 STNB 成绩要能点进对应录像页——补 videos 字段
+ *  （各级历史最高 STNB 的 bestVideo，0=无），直接按主键前缀查 user_stnb_best
+ *  （2 用户 ≤3 行，亚毫秒级；落盘表本就有此列，缓存全量数组为省内存未带）。 */
 export interface StnbProfile {
   beg: number;
   int: number;
   exp: number;
   total: number;
+  /** 各级历史最高 STNB 对应的录像 id（0=无有效成绩/无录像） */
+  videos: { beg: number; int: number; exp: number };
 }
 export async function getStnbProfiles(ids: number[]): Promise<Map<number, StnbProfile>> {
   const wanted = new Set(ids);
   const all = await fetchStnbCollection();
   const out = new Map<number, StnbProfile>();
   for (const e of all) {
-    if (wanted.has(e.id)) out.set(e.id, { beg: e.beg, int: e.int, exp: e.exp, total: e.total });
+    if (wanted.has(e.id)) out.set(e.id, { beg: e.beg, int: e.int, exp: e.exp, total: e.total, videos: { beg: 0, int: 0, exp: 0 } });
   }
+  // 最优盘录像 id：与上方数值同一张 user_stnb_best 落盘表（缓存数值 60s 内可能
+  // 略滞后于本实时查询，仅影响极新纪录刷新瞬间，可接受）
+  const bests = await prisma.userStnbBest.findMany({
+    where: { user: { in: ids.map((i) => BigInt(i)) } },
+    select: { user: true, level: true, bestVideo: true },
+  });
+  for (const b of bests) {
+    const p = out.get(Number(b.user));
+    if (!p) continue;
+    const lv = b.level as VideoLevel;
+    if (lv in p.videos) p.videos[lv] = Number(b.bestVideo);
+  }
+
   return out;
 }
 
