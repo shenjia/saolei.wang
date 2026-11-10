@@ -129,7 +129,15 @@ function validSession(req: NextRequest): boolean {
   return typeof payload?.uid === "number" && payload.uid > 0;
 }
 
+/** 搜索引擎爬虫 UA 豁免（2026-11-10 张老师定）：ESA 关页面 JS 挑战后，验证爬虫会直达
+ * 源站，掉进匿名闸 307 循环过不了（canUseRsc 只认 session/通行证 cookie，不认 UA）。
+ * 名单与 nginx-antibot.conf 的 UA 白名单保持一致（googleother/applebot 等在黑名单，
+ * 明确不豁免）。UA 可伪造：伪造者流量直达源站，由 nginx limit_req + 闸外层消化，
+ * 量级可控——攻击期权衡接受（详见当日日志 09:03 段）。 */
+const SEO_BOT_UA_RE = /Googlebot|Bingbot|Baiduspider|Sogou|YisouSpider/i;
+
 export function canUseRsc(req: NextRequest): boolean {
+  if (SEO_BOT_UA_RE.test(req.headers.get("user-agent") ?? "")) return true;
   if (validSession(req)) return true;
   const owner = req.cookies.get(RSC_ID_COOKIE)?.value;
   const token = req.cookies.get(RSC_PASS_COOKIE)?.value;
