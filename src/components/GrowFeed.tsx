@@ -3,34 +3,46 @@
 // 表格复用 RankingRows 行渲染（排名=本进步榜内名次、姓名+军衔+8 列成绩、尾列=日升降），
 // 榜内只列名次上升者（2026-10-16 张老师定）；.grow_table 标记类供升降列金色渲染区分雷界榜，
 // 底部两行：PageSlider 滑条（严格一页换页/缓存回跳/松手立即加载）+ 递增批量加载更多。
-// 无搜索框/「我在哪里」（榜序按升降幅度，不走定位）。
+// 2026-11-10 张老师要求：进步/活跃榜搜索与雷界榜一致——本组件监听 ranking:locate 事件
+// 定位（页内滚动高亮 / whereami json 探测页码 / 远页整页导航 view=grow，落地 page+hl）。
 
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useRouter } from "next/navigation";
 import type { GrowRow } from "@/lib/ranksnap";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { RANKING_COLS, RankingRowLine, type TitledRow } from "./RankingRows";
 import { SystemText } from "./SystemText";
+import { toast, toastLoadingDone } from "./Toast";
 
 type GrowTitledRow = GrowRow & { title: string; classic?: { name: string; color: string } | null };
+
+/** 未加载时定位最多逐页拉取的页数（同 RankingFeed.NEARBY_PAGES 口径） */
+const NEARBY_PAGES = 30;
 
 export function GrowFeed({
   initial,
   total,
   pageSize,
+  initialHl,
 }: {
   initial: (GrowRow & { title: string; classic?: { name: string; color: string } | null })[];
   total: number;
   pageSize: number;
+  /** 定位落地行（whereami 302 携带 hl=<uid>，SSR 即高亮） */
+  initialHl?: number;
 }) {
   const [rows, setRows] = useState(initial);
   const [nextPage, setNextPage] = useState(2);
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，换页重置）
   const [loadedAll, setLoadedAll] = useState(initial.length >= total);
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [hlUid, setHlUid] = useState<number | undefined>(initialHl);
+  const router = useRouter();
 
   // ---- 滑条窗口状态（2026-10-14）----
   const tableRef = useRef<HTMLTableElement>(null);
@@ -141,6 +153,99 @@ export function GrowFeed({
     }
   }
 
+  // ---- 搜索定位（2026-11-10 张老师要求：与雷界榜一致）----
+  // 已加载行（含缓存整表替换后的当前窗口）→ 滚动高亮；否则问 whereami 要页码：
+  // 近页（30 页内）逐页拉到目标页后滚动；远页整页导航 view=grow（302 回带 page+hl）。
+  function scrollToRow(id: number): boolean {
+    const el = document.getElementById(`id_${id}`);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    return true;
+  }
+
+  function jumpToWhereami(uid: number) {
+    router.push(`/ranking/whereami?id=${uid}&view=grow`);
+  }
+
+  async function locateRow(uid: number) {
+    if (locating) return;
+    setHlUid(uid);
+    // 搜索等待气泡（同雷界榜 2026-10-27 口径）：不跳转分支 finally 收，跳转分支 URL 变化渐隐
+    let navigated = false;
+    if (scrollToRow(uid)) {
+      toastLoadingDone();
+      return;
+    }
+    setLocating(true);
+    try {
+      const res = await fetch(`/ranking/whereami?id=${uid}&view=grow&format=json`);
+      if (!res.ok) throw new Error();
+      const { page } = (await res.json()) as { page: number };
+      if (page <= 0) {
+        // 全局居中气泡（与雷界榜「暂无成绩」同款交互），不跳转
+        toast("该玩家近 30 天名次无提升，未加入进步排行");
+        setHlUid(undefined);
+        return;
+      }
+      if (page - winStart + 1 > NEARBY_PAGES) {
+        navigated = true;
+        jumpToWhereami(uid);
+        return;
+      }
+      // 逐页拉到目标页（进步榜 API 一次一页；winStart..winEnd 递增推进）
+      let cur = winStart + Math.ceil(rows.length / pageSize) - 1; // 已加载末页
+      let win = winStart;
+      let first = rows;
+      if (page <= cur) {
+        scrollToRow(uid);
+        return;
+      }
+      while (cur < page) {
+        const res2 = await fetch(`/api/grow/more?page=${cur + 1}`);
+        if (!res2.ok) throw new Error();
+        const data = (await res2.json()) as { rows: TitledRow[] };
+        if (!data.rows.length) break;
+        const added = data.rows as GrowTitledRow[];
+        pageCache.current.set(cur + 1, added);
+        first = added;
+        win = cur + 1;
+        cur += 1;
+      }
+      // 目标页整表替换后滚动（flushSync 保证新行上屏后再滚）
+      flushSync(() => {
+        setRows(first);
+        setWinStart(win);
+        setNextPage(win + 1);
+        setBatchStep(0);
+        setCurPage(page); // 滑条同步到目标页（否则滑条停在旧页与内容错位）
+      });
+      if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
+    } catch {
+      navigated = true;
+      jumpToWhereami(uid); // 探测失败走导航兜底
+    } finally {
+      setLocating(false);
+      if (!navigated) toastLoadingDone();
+    }
+  }
+
+  // 搜索框事件（RankingNav 经 ranking:locate 自定义事件委托本组件定位）
+  useEffect(() => {
+    function onLocate(e: Event) {
+      const { id } = (e as CustomEvent<{ id: number }>).detail;
+      void locateRow(id);
+    }
+    window.addEventListener("ranking:locate", onLocate);
+    return () => window.removeEventListener("ranking:locate", onLocate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, locating, winStart]);
+
+  // 落地补一次滚动：whereami 302 带 hl + #id_ 锚点，硬导航靠锚点、软导航下补滚动更稳
+  useEffect(() => {
+    if (initialHl) scrollToRow(initialHl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     // rank_scroll：同 RankingFeed——表格与翻页控件同宽，窄屏盒内横滑时一起滚
     <div className="rank_scroll">
@@ -163,7 +268,7 @@ export function GrowFeed({
         <tbody>
           {rows.map((u) => (
             /* by 传 null：进步榜不按成绩列排序，任何成绩列都不做排序高亮 */
-            <RankingRowLine key={u.id} row={u} by={null} delta={u.delta} showDelta />
+            <RankingRowLine key={u.id} row={u} by={null} delta={u.delta} showDelta hl={u.id === hlUid} />
           ))}
           {rows.length === 0 && (
             <tr>
@@ -178,7 +283,7 @@ export function GrowFeed({
         <PageSlider
           page={curPage}
           pages={maxPage}
-          loading={loading}
+          loading={loading || locating}
           onGoto={gotoPage}
           hasMore={!loadedAll}
           onMore={loadMore}

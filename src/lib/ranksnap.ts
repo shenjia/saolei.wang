@@ -290,3 +290,36 @@ export async function getGrowRanking(
     pageSize: 20, // 返回值口径恒为 base 页大小（页码语义），take 只是本批行数
   };
 }
+
+/**
+ * 批量求用户在进步榜中的名次（2026-11-10 张老师要求：进步/活跃榜搜索与雷界榜一致）。
+ * 口径与 getGrowRanking 榜单完全一致：榜内= delta>0 且今日快照有名次（封禁滤除），
+ * 排序 delta DESC、今日总计名次 ASC——名次 = 1 + 榜内比我强的行数。
+ * 不在榜（持平/下降/新上榜无基准/无快照）的 id 不出现在结果里（前端显示「未加入进步排行」）。
+ */
+export async function getGrowRankOfUsers(ids: number[]): Promise<Map<number, number>> {
+  const uniq = [...new Set(ids.filter((i) => Number.isInteger(i) && i > 0))];
+  if (!uniq.length) return new Map();
+  const today = dateStr();
+  // id 白名单直拼（正整数过滤后无注入面，与 getRankOfUsers 同款护栏注释）
+  const idList = uniq.join(",");
+  const rows = await prisma.$queryRawUnsafe<{ user: bigint; rk: bigint }[]>(
+    `SELECT s.user, 1 + (SELECT COUNT(*) FROM rank_snapshot b
+          JOIN \`user\` ub ON ub.id = b.user AND ub.status = 0
+        WHERE b.delta > 0
+          AND JSON_CONTAINS_PATH(b.ranks, 'one', ?)
+          AND (b.delta > s.delta
+            OR (b.delta = s.delta
+              AND CAST(JSON_UNQUOTE(JSON_EXTRACT(b.ranks, ?)) AS UNSIGNED)
+                < CAST(JSON_UNQUOTE(JSON_EXTRACT(s.ranks, ?)) AS UNSIGNED)))) AS rk
+      FROM rank_snapshot s
+      JOIN \`user\` u ON u.id = s.user AND u.status = 0
+      WHERE s.delta > 0 AND JSON_CONTAINS_PATH(s.ranks, 'one', ?)
+        AND s.user IN (${idList})`,
+    `$."${today}"`,
+    `$."${today}"`,
+    `$."${today}"`,
+    `$."${today}"`,
+  );
+  return new Map(rows.map((r) => [N(r.user), N(r.rk)]));
+}

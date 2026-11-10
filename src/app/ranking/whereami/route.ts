@@ -7,9 +7,14 @@
 //   名次走 1 小时缓存的全量数组 getBvRankOfUser（零 DB），落地 URL 与成绩榜同构（page+hl）
 // 2026-10-14：新增 area=<地区>（地区内页搜索定位）——页码限定该地区人口，
 //   302 回 /ranking?view=area（page+hl；2026-11-08 URI 统一，原落 /area）
+// 2026-11-10：新增 view=grow / view=active（进步/活跃榜搜索定位，张老师要求与雷界榜
+//   一致）——页码按各榜名次 20/页换算（getGrowRankOfUsers / getActiveRankOfUsers，
+//   快照口径零重活），302 回 /ranking?view=xxx（page+hl），落地同款锚点+高亮。
 
 import { NextRequest, NextResponse } from "next/server";
 import { findUserByName, getRankingPageOfUser, getBvRankOfUser, getStnbRankOfUser } from "@/lib/queries";
+import { getGrowRankOfUsers } from "@/lib/ranksnap";
+import { getActiveRankOfUsers, ACTIVE_BYS, type ActiveBy } from "@/lib/activerank";
 import {
   byLevelOrder,
   parseRankingBy,
@@ -60,6 +65,41 @@ export async function GET(req: NextRequest) {
     return new NextResponse(null, {
       status: 302,
       headers: { Location: `/ranking?${bqs.toString()}` },
+    });
+  }
+
+  // ---- 进步/活跃榜分支（2026-11-10，张老师要求：搜索与雷界榜一致）----
+  // 名次走各榜快照口径（getGrowRankOfUsers / getActiveRankOfUsers，零重活），
+  // 页码 = ceil(名次/20)；榜外 → json 回 page:0（前端弹气泡），302 退回榜首页。
+  // 活跃榜可带 by（切排序列后名次按该列口径，与榜单表格一致）
+  if (p.get("view") === "grow" || p.get("view") === "active") {
+    const active = p.get("view") === "active";
+    const vqs = new URLSearchParams({ view: active ? "active" : "grow" });
+    if (id > 0) {
+      const ranks = active
+        ? await getActiveRankOfUsers(
+            [id],
+            (ACTIVE_BYS as readonly string[]).includes(p.get("by") ?? "")
+              ? (p.get("by") as ActiveBy)
+              : "act",
+          )
+        : await getGrowRankOfUsers([id]);
+      const rank = ranks.get(id);
+      if (rank) {
+        const page = Math.ceil(rank / 20);
+        if (p.get("format") === "json") return NextResponse.json({ page });
+        vqs.set("page", String(page));
+        vqs.set("hl", String(id)); // 定位落地行持续高亮（与成绩榜同款）
+        return new NextResponse(null, {
+          status: 302,
+          headers: { Location: `/ranking?${vqs.toString()}#id_${id}` },
+        });
+      }
+      if (p.get("format") === "json") return NextResponse.json({ page: 0 });
+    }
+    return new NextResponse(null, {
+      status: 302,
+      headers: { Location: `/ranking?${vqs.toString()}` },
     });
   }
 

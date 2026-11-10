@@ -7,12 +7,15 @@
 // 活跃指数 = 练习 3BV 计点 + 录像级别加权分 + 评论数 + 登录点 + 观看点。
 // 默认按活跃指数降序，数据列点击表头切换排序（?by= 服务端重排，整页换 key 重挂）；
 // 各排序列表头带 hover 气泡说明（2026-11-10 张老师定文案）。
+// 2026-11-10 张老师要求：进步/活跃榜搜索与雷界榜一致——本组件监听 ranking:locate 事件
+// 定位（页内滚动高亮 / whereami json 探测页码 / 远页整页导航 view=active，落地 page+hl）。
 
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ActiveRow } from "@/lib/activerank";
 import { areaDisplay } from "@/lib/config";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
@@ -20,11 +23,15 @@ import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
 import { RankingName, TitleBadge } from "./Cells";
 import { SystemText } from "./SystemText";
 import { buildUrl } from "./Pager";
+import { toast, toastLoadingDone } from "./Toast";
 
 export type TitledActiveRow = ActiveRow & {
   title: string;
   classic?: { name: string; color: string } | null;
 };
+
+/** 未加载时定位最多逐页拉取的页数（同 RankingFeed.NEARBY_PAGES 口径） */
+const NEARBY_PAGES = 30;
 
 /** 可排序数据列（表头点击切换 ?by=；by=act 为默认不显式入链）。
  *  tip = 表头 hover 气泡（2026-11-10 张老师定文案：初中高级「7日内练习次数 + 7日内
@@ -45,17 +52,23 @@ export function ActiveFeed({
   total,
   pageSize,
   by,
+  initialHl,
 }: {
   initial: TitledActiveRow[];
   total: number;
   pageSize: number;
   by: "act" | "beg" | "int" | "exp" | "cmt" | "watch" | "login";
+  /** 定位落地行（whereami 302 携带 hl=<uid>，SSR 即高亮） */
+  initialHl?: number;
 }) {
   const [rows, setRows] = useState(initial);
   const [nextPage, setNextPage] = useState(2);
   const [batchStep, setBatchStep] = useState(0);
   const [loadedAll, setLoadedAll] = useState(initial.length >= total);
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [hlUid, setHlUid] = useState<number | undefined>(initialHl);
+  const router = useRouter();
 
   const tableRef = useRef<HTMLTableElement>(null);
   const [winStart, setWinStart] = useState(1);
@@ -166,6 +179,97 @@ export function ActiveFeed({
     }
   }
 
+  // ---- 搜索定位（2026-11-10 张老师要求：与雷界榜一致）----
+  function scrollToRow(id: number): boolean {
+    const el = document.getElementById(`id_${id}`);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    return true;
+  }
+
+  function jumpToWhereami(uid: number) {
+    const qs = new URLSearchParams({ id: String(uid), view: "active" });
+    if (by !== "act") qs.set("by", by);
+    router.push(`/ranking/whereami?${qs}`);
+  }
+
+  async function locateRow(uid: number) {
+    if (locating) return;
+    setHlUid(uid);
+    // 搜索等待气泡（同雷界榜 2026-10-27 口径）：不跳转分支 finally 收，跳转分支 URL 变化渐隐
+    let navigated = false;
+    if (scrollToRow(uid)) {
+      toastLoadingDone();
+      return;
+    }
+    setLocating(true);
+    try {
+      const qs = new URLSearchParams({ id: String(uid), view: "active", format: "json" });
+      if (by !== "act") qs.set("by", by);
+      const res = await fetch(`/ranking/whereami?${qs}`);
+      if (!res.ok) throw new Error();
+      const { page } = (await res.json()) as { page: number };
+      if (page <= 0) {
+        // 全局居中气泡（与雷界榜「暂无成绩」同款交互），不跳转
+        toast("该玩家近 7 天无活跃记录，未加入活跃排行");
+        setHlUid(undefined);
+        return;
+      }
+      if (page - winStart + 1 > NEARBY_PAGES) {
+        navigated = true;
+        jumpToWhereami(uid);
+        return;
+      }
+      // 逐页拉到目标页后整表替换滚动（flushSync 保证新行上屏后再滚）
+      let cur = winStart + Math.ceil(rows.length / pageSize) - 1; // 已加载末页
+      let win = winStart;
+      let first = rows;
+      if (page <= cur) {
+        scrollToRow(uid);
+        return;
+      }
+      while (cur < page) {
+        const data = await fetchPage(cur + 1);
+        if (!data.rows.length) break;
+        pageCache.current.set(cur + 1, data.rows);
+        first = data.rows;
+        win = cur + 1;
+        cur += 1;
+      }
+      flushSync(() => {
+        setRows(first);
+        setWinStart(win);
+        setNextPage(win + 1);
+        setBatchStep(0);
+        setCurPage(page); // 滑条同步到目标页（否则滑条停在旧页与内容错位）
+      });
+      if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
+    } catch {
+      navigated = true;
+      jumpToWhereami(uid); // 探测失败走导航兜底
+    } finally {
+      setLocating(false);
+      if (!navigated) toastLoadingDone();
+    }
+  }
+
+  // 搜索框事件（RankingNav 经 ranking:locate 自定义事件委托本组件定位）
+  useEffect(() => {
+    function onLocate(e: Event) {
+      const { id } = (e as CustomEvent<{ id: number }>).detail;
+      void locateRow(id);
+    }
+    window.addEventListener("ranking:locate", onLocate);
+    return () => window.removeEventListener("ranking:locate", onLocate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, locating, winStart, by]);
+
+  // 落地补一次滚动：whereami 302 带 hl + #id_ 锚点，硬导航靠锚点、软导航下补滚动更稳
+  useEffect(() => {
+    if (initialHl) scrollToRow(initialHl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="rank_scroll">
       <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table active_table">
@@ -192,7 +296,7 @@ export function ActiveFeed({
         </thead>
         <tbody>
           {rows.map((u, i) => (
-            <tr key={u.id} id={`id_${u.id}`}>
+            <tr key={u.id} id={`id_${u.id}`} className={u.id === hlUid ? "hl" : undefined}>
               <td className="rank">
                 第&nbsp;<em>{(winStart - 1) * pageSize + i + 1}</em>&nbsp;位
               </td>
@@ -238,7 +342,7 @@ export function ActiveFeed({
         <PageSlider
           page={curPage}
           pages={maxPage}
-          loading={loading}
+          loading={loading || locating}
           onGoto={gotoPage}
           hasMore={!loadedAll}
           onMore={loadMore}

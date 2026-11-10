@@ -2,10 +2,14 @@
 // 旧路径 /grow 308 重定向到新 URI，本组件只负责渲染）
 // 表格列与雷界排行一致（排名=本进步榜内名次 | 姓名 | 军衔 | 8 列成绩 | 升降），
 // 榜内排序按日升降幅度降序；底部「加载更多」替代翻页。
+// 2026-11-10 张老师要求：进步/活跃榜搜索与雷界榜一致——搜索框扩到本榜（RankingNav
+// grow 模式），登录聚焦/清空推荐「自己」（含榜内名次，getGrowRankOfUsers 零重活）；
+// ?page=/?hl= 支持 whereami 302 落地（换 key 重挂 + SSR 即高亮）。
 
-import { getGrowRanking } from "@/lib/ranksnap";
+import { getGrowRanking, getGrowRankOfUsers } from "@/lib/ranksnap";
 import { getRankingPageOfUser } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { title as assessTitle } from "@/lib/assess";
 import { dualTitles, getThunderKingThreshold } from "@/lib/title-system";
 import { RankingNav } from "@/components/RankingNav";
@@ -63,14 +67,43 @@ export async function GrowRankingView({
     ? (await getRankingPageOfUser(session.uid, "sum", "time", false)) > 0
     : true;
 
+  // 登录态：搜索框空输入推荐「自己」+ 自己在进步榜内的名次（2026-11-10 张老师要求，
+  // 与雷界榜同体验；getGrowRankOfUsers 快照口径零重活；不在榜显示「未加入进步排行」）
+  let me:
+    | { id: number; chineseName: string; englishName: string; sex: number; growRank?: number }
+    | undefined;
+  if (session?.uid) {
+    const [u, myRanks] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: BigInt(session.uid) },
+        select: { id: true, chineseName: true, englishName: true, sex: true },
+      }),
+      getGrowRankOfUsers([session.uid]),
+    ]);
+    if (u) {
+      me = {
+        id: Number(u.id),
+        chineseName: u.chineseName,
+        englishName: u.englishName,
+        sex: u.sex,
+        growRank: myRanks.get(Number(u.id)),
+      };
+    }
+  }
+
+  // 搜索/whereami 定位落地行：SSR 即高亮（无 JS 也可见），客户端接管后持续
+  const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
+
   return (
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
           <h1 className="page_title">进步排行</h1>
-          <RankingNav current="grow" />
+          <RankingNav current="grow" me={me} />
         </div>
-        <GrowFeed key={page} initial={titled} total={total} pageSize={pageSize} />
+        {/* key 含 page/hl：whereami 302 落地（page+hl）时强制重挂载，
+            否则 Feed 的 useState(initial) 保留旧页数据、表格显示错页 */}
+        <GrowFeed key={`grow-${page}-${hl ?? 0}`} initial={titled} total={total} pageSize={pageSize} initialHl={hl} />
       </div>
       {/* 规则板块：独立 box，与主卡片平级（2026-10-15 张老师要求） */}
       <RankingRules

@@ -33,6 +33,17 @@ const ORDER_BY: Record<ActiveBy, string> = {
   login: "ORDER BY t.login_points DESC, t.user_id ASC",
 };
 
+/** 名次统计列白名单（getActiveRankOfUsers 用，与 ORDER_BY 同源） */
+const ACTIVE_RANK_COLUMN: Record<ActiveBy, string> = {
+  act: "active_points",
+  beg: "beg_count",
+  int: "int_count",
+  exp: "exp_count",
+  cmt: "comment_count",
+  watch: "watch_points",
+  login: "login_points",
+};
+
 export interface ActiveRow {
   id: number;
   chineseName: string;
@@ -127,6 +138,36 @@ export async function getActiveRanking(
     total: Number(countRows[0]?.c ?? 0),
     pageSize: take,
   };
+}
+
+/**
+ * 批量求用户在活跃榜中的名次（2026-11-10 张老师要求：进步/活跃榜搜索与雷界榜一致）。
+ * 口径与 getActiveRanking(by) 完全一致：榜内= 快照行且该列 >0（JOIN user.status=0
+ * 封禁即时生效），排序该列 DESC、user_id ASC——名次 = 1 + 榜内严格更强的行数。
+ * by 默认 act（活跃指数序，= 榜单默认形态）；切排序列后搜索/定位传同 by，口径一致。
+ * 无快照行 / 该列 0 的 id 不出现在结果里（前端显示「未加入活跃排行」）。
+ * 单条 SQL 区间统计（候选 ≤12，快照几千行毫秒级），与 queries.getRankOfUsers 同构；
+ * 列名走 ACTIVE_RANK_COLUMN 白名单映射（Record 常量，无运行时注入面）。
+ */
+export async function getActiveRankOfUsers(
+  ids: number[],
+  by: ActiveBy = "act",
+): Promise<Map<number, number>> {
+  // 只接受正整数 id 后直拼（无注入面；与 getRankOfUsers 同款护栏）
+  const uniq = [...new Set(ids.filter((i) => Number.isInteger(i) && i > 0))];
+  if (!uniq.length) return new Map();
+  const idList = uniq.join(",");
+  const col = ACTIVE_RANK_COLUMN[by] ?? ACTIVE_RANK_COLUMN.act;
+  const rows = await prisma.$queryRawUnsafe<{ id: bigint; rk: bigint }[]>(
+    `SELECT a.user_id id, 1 + (SELECT COUNT(*) FROM user_activity_snapshot b
+          JOIN \`user\` ub ON ub.id = b.user_id AND ub.status = 0
+        WHERE b.${col} > 0 AND (b.${col} > a.${col}
+          OR (b.${col} = a.${col} AND b.user_id < a.user_id))) AS rk
+      FROM user_activity_snapshot a
+      JOIN \`user\` ua ON ua.id = a.user_id AND ua.status = 0
+      WHERE a.${col} > 0 AND a.user_id IN (${idList})`,
+  );
+  return new Map(rows.map((r) => [Number(r.id), Number(r.rk)]));
 }
 
 // ---------- 个人主页「活跃」雷达（2026-11-10 张老师需求） ----------

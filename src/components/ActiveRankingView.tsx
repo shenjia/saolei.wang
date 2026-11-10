@@ -7,9 +7,13 @@
 // 评论 = 评论条数；登录 = 近 7 日访问天数（每日访问记 1 点活跃值）；
 // 活跃指数 = 练习 3BV 计点 + 录像级别加权分（初1/中2/高10）+ 评论数 + 登录点 + 观看点。
 // 默认按活跃指数降序，数据列可点击表头切换排序（?by=）。口径见 lib/activerank.ts。
+// 2026-11-10 张老师要求：进步/活跃榜搜索与雷界榜一致——搜索框扩到本榜（RankingNav
+// active 模式），登录聚焦/清空推荐「自己」（含榜内名次，getActiveRankOfUsers 零重活）；
+// ?page=/?hl= 支持 whereami 302 落地（换 key 重挂 + SSR 即高亮）。
 
-import { getActiveRanking, ACTIVE_BYS, type ActiveBy } from "@/lib/activerank";
+import { getActiveRanking, getActiveRankOfUsers, ACTIVE_BYS, type ActiveBy } from "@/lib/activerank";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { title as assessTitle } from "@/lib/assess";
 import { dualTitles, getThunderKingThreshold } from "@/lib/title-system";
 import { RankingNav } from "@/components/RankingNav";
@@ -56,15 +60,51 @@ export async function ActiveRankingView({
     }))
   );
 
+  // 登录态：搜索框空输入推荐「自己」+ 自己在当前排序列活跃榜内的名次
+  //（2026-11-10 张老师要求，与雷界榜同体验；名次取当前 by 列口径——
+  //  搜索定位走的也是当前 by 序，两处口径一致）
+  const session = await getSession();
+  let me:
+    | { id: number; chineseName: string; englishName: string; sex: number; actRank?: number }
+    | undefined;
+  if (session?.uid) {
+    const [u, myRanks] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: BigInt(session.uid) },
+        select: { id: true, chineseName: true, englishName: true, sex: true },
+      }),
+      getActiveRankOfUsers([session.uid], by),
+    ]);
+    if (u) {
+      me = {
+        id: Number(u.id),
+        chineseName: u.chineseName,
+        englishName: u.englishName,
+        sex: u.sex,
+        actRank: myRanks.get(Number(u.id)),
+      };
+    }
+  }
+
+  // 搜索/whereami 定位落地行：SSR 即高亮（无 JS 也可见），客户端接管后持续
+  const hl = Math.max(0, parseInt(sp.hl ?? "0", 10) || 0) || undefined;
+
   return (
     <div id="page" className="main ranking_old">
       <div className="box ranking_box">
         <div className="page_head">
           <h1 className="page_title">活跃排行</h1>
-          <RankingNav current="active" />
+          <RankingNav current="active" by={by === "act" ? undefined : by} me={me} />
         </div>
-        {/* 切排序即换 key 重挂（Feed 软导航 initial 不重置铁律） */}
-        <ActiveFeed key={by} initial={titled} total={total} pageSize={pageSize} by={by} />
+        {/* 切排序/whereami 落地即换 key 重挂（Feed 软导航 initial 不重置铁律） */}
+        <ActiveFeed
+          key={`active-${by}-${page}-${hl ?? 0}`}
+          initial={titled}
+          total={total}
+          pageSize={pageSize}
+          by={by}
+          initialHl={hl}
+        />
       </div>
       <RankingRules title="活跃排行规则" items={ACTIVE_RULES} />
     </div>

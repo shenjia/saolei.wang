@@ -9,9 +9,15 @@
 //   → { users: [{…, rank?}] }（nf=1 走 user_scores_nf）；缺 rank 即「未加入排行」。
 // 2026-10-20（STNB 榜）：带 bvBy + stnb=1 时回带 STNB 名次 → { users: [{…, stnbRank?}] }
 //   （bvBy 参数名沿用——STNB 榜排序枚举与 BV 榜同构复用）。
+// 2026-11-10（进步/活跃榜搜索，张老师要求：逻辑与体验与雷界榜一致）：
+//   带 grow=1 → { users: [{…, growRank?}] }（rank_snapshot.delta>0 才在进步榜，快照口径）；
+//   带 active=1 → { users: [{…, actRank?}] }（user_activity_snapshot 全列降序、
+//   active_points>0 才在活跃榜，每分钟刷新快照口径）；与 by/bvBy 互斥。
 
 import { NextResponse } from "next/server";
 import { searchUsers, getBvBoardIndex, getStnbBoardIndex, getRankOfUsers } from "@/lib/queries";
+import { getGrowRankOfUsers } from "@/lib/ranksnap";
+import { getActiveRankOfUsers, ACTIVE_BYS, type ActiveBy } from "@/lib/activerank";
 import { BV_RANKING_BYS, RANKING_BYS, parseBvRankingBy, type RankingBy } from "@/lib/config";
 
 export async function GET(req: Request) {
@@ -58,6 +64,33 @@ export async function GET(req: Request) {
       users: users.map((u) => {
         const rank = ranks.get(u.id);
         return rank ? { ...u, rank } : u;
+      }),
+    });
+  }
+
+  // ---- 进步/活跃榜（2026-11-10）：同构回带榜内名次 ----
+  // 进步榜：rank_snapshot 预计算 delta（30 天窗口口径），delta>0 即在榜；
+  // 名次 = 榜内（delta>0 且今日有成绩）按 delta DESC、今日总计名次 ASC 的位次
+  const growIds = users.map((u) => u.id);
+  if (p.get("grow") === "1") {
+    const ranks = await getGrowRankOfUsers(growIds);
+    return NextResponse.json({
+      users: users.map((u) => {
+        const rank = ranks.get(u.id);
+        return rank ? { ...u, growRank: rank } : u;
+      }),
+    });
+  }
+  // 活跃榜：user_activity_snapshot（每分钟刷新），名次与榜单表格完全一致
+  //（当前排序列 DESC、user_id ASC；by 可选切列，默认 act=活跃指数）
+  if (p.get("active") === "1") {
+    const byRaw = p.get("by") ?? "";
+    const by = (ACTIVE_BYS as readonly string[]).includes(byRaw) ? (byRaw as ActiveBy) : "act";
+    const ranks = await getActiveRankOfUsers(growIds, by);
+    return NextResponse.json({
+      users: users.map((u) => {
+        const rank = ranks.get(u.id);
+        return rank ? { ...u, actRank: rank } : u;
       }),
     });
   }

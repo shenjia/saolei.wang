@@ -17,6 +17,10 @@
 // 2026-11-08 URI 统一（张老师要求）：进步/活跃/地区三个 tab 的 href 统一为
 // /ranking?view=xxx（grow/active/area），与雷界/BV/STNB/世界同构；旧路由 /grow
 // /active /area 已改为 308 重定向到新 URI。
+// 2026-11-10（张老师要求：进步/活跃榜搜索与雷界榜一致）：搜索框扩到进步/活跃 tab——
+// 下拉回带榜内名次（growRank/actRank，「第 N 位」/「未加入 XX 排行」），唯一候选在榜
+// 自动定位，定位走 whereami view=grow|active（302 回带 page+hl 整页导航）；
+// 登录后默认点击搜索框，下拉推荐「自己」（同雷界榜 2026-10-13 口径）。
 
 "use client";
 
@@ -49,6 +53,10 @@ interface SuggestUser {
   stnbRank?: number;
   /** 成绩榜名次（带 by 附加查询回带；缺失＝未加入排行） */
   rank?: number;
+  /** 进步榜名次（2026-11-10，grow 模式回带；缺失＝未加入进步排行） */
+  growRank?: number;
+  /** 活跃榜名次（2026-11-10，active 模式回带；缺失＝未加入活跃排行） */
+  actRank?: number;
 }
 
 export function RankingNav({
@@ -82,6 +90,9 @@ export function RankingNav({
   const stnbMode = current === "stnb";
   const boardMode = bvMode || stnbMode; // 缓存数组榜（BV/STNB）公共分支
   const bvBy = boardMode ? (by ?? "total") : "";
+  // 进步/活跃榜模式（2026-11-10 张老师要求：搜索与雷界榜一致）
+  const growMode = current === "grow";
+  const activeMode = current === "active";
   // 地区内页模式：搜索框带 by+area 查地区内名次（2026-10-14）
   const areaMode = current === "area" && !!area;
   const nfSupported = current === "all" || boardMode;
@@ -92,9 +103,9 @@ export function RankingNav({
     return `${fallback}${fallback.includes("?") ? "&" : "?"}nf=1`;
   }
 
-  /** 定位/查询统一带的榜别参数（BV/STNB；成绩榜 NF 独立使用 nf=1） */
+  /** 定位/查询统一带的榜别参数（BV/STNB/进步/活跃；成绩榜 NF 独立使用 nf=1） */
   function viewParam(): string | undefined {
-    return bvMode ? "bv" : stnbMode ? "stnb" : undefined;
+    return bvMode ? "bv" : stnbMode ? "stnb" : growMode ? "grow" : activeMode ? "active" : undefined;
   }
 
   function toggleNf(next: boolean) {
@@ -107,15 +118,32 @@ export function RankingNav({
     router.push(`/ranking${query ? `?${query}` : ""}`);
   }
 
-  /** 该候选是否在榜（缓存数组榜看 bvRank/stnbRank、成绩榜看 rank；都由搜索接口回带） */
+  /** 该候选是否在榜（缓存数组榜看 bvRank/stnbRank、成绩榜看 rank、进步/活跃榜看
+   *  growRank/actRank；都由搜索接口回带） */
   function inBoard(u: SuggestUser): boolean {
-    return bvMode ? u.bvRank !== undefined : stnbMode ? u.stnbRank !== undefined : u.rank !== undefined;
+    return bvMode
+      ? u.bvRank !== undefined
+      : stnbMode
+        ? u.stnbRank !== undefined
+        : growMode
+          ? u.growRank !== undefined
+          : activeMode
+            ? u.actRank !== undefined
+            : u.rank !== undefined;
   }
 
   /** 下拉次级文字（各榜统一只显示名次，未在榜显示提示并置灰） */
   function suggestMeta(u: SuggestUser): { text: string; inBoard: boolean } {
     if (inBoard(u)) {
-      const rank = bvMode ? u.bvRank! : stnbMode ? u.stnbRank! : u.rank!;
+      const rank = bvMode
+        ? u.bvRank!
+        : stnbMode
+          ? u.stnbRank!
+          : growMode
+            ? u.growRank!
+            : activeMode
+              ? u.actRank!
+              : u.rank!;
       return { text: `第 ${rank.toLocaleString("zh-CN")} 位`, inBoard: true };
     }
     return {
@@ -123,9 +151,13 @@ export function RankingNav({
         ? "未加入 BV 排行"
         : stnbMode
           ? "未加入 STNB 排行"
-          : areaMode
-            ? "未加入地区排行"
-            : "未加入排行",
+          : growMode
+            ? "未加入进步排行"
+            : activeMode
+              ? "未加入活跃排行"
+              : areaMode
+                ? "未加入地区排行"
+                : "未加入排行",
       inBoard: false,
     };
   }
@@ -146,6 +178,11 @@ export function RankingNav({
       qs.set("bvBy", bvBy);
       if (stnbMode) qs.set("stnb", "1");
       if (nf) qs.set("nf", "1");
+    } else if (growMode) {
+      qs.set("grow", "1");
+    } else if (activeMode) {
+      qs.set("active", "1");
+      if (by && by !== "act") qs.set("by", by); // 切排序列后名次按该列口径
     } else if (by) {
       qs.set("by", by);
       if (nf && !areaMode) qs.set("nf", "1");
@@ -227,11 +264,16 @@ export function RankingNav({
       try {
         const qs = new URLSearchParams({ q: kw });
         // 榜单名次：BV/STNB 带 bvBy（1 小时缓存数组内存查，零 DB）；成绩榜带 by（+nf）走索引区间统计；
-        // 地区内页另带 area（名次限定该地区人口）
+        // 进步/活跃榜带 grow/active（快照口径，2026-11-10）；地区内页另带 area（名次限定该地区人口）
         if (boardMode) {
           qs.set("bvBy", bvBy);
           if (stnbMode) qs.set("stnb", "1");
           if (nf) qs.set("nf", "1");
+        } else if (growMode) {
+          qs.set("grow", "1");
+        } else if (activeMode) {
+          qs.set("active", "1");
+          if (by && by !== "act") qs.set("by", by); // 切排序列后名次按该列口径
         } else if (by) {
           qs.set("by", by);
           if (nf && !areaMode) qs.set("nf", "1");
@@ -253,9 +295,13 @@ export function RankingNav({
             ? first.bvRank !== undefined
             : stnbMode
               ? first.stnbRank !== undefined
-              : first.rank !== undefined
+              : growMode
+                ? first.growRank !== undefined
+                : activeMode
+                  ? first.actRank !== undefined
+                  : first.rank !== undefined
           : false;
-        if (list.length === 1 && !numeric && (!(boardMode || by) || firstInBoard)) {
+        if (list.length === 1 && !numeric && (!(boardMode || by || growMode || activeMode) || firstInBoard)) {
           setUsers(null);
           locate(first.id);
         }
@@ -264,7 +310,7 @@ export function RankingNav({
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [q, bvBy, boardMode, bvMode, stnbMode, by, current, numeric, areaMode, area, nf]);
+  }, [q, bvBy, boardMode, bvMode, stnbMode, by, current, numeric, areaMode, area, nf, growMode, activeMode]);
 
   // 点击外部收起下拉
   useEffect(() => {
@@ -308,9 +354,13 @@ export function RankingNav({
               ? "该玩家暂无已通过审核的录像，未加入 BV 排行"
               : stnbMode
                 ? "该玩家暂无有效 STNB 成绩，未加入 STNB 排行"
-                : areaMode
-                  ? "该玩家未加入该地区排行（暂无成绩）"
-                  : "该玩家未加入排行榜（暂无成绩）"
+                : growMode
+                  ? "该玩家近 30 天名次无提升，未加入进步排行"
+                  : activeMode
+                    ? "该玩家近 7 天无活跃记录，未加入活跃排行"
+                    : areaMode
+                      ? "该玩家未加入该地区排行（暂无成绩）"
+                      : "该玩家未加入排行榜（暂无成绩）"
           );
           return;
         }
@@ -375,7 +425,7 @@ export function RankingNav({
           onToggle={toggleNf}
         />
       </div>
-      {(current === "all" || boardMode || areaMode) && (
+      {(current === "all" || boardMode || areaMode || growMode || activeMode) && (
         <div className="goto_form" ref={boxRef}>
           <span className="goto_search">
             <svg className="goto_icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
