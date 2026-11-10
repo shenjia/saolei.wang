@@ -54,8 +54,8 @@ export const PATH_SPEED_TRIGGER = 30;
 export const PATH_SPEED_MIN_TIME_MS = 30000;
 
 /** press-release 分级阈值（ms）——初级/中级 45（2026-10-19 张老师晚定：中级从 56 放宽），
- *  高级 60；初/中锚定 P0 回测人类 p1 分位 44.3 / 55.9 取整收紧，高级沿用原线 */
-export const PRESS_AVG_MS: Record<string, number> = { beg: 45, int: 45, exp: 60 };
+ *  高级 50（2026-11-11 张老师指令：60 太容易触发，收紧到 50）；初/中锚定 P0 回测人类 p1 分位 44.3 / 55.9 取整收紧 */
+export const PRESS_AVG_MS: Record<string, number> = { beg: 45, int: 45, exp: 50 };
 
 /** STNB 分级阈值（各级 p99 取整上浮） */
 export const STNB_TRIGGER: Record<string, number> = { beg: 205, int: 160, exp: 150 };

@@ -34,7 +34,7 @@ const LEVEL_NAMES: Record<string, string> = { beg: "初级", int: "中级", exp:
 function reasonTagList(v: AdminVideoRow) {
   const r = v.autoReason;
   const lv = v.level;
-  const pressLine = PRESS_AVG_MS[lv] ?? 60;
+  const pressLine = PRESS_AVG_MS[lv] ?? 50;
   const stnbLine = STNB_TRIGGER[lv] ?? 150;
   const tags: { text: string; title: string; cls: string }[] = [];
   const pressVal = v.pressAvgMs != null ? `${v.pressAvgMs}ms` : "命中";

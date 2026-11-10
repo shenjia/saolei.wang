@@ -236,7 +236,7 @@ export function triageParsed(
   let reason = 0;
 
   const ps = pressPairStats(v);
-  const pressMs = PRESS_AVG_MS[level] ?? 60;
+  const pressMs = PRESS_AVG_MS[level] ?? 50;
   if ((ps.leftAvg !== null && ps.leftN >= PRESS_MIN_PAIRS && ps.leftAvg <= pressMs) ||
       (ps.rightAvg !== null && ps.rightN >= PRESS_MIN_PAIRS && ps.rightAvg <= pressMs)) {
     reason |= AUTO_REASON.PRESS;
