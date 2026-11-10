@@ -63,7 +63,8 @@ import { getThunderKingThreshold, dualTitles } from "@/lib/title-system";
 import { ageOf, constellationText } from "@/lib/birth";
 import { getRadarData } from "@/lib/radar";
 import { getActiveRadar } from "@/lib/activerank";
-import { resolveAvatarUrl, AVATAR_REVIEW_STATUS } from "@/lib/avatar";
+import { resolveAvatarUrl, AVATAR_REVIEW_STATUS, DEFAULT_AVATAR } from "@/lib/avatar";
+import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { SendMessageButton } from "@/components/SendMessageButton";
@@ -341,13 +342,19 @@ export default async function UserViewPage({
 
   // 照片优先级：新版上传头像（/uploads/avatar/…）→ OAuth 头像外链（http 开头）
   // → 老用户本地照片墙（头像实体为 /images/player/{id}.jpg，以文件存在为准）→ 默认头像
+  // （2026-11-11 张老师定：默认图与玩家卡片/每日一星统一并轨 no.jpg；
+  //   军衔制下按性别给军装默认头像，旧版称号观看者仍 no.jpg）
+  const hasWallPhoto = existsSync(path.join(process.cwd(), "public", "images", "player", `${userId}.jpg`));
   const photo = resolveAvatarUrl(
     user.avatar,
-    existsSync(path.join(process.cwd(), "public", "images", "player", `${userId}.jpg`))
-      ? `/images/player/${userId}.jpg`
-      : "/images/common/avatar.png",
+    hasWallPhoto ? `/images/player/${userId}.jpg` : DEFAULT_AVATAR,
   );
-  const photoImg = <img className="avatar" src={photo} alt={user.chineseName} />;
+  const photoImg =
+    photo === DEFAULT_AVATAR ? (
+      <DefaultAvatar sex={user.sex} size="big" className="avatar" alt={user.chineseName} />
+    ) : (
+      <img className="avatar" src={photo} alt={user.chineseName} />
+    );
 
   // 「实力」标题问号：与每日一星同图标同气泡；主栏/侧栏两处响应式副本共用。
   const ratingHelpLink = (
@@ -377,7 +384,7 @@ export default async function UserViewPage({
           {/* 自己的主页：头像可点，点击直接弹文件选择 + 方形裁剪浮窗（不跳账号中心）。
               别人的主页保持原样（裸 <img>，无链接无蒙层），不改动既有 DOM 与样式。 */}
           {isSelf ? (
-            <SelfAvatar src={photo} alt={user.chineseName} pending={avatarPending} />
+            <SelfAvatar src={photo} alt={user.chineseName} pending={avatarPending} defaultSex={user.sex} />
           ) : (
             photoImg
           )}

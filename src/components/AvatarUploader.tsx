@@ -17,6 +17,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AvatarCropper, useAvatarPick, type CropResult } from "./AvatarCropper";
 import { toast } from "./Toast";
+import { useTitleSystem } from "./TitleSystemProvider";
+import { DefaultAvatar } from "./DefaultAvatar";
 
 interface Props {
   /** 当前生效的头像 URL */
@@ -27,12 +29,16 @@ interface Props {
   pendingReason?: string;
   /** 最近一次被驳回的记录（展示原因） */
   rejected?: { reason: string } | null;
+  /** 走默认图时传用户性别：军衔制下按性别显示军装默认头像（2026-11-11），旧版称号仍 currentUrl */
+  defaultSex?: number;
 }
 
-export function AvatarUploader({ currentUrl, pendingUrl, pendingReason, rejected }: Props) {
+export function AvatarUploader({ currentUrl, pendingUrl, pendingReason, rejected, defaultSex }: Props) {
   const router = useRouter();
   const { inputRef, pickedUrl, setPickedUrl, onPick } = useAvatarPick();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // 军衔制默认头像（2026-11-11）：无待审图且军衔制时按性别替换展示图，旧版称号维持 currentUrl
+  const { system } = useTitleSystem();
 
   function onDone(r: CropResult) {
     setPickedUrl(null);
@@ -41,7 +47,9 @@ export function AvatarUploader({ currentUrl, pendingUrl, pendingReason, rejected
     router.refresh();
   }
 
-  // 展示图优先级：待审图（若有）→ 当前生效头像
+  // 展示图优先级：待审图（若有）→ 军衔制性别默认头像（资料页缩略位走 mid 档，
+  // DefaultAvatar 内含 WebP 档位与原图回退，2026-11-11）→ 当前生效头像
+  const showDefault = !pendingUrl && defaultSex !== undefined && system === "m";
   const shown = pendingUrl || currentUrl;
 
   return (
@@ -57,8 +65,12 @@ export function AvatarUploader({ currentUrl, pendingUrl, pendingReason, rejected
             disabled={!!pickedUrl}
             title="点击更换头像"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shown} alt="我的头像" />
+            {showDefault ? (
+              <DefaultAvatar sex={defaultSex} size="mid" alt="我的头像" />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={shown} alt="我的头像" />
+            )}
             <span className="avatar_mask">点击更换</span>
             {pendingUrl && <span className="avatar_flag">审核中</span>}
           </button>

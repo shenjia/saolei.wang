@@ -10,6 +10,7 @@ import { LoginModal } from "@/components/LoginModal";
 import { MessageBadge } from "@/components/MessageBadge";
 import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "@/components/MenuIcons";
 import { MobileNav } from "@/components/MobileNav";
+import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { ScrollReset } from "@/components/ScrollReset";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { SystemText } from "@/components/SystemText";
@@ -132,7 +133,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                     <li className="popMenu user_menu">
                       <Link prefetch={false} href={`/user/${session.uid}`} className="um_trigger">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img className="um_avatar" src={avatarUrl} alt="" />
+                        {/* 无头像：军衔制下按性别给军装默认头像（顶栏 28-30px 位走 mid 档），旧版称号仍 no.jpg（2026-11-11） */}
+                        {me?.avatarIsDefault ? (
+                          <DefaultAvatar sex={me.sex} size="mid" className="um_avatar" />
+                        ) : (
+                          <img className="um_avatar" src={avatarUrl} alt="" />
+                        )}
                         <span className="um_name">{displayName}</span>
                         {/* 顶栏人名是自己，不挂玩家名气泡（2026-10-29 张老师要求） */}
                       </Link>
@@ -183,7 +189,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <MobileNav
               user={
                 session
-                  ? { uid: session.uid, displayName, avatarUrl, role: session.role }
+                  ? {
+                      uid: session.uid,
+                      displayName,
+                      avatarUrl,
+                      avatarSex: me?.sex ?? 0,
+                      avatarIsDefault: !!me?.avatarIsDefault,
+                      role: session.role,
+                    }
                   : null
               }
             />

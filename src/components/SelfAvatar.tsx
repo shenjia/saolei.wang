@@ -13,6 +13,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AvatarCropper, useAvatarPick, type CropResult } from "./AvatarCropper";
 import { toast } from "./Toast";
+import { useTitleSystem } from "./TitleSystemProvider";
+import { DefaultAvatar } from "./DefaultAvatar";
 
 interface Props {
   /** 当前生效的头像 URL（账号中心传 big 360px 档 WebP，2026-11-10 全站头像 WebP 化） */
@@ -22,9 +24,11 @@ interface Props {
   alt: string;
   /** 服务端查到的「有待审头像」状态 */
   pending: boolean;
+  /** 走默认图时传用户性别：军衔制下按性别显示军装默认头像（2026-11-11），旧版称号仍 src */
+  defaultSex?: number;
 }
 
-export function SelfAvatar({ src, fallbackSrc, alt, pending }: Props) {
+export function SelfAvatar({ src, fallbackSrc, alt, pending, defaultSex }: Props) {
   const router = useRouter();
   const { inputRef, pickedUrl, setPickedUrl, onPick } = useAvatarPick();
   const [note, setNote] = useState<{ kind: "ok" | "pending"; text: string } | null>(null);
@@ -45,6 +49,12 @@ export function SelfAvatar({ src, fallbackSrc, alt, pending }: Props) {
 
   const reviewing = pending || note?.kind === "pending";
 
+  // 军衔制默认头像（2026-11-11）：无头像时军衔制下按性别显示军装默认头像
+  // （自己主页 162px 位走 big 档，DefaultAvatar 内含 WebP 档位与原图回退），
+  // 旧版称号维持原 src
+  const { system } = useTitleSystem();
+  const showDefault = defaultSex !== undefined && system === "m";
+
   return (
     <>
       <button
@@ -53,20 +63,24 @@ export function SelfAvatar({ src, fallbackSrc, alt, pending }: Props) {
         onClick={() => inputRef.current?.click()}
         aria-label="点击更换头像"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className="avatar"
-          src={src}
-          alt={alt}
-          onError={
-            fallbackSrc && src !== fallbackSrc
-              ? (e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = fallbackSrc;
-                }
-              : undefined
-          }
-        />
+        {showDefault ? (
+          <DefaultAvatar sex={defaultSex} size="big" className="avatar" alt={alt} />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            className="avatar"
+            src={src}
+            alt={alt}
+            onError={
+              fallbackSrc && src !== fallbackSrc
+                ? (e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = fallbackSrc;
+                  }
+                : undefined
+            }
+          />
+        )}
         {reviewing && <span className="avatar_status">审核中</span>}
         {note?.kind === "ok" && <span className="avatar_status ok">{note.text}</span>}
         <span className="avatar_change">点击更换头像</span>

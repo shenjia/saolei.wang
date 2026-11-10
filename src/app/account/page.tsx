@@ -19,7 +19,7 @@ import { QqAvatarPrompt } from "@/components/QqAvatarPrompt";
 import { AccountVisibilityToggle } from "@/components/AccountVisibilityToggle";
 import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { ageOf, constellationText } from "@/lib/birth";
-import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
+import { AVATAR_REVIEW_STATUS, resolveAvatarUrl, DEFAULT_AVATAR } from "@/lib/avatar";
 import { avatarUrlFor } from "@/lib/small-avatar";
 import { getOpenmsLink } from "@/lib/openms";
 import { OpenmsBindPrefs } from "@/components/OpenmsBind";
@@ -92,11 +92,11 @@ export default async function AccountManagePage({
   const donateCents = Number(donateAgg._sum.amount ?? 0);
 
   // 头像优先级与个人主页一致：新版上传 → OAuth 外链 → 本地照片墙 → 默认图
+  // （2026-11-11 张老师定：默认图统一并轨 no.jpg；SelfAvatar 内部军衔制下按性别切军装默认头像）
+  const hasWallPhoto = existsSync(path.join(process.cwd(), "public", "images", "player", `${session.uid}.jpg`));
   const photo = resolveAvatarUrl(
     me?.avatar ?? "",
-    existsSync(path.join(process.cwd(), "public", "images", "player", `${session.uid}.jpg`))
-      ? `/images/player/${session.uid}.jpg`
-      : "/images/common/avatar.png",
+    hasWallPhoto ? `/images/player/${session.uid}.jpg` : DEFAULT_AVATAR,
   );
   // 162px 展示位走 big 360px 档（2x retina，2026-11-10 全站头像 WebP 化）；
   // OAuth 外链 / 默认图无本地档位 → 回退原图（photo 本身）
@@ -125,7 +125,13 @@ export default async function AccountManagePage({
                 与爱好、QQ 等同格式分栏，无小标题无分割线，2026-10-15 五轮张老师定稿） */}
             <div className="account_identity">
               <div className="account_avatar_cell">
-                <SelfAvatar src={photoBig} fallbackSrc={photo} alt={user.chineseName} pending={avatarPending} />
+                <SelfAvatar
+                  src={photoBig}
+                  fallbackSrc={photo}
+                  alt={user.chineseName}
+                  pending={avatarPending}
+                  defaultSex={photo === DEFAULT_AVATAR ? user.sex : undefined}
+                />
               </div>
               <table className="form" cellPadding={0} cellSpacing={0}>
                 <tbody>

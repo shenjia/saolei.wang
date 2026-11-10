@@ -29,6 +29,8 @@ export interface AvatarSlot {
   pendingUrl?: string | null;
   pendingReason?: string;
   rejected?: { reason: string } | null;
+  /** 走默认图时传用户性别：军衔制下按性别显示军装默认头像（2026-11-11），旧版称号仍 currentUrl */
+  defaultSex?: number;
 }
 
 export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefaults; avatarSlot: AvatarSlot }) {

@@ -22,6 +22,7 @@ import { getUserCard } from "@/lib/usercard";
 import { getRadarData } from "@/lib/radar";
 import { getSession } from "@/lib/auth";
 import { AvatarCell, Score3bvs, ScoreTime, TitleBadge } from "./Cells";
+import { DefaultAvatar } from "./DefaultAvatar";
 import { RadarChart } from "./RadarChart";
 import ClickTracker from "./ClickTracker";
 import { SendMessageButton } from "./SendMessageButton";
@@ -47,7 +48,12 @@ export function UserCard({
             prefetch={false}
             title={`进入 ${card.chineseName} 的地盘`}
           >
-            <img className="ucd_avatar" src={card.avatarUrl} alt={card.chineseName} />
+            {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档），旧版称号仍 no.jpg（2026-11-11） */}
+            {card.avatarIsDefault ? (
+              <DefaultAvatar sex={card.sex} size="mid" className="ucd_avatar" alt={card.chineseName} />
+            ) : (
+              <img className="ucd_avatar" src={card.avatarUrl} alt={card.chineseName} />
+            )}
           </Link>
         </div>
         <div className="ucd_right">

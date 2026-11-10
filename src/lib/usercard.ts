@@ -10,7 +10,7 @@
 
 import { prisma } from "./db";
 import { getUserDetail, getUserRanks } from "./queries";
-import { resolveAvatarUrl } from "./avatar";
+import { resolveAvatarUrl, isDefaultAvatar, DEFAULT_AVATAR } from "./avatar";
 import { avatarUrlFor } from "./small-avatar";
 import { resolveTitleDisplay } from "./title-system";
 
@@ -31,6 +31,8 @@ export interface UserCardData {
   avatarUrl: string;
   /** 头像 big 360px 档 URL（每日之星 144px 展示位 2x 用；OAuth 外链或默认图同 avatarUrl） */
   avatarBigUrl: string;
+  /** 无头像（走默认图）：军衔制下按性别渲染军装默认头像（2026-11-11） */
+  avatarIsDefault: boolean;
   /** 军衔（高级时间绝对阈值，与首页/排行榜/军衔页同口径） */
   militaryTitle: string;
   /** Phase 5：旧版称号备选（按当前成绩+在榜状态评定） */
@@ -53,7 +55,7 @@ function avatarUrl(id: number, avatar: string, size: "mid" | "big" = "mid"): str
   // WebP（2026-11-10 全站头像 WebP 化）；OAuth 外链与默认图（no.jpg）无本地档位，回退原图
   const sized = avatarUrlFor(avatar, id, size);
   if (sized) return sized;
-  return resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "/images/player/no.jpg");
+  return resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : DEFAULT_AVATAR);
 }
 
 /**
@@ -90,6 +92,7 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     sex: user.sex,
     avatarUrl: avatarUrl(id, user.avatar),
     avatarBigUrl: avatarUrl(id, user.avatar, "big"),
+    avatarIsDefault: isDefaultAvatar(user.avatar),
     militaryTitle: detail.title,
     classicTitle: classicPair.system === "c" ? { name: classicPair.name, color: classicPair.color ?? "#666666" } : null,
     rank: national,
@@ -104,11 +107,23 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
 /** 顶部导航右侧用户菜单用：只取姓名 + 英文名 + 头像 URL（不拉成绩/名次，避免每页额外开销） */
 export async function getHeaderUser(
   uid: number,
-): Promise<{ chineseName: string; englishName: string; avatarUrl: string } | null> {
+): Promise<{
+  chineseName: string;
+  englishName: string;
+  avatarUrl: string;
+  sex: number;
+  avatarIsDefault: boolean;
+} | null> {
   const u = await prisma.user.findUnique({
     where: { id: BigInt(uid) },
-    select: { chineseName: true, englishName: true, avatar: true },
+    select: { chineseName: true, englishName: true, avatar: true, sex: true },
   });
   if (!u) return null;
-  return { chineseName: u.chineseName, englishName: u.englishName, avatarUrl: avatarUrl(uid, u.avatar) };
+  return {
+    chineseName: u.chineseName,
+    englishName: u.englishName,
+    avatarUrl: avatarUrl(uid, u.avatar),
+    sex: u.sex,
+    avatarIsDefault: isDefaultAvatar(u.avatar),
+  };
 }

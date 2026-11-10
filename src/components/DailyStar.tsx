@@ -10,6 +10,7 @@ import Link from "next/link";
 import { getTodayStar } from "@/lib/star";
 import { getUserCard } from "@/lib/usercard";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { DefaultAvatar } from "./DefaultAvatar";
 import { AvatarImg } from "@/components/AvatarImg";
 import { areaDisplay, AREA_OVERSEAS, isManager } from "@/lib/config";
 import { getSession } from "@/lib/auth";
@@ -52,13 +53,18 @@ export async function DailyStar() {
           prefetch={false}
           title={`进入 ${card.chineseName} 的地盘`}
         >
-          {/* 144px 展示位走 big 360px 档（2x retina）；小图缺失回退原图（2026-11-10） */}
-          <AvatarImg
-            src={card.avatarBigUrl}
-            fallback={card.avatarUrl}
-            className="star_avatar"
-            alt={card.chineseName}
-          />
+          {/* 144px 展示位走 big 360px 档（2x retina）；小图缺失回退原图（2026-11-10）
+              无头像：军衔制下按性别给军装默认头像（big 档），旧版称号仍 no.jpg（2026-11-11） */}
+          {card.avatarIsDefault ? (
+            <DefaultAvatar sex={card.sex} size="big" className="star_avatar" alt={card.chineseName} />
+          ) : (
+            <AvatarImg
+              src={card.avatarBigUrl}
+              fallback={card.avatarUrl}
+              className="star_avatar"
+              alt={card.chineseName}
+            />
+          )}
         </Link>
         <div className="star_right">
           <p className="star_name">

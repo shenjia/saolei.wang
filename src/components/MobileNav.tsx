@@ -12,12 +12,16 @@ import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "./MenuI
 import { BubbleIcon } from "./SendMessageButton";
 import { pollWhenMobile, useUnreadMessages } from "./useUnreadMessages";
 import { SystemText } from "./SystemText";
+import { DefaultAvatar } from "./DefaultAvatar";
 import { isManager } from "@/lib/config";
 
 export interface MobileNavUser {
   uid: number;
   displayName: string;
   avatarUrl: string;
+  /** 无头像时军衔制默认头像用：用户性别 + 是否默认图（2026-11-11） */
+  avatarSex: number;
+  avatarIsDefault: boolean;
   /** 用户角色（USER_ROLE）：isManager 才显示管理后台入口 */
   role: number;
 }
@@ -128,8 +132,12 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
             aria-expanded={userOpen}
             onClick={toggleUser}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="mn_avatar" src={user.avatarUrl} alt="" />
+            {/* 无头像：军衔制下按性别给军装默认头像（顶栏位走 mid 档），旧版称号仍 no.jpg（2026-11-11） */}
+            {user.avatarIsDefault ? (
+              <DefaultAvatar sex={user.avatarSex} size="mid" className="mn_avatar" />
+            ) : (
+              <img className="mn_avatar" src={user.avatarUrl} alt="" />
+            )}
           </button>
           {userOpen && (
             <ul className="mn_menu mn_user_menu">

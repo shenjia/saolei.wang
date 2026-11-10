@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { AccountHeader } from "@/components/AccountHeader";
 import { ProfileForm, type AvatarSlot } from "@/components/AccountForms";
 import { UserPanel } from "@/components/UserCard";
-import { AVATAR_REVIEW_STATUS, resolveAvatarUrl } from "@/lib/avatar";
+import { AVATAR_REVIEW_STATUS, resolveAvatarUrl, isDefaultAvatar } from "@/lib/avatar";
 import { LEGACY_DEFAULT_BIRTHDAY } from "@/lib/birth";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +43,8 @@ export default async function AccountProfilePage() {
       latestAvatar?.status === AVATAR_REVIEW_STATUS.REJECTED
         ? { reason: latestAvatar.reason || "未通过管理员审核" }
         : null,
+    // 无头像：军衔制下按性别给军装默认头像（2026-11-11）；有真实头像时绝不传
+    defaultSex: isDefaultAvatar(avatarValue) ? detail.user.sex : undefined,
   };
 
   const birthday = Number(info?.birthday ?? 0);
