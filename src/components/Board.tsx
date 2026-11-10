@@ -7,9 +7,9 @@ import { BOARD_SIZE, type VideoLevel } from "@/lib/config";
    2026-10-14 二次返工定稿的「整盘单 SVG 覆盖层」：所有格子共用一张坐标系一次
    光栅化，任意倍率网格完全均匀（flop 原版同构）。
    静态字符（数字 0-8 / b＝雷→未开面）→ FlopSprites symbol id；
-   2026-11-09 张老师定：数字 1-8 默认用 Metasweeper 高清字形（-hd，与练习页
-   「像素风格」关=高清同口径）；2026-11-10 二期：旗/错旗一并高清（cell-flag-hd
-   /cell-flag-wrong-hd，Metasweeper cellflag.svg/falsemine.svg 同源）。
+   2026-11-10 张老师定：录像页数字回滚 flop 原版（-hd crispEdges 在非整数倍
+   版图 zoom 下逐格相位不同＝笔画粗细不一，高级盘尤其明显；练习页大格子
+   不显，保留高清）。旗/雷 -hd 为并行线功能，无 crispEdges 不受影响。
    回放动态类（bb/bf/bq/bm/bn/bmb）映射在 VideoReplay 的 CELL_VEC_MAP。
    2026-10-31 封面含旗编码（张老师需求：封面显示玩家标过的雷，等长合并在
    video_info.board 里）：F＝雷+玩家旗→红旗、X＝非雷格+玩家旗→错旗；
@@ -19,14 +19,14 @@ const VEC_SYM: Record<string, string> = {
   f: "cell-flag-hd",
   n: "cell-flag-wrong-hd",
   "0": "cell-number-0",
-  "1": "cell-number-1-hd",
-  "2": "cell-number-2-hd",
-  "3": "cell-number-3-hd",
-  "4": "cell-number-4-hd",
-  "5": "cell-number-5-hd",
-  "6": "cell-number-6-hd",
-  "7": "cell-number-7-hd",
-  "8": "cell-number-8-hd",
+  "1": "cell-number-1",
+  "2": "cell-number-2",
+  "3": "cell-number-3",
+  "4": "cell-number-4",
+  "5": "cell-number-5",
+  "6": "cell-number-6",
+  "7": "cell-number-7",
+  "8": "cell-number-8",
 };
 
 export function Board({

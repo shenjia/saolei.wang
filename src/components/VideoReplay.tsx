@@ -269,30 +269,30 @@ const FACE_MAP: Record<FaceKind | "press", string> = {
    重采样＝细微错位，换练习页 2026-10-14 定稿的整盘单 SVG 覆盖层）----
    Board vec 模式下 td 只担布局/命中/语义类，视觉走 .vecboard 的 <use>；
    引擎态类名 → FlopSprites symbol（与练习页 OnlinePlay VEC_MAP 同源）。
-   2026-11-09 张老师定：数字 1-8 默认 Metasweeper 高清字形（-hd，与练习页
-   「像素风格」关=高清同口径）；2026-11-10 二期：旗/雷/错雷/踩雷格一并高清
-   （cell-flag-hd/cell-mine-hd/cell-flag-wrong-hd/cell-mine-bomb-hd）。 */
+   2026-11-10 张老师定：录像页数字回滚 flop 原版（-hd crispEdges 在非整数倍
+   版图 zoom 下逐格相位不同＝笔画粗细不一，高级尤其明显；练习页大格子不显）。
+   旗/雷/错雷/踩雷 -hd 高清保留（并行线功能，无 crispEdges 不受相位影响）。 */
 const CELL_VEC_MAP: Record<string, string> = {
   bb: "cell-normal-solid",
   bf: "cell-flag-hd",
   bq: "cell-question-solid",
   b0: "cell-number-0",
-  b1: "cell-number-1-hd",
-  b2: "cell-number-2-hd",
-  b3: "cell-number-3-hd",
-  b4: "cell-number-4-hd",
-  b5: "cell-number-5-hd",
-  b6: "cell-number-6-hd",
-  b7: "cell-number-7-hd",
-  b8: "cell-number-8-hd",
+  b1: "cell-number-1",
+  b2: "cell-number-2",
+  b3: "cell-number-3",
+  b4: "cell-number-4",
+  b5: "cell-number-5",
+  b6: "cell-number-6",
+  b7: "cell-number-7",
+  b8: "cell-number-8",
   bm: "cell-mine-hd",
   bn: "cell-flag-wrong-hd",
   bmb: "cell-mine-bomb-hd",
 };
 
 /* 封面字符（Board 静态直出同款：* / b＝雷→未开面、F=旗、X=错旗、0-8 数字）→
-   symbol。stop() 恢复静态封面与 Board.tsx VEC_SYM 共用此口径（2026-11-09：
-   数字 1-8 走 -hd 高清；2026-11-10：F/X 旗与错旗一并 -hd 高清；
+   symbol。stop() 恢复静态封面与 Board.tsx VEC_SYM 共用此口径（2026-11-10：
+   数字回滚 flop 原版；F/X 旗与错旗 -hd 高清保留——并行线功能）；
    * 与 b 都映射未开面，兼容解析器输出与含旗封面串） */
 const VEC_SYM_CHAR: Record<string, string> = {
   "*": "cell-normal-solid",
@@ -300,14 +300,14 @@ const VEC_SYM_CHAR: Record<string, string> = {
   F: "cell-flag-hd",
   X: "cell-flag-wrong-hd",
   "0": "cell-number-0",
-  "1": "cell-number-1-hd",
-  "2": "cell-number-2-hd",
-  "3": "cell-number-3-hd",
-  "4": "cell-number-4-hd",
-  "5": "cell-number-5-hd",
-  "6": "cell-number-6-hd",
-  "7": "cell-number-7-hd",
-  "8": "cell-number-8-hd",
+  "1": "cell-number-1",
+  "2": "cell-number-2",
+  "3": "cell-number-3",
+  "4": "cell-number-4",
+  "5": "cell-number-5",
+  "6": "cell-number-6",
+  "7": "cell-number-7",
+  "8": "cell-number-8",
 };
 
 /** tbody → table → .board → .vecboard 取整盘 <use> 数组（非 vec 棋盘返回空数组） */
