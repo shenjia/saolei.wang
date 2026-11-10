@@ -12,7 +12,7 @@ import { TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, getApiUsage, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { practiceCusClean } from "@/lib/admin/practice";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies, getCachedOverview, getCachedTrend30 } from "@/lib/admin/cache";
-import { getOpenmsConsentOverview, getPendingOverview } from "@/lib/admin/stats";
+import { getPendingOverview } from "@/lib/admin/stats";
 import { getOpenmsSyncStatus } from "@/lib/admin/openms-sync";
 import { OpenmsSyncCard } from "@/components/admin/OpenmsSyncCard";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
@@ -32,14 +32,13 @@ export default async function AdminDashboard() {
   // 与分布/流量/API/异常一致；轻量「最新注册/最新上传」仍实时
   // 2026-11-06 张老师定：待审类「审核即消费」的数字（录像/评论/论坛/头像待审 + 最老积压）
   // 不进缓存，getPendingOverview 实时取后与缓存核心合并——审完回页数字立即消
-  const [core, trend, dist, traffic, api, pending, openmsConsent, openmsSync] = await Promise.all([
+  const [core, trend, dist, traffic, api, pending, openmsSync] = await Promise.all([
     getCachedOverview(),
     getCachedTrend30(),
     getDashboardDistributionsSoftwares(),
     getTrafficOverview(),
     getApiUsage(),
     getPendingOverview(),
-    getOpenmsConsentOverview(),
     // 2026-11-10 张老师定：同步状态卡实时取（不进 unstable_cache），首帧 RSC + 客户端 10s 轮询校准
     getOpenmsSyncStatus(),
   ]);
@@ -136,26 +135,9 @@ export default async function AdminDashboard() {
       </div>
 
       {/* ---------- 规模指标（2026-10-16 张老师定：第一行全带走势线；2026-11-01 加第 7 卡 API 调用；
-          2026-11-08 张老师定：最上加「开源扫雷网表态」卡——openms_link 96 绑定用户的征求表态进度，实时取） ---------- */}
+          2026-11-11 张老师定：「开源扫雷网表态」卡下线（已正式绑定开始同步），
+          「今日练习」后加「今日胜负」卡——VS 板块对决统计） ---------- */}
       <div className="admin_kpis">
-        <Kpi
-          label="开源扫雷网表态"
-          href="/admin/openms-consent"
-          value={
-            <>
-              {openmsConsent.answered.toLocaleString("zh-CN")}
-              <small> / {openmsConsent.total.toLocaleString("zh-CN")} 人已表态</small>
-            </>
-          }
-          tone="cyan"
-          foot={
-            <>
-              同意 <b>{openmsConsent.agreed}</b> · 不同意 <b>{openmsConsent.disagreed}</b>
-              <br />
-              未表态 {openmsConsent.unans}（视为不同意）
-            </>
-          }
-        />
         <Kpi
           label="今日 PV"
           value={traffic.today.pv}
@@ -210,6 +192,21 @@ export default async function AdminDashboard() {
               })()}
             </>
           }
+        />
+        {/* 今日胜负（2026-11-11 张老师定）：VS 板块对决统计——一次 /vs/:id 页访问
+            = 一次对决，参与人数 = 发起者 + 被挑战者去重；同比与趋势同 PV 口径 */}
+        <Kpi
+          label="今日胜负"
+          value={
+            <>
+              {traffic.vs.today.toLocaleString("zh-CN")}
+              <small> 次对决 / {traffic.vs.todayPlayers} 人参与</small>
+            </>
+          }
+          tone="purple"
+          trend={traffic.vs.trend}
+          trendEstimate={traffic.vs.todayEst}
+          foot={cmpFoot(traffic.vs.today, traffic.vs.lastWeek)}
         />
         <Kpi
           label="注册玩家"
