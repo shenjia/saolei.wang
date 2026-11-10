@@ -39,12 +39,14 @@ export async function POST(req: NextRequest) {
   const sqOn = body.sq === true;
   const comboOn = body.combo === true;
   // 设置开关（2026-11-01）：同上缺省 false——老客户端不带，起记日前旧局稀释占比
+  // pixelStyle 像素风格（2026-11-10 第七列 sw_pixel，开关 2026-11-09 上线后才统计）
   const swQmark = body.qmark === true;
   const swStats = body.showStats === true;
   const swSndfb = body.sndFb === true;
   const swShot = body.autoShot === true;
   const swQretry = body.quickRetry === true;
   const swWheel = body.wheelZoom === true;
+  const swPixel = body.pixelStyle === true;
   if (
     !LEVELS.has(level) ||
     !Number.isFinite(csec) || csec <= 0 || csec > 3_600_000 || // 10 小时封顶
@@ -76,11 +78,11 @@ export async function POST(req: NextRequest) {
     INSERT INTO practice_daily (day, user_id, plays, wins, plays_beg, plays_int, plays_exp,
       wins_beg, wins_int, wins_exp, wins_cus, act_points,
       mode_ranked, mode_nf, mode_ng, mode_sq, mode_combo,
-      sw_qmark, sw_stats, sw_sndfb, sw_shot, sw_qretry, sw_wheel, create_time, update_time)
+      sw_qmark, sw_stats, sw_sndfb, sw_shot, sw_qretry, sw_wheel, sw_pixel, create_time, update_time)
     VALUES (${day}, ${uid}, 1, ${wonInt}, ${begInc}, ${intInc}, ${expInc},
       ${winBegInc}, ${winIntInc}, ${winExpInc}, ${winCusInc}, ${pts},
       ${ranked ? 1 : 0}, ${nfOn ? 1 : 0}, ${ngOn ? 1 : 0}, ${sqOn ? 1 : 0}, ${comboOn ? 1 : 0},
-      ${swQmark ? 1 : 0}, ${swStats ? 1 : 0}, ${swSndfb ? 1 : 0}, ${swShot ? 1 : 0}, ${swQretry ? 1 : 0}, ${swWheel ? 1 : 0}, ${now}, ${now})
+      ${swQmark ? 1 : 0}, ${swStats ? 1 : 0}, ${swSndfb ? 1 : 0}, ${swShot ? 1 : 0}, ${swQretry ? 1 : 0}, ${swWheel ? 1 : 0}, ${swPixel ? 1 : 0}, ${now}, ${now})
     ON DUPLICATE KEY UPDATE
       plays = plays + 1,
       wins = wins + ${wonInt},
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
       sw_shot = sw_shot + ${swShot ? 1 : 0},
       sw_qretry = sw_qretry + ${swQretry ? 1 : 0},
       sw_wheel = sw_wheel + ${swWheel ? 1 : 0},
+      sw_pixel = sw_pixel + ${swPixel ? 1 : 0},
       update_time = ${now}
   `;
   // 小时分布桶（2026-10-27 /admin/practice 24h 图）：与主计数独立 UPSERT，
