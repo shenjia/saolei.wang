@@ -15803,6 +15803,13 @@ span.vs_btn--disabled:hover img {
 .vs_post.vs_post_win {
   color: #fdc61a;
 }
+/* 04:03 张老师：移动端专属元素——终局评价顶部版（.vs_post_top，落 #vs_hero
+   row1 预测位）与底部「保存到相册」黄钮（.vs_save_album），PC 端一律隐藏，
+   移动端媒体查询内放开 */
+.vs_post_top,
+.vs_save_album {
+  display: none;
+}
 @keyframes vsPostIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -16495,5 +16502,40 @@ a.vs_c:hover {
     left: auto;
     right: 43px;
     transform: translateX(50%);
+  }
+  /* 04:03 张老师：终局评价回顶部预测位——动作槽里的评价隐藏，顶部新增
+     .vs_post_top 落 row1（与透明占位的 .vs_pre 叠同一格，DOM 后者在上）；
+     动作槽腾空后 row5 只剩 minmax(30px,auto)，hero 变矮，下方板块在首屏
+     露出个头，用户才知道下面还有内容可看 */
+  .vs_action .vs_post { display: none; }
+  .vs_post.vs_post_top {
+    display: block;
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: center;
+    margin: 15px auto; /* 与 .vs_pre 的 15px 上下对称口径一致 */
+  }
+  /* 04:03 张老师：底部返回左边加黄色「保存到相册」——盒型对齐 .vs_back_end
+     .vs_back（padding 12px 36px / 18px / 圆角 9px），配色走 vs_fight 金 */
+  #page .vs_save_album {
+    display: inline-block;
+    margin: 30px 15px 25px 0;
+    padding: 12px 30px;
+    font-size: 18px;
+    font-weight: 700;
+    font-family: inherit;
+    letter-spacing: 2px;
+    color: #2b2a20;
+    background: linear-gradient(180deg, #ffd23e, #f0b70a);
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+    text-shadow: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      0 6px 18px -8px rgba(253, 198, 29, 0.55);
+  }
+  #page .vs_save_album:disabled {
+    filter: grayscale(0.4) brightness(0.9);
+    cursor: default;
   }
 }

@@ -50,6 +50,89 @@ const LOSE_SOUND = "/sounds/vs-lose.mp3";
 const RISE_VOLUME = 1;
 const RESULT_VOLUME = 0.6;
 
+/** 等待赛后渐显元素全部到位（.vs_below / 胜败字 opacity→1），1.5s 兜底防卡死 */
+function waitSettled(): Promise<void> {
+  return new Promise<void>((res) => {
+    const t0 = Date.now();
+    const tick = () => {
+      const els = [
+        document.querySelector(".vs_below"),
+        ...Array.from(document.querySelectorAll(".vs_mark")),
+      ];
+      const settled =
+        els.every((e) => e && parseFloat(getComputedStyle(e).opacity) >= 1) &&
+        els.length > 0;
+      if (settled || Date.now() - t0 > 1500) return res();
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
+/**
+ * 生成整页截图 PNG Blob（2026-11-11 张老师需求；桌面自动截屏与移动端
+ * 「保存到相册」共用）：#page 全内容（英雄区→纪录→BV 三板块→底部说明从头到尾）
+ * + 顶部 #header .wrapper（站名 logo 条；移动端 #header display:none 时跳过），
+ * 左右各 40 逻辑 px 留白、body 底色铺满（03:29/03:39 张老师定）。
+ * filter 剪掉 .vs_back_end 底部按钮区（04:03 张老师：截图不要截到底部按钮）；
+ * 根节点 #page 不带该类不受影响。
+ */
+async function buildShotBlob(): Promise<Blob> {
+  const pg = document.getElementById("page") ?? document.body;
+  const wrap = document.querySelector<HTMLElement>("#header .wrapper");
+  const bg = getComputedStyle(document.body).backgroundColor || "#151515";
+  const baseOpts = {
+    pixelRatio: 2, // 与在线练习 renderShotPart 同款 2 倍清晰度
+    backgroundColor: bg,
+    style: {
+      zoom: "1",
+      transform: "none",
+      margin: "0",
+      position: "relative",
+      left: "0",
+      top: "0",
+      boxSizing: "border-box", // offsetWidth/Height 含 padding+border，避免右下被挤出
+    },
+  };
+  const shotOpts = (el: HTMLElement) => ({
+    ...baseOpts,
+    width: el.offsetWidth,
+    height: Math.max(1, el.offsetHeight),
+    canvasWidth: Math.max(1, Math.round(el.offsetWidth)),
+    canvasHeight: Math.max(1, Math.round(el.offsetHeight)),
+  });
+  const [pageCv, headCv] = await Promise.all([
+    // ⚠️ filter 会被调到 Text 节点（无 classList），必须先判存在再 contains，
+    // 否则整个截图克隆直接 TypeError（2026-11-11 移动端实测踩过）
+    toCanvas(pg, {
+      ...shotOpts(pg),
+      filter: (n: HTMLElement) => !(n.classList && n.classList.contains("vs_back_end")),
+    }),
+    // header 隐藏（移动端）时 offsetWidth=0，跳过避免截出 1px 空条
+    wrap && wrap.offsetWidth > 0 ? toCanvas(wrap, shotOpts(wrap)) : Promise.resolve(null),
+  ]);
+  // 拼接：header 条置顶（居中），#page 接其下；左右各扩 40px 逻辑留白
+  const GUTTER = 40; // 逻辑 px
+  const scale = pageCv.width / Math.max(1, pg.offsetWidth);
+  const gutter = Math.round(GUTTER * scale);
+  const out = document.createElement("canvas");
+  out.width = pageCv.width + gutter * 2;
+  out.height = (headCv ? headCv.height : 0) + pageCv.height;
+  const cx = out.getContext("2d");
+  let final = pageCv;
+  if (cx) {
+    cx.fillStyle = bg;
+    cx.fillRect(0, 0, out.width, out.height);
+    if (headCv) cx.drawImage(headCv, Math.round((out.width - headCv.width) / 2), 0);
+    cx.drawImage(pageCv, gutter, headCv ? headCv.height : 0);
+    final = out;
+  }
+  return new Promise<Blob>((resolve, reject) => {
+    final.toBlob((b) => (b ? resolve(b) : reject(new Error("png encode failed"))), "image/png");
+  });
+}
+
+
 /** 战前评价色调（与 lib/vs.ts 的 PreTone 同值；客户端不 import 服务端数据模块） */
 type PreTone = "adv" | "dis" | "even";
 
@@ -239,79 +322,34 @@ export function VsScoreBoard({
   // .vs_below（0.55s 淡入）与胜/败字（0.6s 渐显）的 opacity，全部到位立刻
   // 渲染落盘（transient activation 窗口内），气泡/截屏音按上述时刻延后。
   const shotRef = useRef<HTMLAudioElement>(null);
+  // 移动端「保存到相册」的截图缓存：done 后台预生成，点击时秒出分享面板
+  //（navigator.share 必须在 transient activation 手势窗内调用，现场生成 1~2s
+  // 会超时被 iOS 拒掉，所以必须提前备好）
+  const shotBlobRef = useRef<Blob | null>(null);
   useEffect(() => {
     if (phase !== "done") return;
-    // 03:59 张老师：移动端不启用截图也不出气泡——移动端浏览器无法写剪贴板
-    //（ClipboardItem/Safari iOS 均不可用），静默跳过整个截屏 effect
-    if (window.matchMedia("(max-width: 768px)").matches) return;
     let cancelled = false;
-    const doneAt = Date.now(); // 跑分结束时刻，3s/1s 延迟基准
+    // 03:59 张老师：移动端不写剪贴板不出气泡——移动端浏览器无法写剪贴板
+    //（ClipboardItem/Safari iOS 均不可用），跳过截屏 effect，只后台预生成
+    // 截图 Blob 给底部「保存到相册」按钮用
+    if (window.matchMedia("(max-width: 768px)").matches) {
+      void waitSettled()
+        .then(() => buildShotBlob())
+        .then((b) => {
+          if (!cancelled) shotBlobRef.current = b;
+        })
+        .catch(() => {}); // 预生成失败静默，点击时现场重试
+      return () => {
+        cancelled = true;
+      };
+    }
+    const doneAt = Date.now(); // 跑分结束时刻，3s 延迟基准
     const run = async () => {
-      // 元素停止变化即开截：等所有渐显元素 opacity 到 1（1.5s 兜底防卡死）
-      await new Promise<void>((res) => {
-        const t0 = Date.now();
-        const tick = () => {
-          const els = [
-            document.querySelector(".vs_below"),
-            ...Array.from(document.querySelectorAll(".vs_mark")),
-          ];
-          const settled =
-            els.every((e) => e && parseFloat(getComputedStyle(e).opacity) >= 1) &&
-            els.length > 0;
-          if (settled || Date.now() - t0 > 1500) return res();
-          requestAnimationFrame(tick);
-        };
-        tick();
-      });
+      // 元素停止变化即开截（03:38 张老师定）
+      await waitSettled();
       if (cancelled) return;
       try {
-        const pg = document.getElementById("page") ?? document.body;
-        const wrap = document.querySelector<HTMLElement>("#header .wrapper");
-        const bg = getComputedStyle(document.body).backgroundColor || "#151515";
-        const baseOpts = {
-          pixelRatio: 2, // 与在线练习 renderShotPart 同款 2 倍清晰度
-          backgroundColor: bg,
-          style: {
-            zoom: "1",
-            transform: "none",
-            margin: "0",
-            position: "relative",
-            left: "0",
-            top: "0",
-            boxSizing: "border-box", // offsetWidth/Height 含 padding+border，避免右下被挤出
-          },
-        };
-        const shotOpts = (el: HTMLElement) => ({
-          ...baseOpts,
-          width: el.offsetWidth,
-          height: Math.max(1, el.offsetHeight),
-          canvasWidth: Math.max(1, Math.round(el.offsetWidth)),
-          canvasHeight: Math.max(1, Math.round(el.offsetHeight)),
-        });
-        const [pageCv, headCv] = await Promise.all([
-          toCanvas(pg, shotOpts(pg)),
-          wrap ? toCanvas(wrap, shotOpts(wrap)) : Promise.resolve(null),
-        ]);
-        // 拼接：header 条置顶（居中），#page 接其下；左右各扩 40px 逻辑留白
-        //（03:39 张老师：960 截出来太满，左右扩上 40px）
-        const GUTTER = 40; // 逻辑 px
-        const scale = pageCv.width / Math.max(1, pg.offsetWidth);
-        const gutter = Math.round(GUTTER * scale);
-        const out = document.createElement("canvas");
-        out.width = pageCv.width + gutter * 2;
-        out.height = (headCv ? headCv.height : 0) + pageCv.height;
-        const cx = out.getContext("2d");
-        let final = pageCv;
-        if (cx) {
-          cx.fillStyle = bg;
-          cx.fillRect(0, 0, out.width, out.height);
-          if (headCv) cx.drawImage(headCv, Math.round((out.width - headCv.width) / 2), 0);
-          cx.drawImage(pageCv, gutter, headCv ? headCv.height : 0);
-          final = out;
-        }
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          final.toBlob((b) => (b ? resolve(b) : reject(new Error("png encode failed"))), "image/png");
-        });
+        const blob = await buildShotBlob();
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
         if (cancelled) return;
         // 气泡/截屏音：声音开＝done+3s 播截屏音+气泡；声音关＝剪贴板一落就出气泡
@@ -341,6 +379,50 @@ export function VsScoreBoard({
       cancelled = true;
     };
   }, [phase]);
+
+  // 04:03 张老师：移动端底部「保存到相册」——点击出系统分享面板（iOS 选
+  // 「存储图像」即存相册），不支持 files 分享的浏览器兜底直接下载 PNG。
+  // 优先用 done 后预生成的缓存 Blob（保证 share 落在点击手势窗内）。
+  const [saving, setSaving] = useState(false);
+  const saveToAlbum = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const blob = shotBlobRef.current ?? (await buildShotBlob());
+      const file = new File([blob], `vs-${opponentId}.png`, { type: "image/png" });
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[] }) => Promise<void>;
+      };
+      let shared = false;
+      if (nav.canShare?.({ files: [file] }) && nav.share) {
+        try {
+          await nav.share({ files: [file] });
+          shared = true;
+        } catch (e) {
+          // AbortError＝用户主动关掉分享面板，不算失败；NotAllowedError 等
+          //（手势过期/环境弹不出面板）落到下面的下载兜底
+          if ((e as DOMException)?.name === "AbortError") return;
+        }
+      }
+      if (!shared) {
+        // 下载兜底：iOS Safari 存到「文件」（长按可存相册），Android 直接进下载
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      }
+    } catch (e) {
+      // 用户在分享面板点取消（AbortError）不算失败，静默返回
+      if ((e as DOMException)?.name !== "AbortError") toast("截图生成失败", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // 01:18 张老师：赛后分割线宽度与两边玩家卡片边缘平齐——测量首尾 .vs_panel
   // 的跨度，inline 写到 divider 上（PC 端 absolute 定位用）；移动端卡片本就全宽，
@@ -410,6 +492,15 @@ export function VsScoreBoard({
             <div className={"vs_prewrap" + (phase !== "ready" ? " vs_pre_out" : "")}>
               <div className={preClass}>{preComment}</div>
             </div>
+          )}
+          {phase === "done" && (
+            /* 04:03 张老师：移动端终局评价回顶部预测位（#vs_hero grid row1，
+               与上面透明占位叠同一格、DOM 后者在上）——动作槽腾空后 hero 变矮，
+               下方板块在首屏露出个头，用户才知道下面还有内容。
+               PC 端 display:none（终局评价仍在动作槽），仅移动端显示 */
+            <p className={"vs_post vs_post_top" + (winner === 1 ? " vs_post_win" : "")}>
+              {postComment}
+            </p>
           )}
           {/* 两个 audio 留在 DOM 里（display:none 不影响播放），便于观察播放状态 */}
           {/* 张老师 18:12 + 19:07：数字滚动音只播一次，绝不加 loop */}
@@ -512,6 +603,17 @@ export function VsScoreBoard({
       {/* 00:18 张老师：PC/移动端「返回」统一移到页面最底部（footer 之上），按钮加大 */}
       {phase === "done" && (
         <div className="vs_back_end">
+          {/* 04:03 张老师：移动端返回左边加黄色「保存到相册」——点击出系统分享
+              面板选「存储图像」即存相册（截图用 done 时预生成的缓存 Blob，
+              已排除本按钮区）；PC 端隐藏 */}
+          <button
+            type="button"
+            className="vs_save_album"
+            onClick={saveToAlbum}
+            disabled={saving}
+          >
+            {saving ? "生成中…" : "保存到相册"}
+          </button>
           <Link className="vs_back" href={`/user/${opponentId}`}>
             返回
           </Link>
