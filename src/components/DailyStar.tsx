@@ -10,6 +10,7 @@ import Link from "next/link";
 import { getTodayStar } from "@/lib/star";
 import { getUserCard } from "@/lib/usercard";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { AvatarImg } from "@/components/AvatarImg";
 import { areaDisplay, AREA_OVERSEAS, isManager } from "@/lib/config";
 import { getSession } from "@/lib/auth";
 import { SendMessageButton } from "@/components/SendMessageButton";
@@ -51,7 +52,13 @@ export async function DailyStar() {
           prefetch={false}
           title={`进入 ${card.chineseName} 的地盘`}
         >
-          <img className="star_avatar" src={card.avatarUrl} alt={card.chineseName} />
+          {/* 144px 展示位走 big 360px 档（2x retina）；小图缺失回退原图（2026-11-10） */}
+          <AvatarImg
+            src={card.avatarBigUrl}
+            fallback={card.avatarUrl}
+            className="star_avatar"
+            alt={card.chineseName}
+          />
         </Link>
         <div className="star_right">
           <p className="star_name">

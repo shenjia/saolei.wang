@@ -7,7 +7,7 @@ import { smallAvatarUrlFor } from "@/lib/small-avatar";
 import { score3bvs, scoreTime, TIME_NEVER } from "@/lib/format";
 import { RelTime } from "./RelTime";
 import { ActLine } from "./ActLine";
-import { RankingAvatarImg } from "./RankingAvatar";
+import { AvatarImg } from "./AvatarImg";
 
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
 export { TitleBadge } from "./TitleBadge";
@@ -102,11 +102,19 @@ export function BbsAuthorName({
   avatar?: string;
 }) {
   const avatarUrl = resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "");
+  // 16px 展示位走 small 档（2026-11-10 全站头像 WebP 化）；小图缺失回退原图
+  const smallUrl = avatarUrl ? smallAvatarUrlFor(avatar, id) : null;
   if (!avatarUrl)
     return <AvatarCell id={id} name={name} englishName={englishName} sex={sex} gender="small" link />;
   return (
     <span className="bbs_meta_author">
-      <img className="bbs_meta_avatar" src={avatarUrl} alt="" width={16} height={16} />
+      <AvatarImg
+        src={smallUrl ?? avatarUrl}
+        fallback={avatarUrl}
+        className="bbs_meta_avatar"
+        width={16}
+        height={16}
+      />
       <AvatarCell id={id} name={name} englishName={englishName} sex={sex} gender="small" link />
     </span>
   );
@@ -147,7 +155,7 @@ export function RankingName({
     <>
       <span className="ranking_name">
         {avatarUrl && smallUrl ? (
-          <RankingAvatarImg src={smallUrl} fallback={avatarUrl} className="ranking_avatar" />
+          <AvatarImg src={smallUrl} fallback={avatarUrl} className="ranking_avatar" width={13} height={13} />
         ) : avatarUrl ? (
           <img className="ranking_avatar" src={avatarUrl} alt="" width={13} height={13} />
         ) : null}

@@ -16,7 +16,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { moderateAvatar } from "@/lib/avatar-moderate";
-import { ensureSmallDir, generateSmallAvatar } from "@/lib/small-avatar-gen";
+import { generateAvatarSizes } from "@/lib/small-avatar-gen";
 import { NEWS_TYPE } from "@/lib/config";
 import { publishNews } from "@/lib/news";
 
@@ -97,12 +97,8 @@ export async function POST(req: Request) {
   // 失败不阻塞上传主流程——小图缺失时排行页 onError 回退原图，后续可补跑批处理。
   const genSmall = async () => {
     try {
-      const smallDir = path.join(UPLOAD_DIR, "small");
-      ensureSmallDir(smallDir);
-      await generateSmallAvatar(
-        absPath,
-        path.join(smallDir, `${path.basename(relPath, path.extname(relPath))}.webp`),
-      );
+      // 三档小图（small/mid/big）一次生成齐（2026-11-10 全站头像 WebP 化）
+      await generateAvatarSizes(absPath);
     } catch (e) {
       console.warn("[avatar] 小图生成失败（不影响上传）:", e instanceof Error ? e.message : e);
     }

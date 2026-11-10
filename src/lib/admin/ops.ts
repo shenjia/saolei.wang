@@ -17,7 +17,7 @@ import { USER_ROLE, VIDEO_STATUS, VIDEO_LEVELS, isManager, NEWS_TYPE, countsInTo
 import { decodeLegacyEntities, formatDate } from "@/lib/format";
 import { CHINESE_NAME_RE, ENGLISH_NAME_RE } from "@/lib/register";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
-import { ensureSmallDir, generateSmallAvatar } from "@/lib/small-avatar-gen";
+import { generateAvatarSizes } from "@/lib/small-avatar-gen";
 import { publishNews } from "@/lib/news";
 import { reviewVideo, syncRecordNewsChain } from "@/lib/review";
 import { banUntilFromKey, unbanUser } from "@/lib/ban";
@@ -1631,15 +1631,10 @@ async function dispatch(
           // 「更换头像」动态（与 AI 自动放行同口径，仅个人主页可见）
           await publishNews({ tx, type: NEWS_TYPE.AVATAR, userId: Number(row.user) });
         });
-        // 小图补生成（2026-11-10 排行页小头像）：QQ 导入的头像在送审时已生成过；
-        // 这里兜底覆盖「上传时生成失败」的场景。失败不影响审核主流程（排行页回退原图）
+        // 三档小图补生成（2026-11-10 全站头像 WebP 化）：QQ 导入的头像在送审时已生成过；
+        // 这里兜底覆盖「上传时生成失败」的场景。失败不影响审核主流程（前端回退原图）
         try {
-          const smallDir = path.join(process.cwd(), "public", "uploads", "avatar", "small");
-          ensureSmallDir(smallDir);
-          await generateSmallAvatar(
-            path.join(process.cwd(), "public", row.filepath),
-            path.join(smallDir, `${path.basename(row.filepath, path.extname(row.filepath))}.webp`),
-          );
+          await generateAvatarSizes(path.join(process.cwd(), "public", row.filepath));
         } catch {
           /* 小图失败不阻塞审核 */
         }

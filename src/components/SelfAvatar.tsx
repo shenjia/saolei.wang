@@ -15,14 +15,16 @@ import { AvatarCropper, useAvatarPick, type CropResult } from "./AvatarCropper";
 import { toast } from "./Toast";
 
 interface Props {
-  /** 当前生效的头像 URL */
+  /** 当前生效的头像 URL（账号中心传 big 360px 档 WebP，2026-11-10 全站头像 WebP 化） */
   src: string;
+  /** src 加载失败时回退的原图 URL（缺省不回退） */
+  fallbackSrc?: string;
   alt: string;
   /** 服务端查到的「有待审头像」状态 */
   pending: boolean;
 }
 
-export function SelfAvatar({ src, alt, pending }: Props) {
+export function SelfAvatar({ src, fallbackSrc, alt, pending }: Props) {
   const router = useRouter();
   const { inputRef, pickedUrl, setPickedUrl, onPick } = useAvatarPick();
   const [note, setNote] = useState<{ kind: "ok" | "pending"; text: string } | null>(null);
@@ -52,7 +54,19 @@ export function SelfAvatar({ src, alt, pending }: Props) {
         aria-label="点击更换头像"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="avatar" src={src} alt={alt} />
+        <img
+          className="avatar"
+          src={src}
+          alt={alt}
+          onError={
+            fallbackSrc && src !== fallbackSrc
+              ? (e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = fallbackSrc;
+                }
+              : undefined
+          }
+        />
         {reviewing && <span className="avatar_status">审核中</span>}
         {note?.kind === "ok" && <span className="avatar_status ok">{note.text}</span>}
         <span className="avatar_change">点击更换头像</span>

@@ -1,9 +1,10 @@
 // BBS 贴图上传（2026-09-25 张老师需求：编辑器贴图传线上服务器，每张最大 200K）
 //
 // 流程：登录校验 → magic bytes 识别真实类型（JPEG/GIF/PNG/WebP 白名单）→ 服务端二次限 200K
-//      → 落盘 public/uploads/bbs/ → 返回 URL
-// 前端（RichEditor.compressToBudget）已把位图压成 ≤200K 的 JPEG；GIF 走直传（前端已拦 200K）。
-// 这里服务端再校验一遍，不信任客户端。
+//      → 位图统一转 WebP 落盘 public/uploads/bbs/（2026-11-10 张老师需求：全站图片 WebP 化省流量；
+//        转换失败回退按原格式落盘保可用性）→ 返回 URL
+// GIF 动图保持原样直传（sharp 转码丢动画得不偿失，且前端已拦 200K）。
+// 前端（RichEditor.compressToBudget）已把位图压成 ≤200K 的 JPEG；这里服务端再校验一遍，不信任客户端。
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -46,6 +47,16 @@ function sniffImage(buf: Buffer): { ext: string } | null {
   return null;
 }
 
+/** 位图转 WebP（q82，无 resize——贴图保持原尺寸）。失败返回 null，调用方回退原格式。 */
+async function toWebp(buf: Buffer): Promise<Buffer | null> {
+  try {
+    const sharp = (await import("sharp")).default;
+    return await sharp(buf).webp({ quality: 82 }).toBuffer();
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return fail("请先登录", 401);
@@ -66,10 +77,21 @@ export async function POST(req: Request) {
   const kind = sniffImage(buf);
   if (!kind) return fail("只支持 JPG / PNG / GIF / WebP 格式的图片");
 
-  const relPath = `/uploads/bbs/${session.uid}-${Date.now()}-${randomUUID().slice(0, 8)}.${kind.ext}`;
+  // 位图统一转 WebP；GIF 保动画直传；转换失败回退按原格式落盘
+  let out: Buffer<ArrayBufferLike> = buf;
+  let ext = kind.ext;
+  if (kind.ext !== "gif") {
+    const webp = await toWebp(buf);
+    if (webp) {
+      out = webp;
+      ext = "webp";
+    }
+  }
+
+  const relPath = `/uploads/bbs/${session.uid}-${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
   try {
     mkdirSync(UPLOAD_DIR, { recursive: true });
-    writeFileSync(path.join(UPLOAD_DIR, path.basename(relPath)), buf);
+    writeFileSync(path.join(UPLOAD_DIR, path.basename(relPath)), out);
   } catch (e) {
     console.error("[bbs-upload] 落盘失败", e);
     return fail("图片保存失败，请稍后重试", 500);

@@ -11,6 +11,7 @@
 import { prisma } from "./db";
 import { getUserDetail, getUserRanks } from "./queries";
 import { resolveAvatarUrl } from "./avatar";
+import { avatarUrlFor } from "./small-avatar";
 import { resolveTitleDisplay } from "./title-system";
 
 /** 单级纪录：成绩原始值（×1000 存储，null=无）、对应录像 id 与日期（sum 级无录像 → null） */
@@ -26,8 +27,10 @@ export interface UserCardData {
   /** 英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
   englishName: string;
   sex: number;
-  /** 头像 URL（本地 /images/player/{id}.jpg、OAuth 外链或默认 no.jpg） */
+  /** 头像 URL（本地头像为 mid 160px WebP 档；OAuth 外链或默认 no.jpg） */
   avatarUrl: string;
+  /** 头像 big 360px 档 URL（每日之星 144px 展示位 2x 用；OAuth 外链或默认图同 avatarUrl） */
+  avatarBigUrl: string;
   /** 军衔（高级时间绝对阈值，与首页/排行榜/军衔页同口径） */
   militaryTitle: string;
   /** Phase 5：旧版称号备选（按当前成绩+在榜状态评定） */
@@ -45,9 +48,11 @@ export interface UserCardData {
   hasVideos: boolean;
 }
 
-function avatarUrl(id: number, avatar: string): string {
-  // 新版上传头像（/uploads/avatar/…）与 OAuth 外链由 resolveAvatarUrl 统一识别；
-  // 旧站标记位 "1" 对应照片墙实体，其余用 no.jpg 兜底
+function avatarUrl(id: number, avatar: string, size: "mid" | "big" = "mid"): string {
+  // 展示位 72px（用户卡片）/144px（每日之星）：本地头像按 2x retina 给 mid(160px)/big(360px) 档
+  // WebP（2026-11-10 全站头像 WebP 化）；OAuth 外链与默认图（no.jpg）无本地档位，回退原图
+  const sized = avatarUrlFor(avatar, id, size);
+  if (sized) return sized;
   return resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "/images/player/no.jpg");
 }
 
@@ -84,6 +89,7 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     englishName: user.englishName,
     sex: user.sex,
     avatarUrl: avatarUrl(id, user.avatar),
+    avatarBigUrl: avatarUrl(id, user.avatar, "big"),
     militaryTitle: detail.title,
     classicTitle: classicPair.system === "c" ? { name: classicPair.name, color: classicPair.color ?? "#666666" } : null,
     rank: national,
