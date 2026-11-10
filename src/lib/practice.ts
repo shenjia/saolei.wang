@@ -176,14 +176,27 @@ export interface RankedToday {
   act: number;
 }
 
-export async function getRankedToday(uid: number): Promise<RankedToday> {
+/**
+ * 今日各渠道收获（首页/练习页/个人主页三处共用同源，2026-11-11 张老师定统一数据源）。
+ * @param opts.loginFromTable 登录点取数方式：
+ *   - 缺省 false：无条件 +1——首页/练习页口径，「能看到本行必然当日已登录」，
+ *     且本请求 getSession 的 touchLastLogin 心跳正在异步 UPSERT 当日打卡行，
+ *     查表有竞态（当日首访读不到行会误显 0）；
+ *   - true：查 user_daily_visit 当日打卡行——个人主页口径，缓存打包访客无关
+ *     （看别人的主页时，对方今天没来过就不能白送登录点；本人看自己首访当刻
+ *     打卡行可能尚未落，60s 缓存过期后自然校正）。
+ */
+export async function getRankedToday(
+  uid: number,
+  opts?: { loginFromTable?: boolean },
+): Promise<RankedToday> {
   const out: RankedToday = { ranked: false, beg: 0, int: 0, exp: 0, pb: 0, act: 0 };
   const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
   const today0 = dayStart(0);
   const uidBig = BigInt(uid);
 
   // 练习当日行 + 活跃值其余四源并行点查（全部单用户索引点查，毫秒级）
-  const [row, watchRow, videoRow, cmtRow, replyRow] = await Promise.all([
+  const [row, watchRow, videoRow, cmtRow, replyRow, visitRow] = await Promise.all([
     prisma.practiceDaily.findUnique({
       where: { day_userId: { day: todayIdx, userId: uidBig } },
       select: { modeRanked: true, actPoints: true },
@@ -212,17 +225,22 @@ export async function getRankedToday(uid: number): Promise<RankedToday> {
       SELECT COUNT(*) AS cc FROM bbs_reply
       WHERE \`user\` = ${uidBig} AND status = 0 AND create_time >= ${today0}
     `,
+    // 登录点（loginFromTable 时生效）：当日打卡行，1 天 1 点
+    prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT COUNT(*) AS n FROM user_daily_visit
+      WHERE user_id = ${uidBig} AND day = ${todayIdx}
+    `,
   ]);
 
-  // ③ 今日活跃值 z（2026-11-11 张老师定：不可能加 0——能看到本行就必然当日登录了，
-  //     至少记登录 1 点）＝活跃榜 active_points 的当日单日口径：
+  // ③ 今日活跃值 z（2026-11-11 张老师定）＝活跃榜 active_points 的当日单日口径：
   //     练习点(practice_daily.act_points) + 登录 1 点 + 观看点 + 录像加权点 + 评论/回复数。
-  //     登录点不查表无条件计入：本请求 getSession 的 touchLastLogin 心跳正在异步
+  //     登录点默认不查表无条件计入：本请求 getSession 的 touchLastLogin 心跳正在异步
   //     UPSERT 当日 user_daily_visit 打卡行，查表有竞态（当日首访读不到行会误显 0），
-  //     而「正在看页面」本身就是当日访问的铁证。
+  //     而「正在看页面」本身就是当日访问的铁证；个人主页打包（loginFromTable）访客无关，
+  //     改查打卡行（见 getRankedToday 注释）。
   out.act =
     Number(row?.actPoints ?? 0) +
-    1 +
+    (opts?.loginFromTable ? Number(visitRow[0]?.n ?? 0) : 1) +
     Number(watchRow[0]?.wp ?? 0) +
     Number(videoRow[0]?.vs ?? 0) +
     Number(cmtRow[0]?.cc ?? 0) +

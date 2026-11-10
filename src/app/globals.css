@@ -15445,7 +15445,9 @@ a.vs_btn:hover {
 }
 a.vs_btn:hover img {
   filter: none; /* hover 恢复彩色 */
-  opacity: 0.15; /* 00:13 张老师：hover 透明度改 15% */
+  /* 2026-11-11 02:56 张老师实证纠偏：「透明度应为15%」指透掉 15%（不透明度 85%），
+     hover 应更亮；此前 0.15 是反向理解（85% 透明），深底上比旧 0.5 更暗 */
+  opacity: 0.85;
 }
 span.vs_btn--disabled {
   cursor: not-allowed; /* 2026-11-10 张老师要求：与对话气泡按钮灰置态一致，hover 出禁用标记 */
@@ -15492,7 +15494,9 @@ span.vs_btn--disabled:hover img {
 }
 #user_view .radar.box a.vs_btn:hover img {
   filter: none;
-  opacity: 0.5; /* 2026-11-10 张老师要求：hover 也太亮，亮度降一半（保留彩色恢复+回弹放大） */
+  /* 2026-11-11 02:56 张老师实证纠偏：「透明度15%」= 透掉 15% = 不透明度 0.85，
+     与全局 hover 口径同步（此前 0.5/0.15 均为理解偏差，hover 越改越暗） */
+  opacity: 0.85;
 }
 #user_view .radar.box span.vs_btn--disabled img {
   opacity: 0.14;

@@ -4,8 +4,13 @@
 // 图标＝双人对撞爆炸（2026-11-10 张老师指定，复刻其 PNG）；默认灰度变暗（可用≈亮灰、
 // 不可用≈暗灰），hover 恢复彩色 + 尺寸跳动一下——与对话气泡按钮同交互。
 // 与 SendMessageButton 同族：未登录/看自己灰置 + data-tip 说明原因。
-// 纯服务端组件（无状态无事件，禁用态直接渲染 span 防导航）。
+// 客户端组件（2026-11-11 张老师定打开方式：PC 新标签页，移动端本标签页——
+// 关页面不便，PK 页内有返回按钮）：判端按全站铁律用 matchMedia（SSR 首帧
+// 桌面形态 target=_blank，挂载后 ≤768 校准为当前标签页，无 hydration 差异）。
 
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 /** 对战图标：VS 战斗字标（2026-11-10 张老师指定 pngtree versus battle 原图，4000×4000 透明底）。
@@ -31,6 +36,15 @@ export function VsButton({
   sex?: number | boolean | null;
 }) {
   const disabled = viewerId <= 0 || viewerId === to;
+  // 移动端（≤768，与 VsScoreBoard/RecordsCurves 同断点）：当前标签页打开
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   // 2026-11-10 张老师终版：hover 文案「和TA一决胜负」，其中 TA 按被挑战者性别
   // 换成「他/她」（user.sex 真值=男），性别缺失才回退字面 TA
   const pronoun = sex == null ? "TA" : sex ? "他" : "她";
@@ -57,6 +71,9 @@ export function VsButton({
       className="vs_btn"
       href={`/vs/${to}`}
       prefetch={false}
+      // PC 新标签页 / 移动端本页（2026-11-11 张老师定）；target=_blank 必配 prefetch={false}
+      target={isMobile ? undefined : "_blank"}
+      rel={isMobile ? undefined : "noopener"}
       data-tip={`和${pronoun}一决胜负`}
       aria-label={`和${pronoun}一决胜负`}
     >

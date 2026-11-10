@@ -16,22 +16,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import {
-  getUserDetail,
-  getUserNews,
   getUserRanks,
-  getNewsCount,
-  getUserTodayVideos,
-  getUserActivity,
-  getUserActivityIndex,
-  getUserPracticeWins,
   getVideoList,
-  getLevel3bvRanges,
-  getUser3bvCollection,
+  type BbvCell,
 } from "@/lib/queries";
 import { getUserRecordCurves } from "@/lib/records";
-import { getClicks } from "@/lib/star";
+// 60s 打包缓存（2026-11-10 张老师定，方案 A）：14 趟 session 无关查询的
+// 打包入口（lib/userpage.ts），本人视角 fresh 直查绕过
+import { getUserPageData } from "@/lib/userpage";
 import ClickTracker from "@/components/ClickTracker";
-import { getHistory } from "@/lib/history";
 import {
   VIDEO_LEVELS,
   parseVideoListOrder,
@@ -59,16 +52,14 @@ import type { MetricSectionData } from "@/components/RecordsCurves";
 import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
 import { formatDate } from "@/lib/format";
 import { donateYuanPlain } from "@/lib/donate";
-import { getThunderKingThreshold, dualTitles } from "@/lib/title-system";
 import { ageOf, constellationText } from "@/lib/birth";
-import { getRadarData } from "@/lib/radar";
-import { getActiveRadar } from "@/lib/activerank";
 import { resolveAvatarUrl, AVATAR_REVIEW_STATUS, DEFAULT_AVATAR } from "@/lib/avatar";
 import { DefaultAvatar } from "@/components/DefaultAvatar";
+import { dualTitles } from "@/lib/title-system";
 import { prisma } from "@/lib/db";
 import { SelfAvatar } from "@/components/SelfAvatar";
 import { SendMessageButton } from "@/components/SendMessageButton";
-// VS 对战入口（2026-11-10 张老师定：实力板块右上角，桌面/移动双副本同款）
+// ⚠️ DEV-ONLY（2026-11-10）：PK 入口仅 dev 验收用，未获口头确认绝不 push（上线铁律）
 import { VsButton } from "@/components/VsButton";
 import { BbvCollection } from "@/components/BbvCollection";
 import { UserSigs } from "@/components/UserSigs";
@@ -176,85 +167,53 @@ export default async function UserViewPage({
   // 直接渲染该配色（链接可中键新开/F5 不断链）；无参数时默认 3bv，客户端按 localStorage 校正
   const bbvMode: "3bv" | "pb" = sp.bbv === "pb" ? "pb" : "3bv";
 
-  const detail = await getUserDetail(userId);
-  if (!detail) notFound();
-
-  // 人气计数（2026-11-09 张老师定：剥离到客户端 ClickTracker 异步上报
-  // /api/track/click，服务端 recordClick 闸门不变；本页将挂 nginx 整页缓存，
-  // 渲染期计数会被缓存命中吞掉且拿不到真实访客 IP——展示值照常服务端查询）
-  const clicks = await getClicks(userId);
-
   // session 提前取（2026-10-23）：本人主页录像版块要放行自己的屏蔽盘（includeBanned），
   // 判定 isSelf 须在 getVideoList 之前
   const session = await getSession();
   const isSelf = !!session && session.uid === userId;
 
-  const [news, newsTotal] = await Promise.all([
-    getUserNews(userId, USER_NEWS_NUMBER),
-    // 该玩家动态总数（「加载更多」括号内剩余条数口径）
-    getNewsCount({ userId }),
-  ]);
-  const [history, ranks, userVideos, todayVideos, activity, actIndex, practiceWins, bbvRanges, bbvCollection, userCurves] = await Promise.all([
-    getHistory(userId),
-    getUserRanks(userId),
-  // 本人录像：与 /video?author= 同语义（排序由 URL order 决定，默认上传时间倒序）；
-  // 每页 10 条（2026-09-26 张老师要求，与动态/纪事同口径，非 /video 列表的 20）；
-  // time/bv/nf 搜索与 NF 筛选（2026-10-20）
-  // 2026-10-23 张老师需求：本人主页放行自己的屏蔽盘（红 ✕ 标记，详情页可自助删除）；
-  // 他人视角仍滤屏蔽（includeBanned 仅 isSelf）——排序/搜索路径不支持该放行，
-  // 本人切排序/搜索时屏蔽盘自然不出列（默认上传时间序可见，够用）
-  getVideoList({
+  // 60s 打包缓存（2026-11-10，方案 A）：14 趟 session/URL 无关查询一次取齐
+  // （detail/clicks/news/history/todayVideos/activity/actIndex/practiceWins/
+  //  bbv/radar/activeRadar/donate/sigs/kingTh）；本人视角 fresh 直查绕缓存——
+  // 改资料/传头像/新录像统计即时可见（张老师口径：自己看自己不走缓存）。
+  // 不打包：ranks（600s per-user 缓存）、curves（24h per-user 缓存）、
+  // getVideoList（URL 参数键空间无界）、avatarReview（仅本人查，fresh 路径覆盖）
+  const bundle = await getUserPageData(userId, isSelf);
+  if (!bundle) notFound();
+  const {
+    detail,
+    clicks,
+    news,
+    newsTotal,
+    history,
+    todayVideos,
+    activity,
+    actIndex,
+    todayAct,
+    practiceWins,
+    bbvRanges,
+    bbvCells,
+    donateCents,
+    kingTh,
+    radar,
+    activeRadar,
+    sigs,
+  } = bundle;
+  // 收集墙 Map 重组（缓存摊平形态 → 组件原签名）
+  const bbvCollection: Record<VideoLevel, Map<number, BbvCell>> = {
+    beg: new Map(bbvCells.beg),
+    int: new Map(bbvCells.int),
+    exp: new Map(bbvCells.exp),
+  };
+
+  const userVideos = await getVideoList({
     level, order, dir, author: userId, time, bv, nf,
     page: 1, pageSize: USER_VIDEO_NUMBER,
     ...(isSelf ? { includeBanned: true } : {}),
-  }),
-    // 今日新增录像（按级别），统计盒增量列用（2026-10-13 张老师要求）
-    getUserTodayVideos(userId),
-    // 发表文章（论坛主题）/ 发表评论数量 + 今日增量（2026-10-13 张老师要求）
-    getUserActivity(userId),
-    // 活跃指数（2026-11-08 张老师要求）：近 7 日活跃值（练习点数＋录像加权＋评论×1＋登录点，
-    // 发表文章不计——避免灌水），「发表评论」行下新增；口径见 lib/queries.ts
-    // 2026-11-10 登录点并入：每日访问记 1 点（user_daily_visit 打卡，每日唯一键去重）
-    getUserActivityIndex(userId),
-    // 练习完成盘数 + 今日完成（2026-11-02 张老师要求，统计盒「录像总数」下新增一行；
-    // 2026-11-06 改按完成口径——尝试可以刷，完成需要付出努力）
-    getUserPracticeWins(userId),
-    // 「3BV 收集」版块：全站区间（level_3bv_range 小表）+ 本人已收集集合（走索引，毫秒级）
-    getLevel3bvRanges(),
-    getUser3bvCollection(userId),
-    // 「纪录」板块（2026-11-06）：个人纪录进步历程 12 条曲线（3 指标×4 级别），
-    // uid 参与缓存 key 每人一份 24h TTL（lib/records.ts），无点时整块隐藏
-    getUserRecordCurves(userId),
-  ]);
-  // 赞助金额（2026-11-02 张老师要求）：数据统计「发表评论」行下新增「赞助金额」，
-  // 金额金色显示（donate_amt 例外类，压过统计盒数字亮灰）；没赞助过（合计 0）不显示整行。
-  // ID 1（站长）特殊逻辑（2026-11-02 二次修订）：显示 max(−结余, 0)——
-  // 结余 = 全站赞助收入（donate 合计）− 全站支出（donate_expense 合计）；
-  // 结余为负（支出超收）取其负数为站长垫付额，结余 ≥ 0（转整）不显示。
-  // 其余玩家显示本人赞助合计（donate，金额单位分）
-  // 公开赞助金额开关（2026-11-02 张老师）：账户设置关闭（donate_hidden=1）后
-  // 不查不显示——个人主页数据统计隐藏赞助金额行
-  let donateCents = 0;
-  if (detail.user.donateHidden) {
-    // 已关闭公开：跳过查询，整行不渲染
-  } else if (userId === 1) {
-    const [income, expense] = await Promise.all([
-      prisma.donate.aggregate({ _sum: { amount: true } }),
-      prisma.donateExpense.aggregate({ _sum: { amount: true } }),
-    ]);
-    donateCents = Math.max(
-      Number(expense._sum.amount ?? 0) - Number(income._sum.amount ?? 0),
-      0,
-    );
-  } else {
-    const agg = await prisma.donate.aggregate({
-      where: { user: BigInt(userId) },
-      _sum: { amount: true },
-    });
-    donateCents = Number(agg._sum.amount ?? 0);
-  }
-  // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
-  const kingTh = await getThunderKingThreshold();
+  });
+
+  // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）——
+  // 阈值 kingTh 随打包缓存带出（60s 内滞后，与全站 60s 缓存口径一致）
   const feed: NewsFeedItem[] = news.map((n) => ({
     news: n,
     // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
@@ -263,19 +222,18 @@ export default async function UserViewPage({
   }));
 
   const { user, info, scores } = detail;
-  const [radar, activeRadar] = await Promise.all([
-    getRadarData(scores),
-    // 「活跃」雷达（2026-11-10 张老师需求）：近 7 日活跃排行六维（初中高/观看/评论/登录），
-    // 按列名次走实力雷达同款 23 档评级；无活跃值恒 F。口径见 lib/activerank.ts
-    getActiveRadar(userId),
-  ]);
-  // 六维全 0 也恒显示（22:30 张老师定「全零还是显示吧」）
+  // 「纪录」板块（2026-11-06）：个人纪录进步历程 12 条曲线（3 指标×4 级别），
+  // uid 参与缓存 key 每人一份 24h TTL（lib/records.ts），无点时整块隐藏
+  const userCurves = await getUserRecordCurves(userId);
+  // 名次（已有 per-user 600s 缓存 user-ranks-v3，不并入打包）
+  const ranks = await getUserRanks(userId);
 
   // 「纪录」板块数据组装（2026-11-06）：12 条曲线 → 3 指标板块 × 4 级别点集。
   // 点的创造者恒为本人（n/en/s 取 detail）；军衔 hover 必须是「传那盘录像时」的
   // 军衔（2026-11-06 张老师指正）——每点用曲线数据层带回的 video 行内上传时刻
   // 快照（et/rk）dualTitles 批量换算，绝不能用当前 user_scores 快照（那会让
   // 整条曲线 hover 全显示最新军衔，就显示不出进步过程了）；全部无点时整块隐藏
+  // 六维全 0 也恒显示（22:30 张老师定「全零还是显示吧」）：全 0 六轴全 F 贴心不隐藏
   const recordPts = userCurves.flatMap((c) => c.points);
   const recordPairs = await dualTitles(
     recordPts.map((p) => ({ userId, expTime: p.et, ranked: p.rk === 1, sex: user.sex }))
@@ -330,14 +288,7 @@ export default async function UserViewPage({
     age !== null ||
     constellation !== null;
 
-  // 标识列表（user_sig，按注册先后 id 升序；过滤空串脏数据，2026-10-22）
-  const sigs = (
-    await prisma.userSig.findMany({
-      where: { user: BigInt(userId), signature: { not: "" } },
-      orderBy: { id: "asc" },
-      select: { signature: true },
-    })
-  ).map((s) => s.signature);
+  // 标识列表 sigs 由打包缓存带出（lib/userpage.ts，原 prisma.userSig.findMany 已迁入）
   const showProfile = hasProfileFields || sigs.length > 0;
 
   // 照片优先级：新版上传头像（/uploads/avatar/…）→ OAuth 头像外链（http 开头）
@@ -560,11 +511,11 @@ export default async function UserViewPage({
               <RadarChart data={radar} />
             </div>
           )}
-
+        {/* 「活跃」雷达侧栏原件（2026-11-10）：全 0 也恒显示（22:30 张老师定）；≤880 由 .radar_main 副本接管 */}
         <div className="radar box">
-          <h2>活跃</h2>
-          <RadarChart data={activeRadar} accent="#a6e22e" />
-        </div>
+            <h2>活跃</h2>
+            <RadarChart data={activeRadar} accent="#a6e22e" />
+          </div>
         {/* 2026-10-13 张老师方案：侧栏「3BV 收集」版块（设计稿 v3 已确认），
             位置在实力雷达之下、个人资料之上；显示条件与雷达一致（有上传过录像才显示） */}
         {detail.stat &&
@@ -685,9 +636,11 @@ export default async function UserViewPage({
                 </StatRow>
                 {/* 2026-11-08 张老师要求：发表评论下新增「活跃指数」——近 7 日活跃值合计
                     （练习 3BV 计点＋录像级别加权＋评论×1＋登录点；发表文章不计——避免灌水），
-                    hover 显示构成明细；读每分钟重算的活跃快照（user_activity_snapshot），无「今日增量」列。
-                    2026-11-10 登录点并入：每日访问雷网记 1 点（user_daily_visit 打卡） */}
-                <StatRow label="活跃指数">
+                    hover 显示构成明细；读每分钟重算的活跃快照（user_activity_snapshot）。
+                    2026-11-10 登录点并入：每日访问雷网记 1 点（user_daily_visit 打卡）。
+                    2026-11-11 张老师定：加今日增量（绿括号与其他行统一），数据源与首页/
+                    练习页统一走 getRankedToday（打包内 todayAct，loginFromTable 口径） */}
+                <StatRow label="活跃指数" today={todayAct}>
                   <em
                     className="green"
                     title={`近7日：练习 ${actIndex.practice} ＋ 录像 ${actIndex.videos} ＋ 评论 ${actIndex.comments}×1 ＋ 登录 ${actIndex.login}×1 ＋ 观看 ${actIndex.watch}×1`}
