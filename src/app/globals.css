@@ -3954,11 +3954,11 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   cursor: default;
   text-decoration: none;
 }
-/* 外站绑定区（2026-11-10 张老师）：资料表下方独立分区。通栏 hr 复用 manage_head
-   同款 <hr>（宽度同标题）；线上方左侧小标题「外站绑定」，已绑定开源扫雷网时
-   标题下加深灰小字；绑定行独立成表（原行内 border-top 方案只能通到表格宽，弃用） */
+/* 外站绑定区（2026-11-10 张老师）：资料表下方独立分区。整体右移与「赞助金额」
+   标签列左缘对齐（头像列 25% + 18px gap = 资料表左缘），标题/分割线/内容一起缩进 */
 #account_manage .outer_bind_sec {
   margin-top: 15px;
+  margin-left: calc(25% + 18px);
 }
 #account_manage .outer_bind_head h2 {
   margin: 0 0 4px;
