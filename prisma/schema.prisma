@@ -42,10 +42,8 @@ model User {
   ageHidden           Boolean @default(false) @map("age_hidden")
   // 星座主页展示开关（同上，控制个人主页星座行）
   constellationHidden Boolean @default(false) @map("constellation_hidden")
-  // ⚠️ 过渡列（2026-11-10）：旧「显示年龄与星座」开关，代码已不再读写；
-  // 生产库待手工回填 age/constellation_hidden 后 DROP，届时同步摘除本定义
-  // （先摘定义会让 CI db push 判定破坏性变更而中止部署）
-  birthHidden   Boolean @default(false) @map("birth_hidden")
+  // 旧「显示年龄与星座」开关 birth_hidden 已于 2026-11-10 分拆为上两列并从生产库删除
+  // （分拆次序：①schema 暂留旧列定义上线（纯加法）→②生产回填后 DROP→③摘除定义再上线）
 
   // ---- 反作弊处置（2026-10-27）：客户端探测命中（__op 蜜罐/棋盘注入/整页标记浮层）----
   // 排名模式禁用截止 Unix 秒：命中后 24 小时内无法开启排名模式（WS/上传/入口三处闸）
