@@ -1270,16 +1270,17 @@ model SiteUpdate {
 // consent：0=未表态（默认不同意，2026-11-08 张老师定）1=同意 2=不同意——雷网 worker 仅 consent===1 才抓取
 // 协议口径（2026-11-10 张老师定）：两站各抓各的，本站只控制「开源站录像→雷网」这一个方向；
 // 开源站是否抓取雷网录像由开源站自己决定，雷网管不到，也不读写任何反方向开关。
-// ⚠️ 下面两处 syncToOpenms 字段映射仅为「兼容生产库残留列」而保留：代码/API/UI 已零引用，
-//    且 CI 的 prisma db push 遇删列会要求 --accept-data-loss 而中止部署（旧 client 也会 SELECT 全列）。
-//    DROP 两列必须等新 Prisma Client 上线后，先手工 DROP 列、再删 schema 字段，顺序不能反。
+// ⚠️ 下面两处 syncToOpenms 字段映射是历史残留列的兼容声明（2026-11-10 张老师定：
+//    「不删这个字段也没事，只要不用它」）——代码／API／UI／公开接口已零引用，永久保留、不执行 DROP。
+//    保留原因：CI 的 prisma db push 遇删列会要求 --accept-data-loss 而中止整个部署，
+//    且旧 Prisma Client 会 SELECT 全模型列，先 DROP 生产列会直接 500。
 model OpenmsLink {
   user         BigInt @id @db.BigInt
   /// 开源站 userprofile.id（其 /api/video/query_by_id 的 id 参数）
   profile      Int
   /// 0=未表态 1=同意 2=不同意
   consent      Int    @default(0) @db.TinyInt
-  /// 历史残留列（代码零引用，仅兼容生产库；待单独窗口 DROP）
+  /// 历史残留列：代码零引用，永久保留不用（2026-11-10 张老师定，不 DROP）
   syncToOpenms Int    @default(0) @map("sync_to_openms") @db.TinyInt
   /// 表态时刻（Unix 秒；0=未表态）
   consentTime  BigInt @default(0) @map("consent_time") @db.BigInt
@@ -1330,6 +1331,50 @@ model OpenmsVideoMap {
   @@map("openms_video_map")
 }
 
+// 开源扫雷网录像同步「跑批记录」（2026-11-10 后台仪表盘状态卡）
+// 台账只回答「扫过多少 / 落到什么状态」；本表回答「现在是否在跑、跑到哪、
+// 上次为什么停、crontab 是否还在按时触发」。每轮 --apply 写一行，处理中按心跳更新；
+// dry-run 不写，避免测试污染历史。finished_at=0 表示进行中。
+// status：0=运行中 1=正常完成 2=部分失败 3=异常终止
+model OpenmsSyncRun {
+  id             BigInt  @id @default(autoincrement())
+  /// 触发来源：cron / manual
+  trigger        String  @default("cron") @db.VarChar(16)
+  /// 0=运行中 1=正常完成 2=部分失败 3=异常终止
+  status         Int     @default(0) @db.TinyInt
+  /// 开始 / 最近心跳 / 结束（Unix 秒；finished_at=0 表示进行中）
+  startedAt      BigInt  @map("started_at") @db.BigInt
+  heartbeatAt    BigInt  @map("heartbeat_at") @db.BigInt
+  finishedAt     BigInt  @default(0) @map("finished_at") @db.BigInt
+  /// 本轮计数（与 scripts/openms-sync-all.ts 的 stats 一一对应）
+  users          Int     @default(0)
+  pages          Int     @default(0)
+  handled        Int     @default(0)
+  ok             Int     @default(0)
+  skip           Int     @default(0)
+  retry          Int     @default(0)
+  gaveUp         Int     @default(0) @map("gave_up")
+  seen           Int     @default(0)
+  registered     Int     @default(0)
+  /// 当前上下文：卡住时能定位到具体用户与具体录像
+  currentUser    BigInt  @default(0) @map("current_user") @db.BigInt
+  currentProfile Int     @default(0) @map("current_profile")
+  currentCursor  BigInt  @default(0) @map("current_cursor") @db.BigInt
+  currentVideoId BigInt  @default(0) @map("current_video_id") @db.BigInt
+  /// 最近一条错误摘要（列表 504 / 归属错配 / 未捕获异常）
+  lastError      String? @map("last_error") @db.VarChar(255)
+  /// 配置快照：解释「为什么跑这么慢」
+  maxItems       Int     @default(20) @map("max_items")
+  pageCount      Int     @default(200) @map("page_count")
+  minGapMs       Int     @default(12500) @map("min_gap_ms")
+  listGapMs      Int     @default(2100) @map("list_gap_ms")
+  maxRetries     Int     @default(3) @map("max_retries")
+
+  @@index([startedAt])
+  @@index([status, heartbeatAt])
+  @@map("openms_sync_run")
+}
+
 // 绑定申请（2026-11-09 绑定协议 v2：跳转确认+回来核销，无服务端互调）
 // 雷网用户发起绑定 → 生成 token → 用户到开源站授权页登录确认 → 回雷网核销。
 // status：0=待确认 1=已核销（绑定完成）2=已取消
@@ -1341,7 +1386,7 @@ model OpenmsBindRequest {
   token        String @unique @db.VarChar(64)
   /// 开源站 userprofile.id（核销时由开源站 API 回填；未核销为 0）
   profile      Int    @default(0)
-  /// 历史残留列（代码零引用，仅兼容生产库；待单独窗口 DROP）
+  /// 历史残留列：代码零引用，永久保留不用（2026-11-10 张老师定，不 DROP）
   syncToOpenms Int    @default(0) @map("sync_to_openms") @db.TinyInt
   /// 发起时勾选的「开源扫雷网录像自动同步到扫雷网」（0/1，核销时折算 openms_link.consent：1→1 否→2）
   consent      Int    @default(0) @db.TinyInt

@@ -13,6 +13,8 @@ import { getTrafficOverview, getApiUsage, DEVICE_NAMES, REFERRER_NAMES, type Exi
 import { practiceCusClean } from "@/lib/admin/practice";
 import { getDashboardDistributionsSoftwares, getCachedAnomalies, getCachedOverview, getCachedTrend30 } from "@/lib/admin/cache";
 import { getOpenmsConsentOverview, getPendingOverview } from "@/lib/admin/stats";
+import { getOpenmsSyncStatus } from "@/lib/admin/openms-sync";
+import { OpenmsSyncCard } from "@/components/admin/OpenmsSyncCard";
 import { getLatestUsers, getLatestVideosBrief } from "@/lib/admin/data";
 import { TrendChart, BarList, Donut, type Series } from "@/components/admin/Charts";
 import { AdminCard, Kpi, LevelTag, StatusTag } from "@/components/admin/Widgets";
@@ -30,7 +32,7 @@ export default async function AdminDashboard() {
   // 与分布/流量/API/异常一致；轻量「最新注册/最新上传」仍实时
   // 2026-11-06 张老师定：待审类「审核即消费」的数字（录像/评论/论坛/头像待审 + 最老积压）
   // 不进缓存，getPendingOverview 实时取后与缓存核心合并——审完回页数字立即消
-  const [core, trend, dist, traffic, api, pending, openmsConsent] = await Promise.all([
+  const [core, trend, dist, traffic, api, pending, openmsConsent, openmsSync] = await Promise.all([
     getCachedOverview(),
     getCachedTrend30(),
     getDashboardDistributionsSoftwares(),
@@ -38,6 +40,8 @@ export default async function AdminDashboard() {
     getApiUsage(),
     getPendingOverview(),
     getOpenmsConsentOverview(),
+    // 2026-11-10 张老师定：同步状态卡实时取（不进 unstable_cache），首帧 RSC + 客户端 10s 轮询校准
+    getOpenmsSyncStatus(),
   ]);
   const ov = { ...core, ...pending };
   const [anomalies, latestUsers, latestVideos] = await Promise.all([
@@ -265,6 +269,10 @@ export default async function AdminDashboard() {
           }
         />
       </div>
+
+      {/* ---------- 开源扫雷网录像同步状态（2026-11-10 张老师定：只做首页概览卡、
+          10 秒轮询、纯只读无干预操作；插在 KPI 行之后、待审 KPI 之前） ---------- */}
+      <OpenmsSyncCard initial={openmsSync} />
 
       {/* ---------- 待人工审核（2026-10-16 张老师定：第二行只放需人工处理的队列，无则整行不显示） ---------- */}
       {(() => {

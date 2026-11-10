@@ -415,7 +415,9 @@ curl -H "X-Api-Key: <你的key>" "https://saolei.wang/api/public/v1/stats"
 **附：站点侧已同步上线反爬措施**（UA 黑名单 + 全站 10r/s + 录像文件 3r/s 限速），页面抓取方式将不可用或极慢，请统一走本 API。
 
 **变更记录**
-- 2026-11-10（4）：台账 `openms_video_map` 增加 `attempts` 计数与「放弃」终态（state=3）。临时失败（429/5xx/网络/落库异常）首次后最多再重试 3 次（`--max-retries`），累计 4 次失败即落定放弃、写原因并越过该 ID，避免一条坏录像永久卡住流水线；终态 1/2/3 一律按 video_id 跳过。另：schema 仍保留 `sync_to_openms` 两处字段映射**仅为兼容生产残留列**（代码／API／UI 已零引用）——CI 的 `prisma db push` 遇删列会中止部署、旧 Prisma Client 也会 SELECT 全列；DROP 两列须待新 Client 上线后按「先手工 DROP 生产列、再删 schema 字段」顺序执行。
+- 2026-11-10（6）：后台仪表盘新增「开源扫雷网录像同步」**首页概览卡**（张老师定：只做首页卡、10 秒轮询、纯只读、无任何干预操作）。新增 `openms_sync_run` 跑批记录表（写在 schema 内，生产由 `prisma db push` 加法建表）：每轮 `--apply` 写一行，按「每 5 条或 30s」更新心跳与计数、收口写 status/finished_at，`dry-run` 不写以免测试污染历史；脚本埋点见 `scripts/openms-sync-all.ts`。数据源 `src/lib/admin/openms-sync.ts` 实时聚合（不进 `unstable_cache`），只读接口 `GET /api/admin/openms-sync/status`（`requireAdminApi` + `no-store`），客户端 10s 轮询。生产 crontab 由 `scripts/server-release.sh` 幂等注册（每 10 分钟、`flock -n` 防重入、`--max-items 20`）。**不显示全量完成百分比**：对方 `unmapped_videos` 不返回 total，进度只显示本轮实际扫到的 ID 构成。
+- 2026-11-10（5）：张老师确认 `sync_to_openms` 两列**永久保留、无需 DROP**——「不删这个字段也没事，只要不用它」；代码／API／UI／公开接口零引用，schema 仅留兼容映射，生产库不执行任何 DDL，相关注释同步改为「永久保留」。
+- 2026-11-10（4）：台账 `openms_video_map` 增加 `attempts` 计数与「放弃」终态（state=3）。临时失败（429/5xx/网络/落库异常）首次后最多再重试 3 次（`--max-retries`），累计 4 次失败即落定放弃、写原因并越过该 ID，避免一条坏录像永久卡住流水线；终态 1/2/3 一律按 video_id 跳过。另：schema 仍保留 `sync_to_openms` 两处字段映射**仅为兼容生产残留列**（代码／API／UI 已零引用）——CI 的 `prisma db push` 遇删列会中止部署、旧 Prisma Client 也会 SELECT 全列，故两列按同日口径永久保留、不执行 DROP。
 - 2026-11-10（3）：方向 A 后台录像同步接入对方定稿接口 `GET /api/accountlink/saolei/unmapped_videos?user_id=&cursor=&count=`（cursor 为 **inclusive** 下界、继续须传 last_id+1；`user_id` 为开源站 UserProfile.id，省略会 504；列表限速 1/2s、下载限速 5/m）；雷网新增 `openms_video_map` 台账，扫到的 video_id 一律入库，已有终态（已导入/已拒收）按 ID 过滤不再重复下载。实现见 `scripts/openms-sync-all.ts`。
 - 2026-11-10（2）：同步口径定为「两站各抓各的、只控制自己方面的抓取」——摘除雷网侧 `sync_to_openms` 设定（`openms_link` / `openms_bind_request` 两列及全部读写、UI 引导），雷网只保留 `openms_link.consent`；反方向由开源站自行决定，雷网不读写、不存储、不发送。
 - 2026-11-10：方向 A 改为「新标签页打开授权页 + 发起页每 5 秒轮询核销」，成功后提示并返回账户管理页；开源扫雷网授权页无需回跳，雷网凭状态 API 反查判定授权结果；settle 增加申请者本人校验。

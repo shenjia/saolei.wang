@@ -441,4 +441,13 @@ if ! (crontab -l 2>/dev/null | grep -qF "reset-distribution.mjs"); then
   ok "已安装 distribution 每日重算 cron（00:30）"
 fi
 
+# ---------- 开源扫雷网录像同步（2026-11-10 张老师要求「开始同步，设 crontab」）----------
+# 每 10 分钟一轮 --apply，flock -n 防重入：上一轮没跑完时本轮直接跳过，
+# 绝不并发写台账/游标。默认 --max-items 20（下载限速 5 盘/分，一轮约 4 分钟）。
+OPENMS_CRON_LINE="*/10 * * * * cd $DEPLOY_DIR && /usr/bin/flock -n /tmp/openms-sync-all.lock /usr/bin/env -u NODE_OPTIONS node --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-sync-all.ts --apply --max-items 20 >> /home/deploy/logs/openms-sync.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "openms-sync-all.ts"); then
+  (crontab -l 2>/dev/null; echo "$OPENMS_CRON_LINE") | crontab -
+  ok "已安装开源扫雷网录像同步 cron（每 10 分钟）"
+fi
+
 ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 旧主力 $A_APP 保持运行兜底; authority active=$(read_auth_active))"

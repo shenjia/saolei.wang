@@ -1493,3 +1493,82 @@ a.cheat_uid:hover .pt_bubble {
 .sv_table tbody tr.hl td {
   background: #33322b;
 }
+
+/* ---------- 开源扫雷网录像同步概览卡（2026-11-10，首页仪表盘） ----------
+   独立类名不叠加 .admin_kpis：其 5 列 grid 特异性会压过移动端媒体查询里的
+   双列规则，故本区块自带响应式。纯只读展示，无任何按钮/交互态。 */
+.admin_sync_kpis {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+.admin_sync_dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: #939387;
+}
+.admin_sync_dot.run { background: #a6e22e; box-shadow: 0 0 0 3px rgba(166, 226, 46, 0.16); }
+.admin_sync_dot.warn { background: #f79646; box-shadow: 0 0 0 3px rgba(247, 150, 70, 0.16); }
+.admin_sync_dot.bad { background: #f92672; box-shadow: 0 0 0 3px rgba(249, 38, 114, 0.16); }
+.admin_sync_dot.idle { background: #66d9ef; }
+.admin_sync_caption {
+  font-size: 13px;
+  color: #939387;
+  margin-bottom: 7px;
+}
+.admin_sync_caption span { color: #75715e; }
+.admin_sync_seg {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #1e1f1c;
+}
+.admin_sync_seg i { display: block; height: 100%; }
+.admin_sync_legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 9px;
+  font-size: 12px;
+  color: #939387;
+}
+.admin_sync_legend b {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+}
+.admin_sync_legend .dim { color: #75715e; }
+.admin_sync_body { display: flex; gap: 24px; align-items: flex-start; }
+.admin_sync_body .main { flex: 1; min-width: 0; }
+.admin_sync_body .side {
+  width: 290px;
+  flex: none;
+  border-left: 1px solid #3a3a32;
+  padding-left: 22px;
+}
+.admin_sync_ctx { font-size: 13px; color: #939387; line-height: 23px; }
+.admin_sync_ctx .hl { color: #e6db74; }
+.admin_sync_ctx .ok { color: #a6e22e; }
+
+@media (min-width: 901px) and (max-width: 1250px) {
+  .admin_sync_kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .admin_sync_kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .admin_sync_body { flex-direction: column; gap: 12px; }
+  .admin_sync_body .side {
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid #3a3a32;
+    padding: 12px 0 0;
+  }
+}
