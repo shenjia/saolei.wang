@@ -3620,6 +3620,13 @@ body .title_members td.name a:hover {
 body #user_view .info {
   position: relative;
   padding-right: 170px; /* 给右上角军衔徽章留位，成绩表不与其重叠 */
+  /* legacy #user_view .info{overflow:hidden} 是包含头像浮动的 clearfix 手法，但把发消息
+     hover 气泡（2026-11-10）顶部裁掉（气泡探出盒顶 8px，文字上半截消失，张老师实测）。
+     display:flow-root 与 overflow:hidden 同为 BFC 包含浮动（布局等价），纵向放开裁切；
+     横向保留 clip 兜底超长内容（clip 可与 visible 纵向组合，不会把纵向算成 auto） */
+  display: flow-root;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 body #user_view .info .avatar {
   width: 160px;
