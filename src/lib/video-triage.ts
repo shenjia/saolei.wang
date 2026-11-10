@@ -90,15 +90,22 @@ export interface PathJumpStats {
   totalCells: number;
 }
 
-/** 对事件行流算瞬移统计（纯函数；timeMs 由调用方传入） */
+/** 对事件行流算瞬移统计（纯函数；timeMs 由调用方传入）。
+ *  哨兵断链两路：①rmv 越界哨兵（≥SENTINEL_PX）②EVF 排名局 heal/resume 合成
+ *  事件的哨兵点 (W×16, H×16)——恰好落在 60000 线以内会被当真实坐标，每个哨兵
+ *  制造出+回 2 次 >100px 假瞬移推高占比（2026-11-10 张一零 355576/355579/355591/
+ *  355599 四盘 bit10 误报实证，哨兵 20~36 个/盘、断链后 jumpCount 全归零）。
+ *  口径对齐 ms-toollib base_video.rs（行程锚定最后盘内位置）与 replay-core。 */
 export function pathJumpStats(v: ParsedVideo, timeMs: number): PathJumpStats {
+  const evfSentX = v.width * 16, evfSentY = v.height * 16;
   let totalPx = 0, jumpsPx = 0, jumpCount = 0;
   let lastPx: number | null = null, lastPy: number | null = null;
   for (const line of v.events) {
     const m = EV_LINE.exec(line);
     if (!m) continue;
     const px = +m[5], py = +m[6];
-    if (px >= SENTINEL_PX || py >= SENTINEL_PX || px < 0 || py < 0) {
+    if (px >= SENTINEL_PX || py >= SENTINEL_PX || px < 0 || py < 0 ||
+        (px === evfSentX && py === evfSentY)) {
       lastPx = null; lastPy = null; // 哨兵：断开位移链
       continue;
     }
