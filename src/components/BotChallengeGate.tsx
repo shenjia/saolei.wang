@@ -15,14 +15,18 @@ type Board = {
   lost: boolean;
   moves: number;
   cells: Cell[];
+  /** 踩雷时 API 回传的触发雷格（open=所点格；chord=邻域首个未开雷），画红底爆雷 */
+  mineCell?: number;
 };
 type BoardResponse = Board & { token: string };
 
 /* 格子 → FlopSprites symbol（与 Board.tsx VEC_SYM / 练习页 VEC_MAP 同源口径）：
    未开=cell-normal-solid、旗=cell-flag-solid、已开=cell-number-N；
-   按住未开格下沉＝cell-number-0（flop/练习页 pressPaint 同语义） */
-function cellSymbol(cell: Cell, pressed: boolean): string {
+   按住未开格下沉＝cell-number-0（flop/练习页 pressPaint 同语义）；
+   踩雷触发格＝cell-mine-bomb 红底炸雷（2026-11-10 张老师：外框变红不够醒目） */
+function cellSymbol(cell: Cell, i: number, mineCell: number, pressed: boolean): string {
   if (cell.state === 1) return `cell-number-${cell.num ?? 0}`;
+  if (i === mineCell) return "cell-mine-bomb";
   if (cell.state === 2) return "cell-flag-solid";
   return pressed ? "cell-number-0" : "cell-normal-solid";
 }
@@ -43,12 +47,14 @@ export function BotChallengeGate() {
   const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false);
   const redirect = useRef<string | null>(null);
-  /* 按压视觉：鼠标左键按住的未开格（flop 同款下沉），mouseup 全局释放 */
-  const [press, setPress] = useState<number | null>(null);
+  /* 按压视觉（2026-11-10 张老师：chord 按压预览对齐经典扫雷）：左键按住
+     未开格＝该格下沉；按住已开数字格＝周围 8 格中未开且未插旗的同步下沉
+     （已标旗保持原样），mouseup 全局释放后 click 才走 chord */
+  const [press, setPress] = useState<ReadonlySet<number>>(new Set());
 
   useEffect(() => {
-    if (press === null) return;
-    const clear = () => setPress(null);
+    if (press.size === 0) return;
+    const clear = () => setPress(new Set());
     window.addEventListener("mouseup", clear);
     return () => window.removeEventListener("mouseup", clear);
   }, [press]);
@@ -225,7 +231,27 @@ export function BotChallengeGate() {
                             void act("flag", i);
                           }}
                           onMouseDown={(e) => {
-                            if (e.button === 0 && cell.state === 0 && !dead) setPress(i);
+                            if (e.button !== 0 || dead) return;
+                            if (cell.state === 0) {
+                              setPress(new Set([i]));
+                              return;
+                            }
+                            /* 按住已开数字格＝chord 按压预览：周围 8 格中未开且
+                               未插旗的同步下沉（经典扫雷口径，旗保持原样） */
+                            if (cell.state === 1) {
+                              const next = new Set<number>();
+                              for (let dy = -1; dy <= 1; dy++) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                  if (!dx && !dy) continue;
+                                  const nx = x + dx;
+                                  const ny = y + dy;
+                                  if (nx < 0 || nx >= board.width || ny < 0 || ny >= board.height) continue;
+                                  const j = ny * board.width + nx;
+                                  if (board.cells[j].state === 0) next.add(j);
+                                }
+                              }
+                              setPress(next);
+                            }
                           }}
                           onTouchStart={() => {
                             longPress.current = setTimeout(() => {
@@ -260,7 +286,7 @@ export function BotChallengeGate() {
               {board.cells.map((cell, i) => (
                 <use
                   key={i}
-                  href={`#${cellSymbol(cell, press === i)}`}
+                  href={`#${cellSymbol(cell, i, board.mineCell ?? -1, press.has(i))}`}
                   x={(i % board.width) * 16}
                   y={((i / board.width) | 0) * 16}
                   width={16}
