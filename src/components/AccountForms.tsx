@@ -65,7 +65,8 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
   }
 
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: currentYear - 1900 + 1 }, (_, i) => currentYear - i);
+  // 1900 是旧站 MSSQL 零值占位年，不提供选择（2026-11-10 与 birth.ts 口径统一）
+  const years = Array.from({ length: currentYear - 1901 + 1 }, (_, i) => currentYear - i);
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 

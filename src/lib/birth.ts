@@ -32,13 +32,14 @@ export function constellationOf(month: number, day: number): string {
   return "摩羯座";
 }
 
-/** 有效生日 Date；未填/旧站默认/异常返回 null */
+/** 有效生日 Date；未填/旧站默认/异常返回 null。
+ * 1900 年（含 1900-01-01）= 旧站 MSSQL datetime 零值占位（2026-11-10 张老师确认：全部视为未填） */
 function birthDateOf(ts: bigint | number | null | undefined): Date | null {
   const sec = Number(ts ?? 0);
   if (!sec || sec === LEGACY_DEFAULT_BIRTHDAY) return null;
   const d = new Date(sec * 1000);
   const year = d.getFullYear();
-  if (!Number.isFinite(year) || year < 1900 || year > 2100) return null;
+  if (!Number.isFinite(year) || year < 1901 || year > 2100) return null;
   return d;
 }
 

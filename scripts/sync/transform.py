@@ -173,7 +173,8 @@ for p in players:
     if y and m:
         try:
             d = datetime(int(y), int(m), 1)
-            bday = ux(d) if 1900 <= d.year <= 2100 else 0
+            # 1900 = 旧站 MSSQL datetime 零值占位年，视为未填（2026-11-10 与 birth.ts 统一口径）
+            bday = ux(d) if 1901 <= d.year <= 2100 else 0
         except (ValueError, OverflowError):
             bday = 0
     ui_rows.append((pid, (p[C["qq"]] or "")[:20], (p[C["net"]] or "")[:32], bday,
