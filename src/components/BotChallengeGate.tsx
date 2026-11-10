@@ -76,23 +76,24 @@ export function BotChallengeGate() {
   boardRef.current = board;
 
   useEffect(() => {
-    if (press.size === 0) return;
+    /* 拖拽跟踪期间监听常挂（按 press.size 早退会在拖过非数字格、按压清空的
+       瞬间卸载监听，拖回数字格无法恢复跟踪）；组件卸载/弹窗关闭时收尾 */
+    if (!open) return;
     const clear = () => {
       dragChord.current = false;
       setPress(new Set());
     };
     const move = (e: MouseEvent) => {
-      if (!dragChord.current) return;
+      if (!dragChord.current || !boardRef.current) return;
       /* ⚠️ WebKit zoom 子树 gBCR 不可信（项目铁律）——落点判定用
          elementFromPoint，坐标来自 MouseEvent 本身不经 gBCR */
       const t = document.elementFromPoint(e.clientX, e.clientY);
-      const td = t?.closest?.("#mscap_board td");
+      const td = t?.closest?.(".mscap_board td");
       if (!td) {
         setPress(new Set());
         return;
       }
       const i = Number((td as HTMLTableCellElement).dataset.i);
-      if (!boardRef.current) return;
       const b = boardRef.current;
       setPress(b.cells[i].state === 1 ? chordSet(b, i) : new Set<number>());
     };
@@ -102,7 +103,7 @@ export function BotChallengeGate() {
       window.removeEventListener("mouseup", clear);
       window.removeEventListener("mousemove", move);
     };
-  }, [press]);
+  }, [open]);
 
   function settle(ok: boolean) {
     for (const resolve of waiters.current.splice(0)) resolve(ok);
@@ -264,6 +265,7 @@ export function BotChallengeGate() {
                           key={x}
                           className={cellClass(cell)}
                           aria-label={`${y + 1} 行 ${x + 1} 列`}
+                          data-i={i}
                           onClick={() => {
                             if (suppressClick.current) {
                               suppressClick.current = false;
