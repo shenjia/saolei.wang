@@ -3960,9 +3960,10 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   margin-top: 15px;
   margin-left: calc(25% + 18px);
 }
-/* 2026-11-10 二改：去掉「外站绑定」小标题，线上方只留已绑定时的深灰小字 */
+/* 2026-11-10 三改：提示小字挪到「自动同步录像到扫雷网」开关正下方（带括号）。
+   缩进 = 「已绑定」标签宽（3 字 × 14px ≈ 42px）+ 开关左间距 14px = 56px */
 #account_manage .outer_bind_note {
-  margin: 0 0 10px;
+  margin: 6px 0 0 56px;
   font-size: 13px;
   line-height: 18px;
   color: #75715e;
@@ -3994,7 +3995,7 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
    「开源扫雷网用户 #编号」（气泡样式照 star_help 的 data-tip 方案，单行窄版） */
 #account_manage .openms_bound_tag {
   position: relative;
-  color: #34c759;
+  color: #a6e22e;
   font-size: 14px;
   line-height: 24px;
   white-space: nowrap;
