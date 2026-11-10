@@ -9010,7 +9010,7 @@ button.msg_cancel:hover {
 
 /* 已收集方格配色·「PB」模式（2026-10-27 张老师定）：按该 3BV **最好成绩录像的时间评级**
    分四档，SSS~S 都显示为金色。四档取色与雷达 GRADE_COLORS 同源，只是把相近档并为四档
-   （10px 小格分不出 9 档）：金 #E6DB74 / 玫红 #FF0080 / 紫 #A000E5 / 灰 #8A8878。
+   （10px 小格分不出 9 档）：金 #E6DB74 / 玫红 #FF0080 / 紫 #BB47EC（D 档现值）/ 灰 #8A8878。
    选择器带 [data-mode="pb"]，特异性高于上面的级别三色，切换只改 box 的 data-mode（不重渲染） */
 #user_3bv[data-mode="pb"] .sq.on.g_gold {
   background: #e6db74;
@@ -9019,7 +9019,7 @@ button.msg_cancel:hover {
   background: #ff0080;
 }
 #user_3bv[data-mode="pb"] .sq.on.g_violet {
-  background: #a000e5;
+  background: #bb47ec;
 }
 #user_3bv[data-mode="pb"] .sq.on.g_gray {
   background: #8a8878;
