@@ -34,6 +34,7 @@ import { getVsData, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } 
 import { scoreTime } from "@/lib/format";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { RadarChart } from "@/components/RadarChart";
 import { VsScoreBoard } from "@/components/VsScoreBoard";
 
@@ -221,8 +222,14 @@ function VsPanel({ p, accent }: { p: VsPlayer; accent?: string }) {
               prefetch={false}
               title={`进入 ${p.name} 的地盘`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element -- 用户上传头像，走原 URL */}
-              <img className="ucd_avatar" src={p.avatarUrl} alt={p.name} />
+              {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档，与玩家卡片同款），
+                  旧版称号仍 no.jpg（2026-11-11）；有头像走原 URL */}
+              {p.avatarIsDefault ? (
+                <DefaultAvatar sex={p.sex} size="mid" className="ucd_avatar" alt={p.name} />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element -- 用户上传头像，走原 URL */
+                <img className="ucd_avatar" src={p.avatarUrl} alt={p.name} />
+              )}
             </Link>
           </div>
           <div className="ucd_right">

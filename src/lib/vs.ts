@@ -86,6 +86,8 @@ export interface VsPlayer {
   en: string;
   sex: number;
   avatarUrl: string;
+  /** 无头像（走默认图）：军衔制下按性别渲染军装默认头像（2026-11-11） */
+  avatarIsDefault: boolean;
   militaryTitle: string;
   /** 旧版称号备选（TitleBadge classic 双体系渲染，与玩家卡片一致） */
   classicTitle: { name: string; color: string } | null;
@@ -162,6 +164,7 @@ function toVsPlayer(card: UserCardData, radar: RadarPoint[]): VsPlayer {
     en: card.englishName,
     sex: card.sex,
     avatarUrl: card.avatarUrl,
+    avatarIsDefault: card.avatarIsDefault,
     militaryTitle: card.militaryTitle,
     classicTitle: card.classicTitle,
     area: card.area,
