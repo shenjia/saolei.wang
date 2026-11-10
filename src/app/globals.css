@@ -3954,6 +3954,40 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   cursor: default;
   text-decoration: none;
 }
+/* 外站绑定区（2026-11-10 张老师）：资料表下方独立分区。通栏 hr 复用 manage_head
+   同款 <hr>（宽度同标题）；线上方左侧小标题「外站绑定」，已绑定开源扫雷网时
+   标题下加深灰小字；绑定行独立成表（原行内 border-top 方案只能通到表格宽，弃用） */
+#account_manage .outer_bind_sec {
+  margin-top: 15px;
+}
+#account_manage .outer_bind_head h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  line-height: 24px;
+  color: #b1b1a4;
+}
+#account_manage .outer_bind_note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: #75715e;
+}
+/* 压掉 legacy hr{margin:6px 0 30px} 的下边距，线到行距用表格自己的 margin-top */
+#account_manage .outer_bind_sec hr {
+  margin: 6px 0 0;
+}
+#account_manage .outer_bind_sec table.form {
+  margin-top: 12px;
+}
+/* 行头站点 LOGO（2026-11-10 张老师）：置灰小图标，与表头文字同行 */
+#account_manage .openms_th_logo {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  vertical-align: -4px;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
 /* 开源扫雷网已绑定标签（2026-11-10 张老师）：绿色「已绑定」，hover 出气泡
    「开源扫雷网用户 #编号」（气泡样式照 star_help 的 data-tip 方案，单行窄版） */
 #account_manage .openms_bound_tag {
