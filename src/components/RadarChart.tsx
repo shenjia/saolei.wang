@@ -178,10 +178,11 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: (RadarPoint | A
             <text x={lx} y={ly - 3} textAnchor="middle">
               {d.labelValue !== undefined ? (
                 // 活跃雷达（2026-11-10 21:24 张老师定）：顶行不显示 SSS~F 等级也不带
-                // 单位，显示该维换算后活跃值取整（全绿 #a6e22e 与折线同色），下行轴名
+                // 单位，显示该维换算后活跃值取整（绿 #a6e22e 与折线同色）；
+                // 0 值跟下行轴名同色（22:29 张老师定：未 hover 亮灰 #8a8878、hover 绿）
                 <tspan
                   className="radar_lbl_fs"
-                  fill="#a6e22e"
+                  fill={d.labelValue === "0" ? (active ? "#a6e22e" : "#8a8878") : "#a6e22e"}
                   fontWeight="bold"
                   style={{ fontSize: active ? LABEL_GRADE_FS * 1.25 : LABEL_GRADE_FS }}
                 >
