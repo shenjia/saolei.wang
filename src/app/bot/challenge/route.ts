@@ -127,6 +127,7 @@ load()})();`;
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/images/favicon-mini.ico" sizes="16x16 32x32">
 <title>扫雷验证 | 扫雷网 Saolei.wang</title>
 <meta name="robots" content="noindex,nofollow">
 <style>${css}</style>

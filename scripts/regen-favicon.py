@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""favicon.ico 无损瘦身：对现有 ICO 的各原始 PNG 帧（16/24/32/48 手绘帧）做
-64 色 FASTOCTREE 量化 + zlib9 重压，手动重打包（PIL saver 会丢帧）。
-量化损失仅限 alpha 抗锯齿边缘带（每帧感知差异像素 2-6%、通道差 ≤15，肉眼不可辨）；
-帧内容/尺寸全保留。8.4KB → ~3KB。
-用法：python3 scripts/regen-favicon.py（从 git HEAD 的旧版取源，幂等可重跑）"""
+"""favicon.ico 无损瘦身 ×2：从 git HEAD 旧版取源，产出两个文件——
+① src/app/favicon.ico（全站）：四帧 16/24/32/48 原样保留，64 色量化重压，
+   差异仅 alpha 抗锯齿边缘带（≤15/2-6% 像素，肉眼不可辨）。8.4KB → ~3KB。
+② public/images/favicon-mini.ico（挑战页专用极简）：只留 16/32 双帧（浏览器
+   标签页场景够用，砍 24 Windows 冗余档与 48 快捷方式档）。~1.4KB。
+注意 PIL 的 ICO saver 会丢 append_images 帧，必须手动打包目录+帧。
+幂等可重跑：源固定取 git HEAD 的 favicon.ico。"""
 import io
 import struct
 import subprocess
@@ -13,6 +15,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = ROOT / "src/app/favicon.ico"
+TARGET_MINI = ROOT / "public/images/favicon-mini.ico"
 
 def extract_frames(data: bytes) -> dict[int, Image.Image]:
     count = struct.unpack("<H", data[4:6])[0]
@@ -45,6 +48,14 @@ def pack(frames: dict[int, Image.Image]) -> bytes:
     )
     return head + dir_ + payload
 
+def verify(data: bytes, expect: list[tuple[int, int]]) -> None:
+    img = Image.open(io.BytesIO(data))
+    sizes = sorted(img.info.get("sizes", []))
+    assert sizes == expect, f"{sizes} != {expect}"
+    for s in sizes:
+        img.size = s
+        img.load()
+
 def main() -> None:
     src_data = subprocess.run(
         ["git", "show", "HEAD:src/app/favicon.ico"],
@@ -52,16 +63,19 @@ def main() -> None:
     ).stdout
     frames = extract_frames(src_data)
     assert sorted(frames) == [16, 24, 32, 48], sorted(frames)
-    out = pack(frames)
-    # 校验：PIL 能读回全部 4 帧
-    img = Image.open(io.BytesIO(out))
-    sizes = sorted(img.info.get("sizes", []))
-    assert sizes == [(16, 16), (24, 24), (32, 32), (48, 48)], sizes
-    for s in sizes:
-        img.size = s
-        img.load()
-    print(f"{len(src_data)}B -> {len(out)}B ({len(src_data) / len(out):.1f}x)")
-    TARGET.write_bytes(out)
+
+    # 全站版：四帧全保留
+    full = pack(frames)
+    verify(full, [(16, 16), (24, 24), (32, 32), (48, 48)])
+    TARGET.write_bytes(full)
+    print(f"全站 favicon.ico: {len(src_data)}B -> {len(full)}B ({len(src_data) / len(full):.1f}x)")
+
+    # 挑战页极简版：16+32 双帧
+    mini = pack({s: frames[s] for s in (16, 32)})
+    verify(mini, [(16, 16), (32, 32)])
+    TARGET_MINI.parent.mkdir(parents=True, exist_ok=True)
+    TARGET_MINI.write_bytes(mini)
+    print(f"挑战页 favicon-mini.ico: {len(mini)}B（16+32 双帧）")
 
 if __name__ == "__main__":
     main()
