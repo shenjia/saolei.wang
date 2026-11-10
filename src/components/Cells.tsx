@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { INVALID_3BVS_TIP } from "@/lib/config";
 import { resolveAvatarUrl } from "@/lib/avatar";
+import { smallAvatarUrlFor } from "@/lib/small-avatar";
 import { score3bvs, scoreTime, TIME_NEVER } from "@/lib/format";
 import { RelTime } from "./RelTime";
 import { ActLine } from "./ActLine";
+import { RankingAvatarImg } from "./RankingAvatar";
 
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
 export { TitleBadge } from "./TitleBadge";
@@ -113,7 +115,10 @@ export function BbsAuthorName({
 /** 排行榜姓名：上传头像绝对定位在左侧预留区，不参与名字与性别图标的居中排版。
  *  2026-11-04 活跃度标记（张老师需求）：性别图标后加彩色「.」；
  *  hover 气泡（与首页同款「#ID 姓名 英文名」）下加第二行括号文案，
- *  颜色与点一致（act 1~6 见 lib/activity.ts，颜色在 globals.css .act_*） */
+ *  颜色与点一致（act 1~6 见 lib/activity.ts，颜色在 globals.css .act_*）
+ *  2026-11-10 头像小图化（张老师需求）：13px 展示位改加载 20px WebP 小图
+ *  （本地两类头像，OAuth 外链不适用）；小图缺失时 onError 回退原图兜底
+ *  （批处理过渡期 / 生产 uploads 小图尚未生成时不破相） */
 export function RankingName({
   id,
   name,
@@ -136,10 +141,16 @@ export function RankingName({
   // 与主页/用户卡片同口径：新版上传、OAuth 外链、旧站 "1"（照片墙实体）；
   // 无头像时 fallback 为空，绝不把默认 no.jpg 混进排行榜。
   const avatarUrl = resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : "");
+  // 小图优先（2026-11-10）：本地两类头像有 20px WebP 版本；小图 404 时回退原图
+  const smallUrl = avatarUrl ? smallAvatarUrlFor(avatar, id) : null;
   return (
     <>
       <span className="ranking_name">
-        {avatarUrl && <img className="ranking_avatar" src={avatarUrl} alt="" width={13} height={13} />}
+        {avatarUrl && smallUrl ? (
+          <RankingAvatarImg src={smallUrl} fallback={avatarUrl} className="ranking_avatar" />
+        ) : avatarUrl ? (
+          <img className="ranking_avatar" src={avatarUrl} alt="" width={13} height={13} />
+        ) : null}
         <Link href={`/user/${id}`} target="_blank" prefetch={false}>
           {name}
           <span className="pt_bubble">

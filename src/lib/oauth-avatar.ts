@@ -23,6 +23,7 @@ import path from "node:path";
 import { prisma } from "@/lib/db";
 import { moderateAvatar } from "@/lib/avatar-moderate";
 import { AVATAR_REVIEW_STATUS, isUploadedAvatar } from "@/lib/avatar";
+import { ensureSmallDir, generateSmallAvatar } from "@/lib/small-avatar-gen";
 
 const MAX_SIZE = 2 * 1024 * 1024;
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "avatar");
@@ -134,6 +135,17 @@ export async function importQqAvatar(
     const absPath = path.join(UPLOAD_DIR, path.basename(relPath));
     mkdirSync(UPLOAD_DIR, { recursive: true });
     writeFileSync(absPath, buf);
+    // 小图一并生成（2026-11-10 排行页小头像）：文件此时已就绪；失败不影响送审主流程
+    try {
+      const smallDir = path.join(UPLOAD_DIR, "small");
+      ensureSmallDir(smallDir);
+      await generateSmallAvatar(
+        absPath,
+        path.join(smallDir, `${path.basename(relPath, path.extname(relPath))}.webp`),
+      );
+    } catch {
+      /* 排行页 onError 回退原图兜底 */
+    }
 
     const discard = () => {
       try {

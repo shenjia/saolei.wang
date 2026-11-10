@@ -16,6 +16,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { moderateAvatar } from "@/lib/avatar-moderate";
+import { ensureSmallDir, generateSmallAvatar } from "@/lib/small-avatar-gen";
 import { NEWS_TYPE } from "@/lib/config";
 import { publishNews } from "@/lib/news";
 
@@ -91,6 +92,22 @@ export async function POST(req: Request) {
       /* 清理失败不影响用户，忽略 */
     }
   };
+
+  // 小图生成（2026-11-10 张老师需求：排行页加载 20px WebP）。
+  // 失败不阻塞上传主流程——小图缺失时排行页 onError 回退原图，后续可补跑批处理。
+  const genSmall = async () => {
+    try {
+      const smallDir = path.join(UPLOAD_DIR, "small");
+      ensureSmallDir(smallDir);
+      await generateSmallAvatar(
+        absPath,
+        path.join(smallDir, `${path.basename(relPath, path.extname(relPath))}.webp`),
+      );
+    } catch (e) {
+      console.warn("[avatar] 小图生成失败（不影响上传）:", e instanceof Error ? e.message : e);
+    }
+  };
+  await genSmall();
 
   // AI 初审（未配置 Key / 超时 / 报错都会降级成 review 转人工，不会阻塞用户）
   const ai = await moderateAvatar(buf, kind.mime);
