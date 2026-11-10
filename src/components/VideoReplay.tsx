@@ -1620,8 +1620,14 @@ function runPlayGame(opts: {
       clearPress();
       pressAround(i);
       onFace("ooh");
+      /* 双键手势期间另一键再按下＝新一发 chord 上膛（2026-11-10 修）：必须
+         重置 chordDone，否则首击置 true 后「按住右键连点左键」/「按住左键
+         连点右键」第二次起 mouseup 全走尾随分支零动作。练习页 mouseup 判据
+         是 rightDown 不看 chordDone 天然连发；试玩判据带 !chordDone，就得
+         在按下侧重置——2026-10-18「每次松开都触发」口径当时漏了这处同步 */
       if (e.button === 2) rightDown = true;
       else leftDown = true;
+      chordDone = false;
     } else if (e.button === 0) {
       leftDown = true;
       rightDown = false;
