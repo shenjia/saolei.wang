@@ -3960,12 +3960,7 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   margin-top: 15px;
   margin-left: calc(25% + 18px);
 }
-#account_manage .outer_bind_head h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  line-height: 24px;
-  color: #b1b1a4;
-}
+/* 2026-11-10 二改：去掉「外站绑定」小标题，线上方只留已绑定时的深灰小字 */
 #account_manage .outer_bind_note {
   margin: 0 0 10px;
   font-size: 13px;
@@ -3978,6 +3973,13 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
 }
 #account_manage .outer_bind_sec table.form {
   margin-top: 12px;
+}
+/* 开源扫雷网列右缘与上方表格列右缘对齐（2026-11-10 张老师）：上方 .form th
+   恒 129px（列宽取该列最宽内容），本表单行内容更窄（实测 122px），显式定宽补齐。
+   th 是 content-box（width 不含右 padding 1em），必须 border-box 否则盒变 145 */
+#account_manage .outer_bind_sec table.form th {
+  box-sizing: border-box;
+  width: 129px;
 }
 /* 行头站点 LOGO（2026-11-10 张老师）：置灰小图标，与表头文字同行 */
 #account_manage .openms_th_logo {

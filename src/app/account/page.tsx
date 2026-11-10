@@ -236,9 +236,10 @@ export default async function AccountManagePage({
             {/* 外站绑定区（2026-11-10 张老师）：通栏分割线（同 manage_head 的 hr，宽度一致），
                 线上方左侧小标题「外站绑定」；已绑定开源扫雷网时标题下加深灰小字。
                 绑定行独立成表放在线下（原放资料表内时线只能通到表格宽，通不了栏） */}
+            {/* 2026-11-10 张老师：去掉「外站绑定」小标题（2026-11-10 二改），
+                分割线上方只留已绑定时的深灰小字；开源扫雷网列右缘与上方表格列右缘对齐 */}
             <div className="outer_bind_sec">
               <div className="outer_bind_head">
-                <h2>外站绑定</h2>
                 {openmsLink && (
                   <p className="outer_bind_note">同步录像功能正在开发，近日上线</p>
                 )}
