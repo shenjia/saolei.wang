@@ -19,6 +19,10 @@
 //             （+08:00 切天；user_id>0，游客聚合行不可归属地区不计；
 //             act_points 起记日 2026-11-08，此前历史无此数据按 0 计——7 日窗口一周自然补齐）
 //   录像数   = video 近 7 天上传且 status<>0（含待审 10，屏蔽 0 不计），按 v.level 加权
+//             （2026-11-10 张老师定方案 A：剔除 video_info.software='Saolei.wang' 的
+//              排行局在线录像——排行局终局已照发练习埋点计过练习点，上传再计录像分
+//              即同一局双计；剔后在线玩只走练习点、站外软件上传才走录像点，
+//              气泡展示用原始条数 videos_total 同口径剔除）
 //
 // 更新：每小时 crontab 调 scripts/area-activity-refresh.ts 全量重算、事务内整表覆盖
 //（34 行小表，自愈：地区数据残留/权重变更下一轮自动对齐）。
@@ -87,7 +91,9 @@ export async function refreshAreaActivity(): Promise<{ areas: number; ms: number
       v7 AS (
         SELECT u.area area, COUNT(*) total,
                SUM(v.level = 'beg') vb, SUM(v.level = 'int') vi, SUM(v.level = 'exp') ve
-        FROM video v JOIN user u ON u.id = v.user
+        FROM video v
+        JOIN video_info vin ON vin.id = v.id AND vin.software <> 'Saolei.wang'
+        JOIN user u ON u.id = v.user
         WHERE v.status <> 0
           AND v.create_time > UNIX_TIMESTAMP() - 7 * 86400
           AND u.status = 0 AND u.area <> '' AND u.area NOT LIKE '%&%'

@@ -5,6 +5,12 @@
 //   录像/评论/回复 = 滚动 7×86400 秒；全部来源只计 user.status=0。
 //   初/中/高列 = 录像上传数 + 练习完成盘数；活跃总分 = 练习点 + 录像加权 + 评论数。
 //
+// 2026-11-10 三批 张老师定（方案 A）：活跃口径的录像源**剔除排行局录像**
+//   （video_info.software='Saolei.wang'，服务端 rankedInternal 专有标识）——
+//   排行局终局已照发练习埋点计过一次，上传再计录像分即同一局双计；
+//   剔后口径＝在线玩（练习+排行）一律只走练习点、站外软件（Arbiter/元扫雷）
+//   上传才走录像点，一局只计一次。初/中/高列同步剔（排行胜局已计入完成盘数）。
+//
 // 2026-11-09 张老师反馈：活跃榜翻到最后出现整行全空（活跃指数等八列全 0）的人——
 // 成因＝近 7 日玩过练习但全是低完成率败局（逐盘计点全 0），评论/录像也无，
 // 四源聚合得分 0 仍进快照。修复：HAVING 过滤零活跃用户不入快照（榜单与 total 同步收敛）。
@@ -39,7 +45,9 @@ function unionSql(): string {
          UNION ALL
          SELECT v.user uid, SUM(v.level = 'beg') cb, SUM(v.level = 'int') ci, SUM(v.level = 'exp') ce,
                 0 cc, 0 pts, SUM(v.level = 'beg') + 2 * SUM(v.level = 'int') + 10 * SUM(v.level = 'exp') vs, 0 lp, 0 wp
-         FROM video v JOIN user u ON u.id = v.user AND u.status = 0
+         FROM video v
+         JOIN video_info vi ON vi.id = v.id AND vi.software <> 'Saolei.wang'
+         JOIN user u ON u.id = v.user AND u.status = 0
          WHERE v.status <> 0 AND v.create_time >= ?
          GROUP BY v.user
          UNION ALL
