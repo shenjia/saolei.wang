@@ -11207,7 +11207,11 @@ body:has(.vprfs.show) .replay_mouse_tip {
   border: 1px solid #656355;
   border-radius: 6px;
   padding: 9px 12px; /* 十六期：随字号上调微增 */
-  z-index: 5;
+  /* 26＝压过棋盘内鼠标轨迹层 .traj_layer(z25)——轨迹开启时行 hover 气泡
+     (td.gv .tip z10) 须盖住轨迹（2026-11-10 张老师需求）；仍低于回放光标(30)/
+     播放失败气泡(90)。页面态面板挂 body 与轨迹层分属两棵子树，靠 body 层
+     同级比较：.play_board 的 WebKit 旧式 zoom 不建层叠上下文，z-index 直通 */
+  z-index: 26;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: left;
   /* 宽高封顶由组件 fit() 以 inline zoom 落实（练习页 syncReportZoom 同思路）：
@@ -13038,6 +13042,9 @@ html.op-fakefs #header {
   left: auto;
   top: auto;
   zoom: var(--vfz-panel, 1.35);
+  /* static 定位下 z-index 仍生效（flex 子项）：26＝压过中栏棋盘内 .traj_layer(25)，
+     轨迹开启时行 hover 气泡须盖住轨迹（2026-11-10 张老师需求） */
+  z-index: 26;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 /* 中栏：棋盘 + 控制条整块按 --vfz 缩放；stretch 使控制条 100% 宽＝棋盘宽
