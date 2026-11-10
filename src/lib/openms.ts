@@ -145,13 +145,14 @@ export class OpenmsBindError extends Error {
   }
 }
 
-/** 雷网发起申请的核销：查开源扫雷网状态 API，confirmed 则落绑定 */
-export async function settleBindByToken(token: string): Promise<{ profile: number }> {
+/** 雷网发起申请的核销：查开源扫雷网状态 API，confirmed 则落绑定。
+ * 只允许申请者本人核销（发起页轮询走的是本人会话，防第三方拿 token 代核销） */
+export async function settleBindByToken(token: string, uid: number): Promise<{ profile: number }> {
   const reqRow = await prisma.openmsBindRequest.findUnique({
     where: { token },
     select: { user: true, consent: true, status: true },
   });
-  if (!reqRow) throw new OpenmsBindError("not_found");
+  if (!reqRow || reqRow.user !== BigInt(uid)) throw new OpenmsBindError("not_found");
   if (reqRow.status !== OPENMS_BIND_PENDING) throw new OpenmsBindError("not_pending");
 
   // 开源扫雷网契约：GET /api/accountlink/saolei/bind/status?token=… → { profile: number | null, status: "confirmed" | "pending" }

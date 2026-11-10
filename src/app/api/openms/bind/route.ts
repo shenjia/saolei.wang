@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       if (!/^[0-9a-f]{48}$/.test(token)) {
         return NextResponse.json({ error: "bad_request" }, { status: 400 });
       }
-      const { profile } = await settleBindByToken(token);
+      const { profile } = await settleBindByToken(token, session.uid);
       return NextResponse.json({ ok: true, profile });
     }
     if (body.action === "update") {
