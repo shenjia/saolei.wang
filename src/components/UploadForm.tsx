@@ -147,9 +147,24 @@ function showCelebrateBubble(item: CelebrateItem): Promise<void> {
         bubble.remove();
         resolve();
       }, item.holdMs + 380);
+    } else if (item.cls === "gold") {
+      // 金色奖杯气泡：自建 DOM（toast_gold 样式在 globals.css）。不走全局
+      // toast(success)——它自动加 ✓ 图标，与 🏆 并列不合练习页定稿口径
+      //（破纪录只用奖杯，2026-10-28 张老师定；2026-11-10 双对号反馈一并归此）
+      const bubble = document.createElement("div");
+      bubble.className = "toast_bubble toast_gold";
+      bubble.setAttribute("role", "status");
+      bubble.textContent = "🏆 " + item.msg;
+      document.body.appendChild(bubble);
+      window.setTimeout(() => bubble.classList.add("toast_leave"), item.holdMs);
+      window.setTimeout(() => {
+        bubble.remove();
+        resolve();
+      }, item.holdMs + 380);
     } else {
-      // 金色奖杯气泡（cls gold）/ 绿色普通项（汇总）：走全局 toast（同屏单条、居中）
-      toast((item.cls === "gold" ? "🏆 " : "✓ ") + item.msg, "success", item.holdMs);
+      // 绿色普通项（汇总气泡）：走全局 toast。success 自带 ✓ 图标即对号标记，
+      // 文字前不再手写前缀（2026-11-10 张老师：手写「✓ 」会出双对号）
+      toast(item.msg, "success", item.holdMs);
       window.setTimeout(resolve, item.holdMs + 380);
     }
   });
