@@ -8526,8 +8526,7 @@ button.msg_btn:active {
   margin: 1px auto 0;
 }
 
-/* 灰置态（2026-10-25 十二轮张老师定）：未登录 / 看自己——按钮常驻但不可点，
-   hover 提示原因（data-tip 复用全站气泡视觉：暗底浅字小气泡） */
+/* 灰置态（2026-10-25 十二轮张老师定）：未登录 / 看自己——按钮常驻但不可点 */
 button.msg_btn.msg_btn--disabled {
   color: #4a4a41;
   cursor: not-allowed;
@@ -8538,10 +8537,13 @@ button.msg_btn.msg_btn--disabled:hover {
   background-image: none;
   transform: scale(1); /* 不可用不跳动 */
 }
-button.msg_btn.msg_btn--disabled[data-tip] {
+/* hover 即时气泡（2026-11-10 张老师要求）：可用态「给TA发消息」、灰置态提示原因——
+   两态统一 data-tip 全站气泡视觉（暗底浅字小气泡，同军衔徽章/加载更多），
+   下线可用态的浏览器原生 title（延迟大、样式不统一） */
+button.msg_btn[data-tip] {
   position: relative;
 }
-button.msg_btn.msg_btn--disabled[data-tip]::after {
+button.msg_btn[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
   bottom: 150%;
@@ -8560,7 +8562,7 @@ button.msg_btn.msg_btn--disabled[data-tip]::after {
   transition: opacity 0.08s;
   z-index: 9999;
 }
-button.msg_btn.msg_btn--disabled[data-tip]:hover::after {
+button.msg_btn[data-tip]:hover::after {
   opacity: 1;
 }
 

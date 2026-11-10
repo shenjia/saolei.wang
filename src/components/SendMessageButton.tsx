@@ -57,6 +57,8 @@ export function SendMessageButton({
 }) {
   // 2026-10-25 十二轮张老师定：按钮全场景常驻——未登录/看自己时灰置不可点，
   // hover 提示原因（msg_btn--disabled + data-tip 复用全站气泡模式）
+  // 2026-11-10 张老师要求：可用态 hover 同样弹即时气泡「给TA发消息」——两态统一
+  // 走 data-tip（全站 12px 暗底气泡语言），下线浏览器原生 title（延迟大、样式不统一）
   const disabled = authorId <= 0 || authorId === to;
   const [open, setOpen] = useState(false);
   // 草稿秒级备份：受控直绑 draft.value（浮窗挂载即恢复）；按作者 uid + 收件人 id 隔离，
@@ -114,9 +116,8 @@ export function SendMessageButton({
         <button
           type="button"
           className={"msg_btn" + (disabled ? " msg_btn--disabled" : "")}
-          title={disabled ? undefined : `给 ${name} 发消息`}
-          data-tip={disabled ? (authorId <= 0 ? "登录后可发消息" : "不能给自己发消息") : undefined}
-          aria-label={disabled ? "发消息（不可用）" : "发消息"}
+          data-tip={disabled ? (authorId <= 0 ? "登录后可发消息" : "不能给自己发消息") : `给TA发消息`}
+          aria-label={disabled ? "发消息（不可用）" : `给 ${name} 发消息`}
           aria-disabled={disabled}
           onClick={() => {
             if (!disabled) setOpen(true);
