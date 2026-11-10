@@ -99,6 +99,17 @@ export interface ReplayData {
   marks: boolean;
 }
 
+/** 哨兵点判定：flop/EVF 生态盘外事件统一收敛点 (W*16, H*16)（348796 案口径；
+ *  排行局 healLostGesture 自愈 / 服务端 resume 复位也写此点留痕）。
+ *  回放呈现层按 ms-toollib 内核口径把它当透明事件：光标原位保持、不进轨迹、
+ *  行程与跨格不计且锚点不动（base_video.rs：path = last_in_board_pos_path）——
+ *  「出去又回来」贡献零行程、零位移。盘面效果不受影响（哨兵坐标 inb 早退＝
+ *  无盘面动作），键态照常推进。2026-11-10 355571：13 个哨兵事件致光标反复
+ *  瞬移棋盘右下角外一格。 */
+function isSentinelPx(px: number, py: number, cols: number, rows: number) {
+  return px >= cols * 16 && py >= rows * 16;
+}
+
 /** avf/mvf/rmv 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底）。
  *  timeCsecOverride：库内权威用时（video_info.real_time，百分秒）——进度条总长与
  *  播放终点以库为准（页面标题成绩同一来源），缺省退回文件内 Time。
@@ -701,10 +712,16 @@ export function runReplay(opts: {
        也拦，防「终局光标乱扫」复现（353971 报障观感）。
        败局不同：雷区已揭示，后续事件仍动光标（录像事实，flop 同款）。 */
     if (won) return;
-    moveCursor(e.px, e.py);
+    // 哨兵事件对光标透明（isSentinelPx 注释）：光标原位保持，不滑向哨兵点
+    const sent = isSentinelPx(e.px, e.py, cols, rows);
+    if (!sent) moveCursor(e.px, e.py);
     if (dead) return;
-    /* 鼠标行程（flop mouseMove 口径，videoradar 同法）：所有带坐标事件按时间序累加 */
-    if (e.px !== 0 || e.py !== 0) {
+    /* 鼠标行程（flop mouseMove 口径，videoradar 同法）：所有带坐标事件按时间序累加。
+       哨兵不计行程且锚点保持（ms-toollib 同口径）：下一真实事件仍从哨兵前的
+       位置起算，「出去又回来」零行程、跨格光栅化不跨哨兵点 */
+    if (sent) {
+      // 锚点（lastPX/lastCell）原样保留
+    } else if (e.px !== 0 || e.py !== 0) {
       if (lastPX !== null) {
         pathPx += Math.hypot(e.px - lastPX, e.py - lastPY);
         // 跨格光栅化（0.5px 步长，replay-core 同款）：每进入一个新格 +1
@@ -906,8 +923,14 @@ export function runReplay(opts: {
      胜局后定格：evIdx 仍会推进过胜局后残余事件，但插值不再跟随（终点语义） */
   function interpCursor(csec: number) {
     if (won) return;
-    const prev = evIdx > 0 ? evs[evIdx - 1] : null;
-    const next = evIdx < evs.length ? evs[evIdx] : null;
+    // 哨兵事件对光标透明（355571）：向两侧跳过哨兵、取最近真实坐标事件插值，
+    // 光标在哨兵区间内锚定哨兵前位置（与 applyEv 行程锚点口径一致）
+    let pi = evIdx - 1;
+    while (pi >= 0 && isSentinelPx(evs[pi].px, evs[pi].py, cols, rows)) pi--;
+    let ni = evIdx;
+    while (ni < evs.length && isSentinelPx(evs[ni].px, evs[ni].py, cols, rows)) ni++;
+    const prev = pi >= 0 ? evs[pi] : null;
+    const next = ni < evs.length ? evs[ni] : null;
     if (!prev) {
       if (next) moveCursor(next.px, next.py);
       return;
@@ -1124,7 +1147,9 @@ export function runReplay(opts: {
         let ly = gFromY;
         const pushPt = (k: number, isEnd: boolean) => {
           const p = evs[k];
-          if (p.px === 0 && p.py === 0 && !isEnd) {
+          /* 哨兵＝无真实位置语义（355571）：即时落盘不挂航点，末点也不收——
+             光标落点由 finalize 的 interpCursor 锚定哨兵前真实位置 */
+          if (isSentinelPx(p.px, p.py, cols, rows) || (p.px === 0 && p.py === 0 && !isEnd)) {
             imm.push(k);
             return;
           }
@@ -1169,6 +1194,7 @@ export function runReplay(opts: {
         let ly = gFromY;
         const pushPt = (k: number, isEnd: boolean) => {
           const p = evs[k];
+          if (isSentinelPx(p.px, p.py, cols, rows)) return; // 哨兵不进航点（355571），落点由 landTarget 的 interpCursor 锚定
           if (p.px === 0 && p.py === 0 && !isEnd) return;
           if (p.px !== lx || p.py !== ly) {
             path.push(p.px, p.py);
@@ -2715,8 +2741,12 @@ function TrajLayer({
     let lx = NaN,
       ly = NaN;
     for (const e of data.evs) {
+      // 哨兵事件：轨迹与点击标记透明（355571），键态照常推进（对齐引擎/ms-toollib 口径）
+      const sent = isSentinelPx(e.px, e.py, data.w, data.h);
       const click = e.ev !== "mv";
-      if (click || !(Math.abs(e.px - lx) < 3 && Math.abs(e.py - ly) < 3)) {
+      if (sent) {
+        // 不进 path、不更新轨迹锚点
+      } else if (click || !(Math.abs(e.px - lx) < 3 && Math.abs(e.py - ly) < 3)) {
         path.push({ t: e.csec, x: e.px, y: e.py });
         lx = e.px;
         ly = e.py;
@@ -2726,17 +2756,19 @@ function TrajLayer({
           lp = true;
           break;
         case "lr":
-          if (rp || sv) doubles.push({ t: e.csec, x: e.px, y: e.py });
-          else lefts.push({ t: e.csec, x: e.px, y: e.py });
+          if (!sent) {
+            if (rp || sv) doubles.push({ t: e.csec, x: e.px, y: e.py });
+            else lefts.push({ t: e.csec, x: e.px, y: e.py });
+          }
           lp = false;
           sv = false;
           break;
         case "rc":
           rp = true;
-          if (!lp) rights.push({ t: e.csec, x: e.px, y: e.py }); // lp 按住＝chord 预备（引擎不计数）
+          if (!sent && !lp) rights.push({ t: e.csec, x: e.px, y: e.py }); // lp 按住＝chord 预备（引擎不计数）
           break;
         case "rr":
-          if (lp) doubles.push({ t: e.csec, x: e.px, y: e.py });
+          if (!sent && lp) doubles.push({ t: e.csec, x: e.px, y: e.py });
           rp = false;
           break;
         case "mc":
@@ -2744,7 +2776,7 @@ function TrajLayer({
           break;
         case "mr":
           mp = false;
-          doubles.push({ t: e.csec, x: e.px, y: e.py }); // 引擎口径：mr 无条件计双击
+          if (!sent) doubles.push({ t: e.csec, x: e.px, y: e.py }); // 引擎口径：mr 无条件计双击
           break;
         case "sc":
           sv = true;
