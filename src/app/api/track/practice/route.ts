@@ -6,9 +6,10 @@
 // 初/中/高占比）；自定义盘（cus）只进 plays 总数，不进三列。
 // 2026-11-06 加完成盘数分级别四列 wins_beg/int/exp/cus：胜局按 level 自增对应列
 // （地区活跃指数/个人主页练习盘数改按完成口径并按难度加权，见 lib/areaactivity.ts）。
-// 2026-11-08 加活跃点累计列 act_points：地区活跃指数练习侧改按 3BV 完成情况逐盘点数
-// （张老师定稿：初级胜=1 败=0；中级胜=2、败局完成率≥50%=1；高级完成率≥50% 按
-// floor(率×10)，胜局恒=10；自定义胜=1。录像口径不变）。服务端逐盘计点后累加落库，
+// 2026-11-08 加活跃点累计列 act_points：地区活跃指数练习侧改按 3BV 完成情况逐盘点数。
+// 2026-11-11 四轮修订（张老师定）：初级胜=1 败=0；中级完成过半（≥50%）按 floor(率×4)，
+// 胜局恒=4；高级同口径 floor(率×20)，胜局恒=20；自定义胜=1（录像口径不变）。
+// 非排行模式练习（ranked=false）只得 50% 练习点，向下取整——排行模式全额。服务端逐盘计点后累加落库，
 // 不信任客户端算好的分；floor 逐盘取整不可反推，故不存 solvedBv/bbbv 原始和。
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
   const winCusInc = wonInt && level === "cus" ? 1 : 0;
   // 活跃点（2026-11-08）：服务端逐盘计点（口径单一来源 lib/actpoints.ts，
   // 与练习页客户端实时 +N 共用同一函数），败局也按 3BV 完成情况可能得分
-  const pts = practiceActPoints(level, wonInt === 1, bbbv, solvedBv);
+  const pts = practiceActPoints(level, wonInt === 1, bbbv, solvedBv, ranked);
   // 分级别活跃点（2026-11-10 21:28 张老师定：活跃雷达初/中/高标签对齐活跃指数总分；
   // 自定义胜局与初级同权重进 ptsBeg——地区活跃指数同口径）
   const ptsBeg = level === "beg" || level === "cus" ? pts : 0;
