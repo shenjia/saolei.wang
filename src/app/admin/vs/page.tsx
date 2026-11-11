@@ -35,9 +35,9 @@ export default async function AdminVsPage() {
   // 比分/结果展示（发起者视角）：回填行（NULL）亮灰 —
   const fmtScore = (s: number | null) => (s === null ? "—" : s.toFixed(2));
   const RESULT_TAG: Record<number, { cls: string; label: string }> = {
-    1: { cls: "ok", label: "发起者胜" },
-    2: { cls: "bad", label: "对方胜" },
-    0: { cls: "plain", label: "平局" },
+    1: { cls: "ok", label: "胜" },
+    2: { cls: "bad", label: "负" },
+    0: { cls: "plain", label: "平" },
   };
 
   return (
@@ -49,8 +49,8 @@ export default async function AdminVsPage() {
         </span>
       </div>
 
-      {/* ---------- 趋势图 + 右侧两个 Top10 板块 ---------- */}
-      <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
+      {/* ---------- 趋势图 + 右侧两个 Top10 板块（强制同一行） ---------- */}
+      <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "nowrap" }}>
         <div style={{ flex: "1 1 640px", minWidth: 0 }}>
           <AdminCard
             title="对决趋势（近 30 天）"
@@ -96,11 +96,11 @@ export default async function AdminVsPage() {
           <table className="admin_table">
             <thead>
               <tr>
-                <th>发起时间</th>
                 <th>发起者</th>
+                <th className="c">结果</th>
                 <th>被挑战者</th>
                 <th className="num">比分（发起 : 对方）</th>
-                <th className="c">结果</th>
+                <th>发起时间</th>
               </tr>
             </thead>
             <tbody>
@@ -115,10 +115,14 @@ export default async function AdminVsPage() {
                 const tag = d.result === null ? null : RESULT_TAG[d.result];
                 return (
                   <tr key={d.id}>
-                    <td title={formatDate(d.time, "Y-m-d H:i:s")}>
-                      <RelTime time={d.time} />
-                    </td>
                     <td>{userLink(d.u1, d.n1)}</td>
+                    <td className="c">
+                      {tag ? (
+                        <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
+                      ) : (
+                        <span className="gray">—</span>
+                      )}
+                    </td>
                     <td>{userLink(d.u2, d.n2)}</td>
                     <td className="num strong mono">
                       {d.s1 === null || d.s2 === null ? (
@@ -129,12 +133,8 @@ export default async function AdminVsPage() {
                         </>
                       )}
                     </td>
-                    <td className="c">
-                      {tag ? (
-                        <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
-                      ) : (
-                        <span className="gray">—</span>
-                      )}
+                    <td title={formatDate(d.time, "Y-m-d H:i:s")}>
+                      <RelTime time={d.time} />
                     </td>
                   </tr>
                 );
