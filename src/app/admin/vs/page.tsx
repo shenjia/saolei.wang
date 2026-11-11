@@ -1,7 +1,8 @@
 // 管理后台 · 对决统计（2026-11-11 张老师定）：VS 板块（/vs/:id）对决数据。
 // 从仪表盘「今日胜负」KPI 点击进入：趋势图（近 30 天）+ 右侧「发起 Top10 /
-// 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起者 / 挑战者 / 比分·结果 /
-// 被挑战者 / 发起时间；比分拆在结果标签左右：左=挑战者得分，右=被挑战者得分）。
+// 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起时间 / 发起者 / 挑战者 /
+// 比分·结果 / 被挑战者 / 操作；比分拆在结果标签左右：左=挑战者得分，
+// 右=被挑战者得分；「观看」直达 /vs/{挑战者}/{被挑战者} 旁观对局，旁观不落库）。
 // 数据源 vs_duel（page_view 历史回填行比分/结果为 NULL，亮灰 —）。
 
 import Link from "next/link";
@@ -137,25 +138,26 @@ export default async function AdminVsPage() {
         tight
       >
         <div className="admin_scroll">
-          {/* 10:39 张老师：发起时间列挪到最前；内容列收缩、末尾空列吸收余宽
-              （vs_recent：空列保留行线，表格仍铺满整行，右缘与趋势卡对齐） */}
+          {/* 10:39/11:21 张老师：发起时间列最前；比分并回「比分 · 结果」一列
+              （左分 标签 右分，nowrap 限宽）；空列前加「操作」列（观看按钮直达
+              /vs/{挑战者}/{被挑战者} 旁观，旁观不落库）；空列吸收余宽 30%，
+              窄屏隐藏（admin_table.vs_recent，行线延伸与趋势卡右缘对齐） */}
           <table className="admin_table vs_recent">
             <thead>
               <tr>
                 <th>发起时间</th>
                 <th>发起者</th>
-                <th className="c">挑战者得分</th>
                 <th>挑战者</th>
-                <th className="c">结果</th>
+                <th className="c">比分 · 结果</th>
                 <th>被挑战者</th>
-                <th className="c">被挑战者得分</th>
+                <th className="c">操作</th>
                 <th className="sp"></th>
               </tr>
             </thead>
             <tbody>
               {recent.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="gray">
+                  <td colSpan={7} className="gray">
                     暂无对决记录（VS 页访问后开始落库）
                   </td>
                 </tr>
@@ -169,21 +171,31 @@ export default async function AdminVsPage() {
                     </td>
                     {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔 */}
                     <td>{launcherUser(d.u1, d.n1)}</td>
-                    {/* 挑战者得分 / 挑战者（10:43 张老师对换）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
-                    <td className="c num strong mono">
-                      {scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}
-                    </td>
+                    {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
                     <td className="c">
-                      {tag ? (
-                        <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
-                      ) : (
-                        <span className="gray">—</span>
-                      )}
+                      <span style={{ whiteSpace: "nowrap" }}>
+                        {scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}{" "}
+                        {tag ? (
+                          <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
+                        ) : (
+                          <span className="gray">—</span>
+                        )}{" "}
+                        {scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}
+                      </span>
                     </td>
                     <td>{duelUser(d.u2, d.n2, d.sex2, d.exp2)}</td>
-                    <td className="c num strong mono">
-                      {scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}
+                    {/* 观看（11:21 张老师）：直达双方对决页旁观（/vs/[id]/[bid]，不落库） */}
+                    <td className="c">
+                      <Link
+                        className="admin_btn sm"
+                        href={`/vs/${d.u1}/${d.u2}`}
+                        target="_blank"
+                        rel="noopener"
+                        prefetch={false}
+                      >
+                        观看
+                      </Link>
                     </td>
                     <td className="sp"></td>
                   </tr>
