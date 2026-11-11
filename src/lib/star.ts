@@ -108,6 +108,8 @@ export interface StarInfo {
   mySpeech: string;
   /** 当前登录者感言被删次数（≥2 = 永久不能再写，图标灰死） */
   mySpeechDel: number;
+  /** 当前登录者是今日之星且当日已行使「再修改一次」（改完图标灰死；未行使则当选日常绿可改） */
+  myEdited: boolean;
 }
 
 /** 少将档高级时间上限（毫秒）——TITLES 序：总司令(特判), 大元帅 35000, 元帅 40000, 大将 42000,
@@ -142,14 +144,28 @@ async function getMyVote(date: string, viewerUid: number | null): Promise<"up" |
   return v ? (v.dir ? "up" : "down") : null;
 }
 
-/** 观看者自己的预写感言状态（2026-11-11 预写制；标题图标灰/绿态用；未登录给空态） */
-async function viewerSpeechState(viewerUid?: number): Promise<{ mySpeech: string; mySpeechDel: number }> {
-  if (!viewerUid) return { mySpeech: "", mySpeechDel: 0 };
-  const u = await prisma.user.findUnique({
-    where: { id: BigInt(viewerUid) },
-    select: { starSpeech: true, starSpeechDel: true },
-  });
-  return { mySpeech: u?.starSpeech ?? "", mySpeechDel: u?.starSpeechDel ?? 0 };
+/** 观看者自己的预写感言状态（2026-11-11 预写制；标题图标灰/绿态用；未登录给空态）。
+ *  row 传当日 star 行（可空）：观看者恰为今日之星时带出当日是否已行使「再修改一次」 */
+async function viewerSpeechState(
+  viewerUid: number | undefined,
+  row?: { user: bigint; speechEdited: boolean } | null
+): Promise<{ mySpeech: string; mySpeechDel: number; myEdited: boolean }> {
+  if (!viewerUid) return { mySpeech: "", mySpeechDel: 0, myEdited: false };
+  const [u, edited] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: BigInt(viewerUid) },
+      select: { starSpeech: true, starSpeechDel: true },
+    }),
+    (async () =>
+      row && N(row.user) === viewerUid
+        ? prisma.star.findUnique({ where: { date: todayStr() }, select: { speechEdited: true } })
+        : null)(),
+  ]);
+  return {
+    mySpeech: u?.starSpeech ?? "",
+    mySpeechDel: u?.starSpeechDel ?? 0,
+    myEdited: !!edited?.speechEdited,
+  };
 }
 
 /** 指定用户是否已写过预写感言（2026-11-11 预写制；/message?speech=1 自动弹窗短路用） */
@@ -189,7 +205,7 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
     const [authors, myVote, vs] = await Promise.all([
       usersByIds([N(existing.user)]),
       getMyVote(today, viewerUid ?? null),
-      viewerSpeechState(viewerUid),
+      viewerSpeechState(viewerUid, existing),
     ]);
     return {
       date: today,
@@ -313,7 +329,7 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
   const [authors, myVote, vs] = await Promise.all([
     usersByIds([N(row.user)]),
     getMyVote(today, viewerUid ?? null),
-    viewerSpeechState(viewerUid),
+    viewerSpeechState(viewerUid, row),
   ]);
   return {
     date: today,
@@ -355,7 +371,13 @@ export async function setStarSpeech(
   if (u.starSpeechDel >= 2) {
     return { ok: false, error: "感言已被删除两次，不能再撰写" };
   }
-  if (u.starSpeech) {
+  // 已写过：默认锁定；唯一例外＝当日当选者的「再修改一次」（2026-11-11 张老师定，
+  // 预写感言当选当日自动使用后可改一次，改完 star.speechEdited 置位图标转灰）
+  const today = todayStr();
+  const row = await prisma.star.findUnique({ where: { date: today } });
+  const ownToday = !!(row && N(row.user) === userId);
+  const editing = !!u.starSpeech;
+  if (editing && !(ownToday && !row!.speechEdited)) {
     return { ok: false, error: "感言已撰写，不能修改" };
   }
   const text = speech.trim().slice(0, STAR_SPEECH_LIMIT);
@@ -387,11 +409,20 @@ export async function setStarSpeech(
     where: { id: BigInt(userId) },
     data: { starSpeech: text },
   });
-  // 今日恰为本人当选：同步镜像到当日 star 行（行 speech 为空才写——重发场景行已被删除清空）
-  const today = todayStr();
-  const row = await prisma.star.findUnique({ where: { date: today }, select: { user: true, speech: true } });
-  if (row && N(row.user) === userId && !row.speech) {
-    await prisma.star.update({ where: { date: today }, data: { speech: text, updateTime: now } });
+  // 今日恰为本人当选：同步镜像到当日 star 行（首次写入或当日「再修改一次」都覆盖）；
+  // 修改过的置 speechEdited（当日仅此一次）；改稿视同重新发表，赞/踩清零重投
+  if (ownToday) {
+    await prisma.star.update({
+      where: { date: today },
+      data: {
+        speech: text,
+        ...(editing ? { speechEdited: true } : {}),
+        speechUp: 0,
+        speechDown: 0,
+        updateTime: now,
+      },
+    });
+    await prisma.starVote.deleteMany({ where: { date: today } });
   }
   return { ok: true, speech: text, aiBackstop };
 }
@@ -416,8 +447,16 @@ export async function deleteStarSpeech(operatorId: number): Promise<void> {
     }),
     prisma.star.update({
       where: { date: today },
-      // 感言计数清零（2026-10-27）：感言撤下即无投票对象，旧计数不残留
-      data: { speech: "", speechDel: { increment: 1 }, speechUp: 0, speechDown: 0, updateTime: nowSec() },
+      // 感言计数清零（2026-10-27）：感言撤下即无投票对象，旧计数不残留；
+      // speechEdited 一并复位（删除解锁后重写/再改从头计）
+      data: {
+        speech: "",
+        speechDel: { increment: 1 },
+        speechUp: 0,
+        speechDown: 0,
+        speechEdited: false,
+        updateTime: nowSec(),
+      },
     }),
     // 投票明细一并清空：感言已撤下，释放投票额（重发后可再投）
     prisma.starVote.deleteMany({ where: { date: today } }),

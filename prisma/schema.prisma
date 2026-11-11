@@ -721,6 +721,9 @@ model Star {
   speechDel  Int    @default(0) @map("speech_del") @db.Int
   speechUp   Int    @default(0) @map("speech_up") @db.Int
   speechDown Int    @default(0) @map("speech_down") @db.Int
+  // 当选当日已行使「再修改一次」（2026-11-11 张老师定：预写感言当选当日自动使用后，
+  // 本人当日可再修改一次；改完置 true 图标转灰；管理员删除时一并复位）
+  speechEdited Boolean @default(false) @map("speech_edited")
   createTime BigInt @default(0) @map("create_time") @db.BigInt
   updateTime BigInt @default(0) @map("update_time") @db.BigInt
 

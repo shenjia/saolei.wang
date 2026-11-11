@@ -1,7 +1,10 @@
-// 每日一星「发表感言」浮窗（2026-10-25 八轮张老师定；十一轮补字数统计）
-// 当日当选者点击（首页卡片按钮 or 系统私信链接 /message?speech=1）弹出：
+// 每日一星「撰写当选感言」浮窗（2026-10-25 八轮张老师定；十一轮补字数统计）
+// 当日当选者或预写用户点击（首页标题图标 or 系统私信链接 /message?speech=1）弹出：
 // 复用 .msg_dialog 发信浮窗外观，30 字以内一次性提交 /api/star action=speech；
 // 输入框下实时字数统计「n/30」；成功后 toast + 刷新页面展示感言。
+// 2026-11-11 张老师定：标题「发表」→「撰写」、按钮「发表」→「提交」；
+// 按钮下深灰小字说明预写制用途与「当选当日可再修改一次」；传入 initialText 时
+// （当选当日改一次场景）预填原感言供修改。
 
 "use client";
 
@@ -10,8 +13,17 @@ import { toast } from "./Toast";
 
 export const STAR_SPEECH_LIMIT = 30;
 
-export function StarSpeechDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [text, setText] = useState("");
+export function StarSpeechDialog({
+  open,
+  onClose,
+  initialText,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** 原感言（当选当日「再修改一次」场景预填；空=全新撰写） */
+  initialText?: string;
+}) {
+  const [text, setText] = useState(initialText ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -39,7 +51,7 @@ export function StarSpeechDialog({ open, onClose }: { open: boolean; onClose: ()
         return;
       }
       onClose();
-      toast("感言已发表", "success", 2000);
+      toast("感言已提交", "success", 2000);
       // 刷新让首页卡片带上感言（软导航 keep server data 新鲜）
       setTimeout(() => window.location.reload(), 800);
     } finally {
@@ -56,9 +68,9 @@ export function StarSpeechDialog({ open, onClose }: { open: boolean; onClose: ()
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="msg_dialog" role="dialog" aria-modal="true" aria-label="发表感言">
+      <div className="msg_dialog" role="dialog" aria-modal="true" aria-label="撰写当选感言">
         <h1>
-          发表<em>每日一星感言</em>
+          撰写<em>每日一星感言</em>
         </h1>
         <div className="msg_rule" />
         <textarea
@@ -66,7 +78,7 @@ export function StarSpeechDialog({ open, onClose }: { open: boolean; onClose: ()
           autoFocus
           rows={2}
           maxLength={STAR_SPEECH_LIMIT * 2}
-          placeholder={`说点什么…（${STAR_SPEECH_LIMIT} 字以内，发表后不可修改）`}
+          placeholder={`说点什么…（${STAR_SPEECH_LIMIT} 字以内）`}
           value={text}
           onChange={(e) => setText([...e.target.value].slice(0, STAR_SPEECH_LIMIT).join(""))}
         />
@@ -82,12 +94,14 @@ export function StarSpeechDialog({ open, onClose }: { open: boolean; onClose: ()
             disabled={busy || !text.trim()}
             onClick={submit}
           >
-            {busy ? "发表中…" : "发 表"}
+            {busy ? "提交中…" : "提 交"}
           </button>
           <button type="button" className="msg_cancel" onClick={onClose}>
             取 消
           </button>
         </p>
+        {/* 预写制说明（2026-11-11 张老师定）：按钮下方深灰小字一行 */}
+        <p className="star_speech_note">当选每日一星时，将自动使用本感言，当日可再修改一次。</p>
       </div>
     </div>
   );

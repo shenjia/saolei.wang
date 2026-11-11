@@ -46,11 +46,14 @@ export async function DailyStar() {
           </svg>
         </span>
         {/* 「撰写当选感言」图标（预写制 2026-11-11 张老师定）：右上角，默认亮灰
-            hover 绿，本人当日当选常绿，写过/封嘴灰死；点击弹感言浮窗 */}
+            hover 绿，本人当日当选常绿（含当日「再修改一次」窗口未行使时），
+            写过/行使过改窗/封嘴灰死；点击弹感言浮窗（改窗场景预填原感言） */}
         <StarSpeechIcon
           own={own}
           hasSpeech={!!star.mySpeech}
           blocked={star.mySpeechDel >= 2}
+          canEditOnce={own && !star.myEdited}
+          initialText={star.mySpeech}
           loggedIn={!!session}
         />
       </h2>
