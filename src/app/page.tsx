@@ -28,6 +28,9 @@
 // 2026-11-09 张老师要求：管理员审核提醒升级「一键过 / 需手审」双按钮（ReviewEntry 客户端组件，
 // 计数按分拣池 getPoolCounts 拆分）——免核定池（绿钮）在首页就地批量过审不必进后台，
 // 需核定池（玫瑰红钮）仍进后台逐条手审；一键过完成后气泡提示 + 板块按剩余手审数更新/消失。
+// 2026-11-11 张老师要求：「今日练习」底部趋势曲线改为只显示自己的活跃值曲线
+// （原黄/绿双线=全网/我的练习次数撤下；活跃值五源分日聚合，口径与活跃榜 active_points
+// 同源；末点=今日实时活跃值；未登录不渲染图表）。
 
 import Link from "next/link";
 import {
@@ -166,7 +169,7 @@ export default async function HomePage() {
           <span>开始练习</span>
         </Link>
         {/* 今日练习（2026-10-22 五轮张老师要求）：移动端副本，置于置顶「开始练习」大按钮下方、
-            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我/全网双线图 */}
+            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我的活跃值曲线（2026-11-11 改版） */}
         <PracticeToday
           prefix="practice_today_top"
           rankedToday={rankedToday}
@@ -175,9 +178,7 @@ export default async function HomePage() {
           netWon={practice.todayWon}
           net={practice.today}
           users={practice.todayUsers}
-          trendNet={practice.trend}
-          trendNetEstimate={practice.todayEst}
-          trendMine={practice.mineTrend}
+          actTrend={practice.mineActTrend}
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方。
@@ -239,7 +240,7 @@ export default async function HomePage() {
           </Link>
         )}
         {/* 今日练习（2026-10-22 五轮张老师要求）：桌面侧栏副本，置于「开始练习」按钮下方、
-            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我/全网双线图 */}
+            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我的活跃值曲线（2026-11-11 改版） */}
         <PracticeToday
           prefix="practice_today"
           rankedToday={rankedToday}
@@ -248,9 +249,7 @@ export default async function HomePage() {
           netWon={practice.todayWon}
           net={practice.today}
           users={practice.todayUsers}
-          trendNet={practice.trend}
-          trendNetEstimate={practice.todayEst}
-          trendMine={practice.mineTrend}
+          actTrend={practice.mineActTrend}
           logged={!!session}
         />
         {/* 管理员待审提示行（2026-10-22 张老师要求）：2026-11-09 升级一键过/需手审双按钮

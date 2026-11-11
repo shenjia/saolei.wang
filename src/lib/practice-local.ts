@@ -10,7 +10,7 @@
 
 const KEY = "practice_today_count";
 
-/** 保留天数（与首页 30 天趋势线窗口一致） */
+/** 保留天数（防膨胀上限；原供双线趋势图取数，2026-11-11 趋势改服务端活跃值曲线后仅作修剪上限） */
 const KEEP_DAYS = 30;
 
 /** 自定义事件名（PracticeToday useSyncExternalStore 订阅用；bump 后同窗口即时通知） */
@@ -71,16 +71,4 @@ export function bumpLocalPractice(won: boolean): void {
 /** 读今天的完成/尝试盘数（无记录 0/0） */
 export function getLocalPracticeToday(): LocalDayCount {
   return readAll()[todayKey()] ?? { p: 0, w: 0 };
-}
-
-/** 近 n 天尝试盘数趋势（旧→新，末位=今天；与服务端趋势桶对齐供双线图共画） */
-export function getLocalPracticeTrend(days = KEEP_DAYS): number[] {
-  const all = readAll();
-  const out: number[] = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-    out.push(all[dateKey(d)]?.p ?? 0);
-  }
-  return out;
 }

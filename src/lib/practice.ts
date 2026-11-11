@@ -6,8 +6,12 @@
 // · 我的完成/尝试 = 登录者当日行（未登录 0，前端走 localStorage）
 // 表结构：每人每日一行（day 为 +08:00 切天序号），埋点路由 UPSERT 自增——
 // 表体量 = 活跃练习者数 × 天数（一年仅数万行），无逐盘流水膨胀问题（张老师 2026-10-22 定）。
-// 今日实时数不缓存（唯一键 (day,user_id) 点查毫秒级），30 天走势挂 unstable_cache 300s
-// （铁律：热点统计必须挂缓存）且今日桶用实时数覆盖——练完一局刷新立即可见。
+// 今日实时数不缓存（唯一键 (day,user_id) 点查毫秒级），走势挂 unstable_cache 300s
+// （铁律：热点统计必须挂缓存）。
+//
+// 2026-11-11 张老师要求：首页趋势曲线改为只显示自己的活跃值曲线（原全网/我的
+// 练习次数双线撤下，getTrendCached/getMineTrendCached 一并移除）。活跃值分日聚合
+// 见 getMineActTrendCached；今日活跃值走 getRankedToday 口径（登录点无条件 +1）。
 
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
@@ -26,69 +30,80 @@ export interface PracticeToday {
   mineWon: number;
   /** 我今日尝试盘数（未登录 0） */
   mine: number;
-  /** 近 30 天全网尝试盘数走势（+08:00 切天，末位=今日已被实时数覆盖） */
-  trend: number[];
-  /** 今日预估全天盘数（2026-11-02 张老师定）：practice_daily 是日汇总无逐盘时刻，
-   *  与后台同比口径同构的线性外推——today × 86400/今日已过秒数（不低于已发生值） */
-  todayEst: number;
-  /** 近 30 天全网完成盘数走势（与 trend 同轴对齐） */
-  trendWon: number[];
-  /** 近 30 天我的尝试盘数走势（登录才有；末位=今日实时数。绿线数据源） */
-  mineTrend: number[];
+  /** 近 30 天我的活跃值走势（2026-11-11 张老师要求：首页趋势曲线改为只画自己活跃值，
+   *  原全网/我的练习次数双线撤下）。不含今日——今日实时活跃值由 getRankedToday 口径
+   *  （登录点无条件 +1，查表有竞态）单独计算，渲染端拼在末位；未登录恒 []（活跃值
+   *  恒 ≥1 必然登录态才有，游客无「自己」可画）。act_points 起记日 2026-11-08，
+   *  更早历史恒 0（既往不咎，窗口滚动自然补齐） */
+  mineActTrend: number[];
 }
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
-/** 近 30 天全网分日尝试/完成双序列（不含今天；今天由实时查询补，保证练完即见） */
-const getTrendCached = unstable_cache(
-  async (): Promise<{ p: number[]; w: number[] }> => {
-    const fromIdx = Math.floor((dayStart(29) + 28800) / 86400);
-    const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
-    const rows = await prisma.$queryRaw<Array<{ d: bigint; p: bigint; w: bigint }>>`
-      SELECT day AS d, SUM(plays) AS p, SUM(wins) AS w
-      FROM practice_daily
-      WHERE day >= ${fromIdx} AND day < ${todayIdx}
-      GROUP BY day
-    `;
-    const map = new Map<number, { p: number; w: number }>(
-      rows.map((r) => [N(r.d), { p: N(r.p), w: N(r.w) }])
-    );
-    const p: number[] = [];
-    const w: number[] = [];
-    for (let i = 0; i < 30; i++) {
-      const idx = fromIdx + i;
-      if (idx >= todayIdx) break; // 今天及以后的桶由实时数覆盖
-      const b = map.get(idx);
-      p.push(b?.p ?? 0);
-      w.push(b?.w ?? 0);
-    }
-    return { p, w };
-  },
-  ["home-practice-trend", "v3"],
-  { revalidate: REVALIDATE_HOME_CACHE }
-);
-
-/** 近 30 天我的分日尝试盘数（不含今天；uid 参与缓存 key，每人一份不串） */
-const getMineTrendCached = (uid: number) =>
+/**
+ * 近 30 天我的分日活跃值（不含今天；2026-11-11 张老师要求首页趋势曲线改画自己活跃值）。
+ * 口径与 getRankedToday 的今日活跃值（活跃榜 active_points 单日口径）严格一致，五源分日聚合：
+ *   练习点（practice_daily.act_points，逐盘落库累计）+ 登录 1 点（user_daily_visit 打卡行）
+ *   + 观看点（user_watch_daily 每 60000ms 记 1，按日 ROUND）+ 录像加权点（初×1 中×2 高×10，
+ *   剔 Saolei.wang 排行局防双计）+ 评论/回复条数。今日点不在此查——getRankedToday 的
+ *   登录点是无条件 +1（查打卡行有当日首访竞态），历史日无竞态走事实源。
+ * uid 参与缓存 key 每人一份不串；per-user 索引点查/窗口聚合，毫秒级。
+ */
+const getMineActTrendCached = (uid: number) =>
   unstable_cache(
     async (): Promise<number[]> => {
       const fromIdx = Math.floor((dayStart(29) + 28800) / 86400);
       const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
-      const rows = await prisma.$queryRaw<Array<{ d: bigint; c: bigint }>>`
-        SELECT day AS d, plays AS c
-        FROM practice_daily
-        WHERE user_id = ${BigInt(uid)} AND day >= ${fromIdx} AND day < ${todayIdx}
+      const fromTs = dayStart(29);
+      const today0 = dayStart(0);
+      const uidBig = BigInt(uid);
+      const rows = await prisma.$queryRaw<Array<{ d: bigint; p: bigint }>>`
+        SELECT t.day AS d, SUM(t.pts) AS p FROM (
+          SELECT p.day AS day, p.act_points AS pts
+          FROM practice_daily p
+          WHERE p.user_id = ${uidBig} AND p.day >= ${fromIdx} AND p.day < ${todayIdx}
+          UNION ALL
+          SELECT FLOOR((v.create_time + 28800) / 86400) AS day,
+                 SUM(v.level = 'beg') + 2 * SUM(v.level = 'int') + 10 * SUM(v.level = 'exp') AS pts
+          FROM video v
+          JOIN video_info vi ON vi.id = v.id AND vi.software <> 'Saolei.wang'
+          WHERE v.\`user\` = ${uidBig}
+            AND v.status <> ${VIDEO_STATUS.BANNED}
+            AND v.create_time >= ${fromTs} AND v.create_time < ${today0}
+          GROUP BY day
+          UNION ALL
+          SELECT FLOOR((c.create_time + 28800) / 86400) AS day, COUNT(*) AS pts
+          FROM comment c
+          WHERE c.\`user\` = ${uidBig} AND c.status = 0
+            AND c.create_time >= ${fromTs} AND c.create_time < ${today0}
+          GROUP BY day
+          UNION ALL
+          SELECT FLOOR((r.create_time + 28800) / 86400) AS day, COUNT(*) AS pts
+          FROM bbs_reply r
+          WHERE r.\`user\` = ${uidBig} AND r.status = 0
+            AND r.create_time >= ${fromTs} AND r.create_time < ${today0}
+          GROUP BY day
+          UNION ALL
+          SELECT w.day, ROUND(SUM(w.watch_ms) / 60000) AS pts
+          FROM user_watch_daily w
+          WHERE w.user_id = ${uidBig} AND w.day >= ${fromIdx} AND w.day < ${todayIdx}
+          GROUP BY w.day
+          UNION ALL
+          SELECT dv.day, 1 AS pts
+          FROM user_daily_visit dv
+          WHERE dv.user_id = ${uidBig} AND dv.day >= ${fromIdx} AND dv.day < ${todayIdx}
+        ) t GROUP BY t.day
       `;
-      const map = new Map<number, number>(rows.map((r) => [N(r.d), N(r.c)]));
+      const map = new Map<number, number>(rows.map((r) => [N(r.d), N(r.p)]));
       const out: number[] = [];
       for (let i = 0; i < 30; i++) {
         const idx = fromIdx + i;
-        if (idx >= todayIdx) break;
+        if (idx >= todayIdx) break; // 今天及以后的桶由 getRankedToday 实时口径覆盖
         out.push(map.get(idx) ?? 0);
       }
       return out;
     },
-    ["home-practice-mine-trend", `u${uid}`, "v2"],
+    ["home-practice-mine-act-trend", `u${uid}`, "v1"],
     { revalidate: 300 }
   )();
 
@@ -104,7 +119,8 @@ async function todayRow(userId: bigint | null): Promise<{ plays: number; wins: n
 export async function getPracticeToday(uid?: number | null): Promise<PracticeToday> {
   const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
   // 实时数：全网今日（登录玩家汇总 + 游客 0 行单取）+ 参与玩家数 + 我的今日行
-  const [netRow, guestRow, usersAgg, mineRow, trend30, mineTrendBase] = await Promise.all([
+  // + 我的活跃值走势（2026-11-11 起首页曲线唯一数据源；未登录恒空）
+  const [netRow, guestRow, usersAgg, mineRow, actTrend] = await Promise.all([
     prisma.$queryRaw<Array<{ p: bigint; w: bigint }>>`
       SELECT COALESCE(SUM(plays),0) AS p, COALESCE(SUM(wins),0) AS w
       FROM practice_daily WHERE day = ${todayIdx} AND user_id > 0
@@ -114,32 +130,25 @@ export async function getPracticeToday(uid?: number | null): Promise<PracticeTod
       SELECT COUNT(*) AS c FROM practice_daily WHERE day = ${todayIdx} AND user_id > 0
     `,
     uid ? todayRow(BigInt(uid)) : Promise.resolve(null),
-    getTrendCached(),
-    uid ? getMineTrendCached(uid) : Promise.resolve([]),
+    uid ? getMineActTrendCached(uid) : Promise.resolve([]),
   ]);
   const today = N(netRow[0]?.p) + (guestRow?.plays ?? 0);
   const todayWon = N(netRow[0]?.w) + (guestRow?.wins ?? 0);
   const todayUsers = N(usersAgg[0]?.c);
   const mine = uid && mineRow ? mineRow.plays : 0;
   const mineWon = uid && mineRow ? mineRow.wins : 0;
-  // 今日预估全天（2026-11-02）：首页练习折线今日点取预估，免得未满一天的数据画出假跌
-  const elapsed = Math.max(1, Math.floor(Date.now() / 1000) - dayStart(0));
-  const todayEst = Math.max(today, Math.round((today * 86400) / elapsed));
   return {
     today,
     todayWon,
     todayUsers,
     mine,
     mineWon,
-    trend: [...trend30.p, today],
-    trendWon: [...trend30.w, todayWon],
-    todayEst,
-    mineTrend: uid ? [...mineTrendBase, mine] : [],
+    mineActTrend: uid ? actTrend : [],
   };
 }
 
-// 首页访客路径自驱预热：null=全站口径，级联刷新重缓存 getTrendCached（300s 走势聚合）；
-// 今日实时数与按人 mine 走势是毫秒级点查/每用户键，无需也无法预热
+// 首页访客路径自驱预热：null=全站口径（活跃值走势按 uid 各自缓存，无需预热）；
+// 今日实时数是毫秒级点查，无需也无法预热
 registerPreheat("practice-today", REVALIDATE_HOME_CACHE, () => getPracticeToday(null));
 
 // ---------- 首页「今日已收集 x BV 创造 y PB 活跃值 z」行（2026-11-08 张老师改版） ----------
