@@ -12,7 +12,8 @@
 //   · 中间列完全复用 PK 页（/vs/[id]）布局：.vs_vs（.vs_scoreline VS 战斗字标 +
 //     .vs_action 黄色对决按钮 + 喇叭音效开关）——音效开关与 PK 页共用
 //     localStorage「vs_snd」；双方就位前按钮置灰，就位后点「开始对决」进入 /vs/{对手id}。
-// 约束：右侧不能选自己（不能和自己比拼）；同一玩家不能同时站两边。
+// 约束：任一边可选自己；仅当一边已是自己、另一边再选自己时提示「不能和自己比拼」；
+//   同一玩家（非自己）不能同时站两边。
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -329,10 +330,12 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
     });
   };
 
-  /** 选定候选：先做落位校验（不能和自己比拼 / 不能同站两边），再拉卡片数据 */
+  /** 选定候选：先做落位校验，再拉卡片数据。
+   *  自选口径（2026-11-11 张老师）：任一边都可以选自己；只有当另一边已经是自己
+   *  （=两边同站自己）时才拦，提示「不能和自己比拼」。 */
   async function pick(slot: "left" | "right", u: SuggestUser) {
     const other = slot === "left" ? right : left;
-    if (slot === "right" && u.id === me.id) {
+    if (u.id === me.id && other?.id === me.id) {
       toast("不能和自己比拼");
       return;
     }
