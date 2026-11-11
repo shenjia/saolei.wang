@@ -27,6 +27,8 @@
 // 2026-11-08 张老师需求：灰色累计值改「仅限今天」——在线 y＝今日去重连接
 // 人数、对局 y＝今日开局面数（core server.mjs 北京时间零点清零，stats.json
 // 落盘重启不清零），排序同步按今日值。
+// 2026-11-11 张老师需求：展开玩家列表中正在对局中的玩家，对局数字金色渲染
+// （同主表进行中对局数 #fdc61d；core /players 出 playing=任一连接挂着未结束的局）。
 
 import { Fragment, useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
@@ -50,6 +52,8 @@ export interface PlayerBrief {
   rttAvg: number | null;
   /** 本节点延迟样本数 */
   rttN: number;
+  /** 正在对局中（2026-11-11 张老师需求：对局数字金色渲染；旧版实例缺字段按 false） */
+  playing: boolean;
 }
 
 /** 在线时长折算（2026-11-02 三次：对局列后加在线时长列） */
@@ -265,7 +269,7 @@ export function ServerStatusPanel({
                           <tr style={{ color: "#75715e", textAlign: "left" }}>
                             <th style={SUB_TH}>地区</th>
                             <th style={SUB_TH}>玩家</th>
-                            <th style={{ ...SUB_TH, textAlign: "right" }} title="该玩家今日在本服务器开局面数（北京时间零点清零，重启不清零）">对局</th>
+                            <th style={{ ...SUB_TH, textAlign: "right" }} title="该玩家今日在本服务器开局面数（北京时间零点清零，重启不清零）；金色＝正在对局中">对局</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }} title="本轮连上本服务器起的在线时长（刷新/断线重连重新计；同 uid 多标签页取最早连接）">在线时长</th>
                             <th style={{ ...SUB_TH, textAlign: "right" }} title={`该玩家近 7 天在本节点排行局实测平均延迟（随局上报采样）· ${RTT_LEGEND}`}>延迟</th>
                           </tr>
@@ -294,7 +298,14 @@ export function ServerStatusPanel({
                                 />
                                 <TitleBadge title={p.rank} badgeSize={13} />
                               </td>
-                              <td style={{ ...SUB_TD, textAlign: "right" }} className="num">{p.games.toLocaleString("zh-CN")}</td>
+                              {/* 对局数字金色=正在对局中（2026-11-11，同主表进行中对局色） */}
+                              <td style={{ ...SUB_TD, textAlign: "right" }} className="num">
+                                {p.playing ? (
+                                  <b style={{ color: "#fdc61d" }} title="正在对局中">{p.games.toLocaleString("zh-CN")}</b>
+                                ) : (
+                                  p.games.toLocaleString("zh-CN")
+                                )}
+                              </td>
                               <td style={{ ...SUB_TD, textAlign: "right" }} className="num" title="本轮连上本服务器起的在线时长">
                                 {fmtOnline(p.online)}
                               </td>

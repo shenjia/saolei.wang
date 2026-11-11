@@ -5,8 +5,8 @@
 // 北京双实例走本机回环（Next 与 authority 同机）；香港走 AUTHORITY_HK_URL
 // 公网回调。单实例 override（AUTHORITY_INTERNAL_URL，本地开发）时只列一条。
 // 2026-11-02 张老师需求：负载行可展开在线玩家列表——同轮再透传各实例
-// /players（Bearer 鉴权端点，返回 uid/会话名/本实例累计开局面数），本接口
-// 查库补齐展示字段（地区/姓名/性别/军衔）。/players 拉取失败该行 players=null。
+// /players（Bearer 鉴权端点，返回 uid/会话名/本实例累计开局面数/playing 局中标记），
+// 本接口查库补齐展示字段（地区/姓名/性别/军衔）。/players 拉取失败该行 players=null。
 
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/guard";
@@ -80,6 +80,8 @@ export interface PlayerRow {
   rttAvg: number | null;
   /** 该玩家在本节点的延迟样本数 */
   rttN: number;
+  /** 正在对局中（2026-11-11 张老师需求：任一连接挂着未结束的局，与 /health active 同口径；旧版实例缺字段按 false） */
+  playing: boolean;
 }
 
 export async function GET() {
@@ -143,12 +145,12 @@ export async function GET() {
         try {
           const pres = await fetch(`${t.base}/players`, { cache: "no-store", headers, signal: AbortSignal.timeout(2000) });
           if (pres.ok) {
-            const pj = (await pres.json()) as { players?: { uid: number; name?: string; games?: number; secs?: number }[] };
+            const pj = (await pres.json()) as { players?: { uid: number; name?: string; games?: number; secs?: number; playing?: boolean }[] };
             players = (pj.players ?? []).map((p): PlayerRow => {
               const uid = Number(p.uid);
               if (typeof p.name === "string" && p.name) loginNames.set(uid, p.name);
               const rtt = rttByUserRegion.get(`${uid}:${rkey}`) ?? null;
-              return { uid, name: "", area: "", sex: 1, rank: "预备役", games: Number(p.games) || 0, online: Math.max(0, Number(p.secs) || 0), rttAvg: rtt?.avg ?? null, rttN: rtt?.n ?? 0 };
+              return { uid, name: "", area: "", sex: 1, rank: "预备役", games: Number(p.games) || 0, online: Math.max(0, Number(p.secs) || 0), rttAvg: rtt?.avg ?? null, rttN: rtt?.n ?? 0, playing: Boolean(p.playing) };
             });
           }
         } catch { /* players 拉取失败：该行显示获取失败，不影响负载展示 */ }
