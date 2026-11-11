@@ -5100,8 +5100,10 @@ body #page.ranking_old .ranking_box {
 .ranking_table td.rank em {
   color: #fdc61d;
 }
+/* 人名降亮度（2026-11-11 张老师要求）：#f8f8f2 太刺眼，降一档到 #e8e8e0——
+   仍比亮灰成绩列（c_exp #ddddcf）亮，肉眼可区分；hover/定位高亮绿色不变 */
 .ranking_table td.name a {
-  color: #f8f8f2;
+  color: #e8e8e0;
 }
 .ranking_table td.name a:hover {
   color: #a6e22e;
@@ -6245,6 +6247,11 @@ body #page.ranking_old.main .ranking_nav {
   text-align: center;
   max-width: none;
   padding-left: 10px;
+}
+/* 世界榜人名同口径降亮度（2026-11-11 张老师要求，仅排行页；#world_top td.name
+   基础规则 #f8f8f2 供首页使用，不动） */
+#page.ranking_old.main > #world_top td.name {
+  color: #e8e8e0;
 }
 /* 国旗图标（2026-09-24 张老师要求：名字前加国籍图标，原排行有）：名字前 6px 间距、与文字垂直居中 */
 #page.ranking_old.main > #world_top td.name .flag {
