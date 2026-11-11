@@ -12107,6 +12107,43 @@ html.op-fakefs #header {
   margin-top: 8px;
   opacity: 0.9;
 }
+/* 活跃值曲线 hover 气泡（2026-11-11 张老师要求）：第一行日期、第二行「活跃值+xx」
+   xx 绿色。固定朝上方弹出（工程约定）；水平 clamp 防左右溢出（半宽 ~48px 预算）。
+   暗底浮层视觉与后台 TrendChart 悬浮明细同款 */
+.practice_today .pt_chartwrap {
+  position: relative;
+}
+.practice_today .pt_tip {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+  background: rgba(30, 31, 28, 0.96);
+  border: 1px solid #49483e;
+  border-radius: 8px;
+  padding: 4px 9px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.practice_today .pt_tip_date {
+  color: #75715e; /* 标签暗灰（与 pt_ranked 标签同色口径） */
+  font-size: 11px;
+  line-height: 15px;
+}
+.practice_today .pt_tip_act {
+  color: #939387;
+  font-size: 12px;
+  line-height: 17px;
+}
+.practice_today .pt_tip_act b {
+  color: #a6e22e; /* +xx 绿色（与首行活跃值数值同款绿，+ 号与数字同色——13:52 判例） */
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
 /* 移动端置顶副本：桌面隐藏，≤880 单列带内显示（与 #play_entry_top 同款断点） */
 #practice_today_top {
   display: none;

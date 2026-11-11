@@ -11,24 +11,81 @@
 
 "use client";
 
-import { useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getLocalPracticeToday, practiceLocalKey } from "@/lib/practice-local";
 import { RankedTodayLine } from "@/components/RankedTodayLine";
 
 const GREEN = "#a6e22e"; // 站内标准绿（.logo a h1 hover / Sparkline 默认色）
 
-/** 我的活跃值单线图（2026-11-11）：按自身最大值顶格归一（0 点贴底、峰值距顶 3 单位） */
+/** 我的活跃值单线图（2026-11-11）：按自身最大值顶格归一（0 点贴底、峰值距顶 3 单位）。
+ *  hover/触点出气泡（2026-11-11 张老师要求）：第一行日期、第二行「活跃值+xx」xx 绿色。
+ *  命中用 pointer 比例法（clientX−rect.left)/rect.width——clientX 与 gBCR 同属视觉坐标，
+ *  CSS zoom 缩放下比例恒定，全站 #page zoom 体系安全；气泡固定朝上方弹出（工程约定）。
+ *  ⚠️ 触屏 tap 的指针序列以 pointerleave 结尾（触摸指针抬起即移除）——leave 只清鼠标态，
+ *  触屏靠「tap 曲线外其他区域」的全局 pointerdown 收尾（下方 useEffect）。 */
 function ActLine({ values, height }: { values: number[]; height: number }) {
-  if (values.length < 2) return null;
+  const [idx, setIdx] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const n = values.length;
+  if (n < 2) return null;
   const max = Math.max(...values, 1);
-  const step = 100 / (values.length - 1);
-  const d = values
-    .map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(2)},${(height - (v / max) * (height - 3) - 1.5).toFixed(2)}`)
-    .join(" ");
+  const step = 100 / (n - 1);
+  const px = (i: number) => i * step;
+  const py = (v: number) => height - (v / max) * (height - 3) - 1.5;
+  const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join(" ");
+  const pick = (clientX: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    const i = Math.round(((clientX - r.left) / r.width) * (n - 1));
+    setIdx(Math.min(n - 1, Math.max(0, i)));
+  };
+  // 触屏收尾：气泡开着时，tap 本组件之外的任何区域即收起（capture 先于页面其他点击处理）
+  useEffect(() => {
+    if (idx === null) return;
+    const onDoc = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setIdx(null);
+    };
+    document.addEventListener("pointerdown", onDoc, true);
+    return () => document.removeEventListener("pointerdown", onDoc, true);
+  }, [idx]);
+  // 日期（末位=今天，往回推 n-1-i 天；hover 态只在客户端渲染，无 SSR 水合差异）
+  const dt = new Date();
+  dt.setDate(dt.getDate() - (n - 1 - (idx ?? 0)));
+  // 事件绑在外层 div 上：SVG 元素的未绘制空白区不接收 pointer 事件（visiblePainted），
+  // 绑 svg 上鼠标在细线之间滑动会频繁丢 hover
   return (
-    <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height }} aria-hidden="true">
-      <path d={d} fill="none" stroke={GREEN} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <div
+      ref={wrapRef}
+      className="pt_chartwrap"
+      onPointerLeave={(e) => {
+        if (e.pointerType === "mouse") setIdx(null);
+      }}
+      onPointerMove={(e) => {
+        if (e.pointerType === "mouse") pick(e.clientX, e.currentTarget);
+      }}
+      onPointerDown={(e) => pick(e.clientX, e.currentTarget)}
+    >
+      <svg
+        viewBox={`0 0 100 ${height}`}
+        preserveAspectRatio="none"
+        style={{ display: "block", width: "100%", height, touchAction: "pan-y", pointerEvents: "none" }}
+        aria-hidden="true"
+      >
+        <path d={d} fill="none" stroke={GREEN} strokeWidth="1.5" strokeLinejoin="round" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
+        {idx !== null && (
+          <g pointerEvents="none">
+            <line x1={px(idx)} x2={px(idx)} y1={0} y2={height} stroke="#eeeeee" strokeOpacity="0.3" vectorEffect="non-scaling-stroke" />
+            <circle cx={px(idx)} cy={py(values[idx])} r="2.5" fill={GREEN} stroke="#272822" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          </g>
+        )}
+      </svg>
+      {idx !== null && (
+        <div className="pt_tip" style={{ left: `clamp(50px, ${(idx * step).toFixed(2)}%, calc(100% - 50px))` }}>
+          <span className="pt_tip_date">{dt.getMonth() + 1}月{dt.getDate()}日</span>
+          <span className="pt_tip_act">活跃值<b>+{values[idx]}</b></span>
+        </div>
+      )}
+    </div>
   );
 }
 
