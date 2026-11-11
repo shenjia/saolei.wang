@@ -185,14 +185,15 @@ function VsCellSpan({ c, name1, name2 }: { c: VsCell; name1: string; name2: stri
  *  红蓝两侧同序：名字 → 得分 → 胜 → 独有（22:34：红方得分恢复到胜数前面）；
  *  胜数金、但**胜数为 0 时亮灰**（22:34）；独有数亮灰；单位暗灰，字号 22/20
  *  （比名字小两号阶梯），单位前留一空格；移动端隐藏「玩家名：」只留统计。
- *  纪录板块同款头部（没有「独有」段，solo 省略时该段不渲染）。 */
+ *  纪录板块同款头部（没有「独有」段，solo 省略时该段不渲染）。
+ *  08:42 张老师：玩家名改 VsNameTag（#ID 名字 性别 军衔），title 同步补 #ID。 */
 function VsLevelStat({
-  name, total, win, solo, side,
-}: { name: string; total: number; win: number; solo?: number; side: "a" | "b" }) {
-  const plain = `${name}：${total.toFixed(2)}分 ${win}胜${solo === undefined ? "" : ` ${solo}独有`}`;
+  p, total, win, solo, side,
+}: { p: VsPlayer; total: number; win: number; solo?: number; side: "a" | "b" }) {
+  const plain = `#${p.id} ${p.name}：${total.toFixed(2)}分 ${win}胜${solo === undefined ? "" : ` ${solo}独有`}`;
   return (
     <span className={`vs_lv_stat vs_lv_stat_${side}`} title={plain}>
-      <b className="vs_lv_name">{name}：</b>
+      <b className="vs_lv_name"><VsNameTag p={p} />：</b>
       <b className="vs_lv_score">{total.toFixed(2)}</b>{" "}<i className="vs_lv_unit">分</i>{" "}
       <b className={`vs_lv_win${win === 0 ? " vs_lv_win_zero" : ""}`}>{win}</b>{" "}<i className="vs_lv_unit">胜</i>
       {solo !== undefined && (
@@ -202,7 +203,7 @@ function VsLevelStat({
   );
 }
 
-function VsLevelBox({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2: string }) {
+function VsLevelBox({ pk, p1, p2 }: { pk: VsLevelPk; p1: VsPlayer; p2: VsPlayer }) {
   // 21:42 张老师：整行（十位段）双方都没有任何纪录时不画这一行——
   // 判定用「任一方有纪录」而非格子归属，平局（tie，双方都有成绩）仍算有数据。
   // --vs_cols 也只按可见行算，避免隐藏的空行仍决定列宽。
@@ -214,11 +215,11 @@ function VsLevelBox({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2:
     // 板块盒里只放格子，头部与盒子一起套进 .vs_lvblk 控制上下间距。
     <div className="vs_lvblk">
       <div className="vs_lv_head">
-        <VsLevelStat name={name1} total={pk.total1} win={pk.win1} solo={pk.u1} side="a" />
+        <VsLevelStat p={p1} total={pk.total1} win={pk.win1} solo={pk.u1} side="a" />
         <h1 className="gray">
           <span style={{ color: LEVEL_COLOR[pk.level] }}>{LEVEL_CN[pk.level]}</span>
         </h1>
-        <VsLevelStat name={name2} total={pk.total2} win={pk.win2} solo={pk.u2} side="b" />
+        <VsLevelStat p={p2} total={pk.total2} win={pk.win2} solo={pk.u2} side="b" />
       </div>
       <div className="box vs_lvbox">
         <div className="vs_lvbody">
@@ -227,7 +228,7 @@ function VsLevelBox({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2:
               <div className="vs_bandrow" key={band.lo}>
                 <div className="vs_mid">
                   {orderCells(band.cells).map((c) => (
-                    <VsCellSpan key={c.bv} c={c} name1={name1} name2={name2} />
+                    <VsCellSpan key={c.bv} c={c} name1={p1.name} name2={p2.name} />
                   ))}
                 </div>
               </div>
@@ -236,6 +237,19 @@ function VsLevelBox({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2:
         </div>
       </div>
     </div>
+  );
+}
+
+/** 统一玩家名签（2026-11-11 08:42 张老师）：对战双方名字一律「#ID 名字 性别 军衔」——
+ *  ID 放名字前面（暗灰小一号），名字后跟性别图标 + 军衔徽章（双体系 TitleBadge）。
+ *  顶部玩家卡片与各板块头部汇总共用；名字 hover 气泡沿用 AvatarCell 自带。 */
+function VsNameTag({ p, linkTitle = false }: { p: VsPlayer; linkTitle?: boolean }) {
+  return (
+    <>
+      <span className="vs_pid">#{p.id}</span>{" "}
+      <AvatarCell id={p.id} name={p.name} englishName={p.en} sex={p.sex} gender="small" link />
+      <TitleBadge title={p.militaryTitle} classic={p.classicTitle} link={linkTitle} />
+    </>
   );
 }
 
@@ -266,10 +280,10 @@ function VsPanel({ p, accent }: { p: VsPlayer; accent?: string }) {
             </Link>
           </div>
           <div className="ucd_right">
-            {/* 姓名 + 性别 + 军衔：与侧栏卡片同一套 AvatarCell + TitleBadge 组件 */}
+            {/* 姓名行（08:42 张老师）：#ID + 名字 + 性别 + 军衔，统一走 VsNameTag；
+                军衔保持可点（与原 TitleBadge link 一致） */}
             <p className="ucd_name">
-              <AvatarCell id={p.id} name={p.name} englishName={p.en} sex={p.sex} gender="small" link />
-              <TitleBadge title={p.militaryTitle} classic={p.classicTitle} link />
+              <VsNameTag p={p} linkTitle />
             </p>
             {/* 地区 / 全国排名：与玩家卡片 .ranks 同构（海外玩家口径一致） */}
             <div className="ranks">
@@ -390,9 +404,9 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
           纪录名按胜方色渲染（我方胜蓝 / 对方胜玫红 / 平金 / 都无亮灰）。 */}
       <div className="vs_lvblk">
         <div className="vs_lv_head">
-          <VsLevelStat name={p1.name} total={rec1} win={recWin1} side="a" />
+          <VsLevelStat p={p1} total={rec1} win={recWin1} side="a" />
           <h1 className="gray">纪录</h1>
-          <VsLevelStat name={p2.name} total={rec2} win={recWin2} side="b" />
+          <VsLevelStat p={p2} total={rec2} win={recWin2} side="b" />
         </div>
         <div className="box" id="vs_records">
           <div className="vs_lvbody">
@@ -416,7 +430,7 @@ export default async function VsPage({ params }: { params: Promise<{ id: string 
       {/* ② 各BV比拼：初级/中级/高级各一个独立板块（无图例/规则尾部模块） */}
       <div id="vs_bv">
         {levels.map((pk) => (
-          <VsLevelBox key={pk.level} pk={pk} name1={p1.name} name2={p2.name} />
+          <VsLevelBox key={pk.level} pk={pk} p1={p1} p2={p2} />
         ))}
       </div>
 
