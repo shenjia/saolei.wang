@@ -342,7 +342,8 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
   async function pick(slot: "left" | "right", u: SuggestUser) {
     const other = slot === "left" ? right : left;
     if (u.id === me.id && other?.id === me.id) {
-      toast("不能和自己比拼");
+      // 红色气泡（2026-11-11 张老师：拦截类提示用 error 态）
+      toast("不能和自己比拼", "error");
       return;
     }
     if (other && other.id === u.id) {
@@ -369,11 +370,14 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
   }
 
   /** 匹配对手（2026-11-11 张老师）：单边有玩家时点「匹配对手」——
-   *  服务端按登录者全国排名 ±50 窗口随机挑一人，拉其卡片渲染到空位。 */
+   *  服务端按登录者全国排名 ±50 窗口随机挑一人；无论请求多快都把按钮
+   *  置灰停留随机 1~3 秒（「匹配中」+ 转圈），到点再出人（七轮 13:28 口径）。 */
   async function matchOpponent() {
     if (matching) return;
     setMatching(true);
     try {
+      const t0 = Date.now();
+      const holdMs = 1000 + Math.floor(Math.random() * 2000); // 随机 1~3 秒
       // 场上已有玩家一并排除（不能匹配同站两边）
       const onBoard = left?.id ?? right?.id;
       const res = await fetch(`/api/vs/match${onBoard ? `?exclude=${onBoard}` : ""}`);
@@ -392,6 +396,9 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
         return;
       }
       const { player } = (await res2.json()) as { player: VsPickPlayer };
+      // 剩余停留时间：请求再快也走完随机 1~3 秒的「匹配中」
+      const remain = holdMs - (Date.now() - t0);
+      if (remain > 0) await new Promise((r) => setTimeout(r, remain));
       if (left === null) setLeft(player);
       else setRight(player);
     } catch {
@@ -440,16 +447,30 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
           <button
             type="button"
             className="vs_fight"
-            disabled={!both && !one}
+            disabled={(!both && !one) || matching}
             onClick={() => {
               if (both) {
-                if (right) router.push(`/vs/${right.id}`);
+                // PK 页口径＝「我 vs 对手」：两边角色自由后，推非自己那张卡片的 id
+                // （右是自己时推左；两边都不是自己时推右）
+                const opp = right && right.id !== me.id ? right : left;
+                if (opp) router.push(`/vs/${opp.id}`);
               } else if (one) {
                 void matchOpponent();
               }
             }}
           >
-            {both ? "一决胜负" : matching ? "匹配中…" : "匹配对手"}
+            {matching ? (
+              <>
+                {/* 匹配中：置灰 + 钮内转圈（.vs_spin 复用 toast_spin 关键帧），
+                    随机 1~3 秒后出人（七轮 13:28 张老师口径） */}
+                <span className="vs_spin" aria-hidden="true" />
+                匹配中
+              </>
+            ) : both ? (
+              "一决胜负"
+            ) : (
+              "匹配对手"
+            )}
           </button>
           <SndSwitch on={sndOn} onToggle={toggleSnd} />
         </div>

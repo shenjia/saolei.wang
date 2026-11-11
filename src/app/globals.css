@@ -16774,6 +16774,20 @@ a.vs_c:hover {
   text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
   cursor: default;
 }
+/* 「匹配中」钮内转圈（七轮 13:28 张老师）：复用 toast_spin 关键帧
+   （审核入口 .rv_spin 同款姿势），环色随钮灰态文字 #8f8e83 */
+#vs_pick_hero .vs_fight .vs_spin {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid rgba(143, 142, 131, 0.35);
+  border-top-color: #8f8e83;
+  border-radius: 50%;
+  animation: toast_spin 0.72s linear infinite;
+}
 /* VS 图标中心 = 玩家卡片中心（PK 页恒等式口径）：用 margin-top 143px 补偿——
    中列高 333+m 居中后，图标中心 m+44+51 与卡片中心重合（解得 m=143）。
    未就位气泡绝对定位悬浮在字标上方、不占流内高度，不影响此恒等式 */

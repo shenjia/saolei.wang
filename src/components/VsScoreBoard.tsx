@@ -146,6 +146,7 @@ export function VsScoreBoard({
   preTone,
   postComment,
   opponentId,
+  autoRun = false,
   leftPanel,
   rightPanel,
   below,
@@ -164,6 +165,9 @@ export function VsScoreBoard({
   postComment: string;
   /** 对手玩家 id（22:36 张老师：赛后「返回」按钮跳回对手用户主页，原地导航） */
   opponentId: number;
+  /** ?run=1 直达（对决选择页「一决胜负」）：落地自动开跑免二次点击
+   *  （2026-11-11 张老师）；主页入口等其它途径默认 false 保持两段式 */
+  autoRun?: boolean;
   /** 左右玩家面板：RSC 节点，作为 props 传入客户端边界 */
   leftPanel: ReactNode;
   rightPanel: ReactNode;
@@ -220,6 +224,14 @@ export function VsScoreBoard({
     setPhase("exiting");
     fadeTimer.current = setTimeout(() => setPhase("running"), SPREAD_MS);
   };
+
+  // ?run=1 直达自动开跑：先渲染一拍战前版面（赛前预测随开跑淡出），随即 startFight
+  useEffect(() => {
+    if (!autoRun) return;
+    const t = setTimeout(startFight, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时触发一次
+  }, []);
 
   useEffect(() => () => {
     if (fadeTimer.current) clearTimeout(fadeTimer.current);
