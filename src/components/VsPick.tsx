@@ -10,8 +10,10 @@
 //     二轮 10:45 张老师：可以两边全空），hover 出上方气泡「换人」，
 //     点击清空该卡片回到「问号头像 + 搜索框」空位态（与右侧初始 UI 完全一致）；
 //   · 中间列完全复用 PK 页（/vs/[id]）布局：.vs_vs（.vs_scoreline VS 战斗字标 +
-//     .vs_action 黄色对决按钮 + 喇叭音效开关）——音效开关与 PK 页共用
-//     localStorage「vs_snd」；双方就位前按钮置灰，就位后点「开始对决」进入 /vs/{对手id}。
+//     .vs_action 对决按钮 + 喇叭音效开关）——音效开关与 PK 页共用
+//     localStorage「vs_snd」；按钮三态：双方就位=「一决胜负」进 /vs/{对手id}、
+//     单边有玩家=「匹配对手」（七轮 13:13：自动匹配全国排名 ±50 的对手填空位）、
+//     两边全空=置灰。
 // 约束：任一边可选自己；仅当一边已是自己、另一边再选自己时提示「不能和自己比拼」；
 //   同一玩家（非自己）不能同时站两边。
 
@@ -312,7 +314,11 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
   const [left, setLeft] = useState<VsPickPlayer | null>(me);
   const [right, setRight] = useState<VsPickPlayer | null>(null);
   const [sndOn, setSndOn] = useState(true); // SSR 无 localStorage，挂载后读回真值
+  const [matching, setMatching] = useState(false); // 「匹配对手」请求进行中
   const both = left !== null && right !== null;
+  // 单边有玩家：按钮变「匹配对手」（2026-11-11 张老师），自动补一个
+  // 与登录者全国排名 ±50 的对手到空位；两边全空按钮置灰（文案同「匹配对手」）
+  const one = !both && (left !== null || right !== null);
 
   useEffect(() => {
     try {
@@ -362,6 +368,39 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
     else setRight(null);
   }
 
+  /** 匹配对手（2026-11-11 张老师）：单边有玩家时点「匹配对手」——
+   *  服务端按登录者全国排名 ±50 窗口随机挑一人，拉其卡片渲染到空位。 */
+  async function matchOpponent() {
+    if (matching) return;
+    setMatching(true);
+    try {
+      // 场上已有玩家一并排除（不能匹配同站两边）
+      const onBoard = left?.id ?? right?.id;
+      const res = await fetch(`/api/vs/match${onBoard ? `?exclude=${onBoard}` : ""}`);
+      if (!res.ok) {
+        toast(
+          res.status === 404
+            ? "你还没有全国排名，暂时无法匹配对手"
+            : "匹配失败，请重试"
+        );
+        return;
+      }
+      const { id } = (await res.json()) as { id: number };
+      const res2 = await fetch(`/api/vs/player?id=${id}`);
+      if (!res2.ok) {
+        toast("匹配失败，请重试");
+        return;
+      }
+      const { player } = (await res2.json()) as { player: VsPickPlayer };
+      if (left === null) setLeft(player);
+      else setRight(player);
+    } catch {
+      toast("匹配失败，请重试");
+    } finally {
+      setMatching(false);
+    }
+  }
+
   // 自己不在两边场上（两边全空或都换成了别人）→ 空位聚焦时推荐自己
   const selfOnBoard = left?.id === me.id || right?.id === me.id;
   const selfSuggest: SuggestUser = {
@@ -379,9 +418,10 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
         <VsEmptySlot onPick={(u) => void pick("left", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
       {/* 中间列：完全复用 PK 页 .vs_vs 结构——.vs_scoreline（VS 战斗字标，两侧空
-          占位 span 保住三列网格）+ .vs_action（黄色「一决胜负」+ 喇叭开关正下方）。
-          双方未就位按钮置灰、上方浮金色「请双方选手就位」气泡（绝对定位不占流内
-          高度），就位后进入 /vs/{对手id}。 */}
+          占位 span 保住三列网格）+ .vs_action（按钮 + 喇叭开关正下方）。
+          按钮三态：双方就位=黄色「一决胜负」进 /vs/{对手id}；单边有玩家=
+          「匹配对手」（自动匹配全国排名 ±50 的对手填入空位）；两边全空=置灰。
+          未就位时上方浮金色「请双方选手就位」气泡（绝对定位不占流内高度）。 */}
       <div className="vs_vs">
         <div className="vs_scoreline">
           {/* 未就位提示气泡：作为 scoreline 子元素定位（scoreline position:relative
@@ -400,10 +440,16 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
           <button
             type="button"
             className="vs_fight"
-            disabled={!both}
-            onClick={() => right && router.push(`/vs/${right.id}`)}
+            disabled={!both && !one}
+            onClick={() => {
+              if (both) {
+                if (right) router.push(`/vs/${right.id}`);
+              } else if (one) {
+                void matchOpponent();
+              }
+            }}
           >
-            一决胜负
+            {both ? "一决胜负" : matching ? "匹配中…" : "匹配对手"}
           </button>
           <SndSwitch on={sndOn} onToggle={toggleSnd} />
         </div>
