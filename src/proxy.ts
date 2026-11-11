@@ -15,6 +15,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { canUseRsc } from "@/lib/bot-challenge";
+import { apiKeyAllowsDownload } from "@/lib/partner";
 
 export const config = {
   // 拦截旧站路径。三类：
@@ -147,7 +148,7 @@ function withPage(base: string, page: number | undefined, extra?: Record<string,
   return s ? `${base}?${s}` : base;
 }
 
-export function proxy(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const url = req.nextUrl;
   const isRsc = req.headers.get("rsc") === "1" || url.searchParams.has("_rsc");
   if (isRsc) {
@@ -198,6 +199,14 @@ export function proxy(req: NextRequest) {
   }
   if (!isLegacyUrl) {
     if (req.method === "GET" && url.pathname !== "/" && !canUseRsc(req)) {
+      // 2026-11-11 张老师指令：/video/download/:id（公开 API fileUrl 落点，
+      // /api/public/v1/video_info 返回的下载地址）只对带有效 X-Api-Key 的请求放行
+      // ——第三方程序拿 URL 直接 GET，无 cookie、无爬虫 UA 豁免，过闸即 307 死循环。
+      // key 校验走 api_key 表/env 草案（用量记 endpoint=download，见 lib/partner.ts）；
+      // 前台真人游客不受影响（能开录像详情页即已过闸/有通行证，cookie 随请求下发）。
+      if (url.pathname.startsWith("/video/download/") && (await apiKeyAllowsDownload(req))) {
+        return NextResponse.next();
+      }
       const next = `${url.pathname}${url.search}`;
       return movedTo(req, `/bot/challenge?next=${encodeURIComponent(next)}`, 307);
     }

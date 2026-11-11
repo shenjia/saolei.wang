@@ -74,21 +74,20 @@ export async function requirePartner(req: Request): Promise<string | null> {
 /** 完整版鉴权（2026-11-07）：在 requirePartner 基础上多返回 keyId 与 logo。
  *  keyId 供 video_list 过滤调用方自家来源录像（防同步递归）、外站同步落库打 from_site 标；
  *  logo 供详情页展示「来自XX」站点小图标。 */
-export async function requirePartnerEx(req: Request): Promise<PartnerIdentity | null> {
-  const provided = req.headers.get("x-api-key")?.trim() ?? "";
+/**
+ * 核心校验（无副作用，2026-11-11 抽出）：X-Api-Key 明文 → PartnerIdentity | null。
+ * ①sha256 → 查 api_key 表（缓存 30s）；②未命中再走 env 兼容草案 key。
+ * requirePartnerEx（/api/public/v1/* 路由用，含计量）与 apiKeyAllowsDownload
+ * （proxy 匿名闸放行 /video/download/:id 用）共用同一条校验链。
+ */
+async function lookupApiKey(provided: string): Promise<PartnerIdentity | null> {
   if (!provided) return null;
   const h = sha256(provided);
   const now = Date.now();
-  // 接口短名（/api/public/v1/stats?x=1 → stats；路径不匹配记空串，聚合时归「其他/未知」）
-  const m = req.url.match(/\/api\/public\/v1\/([a-z_]+)/);
-  const endpoint = m ? m[1] : "";
-
   const hit = cache.get(h);
   if (hit && now - hit.at < CACHE_TTL) {
-    void touchUsage(hit.keyId, endpoint);
     return { name: hit.name, keyId: hit.keyId, logo: hit.logo, ratePerMin: hit.ratePerMin };
   }
-
   try {
     const row = await prisma.apiKey.findUnique({ where: { keyHash: h } });
     if (row && row.status === 1) {
@@ -99,16 +98,46 @@ export async function requirePartnerEx(req: Request): Promise<PartnerIdentity | 
         ratePerMin: row.ratePerMin,
       };
       cache.set(h, { ...ident, at: now });
-      void touchUsage(ident.keyId, endpoint);
       return ident;
     }
   } catch {
     /* 查库异常走 env 兜底 */
   }
   const envName = envPartnerName(provided);
-  // env 草案 key 也记用量（key=0），今日走势图才能覆盖过渡期流量
-  if (envName) void bumpUsage(0, Math.floor(Date.now() / 1000), endpoint);
   return envName ? { name: envName, keyId: 0, logo: "", ratePerMin: DEFAULT_API_RATE_PER_MIN } : null;
+}
+
+export async function requirePartnerEx(req: Request): Promise<PartnerIdentity | null> {
+  const provided = req.headers.get("x-api-key")?.trim() ?? "";
+  if (!provided) return null;
+  // 接口短名（/api/public/v1/stats?x=1 → stats；路径不匹配记空串，聚合时归「其他/未知」）
+  const m = req.url.match(/\/api\/public\/v1\/([a-z_]+)/);
+  const endpoint = m ? m[1] : "";
+
+  const ident = await lookupApiKey(provided);
+  if (!ident) return null;
+  // keyId=0 即 env 草案 key：touchUsage 的 update(id=0) 必落空，只记分时用量
+  if (ident.keyId > 0) void touchUsage(ident.keyId, endpoint);
+  else void bumpUsage(0, Math.floor(Date.now() / 1000), endpoint);
+  return ident;
+}
+
+/**
+ * 下载口放行判定（2026-11-11 张老师指令）：/video/download/:id 是公开 API
+ * fileUrl 的落点（/api/public/v1/video_info 返回），第三方程序拿 URL 直接 GET，
+ * 无 cookie、无爬虫 UA 豁免——匿名闸会把它 307 到 /bot/challenge 死循环。
+ * proxy 匿名闸对带有效 X-Api-Key 的该前缀请求放行（校验同一条链：
+ * api_key 表 → env 草案、30s 缓存）；命中即把用量记到 endpoint="download"
+ * （/admin/apikeys 分接口统计可见），返回 true。无限速——外层 nginx limit_req 兜底。
+ */
+export async function apiKeyAllowsDownload(req: Request): Promise<boolean> {
+  const provided = req.headers.get("x-api-key")?.trim() ?? "";
+  if (!provided) return false;
+  const ident = await lookupApiKey(provided);
+  if (!ident) return false;
+  if (ident.keyId > 0) void touchUsage(ident.keyId, "download");
+  else void bumpUsage(0, Math.floor(Date.now() / 1000), "download");
+  return true;
 }
 
 /**
