@@ -16675,17 +16675,27 @@ a.vs_c:hover {
   gap: 30px;
   min-height: 360px;
 }
-/* 问号占位头像：圆角矩形遮罩（2026-11-11 张老师：不要圆形），圆角取盒同款 10px 系 */
+/* 问号占位头像：圆角矩形遮罩（2026-11-11 张老师：不要圆形），圆角取盒同款 10px 系；
+   宽度＝搜索框宽度（四轮 11:23 张老师：两者同撑内容宽 200px，正方形等比） */
 .vs_pick_q {
-  width: 96px;
-  height: 96px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
   border-radius: 12px;
   object-fit: cover;
   display: block;
 }
-/* 空位内搜索框：输入区加宽（排行默认 120px 太窄，placeholder 较长） */
+/* 空位内搜索框撑满内容宽（与头像同宽）；输入区随框拉伸 */
+.vs_pick_empty .goto_form {
+  width: 100%;
+}
+.vs_pick_empty .goto_search {
+  flex: 1;
+  min-width: 0;
+}
 .vs_pick_empty .goto_search input {
-  width: 150px;
+  width: 100%;
+  min-width: 0;
 }
 
 /* 「换人」X（双方就位才渲染）：深灰圆形按钮、贴卡片右上角圆角处（.box 圆角

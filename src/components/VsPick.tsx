@@ -2,7 +2,8 @@
 
 // /vs 对决选择页（2026-11-11 张老师需求）：
 //   · 左侧放自己（初始数据由服务端传入），右侧空位 = 问号头像 + 搜索框
-//     （同排行搜索：防抖 250ms 调 /api/ranking/search，下拉键盘上下选、回车/点击选定）；
+//     （同排行搜索：防抖 250ms 调 /api/ranking/search，下拉键盘上下选、回车/点击选定；
+//     空内容聚焦且自己不在场上时下拉直接推荐自己——四轮 11:23）；
 //   · 选定对手后拉 /api/vs/player 渲染该玩家卡片 + 实力雷达
 //     （卡片结构与 /vs/[id] 的 VsPanel 完全同源）；
 //   · 有玩家的卡片右上角圆角处一律出深灰 X 圆形按钮（未选定对手时我方卡片也有，
@@ -48,8 +49,15 @@ interface SuggestUser {
   sex: number;
 }
 
-/** 搜索框（同排行搜索交互）：防抖推荐下拉 + 键盘导航；选定即回调并清空输入 */
-function VsSearch({ onPick }: { onPick: (u: SuggestUser) => void }) {
+/** 搜索框（同排行搜索交互）：防抖推荐下拉 + 键盘导航；选定即回调并清空输入。
+ *  空内容聚焦时若自己不在场上（suggestSelf 非空），下拉直接推荐自己（四轮 11:23 张老师）。 */
+function VsSearch({
+  onPick,
+  suggestSelf,
+}: {
+  onPick: (u: SuggestUser) => void;
+  suggestSelf: SuggestUser | null;
+}) {
   const [q, setQ] = useState("");
   const [users, setUsers] = useState<SuggestUser[] | null>(null);
   const [active, setActive] = useState(0); // 键盘上下键游标
@@ -58,6 +66,8 @@ function VsSearch({ onPick }: { onPick: (u: SuggestUser) => void }) {
 
   const kw = q.trim();
   const numeric = /^\d+$/.test(kw);
+  // 空内容聚焦出的「推荐自己」下拉（与搜索下拉共用 users 状态；kw 非空时走搜索）
+  const selfShown = users !== null && kw === "";
   // 无匹配空态提示（与排行搜索同文案口径）
   const emptyMsg = numeric ? `没有找到ID为${kw}的玩家` : "没有找到符合条件的玩家";
 
@@ -128,13 +138,17 @@ function VsSearch({ onPick }: { onPick: (u: SuggestUser) => void }) {
           type="text"
           value={q}
           maxLength={12}
-          placeholder="搜索对手（姓名/ID）"
+          placeholder="搜索玩家（姓名/ID）"
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={onKeyDown}
+          onFocus={() => {
+            // 空内容聚焦：自己不在两边场上时，下拉直接推荐自己
+            if (!kw && suggestSelf) setUsers([suggestSelf]);
+          }}
           autoComplete="off"
         />
       </span>
-      {users !== null && kw !== "" && (
+      {users !== null && (kw !== "" || selfShown) && (
         <ul className="goto_suggest">
           {users.length === 0 ? (
             <li className="goto_empty">{emptyMsg}</li>
@@ -147,8 +161,8 @@ function VsSearch({ onPick }: { onPick: (u: SuggestUser) => void }) {
                   onClick={() => pick(u)}
                 >
                   <em>{u.chineseName}</em>
-                  {/* 对决页无榜别上下文，次级文字显示 ID */}
-                  <span>ID {u.id}</span>
+                  {/* 对决页无榜别上下文，次级文字显示 ID；聚焦推荐自己的那条加「推荐」标 */}
+                  <span>{selfShown && u.id === suggestSelf?.id ? `推荐 · ID ${u.id}` : `ID ${u.id}`}</span>
                 </button>
               </li>
             ))
@@ -240,13 +254,20 @@ function VsCard({ p, onSwap }: { p: VsPickPlayer; onSwap: () => void }) {
 
 /** 空位：问号头像占位 + 搜索框（刚进入页面时右侧的 UI；换人清空后回到同一形态）。
  *  头像用圆角矩形遮罩（2026-11-11 张老师：不要圆形），与搜索框的间距＝盒内上边距
- *  （.box padding 30px）→ 上下留白等同。 */
-function VsEmptySlot({ onPick }: { onPick: (u: SuggestUser) => void }) {
+ *  （.box padding 30px）→ 上下留白等同；头像宽度＝搜索框宽度（CSS 同撑内容宽 200px）。
+ *  suggestSelf：自己不在两边场上时非空，空内容聚焦推荐自己。 */
+function VsEmptySlot({
+  onPick,
+  suggestSelf,
+}: {
+  onPick: (u: SuggestUser) => void;
+  suggestSelf: SuggestUser | null;
+}) {
   return (
     <div className="box vs_panel vs_pick_empty">
       {/* eslint-disable-next-line @next/next/no-img-element -- 本地静态占位图 */}
       <img className="vs_pick_q" src="/images/common/avatar.png" alt="?" />
-      <VsSearch onPick={onPick} />
+      <VsSearch onPick={onPick} suggestSelf={suggestSelf} />
     </div>
   );
 }
@@ -338,12 +359,21 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
     else setRight(null);
   }
 
+  // 自己不在两边场上（两边全空或都换成了别人）→ 空位聚焦时推荐自己
+  const selfOnBoard = left?.id === me.id || right?.id === me.id;
+  const selfSuggest: SuggestUser = {
+    id: me.id,
+    chineseName: me.name,
+    englishName: me.en,
+    sex: me.sex,
+  };
+
   return (
     <div id="vs_pick_hero">
       {left ? (
         <VsCard p={left} onSwap={() => clearSlot("left")} />
       ) : (
-        <VsEmptySlot onPick={(u) => void pick("left", u)} />
+        <VsEmptySlot onPick={(u) => void pick("left", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
       {/* 中间列：完全复用 PK 页 .vs_vs 结构——.vs_scoreline（VS 战斗字标，两侧空
           占位 span 保住三列网格）+ .vs_action（黄色「开始对决」+ 喇叭开关正下方）。
@@ -370,7 +400,7 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
       {right ? (
         <VsCard p={right} onSwap={() => clearSlot("right")} />
       ) : (
-        <VsEmptySlot onPick={(u) => void pick("right", u)} />
+        <VsEmptySlot onPick={(u) => void pick("right", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
     </div>
   );
