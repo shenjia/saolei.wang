@@ -1,6 +1,7 @@
 // 管理后台 · 对决统计（2026-11-11 张老师定）：VS 板块（/vs/:id）对决数据。
 // 从仪表盘「今日胜负」KPI 点击进入：趋势图（近 30 天）+ 右侧「发起 Top10 /
-// 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起时间 / 谁对谁 / 比分 / 结果）。
+// 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起者 / 挑战者 / 比分·结果 /
+// 被挑战者 / 发起时间；比分拆在结果标签左右：左=挑战者得分，右=被挑战者得分）。
 // 数据源 vs_duel（page_view 历史回填行比分/结果为 NULL，亮灰 —）。
 
 import Link from "next/link";
@@ -10,6 +11,7 @@ import { RelTime } from "@/components/RelTime";
 import { formatDate } from "@/lib/format";
 import { title as militaryTitle } from "@/lib/assess";
 import { getThunderKingThreshold } from "@/lib/title-system";
+import { TitleBadge } from "@/components/TitleBadge";
 import { getVsDuelsOverview, getVsRecentDuels, getVsTopLaunchers, getVsTopTargets } from "@/lib/admin/vsstats";
 
 export const dynamic = "force-dynamic";
@@ -29,24 +31,26 @@ export default async function AdminVsPage() {
     { key: "duels", label: "对决次数", color: "#ae81ff", values: ov.trend, estimate: ov.todayEst },
   ];
 
-  // 对决记录表玩家格（2026-11-11 09:28 张老师）：#ID 放名字前面，名字后跟
-  // 性别图标 + 军衔文字（军衔按 user_scores.exp_time 快照评定，与全站同口径；
-  // 总司令=快照快于动态阈值档）。Top10 聚合榜非「对战双方」，保持原样
+  // 对决记录表玩家格（2026-11-11 10:00 张老师：去掉 #ID，只留名字 + 性别图标 +
+  // 军衔文字；军衔按 user_scores.exp_time 快照评定，与全站同口径；总司令=快照
+  // 快于动态阈值档）。Top10 聚合榜非「对战双方」，保持原样
   const duelUser = (uid: number, name: string, sex: number, exp: number | null) => (
     <span style={{ whiteSpace: "nowrap" }}>
       <Link className="link" href={`/admin/users/${uid}`}>
-        <span className="sub">#{uid}</span> {name}
+        {name}
       </Link>
       <span
         className={`gender ${sex ? "male" : "female"} small`}
         style={{ margin: "0 4px 0 7px", verticalAlign: "-2px" }}
         aria-label={sex ? "男" : "女"}
       />
-      <span className="gray">{militaryTitle(exp, kTh)}</span>
+      <TitleBadge title={militaryTitle(exp, kTh)} />
     </span>
   );
 
-  // 比分/结果展示（发起者视角）：回填行（NULL）亮灰 —
+  // 比分/结果展示（发起者视角）：回填行（NULL）亮灰 —。
+  // 2026-11-11 10:00 张老师：比分拆开放在结果标签左右——左=挑战者得分（默认
+  // 即发起者，故取 s1），右=被挑战者得分（s2）。
   const fmtScore = (s: number | null) => (s === null ? "—" : s.toFixed(2));
   const RESULT_TAG: Record<number, { cls: string; label: string }> = {
     1: { cls: "ok", label: "胜" },
@@ -103,7 +107,7 @@ export default async function AdminVsPage() {
       {/* ---------- 最近对决记录 ---------- */}
       <AdminCard
         title="最近对决记录"
-        more="最近 50 场 · 比分/结果为发起当时快照；历史回填行亮灰 —"
+        more="最近 50 场 · 比分/结果为发起当时快照（左分=挑战者，右分=被挑战者）；历史回填行亮灰 —"
         tight
       >
         <div className="admin_scroll">
@@ -111,9 +115,9 @@ export default async function AdminVsPage() {
             <thead>
               <tr>
                 <th>发起者</th>
-                <th className="c">结果</th>
+                <th>挑战者</th>
+                <th className="c">比分 · 结果</th>
                 <th>被挑战者</th>
-                <th className="num">比分（发起 : 对方）</th>
                 <th>发起时间</th>
               </tr>
             </thead>
@@ -130,23 +134,24 @@ export default async function AdminVsPage() {
                 return (
                   <tr key={d.id}>
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
+                    {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
+                    <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
                     <td className="c">
-                      {tag ? (
-                        <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
-                      ) : (
-                        <span className="gray">—</span>
-                      )}
+                      <span style={{ whiteSpace: "nowrap" }}>
+                        <span className="strong mono">
+                          {d.s1 === null ? <span className="gray">—</span> : fmtScore(d.s1)}
+                        </span>{" "}
+                        {tag ? (
+                          <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
+                        ) : (
+                          <span className="gray">—</span>
+                        )}{" "}
+                        <span className="strong mono">
+                          {d.s2 === null ? <span className="gray">—</span> : fmtScore(d.s2)}
+                        </span>
+                      </span>
                     </td>
                     <td>{duelUser(d.u2, d.n2, d.sex2, d.exp2)}</td>
-                    <td className="num strong mono">
-                      {d.s1 === null || d.s2 === null ? (
-                        <span className="gray">— : —</span>
-                      ) : (
-                        <>
-                          {fmtScore(d.s1)} : {fmtScore(d.s2)}
-                        </>
-                      )}
-                    </td>
                     <td title={formatDate(d.time, "Y-m-d H:i:s")}>
                       <RelTime time={d.time} />
                     </td>
