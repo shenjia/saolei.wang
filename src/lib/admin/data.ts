@@ -156,9 +156,42 @@ export async function getUserList(
   const q = (f.q ?? "").trim();
   let orderSql = order;
   const orderParams: unknown[] = [];
+  // 全字匹配置顶（2026-11-11 张老师要求）：搜索字段整字段=关键词的行排最前，
+  // 再按原排序；含纯数字的 ID 精确置顶（2026-10-27 口径，q=1 曾命中 373 人翻不到）
+  const pin: string[] = [];
+  const pinVals: unknown[] = [];
+  const eq = (col: string) => {
+    pin.push(`${col} = ?`);
+    pinVals.push(q);
+  };
+  if (q && f.qtype !== "id") {
+    if (f.qtype === "name") {
+      eq("u.chinese_name");
+      eq("u.english_name");
+    } else if (f.qtype === "username") {
+      eq("a.username");
+    } else if (f.qtype === "nickname") {
+      eq("i.nickname");
+    } else if (f.qtype === "sig") {
+      pin.push("(u.id IN (SELECT user FROM user_sig WHERE signature = ?))");
+      pinVals.push(q);
+    } else {
+      // 无 qtype 默认组合搜索：任一搜索字段全字命中即置顶（含标识精确）
+      eq("u.chinese_name");
+      eq("u.english_name");
+      eq("a.username");
+      eq("i.nickname");
+      pin.push("(u.id IN (SELECT user FROM user_sig WHERE signature = ?))");
+      pinVals.push(q);
+    }
+  }
   if (/^\d+$/.test(q)) {
-    orderSql = `(u.id = ?) DESC, ${order}`;
-    orderParams.push(BigInt(q));
+    pin.push("u.id = ?");
+    pinVals.push(BigInt(q));
+  }
+  if (pin.length) {
+    orderSql = `(${pin.join(" OR ")}) DESC, ${orderSql}`;
+    orderParams.push(...pinVals);
   }
 
   const [ids, countRows] = await Promise.all([
