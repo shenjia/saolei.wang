@@ -151,12 +151,15 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
               窄屏隐藏（admin_table.vs_recent，行线延伸与趋势卡右缘对齐）。
               12:16 张老师：比分与结果拆成三列——左比分（挑战者）+ 结果标签
               （只放胜负平）+ 右比分（被挑战者），比分列表头置空。
-              14:13 张老师：发起者列与发起时间列互换（发起者在前），发起时间暗灰 */}
+              14:13 张老师：发起者列与发起时间列互换（发起者在前），发起时间暗灰。
+              14:55 张老师：挑战者左加「是否本人」列（发起者∈对决双方判定，亮绿是/
+              暗灰否；指定匹配上线后发起者可能是第三人，判定已按数据驱动预留） */}
           <table className="admin_table vs_recent">
             <thead>
               <tr>
                 <th>发起者</th>
                 <th>发起时间</th>
+                <th className="c">是否本人</th>
                 <th>挑战者</th>
                 <th className="c"></th>
                 <th className="c">结果</th>
@@ -169,13 +172,19 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
             <tbody>
               {recent.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="gray">
+                  <td colSpan={10} className="gray">
                     暂无对决记录（VS 页访问后开始落库）
                   </td>
                 </tr>
               )}
               {recent.map((d) => {
                 const tag = d.result === null ? null : RESULT_TAG[d.result];
+                // 是否本人（14:55 张老师）：发起者是否对决双方之一——是=亮绿，否=暗灰。
+                // 现行 schema 挑战者＝发起者（u1），历史行恒「是」；指定匹配（发起者
+                // 选另外两人对决）上线后 vs_duel 增加真实挑战者字段，届时把 challenger
+                // 换成真实 uid 即自然转「否」，渲染逻辑不动。
+                const challenger = d.u1;
+                const isOwn = d.u1 === challenger || d.u1 === d.u2;
                 return (
                   <tr key={d.id}>
                     {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔 */}
@@ -183,6 +192,14 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
                     {/* 发起时间（14:13 张老师）：暗灰显示 */}
                     <td className="gray" title={formatDate(d.time, "Y-m-d H:i:s")}>
                       <RelTime time={d.time} />
+                    </td>
+                    {/* 是否本人（14:55 张老师）：亮绿「是」/ 暗灰「否」 */}
+                    <td className="c">
+                      {isOwn ? (
+                        <span className="strong" style={{ color: "#a6e22e" }}>是</span>
+                      ) : (
+                        <span className="gray">否</span>
+                      )}
                     </td>
                     {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
