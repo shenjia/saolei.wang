@@ -31,9 +31,21 @@ export default async function AdminVsPage() {
     { key: "duels", label: "对决次数", color: "#ae81ff", values: ov.trend, estimate: ov.todayEst },
   ];
 
-  // 对决记录表玩家格（2026-11-11 10:00 张老师：去掉 #ID，只留名字 + 性别图标 +
-  // 军衔文字；军衔按 user_scores.exp_time 快照评定，与全站同口径；总司令=快照
-  // 快于动态阈值档）。Top10 聚合榜非「对战双方」，保持原样
+  // 对决记录表玩家格（2026-11-11 09:56 张老师）：
+  // · 发起者：只渲染「姓名 #ID」（不加性别/军衔），ID 放姓名后面；
+  // · 挑战者/被挑战者：姓名 + 性别图标 + 军衔徽章（TitleBadge，军衔按
+  //   user_scores.exp_time 快照评定，与全站同口径；总司令=快照快于动态阈值档）。
+  // Top10 聚合榜非「对战双方」，保持原样
+  const launcherUser = (uid: number, name: string) => (
+    <span style={{ whiteSpace: "nowrap" }}>
+      <Link className="link" href={`/admin/users/${uid}`}>
+        {name}
+      </Link>
+      <span className="sub" style={{ marginLeft: 6 }}>
+        #{uid}
+      </span>
+    </span>
+  );
   const duelUser = (uid: number, name: string, sex: number, exp: number | null) => (
     <span style={{ whiteSpace: "nowrap" }}>
       <Link className="link" href={`/admin/users/${uid}`}>
@@ -49,13 +61,25 @@ export default async function AdminVsPage() {
   );
 
   // 比分/结果展示（发起者视角）：回填行（NULL）亮灰 —。
-  // 2026-11-11 10:00 张老师：比分拆开放在结果标签左右——左=挑战者得分（默认
-  // 即发起者，故取 s1），右=被挑战者得分（s2）。
+  // 2026-11-11 09:55 张老师：比分拆开放在结果标签左右——左=挑战者得分（默认
+  // 即发起者，故取 s1），右=被挑战者得分（s2）；胜方比分金色、负方亮灰
+  // （平局双方不着色）。
   const fmtScore = (s: number | null) => (s === null ? "—" : s.toFixed(2));
+  const GOLD = "#ffd700";
   const RESULT_TAG: Record<number, { cls: string; label: string }> = {
     1: { cls: "ok", label: "胜" },
     2: { cls: "bad", label: "负" },
     0: { cls: "plain", label: "平" },
+  };
+  /** 单个比分着色：win=true 胜方金 / false 负方灰 / null（平局或无结果）不着色 */
+  const scoreSpan = (s: number | null, win: boolean | null) => {
+    if (s === null) return <span className="gray">—</span>;
+    if (win === null) return <span className="strong mono">{fmtScore(s)}</span>;
+    return (
+      <span className={`strong mono${win ? "" : " gray"}`} style={win ? { color: GOLD } : undefined}>
+        {fmtScore(s)}
+      </span>
+    );
   };
 
   return (
@@ -133,22 +157,19 @@ export default async function AdminVsPage() {
                 const tag = d.result === null ? null : RESULT_TAG[d.result];
                 return (
                   <tr key={d.id}>
-                    <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
+                    {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔 */}
+                    <td>{launcherUser(d.u1, d.n1)}</td>
                     {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
                     <td className="c">
                       <span style={{ whiteSpace: "nowrap" }}>
-                        <span className="strong mono">
-                          {d.s1 === null ? <span className="gray">—</span> : fmtScore(d.s1)}
-                        </span>{" "}
+                        {scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}{" "}
                         {tag ? (
                           <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
                         ) : (
                           <span className="gray">—</span>
                         )}{" "}
-                        <span className="strong mono">
-                          {d.s2 === null ? <span className="gray">—</span> : fmtScore(d.s2)}
-                        </span>
+                        {scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}
                       </span>
                     </td>
                     <td>{duelUser(d.u2, d.n2, d.sex2, d.exp2)}</td>
