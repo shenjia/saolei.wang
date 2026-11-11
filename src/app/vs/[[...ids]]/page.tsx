@@ -69,13 +69,15 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
   // 17:24 张老师：落地瞬间历史闪现又消失——cookie 在 SSR 侧可读，新鲜（8s 内）
   // 即判定「马上自动开跑」，历史板块首帧就不渲染（histHidden），无闪现；
   // 17:23 张老师：历史板块改 VsScoreBoard 内部渲染（数据直传），换人跟随竞技场。
-  // 换人就地清卡（16:36 张老师）：旁观者（非对决双方）需装配登录者卡；双方本人
-  // 的卡片由 VsDuelView 内部从对决数据零查询转换，这里传 null 免重复拉取
+  // 换人就地清卡（16:36 张老师）：swap.me 恒为登录者卡。20:45 张老师「对决完点叉
+  // 不换人」实证：原实现对决双方本人传 null（寄望 VsDuelView 内部零查询转换，
+  // 实际没做）→ swap=null → 换人监听直接 return——旁观者测试账号测的是另一条
+  // 分支，假绿。改恒装配（本人多一次轻量查询，页面本就 force-dynamic）
   if (l && qr) {
     const jar = await cookies();
     const ar = parseInt(jar.get("vs_autorun")?.value ?? "", 10);
     const histHidden = !!ar && Date.now() - ar < 8000;
-    const swapMe = session.uid === l || session.uid === qr ? null : await getVsPickPlayer(session.uid);
+    const swapMe = await getVsPickPlayer(session.uid);
     return (
       <VsDuelView
         uid1={l}
@@ -83,6 +85,7 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
         record={session.uid === l || session.uid === qr}
         swapMe={swapMe}
         histHidden={histHidden}
+        histUid={session.uid}
       />
     );
   }
@@ -94,10 +97,9 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
   const [initialLeft, initialRight, hist] = await Promise.all([
     l ? getVsPickPlayer(l) : null,
     qr ? getVsPickPlayer(qr) : null,
-    // 「历史对决」板块数据（17:23 张老师：/vs/{id} 单 id 入口也要显示；至少一侧
-    // 有人才渲染，由组件内判定）——单边按该玩家发起的记录查（getVsHistory
-    // IN (l, r)，两边同传即单人口径）
-    getVsHistory(l || qr || session.uid, l || qr || session.uid, 1, 10),
+    // 「历史对决」板块数据（20:51 张老师定口径：＝当前登录用户**发起**的所有
+    // 对决，与卡片上是谁无关）——恒按登录者查，两卡全空也有数据
+    getVsHistory(session.uid, session.uid, 1, 10),
   ]);
 
   return (

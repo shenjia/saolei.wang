@@ -16923,10 +16923,16 @@ a.vs_c:hover {
     pointer-events: auto;
   }
 }
-/* 20:31 张老师：对决完成后双方卡片右上角 X **常显**（截图完成后可直接点换人
-   再战，不再依赖卡片 hover 浮现）——hover 链在 done 态本就不可靠（骑线 X 探进
-   中列，见上「恒穿透」注释），常显后点击不依赖 hover。特异性压过上面的隐藏态 */
-#vs_hero[data-done="1"] .vs_swap {
+/* 20:45 张老师：done 后换人 X 分两拍——
+   ① 截图未完成（data-shot="0"）：X **恒隐**，连 hover 浮现也禁——截图克隆的
+      computed style 若恰好取到 hover 中的 X 会把叉拍进图里（张老师明确怕这个）；
+   ② 截图完成（data-shot="1"）：常显可点（PC=剪贴板落，移动端=分享 Blob 备好，
+      截图失败也放行）。特异性 (1,3,0) 压过 hover 浮现与下面的常显规则 */
+#vs_hero[data-done="1"][data-shot="0"] .vs_swap {
+  opacity: 0;
+  pointer-events: none;
+}
+#vs_hero[data-done="1"][data-shot="1"] .vs_swap {
   opacity: 1;
   pointer-events: auto;
 }

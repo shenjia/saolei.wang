@@ -201,6 +201,10 @@ export function VsScoreBoard({
   // histHidden 只为压住首帧；startFight 消费标记即解除（否则赛后点换人回就位态
   // 时历史板块永远回不来）
   const [histSuppressed, setHistSuppressed] = useState(histHidden);
+  // 20:45 张老师：done 后换人 X 要等**截图完成**才显示（怕截图把 X 拍进图里）。
+  // PC=截图写入剪贴板后放行；移动端=分享 Blob 预生成完放行；截图失败也放行
+  // （图没截成不必再拦着 X）。二轮开跑时复位（下一轮截图期间 X 必须又是隐的）
+  const [shotReady, setShotReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [reveal, setReveal] = useState(false);
   // 23:44 张老师：决出胜负按钮下方的音效开关——默认开，状态记 localStorage「vs_snd」；
@@ -269,6 +273,7 @@ export function VsScoreBoard({
     // 删标记、cleanup 清计时器会让二挂载丢指令；开跑即删，过期标记无害）
     clearAutorun();
     setHistSuppressed(false); // 历史抑制只护首帧，此后（含赛后换人回就位态）正常显隐
+    setShotReady(false); // 二轮跑分：X 回到「截图未完成」隐匿态（下轮截图不能带 X）
     // data-close 由 phase 驱动：面板立刻开始向左右滑，滑完（SPREAD_MS）才跑分
     setPhase("exiting");
     fadeTimer.current = setTimeout(() => setPhase("running"), SPREAD_MS);
@@ -449,9 +454,13 @@ export function VsScoreBoard({
       void waitSettled()
         .then(() => buildShotBlob())
         .then((b) => {
-          if (!cancelled) shotBlobRef.current = b;
+          if (cancelled) return;
+          shotBlobRef.current = b;
+          setShotReady(true); // Blob 预生成完 → 放行换人 X（此后「保存到相册」用它）
         })
-        .catch(() => {}); // 预生成失败静默，点击时现场重试
+        .catch(() => {
+          if (!cancelled) setShotReady(true); // 预生成失败也放行（点击时现场重试）
+        });
       return () => {
         cancelled = true;
       };
@@ -465,6 +474,7 @@ export function VsScoreBoard({
         const blob = await buildShotBlob();
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
         if (cancelled) return;
+        setShotReady(true); // 截图已落剪贴板 → 放行换人 X（图已定型，不再受 X 影响）
         // 气泡/截屏音：声音开＝done+3s 播截屏音+气泡；声音关＝剪贴板一落就出气泡
         //（截图本体渲染约 1~2s，1s 内物理上写不完剪贴板，气泡必须真有其事）
         const finish = () => {
@@ -484,7 +494,10 @@ export function VsScoreBoard({
           sndRef.current ? Math.max(0, doneAt + 3000 - Date.now()) : 0,
         );
       } catch {
-        if (!cancelled) toast("截图失败或剪贴板被拒绝", "error");
+        if (!cancelled) {
+          setShotReady(true); // 截图/剪贴板失败也放行 X，不能让人永远点不了换人
+          toast("截图失败或剪贴板被拒绝", "error");
+        }
       }
     };
     void run();
@@ -606,7 +619,7 @@ export function VsScoreBoard({
            交接跳 /vs/{l}/{r}，与竞技场主路径同一套行为 */
         <VsPickArena me={arena.me} initialLeft={arena.left} initialRight={arena.right} />
       ) : (
-        <div id="vs_hero" data-close={phase === "ready" ? "1" : "0"} data-done={phase === "done" ? "1" : "0"}>
+        <div id="vs_hero" data-close={phase === "ready" ? "1" : "0"} data-done={phase === "done" ? "1" : "0"} data-shot={shotReady ? "1" : "0"}>
         {leftPanel}
         <div className="vs_vs">
           {/* 顶部评价位（22:36 张老师：终局评价与开盘预测放**相同的位置**——
@@ -740,15 +753,16 @@ export function VsScoreBoard({
       {/* 「历史对决」板块（2026-11-11 14:38 张老师）：分割线下默认即渲染；
           15:48 张老师：开始跑分后整块消失（仅「就位」态可见）；16:26 张老师：
           板块宽度与分割线一致（fit 测量值经 heroW 写进 wrapper，margin auto 居中）；
-          16:36 张老师：换人切竞技场形态后保留；17:23 张老师：uids 跟随竞技场
-          两侧卡片（空位=0，单边按该玩家发起的记录查），VsHistFeed 自动重拉；
-          17:24 张老师：自动跑分交接（histHidden，SSR 读 cookie 判定）时首帧
-          就不渲染——否则落地瞬间历史闪现又消失 */}
+          16:36 张老师：换人切竞技场形态后保留；20:51 张老师定口径：＝**当前登录
+          用户发起的**所有对决——uids 恒为登录者（服务端 hist 传入），换人不再
+          跟随重拉（列表与卡上是谁无关，本来就不用变）；17:24 张老师：自动跑分
+          交接（histHidden，SSR 读 cookie 判定）时首帧就不渲染——否则落地瞬间
+          历史闪现又消失 */}
       {phase === "ready" && !histSuppressed && hist && (hist.uid1 || hist.uid2) && (
         <div className="vs_hist_wrap" style={heroW ? { width: heroW } : undefined}>
           <VsHistBlock
-            uid1={arena ? arena.left?.id ?? 0 : hist.uid1}
-            uid2={arena ? arena.right?.id ?? 0 : hist.uid2}
+            uid1={hist.uid1}
+            uid2={hist.uid2}
             initial={hist.rows}
             total={hist.total}
             pageSize={hist.pageSize}

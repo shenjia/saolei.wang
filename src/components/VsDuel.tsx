@@ -345,6 +345,7 @@ export async function VsDuelView({
   record,
   swapMe = null,
   histHidden = false,
+  histUid,
 }: {
   uid1: number;
   uid2: number;
@@ -355,6 +356,9 @@ export async function VsDuelView({
   /** 自动跑分交接（17:24 张老师：竞技场点一决胜负落地瞬间历史闪现又消失）——
    *  统一路由页读到新鲜 vs_autorun cookie 时为 true，历史板块首帧即不渲染 */
   histHidden?: boolean;
+  /** 登录者 id（20:51 张老师定口径：「历史对决」＝当前登录用户发起的所有对决，
+   *  与卡片上是谁无关——恒按登录者查，两条路径同一查询彻底复用） */
+  histUid: number;
 }) {
   // 不能和自己比拼：入口按钮已灰置，直连 URL 兜底提示
   if (uid1 === uid2) {
@@ -413,11 +417,11 @@ export async function VsDuelView({
   // 同玩家卡片渲染）；15:48 改版：底部全站通用「加载更多 + 页码滑条」翻页器
   // （VsHistFeed 客户端组件，/api/vs/history 追加/跳页）。常显板块——赛前即渲染，
   // 开跑后由 VsScoreBoard 按舞台状态整体摘除。
-  // 17:23 张老师：板块改由 VsScoreBoard 内部渲染（VsHistBlock），这里只传**数据**
-  // ——换人就地切竞技场后 uids 跟随竞技场两侧卡片自动重拉。
+  // 20:51 张老师定口径：＝**当前登录用户发起的**所有对决，与卡片上是谁无关——
+  // 恒按登录者查（原来按卡上玩家查，两卡都不是登录者时大概率空）。
   // 17:24 张老师：竞技场自动跑分交接（vs_autorun cookie）由统一路由页读出传
   // histHidden——SSR 首帧就不渲染历史，修掉「落地瞬间历史闪现又消失」。
-  const hist = await getVsHistory(uid1, uid2, 1, 10);
+  const hist = await getVsHistory(histUid, histUid, 1, 10);
 
   // 2026-11-10 第五轮：下面所有板块交给客户端舞台（VsScoreBoard）控制显隐——
   // 赛前完全不挂载，点「决出胜负」跑分完成后才出现。RSC 节点可作为 props 传入客户端边界。
@@ -477,7 +481,7 @@ export async function VsDuelView({
         opponentId={uid2}
         dateStr={duelDateStr}
         swap={swapMe ? { me: swapMe, left: toPick(p1), right: toPick(p2) } : null}
-        hist={{ uid1, uid2, rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
+        hist={{ uid1: histUid, uid2: histUid, rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
         histHidden={histHidden}
         leftPanel={
           <VsPanel p={p1} side="l" swapHref={`/vs?/${uid2}`} />
