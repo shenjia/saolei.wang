@@ -91,9 +91,9 @@ export default async function AdminVsPage() {
         </span>
       </div>
 
-      {/* ---------- 趋势图 + 右侧两个 Top10 板块（强制同一行） ---------- */}
+      {/* ---------- 趋势图 + 两个 Top10 三板块并列一行（2026-11-11 10:26 张老师） ---------- */}
       <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "nowrap" }}>
-        <div style={{ flex: "1 1 640px", minWidth: 0 }}>
+        <div style={{ flex: "1 1 480px", minWidth: 0 }}>
           <AdminCard
             title="对决趋势（近 30 天）"
             more="今日点为按上周同时段预估（虚线）"
@@ -102,7 +102,7 @@ export default async function AdminVsPage() {
             <TrendChart dates={ov.dates} series={series} unit="场" />
           </AdminCard>
         </div>
-        <div style={{ flex: "0 0 340px", minWidth: 300, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ flex: "0 0 300px" }}>
           <AdminCard title="发起对决最多（近 7 天 Top10）" className="h100">
             <BarList
               items={launchers.map((u) => ({
@@ -114,6 +114,8 @@ export default async function AdminVsPage() {
               color="linear-gradient(90deg,#6b4f8b,#ae81ff)"
             />
           </AdminCard>
+        </div>
+        <div style={{ flex: "0 0 300px" }}>
           <AdminCard title="被对决最多（近 7 天 Top10）" className="h100">
             <BarList
               items={targets.map((u) => ({
@@ -135,7 +137,9 @@ export default async function AdminVsPage() {
         tight
       >
         <div className="admin_scroll">
-          <table className="admin_table">
+          {/* 10:26 张老师：列距收紧（tight_cols）+ 发起时间右侧空列吸收余宽，
+              表格不再横向铺满整行 */}
+          <table className="admin_table tight_cols">
             <thead>
               <tr>
                 <th>发起者</th>
@@ -143,12 +147,13 @@ export default async function AdminVsPage() {
                 <th className="c">比分 · 结果</th>
                 <th>被挑战者</th>
                 <th>发起时间</th>
+                <th className="sp"></th>
               </tr>
             </thead>
             <tbody>
               {recent.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="gray">
+                  <td colSpan={6} className="gray">
                     暂无对决记录（VS 页访问后开始落库）
                   </td>
                 </tr>
@@ -176,6 +181,7 @@ export default async function AdminVsPage() {
                     <td title={formatDate(d.time, "Y-m-d H:i:s")}>
                       <RelTime time={d.time} />
                     </td>
+                    <td className="sp"></td>
                   </tr>
                 );
               })}
