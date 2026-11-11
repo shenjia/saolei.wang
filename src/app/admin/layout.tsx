@@ -5,6 +5,7 @@
 // · 待审录像数 / 待审头像数在这里各查一次，供侧栏红点角标与顶栏摘要用。
 
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin/guard";
 import { USER_ROLE, VIDEO_STATUS } from "@/lib/config";
@@ -12,6 +13,7 @@ import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
 import { getGroupBadges } from "@/lib/admin/usergroups";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopSummary } from "@/components/admin/PendingCounts";
+import { EnvSwitch } from "@/components/admin/EnvSwitch";
 import { ConfirmHost } from "@/components/Confirm";
 import "./admin.css";
 
@@ -61,6 +63,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       />
       <div className="admin_body">
         <div className="admin_top">
+          {/* 2026-11-11 张老师需求：环境切换胶囊——按域名高亮，点击切换生产/测试 */}
+          <EnvSwitch host={(await headers()).get("host") ?? ""} />
           <h1>管理后台</h1>
           {/* 2026-10-27：摘要数字与侧栏 badge 同源——服务端首帧 + 客户端切页/轮询校准，
               修「共享 layout 不重跑导致外壳数字停在旧值」的问题（组件自带 .sub 样式） */}

@@ -164,6 +164,42 @@ body:has(.admin_shell) #footer {
   font-weight: bold;
   text-shadow: none;
 }
+/* 环境切换胶囊（2026-11-11）：「管理后台」左侧，按域名高亮当前环境；
+   生产=绿、测试=橙（Monokai 配色），点击另一侧跳到对应环境同路径 */
+.env_switch {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  background: #2b2b26;
+  border: 1px solid #3a3a32;
+  border-radius: 999px;
+  padding: 2px;
+}
+.env_switch button {
+  border: 0;
+  background: transparent;
+  color: #939387;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 1px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.env_switch button:hover {
+  color: #eeeeee;
+}
+.env_switch button.on {
+  color: #1e1f1c;
+  font-weight: bold;
+  cursor: default;
+}
+.env_switch button.on:first-child {
+  background: #a6e22e;
+}
+.env_switch button.on:last-child {
+  background: #fd971f;
+}
 .admin_top .sub {
   color: #75715e;
   font-size: 12px;
