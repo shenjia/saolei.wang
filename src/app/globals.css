@@ -16673,7 +16673,9 @@ a.vs_c:hover {
   align-items: center;
   justify-content: center;
   gap: 30px;
-  min-height: 360px;
+  height: 372px; /* = 玩家卡片实测高（.user_card 结构恒定：ucd_top 固定 74 + hr 21 +
+                    雷达 222 + 盒 padding 60）→ 换人/清空盒子高度零变化（五轮排查：
+                    原 360 与卡片 372 差 12px，居中行内上下各偏 6px 即「高度微调」） */
 }
 /* 问号占位头像：圆角矩形遮罩（2026-11-11 张老师：不要圆形），圆角取盒同款 10px 系；
    宽度＝搜索框宽度（四轮 11:23 张老师：两者同撑内容宽 200px，正方形等比） */
@@ -16698,12 +16700,13 @@ a.vs_c:hover {
   min-width: 0;
 }
 
-/* 「换人」X（双方就位才渲染）：深灰圆形按钮、贴卡片右上角圆角处（.box 圆角
-   10px，按钮 26px 内缩 8px 落在圆角带上），hover 变黄（站点金）+ 上方气泡 */
+/* 「换人」X：深灰圆形按钮，**骑线**在卡片右上角圆角处（26px 按钮中心正压
+   .box 边框角点：top/right 各 -13px），hover 卡片才浮现（触屏设备常显），
+   hover 按钮变黄（站点金）+ 上方气泡 */
 .vs_swap {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: -13px;
+  right: -13px;
   z-index: 5;
   display: flex;
   align-items: center;
@@ -16711,12 +16714,13 @@ a.vs_c:hover {
   width: 26px;
   height: 26px;
   padding: 0;
+  margin: 0; /* legacy 给 button 塞了 margin-right:8px——骑线定位会被它顶偏 8px（实测） */
   border: 0;
   border-radius: 50%;
   background: #49483e; /* 深灰（与盒描边同族） */
   color: #b1b1a4;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 .vs_swap svg {
   width: 12px;
@@ -16749,8 +16753,19 @@ a.vs_c:hover {
 .vs_swap:focus-visible::after {
   opacity: 1;
 }
+/* 默认隐藏、hover 卡片浮现——只在有 hover 能力的设备生效（触屏无 hover 会永远看不到） */
+@media (hover: hover) {
+  .vs_swap {
+    opacity: 0;
+    pointer-events: none; /* 隐藏态不拦鼠标（尤其骑线半悬在卡外时） */
+  }
+  .vs_panel:hover .vs_swap {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
 
-/* 中间列「开始对决」：盒型/字体全走 PK 页 .vs_fight，这里只补置灰态——
+/* 中间列「一决胜负」：盒型/字体全走 PK 页 .vs_fight，这里只补置灰态——
    双方未就位（disabled）换灰底灰字（对齐 .vs_back 灰系），就位后恢复黄钮 */
 #vs_pick_hero .vs_fight:disabled {
   background: #4a493f;
@@ -16759,17 +16774,30 @@ a.vs_c:hover {
   text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
   cursor: default;
 }
-/* VS 图标中心 = 玩家卡片中心（PK 页恒等式口径）：选择页没有上方预测气泡占位，
-   用 margin-top 143px 补偿——中列高 333+m 居中后，图标中心 m+44+51 与卡片
-   中心重合（解得 m=143；左侧卡片态/右侧空位态均成立） */
+/* VS 图标中心 = 玩家卡片中心（PK 页恒等式口径）：用 margin-top 143px 补偿——
+   中列高 333+m 居中后，图标中心 m+44+51 与卡片中心重合（解得 m=143）。
+   未就位气泡绝对定位悬浮在字标上方、不占流内高度，不影响此恒等式 */
 #vs_pick_hero .vs_scoreline {
+  position: relative;
   margin-top: 143px;
+}
+/* 未就位提示气泡（五轮 11:37 张老师）：金色「请双方选手就位」，复用 PK 页
+   .vs_pre 评语框（框型）+ .vs_pre_even（势均力敌金）配色；底距 scoreline 顶
+   21px = PK 页 prewrap 同款间距（气泡底在字标顶上方 65px）。
+   ⚠️ DOM 必须放 .vs_scoreline 内——放 .vs_vs 直接子级时包含块是整列，
+   bottom:100% 会解析到列顶、跑到页头暗底上隐形（实测） */
+#vs_pick_hero .vs_pick_pre {
+  position: absolute;
+  bottom: calc(100% + 21px);
+  left: 50%;
+  transform: translateX(-50%);
 }
 /* 移动端（≤768）：两槽上下堆叠、卡片全宽（对齐 /vs/[id] 移动端面板口径）；
    中间列随 flex 纵向落在两槽之间，复用 PK 页规则无需额外覆盖 */
 @media (max-width: 768px) {
   #vs_pick_hero {
     flex-direction: column;
+    align-items: center; /* 纵向堆叠时交叉轴=横向：260 定宽空位居中（PC 的 stretch 已撤，此处防御） */
   }
   /* ⚠️ 带 body #page 压过移动端通用 body #page .box{padding:16px 14px}（同 /vs/[id] 口径） */
   body #page #vs_pick_hero > .box.vs_panel {
@@ -16781,11 +16809,21 @@ a.vs_c:hover {
     transform: none; /* 纵向堆叠不做 PC 的 73px 收拢平移 */
   }
   .vs_pick_empty {
+    height: auto; /* 撤 PC 定高 372：移动端卡片是两列网格布局（高 ≈235），定高会错位 */
     min-height: 280px;
     gap: 16px;
   }
-  /* 移动端纵向堆叠不需要 PC 的居中补偿，去掉 143px 顶距 */
+  /* 移动端全宽盒内：头像与搜索框同宽 200px、居中列（PC 的 width:100% 会让
+     问号头像撑到 560px+ 巨量化） */
+  .vs_pick_q {
+    width: 200px;
+  }
+  .vs_pick_empty .goto_form {
+    width: 200px;
+  }
+  /* 移动端纵向堆叠不需要 PC 的 143px 居中补偿，但气泡悬浮在字标上方需要空间：
+     60px 顶距 = 气泡高 39 + 间距 21，恰好落在卡片与 VS 字标的间隙里不压卡 */
   #vs_pick_hero .vs_scoreline {
-    margin-top: 0;
+    margin-top: 60px;
   }
 }

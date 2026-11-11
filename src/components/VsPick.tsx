@@ -376,10 +376,18 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
         <VsEmptySlot onPick={(u) => void pick("left", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
       {/* 中间列：完全复用 PK 页 .vs_vs 结构——.vs_scoreline（VS 战斗字标，两侧空
-          占位 span 保住三列网格）+ .vs_action（黄色「开始对决」+ 喇叭开关正下方）。
-          双方未就位按钮置灰，就位后进入 /vs/{对手id}。 */}
+          占位 span 保住三列网格）+ .vs_action（黄色「一决胜负」+ 喇叭开关正下方）。
+          双方未就位按钮置灰、上方浮金色「请双方选手就位」气泡（绝对定位不占流内
+          高度），就位后进入 /vs/{对手id}。 */}
       <div className="vs_vs">
         <div className="vs_scoreline">
+          {/* 未就位提示气泡：作为 scoreline 子元素定位（scoreline position:relative
+              才是包含块；放 .vs_vs 直接子级会被整列高度解析到页头暗底上隐形） */}
+          {!both && (
+            <div className="vs_pre vs_pre_even vs_pick_pre" role="status">
+              请双方选手就位
+            </div>
+          )}
           <span aria-hidden="true" />
           {/* eslint-disable-next-line @next/next/no-img-element -- 固定静态资源 */}
           <img src="/icons/clash.png" alt="VS" width={96} height={102} draggable={false} />
@@ -392,7 +400,7 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
             disabled={!both}
             onClick={() => right && router.push(`/vs/${right.id}`)}
           >
-            开始对决
+            一决胜负
           </button>
           <SndSwitch on={sndOn} onToggle={toggleSnd} />
         </div>

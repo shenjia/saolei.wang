@@ -543,7 +543,7 @@ export function VsScoreBoard({
                   onClick={startFight}
                   disabled={phase !== "ready"}
                 >
-                  决出胜负
+                  一决胜负
                 </button>
                 {/* 01:01 张老师：灰色「返回」（原「还是算了」）——点击直接返回对手主页；
                     仅移动端显示（居右），running 后保留透明占位防行高变化，done 随槽卸载 */}
