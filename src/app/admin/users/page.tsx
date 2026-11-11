@@ -101,6 +101,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const [{ rows, total, pageSize }, areas] = await Promise.all([
     getUserList({
       q: sp.q,
+      qtype: sp.qtype,
       status: sp.status,
       role: sp.role,
       sex: sp.sex,
@@ -131,7 +132,15 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <Suspense fallback={<div className="admin_filterbar">筛选项加载中…</div>}>
           <AdminFilters
             fields={[
-              { name: "q", type: "search", placeholder: "姓名 / 账号 / 昵称 / ID / 录像标识" },
+              // 2026-11-11 张老师需求：加长搜索框 + 输入出「姓名/账号/昵称/标识包含」类型推荐，
+              // 按类型筛选走 qtype；昵称/标识不在原表格列中，下方补列展示
+              {
+                name: "q",
+                type: "search",
+                placeholder: "姓名 / 账号 / 昵称 / ID / 录像标识",
+                suggest: true,
+                width: "340px",
+              },
               {
                 name: "status",
                 type: "select",
@@ -196,6 +205,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 <th className="c">ID</th>
                 <th>玩家</th>
                 <th>账号</th>
+                <th>昵称</th>
+                <th title="录像标识（上传录像时注册）">标识</th>
                 <th>地区</th>
                 <th>称号</th>
                 <th className="num">总计时间</th>
@@ -230,6 +241,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                     )}
                   </td>
                   <td className="sub">{u.username || "—"}</td>
+                  <td className="sub">{u.nickname || "—"}</td>
+                  <td className="sub">{u.signature || "—"}</td>
                   <td className="sub">{u.area || "—"}</td>
                   <td>
                     <TitleBadge title={u.title} />
@@ -292,7 +305,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={12}>
+                  <td colSpan={14}>
                     <div className="admin_empty">没有符合条件的玩家</div>
                   </td>
                 </tr>

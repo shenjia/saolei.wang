@@ -635,6 +635,65 @@ table.admin_table .ai_reason {
 .admin_input.search {
   width: 190px;
 }
+/* 搜索推荐下拉（2026-11-11 玩家管理，交互对齐前台搜索） */
+.admin_search_wrap {
+  position: relative;
+  display: inline-flex;
+}
+.admin_suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 360px;
+  max-width: 520px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #1e1f1c;
+  border: 1px solid #49483e;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  max-height: 320px;
+  overflow-y: auto;
+}
+.admin_suggest li button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.admin_suggest li button:hover,
+.admin_suggest li.active button {
+  background: #2e2e26;
+}
+.admin_suggest em {
+  display: block;
+  font-style: normal;
+  color: #d5d5c8;
+  font-size: 13px;
+  line-height: 18px;
+}
+.admin_suggest span {
+  display: block;
+  color: #75715e;
+  font-size: 12px;
+  line-height: 17px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin_suggest .admin_suggest_empty {
+  padding: 10px 12px;
+  color: #75715e;
+  font-size: 12px;
+}
 .admin_input.tiny {
   width: 84px;
 }

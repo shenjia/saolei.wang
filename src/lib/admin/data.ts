@@ -24,6 +24,10 @@ export const ADMIN_PAGESIZE = 25;
 
 export interface AdminUserRow extends UserBrief {
   username: string;
+  /** user_info.nickname（2026-11-11 玩家管理列展示；getLatestUsers 等轻路径不取，缺省 undefined） */
+  nickname?: string;
+  /** user_sig.signature 首条（2026-11-11 玩家管理列展示；一人多标识取最早注册的） */
+  signature?: string;
   area: string;
   status: number;
   role: number;
@@ -52,6 +56,8 @@ const USER_ORDERS: Record<string, string> = {
 
 export interface UserFilter {
   q?: string;
+  /** 搜索类型（2026-11-11 玩家管理推荐下拉）：限定 q 在哪个字段包含；缺省=全字段（纯数字=ID 精确+标识模糊） */
+  qtype?: string;
   status?: string;
   role?: string;
   sex?: string;
@@ -63,6 +69,9 @@ export interface UserFilter {
   page?: number;
 }
 
+/** 搜索类型白名单（与 /api/admin/user-search-suggest 的 key 对应） */
+export const USER_QTYPES = ["name", "username", "nickname", "sig", "id"] as const;
+
 /** 列表筛选条件 → SQL 片段 + 参数（页面与「导出/计数」共用） */
 function userWhere(f: UserFilter): { sql: string; params: unknown[] } {
   const conds: string[] = [];
@@ -72,16 +81,33 @@ function userWhere(f: UserFilter): { sql: string; params: unknown[] } {
     // 录像标识（user_sig.signature，上传录像时注册）检索：EXPLAIN 下 OR+EXISTS 会全表扫
     // user，改用 IN 子查询（user_sig 仅 1.6 万行、signature 有唯一索引，实测 <60ms）
     const sigSub = "(u.id IN (SELECT user FROM user_sig WHERE signature LIKE ?))";
-    if (/^\d+$/.test(q)) {
+    const isInt = /^\d+$/.test(q);
+    // qtype 带白名单；id 类型遇到非数字输入直接忽略（防 BigInt throw）
+    const qtype = f.qtype && (USER_QTYPES as readonly string[]).includes(f.qtype) ? f.qtype : "";
+    const like = likeContains(q);
+    if (qtype === "id" && isInt) {
+      conds.push("u.id = ?");
+      params.push(BigInt(q));
+    } else if (qtype === "name") {
+      conds.push("(u.chinese_name LIKE ? OR u.english_name LIKE ?)");
+      params.push(like, like);
+    } else if (qtype === "username") {
+      conds.push("a.username LIKE ?");
+      params.push(like);
+    } else if (qtype === "nickname") {
+      conds.push("i.nickname LIKE ?");
+      params.push(like);
+    } else if (qtype === "sig") {
+      conds.push(sigSub);
+      params.push(like);
+    } else if (isInt) {
       // 纯数字：ID 精确匹配 + 标识模糊（存在纯数字标识如 "638"，只按 ID 会漏）
       conds.push(`(u.id = ? OR ${sigSub})`);
-      const like = likeContains(q);
       params.push(BigInt(q), like);
     } else {
       conds.push(
         `(u.chinese_name LIKE ? OR u.english_name LIKE ? OR a.username LIKE ? OR i.nickname LIKE ? OR ${sigSub})`
       );
-      const like = likeContains(q);
       params.push(like, like, like, like, like);
     }
   }
@@ -148,7 +174,7 @@ export async function getUserList(
 
   const uidList = ids.map((r) => N(r.id));
   const bigIds = uidList.map(BigInt);
-  const [users, auths, scores, videoCounts] = await Promise.all([
+  const [users, auths, scores, videoCounts, infos, sigs] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: bigIds } } }),
     prisma.userAuth.findMany({ where: { id: { in: bigIds } }, select: { id: true, username: true, role: true } }),
     prisma.userScores.findMany({ where: { id: { in: bigIds } } }),
@@ -158,12 +184,29 @@ export async function getUserList(
           ...bigIds
         )
       : Promise.resolve([] as { user: bigint; c: bigint }[]),
+    // 昵称 / 录像标识列数据（2026-11-11 玩家管理补列）
+    uidList.length
+      ? prisma.userInfo.findMany({ where: { id: { in: bigIds } }, select: { id: true, nickname: true } })
+      : Promise.resolve([] as { id: bigint; nickname: string }[]),
+    uidList.length
+      ? prisma.userSig.findMany({
+          where: { user: { in: bigIds } },
+          select: { user: true, signature: true },
+          orderBy: { id: "asc" },
+        })
+      : Promise.resolve([] as { user: bigint; signature: string }[]),
   ]);
 
   const uMap = new Map(users.map((u) => [N(u.id), u]));
   const authMap = new Map(auths.map((a) => [N(a.id), a]));
   const scoreMap = new Map(scores.map((s) => [N(s.id), s]));
   const vcMap = new Map(videoCounts.map((v) => [N(v.user), N(v.c)]));
+  const nickMap = new Map(infos.map((r) => [N(r.id), r.nickname]));
+  const sigMap = new Map<number, string>(); // 一人多标识只展示最早注册的一条
+  for (const s of sigs) {
+    const uid = N(s.user);
+    if (!sigMap.has(uid)) sigMap.set(uid, s.signature);
+  }
   // 2026-11-06 总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
   const kingTh = await getThunderKingThreshold();
 
@@ -180,6 +223,8 @@ export async function getUserList(
       englishName: u.englishName,
       sex: u.sex,
       username: auth?.username ?? "",
+      nickname: nickMap.get(id) ?? "",
+      signature: sigMap.get(id) ?? "",
       area: u.area,
       status: u.status,
       role: auth?.role ?? 0,
