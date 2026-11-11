@@ -3,9 +3,10 @@
 // 今日有尝试时最右侧胜率（一位小数，如 63.6%）——七轮（2026-10-22 张老师要求）：
 // 标签「胜率」亮灰、数值绿色，与次行胜率「标签暗灰数值亮灰」同构分层。
 // 次行「共xx位雷友完成 aaa / bbb 局」：aaa=全网完成（金 #fdc61a）、bbb=全网尝试（亮灰）。
-// 底部走势图（2026-11-11 张老师要求改版）：只画「我的活跃值」单线（绿，近 30 天，
-// 按自身最大值顶格归一，末点=今日实时活跃值）——原黄/绿双线（全网/我的练习次数）
-// 撤下。未登录不渲染图表（活跃值恒 ≥1 必然登录态才有，游客无「自己」可画）。
+// 底部走势图（2026-11-11 张老师要求改版）：只画「我的活跃值」单线（绿，近 7 天，
+// 按自身最大值顶格归一，末点=今日实时活跃值，单调三次插值平滑）——原黄/绿双线
+// （全网/我的练习次数）撤下。未登录不渲染图表（活跃值恒 ≥1 必然登录态才有，游客无
+// 「自己」可画）。
 // 「我的」今日局数双轨：登录=服务端 practice_log（SSR 直出）；未登录=localStorage
 // 当日记数（practice-local.ts）——SSR 初值 0，水合后 useSyncExternalStore 接管补真值。
 
@@ -17,7 +18,43 @@ import { RankedTodayLine } from "@/components/RankedTodayLine";
 
 const GREEN = "#a6e22e"; // 站内标准绿（.logo a h1 hover / Sparkline 默认色）
 
-/** 我的活跃值单线图（2026-11-11）：按自身最大值顶格归一（0 点贴底、峰值距顶 3 单位）。
+/** 单调三次插值（Fritsch–Carlson）：把稀疏数据点连成平滑贝塞尔曲线，且不过冲——
+ *  不会画出高于峰值/低于 0 的假起伏（Catmull-Rom 类样条会过冲，对数据图是造假形态）。
+ *  坐标系任意仿射变换下单调性保持，直接在 svg 视图坐标上算即可。 */
+function smoothPath(pts: [number, number][]): string {
+  const n = pts.length;
+  if (n < 2) return "";
+  const dx: number[] = [];
+  const s: number[] = []; // 各段割线斜率
+  const m: number[] = new Array(n); // 各点切线斜率
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = pts[i + 1][0] - pts[i][0];
+    s[i] = (pts[i + 1][1] - pts[i][1]) / dx[i];
+  }
+  m[0] = s[0];
+  m[n - 1] = s[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (s[i - 1] * s[i] <= 0) m[i] = 0; // 局部极值点切线取 0，杜绝过冲
+    else {
+      // 加权调和平均（Fritsch–Carlson），保单调保 C1
+      const w1 = 2 * dx[i] + dx[i - 1];
+      const w2 = dx[i] + 2 * dx[i - 1];
+      m[i] = (w1 + w2) / (w1 / s[i - 1] + w2 / s[i]);
+    }
+  }
+  let d = `M${pts[0][0].toFixed(2)},${pts[0][1].toFixed(2)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const c1x = pts[i][0] + dx[i] / 3;
+    const c1y = pts[i][1] + (m[i] * dx[i]) / 3;
+    const c2x = pts[i + 1][0] - dx[i] / 3;
+    const c2y = pts[i + 1][1] - (m[i + 1] * dx[i]) / 3;
+    d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${pts[i + 1][0].toFixed(2)},${pts[i + 1][1].toFixed(2)}`;
+  }
+  return d;
+}
+
+/** 我的活跃值单线图（2026-11-11）：按自身最大值顶格归一（0 点贴底、峰值距顶 3 单位），
+ *  7 天窗口 + 单调三次插值平滑（点少也平滑且不过冲）。
  *  hover/触点出气泡（2026-11-11 张老师要求）：第一行日期、第二行「活跃值+xx」xx 绿色。
  *  命中用 pointer 比例法（clientX−rect.left)/rect.width——clientX 与 gBCR 同属视觉坐标，
  *  CSS zoom 缩放下比例恒定，全站 #page zoom 体系安全；气泡固定朝上方弹出（工程约定）。
@@ -32,7 +69,8 @@ function ActLine({ values, height }: { values: number[]; height: number }) {
   const step = 100 / (n - 1);
   const px = (i: number) => i * step;
   const py = (v: number) => height - (v / max) * (height - 3) - 1.5;
-  const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join(" ");
+  const pts = values.map((v, i) => [px(i), py(v)] as [number, number]);
+  const d = smoothPath(pts);
   const pick = (clientX: number, el: HTMLElement) => {
     const r = el.getBoundingClientRect();
     if (!r.width) return;
@@ -131,7 +169,7 @@ export function PracticeToday({
   /** 全网尝试盘数 */
   net: number;
   users: number;
-  /** 近 30 天我的活跃值走势（2026-11-11 改版：不含今日的 29 天分日聚合，五源口径
+  /** 近 7 天我的活跃值走势（2026-11-11 改版：不含今日的 6 天分日聚合，五源口径
    *  与活跃榜 active_points 一致；登录才有、未登录恒 []）。末点由本组件拼今日实时值 */
   actTrend: number[];
   /** 登录态：true=信任服务端；false=读 localStorage（今日局数） */
@@ -154,7 +192,7 @@ export function PracticeToday({
   );
   const myWon = local?.w ?? mineWon;
   const myPlayed = local?.p ?? mine;
-  // 活跃值曲线（2026-11-11）：登录态=29 天历史 + 今日实时活跃值（getRankedToday 口径）
+  // 活跃值曲线（2026-11-11）：登录态=6 天历史 + 今日实时活跃值（getRankedToday 口径），共 7 点
   const trend = logged && rankedToday && actTrend.length > 0 ? [...actTrend, rankedToday.act] : null;
   const r = rate(myWon, myPlayed);
   const rNet = rate(netWon, net);

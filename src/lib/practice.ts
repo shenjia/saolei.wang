@@ -30,18 +30,19 @@ export interface PracticeToday {
   mineWon: number;
   /** 我今日尝试盘数（未登录 0） */
   mine: number;
-  /** 近 30 天我的活跃值走势（2026-11-11 张老师要求：首页趋势曲线改为只画自己活跃值，
-   *  原全网/我的练习次数双线撤下）。不含今日——今日实时活跃值由 getRankedToday 口径
-   *  （登录点无条件 +1，查表有竞态）单独计算，渲染端拼在末位；未登录恒 []（活跃值
-   *  恒 ≥1 必然登录态才有，游客无「自己」可画）。act_points 起记日 2026-11-08，
-   *  更早历史恒 0（既往不咎，窗口滚动自然补齐） */
+  /** 近 7 天我的活跃值走势（2026-11-11 张老师要求：首页趋势曲线改为只画自己活跃值，
+   *  原全网/我的练习次数双线撤下；二轮改 30→7 天——act_points 11-08 才起记，30 天
+   *  窗口前段全是贴底 0 无信息量，7 天每点都有意义）。不含今日——今日实时活跃值由
+   *  getRankedToday 口径（登录点无条件 +1，查表有竞态）单独计算，渲染端拼在末位；
+   *  未登录恒 []（活跃值恒 ≥1 必然登录态才有，游客无「自己」可画） */
   mineActTrend: number[];
 }
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 
 /**
- * 近 30 天我的分日活跃值（不含今天；2026-11-11 张老师要求首页趋势曲线改画自己活跃值）。
+ * 近 7 天我的分日活跃值（不含今天；2026-11-11 张老师要求首页趋势曲线改画自己活跃值，
+ * 同日二轮定 7 天窗口——act_points 11-08 起记，30 天窗口前段全是 0）。
  * 口径与 getRankedToday 的今日活跃值（活跃榜 active_points 单日口径）严格一致，五源分日聚合：
  *   练习点（practice_daily.act_points，逐盘落库累计）+ 登录 1 点（user_daily_visit 打卡行）
  *   + 观看点（user_watch_daily 每 60000ms 记 1，按日 ROUND）+ 录像加权点（初×1 中×2 高×10，
@@ -52,9 +53,9 @@ const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const getMineActTrendCached = (uid: number) =>
   unstable_cache(
     async (): Promise<number[]> => {
-      const fromIdx = Math.floor((dayStart(29) + 28800) / 86400);
+      const fromIdx = Math.floor((dayStart(6) + 28800) / 86400);
       const todayIdx = Math.floor((dayStart(0) + 28800) / 86400);
-      const fromTs = dayStart(29);
+      const fromTs = dayStart(6);
       const today0 = dayStart(0);
       const uidBig = BigInt(uid);
       const rows = await prisma.$queryRaw<Array<{ d: bigint; p: bigint }>>`
@@ -96,14 +97,14 @@ const getMineActTrendCached = (uid: number) =>
       `;
       const map = new Map<number, number>(rows.map((r) => [N(r.d), N(r.p)]));
       const out: number[] = [];
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 7; i++) {
         const idx = fromIdx + i;
         if (idx >= todayIdx) break; // 今天及以后的桶由 getRankedToday 实时口径覆盖
         out.push(map.get(idx) ?? 0);
       }
       return out;
     },
-    ["home-practice-mine-act-trend", `u${uid}`, "v1"],
+    ["home-practice-mine-act-trend", `u${uid}`, "v2"],
     { revalidate: 300 }
   )();
 
