@@ -85,6 +85,9 @@ export interface TrafficOverview {
   referrers: { source: string; visits: number }[];
   /** 落地页 Top（会话首条 PV 且来源非站内；/video/:id 归类过滤 ID；三档） */
   entryPages: { today: { path: string; entries: number }[]; d7: { path: string; entries: number }[]; d30: { path: string; entries: number }[] };
+  /** 访问页 Top（2026-11-11 张老师定：近 7 天全站页面 PV，按去参数裸 URI 聚合，
+   *  /video/:id 归类过滤 ID；uv 为该页去重访客数） */
+  topPages: { path: string; pv: number; uv: number }[];
   /** 近 30 天设备分布 */
   devices: { uaClass: string; pv: number }[];
   /** 活跃玩家：登录态访问去重用户（trend 为分日去重数，与 trend.dates 对齐） */
@@ -202,6 +205,8 @@ async function aggregate(): Promise<TrafficOverview> {
   const videoPvToday = new Map<string, { pv: number; uv: Set<string> }>();
   const videoPvD7 = new Map<string, { pv: number; uv: Set<string> }>();
   const videoPvD30 = new Map<string, { pv: number; uv: Set<string> }>();
+  // 访问页 Top（近 7 天，按去参数裸 URI + /video/:id 归类聚合）
+  const pageTopD7 = new Map<string, { pv: number; uv: Set<string> }>();
   // 活跃玩家（登录态访问用户）：分日去重 + 各档期去重
   const activeMap = new Map<number, Set<string>>();
   const todayActive = new Set<string>();
@@ -342,6 +347,18 @@ async function aggregate(): Promise<TrafficOverview> {
     }
     if (r.uaClass) {
       deviceMap.set(r.uaClass, (deviceMap.get(r.uaClass) ?? 0) + 1);
+    }
+
+    // 访问页 Top（近 7 天）：path 落库时已剥查询串，此处再 /video/:id 归类
+    if (t >= d7) {
+      const np = normalizePath(r.path);
+      let pg = pageTopD7.get(np);
+      if (!pg) {
+        pg = { pv: 0, uv: new Set() };
+        pageTopD7.set(np, pg);
+      }
+      pg.pv += 1;
+      pg.uv.add(r.visitorId);
     }
 
     const m = r.path.match(VIDEO_RE);
@@ -549,6 +566,10 @@ async function aggregate(): Promise<TrafficOverview> {
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 10),
     entryPages: { today: entryTop(entryToday), d7: entryTop(entryD7), d30: entryTop(entryD30) },
+    topPages: [...pageTopD7.entries()]
+      .map(([path, agg]) => ({ path, pv: agg.pv, uv: agg.uv.size }))
+      .sort((a, b) => b.pv - a.pv)
+      .slice(0, 10),
     devices: [...deviceMap.entries()]
       .map(([uaClass, pv]) => ({ uaClass, pv }))
       .sort((a, b) => b.pv - a.pv),
@@ -580,7 +601,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v15"],
+  ["admin-traffic", "v16"],
   { revalidate: 300 }
 );
 

@@ -349,6 +349,17 @@ export default async function AdminDashboard() {
             color="linear-gradient(90deg,#6b4f8b,#ae81ff)"
           />
         </AdminCard>
+
+        {/* 访问页 Top（2026-11-11 张老师定）：近 7 天全站页面 PV，去参数裸 URI 聚合 */}
+        <AdminCard title="访问页 Top" more="近 7 天 · 全站页面 PV（去参数裸 URI，录像 ID 已归类）">
+          <BarList
+            items={traffic.topPages.map((p) => ({
+              label: p.path,
+              value: p.pv,
+            }))}
+            color="linear-gradient(90deg,#8b6b3d,#f0c040)"
+          />
+        </AdminCard>
       </div>
 
       {/* ---------- 三个分布环形图并一行（2026-10-21 张老师定：设备/称号/软件；热门录像页板块下线） ---------- */}
