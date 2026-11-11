@@ -6776,6 +6776,85 @@ body #page.two_columns li.main {
   body #page .box:has(.user_card) {
     overflow-x: visible;
   }
+
+  /* ⑤ 滚动容器隐藏态气泡不占 scrollable overflow（2026-11-11 张老师反馈 1188px 视口
+     首页「录像列表 / 入伍新兵 / 热门录像」板块底部出水平滚动条）：
+     盒变横滑容器后，盒内 opacity:0 常驻占位的 hover 气泡（军衔徽章 / record /
+     相对时间的 data-tip ::after、玩家名 .pt_bubble 实元素、BBS 星/帖 ::after）
+     的 scrollable overflow 被计入——absolute 盒隐藏态照样占位（同机理 visibility
+     判例见 8771 tip_bubble 注），右列气泡右缘外挂把 scrollWidth 凭空撑爆
+     （1188 实测：newbie 270→293、video 652→660，无任何真实元素超缘）。
+     隐藏态 display:none 彻底退出布局；hover 时 display:block 原位弹出
+     （display 切换无 0.08s 淡入，肉眼无感；触屏端 tip_bubble 已有同款先例）。
+     范围与上方横滑容器同口径（.box:has 三类），含排名表变体 .ranking_name a；
+     .user_card 盒已在上条豁免为 overflow-x:visible，气泡本就出盒显示、不必收录。
+     真实表格溢出（如 881~960 视口主栏录像表自然宽超盒）仍走横滑兜底，不受影响。 */
+  body #page .box:has(.table) :is(a.title, span.title, span.record, span.reltime)[data-tip]::after,
+  body #page .box:has(.table) del[data-tip]::after,
+  body #page .box:has(.table) .bbs_star::after,
+  body #page .box:has(.table) .bbs_top::after,
+  body #page .box:has(.table) :is(a.avatar_link, .ranking_name a) .pt_bubble,
+  body #page .box:has(.ranking_table) :is(a.title, span.title, span.record, span.reltime)[data-tip]::after,
+  body #page .box:has(.ranking_table) del[data-tip]::after,
+  body #page .box:has(.ranking_table) .bbs_star::after,
+  body #page .box:has(.ranking_table) .bbs_top::after,
+  body #page .box:has(.ranking_table) :is(a.avatar_link, .ranking_name a) .pt_bubble,
+  body #page .box:has(.scores) :is(a.title, span.title, span.record, span.reltime)[data-tip]::after,
+  body #page .box:has(.scores) del[data-tip]::after,
+  body #page .box:has(.scores) .bbs_star::after,
+  body #page .box:has(.scores) .bbs_top::after,
+  body #page .box:has(.scores) :is(a.avatar_link, .ranking_name a) .pt_bubble {
+    display: none;
+  }
+  body #page .box:has(.table) :is(a.title, span.title, span.record, span.reltime)[data-tip]:hover::after,
+  body #page .box:has(.table) del[data-tip]:hover::after,
+  body #page .box:has(.table) .bbs_star:hover::after,
+  body #page .box:has(.table) .bbs_top:hover::after,
+  body #page .box:has(.table) :is(a.avatar_link, .ranking_name a):hover .pt_bubble,
+  body #page .box:has(.ranking_table) :is(a.title, span.title, span.record, span.reltime)[data-tip]:hover::after,
+  body #page .box:has(.ranking_table) del[data-tip]:hover::after,
+  body #page .box:has(.ranking_table) .bbs_star:hover::after,
+  body #page .box:has(.ranking_table) .bbs_top:hover::after,
+  body #page .box:has(.ranking_table) :is(a.avatar_link, .ranking_name a):hover .pt_bubble,
+  body #page .box:has(.scores) :is(a.title, span.title, span.record, span.reltime)[data-tip]:hover::after,
+  body #page .box:has(.scores) del[data-tip]:hover::after,
+  body #page .box:has(.scores) .bbs_star:hover::after,
+  body #page .box:has(.scores) .bbs_top:hover::after,
+  body #page .box:has(.scores) :is(a.avatar_link, .ranking_name a):hover .pt_bubble {
+    display: block;
+  }
+  /* 右列相对时间/无效成绩气泡右对齐防 hover 闪条：居中弹（left:50%
+     translateX(-50%)）在贴容器右缘的格子上有半截探出盒外，hover 一瞬就把
+     水平滚动条顶出来。改右对齐弹出（气泡右缘对齐锚点文本右缘、向左上方
+     弹出）全程不出盒；实测 newbie 气泡左缘 ~83px、video 主栏 ~440px，
+     均 >0 不裁左缘（时间/成绩列在本站表格里恒贴右，左缘风险可控）。 */
+  body #page .box:has(.table) span.reltime[data-tip]::after,
+  body #page .box:has(.table) del[data-tip]::after,
+  body #page .box:has(.ranking_table) span.reltime[data-tip]::after,
+  body #page .box:has(.ranking_table) del[data-tip]::after,
+  body #page .box:has(.scores) span.reltime[data-tip]::after,
+  body #page .box:has(.scores) del[data-tip]::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  /* 玩家名气泡左对齐防左缘裁切：名字在表格最左（上传者列），居中弹的左半
+     出盒即被滚动容器裁掉（实测 1188 首页录像列表「#10000 张三」气泡 "#1"
+     被裁）。改左对齐弹出（气泡左缘对齐名字左缘、向右上方展开）——名字列
+     恒在容器左侧、右侧是空旷表格区，气泡全程不出盒。同款先例：
+     #video_view .meta_area .pt_bubble（1859 起，滚动容器无法外扩维持左对齐）。 */
+  body #page .box:has(.table) :is(a.avatar_link, .ranking_name a) .pt_bubble,
+  body #page .box:has(.ranking_table) :is(a.avatar_link, .ranking_name a) .pt_bubble,
+  body #page .box:has(.scores) :is(a.avatar_link, .ranking_name a) .pt_bubble {
+    left: 0;
+    transform: none;
+    transition: opacity 0.08s;
+  }
+  body #page .box:has(.table) :is(a.avatar_link, .ranking_name a):hover .pt_bubble,
+  body #page .box:has(.ranking_table) :is(a.avatar_link, .ranking_name a):hover .pt_bubble,
+  body #page .box:has(.scores) :is(a.avatar_link, .ranking_name a):hover .pt_bubble {
+    transform: none;
+  }
 }
 
 /* ---------- iOS Safari 文本自动放大（text autosizing）禁用（2026-10-28 玩家反馈） ----------
