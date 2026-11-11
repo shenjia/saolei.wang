@@ -417,28 +417,21 @@ export async function getBoardCounts(): Promise<{ label: string; value: number }
 export interface Anomalies {
   /** video 有主记录但缺 video_info（上传中断/解析失败） */
   orphanVideos: number;
-  /** 同一 hash 出现多次（重复上传） */
+  /** 同一 hash 出现多次（重复上传，已排除空 hash 组） */
   duplicateHashGroups: number;
-  /** 已通过但 3BV 低于级别下限（疑似改包） */
-  lowBoardVideos: number;
   /** 有录像却无任何成绩的玩家 */
   scoreMissingUsers: number;
 }
 
 export async function getAnomalies(): Promise<Anomalies> {
-  const [orphan, dup, low, missing] = await Promise.all([
+  const [orphan, dup, missing] = await Promise.all([
     prisma.$queryRawUnsafe<{ c: bigint }[]>(
       `SELECT COUNT(*) c FROM video v LEFT JOIN video_info vi ON vi.id = v.id WHERE vi.id IS NULL`
     ),
+    // 2026-11-11：加 hash <> '' —— 缺失解析的录像 hash 为空，GROUP BY 会聚成一个
+    // 无意义的巨型「组」，必须排除；录像管理重复视图（/admin/videos?dup=1）同口径。
     prisma.$queryRawUnsafe<{ c: bigint }[]>(
-      `SELECT COUNT(*) c FROM (SELECT hash FROM video GROUP BY hash HAVING COUNT(*) > 1) t`
-    ),
-    prisma.$queryRawUnsafe<{ c: bigint }[]>(
-      `SELECT COUNT(*) c FROM video v JOIN video_info vi ON vi.id = v.id
-       WHERE v.status = ${VIDEO_STATUS.REVIEWED} AND vi.no_record = 0 AND (
-         (v.level = 'beg' AND vi.board_3bv < 2) OR
-         (v.level = 'int' AND vi.board_3bv < 30) OR
-         (v.level = 'exp' AND vi.board_3bv < 100))`
+      `SELECT COUNT(*) c FROM (SELECT hash FROM video WHERE hash <> '' GROUP BY hash HAVING COUNT(*) > 1) t`
     ),
     prisma.$queryRawUnsafe<{ c: bigint }[]>(
       `SELECT COUNT(*) c FROM video v LEFT JOIN user_scores s ON s.id = v.user WHERE s.id IS NULL AND v.status = ${VIDEO_STATUS.REVIEWED}`
@@ -447,7 +440,6 @@ export async function getAnomalies(): Promise<Anomalies> {
   return {
     orphanVideos: N(orphan[0]?.c),
     duplicateHashGroups: N(dup[0]?.c),
-    lowBoardVideos: N(low[0]?.c),
     scoreMissingUsers: N(missing[0]?.c),
   };
 }

@@ -27,6 +27,7 @@ import {
   getTrend,
   getWeekdayCounts,
 } from "./stats";
+import { getIpGroupSummary } from "./data";
 
 export const ADMIN_CACHE_TTL = 600; // 10 分钟
 
@@ -44,6 +45,9 @@ export const getDashboardDistributionsSoftwares = cache(async () => {
 
 /** 仪表盘异常检测（4 条全表聚合 ~2.5s，2026-10-21 挂缓存；数据变化频率低，10 分钟足够） */
 export const getCachedAnomalies = cache(() => getAnomalies(), "anomalies");
+
+/** 同 IP 账号组汇总（仪表盘「同 IP 账号组」待办计数用；维度无关聚合，10 分钟足够） */
+export const getCachedIpGroupSummary = cache(() => getIpGroupSummary(), "ipgroup-summary");
 
 /** 仪表盘两个大缓存统一 TTL（preheat 注册必须与底层 unstable_cache revalidate 同源，禁写字面量分叉） */
 const DASHBOARD_TTL = 300;

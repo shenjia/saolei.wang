@@ -11,7 +11,7 @@ import { PlayerTip } from "@/components/Cells";
 import { TREND_METRICS } from "@/lib/admin/stats";
 import { getTrafficOverview, getApiUsage, DEVICE_NAMES, REFERRER_NAMES, type ExitPage } from "@/lib/admin/traffic";
 import { practiceCusClean } from "@/lib/admin/practice";
-import { getDashboardDistributionsSoftwares, getCachedAnomalies, getCachedOverview, getCachedTrend30 } from "@/lib/admin/cache";
+import { getDashboardDistributionsSoftwares, getCachedAnomalies, getCachedOverview, getCachedTrend30, getCachedIpGroupSummary } from "@/lib/admin/cache";
 import { getPendingOverview } from "@/lib/admin/stats";
 import { getVsDuelsOverview } from "@/lib/admin/vsstats";
 import { getOpenmsSyncStatus } from "@/lib/admin/openms-sync";
@@ -46,10 +46,11 @@ export default async function AdminDashboard() {
     getOpenmsSyncStatus(),
   ]);
   const ov = { ...core, ...pending };
-  const [anomalies, latestUsers, latestVideos] = await Promise.all([
+  const [anomalies, latestUsers, latestVideos, ipSummary] = await Promise.all([
     getCachedAnomalies(),
     getLatestUsers(8),
     getLatestVideosBrief(8),
+    getCachedIpGroupSummary(),
   ]);
   const { softwares, titlePrefs } = dist;
 
@@ -123,9 +124,10 @@ export default async function AdminDashboard() {
   const todos: { label: string; value: number; href: string; hint?: string }[] = [
     { label: "待审核录像", value: ov.videoPending, href: "/admin/review", hint: pendingDays > 0 ? `最老 ${pendingDays} 天` : undefined },
     { label: "录像缺解析信息", value: anomalies.orphanVideos, href: "/admin/videos?q=", hint: "上传中断" },
-    { label: "重复 hash 录像组", value: anomalies.duplicateHashGroups, href: "/admin/videos", hint: "疑似重复上传" },
-    { label: "3BV 低于级别下限", value: anomalies.lowBoardVideos, href: "/admin/videos", hint: "历史数据可能误报" },
+    { label: "重复 hash 录像组", value: anomalies.duplicateHashGroups, href: "/admin/videos?dup=1", hint: "疑似重复上传" },
     { label: "有录像无成绩玩家", value: anomalies.scoreMissingUsers, href: "/admin/users", hint: "成绩异常" },
+    // 2026-11-11 张老师定：同 IP 账号组列入待办（人工参考，不自动处置）；计数取最近登录 IP 维度 ≥2 组
+    { label: "同 IP 账号组", value: ipSummary.groups2, href: "/admin/ipgroups", hint: "疑似小号·人工参考" },
   ];
 
   return (

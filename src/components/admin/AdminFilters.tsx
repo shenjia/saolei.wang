@@ -33,10 +33,13 @@ interface SuggestItem {
 export function AdminFilters({
   fields,
   right,
+  keepParams,
 }: {
   fields: FilterField[];
   /** 右侧附加内容（如导出/批量按钮，服务端渲染的节点也可传） */
   right?: React.ReactNode;
+  /** 清空时需要保留的 URL 参数名（2026-11-11）：如录像管理重复视图的 dup=1，否则清空会退回列表视图 */
+  keepParams?: string[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -211,7 +214,13 @@ export function AdminFilters({
           onClick={() => {
             setQ("");
             setItems(null);
-            startTransition(() => router.push(pathname));
+            const next = new URLSearchParams();
+            for (const k of keepParams ?? []) {
+              const v = params.get(k);
+              if (v) next.set(k, v);
+            }
+            const qs = next.toString();
+            startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname));
           }}
         >
           清空

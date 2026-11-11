@@ -202,10 +202,18 @@ export async function getUserList(
   const scoreMap = new Map(scores.map((s) => [N(s.id), s]));
   const vcMap = new Map(videoCounts.map((v) => [N(v.user), N(v.c)]));
   const nickMap = new Map(infos.map((r) => [N(r.id), r.nickname]));
-  const sigMap = new Map<number, string>(); // 一人多标识只展示最早注册的一条
+  const sigMap = new Map<number, string>(); // 缺省展示最早注册的一条
+  // 搜索时优先展示命中关键字的标识（2026-11-11 张老师：一人多标识，
+  // 搜 F5 命中的可能是后注册的，不能只显示最早那条）
+  const lq = q.toLowerCase();
   for (const s of sigs) {
     const uid = N(s.user);
-    if (!sigMap.has(uid)) sigMap.set(uid, s.signature);
+    const cur = sigMap.get(uid);
+    if (cur === undefined) {
+      sigMap.set(uid, s.signature);
+    } else if (lq && s.signature.toLowerCase().includes(lq) && !cur.toLowerCase().includes(lq)) {
+      sigMap.set(uid, s.signature);
+    }
   }
   // 2026-11-06 总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
   const kingTh = await getThunderKingThreshold();
@@ -474,6 +482,42 @@ export interface IpGroupsResult {
   expanded: boolean;
 }
 
+/**
+ * 同 IP 组汇总指标（维度无关，恒按「最近登录 IP」统计组数 / 最大组）。
+ * 供 /admin/ipgroups 页 KPI 与仪表盘「同 IP 账号组」待办计数共用，避免重复查询。
+ */
+export async function getIpGroupSummary(): Promise<IpGroupStats> {
+  const todayStart = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return Math.floor(d.getTime() / 1000);
+  })();
+  const rows = await prisma.$queryRawUnsafe<{
+    today_new: bigint;
+    today_ips: bigint;
+    groups2: bigint;
+    groups5: bigint;
+    max_group: bigint;
+  }[]>(
+    `SELECT
+        (SELECT COUNT(*) FROM \`user\` WHERE create_time >= ?) today_new,
+        (SELECT COUNT(DISTINCT register_ip) FROM \`user\` WHERE register_ip <> '' AND create_time >= ?) today_ips,
+        (SELECT COALESCE(COUNT(*), 0) FROM (SELECT last_login_ip FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip HAVING COUNT(*) >= 2) t) groups2,
+        (SELECT COALESCE(COUNT(*), 0) FROM (SELECT last_login_ip FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip HAVING COUNT(*) >= 5) t) groups5,
+        (SELECT COALESCE(MAX(c), 0) FROM (SELECT last_login_ip, COUNT(*) c FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip) t) max_group`,
+    todayStart,
+    todayStart
+  );
+  const s = rows[0] ?? {};
+  return {
+    todayNew: N(s.today_new),
+    todayIps: N(s.today_ips),
+    groups2: N(s.groups2),
+    groups5: N(s.groups5),
+    maxGroup: N(s.max_group),
+  };
+}
+
 export async function getIpGroups(opts: {
   dim?: string;
   min?: string;
@@ -516,7 +560,7 @@ export async function getIpGroups(opts: {
     ${where}
     GROUP BY ${col} HAVING ${having.join(" AND ")}`;
 
-  const [groupRows, countRows, statsRows] = await Promise.all([
+  const [groupRows, countRows] = await Promise.all([
     prisma.$queryRawUnsafe<{
       ip: string;
       c: bigint;
@@ -538,32 +582,10 @@ export async function getIpGroups(opts: {
       ...params,
       ...havingParams
     ),
-    prisma.$queryRawUnsafe<{
-      today_new: bigint;
-      today_ips: bigint;
-      groups2: bigint;
-      groups5: bigint;
-      max_group: bigint;
-    }[]>(
-      `SELECT
-        (SELECT COUNT(*) FROM \`user\` WHERE create_time >= ?) today_new,
-        (SELECT COUNT(DISTINCT register_ip) FROM \`user\` WHERE register_ip <> '' AND create_time >= ?) today_ips,
-        (SELECT COALESCE(COUNT(*), 0) FROM (SELECT last_login_ip FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip HAVING COUNT(*) >= 2) t) groups2,
-        (SELECT COALESCE(COUNT(*), 0) FROM (SELECT last_login_ip FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip HAVING COUNT(*) >= 5) t) groups5,
-        (SELECT COALESCE(MAX(c), 0) FROM (SELECT last_login_ip, COUNT(*) c FROM \`user\` WHERE last_login_ip <> '' GROUP BY last_login_ip) t) max_group`,
-      todayStart,
-      todayStart
-    ),
   ]);
 
-  const s = statsRows[0] ?? {};
-  const stats: IpGroupStats = {
-    todayNew: N(s.today_new),
-    todayIps: N(s.today_ips),
-    groups2: N(s.groups2),
-    groups5: N(s.groups5),
-    maxGroup: N(s.max_group),
-  };
+  // stats（今日新注册 / 同 IP 组计数 / 最大组）维度无关，复用汇总函数避免重复查询
+  const stats = await getIpGroupSummary();
 
   const groups: IpGroupRow[] = groupRows.map((r) => ({
     ip: String(r.ip),
@@ -623,6 +645,156 @@ export async function getIpGroups(opts: {
     page,
     stats,
     expanded: Boolean(exact),
+  };
+}
+
+// ---------- 重复 hash 录像组（2026-11-11 防重复上传核查） ----------
+//
+// 口径与仪表盘 getAnomalies.duplicateHashGroups 完全一致：GROUP BY hash HAVING COUNT(*) > 1，
+// 且排除空 hash（缺失解析的录像不计入重复判定）。同一 hash 出现多次＝字节级重复上传，
+// 理论上只可能来自同一文件；仅人工参考，处置永远人工决定。
+// 支持：?hash=<32位> 精确展开该组全量成员；?hash=<前缀> 按前缀过滤组列表；?page= 分页。
+
+export interface DupHashGroup {
+  hash: string;
+  count: number;
+}
+
+export interface DupHashMember {
+  id: number;
+  user: number;
+  authorName: string;
+  authorTitle: string;
+  level: string;
+  status: number;
+  realTime: number;
+  noRecord: number;
+  createTime: number;
+}
+
+export interface DupHashStats {
+  /** 重复组数（当前筛选下） */
+  totalGroups: number;
+  /** 重复录像总数（Σ 各组 COUNT） */
+  totalDupVideos: number;
+  /** 最大组录像数 */
+  maxGroup: number;
+}
+
+export interface DupHashResult {
+  rows: { group: DupHashGroup; members: DupHashMember[] }[];
+  total: number;
+  pageSize: number;
+  page: number;
+  stats: DupHashStats;
+  /** 精确命中某 hash 时为该 hash，触发全量展开 */
+  expandedHash: string | null;
+}
+
+export async function getDuplicateHashGroups(opts: {
+  hash?: string;
+  page?: number;
+}): Promise<DupHashResult> {
+  const page = Math.max(1, opts.page ?? 1);
+  const q = (opts.hash ?? "").trim();
+  // 32 位十六进制＝精确展开；否则作为前缀做 LIKE 过滤组列表
+  const exact = /^[0-9a-fA-F]{32}$/.test(q) ? q.toLowerCase() : "";
+  const like = exact ? "" : q.toLowerCase().replace(/[^0-9a-f]/g, "");
+
+  // 依据 hash 条件拼装分组子查询（所有派生查询共用同一 where 条件）
+  const whereParams: unknown[] = [];
+  let groupSelect: string;
+  if (exact) {
+    groupSelect = `SELECT hash, COUNT(*) c FROM video WHERE hash = ? GROUP BY hash HAVING COUNT(*) > 1`;
+    whereParams.push(exact);
+  } else if (like) {
+    groupSelect = `SELECT hash, COUNT(*) c FROM video WHERE hash <> '' AND hash LIKE ? GROUP BY hash HAVING COUNT(*) > 1`;
+    whereParams.push(`%${like}%`);
+  } else {
+    groupSelect = `SELECT hash, COUNT(*) c FROM video WHERE hash <> '' GROUP BY hash HAVING COUNT(*) > 1`;
+  }
+
+  const statRows = await prisma.$queryRawUnsafe<{ total_dup: bigint; max_c: bigint }[]>(
+    `SELECT COALESCE(SUM(c), 0) total_dup, COALESCE(MAX(c), 0) max_c FROM (${groupSelect}) t`,
+    ...whereParams
+  );
+  const stats: DupHashStats = {
+    totalGroups: 0, // 下方按是否精确/分页填充
+    totalDupVideos: N(statRows[0]?.total_dup),
+    maxGroup: N(statRows[0]?.max_c),
+  };
+
+  let groupRows: { hash: string; c: bigint }[];
+  let countRows: { c: bigint }[];
+  if (exact) {
+    groupRows = await prisma.$queryRawUnsafe<{ hash: string; c: bigint }[]>(groupSelect, ...whereParams);
+    countRows = [{ c: BigInt(groupRows.length) }];
+  } else {
+    [groupRows, countRows] = await Promise.all([
+      prisma.$queryRawUnsafe<{ hash: string; c: bigint }[]>(
+        `${groupSelect} ORDER BY c DESC, hash ASC LIMIT ? OFFSET ?`,
+        ...whereParams,
+        ADMIN_PAGESIZE,
+        (page - 1) * ADMIN_PAGESIZE
+      ),
+      prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c FROM (${groupSelect}) t`, ...whereParams),
+    ]);
+  }
+  stats.totalGroups = N(countRows[0]?.c);
+
+  const groups: DupHashGroup[] = groupRows.map((r) => ({ hash: String(r.hash), count: N(r.c) }));
+  const hashes = exact ? [exact] : groups.map((g) => g.hash);
+
+  const membersByHash = new Map<string, DupHashMember[]>();
+  if (hashes.length) {
+    const memberRows = await prisma.$queryRawUnsafe<{
+      hash: string;
+      id: bigint;
+      user: bigint;
+      chinese_name: string | null;
+      level: string;
+      status: number;
+      real_time: bigint | null;
+      no_record: number | null;
+      create_time: bigint;
+    }[]>(
+      `SELECT v.hash, v.id, v.user, u.chinese_name, v.level, v.status,
+              vi.real_time, vi.no_record, v.create_time
+         FROM video v
+         LEFT JOIN video_info vi ON vi.id = v.id
+         LEFT JOIN \`user\` u ON u.id = v.user
+        WHERE v.hash IN (${hashes.map(() => "?").join(",")})
+        ORDER BY v.hash ASC, v.create_time ASC, v.id ASC`,
+      ...hashes
+    );
+    // 军衔不在任何表列上（称号体系实时计算），批量走 usersWithTitles 同口径
+    const authorIds = [...new Set(memberRows.map((r) => N(r.user)))];
+    const authors = await usersWithTitles(authorIds);
+    for (const r of memberRows) {
+      const h = String(r.hash);
+      const list = membersByHash.get(h) ?? [];
+      list.push({
+        id: N(r.id),
+        user: N(r.user),
+        authorName: String(r.chinese_name ?? ""),
+        authorTitle: authors.get(N(r.user))?.title ?? "",
+        level: String(r.level),
+        status: N(r.status),
+        realTime: N(r.real_time),
+        noRecord: N(r.no_record),
+        createTime: N(r.create_time),
+      });
+      membersByHash.set(h, list);
+    }
+  }
+
+  return {
+    rows: groups.map((g) => ({ group: g, members: membersByHash.get(g.hash) ?? [] })),
+    total: stats.totalGroups,
+    pageSize: ADMIN_PAGESIZE,
+    page,
+    stats,
+    expandedHash: exact || null,
   };
 }
 

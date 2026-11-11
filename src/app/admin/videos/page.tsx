@@ -11,6 +11,7 @@ import { getVideoListAdmin, type VideoFilter } from "@/lib/admin/data";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager } from "@/components/admin/Widgets";
 import { AdminVideoTable } from "@/components/admin/AdminVideoTable";
+import DuplicateHashView from "@/components/admin/DuplicateHashView";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "录像管理 | 管理后台" };
@@ -19,8 +20,26 @@ type SP = Record<string, string | undefined>;
 
 export default async function AdminVideosPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
+  // 视图切换（2026-11-11 张老师定：重复 hash 组并入本页，不占导航）：
+  // ?dup=1 为重复组视图，其余为录像列表视图
+  const dupView = sp.dup === "1";
   const session = await getSession();
   const isSuper = session?.role === USER_ROLE.ADMINISTRATOR;
+
+  if (dupView) {
+    return (
+      <>
+        <div className="admin_page_head">
+          <h1>录像管理</h1>
+          <span className="sub">
+            视图：<Link className="link" href="/admin/videos">录像列表</Link> · <b>重复 hash 组</b>
+            {" · "}字节级重复上传核查 · 仅人工参考，处置永远人工决定
+          </span>
+        </div>
+        <DuplicateHashView sp={sp} />
+      </>
+    );
+  }
 
   const filter: VideoFilter = {
     q: sp.q,
@@ -39,7 +58,10 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
     <>
       <div className="admin_page_head">
         <h1>录像管理</h1>
-        <span className="sub">共 {total.toLocaleString("zh-CN")} 条命中当前条件</span>
+        <span className="sub">
+          视图：<b>录像列表</b> · <Link className="link" href="/admin/videos?dup=1">重复 hash 组</Link>
+          {" · "}共 {total.toLocaleString("zh-CN")} 条命中当前条件
+        </span>
       </div>
 
       <AdminCard tight>
