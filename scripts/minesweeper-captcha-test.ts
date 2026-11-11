@@ -60,26 +60,27 @@ async function main() {
     headers: { "user-agent": ua, cookie: `${bot.RSC_ID_COOKIE}=${owner}; ${bot.RSC_PASS_COOKIE}=${pass}`, rsc: "1" },
   });
   assert.equal(bot.canUseRsc(authed), true);
-  assert.equal(proxy(authed).status, 200);
+  assert.equal((await proxy(authed)).status, 200);
   const wrongUa = new NextRequest("https://saolei.wang/video?_rsc=test", {
     headers: { "user-agent": "other", cookie: `${bot.RSC_ID_COOKIE}=${owner}; ${bot.RSC_PASS_COOKIE}=${pass}`, rsc: "1" },
   });
   assert.equal(bot.canUseRsc(wrongUa), false);
   const anonymous = new NextRequest("https://saolei.wang/video?_rsc=test", { headers: { rsc: "1" } });
   assert.equal(bot.canUseRsc(anonymous), false);
-  assert.equal(proxy(anonymous).status, 403);
-  assert.equal(proxy(anonymous).headers.get("x-saolei-challenge"), "minesweeper");
+  const anonymousRes = await proxy(anonymous);
+  assert.equal(anonymousRes.status, 403);
+  assert.equal(anonymousRes.headers.get("x-saolei-challenge"), "minesweeper");
   const api = new NextRequest("https://saolei.wang/api/online/ranked/pb?_rsc=test");
-  assert.equal(proxy(api).status, 200);
+  assert.equal((await proxy(api)).status, 200);
   const filteredDocument = new NextRequest("https://saolei.wang/video?author=123&3bv=20", { headers: { host: "saolei.wang", "x-forwarded-proto": "https" } });
-  const filteredResponse = proxy(filteredDocument);
+  const filteredResponse = await proxy(filteredDocument);
   assert.equal(filteredResponse.status, 307);
   assert.ok(filteredResponse.headers.get("location")?.startsWith("https://saolei.wang/bot/challenge?next="));
-  assert.equal(proxy(new NextRequest("https://saolei.wang/video")).status, 200);
+  assert.equal((await proxy(new NextRequest("https://saolei.wang/video"))).status, 200);
   const passedDocument = new NextRequest("https://saolei.wang/video?author=123&3bv=20", {
     headers: { "user-agent": ua, cookie: `${bot.RSC_ID_COOKIE}=${owner}; ${bot.RSC_PASS_COOKIE}=${pass}` },
   });
-  assert.equal(proxy(passedDocument).status, 200);
+  assert.equal((await proxy(passedDocument)).status, 200);
 
   const b64 = (value: string) => Buffer.from(value).toString("base64url");
   const header = b64(JSON.stringify({ alg: "HS256", typ: "JWT" }));
