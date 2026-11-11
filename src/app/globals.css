@@ -16622,9 +16622,12 @@ a.vs_c:hover {
 
 /* ==================== /vs 对决选择页（2026-11-11 张老师需求） ====================
    登录态选对手页：左侧自己、右侧问号占位 + 搜索框（排行同款 .goto_search）；
-   双方就位后卡片右上角出「换人」X。卡片结构复用 /vs/[id] 的 .box.vs_panel
-   （内部 = 侧栏玩家卡片 .user_card + 实力雷达），本页 #page 挂独立类 vs_pick_page
-   （不挂 .vs_page——那会命中 PK 页移动端隐藏 header/footer 的规则）。 */
+   双方就位后卡片右上角圆角处出「换人」X（深灰、hover 上方气泡）。中间列完全
+   复用 PK 页 /vs/[id] 的 .vs_vs 结构（.vs_scoreline VS 字标 + .vs_action 黄钮 +
+   .vs_snd_gsw 喇叭开关，样式全走 PK 页既有规则，这里只补按钮置灰态）。
+   卡片结构复用 /vs/[id] 的 .box.vs_panel（内部 = 侧栏玩家卡片 .user_card +
+   实力雷达），本页 #page 挂独立类 vs_pick_page（不挂 .vs_page——那会命中
+   PK 页移动端隐藏 header/footer 的规则）。 */
 #vs_pick_hero {
   display: flex;
   align-items: center;
@@ -16636,33 +16639,40 @@ a.vs_c:hover {
 #vs_pick_hero > .box.vs_panel {
   position: relative; /* 「换人」X 的定位上下文 */
 }
-/* 空位（问号占位 + 搜索框）：宽度对齐玩家卡片（雷达 222 + .box 左右 padding 30×2） */
+/* 空位（问号占位 + 搜索框）：宽度对齐玩家卡片实测外宽 260（.user_card 内容宽
+   200 + .box padding 60；带 8px×2 margin 后与卡片 276 外占位一致）——
+   「两边全空」时 260+380+260+gap20 = 920 ≤ 960，三件套不换行；
+   头像与搜索框的间距 30px = 盒内上边距（.box padding-top），上下留白等同 */
 .vs_pick_empty {
-  width: 282px;
+  width: 260px;
   max-width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 30px;
   min-height: 360px;
 }
+/* 问号占位头像：圆角矩形遮罩（2026-11-11 张老师：不要圆形），圆角取盒同款 10px 系 */
 .vs_pick_q {
   width: 96px;
   height: 96px;
-  border-radius: 50%;
+  border-radius: 12px;
+  object-fit: cover;
+  display: block;
 }
 /* 空位内搜索框：输入区加宽（排行默认 120px 太窄，placeholder 较长） */
 .vs_pick_empty .goto_search input {
   width: 150px;
 }
 
-/* 「换人」X（双方就位才渲染）：亮灰圆形按钮，hover 变黄（站点金）+ 气泡「换人」 */
+/* 「换人」X（双方就位才渲染）：深灰圆形按钮、贴卡片右上角圆角处（.box 圆角
+   10px，按钮 26px 内缩 8px 落在圆角带上），hover 变黄（站点金）+ 上方气泡 */
 .vs_swap {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 5;
   display: flex;
   align-items: center;
@@ -16672,8 +16682,8 @@ a.vs_c:hover {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #939387; /* 亮灰 */
-  color: #f8f8f2;
+  background: #49483e; /* 深灰（与盒描边同族） */
+  color: #b1b1a4;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
@@ -16686,11 +16696,11 @@ a.vs_c:hover {
   background: #fdc61a;
   color: #272822;
 }
-/* hover 气泡「换人」：暗底描边（BV 格 .vs_tip / 排行下拉同风格浮层），按钮正下方弹出 */
+/* hover 气泡「换人」：暗底描边（同音效开关 data-tip 上弹风格），按钮**正上方**弹出 */
 .vs_swap::after {
   content: "换人";
   position: absolute;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   right: 0;
   padding: 4px 10px;
   border: 1px solid #49483e;
@@ -16709,7 +16719,23 @@ a.vs_c:hover {
   opacity: 1;
 }
 
-/* 移动端（≤768）：两槽上下堆叠、卡片全宽（对齐 /vs/[id] 移动端面板口径） */
+/* 中间列「开始对决」：盒型/字体全走 PK 页 .vs_fight，这里只补置灰态——
+   双方未就位（disabled）换灰底灰字（对齐 .vs_back 灰系），就位后恢复黄钮 */
+#vs_pick_hero .vs_fight:disabled {
+  background: #4a493f;
+  color: #8f8e83;
+  box-shadow: none;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  cursor: default;
+}
+/* VS 图标中心 = 玩家卡片中心（PK 页恒等式口径）：选择页没有上方预测气泡占位，
+   用 margin-top 143px 补偿——中列高 333+m 居中后，图标中心 m+44+51 与卡片
+   中心重合（解得 m=143；左侧卡片态/右侧空位态均成立） */
+#vs_pick_hero .vs_scoreline {
+  margin-top: 143px;
+}
+/* 移动端（≤768）：两槽上下堆叠、卡片全宽（对齐 /vs/[id] 移动端面板口径）；
+   中间列随 flex 纵向落在两槽之间，复用 PK 页规则无需额外覆盖 */
 @media (max-width: 768px) {
   #vs_pick_hero {
     flex-direction: column;
@@ -16724,5 +16750,10 @@ a.vs_c:hover {
   }
   .vs_pick_empty {
     min-height: 280px;
+    gap: 16px;
+  }
+  /* 移动端纵向堆叠不需要 PC 的居中补偿，去掉 143px 顶距 */
+  #vs_pick_hero .vs_scoreline {
+    margin-top: 0;
   }
 }

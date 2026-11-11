@@ -5,11 +5,16 @@
 //     （同排行搜索：防抖 250ms 调 /api/ranking/search，下拉键盘上下选、回车/点击选定）；
 //   · 选定对手后拉 /api/vs/player 渲染该玩家卡片 + 实力雷达
 //     （卡片结构与 /vs/[id] 的 VsPanel 完全同源）；
-//   · 双方就位后卡片右上角出亮灰 X 圆形按钮，hover 变黄出气泡「换人」，
-//     点击清空该卡片回到「问号头像 + 搜索框」空位态（与右侧初始 UI 完全一致）。
+//   · 有玩家的卡片右上角圆角处一律出深灰 X 圆形按钮（未选定对手时我方卡片也有，
+//     二轮 10:45 张老师：可以两边全空），hover 出上方气泡「换人」，
+//     点击清空该卡片回到「问号头像 + 搜索框」空位态（与右侧初始 UI 完全一致）；
+//   · 中间列完全复用 PK 页（/vs/[id]）布局：.vs_vs（.vs_scoreline VS 战斗字标 +
+//     .vs_action 黄色对决按钮 + 喇叭音效开关）——音效开关与 PK 页共用
+//     localStorage「vs_snd」；双方就位前按钮置灰，就位后点「开始对决」进入 /vs/{对手id}。
 // 约束：右侧不能选自己（不能和自己比拼）；同一玩家不能同时站两边。
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "./Toast";
 import { AvatarCell, TitleBadge } from "./Cells";
@@ -155,8 +160,8 @@ function VsSearch({ onPick }: { onPick: (u: SuggestUser) => void }) {
 }
 
 /** 玩家卡片：结构与 /vs/[id] 的 VsPanel 完全同源（.user_card 上半部 + 横线 + 实力雷达）。
- *  onSwap 提供时（双方就位）右上角渲染「换人」X 按钮。 */
-function VsCard({ p, onSwap }: { p: VsPickPlayer; onSwap?: () => void }) {
+ *  右上角圆角处恒渲染「换人」X 按钮（10:45 张老师：只要卡上有玩家就有，可两边全空）。 */
+function VsCard({ p, onSwap }: { p: VsPickPlayer; onSwap: () => void }) {
   return (
     <div className="box vs_panel">
       {onSwap && (
@@ -233,7 +238,9 @@ function VsCard({ p, onSwap }: { p: VsPickPlayer; onSwap?: () => void }) {
   );
 }
 
-/** 空位：问号头像占位 + 搜索框（刚进入页面时右侧的 UI；换人清空后回到同一形态） */
+/** 空位：问号头像占位 + 搜索框（刚进入页面时右侧的 UI；换人清空后回到同一形态）。
+ *  头像用圆角矩形遮罩（2026-11-11 张老师：不要圆形），与搜索框的间距＝盒内上边距
+ *  （.box padding 30px）→ 上下留白等同。 */
 function VsEmptySlot({ onPick }: { onPick: (u: SuggestUser) => void }) {
   return (
     <div className="box vs_panel vs_pick_empty">
@@ -244,10 +251,62 @@ function VsEmptySlot({ onPick }: { onPick: (u: SuggestUser) => void }) {
   );
 }
 
+/** 喇叭音效开关：结构与 PK 页 VsScoreBoard 的 .vs_snd_gsw 完全同源（含 hover
+ *  上方 data-tip 气泡），共用 localStorage「vs_snd」——进对决页前先定好音效。 */
+function SndSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={"vs_snd_gsw" + (on ? "" : " vs_snd_off")}
+      onClick={onToggle}
+      aria-pressed={on}
+      aria-label={on ? "音效打开" : "音效关闭"}
+      data-tip={on ? "音效打开" : "音效关闭"}
+    >
+      <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+        {/* 喇叭体（实心）+ 右侧两道声波弧线，描边圆头，颜色走 currentColor */}
+        <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor" />
+        <path
+          d="M14.5 8.7a4.6 4.6 0 0 1 0 6.6"
+          stroke="currentColor"
+          strokeWidth="2.1"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <path
+          d="M17.6 6a9 9 0 0 1 0 12"
+          stroke="currentColor"
+          strokeWidth="2.1"
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+    </button>
+  );
+}
+
 export function VsPickArena({ me }: { me: VsPickPlayer }) {
+  const router = useRouter();
   const [left, setLeft] = useState<VsPickPlayer | null>(me);
   const [right, setRight] = useState<VsPickPlayer | null>(null);
+  const [sndOn, setSndOn] = useState(true); // SSR 无 localStorage，挂载后读回真值
   const both = left !== null && right !== null;
+
+  useEffect(() => {
+    try {
+      setSndOn(localStorage.getItem("vs_snd") !== "0");
+    } catch {}
+  }, []);
+
+  const toggleSnd = () => {
+    setSndOn((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("vs_snd", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  };
 
   /** 选定候选：先做落位校验（不能和自己比拼 / 不能同站两边），再拉卡片数据 */
   async function pick(slot: "left" | "right", u: SuggestUser) {
@@ -282,12 +341,34 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
   return (
     <div id="vs_pick_hero">
       {left ? (
-        <VsCard p={left} onSwap={both ? () => clearSlot("left") : undefined} />
+        <VsCard p={left} onSwap={() => clearSlot("left")} />
       ) : (
         <VsEmptySlot onPick={(u) => void pick("left", u)} />
       )}
+      {/* 中间列：完全复用 PK 页 .vs_vs 结构——.vs_scoreline（VS 战斗字标，两侧空
+          占位 span 保住三列网格）+ .vs_action（黄色「开始对决」+ 喇叭开关正下方）。
+          双方未就位按钮置灰，就位后进入 /vs/{对手id}。 */}
+      <div className="vs_vs">
+        <div className="vs_scoreline">
+          <span aria-hidden="true" />
+          {/* eslint-disable-next-line @next/next/no-img-element -- 固定静态资源 */}
+          <img src="/icons/clash.png" alt="VS" width={96} height={102} draggable={false} />
+          <span aria-hidden="true" />
+        </div>
+        <div className="vs_action">
+          <button
+            type="button"
+            className="vs_fight"
+            disabled={!both}
+            onClick={() => right && router.push(`/vs/${right.id}`)}
+          >
+            开始对决
+          </button>
+          <SndSwitch on={sndOn} onToggle={toggleSnd} />
+        </div>
+      </div>
       {right ? (
-        <VsCard p={right} onSwap={both ? () => clearSlot("right") : undefined} />
+        <VsCard p={right} onSwap={() => clearSlot("right")} />
       ) : (
         <VsEmptySlot onPick={(u) => void pick("right", u)} />
       )}
