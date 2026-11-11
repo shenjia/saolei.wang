@@ -49,6 +49,10 @@ const LOSE_SOUND = "/sounds/vs-lose.mp3";
 
 const RISE_VOLUME = 1;
 const RESULT_VOLUME = 0.6;
+/** hover 音效（2026-11-11 14:38 张老师指定，btn_hover 素材 0.37s）：悬停纪录行
+ *  或 BV 格时播放一次短促音；音效开关关时不播 */
+const HOVER_SOUND = "/sounds/vs-hover.mp3";
+const HOVER_VOLUME = 0.6;
 
 /** 等待赛后渐显元素全部到位（.vs_below / 胜败字 opacity→1），1.5s 兜底防卡死 */
 function waitSettled(): Promise<void> {
@@ -146,7 +150,7 @@ export function VsScoreBoard({
   preTone,
   postComment,
   opponentId,
-  autoRun = false,
+  history,
   leftPanel,
   rightPanel,
   below,
@@ -165,9 +169,9 @@ export function VsScoreBoard({
   postComment: string;
   /** 对手玩家 id（22:36 张老师：赛后「返回」按钮跳回对手用户主页，原地导航） */
   opponentId: number;
-  /** ?run=1 直达（对决选择页「一决胜负」）：落地自动开跑免二次点击
-   *  （2026-11-11 张老师）；主页入口等其它途径默认 false 保持两段式 */
-  autoRun?: boolean;
+  /** 「历史对决」板块（2026-11-11 14:38 张老师）：RSC 节点，分割线下默认
+   *  （赛前）即渲染，不随跑分挂载 */
+  history: ReactNode;
   /** 左右玩家面板：RSC 节点，作为 props 传入客户端边界 */
   leftPanel: ReactNode;
   rightPanel: ReactNode;
@@ -220,14 +224,26 @@ export function VsScoreBoard({
 
   const startFight = () => {
     if (phase !== "ready") return;
+    // 交接标记在此消费（挂载 effect 只读不删——StrictMode 双挂载下首挂载
+    // 删标记、cleanup 清计时器会让二挂载丢指令；开跑即删，过期标记无害）
+    try {
+      sessionStorage.removeItem("vs_autorun");
+    } catch {}
     // data-close 由 phase 驱动：面板立刻开始向左右滑，滑完（SPREAD_MS）才跑分
     setPhase("exiting");
     fadeTimer.current = setTimeout(() => setPhase("running"), SPREAD_MS);
   };
 
-  // ?run=1 直达自动开跑：先渲染一拍战前版面（赛前预测随开跑淡出），随即 startFight
+  // 竞技场「一决胜负」交接自动开跑（十轮 14:11 张老师：URL 不带参数）——
+  // 标记为竞技场写入的时间戳，新鲜（8s 内）即 400ms 后 startFight（八轮 13:29：
+  // 点一下直接开跑免二次点击）；直接访问/刷新无标记或标记过期 → 手动两段式
   useEffect(() => {
-    if (!autoRun) return;
+    let run = false;
+    try {
+      const ts = parseInt(sessionStorage.getItem("vs_autorun") ?? "", 10);
+      if (ts && Date.now() - ts < 8000) run = true;
+    } catch {}
+    if (!run) return;
     const t = setTimeout(startFight, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时触发一次
@@ -255,6 +271,30 @@ export function VsScoreBoard({
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, []);
+
+  // hover 音效（2026-11-11 14:38 张老师）：悬停纪录行（.vs_rec tr）或 BV 格
+  // （.vs_c）时播放一次短促音。下方板块是 RSC 节点，交互走 document 级
+  // mouseover 委托；同一格/行内划过子元素不重播（按进入的容器元素去重），
+  // 音效开关关时不播。
+  const hoverRef = useRef<HTMLAudioElement>(null);
+  const lastHoverEl = useRef<Element | null>(null);
+  useEffect(() => {
+    const onOver = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      const el = t?.closest?.(".vs_c, .vs_rec tbody tr") ?? null;
+      if (!el || el === lastHoverEl.current) return;
+      lastHoverEl.current = el;
+      if (!sndRef.current) return;
+      const a = hoverRef.current;
+      if (a) {
+        a.currentTime = 0;
+        a.volume = HOVER_VOLUME;
+        void a.play().catch(() => {});
+      }
+    };
+    document.addEventListener("mouseover", onOver, true);
+    return () => document.removeEventListener("mouseover", onOver, true);
   }, []);
 
   // 跑分动画：只有 phase=running 才启动（按钮淡出 + 面板滑开之后）
@@ -439,9 +479,10 @@ export function VsScoreBoard({
   // 01:18 张老师：赛后分割线宽度与两边玩家卡片边缘平齐——测量首尾 .vs_panel
   // 的跨度，inline 写到 divider 上（PC 端 absolute 定位用）；移动端卡片本就全宽，
   // 清空 inline 让 CSS 的 width:100% 生效。resize 时重算。
+  // 2026-11-11 14:38 张老师：分割线**默认（赛前）即显示**——fit 不再只在 done 跑，
+  // phase 变化时重测（面板收拢→滑开宽度随动）。
   const dividerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (phase !== "done") return;
     const el = dividerRef.current;
     if (!el) return;
     const fit = () => {
@@ -517,6 +558,8 @@ export function VsScoreBoard({
           {/* 两个 audio 留在 DOM 里（display:none 不影响播放），便于观察播放状态 */}
           {/* 张老师 18:12 + 19:07：数字滚动音只播一次，绝不加 loop */}
           <audio ref={riseRef} src={`${RISE_SOUND}?v=${SND_VER}`} preload="auto" />
+          {/* hover 音效（纪录行 / BV 格悬停短促音，2026-11-11 14:38 张老师指定） */}
+          <audio ref={hoverRef} src={`${HOVER_SOUND}?v=${SND_VER}`} preload="auto" />
           {/* 赛后自动截屏提示音（与在线练习 capture.mp3 同款，只播一次） */}
           <audio ref={shotRef} src={`/sounds/capture.mp3?v=${SND_VER}`} preload="auto" />
           {!tie && (
@@ -606,10 +649,13 @@ export function VsScoreBoard({
               grid 末行（页面最底部）。持续显示。
               01:02 张老师：跑完分后日期下方加一条分割线，上下 40px 留白 */}
           <span className="vs_date">{dateStr}</span>
-          {phase === "done" && <div className="vs_divider" ref={dividerRef} aria-hidden="true" />}
+          {/* 2026-11-11 14:38 张老师：分割线默认（赛前）即显示，不再只在赛后出现 */}
+          <div className="vs_divider" ref={dividerRef} aria-hidden="true" />
         </div>
         {rightPanel}
       </div>
+      {/* 「历史对决」板块（2026-11-11 14:38 张老师）：分割线下默认即渲染，不随跑分挂载 */}
+      {history}
       {/* 跑分完成后下方各板块才出现（RSC 节点，赛前不在可见 DOM 中） */}
       {phase === "done" && <div className="vs_below">{below}</div>}
       {/* 00:18 张老师：PC/移动端「返回」统一移到页面最底部（footer 之上），按钮加大 */}

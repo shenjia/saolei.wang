@@ -20,7 +20,6 @@
 //   同一玩家（非自己）不能同时站两边。
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "./Toast";
 import { AvatarCell, TitleBadge } from "./Cells";
@@ -53,6 +52,9 @@ interface SuggestUser {
   englishName: string;
   sex: number;
 }
+
+/** 预测评价色调（与 lib/vs.ts 的 PreTone 同值；客户端不 import 服务端数据模块） */
+type PreTone = "adv" | "dis" | "even";
 
 /** 搜索框（同排行搜索交互）：防抖推荐下拉 + 键盘导航；选定即回调并清空输入。
  *  空内容聚焦时若自己不在场上（suggestSelf 非空），下拉直接推荐自己（四轮 11:23 张老师）。 */
@@ -323,26 +325,32 @@ export function VsPickArena({
   initialLeft?: VsPickPlayer | null;
   initialRight?: VsPickPlayer | null;
 }) {
-  const router = useRouter();
   const [left, setLeft] = useState<VsPickPlayer | null>(initialLeft);
   const [right, setRight] = useState<VsPickPlayer | null>(initialRight);
   const [sndOn, setSndOn] = useState(true); // SSR 无 localStorage，挂载后读回真值
   const [matching, setMatching] = useState(false); // 「匹配对手」请求进行中
+  // 双方就位后的即时预测评价（十轮 14:38 张老师：匹配成功后立刻出现预测评价）——
+  // /api/vs/pre 与对决页战前预测同源；null=未就位或加载中（显示金气泡「请双方选手就位」）
+  const [pre, setPre] = useState<{ text: string; tone: PreTone } | null>(null);
+  const preSeq = useRef(0); // 竞态：仅最后一次请求生效
   const both = left !== null && right !== null;
   // 单边有玩家：按钮变「匹配对手」（2026-11-11 张老师），自动补一个
   // 与登录者全国排名 ±50 的对手到空位；两边全空按钮置灰（文案同「匹配对手」）
   const one = !both && (left !== null || right !== null);
 
   // URL 实时同步（五轮 13:38 张老师：每换一个人 URL 就实时变化）：
-  //   双卡 /vs/{l}/{r} · 只左 /vs/{l} · 只右 /vs//{r} · 全空 /vs。
-  // replaceState 纯客户端无服务端往返；Next 16 铁律：原样传回 history.state。
-  // ⚠️ 只右形态 /vs//{r} 会被 Next 308 规范化成 /vs/{r}（刷新退化成左位，已知边缘）
+  //   双卡 /vs/{l}/{r} · 只左 /vs/{l} · 只右 /vs?/{r} · 全空 /vs。
+  // 只右用查询串占位（十轮 14:11 张老师定）：实测 /vs?/{r} 不被 Next 规范化，
+  // 刷新保真（双斜杠 /vs//{r} 会被 308 吃掉，弃用）；replaceState 纯客户端
+  // 无服务端往返，Next 16 铁律：原样传回 history.state。
   useEffect(() => {
     const l = left?.id;
     const r = right?.id;
-    const path = l && r ? `/vs/${l}/${r}` : l ? `/vs/${l}` : r ? `/vs//${r}` : "/vs";
-    if (window.location.pathname !== path) {
-      window.history.replaceState(window.history.state, "", path);
+    const target =
+      l && r ? `/vs/${l}/${r}` : l ? `/vs/${l}` : r ? `/vs?/${r}` : "/vs";
+    const cur = window.location.pathname + window.location.search;
+    if (cur !== target) {
+      window.history.replaceState(window.history.state, "", target);
     }
   }, [left, right]);
 
@@ -351,6 +359,30 @@ export function VsPickArena({
       setSndOn(localStorage.getItem("vs_snd") !== "0");
     } catch {}
   }, []);
+
+  // 双方就位 → 立刻拉赛前预测（十轮 14:38 张老师：匹配成功后 URL 已更新，
+  // 预测评价要**马上**出现，不等跳转对决页）。未就位/换人清空即回金气泡。
+  // setState 只发生在异步回调里，规避 set-state-in-effect。
+  useEffect(() => {
+    const l = left?.id;
+    const r = right?.id;
+    if (!l || !r) {
+      setPre(null);
+      return;
+    }
+    const seq = ++preSeq.current;
+    (async () => {
+      try {
+        const res = await fetch(`/api/vs/pre?l=${l}&r=${r}`);
+        if (!res.ok) return;
+        const d = (await res.json()) as { text: string; tone: PreTone };
+        if (seq !== preSeq.current) return; // 已有更快的落位变化
+        setPre({ text: d.text, tone: d.tone });
+      } catch {
+        /* 网络异常静默：保持「请双方选手就位」 */
+      }
+    })();
+  }, [left, right]);
 
   const toggleSnd = () => {
     setSndOn((v) => {
@@ -457,11 +489,17 @@ export function VsPickArena({
           未就位时上方浮金色「请双方选手就位」气泡（绝对定位不占流内高度）。 */}
       <div className="vs_vs">
         <div className="vs_scoreline">
-          {/* 未就位提示气泡：作为 scoreline 子元素定位（scoreline position:relative
-              才是包含块；放 .vs_vs 直接子级会被整列高度解析到页头暗底上隐形） */}
-          {!both && (
+          {/* 中间列气泡（十轮 14:38）：未就位或预测加载中＝金气泡「请双方选手就位」；
+              双方就位且预测已回＝按 tone 渲染真预测（与对决页战前预测同款卡片框）。
+              .vs_pick_pre 绝对定位悬浮在 VS 字标上方，卸载/替换零布局位移 */}
+          {(!both || !pre) && (
             <div className="vs_pre vs_pre_even vs_pick_pre" role="status">
               请双方选手就位
+            </div>
+          )}
+          {both && pre && (
+            <div className={`vs_pre vs_pre_${pre.tone} vs_pick_pre`} role="status">
+              {pre.text}
             </div>
           )}
           <span aria-hidden="true" />
@@ -476,9 +514,19 @@ export function VsPickArena({
             disabled={(!both && !one) || matching}
             onClick={() => {
               if (both) {
-                // 对决 URL 化（五轮 13:38 张老师）：左右两卡即对决双方，
-                // ?fight=1 落地自动跑分（免二次点击）
-                if (left && right) router.push(`/vs/${left.id}/${right.id}?fight=1`);
+                // 对决交接（十轮 14:11 张老师：URL 不带 fight 参数——/vs/{l}/{r}
+                // 即对决页，后台/直访为手动两段式；竞技场点「一决胜负」经
+                // sessionStorage 标记交接，落地自动跑分，八轮 13:29 口径）。
+                // 左右两卡即对决双方；整页跳转保证服务端重渲对决数据。
+                if (left && right) {
+                  try {
+                    // 标记存时间戳（StrictMode 双挂载下「消费即删」会丢——
+                    // 首挂载删掉、cleanup 清计时器、二挂载读不到；对决页按
+                    // 新鲜度校验，开跑时才删除）
+                    sessionStorage.setItem("vs_autorun", String(Date.now()));
+                  } catch {}
+                  window.location.assign(`/vs/${left.id}/${right.id}`);
+                }
               } else if (one) {
                 void matchOpponent();
               }

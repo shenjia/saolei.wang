@@ -15599,6 +15599,12 @@ span.vs_btn--disabled:hover img {
   min-width: 0;
   transition: transform 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
+
+/* 「换人」X（.vs_swap）的定位上下文（2026-11-11 14:38 张老师：对决页左右卡片
+   hover 也可换人——与竞技场 #vs_pick_hero > .box.vs_panel 同款） */
+#vs_hero > .box.vs_panel {
+  position: relative;
+}
 #vs_hero[data-close="1"] > .vs_panel:first-child {
   transform: translateX(var(--vs_close));
 }
@@ -16005,6 +16011,19 @@ span.vs_btn--disabled:hover img {
 .vs_rec th.vs_item.item_tie {
   color: #fdc61a;
 }
+/* 纪录行 hover 白描边（2026-11-11 14:38 张老师）：胜方成绩格与中间纪录名格
+   加与 BV 格 hover 同款的白色描边（#f8f8f2）。成绩数字格与纪录名格是两个
+   独立容器，描边**两侧分开加**（不能画在行/包裹层上）；两格相连的中缝不描
+   ——inset box-shadow 只画外侧三条边，观感与胜方连通底色的圆角衔接一致。
+   平局（无实底格）与无成绩行自然不命中。 */
+.vs_rec tbody tr:hover td.vs_half.half_p1,
+.vs_rec tbody tr:hover th.vs_item.item_p2 {
+  box-shadow: inset 1px 0 0 #f8f8f2, inset 0 1px 0 #f8f8f2, inset 0 -1px 0 #f8f8f2;
+}
+.vs_rec tbody tr:hover td.vs_half.half_p2,
+.vs_rec tbody tr:hover th.vs_item.item_p1 {
+  box-shadow: inset -1px 0 0 #f8f8f2, inset 0 1px 0 #f8f8f2, inset 0 -1px 0 #f8f8f2;
+}
 /* ③ 各BV比拼（2026-11-10 21:16 张老师第六轮）：初级/中级/高级各一个独立板块盒。
    格子＝收集墙式：统一 2px 间距 + 圆角，双方都没有的 BV 也画空格（暗底）。
    20:46 去掉饼图后 .vs_lvbody 改单列块；21:16 再去掉行首 BV 范围（64px）、
@@ -16069,6 +16088,84 @@ span.vs_btn--disabled:hover img {
   /* 01:26 张老师：板块标题再大两号（26→28）；02:07 再放大（28→30）；
      02:10 张老师：纪录/初/中/高级标题放到 40px */
   font-size: 40px;
+}
+/* 「历史对决」板块（2026-11-11 14:38 张老师）：分割线下常显（赛前即渲染），
+   标题同纪录板块 h1.gray；两玩家发起的最近对决记录表 + 行 hover「回看」
+   + 标准 .pager 翻页。margin-top 与 .vs_below 同款 69px（清掉分割线悬出
+   hero 的 29px，线下留白 40px）——置于 .vs_lvblk 之后以覆盖其 49px */
+.vs_hist {
+  margin-top: 69px;
+}
+.vs_histbox {
+  padding: 8px 16px 16px;
+}
+.vs_hist_tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+.vs_hist_tbl td {
+  padding: 9px 8px;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.vs_hist_tbl tr + tr td {
+  border-top: 1px solid #3e3d32;
+}
+.vs_hist_time {
+  color: #75715e;
+  font-size: 13px;
+}
+.vs_hist_name a {
+  color: #f8f8f2;
+}
+.vs_hist_name a:hover {
+  color: #fdc61a;
+  text-decoration: underline;
+}
+.vs_hist_c {
+  text-align: center;
+}
+.vs_hist_s {
+  font-variant-numeric: tabular-nums;
+}
+.vs_hist_s_win {
+  color: #fdc61a;
+}
+.vs_hist_s_lose {
+  color: #8f8e83;
+}
+.vs_hist_res {
+  color: #b1b1a4;
+}
+/* 「回看」：行 hover 浮现（触屏无 hover 常显）；黄色小按钮同 .vs_swap hover 观感 */
+.vs_hist_tbl .vs_look {
+  display: inline-block;
+  padding: 3px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #272822;
+  background: #fdc61a;
+  border-radius: 4px;
+  text-decoration: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.vs_hist_tbl tr:hover .vs_look {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .vs_hist_tbl .vs_look {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+.vs_hist_empty {
+  text-align: center;
+  color: #75715e;
+  padding: 18px 0 6px;
 }
 /* 21:36 / 21:45 张老师字号阶梯（项目「小两号」= 2px，参照 15→13 口径）：
    标题 26px → 玩家名/分数 24px → 胜数/独有数 22px → 单位 20px。
@@ -16544,6 +16641,8 @@ a.vs_c:hover {
     margin: 25px 0 40px;
   }
   .vs_below { margin-top: 0; }
+  /* 历史对决板块同理：移动端 divider 占流不悬出，PC 的 69px 补偿在此抵消 */
+  .vs_hist { margin-top: 0; }
   /* 02:10 张老师：「纪录」标题上方到分割线的空白应与日期↔分割线距离（40px）一致。
      divider 下 margin 40px 已给足，首个板块的 49px margin-top 额外叠加出 89px，
      移动端清零（PC 端板块间距不受影响） */

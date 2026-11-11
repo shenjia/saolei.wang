@@ -1,15 +1,20 @@
-// /vs 竞技场统一路由（2026-11-11 张老师需求，五轮 13:38 URL 口径）：
+// /vs 统一路由（2026-11-11 张老师需求，十轮 14:11 定稿 URL 口径）：
 //   /vs            → 空竞技场，服务端直接预填自己（URL 随即变 /vs/{自己id}）
 //   /vs/{l}        → 左卡=l、右空（「只选左边的，URL就变成/vs/id」）
-//   /vs/{l}/{r}    → 双卡就位（「点其他用户主页的VS标记进来，链接变成/vs/自己id/对方id」）
-//   /vs/{l}/{r}?fight=1 → 对决页：渲染 VsDuelView 并自动跑分（竞技场「一决胜负」
-//     落地即开跑，免二次点击）；URL 即对决链接，可刷新/分享/旁观。
-// 选人/换人/清空全部走客户端 history.replaceState 实时改 URL（张老师：每换一个人
-// URL 实时变化；「只选右边的」地址栏显示 /vs//{r}——⚠️ Next 会把双斜杠 308 规范化，
-// 该形态刷新后退化成 /vs/{r}（左位），已知边缘，见 2026-11-11 日志）。
-// 旧路由 /vs/page.tsx、/vs/[id]/page.tsx、/vs/[id]/[bid]/page.tsx（旁观）已并入本页：
-//   旁观语义由 record=会话是否为对决双方本人 决定（KPI 口径＝双方本人访问），
-//   后台「观看」链接已改指 /vs/{u1}/{u2}?fight=1。
+//   /vs?/{r}       → 右卡=r、左空（「只选右边的」——? 占位左段；实测无尾斜杠的
+//                    /vs?/{r} 不被 Next 规范化，刷新保真；带尾斜杠的 /vs/?/{r} 会被
+//                    308 成编码形态但解析等价，两种都认）
+//   /vs/{l}/{r}    → 对决页：VsDuelView 战前态（赛前预测计算并显示），**手动**点
+//                    「一决胜负」跑分——后台观看直接访问本地址，无任何参数
+//                    （十轮 14:11 张老师：不要加 fight=1 参数）。URL 即对决链接，
+//                    可刷新/分享/旁观；record＝会话是否为对决双方本人
+//                   （KPI 口径＝双方本人访问，后台旁观 uid 非本人自然不落库）。
+// 竞技场「一决胜负」（选满双方）经 sessionStorage「vs_autorun」标记跳转同一
+// /vs/{l}/{r} 地址自动跑分（八轮 13:29 张老师：点一下直接开跑、URL 无参数；
+// 直接访问/刷新无标记 → 手动两段式）。选人/换人/清空走 history.replaceState
+// 实时改 URL（张老师：每换一个人 URL 实时变化）。
+// 旧路由 /vs/page.tsx、/vs/[id]/page.tsx、/vs/[id]/[bid]/page.tsx（旁观）已并入本页，
+// 后台「观看」链接即 /vs/{u1}/{u2}。
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
@@ -22,15 +27,24 @@ export const dynamic = "force-dynamic";
 
 interface VsArenaProps {
   params: Promise<{ ids?: string[] }>;
-  searchParams: Promise<{ fight?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+/** 从查询串解析「? 占位左段」的右卡 id：/vs?/21557 → 键 "/21557"（Next 会把
+ *  308 编码形态 %2F21557 解码回 "/21557"，两种写法等价） */
+function rightIdFromQuery(sp: Record<string, string | string[] | undefined>): number {
+  for (const k of Object.keys(sp)) {
+    const m = /^\/(\d+)$/.exec(k);
+    if (m) return parseInt(m[1], 10);
+  }
+  return 0;
 }
 
 export async function generateMetadata({ params, searchParams }: VsArenaProps): Promise<Metadata> {
   const { ids } = await params;
-  const { fight } = await searchParams;
   const nums = (ids ?? []).map((s) => parseInt(s, 10));
-  // fight 链接给对决标题；竞技场一律「对决」（不暴露对手姓名）
-  if (fight === "1" && nums.length === 2 && nums[0] && nums[1] && nums[0] !== nums[1]) {
+  // 双段对决链接给对决标题；竞技场一律「对决」（不暴露对手姓名）
+  if (nums.length === 2 && nums[0] && nums[1] && nums[0] !== nums[1]) {
     return { title: await getVsDuelTitle(nums[0], nums[1]) };
   }
   return { title: "对决" };
@@ -38,42 +52,45 @@ export async function generateMetadata({ params, searchParams }: VsArenaProps): 
 
 export default async function VsArenaPage({ params, searchParams }: VsArenaProps) {
   const { ids } = await params;
-  const { fight } = await searchParams;
+  const sp = await searchParams;
   const session = await getSession();
   if (!session) redirect("/account/login");
 
-  // 段位解析：至多两段、必须纯数字（0 非法）——多段/非法段一律 404
+  // 路径段解析：至多两段、必须纯数字（0 非法）——多段/非法段一律 404
   const nums = (ids ?? []).map((s) => parseInt(s, 10));
   if (nums.length > 2 || nums.some((n) => !n)) notFound();
   const [l, r] = nums;
+  // 查询串占位的右卡 id（/vs?/{r} 形态）；路径双段时以路径为准
+  const qr = r || rightIdFromQuery(sp);
 
-  // fight=1 且双方齐 → 对决页（自动跑分）。record＝会话是否为对决双方本人
-  //（KPI 口径＝双方本人访问；后台旁观 uid 非本人自然不落库）
-  if (fight === "1" && l && r) {
+  // 双段 → 对决页（战前态、手动跑分；自动跑分由竞技场经 sessionStorage 交接）；
+  // 「历史对决」翻页页码走标准 ?page=N
+  if (l && qr) {
+    const hpage = Math.max(1, parseInt(String(sp.page ?? "1"), 10) || 1);
     return (
       <VsDuelView
         uid1={l}
-        uid2={r}
-        record={session.uid === l || session.uid === r}
-        autoRun
+        uid2={qr}
+        record={session.uid === l || session.uid === qr}
+        hpage={hpage}
       />
     );
   }
 
   // 竞技场：URL 里已有的 id 服务端预取卡片（查无此人按空位处理，URL 随客户端自愈）；
-  // 裸 /vs 空入口由服务端预填自己（张老师 13:38：vs入口进来就自动填上自己的ID）
+  // 裸 /vs 空入口（无任何 id）由服务端预填自己（张老师 13:38：vs入口进来就自动填上自己的ID）
   const me = await getVsPickPlayer(session.uid);
   if (!me) notFound();
   const [initialLeft, initialRight] = await Promise.all([
     l ? getVsPickPlayer(l) : null,
-    r ? getVsPickPlayer(r) : null,
+    qr ? getVsPickPlayer(qr) : null,
   ]);
 
   return (
     <div id="page" className="main vs_pick_page">
       <VsPickArena
         me={me}
-        initialLeft={!l && !r ? me : initialLeft}
+        initialLeft={!l && !qr ? me : initialLeft}
         initialRight={initialRight}
       />
     </div>

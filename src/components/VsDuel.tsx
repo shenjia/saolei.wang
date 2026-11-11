@@ -29,12 +29,13 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getVsData, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";
-import { scoreTime } from "@/lib/format";
+import { getVsData, getVsHistory, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";
+import { scoreTime, formatDate } from "@/lib/format";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { RadarChart } from "@/components/RadarChart";
+import { Pager } from "@/components/Pager";
 import { VsScoreBoard } from "@/components/VsScoreBoard";
 import { getHeaderUser } from "@/lib/usercard";
 
@@ -215,10 +216,21 @@ function VsLevelBox({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2:
 
 /** 玩家面板：结构严格照抄侧栏玩家卡片 .user_card 上半部（横线以上），
     横线以下放实力雷达（2026-11-09 二轮：去掉「实力」二字标题）。
-    accent 缺省＝主页同款默认青蓝（2026-11-10 张老师：自己的雷达不改色） */
-function VsPanel({ p, accent }: { p: VsPlayer; accent?: string }) {
+    accent 缺省＝主页同款默认青蓝（2026-11-10 张老师：自己的雷达不改色）
+    swapHref：给「换人」X 按钮（2026-11-11 14:38 张老师：对决页左右卡片 hover
+    也可换人）——复用竞技场 .vs_swap 骑线样式（.vs_panel hover 显隐同款），
+    点击回竞技场并保留另一侧玩家（href 由调用方按保留侧拼好）。 */
+function VsPanel({ p, accent, swapHref }: { p: VsPlayer; accent?: string; swapHref?: string }) {
   return (
     <div className="box vs_panel">
+      {swapHref && (
+        <Link className="vs_swap" href={swapHref} prefetch={false} aria-label="换人" title="换人">
+          <svg viewBox="0 0 12 12" aria-hidden="true">
+            <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </Link>
+      )}
       <div className="user_card">
         <div className="ucd_top">
           <div className="ucd_left">
@@ -325,22 +337,22 @@ export async function getVsDuelTitle(uid1: number, uid2: number): Promise<string
 }
 
 /** 对决页主体（对战与旁观共用）：
- *  · record=true（会话为对决双方本人，/vs/{l}/{r}?fight=1 统一路由判定）：
- *    渲染快照落 vs_duel（10 分钟窗口去重在函数内）；
+ *  · record=true（会话为对决双方本人）：渲染快照落 vs_duel（10 分钟窗口去重在函数内）；
  *  · record=false（旁观：会话非对决双方）：纯渲染，不落库——对决 KPI 口径＝双方本人访问。
+ *  · hpage：「历史对决」板块页码（分割线下常显板块，标准翻页走 URL ?page=N，
+ *    RSC 重渲染、客户端舞台状态保留）。自动跑分交接见统一路由页（sessionStorage）。
  *  uid1===uid2（含本人直连自己、旁观传同 id）：走「不能和自己比拼」兜底提示。 */
 export async function VsDuelView({
   uid1,
   uid2,
   record,
-  autoRun = false,
+  hpage = 1,
 }: {
   uid1: number;
   uid2: number;
   record: boolean;
-  /** ?run=1 直达（对决选择页「一决胜负」）：落地自动开跑，免二次点击
-   *  （2026-11-11 张老师）；主页入口等其它途径默认 false 保持两段式 */
-  autoRun?: boolean;
+  /** 「历史对决」翻页页码（URL ?page=N，标准 .pager 控件） */
+  hpage?: number;
 }) {
   // 不能和自己比拼：入口按钮已灰置，直连 URL 兜底提示
   if (uid1 === uid2) {
@@ -370,6 +382,71 @@ export async function VsDuelView({
   // 21:55 张老师：纪录板块头部「胜数」＝该方占优的纪录行数（mark=p1/p2，含独有局）
   const recWin1 = recRows.filter((r) => r.mark === "p1").length;
   const recWin2 = recRows.filter((r) => r.mark === "p2").length;
+
+  // 「历史对决」板块（2026-11-11 14:38 张老师）：日期下分割线**默认显示**，线下
+  // 标题（字体同纪录「纪录」h1.gray）+ 两玩家发起的最近 10 次对决（时间/挑战双方/
+  // 比分/胜负结果，格式参考后台对决统计），行 hover 尾部出「回看」跳该行两玩家
+  // 对决页；底部标准翻页控件（URL ?page=N）。常显板块——赛前即渲染。
+  const hist = await getVsHistory(uid1, uid2, hpage, 10);
+  /** 比分着色：胜方金 / 负方亮灰 / 平局与未算亮灰（发起者视角，同后台口径） */
+  const histScore = (s: number | null, win: boolean) =>
+    s === null ? (
+      <span className="gray">—</span>
+    ) : (
+      <b className={"vs_hist_s" + (win ? " vs_hist_s_win" : " vs_hist_s_lose")}>{s.toFixed(2)}</b>
+    );
+  const history = (
+    <div className="vs_lvblk vs_hist">
+      <div className="vs_lv_head">
+        <span aria-hidden="true" />
+        <h1 className="gray">历史对决</h1>
+        <span aria-hidden="true" />
+      </div>
+      <div className="box vs_histbox">
+        {hist.rows.length === 0 ? (
+          <p className="vs_hist_empty">暂无对决记录（VS 页访问后开始落库）</p>
+        ) : (
+          <table className="vs_hist_tbl">
+            <tbody>
+              {hist.rows.map((d) => {
+                const res = d.result === null ? null : d.result;
+                return (
+                  <tr key={d.id}>
+                    <td className="vs_hist_time" title={formatDate(d.time, "Y-m-d H:i:s")}>
+                      {formatDate(d.time, "m-d H:i")}
+                    </td>
+                    <td className="vs_hist_name">
+                      <Link href={`/user/${d.u1}`} target="_blank" rel="noopener" prefetch={false}>
+                        {d.n1}
+                      </Link>
+                    </td>
+                    <td className="vs_hist_c">{histScore(d.s1, res === 1)}</td>
+                    <td className="vs_hist_c vs_hist_res">
+                      {res === null ? "—" : res === 1 ? "胜" : res === 2 ? "负" : "平"}
+                    </td>
+                    <td className="vs_hist_c">{histScore(d.s2, res === 2)}</td>
+                    <td className="vs_hist_name">
+                      <Link href={`/user/${d.u2}`} target="_blank" rel="noopener" prefetch={false}>
+                        {d.n2}
+                      </Link>
+                    </td>
+                    <td className="vs_hist_look">
+                      {/* 回看（行 hover 浮现，触屏常显）：跳该行两玩家的对决页 */}
+                      <Link className="vs_look" href={`/vs/${d.u1}/${d.u2}`} prefetch={false}>
+                        回看
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        {/* 标准翻页控件：URL ?page=N，RSC 重渲染、对决舞台状态保留 */}
+        <Pager base={`/vs/${uid1}/${uid2}`} params={{}} page={hpage} total={hist.total} pageSize={hist.pageSize} />
+      </div>
+    </div>
+  );
 
   // 2026-11-10 第五轮：下面所有板块交给客户端舞台（VsScoreBoard）控制显隐——
   // 赛前完全不挂载，点「决出胜负」跑分完成后才出现。RSC 节点可作为 props 传入客户端边界。
@@ -427,9 +504,13 @@ export async function VsDuelView({
         preTone={preTone}
         postComment={postComment}
         opponentId={uid2}
-        autoRun={autoRun}
-        leftPanel={<VsPanel p={p1} />}
-        rightPanel={<VsPanel p={p2} accent="#e34f8c" />}
+        history={history}
+        leftPanel={
+          <VsPanel p={p1} swapHref={`/vs?/${uid2}`} />
+        }
+        rightPanel={
+          <VsPanel p={p2} accent="#e34f8c" swapHref={`/vs/${uid1}`} />
+        }
         below={below}
       />
     </div>

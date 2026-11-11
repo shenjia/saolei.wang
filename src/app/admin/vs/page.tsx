@@ -189,12 +189,13 @@ export default async function AdminVsPage() {
                     <td className="c">{scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}</td>
                     <td>{duelUser(d.u2, d.n2, d.sex2, d.exp2)}</td>
                     {/* 观看（11:21 张老师）：直达对决页旁观（旧 /vs/[id]/[bid] 旁观路由
-                        并入统一竞技场路由后，改指 /vs/{u1}/{u2}?fight=1；会话非对决双方
-                        本人 → record=false 不落库，KPI 口径不变） */}
+                        并入统一竞技场路由后即 /vs/{u1}/{u2}；十轮 14:11 张老师：
+                        不带任何参数，手动两段式；会话非对决双方本人 → record=false
+                        不落库，KPI 口径不变） */}
                     <td className="c">
                       <Link
                         className="admin_btn sm"
-                        href={`/vs/${d.u1}/${d.u2}?fight=1`}
+                        href={`/vs/${d.u1}/${d.u2}`}
                         target="_blank"
                         rel="noopener"
                         prefetch={false}
