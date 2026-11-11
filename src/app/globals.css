@@ -16003,19 +16003,6 @@ span.vs_btn--disabled:hover img {
   line-height: 1.2;
   white-space: nowrap;
 }
-/* 08:42 张老师：玩家名统一「#ID 名字 性别 军衔」（顶部卡片与板块头共用）——
-   #ID 暗灰、约为名字的 72%、不加粗，不抢名字主体；
-   板块头 24px 语境里军衔文字/徽章压到 15px（卡片行已有 14px 显式规则） */
-.vs_pid {
-  color: #75715e;
-  font-size: 0.72em;
-  font-weight: normal;
-  margin-right: 2px;
-}
-.vs_lv_stat .title em,
-.vs_lv_stat .title .rank-badge {
-  font-size: 15px;
-}
 .vs_lv_stat_a {
   justify-self: start;
 }
