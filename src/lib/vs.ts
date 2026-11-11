@@ -134,7 +134,8 @@ export type PreTone = "adv" | "dis" | "even";
  *  相对差 = (高 - 低) / 高（与赛后评价同款分母）：
  *    ≤ 10% →「势均力敌的对抗」(even 金)
  *    ≤ 20% →「稍占上风的对抗」/「略处下风的对抗」(adv 绿 / dis 玫瑰红)
- *    > 20% →「毫无悬念的碾压」/「毫无胜算的对抗」(adv / dis)
+ *    ≤ 30% →「明显优势的对抗」/「明显劣势的对抗」(adv / dis)
+ *    > 30% →「毫无悬念的碾压」/「毫无胜算的对抗」(adv / dis)
  *  STNB 来自 STNB 榜该级历史最高（缺级＝0），与 PK 记录/BV
  *  得分不是一套口径，故不剧透结果。两边都无有效 STNB 时不下判断，给中性档。 */
 export function preMatchAssessment(s1: number, s2: number): { text: string; tone: PreTone } {
@@ -149,6 +150,12 @@ export function preMatchAssessment(s1: number, s2: number): { text: string; tone
     return mine
       ? { text: "稍占上风的对抗", tone: "adv" }
       : { text: "略处下风的对抗", tone: "dis" };
+  }
+  // 2026-11-11 张老师：加一档 20%~30%「明显优势/明显劣势」，>30% 才是碾压
+  if (diff <= 0.3) {
+    return mine
+      ? { text: "明显优势的对抗", tone: "adv" }
+      : { text: "明显劣势的对抗", tone: "dis" };
   }
   return mine
     ? { text: "毫无悬念的碾压", tone: "adv" }
