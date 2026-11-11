@@ -474,6 +474,18 @@ table.admin_table a.link {
 table.admin_table a.link:hover {
   color: #a6e22e;
 }
+/* 对决统计记录表（2026-11-11 10:39 张老师）：内容列收缩到内容宽，末尾空列（.sp）
+   吸收全部余宽；空列保留行线，表格仍铺满整行——最右列右缘与趋势卡右缘对齐 */
+table.admin_table.vs_recent th:not(.sp),
+table.admin_table.vs_recent td:not(.sp) {
+  width: 1%;
+  white-space: nowrap;
+  padding: 9px 10px;
+}
+table.admin_table.vs_recent th.sp,
+table.admin_table.vs_recent td.sp {
+  padding: 0 4px;
+}
 table.admin_table .sub {
   color: #75715e;
   font-size: 12px;
