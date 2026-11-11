@@ -1,6 +1,8 @@
 "use client";
 
-// /vs 对决选择页（2026-11-11 张老师需求）：
+// /vs 对决选择页 = 竞技场（2026-11-11 张老师需求，五轮 13:38 起为 /vs 系唯一页面）：
+//   · URL 即状态：/vs（空，服务端预填自己）· /vs/{l}（只左）· /vs//{r}（只右）
+//     · /vs/{l}/{r}（双卡）；选人/换人/清空实时 replaceState（见 URL 同步 effect）；
 //   · 左侧放自己（初始数据由服务端传入），右侧空位 = 问号头像 + 搜索框
 //     （同排行搜索：防抖 250ms 调 /api/ranking/search，下拉键盘上下选、回车/点击选定；
 //     空内容聚焦且自己不在场上时下拉直接推荐自己——四轮 11:23）；
@@ -309,16 +311,40 @@ function SndSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
-export function VsPickArena({ me }: { me: VsPickPlayer }) {
+export function VsPickArena({
+  me,
+  initialLeft = null,
+  initialRight = null,
+}: {
+  /** 登录者自己（服务端预取） */
+  me: VsPickPlayer;
+  /** URL 段带来的初始左/右卡（/vs/{l}、/vs/{l}/{r} 直达；裸 /vs 由服务端预填自己）。
+   *  选中/换人/清空后由 URL 同步 effect 实时改地址栏（五轮 13:38 张老师口径）。 */
+  initialLeft?: VsPickPlayer | null;
+  initialRight?: VsPickPlayer | null;
+}) {
   const router = useRouter();
-  const [left, setLeft] = useState<VsPickPlayer | null>(me);
-  const [right, setRight] = useState<VsPickPlayer | null>(null);
+  const [left, setLeft] = useState<VsPickPlayer | null>(initialLeft);
+  const [right, setRight] = useState<VsPickPlayer | null>(initialRight);
   const [sndOn, setSndOn] = useState(true); // SSR 无 localStorage，挂载后读回真值
   const [matching, setMatching] = useState(false); // 「匹配对手」请求进行中
   const both = left !== null && right !== null;
   // 单边有玩家：按钮变「匹配对手」（2026-11-11 张老师），自动补一个
   // 与登录者全国排名 ±50 的对手到空位；两边全空按钮置灰（文案同「匹配对手」）
   const one = !both && (left !== null || right !== null);
+
+  // URL 实时同步（五轮 13:38 张老师：每换一个人 URL 就实时变化）：
+  //   双卡 /vs/{l}/{r} · 只左 /vs/{l} · 只右 /vs//{r} · 全空 /vs。
+  // replaceState 纯客户端无服务端往返；Next 16 铁律：原样传回 history.state。
+  // ⚠️ 只右形态 /vs//{r} 会被 Next 308 规范化成 /vs/{r}（刷新退化成左位，已知边缘）
+  useEffect(() => {
+    const l = left?.id;
+    const r = right?.id;
+    const path = l && r ? `/vs/${l}/${r}` : l ? `/vs/${l}` : r ? `/vs//${r}` : "/vs";
+    if (window.location.pathname !== path) {
+      window.history.replaceState(window.history.state, "", path);
+    }
+  }, [left, right]);
 
   useEffect(() => {
     try {
@@ -450,10 +476,9 @@ export function VsPickArena({ me }: { me: VsPickPlayer }) {
             disabled={(!both && !one) || matching}
             onClick={() => {
               if (both) {
-                // PK 页口径＝「我 vs 对手」：两边角色自由后，推非自己那张卡片的 id
-                // （右是自己时推左；两边都不是自己时推右）
-                const opp = right && right.id !== me.id ? right : left;
-                if (opp) router.push(`/vs/${opp.id}`);
+                // 对决 URL 化（五轮 13:38 张老师）：左右两卡即对决双方，
+                // ?fight=1 落地自动跑分（免二次点击）
+                if (left && right) router.push(`/vs/${left.id}/${right.id}?fight=1`);
               } else if (one) {
                 void matchOpponent();
               }

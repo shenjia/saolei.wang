@@ -69,7 +69,9 @@ export function VsButton({
   return (
     <Link
       className="vs_btn"
-      href={`/vs/${to}`}
+      // 五轮 13:38 张老师：链接带上自己 id（/vs/{自己id}/{对方id}）——
+      // 落地竞技场双卡就位，URL 即本次对决的可分享形态
+      href={`/vs/${viewerId}/${to}`}
       prefetch={false}
       // PC 新标签页 / 移动端本页（2026-11-11 张老师定）；target=_blank 必配 prefetch={false}
       target={isMobile ? undefined : "_blank"}

@@ -325,8 +325,9 @@ export async function getVsDuelTitle(uid1: number, uid2: number): Promise<string
 }
 
 /** 对决页主体（对战与旁观共用）：
- *  · record=true（/vs/[id] 本人访问）：渲染快照落 vs_duel（10 分钟窗口去重在函数内）；
- *  · record=false（/vs/[id]/[bid] 旁观）：纯渲染，不落库——对决 KPI 口径＝双方本人访问。
+ *  · record=true（会话为对决双方本人，/vs/{l}/{r}?fight=1 统一路由判定）：
+ *    渲染快照落 vs_duel（10 分钟窗口去重在函数内）；
+ *  · record=false（旁观：会话非对决双方）：纯渲染，不落库——对决 KPI 口径＝双方本人访问。
  *  uid1===uid2（含本人直连自己、旁观传同 id）：走「不能和自己比拼」兜底提示。 */
 export async function VsDuelView({
   uid1,
