@@ -475,7 +475,9 @@ table.admin_table a.link:hover {
   color: #a6e22e;
 }
 /* 对决统计记录表（2026-11-11 10:39 张老师）：内容列收缩到内容宽，末尾空列（.sp）
-   吸收全部余宽；空列保留行线，表格仍铺满整行——最右列右缘与趋势卡右缘对齐 */
+   吸收余宽；空列保留行线，表格仍铺满整行——最右列右缘与趋势卡右缘对齐。
+   11:05 张老师：空列限宽 40%，空间不够时自动布局先压缩空列（内容优先），
+   窄屏（<1100px）下空列直接隐藏 */
 table.admin_table.vs_recent th:not(.sp),
 table.admin_table.vs_recent td:not(.sp) {
   width: 1%;
@@ -484,7 +486,14 @@ table.admin_table.vs_recent td:not(.sp) {
 }
 table.admin_table.vs_recent th.sp,
 table.admin_table.vs_recent td.sp {
+  width: 40%;
   padding: 0 4px;
+}
+@media (max-width: 1100px) {
+  table.admin_table.vs_recent th.sp,
+  table.admin_table.vs_recent td.sp {
+    display: none;
+  }
 }
 table.admin_table .sub {
   color: #75715e;
