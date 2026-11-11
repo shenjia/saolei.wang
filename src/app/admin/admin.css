@@ -694,6 +694,13 @@ table.admin_table .ai_reason {
   color: #75715e;
   font-size: 12px;
 }
+/* 搜索关键词表格内高亮（2026-11-11 玩家管理）：不加背景色，关键字渲染成元帅金
+   #e6db74（张老师定，与军衔 marshal 档/站内标准金同色） */
+.admin_table mark.hl {
+  background: none;
+  color: #e6db74;
+  font-weight: 600;
+}
 .admin_input.tiny {
   width: 84px;
 }

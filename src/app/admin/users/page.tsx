@@ -114,6 +114,33 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     getAreaOptions(),
   ]);
 
+  // 搜索关键词表格内高亮（2026-11-11 张老师需求）：LIKE 不区分大小写，高亮同口径；
+  // 各文本列统一尝试匹配，未命中的列自然无 mark
+  const q = (sp.q ?? "").trim();
+
+  function Hl({ text }: { text: string }) {
+    if (!q || !text) return <>{text}</>;
+    const lt = text.toLowerCase();
+    const lq = q.toLowerCase();
+    const parts: React.ReactNode[] = [];
+    let i = 0;
+    let k = 0;
+    for (;;) {
+      const idx = lt.indexOf(lq, k);
+      if (idx === -1) break;
+      if (idx > i) parts.push(text.slice(i, idx));
+      parts.push(
+        <mark key={idx} className="hl">
+          {text.slice(idx, idx + lq.length)}
+        </mark>
+      );
+      k = idx + lq.length;
+      i = k;
+    }
+    if (i < text.length) parts.push(text.slice(i));
+    return <>{parts}</>;
+  }
+
   return (
     <>
       <div className="admin_page_head">
@@ -221,15 +248,22 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
             <tbody>
               {rows.map((u) => (
                 <tr key={u.id} className={u.status !== 0 ? "off" : undefined}>
-                  <td className="c sub">{u.id}</td>
+                  <td className="c sub">
+                    <Hl text={String(u.id)} />
+                  </td>
                   <td>
                     <Link className="link" href={`/admin/users/${u.id}`}>
-                      {u.chineseName}
+                      <Hl text={u.chineseName} />
                       <span className="pt_bubble">
                         <PlayerTip id={u.id} name={u.chineseName} englishName={u.englishName} />
                       </span>
                     </Link>
-                    {u.englishName && <span className="sub"> {u.englishName}</span>}
+                    {u.englishName && (
+                      <span className="sub">
+                        {" "}
+                        <Hl text={u.englishName} />
+                      </span>
+                    )}
                     {u.trusted && (
                       <span
                         className="admin_tag ok"
@@ -240,9 +274,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                       </span>
                     )}
                   </td>
-                  <td className="sub">{u.username || "—"}</td>
-                  <td className="sub">{u.nickname || "—"}</td>
-                  <td className="sub">{u.signature || "—"}</td>
+                  <td className="sub">{u.username ? <Hl text={u.username} /> : "—"}</td>
+                  <td className="sub">{u.nickname ? <Hl text={u.nickname} /> : "—"}</td>
+                  <td className="sub">{u.signature ? <Hl text={u.signature} /> : "—"}</td>
                   <td className="sub">{u.area || "—"}</td>
                   <td>
                     <TitleBadge title={u.title} />
