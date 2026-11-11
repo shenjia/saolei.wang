@@ -5521,7 +5521,7 @@ body #page.ranking_old .ranking_box {
 #daily_star h2 .star_write::after {
   content: attr(data-tip);
   position: absolute;
-  top: 160%;
+  bottom: 160%; /* 气泡朝上（2026-11-11 张老师定：hover 气泡永远固定在上面出现） */
   left: 50%;
   transform: translateX(-50%);
   background: #1e1f1c;
