@@ -15786,6 +15786,7 @@ span.vs_btn--disabled:hover img {
   padding: 4px;
   background: none;
   border: 0;
+  box-shadow: none; /* 21:06 张老师：音量按钮不该有 legacy button 的边框和阴影 */
   cursor: pointer;
   color: #fdc61a; /* 开：黄色 */
   line-height: 0;
@@ -16109,6 +16110,19 @@ span.vs_btn--disabled:hover img {
    wrapper（margin auto 居中后与分割线两缘平齐）；移动端 fit 清空即全宽 */
 .vs_hist_wrap {
   margin: 0 auto;
+}
+/* 竞技场（/vs、/vs/{id}）日期+分割线（21:06 张老师：音量按钮下方也要，与
+   对决页同款）——.vs_date/.vs_divider 基础规则是对决页 #vs_hero grid/absolute
+   布局的，竞技场落在 #vs_pick_hero 之后普通流内：日期居中、线 static+margin
+   auto（宽度由 VsPickArena fit 测两侧 .vs_panel 跨度写 inline，两端对齐卡片
+   外缘；移动端 fit 清空回全宽）。线与日期的间距对齐对决页口径（线下留白 40px） */
+.vs_pick_date {
+  display: block;
+  text-align: center;
+}
+.vs_pick_divider {
+  position: static;
+  margin: 28px auto 0;
 }
 /* ①「历史对决」标题比纪录等主板块小一档（40 → 26） */
 .vs_hist .vs_lv_head h1 {

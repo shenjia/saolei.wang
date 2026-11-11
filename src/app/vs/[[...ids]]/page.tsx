@@ -102,6 +102,11 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
     getVsHistory(session.uid, session.uid, 1, 10),
   ]);
 
+  // 日期时间（21:06 张老师：竞技场音量按钮下方也要日期+分割线，与对决页同款；
+  // 服务端算好传客户端组件，水合零冲突。格式与 VsDuelView 一致）
+  const now = new Date();
+  const arenaDateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
   return (
     <div id="page" className="main vs_pick_page">
       <VsPickArena
@@ -109,6 +114,7 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
         initialLeft={!l && !qr ? me : initialLeft}
         initialRight={initialRight}
         hist={{ rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
+        dateStr={arenaDateStr}
       />
     </div>
   );

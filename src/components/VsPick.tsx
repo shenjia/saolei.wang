@@ -324,6 +324,7 @@ export function VsPickArena({
   initialLeft = null,
   initialRight = null,
   hist = null,
+  dateStr,
 }: {
   /** 登录者自己（服务端预取） */
   me: VsPickPlayer;
@@ -335,6 +336,9 @@ export function VsPickArena({
    *  未跑分前常显；选人/换人后 uids 跟随两侧卡片，VsHistFeed 自动重拉）。
    *  null=不渲染（VsScoreBoard 内嵌竞技场形态时由其自渲染，避免重复） */
   hist?: { rows: VsHistRow[]; total: number; pageSize: number } | null;
+  /** 日期时间（21:06 张老师：竞技场音量按钮下方也要日期+分割线，与对决页同款
+   *  ——由服务端算好传入，客户端组件水合零冲突） */
+  dateStr?: string;
 }) {
   const [left, setLeft] = useState<VsPickPlayer | null>(initialLeft);
   const [right, setRight] = useState<VsPickPlayer | null>(initialRight);
@@ -370,6 +374,36 @@ export function VsPickArena({
       setSndOn(localStorage.getItem("vs_snd") !== "0");
     } catch {}
   }, []);
+
+  // 分割线/历史板块宽度（21:06 张老师：竞技场也要日期+分割线，与对决页同款）
+  // ——同 VsScoreBoard fit 口径：测两侧 .vs_panel（空位问号盒同为 .vs_panel）
+  // 的视觉跨度（收拢 translateX 含在 rect 内），写进分割线与板块 wrapper；
+  // 移动端清空回全宽；换人/选人卡片宽恒定不重测也无妨，resize 重算。
+  const [heroW, setHeroW] = useState<number | null>(null);
+  const dividerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = dividerRef.current;
+    if (!el) return;
+    const fit = () => {
+      // ⚠️ 不能用 el.closest——分割线是 #vs_pick_hero 的**兄弟**节点（挂在其后），
+      // closest 只走祖先链；本页唯一实例，直接全局取
+      const hero = document.getElementById("vs_pick_hero");
+      const panels = hero?.querySelectorAll<HTMLElement>(".vs_panel");
+      if (!hero || !panels || panels.length < 2) return;
+      if (window.matchMedia("(max-width: 768px)").matches) {
+        el.style.width = "";
+        setHeroW(null);
+        return;
+      }
+      const l = panels[0].getBoundingClientRect();
+      const r = panels[panels.length - 1].getBoundingClientRect();
+      el.style.width = `${Math.round(r.right - l.left)}px`;
+      setHeroW(Math.round(r.right - l.left));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [left, right]);
 
   // 双方就位 → 立刻拉赛前预测（十轮 14:38 张老师：匹配成功后 URL 已更新，
   // 预测评价要**马上**出现，不等跳转对决页）。未就位/换人清空即回金气泡。
@@ -438,9 +472,10 @@ export function VsPickArena({
     else setRight(null);
   }
 
-  /** 匹配对手（2026-11-11 张老师）：单边有玩家时点「匹配对手」——
-   *  服务端按登录者全国排名 ±50 窗口随机挑一人；无论请求多快都把按钮
-   *  置灰停留随机 1~3 秒（「匹配中」+ 转圈），到点再出人（七轮 13:28 口径）。 */
+  /** 匹配对手（2026-11-11 21:08 张老师新口径）：单边有玩家时点「匹配对手」——
+   *  服务端按登录者**三级（初/中/高）STNB 总分**上下浮动 5% 窗口随机挑一人，
+   *  窗口内无人则逐级扩大 10%、15%……直到找到；无论请求多快都把按钮置灰停留
+   *  随机 1~3 秒（「匹配中」+ 转圈），到点再出人（七轮 13:28 口径）。 */
   async function matchOpponent() {
     if (matching) return;
     setMatching(true);
@@ -453,7 +488,7 @@ export function VsPickArena({
       if (!res.ok) {
         toast(
           res.status === 404
-            ? "你还没有全国排名，暂时无法匹配对手"
+            ? "你还没有 STNB 成绩，暂时无法匹配对手"
             : "匹配失败，请重试"
         );
         return;
@@ -564,17 +599,28 @@ export function VsPickArena({
         <VsEmptySlot onPick={(u) => void pick("right", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
       </div>
+      {/* 日期+分割线（21:06 张老师：竞技场音量按钮下方也要，与对决页同款——
+          日期居中、分割线宽度与两侧卡片边缘平齐（fit 测量值），移动端全宽） */}
+      {dateStr && (
+        <>
+          <span className="vs_date vs_pick_date">{dateStr}</span>
+          <div className="vs_divider vs_pick_divider" ref={dividerRef} aria-hidden="true" />
+        </>
+      )}
       {/* 「历史对决」板块（17:23 张老师：/vs/{id} 单 id 入口、未跑分前常显；
           选人/换人后 uids 跟随两侧卡片自动重拉。至少一侧有人才渲染——全空
-          没有发起者语义，板块整体摘除 */}
+          没有发起者语义，板块整体摘除。21:06 张老师：宽度与分割线一致（同
+          对决页口径，heroW 写进 wrapper 居中） */}
       {hist && (left?.id || right?.id) && (
-        <VsHistBlock
-          uid1={left?.id ?? 0}
-          uid2={right?.id ?? 0}
-          initial={hist.rows}
-          total={hist.total}
-          pageSize={hist.pageSize}
-        />
+        <div className="vs_hist_wrap" style={heroW ? { width: heroW } : undefined}>
+          <VsHistBlock
+            uid1={left?.id ?? 0}
+            uid2={right?.id ?? 0}
+            initial={hist.rows}
+            total={hist.total}
+            pageSize={hist.pageSize}
+          />
+        </div>
       )}
     </>
   );

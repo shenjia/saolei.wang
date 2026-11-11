@@ -617,7 +617,7 @@ export function VsScoreBoard({
            对决板块保留）：VsPickArena 挂载后其 URL 同步 effect 自动把地址改成
            /vs?/{右id} 或 /vs/{左id}；重新选满双方「一决胜负」经 sessionStorage
            交接跳 /vs/{l}/{r}，与竞技场主路径同一套行为 */
-        <VsPickArena me={arena.me} initialLeft={arena.left} initialRight={arena.right} />
+        <VsPickArena me={arena.me} initialLeft={arena.left} initialRight={arena.right} dateStr={dateStr} />
       ) : (
         <div id="vs_hero" data-close={phase === "ready" ? "1" : "0"} data-done={phase === "done" ? "1" : "0"} data-shot={shotReady ? "1" : "0"}>
         {leftPanel}
