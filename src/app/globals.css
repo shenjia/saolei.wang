@@ -15859,10 +15859,17 @@ span.vs_btn--disabled:hover img {
   filter: brightness(1.12);
 }
 /* 00:18 张老师：PC/移动端「返回」统一移到页面最底部（VsScoreBoard 在 below 之后
-   渲染 .vs_back_end），按钮加大一号 */
+   渲染 .vs_back_end），按钮加大一号。
+   20:31 张老师：PC 端底部「返回」去掉（done 后卡片右上角 X 常显承担换人再战，
+   回对手主页走卡片上的头像/姓名链接）；移动端保留（保存到相册 + 返回） */
 .vs_back_end {
   display: block;
   text-align: center;
+}
+@media (min-width: 769px) {
+  .vs_back_end {
+    display: none;
+  }
 }
 #page .vs_back_end .vs_back {
   display: inline-block;
@@ -16790,14 +16797,18 @@ a.vs_c:hover {
 /* 收拢后卡片 X（右上角）会落进中列矩形里——中列对指针穿透，只留按钮可点
    （否则 .vs_vs 的透明区域拦住 X 的点击/hover）；PK 页无 X 不受影响。
    16:52 张老师：对决页同款问题（.vs_vs z-index:2 压过收拢面板的骑线 X，
-   probe 实证 click 打不到按钮）——#vs_hero[data-close="1"]（就位态，X 可见时）
-   同样对指针穿透；跑分后 X 随卡片滑走，正常态中列不受影响 */
+   probe 实证 click 打不到按钮）——原只对 data-close="1"（就位态）穿透；
+   20:29 张老师：对决完成后点 X 没反应——面板滑回原位后 X 仍骑线探进中列，
+   恢复拦截的中列把 hover 链也拦了（鼠标挪到右上角命中中列而非卡片，
+   .vs_panel:hover 不成立 → X 永不浮现 → 无从点起）。改**恒穿透**：done 态
+   中列只剩评价/日期/分割线（均非交互元素）；跑分中「一决胜负」虽恢复可点，
+   但 disabled + startFight 的 phase 守卫双保险，误点无害 */
 #vs_pick_hero .vs_vs,
-#vs_hero[data-close="1"] .vs_vs {
+#vs_hero .vs_vs {
   pointer-events: none;
 }
 #vs_pick_hero .vs_vs button,
-#vs_hero[data-close="1"] .vs_vs button {
+#vs_hero .vs_vs button {
   pointer-events: auto;
 }
 /* 空位（问号占位 + 搜索框）：宽度对齐玩家卡片实测外宽 260（.user_card 内容宽
@@ -16872,6 +16883,13 @@ a.vs_c:hover {
   background: #fdc61a;
   color: #272822;
 }
+/* 20:31 张老师：hover 黄底时中间的叉显示成绿色——.vs_swap 是 <Link>（a 标签），
+   全站 body a:hover:not(.button):not(.auth_button)（特异性 0,3,2）压过上面的
+   裸类规则把字色夺走；#page 提权（1,2,0）夺回黑叉（同 .vs_back 的提权理由） */
+#page .vs_swap:hover {
+  background: #fdc61a;
+  color: #272822;
+}
 /* hover 气泡「换人」：暗底描边（同音效开关 data-tip 上弹风格），按钮**正上方**弹出 */
 .vs_swap::after {
   content: "换人";
@@ -16904,6 +16922,13 @@ a.vs_c:hover {
     opacity: 1;
     pointer-events: auto;
   }
+}
+/* 20:31 张老师：对决完成后双方卡片右上角 X **常显**（截图完成后可直接点换人
+   再战，不再依赖卡片 hover 浮现）——hover 链在 done 态本就不可靠（骑线 X 探进
+   中列，见上「恒穿透」注释），常显后点击不依赖 hover。特异性压过上面的隐藏态 */
+#vs_hero[data-done="1"] .vs_swap {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* 中间列「一决胜负」：盒型/字体全走 PK 页 .vs_fight，这里只补置灰态——

@@ -552,6 +552,14 @@ export function VsScoreBoard({
     if (!el) return;
     const fit = () => {
       const hero = el.closest("#vs_hero");
+      // 20:29 张老师：跑分期间（面板滑开中）分割线不显示——历史对决板块已随开跑
+      // 摘除，fit 若照测滑开后的面板跨度，线会突变成横贯全宽的孤线（实测 ready
+      // 790 → running 936）；就位/赛后照常显示测量
+      if (phase === "exiting" || phase === "running") {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "";
       const panels = hero?.querySelectorAll<HTMLElement>(".vs_panel");
       if (!hero || !panels || panels.length < 2) return;
       if (window.matchMedia("(max-width: 768px)").matches) {
@@ -598,7 +606,7 @@ export function VsScoreBoard({
            交接跳 /vs/{l}/{r}，与竞技场主路径同一套行为 */
         <VsPickArena me={arena.me} initialLeft={arena.left} initialRight={arena.right} />
       ) : (
-        <div id="vs_hero" data-close={phase === "ready" ? "1" : "0"}>
+        <div id="vs_hero" data-close={phase === "ready" ? "1" : "0"} data-done={phase === "done" ? "1" : "0"}>
         {leftPanel}
         <div className="vs_vs">
           {/* 顶部评价位（22:36 张老师：终局评价与开盘预测放**相同的位置**——
