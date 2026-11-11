@@ -23,11 +23,10 @@ const nextConfig: NextConfig = {
   // __dirname 定位 data/ip2region.xdb（11MB），bundler 打包后路径失效 → 运行时读不到库
   serverExternalPackages: ["ip2region-ts"],
 
-  // metadata 图标路由（src/app/ 下的 icon.svg / apple-icon.png / favicon.ico，URL 形如
-  // /icon.svg?icon.<hash>.svg）默认响应 cache-control: max-age=0, must-revalidate 且无
-  // ETag/Last-Modified → 浏览器每次导航都完整重下载；layout.tsx 顶部 logo 的裸 /icon.svg
-  // 同样命中此规则。设 1 天缓存（裸路径无 content-hash，取保守值：改图标最多 1 天生效）；
-  // headers() 的 query 参与忽略，带 hash 的 metadata URL 与裸 URL 一并覆盖
+  // 图标文件缓存头（2026-11-11 注：图标已移出 src/app 文件约定 → public/，由
+  // layout.tsx generateMetadata.icons 按环境切换——本地 dev 绿色 / 生产原版）。
+  // Next 对 public 静态文件默认带合理缓存，但裸 icon.svg（无 content-hash）历史上
+  // 走 metadata 路由时是 max-age=0；此规则保留 1 天缓存（改图标最多 1 天生效）
   headers: async () => [
     {
       source: "/:file(icon.svg|apple-icon.png|favicon.ico)",

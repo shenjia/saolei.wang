@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """favicon.ico 无损瘦身 ×2：从 git HEAD 旧版取源，产出两个文件——
-① src/app/favicon.ico（全站）：四帧 16/24/32/48 原样保留，64 色量化重压，
+① public/favicon.ico（全站）：四帧 16/24/32/48 原样保留，64 色量化重压，
    差异仅 alpha 抗锯齿边缘带（≤15/2-6% 像素，肉眼不可辨）。8.4KB → ~3KB。
+   （2026-11-11 favicon 按环境切换改造：图标移出 src/app 文件约定 → public/，
+   由 layout.tsx generateMetadata.icons 控制，本地 dev 用绿色版 icon-dev.svg/png）
 ② public/images/favicon-mini.ico（挑战页专用极简）：只留 16/32 双帧（浏览器
    标签页场景够用，砍 24 Windows 冗余档与 48 快捷方式档）。~1.4KB。
 注意 PIL 的 ICO saver 会丢 append_images 帧，必须手动打包目录+帧。
@@ -14,7 +16,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-TARGET = ROOT / "src/app/favicon.ico"
+TARGET = ROOT / "public/favicon.ico"
 TARGET_MINI = ROOT / "public/images/favicon-mini.ico"
 
 def extract_frames(data: bytes) -> dict[int, Image.Image]:
@@ -58,7 +60,7 @@ def verify(data: bytes, expect: list[tuple[int, int]]) -> None:
 
 def main() -> None:
     src_data = subprocess.run(
-        ["git", "show", "HEAD:src/app/favicon.ico"],
+        ["git", "show", "HEAD:public/favicon.ico"],
         capture_output=True, cwd=ROOT,
     ).stdout
     frames = extract_frames(src_data)

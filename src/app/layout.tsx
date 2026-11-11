@@ -25,13 +25,33 @@ import { getOpenmsLink } from "@/lib/openms";
 import { OpenmsConsentModal } from "@/components/OpenmsConsentModal";
 import { BotChallengeGate } from "@/components/BotChallengeGate";
 
-export const metadata: Metadata = {
-  /* 站点标题模板（2026-10-15 张老师要求）：所有子页面统一「XXX | 扫雷网 Saolei.wang」 */
-  title: {
-    default: "扫雷网 Saolei.wang",
-    template: "%s | 扫雷网 Saolei.wang",
-  },
-  description: "扫雷网——扫雷玩家的家园，录像排行、成绩认证、雷界快讯",
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    /* 站点标题模板（2026-10-15 张老师要求）：所有子页面统一「XXX | 扫雷网 Saolei.wang」 */
+    title: {
+      default: "扫雷网 Saolei.wang",
+      template: "%s | 扫雷网 Saolei.wang",
+    },
+    description: "扫雷网——扫雷玩家的家园，录像排行、成绩认证、雷界快讯",
+    /* favicon 按环境切换（2026-11-11 张老师要求）：本地 dev（localhost/dev.saolei.wang，
+       两者同为本机 launchd 的 next dev:3100，NODE_ENV=development）用绿色徽章版，
+       生产（蓝绿双槽 next start，NODE_ENV=production）保持原版黑徽章。
+       原文件约定图标（src/app/icon.svg / favicon.ico）无法按环境切换，已移至 public/
+       改由 metadata.icons 控制；Safari 不支持 SVG favicon，补 32px PNG 兜底。 */
+    icons:
+      process.env.NODE_ENV === "development"
+        ? {
+            icon: [
+              { url: "/icons/icon-dev-32.png", sizes: "32x32", type: "image/png" },
+              { url: "/icons/icon-dev.svg", type: "image/svg+xml" },
+            ],
+          }
+        : {
+            icon: [
+              { url: "/icon.svg", type: "image/svg+xml" },
+              { url: "/favicon.ico", sizes: "any" },
+            ],
+          },
   /* iOS 无元素全屏 API（/online 全屏按钮在该环境走伪全屏退化）——
      唯一真隐藏 Safari 地址栏的途径：添加到主屏幕后以 standalone 打开 */
   appleWebApp: {
@@ -47,7 +67,8 @@ export const metadata: Metadata = {
   other: {
     "apple-mobile-web-app-capable": "yes",
   },
-};
+  };
+}
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await getSession();
