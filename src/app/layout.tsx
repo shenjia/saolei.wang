@@ -24,6 +24,7 @@ import { resolveTitleSystem, getThunderKingId } from "@/lib/title-system";
 import { getOpenmsLink } from "@/lib/openms";
 import { OpenmsConsentModal } from "@/components/OpenmsConsentModal";
 import { BotChallengeGate } from "@/components/BotChallengeGate";
+import { VsNavLink } from "@/components/VsNewDot";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -135,10 +136,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 <li>
                   <Link prefetch={false} href="/online">练习</Link>
                 </li>
-                {/* 对决入口（2026-11-11）：登录态才显示（/vs 页本身有登录门槛） */}
+                {/* 对决入口（2026-11-11）：登录态才显示（/vs 页本身有登录门槛）。
+                    新功能绿点（2026-11-11 23:03 张老师）：文字右上角绿点，点过永久消失
+                    （localStorage），2026-11-19 上线满一周整体下线——详见 VsNewDot.tsx */}
                 {session && (
                   <li>
-                    <Link prefetch={false} href="/vs">对决</Link>
+                    <VsNavLink />
                   </li>
                 )}
                 <li>

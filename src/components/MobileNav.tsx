@@ -13,6 +13,7 @@ import { BubbleIcon } from "./SendMessageButton";
 import { pollWhenMobile, useUnreadMessages } from "./useUnreadMessages";
 import { SystemText } from "./SystemText";
 import { DefaultAvatar } from "./DefaultAvatar";
+import { VsNewDot, dismissVsNewDot } from "./VsNewDot";
 import { isManager } from "@/lib/config";
 
 export interface MobileNavUser {
@@ -105,8 +106,26 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
           <ul className="mn_menu">
             {SITE_LINKS.filter((l) => !l.loginOnly || user).map((l) => (
               <li key={l.href}>
-                {/* /titles 文案随观看者称号体系切换（军衔/称号） */}
-                <Link prefetch={false} href={l.href}>{l.href === "/titles" ? <SystemText /> : l.label}</Link>
+                {/* /titles 文案随观看者称号体系切换（军衔/称号）；
+                    /vs「对决」挂新功能绿点（2026-11-11 23:03 张老师）：点过永久消失
+                    （localStorage），2026-11-19 上线满一周整体下线——详见 VsNewDot.tsx */}
+                <Link
+                  prefetch={false}
+                  href={l.href}
+                  className={l.href === "/vs" ? "vs_new_anchor" : undefined}
+                  onClick={l.href === "/vs" ? dismissVsNewDot : undefined}
+                >
+                  {l.href === "/titles" ? (
+                    <SystemText />
+                  ) : l.href === "/vs" ? (
+                    <>
+                      对决
+                      <VsNewDot />
+                    </>
+                  ) : (
+                    l.label
+                  )}
+                </Link>
               </li>
             ))}
             {!user && (

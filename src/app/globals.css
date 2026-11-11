@@ -17177,3 +17177,33 @@ a.vs_c:hover {
     width: 200px;
   }
 }
+
+/* ==================== 「对决」新功能绿点（2026-11-11 23:03 张老师需求） ====================
+   导航「对决」文字右上角绿色小圆点：点击「对决」后永久消失（localStorage
+   vs_new_dot_dismissed）；2026-11-19 00:00（上线满一周）整体下线——
+   到期请连同 .vs_new_* 规则与 src/components/VsNewDot.tsx 一并删除 */
+/* 桌面顶栏（行内文字 44px 行高）：absolute 钉到「决」字右上角。
+   15px 字在 44px 行内文字顶约 12px——dot 顶取 9px、右缘 -7px 微探出字缘 */
+.vs_new_anchor {
+  position: relative;
+}
+.vs_new_dot {
+  position: absolute;
+  top: 9px;
+  right: -7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00c853;
+  box-shadow: 0 0 4px rgba(0, 200, 83, 0.9); /* 暗底顶栏加光晕，6px 小点不发光看不见 */
+}
+/* 移动端汉堡菜单（.mn_menu li a 是 flex 且 li overflow:hidden）：
+   放弃 absolute，改 inline 随排——transform 上提到文字右上方（flex 容器内
+   transform 定位不受 li overflow 影响，dot 不出 li 边界） */
+.mn_menu li a.vs_new_anchor .vs_new_dot {
+  position: static;
+  top: auto;
+  right: auto;
+  margin-left: 3px;
+  transform: translateY(-9px);
+}
