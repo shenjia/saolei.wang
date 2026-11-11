@@ -153,12 +153,13 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
               （只放胜负平）+ 右比分（被挑战者），比分列表头置空。
               14:13 张老师：发起者列与发起时间列互换（发起者在前），发起时间暗灰。
               14:55 张老师：挑战者左加「是否本人」列（发起者∈对决双方判定，亮绿是/
-              暗灰否；指定匹配上线后发起者可能是第三人，判定已按数据驱动预留） */}
+              暗灰否；指定匹配上线后发起者可能是第三人，判定已按数据驱动预留）。
+              15:49 张老师：发起时间与发起者对调（发起时间在前） */}
           <table className="admin_table vs_recent">
             <thead>
               <tr>
-                <th>发起者</th>
                 <th>发起时间</th>
+                <th>发起者</th>
                 <th className="c">是否本人</th>
                 <th>挑战者</th>
                 <th className="c"></th>
@@ -187,12 +188,12 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
                 const isOwn = d.u1 === challenger || d.u1 === d.u2;
                 return (
                   <tr key={d.id}>
-                    {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔 */}
-                    <td>{launcherUser(d.u1, d.n1)}</td>
-                    {/* 发起时间（14:13 张老师）：暗灰显示 */}
+                    {/* 发起时间（15:49 张老师对调：发起时间在前）：暗灰显示 */}
                     <td className="gray" title={formatDate(d.time, "Y-m-d H:i:s")}>
                       <RelTime time={d.time} />
                     </td>
+                    {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔 */}
+                    <td>{launcherUser(d.u1, d.n1)}</td>
                     {/* 是否本人（14:55 张老师）：亮绿「是」/ 暗灰「否」 */}
                     <td className="c">
                       {isOwn ? (

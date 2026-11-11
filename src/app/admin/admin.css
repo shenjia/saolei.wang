@@ -1429,6 +1429,13 @@ table.admin_table .ai_reason {
   right: 0;
   transform: none;
 }
+/* 首列时间气泡（2026-11-11 15:49 张老师：对决统计发起时间对调为首列后气泡被
+   .admin_scroll 左缘裁半）——与上方末列右对齐同一思路的镜像：左对齐向右展开，
+   左缘零溢出不出滚动区 */
+.admin_scroll td:first-child span.reltime[data-tip]::after {
+  left: 0;
+  transform: none;
+}
 
 /* 玩家名 hover 气泡（2026-10-29 张老师要求二轮：#ID 姓名 英文名，姓名亮灰/其余暗灰）
    ——后台玩家链接内嵌 .pt_bubble（同主站 PlayerTip 结构）；富文本双色。 */
