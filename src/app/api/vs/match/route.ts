@@ -1,21 +1,25 @@
-// /vs 对决选择页「匹配对手」接口（2026-11-11 21:08 张老师新口径）：
+// /vs 对决选择页「匹配对手」接口（2026-11-11 21:46 张老师定稿口径）：
 // GET /api/vs/match?exclude=id1,id2
-//   → 以**登录者三级（初级/中级/高级）STNB 总分**（user_stnb_best 落盘表
-//     SUM(stnb)，与卡片/雷达同源）为基准，先在上下浮动 5% 窗口内随机挑一名
-//     玩家；窗口内无人则逐级扩大 10%、15%……直到找到为止，返回 { id, total, pct }；
+//   → 池子＝**高级（exp）STNB 在登录者 ±5% 内** 且 **全国排名在登录者 ±10 内**
+//     的玩家，随机挑一名返回 { id, pct, rankWin }；
+//   → 池内无人则两个维度**同步**逐步扩大（STNB ±10%/±15%……，排名 ±20/±30……），
+//     直到找到为止（与 21:08「直到找到为止」口径一脉相承）；
 //   → 客户端拿到 id 后走 /api/vs/player 渲染卡片。
-// 仅登录可用；无任何 STNB 成绩返回 404 no_stnb。
+// 仅登录可用；无高级 STNB 成绩 → 404 no_exp_stnb，无全国排名 → 404 no_rank。
 // exclude：登录者自己恒排除；场上已有玩家一并排除（不能匹配同站两边）。
-// （旧口径＝全国排名 ±50 名窗口，21:08 张老师定改为 STNB 总分浮动窗）
+// （口径沿革：±50 名窗口 → 21:08 三级 STNB 总分 ±5% 逐级扩大 → 21:46 定稿
+//   高级 STNB ±5% ∩ 排名 ±10——总分口径会被单级形态差异中和，高级 STNB
+//   视作综合实力代表）
 
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-/** 起步浮动比例与步长（%）：5% → 10% → 15% ……；100% 必中（全员皆候选），
- *  循环天然有界，无需额外封顶 */
-const STEP = 5;
+/** 起步窗口与步长：STNB ±5%、排名 ±10，每轮同步扩大一档（5%→10%→…，10→20→…）；
+ *  排名窗上限 100 亿级也必终局（全员覆盖），循环天然有界 */
+const STNB_STEP = 5; // %
+const RANK_STEP = 10; // 名
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -30,28 +34,41 @@ export async function GET(req: Request) {
   }
   const exBits = [...exclude].map((x) => BigInt(x));
 
-  // 我的 STNB 总分（三级各有各行，SUM 覆盖已有级别；无任何成绩=无法匹配）
-  const mine = await prisma.$queryRaw<{ s: number | null }[]>`
-    SELECT SUM(stnb) s FROM user_stnb_best WHERE user = ${BigInt(uid)}`;
-  const myTotal = Number(mine[0]?.s ?? 0);
-  if (!myTotal) {
-    return NextResponse.json({ error: "no_stnb" }, { status: 404 });
+  // 我的高级 STNB 与全国排名（池子两维度都以登录者为基准，缺一不可）
+  const [mineStnb, mineRank] = await Promise.all([
+    prisma.$queryRaw<{ stnb: number }[]>`
+      SELECT stnb FROM user_stnb_best WHERE user = ${BigInt(uid)} AND level = "exp"`,
+    prisma.$queryRaw<{ national: number }[]>`
+      SELECT national FROM user_rank WHERE id = ${BigInt(uid)}`,
+  ]);
+  if (!mineStnb.length) {
+    return NextResponse.json({ error: "no_exp_stnb" }, { status: 404 });
   }
+  if (!mineRank.length) {
+    return NextResponse.json({ error: "no_rank" }, { status: 404 });
+  }
+  const myStnb = Number(mineStnb[0].stnb);
+  const myRank = Number(mineRank[0].national);
 
-  // 逐级扩大窗口找候选（user_stnb_best 按 (user,level) 主键聚组，万级行全扫
-  // 毫秒级；窗口内全取 JS 随机，不值得 ORDER BY RAND()）
-  for (let pct = STEP; pct <= 100; pct += STEP) {
-    const lo = myTotal * (1 - pct / 100);
-    const hi = myTotal * (1 + pct / 100);
-    const cands = await prisma.$queryRaw<{ user: bigint }[]>`
-      SELECT user FROM user_stnb_best
-      WHERE user NOT IN (${Prisma.join(exBits)})
-      GROUP BY user
-      HAVING SUM(stnb) BETWEEN ${lo} AND ${hi}`;
+  // 两个维度同步扩大窗口找候选（user_rank 有 national 索引，JOIN 落盘表毫秒级；
+  // 窗口内全取 JS 随机，不值得 ORDER BY RAND()）
+  for (let k = 1; k <= 20; k++) {
+    const pct = STNB_STEP * k;
+    const rankWin = RANK_STEP * k;
+    const cands = await prisma.$queryRaw<{ id: bigint }[]>`
+      SELECT r.id FROM user_rank r
+      JOIN user_stnb_best s ON s.user = r.id AND s.level = "exp"
+      WHERE r.id NOT IN (${Prisma.join(exBits)})
+        AND s.stnb BETWEEN ${myStnb * (1 - pct / 100)} AND ${myStnb * (1 + pct / 100)}
+        AND r.national BETWEEN ${myRank - rankWin} AND ${myRank + rankWin}`;
     if (!cands.length) continue;
     const picked = cands[Math.floor(Math.random() * cands.length)];
-    return NextResponse.json({ id: Number(picked.user), total: myTotal, pct });
+    return NextResponse.json({
+      id: Number(picked.id),
+      pct,
+      rankWin,
+    });
   }
-  // 理论不可达（100% 窗口覆盖全部有成绩用户，除非全被 exclude）
+  // 理论不可达（窗口足够大后覆盖全部有成绩在榜用户，除非全被 exclude）
   return NextResponse.json({ error: "no_candidate" }, { status: 404 });
 }

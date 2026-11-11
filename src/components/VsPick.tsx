@@ -472,9 +472,9 @@ export function VsPickArena({
     else setRight(null);
   }
 
-  /** 匹配对手（2026-11-11 21:08 张老师新口径）：单边有玩家时点「匹配对手」——
-   *  服务端按登录者**三级（初/中/高）STNB 总分**上下浮动 5% 窗口随机挑一人，
-   *  窗口内无人则逐级扩大 10%、15%……直到找到；无论请求多快都把按钮置灰停留
+  /** 匹配对手（2026-11-11 21:46 张老师定稿口径）：单边有玩家时点「匹配对手」——
+   *  服务端池子＝高级 STNB ±5% 且全国排名 ±10 的玩家随机挑一人，池内无人则
+   *  两维度同步扩大（±10%/±20 名……）直到找到；无论请求多快都把按钮置灰停留
    *  随机 1~3 秒（「匹配中」+ 转圈），到点再出人（七轮 13:28 口径）。 */
   async function matchOpponent() {
     if (matching) return;
@@ -486,9 +486,12 @@ export function VsPickArena({
       const onBoard = left?.id ?? right?.id;
       const res = await fetch(`/api/vs/match${onBoard ? `?exclude=${onBoard}` : ""}`);
       if (!res.ok) {
+        const { error } = (await res.json().catch(() => ({}))) as { error?: string };
         toast(
           res.status === 404
-            ? "你还没有 STNB 成绩，暂时无法匹配对手"
+            ? error === "no_exp_stnb"
+              ? "你还没有高级 STNB 成绩，暂时无法匹配对手"
+              : "你还没有全国排名，暂时无法匹配对手"
             : "匹配失败，请重试"
         );
         return;
