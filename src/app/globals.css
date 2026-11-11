@@ -16059,13 +16059,14 @@ span.vs_btn--disabled:hover img {
    所有行共用「本级别最多格子数」套等宽列（--vs_cols 由 VsLevelBox 注入），
    列宽＝板块可用宽 / 列数，格子按 27:24 等比放大、充分占满板块。
    行内顺序由 orderCells 按「我胜/我独有/都没有/对方独有/对方胜」重排，
-   .vs_c 直接作为 grid item（原 .vs_grp 拆箱层已删），全行统一 2px 间距。 */
+   .vs_c 直接作为 grid item（原 .vs_grp 拆箱层已删）；列间距 6px 与
+   行间距（.vs_bandrow margin-top 6px）统一（2026-11-11 张老师）。 */
 .vs_mid {
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(var(--vs_cols, 10), minmax(0, 1fr));
-  gap: 2px;
+  gap: 6px;
   align-items: center;
 }
 .vs_c {

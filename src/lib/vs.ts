@@ -116,7 +116,7 @@ export interface VsData {
   /** BV 总分（三级别合计） */
   bv1: number;
   bv2: number;
-  /** 战前预估评价：只看双方总 STNB，绝不碰 PK 记录/BV 得分（张老师 2026-11-10：不要剧透结果） */
+  /** 战前预估评价：只看双方中+高级 STNB（2026-11-11 去掉初级，太靠运气），绝不碰 PK 记录/BV 得分（张老师 2026-11-10：不要剧透结果） */
   preComment: string;
   /** 战前评价色调（2026-11-10）：占优=adv 绿 / 不利=dis 玫瑰红 / 势均力敌=even 金 */
   preTone: PreTone;
@@ -127,14 +127,16 @@ export interface VsData {
 /** 战前评价色调：adv=占优（绿）/ dis=不利（玫瑰红）/ even=势均力敌（金） */
 export type PreTone = "adv" | "dis" | "even";
 
-/** 战前预估（2026-11-10 18:08 张老师改口径）：改用**双方总 STNB 成绩**比较，
+/** 战前预估（2026-11-10 18:08 张老师改口径）：改用**双方 STNB 成绩**比较，
  *  不再看雷达（雷达是排位百分位，顶级玩家间饱和，判什么都一样）。
+ *  2026-11-11 张老师：**去掉初级 STNB**（初级盘短、运气成分太大），
+ *  改取中+高级 STNB 之和比较。
  *  相对差 = (高 - 低) / 高（与赛后评价同款分母）：
  *    ≤ 10% →「势均力敌的对抗」(even 金)
  *    ≤ 20% →「稍占上风的对抗」/「略处下风的对抗」(adv 绿 / dis 玫瑰红)
  *    > 20% →「毫无悬念的碾压」/「毫无胜算的对抗」(adv / dis)
- *  总 STNB 来自 STNB 榜「总计」列（三级历史最高之和，缺级＝0），与 PK 记录/BV
- *  得分不是一套口径，故不剧透结果。两边都无有效总 STNB 时不下判断，给中性档。 */
+ *  STNB 来自 STNB 榜该级历史最高（缺级＝0），与 PK 记录/BV
+ *  得分不是一套口径，故不剧透结果。两边都无有效 STNB 时不下判断，给中性档。 */
 export function preMatchAssessment(s1: number, s2: number): { text: string; tone: PreTone } {
   const hi = Math.max(s1, s2);
   const lo = Math.min(s1, s2);
@@ -324,7 +326,8 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
 
   const bv1 = levels.reduce((s, l) => s + l.total1, 0);
   const bv2 = levels.reduce((s, l) => s + l.total2, 0);
-  const pre = preMatchAssessment(stnb1.total, stnb2.total);
+  // 战前预估（2026-11-11 张老师）：去掉初级 STNB（太靠运气），取中+高级之和
+  const pre = preMatchAssessment(stnb1.int + stnb1.exp, stnb2.int + stnb2.exp);
 
   return {
     p1: toVsPlayer(card1, radar1),
