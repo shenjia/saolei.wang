@@ -25,8 +25,10 @@ import { toast } from "./Toast";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { DefaultAvatar } from "./DefaultAvatar";
 import { RadarChart } from "./RadarChart";
+import { VsHistBlock } from "./VsHistBlock";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import type { RadarPoint } from "@/lib/radar";
+import type { VsHistRow } from "@/lib/vs";
 
 /** 玩家卡片数据（/vs/page.tsx 服务端组装初始「自己」；/api/vs/player 返回选定对手） */
 export interface VsPickPlayer {
@@ -321,6 +323,7 @@ export function VsPickArena({
   me,
   initialLeft = null,
   initialRight = null,
+  hist = null,
 }: {
   /** 登录者自己（服务端预取） */
   me: VsPickPlayer;
@@ -328,6 +331,10 @@ export function VsPickArena({
    *  选中/换人/清空后由 URL 同步 effect 实时改地址栏（五轮 13:38 张老师口径）。 */
   initialLeft?: VsPickPlayer | null;
   initialRight?: VsPickPlayer | null;
+  /** 「历史对决」板块数据（17:23 张老师：/vs/{id} 单 id 入口也要显示历史对决，
+   *  未跑分前常显；选人/换人后 uids 跟随两侧卡片，VsHistFeed 自动重拉）。
+   *  null=不渲染（VsScoreBoard 内嵌竞技场形态时由其自渲染，避免重复） */
+  hist?: { rows: VsHistRow[]; total: number; pageSize: number } | null;
 }) {
   const [left, setLeft] = useState<VsPickPlayer | null>(initialLeft);
   const [right, setRight] = useState<VsPickPlayer | null>(initialRight);
@@ -480,7 +487,8 @@ export function VsPickArena({
   };
 
   return (
-    <div id="vs_pick_hero">
+    <>
+      <div id="vs_pick_hero">
       {left ? (
         <VsCard p={left} onSwap={() => clearSlot("left")} />
       ) : (
@@ -523,12 +531,10 @@ export function VsPickArena({
                 // sessionStorage 标记交接，落地自动跑分，八轮 13:29 口径）。
                 // 左右两卡即对决双方；整页跳转保证服务端重渲对决数据。
                 if (left && right) {
-                  try {
-                    // 标记存时间戳（StrictMode 双挂载下「消费即删」会丢——
-                    // 首挂载删掉、cleanup 清计时器、二挂载读不到；对决页按
-                    // 新鲜度校验，开跑时才删除）
-                    sessionStorage.setItem("vs_autorun", String(Date.now()));
-                  } catch {}
+                  // 交接标记改 cookie（17:24 张老师：落地瞬间历史闪现又消失——
+                  // sessionStorage 方案 SSR 读不到，无法在首帧隐藏历史）：
+                  // path=/vs 限定范围、10s 过期，对决页 SSR 与客户端都能读到
+                  document.cookie = `vs_autorun=${Date.now()}; path=/vs; max-age=10; SameSite=Lax`;
                   window.location.assign(`/vs/${left.id}/${right.id}`);
                 }
               } else if (one) {
@@ -557,6 +563,19 @@ export function VsPickArena({
       ) : (
         <VsEmptySlot onPick={(u) => void pick("right", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
-    </div>
+      </div>
+      {/* 「历史对决」板块（17:23 张老师：/vs/{id} 单 id 入口、未跑分前常显；
+          选人/换人后 uids 跟随两侧卡片自动重拉。至少一侧有人才渲染——全空
+          没有发起者语义，板块整体摘除 */}
+      {hist && (left?.id || right?.id) && (
+        <VsHistBlock
+          uid1={left?.id ?? 0}
+          uid2={right?.id ?? 0}
+          initial={hist.rows}
+          total={hist.total}
+          pageSize={hist.pageSize}
+        />
+      )}
+    </>
   );
 }

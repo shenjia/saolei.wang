@@ -6,7 +6,7 @@
 // ··· 加载更多 = 追加下一批（每页 10 条）；滑条跳页 = 整窗替换。
 // 开跑后整块由父级（VsScoreBoard）按舞台状态摘除，本组件只管数据与渲染。
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { formatDate } from "@/lib/format";
@@ -37,7 +37,7 @@ export function VsHistFeed({
 }: {
   uid1: number;
   uid2: number;
-  /** RSC 首屏传入的第 1 页行 */
+  /** RSC 首屏传入的第 1 页行（对应初始 uid 组合；换人后由下方 effect 重拉覆盖） */
   initial: VsHistRow[];
   total: number;
   pageSize: number;
@@ -47,10 +47,12 @@ export function VsHistFeed({
   const [loaded, setLoaded] = useState(1);
   const [viewPage, setViewPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  // 总数可变：换人后 uids 变化，服务端 total 随之不同（首屏取 prop，之后跟 API 走）
+  const [totalCount, setTotalCount] = useState(total);
   // 序号门槛：滑条快速连拖时旧响应一律作废（全站 Feed 同款语义）
   const seq = useRef(0);
-  const maxPage = Math.max(1, Math.ceil(total / pageSize));
-  const hasMore = rows.length < total;
+  const maxPage = Math.max(1, Math.ceil(totalCount / pageSize));
+  const hasMore = rows.length < totalCount;
 
   async function request(p: number, append: boolean) {
     const my = ++seq.current;
@@ -58,10 +60,11 @@ export function VsHistFeed({
     try {
       const res = await fetch(`/api/vs/history?l=${uid1}&r=${uid2}&page=${p}`);
       if (!res.ok) return;
-      const data = (await res.json()) as { rows?: VsHistRow[] };
+      const data = (await res.json()) as { rows?: VsHistRow[]; total?: number };
       if (my !== seq.current) return;
       const got = data.rows ?? [];
       setRows((list) => (append ? [...list, ...got] : got));
+      if (typeof data.total === "number") setTotalCount(data.total);
       setLoaded(p);
       setViewPage(p);
     } finally {
@@ -76,6 +79,20 @@ export function VsHistFeed({
     if (loading || p === viewPage) return;
     request(p, false);
   };
+
+  // 换人跟随（2026-11-11 17:23 张老师：竞技场/就地换人后历史对决要跟着换）：
+  // uids 变化即整窗重拉第 1 页（initial 是服务端按**初始** uid 组合预取的，
+  // 不再对应新组合）。首挂载跳过——数据就是 initial，拉一遍纯属浪费。
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    if (!uid1 && !uid2) return; // 双空位由父级摘除板块，兜底不请求
+    void request(1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- uids 变化即重拉；request 恒取最新 state
+  }, [uid1, uid2]);
 
   return (
     <div className="vs_histbox">

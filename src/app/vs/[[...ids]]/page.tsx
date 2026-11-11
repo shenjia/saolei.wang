@@ -18,8 +18,10 @@
 
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { getVsPickPlayer } from "@/lib/vspick";
+import { getVsHistory } from "@/lib/vs";
 import { VsPickArena } from "@/components/VsPick";
 import { VsDuelView, getVsDuelTitle } from "@/components/VsDuel";
 
@@ -63,11 +65,16 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
   // 查询串占位的右卡 id（/vs?/{r} 形态）；路径双段时以路径为准
   const qr = r || rightIdFromQuery(sp);
 
-  // 双段 → 对决页（战前态、手动跑分；自动跑分由竞技场经 sessionStorage 交接）；
-  // 「历史对决」板块翻页改客户端（15:48 张老师改版），URL 不再带 ?page=N。
+  // 双段 → 对决页（战前态、手动跑分；自动跑分由竞技场经 vs_autorun cookie 交接）。
+  // 17:24 张老师：落地瞬间历史闪现又消失——cookie 在 SSR 侧可读，新鲜（8s 内）
+  // 即判定「马上自动开跑」，历史板块首帧就不渲染（histHidden），无闪现；
+  // 17:23 张老师：历史板块改 VsScoreBoard 内部渲染（数据直传），换人跟随竞技场。
   // 换人就地清卡（16:36 张老师）：旁观者（非对决双方）需装配登录者卡；双方本人
   // 的卡片由 VsDuelView 内部从对决数据零查询转换，这里传 null 免重复拉取
   if (l && qr) {
+    const jar = await cookies();
+    const ar = parseInt(jar.get("vs_autorun")?.value ?? "", 10);
+    const histHidden = !!ar && Date.now() - ar < 8000;
     const swapMe = session.uid === l || session.uid === qr ? null : await getVsPickPlayer(session.uid);
     return (
       <VsDuelView
@@ -75,6 +82,7 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
         uid2={qr}
         record={session.uid === l || session.uid === qr}
         swapMe={swapMe}
+        histHidden={histHidden}
       />
     );
   }
@@ -83,9 +91,13 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
   // 裸 /vs 空入口（无任何 id）由服务端预填自己（张老师 13:38：vs入口进来就自动填上自己的ID）
   const me = await getVsPickPlayer(session.uid);
   if (!me) notFound();
-  const [initialLeft, initialRight] = await Promise.all([
+  const [initialLeft, initialRight, hist] = await Promise.all([
     l ? getVsPickPlayer(l) : null,
     qr ? getVsPickPlayer(qr) : null,
+    // 「历史对决」板块数据（17:23 张老师：/vs/{id} 单 id 入口也要显示；至少一侧
+    // 有人才渲染，由组件内判定）——单边按该玩家发起的记录查（getVsHistory
+    // IN (l, r)，两边同传即单人口径）
+    getVsHistory(l || qr || session.uid, l || qr || session.uid, 1, 10),
   ]);
 
   return (
@@ -94,6 +106,7 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
         me={me}
         initialLeft={!l && !qr ? me : initialLeft}
         initialRight={initialRight}
+        hist={{ rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
       />
     </div>
   );

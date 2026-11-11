@@ -29,14 +29,12 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getVsData, getVsHistory, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";
-import { scoreTime } from "@/lib/format";
+import { getVsData, getVsHistory, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";import { scoreTime } from "@/lib/format";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { RadarChart } from "@/components/RadarChart";
 import { VsScoreBoard } from "@/components/VsScoreBoard";
-import { VsHistFeed } from "@/components/VsHistFeed";
 import { VsSwapX } from "@/components/VsSwapX";
 import type { VsPickPlayer } from "@/components/VsPick";
 import { getHeaderUser } from "@/lib/usercard";
@@ -346,6 +344,7 @@ export async function VsDuelView({
   uid2,
   record,
   swapMe = null,
+  histHidden = false,
 }: {
   uid1: number;
   uid2: number;
@@ -353,6 +352,9 @@ export async function VsDuelView({
   /** 登录者自己的竞技场卡片（16:36 张老师：换人就地清卡回竞技场用；旁观者
    *  非对决双方时由统一路由页额外装配，对决双方本人复用 p1/p2 转换） */
   swapMe?: VsPickPlayer | null;
+  /** 自动跑分交接（17:24 张老师：竞技场点一决胜负落地瞬间历史闪现又消失）——
+   *  统一路由页读到新鲜 vs_autorun cookie 时为 true，历史板块首帧即不渲染 */
+  histHidden?: boolean;
 }) {
   // 不能和自己比拼：入口按钮已灰置，直连 URL 兜底提示
   if (uid1 === uid2) {
@@ -411,17 +413,11 @@ export async function VsDuelView({
   // 同玩家卡片渲染）；15:48 改版：底部全站通用「加载更多 + 页码滑条」翻页器
   // （VsHistFeed 客户端组件，/api/vs/history 追加/跳页）。常显板块——赛前即渲染，
   // 开跑后由 VsScoreBoard 按舞台状态整体摘除。
+  // 17:23 张老师：板块改由 VsScoreBoard 内部渲染（VsHistBlock），这里只传**数据**
+  // ——换人就地切竞技场后 uids 跟随竞技场两侧卡片自动重拉。
+  // 17:24 张老师：竞技场自动跑分交接（vs_autorun cookie）由统一路由页读出传
+  // histHidden——SSR 首帧就不渲染历史，修掉「落地瞬间历史闪现又消失」。
   const hist = await getVsHistory(uid1, uid2, 1, 10);
-  const history = (
-    <div className="vs_lvblk vs_hist">
-      <div className="vs_lv_head">
-        <span aria-hidden="true" />
-        <h1 className="gray">历史对决</h1>
-        <span aria-hidden="true" />
-      </div>
-      <VsHistFeed uid1={uid1} uid2={uid2} initial={hist.rows} total={hist.total} pageSize={hist.pageSize} />
-    </div>
-  );
 
   // 2026-11-10 第五轮：下面所有板块交给客户端舞台（VsScoreBoard）控制显隐——
   // 赛前完全不挂载，点「决出胜负」跑分完成后才出现。RSC 节点可作为 props 传入客户端边界。
@@ -481,7 +477,8 @@ export async function VsDuelView({
         opponentId={uid2}
         dateStr={duelDateStr}
         swap={swapMe ? { me: swapMe, left: toPick(p1), right: toPick(p2) } : null}
-        history={history}
+        hist={{ uid1, uid2, rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
+        histHidden={histHidden}
         leftPanel={
           <VsPanel p={p1} side="l" swapHref={`/vs?/${uid2}`} />
         }

@@ -10,9 +10,11 @@ export async function GET(req: Request) {
   const l = parseInt(sp.get("l") ?? "", 10);
   const r = parseInt(sp.get("r") ?? "", 10);
   const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10) || 1);
-  if (!l || !r || Number.isNaN(l) || Number.isNaN(r)) {
+  // r=0 合法：单边场景（竞技场只选了一人）按该玩家发起的记录查（17:23 张老师：
+  // /vs/{id} 入口也要显示历史对决）——IN (l, r) 归一化成 IN (l, l)
+  if (!l || Number.isNaN(l) || Number.isNaN(r)) {
     return NextResponse.json({ error: "bad_params" }, { status: 400 });
   }
-  const hist = await getVsHistory(l, r, page, 10);
+  const hist = await getVsHistory(l, r || l, page, 10);
   return NextResponse.json(hist);
 }

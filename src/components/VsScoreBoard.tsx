@@ -27,6 +27,8 @@ import Link from "next/link";
 import { toCanvas } from "html-to-image";
 import { toast } from "./Toast";
 import { VsPickArena, type VsPickPlayer } from "./VsPick";
+import { VsHistBlock } from "./VsHistBlock";
+import type { VsHistRow } from "@/lib/vs";
 
 /** 第一阶段：两边同色同速，涨到败方分数（张老师 18:12：2s） */
 const CLIMB_MS = 2000;
@@ -153,7 +155,8 @@ export function VsScoreBoard({
   opponentId,
   dateStr,
   swap = null,
-  history,
+  hist,
+  histHidden = false,
   leftPanel,
   rightPanel,
   below,
@@ -178,9 +181,15 @@ export function VsScoreBoard({
    *  画面不跳，只是清空对应卡片）。me=登录者卡，left/right=当前对决双方卡
    *  （服务端从对决数据转换，零额外查询）；null=不提供（不响应换人） */
   swap?: { me: VsPickPlayer; left: VsPickPlayer; right: VsPickPlayer } | null;
-  /** 「历史对决」板块（2026-11-11 14:38 张老师）：RSC 节点，分割线下默认
-   *  （赛前）即渲染；15:48 张老师：开始跑分后整块消失（仅「就位」态可见） */
-  history: ReactNode;
+  /** 「历史对决」板块数据（2026-11-11 14:38 张老师：分割线下默认（赛前）即渲染；
+   *  15:48：开跑后整块消失；17:23：改传**数据**由本组件渲染 VsHistBlock——
+   *  换人（就位态就地切竞技场）后 uids 跟随 arena 侧卡片，VsHistFeed 自动重拉；
+   *  竞技场形态（arena 非 null）时取 arena 两侧卡片 id（空位=0） */
+  hist: { uid1: number; uid2: number; rows: VsHistRow[]; total: number; pageSize: number } | null;
+  /** 自动跑分交接（17:24 张老师：点一决胜负落地瞬间历史会闪现又消失）——
+   *  竞技场交接时写 vs_autorun cookie，SSR 读到即判定「马上开跑」，
+   *  历史板块从首帧就不渲染（原 sessionStorage 方案 SSR 无从知晓，必闪） */
+  histHidden?: boolean;
   /** 左右玩家面板：RSC 节点，作为 props 传入客户端边界 */
   leftPanel: ReactNode;
   rightPanel: ReactNode;
@@ -188,6 +197,10 @@ export function VsScoreBoard({
   below: ReactNode;
 }) {
   const [phase, setPhase] = useState<Phase>("ready");
+  // 自动跑分交接的历史抑制（17:24 张老师：落地瞬间历史闪现又消失）——SSR 传
+  // histHidden 只为压住首帧；startFight 消费标记即解除（否则赛后点换人回就位态
+  // 时历史板块永远回不来）
+  const [histSuppressed, setHistSuppressed] = useState(histHidden);
   const [elapsed, setElapsed] = useState(0);
   const [reveal, setReveal] = useState(false);
   // 23:44 张老师：决出胜负按钮下方的音效开关——默认开，状态记 localStorage「vs_snd」；
@@ -238,28 +251,34 @@ export function VsScoreBoard({
   const winnerScore = winner === 1 ? total1 : total2;
   const animMs = tie ? CLIMB_MS : CLIMB_MS + SURGE_MS;
 
+  // 交接标记读写（17:24 改 cookie）：竞技场写 vs_autorun=<时间戳>（path=/vs,
+  // 10s 过期）；SSR（page.tsx 读同一 cookie）判定「马上开跑」隐藏历史板块——
+  // sessionStorage 方案 SSR 读不到，历史闪现又消失就是这么来的
+  const readAutorun = (): number => {
+    const m = /(?:^|;\s*)vs_autorun=(\d+)/.exec(document.cookie);
+    const ts = m ? parseInt(m[1], 10) : 0;
+    return ts && Date.now() - ts < 8000 ? ts : 0;
+  };
+  const clearAutorun = () => {
+    document.cookie = "vs_autorun=; path=/vs; max-age=0; SameSite=Lax";
+  };
+
   const startFight = () => {
     if (phase !== "ready") return;
     // 交接标记在此消费（挂载 effect 只读不删——StrictMode 双挂载下首挂载
     // 删标记、cleanup 清计时器会让二挂载丢指令；开跑即删，过期标记无害）
-    try {
-      sessionStorage.removeItem("vs_autorun");
-    } catch {}
+    clearAutorun();
+    setHistSuppressed(false); // 历史抑制只护首帧，此后（含赛后换人回就位态）正常显隐
     // data-close 由 phase 驱动：面板立刻开始向左右滑，滑完（SPREAD_MS）才跑分
     setPhase("exiting");
     fadeTimer.current = setTimeout(() => setPhase("running"), SPREAD_MS);
   };
 
   // 竞技场「一决胜负」交接自动开跑（十轮 14:11 张老师：URL 不带参数）——
-  // 标记为竞技场写入的时间戳，新鲜（8s 内）即 400ms 后 startFight（八轮 13:29：
-  // 点一下直接开跑免二次点击）；直接访问/刷新无标记或标记过期 → 手动两段式
+  // 标记为竞技场写入的时间戳 cookie，新鲜（8s 内）即 400ms 后 startFight（八轮
+  // 13:29：点一下直接开跑免二次点击）；直接访问/刷新无标记或标记过期 → 手动两段式
   useEffect(() => {
-    let run = false;
-    try {
-      const ts = parseInt(sessionStorage.getItem("vs_autorun") ?? "", 10);
-      if (ts && Date.now() - ts < 8000) run = true;
-    } catch {}
-    if (!run) return;
+    if (!readAutorun()) return;
     const t = setTimeout(startFight, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时触发一次
@@ -270,17 +289,25 @@ export function VsScoreBoard({
   }, []);
 
   // 换人就地切换（16:36 张老师）：VsSwapX 广播「vs_swap」，这里清对应侧卡片、
-  // 切到竞技场形态。仅就位态响应（跑分后面板已滑开，无换人按钮）。
+  // 切到竞技场形态。就位态直接切；赛后（17:25 张老师：赛后点换人没反应）也响应——
+  // 回到就位态（below 跑分明细随之卸载、历史对决板块重新出现，正好顶替其位置）
   useEffect(() => {
     const onSwap = (e: Event) => {
       const side = (e as CustomEvent<{ side?: "l" | "r" }>).detail?.side;
       const s = swapRef.current;
-      if (!s || (side !== "l" && side !== "r") || phase !== "ready") return;
+      if (!s || (side !== "l" && side !== "r")) return;
+      if (phase !== "ready" && phase !== "done") return;
       setArena(
         side === "l"
           ? { me: s.me, left: null, right: s.right }
           : { me: s.me, left: s.left, right: null }
       );
+      if (phase === "done") {
+        // 重置跑分残留：reveal 不清会在二轮就位态直接显示上轮「胜/败」字
+        setReveal(false);
+        setElapsed(0);
+        setPhase("ready");
+      }
     };
     window.addEventListener("vs_swap", onSwap);
     return () => window.removeEventListener("vs_swap", onSwap);
@@ -705,10 +732,19 @@ export function VsScoreBoard({
       {/* 「历史对决」板块（2026-11-11 14:38 张老师）：分割线下默认即渲染；
           15:48 张老师：开始跑分后整块消失（仅「就位」态可见）；16:26 张老师：
           板块宽度与分割线一致（fit 测量值经 heroW 写进 wrapper，margin auto 居中）；
-          16:36 张老师：换人切竞技场形态后**保留**（宽度保持最后测量值不跳） */}
-      {phase === "ready" && (
+          16:36 张老师：换人切竞技场形态后保留；17:23 张老师：uids 跟随竞技场
+          两侧卡片（空位=0，单边按该玩家发起的记录查），VsHistFeed 自动重拉；
+          17:24 张老师：自动跑分交接（histHidden，SSR 读 cookie 判定）时首帧
+          就不渲染——否则落地瞬间历史闪现又消失 */}
+      {phase === "ready" && !histSuppressed && hist && (hist.uid1 || hist.uid2) && (
         <div className="vs_hist_wrap" style={heroW ? { width: heroW } : undefined}>
-          {history}
+          <VsHistBlock
+            uid1={arena ? arena.left?.id ?? 0 : hist.uid1}
+            uid2={arena ? arena.right?.id ?? 0 : hist.uid2}
+            initial={hist.rows}
+            total={hist.total}
+            pageSize={hist.pageSize}
+          />
         </div>
       )}
       {/* 跑分完成后下方各板块才出现（RSC 节点，赛前不在可见 DOM 中） */}
