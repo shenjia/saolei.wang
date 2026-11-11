@@ -1,13 +1,13 @@
 // 管理后台 · 对决统计（2026-11-11 张老师定）：VS 板块（/vs/:id）对决数据。
-// 从仪表盘「今日胜负」KPI 点击进入：趋势图（近 30 天）+ 右侧「发起 Top10 /
-// 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起时间 / 发起者 / 挑战者 /
+// 从仪表盘「今日对决」KPI（原「今日胜负」）点击进入：趋势图（近 30 天）+ 右侧「发起 Top10 /
+// 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起者 / 发起时间 / 挑战者 /
 // 比分 | 结果 | 比分 三列 / 被挑战者 / 操作；结果列只放胜负平标签，比分列
 // 表头置空：左=挑战者得分，右=被挑战者得分；「观看」直达 /vs/{挑战者}/
 // {被挑战者} 旁观对局，旁观不落库）。
 // 数据源 vs_duel（page_view 历史回填行比分/结果为 NULL，亮灰 —）。
 
 import Link from "next/link";
-import { AdminCard } from "@/components/admin/Widgets";
+import { AdminCard, AdminPager } from "@/components/admin/Widgets";
 import { BarList, TrendChart, type Series } from "@/components/admin/Charts";
 import { RelTime } from "@/components/RelTime";
 import { formatDate } from "@/lib/format";
@@ -19,15 +19,21 @@ import { getVsDuelsOverview, getVsRecentDuels, getVsTopLaunchers, getVsTopTarget
 export const dynamic = "force-dynamic";
 export const metadata = { title: "对决统计 | 管理后台" };
 
-export default async function AdminVsPage() {
-  const [ov, launchers, targets, recent, kTh] = await Promise.all([
+type SP = Record<string, string | undefined>;
+
+export default async function AdminVsPage({ searchParams }: { searchParams: Promise<SP> }) {
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const [ov, launchers, targets, recentPg, kTh] = await Promise.all([
     getVsDuelsOverview(),
     getVsTopLaunchers(7),
     getVsTopTargets(7),
-    getVsRecentDuels(50),
+    // 最近对决记录分页（2026-11-11 张老师：每页 50 条）
+    getVsRecentDuels(page, 50),
     // 总司令动态阈值（军衔评定与全站同口径，单次查询）
     getThunderKingThreshold(),
   ]);
+  const { rows: recent, total, pageSize } = recentPg;
 
   const series: Series[] = [
     { key: "duels", label: "对决次数", color: "#ae81ff", values: ov.trend, estimate: ov.todayEst },
@@ -135,20 +141,21 @@ export default async function AdminVsPage() {
       {/* ---------- 最近对决记录 ---------- */}
       <AdminCard
         title="最近对决记录"
-        more="最近 50 场 · 比分/结果为发起当时快照（左分=挑战者，右分=被挑战者）；历史回填行亮灰 —"
+        more={`共 ${total.toLocaleString("zh-CN")} 场 · 每页 ${pageSize} 条 · 比分/结果为发起当时快照（左分=挑战者，右分=被挑战者）；历史回填行亮灰 —`}
         tight
       >
         <div className="admin_scroll">
-          {/* 10:39/11:21 张老师：发起时间列最前；空列前加「操作」列（观看按钮直达
+          {/* 10:39/11:21 张老师：空列前加「操作」列（观看按钮直达
               /vs/{挑战者}/{被挑战者} 旁观，旁观不落库）；空列吸收余宽 30%，
               窄屏隐藏（admin_table.vs_recent，行线延伸与趋势卡右缘对齐）。
               12:16 张老师：比分与结果拆成三列——左比分（挑战者）+ 结果标签
-              （只放胜负平）+ 右比分（被挑战者），比分列表头置空 */}
+              （只放胜负平）+ 右比分（被挑战者），比分列表头置空。
+              14:13 张老师：发起者列与发起时间列互换（发起者在前），发起时间暗灰 */}
           <table className="admin_table vs_recent">
             <thead>
               <tr>
-                <th>发起时间</th>
                 <th>发起者</th>
+                <th>发起时间</th>
                 <th>挑战者</th>
                 <th className="c"></th>
                 <th className="c">结果</th>
@@ -170,11 +177,12 @@ export default async function AdminVsPage() {
                 const tag = d.result === null ? null : RESULT_TAG[d.result];
                 return (
                   <tr key={d.id}>
-                    <td title={formatDate(d.time, "Y-m-d H:i:s")}>
-                      <RelTime time={d.time} />
-                    </td>
                     {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔 */}
                     <td>{launcherUser(d.u1, d.n1)}</td>
+                    {/* 发起时间（14:13 张老师）：暗灰显示 */}
+                    <td className="gray" title={formatDate(d.time, "Y-m-d H:i:s")}>
+                      <RelTime time={d.time} />
+                    </td>
                     {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
                     <td className="c">{scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}</td>
@@ -207,6 +215,8 @@ export default async function AdminVsPage() {
             </tbody>
           </table>
         </div>
+        {/* 分页（2026-11-11 张老师）：searchParams 传页码，与后台其他列表页同款 AdminPager */}
+        <AdminPager base="/admin/vs" params={{}} page={page} total={total} pageSize={pageSize} />
       </AdminCard>
     </>
   );

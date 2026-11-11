@@ -141,7 +141,7 @@ export default async function AdminDashboard() {
 
       {/* ---------- 规模指标（2026-10-16 张老师定：第一行全带走势线；2026-11-01 加第 7 卡 API 调用；
           2026-11-11 张老师定：「开源扫雷网表态」卡下线（已正式绑定开始同步），
-          「今日练习」后加「今日胜负」卡——VS 板块对决统计；
+          「今日练习」后加「今日对决」卡（原「今日胜负」，14:16 张老师改名）——VS 板块对决统计；
           同日定：待人工审核卡并入本行、排在「API 调用」之前，独立第二行取消） ---------- */}
       <div className="admin_kpis">
         <Kpi
@@ -199,16 +199,16 @@ export default async function AdminDashboard() {
             </>
           }
         />
-        {/* 今日胜负（2026-11-11 张老师定）：VS 板块对决统计——一次 /vs/:id 页有效
+        {/* 今日对决（2026-11-11 张老师定，14:16 改名）：VS 板块对决统计——一次 /vs/:id 页有效
             访问 = 一次对决（vs_duel 表，10 分钟窗口去重）；发起人数=去重发起者；
             点击进 /admin/vs 对决统计页 */}
         <Kpi
-          label="今日胜负"
+          label="今日对决"
           href="/admin/vs"
           value={
             <>
               {vsDuels.today.toLocaleString("zh-CN")}
-              <small> 次对决 / {vsDuels.todayLaunchers} 人发起</small>
+              <small> 次 / {vsDuels.todayLaunchers} 人发起</small>
             </>
           }
           tone="purple"
