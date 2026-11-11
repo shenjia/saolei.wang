@@ -13,7 +13,7 @@ import { BubbleIcon } from "./SendMessageButton";
 import { pollWhenMobile, useUnreadMessages } from "./useUnreadMessages";
 import { SystemText } from "./SystemText";
 import { DefaultAvatar } from "./DefaultAvatar";
-import { VsNewDot, dismissVsNewDot } from "./VsNewDot";
+import { useVsNewHint } from "./VsNewHint";
 import { isManager } from "@/lib/config";
 
 export interface MobileNavUser {
@@ -71,6 +71,10 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
   // 未读消息角标：与桌面 MessageBadge 共享轮询（移动端只在 ≤768px 轮询）。
   // 未登录不发任何 /api/message* 请求（2026-11-10：此前未登录也挂载即连 SSE 白打 401）
   const unread = useUnreadMessages(pollWhenMobile, user !== null);
+  // 「对决」新功能绿字（2026-11-12 00:00 张老师改版）：未看过对决页的用户「对决」
+  // 显示 active 绿；移动端无 hover，点进对决页时计入 localStorage 后不再变绿。
+  // 2026-11-19 上线满一周整体下线——详见 VsNewHint.tsx
+  const [vsNew, dismissVsNew] = useVsNewHint();
   // 路由切换后收起菜单：渲染期对比上次 pathname（软导航即视为已离开菜单，
   // 不用 useEffect——项目 react-hooks/set-state-in-effect 规则禁止 effect 内同步 setState）
   const pathname = usePathname();
@@ -107,24 +111,14 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
             {SITE_LINKS.filter((l) => !l.loginOnly || user).map((l) => (
               <li key={l.href}>
                 {/* /titles 文案随观看者称号体系切换（军衔/称号）；
-                    /vs「对决」挂新功能绿点（2026-11-11 23:03 张老师）：点过永久消失
-                    （localStorage），2026-11-19 上线满一周整体下线——详见 VsNewDot.tsx */}
+                    /vs「对决」未看过时挂绿字 class，点击计入 localStorage（移动端无 hover） */}
                 <Link
                   prefetch={false}
                   href={l.href}
-                  className={l.href === "/vs" ? "vs_new_anchor" : undefined}
-                  onClick={l.href === "/vs" ? dismissVsNewDot : undefined}
+                  className={l.href === "/vs" && vsNew ? "vs_new_hint" : undefined}
+                  onClick={l.href === "/vs" ? dismissVsNew : undefined}
                 >
-                  {l.href === "/titles" ? (
-                    <SystemText />
-                  ) : l.href === "/vs" ? (
-                    <>
-                      对决
-                      <VsNewDot />
-                    </>
-                  ) : (
-                    l.label
-                  )}
+                  {l.href === "/titles" ? <SystemText /> : l.label}
                 </Link>
               </li>
             ))}
