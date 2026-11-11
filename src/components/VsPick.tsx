@@ -271,7 +271,11 @@ function VsEmptySlot({
   suggestSelf: SuggestUser | null;
 }) {
   return (
-    <div className="box vs_panel vs_pick_empty">
+    <div
+      className="box vs_panel vs_pick_empty"
+      /* 16:38 张老师：hover 空卡自动聚焦搜索框（卡内唯一 input 即搜索框） */
+      onMouseEnter={(e) => e.currentTarget.querySelector("input")?.focus()}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element -- 本地静态占位图 */}
       <img className="vs_pick_q" src="/images/common/avatar.png" alt="?" />
       <VsSearch onPick={onPick} suggestSelf={suggestSelf} />

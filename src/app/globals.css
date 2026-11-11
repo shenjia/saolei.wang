@@ -15599,7 +15599,6 @@ span.vs_btn--disabled:hover img {
   min-width: 0;
   transition: transform 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-
 /* 「换人」X（.vs_swap）的定位上下文（2026-11-11 14:38 张老师：对决页左右卡片
    hover 也可换人——与竞技场 #vs_pick_hero > .box.vs_panel 同款） */
 #vs_hero > .box.vs_panel {
@@ -16091,10 +16090,22 @@ span.vs_btn--disabled:hover img {
 }
 /* 「历史对决」板块（2026-11-11 14:38 张老师）：分割线下常显（赛前即渲染），
    标题同纪录板块 h1.gray；两玩家发起的最近对决记录表 + 行 hover「回看」
-   + 标准 .pager 翻页。margin-top 与 .vs_below 同款 69px（清掉分割线悬出
+   + 全站通用「加载更多 + 页码滑条」翻页器（VsHistFeed/PageSlider）。
+   15:48 张老师改版：①标题改小一档；②内容去掉 .box 底板（裸表格）；
+   ③胜负平用后台 admin_tag 同款标签；④行 hover 加深灰底色；⑤回看 hover
+   同「一决胜负」变亮。margin-top 与 .vs_below 同款 69px（清掉分割线悬出
    hero 的 29px，线下留白 40px）——置于 .vs_lvblk 之后以覆盖其 49px */
 .vs_hist {
   margin-top: 69px;
+}
+/* 16:26 张老师：板块宽度与分割线一致——VsScoreBoard fit() 把测量宽度写到本
+   wrapper（margin auto 居中后与分割线两缘平齐）；移动端 fit 清空即全宽 */
+.vs_hist_wrap {
+  margin: 0 auto;
+}
+/* ①「历史对决」标题比纪录等主板块小一档（40 → 26） */
+.vs_hist .vs_lv_head h1 {
+  font-size: 26px;
 }
 .vs_histbox {
   padding: 8px 16px 16px;
@@ -16111,6 +16122,10 @@ span.vs_btn--disabled:hover img {
 }
 .vs_hist_tbl tr + tr td {
   border-top: 1px solid #3e3d32;
+}
+/* ④ 行 hover 整行加深灰底色（2026-11-11 15:48 张老师；无底板下以行底色示意热区） */
+.vs_hist_tbl tbody tr:hover td {
+  background: #33322b;
 }
 .vs_hist_time {
   color: #75715e;
@@ -16138,29 +16153,48 @@ span.vs_btn--disabled:hover img {
 .vs_hist_res {
   color: #b1b1a4;
 }
+/* ③ 胜负平标签（15:48 张老师：借用后台显示样式）——admin.css .admin_tag
+   同款三色（胜绿/负玫红/平暗灰圆角胶囊） */
+.vs_hist_res .admin_tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 17px;
+  border: 1px solid transparent;
+}
+.vs_hist_res .admin_tag.ok { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
+.vs_hist_res .admin_tag.bad { background: rgba(249, 38, 114, 0.14); color: #f92672; border-color: rgba(249, 38, 114, 0.35); }
+.vs_hist_res .admin_tag.plain { background: #33322b; color: #939387; border-color: #49483e; }
 /* 「回看」：行 hover 浮现（触屏无 hover 常显）；黄色小按钮同 .vs_swap hover 观感 */
+/* 「回看」三态（16:26 张老师）：默认即显示——半透明亮灰块；hover 本行去半透明
+   （仍亮灰）；hover 按钮变黄（同「一决胜负」hover 变亮，见下方特异性注释）。
+   触屏无行 hover：默认态即可点 */
 .vs_hist_tbl .vs_look {
   display: inline-block;
   padding: 3px 14px;
   font-size: 13px;
   line-height: 1.6;
   color: #272822;
-  background: #fdc61a;
+  background: #b1b1a4;
   border-radius: 4px;
   text-decoration: none;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s;
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
 }
 .vs_hist_tbl tr:hover .vs_look {
   opacity: 1;
-  pointer-events: auto;
 }
-@media (hover: none) {
-  .vs_hist_tbl .vs_look {
-    opacity: 1;
-    pointer-events: auto;
-  }
+/* ⑤ 回看 hover 变黄（16:26 张老师：hover 按钮才变黄，不吃全站绿字 hover），
+   同「一决胜负」hover 变亮。⚠️ 选择器四层类级（.vs_hist_tbl/.vs_hist_look/
+   .vs_look/:hover = (0,4,1)）——全局 `body a:hover:not(.button):not(.auth_button)`
+   是 (0,3,2)，少于它必被压绿 */
+.vs_hist_tbl .vs_hist_look a.vs_look:hover {
+  color: #2b2a20;
+  text-decoration: none;
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  filter: brightness(1.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
 }
 .vs_hist_empty {
   text-align: center;
@@ -16752,17 +16786,25 @@ a.vs_c:hover {
   transform: translateX(calc(-1 * var(--vs_close)));
 }
 /* 收拢后卡片 X（右上角）会落进中列矩形里——中列对指针穿透，只留按钮可点
-   （否则 .vs_vs 的透明区域拦住 X 的点击/hover）；PK 页无 X 不受影响 */
-#vs_pick_hero .vs_vs {
+   （否则 .vs_vs 的透明区域拦住 X 的点击/hover）；PK 页无 X 不受影响。
+   16:52 张老师：对决页同款问题（.vs_vs z-index:2 压过收拢面板的骑线 X，
+   probe 实证 click 打不到按钮）——#vs_hero[data-close="1"]（就位态，X 可见时）
+   同样对指针穿透；跑分后 X 随卡片滑走，正常态中列不受影响 */
+#vs_pick_hero .vs_vs,
+#vs_hero[data-close="1"] .vs_vs {
   pointer-events: none;
 }
-#vs_pick_hero .vs_vs button {
+#vs_pick_hero .vs_vs button,
+#vs_hero[data-close="1"] .vs_vs button {
   pointer-events: auto;
 }
 /* 空位（问号占位 + 搜索框）：宽度对齐玩家卡片实测外宽 260（.user_card 内容宽
    200 + .box padding 60；带 8px×2 margin 后与卡片 276 外占位一致）——
    「两边全空」时 260+380+260+gap20 = 920 ≤ 960，三件套不换行；
-   头像与搜索框的间距 30px = 盒内上边距（.box padding-top），上下留白等同 */
+   头像与搜索框的间距 30px = 盒内上边距（.box padding-top），上下留白等同；
+   height 372 = 玩家卡片实测高（.user_card 结构恒定：ucd_top 固定 74 + hr 21 +
+   雷达 222 + 盒 padding 60）→ 换人/清空时盒子高度零变化（五轮排查：原 360
+   与卡片 372 差 12px，居中行内上下各偏 6px 即张老师看到的「高度微调」） */
 .vs_pick_empty {
   width: 260px;
   max-width: 100%;
@@ -16772,9 +16814,7 @@ a.vs_c:hover {
   align-items: center;
   justify-content: center;
   gap: 30px;
-  height: 372px; /* = 玩家卡片实测高（.user_card 结构恒定：ucd_top 固定 74 + hr 21 +
-                    雷达 222 + 盒 padding 60）→ 换人/清空盒子高度零变化（五轮排查：
-                    原 360 与卡片 372 差 12px，居中行内上下各偏 6px 即「高度微调」） */
+  height: 372px;
 }
 /* 问号占位头像：圆角矩形遮罩（2026-11-11 张老师：不要圆形），圆角取盒同款 10px 系；
    宽度＝搜索框宽度（四轮 11:23 张老师：两者同撑内容宽 200px，正方形等比） */
@@ -16858,7 +16898,7 @@ a.vs_c:hover {
     opacity: 0;
     pointer-events: none; /* 隐藏态不拦鼠标（尤其骑线半悬在卡外时） */
   }
-  .vs_panel:hover .vs_swap {
+.vs_panel:hover .vs_swap {
     opacity: 1;
     pointer-events: auto;
   }
@@ -16887,18 +16927,14 @@ a.vs_c:hover {
   border-radius: 50%;
   animation: toast_spin 0.72s linear infinite;
 }
-/* VS 图标中心 = 玩家卡片中心（PK 页恒等式口径）：用 margin-top 143px 补偿——
-   中列高 333+m 居中后，图标中心 m+44+51 与卡片中心重合（解得 m=143）。
-   未就位气泡绝对定位悬浮在字标上方、不占流内高度，不影响此恒等式 */
+/* 未就位提示气泡（五轮 11:37 张老师）：金色「请双方选手就位」，复用 PK 页
+   .vs_pre 评语框（框型）+ .vs_pre_even（势均力敌金）配色；绝对定位悬浮在
+   VS 字标上方（底距 scoreline 顶 21px = PK 页 prewrap 的同款间距），不占流内
+   高度——143px 居中恒等式不受影响，就位后气泡卸载也无布局位移 */
 #vs_pick_hero .vs_scoreline {
   position: relative;
   margin-top: 143px;
 }
-/* 未就位提示气泡（五轮 11:37 张老师）：金色「请双方选手就位」，复用 PK 页
-   .vs_pre 评语框（框型）+ .vs_pre_even（势均力敌金）配色；底距 scoreline 顶
-   21px = PK 页 prewrap 同款间距（气泡底在字标顶上方 65px）。
-   ⚠️ DOM 必须放 .vs_scoreline 内——放 .vs_vs 直接子级时包含块是整列，
-   bottom:100% 会解析到列顶、跑到页头暗底上隐形（实测） */
 #vs_pick_hero .vs_pick_pre {
   position: absolute;
   bottom: calc(100% + 21px);
@@ -16910,7 +16946,7 @@ a.vs_c:hover {
 @media (max-width: 768px) {
   #vs_pick_hero {
     flex-direction: column;
-    align-items: center; /* 纵向堆叠时交叉轴=横向：260 定宽空位居中（PC 的 stretch 已撤，此处防御） */
+    align-items: center; /* 纵向堆叠时交叉轴=横向：260 定宽空位居中，不吃 PC 的 stretch */
   }
   /* ⚠️ 带 body #page 压过移动端通用 body #page .box{padding:16px 14px}（同 /vs/[id] 口径） */
   body #page #vs_pick_hero > .box.vs_panel {

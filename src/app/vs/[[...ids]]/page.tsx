@@ -64,15 +64,17 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
   const qr = r || rightIdFromQuery(sp);
 
   // 双段 → 对决页（战前态、手动跑分；自动跑分由竞技场经 sessionStorage 交接）；
-  // 「历史对决」翻页页码走标准 ?page=N
+  // 「历史对决」板块翻页改客户端（15:48 张老师改版），URL 不再带 ?page=N。
+  // 换人就地清卡（16:36 张老师）：旁观者（非对决双方）需装配登录者卡；双方本人
+  // 的卡片由 VsDuelView 内部从对决数据零查询转换，这里传 null 免重复拉取
   if (l && qr) {
-    const hpage = Math.max(1, parseInt(String(sp.page ?? "1"), 10) || 1);
+    const swapMe = session.uid === l || session.uid === qr ? null : await getVsPickPlayer(session.uid);
     return (
       <VsDuelView
         uid1={l}
         uid2={qr}
         record={session.uid === l || session.uid === qr}
-        hpage={hpage}
+        swapMe={swapMe}
       />
     );
   }

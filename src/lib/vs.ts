@@ -21,6 +21,8 @@ import { LEVEL_MIN_3BV, UNREACHABLE_3BV, type VideoLevel } from "./config";
 import { score3bvs, scoreTime } from "./format";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { title as militaryTitle } from "./assess";
+import { getThunderKingThreshold } from "./title-system";
 
 const VIDEO_LEVELS: VideoLevel[] = ["beg", "int", "exp"];
 const LEVEL_AXIS_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
@@ -229,6 +231,12 @@ export interface VsHistRow {
   time: number;
   u1: number; n1: string; // 发起者
   u2: number; n2: string; // 被挑战者
+  /** 性别（user.sex，1=男）——名字后缀图标（2026-11-11 15:48 张老师：与玩家卡片同渲染） */
+  sex1: number; sex2: number;
+  /** 英文名（AvatarCell 气泡用；空串=气泡只显示 #ID 姓名） */
+  en1: string; en2: string;
+  /** 军衔（user_scores.exp_time 快照评定，同后台口径）——TitleBadge */
+  t1: string; t2: string;
   /** 比分（null=历史回填行未算） */
   s1: number | null; s2: number | null;
   /** 1=发起者胜 2=对方胜 0=平；null=未算 */
@@ -246,19 +254,24 @@ export async function getVsHistory(
   // 展示名表达式（中文名优先 → 英文名 → #id；与 admin/vsstats 同款口径，alias 固定 ua/ub）
   const NAME_A = `COALESCE(NULLIF(ua.chinese_name, ''), NULLIF(ua.english_name, ''), CONCAT('#', ua.id))`;
   const NAME_B = `COALESCE(NULLIF(ub.chinese_name, ''), NULLIF(ub.english_name, ''), CONCAT('#', ub.id))`;
-  const [rows, cnt] = await Promise.all([
+  const [rows, cnt, kTh] = await Promise.all([
     prisma
       .$queryRaw<{
         id: bigint; create_time: bigint; u1: bigint; u2: bigint;
         s1: number | null; s2: number | null; result: number | null;
-        n1: string; n2: string;
+        n1: string; n2: string; sex1: number; sex2: number;
+        en1: string; en2: string; exp1: unknown; exp2: unknown;
       }[]>(
         Prisma.sql`
           SELECT d.id, d.create_time, d.user_id AS u1, d.target_id AS u2, d.s1, d.s2, d.result,
-                 ${Prisma.raw(NAME_A)} AS n1, ${Prisma.raw(NAME_B)} AS n2
+                 ${Prisma.raw(NAME_A)} AS n1, ${Prisma.raw(NAME_B)} AS n2,
+                 ua.sex AS sex1, ub.sex AS sex2, ua.english_name AS en1, ub.english_name AS en2,
+                 sa.exp_time AS exp1, sb.exp_time AS exp2
           FROM vs_duel d
           JOIN \`user\` ua ON ua.id = d.user_id
           JOIN \`user\` ub ON ub.id = d.target_id
+          LEFT JOIN \`user_scores\` sa ON sa.id = d.user_id
+          LEFT JOIN \`user_scores\` sb ON sb.id = d.target_id
           WHERE d.user_id IN (${ids})
           ORDER BY d.create_time DESC LIMIT ${pageSize} OFFSET ${offset}
         `
@@ -270,6 +283,8 @@ export async function getVsHistory(
       )
       .then((r) => N(r[0]?.c))
       .catch(() => 0),
+    // 总司令动态阈值（军衔评定与全站/后台同口径，单次查询）
+    getThunderKingThreshold(),
   ]);
   return {
     total: cnt,
@@ -279,6 +294,11 @@ export async function getVsHistory(
       time: N(r.create_time),
       u1: N(r.u1), n1: r.n1,
       u2: N(r.u2), n2: r.n2,
+      sex1: N(r.sex1), sex2: N(r.sex2),
+      en1: r.en1 ?? "", en2: r.en2 ?? "",
+      // 军衔按 user_scores.exp_time 快照评定（毫秒；与后台 duelUser 同款 militaryTitle(exp, kTh)）
+      t1: militaryTitle(r.exp1 === null || r.exp1 === undefined ? null : Number(r.exp1), kTh),
+      t2: militaryTitle(r.exp2 === null || r.exp2 === undefined ? null : Number(r.exp2), kTh),
       s1: r.s1 === null ? null : Number(r.s1),
       s2: r.s2 === null ? null : Number(r.s2),
       result: r.result === null ? null : N(r.result),
