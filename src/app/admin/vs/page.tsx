@@ -99,9 +99,10 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
         </span>
       </div>
 
-      {/* ---------- 趋势图 + 两个 Top10 三板块并列一行（2026-11-11 10:26 张老师） ---------- */}
-      <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "nowrap" }}>
-        <div style={{ flex: "1 1 480px", minWidth: 0 }}>
+      {/* ---------- 趋势图 + 两个 Top10 三板块并列一行（2026-11-11 10:26 张老师；
+              14:44 张老师：趋势图水平宽度改 50%，Top10 弹性均分剩余宽度，窄屏自动换行） ---------- */}
+      <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
+        <div style={{ flex: "0 0 50%", minWidth: 0 }}>
           <AdminCard
             title="对决趋势（近 30 天）"
             more="今日点为按上周同时段预估（虚线）"
@@ -110,7 +111,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
             <TrendChart dates={ov.dates} series={series} unit="场" />
           </AdminCard>
         </div>
-        <div style={{ flex: "0 0 300px" }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <AdminCard title="发起对决最多（近 7 天 Top10）" className="h100">
             <BarList
               items={launchers.map((u) => ({
@@ -123,7 +124,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
             />
           </AdminCard>
         </div>
-        <div style={{ flex: "0 0 300px" }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <AdminCard title="被对决最多（近 7 天 Top10）" className="h100">
             <BarList
               items={targets.map((u) => ({

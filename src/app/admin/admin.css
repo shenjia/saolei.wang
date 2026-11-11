@@ -165,7 +165,7 @@ body:has(.admin_shell) #footer {
   text-shadow: none;
 }
 /* 环境切换胶囊（2026-11-11）：「管理后台」左侧，按域名高亮当前环境；
-   生产=绿、测试=橙（Monokai 配色），点击另一侧跳到对应环境同路径 */
+   生产=金 #e6db74、测试=绿 #a6e22e（Monokai 配色，2026-11-11 张老师定），点击另一侧跳到对应环境同路径 */
 .env_switch {
   flex: 0 0 auto;
   display: flex;
@@ -195,10 +195,10 @@ body:has(.admin_shell) #footer {
   cursor: default;
 }
 .env_switch button.on:first-child {
-  background: #a6e22e;
+  background: #e6db74;
 }
 .env_switch button.on:last-child {
-  background: #fd971f;
+  background: #a6e22e;
 }
 .admin_top .sub {
   color: #75715e;
