@@ -1,8 +1,9 @@
 // 管理后台 · 对决统计（2026-11-11 张老师定）：VS 板块（/vs/:id）对决数据。
 // 从仪表盘「今日胜负」KPI 点击进入：趋势图（近 30 天）+ 右侧「发起 Top10 /
 // 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起时间 / 发起者 / 挑战者 /
-// 比分·结果 / 被挑战者 / 操作；比分拆在结果标签左右：左=挑战者得分，
-// 右=被挑战者得分；「观看」直达 /vs/{挑战者}/{被挑战者} 旁观对局，旁观不落库）。
+// 比分 | 结果 | 比分 三列 / 被挑战者 / 操作；结果列只放胜负平标签，比分列
+// 表头置空：左=挑战者得分，右=被挑战者得分；「观看」直达 /vs/{挑战者}/
+// {被挑战者} 旁观对局，旁观不落库）。
 // 数据源 vs_duel（page_view 历史回填行比分/结果为 NULL，亮灰 —）。
 
 import Link from "next/link";
@@ -138,17 +139,20 @@ export default async function AdminVsPage() {
         tight
       >
         <div className="admin_scroll">
-          {/* 10:39/11:21 张老师：发起时间列最前；比分并回「比分 · 结果」一列
-              （左分 标签 右分，nowrap 限宽）；空列前加「操作」列（观看按钮直达
+          {/* 10:39/11:21 张老师：发起时间列最前；空列前加「操作」列（观看按钮直达
               /vs/{挑战者}/{被挑战者} 旁观，旁观不落库）；空列吸收余宽 30%，
-              窄屏隐藏（admin_table.vs_recent，行线延伸与趋势卡右缘对齐） */}
+              窄屏隐藏（admin_table.vs_recent，行线延伸与趋势卡右缘对齐）。
+              12:16 张老师：比分与结果拆成三列——左比分（挑战者）+ 结果标签
+              （只放胜负平）+ 右比分（被挑战者），比分列表头置空 */}
           <table className="admin_table vs_recent">
             <thead>
               <tr>
                 <th>发起时间</th>
                 <th>发起者</th>
                 <th>挑战者</th>
-                <th className="c">比分 · 结果</th>
+                <th className="c"></th>
+                <th className="c">结果</th>
+                <th className="c"></th>
                 <th>被挑战者</th>
                 <th className="c">操作</th>
                 <th className="sp"></th>
@@ -157,7 +161,7 @@ export default async function AdminVsPage() {
             <tbody>
               {recent.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="gray">
+                  <td colSpan={9} className="gray">
                     暂无对决记录（VS 页访问后开始落库）
                   </td>
                 </tr>
@@ -173,17 +177,16 @@ export default async function AdminVsPage() {
                     <td>{launcherUser(d.u1, d.n1)}</td>
                     {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
+                    <td className="c">{scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}</td>
+                    {/* 结果（12:16 张老师）：只放胜负平标签，比分拆到两侧列 */}
                     <td className="c">
-                      <span style={{ whiteSpace: "nowrap" }}>
-                        {scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}{" "}
-                        {tag ? (
-                          <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
-                        ) : (
-                          <span className="gray">—</span>
-                        )}{" "}
-                        {scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}
-                      </span>
+                      {tag ? (
+                        <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
+                      ) : (
+                        <span className="gray">—</span>
+                      )}
                     </td>
+                    <td className="c">{scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}</td>
                     <td>{duelUser(d.u2, d.n2, d.sex2, d.exp2)}</td>
                     {/* 观看（11:21 张老师）：直达双方对决页旁观（/vs/[id]/[bid]，不落库） */}
                     <td className="c">
