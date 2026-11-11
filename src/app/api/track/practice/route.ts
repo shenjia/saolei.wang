@@ -8,8 +8,9 @@
 // （地区活跃指数/个人主页练习盘数改按完成口径并按难度加权，见 lib/areaactivity.ts）。
 // 2026-11-08 加活跃点累计列 act_points：地区活跃指数练习侧改按 3BV 完成情况逐盘点数。
 // 2026-11-11 四轮修订（张老师定）：初级胜=1 败=0；中级完成过半（≥50%）按 floor(率×4)，
-// 胜局恒=4；高级同口径 floor(率×20)，胜局恒=20；自定义胜=1（录像口径不变）。
-// 非排行模式练习（ranked=false）只得 50% 练习点，向下取整——排行模式全额。服务端逐盘计点后累加落库，
+// 胜局恒=4；高级同口径 floor(率×20)，胜局恒=20（录像口径不变）。
+// 非排行模式练习（ranked=false）只得 50% 练习点，向下取整——排行模式全额。
+// 自定义盘只存在于非排行模式，减半后恒 0 点=不计活跃点（张老师 11-11 定：接受 0 点）。服务端逐盘计点后累加落库，
 // 不信任客户端算好的分；floor 逐盘取整不可反推，故不存 solvedBv/bbbv 原始和。
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
   // 与练习页客户端实时 +N 共用同一函数），败局也按 3BV 完成情况可能得分
   const pts = practiceActPoints(level, wonInt === 1, bbbv, solvedBv, ranked);
   // 分级别活跃点（2026-11-10 21:28 张老师定：活跃雷达初/中/高标签对齐活跃指数总分；
-  // 自定义胜局与初级同权重进 ptsBeg——地区活跃指数同口径）
+  // 自定义走 ptsBeg 列但 2026-11-11 起恒 0 点——自定义盘不计活跃点，列保留兼容）
   const ptsBeg = level === "beg" || level === "cus" ? pts : 0;
   const ptsInt = level === "int" ? pts : 0;
   const ptsExp = level === "exp" ? pts : 0;
