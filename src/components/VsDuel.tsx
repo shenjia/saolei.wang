@@ -29,13 +29,14 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getVsData, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";
-import { scoreTime } from "@/lib/format";
+import { getVsData, getVsHistory, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";import { scoreTime } from "@/lib/format";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { RadarChart } from "@/components/RadarChart";
 import { VsScoreBoard } from "@/components/VsScoreBoard";
+import { VsSwapX } from "@/components/VsSwapX";
+import type { VsPickPlayer } from "@/components/VsPick";
 import { getHeaderUser } from "@/lib/usercard";
 
 const LEVEL_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
@@ -215,10 +216,18 @@ function VsLevelBox({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2:
 
 /** 玩家面板：结构严格照抄侧栏玩家卡片 .user_card 上半部（横线以上），
     横线以下放实力雷达（2026-11-09 二轮：去掉「实力」二字标题）。
-    accent 缺省＝主页同款默认青蓝（2026-11-10 张老师：自己的雷达不改色） */
-function VsPanel({ p, accent }: { p: VsPlayer; accent?: string }) {
+    accent 缺省＝主页同款默认青蓝（2026-11-10 张老师：自己的雷达不改色）
+    swapHref：给「换人」X 按钮（2026-11-11 14:38 张老师：对决页左右卡片 hover
+    也可换人）——复用竞技场 .vs_swap 骑线样式（.vs_panel hover 显隐同款），
+    点击回竞技场并保留另一侧玩家（href 由调用方按保留侧拼好）。 */
+function VsPanel({ p, accent, swapHref, side }: { p: VsPlayer; accent?: string; swapHref?: string; side?: "l" | "r" }) {
   return (
     <div className="box vs_panel">
+      {swapHref && side && (
+        /* 16:36 张老师：换人不清屏——拦截导航广播 vs_swap，由 VsScoreBoard 就地
+            清对应卡片切回竞技场形态（历史对决板块保留）；href 仅作降级 */
+        <VsSwapX side={side} href={swapHref} />
+      )}
       <div className="user_card">
         <div className="ucd_top">
           <div className="ucd_left">
@@ -325,10 +334,32 @@ export async function getVsDuelTitle(uid1: number, uid2: number): Promise<string
 }
 
 /** 对决页主体（对战与旁观共用）：
- *  · record=true（/vs/[id] 本人访问）：渲染快照落 vs_duel（10 分钟窗口去重在函数内）；
- *  · record=false（/vs/[id]/[bid] 旁观）：纯渲染，不落库——对决 KPI 口径＝双方本人访问。
+ *  · record=true（会话为对决双方本人）：渲染快照落 vs_duel（10 分钟窗口去重在函数内）；
+ *  · record=false（旁观：会话非对决双方）：纯渲染，不落库——对决 KPI 口径＝双方本人访问。
+ *  · 「历史对决」板块翻页改客户端（VsHistFeed + PageSlider，15:48 张老师改版），
+ *    不再走 URL ?page=N。自动跑分交接见统一路由页（sessionStorage）。
  *  uid1===uid2（含本人直连自己、旁观传同 id）：走「不能和自己比拼」兜底提示。 */
-export async function VsDuelView({ uid1, uid2, record }: { uid1: number; uid2: number; record: boolean }) {
+export async function VsDuelView({
+  uid1,
+  uid2,
+  record,
+  swapMe = null,
+  histHidden = false,
+  histUid,
+}: {
+  uid1: number;
+  uid2: number;
+  record: boolean;
+  /** 登录者自己的竞技场卡片（16:36 张老师：换人就地清卡回竞技场用；旁观者
+   *  非对决双方时由统一路由页额外装配，对决双方本人复用 p1/p2 转换） */
+  swapMe?: VsPickPlayer | null;
+  /** 自动跑分交接（17:24 张老师：竞技场点一决胜负落地瞬间历史闪现又消失）——
+   *  统一路由页读到新鲜 vs_autorun cookie 时为 true，历史板块首帧即不渲染 */
+  histHidden?: boolean;
+  /** 登录者 id（20:51 张老师定口径：「历史对决」＝当前登录用户发起的所有对决，
+   *  与卡片上是谁无关——恒按登录者查，两条路径同一查询彻底复用） */
+  histUid: number;
+}) {
   // 不能和自己比拼：入口按钮已灰置，直连 URL 兜底提示
   if (uid1 === uid2) {
     return (
@@ -349,6 +380,28 @@ export async function VsDuelView({ uid1, uid2, record }: { uid1: number; uid2: n
   const total2 = rec2 + bv2;
   const winner = total1 === total2 ? 0 : total1 > total2 ? 1 : 2;
 
+  /** 对决卡片 → 竞技场卡片（16:36 张老师：换人就地清卡——两形状字段同构，
+   *  只差 scores，显式摘除；radar/头像/称号等全量复用，零额外查询） */
+  const toPick = (p: VsPlayer): VsPickPlayer => ({
+    id: p.id,
+    name: p.name,
+    en: p.en,
+    sex: p.sex,
+    avatarUrl: p.avatarUrl,
+    avatarIsDefault: p.avatarIsDefault,
+    militaryTitle: p.militaryTitle,
+    classicTitle: p.classicTitle,
+    area: p.area,
+    areaRank: p.areaRank,
+    natRank: p.natRank,
+    radar: p.radar,
+  });
+
+  // 日期时间（16:26 张老师：进页立刻呈现——服务端算好传 VsScoreBoard，不再等
+  // 客户端水合后填空。格式同原客户端实现「YYYY年M月D日 HH:MM」）
+  const now = new Date();
+  const duelDateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
   // 对决记录落库（2026-11-11 张老师定：后台「今日胜负」KPI + /admin/vs 对决统计页）：
   // 每次有效访问一行，比分/结果为本次渲染快照；10 分钟窗口去重在函数内，失败静默。
   // 旁观模式（record=false）不计入——KPI 口径＝双方本人访问
@@ -357,6 +410,18 @@ export async function VsDuelView({ uid1, uid2, record }: { uid1: number; uid2: n
   // 21:55 张老师：纪录板块头部「胜数」＝该方占优的纪录行数（mark=p1/p2，含独有局）
   const recWin1 = recRows.filter((r) => r.mark === "p1").length;
   const recWin2 = recRows.filter((r) => r.mark === "p2").length;
+
+  // 「历史对决」板块（2026-11-11 14:38 张老师）：日期下分割线**默认显示**，线下
+  // 标题（字体同纪录「纪录」h1.gray，15:48 改小）+ 两玩家发起的最近对决（时间/
+  // 挑战双方/比分/胜负结果，胜负平用后台 admin_tag 同款标签，玩家名后跟性别+军衔
+  // 同玩家卡片渲染）；15:48 改版：底部全站通用「加载更多 + 页码滑条」翻页器
+  // （VsHistFeed 客户端组件，/api/vs/history 追加/跳页）。常显板块——赛前即渲染，
+  // 开跑后由 VsScoreBoard 按舞台状态整体摘除。
+  // 20:51 张老师定口径：＝**当前登录用户发起的**所有对决，与卡片上是谁无关——
+  // 恒按登录者查（原来按卡上玩家查，两卡都不是登录者时大概率空）。
+  // 17:24 张老师：竞技场自动跑分交接（vs_autorun cookie）由统一路由页读出传
+  // histHidden——SSR 首帧就不渲染历史，修掉「落地瞬间历史闪现又消失」。
+  const hist = await getVsHistory(histUid, histUid, 1, 10);
 
   // 2026-11-10 第五轮：下面所有板块交给客户端舞台（VsScoreBoard）控制显隐——
   // 赛前完全不挂载，点「决出胜负」跑分完成后才出现。RSC 节点可作为 props 传入客户端边界。
@@ -414,8 +479,16 @@ export async function VsDuelView({ uid1, uid2, record }: { uid1: number; uid2: n
         preTone={preTone}
         postComment={postComment}
         opponentId={uid2}
-        leftPanel={<VsPanel p={p1} />}
-        rightPanel={<VsPanel p={p2} accent="#e34f8c" />}
+        dateStr={duelDateStr}
+        swap={swapMe ? { me: swapMe, left: toPick(p1), right: toPick(p2) } : null}
+        hist={{ uid1: histUid, uid2: histUid, rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
+        histHidden={histHidden}
+        leftPanel={
+          <VsPanel p={p1} side="l" swapHref={`/vs?/${uid2}`} />
+        }
+        rightPanel={
+          <VsPanel p={p2} accent="#e34f8c" side="r" swapHref={`/vs/${uid1}`} />
+        }
         below={below}
       />
     </div>

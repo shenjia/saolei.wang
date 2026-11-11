@@ -26,14 +26,16 @@ export interface MobileNavUser {
   role: number;
 }
 
-/** 站内主导航（与桌面 #header_nav 前八项一致；/titles 项文案随称号体系切换，见渲染处） */
-const SITE_LINKS: { href: string; label: string }[] = [
+/** 站内主导航（与桌面 #header_nav 前八项一致；/titles 项文案随称号体系切换，见渲染处）
+ *  loginOnly：登录态才显示（2026-11-11「对决」入口，/vs 页本身有登录门槛） */
+const SITE_LINKS: { href: string; label: string; loginOnly?: boolean }[] = [
   { href: "/", label: "首页" },
   { href: "/ranking", label: "排行" },
   { href: "/video", label: "录像" },
   { href: "/bbs", label: "论坛" },
   { href: "/page/guide", label: "教程" },
   { href: "/online", label: "练习" },
+  { href: "/vs", label: "对决", loginOnly: true },
   { href: "/titles", label: "" }, // 军衔/称号（SystemText 动态）
   { href: "/records", label: "纪录" },
   { href: "/page/download", label: "下载" },
@@ -101,7 +103,7 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
         </button>
         {siteOpen && (
           <ul className="mn_menu">
-            {SITE_LINKS.map((l) => (
+            {SITE_LINKS.filter((l) => !l.loginOnly || user).map((l) => (
               <li key={l.href}>
                 {/* /titles 文案随观看者称号体系切换（军衔/称号） */}
                 <Link prefetch={false} href={l.href}>{l.href === "/titles" ? <SystemText /> : l.label}</Link>

@@ -15690,6 +15690,11 @@ span.vs_btn--disabled:hover img {
   min-width: 0;
   transition: transform 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
+/* 「换人」X（.vs_swap）的定位上下文（2026-11-11 14:38 张老师：对决页左右卡片
+   hover 也可换人——与竞技场 #vs_pick_hero > .box.vs_panel 同款） */
+#vs_hero > .box.vs_panel {
+  position: relative;
+}
 #vs_hero[data-close="1"] > .vs_panel:first-child {
   transform: translateX(var(--vs_close));
 }
@@ -15872,6 +15877,7 @@ span.vs_btn--disabled:hover img {
   padding: 4px;
   background: none;
   border: 0;
+  box-shadow: none; /* 21:06 张老师：音量按钮不该有 legacy button 的边框和阴影 */
   cursor: pointer;
   color: #fdc61a; /* 开：黄色 */
   line-height: 0;
@@ -15945,10 +15951,17 @@ span.vs_btn--disabled:hover img {
   filter: brightness(1.12);
 }
 /* 00:18 张老师：PC/移动端「返回」统一移到页面最底部（VsScoreBoard 在 below 之后
-   渲染 .vs_back_end），按钮加大一号 */
+   渲染 .vs_back_end），按钮加大一号。
+   20:31 张老师：PC 端底部「返回」去掉（done 后卡片右上角 X 常显承担换人再战，
+   回对手主页走卡片上的头像/姓名链接）；移动端保留（保存到相册 + 返回） */
 .vs_back_end {
   display: block;
   text-align: center;
+}
+@media (min-width: 769px) {
+  .vs_back_end {
+    display: none;
+  }
 }
 #page .vs_back_end .vs_back {
   display: inline-block;
@@ -16096,6 +16109,19 @@ span.vs_btn--disabled:hover img {
 .vs_rec th.vs_item.item_tie {
   color: #fdc61a;
 }
+/* 纪录行 hover 白描边（2026-11-11 14:38 张老师）：胜方成绩格与中间纪录名格
+   加与 BV 格 hover 同款的白色描边（#f8f8f2）。成绩数字格与纪录名格是两个
+   独立容器，描边**两侧分开加**（不能画在行/包裹层上）；两格相连的中缝不描
+   ——inset box-shadow 只画外侧三条边，观感与胜方连通底色的圆角衔接一致。
+   平局（无实底格）与无成绩行自然不命中。 */
+.vs_rec tbody tr:hover td.vs_half.half_p1,
+.vs_rec tbody tr:hover th.vs_item.item_p2 {
+  box-shadow: inset 1px 0 0 #f8f8f2, inset 0 1px 0 #f8f8f2, inset 0 -1px 0 #f8f8f2;
+}
+.vs_rec tbody tr:hover td.vs_half.half_p2,
+.vs_rec tbody tr:hover th.vs_item.item_p1 {
+  box-shadow: inset -1px 0 0 #f8f8f2, inset 0 1px 0 #f8f8f2, inset 0 -1px 0 #f8f8f2;
+}
 /* ③ 各BV比拼（2026-11-10 21:16 张老师第六轮）：初级/中级/高级各一个独立板块盒。
    格子＝收集墙式：统一 2px 间距 + 圆角，双方都没有的 BV 也画空格（暗底）。
    20:46 去掉饼图后 .vs_lvbody 改单列块；21:16 再去掉行首 BV 范围（64px）、
@@ -16160,6 +16186,132 @@ span.vs_btn--disabled:hover img {
   /* 01:26 张老师：板块标题再大两号（26→28）；02:07 再放大（28→30）；
      02:10 张老师：纪录/初/中/高级标题放到 40px */
   font-size: 40px;
+}
+/* 「历史对决」板块（2026-11-11 14:38 张老师）：分割线下常显（赛前即渲染），
+   标题同纪录板块 h1.gray；两玩家发起的最近对决记录表 + 行 hover「回看」
+   + 全站通用「加载更多 + 页码滑条」翻页器（VsHistFeed/PageSlider）。
+   15:48 张老师改版：①标题改小一档；②内容去掉 .box 底板（裸表格）；
+   ③胜负平用后台 admin_tag 同款标签；④行 hover 加深灰底色；⑤回看 hover
+   同「一决胜负」变亮。margin-top 与 .vs_below 同款 69px（清掉分割线悬出
+   hero 的 29px，线下留白 40px）——置于 .vs_lvblk 之后以覆盖其 49px */
+.vs_hist {
+  margin-top: 69px;
+}
+/* 16:26 张老师：板块宽度与分割线一致——VsScoreBoard fit() 把测量宽度写到本
+   wrapper（margin auto 居中后与分割线两缘平齐）；移动端 fit 清空即全宽 */
+.vs_hist_wrap {
+  margin: 0 auto;
+}
+/* 竞技场（/vs、/vs/{id}）日期+分割线（21:06 张老师：音量按钮下方也要，与
+   对决页同款）——.vs_date/.vs_divider 基础规则是对决页 #vs_hero grid/absolute
+   布局的，竞技场落在 #vs_pick_hero 之后普通流内：日期居中、线 static+margin
+   auto（宽度由 VsPickArena fit 测两侧 .vs_panel 跨度写 inline，两端对齐卡片
+   外缘；移动端 fit 清空回全宽）。线与日期的间距对齐对决页口径（线下留白 40px） */
+.vs_pick_date {
+  display: block;
+  text-align: center;
+}
+.vs_pick_divider {
+  position: static;
+  margin: 28px auto 0;
+}
+/* ①「历史对决」标题比纪录等主板块小一档（40 → 26） */
+.vs_hist .vs_lv_head h1 {
+  font-size: 26px;
+}
+.vs_histbox {
+  padding: 8px 16px 16px;
+}
+.vs_hist_tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+.vs_hist_tbl td {
+  padding: 9px 8px;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.vs_hist_tbl tr + tr td {
+  border-top: 1px solid #3e3d32;
+}
+/* ④ 行 hover 整行加深灰底色（2026-11-11 15:48 张老师；无底板下以行底色示意热区） */
+.vs_hist_tbl tbody tr:hover td {
+  background: #33322b;
+}
+.vs_hist_time {
+  color: #75715e;
+  font-size: 13px;
+}
+.vs_hist_name a {
+  color: #f8f8f2;
+}
+.vs_hist_name a:hover {
+  color: #fdc61a;
+  text-decoration: underline;
+}
+.vs_hist_c {
+  text-align: center;
+}
+.vs_hist_s {
+  font-variant-numeric: tabular-nums;
+}
+.vs_hist_s_win {
+  color: #fdc61a;
+}
+.vs_hist_s_lose {
+  color: #8f8e83;
+}
+.vs_hist_res {
+  color: #b1b1a4;
+}
+/* ③ 胜负平标签（15:48 张老师：借用后台显示样式）——admin.css .admin_tag
+   同款三色（胜绿/负玫红/平暗灰圆角胶囊） */
+.vs_hist_res .admin_tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 17px;
+  border: 1px solid transparent;
+}
+.vs_hist_res .admin_tag.ok { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
+.vs_hist_res .admin_tag.bad { background: rgba(249, 38, 114, 0.14); color: #f92672; border-color: rgba(249, 38, 114, 0.35); }
+.vs_hist_res .admin_tag.plain { background: #33322b; color: #939387; border-color: #49483e; }
+/* 「回看」：行 hover 浮现（触屏无 hover 常显）；黄色小按钮同 .vs_swap hover 观感 */
+/* 「回看」三态（16:26 张老师）：默认即显示——半透明亮灰块；hover 本行去半透明
+   （仍亮灰）；hover 按钮变黄（同「一决胜负」hover 变亮，见下方特异性注释）。
+   触屏无行 hover：默认态即可点 */
+.vs_hist_tbl .vs_look {
+  display: inline-block;
+  padding: 3px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #272822;
+  background: #b1b1a4;
+  border-radius: 4px;
+  text-decoration: none;
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.vs_hist_tbl tr:hover .vs_look {
+  opacity: 1;
+}
+/* ⑤ 回看 hover 变黄（16:26 张老师：hover 按钮才变黄，不吃全站绿字 hover），
+   同「一决胜负」hover 变亮。⚠️ 选择器四层类级（.vs_hist_tbl/.vs_hist_look/
+   .vs_look/:hover = (0,4,1)）——全局 `body a:hover:not(.button):not(.auth_button)`
+   是 (0,3,2)，少于它必被压绿 */
+.vs_hist_tbl .vs_hist_look a.vs_look:hover {
+  color: #2b2a20;
+  text-decoration: none;
+  background: linear-gradient(180deg, #ffd23e, #f0b70a);
+  filter: brightness(1.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 22px -8px rgba(253, 198, 29, 0.6);
+}
+.vs_hist_empty {
+  text-align: center;
+  color: #75715e;
+  padding: 18px 0 6px;
 }
 /* 21:36 / 21:45 张老师字号阶梯（项目「小两号」= 2px，参照 15→13 口径）：
    标题 26px → 玩家名/分数 24px → 胜数/独有数 22px → 单位 20px。
@@ -16473,8 +16625,10 @@ a.vs_c:hover {
     box-sizing: border-box;
     margin: 0 auto;
     /* 2026-11-10 19:57 张老师：两张卡片左右各收 5px，与屏幕边缘留出背景缝。
-       ⚠️ 必须配 box-sizing:border-box，否则 width:100% + padding 会横向溢出 */
-    padding: 0 5px;
+       ⚠️ 必须配 box-sizing:border-box，否则 width:100% + padding 会横向溢出。
+       17:29 张老师：5px 不够骑线换人 X（外露 13px）——被屏幕右缘裁掉一半，
+       左右各收 18px（13px 骑线 + 5px 缝） */
+    padding: 0 18px;
     --vs_close: 0px;
   }
   /* 20:31 张老师：上下加厚、左右收窄（8px 7px → 16px 4px）。
@@ -16635,6 +16789,8 @@ a.vs_c:hover {
     margin: 25px 0 40px;
   }
   .vs_below { margin-top: 0; }
+  /* 历史对决板块同理：移动端 divider 占流不悬出，PC 的 69px 补偿在此抵消 */
+  .vs_hist { margin-top: 0; }
   /* 02:10 张老师：「纪录」标题上方到分割线的空白应与日期↔分割线距离（40px）一致。
      divider 下 margin 40px 已给足，首个板块的 49px margin-top 额外叠加出 89px，
      移动端清零（PC 端板块间距不受影响） */
@@ -16708,5 +16864,316 @@ a.vs_c:hover {
   #page .vs_save_album:disabled {
     filter: grayscale(0.4) brightness(0.9);
     cursor: default;
+  }
+}
+
+/* ==================== /vs 对决选择页（2026-11-11 张老师需求） ====================
+   登录态选对手页：左侧自己、右侧问号占位 + 搜索框（排行同款 .goto_search）；
+   双方就位后卡片右上角圆角处出「换人」X（深灰、hover 上方气泡）。中间列完全
+   复用 PK 页 /vs/[id] 的 .vs_vs 结构（.vs_scoreline VS 字标 + .vs_action 黄钮 +
+   .vs_snd_gsw 喇叭开关，样式全走 PK 页既有规则，这里只补按钮置灰态）。
+   卡片结构复用 /vs/[id] 的 .box.vs_panel（内部 = 侧栏玩家卡片 .user_card +
+   实力雷达），本页 #page 挂独立类 vs_pick_page（不挂 .vs_page——那会命中
+   PK 页移动端隐藏 header/footer 的规则）。 */
+#vs_pick_hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 24px 0;
+}
+#vs_pick_hero > .box.vs_panel {
+  position: relative; /* 「换人」X 的定位上下文 */
+}
+/* 卡片收拢口径与 PK 页赛前一致（张老师 11:06 参考 /vs/[id] 战前布局：
+   未跑分时两槽向中间平移 --vs_close=73px，中列 z-index:2 盖在面板上）。
+   本页没有跑分展开态，恒收拢；两端空位（问号盒）同样平移保持对称。
+   ⚠️ 移动端堆叠布局在 media 块里归零 */
+#vs_pick_hero {
+  --vs_close: 73px;
+}
+#vs_pick_hero > .box.vs_panel:first-child {
+  transform: translateX(var(--vs_close));
+}
+#vs_pick_hero > .box.vs_panel:last-child {
+  transform: translateX(calc(-1 * var(--vs_close)));
+}
+/* 收拢后卡片 X（右上角）会落进中列矩形里——中列对指针穿透，只留按钮可点
+   （否则 .vs_vs 的透明区域拦住 X 的点击/hover）；PK 页无 X 不受影响。
+   16:52 张老师：对决页同款问题（.vs_vs z-index:2 压过收拢面板的骑线 X，
+   probe 实证 click 打不到按钮）——原只对 data-close="1"（就位态）穿透；
+   20:29 张老师：对决完成后点 X 没反应——面板滑回原位后 X 仍骑线探进中列，
+   恢复拦截的中列把 hover 链也拦了（鼠标挪到右上角命中中列而非卡片，
+   .vs_panel:hover 不成立 → X 永不浮现 → 无从点起）。改**恒穿透**：done 态
+   中列只剩评价/日期/分割线（均非交互元素）；跑分中「一决胜负」虽恢复可点，
+   但 disabled + startFight 的 phase 守卫双保险，误点无害 */
+#vs_pick_hero .vs_vs,
+#vs_hero .vs_vs {
+  pointer-events: none;
+}
+#vs_pick_hero .vs_vs button,
+#vs_hero .vs_vs button {
+  pointer-events: auto;
+}
+/* 空位（问号占位 + 搜索框）：宽度对齐玩家卡片实测外宽 260（.user_card 内容宽
+   200 + .box padding 60；带 8px×2 margin 后与卡片 276 外占位一致）——
+   「两边全空」时 260+380+260+gap20 = 920 ≤ 960，三件套不换行；
+   头像与搜索框的间距 30px = 盒内上边距（.box padding-top），上下留白等同；
+   height 372 = 玩家卡片实测高（.user_card 结构恒定：ucd_top 固定 74 + hr 21 +
+   雷达 222 + 盒 padding 60）→ 换人/清空时盒子高度零变化（五轮排查：原 360
+   与卡片 372 差 12px，居中行内上下各偏 6px 即张老师看到的「高度微调」） */
+.vs_pick_empty {
+  width: 260px;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  height: 372px;
+}
+/* 问号占位头像：圆角矩形遮罩（2026-11-11 张老师：不要圆形），圆角取盒同款 10px 系；
+   宽度＝搜索框宽度（四轮 11:23 张老师：两者同撑内容宽 200px，正方形等比） */
+.vs_pick_q {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  object-fit: cover;
+  display: block;
+}
+/* 空位内搜索框撑满内容宽（与头像同宽）；输入区随框拉伸 */
+.vs_pick_empty .goto_form {
+  width: 100%;
+}
+.vs_pick_empty .goto_search {
+  flex: 1;
+  min-width: 0;
+}
+.vs_pick_empty .goto_search input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 「换人」X：深灰圆形按钮，**骑线**在卡片右上角圆角处（26px 按钮中心正压
+   .box 边框角点：top/right 各 -13px），hover 卡片才浮现（触屏设备常显），
+   hover 按钮变黄（站点金）+ 上方气泡 */
+.vs_swap {
+  position: absolute;
+  top: -13px;
+  right: -13px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin: 0; /* legacy 给 button 塞了 margin-right:8px——骑线定位会被它顶偏 8px（实测） */
+  border: 0;
+  border-radius: 50%;
+  background: #49483e; /* 深灰（与盒描边同族） */
+  color: #b1b1a4;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.vs_swap svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+.vs_swap:hover {
+  background: #fdc61a;
+  color: #272822;
+}
+/* 20:31 张老师：hover 黄底时中间的叉显示成绿色——.vs_swap 是 <Link>（a 标签），
+   全站 body a:hover:not(.button):not(.auth_button)（特异性 0,3,2）压过上面的
+   裸类规则把字色夺走；#page 提权（1,2,0）夺回黑叉（同 .vs_back 的提权理由） */
+#page .vs_swap:hover {
+  background: #fdc61a;
+  color: #272822;
+}
+/* hover 气泡「换人」：暗底描边（同音效开关 data-tip 上弹风格），按钮**正上方**弹出 */
+.vs_swap::after {
+  content: "换人";
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  padding: 4px 10px;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #1e1f1c;
+  color: #f8f8f2;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.vs_swap:hover::after,
+.vs_swap:focus-visible::after {
+  opacity: 1;
+}
+/* 默认隐藏、hover 卡片浮现——只在有 hover 能力的设备生效（触屏无 hover 会永远看不到） */
+@media (hover: hover) {
+  .vs_swap {
+    opacity: 0;
+    pointer-events: none; /* 隐藏态不拦鼠标（尤其骑线半悬在卡外时） */
+  }
+.vs_panel:hover .vs_swap {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+/* 20:45 张老师：done 后换人 X 分两拍——
+   ① 截图未完成（data-shot="0"）：X **恒隐**，连 hover 浮现也禁——截图克隆的
+      computed style 若恰好取到 hover 中的 X 会把叉拍进图里（张老师明确怕这个）；
+   ② 截图完成（data-shot="1"）：常显可点（PC=剪贴板落，移动端=分享 Blob 备好，
+      截图失败也放行）。特异性 (1,3,0) 压过 hover 浮现与下面的常显规则 */
+#vs_hero[data-done="1"][data-shot="0"] .vs_swap {
+  opacity: 0;
+  pointer-events: none;
+}
+#vs_hero[data-done="1"][data-shot="1"] .vs_swap {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 中间列「一决胜负」：盒型/字体全走 PK 页 .vs_fight，这里只补置灰态——
+   双方未就位（disabled）换灰底灰字（对齐 .vs_back 灰系），就位后恢复黄钮 */
+#vs_pick_hero .vs_fight:disabled {
+  background: #4a493f;
+  color: #8f8e83;
+  box-shadow: none;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  cursor: default;
+}
+/* 「匹配中」钮内转圈（七轮 13:28 张老师）：复用 toast_spin 关键帧
+   （审核入口 .rv_spin 同款姿势），环色随钮灰态文字 #8f8e83 */
+#vs_pick_hero .vs_fight .vs_spin {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid rgba(143, 142, 131, 0.35);
+  border-top-color: #8f8e83;
+  border-radius: 50%;
+  animation: toast_spin 0.72s linear infinite;
+}
+/* 未就位提示气泡（五轮 11:37 张老师）：金色「请双方选手就位」，复用 PK 页
+   .vs_pre 评语框（框型）+ .vs_pre_even（势均力敌金）配色；绝对定位悬浮在
+   VS 字标上方（底距 scoreline 顶 21px = PK 页 prewrap 的同款间距），不占流内
+   高度——143px 居中恒等式不受影响，就位后气泡卸载也无布局位移 */
+#vs_pick_hero .vs_scoreline {
+  position: relative;
+  margin-top: 143px;
+}
+#vs_pick_hero .vs_pick_pre {
+  position: absolute;
+  bottom: calc(100% + 21px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+/* 移动端（≤768）：两槽上下堆叠、卡片全宽（对齐 /vs/[id] 移动端面板口径）；
+   中间列随 flex 纵向落在两槽之间，复用 PK 页规则无需额外覆盖 */
+@media (max-width: 768px) {
+  /* 17:27 张老师：移动端两个入口样式必须完全相同——主页点对决进来（#vs_hero）
+     与竞技场匹配成功（本页）此前一竖排 grid 一 flex 堆叠，观感两样。
+     竞技场照抄 #vs_hero 的移动端 grid 行序：气泡(1) 卡A(2) VS(3) 卡B(4) 动作槽(5)
+     （竞技场无日期/分割线元素，行数到 5 为止；header/footer 保留——本页不是对决页） */
+  #vs_pick_hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto minmax(30px, auto);
+    align-items: center;
+    justify-items: stretch;
+    gap: 0;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 auto;
+    /* 骑线换人 X 外露 13px，与 #vs_hero 同口径左右各收 18px（17:29 张老师：
+       再缩一点，X 都显示不全了） */
+    padding: 0 18px;
+    --vs_close: 0px; /* 纵向堆叠不做 PC 的 73px 收拢平移 */
+  }
+  /* ⚠️ 带 body #page 压过移动端通用 body #page .box{padding:16px 14px}（同 /vs/[id] 口径） */
+  body #page #vs_pick_hero > .box.vs_panel {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 4px 16px 9px;
+    margin: 0;
+    flex: none;
+    transform: none;
+  }
+  /* 显式 grid-column/row（同 #vs_hero 坑：auto-placement 会塞隐式第 2 列）；
+     空位（问号+搜索框）也带 .box.vs_panel 类，同落 row2/row4 */
+  body #page #vs_pick_hero > .box.vs_panel:first-child { grid-row: 2; grid-column: 1; }
+  body #page #vs_pick_hero > .box.vs_panel:last-child { grid-row: 4; grid-column: 1; }
+  #vs_pick_hero > .box.vs_panel.vs_pick_empty {
+    justify-self: center; /* 260 定宽空位居中（grid 下 stretch 无意义） */
+  }
+  /* 中列拆箱（同 #vs_hero 的 .vs_vs display:contents 套路）。
+     ⚠️ 竞技场气泡 .vs_pick_pre 在 .vs_scoreline **内部**（对决页在 .vs_prewrap
+     独立行），只拆 .vs_vs 它到不了 grid——scoreline 也 contents 拆穿，气泡占
+     row1（同对决页顶部行）、VS 图标占 row3；两侧空占位 span 随之失效隐藏 */
+  #vs_pick_hero .vs_vs,
+  #vs_pick_hero .vs_scoreline { display: contents; }
+  #vs_pick_hero .vs_scoreline > span[aria-hidden] { display: none; }
+  #vs_pick_hero .vs_scoreline img {
+    grid-row: 3;
+    grid-column: 1;
+    justify-self: center;
+    width: 84px;
+    height: 89px;
+    margin: 36px 0; /* 原 scoreline 的上下 36px padding 由 img margin 承担 */
+  }
+  /* 预测气泡从「悬浮在字标上方」（PC absolute）改占流第 1 行（同对决页 .vs_prewrap） */
+  #vs_pick_hero .vs_pick_pre {
+    grid-row: 1;
+    grid-column: 1;
+    position: static;
+    transform: none;
+    margin: 15px auto;
+    font-size: 15px;
+    width: fit-content;
+  }
+  #vs_pick_hero .vs_action {
+    grid-row: 5;
+    grid-column: 1;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+  }
+  #vs_pick_hero .vs_fight { grid-row: 1; grid-column: 2; justify-self: center; margin: 30px auto; }
+  #page #vs_pick_hero .vs_snd_gsw {
+    position: static;
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: center;
+    margin: 30px 0;
+  }
+  /* 竞技场历史对决板块：hero 之下全宽（无对决页分割线宽度对齐逻辑） */
+  .vs_pick_page .vs_hist { margin-top: 8px; }
+  .vs_pick_empty {
+    height: auto; /* 撤 PC 定高 372：移动端卡片是两列网格布局（高 ≈235），定高会错位 */
+    min-height: 280px;
+    gap: 16px;
+  }
+  /* 移动端全宽盒内：头像与搜索框同宽 200px、居中列（PC 的 width:100% 会让
+     问号头像撑到 560px+ 巨量化） */
+  .vs_pick_q {
+    width: 200px;
+  }
+  .vs_pick_empty .goto_form {
+    width: 200px;
   }
 }

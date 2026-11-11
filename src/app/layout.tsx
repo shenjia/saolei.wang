@@ -135,6 +135,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 <li>
                   <Link prefetch={false} href="/online">练习</Link>
                 </li>
+                {/* 对决入口（2026-11-11）：登录态才显示（/vs 页本身有登录门槛） */}
+                {session && (
+                  <li>
+                    <Link prefetch={false} href="/vs">对决</Link>
+                  </li>
+                )}
                 <li>
                   <Link prefetch={false} href="/titles">
                     <SystemText />

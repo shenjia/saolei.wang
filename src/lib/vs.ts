@@ -19,7 +19,10 @@ import { getUser3bvCollection, getLevel3bvRanges, getStnbProfiles, type BbvCell,
 import { getRadarData, type RadarPoint } from "./radar";
 import { LEVEL_MIN_3BV, UNREACHABLE_3BV, type VideoLevel } from "./config";
 import { score3bvs, scoreTime } from "./format";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { title as militaryTitle } from "./assess";
+import { getThunderKingThreshold } from "./title-system";
 
 const VIDEO_LEVELS: VideoLevel[] = ["beg", "int", "exp"];
 const LEVEL_AXIS_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
@@ -116,7 +119,8 @@ export interface VsData {
   /** BV 总分（三级别合计） */
   bv1: number;
   bv2: number;
-  /** 战前预估评价：只看双方中+高级 STNB（2026-11-11 去掉初级，太靠运气），绝不碰 PK 记录/BV 得分（张老师 2026-11-10：不要剧透结果） */
+  /** 战前预估评价：中+高级 STNB 与录像积累量各半综合（2026-11-12 改口径），
+   *  绝不碰 PK 记录/BV 得分（张老师 2026-11-10：不要剧透结果） */
   preComment: string;
   /** 战前评价色调（2026-11-10）：占优=adv 绿 / 不利=dis 玫瑰红 / 势均力敌=even 金 */
   preTone: PreTone;
@@ -127,24 +131,39 @@ export interface VsData {
 /** 战前评价色调：adv=占优（绿）/ dis=不利（玫瑰红）/ even=势均力敌（金） */
 export type PreTone = "adv" | "dis" | "even";
 
-/** 战前预估（2026-11-10 18:08 张老师改口径）：改用**双方 STNB 成绩**比较，
- *  不再看雷达（雷达是排位百分位，顶级玩家间饱和，判什么都一样）。
- *  2026-11-11 张老师：**去掉初级 STNB**（初级盘短、运气成分太大），
- *  改取中+高级 STNB 之和比较。
- *  相对差 = (高 - 低) / 高（与赛后评价同款分母）：
+/** 战前预估（2026-11-12 张老师改口径）：**STNB 峰值 + 录像积累量各半综合**。
+ *  背景：STNB 只量「天花板」，与赛后比分的口径（收集格广度 + 纪录家底，高级
+ *  权重 10 放大）严重脱节——实证 17068 vs 31660：STNB 相对差仅 3.2%（判
+ *  势均力敌），实际比分比例 0.577（差距明显档）。录像积累量（user_stat 三级
+ *  录像数合计，status<>0 口径）是「家底」的现成代理：练得多 → 收集格更全、
+ *  最快成绩更快，与比分高度相关。
+ *  综合指数 = 0.5×STNB 份额 + 0.5×录像量份额（各按双方最大值归一到 0~1）；
+ *  某分量双方全 0 时退化为另一分量全权。相对差 = (高-低)/高（与赛后评价同款
+ *  分母）：
  *    ≤ 10% →「势均力敌的对抗」(even 金)
  *    ≤ 20% →「稍占上风的对抗」/「略处下风的对抗」(adv 绿 / dis 玫瑰红)
  *    ≤ 30% →「明显优势的对抗」/「明显劣势的对抗」(adv / dis)
  *    > 30% →「毫无悬念的碾压」/「毫无胜算的对抗」(adv / dis)
- *  STNB 来自 STNB 榜该级历史最高（缺级＝0），与 PK 记录/BV
- *  得分不是一套口径，故不剧透结果。两边都无有效 STNB 时不下判断，给中性档。 */
-export function preMatchAssessment(s1: number, s2: number): { text: string; tone: PreTone } {
-  const hi = Math.max(s1, s2);
-  const lo = Math.min(s1, s2);
+ *  综合指数与 PK 记录/BV 得分不是一套口径，故不剧透结果。
+ *  双方 STNB 与录像量都为 0 时不下判断，给中性档。 */
+export function preMatchAssessment(stnb1: number, stnb2: number, vid1: number, vid2: number): { text: string; tone: PreTone } {
+  const snMax = Math.max(stnb1, stnb2);
+  const vdMax = Math.max(vid1, vid2);
+  if (snMax <= 0 && vdMax <= 0) return { text: "势均力敌的对抗", tone: "even" };
+  // 份额权重：可用分量各半，退化为单分量时归一到全权
+  const wSn = snMax > 0 ? 0.5 : 0;
+  const wVd = vdMax > 0 ? 0.5 : 0;
+  const wSum = wSn + wVd;
+  const idx = (sn: number, vd: number) =>
+    (wSn * (snMax > 0 ? sn / snMax : 0) + wVd * (vdMax > 0 ? vd / vdMax : 0)) / wSum;
+  const i1 = idx(stnb1, vid1);
+  const i2 = idx(stnb2, vid2);
+  const hi = Math.max(i1, i2);
+  const lo = Math.min(i1, i2);
   if (hi <= 0) return { text: "势均力敌的对抗", tone: "even" };
   const diff = (hi - lo) / hi;
-  // 以我方(p1)视角判定：s1 ≥ s2 即我方占优（含相等，相等必落 even 档）
-  const mine = s1 >= s2;
+  // 以我方(p1)视角判定：i1 ≥ i2 即我方占优（含相等，相等必落 even 档）
+  const mine = i1 >= i2;
   if (diff <= 0.1) return { text: "势均力敌的对抗", tone: "even" };
   if (diff <= 0.2) {
     return mine
@@ -162,15 +181,129 @@ export function preMatchAssessment(s1: number, s2: number): { text: string; tone
     : { text: "毫无胜算的对抗", tone: "dis" };
 }
 
-/** 赛后评价（2026-11-10 17:52 张老师终版四句）：相对差距 = (高分-低分)/高分，
- *  >=0.4 视为悬殊，否则视为接近；平局单独兜底。视角恒为「我方」（p1=登录者）。 */
+/** 赛后评价（2026-11-11 张老师改口径）：不再用 0.4 相对差一刀切，改按**实际比分
+ *  比例（低分/高分）**分四档：
+ *    < 0.5  → 绝对碾压
+ *    < 0.75 → 差距明显
+ *    < 0.9  → 略占上风
+ *    ≥ 0.9  → 势均力敌
+ *  每档按我方（p1=登录者）胜负给对应文案；平局单独兜底。 */
 export function postMatchComment(t1: number, t2: number): string {
   if (t1 === t2) return "棋逢对手，平分秋色！";
   const hi = Math.max(t1, t2);
   const lo = Math.min(t1, t2);
-  const big = hi > 0 && (hi - lo) / hi >= 0.4;
-  if (t1 > t2) return big ? "赢得太轻松了，还是换个对手吧！" : "双方势均力敌，你略胜一筹！";
-  return big ? "毫无还手之力，还是换个对手吧！" : "可惜，就差一点点！";
+  const ratio = hi > 0 ? lo / hi : 1;
+  if (ratio < 0.5) return t1 > t2 ? "赢得太轻松了，还是换个对手吧！" : "毫无还手之力，还是换个对手吧！";
+  if (ratio < 0.75) return t1 > t2 ? "优势明显，赢得干脆利落！" : "差距明显，还需继续苦练！";
+  if (ratio < 0.9) return t1 > t2 ? "略占上风，有惊无险拿下！" : "稍逊一筹，去刷几个纪录吧！";
+  return t1 > t2 ? "双方势均力敌，你略胜一筹！" : "双方势均力敌，可惜就差一点点！";
+}
+
+/** 战前预估独立计算（十轮 14:38 张老师：竞技场匹配成功后要**立刻**显示预测评价
+ *  → /api/vs/pre 供竞技场在双方就位时即时调用；对决页 getVsData 复用同一口径）。
+ *  与 getVsData 内联版完全同源：STNB（去初级，中+高之和）+ 录像积累量各半综合。
+ *  getStnbProfiles 走 60s 缓存，重复调用代价可忽略。 */
+export async function getPreAssessment(id1: number, id2: number): Promise<{ text: string; tone: PreTone }> {
+  const [stnbProfiles, vstats] = await Promise.all([
+    getStnbProfiles([id1, id2]),
+    prisma.userStat.findMany({
+      where: { id: { in: [BigInt(id1), BigInt(id2)] } },
+      select: { id: true, begVideos: true, intVideos: true, expVideos: true },
+    }),
+  ]);
+  const STNB_ZERO: StnbProfile = { beg: 0, int: 0, exp: 0, total: 0, videos: { beg: 0, int: 0, exp: 0 } };
+  const s1 = stnbProfiles.get(id1) ?? STNB_ZERO;
+  const s2 = stnbProfiles.get(id2) ?? STNB_ZERO;
+  const vcnt = (uid: number) => {
+    const s = vstats.find((x) => Number(x.id) === uid);
+    return s ? s.begVideos + s.intVideos + s.expVideos : 0;
+  };
+  return preMatchAssessment(s1.int + s1.exp, s2.int + s2.exp, vcnt(id1), vcnt(id2));
+}
+
+/** 历史对决（2026-11-11 14:38 张老师需求）：对决页分割线下「历史对决」板块——
+ *  两玩家（uid1/uid2 任一方）发起的最近对决记录，格式参考后台对决统计
+ *  （时间/挑战双方/比分/胜负结果），行 hover 出「回看」跳该行两玩家对决页；
+ *  底部标准翻页控件（每页 10 条，由调用方传 page）。 */
+export interface VsHistRow {
+  id: number;
+  /** 发起时刻 Unix 秒 */
+  time: number;
+  u1: number; n1: string; // 发起者
+  u2: number; n2: string; // 被挑战者
+  /** 性别（user.sex，1=男）——名字后缀图标（2026-11-11 15:48 张老师：与玩家卡片同渲染） */
+  sex1: number; sex2: number;
+  /** 英文名（AvatarCell 气泡用；空串=气泡只显示 #ID 姓名） */
+  en1: string; en2: string;
+  /** 军衔（user_scores.exp_time 快照评定，同后台口径）——TitleBadge */
+  t1: string; t2: string;
+  /** 比分（null=历史回填行未算） */
+  s1: number | null; s2: number | null;
+  /** 1=发起者胜 2=对方胜 0=平；null=未算 */
+  result: number | null;
+}
+
+export async function getVsHistory(
+  uid1: number,
+  uid2: number,
+  page = 1,
+  pageSize = 10
+): Promise<{ rows: VsHistRow[]; total: number; pageSize: number }> {
+  const offset = (Math.max(1, page) - 1) * pageSize;
+  const ids = Prisma.join([BigInt(uid1), BigInt(uid2)]);
+  // 展示名表达式（中文名优先 → 英文名 → #id；与 admin/vsstats 同款口径，alias 固定 ua/ub）
+  const NAME_A = `COALESCE(NULLIF(ua.chinese_name, ''), NULLIF(ua.english_name, ''), CONCAT('#', ua.id))`;
+  const NAME_B = `COALESCE(NULLIF(ub.chinese_name, ''), NULLIF(ub.english_name, ''), CONCAT('#', ub.id))`;
+  const [rows, cnt, kTh] = await Promise.all([
+    prisma
+      .$queryRaw<{
+        id: bigint; create_time: bigint; u1: bigint; u2: bigint;
+        s1: number | null; s2: number | null; result: number | null;
+        n1: string; n2: string; sex1: number; sex2: number;
+        en1: string; en2: string; exp1: unknown; exp2: unknown;
+      }[]>(
+        Prisma.sql`
+          SELECT d.id, d.create_time, d.user_id AS u1, d.target_id AS u2, d.s1, d.s2, d.result,
+                 ${Prisma.raw(NAME_A)} AS n1, ${Prisma.raw(NAME_B)} AS n2,
+                 ua.sex AS sex1, ub.sex AS sex2, ua.english_name AS en1, ub.english_name AS en2,
+                 sa.exp_time AS exp1, sb.exp_time AS exp2
+          FROM vs_duel d
+          JOIN \`user\` ua ON ua.id = d.user_id
+          JOIN \`user\` ub ON ub.id = d.target_id
+          LEFT JOIN \`user_scores\` sa ON sa.id = d.user_id
+          LEFT JOIN \`user_scores\` sb ON sb.id = d.target_id
+          WHERE d.user_id IN (${ids})
+          ORDER BY d.create_time DESC LIMIT ${pageSize} OFFSET ${offset}
+        `
+      )
+      .catch(() => []),
+    prisma
+      .$queryRaw<{ c: bigint }[]>(
+        Prisma.sql`SELECT COUNT(*) AS c FROM vs_duel WHERE user_id IN (${ids})`
+      )
+      .then((r) => N(r[0]?.c))
+      .catch(() => 0),
+    // 总司令动态阈值（军衔评定与全站/后台同口径，单次查询）
+    getThunderKingThreshold(),
+  ]);
+  return {
+    total: cnt,
+    pageSize,
+    rows: rows.map((r) => ({
+      id: N(r.id),
+      time: N(r.create_time),
+      u1: N(r.u1), n1: r.n1,
+      u2: N(r.u2), n2: r.n2,
+      sex1: N(r.sex1), sex2: N(r.sex2),
+      en1: r.en1 ?? "", en2: r.en2 ?? "",
+      // 军衔按 user_scores.exp_time 快照评定（毫秒；与后台 duelUser 同款 militaryTitle(exp, kTh)）
+      t1: militaryTitle(r.exp1 === null || r.exp1 === undefined ? null : Number(r.exp1), kTh),
+      t2: militaryTitle(r.exp2 === null || r.exp2 === undefined ? null : Number(r.exp2), kTh),
+      s1: r.s1 === null ? null : Number(r.s1),
+      s2: r.s2 === null ? null : Number(r.s2),
+      result: r.result === null ? null : N(r.result),
+    })),
+  };
 }
 
 function toVsPlayer(card: UserCardData, radar: RadarPoint[]): VsPlayer {
@@ -275,7 +408,7 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
     card1.hasVideos ? getRadarData(card1.scores) : Promise.resolve([]),
     card2.hasVideos ? getRadarData(card2.scores) : Promise.resolve([]),
     getLevel3bvRanges(),
-    // 战前预估口径＝双方总 STNB；纪录板块三行 STNB 也取自同一份 60s 缓存
+    // 纪录板块三行 STNB 取自 STNB 榜 60s 缓存（战前预估另走 getPreAssessment，同源）
     getStnbProfiles([id1, id2]),
   ]);
 
@@ -333,8 +466,9 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
 
   const bv1 = levels.reduce((s, l) => s + l.total1, 0);
   const bv2 = levels.reduce((s, l) => s + l.total2, 0);
-  // 战前预估（2026-11-11 张老师）：去掉初级 STNB（太靠运气），取中+高级之和
-  const pre = preMatchAssessment(stnb1.int + stnb1.exp, stnb2.int + stnb2.exp);
+  // 战前预估（2026-11-12 张老师改口径）：独立函数 getPreAssessment——
+  // STNB（去初级，中+高之和）与录像积累量各半综合，竞技场 /api/vs/pre 同源复用
+  const pre = await getPreAssessment(id1, id2);
 
   return {
     p1: toVsPlayer(card1, radar1),
