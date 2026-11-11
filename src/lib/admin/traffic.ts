@@ -119,9 +119,21 @@ export interface TrafficOverview {
 
 // ---------- 工具 ----------
 
-/** /video/123 → /video/:id（落地页/流失聚合过滤自增 ID） */
+/** /video/123 → /video/:id（topVideos 分组仍按数字 ID，用 VIDEO_RE） */
+
 const VIDEO_RE = /^\/video\/(\d+)$/;
-const normalizePath = (p: string): string => p.replace(VIDEO_RE, "/video/:id");
+
+/** 动态 ID 路由归类（2026-11-11 张老师点名 /user/:id；访问页/落地页/流失聚合共用，
+ *  把自增 ID 归并成占位符；称号/军衔名等语义段不动） */
+const normalizePath = (p: string): string =>
+  p
+    .replace(/^\/video\/(\d+)$/, "/video/:id")
+    .replace(/^\/video\/download\/(\d+)$/, "/video/download/:id")
+    .replace(/^\/user\/(\d+)$/, "/user/:id")
+    .replace(/^\/bbs\/(\d+)$/, "/bbs/:id")
+    .replace(/^\/bbs\/edit\/(\d+)$/, "/bbs/edit/:id")
+    .replace(/^\/vs\/(\d+)\/(\d+)$/, "/vs/:id/:bid")
+    .replace(/^\/vs\/(\d+)$/, "/vs/:id");
 
 const DEVICE_NAMES: Record<string, string> = {
   desktop: "桌面端",
@@ -601,7 +613,7 @@ async function aggregate(): Promise<TrafficOverview> {
 /** 缓存版（铁律：热点统计挂 unstable_cache；改聚合逻辑必须升 key 版本号） */
 export const getTrafficOverview = unstable_cache(
   aggregate,
-  ["admin-traffic", "v16"],
+  ["admin-traffic", "v17"],
   { revalidate: 300 }
 );
 

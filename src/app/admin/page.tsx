@@ -340,7 +340,7 @@ export default async function AdminDashboard() {
           />
         </AdminCard>
 
-        <AdminCard title="落地页 Top" more="近 7 天 · 会话首个页面（录像 ID 已归类）">
+        <AdminCard title="落地页 Top" more="近 7 天 · 会话首个页面（动态 ID 已归类）">
           <BarList
             items={traffic.entryPages.d7.map((e) => ({
               label: e.path,
@@ -351,7 +351,7 @@ export default async function AdminDashboard() {
         </AdminCard>
 
         {/* 访问页 Top（2026-11-11 张老师定）：近 7 天全站页面 PV，去参数裸 URI 聚合 */}
-        <AdminCard title="访问页 Top" more="近 7 天 · 全站页面 PV（去参数裸 URI，录像 ID 已归类）">
+        <AdminCard title="访问页 Top" more="近 7 天 · 全站页面 PV（去参数裸 URI，动态 ID 已归类）">
           <BarList
             items={traffic.topPages.map((p) => ({
               label: p.path,
