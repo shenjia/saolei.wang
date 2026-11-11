@@ -115,11 +115,30 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   ]);
 
   // 搜索关键词表格内高亮（2026-11-11 张老师需求）：LIKE 不区分大小写，高亮同口径；
-  // 各文本列统一尝试匹配，未命中的列自然无 mark
+  // 只高亮当前搜索域内的列（张老师 13:4x 定：qtype 指定类型→只该列；
+  // 无 qtype 默认组合搜索→姓名/账号/昵称/标识，纯数字再加 ID，与 SQL 搜索域一致）
   const q = (sp.q ?? "").trim();
+  const hlTargets = new Set<string>(
+    q
+      ? sp.qtype === "id"
+        ? ["id"]
+        : sp.qtype === "name"
+          ? ["name"]
+          : sp.qtype === "username"
+            ? ["username"]
+            : sp.qtype === "nickname"
+              ? ["nickname"]
+              : sp.qtype === "sig"
+                ? ["sig"]
+                : /^\d+$/.test(q)
+                  ? ["name", "username", "nickname", "sig", "id"]
+                  : ["name", "username", "nickname", "sig"]
+      : []
+  );
 
-  function Hl({ text }: { text: string }) {
-    if (!q || !text) return <>{text}</>;
+  function Hl({ text, col }: { text: string; col: string }) {
+    // ID 列为精确匹配语义（u.id = ?），仅全等才高亮，避免标识命中行的 ID 子串误导
+    if (!hlTargets.has(col) || !text || (col === "id" && text !== q)) return <>{text}</>;
     const lt = text.toLowerCase();
     const lq = q.toLowerCase();
     const parts: React.ReactNode[] = [];
@@ -249,11 +268,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
               {rows.map((u) => (
                 <tr key={u.id} className={u.status !== 0 ? "off" : undefined}>
                   <td className="c sub">
-                    <Hl text={String(u.id)} />
+                    <Hl text={String(u.id)} col="id" />
                   </td>
                   <td>
                     <Link className="link" href={`/admin/users/${u.id}`}>
-                      <Hl text={u.chineseName} />
+                      <Hl text={u.chineseName} col="name" />
                       <span className="pt_bubble">
                         <PlayerTip id={u.id} name={u.chineseName} englishName={u.englishName} />
                       </span>
@@ -261,7 +280,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                     {u.englishName && (
                       <span className="sub">
                         {" "}
-                        <Hl text={u.englishName} />
+                        <Hl text={u.englishName} col="name" />
                       </span>
                     )}
                     {u.trusted && (
@@ -274,9 +293,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                       </span>
                     )}
                   </td>
-                  <td className="sub">{u.username ? <Hl text={u.username} /> : "—"}</td>
-                  <td className="sub">{u.nickname ? <Hl text={u.nickname} /> : "—"}</td>
-                  <td className="sub">{u.signature ? <Hl text={u.signature} /> : "—"}</td>
+                  <td className="sub">{u.username ? <Hl text={u.username} col="username" /> : "—"}</td>
+                  <td className="sub">{u.nickname ? <Hl text={u.nickname} col="nickname" /> : "—"}</td>
+                  <td className="sub">{u.signature ? <Hl text={u.signature} col="sig" /> : "—"}</td>
                   <td className="sub">{u.area || "—"}</td>
                   <td>
                     <TitleBadge title={u.title} />
