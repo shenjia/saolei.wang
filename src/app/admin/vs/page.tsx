@@ -8,28 +8,42 @@ import { AdminCard } from "@/components/admin/Widgets";
 import { BarList, TrendChart, type Series } from "@/components/admin/Charts";
 import { RelTime } from "@/components/RelTime";
 import { formatDate } from "@/lib/format";
+import { title as militaryTitle } from "@/lib/assess";
+import { getThunderKingThreshold } from "@/lib/title-system";
 import { getVsDuelsOverview, getVsRecentDuels, getVsTopLaunchers, getVsTopTargets } from "@/lib/admin/vsstats";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "对决统计 | 管理后台" };
 
 export default async function AdminVsPage() {
-  const [ov, launchers, targets, recent] = await Promise.all([
+  const [ov, launchers, targets, recent, kTh] = await Promise.all([
     getVsDuelsOverview(),
     getVsTopLaunchers(7),
     getVsTopTargets(7),
     getVsRecentDuels(50),
+    // 总司令动态阈值（军衔评定与全站同口径，单次查询）
+    getThunderKingThreshold(),
   ]);
 
   const series: Series[] = [
     { key: "duels", label: "对决次数", color: "#ae81ff", values: ov.trend, estimate: ov.todayEst },
   ];
 
-  const userLink = (uid: number, name: string) => (
-    <Link className="link" href={`/admin/users/${uid}`}>
-      {name}
-      <span className="sub"> #{uid}</span>
-    </Link>
+  // 对决记录表玩家格（2026-11-11 09:28 张老师）：#ID 放名字前面，名字后跟
+  // 性别图标 + 军衔文字（军衔按 user_scores.exp_time 快照评定，与全站同口径；
+  // 总司令=快照快于动态阈值档）。Top10 聚合榜非「对战双方」，保持原样
+  const duelUser = (uid: number, name: string, sex: number, exp: number | null) => (
+    <span style={{ whiteSpace: "nowrap" }}>
+      <Link className="link" href={`/admin/users/${uid}`}>
+        <span className="sub">#{uid}</span> {name}
+      </Link>
+      <span
+        className={`gender ${sex ? "male" : "female"} small`}
+        style={{ margin: "0 4px 0 7px", verticalAlign: "-2px" }}
+        aria-label={sex ? "男" : "女"}
+      />
+      <span className="gray">{militaryTitle(exp, kTh)}</span>
+    </span>
   );
 
   // 比分/结果展示（发起者视角）：回填行（NULL）亮灰 —
@@ -115,7 +129,7 @@ export default async function AdminVsPage() {
                 const tag = d.result === null ? null : RESULT_TAG[d.result];
                 return (
                   <tr key={d.id}>
-                    <td>{userLink(d.u1, d.n1)}</td>
+                    <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
                     <td className="c">
                       {tag ? (
                         <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
@@ -123,7 +137,7 @@ export default async function AdminVsPage() {
                         <span className="gray">—</span>
                       )}
                     </td>
-                    <td>{userLink(d.u2, d.n2)}</td>
+                    <td>{duelUser(d.u2, d.n2, d.sex2, d.exp2)}</td>
                     <td className="num strong mono">
                       {d.s1 === null || d.s2 === null ? (
                         <span className="gray">— : —</span>

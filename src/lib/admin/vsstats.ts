@@ -143,6 +143,10 @@ export interface VsDuelRow {
   time: number;
   u1: number; n1: string; // 发起者
   u2: number; n2: string; // 被挑战者
+  /** 性别（user.sex，1=男）——记录表名字后缀图标（2026-11-11 张老师） */
+  sex1: number; sex2: number;
+  /** 高级最好成绩快照（user_scores.exp_time，毫秒；null=无成绩行）——军衔评定输入 */
+  exp1: number | null; exp2: number | null;
   /** 比分（null=历史回填行未算） */
   s1: number | null; s2: number | null;
   /** 1=发起者胜 2=对方胜 0=平；null=未算 */
@@ -154,15 +158,20 @@ export async function getVsRecentDuels(limit = 50): Promise<VsDuelRow[]> {
     .$queryRaw<{
       id: bigint; create_time: bigint; u1: bigint; u2: bigint;
       s1: number | null; s2: number | null; result: number | null;
-      n1: string; n2: string;
+      n1: string; n2: string; sex1: number; sex2: number;
+      exp1: number | null; exp2: number | null;
     }[]>(
       Prisma.sql`
         SELECT d.id, d.create_time, d.user_id AS u1, d.target_id AS u2, d.s1, d.s2, d.result,
                ${Prisma.raw("COALESCE(NULLIF(ua.chinese_name, ''), NULLIF(ua.english_name, ''), CONCAT('#', ua.id))")} AS n1,
-               ${Prisma.raw("COALESCE(NULLIF(ub.chinese_name, ''), NULLIF(ub.english_name, ''), CONCAT('#', ub.id))")} AS n2
+               ${Prisma.raw("COALESCE(NULLIF(ub.chinese_name, ''), NULLIF(ub.english_name, ''), CONCAT('#', ub.id))")} AS n2,
+               ua.sex AS sex1, ub.sex AS sex2,
+               sa.exp_time AS exp1, sb.exp_time AS exp2
         FROM vs_duel d
         JOIN \`user\` ua ON ua.id = d.user_id
         JOIN \`user\` ub ON ub.id = d.target_id
+        LEFT JOIN \`user_scores\` sa ON sa.id = d.user_id
+        LEFT JOIN \`user_scores\` sb ON sb.id = d.target_id
         ORDER BY d.create_time DESC LIMIT ${limit}
       `
     )
@@ -172,6 +181,9 @@ export async function getVsRecentDuels(limit = 50): Promise<VsDuelRow[]> {
     time: N(r.create_time),
     u1: N(r.u1), n1: r.n1,
     u2: N(r.u2), n2: r.n2,
+    sex1: N(r.sex1), sex2: N(r.sex2),
+    exp1: r.exp1 === null ? null : Number(r.exp1),
+    exp2: r.exp2 === null ? null : Number(r.exp2),
     s1: r.s1 === null ? null : Number(r.s1),
     s2: r.s2 === null ? null : Number(r.s2),
     result: r.result === null ? null : N(r.result),
