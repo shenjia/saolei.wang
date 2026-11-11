@@ -16619,3 +16619,110 @@ a.vs_c:hover {
     cursor: default;
   }
 }
+
+/* ==================== /vs 对决选择页（2026-11-11 张老师需求） ====================
+   登录态选对手页：左侧自己、右侧问号占位 + 搜索框（排行同款 .goto_search）；
+   双方就位后卡片右上角出「换人」X。卡片结构复用 /vs/[id] 的 .box.vs_panel
+   （内部 = 侧栏玩家卡片 .user_card + 实力雷达），本页 #page 挂独立类 vs_pick_page
+   （不挂 .vs_page——那会命中 PK 页移动端隐藏 header/footer 的规则）。 */
+#vs_pick_hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 24px 0;
+}
+#vs_pick_hero > .box.vs_panel {
+  position: relative; /* 「换人」X 的定位上下文 */
+}
+/* 空位（问号占位 + 搜索框）：宽度对齐玩家卡片（雷达 222 + .box 左右 padding 30×2） */
+.vs_pick_empty {
+  width: 282px;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-height: 360px;
+}
+.vs_pick_q {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+}
+/* 空位内搜索框：输入区加宽（排行默认 120px 太窄，placeholder 较长） */
+.vs_pick_empty .goto_search input {
+  width: 150px;
+}
+
+/* 「换人」X（双方就位才渲染）：亮灰圆形按钮，hover 变黄（站点金）+ 气泡「换人」 */
+.vs_swap {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #939387; /* 亮灰 */
+  color: #f8f8f2;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.vs_swap svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+.vs_swap:hover {
+  background: #fdc61a;
+  color: #272822;
+}
+/* hover 气泡「换人」：暗底描边（BV 格 .vs_tip / 排行下拉同风格浮层），按钮正下方弹出 */
+.vs_swap::after {
+  content: "换人";
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  padding: 4px 10px;
+  border: 1px solid #49483e;
+  border-radius: 6px;
+  background: #1e1f1c;
+  color: #f8f8f2;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.vs_swap:hover::after,
+.vs_swap:focus-visible::after {
+  opacity: 1;
+}
+
+/* 移动端（≤768）：两槽上下堆叠、卡片全宽（对齐 /vs/[id] 移动端面板口径） */
+@media (max-width: 768px) {
+  #vs_pick_hero {
+    flex-direction: column;
+  }
+  /* ⚠️ 带 body #page 压过移动端通用 body #page .box{padding:16px 14px}（同 /vs/[id] 口径） */
+  body #page #vs_pick_hero > .box.vs_panel {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 4px 16px 9px;
+    margin: 0;
+    flex: none;
+  }
+  .vs_pick_empty {
+    min-height: 280px;
+  }
+}
