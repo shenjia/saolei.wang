@@ -1,6 +1,8 @@
 // 每日一星感言 API（2026-10-25 八轮张老师定；九轮加管理员删除）
-// POST action=speech：当日当选者本人写感言（≤28 字，一次性 + 删两次封禁重发，前置敏感词 + 后置 AI 复审）
-// POST action=delete：管理员删除今日感言（speechDel+1；删两次本人永久不能再发）
+// 2026-11-11 预写制（张老师定）：感言存 user.star_speech 每人一份、一次性，当选当日
+//   提取展示（镜像到当日 star 行）；AI 预检前置，调用失败才由 after() 后置复审兜底
+// POST action=speech：登录用户撰写感言（≤30 字 + 删两次封嘴，前置敏感词 + AI 预检）
+// POST action=delete：管理员删除今日感言（user/star 双清 + 双计数；删两次永久不能再写）
 // POST action=vote：感言赞/踩（2026-10-27 张老师定；二轮收紧）——仅登录用户，
 //   服务端按用户硬去重（star_vote 同日同人唯一键），堵隐身浏览器无限刷
 import { NextRequest, NextResponse } from "next/server";
@@ -42,21 +44,30 @@ export async function POST(req: NextRequest) {
     const r = await setStarSpeech(session.uid, speech);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
 
-    // 后置 AI 复审（UGC 双闸门铁律）：判 review → 清空撤下（感言单行无动态可撤，
-    // 置空即隐藏；AI 判 pass / 调用失败不动，与全局口径一致）
-    const saved = (r as { speech?: string }).speech ?? "";
-    const day = todayStr();
-    after(async () => {
-      if (!textModerationEnabled() || !saved) return;
-      try {
-        const result = await moderateText(saved);
-        if (result.verdict === "review") {
-          await prisma.star.updateMany({ where: { date: day }, data: { speech: "" } });
+    // 后置 AI 复审兜底（UGC 双闸门铁律）：仅当预检阶段 AI 调用失败/超时（aiBackstop）
+    // 才走——判 review → 双清撤下（user.star_speech 命中原文才清 + 当日 star 行命中才清）；
+    // 预检已过（source=ai）或 AI 未启用（disabled）不需要兜底
+    const saved = r.speech ?? "";
+    if (saved && r.aiBackstop) {
+      const day = todayStr();
+      after(async () => {
+        try {
+          const result = await moderateText(saved);
+          if (result.verdict === "review") {
+            await prisma.user.updateMany({
+              where: { starSpeech: saved },
+              data: { starSpeech: "" },
+            });
+            await prisma.star.updateMany({
+              where: { date: day, speech: saved },
+              data: { speech: "" },
+            });
+          }
+        } catch {
+          // 复审失败不动
         }
-      } catch {
-        // 复审失败不动
-      }
-    });
+      });
+    }
     return NextResponse.json({ ok: true });
   }
 

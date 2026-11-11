@@ -95,15 +95,19 @@ import { sendSystemMessage } from "./message";
 export interface StarInfo {
   date: string;
   user: UserBrief | null;
-  /** 当选感言（≤28 字；空串=未写或被管理员删除） */
+  /** 当选感言（≤30 字；2026-11-11 预写制：来源 user.star_speech，空串=该用户未写或被管理员删除） */
   speech: string;
-  /** 感言被管理员删除次数（≥2 = 本人永久不能再发；九轮张老师定） */
+  /** 感言被管理员删除次数（原 star 行口径；后台历史展示用） */
   speechDel: number;
   /** 感言赞/踩计数（2026-10-27 张老师定：登录用户可投，star_vote 明细按人硬去重） */
   speechUp: number;
   speechDown: number;
   /** 当前登录用户的已投票向（"up"/"down"/null 未投；SSR 带出，跨设备一致） */
   myVote: "up" | "down" | null;
+  /** 当前登录者自己预写的感言（2026-11-11 预写制；非空=已写过，图标转灰不可再点） */
+  mySpeech: string;
+  /** 当前登录者感言被删次数（≥2 = 永久不能再写，图标灰死） */
+  mySpeechDel: number;
 }
 
 /** 少将档高级时间上限（毫秒）——TITLES 序：总司令(特判), 大元帅 35000, 元帅 40000, 大将 42000,
@@ -138,6 +142,25 @@ async function getMyVote(date: string, viewerUid: number | null): Promise<"up" |
   return v ? (v.dir ? "up" : "down") : null;
 }
 
+/** 观看者自己的预写感言状态（2026-11-11 预写制；标题图标灰/绿态用；未登录给空态） */
+async function viewerSpeechState(viewerUid?: number): Promise<{ mySpeech: string; mySpeechDel: number }> {
+  if (!viewerUid) return { mySpeech: "", mySpeechDel: 0 };
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(viewerUid) },
+    select: { starSpeech: true, starSpeechDel: true },
+  });
+  return { mySpeech: u?.starSpeech ?? "", mySpeechDel: u?.starSpeechDel ?? 0 };
+}
+
+/** 指定用户是否已写过预写感言（2026-11-11 预写制；/message?speech=1 自动弹窗短路用） */
+export async function hasStarSpeech(userId: number): Promise<boolean> {
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(userId) },
+    select: { starSpeech: true },
+  });
+  return !!u?.starSpeech;
+}
+
 /**
  * 取今日之星，没有则评选（并发安全：确定性哈希 + star.date 唯一键兜底）：
  * 候选 =（少将及以上现役 且 近 30 天登录过）∪（近 30 日破纪录 且 名次上升者），
@@ -149,18 +172,34 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
   const today = todayStr();
   const existing = await prisma.star.findUnique({ where: { date: today } });
   if (existing) {
-    const [authors, myVote] = await Promise.all([
+    // 预写制自愈（2026-11-11）：行 speech 为空时回读用户正本并镜像——
+    // 覆盖「部署切换前创建的行没拷贝预写感言」的过渡态；
+    // 管理员删除是两处同清，回读必为空串，不会复活已删感言
+    let speech = existing.speech;
+    if (!speech) {
+      const su = await prisma.user.findUnique({
+        where: { id: existing.user },
+        select: { starSpeech: true },
+      });
+      if (su?.starSpeech) {
+        speech = su.starSpeech;
+        await prisma.star.update({ where: { date: today }, data: { speech, updateTime: nowSec() } });
+      }
+    }
+    const [authors, myVote, vs] = await Promise.all([
       usersByIds([N(existing.user)]),
       getMyVote(today, viewerUid ?? null),
+      viewerSpeechState(viewerUid),
     ]);
     return {
       date: today,
       user: authors.get(N(existing.user)) ?? null,
-      speech: existing.speech,
+      speech,
       speechDel: existing.speechDel,
       speechUp: existing.speechUp,
       speechDown: existing.speechDown,
       myVote,
+      ...vs,
     };
   }
 
@@ -241,30 +280,40 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
 
   const now = nowSec();
   try {
+    // 预写制（2026-11-11 张老师定）：当选即提取该用户预先写好的感言镜像进 star 行——
+    // 展示/赞踩闸/后台历史全继续读 star 行，user.star_speech 是每人一份的正本
+    const winnerUser = await prisma.user.findUnique({
+      where: { id: BigInt(winner) },
+      select: { starSpeech: true },
+    });
+    const preWritten = winnerUser?.starSpeech ?? "";
     await prisma.star.create({
-      data: { user: BigInt(winner), date: today, speech: "", createTime: now, updateTime: now },
+      data: { user: BigInt(winner), date: today, speech: preWritten, createTime: now, updateTime: now },
     });
     // 当选动态（2026-10-25 张老师定）：金色「当选了每日一星！」——
     // 只在本次请求真正写入 star 行时发（并发败者/已有行重访不重复发）；
     // 快照口径走 publishNews 缺省（当前 exp_time + 在榜状态）
     await publishNews({ type: 54, userId: winner });
-    // 当选系统私信（2026-10-25 八轮张老师定）：通知当选 + 引导首页发表感言。
-    // 同样只在真正当选的请求发一次。
+    // 当选系统私信（2026-10-25 八轮张老师定）。同样只在真正当选的请求发一次；
+    // 预写制下已写过感言的不再引导撰写
     const d = new Date(Date.now() + 8 * 3600 * 1000);
     const p2 = (n: number) => (n < 10 ? "0" + n : String(n));
     const dateCn = `${d.getUTCFullYear()}年${p2(d.getUTCMonth() + 1)}月${p2(d.getUTCDate())}日`;
     await sendSystemMessage(
       winner,
-      `恭喜您当选${dateCn}的每日一星，快去首页发表感言吧！`
+      preWritten
+        ? `恭喜您当选${dateCn}的每日一星！`
+        : `恭喜您当选${dateCn}的每日一星，快去首页撰写当选感言吧！`
     ).catch(() => undefined); // 短信失败不阻断评选
   } catch {
     // 并发下另一请求已写入，以其为准
   }
   const row = await prisma.star.findUnique({ where: { date: today } });
   if (!row) return null;
-  const [authors, myVote] = await Promise.all([
+  const [authors, myVote, vs] = await Promise.all([
     usersByIds([N(row.user)]),
     getMyVote(today, viewerUid ?? null),
+    viewerSpeechState(viewerUid),
   ]);
   return {
     date: today,
@@ -274,6 +323,7 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
     speechUp: row.speechUp,
     speechDown: row.speechDown,
     myVote,
+    ...vs,
   };
 }
 
@@ -281,24 +331,32 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
 export const STAR_SPEECH_LIMIT = 30;
 
 /**
- * 写当选感言（2026-10-25 八轮张老师定；九轮补删除重发规则；十一轮补内容闸门）：
- * 仅当日当选者本人可写；≤30 字；一次性——已发表不可修改；
- * 被管理员删除后可重发一次（speechDel<2），第二次被删后永久禁止。
- * 内容闸门（十一轮）：checkSensitive 前置 + 拒绝 HTML 标签（< >）与外链
- * 特征（http/https/www/.com 等）——防注入代码观感与广告导流；
- * 写后 AI 复审（判 review 视同删除但不计数）。
+ * 撰写当选感言（2026-11-11 张老师定改预写制；原「当日当选者一次性发」口径废止）：
+ * 任何登录用户可写，落 user.star_speech **每人一份、一次性**（写后不可改）——
+ * 当选当日由 getTodayStar 提取镜像到 star 行展示；被管理员删除后可重写一次
+ * （starSpeechDel<2），第二次被删后永久禁止。
+ * 内容闸门：checkSensitive 前置 + 拒绝 HTML 标签（< >）与外链特征
+ * （http/https/www/.com 等）+ **AI 预检前置**（moderateText 判 review 即拒收，
+ * 张老师 2026-11-11 定「过敏感词审核和 AI 预检后保存落库」；AI 调用失败/超时
+ * 仍放行落库，返回 aiBackstop=true 由路由走 after() 后置复审兜底）。
+ * 今日恰为本人当选时，同步镜像到当日 star 行（展示/赞踩/后台历史同源）。
  */
-export async function setStarSpeech(userId: number, speech: string): Promise<{ ok: boolean; error?: string; speech?: string }> {
-  const today = todayStr();
-  const row = await prisma.star.findUnique({ where: { date: today } });
-  if (!row || N(row.user) !== userId) {
-    return { ok: false, error: "只有今日每日一星可以发表感言" };
+export async function setStarSpeech(
+  userId: number,
+  speech: string
+): Promise<{ ok: boolean; error?: string; speech?: string; aiBackstop?: boolean }> {
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(userId) },
+    select: { starSpeech: true, starSpeechDel: true },
+  });
+  if (!u) {
+    return { ok: false, error: "用户不存在" };
   }
-  if (row.speech) {
-    return { ok: false, error: "感言已发表，不能修改" };
+  if (u.starSpeechDel >= 2) {
+    return { ok: false, error: "感言已被删除两次，不能再撰写" };
   }
-  if (row.speechDel >= 2) {
-    return { ok: false, error: "感言已被删除两次，不能再发表" };
+  if (u.starSpeech) {
+    return { ok: false, error: "感言已撰写，不能修改" };
   }
   const text = speech.trim().slice(0, STAR_SPEECH_LIMIT);
   if (!text) return { ok: false, error: "感言不能为空" };
@@ -313,30 +371,49 @@ export async function setStarSpeech(userId: number, speech: string): Promise<{ o
   if (!checkSensitive(text).ok) {
     return { ok: false, error: "感言包含敏感词，请修改后重试" };
   }
+  // AI 预检前置（2026-11-11 张老师定）：判 review 直接拒收不落库；
+  // 调用失败/超时放行（text-moderate 内部降级为 pass），aiBackstop 交路由后置复审
+  const { moderateText, textModerationEnabled } = await import("./text-moderate");
+  let aiBackstop = false;
+  if (textModerationEnabled()) {
+    const result = await moderateText(text);
+    if (result.verdict === "review") {
+      return { ok: false, error: "感言未通过审核，请修改后重试" };
+    }
+    aiBackstop = result.source !== "ai" && result.source !== "disabled";
+  }
   const now = nowSec();
-  await prisma.$transaction([
-    prisma.star.update({
-      where: { date: today },
-      // 感言计数清零（2026-10-27）：被删后重发是新感言，旧赞/踩不结转
-      data: { speech: text, speechUp: 0, speechDown: 0, updateTime: now },
-    }),
-    // 投票明细一并清空：重发的新感言可再投（旧票不占额）
-    prisma.starVote.deleteMany({ where: { date: today } }),
-  ]);
-  return { ok: true, speech: text };
+  await prisma.user.update({
+    where: { id: BigInt(userId) },
+    data: { starSpeech: text },
+  });
+  // 今日恰为本人当选：同步镜像到当日 star 行（行 speech 为空才写——重发场景行已被删除清空）
+  const today = todayStr();
+  const row = await prisma.star.findUnique({ where: { date: today }, select: { user: true, speech: true } });
+  if (row && N(row.user) === userId && !row.speech) {
+    await prisma.star.update({ where: { date: today }, data: { speech: text, updateTime: now } });
+  }
+  return { ok: true, speech: text, aiBackstop };
 }
 
 /**
  * 删除感言（九轮 2026-10-25 张老师定：管理员清理不当言论；十五轮补通知，十六轮定稿为系统消息）：
- * 仅管理员可调（route 层校验 role，此处只管数据）；speechDel+1、speech 清空；
- * 删两次后本人不能再发（setStarSpeech 校验 speechDel>=2）。
- * 十六轮：删除后发系统消息（is_system=1），文案带管理员名：
+ * 仅管理员可调（route 层校验 role，此处只管数据）。
+ * 预写制（2026-11-11）双清：user.star_speech 清空（图标解锁可重写）+ starSpeechDel+1
+ * （≥2 永久不能再写）；当日 star 行 speech 清空 + speechDel+1（后台历史与展示同步），
+ * 赞/踩计数与投票明细一并清零（感言撤下即无投票对象）。
+ * 删除后发系统消息（is_system=1），文案带管理员名：
  * 「管理员xxx删除了你每日之星的感言，公开场合请注意措辞，合理发言」。
  */
 export async function deleteStarSpeech(operatorId: number): Promise<void> {
   const today = todayStr();
   const row = await prisma.star.findUnique({ where: { date: today } });
+  if (!row) return;
   await prisma.$transaction([
+    prisma.user.update({
+      where: { id: row.user },
+      data: { starSpeech: "", starSpeechDel: { increment: 1 } },
+    }),
     prisma.star.update({
       where: { date: today },
       // 感言计数清零（2026-10-27）：感言撤下即无投票对象，旧计数不残留
@@ -345,7 +422,7 @@ export async function deleteStarSpeech(operatorId: number): Promise<void> {
     // 投票明细一并清空：感言已撤下，释放投票额（重发后可再投）
     prisma.starVote.deleteMany({ where: { date: today } }),
   ]);
-  if (row && row.speech) {
+  if (row.speech) {
     const { sendSystemMessage } = await import("./message");
     const op = await prisma.user.findUnique({
       where: { id: BigInt(operatorId) },

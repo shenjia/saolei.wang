@@ -2,9 +2,10 @@
 // 七轮定稿（张老师 03:37）：左右布局——头像局左（50% 宽）；
 //   右侧姓名+性别 / 军衔 / 地区排行 / 全国排行（与用户主页 .ranks 同构）。
 // 八轮（03:54）：性别标记后加「发消息」对话按钮（与用户卡片同逻辑，登录且非本人）。
-// 九轮（04:12）：感言区移到 star_body 下方通栏（头像下面，充分利用板块宽度）；
-//   本人登录态板块底部「发表感言」按钮（论坛「写文章」同款 button active small + 笔形 ICON）；
-//   管理员登录态感言旁「删除」入口（删两次本人永久不能再发，delStarSpeech 计数）。
+// 九轮（04:12）：感言区移到 star_body 下方通栏（头像下面，充分利用板块宽度）。
+// 预写制（2026-11-11 张老师定）：标题 h2 右上角「撰写当选感言」图标入口
+//   （StarSpeechIcon，替代原板块底部本人「发表感言」按钮）——感言改存 user 表
+//   每人一份，当选当日提取展示；管理员登录态感言旁「删除」入口不变。
 
 import Link from "next/link";
 import { getTodayStar } from "@/lib/star";
@@ -15,7 +16,7 @@ import { AvatarImg } from "@/components/AvatarImg";
 import { areaDisplay, AREA_OVERSEAS, isManager } from "@/lib/config";
 import { getSession } from "@/lib/auth";
 import { SendMessageButton } from "@/components/SendMessageButton";
-import { StarSpeechBar } from "@/components/StarSpeechBar";
+import { StarSpeechIcon } from "@/components/StarSpeechIcon";
 import { StarSpeechDeleteButton } from "@/components/StarSpeechDeleteButton";
 import { StarSpeechVote } from "@/components/StarSpeechVote";
 import ClickTracker from "@/components/ClickTracker";
@@ -44,6 +45,14 @@ export async function DailyStar() {
             <circle cx="10" cy="14.6" r="0.9" fill="currentColor" stroke="none" />
           </svg>
         </span>
+        {/* 「撰写当选感言」图标（预写制 2026-11-11 张老师定）：右上角，默认亮灰
+            hover 绿，本人当日当选常绿，写过/封嘴灰死；点击弹感言浮窗 */}
+        <StarSpeechIcon
+          own={own}
+          hasSpeech={!!star.mySpeech}
+          blocked={star.mySpeechDel >= 2}
+          loggedIn={!!session}
+        />
       </h2>
       <div className="star_body">
         <Link
@@ -108,6 +117,8 @@ export async function DailyStar() {
       </div>
       {/* 感言（九轮）：已发表时显示在 star_body 下方通栏（头像下面）——
           全角引号 + 亮灰，充分利用板块宽度；管理员旁附「删除」小链接。
+          预写制（2026-11-11）：来源=当选者 user.star_speech 的当日镜像，
+          当选即直接提取展示，无需本人再手动发表。
           感言尾部赞/踩小链接（2026-10-27 张老师定，二轮收紧）：仅登录可投
           （未登录弹登录浮窗），服务端明细按人硬去重；默认空心+深灰数字，
           领先一方实心+亮灰，我投的赞绿/踩红；点击就地更新计数 */}
@@ -123,9 +134,6 @@ export async function DailyStar() {
           {manager && <StarSpeechDeleteButton />}
         </p>
       )}
-      {/* 本人「发表感言」按钮（九轮）：论坛「写文章」同款样式 + 笔形 ICON；
-          未发表且未被删两次时显示，板块底部 */}
-      {own && !star.speech && star.speechDel < 2 && <StarSpeechBar />}
     </div>
   );
 }

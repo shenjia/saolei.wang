@@ -18,6 +18,7 @@
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { hasStarSpeech } from "@/lib/star";
 import { getMessageList, messageAuthorsWithTitles, MESSAGE_PAGESIZE, type MessageTypeFilter } from "@/lib/message";
 import { MessageFeed } from "@/components/MessageFeed";
 import { Tabs } from "@/components/Pager";
@@ -38,8 +39,10 @@ export default async function MessagePage({
   const sp = await searchParams;
   const to = parseInt(sp.to ?? "", 10) || undefined;
   const toName = to ? (await messageAuthorsWithTitles([to])).get(to)?.chineseName : undefined;
-  // 每日一星感言（八轮 2026-10-25）：当选系统私信带 ?speech=1——自动弹感言浮窗
+  // 每日一星感言（八轮 2026-10-25）：当选系统私信带 ?speech=1——自动弹感言浮窗。
+  // 预写制（2026-11-11）：已写过感言的不再挂载自动弹窗（正本一人一份、写后不可改）
   const speech = sp.speech === "1";
+  const speechWritten = speech ? await hasStarSpeech(session.uid) : false;
 
   // 类型筛选（非法值视作全部；params 只透传 type，不给 Tabs 带 to 等无关参数）
   // 2026-10-27（张老师要求）加 sent=已发送：我发出的全部记录（不可删除）+ 对方已读状态
@@ -55,7 +58,7 @@ export default async function MessagePage({
     <div id="page" className="main message_list">
       {/* 感言浮窗（八轮）：系统私信链接 /message?speech=1 进入时自动弹出一次
           （仅挂载时读 URL；关闭即止，不因刷新重复弹——刷新视为用户主动再看列表） */}
-      {speech && <StarSpeechAutoDialog />}
+      {speech && !speechWritten && <StarSpeechAutoDialog />}
       <div className="box">
         <div className="page_head">
           <h1 className="page_title">消息</h1>

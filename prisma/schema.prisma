@@ -56,6 +56,12 @@ model User {
   // 口径见 src/lib/lowtrust.ts（列表 / 详情页 / 录像分拣三处共用，禁单边漂移）
   lowTrustExempt BigInt @default(0) @map("low_trust_exempt") @db.BigInt
 
+  // 每日一星当选感言（2026-11-11 张老师定改预写制）：存用户表每人一份、一次性
+  // （写后不可改），当选当日提取展示并同步镜像到当日 star 行；空串=未写或被管理员移除
+  starSpeech    String @default("") @map("star_speech") @db.VarChar(84)
+  // 感言被管理员删除次数（原 star 行口径移到用户维度）：≥2 = 永久不能再写（删两次封嘴）
+  starSpeechDel Int    @default(0) @map("star_speech_del") @db.Int
+
   // 2026-10-15 上线前性能审计新增：
   // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；
   // (status) 服务首页注册人数 count（ACTIVE_USER 口径）
@@ -701,9 +707,10 @@ model Click {
 }
 
 // 每日一星（移植 2008 版 Star 表，每日评选一次、月度不重复）
-// speech：当选感言（2026-10-25 张老师定，≤28 字；空串=未写/被删）
-// speechDel：感言被管理员删除次数（0/1=还可再发一次；≥2=永久禁止再发——
-//   删两次即封嘴，star 行落盘永久保存供翻历史）
+// speech：当日展示的当选感言（2026-11-11 预写制：正本在 user.star_speech 每人一份，
+//   当选创建行时拷贝 + 当日撰写时同步镜像；空串=未写/被删）
+// speechDel：感言被管理员删除次数（0/1=还可再写一次；≥2=永久禁止再写——
+//   删两次即封嘴，正本计数同步在 user.star_speech_del，star 行计数供后台历史翻看）
 // speechUp/speechDown：感言赞/踩计数（2026-10-27 张老师定）——登录用户可投，
 //   明细去重落 star_vote 表（同日同人一票，服务端硬闸门）；删除感言/重发时清零
 model Star {
