@@ -137,23 +137,24 @@ export default async function AdminVsPage() {
         tight
       >
         <div className="admin_scroll">
-          {/* 10:26 张老师：列距收紧（tight_cols）+ 发起时间右侧空列吸收余宽，
-              表格不再横向铺满整行 */}
-          <table className="admin_table tight_cols">
+          {/* 10:33 张老师：表格与趋势卡同宽铺满整行、列宽自适应；比分拆三列
+              （挑战者得分 / 结果 / 被挑战者得分），「胜/负」在一条垂直线上 */}
+          <table className="admin_table">
             <thead>
               <tr>
                 <th>发起者</th>
                 <th>挑战者</th>
-                <th className="c">比分 · 结果</th>
+                <th className="c">挑战者得分</th>
+                <th className="c">结果</th>
+                <th className="c">被挑战者得分</th>
                 <th>被挑战者</th>
                 <th>发起时间</th>
-                <th className="sp"></th>
               </tr>
             </thead>
             <tbody>
               {recent.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="gray">
+                  <td colSpan={7} className="gray">
                     暂无对决记录（VS 页访问后开始落库）
                   </td>
                 </tr>
@@ -166,22 +167,23 @@ export default async function AdminVsPage() {
                     <td>{launcherUser(d.u1, d.n1)}</td>
                     {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
+                    <td className="c num strong mono">
+                      {scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}
+                    </td>
                     <td className="c">
-                      <span style={{ whiteSpace: "nowrap" }}>
-                        {scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}{" "}
-                        {tag ? (
-                          <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
-                        ) : (
-                          <span className="gray">—</span>
-                        )}{" "}
-                        {scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}
-                      </span>
+                      {tag ? (
+                        <span className={`admin_tag ${tag.cls}`}>{tag.label}</span>
+                      ) : (
+                        <span className="gray">—</span>
+                      )}
+                    </td>
+                    <td className="c num strong mono">
+                      {scoreSpan(d.s2, tag === null || tag.cls === "plain" ? null : tag.cls === "bad")}
                     </td>
                     <td>{duelUser(d.u2, d.n2, d.sex2, d.exp2)}</td>
                     <td title={formatDate(d.time, "Y-m-d H:i:s")}>
                       <RelTime time={d.time} />
                     </td>
-                    <td className="sp"></td>
                   </tr>
                 );
               })}

@@ -474,22 +474,6 @@ table.admin_table a.link {
 table.admin_table a.link:hover {
   color: #a6e22e;
 }
-/* 对决统计记录表（2026-11-11 张老师）：内容列收缩到内容宽（padding 收紧保留必要间距），
-   末尾空列（.sp）吸收表格余宽，表格不再横向铺满整行 */
-table.admin_table.tight_cols th:not(.sp),
-table.admin_table.tight_cols td:not(.sp) {
-  width: 1%;
-  white-space: nowrap;
-  padding: 9px 7px;
-}
-table.admin_table.tight_cols th.sp,
-table.admin_table.tight_cols td.sp {
-  padding: 0;
-  border-bottom-color: transparent;
-}
-table.admin_table.tight_cols tbody tr:hover td.sp {
-  background: transparent;
-}
 table.admin_table .sub {
   color: #75715e;
   font-size: 12px;
