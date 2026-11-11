@@ -139,7 +139,8 @@ export default async function AdminDashboard() {
 
       {/* ---------- 规模指标（2026-10-16 张老师定：第一行全带走势线；2026-11-01 加第 7 卡 API 调用；
           2026-11-11 张老师定：「开源扫雷网表态」卡下线（已正式绑定开始同步），
-          「今日练习」后加「今日胜负」卡——VS 板块对决统计） ---------- */}
+          「今日练习」后加「今日胜负」卡——VS 板块对决统计；
+          同日定：待人工审核卡并入本行、排在「API 调用」之前，独立第二行取消） ---------- */}
       <div className="admin_kpis">
         <Kpi
           label="今日 PV"
@@ -253,6 +254,24 @@ export default async function AdminDashboard() {
             </>
           }
         />
+        {/* 待人工审核（2026-10-16 张老师定：只放需人工处理的队列，0 则不显示；
+            2026-11-11 张老师定：并入首行、排在「API 调用」之前） */}
+        {[
+          {
+            label: "录像待审",
+            value: ov.videoPending,
+            href: "/admin/review",
+            foot: ov.videoPending ? (pendingDays ? `最老积压 ${pendingDays} 天` : "均已下载") : "",
+          },
+          { label: "评论待审", value: ov.commentPending, href: "/admin/comments?status=5", foot: "AI 复核存疑" },
+          // 2026-10-27：论坛待审=主题+回复合计（同侧栏 badge 口径）；页面顶部即待审混合队列，无需 ?status=5
+          { label: "论坛待审", value: ov.bbsPending, href: "/admin/bbs", foot: "AI 复核存疑" },
+          { label: "头像待审", value: ov.avatarPending, href: "/admin/avatars", foot: "AI 判 review" },
+        ]
+          .filter((p) => p.value > 0)
+          .map((p) => (
+            <Kpi key={p.label} label={p.label} value={p.value} tone="red" href={p.href} foot={p.foot || "待处理"} />
+          ))}
         {/* API 调用（2026-11-01 张老师定）：合作方 API 分时用量，与 PV/UV 口径互不相干
             （埋点端拒收 /api/ 路径，API 从不进 page_view）；走势 30 天，foot 同比 + 在用 key 数 */}
         <Kpi
@@ -273,32 +292,8 @@ export default async function AdminDashboard() {
       </div>
 
       {/* ---------- 开源扫雷网录像同步状态（2026-11-10 张老师定：只做首页概览卡、
-          10 秒轮询、纯只读无干预操作；插在 KPI 行之后、待审 KPI 之前） ---------- */}
+          10 秒轮询、纯只读无干预操作；插在 KPI 行之后；2026-11-11 待审核行并入首行后紧随其后） ---------- */}
       <OpenmsSyncCard initial={openmsSync} />
-
-      {/* ---------- 待人工审核（2026-10-16 张老师定：第二行只放需人工处理的队列，无则整行不显示） ---------- */}
-      {(() => {
-        const reviewItems = [
-          {
-            label: "录像待审",
-            value: ov.videoPending,
-            href: "/admin/review",
-            foot: ov.videoPending ? (pendingDays ? `最老积压 ${pendingDays} 天` : "均已下载") : "",
-          },
-          { label: "评论待审", value: ov.commentPending, href: "/admin/comments?status=5", foot: "AI 复核存疑" },
-          // 2026-10-27：论坛待审=主题+回复合计（同侧栏 badge 口径）；页面顶部即待审混合队列，无需 ?status=5
-          { label: "论坛待审", value: ov.bbsPending, href: "/admin/bbs", foot: "AI 复核存疑" },
-          { label: "头像待审", value: ov.avatarPending, href: "/admin/avatars", foot: "AI 判 review" },
-        ].filter((p) => p.value > 0);
-        if (reviewItems.length === 0) return null;
-        return (
-          <div className="admin_kpis">
-            {reviewItems.map((p) => (
-              <Kpi key={p.label} label={p.label} value={p.value} tone="red" href={p.href} foot={p.foot || "待处理"} />
-            ))}
-          </div>
-        );
-      })()}
 
       {/* ---------- 待办 + 趋势并排（2026-10-21 张老师定：待办在左） ---------- */}
       <div className="admin_grid todo_trend">
