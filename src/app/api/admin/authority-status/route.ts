@@ -80,7 +80,7 @@ export interface PlayerRow {
   rttAvg: number | null;
   /** 该玩家在本节点的延迟样本数 */
   rttN: number;
-  /** 正在对局中（2026-11-11 张老师需求：任一连接挂着未结束的局，与 /health active 同口径；旧版实例缺字段按 false） */
+  /** 正在对局中（2026-11-11 张老师需求：挂着未结束且已实际开局的局——进排行盘面建局未首击不算；旧版实例缺字段按 false） */
   playing: boolean;
 }
 

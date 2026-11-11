@@ -28,7 +28,8 @@
 // 人数、对局 y＝今日开局面数（core server.mjs 北京时间零点清零，stats.json
 // 落盘重启不清零），排序同步按今日值。
 // 2026-11-11 张老师需求：展开玩家列表中正在对局中的玩家，对局数字金色渲染
-// （同主表进行中对局数 #fdc61d；core /players 出 playing=任一连接挂着未结束的局）。
+// （同主表进行中对局数 #fdc61d；core /players 出 playing=挂着未结束且已实际
+// 开局的局——进排行盘面建局未首击不算，11:57 初版漏此判即报即修）。
 
 import { Fragment, useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
@@ -52,7 +53,7 @@ export interface PlayerBrief {
   rttAvg: number | null;
   /** 本节点延迟样本数 */
   rttN: number;
-  /** 正在对局中（2026-11-11 张老师需求：对局数字金色渲染；旧版实例缺字段按 false） */
+  /** 正在对局中（2026-11-11 张老师需求：对局数字金色渲染——已实际开局的未结束局，进排行盘面建局未首击不算；旧版实例缺字段按 false） */
   playing: boolean;
 }
 
