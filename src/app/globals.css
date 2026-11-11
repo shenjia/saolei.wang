@@ -16639,6 +16639,27 @@ a.vs_c:hover {
 #vs_pick_hero > .box.vs_panel {
   position: relative; /* 「换人」X 的定位上下文 */
 }
+/* 卡片收拢口径与 PK 页赛前一致（张老师 11:06 参考 /vs/[id] 战前布局：
+   未跑分时两槽向中间平移 --vs_close=73px，中列 z-index:2 盖在面板上）。
+   本页没有跑分展开态，恒收拢；两端空位（问号盒）同样平移保持对称。
+   ⚠️ 移动端堆叠布局在 media 块里归零 */
+#vs_pick_hero {
+  --vs_close: 73px;
+}
+#vs_pick_hero > .box.vs_panel:first-child {
+  transform: translateX(var(--vs_close));
+}
+#vs_pick_hero > .box.vs_panel:last-child {
+  transform: translateX(calc(-1 * var(--vs_close)));
+}
+/* 收拢后卡片 X（右上角）会落进中列矩形里——中列对指针穿透，只留按钮可点
+   （否则 .vs_vs 的透明区域拦住 X 的点击/hover）；PK 页无 X 不受影响 */
+#vs_pick_hero .vs_vs {
+  pointer-events: none;
+}
+#vs_pick_hero .vs_vs button {
+  pointer-events: auto;
+}
 /* 空位（问号占位 + 搜索框）：宽度对齐玩家卡片实测外宽 260（.user_card 内容宽
    200 + .box padding 60；带 8px×2 margin 后与卡片 276 外占位一致）——
    「两边全空」时 260+380+260+gap20 = 920 ≤ 960，三件套不换行；
@@ -16747,6 +16768,7 @@ a.vs_c:hover {
     padding: 16px 4px 16px 9px;
     margin: 0;
     flex: none;
+    transform: none; /* 纵向堆叠不做 PC 的 73px 收拢平移 */
   }
   .vs_pick_empty {
     min-height: 280px;
