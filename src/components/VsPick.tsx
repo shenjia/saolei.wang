@@ -15,7 +15,10 @@
 //     .vs_action 对决按钮 + 喇叭音效开关）——音效开关与 PK 页共用
 //     localStorage「vs_snd」；按钮三态：双方就位=「一决胜负」进 /vs/{对手id}、
 //     单边有玩家=「匹配对手」（七轮 13:13 起自动匹配填空位；21:46 定稿高级
-//     STNB ±5% ∩ 全国排名 ±10；2026-11-12：基准＝场上现存玩家，非恒登录者）、
+//     STNB 窗口 ∩ 全国排名 ±10——STNB 半宽 = 比例 5k% 与绝对下限 10×k 取大者
+//     （2026-11-13 张老师定），并排除本地 1h 内匹配出过的对手（localStorage
+//     上报 avoid，不建服务端流水表）；2026-11-12：基准＝
+//     场上现存玩家，非恒登录者）、
 //     两边全空=置灰。
 // 约束：任一边可选自己；仅当一边已是自己、另一边再选自己时提示「不能和自己比拼」；
 //   同一玩家（非自己）不能同时站两边。
@@ -47,6 +50,51 @@ export interface VsPickPlayer {
   areaRank: number | null;
   natRank: number | null;
   radar: RadarPoint[];
+}
+
+// 防短期重复（2026-11-13 张老师定，localStorage 方案不建服务端流水表）：
+// 本地记最近 1h 匹配出过的对手 id，匹配请求经 avoid 参数上报由服务端排除。
+// 对决本就单向发起（被挑战方无感知），重复的体感只发生在「我」这块屏幕上，
+// 故按浏览器本地记录即可；不跨设备/浏览器，丢档最多重复出现一次，软约束可接受。
+const MATCH_AVOID_KEY = "vs_match_avoid";
+const MATCH_AVOID_MS = 3600 * 1000;
+
+/** 读出 1h 内匹配出过的对手 id（顺带清掉过期条目） */
+function loadMatchAvoid(): number[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MATCH_AVOID_KEY) ?? "[]") as {
+      i: number;
+      t: number;
+    }[];
+    const now = Date.now();
+    const live = raw.filter(
+      (e) => e && Number.isInteger(e.i) && e.i > 0 && now - e.t < MATCH_AVOID_MS
+    );
+    if (live.length !== raw.length) {
+      try {
+        localStorage.setItem(MATCH_AVOID_KEY, JSON.stringify(live));
+      } catch {}
+    }
+    return live.map((e) => e.i);
+  } catch {
+    return [];
+  }
+}
+
+/** 匹配成功后追加记录（保留最近 100 条防膨胀；隐私模式等写入失败静默） */
+function saveMatchAvoid(id: number) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MATCH_AVOID_KEY) ?? "[]") as {
+      i: number;
+      t: number;
+    }[];
+    const now = Date.now();
+    const live = raw.filter(
+      (e) => e && Number.isInteger(e.i) && e.i > 0 && now - e.t < MATCH_AVOID_MS
+    );
+    live.push({ i: id, t: now });
+    localStorage.setItem(MATCH_AVOID_KEY, JSON.stringify(live.slice(-100)));
+  } catch {}
 }
 
 interface SuggestUser {
@@ -478,21 +526,26 @@ export function VsPickArena({
   }
 
   /** 匹配对手（2026-11-11 21:46 张老师定稿口径）：单边有玩家时点「匹配对手」——
-   *  服务端池子＝**场上现存玩家**高级 STNB ±5% 且全国排名 ±10 的玩家随机挑一人
-   *  （2026-11-12 张老师：把自己换掉后按换上来的玩家匹配，不是恒按登录者），
-   *  池内无人则两维度同步扩大（±10%/±20 名……）直到找到；无论请求多快都把
-   *  按钮置灰停留随机 1~3 秒（「匹配中」+ 转圈），到点再出人（七轮 13:28 口径）。 */
+   *  服务端池子＝**场上现存玩家**高级 STNB 窗口且全国排名 ±10 的玩家随机挑一人
+   *  （STNB 半宽 = 比例 5k% 与绝对下限 10×k 取大者，2026-11-13 张老师定；
+   *  并排除本地 1h 内匹配出过的对手，全扫无人则放开兜底），池内无人则两维度
+   *  同步扩大直到找到；无论请求多快都把按钮置灰停留随机 1~3 秒（「匹配中」+
+   *  转圈），到点再出人（七轮 13:28 口径）。 */
   async function matchOpponent() {
     if (matching) return;
     setMatching(true);
     try {
       const t0 = Date.now();
       const holdMs = 1000 + Math.floor(Math.random() * 2000); // 随机 1~3 秒
-      // 场上现存玩家＝匹配基准（base），服务端按 TA 的成绩/排名拉池子并排除本人
+      // 场上现存玩家＝匹配基准（base），服务端按 TA 的成绩/排名拉池子并排除本人；
+      // avoid＝本地 1h 内匹配出过的对手（防短期重复，2026-11-13 张老师口径）
       const onBoard = left?.id ?? right?.id;
       if (!onBoard) return;
       const selfBoard = onBoard === me.id;
-      const res = await fetch(`/api/vs/match?base=${onBoard}`);
+      const avoid = loadMatchAvoid().join(",");
+      const res = await fetch(
+        `/api/vs/match?base=${onBoard}${avoid ? `&avoid=${avoid}` : ""}`
+      );
       if (!res.ok) {
         const { error } = (await res.json().catch(() => ({}))) as { error?: string };
         toast(
@@ -509,6 +562,7 @@ export function VsPickArena({
         return;
       }
       const { id } = (await res.json()) as { id: number };
+      saveMatchAvoid(id); // 记入本地防重复名单（1h 窗口）
       const res2 = await fetch(`/api/vs/player?id=${id}`);
       if (!res2.ok) {
         toast("匹配失败，请重试");
