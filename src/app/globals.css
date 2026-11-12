@@ -16122,15 +16122,19 @@ span.vs_btn--disabled:hover img {
 .vs_rec tbody tr:hover th.vs_item.item_p1 {
   box-shadow: inset -1px 0 0 #f8f8f2, inset 0 1px 0 #f8f8f2, inset 0 -1px 0 #f8f8f2;
 }
-/* 2026-11-12 10:27 张老师：纪录行左右各加一列「该行得分」——胜方用玩家色纯文字
-   （蓝 #66d9ef / 玫红 #e34f8c，无底色——实底已在胜方成绩格上），独有行按规则
-   口径显示 0.25；失败/平局/空行暗灰 0。列压到内容宽（1px+nowrap），剩余空间
-   仍归成绩列；左列左对齐、右列右对齐（分列贴外缘，与成绩贴中间互补）。 */
+/* 2026-11-12 10:27 张老师：纪录行左右各加一列「该行得分」；11:00 改两处——
+   ①失败/平局/空行**不再显示 0**（留空，只有胜方一侧有数字）；②胜方得分加粗
+   ＋加大字号 26px（.vs_rec 行高上限 28px，满配 28、取小一号 26）。
+   胜方用玩家色纯文字（蓝 #66d9ef / 玫红 #e34f8c，无底色——实底已在胜方成绩格上），
+   独有行按规则口径显示 0.25。列压到内容宽（1px+nowrap），剩余空间仍归成绩列；
+   左列左对齐、右列右对齐（分列贴外缘，与成绩贴中间互补）。 */
 .vs_rec td.vs_pts {
   width: 1px;
   padding: 0 12px;
   white-space: nowrap;
-  color: #75715e;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 28px;
 }
 .vs_rec td.vs_pts.vs_pts_l {
   text-align: left;

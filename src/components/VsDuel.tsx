@@ -324,16 +324,17 @@ function RecScore({ mark, side, score, video }: { mark: VsRecRow["mark"]; side: 
   );
 }
 
-/** 纪录行两端得分列（2026-11-12 10:27 张老师）：每行左右各加一列——胜方用玩家色
- *  显示该行得分（双有胜＝该级权重 3/5/7，独有胜按规则口径 0.25），失败/平局/空行
- *  显示 0。pts 与纪录板块总分 rec1/rec2 同源（lib/vs 逐行求和一致）。 */
+/** 纪录行两端得分列（2026-11-12 10:27 张老师；11:00 改）：每行左右各加一列——
+ *  胜方用玩家色加粗大字号（26px，行高 28px 上限的小一号）显示该行得分（双有胜＝
+ *  该级权重 3/5/7，独有胜按规则口径 0.25），失败/平局/空行**不再显示 0、留空**。
+ *  pts 与纪录板块总分 rec1/rec2 同源（lib/vs 逐行求和一致）。 */
 function RecPts({ pts, mark, side }: { pts: number; mark: VsRecRow["mark"]; side: "l" | "r" }) {
   const win = mark === (side === "l" ? "p1" : "p2") && pts > 0;
   return (
     <td
       className={`vs_pts vs_pts_${side}${win ? ` pts_win_${side === "l" ? "p1" : "p2"}` : ""}`}
     >
-      {win ? pts : 0}
+      {win ? pts : ""}
     </td>
   );
 }
