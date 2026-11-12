@@ -318,11 +318,15 @@ export function BbsSection({
   }
 
   async function loadMore() {
-    if (loading) return;
+    // !hasMore 守卫（2026-11-12）：与 VideoListFeed/BbsReplies 对齐，双保险
+    if (loading || !hasMore) return;
     setLoading(true);
     const seq = ++reqSeq.current;
     try {
-      const page = winStart + Math.floor(items.length / pageSize);
+      // 请求页 ceil 语义（2026-11-12 修复重叠 BUG）：翻页整表替换后窗口可能不满一页
+      //（尾页残页），floor 会把请求页锚回当前页自己——追加重复数据；ceil 满页时
+      // 与 floor 同值（零回归），不满页时正确指向下一页。同 NewsFeed。
+      const page = winStart + Math.ceil(items.length / pageSize);
       const size = nextBatchSize(batchStep, pageSize);
       const res = await fetch(moreUrl(page, size));
       if (seq !== reqSeq.current) return;

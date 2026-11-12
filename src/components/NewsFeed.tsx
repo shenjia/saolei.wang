@@ -113,13 +113,22 @@ export function NewsFeed({
   }
 
   async function loadMore() {
-    if (loading) return;
+    // !hasMore 守卫（2026-11-12）：翻页条 hasMore 口径曾被缓存分支误判复活，双保险
+    if (loading || !hasMore) return;
     setLoading(true);
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = await fetchByPage(level, winStart + Math.floor(items.length / pageSize), size);
+      // 请求页 ceil 语义（2026-11-12 修复重叠 BUG）：翻页整表替换后窗口可能不满一页
+      //（尾页残页），floor 会把请求页锚回当前页自己——追加出来的就是重复数据
+      //（用户主页反复翻页+点更多，尾页 3 条动态重复成 15 条）。ceil 在满页时与
+      // floor 同值（零回归），不满页时正确指向下一页。
+      const data = await fetchByPage(level, winStart + Math.ceil(items.length / pageSize), size);
       if (seq !== reqSeq.current) return;
+      if (!data.items.length) {
+        setHasMore(false);
+        return;
+      }
       setItems((prev) => [...prev, ...data.items]);
       setCursor(data.cursor);
       setBatchStep((s) => s + 1);
@@ -155,7 +164,10 @@ export function NewsFeed({
       });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
-      setHasMore(cached.length < total);
+      // hasMore 与拉取分支同口径（2026-11-12 修复重叠 BUG）：原 cached.length < total
+      // 会把不满尾页（残页）误判成「还有更多」，··· 按钮复活后点更多把尾页追加
+      // 到自己后面——数据重叠。页码口径 p*pageSize < total 与滑条 maxPage 一致。
+      setHasMore(p * pageSize < total);
       return;
     }
     const seq = ++reqSeq.current;

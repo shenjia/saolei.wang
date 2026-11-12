@@ -265,7 +265,10 @@ export function VideoListFeed({
     setLoading(true);
     const seq = ++reqSeq.current;
     try {
-      const page = winStart + Math.floor(items.length / pageSize);
+      // 请求页 ceil 语义（2026-11-12 修复重叠 BUG）：翻页整表替换后窗口可能不满一页
+      //（尾页残页），floor 会把请求页锚回当前页自己——追加重复数据；ceil 满页时
+      // 与 floor 同值（零回归），不满页时正确指向下一页。同 NewsFeed。
+      const page = winStart + Math.ceil(items.length / pageSize);
       const size = nextBatchSize(batchStep, pageSize);
       const res = await fetch(moreUrl(page, size));
       if (!res.ok) throw new Error("加载失败");
@@ -320,7 +323,9 @@ export function VideoListFeed({
       });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
-      setHasMore(cached.length < curTotal);
+      // hasMore 页码口径（2026-11-12 修复重叠 BUG，同 NewsFeed）：原 cached.length < curTotal
+      // 把不满尾页误判成「还有更多」，点更多会把尾页追加到自己后面——数据重叠
+      setHasMore(p * pageSize < curTotal);
       return;
     }
     const seq = ++reqSeq.current;

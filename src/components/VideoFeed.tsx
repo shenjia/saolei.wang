@@ -83,13 +83,21 @@ export function VideoFeed({
   }
 
   async function loadMore() {
-    if (loading) return;
+    // !hasMore 守卫（2026-11-12）：翻页条 hasMore 口径曾被缓存分支误判复活，双保险
+    if (loading || !hasMore) return;
     setLoading(true);
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = await fetchByPage(level, winStart + Math.floor(items.length / pageSize), size, nf);
+      // 请求页 ceil 语义（2026-11-12 修复重叠 BUG）：翻页整表替换后窗口可能不满一页
+      //（尾页残页），floor 会把请求页锚回当前页自己——追加重复数据；ceil 满页时
+      // 与 floor 同值（零回归），不满页时正确指向下一页。同 NewsFeed。
+      const data = await fetchByPage(level, winStart + Math.ceil(items.length / pageSize), size, nf);
       if (seq !== reqSeq.current) return;
+      if (!data.items.length) {
+        setHasMore(false);
+        return;
+      }
       const prevCount = items.length;
       setItems((prev) => [...prev, ...data.items]);
       // 新覆盖的整页入缓存
@@ -134,7 +142,9 @@ export function VideoFeed({
       });
       restoreViewportAnchor(tableRef.current, anchor);
       setBatchStep(0);
-      setHasMore(cached.length < total);
+      // hasMore 页码口径（2026-11-12 修复重叠 BUG，同 NewsFeed）：原 cached.length < total
+      // 把不满尾页误判成「还有更多」，点更多会把尾页追加到自己后面——数据重叠
+      setHasMore(p * pageSize < total);
       return;
     }
     const seq = ++reqSeq.current;
