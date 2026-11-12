@@ -183,8 +183,10 @@ function VsSearch({
 }
 
 /** 玩家卡片：结构与 /vs/[id] 的 VsPanel 完全同源（.user_card 上半部 + 横线 + 实力雷达）。
- *  右上角圆角处恒渲染「换人」X 按钮（10:45 张老师：只要卡上有玩家就有，可两边全空）。 */
-function VsCard({ p, onSwap }: { p: VsPickPlayer; onSwap: () => void }) {
+ *  右上角圆角处恒渲染「换人」X 按钮（10:45 张老师：只要卡上有玩家就有，可两边全空）。
+ *  accent（2026-11-12 张老师）：右侧对手卡固定玫红实力图（与对决页 VsPanel 右卡
+ *  同款 #e34f8c），不再是默认蓝、等进了对决页才变红；左卡缺省＝主页同款青蓝。 */
+function VsCard({ p, accent, onSwap }: { p: VsPickPlayer; accent?: string; onSwap: () => void }) {
   return (
     <div className="box vs_panel">
       {onSwap && (
@@ -253,7 +255,7 @@ function VsCard({ p, onSwap }: { p: VsPickPlayer; onSwap: () => void }) {
         <hr className="ucd_hr" />
         {p.radar.length > 0 && (
           <div className="vs_radar">
-            <RadarChart data={p.radar} />
+            <RadarChart data={p.radar} accent={accent} />
           </div>
         )}
       </div>
@@ -597,7 +599,7 @@ export function VsPickArena({
         </div>
       </div>
       {right ? (
-        <VsCard p={right} onSwap={() => clearSlot("right")} />
+        <VsCard p={right} accent="#e34f8c" onSwap={() => clearSlot("right")} />
       ) : (
         <VsEmptySlot onPick={(u) => void pick("right", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
