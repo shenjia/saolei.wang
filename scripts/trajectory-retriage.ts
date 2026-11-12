@@ -67,7 +67,7 @@ async function main() {
   const t0 = Date.now();
   for (const r of rows) {
     done++;
-    if (done % 20000 === 0) console.log(`  ... ${done}/${rows.length} (${((Date.now() - t0) / 60).toFixed(0)}min) 命中 ${hits}`);
+    if (done % 20000 === 0) console.log(`  ... ${done}/${rows.length} (${((Date.now() - t0) / 60000).toFixed(1)}min) 命中 ${hits}`);
     let buf: Buffer;
     try {
       const full = path.resolve(VIDEOS_ROOT, "." + r.filepath);
