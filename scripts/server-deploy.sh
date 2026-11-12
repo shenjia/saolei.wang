@@ -174,6 +174,24 @@ if [[ -d "$A_DIR/static" ]]; then
   info "已并集旧槽 $A_DIR/static → $S_DIR/static（旧哈希资源跨发布可取）"
 fi
 
+# ---------- sharp vendored 运行时依赖补链（2026-11-12 每日一星头像档位 404 修复） ----------
+# Turbopack build 把 serverExternalPackages 名单内的包（sharp 在 Next 内置自动名单里）
+# vendor 拷贝到 <distDir>/node_modules/<pkg>-<hash>/，但只拷包本体、不带运行时依赖
+# （@img/* 平台二进制、detect-libc、semver）→ 运行时 dynamic import sharp 报
+# ERR_MODULE_NOT_FOUND（Cannot find package '@img/colour'），头像三档 WebP 生成
+# 全部静默失败（上传 route 对小图生成 catch 不阻塞），mid/big 档 404 前端裂图。
+# 修复：build 后从 pnpm 依赖目录把 sharp 的运行时依赖 symlink 进槽位 node_modules。
+# ln -sfn 幂等：依赖已在（上次部署补过）时原样覆盖，无副作用。
+SHARP_PNPM_DIR="$(ls -d "$DEPLOY_DIR"/node_modules/.pnpm/sharp@*/node_modules 2>/dev/null | head -1)"
+if [[ -n "$SHARP_PNPM_DIR" ]]; then
+  for dep in @img detect-libc semver; do
+    [[ -e "$SHARP_PNPM_DIR/$dep" ]] && ln -sfn "$SHARP_PNPM_DIR/$dep" "${S_DIR}/node_modules/$dep"
+  done
+  info "已补链 sharp 运行时依赖（@img/detect-libc/semver）→ ${S_DIR}/node_modules"
+else
+  warn "未找到 pnpm sharp 依赖目录，跳过补链——上传头像的 WebP 档位生成会失败，请检查 sharp 安装"
+fi
+
 # ---------- 共享 unstable_cache（2026-10-28，与 server-release.sh 同方案） ----------
 # 服务器兜底构建同样把 <distDir>/cache 软链到共享目录，切槽不清缓存（详见 release 脚本注释）。
 SHARED_CACHE_DIR="$DEPLOY_DIR/.next-shared-cache"
