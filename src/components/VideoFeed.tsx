@@ -92,14 +92,23 @@ export function VideoFeed({
       // 请求页 ceil 语义（2026-11-12 修复重叠 BUG）：翻页整表替换后窗口可能不满一页
       //（尾页残页），floor 会把请求页锚回当前页自己——追加重复数据；ceil 满页时
       // 与 floor 同值（零回归），不满页时正确指向下一页。同 NewsFeed。
-      const data = await fetchByPage(level, winStart + Math.ceil(items.length / pageSize), size, nf);
+      const page = winStart + Math.ceil(items.length / pageSize);
+      const data = await fetchByPage(level, page, size, nf);
       if (seq !== reqSeq.current) return;
       if (!data.items.length) {
         setHasMore(false);
         return;
       }
+      // 加载即翻页（2026-11-12 张老师定）：点「···」后当前页码 +1 指向新加载的
+      // 首个新页，并滚动定位到新页首行（同 NewsFeed，否则页码停在原页、点 ▶
+      // 只滚不翻页）。
       const prevCount = items.length;
-      setItems((prev) => [...prev, ...data.items]);
+      flushSync(() => {
+        setItems((prev) => [...prev, ...data.items]);
+      });
+      const tr = tableRef.current?.tBodies[0]?.children[prevCount] as HTMLElement | undefined;
+      tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      setPage(page);
       // 新覆盖的整页入缓存
       const totalNow = prevCount + data.items.length;
       for (let pg = Math.floor(prevCount / pageSize); pg < Math.ceil(totalNow / pageSize); pg++) {

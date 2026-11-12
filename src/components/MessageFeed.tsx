@@ -262,7 +262,16 @@ export function MessageFeed({
         setLoadedAll(true);
         return;
       }
-      setItems((prev) => [...prev, ...rows]);
+      // 加载即翻页（2026-11-12 张老师定）：点「···」后当前页码 +1 指向新加载的
+      // 首个新页，并滚动定位到新页首条（同 NewsFeed，否则页码停在原页、点 ▶
+      // 只滚不翻页）。定位口径与 gotoPage 窗口内分支同款（msg_ 锚点/smooth/start）。
+      flushSync(() => {
+        setItems((prev) => [...prev, ...rows]);
+      });
+      document
+        .getElementById(`msg_${rows[0].id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setCurPage(p);
       // 新覆盖的整页入缓存（页锚点对齐处切片；尾页残段不入缓存）
       for (let i = 0; i + pageSize <= rows.length; i += pageSize) {
         pageCache.current.set(p + i / pageSize, rows.slice(i, i + pageSize));

@@ -126,7 +126,15 @@ export function BbsReplySection({
         return;
       }
       const prevCount = items.length;
-      setItems((prev) => [...prev, ...data.items]);
+      // 加载即翻页（2026-11-12 张老师定）：点「···」后当前页码 +1 指向新加载的
+      // 首个新页，并滚动定位到新页首楼（同 NewsFeed 表格行定位口径；楼层流无
+      // 锚点 id，用容器子元素定位——同 gotoPage 窗口内分支）。
+      flushSync(() => {
+        setItems((prev) => [...prev, ...data.items]);
+      });
+      const el = listRef.current?.children[prevCount] as HTMLElement | undefined;
+      el?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      setCurPage(page);
       // 新覆盖的整页入缓存
       const totalNow = prevCount + data.items.length;
       for (let pg = Math.floor(prevCount / pageSize); pg < Math.ceil(totalNow / pageSize); pg++) {

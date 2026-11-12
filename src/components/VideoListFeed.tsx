@@ -279,7 +279,15 @@ export function VideoListFeed({
         return;
       }
       const prevCount = items.length;
-      setItems((prev) => [...prev, ...data.videos]);
+      // 加载即翻页（2026-11-12 张老师定）：点「···」后当前页码 +1 指向新加载的
+      // 首个新页，并滚动定位到新页首行（同 NewsFeed，否则页码停在原页、点 ▶
+      // 只滚不翻页）。
+      flushSync(() => {
+        setItems((prev) => [...prev, ...data.videos]);
+      });
+      const tr = tableRef.current?.tBodies[0]?.children[prevCount] as HTMLElement | undefined;
+      tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      setCurPage(page);
       // 新覆盖的整页入缓存
       const totalNow = prevCount + data.videos.length;
       for (let pg = Math.floor(prevCount / pageSize); pg < Math.ceil(totalNow / pageSize); pg++) {

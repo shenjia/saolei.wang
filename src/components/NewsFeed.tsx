@@ -123,13 +123,23 @@ export function NewsFeed({
       //（尾页残页），floor 会把请求页锚回当前页自己——追加出来的就是重复数据
       //（用户主页反复翻页+点更多，尾页 3 条动态重复成 15 条）。ceil 在满页时与
       // floor 同值（零回归），不满页时正确指向下一页。
-      const data = await fetchByPage(level, winStart + Math.ceil(items.length / pageSize), size);
+      const page = winStart + Math.ceil(items.length / pageSize);
+      const data = await fetchByPage(level, page, size);
       if (seq !== reqSeq.current) return;
       if (!data.items.length) {
         setHasMore(false);
         return;
       }
-      setItems((prev) => [...prev, ...data.items]);
+      // 加载即翻页（2026-11-12 张老师定）：点「···」后当前页码 +1 指向新加载的
+      // 首个新页，并滚动定位到新页首行——否则页码停在原页，接着点 ▶ 走「窗口内
+      // 滚动」分支，观感是「只滚一下、要点第二次才真翻页」。
+      const prevCount = items.length;
+      flushSync(() => {
+        setItems((prev) => [...prev, ...data.items]);
+      });
+      const tr = tableRef.current?.tBodies[0]?.children[prevCount] as HTMLElement | undefined;
+      tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      setPage(page);
       setCursor(data.cursor);
       setBatchStep((s) => s + 1);
       if (typeof data.total === "number") setTotal(data.total);

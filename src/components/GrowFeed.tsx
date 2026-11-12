@@ -75,7 +75,16 @@ export function GrowFeed({
       }
       const added = data.rows as GrowTitledRow[];
       const prevCount = rows.length;
-      setRows((prev) => [...prev, ...added]);
+      // 加载即翻页（2026-11-12 张老师定）：点「···」后当前页码 +1 指向新加载的
+      // 首个新页，并滚动定位到新页首行（同 NewsFeed，否则页码停在原页、点 ▶
+      // 只滚不翻页）。行锚点 id_ 与 gotoPage 窗口内分支同口径。
+      flushSync(() => {
+        setRows((prev) => [...prev, ...added]);
+      });
+      document
+        .getElementById(`id_${added[0].id}`)
+        ?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      setCurPage(nextPage);
       // 新覆盖的整页入缓存（本批从 prevCount 起拼接）
       const totalNow = prevCount + added.length;
       for (let pg = Math.floor(prevCount / pageSize); pg < Math.ceil(totalNow / pageSize); pg++) {
