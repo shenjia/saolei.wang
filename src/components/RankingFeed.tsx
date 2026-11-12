@@ -183,13 +183,21 @@ export function RankingFeed(props: RankingFeedProps) {
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
-      const data = await fetchPage(nextPage.current, size);
+      const reqPage = nextPage.current;
+      const data = await fetchPage(reqPage, size);
       if (seq !== reqSeq.current) return;
       if (!data.rows.length) {
         setLoadedAll(true);
         return;
       }
-      setRows((prev) => [...prev, ...data.rows]);
+      // 加载即翻页（2026-11-12 张老师定，同全站 Feed）：当前页码 +1 指向新加载的
+      // 首个新页并滚动定位到新页首行——否则数据追加在视口外、页码停在原页，
+      // 观感是「点加载更多页面没变」。
+      flushSync(() => {
+        setRows((prev) => [...prev, ...data.rows]);
+      });
+      scrollToRow(data.rows[0].id);
+      setCurPage(reqPage);
       if (data.deltas) {
         setDeltas((prev) => {
           const m = prev ? new Map(prev) : new Map();

@@ -92,7 +92,15 @@ export function WorldTop100Table({
     const lastLoaded = Math.min(rows.length, winEnd * PAGE);
     const appended = Math.min(nextBatchSize(batchStep, PAGE), rows.length - lastLoaded);
     if (appended <= 0) return;
-    setWinEnd(Math.min(maxPage, Math.ceil((lastLoaded + appended) / PAGE)));
+    // 加载即翻页（2026-11-12 张老师定，同全站 Feed）：当前页码 +1 指向新显示的
+    // 首个新页并滚动定位到新页首行——否则窗口扩了但页码/视口都不动，
+    // 观感是「点加载更多页面没变」。
+    const firstNewPage = winEnd + 1;
+    flushSync(() => {
+      setWinEnd(Math.min(maxPage, Math.ceil((lastLoaded + appended) / PAGE)));
+      setCurPage(firstNewPage);
+    });
+    scrollToRowIdx((firstNewPage - winStart) * PAGE);
     setBatchStep((s) => s + 1);
   }
 

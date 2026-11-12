@@ -148,8 +148,9 @@ export function StnbRankingFeed({
     const seq = ++reqSeq.current;
     try {
       const size = nextBatchSize(batchStep, pageSize);
+      const reqPage = nextPage.current;
       const res = await fetch(
-        `/api/ranking/stnb/more?by=${by}&page=${nextPage.current}&size=${size}${nfQuery}`
+        `/api/ranking/stnb/more?by=${by}&page=${reqPage}&size=${size}${nfQuery}`
       );
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { rows: StnbTitledRow[] };
@@ -158,7 +159,14 @@ export function StnbRankingFeed({
         setLoadedAll(true);
         return;
       }
-      setRows((prev) => [...prev, ...data.rows]);
+      // 加载即翻页（2026-11-12 张老师定，同全站 Feed）：当前页码 +1 指向新加载的
+      // 首个新页并滚动定位到新页首行——否则数据追加在视口外、页码停在原页，
+      // 观感是「点加载更多页面没变」。
+      flushSync(() => {
+        setRows((prev) => [...prev, ...data.rows]);
+      });
+      scrollToRow(data.rows[0].id);
+      setCurPage(reqPage);
       // 新覆盖的整页入缓存
       const firstPage = nextPage.current;
       for (let pg = firstPage; pg <= Math.floor(data.rows.at(-1)!.rank / pageSize); pg++) {
