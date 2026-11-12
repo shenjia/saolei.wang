@@ -21,10 +21,10 @@ import { rateLimit } from "@/lib/ratelimit";
 /** 未配置限速的 key（含 env 草案 key）的默认上限 */
 export const DEFAULT_API_RATE_PER_MIN = 60;
 
-/** 内存缓存：hash → { name, keyId, logo, ratePerMin }，30s 过期（吊销/限速变更最迟 30s 生效） */
+/** 内存缓存：hash → { name, keyId, logo, ratePerMin, scopes }，30s 过期（吊销/限速变更最迟 30s 生效） */
 const cache = new Map<
   string,
-  { name: string; keyId: number; logo: string; ratePerMin: number; at: number }
+  { name: string; keyId: number; logo: string; ratePerMin: number; scopes: string; at: number }
 >();
 const CACHE_TTL = 30_000;
 
@@ -38,6 +38,8 @@ export interface PartnerIdentity {
   logo: string;
   /** 每分钟请求上限（api_key.rate_per_min，0=不限速）；env 草案 key 走默认 60 */
   ratePerMin: number;
+  /** 端点权限白名单 CSV（api_key.scopes）；空=不限制。env 草案 key 恒空（全放行） */
+  scopes: string;
 }
 
 export function sha256(s: string): string {
@@ -86,7 +88,7 @@ async function lookupApiKey(provided: string): Promise<PartnerIdentity | null> {
   const now = Date.now();
   const hit = cache.get(h);
   if (hit && now - hit.at < CACHE_TTL) {
-    return { name: hit.name, keyId: hit.keyId, logo: hit.logo, ratePerMin: hit.ratePerMin };
+    return { name: hit.name, keyId: hit.keyId, logo: hit.logo, ratePerMin: hit.ratePerMin, scopes: hit.scopes };
   }
   try {
     const row = await prisma.apiKey.findUnique({ where: { keyHash: h } });
@@ -96,6 +98,7 @@ async function lookupApiKey(provided: string): Promise<PartnerIdentity | null> {
         keyId: Number(row.id),
         logo: row.logo ?? "",
         ratePerMin: row.ratePerMin,
+        scopes: row.scopes ?? "",
       };
       cache.set(h, { ...ident, at: now });
       return ident;
@@ -104,7 +107,9 @@ async function lookupApiKey(provided: string): Promise<PartnerIdentity | null> {
     /* 查库异常走 env 兜底 */
   }
   const envName = envPartnerName(provided);
-  return envName ? { name: envName, keyId: 0, logo: "", ratePerMin: DEFAULT_API_RATE_PER_MIN } : null;
+  return envName
+    ? { name: envName, keyId: 0, logo: "", ratePerMin: DEFAULT_API_RATE_PER_MIN, scopes: "" }
+    : null;
 }
 
 export async function requirePartnerEx(req: Request): Promise<PartnerIdentity | null> {
@@ -147,6 +152,31 @@ export async function apiKeyAllowsDownload(req: Request): Promise<boolean> {
 export function partnerRateLimit(p: PartnerIdentity, dim: string): boolean {
   if (p.ratePerMin <= 0) return true;
   return rateLimit(`${dim}:${p.name}`, p.ratePerMin, 60_000);
+}
+
+/**
+ * 端点权限判定（2026-11-12）：scopes 空=不限制（存量合作方不受影响）；
+ * 否则按 CSV 短名精确匹配（upload/login/me/…，与 api_key_usage.endpoint 同词表）。
+ * 敏感端点（login / upload）的路由在鉴权通过后应调用本函数，
+ * 未授权 scope 由路由回 forbiddenScope()。
+ */
+export function partnerScopeAllowed(p: PartnerIdentity, scope: string): boolean {
+  if (!p.scopes) return true;
+  return p.scopes
+    .split(",")
+    .map((s) => s.trim())
+    .includes(scope);
+}
+
+/** scope 不足的 403 响应（key 已验真，可明示缺什么权限） */
+export function forbiddenScope(scope: string): Response {
+  return new Response(
+    JSON.stringify({
+      error: "insufficient_scope",
+      message: `该 API Key 无权调用 ${scope} 接口，请联系站点管理员开通`,
+    }),
+    { status: 403, headers: { "content-type": "application/json; charset=utf-8" } }
+  );
 }
 
 /** 用量累计：异步 fire-and-forget，失败不影响请求 */

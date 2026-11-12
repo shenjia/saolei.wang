@@ -47,10 +47,19 @@ export async function uploadVideo(
     /** 排名局行为审计（调用方已重放事件流）：本局决策点击数与盲区点击数，
      *  透传给分拣做盲区率触发器（<10% 需核定，张老师 2026-10-27 指令） */
     audit?: { clicks: number; blindClicks: number };
+    /** 用户侧 API（2026-11-12 元扫雷上传）：调用方已通过 Bearer token 鉴权并
+     *  完成 scope 校验，直接注入 uid，跳过 cookie session（身份从 token 推导，
+     *  不收客户端自报的 userId——防伪造） */
+    authUid?: number;
+    /** 来源合作方（api_key.id，2026-11-12）：写入 video.from_site，
+     *  详情页显示「来自XX」小图标；站内网页上传不传（NULL=原生上传） */
+    fromSite?: number;
   }
 ) {
   if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
-  const session = await getSession();
+  // 认证：token 版（用户侧 API）注入 authUid；否则走站内 cookie session
+  const session =
+    options?.authUid !== undefined ? { uid: options.authUid } : await getSession();
   if (!session) return fail("请先登录", 401);
 
   // 封禁拦截（2026-10-27）：低信任口径已不计入封禁账号（口径见 lib/lowtrust.ts），
@@ -254,6 +263,9 @@ export async function uploadVideo(
           ranked: snap.ranked ? BigInt(1) : BigInt(0),
           firstBv,
           pbBv,
+          // 来源合作方标记（2026-11-12 元扫雷上传）：from_site=api_key.id，
+          // 详情页「来自XX」；from_id 不写（那是外站同步的幂等键，NULL 不参与唯一约束）
+          ...(options?.fromSite ? { fromSite: BigInt(options.fromSite) } : {}),
           createTime: nowSec,
           updateTime: nowSec,
         },

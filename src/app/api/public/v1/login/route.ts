@@ -17,13 +17,16 @@ import { verifyPassword } from "@/lib/auth";
 import { unbanUser } from "@/lib/ban";
 import { formatDate } from "@/lib/format";
 import { getClientIp } from "@/lib/net";
-import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit, partnerScopeAllowed, forbiddenScope } from "@/lib/partner";
 import { issueUserToken, userTokenRateLimit, USER_TOKEN_TTL } from "@/lib/usertoken";
 
 export async function POST(req: Request) {
   // 合作方鉴权：无/错 X-Api-Key 一律 401（不透露 key 是否存在）
   const partner = await requirePartnerEx(req);
   if (!partner) return unauthorized();
+  // 端点权限（2026-11-12）：打包进客户端的 key 必然被提取，scope 白名单收紧后
+  // （如元扫雷 key 只授 upload），被提取也无法借本端点探测用户密码
+  if (!partnerScopeAllowed(partner, "login")) return forbiddenScope("login");
   if (!partnerRateLimit(partner, "pub-login")) return rateLimited(partner.ratePerMin);
 
   // 防爆破：同 IP 每分钟最多 10 次

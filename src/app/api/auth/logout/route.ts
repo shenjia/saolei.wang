@@ -16,6 +16,7 @@ const LOGIN_REQUIRED_PREFIXES = [
   "/bbs/post",
   "/bbs/edit",
   "/vs",
+  "/connect", // APP 授权页（2026-11-12 元扫雷上传）：自身要求登录
 ];
 
 /**

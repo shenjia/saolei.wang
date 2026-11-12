@@ -20,6 +20,9 @@ import { rateLimit } from "@/lib/ratelimit";
 import { ensureBansLifted } from "@/lib/ban";
 
 export const USER_TOKEN_TTL = 7 * 24 * 3600; // 7 天（秒）
+/** /connect 授权页签发的 token 有效期（2026-11-12 元扫雷 APP 授权口径）：
+ *  APP 场景用户不会频繁重授权，给 90 天；后续如需吊销管理再加用户中心入口。 */
+export const CONNECT_TOKEN_TTL = 90 * 24 * 3600; // 90 天（秒）
 /** login 防爆破：同 IP 每分钟最多 10 次 */
 const LOGIN_RATE_PER_MIN = 10;
 
@@ -43,11 +46,18 @@ export function userTokenRateLimit(ip: string): boolean {
   return rateLimit(`ut-login:${ip}`, LOGIN_RATE_PER_MIN, 60_000);
 }
 
+/** /connect 授权签发防刷（2026-11-12）：同一用户每分钟最多签发 3 个 token，
+ *  防脚本灌 user_token 表；正常用户不可能一分钟授权 3 次 */
+export function connectRateLimit(uid: number): boolean {
+  return rateLimit(`ut-connect:${uid}`, 3, 60_000);
+}
+
 /**
- * 签发用户 token（login 校验通过后调用）：
+ * 签发用户 token（校验通过后调用）：
  * 落库 sha256 哈希 + 过期时刻，返回明文（仅此一次）。
+ * ttlSeconds 缺省 7 天（login 口径）；/connect 授权页传 90 天。
  */
-export async function issueUserToken(uid: number): Promise<string> {
+export async function issueUserToken(uid: number, ttlSeconds = USER_TOKEN_TTL): Promise<string> {
   const token = generateUserToken();
   const now = Math.floor(Date.now() / 1000);
   await prisma.userToken.create({
@@ -56,7 +66,7 @@ export async function issueUserToken(uid: number): Promise<string> {
       tokenHash: sha256(token),
       status: 1,
       createTime: BigInt(now),
-      expireTime: BigInt(now + USER_TOKEN_TTL),
+      expireTime: BigInt(now + ttlSeconds),
     },
   });
   return token;

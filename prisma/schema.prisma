@@ -919,6 +919,11 @@ model ApiKey {
   logo         String @default("") @db.VarChar(200)
   // 单 key 限速（2026-11-07）：每分钟请求上限，0=不限速；默认 60 与原全站口径一致
   ratePerMin   Int    @default(60) @map("rate_per_min") @db.SmallInt
+  // 端点权限白名单（2026-11-12 元扫雷上传）：CSV 接口短名（upload/login/me/…，
+  // 与 api_key_usage.endpoint 同词表），空=不限制（全端点放行，兼容存量合作方）。
+  // 场景：打包进客户端的 key 必然被提取——元扫雷 key 只授 upload，焊死借 /login
+  // 探测用户密码的通道（张老师 2026-11-09 定 key 鉴权初衷即防此）。
+  scopes       String @default("") @db.VarChar(200)
   requestCount BigInt @default(0) @map("request_count") @db.BigInt
   lastUsedAt   BigInt @default(0) @map("last_used_at") @db.BigInt
   createTime   BigInt @default(0) @map("create_time") @db.BigInt
