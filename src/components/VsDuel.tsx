@@ -23,7 +23,7 @@
 //      下方板块，只留「战前预估评价 + 决出胜负按钮」；点击后按钮渐隐、评价渐隐、
 //      两侧面板向左右滑开，再跑分；跑分完成下方板块才出现、图标下方换成赛后评价
 //      （详见 VsScoreBoard 状态机）。
-// 得分规则（张老师 2026-11-09 定，23:50 终版）：纪录 9 行按初/中/高 1/2/10 分
+// 得分规则（张老师 2026-11-09 定，2026-11-12 10:26 改纪录权重）：纪录 9 行按初/中/高 3/5/7 分
 // 权重计（优者满分、独有 0.25、平局 0）；三级别 BV 格每胜一局固定 1 分、独有
 // 0.25、平局 0。页面底部「计分规则」文案见 VS_RULE_TEXT。
 
@@ -43,10 +43,11 @@ const LEVEL_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "�
 /** 级别标准配色：初绿 / 中橙 / 高黄（与 3BV 收集等板块同源） */
 const LEVEL_COLOR: Record<string, string> = { beg: "#a6e22e", int: "#fd971f", exp: "#e6db74" };
 
-/** 页面最下方「计分规则」（22:02 张老师逐字指定文案，不得改写；22:20 改为只出现
+/** 页面最下方「计分规则」（22:02 张老师逐字指定文案；2026-11-12 10:26 张老师改
+ *  纪录权重口径：1/2/10 → 3/5/7；22:20 改为只出现
  *  一次）：此前纪录 / 初级 / 中级 / 高级四个板块各内嵌一份相同说明，占板块内部空间，
  *  现合并为 below 末尾唯一一份独立段落（不带 .box），不占任何板块盒内空间。 */
-const VS_RULE_TEXT = "初中高级纪录胜一局1/2/10分，BV胜一局计1分，独有计0.25分";
+const VS_RULE_TEXT = "初中高级纪录胜一局3/5/7分，BV胜一局计1分，独有计0.25分";
 /** 规则行下方的致谢声明（2026-11-11 02:00 张老师逐字指定，02:06 去掉「声明」两字） */
 const VS_DECLARE_TEXT =
   "BV对抗系统借鉴了钟言开发的小瞄机器人，特在此表示感谢";
@@ -323,6 +324,20 @@ function RecScore({ mark, side, score, video }: { mark: VsRecRow["mark"]; side: 
   );
 }
 
+/** 纪录行两端得分列（2026-11-12 10:27 张老师）：每行左右各加一列——胜方用玩家色
+ *  显示该行得分（双有胜＝该级权重 3/5/7，独有胜按规则口径 0.25），失败/平局/空行
+ *  显示 0。pts 与纪录板块总分 rec1/rec2 同源（lib/vs 逐行求和一致）。 */
+function RecPts({ pts, mark, side }: { pts: number; mark: VsRecRow["mark"]; side: "l" | "r" }) {
+  const win = mark === (side === "l" ? "p1" : "p2") && pts > 0;
+  return (
+    <td
+      className={`vs_pts vs_pts_${side}${win ? ` pts_win_${side === "l" ? "p1" : "p2"}` : ""}`}
+    >
+      {win ? pts : 0}
+    </td>
+  );
+}
+
 /** 浏览器标签页标题（2026-11-10 张老师定）：「左方名 vs 右方名」，
  *  与页面左右布局同序；站点后缀由根布局 title.template 统一拼接。
  *  这里只取姓名两条轻量查询，不复用 getVsData（会重复拉 BV/雷达/STNB 全量数据）。
@@ -445,9 +460,11 @@ export async function VsDuelView({
                 <tbody>
                   {recRows.map((row) => (
                     <tr key={row.label}>
+                      <RecPts pts={row.pts1} mark={row.mark} side="l" />
                       <RecScore mark={row.mark} side="l" score={row.s1} video={row.v1} />
                       <th className={`vs_item item_${row.mark}`}>{row.label}</th>
                       <RecScore mark={row.mark} side="r" score={row.s2} video={row.v2} />
+                      <RecPts pts={row.pts2} mark={row.mark} side="r" />
                     </tr>
                   ))}
                 </tbody>

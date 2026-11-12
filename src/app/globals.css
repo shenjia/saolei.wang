@@ -16122,6 +16122,28 @@ span.vs_btn--disabled:hover img {
 .vs_rec tbody tr:hover th.vs_item.item_p1 {
   box-shadow: inset -1px 0 0 #f8f8f2, inset 0 1px 0 #f8f8f2, inset 0 -1px 0 #f8f8f2;
 }
+/* 2026-11-12 10:27 张老师：纪录行左右各加一列「该行得分」——胜方用玩家色纯文字
+   （蓝 #66d9ef / 玫红 #e34f8c，无底色——实底已在胜方成绩格上），独有行按规则
+   口径显示 0.25；失败/平局/空行暗灰 0。列压到内容宽（1px+nowrap），剩余空间
+   仍归成绩列；左列左对齐、右列右对齐（分列贴外缘，与成绩贴中间互补）。 */
+.vs_rec td.vs_pts {
+  width: 1px;
+  padding: 0 12px;
+  white-space: nowrap;
+  color: #75715e;
+}
+.vs_rec td.vs_pts.vs_pts_l {
+  text-align: left;
+}
+.vs_rec td.vs_pts.vs_pts_r {
+  text-align: right;
+}
+.vs_rec td.vs_pts.pts_win_p1 {
+  color: #66d9ef;
+}
+.vs_rec td.vs_pts.pts_win_p2 {
+  color: #e34f8c;
+}
 /* ③ 各BV比拼（2026-11-10 21:16 张老师第六轮）：初级/中级/高级各一个独立板块盒。
    格子＝收集墙式：统一 2px 间距 + 圆角，双方都没有的 BV 也画空格（暗底）。
    20:46 去掉饼图后 .vs_lvbody 改单列块；21:16 再去掉行首 BV 范围（64px）、
