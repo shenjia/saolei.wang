@@ -11400,6 +11400,11 @@ body:has(.vprfs.show) .replay_mouse_tip {
 .rk_row.down .rk_action {
   color: #e8e8e0;
 }
+/* 「持续xx ms」的数字金色（2026-11-13 张老师定稿）：抬起行正文是次灰，
+   数字是取证关键值，用高亮行时间列同款金；「持续」「ms」保持次灰。 */
+.rk_row .rk_hold {
+  color: #fdc61d;
+}
 .rk_row.current {
   background: #707068;
 }

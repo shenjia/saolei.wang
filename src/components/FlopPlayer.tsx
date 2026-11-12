@@ -421,6 +421,8 @@ const REPLAY_MOUSE_SCRIPT = `
     '.replay_key_panel_flop .rk_row.dbl .rk_left::before{content:"";position:absolute;left:0;width:1px;top:2px;bottom:2px;background:#2BD9E0}' +
     '.replay_key_panel_flop .rk_time{color:#b1b1a4;font-family:"Courier New",monospace;font-variant-numeric:tabular-nums;text-align:center}' +
     '.replay_key_panel_flop .rk_row.down .rk_action{color:#e8e8e0}' +
+    /* 「持续xx ms」数字金色（与站内面板 .rk_hold 同口径）：正文次灰、数字是取证关键值 */
+    '.replay_key_panel_flop .rk_hold{color:#fdc61d}' +
     '.replay_key_panel_flop .rk_row.current{background:#707068}' +
     '.replay_key_panel_flop .rk_row.current .rk_time{color:#fdc61d}' +
     '.replay_key_panel_flop .rk_empty{padding:10px 0;color:#939387;text-align:center}';
@@ -606,7 +608,7 @@ const REPLAY_MOUSE_SCRIPT = `
         ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : labels[e.name]
         : e.name === "MiddleRelease"
         ? labels.MiddleRelease
-        : e.holdMs === null ? "抬起" : "持续" + Math.round(e.holdMs) + "ms";
+        : e.holdMs === null ? "抬起" : "持续<span class=\"rk_hold\">" + Math.round(e.holdMs) + "</span>ms";
       html += '<div class="rk_row' + dbl + (e.lPos ? " pair_l pair_l_" + e.lPos : "") + (e.rPos ? " pair_r pair_r_" + e.rPos : "") + (down ? " down" : "") + '" data-index="' + i + '">' +
         '<span class="rk_action rk_left">' + (isLeft ? action : "") + '</span>' +
         '<span class="rk_time">' + (e.time / 1000).toFixed(3) + '</span>' +

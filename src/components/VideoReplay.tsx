@@ -103,6 +103,12 @@ function playSnd(src: string) {
 /* RawVF 事件行 → 紧凑事件（csec 统一百分秒；px/py 为 16px/格 像素坐标） */
 interface ReplayEv {
   csec: number;
+  /** 事件绝对毫秒时间戳（2026-11-12 张老师「升吧」）：RawVF 行本身 toFixed(3)
+   *  有完整毫秒，旧实现 round(s*100) 在入口就压上 10ms 网格。ms 只供按键记录
+   *  面板（hold 时长/时间列）露出毫秒位；回放时钟/事件分发/seek 仍走 csec 域，
+   *  10ms 内的相邻事件同拍应用，回放观感零变化。csec 恒由 ms 派生
+   *  （round(ms/10)，与旧算法差 ≤1csec 的双重舍入），保证两域排序一致。 */
+  ms: number;
   ev: string;
   px: number;
   py: number;
@@ -162,8 +168,9 @@ export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?:
     // 与首帧事件挤在一起乱跳（2026-10-27 347863 观感问题的一半原因）。
     const m = /^(-?[\d.]+) (mv|lc|lr|rc|rr|mc|mr|sc|mt) (\d+) (\d+) \((\d+) (\d+)\)/.exec(line);
     if (!m) continue;
-    const csec = Math.max(0, Math.round(parseFloat(m[1]) * 100));
-    evs.push({ csec, ev: m[2], px: +m[5], py: +m[6] });
+    const ms = Math.max(0, Math.round(parseFloat(m[1]) * 1000));
+    const csec = Math.round(ms / 10);
+    evs.push({ csec, ms, ev: m[2], px: +m[5], py: +m[6] });
     if (csec > lastCsec) lastCsec = csec;
   }
   if (!evs.length) return null;

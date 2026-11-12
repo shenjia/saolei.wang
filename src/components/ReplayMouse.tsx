@@ -6,12 +6,18 @@ import { createPortal } from "react-dom";
 /** 回放按键指示器消费的最小事件结构（VideoReplay.ReplayEv 可直接传入）。 */
 export interface ReplayMouseEvent {
   csec: number;
+  /** 事件绝对毫秒时间戳（2026-11-12 张老师「升吧」，可选）：录像回放链路
+   *  （RawVF 行 toFixed(3)）与 0.5 代排行局事件流提供，按键记录面板的 hold
+   *  时长/时间列优先用它露出毫秒位；练习回放等厘秒源不传，回退 csec 口径
+   *  （×10 恒整十毫秒——旧格式 AVF/MVF 事件本身只有百分秒，属源精度上限）。 */
+  ms?: number;
   ev: string;
 }
 
 interface KeyRecord extends ReplayMouseEvent {
-  /** 抬起行持有：与上一次同键按下的间距；孤立抬起为 null。 */
-  holdCsec: number | null;
+  /** 抬起行持有：与上一次同键按下的按压毫秒数；孤立抬起为 null。
+   *  事件带 ms 时＝真实毫秒差（1ms 精度），否则 csec 差 ×10（厘秒网格）。 */
+  holdMs: number | null;
   /** 按下/抬起成功配对时双方置真；中间覆盖行不置真。 */
   paired: boolean;
   /** 该行被左键动作区间覆盖时的位置；区间可与其他键重叠。 */
@@ -44,8 +50,10 @@ const EVENT_LABELS: Record<string, string> = {
 /** 反向扫描一次完成按下→下一次同键抬起配对，避免长录像 O(n²)；
     动作区间用差分标记，按下→抬起之间隔着的行也归入同组连线。 */
 function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
-  /* 行序只由时间决定；同刻事件保持原始先后顺序，左右列穿插的行不能跳过。 */
-  const raw: KeyRecord[] = events.filter((e) => EVENT_LABELS[e.ev]).map((e) => ({ ...e, holdCsec: null, paired: false, lPos: null, rPos: null, missing: false, inferred: false })).sort((a, b) => a.csec - b.csec);
+  /* 行序只由时间决定；同刻事件保持原始先后顺序，左右列穿插的行不能跳过。
+     排序键优先 ms（毫秒域行序更真实，稳定排序保留同刻原序），厘秒源回退
+     csec×10 —— 两种键下原始行序都单调，排序结果与传入数组序一致。 */
+  const raw: KeyRecord[] = events.filter((e) => EVENT_LABELS[e.ev]).map((e) => ({ ...e, holdMs: null, paired: false, lPos: null, rPos: null, missing: false, inferred: false })).sort((a, b) => (a.ms ?? a.csec * 10) - (b.ms ?? b.csec * 10));
   /* 录像起始已是按住态时，首个抬起前补一条「缺失按下」，时长从它起算。 */
   const rows: KeyRecord[] = [];
   let lDown = false;
@@ -79,13 +87,17 @@ function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
   let rightRelease = -1;
   const coverL = new Array(rows.length + 1).fill(0);
   const coverR = new Array(rows.length + 1).fill(0);
+  /* hold 时长（2026-11-12 毫秒升级）：事件带 ms 用真实毫秒差（1ms 精度），
+     厘秒源回退 csec 差×10（恒整十毫秒，旧格式源精度上限）。 */
+  const pairHold = (rel: KeyRecord, press: KeyRecord) =>
+    rel.ms != null && press.ms != null ? Math.max(0, rel.ms - press.ms) : Math.max(0, (rel.csec - press.csec) * 10);
   for (let i = rows.length - 1; i >= 0; i--) {
     const ev = rows[i].ev;
     if (ev === "lr") leftRelease = i;
     else if (ev === "rr") rightRelease = i;
     else if (ev === "lc") {
       if (leftRelease > i) {
-        rows[leftRelease].holdCsec = Math.max(0, rows[leftRelease].csec - rows[i].csec);
+        rows[leftRelease].holdMs = pairHold(rows[leftRelease], rows[i]);
         rows[leftRelease].paired = true;
         rows[i].paired = true;
         coverL[i]++;
@@ -96,14 +108,14 @@ function buildRecords(events: ReplayMouseEvent[]): KeyRecord[] {
       /* 仅异常流 fallback（孤立 sc，见 forward 判定）：按左键语义归领后续 lr。
          正常元流已在 forward 改写成 lc/rc，走上方标准配对。 */
       if (leftRelease > i) {
-        rows[leftRelease].holdCsec = Math.max(0, rows[leftRelease].csec - rows[i].csec);
+        rows[leftRelease].holdMs = pairHold(rows[leftRelease], rows[i]);
         rows[leftRelease].paired = true;
         rows[i].paired = true;
         leftRelease = -1;
       }
     } else if (ev === "rc") {
       if (rightRelease > i) {
-        rows[rightRelease].holdCsec = Math.max(0, rows[rightRelease].csec - rows[i].csec);
+        rows[rightRelease].holdMs = pairHold(rows[rightRelease], rows[i]);
         rows[rightRelease].paired = true;
         rows[i].paired = true;
         coverR[i]++;
@@ -138,13 +150,16 @@ const KeyRow = memo(function KeyRow({
   const down = e.ev === "lc" || e.ev === "rc" || e.ev === "sc";
   const isLeft = e.ev === "lc" || e.ev === "lr" || e.ev === "mr" || e.ev === "sc";
   const dbl = e.ev === "mr" || e.ev === "sc" || e.inferred ? " dbl" : "";
+  /* 「持续xx ms」的数字用金色（2026-11-13 张老师定稿）：抬起行正文是次灰，
+     数字是取证关键值，用高亮行时间列同款金（globals.css .rk_hold）。
+     hold 优先毫秒差（事件带 ms），厘秒源为整十毫秒——源精度上限。 */
   const action = down
     ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : EVENT_LABELS[e.ev]
     : e.ev === "mr"
     ? EVENT_LABELS.mr
-    : e.holdCsec === null
+    : e.holdMs === null
     ? "抬起"
-    : `持续${Math.round(e.holdCsec * 10)}ms`;
+    : <>持续<span className="rk_hold">{Math.round(e.holdMs)}</span>ms</>;
   return (
     <div
       className={"rk_row" + dbl + (e.lPos ? ` pair_l pair_l_${e.lPos}` : "") + (e.rPos ? ` pair_r pair_r_${e.rPos}` : "") + (down ? " down" : "") + (selected ? " current" : "")}
@@ -152,7 +167,7 @@ const KeyRow = memo(function KeyRow({
       aria-current={selected ? "true" : undefined}
     >
       <span className="rk_action rk_left">{isLeft ? action : ""}</span>
-      <span className="rk_time">{(e.csec / 100).toFixed(3)}</span>
+      <span className="rk_time">{e.ms != null ? (e.ms / 1000).toFixed(3) : (e.csec / 100).toFixed(3)}</span>
       <span className="rk_action rk_right">{isLeft ? "" : action}</span>
     </div>
   );
