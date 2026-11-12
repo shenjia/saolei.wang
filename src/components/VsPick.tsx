@@ -14,7 +14,8 @@
 //   · 中间列完全复用 PK 页（/vs/[id]）布局：.vs_vs（.vs_scoreline VS 战斗字标 +
 //     .vs_action 对决按钮 + 喇叭音效开关）——音效开关与 PK 页共用
 //     localStorage「vs_snd」；按钮三态：双方就位=「一决胜负」进 /vs/{对手id}、
-//     单边有玩家=「匹配对手」（七轮 13:13：自动匹配全国排名 ±50 的对手填空位）、
+//     单边有玩家=「匹配对手」（七轮 13:13 起自动匹配填空位；21:46 定稿高级
+//     STNB ±5% ∩ 全国排名 ±10；2026-11-12：基准＝场上现存玩家，非恒登录者）、
 //     两边全空=置灰。
 // 约束：任一边可选自己；仅当一边已是自己、另一边再选自己时提示「不能和自己比拼」；
 //   同一玩家（非自己）不能同时站两边。
@@ -351,8 +352,10 @@ export function VsPickArena({
   const [pre, setPre] = useState<{ text: string; tone: PreTone } | null>(null);
   const preSeq = useRef(0); // 竞态：仅最后一次请求生效
   const both = left !== null && right !== null;
-  // 单边有玩家：按钮变「匹配对手」（2026-11-11 张老师），自动补一个
-  // 与登录者全国排名 ±50 的对手到空位；两边全空按钮置灰（文案同「匹配对手」）
+  // 单边有玩家：按钮变「匹配对手」（2026-11-11 张老师），自动补一个与**场上
+  // 现存玩家**高级 STNB ±5% 且全国排名 ±10 的对手到空位（2026-11-12：基准是
+  // 当下场上那个玩家，不是恒按登录者——把自己换掉后按换上来的玩家匹配）；
+  // 两边全空按钮置灰（文案同「匹配对手」）
   const one = !both && (left !== null || right !== null);
 
   // URL 实时同步（五轮 13:38 张老师：每换一个人 URL 就实时变化）：
@@ -475,25 +478,32 @@ export function VsPickArena({
   }
 
   /** 匹配对手（2026-11-11 21:46 张老师定稿口径）：单边有玩家时点「匹配对手」——
-   *  服务端池子＝高级 STNB ±5% 且全国排名 ±10 的玩家随机挑一人，池内无人则
-   *  两维度同步扩大（±10%/±20 名……）直到找到；无论请求多快都把按钮置灰停留
-   *  随机 1~3 秒（「匹配中」+ 转圈），到点再出人（七轮 13:28 口径）。 */
+   *  服务端池子＝**场上现存玩家**高级 STNB ±5% 且全国排名 ±10 的玩家随机挑一人
+   *  （2026-11-12 张老师：把自己换掉后按换上来的玩家匹配，不是恒按登录者），
+   *  池内无人则两维度同步扩大（±10%/±20 名……）直到找到；无论请求多快都把
+   *  按钮置灰停留随机 1~3 秒（「匹配中」+ 转圈），到点再出人（七轮 13:28 口径）。 */
   async function matchOpponent() {
     if (matching) return;
     setMatching(true);
     try {
       const t0 = Date.now();
       const holdMs = 1000 + Math.floor(Math.random() * 2000); // 随机 1~3 秒
-      // 场上已有玩家一并排除（不能匹配同站两边）
+      // 场上现存玩家＝匹配基准（base），服务端按 TA 的成绩/排名拉池子并排除本人
       const onBoard = left?.id ?? right?.id;
-      const res = await fetch(`/api/vs/match${onBoard ? `?exclude=${onBoard}` : ""}`);
+      if (!onBoard) return;
+      const selfBoard = onBoard === me.id;
+      const res = await fetch(`/api/vs/match?base=${onBoard}`);
       if (!res.ok) {
         const { error } = (await res.json().catch(() => ({}))) as { error?: string };
         toast(
           res.status === 404
             ? error === "no_exp_stnb"
-              ? "你还没有高级 STNB 成绩，暂时无法匹配对手"
-              : "你还没有全国排名，暂时无法匹配对手"
+              ? selfBoard
+                ? "你还没有高级 STNB 成绩，暂时无法匹配对手"
+                : "该玩家还没有高级 STNB 成绩，暂时无法匹配对手"
+              : selfBoard
+                ? "你还没有全国排名，暂时无法匹配对手"
+                : "该玩家还没有全国排名，暂时无法匹配对手"
             : "匹配失败，请重试"
         );
         return;
@@ -537,7 +547,7 @@ export function VsPickArena({
       {/* 中间列：完全复用 PK 页 .vs_vs 结构——.vs_scoreline（VS 战斗字标，两侧空
           占位 span 保住三列网格）+ .vs_action（按钮 + 喇叭开关正下方）。
           按钮三态：双方就位=黄色「一决胜负」进 /vs/{对手id}；单边有玩家=
-          「匹配对手」（自动匹配全国排名 ±50 的对手填入空位）；两边全空=置灰。
+          「匹配对手」（按场上现存玩家成绩自动匹配对手填入空位）；两边全空=置灰。
           未就位时上方浮金色「请双方选手就位」气泡（绝对定位不占流内高度）。 */}
       <div className="vs_vs">
         <div className="vs_scoreline">
