@@ -79,3 +79,22 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
    值用 100% 不用 none：none 禁用户手动放大、有桌面副作用。 */
 html{text-size-adjust:100%}
 body #page,body #page table{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+
+/* 2026-11-12 玩家反馈（iPhone 13 mini / iOS 26 Safari 竖屏）：排行页表格文字
+   爆大互相叠压（表头成串、数据列叠字），横屏正常；同屏页头/tabs/规则块正常
+   ——上条 10-28 修复（#page/table 上 100%）在新 iOS WebKit 上护不住表格文本。
+   机理：iOS 26 重写了 text autosizing（TextAutoSizing.cpp 新算法，块宽超屏宽
+   即按 round(15×块宽/屏宽) 补偿放大字号、上限 ×1.95/log10(字号)），并保留
+   iPadOS 13 起对 CSS zoom 的字号干预（zoom<1 时自动按 1/zoom 放大 font-size
+   "抵消缩小"——该干预 100% 挡不住、只认 none，WebKit bug 报告亦建议 none）。
+   排行表 12 列 colgroup 钉宽 734：竖屏 375 命中 zoom=0.40，字号被补偿放大
+   后撑爆列宽即叠压；横屏 667 zoom=0.70 补偿倍率低（×1.43）视觉不明显。
+   none 不禁用户捏合缩放（真机实测 pinch 与 aA 页面缩放均不受影响）；
+   text-size-adjust 桌面浏览器不消费、无桌面副作用。作用域收紧：触屏窄屏
+   （≤768 即 #page zoom 阶梯域）#page 内表格三件套 table/th/td 显式声明
+   ——zoom 子树内继承值在新算法下不可靠，不再依赖继承。 */
+@media (hover:none) and (pointer:coarse) and (max-width:768px){
+  body #page table,body #page table th,body #page table td{
+    -webkit-text-size-adjust:none;text-size-adjust:none
+  }
+}
