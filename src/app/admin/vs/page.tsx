@@ -1,6 +1,6 @@
 // 管理后台 · 对决统计（2026-11-11 张老师定）：VS 板块（/vs/:id）对决数据。
 // 从仪表盘「今日对决」KPI（原「今日胜负」）点击进入：趋势图（近 30 天）+ 右侧「发起 Top10 /
-// 被对决 Top10」（近 7 天）+ 底部最近对决记录（发起者 / 发起时间 / 挑战者 /
+// 被对决 Top10」+ 底部最近对决记录（发起者 / 发起时间 / 挑战者 /
 // 比分 | 结果 | 比分 三列 / 被挑战者 / 操作；结果列只放胜负平标签，比分列
 // 表头置空：左=挑战者得分，右=被挑战者得分；「观看」直达 /vs/{挑战者}/
 // {被挑战者} 旁观对局，旁观不落库）。
@@ -21,13 +21,20 @@ export const metadata = { title: "对决统计 | 管理后台" };
 
 type SP = Record<string, string | undefined>;
 
+// Top10 统计范围筛选（2026-11-12 张老师）：今天 / 近 7 天 / 近 30 天，默认今天；
+// 走 URL searchParams 便于分享与回退，两个 Top10 共用一档
+const RANGES: number[] = [1, 7, 30];
+const RANGE_LABEL: Record<number, string> = { 1: "今天", 7: "近 7 天", 30: "近 30 天" };
+
 export default async function AdminVsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const rangeQ = parseInt(sp.range ?? "1", 10);
+  const range = RANGES.includes(rangeQ) ? rangeQ : 1;
   const [ov, launchers, targets, recentPg, kTh] = await Promise.all([
     getVsDuelsOverview(),
-    getVsTopLaunchers(7),
-    getVsTopTargets(7),
+    getVsTopLaunchers(range),
+    getVsTopTargets(range),
     // 最近对决记录分页（2026-11-11 张老师：每页 50 条）
     getVsRecentDuels(page, 50),
     // 总司令动态阈值（军衔评定与全站同口径，单次查询）
@@ -100,7 +107,8 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
       </div>
 
       {/* ---------- 趋势图 + 两个 Top10 三板块并列一行（2026-11-11 10:26 张老师；
-              14:44 张老师：趋势图水平宽度改 50%，Top10 弹性均分剩余宽度，窄屏自动换行） ---------- */}
+              14:44 张老师：趋势图水平宽度改 50%，Top10 弹性均分剩余宽度，窄屏自动换行；
+              2026-11-12 张老师：两个 Top10 收进右列并加范围筛选（今天/7天/30天，默认今天） ---------- */}
       <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
         <div style={{ flex: "0 0 50%", minWidth: 0 }}>
           <AdminCard
@@ -111,31 +119,48 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
             <TrendChart dates={ov.dates} series={series} unit="场" />
           </AdminCard>
         </div>
-        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-          <AdminCard title="发起对决最多（近 7 天 Top10）" className="h100">
-            <BarList
-              items={launchers.map((u) => ({
-                label: u.name,
-                value: u.count,
-                href: `/admin/users/${u.uid}`,
-                hint: `#${u.uid}`,
-              }))}
-              color="linear-gradient(90deg,#6b4f8b,#ae81ff)"
-            />
-          </AdminCard>
-        </div>
-        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-          <AdminCard title="被对决最多（近 7 天 Top10）" className="h100">
-            <BarList
-              items={targets.map((u) => ({
-                label: u.name,
-                value: u.count,
-                href: `/admin/users/${u.uid}`,
-                hint: `#${u.uid}`,
-              }))}
-              color="linear-gradient(90deg,#8b4f6f,#e34f8c)"
-            />
-          </AdminCard>
+        <div style={{ flex: "1 1 460px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Top10 范围筛选（2026-11-12 张老师）：今天/7天/30天，默认今天；只作用于下方两个 Top10 */}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="sub" style={{ fontSize: 12 }}>Top10 范围</span>
+            {RANGES.map((v) => (
+              <Link
+                key={v}
+                href={`/admin/vs?range=${v}`}
+                className={`admin_btn sm${v === range ? " primary" : ""}`}
+              >
+                {RANGE_LABEL[v]}
+              </Link>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap", flex: "1 1 auto" }}>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <AdminCard title={`发起对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
+                <BarList
+                  items={launchers.map((u) => ({
+                    label: u.name,
+                    value: u.count,
+                    href: `/admin/users/${u.uid}`,
+                    hint: `#${u.uid}`,
+                  }))}
+                  color="linear-gradient(90deg,#6b4f8b,#ae81ff)"
+                />
+              </AdminCard>
+            </div>
+            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <AdminCard title={`被对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
+                <BarList
+                  items={targets.map((u) => ({
+                    label: u.name,
+                    value: u.count,
+                    href: `/admin/users/${u.uid}`,
+                    hint: `#${u.uid}`,
+                  }))}
+                  color="linear-gradient(90deg,#8b4f6f,#e34f8c)"
+                />
+              </AdminCard>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -234,8 +259,9 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         </div>
-        {/* 分页（2026-11-11 张老师）：searchParams 传页码，与后台其他列表页同款 AdminPager */}
-        <AdminPager base="/admin/vs" params={{}} page={page} total={total} pageSize={pageSize} />
+        {/* 分页（2026-11-11 张老师）：searchParams 传页码，与后台其他列表页同款 AdminPager；
+            range 一并透传，翻页时保持 Top10 范围 */}
+        <AdminPager base="/admin/vs" params={{ range }} page={page} total={total} pageSize={pageSize} />
       </AdminCard>
     </>
   );

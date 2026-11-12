@@ -4,7 +4,8 @@
 // · 一次对决 = vs_duel 一行；发起人数 = 去重 user_id
 // · 同比 = 上周同一日同时段（逐行精确窗口，与 PV/UV 同构）
 // · 趋势聚合挂 unstable_cache 300s（铁律：热点统计必须挂缓存；改逻辑升版本号）
-// · Top10（近 7 天）/ 最近记录为轻量查询实时取（表量级 = 访问数，索引齐；
+// · Top10（发起 / 被对决）范围由 /admin/vs ?range=1|7|30 指定（2026-11-12 张老师：
+//   今天/7天/30天，默认今天）/ 最近记录为轻量查询实时取（表量级 = 访问数，索引齐；
 //   最近记录分页取，COUNT 全表走主键索引）
 // · 玩家名展示口径：中文名优先，退英文名，再退 #id（三处 SQL 各自内联同名表达式）
 
@@ -92,7 +93,7 @@ export const getVsDuelsOverview = unstable_cache(aggregate, ["admin-vs-duels", "
   revalidate: 300,
 });
 
-// ---------- Top10（近 7 天发起 / 被对决） ----------
+// ---------- Top10（发起 / 被对决，范围 days=1|7|30，页面默认今天） ----------
 
 export interface VsTopUser {
   uid: number;
