@@ -1,4 +1,5 @@
-// 人类相似度触发器（bit17~21，2026-11-12 红客合成录像 360671 案）存量补判：
+// 人类相似度触发器（bit17~22，2026-11-12 红客合成录像 360671 案 + 钮志锋
+// 360420/347805「带抖动合成流」案）存量补判：
 // 全站扫描事件流，命中新触发器的录像以「增量 OR 位码」写 auto_reason 并转需核定
 // （auto_flag 0）——不重跑整组触发器、不清除既有判定（幂等，可重复跑）。
 //
@@ -26,6 +27,7 @@ const MASK_BITS: [number, string][] = [
   [AUTO_REASON.PRESS_UNIFORM, "PRESS_UNIFORM"],
   [AUTO_REASON.CLICK_OFFSET, "CLICK_OFFSET"],
   [AUTO_REASON.ZERO_PRESS, "ZERO_PRESS"],
+  [AUTO_REASON.GAP_MODE, "GAP_MODE"],
 ];
 
 interface Row {

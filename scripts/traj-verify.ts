@@ -10,8 +10,8 @@ const hl = humanLikeStats(v);
 console.log("humanLikeStats:", JSON.stringify(hl, null, 1));
 const r = triageParsed(v, level, null, false, {}, v.timeMs, false, false, software ?? null);
 console.log(`triageParsed(${level}, software=${software ?? "?"}):`, r);
-// bit17~21 命中明细
-const names = ["PATH_SPARSE", "PATH_DT", "PRESS_UNIFORM", "CLICK_OFFSET", "ZERO_PRESS"];
+// bit17~22 命中明细
+const names = ["PATH_SPARSE", "PATH_DT", "PRESS_UNIFORM", "CLICK_OFFSET", "ZERO_PRESS", "GAP_MODE"];
 names.forEach((n, i) => {
   if (r.reason & (1 << (17 + i))) console.log(`  命中 bit${17 + i} ${n}`);
 });

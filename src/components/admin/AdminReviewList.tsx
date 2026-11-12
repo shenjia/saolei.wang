@@ -166,6 +166,16 @@ function reasonTagList(v: AdminVideoRow) {
       cls: "bad",
     });
   }
+  // 点击节拍触发器（2026-11-12 钮志锋 360420/347805「带抖动合成流」案）：
+  // 空闲间隔（松开→下一次按下）在长间隔区（≥180ms）的精确节拍聚集。真人高
+  // 众数占比全部是快速节奏连点（众数 30~150ms），长间隔区真人极值 16.2%。
+  if (r & (1 << 22)) {
+    tags.push({
+      text: `长间隔节拍 ${t?.idleModeMs ?? "?"}ms×${t?.idleModeShare != null ? (t.idleModeShare * 100).toFixed(0) : "?"}%`,
+      title: `空闲间隔（松开→下一次按下）的精确众数落在长间隔区且占比过高（本盘众数 ${t?.idleModeMs ?? "?"}ms，占比 ${t?.idleModeShare != null ? (t.idleModeShare * 100).toFixed(1) : "?"}%，样本 ${t?.idleN ?? "?"} 个，触发线 23%）——真人的间隔聚集只出现在快速节奏区（众数 30~150ms 连点），长间隔区真人极值 16.2%；同一精确长间隔反复出现是定时器/宏的节拍指纹（360420：230ms×21=30.9%、347805：270ms×47=23.2%）`,
+      cls: "bad",
+    });
+  }
   return tags;
 }
 

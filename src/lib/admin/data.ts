@@ -872,7 +872,7 @@ export interface AdminVideoRow {
   pressAvgMs: number | null;
   /** 人类相似度统计（需核定行现算，2026-11-12 bit17~21 标签展示具体数值用；
    *  null=未算/解析失败） */
-  trajStats: { mv: number; clicks: number; mvPerClick: number | null; mvMinDt: number | null; maxMvBurst: number; pressStd: number | null; offDistinct: number | null; offStd: number | null; zeroPressFrac: number | null; loneZeroPressFrac: number | null } | null;
+  trajStats: { mv: number; clicks: number; mvPerClick: number | null; mvMinDt: number | null; maxMvBurst: number; pressStd: number | null; offDistinct: number | null; offStd: number | null; zeroPressFrac: number | null; loneZeroPressFrac: number | null; idleN: number; idleModeMs: number | null; idleModeShare: number | null } | null;
   /** 录像文件路径（/2026/01/05/xxx.mvf；后台播放器 fetch 用） */
   filepath: string;
 }
@@ -1162,6 +1162,9 @@ async function computePressAvg(
         offStd: hl.offStd !== null ? +hl.offStd.toFixed(2) : null,
         zeroPressFrac: hl.zeroPressFrac !== null ? +hl.zeroPressFrac.toFixed(3) : null,
         loneZeroPressFrac: hl.loneZeroPressFrac !== null ? +hl.loneZeroPressFrac.toFixed(3) : null,
+        idleN: hl.idleN,
+        idleModeMs: hl.idleModeMs,
+        idleModeShare: hl.idleModeShare !== null ? +hl.idleModeShare.toFixed(3) : null,
       };
       result.set(N(info.id), { pressAvgMs: hit, traj });
     } catch {

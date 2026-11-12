@@ -38,8 +38,14 @@
 //       （排除真人和弦手势 lc|rc|lr 与双击连发的同刻膨胀）占比 >30%（真人孤立
 //       观测上限 15.5%；合成流 61%；clicks≥100 守卫；老 Clone 豁免——其瞬时
 //       点击即同刻写 lc+lr）
-//   （bit17~21 为 2026-11-12 人类相似度触发器组，定标与豁免口径见
-//       video-triage-limits.ts 头部注释及 humanLikeTriggers）
+//   bit22 GAP_MODE 长间隔精确节拍：空闲间隔（松开→下一次按下）众数 ≥180ms 且
+//       精确占比 >23%（真人长间隔区极值 16.2%；360420=30.9%、347805=23.2%）
+//       ——360420 型生成器补齐了 bit17~21 全部结构特征，但定时器节拍无法
+//       伪装：真人高占比聚集全部在快速节奏区（众数 30~150ms）
+//   （bit17~21 为 2026-11-12 人类相似度触发器组（红客 360671 案），定标与豁免
+//       口径见 video-triage-limits.ts 头部注释及 humanLikeTriggers；
+//       bit22 为同日点击节拍组（钮志锋 360420/347805 案）；曾试过 bit23
+//       50ms 窗口带聚集层，全站回扫证伪删除——稳节奏真人窗口占比可达 61%）
 //
 // 另外的强制口径（不是触发器）：bit16 在线排行模式录像强制转手审
 //   （2026-10-27 张老师指令开启，2026-10-28 张老师指令关闭——排名局走正常分拣；
@@ -55,7 +61,7 @@ import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
 import { calZini } from "./zini";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_STD_TRIGGER_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_STD_TRIGGER_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS, GAP_MODE_MIN_MS, GAP_MODE_SHARE_TRIGGER, GAP_MODE_MIN_COUNT, GAP_CADENCE_MIN_N } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
 import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
 import { auditRankedGame } from "../core/src/lib/ranked-audit";
@@ -227,6 +233,13 @@ export interface HumanLikeStats {
    *  lc|rc|lr、双击连发都是多点击同刻＝非孤立；孤立对＝单次点击快于时间
    *  粒度＝物理不可能，合成流特征；真人观测上限 15.5%，360671=61%） */
   loneZeroPressFrac: number | null;
+  // 点击节拍（bit22；360420 型「带抖动合成流」指纹）
+  /** 空闲间隔（松开→下一次按下）样本数 */
+  idleN: number;
+  /** 空闲间隔精确众数值（ms；idleN>0 时） */
+  idleModeMs: number | null;
+  /** 众数精确占比（0~1；idleN>0 时） */
+  idleModeShare: number | null;
 }
 
 export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
@@ -249,6 +262,9 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
     if (ev === "lc" || ev === "rc" || ev === "mc" || ev === "sc") rawClickTs.push(parseFloat(m[1]) * 1000);
   }
   for (const t of rawClickTs) clickTs.set(t, (clickTs.get(t) ?? 0) + 1);
+  // 点击节拍（bit22/23）：按下/松开时间序列（事件序），后置两指针算空闲间隔
+  const pressTs: number[] = [];
+  const releaseTs: number[] = [];
   for (const line of v.events) {
     const m = EV_LINE.exec(line);
     if (!m) continue;
@@ -269,9 +285,10 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
       mvPrevTs = ts;
       continue;
     }
-    if (ev === "lc" || ev === "mc" || ev === "sc") { presses.L = ts; totalPress++; clicks++; }
-    else if (ev === "rc") { presses.R = ts; totalPress++; clicks++; }
+    if (ev === "lc" || ev === "mc" || ev === "sc") { presses.L = ts; totalPress++; clicks++; pressTs.push(ts); }
+    else if (ev === "rc") { presses.R = ts; totalPress++; clicks++; pressTs.push(ts); }
     else if (ev === "lr" || ev === "mr") {
+      releaseTs.push(ts);
       if (presses.L !== null) {
         const d = ts - presses.L;
         if (d === 0) {
@@ -282,6 +299,7 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
         presses.L = null;
       }
     } else if (ev === "rr") {
+      releaseTs.push(ts);
       if (presses.R !== null) {
         const d = ts - presses.R;
         if (d === 0) {
@@ -300,6 +318,29 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
     return Math.sqrt(a.reduce((s, x) => s + (x - mu) ** 2, 0) / a.length);
   };
   const offMu = mean(offs);
+  // 点击节拍：空闲间隔＝press[i] 与其前最近一次 release 的间隔（要求该 release
+  // 晚于前一 press——排除按下期间连按与未配对残留）。按下/松开时间序列天然有序
+  // （事件流时间序），两指针线性扫描。仅统计 ≥0ms 的间隔。
+  const idle: number[] = [];
+  {
+    let ri = 0;
+    for (let i = 1; i < pressTs.length; i++) {
+      while (ri + 1 < releaseTs.length && releaseTs[ri + 1]! <= pressTs[i]!) ri++;
+      const r = releaseTs[ri];
+      if (r !== undefined && r > pressTs[i - 1]! && r <= pressTs[i]!) {
+        const g = pressTs[i]! - r;
+        if (g >= 0) idle.push(g);
+      }
+    }
+  }
+  let idleModeMs: number | null = null, idleModeShare: number | null = null;
+  if (idle.length) {
+    const h = new Map<number, number>();
+    for (const g of idle) h.set(g, (h.get(g) ?? 0) + 1);
+    let modeN = 0;
+    for (const [val, n] of h) if (n > modeN) { modeN = n; idleModeMs = val; }
+    idleModeShare = modeN / idle.length;
+  }
   return {
     clicks, mv,
     mvPerClick: clicks > 0 ? mv / clicks : null,
@@ -311,10 +352,13 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
     offStd: offMu !== null && offs.length >= 2 ? std(offs) : null,
     zeroPressFrac: totalPress > 0 ? zero / totalPress : null,
     loneZeroPressFrac: totalPress > 0 ? loneZero / totalPress : null,
+    idleN: idle.length,
+    idleModeMs,
+    idleModeShare,
   };
 }
 
-/** 人类相似度触发器组：返回命中的位码（bit17~21）。triageParsed 内联调用；
+/** 人类相似度触发器组：返回命中的位码（bit17~22）。triageParsed 内联调用；
  *  存量补判脚本（scripts/trajectory-retriage.ts）直接复用做增量 OR。
  *  格式豁免（全站回扫实证，2026-11-12 本地 29.7 万免核定盘）：
  *  · 站内客户端（software=Saolei.wang / 带 evf_sig 签名）——落点本就格对齐、
@@ -324,7 +368,9 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
  *    「点击落点=格中心（offDistinct=1）+ 瞬时点击同刻写 lc+lr（零占比可到 37.9%）
  *    + 每格跨界一条 mv（比值可到 1.7）」：豁免 PATH_SPARSE / CLICK_OFFSET /
  *    ZERO_PRESS。三路的反作弊火力由 PATH_DT / PRESS_UNIFORM（全软件适用、
- *    老Clone零命中）与既有触发器组承接。 */
+ *    老Clone零命中）与既有触发器组承接。
+ *  · 点击节拍组（bit22）全软件适用：节拍指纹来自时间戳本身，与写流格式
+ *    无关（各软件人类长间隔区极值均 ≤0.162，低于触发线 0.23）。 */
 export function humanLikeTriggers(hl: HumanLikeStats, software: string | null, clientOwned: boolean): number {
   const clone = software === "Clone";
   let bits = 0;
@@ -356,6 +402,22 @@ export function humanLikeTriggers(hl: HumanLikeStats, software: string | null, c
       hl.clicks >= ZERO_PRESS_MIN_CLICKS && hl.loneZeroPressFrac !== null &&
       hl.loneZeroPressFrac > ZERO_PRESS_FRACTION_TRIGGER) {
     bits |= AUTO_REASON.ZERO_PRESS;
+  }
+  // 点击节拍（bit22，2026-11-12 钮志锋 360420/347805 案）：不依赖 mv 采样，
+  // 独立于上方 clicks/mv 守卫。带抖动的合成流可以补齐结构特征（密集 mv、按压
+  // 方差、落点散布），但「定时器节拍」在长间隔区（≥180ms）的精确聚集暴露生成器。
+  // 真人高众数占比全部出现在快速节奏区（众数 30~150ms）；长间隔区真人极值
+  // 0.162（全站回扫，11771 顾远 Clone 280ms）——触发线 0.23。
+  // 全软件适用（Clone/Vienna/元/站内客户端人类极值均低于线，无需豁免）。
+  // ⚠️ 50ms 窗口带聚集层已证伪删除：稳节奏真人窗口占比可达 61%（顾远 11767/
+  // 11771），覆盖嫌疑盘 47%，带聚集维度与真人不可分（详见 limits 注释）。
+  if (hl.idleN >= GAP_CADENCE_MIN_N && hl.idleModeMs !== null && hl.idleModeMs >= GAP_MODE_MIN_MS) {
+    // bit22 精确节拍：同一精确长间隔重复占比过高（360420：230ms×21=30.9%）
+    if (hl.idleModeShare !== null &&
+        hl.idleModeShare >= GAP_MODE_SHARE_TRIGGER &&
+        hl.idleModeShare * hl.idleN >= GAP_MODE_MIN_COUNT) {
+      bits |= AUTO_REASON.GAP_MODE;
+    }
   }
   return bits;
 }
