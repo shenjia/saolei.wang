@@ -30,6 +30,9 @@
 // 2026-11-11 张老师需求：展开玩家列表中正在对局中的玩家，对局数字金色渲染
 // （同主表进行中对局数 #fdc61d；core /players 出 playing=挂着未结束且已实际
 // 开局的局——进排行盘面建局未首击不算，11:57 初版漏此判即报即修）。
+// 2026-11-12 张老师定（方案 A）：主表「在线」分子改按 uid 去重人数（onlineUsers，
+// ＝展开列表行数）；原 connections 连接条数会被多标签页/断线重连僵尸连接虚高
+// （10 连接实际 3 人，生产实证），不再作展示口径。
 
 import { Fragment, useState } from "react";
 import { rttColor, RTT_LEGEND } from "./rttColor";
@@ -71,6 +74,8 @@ export interface ServerRow {
   ok: boolean;
   rtt: number;
   connections: number;
+  /** 当前在线人数（按 uid 去重，2026-11-12 方案 A：主表在线分子与展开列表同口径；/players 拉取失败回退 connections） */
+  onlineUsers: number;
   active: number;
   games: number;
   draining: boolean;
@@ -236,8 +241,8 @@ export function ServerStatusPanel({
                   {dot(r)}
                   <b style={{ color: "#d6d6cc" }}>{r.name}</b>
                 </td>
-                <td title="x＝当前在线连接数 · y＝今日去重连接人数（北京时间零点清零，重启不清零；点击表头按今日值排序）">
-                  {pair(r, r.connections, "#a6e22e", r.connsUsers)}
+                <td title="x＝当前在线人数（按用户去重，与展开列表一致） · y＝今日去重连接人数（北京时间零点清零，重启不清零；点击表头按今日值排序）">
+                  {pair(r, r.onlineUsers, "#a6e22e", r.connsUsers)}
                 </td>
                 <td title="x＝进行中对局数 · y＝今日开局面数（北京时间零点清零，重启不清零；点击表头按今日值排序）">
                   {pair(r, r.active, "#fdc61d", r.gamesServed)}
@@ -344,7 +349,7 @@ export function ServerStatusPanel({
       <div style={{ marginTop: 8, color: "#75715e", fontSize: 12 }}>
         <span style={{ color: "#a6e22e" }}>●</span> 正常 ·{" "}
         <span style={{ color: "#f79646" }}>●</span> 排空 ·{" "}
-        <span style={{ color: "#e24b4a" }}>●</span> 不可用 · 在线＝当前连接 / 今日人数（灰） ·
+        <span style={{ color: "#e24b4a" }}>●</span> 不可用 · 在线＝当前人数（去重） / 今日人数（灰） ·
         对局＝进行中 / 今日局数（灰） · 平均延迟＝玩家实测近 7 天均值（{RTT_LEGEND}） ·
         点击表头按今日值排序 · 点击行展开在线玩家
       </div>

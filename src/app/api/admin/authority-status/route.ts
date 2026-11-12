@@ -2,11 +2,18 @@
 // 负载面板数据源，每 3s 由客户端轮询本接口。
 // 直接透传各实例开放 /health（server.mjs：connections=在线连接数、active=
 // 进行中且有活连接的局数、games=内存局总数、draining=排空中、region/slot）。
-// 北京双实例走本机回环（Next 与 authority 同机）；香港走 AUTHORITY_HK_URL
-// 公网回调。单实例 override（AUTHORITY_INTERNAL_URL，本地开发）时只列一条。
+// 北京双实例：优先读 AUTHORITY_URL_A/B（发布脚本 server-release.sh 同款约定，
+// f35d7b8 北京主服迁独立节点后 a 在远程机——旧硬编码 127.0.0.1:3104 会让面板
+// 「北京1」恒显不可用，2026-11-12 修正）；未配置回退本机端口默认。
+// 远程节点走 AUTHORITY_URL_A 公网/内网回调，鉴权同 AUTHORITY_HTTP_TOKEN。
+// 单实例 override（AUTHORITY_INTERNAL_URL，本地开发）优先级最高，只列一条。
 // 2026-11-02 张老师需求：负载行可展开在线玩家列表——同轮再透传各实例
 // /players（Bearer 鉴权端点，返回 uid/会话名/本实例累计开局面数/playing 局中标记），
 // 本接口查库补齐展示字段（地区/姓名/性别/军衔）。/players 拉取失败该行 players=null。
+// 2026-11-12 张老师定（方案 A）：主表「在线」分子改按 uid 去重人数——与展开
+// 列表同口径（原 connections 连接条数会被同一玩家多标签页/断线重连半开僵尸
+// 连接重复计，10 连接实际只 3 人，实证自愈型虚高）。去重数直接取 /players
+// 响应长度（core 侧已按 uid 去重）；/players 拉取失败回退 connections 保底。
 
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/guard";
@@ -26,11 +33,15 @@ interface Target {
 function targets(): Target[] {
   const override = process.env.AUTHORITY_INTERNAL_URL;
   if (override) return [{ name: "北京", base: override.replace(/\/$/, "") }];
+  /* 北京 a/b：优先 AUTHORITY_URL_A/B（生产 a 在独立节点 192.168.1.211，
+     与 server-release.sh/nginx upstream 同源；缺省回退本机端口） */
+  const urlA = process.env.AUTHORITY_URL_A?.replace(/\/$/, "");
+  const urlB = process.env.AUTHORITY_URL_B?.replace(/\/$/, "");
   const a = process.env.AUTHORITY_PORT_A || "3104";
   const b = process.env.AUTHORITY_PORT_B || "3105";
   const list = [
-    { name: "北京1", base: `http://127.0.0.1:${a}`, tokenEnv: "AUTHORITY_HTTP_TOKEN" },
-    { name: "北京2", base: `http://127.0.0.1:${b}`, tokenEnv: "AUTHORITY_HTTP_TOKEN" },
+    { name: "北京1", base: urlA || `http://127.0.0.1:${a}`, tokenEnv: "AUTHORITY_HTTP_TOKEN" },
+    { name: "北京2", base: urlB || `http://127.0.0.1:${b}`, tokenEnv: "AUTHORITY_HTTP_TOKEN" },
   ];
   if (process.env.AUTHORITY_HK_URL) list.push({ name: "香港", base: process.env.AUTHORITY_HK_URL.replace(/\/$/, ""), tokenEnv: "AUTHORITY_HK_TOKEN" });
   if (process.env.AUTHORITY_HZ_URL) list.push({ name: "杭州", base: process.env.AUTHORITY_HZ_URL.replace(/\/$/, ""), tokenEnv: "AUTHORITY_HZ_TOKEN" });
@@ -46,6 +57,8 @@ interface Row {
   ok: boolean;
   rtt: number;
   connections: number;
+  /** 当前在线人数（按 uid 去重，2026-11-12 方案 A：与展开玩家列表同口径；/players 拉取失败回退 connections） */
+  onlineUsers: number;
   active: number;
   games: number;
   draining: boolean;
@@ -161,6 +174,9 @@ export async function GET() {
           ok: res.ok,
           rtt: Date.now() - t0,
           connections: j.connections ?? 0,
+          /* 在线分子改去重人数（2026-11-12 张老师定）：/players 成功＝列表长度
+             （core 已按 uid 去重）；失败回退连接数保底（此时展开列表也显示获取失败） */
+          onlineUsers: players !== null ? players.length : (j.connections ?? 0),
           active: j.active ?? 0,
           games: j.games ?? 0,
           draining: Boolean(j.draining),
@@ -174,7 +190,7 @@ export async function GET() {
         };
         return row;
       } catch {
-        const row: Row = { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, active: 0, games: 0, draining: false, connsUsers: 0, gamesServed: 0, rttAvg: null, rttN: 0, players: null };
+        const row: Row = { name: t.name, region: "", slot: "", ok: false, rtt: 0, connections: 0, onlineUsers: 0, active: 0, games: 0, draining: false, connsUsers: 0, gamesServed: 0, rttAvg: null, rttN: 0, players: null };
         return row;
       }
     }),

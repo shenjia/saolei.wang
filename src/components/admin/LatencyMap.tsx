@@ -319,7 +319,8 @@ export function LatencyMap({
               <div className="tp_row">
                 <i>在线</i>
                 <b className="green">
-                  {hotSrv.connections} <em className="unit">/ {hotSrv.connsUsers.toLocaleString("zh-CN")} 人</em>
+                  {/* 去重人数口径（2026-11-12 方案 A，与负载面板主表/展开列表一致） */}
+                  {hotSrv.onlineUsers} <em className="unit">/ {hotSrv.connsUsers.toLocaleString("zh-CN")} 人</em>
                 </b>
               </div>
               <div className="tp_row">
