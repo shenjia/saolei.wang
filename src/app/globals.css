@@ -15728,6 +15728,13 @@ span.vs_btn--disabled:hover img {
    ④ 各阶段行高不变（action min-height）→ 跑分/赛后零跳动。 */
 .vs_vs {
   flex: none;
+  /* 2026-11-12：宽度钉死 330（与 .vs_scoreline 同值）——此前宽度由内容决定，
+     赛后动作槽换成终局评价（.vs_post nowrap 17px，实测 329px，Windows 雅黑下
+     更宽可超 330）会把中列撑宽，两侧 .vs_panel(flex-shrink:1) 随之各被挤窄约
+     8px，名字+军衔行（零富余）被挤到折行（四字名/长军衔必折，赛前不折赛后折）。
+     钉死后布局前后零变化；评价气泡略超 330 时向两侧 25px margin 内溢出，
+     碰不到卡片。移动端 display:contents，本宽度不生效 */
+  width: 330px;
   display: grid;
   grid-template-rows: auto auto auto auto;
   justify-items: center;
