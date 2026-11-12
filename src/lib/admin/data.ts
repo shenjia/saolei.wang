@@ -870,6 +870,9 @@ export interface AdminVideoRow {
   cl: number | null;
   /** press-release 平均时长 ms（需核定行现算：左键优先、右键单独；null=未算/不适用） */
   pressAvgMs: number | null;
+  /** 人类相似度统计（需核定行现算，2026-11-12 bit17~21 标签展示具体数值用；
+   *  null=未算/解析失败） */
+  trajStats: { mv: number; clicks: number; mvPerClick: number | null; mvMinDt: number | null; maxMvBurst: number; pressStd: number | null; offDistinct: number | null; offStd: number | null; zeroPressFrac: number | null; loneZeroPressFrac: number | null } | null;
   /** 录像文件路径（/2026/01/05/xxx.mvf；后台播放器 fetch 用） */
   filepath: string;
 }
@@ -1084,22 +1087,33 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       cls: mMap.get(id)?.cls ?? null,
       cl: mMap.get(id)?.cl ?? null,
       pressAvgMs: null,
+      trajStats: null,
       filepath: info?.filepath ?? "",
     });
   }
-  // 需核定行现算 press-release 平均时长（触发原因展示具体数值；每页 ≤25 行 × ~3ms）
+  // 需核定行现算 press-release 平均时长 + 人类相似度统计（触发原因展示具体数值；
+  // 每页 ≤25 行 × ~3ms，pressAvgMs 与 trajStats 同一次解析产出）
   const needIds = out.filter((r) => r.autoFlag !== 1 && r.hasInfo).map((r) => r.id);
   if (needIds.length) {
     const pressMap = await computePressAvg(needIds);
     for (const r of out) {
-      if (r.autoFlag !== 1) r.pressAvgMs = pressMap.get(r.id) ?? null;
+      if (r.autoFlag !== 1) {
+        const d = pressMap.get(r.id);
+        if (d) {
+          r.pressAvgMs = d.pressAvgMs;
+          r.trajStats = d.traj;
+        }
+      }
     }
   }
   return out;
 }
 
-/** 现读录像文件算 press-release 平均时长（复用 video-triage 同口径；文件缺失/解析失败返回 null） */
-async function computePressAvg(ids: number[]): Promise<Map<number, number | null>> {
+/** 现读录像文件算 press-release 平均时长与人类相似度统计（复用 video-triage 同口径；
+ *  文件缺失/解析失败返回 null） */
+async function computePressAvg(
+  ids: number[]
+): Promise<Map<number, { pressAvgMs: number | null; traj: AdminVideoRow["trajStats"] } | null>> {
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: ids.map(BigInt) } },
     select: { id: true, filepath: true },
@@ -1107,9 +1121,9 @@ async function computePressAvg(ids: number[]): Promise<Map<number, number | null
   const { readFileSync } = await import("fs");
   const pathMod = await import("path");
   const { parseVideoBinary } = await import("@/lib/videoradar");
-  const { pressPairStats } = await import("@/lib/video-triage");
+  const { pressPairStats, humanLikeStats } = await import("@/lib/video-triage");
   const { PRESS_AVG_MS } = await import("@/lib/video-triage-limits");
-  const result = new Map<number, number | null>();
+  const result = new Map<number, { pressAvgMs: number | null; traj: AdminVideoRow["trajStats"] } | null>();
   for (const info of infos) {
     result.set(N(info.id), null);
     try {
@@ -1136,7 +1150,20 @@ async function computePressAvg(ids: number[]): Promise<Map<number, number | null
         const r = Math.round(ps.rightAvg);
         hit = hit === null ? r : Math.min(hit, r);
       }
-      result.set(N(info.id), hit);
+      const hl = humanLikeStats(parsed);
+      const traj: AdminVideoRow["trajStats"] = {
+        mv: hl.mv,
+        clicks: hl.clicks,
+        mvPerClick: hl.mvPerClick !== null ? +hl.mvPerClick.toFixed(2) : null,
+        mvMinDt: hl.mvMinDt,
+        maxMvBurst: hl.maxMvBurst,
+        pressStd: hl.pressStd !== null ? +hl.pressStd.toFixed(1) : null,
+        offDistinct: hl.offDistinct,
+        offStd: hl.offStd !== null ? +hl.offStd.toFixed(2) : null,
+        zeroPressFrac: hl.zeroPressFrac !== null ? +hl.zeroPressFrac.toFixed(3) : null,
+        loneZeroPressFrac: hl.loneZeroPressFrac !== null ? +hl.loneZeroPressFrac.toFixed(3) : null,
+      };
+      result.set(N(info.id), { pressAvgMs: hit, traj });
     } catch {
       /* 单行失败保持 null，标签退化为无数值形态 */
     }

@@ -126,6 +126,46 @@ function reasonTagList(v: AdminVideoRow) {
       cls: "info",
     });
   }
+  // 人类相似度触发器（2026-11-12 红客合成录像 360671 案）：抓「生成器写事件流」
+  // 的非人类结构特征，数值来自需核定行现算的 trajStats。
+  // 豁免口径：站内客户端与老 Clone 对 bit17/20（站内客户端）/bit17/20/21（老 Clone）
+  // 豁免——其写流格式本身即格中心落点/稀疏 mv/同刻瞬时点击
+  const t = v.trajStats;
+  if (r & (1 << 17)) {
+    tags.push({
+      text: `轨迹稀疏 mv/点击 ${t?.mvPerClick ?? "?"}<2 无密集串`,
+      title: `mv 事件数/点击数过低（本盘 ${t?.mv ?? "?"} mv / ${t?.clicks ?? "?"} 点击，最长密集采样串 ${t?.maxMvBurst ?? "?"} 连）——真人每次点击间的移动伴随多条连续采样事件（桌面软件人类下限 2.68），慢速玩家比值虽低但必有 ≥3 连密集串；合成流每次移动只写一条瞬移。站内客户端与老 Clone 录像豁免本项`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 18)) {
+    tags.push({
+      text: `mv 采样间隔 ≥${t?.mvMinDt ?? "?"}ms`,
+      title: `全程任意相邻 mv 事件间隔均超过 100ms（本盘最小 ${t?.mvMinDt ?? "?"}ms）——真人移动鼠标必产生密集采样对（各软件人类观测最大 50ms），无密集采样对＝轨迹由程序直接写入目标坐标`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 19)) {
+    tags.push({
+      text: `按压时长恒定 σ=${t?.pressStd ?? "?"}ms`,
+      title: `配对按压时长的标准差近零（本盘 σ=${t?.pressStd ?? "?"}ms）——人类按压时长天然有方差（全站人类下限 9ms），零方差是确定性生成器特征，即便平均时长调到人类区间也会暴露`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 20)) {
+    tags.push({
+      text: `点击落点量化 ${t?.offDistinct ?? "?"}种偏移`,
+      title: `点击落点的格内偏移（x/y 对 16 取余）取值过少或散布过小（本盘 ${t?.offDistinct ?? "?"} 种 / σ=${t?.offStd ?? "?"}px）——人类鼠标落点是连续分布（全站人类下限 11 种 / 2.54px），合成流落点集中在格中心±1。站内客户端与老 Clone 录像豁免本项`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 21)) {
+    tags.push({
+      text: `孤立同刻按压 ${(t?.loneZeroPressFrac != null ? (t.loneZeroPressFrac * 100).toFixed(0) : "?")}%`,
+      title: `按下与松开同刻且该时刻无其他点击事件的配对占比过高（本盘孤立占比 ${t?.loneZeroPressFrac != null ? (t.loneZeroPressFrac * 100).toFixed(1) : "?"}%，含和弦总同刻占比 ${t?.zeroPressFrac != null ? (t.zeroPressFrac * 100).toFixed(1) : "?"}%）——物理上不可能单次按压比录像时间粒度还快（人类孤立占比观测上限 15.5%），生成器常批量写同刻按压对。已排除真人和弦手势（lc|rc|lr 同刻）与双击连发的同刻膨胀；老 Clone 录像豁免本项`,
+      cls: "bad",
+    });
+  }
   return tags;
 }
 

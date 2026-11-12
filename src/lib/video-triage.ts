@@ -25,6 +25,21 @@
 //   bit7 级别 TOP 榜（时间 TOP100 / 3bvs TOP10，同上由调用方判定传入）
 //   bit8 首次入伍（三级成绩将首次齐全，同上）
 //   bit9 低信任：上传者属低信任组（口径见 lib/lowtrust.ts：反作弊标记未到期 ∪ 屏蔽史）
+//   bit17 PATH_SPARSE 轨迹稀疏：mv/点击比 <2.0 且全程无 ≥3 连密集采样串（桌面
+//       软件人类 min 2.68；慢速真人低比值盘必有密集串；合成流≈1 且串长 1；
+//       站内客户端与老 Clone 豁免——其 mv/点击比合法低至 1.56 / 1.7）
+//   bit18 PATH_DT 轨迹无密集采样：相邻 mv 间隔全程 >100ms（任何真实鼠标移动都有
+//       <16ms 的连续采样对；红客 360671 全程最密 450ms）
+//   bit19 PRESS_UNIFORM 按压时长恒定：配对时长标准差 <5ms（人类 min 9；合成流 0）
+//   bit20 CLICK_OFFSET 点击落点量化：格内偏移取值 <8 种或标准差 <1.6px（人类
+//       min 11 种 / 2.54px；合成流 3 种 / 0.8px；站内客户端与老 Clone 豁免——
+//       两格式落点=格中心是写流格式行为）
+//   bit21 ZERO_PRESS 孤立同刻按压占比：按下与松开同刻且该时刻无其他点击事件
+//       （排除真人和弦手势 lc|rc|lr 与双击连发的同刻膨胀）占比 >30%（真人孤立
+//       观测上限 15.5%；合成流 61%；clicks≥100 守卫；老 Clone 豁免——其瞬时
+//       点击即同刻写 lc+lr）
+//   （bit17~21 为 2026-11-12 人类相似度触发器组，定标与豁免口径见
+//       video-triage-limits.ts 头部注释及 humanLikeTriggers）
 //
 // 另外的强制口径（不是触发器）：bit16 在线排行模式录像强制转手审
 //   （2026-10-27 张老师指令开启，2026-10-28 张老师指令关闭——排名局走正常分拣；
@@ -40,7 +55,7 @@ import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
 import { calZini } from "./zini";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_STD_TRIGGER_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
 import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
 import { auditRankedGame } from "../core/src/lib/ranked-audit";
@@ -180,6 +195,171 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
   return { leftAvg: avg(dursL), leftN: dursL.length, rightAvg: avg(dursR), rightN: dursR.length, cl };
 }
 
+// ---------- 人类相似度统计（2026-11-12 红客合成录像 360671 案；定标见 limits 注释） ----------
+//
+// 五路特征全部是「事件流结构」信号，与成绩指标（STNB/手速）正交，专门抓
+// 生成器写流：真人移动有连续采样、按压时长有方差、落点有亚像素散布、
+// 按压不可能零时长。人类基线（本地 938 + 生产 1418 分层抽样）与触发线 ≥2 倍分离。
+
+export interface HumanLikeStats {
+  /** 点击总数（lc/rc/mc/sc） */
+  clicks: number;
+  /** mv 事件总数 */
+  mv: number;
+  /** mv/点击比（clicks>0 时） */
+  mvPerClick: number | null;
+  /** 相邻 mv 最小间隔（ms；mv≥2 时） */
+  mvMinDt: number | null;
+  /** 最长密集采样串：连续 mv 且相邻间隔 ≤100ms 的最大连长（真鼠标移动必现 ≥3 连；
+   *  合成流单步瞬移为 1；防「补一对假事件绕过 mvMinDt」） */
+  maxMvBurst: number;
+  /** 配对按压时长（d>0）样本数 */
+  pressN: number;
+  /** 配对按压时长标准差（左右键合并池；pressN≥2 时） */
+  pressStd: number | null;
+  /** 格内偏移（x%16 / y%16 合并池）去重取值数（clicks>0 时） */
+  offDistinct: number | null;
+  /** 格内偏移标准差 px（clicks≥2 时） */
+  offStd: number | null;
+  /** 同刻（0ms）按压配对占全部按下比例（按下总数>0 时；含和弦手势膨胀，仅展示） */
+  zeroPressFrac: number | null;
+  /** 孤立同刻配对占比：同刻按下-松开且该时刻无其他点击事件（和弦手势
+   *  lc|rc|lr、双击连发都是多点击同刻＝非孤立；孤立对＝单次点击快于时间
+   *  粒度＝物理不可能，合成流特征；真人观测上限 15.5%，360671=61%） */
+  loneZeroPressFrac: number | null;
+}
+
+export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
+  let clicks = 0, mv = 0;
+  let mvPrevTs: number | null = null, mvMinDt: number | null = null;
+  let burstRun = 1, maxMvBurst = 0;
+  const offs: number[] = [];
+  // 按压配对复用 pressPairStats 口径（0ms 不入时长池，但占 zeroFrac 分母）；
+  // 孤立判定＝配对时刻除该按下外无其他点击事件（按时间戳计数）
+  const presses: { L: number | null; R: number | null } = { L: null, R: null };
+  const clickTs = new Map<number, number>();
+  const durs: number[] = [];
+  let totalPress = 0, zero = 0, loneZero = 0;
+  // 先扫一遍建 clickTs（mv 无点击语义；lc/rc/sc/mc 计数按原始时间戳）
+  const rawClickTs: number[] = [];
+  for (const line of v.events) {
+    const m = EV_LINE.exec(line);
+    if (!m) continue;
+    const ev = m[2];
+    if (ev === "lc" || ev === "rc" || ev === "mc" || ev === "sc") rawClickTs.push(parseFloat(m[1]) * 1000);
+  }
+  for (const t of rawClickTs) clickTs.set(t, (clickTs.get(t) ?? 0) + 1);
+  for (const line of v.events) {
+    const m = EV_LINE.exec(line);
+    if (!m) continue;
+    const ts = parseFloat(m[1]) * 1000;
+    const ev = m[2];
+    const px = +m[5], py = +m[6];
+    if (ev === "mv") {
+      if (mv > 0 && mvPrevTs !== null) {
+        const d = ts - mvPrevTs;
+        if (mvMinDt === null || d < mvMinDt) mvMinDt = d;
+        if (d <= MV_MIN_DT_TRIGGER_MS) burstRun++;
+        else burstRun = 1;
+        if (burstRun > maxMvBurst) maxMvBurst = burstRun;
+      } else if (mv === 0) {
+        maxMvBurst = 1;
+      }
+      mv++;
+      mvPrevTs = ts;
+      continue;
+    }
+    if (ev === "lc" || ev === "mc" || ev === "sc") { presses.L = ts; totalPress++; clicks++; }
+    else if (ev === "rc") { presses.R = ts; totalPress++; clicks++; }
+    else if (ev === "lr" || ev === "mr") {
+      if (presses.L !== null) {
+        const d = ts - presses.L;
+        if (d === 0) {
+          zero++;
+          // 孤立＝该时刻没有其他点击事件（和弦 lc|rc|lr / 双击连发是多点击同刻）
+          if ((clickTs.get(presses.L) ?? 0) <= 1) loneZero++;
+        } else if (d > 0) durs.push(d);
+        presses.L = null;
+      }
+    } else if (ev === "rr") {
+      if (presses.R !== null) {
+        const d = ts - presses.R;
+        if (d === 0) {
+          zero++;
+          if ((clickTs.get(presses.R) ?? 0) <= 1) loneZero++;
+        } else if (d > 0) durs.push(d);
+        presses.R = null;
+      }
+    }
+    if (px >= 0 && px < 60000 && py >= 0 && py < 60000) offs.push(px % 16, py % 16);
+  }
+  const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const std = (a: number[]) => {
+    const mu = mean(a);
+    if (mu === null || a.length < 2) return null;
+    return Math.sqrt(a.reduce((s, x) => s + (x - mu) ** 2, 0) / a.length);
+  };
+  const offMu = mean(offs);
+  return {
+    clicks, mv,
+    mvPerClick: clicks > 0 ? mv / clicks : null,
+    mvMinDt,
+    maxMvBurst,
+    pressN: durs.length,
+    pressStd: std(durs),
+    offDistinct: offs.length ? new Set(offs).size : null,
+    offStd: offMu !== null && offs.length >= 2 ? std(offs) : null,
+    zeroPressFrac: totalPress > 0 ? zero / totalPress : null,
+    loneZeroPressFrac: totalPress > 0 ? loneZero / totalPress : null,
+  };
+}
+
+/** 人类相似度触发器组：返回命中的位码（bit17~21）。triageParsed 内联调用；
+ *  存量补判脚本（scripts/trajectory-retriage.ts）直接复用做增量 OR。
+ *  格式豁免（全站回扫实证，2026-11-12 本地 29.7 万免核定盘）：
+ *  · 站内客户端（software=Saolei.wang / 带 evf_sig 签名）——落点本就格对齐、
+ *    mv 事件较稀（浏览器 mousemove，mv/点击比合法低至 1.56）：豁免
+ *    PATH_SPARSE / CLICK_OFFSET；
+ *  · 老 Clone 0.97（全站 5.7 万盘，唯一在用版本）——其写流格式本身就是
+ *    「点击落点=格中心（offDistinct=1）+ 瞬时点击同刻写 lc+lr（零占比可到 37.9%）
+ *    + 每格跨界一条 mv（比值可到 1.7）」：豁免 PATH_SPARSE / CLICK_OFFSET /
+ *    ZERO_PRESS。三路的反作弊火力由 PATH_DT / PRESS_UNIFORM（全软件适用、
+ *    老Clone零命中）与既有触发器组承接。 */
+export function humanLikeTriggers(hl: HumanLikeStats, software: string | null, clientOwned: boolean): number {
+  const clone = software === "Clone";
+  let bits = 0;
+  if (hl.clicks >= TRAJ_MIN_CLICKS && hl.mv >= TRAJ_MIN_MV) {
+    // 轨迹无密集采样：全软件适用（人类 mv 采样最稀的站内客户端 max 16ms、老 Clone max 10ms）
+    if (hl.mvMinDt !== null && hl.mvMinDt > MV_MIN_DT_TRIGGER_MS) bits |= AUTO_REASON.PATH_DT;
+    // 轨迹稀疏：比值低且全程无 ≥3 连密集采样串（慢速真人盘 mv/点击比可低到 1.29，
+    // 但真实移动必现 ≥3 连密集串——2026-11-12 全站回扫 260087/260089 实证）；
+    // 站内客户端与老 Clone 豁免；「补一对假事件」可绕 mvMinDt 但绕不过 burst<3
+    if (!clientOwned && !clone &&
+        hl.mvPerClick !== null && hl.mvPerClick < MV_PER_CLICK_TRIGGER &&
+        hl.maxMvBurst < MIN_MV_BURST) {
+      bits |= AUTO_REASON.PATH_SPARSE;
+    }
+    // 按压时长恒定：全软件适用（人类标准差 min 9ms，含老 Clone min 9.8ms）
+    if (hl.pressN >= 30 && hl.pressStd !== null && hl.pressStd < PRESS_STD_TRIGGER_MS) bits |= AUTO_REASON.PRESS_UNIFORM;
+    // 点击落点量化：站内客户端与老 Clone 豁免（两者落点=格中心是合法格式行为）
+    if (!clientOwned && !clone &&
+        (hl.offDistinct !== null && hl.offDistinct < CLICK_OFFSET_DISTINCT_TRIGGER ||
+         hl.offStd !== null && hl.offStd < CLICK_OFFSET_STD_TRIGGER)) {
+      bits |= AUTO_REASON.CLICK_OFFSET;
+    }
+  }
+  // 孤立同刻按压占比：老 Clone 豁免（瞬时点击同刻配对是其写流格式）；clicks≥100
+  // 守卫稀释少量胜局补洞合成对；用「孤立对」排除真人和弦手势同刻膨胀
+  // （lc|rc|lr 和弦、双击连发都是多点击同刻；真人孤立占比观测上限 15.5%，
+  // 360671=61%，线 30%）。站内客户端合成 sc+lr 对是孤立对但其占比 max 2.9%，照常适用
+  if (!clone &&
+      hl.clicks >= ZERO_PRESS_MIN_CLICKS && hl.loneZeroPressFrac !== null &&
+      hl.loneZeroPressFrac > ZERO_PRESS_FRACTION_TRIGGER) {
+    bits |= AUTO_REASON.ZERO_PRESS;
+  }
+  return bits;
+}
+
 // ---------- 榜单/纪录/入伍判定输入（bit6/7/8 由调用方算好传入，保持本模块纯函数） ----------
 
 export interface TriageExtra {
@@ -231,7 +411,9 @@ export function triageParsed(
   lowTrust: boolean,
   extra: TriageExtra = {},
   timeMs: number = v.timeMs,
-  trusted: boolean = false
+  trusted: boolean = false,
+  clientOwned: boolean = false,
+  software: string | null = null
 ): TriageResult {
   let reason = 0;
 
@@ -241,6 +423,11 @@ export function triageParsed(
       (ps.rightAvg !== null && ps.rightN >= PRESS_MIN_PAIRS && ps.rightAvg <= pressMs)) {
     reason |= AUTO_REASON.PRESS;
   }
+
+  // 人类相似度触发器组（2026-11-12 红客合成录像 360671 案）：
+  // 抓生成器写流的非人类结构特征（详见 humanLikeStats 注释与 limits 定标说明）。
+  // 格式豁免口径（老 Clone / 站内客户端）见 humanLikeTriggers 注释。
+  reason |= humanLikeTriggers(humanLikeStats(v), software, clientOwned);
 
   // path 瞬移异常（2026-10-23；timeMs 用库内权威值，调用方在 triageVideo 传入）
   const pj = pathJumpStats(v, timeMs);
@@ -393,6 +580,9 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
     });
 
     const { lowTrust, trusted } = await getUserTrustInfo(Number(video.user));
+    // 站内客户端录像（排行/练习 evf 或自家 avf）＋软件名一并传入人类相似度
+    // 触发器组做格式豁免（老 Clone / 站内客户端口径见 humanLikeTriggers 注释）
+    const clientOwned = info.software === RANKED_SOFTWARE || info.evfSig !== null;
     const { flag: baseFlag, reason: baseReason } = triageParsed(
       parsed,
       video.level,
@@ -400,7 +590,9 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
       lowTrust,
       {},
       info.realTime,
-      trusted
+      trusted,
+      clientOwned,
+      info.software
     );
     let flag = baseFlag;
     let reason = baseReason;
