@@ -104,11 +104,26 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
         <span className="sub">
           VS 板块（/vs/:id）对决数据 · 近 30 天 {ov.d30.toLocaleString("zh-CN")} 场 · KPI 口径：一次对决页访问 = 一次对决 · 趋势缓存 5 分钟
         </span>
+        {/* Top10 范围筛选（2026-11-12 张老师）：上移至页头右端复用行高，不压缩下方板块高度；
+            只作用于两个 Top10（趋势图固定近 30 天） */}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span className="sub" style={{ fontSize: 12 }}>Top10 范围</span>
+          {RANGES.map((v) => (
+            <Link
+              key={v}
+              href={`/admin/vs?range=${v}`}
+              className={`admin_btn sm${v === range ? " primary" : ""}`}
+            >
+              {RANGE_LABEL[v]}
+            </Link>
+          ))}
+        </span>
       </div>
 
       {/* ---------- 趋势图 + 两个 Top10 三板块并列一行（2026-11-11 10:26 张老师；
               14:44 张老师：趋势图水平宽度改 50%，Top10 弹性均分剩余宽度，窄屏自动换行；
-              2026-11-12 张老师：两个 Top10 收进右列并加范围筛选（今天/7天/30天，默认今天） ---------- */}
+              2026-11-12 张老师：Top10 加范围筛选（今天/7天/30天，默认今天），
+              筛选器放页头右端不占板块高度，三板块保持平铺对齐 ---------- */}
       <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
         <div style={{ flex: "0 0 50%", minWidth: 0 }}>
           <AdminCard
@@ -119,48 +134,31 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
             <TrendChart dates={ov.dates} series={series} unit="场" />
           </AdminCard>
         </div>
-        <div style={{ flex: "1 1 460px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-          {/* Top10 范围筛选（2026-11-12 张老师）：今天/7天/30天，默认今天；只作用于下方两个 Top10 */}
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            <span className="sub" style={{ fontSize: 12 }}>Top10 范围</span>
-            {RANGES.map((v) => (
-              <Link
-                key={v}
-                href={`/admin/vs?range=${v}`}
-                className={`admin_btn sm${v === range ? " primary" : ""}`}
-              >
-                {RANGE_LABEL[v]}
-              </Link>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap", flex: "1 1 auto" }}>
-            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-              <AdminCard title={`发起对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
-                <BarList
-                  items={launchers.map((u) => ({
-                    label: u.name,
-                    value: u.count,
-                    href: `/admin/users/${u.uid}`,
-                    hint: `#${u.uid}`,
-                  }))}
-                  color="linear-gradient(90deg,#6b4f8b,#ae81ff)"
-                />
-              </AdminCard>
-            </div>
-            <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-              <AdminCard title={`被对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
-                <BarList
-                  items={targets.map((u) => ({
-                    label: u.name,
-                    value: u.count,
-                    href: `/admin/users/${u.uid}`,
-                    hint: `#${u.uid}`,
-                  }))}
-                  color="linear-gradient(90deg,#8b4f6f,#e34f8c)"
-                />
-              </AdminCard>
-            </div>
-          </div>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <AdminCard title={`发起对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
+            <BarList
+              items={launchers.map((u) => ({
+                label: u.name,
+                value: u.count,
+                href: `/admin/users/${u.uid}`,
+                hint: `#${u.uid}`,
+              }))}
+              color="linear-gradient(90deg,#6b4f8b,#ae81ff)"
+            />
+          </AdminCard>
+        </div>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <AdminCard title={`被对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
+            <BarList
+              items={targets.map((u) => ({
+                label: u.name,
+                value: u.count,
+                href: `/admin/users/${u.uid}`,
+                hint: `#${u.uid}`,
+              }))}
+              color="linear-gradient(90deg,#8b4f6f,#e34f8c)"
+            />
+          </AdminCard>
         </div>
       </div>
 
