@@ -183,9 +183,10 @@ export async function getActiveRankOfUsers(
 //   ⑤ 其余按 名次/活跃玩家数 比率落档：p=(1−rank/N)×100，取 ≤p 的最大网格环。
 //   网格环与 RadarChart.tsx 的 GRID_RINGS 同源（升级序 15/35/50/60/70/80/90/100）。
 //
-// 气泡第二行（2026-11-13 二批 张老师定）：名次 ≤3 → 金色「全网前N」；否则
+// 气泡第二行（2026-11-13 二批 张老师定，11:51 修正文案）：名次 ≤3 → 金色
+//   「全网第一/第二/第三」（登录 rank=1 恒「全网并列第一」）；否则
 //   「超过 xx% 的活跃玩家」，xx=(1−rank/N)×100——分母由全站用户改为活跃玩家数，
-//   旧「全网第一」分支被「全网前1」自然覆盖。
+//   旧「全网第一」分支由序数文案覆盖。
 
 /** 六维定义：key=快照列名，name=轴名（与活跃排行页表头一致）。
  *  轴序（2026-11-10 张老师定，二改）：顶轴起顺时针＝登录、评论、高级、中级、初级、观看
@@ -242,9 +243,11 @@ export interface ActiveRadarDataPoint {
   tipValue?: string;
   /** 轴标签顶行（2026-11-10 21:24 张老师定）：不带单位、显示换算后活跃值取整 */
   labelValue?: string;
-  /** 气泡第二行金色名次（2026-11-13 张老师定）：活跃玩家中本数据名次 ≤3 时置值，
-   *  RadarChart 显示金色「全网前N」（.tip_first）；否则走「超过 xx%」分支 */
-  beatRank?: number;
+  /** 气泡第二行金色名次文案（2026-11-13 张老师定）：名次 ≤3 时置值——
+   *  非登录轴「全网第一/第二/第三」；登录轴与第一同值（rank=1）恒「全网并列第一」
+   *  （7 天封顶并列者众，「全网第一」会被误解为独占），rank 2/3 照常序数；
+   *  RadarChart 以 .tip_first 金色渲染 */
+  beatText?: string;
   /** 「超过 xx%」句尾人群词（2026-11-13 张老师定）：活跃雷达恒「活跃玩家」 */
   beatScope?: string;
 }
@@ -369,17 +372,25 @@ export async function getActiveRadar(
         if (ring <= p) percent = ring;
       }
     }
-    // 气泡第二行（2026-11-13 张老师定）：名次 ≤3 → 金色「全网前N」（beatRank 置值，
-    // RadarChart .tip_first 分支）；否则「超过 xx% 的活跃玩家」，xx=(1−rank/N)×100
-    // 取整（与绘图档位 p 同式；字面「排名/玩家数」与「超过」语义相反，按语义倒推）。
-    // 旧「全网第一」（worse=0 且 ties=1）分支由「全网前1」自然覆盖，全站 total 分母弃用
+    // 气泡第二行（2026-11-13 张老师定，11:51 二次修正）：名次 ≤3 → 金色中文序数
+    //「全网第一/第二/第三」（beatText 置值，RadarChart .tip_first 分支）；登录轴
+    // rank=1（与第一同值）恒「全网并列第一」——7 天封顶并列者众，独占措辞误导；
+    // 否则「超过 xx% 的活跃玩家」，xx=(1−rank/N)×100 取整（与绘图档位 p 同式）。
+    // 旧「全网第一」（worse=0 且 ties=1）分支由序数文案覆盖，全站 total 分母弃用
     const beatPct = Math.floor((1 - rank / totalActive) * 100);
+    const ORDINAL = ["全网第一", "全网第二", "全网第三"];
+    const beatText =
+      rank <= 3
+        ? key === "login" && rank === 1
+          ? "全网并列第一"
+          : ORDINAL[rank - 1]
+        : undefined;
     return {
       name,
       score: String(value),
       percent,
       beatPct,
-      beatRank: rank <= 3 ? rank : undefined,
+      beatText,
       grade: "F",
       tipLabel: TIP_LABEL[key],
       tipValue: `${value} ${TIP_UNIT[key]}`,

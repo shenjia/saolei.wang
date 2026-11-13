@@ -17,14 +17,14 @@ import { gradeColor } from "@/lib/videoscore";
 /** 活跃雷达数据点：在实力雷达 RadarPoint 上加气泡具体数据（tipLabel/tipValue 可选，
  *  不传时走实力雷达原「超过 xx%」分支，两者共用同一组件互不影响）；
  *  labelValue=轴标签顶行活跃值（21:24 张老师定，不带单位取整）；
- *  beatRank=活跃玩家中本数据名次（2026-11-13 张老师定：≤3 时气泡第二行显示金色
- *  「全网前N」，复用 .tip_first 金色）；beatScope=「超过 xx%」句尾人群词（缺省「玩家」，
- *  活跃雷达传「活跃玩家」） */
+ *  beatText=气泡第二行金色名次文案（2026-11-13 张老师定：名次 ≤3 时由服务端组好
+ *  「全网第一/第二/第三」，登录第一恒「全网并列第一」，以 .tip_first 金色渲染）；
+ *  beatScope=「超过 xx%」句尾人群词（缺省「玩家」，活跃雷达传「活跃玩家」） */
 export type ActiveRadarPoint = RadarPoint & {
   tipLabel?: string;
   tipValue?: string;
   labelValue?: string;
-  beatRank?: number;
+  beatText?: string;
   beatScope?: string;
 };
 
@@ -227,10 +227,11 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: (RadarPoint | A
             const beatLine =
               tip.grade === "?" ? (
                 "暂无成绩"
-              ) : tip.beatRank !== undefined ? (
-                // 活跃雷达前三分支（2026-11-13 张老师定）：金色「全网前N」（N=活跃玩家
-                // 中本数据名次，并列同名次），复用 .tip_first 金色 #E6DB74
-                <span className="tip_first">全网前{tip.beatRank}</span>
+              ) : tip.beatText !== undefined ? (
+                // 活跃雷达前三分支（2026-11-13 张老师定 11:51 修正）：金色中文序数
+                // 「全网第一/第二/第三」；登录第一由服务端组为「全网并列第一」
+                //（7 天封顶并列者众，不显示独占措辞），复用 .tip_first 金色 #E6DB74
+                <span className="tip_first">{tip.beatText}</span>
               ) : tip.beatPct >= 100 ? (
                 // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 vr_tip 统一）；
                 // 判定用真实排位（beatPct：无人更优），非绘图用的档位插值 percent
