@@ -36,8 +36,10 @@
 //   bit20 CLICK_OFFSET 点击落点量化：格内偏移取值 <8 种或标准差 <1.6px（人类
 //       min 11 种 / 2.54px；合成流 3 种 / 0.8px；站内客户端与老 Clone 豁免——
 //       两格式落点=格中心是写流格式行为）
-//   bit21 ZERO_PRESS 孤立同刻按压占比：按下与松开同刻且该时刻无其他点击事件
-//       （排除真人和弦手势 lc|rc|lr 与双击连发的同刻膨胀）占比 >30%（真人孤立
+//   bit21 ZERO_PRESS 孤立同刻按压占比：按下与松开同刻、该时刻无其他点击事件、
+//       且前后 250ms 内无其他点击（双击/快速连击豁免，2026-11-13 张老师定——
+//       真人触控板快速点按/双击在量化下成零时长对；360671 节拍 470ms 不受影响）
+//       占比 >30%（真人孤立
 //       观测上限 15.5%；合成流 61%；clicks≥100 守卫；老 Clone 豁免——其瞬时
 //       点击即同刻写 lc+lr）
 //   bit22 GAP_MODE 长间隔精确节拍：空闲间隔（松开→下一次按下）众数 ≥180ms 且
@@ -70,7 +72,7 @@ import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
 import { calZini } from "./zini";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_UNIFORM_SHARE, TOUCHPAD_MAX_PRESS_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS, GAP_MODE_MIN_MS, GAP_MODE_SHARE_TRIGGER, GAP_MODE_MIN_COUNT, GAP_CADENCE_MIN_N, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS, CLIENT_MV_PER_CLICK_LEGAL_MIN, CLONE_MV_PER_CLICK_LEGAL_MIN, ACCOUNT_PRESS_SCAN_LIMIT, ACCOUNT_PRESS_MIN_VIDEOS, ACCOUNT_PRESS_MEDIAN_MS } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_UNIFORM_SHARE, TOUCHPAD_MAX_PRESS_MS, DOUBLE_CLICK_WINDOW_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS, GAP_MODE_MIN_MS, GAP_MODE_SHARE_TRIGGER, GAP_MODE_MIN_COUNT, GAP_CADENCE_MIN_N, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS, CLIENT_MV_PER_CLICK_LEGAL_MIN, CLONE_MV_PER_CLICK_LEGAL_MIN, ACCOUNT_PRESS_SCAN_LIMIT, ACCOUNT_PRESS_MIN_VIDEOS, ACCOUNT_PRESS_MEDIAN_MS } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
 import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
 import { auditRankedGame } from "../core/src/lib/ranked-audit";
@@ -167,14 +169,18 @@ export interface PressPairStats {
   rightAvg: number | null;
   rightN: number;
   cl: number;
-  /** 左右键合并的最大配对时长 ms（无配对=null）——触控板豁免判据（全部 <12ms） */
+  /** 左右键合并的最大配对时长 ms（无配对=null） */
   pressMaxMs: number | null;
+  /** 左右键合并的配对时长中位数 ms（无配对=null）——触控板豁免判据（<12ms） */
+  pressMedianMs: number | null;
 }
 
-/** 触控板豁免（2026-11-13 张老师定）：全部按压配对时长 <12ms → 触控板操作，
- *  按压类触发器（bit0/bit19/bit23）全部放过。bit19 由调用方用同一判据。 */
+/** 触控板豁免（2026-11-13 张老师定，v4 改中位数判据）：按压配对时长中位数
+ *  <12ms → 触控板操作，按压类触发器（bit0/bit19/bit23）全部放过。v3 的
+ *  「全部配对 <12ms」（max 判据）被偶发实体键长按/量化 20ms 离群击穿，大量
+ *  误伤（生产探针：触控板真人中位数恒 10ms、生成器 8 盘 ≥12ms，见 limits 注释）。 */
 export function isTouchpadPress(ps: PressPairStats): boolean {
-  return ps.pressMaxMs !== null && ps.pressMaxMs < TOUCHPAD_MAX_PRESS_MS;
+  return ps.pressMedianMs !== null && ps.pressMedianMs < TOUCHPAD_MAX_PRESS_MS;
 }
 
 /** bit0（分级线，n≥30）+ bit23 短局超快按压（n≥10 且 ≤30ms）——左右键各自独立判，
@@ -236,11 +242,18 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
   }
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const allDurs = [...dursL, ...dursR];
+  const median = (a: number[]) => {
+    if (!a.length) return null;
+    const s = [...a].sort((x, y) => x - y);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
+  };
   return {
     leftAvg: avg(dursL), leftN: dursL.length,
     rightAvg: avg(dursR), rightN: dursR.length,
     cl,
     pressMaxMs: allDurs.length ? Math.max(...allDurs) : null,
+    pressMedianMs: median(allDurs),
   };
 }
 
@@ -266,8 +279,10 @@ export interface HumanLikeStats {
   pressN: number;
   /** 配对按压时长标准差（左右键合并池；pressN≥2 时） */
   pressStd: number | null;
-  /** 配对按压时长合并池的最大值 ms（pressN>0 时）——触控板豁免判据 */
+  /** 配对按压时长合并池的最大值 ms（pressN>0 时） */
   pressMaxMs: number | null;
+  /** 配对按压时长合并池的中位数 ms（pressN>0 时）——触控板豁免判据（v4，<12ms） */
+  pressMedianMs: number | null;
   /** 完全相同按压时长的众数值 ms（pressN>0 时；bit19 占比口径展示用） */
   pressModeMs: number | null;
   /** 众数精确占比 0~1（pressN>0 时；bit19 触发值） */
@@ -278,9 +293,11 @@ export interface HumanLikeStats {
   offStd: number | null;
   /** 同刻（0ms）按压配对占全部按下比例（按下总数>0 时；含和弦手势膨胀，仅展示） */
   zeroPressFrac: number | null;
-  /** 孤立同刻配对占比：同刻按下-松开且该时刻无其他点击事件（和弦手势
-   *  lc|rc|lr、双击连发都是多点击同刻＝非孤立；孤立对＝单次点击快于时间
-   *  粒度＝物理不可能，合成流特征；真人观测上限 15.5%，360671=61%） */
+  /** 孤立同刻配对占比：同刻按下-松开且该时刻无其他点击事件、且前后
+   *  DOUBLE_CLICK_WINDOW_MS 内无其他点击事件（和弦 lc|rc|lr、双击/快速连击
+   *  都不算孤立——双击两次点击跨时间戳时各自成零时长对，是真人节奏）。
+   *  孤立对＝单次点击快于时间粒度且无伴随点击＝合成流特征；真人观测上限
+   *  15.5%，360671=61%；双击豁免后超快连击手（黎茜怡）归零。 */
   loneZeroPressFrac: number | null;
   // 点击节拍（bit22；360420 型「带抖动合成流」指纹）
   /** 空闲间隔（松开→下一次按下）样本数 */
@@ -311,6 +328,23 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
     if (ev === "lc" || ev === "rc" || ev === "mc" || ev === "sc") rawClickTs.push(parseFloat(m[1]) * 1000);
   }
   for (const t of rawClickTs) clickTs.set(t, (clickTs.get(t) ?? 0) + 1);
+  // 双击/连击豁免（bit21，2026-11-13 张老师定）：孤立零对前后 250ms 内有其他
+  // 点击事件 → 属于双击/快速连击节奏，不算孤立（真人触控板快速点按在 10ms
+  // 量化下成零时长对，双击两次点击跨时间戳各自成对；生成器 360671 节拍 470ms+
+  // 完全不受影响）。排序数组 + 二分找最近邻。
+  const sortedClickTs = [...rawClickTs].sort((a, b) => a - b);
+  const nearOtherClick = (ts: number): boolean => {
+    let lo = 0, hi = sortedClickTs.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (sortedClickTs[mid]! < ts) lo = mid + 1; else hi = mid; }
+    // sortedClickTs[lo] 是首个 ≥ ts 的元素；同刻其他点击已在 count 判定排除，
+    // 这里只需看 lo-1（<ts）与 lo（=ts 自身则跳过看 lo+1）
+    const prev = sortedClickTs[lo - 1];
+    if (prev !== undefined && ts - prev <= DOUBLE_CLICK_WINDOW_MS) return true;
+    let i = lo;
+    while (i < sortedClickTs.length && sortedClickTs[i] === ts) i++;
+    const next = sortedClickTs[i];
+    return next !== undefined && next - ts <= DOUBLE_CLICK_WINDOW_MS;
+  };
   // 点击节拍（bit22/23）：按下/松开时间序列（事件序），后置两指针算空闲间隔
   const pressTs: number[] = [];
   const releaseTs: number[] = [];
@@ -343,7 +377,8 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
         if (d === 0) {
           zero++;
           // 孤立＝该时刻没有其他点击事件（和弦 lc|rc|lr / 双击连发是多点击同刻）
-          if ((clickTs.get(presses.L) ?? 0) <= 1) loneZero++;
+          // 且前后 250ms 内无其他点击（双击/快速连击序列豁免）
+          if ((clickTs.get(presses.L) ?? 0) <= 1 && !nearOtherClick(presses.L)) loneZero++;
         } else if (d > 0) durs.push(d);
         presses.L = null;
       }
@@ -353,7 +388,7 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
         const d = ts - presses.R;
         if (d === 0) {
           zero++;
-          if ((clickTs.get(presses.R) ?? 0) <= 1) loneZero++;
+          if ((clickTs.get(presses.R) ?? 0) <= 1 && !nearOtherClick(presses.R)) loneZero++;
         } else if (d > 0) durs.push(d);
         presses.R = null;
       }
@@ -407,6 +442,7 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
     pressN: durs.length,
     pressStd: std(durs),
     pressMaxMs: durs.length ? Math.max(...durs) : null,
+    pressMedianMs: (() => { if (!durs.length) return null; const s = [...durs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2; })(),
     pressModeMs,
     pressModeShare,
     offDistinct: offs.length ? new Set(offs).size : null,
@@ -457,9 +493,9 @@ export function humanLikeTriggers(hl: HumanLikeStats, software: string | null, c
     // 按压时长恒定（bit19，2026-11-13 张老师晚定改占比口径）：完全相同按压时长的
     // 众数占比 ≥ 分级线（初 95% / 中 85% / 高 75%）——确定性生成器特征（真人即快
     // 也有散布）。旧 σ<8ms 线误伤 Arbiter 10ms 量化下的按压偏快捷通真人，废弃。
-    // 触控板流（全部按压 <12ms）豁免——触控板物理按压本就短且量化后高度一致。
+    // 触控板豁免用中位数判据（v4，与 isTouchpadPress 同口径）。
     if (hl.pressN >= 30 &&
-        !(hl.pressMaxMs !== null && hl.pressMaxMs < TOUCHPAD_MAX_PRESS_MS) &&
+        !(hl.pressMedianMs !== null && hl.pressMedianMs < TOUCHPAD_MAX_PRESS_MS) &&
         hl.pressModeShare !== null &&
         hl.pressModeShare >= (PRESS_UNIFORM_SHARE[level] ?? 0.85)) {
       bits |= AUTO_REASON.PRESS_UNIFORM;
@@ -558,6 +594,7 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
   });
   const rows = [...infos];
   const reps: number[] = [];
+  let allTouchpad = true;
   for (const info of rows) {
     const buf = readVideoFile(info.filepath);
     if (!buf) continue;
@@ -565,6 +602,10 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
     const parsed = parseVideoBinary(buf, ext);
     if (!parsed) continue;
     const ps = pressPairStats(parsed);
+    // 触控板豁免用中位数判据（v4，与 isTouchpadPress 同口径）——任一盘
+    // 中位数 ≥12ms（偶发实体键/长按）不否决账号豁免，触控板真人中位数恒 10ms；
+    // 无按压配对的盘不参与判定
+    if (ps.pressMedianMs !== null && !isTouchpadPress(ps)) allTouchpad = false;
     const keys: number[] = [];
     if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.leftAvg);
     if (ps.rightAvg !== null && ps.rightN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.rightAvg);
@@ -577,8 +618,8 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
   return {
     usable: reps.length,
     medianMs: Math.round(median),
-    // 触控板账号：全部可统计代表按压都 <12ms（任一 ≥12ms 即不豁免，从严）
-    touchpad: sorted[sorted.length - 1]! < TOUCHPAD_MAX_PRESS_MS,
+    // 触控板账号：窗口内全部盘按压中位数 <12ms（isTouchpadPress 判据）
+    touchpad: allTouchpad,
   };
 }
 

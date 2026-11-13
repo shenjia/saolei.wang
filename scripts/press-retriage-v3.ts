@@ -1,15 +1,17 @@
-// 按压口径 v3 重捡（2026-11-13 张老师指令）：对需核定池（auto_flag=0）重算按压类
-// 触发器并按新口径重写——与增量 OR 补判不同，本脚本是「清位重判」：
+// 按压口径 v3 重捡（2026-11-13 张老师指令；v4 口径 2026-11-13 晚二轮反馈）：
+// 对需核定池（auto_flag=0）重算按压类触发器并按新口径重写——与增量 OR 补判
+// 不同，本脚本是「清位重判」：
 //
-//   1. bit0/bit23：pressTriggers 新口径（含触控板豁免——全部配对 <12ms 放过）
-//   2. bit19：σ 线废弃，改「完全相同按压时长众数占比」分级线（初95%/中85%/高75%），
-//      触控板流同样豁免
-//   3. bit24：账号触控板豁免——账号窗口内全部可统计按压 <12ms → 触控板账号，
-//      剥离该账号池内录像的 bit24（触控板账号中位数天然 ≤12ms，不是合成流证据）
-//   4. 重算后 reason=0 的盘解除需核定（auto_flag=1）；若该盘在 --restore-file
-//      清单内且当前 status=10，恢复 status=20（2026-11-13 嫌疑清单批量转待审的回滚）
+//   1. bit0/bit23：pressTriggers 新口径（触控板豁免 v4＝按压中位数 <12ms 放过）
+//   2. bit19：众数占比分级线（初95%/中85%/高75%），触控板豁免同中位数判据
+//   3. bit21：孤立同刻按压重算——双击/快速连击豁免（前后 250ms 内有其他点击
+//      事件不算孤立；真人超快连击手黎茜怡 30+ 盘全部释放，360671 节拍 470ms 不受影响）
+//   4. bit24：账号触控板豁免 v4——窗口内全部可统计盘中位数 <12ms → 触控板账号，
+//      剥离该账号池内录像的 bit24
+//   5. 重算后 reason=0 的盘解除需核定（auto_flag=1）；若该盘在 --restore-file
+//      清单内且当前 status=10，恢复 status=20
 //
-// 不动 auto_flag=-1（人工终局）/ 2（分拣失败）。轨迹类位码（17/18/20/21/22）口径
+// 不动 auto_flag=-1（人工终局）/ 2（分拣失败）。其余轨迹位码（17/18/20/22）口径
 // 未变，原位保留。
 //
 // 跑法（本地 / 生产）:
@@ -21,11 +23,11 @@ import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "../src/lib/db";
 import { parseVideoBinary } from "../src/lib/videoradar";
-import { pressPairStats, pressTriggers, humanLikeStats } from "../src/lib/video-triage";
-import { AUTO_REASON, PRESS_UNIFORM_SHARE, PRESS_SHORT_MIN_PAIRS, TOUCHPAD_MAX_PRESS_MS, ACCOUNT_PRESS_SCAN_LIMIT } from "../src/lib/video-triage-limits";
+import { pressPairStats, pressTriggers, humanLikeStats, isTouchpadPress } from "../src/lib/video-triage";
+import { AUTO_REASON, PRESS_UNIFORM_SHARE, TOUCHPAD_MAX_PRESS_MS, ACCOUNT_PRESS_SCAN_LIMIT, ZERO_PRESS_MIN_CLICKS, ZERO_PRESS_FRACTION_TRIGGER } from "../src/lib/video-triage-limits";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
-const PRESS_BITS = AUTO_REASON.PRESS | AUTO_REASON.PRESS_UNIFORM | AUTO_REASON.SHORT_PRESS;
+const PRESS_BITS = AUTO_REASON.PRESS | AUTO_REASON.PRESS_UNIFORM | AUTO_REASON.SHORT_PRESS | AUTO_REASON.ZERO_PRESS;
 const BIT24 = AUTO_REASON.ACCOUNT_PRESS;
 
 interface Row {
@@ -34,6 +36,7 @@ interface Row {
   level: string;
   status: number;
   auto_reason: number;
+  software: string;
   filepath: string;
   chinese_name: string | null;
 }
@@ -46,7 +49,7 @@ async function main() {
     : null;
 
   const rows = await prisma.$queryRawUnsafe<Row[]>(
-    `SELECT v.id, v.user, v.level, v.status, v.auto_reason, vi.filepath, u.chinese_name
+    `SELECT v.id, v.user, v.level, v.status, v.auto_reason, vi.software, vi.filepath, u.chinese_name
      FROM video v JOIN video_info vi ON vi.id=v.id LEFT JOIN user u ON u.id=v.user
      WHERE v.auto_flag = 0
      ORDER BY v.id ASC`
@@ -76,11 +79,18 @@ async function main() {
     const hl = humanLikeStats(v);
     let next = r.auto_reason & ~PRESS_BITS;
     next |= pressTriggers(ps, r.level);
-    // bit19 占比口径（触控板豁免内嵌判据：全部 <12ms 不判）
+    // bit19 占比口径（触控板豁免 v4 内嵌判据：按压中位数 <12ms 不判）
     if (hl.pressN >= 30 &&
-        !(hl.pressMaxMs !== null && hl.pressMaxMs < TOUCHPAD_MAX_PRESS_MS) &&
+        !(hl.pressMedianMs !== null && hl.pressMedianMs < TOUCHPAD_MAX_PRESS_MS) &&
         hl.pressModeShare !== null && hl.pressModeShare >= levelLine(r.level)) {
       next |= AUTO_REASON.PRESS_UNIFORM;
+    }
+    // bit21 孤立同刻按压重算（双击/快速连击豁免在 humanLikeStats 内嵌）；
+    // 老 Clone 豁免——其瞬时点击同刻写 lc+lr 是写流格式
+    if (r.software !== "Clone" &&
+        hl.clicks >= ZERO_PRESS_MIN_CLICKS &&
+        hl.loneZeroPressFrac !== null && hl.loneZeroPressFrac > ZERO_PRESS_FRACTION_TRIGGER) {
+      next |= AUTO_REASON.ZERO_PRESS;
     }
     if (next & BIT24) {
       const key = String(r.user);
@@ -90,7 +100,7 @@ async function main() {
     if (next !== r.auto_reason) rewrites.push({ row: r, next });
   }
 
-  // bit24 触控板账号豁免：窗口内全部可统计按压 <12ms → 剥离
+  // bit24 触控板账号豁免 v4：窗口内全部可统计盘按压中位数 <12ms → 剥离
   // （VideoInfo 无 Video 的 Prisma 关联，两步查询取用户最近 30 盘）
   let stripped24 = 0;
   for (const [uid, urows] of bit24Users) {
@@ -118,15 +128,12 @@ async function main() {
       const v = parseVideoBinary(new Uint8Array(buf), ext);
       if (!v) continue;
       const ps = pressPairStats(v);
-      const keys: number[] = [];
-      if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.leftAvg);
-      if (ps.rightAvg !== null && ps.rightN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.rightAvg);
-      if (!keys.length) continue;
+      if (ps.pressMedianMs === null) continue; // 无按压配对不参与判定
       usable++;
-      if (Math.min(...keys) >= TOUCHPAD_MAX_PRESS_MS) { allTouchpad = false; break; }
+      if (!isTouchpadPress(ps)) { allTouchpad = false; break; }
     }
     if (allTouchpad && usable > 0) {
-      console.log(`☐ uid=${uid} ${urows[0]!.chinese_name ?? "?"} 账号 ${usable} 盘可统计按压全部 <${TOUCHPAD_MAX_PRESS_MS}ms → 触控板账号，剥离 ${urows.length} 盘的 bit24`);
+      console.log(`☐ uid=${uid} ${urows[0]!.chinese_name ?? "?"} 账号 ${usable} 盘可统计按压中位数全部 <${TOUCHPAD_MAX_PRESS_MS}ms → 触控板账号，剥离 ${urows.length} 盘的 bit24`);
       for (const r of urows) {
         const rw = rewrites.find((x) => x.row.id === r.id);
         const next = (rw ? rw.next : r.auto_reason) & ~BIT24;

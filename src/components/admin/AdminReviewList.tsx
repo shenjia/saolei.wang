@@ -149,7 +149,7 @@ function reasonTagList(v: AdminVideoRow) {
     const linePct = v.level === "beg" ? 95 : v.level === "int" ? 85 : 75;
     tags.push({
       text: `按压时长恒定 ${t?.pressModeShare != null ? (t.pressModeShare * 100).toFixed(0) : "?"}%=${t?.pressModeMs ?? "?"}ms`,
-      title: `配对按压时长高度一致：完全相同的众数时长 ${t?.pressModeMs ?? "?"}ms 占 ${(t?.pressModeShare != null ? (t.pressModeShare * 100).toFixed(1) : "?")}%，超过分级触发线（初 ${linePct}% / 中 85% / 高 75%，2026-11-13 张老师定占比口径）——真人按压再快也有时长散布，「几乎每个按压都一模一样」是确定性生成器特征。触控板流（全部按压 <12ms）豁免本项`,
+      title: `配对按压时长高度一致：完全相同的众数时长 ${t?.pressModeMs ?? "?"}ms 占 ${(t?.pressModeShare != null ? (t.pressModeShare * 100).toFixed(1) : "?")}%，超过分级触发线（初 ${linePct}% / 中 85% / 高 75%，2026-11-13 张老师定占比口径）——真人按压再快也有时长散布，「几乎每个按压都一模一样」是确定性生成器特征。触控板豁免（按压中位数 <12ms，2026-11-13 晚 v4 口径）`,
       cls: "bad",
     });
   }
@@ -163,7 +163,7 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 21)) {
     tags.push({
       text: `孤立同刻按压 ${(t?.loneZeroPressFrac != null ? (t.loneZeroPressFrac * 100).toFixed(0) : "?")}%`,
-      title: `按下与松开同刻且该时刻无其他点击事件的配对占比过高（本盘孤立占比 ${t?.loneZeroPressFrac != null ? (t.loneZeroPressFrac * 100).toFixed(1) : "?"}%，含和弦总同刻占比 ${t?.zeroPressFrac != null ? (t.zeroPressFrac * 100).toFixed(1) : "?"}%）——物理上不可能单次按压比录像时间粒度还快（人类孤立占比观测上限 15.5%），生成器常批量写同刻按压对。已排除真人和弦手势（lc|rc|lr 同刻）与双击连发的同刻膨胀；老 Clone 录像豁免本项`,
+      title: `按下与松开同刻、且前后 250ms 内无其他点击事件的配对占比过高（本盘孤立占比 ${t?.loneZeroPressFrac != null ? (t.loneZeroPressFrac * 100).toFixed(1) : "?"}%，含和弦总同刻占比 ${t?.zeroPressFrac != null ? (t.zeroPressFrac * 100).toFixed(1) : "?"}%）——物理上不可能单次按压比录像时间粒度还快（人类孤立占比观测上限 15.5%），生成器常批量写同刻按压对。已排除真人和弦手势（lc|rc|lr 同刻）与双击/快速连击（2026-11-13 张老师定：零对前后 250ms 内有其他点击即属连击节奏，真人超快连击手黎茜怡 30+ 盘由 100% 归零，生成器 360671 节拍 470ms 不受影响）；老 Clone 录像豁免本项`,
       cls: "bad",
     });
   }
