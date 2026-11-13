@@ -15926,12 +15926,14 @@ span.vs_btn--disabled:hover img {
    background 与 color（照 .lp_submit_btn 踩过的坑）。 */
 .vs_fight {
   margin: 0; /* 覆盖全站 button 的 margin-right:8px，否则按钮比图标左偏 4px */
-  /* 上下 9.5/8.5 不对称：legacy button line-height:30px 的字体度量让 CJK 墨迹
-     整体偏高约 1.5px，补差把墨迹垂直居中（2x 截图实测：上留白32/下留白35）。
-     text-indent 2px：letter-spacing 会在末字右侧多推 2px 参与居中，把墨迹挤向
-     左（实测「一决胜负」左偏 5 device px），首行右移 2px 找回视觉居中 */
-  padding: 9.5px 26px 8.5px;
-  text-indent: 2px;
+  /* 上下 8.5/9.5：legacy button line-height:30px 的字体度量让 CJK 墨迹整体
+     偏高约 1.5px，补差后几何居中；张老师定稿在几何居中基础上再上移 1px 视觉
+     居中（2026-11-13）。
+     text-indent 3px：letter-spacing 会在末字右侧多推 2px 参与居中，把墨迹挤
+     向左（实测「一决胜负」左偏 5 device px），先右移 2px 找回几何居中，再按
+     张老师定稿 +1px 视觉居中 */
+  padding: 8.5px 26px 9.5px;
+  text-indent: 3px;
   font-size: 16px;
   font-weight: 700;
   font-family: inherit;
