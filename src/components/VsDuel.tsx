@@ -420,8 +420,15 @@ export async function VsDuelView({
 
   // 对决记录落库（2026-11-11 张老师定：后台「今日胜负」KPI + /admin/vs 对决统计页）：
   // 每次有效访问一行，比分/结果为本次渲染快照；10 分钟窗口去重在函数内，失败静默。
-  // 旁观模式（record=false）不计入——KPI 口径＝双方本人访问
-  if (record) await recordVsDuel(uid1, uid2, total1, total2);
+  // 旁观模式（record=false）不计入——KPI 口径＝双方本人访问。
+  // 2026-11-13 张老师定口径：发起者＝**访问对决页的本人**（原实现记页面左玩家，
+  // 对方访问时把登录者放左边就会污染其「历史对决」；登录者放右边发起的对决则
+  // 记到对方名下漏掉）——user_id=histUid，target_id=另一方，比分按发起者视角翻转
+  if (record) {
+    const [initiator, target, is1, is2] =
+      histUid === uid1 ? [uid1, uid2, total1, total2] : [uid2, uid1, total2, total1];
+    await recordVsDuel(initiator, target, is1, is2);
+  }
 
   // 21:55 张老师：纪录板块头部「胜数」＝该方占优的纪录行数（mark=p1/p2，含独有局）
   const recWin1 = recRows.filter((r) => r.mark === "p1").length;

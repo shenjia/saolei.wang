@@ -226,7 +226,8 @@ export async function getPreAssessment(id1: number, id2: number): Promise<{ text
 }
 
 /** 历史对决（2026-11-11 14:38 张老师需求）：对决页分割线下「历史对决」板块——
- *  两玩家（uid1/uid2 任一方）发起的最近对决记录，格式参考后台对决统计
+ *  当前登录用户**发起**的最近对决记录（2026-11-13 口径：发起者＝访问对决页的
+ *  本人，落库见 recordVsDuel；调用方恒传 session.uid），格式参考后台对决统计
  *  （时间/挑战双方/比分/胜负结果），行 hover 出「回看」跳该行两玩家对决页；
  *  底部标准翻页控件（每页 10 条，由调用方传 page）。 */
 export interface VsHistRow {
@@ -500,7 +501,9 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
 // ---------- 对决记录落库（2026-11-11 张老师定） ----------
 // /vs/:id 页每次有效访问落一行 vs_duel（比分/结果为本次渲染快照）；
 // 同一 (发起者, 被挑战者) 10 分钟窗口去重——刷新/反复打开不重复计数。
-// 失败静默：统计缺行可接受，绝不能影响 PK 页渲染。
+// 2026-11-13 张老师定口径：发起者＝访问对决页的本人（uid 参数即 histUid），
+// 不再是页面左玩家——否则对方访问时登录者会被动入其「历史对决」、本人放
+// 右边访问的对决反而漏记。失败静默：统计缺行可接受，绝不能影响 PK 页渲染。
 
 const N = (v: unknown): number => Number(v ?? 0);
 
