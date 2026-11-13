@@ -16,11 +16,16 @@ import { gradeColor } from "@/lib/videoscore";
 
 /** 活跃雷达数据点：在实力雷达 RadarPoint 上加气泡具体数据（tipLabel/tipValue 可选，
  *  不传时走实力雷达原「超过 xx%」分支，两者共用同一组件互不影响）；
- *  labelValue=轴标签顶行活跃值（21:24 张老师定，不带单位取整） */
+ *  labelValue=轴标签顶行活跃值（21:24 张老师定，不带单位取整）；
+ *  beatRank=活跃玩家中本数据名次（2026-11-13 张老师定：≤3 时气泡第二行显示金色
+ *  「全网前N」，复用 .tip_first 金色）；beatScope=「超过 xx%」句尾人群词（缺省「玩家」，
+ *  活跃雷达传「活跃玩家」） */
 export type ActiveRadarPoint = RadarPoint & {
   tipLabel?: string;
   tipValue?: string;
   labelValue?: string;
+  beatRank?: number;
+  beatScope?: string;
 };
 
 /** 实力雷达 hover 数据行（2026-11-10 20:40 张老师定）：time 轴显示「初级Time 46.650」
@@ -222,13 +227,17 @@ export function RadarChart({ data, accent = "#66d9ef" }: { data: (RadarPoint | A
             const beatLine =
               tip.grade === "?" ? (
                 "暂无成绩"
+              ) : tip.beatRank !== undefined ? (
+                // 活跃雷达前三分支（2026-11-13 张老师定）：金色「全网前N」（N=活跃玩家
+                // 中本数据名次，并列同名次），复用 .tip_first 金色 #E6DB74
+                <span className="tip_first">全网前{tip.beatRank}</span>
               ) : tip.beatPct >= 100 ? (
                 // 2026-10-15 张老师定：「全网第一」整条金色（.tip_first，globals.css，与 vr_tip 统一）；
                 // 判定用真实排位（beatPct：无人更优），非绘图用的档位插值 percent
                 <span className="tip_first">全网第一</span>
               ) : (
                 <>
-                  超过 <em>{tip.beatPct}%</em> 的玩家
+                  超过 <em>{tip.beatPct}%</em> 的{tip.beatScope ?? "玩家"}
                 </>
               );
             if (!hasData) {

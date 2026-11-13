@@ -182,6 +182,10 @@ export async function getActiveRankOfUsers(
 //   ④ 该维数据 >0 → 至少画一格（percent≥ 首环 15）；
 //   ⑤ 其余按 名次/活跃玩家数 比率落档：p=(1−rank/N)×100，取 ≤p 的最大网格环。
 //   网格环与 RadarChart.tsx 的 GRID_RINGS 同源（升级序 15/35/50/60/70/80/90/100）。
+//
+// 气泡第二行（2026-11-13 二批 张老师定）：名次 ≤3 → 金色「全网前N」；否则
+//   「超过 xx% 的活跃玩家」，xx=(1−rank/N)×100——分母由全站用户改为活跃玩家数，
+//   旧「全网第一」分支被「全网前1」自然覆盖。
 
 /** 六维定义：key=快照列名，name=轴名（与活跃排行页表头一致）。
  *  轴序（2026-11-10 张老师定，二改）：顶轴起顺时针＝登录、评论、高级、中级、初级、观看
@@ -238,6 +242,11 @@ export interface ActiveRadarDataPoint {
   tipValue?: string;
   /** 轴标签顶行（2026-11-10 21:24 张老师定）：不带单位、显示换算后活跃值取整 */
   labelValue?: string;
+  /** 气泡第二行金色名次（2026-11-13 张老师定）：活跃玩家中本数据名次 ≤3 时置值，
+   *  RadarChart 显示金色「全网前N」（.tip_first）；否则走「超过 xx%」分支 */
+  beatRank?: number;
+  /** 「超过 xx%」句尾人群词（2026-11-13 张老师定）：活跃雷达恒「活跃玩家」 */
+  beatScope?: string;
 }
 
 /**
@@ -325,18 +334,12 @@ export async function getActiveRadar(
   ]);
   const totalActive = Math.max(Number(s?.n ?? 0), 1);
 
-  // 总人口（气泡百分位分母，2026-11-10 21:00 张老师定）：分母=全站正常状态用户数
-  //（与各排行榜上榜人口同源 user.status=0）——绘制档位与气泡百分位口径独立
-  const totalRows = await prisma.$queryRawUnsafe<{ t: bigint | number }[]>(
-    `SELECT COUNT(*) t FROM user WHERE status = 0`,
-  );
-  const total = Math.max(Number(totalRows[0]?.t ?? 0), 1);
-
   return RADAR_AXES.map(({ key, name }) => {
     const value = mine[key] ?? 0;
     if (!value) {
       // 无活跃值（不在快照或该列为 0）：回中心（percent=0，2026-11-13 张老师定）；
-      // 气泡仍显示具体数据「本周完成 0 盘」（20:02 张老师定 hover 一律具体数据）
+      // 气泡仍显示具体数据「本周完成 0 盘」（20:02 张老师定 hover 一律具体数据），
+      // 第二行「超过 0% 的活跃玩家」（0% 也恒显第二行，2026-11-10 20:41 张老师定）
       return {
         name,
         score: "无",
@@ -346,11 +349,11 @@ export async function getActiveRadar(
         tipLabel: TIP_LABEL[key],
         tipValue: `0 ${TIP_UNIT[key]}`,
         labelValue: "0",
+        beatScope: "活跃玩家",
       };
     }
     const st = statByKey.get(key)!;
     const worse = st.worse;
-    const ties = Math.max(st.ties, 1);
     // 活跃玩家中本数据名次（并列同名次，与榜单口径一致）
     const rank = worse + 1;
     // 画满判定：登录轴与第一同值（worse=0）即满；其余轴排名前 3（rank≤3）即满
@@ -366,22 +369,22 @@ export async function getActiveRadar(
         if (ring <= p) percent = ring;
       }
     }
-    // beatPct = 全站百分位（2026-11-10 21:00 张老师定）：分母=全站正常用户 total，
-    // 超过者 = 全部无活跃值用户（total − 活跃玩家 totalActive）+ 活跃玩家中严格更差者
-    //（totalActive − worse − ties）；并列者不算被超过。真独占榜首（worse=0 且 ties=1，
-    // 仅非登录轴）→ 100「全网第一」；登录轴恒真实百分位（7 天封顶并列第一者众）
-    const worseAll = total - totalActive + (totalActive - worse - ties);
-    const beatPct =
-      worse === 0 && ties === 1 && key !== "login" ? 100 : Math.floor((worseAll / total) * 100);
+    // 气泡第二行（2026-11-13 张老师定）：名次 ≤3 → 金色「全网前N」（beatRank 置值，
+    // RadarChart .tip_first 分支）；否则「超过 xx% 的活跃玩家」，xx=(1−rank/N)×100
+    // 取整（与绘图档位 p 同式；字面「排名/玩家数」与「超过」语义相反，按语义倒推）。
+    // 旧「全网第一」（worse=0 且 ties=1）分支由「全网前1」自然覆盖，全站 total 分母弃用
+    const beatPct = Math.floor((1 - rank / totalActive) * 100);
     return {
       name,
       score: String(value),
       percent,
       beatPct,
+      beatRank: rank <= 3 ? rank : undefined,
       grade: "F",
       tipLabel: TIP_LABEL[key],
       tipValue: `${value} ${TIP_UNIT[key]}`,
       labelValue: String(labelPts[key] ?? 0),
+      beatScope: "活跃玩家",
     };
   });
 }
