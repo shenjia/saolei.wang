@@ -17251,3 +17251,102 @@ body #header .nav li a.vs_new_hint,
 .mn_menu li a.vs_new_hint {
   color: #a6e22e;
 }
+
+/* ==================== 比赛页（2026-11-13 张老师需求） ====================
+   版式：#page.two_columns 双栏壳。左=比赛列表（一比赛一 .box）+ Pager；
+   右=玩家卡片 +「我的统计」（登录态）+「全网统计」。
+   标题色口径：只有进行中金色（张老师 13:12 定）；气泡一律朝上（2026-11-11 定）。 */
+
+#page.comp_page .comp_page_head { margin: 16px 8px 0; }
+#page.comp_page .comp_page_head h1 {
+  margin: 0;
+  color: #fdc61a;
+  font-size: 22px;
+  line-height: 30px;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* 比赛板块（复用 .box 盒型，压缩内边距适配信息密度） */
+#page.comp_page .comp_item { width: auto; margin: 0 8px 16px; padding: 16px 20px; }
+.comp_head { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+.comp_title_group { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.comp_name { margin: 0; font-size: 18px; line-height: 26px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.comp_name.on { color: #fdc61a; }
+.comp_dates { font-size: 12px; color: #939387; white-space: nowrap; }
+.comp_ctrl { display: flex; align-items: flex-end; gap: 14px; flex-shrink: 0; }
+
+/* 总奖金（比标题小两号 = 16px），hover 出分配方案气泡 */
+.comp_tipwrap { position: relative; display: inline-block; }
+.comp_prize { font-size: 16px; line-height: 26px; color: #b1b1a4; white-space: nowrap; padding-bottom: 9px; }
+.comp_prize b { color: #fdc61a; }
+
+/* 朝上气泡（hover 显示；箭头朝下指按钮） */
+.comp_tip {
+  position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
+  background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px;
+  padding: 6px 10px; font-size: 12px; line-height: 18px; color: #b1b1a4;
+  white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.15s;
+  pointer-events: none; z-index: 30; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+}
+.comp_tip::after {
+  content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
+  border: 5px solid transparent; border-top-color: #49483e;
+}
+.comp_tipwrap:hover .comp_tip { opacity: 1; visibility: visible; }
+.comp_tip b { color: #fdc61a; font-weight: 700; }
+.comp_btn_zone { display: inline-block; }
+
+/* 状态按钮三态（盒型对齐 vs_fight：9px 圆角 / 16px 粗体 / letter-spacing 2px） */
+.comp_btn {
+  display: inline-block; padding: 9.5px 26px 8.5px; text-indent: 2px;
+  font-size: 16px; font-weight: 700; letter-spacing: 2px; font-family: inherit;
+  border: 0; border-radius: 9px; cursor: pointer; text-shadow: none;
+}
+#page.comp_page a.comp_btn { text-decoration: none; }
+.comp_btn_join {
+  background: #a6e22e; color: #2b2a20;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px -8px rgba(166, 226, 46, 0.55);
+}
+.comp_btn_join:hover { background: #a6e22e; color: #2b2a20; filter: brightness(1.06); }
+.comp_btn_joined {
+  background: #3f5315; color: #a6e22e; border: 1px solid #5a751f;
+  padding: 8.5px 25px 7.5px; cursor: default;
+}
+.comp_btn_ended {
+  background: #4a493f; color: #b1b1a4; border: 1px solid #5c5b4f;
+  padding: 8.5px 25px 7.5px; cursor: default;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+/* 进行中「开始比赛」直接复用 .vs_fight（对决页同款黄渐变），补链接形态去下划线 */
+#page.comp_page a.comp_link { text-decoration: none; display: inline-block; }
+
+/* 纪录图表 */
+.comp_chart {
+  background: #2a2b25; border-radius: 6px; margin: 12px 0 0;
+  height: 216px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.comp_chart_empty { color: #75715e; font-size: 14px; }
+.comp_chart_svg { display: block; }
+
+/* 信息行：发起人 | 比赛标识 */
+.comp_meta { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
+.comp_meta b { color: #f8f8f2; font-weight: 700; }
+.comp_meta b.mono { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
+.comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
+.comp_rules { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: #b1b1a4; }
+
+/* 右栏：玩家卡片 / 我的统计 / 全网统计 */
+#page.comp_page .comp_card { width: auto; padding: 14px; }
+.comp_card_link { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.comp_avatar { width: 48px; height: 48px; border-radius: 6px; display: block; flex-shrink: 0; }
+.comp_card_info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.comp_card_name { color: #f8f8f2; font-size: 16px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.comp_card_uid { font-style: normal; color: #939387; font-size: 12px; }
+#page.comp_page a.comp_card_link:hover .comp_card_name { color: #a6e22e; }
+
+#page.comp_page .comp_stats { width: auto; padding: 14px; }
+.comp_stats h3 { margin: 0 0 8px; font-size: 15px; line-height: 22px; color: #fdc61a; }
+.comp_stats h3.green { color: #a6e22e; }
+.comp_stat_row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; line-height: 28px; color: #b1b1a4; }
+.comp_stat_row b { color: #f8f8f2; font-weight: 700; }
+#page.comp_page .gold { color: #fdc61a; }

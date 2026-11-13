@@ -32,6 +32,8 @@ const GROUPS: { title: string | null; items: NavItem[] }[] = [
       { href: "/admin/practice", label: "练习数据", icon: "🎮" },
       // 2026-11-11 张老师定：VS 板块对决统计（/vs/:id 落库 vs_duel）
       { href: "/admin/vs", label: "对决统计", icon: "⚔️" },
+      // 2026-11-13 张老师需求：比赛管理（发起/维护前台「比赛」页数据）
+      { href: "/admin/competitions", label: "比赛管理", icon: "🏁" },
     ],
   },
   {

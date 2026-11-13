@@ -1452,3 +1452,60 @@ model VsDuel {
   @@index([targetId, createTime]) // 被对决 Top10
   @@map("vs_duel")
 }
+
+// /connect 授权页 · 设备授权流会话（2026-11-12 元扫雷 device flow，张老师方案）
+// APP 调 start（X-Api-Key）→ 服务端生成高熵 code（只存 sha256，明文仅 start 响应
+// 出现一次）→ 用户在授权页点「允许」（status 0→1 + 写 uid）→ APP 每 5 秒轮询
+// poll：首次拉取时才签发 90 天 user_token（user_token 表仍只存 hash，token 明文
+// 仅 poll 响应出现一次）并原子置 status=3 防重放。短寿命（默认 10 分钟）防囤积；
+// client_ip 供授权页「异地发起」警告（IP 不一致时提示用户勿授权，防钓鱼转发 code）。
+model ConnectSession {
+  id          BigInt  @id @default(autoincrement()) @db.BigInt
+  codeHash    String  @unique @map("code_hash") @db.Char(64) // sha256(code) hex
+  appKey      String  @map("app_key") @db.VarChar(20) // connect-apps key（如 meta）
+  partner     String  @db.VarChar(50) // 发起 start 的 api_key.name，poll 校验同源
+  status      Int     @default(0) @db.TinyInt // 0=待授权 1=已同意 2=已拒绝 3=已消费
+  uid         BigInt? @db.BigInt // 同意用户 user.id（status≥1 时写入）
+  clientIp    String  @default("") @map("client_ip") @db.VarChar(64) // 发起方 IP（钓鱼警告用）
+  createTime  BigInt  @default(0) @map("create_time") @db.BigInt
+  expireTime  BigInt  @map("expire_time") @db.BigInt
+  consumeTime BigInt? @map("consume_time") @db.BigInt // poll 取走 token 时刻（审计）
+
+  @@index([expireTime]) // 过期行清扫/跳过
+  @@map("connect_session")
+}
+
+// 比赛（2026-11-13 张老师需求：前台「比赛」页 + 后台「比赛管理」发起/维护）。
+// 状态不落库，由起止时间对 now 推导：now<start=未开始 / start≤now<end=进行中 / now≥end=已结束。
+// code 比赛标识：创建时即生成 6 位数字+大小写字母随机码；前台开始前显示「待定」，开始后展示。
+// prize_plan 分配方案按后台表单原文逐行存（每行一名次，如「第一名 ¥600」），前台 hover 气泡逐行拼读。
+// 成绩采集（比赛局录像/成绩挂接、排名图表数据）为下一期口径，本期表不预设。
+model Competition {
+  id         BigInt  @id @default(autoincrement()) @db.BigInt
+  name       String  @db.VarChar(100) // 比赛全名
+  shortName  String  @map("short_name") @db.VarChar(10) // 简称（3-4 字）
+  startTime  BigInt  @map("start_time") @db.BigInt // 开始时刻 Unix 秒
+  endTime    BigInt  @map("end_time") @db.BigInt // 结束时刻 Unix 秒
+  rules      String  @db.VarChar(1000) // 比赛规则（纯文本）
+  creatorId  BigInt  @map("creator_id") @db.BigInt // 发起人 user.id（后台填写）
+  prizeTotal Int     @map("prize_total") // 总奖金（元，整数）
+  prizePlan  String  @map("prize_plan") @db.VarChar(500) // 分配方案原文（每行一名次）
+  code       String  @default("") @db.VarChar(10) // 比赛标识（创建时生成，前台开始前不展示）
+  createTime BigInt  @default(0) @map("create_time") @db.BigInt // 创建时刻 Unix 秒
+
+  @@index([startTime, endTime]) // 状态排序/筛选
+  @@map("competition")
+}
+
+// 比赛报名（一人一比赛一条，唯一索引防重；未开始阶段报名，进行中/已结束接口拒绝）。
+// 成绩/名次/奖金发放不在此表——下一期成绩采集口径定了再扩。
+model CompetitionEntry {
+  id            BigInt @id @default(autoincrement()) @db.BigInt
+  competitionId BigInt @map("competition_id") @db.BigInt
+  userId        BigInt @map("user_id") @db.BigInt
+  createTime    BigInt @default(0) @map("create_time") @db.BigInt // 报名时刻 Unix 秒
+
+  @@unique([competitionId, userId])
+  @@index([userId, createTime]) // 我的统计：参加比赛次数
+  @@map("competition_entry")
+}

@@ -27,6 +27,7 @@ import { rankEnter, rankLeave, safeRankOp, applyRankAreaChange } from "@/lib/use
 import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
 import { normalizeSiteUpdateDate } from "@/lib/site-updates";
+import { genUniqueCompCode } from "@/lib/competition";
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
 import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
@@ -84,6 +85,10 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "siteupdate.add": "manager",
   "siteupdate.edit": "manager",
   "siteupdate.delete": "manager",
+  // 比赛管理（2026-11-13 张老师需求：前台「比赛」页数据源）：发起/编辑/删除均管理员即可
+  "competition.add": "manager",
+  "competition.edit": "manager",
+  "competition.delete": "manager",
   "site.setMaintenance": "administrator",
   // API key 管理（2026-10-24 公开 API 体系）：签发/吊销都是超管权限——
   // key 即数据出口凭据，签发对象需张老师把关
@@ -101,6 +106,14 @@ const toId = (v: unknown): number | null => {
 };
 const toBool = (v: unknown): boolean => v === true || v === "1" || v === 1 || v === "true";
 const toText = (v: unknown, max: number): string => String(v ?? "").trim().slice(0, max);
+
+/** 「YYYY-MM-DD HH:mm」按北京时间解析为 Unix 秒（比赛起止时间用）；非法返回 null */
+const resolveCstMinute = (raw: unknown): number | null => {
+  const s = String(raw ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(s)) return null;
+  const t = Date.parse(`${s.replace(" ", "T")}:00+08:00`);
+  return Number.isNaN(t) ? null : Math.floor(t / 1000);
+};
 
 /** 登记日期 → 落库时间（2026-10-30 张老师：赞助/支出登记可选日期，默认今天）。
  *  不传或传今天 = 沿用当前时刻；历史日期 = 该日北京时间 12:00（前台按 Y-m-d 展示，
@@ -1584,6 +1597,103 @@ async function dispatch(
       if (!row) return { ok: false, error: "更新历史记录不存在" };
       await prisma.siteUpdate.delete({ where: { id: BigInt(id) } });
       return { ok: true, message: `已删除更新历史 #${id}（${row.date} ${row.content}）` };
+    }
+
+    // ---------- 比赛（2026-11-13 张老师需求：前台「比赛」页数据源）----------
+    // 发起：全名/简称/起止(北京时间 YYYY-MM-DD HH:mm)/规则/发起人ID/总奖金/分配方案；
+    // 比赛标识 code 创建时即生成（前台开始前显示「待定」）。
+
+    case "competition.add": {
+      const name = toText(p.name, 100);
+      const shortName = toText(p.shortName, 10);
+      const start = resolveCstMinute(p.startTime);
+      const end = resolveCstMinute(p.endTime);
+      const rules = toText(p.rules, 1000);
+      const creatorId = toId(p.creatorId);
+      const prizeTotal = Number(p.prizeTotal);
+      const prizePlan = toText(p.prizePlan, 500);
+      if (!name) return { ok: false, error: "参数错误：请填写比赛全名" };
+      if (!shortName) return { ok: false, error: "参数错误：请填写比赛简称（3-4 字）" };
+      if (start === null || end === null) {
+        return { ok: false, error: "参数错误：起止时间格式应为 YYYY-MM-DD HH:mm（北京时间）" };
+      }
+      if (end <= start) return { ok: false, error: "参数错误：结束时间必须晚于开始时间" };
+      if (!rules) return { ok: false, error: "参数错误：请填写比赛规则" };
+      if (!creatorId) return { ok: false, error: "参数错误：请填写发起人 ID" };
+      if (!Number.isInteger(prizeTotal) || prizeTotal < 0) {
+        return { ok: false, error: "参数错误：总奖金应为非负整数（元）" };
+      }
+      const creator = await prisma.user.findUnique({ where: { id: BigInt(creatorId) }, select: { id: true } });
+      if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
+      const code = await genUniqueCompCode();
+      await prisma.competition.create({
+        data: {
+          name,
+          shortName,
+          startTime: BigInt(start),
+          endTime: BigInt(end),
+          rules,
+          creatorId: BigInt(creatorId),
+          prizeTotal,
+          prizePlan,
+          code,
+          createTime: BigInt(now()),
+        },
+      });
+      return { ok: true, message: `已发起比赛「${name}」，比赛标识 ${code}` };
+    }
+
+    case "competition.edit": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少比赛 ID" };
+      const name = toText(p.name, 100);
+      const shortName = toText(p.shortName, 10);
+      const start = resolveCstMinute(p.startTime);
+      const end = resolveCstMinute(p.endTime);
+      const rules = toText(p.rules, 1000);
+      const creatorId = toId(p.creatorId);
+      const prizeTotal = Number(p.prizeTotal);
+      const prizePlan = toText(p.prizePlan, 500);
+      if (!name) return { ok: false, error: "参数错误：请填写比赛全名" };
+      if (!shortName) return { ok: false, error: "参数错误：请填写比赛简称（3-4 字）" };
+      if (start === null || end === null) {
+        return { ok: false, error: "参数错误：起止时间格式应为 YYYY-MM-DD HH:mm（北京时间）" };
+      }
+      if (end <= start) return { ok: false, error: "参数错误：结束时间必须晚于开始时间" };
+      if (!rules) return { ok: false, error: "参数错误：请填写比赛规则" };
+      if (!creatorId) return { ok: false, error: "参数错误：请填写发起人 ID" };
+      if (!Number.isInteger(prizeTotal) || prizeTotal < 0) {
+        return { ok: false, error: "参数错误：总奖金应为非负整数（元）" };
+      }
+      const row = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "比赛不存在" };
+      const creator = await prisma.user.findUnique({ where: { id: BigInt(creatorId) }, select: { id: true } });
+      if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
+      await prisma.competition.update({
+        where: { id: BigInt(id) },
+        data: {
+          name,
+          shortName,
+          startTime: BigInt(start),
+          endTime: BigInt(end),
+          rules,
+          creatorId: BigInt(creatorId),
+          prizeTotal,
+          prizePlan,
+        },
+      });
+      return { ok: true, message: `已修改比赛 #${id}「${name}」` };
+    }
+
+    case "competition.delete": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少比赛 ID" };
+      const row = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
+      if (!row) return { ok: false, error: "比赛不存在" };
+      // 报名记录一并清掉（无成绩/奖金挂接，级联安全）
+      await prisma.competitionEntry.deleteMany({ where: { competitionId: BigInt(id) } });
+      await prisma.competition.delete({ where: { id: BigInt(id) } });
+      return { ok: true, message: `已删除比赛 #${id}「${row.name}」（含报名记录）` };
     }
 
     // ---------- 头像审核（2026-09-24）----------
