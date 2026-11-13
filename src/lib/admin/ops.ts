@@ -89,6 +89,8 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "competition.add": "manager",
   "competition.edit": "manager",
   "competition.delete": "manager",
+  // 比赛批量收录像（2026-11-13 三期：清单行「收录像」弹窗输入多个录像 ID 一次性挂接）
+  "competition.addVideos": "manager",
   // 录像挂接比赛（2026-11-13 二期：录像管理手动将录像加入比赛）
   "video.competition": "manager",
   "site.setMaintenance": "administrator",
@@ -1742,6 +1744,50 @@ async function dispatch(
       await prisma.video.updateMany({ where: { competitionId: BigInt(id) }, data: { competitionId: null } });
       await prisma.competition.delete({ where: { id: BigInt(id) } });
       return { ok: true, message: `已删除比赛 #${id}「${row.name}」（含报名记录）` };
+    }
+
+    // 批量收录像（2026-11-13 三期张老师需求）：清单行「收录像」弹窗输入多个录像 ID
+    // 一次性挂接到本比赛。已挂其他比赛的静默转入（张老师原话口径）；本就在本比赛的不动
+    // 不写动态；变更的逐条写「玩家更新成绩」比赛动态（同单条 video.competition 口径）。
+    case "competition.addVideos": {
+      const compId = toId(p.id);
+      if (!compId) return { ok: false, error: "参数错误：缺少比赛 ID" };
+      const comp = await prisma.competition.findUnique({
+        where: { id: BigInt(compId) },
+        select: { id: true, name: true },
+      });
+      if (!comp) return { ok: false, error: `比赛 #${compId} 不存在` };
+      // 支持逗号/空格/换行等任意分隔，去重；单次上限 500 条防误粘大段文本
+      const ids = [
+        ...new Set(
+          String(p.ids ?? "")
+            .split(/[^\d]+/)
+            .filter(Boolean),
+        ),
+      ].slice(0, 500);
+      if (ids.length === 0) return { ok: false, error: "请输入至少一个录像 ID" };
+      const found = await prisma.video.findMany({
+        where: { id: { in: ids.map((s) => BigInt(s)) } },
+        select: { id: true, user: true, competitionId: true },
+      });
+      const missing = ids.filter((s) => !found.some((v) => v.id.toString() === s));
+      const compBig = BigInt(compId);
+      let moved = 0;
+      let already = 0;
+      for (const v of found) {
+        if (v.competitionId === compBig) {
+          already++;
+          continue;
+        }
+        await prisma.video.update({ where: { id: v.id }, data: { competitionId: compBig } });
+        if (v.competitionId) moved++;
+        await addCompEvent(compId, COMP_EVENT_SCORE, Number(v.user));
+      }
+      const parts: string[] = [`已收录 ${found.length - already} 条录像`];
+      if (moved) parts.push(`${moved} 条从其他比赛转入`);
+      if (already) parts.push(`${already} 条本就在本比赛`);
+      if (missing.length) parts.push(`未找到：${missing.join("、")}`);
+      return { ok: true, message: `「${comp.name}」${parts.join("，")}` };
     }
 
     // ---------- 头像审核（2026-09-24）----------

@@ -10,6 +10,7 @@ import { AdminAction } from "@/components/admin/AdminAction";
 import { RowEditButton } from "@/components/admin/RowEditButton";
 import { AdminCard } from "@/components/admin/Widgets";
 import { CompetitionForm } from "@/components/admin/CompetitionForm";
+import { CompAddVideosDialog } from "@/components/admin/CompAddVideosDialog";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "比赛管理 | 管理后台" };
@@ -154,6 +155,7 @@ export default async function AdminCompetitionsPage({
                           endSec: Number(r.endTime),
                         }}
                       />{" "}
+                      <CompAddVideosDialog competitionId={Number(r.id)} name={r.name} />{" "}
                       <AdminAction
                         op="competition.delete"
                         params={{ id: r.id.toString() }}
