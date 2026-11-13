@@ -37,6 +37,37 @@ function parseIncludeLevels(v: unknown): string {
   const picked = VALID.filter((k) => raw.map((s) => s.trim()).includes(k));
   return (picked.length ? picked : VALID).join(",");
 }
+
+/** 成绩计算方式落库校验（张老师 2026-11-13 四期）：返回 [mode, configJSON] 或 null=非法。
+ *  sum_topn={"beg":n,"int":n,"exp":n}（n 0-99，至少一个>0）；target_diff={"target":秒>0}；
+ *  mode=""（未配置）合法。 */
+function parseScoreConf(
+  v: unknown
+): { mode: string; config: string } | { error: string } | null {
+  const p = (v ?? {}) as Record<string, unknown>;
+  const mode = String(p.scoreMode ?? "");
+  const raw = p.scoreConfig;
+  if (!mode) return { mode: "", config: "" };
+  if (mode === "sum_topn") {
+    const o = (raw ?? {}) as Record<string, unknown>;
+    const conf: Record<string, number> = {};
+    let any = false;
+    for (const lv of ["beg", "int", "exp"]) {
+      const n = Number(o[lv]);
+      if (!Number.isInteger(n) || n < 0 || n > 99) return { error: "取局数应为 0-99 整数" };
+      conf[lv] = n;
+      if (n > 0) any = true;
+    }
+    if (!any) return { error: "成绩加总至少有一个级别取局数大于 0" };
+    return { mode, config: JSON.stringify(conf) };
+  }
+  if (mode === "target_diff") {
+    const t = Number((raw as Record<string, unknown>)?.target);
+    if (!Number.isFinite(t) || t <= 0) return { error: "目标成绩应为正数（秒）" };
+    return { mode, config: JSON.stringify({ target: t }) };
+  }
+  return { error: "未知的成绩计算方式" };
+}
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
 import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
@@ -1683,6 +1714,8 @@ async function dispatch(
       }
       const creator = await prisma.user.findUnique({ where: { id: BigInt(creatorId) }, select: { id: true } });
       if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
+      const sc = parseScoreConf(p);
+      if (sc && "error" in sc) return { ok: false, error: `参数错误：${sc.error}` };
       const code = await genUniqueCompCode();
       const created = await prisma.competition.create({
         data: {
@@ -1696,6 +1729,8 @@ async function dispatch(
           prizePlan,
           code,
           includeLevels: parseIncludeLevels(p.levels),
+          scoreMode: sc?.mode ?? "",
+          scoreConfig: sc?.config ?? "",
           createTime: BigInt(now()),
         },
       });
@@ -1730,6 +1765,8 @@ async function dispatch(
       if (!row) return { ok: false, error: "比赛不存在" };
       const creator = await prisma.user.findUnique({ where: { id: BigInt(creatorId) }, select: { id: true } });
       if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
+      const scEdit = parseScoreConf(p);
+      if (scEdit && "error" in scEdit) return { ok: false, error: `参数错误：${scEdit.error}` };
       await prisma.competition.update({
         where: { id: BigInt(id) },
         data: {
@@ -1742,6 +1779,8 @@ async function dispatch(
           prizeTotal,
           prizePlan,
           includeLevels: parseIncludeLevels(p.levels),
+          scoreMode: scEdit?.mode ?? "",
+          scoreConfig: scEdit?.config ?? "",
         },
       });
       return { ok: true, message: `已修改比赛 #${id}「${name}」` };

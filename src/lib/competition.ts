@@ -11,7 +11,7 @@
 import { prisma } from "@/lib/db";
 import { getVideosByIds, type VideoListItem } from "@/lib/queries";
 import { dualTitles } from "@/lib/title-system";
-import { LEVELS, type Level } from "@/lib/config";
+import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
 
 export type CompetitionStatus = "upcoming" | "active" | "ended";
 
@@ -605,4 +605,119 @@ export async function getCompetitionDetail(
     creatorTitle: pair?.m ?? "",
     creatorClassic: pair?.c ?? null,
   };
+}
+
+// ---------- 成绩计算（2026-11-13 四期 张老师定） ----------
+//
+// 计算方式可扩展：score_mode + score_config(JSON) 落库，新增方式加分支即可。
+// 口径（张老师 22:47 三问定）：
+// · sum_topn 成绩加总：玩家成绩 = 各收录级别最好 N 局 time(real_time) 加总，越小越好；
+//   某级别不足 N 局按已有局数计；config={"beg":2,"int":2,"exp":2}（n=0 该级别不计）。
+// · target_diff 目标求差：config={"target":8.88}（秒），玩家成绩 = 所有有效局中
+//   |time − target| 最小一局的误差（ms），越小越好（打靶赛）。
+// · 成绩只认 status!=0 且 no_record=0 且 real_time>0 的录像（同前台排名口径）。
+
+export type CompScoreMode = "" | "sum_topn" | "target_diff";
+
+export const SCORE_MODE_LABELS: Record<string, string> = {
+  "": "未配置（暂不计成绩）",
+  sum_topn: "成绩加总（各级别最好 N 局 time 求和）",
+  target_diff: "目标成绩求差（与指定 time 的最小误差）",
+};
+
+/** 解析 score_config，非法/与 mode 不符回退 null（展示与计算共用入口） */
+export function parseScoreConfig(mode: string, cfg: string): Record<string, number> | null {
+  if (!mode) return null;
+  try {
+    const o = JSON.parse(cfg) as Record<string, unknown>;
+    if (typeof o !== "object" || o === null) return null;
+    if (mode === "sum_topn") {
+      const out: Record<string, number> = {};
+      for (const lv of ["beg", "int", "exp"]) {
+        const n = Number(o[lv]);
+        out[lv] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+      }
+      return out;
+    }
+    if (mode === "target_diff") {
+      const t = Number(o.target);
+      return Number.isFinite(t) && t > 0 ? { target: t } : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 计算方式人话描述（后台基本信息块/表单回显用） */
+export function scoreModeDesc(mode: string, cfg: string): string {
+  const c = parseScoreConfig(mode, cfg);
+  if (mode === "sum_topn" && c) {
+    const parts = (["beg", "int", "exp"] as const)
+      .filter((lv) => c[lv] > 0)
+      .map((lv) => `${LEVEL_NAMES[lv]}${c[lv]}局`);
+    return `成绩加总：${parts.length ? parts.join(" + ") : "未配置级别"}`;
+  }
+  if (mode === "target_diff" && c) {
+    return `目标求差：time=${c.target}，取误差最小一局`;
+  }
+  return SCORE_MODE_LABELS[mode] ?? "未配置";
+}
+
+export interface CompScoreVideo {
+  user: bigint | number;
+  level: string;
+  realTime: number;
+  noRecord: boolean;
+}
+
+/** 批量计算玩家成绩：Map<uid, score(ms)>，无有效录像的玩家不在 Map。均为越小越好。 */
+export function computePlayerScores(
+  mode: string,
+  cfg: string,
+  vids: CompScoreVideo[]
+): Map<number, number> {
+  const conf = parseScoreConfig(mode, cfg);
+  const out = new Map<number, number>();
+  if (!conf) return out;
+  const valid = vids.filter((v) => v.realTime > 0 && !v.noRecord);
+  if (mode === "sum_topn") {
+    // 各级别最好 N 局 time 加总（跨级别累加）
+    const byUserLevel = new Map<number, Map<string, number[]>>();
+    for (const v of valid) {
+      const n = conf[v.level] ?? 0;
+      if (n <= 0) continue;
+      const uid = Number(v.user);
+      if (!byUserLevel.has(uid)) byUserLevel.set(uid, new Map());
+      const m = byUserLevel.get(uid)!;
+      if (!m.has(v.level)) m.set(v.level, []);
+      m.get(v.level)!.push(v.realTime);
+    }
+    for (const [uid, levels] of byUserLevel) {
+      let sum = 0;
+      for (const [lv, times] of levels) {
+        times.sort((a, b) => a - b);
+        sum += times.slice(0, conf[lv] ?? 0).reduce((a, b) => a + b, 0);
+      }
+      out.set(uid, sum);
+    }
+    return out;
+  }
+  if (mode === "target_diff") {
+    const targetMs = conf.target * 1000;
+    for (const v of valid) {
+      const uid = Number(v.user);
+      const err = Math.abs(v.realTime - targetMs);
+      if (!out.has(uid) || err < out.get(uid)!) out.set(uid, err);
+    }
+    return out;
+  }
+  return out;
+}
+
+/** 成绩展示（ms → 秒，去尾零；sum_topn 与 target_diff 共用「越小越好」语义） */
+export function fmtScoreMs(ms: number): string {
+  const s = ms / 1000;
+  const str = s.toFixed(3).replace(/\.?0+$/, "");
+  return `${str}s`;
 }

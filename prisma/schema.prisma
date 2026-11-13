@@ -1506,6 +1506,8 @@ model Competition {
   prizePlan  String  @map("prize_plan") @db.VarChar(500) // 分配方案原文（每行一名次）
   code       String  @default("") @db.VarChar(10) // 比赛标识（创建时生成，前台开始前不展示）
   includeLevels String @default("beg,int,exp") @map("include_levels") @db.VarChar(20) // 收录录像级别（逗号分隔 beg/int/exp，可多选；张老师 2026-11-13）
+  scoreMode String @default("") @map("score_mode") @db.VarChar(20) // 成绩计算方式：""=未配置 / sum_topn=成绩加总（各级别最好N局） / target_diff=目标成绩求差（张老师 2026-11-13，后续可扩）
+  scoreConfig String @default("") @map("score_config") @db.VarChar(200) // 计算方式参数 JSON：sum_topn={"beg":2,"int":2,"exp":2}；target_diff={"target":8.88}（time，秒）
   createTime BigInt  @default(0) @map("create_time") @db.BigInt // 创建时刻 Unix 秒
 
   @@index([startTime, endTime]) // 状态排序/筛选

@@ -21,6 +21,8 @@ export interface CompFormRow {
   prizeTotal: number;
   prizePlan: string;
   levels: string[]; // 收录录像级别（beg/int/exp 子集）
+  scoreMode: string; // ""=未配置 / sum_topn / target_diff
+  scoreConf: Record<string, number> | null; // 解析后的计算参数（未配置 null）
 }
 
 /** 库里 Unix 秒 → datetime-local input 值（北京时间 YYYY-MM-DDTHH:mm） */
@@ -39,6 +41,10 @@ export function CompetitionForm() {
   const [values, setValues] = useState({ ...EMPTY });
   // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
   const [levels, setLevels] = useState<string[]>([...ALL_LEVELS]);
+  // 成绩计算方式（张老师 2026-11-13 四期：创建/编辑时配置，后续可扩更多方式）
+  const [scoreMode, setScoreMode] = useState("");
+  const [topn, setTopn] = useState({ beg: "1", int: "1", exp: "1" });
+  const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<CompFormRow | null>(null);
 
@@ -66,6 +72,13 @@ export function CompetitionForm() {
         prizePlan: d.prizePlan,
       });
       setLevels(d.levels.length ? [...ALL_LEVELS].filter((a) => d.levels.includes(a)) : [...ALL_LEVELS]);
+      setScoreMode(d.scoreMode ?? "");
+      setTopn({
+        beg: String(d.scoreConf?.beg ?? 1),
+        int: String(d.scoreConf?.int ?? 1),
+        exp: String(d.scoreConf?.exp ?? 1),
+      });
+      setTarget(d.scoreConf?.target != null ? String(d.scoreConf.target) : "");
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
     window.addEventListener("sl-comp-edit", onEdit);
@@ -76,6 +89,9 @@ export function CompetitionForm() {
     setEditing(null);
     setValues({ ...EMPTY });
     setLevels([...ALL_LEVELS]);
+    setScoreMode("");
+    setTopn({ beg: "1", int: "1", exp: "1" });
+    setTarget("");
   };
 
   const submit = async () => {
@@ -87,6 +103,24 @@ export function CompetitionForm() {
     if (!/^\d+$/.test(values.creatorId.trim())) return toast("请填写发起人 ID（纯数字 UID）", "error");
     if (!/^\d+$/.test(values.prizeTotal.trim())) return toast("总奖金应为非负整数（元）", "error");
     if (levels.length === 0) return toast("请至少勾选一个收录录像级别", "error");
+    // 成绩计算方式参数校验（null=配置非法，""=未配置）
+    let scoreConfig = "";
+    if (scoreMode === "sum_topn") {
+      const conf: Record<string, number> = {};
+      let any = false;
+      for (const lv of ALL_LEVELS) {
+        const v = topn[lv].trim();
+        if (!/^\d+$/.test(v) || parseInt(v, 10) > 99) return toast(`${LEVEL_LABELS[lv]}取局数应为 0-99 整数`, "error");
+        conf[lv] = parseInt(v, 10);
+        if (conf[lv] > 0) any = true;
+      }
+      if (!any) return toast("成绩加总至少有一个级别取局数大于 0", "error");
+      scoreConfig = JSON.stringify(conf);
+    } else if (scoreMode === "target_diff") {
+      const n = Number(target.trim());
+      if (!target.trim() || !Number.isFinite(n) || n <= 0) return toast("目标成绩应为正数（秒，如 8.88）", "error");
+      scoreConfig = JSON.stringify({ target: n });
+    }
 
     setBusy(true);
     try {
@@ -107,6 +141,8 @@ export function CompetitionForm() {
                 prizeTotal: values.prizeTotal,
                 prizePlan: values.prizePlan,
                 levels,
+                scoreMode,
+                scoreConfig,
               }
             : {
                 op: "competition.add",
@@ -119,6 +155,8 @@ export function CompetitionForm() {
                 prizeTotal: values.prizeTotal,
                 prizePlan: values.prizePlan,
                 levels,
+                scoreMode,
+                scoreConfig,
               }
         ),
       });
@@ -238,6 +276,52 @@ export function CompetitionForm() {
             </label>
           ))}
         </div>
+      </div>
+
+      {/* 成绩计算方式（张老师 2026-11-13 四期：创建/编辑时配置，可扩展更多方式）——
+          决定玩家列表「当前成绩」怎么算：sum_topn=各级别最好 N 局 time 加总；
+          target_diff=与指定 time 的最小误差（越小越好） */}
+      <div style={labelStyle}>
+        成绩计算方式（决定玩家「当前成绩」怎么算，均为越小越好）
+        <select
+          className="admin_input"
+          value={scoreMode}
+          onChange={(e) => setScoreMode(e.target.value)}
+        >
+          <option value="">未配置（暂不计成绩）</option>
+          <option value="sum_topn">成绩加总（各级别最好 N 局 time 求和）</option>
+          <option value="target_diff">目标成绩求差（与指定 time 的最小误差）</option>
+        </select>
+        {scoreMode === "sum_topn" && (
+          <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+            {ALL_LEVELS.map((lv) => (
+              <label key={lv} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2" }}>
+                {LEVEL_LABELS[lv]}
+                <input
+                  className="admin_input"
+                  style={{ width: 64 }}
+                  inputMode="numeric"
+                  value={topn[lv]}
+                  onChange={(e) => setTopn((s) => ({ ...s, [lv]: e.target.value }))}
+                />
+                局
+              </label>
+            ))}
+          </div>
+        )}
+        {scoreMode === "target_diff" && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2", marginTop: 4 }}>
+            目标 time（秒）
+            <input
+              className="admin_input"
+              style={{ width: 100 }}
+              inputMode="decimal"
+              placeholder="如：8.88"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+            />
+          </label>
+        )}
       </div>
 
       <label style={labelStyle}>

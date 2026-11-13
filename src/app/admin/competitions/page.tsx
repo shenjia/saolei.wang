@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { compStatus } from "@/lib/competition";
+import { compStatus, parseScoreConfig } from "@/lib/competition";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { RowEditButton } from "@/components/admin/RowEditButton";
 import { AdminCard } from "@/components/admin/Widgets";
@@ -124,8 +124,10 @@ export default async function AdminCompetitionsPage({
                   <tr key={r.id.toString()}>
                     <td className="c sub">{r.id.toString()}</td>
                     <td>
-                      {r.name}
-                      {/* 状态并入全名括号（张老师 11-13：不再单列），文字保留状态配色 */}
+                      <Link className="link" href={`/admin/competitions/${r.id}`}>
+                        {r.name}
+                      </Link>
+                      {/* 状态并入全名括号（张老师 11-13：不再单列），文字保留状态配色；点全名进后台详情页（11-13 四期） */}
                       <span style={{ color: STATUS_COLOR[stKey] }}>（{STATUS_LABEL[stKey]}）</span>
                     </td>
                     <td className="sub">{r.shortName}</td>
@@ -152,6 +154,8 @@ export default async function AdminCompetitionsPage({
                           prizeTotal: r.prizeTotal,
                           prizePlan: r.prizePlan,
                           levels: r.includeLevels.split(","),
+                          scoreMode: r.scoreMode,
+                          scoreConf: parseScoreConfig(r.scoreMode, r.scoreConfig),
                           startSec: Number(r.startTime),
                           endSec: Number(r.endTime),
                         }}
