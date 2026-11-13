@@ -33,10 +33,10 @@ const SITE_LINKS: { href: string; label: string; loginOnly?: boolean }[] = [
   { href: "/", label: "首页" },
   { href: "/ranking", label: "排行" },
   { href: "/video", label: "录像" },
-  { href: "/bbs", label: "论坛" },
-  { href: "/page/guide", label: "教程" },
   { href: "/online", label: "练习" },
   { href: "/vs", label: "对决", loginOnly: true },
+  { href: "/bbs", label: "论坛" },
+  { href: "/page/guide", label: "教程" },
   { href: "/titles", label: "" }, // 军衔/称号（SystemText 动态）
   { href: "/records", label: "纪录" },
   { href: "/page/download", label: "下载" },

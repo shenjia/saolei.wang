@@ -128,12 +128,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link prefetch={false} href="/video">录像</Link>
                 </li>
                 <li>
-                  <Link prefetch={false} href="/bbs">论坛</Link>
-                </li>
-                <li>
-                  <Link prefetch={false} href="/page/guide">教程</Link>
-                </li>
-                <li>
                   <Link prefetch={false} href="/online">练习</Link>
                 </li>
                 {/* 对决入口（2026-11-11）：登录态才显示（/vs 页本身有登录门槛）。
@@ -145,6 +139,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                     <VsNavLink />
                   </li>
                 )}
+                <li>
+                  <Link prefetch={false} href="/bbs">论坛</Link>
+                </li>
+                <li>
+                  <Link prefetch={false} href="/page/guide">教程</Link>
+                </li>
                 <li>
                   <Link prefetch={false} href="/titles">
                     <SystemText />
