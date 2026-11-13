@@ -1298,7 +1298,8 @@ export interface PlayResult {
   /** 有效点击（Ce = Cl − wasted） */
   ce: number;
   /** 鼠标行程（棋盘 1x 像素，mousemove 累加）——回放数据面板 Path 行由共享件
-   *  statsRows 按 16px/格折算成格数展示（2026-11-09 张老师定，CPath 行已撤）；
+   *  statsRows 直出像素数展示（2026-11-13 张老师定：与 flop player PATH 一致，
+   *  2026-11-09 折格口径已废，CPath 行更早已撤）；
    *  「我的评级」路线规划轴 2026-10-29 起改用 cp（跨格次数） */
   path: number;
   /** 跨格次数：轨迹跨格线次数（0.5px 光栅化，replay-core crossings 同口径） */
