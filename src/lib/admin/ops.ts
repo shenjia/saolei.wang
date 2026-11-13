@@ -46,7 +46,15 @@ function parseScoreConf(
 ): { mode: string; config: string } | { error: string } | null {
   const p = (v ?? {}) as Record<string, unknown>;
   const mode = String(p.scoreMode ?? "");
-  const raw = p.scoreConfig;
+  // 客户端传 JSON 字符串（JSON.stringify 结果），服务端测试脚本可能直接传对象——两种形态都接
+  let raw: unknown = p.scoreConfig;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return { error: "成绩计算参数 JSON 非法" };
+    }
+  }
   if (!mode) return { mode: "", config: "" };
   if (mode === "sum_topn") {
     const o = (raw ?? {}) as Record<string, unknown>;
