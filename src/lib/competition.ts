@@ -10,6 +10,8 @@
 
 import { prisma } from "@/lib/db";
 import { getVideosByIds, type VideoListItem } from "@/lib/queries";
+import { dualTitles } from "@/lib/title-system";
+import { LEVELS, type Level } from "@/lib/config";
 
 export type CompetitionStatus = "upcoming" | "active" | "ended";
 
@@ -114,6 +116,12 @@ export interface CompRow {
   code: string;
   entryCount: number;
   joined: boolean; // 当前登录用户是否已报名
+  levels: Level[]; // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
+  creatorId: number; // 发起人（图表下方玩家卡片式名字展示：性别+军衔）
+  creatorEnglishName: string;
+  creatorSex: number;
+  creatorTitle: string; // 军衔制称号
+  creatorClassic: { name: string; color: string } | null; // 旧版称号备选
 }
 
 export interface CompPage {
@@ -150,15 +158,48 @@ export async function getCompetitionPage(page: number, uid?: number, pageSize?: 
     mineSet = new Set(mine.map((m) => m.competitionId.toString()));
   }
 
-  // 发起人姓名
+  // 发起人：姓名/英文名/性别 + 称号评定数据（user_scores 与 user 同主键；
+  // ranked=当前是否在榜即 user.status===0，与查询线口径一致）
   const creatorIds = [...new Set(all.map((c) => c.creatorId.toString()))];
-  const creators = creatorIds.length
-    ? await prisma.user.findMany({
-        where: { id: { in: creatorIds.map((s) => BigInt(s)) } },
-        select: { id: true, chineseName: true },
-      })
-    : [];
+  const creatorBigs = creatorIds.map((s) => BigInt(s));
+  const [creators, scoreRows] = creatorIds.length
+    ? await Promise.all([
+        prisma.user.findMany({
+          where: { id: { in: creatorBigs } },
+          select: { id: true, chineseName: true, englishName: true, sex: true, status: true },
+        }),
+        prisma.userScores.findMany({
+          where: { id: { in: creatorBigs } },
+          select: { id: true, expTime: true },
+        }),
+      ])
+    : [[], []];
   const nameMap = new Map(creators.map((u) => [u.id.toString(), u.chineseName]));
+  const creatorMap = new Map(creators.map((u) => [u.id.toString(), u]));
+  const expMap = new Map(scoreRows.map((s) => [s.id.toString(), s.expTime ?? 0]));
+  // 双体系称号一次评定（dualTitles 内部取一次雷界阈值；行序与 creators 对齐）
+  const titlePairs = creators.length
+    ? await dualTitles(
+        creators.map((u) => ({
+          userId: Number(u.id),
+          expTime: expMap.get(u.id.toString()) ?? 0,
+          ranked: u.status === 0,
+          sex: u.sex,
+        })),
+      )
+    : [];
+  const titleMap = new Map(creators.map((u, i) => [u.id.toString(), titlePairs[i]]));
+
+  // 收录级别解析（容错：非法键剔除；全空回退全级别）
+  const parseLevels = (raw: string): Level[] => {
+    const set = new Set(
+      raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s): s is Level => (LEVELS as readonly string[]).includes(s)),
+    );
+    return set.size ? LEVELS.filter((l) => set.has(l)) : [...LEVELS];
+  };
 
   const rows: CompRow[] = all.map((c) => {
     const cid = c.id.toString();
@@ -176,6 +217,12 @@ export async function getCompetitionPage(page: number, uid?: number, pageSize?: 
       code: c.code,
       entryCount: countMap.get(cid) ?? 0,
       joined: mineSet.has(cid),
+      levels: parseLevels(c.includeLevels),
+      creatorId: Number(c.creatorId),
+      creatorEnglishName: creatorMap.get(c.creatorId.toString())?.englishName ?? "",
+      creatorSex: creatorMap.get(c.creatorId.toString())?.sex ?? 1,
+      creatorTitle: titleMap.get(c.creatorId.toString())?.m ?? "",
+      creatorClassic: titleMap.get(c.creatorId.toString())?.c ?? null,
     };
   });
 
@@ -507,9 +554,13 @@ export async function getCompetitionDetail(
   const c = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
   if (!c) return null;
   const now = Math.floor(Date.now() / 1000);
-  const [entryCount, creator, joined] = await Promise.all([
+  const [entryCount, creator, scoreRow, joined] = await Promise.all([
     prisma.competitionEntry.count({ where: { competitionId: c.id } }),
-    prisma.user.findUnique({ where: { id: c.creatorId }, select: { chineseName: true } }),
+    prisma.user.findUnique({
+      where: { id: c.creatorId },
+      select: { chineseName: true, englishName: true, sex: true, status: true },
+    }),
+    prisma.userScores.findUnique({ where: { id: c.creatorId }, select: { expTime: true } }),
     uid
       ? prisma.competitionEntry.findFirst({
           where: { competitionId: c.id, userId: BigInt(uid) },
@@ -517,6 +568,22 @@ export async function getCompetitionDetail(
         })
       : Promise.resolve(null),
   ]);
+  // 双体系称号评定（与列表同口径：ranked=当前在榜）
+  const [pair] = await dualTitles([
+    {
+      userId: Number(c.creatorId),
+      expTime: scoreRow?.expTime ?? 0,
+      ranked: creator?.status === 0,
+      sex: creator?.sex ?? 1,
+    },
+  ]);
+  // 收录级别解析（容错同列表：非法键剔除，全空回退全级别）
+  const levelSet = new Set(
+    c.includeLevels
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s): s is Level => (LEVELS as readonly string[]).includes(s)),
+  );
   return {
     id: c.id.toString(),
     name: c.name,
@@ -531,5 +598,11 @@ export async function getCompetitionDetail(
     code: c.code,
     entryCount,
     joined: !!joined,
+    levels: levelSet.size ? LEVELS.filter((l) => levelSet.has(l)) : [...LEVELS],
+    creatorId: Number(c.creatorId),
+    creatorEnglishName: creator?.englishName ?? "",
+    creatorSex: creator?.sex ?? 1,
+    creatorTitle: pair?.m ?? "",
+    creatorClassic: pair?.c ?? null,
   };
 }

@@ -28,6 +28,15 @@ import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
 import { normalizeSiteUpdateDate } from "@/lib/site-updates";
 import { genUniqueCompCode, addCompEvent, COMP_EVENT_JOIN_OPEN, COMP_EVENT_SCORE } from "@/lib/competition";
+
+/** 收录录像级别参数解析（张老师 2026-11-13：可多选，默认初中高都有）。
+ *  接受数组或逗号分隔串；非法键剔除，全空回退全级别。返回落库串（逗号分隔） */
+function parseIncludeLevels(v: unknown): string {
+  const VALID = ["beg", "int", "exp"];
+  const raw = Array.isArray(v) ? v.map(String) : String(v ?? "").split(",");
+  const picked = VALID.filter((k) => raw.map((s) => s.trim()).includes(k));
+  return (picked.length ? picked : VALID).join(",");
+}
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
 import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
@@ -1097,7 +1106,7 @@ async function dispatch(
       }
       const video = await prisma.video.findUnique({
         where: { id: BigInt(id) },
-        select: { id: true, user: true, competitionId: true },
+        select: { id: true, user: true, competitionId: true, level: true },
       });
       if (!video) return { ok: false, error: "录像不存在" };
       if (rawComp === 0) {
@@ -1107,9 +1116,13 @@ async function dispatch(
       }
       const comp = await prisma.competition.findUnique({
         where: { id: BigInt(rawComp) },
-        select: { id: true, name: true },
+        select: { id: true, name: true, includeLevels: true },
       });
       if (!comp) return { ok: false, error: `比赛 #${rawComp} 不存在` };
+      // 收录级别校验（张老师 2026-11-13：比赛设定可收录的录像级别，级别不符拒绝挂接）
+      if (!comp.includeLevels.split(",").map((s) => s.trim()).includes(video.level)) {
+        return { ok: false, error: `录像 #${id} 级别不符：「${comp.name}」只收录 ${comp.includeLevels.split(",").map((s) => ({ beg: "初级", int: "中级", exp: "高级" })[s] ?? s).join("、")} 录像` };
+      }
       const changed = video.competitionId !== BigInt(rawComp);
       await prisma.video.update({
         where: { id: BigInt(id) },
@@ -1682,6 +1695,7 @@ async function dispatch(
           prizeTotal,
           prizePlan,
           code,
+          includeLevels: parseIncludeLevels(p.levels),
           createTime: BigInt(now()),
         },
       });
@@ -1727,6 +1741,7 @@ async function dispatch(
           creatorId: BigInt(creatorId),
           prizeTotal,
           prizePlan,
+          includeLevels: parseIncludeLevels(p.levels),
         },
       });
       return { ok: true, message: `已修改比赛 #${id}「${name}」` };
@@ -1754,7 +1769,7 @@ async function dispatch(
       if (!compId) return { ok: false, error: "参数错误：缺少比赛 ID" };
       const comp = await prisma.competition.findUnique({
         where: { id: BigInt(compId) },
-        select: { id: true, name: true },
+        select: { id: true, name: true, includeLevels: true },
       });
       if (!comp) return { ok: false, error: `比赛 #${compId} 不存在` };
       // 支持逗号/空格/换行等任意分隔，去重；单次上限 500 条防误粘大段文本
@@ -1768,13 +1783,17 @@ async function dispatch(
       if (ids.length === 0) return { ok: false, error: "请输入至少一个录像 ID" };
       const found = await prisma.video.findMany({
         where: { id: { in: ids.map((s) => BigInt(s)) } },
-        select: { id: true, user: true, competitionId: true },
+        select: { id: true, user: true, competitionId: true, level: true },
       });
       const missing = ids.filter((s) => !found.some((v) => v.id.toString() === s));
+      // 收录级别过滤（张老师 2026-11-13：比赛设定可收录的录像级别，级别不符不收录）
+      const levelSet = new Set(comp.includeLevels.split(",").map((s) => s.trim()));
+      const levelRejected = found.filter((v) => !levelSet.has(v.level));
+      const matched = found.filter((v) => levelSet.has(v.level));
       const compBig = BigInt(compId);
       let moved = 0;
       let already = 0;
-      for (const v of found) {
+      for (const v of matched) {
         if (v.competitionId === compBig) {
           already++;
           continue;
@@ -1783,9 +1802,10 @@ async function dispatch(
         if (v.competitionId) moved++;
         await addCompEvent(compId, COMP_EVENT_SCORE, Number(v.user));
       }
-      const parts: string[] = [`已收录 ${found.length - already} 条录像`];
+      const parts: string[] = [`已收录 ${matched.length - already} 条录像`];
       if (moved) parts.push(`${moved} 条从其他比赛转入`);
       if (already) parts.push(`${already} 条本就在本比赛`);
+      if (levelRejected.length) parts.push(`级别不符未收录：${levelRejected.map((v) => v.id.toString()).join("、")}`);
       if (missing.length) parts.push(`未找到：${missing.join("、")}`);
       return { ok: true, message: `「${comp.name}」${parts.join("，")}` };
     }

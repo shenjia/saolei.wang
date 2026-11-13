@@ -151,6 +151,7 @@ export default async function AdminCompetitionsPage({
                           creatorId: Number(r.creatorId),
                           prizeTotal: r.prizeTotal,
                           prizePlan: r.prizePlan,
+                          levels: r.includeLevels.split(","),
                           startSec: Number(r.startTime),
                           endSec: Number(r.endTime),
                         }}

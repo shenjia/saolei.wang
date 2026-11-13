@@ -20,6 +20,7 @@ export interface CompFormRow {
   creatorId: number;
   prizeTotal: number;
   prizePlan: string;
+  levels: string[]; // 收录录像级别（beg/int/exp 子集）
 }
 
 /** 库里 Unix 秒 → datetime-local input 值（北京时间 YYYY-MM-DDTHH:mm） */
@@ -30,14 +31,23 @@ function cstInput(sec: number): string {
 }
 
 const EMPTY = { name: "", shortName: "", startTime: "", endTime: "", rules: "", creatorId: "", prizeTotal: "", prizePlan: "" };
+const ALL_LEVELS = ["beg", "int", "exp"] as const;
+const LEVEL_LABELS: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 
 export function CompetitionForm() {
   const router = useRouter();
   const [values, setValues] = useState({ ...EMPTY });
+  // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
+  const [levels, setLevels] = useState<string[]>([...ALL_LEVELS]);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<CompFormRow | null>(null);
 
   const set = (k: keyof typeof EMPTY, v: string) => setValues((s) => ({ ...s, [k]: v }));
+  const toggleLevel = (lv: string) =>
+    setLevels((s) => {
+      const next = s.includes(lv) ? s.filter((x) => x !== lv) : [...s, lv];
+      return ALL_LEVELS.filter((a) => next.includes(a)); // 恒按初中高顺序存放
+    });
 
   // 监听清单行「编辑」：回填记录
   useEffect(() => {
@@ -55,6 +65,7 @@ export function CompetitionForm() {
         prizeTotal: String(d.prizeTotal),
         prizePlan: d.prizePlan,
       });
+      setLevels(d.levels.length ? [...ALL_LEVELS].filter((a) => d.levels.includes(a)) : [...ALL_LEVELS]);
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
     window.addEventListener("sl-comp-edit", onEdit);
@@ -64,6 +75,7 @@ export function CompetitionForm() {
   const reset = () => {
     setEditing(null);
     setValues({ ...EMPTY });
+    setLevels([...ALL_LEVELS]);
   };
 
   const submit = async () => {
@@ -74,6 +86,7 @@ export function CompetitionForm() {
     if (!values.rules.trim()) return toast("请填写比赛规则", "error");
     if (!/^\d+$/.test(values.creatorId.trim())) return toast("请填写发起人 ID（纯数字 UID）", "error");
     if (!/^\d+$/.test(values.prizeTotal.trim())) return toast("总奖金应为非负整数（元）", "error");
+    if (levels.length === 0) return toast("请至少勾选一个收录录像级别", "error");
 
     setBusy(true);
     try {
@@ -93,6 +106,7 @@ export function CompetitionForm() {
                 creatorId: values.creatorId,
                 prizeTotal: values.prizeTotal,
                 prizePlan: values.prizePlan,
+                levels,
               }
             : {
                 op: "competition.add",
@@ -104,6 +118,7 @@ export function CompetitionForm() {
                 creatorId: values.creatorId,
                 prizeTotal: values.prizeTotal,
                 prizePlan: values.prizePlan,
+                levels,
               }
         ),
       });
@@ -206,6 +221,23 @@ export function CompetitionForm() {
             onChange={(e) => set("prizeTotal", e.target.value)}
           />
         </label>
+      </div>
+
+      {/* 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）——
+          决定本比赛收录哪些级别的录像，前台列表页/详情页信息行展示 */}
+      <div style={labelStyle}>
+        收录录像级别（可多选，决定本比赛收录哪些级别的录像）
+        <div style={{ display: "flex", gap: 16 }}>
+          {ALL_LEVELS.map((lv) => (
+            <label
+              key={lv}
+              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2", cursor: "pointer" }}
+            >
+              <input type="checkbox" checked={levels.includes(lv)} onChange={() => toggleLevel(lv)} />
+              {LEVEL_LABELS[lv]}
+            </label>
+          ))}
+        </div>
       </div>
 
       <label style={labelStyle}>

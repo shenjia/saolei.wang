@@ -1505,6 +1505,7 @@ model Competition {
   prizeTotal Int     @map("prize_total") // 总奖金（元，整数）
   prizePlan  String  @map("prize_plan") @db.VarChar(500) // 分配方案原文（每行一名次）
   code       String  @default("") @db.VarChar(10) // 比赛标识（创建时生成，前台开始前不展示）
+  includeLevels String @default("beg,int,exp") @map("include_levels") @db.VarChar(20) // 收录录像级别（逗号分隔 beg/int/exp，可多选；张老师 2026-11-13）
   createTime BigInt  @default(0) @map("create_time") @db.BigInt // 创建时刻 Unix 秒
 
   @@index([startTime, endTime]) // 状态排序/筛选

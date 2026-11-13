@@ -17385,12 +17385,16 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_empty { color: #75715e; font-size: 14px; }
 .comp_chart_svg { display: block; }
 
-/* 信息行（三轮 16:40 定）：发起人一行局左在上，比赛标识一行在下（整段加粗高亮） */
+/* 信息行（2026-11-13 张老师定：收录级别一行在上、比赛标识一行在下（标识整段加粗高亮）；
+   发起人已移出信息行，落图表下方右对齐 .comp_creator） */
 .comp_meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
 .comp_meta b.comp_code_all { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
 .comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
+/* 发起人行（2026-11-13 张老师定：图表下方右侧对齐，名字展示与玩家卡片一致
+   ——AvatarCell 性别图标 + TitleBadge 军衔徽章；行高与信息行同 13px 灰） */
+.comp_creator { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 13px; color: #b1b1a4; margin-top: 8px; }
 .comp_rules { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: #b1b1a4; }
 
 /* 右栏：玩家卡片走标准 UserPanel（.user_card，与录像页同款，无本页私有样式）；

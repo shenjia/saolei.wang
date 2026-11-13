@@ -13,6 +13,7 @@
 
 import Link from "next/link";
 import { SignupButton } from "./SignupButton";
+import { AvatarCell, TitleBadge } from "@/components/Cells";
 import {
   fmtDateRange,
   fmtDuration,
@@ -21,6 +22,7 @@ import {
   remainColor,
   type CompRow,
 } from "@/lib/competition";
+import { LEVEL_NAMES } from "@/lib/config";
 
 export function CompBlock({
   c,
@@ -124,10 +126,28 @@ export function CompBlock({
         )}
       </div>
 
-      {/* 信息行（三轮 16:40 定：发起人单独一行局左在上，比赛标识一行在下）——
+      {/* 发起人（2026-11-13 张老师定：移到图表下方右侧对齐，名字展示与玩家卡片一致
+          ——首页同款 AvatarCell（性别图标+名气泡）+ TitleBadge（军衔徽章）） */}
+      <div className="comp_creator">
+        <span>发起人：</span>
+        <AvatarCell
+          id={c.creatorId}
+          name={c.creatorName}
+          englishName={c.creatorEnglishName}
+          sex={c.creatorSex}
+          gender="small"
+          link
+        />
+        <TitleBadge title={c.creatorTitle} classic={c.creatorClassic} link />
+      </div>
+
+      {/* 信息行（2026-11-13 张老师定：收录级别一行在上，比赛标识一行在下）——
           标识整段加粗高亮，含括号与简称 */}
       <div className="comp_meta">
-        <span className="comp_creator">发起人：{c.creatorName}</span>
+        <span className="comp_levels">
+          收录级别：
+          {c.levels.map((l) => LEVEL_NAMES[l]).join("、")}
+        </span>
         <span className="comp_code">
           比赛标识：
           {c.status === "upcoming" ? (
