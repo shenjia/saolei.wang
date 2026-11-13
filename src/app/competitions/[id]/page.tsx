@@ -11,24 +11,20 @@
 //
 // 成绩口径（本期）：成绩＝video_info.real_time（排行成绩口径 2026-10-30 张老师定），
 // 录像由管理员在后台录像管理手动挂接（video.competition op）；跨级别混排公平性
-// 口径待成绩采集期定。翻页参数：录像 page（复用 Pager），动态 ep（轻量迷你翻页）。
+// 口径待成绩采集期定。翻页参数：录像 page、动态 ep——两板块底部均挂标准 Pager
+// （pageKey 区分页码参数、互带对方页码，2026-11-13 五轮张老师定）。
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { UserPanel } from "@/components/UserCard";
-import { buildUrl } from "@/components/Pager";
-import { RelTime } from "@/components/RelTime";
-import { VideoHead, VideoRowLine } from "@/components/VideoRows";
+import { FlopSprites } from "@/components/FlopSprites";
+import { CompEventsFeed } from "@/components/competition/CompEventsFeed";
+import { CompVideosFeed } from "@/components/competition/CompVideosFeed";
 import { CompBlock } from "@/components/competition/CompBlock";
 import { scoreTime } from "@/lib/format";
 import {
-  COMP_EVENT_ENDED,
-  COMP_EVENT_JOIN_OPEN,
-  COMP_EVENT_PLAYER_JOIN,
-  COMP_EVENT_SCORE,
-  COMP_EVENT_STARTED,
   ensureCompLifecycleEvents,
   fmtPrize,
   getCompDetailStats,
@@ -37,31 +33,12 @@ import {
   getCompRanking,
   getCompVideosPage,
   getCompetitionDetail,
-  type CompEventRow,
 } from "@/lib/competition";
 
 export const dynamic = "force-dynamic";
 
 const COMP_EVENT_PAGE_SIZE = 20;
 const COMP_VIDEO_PAGE_SIZE = 20;
-
-/** 动态事件文案（type → 展示文本；主体玩家名由行渲染拼接） */
-function eventText(type: number): string {
-  switch (type) {
-    case COMP_EVENT_JOIN_OPEN:
-      return "报名开始";
-    case COMP_EVENT_PLAYER_JOIN:
-      return "报名参加了比赛";
-    case COMP_EVENT_STARTED:
-      return "比赛正式开始";
-    case COMP_EVENT_SCORE:
-      return "更新了成绩";
-    case COMP_EVENT_ENDED:
-      return "比赛正式结束";
-    default:
-      return "";
-  }
-}
 
 export async function generateMetadata({
   params,
@@ -105,88 +82,69 @@ export default async function CompetitionDetailPage({
     session ? getCompMyResult(compId, session.uid) : Promise.resolve(null),
   ]);
 
-  const eventRows = (rows: CompEventRow[]) =>
-    rows.map((e) => (
-      <li key={e.id} className="comp_ev_row">
-        <span className="comp_ev_main">
-          {e.userName && e.userId ? (
-            <Link className="comp_ev_user" href={`/user/${e.userId}`}>
-              {e.userName}
-            </Link>
-          ) : null}
-          <span className="comp_ev_text">{eventText(e.type)}</span>
-        </span>
-        <span className="comp_ev_time">
-          <RelTime time={e.createTime} />
-        </span>
-      </li>
-    ));
-
   return (
     <div id="page" className="two_columns comp_page">
       {/* comp_detail：详情页专用钩子——主栏顶部留白（三轮 16:40 张老师定「主板块贴 header 不对」） */}
       <ul id="home" className="comp_detail">
         <li className="main">
-          {/* 顶部板块：与列表页完全一致（CompBlock 共用） */}
-          <CompBlock c={c} now={now} loggedIn={!!session} />
+          {/* 顶部板块：与列表页同一 CompBlock，detail 形态——标题恢复首页标准 26px、
+              无「开赛」按钮（五轮 20:13，入口移右栏「开始比赛」双钮） */}
+          <CompBlock c={c} now={now} loggedIn={!!session} detail />
 
-          {/* 动态板块 */}
+          {/* 动态板块：标准翻页组件 = 首页同款 PageSlider（五轮 20:31 张老师定，
+              client 壳 CompEventsFeed——换页走 URL、加载更多走 API 前缀整批替换） */}
           <div className="box comp_section">
             <h2>动态</h2>
-            {events.rows.length > 0 ? (
-              <ul className="comp_events">{eventRows(events.rows)}</ul>
-            ) : (
-              <div className="comp_section_empty">暂无动态</div>
-            )}
-            {events.total > COMP_EVENT_PAGE_SIZE && (
-              <div className="comp_mini_pager">
-                {events.page > 1 ? (
-                  <Link
-                    className="prev"
-                    href={buildUrl(`/competitions/${compId}`, { page: vp, ep: events.page - 1 })}
-                  >
-                    上一页
-                  </Link>
-                ) : (
-                  <span className="prev off">上一页</span>
-                )}
-                <span className="comp_mini_info">
-                  第 {events.page} / {Math.max(1, Math.ceil(events.total / COMP_EVENT_PAGE_SIZE))} 页
-                </span>
-                {events.page * COMP_EVENT_PAGE_SIZE < events.total ? (
-                  <Link
-                    className="next"
-                    href={buildUrl(`/competitions/${compId}`, { page: vp, ep: events.page + 1 })}
-                  >
-                    下一页
-                  </Link>
-                ) : (
-                  <span className="next off">下一页</span>
-                )}
-              </div>
-            )}
+            <CompEventsFeed
+              compId={compId}
+              initialRows={events.rows}
+              initialPage={events.page}
+              initialTotal={events.total}
+              initialTotalPages={Math.max(1, Math.ceil(events.total / COMP_EVENT_PAGE_SIZE))}
+              videosPage={vp}
+              pageSize={COMP_EVENT_PAGE_SIZE}
+            />
           </div>
 
           {/* 录像板块：本比赛全部参赛录像，时间正序、不去重；行渲染与首页录像流同源。
-              三轮 16:40 张老师定：详情页底部不放翻页组件 */}
+              标准翻页组件同上（client 壳 CompVideosFeed） */}
           <div className="box comp_section">
             <h2>录像</h2>
-            {videos.videos.length > 0 ? (
-              <table cellPadding={0} cellSpacing={0} className="ranking_table video_table comp_video_table">
-                <VideoHead hideIoe />
-                <tbody>
-                  {videos.videos.map((v) => (
-                    <VideoRowLine key={v.id} video={v} hideIoe />
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="comp_section_empty">还没有参赛录像</div>
-            )}
+            <CompVideosFeed
+              compId={compId}
+              initialVideos={videos.videos}
+              initialPage={videos.page}
+              initialTotal={videos.total}
+              initialTotalPages={Math.max(1, Math.ceil(videos.total / COMP_VIDEO_PAGE_SIZE))}
+              eventsPage={events.page}
+              pageSize={COMP_VIDEO_PAGE_SIZE}
+            />
           </div>
         </li>
 
         <li className="sidebar">
+          {/* 登录态：首页同款双钮行（五轮 20:13 复刻 #play_row）——「开始比赛」进比赛模式
+              （/online?c=比赛ID，逻辑同列表页原「开赛」钮，新标签页），「传录像」新标签页上传。
+              FlopSprites 提供 #face-flat 笑脸 symbol（纯 0×0 贴图库，无视觉占位） */}
+          {session && (
+            <>
+              <FlopSprites />
+              <div id="play_row">
+                <Link id="play_entry" href={`/online?c=${compId}`} target="_blank">
+                  <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
+                    <use href="#face-flat" />
+                  </svg>
+                  <span>开始比赛</span>
+                </Link>
+                <Link id="upload_entry" href="/video/upload" target="_blank">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/images/upload-folder-icon.png" alt="" width={24} />
+                  <span>传录像</span>
+                </Link>
+              </div>
+            </>
+          )}
+
           {/* 登录态：标准玩家卡片（与录像详情页右栏同款）。
               三轮 16:40 张老师定：比赛页右栏不放实力雷达（hideRadar） */}
           {session && <UserPanel userId={session.uid} hideRadar />}

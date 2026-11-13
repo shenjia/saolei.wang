@@ -26,18 +26,22 @@ export function CompBlock({
   c,
   now,
   loggedIn,
+  detail,
 }: {
   c: CompRow;
   now: number;
   /** 是否登录（未登录报名按钮渲染为登录跳转链接） */
   loggedIn: boolean;
+  /** 详情页形态（五轮 20:13 张老师定）：标题恢复首页标准 26px/39px；不渲染「开赛」按钮
+      （入口移到右栏「开始比赛」双钮行）——列表页保持三轮 22px 小两号口径不变 */
+  detail?: boolean;
 }) {
   return (
     <div className="box comp_item">
       {/* 标题行：标题+日期左，总奖金+按钮右 */}
       <div className="comp_head">
         <div className="comp_title_group">
-          <h3 className={"comp_name" + (c.status === "active" ? " on" : "")}>
+          <h3 className={"comp_name" + (c.status === "active" ? " on" : "") + (detail ? " comp_name_lg" : "")}>
             <Link className="comp_name_link" href={`/competitions/${c.id}`}>
               {c.name}
             </Link>
@@ -55,16 +59,13 @@ export function CompBlock({
             )}
           </span>
 
+          {/* 未开始：报名三态钮（五轮 20:13 定）——未报名默认亮灰「报名中」hover 绿
+              「报名参赛」；已报名 hover 玫瑰红「退赛」（confirmDialog 确认）；未登录
+              点击弹登录浮窗（SignupButton 内 dispatch app:login） */}
           {c.status === "upcoming" && (
             <span className="comp_tipwrap">
               <span className="comp_btn_zone">
-                {loggedIn ? (
-                  <SignupButton compId={c.id} joined={c.joined} name={c.name} />
-                ) : (
-                  <Link className="comp_btn comp_btn_join" href="/account/login?next=/competitions">
-                    报名参加
-                  </Link>
-                )}
+                <SignupButton compId={c.id} joined={c.joined} name={c.name} loggedIn={loggedIn} />
               </span>
               {/* 两行气泡（14:45 定）：报名信息在上，开始时间在下（时长绿色） */}
               <span className="comp_tip">
@@ -78,13 +79,13 @@ export function CompBlock({
             </span>
           )}
 
-          {c.status === "active" && (
+          {!detail && c.status === "active" && (
             <span className="comp_tipwrap">
-              {/* 开赛 → /online?c=比赛ID（张老师 15:14 定：带比赛 ID 进练习页比赛模式；
-                  三轮 16:40 定文案「开赛」；四轮 20:03 定新标签页打开） */}
-              <a className="vs_fight comp_link" href={`/online?c=${c.id}`} target="_blank">
-                开赛
-              </a>
+              {/* 进行中：绿色「进行中」链接钮（五轮 20:13 定）——点击与标题一样进详情页
+                  （本页跳转，原「开赛」钮退役）；保留「xx后结束」气泡 */}
+              <Link className="comp_btn comp_btn_active" href={`/competitions/${c.id}`}>
+                进行中
+              </Link>
               <span className="comp_tip">
                 <b style={{ color: remainColor(c.end - now) }}>
                   {fmtDuration(Math.max(c.end - now, 0))}

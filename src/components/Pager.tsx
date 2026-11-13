@@ -16,12 +16,16 @@ export function Pager({
   page,
   total,
   pageSize,
+  pageKey = "page",
 }: {
   base: string;
   params: Record<string, string | number | undefined>;
   page: number;
   total: number;
   pageSize: number;
+  /** 页码参数名（默认 "page"；同页双翻页器时另一方传自定义名，如动态板块用 "ep"，
+      并把对方页码放进 params 带住不丢——2026-11-13 五轮比赛详情页） */
+  pageKey?: string;
 }) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   // 2026-10-15 张老师要求：只有一页时也显示翻页控件，但按钮全灰不可点
@@ -37,7 +41,7 @@ export function Pager({
   return (
     <div className={"pager" + (single ? " single" : "")}>
       {page > 1 && !single ? (
-        <Link href={buildUrl(base, { ...params, page: page - 1 })} className="prev">
+        <Link href={buildUrl(base, { ...params, [pageKey]: page - 1 })} className="prev">
           上一页
         </Link>
       ) : (
@@ -53,13 +57,13 @@ export function Pager({
             {p}
           </span>
         ) : (
-          <Link key={p} href={buildUrl(base, { ...params, page: p })}>
+          <Link key={p} href={buildUrl(base, { ...params, [pageKey]: p })}>
             {p}
           </Link>
         )
       )}
       {page < pageCount && !single ? (
-        <Link href={buildUrl(base, { ...params, page: page + 1 })} className="next">
+        <Link href={buildUrl(base, { ...params, [pageKey]: page + 1 })} className="next">
           下一页
         </Link>
       ) : (

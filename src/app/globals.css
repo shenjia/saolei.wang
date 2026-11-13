@@ -17342,6 +17342,41 @@ body #header .nav li a.vs_new_hint,
 #page.comp_page a.comp_link { text-decoration: none; display: inline-block; }
 #page a.comp_link.vs_fight:hover:not(:disabled) { color: #2b2a20; }
 
+/* 进行中「进行中」链接钮（五轮 20:13 张老师定：绿色，点击同标题进详情页，
+   原「开赛」退役——色彩沿 .comp_btn_join 绿底渐变系） */
+.comp_btn_active {
+  background: #a6e22e; color: #2b2a20;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px -8px rgba(166, 226, 46, 0.55);
+}
+#page a.comp_btn_active { text-decoration: none; }
+.comp_btn_active:hover { background: #a6e22e; color: #2b2a20; filter: brightness(1.06); }
+
+/* 报名三态（五轮 20:13 张老师定）：
+   · 未报名 comp_btn_signup：默认亮灰「报名中」，hover 绿底切「报名参赛」（尺寸不变）；
+   · 已报名 comp_btn_leave：默认暗绿「已报名」，hover 玫瑰红切「退赛」（点击弹确认窗）。
+   lbl_a/lbl_b 切换同 comp_btn_result 模式；hover 颜色用 1,2,1 特异性压 legacy #page a:hover */
+.comp_btn_signup {
+  background: #4a493f; color: #b1b1a4; border: 1px solid #5c5b4f;
+  padding: 8.5px 25px 7.5px;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+.comp_btn_signup .lbl_b { display: none; }
+.comp_btn_signup:hover {
+  background: #a6e22e; border-color: #a6e22e; color: #2b2a20;
+  text-shadow: none; filter: brightness(1.06);
+}
+.comp_btn_signup:hover .lbl_a { display: none; }
+.comp_btn_signup:hover .lbl_b { display: inline; }
+.comp_btn_signup:disabled { cursor: wait; }
+.comp_btn_leave { cursor: pointer; }
+.comp_btn_leave .lbl_b { display: none; }
+.comp_btn_leave:hover {
+  background: #c55a72; border-color: #c55a72; color: #fff;
+  text-shadow: none;
+}
+.comp_btn_leave:hover .lbl_a { display: none; }
+.comp_btn_leave:hover .lbl_b { display: inline; }
+
 /* 纪录图表 */
 .comp_chart {
   background: #2a2b25; border-radius: 6px; margin: 12px 0 0;
@@ -17389,12 +17424,10 @@ body #header .nav li a.vs_new_hint,
 .comp_ev_text { color: #b1b1a4; }
 .comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; }
 
-/* 迷你翻页（动态板块用 ep 参数，与录像板块 page 参数互不干扰） */
-.comp_mini_pager { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 8px; font-size: 13px; }
-.comp_mini_pager a { color: #b1b1a4; text-decoration: none; }
-.comp_mini_pager a:hover { color: #a6e22e; }
-.comp_mini_pager .off { color: #5d5c4f; cursor: default; }
-.comp_mini_info { color: #75715e; font-size: 12px; }
+/* 详情页标题大字号（五轮 20:13 张老师定「所有模块标题恢复正常尺寸参考首页」）：
+   比赛名恢复首页 h1 标准 26px/39px（列表页保持三轮 22px 小两号口径）；
+   「动态」「录像」等板块 h2 走 legacy 默认 20px/30px，本就正常无需覆写 */
+.comp_name_lg { font-size: 26px; line-height: 39px; }
 
 /* 最新排名（详情页右栏）：名次 / 玩家 / 成绩 */
 .comp_rank { margin: 0; padding: 0; list-style: none; counter-reset: none; }

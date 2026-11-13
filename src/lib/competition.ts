@@ -244,6 +244,25 @@ export const COMP_EVENT_STARTED = 3; // 比赛正式开始
 export const COMP_EVENT_SCORE = 4; // 玩家更新成绩
 export const COMP_EVENT_ENDED = 5; // 比赛正式结束
 
+/** 动态事件文案（type → 展示文本；主体玩家名由行渲染拼接）。
+    详情页 RSC 与 CompEventsFeed 客户端壳共用（2026-11-13 五轮翻页改版） */
+export function compEventText(type: number): string {
+  switch (type) {
+    case COMP_EVENT_JOIN_OPEN:
+      return "报名开始";
+    case COMP_EVENT_PLAYER_JOIN:
+      return "报名参加了比赛";
+    case COMP_EVENT_STARTED:
+      return "比赛正式开始";
+    case COMP_EVENT_SCORE:
+      return "更新了成绩";
+    case COMP_EVENT_ENDED:
+      return "比赛正式结束";
+    default:
+      return "";
+  }
+}
+
 /** 写一条动态（报名/挂录像走此入口；开始/结束走 ensureCompLifecycleEvents 惰性补写） */
 export async function addCompEvent(
   competitionId: number,
