@@ -32,6 +32,21 @@ export async function DailyStar() {
   if (!card) return null;
   const own = !!session && session.uid === card.id;
   const manager = !!session && isManager(session.role);
+  // 感言双渲染（2026-11-13 张老师定）：移动版放头像右侧排名下方（star_right 内），
+  // 桌面版保持 star_body 下方通栏（九轮口径）；CSS 按 881/880 断点互斥显隐。
+  // StarSpeechVote/DeleteButton 均无固定 id，双实例互不干扰（同时只有一份可见）。
+  const speechBlock = star.speech && (
+    <>
+      “{star.speech}”
+      <StarSpeechVote
+        up={star.speechUp}
+        down={star.speechDown}
+        myVote={star.myVote}
+        loggedIn={!!session}
+      />
+      {manager && <StarSpeechDeleteButton />}
+    </>
+  );
   return (
     <div id="daily_star" className="box">
     <ClickTracker userId={star.user.id} source="star" />
@@ -116,9 +131,13 @@ export async function DailyStar() {
               </>
             )}
           </div>
+          {/* 移动版感言：头像右侧、排名下方（2026-11-13 张老师定；≤880 显示） */}
+          {star.speech && (
+            <p className="star_speech star_speech_mob">{speechBlock}</p>
+          )}
         </div>
       </div>
-      {/* 感言（九轮）：已发表时显示在 star_body 下方通栏（头像下面）——
+      {/* 感言（桌面版通栏，九轮）：已发表时显示在 star_body 下方通栏（头像下面）——
           全角引号 + 亮灰，充分利用板块宽度；管理员旁附「删除」小链接。
           预写制（2026-11-11）：来源=当选者 user.star_speech 的当日镜像，
           当选即直接提取展示，无需本人再手动发表。
@@ -126,16 +145,7 @@ export async function DailyStar() {
           （未登录弹登录浮窗），服务端明细按人硬去重；默认空心+深灰数字，
           领先一方实心+亮灰，我投的赞绿/踩红；点击就地更新计数 */}
       {star.speech && (
-        <p className="star_speech">
-          “{star.speech}”
-          <StarSpeechVote
-            up={star.speechUp}
-            down={star.speechDown}
-            myVote={star.myVote}
-            loggedIn={!!session}
-          />
-          {manager && <StarSpeechDeleteButton />}
-        </p>
+        <p className="star_speech star_speech_desk">{speechBlock}</p>
       )}
     </div>
   );
