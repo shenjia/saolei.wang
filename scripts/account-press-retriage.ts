@@ -40,6 +40,7 @@ interface Row {
   auto_flag: number;
   auto_reason: number;
   filepath: string;
+  software: string | null;
   chinese_name: string | null;
 }
 
@@ -62,7 +63,7 @@ async function main() {
       ? new Set(process.argv[idIdx + 1]!.split(",").map((s) => s.trim()))
       : null;
   const rows = (await prisma.$queryRawUnsafe<Row[]>(
-    `SELECT v.id, v.user, v.status, v.auto_flag, v.auto_reason, vi.filepath, u.chinese_name
+    `SELECT v.id, v.user, v.status, v.auto_flag, v.auto_reason, vi.filepath, vi.software, u.chinese_name
      FROM video v JOIN video_info vi ON vi.id=v.id LEFT JOIN user u ON u.id=v.user
      ORDER BY v.user ASC, v.id DESC`
   )).filter((r) => !idFilter || idFilter.has(String(r.id)));
@@ -90,8 +91,12 @@ async function main() {
     const v = parseVideoBinary(new Uint8Array(buf), ext);
     if (!v) { parseFail++; agg.reps.push(NaN); continue; }
     const ps = pressPairStats(v);
-    // 只判左键（2026-11-13 张老师晚定）：右键插旗真人天然超快，不进判据
-    if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) {
+    // 只判左键（2026-11-13 张老师晚定）：右键插旗真人天然超快，不进判据；
+    // 老 Clone 格式盘不入证据池（瞬时/超短点击是写流格式行为，avg 失真）
+    if (r.software === "Clone") {
+      agg.reps.push(NaN);
+      agg.meds.push(NaN);
+    } else if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) {
       agg.reps.push(ps.leftAvg);
       agg.meds.push(ps.pressMedianMs ?? ps.leftAvg);
     } else {

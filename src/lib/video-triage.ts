@@ -580,7 +580,11 @@ export interface AccountPressStats {
  *  补判口径一致，都是「该账号最近 30 盘」的整体视角），逐盘算左键按压平均，
  *  聚合中位数。单盘读文件 + 解析 ~3ms，30 盘上限对上传链路无感。
  *  代表值只看左键 hold（2026-11-13 张老师定：右键插旗真人天然 11~22ms，
- *  纳入会把正常账号整窗误判；28122 合成流左键 avg 13~26ms 稳抓）。 */
+ *  纳入会把正常账号整窗误判；28122 合成流左键 avg 13~26ms 稳抓）。
+ *  老 Clone 0.97 格式盘不入证据池（2026-11-13 张老师定，与 bit17/20/21 豁免
+ *  同哲学）：其瞬时/超短点击是写流格式行为，把左键 avg 拉到 10~33ms 而中位
+ *  数 110ms+ 完全正常（生产探针 uid 2517 实证）——Clone 用户的反作弊火力由
+ *  bit0/bit23 左键判据与 PATH_DT 承接。 */
 export async function accountPressStatsOf(userId: number): Promise<AccountPressStats> {
   // VideoInfo 与 Video 无 Prisma 关联（同 id 平表），两步取最近 30 盘
   const vids = await prisma.video.findMany({
@@ -592,12 +596,14 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
   if (!vids.length) return { usable: 0, medianMs: null, touchpad: false };
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: vids.map((x) => x.id) } },
-    select: { id: true, filepath: true },
+    select: { id: true, filepath: true, software: true },
   });
   const rows = [...infos];
   const reps: number[] = [];
   const meds: number[] = [];
   for (const info of rows) {
+    // 老 Clone 格式盘不入证据池（avg 被格式性瞬时点击拉失真，见函数头注释）
+    if (info.software === "Clone") continue;
     const buf = readVideoFile(info.filepath);
     if (!buf) continue;
     const ext = info.filepath.split(".").pop()?.toLowerCase() ?? "";
