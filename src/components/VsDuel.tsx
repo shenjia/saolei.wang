@@ -32,6 +32,7 @@ import { notFound } from "next/navigation";
 import { getVsData, getVsHistory, recordVsDuel, type VsCell, type VsLevelPk, type VsPlayer, type VsRecRow } from "@/lib/vs";import { scoreTime } from "@/lib/format";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { AvatarImg } from "@/components/AvatarImg";
 import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { RadarChart } from "@/components/RadarChart";
 import { VsScoreBoard } from "@/components/VsScoreBoard";
@@ -240,12 +241,17 @@ function VsPanel({ p, accent, swapHref, side }: { p: VsPlayer; accent?: string; 
               title={`进入 ${p.name} 的地盘`}
             >
               {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档，与玩家卡片同款），
-                  旧版称号仍 no.jpg（2026-11-11）；有头像走原 URL */}
+                  旧版称号仍 no.jpg（2026-11-11）；有头像走 mid 档 WebP，缺档 onError 回退原图
+                  （2026-11-13 35193 破图教训：生产 mid 档生成失败 404，裸 <img> 直接破图） */}
               {p.avatarIsDefault ? (
                 <DefaultAvatar sex={p.sex} size="mid" className="ucd_avatar" alt={p.name} />
               ) : (
-                /* eslint-disable-next-line @next/next/no-img-element -- 用户上传头像，走原 URL */
-                <img className="ucd_avatar" src={p.avatarUrl} alt={p.name} />
+                <AvatarImg
+                  src={p.avatarUrl}
+                  fallback={p.avatarOrigUrl}
+                  className="ucd_avatar"
+                  alt={p.name}
+                />
               )}
             </Link>
           </div>
@@ -403,6 +409,7 @@ export async function VsDuelView({
     en: p.en,
     sex: p.sex,
     avatarUrl: p.avatarUrl,
+    avatarOrigUrl: p.avatarOrigUrl,
     avatarIsDefault: p.avatarIsDefault,
     militaryTitle: p.militaryTitle,
     classicTitle: p.classicTitle,

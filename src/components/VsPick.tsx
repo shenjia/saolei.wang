@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "./Toast";
 import { AvatarCell, TitleBadge } from "./Cells";
+import { AvatarImg } from "./AvatarImg";
 import { DefaultAvatar } from "./DefaultAvatar";
 import { RadarChart } from "./RadarChart";
 import { VsHistBlock } from "./VsHistBlock";
@@ -40,7 +41,10 @@ export interface VsPickPlayer {
   name: string;
   en: string;
   sex: number;
+  /** 头像 URL（mid 160px WebP 档；缺档时靠 avatarOrigUrl onError 回退，2026-11-13） */
   avatarUrl: string;
+  /** 头像原图 URL（分档 WebP 缺档回退目标；与 usercard.avatarOrigUrl 同口径） */
+  avatarOrigUrl: string;
   /** 无头像（走默认图）：军衔制下按性别渲染军装默认头像 */
   avatarIsDefault: boolean;
   militaryTitle: string;
@@ -260,8 +264,14 @@ function VsCard({ p, accent, onSwap }: { p: VsPickPlayer; accent?: string; onSwa
               {p.avatarIsDefault ? (
                 <DefaultAvatar sex={p.sex} size="mid" className="ucd_avatar" alt={p.name} />
               ) : (
-                /* eslint-disable-next-line @next/next/no-img-element -- 用户上传头像，走原 URL */
-                <img className="ucd_avatar" src={p.avatarUrl} alt={p.name} />
+                /* 有头像：mid 档 WebP，缺档 onError 回退原图（2026-11-13 35193 破图教训：
+                   生产 mid 档生成失败 404，裸 <img> 直接破图） */
+                <AvatarImg
+                  src={p.avatarUrl}
+                  fallback={p.avatarOrigUrl}
+                  className="ucd_avatar"
+                  alt={p.name}
+                />
               )}
             </Link>
           </div>

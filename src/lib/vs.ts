@@ -99,7 +99,10 @@ export interface VsPlayer {
   name: string;
   en: string;
   sex: number;
+  /** 头像 URL（mid 160px WebP 档；缺档时靠 avatarOrigUrl onError 回退，2026-11-13） */
   avatarUrl: string;
+  /** 头像原图 URL（分档 WebP 缺档回退目标；与 usercard.avatarOrigUrl 同口径） */
+  avatarOrigUrl: string;
   /** 无头像（走默认图）：军衔制下按性别渲染军装默认头像（2026-11-11） */
   avatarIsDefault: boolean;
   militaryTitle: string;
@@ -317,6 +320,7 @@ function toVsPlayer(card: UserCardData, radar: RadarPoint[]): VsPlayer {
     en: card.englishName,
     sex: card.sex,
     avatarUrl: card.avatarUrl,
+    avatarOrigUrl: card.avatarOrigUrl,
     avatarIsDefault: card.avatarIsDefault,
     militaryTitle: card.militaryTitle,
     classicTitle: card.classicTitle,

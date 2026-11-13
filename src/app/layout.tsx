@@ -11,6 +11,7 @@ import { MessageBadge } from "@/components/MessageBadge";
 import { IconAdmin, IconGear, IconLogout, IconPerson, IconUpload } from "@/components/MenuIcons";
 import { MobileNav } from "@/components/MobileNav";
 import { DefaultAvatar } from "@/components/DefaultAvatar";
+import { AvatarImg } from "@/components/AvatarImg";
 import { ScrollReset } from "@/components/ScrollReset";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { SystemText } from "@/components/SystemText";
@@ -167,12 +168,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                     </li>
                     <li className="popMenu user_menu">
                       <Link prefetch={false} href={`/user/${session.uid}`} className="um_trigger">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        {/* 无头像：军衔制下按性别给军装默认头像（顶栏 28-30px 位走 mid 档），旧版称号仍 no.jpg（2026-11-11） */}
+                        {/* 无头像：军衔制下按性别给军装默认头像（顶栏 28-30px 位走 mid 档），旧版称号仍 no.jpg（2026-11-11）；
+                            有头像走 mid 档 WebP，缺档 onError 回退原图（2026-11-13 35193 破图教训） */}
                         {me?.avatarIsDefault ? (
                           <DefaultAvatar sex={me.sex} size="mid" className="um_avatar" />
                         ) : (
-                          <img className="um_avatar" src={avatarUrl} alt="" />
+                          <AvatarImg
+                            src={avatarUrl}
+                            fallback={me?.avatarOrigUrl ?? "/images/player/no.jpg"}
+                            className="um_avatar"
+                            alt=""
+                          />
                         )}
                         <span className="um_name">{displayName}</span>
                         {/* 顶栏人名是自己，不挂玩家名气泡（2026-10-29 张老师要求） */}
@@ -228,6 +234,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                       uid: session.uid,
                       displayName,
                       avatarUrl,
+                      avatarOrigUrl: me?.avatarOrigUrl ?? "/images/player/no.jpg",
                       avatarSex: me?.sex ?? 0,
                       avatarIsDefault: !!me?.avatarIsDefault,
                       role: session.role,

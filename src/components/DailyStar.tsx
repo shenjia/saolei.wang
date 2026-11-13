@@ -87,7 +87,7 @@ export async function DailyStar() {
           ) : (
             <AvatarImg
               src={card.avatarBigUrl}
-              fallback={card.avatarUrl}
+              fallback={card.avatarOrigUrl}
               className="star_avatar"
               alt={card.chineseName}
             />

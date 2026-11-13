@@ -27,8 +27,12 @@ export interface UserCardData {
   /** 英文名（hover 气泡「姓名（英文名）#ID」用，2026-10-29） */
   englishName: string;
   sex: number;
-  /** 头像 URL（本地头像为 mid 160px WebP 档；OAuth 外链或默认 no.jpg） */
+  /** 头像 URL（本地头像为 mid 160px WebP 档；OAuth 外链或默认 no.jpg）
+   *  ⚠️ 分档 WebP 可能缺档（生成失败/未跑批处理），展示必须走 AvatarImg
+   *  带 avatarOrigUrl 回退，不可裸 <img>（2026-11-13 VS 卡破图教训） */
   avatarUrl: string;
+  /** 头像原图 URL（分档 WebP 缺档时 onError 回退目标；OAuth 外链/默认图与 avatarUrl 同值） */
+  avatarOrigUrl: string;
   /** 头像 big 360px 档 URL（每日之星 144px 展示位 2x 用；OAuth 外链或默认图同 avatarUrl） */
   avatarBigUrl: string;
   /** 无头像（走默认图）：军衔制下按性别渲染军装默认头像（2026-11-11） */
@@ -55,6 +59,11 @@ function avatarUrl(id: number, avatar: string, size: "mid" | "big" = "mid"): str
   // WebP（2026-11-10 全站头像 WebP 化）；OAuth 外链与默认图（no.jpg）无本地档位，回退原图
   const sized = avatarUrlFor(avatar, id, size);
   if (sized) return sized;
+  return resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : DEFAULT_AVATAR);
+}
+
+/** 头像原图 URL（不分档）：新版上传=上传文件本身、OAuth 外链=外链、旧站照片墙=实体 jpg、无头像=默认图 */
+function avatarOrigUrl(id: number, avatar: string): string {
   return resolveAvatarUrl(avatar, avatar === "1" ? `/images/player/${id}.jpg` : DEFAULT_AVATAR);
 }
 
@@ -91,6 +100,7 @@ export async function getUserCard(id: number): Promise<UserCardData | null> {
     englishName: user.englishName,
     sex: user.sex,
     avatarUrl: avatarUrl(id, user.avatar),
+    avatarOrigUrl: avatarOrigUrl(id, user.avatar),
     avatarBigUrl: avatarUrl(id, user.avatar, "big"),
     avatarIsDefault: isDefaultAvatar(user.avatar),
     militaryTitle: detail.title,
@@ -111,6 +121,7 @@ export async function getHeaderUser(
   chineseName: string;
   englishName: string;
   avatarUrl: string;
+  avatarOrigUrl: string;
   sex: number;
   avatarIsDefault: boolean;
 } | null> {
@@ -123,6 +134,7 @@ export async function getHeaderUser(
     chineseName: u.chineseName,
     englishName: u.englishName,
     avatarUrl: avatarUrl(uid, u.avatar),
+    avatarOrigUrl: avatarOrigUrl(uid, u.avatar),
     sex: u.sex,
     avatarIsDefault: isDefaultAvatar(u.avatar),
   };

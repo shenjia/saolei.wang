@@ -13,6 +13,7 @@ import { BubbleIcon } from "./SendMessageButton";
 import { pollWhenMobile, useUnreadMessages } from "./useUnreadMessages";
 import { SystemText } from "./SystemText";
 import { DefaultAvatar } from "./DefaultAvatar";
+import { AvatarImg } from "./AvatarImg";
 import { useVsNewHint } from "./VsNewHint";
 import { isManager } from "@/lib/config";
 
@@ -20,6 +21,8 @@ export interface MobileNavUser {
   uid: number;
   displayName: string;
   avatarUrl: string;
+  /** 头像原图 URL（mid 档 WebP 缺档 onError 回退目标，2026-11-13） */
+  avatarOrigUrl: string;
   /** 无头像时军衔制默认头像用：用户性别 + 是否默认图（2026-11-11） */
   avatarSex: number;
   avatarIsDefault: boolean;
@@ -152,7 +155,12 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
             {user.avatarIsDefault ? (
               <DefaultAvatar sex={user.avatarSex} size="mid" className="mn_avatar" />
             ) : (
-              <img className="mn_avatar" src={user.avatarUrl} alt="" />
+              <AvatarImg
+                src={user.avatarUrl}
+                fallback={user.avatarOrigUrl}
+                className="mn_avatar"
+                alt=""
+              />
             )}
           </button>
           {userOpen && (
