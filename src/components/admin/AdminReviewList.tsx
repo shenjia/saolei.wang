@@ -41,7 +41,7 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 0)) {
     tags.push({
       text: `按住时长 ${pressVal}≤${pressLine}ms`,
-      title: `全盘鼠标按下→松开平均时长 ${v.pressAvgMs != null ? v.pressAvgMs + "ms（命中键：左/右键独立判定，取命中值）" : "（现算失败）"}，低于${LEVEL_NAMES[lv] ?? "该级别"}线 ${pressLine}ms，疑似机器生成事件流`,
+      title: `全盘左键按下→松开平均时长 ${v.pressAvgMs != null ? v.pressAvgMs + "ms" : "（现算失败）"}，低于${LEVEL_NAMES[lv] ?? "该级别"}线 ${pressLine}ms，疑似机器生成事件流（只判左键：右键插旗真人天然超快，不判）`,
       cls: "bad",
     });
   }
@@ -181,14 +181,14 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 23)) {
     tags.push({
       text: `短局按压 ${v.pressShortMs != null ? v.pressShortMs + "ms" : "命中"}≤30ms`,
-      title: `短局超快按压：press 配对不足常规线的 30 对守卫（本盘命中键 ≥10 对）但平均时长 ≤30ms（本盘 ${v.pressShortMs != null ? v.pressShortMs + "ms" : "现算失败"}）。人类初级 p1=44.3ms、p5≈50ms，30ms 线留 14ms+ 余量；3.6~5.7 秒短局点击数不足会被所有 n≥30 守卫拦成零命中，本触发器放宽样本、收紧阈值兜住（362462/362485/362486 案定标）`,
+      title: `短局超快按压：左键 press 配对不足常规线的 30 对守卫（本盘左键 ≥10 对）但平均时长 ≤30ms（本盘左键 ${v.pressShortMs != null ? v.pressShortMs + "ms" : "现算失败"}）。人类初级 p1=44.3ms、p5≈50ms，30ms 线留 14ms+ 余量；3.6~5.7 秒短局点击数不足会被所有 n≥30 守卫拦成零命中，本触发器放宽样本、收紧阈值兜住（362462/362485/362486 案定标）。只判左键：右键插旗真人天然超快（11~22ms），不判`,
       cls: "bad",
     });
   }
   if (r & (1 << 24)) {
     tags.push({
       text: `账号按压异常${v.acctPressMedianMs != null ? ` 中位 ${v.acctPressMedianMs}ms` : ""}`,
-      title: `账号级按压聚合：上传者最近 30 盘中 press 可统计（合并配对 n≥10）的录像 ≥3 盘，且账号代表按压时长（各盘取按压中位数）的账号级中位数 ≤40ms${v.acctPressMedianMs != null ? `（本账号 ${v.acctPressVideos ?? "?"} 盘可统计，中位 ${v.acctPressMedianMs}ms）` : "（现算失败）"}。人类单盘按压 p1=44.3ms，中位数 ≤40ms 意味着该账号的典型盘全部在人类 1 分位以下——单盘可以擦线伪装，账号级连续超人类是生成器特征（28122 案：22 盘合成流）。触控板账号豁免（账号中位数 <12ms，2026-11-13 晚 v4 口径：各盘取中位数，偶发实体键长按被稀释不否决）`,
+      title: `账号级按压聚合：上传者最近 30 盘中左键可统计（左键配对 n≥10）的录像 ≥3 盘，且左键按压平均时长的账号级中位数 ≤40ms${v.acctPressMedianMs != null ? `（本账号 ${v.acctPressVideos ?? "?"} 盘可统计，中位 ${v.acctPressMedianMs}ms）` : "（现算失败）"}。人类左键单盘 p1=44.3ms，中位数 ≤40ms 意味着该账号的典型盘全部在人类 1 分位以下——单盘可以擦线伪装，账号级连续超人类是生成器特征（28122 案：22 盘合成流）。只判左键：右键插旗真人天然超快（11~22ms），不判。触控板账号豁免（各盘按压中位数的账号中位 <12ms，2026-11-13 晚 v4 口径）`,
       cls: "bad",
     });
   }

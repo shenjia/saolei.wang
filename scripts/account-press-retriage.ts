@@ -1,8 +1,11 @@
 // 账号按压聚合触发器（bit24，2026-11-13 沈正刚 28122 案）存量补判：
 // 按用户分组单遍扫描全站录像（每盘只读文件/解析一次，~3ms），对每个用户取
-// 最近 ACCOUNT_PRESS_SCAN_LIMIT 盘算 press 代表时长（可统计键 n≥15 取更低者），
-// 可统计盘 ≥ACCOUNT_PRESS_MIN_VIDEOS 且中位数 ≤ACCOUNT_PRESS_MEDIAN_MS →
+// 最近 ACCOUNT_PRESS_SCAN_LIMIT 盘算左键按压平均（左键配对 n≥10），
+// 可统计盘 ≥ACCOUNT_PRESS_MIN_VIDEOS 且账号中位数 ≤ACCOUNT_PRESS_MEDIAN_MS →
 // 该用户窗口内全部录像增量 OR bit24 并转需核定（auto_flag 0）。
+// 触控板账号豁免（2026-11-13 v4）：各盘合并按压中位数的账号中位 <12ms 放过。
+// 只判左键（2026-11-13 张老师晚定）：右键插旗真人天然超快（探针 uid 22955
+// 右键 avg 11~22ms），纳入判据把正常账号整窗误判（184425 误报案根因）。
 //
 // 与上传链路 triageVideo 的口径差异：上传时对「当前账号最近 30 盘」（含当前盘）
 // 现算；本脚本对「此刻账号最近 30 盘」回溯打标——窗口随时间滚动，历史时点的
@@ -24,6 +27,7 @@ import {
   ACCOUNT_PRESS_MIN_VIDEOS,
   ACCOUNT_PRESS_MEDIAN_MS,
   PRESS_SHORT_MIN_PAIRS,
+  TOUCHPAD_MAX_PRESS_MS,
   AUTO_REASON,
 } from "../src/lib/video-triage-limits";
 
@@ -41,7 +45,10 @@ interface Row {
 
 interface UserAgg {
   ids: bigint[];
+  /** 左键按压平均（判定值） */
   reps: number[];
+  /** 各盘合并按压中位数（触控板豁免判据，与 reps 一一对应） */
+  meds: number[];
   name: string | null;
 }
 
@@ -69,7 +76,7 @@ async function main() {
     if (done % 20000 === 0) console.log(`  ... ${done}/${rows.length} (${((Date.now() - t0) / 60000).toFixed(1)}min)`);
     const key = String(r.user);
     let agg = byUser.get(key);
-    if (!agg) { agg = { ids: [], reps: [], name: r.chinese_name }; byUser.set(key, agg); }
+    if (!agg) { agg = { ids: [], reps: [], meds: [], name: r.chinese_name }; byUser.set(key, agg); }
     if (agg.ids.length >= ACCOUNT_PRESS_SCAN_LIMIT) continue; // 窗口已满，后续更老的盘不再入窗
     agg.ids.push(r.id);
     // 文件解析只为算 press；窗口外的盘不解析（上面 continue 先行），窗口内的盘恰好都要算
@@ -83,10 +90,14 @@ async function main() {
     const v = parseVideoBinary(new Uint8Array(buf), ext);
     if (!v) { parseFail++; agg.reps.push(NaN); continue; }
     const ps = pressPairStats(v);
-    const keys: number[] = [];
-    if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.leftAvg);
-    if (ps.rightAvg !== null && ps.rightN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.rightAvg);
-    agg.reps.push(keys.length ? Math.min(...keys) : NaN);
+    // 只判左键（2026-11-13 张老师晚定）：右键插旗真人天然超快，不进判据
+    if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) {
+      agg.reps.push(ps.leftAvg);
+      agg.meds.push(ps.pressMedianMs ?? ps.leftAvg);
+    } else {
+      agg.reps.push(NaN);
+      agg.meds.push(NaN);
+    }
   }
 
   // 聚合判定 + 落库
@@ -97,6 +108,11 @@ async function main() {
   for (const [uid, agg] of byUser) {
     const usable = agg.reps.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
     if (usable.length < ACCOUNT_PRESS_MIN_VIDEOS) continue;
+    // 触控板账号豁免（v4）：各盘合并按压中位数的账号中位 <12ms 放过
+    const meds = agg.meds.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+    const medMid = Math.floor(meds.length / 2);
+    const medMedian = meds.length % 2 ? meds[medMid]! : (meds[medMid - 1]! + meds[medMid]!) / 2;
+    if (meds.length && medMedian < TOUCHPAD_MAX_PRESS_MS) continue;
     const mid = Math.floor(usable.length / 2);
     const median = usable.length % 2 ? usable[mid]! : (usable[mid - 1]! + usable[mid]!) / 2;
     if (median > ACCOUNT_PRESS_MEDIAN_MS) continue;

@@ -1182,28 +1182,19 @@ async function computePressAvg(
       if (!lv) continue;
       const line = PRESS_AVG_MS[lv.level] ?? 50;
       const ps = pressPairStats(parsed);
-      /* 与触发口径一致：独立判左右键（n≥30 且 ≤阈值）；
-         标签数值取实际命中的那只键（2026-10-19 张老师报 87ms≤60ms 错位——
-         命中在右键 49ms、显示却取了左键 87ms）；两键都中取更低者 */
-      // 触控板豁免（2026-11-13 张老师定）：全部按压 <12ms → 触控板操作，
+      /* 与触发口径一致：只判左键（2026-11-13 张老师定：右键插旗真人天然超快
+         11~22ms，纳入判据整窗误伤；旧版「命中键取值」口径废弃） */
+      // 触控板豁免（2026-11-13 v4 中位数判据）：按压中位数 <12ms → 触控板操作，
       // 按压类触发器全放过，展示数值一并置空免得误导复核
-      const touchpad = ps.pressMaxMs !== null && ps.pressMaxMs < TOUCHPAD_MAX_PRESS_MS;
+      const touchpad = ps.pressMedianMs !== null && ps.pressMedianMs < TOUCHPAD_MAX_PRESS_MS;
       let hit: number | null = null;
       if (!touchpad) {
         if (ps.leftAvg !== null && ps.leftN >= 30 && ps.leftAvg <= line) hit = Math.round(ps.leftAvg);
-        if (ps.rightAvg !== null && ps.rightN >= 30 && ps.rightAvg <= line) {
-          const r = Math.round(ps.rightAvg);
-          hit = hit === null ? r : Math.min(hit, r);
-        }
       }
-      // bit23 短局超快按压命中值（n≥10 且 ≤30ms 的键取更低者，与触发口径一致）
+      // bit23 短局超快按压命中值（左键 n≥10 且 ≤30ms，与触发口径一致）
       let shortHit: number | null = null;
       if (!touchpad) {
         if (ps.leftAvg !== null && ps.leftN >= 10 && ps.leftAvg <= PRESS_SHORT_TRIGGER_MS) shortHit = Math.round(ps.leftAvg);
-        if (ps.rightAvg !== null && ps.rightN >= 10 && ps.rightAvg <= PRESS_SHORT_TRIGGER_MS) {
-          const r = Math.round(ps.rightAvg);
-          shortHit = shortHit === null ? r : Math.min(shortHit, r);
-        }
       }
       const hl = humanLikeStats(parsed);
       const traj: AdminVideoRow["trajStats"] = {

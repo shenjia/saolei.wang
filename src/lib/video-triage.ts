@@ -5,9 +5,10 @@
 //      永远由管理员手动执行（免核定池批量一键过、需核定逐条手审）。
 //
 // 触发器（任一命中 → 需核定）：
-//   bit0 press-release：全盘左键按下→松开平均 ≤ 阈值ms（beg 45 / int 45 / exp 60；
-//       2026-10-19 张老师晚定中级放宽 56→45，初/中同线；高级沿用 60），
-//       守卫配对数 n≥30；左右键独立判（各自 n≥30 且 ≤阈值）。分级依据：初级人类
+//   bit0 press-release：全盘左键按下→松开平均 ≤ 阈值ms（beg 45 / int 45 / exp 50；
+//       2026-10-19 张老师晚定中级放宽 56→45，初/中同线；高级沿用 60 后 11-11 收紧 50），
+//       守卫配对数 n≥30；**只判左键**（2026-11-13 张老师定：右键插旗真人天然超快，
+//       生产探针 uid 22955 右键 avg 11~22ms，纳入判据整窗误伤）。分级依据：初级人类
 //       普遍点击快（p50 仅 72ms），统一 60ms 线会误落 17% 真人（回测 9837 盘实证）
 //   bit1 STNB 分位：beg>205 / int>160 / exp>150（flag 与 NF 同线，各级 p99 定标）；
 //       2026-10-24 起两路豁免：初级 3BV<10 运气盘不判（与 3BV/s 划线同口径）、可信用户组不判
@@ -46,13 +47,13 @@
 //       精确占比 >23%（真人长间隔区极值 16.2%；360420=30.9%、347805=23.2%）
 //       ——360420 型生成器补齐了 bit17~21 全部结构特征，但定时器节拍无法
 //       伪装：真人高占比聚集全部在快速节奏区（众数 30~150ms）
-//   bit23 SHORT_PRESS 短局超快按压（2026-11-13 沈正刚 28122 案）：press 配对
+//   bit23 SHORT_PRESS 短局超快按压（2026-11-13 沈正刚 28122 案）：左键 press 配对
 //       n≥10（放宽自 bit0 的 30 守卫）且平均 ≤30ms——3.6~5.7s 短局（16~24 次
 //       点击）被所有 n≥30 守卫拦成零命中，唯一超人类信号 press avg 13~26ms
 //       由此生效（人类初级 p1=44.3ms / p5≈50ms 留 14ms+ 余量）
-//   bit24 ACCOUNT_PRESS 账号按压聚合（2026-11-13）：最近 30 盘中 press 可统计
-//       （n≥15）盘 ≥3 且代表按压时长中位数 ≤40ms——单盘可擦线伪装，账号级
-//       连续超人类难伪装；合成流批量上传（28122 当日 22 盘）账号层证据更早
+//   bit24 ACCOUNT_PRESS 账号按压聚合（2026-11-13）：最近 30 盘中左键可统计
+//       （n≥10）盘 ≥3 且左键按压平均的账号级中位数 ≤40ms——单盘可擦线伪装，
+//       账号级连续超人类难伪装；合成流批量上传（28122 当日 22 盘）账号层证据更早
 //   （bit17~21 为 2026-11-12 人类相似度触发器组（红客 360671 案），定标与豁免
 //       口径见 video-triage-limits.ts 头部注释及 humanLikeTriggers；
 //       bit22 为同日点击节拍组（钮志锋 360420/347805 案）；曾试过 bit23
@@ -183,21 +184,19 @@ export function isTouchpadPress(ps: PressPairStats): boolean {
   return ps.pressMedianMs !== null && ps.pressMedianMs < TOUCHPAD_MAX_PRESS_MS;
 }
 
-/** bit0（分级线，n≥30）+ bit23 短局超快按压（n≥10 且 ≤30ms）——左右键各自独立判，
- *  任一键命中即置位。触控板流（全部配对 <12ms）整组放过。
+/** bit0（分级线，n≥30）+ bit23 短局超快按压（n≥10 且 ≤30ms）——**只判左键**
+ *  （2026-11-13 张老师定：右键插旗真人天然超快，生产探针 uid 22955 右键 avg
+ *  11~22ms 远低于人类左键 p1=44.3ms，纳入判据把正常账号整窗打成
+ *  bit0+bit23+bit24）。触控板流（中位数 <12ms）整组放过。
  *  triageParsed 与存量补判脚本共用同一口径，防两处漂移。 */
 export function pressTriggers(ps: PressPairStats, level: string): number {
   if (isTouchpadPress(ps)) return 0;
   let bits = 0;
   const pressMs = PRESS_AVG_MS[level] ?? 50;
-  const hit = (avg: number | null, n: number, line: number, minN: number) =>
-    avg !== null && n >= minN && avg <= line;
-  if (hit(ps.leftAvg, ps.leftN, pressMs, PRESS_MIN_PAIRS) ||
-      hit(ps.rightAvg, ps.rightN, pressMs, PRESS_MIN_PAIRS)) {
+  if (ps.leftAvg !== null && ps.leftN >= PRESS_MIN_PAIRS && ps.leftAvg <= pressMs) {
     bits |= AUTO_REASON.PRESS;
   }
-  if (hit(ps.leftAvg, ps.leftN, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS) ||
-      hit(ps.rightAvg, ps.rightN, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS)) {
+  if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS && ps.leftAvg <= PRESS_SHORT_TRIGGER_MS) {
     bits |= AUTO_REASON.SHORT_PRESS;
   }
   return bits;
@@ -568,18 +567,20 @@ export async function isLowTrustUser(userId: number): Promise<boolean> {
 // ---------- 账号级按压聚合（bit24，2026-11-13 沈正刚 28122 案） ----------
 
 export interface AccountPressStats {
-  /** 参与统计的盘数（扫描窗口内 press 可统计：合并配对 n≥10） */
+  /** 参与统计的盘数（扫描窗口内左键可统计：左键配对 n≥10） */
   usable: number;
-  /** 各可统计盘的代表按压时长（左右键合并中位数）的账号级中位数（ms；usable=0 时 null） */
+  /** 各可统计盘的左键按压平均时长的账号级中位数（ms；usable=0 时 null） */
   medianMs: number | null;
-  /** 触控板账号：账号代表按压中位数 <12ms（v4 口径——各盘取按压中位数为代表，
-   *  偶发实体键长按不否决；2026-11-13 张老师定豁免） */
+  /** 触控板账号：各盘按压中位数（合并池）的账号级中位数 <12ms（v4 口径——
+   *  偶发实体键长按/量化离群被中位数稀释不否决；2026-11-13 张老师定豁免） */
   touchpad: boolean;
 }
 
 /** 扫描上传者最近 ACCOUNT_PRESS_SCAN_LIMIT 盘（含正在分拣的当前盘——与存量
- *  补判口径一致，都是「该账号最近 30 盘」的整体视角），逐盘算 press 代表时长，
- *  聚合中位数。单盘读文件 + 解析 ~3ms，30 盘上限对上传链路无感。 */
+ *  补判口径一致，都是「该账号最近 30 盘」的整体视角），逐盘算左键按压平均，
+ *  聚合中位数。单盘读文件 + 解析 ~3ms，30 盘上限对上传链路无感。
+ *  代表值只看左键 hold（2026-11-13 张老师定：右键插旗真人天然 11~22ms，
+ *  纳入会把正常账号整窗误判；28122 合成流左键 avg 13~26ms 稳抓）。 */
 export async function accountPressStatsOf(userId: number): Promise<AccountPressStats> {
   // VideoInfo 与 Video 无 Prisma 关联（同 id 平表），两步取最近 30 盘
   const vids = await prisma.video.findMany({
@@ -595,6 +596,7 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
   });
   const rows = [...infos];
   const reps: number[] = [];
+  const meds: number[] = [];
   for (const info of rows) {
     const buf = readVideoFile(info.filepath);
     if (!buf) continue;
@@ -602,20 +604,24 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
     const parsed = parseVideoBinary(buf, ext);
     if (!parsed) continue;
     const ps = pressPairStats(parsed);
-    // 代表值用按压中位数（v4）——avg 被偶发长按拉高，会把触控板账号误判
-    if (ps.pressMedianMs !== null && ps.leftN + ps.rightN >= PRESS_SHORT_MIN_PAIRS) {
-      reps.push(ps.pressMedianMs);
+    // 判定值＝左键按压平均（n≥10）；触控板豁免判据＝合并按压中位数
+    if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) {
+      reps.push(ps.leftAvg);
+      if (ps.pressMedianMs !== null) meds.push(ps.pressMedianMs);
     }
   }
   if (!reps.length) return { usable: 0, medianMs: null, touchpad: false };
   const sorted = [...reps].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   const median = sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  const medSorted = [...meds].sort((a, b) => a - b);
+  const medMid = Math.floor(medSorted.length / 2);
+  const medMedian = medSorted.length % 2 ? medSorted[medMid]! : (medSorted[medMid - 1]! + medSorted[medMid]!) / 2;
   return {
     usable: reps.length,
     medianMs: Math.round(median),
-    // 触控板账号：账号代表按压中位数 <12ms（偶发实体键/换鼠标的盘被中位数稀释）
-    touchpad: median < TOUCHPAD_MAX_PRESS_MS,
+    // 触控板账号：各盘按压中位数的账号级中位数 <12ms（偶发实体键/换鼠标的盘被中位数稀释）
+    touchpad: medMedian < TOUCHPAD_MAX_PRESS_MS,
   };
 }
 
