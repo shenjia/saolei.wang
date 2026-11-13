@@ -17268,22 +17268,38 @@ body #header .nav li a.vs_new_hint,
 /* ==================== 比赛页（2026-11-13 张老师需求） ====================
    版式：#page.two_columns 双栏壳。左=比赛列表（一比赛一 .box）+ Pager；
    右=玩家卡片 +「我的统计」（登录态）+「全网统计」。
-   标题色口径：只有进行中金色（张老师 13:12 定）；气泡一律朝上（2026-11-11 定）。 */
+   标题色口径：只有进行中金色（张老师 13:12 定）；气泡一律朝上（2026-11-11 定）。
+   七轮（2026-11-14 03:10 张老师定）：盒子 padding 对齐纪录页（.video_cell.box 的
+   .box 默认 30px，不再缩 16/20）；标题字号对齐纪录页 h1（26px/39px）；
+   右上角按钮组与发起人整组退役；日期后挂彩色状态标签。 */
 
-/* 页面级 h1 已去掉（2026-11-13 二轮：与导航「比赛」重复）；板块标题字号比全站
-   主标题小两号 22px/33px（三轮 16:40 张老师定），进行中金色、其余亮灰 */
-#page.comp_page .comp_item { width: auto; margin: 16px 8px; padding: 16px 20px; }
+/* 页面级 h1 已去掉（2026-11-13 二轮：与导航「比赛」重复）；
+   板块标题＝纪录页 h1 同款 26px/39px（七轮 03:10 张老师定），进行中金色、其余亮灰 */
+#page.comp_page .comp_item { width: auto; margin: 16px 8px; padding: 30px; }
 .comp_head { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
-.comp_title_group { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.comp_name { margin: 0; font-size: 22px; line-height: 33px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
+.comp_title_group { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.comp_name { margin: 0; font-size: 26px; line-height: 39px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
 .comp_name.on { color: #fdc61a; }
 .comp_name_link { color: inherit; text-decoration: none; }
 .comp_dates { font-size: 12px; color: #939387; white-space: nowrap; }
 .comp_ctrl { display: flex; align-items: flex-end; gap: 14px; flex-shrink: 0; }
 
-/* 总奖金（标题 22px 后奖金 18px 保持），hover 出分配方案气泡 */
+/* 状态标签（七轮 03:10 张老师定，日期后圆角描边小标签）：
+   进行中绿 #a6e22e / 未开始金 #fdc61a / 已结束亮灰 #b1b1a4 / 已报名✓ 绿（同进行中），
+   底色 14% + 边框 35%（配色机制与 .comp_lv_tag / 后台 admin_tag 同源） */
+.comp_status_tag {
+  display: inline-block; padding: 1px 8px;
+  border-radius: 9px; border: 1px solid transparent;
+  font-size: 12px; line-height: 19px; white-space: nowrap; flex-shrink: 0;
+}
+.comp_status_tag.st_active { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
+.comp_status_tag.st_joined { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
+.comp_status_tag.st_upcoming { background: rgba(253, 198, 29, 0.14); color: #fdc61a; border-color: rgba(253, 198, 29, 0.35); }
+.comp_status_tag.st_ended { background: rgba(177, 177, 164, 0.12); color: #b1b1a4; border-color: rgba(177, 177, 164, 0.35); }
+
+/* 总奖金（标题恢复 26px 后奖金跟随纪录页 h2 em 的 20px 档），hover 出分配方案气泡 */
 .comp_tipwrap { position: relative; display: inline-block; }
-.comp_prize { font-size: 18px; line-height: 33px; color: #b1b1a4; white-space: nowrap; }
+.comp_prize { font-size: 20px; line-height: 39px; color: #b1b1a4; white-space: nowrap; }
 .comp_prize b { color: #fdc61a; }
 
 /* 朝上气泡（hover 显示；箭头朝下指按钮） */
@@ -17300,82 +17316,11 @@ body #header .nav li a.vs_new_hint,
 }
 .comp_tipwrap:hover .comp_tip { opacity: 1; visibility: visible; }
 .comp_tip b { color: #fdc61a; font-weight: 700; }
-.comp_tip_line { display: block; white-space: nowrap; }
-.comp_tip_line.white { color: #f8f8f2; }
-/* 报名气泡第二行：时间信息（张老师 15:14 二轮定「时间中的数字多用绿色」） */
-.comp_tip_time { color: #a6e22e; font-weight: 700; }
-.comp_btn_zone { display: inline-block; }
 
-/* 状态按钮三态（盒型对齐 vs_fight：9px 圆角 / 16px 粗体 / letter-spacing 2px） */
-.comp_btn {
-  display: inline-block; padding: 9.5px 26px 8.5px; text-indent: 2px;
-  font-size: 16px; font-weight: 700; letter-spacing: 2px; font-family: inherit;
-  border: 0; border-radius: 9px; cursor: pointer; text-shadow: none;
-}
-#page.comp_page a.comp_btn { text-decoration: none; }
-.comp_btn_join {
-  background: #a6e22e; color: #2b2a20;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px -8px rgba(166, 226, 46, 0.55);
-}
-.comp_btn_join:hover { background: #a6e22e; color: #2b2a20; filter: brightness(1.06); }
-.comp_btn_joined {
-  background: #3f5315; color: #a6e22e; border: 1px solid #5a751f;
-  padding: 8.5px 25px 7.5px; cursor: default;
-}
-.comp_btn_ended {
-  background: #4a493f; color: #b1b1a4; border: 1px solid #5c5b4f;
-  padding: 8.5px 25px 7.5px; text-decoration: none;
-  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
-}
-/* 已结束按钮（三轮 16:40 定）：hover 亮灰底色黑色字「看结果」，点击进详情页。
-   1,2,1 特异性压过 legacy #page a:hover（1,1,1 金色）——同 comp_link 的坑 */
-.comp_btn_result .lbl_b { display: none; }
-#page a.comp_btn_result:hover {
-  background: #c9c8ba; border-color: #c9c8ba; color: #272822;
-  text-decoration: none; text-shadow: none;
-}
-.comp_btn_result:hover .lbl_a { display: none; }
-.comp_btn_result:hover .lbl_b { display: inline; }
-/* 进行中「开始比赛」直接复用 .vs_fight（对决页同款黄渐变），补链接形态去下划线；
-   hover 文字不得变绿（legacy #page a:hover 1,1,1 压过 .vs_fight:hover 0,3,0，
-   张老师 15:14 二轮点名，这里用 1,3,1 特异性压回去锁深字） */
-#page.comp_page a.comp_link { text-decoration: none; display: inline-block; }
-#page a.comp_link.vs_fight:hover:not(:disabled) { color: #2b2a20; }
-
-/* 进行中「进行中」链接钮（五轮 20:13 张老师定：绿色，点击同标题进详情页，
-   原「开赛」退役——色彩沿 .comp_btn_join 绿底渐变系） */
-.comp_btn_active {
-  background: #a6e22e; color: #2b2a20;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 18px -8px rgba(166, 226, 46, 0.55);
-}
-#page a.comp_btn_active { text-decoration: none; }
-.comp_btn_active:hover { background: #a6e22e; color: #2b2a20; filter: brightness(1.06); }
-
-/* 报名三态（五轮 20:13 张老师定）：
-   · 未报名 comp_btn_signup：默认亮灰「报名中」，hover 绿底切「报名参赛」（尺寸不变）；
-   · 已报名 comp_btn_leave：默认暗绿「已报名」，hover 玫瑰红切「退赛」（点击弹确认窗）。
-   lbl_a/lbl_b 切换同 comp_btn_result 模式；hover 颜色用 1,2,1 特异性压 legacy #page a:hover */
-.comp_btn_signup {
-  background: #4a493f; color: #b1b1a4; border: 1px solid #5c5b4f;
-  padding: 8.5px 25px 7.5px;
-  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
-}
-.comp_btn_signup .lbl_b { display: none; }
-.comp_btn_signup:hover {
-  background: #a6e22e; border-color: #a6e22e; color: #2b2a20;
-  text-shadow: none; filter: brightness(1.06);
-}
-.comp_btn_signup:hover .lbl_a { display: none; }
-.comp_btn_signup:hover .lbl_b { display: inline; }
-.comp_btn_signup:disabled { cursor: wait; }
-.comp_btn_leave { cursor: pointer; }
-.comp_btn_leave .lbl_b { display: none; }
-.comp_btn_leave:hover {
-  background: #c55a72; border-color: #c55a72; color: #fff;
-  text-shadow: none;
-}
-.comp_btn_leave:hover .lbl_a { display: none; }
-.comp_btn_leave:hover .lbl_b { display: inline; }
+/* 状态按钮系（报名三态/进行中/已结束钮）七轮 03:10 全组退役（张老师定「去掉右上角
+   按钮」，状态改由日期后彩色标签呈现）——.comp_btn* / .comp_btn_zone / 报名·结束气泡
+   辅助类一并清除；总奖金气泡 .comp_tip 保留。报名入口收口到详情页右栏（SignupButton
+   组件文件保留，后台/详情页可复用）。 */
 
 /* 纪录图表 */
 .comp_chart {
@@ -17386,8 +17331,8 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_svg { display: block; }
 
 /* 信息行（2026-11-13 张老师定：收录级别一行在上、比赛标识一行在下（标识整段加粗高亮）；
-   发起人已移出信息行，浮动图表下方右对齐 .comp_creator） */
-.comp_meta { clear: both; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
+   七轮 03:10 起发起人整块下线，不再有浮动行） */
+.comp_meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
 .comp_meta b.comp_code_all { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
@@ -17403,10 +17348,7 @@ body #header .nav li a.vs_new_hint,
 .comp_lv_tag.lv_beg { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
 .comp_lv_tag.lv_int { background: rgba(247, 150, 70, 0.14); color: #f79646; border-color: rgba(247, 150, 70, 0.35); }
 .comp_lv_tag.lv_exp { background: rgba(253, 198, 29, 0.14); color: #fdc61d; border-color: rgba(253, 198, 29, 0.35); }
-/* 发起人行（2026-11-13 张老师定：浮动在图表下方右对齐，不挤占下方信息行/规则
-   文字的排版空间——float:right 挂在 comp_chart 之后；名字展示与玩家卡片一致
-   ——AvatarCell 性别图标 + TitleBadge 军衔徽章；行高与信息行同 13px 灰） */
-.comp_creator { float: right; display: flex; align-items: center; gap: 4px; font-size: 13px; color: #b1b1a4; margin: -34px 8px 0 0; }
+/* 发起人行七轮 03:10 整块下线（张老师定「隐藏发起人」），.comp_creator 样式一并清除 */
 .comp_rules { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: #b1b1a4; }
 
 /* 右栏：玩家卡片走标准 UserPanel（.user_card，与录像页同款，无本页私有样式）；
@@ -17419,9 +17361,10 @@ body #header .nav li a.vs_new_hint,
 
 /* ==================== 比赛详情页（2026-11-13 二期：/competitions/[id]） ==================== */
 
-/* 「动态」「录像」板块：h2 盒标题（legacy .box h2 同源），录像表与首页流同源
-   （ranking_table video_table 行渲染），板块内表格去掉外层 box 默认间距 */
-.comp_section { width: auto; margin: 0 8px 16px; padding: 16px 20px; }
+/* 「动态」「录像」板块（七轮 03:10 对齐：padding 同 .box 默认 30px，与顶部板块/
+   纪录页盒子一致），录像表与首页流同源（ranking_table video_table 行渲染），
+   板块内表格去掉外层 box 默认间距 */
+.comp_section { width: auto; margin: 16px 8px; padding: 30px; }
 .comp_section h2 { margin: 0 0 10px; }
 .comp_section .comp_video_table { margin: 0 -8px; width: calc(100% + 16px); }
 .comp_section_empty { color: #75715e; font-size: 13px; line-height: 22px; padding: 6px 0; }
@@ -17436,10 +17379,9 @@ body #header .nav li a.vs_new_hint,
 .comp_ev_text { color: #b1b1a4; }
 .comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; }
 
-/* 详情页标题大字号（五轮 20:13 张老师定「所有模块标题恢复正常尺寸参考首页」）：
-   比赛名恢复首页 h1 标准 26px/39px（列表页保持三轮 22px 小两号口径）；
+/* 详情页标题大字号（五轮 20:13 曾区分 26px；七轮 03:10 起列表页标题也恢复
+   26px/39px（.comp_name 基准已改），本覆写冗余删除；
    「动态」「录像」等板块 h2 走 legacy 默认 20px/30px，本就正常无需覆写 */
-.comp_name_lg { font-size: 26px; line-height: 39px; }
 
 /* 最新排名（详情页右栏）：名次 / 玩家 / 成绩 */
 .comp_rank { margin: 0; padding: 0; list-style: none; counter-reset: none; }
