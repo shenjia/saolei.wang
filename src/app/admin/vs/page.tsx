@@ -1,9 +1,12 @@
 // 管理后台 · 对决统计（2026-11-11 张老师定）：VS 板块（/vs/:id）对决数据。
 // 从仪表盘「今日对决」KPI（原「今日胜负」）点击进入：趋势图（近 30 天）+ 右侧「发起 Top10 /
-// 被对决 Top10」+ 底部最近对决记录（发起者 / 发起时间 / 挑战者 /
-// 比分 | 结果 | 比分 三列 / 被挑战者 / 操作；结果列只放胜负平标签，比分列
+// 被对决 Top10」+ 底部最近对决记录（发起时间 / 发起者 / 是否本人 /
+// 挑战者 / 比分 | 结果 | 比分 三列 / 被挑战者 / 操作；结果列只放胜负平标签，比分列
 // 表头置空：左=挑战者得分，右=被挑战者得分；「观看」直达 /vs/{挑战者}/
 // {被挑战者} 旁观对局，旁观不落库）。
+// 发起者口径（2026-11-14 修）：＝initiator_id（访问对决页的登录者），**不一定是
+// 参赛双方**——指定 A、B 两人 PK 的旁观对决发起者仍是访问者本人（2026-11-13
+// 张老师定口径；此前发起者/Top10/KPI 全按 user_id=参赛方1 显示，旁观行被误显示成参赛方1 发起）。
 // 数据源 vs_duel（page_view 历史回填行比分/结果为 NULL，亮灰 —）。
 
 import Link from "next/link";
@@ -165,7 +168,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
       {/* ---------- 最近对决记录 ---------- */}
       <AdminCard
         title="最近对决记录"
-        more={`共 ${total.toLocaleString("zh-CN")} 场 · 每页 ${pageSize} 条 · 比分/结果为发起当时快照（左分=挑战者，右分=被挑战者）；历史回填行亮灰 —`}
+        more={`共 ${total.toLocaleString("zh-CN")} 场 · 每页 ${pageSize} 条 · 比分/结果为发起当时快照（左分=挑战者，右分=被挑战者）；发起者＝访问对决页的登录者（旁观他人对决也算）；历史回填行亮灰 —`}
         tight
       >
         <div className="admin_scroll">
@@ -204,19 +207,17 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
               {recent.map((d) => {
                 const tag = d.result === null ? null : RESULT_TAG[d.result];
                 // 是否本人（14:55 张老师）：发起者是否对决双方之一——是=亮绿，否=暗灰。
-                // 现行 schema 挑战者＝发起者（u1），历史行恒「是」；指定匹配（发起者
-                // 选另外两人对决）上线后 vs_duel 增加真实挑战者字段，届时把 challenger
-                // 换成真实 uid 即自然转「否」，渲染逻辑不动。
-                const challenger = d.u1;
-                const isOwn = d.u1 === challenger || d.u1 === d.u2;
+                // 2026-11-13 起发起者＝访问者，指定 A、B 两人 PK 的旁观对决自然为「否」
+                const isOwn = d.ini === d.u1 || d.ini === d.u2;
                 return (
                   <tr key={d.id}>
                     {/* 发起时间（15:49 张老师对调：发起时间在前）：暗灰显示 */}
                     <td className="gray" title={formatDate(d.time, "Y-m-d H:i:s")}>
                       <RelTime time={d.time} />
                     </td>
-                    {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔 */}
-                    <td>{launcherUser(d.u1, d.n1)}</td>
+                    {/* 发起者（09:56 张老师）：只渲染姓名 + #ID，不带性别/军衔；
+                        2026-11-14 修：取 initiator_id（访问者），不再恒等于参赛方1 */}
+                    <td>{launcherUser(d.ini, d.ni)}</td>
                     {/* 是否本人（14:55 张老师）：亮绿「是」/ 暗灰「否」 */}
                     <td className="c">
                       {isOwn ? (
@@ -225,7 +226,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
                         <span className="gray">否</span>
                       )}
                     </td>
-                    {/* 挑战者（2026-11-11 张老师）：vs_duel 暂无独立挑战者字段，默认＝发起者 */}
+                    {/* 挑战者＝参赛方1（页面左）：与发起者解耦（旁观对决发起者是第三人） */}
                     <td>{duelUser(d.u1, d.n1, d.sex1, d.exp1)}</td>
                     <td className="c">{scoreSpan(d.s1, tag === null || tag.cls === "plain" ? null : tag.cls === "ok")}</td>
                     {/* 结果（12:16 张老师）：只放胜负平标签，比分拆到两侧列 */}

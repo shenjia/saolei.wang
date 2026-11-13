@@ -45,7 +45,9 @@ async function aggregate(): Promise<VsDuelsOverview> {
 
   const rows = await prisma.vsDuel.findMany({
     where: { createTime: { gte: from } },
-    select: { createTime: true, userId: true },
+    // 发起者＝initiatorId（2026-11-13 口径：访问者，不一定是参赛双方——
+    // 原按 userId（参赛方1）去重是旧口径遗留，旁观对决会把参赛方1误计入发起人）
+    select: { createTime: true, initiatorId: true },
   });
 
   const dayMap = new Map<number, number>();
@@ -58,7 +60,7 @@ async function aggregate(): Promise<VsDuelsOverview> {
     dayMap.set(idx, (dayMap.get(idx) ?? 0) + 1);
     if (t >= today0) {
       today += 1;
-      launchers.add(String(N(r.userId)));
+      launchers.add(String(N(r.initiatorId)));
     }
     if (t >= lastWeek0 && t < lastWeekEnd) lastWeek += 1;
   }
@@ -89,7 +91,7 @@ async function aggregate(): Promise<VsDuelsOverview> {
 }
 
 /** 缓存版（铁律：热点统计挂 unstable_cache） */
-export const getVsDuelsOverview = unstable_cache(aggregate, ["admin-vs-duels", "v1"], {
+export const getVsDuelsOverview = unstable_cache(aggregate, ["admin-vs-duels", "v2"], {
   revalidate: 300,
 });
 
@@ -108,12 +110,13 @@ export async function getVsTopLaunchers(days = 7): Promise<VsTopUser[]> {
   const from = BigInt(dayStart(days - 1));
   const rows = await prisma
     .$queryRaw<{ uid: bigint; name: string; c: bigint }[]>(
-      // 值拼 SQL 禁——此处无外部输入，整条静态模板；表达式无法参数化故内联（见 NAME_EXPR 注释）
+      // 值拼 SQL 禁——此处无外部输入，整条静态模板；表达式无法参数化故内联（见 NAME_EXPR 注释）。
+      // 发起者＝initiator_id（2026-11-13 口径：访问者，不一定是参赛双方）
       Prisma.sql`
-        SELECT d.user_id AS uid, ${Prisma.raw(NAME_EXPR)} AS name, COUNT(*) AS c
-        FROM vs_duel d JOIN \`user\` u ON u.id = d.user_id
+        SELECT d.initiator_id AS uid, ${Prisma.raw(NAME_EXPR)} AS name, COUNT(*) AS c
+        FROM vs_duel d JOIN \`user\` u ON u.id = d.initiator_id
         WHERE d.create_time >= ${from}
-        GROUP BY d.user_id, u.chinese_name, u.english_name, u.id
+        GROUP BY d.initiator_id, u.chinese_name, u.english_name, u.id
         ORDER BY c DESC, uid ASC LIMIT 10
       `
     )
@@ -143,16 +146,19 @@ export interface VsDuelRow {
   id: number;
   /** 发起时刻 Unix 秒 */
   time: number;
-  u1: number; n1: string; // 发起者
-  u2: number; n2: string; // 被挑战者
+  u1: number; n1: string; // 参赛方1（页面左）
+  u2: number; n2: string; // 参赛方2（页面右）
   /** 性别（user.sex，1=男）——记录表名字后缀图标（2026-11-11 张老师） */
   sex1: number; sex2: number;
   /** 高级最好成绩快照（user_scores.exp_time，毫秒；null=无成绩行）——军衔评定输入 */
   exp1: number | null; exp2: number | null;
   /** 比分（null=历史回填行未算） */
   s1: number | null; s2: number | null;
-  /** 1=发起者胜 2=对方胜 0=平；null=未算 */
+  /** 1=左方胜 2=右方胜 0=平；null=未算 */
   result: number | null;
+  /** 发起者 uid / 展示名（2026-11-13 口径：＝访问者，不一定是参赛双方；
+   *  旧行 initiator_id 为 NULL 时回退 u1） */
+  ini: number; ni: string;
 }
 
 export async function getVsRecentDuels(
@@ -165,18 +171,22 @@ export async function getVsRecentDuels(
       .$queryRaw<{
         id: bigint; create_time: bigint; u1: bigint; u2: bigint;
         s1: number | null; s2: number | null; result: number | null;
+        ini: bigint | null; ni: string | null;
         n1: string; n2: string; sex1: number; sex2: number;
         exp1: number | null; exp2: number | null;
       }[]>(
         Prisma.sql`
           SELECT d.id, d.create_time, d.user_id AS u1, d.target_id AS u2, d.s1, d.s2, d.result,
+                 d.initiator_id AS ini,
                  ${Prisma.raw("COALESCE(NULLIF(ua.chinese_name, ''), NULLIF(ua.english_name, ''), CONCAT('#', ua.id))")} AS n1,
                  ${Prisma.raw("COALESCE(NULLIF(ub.chinese_name, ''), NULLIF(ub.english_name, ''), CONCAT('#', ub.id))")} AS n2,
+                 ${Prisma.raw("COALESCE(NULLIF(ui.chinese_name, ''), NULLIF(ui.english_name, ''), CONCAT('#', ui.id))")} AS ni,
                  ua.sex AS sex1, ub.sex AS sex2,
                  sa.exp_time AS exp1, sb.exp_time AS exp2
           FROM vs_duel d
           JOIN \`user\` ua ON ua.id = d.user_id
           JOIN \`user\` ub ON ub.id = d.target_id
+          LEFT JOIN \`user\` ui ON ui.id = d.initiator_id
           LEFT JOIN \`user_scores\` sa ON sa.id = d.user_id
           LEFT JOIN \`user_scores\` sb ON sb.id = d.target_id
           ORDER BY d.create_time DESC LIMIT ${pageSize} OFFSET ${offset}
@@ -203,6 +213,9 @@ export async function getVsRecentDuels(
       s1: r.s1 === null ? null : Number(r.s1),
       s2: r.s2 === null ? null : Number(r.s2),
       result: r.result === null ? null : N(r.result),
+      // 旧行 initiator_id 为 NULL 时回退参赛方1（与 schema 回填口径一致）
+      ini: r.ini === null ? N(r.u1) : N(r.ini),
+      ni: r.ni ?? r.n1,
     })),
   };
 }
