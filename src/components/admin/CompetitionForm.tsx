@@ -33,6 +33,14 @@ function cstInput(sec: number): string {
 }
 
 const EMPTY = { name: "", shortName: "", startTime: "", endTime: "", rules: "", creatorId: "", prizeTotal: "", prizePlan: "" };
+
+/** 新建默认起止时间（张老师 2026-11-13：当天北京 20:00 起，7 日后 20:00 止） */
+function defaultTimeInput(offsetDays: number): string {
+  const d = new Date(Date.now() + (8 * 3600 + offsetDays * 86400) * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T20:00`;
+}
+const newDefaults = () => ({ startTime: defaultTimeInput(0), endTime: defaultTimeInput(7) });
 const ALL_LEVELS = ["beg", "int", "exp"] as const;
 const LEVEL_LABELS: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 
@@ -85,9 +93,15 @@ export function CompetitionForm() {
     return () => window.removeEventListener("sl-comp-edit", onEdit);
   }, []);
 
+  // 新建默认起止时间：挂载后填（避免 SSR/客户端跨天时刻的 hydration 差异）
+  useEffect(() => {
+    setValues((s) => (s.startTime || s.endTime ? s : { ...s, ...newDefaults() }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const reset = () => {
     setEditing(null);
-    setValues({ ...EMPTY });
+    setValues({ ...EMPTY, ...newDefaults() });
     setLevels([...ALL_LEVELS]);
     setScoreMode("");
     setTopn({ beg: "1", int: "1", exp: "1" });
