@@ -43,11 +43,20 @@ export default async function AdminCompetitionsPage({
   const st = sp.st === "active" || sp.st === "upcoming" || sp.st === "ended" ? sp.st : "";
 
   const now = Math.floor(Date.now() / 1000);
-  const [all, counts] = await Promise.all([
+  const [all, counts, videoCounts] = await Promise.all([
     prisma.competition.findMany({ orderBy: { startTime: "asc" } }),
     prisma.competitionEntry.groupBy({ by: ["competitionId"], _count: { competitionId: true } }),
+    // 挂接录像数（口径与详情页统计一致：competitionId 挂接 + 未屏蔽 status!=0）
+    prisma.video.groupBy({
+      by: ["competitionId"],
+      where: { competitionId: { not: null }, status: { not: 0 } },
+      _count: { competitionId: true },
+    }),
   ]);
   const countMap = new Map(counts.map((c) => [c.competitionId.toString(), c._count.competitionId]));
+  const videoMap = new Map(
+    videoCounts.filter((v) => v.competitionId !== null).map((v) => [v.competitionId!.toString(), v._count.competitionId]),
+  );
 
   // 发起人姓名一次取齐（发起人为后台填写，量小；查无此人兜底显示 #ID）
   const creatorIds = [...new Set(all.map((r) => r.creatorId.toString()))];
@@ -97,9 +106,10 @@ export default async function AdminCompetitionsPage({
                 <th className="c">ID</th>
                 <th>比赛全名</th>
                 <th>简称</th>
-                <th className="c">状态</th>
+                <th>标识</th>
                 <th>发起人</th>
-                <th className="c">报名数</th>
+                <th className="c">参加人数</th>
+                <th className="c">录像数</th>
                 <th className="c">总奖金</th>
                 <th>开始时间（北京）</th>
                 <th>结束时间（北京）</th>
@@ -112,13 +122,16 @@ export default async function AdminCompetitionsPage({
                 return (
                   <tr key={r.id.toString()}>
                     <td className="c sub">{r.id.toString()}</td>
-                    <td>{r.name}</td>
-                    <td className="sub">{r.shortName}</td>
-                    <td className="c">
-                      <span style={{ color: STATUS_COLOR[stKey] }}>{STATUS_LABEL[stKey]}</span>
+                    <td>
+                      {r.name}
+                      {/* 状态并入全名括号（张老师 11-13：不再单列），文字保留状态配色 */}
+                      <span style={{ color: STATUS_COLOR[stKey] }}>（{STATUS_LABEL[stKey]}）</span>
                     </td>
+                    <td className="sub">{r.shortName}</td>
+                    <td className="mono sub">{r.code || "—"}</td>
                     <td className="sub">{creatorMap.get(r.creatorId.toString()) ?? `#${r.creatorId}`}</td>
                     <td className="c">{countMap.get(r.id.toString()) ?? 0}</td>
+                    <td className="c">{videoMap.get(r.id.toString()) ?? 0}</td>
                     <td className="c" style={{ color: "#fdc61a" }}>¥{r.prizeTotal.toLocaleString("en-US")}</td>
                     <td className="mono" style={{ whiteSpace: "nowrap" }}>
                       {cstStr(Number(r.startTime))}
@@ -154,7 +167,7 @@ export default async function AdminCompetitionsPage({
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10}>
+                  <td colSpan={11}>
                     <div className="admin_empty">
                       {st ? "该状态下暂无比赛" : "还没有比赛，用下方表单发起第一场"}
                     </div>
