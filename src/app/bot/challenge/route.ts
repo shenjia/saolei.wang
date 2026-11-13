@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 /* /bot/challenge 独立验证页：原生重写为自包含 HTML（2026-11-10 张老师：
    「挺废流量的…大头 css 和 JS 压缩精简…必要时可以原生重写」）。
@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
    1:1 取自 FlopSprites（GPL-3.0，与站内既有使用同源），只内联挑战盘
    需要的 symbol。 */
 
-function page(next: string): string {
+function page(): string {
   /* SVG symbol 集（viewBox 0 0 168 168）：cell-normal 未开 / cell-press 凹面 /
      cell-number-1..8 / cell-flag-hd 旗 / face-flat·face-lose·face-win 笑脸三态。
      2026-11-10：数字/旗/踩雷格对齐全站高清口径（-hd，Metasweeper 同源，
@@ -62,7 +62,12 @@ body{background:#11150f;font-family:"微软雅黑",Arial,"宋体";color:#d8d8cc;
 
   const js = `(function(){
 "use strict";
-var NEXT=${JSON.stringify(next)};
+/* next 跳转参数改客户端解析（2026-11-13）：页面本体变纯静态可挂 ESA 边缘缓存。
+   校验口径与旧服务端版一致：只收站内相对地址（以 / 开头且非 //），防开放跳转；
+   query 缺失/畸形/不合法一律回落 /video。 */
+var NEXT=(function(){try{var m=location.search.match(/[?&]next=([^&]*)/);
+if(!m)return"/video";var v=decodeURIComponent(m[1]);
+return /^\\/(?!\\/)/.test(v)?v:"/video"}catch(e){return"/video"}})();
 var boardEl=document.getElementById("board"),faceEl=document.getElementById("face"),faceSym=document.getElementById("faceSym"),
 statusEl=document.getElementById("status"),errEl=document.getElementById("err"),winEl=document.getElementById("win"),
 vec=document.getElementById("vec");
@@ -162,14 +167,16 @@ ${svg}
 </html>`;
 }
 
-export async function GET(req: NextRequest) {
-  /* next 只收站内相对地址（与旧版 page.tsx 同口径），防开放跳转 */
-  const raw = req.nextUrl.searchParams.get("next") ?? "/video";
-  const next = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/video";
-  return new NextResponse(page(next), {
+/* 页面纯静态（next 客户端解析），模块级预计算一次 */
+const CHALLENGE_HTML = page();
+
+export async function GET() {
+  /* 2026-11-13 张老师拍板：页面挂 ESA 边缘缓存，省每日 ~1.2GB 质询页回源。
+     max-age=3600：改动后最多 1 小时全量生效，可接受；验证 API 不受影响（POST）。 */
+  return new NextResponse(CHALLENGE_HTML, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
+      "Cache-Control": "public, max-age=3600",
       "X-Robots-Tag": "noindex, nofollow",
     },
   });
