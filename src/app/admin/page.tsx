@@ -127,7 +127,8 @@ export default async function AdminDashboard() {
     { label: "重复 hash 录像组", value: anomalies.duplicateHashGroups, href: "/admin/videos?dup=1", hint: "疑似重复上传" },
     { label: "有录像无成绩玩家", value: anomalies.scoreMissingUsers, href: "/admin/users", hint: "成绩异常" },
     // 2026-11-11 张老师定：同 IP 账号组列入待办（人工参考，不自动处置）；计数取最近登录 IP 维度 ≥2 组
-    { label: "同 IP 账号组", value: ipSummary.groups2, href: "/admin/ipgroups", hint: "疑似小号·人工参考" },
+    // 2026-11-13 并入玩家管理第四 tab
+    { label: "同 IP 账号组", value: ipSummary.groups2, href: "/admin/users?group=ip", hint: "疑似小号·人工参考" },
   ];
 
   return (

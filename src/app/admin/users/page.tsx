@@ -1,6 +1,7 @@
-// 管理后台 · 玩家管理（2026-09-24；2026-10-27 用户组 tab 聚合进来）
-// 顶部三 tab（走 URL，同录像审核页签惯例）：全部玩家 / 可信用户组 / 低信任用户组——
+// 管理后台 · 玩家管理（2026-09-24；2026-10-27 用户组 tab 聚合进来；2026-11-13 同 IP 账号组并入第四 tab）
+// 顶部四 tab（走 URL，同录像审核页签惯例）：全部玩家 / 可信用户组 / 低信任用户组 / 同 IP 账号组——
 // 两个组 tab 即原独立列表页原样搬入（组内成员、来源、加入时间、操作管理员、移出、新行加亮）；
+// 「同 IP 账号组」即原独立页原样搬入（IpGroupsPanel，防小号排查）；旧地址 /admin/ipgroups 重定向保兼容；
 // 「全部玩家」保持原玩家管理（搜索/筛选/排序，行内封禁·解封·改角色）。
 
 import Link from "next/link";
@@ -16,6 +17,7 @@ import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager, RoleTag } from "@/components/admin/Widgets";
 import { UserGroupTable } from "@/components/admin/UserGroupTable";
 import { UserGroupTabs } from "@/components/admin/UserGroupTabs";
+import { IpGroupsPanel } from "@/components/admin/IpGroupsPanel";
 import { TitleBadge } from "@/components/Cells";
 import { formatDate, scoreTime } from "@/lib/format";
 import { RelTime } from "@/components/RelTime";
@@ -29,7 +31,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const session = await getSession();
   const isSuper = session?.role === USER_ROLE.ADMINISTRATOR;
-  const tab = sp.group === "trusted" || sp.group === "lowtrust" ? sp.group : "all";
+  const tab =
+    sp.group === "trusted" || sp.group === "lowtrust" || sp.group === "ip" ? sp.group : "all";
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
@@ -37,6 +40,19 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   // tab 上挂各组自己的 badge（2026-10-27 张老师反馈：侧栏红点合并两组，
   // 落地页不知道该看哪个 tab）——信号与 layout 侧栏同源（getGroupBadges）
   const groupBadges = await getGroupBadges();
+
+  // ---------- 同 IP 账号组 tab：原独立页原样搬入（2026-11-13 张老师要求合并，省导航栏一项） ----------
+  if (tab === "ip") {
+    return (
+      <>
+        <div className="admin_page_head">
+          <h1>玩家管理</h1>
+          <span className="sub">防小号排查 · IP 关联仅人工参考 · 学校机房 / 网吧 / 家庭同 IP 属正常现象 · 处置永远人工决定</span>
+        </div>
+        <IpGroupsPanel sp={sp} />
+      </>
+    );
+  }
 
   // ---------- 组 tab：原独立列表页原样 ----------
   if (tab !== "all") {

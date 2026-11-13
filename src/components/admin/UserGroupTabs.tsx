@@ -28,8 +28,8 @@ export function UserGroupTabs({
   tab,
   groupBadges,
 }: {
-  /** 当前激活 tab：all / trusted / lowtrust（URL ?group=） */
-  tab: "all" | "trusted" | "lowtrust";
+  /** 当前激活 tab：all / trusted / lowtrust / ip（URL ?group=） */
+  tab: "all" | "trusted" | "lowtrust" | "ip";
   /** 两组 badge 信号（layout 同源查询透传） */
   groupBadges: Record<GroupKey, { count: number; maxJoin: number }>;
 }) {
@@ -52,10 +52,12 @@ export function UserGroupTabs({
     return () => window.removeEventListener("admin-group-seen", recompute);
   }, [groupBadges]);
 
-  const tabs: { key: "all" | GroupKey; label: string }[] = [
+  const tabs: { key: "all" | GroupKey | "ip"; label: string }[] = [
     { key: "all", label: "全部玩家" },
     { key: "trusted", label: "可信用户组" },
     { key: "lowtrust", label: "低信任用户组" },
+    // 2026-11-13 张老师要求：同 IP 账号组并入玩家管理，省侧栏一项（无 badge 语义——IP 组没有「新成员」概念）
+    { key: "ip", label: "同 IP 账号组" },
   ];
 
   return (
@@ -67,7 +69,7 @@ export function UserGroupTabs({
           className={`admin_btn${tab === key ? " primary" : ""}`}
         >
           {label}
-          {key !== "all" && diffs[key] !== null && (
+          {key !== "all" && key !== "ip" && diffs[key] !== null && (
             <span className="ug_tab_badge" title="有新成员加入，点进去查看（新行会加亮）">
               {diffs[key]! || 1}
             </span>

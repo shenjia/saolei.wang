@@ -51,7 +51,7 @@ const GROUPS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { href: "/admin/users", label: "玩家管理", icon: "👥", groupBadge: true },
       { href: "/admin/cheat", label: "反作弊复核", icon: "🚨", badgeKey: "cheat" },
-      { href: "/admin/ipgroups", label: "同 IP 账号组", icon: "🔗" },
+      // 2026-11-13 张老师要求：同 IP 账号组并入玩家管理第四 tab（?group=ip），独立入口移除
       { href: "/admin/avatars", label: "头像审核", icon: "🖼", badgeKey: "avatar" },
     ],
   },

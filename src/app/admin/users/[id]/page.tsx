@@ -144,7 +144,7 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             <dt>注册 IP</dt>
             <dd>
               {d.registerIp ? (
-                <Link className="link" href={`/admin/ipgroups?dim=register&q=${encodeURIComponent(d.registerIp)}`}>
+                <Link className="link" href={`/admin/users?group=ip&dim=register&q=${encodeURIComponent(d.registerIp)}`}>
                   {d.registerIp}
                 </Link>
               ) : (
