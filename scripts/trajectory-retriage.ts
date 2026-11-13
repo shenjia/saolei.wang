@@ -1,5 +1,6 @@
 // 人类相似度触发器（bit17~22，2026-11-12 红客合成录像 360671 案 + 钮志锋
-// 360420/347805「带抖动合成流」案）存量补判：
+// 360420/347805「带抖动合成流」案）+ 短局超快按压（bit23，2026-11-13 沈正刚
+// 28122 案）存量补判：
 // 全站扫描事件流，命中新触发器的录像以「增量 OR 位码」写 auto_reason 并转需核定
 // （auto_flag 0）——不重跑整组触发器、不清除既有判定（幂等，可重复跑）。
 //
@@ -9,14 +10,16 @@
 //   落库: 同上 + --apply
 // 可选 --where "v.create_time>..." 限定范围；--id N[,N] 指定盘。
 //
-// 注意：本脚本只加位不清位。若要按完整新口径重算单盘（覆盖清除旧位），
-// 走 triageVideo（scripts/path-anomaly-retriage.ts 同款）。
+// 注意：本脚本只加位不清位（bit23 只补 SHORT_PRESS 位，bit0 不经此脚本补）。
+// 若要按完整新口径重算单盘（覆盖清除旧位），走 triageVideo
+// （scripts/path-anomaly-retriage.ts 同款）；bit24 账号聚合走
+// account-press-retriage.ts（按用户分组单遍扫描）。
 
 import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "../src/lib/db";
 import { parseVideoBinary } from "../src/lib/videoradar";
-import { humanLikeStats, humanLikeTriggers } from "../src/lib/video-triage";
+import { humanLikeStats, humanLikeTriggers, pressPairStats, pressTriggers } from "../src/lib/video-triage";
 import { AUTO_REASON } from "../src/lib/video-triage-limits";
 import { RANKED_SOFTWARE } from "../src/lib/evfwrite";
 
@@ -28,6 +31,7 @@ const MASK_BITS: [number, string][] = [
   [AUTO_REASON.CLICK_OFFSET, "CLICK_OFFSET"],
   [AUTO_REASON.ZERO_PRESS, "ZERO_PRESS"],
   [AUTO_REASON.GAP_MODE, "GAP_MODE"],
+  [AUTO_REASON.SHORT_PRESS, "SHORT_PRESS"],
 ];
 
 interface Row {
@@ -81,7 +85,10 @@ async function main() {
     if (!v) { parseFail++; continue; }
 
     const clientOwned = r.software === RANKED_SOFTWARE || r.evf_sig !== null;
-    const bits = humanLikeTriggers(humanLikeStats(v), r.software, clientOwned);
+    const bits = humanLikeTriggers(humanLikeStats(v), r.software, clientOwned)
+      // bit23 短局超快按压：只增量补 SHORT_PRESS 位（bit0 常规线不经本脚本补，
+      // 历史判定维持原样）
+      | (pressTriggers(pressPairStats(v), r.level) & AUTO_REASON.SHORT_PRESS);
     if (bits === 0) continue;
     hits++;
     const names = MASK_BITS.filter(([b]) => bits & b).map(([, n]) => n).join("+");

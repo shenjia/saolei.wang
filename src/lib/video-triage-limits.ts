@@ -77,6 +77,21 @@ export const AUTO_REASON = {
   // 绕过本位，届时需靠其他维度（轨迹弧线取证见 scripts/analyze-avf-curve2.ts）。
   /** 长间隔精确节拍：空闲间隔众数落在长间隔区且精确占比过高——确定性定时器特征 */
   GAP_MODE: 1 << 22,
+  // ---------- 短局与账号级触发器（2026-11-13 沈正刚 28122 案：22 盘合成流 3 盘零命中） ----------
+  // 背景：362462/362485/362486 三盘 3.6~5.7s 初级短局零命中——所有触发器统计守卫
+  // （press 对 n≥30 / clicks≥30 / idle≥40）按「整盘统计意义」设计，短局盘全部被
+  // 守卫拦下，唯一超人类信号 press avg 13~26ms 无法生效。bit23 放宽样本守卫、
+  // 收紧阈值线；bit24 把粒度从单盘抬到账号（单盘可伪装，账号连续伪装难）。
+  /** 短局超快按压：press 配对 n≥10（放宽自 bit0 的 30）且平均 ≤30ms（人类初级
+   *  p1=44.3ms、p5≈50ms，留 14ms 余量；362462/362485/362486 实测 26/18/13ms
+   *  全命中——362462 左键仅 13 对，守卫放到 10 才吃得到）。左右键独立判。 */
+  SHORT_PRESS: 1 << 23,
+  /** 账号按压聚合：上传者最近 30 盘中 press 可统计（n≥10）盘数 ≥3 且代表按压
+   *  时长（可统计键取更低者）中位数 ≤40ms——单盘按压可以擦线伪装，但账号级
+   *  中位数超人类（真人单盘 p1=44.3ms，中位数 ≤40ms 意味着该账号典型盘都在
+   *  人类 1 分位以下）。合成流账号（28122：22 盘 bit0 命中 19 盘）在账号层
+   *  面证据远早于单盘。 */
+  ACCOUNT_PRESS: 1 << 24,
 } as const;
 
 /** 在线排行模式录像是否全部转手审（临时口径）
@@ -97,8 +112,17 @@ export const MV_PER_CLICK_TRIGGER = 2.0;
 /** 密集采样串判定窗（ms）与轨迹稀疏守卫：真鼠标移动必现 ≥3 连（间隔 ≤ 此窗） */
 export const MV_MIN_DT_TRIGGER_MS = 100;
 export const MIN_MV_BURST = 3;
-/** 按压时长恒定触发线：配对时长标准差低于此 ms（人类 min 9 / 作弊盘 0） */
-export const PRESS_STD_TRIGGER_MS = 5;
+/** 按压时长恒定触发线：配对时长标准差低于此 ms（人类 min 9 / 合成流 0；
+ *  2026-11-13 从 5 收紧到 8：沈正刚 28122 案 5 盘合成流 pressStd 5.33~5.67ms
+ *  压着 5ms 线上方过——10ms 时间戳量化天然给 ~5ms 散布；人类 min 9ms 仍留 1ms 余量，
+ *  全站回扫定标零误报后生效） */
+export const PRESS_STD_TRIGGER_MS = 8;
+/** 轨迹稀疏豁免的数值守卫（2026-11-13 沈正刚 28122 案）：站内客户端/老 Clone 的
+ *  bit17 豁免原先只看 software 名——合成流冒用站内软件名（mv/点击 0.78~0.81）
+ *  远低于合法客户端物理下限仍被豁免。改为：比值低于本软件合法下限时豁免失效照判。
+ *  合法下限定标（2026-11-12 全站回扫）：站内客户端 1.56 / 老 Clone 1.7。 */
+export const CLIENT_MV_PER_CLICK_LEGAL_MIN = 1.56;
+export const CLONE_MV_PER_CLICK_LEGAL_MIN = 1.7;
 /** 点击落点量化触发线：格内偏移（x%16/y%16 池）取值数低于此（人类 min 11 / 作弊盘 3） */
 export const CLICK_OFFSET_DISTINCT_TRIGGER = 8;
 /** 点击落点量化触发线：格内偏移标准差低于此 px（人类 min 2.54 / 作弊盘 ≈0.8） */
@@ -127,6 +151,20 @@ export const GAP_CADENCE_MIN_N = 40;
 /** press-release 分级阈值（ms）——初级/中级 45（2026-10-19 张老师晚定：中级从 56 放宽），
  *  高级 50（2026-11-11 张老师指令：60 太容易触发，收紧到 50）；初/中锚定 P0 回测人类 p1 分位 44.3 / 55.9 取整收紧 */
 export const PRESS_AVG_MS: Record<string, number> = { beg: 45, int: 45, exp: 50 };
+
+/** 短局超快按压（bit23，2026-11-13 沈正刚 28122 案）：配对数守卫放宽到 10，
+ *  阈值线收紧到 30ms——人类初级 p1=44.3ms / p5≈50ms 留 14ms+ 余量；
+ *  362462/362485/362486 三盘零命中短局（26/18/13ms）由此吃到。左右键独立判。
+ *  本常量同时用作 bit24 账号聚合的「press 可统计」配对下限。 */
+export const PRESS_SHORT_TRIGGER_MS = 30;
+export const PRESS_SHORT_MIN_PAIRS = 10;
+
+/** 账号按压聚合（bit24，2026-11-13）：扫描上传者最近 N 盘（含当前盘），press
+ *  可统计（任一键配对 n≥15）的盘数 ≥ 下限且代表按压时长中位数 ≤ 线即命中。
+ *  无时间窗——账号最近的连续表现即为证据，滚动窗口随上传自然更新。 */
+export const ACCOUNT_PRESS_SCAN_LIMIT = 30;
+export const ACCOUNT_PRESS_MIN_VIDEOS = 3;
+export const ACCOUNT_PRESS_MEDIAN_MS = 40;
 
 /** STNB 分级阈值（各级 p99 取整上浮） */
 export const STNB_TRIGGER: Record<string, number> = { beg: 205, int: 160, exp: 150 };

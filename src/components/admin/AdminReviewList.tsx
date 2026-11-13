@@ -134,7 +134,7 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 17)) {
     tags.push({
       text: `轨迹稀疏 mv/点击 ${t?.mvPerClick ?? "?"}<2 无密集串`,
-      title: `mv 事件数/点击数过低（本盘 ${t?.mv ?? "?"} mv / ${t?.clicks ?? "?"} 点击，最长密集采样串 ${t?.maxMvBurst ?? "?"} 连）——真人每次点击间的移动伴随多条连续采样事件（桌面软件人类下限 2.68），慢速玩家比值虽低但必有 ≥3 连密集串；合成流每次移动只写一条瞬移。站内客户端与老 Clone 录像豁免本项`,
+      title: `mv 事件数/点击数过低（本盘 ${t?.mv ?? "?"} mv / ${t?.clicks ?? "?"} 点击，最长密集采样串 ${t?.maxMvBurst ?? "?"} 连）——真人每次点击间的移动伴随多条连续采样事件（桌面软件人类下限 2.68），慢速玩家比值虽低但必有 ≥3 连密集串；合成流每次移动只写一条瞬移。站内客户端（合法下限 1.56）与老 Clone（1.7）录像豁免本项，但比值低于各自合法下限时豁免失效照判——合法客户端物理上写不出这种流（2026-11-13 数值守卫）`,
       cls: "bad",
     });
   }
@@ -148,7 +148,7 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 19)) {
     tags.push({
       text: `按压时长恒定 σ=${t?.pressStd ?? "?"}ms`,
-      title: `配对按压时长的标准差近零（本盘 σ=${t?.pressStd ?? "?"}ms）——人类按压时长天然有方差（全站人类下限 9ms），零方差是确定性生成器特征，即便平均时长调到人类区间也会暴露`,
+      title: `配对按压时长的标准差过低（本盘 σ=${t?.pressStd ?? "?"}ms，触发线 <8ms）——人类按压时长天然有方差（全站人类下限 9ms），贴近零方差是确定性生成器特征，即便平均时长调到人类区间也会暴露（2026-11-13 线从 5ms 收紧到 8ms：沈正刚 28122 案 5 盘合成流 σ=5.3~5.7ms 压着 5ms 线擦过）`,
       cls: "bad",
     });
   }
@@ -173,6 +173,21 @@ function reasonTagList(v: AdminVideoRow) {
     tags.push({
       text: `长间隔节拍 ${t?.idleModeMs ?? "?"}ms×${t?.idleModeShare != null ? (t.idleModeShare * 100).toFixed(0) : "?"}%`,
       title: `空闲间隔（松开→下一次按下）的精确众数落在长间隔区且占比过高（本盘众数 ${t?.idleModeMs ?? "?"}ms，占比 ${t?.idleModeShare != null ? (t.idleModeShare * 100).toFixed(1) : "?"}%，样本 ${t?.idleN ?? "?"} 个，触发线 23%）——真人的间隔聚集只出现在快速节奏区（众数 30~150ms 连点），长间隔区真人极值 16.2%；同一精确长间隔反复出现是定时器/宏的节拍指纹（360420：230ms×21=30.9%、347805：270ms×47=23.2%）`,
+      cls: "bad",
+    });
+  }
+  // 短局与账号级触发器（2026-11-13 沈正刚 28122 案：22 盘合成流 3 盘零命中）
+  if (r & (1 << 23)) {
+    tags.push({
+      text: `短局按压 ${v.pressShortMs != null ? v.pressShortMs + "ms" : "命中"}≤30ms`,
+      title: `短局超快按压：press 配对不足常规线的 30 对守卫（本盘命中键 ≥10 对）但平均时长 ≤30ms（本盘 ${v.pressShortMs != null ? v.pressShortMs + "ms" : "现算失败"}）。人类初级 p1=44.3ms、p5≈50ms，30ms 线留 14ms+ 余量；3.6~5.7 秒短局点击数不足会被所有 n≥30 守卫拦成零命中，本触发器放宽样本、收紧阈值兜住（362462/362485/362486 案定标）`,
+      cls: "bad",
+    });
+  }
+  if (r & (1 << 24)) {
+    tags.push({
+      text: `账号按压异常${v.acctPressMedianMs != null ? ` 中位 ${v.acctPressMedianMs}ms` : ""}`,
+      title: `账号级按压聚合：上传者最近 30 盘中 press 可统计（配对 n≥10）的录像 ≥3 盘，且代表按压时长（可统计键取更低者）中位数 ≤40ms${v.acctPressMedianMs != null ? `（本账号 ${v.acctPressVideos ?? "?"} 盘可统计，中位 ${v.acctPressMedianMs}ms）` : "（现算失败）"}。人类单盘按压 p1=44.3ms，中位数 ≤40ms 意味着该账号的典型盘全部在人类 1 分位以下——单盘可以擦线伪装，账号级连续超人类是生成器特征（28122 案：22 盘合成流）`,
       cls: "bad",
     });
   }

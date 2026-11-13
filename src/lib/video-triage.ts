@@ -42,6 +42,13 @@
 //       精确占比 >23%（真人长间隔区极值 16.2%；360420=30.9%、347805=23.2%）
 //       ——360420 型生成器补齐了 bit17~21 全部结构特征，但定时器节拍无法
 //       伪装：真人高占比聚集全部在快速节奏区（众数 30~150ms）
+//   bit23 SHORT_PRESS 短局超快按压（2026-11-13 沈正刚 28122 案）：press 配对
+//       n≥10（放宽自 bit0 的 30 守卫）且平均 ≤30ms——3.6~5.7s 短局（16~24 次
+//       点击）被所有 n≥30 守卫拦成零命中，唯一超人类信号 press avg 13~26ms
+//       由此生效（人类初级 p1=44.3ms / p5≈50ms 留 14ms+ 余量）
+//   bit24 ACCOUNT_PRESS 账号按压聚合（2026-11-13）：最近 30 盘中 press 可统计
+//       （n≥15）盘 ≥3 且代表按压时长中位数 ≤40ms——单盘可擦线伪装，账号级
+//       连续超人类难伪装；合成流批量上传（28122 当日 22 盘）账号层证据更早
 //   （bit17~21 为 2026-11-12 人类相似度触发器组（红客 360671 案），定标与豁免
 //       口径见 video-triage-limits.ts 头部注释及 humanLikeTriggers；
 //       bit22 为同日点击节拍组（钮志锋 360420/347805 案）；曾试过 bit23
@@ -61,7 +68,7 @@ import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
 import { calZini } from "./zini";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_STD_TRIGGER_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS, GAP_MODE_MIN_MS, GAP_MODE_SHARE_TRIGGER, GAP_MODE_MIN_COUNT, GAP_CADENCE_MIN_N } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_STD_TRIGGER_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS, GAP_MODE_MIN_MS, GAP_MODE_SHARE_TRIGGER, GAP_MODE_MIN_COUNT, GAP_CADENCE_MIN_N, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS, CLIENT_MV_PER_CLICK_LEGAL_MIN, CLONE_MV_PER_CLICK_LEGAL_MIN, ACCOUNT_PRESS_SCAN_LIMIT, ACCOUNT_PRESS_MIN_VIDEOS, ACCOUNT_PRESS_MEDIAN_MS } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
 import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
 import { auditRankedGame } from "../core/src/lib/ranked-audit";
@@ -158,6 +165,24 @@ export interface PressPairStats {
   rightAvg: number | null;
   rightN: number;
   cl: number;
+}
+
+/** bit0（分级线，n≥30）+ bit23 短局超快按压（n≥15 且 ≤30ms）——左右键各自独立判，
+ *  任一键命中即置位。triageParsed 与存量补判脚本共用同一口径，防两处漂移。 */
+export function pressTriggers(ps: PressPairStats, level: string): number {
+  let bits = 0;
+  const pressMs = PRESS_AVG_MS[level] ?? 50;
+  const hit = (avg: number | null, n: number, line: number, minN: number) =>
+    avg !== null && n >= minN && avg <= line;
+  if (hit(ps.leftAvg, ps.leftN, pressMs, PRESS_MIN_PAIRS) ||
+      hit(ps.rightAvg, ps.rightN, pressMs, PRESS_MIN_PAIRS)) {
+    bits |= AUTO_REASON.PRESS;
+  }
+  if (hit(ps.leftAvg, ps.leftN, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS) ||
+      hit(ps.rightAvg, ps.rightN, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS)) {
+    bits |= AUTO_REASON.SHORT_PRESS;
+  }
+  return bits;
 }
 
 /** 左键按下＝lc/mc/sc、松开＝lr/mr；右键按下＝rc、松开＝rr；时间序自然配对。
@@ -360,15 +385,16 @@ export function humanLikeStats(v: ParsedVideo): HumanLikeStats {
 
 /** 人类相似度触发器组：返回命中的位码（bit17~22）。triageParsed 内联调用；
  *  存量补判脚本（scripts/trajectory-retriage.ts）直接复用做增量 OR。
- *  格式豁免（全站回扫实证，2026-11-12 本地 29.7 万免核定盘）：
+ *  格式豁免（全站回扫实证，2026-11-12 本地 29.7 万免核定盘；2026-11-13 起豁免
+ *  带数值守卫，见 CLIENT_MV_PER_CLICK_LEGAL_MIN 注释）：
  *  · 站内客户端（software=Saolei.wang / 带 evf_sig 签名）——落点本就格对齐、
  *    mv 事件较稀（浏览器 mousemove，mv/点击比合法低至 1.56）：豁免
- *    PATH_SPARSE / CLICK_OFFSET；
+ *    PATH_SPARSE / CLICK_OFFSET，但 mv/点击低于 1.56 时 PATH_SPARSE 豁免失效；
  *  · 老 Clone 0.97（全站 5.7 万盘，唯一在用版本）——其写流格式本身就是
  *    「点击落点=格中心（offDistinct=1）+ 瞬时点击同刻写 lc+lr（零占比可到 37.9%）
  *    + 每格跨界一条 mv（比值可到 1.7）」：豁免 PATH_SPARSE / CLICK_OFFSET /
- *    ZERO_PRESS。三路的反作弊火力由 PATH_DT / PRESS_UNIFORM（全软件适用、
- *    老Clone零命中）与既有触发器组承接。
+ *    ZERO_PRESS，但 mv/点击低于 1.7 时 PATH_SPARSE 豁免失效。三路的反作弊火力
+ *    由 PATH_DT / PRESS_UNIFORM（全软件适用、老Clone零命中）与既有触发器组承接。
  *  · 点击节拍组（bit22）全软件适用：节拍指纹来自时间戳本身，与写流格式
  *    无关（各软件人类长间隔区极值均 ≤0.162，低于触发线 0.23）。 */
 export function humanLikeTriggers(hl: HumanLikeStats, software: string | null, clientOwned: boolean): number {
@@ -379,8 +405,15 @@ export function humanLikeTriggers(hl: HumanLikeStats, software: string | null, c
     if (hl.mvMinDt !== null && hl.mvMinDt > MV_MIN_DT_TRIGGER_MS) bits |= AUTO_REASON.PATH_DT;
     // 轨迹稀疏：比值低且全程无 ≥3 连密集采样串（慢速真人盘 mv/点击比可低到 1.29，
     // 但真实移动必现 ≥3 连密集串——2026-11-12 全站回扫 260087/260089 实证）；
-    // 站内客户端与老 Clone 豁免；「补一对假事件」可绕 mvMinDt 但绕不过 burst<3
-    if (!clientOwned && !clone &&
+    // 「补一对假事件」可绕 mvMinDt 但绕不过 burst<3
+    // 豁免改数值守卫（2026-11-13 沈正刚 28122 案）：站内客户端/老 Clone 的豁免原先
+    // 只看 software 名，合成流冒用站内软件名（mv/点击 0.78~0.81）仍被白免。比值低于
+    // 本软件合法下限（站内 1.56 / Clone 1.7，2026-11-12 定标）时豁免失效照判——
+    // 合法客户端物理上写不出低于下限的流。
+    const legalMin = clone ? CLONE_MV_PER_CLICK_LEGAL_MIN : CLIENT_MV_PER_CLICK_LEGAL_MIN;
+    const formatExempt17 = (clientOwned || clone) &&
+      hl.mvPerClick !== null && hl.mvPerClick >= legalMin;
+    if (!formatExempt17 &&
         hl.mvPerClick !== null && hl.mvPerClick < MV_PER_CLICK_TRIGGER &&
         hl.maxMvBurst < MIN_MV_BURST) {
       bits |= AUTO_REASON.PATH_SPARSE;
@@ -452,6 +485,58 @@ export async function isLowTrustUser(userId: number): Promise<boolean> {
   return (await getUserTrustInfo(userId)).lowTrust;
 }
 
+// ---------- 账号级按压聚合（bit24，2026-11-13 沈正刚 28122 案） ----------
+
+export interface AccountPressStats {
+  /** 参与统计的盘数（扫描窗口内 press 可统计：任一键配对 n≥15） */
+  usable: number;
+  /** 各可统计盘的代表按压时长（可统计键取更低者）中位数（ms；usable=0 时 null） */
+  medianMs: number | null;
+}
+
+/** 扫描上传者最近 ACCOUNT_PRESS_SCAN_LIMIT 盘（含正在分拣的当前盘——与存量
+ *  补判口径一致，都是「该账号最近 30 盘」的整体视角），逐盘算 press 代表时长，
+ *  聚合中位数。单盘读文件 + 解析 ~3ms，30 盘上限对上传链路无感。 */
+export async function accountPressStatsOf(userId: number): Promise<AccountPressStats> {
+  // VideoInfo 与 Video 无 Prisma 关联（同 id 平表），两步取最近 30 盘
+  const vids = await prisma.video.findMany({
+    where: { user: BigInt(userId) },
+    select: { id: true },
+    orderBy: { id: "desc" },
+    take: ACCOUNT_PRESS_SCAN_LIMIT,
+  });
+  if (!vids.length) return { usable: 0, medianMs: null };
+  const infos = await prisma.videoInfo.findMany({
+    where: { id: { in: vids.map((x) => x.id) } },
+    select: { id: true, filepath: true },
+  });
+  const rows = [...infos];
+  const reps: number[] = [];
+  for (const info of rows) {
+    const buf = readVideoFile(info.filepath);
+    if (!buf) continue;
+    const ext = info.filepath.split(".").pop()?.toLowerCase() ?? "";
+    const parsed = parseVideoBinary(buf, ext);
+    if (!parsed) continue;
+    const ps = pressPairStats(parsed);
+    const keys: number[] = [];
+    if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.leftAvg);
+    if (ps.rightAvg !== null && ps.rightN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.rightAvg);
+    if (keys.length) reps.push(Math.min(...keys));
+  }
+  if (!reps.length) return { usable: 0, medianMs: null };
+  const sorted = [...reps].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return { usable: reps.length, medianMs: Math.round(median) };
+}
+
+/** bit24 判定：可统计盘数与中位数双门槛（口径见 ACCOUNT_PRESS_* 常量注释） */
+export function accountPressHit(s: AccountPressStats): boolean {
+  return s.usable >= ACCOUNT_PRESS_MIN_VIDEOS &&
+    s.medianMs !== null && s.medianMs <= ACCOUNT_PRESS_MEDIAN_MS;
+}
+
 // ---------- 判档主函数 ----------
 
 export interface TriageResult {
@@ -480,11 +565,7 @@ export function triageParsed(
   let reason = 0;
 
   const ps = pressPairStats(v);
-  const pressMs = PRESS_AVG_MS[level] ?? 50;
-  if ((ps.leftAvg !== null && ps.leftN >= PRESS_MIN_PAIRS && ps.leftAvg <= pressMs) ||
-      (ps.rightAvg !== null && ps.rightN >= PRESS_MIN_PAIRS && ps.rightAvg <= pressMs)) {
-    reason |= AUTO_REASON.PRESS;
-  }
+  reason |= pressTriggers(ps, level);
 
   // 人类相似度触发器组（2026-11-12 红客合成录像 360671 案）：
   // 抓生成器写流的非人类结构特征（详见 humanLikeStats 注释与 limits 定标说明）。
@@ -658,6 +739,18 @@ export async function triageVideo(videoId: number, uploadExtra: TriageUploadExtr
     );
     let flag = baseFlag;
     let reason = baseReason;
+
+    // 账号按压聚合（bit24，2026-11-13）：单盘触发器可以擦线伪装，账号级中位数
+    // 难以连续伪装。30 盘 × ~3ms 读文件对上传链路无感；批量回填脚本走
+    // account-press-retriage.ts 的按用户分组单遍扫描（每盘只解析一次），
+    // 不经本入口（否则全站盘 × 30 读文件不可承受）。
+    try {
+      const acct = await accountPressStatsOf(Number(video.user));
+      if (accountPressHit(acct)) {
+        reason |= AUTO_REASON.ACCOUNT_PRESS;
+        flag = 0;
+      }
+    } catch { /* 聚合失败不阻断主分拣 */ }
 
     // evf 校验（2026-10-24 引入，2026-10-28 张老师收窄口径）：ms-toollib is_valid
     // 只跑**元扫雷** evf（库白名单止于元3.3.4，元3.3.5+ 会误报 bit12；软件按

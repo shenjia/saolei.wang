@@ -870,6 +870,12 @@ export interface AdminVideoRow {
   cl: number | null;
   /** press-release 平均时长 ms（需核定行现算：左键优先、右键单独；null=未算/不适用） */
   pressAvgMs: number | null;
+  /** 短局超快按压命中值 ms（bit23，n≥15 且 ≤30ms 的键取更低者；null=未命中/未算） */
+  pressShortMs: number | null;
+  /** 账号按压聚合中位数 ms（bit24 行现算：最近 30 盘可统计盘代表时长的中位数） */
+  acctPressMedianMs: number | null;
+  /** 账号按压聚合可统计盘数（bit24 行现算） */
+  acctPressVideos: number | null;
   /** 人类相似度统计（需核定行现算，2026-11-12 bit17~21 标签展示具体数值用；
    *  null=未算/解析失败） */
   trajStats: { mv: number; clicks: number; mvPerClick: number | null; mvMinDt: number | null; maxMvBurst: number; pressStd: number | null; offDistinct: number | null; offStd: number | null; zeroPressFrac: number | null; loneZeroPressFrac: number | null; idleN: number; idleModeMs: number | null; idleModeShare: number | null } | null;
@@ -1087,6 +1093,9 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       cls: mMap.get(id)?.cls ?? null,
       cl: mMap.get(id)?.cl ?? null,
       pressAvgMs: null,
+      pressShortMs: null,
+      acctPressMedianMs: null,
+      acctPressVideos: null,
       trajStats: null,
       filepath: info?.filepath ?? "",
     });
@@ -1101,9 +1110,23 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
         const d = pressMap.get(r.id);
         if (d) {
           r.pressAvgMs = d.pressAvgMs;
+          r.pressShortMs = d.pressShortMs;
           r.trajStats = d.traj;
         }
       }
+    }
+  }
+  // bit24 账号按压聚合（2026-11-13）：只对命中行现算（每次最多读 30 个文件，
+  // 不对全部需核定行跑）
+  const acctIds = out.filter((r) => r.autoReason & (1 << 24));
+  if (acctIds.length) {
+    const { accountPressStatsOf } = await import("@/lib/video-triage");
+    for (const r of acctIds) {
+      try {
+        const acct = await accountPressStatsOf(r.user);
+        r.acctPressMedianMs = acct.medianMs;
+        r.acctPressVideos = acct.usable;
+      } catch { /* 展示退化，不影响列表 */ }
     }
   }
   return out;
@@ -1113,7 +1136,7 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
  *  文件缺失/解析失败返回 null） */
 async function computePressAvg(
   ids: number[]
-): Promise<Map<number, { pressAvgMs: number | null; traj: AdminVideoRow["trajStats"] } | null>> {
+): Promise<Map<number, { pressAvgMs: number | null; pressShortMs: number | null; traj: AdminVideoRow["trajStats"] } | null>> {
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: ids.map(BigInt) } },
     select: { id: true, filepath: true },
@@ -1122,8 +1145,8 @@ async function computePressAvg(
   const pathMod = await import("path");
   const { parseVideoBinary } = await import("@/lib/videoradar");
   const { pressPairStats, humanLikeStats } = await import("@/lib/video-triage");
-  const { PRESS_AVG_MS } = await import("@/lib/video-triage-limits");
-  const result = new Map<number, { pressAvgMs: number | null; traj: AdminVideoRow["trajStats"] } | null>();
+  const { PRESS_AVG_MS, PRESS_SHORT_TRIGGER_MS } = await import("@/lib/video-triage-limits");
+  const result = new Map<number, { pressAvgMs: number | null; pressShortMs: number | null; traj: AdminVideoRow["trajStats"] } | null>();
   for (const info of infos) {
     result.set(N(info.id), null);
     try {
@@ -1150,6 +1173,13 @@ async function computePressAvg(
         const r = Math.round(ps.rightAvg);
         hit = hit === null ? r : Math.min(hit, r);
       }
+      // bit23 短局超快按压命中值（n≥10 且 ≤30ms 的键取更低者，与触发口径一致）
+      let shortHit: number | null = null;
+      if (ps.leftAvg !== null && ps.leftN >= 10 && ps.leftAvg <= PRESS_SHORT_TRIGGER_MS) shortHit = Math.round(ps.leftAvg);
+      if (ps.rightAvg !== null && ps.rightN >= 10 && ps.rightAvg <= PRESS_SHORT_TRIGGER_MS) {
+        const r = Math.round(ps.rightAvg);
+        shortHit = shortHit === null ? r : Math.min(shortHit, r);
+      }
       const hl = humanLikeStats(parsed);
       const traj: AdminVideoRow["trajStats"] = {
         mv: hl.mv,
@@ -1166,7 +1196,7 @@ async function computePressAvg(
         idleModeMs: hl.idleModeMs,
         idleModeShare: hl.idleModeShare !== null ? +hl.idleModeShare.toFixed(3) : null,
       };
-      result.set(N(info.id), { pressAvgMs: hit, traj });
+      result.set(N(info.id), { pressAvgMs: hit, pressShortMs: shortHit, traj });
     } catch {
       /* 单行失败保持 null，标签退化为无数值形态 */
     }
