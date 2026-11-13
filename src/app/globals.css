@@ -15902,6 +15902,10 @@ span.vs_btn--disabled:hover img {
   align-items: center;
   justify-content: center;
   padding: 4px;
+    /* 必须清 margin：legacy 全站 button margin-right:8px 会让 flex 居中项的
+     margin 盒参与计算，喇叭连同上方「音效打开/关闭」气泡整体左偏 4px
+     （2026-11-13 实测：snd 中心 716 vs 按钮中心 720）。同 .vs_fight 的坑 */
+  margin: 0;
   background: none;
   border: 0;
   box-shadow: none; /* 21:06 张老师：音量按钮不该有 legacy button 的边框和阴影 */
