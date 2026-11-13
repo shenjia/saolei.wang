@@ -81,8 +81,8 @@ export function CompBlock({
           {c.status === "active" && (
             <span className="comp_tipwrap">
               {/* 开赛 → /online?c=比赛ID（张老师 15:14 定：带比赛 ID 进练习页比赛模式；
-                  三轮 16:40 定文案「开赛」） */}
-              <a className="vs_fight comp_link" href={`/online?c=${c.id}`}>
+                  三轮 16:40 定文案「开赛」；四轮 20:03 定新标签页打开） */}
+              <a className="vs_fight comp_link" href={`/online?c=${c.id}`} target="_blank">
                 开赛
               </a>
               <span className="comp_tip">
@@ -96,8 +96,10 @@ export function CompBlock({
 
           {c.status === "ended" && (
             <span className="comp_tipwrap">
-              {/* 已结束 → 可点进详情页；hover 文字切「查看结果」+ 按钮提亮为亮灰（14:45 定） */}
-              <Link className="comp_btn comp_btn_ended comp_btn_result" href={`/competitions/${c.id}`}>
+              {/* 已结束 → 可点进详情页；hover 文字切「看结果」+ 按钮提亮为亮灰（14:45 定）；
+                  四轮 20:03 定新标签页打开（铁律：_blank 的 Link 必须 prefetch={false}，
+                  新标签页预取缓存无用、纯吃 nginx 限速配额 e77f131） */}
+              <Link className="comp_btn comp_btn_ended comp_btn_result" href={`/competitions/${c.id}`} target="_blank" prefetch={false}>
                 <span className="lbl_a">已结束</span>
                 <span className="lbl_b">看结果</span>
               </Link>

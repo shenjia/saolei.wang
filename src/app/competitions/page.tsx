@@ -1,7 +1,7 @@
 // 前台「比赛」页（2026-11-13 张老师需求；二轮 14:45 口径修订）
 //
 // 版式：复用首页 #page.two_columns 双栏壳——左=比赛列表板块（一比赛一 .box，一页 ≤5 个，
-// 底部 Pager 翻页），右=标准玩家卡片（UserPanel，与录像页同款）+「我的统计」+「全网统计」。
+// 底部 Pager 翻页），右=标准玩家卡片（UserPanel，与录像页同款）+「参赛记录」+「数据统计」。
 // 二轮修订：
 // · 顶部去掉页标题 h1（与导航「比赛」重复，张老师 14:45 定）；
 // · 板块渲染抽到 CompBlock 共用（详情页顶部同款），状态气泡/标识/奖金口径见该组件头注；
@@ -60,11 +60,11 @@ export default async function CompetitionsPage({
         </li>
 
         <li className="sidebar">
-          {/* 登录态：标准玩家卡片（与录像详情页右栏同款 UserPanel）+ 我的统计 */}
-          {session && <UserPanel userId={session.uid} />}
+          {/* 登录态：标准玩家卡片（与录像详情页右栏同款 UserPanel，四轮 20:03 定不带雷达板块） */}
+          {session && <UserPanel userId={session.uid} hideRadar />}
           {session && mstats && (
             <div className="box comp_stats">
-              <h2>我的统计</h2>
+              <h2>参赛记录</h2>
               <div className="comp_stat_row">
                 <span>参加比赛次数</span>
                 <b>{mstats.joined}</b>
@@ -82,7 +82,7 @@ export default async function CompetitionsPage({
 
           {/* 全网统计（全站口径，未登录也显示） */}
           <div className="box comp_stats">
-            <h2>全网统计</h2>
+            <h2>数据统计</h2>
             <div className="comp_stat_row">
               <span>比赛个数</span>
               <b>{gstats.competitions}</b>
