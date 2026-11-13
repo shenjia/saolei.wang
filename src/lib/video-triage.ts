@@ -47,12 +47,14 @@
 //       精确占比 >23%（真人长间隔区极值 16.2%；360420=30.9%、347805=23.2%）
 //       ——360420 型生成器补齐了 bit17~21 全部结构特征，但定时器节拍无法
 //       伪装：真人高占比聚集全部在快速节奏区（众数 30~150ms）
-//   bit23 SHORT_PRESS 短局超快按压（2026-11-13 沈正刚 28122 案）：左键 press 配对
-//       n≥10（放宽自 bit0 的 30 守卫）且平均 ≤30ms——3.6~5.7s 短局（16~24 次
+//   bit23 SHORT_PRESS 短局超快按压（2026-11-13 沈正刚 28122 案）：单纯左键
+//       press 配对 n≥5 且平均 ≤30ms——3.6~5.7s 短局（16~24 次
 //       点击）被所有 n≥30 守卫拦成零命中，唯一超人类信号 press avg 13~26ms
-//       由此生效（人类初级 p1=44.3ms / p5≈50ms 留 14ms+ 余量）
-//   bit24 ACCOUNT_PRESS 账号按压聚合（2026-11-13）：最近 30 盘中左键可统计
-//       （n≥10）盘 ≥3 且左键按压平均的账号级中位数 ≤40ms——单盘可擦线伪装，
+//       由此生效（人类初级 p1=44.3ms / p5≈50ms 留 14ms+ 余量）。
+//       判据池＝单纯左键（2026-11-13 晚张老师定，36452 案）：双击/连击成员
+//       剔除——老 Clone 合成双击不区分按下抬起，双击对 0~10ms 是格式行为
+//   bit24 ACCOUNT_PRESS 账号按压聚合（2026-11-13）：最近 30 盘中单纯左键可统计
+//       （n≥10）盘 ≥3 且单纯左键按压平均的账号级中位数 ≤40ms——单盘可擦线伪装，
 //       账号级连续超人类难伪装；合成流批量上传（28122 当日 22 盘）账号层证据更早
 //   （bit17~21 为 2026-11-12 人类相似度触发器组（红客 360671 案），定标与豁免
 //       口径见 video-triage-limits.ts 头部注释及 humanLikeTriggers；
@@ -73,7 +75,7 @@ import { MIN_3BV_FOR_3BVS } from "./config";
 import { parseVideoBinary } from "./videoradar";
 import type { ParsedVideo } from "./rawvf";
 import { calZini } from "./zini";
-import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_UNIFORM_SHARE, TOUCHPAD_MAX_PRESS_MS, DOUBLE_CLICK_WINDOW_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS, GAP_MODE_MIN_MS, GAP_MODE_SHARE_TRIGGER, GAP_MODE_MIN_COUNT, GAP_CADENCE_MIN_N, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS, CLIENT_MV_PER_CLICK_LEGAL_MIN, CLONE_MV_PER_CLICK_LEGAL_MIN, ACCOUNT_PRESS_SCAN_LIMIT, ACCOUNT_PRESS_MIN_VIDEOS, ACCOUNT_PRESS_MEDIAN_MS } from "./video-triage-limits";
+import { AUTO_REASON, PRESS_AVG_MS, STNB_TRIGGER, PATH_SPEED_TRIGGER, PATH_SPEED_MIN_TIME_MS, BLIND_RATE_TRIGGER, BLIND_RATE_MIN_BLINDS, BLIND_RATE_MIN_CLICKS, RANKED_FORCE_MANUAL_REVIEW, MV_PER_CLICK_TRIGGER, MV_MIN_DT_TRIGGER_MS, MIN_MV_BURST, PRESS_UNIFORM_SHARE, TOUCHPAD_MAX_PRESS_MS, DOUBLE_CLICK_WINDOW_MS, CLICK_OFFSET_DISTINCT_TRIGGER, CLICK_OFFSET_STD_TRIGGER, ZERO_PRESS_FRACTION_TRIGGER, TRAJ_MIN_CLICKS, TRAJ_MIN_MV, ZERO_PRESS_MIN_CLICKS, GAP_MODE_MIN_MS, GAP_MODE_SHARE_TRIGGER, GAP_MODE_MIN_COUNT, GAP_CADENCE_MIN_N, PRESS_SHORT_TRIGGER_MS, PRESS_SHORT_MIN_PAIRS, PRESS_MIN_SINGLE_CLICKS, CLIENT_MV_PER_CLICK_LEGAL_MIN, CLONE_MV_PER_CLICK_LEGAL_MIN, ACCOUNT_PRESS_SCAN_LIMIT, ACCOUNT_PRESS_MIN_VIDEOS, ACCOUNT_PRESS_MEDIAN_MS } from "./video-triage-limits";
 import { RANKED_SOFTWARE } from "./evfwrite";
 import { loadBlockedHistoryOf, lowTrustState } from "./lowtrust";
 import { auditRankedGame } from "../core/src/lib/ranked-audit";
@@ -174,6 +176,13 @@ export interface PressPairStats {
   pressMaxMs: number | null;
   /** 左右键合并的配对时长中位数 ms（无配对=null）——触控板豁免判据（<12ms） */
   pressMedianMs: number | null;
+  /** 单纯左键按压平均 ms——剔除双击/连击成员后的按压对池（d>0）。
+   *  2026-11-13 张老师定（36452 案）：老 Clone 合成双击不区分按下与抬起，
+   *  双击对被写成 0~10ms，不是真按压证据；按压触发器（bit0/bit23）只认
+   *  单纯左键（前后 DOUBLE_CLICK_WINDOW_MS 内无其他左键按下）。 */
+  pureLeftAvg: number | null;
+  /** 单纯左键按压对数 */
+  pureLeftN: number;
 }
 
 /** 触控板豁免（2026-11-13 张老师定，v4 改中位数判据）：按压配对时长中位数
@@ -184,19 +193,22 @@ export function isTouchpadPress(ps: PressPairStats): boolean {
   return ps.pressMedianMs !== null && ps.pressMedianMs < TOUCHPAD_MAX_PRESS_MS;
 }
 
-/** bit0（分级线，n≥30）+ bit23 短局超快按压（n≥10 且 ≤30ms）——**只判左键**
- *  （2026-11-13 张老师定：右键插旗真人天然超快，生产探针 uid 22955 右键 avg
- *  11~22ms 远低于人类左键 p1=44.3ms，纳入判据把正常账号整窗打成
- *  bit0+bit23+bit24）。触控板流（中位数 <12ms）整组放过。
+/** bit0（分级线，n≥30）+ bit23 短局超快按压（单纯左键 ≥5 且 ≤30ms）——
+ *  判据池＝单纯左键（2026-11-13 张老师定，36452 案）：
+ *  ① 只判左键（右键插旗真人天然超快，生产探针 uid 22955 右键 avg 11~22ms）；
+ *  ② 剔除双击/连击成员（老 Clone 合成双击不区分按下抬起，双击对 0~10ms
+ *     是写流格式行为，不是真按压证据）；
+ *  ③ bit23 单纯左键 ≥PRESS_MIN_SINGLE_CLICKS（5 次）才生效。
+ *  触控板流（中位数 <12ms）整组放过。
  *  triageParsed 与存量补判脚本共用同一口径，防两处漂移。 */
 export function pressTriggers(ps: PressPairStats, level: string): number {
   if (isTouchpadPress(ps)) return 0;
   let bits = 0;
   const pressMs = PRESS_AVG_MS[level] ?? 50;
-  if (ps.leftAvg !== null && ps.leftN >= PRESS_MIN_PAIRS && ps.leftAvg <= pressMs) {
+  if (ps.pureLeftAvg !== null && ps.pureLeftN >= PRESS_MIN_PAIRS && ps.pureLeftAvg <= pressMs) {
     bits |= AUTO_REASON.PRESS;
   }
-  if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS && ps.leftAvg <= PRESS_SHORT_TRIGGER_MS) {
+  if (ps.pureLeftAvg !== null && ps.pureLeftN >= PRESS_MIN_SINGLE_CLICKS && ps.pureLeftAvg <= PRESS_SHORT_TRIGGER_MS) {
     bits |= AUTO_REASON.SHORT_PRESS;
   }
   return bits;
@@ -213,6 +225,9 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
   const presses: { L: number | null; R: number | null } = { L: null, R: null };
   const dursL: number[] = [];
   const dursR: number[] = [];
+  // 左键按压对（按下时刻 + 时长）与全部左键按下时刻——双击/连击成员分类用
+  const leftPairs: { ts: number; d: number }[] = [];
+  const leftClickTs: number[] = [];
   let cl = 0;
   for (const line of v.events) {
     const m = EV_LINE.exec(line);
@@ -222,12 +237,14 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
     if (ev === "lc" || ev === "mc" || ev === "sc") {
       presses.L = ts;
       cl++;
+      leftClickTs.push(ts);
     } else if (ev === "rc") {
       presses.R = ts;
       cl++;
     } else if (ev === "lr" || ev === "mr") {
       if (presses.L !== null) {
         const d = ts - presses.L;
+        leftPairs.push({ ts: presses.L, d });
         if (d > 0) dursL.push(d);
         presses.L = null;
       }
@@ -239,6 +256,21 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
       }
     }
   }
+  // 单纯左键池（2026-11-13 张老师定，36452 案）：按下时刻前后 250ms 内存在
+  // 其他左键按下 → 双击/快速连击成员，不进按压判据池（老 Clone 写流双击
+  // 不区分按下抬起，双击对 0~10ms 是格式行为；真人双击节奏同理豁免）。
+  const sortedL = [...leftClickTs].sort((a, b) => a - b);
+  const isDoubleClickMember = (ts: number): boolean => {
+    let lo = 0, hi = sortedL.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (sortedL[mid]! < ts) lo = mid + 1; else hi = mid; }
+    const prev = sortedL[lo - 1];
+    if (prev !== undefined && ts - prev <= DOUBLE_CLICK_WINDOW_MS) return true;
+    let i = lo;
+    while (i < sortedL.length && sortedL[i] === ts) i++;
+    const next = sortedL[i];
+    return next !== undefined && next - ts <= DOUBLE_CLICK_WINDOW_MS;
+  };
+  const pureDursL = leftPairs.filter((p) => p.d > 0 && !isDoubleClickMember(p.ts)).map((p) => p.d);
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const allDurs = [...dursL, ...dursR];
   const median = (a: number[]) => {
@@ -253,6 +285,8 @@ export function pressPairStats(v: ParsedVideo): PressPairStats {
     cl,
     pressMaxMs: allDurs.length ? Math.max(...allDurs) : null,
     pressMedianMs: median(allDurs),
+    pureLeftAvg: avg(pureDursL),
+    pureLeftN: pureDursL.length,
   };
 }
 
@@ -610,9 +644,9 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
     const parsed = parseVideoBinary(buf, ext);
     if (!parsed) continue;
     const ps = pressPairStats(parsed);
-    // 判定值＝左键按压平均（n≥10）；触控板豁免判据＝合并按压中位数
-    if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) {
-      reps.push(ps.leftAvg);
+    // 判定值＝单纯左键按压平均（n≥10，双击/连击成员剔除）；触控板豁免判据＝合并按压中位数
+    if (ps.pureLeftAvg !== null && ps.pureLeftN >= PRESS_SHORT_MIN_PAIRS) {
+      reps.push(ps.pureLeftAvg);
       if (ps.pressMedianMs !== null) meds.push(ps.pressMedianMs);
     }
   }

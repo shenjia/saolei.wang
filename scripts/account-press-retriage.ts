@@ -1,6 +1,6 @@
 // 账号按压聚合触发器（bit24，2026-11-13 沈正刚 28122 案）存量补判：
 // 按用户分组单遍扫描全站录像（每盘只读文件/解析一次，~3ms），对每个用户取
-// 最近 ACCOUNT_PRESS_SCAN_LIMIT 盘算左键按压平均（左键配对 n≥10），
+// 最近 ACCOUNT_PRESS_SCAN_LIMIT 盘算单纯左键按压平均（单纯左键配对 n≥10），
 // 可统计盘 ≥ACCOUNT_PRESS_MIN_VIDEOS 且账号中位数 ≤ACCOUNT_PRESS_MEDIAN_MS →
 // 该用户窗口内全部录像增量 OR bit24 并转需核定（auto_flag 0）。
 // 触控板账号豁免（2026-11-13 v4）：各盘合并按压中位数的账号中位 <12ms 放过。
@@ -91,14 +91,15 @@ async function main() {
     const v = parseVideoBinary(new Uint8Array(buf), ext);
     if (!v) { parseFail++; agg.reps.push(NaN); continue; }
     const ps = pressPairStats(v);
-    // 只判左键（2026-11-13 张老师晚定）：右键插旗真人天然超快，不进判据；
-    // 老 Clone 格式盘不入证据池（瞬时/超短点击是写流格式行为，avg 失真）
+    // 判据池＝单纯左键（2026-11-13 张老师晚定）：右键插旗真人天然超快不进判据；
+    // 双击/连击成员剔除（老 Clone 合成双击不区分按下抬起，双击对 0~10ms 是
+    // 格式行为，36452 案）；老 Clone 格式盘不入证据池（瞬时/超短点击 avg 失真）
     if (r.software === "Clone") {
       agg.reps.push(NaN);
       agg.meds.push(NaN);
-    } else if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) {
-      agg.reps.push(ps.leftAvg);
-      agg.meds.push(ps.pressMedianMs ?? ps.leftAvg);
+    } else if (ps.pureLeftAvg !== null && ps.pureLeftN >= PRESS_SHORT_MIN_PAIRS) {
+      agg.reps.push(ps.pureLeftAvg);
+      agg.meds.push(ps.pressMedianMs ?? ps.pureLeftAvg);
     } else {
       agg.reps.push(NaN);
       agg.meds.push(NaN);
