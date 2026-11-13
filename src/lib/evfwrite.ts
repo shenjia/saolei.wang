@@ -71,6 +71,12 @@ export interface RankedEvfInput {
    *  练习页下载＝客户端自己传常量（OnlinePlay 内联）；
    *  凭据 evf（cheat report）＝服务端生成，无客户端版本语义，缺省 0.3 */
   clientVersion?: string;
+  /** Program 标识覆写（2026-11-13 二期比赛模式）：缺省写 RANKED_SOFTWARE——
+   *  上传路由拒绝手动上传排名软件录像（只允许服务器生成），比赛局 EVF 需走
+   *  普通上传管线（录像标识带比赛标识自动分拣），故覆写为
+   *  COMP_EVF_PROGRAM（"Saolei.wang Competition"）绕开排名闸；
+   *  evf.ts 归一时未匹配站名前缀，Program 原样入库，checkProgramVersion 未知软件放行 */
+  programLabel?: string;
   /** 导出语义校验的权威原始流（2026-11-08，353969 案）。
    *  缺省与 events 相同；若 events 经过 canonicalize/repair 等预处理，必须在这里
    *  另传预处理前的原始流，防止拿已经转换坏的结果自证正确。只参与校验，不写文件；
@@ -188,7 +194,7 @@ function encodeRankedEvf(input: RankedEvfInput): Uint8Array {
   out.push(0x58, 0x58); // country "XX"：ISO 3166-1 无法解析国家的标准占位
   u64(Math.round((startMs ?? 0) * 1000));
   u64(Math.round((endMs ?? 0) * 1000));
-  cstr(`${RANKED_SOFTWARE} ${input.clientVersion ?? RANKED_CLIENT_VERSION_DEFAULT}`);
+  cstr(`${input.programLabel ?? RANKED_SOFTWARE} ${input.clientVersion ?? RANKED_CLIENT_VERSION_DEFAULT}`);
   cstr(input.player ?? "");
   cstr(""); // race identifier
   cstr(input.uniqueIdentifier ?? "");

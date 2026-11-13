@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { compStatus } from "@/lib/competition";
+import { addCompEvent, COMP_EVENT_PLAYER_JOIN, compStatus } from "@/lib/competition";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -54,6 +54,9 @@ export async function POST(req: Request) {
     }
     throw e;
   }
+
+  // 「玩家报名参加」动态（2026-11-13 二期：详情页动态板块）
+  await addCompEvent(Number(comp.id), COMP_EVENT_PLAYER_JOIN, session.uid);
 
   return NextResponse.json({ ok: true });
 }

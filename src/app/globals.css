@@ -17270,27 +17270,20 @@ body #header .nav li a.vs_new_hint,
    右=玩家卡片 +「我的统计」（登录态）+「全网统计」。
    标题色口径：只有进行中金色（张老师 13:12 定）；气泡一律朝上（2026-11-11 定）。 */
 
-#page.comp_page .comp_page_head { margin: 16px 8px 0; }
-#page.comp_page .comp_page_head h1 {
-  margin: 0;
-  color: #fdc61a;
-  font-size: 22px;
-  line-height: 30px;
-  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
-}
-
-/* 比赛板块（复用 .box 盒型，压缩内边距适配信息密度） */
+/* 页面级 h1 已去掉（2026-11-13 二轮：与导航「比赛」重复）；板块标题字号比全站
+   主标题小两号 22px/33px（三轮 16:40 张老师定），进行中金色、其余亮灰 */
 #page.comp_page .comp_item { width: auto; margin: 0 8px 16px; padding: 16px 20px; }
 .comp_head { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
 .comp_title_group { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.comp_name { margin: 0; font-size: 18px; line-height: 26px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.comp_name { margin: 0; font-size: 22px; line-height: 33px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
 .comp_name.on { color: #fdc61a; }
+.comp_name_link { color: inherit; text-decoration: none; }
 .comp_dates { font-size: 12px; color: #939387; white-space: nowrap; }
 .comp_ctrl { display: flex; align-items: flex-end; gap: 14px; flex-shrink: 0; }
 
-/* 总奖金（比标题小两号 = 16px），hover 出分配方案气泡 */
+/* 总奖金（标题 22px 后奖金 18px 保持），hover 出分配方案气泡 */
 .comp_tipwrap { position: relative; display: inline-block; }
-.comp_prize { font-size: 16px; line-height: 26px; color: #b1b1a4; white-space: nowrap; padding-bottom: 9px; }
+.comp_prize { font-size: 18px; line-height: 33px; color: #b1b1a4; white-space: nowrap; }
 .comp_prize b { color: #fdc61a; }
 
 /* 朝上气泡（hover 显示；箭头朝下指按钮） */
@@ -17307,6 +17300,10 @@ body #header .nav li a.vs_new_hint,
 }
 .comp_tipwrap:hover .comp_tip { opacity: 1; visibility: visible; }
 .comp_tip b { color: #fdc61a; font-weight: 700; }
+.comp_tip_line { display: block; white-space: nowrap; }
+.comp_tip_line.white { color: #f8f8f2; }
+/* 报名气泡第二行：时间信息（张老师 15:14 二轮定「时间中的数字多用绿色」） */
+.comp_tip_time { color: #a6e22e; font-weight: 700; }
 .comp_btn_zone { display: inline-block; }
 
 /* 状态按钮三态（盒型对齐 vs_fight：9px 圆角 / 16px 粗体 / letter-spacing 2px） */
@@ -17327,11 +17324,23 @@ body #header .nav li a.vs_new_hint,
 }
 .comp_btn_ended {
   background: #4a493f; color: #b1b1a4; border: 1px solid #5c5b4f;
-  padding: 8.5px 25px 7.5px; cursor: default;
+  padding: 8.5px 25px 7.5px; text-decoration: none;
   text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
 }
-/* 进行中「开始比赛」直接复用 .vs_fight（对决页同款黄渐变），补链接形态去下划线 */
+/* 已结束按钮（三轮 16:40 定）：hover 亮灰底色黑色字「看结果」，点击进详情页。
+   1,2,1 特异性压过 legacy #page a:hover（1,1,1 金色）——同 comp_link 的坑 */
+.comp_btn_result .lbl_b { display: none; }
+#page a.comp_btn_result:hover {
+  background: #c9c8ba; border-color: #c9c8ba; color: #272822;
+  text-decoration: none; text-shadow: none;
+}
+.comp_btn_result:hover .lbl_a { display: none; }
+.comp_btn_result:hover .lbl_b { display: inline; }
+/* 进行中「开始比赛」直接复用 .vs_fight（对决页同款黄渐变），补链接形态去下划线；
+   hover 文字不得变绿（legacy #page a:hover 1,1,1 压过 .vs_fight:hover 0,3,0，
+   张老师 15:14 二轮点名，这里用 1,3,1 特异性压回去锁深字） */
 #page.comp_page a.comp_link { text-decoration: none; display: inline-block; }
+#page a.comp_link.vs_fight:hover:not(:disabled) { color: #2b2a20; }
 
 /* 纪录图表 */
 .comp_chart {
@@ -17341,25 +17350,63 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_empty { color: #75715e; font-size: 14px; }
 .comp_chart_svg { display: block; }
 
-/* 信息行：发起人 | 比赛标识 */
-.comp_meta { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
+/* 信息行（三轮 16:40 定）：发起人一行局左在上，比赛标识一行在下（整段加粗高亮） */
+.comp_meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
-.comp_meta b.mono { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
+/* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
+.comp_meta b.comp_code_all { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
 .comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
 .comp_rules { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: #b1b1a4; }
 
-/* 右栏：玩家卡片 / 我的统计 / 全网统计 */
-#page.comp_page .comp_card { width: auto; padding: 14px; }
-.comp_card_link { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.comp_avatar { width: 48px; height: 48px; border-radius: 6px; display: block; flex-shrink: 0; }
-.comp_card_info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.comp_card_name { color: #f8f8f2; font-size: 16px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.comp_card_uid { font-style: normal; color: #939387; font-size: 12px; }
-#page.comp_page a.comp_card_link:hover .comp_card_name { color: #a6e22e; }
+/* 右栏：玩家卡片走标准 UserPanel（.user_card，与录像页同款，无本页私有样式）；
+   统计/排名板块（三轮 16:40 定）标题与内 padding 与站内右栏板块一致——
+   即 .box 默认（padding 30px / 盒宽 210）+ h2 legacy 盒标题（20px 灰），无私有覆盖 */
 
-#page.comp_page .comp_stats { width: auto; padding: 14px; }
-.comp_stats h3 { margin: 0 0 8px; font-size: 15px; line-height: 22px; color: #fdc61a; }
-.comp_stats h3.green { color: #a6e22e; }
 .comp_stat_row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; line-height: 28px; color: #b1b1a4; }
 .comp_stat_row b { color: #f8f8f2; font-weight: 700; }
 #page.comp_page .gold { color: #fdc61a; }
+
+/* ==================== 比赛详情页（2026-11-13 二期：/competitions/[id]） ==================== */
+
+/* 主栏顶部留白（三轮 16:40 张老师定「主板块贴 header 不对」）：
+   comp_item margin-top 为 0，详情页首块顶到 header——给主栏加 16px（与板块间距一致） */
+#page.comp_page ul.comp_detail > li.main { padding-top: 16px; }
+
+/* 「动态」「录像」板块：h2 盒标题（legacy .box h2 同源），录像表与首页流同源
+   （ranking_table video_table 行渲染），板块内表格去掉外层 box 默认间距 */
+.comp_section { width: auto; margin: 0 8px 16px; padding: 16px 20px; }
+.comp_section h2 { margin: 0 0 10px; }
+.comp_section .comp_video_table { margin: 0 -8px; width: calc(100% + 16px); }
+.comp_section_empty { color: #75715e; font-size: 13px; line-height: 22px; padding: 6px 0; }
+
+/* 动态行：主体（玩家名 + 动作文）左，相对时间右 */
+.comp_events { margin: 0; padding: 0; list-style: none; }
+.comp_ev_row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; line-height: 28px; border-bottom: 1px dashed #3e3d32; }
+.comp_ev_row:last-child { border-bottom: 0; }
+.comp_ev_main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp_ev_user { color: #f8f8f2; font-weight: 700; text-decoration: none; margin-right: 4px; }
+.comp_ev_user:hover { color: #a6e22e; }
+.comp_ev_text { color: #b1b1a4; }
+.comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; }
+
+/* 迷你翻页（动态板块用 ep 参数，与录像板块 page 参数互不干扰） */
+.comp_mini_pager { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 8px; font-size: 13px; }
+.comp_mini_pager a { color: #b1b1a4; text-decoration: none; }
+.comp_mini_pager a:hover { color: #a6e22e; }
+.comp_mini_pager .off { color: #5d5c4f; cursor: default; }
+.comp_mini_info { color: #75715e; font-size: 12px; }
+
+/* 最新排名（详情页右栏）：名次 / 玩家 / 成绩 */
+.comp_rank { margin: 0; padding: 0; list-style: none; counter-reset: none; }
+.comp_rank_row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 28px; }
+.comp_rank_no { width: 20px; text-align: center; color: #939387; font-weight: 700; flex-shrink: 0; }
+.comp_rank_no.top { color: #fdc61a; }
+.comp_rank_name { color: #b1b1a4; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp_rank_name:hover { color: #a6e22e; }
+.comp_rank_time { margin-left: auto; color: #f8f8f2; font-weight: 700; text-decoration: none; flex-shrink: 0; }
+.comp_rank_time:hover { color: #a6e22e; }
+
+/* 后台录像管理「比赛」列挂接控件 */
+.comp_attach_on { display: inline-flex; align-items: center; gap: 6px; }
+.comp_attach_pick { display: inline-flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.comp_attach_pick .admin_input.sm { min-width: 120px; }

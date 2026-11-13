@@ -1870,7 +1870,8 @@ export async function getUserPracticeWins(
 // 计算序后不再需要；2026-10-22 起默认排序级别路径也改 raw SQL（JOIN video 滤
 // status=20，屏蔽不进前台）——ScoresDelegate/scoresTable 已无调用方，随之移除
 
-async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
+/** 按 id 批量取录像行（保持传入顺序）——比赛详情页「录像」板块复用（2026-11-13） */
+export async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
   if (!ids.length) return [];
   const bigIds = ids.map(BigInt);
   const [videos, infos, stats, metrics] = await Promise.all([

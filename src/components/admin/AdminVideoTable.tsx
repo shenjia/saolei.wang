@@ -19,7 +19,16 @@ import { VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { AdminVideoPlayer, type AdminPlayerTarget } from "./AdminVideoPlayer";
 import { confirmDialogChecked } from "@/components/Confirm";
 
-export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSuper: boolean }) {
+export function AdminVideoTable({
+  rows,
+  isSuper,
+  comps,
+}: {
+  rows: AdminVideoRow[];
+  isSuper: boolean;
+  /** 全量比赛选项（2026-11-13 二期挂接比赛用，比赛总量小服务端一次取回） */
+  comps: { id: number; name: string; shortName: string }[];
+}) {
   /** 全屏回放播放器（点时间列弹出，Esc/关闭按钮退出） */
   const [playTarget, setPlayTarget] = useState<AdminPlayerTarget | null>(null);
   /** 本会话内已看过的录像 id（markWatched 落库成功即入集，按钮即时变「已看」，2026-10-27） */
@@ -115,6 +124,10 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
             <td className="num">{v.downloads || "—"}</td>
             <td className="num">{v.comments || "—"}</td>
             <td className="sub">{v.createTime ? <RelTime time={v.createTime} /> : "—"}</td>
+            {/* 比赛列（2026-11-13 二期张老师需求）：显示所属比赛，行内可挂接/解除 */}
+            <td className="c comp_attach_cell">
+              <CompAttachCell v={v} comps={comps} />
+            </td>
             <td className="ops">
               {v.status !== VIDEO_STATUS.REVIEWED && (
                 <AdminAction
@@ -140,7 +153,7 @@ export function AdminVideoTable({ rows, isSuper }: { rows: AdminVideoRow[]; isSu
         ))}
         {rows.length === 0 && (
           <tr>
-            <td colSpan={16}>
+            <td colSpan={17}>
               <div className="admin_empty">没有符合条件的录像</div>
             </td>
           </tr>
@@ -199,5 +212,62 @@ function BanVideoButton({ v }: { v: AdminVideoRow }) {
     >
       {busy ? "…" : "屏蔽"}
     </button>
+  );
+}
+
+/** 比赛挂接单元格（2026-11-13 二期张老师需求）：录像管理行内手动将录像加入某场比赛。
+ *  已挂接=比赛名链接 +「解除」；未挂接=下拉选比赛 +「挂接」。走 ops video.competition
+ * （competitionId=0 表示解除），挂接成功服务端写「玩家更新成绩」比赛动态。 */
+function CompAttachCell({
+  v,
+  comps,
+}: {
+  v: AdminVideoRow;
+  comps: { id: number; name: string; shortName: string }[];
+}) {
+  const { run, busy } = useOp();
+  const [sel, setSel] = useState("");
+
+  if (v.compId) {
+    return (
+      <span className="comp_attach_on">
+        <Link className="link" href={`/competitions/${v.compId}`} target="_blank" prefetch={false}>
+          {v.compName ?? `#${v.compId}`}
+        </Link>
+        <AdminAction
+          op="video.competition"
+          params={{ id: v.id, competitionId: 0 }}
+          label="解除"
+          confirm={`确认解除录像 #${v.id} 的比赛挂接？`}
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span className="comp_attach_pick">
+      <select
+        className="admin_input sm"
+        value={sel}
+        disabled={busy || comps.length === 0}
+        onChange={(e) => setSel(e.target.value)}
+        title={comps.length === 0 ? "暂无比赛，先到「比赛管理」发起" : "选择要挂接的比赛"}
+      >
+        <option value="">选择比赛…</option>
+        {comps.map((c) => (
+          <option key={c.id} value={c.id}>
+            {`#${c.id} ${c.name}`}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="admin_btn sm primary"
+        disabled={busy || !sel}
+        onClick={() => sel && run("video.competition", { id: v.id, competitionId: Number(sel) })}
+      >
+        {busy ? "…" : "挂接"}
+      </button>
+    </span>
   );
 }

@@ -20,6 +20,7 @@ import { replayEvents } from "@/lib/videoradar";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { RANKED_SOFTWARE } from "@/lib/evfwrite";
 import { evfSignature } from "@/core/src/lib/evf-sign";
+import { addCompEvent, COMP_EVENT_SCORE } from "@/lib/competition";
 import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, UNREACHABLE_3BV, type VideoLevel } from "@/lib/config";
 import { getUser3bvCollection } from "@/lib/queries";
@@ -174,6 +175,23 @@ export async function uploadVideo(
      录像本体照常展示。历史录像不受追溯（库内标记制，非现算） */
   const noRecord = (parsed.bbbv ?? 0) < LEVEL_MIN_3BV[level];
 
+  /* 比赛自动分拣（2026-11-13 二期张老师定）：录像标识包含「进行中比赛」的标识
+     （competition.code，6 位随机码）→ 自动挂接该比赛。任何上传通道通用
+     （站内在线局保存时标识自动附加、外部软件玩家可把标识写进署名自行参加）。
+     只认进行中（start≤now<end）的比赛；标识不存在于任何进行中比赛 → 不挂接 */
+  const nowSecC = Math.floor(Date.now() / 1000);
+  let compAttach: { id: bigint; code: string } | null = null;
+  const activeComps = await prisma.competition.findMany({
+    where: { startTime: { lte: BigInt(nowSecC) }, endTime: { gt: BigInt(nowSecC) } },
+    select: { id: true, code: true },
+  });
+  for (const a of activeComps) {
+    if (a.code && parsed.player.includes(a.code)) {
+      compAttach = a;
+      break;
+    }
+  }
+
   /* 封面含旗串（2026-10-31 张老师需求：封面显示玩家标过的雷，F/X 等长编码进
      board）：重放事件流取终态旗位（flop 状态机，单盘 ~2.4ms）。NF 局旗位图
      全零、FL 局错旗也如实编码；重放抛错回退纯雷位串（封面功能降级不阻塞上传） */
@@ -266,6 +284,8 @@ export async function uploadVideo(
           // 来源合作方标记（2026-11-12 元扫雷上传）：from_site=api_key.id，
           // 详情页「来自XX」；from_id 不写（那是外站同步的幂等键，NULL 不参与唯一约束）
           ...(options?.fromSite ? { fromSite: BigInt(options.fromSite) } : {}),
+          // 比赛自动分拣（2026-11-13 二期）：标识命中进行中比赛 → 挂接
+          ...(compAttach ? { competitionId: compAttach.id } : {}),
           createTime: nowSec,
           updateTime: nowSec,
         },
@@ -313,6 +333,11 @@ export async function uploadVideo(
     });
   } catch {
     return fail("录像保存失败", 500);
+  }
+
+  // 比赛挂接成功 → 「玩家更新成绩」动态（2026-11-13 二期：详情页动态板块）
+  if (compAttach) {
+    await addCompEvent(Number(compAttach.id), COMP_EVENT_SCORE, session.uid);
   }
 
   // 自动分拣后置钩子（2026-10-19 方案 v2）：事务提交后异步跑触发器组，

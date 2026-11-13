@@ -109,51 +109,54 @@ export function ToastHost() {
   /** 提交前到达的 toastLoadingDone：整个气泡不渲染、不显示，effect 里直接复位 */
   const loadingSuppressed = useRef(false);
 
+  /* 命令式入口注册（⚠️ 必须在 render 期赋值，不能放 useEffect）：
+     ToastHost 在 layout 里排在 {children} 之后，React effect 按树序先跑页面子树——
+     挂在 effect 里时，页面进页即弹 toast（如 /online?c= 无效的比赛气泡）会在
+     emit 赋值前调用、静默丢失（2026-11-13 实证）。render 期赋值则必然先于
+     一切 effect 执行。赋值幂等，StrictMode 双 render 无碍 */
+  const push = (message: string, type: ToastType, hold?: number) => {
+    seq.current += 1;
+    loadingId.current = 0; // 普通气泡顶替 loading：此后再调 toastLoadingDone 一律无效
+    setLeaving(false); // 新消息进来时取消上一条的淡出
+    setItem({ id: seq.current, message, type, hold: hold ?? HOLD[type] });
+  };
+  const pushLoading = (message: string) => {
+    seq.current += 1;
+    loadingId.current = seq.current;
+    loadingCommitted.current = false; // 新气泡待提交；提交前到达的 done 走同步取消
+    loadingSuppressed.current = false;
+    setLeaving(false);
+    setItem({
+      id: seq.current,
+      message,
+      type: "loading",
+      hold: 0,
+      href: window.location.href,
+      shownAt: Date.now(),
+    });
+  };
+  emit = push; // 注册命令式入口
+  emitLoading = pushLoading;
+  emitLoadingDone = () => {
+    if (!loadingCommitted.current) {
+      // 气泡尚未上屏（同一同步事件里先 toastLoading 后 toastLoadingDone）：同步取消，
+      // 渲染层直接不输出、effect 里复位状态——气泡完全不出现（2026-11-10）
+      loadingSuppressed.current = true;
+      return;
+    }
+    closeLoading.current?.();
+  };
+
   useEffect(() => {
-    const push = (message: string, type: ToastType, hold?: number) => {
-      seq.current += 1;
-      loadingId.current = 0; // 普通气泡顶替 loading：此后再调 toastLoadingDone 一律无效
-      setLeaving(false); // 新消息进来时取消上一条的淡出
-      setItem({ id: seq.current, message, type, hold: hold ?? HOLD[type] });
-    };
-    const pushLoading = (message: string) => {
-      seq.current += 1;
-      loadingId.current = seq.current;
-      loadingCommitted.current = false; // 新气泡待提交；提交前到达的 done 走同步取消
-      loadingSuppressed.current = false;
-      setLeaving(false);
-      setItem({
-        id: seq.current,
-        message,
-        type: "loading",
-        hold: 0,
-        href: window.location.href,
-        shownAt: Date.now(),
-      });
-    };
-    emit = push; // 注册命令式入口
-    emitLoading = pushLoading;
-    emitLoadingDone = () => {
-      if (!loadingCommitted.current) {
-        // 气泡尚未上屏（同一同步事件里先 toastLoading 后 toastLoadingDone）：同步取消，
-        // 渲染层直接不输出、effect 里复位状态——气泡完全不出现（2026-11-10）
-        loadingSuppressed.current = true;
-        return;
-      }
-      closeLoading.current?.();
-    };
     function onToast(e: Event) {
       const d = (e as CustomEvent<{ message: string; type?: ToastType; hold?: number }>).detail;
       push(d.message, d.type ?? "info", d.hold);
     }
     window.addEventListener("app:toast", onToast);
     return () => {
-      emit = null;
-      emitLoading = null;
-      emitLoadingDone = null;
       window.removeEventListener("app:toast", onToast);
     };
-  }, []);
+  });
 
   // 停留 → 淡出 → 卸载（msg 变化即重置计时）
   // loading 分支不按 hold 计时：等「URL 变化」（跳转完成）或兜底超时，且至少可见 LOADING_MIN

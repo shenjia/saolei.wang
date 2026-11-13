@@ -288,7 +288,6 @@ model Video {
   // 成绩口径＝video_info.real_time（排行成绩口径 2026-10-30 张老师定）
   competitionId BigInt? @map("competition_id") @db.BigInt
 
-
   // 外站同步幂等键（2026-11-07）：同站同 remote id 唯一；NULL 行（站内原生）MySQL 不参与唯一约束
   @@unique([fromSite, fromId])
   // 2026-10-15 上线前性能审计新增：
@@ -1523,4 +1522,21 @@ model CompetitionEntry {
   @@unique([competitionId, userId])
   @@index([userId, createTime]) // 我的统计：参加比赛次数
   @@map("competition_entry")
+}
+
+// 比赛动态（2026-11-13 二期，张老师定口径）：详情页「动态」板块数据源。
+// type：1=报名开始（发起比赛时写入）2=玩家报名参加（报名接口写入）
+//       3=比赛正式开始 / 5=比赛正式结束（now 越过起止时刻时惰性补写，幂等查重）
+//       4=玩家更新成绩（后台挂接比赛录像时写入）
+// type 2/4 主体是玩家（userId>0）；1/3/5 为全站事件 userId 恒 0。文案展示层拼接。
+model CompetitionEvent {
+  id            BigInt @id @default(autoincrement()) @db.BigInt
+  competitionId BigInt @map("competition_id") @db.BigInt
+  type          Int    @db.TinyInt
+  userId        BigInt @default(0) @map("user_id") @db.BigInt
+  createTime    BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@index([competitionId, id]) // 详情页动态流
+  @@index([userId, createTime]) // 我的活动
+  @@map("competition_event")
 }

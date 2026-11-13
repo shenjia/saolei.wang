@@ -881,6 +881,9 @@ export interface AdminVideoRow {
   trajStats: { mv: number; clicks: number; mvPerClick: number | null; mvMinDt: number | null; maxMvBurst: number; pressStd: number | null; offDistinct: number | null; offStd: number | null; zeroPressFrac: number | null; loneZeroPressFrac: number | null; idleN: number; idleModeMs: number | null; idleModeShare: number | null } | null;
   /** 录像文件路径（/2026/01/05/xxx.mvf；后台播放器 fetch 用） */
   filepath: string;
+  /** 所属比赛（2026-11-13 二期：后台录像管理挂接比赛；null=未挂接） */
+  compId: number | null;
+  compName: string | null;
 }
 
 const VIDEO_ORDERS: Record<string, string> = {
@@ -1098,7 +1101,21 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       acctPressVideos: null,
       trajStats: null,
       filepath: info?.filepath ?? "",
+      compId: v.competitionId == null ? null : N(v.competitionId),
+      compName: null,
     });
+  }
+  // 所属比赛名批量补齐（2026-11-13 二期：挂接列展示；每页 ≤25 行，比赛总量小）
+  const compIds = [...new Set(out.map((r) => r.compId).filter((x): x is number => x !== null))];
+  if (compIds.length) {
+    const comps = await prisma.competition.findMany({
+      where: { id: { in: compIds.map(BigInt) } },
+      select: { id: true, name: true },
+    });
+    const cMap = new Map(comps.map((c) => [Number(c.id), c.name]));
+    for (const r of out) {
+      if (r.compId !== null) r.compName = cMap.get(r.compId) ?? null;
+    }
   }
   // 需核定行现算 press-release 平均时长 + 人类相似度统计（触发原因展示具体数值；
   // 每页 ≤25 行 × ~3ms，pressAvgMs 与 trajStats 同一次解析产出）

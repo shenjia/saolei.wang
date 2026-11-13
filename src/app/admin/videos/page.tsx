@@ -12,6 +12,7 @@ import { AdminFilters } from "@/components/admin/AdminFilters";
 import { AdminCard, AdminPager } from "@/components/admin/Widgets";
 import { AdminVideoTable } from "@/components/admin/AdminVideoTable";
 import DuplicateHashView from "@/components/admin/DuplicateHashView";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "录像管理 | 管理后台" };
@@ -53,6 +54,11 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
     page: Math.max(1, parseInt(sp.page ?? "1", 10) || 1),
   };
   const { rows, total, pageSize, page } = await getVideoListAdmin(filter);
+  // 全量比赛选项（2026-11-13 二期：行内挂接比赛用；比赛总量小一次取回）
+  const comps = (await prisma.competition.findMany({
+    orderBy: { id: "asc" },
+    select: { id: true, name: true, shortName: true },
+  })).map((c) => ({ id: Number(c.id), name: c.name, shortName: c.shortName }));
 
   return (
     <>
@@ -138,10 +144,11 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
                 <th className="num">下载</th>
                 <th className="num">评论</th>
                 <th>上传</th>
+                <th>比赛</th>
                 <th>操作</th>
               </tr>
             </thead>
-            <AdminVideoTable rows={rows} isSuper={isSuper} />
+            <AdminVideoTable rows={rows} isSuper={isSuper} comps={comps} />
           </table>
         </div>
 

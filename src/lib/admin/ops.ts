@@ -27,7 +27,7 @@ import { rankEnter, rankLeave, safeRankOp, applyRankAreaChange } from "@/lib/use
 import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
 import { normalizeSiteUpdateDate } from "@/lib/site-updates";
-import { genUniqueCompCode } from "@/lib/competition";
+import { genUniqueCompCode, addCompEvent, COMP_EVENT_JOIN_OPEN, COMP_EVENT_SCORE } from "@/lib/competition";
 import { generateApiKey, sha256, invalidateApiKeyCache } from "@/lib/partner";
 import { loadBlockedHistoryOf, lowTrustState } from "@/lib/lowtrust";
 import { CHEAT_CONFIRM_NOTICE, CHEAT_DISMISS_NOTICE } from "@/lib/cheat-notice";
@@ -89,6 +89,8 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "competition.add": "manager",
   "competition.edit": "manager",
   "competition.delete": "manager",
+  // 录像挂接比赛（2026-11-13 二期：录像管理手动将录像加入比赛）
+  "video.competition": "manager",
   "site.setMaintenance": "administrator",
   // API key 管理（2026-10-24 公开 API 体系）：签发/吊销都是超管权限——
   // key 即数据出口凭据，签发对象需张老师把关
@@ -1079,6 +1081,47 @@ async function dispatch(
       return { ok: true, message: `彻底删除录像 #${id}（含解析信息 / 评论 / 引用动态）` };
     }
 
+    // 录像挂接比赛（2026-11-13 二期张老师需求）：录像管理行内手动将录像加入某场比赛；
+    // competitionId=0 表示解除。挂接成功写一条「玩家更新成绩」比赛动态
+    //（同录像换挂同一场不重复写）。成绩口径＝video_info.real_time，前台排名/成绩
+    // 全部按挂接录像聚合，见 lib/competition.ts getCompRanking。
+    case "video.competition": {
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少录像 ID" };
+      // 0=解除挂接（合法值，不能用 toId 滤掉）
+      const rawComp = parseInt(String(p.competitionId ?? ""), 10);
+      if (!Number.isInteger(rawComp) || rawComp < 0) {
+        return { ok: false, error: "参数错误：缺少比赛 ID（0=解除挂接）" };
+      }
+      const video = await prisma.video.findUnique({
+        where: { id: BigInt(id) },
+        select: { id: true, user: true, competitionId: true },
+      });
+      if (!video) return { ok: false, error: "录像不存在" };
+      if (rawComp === 0) {
+        if (!video.competitionId) return { ok: false, error: "该录像未挂接比赛" };
+        await prisma.video.update({ where: { id: BigInt(id) }, data: { competitionId: null } });
+        return { ok: true, message: `已解除录像 #${id} 的比赛挂接` };
+      }
+      const comp = await prisma.competition.findUnique({
+        where: { id: BigInt(rawComp) },
+        select: { id: true, name: true },
+      });
+      if (!comp) return { ok: false, error: `比赛 #${rawComp} 不存在` };
+      const changed = video.competitionId !== BigInt(rawComp);
+      await prisma.video.update({
+        where: { id: BigInt(id) },
+        data: { competitionId: BigInt(rawComp) },
+      });
+      if (changed) await addCompEvent(rawComp, COMP_EVENT_SCORE, Number(video.user));
+      return {
+        ok: true,
+        message: changed
+          ? `录像 #${id} 已挂接到「${comp.name}」`
+          : `录像 #${id} 本就挂在「${comp.name}」，未变更`,
+      };
+    }
+
     // ---------- 评论 ----------
     case "comment.setStatus": {
       const id = toId(p.id);
@@ -1626,7 +1669,7 @@ async function dispatch(
       const creator = await prisma.user.findUnique({ where: { id: BigInt(creatorId) }, select: { id: true } });
       if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
       const code = await genUniqueCompCode();
-      await prisma.competition.create({
+      const created = await prisma.competition.create({
         data: {
           name,
           shortName,
@@ -1640,6 +1683,8 @@ async function dispatch(
           createTime: BigInt(now()),
         },
       });
+      // 「报名开始」动态（2026-11-13 二期：详情页动态板块首条事件）
+      await addCompEvent(Number(created.id), COMP_EVENT_JOIN_OPEN);
       return { ok: true, message: `已发起比赛「${name}」，比赛标识 ${code}` };
     }
 
@@ -1690,8 +1735,11 @@ async function dispatch(
       if (!id) return { ok: false, error: "参数错误：缺少比赛 ID" };
       const row = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
       if (!row) return { ok: false, error: "比赛不存在" };
-      // 报名记录一并清掉（无成绩/奖金挂接，级联安全）
+      // 报名记录与动态一并清掉（无成绩/奖金挂接，级联安全）
+      await prisma.competitionEvent.deleteMany({ where: { competitionId: BigInt(id) } });
       await prisma.competitionEntry.deleteMany({ where: { competitionId: BigInt(id) } });
+      // 挂接在本场比赛的录像解挂（比赛没了，video.competition_id 置回 NULL）
+      await prisma.video.updateMany({ where: { competitionId: BigInt(id) }, data: { competitionId: null } });
       await prisma.competition.delete({ where: { id: BigInt(id) } });
       return { ok: true, message: `已删除比赛 #${id}「${row.name}」（含报名记录）` };
     }
