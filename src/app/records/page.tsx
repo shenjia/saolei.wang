@@ -12,8 +12,8 @@
 // 一次性丢给 dualTitles 批量换算（快照制口径：高级成绩 + 是否在榜，总司令=雷界第一人特判）。
 //
 // 版式复用首页 ul#home 双栏骨架（two_columns + li.main/li.sidebar）：
-// 窄版右栏宽 300 与排行页一致（#page.records_old 覆盖，≥769 生效）；
-// ≤880 单列化 + page_head 堆叠由既有规则接管。
+// 窄版右栏宽 288 与首页/录像/用户主页一致（2026-11-14 张老师选 A 收窄，直接继承
+// #page #home 通用几何，无 records_old 覆盖；≤880 单列化 + page_head 堆叠由既有规则接管）。
 
 import { getRecordsPageData } from "@/lib/records";
 import { dualTitles } from "@/lib/title-system";

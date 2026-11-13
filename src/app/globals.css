@@ -3088,21 +3088,15 @@ button.msg_reply_link {
 }
 
 /* ---------- 纪录页 /records（2026-10-28 三轮，张老师口径） ----------
-   左宽右窄（复用首页 ul#home 双栏骨架；右栏 300px 与排行页一致）。
+   左宽右窄（复用首页 ul#home 双栏骨架；2026-11-14 张老师选 A：
+   右栏收窄 300→288 与首页/录像/用户主页统一——#page #home 通用 288px
+   几何直接继承，不再设 records_old 覆盖；主栏相应多回 12px）。
    左 = 三个板块卡（时间/3BV/s/STNB），标题行 = 首页新闻板块同款 .news_head
    （十轮 2026-10-28 张老师定：参考首页新闻版式，保证标题与筛选器同行——
    .news_head 是全站组件级 flex wrap，不受 ≤768 通用 .page_head column 堆叠
    规则影响，此前为 page_head 打的桌面/移动断点补丁已全部退掉）。
    级别专属色由组件 inline 传入（总计金/初绿 #a6e22e / 中橙 #f79646 / 高金 #fdc61a）。
    右 = 八个标准 .box 板块（h2 与首页右栏同款 legacy 20px）。 */
-@media (min-width: 769px) {
-  body #page.records_old #home > li.sidebar {
-    width: 300px;
-  }
-  body #page.records_old #home > li.main {
-    width: calc(100% - 302px);
-  }
-}
 .records_sec_title {
   /* 五轮张老师定：与首页左栏板块标题（新闻 h1）同款 26px；
      六轮：默认亮灰 #b1b1a4，仅时间纪录（.gold）保留首页金 #fdc61a */
