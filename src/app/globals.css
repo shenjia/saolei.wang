@@ -17272,7 +17272,7 @@ body #header .nav li a.vs_new_hint,
 
 /* 页面级 h1 已去掉（2026-11-13 二轮：与导航「比赛」重复）；板块标题字号比全站
    主标题小两号 22px/33px（三轮 16:40 张老师定），进行中金色、其余亮灰 */
-#page.comp_page .comp_item { width: auto; margin: 0 8px 16px; padding: 16px 20px; }
+#page.comp_page .comp_item { width: auto; margin: 16px 8px; padding: 16px 20px; }
 .comp_head { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
 .comp_title_group { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .comp_name { margin: 0; font-size: 22px; line-height: 33px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
@@ -17386,15 +17386,27 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_svg { display: block; }
 
 /* 信息行（2026-11-13 张老师定：收录级别一行在上、比赛标识一行在下（标识整段加粗高亮）；
-   发起人已移出信息行，落图表下方右对齐 .comp_creator） */
-.comp_meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
+   发起人已移出信息行，浮动图表下方右对齐 .comp_creator） */
+.comp_meta { clear: both; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
 .comp_meta b.comp_code_all { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
 .comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
-/* 发起人行（2026-11-13 张老师定：图表下方右侧对齐，名字展示与玩家卡片一致
+
+/* 收录级别圆角标签（六轮 23:20 张老师定，参考后台录像列表 LevelTag/admin_tag.lv_*）：
+   同款配色——初级绿 #a6e22e / 中级橙 #f79646 / 高级金 #fdc61d，14% 底 + 35% 边框 */
+.comp_lv_tag {
+  display: inline-block; margin-left: 4px; padding: 1px 8px;
+  border-radius: 9px; border: 1px solid transparent;
+  font-size: 12px; line-height: 19px; white-space: nowrap;
+}
+.comp_lv_tag.lv_beg { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
+.comp_lv_tag.lv_int { background: rgba(247, 150, 70, 0.14); color: #f79646; border-color: rgba(247, 150, 70, 0.35); }
+.comp_lv_tag.lv_exp { background: rgba(253, 198, 29, 0.14); color: #fdc61d; border-color: rgba(253, 198, 29, 0.35); }
+/* 发起人行（2026-11-13 张老师定：浮动在图表下方右对齐，不挤占下方信息行/规则
+   文字的排版空间——float:right 挂在 comp_chart 之后；名字展示与玩家卡片一致
    ——AvatarCell 性别图标 + TitleBadge 军衔徽章；行高与信息行同 13px 灰） */
-.comp_creator { display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 13px; color: #b1b1a4; margin-top: 8px; }
+.comp_creator { float: right; display: flex; align-items: center; gap: 4px; font-size: 13px; color: #b1b1a4; margin: -34px 8px 0 0; }
 .comp_rules { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: #b1b1a4; }
 
 /* 右栏：玩家卡片走标准 UserPanel（.user_card，与录像页同款，无本页私有样式）；
@@ -17406,10 +17418,6 @@ body #header .nav li a.vs_new_hint,
 #page.comp_page .gold { color: #fdc61a; }
 
 /* ==================== 比赛详情页（2026-11-13 二期：/competitions/[id]） ==================== */
-
-/* 主栏顶部留白（三轮 16:40 张老师定「主板块贴 header 不对」）：
-   comp_item margin-top 为 0，详情页首块顶到 header——给主栏加 16px（与板块间距一致） */
-#page.comp_page ul.comp_detail > li.main { padding-top: 16px; }
 
 /* 「动态」「录像」板块：h2 盒标题（legacy .box h2 同源），录像表与首页流同源
    （ranking_table video_table 行渲染），板块内表格去掉外层 box 默认间距 */

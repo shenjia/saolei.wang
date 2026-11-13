@@ -142,11 +142,16 @@ export function CompBlock({
       </div>
 
       {/* 信息行（2026-11-13 张老师定：收录级别一行在上，比赛标识一行在下）——
-          标识整段加粗高亮，含括号与简称 */}
+          标识整段加粗高亮，含括号与简称；级别渲染为圆角标签（六轮 23:20 定，
+          配色复用后台 LevelTag 同款：初级绿/中级橙/高级金） */}
       <div className="comp_meta">
         <span className="comp_levels">
           收录级别：
-          {c.levels.map((l) => LEVEL_NAMES[l]).join("、")}
+          {c.levels.map((l) => (
+            <span key={l} className={"comp_lv_tag lv_" + l}>
+              {LEVEL_NAMES[l]}
+            </span>
+          ))}
         </span>
         <span className="comp_code">
           比赛标识：
