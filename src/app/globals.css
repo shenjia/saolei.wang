@@ -17292,7 +17292,7 @@ body #header .nav li a.vs_new_hint,
   background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px;
   padding: 6px 10px; font-size: 12px; line-height: 18px; color: #b1b1a4;
   white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.15s;
-  pointer-events: none; z-index: 30; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+  pointer-events: none; z-index: 950; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
 }
 .comp_tip::after {
   content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
