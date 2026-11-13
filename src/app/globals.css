@@ -5522,8 +5522,13 @@ body #page.ranking_old .ranking_box {
   content: attr(data-tip);
   position: absolute;
   bottom: 160%; /* 气泡朝上（2026-11-11 张老师定：hover 气泡永远固定在上面出现） */
-  left: 50%;
-  transform: translateX(-50%);
+  /* 右锚定（2026-11-13 修移动端首页横向滑动 10px）：图标贴 h2 右缘（margin-left:auto），
+     原 left:50%+translateX(-50%) 居中锚定让气泡右半截伸出盒子右缘——opacity:0 的
+     absolute 盒仍占 scrollable overflow，整页被撑出横向滑动区；改 right:0 让气泡
+     向左生长，恒不出右缘（右锚定模拟修复实测 scrollWidth 505→495 归位） */
+  left: auto;
+  right: 0;
+  transform: none;
   background: #1e1f1c;
   color: #f8f8f2;
   border: 1px solid #49483e;
