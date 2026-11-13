@@ -60,6 +60,12 @@ import { sfxPlay, sfxPrefetch } from "@/lib/sfx";
    出声口径＝练习模式定稿（2026-10-30 张老师定，2026-11-06 含排行复核）：
    开空＝pop1..7 循环（开一片同走循环）、插旗一声 flag（仅插上时，拔旗不播）、
    chord 有效开格收尾一声 chord；踩雷/胜局不播音效。
+   移动端禁声（2026-11-13 张老师定）：Web Audio 改造后移动端实测仍卡
+   （媒体管线延迟无法彻底消除），产品口径＝移动端默认不开声音且不显示
+   声音开关——UA 判定（与 layout.tsx 内联脚本同口径 Mobi/Android/iPhone），
+   命中则 readSndPref 恒 false（忽略 localStorage 存档，防止出声却关不掉）、
+   开关不渲染、预取不发起（省流量）。SSR 无 navigator 恒 false＝桌面形态
+   首帧，客户端挂载后模块级变量生效（站内既有 SSR→客户端校准模式）。
    开关落模块级单例 replaySndOn：页面态引擎/全屏层/后台审核 standalone 三处
    引擎共用同一开关（同一时刻只有一处回放在跑）；播放出口 playSnd 走
    src/lib/sfx.ts 的 Web Audio（2026-11-13 移动端开声音卡顿修复：旧
@@ -71,8 +77,12 @@ import { sfxPlay, sfxPrefetch } from "@/lib/sfx";
    持久化（2026-11-10 张老师需求：开关存 localStorage，每个录像都生效）：
    全局一份 video_replay_snd（与 video_replay_fs_zoom 同风格），初始读、切换写；
    SSR（localStorage 不存在）/隐私模式/脏值一律回退默认开 */
+const SND_MOBILE_RE = /Mobi|Android|iPhone|iPad|iPod/i;
+const sndHidden =
+  typeof navigator !== "undefined" && SND_MOBILE_RE.test(navigator.userAgent);
 const SND_LS_KEY = "video_replay_snd";
 function readSndPref(): boolean {
+  if (sndHidden) return false; /* 移动端：恒关（忽略存档） */
   if (typeof localStorage === "undefined") return true;
   try {
     return localStorage.getItem(SND_LS_KEY) !== "0";
@@ -99,8 +109,10 @@ function playSnd(src: string) {
   if (!replaySndOn) return;
   sfxPlay(src);
 }
-/* 解锁后预取解码全部回放音效（首个 pop 前就绪；全套 <50KB） */
-sfxPrefetch([
+/* 解锁后预取解码全部回放音效（首个 pop 前就绪；全套 <50KB）；移动端不出声
+   也不预取（省 50KB 流量） */
+if (!sndHidden) {
+  sfxPrefetch([
   "/sounds/pop1.mp3",
   "/sounds/pop2.mp3",
   "/sounds/pop3.mp3",
@@ -110,7 +122,8 @@ sfxPrefetch([
   "/sounds/pop7.mp3",
   "/sounds/flag.mp3",
   "/sounds/chord.mp3",
-]);
+  ]);
+}
 
 /* RawVF 事件行 → 紧凑事件（csec 统一百分秒；px/py 为 16px/格 像素坐标） */
 interface ReplayEv {
@@ -3060,7 +3073,9 @@ function ReplayBar({
           </svg>
         </button>
       )}
-      {sndVal !== undefined && sndToggleFn && (
+      {/* 声音开关（2026-11-13 张老师定：移动端不渲染——sndHidden 时整体隐藏，
+          页面态/全屏层共用此渲染点自动生效） */}
+      {!sndHidden && sndVal !== undefined && sndToggleFn && (
         <button
           type="button"
           className={"rb_btn" + (sndVal ? "" : " snd_off")}
