@@ -487,6 +487,50 @@ table.admin_table tr.ug_new td:first-child {
   vertical-align: 2px;
   border-radius: 50%;
 }
+/* 玩家管理四 tab 各自主题色（2026-11-13 张老师定）：选中/hover 按色渲染，
+   未选中保持默认灰。色板沿用全站 Monokai 体系：金 #fdc61a（站名金）/
+   绿 #a6e22e / 玫瑰红 #f92672（低信任新行高亮同源）/ 青 #66d9ef。
+   on=选中（较亮），hover=未选中悬停预告（较淡）。 */
+.admin_filterbar a.admin_btn.ugt_all.on,
+.admin_filterbar a.admin_btn.ugt_all:hover {
+  border-color: rgba(253, 198, 26, 0.5);
+  background: rgba(253, 198, 26, 0.16);
+  color: #fdc61a;
+}
+.admin_filterbar a.admin_btn.ugt_all:hover:not(.on) {
+  background: rgba(253, 198, 26, 0.08);
+  color: #ffd75e;
+}
+.admin_filterbar a.admin_btn.ugt_trusted.on,
+.admin_filterbar a.admin_btn.ugt_trusted:hover {
+  border-color: rgba(166, 226, 46, 0.5);
+  background: rgba(166, 226, 46, 0.16);
+  color: #a6e22e;
+}
+.admin_filterbar a.admin_btn.ugt_trusted:hover:not(.on) {
+  background: rgba(166, 226, 46, 0.08);
+  color: #c3f04a;
+}
+.admin_filterbar a.admin_btn.ugt_lowtrust.on,
+.admin_filterbar a.admin_btn.ugt_lowtrust:hover {
+  border-color: rgba(249, 38, 114, 0.5);
+  background: rgba(249, 38, 114, 0.16);
+  color: #f92672;
+}
+.admin_filterbar a.admin_btn.ugt_lowtrust:hover:not(.on) {
+  background: rgba(249, 38, 114, 0.08);
+  color: #ff5c92;
+}
+.admin_filterbar a.admin_btn.ugt_ip.on,
+.admin_filterbar a.admin_btn.ugt_ip:hover {
+  border-color: rgba(102, 217, 239, 0.5);
+  background: rgba(102, 217, 239, 0.16);
+  color: #66d9ef;
+}
+.admin_filterbar a.admin_btn.ugt_ip:hover:not(.on) {
+  background: rgba(102, 217, 239, 0.08);
+  color: #8fe8f7;
+}
 table.admin_table td.num,
 table.admin_table th.num {
   text-align: right;

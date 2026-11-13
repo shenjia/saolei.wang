@@ -52,21 +52,21 @@ export function UserGroupTabs({
     return () => window.removeEventListener("admin-group-seen", recompute);
   }, [groupBadges]);
 
-  const tabs: { key: "all" | GroupKey | "ip"; label: string }[] = [
-    { key: "all", label: "全部玩家" },
-    { key: "trusted", label: "可信用户组" },
-    { key: "lowtrust", label: "低信任用户组" },
-    // 2026-11-13 张老师要求：同 IP 账号组并入玩家管理，省侧栏一项（无 badge 语义——IP 组没有「新成员」概念）
-    { key: "ip", label: "同 IP 账号组" },
+  // 2026-11-13 张老师定：四 tab 各自主题色（金/绿/玫瑰红/青），选中或 hover 按色渲染
+  const tabs: { key: "all" | GroupKey | "ip"; label: string; cls: string }[] = [
+    { key: "all", label: "全部玩家", cls: "ugt_all" },
+    { key: "trusted", label: "可信用户组", cls: "ugt_trusted" },
+    { key: "lowtrust", label: "低信任用户组", cls: "ugt_lowtrust" },
+    { key: "ip", label: "同 IP 账号组", cls: "ugt_ip" },
   ];
 
   return (
     <div className="admin_filterbar">
-      {tabs.map(({ key, label }) => (
+      {tabs.map(({ key, label, cls }) => (
         <Link
           key={key}
           href={key === "all" ? "/admin/users" : `/admin/users?group=${key}`}
-          className={`admin_btn${tab === key ? " primary" : ""}`}
+          className={`admin_btn ${cls}${tab === key ? " on" : ""}`}
         >
           {label}
           {key !== "all" && key !== "ip" && diffs[key] !== null && (
