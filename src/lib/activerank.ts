@@ -14,7 +14,6 @@
 // 其余内容状态变化最迟下一轮刷新纠正，刷新失败继续读旧快照，不回退实时聚合。
 
 import { prisma } from "./db";
-import { radarDistributionRanks, radarGrade, radarPercent } from "./radar-standard.mjs";
 
 /** 排序键白名单 */
 export type ActiveBy = "act" | "beg" | "int" | "exp" | "cmt" | "watch" | "login";
@@ -172,10 +171,17 @@ export async function getActiveRankOfUsers(
 
 // ---------- 个人主页「活跃」雷达（2026-11-10 张老师需求） ----------
 // 六维 = 活跃排行页六个数据列（初级/中级/高级盘数、观看时长点、评论次数、登录天数），
-// 值全部来自 user_activity_snapshot（近 7 日窗口，每分钟重算）。评级按该列在快照内
-// 的名次映射实力雷达同款 23 档边界（radar-standard.mjs 的 radarDistributionRanks）：
-// 严格更大者计数 = 名次（并列同名次，与各榜单口径一致）；某维活跃值为 0 → 恒 F。
-// 只看榜内（该列 >0 的快照行）即「活跃排行中的名次」；0 值不在榜但按需求直落 F。
+// 值全部来自 user_activity_snapshot（近 7 日窗口，每分钟重算）。
+//
+// 绘制档位口径（2026-11-13 张老师定）：
+//   比较范围 = 当前活跃指数 >0 的玩家（active_points>0 快照行，JOIN user.status=0）；
+//   每轴名次 = 活跃玩家中该列严格大于本人值的行数 + 1（并列同名次，与榜单口径一致）；
+//   ① 排名前 3 → 本轴画满（percent=100）；
+//   ② 登录轴特殊：与第一名同值即画满（7 天封顶并列第一者众，不能只限前 3）；
+//   ③ 该维数据为 0 → 回中心（percent=0）；
+//   ④ 该维数据 >0 → 至少画一格（percent≥ 首环 15）；
+//   ⑤ 其余按 名次/活跃玩家数 比率落档：p=(1−rank/N)×100，取 ≤p 的最大网格环。
+//   网格环与 RadarChart.tsx 的 GRID_RINGS 同源（升级序 15/35/50/60/70/80/90/100）。
 
 /** 六维定义：key=快照列名，name=轴名（与活跃排行页表头一致）。
  *  轴序（2026-11-10 张老师定，二改）：顶轴起顺时针＝登录、评论、高级、中级、初级、观看
@@ -191,14 +197,9 @@ const RADAR_AXES: { key: ActiveMetricKey; name: string }[] = [
 
 type ActiveMetricKey = "beg" | "int" | "exp" | "cmt" | "watch" | "login";
 
-const METRIC_COLUMN: Record<ActiveMetricKey, string> = {
-  beg: "beg_count",
-  int: "int_count",
-  exp: "exp_count",
-  cmt: "comment_count",
-  watch: "watch_points",
-  login: "login_points",
-};
+/** 绘制档位 = 网格环（与 RadarChart.tsx GRID_RINGS 保持一致，升级序）；
+ *  名次/人口比率落档时取 ≤p 的最大环，最低钳首环（>0 至少画一格）。 */
+const RADAR_GRID_RINGS = [15, 35, 50, 60, 70, 80, 90, 100];
 
 /** 气泡文案（2026-11-10 张老师定）：hover 显示具体数据，数值绿色（RadarChart tipLabel 分支） */
 const TIP_LABEL: Record<ActiveMetricKey, string> = {
@@ -240,20 +241,17 @@ export interface ActiveRadarDataPoint {
 }
 
 /**
- * 某用户近 7 日六维活跃雷达。评级＝纯名次判定：
- *   榜 = 该列 >0 的快照行（JOIN user.status=0）；N = 榜内人口（COUNT）；
- *   R' = 1 + 榜内严格大于本人值的行数（并列同名次，与各榜单口径一致）；
- *   23 档名次边界 = radarDistributionRanks(N)；取首个 ranks[i] ≥ R' 的档。
- *   dist[i] = −ranks[i]（名次下界取负成 desc 值序），radarGrade(v, dist, "desc")
- *   与上述判定数学等价——v=0 占位（0 值档位恒 F 分支拦截，不入 radarGrade）。
- *   N 不足 550 时边界自动钳到 N（首档即 SSS），小 N 判级稳定（radar-standard 设计语义）。
- * 索引口径：六列均有 (col DESC, user_id ASC) 复合索引（本需求新增），TOP 23 与
- * COUNT/MAX 全走索引，快照几千行毫秒级。
+ * 某用户近 7 日六维活跃雷达。绘制档位（2026-11-13 张老师定，见顶部注释块）：
+ *   比较范围 = active_points>0 的活跃玩家（JOIN user.status=0，封禁即时生效）；
+ *   N = 活跃玩家数；每轴 rank = 活跃玩家中该列严格更大行数 + 1（并列同名次）；
+ *   前 3 画满（登录轴改为「与第一同值即画满」）；0 值回中心；
+ *   >0 至少首环一格；其余 p=(1−rank/N)×100 落最大 ≤p 的网格环。
+ * 索引口径：六列均有 (col DESC, user_id ASC) 复合索引，快照几千行毫秒级。
  */
 export async function getActiveRadar(
   userId: number,
 ): Promise<ActiveRadarDataPoint[]> {
-  // 本人六列值一行取齐（不在快照 = 全 0 = 六维全 F）
+  // 本人六列值一行取齐（不在快照 = 全 0 = 六维回中心）
   // ⚠️ int 是 MySQL 保留字，中级列别名用 mid 接收再映射；
   // pb/pi/pe = 分级别点数（练习分级点+录像加权，21:28 对齐总分用）
   const myRows = await prisma.$queryRawUnsafe<
@@ -294,32 +292,41 @@ export async function getActiveRadar(
       }
     : {};
 
-  // 六列一次取齐：榜内人口 n + 严格大于本人值行数 worse + 与本人并列行数 ties（含本人）
-  const stats: { key: ActiveMetricKey; n: number; worse: number; ties: number }[] = [];
-  for (const { key } of RADAR_AXES) {
-    const col = METRIC_COLUMN[key];
-    const rows = await prisma.$queryRawUnsafe<
-      { n: bigint | number; worse: bigint | number; ties: bigint | number }[]
-    >(
-      `SELECT COUNT(*) n, COALESCE(SUM(t.${col} > ?), 0) worse, COALESCE(SUM(t.${col} = ?), 0) ties
-       FROM user_activity_snapshot t
-       JOIN user u ON u.id = t.user_id AND u.status = 0
-       WHERE t.${col} > 0`,
-      mine[key] ?? 0,
-      mine[key] ?? 0,
-    );
-    stats.push({
-      key,
-      n: Number(rows[0]?.n ?? 0),
-      worse: Number(rows[0]?.worse ?? 0),
-      ties: Number(rows[0]?.ties ?? 0),
-    });
-  }
-  const statByKey = new Map(stats.map((s) => [s.key, s]));
+  // 一次取齐：活跃玩家总数 N + 六列「严格大于本人值行数 worse / 与本人并列行数 ties」
+  // （比较范围统一 = active_points>0，2026-11-13 张老师定；SUM 条件布尔 0/1，NULL 兜 0）
+  const statRows = await prisma.$queryRawUnsafe<
+    { n: bigint | number; bw: bigint | number; bt: bigint | number; iw: bigint | number; it: bigint | number; ew: bigint | number; et: bigint | number; cw: bigint | number; ct: bigint | number; ww: bigint | number; wt: bigint | number; lw: bigint | number; lt: bigint | number }[]
+  >(
+    `SELECT COUNT(*) n,
+            COALESCE(SUM(t.beg_count > ?), 0) bw, COALESCE(SUM(t.beg_count = ?), 0) bt,
+            COALESCE(SUM(t.int_count > ?), 0) iw, COALESCE(SUM(t.int_count = ?), 0) it,
+            COALESCE(SUM(t.exp_count > ?), 0) ew, COALESCE(SUM(t.exp_count = ?), 0) et,
+            COALESCE(SUM(t.comment_count > ?), 0) cw, COALESCE(SUM(t.comment_count = ?), 0) ct,
+            COALESCE(SUM(t.watch_points > ?), 0) ww, COALESCE(SUM(t.watch_points = ?), 0) wt,
+            COALESCE(SUM(t.login_points > ?), 0) lw, COALESCE(SUM(t.login_points = ?), 0) lt
+     FROM user_activity_snapshot t
+     JOIN user u ON u.id = t.user_id AND u.status = 0
+     WHERE t.active_points > 0`,
+    mine.beg ?? 0, mine.beg ?? 0,
+    mine.int ?? 0, mine.int ?? 0,
+    mine.exp ?? 0, mine.exp ?? 0,
+    mine.cmt ?? 0, mine.cmt ?? 0,
+    mine.watch ?? 0, mine.watch ?? 0,
+    mine.login ?? 0, mine.login ?? 0,
+  );
+  const s = statRows[0];
+  const statByKey = new Map<ActiveMetricKey, { worse: number; ties: number }>([
+    ["beg", { worse: Number(s?.bw ?? 0), ties: Number(s?.bt ?? 0) }],
+    ["int", { worse: Number(s?.iw ?? 0), ties: Number(s?.it ?? 0) }],
+    ["exp", { worse: Number(s?.ew ?? 0), ties: Number(s?.et ?? 0) }],
+    ["cmt", { worse: Number(s?.cw ?? 0), ties: Number(s?.ct ?? 0) }],
+    ["watch", { worse: Number(s?.ww ?? 0), ties: Number(s?.wt ?? 0) }],
+    ["login", { worse: Number(s?.lw ?? 0), ties: Number(s?.lt ?? 0) }],
+  ]);
+  const totalActive = Math.max(Number(s?.n ?? 0), 1);
 
-  // 总人口（2026-11-10 21:00 张老师定）：气泡百分位分母不再用榜内人数——大多数用户
-  // 近 7 日无活跃值，只要该列有名次，就超过了「全部无活跃值用户 + 榜内严格更差者」，
-  // 分母＝全站正常状态用户数（与各排行榜上榜人口同源 user.status=0）
+  // 总人口（气泡百分位分母，2026-11-10 21:00 张老师定）：分母=全站正常状态用户数
+  //（与各排行榜上榜人口同源 user.status=0）——绘制档位与气泡百分位口径独立
   const totalRows = await prisma.$queryRawUnsafe<{ t: bigint | number }[]>(
     `SELECT COUNT(*) t FROM user WHERE status = 0`,
   );
@@ -328,7 +335,7 @@ export async function getActiveRadar(
   return RADAR_AXES.map(({ key, name }) => {
     const value = mine[key] ?? 0;
     if (!value) {
-      // 无活跃值（不在快照或该列为 0）：恒 F，半径 0 贴心（张老师定，2026-11-10）；
+      // 无活跃值（不在快照或该列为 0）：回中心（percent=0，2026-11-13 张老师定）；
       // 气泡仍显示具体数据「本周完成 0 盘」（20:02 张老师定 hover 一律具体数据）
       return {
         name,
@@ -340,28 +347,38 @@ export async function getActiveRadar(
         tipValue: `0 ${TIP_UNIT[key]}`,
         labelValue: "0",
       };
-    }    const st = statByKey.get(key);
-    const n = st?.n ?? 0;
-    const worse = st?.worse ?? 0;
-    const ties = Math.max(st?.ties ?? 1, 1);
-    // 名次 R' = worse + 1；23 档名次下界取负成 desc 值序 → radarGrade(v=−R')
-    // 恰好落在「ranks[i] ≥ R' 的最强档」（radarPosition 首个 dist[i] ≤ v）。
-    const ranks = radarDistributionRanks(Math.max(n, 1));
-    const dist = ranks.map((r) => -r);
-    const v = -(worse + 1);
+    }
+    const st = statByKey.get(key)!;
+    const worse = st.worse;
+    const ties = Math.max(st.ties, 1);
+    // 活跃玩家中本数据名次（并列同名次，与榜单口径一致）
+    const rank = worse + 1;
+    // 画满判定：登录轴与第一同值（worse=0）即满；其余轴排名前 3（rank≤3）即满
+    let percent: number;
+    if (key === "login" ? worse === 0 : rank <= 3) {
+      percent = 100;
+    } else {
+      // 名次/活跃玩家数比率落档：p=(1−rank/N)×100，取 ≤p 的最大网格环；
+      // p 低于首环也钳到首环（>0 至少画一格，④）
+      const p = (1 - rank / totalActive) * 100;
+      percent = RADAR_GRID_RINGS[0];
+      for (const ring of RADAR_GRID_RINGS) {
+        if (ring <= p) percent = ring;
+      }
+    }
     // beatPct = 全站百分位（2026-11-10 21:00 张老师定）：分母=全站正常用户 total，
-    // 超过者 = 全部无活跃值用户（total − 榜内 n）+ 榜内严格更差者（n − worse − ties）；
-    // 并列者不算被超过。真独占榜首（worse=0 且 ties=1，仅非登录轴）→ 100「全网第一」；
-    // 登录轴恒真实百分位（7 天封顶并列第一者众）
-    const worseAll = total - n + (n - worse - ties);
+    // 超过者 = 全部无活跃值用户（total − 活跃玩家 totalActive）+ 活跃玩家中严格更差者
+    //（totalActive − worse − ties）；并列者不算被超过。真独占榜首（worse=0 且 ties=1，
+    // 仅非登录轴）→ 100「全网第一」；登录轴恒真实百分位（7 天封顶并列第一者众）
+    const worseAll = total - totalActive + (totalActive - worse - ties);
     const beatPct =
       worse === 0 && ties === 1 && key !== "login" ? 100 : Math.floor((worseAll / total) * 100);
     return {
       name,
       score: String(value),
-      percent: radarPercent(v, dist, "desc"),
+      percent,
       beatPct,
-      grade: radarGrade(v, dist, "desc"),
+      grade: "F",
       tipLabel: TIP_LABEL[key],
       tipValue: `${value} ${TIP_UNIT[key]}`,
       labelValue: String(labelPts[key] ?? 0),
