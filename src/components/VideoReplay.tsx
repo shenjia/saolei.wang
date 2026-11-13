@@ -53,15 +53,21 @@ import { LEVEL_NAMES, type VideoLevel } from "@/lib/config";
 import type { MetricKey, VideoAnalysisPoint } from "@/lib/videoscore";
 /* 五轴评级算法（共享件）；别名避开本文件里的 radarOverall 同名 prop */
 import { gradeColor, radarOverall as overallGrade, radarPointsFrom } from "@/lib/videoscore";
+/* Web Audio 音效（2026-11-13 移动端开声音卡顿修复）：见 sfx.ts 头注 */
+import { sfxPlay, sfxPrefetch } from "@/lib/sfx";
 
 /* ---- 回放音效（2026-11-10 张老师需求：控制条声音开关，全屏钮左侧，默认开）----
    出声口径＝练习模式定稿（2026-10-30 张老师定，2026-11-06 含排行复核）：
    开空＝pop1..7 循环（开一片同走循环）、插旗一声 flag（仅插上时，拔旗不播）、
    chord 有效开格收尾一声 chord；踩雷/胜局不播音效。
    开关落模块级单例 replaySndOn：页面态引擎/全屏层/后台审核 standalone 三处
-   引擎共用同一开关（同一时刻只有一处回放在跑）；Audio 按src单例缓存复用同一
-   元素（快速连发 currentTime=0 从头重放，无叠加爆音），play() 被拒（自动播放
-   策略）时静默。sndPopIdx 模块级循环（不落盘，每次进页从 pop1 起步）。
+   引擎共用同一开关（同一时刻只有一处回放在跑）；播放出口 playSnd 走
+   src/lib/sfx.ts 的 Web Audio（2026-11-13 移动端开声音卡顿修复：旧
+   HTMLAudioElement retrigger 在移动端 WebKit 重触发走媒体管线 seek+重启
+   → 主线程停顿掉帧；Web Audio 一次性解码缓存 + BufferSource 近零开销，
+   快速连发同 src stop 上一条，无叠加爆音，不可用自动回退旧元素路径），
+   play() 被拒（自动播放策略）时静默。sndPopIdx 模块级循环（不落盘，
+   每次进页从 pop1 起步）。
    持久化（2026-11-10 张老师需求：开关存 localStorage，每个录像都生效）：
    全局一份 video_replay_snd（与 video_replay_fs_zoom 同风格），初始读、切换写；
    SSR（localStorage 不存在）/隐私模式/脏值一律回退默认开 */
@@ -84,21 +90,27 @@ function writeSndPref(v: boolean) {
 }
 let replaySndOn = readSndPref();
 let sndPopIdx = 0;
-const sndCache = new Map<string, HTMLAudioElement>();
+/* ---- 播放出口（2026-11-13 移动端开声音卡顿修复）----
+   旧实现 HTMLAudioElement retrigger（currentTime=0 + play()）在移动端 WebKit
+   每次重触发都要走媒体管线 seek+重启，主线程停顿 → 回放 rAF 掉帧「一顿一顿」
+   （桌面媒体管线便宜无感）。改 Web Audio（sfx.ts）：一次性解码缓存 +
+   BufferSource 播放，近零开销；Web Audio 不可用/未就绪自动回退旧元素路径 */
 function playSnd(src: string) {
   if (!replaySndOn) return;
-  let a = sndCache.get(src);
-  if (!a) {
-    a = new Audio(src);
-    sndCache.set(src, a);
-  }
-  try {
-    a.currentTime = 0;
-  } catch {
-    /* 已在播等异常忽略 */
-  }
-  void a.play().catch(() => {});
+  sfxPlay(src);
 }
+/* 解锁后预取解码全部回放音效（首个 pop 前就绪；全套 <50KB） */
+sfxPrefetch([
+  "/sounds/pop1.mp3",
+  "/sounds/pop2.mp3",
+  "/sounds/pop3.mp3",
+  "/sounds/pop4.mp3",
+  "/sounds/pop5.mp3",
+  "/sounds/pop6.mp3",
+  "/sounds/pop7.mp3",
+  "/sounds/flag.mp3",
+  "/sounds/chord.mp3",
+]);
 
 /* RawVF 事件行 → 紧凑事件（csec 统一百分秒；px/py 为 16px/格 像素坐标） */
 interface ReplayEv {
