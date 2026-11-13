@@ -676,19 +676,13 @@ export function VsPickArena({
           <div className="vs_divider vs_pick_divider" ref={dividerRef} aria-hidden="true" />
         </>
       )}
-      {/* 「历史对决」板块（17:23 张老师：/vs/{id} 单 id 入口、未跑分前常显；
-          选人/换人后 uids 跟随两侧卡片自动重拉。至少一侧有人才渲染——全空
-          没有发起者语义，板块整体摘除。21:06 张老师：宽度与分割线一致（同
-          对决页口径，heroW 写进 wrapper 居中） */}
-      {hist && (left?.id || right?.id) && (
+      {/* 「历史对决」板块（17:23 张老师：/vs/{id} 单 id 入口常显；21:06 张老师：
+          宽度与分割线一致（同对决页口径，heroW 写进 wrapper 居中）。
+          2026-11-13 张老师定口径：＝登录者发起的所有对决，与卡片上是谁无关——
+          换人清卡（把自己换掉）板块必须保留，不再按卡片有无决定渲染 */}
+      {hist && (
         <div className="vs_hist_wrap" style={heroW ? { width: heroW } : undefined}>
-          <VsHistBlock
-            uid1={left?.id ?? 0}
-            uid2={right?.id ?? 0}
-            initial={hist.rows}
-            total={hist.total}
-            pageSize={hist.pageSize}
-          />
+          <VsHistBlock initial={hist.rows} total={hist.total} pageSize={hist.pageSize} />
         </div>
       )}
     </>

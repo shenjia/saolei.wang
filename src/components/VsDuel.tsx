@@ -350,30 +350,29 @@ export async function getVsDuelTitle(uid1: number, uid2: number): Promise<string
 }
 
 /** 对决页主体（对战与旁观共用）：
- *  · record=true（会话为对决双方本人）：渲染快照落 vs_duel（10 分钟窗口去重在函数内）；
- *  · record=false（旁观：会话非对决双方）：纯渲染，不落库——对决 KPI 口径＝双方本人访问。
+ *  · 每次登录访问都落 vs_duel（10 分钟窗口去重在函数内）：2026-11-13 张老师
+ *    定口径——发起者＝访问者，**不一定是参赛双方**（指定 A、B 两人 PK 的旁观
+ *    访问同样落库、进其「历史对决」），user_id/target_id=参赛双方页面左/右。
  *  · 「历史对决」板块翻页改客户端（VsHistFeed + PageSlider，15:48 张老师改版），
  *    不再走 URL ?page=N。自动跑分交接见统一路由页（sessionStorage）。
  *  uid1===uid2（含本人直连自己、旁观传同 id）：走「不能和自己比拼」兜底提示。 */
 export async function VsDuelView({
   uid1,
   uid2,
-  record,
   swapMe = null,
   histHidden = false,
   histUid,
 }: {
   uid1: number;
   uid2: number;
-  record: boolean;
   /** 登录者自己的竞技场卡片（16:36 张老师：换人就地清卡回竞技场用；旁观者
    *  非对决双方时由统一路由页额外装配，对决双方本人复用 p1/p2 转换） */
   swapMe?: VsPickPlayer | null;
   /** 自动跑分交接（17:24 张老师：竞技场点一决胜负落地瞬间历史闪现又消失）——
    *  统一路由页读到新鲜 vs_autorun cookie 时为 true，历史板块首帧即不渲染 */
   histHidden?: boolean;
-  /** 登录者 id（20:51 张老师定口径：「历史对决」＝当前登录用户发起的所有对决，
-   *  与卡片上是谁无关——恒按登录者查，两条路径同一查询彻底复用） */
+  /** 登录者 id（2026-11-13 张老师定口径：「历史对决」＝登录者**发起**的所有
+ *  对决——访问即发起，旁观指定他人 PK 也算；落库/查询都以登录者为准） */
   histUid: number;
 }) {
   // 不能和自己比拼：入口按钮已灰置，直连 URL 兜底提示
@@ -420,15 +419,10 @@ export async function VsDuelView({
 
   // 对决记录落库（2026-11-11 张老师定：后台「今日胜负」KPI + /admin/vs 对决统计页）：
   // 每次有效访问一行，比分/结果为本次渲染快照；10 分钟窗口去重在函数内，失败静默。
-  // 旁观模式（record=false）不计入——KPI 口径＝双方本人访问。
-  // 2026-11-13 张老师定口径：发起者＝**访问对决页的本人**（原实现记页面左玩家，
-  // 对方访问时把登录者放左边就会污染其「历史对决」；登录者放右边发起的对决则
-  // 记到对方名下漏掉）——user_id=histUid，target_id=另一方，比分按发起者视角翻转
-  if (record) {
-    const [initiator, target, is1, is2] =
-      histUid === uid1 ? [uid1, uid2, total1, total2] : [uid2, uid1, total2, total1];
-    await recordVsDuel(initiator, target, is1, is2);
-  }
+  // 2026-11-13 张老师定口径：发起者＝访问者 histUid（**不一定是参赛双方**，指定
+  // A、B 两人 PK 的旁观访问同样落库），user_id/target_id=参赛双方页面左/右，
+  // 比分/结果不再翻转（s1=左方、s2=右方）
+  await recordVsDuel(histUid, uid1, uid2, total1, total2);
 
   // 21:55 张老师：纪录板块头部「胜数」＝该方占优的纪录行数（mark=p1/p2，含独有局）
   const recWin1 = recRows.filter((r) => r.mark === "p1").length;
@@ -440,11 +434,11 @@ export async function VsDuelView({
   // 同玩家卡片渲染）；15:48 改版：底部全站通用「加载更多 + 页码滑条」翻页器
   // （VsHistFeed 客户端组件，/api/vs/history 追加/跳页）。常显板块——赛前即渲染，
   // 开跑后由 VsScoreBoard 按舞台状态整体摘除。
-  // 20:51 张老师定口径：＝**当前登录用户发起的**所有对决，与卡片上是谁无关——
-  // 恒按登录者查（原来按卡上玩家查，两卡都不是登录者时大概率空）。
+  // 2026-11-13 张老师定口径：＝**登录者发起的**所有对决——访问即发起，指定
+  // A、B 两人 PK 的旁观对决也算；恒按登录者（initiator）查。
   // 17:24 张老师：竞技场自动跑分交接（vs_autorun cookie）由统一路由页读出传
   // histHidden——SSR 首帧就不渲染历史，修掉「落地瞬间历史闪现又消失」。
-  const hist = await getVsHistory(histUid, histUid, 1, 10);
+  const hist = await getVsHistory(histUid, 1, 10);
 
   // 2026-11-10 第五轮：下面所有板块交给客户端舞台（VsScoreBoard）控制显隐——
   // 赛前完全不挂载，点「决出胜负」跑分完成后才出现。RSC 节点可作为 props 传入客户端边界。
@@ -506,7 +500,7 @@ export async function VsDuelView({
         opponentId={uid2}
         dateStr={duelDateStr}
         swap={swapMe ? { me: swapMe, left: toPick(p1), right: toPick(p2) } : null}
-        hist={{ uid1: histUid, uid2: histUid, rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
+        hist={{ rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
         histHidden={histHidden}
         leftPanel={
           <VsPanel p={p1} side="l" swapHref={`/vs?/${uid2}`} />

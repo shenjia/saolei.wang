@@ -182,10 +182,10 @@ export function VsScoreBoard({
    *  （服务端从对决数据转换，零额外查询）；null=不提供（不响应换人） */
   swap?: { me: VsPickPlayer; left: VsPickPlayer; right: VsPickPlayer } | null;
   /** 「历史对决」板块数据（2026-11-11 14:38 张老师：分割线下默认（赛前）即渲染；
-   *  15:48：开跑后整块消失；17:23：改传**数据**由本组件渲染 VsHistBlock——
-   *  换人（就位态就地切竞技场）后 uids 跟随 arena 侧卡片，VsHistFeed 自动重拉；
-   *  竞技场形态（arena 非 null）时取 arena 两侧卡片 id（空位=0） */
-  hist: { uid1: number; uid2: number; rows: VsHistRow[]; total: number; pageSize: number } | null;
+   *  15:48：开跑后整块消失；17:23：改传**数据**由本组件渲染 VsHistBlock。
+   *  2026-11-13 张老师定口径：＝登录者发起的所有对决、与卡片无关——换人
+   *  （含把自己换掉清卡）板块保留，不再跟随 uids */
+  hist: { rows: VsHistRow[]; total: number; pageSize: number } | null;
   /** 自动跑分交接（17:24 张老师：点一决胜负落地瞬间历史会闪现又消失）——
    *  竞技场交接时写 vs_autorun cookie，SSR 读到即判定「马上开跑」，
    *  历史板块从首帧就不渲染（原 sessionStorage 方案 SSR 无从知晓，必闪） */
@@ -753,20 +753,13 @@ export function VsScoreBoard({
       {/* 「历史对决」板块（2026-11-11 14:38 张老师）：分割线下默认即渲染；
           15:48 张老师：开始跑分后整块消失（仅「就位」态可见）；16:26 张老师：
           板块宽度与分割线一致（fit 测量值经 heroW 写进 wrapper，margin auto 居中）；
-          16:36 张老师：换人切竞技场形态后保留；20:51 张老师定口径：＝**当前登录
-          用户发起的**所有对决——uids 恒为登录者（服务端 hist 传入），换人不再
-          跟随重拉（列表与卡上是谁无关，本来就不用变）；17:24 张老师：自动跑分
-          交接（histHidden，SSR 读 cookie 判定）时首帧就不渲染——否则落地瞬间
-          历史闪现又消失 */}
-      {phase === "ready" && !histSuppressed && hist && (hist.uid1 || hist.uid2) && (
+          16:36 张老师：换人切竞技场形态后保留；2026-11-13 张老师定口径：＝登录者
+          **发起的**所有对决、与卡片上是谁无关（换人清卡板块保留，无 uids 跟随）；
+          17:24 张老师：自动跑分交接（histHidden，SSR 读 cookie 判定）时首帧就
+          不渲染——否则落地瞬间历史闪现又消失 */}
+      {phase === "ready" && !histSuppressed && hist && (
         <div className="vs_hist_wrap" style={heroW ? { width: heroW } : undefined}>
-          <VsHistBlock
-            uid1={hist.uid1}
-            uid2={hist.uid2}
-            initial={hist.rows}
-            total={hist.total}
-            pageSize={hist.pageSize}
-          />
+          <VsHistBlock initial={hist.rows} total={hist.total} pageSize={hist.pageSize} />
         </div>
       )}
       {/* 跑分完成后下方各板块才出现（RSC 节点，赛前不在可见 DOM 中） */}

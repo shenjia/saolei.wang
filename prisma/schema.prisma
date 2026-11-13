@@ -1434,22 +1434,28 @@ model OpenmsBindRequest {
 }
 
 // VS 对决记录（2026-11-11 张老师定：仪表盘「今日胜负」KPI + /admin/vs 对决统计页）。
-// /vs/:id 页每次有效访问落一行（同对手 10 分钟窗口去重，防刷新虚高）：
-// 发起者=登录用户（未登录 redirect 不会走到落库），target=被挑战者；
-// 比分/结果为渲染时实时算得的口径快照（rec+BV 总分）；result 1=发起者胜 2=对方胜 0=平。
+// /vs/:id 页每次有效访问落一行（同 发起者+参赛双方 10 分钟窗口去重，防刷新虚高）：
+// 2026-11-13 张老师定口径：发起者＝访问对决页的登录者，**不一定是参赛双方**——
+// 指定 A、B 两人 PK（旁观访问）同样落一行、进发起者自己的「历史对决」。
+// initiator_id=发起者（访问者；旧行为 NULL，已回填=user_id 近似——旧行发起者
+// 就是当时的页面左玩家），user_id/target_id=参赛双方（页面左/右玩家）；
+// 比分/结果为渲染时实时算得的口径快照（rec+BV 总分）；
+// result 1=左方(user_id)胜 2=右方(target_id)胜 0=平。
 // 回填行（page_view 历史导入）比分/结果为 NULL，展示层亮灰 —。
 model VsDuel {
-  id         BigInt  @id @default(autoincrement()) @db.BigInt
-  userId     BigInt  @map("user_id") @db.BigInt // 发起者
-  targetId   BigInt  @map("target_id") @db.BigInt // 被挑战者
-  s1         Float?  // 发起者总分（纪录+BV）
-  s2         Float?  // 被挑战者总分
-  result     Int?    @db.TinyInt // 1=发起者胜 2=对方胜 0=平；NULL=历史回填未算
-  createTime BigInt  @default(0) @map("create_time") @db.BigInt // 发起时刻 Unix 秒
+  id          BigInt  @id @default(autoincrement()) @db.BigInt
+  initiatorId BigInt? @map("initiator_id") @db.BigInt // 发起者＝访问者（旧行 NULL→回填）
+  userId      BigInt  @map("user_id") @db.BigInt // 参赛方1（页面左）
+  targetId    BigInt  @map("target_id") @db.BigInt // 参赛方2（页面右）
+  s1          Float?  // 参赛方1（user_id）总分（纪录+BV）
+  s2          Float?  // 参赛方2（target_id）总分
+  result      Int?    @db.TinyInt // 1=左方胜 2=右方胜 0=平；NULL=历史回填未算
+  createTime  BigInt  @default(0) @map("create_time") @db.BigInt // 发起时刻 Unix 秒
 
   @@index([createTime]) // 趋势/记录列表
-  @@index([userId, createTime]) // 发起 Top10 / 个人维度
-  @@index([targetId, createTime]) // 被对决 Top10
+  @@index([initiatorId, createTime]) // 历史对决按发起者分页（2026-11-13）
+  @@index([userId, createTime]) // 参赛方1 维度（后台 Top10 等）
+  @@index([targetId, createTime]) // 参赛方2 维度（后台 Top10）
   @@map("vs_duel")
 }
 

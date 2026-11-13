@@ -227,15 +227,16 @@ export async function getPreAssessment(id1: number, id2: number): Promise<{ text
 
 /** 历史对决（2026-11-11 14:38 张老师需求）：对决页分割线下「历史对决」板块——
  *  当前登录用户**发起**的最近对决记录（2026-11-13 口径：发起者＝访问对决页的
- *  本人，落库见 recordVsDuel；调用方恒传 session.uid），格式参考后台对决统计
- *  （时间/挑战双方/比分/胜负结果），行 hover 出「回看」跳该行两玩家对决页；
+ *  本人，**不一定是参赛双方**——指定 A、B 两人 PK 的旁观对决同样计入；落库见
+ *  recordVsDuel，查询恒按 initiator_id=session.uid），格式参考后台对决统计
+ *  （时间/参赛双方/比分/胜负结果），行 hover 出「回看」跳该行两玩家对决页；
  *  底部标准翻页控件（每页 10 条，由调用方传 page）。 */
 export interface VsHistRow {
   id: number;
   /** 发起时刻 Unix 秒 */
   time: number;
-  u1: number; n1: string; // 发起者
-  u2: number; n2: string; // 被挑战者
+  u1: number; n1: string; // 参赛方1（页面左）
+  u2: number; n2: string; // 参赛方2（页面右）
   /** 性别（user.sex，1=男）——名字后缀图标（2026-11-11 15:48 张老师：与玩家卡片同渲染） */
   sex1: number; sex2: number;
   /** 英文名（AvatarCell 气泡用；空串=气泡只显示 #ID 姓名） */
@@ -244,18 +245,16 @@ export interface VsHistRow {
   t1: string; t2: string;
   /** 比分（null=历史回填行未算） */
   s1: number | null; s2: number | null;
-  /** 1=发起者胜 2=对方胜 0=平；null=未算 */
+  /** 1=左方(user_id)胜 2=右方(target_id)胜 0=平；null=未算 */
   result: number | null;
 }
 
 export async function getVsHistory(
-  uid1: number,
-  uid2: number,
+  uid: number,
   page = 1,
   pageSize = 10
 ): Promise<{ rows: VsHistRow[]; total: number; pageSize: number }> {
   const offset = (Math.max(1, page) - 1) * pageSize;
-  const ids = Prisma.join([BigInt(uid1), BigInt(uid2)]);
   // 展示名表达式（中文名优先 → 英文名 → #id；与 admin/vsstats 同款口径，alias 固定 ua/ub）
   const NAME_A = `COALESCE(NULLIF(ua.chinese_name, ''), NULLIF(ua.english_name, ''), CONCAT('#', ua.id))`;
   const NAME_B = `COALESCE(NULLIF(ub.chinese_name, ''), NULLIF(ub.english_name, ''), CONCAT('#', ub.id))`;
@@ -277,14 +276,14 @@ export async function getVsHistory(
           JOIN \`user\` ub ON ub.id = d.target_id
           LEFT JOIN \`user_scores\` sa ON sa.id = d.user_id
           LEFT JOIN \`user_scores\` sb ON sb.id = d.target_id
-          WHERE d.user_id IN (${ids})
+          WHERE d.initiator_id = ${BigInt(uid)}
           ORDER BY d.create_time DESC LIMIT ${pageSize} OFFSET ${offset}
         `
       )
       .catch(() => []),
     prisma
       .$queryRaw<{ c: bigint }[]>(
-        Prisma.sql`SELECT COUNT(*) AS c FROM vs_duel WHERE user_id IN (${ids})`
+        Prisma.sql`SELECT COUNT(*) AS c FROM vs_duel WHERE initiator_id = ${BigInt(uid)}`
       )
       .then((r) => N(r[0]?.c))
       .catch(() => 0),
@@ -500,26 +499,36 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
 
 // ---------- 对决记录落库（2026-11-11 张老师定） ----------
 // /vs/:id 页每次有效访问落一行 vs_duel（比分/结果为本次渲染快照）；
-// 同一 (发起者, 被挑战者) 10 分钟窗口去重——刷新/反复打开不重复计数。
-// 2026-11-13 张老师定口径：发起者＝访问对决页的本人（uid 参数即 histUid），
-// 不再是页面左玩家——否则对方访问时登录者会被动入其「历史对决」、本人放
-// 右边访问的对决反而漏记。失败静默：统计缺行可接受，绝不能影响 PK 页渲染。
+// 同一 (发起者, 参赛双方) 10 分钟窗口去重——刷新/反复打开不重复计数。
+// 2026-11-13 张老师定口径：发起者＝访问对决页的登录者，**不一定是参赛双方**——
+// 指定 A、B 两人 PK（旁观访问）同样落一行、进发起者自己的「历史对决」；
+// user_id/target_id=参赛双方（页面左/右），result 1=左方胜 2=右方胜 0=平。
+// 每个登录访客各自落行（A 访问记 initiator=A，B 随后访问再记 initiator=B）。
+// 失败静默：统计缺一行可接受，绝不能影响 PK 页渲染。
 
 const N = (v: unknown): number => Number(v ?? 0);
 
-export async function recordVsDuel(uid: number, targetId: number, s1: number, s2: number): Promise<void> {
+export async function recordVsDuel(
+  initiatorId: number,
+  uid1: number,
+  uid2: number,
+  s1: number,
+  s2: number
+): Promise<void> {
   try {
     const now = Math.floor(Date.now() / 1000);
     const recent = await prisma.$queryRaw<{ n: bigint }[]>`
       SELECT COUNT(*) AS n FROM vs_duel
-      WHERE user_id = ${BigInt(uid)} AND target_id = ${BigInt(targetId)}
+      WHERE initiator_id = ${BigInt(initiatorId)}
+        AND user_id = ${BigInt(uid1)} AND target_id = ${BigInt(uid2)}
         AND create_time >= ${now - 600}
     `;
     if (N(recent[0]?.n) > 0) return;
     await prisma.vsDuel.create({
       data: {
-        userId: BigInt(uid),
-        targetId: BigInt(targetId),
+        initiatorId: BigInt(initiatorId),
+        userId: BigInt(uid1),
+        targetId: BigInt(uid2),
         s1,
         s2,
         result: s1 === s2 ? 0 : s1 > s2 ? 1 : 2,

@@ -82,7 +82,6 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
       <VsDuelView
         uid1={l}
         uid2={qr}
-        record={session.uid === l || session.uid === qr}
         swapMe={swapMe}
         histHidden={histHidden}
         histUid={session.uid}
@@ -97,9 +96,9 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
   const [initialLeft, initialRight, hist] = await Promise.all([
     l ? getVsPickPlayer(l) : null,
     qr ? getVsPickPlayer(qr) : null,
-    // 「历史对决」板块数据（20:51 张老师定口径：＝当前登录用户**发起**的所有
-    // 对决，与卡片上是谁无关）——恒按登录者查，两卡全空也有数据
-    getVsHistory(session.uid, session.uid, 1, 10),
+    // 「历史对决」板块数据（2026-11-13 张老师定口径：＝登录者**发起**的所有
+    // 对决——访问即发起，指定 A、B 两人 PK 的旁观对决也算）——恒按登录者查
+    getVsHistory(session.uid, 1, 10),
   ]);
 
   // 日期时间（21:06 张老师：竞技场音量按钮下方也要日期+分割线，与对决页同款；
