@@ -23,8 +23,8 @@ import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "../src/lib/db";
 import { parseVideoBinary } from "../src/lib/videoradar";
-import { pressPairStats, pressTriggers, humanLikeStats, isTouchpadPress } from "../src/lib/video-triage";
-import { AUTO_REASON, PRESS_UNIFORM_SHARE, TOUCHPAD_MAX_PRESS_MS, ACCOUNT_PRESS_SCAN_LIMIT, ZERO_PRESS_MIN_CLICKS, ZERO_PRESS_FRACTION_TRIGGER } from "../src/lib/video-triage-limits";
+import { pressPairStats, pressTriggers, humanLikeStats } from "../src/lib/video-triage";
+import { AUTO_REASON, PRESS_UNIFORM_SHARE, TOUCHPAD_MAX_PRESS_MS, ZERO_PRESS_MIN_CLICKS, ZERO_PRESS_FRACTION_TRIGGER } from "../src/lib/video-triage-limits";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const PRESS_BITS = AUTO_REASON.PRESS | AUTO_REASON.PRESS_UNIFORM | AUTO_REASON.SHORT_PRESS | AUTO_REASON.ZERO_PRESS;
@@ -100,40 +100,14 @@ async function main() {
     if (next !== r.auto_reason) rewrites.push({ row: r, next });
   }
 
-  // bit24 触控板账号豁免 v4：窗口内全部可统计盘按压中位数 <12ms → 剥离
-  // （VideoInfo 无 Video 的 Prisma 关联，两步查询取用户最近 30 盘）
+  // bit24 触控板账号豁免 v4：账号代表按压中位数 <12ms → 剥离（与上传链路
+  // accountPressStatsOf 同一实现，防口径漂移）
   let stripped24 = 0;
   for (const [uid, urows] of bit24Users) {
-    const userVids = await prisma.video.findMany({
-      where: { user: BigInt(uid) },
-      select: { id: true },
-      orderBy: { id: "desc" },
-      take: ACCOUNT_PRESS_SCAN_LIMIT,
-    });
-    const vids = userVids.length
-      ? await prisma.videoInfo.findMany({
-          where: { id: { in: userVids.map((x) => x.id) } },
-          select: { id: true, filepath: true },
-        })
-      : [];
-    let allTouchpad = true, usable = 0;
-    for (const vi of vids) {
-      let buf: Buffer;
-      try {
-        const full = path.resolve(VIDEOS_ROOT, "." + vi.filepath);
-        if (!full.startsWith(VIDEOS_ROOT + path.sep)) { allTouchpad = false; break; }
-        buf = readFileSync(full);
-      } catch { allTouchpad = false; break; }
-      const ext = vi.filepath.split(".").pop()?.toLowerCase() ?? "";
-      const v = parseVideoBinary(new Uint8Array(buf), ext);
-      if (!v) continue;
-      const ps = pressPairStats(v);
-      if (ps.pressMedianMs === null) continue; // 无按压配对不参与判定
-      usable++;
-      if (!isTouchpadPress(ps)) { allTouchpad = false; break; }
-    }
-    if (allTouchpad && usable > 0) {
-      console.log(`☐ uid=${uid} ${urows[0]!.chinese_name ?? "?"} 账号 ${usable} 盘可统计按压中位数全部 <${TOUCHPAD_MAX_PRESS_MS}ms → 触控板账号，剥离 ${urows.length} 盘的 bit24`);
+    const { accountPressStatsOf } = await import("../src/lib/video-triage");
+    const acct = await accountPressStatsOf(Number(uid));
+    if (acct.touchpad && acct.usable > 0) {
+      console.log(`☐ uid=${uid} ${urows[0]!.chinese_name ?? "?"} 账号 ${acct.usable} 盘可统计按压中位 ${acct.medianMs}ms <${TOUCHPAD_MAX_PRESS_MS}ms → 触控板账号，剥离 ${urows.length} 盘的 bit24`);
       for (const r of urows) {
         const rw = rewrites.find((x) => x.row.id === r.id);
         const next = (rw ? rw.next : r.auto_reason) & ~BIT24;

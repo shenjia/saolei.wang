@@ -130,19 +130,33 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
           needTotal={pool === "exempt" ? poolCounts.need : undefined}
         />
 
-        {list.total > list.pageSize && (
-          <div className="admin_pager">
-            {/* 翻页必须带 pool：丢了会按默认落点逻辑跳回免核定池（2026-11-13 张老师报的翻页 bug） */}
-            {page > 1 && <Link href={`/admin/review?status=${status}${pool ? `&pool=${pool}` : ""}&page=${page - 1}`}>上一页</Link>}
-            <span className="current">{page}</span>
-            {page * list.pageSize < list.total && (
-              <Link href={`/admin/review?status=${status}${pool ? `&pool=${pool}` : ""}&page=${page + 1}`}>下一页</Link>
-            )}
-            <span style={{ border: 0, marginLeft: 12, color: "#75715e" }}>
-              共 {Math.ceil(list.total / list.pageSize)} 页
-            </span>
-          </div>
-        )}
+        {list.total > list.pageSize && (() => {
+          const totalPages = Math.ceil(list.total / list.pageSize);
+          const href = (p: number) => `/admin/review?status=${status}${pool ? `&pool=${pool}` : ""}&page=${p}`;
+          // 窗口式页码：最多显示 10 页，当前页尽量居中；首页/尾页越界时按需显示
+          const start = Math.max(1, Math.min(page - 4, totalPages - 9));
+          const end = Math.min(totalPages, start + 9);
+          const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+          return (
+            <div className="admin_pager">
+              {/* 翻页必须带 pool：丢了会按默认落点逻辑跳回免核定池（2026-11-13 张老师报的翻页 bug） */}
+              {page > 1 && <Link href={href(page - 1)}>上一页</Link>}
+              {start > 1 && <Link href={href(1)}>首页</Link>}
+              {start > 2 && <span style={{ border: 0 }} className="pager_ellipsis">…</span>}
+              {pages.map((p) =>
+                p === page
+                  ? <span key={p} className="current">{p}</span>
+                  : <Link key={p} href={href(p)}>{p}</Link>
+              )}
+              {end < totalPages - 1 && <span style={{ border: 0 }} className="pager_ellipsis">…</span>}
+              {end < totalPages && <Link href={href(totalPages)}>尾页</Link>}
+              {page < totalPages && <Link href={href(page + 1)}>下一页</Link>}
+              <span style={{ border: 0, marginLeft: 12, color: "#75715e" }}>
+                共 {totalPages} 页
+              </span>
+            </div>
+          );
+        })()}
       </AdminCard>
 
       <div className="admin_grid c2">

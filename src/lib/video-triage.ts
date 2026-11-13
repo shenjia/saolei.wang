@@ -568,11 +568,12 @@ export async function isLowTrustUser(userId: number): Promise<boolean> {
 // ---------- 账号级按压聚合（bit24，2026-11-13 沈正刚 28122 案） ----------
 
 export interface AccountPressStats {
-  /** 参与统计的盘数（扫描窗口内 press 可统计：任一键配对 n≥15） */
+  /** 参与统计的盘数（扫描窗口内 press 可统计：合并配对 n≥10） */
   usable: number;
-  /** 各可统计盘的代表按压时长（可统计键取更低者）中位数（ms；usable=0 时 null） */
+  /** 各可统计盘的代表按压时长（左右键合并中位数）的账号级中位数（ms；usable=0 时 null） */
   medianMs: number | null;
-  /** 触控板账号：窗口内全部可统计代表按压 <12ms（2026-11-13 张老师定豁免） */
+  /** 触控板账号：账号代表按压中位数 <12ms（v4 口径——各盘取按压中位数为代表，
+   *  偶发实体键长按不否决；2026-11-13 张老师定豁免） */
   touchpad: boolean;
 }
 
@@ -594,7 +595,6 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
   });
   const rows = [...infos];
   const reps: number[] = [];
-  let allTouchpad = true;
   for (const info of rows) {
     const buf = readVideoFile(info.filepath);
     if (!buf) continue;
@@ -602,14 +602,10 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
     const parsed = parseVideoBinary(buf, ext);
     if (!parsed) continue;
     const ps = pressPairStats(parsed);
-    // 触控板豁免用中位数判据（v4，与 isTouchpadPress 同口径）——任一盘
-    // 中位数 ≥12ms（偶发实体键/长按）不否决账号豁免，触控板真人中位数恒 10ms；
-    // 无按压配对的盘不参与判定
-    if (ps.pressMedianMs !== null && !isTouchpadPress(ps)) allTouchpad = false;
-    const keys: number[] = [];
-    if (ps.leftAvg !== null && ps.leftN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.leftAvg);
-    if (ps.rightAvg !== null && ps.rightN >= PRESS_SHORT_MIN_PAIRS) keys.push(ps.rightAvg);
-    if (keys.length) reps.push(Math.min(...keys));
+    // 代表值用按压中位数（v4）——avg 被偶发长按拉高，会把触控板账号误判
+    if (ps.pressMedianMs !== null && ps.leftN + ps.rightN >= PRESS_SHORT_MIN_PAIRS) {
+      reps.push(ps.pressMedianMs);
+    }
   }
   if (!reps.length) return { usable: 0, medianMs: null, touchpad: false };
   const sorted = [...reps].sort((a, b) => a - b);
@@ -618,8 +614,8 @@ export async function accountPressStatsOf(userId: number): Promise<AccountPressS
   return {
     usable: reps.length,
     medianMs: Math.round(median),
-    // 触控板账号：窗口内全部盘按压中位数 <12ms（isTouchpadPress 判据）
-    touchpad: allTouchpad,
+    // 触控板账号：账号代表按压中位数 <12ms（偶发实体键/换鼠标的盘被中位数稀释）
+    touchpad: median < TOUCHPAD_MAX_PRESS_MS,
   };
 }
 

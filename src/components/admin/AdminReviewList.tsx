@@ -188,7 +188,7 @@ function reasonTagList(v: AdminVideoRow) {
   if (r & (1 << 24)) {
     tags.push({
       text: `账号按压异常${v.acctPressMedianMs != null ? ` 中位 ${v.acctPressMedianMs}ms` : ""}`,
-      title: `账号级按压聚合：上传者最近 30 盘中 press 可统计（配对 n≥10）的录像 ≥3 盘，且代表按压时长（可统计键取更低者）中位数 ≤40ms${v.acctPressMedianMs != null ? `（本账号 ${v.acctPressVideos ?? "?"} 盘可统计，中位 ${v.acctPressMedianMs}ms）` : "（现算失败）"}。人类单盘按压 p1=44.3ms，中位数 ≤40ms 意味着该账号的典型盘全部在人类 1 分位以下——单盘可以擦线伪装，账号级连续超人类是生成器特征（28122 案：22 盘合成流）`,
+      title: `账号级按压聚合：上传者最近 30 盘中 press 可统计（合并配对 n≥10）的录像 ≥3 盘，且账号代表按压时长（各盘取按压中位数）的账号级中位数 ≤40ms${v.acctPressMedianMs != null ? `（本账号 ${v.acctPressVideos ?? "?"} 盘可统计，中位 ${v.acctPressMedianMs}ms）` : "（现算失败）"}。人类单盘按压 p1=44.3ms，中位数 ≤40ms 意味着该账号的典型盘全部在人类 1 分位以下——单盘可以擦线伪装，账号级连续超人类是生成器特征（28122 案：22 盘合成流）。触控板账号豁免（账号中位数 <12ms，2026-11-13 晚 v4 口径：各盘取中位数，偶发实体键长按被稀释不否决）`,
       cls: "bad",
     });
   }
