@@ -12,6 +12,7 @@
 //   扫描（只报不写）: env -u NODE_OPTIONS node --experimental-transform-types \
 //     --import ./scripts/sync/ts-extension-loader.mjs scripts/account-press-retriage.ts
 //   落库: 同上 + --apply
+//   定向补判: 同上 + --id "1,2,3"（只统计清单盘，窗口从清单集合内取）
 
 import { readFileSync } from "fs";
 import path from "path";
@@ -46,11 +47,18 @@ interface UserAgg {
 
 async function main() {
   const apply = process.argv.includes("--apply");
-  const rows = await prisma.$queryRawUnsafe<Row[]>(
+  // 可选 --id "1,2,3"：只统计指定盘（分母窗口仍按每用户取最近 N 盘的口径从
+  // 指定集合内取）——用于按嫌疑清单定向补判，避免全站 30+ 万盘文件 IO。
+  const idIdx = process.argv.indexOf("--id");
+  const idFilter =
+    idIdx >= 0
+      ? new Set(process.argv[idIdx + 1]!.split(",").map((s) => s.trim()))
+      : null;
+  const rows = (await prisma.$queryRawUnsafe<Row[]>(
     `SELECT v.id, v.user, v.status, v.auto_flag, v.auto_reason, vi.filepath, u.chinese_name
      FROM video v JOIN video_info vi ON vi.id=v.id LEFT JOIN user u ON u.id=v.user
      ORDER BY v.user ASC, v.id DESC`
-  );
+  )).filter((r) => !idFilter || idFilter.has(String(r.id)));
   console.log(`待扫 ${rows.length} 盘${apply ? "（--apply 落库）" : "（只报不写）"}…`);
 
   const byUser = new Map<string, UserAgg>();
