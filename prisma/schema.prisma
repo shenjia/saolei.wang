@@ -283,6 +283,12 @@ model Video {
   fromSite BigInt? @map("from_site") @db.BigInt
   fromId   BigInt? @map("from_id") @db.BigInt
 
+  // ---- 所属比赛（2026-11-13 张老师需求）：NULL=不挂比赛；本期由管理员在后台
+  // 录像管理手动挂接（video.competition op），比赛详情页「录像」板块与排名按此聚合；
+  // 成绩口径＝video_info.real_time（排行成绩口径 2026-10-30 张老师定）
+  competitionId BigInt? @map("competition_id") @db.BigInt
+
+
   // 外站同步幂等键（2026-11-07）：同站同 remote id 唯一；NULL 行（站内原生）MySQL 不参与唯一约束
   @@unique([fromSite, fromId])
   // 2026-10-15 上线前性能审计新增：
@@ -300,6 +306,9 @@ model Video {
   @@index([user, level])
   @@index([hash])
   @@index([createTime])
+  // (competition_id, create_time) 2026-11-13：比赛详情页「录像」板块按比赛取行
+  // （正序时间序扫描）+ 后台按比赛筛选
+  @@index([competitionId, createTime])
   // (review_user, status) 2026-10-22 迁移收尾索引排查：团队页 getTeam 逐管理员 count
   // （WHERE review_user=N AND status=20）原走 (status,…) 索引扫 15 万条目，实测 1.4s/人
   @@index([reviewUser, status])
