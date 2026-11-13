@@ -21,6 +21,7 @@ import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
 import { scoreTime } from "@/lib/format";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { AdminCard, AdminPager, LevelTag, StatusTag } from "@/components/admin/Widgets";
+import { CompAddVideosDialog } from "@/components/admin/CompAddVideosDialog";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 
 export const dynamic = "force-dynamic";
@@ -227,7 +228,11 @@ export default async function AdminCompetitionDetailPage({
         </table>
       </AdminCard>
 
-      <AdminCard title="录像列表" tight>
+      <AdminCard
+        title="录像列表"
+        tight
+        more={<CompAddVideosDialog competitionId={id} name={comp.name} />}
+      >
         <div className="admin_scroll">
           <table className="admin_table">
             <thead>
@@ -299,7 +304,7 @@ export default async function AdminCompetitionDetailPage({
               {videoRows.length === 0 && (
                 <tr>
                   <td colSpan={10}>
-                    <div className="admin_empty">本比赛还没有收录录像（清单行「收录像」或录像管理「挂接比赛」均可）</div>
+                    <div className="admin_empty">本比赛还没有收录录像（点右上「批量收录录像」或录像管理「挂接比赛」均可）</div>
                   </td>
                 </tr>
               )}

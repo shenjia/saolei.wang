@@ -1,7 +1,7 @@
 "use client";
 
-// 比赛批量收录像弹窗（2026-11-13 三期张老师需求）
-// 清单行「收录像」→ 弹窗逐行输入录像 ID（一行一个，22:40 张老师定不用逗号）→ 一次性挂接到本比赛。
+// 比赛批量收录像弹窗（2026-11-13 三期张老师需求；23:27 张老师定：入口移到详情页录像列表标题右侧）
+// 详情页录像列表「批量收录录像」→ 弹窗逐行输入录像 ID（一行一个，22:40 张老师定不用逗号）→ 一次性挂接到本比赛。
 // 已挂其他比赛的静默转入（张老师原话口径），服务端 competition.addVideos 兜底校验。
 // 弹窗样式复用 ban_overlay / ban_dialog（封禁弹窗同款）。
 
@@ -60,12 +60,12 @@ export function CompAddVideosDialog({
   return (
     <>
       <button type="button" className="admin_btn sm" onClick={() => setOpen(true)}>
-        收录像
+        批量收录录像
       </button>
       {open && (
         <div className="ban_overlay" onClick={() => !busy && setOpen(false)}>
           <div className="ban_dialog" onClick={(e) => e.stopPropagation()}>
-            <h1>批量收录像</h1>
+            <h1>批量收录录像</h1>
             <p className="ban_desc">
               比赛「{name}」（#{competitionId}）——每行输入一个录像 ID，
               已参与其他比赛的录像将静默转入本比赛。
