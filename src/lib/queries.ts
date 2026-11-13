@@ -2316,8 +2316,9 @@ export interface SiteStats {
   // 是录像评论，改挂「录像评论」新行）——两行统计数字各归各位
   bbsReplyTotal: number;
   bbsReplyToday: number;
-  // 2026-10-22 张老师要求：新增「在线练习」行——practice_log 累计练习盘数 + 今日增量
-  // （口径同「今日练习」板块/后台 KPI：胜负都算、游客局也计）
+  // 2026-10-22 张老师要求：新增「在线练习」行——practice_daily 累计练习盘数 + 今日增量
+  // （2026-11-13 张老师定：改按完成盘数口径，取 wins 列——尝试可刷、完成要付出努力，
+  // 同 user_scores.wins_7d / 后台 KPI 先例；游客完成局也计）
   practiceTotal: number;
   practiceToday: number;
   // 2026-11-02 张老师要求：新增「资金结余」行——赞助页同口径结余（分）：
@@ -2357,11 +2358,12 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
     // 论坛评论（bbs_reply；2026-10-22 起首页行名「论坛评论」，口径同 bbs_post：软删 -1 不计）
     prisma.bbsReply.count({ where: { status: 0 } }),
     prisma.bbsReply.count({ where: { status: 0, createTime: { gte: dayStart } } }),
-    // 在线练习（practice_daily 日汇总：SUM 全量；口径同「今日练习」板块：胜负都算、游客局也计。
+    // 在线练习（practice_daily 日汇总：SUM 全量；2026-11-13 张老师定：首页「练习盘数」
+    // 按「完成盘数」口径，取 wins 列不再取 plays——尝试含踩雷可刷，完成才是有效盘数。
     // 2026-10-22 张老师定：不逐盘落行改汇总表，原 practice_log 已迁移清理）
-    prisma.$queryRaw<Array<{ p: bigint }>>`SELECT COALESCE(SUM(plays),0) AS p FROM practice_daily`,
+    prisma.$queryRaw<Array<{ p: bigint }>>`SELECT COALESCE(SUM(wins),0) AS p FROM practice_daily`,
     prisma.$queryRaw<Array<{ p: bigint }>>`
-      SELECT COALESCE(SUM(plays),0) AS p FROM practice_daily
+      SELECT COALESCE(SUM(wins),0) AS p FROM practice_daily
       WHERE day = ${Math.floor((Number(dayStart) + 28800) / 86400)}
     `,
     // 资金结余（2026-11-02 张老师要求）：赞助页同口径——donate 合计 − donate_expense 合计；
@@ -2391,7 +2393,8 @@ async function getSiteStatsImpl(): Promise<SiteStats> {
 // 2026-10-15 性能审计：首页右栏「站点统计」9 个 count，其中 video/news/comment 三项
 // 在 20 万级表上全表扫描（EXPLAIN 证实 ALL），是全站最重的单点。缓存 60s
 // 2026-11-03 首页缓存永续化：60→REVALIDATE_HOME_CACHE
-const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v2"], { revalidate: REVALIDATE_HOME_CACHE });
+// 2026-11-13 练习盘数改完成口径（SUM(wins)），缓存键升 v3 令旧缓存（plays 口径）立即失效
+const fetchSiteStats = unstable_cache(getSiteStatsImpl, ["site-stats-v3"], { revalidate: REVALIDATE_HOME_CACHE });
 
 export async function getSiteStats(): Promise<SiteStats> {
   return fetchSiteStats();

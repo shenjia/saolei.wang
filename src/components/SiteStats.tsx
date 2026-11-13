@@ -50,9 +50,9 @@ export async function SiteStats() {
         <tbody>
           <StatRow label="雷友总数" total={s.userTotal} today={s.userToday} />
           <StatRow label="排行人数" total={s.rankedTotal} />
-          {/* 2026-10-22 张老师要求：新增「练习盘数」——practice_log 累计练习盘数
-              +今日增量（口径同「今日练习」板块/后台 KPI：胜负都算、游客局也计）；
-              二轮定位：行名「在线练习」改「练习盘数」，行位移到「排行人数」之下 */}
+          {/* 2026-10-22 张老师要求：新增「练习盘数」——practice_daily 汇总；
+              2026-11-13 张老师定：改按「完成盘数」口径（wins 列，含游客完成局）——
+              尝试盘数含踩雷可刷，完成才是有效盘数；行位移到「排行人数」之下 */}
           <StatRow label="练习盘数" total={s.practiceTotal} today={s.practiceToday} />
           <StatRow label="上传录像" total={s.videoTotal} today={s.videoToday} />
           {/* 2026-10-22 张老师要求：新增「录像评论」（原「发布评论」的 comment 表数据归此处） */}
