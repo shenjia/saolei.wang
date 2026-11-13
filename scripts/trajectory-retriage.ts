@@ -85,7 +85,7 @@ async function main() {
     if (!v) { parseFail++; continue; }
 
     const clientOwned = r.software === RANKED_SOFTWARE || r.evf_sig !== null;
-    const bits = humanLikeTriggers(humanLikeStats(v), r.software, clientOwned)
+    const bits = humanLikeTriggers(humanLikeStats(v), r.software, clientOwned, r.level)
       // bit23 短局超快按压：只增量补 SHORT_PRESS 位（bit0 常规线不经本脚本补，
       // 历史判定维持原样）
       | (pressTriggers(pressPairStats(v), r.level) & AUTO_REASON.SHORT_PRESS);

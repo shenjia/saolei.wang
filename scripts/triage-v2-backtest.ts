@@ -77,7 +77,7 @@ async function main() {
     const clientOwned = r.software === RANKED_SOFTWARE || r.evf_sig !== null;
     const ps = pressPairStats(v);
     const bits =
-      humanLikeTriggers(humanLikeStats(v), r.software, clientOwned) |
+      humanLikeTriggers(humanLikeStats(v), r.software, clientOwned, r.level) |
       pressTriggers(ps, r.level);
     if (bits) perVideo.push({ id: r.id, user: uk, level: r.level, status: r.status, autoReason: r.auto_reason, name: r.chinese_name, bits });
     const keys: number[] = [];

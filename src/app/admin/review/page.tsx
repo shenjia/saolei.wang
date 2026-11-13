@@ -132,10 +132,11 @@ export default async function AdminReviewPage({ searchParams }: { searchParams: 
 
         {list.total > list.pageSize && (
           <div className="admin_pager">
-            {page > 1 && <Link href={`/admin/review?status=${status}&page=${page - 1}`}>上一页</Link>}
+            {/* 翻页必须带 pool：丢了会按默认落点逻辑跳回免核定池（2026-11-13 张老师报的翻页 bug） */}
+            {page > 1 && <Link href={`/admin/review?status=${status}${pool ? `&pool=${pool}` : ""}&page=${page - 1}`}>上一页</Link>}
             <span className="current">{page}</span>
             {page * list.pageSize < list.total && (
-              <Link href={`/admin/review?status=${status}&page=${page + 1}`}>下一页</Link>
+              <Link href={`/admin/review?status=${status}${pool ? `&pool=${pool}` : ""}&page=${page + 1}`}>下一页</Link>
             )}
             <span style={{ border: 0, marginLeft: 12, color: "#75715e" }}>
               共 {Math.ceil(list.total / list.pageSize)} 页

@@ -878,7 +878,7 @@ export interface AdminVideoRow {
   acctPressVideos: number | null;
   /** 人类相似度统计（需核定行现算，2026-11-12 bit17~21 标签展示具体数值用；
    *  null=未算/解析失败） */
-  trajStats: { mv: number; clicks: number; mvPerClick: number | null; mvMinDt: number | null; maxMvBurst: number; pressStd: number | null; offDistinct: number | null; offStd: number | null; zeroPressFrac: number | null; loneZeroPressFrac: number | null; idleN: number; idleModeMs: number | null; idleModeShare: number | null } | null;
+  trajStats: { mv: number; clicks: number; mvPerClick: number | null; mvMinDt: number | null; maxMvBurst: number; pressStd: number | null; pressModeMs: number | null; pressModeShare: number | null; pressMaxMs: number | null; offDistinct: number | null; offStd: number | null; zeroPressFrac: number | null; loneZeroPressFrac: number | null; idleN: number; idleModeMs: number | null; idleModeShare: number | null } | null;
   /** 录像文件路径（/2026/01/05/xxx.mvf；后台播放器 fetch 用） */
   filepath: string;
   /** 所属比赛（2026-11-13 二期：后台录像管理挂接比赛；null=未挂接） */
@@ -1141,8 +1141,9 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
     for (const r of acctIds) {
       try {
         const acct = await accountPressStatsOf(r.user);
-        r.acctPressMedianMs = acct.medianMs;
-        r.acctPressVideos = acct.usable;
+        // 触控板账号豁免（2026-11-13）：中位数天然 ≤12ms，展示置空免误导复核
+        r.acctPressMedianMs = acct.touchpad ? null : acct.medianMs;
+        r.acctPressVideos = acct.touchpad ? null : acct.usable;
       } catch { /* 展示退化，不影响列表 */ }
     }
   }
@@ -1162,7 +1163,7 @@ async function computePressAvg(
   const pathMod = await import("path");
   const { parseVideoBinary } = await import("@/lib/videoradar");
   const { pressPairStats, humanLikeStats } = await import("@/lib/video-triage");
-  const { PRESS_AVG_MS, PRESS_SHORT_TRIGGER_MS } = await import("@/lib/video-triage-limits");
+  const { PRESS_AVG_MS, PRESS_SHORT_TRIGGER_MS, TOUCHPAD_MAX_PRESS_MS } = await import("@/lib/video-triage-limits");
   const result = new Map<number, { pressAvgMs: number | null; pressShortMs: number | null; traj: AdminVideoRow["trajStats"] } | null>();
   for (const info of infos) {
     result.set(N(info.id), null);
@@ -1184,18 +1185,25 @@ async function computePressAvg(
       /* 与触发口径一致：独立判左右键（n≥30 且 ≤阈值）；
          标签数值取实际命中的那只键（2026-10-19 张老师报 87ms≤60ms 错位——
          命中在右键 49ms、显示却取了左键 87ms）；两键都中取更低者 */
+      // 触控板豁免（2026-11-13 张老师定）：全部按压 <12ms → 触控板操作，
+      // 按压类触发器全放过，展示数值一并置空免得误导复核
+      const touchpad = ps.pressMaxMs !== null && ps.pressMaxMs < TOUCHPAD_MAX_PRESS_MS;
       let hit: number | null = null;
-      if (ps.leftAvg !== null && ps.leftN >= 30 && ps.leftAvg <= line) hit = Math.round(ps.leftAvg);
-      if (ps.rightAvg !== null && ps.rightN >= 30 && ps.rightAvg <= line) {
-        const r = Math.round(ps.rightAvg);
-        hit = hit === null ? r : Math.min(hit, r);
+      if (!touchpad) {
+        if (ps.leftAvg !== null && ps.leftN >= 30 && ps.leftAvg <= line) hit = Math.round(ps.leftAvg);
+        if (ps.rightAvg !== null && ps.rightN >= 30 && ps.rightAvg <= line) {
+          const r = Math.round(ps.rightAvg);
+          hit = hit === null ? r : Math.min(hit, r);
+        }
       }
       // bit23 短局超快按压命中值（n≥10 且 ≤30ms 的键取更低者，与触发口径一致）
       let shortHit: number | null = null;
-      if (ps.leftAvg !== null && ps.leftN >= 10 && ps.leftAvg <= PRESS_SHORT_TRIGGER_MS) shortHit = Math.round(ps.leftAvg);
-      if (ps.rightAvg !== null && ps.rightN >= 10 && ps.rightAvg <= PRESS_SHORT_TRIGGER_MS) {
-        const r = Math.round(ps.rightAvg);
-        shortHit = shortHit === null ? r : Math.min(shortHit, r);
+      if (!touchpad) {
+        if (ps.leftAvg !== null && ps.leftN >= 10 && ps.leftAvg <= PRESS_SHORT_TRIGGER_MS) shortHit = Math.round(ps.leftAvg);
+        if (ps.rightAvg !== null && ps.rightN >= 10 && ps.rightAvg <= PRESS_SHORT_TRIGGER_MS) {
+          const r = Math.round(ps.rightAvg);
+          shortHit = shortHit === null ? r : Math.min(shortHit, r);
+        }
       }
       const hl = humanLikeStats(parsed);
       const traj: AdminVideoRow["trajStats"] = {
@@ -1205,6 +1213,9 @@ async function computePressAvg(
         mvMinDt: hl.mvMinDt,
         maxMvBurst: hl.maxMvBurst,
         pressStd: hl.pressStd !== null ? +hl.pressStd.toFixed(1) : null,
+        pressModeMs: hl.pressModeMs,
+        pressModeShare: hl.pressModeShare !== null ? +hl.pressModeShare.toFixed(3) : null,
+        pressMaxMs: hl.pressMaxMs,
         offDistinct: hl.offDistinct,
         offStd: hl.offStd !== null ? +hl.offStd.toFixed(2) : null,
         zeroPressFrac: hl.zeroPressFrac !== null ? +hl.zeroPressFrac.toFixed(3) : null,

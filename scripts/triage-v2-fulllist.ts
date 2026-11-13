@@ -84,7 +84,7 @@ async function main() {
     const ps = pressPairStats(v);
     const hl = humanLikeStats(v);
     const bits =
-      humanLikeTriggers(hl, r.software, clientOwned) |
+      humanLikeTriggers(hl, r.software, clientOwned, r.level) |
       pressTriggers(ps, r.level);
     // press 代表时长（bit24 口径：可统计键 n≥10 取更低者）
     const keys: number[] = [];

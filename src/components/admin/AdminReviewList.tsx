@@ -146,9 +146,10 @@ function reasonTagList(v: AdminVideoRow) {
     });
   }
   if (r & (1 << 19)) {
+    const linePct = v.level === "beg" ? 95 : v.level === "int" ? 85 : 75;
     tags.push({
-      text: `按压时长恒定 σ=${t?.pressStd ?? "?"}ms`,
-      title: `配对按压时长的标准差过低（本盘 σ=${t?.pressStd ?? "?"}ms，触发线 <8ms）——人类按压时长天然有方差（全站人类下限 9ms），贴近零方差是确定性生成器特征，即便平均时长调到人类区间也会暴露（2026-11-13 线从 5ms 收紧到 8ms：沈正刚 28122 案 5 盘合成流 σ=5.3~5.7ms 压着 5ms 线擦过）`,
+      text: `按压时长恒定 ${t?.pressModeShare != null ? (t.pressModeShare * 100).toFixed(0) : "?"}%=${t?.pressModeMs ?? "?"}ms`,
+      title: `配对按压时长高度一致：完全相同的众数时长 ${t?.pressModeMs ?? "?"}ms 占 ${(t?.pressModeShare != null ? (t.pressModeShare * 100).toFixed(1) : "?")}%，超过分级触发线（初 ${linePct}% / 中 85% / 高 75%，2026-11-13 张老师定占比口径）——真人按压再快也有时长散布，「几乎每个按压都一模一样」是确定性生成器特征。触控板流（全部按压 <12ms）豁免本项`,
       cls: "bad",
     });
   }
