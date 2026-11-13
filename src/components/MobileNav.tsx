@@ -37,6 +37,8 @@ const SITE_LINKS: { href: string; label: string; loginOnly?: boolean }[] = [
   { href: "/ranking", label: "排行" },
   { href: "/video", label: "录像" },
   { href: "/online", label: "练习" },
+  // 比赛（/competitions，2026-11-13 张老师需求公开页）：先隐藏入口，数据处理完再显示（把上行注释解开即可）
+  // { href: "/competitions", label: "比赛" },
   { href: "/vs", label: "对决", loginOnly: true },
   { href: "/bbs", label: "论坛" },
   { href: "/page/guide", label: "教程" },

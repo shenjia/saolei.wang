@@ -128,6 +128,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 <li>
                   <Link prefetch={false} href="/video">录像</Link>
                 </li>
+                {/* 比赛入口（2026-11-13 张老师需求）：公开页，未登录可看（报名需登录）。
+                    2026-11-13 晚张老师：上线但先隐藏入口，等数据处理完再显示（直接取消注释即可） */}
+                {/* <li>
+                  <Link prefetch={false} href="/competitions">比赛</Link>
+                </li> */}
                 <li>
                   <Link prefetch={false} href="/online">练习</Link>
                 </li>
