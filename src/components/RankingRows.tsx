@@ -149,14 +149,14 @@ export function RankingRowLine({
                 <DeltaArrow dir="up" />新
               </span>
             ) : delta === 0 ? (
-              <span className="flat" title="与昨日持平">→</span>
+              <span className="flat" title="与30天前持平">→</span>
             ) : delta > 0 ? (
-              <span className="up" title={`比昨日进步${delta}位`}>
+              <span className="up" title={`比30天前进步${delta}位`}>
                 <DeltaArrow dir="up" />
                 {delta}
               </span>
             ) : (
-              <span className="down" title={`比昨日下降${-delta}位`}>
+              <span className="down" title={`比30天前下降${-delta}位`}>
                 <DeltaArrow dir="down" />
                 {-delta}
               </span>

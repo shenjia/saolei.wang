@@ -270,8 +270,8 @@ export function GrowFeed({
             {RANKING_COLS.filter((c) => c.by !== "act").map((c) => (
               <th key={c.by}>{c.label}</th>
             ))}
-            {/* 榜序按日升降幅度（非成绩列排序），升降表头黄标 */}
-            <th className="current">升降</th>
+            {/* 榜序按进步幅度（非成绩列排序），提升表头黄标；2026-11-13 张老师定：列名「升降」改「提升」 */}
+            <th className="current">提升</th>
           </tr>
         </thead>
         <tbody>
