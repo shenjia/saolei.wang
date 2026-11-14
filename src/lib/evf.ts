@@ -510,6 +510,9 @@ export function evfToRawvf(buf: Uint8Array): string[] {
     `Version: ${yuanVersion ?? clientVersion ?? `0.${v.version}`}`,
     // 玩家标识可能为空（靠 UUID 区分身份的录法），逐级兜底防止空签名入库
     `Player: ${v.playerIdentifier || v.uniqueIdentifier || "元扫雷玩家"}`,
+    // 比赛标识（2026-11-14 张老师需求）：race_identifier 是 evf v0.1–v0.4 头部
+    // 标准字段，元扫雷/Vienna 比赛工具写入；空串时省略该行（formatRawvf 缺行归一空串）
+    ...(v.raceIdentifier ? [`Race: ${v.raceIdentifier}`] : []),
     `Level: ${v.level === "beg" ? "beginner" : v.level === "int" ? "intermediate" : v.level === "exp" ? "expert" : "custom"}`,
     `Width: ${v.width}`,
     `Height: ${v.height}`,

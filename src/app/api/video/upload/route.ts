@@ -208,6 +208,16 @@ export async function uploadVideo(
     logSensitiveHit("video.signature", session.uid, sigHit);
     return fail(sensitiveRejectMessage(sigHit, "上传"));
   }
+  /* 比赛标识（2026-11-14 张老师需求）：evf race_identifier / rmv token 段提取，
+     详情页「比赛 xxx」公开展示——与签名同过前置词库（命中拒绝上传）。
+     绝大多数录像无此字段（空串），命中率为 0 不增心智负担 */
+  if (parsed.race) {
+    const raceHit = checkSensitive(parsed.race);
+    if (!raceHit.ok) {
+      logSensitiveHit("video.race", session.uid, raceHit);
+      return fail(sensitiveRejectMessage(raceHit, "上传"));
+    }
+  }
 
   // 签名注册（移植 UserSig::register：已存在则必须是本人）
   const sig = await prisma.userSig.findFirst({ where: { signature: parsed.player } });
@@ -308,6 +318,8 @@ export async function uploadVideo(
           ...(options?.rankedInternal
             ? { evfSig: evfSignature(buf) }
             : {}),
+          // 比赛标识（2026-11-14 张老师需求）：文件内嵌赛事字段原样落库；无则不写（NULL）
+          ...(parsed.race ? { race: parsed.race } : {}),
           createTime: nowSec,
           updateTime: nowSec,
         },

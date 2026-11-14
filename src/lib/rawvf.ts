@@ -18,6 +18,9 @@ export interface ParsedVideo {
   /** 问号开关（AVF 头 QuestionMarks / MVF 头 Marks 行；回放引擎 toggleLabel 旗→问号分支依赖） */
   marks: boolean;
   board: string; // renderBoard 后的整盘字符串：'*' 或数字字符
+  /** 比赛标识（2026-11-14 张老师需求）：evf race_identifier / rmv 玩家信息第 4 段
+   *  token（ms-toollib 判例即 race_identifier）；格式无此字段/为空时＝空串 */
+  race: string;
   events: string[]; // RawVF 事件行（调试用，不入库）
 }
 
@@ -173,6 +176,8 @@ export function formatRawvf(result: string[]): ParsedVideo {
     noflag: !events.some((e) => e.indexOf("rc") > 0),
     marks: formatted.questionmarks === "on" || formatted.marks === "on",
     board: renderBoard(boardLines),
+    // 比赛标识（2026-11-14）：RawVF 的 Race: 行，无此行/空值归一为空串
+    race: String(formatted.race ?? ""),
     events,
   };
 }

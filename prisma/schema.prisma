@@ -333,6 +333,12 @@ model VideoInfo {
   // 录像本体照常展示。只在上传时刻判定落列——历史录像恒 0 不受追溯
   // （如 76668 高级 95BV 老盘成绩照旧有效）
   noRecord   Boolean @default(false) @map("no_record")
+  // 比赛标识（2026-11-14 张老师需求）：录像文件内嵌的赛事标识字段——
+  // evf＝race_identifier（元扫雷 v0.1–v0.4 头部标准字段，元/Vienna 比赛工具写入）；
+  // rmv＝玩家信息第 4 段 token（ms-toollib RmvVideo 权威判例即 race_identifier，
+  // Vienna Scoreganizer 比赛客户端写入）。站内生成的 evf 恒空串；展示层「比赛 xxx」
+  // 仅在非空时渲染。落库前过 checkSensitive（会公开展示，同 signature 口径）
+  race       String? @db.VarChar(255)
   createTime BigInt  @default(0) @map("create_time") @db.BigInt
   updateTime BigInt  @default(0) @map("update_time") @db.BigInt
 

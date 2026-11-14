@@ -211,6 +211,11 @@ async function main() {
       // 敏感词标识
       const sigHit = checkSensitive(parsed.player);
       if (!sigHit.ok) { counts.sensitive++; skipDetail.push({ id: v.id, reason: "敏感词标识" }); continue; }
+      // 比赛标识（2026-11-14 张老师需求）：会公开展示，同过前置词库
+      if (parsed.race) {
+        const raceHit = checkSensitive(parsed.race);
+        if (!raceHit.ok) { counts.sensitive++; skipDetail.push({ id: v.id, reason: "敏感词比赛标识" }); continue; }
+      }
 
       // ⑤ 落文件（目录按上传时间 +08:00 日期）
       const uploadSec = Math.floor(new Date(v.upload_time).getTime() / 1000);
@@ -260,6 +265,8 @@ async function main() {
             software: parsed.program, version: parsed.version,
             noflag: parsed.noflag, board: boardWithFlags,
             board3bv: parsed.bbbv ?? 0, realTime: parsed.timeMs, noRecord,
+            // 比赛标识（2026-11-14 张老师需求）：文件内嵌赛事字段原样落库；无则不写
+            ...(parsed.race ? { race: parsed.race } : {}),
             createTime: ts, updateTime: ts,
           },
         });

@@ -42,6 +42,9 @@ class RmvParser {
   private program = "";
   private version = "";
   private player = "";
+  /** 比赛标识：玩家信息第 4 段 token（ms-toollib RmvVideo 权威判例即 race_identifier，
+   *  Vienna Scoreganizer 比赛客户端写入；f≤3 时无此字段恒空串） */
+  private race = "";
   private board: number[] = [];
   private events: Array<{ ev: number; time: number; x: number; y: number }> = [];
   /** 事件流末端毫秒（最后一个鼠标事件的时间戳）＝全站成绩口径 real_time */
@@ -132,8 +135,12 @@ class RmvParser {
       for (let i = 0; i < n; i++) this.num();
     }
     if (f > 3) {
+      // 第 4 段 token＝race_identifier（ms-toollib rmv_video.rs：utf8 判据成立时
+      // `race_identifier = token_buffer`，Vienna Scoreganizer 比赛客户端写入）
       const n = this.num();
-      for (let i = 0; i < n; i++) this.num();
+      const bytes: number[] = [];
+      for (let i = 0; i < n; i++) bytes.push(this.num());
+      this.race = bytes.map((b) => String.fromCharCode(b)).join("");
     }
 
     this.int();
@@ -228,6 +235,8 @@ class RmvParser {
     // 用时：RMV 文件内无可靠 SCORE 字段，按全站成绩口径取事件流末端毫秒
     // （2026-11-07 恢复 RMV 上传：置 0 会让 real_time 落库为 0，毁排行/STNB）
     lines.push(`Time: ${(this.lastEvTime / 1000).toFixed(3)}`);
+    // 比赛标识（2026-11-14 张老师需求）：非空时输出 Race: 行（formatRawvf 消费）
+    if (this.race) lines.push(`Race: ${this.race}`);
     if (this.bbbv !== null) lines.push(`3BV: ${this.bbbv}`);
     if (this.qm) lines.push("QuestionMarks: on");
     if (this.nf) lines.push("NF: on");

@@ -401,6 +401,13 @@ export default async function VideoViewPage({
                 <span className="signature">
                   签名<em>{video.signature}</em>
                 </span>
+                {/* 比赛标识（2026-11-14 张老师需求）：evf race_identifier / rmv token
+                    段提取落库，仅非空时展示——历史存量与站内生成的 evf 恒 NULL 不渲染 */}
+                {video.race && (
+                  <span className="race_name">
+                    比赛<em>{video.race}</em>
+                  </span>
+                )}
               </p>
               <span className="counters">
                 <em>{video.downloads}</em>次下载

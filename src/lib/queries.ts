@@ -1949,6 +1949,9 @@ export interface VideoDetail extends VideoListItem {
   /** video_info.update_time：录像文件版本号，回放页 fetch 用它绕 CDN 缓存（2026-11-02） */
   fileVer: number;
   signature: string;
+  /** 比赛标识（2026-11-14 张老师需求）：evf race_identifier / rmv token 段；
+   *  NULL=文件无此字段或历史存量——详情页仅在非空时展示「比赛 xxx」 */
+  race: string | null;
   reviewUser: number | null;
   reviewTime: number | null;
   reviewer: UserBrief | null;
@@ -2006,6 +2009,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     filepath: info.filepath,
     fileVer: N(info.updateTime),
     signature: info.signature,
+    race: info.race,
     clicks: stat?.clicks ?? 0,
     comments: stat?.comments ?? 0,
     downloads: stat?.downloads ?? 0,
