@@ -53,7 +53,7 @@ import { RelTime } from "@/components/RelTime";
 import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
 import { VideoFeed } from "@/components/VideoFeed";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
-import { BbsLatest } from "@/components/BbsLatest";
+import { BbsLatestFeed } from "@/components/BbsLatest";
 import { DailyStar } from "@/components/DailyStar";
 import { SystemText } from "@/components/SystemText";
 import { SiteStats } from "@/components/SiteStats";
@@ -290,7 +290,7 @@ export default async function HomePage() {
             </tbody>
           </table>
         </div>
-        <BbsLatest />
+        <BbsLatestFeed />
         {/* 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块；样式沿用 VideoHot
             原 /video 右栏同款紧凑行。原 #top 排行前十板块与 getTopUsers 查询一并撤下；
             2026-10-26 更名回「热门录像」，口径改为近 30 天点击 + 他人有效评论综合热度） */}

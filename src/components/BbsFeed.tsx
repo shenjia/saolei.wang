@@ -31,7 +31,7 @@ import { Tabs } from "./Pager";
 import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
 import { TotalCount } from "./TotalCount";
 import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
-import { markBbsRead, useBbsReadSet } from "./BbsRead";
+import { isBbsRead, isBbsKeep, markBbsRead, useBbsReadMap } from "./BbsRead";
 import { BbsSearch } from "./BbsSearch";
 
 /** 搜索态标题关键字高亮（2026-10-15 张老师）：标题中命中的关键字（大小写不敏感子串，
@@ -54,13 +54,6 @@ function hlTitle(title: string, kw?: string): ReactNode {
   );
 }
 
-/** 已读后标题保持亮灰不变的帖子（2026-10-23 张老师：取消高亮后口径统一）——
- *  公告（board=0）与精华（isNice）已读后标题降至亮灰 #bbbbbb，不随已读降暗灰，
- *  与原「公告/高亮帖已读」规则同语义，仅换载体类名 */
-function isReadKeep(p: BbsPostItem): boolean {
-  return p.board === 0 || p.isNice;
-}
-
 export function BbsRow({
   p,
   showBoard,
@@ -75,8 +68,10 @@ export function BbsRow({
    *  replies/clicks=对应计数金色高亮；时间列筛选（reply/post）不高亮 */
   order?: BbsOrder;
 }) {
-  const readIds = useBbsReadSet();
-  const isRead = readIds.has(p.id);
+  const readMap = useBbsReadMap();
+  // 已读暗灰判定（2026-11-14）：点击时刻记录了 lastReplyTime 快照，读后来了新回复
+  // （lastReplyTime 超快照）即视同未读，标题复亮
+  const isRead = isBbsRead(readMap, p.id, p.lastReplyTime);
   return (
     <tr className={isRead ? "read" : undefined}>
       <td>
@@ -104,10 +99,10 @@ export function BbsRow({
           {/* 2026-10-23（张老师）：取消论坛高亮设定——标题一律不加 highlight 类，
               管理员高亮操作入口一并移除；公告/精华已读标题保持亮灰（keep 类） */}
           <Link
-            className={"bbs_title" + (isReadKeep(p) ? " keep" : "")}
+            className={"bbs_title" + (isRead && isBbsKeep(p) ? " keep" : "")}
             href={`/bbs/${p.id}`}
             target="_blank" prefetch={false}
-            onClick={() => markBbsRead(p.id)}
+            onClick={() => markBbsRead(p.id, p.lastReplyTime)}
           >
             {hlTitle(p.title, hlKw)}
           </Link>

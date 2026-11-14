@@ -9,6 +9,13 @@ article,aside,details,figcaption,figure,footer,header,hgroup,nav,section{display
 #bbs_latest .subject a.t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;color:#BBBBBB;font-size:14px;text-decoration:none}
 #bbs_latest .subject a.t:hover{color:#a6e22e;text-decoration:underline}
 #bbs_latest .subject a.t.high{color:#FFFFFF}
+/* 已读主题（2026-11-14 张老师要求，与论坛列表页同口径）：点过且读后无新回复 → 暗灰；
+   读后来了新回复（lastReplyTime 超点击时刻快照）不挂 read 类 → 恢复亮灰。
+   公告/精华已读保持亮灰（.keep 同 BbsFeed 口径），hover 绿不变 */
+#bbs_latest .bbs_new tr.read a.t{color:#75715e}
+#bbs_latest .bbs_new tr.read a.t:hover{color:#a6e22e;text-decoration:underline}
+#bbs_latest .bbs_new tr.read a.t.keep{color:#BBBBBB}
+#bbs_latest .bbs_new tr.read a.t.keep:hover{color:#a6e22e;text-decoration:underline}
 #bbs_latest .bbs_new tbody tr:hover td{background:#444444}
 /* 分类标签（2026-09-26 张老师）：与论坛列表页 .bbs_list .board_tag 同款徽章渲染
    （globals.css 九~十一轮定稿：灰底圆角描边徽章、12px 加粗、十三轮四板块配色）。

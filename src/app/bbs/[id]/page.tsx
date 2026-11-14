@@ -84,8 +84,9 @@ export default async function BbsTitlePage({
 
   return (
     <div id="page" className="two_columns">
-      {/* 已读标记：进详情页即记录（列表页标题变灰，2026-09-26 张老师要求） */}
-      <BbsReadMark id={post.id} />
+      {/* 已读标记：进详情页即记录（列表页标题变灰，2026-09-26 张老师要求）；
+          2026-11-14 起带 lastReplyTime 快照——读后来了新回复列表标题复亮 */}
+      <BbsReadMark id={post.id} lastReplyTime={post.lastReplyTime} />
       <ul id="home">
         <li className="main">
           <div className="box bbs_post">
