@@ -5,10 +5,10 @@
 //   · 实力雷达：getRadarData（23 档显式名次档）
 //
 // 得分规则（张老师 2026-11-09 定，2026-11-10 23:50 改口径，2026-11-12 10:26 改纪录权重，
-// 2026-11-14 12:17 改平局口径：纪录平局各 1 分、BV 平局各 0.5 分）：
-//   「初中高级纪录胜一局3/5/7分，平各得1分；BV胜一局计1分，独有计0.25分，平各得0.5分」——
+// 2026-11-14 13:42 再改平局口径：纪录平局各得权重一半、BV 平局各得 0.5）：
+//   「初中高级纪录胜一局3/5/7分，平各得一半；BV胜一局计1分，独有计0.25分，平各得0.5」——
 //   · 纪录 9 行（时间/3BV/s/STNB）：优者拿该级权重 REC_WEIGHT（初级3/中级5/高级7），
-//     双有打平各得 REC_TIE_SCORE（1 分）；
+//     双有打平各得 REC_TIE_RATIO × 权重（初级1.5 / 中级2.5 / 高级3.5）；
 //   · BV 格：每胜一局固定 1 分（BV_WIN_SCORE，不按级别加权），打平各得 BV_TIE_SCORE（0.5 分）；
 //   · 独有一律 0.25 分（纪录与 BV 同口径）。
 //   · 总得分 = 纪录得分 + 三级别 BV 得分。
@@ -37,8 +37,9 @@ const BV_WIN_SCORE = 1;
 const BV_TIE_SCORE = 0.5;
 /** 独有固定 0.25 分（2026-11-10 23:00 张老师：不再按级别权重折算） */
 const SOLO_SCORE = 0.25;
-/** 纪录打平各得 1 分（2026-11-14 张老师改口径：原平局各 0 分；不按级别权重） */
-const REC_TIE_SCORE = 1;
+/** 纪录平局得分比例（2026-11-14 13:42 张老师改口径：平局各得该级权重的一半，
+ *  即初级 1.5 / 中级 2.5 / 高级 3.5；上一版「各 1 分」弃用） */
+const REC_TIE_RATIO = 0.5;
 
 /** 格子归属：p1=左侧玩家胜 / p2=右侧玩家胜 / u1、u2=单方独有 / tie=平局 / none=双方都没有（空格） */
 export type VsOutcome = "p1" | "p2" | "tie" | "u1" | "u2" | "none";
@@ -92,7 +93,8 @@ export interface VsRecRow {
   s2: string;
   mark: VsOutcome | "none";
   /** 该行双方实际得分（2026-11-12 10:27 张老师：行左右加得分列——胜方玩家色
-   *  显示该级权重 3/5/7，平局行两侧各 1，独有行 0.25，失败/空行 0；逐行求和＝rec1/rec2） */
+   *  显示该级权重 3/5/7，平局行两侧各得权重一半（1.5/2.5/3.5），独有行 0.25，
+   *  失败/空行 0；逐行求和＝rec1/rec2） */
   pts1: number;
   pts2: number;
   /** 双方该纪录对应录像 id（0=无；2026-11-11 张老师：纪录成绩格可点进录像页） */
@@ -431,8 +433,8 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
   // 各项纪录比拼（2026-11-10 22:02 张老师）：按级别分组，每组「时间 / 3BV/s / STNB」
   // 共 9 行；去掉原「总计时间 / 总计 3BV/s」两行（规则里没有总计项），STNB 取 STNB
   // 榜该级历史最高（0＝无有效成绩，显示「—」，数值越高越好，与 3BV/s 同向）。
-  // 计分按 2026-11-14 口径：纪录优者拿级别权重（3/5/7）、双有平各 1 分、
-  // 独有一律 0.25 分（BV 格每胜 1 分、平各 0.5 分，不按级别加权）
+  // 计分按 2026-11-14 13:42 口径：纪录优者拿级别权重（3/5/7）、双有平各得权重一半
+  // （1.5/2.5/3.5）、独有一律 0.25 分（BV 格每胜 1 分、平各 0.5 分，不按级别加权）
   const STNB_ZERO: StnbProfile = { beg: 0, int: 0, exp: 0, total: 0, videos: { beg: 0, int: 0, exp: 0 } };
   const stnb1 = stnbProfiles.get(id1) ?? STNB_ZERO;
   const stnb2 = stnbProfiles.get(id2) ?? STNB_ZERO;
@@ -450,14 +452,14 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
         mark = v1 === v2 ? "tie" : order === "time" ? (v1 < v2 ? "p1" : "p2") : (v1 > v2 ? "p1" : "p2");
       } else if (v1 !== null) mark = "p1";
       else if (v2 !== null) mark = "p2";
-      // 计分（2026-11-14 12:17）：纪录优者拿该级权重 3/5/7、双有平各 1 分、独有一律 0.25 分
+      // 计分（2026-11-14 13:42）：纪录优者拿该级权重 3/5/7、双有平各得权重一半、独有一律 0.25 分
       const w = REC_WEIGHT[lv];
       const score =
-        v1 !== null && v2 !== null ? (mark === "tie" ? REC_TIE_SCORE : w) : SOLO_SCORE;
+        v1 !== null && v2 !== null ? (mark === "tie" ? w * REC_TIE_RATIO : w) : SOLO_SCORE;
       if (mark === "p1") rec1 += score;
       else if (mark === "p2") rec2 += score;
       else if (mark === "tie") { rec1 += score; rec2 += score; }
-      // 逐行得分（2026-11-12 10:27 张老师：行两端得分列用；平局行两侧各显示 1）
+      // 逐行得分（2026-11-12 10:27 张老师：行两端得分列用；平局行两侧各显示权重一半）
       const pts1 = mark === "p1" || mark === "tie" ? score : 0;
       const pts2 = mark === "p2" || mark === "tie" ? score : 0;
       const fmt = (v: number | null) => {
