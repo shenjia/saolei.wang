@@ -148,6 +148,10 @@ export interface ReplayData {
   board: string;
   evs: ReplayEv[];
   totalCsec: number;
+  /** 回放总长（毫秒）：与 totalCsec 同源（同一取大逻辑），毫秒域不丢精度——
+   *  数据面板 RTime/Est 由引擎 ms 时钟直供（2026-11-14 367056 案：EVF 末事件
+   *  7.815s，百分秒域 round(781.5)=782 → 面板 7.820 与标题 7.815 差 5ms） */
+  totalMs: number;
   /** 问号开关（toggleLabel 的旗→问号分支依赖） */
   marks: boolean;
 }
@@ -164,10 +168,13 @@ function isSentinelPx(px: number, py: number, cols: number, rows: number) {
 }
 
 /** avf/mvf/rmv 二进制 → 回放数据；不可解析返回 null（调用方走 flop 兜底）。
- *  timeCsecOverride：库内权威用时（video_info.real_time，百分秒）——进度条总长与
- *  播放终点以库为准（页面标题成绩同一来源），缺省退回文件内 Time。
+ *  @param timeCsecOverride 库内权威用时（video_info.real_time，百分秒）——totalCsec
+ *  （进度条总长/播放终点域）用它，缺省退回文件内 Time；页面标题成绩同一来源。
+ *  @param timeMsOverride 库内权威用时原值（毫秒）——totalMs（面板 RTime 显示域）
+ *  用它，避免 csec 域往返丢 5ms（2026-11-14 367056 案：round(7815/10)=782 →
+ *  ×10=7820 ≠ 7815）。
  *  2026-10-19 导出：管理后台审核页全屏播放器（AdminVideoPlayer）复用同一解析。 */
-export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?: number): ReplayData | null {
+export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?: number, timeMsOverride?: number): ReplayData | null {
   let lines: string[] | null = null;
   try {
     lines =
@@ -188,6 +195,7 @@ export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?:
   if (!v.width || !v.height || !v.board || v.board.length !== v.width * v.height) return null;
   const evs: ReplayEv[] = [];
   let lastCsec = 0;
+  let lastMs = 0;
   for (const line of v.events) {
     // 行形态：`ts ev col row (px py)`（与 videoradar replayEvents 同一正则）
     // ts 可为负（元扫雷 evf 的负值修正：开局前按下/标旗）——钳到 0：这类事件属于
@@ -199,26 +207,37 @@ export function parseReplayData(buf: Uint8Array, ext: string, timeCsecOverride?:
     const csec = Math.round(ms / 10);
     evs.push({ csec, ms, ev: m[2], px: +m[5], py: +m[6] });
     if (csec > lastCsec) lastCsec = csec;
+    if (ms > lastMs) lastMs = ms;
   }
   if (!evs.length) return null;
   evs.sort((a, b) => a.csec - b.csec); // 保险：解析器本就时序输出，稳定排序不破坏同刻顺序
+  // 终点取「最后事件」与「权威用时」的较大者：最后开格后计时器还走着，
+  // 停在 totalCsec 与真实对局节奏一致（练习页引擎用 s.csec 同理）。
+  // totalMs 是同一取大逻辑的毫秒域镜像——毫秒权威值优先（timeMsOverride），
+  // 缺省回文件内 timeMs；绝不经 csec 域往返（round 丢 5ms，367056 案）。
+  const totalCsec = Math.max(lastCsec, timeCsecOverride ?? Math.round(v.timeMs / 10));
+  const totalMs = Math.max(lastMs, timeMsOverride ?? v.timeMs);
   return {
     w: v.width,
     h: v.height,
     board: v.board,
     evs,
-    // 终点取「最后事件」与「权威用时」的较大者：最后开格后计时器还走着，
-    // 停在 totalCsec 与真实对局节奏一致（练习页引擎用 s.csec 同理）
-    totalCsec: Math.max(lastCsec, timeCsecOverride ?? Math.round(v.timeMs / 10)),
+    totalCsec,
+    totalMs,
     marks: v.marks,
   };
 }
 
 /* ---- 实时统计快照（九期：数据面板行值，口径＝练习页 statsReport 的输入面） ---- */
 export interface ReplayStats {
-  /** 当前回放时钟（百分秒） */
+  /** 当前回放时钟（百分秒）——进度条/LED/试玩结算仍走此域 */
   csec: number;
+  /** 当前回放时钟（毫秒）——数据面板 RTime/Est 直供，百分秒 round 会丢 5ms
+   *  （2026-11-14 367056 案：面板 7.820 vs 标题 7.815） */
+  ms: number;
   totalCsec: number;
+  /** 回放总长（毫秒，data.totalMs 透传）——面板 Est 折算基数 */
+  totalMs: number;
   board3bv: number;
   /** 全盘雷数（十七期：全屏计数条 LED 雷数＝totalMines − flags） */
   totalMines: number;
@@ -901,9 +920,15 @@ export function runReplay(opts: {
     const { solvedBv, solvedOps, solvedIsls } = solvedScan(bvSt, (i) => rstate[i] === 1);
     const cl = cLeft + cRight + cDouble;
     const ce = cl - (wastedLeft + wastedRight + wastedDouble);
+    /* 毫秒时钟（367056 案）：停在终点（含自然播完/seek 到终点/拖到最右 ended）
+       ms 直取 data.totalMs（权威毫秒）——curCsec=782 百分秒 ×10=7820 会比标题
+       7.815 多 5ms；中途回放帧 ms=csec×10（观感插值，无精度语义） */
+    const atEnd = curCsec >= data.totalCsec;
     return {
       csec: curCsec,
+      ms: atEnd ? data.totalMs : curCsec * 10,
       totalCsec: data.totalCsec,
+      totalMs: data.totalMs,
       board3bv,
       totalMines: mineCount,
       solvedBv,
@@ -929,7 +954,8 @@ export function runReplay(opts: {
   let lastFrame = 0;
   let lastStatTs = 0;
   /* 播放倍速（2026-11-05 张老师需求）：tick 的 dt 按倍速缩放，默认恒为 1x；
-     回放时钟 csec 仍是唯一权威时间域（事件/插值/统计/进度条口径不变） */
+     回放时钟 csec 仍是唯一权威时间域（事件/插值/统计/进度条口径不变）；
+     面板 RTime 毫秒精度由 buildStats 的终点判定透出（367056 案） */
   let speed = 1;
   /* ---- 回放音效（2026-11-10 张老师需求）：练习口径三声（开空 pop 循环/
      插旗 flag/chord 收尾一声），踩雷不播。sndMute＝seek 跳转期间静音——
@@ -1124,7 +1150,7 @@ export function runReplay(opts: {
     interpCursor(target);
     if (target >= data.totalCsec) {
       setPlaying(false);
-      onStats(buildStats()); // 终值先于 ended 状态落地（面板/进度条一步到位）
+      onStats(buildStats()); // 终值先于 ended 状态落地（面板/进度条一步到位；ms 已按终点校正）
       onEnd(); // 定格终局画面（练习页桌面口径）；退出由棋盘点击 / Esc / stop 负责
       return;
     }
@@ -1466,9 +1492,11 @@ function runPlayGame(opts: {
     const ce = cl - (wLeft + wRight + wDouble);
     return {
       csec: curCsec,
+      ms: Math.round(curCsec * 10),
       /* 试玩没有「总长」概念：totalCsec 给 Est 折算一个非零基数（同录像长度，
          面板 RTime/Est 只显示不参与游戏逻辑） */
       totalCsec: data.totalCsec || 1,
+      totalMs: data.totalMs || 10,
       board3bv: bvSt.board3bv,
       totalMines: mineCount,
       solvedBv,
@@ -2304,7 +2332,10 @@ export function VideoReplayProvider({
         dataRef.current = parseReplayData(
           new Uint8Array(await res.arrayBuffer()),
           ext,
-          realTimeMs ? Math.round(realTimeMs / 10) : undefined
+          realTimeMs ? Math.round(realTimeMs / 10) : undefined,
+          /* 毫秒权威值直传（2026-11-14 367056 案）：csec 域 round(57535/10)=5754
+             再 ×10=57540 会丢 5ms——totalMs 必须从 realTimeMs 原值取 */
+          realTimeMs
         );
       }
       const data = dataRef.current;
@@ -2606,7 +2637,9 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
      练习页自定义盘在 core 侧按雷密度折算后传入同一共享件 */
   const ln = level === "beg" ? 1 : level === "int" ? 2 : 3;
   const rows = statsRows({
-    t: s.csec / 100,
+    /* 毫秒域直供（2026-11-14 367056 案）：百分秒 round 丢 5ms（782csec→7.820
+       vs 标题 7.815）——引擎 ms 时钟终点校正后，面板 t 改 ms/1000 */
+    t: s.ms / 1000,
     board3bv: s.board3bv,
     solvedBv: s.solvedBv,
     solvedOps: s.solvedOps,
