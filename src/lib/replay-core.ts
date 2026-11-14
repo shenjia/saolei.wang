@@ -459,6 +459,11 @@ export interface StatsRowSource {
   flags: number;
   /** STNB 难度档：标准级别 beg=1/int=2/exp=3；自定义盘按雷密度折算后传入 */
   ln: number;
+  /** ZiNi（2026-11-14 张老师需求：数据面板 Ops 行上方）：已知全部雷位时拆完本盘
+   *  所需的最少点击次数估计——lib/zini.ts calZini（与 ms-toollib cal_zini 逐行等价，
+   *  左键/右键/chord 各计 1 次）。由调用方在结算时刻从雷位现算传入（引擎手里都有
+   *  纯雷位盘面与宽高，亚毫秒级）；缺省/无效（≤0）显示 "*" */
+  zini?: number;
 }
 
 export function statsRows(s: StatsRowSource): [string, string, string][] {
@@ -479,6 +484,14 @@ export function statsRows(s: StatsRowSource): [string, string, string][] {
     ["Est RTime", hasBv ? f3(est) + " (" + (Math.floor(est) + 1) + ")" : "* (*)", "按完成度折算的估算用时 = 实际用时 × 3BV ÷ 已完成 3BV"],
     ["3BV", s.solvedBv + "/" + s.board3bv, "盘面理论最少点击次数（Bechtel 基准值），显示为 已完成 / 全盘总量"],
     ["3BV/s", hasBv ? f3(s.solvedBv / s.t) : "*", "每秒完成的 3BV 数 = 已完成 3BV ÷ 实际用时，衡量操作效率"],
+    /* ZiNi 行（2026-11-14 张老师需求：固定在 Ops 上方）——盘面属性与用时/点击无关，
+       zini ≤ 0（无盘面）显示 "*"；cl 全程可拿（clLeft+clRight+clDouble），顺手给
+       「本局实际点击 ÷ ZiNi」比值（效率直观读数：1.0 = 打到理论下界） */
+    [
+      "ZiNi",
+      s.zini && s.zini > 0 ? String(s.zini) + (cl > 0 ? " (" + (cl / s.zini).toFixed(2) + ")" : "") : "*",
+      "ZiNi 下界（Elmar 算法）：已知全部雷位时拆完本盘所需的最少点击次数估计（左键/右键/双击各计 1）。括号内＝本局总点击 ÷ ZiNi，越小越接近理论极限；点击数低于 ZiNi 视为事件流异常",
+    ],
     ["Ops", s.solvedOps + "/" + s.totalOps, "开空区域（opening）的完成数 / 全盘总数"],
     ["Isls", s.solvedIsls + "/" + s.totalIsls, "孤立数字块（island）的完成数 / 全盘总数"],
     ["Left", s.clLeft + "@" + freq(s.clLeft), "左键点击次数 @ 每秒点击频率"],

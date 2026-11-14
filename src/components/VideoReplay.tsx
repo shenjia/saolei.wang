@@ -49,6 +49,8 @@ import { evfToRawvf } from "@/lib/evf";
 import { formatRawvf } from "@/lib/rawvf";
 /* 结算面板行定义（共享件，2026-11-08 与练习页统一） */
 import { statsRows } from "@/lib/replay-core";
+/* ZiNi 下界（2026-11-14 张老师需求：数据面板 Ops 行上方） */
+import { calZini } from "@/lib/zini";
 import { LEVEL_NAMES, type VideoLevel } from "@/lib/config";
 import type { MetricKey, VideoAnalysisPoint } from "@/lib/videoscore";
 /* 五轴评级算法（共享件）；别名避开本文件里的 radarOverall 同名 prop */
@@ -235,6 +237,9 @@ export interface ReplayStats {
   cp: number;
   /** 当前盘面旗数 */
   flags: number;
+  /** ZiNi 下界（2026-11-14 张老师需求：数据面板 Ops 行上方）——引擎初始化时
+   *  由 calZini 按雷位现算一次，盘面属性与回放进度无关 */
+  zini: number;
 }
 
 /* ---- 3BV 结构（练习页 compute3BV 同法）：空格连通域 regions（含边界数字格）、
@@ -461,6 +466,9 @@ export function runReplay(opts: {
   /* ---- 3BV 结构（十七期抽共享 buildBvStructures）---- */
   const bvSt = buildBvStructures(mines, nums, nbR);
   const { board3bv } = bvSt; // solved 系走 solvedScan(bvSt)，结构体内部消费
+  /* ZiNi（2026-11-14 张老师需求：数据面板 Ops 行上方）——已知雷位的贪心下界，
+     纯盘面函数结算时刻恒定；初始化算一次（高级盘亚毫秒），0=无盘面兜底 */
+  const ziniVal = calZini(data.board, cols, rows);
   /* 回放状态机（0 未开 / 1 开 / 2 旗 / 3 问号）+ 原图类名备份（stop 恢复静态地图） */
   const rstate = new Uint8Array(N);
   const saved = new Array<string>(N);
@@ -910,6 +918,7 @@ export function runReplay(opts: {
       path: pathPx,
       cp: crossings,
       flags: playerFlags,
+      zini: ziniVal,
     };
   }
   /* rAF 驱动（九期起支持暂停/继续/拖拽；统计按 ~100ms 节流回传） */
@@ -1359,6 +1368,8 @@ function runPlayGame(opts: {
     return r;
   };
   const bvSt = buildBvStructures(mines, nums, nbR);
+  /* ZiNi（2026-11-14 张老师需求）：试玩实时面板同显示，初始化算一次 */
+  const ziniVal = calZini(data.board, cols, rows);
   /* 3BV 与录像面板同一分母（试玩实时统计用） */
   const state = new Uint8Array(N); // 0 未开 / 1 开 / 2 旗 / 3 问号
   const cellTd = (i: number) => tbody.rows[(i / cols) | 0].cells[i % cols];
@@ -1472,6 +1483,7 @@ function runPlayGame(opts: {
       path: Math.round(playPathPx),
       cp: playCrossings,
       flags,
+      zini: ziniVal,
     };
   }
   function emitStats() {
@@ -2609,6 +2621,7 @@ function ReplayStatsTable({ level, s }: { level: VideoLevel; s: ReplayStats }) {
     crossings: s.cp,
     flags: s.flags,
     ln,
+    zini: s.zini,
   });
   return (
     <>
