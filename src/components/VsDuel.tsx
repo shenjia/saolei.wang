@@ -23,9 +23,9 @@
 //      下方板块，只留「战前预估评价 + 决出胜负按钮」；点击后按钮渐隐、评价渐隐、
 //      两侧面板向左右滑开，再跑分；跑分完成下方板块才出现、图标下方换成赛后评价
 //      （详见 VsScoreBoard 状态机）。
-// 得分规则（张老师 2026-11-09 定，2026-11-12 10:26 改纪录权重）：纪录 9 行按初/中/高 3/5/7 分
-// 权重计（优者满分、独有 0.25、平局 0）；三级别 BV 格每胜一局固定 1 分、独有
-// 0.25、平局 0。页面底部「计分规则」文案见 VS_RULE_TEXT。
+// 得分规则（张老师 2026-11-09 定，2026-11-12 10:26 改纪录权重，2026-11-14 12:17 改平局
+// 口径）：纪录 9 行按初/中/高 3/5/7 分权重计（优者满分、平局各 1、独有 0.25）；三级别
+// BV 格每胜一局固定 1 分、平局各 0.5、独有 0.25。页面底部「计分规则」文案见 VS_RULE_TEXT。
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -44,11 +44,11 @@ const LEVEL_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "�
 /** 级别标准配色：初绿 / 中橙 / 高黄（与 3BV 收集等板块同源） */
 const LEVEL_COLOR: Record<string, string> = { beg: "#a6e22e", int: "#fd971f", exp: "#e6db74" };
 
-/** 页面最下方「计分规则」（22:02 张老师逐字指定文案；2026-11-12 10:26 张老师改
- *  纪录权重口径：1/2/10 → 3/5/7；22:20 改为只出现
+/** 页面最下方「计分规则」（2026-11-14 12:17 张老师逐字指定文案；22:20 改为只出现
  *  一次）：此前纪录 / 初级 / 中级 / 高级四个板块各内嵌一份相同说明，占板块内部空间，
  *  现合并为 below 末尾唯一一份独立段落（不带 .box），不占任何板块盒内空间。 */
-const VS_RULE_TEXT = "初中高级纪录胜一局3/5/7分，BV胜一局计1分，独有计0.25分";
+const VS_RULE_TEXT =
+  "初中高级纪录胜一局3/5/7分，平各得1分；BV胜一局计1分，独有计0.25分，平各得0.5分";
 /** 规则行下方的致谢声明（2026-11-11 02:00 张老师逐字指定，02:06 去掉「声明」两字） */
 const VS_DECLARE_TEXT =
   "BV对抗系统借鉴了钟言开发的小瞄机器人，特在此表示感谢";
@@ -305,11 +305,12 @@ function VsPanel({ p, accent, swapHref, side }: { p: VsPlayer; accent?: string; 
 
 /** 纪录行成绩格（21:53 张老师）：格内不再放「胜/负/平」字标，也不再用旧的
  *  深绿/浅玫红半行底色；只有胜方那一侧加自己的阵营实底（我蓝 / 对手玫红）。
+ *  2026-11-14：平局行两侧成绩格都铺金底（整行金底黑字，张老师定）。
  *  2026-11-11 张老师：纪录中所有成绩格都可点击，新标签页打开对应录像页
  *  （time/3bvs 六项=user_scores 纪录盘、STNB 三行=user_stnb_best 最优盘）。 */
 function RecScore({ mark, side, score, video }: { mark: VsRecRow["mark"]; side: "l" | "r"; score: string; video: number }) {
   const winSide = side === "l" ? "p1" : "p2";
-  const bg = mark === winSide ? (side === "l" ? "half_p1" : "half_p2") : "";
+  const bg = mark === winSide ? (side === "l" ? "half_p1" : "half_p2") : mark === "tie" ? "half_tie" : "";
   return (
     <td className={`vs_half vs_half_${side} ${bg}`}>
       {video > 0 ? (
@@ -330,17 +331,19 @@ function RecScore({ mark, side, score, video }: { mark: VsRecRow["mark"]; side: 
   );
 }
 
-/** 纪录行两端得分列（2026-11-12 10:27 张老师；11:00 改）：每行左右各加一列——
- *  胜方用玩家色加粗大字号（26px，行高 28px 上限的小一号）显示该行得分（双有胜＝
- *  该级权重 3/5/7，独有胜按规则口径 0.25），失败/平局/空行**不再显示 0、留空**。
+/** 纪录行两端得分列（2026-11-12 10:27 张老师；11:00 改；2026-11-14 再改）：每行
+ *  左右各加一列——胜方用玩家色加粗大字号（26px，行高 28px 上限的小一号）显示该行
+ *  得分（双有胜＝该级权重 3/5/7，**平局行两侧各 1**（2026-11-14 平局计分口径），
+ *  独有胜按规则口径 0.25），失败/空行**不再显示 0、留空**。
  *  pts 与纪录板块总分 rec1/rec2 同源（lib/vs 逐行求和一致）。 */
 function RecPts({ pts, mark, side }: { pts: number; mark: VsRecRow["mark"]; side: "l" | "r" }) {
   const win = mark === (side === "l" ? "p1" : "p2") && pts > 0;
+  const tie = mark === "tie" && pts > 0;
   return (
     <td
-      className={`vs_pts vs_pts_${side}${win ? ` pts_win_${side === "l" ? "p1" : "p2"}` : ""}`}
+      className={`vs_pts vs_pts_${side}${win ? ` pts_win_${side === "l" ? "p1" : "p2"}` : ""}${tie ? " pts_tie" : ""}`}
     >
-      {win ? pts : ""}
+      {win || tie ? pts : ""}
     </td>
   );
 }

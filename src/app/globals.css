@@ -16138,8 +16138,24 @@ span.vs_btn--disabled:hover img {
   color: #ffffff;
   border-radius: 4px 0 0 4px;
 }
+/* 2026-11-14 12:17 张老师：平局（tie）行整行金底黑字——左右成绩格 + 中间纪录名格
+   全部铺金色 #fdc61a 实底、黑字，观感与胜方连通底色一致（中缝无表格线）；
+   连通方向同款：左半行左侧圆角、右半行右侧圆角，纪录名格补外侧圆角。 */
+.vs_rec td.vs_half.half_tie {
+  background: #fdc61a;
+}
+.vs_rec td.vs_half.half_tie .vs_score {
+  color: #272822;
+}
+.vs_rec td.vs_half.vs_half_l.half_tie {
+  border-radius: 4px 0 0 4px;
+}
+.vs_rec td.vs_half.vs_half_r.half_tie {
+  border-radius: 0 4px 4px 0;
+}
 .vs_rec th.vs_item.item_tie {
-  color: #fdc61a;
+  background: #fdc61a;
+  color: #272822;
 }
 /* 纪录行 hover 白描边（2026-11-11 14:38 张老师）：胜方成绩格与中间纪录名格
    加与 BV 格 hover 同款的白色描边（#f8f8f2）。成绩数字格与纪录名格是两个
@@ -16155,10 +16171,11 @@ span.vs_btn--disabled:hover img {
   box-shadow: inset -1px 0 0 #f8f8f2, inset 0 1px 0 #f8f8f2, inset 0 -1px 0 #f8f8f2;
 }
 /* 2026-11-12 10:27 张老师：纪录行左右各加一列「该行得分」；11:00 改两处——
-   ①失败/平局/空行**不再显示 0**（留空，只有胜方一侧有数字）；②胜方得分加粗
+   ①失败/空行**不再显示 0**（留空，只有胜方一侧有数字）；②胜方得分加粗
    ＋加大字号 26px（.vs_rec 行高上限 28px，满配 28、取小一号 26）。
    胜方用玩家色纯文字（蓝 #66d9ef / 玫红 #e34f8c，无底色——实底已在胜方成绩格上），
-   独有行按规则口径显示 0.25。列压到内容宽（1px+nowrap），剩余空间仍归成绩列；
+   2026-11-14：平局行两侧各显示 1，金字 #fdc61a；独有行按规则口径显示 0.25。
+   列压到内容宽（1px+nowrap），剩余空间仍归成绩列；
    左列左对齐、右列右对齐（分列贴外缘，与成绩贴中间互补）。 */
 .vs_rec td.vs_pts {
   width: 1px;
@@ -16179,6 +16196,9 @@ span.vs_btn--disabled:hover img {
 }
 .vs_rec td.vs_pts.pts_win_p2 {
   color: #e34f8c;
+}
+.vs_rec td.vs_pts.pts_tie {
+  color: #fdc61a;
 }
 /* ③ 各BV比拼（2026-11-10 21:16 张老师第六轮）：初级/中级/高级各一个独立板块盒。
    格子＝收集墙式：统一 2px 间距 + 圆角，双方都没有的 BV 也画空格（暗底）。
