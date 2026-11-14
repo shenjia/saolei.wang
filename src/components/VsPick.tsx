@@ -63,6 +63,19 @@ export interface VsPickPlayer {
 const MATCH_AVOID_KEY = "vs_match_avoid";
 const MATCH_AVOID_MS = 3600 * 1000;
 
+// 换人 X 首次引导（2026-11-14 张老师）：刚进 /vs 未选对手时自己卡片的换人 X
+// 金色脉冲高亮，把「换人/换自己围观」这个能力摆到眼前——点过**任意一处**换人 X
+// （竞技场卡上 X 或对决页换人 X）一次后 localStorage 记忆，永不再提示。
+// 与防重复名单同款 localStorage 软约束：清档最多多提示一次，可接受。
+const SWAP_HINT_KEY = "vs_swap_hinted";
+
+/** 引导完成标记（任意入口点过换人 X 即写；之后所有入口不再高亮） */
+export function markSwapHintDone() {
+  try {
+    localStorage.setItem(SWAP_HINT_KEY, "1");
+  } catch {}
+}
+
 /** 读出 1h 内匹配出过的对手 id（顺带清掉过期条目） */
 function loadMatchAvoid(): number[] {
   try {
@@ -238,12 +251,22 @@ function VsSearch({
 /** 玩家卡片：结构与 /vs/[id] 的 VsPanel 完全同源（.user_card 上半部 + 横线 + 实力雷达）。
  *  右上角圆角处恒渲染「换人」X 按钮（10:45 张老师：只要卡上有玩家就有，可两边全空）。
  *  accent（2026-11-12 张老师）：右侧对手卡固定玫红实力图（与对决页 VsPanel 右卡
- *  同款 #e34f8c），不再是默认蓝、等进了对决页才变红；左卡缺省＝主页同款青蓝。 */
-function VsCard({ p, accent, onSwap }: { p: VsPickPlayer; accent?: string; onSwap: () => void }) {
+ *  同款 #e34f8c），不再是默认蓝、等进了对决页才变红；左卡缺省＝主页同款青蓝。
+ *  hint（2026-11-14 张老师）：首次引导态——X 金底脉冲常显（含触屏），点一次即写
+ *  localStorage 永不再提示（由调用方传 hint=未点过 && 本卡该高亮）。 */
+function VsCard({ p, accent, onSwap, hint = false }: { p: VsPickPlayer; accent?: string; onSwap: () => void; hint?: boolean }) {
   return (
     <div className="box vs_panel">
       {onSwap && (
-        <button type="button" className="vs_swap" aria-label="换人" onClick={onSwap}>
+        <button
+          type="button"
+          className={"vs_swap" + (hint ? " vs_swap_hint" : "")}
+          aria-label="换人"
+          onClick={() => {
+            markSwapHintDone();
+            onSwap();
+          }}
+        >
           <svg viewBox="0 0 12 12" aria-hidden="true">
             <line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             <line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -405,6 +428,10 @@ export function VsPickArena({
   const [right, setRight] = useState<VsPickPlayer | null>(initialRight);
   const [sndOn, setSndOn] = useState(true); // SSR 无 localStorage，挂载后读回真值
   const [matching, setMatching] = useState(false); // 「匹配对手」请求进行中
+  // 换人 X 首次引导（2026-11-14 张老师）：SSR 无 localStorage，挂载后读回——
+  // 未点过换人 X && 对手位还空着 && 左卡是自己（裸 /vs 服务端预填自己的入口形态）
+  // → 左卡 X 金色脉冲高亮；点过一次（含对决页入口的 X）即永不再提示
+  const [swapHint, setSwapHint] = useState(false);
   // 双方就位后的即时预测评价（十轮 14:38 张老师：匹配成功后立刻出现预测评价）——
   // /api/vs/pre 与对决页战前预测同源；null=未就位或加载中（显示金气泡「请双方选手就位」）
   const [pre, setPre] = useState<{ text: string; tone: PreTone } | null>(null);
@@ -437,6 +464,30 @@ export function VsPickArena({
       setSndOn(localStorage.getItem("vs_snd") !== "0");
     } catch {}
   }, []);
+
+  // 引导态求值（挂载后一次；点击写标记的时机在 VsCard/广播监听里）：对手位
+  // 空着 && 左卡是自己——/vs 裸入口的预填形态（2026-11-14 张老师指定场景）
+  useEffect(() => {
+    try {
+      setSwapHint(
+        localStorage.getItem(SWAP_HINT_KEY) !== "1" &&
+          right === null &&
+          left?.id === me.id
+      );
+    } catch {
+      setSwapHint(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只按挂载时的初始卡判定
+  }, []);
+
+  // 引导期间对侧入口（对决页 VsSwapX 广播 vs_swap）也算「点过换人」——
+  // 见 VsScoreBoard onSwap 处理；此处只兜竞技场内本卡片点击后的即时熄灭
+  useEffect(() => {
+    if (!swapHint) return;
+    const off = () => setSwapHint(false);
+    window.addEventListener("vs_swap", off);
+    return () => window.removeEventListener("vs_swap", off);
+  }, [swapHint]);
 
   // 分割线/历史板块宽度（21:06 张老师：竞技场也要日期+分割线，与对决页同款）
   // ——同 VsScoreBoard fit 口径：测两侧 .vs_panel（空位问号盒同为 .vs_panel）
@@ -604,7 +655,7 @@ export function VsPickArena({
     <>
       <div id="vs_pick_hero">
       {left ? (
-        <VsCard p={left} onSwap={() => clearSlot("left")} />
+        <VsCard p={left} hint={swapHint} onSwap={() => clearSlot("left")} />
       ) : (
         <VsEmptySlot onPick={(u) => void pick("left", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}

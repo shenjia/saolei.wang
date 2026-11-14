@@ -17111,6 +17111,30 @@ a.vs_c:hover {
   pointer-events: auto;
 }
 
+/* 换人 X 首次引导（2026-11-14 张老师）：刚进 /vs 未选对手时，自己卡片的 X
+   金底脉冲常显（压过 hover:none 设备的默认隐藏——引导必须触屏也看得见），
+   把「换人/换自己围观」能力摆到眼前；点过任意换人 X 一次即写 localStorage
+   永不再提示（.vs_swap_hint 由 VsCard/VsSwapX 挂）。气泡默认上弹（全站铁律），
+   引导态把文案换成完整玩法说明。@media (prefers-reduced-motion) 用户给静态
+   金底不闪。特异性 (0,2,0) 压过 hover 设备的 .vs_swap 隐藏规则 (0,1,0)。 */
+.vs_swap.vs_swap_hint {
+  opacity: 1;
+  pointer-events: auto;
+  background: #fdc61a;
+  color: #272822;
+  animation: vs_swap_pulse 1.6s ease-in-out infinite;
+}
+.vs_swap.vs_swap_hint::after {
+  content: "点这里换人——可换上任意玩家，也可以围观高手过招";
+}
+@keyframes vs_swap_pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(253, 198, 26, 0.55); }
+  50% { box-shadow: 0 0 0 7px rgba(253, 198, 26, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vs_swap.vs_swap_hint { animation: none; }
+}
+
 /* 中间列「一决胜负」：盒型/字体全走 PK 页 .vs_fight，这里只补置灰态——
    双方未就位（disabled）换灰底灰字（对齐 .vs_back 灰系），就位后恢复黄钮 */
 #vs_pick_hero .vs_fight:disabled {
