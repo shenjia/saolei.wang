@@ -608,7 +608,7 @@ const REPLAY_MOUSE_SCRIPT = `
         ? e.missing ? (isLeft ? "左键按下(缺)" : "右键按下(缺)") : labels[e.name]
         : e.name === "MiddleRelease"
         ? labels.MiddleRelease
-        : e.holdMs === null ? "抬起" : "持续<span class=\"rk_hold\">" + Math.round(e.holdMs) + "</span>ms";
+        : e.holdMs === null ? "抬起" : "持续<span class=\\"rk_hold\\">" + Math.round(e.holdMs) + "</span>ms";
       html += '<div class="rk_row' + dbl + (e.lPos ? " pair_l pair_l_" + e.lPos : "") + (e.rPos ? " pair_r pair_r_" + e.rPos : "") + (down ? " down" : "") + '" data-index="' + i + '">' +
         '<span class="rk_action rk_left">' + (isLeft ? action : "") + '</span>' +
         '<span class="rk_time">' + (e.time / 1000).toFixed(3) + '</span>' +
@@ -821,11 +821,20 @@ const REPLAY_MOUSE_SCRIPT = `
    2026-10-28 补二（张老师实测红框）：窗口外框是透明容器且被底部控制条
    撑宽，包围盒左部盖在宿主页面内容上——用 contains() 判「窗口内」会让
    视觉暗区点击无效。改为「窗口内可视元素矩形并集」判定：有背景/边框/
-   画布/表单控件的元素才算窗口 UI，透明区域一律视为暗区。 */
+   画布/表单控件的元素才算窗口 UI，透明区域一律视为暗区。
+   2026-11-14（张老师转玩家反馈）：移动端触屏拖动/点按棋盘常落点在窗口
+   外＝误触暗区直接关掉播放器，回放被迫重开。移动端（coarse pointer）
+   整体禁用暗区退出——关闭只走播放器自带 X 按钮；桌面保持原体验。 */
 const MASK_EXIT_SCRIPT = `
 (function () {
   if (window.__flopMaskExit) return;
   window.__flopMaskExit = true;
+  /* 移动端开关（2026-11-14）：coarse pointer＝触屏设备。SSR 无 window 不注入
+     判定放函数里（脚本只在 iframe 内运行，恒有 window）。 */
+  var isTouch = false;
+  try {
+    isTouch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  } catch (e) {}
   /* 可视元素矩形缓存：TTL 250ms（回放中布局稳定，无需监听 mutation） */
   var rectsCache = null, rectsAt = 0;
   function paints(el) {
@@ -858,6 +867,8 @@ const MASK_EXIT_SCRIPT = `
     return false;
   }
   window.addEventListener("pointerdown", function (e) {
+    /* 移动端：暗区退出整体禁用（2026-11-14 玩家反馈误触），只留播放器 X 关闭 */
+    if (isTouch) return;
     var t = e.target;
     if (!(t instanceof Element)) return;
     // 回放鼠标、按键记录与提示是自有 UI，点击/悬停不按暗区退出。
@@ -926,7 +937,8 @@ const MASK_EXIT_SCRIPT = `
     // 整个 SPA 会话不卸载）的旧脚本会带着旧监听一直跑，HMR 只重跑 effect、
     // 防重入标记仍在 → 永不重注。版本不符时重载 iframe 文档强制换新脚本
     // （dev/HMR 场景；生产新 bundle 只随页面刷新加载，不会走到这里）。
-    const HOST_SCRIPT_VER = 11;
+    // 12（2026-11-14）：MASK_EXIT 移动端禁暗区退出（误触关播放器）。
+    const HOST_SCRIPT_VER = 12;
     const ensureInject = () => {
       const doc = frame.contentDocument;
       if (!doc || !doc.body || !doc.defaultView) return;

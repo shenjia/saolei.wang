@@ -40,7 +40,7 @@ import { createPortal } from "react-dom";
 import { Board } from "./Board";
 import { FlopSprites } from "./FlopSprites";
 import { FlopPlayer, playFlop } from "./FlopPlayer";
-import { ReplayMouseIndicator } from "./ReplayMouse";
+import { ReplayMouseIndicator, isReplayMouseLive } from "./ReplayMouse";
 import { VideoAnalysisRadar } from "./VideoAnalysis";
 import { avfToRawvf } from "@/lib/avf";
 import { mvfToRawvfBest } from "@/lib/mvf-best";
@@ -570,30 +570,40 @@ export function runReplay(opts: {
      （video 348523 教训：人工算 zoom×pageZoom 有浏览器差异） */
   let offZ = wrapZoom;
   const off = { x: 0, y: 0 };
-  const measureOff = () => {
-    const tr = table.getBoundingClientRect();
-    const wr = wrap.getBoundingClientRect();
-    const td0 = tbody.rows[0]?.cells[0]?.getBoundingClientRect();
-    const z = td0 && td0.width > 0 ? td0.width / 16 : wrapZoom;
-    offZ = z;
-    off.x = (tr.left - wr.left) / z;
-    off.y = (tr.top - wr.top) / z;
+  /* 掉帧修复（2026-11-14 用户报「一开始播放就掉帧」）：旧 ensureZoom 在
+     moveCursor（每帧 1-2 次）里同步 getComputedStyle + td gBCR——上一帧写
+     光标 left/top、下一帧读布局 = 读写交错强制 reflow，全程 60 次/秒，
+     低端机光标全程卡顿。改为**事件驱动重测**：只在会改变 zoom/布局的事件
+     （resize / 滚轮缩放 --vfz / 字体加载后首帧）后做一次 rAF 延迟重测，
+     帧内 moveCursor 零布局读（off 是布局域差值，布局不动则恒有效）；
+     桌面页级 zoom=1、版图 zoom 播放中不变 → 常态整个播放期间零重测 */
+  let remeasureRaf: number | null = null;
+  const scheduleRemeasure = () => {
+    if (remeasureRaf !== null) return;
+    remeasureRaf = requestAnimationFrame(() => {
+      remeasureRaf = null;
+      remeasureOff();
+    });
   };
-  measureOff();
-  /* 每帧光标移动前校验 zoom 漂移（滚轮缩放/页级 zoom 档位变化）：变了就重量
-     off——便宜且自愈 */
-  function ensureZoom() {
+  const remeasureOff = () => {
     const z = readZoom();
     const td0 = tbody.rows[0]?.cells[0]?.getBoundingClientRect();
     const zTotal = td0 && td0.width > 0 ? td0.width / 16 : z;
-    if (z === wrapZoom && zTotal === offZ) return;
     wrapZoom = z;
     offZ = zTotal;
     const tr = table.getBoundingClientRect();
     const wr = wrap.getBoundingClientRect();
     off.x = (tr.left - wr.left) / zTotal;
     off.y = (tr.top - wr.top) / zTotal;
-  }
+  };
+  const measureOff = remeasureOff;
+  measureOff();
+  window.addEventListener("resize", scheduleRemeasure);
+  /* 滚轮缩放（全屏层 --vfz / 页面版图 zoom）：wheel 不冒泡到 window 顶——
+     capture 兜住 wrap 上任意祖先的滚轮缩放；300ms 定时器兜底（触控板惯性/
+     程序化 zoom 变更无 wheel 事件的场景） */
+  window.addEventListener("wheel", scheduleRemeasure, { capture: true, passive: true });
+  const zoomPoll = window.setInterval(scheduleRemeasure, 500);
   const TIP_X = 0.5,
     TIP_Y = 1.21;
   /* 光标当前逻辑位置（moveCursor 每次更新；seek 滑行起点/连打续滑用）。
@@ -608,7 +618,6 @@ export function runReplay(opts: {
     curX = px;
     curY = py;
     if (noDraw) return;
-    ensureZoom();
     lastDrawX = px;
     lastDrawY = py;
     curEl.style.left = px + off.x - TIP_X + "px";
@@ -1168,6 +1177,7 @@ export function runReplay(opts: {
     restart() {
       setPlaying(false);
       cancelGlide(); // 先取消滑行（兜底落盘落在旧盘面，随即被重置覆盖）；否则 resume 分支的 cancelGlide 会把未落盘事件补到空白盘上
+      remeasureOff(); // 重播重测布局（窗口在两次播放间可能变了；此处同步一次可接受）
       resetReplay();
       onFace?.("smile");
       setPlaying(true);
@@ -1177,6 +1187,15 @@ export function runReplay(opts: {
       setPlaying(false);
       cancelGlide();
       curEl.remove();
+      /* 掉帧修复：引擎级监听/轮询随 stop 释放（重播走 restart 不经此路；
+         rAF 重测的悬挂帧有 remeasureRaf 守卫，stop 后触发也只是幂等重测） */
+      window.removeEventListener("resize", scheduleRemeasure);
+      window.removeEventListener("wheel", scheduleRemeasure, { capture: true } as EventListenerOptions);
+      window.clearInterval(zoomPoll);
+      if (remeasureRaf !== null) {
+        cancelAnimationFrame(remeasureRaf);
+        remeasureRaf = null;
+      }
       /* 静态地图恢复：saved 类名回写 + 清内嵌 SVG（旧位图棋盘红雷残留）+
          覆盖层按初始 board 串恢复贴图（雷=b 未开面，与 Board 静态直出一致） */
       for (let i = 0; i < N; i++) {
@@ -1215,18 +1234,20 @@ export function runReplay(opts: {
       let finalIdx = 0;
       while (finalIdx < evs.length && evs[finalIdx].csec <= target) finalIdx++;
       if (fromIdx <= finalIdx) {
-        /* 前进：过去事件（<fromIdx）瞬时重放（盘面与滑行前一致），跨过事件挂到
-           航点渐进落盘——标雷/开格/chord 按压随光标到位浮现，不先于光标出现 */
+        /* 前进：已过事件（<fromIdx）的盘面态**留在原地不重放**（seek 性能修复
+           2026-11-14 用户报「移动进度条卡来卡去」：旧版每次拖动 resetReplay
+           全盘重画 480 格 + 从事件 0 重放全部已过事件（长录像数千次 applyEv，
+           其中 pop 音效被 sndMute 拦但 revealLoss/paintR 全跑），拖一次几十上百
+           ms——逐帧 seek 必卡。rstate/counters 等引擎态此刻本就是 fromIdx 时的
+           快照（暂停中无人改它），直接沿用；只把光标归位目标起点）。
+           注意 resetReplay 归零 evIdx/curCsec 但会全盘重画——这里**不调它**，
+           手动只复位时间游标与光标（盘面/统计/键态全部保留） */
         noDraw = true;
-        resetReplay(); // 归零 evIdx/curCsec（moveCursor(0,0) 被 noDraw 抑制）
-        onFace?.("smile"); // seek 重置盘面：笑脸同步复位（重放过终局事件会再落 win/dead）
-        for (let k = 0; k < fromIdx; k++) {
-          applyEv(k);
-          evIdx = k + 1;
-        }
-        /* 收集跨过事件的坐标序列作滑行航点（去连续重复；(0,0)＝无坐标语义、
-           与引擎 pathPx 同口径跳过，但末点照收保证落点与盘面逻辑精确一致）；
-           无坐标/与起点同位而挂不上航点的事件，起滑前即时落盘 */
+        evIdx = fromIdx;
+        curCsec = 0; // 先归零，跨过段收集完再设目标（与旧 resetReplay 语义一致）
+        onFace?.("smile"); // seek 重置盘面观感：笑脸同步复位（重放过终局事件会再落 win/dead）
+        /* 跨过事件挂到航点渐进落盘——标雷/开格/chord 按压随光标到位浮现，
+           不先于光标出现 */
         const path: number[] = [];
         const wpEv: number[][] = [];
         const imm: number[] = [];
@@ -1252,7 +1273,7 @@ export function runReplay(opts: {
           }
         };
         for (let k = fromIdx; k < finalIdx; k++) pushPt(k, k === finalIdx - 1);
-        curCsec = target; // resetReplay 归零过，重设目标时间域
+        curCsec = target; // 归零过，重设目标时间域
         for (const k of imm) {
           applyEv(k); // noDraw 仍开：只落盘面，不动光标 DOM
           evIdx = k + 1;
@@ -1274,8 +1295,10 @@ export function runReplay(opts: {
           sndMute = false;
         }
       } else {
-        /* 反向（↑/←）：盘面保持旧态沿来路倒序滑回，到位后一次性落到目标态
-           （撤销无法逐点回放；到位才变＝满足「效果不先于光标」） */
+        /* 反向（↑/←）：撤销无法逐点回放——盘面从零重放到目标态（landTarget），
+           滑行期间保持旧态沿来路倒序滑回、到位一次性落目标（「效果不先于光标」）。
+           性能：反向 seek 低频（键盘逐行），整段重放可接受；高频反向走拖动条时
+           每帧一次 resetReplay+O(finalIdx) 重放，与旧版持平（未回退） */
         const path: number[] = [];
         let lx = gFromX;
         let ly = gFromY;
@@ -2118,7 +2141,6 @@ export type Status = "idle" | "loading" | "playing" | "paused" | "ended";
 
 interface ReplayCtxValue {
   status: Status;
-  stats: ReplayStats | null;
   /** 矢量鼠标的即时按键态与 hover 事件流（不经过统计节流） */
   leftPressed: boolean;
   rightPressed: boolean;
@@ -2152,7 +2174,19 @@ interface ReplayCtxValue {
   toggleSnd: () => void;
 }
 
+/* 统计快照单独一个 context（2026-11-14 掉帧优化）：回放中 stats 每 ~100ms
+   变一次，混在主 ctx 里会拖整棵 Provider 子树（含 480 td Board）跟着重渲染
+   diff。拆出后只有真正消费 stats 的薄组件（数据面板/控制条/轨迹层/全屏层
+   顶部）随 tick 重渲，Board 与页面骨架零牵连。 */
+interface ReplayStatsCtxValue {
+  stats: ReplayStats | null;
+}
 const ReplayCtx = createContext<ReplayCtxValue | null>(null);
+const ReplayStatsCtx = createContext<ReplayStatsCtxValue | null>(null);
+/** 消费高频 stats 的组件用这个 hook（替代 useContext(ReplayCtx).stats） */
+function useReplayStats() {
+  return useContext(ReplayStatsCtx)?.stats ?? null;
+}
 
 /* fetch 非 2xx（404/5xx 等）专用错误：拉不到文件时 flop 播放器拉同一 URL
    也必失败，不再走 flop 兜底，改气泡提示（见 play() catch 分支） */
@@ -2364,7 +2398,13 @@ export function VideoReplayProvider({
         onEnd: () => setStatus("ended"),
         onStats: setStats,
         onFace: setFace,
-        onButtons: (left, right) => setMouseButtons((old) => old.left === left && old.right === right ? old : { left, right }),
+        /* 小鼠标实时态闸门（2026-11-14 张老师定）：按键记录面板关闭时按键态
+           更新不进 React——每事件一次的 setState 会让 Provider 整树重渲染
+           （含 480 格 Board），掉帧帮凶之一；面板打开后才恢复实时亮灭。 */
+        onButtons: (left, right) => {
+          if (!isReplayMouseLive()) return;
+          setMouseButtons((old) => old.left === left && old.right === right ? old : { left, right });
+        },
         /* 静态封面恢复用 DB 含旗串（2026-10-31）：与页面封面同源 */
         coverBoard: boardStr,
       });
@@ -2466,15 +2506,23 @@ export function VideoReplayProvider({
     engineRef.current?.setSpeed(v);
   }, []);
 
+  /* stats 的 ref 镜像：seek 闭包[]化后取总长用（先声明后用；渲染期不写
+     ref——同步收进 effect） */
+  const statsRef = useRef<ReplayStats | null>(null);
+  useEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
+
   const seek = useCallback(
     (csec: number) => {
       const engine = engineRef.current;
-      if (!engine || !stats) return;
+      const st = statsRef.current;
+      if (!engine || !st) return;
       engine.seek(csec);
       /* 拖到终点＝ended 态（定格终局，播放按钮语义与自然播完一致＝重播） */
-      setStatus(csec >= stats.totalCsec ? "ended" : "paused");
+      setStatus(csec >= st.totalCsec ? "ended" : "paused");
     },
-    [stats]
+    []
   );
 
   /* Esc（练习页同款出口之一）：全屏态 Esc＝只退出全屏（回放继续）；
@@ -2566,7 +2614,6 @@ export function VideoReplayProvider({
     <ReplayCtx.Provider
       value={{
         status,
-        stats,
         leftPressed: mouseButtons.left,
         rightPressed: mouseButtons.right,
         replayData,
@@ -2588,44 +2635,45 @@ export function VideoReplayProvider({
         toggleSnd,
       }}
     >
-      {children}
-      {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
-      <FlopSprites />
-      {flopUri && <FlopPlayer />}
-      {/* 播放失败提示（2026-10-16）：棋盘中央红色气泡（文件 404 等场景，
-          flop 播放器拉同一 URL 也必失败，不再弹全屏播放器） */}
-      {notice && <div className="replay_notice" role="alert">{notice}</div>}
-      {/* 全屏回放层（十期）：遮罩 + 自适应布局，点遮罩退出。
-          十七期：复用练习页游戏界面（银框+计数条+笑脸），撤右栏评级；
-          引擎启动时若已全屏，直接以全屏棋盘为宿主 */}
-      {fullscreen && level && boardStr && (
-        <ReplayFullscreen
-          level={level}
-          boardId={boardId}
-          boardStr={boardStr}
-          stats={stats}
-          status={status}
-          replayData={replayData}
-          leftPressed={mouseButtons.left}
-          rightPressed={mouseButtons.right}
-          engineFace={face}
-          radarPoints={radarPoints}
-          radarOverall={radarOverall}
-          radarDists={radarDists}
-          radarPoolDesc={radarPoolDesc}
-          radarBppBucketPrefix={radarBppBucketPrefix}
-          noflag={noflag}
-          autoEnterPlay={autoPlay}
-          onAutoEnterDone={autoEnterDone}
-          onToggle={togglePlay}
-          onPause={pause}
-          onSeek={seek}
-          onResume={resume}
-          speed={speed}
-          onSpeed={setSpeed}
-          onExit={() => setFullscreen(false)}
-        />
-      )}
+      <ReplayStatsCtx.Provider value={{ stats }}>
+        {children}
+        {/* 光标贴图定义（隐藏 svg defs，含 #cursor-arrow） */}
+        <FlopSprites />
+        {flopUri && <FlopPlayer />}
+        {/* 播放失败提示（2026-10-16）：棋盘中央红色气泡（文件 404 等场景，
+            flop 播放器拉同一 URL 也必失败，不再弹全屏播放器） */}
+        {notice && <div className="replay_notice" role="alert">{notice}</div>}
+        {/* 全屏回放层（十期）：遮罩 + 自适应布局，点遮罩退出。
+            十七期：复用练习页游戏界面（银框+计数条+笑脸），撤右栏评级；
+            引擎启动时若已全屏，直接以全屏棋盘为宿主 */}
+        {fullscreen && level && boardStr && (
+          <ReplayFullscreen
+            level={level}
+            boardId={boardId}
+            boardStr={boardStr}
+            status={status}
+            replayData={replayData}
+            leftPressed={mouseButtons.left}
+            rightPressed={mouseButtons.right}
+            engineFace={face}
+            radarPoints={radarPoints}
+            radarOverall={radarOverall}
+            radarDists={radarDists}
+            radarPoolDesc={radarPoolDesc}
+            radarBppBucketPrefix={radarBppBucketPrefix}
+            noflag={noflag}
+            autoEnterPlay={autoPlay}
+            onAutoEnterDone={autoEnterDone}
+            onToggle={togglePlay}
+            onPause={pause}
+            onSeek={seek}
+            onResume={resume}
+            speed={speed}
+            onSpeed={setSpeed}
+            onExit={() => setFullscreen(false)}
+          />
+        )}
+      </ReplayStatsCtx.Provider>
     </ReplayCtx.Provider>
   );
 }
@@ -3270,7 +3318,6 @@ export function ReplayFullscreen({
   level,
   boardId,
   boardStr,
-  stats = null,
   status = "idle",
   replayData = null,
   leftPressed = false,
@@ -3298,8 +3345,6 @@ export function ReplayFullscreen({
   level: VideoLevel;
   boardId: number;
   boardStr: string;
-  /** Provider 的回放统计（standalone 下不传，用内部 fsStats） */
-  stats?: ReplayStats | null;
   /** Provider 的回放状态（standalone 下不传，用内部 fsStatus） */
   status?: Status;
   /** Provider 持有的解析产物（试玩引擎锁定同盘布雷的数据源；鼠标 hover 事件流同源） */
@@ -3363,11 +3408,15 @@ export function ReplayFullscreen({
   /* 轨迹层开关（2026-11-05 张老师需求）：读 Provider（standalone 无 Provider
      自动隐藏，后台审核不开放该功能） */
   const trajCtx = useContext(ReplayCtx);
-  /* ---- standalone 自持状态（2026-10-22 后台审核播放器）----
+  /* standalone 自持状态（2026-10-22 后台审核播放器）----
      页面态的 status/stats/engineFace 来自 Provider props；standalone 下没有
-     Provider，本组件自持同构状态机（引擎 onStats/onFace/onEnd 驱动）。 */
+     Provider，本组件自持同构状态机（引擎 onStats/onFace/onEnd 驱动）。
+     stats 改读高频 ReplayStatsCtx（2026-11-14 拆 context）：FS 层内部已把
+     消费面收进子组件，本层不再因 100ms tick 整树重渲染 */
   const [fsStatus, setFsStatus] = useState<Status>("idle");
   const [fsStats, setFsStats] = useState<ReplayStats | null>(null);
+  const ctxStats = useReplayStats();
+  const stats = standalone ? fsStats : ctxStats;
   const [fsButtons, setFsButtons] = useState({ left: false, right: false });
   const [fsFace, setFsFace] = useState<FaceKind>("smile");
   /* standalone 播放倍速（2026-11-05 张老师需求）：与 fsEngine setSpeed 直连 */
@@ -3533,7 +3582,10 @@ export function ReplayFullscreen({
         onEnd: () => setFsStatus("ended"),
         onStats: setFsStats,
         onFace: setFsFace,
-        onButtons: (left, right) => setFsButtons((old) => old.left === left && old.right === right ? old : { left, right }),
+        onButtons: (left, right) => {
+          if (!isReplayMouseLive()) return;
+          setFsButtons((old) => old.left === left && old.right === right ? old : { left, right });
+        },
         getHostZoom: () => zoomRef.current ?? 1,
         /* 静态封面恢复用 DB 含旗串（2026-10-31）：boardStr 即本 FS 层的封面骨架 */
         coverBoard: boardStr,
@@ -3919,6 +3971,10 @@ export function ReplayFullscreen({
 
   if (typeof document === "undefined") return null;
   const showStats = standalone ? fsStats : mode === "play" ? playStats : stats;
+  /* 小鼠标「实时态」（2026-11-14 张老师定）：按键记录面板打开才跟随回放时钟
+     与按键亮灭；关闭时恒静态（csec=0、左右键 false），指示器组件的 32ms 级
+     内部轮询照常但零 DOM 变更 */
+  const mouseLive = isReplayMouseLive();
   /* standalone 控制条回调（引擎直挂 FS 棋盘，无 Provider）：ended 后重播走
      restart；seek/pause/resume 直通引擎 */
   const fsToggle = () => {
@@ -4265,13 +4321,15 @@ export function ReplayFullscreen({
                 </div>
               </div>
             ) : null}
-            {/* 回放鼠标固定在右侧评级/结算卡正下方，独立于中栏棋盘 zoom。 */}
+            {/* 回放鼠标固定在右侧评级/结算卡正下方，独立于中栏棋盘 zoom。
+                csec 走「实时态」口径（2026-11-14 张老师定）：面板关闭恒 0，
+                打开后跟随真实回放时钟；按键态同样只在实时态透传 */}
             {mode === "replay" && (standalone ? fsStats && fsData : stats && replayData) && (
               <ReplayMouseIndicator
-                left={standalone ? fsButtons.left : leftPressed}
-                right={standalone ? fsButtons.right : rightPressed}
+                left={mouseLive ? (standalone ? fsButtons.left : leftPressed) : false}
+                right={mouseLive ? (standalone ? fsButtons.right : rightPressed) : false}
                 events={(standalone ? fsData : replayData)!.evs}
-                csec={(standalone ? fsStats : stats)!.csec}
+                csec={mouseLive ? (standalone ? fsStats : stats)!.csec : 0}
                 onSeek={standalone ? fsSeek : onSeek}
                 panelAnchorSelector=".vprfs_center"
                 className="replay_mouse_fs"
@@ -4308,7 +4366,6 @@ export function VideoReplayBoard({
           引擎定位走 board_{id}（Provider 传 boardId），此处无需 ref */}
       {/* 九期：回放中在棋盘左侧弹数据面板（十期 portal 挂 body，摆脱盒裁剪）；
           全屏层打开时页面态面板收起（全屏层自带面板） */}
-      {replaying && !ctx.fullscreen && ctx.stats && <ReplayStatsPanel level={level} s={ctx.stats} />}
       <div
         className={`play_board ${zoomCls}`}
         title={replaying ? "点击退出回放" : "点击播放在线录像"}
@@ -4325,11 +4382,10 @@ export function VideoReplayBoard({
         <div className="pb_frame">
           <Board id={id} level={level} board={board} size={16} vec />
         </div>
-        {/* 鼠标轨迹层（2026-11-05 张老师需求）：控制条轨迹钮开启后蒙地图绘制；
-            回放光标 z30 仍在其上，遮罩不压光标 */}
-        {replaying && ctx.traj && ctx.replayData && ctx.stats && (
-          <TrajLayer boardDomId={`board_${id}`} csec={ctx.stats.csec} data={ctx.replayData} />
-        )}
+        {/* 掉帧优化（2026-11-14）：面板/控制条/轨迹层/小鼠标全部拆进 BoardExtras
+            （单独订阅高频 stats context）——回放中每 100ms 的 stats tick 不再
+            重渲染本组件与 480 格 Board 的虚拟 DOM */}
+        {replaying && !ctx.fullscreen && <BoardExtras id={id} level={level} />}
         {!replaying && (
           <button
             type="button"
@@ -4348,88 +4404,84 @@ export function VideoReplayBoard({
             </svg>
           </button>
         )}
-        {/* 九期：回放控制条（棋盘正下方同宽；点击不冒泡到棋盘退出）；
-            十期：加全屏按钮（进全屏回放层） */}
-        {replaying && ctx.stats && (
-          <ReplayBar
-            status={ctx.status}
-            stats={ctx.stats}
-            onToggle={ctx.togglePlay}
-            onPause={ctx.pause}
-            onSeek={ctx.seek}
-            onResume={ctx.resume}
-            speed={ctx.speed}
-            onSpeed={ctx.setSpeed}
-            onFullscreen={() => ctx.setFullscreen(true)}
-          />
-        )}
       </div>
-      {/* 三个级别统一落在游戏区域右侧底部；宿主在 .play_board 外，不覆盖格子。 */}
-      {replaying && !ctx.fullscreen && ctx.stats && ctx.replayData && (
+    </div>
+  );
+}
+
+/* 页面态回放配件（2026-11-14 掉帧优化抽壳）：数据统计面板/轨迹层/控制条/
+   小鼠标——唯一吃高频 stats 的集合。挂在 .play_board **内部**原位置
+   （控制条/轨迹层须在棋盘 zoom 域内；小鼠标锚 #video_view .play_board），
+   本组件随 stats 每 100ms 重渲染，但兄弟 Board（480 td + 480 use）不再进
+   diff。indicator 的 csec 走「实时态」口径：面板关闭恒 0（张老师定：小鼠标
+   状态更新默认关闭），打开后跟随真实回放时钟 */
+function BoardExtras({ id, level }: { id: number; level: VideoLevel }) {
+  const ctx = useContext(ReplayCtx);
+  const stats = useReplayStats();
+  if (!ctx) return null;
+  const replaying = ctx.status !== "idle";
+  const mouseLive = isReplayMouseLive();
+  return (
+    <>
+      {stats && <ReplayStatsPanel level={level} s={stats} />}
+      {/* 鼠标轨迹层（2026-11-05 张老师需求）：控制条轨迹钮开启后蒙地图绘制；
+          回放光标 z30 仍在其上，遮罩不压光标 */}
+      {ctx.traj && ctx.replayData && stats && (
+        <TrajLayer boardDomId={`board_${id}`} csec={stats.csec} data={ctx.replayData} />
+      )}
+      {/* 九期：回放控制条（棋盘正下方同宽；点击不冒泡到棋盘退出）；
+          十期：加全屏按钮（进全屏回放层） */}
+      {stats && (
+        <ReplayBar
+          status={ctx.status}
+          stats={stats}
+          onToggle={ctx.togglePlay}
+          onPause={ctx.pause}
+          onSeek={ctx.seek}
+          onResume={ctx.resume}
+          speed={ctx.speed}
+          onSpeed={ctx.setSpeed}
+          onFullscreen={() => ctx.setFullscreen(true)}
+        />
+      )}
+      {/* 三个级别统一落在游戏区域右侧底部；宿主在 .play_board 外（CSS 绝对
+          定位），portal-free 挂这里不覆盖格子 */}
+      {stats && ctx.replayData && (
         <ReplayMouseIndicator
-          left={ctx.leftPressed}
-          right={ctx.rightPressed}
+          left={mouseLive ? ctx.leftPressed : false}
+          right={mouseLive ? ctx.rightPressed : false}
           events={ctx.replayData.evs}
-          csec={ctx.stats.csec}
+          csec={mouseLive ? stats.csec : 0}
           onSeek={ctx.seek}
           panelAnchorSelector="#video_view .play_board"
           className={`replay_mouse_page replay_mouse_page_side replay_mouse_${level}`}
         />
       )}
-    </div>
+    </>
   );
 }
 
-/** 「播放」「试玩」按钮（替代原 PlayButton）：
- *  播放——加载中禁用；回放中/结束＝「重播」；hover 时按钮下方弹深灰气泡
- *  「使用Flop Player播放」（2026-10-21 张老师需求），点击弹 flop 播放器播放本录像。
- *  试玩（二十一期，2026-10-21 张老师需求）——一键直达全屏试玩（等价点全屏
- *  按钮后再点笑脸），锁定本录像布雷不可更改；首点自动 fetch+起播再进全屏。
+/** 「播放」「试玩」按钮（2026-11-14 张老师定口径变更）：
+ *  播放——**固定调用 flop 播放器**（playLegacy）播放本录像；点游戏画面
+ *  （VideoReplayBoard 的 .play_board / 播放浮层）才是站内原地回放。
+ *  原 hover「使用Flop Player播放」气泡与按钮本职重合，撤除。
+ *  加载中禁用。
+ *  试玩（二十一期）——一键直达全屏试玩（等价点全屏按钮后再点笑脸），
+ *  锁定本录像布雷不可更改；首点自动 fetch+起播再进全屏。
  *  图标＝手柄（游戏手柄＝亲手玩一盘的语义，与播放三角/下载箭头区分）。 */
 export function VideoReplayButton() {
   const ctx = useContext(ReplayCtx);
   if (!ctx) return null;
   const { status } = ctx;
-  const label = status === "loading" ? "加载中…" : status === "idle" ? "播放" : "重播";
+  const label = status === "loading" ? "加载中…" : "播放";
   return (
     <>
-      <span className="tip_host">
-        <button type="button" onClick={ctx.play} disabled={status === "loading"}>
-          {status === "idle" || status === "loading" ? (
-            <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
-              <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
-            </svg>
-          ) : (
-            <svg className="btn_icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-            </svg>
-          )}
-          {label}
-        </button>
-        {/* 旧版播放器气泡（2026-10-21 张老师需求）：hover 播放按钮时下方弹深灰
-            气泡，点击弹 flop 播放器（ctx.playLegacy）。span.tip_host 包按钮做
-            hover 联动锚（气泡是 host 后代，hover 气泡不闪断）；点击 stopPropagation
-            防触发按钮自身的原地回播。加载中隐藏（按钮此时禁用，入口无意义） */}
-        <span
-          className="tip_bubble"
-          role="button"
-          tabIndex={0}
-          aria-label="使用Flop Player播放本录像"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (status !== "loading") ctx.playLegacy();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.stopPropagation();
-              if (status !== "loading") ctx.playLegacy();
-            }
-          }}
-        >
-          使用Flop Player播放
-        </span>
-      </span>
+      <button type="button" onClick={ctx.playLegacy} disabled={status === "loading"}>
+        <svg className="btn_icon" viewBox="0 0 18 18" width="18" height="18" fill="currentColor" aria-hidden="true">
+          <path d="M4.5 3v12c0 .85.93 1.36 1.64.91l9.2-6a1.07 1.07 0 0 0 0-1.82l-9.2-6A1.07 1.07 0 0 0 4.5 3z" />
+        </svg>
+        {label}
+      </button>
       <button
         type="button"
         onClick={ctx.playGame}
