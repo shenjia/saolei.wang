@@ -1274,9 +1274,16 @@ export function runReplay(opts: {
         };
         for (let k = fromIdx; k < finalIdx; k++) pushPt(k, k === finalIdx - 1);
         curCsec = target; // 归零过，重设目标时间域
+        /* imm 已落盘到哪（368776 案）：跨过事件全与光标同位/哨兵时 path 为空，
+           startGlide false 落进下方兜底——兜底绝不能从 fromIdx 整段重放（imm
+           成员被二次应用：rc 双应用=插旗又拔旗丢旗、键态错位把后续 lr 误判成
+           chord，Double/wasted 虚高、旗丢 chord 哑火 3BV 卡死）。从 imm 之后
+           续放（正常情况 imm 已含全部跨过事件，此循环零迭代） */
+        let appliedTo = fromIdx - 1;
         for (const k of imm) {
           applyEv(k); // noDraw 仍开：只落盘面，不动光标 DOM
           evIdx = k + 1;
+          appliedTo = k;
         }
         noDraw = false;
         const gliding = startGlide(gFromX, gFromY, path, target, wpEv, () => onStats(buildStats()), () => {
@@ -1285,8 +1292,8 @@ export function runReplay(opts: {
           onStats(buildStats());
         });
         if (!gliding) {
-          /* 无位移（同位簇内 seek）：跨过事件全部即时落盘 */
-          for (let k = fromIdx; k < finalIdx; k++) {
+          /* 无位移（同位簇内 seek）：补放 imm 之后剩余的跨过事件（不整段重放） */
+          for (let k = appliedTo + 1; k < finalIdx; k++) {
             applyEv(k);
             evIdx = k + 1;
           }
