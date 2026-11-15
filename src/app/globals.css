@@ -6997,6 +6997,28 @@ body #page {
     float: right;
     height: 44px;
   }
+  /* ⚠️ 漂浮按钮掉行事故（2026-11-15 用户报障实证）：float:right 依赖「与 float:left 的
+     logo 同行放得下」——视口 ≤365 时 logo(191.7) + mn(136) 超 wrapper 内容宽的临界余量
+     只有 2~4px，加上 legacy h1{margin:0 0 19.5px} 把 logo 浮动盒撑高到 63.5，
+     mn 被挤到第二行（y≈64）溢出 fixed 页头，整排压在 BV 卡片的搜索框/表格上：
+     点击搜索全部落在头像图上（elementFromPoint 实证），页面看起来「错乱+搜索失灵」。
+     360 视口必炸、390 侥幸存活（张老师 iPhone 与大量安卓 = 360pt）。
+     修复：wrapper 加 position:relative 锚点，mn 改 absolute 钉右上角——彻底脱离
+     float 流，任何视口宽度都不再掉行；h1 清掉 legacy 19.5px 底距让 logo 恢复 44 高。
+     （≥961 桌面无此块，桌面横向导航不受影响；mn 下拉菜单 .mn_menu 原本就是
+     absolute 定位，改父级为 absolute 不影响其锚定。） */
+  body #header .wrapper {
+    position: relative;
+  }
+  body #header #mobile_nav {
+    position: absolute;
+    top: 0;
+    right: 10px; /* 与原 float:right 形态右距一致（390 实测） */
+    float: none;
+  }
+  body #header .logo a h1 {
+    margin-bottom: 0;
+  }
   .mn_item {
     position: relative;
     height: 44px;
