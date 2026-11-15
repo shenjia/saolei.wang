@@ -262,9 +262,23 @@ export function RankingFeed(props: RankingFeedProps) {
       }
       const lastLoadedRank = rows.at(-1)?.rank ?? 0;
       const targetRank = (page - 1) * pageSize + 1;
+      // 目标页在已加载窗口之前（2026-11-15 修复）：原实现落入 scrollToRow 即返回，
+      // 但行在窗口上方不在 DOM 里 → 静默失败（张老师实证：排行榜搜索定位无任何反应）。
+      // 现改为：缓存命中（LRU，滑条翻过/初始页）→ 整表替换回跳后滚动；否则 whereami
+      // 302 整页导航（page+hl 落地）。升降 Map 持久保留，回跳页行仍能取到 delta。
       if (targetRank <= lastLoadedRank) {
-        scrollToRow(uid);
-            return;
+        const cached = pageCache.current.get(page);
+        if (cached) {
+          const anchor = captureViewportAnchor(tableRef.current);
+          flushSync(() => setRows(cached));
+          restoreViewportAnchor(tableRef.current, anchor);
+          setCurPage(page);
+          if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
+          return;
+        }
+        navigated = true;
+        jumpToWhereami(uid);
+        return;
       }
       if (page - Math.floor(lastLoadedRank / pageSize) > NEARBY_PAGES) {
         navigated = true;
