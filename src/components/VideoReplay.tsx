@@ -4451,8 +4451,9 @@ function BoardExtras({ id, level }: { id: number; level: VideoLevel }) {
           onFullscreen={() => ctx.setFullscreen(true)}
         />
       )}
-      {/* 三个级别统一落在游戏区域右侧底部；宿主在 .play_board 外（CSS 绝对
-          定位），portal-free 挂这里不覆盖格子 */}
+      {/* 三个级别统一落在游戏区域右侧底部；宿主随 BoardExtras 在 .play_board
+          内（版图 zoom 域）——globals.css .replay_mouse_page_side 按 --pbz
+          反折算位置与尺寸，portal-free 挂这里不覆盖格子 */}
       {stats && ctx.replayData && (
         <ReplayMouseIndicator
           left={mouseLive ? ctx.leftPressed : false}

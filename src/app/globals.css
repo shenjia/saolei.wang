@@ -11268,17 +11268,28 @@ html:has(#online_play) #footer {
 }
 .replay_mouse_page_side {
   position: absolute;
-  bottom: 68px;
+  /* ⚠️ a5eebf6 起宿主挪进 .play_board（版图 zoom 域内）——位置与尺寸必须按
+     --pbz 反折算恢复原视觉口径（左缘=棋盘渲染宽+14px、鼠标恒 44×60），
+     否则被 zoom 再放大一倍：exp left 598×1.15≈688px 偏出棋盘右缘 ~100px；
+     beg 420×2.6=1092px 直接飞出 .playable 可用宽 592px 被裁＝初级"不显示"
+     （2026-11-15 张老师报）。与 .play_board margin、播放按钮 52px 同反折算手法 */
+  bottom: calc(68px / var(--pbz, 1));
+  width: calc(44px / var(--pbz, 1));
+  height: calc(60px / var(--pbz, 1));
+}
+.replay_mouse_page_side > svg {
+  width: calc(44px / var(--pbz, 1));
+  height: calc(60px / var(--pbz, 1));
 }
 /* 左缘＝当前级别棋盘的实际渲染宽 + 14px，紧跟游戏区而非整栏右缘。 */
 .replay_mouse_page_side.replay_mouse_beg {
-  left: 420px; /* (128 + 4 + 24) × 2.6 + 14 ≈ 420 */
+  left: calc(420px / var(--pbz, 1)); /* (128 + 4 + 24) × 2.6 + 14 ≈ 420（视觉 px，zoom 域内反折算） */
 }
 .replay_mouse_page_side.replay_mouse_int {
-  left: 440px; /* (256 + 4 + 24) × 1.5 + 14 = 440（中级棋盘 2026-11-05 加到 1.5 倍） */
+  left: calc(440px / var(--pbz, 1)); /* (256 + 4 + 24) × 1.5 + 14 = 440（中级棋盘 2026-11-05 加到 1.5 倍） */
 }
 .replay_mouse_page_side.replay_mouse_exp {
-  left: 598px; /* (480 + 4 + 24) × 1.15 + 14 ≈ 598 */
+  left: calc(598px / var(--pbz, 1)); /* (480 + 4 + 24) × 1.15 + 14 ≈ 598 */
 }
 #online_play .replay_mouse_online_host {
   position: absolute;
