@@ -28,6 +28,8 @@ const GROUPS: { title: string | null; items: NavItem[] }[] = [
     title: null,
     items: [
       { href: "/admin", label: "仪表盘", icon: "📊" },
+      // 2026-11-16 张老师要求：收支管理上移至数据分析前面
+      { href: "/admin/donate", label: "收支管理", icon: "💰" },
       { href: "/admin/stats", label: "数据分析", icon: "📈" },
       { href: "/admin/practice", label: "练习数据", icon: "🎮" },
       // 2026-11-11 张老师定：VS 板块对决统计（/vs/:id 落库 vs_duel）
@@ -62,7 +64,6 @@ const GROUPS: { title: string | null; items: NavItem[] }[] = [
     items: [
       { href: "/admin/rank", label: "排行与荣誉", icon: "🏆" },
       { href: "/admin/star", label: "每日一星", icon: "⭐" },
-      { href: "/admin/donate", label: "收支管理", icon: "💰" },
       { href: "/admin/apikeys", label: "API Key", icon: "🔑" },
       { href: "/admin/logs", label: "操作日志", icon: "🗂" },
       { href: "/admin/system", label: "系统信息", icon: "⚙️" },
