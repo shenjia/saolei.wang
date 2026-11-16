@@ -7,14 +7,12 @@
 //   显示该玩家个人纪录进步历程（个人纪录严格变优才出点，口径见 lib/records.ts
 //   fetchUserRecordCurves）。筛选就地切换不导航（与纪录页 MetricSection 同体验）。
 // · 全部曲线无点（从未刷新过任何个人纪录）时由服务端整块隐藏，本组件不渲染空态。
-// · BV 格子墙（2026-11-16 张老师需求）：级别筛选选中 初级/中级/高级 时，图表下方
-//   出现该级别的 BV 格子墙（形式同对决页各级别 BV 墙：十位分段、每 BV 一格）。
-//   每格显示**当前指标筛选**对应的该 BV 个人纪录（时间/3BV/s/STNB 三选一，
-//   数据 = lib/records.ts 每 BV 纪录墙，与曲线同源同缓存），底色按该纪录的评级
-//   四档渲染（同收集墙 PB 模式：SSS~S 金 / A~B 玫红 / C~E 紫 / F·? 灰），
-//   hover 气泡显示纪录值与评级，点击新标签页打开该纪录的录像页。
+// · BV 纪录墙（2026-11-16 张老师需求）：级别筛选选中 初级/中级/高级 时，图表下方
+//   出现该级别的 BV 纪录墙。**2026-11-16 二次定稿**：水平铺满板块宽度，格子里直接
+//   显示成绩（不再只是纯色方格）——格内两行 = BV 值（暗色小字）+ 当前指标筛选项的
+//   个人纪录值（按评级四档着色），点击新标签页打开该纪录的录像页。
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ChartCard, LEVEL_COLORS, type MetricSectionData } from "./RecordsCurves";
 import { UNREACHABLE_3BV, type VideoLevel } from "@/lib/config";
@@ -34,7 +32,7 @@ const METRIC_TABS: [MetricKey, string][] = [
   ["stnb", "STNB"],
 ];
 
-/** 评级四档底色类（2026-11-16 张老师定：沿用收集墙 PB 模式归档，10px 小格上才分得清）：
+/** 评级四档色类（2026-11-16 张老师定：沿用收集墙 PB 模式归档）：
  *  SSS~S 金 / A~B 玫红 / C~E 紫 / F·? 灰。尾缀 +/- 不影响档位。
  *  （口径与 BbvCollection.gradeTone 同表，类名按本板块 rw_ 前缀独立，互不干扰） */
 function wallTone(grade: string): string {
@@ -64,13 +62,29 @@ const METRIC_LABELS: Record<MetricKey, string> = {
   stnb: "最高 STNB",
 };
 
+/** 悬停气泡状态：坐标相对墙容器（不是相对格子）——行首/行尾格子的气泡会被夹回
+ *  墙内，永远不会把页面撑出横向滚动条。 */
+interface WallTip {
+  x: number;
+  y: number;
+  /** 上方空间不足（第一行）时翻到格子下方弹出 */
+  below: boolean;
+  bv: number;
+  v: number | null;
+  grade: string;
+  vid: number;
+}
+
 /**
- * BV 格子墙（级别筛选选中初中高时挂在图表下方）：
+ * BV 纪录墙（级别筛选选中初中高时挂在图表下方）：
  * · 格子全序列 = level_3bv_range 级别区间（getLevel3bvRanges，与收集墙/对决页同源），
  *   跳过数学不可达值（初级 50/52/53）；区间缺行兜底回格子数据并集。
- * · 十位分段行（对决页 .vs_bandrow 形式），行内 flex 排布。
- * · 有纪录的格子 = 链接（新标签页开该纪录录像页，_blank 必配 prefetch=false 铁律）；
- *   无纪录暗格 = span。hover 气泡：3BV 值 + 纪录值与评级（纯 CSS :hover 显隐）。
+ * · **水平铺满**：CSS grid `auto-fill + 1fr`，列数随板块宽度自适应，行尾无留白。
+ * · 每格两行：上 BV 值（暗色小字，定位用）、下该 BV 的个人纪录值（评级四档显色），
+ *   格底/描边同档微着色；无纪录 = 暗格（只显示 BV 值，一眼看出收集缺口）。
+ * · 有纪录的格子 = 链接（新标签页开该纪录录像页，_blank 必配 prefetch=false 铁律）。
+ * · 气泡用 JS 定位（纯 CSS 无法在网格里按行首/行尾夹紧）：朝上弹出（2026-11-11
+ *   全站气泡口径），第一行空间不足时翻到格子下方。
  */
 function RecordBvWall({
   level,
@@ -93,66 +107,98 @@ function RecordBvWall({
   } else {
     values = cells.map((c) => c.bv);
   }
+  const wallRef = useRef<HTMLDivElement | null>(null);
+  const [tip, setTip] = useState<WallTip | null>(null);
+
   if (values.length === 0) return null;
-  // 十位分段（对决页同形式）：每行 = 同一十位段的可达 BV
-  const bands = new Map<number, number[]>();
-  for (const b of values) {
-    const lo = Math.floor(b / 10) * 10;
-    const arr = bands.get(lo);
-    if (arr) arr.push(b);
-    else bands.set(lo, [b]);
-  }
+
+  const showTip = (
+    el: HTMLElement,
+    bv: number,
+    v: number | null,
+    grade: string,
+    vid: number
+  ) => {
+    const wall = wallRef.current;
+    if (!wall) return;
+    const wr = wall.getBoundingClientRect();
+    const cr = el.getBoundingClientRect();
+    // 气泡按 ~208px 宽估半宽夹紧（文案最长一行 = 指标名+值+评级）
+    const half = 104;
+    const cx = cr.left + cr.width / 2 - wr.left;
+    const x = Math.min(Math.max(cx, half), Math.max(half, wr.width - half));
+    const top = cr.top - wr.top;
+    const below = top < 46;
+    setTip({ x, y: below ? cr.bottom - wr.top : top, below, bv, v, grade, vid });
+  };
 
   return (
-    <div className="rw_wall" aria-label={`${METRIC_LABELS[metric]}BV 格子墙`}>
-      {[...bands.entries()].map(([lo, bvs]) => (
-        <div className="rw_band" key={lo}>
-          {bvs.map((bv) => {
-            const cell = byBv.get(bv);
-            const rec = cell ? cellMetric(cell, metric) : null;
-            const has = !!rec && rec.v !== null && rec.vid > 0;
-            const tip = (
-              <i className="rw_tip">
-                <b>3BV{" "}={" "}{bv}</b>
-                {rec && rec.v !== null ? (
-                  <>
-                    <span>
-                      {METRIC_LABELS[metric]}：
-                      <em>{metric === "time" ? scoreTime(rec.v) : fmtMetric(metric, rec.v)}</em>
-                      {metric === "time" && " 秒"}
-                      　评级：
-                      <b className="rw_grade" style={{ color: gradeColor(rec.grade) }}>
-                        {rec.grade}
-                      </b>
-                    </span>
-                    {has && <span className="rw_hint">点击查看录像</span>}
-                  </>
-                ) : (
-                  <span>暂无成绩</span>
-                )}
-              </i>
-            );
-            const cls = `rw_sq${has && rec ? ` rw_on ${wallTone(rec.grade)}` : ""}`;
-            return has && rec ? (
-              <Link
-                key={bv}
-                className={cls}
-                href={`/video/${rec.vid}`}
-                target="_blank"
-                rel="noopener"
-                prefetch={false}
-                title="查看对应录像"
-              >
-                {tip}
-              </Link>
-            ) : (
-              <span key={bv} className={cls}>
-                {tip}
+    <div
+      className="rw_wall"
+      ref={wallRef}
+      aria-label={`${METRIC_LABELS[metric]}BV 纪录墙`}
+      onMouseLeave={() => setTip(null)}
+    >
+      <div className="rw_grid">
+        {values.map((bv) => {
+          const cell = byBv.get(bv);
+          const rec = cell ? cellMetric(cell, metric) : null;
+          const v = rec?.v ?? null;
+          const grade = rec?.grade ?? "";
+          const vid = rec?.vid ?? 0;
+          const has = v !== null && vid > 0;
+          const cls = `rw_sq${v !== null ? ` rw_on ${wallTone(grade)}` : ""}`;
+          const body = (
+            <>
+              <em className="rw_bv">{bv}</em>
+              {v !== null && (
+                <b className="rw_val">{metric === "time" ? scoreTime(v) : fmtMetric(metric, v)}</b>
+              )}
+            </>
+          );
+          const enter = (e: React.SyntheticEvent<HTMLElement>) =>
+            showTip(e.currentTarget, bv, v, grade, vid);
+          return has ? (
+            <Link
+              key={bv}
+              className={cls}
+              href={`/video/${vid}`}
+              target="_blank"
+              rel="noopener"
+              prefetch={false}
+              onMouseEnter={enter}
+              onFocus={enter}
+              onBlur={() => setTip(null)}
+            >
+              {body}
+            </Link>
+          ) : (
+            <span key={bv} className={cls} onMouseEnter={enter}>
+              {body}
+            </span>
+          );
+        })}
+      </div>
+      {tip && (
+        <i className={`rw_tip${tip.below ? " rw_tip_b" : ""}`} style={{ left: tip.x, top: tip.y }}>
+          <b className="rw_tip_bv">3BV {tip.bv}</b>
+          {tip.v !== null ? (
+            <>
+              <span>
+                {METRIC_LABELS[metric]}：
+                <em>{metric === "time" ? scoreTime(tip.v) : fmtMetric(metric, tip.v)}</em>
+                {metric === "time" && " 秒"}　评级：
+                <b className="rw_grade" style={{ color: gradeColor(tip.grade) }}>
+                  {tip.grade}
+                </b>
               </span>
-            );
-          })}
-        </div>
-      ))}
+              {tip.vid > 0 && <span className="rw_hint">点击查看录像</span>}
+            </>
+          ) : (
+            <span>暂无成绩</span>
+          )}
+        </i>
+      )}
     </div>
   );
 }
@@ -229,7 +275,7 @@ export function UserRecordsSection({
           levelName={cur?.levelName ?? ""}
           color={LEVEL_COLORS[level]}
         />
-        {/* BV 格子墙（2026-11-16 张老师需求）：仅初中高级出现（总计无 BV 轴） */}
+        {/* BV 纪录墙（2026-11-16 张老师需求）：仅初中高级出现（总计无 BV 轴） */}
         {level !== "total" && walls && (
           <RecordBvWall
             key={`wall-${metric}-${level}`}

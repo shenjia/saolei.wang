@@ -17683,78 +17683,134 @@ body #header .nav li a.vs_new_hint,
    初级银框 ~200px 时 3~4 行属正常窄屏形态，张老师口径以 960 桌面为准） */
 .comp_attach_pick .admin_input.sm { min-width: 120px; }
 
-/* ===== 用户主页「纪录」板块 BV 格子墙（2026-11-16 张老师需求） =====
-   级别筛选选中初级/中级/高级时图表下方出现，形式同对决页各级别 BV 墙：
-   十位分段行、每 BV 一格 10px 方格（同收集墙口径）。每格显示当前指标筛选
-   （时间/3BV/s/STNB 三选一）在该 BV 的个人纪录，底色按评级四档
-   （同收集墙 PB 模式），点击新标签页开对应录像页；无纪录为暗格。 */
+/* ===== 用户主页「纪录」板块 BV 纪录墙（2026-11-16 张老师需求） =====
+   级别筛选选中 初级/中级/高级 时图表下方出现。
+   ① 水平铺满板块宽度：grid auto-fill + 1fr，列数随宽度自适应（行尾不留白）；
+   ② 格子里直接显示成绩（2026-11-16 二次定稿）：每格两行 = BV 值（暗色小字）
+      + 当前指标筛选（Time / 3BV/s / STNB）在该 BV 的个人纪录值，格底与描边
+      按评级四档微着色（SSS~S 金 / A~B 玫红 / C~E 紫 / F·? 灰，同收集墙 PB 模式）；
+   ③ 无纪录 = 暗格（只显示 BV 值，一眼看出收集缺口）；
+   ④ 有纪录的格子点击新标签页开对应录像页；悬停气泡由组件 JS 定位（相对墙容器
+      夹紧，行首/行尾不会撑出横向滚动条），朝上弹出、第一行翻到下方。 */
 #user_records .rw_wall {
-  margin-top: 12px;
-  padding-top: 10px;
+  position: relative;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid #49483e;
 }
-#user_records .rw_band {
-  display: flex;
-  flex-wrap: wrap;
-  margin-top: 4px;
+#user_records .rw_grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 3px;
 }
-#user_records .rw_band:first-child {
-  margin-top: 0;
-}
-/* 10px 方格 + 2px 间距（同 #user_3bv .sq / 排行模式 .bw_sq 口径） */
 #user_records .rw_sq {
   position: relative;
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin: 0 2px 2px 0;
-  background: #49483e;
-  border-radius: 2px;
-  vertical-align: top;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 2px 2px 3px;
+  background: #24251e;
+  border: 1px solid #33342c;
+  border-radius: 3px;
+  line-height: 1.2;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+#user_records .rw_sq .rw_bv {
+  font-style: normal;
+  font-size: 9px;
+  line-height: 1.1;
+  color: #5d5d51;
+}
+#user_records .rw_sq .rw_val {
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1.25;
+  color: #b1b1a4;
+  white-space: nowrap;
+}
+#user_records .rw_sq.rw_on {
+  background: #2b2c24;
+  border-color: #4a4b40;
+}
+/* 评级四档（格底/描边微着色 + 纪录值显色；档位同收集墙 PB 模式） */
+#user_records .rw_sq.rw_gold {
+  background: #38351f;
+  border-color: #6f693c;
+}
+#user_records .rw_sq.rw_gold .rw_bv {
+  color: #8a8250;
+}
+#user_records .rw_sq.rw_gold .rw_val {
+  color: #e6db74;
+}
+#user_records .rw_sq.rw_rose {
+  background: #381c29;
+  border-color: #7f2450;
+}
+#user_records .rw_sq.rw_rose .rw_bv {
+  color: #8d5871;
+}
+#user_records .rw_sq.rw_rose .rw_val {
+  color: #ff5c9e;
+}
+#user_records .rw_sq.rw_violet {
+  background: #2d1f37;
+  border-color: #622b86;
+}
+#user_records .rw_sq.rw_violet .rw_bv {
+  color: #7c6292;
+}
+#user_records .rw_sq.rw_violet .rw_val {
+  color: #c874ff;
+}
+#user_records .rw_sq.rw_gray {
+  background: #2b2c24;
+  border-color: #55564a;
+}
+#user_records .rw_sq.rw_gray .rw_bv {
+  color: #6b6b5f;
+}
+#user_records .rw_sq.rw_gray .rw_val {
+  color: #b1b1a4;
 }
 #user_records a.rw_sq {
   cursor: pointer;
 }
-/* 评级四档底色（同收集墙 PB 模式：SSS~S 金 / A~B 玫红 / C~E 紫 / F·? 灰） */
-#user_records .rw_sq.rw_gold {
-  background: #e6db74;
+#user_records a.rw_sq:hover {
+  border-color: #c9c9bb;
+  z-index: 2;
 }
-#user_records .rw_sq.rw_rose {
-  background: #ff0080;
+#user_records a.rw_sq:hover .rw_bv {
+  color: #b1b1a4;
 }
-#user_records .rw_sq.rw_violet {
-  background: #a000e5;
-}
-#user_records .rw_sq.rw_gray {
-  background: #8a8878;
-}
-/* hover 提亮描边（outline 不占布局，同收集墙手法） */
-#user_records .rw_sq:hover {
-  outline: 1px solid #f8f8f2;
-  z-index: 61;
-}
-/* hover 气泡：固定格子上方弹出（2026-11-11 全站气泡朝上口径）。
-   无伪元素：悬停桥用气泡 padding 向下延伸（同排行模式 .bw_tip 手法，
-   ::after 是 css_inject 审计特征词） */
+/* 悬停气泡（组件 JS 定位：left/top 相对 .rw_wall 后被夹回墙内） */
 #user_records .rw_tip {
-  display: none;
   position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 60;
-  padding: 4px 8px 8px;
+  transform: translate(-50%, calc(-100% - 7px));
+  padding: 5px 10px 7px;
   background: #1f201b;
   border: 1px solid #656355;
   border-radius: 4px;
   font-style: normal;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.55;
   white-space: nowrap;
   text-align: center;
   color: #f8f8f2;
   text-shadow: none;
   pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+#user_records .rw_tip.rw_tip_b {
+  transform: translate(-50%, 7px);
+}
+#user_records .rw_tip .rw_tip_bv {
+  display: block;
+  font-weight: bold;
 }
 #user_records .rw_tip span {
   display: block;
@@ -17771,16 +17827,19 @@ body #header .nav li a.vs_new_hint,
   font-size: 11px;
   color: #636359;
 }
-#user_records .rw_sq:hover .rw_tip {
-  display: block;
-}
-/* 首格/末格气泡贴行端对齐（防溢出板块产生横向滚动，同对决页 .vs_tip 处理） */
-#user_records .rw_band .rw_sq:first-child .rw_tip {
-  left: 0;
-  transform: none;
-}
-#user_records .rw_band .rw_sq:last-child .rw_tip {
-  left: auto;
-  right: 0;
-  transform: none;
+/* 窄屏：格子再压一档（每行多两列，避免墙过高） */
+@media (max-width: 768px) {
+  #user_records .rw_grid {
+    grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+    gap: 2px;
+  }
+  #user_records .rw_sq {
+    padding: 1px 1px 2px;
+  }
+  #user_records .rw_sq .rw_bv {
+    font-size: 8px;
+  }
+  #user_records .rw_sq .rw_val {
+    font-size: 10px;
+  }
 }
