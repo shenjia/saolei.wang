@@ -51,7 +51,9 @@ export async function POST(req: NextRequest) {
   const swWall = body.wall === true;
   if (
     !LEVELS.has(level) ||
-    !Number.isFinite(csec) || csec <= 0 || csec > 3_600_000 || // 10 小时封顶
+    /* csec 允许 0（2026-11-16 去厘秒化）：3BV=1 一击局真实成绩 0ms，胜局埋点
+       照发（今日已完成/活跃值正常累计）；负值/超 10 小时仍是脏数据拒收 */
+    !Number.isFinite(csec) || csec < 0 || csec > 3_600_000 || // 10 小时封顶
     !Number.isInteger(bbbv) || bbbv < 1 || bbbv > 999 ||
     !Number.isInteger(solvedBv) || solvedBv < 0 || solvedBv > bbbv ||
     !Number.isInteger(clicks) || clicks < 0 || clicks > 99_999

@@ -149,6 +149,7 @@ function encodeRankedEvf(input: RankedEvfInput): Uint8Array {
     normEvents.push({ code, ms, x: e.x, y: e.y });
   }
 
+  /* rtime 允许 0（2026-11-16 去厘秒化：3BV=1 一击局真实成绩就是 0ms） */
   const rtimeMs = Math.max(0, Math.round(input.scoreMs ?? input.scoreCsec * 10));
 
   /* —— 流首约束（ms-toollib evf_video.rs parse_v4 把首个事件单独解析，实测

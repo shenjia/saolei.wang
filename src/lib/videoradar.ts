@@ -205,7 +205,9 @@ export function analyzeVideo(
   const c = replayEvents(v);
   const bbbv = opts?.bbbv && opts.bbbv > 0 ? opts.bbbv : v.bbbv ?? opts?.bbbvFallback ?? 0;
   const parsedTime = v.timeMs;
-  const timeMs = opts?.timeMs && opts.timeMs > 0 ? opts.timeMs : parsedTime;
+  /* opts.timeMs 允许 0（2026-11-16 去厘秒化：3BV=1 一击局 real_time=0 合法）——
+     只有「未传」才回退文件解析值；t=0 时下方 valid 门禁会把速度类指标归 0 */
+  const timeMs = opts?.timeMs !== undefined && Number.isFinite(opts.timeMs) ? opts.timeMs : parsedTime;
   const t = timeMs / 1000;
   const cl = c.clLeft + c.clRight + c.clDouble;
   /* 分子用完成 3BV（2026-10-30 张老师定）：重放终态实算（胜局＝全盘 3BV 恒等，
