@@ -17480,17 +17480,17 @@ body #header .nav li a.vs_new_hint,
    本块全部用 .bvwall 自有类名、无伪元素（气泡三角方案弃用，悬停桥用透明 border 盒）、
    白框用 outline、强调环不用 box-shadow。改动时必须维持这些约束 */
 #online_play .bvwall {
-  /* 块级自然充满 #game_area（=主板块内容宽，2026-11-16 张老师二改：
-     不再跟游戏银框宽走）；全屏态走下方 :fullscreen 覆盖（钉屏底通栏）。
-     常驻 50% 透明（2026-11-16 张老师四定）：墙永远半透明衬在游戏区下方，
-     只在游戏结束时（.dim 摘除）与 hover 时（下方 .bvwall:hover）恢复 100%。
-     内容整体居中（2026-11-16 张老师五定：标题+格子同行居中，宽度自适应内容） */
-  margin: 6px 0 0;
+  /* 宽度自适应内容（2026-11-16 张老师七定）：不再撑满主板块——墙收缩为
+     「标题+格子+进度」的实际宽度，水平居中；全屏态走下方 :fullscreen 覆盖
+     （inset 12px 定宽）。常驻 50% 透明（四定）：只在游戏结束（.dim 摘除）
+     与 hover 时恢复 100% */
+  width: fit-content;
+  max-width: 100%;
+  margin: 6px auto 0;
   padding: 5px 8px 6px;
   background: rgba(39, 40, 34, 0.55);
   border: 1px solid #3e3d32;
   border-radius: 4px;
-  text-align: center;
   opacity: 0.5;
   transition: opacity 0.6s ease;
   /* [hidden] 兜底（display:flex 压 UA 规则的前科，见 .op_ranked 判例） */
