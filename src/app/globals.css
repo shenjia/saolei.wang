@@ -17575,7 +17575,13 @@ body #header .nav li a.vs_new_hint,
    ⚠️ fixed 定位会被 fullscreenFitCap 的 belowH 扫描按 position:fixed 跳过——
    棋盘拉满预算由 fit 内显式扣墙高（OnlinePlay fullscreenFitCap wallH 段），
    两处必须成对存在：墙改形态/尺寸时同步复核那段预算 */
+/* ⚠️ 全屏元素是 .op_root（= #online_play > div，JS rootRef），不是 #online_play。
+   选择器必须带 #online_play > div:fullscreen 才压得过基础规则 #online_play .bvwall
+   （特定性 1-2-1 > 1-1-0）；旧写法只有 `#online_play:fullscreen` + 通配 `:fullscreen`，
+   后者 0-2-0 输给基础 1-1-0 → position:fixed 被 relative 吃掉，墙贴着游戏区域底
+   而不是钉屏幕底（张老师 2026-11-17 报障）。 */
 #online_play:fullscreen .bvwall,
+#online_play > div:fullscreen .bvwall,
 :fullscreen .bvwall {
   position: fixed;
   left: 12px;
