@@ -17480,24 +17480,95 @@ body #header .nav li a.vs_new_hint,
    本块全部用 .bvwall 自有类名、无伪元素（气泡三角方案弃用，悬停桥用透明 border 盒）、
    白框用 outline、强调环不用 box-shadow。改动时必须维持这些约束 */
 #online_play .bvwall {
-  /* 宽度由 JS syncBvWallWidth 按 gwrap 渲染宽设置；max-width 兜底防溢出 */
-  max-width: 960px;
-  margin: 6px auto 0;
+  /* 块级自然充满 #game_area（=主板块内容宽，2026-11-16 张老师二改：
+     不再跟游戏银框宽走）；全屏态走下方 :fullscreen 覆盖（钉屏底通栏）。
+     常驻 50% 透明（2026-11-16 张老师四定）：墙永远半透明衬在游戏区下方，
+     只在游戏结束时（.dim 摘除）与 hover 时（下方 .bvwall:hover）恢复 100%。
+     内容整体居中（2026-11-16 张老师五定：标题+格子同行居中，宽度自适应内容） */
+  margin: 6px 0 0;
   padding: 5px 8px 6px;
   background: rgba(39, 40, 34, 0.55);
   border: 1px solid #3e3d32;
   border-radius: 4px;
-  /* 开局 50% 渐隐恢复：opacity 过渡（张老师口径「渐变为 50% / 渐变恢复」） */
-  opacity: 1;
+  text-align: center;
+  opacity: 0.5;
   transition: opacity 0.6s ease;
   /* [hidden] 兜底（display:flex 压 UA 规则的前科，见 .op_ranked 判例） */
 }
 #online_play .bvwall[hidden] {
   display: none;
 }
+/* 标题 + 格子墙同行并行（2026-11-16 张老师五定）：.bw_row 是行内弹性容器、
+   宽度自适应内容（不定 100%）——由容器 text-align:center 居中；
+   格子墙在自身盒内独立换行（2~3 行时列对齐、不折到标题下面） */
+#online_play .bvwall .bw_row {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 100%;
+}
+/* 标题行：竖排两段（名字/进度）上下堆叠——与多行格子墙等高对齐更紧凑 */
+#online_play .bvwall .bw_head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+#online_play .bvwall .bw_name {
+  font-size: 12px;
+  color: #939387;
+}
+/* 进度合进标题右侧括号（2026-11-16 张老师五定） */
+#online_play .bvwall .bw_stat {
+  color: #636359;
+  font-size: 11px;
+  white-space: nowrap;
+}
+#online_play .bvwall .bw_stat em {
+  font-style: normal;
+  font-weight: bold;
+}
+/* 格子墙：text-align:left 保证多行列对齐（继承的 center 会把末行居中造成错位）；
+   max-width 限制换行宽度，超出折行但列位由固定格宽保证对齐 */
+#online_play .bvwall .bw_grid {
+  line-height: 0;
+  text-align: left;
+}
+/* 全屏形态（2026-11-16 张老师定）：墙钉屏幕下端、与屏幕边缘保持 12px 距离
+   （左/右/下各 12px，张老师三定口径）——宽度由 left+right inset 驱动通栏自适应，
+   不再跟游戏银框走。:fullscreen 伪类门控（组件根是 fullscreenElement；
+   iOS 伪全屏 op-fakefs 无 :fullscreen 伪类，保持流内形态）。
+   ⚠️ fixed 定位会被 fullscreenFitCap 的 belowH 扫描按 position:fixed 跳过——
+   棋盘拉满预算由 fit 内显式扣墙高（OnlinePlay fullscreenFitCap wallH 段），
+   两处必须成对存在：墙改形态/尺寸时同步复核那段预算 */
+#online_play:fullscreen .bvwall,
+:fullscreen .bvwall {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  border-radius: 4px;
+  z-index: 4; /* 压过回放控制条（z6 不相交，此值防遮罩态浮层挤压） */
+}
+/* 游戏结束恢复 100%（张老师四定二时机之一）：.dim 摘除＝终局定格（report
+   终局挂点摘类、reset 开新局重新挂上＝回到半透明常驻态）。0.6s 渐变过渡不变 */
+#online_play .bvwall:not(.dim) {
+  opacity: 1;
+}
+/* hover 恢复 100%（张老师四定另一时机）：终局/未开局态鼠标进墙即全亮（含
+   格子气泡交互）。⚠️ 局中 dim 态 pointer-events:none 使 hover 不触发——
+   半透明常驻期墙不吃任何交互（干扰最小化），只有终局/未开局才可悬停 */
+#online_play .bvwall:hover {
+  opacity: 1;
+}
 #online_play .bvwall.dim {
-  opacity: 0.5;
-  /* 局中禁 hover 气泡（渐隐态不响应 hover，免得玩家误触弹出干扰） */
+  /* 半透明常驻态禁 hover 气泡（免得玩家误触弹出干扰） */
   pointer-events: none;
 }
 #online_play .bvwall .bw_head {
@@ -17523,15 +17594,6 @@ body #header .nav li a.vs_new_hint,
 #online_play .bvwall[data-lv="exp"] .bw_name,
 #online_play .bvwall[data-lv="exp"] .bw_stat em {
   color: #e6db74;
-}
-#online_play .bvwall .bw_stat {
-  color: #636359;
-  font-size: 11px;
-}
-#online_play .bvwall .bw_grid {
-  line-height: 0;
-  text-align: left;
-  white-space: normal;
 }
 /* 10px 方格 + 2px 间距（同个人主页收集墙 #user_3bv .sq 口径） */
 #online_play .bvwall .bw_sq {
