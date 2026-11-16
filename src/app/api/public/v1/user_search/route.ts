@@ -3,7 +3,7 @@
 // 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置。
 //
 // 与站内排行搜索框同口径（lib/queries searchUsers）：
-//   · 中文姓名 前缀 / 包含 模糊 + 英文名 前缀；纯数字 = id 精确匹配
+//   · 中文姓名 前缀 / 包含 模糊 + 英文名 前缀；纯数字 = id 精确匹配（至多一行）
 //   · 排序＝上榜者按全国总计时间榜名次序在前，未上榜沉底按 id 升序
 //   · 封禁账号（status≠0）不出——与榜单「封禁不在榜」口径一致
 // 返回 { users: [{ id, name, englishName, area, avatar, title }] }：
@@ -39,7 +39,8 @@ export async function GET(req: Request) {
   }
   const take = Math.min(20, Math.max(1, parseInt(p.get("limit") ?? "10", 10) || 10));
 
-  // 站内 searchUsers 同款查询，多取 area/avatar/exp_time（称号与地区展示用）；
+  // 站内 searchUsers 同款查询：纯数字 = id 精确匹配（2026-11-16 补分支，修复用户反馈）；
+  // 姓名查询多取 area/avatar/exp_time（称号与地区展示用）；
   // LIMIT 为 clamp 后的整数直插（无注入面），关键词走 ? 占位符 + escapeLike。
   const rows = await prisma.$queryRawUnsafe<
     {
@@ -51,17 +52,25 @@ export async function GET(req: Request) {
       avatar: string;
       exp_time: number | null;
     }[] >(
-    `SELECT u.id, u.chinese_name, u.english_name, u.sex, u.area, u.avatar, us.exp_time
-     FROM user u
-     LEFT JOIN user_scores us ON us.id = u.id
-     WHERE u.status = 0
-       AND (u.chinese_name LIKE ? OR u.chinese_name LIKE ? OR u.english_name LIKE ?)
-     ORDER BY CASE WHEN us.sum_time IS NULL OR us.sum_time <= 0 THEN 1 ELSE 0 END,
-              us.sum_time ASC, u.id ASC
-     LIMIT ${take}`,
-    `${escapeLike(kw)}%`,
-    `%${escapeLike(kw)}%`,
-    `${escapeLike(kw)}%`
+    /^\d+$/.test(kw)
+      ? `SELECT u.id, u.chinese_name, u.english_name, u.sex, u.area, u.avatar, us.exp_time
+         FROM user u
+         LEFT JOIN user_scores us ON us.id = u.id
+         WHERE u.status = 0 AND u.id = ?
+         LIMIT 1`
+      : `SELECT u.id, u.chinese_name, u.english_name, u.sex, u.area, u.avatar, us.exp_time
+         FROM user u
+         LEFT JOIN user_scores us ON us.id = u.id
+         WHERE u.status = 0
+           AND (u.chinese_name LIKE ? OR u.chinese_name LIKE ? OR u.english_name LIKE ?)
+         ORDER BY CASE WHEN us.sum_time IS NULL OR us.sum_time <= 0 THEN 1 ELSE 0 END,
+                  us.sum_time ASC, u.id ASC
+         LIMIT ${take}`,
+    ...((/^\d+$/.test(kw) ? [BigInt(kw)] : [
+      `${escapeLike(kw)}%`,
+      `%${escapeLike(kw)}%`,
+      `${escapeLike(kw)}%`
+    ]))
   );
 
   // 军衔称号：总司令=动态阈值档（与榜单徽章同口径）
