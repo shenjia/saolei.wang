@@ -13,6 +13,8 @@
 //   领军人物为「无」时只显示文本、不渲染称号 em。
 // 2026-11-10 领军人物改随排序切换（战力排行=该地区全国名次最高者，其余=活跃领军）——
 //   气泡收到的 bestName/noLeader/title 已由上游 AreaRanking 按 order 选好，此处不变。
+// 2026-11-16 张老师定：领军人物排行=按各地区领军人物的全国排名排——该档领军与战力
+//   同口径（上游已选好）；气泡头部名次在领军档标注「领军排行第x位」。
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -81,6 +83,8 @@ export interface AreaMapDatum {
   /** 近 7 日上传录像数（落盘表快照） */
   videos7d: number;
   bestName: string;
+  /** 领军人物的全国名次（2026-11-16 领军排行档地图填色用：名次越靠前越亮） */
+  bestRank: number;
   /** 领军人物缺位（地区内无人 7 日活跃值>0，2026-11-09）：为 true 时领军人物只显示「无」，无称号 */
   noLeader?: boolean;
   /** 领军人物的军衔（按高级时间评定，服务端算好传入） */
@@ -113,10 +117,18 @@ export function AreaMap({
   const [tipFrom, setTipFrom] = useState<"map" | "row" | null>(null);
 
   const byActivity = order === "activity";
-  // 填色模式：活跃指数榜=深绿→亮绿，其余（战力指数）=灰→站点金
+  // 填色模式：活跃指数榜=深绿→亮绿，其余（战力/领军）=灰→站点金
   const fillMode: "power" | "activity" = byActivity ? "activity" : "power";
   const legend = legendFor(fillMode);
-  const metric = (d: AreaMapDatum) => (byActivity ? d.activity : d.power);
+  // 领军人物排行档（2026-11-16）：填色跟随领军人物全国名次（越靠前越亮，反向归一）；
+  // 其余档按当前排序指标值（越大越亮）
+  const maxBestRank = data.reduce((m, d) => Math.max(m, d.bestRank), 1);
+  const metric = (d: AreaMapDatum) =>
+    order === "best"
+      ? maxBestRank - d.bestRank + 1
+      : byActivity
+        ? d.activity
+        : d.power;
   const maxMetric = data.reduce((m, d) => Math.max(m, metric(d)), 0) || 1;
   const byName = new Map(data.map((d) => [d.area, d]));
   const hot = tipArea ? byName.get(tipArea) : undefined;
@@ -255,8 +267,11 @@ export function AreaMap({
               <div className="tp_head">
                 <b>{areaDisplay(hot.area)}</b>
                 <span>
+                  {/* 2026-11-16 领军人物排行=按各地区领军人物的全国排名排，名次口径独立标注 */}
                   {byActivity ? (
                     <>活跃排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>
+                  ) : order === "best" ? (
+                    <>领军排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>
                   ) : (
                     <>战力排行第&nbsp;<em>{hot.rank}</em>&nbsp;位</>
                   )}

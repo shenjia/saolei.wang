@@ -19,6 +19,8 @@
 //   hover 表格行时右侧地图同步弹气泡（气泡钉在地图右上角，见 AreaMap tipFromRow）；
 // 2026-11-10 张老师改回随排序切换：战力指数排行时=该地区全国名次最高者（powerLead*，
 //   不管活跃不活跃），其余=活跃领军；「无」仅活跃排行且无人活跃时出现。
+// 2026-11-16 张老师定：领军人物排行时领军=该地区全国名次最高者（与战力同口径），
+//   榜序按各地区领军人物的全国排名排（best_rank ASC，服务端 ORDER BY）。
 // 军衔（title）由服务端按高级时间评好（随当前口径的领军评定），与 rows 同序传入。
 
 import { useState, type ReactNode } from "react";
@@ -50,9 +52,11 @@ export function AreaRanking({
   rules?: ReactNode;
 }) {
   const [hover, setHover] = useState<string | null>(null);
-  // 领军人物口径（2026-11-10 张老师改）：随排序切换——战力指数排行时=该地区全国名次
-  // 最高者（powerLead*，不管活跃不活跃）；其余（活跃指数 / 领军表头）=活跃领军（best*）
-  const usePowerLead = order === "power";
+  // 领军人物口径（2026-11-16 张老师定）：随排序切换——领军人物排行与战力指数排行时
+  // =该地区全国名次最高者（powerLead*，不管活跃不活跃）；活跃指数排行=活跃领军（best*）
+  // 领军人物缺位（活跃排行且地区内无人 7 日活跃）：纯文本「无」；
+  // 领军/战力排行的领军=全国名次最高者恒在位，无缺位
+  const usePowerLead = order === "power" || order === "best";
 
   const mapData: AreaMapDatum[] = rows.map((r, i) => ({
     area: r.area,
@@ -63,6 +67,7 @@ export function AreaRanking({
     activity: r.activity,
     wins7d: r.wins7d,
     videos7d: r.videos7d,
+    bestRank: r.bestRank,
     bestName: usePowerLead ? r.powerLeadName : r.bestName,
     noLeader: !usePowerLead && r.noActiveLeader,
     title: titles[i] ?? "",

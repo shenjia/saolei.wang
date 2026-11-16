@@ -2999,14 +2999,13 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
       : order === "active"
         ? "active DESC, a.power DESC"
         : order === "best"
-          ? "(abest_rank = 0) ASC, abest_rank ASC"
+          ? "best_rank ASC"
           : order === "activity"
             ? "act_score DESC, a.power DESC"
             : "power DESC";
-  // 领军人物口径（2026-11-09 晚张老师改）：不随排序切换——一律取该地区上榜雷友中
-  // 7 日活跃值>0（user_activity_snapshot.active_points，每分钟刷新，即用户主页活跃值）
-  // 的全国名次最高者，无人活跃则为「无」（bestId=0，前端渲染纯文本）。
-  // 「领军人物」表头排序键=活跃领军的全国名次（无人活跃沉底），保持列内一致
+  // 2026-11-16 张老师定：领军人物排行=按各地区领军人物的全国排名排——领军人物即
+  // 全国名次最高者（powerLead*），榜序按 best_rank ASC。
+  // 「领军人物」表头排序键=领军人物全国名次（best_rank，全区无人上榜的行不存在）
   const rows = await prisma.$queryRawUnsafe<
     {
       area: string;
@@ -3120,7 +3119,9 @@ async function getAreaRankingImpl(order: AreaOrder = "activity"): Promise<AreaRo
 // 2026-11-10 领军人物改回随排序切换（张老师：战力指数排行时领军应为该地区排行第一名，
 // 不管活跃不活跃）——战力=全国名次最高（best_*，数据本就在 SELECT 里，仅透出），
 // 其余（活跃指数/领军表头）=活跃领军；缓存键升 v8
-const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v8"], {
+// 2026-11-16 张老师定：领军人物排行=按各地区领军人物的全国排名排——领军恒为全国
+// 名次最高者（powerLead*），表头排序键切 best_rank ASC；缓存键升 v9
+const fetchAreaRanking = unstable_cache(getAreaRankingImpl, ["area-ranking-v9"], {
   revalidate: 300,
 });
 
