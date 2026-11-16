@@ -17489,7 +17489,11 @@ body #header .nav li a.vs_new_hint,
      （inset 12px 定宽）。常驻 50% 透明（四定）：只在游戏结束（.dim 摘除）
      与 hover 时恢复 100% */
   width: fit-content;
-  max-width: 100%;
+  /* 墙宽锁进银框渲染宽（2026-11-16 张老师「墙不许压面板 / 不许溢出主板块」终案）：
+     JS syncReportZoom 按 gwrap 渲染矩形写 --bw-maxw。墙是 fit-content 通栏，实测
+     50 格一行宽 735px，而初级银框仅 77~233px——不锁宽就必然横穿左右两侧面板。
+     全屏态 CSS :fullscreen 下墙改 fixed 通栏（max-width:none 覆盖本行），JS 同步清变量 */
+  max-width: var(--bw-maxw, 100%);
   margin: 6px auto 0;
   padding: 5px 8px 6px;
   background: rgba(39, 40, 34, 0.55);
@@ -17511,6 +17515,23 @@ body #header .nav li a.vs_new_hint,
 }
 #online_play .bvwall[hidden] {
   display: none;
+}
+/* 窄版墙（银框渲染宽 < 420px，JS 按 gwrap 宽挂 .narrow）：墙宽收进银框后
+   「标题 + 格子 + 进度」三段同行放不下，改成标题/进度同列首行两端、格子整行折行。
+   .bw_sq 是 inline-block，给 .bw_grid 100% 行宽即自动折行；order 把进度提到
+   格子前面，避免 wrap 后进度掉到第三行。格子仍左对齐保证各行列位对齐 */
+#online_play .bvwall.narrow .bw_row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 100%;
+}
+#online_play .bvwall.narrow .bw_head { order: 1; }
+#online_play .bvwall.narrow .bw_stat { order: 2; }
+#online_play .bvwall.narrow .bw_grid {
+  order: 3;
+  flex: 0 0 100%;
+  min-width: 0;
 }
 /* 标题 + 格子墙 + 进度三段同行（2026-11-16 张老师六定）：标题在左、格子居中、
    进度在右（无括号），左右与标题对称。.bw_row 行内弹性容器、宽度自适应内容
