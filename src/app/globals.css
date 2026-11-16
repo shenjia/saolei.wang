@@ -17498,6 +17498,16 @@ body #header .nav li a.vs_new_hint,
   opacity: 0.5;
   transition: opacity 0.6s ease;
   /* [hidden] 兜底（display:flex 压 UA 规则的前科，见 .op_ranked 判例） */
+  /* ⚠️ 墙必须自建层级（2026-11-16 张老师报「扫完一局 hover 当前 BV 的气泡
+     被数据统计面板挡住」）：数据/结算面板 .greport/.gresult 均 absolute
+     z-index:5。墙无层级时两处陷阱：①终局白框格 .bw_sq.end（z-index:2）
+     自建层叠上下文，把格内 .bw_tip(z60) 困在 z2 层 → 气泡左半被面板盖住
+     （本案——只挡「当前扫开 BV」那格，其他格正常）；②局中 .dim 的
+     opacity:0.5 同建上下文困住全部气泡（面板常驻开局中 hover 同病）。
+     墙提 relative z-index:6（>面板 5；与回放控制条 z6 同带不相交）两案同治；
+     全屏态仍走下方 :fullscreen 的 fixed z4 覆盖，不受此值影响 */
+  position: relative;
+  z-index: 6;
 }
 #online_play .bvwall[hidden] {
   display: none;
