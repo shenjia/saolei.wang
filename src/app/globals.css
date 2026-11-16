@@ -17557,15 +17557,12 @@ body #header .nav li a.vs_new_hint,
 #online_play .bvwall:not(.dim) {
   opacity: 1;
 }
-/* hover 恢复 100%（张老师四定另一时机）：终局/未开局态鼠标进墙即全亮（含
-   格子气泡交互）。⚠️ 局中 dim 态 pointer-events:none 使 hover 不触发——
-   半透明常驻期墙不吃任何交互（干扰最小化），只有终局/未开局才可悬停 */
+/* hover 恢复 100%（张老师四定另一时机）：**任何状态**都生效——未开局/局中/
+   终局鼠标进墙即全亮 + 格子气泡可交互（2026-11-16 张老师补：未开局 hover
+   没反应的根因是 dim 态挂了 pointer-events:none 把交互整个掐掉，已撤——
+   「不干扰玩家」由 50% 半透明本身承担，墙在棋盘下方不占游戏区） */
 #online_play .bvwall:hover {
   opacity: 1;
-}
-#online_play .bvwall.dim {
-  /* 半透明常驻态禁 hover 气泡（免得玩家误触弹出干扰） */
-  pointer-events: none;
 }
 #online_play .bvwall .bw_head {
   display: flex;
