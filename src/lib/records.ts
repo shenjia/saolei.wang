@@ -21,7 +21,8 @@
 import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { VIDEO_STATUS } from "./config";
+import { MIN_3BV_FOR_3BVS, VIDEO_STATUS } from "./config";
+import { DIST_BUCKET_ALL, MIN_DIST_SIZE, gradeOf } from "./videoscore";
 import { getBvRanking } from "./queries";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
@@ -521,12 +522,48 @@ export interface UserRecordCurve {
   points: UserRecordPoint[];
 }
 
-async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]> {
+/** 三级别 key（墙不涉及「总计」——总计没有 BV 轴） */
+type WallLevel = "beg" | "int" | "exp";
+
+/**
+ * 「BV 格子墙」单格（2026-11-16 张老师需求）：某级别某 3BV 的三指标个人纪录。
+ * 计算与曲线同源（fetchUserRecordCurves 内同批 evs 行，零额外主查询）：
+ * 口径 = status=REVIEWED + no_record=0 + real_time>0；3BV/s 与 STNB 另加
+ * 3BV 限界（初 10 / 中高 4，MIN_3BV_FOR_3BVS——低于限界成绩不承认，
+ * 与全站 3BV/s 计分划线同口径）。三指标的纪录盘可以是不同录像（各自独立取优）。
+ */
+export interface UserRecordBvCell {
+  bv: number;
+  /** 最快时间（毫秒；null=该 BV 无有效时间成绩）+ 纪录盘 id + 时间评级 */
+  time: number | null;
+  timeVid: number;
+  timeGrade: string;
+  /** 最高 3BV/s（×1000 整数口径，与曲线 fmtVal 同源；null=无） */
+  bvs: number | null;
+  bvsVid: number;
+  bvsGrade: string;
+  /** 最高 STNB（video_metrics.stnb 原值；null=无） */
+  stnb: number | null;
+  stnbVid: number;
+  stnbGrade: string;
+}
+
+/** 每 BV 纪录墙（级别 → 格子数组，bv 升序） */
+export type UserRecordBvWalls = Record<WallLevel, UserRecordBvCell[]>;
+
+/** 返回包：曲线 + 每 BV 纪录墙（同一缓存，随曲线 24h TTL / 审核联动失效） */
+export interface UserRecordCurvesBundle {
+  curves: UserRecordCurve[];
+  /** 级别 → 格子数组（bv 升序；缓存摊平形态，页面层重组成 Map） */
+  walls: UserRecordBvWalls;
+}
+
+async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurvesBundle> {
   const rows = await prisma.$queryRaw<
-    { level: string; vid: bigint; ct: bigint; rt: number; b3: number; nr: number; st: number | null; et: bigint; rk: bigint }[]
+    { level: string; vid: bigint; ct: bigint; rt: number; b3: number; nr: number; st: number | null; nf: number; et: bigint; rk: bigint }[]
   >`
     SELECT v.level, v.id vid, v.create_time ct,
-           vi.real_time rt, vi.board_3bv b3, vi.no_record nr, m.stnb st,
+           vi.real_time rt, vi.board_3bv b3, vi.no_record nr, m.stnb st, vi.noflag nf,
            v.exp_time et, v.ranked rk
     FROM video v
     JOIN video_info vi ON vi.id = v.id
@@ -543,6 +580,7 @@ async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]>
     b3: N(r.b3),
     nr: N(r.nr),
     st: r.st === null ? 0 : Number(r.st),
+    nf: N(r.nf),
     et: N(r.et),
     rk: N(r.rk),
   }));
@@ -605,18 +643,80 @@ async function fetchUserRecordCurves(userId: number): Promise<UserRecordCurve[]>
       out.push({ metric, level, points: byLevel[level] });
     }
   }
-  return out;
+
+  // ---------- 每 BV 纪录墙（2026-11-16 张老师需求）----------
+  // 同批 evs 行内存聚合（零额外主查询）：每 (级别, 3BV) 三指标各取最优
+  // （time 取最小 rt / bvs·stnb 取最大），过滤条件与上面三个 build 完全一致。
+  // nf 跟着纪录盘走：评级按「该盘自己的级别×模式」组取分位基准（与录像页
+  // 雷达「速度」轴/收集墙 PB 评级同算法）。
+  type BvRec = { v: number; vid: number; nf: number };
+  type BvAcc = { time?: BvRec; bvs?: BvRec; stnb?: BvRec };
+  const accs: Record<WallLevel, Map<number, BvAcc>> = { beg: new Map(), int: new Map(), exp: new Map() };
+  for (const r of evs) {
+    let c = accs[r.level].get(r.b3);
+    if (!c) {
+      c = {};
+      accs[r.level].set(r.b3, c);
+    }
+    if (r.nr === 0 && r.rt > 0 && (c.time === undefined || r.rt < c.time.v)) {
+      c.time = { v: r.rt, vid: r.vid, nf: r.nf };
+    }
+    // 3BV/s 与 STNB 另加级别限界（初 10 / 中高 4）：低于限界成绩不承认，恒无 bvs/stnb 纪录
+    if (r.nr === 0 && r.rt > 0 && r.b3 >= MIN_3BV_FOR_3BVS[r.level]) {
+      const bvs = Math.round((r.b3 * 1e6) / r.rt);
+      if (bvs > 0 && (c.bvs === undefined || bvs > c.bvs.v)) c.bvs = { v: bvs, vid: r.vid, nf: r.nf };
+      if (r.st > 0 && (c.stnb === undefined || r.st > c.stnb.v)) c.stnb = { v: r.st, vid: r.vid, nf: r.nf };
+    }
+  }
+
+  // 评级分位基准：级别 × 模式 全组行（bucket=-1），time/bvs/stnb 三列边界
+  // （time 列单位=秒，与跑批写入口径一致；size<MIN_DIST_SIZE 的组评级给「?」，
+  // 与收集墙 getUser3bvCollection 同处理）
+  const distRows = await prisma.videoMetricDist.findMany({
+    where: { bucket: DIST_BUCKET_ALL },
+    select: { level: true, noflag: true, size: true, time: true, bvs: true, stnb: true },
+  });
+  const dists = new Map<string, { time: number[]; bvs: number[]; stnb: number[] }>();
+  for (const d of distRows) {
+    if (d.size < MIN_DIST_SIZE) continue;
+    const parse = (s: string) => s.split(",").filter((x) => x !== "").map(Number);
+    dists.set(`${d.level}:${d.noflag ? 1 : 0}`, { time: parse(d.time), bvs: parse(d.bvs), stnb: parse(d.stnb) });
+  }
+  /** 评级兜底：组基准缺失 →「?」（与收集墙同语义） */
+  const rate = (v: number, arr: number[] | undefined, hib: boolean) =>
+    arr && arr.length ? gradeOf(v, arr, hib) : "?";
+
+  const walls: Record<WallLevel, UserRecordBvCell[]> = { beg: [], int: [], exp: [] };
+  for (const lv of LEVELS3) {
+    const cells: UserRecordBvCell[] = [];
+    for (const [bv, c] of accs[lv]) {
+      cells.push({
+        bv,
+        time: c.time ? c.time.v : null,
+        timeVid: c.time?.vid ?? 0,
+        timeGrade: c.time ? rate(c.time.v / 1000, dists.get(`${lv}:${c.time.nf ? 1 : 0}`)?.time, false) : "",
+        bvs: c.bvs ? c.bvs.v : null,
+        bvsVid: c.bvs?.vid ?? 0,
+        bvsGrade: c.bvs ? rate(c.bvs.v / 1000, dists.get(`${lv}:${c.bvs.nf ? 1 : 0}`)?.bvs, true) : "",
+        stnb: c.stnb ? c.stnb.v : null,
+        stnbVid: c.stnb?.vid ?? 0,
+        stnbGrade: c.stnb ? rate(c.stnb.v, dists.get(`${lv}:${c.stnb.nf ? 1 : 0}`)?.stnb, true) : "",
+      });
+    }
+    walls[lv] = cells.sort((a, b) => a.bv - b.bv);
+  }
+  return { curves: out, walls };
 }
 
-/** 个人纪录进步历程（uid 参与缓存 key 每人一份，24h TTL；与全站曲线同向——
- *  新纪录一天内上图延迟可接受。⚠️ 改口径必须升版本号（v2：点带 video 行内
- *  上传时刻称号快照 et/rk——hover 军衔=传那盘录像时的军衔，2026-11-06）。
+/** 个人纪录进步历程 + 每 BV 纪录墙（uid 参与缓存 key 每人一份，24h TTL；与全站
+ *  曲线同向——新纪录一天内上图延迟可接受。⚠️ 改口径必须升版本号（v3：返回包
+ *  扩为 { curves, walls }，附带每 BV 三指标纪录墙数据，2026-11-16）。
  *  tag 用独立 user-records-curves（2026-11-06）：审核过审/屏蔽时 review.ts 会
  *  revalidateTag 精准打掉本缓存——绝不能与全站曲线共用 records-curves tag，
  *  否则每次审核都会连带打掉全站 24h 重查询缓存（全站曲线仍靠 TTL 兜底） */
 export const getUserRecordCurves = (userId: number) =>
   unstable_cache(
     async () => fetchUserRecordCurves(userId),
-    ["user-records-curves-v2", String(userId)],
+    ["user-records-curves-v3", String(userId)],
     { revalidate: 86400, tags: ["user-records-curves"] }
   )();

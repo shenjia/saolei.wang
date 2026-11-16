@@ -222,9 +222,10 @@ export default async function UserViewPage({
   }));
 
   const { user, info, scores } = detail;
-  // 「纪录」板块（2026-11-06）：个人纪录进步历程 12 条曲线（3 指标×4 级别），
+  // 「纪录」板块（2026-11-06）：个人纪录进步历程 12 条曲线（3 指标×4 级别）+
+  // 每 BV 纪录墙（2026-11-16 张老师需求，同缓存带出 walls），
   // uid 参与缓存 key 每人一份 24h TTL（lib/records.ts），无点时整块隐藏
-  const userCurves = await getUserRecordCurves(userId);
+  const { curves: userCurves, walls: userRecordWalls } = await getUserRecordCurves(userId);
   // 名次（已有 per-user 600s 缓存 user-ranks-v3，不并入打包）
   const ranks = await getUserRanks(userId);
 
@@ -470,7 +471,9 @@ export default async function UserViewPage({
         {/* 「纪录」板块（2026-11-06 张老师需求，11-37 二改：放动态板块上面）——个人纪录进步历程，
             级别筛选靠 title（默认总计）+ 指标筛选靠右（默认 Time），图表复刻
             /records 页 ChartCard；无任何个人纪录点时整块隐藏 */}
-        {hasRecordCurves && <UserRecordsSection sections={recordSections} />}
+        {hasRecordCurves && (
+          <UserRecordsSection sections={recordSections} walls={userRecordWalls} ranges={bbvRanges} />
+        )}
         {news.length > 0 && (
           <div id="news" className="box">
             {/* 2026-09-27 张老师要求：动态/录像/纪事板块标题与其他页面同款 26px 大字，
