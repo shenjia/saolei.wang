@@ -116,7 +116,8 @@ export async function getPracticeModes(days = 7): Promise<{
 /** 设置开关打开比例（2026-11-01 张老师定：后台「开关占比」模块，模式占比下方）。
  *  各列自上线起即真值；分母=同期总盘数（老客户端不带开关字段缺省 0，起记日前的
  *  旧局会稀释占比，明天起分母全干净）；开关各自独立，之和可 >100%。
- *  pixel 像素风格为 2026-11-10 第七列（开关 11-09 上线，之后起记才准） */
+ *  pixel 像素风格为 2026-11-10 第七列（开关 11-09 上线，之后起记才准）
+ *  wall BV收集墙为 2026-11-16 第八列（开关当天上线当天起记） */
 export async function getPracticeSwitches(days = 7): Promise<{
   items: { label: string; value: number }[];
   total: number;
@@ -125,10 +126,10 @@ export async function getPracticeSwitches(days = 7): Promise<{
   const todayIdx = Math.floor((now + 28800) / 86400);
   const fromIdx = Math.max(todayIdx - (days - 1), LEVEL_CLEAN_SINCE_DAY);
   const rows = await prisma.$queryRawUnsafe<{
-    qmark: bigint; stats: bigint; sndfb: bigint; shot: bigint; qretry: bigint; wheel: bigint; pixel: bigint; plays: bigint;
+    qmark: bigint; stats: bigint; sndfb: bigint; shot: bigint; qretry: bigint; wheel: bigint; pixel: bigint; wall: bigint; plays: bigint;
   }[]>(
     `SELECT SUM(sw_qmark) qmark, SUM(sw_stats) stats, SUM(sw_sndfb) sndfb, SUM(sw_shot) shot,
-            SUM(sw_qretry) qretry, SUM(sw_wheel) wheel, SUM(sw_pixel) pixel, SUM(plays) plays
+            SUM(sw_qretry) qretry, SUM(sw_wheel) wheel, SUM(sw_pixel) pixel, SUM(sw_wall) wall, SUM(plays) plays
      FROM practice_daily WHERE day >= ?`,
     fromIdx
   );
@@ -142,6 +143,7 @@ export async function getPracticeSwitches(days = 7): Promise<{
       { label: "快速重开", value: N(r?.qretry) },
       { label: "滚轮缩放", value: N(r?.wheel) },
       { label: "像素风格", value: N(r?.pixel) },
+      { label: "BV收集墙", value: N(r?.wall) },
     ],
     total: N(r?.plays),
   };
