@@ -17467,4 +17467,163 @@ body #header .nav li a.vs_new_hint,
 /* 后台录像管理「比赛」列挂接控件 */
 .comp_attach_on { display: inline-flex; align-items: center; gap: 6px; }
 .comp_attach_pick { display: inline-flex; flex-direction: column; gap: 4px; align-items: stretch; }
+
+/* ===== 练习页·排行模式游戏区底部「BV 收集墙」（2026-11-16 张老师需求） =====
+   游戏区域最底下、gwrap 之后的流内子元素（不吃游戏 zoom，宽由 JS 跟 gwrap 渲染宽走）。
+   只在排行模式渲染（renderBvWall 控 hidden）；与个人主页收集墙同视觉语言：
+   10px 方格·级别三色（初绿 #a6e22e / 中橙 #fd971f / 高黄 #e6db74，--bw-on 注入）。
+   交互：开局整墙渐变 50% 透明（.dim，transition 0.6s）、终局恢复；
+   终局本局盘面 3BV 格白边（.end，outline 不占布局）；上传成功新收集格亮起（.lit flash）。
+   hover 出状态气泡（纯 CSS，.bw_tip，无跳转）。
+   ⚠️ 反作弊 css_inject 审计判据（OnlinePlay cssTamperAudit）：选择器不得含
+   #gboard/#game_area/.gwrap/.board 锚 + gradient/伪元素/box-shadow 组合——
+   本块全部用 .bvwall 自有类名、无伪元素（气泡三角方案弃用，悬停桥用透明 border 盒）、
+   白框用 outline、强调环不用 box-shadow。改动时必须维持这些约束 */
+#online_play .bvwall {
+  /* 宽度由 JS syncBvWallWidth 按 gwrap 渲染宽设置；max-width 兜底防溢出 */
+  max-width: 960px;
+  margin: 6px auto 0;
+  padding: 5px 8px 6px;
+  background: rgba(39, 40, 34, 0.55);
+  border: 1px solid #3e3d32;
+  border-radius: 4px;
+  /* 开局 50% 渐隐恢复：opacity 过渡（张老师口径「渐变为 50% / 渐变恢复」） */
+  opacity: 1;
+  transition: opacity 0.6s ease;
+  /* [hidden] 兜底（display:flex 压 UA 规则的前科，见 .op_ranked 判例） */
+}
+#online_play .bvwall[hidden] {
+  display: none;
+}
+#online_play .bvwall.dim {
+  opacity: 0.5;
+  /* 局中禁 hover 气泡（渐隐态不响应 hover，免得玩家误触弹出干扰） */
+  pointer-events: none;
+}
+#online_play .bvwall .bw_head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+#online_play .bvwall .bw_name {
+  font-size: 12px;
+  color: #939387;
+}
+/* 级别名色随级别（JS 渲染时墙文字不带级别类，走容器 data-lv）——
+   与个人主页 #user_3bv 的级别三色同表 */
+#online_play .bvwall[data-lv="beg"] .bw_name,
+#online_play .bvwall[data-lv="beg"] .bw_stat em {
+  color: #a6e22e;
+}
+#online_play .bvwall[data-lv="int"] .bw_name,
+#online_play .bvwall[data-lv="int"] .bw_stat em {
+  color: #fd971f;
+}
+#online_play .bvwall[data-lv="exp"] .bw_name,
+#online_play .bvwall[data-lv="exp"] .bw_stat em {
+  color: #e6db74;
+}
+#online_play .bvwall .bw_stat {
+  color: #636359;
+  font-size: 11px;
+}
+#online_play .bvwall .bw_grid {
+  line-height: 0;
+  text-align: left;
+  white-space: normal;
+}
+/* 10px 方格 + 2px 间距（同个人主页收集墙 #user_3bv .sq 口径） */
+#online_play .bvwall .bw_sq {
+  position: relative;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0 2px 2px 0;
+  background: #49483e;
+  border-radius: 2px;
+  vertical-align: top;
+}
+/* 已收集三色：跟容器 data-lv（每行墙恒单级别，无需逐格注入） */
+#online_play .bvwall[data-lv="beg"] .bw_sq.on {
+  background: #a6e22e;
+}
+#online_play .bvwall[data-lv="int"] .bw_sq.on {
+  background: #fd971f;
+}
+#online_play .bvwall[data-lv="exp"] .bw_sq.on {
+  background: #e6db74;
+}
+/* 终局白框（张老师口径「游戏结束后对应 BV 格加白色边框」）：
+   outline 不占布局（同 #user_3bv .sq:hover 手法），白 1.5px + 微光点 */
+#online_play .bvwall .bw_sq.end {
+  outline: 1.5px solid #f8f8f2;
+  outline-offset: 0.5px;
+  z-index: 2;
+}
+/* 新收集亮起（张老师口径「收集到新 BV 对应格同步亮起」）：
+   白闪两拍后定格级别色（与结算收集墙气泡 bbv_wall_flash 同语言、1.2s 短版）。
+   ⚠️ keyframes 不带渐变特征词不触发 css_inject 审计（feats 只扫选择器规则声明） */
+@keyframes bvwall_lit {
+  0% {
+    background: #f8f8f2;
+  }
+  55% {
+    background: #f8f8f2;
+  }
+  100% {
+    background: var(--bw-lit, #a6e22e);
+  }
+}
+#online_play .bvwall[data-lv="beg"] { --bw-lit: #a6e22e; }
+#online_play .bvwall[data-lv="int"] { --bw-lit: #fd971f; }
+#online_play .bvwall[data-lv="exp"] { --bw-lit: #e6db74; }
+#online_play .bvwall .bw_sq.lit {
+  animation: bvwall_lit 1.2s ease-out forwards;
+}
+/* hover 状态气泡（张老师口径：显示该 BV 状态，不跳转）——
+   视觉同 #user_3bv .tip（深底描边圆角小卡），固定在格子上方弹出
+   （2026-11-11 全站气泡朝上口径）。无伪元素：三角弃用，悬停桥＝
+   气泡自身 padding 延伸到格子（bottom 距离小 + 透明 hover 区） */
+#online_play .bvwall .bw_tip {
+  display: none;
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 4px 8px 6px;
+  background: #1f201b;
+  border: 1px solid #656355;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-align: center;
+  color: #f8f8f2;
+  text-shadow: none;
+  pointer-events: none;
+}
+#online_play .bvwall .bw_tip span {
+  display: block;
+  color: #b1b1a4;
+}
+#online_play .bvwall .bw_tip span em {
+  font-style: normal;
+  color: #fdc61d;
+}
+/* 悬停桥：气泡盒向下多留 8px 透明接触区（padding-bottom 承担，gap 只有 2px）——
+   鼠标从格子斜移进气泡不断链。零 JS（弃 #user_3bv 的 ::after 方案，
+   伪元素是 css_inject 审计特征词） */
+#online_play .bvwall .bw_sq:hover .bw_tip {
+  display: block;
+}
+/* 首行 3BV 值行内「出现概率」（同主页 .prob 口径：常规字重灰字不换行） */
+#online_play .bvwall .bw_tip b {
+  font-weight: bold;
+}
+/* 高级 271 格 ~3 行：格子墙允许自然换行（容器定宽 = 银框宽，行数随级别
+   2~3 行自适应；初级 50 格一行——银框宽 ≥ 50×12=600px 时单行，
+   初级银框 ~200px 时 3~4 行属正常窄屏形态，张老师口径以 960 桌面为准） */
 .comp_attach_pick .admin_input.sm { min-width: 120px; }
