@@ -17717,8 +17717,10 @@ body #header .nav li a.vs_new_hint,
   align-items: center;
   justify-content: center;
   min-width: 0;
-  /* 统一格高：值槽恒占位（空值填 nbsp，见组件），暗格与有成绩格等高，
-     行高不随有无成绩抖动——不需要 min-height 兜底 */
+  /* 统一格高：定死 28px（border-box 口径，含 padding/描边），暗格与有成绩格
+     完全等高、行高不随有无成绩抖动；空格 BV 绝对定位垂直居中见 .rw_empty */
+  box-sizing: border-box;
+  height: 28px;
   padding: 1px 2px 2px;
   overflow: hidden;
   background: #24251e;
@@ -17745,7 +17747,19 @@ body #header .nav li a.vs_new_hint,
   background: #2b2c24;
   border-color: #4a4b40;
 }
-/* 评级四档（格底/描边微着色 + 纪录值显色；档位同收集墙 PB 模式） */
+/* SS 及以上（不含 SS-）：标题金 #fdc61a（2026-11-16 张老师定——站名/标题色，
+   与 S 段元帅金 #e6db74 区分开，一眼看出「超神」段） */
+#user_records .rw_sq.rw_title {
+  background: #3a3119;
+  border-color: #82691f;
+}
+#user_records .rw_sq.rw_title .rw_bv {
+  color: #93783a;
+}
+#user_records .rw_sq.rw_title .rw_val {
+  color: #fdc61a;
+}
+/* 其余四档（格底/描边微着色 + 纪录值显色；档位同收集墙 PB 模式） */
 #user_records .rw_sq.rw_gold {
   background: #38351f;
   border-color: #6f693c;
@@ -17785,6 +17799,18 @@ body #header .nav li a.vs_new_hint,
 }
 #user_records .rw_sq.rw_gray .rw_val {
   color: #b1b1a4;
+}
+/* 无成绩格：值槽保留占位（visibility 不影响布局）保证与有成绩格同高，
+   BV 值改成绝对定位在格内垂直居中（2026-11-16 张老师定） */
+#user_records .rw_sq.rw_empty .rw_val {
+  visibility: hidden;
+}
+#user_records .rw_sq.rw_empty .rw_bv {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 #user_records a.rw_sq {
   cursor: pointer;
@@ -17843,6 +17869,7 @@ body #header .nav li a.vs_new_hint,
     gap: 2px;
   }
   #user_records .rw_sq {
+    height: 26px;
     padding: 1px 1px 2px;
   }
   #user_records .rw_sq .rw_bv {

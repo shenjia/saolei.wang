@@ -32,11 +32,15 @@ const METRIC_TABS: [MetricKey, string][] = [
   ["stnb", "STNB"],
 ];
 
-/** 评级四档色类（2026-11-16 张老师定：沿用收集墙 PB 模式归档）：
- *  SSS~S 金 / A~B 玫红 / C~E 紫 / F·? 灰。尾缀 +/- 不影响档位。
- *  （口径与 BbvCollection.gradeTone 同表，类名按本板块 rw_ 前缀独立，互不干扰） */
+/** 评级色类（2026-11-16 张老师定）：
+ *  · **SS 及以上（不含 SS-）= 标题金 #fdc61a**（站名/标题色）——与 S 段区分；
+ *  · SSS~S（含 SS-）= 元帅金 #e6db74；
+ *  · A~B 玫红 / C~E 紫 / F·? 灰（同收集墙 PB 模式归档）。
+ *  尾缀 +/- 不影响档位判断，仅 SS- 单独踢回元帅金档。
+ *  （类名按本板块 rw_ 前缀独立，与其他墙互不干扰） */
 function wallTone(grade: string): string {
   const g = grade.replace(/[+-]$/, "");
+  if ((g === "SS" || g === "SSS") && grade !== "SS-") return "rw_title";
   if (g === "SSS" || g === "SS" || g === "S") return "rw_gold";
   if (g === "A" || g === "B") return "rw_rose";
   if (g === "C" || g === "D" || g === "E") return "rw_violet";
@@ -82,8 +86,10 @@ interface WallTip {
  * · **一行 10 格**（十位分段行，个位对齐，2026-11-16 张老师定）：每行都是
  *   `repeat(10, 1fr)` 的 grid，10 列铺满板块全宽；末段不足 10 个仍按 10 列排位。
  * · 每格两行：上 BV 值（暗色小字，定位用）、下该 BV 的个人纪录值（评级四档显色），
- *   格底/描边同档微着色；无纪录 = 暗格（只显示 BV 值，一眼看出收集缺口）。
- *   无纪录格与有纪录格**同高**：值槽恒占位（空值填 nbsp），行高不随有无成绩变化。
+ *   格底/描边同档微着色（SS 及以上另用标题金 #fdc61a，与 S 段元帅金区分）；
+ *   无纪录 = 暗格（只显示 BV 值，一眼看出收集缺口）。
+ *   无纪录格与有纪录格**同高**：值槽恒占位（空值填 nbsp，CSS 里 visibility:hidden
+ *   仍占行高），BV 值用绝对定位在格内垂直居中。
  * · 有纪录的格子 = 链接（新标签页开该纪录录像页，_blank 必配 prefetch=false 铁律）。
  * · 气泡用 JS 定位（纯 CSS 无法在网格里按行首/行尾夹紧）：朝上弹出（2026-11-11
  *   全站气泡口径），第一行空间不足时翻到格子下方。
@@ -158,7 +164,7 @@ function RecordBvWall({
             const grade = rec?.grade ?? "";
             const vid = rec?.vid ?? 0;
             const has = v !== null && vid > 0;
-            const cls = `rw_sq${v !== null ? ` rw_on ${wallTone(grade)}` : ""}`;
+            const cls = `rw_sq${v !== null ? ` rw_on ${wallTone(grade)}` : " rw_empty"}`;
             // 值槽恒占位：无成绩填 nbsp —— 暗格与有成绩格同高，行高不抖
             const body = (
               <>
