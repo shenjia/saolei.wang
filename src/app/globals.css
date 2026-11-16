@@ -9289,9 +9289,13 @@ button.msg_cancel:hover {
 }
 
 /* 已收集方格配色·「PB」模式（2026-10-27 张老师定）：按该 3BV **最好成绩录像的时间评级**
-   分四档，SSS~S 都显示为金色。四档取色与雷达 GRADE_COLORS 同源，只是把相近档并为四档
-   （10px 小格分不出 9 档）：金 #E6DB74 / 玫红 #FF0080 / 紫 #BB47EC（D 档现值）/ 灰 #8A8878。
+   分五档——SS 及以上（不含 SS-）标题金 #FDC61A（2026-11-16 张老师定，与 S 段区分）/ 
+   其余 SSS~S 元帅金 #E6DB74 / 玫红 #FF0080 / 紫 #BB47EC（D 档现值）/ 灰 #8A8878。
+   取色与雷达 GRADE_COLORS 同源，只是把相近档并为五档（10px 小格分不出 9 档）。
    选择器带 [data-mode="pb"]，特异性高于上面的级别三色，切换只改 box 的 data-mode（不重渲染） */
+#user_3bv[data-mode="pb"] .sq.on.g_title {
+  background: #fdc61a;
+}
 #user_3bv[data-mode="pb"] .sq.on.g_gold {
   background: #e6db74;
 }

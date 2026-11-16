@@ -9,8 +9,9 @@
 //
 // 两种配色（2026-10-27 张老师定，同一批格子靠 `#user_3bv[data-mode]` 切 CSS，不重渲染）：
 //   · 「3BV」模式（默认）：**级别三色**——初绿 #a6e22e / 中橙 #fd971f / 高黄 #e6db74；
-//   · 「PB」模式：按该 3BV **最好成绩录像的时间评级**分四档——SSS~S 金 / A~B 玫红 /
-//     C~E 紫 / F·? 灰（格子带 g_* 类，CSS 只在 data-mode="pb" 下生效）。
+//   · 「PB」模式：按该 3BV **最好成绩录像的时间评级**分五档——SS 及以上（不含 SS-）
+//     标题金 / SSS~S 元帅金 / A~B 玫红 / C~E 紫 / F·? 灰（格子带 g_* 类，
+//     CSS 只在 data-mode="pb" 下生效）。
 // 选择存 localStorage（键 bbv_mode，**全站共用一份**——张老师要求「查看全站用户都用自己
 // 的选择」，即按访问者而非被查看者）。筛选器是**链接**（2026-10-27 二轮：不用按钮），
 // href 带 ?bbv=，点击被 BbvModeSync 拦截（不导航，纯 CSS 切换 + replaceState 同步 URL），
@@ -36,13 +37,16 @@ import { BbvModeSync } from "./BbvModeSync";
 const MODE_KEY = "bbv_mode";
 
 /**
- * 评级 → 方格底色的四档归类（2026-10-27 张老师定：SSS-S 都显示为金色）。
- * 与雷达 GRADE_COLORS 同源取色（gradeColor），只是把相近档并成四档，10px 小格上才分得清：
- *   金 #E6DB74 / 玫红 #FF0080 / 紫 #A000E5 / 灰 #8A8878。尾缀 +/- 不影响档位。
+ * 评级 → 方格底色的五档归类（2026-11-16 张老师定：SS 及以上（不含 SS-）用标题金，
+ * 与 S 段元帅金区分；2026-10-27 起 SSS-S 原本同为金色）。
+ * 与雷达 GRADE_COLORS 同源取色（gradeColor），只是把相近档并成五档，10px 小格上才分得清：
+ *   标题金 #FDC61A（SS/SSS，不含 SS-）/ 元帅金 #E6DB74（SSS~S，含 SS-）/
+ *   玫红 #FF0080 / 紫 #BB47EC / 灰 #8A8878。尾缀 +/- 不影响档位判断（仅 SS- 单独踢回元帅金）。
  * ⚠️ 这些类只在 `#user_3bv[data-mode="pb"]` 下生效，3BV 模式下格子走级别三色。
  */
 function gradeTone(grade: string): string {
   const g = grade.replace(/[+-]$/, "");
+  if ((g === "SS" || g === "SSS") && grade !== "SS-") return "g_title";
   if (g === "SSS" || g === "SS" || g === "S") return "g_gold";
   if (g === "A" || g === "B") return "g_rose";
   if (g === "C" || g === "D" || g === "E") return "g_violet";
