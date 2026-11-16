@@ -177,9 +177,11 @@ export async function AreaRankingView({
   // 领军人物口径（2026-11-16 张老师定）：领军人物排行时=该地区全国名次最高者
   // （powerLead*，榜序按其全国名次排）；活跃指数排行=7 日活跃值>0 的上榜雷友中
   // 全国名次最高者（best*），无人活跃为「无」（缺位不评军衔）。
-  // 军衔按高级时间评定（2026-10-13 SUB 制）——对当前口径的领军评定；
+  // 军衔按高级时间评定（2026-10-13 SUB 制）——**对当前口径的领军评定**（领军档与
+  // 战力档同取 powerLead*，2026-11-16 晚补：上一轮漏改此处致领军档军衔按活跃领军
+  // 评定，缺位即空、在位即张冠李戴）；
   // 2026-11-06 总司令/雷帝=动态阈值档。缺位行不评称号（titles/classics 置空）。
-  const usePowerLead = order === "power";
+  const usePowerLead = order === "power" || order === "best";
   const leadTh = await getThunderKingThreshold();
   const leadPairs = await dualTitles(
     rows.map((r) => {
