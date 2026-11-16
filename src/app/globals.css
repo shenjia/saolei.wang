@@ -17498,22 +17498,17 @@ body #header .nav li a.vs_new_hint,
 #online_play .bvwall[hidden] {
   display: none;
 }
-/* 标题 + 格子墙同行并行（2026-11-16 张老师五定）：.bw_row 是行内弹性容器、
-   宽度自适应内容（不定 100%）——由容器 text-align:center 居中；
-   格子墙在自身盒内独立换行（2~3 行时列对齐、不折到标题下面） */
+/* 标题 + 格子墙 + 进度三段同行（2026-11-16 张老师六定）：标题在左、格子居中、
+   进度在右（无括号），左右与标题对称。.bw_row 行内弹性容器、宽度自适应内容
+   （不定 100%）——由容器 text-align:center 居中；格子墙在自身盒内独立换行 */
 #online_play .bvwall .bw_row {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   max-width: 100%;
 }
-/* 标题行：竖排两段（名字/进度）上下堆叠——与多行格子墙等高对齐更紧凑 */
+/* 标题列：单行「X级BV收集」，与右侧进度列左右对称（视觉等重） */
 #online_play .bvwall .bw_head {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 2px;
   white-space: nowrap;
   line-height: 1.4;
 }
@@ -17521,11 +17516,12 @@ body #header .nav li a.vs_new_hint,
   font-size: 12px;
   color: #939387;
 }
-/* 进度合进标题右侧括号（2026-11-16 张老师五定） */
+/* 进度列（2026-11-16 张老师六定）：无括号 n/N，数字金色加粗同主页口径 */
 #online_play .bvwall .bw_stat {
   color: #636359;
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
+  line-height: 1.4;
 }
 #online_play .bvwall .bw_stat em {
   font-style: normal;
