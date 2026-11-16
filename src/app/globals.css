@@ -17685,7 +17685,8 @@ body #header .nav li a.vs_new_hint,
 
 /* ===== 用户主页「纪录」板块 BV 纪录墙（2026-11-16 张老师需求） =====
    级别筛选选中 初级/中级/高级 时图表下方出现。
-   ① 水平铺满板块宽度：grid auto-fill + 1fr，列数随宽度自适应（行尾不留白）；
+   ① 一行 10 格（十位分段、个位对齐）且水平铺满板块宽度：每行 10 列 1fr，
+      格子宽度随板块宽度自动分配（2026-11-16 张老师定，非 auto-fill）；
    ② 格子里直接显示成绩（2026-11-16 二次定稿）：每格两行 = BV 值（暗色小字）
       + 当前指标筛选（Time / 3BV/s / STNB）在该 BV 的个人纪录值，格底与描边
       按评级四档微着色（SSS~S 金 / A~B 玫红 / C~E 紫 / F·? 灰，同收集墙 PB 模式）；
@@ -17698,10 +17699,16 @@ body #header .nav li a.vs_new_hint,
   padding-top: 12px;
   border-top: 1px solid #49483e;
 }
-#user_records .rw_grid {
+/* 一行 10 格（十位分段，个位对齐）：每行都是 10 列 grid，格子宽度随板块宽度
+   自动分配（592px 墙 → 每格 ~57px）；末段不足 10 个仍从第一列排起，格子宽度不变 */
+#user_records .rw_band {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  grid-template-columns: repeat(10, 1fr);
   gap: 3px;
+  margin-top: 3px;
+}
+#user_records .rw_band:first-child {
+  margin-top: 0;
 }
 #user_records .rw_sq {
   position: relative;
@@ -17710,7 +17717,10 @@ body #header .nav li a.vs_new_hint,
   align-items: center;
   justify-content: center;
   min-width: 0;
-  padding: 2px 2px 3px;
+  /* 统一格高：值槽恒占位（空值填 nbsp，见组件），暗格与有成绩格等高，
+     行高不随有无成绩抖动——不需要 min-height 兜底 */
+  padding: 1px 2px 2px;
+  overflow: hidden;
   background: #24251e;
   border: 1px solid #33342c;
   border-radius: 3px;
@@ -17721,7 +17731,7 @@ body #header .nav li a.vs_new_hint,
 #user_records .rw_sq .rw_bv {
   font-style: normal;
   font-size: 9px;
-  line-height: 1.1;
+  line-height: 1;
   color: #5d5d51;
 }
 #user_records .rw_sq .rw_val {
@@ -17827,10 +17837,9 @@ body #header .nav li a.vs_new_hint,
   font-size: 11px;
   color: #636359;
 }
-/* 窄屏：格子再压一档（每行多两列，避免墙过高） */
+/* 窄屏：仍是 10 列（个位对齐不能破），只把字与格高压一档 */
 @media (max-width: 768px) {
-  #user_records .rw_grid {
-    grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  #user_records .rw_band {
     gap: 2px;
   }
   #user_records .rw_sq {

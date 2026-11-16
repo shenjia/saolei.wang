@@ -79,9 +79,11 @@ interface WallTip {
  * BV 纪录墙（级别筛选选中初中高时挂在图表下方）：
  * · 格子全序列 = level_3bv_range 级别区间（getLevel3bvRanges，与收集墙/对决页同源），
  *   跳过数学不可达值（初级 50/52/53）；区间缺行兜底回格子数据并集。
- * · **水平铺满**：CSS grid `auto-fill + 1fr`，列数随板块宽度自适应，行尾无留白。
+ * · **一行 10 格**（十位分段行，个位对齐，2026-11-16 张老师定）：每行都是
+ *   `repeat(10, 1fr)` 的 grid，10 列铺满板块全宽；末段不足 10 个仍按 10 列排位。
  * · 每格两行：上 BV 值（暗色小字，定位用）、下该 BV 的个人纪录值（评级四档显色），
  *   格底/描边同档微着色；无纪录 = 暗格（只显示 BV 值，一眼看出收集缺口）。
+ *   无纪录格与有纪录格**同高**：值槽恒占位（空值填 nbsp），行高不随有无成绩变化。
  * · 有纪录的格子 = 链接（新标签页开该纪录录像页，_blank 必配 prefetch=false 铁律）。
  * · 气泡用 JS 定位（纯 CSS 无法在网格里按行首/行尾夹紧）：朝上弹出（2026-11-11
  *   全站气泡口径），第一行空间不足时翻到格子下方。
@@ -111,6 +113,14 @@ function RecordBvWall({
   const [tip, setTip] = useState<WallTip | null>(null);
 
   if (values.length === 0) return null;
+  // 十位分段（一行 10 格，个位对齐；末段不足 10 个仍占前几列，格子宽度不变）
+  const bands = new Map<number, number[]>();
+  for (const b of values) {
+    const lo = Math.floor(b / 10) * 10;
+    const arr = bands.get(lo);
+    if (arr) arr.push(b);
+    else bands.set(lo, [b]);
+  }
 
   const showTip = (
     el: HTMLElement,
@@ -139,46 +149,49 @@ function RecordBvWall({
       aria-label={`${METRIC_LABELS[metric]}BV 纪录墙`}
       onMouseLeave={() => setTip(null)}
     >
-      <div className="rw_grid">
-        {values.map((bv) => {
-          const cell = byBv.get(bv);
-          const rec = cell ? cellMetric(cell, metric) : null;
-          const v = rec?.v ?? null;
-          const grade = rec?.grade ?? "";
-          const vid = rec?.vid ?? 0;
-          const has = v !== null && vid > 0;
-          const cls = `rw_sq${v !== null ? ` rw_on ${wallTone(grade)}` : ""}`;
-          const body = (
-            <>
-              <em className="rw_bv">{bv}</em>
-              {v !== null && (
-                <b className="rw_val">{metric === "time" ? scoreTime(v) : fmtMetric(metric, v)}</b>
-              )}
-            </>
-          );
-          const enter = (e: React.SyntheticEvent<HTMLElement>) =>
-            showTip(e.currentTarget, bv, v, grade, vid);
-          return has ? (
-            <Link
-              key={bv}
-              className={cls}
-              href={`/video/${vid}`}
-              target="_blank"
-              rel="noopener"
-              prefetch={false}
-              onMouseEnter={enter}
-              onFocus={enter}
-              onBlur={() => setTip(null)}
-            >
-              {body}
-            </Link>
-          ) : (
-            <span key={bv} className={cls} onMouseEnter={enter}>
-              {body}
-            </span>
-          );
-        })}
-      </div>
+      {[...bands.entries()].map(([lo, bvs]) => (
+        <div className="rw_band" key={lo}>
+          {bvs.map((bv) => {
+            const cell = byBv.get(bv);
+            const rec = cell ? cellMetric(cell, metric) : null;
+            const v = rec?.v ?? null;
+            const grade = rec?.grade ?? "";
+            const vid = rec?.vid ?? 0;
+            const has = v !== null && vid > 0;
+            const cls = `rw_sq${v !== null ? ` rw_on ${wallTone(grade)}` : ""}`;
+            // 值槽恒占位：无成绩填 nbsp —— 暗格与有成绩格同高，行高不抖
+            const body = (
+              <>
+                <em className="rw_bv">{bv}</em>
+                <b className="rw_val">
+                  {v !== null ? (metric === "time" ? scoreTime(v) : fmtMetric(metric, v)) : "\u00a0"}
+                </b>
+              </>
+            );
+            const enter = (e: React.SyntheticEvent<HTMLElement>) =>
+              showTip(e.currentTarget, bv, v, grade, vid);
+            return has ? (
+              <Link
+                key={bv}
+                className={cls}
+                href={`/video/${vid}`}
+                target="_blank"
+                rel="noopener"
+                prefetch={false}
+                onMouseEnter={enter}
+                onFocus={enter}
+                onBlur={() => setTip(null)}
+              >
+                {body}
+              </Link>
+            ) : (
+              <span key={bv} className={cls} onMouseEnter={enter}>
+                {body}
+              </span>
+            );
+          })}
+        </div>
+      ))}
       {tip && (
         <i className={`rw_tip${tip.below ? " rw_tip_b" : ""}`} style={{ left: tip.x, top: tip.y }}>
           <b className="rw_tip_bv">3BV {tip.bv}</b>
