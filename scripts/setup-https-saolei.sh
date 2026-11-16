@@ -278,6 +278,45 @@ server {
     # 受 saolei_general 限速，浏览密集时 429 会把北京从选路探测里误杀（客户端
     # 非 200/404 即抛错剔除该节点），把用户偏向香港节点；204 与香港 Caddy 静态
     # 返回对等，保探测公平
+    # 质询页整页缓存（2026-11-13：next 参数改客户端解析后页面纯静态）。
+    # 缓存键不含查询串——bot 的 next 参数组合爆炸（日 22 万请求数百种参数），
+    # 动态 location / 的键含 $request_uri，60s 窗口形同虚设全 MISS 回源；
+    # 键收敛到 $uri 后全站每 60s 最多回源一次。响应头给 public,max-age=3600
+    # 供浏览器/ESA 边缘缓存。POST 验证接口 /api/bot/challenge 不受影响（POST
+    # 走动态 location / 的 method bypass）。
+    location = /bot/challenge {
+        limit_req zone=saolei_general burst=20 nodelay;
+        set $page_cache_bypass $saolei_method_bypass;
+        if ($http_cookie ~ saolei_session) { set $page_cache_bypass "cookie"; }
+        if ($http_rsc) { set $page_cache_bypass "rsc"; }
+        if ($http_next_router_prefetch) { set $page_cache_bypass "rsc"; }
+        proxy_cache_bypass $page_cache_bypass;
+        proxy_no_cache $page_cache_bypass $upstream_http_set_cookie;
+        proxy_ignore_headers Cache-Control Expires Set-Cookie;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "public, max-age=3600" always;
+        proxy_cache saolei_pages;
+        proxy_cache_key "$scheme://$host$uri";
+        proxy_cache_valid 200 1h;
+        proxy_cache_valid 404 10s;
+        proxy_cache_valid 500 502 503 504 5s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 5s;
+        add_header X-Cache-Status $upstream_cache_status always;
+        # 过期先回旧页（STALE 秒回）、后台静默重建（2026-11-16）：质询页 1h TTL，
+        # 到期后 bot 请求不再阻塞等待渲染，也无空窗
+        proxy_cache_background_update on;
+        proxy_pass http://saolei_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
     location = /api/ping {
         access_log off;
         return 204;
@@ -305,10 +344,10 @@ server {
 
     # ========== 静态缓存段结束 ==========
 
-    # ========== L7 攻击闸门（2026-11-09 应急上线，实战拦截验证有效）==========
+    # ========== L7 攻击闸门（2026-11-09 应急，一一/巡检会话；模板同步待办）==========
     # 攻击画像：11 万分布式消费级 IP、轮换 Chrome UA、专打 /user/<id>?order/dir/level
-    # 随机参数组合穿透缓存（打瘫 Node SSR 造成 28 万次 502）；攻击请求 100% 无
-    # Referer（实测 4361/4361）。闸门：/user/<id> 带查询参数 且 无 Referer → 444。
+    # 随机参数组合穿透缓存；攻击请求 100% 无 Referer（实测 4361/4361）。
+    # 闸门：/user/<id> 带查询参数 且 无 Referer → 444（断连不回包）。
     # 注意：nginx location 只匹配不含查询串的 URI，是否带参数须用 $args 判断。
     # 真实用户路径不受影响：站内点排序必带 Referer；外部分享裸链无参数。
     location ~ ^/user/[0-9]+$ {
@@ -317,6 +356,35 @@ server {
         if ($args != "") { set $ddos_gate "${ddos_gate}_args"; }
         if ($ddos_gate = "noref_args") { return 444; }
         limit_req zone=saolei_general burst=20 nodelay;
+
+        # 游客整页缓存（同 location / 的配置——本 location 优先级更高，/user/<id>
+        # 请求全部落在这里，必须同样挂缓存；攻击者带参数请求已被上方 444 拦截，
+        # 到达此处的游客请求吃 60s 缓存，Node 只需每 uid 每分钟渲染一次）
+        set $page_cache_bypass $saolei_method_bypass;
+        if ($http_cookie ~ saolei_session) { set $page_cache_bypass "cookie"; }
+        if ($args ~ _rsc=) { set $page_cache_bypass "rsc"; }
+        if ($http_rsc) { set $page_cache_bypass "rsc"; }
+        if ($http_next_router_prefetch) { set $page_cache_bypass "rsc"; }
+        if ($request_uri ~ ^/api/) { set $page_cache_bypass "api"; }
+        proxy_cache_bypass $page_cache_bypass;
+        proxy_no_cache $page_cache_bypass $upstream_http_set_cookie;
+        proxy_ignore_headers Cache-Control Expires Set-Cookie;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        proxy_cache saolei_pages;
+        proxy_cache_key "$scheme://$host$request_uri";
+        proxy_cache_valid 200 60s;
+        proxy_cache_valid 301 302 10m;
+        proxy_cache_valid 404 10s;
+        proxy_cache_valid 500 502 503 504 5s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 5s;
+        add_header X-Cache-Status $upstream_cache_status always;
+        # 过期先回旧页（STALE 秒回）、后台静默重建（2026-11-16）：游客/爬虫请求
+        # 到期瞬间不再撞 307 闸，也无 60s 过期空窗
+        proxy_cache_background_update on;
+
         proxy_pass http://saolei_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -332,6 +400,40 @@ server {
         # 静态 location 各自成块不带 limit_req 即天然不限速（server 顶层挂载会把
         # JS chunk/头像也算进 burst，玩家切排行 tab 连点即 429）
         limit_req zone=saolei_general burst=20 nodelay;
+
+        # ===== 游客整页缓存（2026-11-09，zone 定义见 00-saolei-pagecache.conf）=====
+        # bypass 判据（proxy_cache_bypass/proxy_no_cache 语义：参数非空且非 "0" 即
+        # 触发；空串 = 放行缓存）。四类不放行：非 GET（map）、带 saolei_session
+        # cookie（登录用户实时）、?_rsc=（RSC 流式响应非 HTML）、/api/ 前缀。
+        # 另有 $upstream_http_set_cookie 非空不落盘（上游种 cookie 的响应不缓存）。
+        set $page_cache_bypass $saolei_method_bypass;
+        if ($http_cookie ~ saolei_session) { set $page_cache_bypass "cookie"; }
+        if ($args ~ _rsc=) { set $page_cache_bypass "rsc"; }
+        if ($http_rsc) { set $page_cache_bypass "rsc"; }
+        if ($http_next_router_prefetch) { set $page_cache_bypass "rsc"; }
+        if ($request_uri ~ ^/api/) { set $page_cache_bypass "api"; }
+        proxy_cache_bypass $page_cache_bypass;
+        proxy_no_cache $page_cache_bypass $upstream_http_set_cookie;
+        # Next 全部响应带 Cache-Control: private, no-cache, no-store——nginx 默认
+        # 尊重源站拒绝落盘。缓存安全性已由 bypass 判据（cookie/_rsc/api）+ 不缓存
+        # Set-Cookie 响应保证，此处显式忽略源站 no-store 由 nginx 接管缓存生命周期。
+        proxy_ignore_headers Cache-Control Expires Set-Cookie;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        proxy_cache saolei_pages;
+        proxy_cache_key "$scheme://$host$request_uri";
+        proxy_cache_valid 200 60s;
+        proxy_cache_valid 301 302 10m;
+        proxy_cache_valid 404 10s;
+        proxy_cache_valid 500 502 503 504 5s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 5s;
+        add_header X-Cache-Status $upstream_cache_status always;
+        # 过期先回旧页（STALE 秒回）、后台静默重建（2026-11-16）：游客页缓存到期瞬间不
+        # 再撞 307 闸（原 40s preheat 每 80s 有 20s 空窗）；间隔放宽 59s，空窗由本指令兜底
+        proxy_cache_background_update on;
+
         proxy_pass http://saolei_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

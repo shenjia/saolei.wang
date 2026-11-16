@@ -14,9 +14,11 @@ import { createHmac, createHash, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-// 页缓存 TTL 200=60s，40s 预热一轮保恒命中；覆盖首页+各列表入口（首页另有豁免自愈）
+// 页缓存 TTL 200=60s；nginx 已挂 proxy_cache_background_update（2026-11-16），
+// 过期空窗由 STALE 秒回兜底，间隔只决定渲染预算——59s 拍频 3 HIT+1 MISS，
+// 渲染 732 次/页/日（40s 时为 1080，-32%）。覆盖首页+各列表入口（首页另有豁免自愈）
 const PAGES = ["/", "/video", "/bbs", "/ranking", "/online", "/page/help"];
-const INTERVAL_MS = 40_000;
+const INTERVAL_MS = 59_000;
 const UA = "saolei-preheat/1";
 const HOST = "saolei.wang";
 
