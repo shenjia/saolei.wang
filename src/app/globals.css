@@ -70,6 +70,14 @@ body {
   right: 0;
   z-index: 900;
 }
+/* 页头层级加固（2026-11-17 张老师报上传页 BUG）：legacy 基础规则
+   .progressBar .title / .progressBar .cancel 是 z-index:1000 的定位层
+   （旧版 plupload 交互遗产），页面一滚，上传失败卡片的错误文案与右上角
+   红叉就穿透吸顶页头、盖住 LOGO 与顶栏头像。body 前缀提权压回内容层——
+   页头必须压过一切普通内容层；登录浮窗(9999)/全局气泡(10000)仍在其上 */
+body #header {
+  z-index: 1100;
+}
 body #header .wrapper {
   height: 44px;
   max-width: 960px;
@@ -11311,7 +11319,7 @@ html:has(#online_play) #footer {
   background: #272822;
   color: #f8f8f2;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-  z-index: 891; /* 页面态沉到页头(#header z900)之下——导航菜单第一优先级（2026-11-09 张老师）；全屏回放层打开时由 body:has(.vprfs.show) 提回 1510 */
+  z-index: 891; /* 页面态沉到页头(#header z1100)之下——导航菜单第一优先级（2026-11-09 张老师）；全屏回放层打开时由 body:has(.vprfs.show) 提回 1510 */
   pointer-events: none;
   font: 11px/18px Arial, "PingFang SC", sans-serif;
   text-align: center;
@@ -11330,7 +11338,7 @@ html:has(#online_play) #footer {
   background: #49483e;
   color: #b1b1a4;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  z-index: 890; /* 页面态沉到页头(#header z900)之下——用户下拉菜单永远压过面板（2026-11-09 张老师：菜单第一优先级，首页实证面板盖住菜单）；全屏回放层打开时由 body:has(.vprfs.show) 提回 1500 压过 .vprfs(z1200) */
+  z-index: 890; /* 页面态沉到页头(#header z1100)之下——用户下拉菜单永远压过面板（2026-11-09 张老师：菜单第一优先级，首页实证面板盖住菜单）；全屏回放层打开时由 body:has(.vprfs.show) 提回 1500 压过 .vprfs(z1200) */
   text-align: left;
 }
 /* 全屏回放层（.vprfs z1200）打开期间：按键记录/提示必须压过遮罩层，整体提回高层。 */
@@ -13325,7 +13333,7 @@ html.op-fakefs #header {
 .vprfs {
   position: fixed;
   inset: 0;
-  z-index: 1200; /* 压过页头（900）与 #gr_modal */
+  z-index: 1200; /* 压过页头（1100）与 #gr_modal */
   display: flex;
   align-items: center;
   justify-content: center;
