@@ -3,8 +3,9 @@
 // 【规则】开源扫雷网同步过来的「历史录像」中，满足以下全部条件的，统一由 ID=1 的
 //   站长审核通过（status 10→20，reviewer=1）：
 //     ① 来源 = 开源扫雷网（video.from_site = OPENMS_FROM_SITE，默认 3，与 scripts/sync/openms-core.ts 同值）
-//     ② 上传时间（video.create_time，导入时即开源站原始上传时间）距今 > 7 天
-//        —— 给近 7 天内新同步的录像留人工复核窗口
+//     ② 上传时间（video.create_time，导入时即开源站原始上传时间）距今 > 24 小时
+//        —— 张老师 2026-11-18 定：「只要不是 24 小时内的录像，就走自动审核」
+//        （原为 7 天，从 7 天压缩到 1 天）给最近 24 小时内新同步的录像留人工复核窗口
 //     ③ 自动分拣结果 = 免核定（video.auto_flag = 1）
 //
 // 【为何走 reviewVideo 权威路径】「审核通过」不是单纯改状态：要正确落 video_scores_*/user_scores、
@@ -15,13 +16,13 @@
 // 【幂等】只筛 status=10 待审，已通过/已屏蔽的自然被排除；重跑安全。
 //
 // 【范围说明（张老师确认口径）】此脚本是 v2 自动审核「机器永不自动过审」原则的
-//   **定向例外**：仅限开源扫雷网同步来源 + >7 天 + 免核定 三条件交集；站内原生上传
+//   **定向例外**：仅限开源扫雷网同步来源 + >24 小时 + 免核定 三条件交集；站内原生上传
 //   与其他外站录像不受影响，仍需人工按原流程审核。
 //
 // 【用法】（默认 dry-run，必须 --apply 才写库；与 openms-scan / openms-download 同加载器）
 //   env -u NODE_OPTIONS node --experimental-transform-types \
 //     --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-auto-approve.ts \
-//     [--apply] [--cutoff-days 7] [--limit 0] [--batch 200] [--from-site 3]
+//     [--apply] [--cutoff-days 1] [--limit 0] [--batch 200] [--from-site 3]
 //   --limit 0 = 不限额（处理全部符合条件）；默认 0。
 //   --apply 才会真正调 reviewVideo 写库；dry-run 只打印命中清单与计数。
 
@@ -40,7 +41,7 @@ function arg(name: string, def?: string): string | undefined {
   return i > 0 ? process.argv[i + 1] : def;
 }
 const APPLY = process.argv.includes("--apply");
-const CUTOFF_DAYS = Math.max(0, parseInt(arg("cutoff-days", "7") ?? "7", 10) || 7);
+const CUTOFF_DAYS = Math.max(0, parseInt(arg("cutoff-days", "1") ?? "1", 10) || 1);
 const LIMIT = Math.max(0, parseInt(arg("limit", "0") ?? "0", 10) || 0); // 0=不限
 const BATCH = Math.max(1, Math.min(1000, parseInt(arg("batch", "200") ?? "200", 10) || 200));
 
