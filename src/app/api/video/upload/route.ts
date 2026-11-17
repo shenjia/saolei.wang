@@ -220,15 +220,16 @@ export async function uploadVideo(
   if (sig && Number(sig.user) !== session.uid) return fail("该录像标示已被他人注册");
 
   /* 每周上传上限闸（后移至此：破纪录豁免要用本盘 parsed 成绩；2026-11-17 张老师定）：
-     超限录像先判「是否破个人/全站纪录（time/3bvs/stnb 任一）」，破了就放行，
-     否则原样 429。运气盘（noRecord=1，3BV 低于级别下限）不进任何纪录链，不豁免。
+     超限录像先判「是否破本人当前排行纪录（time/3bvs/stnb 任一，FL/NF 分池）」，
+     破了就放行，否则原样 429。只对比个人纪录，不做全站对比、不含 BV 级 PB
+     （2026-11-18 张老师定稿）。运气盘（noRecord=1，3BV 低于级别下限）不进纪录链，不豁免。
      排名局（rankedInternal）本就不占额度，跳过闸。低信任 24h≤5 闸不豁免，在上方。 */
   const donateCents = await sumDonateCents(session.uid);
   const weeklyLimit = weeklyUploadLimit(donateCents);
   const used = await countWeeklyUploads(session.uid);
   if (!options?.rankedInternal && used >= weeklyLimit) {
     const exemption = noRecord
-      ? { exempt: false, personal: [], global: [] }
+      ? { exempt: false, personal: [] as string[] }
       : await checkRecordExempt(session.uid, level, parsed.noflag, parsed.bbbv ?? 0, parsed.timeMs);
     if (!exemption.exempt) {
       console.warn(`[upload-limit] uid=${session.uid} 近 7 天上传达上限 ${weeklyLimit}，已拦截`);
@@ -238,7 +239,7 @@ export async function uploadVideo(
       );
     }
     console.warn(
-      `[upload-limit] uid=${session.uid} 额度已满但破纪录豁免放行（个人:${exemption.personal.join("/") || "-"} 全站:${exemption.global.join("/") || "-"}）`
+      `[upload-limit] uid=${session.uid} 额度已满但破个人纪录豁免放行（${exemption.personal.join("/") || "-"}）`
     );
   }
 
