@@ -332,15 +332,17 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
   const addFiles = useCallback(
     (files: FileList | File[]) => {
       const seen = new Set(itemsRef.current.map((i) => `${i.file.name}|${i.file.size}|${i.file.lastModified}`));
-      // 剩余可入列的待传名额（2026-11-02 张老师定：超配额文件直接拦下不让入列，
-      // 不只提示）。invalid 文件不占额度，照常入列展示错误。
+      /* 超额文件照常入列（2026-11-17 张老师定破纪录豁免）：是否放行由服务端按本盘
+         time/3bv/s/stnb 判「破个人/全站纪录」决定，前端不再提前拦下——否则破纪录
+         录像根本到不了服务端。非破纪录的超额文件由上传接口回 429，行内 message
+         显示错误。invalid 文件（格式/大小）不占额度，照常入列展示错误。 */
+      const incoming = Array.from(files);
       const queuedBefore = itemsRef.current.filter(
         (i) => i.status === "pending" || i.status === "uploading"
       ).length;
-      let slots = Math.max(0, serverRemaining - queuedBefore);
-      let blocked = 0;
+      if (incoming.length > 0 && serverRemaining <= queuedBefore) showQuotaBubble();
       const added: Item[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of incoming) {
         const id = `${file.name}|${file.size}|${file.lastModified}`;
         if (seen.has(id)) continue; // 拖拽/重复选择去重
         seen.add(id);
@@ -354,20 +356,9 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
           status = "invalid";
           message = "文件大小不能超过 500KB";
         }
-        if (status === "pending") {
-          if (slots <= 0) {
-            blocked++;
-            continue; // 超出额度：不入列
-          }
-          slots--;
-        }
         added.push({ key: `${Date.now()}-${seqRef.current++}`, file, status, progress: 0, message });
       }
-      if (added.length === 0) {
-        if (blocked > 0) showQuotaBubble();
-        return;
-      }
-      if (blocked > 0) showQuotaBubble();
+      if (added.length === 0) return;
       applyItems([...itemsRef.current, ...added]);
       for (const item of added) {
         if (item.status !== "pending") continue;
@@ -633,7 +624,7 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
                 zIndex: 10,
               }}
             >
-              你本周的录像上传额度已用完
+              本周额度已用完，破纪录（时间/3BV/s/STNB）录像仍可上传
               <span
                 style={{
                   position: "absolute",

@@ -29,6 +29,7 @@ import { userTitleSnapshot } from "@/lib/queries";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 import { getRankPenalty, countRecentUploads, LOW_TRUST_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
 import { countWeeklyUploads, weeklyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
+import { checkRecordExempt } from "@/lib/record-exempt";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -81,18 +82,10 @@ export async function uploadVideo(
   // 每周上传上限（2026-11-02 张老师定，12:36 二改）：默认每 7 天 100 盘（滚动窗口），
   // 赞助每 1 元 +20（2000 封顶）。排名局服务端自动入库（rankedInternal）不占额度
   // 也不计数（countWeeklyUploads 已排除 RANKED_SOFTWARE）——排名玩法是本站核心业务，
-  // 不被上传闸误伤。排在格式校验前，伪造请求同吃限额。
-  const donateCents = await sumDonateCents(session.uid);
-  const weeklyLimit = weeklyUploadLimit(donateCents);
-  const used = await countWeeklyUploads(session.uid);
-  if (!options?.rankedInternal && used >= weeklyLimit) {
-    console.warn(`[upload-limit] uid=${session.uid} 近 7 天上传达上限 ${weeklyLimit}，已拦截`);
-    return NextResponse.json(
-      { error: "您最近 7 天还能上传的录像额度已用完，请明天再试", remaining: 0 },
-      { status: 429 }
-    );
-  }
-
+  // 不被上传闸误伤。
+  // ⚠️ 闸口后移到解析/校验之后（2026-11-17 张老师定破纪录豁免）：超限录像要按
+  // 本盘 time/3bvs/stnb 判定是否破（个人/全站）纪录再决定放行，必须拿到 parsed
+  // 才能算。低信任 24h≤5 闸不豁免，仍留在上方。
   let file: File | null;
   try {
     const form = await req.formData();
@@ -225,6 +218,29 @@ export async function uploadVideo(
   // 签名注册（移植 UserSig::register：已存在则必须是本人）
   const sig = await prisma.userSig.findFirst({ where: { signature: parsed.player } });
   if (sig && Number(sig.user) !== session.uid) return fail("该录像标示已被他人注册");
+
+  /* 每周上传上限闸（后移至此：破纪录豁免要用本盘 parsed 成绩；2026-11-17 张老师定）：
+     超限录像先判「是否破个人/全站纪录（time/3bvs/stnb 任一）」，破了就放行，
+     否则原样 429。运气盘（noRecord=1，3BV 低于级别下限）不进任何纪录链，不豁免。
+     排名局（rankedInternal）本就不占额度，跳过闸。低信任 24h≤5 闸不豁免，在上方。 */
+  const donateCents = await sumDonateCents(session.uid);
+  const weeklyLimit = weeklyUploadLimit(donateCents);
+  const used = await countWeeklyUploads(session.uid);
+  if (!options?.rankedInternal && used >= weeklyLimit) {
+    const exemption = noRecord
+      ? { exempt: false, personal: [], global: [] }
+      : await checkRecordExempt(session.uid, level, parsed.noflag, parsed.bbbv ?? 0, parsed.timeMs);
+    if (!exemption.exempt) {
+      console.warn(`[upload-limit] uid=${session.uid} 近 7 天上传达上限 ${weeklyLimit}，已拦截`);
+      return NextResponse.json(
+        { error: "您最近 7 天还能上传的录像额度已用完，请明天再试", remaining: 0 },
+        { status: 429 }
+      );
+    }
+    console.warn(
+      `[upload-limit] uid=${session.uid} 额度已满但破纪录豁免放行（个人:${exemption.personal.join("/") || "-"} 全站:${exemption.global.join("/") || "-"}）`
+    );
+  }
 
   // 存文件：videos/Y/M/D/hash.ext（旧版存 videos/Y/m/d/hash.avf，新版按真实扩展名）
   const now = new Date();
