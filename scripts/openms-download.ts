@@ -9,8 +9,10 @@
 //   跑满一趟自然就贴着上限；flock -n 保证不重叠，crontab 每 2 分钟触发一次 --max-downloads 10，
 //   上一趟没跑完时本次直接跳过 → 下载几乎连续不断，又绝不超对方限速。
 //
-// 【队列顺序】按 upload_time 升序（老的先补，FIFO 不跳队）——扫描器已保证所有用户在同一个
-//   全局队列里，因此不存在「后位用户饿死」的问题。
+// 【队列顺序】**新盘优先**（upload_time 降序，张老师 2026-11-17 定「新盘默认优先」）——
+//   历史存量（实测 4.4 万盘，按对端 5 盘/分要 6 天以上才清得完）不能让新上传的录像跟着排队，
+//   否则用户在雷网看不到自己刚传的盘。新盘随时插到队头，历史按时间倒序慢慢补。
+//   `--order oldest` 可临时切回老盘优先（FIFO）做对账/补漏。
 //
 // 【临时失败退避】失败项保持 state=0 并累加 attempts，且 update_time 写入当下；
 //   查询时跳过「最近 --cooldown 秒内失败过」的行，避免同一条坏盘连续霸占每分钟的下载位。
@@ -20,7 +22,7 @@
 //   env -u NODE_OPTIONS node --experimental-transform-types \
 //     --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-download.ts \
 //     [--apply] [--max-downloads 10] [--min-gap 12500] [--cooldown 180] [--retry-wait 25000] \
-//     [--max-retries 3] [--dry-ids 123456,123457]
+//     [--order newest|oldest] [--max-retries 3] [--dry-ids 123456,123457]
 //
 // 【生产 crontab】scripts/server-release.sh 幂等注册，每 2 分钟一轮（flock 防重入）。
 
@@ -45,11 +47,19 @@ cfg.downloadGapMs = Math.max(0, parseInt(arg("min-gap", "12500") ?? "12500", 10)
 cfg.retryWaitMs = Math.max(0, Number(arg("retry-wait", "25000") ?? "25000") || 0);
 cfg.maxRetries = Math.max(0, parseInt(arg("max-retries", "3") ?? "3", 10) || 0);
 
+/** 队列顺序：newest=新盘优先（默认）；oldest=老盘优先（FIFO，补历史/对账用） */
+const ORDER: "newest" | "oldest" = (arg("order", "newest") ?? "newest").toLowerCase() === "oldest" ? "oldest" : "newest";
+
+/** state=0 队列的排序子句（与 --order 对应；同 upload_time 时按 video_id 定序保证稳定） */
+const ORDER_BY = ORDER === "newest"
+  ? [{ uploadTime: "desc" as const }, { videoId: "desc" as const }]
+  : [{ uploadTime: "asc" as const }, { videoId: "asc" as const }];
+
 type QueueRow = {
   videoId: bigint; saoleiId: bigint; profile: number; uploadTime: bigint; attempts: number;
 };
 
-/** 取下一批待下载项：state=0、不在失败冷却期内，按上传时间 FIFO */
+/** 取下一批待下载项：state=0、不在失败冷却期内，按 --order 排序（默认新盘优先） */
 async function takeQueue(limit: number): Promise<QueueRow[]> {
   const cutoff = BigInt(Math.floor(Date.now() / 1000) - COOLDOWN_SEC);
   return prisma.openmsVideoMap.findMany({
@@ -57,7 +67,7 @@ async function takeQueue(limit: number): Promise<QueueRow[]> {
       state: MAP_PENDING,
       OR: [{ attempts: 0 }, { updateTime: { lt: cutoff } }],
     },
-    orderBy: [{ uploadTime: "asc" }, { videoId: "asc" }],
+    orderBy: ORDER_BY,
     take: limit,
     select: { videoId: true, saoleiId: true, profile: true, uploadTime: true, attempts: true },
   });
@@ -66,14 +76,14 @@ async function takeQueue(limit: number): Promise<QueueRow[]> {
 async function takeByIds(ids: number[]): Promise<QueueRow[]> {
   return prisma.openmsVideoMap.findMany({
     where: { videoId: { in: ids.map((n) => BigInt(n)) } },
-    orderBy: [{ uploadTime: "asc" }, { videoId: "asc" }],
+    orderBy: ORDER_BY,
     select: { videoId: true, saoleiId: true, profile: true, uploadTime: true, attempts: true },
   });
 }
 
 async function main() {
   const t0 = Date.now();
-  log(`[openms-download] start ${APPLY ? "APPLY" : "DRY-RUN"} max-downloads=${MAX_DOWNLOADS} min-gap=${cfg.downloadGapMs}ms cooldown=${COOLDOWN_SEC}s max-retries=${cfg.maxRetries}`);
+  log(`[openms-download] start ${APPLY ? "APPLY" : "DRY-RUN"} max-downloads=${MAX_DOWNLOADS} min-gap=${cfg.downloadGapMs}ms cooldown=${COOLDOWN_SEC}s max-retries=${cfg.maxRetries} order=${ORDER}`);
   await startRun("download", {
     maxItems: MAX_DOWNLOADS, pageCount: 0,
     minGapMs: cfg.downloadGapMs, listGapMs: 0, maxRetries: cfg.maxRetries,
@@ -104,7 +114,7 @@ async function main() {
       closed = true;
       return;
     }
-    log(`  待下载 ${queue.length} 条，最老 #${queue[0].videoId} → 最新 #${queue[queue.length - 1].videoId}`);
+    log(`  待下载 ${queue.length} 条（${ORDER === "newest" ? "新盘优先" : "老盘优先"}）首 #${queue[0].videoId} → 末 #${queue[queue.length - 1].videoId}`);
 
     for (const item of queue) {
       if (handled >= MAX_DOWNLOADS) break;

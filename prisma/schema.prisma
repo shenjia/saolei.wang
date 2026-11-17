@@ -1377,6 +1377,7 @@ model OpenmsVideoMap {
   updateTime    BigInt  @default(0) @map("update_time") @db.BigInt
 
   @@index([state])
+  @@index([state, uploadTime])
   @@index([saoleiId])
   @@map("openms_video_map")
 }
