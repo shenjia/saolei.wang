@@ -1732,12 +1732,46 @@ a.cheat_uid:hover .pt_bubble {
 .admin_sync_ctx { font-size: 13px; color: #939387; line-height: 23px; }
 .admin_sync_ctx .hl { color: #e6db74; }
 .admin_sync_ctx .ok { color: #a6e22e; }
+.admin_sync_ctx .dim { color: #75715e; }
+
+/* 扫描器 / 下载器分栏（2026-11-17 拆双脚本后新增）：两块等宽并排，
+   各带状态点与本轮计数；窄屏自动堆叠 */
+.admin_sync_split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.admin_sync_side {
+  background: #26271f;
+  border: 1px solid #3a3a32;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.admin_sync_side .hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #f8f8f2;
+  margin-bottom: 6px;
+}
+.admin_sync_side .hd em {
+  margin-left: auto;
+  font-style: normal;
+  font-weight: normal;
+  font-size: 12px;
+  color: #75715e;
+}
+.admin_sync_side .admin_sync_ctx { line-height: 21px; }
 
 @media (min-width: 901px) and (max-width: 1250px) {
   .admin_sync_kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
   .admin_sync_kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .admin_sync_split { grid-template-columns: minmax(0, 1fr); }
   .admin_sync_body { flex-direction: column; gap: 12px; }
   .admin_sync_body .side {
     width: 100%;

@@ -1,14 +1,17 @@
-// 后台仪表盘 · 开源扫雷网录像同步概览卡（2026-11-10 张老师定）
+// 后台仪表盘 · 开源扫雷网录像同步概览卡（2026-11-10 建，2026-11-17 拆双脚本后分栏）
 //
 // 只做首页卡、10 秒轮询、纯只读：没有任何触发/重试/停止按钮。
 // 首帧由 RSC 传入 initial（无 JS 也能看到状态），挂载后每 10 秒拉一次
 // /api/admin/openms-sync/status 校准；轮询失败静默保留旧值，不闪归零。
 // 相对时间用「服务端 now + 客户端挂载后秒数」计算，避免 hydration 不一致。
+//
+// 2026-11-17：扫描器（每 10 分钟穿越全部用户、只登记台账）与下载器（每 2 分钟消费台账队列、
+// 连续 4.8 盘/分）拆成两个脚本，卡片按两侧分栏展示各自心跳与本轮计数。
 
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { OpenmsSyncStatus } from "@/lib/admin/openms-sync";
+import type { OpenmsSideStatus, OpenmsSyncStatus } from "@/lib/admin/openms-sync";
 
 const REFRESH_MS = 10_000;
 
@@ -62,13 +65,16 @@ export function OpenmsSyncCard({ initial }: { initial: OpenmsSyncStatus }) {
     };
   }, []);
 
-  const r = d.run;
+  const sc = d.scan;
+  const dl = d.download;
   const t = d.totals;
+  const r = dl.run;
+  const sr = sc.run;
   const segValues = r ? { ok: r.ok, skip: r.skip, gaveUp: r.gaveUp, retry: r.retry } : { ok: 0, skip: 0, gaveUp: 0, retry: 0 };
   const segTotal = SEG.reduce((a, s) => a + segValues[s.key], 0);
-  const scannedThisRun = r ? r.registered + r.seen : 0;
-  const heartbeatAge = d.heartbeatAgeSec === null ? null : Math.max(0, d.heartbeatAgeSec + elapsed);
-  const lastError = r?.lastError || null;
+  const hbAge = (side: OpenmsSideStatus) =>
+    side.heartbeatAgeSec === null ? null : Math.max(0, side.heartbeatAgeSec + elapsed);
+  const lastError = dl.run?.lastError || sc.run?.lastError || null;
 
   return (
     <div className="admin_card">
@@ -81,11 +87,49 @@ export function OpenmsSyncCard({ initial }: { initial: OpenmsSyncStatus }) {
         <span className="more">10 秒自动刷新 · 只读</span>
       </h2>
       <div className="admin_card_body">
+        {/* 扫描器 / 下载器 两侧 */}
+        <div className="admin_sync_split">
+          <div className="admin_sync_side">
+            <div className="hd">
+              扫描器
+              <span className={`admin_tag ${sc.tone}`}>
+                <span className={`admin_sync_dot ${sc.dot}`} />
+                {sc.label}
+              </span>
+              <em>每 10 分钟 · 不下载</em>
+            </div>
+            <div className="admin_sync_ctx">
+              本轮登记 <span className="ok">{fmt(sr?.registered ?? 0)}</span> 个新 ID · 穿越
+              <span className="hl"> {fmt(sr?.users ?? 0)}</span> 人 / {fmt(sr?.pages ?? 0)} 页
+              <span className="dim">（已存在 {fmt(sr?.seen ?? 0)} 条）</span><br />
+              心跳 {hbAge(sc) === null ? "—" : `${dur(hbAge(sc))}前`}（{sr?.heartbeatText ?? "—"}）· 阈值 180 秒 /
+              停滞 15 分钟
+            </div>
+          </div>
+          <div className="admin_sync_side">
+            <div className="hd">
+              下载器
+              <span className={`admin_tag ${dl.tone}`}>
+                <span className={`admin_sync_dot ${dl.dot}`} />
+                {dl.label}
+              </span>
+              <em>每 2 分钟 · 连续 4.8 盘/分</em>
+            </div>
+            <div className="admin_sync_ctx">
+              本轮下载 <span className="ok">{fmt(r?.handled ?? 0)}</span> / 配额 {fmt(r?.maxItems ?? 0)} 盘 ·
+              成功 <span className="ok">{fmt(r?.ok ?? 0)}</span> / 拒收 <span className="hl">{fmt(r?.skip ?? 0)}</span> /
+              放弃 {fmt(r?.gaveUp ?? 0)}<br />
+              心跳 {hbAge(dl) === null ? "—" : `${dur(hbAge(dl))}前`}（{r?.heartbeatText ?? "—"}）· 阈值 180 秒 /
+              停滞 8 分钟
+            </div>
+          </div>
+        </div>
+
         <div className="admin_sync_kpis">
           <div className="admin_kpi green">
-            <div className="label">本轮已处理</div>
-            <div className="value">{fmt(r?.handled ?? 0)}<small> 盘</small></div>
-            <div className="foot">扫到 {fmt(scannedThisRun)} 个 ID · 限速 5 盘/分</div>
+            <div className="label">本轮已导入</div>
+            <div className="value">{fmt(r?.ok ?? 0)}<small> 盘</small></div>
+            <div className="foot">下载间隔 12.5s（对方限速 5 盘/分）</div>
           </div>
           <div className="admin_kpi green">
             <div className="label">累计已导入</div>
@@ -98,7 +142,7 @@ export function OpenmsSyncCard({ initial }: { initial: OpenmsSyncStatus }) {
             <div className="foot">已登记进映射台账</div>
           </div>
           <div className="admin_kpi yellow">
-            <div className="label">待重试</div>
+            <div className="label">待下载队列</div>
             <div className="value">{fmt(t.pending)}</div>
             <div className="foot">其中 <b>{fmt(t.pendingHigh)}</b> 条已重试 3 次</div>
           </div>
@@ -112,8 +156,8 @@ export function OpenmsSyncCard({ initial }: { initial: OpenmsSyncStatus }) {
         <div className="admin_sync_body">
           <div className="main">
             <div className="admin_sync_caption">
-              本轮扫描构成
-              <span>（分母＝本轮实际扫到的 {fmt(segTotal)} 个 ID，随扫描增长，非全量完成度）</span>
+              本轮下载构成
+              <span>（分母＝本轮实际处理的 {fmt(segTotal)} 盘，随队列推进，非全量完成度）</span>
             </div>
             <div className="admin_sync_seg">
               {segTotal > 0 && SEG.map((s) => (
@@ -126,28 +170,30 @@ export function OpenmsSyncCard({ initial }: { initial: OpenmsSyncStatus }) {
               {SEG.map((s) => (
                 <span key={s.key}><b style={{ background: s.color }} />{s.label} {fmt(segValues[s.key])}</span>
               ))}
-              <span className="dim">另有 {fmt(r?.seen ?? 0)} 条历史 ID 按台账直接跳过（不下载、不占配额）</span>
+              <span className="dim">扫描器只登记不下载，所以不存在「跳过占配额」</span>
             </div>
             <div className="admin_hint" style={{ marginTop: 8 }}>
-              对方接口不返回总量，故不显示「全量完成 XX%」；游标只是已处理过的最大 video_id，不能换算百分比。
+              对方接口不返回总量，故不显示「全量完成 XX%」；游标只是已扫描过的最大 video_id。
               {lastError && <> 上轮错误：<span style={{ color: "#f92672" }}>{lastError}</span></>}
             </div>
           </div>
           <div className="side">
             {d.state === "never" ? (
-              <div className="admin_hint">尚无跑批记录：等待 crontab 注册后的首轮 --apply 跑批。</div>
+              <div className="admin_hint">尚无跑批记录：等待 crontab 注册后的首轮跑批。</div>
             ) : (
               <div className="admin_sync_ctx">
-                {d.state === "running" || d.state === "stuck" ? "当前" : "上轮最后"}：
-                雷网用户 <span className="hl">#{fmt(r?.currentUser ?? 0)}</span> / 开源 profile <span className="hl">{fmt(r?.currentProfile ?? 0)}</span><br />
-                游标推进至 <span className="ok">#{fmt(r?.currentCursor ?? 0)}</span>
-                {r && r.currentVideoId > 0 && <> · 末条开源 #{fmt(r.currentVideoId)}</>}<br />
-                心跳 {heartbeatAge === null ? "—" : `${dur(heartbeatAge)}前`}（{r?.heartbeatText ?? "—"}）· 阈值 180 秒
+                {dl.state === "running" || dl.state === "stuck" ? "当前下载" : "上轮最后下载"}：
+                开源 <span className="ok">#{fmt(r?.currentVideoId ?? 0)}</span> → 雷网用户
+                <span className="hl"> #{fmt(r?.currentUser ?? 0)}</span><br />
+                扫描侧游标：雷网用户 <span className="hl">#{fmt(sr?.currentUser ?? 0)}</span> /
+                开源 profile <span className="hl">{fmt(sr?.currentProfile ?? 0)}</span> →
+                已扫至 <span className="ok">#{fmt(sr?.currentCursor ?? 0)}</span><br />
+                上轮下载 {dl.lastFinished ? `${dl.lastFinished.startedText} 完成 · 耗时 ${dur(dl.lastFinished.durationSec)}` : "暂无"}<br />
+                上轮扫描 {sc.lastFinished ? `${sc.lastFinished.startedText} 完成 · 耗时 ${dur(sc.lastFinished.durationSec)}` : "暂无"}
               </div>
             )}
             <div className="admin_hint" style={{ marginTop: 8 }}>
-              上一轮 {d.lastFinished ? `${d.lastFinished.startedText} 完成 · 耗时 ${dur(d.lastFinished.durationSec)}` : "暂无完成记录"}<br />
-              crontab 每 10 分钟一轮 · 参与用户 {fmt(t.syncUsers)} / {fmt(t.linksTotal)} 人（仅 consent=1）
+              参与用户 {fmt(t.syncUsers)} / {fmt(t.linksTotal)} 人（仅 consent=1）
             </div>
           </div>
         </div>

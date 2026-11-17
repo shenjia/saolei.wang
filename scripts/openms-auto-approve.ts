@@ -2,7 +2,7 @@
 //
 // 【规则】开源扫雷网同步过来的「历史录像」中，满足以下全部条件的，统一由 ID=1 的
 //   站长审核通过（status 10→20，reviewer=1）：
-//     ① 来源 = 开源扫雷网（video.from_site = OPENMS_FROM_SITE，默认 3，与 openms-sync-all.ts 同值）
+//     ① 来源 = 开源扫雷网（video.from_site = OPENMS_FROM_SITE，默认 3，与 scripts/sync/openms-core.ts 同值）
 //     ② 上传时间（video.create_time，导入时即开源站原始上传时间）距今 > 7 天
 //        —— 给近 7 天内新同步的录像留人工复核窗口
 //     ③ 自动分拣结果 = 免核定（video.auto_flag = 1）
@@ -18,7 +18,7 @@
 //   **定向例外**：仅限开源扫雷网同步来源 + >7 天 + 免核定 三条件交集；站内原生上传
 //   与其他外站录像不受影响，仍需人工按原流程审核。
 //
-// 【用法】（默认 dry-run，必须 --apply 才写库；与 openms-sync-all 同加载器）
+// 【用法】（默认 dry-run，必须 --apply 才写库；与 openms-scan / openms-download 同加载器）
 //   env -u NODE_OPTIONS node --experimental-transform-types \
 //     --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-auto-approve.ts \
 //     [--apply] [--cutoff-days 7] [--limit 0] [--batch 200] [--from-site 3]
@@ -29,7 +29,7 @@ import { prisma } from "@/lib/db";
 import { reviewVideo } from "@/lib/review";
 import { VIDEO_STATUS } from "@/lib/config";
 
-// 与 openms-sync-all.ts 的 FROM_SITE 同源（开源扫雷网在 api_key 表的 key id）
+// 与 scripts/sync/openms-core.ts 的 FROM_SITE 同源（开源扫雷网在 api_key 表的 key id）
 const FROM_SITE = BigInt(process.env.OPENMS_FROM_SITE ?? "3");
 const ADMIN_ID = 1;
 const ADMIN_ROLE = 100; // USER_ROLE.ADMINISTRATOR

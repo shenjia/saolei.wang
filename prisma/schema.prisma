@@ -1388,7 +1388,7 @@ model OpenmsVideoMap {
 // status：0=运行中 1=正常完成 2=部分失败 3=异常终止
 model OpenmsSyncRun {
   id             BigInt  @id @default(autoincrement())
-  /// 触发来源：cron / manual
+  /// 触发来源：scan / download / manual（旧单脚本历史行为 cron）
   trigger        String  @default("cron") @db.VarChar(16)
   /// 0=运行中 1=正常完成 2=部分失败 3=异常终止
   status         Int     @default(0) @db.TinyInt
@@ -1396,7 +1396,7 @@ model OpenmsSyncRun {
   startedAt      BigInt  @map("started_at") @db.BigInt
   heartbeatAt    BigInt  @map("heartbeat_at") @db.BigInt
   finishedAt     BigInt  @default(0) @map("finished_at") @db.BigInt
-  /// 本轮计数（与 scripts/openms-sync-all.ts 的 stats 一一对应）
+  /// 本轮计数（与 scripts/openms-scan.ts / openms-download.ts 的 stats 一一对应）
   users          Int     @default(0)
   pages          Int     @default(0)
   handled        Int     @default(0)

@@ -441,13 +441,26 @@ if ! (crontab -l 2>/dev/null | grep -qF "reset-distribution.mjs"); then
   ok "已安装 distribution 每日重算 cron（00:30）"
 fi
 
-# ---------- 开源扫雷网录像同步（2026-11-10 张老师要求「开始同步，设 crontab」）----------
-# 每 10 分钟一轮 --apply，flock -n 防重入：上一轮没跑完时本轮直接跳过，
-# 绝不并发写台账/游标。默认 --max-items 20（下载限速 5 盘/分，一轮约 4 分钟）。
-OPENMS_CRON_LINE="*/10 * * * * cd $DEPLOY_DIR && /usr/bin/flock -n /tmp/openms-sync-all.lock /usr/bin/env -u NODE_OPTIONS node --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-sync-all.ts --apply --max-items 20 >> /home/deploy/logs/openms-sync.log 2>&1"
-if ! (crontab -l 2>/dev/null | grep -qF "openms-sync-all.ts"); then
-  (crontab -l 2>/dev/null; echo "$OPENMS_CRON_LINE") | crontab -
-  ok "已安装开源扫雷网录像同步 cron（每 10 分钟）"
+# ---------- 开源扫雷网录像同步（2026-11-10 建；2026-11-17 拆成扫描器 + 下载器）----------
+# 拆分原因（张老师 2026-11-17 定）：单脚本「列表+下载」串行跑时，大积压用户会把整轮配额吃光，
+# 后面的用户连列表都拉不到，新上传录像要等队头几千盘清完才被扫到。拆开后：
+#   扫描器 —— 每 10 分钟穿越全部 consent=1 用户，只登记台账（列表限速 1/2s），不下载、不占下载位；
+#   下载器 —— 每 2 分钟消费台账 state=0 队列，脚本内 12.5s 打点 = 连续 4.8 盘/分（对方上限 5/分）。
+# 各自 flock -n 防重入；两条任务互不阻塞，扫描永远不会被下载积压拖住。
+# 先清掉旧单脚本的 crontab 行（否则新旧同跑会争抢下载位）。
+if crontab -l 2>/dev/null | grep -qF "openms-sync-all.ts"; then
+  crontab -l 2>/dev/null | grep -vF "openms-sync-all.ts" | crontab -
+  ok "已移除旧 openms-sync-all cron（已拆分为 scan + download）"
+fi
+OPENMS_SCAN_CRON="*/10 * * * * cd $DEPLOY_DIR && /usr/bin/flock -n /tmp/openms-scan.lock /usr/bin/env -u NODE_OPTIONS node --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-scan.ts --apply >> /home/deploy/logs/openms-scan.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "openms-scan.ts"); then
+  (crontab -l 2>/dev/null; echo "$OPENMS_SCAN_CRON") | crontab -
+  ok "已安装开源扫雷网扫描器 cron（每 10 分钟）"
+fi
+OPENMS_DL_CRON="*/2 * * * * cd $DEPLOY_DIR && /usr/bin/flock -n /tmp/openms-download.lock /usr/bin/env -u NODE_OPTIONS node --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-download.ts --apply --max-downloads 10 >> /home/deploy/logs/openms-download.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "openms-download.ts"); then
+  (crontab -l 2>/dev/null; echo "$OPENMS_DL_CRON") | crontab -
+  ok "已安装开源扫雷网下载器 cron（每 2 分钟）"
 fi
 
 ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 旧主力 $A_APP 保持运行兜底; authority active=$(read_auth_active))"
