@@ -18,20 +18,22 @@ const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 /** 新粉丝提醒合并窗口（秒）：窗口内再有人关注，不新增消息，只改写既有那条 */
 export const FOLLOW_NOTICE_MERGE_WINDOW_SEC = 3600;
 
-/** 关注上限（2026-11-19 00:18 张老师定，00:20 上限改 200）：每用户默认 30 人；
- *  每赞助 1 元 +1 位，封顶 200。口径=本人赞助合计（donate 表 amount 分求和 ÷100，
- *  与主页统计一致） */
+/** 关注上限（2026-11-19 00:18 张老师定，00:20 上限改 200、00:38 每元改 5 位）：
+ *  每用户默认 30 人；每赞助 1 元 +5 位，封顶 200。口径=本人赞助合计
+ *  （donate 表 amount 分求和 ÷100 元，与主页统计一致） */
 export const FOLLOW_LIMIT_BASE = 30;
 export const FOLLOW_LIMIT_MAX = 200;
+/** 每赞助 1 元提升的关注席位 */
+export const FOLLOW_LIMIT_PER_YUAN = 5;
 
-/** 用户的关注上限（默认 30 + 赞助元数，封顶 100） */
+/** 用户的关注上限（默认 30 + 赞助元数×5，封顶 200） */
 export async function getFollowLimit(userId: number): Promise<number> {
   const agg = await prisma.donate.aggregate({
     where: { user: BigInt(userId) },
     _sum: { amount: true },
   });
   const donatedYuan = Math.floor(N(agg._sum?.amount) / 100);
-  return Math.min(FOLLOW_LIMIT_BASE + donatedYuan, FOLLOW_LIMIT_MAX);
+  return Math.min(FOLLOW_LIMIT_BASE + donatedYuan * FOLLOW_LIMIT_PER_YUAN, FOLLOW_LIMIT_MAX);
 }
 
 /** 合并消息锚点（contains 匹配用）：同时命中旧「（去查看）」与新「查看[/url]」两形态 */
@@ -138,7 +140,7 @@ export async function followUser(followerId: number, followeeId: number): Promis
     select: { id: true },
   });
   if (dup) return null;
-  // 关注上限（2026-11-19 00:18 张老师定）：默认 30，每赞助 1 元 +1 位封顶 200。
+  // 关注上限（2026-11-19 00:18 张老师定）：默认 30，每赞助 1 元 +5 位封顶 200。
   // 满员返回红色气泡文案（前端 error 型 toast 即红色）。
   const count = await prisma.userFollow.count({ where: { follower: BigInt(followerId) } });
   const limit = await getFollowLimit(followerId);

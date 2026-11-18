@@ -174,10 +174,11 @@ export function FollowListFeed({
         />
       </div>
       {/* 关注上限规则（2026-11-19 00:21 张老师定）：列表页底部展示 + 赞助链接。
-          仅「我的关注」页显示（他人视角列表不放运营文案） */}
-      {type === "following" && !listOwner && (
+          00:38 张老师在自己主页他人视角页（/user/1/following）没看到——
+          去 listOwner 限制，所有「关注」列表页都显示（粉丝列表页不放运营文案） */}
+      {type === "following" && (
         <p className="fol_limit_note">
-          每位玩家默认可关注 30 人，每赞助 1 元可提升 1 个关注位（最多 200 人）。
+          每位玩家默认可关注 30 人，每赞助 1 元可提升 5 个关注位（最多 200 人）。
           <Link href="/page/donate" target="_blank" prefetch={false} className="fol_limit_donate">
             赞助本站
           </Link>
