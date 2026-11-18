@@ -1,6 +1,8 @@
 // 账号中心 · 隐私设置（2026-11-18 23:06 张老师：从 /account 页提为独立页）：
-// 年龄/星座/关注列表/粉丝列表/新粉丝提醒五个开关 + 黑名单，全放本页；
-// AccountHeader 子导航高亮 privacy。双栏 + 右栏玩家卡片（账户中心族同款几何）。
+// 年龄/星座/关注列表/粉丝列表/新粉丝提醒五个开关 + 黑名单，全放本页。
+// 23:28 张老师四改：导航统一筛选器 tabs（AccountHeader）；去「隐私设置」小标题
+// 与开关行标签/小字提示（开关文案自释）；黑名单应用小标题样式（原 privacy_title）。
+// 双栏 + 右栏玩家卡片（账户中心族同款几何）。
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
@@ -24,7 +26,6 @@ export default async function AccountPrivacyPage() {
         <li className="main">
           <div className="box">
             <AccountHeader active="privacy" />
-            <h2 className="privacy_page_title">隐私设置</h2>
             <AccountPrivacySection
               flags={{
                 ageHidden: user.ageHidden,
@@ -44,3 +45,4 @@ export default async function AccountPrivacyPage() {
     </div>
   );
 }
+

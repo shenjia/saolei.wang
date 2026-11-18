@@ -30,13 +30,15 @@ export function parseBlocklist(raw: string): Set<number> {
   return out;
 }
 
-/** 序列化黑名单（输入行数组 → 规范文本：每行一个 id，去重去空行） */
+/** 序列化黑名单（输入行数组 → 规范文本：每行一个 id，去重去空行。
+ *  23:28 收紧：与 parseBlocklistIds 同一白名单 /^[1-9]\d{0,14}$/——
+ *  20 位超长数字串此前会混进存储列（无害但脏），清洗源头统一 */
 export function serializeBlocklist(ids: string[]): string {
   const seen = new Set<string>();
   const lines: string[] = [];
   for (const raw of ids) {
     const s = raw.trim();
-    if (!/^\d+$/.test(s) || s === "0") continue;
+    if (!/^[1-9]\d{0,14}$/.test(s)) continue;
     if (seen.has(s)) continue;
     seen.add(s);
     lines.push(s);
@@ -149,6 +151,47 @@ export async function unfollowUser(followerId: number, followeeId: number): Prom
     });
   }
   return null;
+}
+
+/**
+ * 黑名单提交联动清理（2026-11-18 23:28 张老师定）：
+ * ① 从自己的关注列表移除黑名单中所有 id（单向：我不再关注被拉黑的人）；
+ * ② 从黑名单中所有用户的关注列表移除自己（单向：被拉黑的人不再关注我）。
+ * 均只删关注关系、不发取关动态（拉黑是管理动作，动态流刷屏无意义且暴露拉黑关系）。
+ *
+ * ⚠️ SQL 注入防线：uid 入参在写点统一走 parseBlocklistIds（/^\d+$/ 严格校验 +
+ * 上限 1000），查询全部走 Prisma 参数化（BigInt 包装），绝不做字符串拼接。
+ */
+export function parseBlocklistIds(raw: string): number[] {
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const line of (raw ?? "").split(/\r?\n/)) {
+    const s = line.trim();
+    // 严格数字白名单：仅 1~15 位纯数字（首位非零），其余一律拒绝
+    if (!/^[1-9]\d{0,14}$/.test(s)) continue;
+    const n = Number(s);
+    if (!Number.isSafeInteger(n) || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out.slice(0, 1000);
+}
+
+export async function applyBlocklistCleanup(
+  ownerId: number,
+  blockIds: number[]
+): Promise<{ removedMine: number; removedTheirs: number }> {
+  if (!blockIds.length) return { removedMine: 0, removedTheirs: 0 };
+  const bigIds = blockIds.map(BigInt);
+  // ① 我 → 黑名单用户的关注行（follower=我，followee∈黑名单）
+  const r1 = await prisma.userFollow.deleteMany({
+    where: { follower: BigInt(ownerId), followee: { in: bigIds } },
+  });
+  // ② 黑名单用户 → 我的关注行（follower∈黑名单，followee=我）
+  const r2 = await prisma.userFollow.deleteMany({
+    where: { follower: { in: bigIds }, followee: BigInt(ownerId) },
+  });
+  return { removedMine: r1.count, removedTheirs: r2.count };
 }
 
 /**

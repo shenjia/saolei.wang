@@ -4,9 +4,9 @@
 // 不再挂子导航；侧栏卡片名字去链接（本页右侧不出现任何链接）。
 // 2026-10-25：侧栏统一为标准玩家卡片（UserPanel，与 /account 一致，hideRadar）。
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { AccountHeader } from "@/components/AccountHeader";
 import { EmailBindForm } from "@/components/AccountForms";
 import { UserPanel } from "@/components/UserCard";
 import { prisma } from "@/lib/db";
@@ -30,15 +30,8 @@ export default async function AccountEmailPage() {
       <ul id="account_email">
         <li className="main">
           <div className="box">
-            <div className="nav">
-              <h1>绑定邮箱</h1>
-              <ul className="email_back">
-                <li>
-                  <Link href="/account">返回</Link>
-                </li>
-              </ul>
-            </div>
-            <hr />
+            {/* 23:28 张老师定：导航统一筛选器 tabs（原「返回」独立头撤下） */}
+            <AccountHeader active="email" />
             <EmailBindForm currentEmail={auth?.email ?? ""} verified={Number(auth?.emailVerified ?? 0) > 0} />
           </div>
         </li>

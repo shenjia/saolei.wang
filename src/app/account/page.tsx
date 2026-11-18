@@ -17,6 +17,7 @@ import { UserPanel } from "@/components/UserCard";
 import { QqBindLink } from "@/components/QqLogin";
 import { QqAvatarPrompt } from "@/components/QqAvatarPrompt";
 import { AccountVisibilityToggle } from "@/components/AccountVisibilityToggle";
+import { AccountHeader } from "@/components/AccountHeader";
 import { QQ_OAUTH_ENABLED, areaDisplay } from "@/lib/config";
 import { ageOf, constellationText } from "@/lib/birth";
 import { AVATAR_REVIEW_STATUS, resolveAvatarUrl, DEFAULT_AVATAR } from "@/lib/avatar";
@@ -108,22 +109,9 @@ export default async function AccountManagePage({
       <ul id="account_manage">
         <li className="main">
           <div className="box">
-            <div className="manage_head">
-              <h1>账户设置</h1>
-              <div className="manage_actions">
-                {/* 隐私设置独立页入口（2026-11-18 23:06 张老师：放在「修改资料」前面） */}
-                <Link href="/account/privacy" className="button small">
-                  隐私设置
-                </Link>
-                <Link href="/account/profile" className="button small">
-                  修改资料
-                </Link>
-                <Link href="/account/password" className="button small">
-                  修改密码
-                </Link>
-              </div>
-            </div>
-            <hr />
+            {/* 23:28 张老师定：导航统一改筛选器 tabs（首页/资料/密码/隐私/邮箱），
+                替代原按钮导航 manage_actions；原 <hr> 由 tabs 底部细线替代 */}
+            <AccountHeader />
 
             {/* 头像单独一列居左（可点更换），右侧一张连续资料表（账户名/中文名/英文名
                 与爱好、QQ 等同格式分栏，无小标题无分割线，2026-10-15 五轮张老师定稿） */}
@@ -165,21 +153,12 @@ export default async function AccountManagePage({
                     </td>
                   </tr>
                   {/* 年龄 / 星座（2026-11-03 张老师二改）：各占独立一行；未填生日不显示。
-                      行尾「在主页展示xx」开关（2026-11-10 张老师：原页面底部合并开关分拆为两个；
-                      二改：文案分列 + 一律靠右对齐） */}
+                      23:28 张老师定：开关移隐私设置页，本页只做纯展示（不再显示开关） */}
                   {age !== null && (
                     <tr>
                       <th>年龄</th>
                       <td>
-                        <div className="acct_vis_cell">
-                          {age}
-                          <AccountVisibilityToggle
-                            field="age"
-                            label="年龄"
-                            switchText="在主页展示年龄"
-                            initialHidden={user.ageHidden}
-                          />
-                        </div>
+                        <div>{age}</div>
                       </td>
                     </tr>
                   )}
@@ -187,15 +166,7 @@ export default async function AccountManagePage({
                     <tr>
                       <th>星座</th>
                       <td>
-                        <div className="acct_vis_cell">
-                          {constellation}
-                          <AccountVisibilityToggle
-                            field="constellation"
-                            label="星座"
-                            switchText="在主页展示星座"
-                            initialHidden={user.constellationHidden}
-                          />
-                        </div>
+                        <div>{constellation}</div>
                       </td>
                     </tr>
                   )}

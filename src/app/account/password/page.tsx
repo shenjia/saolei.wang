@@ -18,7 +18,7 @@ export default async function AccountPasswordPage() {
       <ul id="account_password">
         <li className="main">
           <div className="box">
-            <AccountHeader />
+            <AccountHeader active="password" />
             <PasswordForm />
           </div>
         </li>

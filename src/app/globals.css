@@ -18106,55 +18106,38 @@ body #header .nav li a.vs_new_hint,
   color: #75715e;
 }
 
-/* 账户设置隐私区 */
-#account_manage .privacy_sec hr, #account_privacy .privacy_sec hr {
-  margin: 18px 0 10px;
+/* 隐私设置页版式（2026-11-18 23:28 张老师四改）：
+   开关行去标签去小字（纯开关行流式排列）；黑名单小标题沿用 privacy_title 样式 */
+#account_manage .privacy_sec,
+#account_privacy .privacy_sec {
+  margin-top: 4px;
 }
-#account_manage .privacy_title, #account_privacy .privacy_title {
+#account_privacy .priv_rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0 18px;
+}
+#account_privacy .priv_row .acct_gsw {
+  /* 开关行不做左右分栏，靠左自然排列 */
+  float: none;
+  margin: 0;
+}
+#account_privacy .privacy_title,
+#account_privacy .acct_blocklist .bl_label {
   margin: 0 0 8px;
   font-size: 14px;
   color: #b1b1a4;
   font-weight: normal;
 }
-#account_manage .acct_privacy_cell .acct_row_gsw, #account_privacy .acct_privacy_cell .acct_row_gsw {
-  margin: 0;
-}
-#account_manage .acct_privacy_hint, #account_privacy .acct_privacy_hint {
+#account_privacy .acct_privacy_hint {
   margin: 4px 0 0;
   font-size: 11px;
   color: #636359;
 }
-#account_manage .acct_blocklist, #account_privacy .acct_blocklist {
-  margin-top: 14px;
-}
-#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_label {
-  display: block;
-  font-size: 13px;
-  color: #b1b1a4;
-  margin-bottom: 6px;
-}
-#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_input {
-  width: 100%;
-  box-sizing: border-box;
-  background: #272822;
-  border: 1px solid #3e3d35;
-  border-radius: 2px;
-  color: #e6e6e0;
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 6px 8px;
-  resize: vertical;
-  font-family: inherit;
-}
-#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_input:focus {
-  outline: none;
-  border-color: #57574e;
-}
-#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_hint {
-  margin-top: 6px;
-}
-#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_save {
-  margin-top: 8px;
+#account_privacy .acct_blocklist {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 14px;
 }
 
 /* ---------- 隐私设置独立页（2026-11-18 23:06 张老师：从账户设置提为 /account/privacy） ----------
@@ -18169,11 +18152,38 @@ body #header .nav li a.vs_new_hint,
 #page #account_privacy > li.sidebar .box {
   width: 210px;
 }
-#account_privacy .privacy_page_title {
-  margin: 0 0 14px;
-  font-size: 20px;
-  line-height: 30px;
-}
 #account_privacy .acct_gsw input {
   cursor: pointer;
+}
+
+/* ---------- 账户中心筛选器导航（2026-11-18 23:28 张老师定） ----------
+   AccountHeader 统一为 .news_head > h1 + .ranking_tabs（首页/资料/密码/隐私/邮箱），
+   替代按钮导航与子导航链接两种旧形态；tabs 底部细线替代原 <hr>。 */
+.account_head {
+  margin-bottom: 19.5px;
+}
+.account_head h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 39px;
+}
+.account_head h1 a {
+  color: #fdc61a;
+}
+.account_head h1 a:hover {
+  color: #a6e22e;
+}
+.account_head .account_tabs {
+  margin-left: auto;
+  border-bottom: none;
+}
+.account_head .account_tabs a,
+.account_head .account_tabs span {
+  padding: 6px 14px;
+  font-size: 14px;
+}
+.account_head .account_tabs a::after,
+.account_head .account_tabs span::after {
+  left: 14px;
+  right: 14px;
 }

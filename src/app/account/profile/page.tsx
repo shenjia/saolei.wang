@@ -58,7 +58,7 @@ export default async function AccountProfilePage() {
       <ul id="account_profile">
         <li className="main">
           <div className="box">
-            <AccountHeader />
+            <AccountHeader active="profile" />
             <ProfileForm
               avatarSlot={avatarSlot}
               defaults={{
