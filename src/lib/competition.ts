@@ -413,12 +413,61 @@ export interface CompRankRow {
   videoId: number;
 }
 
+// ---------- 自动绑定（张老师 2026-11-18：上传/开源网导入按标识自动挂比赛）----------
+//
+// 与批量回填同口径：race=code（EVF 内嵌标识，硬证据，不限窗）；
+// race 为空时退「签名末尾=code 且上传时间在比赛窗口内」。命中多场取 id 最小（奇异撞码极罕见）。
+
+/** 按比赛标识匹配比赛：race 精确优先，退签名末尾+窗口。返回 competition.id 或 null */
+export async function matchCompByRace(
+  race: string | null | undefined,
+  signature: string,
+  createTimeSec: number
+): Promise<number | null> {
+  if (race) {
+    const hit = await prisma.competition.findFirst({
+      where: { code: race },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    if (hit) return Number(hit.id);
+  }
+  const sig = signature.trim();
+  if (!sig) return null;
+  // 签名后缀命中：窗口由 create_time 推导（上传时刻），与回填 SQL 同判据
+  const candidates = await prisma.competition.findMany({
+    where: {
+      code: { not: null },
+      startTime: { lte: BigInt(Math.floor(createTimeSec)) },
+      endTime: { gte: BigInt(Math.floor(createTimeSec)) },
+    },
+    select: { id: true, code: true },
+    orderBy: { id: "asc" },
+  });
+  for (const c of candidates) {
+    if (c.code && sig.endsWith(c.code)) return Number(c.id);
+  }
+  return null;
+}
+
 /** 最新排名：挂接录像按玩家取最好成绩（real_time 最小），升序取前 limit 名。
- *  注意：跨级别混排的公平性口径待成绩采集期定，本期按 real_time 直接排序。 */
+ *  注意：跨级别混排的公平性口径待成绩采集期定，本期按 real_time 直接排序。
+ *  成绩口径（张老师 2026-11-18 批量绑定定）：只计上传时间落在比赛窗口内的录像——
+ *  窗口外的赛后补传盘只展示不计成绩（绑定时 race 硬证据不受窗口限制）。 */
 export async function getCompRanking(compId: number, limit = 10): Promise<CompRankRow[]> {
+  // 窗口过滤需要比赛起止时刻（Video/VideoInfo 无 relation，起止从比赛行取）
+  const comp = await prisma.competition.findUnique({
+    where: { id: BigInt(compId) },
+    select: { startTime: true, endTime: true },
+  });
+  if (!comp) return [];
   // Video/VideoInfo 同 id 1:1 但 schema 无 relation，real_time/no_record 分表取
   const rows = await prisma.video.findMany({
-    where: { competitionId: BigInt(compId), status: { not: 0 } },
+    where: {
+      competitionId: BigInt(compId),
+      status: { not: 0 },
+      createTime: { gte: comp.startTime, lte: comp.endTime },
+    },
     select: { id: true, user: true },
   });
   const infos = await prisma.videoInfo.findMany({
@@ -459,15 +508,25 @@ export interface CompMyResult {
   rank: number | null; // 在最新排名中的名次（全量排名内）
 }
 
-/** 我在这场比赛的成绩（详情页「我的成绩」板块） */
+/** 我在这场比赛的成绩（详情页「我的成绩」板块）。
+ *  成绩口径（张老师 2026-11-18）：只计窗口内录像（同 getCompRanking）。 */
 export async function getCompMyResult(compId: number, uid: number): Promise<CompMyResult> {
   const joined = await prisma.competitionEntry.findFirst({
     where: { competitionId: BigInt(compId), userId: BigInt(uid) },
     select: { id: true },
   });
+  const comp = await prisma.competition.findUnique({
+    where: { id: BigInt(compId) },
+    select: { startTime: true, endTime: true },
+  });
   // Video/VideoInfo 无 relation，real_time 分表取（同 getCompRanking）
   const rows = await prisma.video.findMany({
-    where: { competitionId: BigInt(compId), user: BigInt(uid), status: { not: 0 } },
+    where: {
+      competitionId: BigInt(compId),
+      user: BigInt(uid),
+      status: { not: 0 },
+      ...(comp ? { createTime: { gte: comp.startTime, lte: comp.endTime } } : {}),
+    },
     select: { id: true },
   });
   const myInfos = await prisma.videoInfo.findMany({
@@ -484,7 +543,11 @@ export async function getCompMyResult(compId: number, uid: number): Promise<Comp
   if (bestTime !== null) {
     // 名次＝real_time 严格更小的去重玩家数 + 1（与 getCompRanking 同口径的全量版）
     const all = await prisma.video.findMany({
-      where: { competitionId: BigInt(compId), status: { not: 0 } },
+      where: {
+        competitionId: BigInt(compId),
+        status: { not: 0 },
+        ...(comp ? { createTime: { gte: comp.startTime, lte: comp.endTime } } : {}),
+      },
       select: { id: true, user: true },
     });
     const allInfos = await prisma.videoInfo.findMany({

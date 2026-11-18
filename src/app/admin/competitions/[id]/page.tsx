@@ -119,11 +119,17 @@ export default async function AdminCompetitionDetailPage({
   const titleMap = new Map(uids.map((u, i) => [Number(u), titlePairs[i]]));
 
   // 玩家成绩：只认未屏蔽录像（computePlayerScores 内部再滤 real_time/no_record）
+  // 成绩口径（张老师 2026-11-18）：只计上传时间在比赛窗口内的录像（窗口外补传盘不计）
   const scoreMap = computePlayerScores(
     comp.scoreMode,
     comp.scoreConfig,
     allVideos
-      .filter((v) => v.status !== 0)
+      .filter(
+        (v) =>
+          v.status !== 0 &&
+          v.createTime >= comp.startTime &&
+          v.createTime <= comp.endTime,
+      )
       .map((v) => ({
         user: v.user,
         level: v.level,
