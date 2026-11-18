@@ -17364,8 +17364,11 @@ body #header .nav li a.vs_new_hint,
 .comp_name { margin: 0; font-size: 26px; line-height: 39px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
 .comp_name.on { color: #fdc61a; }
 .comp_name_link { color: inherit; text-decoration: none; }
-.comp_dates { font-size: 12px; color: #939387; white-space: nowrap; }
 .comp_ctrl { display: flex; align-items: flex-end; gap: 14px; flex-shrink: 0; }
+
+/* 比赛时间（2026-11-18 张老师需求：起止日期从标题行移到图表下方一行；
+   原 .comp_dates 标题行日期样式随功能迁移一并退役） */
+.comp_time { margin-top: 10px; font-size: 13px; color: #939387; }
 
 /* 状态标签（七轮 03:10 张老师定，日期后圆角描边小标签）：
    进行中绿 #a6e22e / 未开始金 #fdc61a / 已结束亮灰 #b1b1a4 / 已报名✓ 绿（同进行中），
@@ -17413,7 +17416,8 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_empty { color: #75715e; font-size: 14px; }
 .comp_chart_svg { display: block; }
 
-/* 信息行（2026-11-13 张老师定：收录级别一行在上、比赛标识一行在下（标识整段加粗高亮）；
+/* 信息行（2026-11-13 张老师定：比赛级别一行在上、比赛标识一行在下（标识整段加粗高亮；
+   2026-11-18「收录级别」更名「比赛级别」，标识未设置时整行不展示）；
    七轮 03:10 起发起人整块下线，不再有浮动行） */
 .comp_meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }

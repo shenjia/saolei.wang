@@ -183,7 +183,7 @@ export async function uploadVideo(
   });
   for (const a of activeComps) {
     if (a.code && parsed.player.includes(a.code)) {
-      compAttach = a;
+      compAttach = { id: a.id, code: a.code }; // code 可空（2026-11-18 起标识默认留空），命中时必非空
       break;
     }
   }

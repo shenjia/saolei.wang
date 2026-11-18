@@ -29,6 +29,22 @@ import { setMaintenance } from "@/lib/maintenance";
 import { normalizeSiteUpdateDate } from "@/lib/site-updates";
 import { genUniqueCompCode, addCompEvent, COMP_EVENT_JOIN_OPEN, COMP_EVENT_SCORE } from "@/lib/competition";
 
+/** 比赛标识参数校验（2026-11-18 张老师需求）：默认留空（null=不设置/保持不变）；
+ *  手填时 1-10 位数字+大小写字母（与列宽 varchar(10) 一致），全库查重防撞（唯一索引兜底） */
+async function parseCompCode(v: unknown, excludeId?: number): Promise<string | null | { error: string }> {
+  const s = String(v ?? "").trim();
+  if (!s) return null; // 默认留空
+  if (!/^[0-9A-Za-z]{1,10}$/.test(s)) {
+    return { error: "比赛标识应为 1-10 位数字或大小写字母" };
+  }
+  const hit = await prisma.competition.findFirst({
+    where: { code: s, ...(excludeId ? { id: { not: BigInt(excludeId) } } : {}) },
+    select: { id: true, name: true },
+  });
+  if (hit) return { error: `比赛标识 ${s} 已被「${hit.name}」（#${hit.id}）占用，请换一个` };
+  return s;
+}
+
 /** 收录录像级别参数解析（张老师 2026-11-13：可多选，默认初中高都有）。
  *  接受数组或逗号分隔串；非法键剔除，全空回退全级别。返回落库串（逗号分隔） */
 function parseIncludeLevels(v: unknown): string {
@@ -137,6 +153,8 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "competition.add": "manager",
   "competition.edit": "manager",
   "competition.delete": "manager",
+  // 随机生成比赛标识（2026-11-18：5 位含大小写字母+数字，服务端查重重抽）
+  "competition.genCode": "manager",
   // 比赛批量收录像（2026-11-13 三期：清单行「收录像」弹窗输入多个录像 ID 一次性挂接）
   "competition.addVideos": "manager",
   // 录像挂接比赛（2026-11-13 二期：录像管理手动将录像加入比赛）
@@ -1698,7 +1716,7 @@ async function dispatch(
 
     // ---------- 比赛（2026-11-13 张老师需求：前台「比赛」页数据源）----------
     // 发起：全名/简称/起止(北京时间 YYYY-MM-DD HH:mm)/规则/发起人ID/总奖金/分配方案；
-    // 比赛标识 code 创建时即生成（前台开始前显示「待定」）。
+    // 比赛标识 code 默认留空（2026-11-18 起：后台表单可手填或点「随机生成」）。
 
     case "competition.add": {
       const name = toText(p.name, 100);
@@ -1724,7 +1742,10 @@ async function dispatch(
       if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
       const sc = parseScoreConf(p);
       if (sc && "error" in sc) return { ok: false, error: `参数错误：${sc.error}` };
-      const code = await genUniqueCompCode();
+      // 比赛标识：默认留空（NULL=前台不展示标识行），手填则查重
+      const codeIn = await parseCompCode(p.code);
+      if (codeIn !== null && typeof codeIn !== "string") return { ok: false, error: codeIn.error };
+      const codeSet = codeIn as string | null; // error 形态已拦，收窄回 string|null
       const created = await prisma.competition.create({
         data: {
           name,
@@ -1735,7 +1756,7 @@ async function dispatch(
           creatorId: BigInt(creatorId),
           prizeTotal,
           prizePlan,
-          code,
+          code: codeSet,
           includeLevels: parseIncludeLevels(p.levels),
           scoreMode: sc?.mode ?? "",
           scoreConfig: sc?.config ?? "",
@@ -1744,7 +1765,7 @@ async function dispatch(
       });
       // 「报名开始」动态（2026-11-13 二期：详情页动态板块首条事件）
       await addCompEvent(Number(created.id), COMP_EVENT_JOIN_OPEN);
-      return { ok: true, message: `已发起比赛「${name}」，比赛标识 ${code}` };
+      return { ok: true, message: `已发起比赛「${name}」${codeSet ? `，比赛标识 ${codeSet}` : ""}` };
     }
 
     case "competition.edit": {
@@ -1775,6 +1796,15 @@ async function dispatch(
       if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
       const scEdit = parseScoreConf(p);
       if (scEdit && "error" in scEdit) return { ok: false, error: `参数错误：${scEdit.error}` };
+      // 比赛标识（2026-11-18）：参数缺省/空串=保持原值不动（编辑表单恒回填当前值，
+      // 只有显式改动才更新）；手填新值则查重（排除自身）。清空标识暂不开放——
+      // 如需撤销标识走「随机生成」换一个即可
+      let codeUpdate: string | null | undefined = undefined;
+      if (p.code !== undefined && String(p.code ?? "").trim() && String(p.code).trim() !== row.code) {
+        const codeIn = await parseCompCode(p.code, id);
+        if (codeIn === null || typeof codeIn === "string") codeUpdate = codeIn;
+        else return { ok: false, error: codeIn.error };
+      }
       await prisma.competition.update({
         where: { id: BigInt(id) },
         data: {
@@ -1786,12 +1816,19 @@ async function dispatch(
           creatorId: BigInt(creatorId),
           prizeTotal,
           prizePlan,
+          ...(codeUpdate !== undefined ? { code: codeUpdate } : {}),
           includeLevels: parseIncludeLevels(p.levels),
           scoreMode: scEdit?.mode ?? "",
           scoreConfig: scEdit?.config ?? "",
         },
       });
       return { ok: true, message: `已修改比赛 #${id}「${name}」` };
+    }
+
+    // 随机生成比赛标识（2026-11-18 张老师需求）：5 位数字+大小写字母，服务端查重重抽
+    case "competition.genCode": {
+      const code = await genUniqueCompCode();
+      return { ok: true, message: code };
     }
 
     case "competition.delete": {

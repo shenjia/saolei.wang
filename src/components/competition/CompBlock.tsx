@@ -7,8 +7,13 @@
 // · 标题字号对齐纪录页 h1（26px/39px，CSS 兜）；
 // · 发起人整块下线（张老师 03:10 定「隐藏发起人」）；
 // · 右上角按钮组整组下线（报名/进行中/已结束钮及其 hover 气泡随之退役——报名改走详情页右栏）；
-// · 起止日期后加彩色状态标签：绿「进行中」/ 金「未开始」/ 绿「已报名✓」（未结束且已报名时追加）/
+// · 状态标签：绿「进行中」/ 金「未开始」/ 绿「已报名✓」（未结束且已报名时追加）/
 //   亮灰「已结束」，圆角描边小标签（配色同全站级别色系）。
+//
+// 2026-11-18 张老师需求：
+// · 标题行不再显示起止日期，改图表下方「比赛时间：11月11日 ~ 12月3日」一行；
+// · 「收录级别」更名「比赛级别」；
+// · 比赛标识空（未设置）时整行不展示——后台支持手动设置标识后，空标识是常态。
 
 import Link from "next/link";
 import {
@@ -35,7 +40,7 @@ export function CompBlock({
 }) {
   return (
     <div className="box comp_item">
-      {/* 标题行：标题+日期+状态标签左，总奖金右 */}
+      {/* 标题行：标题+状态标签左，总奖金右（2026-11-18 起止日期移图表下方「比赛时间」行） */}
       <div className="comp_head">
         <div className="comp_title_group">
           <h3 className={"comp_name" + (c.status === "active" ? " on" : "")}>
@@ -43,7 +48,6 @@ export function CompBlock({
               {c.name}
             </Link>
           </h3>
-          <span className="comp_dates">{fmtDateRange(c.start, c.end)}</span>
           {/* 状态标签（七轮 03:10 张老师定）：绿「进行中」/金「未开始」/亮灰「已结束」；
               已报名且未结束时追加绿色「已报名✓」（可与前两者并存） */}
           {c.status === "active" && <span className="comp_status_tag st_active">进行中</span>}
@@ -75,28 +79,29 @@ export function CompBlock({
         )}
       </div>
 
-      {/* 信息行（2026-11-13 张老师定：收录级别一行在上，比赛标识一行在下）——
-          标识整段加粗高亮，含括号与简称；级别渲染为圆角标签（六轮 23:20 定，
-          配色复用后台 LevelTag 同款：初级绿/中级橙/高级金） */}
+      {/* 比赛时间（2026-11-18 张老师需求：起止日期从标题行移到图表下方） */}
+      <div className="comp_time">比赛时间：{fmtDateRange(c.start, c.end)}</div>
+
+      {/* 信息行（2026-11-13 张老师定：比赛级别一行在上，比赛标识一行在下）——
+          标识整段加粗高亮，含括号与简称；标识未设置（空）时整行不展示（2026-11-18 定）；
+          级别渲染为圆角标签（六轮 23:20 定，配色复用后台 LevelTag 同款：初级绿/中级橙/高级金） */}
       <div className="comp_meta">
         <span className="comp_levels">
-          收录级别：
+          比赛级别：
           {c.levels.map((l) => (
             <span key={l} className={"comp_lv_tag lv_" + l}>
               {LEVEL_NAMES[l]}
             </span>
           ))}
         </span>
-        <span className="comp_code">
-          比赛标识：
-          {c.status === "upcoming" ? (
-            "待定"
-          ) : (
+        {c.code && (
+          <span className="comp_code">
+            比赛标识：
             <b className="comp_code_all">
               {c.code}({c.shortName})
             </b>
-          )}
-        </span>
+          </span>
+        )}
       </div>
 
       <p className="comp_rules">比赛规则：{c.rules}</p>

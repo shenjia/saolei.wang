@@ -25,8 +25,8 @@ const getSignupPlayers = unstable_cache(
 );
 
 export interface OnlineCompParam {
-  /** 进行中比赛（?c= 合法时） */
-  comp: { id: number; shortName: string; code: string } | null;
+  /** 进行中比赛（?c= 合法时）；code=比赛标识，2026-11-18 起可空（未设置=不附加标识） */
+  comp: { id: number; shortName: string; code: string | null } | null;
   /** ?c= 指向的比赛无效（不存在/未开始/已结束）时的人话提示 */
   compError: string | null;
 }

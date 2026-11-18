@@ -148,6 +148,7 @@ export default async function AdminCompetitionsPage({
                           id: Number(r.id),
                           name: r.name,
                           shortName: r.shortName,
+                          code: r.code ?? "",
                           rules: r.rules,
                           creatorId: Number(r.creatorId),
                           prizeTotal: r.prizeTotal,
@@ -186,7 +187,8 @@ export default async function AdminCompetitionsPage({
 
       <AdminCard title="发起比赛">
         <div className="admin_note" style={{ marginBottom: 10 }}>
-          起止时间按北京时间填写；比赛标识创建时自动生成（前台开始前显示「待定」）。成绩采集与奖金发放为下一期功能。
+          起止时间按北京时间填写；比赛标识默认留空，可手填或点「随机生成」（5 位，全库唯一）。
+          成绩采集与奖金发放为下一期功能。
         </div>
         <CompetitionForm />
       </AdminCard>

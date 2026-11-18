@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/db";
 import { getComments, getCommentsCount, getVideoDetail, videoScores } from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { clientIp, uniqueVideoAction } from "@/lib/stat";
@@ -106,6 +107,17 @@ export default async function VideoViewPage({
   ]);
   // 显示口径：本次计数后的最新值；stat 行缺失（null）才退回读取时快照
   const clicksShown = clicksNow ?? video.clicks;
+
+  // 比赛标识匹配（2026-11-18 张老师需求）：录像内嵌 race_identifier 与比赛 code 一致时，
+  // meta 区显示比赛简称（链详情页）；未匹配/未设置标识的比赛保持只显示原标识文本。
+  // 比赛量小（十场量级）且 code 有唯一索引，单次查询开销可忽略。
+  const raceComp =
+    video.race
+      ? await prisma.competition.findUnique({
+          where: { code: video.race },
+          select: { id: true, shortName: true },
+        })
+      : null;
 
   const level = video.level as VideoLevel;
   const scores = videoScores(video.board3bv, video.realTime, level);
@@ -402,10 +414,18 @@ export default async function VideoViewPage({
                   签名<em>{video.signature}</em>
                 </span>
                 {/* 比赛标识（2026-11-14 张老师需求）：evf race_identifier / rmv token
-                    段提取落库，仅非空时展示——历史存量与站内生成的 evf 恒 NULL 不渲染 */}
+                    段提取落库，仅非空时展示——历史存量与站内生成的 evf 恒 NULL 不渲染。
+                    2026-11-18：标识匹配到比赛时显示简称并链接详情页，未匹配保持原样 */}
                 {video.race && (
                   <span className="race_name">
-                    比赛<em>{video.race}</em>
+                    比赛
+                    {raceComp ? (
+                      <Link href={`/competitions/${raceComp.id}`} prefetch={false}>
+                        {raceComp.shortName}
+                      </Link>
+                    ) : (
+                      <em>{video.race}</em>
+                    )}
                   </span>
                 )}
               </p>

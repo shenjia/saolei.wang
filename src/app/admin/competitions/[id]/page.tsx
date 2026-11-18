@@ -206,8 +206,9 @@ export default async function AdminCompetitionDetailPage({
             {info("简称", comp.shortName)}
             {info("比赛标识", <span className="mono">{comp.code || "—"}</span>)}
             {info("起止时间", `${cstStr(Number(comp.startTime))} ~ ${cstStr(Number(comp.endTime))}（北京）`)}
-            {info("收录级别", levels.map((l) => LEVEL_NAMES[l]).join("、"))}
+            {info("比赛级别", levels.map((l) => LEVEL_NAMES[l]).join("、"))}
             {info("成绩计算方式", scoreModeDesc(comp.scoreMode, comp.scoreConfig))}
+
             {info("总奖金", <span style={{ color: "#fdc61a" }}>¥{comp.prizeTotal.toLocaleString("en-US")}</span>)}
             {info(
               "分配方案",

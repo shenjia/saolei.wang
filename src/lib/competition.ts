@@ -5,7 +5,7 @@
 // · 列表排序＝进行中 → 未开始 → 已结束（张老师 13:12 定）；同状态内：
 //   进行中按结束时间升序（先结束的在前）、未开始按开始时间升序、已结束按结束时间倒序；
 // · 比赛总量小（十场量级），列表整表取回内存排序 + 切页，避免 CASE WHEN 裸拼 SQL；
-// · 比赛标识 code 创建时即生成，前台开始前显示「待定」；
+// · 比赛标识 code 默认留空（NULL=未设置不展示）；后台可手填/随机生成，唯一约束；
 // · 成绩采集为下一期口径：本期图表无数据源，渲染占位；全网统计「录像数量」恒 0。
 
 import { prisma } from "@/lib/db";
@@ -54,13 +54,13 @@ export function fmtEndedAt(end: bigint | number, now: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
 }
 
-/** 起止日期小标：11月11日 ~ 12月3日（跨年带年份） */
+/** 起止日期小标：11月11日 ~ 12月3日（跨年带年份）；括号版/裸版共用（裸版=图表下「比赛时间」行） */
 export function fmtDateRange(start: bigint | number, end: bigint | number): string {
   const s = new Date(Number(start) * 1000);
   const e = new Date(Number(end) * 1000);
   const f = (d: Date) => `${d.getMonth() + 1}月${d.getDate()}日`;
   const year = s.getFullYear() === e.getFullYear() ? "" : `${s.getFullYear()}年`;
-  return `(${year}${f(s)} ~ ${f(e)})`;
+  return `${year}${f(s)} ~ ${f(e)}`;
 }
 
 export const fmtPrize = (n: number): string => `¥${n.toLocaleString("en-US")}`;
@@ -84,20 +84,20 @@ export function remainColor(sec: number): string {
 
 const CODE_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-/** 6 位数字+大小写字母随机标识（创建时生成，唯一性靠重试） */
+/** 5 位数字+大小写字母随机标识（后台按钮生成/手填都走应用层查重，唯一索引兜底） */
 export function genCompCode(): string {
   let s = "";
-  for (let i = 0; i < 6; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  for (let i = 0; i < 5; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   return s;
 }
 
 export async function genUniqueCompCode(): Promise<string> {
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 20; i++) {
     const code = genCompCode();
     const hit = await prisma.competition.findFirst({ where: { code }, select: { id: true } });
     if (!hit) return code;
   }
-  return `${Date.now().toString(36)}`.slice(-6); // 兜底：碰撞概率极低，仍保证可写
+  return `${Date.now().toString(36)}`.slice(-5); // 兜底：碰撞概率极低，仍保证可写
 }
 
 // ---------- 列表查询 ----------
@@ -113,7 +113,7 @@ export interface CompRow {
   creatorName: string;
   prizeTotal: number;
   prizeLines: string[];
-  code: string;
+  code: string; // 比赛标识（""=未设置，前台不展示标识行）
   entryCount: number;
   joined: boolean; // 当前登录用户是否已报名
   levels: Level[]; // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
@@ -214,7 +214,7 @@ export async function getCompetitionPage(page: number, uid?: number, pageSize?: 
       creatorName: nameMap.get(c.creatorId.toString()) || `UID ${c.creatorId}`,
       prizeTotal: c.prizeTotal,
       prizeLines: parsePrizePlan(c.prizePlan),
-      code: c.code,
+      code: c.code ?? "",
       entryCount: countMap.get(cid) ?? 0,
       joined: mineSet.has(cid),
       levels: parseLevels(c.includeLevels),
@@ -595,7 +595,7 @@ export async function getCompetitionDetail(
     creatorName: creator?.chineseName ?? `UID ${c.creatorId}`,
     prizeTotal: c.prizeTotal,
     prizeLines: parsePrizePlan(c.prizePlan),
-    code: c.code,
+    code: c.code ?? "",
     entryCount,
     joined: !!joined,
     levels: levelSet.size ? LEVELS.filter((l) => levelSet.has(l)) : [...LEVELS],
