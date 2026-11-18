@@ -1736,32 +1736,56 @@ export async function getLatestVideosBrief(
 
 export interface BroadcastRow {
   content: string;
-  fromUser: number;
-  author: UserBrief | null;
+  /** 接收人玩家 ID（2026-11-18 张老师要求：列语义从「发送人」改「接收人」——
+   *  单发系统通知（from_user=0）= 实际收件玩家；全站广播恒 0（显示「全站玩家」） */
+  toUser: number;
+  /** 接收人简要资料（单发系统通知填充；全站广播为 null） */
+  recipient: UserBrief | null;
   receivers: number;
   readCount: number;
   createTime: number;
 }
 
-/** 广播历史：按「发送人 + 内容 + 时间」聚合成一次广播（逐条写入 message 表，故用聚合还原） */
-export async function getBroadcastHistory(limit = 20): Promise<BroadcastRow[]> {
-  const rows = await prisma.$queryRawUnsafe<
-    { content: string; from_user: bigint; c: bigint; read_c: bigint; t: bigint }[]
-  >(
-    `SELECT content, from_user, COUNT(*) c, SUM(is_read = 1) read_c, MIN(create_time) t
+/** 系统消息记录（2026-11-18 张老师要求改版，原「历史广播」）：is_system=1 全量分页——
+ *  单发系统通知（审核结果/每日一星/低信任通知等，from_user=0、一人一行）逐行展示，
+ *  接收人=to_user 本人；全站广播（message.broadcast 逐玩家落行）按「内容+发送人+时间」
+ *  聚合成一行（否则 3 万玩家 = 3 万行刷屏），接收人列显示「全站玩家」。
+ *  后台标准翻页 = AdminPager（每页 ADMIN_PAGESIZE 条）。 */
+export async function getBroadcastHistory(
+  page: number,
+  pageSize: number = ADMIN_PAGESIZE
+): Promise<{ rows: BroadcastRow[]; total: number }> {
+  const base = `SELECT content, from_user, COUNT(*) c, SUM(is_read = 1) read_c,
+       MIN(create_time) t, MIN(to_user) min_to, MAX(to_user) max_to
      FROM message WHERE is_system = 1
-     GROUP BY content, from_user, create_time
-     ORDER BY t DESC LIMIT ${limit}`
-  );
-  const authors = await usersByIds(rows.map((r) => N(r.from_user)));
-  return rows.map((r) => ({
-    content: r.content,
-    fromUser: N(r.from_user),
-    author: authors.get(N(r.from_user)) ?? null,
-    receivers: N(r.c),
-    readCount: N(r.read_c),
-    createTime: N(r.t),
-  }));
+     GROUP BY content, from_user, create_time`;
+  const [rows, countRows] = await Promise.all([
+    prisma.$queryRawUnsafe<
+      { content: string; from_user: bigint; c: bigint; read_c: bigint; t: bigint; min_to: bigint; max_to: bigint }[]
+    >(`${base} ORDER BY t DESC LIMIT ? OFFSET ?`, pageSize, (page - 1) * pageSize),
+    prisma.$queryRawUnsafe<{ c: bigint }[]>(`SELECT COUNT(*) c FROM (${base}) agg`),
+  ]);
+  // 广播判定：同一（内容+发送人+秒）落了多个不同收件人 = 广播聚合行；
+  // 单发通知一组恒一人（min_to = max_to = 收件人 ID）。
+  const isBroadcast = (r: { c: bigint; min_to: bigint; max_to: bigint }) => N(r.c) > 1 && r.min_to !== r.max_to;
+  const people = await usersByIds([
+    ...new Set(rows.filter((r) => !isBroadcast(r)).map((r) => N(r.min_to))),
+  ]);
+  return {
+    rows: rows.map((r) => {
+      const bc = isBroadcast(r);
+      const to = bc ? 0 : N(r.min_to);
+      return {
+        content: r.content,
+        toUser: to,
+        recipient: bc ? null : (people.get(to) ?? null),
+        receivers: N(r.c),
+        readCount: N(r.read_c),
+        createTime: N(r.t),
+      };
+    }),
+    total: N(countRows[0]?.c),
+  };
 }
 
 /** 站内信总览 */
