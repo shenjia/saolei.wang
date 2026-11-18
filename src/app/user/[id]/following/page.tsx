@@ -71,9 +71,6 @@ export default async function UserFollowingPage({
       <ul id="follow_list">
         <li className="main">
           <div className="box video_box">
-            <div className="page_head">
-              <h1>{owner.chineseName}的关注</h1>
-            </div>
             <FollowListFeed
               initial={rows}
               initialTotal={total}
