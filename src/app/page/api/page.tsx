@@ -5,6 +5,10 @@
 // 页面自足可读，不必跳 GitHub；接口区块用 <details> 折叠（默认展开，长页可收起）。
 // 2026-10-27：首屏新增接口导航表（锚点跳转到对应区块）——导航行直接由 APIS 数组
 // 生成，**今后加减接口只改 APIS 数组一处**，导航表自动跟随，无需单独维护。
+// 2026-11-19（张老师要求）：列表拆「用户 API / 公开 API」两张导航表 + 两个详情区——
+//   用户 API（USER_APIS）= 需 Bearer token 登录态的接口（login 也列在用户表首位，
+//   因为它是拿 token 的入口）；公开 API（APIS）= 纯数据接口只要 X-Api-Key。
+//   加减接口只改对应数组一处，导航表与详情区自动跟随。
 
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -31,7 +35,9 @@ interface ApiDoc {
   method?: "GET" | "POST";
 }
 
-const APIS: ApiDoc[] = [
+// ---- 用户 API（需登录态：Bearer token）----
+// 2026-11-19 拆表：login 是拿 token 的入口，me 自检登录态，其余为登录后才可用的操作接口。
+const USER_APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/login",
     title: "用户登录",
@@ -99,6 +105,156 @@ const APIS: ApiDoc[] = [
       "隐私字段（QQ / 邮箱 / 注册 IP / 登录 IP）一律不出",
     ],
   },
+  {
+    path: "/api/public/v1/follow",
+    title: "关注用户",
+    brief: "关注指定玩家（2026-11-19 新增）",
+    desc: "关注指定玩家（uid）。业务闸门与站内完全一致：不能关注自己、目标用户不存在或已封禁拒绝、对方将你拉黑拒绝、重复关注幂等成功（不重复发动态/提醒）、关注上限（默认 30 人，赞助每 1 元 +5 位，封顶 200）。成功后照常产生关注动态与新粉丝站内提醒。",
+    params: [
+      { name: "uid", required: true, desc: "要关注的玩家 ID（请求体 JSON 字段，正整数）" },
+    ],
+    request: "POST /api/public/v1/follow\n\nAuthorization: Bearer ut-xxxxxxxx…\n\n{\"uid\": 123}",
+    response: `{
+  "ok": true
+}`,
+    notes: [
+      "上限已满返回 400（文案提示赞助可提升上限）；维护模式下写操作返回 503",
+      "本接口会在站内产生真实关注关系与动态，请勿用于批量操作（站内频控与反滥用措施同样生效）",
+    ],
+    method: "POST",
+  },
+  {
+    path: "/api/public/v1/unfollow",
+    title: "取关用户",
+    brief: "取消关注指定玩家（2026-11-19 新增）",
+    desc: "取消关注指定玩家（uid）。幂等：未关注该玩家时同样返回成功。取消后照常产生取关动态（若与紧邻的关注动作互相抵消，两条动态自动消失，与站内口径一致）。",
+    params: [
+      { name: "uid", required: true, desc: "要取关的玩家 ID（请求体 JSON 字段，正整数）" },
+    ],
+    request: "POST /api/public/v1/unfollow\n\nAuthorization: Bearer ut-xxxxxxxx…\n\n{\"uid\": 123}",
+    response: `{
+  "ok": true
+}`,
+    notes: ["维护模式下写操作返回 503"],
+    method: "POST",
+  },
+  {
+    path: "/api/public/v1/follow_list",
+    title: "关注列表",
+    brief: "我关注的人，按关注时间倒序，20 条/页（2026-11-19 新增）",
+    desc: "分页返回当前 token 用户的关注列表（按关注时间倒序），每页固定 20 条。只查本人——他人列表受隐私设置限制（「隐藏关注列表」的用户仅本人与管理员可见），公开 API 不提供他人视角。",
+    params: [{ name: "page", desc: "页码，从 1 起，默认 1" }],
+    request: "GET /api/public/v1/follow_list?page=1\n\nAuthorization: Bearer ut-xxxxxxxx…",
+    response: `{
+  "rows": [
+    {
+      "id": 123,
+      "chineseName": "张三",
+      "englishName": "Zhang San",
+      "sex": 1,
+      "avatarUrl": "https://saolei.wang/images/player/123.jpg",
+      "createTime": 1795190400,
+      "title": "大元帅",
+      "classic": null
+    }
+  ],
+  "total": 8,
+  "page": 1,
+  "hasMore": false
+}`,
+    notes: [
+      "createTime 为关注时间（Unix 秒）；title 军衔（当前成绩评定，与站内列表页同口径）；classic 旧版称号备选（null=无）",
+      "avatarUrl 头像完整 URL，空串 = 无头像（请用调用方默认图占位）",
+    ],
+  },
+  {
+    path: "/api/public/v1/fan_list",
+    title: "粉丝列表",
+    brief: "关注我的人，按关注时间倒序，20 条/页（2026-11-19 新增）",
+    desc: "分页返回当前 token 用户的粉丝列表（按关注时间倒序），每页固定 20 条，行结构与 follow_list 完全一致（createTime 为对方关注你的时间）。只查本人，不提供他人视角。",
+    params: [{ name: "page", desc: "页码，从 1 起，默认 1" }],
+    request: "GET /api/public/v1/fan_list?page=1\n\nAuthorization: Bearer ut-xxxxxxxx…",
+    response: `{
+  "rows": [
+    {
+      "id": 456,
+      "chineseName": "李四",
+      "englishName": "",
+      "sex": 0,
+      "avatarUrl": "",
+      "createTime": 1795190400,
+      "title": "",
+      "classic": null
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "hasMore": false
+}`,
+    notes: ["行结构与 follow_list 完全一致；avatarUrl 空串 = 无头像"],
+  },
+  {
+    path: "/api/public/v1/messages",
+    title: "短消息列表",
+    brief: "收件箱分页列表，支持系统/私信/已发送筛选（2026-11-19 新增）",
+    desc: "分页返回当前 token 用户的站内短消息（按时间倒序，最新在前）。type 筛选：all 全部 / system 系统消息 / private 手写私信 / sent 已发送视角（我发出的，含管理员广播行；此时 isRead 语义 = 对方是否已读）。分页口径：页锚 15 条，size 为本批行数（15 的整数倍、100 封顶）。",
+    params: [
+      { name: "page", desc: "页码，从 1 起，默认 1" },
+      { name: "type", desc: "all（默认）/ system / private / sent" },
+      { name: "size", desc: "本批行数，15 的整数倍、100 封顶，默认 15" },
+    ],
+    request: "GET /api/public/v1/messages?page=1&type=private\n\nAuthorization: Bearer ut-xxxxxxxx…",
+    response: `{
+  "messages": [
+    {
+      "id": 789,
+      "content": "你好，想约一场对决。",
+      "isRead": false,
+      "isSystem": false,
+      "createTime": 1795190400,
+      "from": { "id": 123, "chineseName": "张三", "englishName": "Zhang San", "title": "大元帅" },
+      "to": null,
+      "sent": false
+    }
+  ],
+  "hasMore": true,
+  "total": 42,
+  "pageSize": 15,
+  "type": "private",
+  "page": 1
+}`,
+    notes: [
+      "from / to 为发件人、收件人简卡 { id, chineseName, englishName, title }，只出姓名与军衔（头像与隐私字段不出）；from 为 null 多见于系统通知行",
+      "sent=true 的行在「已发送」视角返回，此时 to 有值、isRead = 对方是否已读",
+      "content 中 [url …]文字[/url] 为站内链接标记（如新粉丝提醒的「查看」），渲染时可自行处理",
+      "只读接口，维护模式下仍可调用",
+    ],
+  },
+  {
+    path: "/api/public/v1/send_message",
+    title: "发送短消息",
+    brief: "给指定玩家发站内私信（2026-11-19 新增）",
+    desc: "以当前 token 用户身份给指定玩家（to）发送站内私信（content，≤200 字）。全部站内发信闸门逐条继承：敏感词前置闸、黑名单闸（对方将你拉黑则拒）、未上榜限制（未加入排行的账号只能发给管理员或回复对方先发来的消息）、反群发频控（当日总量、同收件人频率、同文重复，超限 429）。成功后对方站内未读数实时 +1。",
+    params: [
+      { name: "to", required: true, desc: "收件人玩家 ID（请求体 JSON 字段，正整数）" },
+      { name: "content", required: true, desc: "消息内容（请求体 JSON 字段，非空，≤200 字，超长截断）" },
+    ],
+    request: "POST /api/public/v1/send_message\n\nAuthorization: Bearer ut-xxxxxxxx…\n\n{\"to\": 123, \"content\": \"你好\"}",
+    response: `{
+  "ok": true,
+  "id": 791
+}`,
+    notes: [
+      "不能给自己发信；收件人不存在 404；敏感词/黑名单/未上榜限制 400 或 403（文案见错误信息）；频控超限 429",
+      "维护模式下返回 503（与站内一致：只挡发信不挡收信）",
+      "请勿用于批量群发——频控与站内同一套，触发后当日无法再发",
+    ],
+    method: "POST",
+  },
+];
+
+// ---- 公开 API（纯数据接口：只需 X-Api-Key）----
+const APIS: ApiDoc[] = [
   {
     path: "/api/public/v1/stats",
     title: "站点统计",
@@ -451,7 +607,7 @@ function escapeRegExp(s: string): string {
 }
 
 const NOTE_KEY_RES = new Map<string, RegExp | null>();
-for (const api of APIS) {
+for (const api of [...USER_APIS, ...APIS]) {
   const keys = new Set<string>();
   for (const m of api.response.matchAll(/"([A-Za-z0-9_]+)":/g)) keys.add(m[1]);
   for (const p of api.params) keys.add(p.name);
@@ -487,6 +643,103 @@ function renderNote(note: string, re: RegExp | null): ReactNode {
   }
   if (last < note.length) out.push(note.slice(last));
   return out;
+}
+
+/** 单张导航表：行数据直接映射数组——加减接口只改数组一处，表自动跟随 */
+function ApiNavTable({ apis }: { apis: ApiDoc[] }) {
+  return (
+    <table className="api_table api_nav">
+      <thead>
+        <tr>
+          <th style={{ width: 64 }}>方法</th>
+          <th style={{ width: 260 }}>接口</th>
+          <th style={{ width: 90 }}>说明</th>
+          <th>功能</th>
+        </tr>
+      </thead>
+      <tbody>
+        {apis.map((api) => (
+          <tr key={api.path}>
+            <td>
+              <span className="api_method">{api.method ?? "GET"}</span>
+            </td>
+            <td>
+              <a className="api_nav_link" href={`#api-${api.path.split("/").pop()}`}>
+                <code>{api.path}</code>
+              </a>
+            </td>
+            <td className="api_nav_title">{api.title}</td>
+            <td className="api_nav_brief">{api.brief}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** 接口详情区块列表：同上由数组生成 */
+function ApiDetails({ apis }: { apis: ApiDoc[] }) {
+  return (
+    <>
+      {apis.map((api) => (
+        <details key={api.path} id={`api-${api.path.split("/").pop()}`} className="api_endpoint" open>
+          <summary>
+            <span className="api_method">{api.method ?? "GET"}</span>
+            <code>{api.path}</code>
+            <span className="api_ep_title">{api.title}</span>
+          </summary>
+          <div className="api_ep_body">
+            <p className="api_ep_desc">{api.desc}</p>
+
+            <div className="api_sub">输入参数{api.params.length === 0 ? "：无" : ""}</div>
+            {api.params.length > 0 && (
+              <table className="api_table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 90 }}>参数</th>
+                    <th style={{ width: 60 }}>必填</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {api.params.map((p) => (
+                    <tr key={p.name}>
+                      <td>
+                        <code>{p.name}</code>
+                      </td>
+                      {/* 必填「是」金 /「否」亮灰，说明列正文亮灰（2026-10-27 张老师定） */}
+                      <td>
+                        <span className={p.required ? "api_req_yes" : "api_req_no"}>{p.required ? "是" : "否"}</span>
+                      </td>
+                      <td className="api_param_desc">{p.desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <div className="api_sub">请求示例</div>
+            <pre className="api_code">
+              <code>{api.request}</code>
+            </pre>
+
+            <div className="api_sub">返回示例</div>
+            <pre className="api_code">
+              <code>{api.response}</code>
+            </pre>
+
+            {api.notes && (
+              <ul className="api_brief">
+                {api.notes.map((n, i) => (
+                  <li key={i}>{renderNote(n, NOTE_KEY_RES.get(api.path) ?? null)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </details>
+      ))}
+    </>
+  );
 }
 
 export default function ApiPage() {
@@ -525,94 +778,26 @@ export default function ApiPage() {
         </ul>
 
         {/* 接口导航（2026-10-27 张老师要求）：首屏总表，点击跳到对应接口区块。
-            行数据直接映射 APIS 数组——加减接口只改上面 APIS 一处，此表自动跟随。
+            2026-11-19 拆两张表：用户 API（需 Bearer token 登录态）与公开 API（纯数据）。
+            行数据直接映射 USER_APIS / APIS 数组——加减接口只改数组一处，此表自动跟随。
             配色（张老师 16:37 定）：说明列白、功能列亮灰（.api_nav 修饰类区分参数表）。 */}
-        <h2>接口导航</h2>
-        <table className="api_table api_nav">
-          <thead>
-            <tr>
-              <th style={{ width: 64 }}>方法</th>
-              <th style={{ width: 260 }}>接口</th>
-              <th style={{ width: 90 }}>说明</th>
-              <th>功能</th>
-            </tr>
-          </thead>
-          <tbody>
-            {APIS.map((api) => (
-              <tr key={api.path}>
-                <td>
-                  <span className="api_method">{api.method ?? "GET"}</span>
-                </td>
-                <td>
-                  <a className="api_nav_link" href={`#api-${api.path.split("/").pop()}`}>
-                    <code>{api.path}</code>
-                  </a>
-                </td>
-                <td className="api_nav_title">{api.title}</td>
-                <td className="api_nav_brief">{api.brief}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h2>用户 API（需登录态）</h2>
+        <p>
+          除 <code>login</code>（换取 token 的入口）外，均需在请求头携带
+          <code>Authorization: Bearer &lt;token&gt;</code>（login 签发）；无效/过期/被吊销的 token 返回
+          <code>401</code>。接口以当前登录用户身份操作，写操作与站内同一套闸门（频控、黑名单、敏感词等）。
+        </p>
+        <ApiNavTable apis={USER_APIS} />
 
-        <h2>接口详情</h2>
-        {APIS.map((api) => (
-          <details key={api.path} id={`api-${api.path.split("/").pop()}`} className="api_endpoint" open>
-            <summary>
-              <span className="api_method">{api.method ?? "GET"}</span>
-              <code>{api.path}</code>
-              <span className="api_ep_title">{api.title}</span>
-            </summary>
-            <div className="api_ep_body">
-              <p className="api_ep_desc">{api.desc}</p>
+        <h2>公开 API（纯数据）</h2>
+        <p>只读数据接口，无需用户登录态，凭 API Key 即可调用。</p>
+        <ApiNavTable apis={APIS} />
 
-              <div className="api_sub">输入参数{api.params.length === 0 ? "：无" : ""}</div>
-              {api.params.length > 0 && (
-                <table className="api_table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 90 }}>参数</th>
-                      <th style={{ width: 60 }}>必填</th>
-                      <th>说明</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {api.params.map((p) => (
-                      <tr key={p.name}>
-                        <td>
-                          <code>{p.name}</code>
-                        </td>
-                        {/* 必填「是」金 /「否」亮灰，说明列正文亮灰（2026-10-27 张老师定） */}
-                        <td>
-                          <span className={p.required ? "api_req_yes" : "api_req_no"}>{p.required ? "是" : "否"}</span>
-                        </td>
-                        <td className="api_param_desc">{p.desc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+        <h2>接口详情 · 用户 API</h2>
+        <ApiDetails apis={USER_APIS} />
 
-              <div className="api_sub">请求示例</div>
-              <pre className="api_code">
-                <code>{api.request}</code>
-              </pre>
-
-              <div className="api_sub">返回示例</div>
-              <pre className="api_code">
-                <code>{api.response}</code>
-              </pre>
-
-              {api.notes && (
-                <ul className="api_brief">
-                  {api.notes.map((n, i) => (
-                    <li key={i}>{renderNote(n, NOTE_KEY_RES.get(api.path) ?? null)}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </details>
-        ))}
+        <h2>接口详情 · 公开 API</h2>
+        <ApiDetails apis={APIS} />
 
         <p>
           快速验证：

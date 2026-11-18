@@ -64,6 +64,32 @@ X-Api-Key: <你的专用 key>
 
 - 无效/过期/被吊销的 token：`401`（应重新 login）
 
+### 0.2 关注用户 `POST /api/public/v1/follow`（2026-11-19 新增）
+
+以 token 用户身份关注指定玩家。请求体 `{"uid": 123}`。闸门与站内一致：不能关注自己 / 目标不存在或封禁拒绝 / 黑名单拒绝 / 幂等（已关注直接成功）/ 上限（默认 30，赞助每元 +5 封顶 200）。成功 `{"ok": true}`；业务拒绝 `400`（文案见 error）；维护模式 `503`。
+
+### 0.3 取关用户 `POST /api/public/v1/unfollow`（2026-11-19 新增）
+
+以 token 用户身份取关。请求体 `{"uid": 123}`，幂等（未关注也成功）。成功 `{"ok": true}`。
+
+### 0.4 关注列表 `GET /api/public/v1/follow_list?page=1`（2026-11-19 新增）
+
+当前 token 用户关注的人，按关注时间倒序，每页 20。行：`{ id, chineseName, englishName, sex, avatarUrl, createTime, title, classic }`（createTime=关注时间 Unix 秒；avatarUrl 空串=无头像）。只查本人，不提供他人视角（隐私闸）。返回 `{ rows, total, page, hasMore }`。
+
+### 0.5 粉丝列表 `GET /api/public/v1/fan_list?page=1`（2026-11-19 新增）
+
+关注当前 token 用户的人，行结构与分页口径同 0.4。
+
+### 0.6 短消息列表 `GET /api/public/v1/messages?page=1&type=all&size=15`（2026-11-19 新增）
+
+当前 token 用户站内短消息，按时间倒序。`type`：all / system / private / sent（已发送视角，此时 isRead=对方已读）。行：`{ id, content, isRead, isSystem, createTime, from, to, sent }`；from/to 简卡 `{ id, chineseName, englishName, title }`（sent 视角才有 to）。分页：页锚 15，size 为本批行数（15 的整数倍、100 封顶）。返回 `{ messages, hasMore, total, pageSize, type, page }`。只读，维护模式下仍可用。
+
+### 0.7 发送短消息 `POST /api/public/v1/send_message`（2026-11-19 新增）
+
+以 token 用户身份发站内私信。请求体 `{"to": 123, "content": "你好"}`（content ≤200 字）。站内发信闸门逐条继承：敏感词 / 黑名单 / 未上榜限制（只能发管理员或回复对方先发来的消息）/ 反群发频控。成功 `{"ok": true, "id": 消息id}`；收件人不存在 `404`；频控 `429`；维护模式 `503`。
+
+> 用户侧接口鉴权均需 `X-Api-Key`（scope 含 `user`，2026-11-19 起用户操作类接口按 scope 控制；存量无 scope 的 key 不受影响）+ `Authorization: Bearer <token>`。
+
 ### 1. 站点统计 `GET /api/public/v1/stats`
 
 无参数。返回首页「站点统计」版块同口径数据 + 两个最大 ID（确定增量抓取范围用）。
