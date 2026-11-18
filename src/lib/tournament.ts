@@ -5,7 +5,7 @@
 // · 列表排序＝进行中 → 未开始 → 已结束（张老师 13:12 定）；同状态内：
 //   进行中按结束时间升序（先结束的在前）、未开始按开始时间升序、已结束按结束时间倒序；
 // · 比赛总量小（十场量级），列表整表取回内存排序 + 切页，避免 CASE WHEN 裸拼 SQL；
-// · 比赛标识 code 创建时即生成，前台开始前显示「待定」；
+// · 比赛标识 code 默认留空（NULL=未设置不展示）；后台可手填/随机生成，唯一约束；
 // · 成绩采集为下一期口径：本期图表无数据源，渲染占位；全网统计「录像数量」恒 0。
 
 import { prisma } from "@/lib/db";
@@ -13,15 +13,15 @@ import { getVideosByIds, type VideoListItem } from "@/lib/queries";
 import { dualTitles } from "@/lib/title-system";
 import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
 
-export type CompetitionStatus = "upcoming" | "active" | "ended";
+export type TournamentStatus = "upcoming" | "active" | "ended";
 
-export const COMP_PAGE_SIZE = 5; // 张老师：一页最多同时显示 5 个比赛
+export const TOUR_PAGE_SIZE = 5; // 张老师：一页最多同时显示 5 个比赛
 
-export function compStatus(
+export function tourStatus(
   start: bigint | number,
   end: bigint | number,
   now: number
-): CompetitionStatus {
+): TournamentStatus {
   const s = Number(start);
   const e = Number(end);
   if (now < s) return "upcoming";
@@ -29,7 +29,7 @@ export function compStatus(
   return "ended";
 }
 
-const STATUS_ORDER: Record<CompetitionStatus, number> = { active: 0, upcoming: 1, ended: 2 };
+const STATUS_ORDER: Record<TournamentStatus, number> = { active: 0, upcoming: 1, ended: 2 };
 
 // ---------- 展示格式化 ----------
 
@@ -54,13 +54,15 @@ export function fmtEndedAt(end: bigint | number, now: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
 }
 
-/** 起止日期小标：11月11日 ~ 12月3日（跨年带年份） */
+/** 起止日期小标：11月11日 ~ 12月3日（跨年带年份）；括号版/裸版共用（裸版=图表下「比赛时间」行） */
 export function fmtDateRange(start: bigint | number, end: bigint | number): string {
   const s = new Date(Number(start) * 1000);
   const e = new Date(Number(end) * 1000);
-  const f = (d: Date) => `${d.getMonth() + 1}月${d.getDate()}日`;
+  // 精确到分钟（张老师 2026-11-18 详情页反馈）：比赛起止时刻恒为整点分钟级
+  const f = (d: Date) =>
+    `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const year = s.getFullYear() === e.getFullYear() ? "" : `${s.getFullYear()}年`;
-  return `(${year}${f(s)} ~ ${f(e)})`;
+  return `${year}${f(s)} ~ ${f(e)}`;
 }
 
 export const fmtPrize = (n: number): string => `¥${n.toLocaleString("en-US")}`;
@@ -84,36 +86,36 @@ export function remainColor(sec: number): string {
 
 const CODE_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-/** 6 位数字+大小写字母随机标识（创建时生成，唯一性靠重试） */
-export function genCompCode(): string {
+/** 5 位数字+大小写字母随机标识（后台按钮生成/手填都走应用层查重，唯一索引兜底） */
+export function genTourCode(): string {
   let s = "";
-  for (let i = 0; i < 6; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  for (let i = 0; i < 5; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   return s;
 }
 
-export async function genUniqueCompCode(): Promise<string> {
-  for (let i = 0; i < 5; i++) {
-    const code = genCompCode();
-    const hit = await prisma.competition.findFirst({ where: { code }, select: { id: true } });
+export async function genUniqueTourCode(): Promise<string> {
+  for (let i = 0; i < 20; i++) {
+    const code = genTourCode();
+    const hit = await prisma.tournament.findFirst({ where: { code }, select: { id: true } });
     if (!hit) return code;
   }
-  return `${Date.now().toString(36)}`.slice(-6); // 兜底：碰撞概率极低，仍保证可写
+  return `${Date.now().toString(36)}`.slice(-5); // 兜底：碰撞概率极低，仍保证可写
 }
 
 // ---------- 列表查询 ----------
 
-export interface CompRow {
+export interface TourRow {
   id: string;
   name: string;
   shortName: string;
-  status: CompetitionStatus;
+  status: TournamentStatus;
   start: number;
   end: number;
   rules: string;
   creatorName: string;
   prizeTotal: number;
   prizeLines: string[];
-  code: string;
+  code: string; // 比赛标识（""=未设置，前台不展示标识行）
   entryCount: number;
   joined: boolean; // 当前登录用户是否已报名
   levels: Level[]; // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
@@ -124,8 +126,8 @@ export interface CompRow {
   creatorClassic: { name: string; color: string } | null; // 旧版称号备选
 }
 
-export interface CompPage {
-  rows: CompRow[];
+export interface TourPage {
+  rows: TourRow[];
   total: number;
   page: number;
   pageSize: number;
@@ -134,28 +136,28 @@ export interface CompPage {
 
 /** 比赛列表：状态排序 → 内存切页。uid 传入时带「是否已报名」标记。
  *  pageSize 供「加载更多」大批量取数（82ff927 口径：size 只是本批行数 take） */
-export async function getCompetitionPage(page: number, uid?: number, pageSize?: number): Promise<CompPage> {
+export async function getTournamentPage(page: number, uid?: number, pageSize?: number): Promise<TourPage> {
   const now = Math.floor(Date.now() / 1000);
-  const size = Math.min(Math.max(pageSize ?? COMP_PAGE_SIZE, 1), 100);
-  const all = await prisma.competition.findMany({
+  const size = Math.min(Math.max(pageSize ?? TOUR_PAGE_SIZE, 1), 100);
+  const all = await prisma.tournament.findMany({
     orderBy: { startTime: "asc" },
   });
 
   // 报名数一次聚合
-  const counts = await prisma.competitionEntry.groupBy({
-    by: ["competitionId"],
-    _count: { competitionId: true },
+  const counts = await prisma.tournamentEntry.groupBy({
+    by: ["tournamentId"],
+    _count: { tournamentId: true },
   });
-  const countMap = new Map<string, number>(counts.map((c) => [c.competitionId.toString(), c._count.competitionId]));
+  const countMap = new Map<string, number>(counts.map((c) => [c.tournamentId.toString(), c._count.tournamentId]));
 
   // 我的报名集合
   let mineSet = new Set<string>();
   if (uid) {
-    const mine = await prisma.competitionEntry.findMany({
+    const mine = await prisma.tournamentEntry.findMany({
       where: { userId: BigInt(uid) },
-      select: { competitionId: true },
+      select: { tournamentId: true },
     });
-    mineSet = new Set(mine.map((m) => m.competitionId.toString()));
+    mineSet = new Set(mine.map((m) => m.tournamentId.toString()));
   }
 
   // 发起人：姓名/英文名/性别 + 称号评定数据（user_scores 与 user 同主键；
@@ -201,20 +203,20 @@ export async function getCompetitionPage(page: number, uid?: number, pageSize?: 
     return set.size ? LEVELS.filter((l) => set.has(l)) : [...LEVELS];
   };
 
-  const rows: CompRow[] = all.map((c) => {
+  const rows: TourRow[] = all.map((c) => {
     const cid = c.id.toString();
     return {
       id: cid,
       name: c.name,
       shortName: c.shortName,
-      status: compStatus(c.startTime, c.endTime, now),
+      status: tourStatus(c.startTime, c.endTime, now),
       start: Number(c.startTime),
       end: Number(c.endTime),
       rules: c.rules,
       creatorName: nameMap.get(c.creatorId.toString()) || `UID ${c.creatorId}`,
       prizeTotal: c.prizeTotal,
       prizeLines: parsePrizePlan(c.prizePlan),
-      code: c.code,
+      code: c.code ?? "",
       entryCount: countMap.get(cid) ?? 0,
       joined: mineSet.has(cid),
       levels: parseLevels(c.includeLevels),
@@ -249,76 +251,76 @@ export async function getCompetitionPage(page: number, uid?: number, pageSize?: 
 
 // ---------- 统计 ----------
 
-export interface CompGlobalStats {
-  competitions: number; // 比赛个数（全站）
+export interface TourGlobalStats {
+  tournaments: number; // 比赛个数（全站）
   participants: number; // 参赛人数（去重用户）
   videos: number; // 录像数量（成绩采集下一期接入，恒 0）
   prizeTotal: number; // 累计奖金（全站总奖金之和）
 }
 
-export async function getCompGlobalStats(): Promise<CompGlobalStats> {
-  const [competitions, participants, prizeAgg, videos] = await Promise.all([
-    prisma.competition.count(),
-    prisma.competitionEntry.groupBy({ by: ["userId"], where: {} }).then((g) => g.length),
-    prisma.competition.aggregate({ _sum: { prizeTotal: true } }),
+export async function getTourGlobalStats(): Promise<TourGlobalStats> {
+  const [tournaments, participants, prizeAgg, videos] = await Promise.all([
+    prisma.tournament.count(),
+    prisma.tournamentEntry.groupBy({ by: ["userId"], where: {} }).then((g) => g.length),
+    prisma.tournament.aggregate({ _sum: { prizeTotal: true } }),
     // 挂接到比赛的录像数（2026-11-13 二期起有真实数据源：后台手动挂接）
-    prisma.video.count({ where: { competitionId: { not: null }, status: { not: 0 } } }),
+    prisma.video.count({ where: { tournamentId: { not: null }, status: { not: 0 } } }),
   ]);
   return {
-    competitions,
+    tournaments,
     participants,
     videos,
     prizeTotal: prizeAgg._sum.prizeTotal ?? 0,
   };
 }
 
-export interface CompMyStats {
+export interface TourMyStats {
   joined: number; // 参加比赛次数（已报名数）
   bestRank: number | null; // 最高排名（成绩采集下一期接入）
   prize: number; // 累计奖金（成绩采集下一期接入）
 }
 
-export async function getCompMyStats(uid: number): Promise<CompMyStats> {
-  const joined = await prisma.competitionEntry.count({ where: { userId: BigInt(uid) } });
+export async function getTourMyStats(uid: number): Promise<TourMyStats> {
+  const joined = await prisma.tournamentEntry.count({ where: { userId: BigInt(uid) } });
   return { joined, bestRank: null, prize: 0 }; // TODO 成绩采集期接入：bestRank / prize
 }
 
 // ---------- 动态（2026-11-13 二期：详情页「动态」板块）----------
 
-export const COMP_EVENT_JOIN_OPEN = 1; // 报名开始
-export const COMP_EVENT_PLAYER_JOIN = 2; // 玩家报名参加
-export const COMP_EVENT_STARTED = 3; // 比赛正式开始
-export const COMP_EVENT_SCORE = 4; // 玩家更新成绩
-export const COMP_EVENT_ENDED = 5; // 比赛正式结束
+export const TOUR_EVENT_JOIN_OPEN = 1; // 报名开始
+export const TOUR_EVENT_PLAYER_JOIN = 2; // 玩家报名参加
+export const TOUR_EVENT_STARTED = 3; // 比赛正式开始
+export const TOUR_EVENT_SCORE = 4; // 玩家更新成绩
+export const TOUR_EVENT_ENDED = 5; // 比赛正式结束
 
 /** 动态事件文案（type → 展示文本；主体玩家名由行渲染拼接）。
-    详情页 RSC 与 CompEventsFeed 客户端壳共用（2026-11-13 五轮翻页改版） */
+    详情页 RSC 与 TourEventsFeed 客户端壳共用（2026-11-13 五轮翻页改版） */
 export function compEventText(type: number): string {
   switch (type) {
-    case COMP_EVENT_JOIN_OPEN:
+    case TOUR_EVENT_JOIN_OPEN:
       return "报名开始";
-    case COMP_EVENT_PLAYER_JOIN:
+    case TOUR_EVENT_PLAYER_JOIN:
       return "报名参加了比赛";
-    case COMP_EVENT_STARTED:
+    case TOUR_EVENT_STARTED:
       return "比赛正式开始";
-    case COMP_EVENT_SCORE:
+    case TOUR_EVENT_SCORE:
       return "更新了成绩";
-    case COMP_EVENT_ENDED:
+    case TOUR_EVENT_ENDED:
       return "比赛正式结束";
     default:
       return "";
   }
 }
 
-/** 写一条动态（报名/挂录像走此入口；开始/结束走 ensureCompLifecycleEvents 惰性补写） */
-export async function addCompEvent(
-  competitionId: number,
+/** 写一条动态（报名/挂录像走此入口；开始/结束走 ensureTourLifecycleEvents 惰性补写） */
+export async function addTourEvent(
+  tournamentId: number,
   type: number,
   userId = 0
 ): Promise<void> {
-  await prisma.competitionEvent.create({
+  await prisma.tournamentEvent.create({
     data: {
-      competitionId: BigInt(competitionId),
+      tournamentId: BigInt(tournamentId),
       type,
       userId: BigInt(userId),
       createTime: BigInt(Math.floor(Date.now() / 1000)),
@@ -328,10 +330,10 @@ export async function addCompEvent(
 
 /**
  * 惰性补写「比赛正式开始 / 比赛正式结束」动态：now 越过起止时刻且该事件尚不存在时补一条。
- * 列表页与详情页渲染期各调一次（行数 ≤ 页内比赛数，两次 findFirst 走 (competition_id,id)
+ * 列表页与详情页渲染期各调一次（行数 ≤ 页内比赛数，两次 findFirst 走 (tournament_id,id)
  * 索引，开销可忽略）——不依赖定时器，重启/停机不漏事件。
  */
-export async function ensureCompLifecycleEvents(
+export async function ensureTourLifecycleEvents(
   c: { id: bigint | number | string; startTime: bigint | number; endTime: bigint | number },
   now: number
 ): Promise<void> {
@@ -339,22 +341,22 @@ export async function ensureCompLifecycleEvents(
   const start = Number(c.startTime);
   const end = Number(c.endTime);
   if (now >= start) {
-    const hit = await prisma.competitionEvent.findFirst({
-      where: { competitionId: cid, type: COMP_EVENT_STARTED },
+    const hit = await prisma.tournamentEvent.findFirst({
+      where: { tournamentId: cid, type: TOUR_EVENT_STARTED },
       select: { id: true },
     });
-    if (!hit) await addCompEvent(Number(c.id), COMP_EVENT_STARTED);
+    if (!hit) await addTourEvent(Number(c.id), TOUR_EVENT_STARTED);
   }
   if (now >= end) {
-    const hit = await prisma.competitionEvent.findFirst({
-      where: { competitionId: cid, type: COMP_EVENT_ENDED },
+    const hit = await prisma.tournamentEvent.findFirst({
+      where: { tournamentId: cid, type: TOUR_EVENT_ENDED },
       select: { id: true },
     });
-    if (!hit) await addCompEvent(Number(c.id), COMP_EVENT_ENDED);
+    if (!hit) await addTourEvent(Number(c.id), TOUR_EVENT_ENDED);
   }
 }
 
-export interface CompEventRow {
+export interface TourEventRow {
   id: number;
   type: number;
   userName: string | null; // 全站事件（1/3/5）为 null
@@ -363,20 +365,20 @@ export interface CompEventRow {
 }
 
 /** 比赛动态分页：最新在前（与全站动态流口径一致） */
-export async function getCompEventsPage(
-  competitionId: number,
+export async function getTourEventsPage(
+  tournamentId: number,
   page: number,
   pageSize = 20
-): Promise<{ rows: CompEventRow[]; total: number; page: number; pageSize: number }> {
-  const cid = BigInt(competitionId);
-  const total = await prisma.competitionEvent.count({ where: { competitionId: cid } });
+): Promise<{ rows: TourEventRow[]; total: number; page: number; pageSize: number }> {
+  const cid = BigInt(tournamentId);
+  const total = await prisma.tournamentEvent.count({ where: { tournamentId: cid } });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const p = Math.min(Math.max(page, 1), totalPages);
   const events =
     total === 0
       ? []
-      : await prisma.competitionEvent.findMany({
-          where: { competitionId: cid },
+      : await prisma.tournamentEvent.findMany({
+          where: { tournamentId: cid },
           orderBy: [{ id: "desc" }],
           skip: (p - 1) * pageSize,
           take: pageSize,
@@ -405,7 +407,7 @@ export async function getCompEventsPage(
 
 // ---------- 参赛录像与排名（本期口径：成绩＝video_info.real_time，管理员后台挂接）----------
 
-export interface CompRankRow {
+export interface TourRankRow {
   rank: number;
   uid: number;
   name: string;
@@ -413,12 +415,61 @@ export interface CompRankRow {
   videoId: number;
 }
 
+// ---------- 自动绑定（张老师 2026-11-18：上传/开源网导入按标识自动挂比赛）----------
+//
+// 与批量回填同口径：race=code（EVF 内嵌标识，硬证据，不限窗）；
+// race 为空时退「签名末尾=code 且上传时间在比赛窗口内」。命中多场取 id 最小（奇异撞码极罕见）。
+
+/** 按比赛标识匹配比赛：race 精确优先，退签名末尾+窗口。返回 tournament.id 或 null */
+export async function matchTourByRace(
+  race: string | null | undefined,
+  signature: string,
+  createTimeSec: number
+): Promise<number | null> {
+  if (race) {
+    const hit = await prisma.tournament.findFirst({
+      where: { code: race },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    if (hit) return Number(hit.id);
+  }
+  const sig = signature.trim();
+  if (!sig) return null;
+  // 签名后缀命中：窗口由 create_time 推导（上传时刻），与回填 SQL 同判据
+  const candidates = await prisma.tournament.findMany({
+    where: {
+      code: { not: null },
+      startTime: { lte: BigInt(Math.floor(createTimeSec)) },
+      endTime: { gte: BigInt(Math.floor(createTimeSec)) },
+    },
+    select: { id: true, code: true },
+    orderBy: { id: "asc" },
+  });
+  for (const c of candidates) {
+    if (c.code && sig.endsWith(c.code)) return Number(c.id);
+  }
+  return null;
+}
+
 /** 最新排名：挂接录像按玩家取最好成绩（real_time 最小），升序取前 limit 名。
- *  注意：跨级别混排的公平性口径待成绩采集期定，本期按 real_time 直接排序。 */
-export async function getCompRanking(compId: number, limit = 10): Promise<CompRankRow[]> {
+ *  注意：跨级别混排的公平性口径待成绩采集期定，本期按 real_time 直接排序。
+ *  成绩口径（张老师 2026-11-18 批量绑定定）：只计上传时间落在比赛窗口内的录像——
+ *  窗口外的赛后补传盘只展示不计成绩（绑定时 race 硬证据不受窗口限制）。 */
+export async function getTourRanking(compId: number, limit = 10): Promise<TourRankRow[]> {
+  // 窗口过滤需要比赛起止时刻（Video/VideoInfo 无 relation，起止从比赛行取）
+  const comp = await prisma.tournament.findUnique({
+    where: { id: BigInt(compId) },
+    select: { startTime: true, endTime: true },
+  });
+  if (!comp) return [];
   // Video/VideoInfo 同 id 1:1 但 schema 无 relation，real_time/no_record 分表取
   const rows = await prisma.video.findMany({
-    where: { competitionId: BigInt(compId), status: { not: 0 } },
+    where: {
+      tournamentId: BigInt(compId),
+      status: { not: 0 },
+      createTime: { gte: comp.startTime, lte: comp.endTime },
+    },
     select: { id: true, user: true },
   });
   const infos = await prisma.videoInfo.findMany({
@@ -452,22 +503,32 @@ export async function getCompRanking(compId: number, limit = 10): Promise<CompRa
   }));
 }
 
-export interface CompMyResult {
+export interface TourMyResult {
   joined: boolean;
   videos: number; // 我的参赛录像数
   bestTime: number | null; // 我的最好成绩（毫秒）
   rank: number | null; // 在最新排名中的名次（全量排名内）
 }
 
-/** 我在这场比赛的成绩（详情页「我的成绩」板块） */
-export async function getCompMyResult(compId: number, uid: number): Promise<CompMyResult> {
-  const joined = await prisma.competitionEntry.findFirst({
-    where: { competitionId: BigInt(compId), userId: BigInt(uid) },
+/** 我在这场比赛的成绩（详情页「我的成绩」板块）。
+ *  成绩口径（张老师 2026-11-18）：只计窗口内录像（同 getTourRanking）。 */
+export async function getTourMyResult(compId: number, uid: number): Promise<TourMyResult> {
+  const joined = await prisma.tournamentEntry.findFirst({
+    where: { tournamentId: BigInt(compId), userId: BigInt(uid) },
     select: { id: true },
   });
-  // Video/VideoInfo 无 relation，real_time 分表取（同 getCompRanking）
+  const comp = await prisma.tournament.findUnique({
+    where: { id: BigInt(compId) },
+    select: { startTime: true, endTime: true },
+  });
+  // Video/VideoInfo 无 relation，real_time 分表取（同 getTourRanking）
   const rows = await prisma.video.findMany({
-    where: { competitionId: BigInt(compId), user: BigInt(uid), status: { not: 0 } },
+    where: {
+      tournamentId: BigInt(compId),
+      user: BigInt(uid),
+      status: { not: 0 },
+      ...(comp ? { createTime: { gte: comp.startTime, lte: comp.endTime } } : {}),
+    },
     select: { id: true },
   });
   const myInfos = await prisma.videoInfo.findMany({
@@ -482,9 +543,13 @@ export async function getCompMyResult(compId: number, uid: number): Promise<Comp
   }
   let rank: number | null = null;
   if (bestTime !== null) {
-    // 名次＝real_time 严格更小的去重玩家数 + 1（与 getCompRanking 同口径的全量版）
+    // 名次＝real_time 严格更小的去重玩家数 + 1（与 getTourRanking 同口径的全量版）
     const all = await prisma.video.findMany({
-      where: { competitionId: BigInt(compId), status: { not: 0 } },
+      where: {
+        tournamentId: BigInt(compId),
+        status: { not: 0 },
+        ...(comp ? { createTime: { gte: comp.startTime, lte: comp.endTime } } : {}),
+      },
       select: { id: true, user: true },
     });
     const allInfos = await prisma.videoInfo.findMany({
@@ -506,24 +571,27 @@ export async function getCompMyResult(compId: number, uid: number): Promise<Comp
 }
 
 /** 比赛详情页统计（参赛人数=报名去重人数；录像数=挂接且未屏蔽） */
-export async function getCompDetailStats(
+export async function getTourDetailStats(
   compId: number
 ): Promise<{ entries: number; videos: number }> {
-  const [entries, videos] = await Promise.all([
-    prisma.competitionEntry.count({ where: { competitionId: BigInt(compId) } }),
-    prisma.video.count({ where: { competitionId: BigInt(compId), status: { not: 0 } } }),
-  ]);
-  return { entries, videos };
+  // 参赛人数口径（张老师 2026-11-18 详情页反馈）：＝录像持有者数量（distinct user）——
+  // 历届金羊杯早已结束、报名表恒 0，报名数无意义；持有者与动态/排名自然一致
+  const holders = await prisma.video.findMany({
+    where: { tournamentId: BigInt(compId), status: { not: 0 } },
+    select: { user: true },
+  });
+  const videos = holders.length;
+  return { entries: new Set(holders.map((h) => h.user.toString())).size, videos };
 }
 
 /** 比赛录像分页（详情页「录像」板块）：按时间正序（早在前，张老师 14:45 口径「按时间顺序」），
  *  展示形式与首页录像流一致（VideoRows 行渲染），但按比赛过滤、不去重 */
-export async function getCompVideosPage(
+export async function getTourVideosPage(
   compId: number,
   page: number,
   pageSize = 20
 ): Promise<{ videos: VideoListItem[]; total: number; page: number; pageSize: number }> {
-  const where = { competitionId: BigInt(compId), status: { not: 0 } };
+  const where = { tournamentId: BigInt(compId), status: { not: 0 } };
   const total = await prisma.video.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const p = Math.min(Math.max(page, 1), totalPages);
@@ -544,26 +612,26 @@ export async function getCompVideosPage(
 
 // 首页录像流行类型（VideoRows 渲染入参）
 
-// ---------- 详情（2026-11-13 二期：/competitions/[id]）----------
+// ---------- 详情（2026-11-13 二期：/tournaments/[id]）----------
 
-/** 单场比赛完整行（与列表 CompRow 同构，详情页顶部板块复用 CompBlock 渲染） */
-export async function getCompetitionDetail(
+/** 单场比赛完整行（与列表 TourRow 同构，详情页顶部板块复用 TourBlock 渲染） */
+export async function getTournamentDetail(
   id: number,
   uid?: number
-): Promise<CompRow | null> {
-  const c = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
+): Promise<TourRow | null> {
+  const c = await prisma.tournament.findUnique({ where: { id: BigInt(id) } });
   if (!c) return null;
   const now = Math.floor(Date.now() / 1000);
   const [entryCount, creator, scoreRow, joined] = await Promise.all([
-    prisma.competitionEntry.count({ where: { competitionId: c.id } }),
+    prisma.tournamentEntry.count({ where: { tournamentId: c.id } }),
     prisma.user.findUnique({
       where: { id: c.creatorId },
       select: { chineseName: true, englishName: true, sex: true, status: true },
     }),
     prisma.userScores.findUnique({ where: { id: c.creatorId }, select: { expTime: true } }),
     uid
-      ? prisma.competitionEntry.findFirst({
-          where: { competitionId: c.id, userId: BigInt(uid) },
+      ? prisma.tournamentEntry.findFirst({
+          where: { tournamentId: c.id, userId: BigInt(uid) },
           select: { id: true },
         })
       : Promise.resolve(null),
@@ -588,14 +656,14 @@ export async function getCompetitionDetail(
     id: c.id.toString(),
     name: c.name,
     shortName: c.shortName,
-    status: compStatus(c.startTime, c.endTime, now),
+    status: tourStatus(c.startTime, c.endTime, now),
     start: Number(c.startTime),
     end: Number(c.endTime),
     rules: c.rules,
     creatorName: creator?.chineseName ?? `UID ${c.creatorId}`,
     prizeTotal: c.prizeTotal,
     prizeLines: parsePrizePlan(c.prizePlan),
-    code: c.code,
+    code: c.code ?? "",
     entryCount,
     joined: !!joined,
     levels: levelSet.size ? LEVELS.filter((l) => levelSet.has(l)) : [...LEVELS],
@@ -617,7 +685,7 @@ export async function getCompetitionDetail(
 //   |time − target| 最小一局的误差（ms），越小越好（打靶赛）。
 // · 成绩只认 status!=0 且 no_record=0 且 real_time>0 的录像（同前台排名口径）。
 
-export type CompScoreMode = "" | "sum_topn" | "target_diff";
+export type TournamentScoreMode = "" | "sum_topn" | "target_diff";
 
 export const SCORE_MODE_LABELS: Record<string, string> = {
   "": "未配置（暂不计成绩）",
@@ -664,7 +732,7 @@ export function scoreModeDesc(mode: string, cfg: string): string {
   return SCORE_MODE_LABELS[mode] ?? "未配置";
 }
 
-export interface CompScoreVideo {
+export interface TourScoreVideo {
   user: bigint | number;
   level: string;
   realTime: number;
@@ -675,7 +743,7 @@ export interface CompScoreVideo {
 export function computePlayerScores(
   mode: string,
   cfg: string,
-  vids: CompScoreVideo[]
+  vids: TourScoreVideo[]
 ): Map<number, number> {
   const conf = parseScoreConfig(mode, cfg);
   const out = new Map<number, number>();
