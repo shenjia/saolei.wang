@@ -489,18 +489,27 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
 
 // ---------- 自动绑定（张老师 2026-11-18：上传/开源网导入按标识自动挂比赛）----------
 //
-// 与批量回填同口径：race=code（EVF 内嵌标识，硬证据，不限窗）；
-// race 为空时退「签名末尾=code 且上传时间在比赛窗口内」。命中多场取 id 最小（奇异撞码极罕见）。
+// 严格时间窗口口径（张老师 2026-11-18 晚定）：race 命中与签名末尾命中都要求
+// 上传时间在比赛窗口内——时间过后玩家会忘了改标识。命中多场取 id 最小（奇异撞码极罕见）。
 
-/** 按比赛标识匹配比赛：race 精确优先，退签名末尾+窗口。返回 tournament.id 或 null */
+/** 按比赛标识匹配比赛（张老师 2026-11-18 晚定：**严格时间窗口**）——
+ *  无论 race 命中还是签名末尾命中，都要求上传时间落在比赛窗口内：
+ *  时间过后玩家会忘了改标识，race 命中不能豁免窗口。
+ *  race 精确优先，退签名末尾；都不在窗内 → 不绑定。 */
 export async function matchTourByRace(
   race: string | null | undefined,
   signature: string,
   createTimeSec: number
 ): Promise<number | null> {
+  const ts = BigInt(Math.floor(createTimeSec));
+  // 窗口条件对象（race 分支不带 code 条件，签名分支在外面拼）
+  const windowWhere = {
+    startTime: { lte: ts },
+    endTime: { gte: ts },
+  };
   if (race) {
     const hit = await prisma.tournament.findFirst({
-      where: { code: race },
+      where: { code: race, ...windowWhere },
       select: { id: true },
       orderBy: { id: "asc" },
     });
@@ -508,13 +517,9 @@ export async function matchTourByRace(
   }
   const sig = signature.trim();
   if (!sig) return null;
-  // 签名后缀命中：窗口由 create_time 推导（上传时刻），与回填 SQL 同判据
+  // 签名后缀命中（同一窗口判据）
   const candidates = await prisma.tournament.findMany({
-    where: {
-      code: { not: null },
-      startTime: { lte: BigInt(Math.floor(createTimeSec)) },
-      endTime: { gte: BigInt(Math.floor(createTimeSec)) },
-    },
+    where: { ...windowWhere, code: { not: null } },
     select: { id: true, code: true },
     orderBy: { id: "asc" },
   });
