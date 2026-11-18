@@ -15,7 +15,7 @@ export interface CompChartPoint {
   name?: string;
 }
 
-export function CompChart({ points }: { points: CompChartPoint[] }) {
+export function TourChart({ points }: { points: CompChartPoint[] }) {
   if (points.length === 0) return null;
 
   const maxRank = Math.max(...points.map((p) => p.rank), 2);

@@ -701,7 +701,14 @@ export function triageParsed(
   let reason = 0;
 
   const ps = pressPairStats(v);
-  reason |= pressTriggers(ps, level);
+  let pressBits = pressTriggers(ps, level);
+  // 老 Clone 格式盘豁免按压类触发器（bit0/bit23，2026-11-13 张老师定，36452 案）：
+  // Clone 写流不区分按下与抬起（lc+lr 同刻），按压时长整体不可测——
+  // 生产探针 36452：145 个左键对 131 对 d=0，余下 d>0 全是 10/20ms 量化抖动
+  // （散布在 500ms+ 间隔里，并非双击），avg 15ms 纯格式噪声。
+  // 与 bit17/20/21 老 Clone 豁免同哲学；反作弊火力由 path/结构类触发器承接。
+  if (software === "Clone") pressBits &= ~(AUTO_REASON.PRESS | AUTO_REASON.SHORT_PRESS);
+  reason |= pressBits;
 
   // 人类相似度触发器组（2026-11-12 红客合成录像 360671 案）：
   // 抓生成器写流的非人类结构特征（详见 humanLikeStats 注释与 limits 定标说明）。

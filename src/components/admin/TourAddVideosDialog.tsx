@@ -2,7 +2,7 @@
 
 // 比赛批量收录像弹窗（2026-11-13 三期张老师需求；23:27 张老师定：入口移到详情页录像列表标题右侧）
 // 详情页录像列表「批量收录录像」→ 弹窗逐行输入录像 ID（一行一个，22:40 张老师定不用逗号）→ 一次性挂接到本比赛。
-// 已挂其他比赛的静默转入（张老师原话口径），服务端 competition.addVideos 兜底校验。
+// 已挂其他比赛的静默转入（张老师原话口径），服务端 tournament.addVideos 兜底校验。
 // 弹窗样式复用 ban_overlay / ban_dialog（封禁弹窗同款）。
 
 import { useState } from "react";
@@ -10,11 +10,11 @@ import { useRouter } from "next/navigation";
 import { postOp } from "./AdminAction";
 import { toast } from "@/components/Toast";
 
-export function CompAddVideosDialog({
-  competitionId,
+export function TourAddVideosDialog({
+  tournamentId,
   name,
 }: {
-  competitionId: number;
+  tournamentId: number;
   name: string;
 }) {
   const router = useRouter();
@@ -47,7 +47,7 @@ export function CompAddVideosDialog({
       return;
     }
     setBusy(true);
-    const res = await postOp("competition.addVideos", { id: competitionId, ids });
+    const res = await postOp("tournament.addVideos", { id: tournamentId, ids });
     setBusy(false);
     toast(res.ok ? res.message ?? "已收录" : res.error ?? "操作失败", res.ok ? "success" : "error");
     if (res.ok) {
@@ -67,7 +67,7 @@ export function CompAddVideosDialog({
           <div className="ban_dialog" onClick={(e) => e.stopPropagation()}>
             <h1>批量收录录像</h1>
             <p className="ban_desc">
-              比赛「{name}」（#{competitionId}）——每行输入一个录像 ID，
+              比赛「{name}」（#{tournamentId}）——每行输入一个录像 ID，
               已参与其他比赛的录像将静默转入本比赛。
             </p>
             <textarea

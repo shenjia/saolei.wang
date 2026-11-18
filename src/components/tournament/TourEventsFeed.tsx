@@ -1,9 +1,9 @@
 // 比赛详情页「动态」板块客户端壳（2026-11-13 五轮 20:31 张老师定：
 // 标准翻页组件 = 首页同款 PageSlider「···加载更多 + 滑轨滚动翻页」，非页码式 Pager）。
 //
-// 语义（与 CompListFeed 同口径）：
+// 语义（与 TourListFeed 同口径）：
 // · 滑轨/◀▶ 换页 → router.push(?ep=N&page=对方页码)，URL 即状态、RSC 重渲染；
-// · 「···加载更多」→ GET /api/competition/[id]/events?page=1&size=前缀长度
+// · 「···加载更多」→ GET /api/tournament/[id]/events?page=1&size=前缀长度
 //   （动态最新在前、新事件会插到头部，前缀整批替换即「加载后最新快照」，无重复无跳行）；
 //   hasMore 按「已加载 < total」判；
 // · 首屏数据由服务端 RSC 传入（SSR 可见、无 JS 降级仍能看首屏与 URL 换页）。
@@ -15,9 +15,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { RelTime } from "@/components/RelTime";
-import { compEventText, type CompEventRow } from "@/lib/competition";
+import { compEventText, type TourEventRow } from "@/lib/tournament";
 
-export function CompEventsFeed({
+export function TourEventsFeed({
   compId,
   initialRows,
   initialPage,
@@ -28,7 +28,7 @@ export function CompEventsFeed({
   pageSize,
 }: {
   compId: number;
-  initialRows: CompEventRow[];
+  initialRows: TourEventRow[];
   initialPage: number;
   initialTotal: number;
   initialTotalPages: number;
@@ -36,7 +36,7 @@ export function CompEventsFeed({
   pageSize: number;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState<CompEventRow[]>(initialRows);
+  const [rows, setRows] = useState<TourEventRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
   const [step, setStep] = useState(0);
@@ -50,7 +50,7 @@ export function CompEventsFeed({
     setLoading(true);
     try {
       const size = rows.length + nextBatchSize(step, pageSize);
-      const res = await fetch(`/api/competition/${compId}/events?page=1&size=${size}`, {
+      const res = await fetch(`/api/tournament/${compId}/events?page=1&size=${size}`, {
         cache: "no-store",
       });
       if (res.ok) {
@@ -68,7 +68,7 @@ export function CompEventsFeed({
   function gotoPage(p: number) {
     startTransition(() => {
       router.push(
-        `/competitions/${compId}?page=${videosPage}${p > 1 ? `&ep=${p}` : ""}`
+        `/tournaments/${compId}?page=${videosPage}${p > 1 ? `&ep=${p}` : ""}`
       );
     });
   }

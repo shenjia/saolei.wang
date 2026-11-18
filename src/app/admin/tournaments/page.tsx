@@ -1,20 +1,20 @@
 // 管理后台 · 比赛管理（2026-11-13 张老师需求）
 // 清单置顶（状态 tab 筛选：全部/进行中/未开始/已结束，URL ?st= 承载）+ 发起比赛表单。
 // 状态配色（张老师 11-13 定）：进行中绿 / 未开始金 / 已结束灰。
-// 前台 /competitions 读同一份数据；列表排序与前台一致＝进行中 → 未开始 → 已结束。
+// 前台 /tournaments 读同一份数据；列表排序与前台一致＝进行中 → 未开始 → 已结束。
 
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { compStatus, parseScoreConfig } from "@/lib/competition";
+import { tourStatus, parseScoreConfig } from "@/lib/tournament";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { RowEditButton } from "@/components/admin/RowEditButton";
 import { AdminCard } from "@/components/admin/Widgets";
-import { CompetitionForm } from "@/components/admin/CompetitionForm";
+import { TournamentForm } from "@/components/admin/TournamentForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "比赛管理 | 管理后台" };
 
-type StatusKey = ReturnType<typeof compStatus>;
+type StatusKey = ReturnType<typeof tourStatus>;
 
 /** Unix 秒 → 北京时间 "YYYY-MM-DD HH:mm"（+8h 后按 UTC 取字段，免时区歧义） */
 function cstStr(sec: number): string {
@@ -44,18 +44,18 @@ export default async function AdminCompetitionsPage({
 
   const now = Math.floor(Date.now() / 1000);
   const [all, counts, videoCounts] = await Promise.all([
-    prisma.competition.findMany({ orderBy: { startTime: "asc" } }),
-    prisma.competitionEntry.groupBy({ by: ["competitionId"], _count: { competitionId: true } }),
-    // 挂接录像数（口径与详情页统计一致：competitionId 挂接 + 未屏蔽 status!=0）
+    prisma.tournament.findMany({ orderBy: { startTime: "asc" } }),
+    prisma.tournamentEntry.groupBy({ by: ["tournamentId"], _count: { tournamentId: true } }),
+    // 挂接录像数（口径与详情页统计一致：tournamentId 挂接 + 未屏蔽 status!=0）
     prisma.video.groupBy({
-      by: ["competitionId"],
-      where: { competitionId: { not: null }, status: { not: 0 } },
-      _count: { competitionId: true },
+      by: ["tournamentId"],
+      where: { tournamentId: { not: null }, status: { not: 0 } },
+      _count: { tournamentId: true },
     }),
   ]);
-  const countMap = new Map(counts.map((c) => [c.competitionId.toString(), c._count.competitionId]));
+  const countMap = new Map(counts.map((c) => [c.tournamentId.toString(), c._count.tournamentId]));
   const videoMap = new Map(
-    videoCounts.filter((v) => v.competitionId !== null).map((v) => [v.competitionId!.toString(), v._count.competitionId]),
+    videoCounts.filter((v) => v.tournamentId !== null).map((v) => [v.tournamentId!.toString(), v._count.tournamentId]),
   );
 
   // 发起人姓名一次取齐（发起人为后台填写，量小；查无此人兜底显示 #ID）
@@ -69,19 +69,19 @@ export default async function AdminCompetitionsPage({
   // 排序与前台一致：进行中 → 未开始 → 已结束；再按 tab 筛选
   const order = { active: 0, upcoming: 1, ended: 2 } as const;
   const sorted = [...all].sort((a, b) => {
-    const sa = compStatus(a.startTime, a.endTime, now);
-    const sb = compStatus(b.startTime, b.endTime, now);
+    const sa = tourStatus(a.startTime, a.endTime, now);
+    const sb = tourStatus(b.startTime, b.endTime, now);
     if (sa !== sb) return order[sa] - order[sb];
     return Number(b.startTime) - Number(a.startTime);
   });
-  const rows = st ? sorted.filter((r) => compStatus(r.startTime, r.endTime, now) === st) : sorted;
+  const rows = st ? sorted.filter((r) => tourStatus(r.startTime, r.endTime, now) === st) : sorted;
 
   return (
     <>
       <div className="admin_page_head">
         <h1>比赛管理</h1>
         <span className="sub">
-          前台 <a href="/competitions" target="_blank" rel="noopener noreferrer">saolei.wang/competitions</a>{" "}
+          前台 <a href="/tournaments" target="_blank" rel="noopener noreferrer">saolei.wang/tournaments</a>{" "}
           展示同一份数据 · 共 {rows.length} 场
         </span>
       </div>
@@ -92,7 +92,7 @@ export default async function AdminCompetitionsPage({
           {ST_TABS.map(({ key, label, cls }) => (
             <Link
               key={key || "all"}
-              href={key ? `/admin/competitions?st=${key}` : "/admin/competitions"}
+              href={key ? `/admin/tournaments?st=${key}` : "/admin/tournaments"}
               className={`admin_btn ${cls}${st === key ? " on" : ""}`}
             >
               {label}
@@ -118,12 +118,12 @@ export default async function AdminCompetitionsPage({
             </thead>
             <tbody>
               {rows.map((r) => {
-                const stKey = compStatus(r.startTime, r.endTime, now);
+                const stKey = tourStatus(r.startTime, r.endTime, now);
                 return (
                   <tr key={r.id.toString()}>
                     <td className="c sub">{r.id.toString()}</td>
                     <td>
-                      <Link className="link" href={`/admin/competitions/${r.id}`}>
+                      <Link className="link" href={`/admin/tournaments/${r.id}`}>
                         {r.name}
                       </Link>
                       {/* 状态并入全名括号（张老师 11-13：不再单列），文字保留状态配色；点全名进后台详情页（11-13 四期） */}
@@ -148,6 +148,7 @@ export default async function AdminCompetitionsPage({
                           id: Number(r.id),
                           name: r.name,
                           shortName: r.shortName,
+                          code: r.code ?? "",
                           rules: r.rules,
                           creatorId: Number(r.creatorId),
                           prizeTotal: r.prizeTotal,
@@ -160,7 +161,7 @@ export default async function AdminCompetitionsPage({
                         }}
                       />{" "}
                       <AdminAction
-                        op="competition.delete"
+                        op="tournament.delete"
                         params={{ id: r.id.toString() }}
                         label="删除"
                         variant="danger"
@@ -186,9 +187,10 @@ export default async function AdminCompetitionsPage({
 
       <AdminCard title="发起比赛">
         <div className="admin_note" style={{ marginBottom: 10 }}>
-          起止时间按北京时间填写；比赛标识创建时自动生成（前台开始前显示「待定」）。成绩采集与奖金发放为下一期功能。
+          起止时间按北京时间填写；比赛标识默认留空，可手填或点「随机生成」（5 位，全库唯一）。
+          成绩采集与奖金发放为下一期功能。
         </div>
-        <CompetitionForm />
+        <TournamentForm />
       </AdminCard>
     </>
   );

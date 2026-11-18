@@ -55,7 +55,7 @@ export default async function AdminVideosPage({ searchParams }: { searchParams: 
   };
   const { rows, total, pageSize, page } = await getVideoListAdmin(filter);
   // 全量比赛选项（2026-11-13 二期：行内挂接比赛用；比赛总量小一次取回）
-  const comps = (await prisma.competition.findMany({
+  const comps = (await prisma.tournament.findMany({
     orderBy: { id: "asc" },
     select: { id: true, name: true, shortName: true },
   })).map((c) => ({ id: Number(c.id), name: c.name, shortName: c.shortName }));

@@ -21,7 +21,10 @@ const nextConfig: NextConfig = {
 
   // ip2region-ts（IP→省份离线库，排行延迟埋点用）不参与打包：包内 defaultDbFile 依赖
   // __dirname 定位 data/ip2region.xdb（11MB），bundler 打包后路径失效 → 运行时读不到库
-  serverExternalPackages: ["ip2region-ts"],
+  // sharp（头像三档 WebP 生成）同理必须外部化：被打进 .next-*/node_modules/sharp-* 后
+  // 其原生依赖 @img/colour 等不在 trace 里，运行时 ERR_MODULE_NOT_FOUND → 上传头像时
+  // 三档小图全部静默生成失败（2026-11-13 实证：生产 8 个上传头像 mid 档 404 即此因）
+  serverExternalPackages: ["ip2region-ts", "sharp"],
 
   // 图标文件缓存头（2026-11-11 注：图标已移出 src/app 文件约定 → public/，由
   // layout.tsx generateMetadata.icons 按环境切换——本地 dev 绿色 / 生产原版）。

@@ -13,10 +13,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
-import { CompBlock } from "./CompBlock";
-import { COMP_PAGE_SIZE, type CompRow } from "@/lib/competition";
+import { TourBlock } from "./TourBlock";
+import { TOUR_PAGE_SIZE, type TourRow } from "@/lib/tournament";
 
-export function CompListFeed({
+export function TourListFeed({
   initialRows,
   initialPage,
   initialTotal,
@@ -24,7 +24,7 @@ export function CompListFeed({
   now,
   loggedIn,
 }: {
-  initialRows: CompRow[];
+  initialRows: TourRow[];
   initialPage: number;
   initialTotal: number;
   initialTotalPages: number;
@@ -32,7 +32,7 @@ export function CompListFeed({
   loggedIn: boolean;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState<CompRow[]>(initialRows);
+  const [rows, setRows] = useState<TourRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
   // 「加载更多」递增步（首击=一页，此后翻倍封顶 100——nextBatchSize 站内口径）
@@ -46,8 +46,8 @@ export function CompListFeed({
     if (loading || !hasMore) return;
     setLoading(true);
     try {
-      const size = rows.length + nextBatchSize(step, COMP_PAGE_SIZE);
-      const res = await fetch(`/api/competition/list?page=1&size=${size}`, { cache: "no-store" });
+      const size = rows.length + nextBatchSize(step, TOUR_PAGE_SIZE);
+      const res = await fetch(`/api/tournament/list?page=1&size=${size}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setRows(data.rows);
@@ -62,7 +62,7 @@ export function CompListFeed({
 
   function gotoPage(p: number) {
     startTransition(() => {
-      router.push(p <= 1 ? "/competitions" : `/competitions?page=${p}`);
+      router.push(p <= 1 ? "/tournaments" : `/tournaments?page=${p}`);
     });
   }
 
@@ -77,7 +77,7 @@ export function CompListFeed({
   return (
     <>
       {rows.map((c) => (
-        <CompBlock key={c.id} c={c} now={now} loggedIn={loggedIn} />
+        <TourBlock key={c.id} c={c} now={now} loggedIn={loggedIn} />
       ))}
       {/* 通用翻页器（PageSlider）：单页也渲染（single 态全灰），换页走 URL、加载更多走 API */}
       <div className="list_footer">

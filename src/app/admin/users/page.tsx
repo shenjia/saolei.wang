@@ -3,18 +3,19 @@
 // 两个组 tab 即原独立列表页原样搬入（组内成员、来源、加入时间、操作管理员、移出、新行加亮）；
 // 「同 IP 账号组」即原独立页原样搬入（IpGroupsPanel，防小号排查）；旧地址 /admin/ipgroups 重定向保兼容；
 // 「全部玩家」保持原玩家管理（搜索/筛选/排序，行内封禁·解封·改角色）。
+// 2026-11-13（张老师反馈）：防小号 KPI 卡片上移到页头（所有 tab 恒显示）；切 tab 筛选条不消失。
 
 import Link from "next/link";
 import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { getSession } from "@/lib/auth";
 import { USER_ROLE } from "@/lib/config";
-import { getUserList, getAreaOptions } from "@/lib/admin/data";
+import { getUserList, getAreaOptions, getIpGroupSummary } from "@/lib/admin/data";
 import { getTrustedGroup, getLowTrustGroup, getGroupBadges } from "@/lib/admin/usergroups";
 import { AdminAction, AdminSelect } from "@/components/admin/AdminAction";
 import { BanUserDialog } from "@/components/admin/BanUserDialog";
 import { AdminFilters } from "@/components/admin/AdminFilters";
-import { AdminCard, AdminPager, RoleTag } from "@/components/admin/Widgets";
+import { AdminCard, AdminPager, Kpi, RoleTag } from "@/components/admin/Widgets";
 import { UserGroupTable } from "@/components/admin/UserGroupTable";
 import { UserGroupTabs } from "@/components/admin/UserGroupTabs";
 import { IpGroupsPanel } from "@/components/admin/IpGroupsPanel";
@@ -39,9 +40,21 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   // ---------- 顶部 tab（走 URL） ----------
   // tab 上挂各组自己的 badge（2026-10-27 张老师反馈：侧栏红点合并两组，
   // 落地页不知道该看哪个 tab）——信号与 layout 侧栏同源（getGroupBadges）
-  const groupBadges = await getGroupBadges();
+  // 防小号 KPI（2026-11-13 张老师定：移到玩家管理页头，所有 tab 恒显示；
+  // getIpGroupSummary 维度无关恒按最近登录 IP，单条轻量查询）
+  const [groupBadges, ipStats] = await Promise.all([getGroupBadges(), getIpGroupSummary()]);
+  const ipKpis = (
+    <div className="admin_kpis">
+      <Kpi label="今日新注册" value={ipStats.todayNew} tone="green" />
+      <Kpi label="今日新注册 IP" value={ipStats.todayIps} tone="cyan" />
+      <Kpi label="同 IP 组（≥2）· 最近登录 IP" value={ipStats.groups2} tone="yellow" />
+      <Kpi label="同 IP 组（≥5）· 最近登录 IP" value={ipStats.groups5} tone="orange" />
+      <Kpi label="最大组账号数" value={ipStats.maxGroup} tone={ipStats.maxGroup >= 5 ? "red" : "grey"} />
+    </div>
+  );
 
   // ---------- 同 IP 账号组 tab：原独立页原样搬入（2026-11-13 张老师要求合并，省导航栏一项） ----------
+  // tab 条与筛选条恒显示（张老师 11-13 反馈：点进来不能没有筛选）；KPI 卡片在页头
   if (tab === "ip") {
     return (
       <>
@@ -49,7 +62,19 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
           <h1>玩家管理</h1>
           <span className="sub">防小号排查 · IP 关联仅人工参考 · 学校机房 / 网吧 / 家庭同 IP 属正常现象 · 处置永远人工决定</span>
         </div>
-        <IpGroupsPanel sp={sp} />
+        {ipKpis}
+        <IpGroupsPanel
+          sp={sp}
+          tabs={
+            <UserGroupTabs
+              tab={tab}
+              groupBadges={{
+                trusted: { count: groupBadges.trustedCount, maxJoin: groupBadges.trustedMaxJoin },
+                lowtrust: { count: groupBadges.lowTrustCount, maxJoin: groupBadges.lowTrustMaxJoin },
+              }}
+            />
+          }
+        />
       </>
     );
   }
@@ -64,6 +89,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
           <h1>玩家管理</h1>
           <span className="sub">共 {total.toLocaleString("zh-CN")} 名玩家 · {tab === "trusted" ? "组内上传录像自动分拣不检查 STNB 触发器" : "反作弊标记 ∪ 屏蔽史（与录像分拣同口径），上传全量人工审核"}</span>
         </div>
+
+        {ipKpis}
 
         <AdminCard tight>
           <UserGroupTabs
@@ -182,6 +209,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <h1>玩家管理</h1>
         <span className="sub">共 {total.toLocaleString("zh-CN")} 名玩家命中当前条件</span>
       </div>
+
+      {ipKpis}
 
       <AdminCard tight>
         <UserGroupTabs

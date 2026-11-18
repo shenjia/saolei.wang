@@ -2,12 +2,14 @@
 // 原页面逻辑不动：IP 关联仅人工参考，不做自动处置；维度默认「最近登录 IP」
 // （存量账号随登录逐步积累），可切「注册 IP」；点 IP 进入展开态看该组全量成员；
 // 筛选状态全走 URL（可分享、可后退）。
+// 2026-11-13（张老师反馈）：KPI 卡片上移到玩家管理页头（本面板不再渲染）；tab 条由页传入
+// （恒显示）；「清空」按钮用 keepParams 保住 group=ip，不清回全部玩家 tab。
 
 import Link from "next/link";
 import { PlayerTip } from "@/components/Cells";
 import { Suspense } from "react";
 import { getIpGroups } from "@/lib/admin/data";
-import { AdminCard, AdminPager, Kpi } from "@/components/admin/Widgets";
+import { AdminCard, AdminPager } from "@/components/admin/Widgets";
 import { AdminFilters } from "@/components/admin/AdminFilters";
 import { formatDate } from "@/lib/format";
 
@@ -26,9 +28,9 @@ function buildIpQuery(sp: SP, extra: Record<string, string> = {}) {
   return `/admin/users?${params.toString()}`;
 }
 
-export async function IpGroupsPanel({ sp }: { sp: SP }) {
+export async function IpGroupsPanel({ sp, tabs }: { sp: SP; tabs?: React.ReactNode }) {
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const { rows, total, pageSize, stats, expanded } = await getIpGroups({
+  const { rows, total, pageSize, expanded } = await getIpGroups({
     dim: sp.dim,
     min: sp.min,
     q: sp.q,
@@ -36,21 +38,13 @@ export async function IpGroupsPanel({ sp }: { sp: SP }) {
     page,
   });
 
-  const dimLabel = sp.dim === "register" ? "注册 IP" : "最近登录 IP";
-
   return (
     <>
-      <div className="admin_kpis">
-        <Kpi label="今日新注册" value={stats.todayNew} tone="green" />
-        <Kpi label="今日新注册 IP" value={stats.todayIps} tone="cyan" />
-        <Kpi label={`同 IP 组（≥2）· ${dimLabel}`} value={stats.groups2} tone="yellow" />
-        <Kpi label={`同 IP 组（≥5）· ${dimLabel}`} value={stats.groups5} tone="orange" />
-        <Kpi label="最大组账号数" value={stats.maxGroup} tone={stats.maxGroup >= 5 ? "red" : "grey"} />
-      </div>
-
       <AdminCard tight>
+        {tabs}
         <Suspense fallback={<div className="admin_filterbar">筛选加载中…</div>}>
           <AdminFilters
+            keepParams={["group"]}
             fields={[
               { name: "q", type: "search", placeholder: "输入完整 IPv4 精确查询" },
               {

@@ -20,7 +20,7 @@ import { replayEvents } from "@/lib/videoradar";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { RANKED_SOFTWARE } from "@/lib/evfwrite";
 import { evfSignature } from "@/core/src/lib/evf-sign";
-import { addCompEvent, COMP_EVENT_SCORE } from "@/lib/competition";
+import { addTourEvent, TOUR_EVENT_SCORE, matchTourByRace } from "@/lib/tournament";
 import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, UNREACHABLE_3BV, type VideoLevel } from "@/lib/config";
 import { getUser3bvCollection } from "@/lib/queries";
@@ -174,19 +174,21 @@ export async function uploadVideo(
   /* 比赛自动分拣（2026-11-13 二期张老师定）：录像标识包含「进行中比赛」的标识
      （competition.code，6 位随机码）→ 自动挂接该比赛。任何上传通道通用
      （站内在线局保存时标识自动附加、外部软件玩家可把标识写进署名自行参加）。
-     只认进行中（start≤now<end）的比赛；标识不存在于任何进行中比赛 → 不挂接 */
-  const nowSecC = Math.floor(Date.now() / 1000);
+     只认进行中（start≤now<end）的比赛；标识不存在于任何进行中比赛 → 不挂接。
+     2026-11-18 改走 matchTourByRace 统一判据：race 精确优先（EVF 内嵌标识，
+     与开源网导入线同源），退签名末尾=code（原 includes 误绑面大：签名中间含
+     标识字样的盘会挂错）；两路都不中 → 不挂接 */
   let compAttach: { id: bigint; code: string } | null = null;
-  const activeComps = await prisma.competition.findMany({
-    where: { startTime: { lte: BigInt(nowSecC) }, endTime: { gt: BigInt(nowSecC) } },
-    select: { id: true, code: true },
-  });
-  for (const a of activeComps) {
-    if (a.code && parsed.player.includes(a.code)) {
-      compAttach = a;
-      break;
+  try {
+    const compId = await matchTourByRace(parsed.race, parsed.player, Math.floor(Date.now() / 1000));
+    if (compId) {
+      const a = await prisma.tournament.findUnique({
+        where: { id: BigInt(compId) },
+        select: { id: true, code: true },
+      });
+      if (a?.code) compAttach = { id: a.id, code: a.code };
     }
-  }
+  } catch { /* 匹配失败不阻断上传 */ }
 
   /* 封面含旗串（2026-10-31 张老师需求：封面显示玩家标过的雷，F/X 等长编码进
      board）：重放事件流取终态旗位（flop 状态机，单盘 ~2.4ms）。NF 局旗位图
@@ -315,7 +317,7 @@ export async function uploadVideo(
           // 详情页「来自XX」；from_id 不写（那是外站同步的幂等键，NULL 不参与唯一约束）
           ...(options?.fromSite ? { fromSite: BigInt(options.fromSite) } : {}),
           // 比赛自动分拣（2026-11-13 二期）：标识命中进行中比赛 → 挂接
-          ...(compAttach ? { competitionId: compAttach.id } : {}),
+          ...(compAttach ? { tournamentId: compAttach.id } : {}),
           createTime: nowSec,
           updateTime: nowSec,
         },
@@ -369,7 +371,7 @@ export async function uploadVideo(
 
   // 比赛挂接成功 → 「玩家更新成绩」动态（2026-11-13 二期：详情页动态板块）
   if (compAttach) {
-    await addCompEvent(Number(compAttach.id), COMP_EVENT_SCORE, session.uid);
+    await addTourEvent(Number(compAttach.id), TOUR_EVENT_SCORE, session.uid);
   }
 
   // 自动分拣后置钩子（2026-10-19 方案 v2）：事务提交后异步跑触发器组，

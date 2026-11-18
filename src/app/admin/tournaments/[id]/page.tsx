@@ -3,31 +3,31 @@
 // 录像列：ID/玩家/级别/time/3BV/s/3BV/审核状态/播放/上传时间/操作（移出比赛）。
 // 玩家列：ID/人名/军衔/录像数/当前成绩——成绩按比赛配置的计算方式算（越小越好），
 //         玩家=有录像挂在本比赛的人（含屏蔽录像的拥有者，成绩只认有效录像）。
-// 移出比赛复用 video.competition op（competitionId=0 解除挂接）。
+// 移出比赛复用 video.tournament op（tournamentId=0 解除挂接）。
 
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { prisma } from "@/lib/db";
 import {
-  compStatus,
+  tourStatus,
   computePlayerScores,
   fmtScoreMs,
   parsePrizePlan,
   parseScoreConfig,
   scoreModeDesc,
-} from "@/lib/competition";
+} from "@/lib/tournament";
 import { dualTitles } from "@/lib/title-system";
 import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
 import { scoreTime } from "@/lib/format";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { AdminCard, AdminPager, LevelTag, StatusTag } from "@/components/admin/Widgets";
-import { CompAddVideosDialog } from "@/components/admin/CompAddVideosDialog";
+import { TourAddVideosDialog } from "@/components/admin/TourAddVideosDialog";
 import { AvatarCell, TitleBadge } from "@/components/Cells";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "比赛详情 | 管理后台" };
 
-type StatusKey = ReturnType<typeof compStatus>;
+type StatusKey = ReturnType<typeof tourStatus>;
 
 /** Unix 秒 → 北京时间 "YYYY-MM-DD HH:mm"（同清单页） */
 function cstStr(sec: number): string {
@@ -60,29 +60,29 @@ export default async function AdminCompetitionDetailPage({
     );
   }
 
-  const comp = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
+  const comp = await prisma.tournament.findUnique({ where: { id: BigInt(id) } });
   if (!comp) {
     return (
       <div className="admin_page_head">
         <h1>比赛详情</h1>
         <p className="admin_note">
-          比赛 #{id} 不存在 · <Link className="link" href="/admin/competitions">返回清单</Link>
+          比赛 #{id} 不存在 · <Link className="link" href="/admin/tournaments">返回清单</Link>
         </p>
       </div>
     );
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const stKey = compStatus(comp.startTime, comp.endTime, now);
+  const stKey = tourStatus(comp.startTime, comp.endTime, now);
 
   // 本比赛全部挂接录像（含屏蔽，后台看全貌）+ 成绩字段分表取（Video/VideoInfo 无 relation）
   const [allVideos, entryCount] = await Promise.all([
     prisma.video.findMany({
-      where: { competitionId: BigInt(id) },
+      where: { tournamentId: BigInt(id) },
       select: { id: true, user: true, level: true, status: true, createTime: true },
       orderBy: [{ createTime: "desc" }, { id: "desc" }],
     }),
-    prisma.competitionEntry.count({ where: { competitionId: BigInt(id) } }),
+    prisma.tournamentEntry.count({ where: { tournamentId: BigInt(id) } }),
   ]);
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: allVideos.map((v) => v.id) } },
@@ -119,11 +119,17 @@ export default async function AdminCompetitionDetailPage({
   const titleMap = new Map(uids.map((u, i) => [Number(u), titlePairs[i]]));
 
   // 玩家成绩：只认未屏蔽录像（computePlayerScores 内部再滤 real_time/no_record）
+  // 成绩口径（张老师 2026-11-18）：只计上传时间在比赛窗口内的录像（窗口外补传盘不计）
   const scoreMap = computePlayerScores(
     comp.scoreMode,
     comp.scoreConfig,
     allVideos
-      .filter((v) => v.status !== 0)
+      .filter(
+        (v) =>
+          v.status !== 0 &&
+          v.createTime >= comp.startTime &&
+          v.createTime <= comp.endTime,
+      )
       .map((v) => ({
         user: v.user,
         level: v.level,
@@ -181,13 +187,13 @@ export default async function AdminCompetitionDetailPage({
     <>
       <div className="admin_page_head">
         <h1>
-          <Link className="link" href="/admin/competitions">比赛管理</Link>
+          <Link className="link" href="/admin/tournaments">比赛管理</Link>
           {" / "}
           {comp.name}
         </h1>
         <span className="sub">
           #{comp.id} ·{" "}
-          <a href={`/competitions/${comp.id}`} target="_blank" rel="noopener noreferrer">
+          <a href={`/tournaments/${comp.id}`} target="_blank" rel="noopener noreferrer">
             前台详情页
           </a>
         </span>
@@ -206,8 +212,9 @@ export default async function AdminCompetitionDetailPage({
             {info("简称", comp.shortName)}
             {info("比赛标识", <span className="mono">{comp.code || "—"}</span>)}
             {info("起止时间", `${cstStr(Number(comp.startTime))} ~ ${cstStr(Number(comp.endTime))}（北京）`)}
-            {info("收录级别", levels.map((l) => LEVEL_NAMES[l]).join("、"))}
+            {info("比赛级别", levels.map((l) => LEVEL_NAMES[l]).join("、"))}
             {info("成绩计算方式", scoreModeDesc(comp.scoreMode, comp.scoreConfig))}
+
             {info("总奖金", <span style={{ color: "#fdc61a" }}>¥{comp.prizeTotal.toLocaleString("en-US")}</span>)}
             {info(
               "分配方案",
@@ -231,7 +238,7 @@ export default async function AdminCompetitionDetailPage({
       <AdminCard
         title="录像列表"
         tight
-        more={<CompAddVideosDialog competitionId={id} name={comp.name} />}
+        more={<TourAddVideosDialog tournamentId={id} name={comp.name} />}
       >
         <div className="admin_scroll">
           <table className="admin_table">
@@ -292,8 +299,8 @@ export default async function AdminCompetitionDetailPage({
                     </td>
                     <td className="ops">
                       <AdminAction
-                        op="video.competition"
-                        params={{ id: v.id.toString(), competitionId: 0 }}
+                        op="video.tournament"
+                        params={{ id: v.id.toString(), tournamentId: 0 }}
                         label="移出比赛"
                         confirm={`确认将录像 #${v.id} 移出本场比赛？`}
                       />
@@ -312,7 +319,7 @@ export default async function AdminCompetitionDetailPage({
           </table>
         </div>
         {videoTotal > 0 && (
-          <AdminPager base={`/admin/competitions/${id}`} params={sp} page={pv} total={videoTotal} pageSize={PAGE_SIZE} />
+          <AdminPager base={`/admin/tournaments/${id}`} params={sp} page={pv} total={videoTotal} pageSize={PAGE_SIZE} />
         )}
       </AdminCard>
 
@@ -359,7 +366,7 @@ export default async function AdminCompetitionDetailPage({
           </table>
         </div>
         {playerTotal > 0 && (
-          <AdminPager base={`/admin/competitions/${id}`} params={sp} page={pp} total={playerTotal} pageSize={PAGE_SIZE} />
+          <AdminPager base={`/admin/tournaments/${id}`} params={sp} page={pp} total={playerTotal} pageSize={PAGE_SIZE} />
         )}
         {comp.scoreMode && (
           <div className="admin_note" style={{ marginTop: 8 }}>

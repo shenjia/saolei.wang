@@ -284,9 +284,11 @@ model Video {
   fromId   BigInt? @map("from_id") @db.BigInt
 
   // ---- 所属比赛（2026-11-13 张老师需求）：NULL=不挂比赛；本期由管理员在后台
-  // 录像管理手动挂接（video.competition op），比赛详情页「录像」板块与排名按此聚合；
+  // 录像管理手动挂接（video.tournament op），比赛详情页「录像」板块与排名按此聚合；
   // 成绩口径＝video_info.real_time（排行成绩口径 2026-10-30 张老师定）
-  competitionId BigInt? @map("competition_id") @db.BigInt
+  // 2026-11-18 全站 competition→tournament 改名：列名暂留 competition_id（RENAME TABLE
+  // 已做，列级 @map 后续统一挪时再动，避免一次动两面）
+  tournamentId BigInt? @map("competition_id") @db.BigInt
 
   // 外站同步幂等键（2026-11-07）：同站同 remote id 唯一；NULL 行（站内原生）MySQL 不参与唯一约束
   @@unique([fromSite, fromId])
@@ -307,7 +309,7 @@ model Video {
   @@index([createTime])
   // (competition_id, create_time) 2026-11-13：比赛详情页「录像」板块按比赛取行
   // （正序时间序扫描）+ 后台按比赛筛选
-  @@index([competitionId, createTime])
+  @@index([tournamentId, createTime])
   // (review_user, status) 2026-10-22 迁移收尾索引排查：团队页 getTeam 逐管理员 count
   // （WHERE review_user=N AND status=20）原走 (status,…) 索引扫 15 万条目，实测 1.4s/人
   @@index([reviewUser, status])
@@ -1499,10 +1501,12 @@ model ConnectSession {
 
 // 比赛（2026-11-13 张老师需求：前台「比赛」页 + 后台「比赛管理」发起/维护）。
 // 状态不落库，由起止时间对 now 推导：now<start=未开始 / start≤now<end=进行中 / now≥end=已结束。
-// code 比赛标识：创建时即生成 6 位数字+大小写字母随机码；前台开始前显示「待定」，开始后展示。
+// code 比赛标识：默认留空（NULL=未设置，前台不展示标识行）；后台编辑页可手填或
+// 点「随机生成」（5 位数字+大小写字母，应用层查重重抽，唯一索引兜底）。
+// 录像文件内嵌 race_identifier 与比赛 code 匹配 → 录像详情页显示比赛简称并链详情页。
 // prize_plan 分配方案按后台表单原文逐行存（每行一名次，如「第一名 ¥600」），前台 hover 气泡逐行拼读。
 // 成绩采集（比赛局录像/成绩挂接、排名图表数据）为下一期口径，本期表不预设。
-model Competition {
+model Tournament {
   id         BigInt  @id @default(autoincrement()) @db.BigInt
   name       String  @db.VarChar(100) // 比赛全名
   shortName  String  @map("short_name") @db.VarChar(10) // 简称（3-4 字）
@@ -1512,27 +1516,28 @@ model Competition {
   creatorId  BigInt  @map("creator_id") @db.BigInt // 发起人 user.id（后台填写）
   prizeTotal Int     @map("prize_total") // 总奖金（元，整数）
   prizePlan  String  @map("prize_plan") @db.VarChar(500) // 分配方案原文（每行一名次）
-  code       String  @default("") @db.VarChar(10) // 比赛标识（创建时生成，前台开始前不展示）
+  code       String? @unique @db.VarChar(10) // 比赛标识（默认 NULL=未设置；后台可设/随机生成 5 位，唯一约束）
+  alias      String? @unique @db.VarChar(20) // 比赛代号（如 gsc1；历届金羊杯导入 2026-11-18；NULL=未设置，唯一约束）
   includeLevels String @default("beg,int,exp") @map("include_levels") @db.VarChar(20) // 收录录像级别（逗号分隔 beg/int/exp，可多选；张老师 2026-11-13）
   scoreMode String @default("") @map("score_mode") @db.VarChar(20) // 成绩计算方式：""=未配置 / sum_topn=成绩加总（各级别最好N局） / target_diff=目标成绩求差（张老师 2026-11-13，后续可扩）
   scoreConfig String @default("") @map("score_config") @db.VarChar(200) // 计算方式参数 JSON：sum_topn={"beg":2,"int":2,"exp":2}；target_diff={"target":8.88}（time，秒）
   createTime BigInt  @default(0) @map("create_time") @db.BigInt // 创建时刻 Unix 秒
 
   @@index([startTime, endTime]) // 状态排序/筛选
-  @@map("competition")
+  @@map("tournament")
 }
 
 // 比赛报名（一人一比赛一条，唯一索引防重；未开始阶段报名，进行中/已结束接口拒绝）。
 // 成绩/名次/奖金发放不在此表——下一期成绩采集口径定了再扩。
-model CompetitionEntry {
+model TournamentEntry {
   id            BigInt @id @default(autoincrement()) @db.BigInt
-  competitionId BigInt @map("competition_id") @db.BigInt
+  tournamentId BigInt @map("competition_id") @db.BigInt
   userId        BigInt @map("user_id") @db.BigInt
   createTime    BigInt @default(0) @map("create_time") @db.BigInt // 报名时刻 Unix 秒
 
-  @@unique([competitionId, userId])
+  @@unique([tournamentId, userId])
   @@index([userId, createTime]) // 我的统计：参加比赛次数
-  @@map("competition_entry")
+  @@map("tournament_entry")
 }
 
 // 比赛动态（2026-11-13 二期，张老师定口径）：详情页「动态」板块数据源。
@@ -1540,14 +1545,14 @@ model CompetitionEntry {
 //       3=比赛正式开始 / 5=比赛正式结束（now 越过起止时刻时惰性补写，幂等查重）
 //       4=玩家更新成绩（后台挂接比赛录像时写入）
 // type 2/4 主体是玩家（userId>0）；1/3/5 为全站事件 userId 恒 0。文案展示层拼接。
-model CompetitionEvent {
+model TournamentEvent {
   id            BigInt @id @default(autoincrement()) @db.BigInt
-  competitionId BigInt @map("competition_id") @db.BigInt
+  tournamentId BigInt @map("competition_id") @db.BigInt
   type          Int    @db.TinyInt
   userId        BigInt @default(0) @map("user_id") @db.BigInt
   createTime    BigInt @default(0) @map("create_time") @db.BigInt
 
-  @@index([competitionId, id]) // 详情页动态流
+  @@index([tournamentId, id]) // 详情页动态流
   @@index([userId, createTime]) // 我的活动
-  @@map("competition_event")
+  @@map("tournament_event")
 }

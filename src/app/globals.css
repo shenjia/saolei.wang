@@ -17364,8 +17364,12 @@ body #header .nav li a.vs_new_hint,
 .comp_name { margin: 0; font-size: 26px; line-height: 39px; color: #b1b1a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
 .comp_name.on { color: #fdc61a; }
 .comp_name_link { color: inherit; text-decoration: none; }
-.comp_dates { font-size: 12px; color: #939387; white-space: nowrap; }
 .comp_ctrl { display: flex; align-items: flex-end; gap: 14px; flex-shrink: 0; }
+
+/* 比赛时间（2026-11-18 张老师需求：起止日期从标题行移到图表下方，
+   与「比赛级别」同列纵排；文字格式与下行一致 #b1b1a4；
+   原 .comp_dates 标题行日期样式随功能迁移一并退役） */
+.comp_time { font-size: 13px; color: #b1b1a4; white-space: nowrap; }
 
 /* 状态标签（七轮 03:10 张老师定，日期后圆角描边小标签）：
    进行中绿 #a6e22e / 未开始金 #fdc61a / 已结束亮灰 #b1b1a4 / 已报名✓ 绿（同进行中），
@@ -17413,9 +17417,12 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_empty { color: #75715e; font-size: 14px; }
 .comp_chart_svg { display: block; }
 
-/* 信息行（2026-11-13 张老师定：收录级别一行在上、比赛标识一行在下（标识整段加粗高亮）；
-   七轮 03:10 起发起人整块下线，不再有浮动行） */
-.comp_meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 13px; color: #b1b1a4; margin-top: 10px; }
+/* 信息行（2026-11-18 张老师二轮定）：左列=比赛时间+比赛级别纵排（文字色一致），
+   比赛标识靠右下角（space-between + 底对齐，不挤左边文字，窄屏换行兜底 flex-wrap）；
+   标识整段加粗高亮，标识未设置时不渲染；
+   七轮 03:10 起发起人整块下线，不再有浮动行 */
+.comp_meta { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 2px 16px; margin-top: 10px; font-size: 13px; color: #b1b1a4; }
+.comp_meta_left { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
 .comp_meta b.comp_code_all { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
@@ -17442,7 +17449,7 @@ body #header .nav li a.vs_new_hint,
 .comp_stat_row b { color: #f8f8f2; font-weight: 700; }
 #page.comp_page .gold { color: #fdc61a; }
 
-/* ==================== 比赛详情页（2026-11-13 二期：/competitions/[id]） ==================== */
+/* ==================== 比赛详情页（2026-11-13 二期：/tournaments/[id]） ==================== */
 
 /* 「动态」「录像」板块（七轮 03:10 对齐：padding 同 .box 默认 30px，与顶部板块/
    纪录页盒子一致），录像表与首页流同源（ranking_table video_table 行渲染），

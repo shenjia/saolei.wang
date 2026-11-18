@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toast";
 import { confirmDialog } from "@/components/Confirm";
 
-export function SignupButton({
+export function TourSignupButton({
   compId,
   joined,
   name,
@@ -22,7 +22,7 @@ export function SignupButton({
   compId: string;
   joined: boolean;
   name: string; // 确认窗文案用（比赛全名）
-  /** 未登录时点击弹登录浮窗（CompBlock 统一传入，不再渲染跳登录页链接） */
+  /** 未登录时点击弹登录浮窗（TourBlock 统一传入，不再渲染跳登录页链接） */
   loggedIn: boolean;
 }) {
   const router = useRouter();
@@ -32,7 +32,7 @@ export function SignupButton({
   async function join() {
     setBusy(true);
     try {
-      const res = await fetch("/api/competition/join", {
+      const res = await fetch("/api/tournament/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: compId }),
@@ -54,7 +54,7 @@ export function SignupButton({
   async function leave() {
     setBusy(true);
     try {
-      const res = await fetch("/api/competition/join", {
+      const res = await fetch("/api/tournament/join", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: compId }),
