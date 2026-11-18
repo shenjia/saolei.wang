@@ -24,6 +24,13 @@ import {
 import { LEVEL_NAMES } from "@/lib/config";
 import { TourChart } from "./TourChart";
 
+/** 「创造于」时刻 → YYYY-MM-DD HH:mm（北京时间；图表行专用，站内其余处走 RelTime） */
+function fmtBestAt(sec: number): string {
+  const d = new Date((sec + 8 * 3600) * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export function TourBlock({
   c,
   now,
@@ -71,12 +78,24 @@ export function TourBlock({
         </div>
       </div>
 
-      {/* 纪录图表（2026-11-18 晚张老师问「已结束为什么没数据」）：详情页形态有成绩数据
-          （chartPoints 非空，按比赛设定总分排名前 30 散点）渲染 TourChart 折线；
+      {/* 纪录图表（2026-11-18 晚张老师定：复刻纪录页样式金线+下方阴影+右标尺）——
+          上部「最好成绩：xxx 姓名 军衔 创造于 xxx-xx-xx xx:xx」（总分口径第一名）；
           未开始/无成绩保持占位文案 */}
       <div className="comp_chart">
-        {c.status !== "upcoming" && c.chartPoints.length > 0 ? (
-          <TourChart points={c.chartPoints} />
+        {c.status !== "upcoming" && c.chartPoints.length > 0 && c.bestLine ? (
+          <div className="comp_chart_body">
+            <p className="comp_chart_best">
+              最好成绩：<b>{(c.bestLine.score / 1000).toFixed(3)}</b>
+              <Link className="comp_chart_best_name" href={`/user/${c.bestLine.uid}`}>
+                {c.bestLine.name}
+              </Link>
+              {c.bestLine.title && <span className="comp_chart_best_title">{c.bestLine.title}</span>}
+              <span className="comp_chart_best_at">
+                创造于 {fmtBestAt(c.bestLine.at)}
+              </span>
+            </p>
+            <TourChart points={c.chartPoints} />
+          </div>
         ) : c.status === "upcoming" ? (
           <span className="comp_chart_empty">尚未开始</span>
         ) : (

@@ -126,6 +126,8 @@ export interface TourRow {
   creatorClassic: { name: string; color: string } | null; // 旧版称号备选
   /** 纪录图表散点（详情页形态填充：按比赛设定总分排名前 30，score 秒；列表形态为空数组） */
   chartPoints: { rank: number; score: number; name?: string }[];
+  /** 图表上方「最好成绩」行（详情页形态填充；无成绩 null）——总分口径第一名 */
+  bestLine: { score: number; name: string; title: string; uid: number; at: number } | null;
 }
 
 export interface TourPage {
@@ -228,6 +230,7 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
       creatorTitle: titleMap.get(c.creatorId.toString())?.m ?? "",
       creatorClassic: titleMap.get(c.creatorId.toString())?.c ?? null,
       chartPoints: [], // 列表形态不取图表数据（详情页才有）
+      bestLine: null,
     };
   });
 
@@ -370,69 +373,201 @@ export interface TourEventRow {
   englishName: string;
   title: string;
   classic: { name: string; color: string } | null;
-  /** type=4 合并组：同刻连续动态条数（1=单条） */
+  /** type=4 合并行：该玩家本比赛全部成绩动态合并后的盘数 */
   count: number;
-  /** type=4 合并组内最好成绩（毫秒；无有效成绩 null） */
-  scoreMs: number | null;
+  /** type=4 合并行：该玩家当时（≤本批时刻）的比赛总成绩（computePlayerScores 同口径毫秒） */
+  totalMs: number | null;
+  /** type=4 合并行：本批新盘中最好单盘成绩（毫秒） */
+  batchBestMs: number | null;
+  /** type=4 合并行：上一行总成绩（提升幅度 = prev 与本次的差；null=首次成绩动态） */
+  prevTotalMs: number | null;
 }
 
-/** 比赛动态分页（2026-11-18 晚张老师定改版）：
- *  · 时间正序（老在前）
- *  · type=4 按 (user_id, create_time) 分组合并——同刻连续的同一人成绩动态合一行，
- *    显示「×N」与组内最好成绩（从 video 表按上传时刻精确关联取 real_time 最小值）
+/** 比赛动态分页（2026-11-18 深夜张老师四轮定版）：
+ *  · 新在上老在下
+ *  · type=4 按玩家合并成一行（整段比赛的所有成绩动态并成一条，截图里 20 行全是
+ *    同一人批量传盘的碎片）——行显示：本批（相邻 60 秒窗口）盘数 ×N、本批最好单盘、
+ *    **当时比赛总成绩**（computePlayerScores 同口径，各级别最好 N 局+保底），非首行
+ *    再带提升幅度（金色 ▼差值，同首页新闻破纪录）
  *  · 带出玩家性别/军衔（同首页动态行）
- *  total 口径：合并后的行数（分页/滑轨都按它算） */
+ *  total 口径：合并后的行数 */
 export async function getTourEventsPage(
   tournamentId: number,
   page: number,
   pageSize = 20
 ): Promise<{ rows: TourEventRow[]; total: number; page: number; pageSize: number }> {
   const cid = BigInt(tournamentId);
-  // 合并聚合（原生 SQL：Prisma 无 groupBy 多键 + 关联取数的表达力）
-  // 分组键 = (user_id, create_time)；type=4 之外每行自成一组（user_id=0 或各自时刻天然不同）
-  const groups = await prisma.$queryRaw<
-    {
-      user_id: bigint | null;
-      create_time: bigint;
-      type: number;
-      cnt: bigint;
-      min_id: bigint;
-      score_ms: number | null;
-    }[]
-  >`
-    SELECT te.user_id, te.create_time, te.type, COUNT(*) AS cnt, MIN(te.id) AS min_id,
-           MIN(te.competition_id) AS competition_id,
-           (SELECT MIN(vi.real_time)
-            FROM video v JOIN video_info vi ON vi.id = v.id
-            WHERE v.competition_id = MIN(te.competition_id)
-              AND v.status <> 0
-              AND v.user = te.user_id
-              AND v.create_time = te.create_time) AS score_ms
-    FROM tournament_event te
-    WHERE te.competition_id = ${cid}
-    GROUP BY te.user_id, te.create_time, te.type
-    ORDER BY te.create_time DESC, te.type ASC, min_id DESC
-    LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
-  `;
-  const totalRow = await prisma.$queryRaw<{ c: bigint }[]>`
-    SELECT COUNT(*) AS c FROM (
-      SELECT 1 FROM tournament_event
-      WHERE competition_id = ${cid}
-      GROUP BY user_id, create_time, type
-    ) t
-  `;
-  const total = Number(totalRow[0]?.c ?? 0);
+  // 全量取出本比赛动态（比赛量级十场、单场动态几千条，内存归并最直白；
+  // 跨批合并/总成绩进度都无法在 SQL 一层表达）
+  const all = await prisma.tournamentEvent.findMany({
+    where: { tournamentId: cid },
+    orderBy: [{ createTime: "asc" }, { id: "asc" }],
+  });
+  const scoreEv = all.filter((e) => e.type === TOUR_EVENT_SCORE);
+  const uids = [...new Set(scoreEv.map((e) => Number(e.userId)).filter((x) => x > 0))];
+  // 一次取全部成绩动态玩家的窗口内录像（总成绩进度计算的数据源）
+  const vids = uids.length
+    ? await prisma.video.findMany({
+        where: { tournamentId: cid, status: { not: 0 }, user: { in: uids.map((s) => BigInt(s)) } },
+        select: { id: true, user: true, level: true, createTime: true },
+      })
+    : [];
+  const infos = vids.length
+    ? await prisma.videoInfo.findMany({
+        where: { id: { in: vids.map((v) => v.id) } },
+        select: { id: true, realTime: true, noRecord: true },
+      })
+    : [];
+  const infoMap = new Map(infos.map((i) => [i.id, i]));
+  const comp = await prisma.tournament.findUnique({
+    where: { id: cid },
+    select: { scoreMode: true, scoreConfig: true },
+  });
+  // 按玩家归并：每条成绩动态 → 该玩家截至该时刻的录像集
+  const vidsByUser = new Map<number, typeof vids>();
+  for (const v of vids) {
+    const uid = Number(v.user);
+    if (!vidsByUser.has(uid)) vidsByUser.set(uid, []);
+    vidsByUser.get(uid)!.push(v);
+  }
+  // 成绩动态合并：同人相邻事件间隔 ≤ 600 秒视为同一批（连传）；批内取最新时刻为行时刻
+  const BATCH_WINDOW_SEC = 600;
+  type Merged = {
+    userId: number;
+    /** 行时刻 = 批内最新事件时刻 */
+    createTime: number;
+    /** 批内事件数（动态条数） */
+    evCount: number;
+    /** 批内新盘 id 集（时刻落在 (批首事件−窗口, 批末事件] 的录像） */
+    batchVideoIds: number[];
+    /** 批首事件时刻（总成绩进度取「批末事件时刻」口径） */
+    firstTime: number;
+    /** 批末事件时刻 */
+    lastTime: number;
+    minId: number;
+  };
+  const merged: Merged[] = [];
+  {
+    let cur: Merged | null = null;
+    for (const e of scoreEv) {
+      const uid = Number(e.userId);
+      const t = Number(e.createTime);
+      if (cur && cur.userId === uid && t - cur.lastTime <= BATCH_WINDOW_SEC) {
+        cur.lastTime = t;
+        cur.createTime = t;
+        cur.evCount += 1;
+      } else {
+        if (cur) merged.push(cur);
+        cur = { userId: uid, createTime: t, evCount: 1, batchVideoIds: [], firstTime: t, lastTime: t, minId: Number(e.id) };
+      }
+    }
+    if (cur) merged.push(cur);
+  }
+  // 批内新盘：该玩家录像中上传时刻 ∈ (上一批 lastTime, 本批 lastTime]
+  for (const m of merged) {
+    const prev = merged.find((x) => x.userId === m.userId && x.lastTime < m.lastTime);
+    const from = prev ? prev.lastTime : m.firstTime - BATCH_WINDOW_SEC - 1;
+    const pool = vidsByUser.get(m.userId) ?? [];
+    m.batchVideoIds = pool
+      .filter((v) => Number(v.createTime) > from && Number(v.createTime) <= m.lastTime)
+      .map((v) => Number(v.id));
+    m.minId = Math.min(m.minId, ...m.batchVideoIds.slice(0, 1), m.minId);
+  }
+  // 总成绩进度：截至每批 lastTime 的窗口内录像按比赛设定算总分
+  const progressBy = new Map<string, { total: number | null; batchBest: number | null }>();
+  for (const m of merged) {
+    const pool = vidsByUser.get(m.userId) ?? [];
+    const upto = pool.filter((v) => Number(v.createTime) <= m.lastTime);
+    const scores = computePlayerScores(
+      comp?.scoreMode ?? "",
+      comp?.scoreConfig ?? "",
+      upto.map((v) => ({
+        user: v.user,
+        level: v.level,
+        realTime: infoMap.get(v.id)?.realTime ?? 0,
+        noRecord: infoMap.get(v.id)?.noRecord ?? false,
+      })),
+    );
+    const mine = scores.get(m.userId);
+    const batchBestRaw = m.batchVideoIds
+      .map((vid) => {
+        const info = infoMap.get(vid as unknown as bigint);
+        return info && !info.noRecord ? info.realTime : 0;
+      })
+      .filter((t) => t > 0);
+    progressBy.set(`${m.userId}@${m.lastTime}`, {
+      total: mine ? mine.score : null,
+      batchBest: batchBestRaw.length ? Math.min(...batchBestRaw) : null,
+    });
+  }
+  // 官方/报名事件行也并入时间线（与合并后的成绩行一起排序）
+  const otherRows = all
+    .filter((e) => e.type !== TOUR_EVENT_SCORE)
+    .map((e) => ({
+      userId: Number(e.userId),
+      createTime: Number(e.createTime),
+      evCount: 1,
+      type: e.type,
+      minId: Number(e.id),
+    }));
+  type Row = {
+    sortKey: number;
+    type: number;
+    userId: number;
+    createTime: number;
+    evCount: number;
+    minId: number;
+    total: number | null;
+    batchBest: number | null;
+    prevTotal: number | null;
+  };
+  const rows: Row[] = [];
+  // 成绩合并行 + 提升幅度（与该玩家上一批的总成绩比）
+  const lastTotalBy = new Map<number, number | null>();
+  for (const m of merged) {
+    const key = `${m.userId}@${m.lastTime}`;
+    const prog = progressBy.get(key)!;
+    const prev = lastTotalBy.get(m.userId);
+    rows.push({
+      sortKey: m.lastTime,
+      type: TOUR_EVENT_SCORE,
+      userId: m.userId,
+      createTime: m.lastTime,
+      evCount: m.evCount,
+      minId: m.minId,
+      total: prog.total,
+      batchBest: prog.batchBest,
+      prevTotal: prev === undefined ? null : prev,
+    });
+    lastTotalBy.set(m.userId, prog.total);
+  }
+  for (const o of otherRows) {
+    rows.push({
+      sortKey: o.createTime,
+      type: o.type,
+      userId: o.userId,
+      createTime: o.createTime,
+      evCount: o.evCount,
+      minId: o.minId,
+      total: null,
+      batchBest: null,
+      prevTotal: null,
+    });
+  }
+  rows.sort((a, b) => b.sortKey - a.sortKey || b.minId - a.minId);
+  const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const p = Math.min(Math.max(page, 1), totalPages);
-  const uids = [...new Set(groups.map((g) => Number(g.user_id)).filter((x) => x > 0))];
-  const [users, scoreRows] = uids.length
+  const pageRows = rows.slice((p - 1) * pageSize, p * pageSize);
+  const rowUids = [...new Set(pageRows.map((r) => r.userId).filter((x) => x > 0))];
+  const [users, scoreRows] = rowUids.length
     ? await Promise.all([
         prisma.user.findMany({
-          where: { id: { in: uids.map((s) => BigInt(s)) } },
+          where: { id: { in: rowUids.map((s) => BigInt(s)) } },
           select: { id: true, chineseName: true, englishName: true, sex: true, status: true },
         }),
         prisma.userScores.findMany({
-          where: { id: { in: uids.map((s) => BigInt(s)) } },
+          where: { id: { in: rowUids.map((s) => BigInt(s)) } },
           select: { id: true, expTime: true },
         }),
       ])
@@ -451,22 +586,23 @@ export async function getTourEventsPage(
     : [];
   const titleMap = new Map(users.map((u, i) => [Number(u.id), titlePairs[i]]));
   return {
-    rows: groups.map((g) => {
-      const uid = Number(g.user_id);
-      const u = uid > 0 ? userMap.get(uid) : undefined;
-      const pair = uid > 0 ? titleMap.get(uid) : undefined;
+    rows: pageRows.map((r) => {
+      const u = r.userId > 0 ? userMap.get(r.userId) : undefined;
+      const pair = r.userId > 0 ? titleMap.get(r.userId) : undefined;
       return {
-        id: Number(g.min_id),
-        type: g.type,
-        userName: uid > 0 ? u?.chineseName ?? `UID ${uid}` : null,
-        userId: uid > 0 ? uid : null,
-        createTime: Number(g.create_time),
+        id: r.minId,
+        type: r.type,
+        userName: r.userId > 0 ? u?.chineseName ?? `UID ${r.userId}` : null,
+        userId: r.userId > 0 ? r.userId : null,
+        createTime: r.createTime,
         sex: u?.sex ?? 1,
         englishName: u?.englishName ?? "",
         title: pair?.m ?? "",
         classic: pair?.c ?? null,
-        count: Number(g.cnt),
-        scoreMs: g.score_ms !== null ? Number(g.score_ms) : null,
+        count: r.evCount,
+        totalMs: r.total,
+        batchBestMs: r.batchBest,
+        prevTotalMs: r.prevTotal,
       };
     }),
     total,
@@ -729,9 +865,32 @@ export async function getTourDetailStats(
 export async function getTourVideosPage(
   compId: number,
   page: number,
-  pageSize = 20
+  pageSize = 20,
+  opts?: {
+    /** 作者筛选（用户 id，比赛范围搜索 2026-11-18 晚张老师定） */
+    author?: number;
+    /** 时间成绩搜索（秒，前缀匹配语义同 /video 列表页：>=该值的实盘成绩） */
+    time?: number;
+    /** 3BV 搜索（整数） */
+    bv?: number;
+  }
 ): Promise<{ videos: VideoListItem[]; total: number; page: number; pageSize: number }> {
-  const where = { tournamentId: BigInt(compId), status: { not: 0 } };
+  const base: Record<string, unknown> = { tournamentId: BigInt(compId), status: { not: 0 } };
+  if (opts?.author) base.user = BigInt(opts.author);
+  // 成绩/3BV 搜索需要关联 video_info——先按 info 表筛 id（同 /video 列表口径）
+  let idFilter: bigint[] | null = null;
+  if (opts?.time || opts?.bv) {
+    const infoWhere: Record<string, unknown> = {};
+    if (opts.time) infoWhere.realTime = { gte: Math.round(opts.time * 1000) };
+    if (opts.bv) infoWhere.board3bv = { gte: opts.bv };
+    const hits = await prisma.videoInfo.findMany({
+      where: infoWhere,
+      select: { id: true },
+    });
+    idFilter = hits.map((h) => h.id);
+    base.id = { in: idFilter };
+  }
+  const where = base as { tournamentId: bigint; status: { not: 0 } };
   const total = await prisma.video.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const p = Math.min(Math.max(page, 1), totalPages);
@@ -793,7 +952,8 @@ export async function getTournamentDetail(
       .filter((s): s is Level => (LEVELS as readonly string[]).includes(s)),
   );
   // 纪录图表数据（2026-11-18 晚张老师问「已结束为什么没数据」）：按比赛设定总分
-  // 排名的散点——复用 getTourRanking 全量口径，取前 30 名（score 秒）；无成绩比赛为空
+  // 排名的散点——复用 getTourRanking 全量口径，取前 30 名（score 秒）；无成绩比赛为空。
+  // 图表上方「最好成绩」行 = 第一名（总分口径）
   const rankRows =
     c.startTime <= now
       ? await getTourRanking(id, 30)
@@ -803,6 +963,29 @@ export async function getTournamentDetail(
     score: r.time / 1000,
     name: r.name,
   }));
+  const first = rankRows[0];
+  const bestLine = first
+    ? {
+        score: first.time,
+        name: first.name,
+        title: first.title,
+        uid: first.uid,
+        // 「创造于」= 该玩家窗口内最早一盘的上传时刻
+        at: await (async () => {
+          const v = await prisma.video.findFirst({
+            where: {
+              tournamentId: BigInt(id),
+              user: BigInt(first.uid),
+              status: { not: 0 },
+              createTime: { gte: c.startTime, lte: c.endTime },
+            },
+            select: { createTime: true },
+            orderBy: { createTime: "asc" },
+          });
+          return Number(v?.createTime ?? c.startTime);
+        })(),
+      }
+    : null;
   return {
     id: c.id.toString(),
     name: c.name,
@@ -824,6 +1007,7 @@ export async function getTournamentDetail(
     creatorTitle: pair?.m ?? "",
     creatorClassic: pair?.c ?? null,
     chartPoints,
+    bestLine,
   };
 }
 

@@ -65,6 +65,7 @@ export function VideoSearch({
   bv,
   nf,
   scope,
+  tourId,
   userId,
 }: {
   level: string;
@@ -83,13 +84,18 @@ export function VideoSearch({
   /** NF 筛选开关（2026-10-20）：跳转保留 nf=1 */
   nf?: boolean;
   /** 作用域（2026-10-20）："list"=默认 /video 列表页；"user"=用户主页录像版块
-   *  （作者锁定，只支持 成绩/3BV/ID 三种查询，跳转回本主页 URL） */
-  scope?: "list" | "user";
+   *  （作者锁定，只支持 成绩/3BV/ID 三种查询，跳转回本主页 URL）；
+   *  "tour"=比赛详情页录像区（2026-11-18 深夜张老师定：限本比赛范围搜索，
+   *  跳回 /tournaments/{tourId}?vauthor=…|vtime=…） */
+  scope?: "list" | "user" | "tour";
+  /** scope=tour：比赛 id（跳回本详情页） */
+  tourId?: number;
   /** scope=user：主页用户 id（跳转 /user/{id}）与显示名（清除搜索回显） */
   userId?: number;
 }) {
   const router = useRouter();
   const isUser = scope === "user";
+  const isTour = scope === "tour";
   const [q, setQ] = useState(
     isUser ? (time ?? (bv != null ? `3BV ${bv}` : "")) : authorName ?? time ?? (bv != null ? `3BV ${bv}` : "")
   );
@@ -219,6 +225,18 @@ export function VideoSearch({
     // 搜索等待气泡（2026-10-27 张老师要求，全站前台搜索框统一）：跳转延迟期间弹「搜索中」，
     // URL 变化（跳转完成）后由 Toast 自动渐隐
     toastLoading();
+    if (isTour) {
+      // 比赛范围模式（2026-11-18 深夜张老师定）：作者/成绩互斥，跳回本详情页
+      // vauthor/vtime 参数（录像板块按比赛范围过滤）
+      router.push(
+        buildUrl(`/tournaments/${tourId}`, {
+          vauthor: params.author,
+          vtime: params.time,
+          page: undefined,
+        })
+      );
+      return;
+    }
     if (isUser) {
       router.push(
         buildUrl(`/user/${userId}`, {

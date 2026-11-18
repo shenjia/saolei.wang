@@ -17421,8 +17421,23 @@ body #header .nav li a.vs_new_hint,
   background: #2a2b25; border-radius: 6px; margin: 12px 0 0;
   height: 216px; display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
+/* 图表带数据形态（2026-11-18 深夜张老师定：上部「最好成绩」行 + 金线图表）——
+   高度放开容纳两段内容，占位态维持原高 */
+.comp_chart:has(.comp_chart_body) { height: auto; padding: 10px 12px 6px; }
+.comp_chart_body { width: 100%; }
+.comp_chart_best { margin: 0 0 2px; font-size: 13px; line-height: 22px; color: #b1b1a4; }
+.comp_chart_best b { color: #fdc61a; font-weight: 700; margin-right: 8px; }
+.comp_chart_best_name { color: #b1b1a4; text-decoration: none; margin-right: 6px; }
+.comp_chart_best_name:hover { color: #a6e22e; }
+.comp_chart_best_title { font-size: 12px; margin-right: 8px; }
+.comp_chart_best_at { color: #939387; font-size: 12px; }
 .comp_chart_empty { color: #75715e; font-size: 14px; }
 .comp_chart_svg { display: block; }
+
+/* 板块标题行（标题+右上角搜索框，2026-11-18 深夜定：录像区搜索同录像页页头形态） */
+.comp_sec_head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.comp_sec_head h2 { margin: 0; }
+.comp_sec_head .video_search { flex-shrink: 0; }
 
 /* 信息行（2026-11-18 晚张老师定）：比赛级别+比赛标识一行在上（space-between 底对齐，
    窄屏换行兜底 flex-wrap），比赛时间单独一行在下；
@@ -17467,8 +17482,13 @@ body #header .nav li a.vs_new_hint,
 .comp_ev_user { color: #f8f8f2; font-weight: 700; text-decoration: none; margin-right: 4px; }
 .comp_ev_user:hover { color: #a6e22e; }
 .comp_ev_text { color: #b1b1a4; }
-/* 成绩动态具体数值（2026-11-18 晚张老师定）：合并组最好成绩加粗亮白强调 */
-.comp_ev_score { color: #f8f8f2; font-weight: 700; margin-left: 2px; }
+/* 成绩动态具体数值（2026-11-18 深夜四轮定）：总成绩亮灰加粗（同首页新闻破纪录新成绩）、
+   盘数 ×N 暗灰小字、提升幅度金色（delta 同首页 #fdc61a 带小三角） */
+.comp_ev_count { color: #939387; margin-left: 4px; }
+.comp_ev_total { color: #b1b1a4; font-weight: 700; margin-left: 4px; text-decoration: none; }
+.comp_ev_total:hover { color: #a6e22e; }
+.comp_ev_row .delta { color: #fdc61a; font-size: 13px; margin-left: 4px; }
+.comp_ev_row .delta svg.d_arrow { display: inline-block; vertical-align: -1px; margin-right: 2px; }
 /* 官方事件金色（2026-11-18 晚张老师定：报名开始/正式开始/正式结束） */
 .comp_ev_official { color: #fdc61a; font-weight: 700; }
 /* 动态行军衔徽章小号（2026-11-18 晚定：同首页动态行紧凑排布） */

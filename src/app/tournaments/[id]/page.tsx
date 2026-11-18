@@ -18,6 +18,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { UserPanel } from "@/components/UserCard";
 import { FlopSprites } from "@/components/FlopSprites";
 import { AvatarCell } from "@/components/Cells";
@@ -25,6 +26,7 @@ import { TitleBadge } from "@/components/TitleBadge";
 import { TourEventsFeed } from "@/components/tournament/TourEventsFeed";
 import { TourVideosFeed } from "@/components/tournament/TourVideosFeed";
 import { TourBlock } from "@/components/tournament/TourBlock";
+import { VideoSearch } from "@/components/VideoSearch";
 import { scoreTime } from "@/lib/format";
 import { LEVEL_NAMES, type Level } from "@/lib/config";
 import {
@@ -77,12 +79,20 @@ export default async function CompetitionDetailPage({
 
   const ep = Math.max(parseInt(sp.ep ?? "1", 10) || 1, 1);
   const vp = Math.max(parseInt(sp.page ?? "1", 10) || 1, 1);
-  const [events, videos, ranking, dstats, myResult] = await Promise.all([
+  // 录像区搜索（2026-11-18 深夜张老师定：同录像页，限本比赛范围内）——
+  // author（玩家 id）与 time（成绩秒）互斥；vtime 输入格式同 /video（如 16.6）
+  const vAuthor = Math.max(parseInt(sp.vauthor ?? "", 10) || 0, 0) || undefined;
+  const vTimeRaw = (sp.vtime ?? "").trim();
+  const vTime = vTimeRaw && Number.isFinite(Number(vTimeRaw)) && Number(vTimeRaw) > 0 ? Number(vTimeRaw) : undefined;
+  const [events, videos, ranking, dstats, myResult, searchUser] = await Promise.all([
     getTourEventsPage(compId, ep, TOUR_EVENT_PAGE_SIZE),
-    getTourVideosPage(compId, vp, COMP_VIDEO_PAGE_SIZE),
+    getTourVideosPage(compId, vp, COMP_VIDEO_PAGE_SIZE, { author: vAuthor, time: vTime }),
     getTourRanking(compId, 10),
     getTourDetailStats(compId),
     session ? getTourMyResult(compId, session.uid) : Promise.resolve(null),
+    vAuthor
+      ? prisma.user.findUnique({ where: { id: BigInt(vAuthor) }, select: { chineseName: true } })
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -113,11 +123,26 @@ export default async function CompetitionDetailPage({
           </div>
 
           {/* 录像板块：本比赛全部参赛录像，时间正序、不去重；行渲染与首页录像流同源。
-              标准翻页组件同上（client 壳 TourVideosFeed）；key=page 同上铁律 */}
+              标准翻页组件同上（client 壳 TourVideosFeed）；key=page 同上铁律。
+              右上角搜索框（2026-11-18 深夜张老师定：同录像页，限本比赛范围——
+              VideoSearch scope=tour 跳 vauthor/vtime，作者与成绩互斥） */}
           <div className="box comp_section">
-            <h2>录像</h2>
+            <div className="comp_sec_head">
+              <h2>录像</h2>
+              <div className="video_search">
+                <VideoSearch
+                  scope="tour"
+                  tourId={compId}
+                  level=""
+                  order="id"
+                  author={vAuthor}
+                  authorName={searchUser?.chineseName ?? ""}
+                  time={vTimeRaw || undefined}
+                />
+              </div>
+            </div>
             <TourVideosFeed
-              key={`vp${vp}-ep${ep}`}
+              key={`vp${vp}-ep${ep}-va${vAuthor ?? 0}-vt${vTimeRaw}`}
               compId={compId}
               initialVideos={videos.videos}
               initialPage={videos.page}

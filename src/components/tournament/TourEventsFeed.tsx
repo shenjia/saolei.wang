@@ -17,6 +17,7 @@ import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { RelTime } from "@/components/RelTime";
 import { AvatarCell } from "@/components/Cells";
 import { TitleBadge } from "@/components/TitleBadge";
+import { DeltaArrow } from "@/components/RankingRows";
 import { compEventText, type TourEventRow } from "@/lib/tournament";
 import { scoreTime } from "@/lib/format";
 
@@ -108,10 +109,24 @@ export function TourEventsFeed({
                   ) : (
                     compEventText(e.type)
                   )}
-                  {/* 成绩动态（2026-11-18 晚定）：合并组显示 ×N，带组内最好成绩具体数值 */}
-                  {e.type === 4 && e.count > 1 && ` ×${e.count}`}
-                  {e.type === 4 && e.scoreMs !== null && (
-                    <b className="comp_ev_score">（最好 {scoreTime(e.scoreMs)}s）</b>
+                  {/* 成绩动态（2026-11-18 深夜四轮定）：整段比赛同人成绩动态并成一行——
+                      ×N=盘数；成绩亮灰=当时比赛总成绩（各级别最好N局+保底）；
+                      非首次成绩动态后跟提升幅度（金色▼差值，同首页新闻破纪录） */}
+                  {e.type === 4 && (
+                    <>
+                      {e.count > 1 && <span className="comp_ev_count">×{e.count}</span>}
+                      {e.totalMs !== null && (
+                        <Link href={e.userId ? `/user/${e.userId}` : "#"} className="score comp_ev_total">
+                          {scoreTime(e.totalMs)}
+                        </Link>
+                      )}
+                      {e.prevTotalMs !== null && e.totalMs !== null && e.totalMs < e.prevTotalMs && (
+                        <span className="delta">
+                          <DeltaArrow dir="down" />
+                          {((e.prevTotalMs - e.totalMs) / 1000).toFixed(3)}
+                        </span>
+                      )}
+                    </>
                   )}
                 </span>
               </span>
