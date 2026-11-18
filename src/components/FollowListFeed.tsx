@@ -17,6 +17,7 @@ export function FollowListFeed({
   initial,
   initialTotal,
   type,
+  title,
   listOwner,
   viewerId,
   followingIds: initialFollowingIds,
@@ -25,6 +26,8 @@ export function FollowListFeed({
   initialTotal: number;
   /** following | followers（API 参数） */
   type: "following" | "followers";
+  /** 标题文案（我的关注 / XXX的粉丝 等；（共XX人）下标壳内随 total 渲染） */
+  title: string;
   /** 列表属主（缺省=观看者自己；他人列表翻页 API 带 uid） */
   listOwner?: number;
   /** 观看者 id（关注按钮初始态批量查） */
@@ -145,6 +148,13 @@ export function FollowListFeed({
 
   return (
     <>
+      {/* 标题（共XX人）下标（23:42 张老师定）：h1 移入壳随 total 实时刷新 */}
+      <div className="news_head">
+        <h1>
+          {title}
+          <span className="fol_total">（共{total}人）</span>
+        </h1>
+      </div>
       <div ref={tableRef}>
         <FollowListBody
           rows={items}

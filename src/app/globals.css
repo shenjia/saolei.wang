@@ -18064,8 +18064,8 @@ body #header .nav li a.vs_new_hint,
   display: block;
 }
 
-/* 关注/粉丝列表页（2026-11-18 22:32 张老师定版式）：two_columns 双栏——
-   主栏列表（PageSlider 标准翻页）+ 右栏玩家卡片（UserPanel）。
+/* 关注/粉丝列表页（2026-11-18 22:32 双栏定版；23:42 五改四列表格形态）：
+   主栏列表（表头 姓名/军衔/关注时间/操作 + PageSlider 标准翻页）+ 右栏玩家卡片。
    几何与账户设置族同款（288 侧栏 / 盒内容 210）。 */
 #page #follow_list > li.sidebar {
   width: 288px;
@@ -18077,30 +18077,66 @@ body #header .nav li a.vs_new_hint,
 #page #follow_list > li.sidebar .box {
   width: 210px;
 }
-.follow_list_page .fol_table td {
+#follow_list .fol_table th {
+  text-align: left;
+  color: #75715e;
+  font-size: 12px;
+  font-weight: normal;
+  padding: 6px 8px;
+  border-bottom: 1px solid #49483e;
+  white-space: nowrap;
+}
+#follow_list .fol_table td {
   border-bottom: 1px solid #3e3d35;
   padding: 6px 8px;
+  vertical-align: middle;
 }
-.follow_list_page .fol_avatar_cell {
-  width: 46px;
+#follow_list .fol_name_cell {
+  white-space: nowrap;
 }
-.follow_list_page .fol_wrap .fol_btn {
-  bottom: 2px;
+#follow_list .fol_inline_wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.follow_list_page .fol_avatar {
+#follow_list .fol_avatar {
   width: 36px;
   height: 36px;
   display: block;
   border-radius: 2px;
 }
-.follow_list_page .fol_time {
-  width: 100px;
-  text-align: right;
-  color: #75715e;
-  font-size: 12px;
+#follow_list .fol_name {
+  font-size: 14px;
+}
+#follow_list .fol_title_cell {
   white-space: nowrap;
 }
-.follow_list_page .fol_private {
+#follow_list .fol_time {
+  width: 130px;
+  white-space: nowrap;
+  color: #75715e;
+  font-size: 12px;
+}
+/* 操作列按钮：常显（非 hover 形态——按钮本身就在「操作」列，无需浮现） */
+#follow_list .fol_op_btn {
+  position: static;
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+#follow_list .fol_op_cell {
+  width: 90px;
+}
+/* 标题（共XX人）下标：小一号暗灰 */
+#follow_list .fol_total {
+  font-size: 14px;
+  color: #75715e;
+  font-weight: normal;
+}
+/* 他人视角隐藏文案页（fol_private）沿用旧类，样式保留 */
+.follow_list_page .fol_private,
+#follow_list .fol_private {
   padding: 16px 0;
   text-align: center;
   color: #75715e;

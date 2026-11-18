@@ -80,6 +80,7 @@ export default async function UserFollowersPage({
               initial={rows}
               initialTotal={total}
               type="followers"
+              title={`${owner.chineseName}的粉丝`}
               listOwner={userId}
               viewerId={session.uid}
               followingIds={followingIds}

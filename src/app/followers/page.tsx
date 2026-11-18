@@ -27,13 +27,11 @@ export default async function FollowersPage({
       <ul id="follow_list">
         <li className="main">
           <div className="box video_box">
-            <div className="page_head">
-              <h1>我的粉丝</h1>
-            </div>
             <FollowListFeed
               initial={rows}
               initialTotal={total}
               type="followers"
+              title="我的粉丝"
               viewerId={session.uid}
               followingIds={followingIds}
             />

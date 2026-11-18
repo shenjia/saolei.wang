@@ -10,6 +10,7 @@ import { prisma } from "./db";
 import { publishNews } from "./news";
 import { NEWS_TYPE } from "./config";
 import { sendSystemMessage } from "./message";
+import { dualTitles } from "./title-system";
 
 const N = (v: bigint | number | null | undefined): number => Number(v ?? 0);
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
@@ -241,6 +242,7 @@ async function sendFollowNotice(followerId: number, followeeId: number): Promise
 
 /**
  * 关注列表行（粉丝/关注列表页与聚合查询共用）：按关注时间倒序，时间口径=关注动作时间。
+ * 军衔（23:42 张老师：性别标记后显示军衔）：按被列用户当前成绩评定（title 经典备选齐带）。
  */
 export interface FollowListRow {
   id: number;
@@ -250,6 +252,58 @@ export interface FollowListRow {
   avatar: string;
   /** 关注时间（Unix 秒） */
   createTime: number;
+  /** 军衔（当前成绩评定；TitleBadge 主渲染） */
+  title: string;
+  /** 旧版称号备选（观看者体系切换渲染；null=无） */
+  classic: { name: string; color: string } | null;
+}
+
+/** 列表行装配：users 行 + user_scores/user 双查 → 军衔评定（两列表共用） */
+async function assembleRows(
+  rows: { followee: bigint; follower: bigint; createTime: bigint }[],
+  side: "followee" | "follower"
+): Promise<FollowListRow[]> {
+  const ids = [...new Set(rows.map((r) => Number(side === "followee" ? r.followee : r.follower)))];
+  if (!ids.length) return [];
+  const [users, scores] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: ids.map(BigInt) } },
+      select: { id: true, chineseName: true, englishName: true, sex: true, avatar: true, status: true },
+    }),
+    prisma.userScores.findMany({
+      where: { id: { in: ids.map(BigInt) } },
+      select: { id: true, expTime: true },
+    }),
+  ]);
+  const um = new Map(users.map((u) => [N(u.id), u]));
+  const expMap = new Map(scores.map((x) => [N(x.id), x.expTime ?? 0]));
+  const pairs = await dualTitles(
+    ids.map((id) => ({
+      userId: id,
+      expTime: expMap.get(id) ?? 0,
+      ranked: (um.get(id)?.status ?? -1) === 0,
+      sex: um.get(id)?.sex ?? 1,
+    }))
+  );
+  const pairById = new Map(ids.map((id, i) => [id, pairs[i] ?? null]));
+  return rows
+    .map((r) => {
+      const uid = Number(side === "followee" ? r.followee : r.follower);
+      const u = um.get(uid);
+      if (!u) return null;
+      const p = pairById.get(uid) ?? null;
+      return {
+        id: uid,
+        chineseName: u.chineseName,
+        englishName: u.englishName,
+        sex: u.sex,
+        avatar: u.avatar,
+        createTime: N(r.createTime),
+        title: p?.m ?? "",
+        classic: p?.c ?? null,
+      };
+    })
+    .filter((x): x is FollowListRow => x !== null);
 }
 
 /** 我的关注列表（按时间倒序分页） */
@@ -268,29 +322,7 @@ export async function getFollowingList(
     }),
     prisma.userFollow.count({ where }),
   ]);
-  const users = await prisma.user.findMany({
-    where: { id: { in: rows.map((r) => r.followee) } },
-    select: { id: true, chineseName: true, englishName: true, sex: true, avatar: true },
-  });
-  const um = new Map(users.map((u) => [N(u.id), u]));
-  return {
-    rows: rows
-      .map((r) => {
-        const u = um.get(N(r.followee));
-        return u
-          ? {
-              id: N(u.id),
-              chineseName: u.chineseName,
-              englishName: u.englishName,
-              sex: u.sex,
-              avatar: u.avatar,
-              createTime: N(r.createTime),
-            }
-          : null;
-      })
-      .filter((x): x is FollowListRow => x !== null),
-    total,
-  };
+  return { rows: await assembleRows(rows, "followee"), total };
 }
 
 /** 我的粉丝列表（按时间倒序分页） */
@@ -309,27 +341,5 @@ export async function getFollowerList(
     }),
     prisma.userFollow.count({ where }),
   ]);
-  const users = await prisma.user.findMany({
-    where: { id: { in: rows.map((r) => r.follower) } },
-    select: { id: true, chineseName: true, englishName: true, sex: true, avatar: true },
-  });
-  const um = new Map(users.map((u) => [N(u.id), u]));
-  return {
-    rows: rows
-      .map((r) => {
-        const u = um.get(N(r.follower));
-        return u
-          ? {
-              id: N(u.id),
-              chineseName: u.chineseName,
-              englishName: u.englishName,
-              sex: u.sex,
-              avatar: u.avatar,
-              createTime: N(r.createTime),
-            }
-          : null;
-      })
-      .filter((x): x is FollowListRow => x !== null),
-    total,
-  };
+  return { rows: await assembleRows(rows, "follower"), total };
 }

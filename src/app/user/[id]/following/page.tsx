@@ -78,6 +78,7 @@ export default async function UserFollowingPage({
               initial={rows}
               initialTotal={total}
               type="following"
+              title={`${owner.chineseName}的关注`}
               listOwner={userId}
               viewerId={session.uid}
               followingIds={followingIds}
