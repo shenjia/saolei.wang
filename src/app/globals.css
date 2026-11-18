@@ -17417,27 +17417,20 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_empty { color: #75715e; font-size: 14px; }
 .comp_chart_svg { display: block; }
 
-/* 信息行（2026-11-18 张老师二轮定）：左列=比赛时间+比赛级别纵排（文字色一致），
-   比赛标识靠右下角（space-between + 底对齐，不挤左边文字，窄屏换行兜底 flex-wrap）；
-   标识整段加粗高亮，标识未设置时不渲染；
-   七轮 03:10 起发起人整块下线，不再有浮动行 */
+/* 信息行（2026-11-18 晚张老师定）：比赛级别+比赛标识一行在上（space-between 底对齐，
+   窄屏换行兜底 flex-wrap），比赛时间单独一行在下；
+   标识整段加粗高亮，标识未设置时不渲染 */
 .comp_meta { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 2px 16px; margin-top: 10px; font-size: 13px; color: #b1b1a4; }
-.comp_meta_left { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
 .comp_meta b.comp_code_all { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
 .comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
+/* 比赛时间行（2026-11-18 晚定：从信息行拆出单独一行在下） */
+.comp_time_line { margin-top: 6px; font-size: 13px; color: #b1b1a4; }
 
-/* 收录级别圆角标签（六轮 23:20 张老师定，参考后台录像列表 LevelTag/admin_tag.lv_*）：
-   同款配色——初级绿 #a6e22e / 中级橙 #f79646 / 高级金 #fdc61d，14% 底 + 35% 边框 */
-.comp_lv_tag {
-  display: inline-block; margin-left: 4px; padding: 1px 8px;
-  border-radius: 9px; border: 1px solid transparent;
-  font-size: 12px; line-height: 19px; white-space: nowrap;
-}
-.comp_lv_tag.lv_beg { background: rgba(166, 226, 46, 0.14); color: #a6e22e; border-color: rgba(166, 226, 46, 0.35); }
-.comp_lv_tag.lv_int { background: rgba(247, 150, 70, 0.14); color: #f79646; border-color: rgba(247, 150, 70, 0.35); }
-.comp_lv_tag.lv_exp { background: rgba(253, 198, 29, 0.14); color: #fdc61d; border-color: rgba(253, 198, 29, 0.35); }
+/* 比赛级别亮灰纯文本（2026-11-18 晚张老师定：圆角彩色标签退役）——
+   亮灰 #f8f8f2 加粗（与标识同级强调），级别名间留间距 */
+.comp_lv_plain { color: #f8f8f2; font-weight: 700; margin-left: 4px; }
 /* 发起人行七轮 03:10 整块下线（张老师定「隐藏发起人」），.comp_creator 样式一并清除 */
 .comp_rules { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: #b1b1a4; }
 
@@ -17480,7 +17473,7 @@ body #header .nav li a.vs_new_hint,
 .comp_rank_no.top { color: #fdc61a; }
 .comp_rank_name { color: #b1b1a4; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comp_rank_name:hover { color: #a6e22e; }
-.comp_rank_time { margin-left: auto; color: #f8f8f2; font-weight: 700; text-decoration: none; flex-shrink: 0; }
+.comp_rank_time { margin-left: auto; color: #b1b1a4; font-weight: 700; text-decoration: none; flex-shrink: 0; }
 .comp_rank_time:hover { color: #a6e22e; }
 
 /* 后台录像管理「比赛」列挂接控件 */

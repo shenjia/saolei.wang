@@ -20,6 +20,8 @@ import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { UserPanel } from "@/components/UserCard";
 import { FlopSprites } from "@/components/FlopSprites";
+import { AvatarCell } from "@/components/Cells";
+import { TitleBadge } from "@/components/TitleBadge";
 import { TourEventsFeed } from "@/components/tournament/TourEventsFeed";
 import { TourVideosFeed } from "@/components/tournament/TourVideosFeed";
 import { TourBlock } from "@/components/tournament/TourBlock";
@@ -92,10 +94,13 @@ export default async function CompetitionDetailPage({
           <TourBlock c={c} now={now} loggedIn={!!session} detail />
 
           {/* 动态板块：标准翻页组件 = 首页同款 PageSlider（五轮 20:31 张老师定，
-              client 壳 TourEventsFeed——换页走 URL、加载更多走 API 前缀整批替换） */}
+              client 壳 TourEventsFeed——换页走 URL、加载更多走 API 前缀整批替换）。
+              key=ep：软导航换页时强制重挂载换入服务端新数据（铁律「客户端 Feed 软导航
+              initial 不重置」，同 VideoListFeed key=author-time 判例） */}
           <div className="box comp_section">
             <h2>动态</h2>
             <TourEventsFeed
+              key={`ep${ep}-vp${vp}`}
               compId={compId}
               initialRows={events.rows}
               initialPage={events.page}
@@ -107,10 +112,11 @@ export default async function CompetitionDetailPage({
           </div>
 
           {/* 录像板块：本比赛全部参赛录像，时间正序、不去重；行渲染与首页录像流同源。
-              标准翻页组件同上（client 壳 TourVideosFeed） */}
+              标准翻页组件同上（client 壳 TourVideosFeed）；key=page 同上铁律 */}
           <div className="box comp_section">
             <h2>录像</h2>
             <TourVideosFeed
+              key={`vp${vp}-ep${ep}`}
               compId={compId}
               initialVideos={videos.videos}
               initialPage={videos.page}
@@ -175,7 +181,8 @@ export default async function CompetitionDetailPage({
           )}
 
           {/* 排行榜（2026-11-18 张老师定：按比赛设定计算成绩——sum_topn 各级别最好 N 局
-              加总+保底补足，target_diff 最小误差；行尾标注补保底盘数） */}
+              加总+保底补足，target_diff 最小误差；行含性别标志+军衔（AvatarCell/TitleBadge
+              首页同款），成绩亮灰；行尾 *N 标注补保底盘数） */}
           <div className="box comp_stats">
             <h2>排行榜</h2>
             {ranking.length > 0 ? (
@@ -185,9 +192,15 @@ export default async function CompetitionDetailPage({
                   return (
                     <li key={r.uid} className="comp_rank_row">
                       <span className={"comp_rank_no" + (r.rank <= 3 ? " top" : "")}>{r.rank}</span>
-                      <Link className="comp_rank_name" href={`/user/${r.uid}`}>
-                        {r.name}
-                      </Link>
+                      <AvatarCell
+                        id={r.uid}
+                        name={r.name}
+                        englishName={r.englishName}
+                        sex={r.sex}
+                        link
+                        className="comp_rank_name"
+                      />
+                      <TitleBadge title={r.title} classic={r.classic} />
                       <Link
                         className="comp_rank_time"
                         href={r.videoId ? `/video/${r.videoId}` : `/user/${r.uid}`}

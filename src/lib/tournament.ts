@@ -411,6 +411,12 @@ export interface TourRankRow {
   rank: number;
   uid: number;
   name: string;
+  englishName: string;
+  sex: number;
+  /** 军衔制称号（TitleBadge 主渲染） */
+  title: string;
+  /** 旧版称号备选（观看者偏好旧体系时 TitleBadge 渲染此套） */
+  classic: { name: string; color: string } | null;
   /** 玩家总成绩（毫秒）：sum_topn=各级别最好N局加总+保底补足；target_diff=最小误差 */
   time: number;
   /** 代表盘录像 ID（总成绩对应不了单盘时＝该玩家最好一局，供链接跳详情） */
@@ -472,15 +478,39 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
   const sorted = [...scores.entries()]
     .sort((a, b) => a[1].score - b[1].score)
     .slice(0, limit);
-  const users = await prisma.user.findMany({
-    where: { id: { in: sorted.map(([uid]) => BigInt(uid)) } },
-    select: { id: true, chineseName: true },
-  });
-  const nameMap = new Map(users.map((u) => [Number(u.id), u.chineseName]));
+  const uids = sorted.map(([uid]) => BigInt(uid));
+  const [users, scoreRows] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: uids } },
+      select: { id: true, chineseName: true, englishName: true, sex: true, status: true },
+    }),
+    prisma.userScores.findMany({
+      where: { id: { in: uids } },
+      select: { id: true, expTime: true },
+    }),
+  ]);
+  const userMap = new Map(users.map((u) => [Number(u.id), u]));
+  const expMap = new Map(scoreRows.map((s) => [s.id.toString(), s.expTime ?? 0]));
+  // 双体系称号一次评定（行序与 users 对齐；ranked=当前在榜）
+  const titlePairs = users.length
+    ? await dualTitles(
+        users.map((u) => ({
+          userId: Number(u.id),
+          expTime: expMap.get(u.id.toString()) ?? 0,
+          ranked: u.status === 0,
+          sex: u.sex,
+        })),
+      )
+    : [];
+  const titleMap = new Map(users.map((u, i) => [Number(u.id), titlePairs[i]]));
   return sorted.map(([uid, s], i) => ({
     rank: i + 1,
     uid,
-    name: nameMap.get(uid) ?? `UID ${uid}`,
+    name: userMap.get(uid)?.chineseName ?? `UID ${uid}`,
+    englishName: userMap.get(uid)?.englishName ?? "",
+    sex: userMap.get(uid)?.sex ?? 1,
+    title: titleMap.get(uid)?.m ?? "",
+    classic: titleMap.get(uid)?.c ?? null,
     time: s.score,
     videoId: bestBy.get(uid)?.videoId ?? 0,
     filled: s.filled,
