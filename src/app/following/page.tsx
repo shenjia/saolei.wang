@@ -1,11 +1,12 @@
 // 我的关注列表（2026-11-18 张老师需求 4）：登录用户查看自己关注了谁，按关注时间倒序。
-// 需登录（redirect /account/login）；翻页 OldPager（?page= 服务端分页）。
+// 版式（同日 22:32 张老师定）：two_columns 双栏——主栏列表（标准翻页控件 PageSlider），
+// 右栏标准玩家卡片（UserPanel）。需登录（redirect /account/login）。
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getFollowingList, followingSet } from "@/lib/follow";
-import { FollowListBody } from "@/components/FollowListBody";
-import { OldPager } from "@/components/OldPager";
+import { FollowListFeed } from "@/components/FollowListFeed";
+import { UserPanel } from "@/components/UserCard";
 import { FOLLOW_LIST_PAGESIZE } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -18,26 +19,30 @@ export default async function FollowingPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/account/login");
-  const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const { rows, total } = await getFollowingList(session.uid, page, FOLLOW_LIST_PAGESIZE);
+  await searchParams; // 翻页由客户端 PageSlider 承担，URL 参数不再消费（保留签名兼容）
+  const { rows, total } = await getFollowingList(session.uid, 1, FOLLOW_LIST_PAGESIZE);
   const followingIds = [...(await followingSet(session.uid, rows.map((r) => r.id)))];
   return (
-    <div id="page" className="main follow_list_page">
-      <div className="box video_box">
-        <div className="page_head">
-          <h1>我的关注</h1>
-        </div>
-        <FollowListBody rows={rows} viewerId={session.uid} followingIds={followingIds} />
-        <OldPager
-          base="/following"
-          params={{}}
-          page={page}
-          total={total}
-          pageSize={FOLLOW_LIST_PAGESIZE}
-          unit="位"
-        />
-      </div>
+    <div id="page" className="two_columns">
+      <ul id="follow_list">
+        <li className="main">
+          <div className="box video_box">
+            <div className="page_head">
+              <h1>我的关注</h1>
+            </div>
+            <FollowListFeed
+              initial={rows}
+              initialTotal={total}
+              type="following"
+              viewerId={session.uid}
+              followingIds={followingIds}
+            />
+          </div>
+        </li>
+        <li className="sidebar">
+          <UserPanel userId={session.uid} cardId="follow_list_user_card" hideRadar />
+        </li>
+      </ul>
     </div>
   );
 }

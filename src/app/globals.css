@@ -17969,11 +17969,13 @@ body #header .nav li a.vs_new_hint,
   visibility: visible;
   pointer-events: auto;
 }
-/* 已关注态：亮灰胶囊；按钮自身 hover 时变红（取消关注），文字由组件切换 */
+/* 已关注态：亮灰胶囊（2026-11-18 22:38 张老师改：hover 时**加亮**不变灰——
+   默认已关注=灰底白字，按钮 hover 提亮一档背景+边框）；按钮 hover 变红
+   （取消关注）由组件加 btn_hover 类同段控制，文字由组件切换 */
 .fol_btn.is_fol {
-  border-color: #55554e;
-  background: #494945;
-  color: #e6e6e0;
+  border-color: #6b6b62;
+  background: #55554e;
+  color: #f0f0ea;
 }
 .fol_btn.is_fol.btn_hover,
 .fol_btn.is_fol:hover {
@@ -17984,6 +17986,30 @@ body #header .nav li a.vs_new_hint,
 .fol_btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* 个人主页大头像关注按钮（2026-11-18 22:38 张老师：头像 160px 比卡片 72px 大，
+   按钮同比例加大）：高 24 / 字号 13 / 内距 14 */
+#user_view .info .fol_wrap .fol_btn {
+  height: 24px;
+  line-height: 22px;
+  font-size: 13px;
+  padding: 0 14px;
+  border-radius: 3px;
+}
+
+/* 个人主页：fol_wrap 包住头像后须接管 legacy 头像浮动
+   （#user_view .info .avatar{float:left;margin-right:15px} 在 legacy 中；
+   浮动挪到 fol_wrap 上、内部 img 取消浮动转 block，否则 inline-block 容器
+   不吃浮动导致姓名/成绩表顶到头像右侧、版式错乱——22:32 张老师截图案） */
+#user_view .info .fol_wrap {
+  float: left;
+  margin-right: 15px;
+}
+#user_view .info .fol_wrap .avatar {
+  float: none;
+  margin-right: 0;
+  display: block;
 }
 
 /* 侧栏玩家卡片：fol_wrap 直接顶替 ucd_left 原锚（inline-block 与 flex 布局兼容） */
@@ -18000,7 +18026,19 @@ body #header .nav li a.vs_new_hint,
   display: block;
 }
 
-/* 关注/粉丝列表页 */
+/* 关注/粉丝列表页（2026-11-18 22:32 张老师定版式）：two_columns 双栏——
+   主栏列表（PageSlider 标准翻页）+ 右栏玩家卡片（UserPanel）。
+   几何与账户设置族同款（288 侧栏 / 盒内容 210）。 */
+#page #follow_list > li.sidebar {
+  width: 288px;
+}
+#page #follow_list > li.main {
+  width: calc(100% - 290px);
+  min-width: 0;
+}
+#page #follow_list > li.sidebar .box {
+  width: 210px;
+}
 .follow_list_page .fol_table td {
   border-bottom: 1px solid #3e3d35;
   padding: 6px 8px;

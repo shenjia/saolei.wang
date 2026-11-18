@@ -63,6 +63,9 @@ import { SendMessageButton } from "@/components/SendMessageButton";
 import { VsButton } from "@/components/VsButton";
 import { BbvCollection } from "@/components/BbvCollection";
 import { UserSigs } from "@/components/UserSigs";
+// 关注系统（2026-11-18）：头像 hover 关注按钮 + 主页统计行
+import { AvatarFollowBtn } from "@/components/AvatarFollowBtn";
+import { followCounts, isFollowing } from "@/lib/follow";
 
 export const dynamic = "force-dynamic";
 
@@ -275,6 +278,13 @@ export default async function UserViewPage({
     : null;
   const avatarPending = latestAvatarReview?.status === AVATAR_REVIEW_STATUS.PENDING;
 
+  // 关注系统（2026-11-18）：头像 hover 关注按钮初始态 + 主页统计行粉丝/关注数。
+  // 每请求直查（计数走索引 count，量级 <1ms×2；已关注判定唯一索引点查）
+  const [fc, viewerFollowing] = await Promise.all([
+    followCounts(userId),
+    session && !isSelf ? isFollowing(session.uid, userId) : Promise.resolve(false),
+  ]);
+
   // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
   // 2026-10-22「标识」行（user_sig 录像标识文字）也算可展示内容——
   // 有标识但没填资料的老用户，个人资料版块同样显示
@@ -347,7 +357,11 @@ export default async function UserViewPage({
               defaultSex={photo === DEFAULT_AVATAR ? user.sex : undefined}
             />
           ) : (
-            photoImg
+            <span className="fol_wrap">
+              {photoImg}
+              {/* 关注按钮（2026-11-18）：hover 头像浮现正下边缘；自己看自己不渲染 */}
+              <AvatarFollowBtn uid={userId} sex={user.sex} loggedIn={!!session} following={viewerFollowing} />
+            </span>
           )}
           <h1>{user.chineseName}</h1>
           <h2>({user.englishName})</h2>
@@ -645,6 +659,27 @@ export default async function UserViewPage({
                 </StatRow>
                 <StatRow label="发表评论" today={activity.commentsToday}>
                   <em>{activity.comments}</em>
+                </StatRow>
+                {/* 粉丝数量 / 关注数量（2026-11-18 张老师需求 4）：点击进对应列表，
+                    按关注时间倒序。仅对方公开列表时给链接（隐私开关 follow_list_hidden /
+                    follower_list_hidden）；本人看自己恒可点（自己看自己的隐藏列表无意义） */}
+                <StatRow label="粉丝数量">
+                  {isSelf || !detail.user.followerListHidden ? (
+                    <Link href={`/user/${userId}/followers`} target="_blank" prefetch={false}>
+                      <em>{fc.followers}</em>
+                    </Link>
+                  ) : (
+                    <em>{fc.followers}</em>
+                  )}
+                </StatRow>
+                <StatRow label="关注数量">
+                  {isSelf || !detail.user.followListHidden ? (
+                    <Link href={`/user/${userId}/following`} target="_blank" prefetch={false}>
+                      <em>{fc.following}</em>
+                    </Link>
+                  ) : (
+                    <em>{fc.following}</em>
+                  )}
                 </StatRow>
                 {/* 2026-11-08 张老师要求：发表评论下新增「活跃指数」——近 7 日活跃值合计
                     （练习 3BV 计点＋录像级别加权＋评论×1＋登录点；发表文章不计——避免灌水），

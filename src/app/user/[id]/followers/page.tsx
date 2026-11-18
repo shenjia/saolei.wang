@@ -1,14 +1,15 @@
 // 他人视角：某玩家的粉丝列表（2026-11-18 张老师需求 4）。
-// 隐私：对方 follower_list_hidden=true 时仅本人与管理员可看（10-16 封禁语义沿用
-// status 判定无需额外处理；管理员 role>=10 放行）。/followers 与 /following
-// 是登录用户的自己的列表（首页落点）；本页挂在用户主页路径下供他人浏览。
+// 隐私：对方 follower_list_hidden=true 时仅本人与管理员可看（管理员 role>=10 放行）。
+// 版式（同日 22:32 张老师定）：two_columns 双栏——主栏列表（PageSlider 客户端翻页，
+// 他人列表走 /api/follow/list?uid=N 带目标 id）+ 右栏**该玩家**卡片（UserPanel userId=owner）。
 
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
 import { getFollowerList, followingSet } from "@/lib/follow";
 import { prisma } from "@/lib/db";
-import { FollowListBody } from "@/components/FollowListBody";
-import { OldPager } from "@/components/OldPager";
+import { FollowListFeed } from "@/components/FollowListFeed";
+import { UserPanel } from "@/components/UserCard";
 import { FOLLOW_LIST_PAGESIZE, isManager } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +19,14 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  void params;
-  return { title: "粉丝列表" };
+  const userId = parseInt((await params).id, 10) || 0;
+  if (!userId) return { title: "粉丝列表" };
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(userId) },
+    select: { chineseName: true },
+  });
+  return { title: u ? `${u.chineseName}的粉丝` : "粉丝列表" };
 }
-
-import type { Metadata } from "next";
 
 export default async function UserFollowersPage({
   params,
@@ -44,36 +48,49 @@ export default async function UserFollowersPage({
   const isSelf = session.uid === userId;
   if (owner.followerListHidden && !isSelf && !isManager(session.role)) {
     return (
-      <div id="page" className="main follow_list_page">
-        <div className="box video_box">
-          <div className="page_head">
-            <h1>{owner.chineseName}的粉丝</h1>
-          </div>
-          <p className="text fol_private">该用户已隐藏粉丝列表</p>
-        </div>
+      <div id="page" className="two_columns">
+        <ul id="follow_list">
+          <li className="main">
+            <div className="box video_box">
+              <div className="page_head">
+                <h1>{owner.chineseName}的粉丝</h1>
+              </div>
+              <p className="text fol_private">该用户已隐藏粉丝列表</p>
+            </div>
+          </li>
+          <li className="sidebar">
+            <UserPanel userId={userId} cardId="follow_list_user_card" hideRadar />
+          </li>
+        </ul>
       </div>
     );
   }
-  const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const { rows, total } = await getFollowerList(userId, page, FOLLOW_LIST_PAGESIZE);
+  await searchParams;
+  const { rows, total } = await getFollowerList(userId, 1, FOLLOW_LIST_PAGESIZE);
   const followingIds = [...(await followingSet(session.uid, rows.map((r) => r.id)))];
   return (
-    <div id="page" className="main follow_list_page">
-      <div className="box video_box">
-        <div className="page_head">
-          <h1>{owner.chineseName}的粉丝</h1>
-        </div>
-        <FollowListBody rows={rows} viewerId={session.uid} followingIds={followingIds} />
-        <OldPager
-          base={`/user/${userId}/followers`}
-          params={{}}
-          page={page}
-          total={total}
-          pageSize={FOLLOW_LIST_PAGESIZE}
-          unit="位"
-        />
-      </div>
+    <div id="page" className="two_columns">
+      <ul id="follow_list">
+        <li className="main">
+          <div className="box video_box">
+            <div className="page_head">
+              <h1>{owner.chineseName}的粉丝</h1>
+            </div>
+            <FollowListFeed
+              initial={rows}
+              initialTotal={total}
+              type="followers"
+              listOwner={userId}
+              viewerId={session.uid}
+              followingIds={followingIds}
+            />
+          </div>
+        </li>
+        <li className="sidebar">
+          {/* 右栏=该玩家卡片（22:32 张老师定：不是观看者自己的卡片） */}
+          <UserPanel userId={userId} cardId="follow_list_user_card" hideRadar />
+        </li>
+      </ul>
     </div>
   );
 }

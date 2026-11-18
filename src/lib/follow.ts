@@ -17,6 +17,9 @@ const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 /** 新粉丝提醒合并窗口（秒）：窗口内再有人关注，不新增消息，只改写既有那条 */
 export const FOLLOW_NOTICE_MERGE_WINDOW_SEC = 3600;
 
+/** 合并消息锚点（contains 匹配用）：同时命中旧「（去查看）」与新「查看[/url]」两形态 */
+const FOLLOW_NOTICE_ANCHOR = "关注了你。";
+
 /** 解析黑名单文本 → id 集合（每行一个数字 id；脏行忽略） */
 export function parseBlocklist(raw: string): Set<number> {
   const out = new Set<number>();
@@ -151,9 +154,10 @@ export async function unfollowUser(followerId: number, followeeId: number): Prom
 /**
  * 新粉丝提醒（需求 3）：
  * 提醒开关（user.follow_notify_disabled，默认开=提醒）关闭时不发。
- * 窗口（1h）内已有未读的「关注了你」合并消息 → 改写为「XXX等x人关注了你。（去查看）」，
- * 不新增行；窗口外或没有未读合并消息 → 新发「XXX 关注了你。（去查看）」。
- * 已读消息不合并（读过了就该再提醒）。
+ * 窗口（1h）内已有未读的「关注了你」合并消息 → 改写为「XXX等x人关注了你。查看」，
+ * 不新增行；窗口外或没有未读合并消息 → 新发「XXX 关注了你。查看」。
+ * 「查看」为站内链接标记（[url /followers]查看[/url]），消息列表渲染成绿色链接
+ * （22:50 张老师定：与「回复」同款形态），点击跳我的粉丝列表。已读消息不合并。
  */
 async function sendFollowNotice(followerId: number, followeeId: number): Promise<void> {
   const owner = await prisma.user.findUnique({
@@ -165,12 +169,12 @@ async function sendFollowNotice(followerId: number, followeeId: number): Promise
     (await prisma.user.findUnique({ where: { id: BigInt(followerId) }, select: { chineseName: true } }))
       ?.chineseName ?? "";
   const now = N(nowSec());
-  const anchor = "关注了你。（去查看）";
+  const viewLink = "[url /followers]查看[/url]";
   const latest = await prisma.message.findFirst({
     where: {
       toUser: BigInt(followeeId),
       isSystem: true,
-      content: { contains: anchor },
+      content: { contains: FOLLOW_NOTICE_ANCHOR },
       createTime: { gte: BigInt(now - FOLLOW_NOTICE_MERGE_WINDOW_SEC) },
     },
     orderBy: { id: "desc" },
@@ -179,18 +183,17 @@ async function sendFollowNotice(followerId: number, followeeId: number): Promise
   if (latest && !latest.isRead) {
     // 未读合并消息存在：改写人数与首个名字（首名保持窗口首条关注者不变）。
     // 两种既有形态都要解析基名：① 已合并「XXX等N人关注了你…」；② 单人「XXX 关注了你…」
-    // （名字后带空格，注意与合并形态的「等N人关注了你」区分——先试合并再试单人）
     const multi = latest.content.match(/^(.+?)等(\d+)人关注了你/);
     const single = multi ? null : latest.content.match(/^(.+?) 关注了你/);
     const firstName = multi ? multi[1] : single ? single[1] : followerName;
     const count = (multi ? parseInt(multi[2], 10) : 1) + 1;
     await prisma.message.update({
       where: { id: latest.id },
-      data: { content: `${firstName}等${count}人关注了你。（去查看）`, updateTime: nowSec() },
+      data: { content: `${firstName}等${count}人关注了你。${viewLink}`, updateTime: nowSec() },
     });
     return;
   }
-  await sendSystemMessage(followeeId, `${followerName} ${anchor}`);
+  await sendSystemMessage(followeeId, `${followerName} 关注了你。${viewLink}`);
 }
 
 /**
