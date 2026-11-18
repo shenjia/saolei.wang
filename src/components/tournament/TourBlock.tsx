@@ -22,6 +22,8 @@ import {
   type TourRow,
 } from "@/lib/tournament";
 import { LEVEL_NAMES } from "@/lib/config";
+import { AvatarCell } from "@/components/Cells";
+import { TitleBadge } from "@/components/TitleBadge";
 import { TourChart } from "./TourChart";
 
 /** 「创造于」时刻 → YYYY-MM-DD HH:mm（北京时间；图表行专用，站内其余处走 RelTime） */
@@ -78,22 +80,27 @@ export function TourBlock({
         </div>
       </div>
 
-      {/* 纪录图表（2026-11-18 晚张老师定：复刻纪录页样式金线+下方阴影+右标尺）——
-          上部「最好成绩：xxx 姓名 军衔 创造于 xxx-xx-xx xx:xx」（总分口径第一名）；
-          未开始/无成绩保持占位文案 */}
+      {/* 纪录图表（2026-11-19 凌晨张老师定：严格复刻纪录页 rec_card——深底 #1e1f1c、
+          金线+下方阴影、右标尺、hover 气泡）——上部「最好成绩」行严格复刻 rec_head：
+          元帅金大数字 + 性别 + 军衔徽章；未开始/无成绩保持占位文案 */}
       <div className="comp_chart">
         {c.status !== "upcoming" && c.chartPoints.length > 0 && c.bestLine ? (
-          <div className="comp_chart_body">
-            <p className="comp_chart_best">
-              最好成绩：<b>{(c.bestLine.score / 1000).toFixed(3)}</b>
-              <Link className="comp_chart_best_name" href={`/user/${c.bestLine.uid}`}>
-                {c.bestLine.name}
-              </Link>
-              {c.bestLine.title && <span className="comp_chart_best_title">{c.bestLine.title}</span>}
-              <span className="comp_chart_best_at">
-                创造于 {fmtBestAt(c.bestLine.at)}
-              </span>
-            </p>
+          <div className="rec_card comp_chart_body">
+            <div className="rec_head">
+              <span className="rec_name">最好成绩：</span>
+              <b className="rec_val">{(c.bestLine.score / 1000).toFixed(3)}</b>
+              <span className="rec_meta">　</span>
+              <AvatarCell
+                id={c.bestLine.uid}
+                name={c.bestLine.name}
+                sex={c.bestLine.sex}
+                link
+                className="rec_user"
+                gender="small"
+              />
+              {c.bestLine.title && <TitleBadge title={c.bestLine.title} link />}
+              <span className="rec_meta">　创造于 {fmtBestAt(c.bestLine.at)}</span>
+            </div>
             <TourChart points={c.chartPoints} />
           </div>
         ) : c.status === "upcoming" ? (

@@ -17420,22 +17420,16 @@ body #header .nav li a.vs_new_hint,
    辅助类一并清除；总奖金气泡 .comp_tip 保留。报名入口收口到详情页右栏（SignupButton
    组件文件保留，后台/详情页可复用）。 */
 
-/* 纪录图表 */
+/* 纪录图表（2026-11-19 凌晨张老师定：严格复刻纪录页 rec_card——深底 #1e1f1c）；
+   有数据形态内部直接用 .rec_card/.rec_head/.rec_tip 纪录页原样式，容器只留外距 */
 .comp_chart {
-  background: #2a2b25; border-radius: 6px; margin: 12px 0 0;
-  height: 216px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  margin: 12px 0 0;
+  min-height: 60px; display: flex; align-items: stretch; justify-content: center; overflow: hidden;
 }
-/* 图表带数据形态（2026-11-18 深夜张老师定：上部「最好成绩」行 + 金线图表）——
-   高度放开容纳两段内容，占位态维持原高 */
-.comp_chart:has(.comp_chart_body) { height: auto; padding: 10px 12px 6px; }
+.comp_chart:has(.comp_chart_body) { display: block; }
 .comp_chart_body { width: 100%; }
-.comp_chart_best { margin: 0 0 2px; font-size: 13px; line-height: 22px; color: #b1b1a4; }
-.comp_chart_best b { color: #fdc61a; font-weight: 700; margin-right: 8px; }
-.comp_chart_best_name { color: #b1b1a4; text-decoration: none; margin-right: 6px; }
-.comp_chart_best_name:hover { color: #a6e22e; }
-.comp_chart_best_title { font-size: 12px; margin-right: 8px; }
-.comp_chart_best_at { color: #939387; font-size: 12px; }
-.comp_chart_empty { color: #75715e; font-size: 14px; }
+.comp_chart_body .rec_chart { cursor: default; }
+.comp_chart_empty { color: #75715e; font-size: 14px; padding: 8px; }
 .comp_chart_svg { display: block; }
 
 /* 板块标题行（标题+右上角搜索框，2026-11-18 深夜定：录像区搜索同录像页页头形态） */

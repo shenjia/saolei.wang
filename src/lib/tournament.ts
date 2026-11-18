@@ -125,9 +125,26 @@ export interface TourRow {
   creatorTitle: string; // 军衔制称号
   creatorClassic: { name: string; color: string } | null; // 旧版称号备选
   /** 纪录图表散点（详情页形态填充：按比赛设定总分排名前 30，score 秒；列表形态为空数组） */
-  chartPoints: { rank: number; score: number; name?: string }[];
+  chartPoints: {
+    rank: number;
+    score: number;
+    name?: string;
+    uid?: number;
+    englishName?: string;
+    sex?: number;
+    title?: string;
+    classic?: { name: string; color: string } | null;
+  }[];
   /** 图表上方「最好成绩」行（详情页形态填充；无成绩 null）——总分口径第一名 */
-  bestLine: { score: number; name: string; title: string; uid: number; at: number } | null;
+  bestLine: {
+    score: number;
+    name: string;
+    englishName: string;
+    sex: number;
+    title: string;
+    uid: number;
+    at: number;
+  } | null;
 }
 
 export interface TourPage {
@@ -962,12 +979,19 @@ export async function getTournamentDetail(
     rank: r.rank,
     score: r.time / 1000,
     name: r.name,
+    uid: r.uid,
+    englishName: r.englishName,
+    sex: r.sex,
+    title: r.title,
+    classic: r.classic,
   }));
   const first = rankRows[0];
   const bestLine = first
     ? {
         score: first.time,
         name: first.name,
+        englishName: first.englishName,
+        sex: first.sex,
         title: first.title,
         uid: first.uid,
         // 「创造于」= 该玩家窗口内最早一盘的上传时刻
