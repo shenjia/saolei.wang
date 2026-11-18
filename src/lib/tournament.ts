@@ -411,7 +411,7 @@ export async function getTourEventsPage(
     FROM tournament_event te
     WHERE te.competition_id = ${cid}
     GROUP BY te.user_id, te.create_time, te.type
-    ORDER BY te.create_time ASC, te.type ASC, min_id ASC
+    ORDER BY te.create_time DESC, te.type ASC, min_id DESC
     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
   `;
   const totalRow = await prisma.$queryRaw<{ c: bigint }[]>`

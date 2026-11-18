@@ -17469,6 +17469,8 @@ body #header .nav li a.vs_new_hint,
 .comp_ev_text { color: #b1b1a4; }
 /* 成绩动态具体数值（2026-11-18 晚张老师定）：合并组最好成绩加粗亮白强调 */
 .comp_ev_score { color: #f8f8f2; font-weight: 700; margin-left: 2px; }
+/* 官方事件金色（2026-11-18 晚张老师定：报名开始/正式开始/正式结束） */
+.comp_ev_official { color: #fdc61a; font-weight: 700; }
 /* 动态行军衔徽章小号（2026-11-18 晚定：同首页动态行紧凑排布） */
 .comp_ev_row .title { font-size: 12px; line-height: 18px; margin-right: 4px; }
 .comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; }

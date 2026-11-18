@@ -102,7 +102,12 @@ export function TourEventsFeed({
                   </>
                 ) : null}
                 <span className="comp_ev_text">
-                  {compEventText(e.type)}
+                  {/* 官方事件（报名开始/正式开始/正式结束）金色渲染（张老师 2026-11-18 晚定） */}
+                  {e.type === 1 || e.type === 3 || e.type === 5 ? (
+                    <b className="comp_ev_official">{compEventText(e.type)}</b>
+                  ) : (
+                    compEventText(e.type)
+                  )}
                   {/* 成绩动态（2026-11-18 晚定）：合并组显示 ×N，带组内最好成绩具体数值 */}
                   {e.type === 4 && e.count > 1 && ` ×${e.count}`}
                   {e.type === 4 && e.scoreMs !== null && (
