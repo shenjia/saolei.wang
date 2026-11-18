@@ -37,7 +37,7 @@ import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, type VideoLevel } from "@/lib/config";
 import { checkSensitive } from "@/lib/sensitive";
 import { userTitleSnapshot } from "@/lib/queries";
-import { matchCompByRace } from "@/lib/competition";
+import { matchTourByRace } from "@/lib/tournament";
 
 // ---------------- 配置区（env 覆盖便于联调/灰度） ----------------
 const env = (k: string, d: string) => process.env[k] ?? d;
@@ -293,9 +293,9 @@ export async function importOne(row: Row, leiUid: number): Promise<Outcome> {
   // ⑦ 事务落库（镜像上传路由：签名/称号快照/本BV/四表；status=10 待审）
   // 比赛自动绑定（张老师 2026-11-18）：落库前按标识匹配（race 精确优先，退签名末尾+窗口），
   // 失败不阻断导入；批量回填不写「更新成绩」动态，此处同为静默绑定保持一致
-  let competitionId: number | null = null;
+  let tournamentId: number | null = null;
   try {
-    competitionId = await matchCompByRace(parsed.race, parsed.player, row.uploadSec);
+    tournamentId = await matchTourByRace(parsed.race, parsed.player, row.uploadSec);
   } catch (e) {
     log(`  ! 开源站 #${row.id} 比赛匹配失败（不阻断）: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -327,7 +327,7 @@ export async function importOne(row: Row, leiUid: number): Promise<Outcome> {
           expTime: BigInt(snap.expTime), ranked: snap.ranked ? BigInt(1) : BigInt(0),
           firstBv, pbBv,
           fromSite: FROM_SITE, fromId: BigInt(row.id),
-          ...(competitionId ? { competitionId: BigInt(competitionId) } : {}),
+          ...(tournamentId ? { tournamentId: BigInt(tournamentId) } : {}),
           createTime: ts, updateTime: ts,
         },
       });

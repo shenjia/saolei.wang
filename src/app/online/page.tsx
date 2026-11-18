@@ -38,7 +38,7 @@ async function resolveCompParam(raw: string | undefined): Promise<OnlineCompPara
     // 带了 c 但不是合法数字 → 按不存在处理；不带 c → 普通练习
     return raw ? { comp: null, compError: "比赛不存在" } : { comp: null, compError: null };
   }
-  const c = await prisma.competition.findUnique({
+  const c = await prisma.tournament.findUnique({
     where: { id: BigInt(cid) },
     select: { id: true, shortName: true, code: true, startTime: true, endTime: true },
   });

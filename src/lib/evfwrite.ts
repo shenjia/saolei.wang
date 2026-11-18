@@ -74,7 +74,7 @@ export interface RankedEvfInput {
   /** Program 标识覆写（2026-11-13 二期比赛模式）：缺省写 RANKED_SOFTWARE——
    *  上传路由拒绝手动上传排名软件录像（只允许服务器生成），比赛局 EVF 需走
    *  普通上传管线（录像标识带比赛标识自动分拣），故覆写为
-   *  COMP_EVF_PROGRAM（"Saolei.wang Competition"）绕开排名闸；
+   *  TOUR_EVF_PROGRAM（"Saolei.wang Tournament"，原 Competition 2026-11-18 改名）绕开排名闸；
    *  evf.ts 归一时未匹配站名前缀，Program 原样入库，checkProgramVersion 未知软件放行 */
   programLabel?: string;
   /** 导出语义校验的权威原始流（2026-11-08，353969 案）。

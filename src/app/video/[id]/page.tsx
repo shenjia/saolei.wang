@@ -113,7 +113,7 @@ export default async function VideoViewPage({
   // 比赛量小（十场量级）且 code 有唯一索引，单次查询开销可忽略。
   const raceComp =
     video.race
-      ? await prisma.competition.findUnique({
+      ? await prisma.tournament.findUnique({
           where: { code: video.race },
           select: { id: true, shortName: true },
         })
@@ -420,7 +420,7 @@ export default async function VideoViewPage({
                   <span className="race_name">
                     比赛
                     {raceComp ? (
-                      <Link href={`/competitions/${raceComp.id}`} prefetch={false}>
+                      <Link href={`/tournaments/${raceComp.id}`} prefetch={false}>
                         {raceComp.shortName}
                       </Link>
                     ) : (
