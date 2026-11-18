@@ -18013,6 +18013,11 @@ body #header .nav li a.vs_new_hint,
   border-radius: 2px;
   border: 1px solid #2d9f6e;
   background: #3fae74;
+  /* ⚠️ legacy 全局 button 带 background-image 深色渐变 + filter 渐变滤镜——
+     不清掉它们会盖在 background 色上（hover 时全站 button:hover 深色渐变
+     再压上来显黑底，2026-11-19 00:04 张老师报「hover 变黑底」根因） */
+  background-image: none;
+  filter: none;
   color: #fff;
   cursor: pointer;
   opacity: 0;
@@ -18027,16 +18032,25 @@ body #header .nav li a.vs_new_hint,
   visibility: visible;
   pointer-events: auto;
 }
-/* 已关注态：亮灰胶囊（2026-11-18 22:38 张老师改：hover 时**加亮**不变灰——
-   默认已关注=灰底白字，按钮 hover 提亮一档背景+边框）；按钮 hover 变红
-   （取消关注）由组件加 btn_hover 类同段控制，文字由组件切换 */
+/* 未关注态 hover：绿色加亮一档（2026-11-19 00:04 张老师：hover 必须比未 hover 醒目） */
+.fol_btn:hover {
+  border-color: #4cc98a;
+  background: #52c687;
+  color: #fff;
+}
+/* 已关注态：灰胶囊；hover 提亮（灰→亮灰，比未 hover 醒目；22:38 张老师定加亮不变灰）。
+   组件层 btn_hover（按钮自身 hover）仍变红——「取消关注」危险动作预览语义保留 */
 .fol_btn.is_fol {
   border-color: #6b6b62;
   background: #55554e;
   color: #f0f0ea;
 }
-.fol_btn.is_fol.btn_hover,
 .fol_btn.is_fol:hover {
+  border-color: #8f8f84;
+  background: #6e6e66;
+  color: #fff;
+}
+.fol_btn.is_fol.btn_hover {
   border-color: #a83a32;
   background: #c0392b;
   color: #fff;
