@@ -70,19 +70,11 @@ export function TourVideosFeed({
 
   function gotoPage(p: number) {
     startTransition(() => {
-      // scroll:false + RSC 提交后锚定本板块顶部（同 TourEventsFeed，张老师 2026-11-19 反馈仍跳顶）
+      // 保持滚动位置（张老师 2026-11-19 凌晨定「原地不动」，同 TourEventsFeed）：
       router.push(
         `/tournaments/${compId}?page=${p}${eventsPage > 1 ? `&ep=${eventsPage}` : ""}`,
         { scroll: false }
       );
-      requestAnimationFrame(() => {
-        const el = listRef.current;
-        if (!el) return;
-        const top = el.getBoundingClientRect().top;
-        if (top < 0 || top > window.innerHeight * 0.5) {
-          window.scrollBy({ top: top - 76, behavior: "instant" as ScrollBehavior });
-        }
-      });
     });
   }
 

@@ -76,23 +76,13 @@ export function TourEventsFeed({
 
   function gotoPage(p: number) {
     startTransition(() => {
-      // scroll:false + key 重挂载后视口锚定由 SSR 侧接管（张老师 2026-11-19 反馈仍跳顶）：
-      // router.push 的 scroll:false 只拦「Next 主动滚顶」，软导航 RSC 重渲染把
-      // 两个板块整块替换（client 壳带 key 强制重挂载），内容高度突变仍会视觉跳——
-      // 详情页两个板块在主栏上下排布，换页锚定到本板块顶部是符合直觉的目标态
+      // 保持滚动位置（张老师 2026-11-19 凌晨定「原地不动」）：
+      // scroll:false 拦 Next 滚顶 + ScrollReset 已修同页参数变化不滚顶；
+      // 不做主动锚定——板块在视口内时原地替换即可（浏览器 scroll anchoring 保持视觉位置）
       router.push(
         `/tournaments/${compId}?page=${videosPage}${p > 1 ? `&ep=${p}` : ""}`,
         { scroll: false }
       );
-      // RSC 提交后把本板块顶部滚进视口（instant 无动画；若板块已在视口内则几乎无位移）
-      requestAnimationFrame(() => {
-        const el = listRef.current;
-        if (!el) return;
-        const top = el.getBoundingClientRect().top;
-        if (top < 0 || top > window.innerHeight * 0.5) {
-          window.scrollBy({ top: top - 76, behavior: "instant" as ScrollBehavior });
-        }
-      });
     });
   }
 
