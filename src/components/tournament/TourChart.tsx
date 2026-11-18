@@ -59,9 +59,13 @@ export function TourChart({ points }: { points: CompChartPoint[] }) {
   // 每点透明命中竖条（RecordsCurves 十三轮同款：命中交给浏览器 hit-test，零坐标换算）
   const bandW = (W - PAD_L - PAD_R) / Math.max(points.length - 1, 1);
   const hp = hover !== null ? points[hover] : null;
+  // 气泡跟随 hover 点（rec_tip 是 position:absolute，需要本容器 relative 作定位基准；
+  // left 按 SVG viewBox 坐标折算容器百分比，随点移动；右半区自动翻转到点左侧防溢出）
+  const tipLeftPct = hp ? (x(hp.rank) / W) * 100 : 0;
+  const flip = hp ? x(hp.rank) > W * 0.6 : false;
 
   return (
-    <div className="comp_chart_plot">
+    <div className="comp_chart_plot" style={{ position: "relative" }}>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="comp_chart_svg" role="img" aria-label="比赛纪录图表">
         {ticks.map((t, i) => (
           <line key={`t${i}`} x1={PAD_L} y1={y(t)} x2={W - PAD_R} y2={y(t)} stroke="#49483e" strokeWidth="1" />
@@ -102,9 +106,13 @@ export function TourChart({ points }: { points: CompChartPoint[] }) {
           />
         ))}
       </svg>
-      {/* hover 气泡（rec_tip 同款 DOM/样式：排名/成绩/创造者三行） */}
+      {/* hover 气泡（rec_tip 同款 DOM/样式：排名/成绩/创造者三行）——
+          跟随 hover 点：left 按点在 viewBox 的百分比折算，右半区翻转到点左侧 */}
       {hp && (
-        <div className="rec_tip" style={{ right: 8 }}>
+        <div
+          className="rec_tip"
+          style={flip ? { right: `${100 - tipLeftPct + 2}%` } : { left: `${tipLeftPct + 2}%` }}
+        >
           <div className="row">
             <span>排名</span>
             <b>第 {hp.rank} 位</b>
