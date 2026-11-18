@@ -68,7 +68,9 @@ export const config = {
     // 目标读者就是机器人/第三方服务，过扫雷闸自相矛盾，直接豁免。
     // 2026-11-09 补 page/download：软件下载页（/download 301 落点，游客免费资源获取设闸自断
     // 入口——小写 /download/** 旧站 .zip/.exe 直链静态树本就有豁免，勿混淆）。
-    "/((?!api/|ws/|_next/|videos/|uploads/|images/|icons/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|page/api|page/download|account|active|favicon\\.ico|icon\\.svg|apple-icon\\.png|openms-logo\\.svg|robots\\.txt|sitemap).*)",
+    // 2026-11-18 补 online：练习页（旧站外链 /Online、/online/game.asp 都 301 落这里）对游客弹
+    // 「扫雷验证」自相矛盾——文档 307 与 RSC 403 弹窗闸一并豁免，子路径同步覆盖。
+    "/((?!api/|ws/|_next/|videos/|uploads/|images/|icons/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|page/api|page/download|online|account|active|favicon\\.ico|icon\\.svg|apple-icon\\.png|openms-logo\\.svg|robots\\.txt|sitemap).*)",
   ],
 };
 
@@ -156,7 +158,9 @@ export async function proxy(req: NextRequest) {
     // API、WS、静态资源有自己鉴权/缓存口径，不能套页面 RSC 通行证。
     // /page/api 开放 API 说明页已过闸豁免（见 matcher 注释），RSC 导航同步放行。
     // /page/download 软件下载页同批豁免（2026-11-09），切页导航同步放行。
-    if (path.startsWith("/api/") || path.startsWith("/ws/") || path.startsWith("/_next/") || path.startsWith("/videos/") || path.startsWith("/page/api") || path.startsWith("/page/download")) {
+    // /online 练习页豁免（2026-11-18 张老师定）：扫雷站的练习页不该弹扫雷验证
+    // （RSC 403 即 JS 弹窗闸）——游客软导航直达即玩，与 matcher 豁免配套。
+    if (path.startsWith("/api/") || path.startsWith("/ws/") || path.startsWith("/_next/") || path.startsWith("/videos/") || path.startsWith("/page/api") || path.startsWith("/page/download") || path === "/online" || path.startsWith("/online/")) {
       return NextResponse.next();
     }
     if (!canUseRsc(req)) {
