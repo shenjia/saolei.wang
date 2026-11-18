@@ -24,8 +24,6 @@ import { avatarUrlFor } from "@/lib/small-avatar";
 import { getOpenmsLink } from "@/lib/openms";
 import { OpenmsBindPrefs } from "@/components/OpenmsBind";
 import { donateYuanPlain } from "@/lib/donate";
-// 隐私区（2026-11-18 张老师需求 5）：关注/粉丝列表公开开关 + 新粉丝提醒 + 黑名单
-import { AccountPrivacySection } from "@/components/AccountPrivacySection";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "账户设置" };
@@ -113,6 +111,10 @@ export default async function AccountManagePage({
             <div className="manage_head">
               <h1>账户设置</h1>
               <div className="manage_actions">
+                {/* 隐私设置独立页入口（2026-11-18 23:06 张老师：放在「修改资料」前面） */}
+                <Link href="/account/privacy" className="button small">
+                  隐私设置
+                </Link>
                 <Link href="/account/profile" className="button small">
                   修改资料
                 </Link>
@@ -285,17 +287,8 @@ export default async function AccountManagePage({
                 </tbody>
               </table>
             </div>
-            {/* 隐私区（2026-11-18 张老师需求 5）：分割线通栏 + 「隐私」小标题 +
-                三个滑块开关（关注列表公开/粉丝列表公开/新粉丝提醒，默认全开）+
-                黑名单输入框（每行一个 ID，四个闸口即时生效） */}
-            <AccountPrivacySection
-              flags={{
-                followListHidden: user.followListHidden,
-                followerListHidden: user.followerListHidden,
-                followNotifyDisabled: user.followNotifyDisabled,
-                blocklist: user.followBlocklist,
-              }}
-            />
+            {/* 隐私区（2026-11-18 23:06 张老师：提为独立页 /account/privacy，本页只留入口按钮——
+                管理头「隐私设置」按钮 + 子导航第四项，年龄/星座/关注/粉丝/提醒/黑名单全在独立页） */}
             {/* （2026-11-10 张老师：原页面底部「显示年龄与星座」「公开赞助金额」两个独立开关
                 已移入年龄/星座/赞助金额行尾的「在我的主页展示」行内开关） */}
             {/* 绑定结果反馈（弹窗授权完成后主窗跳回 /account?bound=1 / ?error=taken） */}

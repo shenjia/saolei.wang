@@ -1,7 +1,9 @@
-// 账户设置「隐私」区（2026-11-18 张老师需求 5）：三个滑块开关（关注/粉丝列表公开、
-// 新粉丝提醒）+ 底部黑名单输入框（每行一个用户 ID）。开关走 /api/account/visibility
-// 的 privacy 组；黑名单走 /api/account/blocklist 独立保存按钮。
-// 服务端直渲初始态（服务端组件页面里用），交互全部客户端。
+// 账户设置 · 隐私设置页表单（2026-11-18 张老师需求 5，同日 23:06 提为独立页）：
+// 五个滑块开关（在主页展示年龄/星座 + 公开关注/粉丝列表 + 新粉丝提醒）+
+// 黑名单输入框（每行一个用户 ID，placeholder 只放「每行一个用户ID」）。
+// 开关走 /api/account/visibility（age/constellation 沿用 11-10 组、
+// followList/followerList/followNotify 走 /api/account/privacy 组）；
+// 黑名单走 /api/account/blocklist 独立保存按钮。交互全客户端。
 
 "use client";
 
@@ -9,11 +11,18 @@ import { useState } from "react";
 import { toast } from "./Toast";
 
 export interface PrivacyFlags {
+  /** 主页展示年龄（true=隐藏；语义同 ageHidden） */
+  ageHidden: boolean;
+  /** 主页展示星座（true=隐藏；语义同 constellationHidden） */
+  constellationHidden: boolean;
   followListHidden: boolean;
   followerListHidden: boolean;
   followNotifyDisabled: boolean;
   blocklist: string;
 }
+
+type VisField = "age" | "constellation" | "donate";
+type PrivField = "followList" | "followerList" | "followNotify";
 
 function PrivacyToggle({
   field,
@@ -21,13 +30,17 @@ function PrivacyToggle({
   switchText,
   initialHidden,
   hint,
+  group,
 }: {
-  field: "followList" | "followerList" | "followNotify";
+  /** visibility 组（age/constellation）或 privacy 组（followList/followerList/followNotify） */
+  field: VisField | PrivField;
   label: string;
   switchText: string;
   initialHidden: boolean;
   /** 开关下的小字说明 */
   hint?: string;
+  /** API 分组：vis=/api/account/visibility，priv=/api/account/privacy */
+  group: "vis" | "priv";
 }) {
   const [hidden, setHidden] = useState(initialHidden);
   const [busy, setBusy] = useState(false);
@@ -37,7 +50,7 @@ function PrivacyToggle({
     setBusy(true);
     setHidden(next);
     try {
-      const res = await fetch("/api/account/visibility", {
+      const res = await fetch(group === "vis" ? "/api/account/visibility" : "/api/account/privacy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ field, hidden: next }),
@@ -101,11 +114,26 @@ export function AccountPrivacySection({ flags }: { flags: PrivacyFlags }) {
 
   return (
     <div className="privacy_sec">
-      <hr />
-      <h3 className="privacy_title">隐私</h3>
       <table className="form" cellPadding={0} cellSpacing={0}>
         <tbody>
           <PrivacyToggle
+            group="vis"
+            field="age"
+            label="年龄"
+            switchText="在主页展示年龄"
+            initialHidden={flags.ageHidden}
+            hint="关闭后个人主页资料不显示年龄行"
+          />
+          <PrivacyToggle
+            group="vis"
+            field="constellation"
+            label="星座"
+            switchText="在主页展示星座"
+            initialHidden={flags.constellationHidden}
+            hint="关闭后个人主页资料不显示星座行"
+          />
+          <PrivacyToggle
+            group="priv"
             field="followList"
             label="关注列表"
             switchText="公开显示我的关注列表"
@@ -113,6 +141,7 @@ export function AccountPrivacySection({ flags }: { flags: PrivacyFlags }) {
             hint="关闭后其他玩家无法查看你关注了谁"
           />
           <PrivacyToggle
+            group="priv"
             field="followerList"
             label="粉丝列表"
             switchText="公开显示我的粉丝列表"
@@ -120,6 +149,7 @@ export function AccountPrivacySection({ flags }: { flags: PrivacyFlags }) {
             hint="关闭后其他玩家无法查看你的粉丝"
           />
           <PrivacyToggle
+            group="priv"
             field="followNotify"
             label="新粉丝提醒"
             switchText="有新粉丝时提醒我"
@@ -137,7 +167,7 @@ export function AccountPrivacySection({ flags }: { flags: PrivacyFlags }) {
           className="bl_input"
           rows={4}
           value={bl}
-          placeholder={"每行一个用户 ID，例如：\n3\n1234"}
+          placeholder="每行一个用户ID"
           onChange={(e) => setBl(e.target.value)}
         />
         <p className="acct_privacy_hint bl_hint">

@@ -4086,7 +4086,7 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
-#account_manage .acct_gsw {
+#account_manage .acct_gsw, #account_privacy .acct_gsw {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -4098,13 +4098,15 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   line-height: normal;
   white-space: normal;
 }
-#account_manage .acct_gsw input {
+#account_manage .acct_gsw input,
+#account_privacy .acct_gsw input {
   position: absolute;
   opacity: 0;
   width: 0;
   height: 0;
 }
-#account_manage .acct_gsw .track {
+#account_manage .acct_gsw .track,
+#account_privacy .acct_gsw .track {
   width: 32px;
   height: 18px;
   border-radius: 9px;
@@ -4113,7 +4115,8 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   flex: 0 0 auto;
   transition: background 0.15s;
 }
-#account_manage .acct_gsw .track::after {
+#account_manage .acct_gsw .track::after,
+#account_privacy .acct_gsw .track::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -4124,16 +4127,20 @@ body #user_view .info button.avatar_slot:focus-visible .avatar_status {
   background: #e8e8e0;
   transition: left 0.15s;
 }
-#account_manage .acct_gsw input:checked + .track {
+#account_manage .acct_gsw input:checked + .track,
+#account_privacy .acct_gsw input:checked + .track {
   background: #34c759;
 }
-#account_manage .acct_gsw input:checked + .track::after {
+#account_manage .acct_gsw input:checked + .track::after,
+#account_privacy .acct_gsw input:checked + .track::after {
   left: 16px;
 }
-#account_manage .acct_gsw input:disabled + .track {
+#account_manage .acct_gsw input:disabled + .track,
+#account_privacy .acct_gsw input:disabled + .track {
   opacity: 0.5;
 }
-#account_manage .acct_gsw .txt {
+#account_manage .acct_gsw .txt,
+#account_privacy .acct_gsw .txt {
   color: #bbbbbb;
   font-size: 14px;
 }
@@ -18098,33 +18105,33 @@ body #header .nav li a.vs_new_hint,
 }
 
 /* 账户设置隐私区 */
-#account_manage .privacy_sec hr {
+#account_manage .privacy_sec hr, #account_privacy .privacy_sec hr {
   margin: 18px 0 10px;
 }
-#account_manage .privacy_title {
+#account_manage .privacy_title, #account_privacy .privacy_title {
   margin: 0 0 8px;
   font-size: 14px;
   color: #b1b1a4;
   font-weight: normal;
 }
-#account_manage .acct_privacy_cell .acct_row_gsw {
+#account_manage .acct_privacy_cell .acct_row_gsw, #account_privacy .acct_privacy_cell .acct_row_gsw {
   margin: 0;
 }
-#account_manage .acct_privacy_hint {
+#account_manage .acct_privacy_hint, #account_privacy .acct_privacy_hint {
   margin: 4px 0 0;
   font-size: 11px;
   color: #636359;
 }
-#account_manage .acct_blocklist {
+#account_manage .acct_blocklist, #account_privacy .acct_blocklist {
   margin-top: 14px;
 }
-#account_manage .acct_blocklist .bl_label {
+#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_label {
   display: block;
   font-size: 13px;
   color: #b1b1a4;
   margin-bottom: 6px;
 }
-#account_manage .acct_blocklist .bl_input {
+#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_input {
   width: 100%;
   box-sizing: border-box;
   background: #272822;
@@ -18137,13 +18144,34 @@ body #header .nav li a.vs_new_hint,
   resize: vertical;
   font-family: inherit;
 }
-#account_manage .acct_blocklist .bl_input:focus {
+#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_input:focus {
   outline: none;
   border-color: #57574e;
 }
-#account_manage .acct_blocklist .bl_hint {
+#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_hint {
   margin-top: 6px;
 }
-#account_manage .acct_blocklist .bl_save {
+#account_manage .acct_blocklist, #account_privacy .acct_blocklist .bl_save {
   margin-top: 8px;
+}
+
+/* ---------- 隐私设置独立页（2026-11-18 23:06 张老师：从账户设置提为 /account/privacy） ----------
+   几何与账户设置族同款（288 侧栏 / 盒内容 210）；页标题 h2 与表单间距定版 */
+#page #account_privacy > li.sidebar {
+  width: 288px;
+}
+#page #account_privacy > li.main {
+  width: calc(100% - 290px);
+  min-width: 0;
+}
+#page #account_privacy > li.sidebar .box {
+  width: 210px;
+}
+#account_privacy .privacy_page_title {
+  margin: 0 0 14px;
+  font-size: 20px;
+  line-height: 30px;
+}
+#account_privacy .acct_gsw input {
+  cursor: pointer;
 }
