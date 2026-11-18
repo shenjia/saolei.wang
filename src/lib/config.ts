@@ -530,14 +530,9 @@ export const NEWS_RECORD_FIRST_MARKS: string[] = ['"or":0', '"or":"0"'];
 /** 用户主页「动态」排除的类型（2026-10-17：与首页同口径撤掉上传录像；
  *  晋升动态存量已删，无需列入——此数组仅排除「仍会写入但不展示」的类型）。
  *  管理后台不受此口径影响。
- *  2026-11-18 关注系统：关注/取关动态（55/56）个人主页也不显示（只在「关注的人
- *  的动态」聚合筛选里出现，与上传录像同类定位——流水账不值得占个人主页） */
-export const NEWS_FEED_EXCLUDED: number[] = [
-  NEWS_TYPE.VIDEO,
-  NEWS_TYPE.PROMOTION,
-  NEWS_TYPE.FOLLOW,
-  NEWS_TYPE.UNFOLLOW,
-];
+ *  2026-11-19 00:13 张老师定：关注/取关动态（55/56）**回归个人主页**——
+ *  此前 11-18 曾按「流水账」口径排除，张老师要求补进个人主页动态流 */
+export const NEWS_FEED_EXCLUDED: number[] = [NEWS_TYPE.VIDEO, NEWS_TYPE.PROMOTION];
 
 // ---------- 地区 ----------
 

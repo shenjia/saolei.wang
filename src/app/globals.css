@@ -6681,13 +6681,17 @@ body #page.two_columns li.main {
   body #page.two_columns #account_manage > li.sidebar,
   body #page.two_columns #account_profile > li.sidebar,
   body #page.two_columns #account_password > li.sidebar,
-  body #page.two_columns #account_email > li.sidebar {
+  body #page.two_columns #account_email > li.sidebar,
+  body #page.two_columns #account_privacy > li.sidebar,
+  body #page.two_columns #follow_list > li.sidebar {
     display: none;
   }
   body #page.two_columns #account_manage > li.main,
   body #page.two_columns #account_profile > li.main,
   body #page.two_columns #account_password > li.main,
-  body #page.two_columns #account_email > li.main {
+  body #page.two_columns #account_email > li.main,
+  body #page.two_columns #account_privacy > li.main,
+  body #page.two_columns #follow_list > li.main {
     float: none;
     width: auto;
     min-width: 0;
@@ -18209,6 +18213,15 @@ body #header .nav li a.vs_new_hint,
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   padding-top: 14px;
 }
+/* 黑名单输入框占满版块、按钮放输入框正下（2026-11-19 00:14 张老师） */
+#account_privacy .acct_blocklist .bl_input {
+  display: block;
+  width: 100%;
+}
+#account_privacy .acct_blocklist .bl_save {
+  display: block;
+  margin-top: 8px;
+}
 
 /* ---------- 隐私设置独立页（2026-11-18 23:06 张老师：从账户设置提为 /account/privacy） ----------
    几何与账户设置族同款（288 侧栏 / 盒内容 210）；页标题 h2 与表单间距定版 */
@@ -18245,15 +18258,30 @@ body #header .nav li a.vs_new_hint,
 }
 .account_head .account_tabs {
   margin-left: auto;
-  border-bottom: none;
+  /* 底部横线沿用 .ranking_tabs 自带 border-bottom（2026-11-19 00:14 张老师：
+     与全站筛选器样式一致；此前自作主张 none 是「筛选器下没有横线」根因） */
 }
 .account_head .account_tabs a,
 .account_head .account_tabs span {
-  padding: 6px 14px;
-  font-size: 14px;
+  padding: 9px 18px;
+  font-size: 15px;
 }
 .account_head .account_tabs a::after,
 .account_head .account_tabs span::after {
-  left: 14px;
-  right: 14px;
+  left: 18px;
+  right: 18px;
+}
+
+/* 关注上限规则说明（2026-11-19 00:21 张老师定）：关注列表页底部小字 + 赞助链接 */
+#follow_list .fol_limit_note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #75715e;
+}
+#follow_list .fol_limit_note .fol_limit_donate {
+  margin-left: 8px;
+  color: #a6e22e;
+}
+#follow_list .fol_limit_note .fol_limit_donate:hover {
+  text-decoration: underline;
 }

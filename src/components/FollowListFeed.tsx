@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import Link from "next/link";
 import type { FollowListRow } from "@/lib/follow";
 import { FollowListBody } from "./FollowListBody";
 import { PageSlider, PageCache } from "./PageSlider";
@@ -172,6 +173,16 @@ export function FollowListFeed({
           onMore={loadMore}
         />
       </div>
+      {/* 关注上限规则（2026-11-19 00:21 张老师定）：列表页底部展示 + 赞助链接。
+          仅「我的关注」页显示（他人视角列表不放运营文案） */}
+      {type === "following" && !listOwner && (
+        <p className="fol_limit_note">
+          每位玩家默认可关注 30 人，每赞助 1 元可提升 1 个关注位（最多 200 人）。
+          <Link href="/page/donate" target="_blank" prefetch={false} className="fol_limit_donate">
+            赞助本站
+          </Link>
+        </p>
+      )}
     </>
   );
 }

@@ -18,6 +18,22 @@ const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 /** 新粉丝提醒合并窗口（秒）：窗口内再有人关注，不新增消息，只改写既有那条 */
 export const FOLLOW_NOTICE_MERGE_WINDOW_SEC = 3600;
 
+/** 关注上限（2026-11-19 00:18 张老师定，00:20 上限改 200）：每用户默认 30 人；
+ *  每赞助 1 元 +1 位，封顶 200。口径=本人赞助合计（donate 表 amount 分求和 ÷100，
+ *  与主页统计一致） */
+export const FOLLOW_LIMIT_BASE = 30;
+export const FOLLOW_LIMIT_MAX = 200;
+
+/** 用户的关注上限（默认 30 + 赞助元数，封顶 100） */
+export async function getFollowLimit(userId: number): Promise<number> {
+  const agg = await prisma.donate.aggregate({
+    where: { user: BigInt(userId) },
+    _sum: { amount: true },
+  });
+  const donatedYuan = Math.floor(N(agg._sum?.amount) / 100);
+  return Math.min(FOLLOW_LIMIT_BASE + donatedYuan, FOLLOW_LIMIT_MAX);
+}
+
 /** 合并消息锚点（contains 匹配用）：同时命中旧「（去查看）」与新「查看[/url]」两形态 */
 const FOLLOW_NOTICE_ANCHOR = "关注了你。";
 
@@ -122,20 +138,56 @@ export async function followUser(followerId: number, followeeId: number): Promis
     select: { id: true },
   });
   if (dup) return null;
+  // 关注上限（2026-11-19 00:18 张老师定）：默认 30，每赞助 1 元 +1 位封顶 200。
+  // 满员返回红色气泡文案（前端 error 型 toast 即红色）。
+  const count = await prisma.userFollow.count({ where: { follower: BigInt(followerId) } });
+  const limit = await getFollowLimit(followerId);
+  if (count >= limit) {
+    return `你关注已达上限${limit}人，对本站赞助可提升上限（最多200）`;
+  }
   const now = nowSec();
   await prisma.userFollow.create({
     data: { follower: BigInt(followerId), followee: BigInt(followeeId), createTime: now },
   });
-  // 关注动态（type=55，reference=被关注人）：个人主页 NEWS_FEED_EXCLUDED 不显示，
-  // 仅首页「关注的人的动态」聚合筛选可见
-  await publishNews({
-    type: NEWS_TYPE.FOLLOW,
-    userId: followerId,
-    reference: followeeId,
-    createTime: N(now),
-  });
+  // 紧邻抵消（2026-11-19 00:13 张老师定）：先取关又关注——
+  // 若上一条是本人对同一目标的取关动态，删除它并跳过本次关注动态（两条都消失）
+  const offset = await cancelOffsettingNews(followerId, followeeId, NEWS_TYPE.UNFOLLOW);
+  if (!offset) {
+    // 关注动态（type=55，reference=被关注人）：个人主页动态 + 首页「关注」筛选可见
+    await publishNews({
+      type: NEWS_TYPE.FOLLOW,
+      userId: followerId,
+      reference: followeeId,
+      createTime: N(now),
+    });
+  }
   await sendFollowNotice(followerId, followeeId);
   return null;
+}
+
+/**
+ * 紧邻抵消判定（2026-11-19 00:13 张老师定）：本人在同一目标上的**最新一条**
+ * 关注/取关动态若是 expectedType（紧邻、中间无本人对该目标的其他关注/取关动态），
+ * 删除它并返回 true（调用方跳过发新动态——两条互相抵消）。
+ * 时间序按 (create_time, id) 倒序取第一条；只比对同一 (user, reference) 对。
+ */
+async function cancelOffsettingNews(
+  userId: number,
+  reference: number,
+  expectedType: number
+): Promise<boolean> {
+  const latest = await prisma.news.findFirst({
+    where: {
+      user: BigInt(userId),
+      reference: BigInt(reference),
+      type: { in: [NEWS_TYPE.FOLLOW, NEWS_TYPE.UNFOLLOW] },
+    },
+    orderBy: [{ createTime: "desc" }, { id: "desc" }],
+    select: { id: true, type: true },
+  });
+  if (!latest || latest.type !== expectedType) return false;
+  await prisma.news.delete({ where: { id: latest.id } });
+  return true;
 }
 
 /** 取关。幂等：未关注直接成功。成功后发取关动态（type=56） */
@@ -145,11 +197,16 @@ export async function unfollowUser(followerId: number, followeeId: number): Prom
     where: { follower: BigInt(followerId), followee: BigInt(followeeId) },
   });
   if (res.count > 0) {
-    await publishNews({
-      type: NEWS_TYPE.UNFOLLOW,
-      userId: followerId,
-      reference: followeeId,
-    });
+    // 紧邻抵消（2026-11-19 00:13 张老师定）：先关注又取关——
+    // 若上一条是本人对同一目标的关注动态，删除它并跳过本次取关动态
+    const offset = await cancelOffsettingNews(followerId, followeeId, NEWS_TYPE.FOLLOW);
+    if (!offset) {
+      await publishNews({
+        type: NEWS_TYPE.UNFOLLOW,
+        userId: followerId,
+        reference: followeeId,
+      });
+    }
   }
   return null;
 }
