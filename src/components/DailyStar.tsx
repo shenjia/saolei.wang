@@ -20,6 +20,9 @@ import { StarSpeechIcon } from "@/components/StarSpeechIcon";
 import { StarSpeechDeleteButton } from "@/components/StarSpeechDeleteButton";
 import { StarSpeechVote } from "@/components/StarSpeechVote";
 import ClickTracker from "@/components/ClickTracker";
+// 关注系统（2026-11-18）：头像 hover 关注按钮
+import { AvatarFollowBtn } from "@/components/AvatarFollowBtn";
+import { isFollowing } from "@/lib/follow";
 
 export async function DailyStar() {
   // 先取 session（getTodayStar 带上 viewer，SSR 顺带查出 myVote——跨设备一致的已投态）
@@ -32,6 +35,8 @@ export async function DailyStar() {
   if (!card) return null;
   const own = !!session && session.uid === card.id;
   const manager = !!session && isManager(session.role);
+  // 观看者对该星的已关注态（hover 关注按钮初始态；唯一索引点查）
+  const viewerFollowing = session && !own ? await isFollowing(session.uid, card.id) : false;
   // 感言双渲染（2026-11-13 张老师定）：移动版放头像右侧排名下方（star_right 内），
   // 桌面版保持 star_body 下方通栏（九轮口径）；CSS 按 881/880 断点互斥显隐。
   // StarSpeechVote/DeleteButton 均无固定 id，双实例互不干扰（同时只有一份可见）。
@@ -73,26 +78,32 @@ export async function DailyStar() {
         />
       </h2>
       <div className="star_body">
-        <Link
-          className="avatar_link star_left"
-          href={`/user/${card.id}`}
-          target="_blank"
-          prefetch={false}
-          title={`进入 ${card.chineseName} 的地盘`}
-        >
-          {/* 144px 展示位走 big 360px 档（2x retina）；小图缺失回退原图（2026-11-10）
-              无头像：军衔制下按性别给军装默认头像（big 档），旧版称号仍 no.jpg（2026-11-11） */}
-          {card.avatarIsDefault ? (
-            <DefaultAvatar sex={card.sex} size="big" className="star_avatar" alt={card.chineseName} />
-          ) : (
-            <AvatarImg
-              src={card.avatarBigUrl}
-              fallback={card.avatarOrigUrl}
-              className="star_avatar"
-              alt={card.chineseName}
-            />
+        <span className="fol_wrap star_left_wrap">
+          <Link
+            className="avatar_link star_left"
+            href={`/user/${card.id}`}
+            target="_blank"
+            prefetch={false}
+            title={`进入 ${card.chineseName} 的地盘`}
+          >
+            {/* 144px 展示位走 big 360px 档（2x retina）；小图缺失回退原图（2026-11-10）
+                无头像：军衔制下按性别给军装默认头像（big 档），旧版称号仍 no.jpg（2026-11-11） */}
+            {card.avatarIsDefault ? (
+              <DefaultAvatar sex={card.sex} size="big" className="star_avatar" alt={card.chineseName} />
+            ) : (
+              <AvatarImg
+                src={card.avatarBigUrl}
+                fallback={card.avatarOrigUrl}
+                className="star_avatar"
+                alt={card.chineseName}
+              />
+            )}
+          </Link>
+          {/* 关注按钮（2026-11-18 需求 1）：hover 头像浮现正下边缘；看自己不渲染 */}
+          {!own && (
+            <AvatarFollowBtn uid={card.id} sex={card.sex} loggedIn={!!session} following={viewerFollowing} />
           )}
-        </Link>
+        </span>
         <div className="star_right">
           <p className="star_name">
             <AvatarCell id={card.id} name={card.chineseName} englishName={card.englishName} sex={card.sex} gender="small" link />

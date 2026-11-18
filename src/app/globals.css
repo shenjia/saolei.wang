@@ -17935,3 +17935,155 @@ body #header .nav li a.vs_new_hint,
     font-size: 10px;
   }
 }
+
+/* ==================== 关注系统（2026-11-18 张老师需求五点一揽子） ==================== */
+
+/* 头像 hover 关注按钮容器：包住头像（position:relative 锚点），
+   hover 时按钮在头像正下边缘浮现（bottom:0 上浮），离开即收起 */
+.fol_wrap {
+  position: relative;
+  display: inline-block;
+}
+.fol_wrap .fol_avatar_link {
+  display: block;
+  line-height: 0;
+}
+.fol_btn {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 100%);
+  display: inline-block;
+  padding: 0 8px;
+  height: 18px;
+  line-height: 16px;
+  font-size: 11px;
+  white-space: nowrap;
+  border-radius: 2px;
+  border: 1px solid #2d9f6e;
+  background: #3fae74;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+  z-index: 5;
+}
+.fol_wrap:hover .fol_btn,
+.fol_wrap:focus-within .fol_btn {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+/* 已关注态：亮灰胶囊；按钮自身 hover 时变红（取消关注），文字由组件切换 */
+.fol_btn.is_fol {
+  border-color: #55554e;
+  background: #494945;
+  color: #e6e6e0;
+}
+.fol_btn.is_fol.btn_hover,
+.fol_btn.is_fol:hover {
+  border-color: #a83a32;
+  background: #c0392b;
+  color: #fff;
+}
+.fol_btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 侧栏玩家卡片：fol_wrap 直接顶替 ucd_left 原锚（inline-block 与 flex 布局兼容） */
+.user_card .ucd_left .fol_wrap {
+  display: block;
+}
+
+/* 每日一星：star_left 原本是 50% 宽的 Link；fol_wrap 接管 50% 宽、Link 铺满其内 */
+#daily_star .star_left_wrap {
+  display: block;
+  width: 50%;
+}
+#daily_star .star_left_wrap .star_left {
+  display: block;
+}
+
+/* 关注/粉丝列表页 */
+.follow_list_page .fol_table td {
+  border-bottom: 1px solid #3e3d35;
+  padding: 6px 8px;
+}
+.follow_list_page .fol_avatar_cell {
+  width: 46px;
+}
+.follow_list_page .fol_wrap .fol_btn {
+  bottom: 2px;
+}
+.follow_list_page .fol_avatar {
+  width: 36px;
+  height: 36px;
+  display: block;
+  border-radius: 2px;
+}
+.follow_list_page .fol_time {
+  width: 100px;
+  text-align: right;
+  color: #75715e;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.follow_list_page .fol_private {
+  padding: 16px 0;
+  text-align: center;
+  color: #75715e;
+}
+
+/* 账户设置隐私区 */
+#account_manage .privacy_sec hr {
+  margin: 18px 0 10px;
+}
+#account_manage .privacy_title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #b1b1a4;
+  font-weight: normal;
+}
+#account_manage .acct_privacy_cell .acct_row_gsw {
+  margin: 0;
+}
+#account_manage .acct_privacy_hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #636359;
+}
+#account_manage .acct_blocklist {
+  margin-top: 14px;
+}
+#account_manage .acct_blocklist .bl_label {
+  display: block;
+  font-size: 13px;
+  color: #b1b1a4;
+  margin-bottom: 6px;
+}
+#account_manage .acct_blocklist .bl_input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #272822;
+  border: 1px solid #3e3d35;
+  border-radius: 2px;
+  color: #e6e6e0;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 6px 8px;
+  resize: vertical;
+  font-family: inherit;
+}
+#account_manage .acct_blocklist .bl_input:focus {
+  outline: none;
+  border-color: #57574e;
+}
+#account_manage .acct_blocklist .bl_hint {
+  margin-top: 6px;
+}
+#account_manage .acct_blocklist .bl_save {
+  margin-top: 8px;
+}

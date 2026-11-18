@@ -94,6 +94,8 @@ export interface NewsItem {
    *  仅 kind=video 且 details.vid 有效时带出，其余类型 null。楼主称号按其录像行内
    *  快照评定——发评论时楼主成绩已定格在该录像审核时刻，语义贴合） */
   videoOwner: (UserBrief & { titles: TitlePair | null }) | null;
+  /** 关注/取关动态的被关注人（2026-11-18）：渲染「关注了 XX」用，其余类型 null */
+  followee: (UserBrief & { title: string; classic: { name: string; color: string } | null }) | null;
 }
 
 export interface RankingUser extends UserBrief {
@@ -484,6 +486,9 @@ export async function getNews(opts: {
   /** 首页阶段筛选（gen/col/sol/god/man）：按有效评定时间分档（快照与关联录像 real_time
    *  取优，与徽章 recordNewsExpTime 同口径），走 raw SQL 路径，见 newsStageSqlCond（2026-10-31） */
   stage?: FeedStage;
+  /** 「关注」筛选（2026-11-18）：只取 userId 关注目标们的全部动态（时间线聚合，不去重）。
+   *  与 home/stage 互斥（tab 层面互斥，API 层关注优先）；userId 必传（未登录无关注语义） */
+  followeeOf?: number;
   /** keyset 游标：上一批末行的 id，服务端据此查 (create_time,id) 序更早的动态。
    *  2026-10-20 起动态流按 (create_time, id) 倒序（破纪录动态时间=录像上传时间，
    *  id 序不再等于时间序），cursor 单传 id 不再够用——实现上改为先查 cursor 行的
@@ -507,16 +512,30 @@ export async function getNews(opts: {
     });
     cursorTime = anchor?.createTime;
   }
+  // 「关注」筛选（2026-11-18）：目标 id 集合预查（关注 0 人→空行集），where 改 user IN (...)。
+  // 口径=关注目标的**全部动态**（时间线聚合，不做类型过滤、不去重）
+  const followeeIds = opts.followeeOf
+    ? (
+        await prisma.userFollow.findMany({
+          where: { follower: BigInt(opts.followeeOf) },
+          select: { followee: true },
+        })
+      ).map((r) => N(r.followee))
+    : undefined;
   const where = {
     // 类型口径统一由 feedTypeFilter 决定（含级别筛选只认成绩类，2026-10-27）
     // （stage≠"" 时本 where 整体不参与——阶段档走下方 raw SQL 路径）
-    ...feedTypeFilter(opts),
-    ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
+    ...(followeeIds !== undefined
+      ? followeeIds.length
+        ? { user: { in: followeeIds.map(BigInt) } }
+        : { id: { in: [] as bigint[] } } // 关注 0 人：恒空集
+      : feedTypeFilter(opts)),
+    ...(!followeeIds && opts.userId ? { user: BigInt(opts.userId) } : {}),
     // keyset 游标与级别筛选都是 OR 组，必须并列进 AND——曾因两者都写成顶层 OR
     // 而在「cursor + level」组合下后者覆盖前者（级别筛选静默失效）
     ...(() => {
       const and: Prisma.NewsWhereInput[] = [];
-      if (opts.level) and.push(newsLevelFilter(opts.level));
+      if (!followeeIds && opts.level) and.push(newsLevelFilter(opts.level));
       // 查 (create_time,id) 序比 cursor 行更早的动态（同刻按 id 分先后）
       if (cursorTime !== undefined) {
         and.push({ OR: [{ createTime: { lt: cursorTime } }, { createTime: cursorTime, id: { lt: BigInt(opts.cursor!) } }] });
@@ -638,12 +657,57 @@ export async function getNews(opts: {
       })
     );
   }
+  // 关注/取关动态（2026-11-18）：被关注人（reference）批量带出——渲染「关注了 XX」用；
+  // 称号按被关注人当前成绩评定（关注动态无快照语义，实时值即可）
+  const followeeMap = new Map<
+    number,
+    UserBrief & { title: string; classic: { name: string; color: string } | null }
+  >();
+  {
+    const folRefs = [
+      ...new Set(
+        rows
+          .filter((r) => r.type === NEWS_TYPE.FOLLOW || r.type === NEWS_TYPE.UNFOLLOW)
+          .map((r) => N(r.reference))
+          .filter((v) => v > 0)
+      ),
+    ];
+    if (folRefs.length) {
+      const briefs = await usersByIds(folRefs);
+      const scores = await prisma.userScores.findMany({
+        where: { id: { in: folRefs.map(BigInt) } },
+        select: { id: true, expTime: true },
+      });
+      const statusRows = await prisma.user.findMany({
+        where: { id: { in: folRefs.map(BigInt) } },
+        select: { id: true, status: true },
+      });
+      const expMap = new Map(scores.map((s) => [N(s.id), s.expTime ?? 0]));
+      const rankedMap = new Map(statusRows.map((u) => [N(u.id), u.status === 0]));
+      const pairs = await dualTitles(
+        folRefs.map((id) => ({
+          userId: id,
+          expTime: expMap.get(id) ?? 0,
+          ranked: rankedMap.get(id) ?? false,
+          sex: briefs.get(id)?.sex ?? 1,
+        }))
+      );
+      folRefs.forEach((id, i) => {
+        const b = briefs.get(id);
+        if (b) followeeMap.set(id, { ...b, title: pairs[i]?.m ?? "", classic: pairs[i]?.c ?? null });
+      });
+    }
+  }
   return rows.map((r, i) => {
     const d = safeJson(r.detailsData);
     const vid = typeof d.vid === "number" ? d.vid : 0;
     const owner =
       r.type === NEWS_TYPE.COMMENT && d.kind === "video" && vid > 0
         ? ownerMap.get(vid) ?? null
+        : null;
+    const followee =
+      (r.type === NEWS_TYPE.FOLLOW || r.type === NEWS_TYPE.UNFOLLOW) && N(r.reference) > 0
+        ? followeeMap.get(N(r.reference)) ?? null
         : null;
     return {
       id: N(r.id),
@@ -657,6 +721,7 @@ export async function getNews(opts: {
       author: authors.get(N(r.user)) ?? null,
       authorTitles: pairList[i] ?? null,
       videoOwner: owner,
+      followee,
     };
   });
 }
@@ -673,6 +738,8 @@ export async function getNewsPage(opts: {
   home?: boolean;
   /** 首页阶段筛选（2026-10-29），透传 getNews */
   stage?: FeedStage;
+  /** 「关注」筛选（2026-11-18），透传 getNews */
+  followeeOf?: number;
   page: number;
   base: number;
   limit: number;
@@ -691,11 +758,24 @@ export async function getNewsPage(opts: {
       (opts.page - 1) * opts.base
     );
   } else {
+    // 「关注」筛选（2026-11-18）：user IN (关注目标) 的 id 预查（与 getNews 同口径）
+    const followeeIds = opts.followeeOf
+      ? (
+          await prisma.userFollow.findMany({
+            where: { follower: BigInt(opts.followeeOf) },
+            select: { followee: true },
+          })
+        ).map((r) => N(r.followee))
+      : undefined;
     const where = {
       // 与 getNews 同一口径（含级别筛选只认成绩类，2026-10-27）
-      ...feedTypeFilter(opts),
-      ...(opts.userId ? { user: BigInt(opts.userId) } : {}),
-      ...(opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
+      ...(followeeIds !== undefined
+        ? followeeIds.length
+          ? { user: { in: followeeIds.map(BigInt) } }
+          : { id: { in: [] as bigint[] } }
+        : feedTypeFilter(opts)),
+      ...(!followeeIds && opts.userId ? { user: BigInt(opts.userId) } : {}),
+      ...(!followeeIds && opts.level ? { AND: [newsLevelFilter(opts.level)] } : {}),
     };
     idRows = await prisma.news.findMany({
       where,
@@ -711,6 +791,7 @@ export async function getNewsPage(opts: {
     userId: opts.userId,
     level: opts.level,
     home: opts.home,
+    followeeOf: opts.followeeOf,
     limit: opts.limit,
     ids: idRows.map((r) => r.id),
   });
@@ -753,6 +834,8 @@ async function getNewsCountImpl(opts: {
   home?: boolean;
   /** 与 getNews 的首页阶段筛选一致（2026-10-29） */
   stage?: FeedStage;
+  /** 与 getNews 的「关注」筛选一致（2026-11-18） */
+  followeeOf?: number;
   /** 登录态实时盐（2026-11-09）：仅作 unstable_cache 键成分，非筛选条件；impl 直查路径忽略 */
   salt?: string;
 }): Promise<number> {
@@ -768,6 +851,18 @@ async function getNewsCountImpl(opts: {
     return N(rows[0]?.c);
   }
   void opts.salt;
+  // 「关注」筛选（2026-11-18）：user IN (关注目标) 的 count（与 getNews/getNewsPage 严格同口径）
+  if (opts.followeeOf) {
+    const followeeIds = (
+      await prisma.userFollow.findMany({
+        where: { follower: BigInt(opts.followeeOf) },
+        select: { followee: true },
+      })
+    ).map((r) => N(r.followee));
+    return prisma.news.count({
+      where: followeeIds.length ? { user: { in: followeeIds.map(BigInt) } } : { id: { in: [] } },
+    });
+  }
   return prisma.news.count({
     where: {
       // 与 getNews / getNewsPage 严格同一类型口径（级别筛选只认成绩类，2026-10-27），
@@ -1611,9 +1706,86 @@ const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup
  *  仅首页 SSR 与 /api/video/more 的 feedPage 分支使用；/video 列表仍用 getVideoCount 全量口径。
  *  salt（2026-11-09 登录态实时盐，服务端取，不信客户端参数）：登录态随水位即时重建。 */
 export async function getVideoFeedCount(
-  opts: { level?: VideoLevel | "all"; nf?: boolean; stage?: FeedStage; salt?: string } = {}
+  opts: {
+    level?: VideoLevel | "all";
+    nf?: boolean;
+    stage?: FeedStage;
+    salt?: string;
+    /** 「关注」筛选（2026-11-18）：只数关注目标们的录像（全量不去重口径） */
+    followeeOf?: number;
+  } = {}
 ): Promise<number> {
+  if (opts.followeeOf) {
+    return fetchFeedFolloweeCount(opts.followeeOf, opts.nf === true);
+  }
   return fetchFeedDedupCount(opts.level ?? "all", opts.nf === true, opts.stage ?? "", opts.salt ?? "");
+}
+
+/** 「关注」录像流（2026-11-18 张老师需求）：关注目标们的全部录像，上传时间倒序，
+ *  **全量不去重**（明确不去重，无发现流配额）。直查 video 表走 (create_time,id) 序；
+ *  nf 时 JOIN video_info 滤 noflag。keyset 锚点口径同 getVideoList 页码（offset 分页）。
+ *  每请求直查不走 unstable_cache（键空间=观看者×页码无界；关注列表查询有索引兜底，
+ *  行装配复用 getVideosByIds 的 60s per-id 缓存链）。 */
+export async function getVideoFeedFolloweePage(opts: {
+  followeeOf: number;
+  page: number;
+  base: number;
+  limit: number;
+  nf?: boolean;
+}): Promise<VideoListItem[]> {
+  const ids = await fetchFeedFolloweeIds(opts.followeeOf, opts.nf === true, opts.page, opts.base, opts.limit);
+  return getVideosByIds(ids);
+}
+
+/** 「关注」录像流计数（与 fetchFeedFolloweeIds 严格同口径）。
+ *  nf 用 raw join video_info（schema 无 relation，Prisma where 表达不了跨表过滤） */
+async function fetchFeedFolloweeCount(followeeOf: number, nf: boolean): Promise<number> {
+  const followeeIds = (
+    await prisma.userFollow.findMany({ where: { follower: BigInt(followeeOf) }, select: { followee: true } })
+  ).map((r) => N(r.followee));
+  if (!followeeIds.length) return 0;
+  if (nf) {
+    const rows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
+      `SELECT COUNT(*) AS c FROM video v JOIN video_info vi ON vi.id = v.id` +
+        ` WHERE v.status <> ${VIDEO_STATUS.BANNED} AND vi.noflag = 1 AND v.user IN (${followeeIds.map(Number).join(",")})`
+    );
+    return N(rows[0]?.c);
+  }
+  return prisma.video.count({
+    where: { status: { not: VIDEO_STATUS.BANNED }, user: { in: followeeIds.map(BigInt) } },
+  });
+}
+
+async function fetchFeedFolloweeIds(
+  followeeOf: number,
+  nf: boolean,
+  page: number,
+  base: number,
+  limit: number
+): Promise<number[]> {
+  const followeeIds = (
+    await prisma.userFollow.findMany({ where: { follower: BigInt(followeeOf) }, select: { followee: true } })
+  ).map((r) => N(r.followee));
+  if (!followeeIds.length) return [];
+  if (nf) {
+    const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
+      `SELECT v.id AS id FROM video v JOIN video_info vi ON vi.id = v.id` +
+        ` WHERE v.status <> ${VIDEO_STATUS.BANNED} AND vi.noflag = 1 AND v.user IN (${followeeIds.map(Number).join(",")})` +
+        ` ORDER BY v.create_time DESC, v.id DESC LIMIT ${limit} OFFSET ${(page - 1) * base}`
+    );
+    return rows.map((r) => N(r.id));
+  }
+  const rows = await prisma.video.findMany({
+    where: {
+      status: { not: VIDEO_STATUS.BANNED },
+      user: { in: followeeIds.map(BigInt) },
+    },
+    select: { id: true },
+    orderBy: [{ createTime: "desc" }, { id: "desc" }],
+    skip: (page - 1) * base,
+    take: limit,
+  });
+  return rows.map((r) => N(r.id));
 }
 
 export async function getVideoFeedPage(opts: {
@@ -2029,7 +2201,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
 // ---------- 用户主页 ----------
 
 export interface UserDetail {
-  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number; donateHidden: boolean; ageHidden: boolean; constellationHidden: boolean };
+  user: UserBrief & { area: string; avatar: string; createTime: number; lastLoginTime: number; status: number; donateHidden: boolean; ageHidden: boolean; constellationHidden: boolean; followListHidden: boolean; followerListHidden: boolean; followNotifyDisabled: boolean; followBlocklist: string };
   info: { nickname: string; interest: string | null; qq: string; mouse: string; pad: string; birthday: number } | null;
   stat: { loginTimes: number; loginTime: number; points: number; begVideos: number; intVideos: number; expVideos: number } | null;
   scores: Record<string, { score: number | null; videoId: number | null; date: number | null }>;
@@ -2075,6 +2247,11 @@ export async function getUserDetail(id: number): Promise<UserDetail | null> {
       // true=账户设置关闭，主页资料不显示对应行
       ageHidden: u.ageHidden,
       constellationHidden: u.constellationHidden,
+      // 关注系统隐私（2026-11-18）：列表公开双开关 + 新粉丝提醒 + 黑名单原文
+      followListHidden: u.followListHidden,
+      followerListHidden: u.followerListHidden,
+      followNotifyDisabled: u.followNotifyDisabled,
+      followBlocklist: u.followBlocklist,
     },
     info: info
       ? {
