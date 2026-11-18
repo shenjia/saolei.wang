@@ -74,6 +74,10 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
       <TitleBadge title={title} classic={classic} link />
     </>
   );
+  // 关注/取关动态（2026-11-18）：被关注人（news.reference）批量带出为 news.followee，
+  // 渲染「关注了/取关了 XX」；followee 缺失（脏数据防御）按 reference 直链兜底
+  const isFollowType = news.type === NEWS_TYPE.FOLLOW || news.type === NEWS_TYPE.UNFOLLOW;
+  const followee = news.followee;
   // SUB 大关（null = 本条不显示标签）：刷新纪录才判（首创行 or=0 旧成绩为大关外，天然 null）
   const subGate = subMilestone(d.od, d.lv, d.or ?? 0, d.cr ?? 0);
 
@@ -279,9 +283,34 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             <em className="news_star">当选了每日一星！</em>
           </>
         )}
+        {/* 关注/取关动态（2026-11-18）：「关注了/取关了 + 被关注人」，仅「关注」筛选可见 */}
+        {isFollowType && news.author && (
+          <>
+            {authorCells}
+            {news.type === NEWS_TYPE.FOLLOW ? "关注了" : "取关了"}
+            {followee ? (
+              <>
+                <AvatarCell
+                  id={followee.id}
+                  name={followee.chineseName}
+                  englishName={followee.englishName}
+                  sex={followee.sex}
+                  className="author"
+                  gender="small"
+                  link
+                />
+                <TitleBadge title={followee.title ?? ""} classic={followee.classic ?? null} link />
+              </>
+            ) : (
+              <Link href={`/user/${news.reference}`} target="_blank" prefetch={false} className="score news_article">
+                #{news.reference}
+              </Link>
+            )}
+          </>
+        )}
         {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
             渲染块移除——details 的 ti/cond 字段随存量行一并消失 */}
-        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54].includes(news.type) && (
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56].includes(news.type) && (
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>

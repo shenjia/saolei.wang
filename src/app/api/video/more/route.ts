@@ -8,7 +8,14 @@
 // 军衔称号在服务端预算好随 JSON 返回，客户端直接渲染。
 
 import { NextResponse } from "next/server";
-import { getVideoFeed, getVideoFeedPage, getVideoCount, getVideoFeedCount, getVideoList } from "@/lib/queries";
+import {
+  getVideoFeed,
+  getVideoFeedPage,
+  getVideoCount,
+  getVideoFeedCount,
+  getVideoFeedFolloweePage,
+  getVideoList,
+} from "@/lib/queries";
 import { getSession } from "@/lib/auth";
 import { getFeedSalts } from "@/lib/feedsalt";
 import {
@@ -85,13 +92,31 @@ export async function GET(req: Request) {
   //  total 同步换 getVideoFeedCount 去重口径（与首页 SSR 同源同键，共享缓存）
   //  2026-11-09：登录态实时盐由服务端按 session 自取（feedsalt），与首页 SSR 同键同源；
   //  不信客户端参数（防止伪造盐把缓存键空间打爆）。盐=登录态水位探测，5s 微缓存
+  //  2026-11-18：「关注」筛选 follow=1——关注目标们的全部录像，全量不去重
+  //  （getVideoFeedFolloweePage）；服务端按 session 取 viewer，未登录回「全部」
   const feedPage = parseInt(p.get("feedPage") ?? "", 10);
   if (feedPage >= 1) {
+    const nf = p.get("nf") === "1";
+    const followReq = p.get("follow") === "1";
+    const sess = followReq ? await getSession() : null;
+    if (followReq && sess) {
+      const base = parseInt(p.get("base") ?? "", 10) || VIDEO_PAGESIZE;
+      const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
+      const [items, total] = await Promise.all([
+        getVideoFeedFolloweePage({ followeeOf: sess.uid, page: feedPage, base, limit: size, nf }),
+        getVideoFeedCount({ followeeOf: sess.uid, nf }),
+      ]);
+      return NextResponse.json({
+        items,
+        cursor: items.length ? items[items.length - 1].id : 0,
+        count: items.length,
+        total,
+      });
+    }
     const level = parseLevel(p);
     const base = parseInt(p.get("base") ?? "", 10) || VIDEO_PAGESIZE;
     const size = Math.min(parseInt(p.get("size") ?? "", 10) || VIDEO_PAGESIZE, 100);
     // 2026-10-20：透传 NF 筛选（首页录像版块 NF 开关）
-    const nf = p.get("nf") === "1";
     // 2026-10-29：首页阶段筛选（gen/col/sol/god/man，按录像行内快照分档）；非法值回「全部」
     const stage = parseFeedStage(p.get("stage"));
     const salt = (await getFeedSalts()).video;

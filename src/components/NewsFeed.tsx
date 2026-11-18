@@ -51,6 +51,7 @@ export function NewsFeed({
   title,
   titleClassName,
   homeOnly,
+  viewerId,
 }: {
   initial: NewsFeedItem[];
   userId?: number;
@@ -64,6 +65,8 @@ export function NewsFeed({
   titleClassName?: string;
   /** 首页新闻流口径：加载更多/等级筛选只取 NEWS_HOME_TYPES（2026-09-24） */
   homeOnly?: boolean;
+  /** 观看者 id（2026-11-18 关注系统）：>0 时首页 tabs 追加「关注」（时间线聚合） */
+  viewerId?: number;
 }) {
   const [items, setItems] = useState(initial);
   const [cursor, setCursor] = useState(initial.length ? initial[initial.length - 1].news.id : 0);
@@ -94,9 +97,20 @@ export function NewsFeed({
     const url =
       `/api/news/more?cursor=${cur}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      // 首页（homeOnly）：lv 是阶段 key 走 stage 参数；用户主页保持 type/level 语义
-      (homeOnly ? (lv ? `&stage=${lv}` : "") : isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
-      (homeOnly ? "&home=1" : "");
+      // 首页（homeOnly）：lv 是阶段 key 走 stage 参数；「关注」tab 走 follow=1；
+      // 用户主页保持 type/level 语义
+      (homeOnly
+        ? lv === "fol"
+          ? "&follow=1"
+          : lv
+            ? `&stage=${lv}`
+            : ""
+        : isTypeTab(lv)
+          ? `&type=${lv}`
+          : lv
+            ? `&level=${lv}`
+            : "") +
+      (homeOnly && lv !== "fol" ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
   }
@@ -106,8 +120,18 @@ export function NewsFeed({
     const url =
       `/api/news/more?page=${page}&base=${pageSize}&size=${size ?? pageSize}` +
       (userId ? `&user=${userId}` : "") +
-      (homeOnly ? (lv ? `&stage=${lv}` : "") : isTypeTab(lv) ? `&type=${lv}` : lv ? `&level=${lv}` : "") +
-      (homeOnly ? "&home=1" : "");
+      (homeOnly
+        ? lv === "fol"
+          ? "&follow=1"
+          : lv
+            ? `&stage=${lv}`
+            : ""
+        : isTypeTab(lv)
+          ? `&type=${lv}`
+          : lv
+            ? `&level=${lv}`
+            : "") +
+      (homeOnly && lv !== "fol" ? "&home=1" : "");
     const res = await fetch(url);
     return (await res.json()) as { items: NewsFeedItem[]; cursor: number; count: number; total: number };
   }
@@ -229,23 +253,27 @@ export function NewsFeed({
   }
 
   // 观看者切换称号体系后（如军衔→人神界），当前选中阶段可能不在新 tabs 里
-  // （如「将帅」），回「全部」重新加载（2026-10-29 阶段筛选随体系切换）
+  // （如「将帅」），回「全部」重新加载（2026-10-29 阶段筛选随体系切换）；
+  // 「关注」tab（fol）不受体系切换影响，保留
   useEffect(() => {
-    if (homeOnly && level && !STAGE_KEYS.includes(level as FeedStage)) {
+    if (homeOnly && level && level !== "fol" && !STAGE_KEYS.includes(level as FeedStage)) {
       switchLevel("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [system, homeOnly]);
 
   // 「发表」「评论」tab 只在用户主页出现：首页新闻流口径（NEWS_HOME_TYPES）本来就不含发帖/评论动态。
-  // 首页（homeOnly）2026-10-29 起用阶段 tabs（随观看者体系切换）；用户主页保持原等级/类型 tabs
-  const tabDefs = homeOnly
+  // 首页（homeOnly）2026-10-29 起用阶段 tabs（随观看者体系切换）；登录态行尾追加「关注」
+  // （2026-11-18 关注系统）；用户主页保持原等级/类型 tabs
+  const baseTabDefs = homeOnly
     ? system === "c"
       ? STAGE_TABS_C
       : STAGE_TABS_M
     : userId
       ? LEVEL_TABS
       : LEVEL_TABS.filter((t) => !isTypeTab(t.key));
+  const tabDefs =
+    homeOnly && (viewerId ?? 0) > 0 ? [...baseTabDefs, { key: "fol", label: "关注" }] : baseTabDefs;
   const tabs = tabDefs.map((t) =>
     t.key === level ? (
       <span key={t.key || "all"} className="current">
