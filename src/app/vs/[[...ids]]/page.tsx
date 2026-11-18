@@ -49,7 +49,7 @@ export async function generateMetadata({ params, searchParams }: VsArenaProps): 
   if (nums.length === 2 && nums[0] && nums[1] && nums[0] !== nums[1]) {
     return { title: await getVsDuelTitle(nums[0], nums[1]) };
   }
-  return { title: "对决" };
+  return { title: "胜负" };
 }
 
 export default async function VsArenaPage({ params, searchParams }: VsArenaProps) {

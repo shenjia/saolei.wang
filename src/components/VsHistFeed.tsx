@@ -81,7 +81,7 @@ export function VsHistFeed({
   return (
     <div className="vs_histbox">
       {rows.length === 0 ? (
-        <p className="vs_hist_empty">暂无对决记录（VS 页访问后开始落库）</p>
+        <p className="vs_hist_empty">暂无胜负记录（VS 页访问后开始落库）</p>
       ) : (
         <table className="vs_hist_tbl">
           <tbody>

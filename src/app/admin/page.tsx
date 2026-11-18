@@ -204,7 +204,7 @@ export default async function AdminDashboard() {
             访问 = 一次对决（vs_duel 表，10 分钟窗口去重）；发起人数=去重发起者；
             点击进 /admin/vs 对决统计页 */}
         <Kpi
-          label="今日对决"
+          label="今日胜负"
           href="/admin/vs"
           value={
             <>

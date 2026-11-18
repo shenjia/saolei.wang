@@ -67,7 +67,7 @@ export function VsNavLink() {
       className={show ? "vs_new_hint" : undefined}
       onMouseEnter={show ? dismiss : undefined}
     >
-      对决
+      胜负
     </Link>
   );
 }

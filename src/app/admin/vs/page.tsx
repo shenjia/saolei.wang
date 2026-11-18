@@ -20,7 +20,7 @@ import { TitleBadge } from "@/components/TitleBadge";
 import { getVsDuelsOverview, getVsRecentDuels, getVsTopLaunchers, getVsTopTargets } from "@/lib/admin/vsstats";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "对决统计 | 管理后台" };
+export const metadata = { title: "胜负统计 | 管理后台" };
 
 type SP = Record<string, string | undefined>;
 
@@ -46,7 +46,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
   const { rows: recent, total, pageSize } = recentPg;
 
   const series: Series[] = [
-    { key: "duels", label: "对决次数", color: "#ae81ff", values: ov.trend, estimate: ov.todayEst },
+    { key: "duels", label: "胜负次数", color: "#ae81ff", values: ov.trend, estimate: ov.todayEst },
   ];
 
   // 对决记录表玩家格（2026-11-11 09:56 张老师）：
@@ -103,9 +103,9 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <div className="admin_page_head">
-        <h1>对决统计</h1>
+        <h1>胜负统计</h1>
         <span className="sub">
-          VS 板块（/vs/:id）对决数据 · 近 30 天 {ov.d30.toLocaleString("zh-CN")} 场 · KPI 口径：一次对决页访问 = 一次对决 · 趋势缓存 5 分钟
+          VS 板块（/vs/:id）胜负数据 · 近 30 天 {ov.d30.toLocaleString("zh-CN")} 场 · KPI 口径：一次胜负页访问 = 一次胜负 · 趋势缓存 5 分钟
         </span>
         {/* Top10 范围筛选（2026-11-12 张老师）：上移至页头右端复用行高，不压缩下方板块高度；
             只作用于两个 Top10（趋势图固定近 30 天） */}
@@ -130,7 +130,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
       <div style={{ display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
         <div style={{ flex: "0 0 50%", minWidth: 0 }}>
           <AdminCard
-            title="对决趋势（近 30 天）"
+            title="胜负趋势（近 30 天）"
             more="今日点为按上周同时段预估（虚线）"
             className="h100"
           >
@@ -138,7 +138,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
           </AdminCard>
         </div>
         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-          <AdminCard title={`发起对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
+          <AdminCard title={`发起胜负最多（${RANGE_LABEL[range]} Top10）`} className="h100">
             <BarList
               items={launchers.map((u) => ({
                 label: u.name,
@@ -151,7 +151,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
           </AdminCard>
         </div>
         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-          <AdminCard title={`被对决最多（${RANGE_LABEL[range]} Top10）`} className="h100">
+          <AdminCard title={`被胜负最多（${RANGE_LABEL[range]} Top10）`} className="h100">
             <BarList
               items={targets.map((u) => ({
                 label: u.name,
@@ -167,8 +167,8 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
 
       {/* ---------- 最近对决记录 ---------- */}
       <AdminCard
-        title="最近对决记录"
-        more={`共 ${total.toLocaleString("zh-CN")} 场 · 每页 ${pageSize} 条 · 比分/结果为发起当时快照（左分=挑战者，右分=被挑战者）；发起者＝访问对决页的登录者（旁观他人对决也算）；历史回填行亮灰 —`}
+        title="最近胜负记录"
+        more={`共 ${total.toLocaleString("zh-CN")} 场 · 每页 ${pageSize} 条 · 比分/结果为发起当时快照（左分=挑战者，右分=被挑战者）；发起者＝访问胜负页的登录者（旁观他人胜负也算）；历史回填行亮灰 —`}
         tight
       >
         <div className="admin_scroll">
@@ -200,7 +200,7 @@ export default async function AdminVsPage({ searchParams }: { searchParams: Prom
               {recent.length === 0 && (
                 <tr>
                   <td colSpan={10} className="gray">
-                    暂无对决记录（VS 页访问后开始落库）
+                    暂无胜负记录（VS 页访问后开始落库）
                   </td>
                 </tr>
               )}

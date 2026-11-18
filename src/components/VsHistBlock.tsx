@@ -22,7 +22,7 @@ export function VsHistBlock({
     <div className="vs_lvblk vs_hist">
       <div className="vs_lv_head">
         <span aria-hidden="true" />
-        <h1 className="gray">历史对决</h1>
+        <h1 className="gray">历史胜负</h1>
         <span aria-hidden="true" />
       </div>
       <VsHistFeed initial={initial} total={total} pageSize={pageSize} />
