@@ -94,6 +94,7 @@ export function SendMessageButton({
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "发送失败");
+        toast(data.error ?? "发送失败", "error"); // 频控等限制触发时红色气泡（2026-11-19）
         return;
       }
       // 成功：关浮窗 + 屏中成功气泡（2 秒后渐隐）

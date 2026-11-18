@@ -335,11 +335,23 @@ export async function retractVideoCommentNotice(
  *   ③ 24h 内相同内容已发给 DM_MAX_SAME_CONTENT_PER_DAY 个不同人，且本次收件人未收过
  *      （同文模板群发的核心特征；逐条手写的正常用户几乎不可能命中）。
  * 返回 null=放行；否则返回给用户看的拒绝文案。
+ * 2026-11-19（张老师要求）新增两条闸门，判在原有三条之前：
+ *   ⓪ 当日总量——自然日（GMT+8 当天 0 点起）累计手写私信达 DM_MAX_PER_DAY 条即拒；
+ *   ⓪' 单人连续——对方未回复期间，对同一人最多连发 DM_MAX_STREAK_PER_RECIPIENT 条
+ *      （连续口径＝对方最后一条手写回复之后我发的手写私信条数，跨天累积；
+ *      对方一回复即解锁重新计 5；系统通知/评论通知既不算对方的回复、也不占我的额度）。
  */
 export const DM_MIN_INTERVAL_SEC = 10;
 export const DM_MAX_RECIPIENTS_PER_DAY = 10;
 export const DM_MAX_SAME_CONTENT_PER_DAY = 2;
+export const DM_MAX_PER_DAY = 100;
+export const DM_MAX_STREAK_PER_RECIPIENT = 5;
 const DM_WINDOW_SEC = 86400;
+
+/** 排除「系统代发通知」的过滤器（通知模板前缀同 NOTICE_PREFIXES；广播行另有 isSystem 排除） */
+const notNoticeFilter = {
+  NOT: { OR: NOTICE_PREFIXES.map((p) => ({ content: { startsWith: p } })) },
+} as const;
 
 export async function checkDmRateLimit(
   fromUserId: number,
@@ -347,6 +359,45 @@ export async function checkDmRateLimit(
   content: string
 ): Promise<string | null> {
   const now = Math.floor(Date.now() / 1000);
+
+  // ⓪ 当日总量频控（2026-11-19）：自然日按 GMT+8 算当天 0 点
+  const dayStartSec = Math.floor((now + 8 * 3600) / 86400) * 86400 - 8 * 3600;
+  const sentToday = await prisma.message.count({
+    where: {
+      fromUser: BigInt(fromUserId),
+      isSystem: false,
+      createTime: { gte: BigInt(dayStartSec) },
+      ...notNoticeFilter,
+    },
+  });
+  if (sentToday >= DM_MAX_PER_DAY) {
+    return `今日发送已达上限（${DM_MAX_PER_DAY} 条），请明天再试`;
+  }
+
+  // ⓪' 单人连续频控（2026-11-19）：对方最后一条手写回复之后我发的手写私信条数
+  const lastReply = await prisma.message.findFirst({
+    where: {
+      fromUser: BigInt(toUserId),
+      toUser: BigInt(fromUserId),
+      isSystem: false,
+      ...notNoticeFilter,
+    },
+    orderBy: { id: "desc" },
+    select: { id: true },
+  });
+  const streak = await prisma.message.count({
+    where: {
+      fromUser: BigInt(fromUserId),
+      toUser: BigInt(toUserId),
+      isSystem: false,
+      id: { gt: lastReply?.id ?? BigInt(0) },
+      ...notNoticeFilter,
+    },
+  });
+  if (streak >= DM_MAX_STREAK_PER_RECIPIENT) {
+    return `对方还没有回复，最多连续发送 ${DM_MAX_STREAK_PER_RECIPIENT} 条`;
+  }
+
   const rows = await prisma.message.findMany({
     where: {
       fromUser: BigInt(fromUserId),

@@ -10,6 +10,7 @@
 // fixed 遮罩做在里面会随缩放失真铺不满屏（同 EmailBindNotice 口径）。
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "./Toast";
 import { useDraft } from "./useDraft";
 
 const LS_KEY = "update_notice_seen"; // 值 = 最新更新日期的可比数值（yyyymmdd）
@@ -86,6 +87,7 @@ export function UpdateNotice({ updates, uid }: { updates: UpdateNoticeRow[]; uid
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error ?? "发送失败");
+      toast(data.error ?? "发送失败", "error"); // 频控等限制触发时红色气泡（2026-11-19）
       return;
     }
     setSent(true);

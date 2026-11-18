@@ -27,6 +27,7 @@ export function SendMessageForm({ to, toName, authorId }: { to?: number; toName?
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error ?? "发送失败");
+      toast(data.error ?? "发送失败", "error"); // 频控等限制触发时红色气泡（2026-11-19）
       return;
     }
     setOk("已发送");
