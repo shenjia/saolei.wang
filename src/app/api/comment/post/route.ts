@@ -9,7 +9,6 @@ import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/s
 import { runContentReview } from "@/lib/content-review";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 import { checkCommentLevel } from "@/lib/ugc-limit";
-import { blocklistReject } from "@/lib/follow";
 
 export async function POST(req: Request) {
   if (await isMaintenanceOn()) return maintenanceReject() as unknown as NextResponse;
@@ -43,14 +42,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: sensitiveRejectMessage(hit) }, { status: 400 });
   }
 
-  const video = await prisma.video.findUnique({ where: { id: BigInt(videoId) }, select: { id: true, level: true, user: true } });
+  const video = await prisma.video.findUnique({ where: { id: BigInt(videoId) }, select: { id: true, level: true } });
   if (!video) {
     return NextResponse.json({ error: "录像不存在" }, { status: 404 });
-  }
-  // 黑名单闸（2026-11-18 张老师需求 5）：名单内用户不能评论我的录像（管理员豁免）
-  if (session.role < 10 && Number(video.user) !== session.uid) {
-    const blk = await blocklistReject(Number(video.user), session.uid);
-    if (blk) return NextResponse.json({ error: blk }, { status: 403 });
   }
   // 评论级别限制（2026-11-09 张老师要求）：上传过该级别录像才能评论该级别录像，管理员/信任用户豁免
   const levelErr = await checkCommentLevel(session.uid, session.role, video.level);

@@ -29,7 +29,6 @@ export function VideoFeed({
   initialTotal,
   title,
   titleClassName,
-  viewerId,
 }: {
   initial: VideoListItem[];
   pageSize: number;
@@ -40,8 +39,6 @@ export function VideoFeed({
   title?: ReactNode;
   /** 标题附加类名（首页「录像」版块传 gray 走灰色次级标题，2026-09-24 张老师要求） */
   titleClassName?: string;
-  /** 观看者 id（2026-11-18 关注系统）：>0 时 tabs 追加「关注」（全量不去重） */
-  viewerId?: number;
 }) {
   const [items, setItems] = useState(initial);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -70,11 +67,11 @@ export function VideoFeed({
   }, []);
 
   /** 页码模式请求：?feedPage=N&base=pageSize（id 倒序按页取）；nf=1 只取 NF 录像；
-   *  stage=阶段筛选 key（2026-10-29，「全部」不传）；lv="fol" 走关注流（follow=1，不去重） */
+   *  stage=阶段筛选 key（2026-10-29，「全部」不传） */
   async function fetchByPage(lv: string, page: number, size?: number, nfOn = false) {
     const url =
       `/api/video/more?feedPage=${page}&base=${pageSize}&size=${size ?? pageSize}` +
-      (lv === "fol" ? "&follow=1" : lv ? `&stage=${lv}` : "") +
+      (lv ? `&stage=${lv}` : "") +
       (nfOn ? "&nf=1" : "");
     const res = await fetch(url);
     return (await res.json()) as {
@@ -207,19 +204,16 @@ export function VideoFeed({
     }
   }
 
-  // 观看者切换称号体系后，当前选中阶段可能不在新 tabs 里（如「将帅」→人神界），回「全部」；
-  // 「关注」tab（fol）不受体系切换影响，保留
+  // 观看者切换称号体系后，当前选中阶段可能不在新 tabs 里（如「将帅」→人神界），回「全部」
   useEffect(() => {
-    if (level && level !== "fol" && !STAGE_KEYS.includes(level as FeedStage)) {
+    if (level && !STAGE_KEYS.includes(level as FeedStage)) {
       switchFeed("", nf);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [system]);
 
   const stageTabs = system === "c" ? STAGE_TABS_C : STAGE_TABS_M;
-  const tabDefs =
-    (viewerId ?? 0) > 0 ? [...stageTabs, { key: "fol", label: "关注" }] : stageTabs;
-  const tabs = tabDefs.map((t) =>
+  const tabs = stageTabs.map((t) =>
     t.key === level ? (
       <span key={t.key || "all"} className="current">
         {t.label}

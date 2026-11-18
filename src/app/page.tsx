@@ -195,7 +195,6 @@ export default async function HomePage() {
             pageSize={HOME_NEWS_NUMBER}
             initialHasMore={news.length === HOME_NEWS_NUMBER}
             initialTotal={newsTotal}
-            viewerId={session?.uid ?? 0}
           />
         </div>
         <div id="video" className="box">
@@ -207,7 +206,6 @@ export default async function HomePage() {
             pageSize={HOME_VIDEO_NUMBER}
             initialHasMore={videos.length === HOME_VIDEO_NUMBER}
             initialTotal={videoTotal}
-            viewerId={session?.uid ?? 0}
           />
         </div>
       </li>

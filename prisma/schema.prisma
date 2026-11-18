@@ -62,17 +62,6 @@ model User {
   // 感言被管理员删除次数（原 star 行口径移到用户维度）：≥2 = 永久不能再写（删两次封嘴）
   starSpeechDel Int    @default(0) @map("star_speech_del") @db.Int
 
-  // ---- 关注系统隐私区（2026-11-18 张老师需求，默认全公开/提醒）----
-  // false=公开显示我的关注列表；true=他人看 /user/{id}/following 显示隐藏
-  followListHidden    Boolean @default(false) @map("follow_list_hidden")
-  // false=公开显示我的粉丝列表；true=他人看 /user/{id}/followers 显示隐藏
-  followerListHidden  Boolean @default(false) @map("follower_list_hidden")
-  // false=有新粉丝时发系统消息提醒（合并窗口见 lib/follow.ts sendFollowNotice）；true=不提醒
-  followNotifyDisabled Boolean @default(false) @map("follow_notify_disabled")
-  // 黑名单：每行一个用户 id（VarChar 4000 ≈ 700+ 个 5 位 id，足够）。
-  // 名单内用户不能给我发消息/评论我的录像/回复我的文章/关注我
-  followBlocklist     String  @default("") @map("follow_blocklist") @db.VarChar(4000)
-
   // 2026-10-15 上线前性能审计新增：
   // (area, status) 服务地区榜/地区内页取人口（原 (area,sex) 不覆盖）；
   // (status) 服务首页注册人数 count（ACTIVE_USER 口径）
@@ -797,19 +786,6 @@ model Message {
 
   @@index([toUser, isRead])
   @@map("message")
-}
-
-// 关注关系（2026-11-18 张老师需求）：follower 关注 followee；(follower, followee)
-// 唯一键幂等防重；双向索引支撑「我的关注」「我的粉丝」列表页与黑名单/动态流过滤
-model UserFollow {
-  id         BigInt  @id @default(autoincrement()) @db.BigInt
-  follower   BigInt  @map("follower") @db.BigInt
-  followee   BigInt  @map("followee") @db.BigInt
-  createTime BigInt  @default(0) @map("create_time") @db.BigInt
-
-  @@unique([follower, followee])
-  @@index([followee, createTime])
-  @@map("user_follow")
 }
 
 // 论坛主题（移植 2008 版 BBS Title 表；板块：0 公告 1 技术 2 杂谈 3 问答）

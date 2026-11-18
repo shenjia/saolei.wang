@@ -29,52 +29,39 @@ import ClickTracker from "./ClickTracker";
 import { SendMessageButton } from "./SendMessageButton";
 import { areaDisplay, AREA_OVERSEAS, LEVELS, LEVEL_NAMES } from "@/lib/config";
 import { formatDate } from "@/lib/format";
-// 关注系统（2026-11-18）：头像 hover 关注按钮 + 初始态
-import { AvatarFollowBtn } from "./AvatarFollowBtn";
-import { isFollowing } from "@/lib/follow";
 
 export function UserCard({
   card,
   viewerId = 0,
-  viewerFollowing = false,
 }: {
   card: UserCardData;
   /** 当前登录用户 id（0=未登录）：登录且非本人时，「最近登录」行右端渲染发消息按钮 */
   viewerId?: number;
-  /** 观看者是否已关注该用户（2026-11-18：hover 关注按钮初始态；仅 viewerId>0 且非本人时有意义） */
-  viewerFollowing?: boolean;
 }) {
-  const own = viewerId === card.id;
   return (
     <div className="user_card">
       <div className="ucd_top">
         <div className="ucd_left">
-          <span className="fol_wrap ucd_fol_wrap">
-            <Link
-              className="avatar_link"
-              href={`/user/${card.id}`}
-              target="_blank"
-              prefetch={false}
-              title={`进入 ${card.chineseName} 的地盘`}
-            >
-              {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档），旧版称号仍 no.jpg（2026-11-11）；
-                  有头像走 mid 档 WebP，缺档 onError 回退原图（2026-11-13 35193 破图教训） */}
-              {card.avatarIsDefault ? (
-                <DefaultAvatar sex={card.sex} size="mid" className="ucd_avatar" alt={card.chineseName} />
-              ) : (
-                <AvatarImg
-                  src={card.avatarUrl}
-                  fallback={card.avatarOrigUrl}
-                  className="ucd_avatar"
-                  alt={card.chineseName}
-                />
-              )}
-            </Link>
-            {/* 关注按钮（2026-11-18 需求 1）：hover 头像浮现正下边缘；看自己不渲染 */}
-            {!own && (
-              <AvatarFollowBtn uid={card.id} sex={card.sex} loggedIn={viewerId > 0} following={viewerFollowing} />
+          <Link
+            className="avatar_link"
+            href={`/user/${card.id}`}
+            target="_blank"
+            prefetch={false}
+            title={`进入 ${card.chineseName} 的地盘`}
+          >
+            {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档），旧版称号仍 no.jpg（2026-11-11）；
+                有头像走 mid 档 WebP，缺档 onError 回退原图（2026-11-13 35193 破图教训） */}
+            {card.avatarIsDefault ? (
+              <DefaultAvatar sex={card.sex} size="mid" className="ucd_avatar" alt={card.chineseName} />
+            ) : (
+              <AvatarImg
+                src={card.avatarUrl}
+                fallback={card.avatarOrigUrl}
+                className="ucd_avatar"
+                alt={card.chineseName}
+              />
             )}
-          </span>
+          </Link>
         </div>
         <div className="ucd_right">
           {/* 姓名 + 性别 + 军衔：与首页「入伍新兵 / 国内TOP10」同一套组件，显示方式天然一致
@@ -196,14 +183,11 @@ export async function UserPanel({
   const radar = card.hasVideos && !hideRadar ? await getRadarData(card.scores) : [];
   // 发消息按钮（2026-10-25）：登录且非本人时渲染（本人卡片不渲染，与用户主页同口径）
   const session = await getSession();
-  // 观看者已关注态（2026-11-18）：hover 关注按钮初始态（唯一索引点查，仅登录非本人）
-  const viewerFollowing =
-    session && session.uid !== card.id ? await isFollowing(session.uid, card.id) : false;
   return (
     <>
       <ClickTracker userId={userId} source="card" />
       <div id={cardId} className="box">
-        <UserCard card={card} viewerId={session?.uid ?? 0} viewerFollowing={viewerFollowing} />
+        <UserCard card={card} viewerId={session?.uid ?? 0} />
       </div>
       {card.hasVideos && !hideRadar && (
         <div className="radar box">

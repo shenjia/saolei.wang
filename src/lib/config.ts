@@ -64,8 +64,6 @@ export function parseBvRankingBy(v?: string): BvRankingBy {
 }
 
 export const VIDEO_PAGESIZE = 20;
-/** 关注/粉丝列表每页条数（2026-11-18 关注系统） */
-export const FOLLOW_LIST_PAGESIZE = 20;
 export const HOME_TOP_NUMBER = 10;
 export const HOME_NEWBIE_NUMBER = 5;
 // 首页「新闻」初始条数（2026-09-24 张老师要求：30 → 20 → 15，标题由「雷界快讯」改「动态」；
@@ -500,8 +498,6 @@ export const NEWS_TYPE = {
   PROMOTION: 53, // 晋升军衔（2026-10-17 张老师要求整体下线：存量已删、回填脚本退役；
                  // 常量保留仅为类型编号存档，勿再写入/渲染）
   STAR: 54, // 当选每日一星（2026-10-25 恢复：评选落库时发金色动态）
-  FOLLOW: 55, // 关注了XX（2026-11-18 张老师需求：仅「关注的人的动态」筛选可见，首页不进）
-  UNFOLLOW: 56, // 取关了XX（同上）
 } as const;
 
 /** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻）
@@ -529,15 +525,8 @@ export const NEWS_RECORD_FIRST_MARKS: string[] = ['"or":0', '"or":"0"'];
 
 /** 用户主页「动态」排除的类型（2026-10-17：与首页同口径撤掉上传录像；
  *  晋升动态存量已删，无需列入——此数组仅排除「仍会写入但不展示」的类型）。
- *  管理后台不受此口径影响。
- *  2026-11-18 关注系统：关注/取关动态（55/56）个人主页也不显示（只在「关注的人
- *  的动态」聚合筛选里出现，与上传录像同类定位——流水账不值得占个人主页） */
-export const NEWS_FEED_EXCLUDED: number[] = [
-  NEWS_TYPE.VIDEO,
-  NEWS_TYPE.PROMOTION,
-  NEWS_TYPE.FOLLOW,
-  NEWS_TYPE.UNFOLLOW,
-];
+ *  管理后台不受此口径影响 */
+export const NEWS_FEED_EXCLUDED: number[] = [NEWS_TYPE.VIDEO, NEWS_TYPE.PROMOTION];
 
 // ---------- 地区 ----------
 

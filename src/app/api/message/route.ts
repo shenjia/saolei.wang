@@ -15,7 +15,6 @@ import {
   MESSAGE_PAGESIZE,
 } from "@/lib/message";
 import { ugcRestricted, checkDmAudience } from "@/lib/ugc-limit";
-import { blocklistReject } from "@/lib/follow";
 import { prisma } from "@/lib/db";
 import { checkSensitive, logSensitiveHit, sensitiveRejectMessage } from "@/lib/sensitive";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
@@ -72,11 +71,6 @@ export async function POST(req: NextRequest) {
     }
     const target = await prisma.userAuth.findUnique({ where: { id: BigInt(to) }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "收件人不存在" }, { status: 404 });
-    // 黑名单闸（2026-11-18 张老师需求 5）：名单内用户不能给我发消息（管理员豁免）
-    if (session.role < 10) {
-      const blk = await blocklistReject(to, session.uid);
-      if (blk) return NextResponse.json({ error: blk }, { status: 403 });
-    }
     // 未上榜限制（2026-11-09 张老师要求）：只能发管理员或回复对方先发来的消息（管理员豁免）
     if (session.role < 10 && (await ugcRestricted(session.uid, session.role))) {
       const audienceErr = await checkDmAudience(session.uid, to);
