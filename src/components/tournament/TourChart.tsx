@@ -115,11 +115,16 @@ export function TourChart({ points }: { points: CompChartPoint[] }) {
         >
           <div className="row">
             <span>排名</span>
-            <b>第 {hp.rank} 位</b>
+            {/* 2026-11-19 凌晨张老师定：只有名次数字元帅金，「第/位」亮灰小字（rec_tip b 16px 过大） */}
+            <b className="comp_tip_val">
+              <span className="comp_tip_unit">第 </span>
+              <span className="comp_tip_num">{hp.rank}</span>
+              <span className="comp_tip_unit"> 位</span>
+            </b>
           </div>
           <div className="row">
             <span>成绩</span>
-            <b>{hp.score.toFixed(3)}</b>
+            <b className="comp_tip_val">{hp.score.toFixed(3)}</b>
           </div>
           <div className="row">
             <span>创造者</span>

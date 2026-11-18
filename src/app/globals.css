@@ -17429,6 +17429,15 @@ body #header .nav li a.vs_new_hint,
 .comp_chart:has(.comp_chart_body) { display: block; }
 .comp_chart_body { width: 100%; }
 .comp_chart_body .rec_chart { cursor: default; }
+/* 气泡值行字号配色（2026-11-19 凌晨张老师定：rec_tip b 全金 16px 过大——
+   值行整体 14px 亮灰，仅名次数字元帅金，「第/位」亮灰） */
+.comp_chart_body .rec_tip b.comp_tip_val {
+  color: #b1b1a4;
+  font-size: 14px;
+  line-height: 20px;
+}
+.comp_chart_body .rec_tip b.comp_tip_val .comp_tip_num { color: #e6db74; }
+.comp_chart_body .rec_tip b.comp_tip_val .comp_tip_unit { color: #b1b1a4; font-weight: 400; }
 .comp_chart_empty { color: #75715e; font-size: 14px; padding: 8px; }
 .comp_chart_svg { display: block; }
 
