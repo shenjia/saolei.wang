@@ -134,7 +134,7 @@ export interface VsData {
   /** BV 总分（三级别合计） */
   bv1: number;
   bv2: number;
-  /** 战前预估评价：中+高级 STNB 与录像积累量各半综合（2026-11-12 改口径），
+  /** 战前预估评价：STNB 硬指标 0.8 + BV 收集数 0.2 综合（2026-11-19 改口径），
    *  绝不碰 PK 记录/BV 得分（张老师 2026-11-10：不要剧透结果） */
   preComment: string;
   /** 战前评价色调（2026-11-10）：占优=adv 绿 / 不利=dis 玫瑰红 / 势均力敌=even 金 */
@@ -146,13 +146,14 @@ export interface VsData {
 /** 战前评价色调：adv=占优（绿）/ dis=不利（玫瑰红）/ even=势均力敌（金） */
 export type PreTone = "adv" | "dis" | "even";
 
-/** 战前预估（2026-11-12 张老师改口径）：**STNB 峰值 + 录像积累量各半综合**。
- *  背景：STNB 只量「天花板」，与赛后比分的口径（收集格广度 + 纪录家底，高级
- *  权重 10 放大）严重脱节——实证 17068 vs 31660：STNB 相对差仅 3.2%（判
- *  势均力敌），实际比分比例 0.577（差距明显档）。录像积累量（user_stat 三级
- *  录像数合计，status<>0 口径）是「家底」的现成代理：练得多 → 收集格更全、
- *  最快成绩更快，与比分高度相关。
- *  综合指数 = 0.5×STNB 份额 + 0.5×录像量份额（各按双方最大值归一到 0~1）；
+/** 战前预估（2026-11-19 张老师定稿口径）：**STNB 硬指标 0.8 + BV 收集数 0.2 综合**。
+ *  背景（两轮返工判例）：v1 纯 STNB 一刀切——17068 vs 31660 STNB 相对差仅 3.2%
+ *  （判势均力敌）实际比分比例 0.577（差距明显档）；v2 加「录像积累量」0.5——
+ *  孙明诺 vs 张神镓反向翻车：895 盘 vs 649 盘（练得多但天花板低）把 33% 的 STNB
+ *  差距对冲成 3.3%，又判势均力敌——盘数可刷、与实力弱相关，录像量口径废弃。
+ *  BV 收集数（getUser3bvCollection 三级格数合计）是「家底广度」的贴身代理：
+ *  收集格越全 → 记录/BV 得分面越宽，与比分生成机制直接相关且难刷。
+ *  综合指数 = 0.8×STNB 份额 + 0.2×BV 份额（各按双方最大值归一到 0~1）；
  *  某分量双方全 0 时退化为另一分量全权。相对差 = (高-低)/高（与赛后评价同款
  *  分母）：
  *    ≤ 10% →「势均力敌的对抗」(even 金)
@@ -160,19 +161,19 @@ export type PreTone = "adv" | "dis" | "even";
  *    ≤ 30% →「明显优势的对抗」/「明显劣势的对抗」(adv / dis)
  *    > 30% →「毫无悬念的碾压」/「毫无胜算的对抗」(adv / dis)
  *  综合指数与 PK 记录/BV 得分不是一套口径，故不剧透结果。
- *  双方 STNB 与录像量都为 0 时不下判断，给中性档。 */
-export function preMatchAssessment(stnb1: number, stnb2: number, vid1: number, vid2: number): { text: string; tone: PreTone } {
+ *  双方 STNB 与 BV 数都为 0 时不下判断，给中性档。 */
+export function preMatchAssessment(stnb1: number, stnb2: number, bv1: number, bv2: number): { text: string; tone: PreTone } {
   const snMax = Math.max(stnb1, stnb2);
-  const vdMax = Math.max(vid1, vid2);
-  if (snMax <= 0 && vdMax <= 0) return { text: "势均力敌的对抗", tone: "even" };
-  // 份额权重：可用分量各半，退化为单分量时归一到全权
-  const wSn = snMax > 0 ? 0.5 : 0;
-  const wVd = vdMax > 0 ? 0.5 : 0;
-  const wSum = wSn + wVd;
-  const idx = (sn: number, vd: number) =>
-    (wSn * (snMax > 0 ? sn / snMax : 0) + wVd * (vdMax > 0 ? vd / vdMax : 0)) / wSum;
-  const i1 = idx(stnb1, vid1);
-  const i2 = idx(stnb2, vid2);
+  const bvMax = Math.max(bv1, bv2);
+  if (snMax <= 0 && bvMax <= 0) return { text: "势均力敌的对抗", tone: "even" };
+  // 份额权重：可用分量各按 0.8/0.2，退化为单分量时归一到全权
+  const wSn = snMax > 0 ? 0.8 : 0;
+  const wBv = bvMax > 0 ? 0.2 : 0;
+  const wSum = wSn + wBv;
+  const idx = (sn: number, bv: number) =>
+    (wSn * (snMax > 0 ? sn / snMax : 0) + wBv * (bvMax > 0 ? bv / bvMax : 0)) / wSum;
+  const i1 = idx(stnb1, bv1);
+  const i2 = idx(stnb2, bv2);
   const hi = Math.max(i1, i2);
   const lo = Math.min(i1, i2);
   if (hi <= 0) return { text: "势均力敌的对抗", tone: "even" };
@@ -216,24 +217,21 @@ export function postMatchComment(t1: number, t2: number): string {
 
 /** 战前预估独立计算（十轮 14:38 张老师：竞技场匹配成功后要**立刻**显示预测评价
  *  → /api/vs/pre 供竞技场在双方就位时即时调用；对决页 getVsData 复用同一口径）。
- *  与 getVsData 内联版完全同源：STNB（去初级，中+高之和）+ 录像积累量各半综合。
- *  getStnbProfiles 走 60s 缓存，重复调用代价可忽略。 */
+ *  与 getVsData 内联版完全同源：STNB（去初级，中+高之和）0.8 + BV 收集数 0.2。
+ *  BV 数走 getUser3bvCollection（收集墙口径，与页面 BV 对抗格完全同源）；
+ *  STNB 走 60s 缓存，重复调用代价可忽略。 */
 export async function getPreAssessment(id1: number, id2: number): Promise<{ text: string; tone: PreTone }> {
-  const [stnbProfiles, vstats] = await Promise.all([
+  const [stnbProfiles, col1, col2] = await Promise.all([
     getStnbProfiles([id1, id2]),
-    prisma.userStat.findMany({
-      where: { id: { in: [BigInt(id1), BigInt(id2)] } },
-      select: { id: true, begVideos: true, intVideos: true, expVideos: true },
-    }),
+    getUser3bvCollection(id1),
+    getUser3bvCollection(id2),
   ]);
   const STNB_ZERO: StnbProfile = { beg: 0, int: 0, exp: 0, total: 0, videos: { beg: 0, int: 0, exp: 0 } };
   const s1 = stnbProfiles.get(id1) ?? STNB_ZERO;
   const s2 = stnbProfiles.get(id2) ?? STNB_ZERO;
-  const vcnt = (uid: number) => {
-    const s = vstats.find((x) => Number(x.id) === uid);
-    return s ? s.begVideos + s.intVideos + s.expVideos : 0;
-  };
-  return preMatchAssessment(s1.int + s1.exp, s2.int + s2.exp, vcnt(id1), vcnt(id2));
+  const bvcnt = (m: Record<VideoLevel, Map<number, BbvCell>>) =>
+    (["beg", "int", "exp"] as const).reduce((sum, lv) => sum + m[lv].size, 0);
+  return preMatchAssessment(s1.int + s1.exp, s2.int + s2.exp, bvcnt(col1), bvcnt(col2));
 }
 
 /** 历史对决（2026-11-11 14:38 张老师需求）：对决页分割线下「历史对决」板块——
@@ -489,8 +487,8 @@ export async function getVsData(id1: number, id2: number): Promise<VsData | null
 
   const bv1 = levels.reduce((s, l) => s + l.total1, 0);
   const bv2 = levels.reduce((s, l) => s + l.total2, 0);
-  // 战前预估（2026-11-12 张老师改口径）：独立函数 getPreAssessment——
-  // STNB（去初级，中+高之和）与录像积累量各半综合，竞技场 /api/vs/pre 同源复用
+  // 战前预估（2026-11-19 张老师定稿口径）：独立函数 getPreAssessment——
+  // STNB（去初级，中+高之和）0.8 + BV 收集数 0.2 综合，竞技场 /api/vs/pre 同源复用
   const pre = await getPreAssessment(id1, id2);
 
   return {
