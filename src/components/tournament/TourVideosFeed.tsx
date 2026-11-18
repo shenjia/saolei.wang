@@ -65,8 +65,10 @@ export function TourVideosFeed({
 
   function gotoPage(p: number) {
     startTransition(() => {
+      // scroll:false（张老师 2026-11-18 晚反馈「翻页时页面跳动」）：保持滚动位置
       router.push(
-        `/tournaments/${compId}?page=${p}${eventsPage > 1 ? `&ep=${eventsPage}` : ""}`
+        `/tournaments/${compId}?page=${p}${eventsPage > 1 ? `&ep=${eventsPage}` : ""}`,
+        { scroll: false }
       );
     });
   }

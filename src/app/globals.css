@@ -17468,11 +17468,16 @@ body #header .nav li a.vs_new_hint,
 
 /* 最新排名（详情页右栏）：名次 / 玩家 / 成绩 */
 .comp_rank { margin: 0; padding: 0; list-style: none; counter-reset: none; }
-.comp_rank_row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 28px; }
+/* 排行榜行（2026-11-18 晚张老师定：小字紧凑，参考首页热门录像 VideoHot）——
+   行 13px、姓名/军衔小号（姓名 #b1b1a4、军衔徽章 title_classic 小号自适应），
+   性别图标走 gender small 档；成绩亮灰贴行尾 */
+.comp_rank_row { display: flex; align-items: baseline; gap: 6px; font-size: 13px; line-height: 26px; }
 .comp_rank_no { width: 20px; text-align: center; color: #939387; font-weight: 700; flex-shrink: 0; }
 .comp_rank_no.top { color: #fdc61a; }
-.comp_rank_name { color: #b1b1a4; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp_rank_name { color: #b1b1a4; font-size: 13px; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comp_rank_name:hover { color: #a6e22e; }
+/* 军衔徽章小号（comp_rank_row 内压过全局 .title 尺寸，向 VideoHot 紧凑行看齐） */
+.comp_rank_row .title { font-size: 12px; line-height: 18px; }
 .comp_rank_time { margin-left: auto; color: #b1b1a4; font-weight: 700; text-decoration: none; flex-shrink: 0; }
 .comp_rank_time:hover { color: #a6e22e; }
 

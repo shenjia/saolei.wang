@@ -22,6 +22,7 @@ import {
   type TourRow,
 } from "@/lib/tournament";
 import { LEVEL_NAMES } from "@/lib/config";
+import { TourChart } from "./TourChart";
 
 export function TourBlock({
   c,
@@ -70,9 +71,13 @@ export function TourBlock({
         </div>
       </div>
 
-      {/* 纪录图表：x=排名（最右为 1）y=成绩；本期成绩采集未接入，无数据占位 */}
+      {/* 纪录图表（2026-11-18 晚张老师问「已结束为什么没数据」）：详情页形态有成绩数据
+          （chartPoints 非空，按比赛设定总分排名前 30 散点）渲染 TourChart 折线；
+          未开始/无成绩保持占位文案 */}
       <div className="comp_chart">
-        {c.status === "upcoming" ? (
+        {c.status !== "upcoming" && c.chartPoints.length > 0 ? (
+          <TourChart points={c.chartPoints} />
+        ) : c.status === "upcoming" ? (
           <span className="comp_chart_empty">尚未开始</span>
         ) : (
           <span className="comp_chart_empty">暂无成绩数据</span>

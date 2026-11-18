@@ -197,6 +197,7 @@ export default async function CompetitionDetailPage({
                         name={r.name}
                         englishName={r.englishName}
                         sex={r.sex}
+                        gender="small"
                         link
                         className="comp_rank_name"
                       />

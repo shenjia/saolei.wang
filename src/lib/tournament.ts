@@ -124,6 +124,8 @@ export interface TourRow {
   creatorSex: number;
   creatorTitle: string; // 军衔制称号
   creatorClassic: { name: string; color: string } | null; // 旧版称号备选
+  /** 纪录图表散点（详情页形态填充：按比赛设定总分排名前 30，score 秒；列表形态为空数组） */
+  chartPoints: { rank: number; score: number; name?: string }[];
 }
 
 export interface TourPage {
@@ -225,6 +227,7 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
       creatorSex: creatorMap.get(c.creatorId.toString())?.sex ?? 1,
       creatorTitle: titleMap.get(c.creatorId.toString())?.m ?? "",
       creatorClassic: titleMap.get(c.creatorId.toString())?.c ?? null,
+      chartPoints: [], // 列表形态不取图表数据（详情页才有）
     };
   });
 
@@ -441,14 +444,10 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
       status: { not: 0 },
       createTime: { gte: comp.startTime, lte: comp.endTime },
     },
-    select: { id: true, user: true },
+    select: { id: true, user: true, level: true },
   });
   if (!rows.length) return [];
-  const levels = await prisma.video.findMany({
-    where: { id: { in: rows.map((r) => r.id) } },
-    select: { id: true, level: true },
-  });
-  const levelMap = new Map(levels.map((l) => [l.id, l.level]));
+  const levelMap = new Map(rows.map((r) => [r.id, r.level]));
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: rows.map((r) => r.id) } },
     select: { id: true, realTime: true, noRecord: true },
@@ -722,6 +721,17 @@ export async function getTournamentDetail(
       .map((s) => s.trim())
       .filter((s): s is Level => (LEVELS as readonly string[]).includes(s)),
   );
+  // 纪录图表数据（2026-11-18 晚张老师问「已结束为什么没数据」）：按比赛设定总分
+  // 排名的散点——复用 getTourRanking 全量口径，取前 30 名（score 秒）；无成绩比赛为空
+  const rankRows =
+    c.startTime <= now
+      ? await getTourRanking(id, 30)
+      : [];
+  const chartPoints = rankRows.map((r) => ({
+    rank: r.rank,
+    score: r.time / 1000,
+    name: r.name,
+  }));
   return {
     id: c.id.toString(),
     name: c.name,
@@ -742,6 +752,7 @@ export async function getTournamentDetail(
     creatorSex: creator?.sex ?? 1,
     creatorTitle: pair?.m ?? "",
     creatorClassic: pair?.c ?? null,
+    chartPoints,
   };
 }
 
