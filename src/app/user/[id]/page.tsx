@@ -626,6 +626,29 @@ export default async function UserViewPage({
                 <StatRow label="累计人气" today={clicks.today}>
                   <em>{clicks.total}</em>
                 </StatRow>
+
+                {/* 粉丝数量 / 关注数量（2026-11-18 需求 4；00:52 张老师定挪到累计人气下面）：
+                    点击进对应列表，按关注时间倒序。仅对方公开列表时给链接（隐私开关
+                    follow_list_hidden / follower_list_hidden）；本人看自己恒可点
+                    （自己看自己的隐藏列表无意义） */}
+                <StatRow label="粉丝数量" today={fc.followersToday}>
+                  {isSelf || !detail.user.followerListHidden ? (
+                    <Link href={`/user/${userId}/followers`} target="_blank" prefetch={false}>
+                      <em>{fc.followers}</em>
+                    </Link>
+                  ) : (
+                    <em>{fc.followers}</em>
+                  )}
+                </StatRow>
+                <StatRow label="关注数量" today={fc.followingToday}>
+                  {isSelf || !detail.user.followListHidden ? (
+                    <Link href={`/user/${userId}/following`} target="_blank" prefetch={false}>
+                      <em>{fc.following}</em>
+                    </Link>
+                  ) : (
+                    <em>{fc.following}</em>
+                  )}
+                </StatRow>
                 <StatRow label="初级录像" today={todayVideos.beg}>
                   <Link href={`/video?author=${userId}&level=beg`} target="_blank" prefetch={false}>
                     <em>{detail.stat.begVideos}</em>
@@ -659,27 +682,6 @@ export default async function UserViewPage({
                 </StatRow>
                 <StatRow label="发表评论" today={activity.commentsToday}>
                   <em>{activity.comments}</em>
-                </StatRow>
-                {/* 粉丝数量 / 关注数量（2026-11-18 张老师需求 4）：点击进对应列表，
-                    按关注时间倒序。仅对方公开列表时给链接（隐私开关 follow_list_hidden /
-                    follower_list_hidden）；本人看自己恒可点（自己看自己的隐藏列表无意义） */}
-                <StatRow label="粉丝数量">
-                  {isSelf || !detail.user.followerListHidden ? (
-                    <Link href={`/user/${userId}/followers`} target="_blank" prefetch={false}>
-                      <em>{fc.followers}</em>
-                    </Link>
-                  ) : (
-                    <em>{fc.followers}</em>
-                  )}
-                </StatRow>
-                <StatRow label="关注数量">
-                  {isSelf || !detail.user.followListHidden ? (
-                    <Link href={`/user/${userId}/following`} target="_blank" prefetch={false}>
-                      <em>{fc.following}</em>
-                    </Link>
-                  ) : (
-                    <em>{fc.following}</em>
-                  )}
                 </StatRow>
                 {/* 2026-11-08 张老师要求：发表评论下新增「活跃指数」——近 7 日活跃值合计
                     （练习 3BV 计点＋录像级别加权＋评论×1＋登录点；发表文章不计——避免灌水），

@@ -110,13 +110,20 @@ export async function followingSet(
   return out;
 }
 
-/** 批量关注/粉丝计数（列表页头部 + 主页统计行用） */
-export async function followCounts(userId: number): Promise<{ following: number; followers: number }> {
-  const [f1, f2] = await Promise.all([
+/** 批量关注/粉丝计数（列表页头部 + 主页统计行用）。
+ *  today（2026-11-19 00:53 张老师）：今日新增（create_time ≥ 当日零点，与全站
+ *  统计行绿括号「今日」口径一致），主页 StatRow today 参数直接可用 */
+export async function followCounts(
+  userId: number
+): Promise<{ following: number; followers: number; followingToday: number; followersToday: number }> {
+  const dayStart = Math.floor(Date.now() / 1000) - ((Math.floor(Date.now() / 1000) + 8 * 3600) % 86400);
+  const [f1, f2, t1, t2] = await Promise.all([
     prisma.userFollow.count({ where: { follower: BigInt(userId) } }),
     prisma.userFollow.count({ where: { followee: BigInt(userId) } }),
+    prisma.userFollow.count({ where: { follower: BigInt(userId), createTime: { gte: BigInt(dayStart) } } }),
+    prisma.userFollow.count({ where: { followee: BigInt(userId), createTime: { gte: BigInt(dayStart) } } }),
   ]);
-  return { following: f1, followers: f2 };
+  return { following: f1, followers: f2, followingToday: t1, followersToday: t2 };
 }
 
 /**
