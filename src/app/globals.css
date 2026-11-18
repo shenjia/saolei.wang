@@ -18166,6 +18166,11 @@ body #header .nav li a.vs_new_hint,
   color: #75715e;
   font-weight: normal;
 }
+/* 人数亮灰加粗（2026-11-19 00:45 张老师：括号内带空格，数字醒目） */
+#follow_list .fol_total .fol_total_num {
+  color: #999;
+  font-weight: bold;
+}
 /* 他人视角隐藏文案页（fol_private）沿用旧类，样式保留 */
 .follow_list_page .fol_private,
 #follow_list .fol_private {

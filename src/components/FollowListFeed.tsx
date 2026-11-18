@@ -153,7 +153,7 @@ export function FollowListFeed({
       <div className="news_head">
         <h1>
           {title}
-          <span className="fol_total">（共{total}人）</span>
+          <span className="fol_total">（ 共<span className="fol_total_num">{total}</span>人 ）</span>
         </h1>
       </div>
       <div ref={tableRef}>
