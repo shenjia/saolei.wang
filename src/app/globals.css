@@ -18120,7 +18120,7 @@ body #header .nav li a.vs_new_hint,
 }
 #follow_list .fol_table td {
   border-bottom: 1px solid #3e3d35;
-  padding: 6px 8px;
+  padding: 3px 8px;
   vertical-align: middle;
 }
 #follow_list .fol_name_cell {
@@ -18131,9 +18131,10 @@ body #header .nav li a.vs_new_hint,
   align-items: center;
   gap: 6px;
 }
+/* 头像对齐排行榜规格（2026-11-19 00:59 张老师：13px，ranking_avatar 同款） */
 #follow_list .fol_avatar {
-  width: 36px;
-  height: 36px;
+  width: 13px;
+  height: 13px;
   display: block;
   border-radius: 2px;
 }
