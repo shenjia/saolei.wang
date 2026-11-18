@@ -401,9 +401,10 @@ export async function getTourEventsPage(
     }[]
   >`
     SELECT te.user_id, te.create_time, te.type, COUNT(*) AS cnt, MIN(te.id) AS min_id,
+           MIN(te.competition_id) AS competition_id,
            (SELECT MIN(vi.real_time)
             FROM video v JOIN video_info vi ON vi.id = v.id
-            WHERE v.competition_id = te.competition_id
+            WHERE v.competition_id = MIN(te.competition_id)
               AND v.status <> 0
               AND v.user = te.user_id
               AND v.create_time = te.create_time) AS score_ms
