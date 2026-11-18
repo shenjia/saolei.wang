@@ -9,11 +9,12 @@
 
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { VideoHead, VideoRowLine } from "@/components/VideoRows";
 import type { VideoListItem } from "@/lib/queries";
+import { replaceWithoutJump } from "@/components/useNoJump";
 
 export function TourVideosFeed({
   compId,
@@ -34,6 +35,7 @@ export function TourVideosFeed({
   pageSize: number;
 }) {
   const router = useRouter();
+  const listRef = useRef<HTMLTableElement>(null);
   const [videos, setVideos] = useState<VideoListItem[]>(initialVideos);
   const [total, setTotal] = useState(initialTotal);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
@@ -53,10 +55,13 @@ export function TourVideosFeed({
       });
       if (res.ok) {
         const data = await res.json();
-        setVideos(data.videos);
-        setTotal(data.total);
-        setTotalPages(data.totalPages);
-        setStep((s) => s + 1);
+        // 视口零跳动（useNoJump 权威方案）
+        replaceWithoutJump(listRef.current, () => {
+          setVideos(data.videos);
+          setTotal(data.total);
+          setTotalPages(data.totalPages);
+          setStep((s) => s + 1);
+        });
       }
     } finally {
       setLoading(false);
@@ -65,18 +70,26 @@ export function TourVideosFeed({
 
   function gotoPage(p: number) {
     startTransition(() => {
-      // scroll:false（张老师 2026-11-18 晚反馈「翻页时页面跳动」）：保持滚动位置
+      // scroll:false + RSC 提交后锚定本板块顶部（同 TourEventsFeed，张老师 2026-11-19 反馈仍跳顶）
       router.push(
         `/tournaments/${compId}?page=${p}${eventsPage > 1 ? `&ep=${eventsPage}` : ""}`,
         { scroll: false }
       );
+      requestAnimationFrame(() => {
+        const el = listRef.current;
+        if (!el) return;
+        const top = el.getBoundingClientRect().top;
+        if (top < 0 || top > window.innerHeight * 0.5) {
+          window.scrollBy({ top: top - 76, behavior: "instant" as ScrollBehavior });
+        }
+      });
     });
   }
 
   return (
     <>
       {videos.length > 0 ? (
-        <table cellPadding={0} cellSpacing={0} className="ranking_table video_table comp_video_table">
+        <table ref={listRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table comp_video_table">
           <VideoHead hideIoe />
           <tbody>
             {videos.map((v) => (

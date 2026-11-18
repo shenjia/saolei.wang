@@ -17435,6 +17435,9 @@ body #header .nav li a.vs_new_hint,
 /* 板块标题行（标题+右上角搜索框，2026-11-18 深夜定：录像区搜索同录像页页头形态） */
 .comp_sec_head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .comp_sec_head h2 { margin: 0; }
+/* 板块标题与主标题同字号（2026-11-19 凌晨张老师定：动态/录像 h2 26px/39px，同 comp_name） */
+.comp_sec_head h2,
+.comp_section h2 { font-size: 26px; line-height: 39px; color: #b1b1a4; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
 .comp_sec_head .video_search { flex-shrink: 0; }
 
 /* 信息行（2026-11-18 晚张老师定）：比赛级别+比赛标识一行在上（space-between 底对齐，
@@ -17474,7 +17477,9 @@ body #header .nav li a.vs_new_hint,
 
 /* 动态行：主体（玩家名 + 动作文）左，相对时间右 */
 .comp_events { margin: 0; padding: 0; list-style: none; }
-.comp_ev_row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; line-height: 28px; border-bottom: 1px dashed #3e3d32; }
+/* 动态行（2026-11-19 凌晨张老师定：正文字号与首页新闻一致——legacy #news .table td
+   14px/30px 口径，弃 13px 小字） */
+.comp_ev_row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; line-height: 30px; border-bottom: 1px dashed #3e3d32; }
 .comp_ev_row:last-child { border-bottom: 0; }
 .comp_ev_main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comp_ev_user { color: #f8f8f2; font-weight: 700; text-decoration: none; margin-right: 4px; }

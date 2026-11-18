@@ -11,7 +11,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { RelTime } from "@/components/RelTime";
@@ -20,6 +20,7 @@ import { TitleBadge } from "@/components/TitleBadge";
 import { DeltaArrow } from "@/components/RankingRows";
 import { compEventText, type TourEventRow } from "@/lib/tournament";
 import { scoreTime } from "@/lib/format";
+import { replaceWithoutJump } from "@/components/useNoJump";
 
 export function TourEventsFeed({
   compId,
@@ -40,6 +41,7 @@ export function TourEventsFeed({
   pageSize: number;
 }) {
   const router = useRouter();
+  const listRef = useRef<HTMLUListElement>(null);
   const [rows, setRows] = useState<TourEventRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
@@ -59,10 +61,13 @@ export function TourEventsFeed({
       });
       if (res.ok) {
         const data = await res.json();
-        setRows(data.rows);
-        setTotal(data.total);
-        setTotalPages(data.totalPages);
-        setStep((s) => s + 1);
+        // 视口零跳动（useNoJump 权威方案）：前缀整批替换会改变列表高度，锚定列表顶
+        replaceWithoutJump(listRef.current, () => {
+          setRows(data.rows);
+          setTotal(data.total);
+          setTotalPages(data.totalPages);
+          setStep((s) => s + 1);
+        });
       }
     } finally {
       setLoading(false);
@@ -71,19 +76,30 @@ export function TourEventsFeed({
 
   function gotoPage(p: number) {
     startTransition(() => {
-      // scroll:false（张老师 2026-11-18 晚反馈「翻页时页面跳动」）：详情页右栏翻页
-      // 不应把视口拽到页顶，保持当前滚动位置只更新板块内容
+      // scroll:false + key 重挂载后视口锚定由 SSR 侧接管（张老师 2026-11-19 反馈仍跳顶）：
+      // router.push 的 scroll:false 只拦「Next 主动滚顶」，软导航 RSC 重渲染把
+      // 两个板块整块替换（client 壳带 key 强制重挂载），内容高度突变仍会视觉跳——
+      // 详情页两个板块在主栏上下排布，换页锚定到本板块顶部是符合直觉的目标态
       router.push(
         `/tournaments/${compId}?page=${videosPage}${p > 1 ? `&ep=${p}` : ""}`,
         { scroll: false }
       );
+      // RSC 提交后把本板块顶部滚进视口（instant 无动画；若板块已在视口内则几乎无位移）
+      requestAnimationFrame(() => {
+        const el = listRef.current;
+        if (!el) return;
+        const top = el.getBoundingClientRect().top;
+        if (top < 0 || top > window.innerHeight * 0.5) {
+          window.scrollBy({ top: top - 76, behavior: "instant" as ScrollBehavior });
+        }
+      });
     });
   }
 
   return (
     <>
       {rows.length > 0 ? (
-        <ul className="comp_events">
+        <ul className="comp_events" ref={listRef}>
           {rows.map((e) => (
             <li key={e.id} className="comp_ev_row">
               <span className="comp_ev_main">
@@ -115,10 +131,9 @@ export function TourEventsFeed({
                   {e.type === 4 && (
                     <>
                       {e.count > 1 && <span className="comp_ev_count">×{e.count}</span>}
+                      {/* 成绩不可点（张老师 2026-11-19 反馈）：纯文本亮灰加粗 */}
                       {e.totalMs !== null && (
-                        <Link href={e.userId ? `/user/${e.userId}` : "#"} className="score comp_ev_total">
-                          {scoreTime(e.totalMs)}
-                        </Link>
+                        <b className="comp_ev_total">{scoreTime(e.totalMs)}</b>
                       )}
                       {e.prevTotalMs !== null && e.totalMs !== null && e.totalMs < e.prevTotalMs && (
                         <span className="delta">
