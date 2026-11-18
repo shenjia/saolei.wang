@@ -1101,14 +1101,14 @@ export async function fillVideos(ids: number[]): Promise<AdminVideoRow[]> {
       acctPressVideos: null,
       trajStats: null,
       filepath: info?.filepath ?? "",
-      compId: v.tournamentId == null ? null : N(v.tournamentId),
+      compId: v.competitionId == null ? null : N(v.competitionId),
       compName: null,
     });
   }
   // 所属比赛名批量补齐（2026-11-13 二期：挂接列展示；每页 ≤25 行，比赛总量小）
   const compIds = [...new Set(out.map((r) => r.compId).filter((x): x is number => x !== null))];
   if (compIds.length) {
-    const comps = await prisma.tournament.findMany({
+    const comps = await prisma.competition.findMany({
       where: { id: { in: compIds.map(BigInt) } },
       select: { id: true, name: true },
     });

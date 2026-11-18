@@ -25,8 +25,8 @@ const getSignupPlayers = unstable_cache(
 );
 
 export interface OnlineCompParam {
-  /** 进行中比赛（?c= 合法时）；code=比赛标识，2026-11-18 起可空（未设置=不附加标识） */
-  comp: { id: number; shortName: string; code: string | null } | null;
+  /** 进行中比赛（?c= 合法时） */
+  comp: { id: number; shortName: string; code: string } | null;
   /** ?c= 指向的比赛无效（不存在/未开始/已结束）时的人话提示 */
   compError: string | null;
 }
@@ -38,7 +38,7 @@ async function resolveCompParam(raw: string | undefined): Promise<OnlineCompPara
     // 带了 c 但不是合法数字 → 按不存在处理；不带 c → 普通练习
     return raw ? { comp: null, compError: "比赛不存在" } : { comp: null, compError: null };
   }
-  const c = await prisma.tournament.findUnique({
+  const c = await prisma.competition.findUnique({
     where: { id: BigInt(cid) },
     select: { id: true, shortName: true, code: true, startTime: true, endTime: true },
   });

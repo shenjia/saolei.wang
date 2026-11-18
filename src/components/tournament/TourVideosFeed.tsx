@@ -1,9 +1,9 @@
 // 比赛详情页「录像」板块客户端壳（2026-11-13 五轮 20:31 张老师定：
 // 标准翻页组件 = 首页同款 PageSlider「···加载更多 + 滑轨滚动翻页」，非页码式 Pager）。
 //
-// 语义（与 TourListFeed / 首页 VideoFeed 同口径）：
+// 语义（与 CompListFeed / 首页 VideoFeed 同口径）：
 // · 滑轨/◀▶ 换页 → router.push(?page=N&ep=动态页码)，URL 即状态、RSC 重渲染；
-// · 「···加载更多」→ GET /api/tournament/[id]/videos?page=1&size=前缀长度
+// · 「···加载更多」→ GET /api/competition/[id]/videos?page=1&size=前缀长度
 //   （录像时间正序、新录像追加尾部，前缀锚定无重复无跳行）；hasMore 按「已加载 < total」判；
 // · 行渲染复用 VideoRows（与首页录像流同源）；首屏数据由服务端 RSC 传入。
 
@@ -15,7 +15,7 @@ import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { VideoHead, VideoRowLine } from "@/components/VideoRows";
 import type { VideoListItem } from "@/lib/queries";
 
-export function TourVideosFeed({
+export function CompVideosFeed({
   compId,
   initialVideos,
   initialPage,
@@ -48,7 +48,7 @@ export function TourVideosFeed({
     setLoading(true);
     try {
       const size = videos.length + nextBatchSize(step, pageSize);
-      const res = await fetch(`/api/tournament/${compId}/videos?page=1&size=${size}`, {
+      const res = await fetch(`/api/competition/${compId}/videos?page=1&size=${size}`, {
         cache: "no-store",
       });
       if (res.ok) {
@@ -66,7 +66,7 @@ export function TourVideosFeed({
   function gotoPage(p: number) {
     startTransition(() => {
       router.push(
-        `/tournaments/${compId}?page=${p}${eventsPage > 1 ? `&ep=${eventsPage}` : ""}`
+        `/competitions/${compId}?page=${p}${eventsPage > 1 ? `&ep=${eventsPage}` : ""}`
       );
     });
   }

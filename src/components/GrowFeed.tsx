@@ -205,25 +205,8 @@ export function GrowFeed({
       let cur = winStart + Math.ceil(rows.length / pageSize) - 1; // 已加载末页
       let win = winStart;
       let first = rows;
-      // 目标页在已加载窗口之前（2026-11-15 修复）：原实现 page <= cur 直接 scrollToRow，
-      // 但行在窗口上方不在 DOM 里 → 静默失败。先试缓存整表替换回跳；缓存没有走
-      // whereami 302 整页导航（page+hl 落地）。
       if (page <= cur) {
-        const cached = pageCache.current.get(page);
-        if (cached) {
-          const anchor = captureViewportAnchor(tableRef.current);
-          flushSync(() => {
-            setRows(cached);
-            setWinStart(page);
-            setNextPage(page + 1);
-            setCurPage(page);
-          });
-          restoreViewportAnchor(tableRef.current, anchor);
-          if (!scrollToRow(uid)) toast("未找到该玩家的位置，请稍后重试");
-          return;
-        }
-        navigated = true;
-        jumpToWhereami(uid);
+        scrollToRow(uid);
         return;
       }
       while (cur < page) {

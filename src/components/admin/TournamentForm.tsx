@@ -1,21 +1,19 @@
 "use client";
 
 // 比赛发起/编辑表单（2026-11-13 后台「比赛管理」页）
-// 字段：比赛全名 / 简称（3-4字）/ 比赛标识（默认留空，可手填或点「随机生成」5位码）/
-//       起止时间（datetime-local，北京时间）/ 比赛规则 /
+// 字段：比赛全名 / 简称（3-4字）/ 起止时间（datetime-local，北京时间）/ 比赛规则 /
 //       发起人 ID / 总奖金（元）/ 分配方案（每行一名次，如「第一名 ¥600」）。
-// 提交走统一 /api/admin/action（tournament.add / tournament.edit）。
+// 提交走统一 /api/admin/action（competition.add / competition.edit）。
 // 编辑模式：清单行「编辑」按钮派发 sl-comp-edit 事件回填，可取消。
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toast";
 
-export interface TourFormRow {
+export interface CompFormRow {
   id: number;
   name: string;
   shortName: string;
-  code: string; // 比赛标识（""=未设置）
   startTime: string; // "YYYY-MM-DD HH:mm"
   endTime: string;
   rules: string;
@@ -34,7 +32,7 @@ function cstInput(sec: number): string {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 
-const EMPTY = { name: "", shortName: "", code: "", startTime: "", endTime: "", rules: "", creatorId: "", prizeTotal: "", prizePlan: "" };
+const EMPTY = { name: "", shortName: "", startTime: "", endTime: "", rules: "", creatorId: "", prizeTotal: "", prizePlan: "" };
 
 /** 新建默认起止时间（张老师 2026-11-13：当天北京 20:00 起，7 日后 20:00 止） */
 function defaultTimeInput(offsetDays: number): string {
@@ -46,7 +44,7 @@ const newDefaults = () => ({ startTime: defaultTimeInput(0), endTime: defaultTim
 const ALL_LEVELS = ["beg", "int", "exp"] as const;
 const LEVEL_LABELS: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 
-export function TournamentForm() {
+export function CompetitionForm() {
   const router = useRouter();
   const [values, setValues] = useState({ ...EMPTY });
   // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
@@ -56,9 +54,7 @@ export function TournamentForm() {
   const [topn, setTopn] = useState({ beg: "1", int: "1", exp: "1" });
   const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
-  // 随机生成标识中（防连点）
-  const [genning, setGenning] = useState(false);
-  const [editing, setEditing] = useState<TourFormRow | null>(null);
+  const [editing, setEditing] = useState<CompFormRow | null>(null);
 
   const set = (k: keyof typeof EMPTY, v: string) => setValues((s) => ({ ...s, [k]: v }));
   const toggleLevel = (lv: string) =>
@@ -70,13 +66,12 @@ export function TournamentForm() {
   // 监听清单行「编辑」：回填记录
   useEffect(() => {
     const onEdit = (e: Event) => {
-      const d = (e as CustomEvent).detail as TourFormRow & { startSec: number; endSec: number };
+      const d = (e as CustomEvent).detail as CompFormRow & { startSec: number; endSec: number };
       if (!d || typeof d.id !== "number") return;
       setEditing(d);
       setValues({
         name: d.name,
         shortName: d.shortName,
-        code: d.code ?? "",
         startTime: cstInput(d.startSec),
         endTime: cstInput(d.endSec),
         rules: d.rules,
@@ -113,41 +108,15 @@ export function TournamentForm() {
     setTarget("");
   };
 
-  // 随机生成 5 位标识（2026-11-18 张老师需求）：服务端查重重抽，重了再抽概率极小；
-  // 返回的即「库内当前无碰撞」的可用码
-  const genCode = async () => {
-    if (genning) return;
-    setGenning(true);
-    try {
-      const res = await fetch("/api/admin/action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "tournament.genCode" }),
-      });
-      const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
-      if (data.ok && data.message) {
-        set("code", data.message);
-      } else {
-        toast(data.error ?? "生成失败，请重试", "error");
-      }
-    } catch {
-      toast("网络错误，请重试", "error");
-    } finally {
-      setGenning(false);
-    }
-  };
-
   const submit = async () => {
     if (!values.name.trim()) return toast("请填写比赛全名", "error");
     if (!values.shortName.trim()) return toast("请填写比赛简称（3-4 字）", "error");
-    const code = values.code.trim();
-    if (code && !/^[0-9A-Za-z]{1,10}$/.test(code)) return toast("比赛标识应为 1-10 位数字或大小写字母", "error");
     if (!values.startTime || !values.endTime) return toast("请填写起止时间", "error");
     if (values.endTime <= values.startTime) return toast("结束时间必须晚于开始时间", "error");
     if (!values.rules.trim()) return toast("请填写比赛规则", "error");
     if (!/^\d+$/.test(values.creatorId.trim())) return toast("请填写发起人 ID（纯数字 UID）", "error");
     if (!/^\d+$/.test(values.prizeTotal.trim())) return toast("总奖金应为非负整数（元）", "error");
-    if (levels.length === 0) return toast("请至少勾选一个比赛级别", "error");
+    if (levels.length === 0) return toast("请至少勾选一个收录录像级别", "error");
     // 成绩计算方式参数校验（null=配置非法，""=未配置）
     let scoreConfig = "";
     if (scoreMode === "sum_topn") {
@@ -175,11 +144,10 @@ export function TournamentForm() {
         body: JSON.stringify(
           editing
             ? {
-                op: "tournament.edit",
+                op: "competition.edit",
                 id: editing.id,
                 name: values.name,
                 shortName: values.shortName,
-                code,
                 startTime: values.startTime.replace("T", " "),
                 endTime: values.endTime.replace("T", " "),
                 rules: values.rules,
@@ -191,10 +159,9 @@ export function TournamentForm() {
                 scoreConfig,
               }
             : {
-                op: "tournament.add",
+                op: "competition.add",
                 name: values.name,
                 shortName: values.shortName,
-                code,
                 startTime: values.startTime.replace("T", " "),
                 endTime: values.endTime.replace("T", " "),
                 rules: values.rules,
@@ -274,34 +241,6 @@ export function TournamentForm() {
         </label>
       </div>
 
-      {/* 比赛标识（2026-11-18 张老师需求）：默认留空=不设置（前台不展示标识行）；
-          可手填（1-10 位数字/大小写字母）或点「随机生成」出 5 位码（服务端查重重抽）。
-          编辑模式回填当前标识，改了才更新、不动原值 */}
-      <div style={{ ...twoCol, alignItems: "end" }}>
-        <label style={labelStyle}>
-          比赛标识（可留空）
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              className="admin_input"
-              maxLength={10}
-              placeholder="留空则不设置"
-              value={values.code}
-              onChange={(e) => set("code", e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <button
-              type="button"
-              className="admin_btn sm"
-              onClick={() => void genCode()}
-              disabled={genning}
-              title="随机生成 5 位数字+大小写字母标识（自动避开已占用的）"
-            >
-              {genning ? "生成中…" : "随机生成"}
-            </button>
-          </div>
-        </label>
-      </div>
-
       <div style={twoCol}>
         <label style={labelStyle}>
           开始时间（北京时间）
@@ -339,7 +278,7 @@ export function TournamentForm() {
       {/* 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）——
           决定本比赛收录哪些级别的录像，前台列表页/详情页信息行展示 */}
       <div style={labelStyle}>
-        比赛级别（可多选，决定本比赛收录哪些级别的录像）
+        收录录像级别（可多选，决定本比赛收录哪些级别的录像）
         <div style={{ display: "flex", gap: 16 }}>
           {ALL_LEVELS.map((lv) => (
             <label
@@ -428,7 +367,7 @@ export function TournamentForm() {
           {busy ? "提交中…" : editing ? "保存修改" : "发起比赛"}
         </button>
         <span className="admin_hint" style={{ marginLeft: 10 }}>
-          比赛标识默认留空；设置后前台录像页按标识匹配显示比赛简称与链接
+          比赛标识创建时自动生成，前台开始前显示「待定」
         </span>
       </div>
     </form>

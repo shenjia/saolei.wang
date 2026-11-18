@@ -1,9 +1,9 @@
-// 比赛动态分页 API（GET /api/tournament/[id]/events?page=1&size=20）
+// 比赛动态分页 API（GET /api/competition/[id]/events?page=1&size=20）
 // 2026-11-13 五轮：详情页动态板块换 PageSlider，client 壳「加载更多」走本接口
-// （前缀整批替换语义：page=1&size=N 取最新 N 条，与 TourListFeed 同口径）。
+// （前缀整批替换语义：page=1&size=N 取最新 N 条，与 CompListFeed 同口径）。
 
 import { NextResponse } from "next/server";
-import { getTourEventsPage } from "@/lib/tournament";
+import { getCompEventsPage } from "@/lib/competition";
 
 export async function GET(
   req: Request,
@@ -19,7 +19,7 @@ export async function GET(
   const page = Math.max(parseInt(sp.get("page") ?? "1", 10) || 1, 1);
   const size = Math.min(Math.max(parseInt(sp.get("size") ?? "20", 10) || 20, 1), 100);
 
-  const data = await getTourEventsPage(compId, page, size);
+  const data = await getCompEventsPage(compId, page, size);
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   return NextResponse.json({ ok: true, ...data, totalPages });
 }

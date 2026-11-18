@@ -18,7 +18,6 @@ export async function getVsPickPlayer(id: number): Promise<VsPickPlayer | null> 
     en: card.englishName,
     sex: card.sex,
     avatarUrl: card.avatarUrl,
-    avatarOrigUrl: card.avatarOrigUrl,
     avatarIsDefault: card.avatarIsDefault,
     militaryTitle: card.militaryTitle,
     classicTitle: card.classicTitle,

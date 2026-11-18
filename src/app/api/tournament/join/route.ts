@@ -1,4 +1,4 @@
-// 比赛报名接口（POST /api/tournament/join，2026-11-13）
+// 比赛报名接口（POST /api/competition/join，2026-11-13）
 // 仅未开始的比赛可报名；一人一比赛一条（唯一索引防重）。
 // 进行中/已结束的比赛返回明确错误——报名闸只认「未开始」。
 // DELETE 同路径退赛（2026-11-13 五轮 20:13 张老师定：已报名 hover「退赛」，
@@ -9,7 +9,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { addTourEvent, TOUR_EVENT_PLAYER_JOIN, tourStatus } from "@/lib/tournament";
+import { addCompEvent, COMP_EVENT_PLAYER_JOIN, compStatus } from "@/lib/competition";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -28,13 +28,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "参数错误" }, { status: 400 });
   }
 
-  const comp = await prisma.tournament.findUnique({ where: { id: BigInt(id) } });
+  const comp = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
   if (!comp) {
     return NextResponse.json({ ok: false, error: "比赛不存在" }, { status: 404 });
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const st = tourStatus(comp.startTime, comp.endTime, now);
+  const st = compStatus(comp.startTime, comp.endTime, now);
   if (st !== "upcoming") {
     return NextResponse.json(
       { ok: false, error: st === "active" ? "比赛已开始，无法报名" : "比赛已结束，无法报名" },
@@ -43,9 +43,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    await prisma.tournamentEntry.create({
+    await prisma.competitionEntry.create({
       data: {
-        tournamentId: comp.id,
+        competitionId: comp.id,
         userId: BigInt(session.uid),
         createTime: BigInt(now),
       },
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   // 「玩家报名参加」动态（2026-11-13 二期：详情页动态板块）
-  await addTourEvent(Number(comp.id), TOUR_EVENT_PLAYER_JOIN, session.uid);
+  await addCompEvent(Number(comp.id), COMP_EVENT_PLAYER_JOIN, session.uid);
 
   return NextResponse.json({ ok: true });
 }
@@ -82,13 +82,13 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ ok: false, error: "参数错误" }, { status: 400 });
   }
 
-  const comp = await prisma.tournament.findUnique({ where: { id: BigInt(id) } });
+  const comp = await prisma.competition.findUnique({ where: { id: BigInt(id) } });
   if (!comp) {
     return NextResponse.json({ ok: false, error: "比赛不存在" }, { status: 404 });
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const st = tourStatus(comp.startTime, comp.endTime, now);
+  const st = compStatus(comp.startTime, comp.endTime, now);
   if (st !== "upcoming") {
     return NextResponse.json(
       { ok: false, error: st === "active" ? "比赛已开始，无法退赛" : "比赛已结束，无法退赛" },
@@ -96,8 +96,8 @@ export async function DELETE(req: Request) {
     );
   }
 
-  const del = await prisma.tournamentEntry.deleteMany({
-    where: { tournamentId: comp.id, userId: BigInt(session.uid) },
+  const del = await prisma.competitionEntry.deleteMany({
+    where: { competitionId: comp.id, userId: BigInt(session.uid) },
   });
   if (del.count === 0) {
     return NextResponse.json({ ok: false, error: "你尚未报名这场比赛" }, { status: 400 });

@@ -173,18 +173,6 @@ const KeyRow = memo(function KeyRow({
   );
 });
 
-/* 按键记录面板「实时态」信号（2026-11-14 张老师定：小鼠标状态更新默认关闭，
-   点击鼠标打开面板后才显示实时按键/进度）——模块级计数，Provider 侧据此
-   闸门 onButtons 的 setState 与喂给指示器的 csec 流：面板关闭时指示器 props
-   全稳（left/right 恒 false、csec 恒 0、events 引用稳定），配合 memo 整个
-   指示器零重渲染（回放期间每事件/每 100ms 的 React 开销一并省掉）。
-   同一时刻至多一个面板（页面态/全屏/后台审核只有一处回放），计数兜底
-   软导航卸载时序。 */
-let livePanels = 0;
-export function isReplayMouseLive() {
-  return livePanels > 0;
-}
-
 /** 最后一个已经发生的事件；开局尚未有按键时返回 -1。 */
 function currentEventIndex(rows: KeyRecord[], csec: number) {
   let lo = 0;
@@ -237,22 +225,9 @@ export function ReplayMouseIndicator({
   const visibleRowsRef = useRef(1);
   /* 面板默认隐藏，每次进入都需手动开启（2026-11-10 张老师定）。 */
   const [open, setOpen] = useState(false);
-  /* 「实时态」信号同步（2026-11-14）：面板开启/关闭时增减模块级计数，
-     Provider 引擎的 onButtons 回调据此决定是否 setState（小鼠标亮灭与
-     当前行高亮都是「实时态」的一部分）。渲染期不写模块变量之外的 ref，
-     模块级计数器不是 React 状态无此约束；open 变化必然触发重渲染，
-     计数与 UI 天然一致。 */
-  useEffect(() => {
-    if (open) livePanels++;
-    return () => {
-      if (open) livePanels--;
-    };
-  }, [open]);
   const [manual, setManual] = useState<{ index: number; targetCsec: number } | null>(null);
   const [tip, setTip] = useState<{ left: number; top: number } | null>(null);
   const records = useMemo(() => buildRecords(events), [events]);
-  /* csec 传 0 时实时行跟随退化为「未有任何事件」——面板打开后才有实时态
-     （2026-11-14 张老师定），此处无须额外逻辑：Provider 侧会把 csec 切回真实流 */
   const currentIndex = useMemo(() => currentEventIndex(records, csec), [records, csec]);
   /* seek 可能让相邻的另一侧事件也成为「当前最后事件」，但键盘选中的行
      必须保持；只有恢复播放、时钟离开本次 seek 目标后才回到自动跟随。 */

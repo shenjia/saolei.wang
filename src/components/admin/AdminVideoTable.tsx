@@ -216,8 +216,8 @@ function BanVideoButton({ v }: { v: AdminVideoRow }) {
 }
 
 /** 比赛挂接单元格（2026-11-13 二期张老师需求）：录像管理行内手动将录像加入某场比赛。
- *  已挂接=比赛名链接 +「解除」；未挂接=下拉选比赛 +「挂接」。走 ops video.tournament
- * （tournamentId=0 表示解除），挂接成功服务端写「玩家更新成绩」比赛动态。 */
+ *  已挂接=比赛名链接 +「解除」；未挂接=下拉选比赛 +「挂接」。走 ops video.competition
+ * （competitionId=0 表示解除），挂接成功服务端写「玩家更新成绩」比赛动态。 */
 function CompAttachCell({
   v,
   comps,
@@ -231,12 +231,12 @@ function CompAttachCell({
   if (v.compId) {
     return (
       <span className="comp_attach_on">
-        <Link className="link" href={`/tournaments/${v.compId}`} target="_blank" prefetch={false}>
+        <Link className="link" href={`/competitions/${v.compId}`} target="_blank" prefetch={false}>
           {v.compName ?? `#${v.compId}`}
         </Link>
         <AdminAction
-          op="video.tournament"
-          params={{ id: v.id, tournamentId: 0 }}
+          op="video.competition"
+          params={{ id: v.id, competitionId: 0 }}
           label="解除"
           confirm={`确认解除录像 #${v.id} 的比赛挂接？`}
         />
@@ -264,7 +264,7 @@ function CompAttachCell({
         type="button"
         className="admin_btn sm primary"
         disabled={busy || !sel}
-        onClick={() => sel && run("video.tournament", { id: v.id, tournamentId: Number(sel) })}
+        onClick={() => sel && run("video.competition", { id: v.id, competitionId: Number(sel) })}
       >
         {busy ? "…" : "挂接"}
       </button>

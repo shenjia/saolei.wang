@@ -15,17 +15,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 // 页缓存 TTL 200=60s；nginx 已挂 proxy_cache_background_update（2026-11-16），
-// 过期由 STALE 秒回+后台刷新兜底（lock 保证每 60s 窗口至多一次渲染，与拍频无关）。
-// 本间隔只决定：①preheat 自身的回源字节成本 ②零访客时段的保温保底——
-// 179s 拍频请求次数 -67%（2026-11-17 张老师定：新鲜度口径放宽，配 gzip 降字节，
-// preheat 单日 1.22GB→约 60MB）。覆盖首页+各列表入口（首页另有豁免自愈）
-// ⚠️ curl 必须带 Accept-Encoding: gzip（2026-11-17）：不带时 nginx 页缓存 HIT
-// 按明文全量重发（均压 112KB），是 preheat 流量大头；带 A-E 后出站由 nginx gzip
-// 压缩（~15KB，-84%）。缓存形态由 nginx 侧 proxy_set_header Accept-Encoding ""
-// 锁定为明文（键不含 A-E，若不锁定，带 A-E 请求会把缓存条目写成 gzip，不带
-// A-E 的老客户端命中即乱码）——两侧改动成套上线，缺一不可。
+// 过期空窗由 STALE 秒回兜底，间隔只决定渲染预算——59s 拍频 3 HIT+1 MISS，
+// 渲染 732 次/页/日（40s 时为 1080，-32%）。覆盖首页+各列表入口（首页另有豁免自愈）
 const PAGES = ["/", "/video", "/bbs", "/ranking", "/online", "/page/help"];
-const INTERVAL_MS = 179_000;
+const INTERVAL_MS = 59_000;
 const UA = "saolei-preheat/1";
 const HOST = "saolei.wang";
 
@@ -63,8 +56,7 @@ function preheat(secret) {
     try {
       execFileSync(
         "curl",
-        ["-sf", "-o", "/dev/null", "-A", UA, "-H", "Accept-Encoding: gzip",
-         "-H", `Cookie: ${cookie}`,
+        ["-sf", "-o", "/dev/null", "-A", UA, "-H", `Cookie: ${cookie}`,
          "--resolve", `${HOST}:443:127.0.0.1`, `https://${HOST}${p}`],
         { timeout: 15_000 },
       );
