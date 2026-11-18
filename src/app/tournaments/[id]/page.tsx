@@ -174,22 +174,31 @@ export default async function CompetitionDetailPage({
             </div>
           )}
 
-          {/* 排行榜（本期口径：挂接录像按玩家最好 real_time 升序；三轮定「最新排名」→「排行榜」） */}
+          {/* 排行榜（2026-11-18 张老师定：按比赛设定计算成绩——sum_topn 各级别最好 N 局
+              加总+保底补足，target_diff 最小误差；行尾标注补保底盘数） */}
           <div className="box comp_stats">
             <h2>排行榜</h2>
             {ranking.length > 0 ? (
               <ol className="comp_rank">
-                {ranking.map((r) => (
-                  <li key={r.uid} className="comp_rank_row">
-                    <span className={"comp_rank_no" + (r.rank <= 3 ? " top" : "")}>{r.rank}</span>
-                    <Link className="comp_rank_name" href={`/user/${r.uid}`}>
-                      {r.name}
-                    </Link>
-                    <Link className="comp_rank_time" href={`/video/${r.videoId}`}>
-                      {scoreTime(r.time)}
-                    </Link>
-                  </li>
-                ))}
+                {ranking.map((r) => {
+                  const filledTotal = Object.values(r.filled ?? {}).reduce((a, b) => a + b, 0);
+                  return (
+                    <li key={r.uid} className="comp_rank_row">
+                      <span className={"comp_rank_no" + (r.rank <= 3 ? " top" : "")}>{r.rank}</span>
+                      <Link className="comp_rank_name" href={`/user/${r.uid}`}>
+                        {r.name}
+                      </Link>
+                      <Link
+                        className="comp_rank_time"
+                        href={r.videoId ? `/video/${r.videoId}` : `/user/${r.uid}`}
+                        title={filledTotal > 0 ? `不足盘数按保底成绩补足（${filledTotal} 局保底）` : undefined}
+                      >
+                        {scoreTime(r.time)}
+                        {filledTotal > 0 && <em className="comp_rank_fill">*{filledTotal}</em>}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ol>
             ) : (
               <div className="comp_section_empty">暂无排名数据</div>

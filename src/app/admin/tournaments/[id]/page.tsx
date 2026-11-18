@@ -148,7 +148,7 @@ export default async function AdminCompetitionDetailPage({
       title: titleMap.get(uid)?.m ?? "",
       classic: titleMap.get(uid)?.c ?? null,
       videoCount: allVideos.filter((v) => Number(v.user) === uid).length,
-      score: scoreMap.get(uid),
+      score: scoreMap.get(uid)?.score ?? null,
     }))
     .sort((a, b) => {
       if (a.score != null && b.score != null) return a.score - b.score;

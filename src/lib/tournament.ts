@@ -411,8 +411,80 @@ export interface TourRankRow {
   rank: number;
   uid: number;
   name: string;
-  time: number; // 最好成绩（毫秒，real_time）
+  /** 玩家总成绩（毫秒）：sum_topn=各级别最好N局加总+保底补足；target_diff=最小误差 */
+  time: number;
+  /** 代表盘录像 ID（总成绩对应不了单盘时＝该玩家最好一局，供链接跳详情） */
   videoId: number;
+  /** sum_topn 各级别补保底局数（前端展示「含保底 x 局」） */
+  filled: Record<string, number>;
+}
+
+/** 排行榜（张老师 2026-11-18 定：按比赛设定计算成绩排序，不再按单盘最好成绩）——
+ *  sum_topn：窗口内录像按 computePlayerScores 同口径算总分（不足 N 局补保底），
+ *  videoId 取该玩家窗口内最好一局；target_diff 同口径取最小误差。 */
+export async function getTourRanking(compId: number, limit = 10): Promise<TourRankRow[]> {
+  const comp = await prisma.tournament.findUnique({
+    where: { id: BigInt(compId) },
+    select: { startTime: true, endTime: true, scoreMode: true, scoreConfig: true },
+  });
+  if (!comp) return [];
+  // Video/VideoInfo 同 id 1:1 但 schema 无 relation，real_time/no_record 分表取
+  const rows = await prisma.video.findMany({
+    where: {
+      tournamentId: BigInt(compId),
+      status: { not: 0 },
+      createTime: { gte: comp.startTime, lte: comp.endTime },
+    },
+    select: { id: true, user: true },
+  });
+  if (!rows.length) return [];
+  const levels = await prisma.video.findMany({
+    where: { id: { in: rows.map((r) => r.id) } },
+    select: { id: true, level: true },
+  });
+  const levelMap = new Map(levels.map((l) => [l.id, l.level]));
+  const infos = await prisma.videoInfo.findMany({
+    where: { id: { in: rows.map((r) => r.id) } },
+    select: { id: true, realTime: true, noRecord: true },
+  });
+  const infoMap = new Map(infos.map((i) => [i.id, i]));
+  const scores = computePlayerScores(
+    comp.scoreMode,
+    comp.scoreConfig,
+    rows.map((r) => ({
+      user: r.user,
+      level: levelMap.get(r.id) ?? "",
+      realTime: infoMap.get(r.id)?.realTime ?? 0,
+      noRecord: infoMap.get(r.id)?.noRecord ?? false,
+    })),
+  );
+  if (!scores.size) return [];
+  // 代表盘 = 该玩家窗口内最好一局（总成绩是多盘合成，链接供看最好盘）
+  const bestBy = new Map<number, { time: number; videoId: number }>();
+  for (const r of rows) {
+    const info = infoMap.get(r.id);
+    const rt = info?.realTime ?? 0;
+    if (!rt || info?.noRecord) continue;
+    const uid = Number(r.user);
+    const prev = bestBy.get(uid);
+    if (!prev || rt < prev.time) bestBy.set(uid, { time: rt, videoId: Number(r.id) });
+  }
+  const sorted = [...scores.entries()]
+    .sort((a, b) => a[1].score - b[1].score)
+    .slice(0, limit);
+  const users = await prisma.user.findMany({
+    where: { id: { in: sorted.map(([uid]) => BigInt(uid)) } },
+    select: { id: true, chineseName: true },
+  });
+  const nameMap = new Map(users.map((u) => [Number(u.id), u.chineseName]));
+  return sorted.map(([uid, s], i) => ({
+    rank: i + 1,
+    uid,
+    name: nameMap.get(uid) ?? `UID ${uid}`,
+    time: s.score,
+    videoId: bestBy.get(uid)?.videoId ?? 0,
+    filled: s.filled,
+  }));
 }
 
 // ---------- 自动绑定（张老师 2026-11-18：上传/开源网导入按标识自动挂比赛）----------
@@ -452,57 +524,6 @@ export async function matchTourByRace(
   return null;
 }
 
-/** 最新排名：挂接录像按玩家取最好成绩（real_time 最小），升序取前 limit 名。
- *  注意：跨级别混排的公平性口径待成绩采集期定，本期按 real_time 直接排序。
- *  成绩口径（张老师 2026-11-18 批量绑定定）：只计上传时间落在比赛窗口内的录像——
- *  窗口外的赛后补传盘只展示不计成绩（绑定时 race 硬证据不受窗口限制）。 */
-export async function getTourRanking(compId: number, limit = 10): Promise<TourRankRow[]> {
-  // 窗口过滤需要比赛起止时刻（Video/VideoInfo 无 relation，起止从比赛行取）
-  const comp = await prisma.tournament.findUnique({
-    where: { id: BigInt(compId) },
-    select: { startTime: true, endTime: true },
-  });
-  if (!comp) return [];
-  // Video/VideoInfo 同 id 1:1 但 schema 无 relation，real_time/no_record 分表取
-  const rows = await prisma.video.findMany({
-    where: {
-      tournamentId: BigInt(compId),
-      status: { not: 0 },
-      createTime: { gte: comp.startTime, lte: comp.endTime },
-    },
-    select: { id: true, user: true },
-  });
-  const infos = await prisma.videoInfo.findMany({
-    where: { id: { in: rows.map((r) => r.id) } },
-    select: { id: true, realTime: true, noRecord: true },
-  });
-  const infoMap = new Map(infos.map((i) => [i.id, i]));
-  type Best = { uid: number; time: number; videoId: number };
-  const best = new Map<number, Best>();
-  for (const r of rows) {
-    const info = infoMap.get(r.id);
-    const rt = info?.realTime ?? 0;
-    if (!rt || info?.noRecord) continue; // 运气盘不计成绩（2026-11-02 口径）
-    const uid = Number(r.user);
-    const prev = best.get(uid);
-    if (!prev || rt < prev.time) best.set(uid, { uid, time: rt, videoId: Number(r.id) });
-  }
-  const sorted = [...best.values()].sort((a, b) => a.time - b.time).slice(0, limit);
-  if (!sorted.length) return [];
-  const users = await prisma.user.findMany({
-    where: { id: { in: sorted.map((s) => BigInt(s.uid)) } },
-    select: { id: true, chineseName: true },
-  });
-  const nameMap = new Map(users.map((u) => [Number(u.id), u.chineseName]));
-  return sorted.map((s, i) => ({
-    rank: i + 1,
-    uid: s.uid,
-    name: nameMap.get(s.uid) ?? `UID ${s.uid}`,
-    time: s.time,
-    videoId: s.videoId,
-  }));
-}
-
 export interface TourMyResult {
   joined: boolean;
   videos: number; // 我的参赛录像数
@@ -511,7 +532,8 @@ export interface TourMyResult {
 }
 
 /** 我在这场比赛的成绩（详情页「我的成绩」板块）。
- *  成绩口径（张老师 2026-11-18）：只计窗口内录像（同 getTourRanking）。 */
+ *  成绩口径（张老师 2026-11-18）：bestTime=窗口内最好一局（单盘口径）；
+ *  rank=按比赛设定总分口径的名次（与排行榜 getTourRanking 全量同口径）。 */
 export async function getTourMyResult(compId: number, uid: number): Promise<TourMyResult> {
   const joined = await prisma.tournamentEntry.findFirst({
     where: { tournamentId: BigInt(compId), userId: BigInt(uid) },
@@ -543,7 +565,8 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
   }
   let rank: number | null = null;
   if (bestTime !== null) {
-    // 名次＝real_time 严格更小的去重玩家数 + 1（与 getTourRanking 同口径的全量版）
+    // 名次按比赛设定总分（getTourRanking 全量版）：取全部玩家的 computePlayerScores，
+    // 我的 score 严格更小的去重玩家数 + 1
     const all = await prisma.video.findMany({
       where: {
         tournamentId: BigInt(compId),
@@ -552,20 +575,32 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
       },
       select: { id: true, user: true },
     });
+    const allLevels = await prisma.video.findMany({
+      where: { id: { in: all.map((r) => r.id) } },
+      select: { id: true, level: true },
+    });
+    const levelMap = new Map(allLevels.map((l) => [l.id, l.level]));
     const allInfos = await prisma.videoInfo.findMany({
       where: { id: { in: all.map((r) => r.id) } },
       select: { id: true, realTime: true, noRecord: true },
     });
     const infoById = new Map(allInfos.map((i) => [i.id, i]));
-    const bestBy = new Map<number, number>();
-    for (const r of all) {
-      const info = infoById.get(r.id);
-      const rt = info?.realTime ?? 0;
-      if (!rt || info?.noRecord) continue;
-      const u = Number(r.user);
-      if (!bestBy.has(u) || rt < bestBy.get(u)!) bestBy.set(u, rt);
-    }
-    rank = 1 + [...bestBy.values()].filter((t) => t < bestTime!).length;
+    const full = await prisma.tournament.findUnique({
+      where: { id: BigInt(compId) },
+      select: { scoreMode: true, scoreConfig: true },
+    });
+    const scores = computePlayerScores(
+      full?.scoreMode ?? "",
+      full?.scoreConfig ?? "",
+      all.map((r) => ({
+        user: r.user,
+        level: levelMap.get(r.id) ?? "",
+        realTime: infoById.get(r.id)?.realTime ?? 0,
+        noRecord: infoById.get(r.id)?.noRecord ?? false,
+      })),
+    );
+    const mine = scores.get(uid);
+    rank = mine ? 1 + [...scores.values()].filter((s) => s.score < mine.score).length : null;
   }
   return { joined: !!joined, videos: rows.length, bestTime, rank };
 }
@@ -675,12 +710,14 @@ export async function getTournamentDetail(
   };
 }
 
-// ---------- 成绩计算（2026-11-13 四期 张老师定） ----------
+// ---------- 成绩计算（2026-11-13 四期 张老师定；2026-11-18 保底补足+排行榜按总分排序） ----------
 //
 // 计算方式可扩展：score_mode + score_config(JSON) 落库，新增方式加分支即可。
-// 口径（张老师 22:47 三问定）：
+// 口径：
 // · sum_topn 成绩加总：玩家成绩 = 各收录级别最好 N 局 time(real_time) 加总，越小越好；
-//   某级别不足 N 局按已有局数计；config={"beg":2,"int":2,"exp":2}（n=0 该级别不计）。
+//   某级别不足 N 局用「保底成绩」补足（张老师 2026-11-18 定：默认初 10s / 中 60s / 高 240s，
+//   后台可改）——config={"beg":20,"int":12,"exp":5,"floor":{"beg":10000,"int":60000,"exp":240000}}
+//   （floor 毫秒，缺省回退默认；n=0 该级别不计，也不补保底）。
 // · target_diff 目标求差：config={"target":8.88}（秒），玩家成绩 = 所有有效局中
 //   |time − target| 最小一局的误差（ms），越小越好（打靶赛）。
 // · 成绩只认 status!=0 且 no_record=0 且 real_time>0 的录像（同前台排名口径）。
@@ -693,23 +730,48 @@ export const SCORE_MODE_LABELS: Record<string, string> = {
   target_diff: "目标成绩求差（与指定 time 的最小误差）",
 };
 
-/** 解析 score_config，非法/与 mode 不符回退 null（展示与计算共用入口） */
-export function parseScoreConfig(mode: string, cfg: string): Record<string, number> | null {
+/** sum_topn 各级别保底成绩（毫秒）默认值（张老师 2026-11-18 定：初 10s / 中 60s / 高 240s） */
+export const DEFAULT_SCORE_FLOOR_MS: Record<string, number> = {
+  beg: 10_000,
+  int: 60_000,
+  exp: 240_000,
+};
+
+export interface ParsedScoreConfig {
+  topn: Record<string, number>;
+  /** 保底成绩（毫秒）；仅 sum_topn 使用 */
+  floor: Record<string, number>;
+  /** target_diff 的目标（秒） */
+  target?: number;
+}
+
+/** 解析 score_config，非法/与 mode 不符回退 null（展示与计算共用入口）。
+ *  兼容旧形态 {"beg":20,...}（无 floor → 回默认保底） */
+export function parseScoreConfig(mode: string, cfg: string): ParsedScoreConfig | null {
   if (!mode) return null;
   try {
     const o = JSON.parse(cfg) as Record<string, unknown>;
     if (typeof o !== "object" || o === null) return null;
     if (mode === "sum_topn") {
-      const out: Record<string, number> = {};
+      const topn: Record<string, number> = {};
+      let any = false;
       for (const lv of ["beg", "int", "exp"]) {
         const n = Number(o[lv]);
-        out[lv] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+        topn[lv] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+        if (topn[lv] > 0) any = true;
       }
-      return out;
+      if (!any) return null;
+      const rawFloor = (o.floor ?? {}) as Record<string, unknown>;
+      const floor: Record<string, number> = {};
+      for (const lv of ["beg", "int", "exp"]) {
+        const f = Number(rawFloor[lv]);
+        floor[lv] = Number.isFinite(f) && f > 0 ? Math.round(f) : DEFAULT_SCORE_FLOOR_MS[lv]!;
+      }
+      return { topn, floor };
     }
     if (mode === "target_diff") {
       const t = Number(o.target);
-      return Number.isFinite(t) && t > 0 ? { target: t } : null;
+      return Number.isFinite(t) && t > 0 ? { topn: {}, floor: {}, target: t } : null;
     }
     return null;
   } catch {
@@ -722,9 +784,12 @@ export function scoreModeDesc(mode: string, cfg: string): string {
   const c = parseScoreConfig(mode, cfg);
   if (mode === "sum_topn" && c) {
     const parts = (["beg", "int", "exp"] as const)
-      .filter((lv) => c[lv] > 0)
-      .map((lv) => `${LEVEL_NAMES[lv]}${c[lv]}局`);
-    return `成绩加总：${parts.length ? parts.join(" + ") : "未配置级别"}`;
+      .filter((lv) => c.topn[lv] > 0)
+      .map((lv) => `${LEVEL_NAMES[lv]}${c.topn[lv]}局`);
+    const floors = (["beg", "int", "exp"] as const)
+      .filter((lv) => c.topn[lv] > 0)
+      .map((lv) => `${LEVEL_NAMES[lv]}保底${c.floor[lv]! / 1000}s`);
+    return `成绩加总：${parts.length ? parts.join(" + ") : "未配置级别"}（${floors.join("，")}，不足补保底）`;
   }
   if (mode === "target_diff" && c) {
     return `目标求差：time=${c.target}，取误差最小一局`;
@@ -739,21 +804,32 @@ export interface TourScoreVideo {
   noRecord: boolean;
 }
 
-/** 批量计算玩家成绩：Map<uid, score(ms)>，无有效录像的玩家不在 Map。均为越小越好。 */
+export interface PlayerScore {
+  /** 总成绩（毫秒，越小越好）；target_diff 为最小误差 ms */
+  score: number;
+  /** sum_topn 明细：各级别实盘加总（0=无实盘）与补保底盘数 */
+  parts: Record<string, number>;
+  /** 各级别补保底局数（实盘数 < N 时） */
+  filled: Record<string, number>;
+}
+
+/** 批量计算玩家成绩：Map<uid, PlayerScore>，无有效录像且无需保底的玩家不在 Map。
+ *  sum_topn：各级别最好 N 局求和；不足 N 局用保底成绩补足差额局数（保底恒大于
+ *  实盘才有意义，实盘更优的玩家自然排前）。均为越小越好。 */
 export function computePlayerScores(
   mode: string,
   cfg: string,
   vids: TourScoreVideo[]
-): Map<number, number> {
+): Map<number, PlayerScore> {
   const conf = parseScoreConfig(mode, cfg);
-  const out = new Map<number, number>();
+  const out = new Map<number, PlayerScore>();
   if (!conf) return out;
   const valid = vids.filter((v) => v.realTime > 0 && !v.noRecord);
   if (mode === "sum_topn") {
-    // 各级别最好 N 局 time 加总（跨级别累加）
+    // 各级别最好 N 局 time 加总（跨级别累加），不足 N 局补保底
     const byUserLevel = new Map<number, Map<string, number[]>>();
     for (const v of valid) {
-      const n = conf[v.level] ?? 0;
+      const n = conf.topn[v.level] ?? 0;
       if (n <= 0) continue;
       const uid = Number(v.user);
       if (!byUserLevel.has(uid)) byUserLevel.set(uid, new Map());
@@ -763,20 +839,30 @@ export function computePlayerScores(
     }
     for (const [uid, levels] of byUserLevel) {
       let sum = 0;
-      for (const [lv, times] of levels) {
-        times.sort((a, b) => a - b);
-        sum += times.slice(0, conf[lv] ?? 0).reduce((a, b) => a + b, 0);
+      const parts: Record<string, number> = {};
+      const filled: Record<string, number> = {};
+      for (const lv of ["beg", "int", "exp"] as const) {
+        const n = conf.topn[lv] ?? 0;
+        if (n <= 0) continue;
+        const times = (levels.get(lv) ?? []).sort((a, b) => a - b);
+        const real = times.slice(0, n).reduce((a, b) => a + b, 0);
+        const fill = Math.max(n - times.length, 0);
+        parts[lv] = real;
+        filled[lv] = fill;
+        sum += real + fill * (conf.floor[lv] ?? 0);
       }
-      out.set(uid, sum);
+      out.set(uid, { score: sum, parts, filled });
     }
     return out;
   }
   if (mode === "target_diff") {
-    const targetMs = conf.target * 1000;
+    const targetMs = (conf.target ?? 0) * 1000;
     for (const v of valid) {
       const uid = Number(v.user);
       const err = Math.abs(v.realTime - targetMs);
-      if (!out.has(uid) || err < out.get(uid)!) out.set(uid, err);
+      if (!out.has(uid) || err < out.get(uid)!.score) {
+        out.set(uid, { score: err, parts: {}, filled: {} });
+      }
     }
     return out;
   }

@@ -24,7 +24,7 @@ export interface TourFormRow {
   prizePlan: string;
   levels: string[]; // 收录录像级别（beg/int/exp 子集）
   scoreMode: string; // ""=未配置 / sum_topn / target_diff
-  scoreConf: Record<string, number> | null; // 解析后的计算参数（未配置 null）
+  scoreConf: (Record<string, number> & { floor?: Record<string, number> }) | null; // 解析后的计算参数（未配置 null）
 }
 
 /** 库里 Unix 秒 → datetime-local input 值（北京时间 YYYY-MM-DDTHH:mm） */
@@ -54,6 +54,8 @@ export function TournamentForm() {
   // 成绩计算方式（张老师 2026-11-13 四期：创建/编辑时配置，后续可扩更多方式）
   const [scoreMode, setScoreMode] = useState("");
   const [topn, setTopn] = useState({ beg: "1", int: "1", exp: "1" });
+  // sum_topn 各级别保底成绩（秒；张老师 2026-11-18 定，默认初10/中60/高240，盘数不足按此补足）
+  const [floor, setFloor] = useState({ beg: "10", int: "60", exp: "240" });
   const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
   // 随机生成标识中（防连点）
@@ -91,6 +93,12 @@ export function TournamentForm() {
         int: String(d.scoreConf?.int ?? 1),
         exp: String(d.scoreConf?.exp ?? 1),
       });
+      // 保底回显（floor 毫秒 → 秒；旧配置无 floor 回默认值）
+      setFloor({
+        beg: String(Math.round((d.scoreConf?.floor?.beg ?? 10000) / 1000)),
+        int: String(Math.round((d.scoreConf?.floor?.int ?? 60000) / 1000)),
+        exp: String(Math.round((d.scoreConf?.floor?.exp ?? 240000) / 1000)),
+      });
       setTarget(d.scoreConf?.target != null ? String(d.scoreConf.target) : "");
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
@@ -110,6 +118,7 @@ export function TournamentForm() {
     setLevels([...ALL_LEVELS]);
     setScoreMode("");
     setTopn({ beg: "1", int: "1", exp: "1" });
+    setFloor({ beg: "10", int: "60", exp: "240" });
     setTarget("");
   };
 
@@ -152,15 +161,21 @@ export function TournamentForm() {
     let scoreConfig = "";
     if (scoreMode === "sum_topn") {
       const conf: Record<string, number> = {};
+      const floorMs: Record<string, number> = {};
       let any = false;
       for (const lv of ALL_LEVELS) {
         const v = topn[lv].trim();
         if (!/^\d+$/.test(v) || parseInt(v, 10) > 99) return toast(`${LEVEL_LABELS[lv]}取局数应为 0-99 整数`, "error");
         conf[lv] = parseInt(v, 10);
         if (conf[lv] > 0) any = true;
+        // 保底成绩（秒→毫秒；张老师 2026-11-18 定：盘数不足按保底补足，默认初10/中60/高240）
+        const fv = floor[lv].trim();
+        if (!/^\d+(\.\d+)?$/.test(fv) || parseFloat(fv) <= 0)
+          return toast(`${LEVEL_LABELS[lv]}保底成绩应为正数（秒）`, "error");
+        floorMs[lv] = Math.round(parseFloat(fv) * 1000);
       }
       if (!any) return toast("成绩加总至少有一个级别取局数大于 0", "error");
-      scoreConfig = JSON.stringify(conf);
+      scoreConfig = JSON.stringify({ ...conf, floor: floorMs });
     } else if (scoreMode === "target_diff") {
       const n = Number(target.trim());
       if (!target.trim() || !Number.isFinite(n) || n <= 0) return toast("目标成绩应为正数（秒，如 8.88）", "error");
@@ -368,19 +383,29 @@ export function TournamentForm() {
           <option value="target_diff">目标成绩求差（与指定 time 的最小误差）</option>
         </select>
         {scoreMode === "sum_topn" && (
-          <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
             {ALL_LEVELS.map((lv) => (
-              <label key={lv} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2" }}>
+              <span key={lv} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2" }}>
                 {LEVEL_LABELS[lv]}
                 <input
                   className="admin_input"
                   style={{ width: 64 }}
                   inputMode="numeric"
+                  title="取局数（盘数不足用保底成绩补足）"
                   value={topn[lv]}
                   onChange={(e) => setTopn((s) => ({ ...s, [lv]: e.target.value }))}
                 />
                 局
-              </label>
+                <input
+                  className="admin_input"
+                  style={{ width: 72 }}
+                  inputMode="decimal"
+                  title="保底成绩（秒，盘数不足按此补足）"
+                  value={floor[lv]}
+                  onChange={(e) => setFloor((s) => ({ ...s, [lv]: e.target.value }))}
+                />
+                秒保底
+              </span>
             ))}
           </div>
         )}
