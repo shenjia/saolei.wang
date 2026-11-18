@@ -15,7 +15,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { RelTime } from "@/components/RelTime";
+import { AvatarCell } from "@/components/Cells";
+import { TitleBadge } from "@/components/TitleBadge";
 import { compEventText, type TourEventRow } from "@/lib/tournament";
+import { scoreTime } from "@/lib/format";
 
 export function TourEventsFeed({
   compId,
@@ -83,12 +86,29 @@ export function TourEventsFeed({
           {rows.map((e) => (
             <li key={e.id} className="comp_ev_row">
               <span className="comp_ev_main">
+                {/* 事件主体玩家（2026-11-18 晚张老师定：人名+性别+军衔同首页动态——
+                    AvatarCell gender=small + TitleBadge；全站事件 1/3/5 无主体不渲染） */}
                 {e.userName && e.userId ? (
-                  <Link className="comp_ev_user" href={`/user/${e.userId}`}>
-                    {e.userName}
-                  </Link>
+                  <>
+                    <AvatarCell
+                      id={e.userId}
+                      name={e.userName}
+                      englishName={e.englishName}
+                      sex={e.sex}
+                      gender="small"
+                      link
+                    />
+                    <TitleBadge title={e.title} classic={e.classic} link />
+                  </>
                 ) : null}
-                <span className="comp_ev_text">{compEventText(e.type)}</span>
+                <span className="comp_ev_text">
+                  {compEventText(e.type)}
+                  {/* 成绩动态（2026-11-18 晚定）：合并组显示 ×N，带组内最好成绩具体数值 */}
+                  {e.type === 4 && e.count > 1 && ` ×${e.count}`}
+                  {e.type === 4 && e.scoreMs !== null && (
+                    <b className="comp_ev_score">（最好 {scoreTime(e.scoreMs)}s）</b>
+                  )}
+                </span>
               </span>
               <span className="comp_ev_time">
                 <RelTime time={e.createTime} />

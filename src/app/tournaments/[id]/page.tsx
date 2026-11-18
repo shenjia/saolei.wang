@@ -26,6 +26,7 @@ import { TourEventsFeed } from "@/components/tournament/TourEventsFeed";
 import { TourVideosFeed } from "@/components/tournament/TourVideosFeed";
 import { TourBlock } from "@/components/tournament/TourBlock";
 import { scoreTime } from "@/lib/format";
+import { LEVEL_NAMES, type Level } from "@/lib/config";
 import {
   ensureTourLifecycleEvents,
   fmtPrize,
@@ -180,15 +181,25 @@ export default async function CompetitionDetailPage({
             </div>
           )}
 
-          {/* 排行榜（2026-11-18 张老师定：按比赛设定计算成绩——sum_topn 各级别最好 N 局
-              加总+保底补足，target_diff 最小误差；行含性别标志+军衔（AvatarCell/TitleBadge
-              首页同款），成绩亮灰；行尾 *N 标注补保底盘数） */}
+          {/* 排行榜（2026-11-18 晚张老师定：小字紧凑同热门录像；成绩 hover 出气泡
+              展示计算过程——各级别分色、保底直接写在过程中，无单独 *N 标注） */}
           <div className="box comp_stats">
             <h2>排行榜</h2>
             {ranking.length > 0 ? (
               <ol className="comp_rank">
                 {ranking.map((r) => {
-                  const filledTotal = Object.values(r.filled ?? {}).reduce((a, b) => a + b, 0);
+                  const calcTip =
+                    r.calc && r.calc.length > 0
+                      ? r.calc
+                          .map((seg) => {
+                            const lvName =
+                              seg.lv in LEVEL_NAMES ? LEVEL_NAMES[seg.lv as Level] : seg.lv;
+                            const fillPart =
+                              seg.fill > 0 ? `+${seg.fill}×保底${seg.floorMs / 1000}s` : "";
+                            return `${lvName}${seg.n}盘 ${scoreTime(seg.real)}s${fillPart ? ` ${fillPart}` : ""}`;
+                          })
+                          .join("\n")
+                      : "";
                   return (
                     <li key={r.uid} className="comp_rank_row">
                       <span className={"comp_rank_no" + (r.rank <= 3 ? " top" : "")}>{r.rank}</span>
@@ -205,10 +216,9 @@ export default async function CompetitionDetailPage({
                       <Link
                         className="comp_rank_time"
                         href={r.videoId ? `/video/${r.videoId}` : `/user/${r.uid}`}
-                        title={filledTotal > 0 ? `不足盘数按保底成绩补足（${filledTotal} 局保底）` : undefined}
+                        data-tip={calcTip || undefined}
                       >
                         {scoreTime(r.time)}
-                        {filledTotal > 0 && <em className="comp_rank_fill">*{filledTotal}</em>}
                       </Link>
                     </li>
                   );

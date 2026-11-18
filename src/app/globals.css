@@ -17460,6 +17460,10 @@ body #header .nav li a.vs_new_hint,
 .comp_ev_user { color: #f8f8f2; font-weight: 700; text-decoration: none; margin-right: 4px; }
 .comp_ev_user:hover { color: #a6e22e; }
 .comp_ev_text { color: #b1b1a4; }
+/* 成绩动态具体数值（2026-11-18 晚张老师定）：合并组最好成绩加粗亮白强调 */
+.comp_ev_score { color: #f8f8f2; font-weight: 700; margin-left: 2px; }
+/* 动态行军衔徽章小号（2026-11-18 晚定：同首页动态行紧凑排布） */
+.comp_ev_row .title { font-size: 12px; line-height: 18px; margin-right: 4px; }
 .comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; }
 
 /* 详情页标题大字号（五轮 20:13 曾区分 26px；七轮 03:10 起列表页标题也恢复
@@ -17480,6 +17484,26 @@ body #header .nav li a.vs_new_hint,
 .comp_rank_row .title { font-size: 12px; line-height: 18px; }
 .comp_rank_time { margin-left: auto; color: #b1b1a4; font-weight: 700; text-decoration: none; flex-shrink: 0; }
 .comp_rank_time:hover { color: #a6e22e; }
+/* 成绩计算过程气泡（2026-11-18 晚张老师定：hover 成绩出气泡，各级别分行分色；
+   复用全站 data-tip 模式但保留换行 \n——white-space:pre-line） */
+.comp_rank_time[data-tip] { position: relative; }
+.comp_rank_time[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 8px); right: 0;
+  background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px;
+  padding: 6px 10px; font-size: 12px; line-height: 18px; color: #b1b1a4;
+  white-space: pre-line; text-align: left; font-weight: 400;
+  opacity: 0; visibility: hidden; transition: opacity 0.15s;
+  pointer-events: none; z-index: 950; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+}
+.comp_rank_time[data-tip]:hover::after { opacity: 1; visibility: visible; }
+.comp_rank_time[data-tip]::before {
+  content: ""; position: absolute; top: 100%; right: 14px; margin-top: -5px;
+  border: 5px solid transparent; border-top-color: #49483e;
+  opacity: 0; visibility: hidden; transition: opacity 0.15s;
+  pointer-events: none; z-index: 950;
+}
+.comp_rank_time[data-tip]:hover::before { opacity: 1; visibility: visible; }
 
 /* 后台录像管理「比赛」列挂接控件 */
 .comp_attach_on { display: inline-flex; align-items: center; gap: 6px; }

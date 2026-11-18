@@ -365,43 +365,109 @@ export interface TourEventRow {
   userName: string | null; // 全站事件（1/3/5）为 null
   userId: number | null;
   createTime: number;
+  /** 事件主体玩家展示信息（type=2/4 有；性别标志+军衔，2026-11-18 晚张老师定同首页动态） */
+  sex: number;
+  englishName: string;
+  title: string;
+  classic: { name: string; color: string } | null;
+  /** type=4 合并组：同刻连续动态条数（1=单条） */
+  count: number;
+  /** type=4 合并组内最好成绩（毫秒；无有效成绩 null） */
+  scoreMs: number | null;
 }
 
-/** 比赛动态分页：最新在前（与全站动态流口径一致） */
+/** 比赛动态分页（2026-11-18 晚张老师定改版）：
+ *  · 时间正序（老在前）
+ *  · type=4 按 (user_id, create_time) 分组合并——同刻连续的同一人成绩动态合一行，
+ *    显示「×N」与组内最好成绩（从 video 表按上传时刻精确关联取 real_time 最小值）
+ *  · 带出玩家性别/军衔（同首页动态行）
+ *  total 口径：合并后的行数（分页/滑轨都按它算） */
 export async function getTourEventsPage(
   tournamentId: number,
   page: number,
   pageSize = 20
 ): Promise<{ rows: TourEventRow[]; total: number; page: number; pageSize: number }> {
   const cid = BigInt(tournamentId);
-  const total = await prisma.tournamentEvent.count({ where: { tournamentId: cid } });
+  // 合并聚合（原生 SQL：Prisma 无 groupBy 多键 + 关联取数的表达力）
+  // 分组键 = (user_id, create_time)；type=4 之外每行自成一组（user_id=0 或各自时刻天然不同）
+  const groups = await prisma.$queryRaw<
+    {
+      user_id: bigint | null;
+      create_time: bigint;
+      type: number;
+      cnt: bigint;
+      min_id: bigint;
+      score_ms: number | null;
+    }[]
+  >`
+    SELECT te.user_id, te.create_time, te.type, COUNT(*) AS cnt, MIN(te.id) AS min_id,
+           (SELECT MIN(vi.real_time)
+            FROM video v JOIN video_info vi ON vi.id = v.id
+            WHERE v.tournament_id = te.tournament_id
+              AND v.status <> 0
+              AND v.user = te.user_id
+              AND v.create_time = te.create_time) AS score_ms
+    FROM tournament_event te
+    WHERE te.tournament_id = ${cid}
+    GROUP BY te.user_id, te.create_time, te.type
+    ORDER BY te.create_time ASC, te.type ASC, min_id ASC
+    LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+  `;
+  const totalRow = await prisma.$queryRaw<{ c: bigint }[]>`
+    SELECT COUNT(*) AS c FROM (
+      SELECT 1 FROM tournament_event
+      WHERE tournament_id = ${cid}
+      GROUP BY user_id, create_time, type
+    ) t
+  `;
+  const total = Number(totalRow[0]?.c ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const p = Math.min(Math.max(page, 1), totalPages);
-  const events =
-    total === 0
-      ? []
-      : await prisma.tournamentEvent.findMany({
-          where: { tournamentId: cid },
-          orderBy: [{ id: "desc" }],
-          skip: (p - 1) * pageSize,
-          take: pageSize,
-        });
-  const uids = [...new Set(events.map((e) => Number(e.userId)).filter((x) => x > 0))];
-  const users = uids.length
-    ? await prisma.user.findMany({
-        where: { id: { in: uids.map((s) => BigInt(s)) } },
-        select: { id: true, chineseName: true },
-      })
+  const uids = [...new Set(groups.map((g) => Number(g.user_id)).filter((x) => x > 0))];
+  const [users, scoreRows] = uids.length
+    ? await Promise.all([
+        prisma.user.findMany({
+          where: { id: { in: uids.map((s) => BigInt(s)) } },
+          select: { id: true, chineseName: true, englishName: true, sex: true, status: true },
+        }),
+        prisma.userScores.findMany({
+          where: { id: { in: uids.map((s) => BigInt(s)) } },
+          select: { id: true, expTime: true },
+        }),
+      ])
+    : [[], []];
+  const userMap = new Map(users.map((u) => [Number(u.id), u]));
+  const expMap = new Map(scoreRows.map((s) => [s.id.toString(), s.expTime ?? 0]));
+  const titlePairs = users.length
+    ? await dualTitles(
+        users.map((u) => ({
+          userId: Number(u.id),
+          expTime: expMap.get(u.id.toString()) ?? 0,
+          ranked: u.status === 0,
+          sex: u.sex,
+        })),
+      )
     : [];
-  const nameMap = new Map(users.map((u) => [Number(u.id), u.chineseName]));
+  const titleMap = new Map(users.map((u, i) => [Number(u.id), titlePairs[i]]));
   return {
-    rows: events.map((e) => ({
-      id: Number(e.id),
-      type: e.type,
-      userName: Number(e.userId) > 0 ? nameMap.get(Number(e.userId)) ?? `UID ${e.userId}` : null,
-      userId: Number(e.userId) > 0 ? Number(e.userId) : null,
-      createTime: Number(e.createTime),
-    })),
+    rows: groups.map((g) => {
+      const uid = Number(g.user_id);
+      const u = uid > 0 ? userMap.get(uid) : undefined;
+      const pair = uid > 0 ? titleMap.get(uid) : undefined;
+      return {
+        id: Number(g.min_id),
+        type: g.type,
+        userName: uid > 0 ? u?.chineseName ?? `UID ${uid}` : null,
+        userId: uid > 0 ? uid : null,
+        createTime: Number(g.create_time),
+        sex: u?.sex ?? 1,
+        englishName: u?.englishName ?? "",
+        title: pair?.m ?? "",
+        classic: pair?.c ?? null,
+        count: Number(g.cnt),
+        scoreMs: g.score_ms !== null ? Number(g.score_ms) : null,
+      };
+    }),
     total,
     page: p,
     pageSize,
@@ -426,6 +492,9 @@ export interface TourRankRow {
   videoId: number;
   /** sum_topn 各级别补保底局数（前端展示「含保底 x 局」） */
   filled: Record<string, number>;
+  /** 计算过程明细（2026-11-18 晚张老师定：hover 成绩出气泡展示，各级别分色；
+   *  sum_topn 每级别一条 real+fill，target_diff 为 null） */
+  calc: { lv: string; n: number; real: number; fill: number; floorMs: number }[] | null;
 }
 
 /** 排行榜（张老师 2026-11-18 定：按比赛设定计算成绩排序，不再按单盘最好成绩）——
@@ -513,6 +582,7 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
     time: s.score,
     videoId: bestBy.get(uid)?.videoId ?? 0,
     filled: s.filled,
+    calc: s.calc,
   }));
 }
 
@@ -857,6 +927,8 @@ export interface PlayerScore {
   parts: Record<string, number>;
   /** 各级别补保底局数（实盘数 < N 时） */
   filled: Record<string, number>;
+  /** 计算过程（2026-11-18 晚张老师定：hover 成绩气泡展示；每级别一条） */
+  calc: { lv: string; n: number; real: number; fill: number; floorMs: number }[];
 }
 
 /** 批量计算玩家成绩：Map<uid, PlayerScore>，无有效录像且无需保底的玩家不在 Map。
@@ -887,6 +959,7 @@ export function computePlayerScores(
       let sum = 0;
       const parts: Record<string, number> = {};
       const filled: Record<string, number> = {};
+      const calc: PlayerScore["calc"] = [];
       for (const lv of ["beg", "int", "exp"] as const) {
         const n = conf.topn[lv] ?? 0;
         if (n <= 0) continue;
@@ -895,9 +968,11 @@ export function computePlayerScores(
         const fill = Math.max(n - times.length, 0);
         parts[lv] = real;
         filled[lv] = fill;
-        sum += real + fill * (conf.floor[lv] ?? 0);
+        const floorMs = conf.floor[lv] ?? 0;
+        sum += real + fill * floorMs;
+        calc.push({ lv, n, real, fill, floorMs });
       }
-      out.set(uid, { score: sum, parts, filled });
+      out.set(uid, { score: sum, parts, filled, calc });
     }
     return out;
   }
@@ -907,7 +982,7 @@ export function computePlayerScores(
       const uid = Number(v.user);
       const err = Math.abs(v.realTime - targetMs);
       if (!out.has(uid) || err < out.get(uid)!.score) {
-        out.set(uid, { score: err, parts: {}, filled: {} });
+        out.set(uid, { score: err, parts: {}, filled: {}, calc: [] });
       }
     }
     return out;
