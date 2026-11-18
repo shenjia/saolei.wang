@@ -408,7 +408,7 @@ export async function getTourEventsPage(
               AND v.user = te.user_id
               AND v.create_time = te.create_time) AS score_ms
     FROM tournament_event te
-    WHERE te.tournament_id = ${cid}
+    WHERE te.competition_id = ${cid}
     GROUP BY te.user_id, te.create_time, te.type
     ORDER BY te.create_time ASC, te.type ASC, min_id ASC
     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
@@ -416,7 +416,7 @@ export async function getTourEventsPage(
   const totalRow = await prisma.$queryRaw<{ c: bigint }[]>`
     SELECT COUNT(*) AS c FROM (
       SELECT 1 FROM tournament_event
-      WHERE tournament_id = ${cid}
+      WHERE competition_id = ${cid}
       GROUP BY user_id, create_time, type
     ) t
   `;
