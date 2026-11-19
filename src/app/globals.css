@@ -17489,6 +17489,24 @@ body #header .nav li a.vs_new_hint,
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
 .comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
+/* 窗口赛开赛盒（2026-11-19 张老师定）：详情页右栏 */
+.win_play_box { display: flex; flex-direction: column; gap: 10px; }
+.win_start_btn {
+  display: block; width: 100%; padding: 10px 0;
+  background: #3e3d32; border: 1px solid #49483e; border-radius: 6px;
+  color: #a6e22e; font-size: 15px; font-weight: 700; cursor: pointer;
+  transition: background 0.15s;
+}
+.win_start_btn:hover { background: #49483e; }
+.win_start_btn:disabled { opacity: 0.6; cursor: default; }
+.win_race_row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.win_race_label { color: #75715e; font-size: 13px; }
+.win_race {
+  color: #e6db74; font-size: 20px; font-weight: 700; letter-spacing: 3px;
+  font-family: Menlo, Consolas, "Courier New", monospace;
+}
+.win_countdown { margin: 0; font-size: 14px; font-weight: 700; text-align: center; }
+
 /* 比赛时间行（2026-11-18 晚定：从信息行拆出单独一行在下） */
 .comp_time_line { margin-top: 6px; font-size: 13px; color: #b1b1a4; }
 /* 窗口赛括号文案（2026-11-19 张老师定：任选 X 小时） */

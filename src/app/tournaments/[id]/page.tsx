@@ -26,6 +26,7 @@ import { TitleBadge } from "@/components/TitleBadge";
 import { TourEventsFeed } from "@/components/tournament/TourEventsFeed";
 import { TourVideosFeed } from "@/components/tournament/TourVideosFeed";
 import { TourBlock } from "@/components/tournament/TourBlock";
+import { WindowPlayBox } from "@/components/tournament/WindowPlayBox";
 import { VideoSearch } from "@/components/VideoSearch";
 import { scoreTime } from "@/lib/format";
 import { LEVEL_NAMES, type Level } from "@/lib/config";
@@ -155,26 +156,37 @@ export default async function CompetitionDetailPage({
         </li>
 
         <li className="sidebar">
-          {/* 登录态：首页同款双钮行（五轮 20:13 复刻 #play_row）——「开始比赛」进比赛模式
-              （/online?c=比赛ID，逻辑同列表页原「开赛」钮，新标签页），「传录像」新标签页上传。
+          {/* 登录态：双钮行按比赛形态分流（2026-11-19 张老师定）：
+              · 窗口赛（windowHours>0）→ WindowPlayBox（未开赛单按钮+确认窗；已开赛
+                个人标识+进入比赛/传录像双钮+倒计时色阶）
+              · 集体赛 → 原双钮行（/online?c=比赛ID 新标签页比赛模式 + 传录像）
               已结束比赛不显示（张老师 2026-11-18 详情页反馈）。
               FlopSprites 提供 #face-flat 笑脸 symbol（纯 0×0 贴图库，无视觉占位） */}
           {session && c.status !== "ended" && (
             <>
               <FlopSprites />
-              <div id="play_row">
-                <Link id="play_entry" href={`/online?c=${compId}`} target="_blank">
-                  <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
-                    <use href="#face-flat" />
-                  </svg>
-                  <span>开始比赛</span>
-                </Link>
-                <Link id="upload_entry" href="/video/upload" target="_blank">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/images/upload-folder-icon.png" alt="" width={24} />
-                  <span>传录像</span>
-                </Link>
-              </div>
+              {c.windowHours > 0 ? (
+                <WindowPlayBox
+                  compId={compId}
+                  windowHours={c.windowHours}
+                  compEnd={c.end}
+                  session0={c.mySession}
+                />
+              ) : (
+                <div id="play_row">
+                  <Link id="play_entry" href={`/online?c=${compId}`} target="_blank">
+                    <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
+                      <use href="#face-flat" />
+                    </svg>
+                    <span>开始比赛</span>
+                  </Link>
+                  <Link id="upload_entry" href="/video/upload" target="_blank">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/images/upload-folder-icon.png" alt="" width={24} />
+                    <span>传录像</span>
+                  </Link>
+                </div>
+              )}
             </>
           )}
 

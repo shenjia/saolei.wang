@@ -119,6 +119,10 @@ export interface TourRow {
   entryCount: number;
   joined: boolean; // 当前登录用户是否已报名
   levels: Level[]; // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
+  /** 自选窗口时长（小时，0=同期集体赛；>0=窗口赛，张老师 2026-11-19） */
+  windowHours: number;
+  /** 我的进行中窗口会话（窗口赛已手动开赛；null=未开赛/无窗口） */
+  mySession: { race: string; start: number; end: number } | null;
   creatorId: number; // 发起人（图表下方玩家卡片式名字展示：性别+军衔）
   creatorEnglishName: string;
   creatorSex: number;
@@ -238,6 +242,8 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
       prizeTotal: c.prizeTotal,
       prizeLines: parsePrizePlan(c.prizePlan),
       code: c.code ?? "",
+      windowHours: c.windowHours ?? 0,
+      mySession: null, // 列表行批量填充见下方会话查询
       entryCount: countMap.get(cid) ?? 0,
       joined: mineSet.has(cid),
       levels: parseLevels(c.includeLevels),
@@ -301,9 +307,26 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
         : null,
     );
   });
+  // 我的窗口会话（2026-11-19 窗口赛）：登录态下当前页各窗口赛的一场进行中会话
   for (const r of pageRows) {
     r.chartPoints = chartMap.get(r.id) ?? [];
     r.bestLine = bestMap.get(r.id) ?? null;
+  }
+  if (uid) {
+    const pageWindowIds = pageRows.filter((r) => r.windowHours > 0).map((r) => BigInt(r.id));
+    if (pageWindowIds.length) {
+      const nowB = BigInt(now);
+      const sessions = await prisma.tournamentWindowSession.findMany({
+        where: { tournamentId: { in: pageWindowIds }, userId: BigInt(uid), endTime: { gt: nowB } },
+        select: { tournamentId: true, race: true, startTime: true, endTime: true },
+        orderBy: { endTime: "desc" },
+      });
+      const sessMap = new Map(sessions.map((s) => [s.tournamentId.toString(), s]));
+      for (const r of pageRows) {
+        const s = sessMap.get(r.id);
+        if (s) r.mySession = { race: s.race, start: Number(s.startTime), end: Number(s.endTime) };
+      }
+    }
   }
 
   return {
@@ -809,6 +832,23 @@ export async function matchTourByRace(
   createTimeSec: number
 ): Promise<number | null> {
   const ts = BigInt(Math.floor(createTimeSec));
+  const nowB = BigInt(Math.floor(Date.now() / 1000));
+  // 窗口赛个人会话判据（2026-11-19 张老师定）：race 命中一个**未过期**的个人会话
+  // 且上传时刻落在该会话窗口内 → 挂接该比赛；过期会话标识失效不再录入
+  if (race) {
+    const sess = await prisma.tournamentWindowSession.findUnique({
+      where: { race },
+      select: { tournamentId: true, startTime: true, endTime: true },
+    });
+    if (
+      sess &&
+      sess.endTime > nowB && // 会话未过期（标识失效判据）
+      sess.startTime <= ts &&
+      ts <= sess.endTime // 上传时刻在个人窗口内
+    ) {
+      return Number(sess.tournamentId);
+    }
+  }
   // 窗口条件对象（race 分支不带 code 条件，签名分支在外面拼）
   const windowWhere = {
     startTime: { lte: ts },
@@ -1076,6 +1116,19 @@ export async function getTournamentDetail(
     prizeTotal: c.prizeTotal,
     prizeLines: parsePrizePlan(c.prizePlan),
     code: c.code ?? "",
+    windowHours: c.windowHours ?? 0,
+    // 我的进行中窗口（窗口赛已手动开赛；登录态查询）
+    mySession: uid
+      ? await (async () => {
+          const nowB = BigInt(now);
+          const s = await prisma.tournamentWindowSession.findFirst({
+            where: { tournamentId: c.id, userId: BigInt(uid), endTime: { gt: nowB } },
+            select: { race: true, startTime: true, endTime: true },
+            orderBy: { endTime: "desc" },
+          });
+          return s ? { race: s.race, start: Number(s.startTime), end: Number(s.endTime) } : null;
+        })()
+      : null,
     entryCount,
     joined: !!joined,
     levels: levelSet.size ? LEVELS.filter((l) => levelSet.has(l)) : [...LEVELS],

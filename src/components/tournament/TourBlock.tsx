@@ -145,7 +145,11 @@ export function TourBlock({
         )}
       </div>
       <div className="comp_time_line">
-        <span className="comp_time">比赛时间：{fmtDateRange(c.start, c.end)}</span>
+        <span className="comp_time">
+          比赛时间：{fmtDateRange(c.start, c.end)}
+          {/* 窗口赛括号文案（2026-11-19 张老师定）：自选 X 小时窗口 */}
+          {c.windowHours > 0 && <span className="comp_time_window">（任选 {c.windowHours} 小时）</span>}
+        </span>
       </div>
 
       <p className="comp_rules">比赛规则：{c.rules}</p>

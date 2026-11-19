@@ -1545,6 +1545,7 @@ model Tournament {
   includeLevels String @default("beg,int,exp") @map("include_levels") @db.VarChar(20) // 收录录像级别（逗号分隔 beg/int/exp，可多选；张老师 2026-11-13）
   scoreMode String @default("") @map("score_mode") @db.VarChar(20) // 成绩计算方式：""=未配置 / sum_topn=成绩加总（各级别最好N局） / target_diff=目标成绩求差（张老师 2026-11-13，后续可扩）
   scoreConfig String @default("") @map("score_config") @db.VarChar(200) // 计算方式参数 JSON：sum_topn={"beg":2,"int":2,"exp":2}；target_diff={"target":8.88}（time，秒）
+  windowHours Int @default(0) @map("window_hours") // 自选窗口时长（小时，0=无窗口即同期集体赛；>0=玩家在 [start,end] 内任选窗口手动开赛，张老师 2026-11-19）
   createTime BigInt  @default(0) @map("create_time") @db.BigInt // 创建时刻 Unix 秒
 
   @@index([startTime, endTime]) // 状态排序/筛选
@@ -1579,4 +1580,22 @@ model TournamentEvent {
   @@index([tournamentId, id]) // 详情页动态流
   @@index([userId, createTime]) // 我的活动
   @@map("tournament_event")
+}
+
+// 窗口模式个人比赛会话（2026-11-19 张老师定）：比赛分两种——同期集体赛（现状，全
+// 程共用 start/end）与自选时间窗口赛（windowHours>0 的比赛）。玩家手动开赛后生成
+// 个人随机标识（每人不同），窗口内录像凭该标识挂接本比赛；窗口结束标识失效不录。
+// 窗口必须整体落在比赛 [startTime, endTime] 范围内；过期会话不删（历史可溯）。
+model TournamentWindowSession {
+  id            BigInt @id @default(autoincrement()) @db.BigInt
+  tournamentId  BigInt @map("competition_id") @db.BigInt
+  userId        BigInt @map("user_id") @db.BigInt
+  race          String @unique @db.VarChar(10) // 个人比赛标识（6 位随机码，全局唯一）
+  startTime     BigInt @map("start_time") @db.BigInt // 个人窗口开始时刻（=手动开赛时刻）Unix 秒
+  endTime       BigInt @map("end_time") @db.BigInt // 个人窗口结束时刻（=开始+windowHours*3600，钳到比赛 end）
+  createTime    BigInt @default(0) @map("create_time") @db.BigInt
+
+  @@unique([tournamentId, userId, startTime]) // 防连点重复开赛（同秒唯一）
+  @@index([userId, endTime]) // 我的进行中窗口查询
+  @@map("tournament_window_session")
 }

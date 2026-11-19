@@ -25,8 +25,9 @@ const getSignupPlayers = unstable_cache(
 );
 
 export interface OnlineCompParam {
-  /** 进行中比赛（?c= 合法时）；code=比赛标识，2026-11-18 起可空（未设置=不附加标识） */
-  comp: { id: number; shortName: string; code: string | null } | null;
+  /** 进行中比赛（?c= 合法时）；code=比赛标识，2026-11-18 起可空（未设置=不附加标识）；
+   *  race=窗口赛个人标识（2026-11-19，?race= 传入，优先注入结算 EVF） */
+  comp: { id: number; shortName: string; code: string | null; race?: string | null } | null;
   /** ?c= 指向的比赛无效（不存在/未开始/已结束）时的人话提示 */
   compError: string | null;
 }
@@ -49,6 +50,27 @@ async function resolveCompParam(raw: string | undefined): Promise<OnlineCompPara
   return { comp: { id: Number(c.id), shortName: c.shortName, code: c.code }, compError: null };
 }
 
+/** 解析 ?race= 窗口赛个人标识（2026-11-19 张老师定）：标识须命中当前登录玩家
+ *  一个未过期的窗口会话 → 返回该比赛与标识；未登录/无会话/过期 → null（普通比赛模式降级） */
+async function resolveRaceParam(
+  raw: string | undefined,
+  uid: number | undefined
+): Promise<{ comp: OnlineCompParam["comp"] } | null> {
+  if (!raw || !uid) return null;
+  const sess = await prisma.tournamentWindowSession.findUnique({
+    where: { race: raw.toUpperCase() },
+  });
+  if (!sess || Number(sess.userId) !== uid) return null;
+  const now = Math.floor(Date.now() / 1000);
+  if (now > Number(sess.endTime)) return null; // 会话过期，标识失效
+  const c = await prisma.tournament.findUnique({
+    where: { id: sess.tournamentId },
+    select: { id: true, shortName: true, code: true, endTime: true },
+  });
+  if (!c || now >= Number(c.endTime)) return null;
+  return { comp: { id: Number(c.id), shortName: c.shortName, code: c.code, race: sess.race } };
+}
+
 export async function generateMetadata({
   searchParams,
 }: {
@@ -66,11 +88,15 @@ export default async function OnlinePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const [{ comp, compError }, session, players] = await Promise.all([
+  const session = await getSession();
+  const [base, raceHit] = await Promise.all([
     resolveCompParam(sp.c),
-    getSession(),
-    getSignupPlayers(),
+    resolveRaceParam(sp.race, session?.uid),
   ]);
+  // 窗口赛个人标识优先（?race= 命中本人未过期会话）
+  const comp = raceHit?.comp ?? base.comp;
+  const compError = raceHit?.comp ? null : base.compError;
+  const players = await getSignupPlayers();
   return (
     <>
       <CoreOnlinePage comp={comp} compError={compError} />
