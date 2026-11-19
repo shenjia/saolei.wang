@@ -47,22 +47,23 @@ export default async function AdminCompetitionsPage({
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const now = Math.floor(Date.now() / 1000);
-  const [all, videoCounts, videoHolders] = await Promise.all([
+  const [all, regCounts, videoCounts, videoHolders] = await Promise.all([
     prisma.tournament.findMany({ orderBy: { startTime: "asc" } }),
-    // 挂接录像数（口径与详情页统计一致：tournamentId 挂接 + 未屏蔽 status!=0）
+    // 报名人数（张老师 2026-11-19 定：与参赛人数分开统计，不冲突；后台恒显示）
+    prisma.tournamentEntry.groupBy({ by: ["tournamentId"], _count: { tournamentId: true } }),
+    // 参赛录像数（口径与详情页统计一致：tournamentId 挂接 + 未屏蔽 status!=0）
     prisma.video.groupBy({
       by: ["tournamentId"],
       where: { tournamentId: { not: null }, status: { not: 0 } },
       _count: { tournamentId: true },
     }),
-    // 参赛人数原料（2026-11-19 张老师反馈后台显示 0）：前台详情页口径＝挂接录像
-    // 持有者数（distinct user，getTourDetailStats 同源）——历届金羊杯为导入的
-    // 已结束比赛、报名表恒空，按报名数统计恒 0；本行只取挂接录像的 user 列
+    // 参赛人数原料：挂接录像持有者（distinct user，getTourDetailStats 同源）
     prisma.video.findMany({
       where: { tournamentId: { not: null }, status: { not: 0 } },
       select: { tournamentId: true, user: true },
     }),
   ]);
+  const regMap = new Map(regCounts.map((c) => [c.tournamentId.toString(), c._count.tournamentId]));
   const videoMap = new Map(
     videoCounts.filter((v) => v.tournamentId !== null).map((v) => [v.tournamentId!.toString(), v._count.tournamentId]),
   );
@@ -129,8 +130,9 @@ export default async function AdminCompetitionsPage({
                 <th>简称</th>
                 <th>标识</th>
                 <th>发起人</th>
-                <th className="c">参加人数</th>
-                <th className="c">录像数</th>
+                <th className="c">报名人数</th>
+                <th className="c">参赛人数</th>
+                <th className="c">参赛录像</th>
                 <th className="c">总奖金</th>
                 <th>开始时间（北京）</th>
                 <th>结束时间（北京）</th>
@@ -153,6 +155,7 @@ export default async function AdminCompetitionsPage({
                     <td className="sub">{r.shortName}</td>
                     <td className="mono sub">{r.code || "—"}</td>
                     <td className="sub">{creatorMap.get(r.creatorId.toString()) ?? `#${r.creatorId}`}</td>
+                    <td className="c">{regMap.get(r.id.toString()) ?? 0}</td>
                     <td className="c">{holderMap.get(r.id.toString())?.size ?? 0}</td>
                     <td className="c">{videoMap.get(r.id.toString()) ?? 0}</td>
                     <td className="c" style={{ color: "#fdc61a" }}>¥{r.prizeTotal.toLocaleString("en-US")}</td>
@@ -194,7 +197,7 @@ export default async function AdminCompetitionsPage({
               })}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={12}>
                     <div className="admin_empty">
                       {st ? "该状态下暂无比赛" : "还没有比赛，用下方表单发起第一场"}
                     </div>

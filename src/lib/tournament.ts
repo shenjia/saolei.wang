@@ -957,18 +957,29 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
   return { joined: !!joined, videos: rows.length, bestTime, rank };
 }
 
-/** 比赛详情页统计（参赛人数=报名去重人数；录像数=挂接且未屏蔽） */
+/** 比赛详情页统计（张老师 2026-11-19 定：报名人数与参赛人数分开统计，不冲突）——
+ *  registrations=报名人数（tournament_entry 去重 user；为 0 时前台整行不显示，
+ *  历届导入的旧比赛不存在统计误差）；entries=参赛人数＝实际传了录像的持有者数
+ *  （distinct user）；videos=参赛录像数（挂接且未屏蔽） */
 export async function getTourDetailStats(
   compId: number
-): Promise<{ entries: number; videos: number }> {
-  // 参赛人数口径（张老师 2026-11-18 详情页反馈）：＝录像持有者数量（distinct user）——
-  // 历届金羊杯早已结束、报名表恒 0，报名数无意义；持有者与动态/排名自然一致
-  const holders = await prisma.video.findMany({
-    where: { tournamentId: BigInt(compId), status: { not: 0 } },
-    select: { user: true },
-  });
+): Promise<{ registrations: number; entries: number; videos: number }> {
+  const [regRows, holders] = await Promise.all([
+    prisma.tournamentEntry.findMany({
+      where: { tournamentId: BigInt(compId) },
+      select: { userId: true },
+    }),
+    prisma.video.findMany({
+      where: { tournamentId: BigInt(compId), status: { not: 0 } },
+      select: { user: true },
+    }),
+  ]);
   const videos = holders.length;
-  return { entries: new Set(holders.map((h) => h.user.toString())).size, videos };
+  return {
+    registrations: new Set(regRows.map((r) => r.userId.toString())).size,
+    entries: new Set(holders.map((h) => h.user.toString())).size,
+    videos,
+  };
 }
 
 /** 比赛录像分页（详情页「录像」板块）：按时间正序（早在前，张老师 14:45 口径「按时间顺序」），
