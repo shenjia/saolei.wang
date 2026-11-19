@@ -14,7 +14,7 @@ import { EditProfileDialog } from "@/components/admin/EditProfileDialog";
 import { LowTrustDialog } from "@/components/admin/LowTrustDialog";
 import { RankBanDialog } from "@/components/admin/RankBanDialog";
 import { AdminCard, LevelTag, RoleTag, StatusTag } from "@/components/admin/Widgets";
-import { TitleBadge } from "@/components/Cells";
+import { TitleBadge, PlayerAvatar } from "@/components/Cells";
 import { formatDate, score3bvs, scoreTime } from "@/lib/format";
 import { RelTime } from "@/components/RelTime";
 import { UserSigs } from "@/components/UserSigs";
@@ -129,6 +129,35 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       <div className="admin_grid c2">
         <AdminCard title="账号信息">
           <dl className="admin_kv">
+            {/* 头像（2026-11-19 张老师需求）：直观看到当前对外头像；仅超管且有真头像时
+                给「撤下头像」操作（列表行同款 user.removeAvatar） */}
+            <dt>头像</dt>
+            <dd>
+              <span className="admin_avatar_row">
+                <PlayerAvatar id={u.id} avatar={u.avatar} sex={u.sex} size="mid" />
+                {(() => {
+                  const av = u.avatar ?? "";
+                  const kind = av.startsWith("/uploads/avatar/")
+                    ? "上传头像"
+                    : av.startsWith("http")
+                      ? "OAuth 外链"
+                      : av === "1"
+                        ? "旧站照片墙照片"
+                        : "";
+                  if (!isSuper || !kind) return null;
+                  return (
+                    <AdminAction
+                      op="user.removeAvatar"
+                      params={{ id: u.id }}
+                      label="撤下头像"
+                      variant="warn"
+                      sm={false}
+                      confirm={`确认撤下「${u.chineseName}」的头像（${kind}）？全站立即恢复默认图；实体文件保留，用户重新上传即覆盖，操作记入日志。`}
+                    />
+                  );
+                })()}
+              </span>
+            </dd>
             <dt>ID</dt>
             <dd>{u.id}</dd>
             <dt>账号</dt>

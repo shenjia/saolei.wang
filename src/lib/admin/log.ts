@@ -28,6 +28,7 @@ export const OP_LABELS: Record<string, string> = {
   "user.delete": "删除玩家",
   "user.merge": "账户合并",
   "user.editProfile": "修改玩家资料",
+  "user.removeAvatar": "撤下玩家头像",
   "video.review": "审核录像",
   "video.batchReview": "批量审核录像",
   "video.markWatched": "标记已观看",

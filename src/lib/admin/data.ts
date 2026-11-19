@@ -44,6 +44,8 @@ export interface AdminUserRow extends UserBrief {
   videos: number;
   /** 可信用户组（2026-10-24）：录像分拣不检查 STNB 触发器 */
   trusted: boolean;
+  /** 头像原始值（2026-11-19 玩家管理头像列 + 撤下按钮；getLatestUsers 等轻路径缺省 undefined） */
+  avatar?: string;
 }
 
 const USER_ORDERS: Record<string, string> = {
@@ -278,6 +280,7 @@ export async function getUserList(
       sumTime,
       videos: vcMap.get(id) ?? 0,
       trusted: u.trusted,
+      avatar: u.avatar, // 2026-11-19 玩家管理头像列（UserBrief.findMany 全字段已含 avatar）
     });
   }
 

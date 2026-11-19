@@ -94,7 +94,10 @@ export default async function AccountManagePage({
 
   // 头像优先级与个人主页一致：新版上传 → OAuth 外链 → 本地照片墙 → 默认图
   // （2026-11-11 张老师定：默认图统一并轨 no.jpg；SelfAvatar 内部军衔制下按性别切军装默认头像）
-  const hasWallPhoto = existsSync(path.join(process.cwd(), "public", "images", "player", `${session.uid}.jpg`));
+  // 照片墙判据同样要求 avatar==='1'（2026-11-19 后台撤下头像置 '0' 后立即失效，与个人主页同口径）
+  const hasWallPhoto =
+    (me?.avatar ?? "") === "1" &&
+    existsSync(path.join(process.cwd(), "public", "images", "player", `${session.uid}.jpg`));
   const photo = resolveAvatarUrl(
     me?.avatar ?? "",
     hasWallPhoto ? `/images/player/${session.uid}.jpg` : DEFAULT_AVATAR,

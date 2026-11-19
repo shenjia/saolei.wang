@@ -541,6 +541,34 @@ table.admin_table td.c,
 table.admin_table th.c {
   text-align: center;
 }
+/* 玩家管理头像列（2026-11-19 张老师需求）：20px 缩略图（列表 small 档 / 详情 mid 档放大），
+   军装默认图同尺寸；「撤下」钮与头像同行竖排有间距 */
+.admin_avatar_cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.admin_avatar_cell img {
+  display: block;
+  border-radius: 3px;
+}
+.admin_avatar_cell + .admin_btn {
+  display: block;
+  margin: 4px auto 0;
+}
+/* 玩家详情「头像」行（2026-11-19）：mid 档 48px 展示 + 撤下钮同行 */
+.admin_avatar_row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin_avatar_row img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+}
 table.admin_table td.mono {
   font-family: Menlo, Consolas, monospace;
   font-size: 12px;

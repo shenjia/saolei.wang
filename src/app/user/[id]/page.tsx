@@ -303,10 +303,14 @@ export default async function UserViewPage({
   const showProfile = hasProfileFields || sigs.length > 0;
 
   // 照片优先级：新版上传头像（/uploads/avatar/…）→ OAuth 头像外链（http 开头）
-  // → 老用户本地照片墙（头像实体为 /images/player/{id}.jpg，以文件存在为准）→ 默认头像
+  // → 老用户本地照片墙（头像实体为 /images/player/{id}.jpg，文件在且 avatar==='1'
+  //   才显示——2026-11-19 后台「撤下头像」置 avatar='0' 后照片墙须立即失效，
+  //   光看文件存在会让撤下不生效）→ 默认头像
   // （2026-11-11 张老师定：默认图与玩家卡片/每日一星统一并轨 no.jpg；
   //   军衔制下按性别给军装默认头像，旧版称号观看者仍 no.jpg）
-  const hasWallPhoto = existsSync(path.join(process.cwd(), "public", "images", "player", `${userId}.jpg`));
+  const hasWallPhoto =
+    user.avatar === "1" &&
+    existsSync(path.join(process.cwd(), "public", "images", "player", `${userId}.jpg`));
   const photo = resolveAvatarUrl(
     user.avatar,
     hasWallPhoto ? `/images/player/${userId}.jpg` : DEFAULT_AVATAR,

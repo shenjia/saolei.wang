@@ -16,7 +16,7 @@ import type { SessionUser } from "@/lib/auth";
 import { USER_ROLE, VIDEO_STATUS, VIDEO_LEVELS, isManager, NEWS_TYPE, countsInTotal, RANK_BAN_DURATIONS, RANK_BAN_PERMANENT, AREA_LIST } from "@/lib/config";
 import { decodeLegacyEntities, formatDate } from "@/lib/format";
 import { CHINESE_NAME_RE, ENGLISH_NAME_RE } from "@/lib/register";
-import { AVATAR_REVIEW_STATUS } from "@/lib/avatar";
+import { AVATAR_REVIEW_STATUS, isDefaultAvatar } from "@/lib/avatar";
 import { generateAvatarSizes } from "@/lib/small-avatar-gen";
 import { publishNews } from "@/lib/news";
 import { reviewVideo, syncRecordNewsChain } from "@/lib/review";
@@ -135,6 +135,8 @@ export const OP_LEVELS: Record<string, AdminLevel> = {
   "user.setRankBan": "administrator",
   // 编辑玩家资料（2026-11-02 张老师需求）：处置面板可改玩家填写的资料（中文名/英文名等），超管专属
   "user.editProfile": "administrator",
+  // 手动撤下头像（2026-11-19 张老师需求）：全站恢复默认图，实体文件保留，超管专属
+  "user.removeAvatar": "administrator",
   // 给单个玩家发系统消息（2026-10-23）：manager 可用——与头像审核通知同级触达能力；
   // 全站广播 message.broadcast 仍是超管专属
   "user.sendSystemMessage": "manager",
@@ -689,6 +691,39 @@ async function dispatch(
         if (areaChanged) await applyRankAreaChange(tx, id, user.area, areaRaw);
       });
       return { ok: true, message: `已更新 ${chineseName}（#${id}）的资料：${changes.join("、")}` };
+    }
+
+    case "user.removeAvatar": {
+      /* 手动撤下头像（2026-11-19 张老师需求）：avatar 置 "0"（无头像态，全站按默认图渲染）。
+         只清标记不动实体文件（/uploads/avatar/… 与 /images/player/{id}.jpg 都留在磁盘），
+         用户随时重新上传即自然覆盖；photo 墙老用户的照片墙判据已收紧为 avatar==='1'
+         （user/[id] 与 account 两处 hasWallPhoto 逻辑），置 0 后前台立即不显示。
+         OAuth 外链头像也可撤（置 0 后 QQ/微信登录不会自动回写——hasOwnAvatarPhoto
+         只认上传路径与 "1"，"0" 视为「还没传照片」才会同步，而同步走审核队列需人工通过，
+         实际回写只发生在用户主动绑定/确认时）。 */
+      const id = toId(p.id);
+      if (!id) return { ok: false, error: "参数错误：缺少玩家 ID" };
+      const user = await prisma.user.findUnique({ where: { id: BigInt(id) }, select: { chineseName: true, avatar: true } });
+      if (!user) return { ok: false, error: "玩家不存在" };
+      if (isDefaultAvatar(user.avatar)) return { ok: false, error: "该玩家本就没有头像" };
+      const prev = user.avatar;
+      await prisma.user.update({ where: { id: BigInt(id) }, data: { avatar: "0", updateTime: BigInt(now()) } });
+      // 同步撤下其待审头像（若有）：撤的是「当前对外形象」，新传的那张不该再替上来
+      await prisma.avatarReview.updateMany({
+        where: { user: BigInt(id), status: AVATAR_REVIEW_STATUS.PENDING },
+        data: {
+          status: AVATAR_REVIEW_STATUS.REJECTED,
+          reviewer: BigInt(actor.uid),
+          reviewTime: BigInt(now()),
+          reason: "管理员撤下头像",
+        },
+      });
+      const prevLabel = prev === "1" ? "旧站照片墙照片" : prev.startsWith("http") ? "OAuth 外链头像" : "上传头像";
+      return {
+        ok: true,
+        message: `已撤下 ${user.chineseName}（#${id}）的头像（${prevLabel}），全站恢复默认图`,
+        logDetail: `撤下 ${user.chineseName}（#${id}）的头像（原值 ${prevLabel}），实体文件保留`,
+      };
     }
 
     case "user.delete": {

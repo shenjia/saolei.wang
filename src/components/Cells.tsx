@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { INVALID_3BVS_TIP } from "@/lib/config";
 import { resolveAvatarUrl } from "@/lib/avatar";
-import { smallAvatarUrlFor } from "@/lib/small-avatar";
+import { smallAvatarUrlFor, avatarUrlFor } from "@/lib/small-avatar";
 import { score3bvs, scoreTime, TIME_NEVER } from "@/lib/format";
 import { RelTime } from "./RelTime";
 import { ActLine } from "./ActLine";
 import { AvatarImg } from "./AvatarImg";
+import { DefaultAvatar } from "./DefaultAvatar";
 
 // TitleBadge 已拆分至独立客户端组件（2026-10-17 双体系渲染），此处 re-export 保持 26 处引用不变
 export { TitleBadge } from "./TitleBadge";
@@ -47,6 +48,33 @@ export function PlayerTip({
       {act ? <span className={`pt_act act_${act}`}>（{actTip}）</span> : <ActLine uid={id} />}
     </>
   );
+}
+
+/** 玩家头像缩略图（2026-11-19 管理后台玩家列表用）：与前台同口径三类真头像
+ *  （新版上传 /uploads、OAuth 外链 http、旧站照片墙 avatar==="1"），有头像按展示档
+ *  加载 WebP 小图（缺失 onError 回退原图）；无头像渲染军衔制性别军装默认图
+ *  （后台管理员观看者默认军衔制，DefaultAvatar 客户端组件自行处理体系切换）。
+ *  size 对应 DefaultAvatar 展示档：列表行用 small（20px）。 */
+export function PlayerAvatar({
+  id,
+  avatar,
+  sex,
+  size = "small",
+  className = "",
+}: {
+  id: number;
+  /** user.avatar 原始值 */
+  avatar?: string;
+  sex: number;
+  size?: "small" | "mid";
+  className?: string;
+}) {
+  const val = avatar ?? "";
+  const real = val.startsWith("/uploads/avatar/") || val.startsWith("http") || val === "1";
+  if (!real) return <DefaultAvatar sex={sex} size={size} className={className} />;
+  const url = resolveAvatarUrl(val, val === "1" ? `/images/player/${id}.jpg` : "");
+  const sized = size === "small" ? smallAvatarUrlFor(val, id) : avatarUrlFor(val, id, "mid");
+  return <AvatarImg src={sized ?? url} fallback={url} className={className} width={20} height={20} />;
 }
 
 /** 用户名 + 性别图标（移植 _avatarCell）

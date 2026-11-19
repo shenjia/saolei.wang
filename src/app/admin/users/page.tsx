@@ -6,7 +6,7 @@
 // 2026-11-13（张老师反馈）：防小号 KPI 卡片上移到页头（所有 tab 恒显示）；切 tab 筛选条不消失。
 
 import Link from "next/link";
-import { PlayerTip } from "@/components/Cells";
+import { PlayerTip, PlayerAvatar } from "@/components/Cells";
 import { Suspense } from "react";
 import { getSession } from "@/lib/auth";
 import { USER_ROLE } from "@/lib/config";
@@ -294,6 +294,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
             <thead>
               <tr>
                 <th className="c">ID</th>
+                <th className="c">头像</th>
                 <th>玩家</th>
                 <th>账号</th>
                 <th>昵称</th>
@@ -314,6 +315,23 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 <tr key={u.id} className={u.status !== 0 ? "off" : undefined}>
                   <td className="c sub">
                     <Hl text={String(u.id)} col="id" />
+                  </td>
+                  {/* 头像列（2026-11-19 张老师需求）：列表直观看头像；有真头像且超管时
+                      给「撤下」小钮（user.removeAvatar，置 avatar='0' 全站恢复默认图，
+                      实体文件保留可恢复） */}
+                  <td className="c">
+                    <span className="admin_avatar_cell">
+                      <PlayerAvatar id={u.id} avatar={u.avatar} sex={u.sex} size="small" />
+                    </span>
+                    {isSuper && u.avatar && (u.avatar.startsWith("/uploads/avatar/") || u.avatar.startsWith("http") || u.avatar === "1") && (
+                      <AdminAction
+                        op="user.removeAvatar"
+                        params={{ id: u.id }}
+                        label="撤下"
+                        variant="warn"
+                        confirm={`确认撤下「${u.chineseName}」的头像？全站立即恢复默认图；实体文件保留，用户重新上传即覆盖，操作记入日志。`}
+                      />
+                    )}
                   </td>
                   <td>
                     <Link className="link" href={`/admin/users/${u.id}`}>
@@ -403,7 +421,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={14}>
+                  <td colSpan={15}>
                     <div className="admin_empty">没有符合条件的玩家</div>
                   </td>
                 </tr>
