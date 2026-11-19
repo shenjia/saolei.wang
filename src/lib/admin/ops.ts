@@ -45,6 +45,22 @@ async function parseCompCode(v: unknown, excludeId?: number): Promise<string | n
   return s;
 }
 
+/** 比赛代号参数校验（2026-11-19 张老师定）：默认留空（null=不设置/保持不变）；
+ *  手填时 2-20 位字母/数字/下划线/连字符（列宽 varchar(20)），全库查重（唯一索引兜底） */
+async function parseCompAlias(v: unknown, excludeId?: number): Promise<string | null | { error: string }> {
+  const s = String(v ?? "").trim();
+  if (!s) return null; // 默认留空
+  if (!/^[0-9A-Za-z_-]{2,20}$/.test(s)) {
+    return { error: "比赛代号应为 2-20 位字母、数字、下划线或连字符" };
+  }
+  const hit = await prisma.tournament.findFirst({
+    where: { alias: s, ...(excludeId ? { id: { not: BigInt(excludeId) } } : {}) },
+    select: { id: true, name: true },
+  });
+  if (hit) return { error: `比赛代号 ${s} 已被「${hit.name}」（#${hit.id}）占用，请换一个` };
+  return s;
+}
+
 /** 收录录像级别参数解析（张老师 2026-11-13：可多选，默认初中高都有）。
  *  接受数组或逗号分隔串；非法键剔除，全空回退全级别。返回落库串（逗号分隔） */
 function parseIncludeLevels(v: unknown): string {
@@ -1742,10 +1758,18 @@ async function dispatch(
       if (!creator) return { ok: false, error: `发起人不存在（UID ${creatorId}）` };
       const sc = parseScoreConf(p);
       if (sc && "error" in sc) return { ok: false, error: `参数错误：${sc.error}` };
-      // 比赛标识：默认留空（NULL=前台不展示标识行），手填则查重
+      // 比赛标识：默认留空（NULL=比赛开始时惰性自动生成），手填则查重
       const codeIn = await parseCompCode(p.code);
       if (codeIn !== null && typeof codeIn !== "string") return { ok: false, error: codeIn.error };
       const codeSet = codeIn as string | null; // error 形态已拦，收窄回 string|null
+      // 计时模式（2026-11-19 张老师定）：windowHours>0=个人计时（任选窗口），0=统一计时
+      const whRaw = Number(p.windowHours);
+      const windowHours =
+        p.windowHours !== undefined && Number.isInteger(whRaw) && whRaw > 0 ? Math.min(whRaw, 168) : 0;
+      // 比赛代号（alias，2026-11-19 张老师定）：可留空，用作详情页链接
+      const aliasIn = await parseCompAlias(p.alias);
+      if (typeof aliasIn === "object" && aliasIn && "error" in aliasIn) return { ok: false, error: aliasIn.error };
+      const aliasSet = aliasIn === null ? null : (aliasIn as string);
       const created = await prisma.tournament.create({
         data: {
           name,
@@ -1757,6 +1781,8 @@ async function dispatch(
           prizeTotal,
           prizePlan,
           code: codeSet,
+          alias: aliasSet,
+          windowHours,
           includeLevels: parseIncludeLevels(p.levels),
           scoreMode: sc?.mode ?? "",
           scoreConfig: sc?.config ?? "",
@@ -1805,6 +1831,34 @@ async function dispatch(
         if (codeIn === null || typeof codeIn === "string") codeUpdate = codeIn;
         else return { ok: false, error: codeIn.error };
       }
+      // 比赛开始后统一标识不可改（2026-11-19 张老师定文案「比赛开始后不可更改」——
+      // 后台同样拦：进行中/已结束的比赛 codeUpdate 恒 undefined）
+      const nowSec = now();
+      if (codeUpdate !== undefined && nowSec >= Number(row.startTime)) {
+        return { ok: false, error: "比赛已开始，统一标识不可更改" };
+      }
+      // 计时模式（2026-11-19）：windowHours>0=个人计时，0=统一计时；
+      // 比赛开始后改窗口时长会造成已开窗口与新窗口不一致——同样拦
+      const whRaw = Number(p.windowHours);
+      const windowHours =
+        p.windowHours !== undefined && Number.isInteger(whRaw) && whRaw > 0 ? Math.min(whRaw, 168) : 0;
+      if (windowHours !== (row.windowHours ?? 0) && nowSec >= Number(row.startTime)) {
+        return { ok: false, error: "比赛已开始，计时模式不可更改" };
+      }
+      // 比赛代号（alias）：参数缺省=保持原值；填写则 2-20 位字母数字/_/-，查重
+      let aliasUpdate: string | null | undefined = undefined;
+      if (p.alias !== undefined) {
+        const aliasIn = await parseCompAlias(p.alias);
+        if (typeof aliasIn === "object" && aliasIn && "error" in aliasIn) return { ok: false, error: aliasIn.error };
+        const next = aliasIn === null ? null : (aliasIn as string);
+        if (next !== row.alias) {
+          if (next) {
+            const dup = await prisma.tournament.findUnique({ where: { alias: next }, select: { id: true } });
+            if (dup && Number(dup.id) !== id) return { ok: false, error: `比赛代号 ${next} 已被 #${dup.id} 占用` };
+          }
+          aliasUpdate = next;
+        }
+      }
       await prisma.tournament.update({
         where: { id: BigInt(id) },
         data: {
@@ -1817,6 +1871,8 @@ async function dispatch(
           prizeTotal,
           prizePlan,
           ...(codeUpdate !== undefined ? { code: codeUpdate } : {}),
+          ...(aliasUpdate !== undefined ? { alias: aliasUpdate } : {}),
+          windowHours,
           includeLevels: parseIncludeLevels(p.levels),
           scoreMode: scEdit?.mode ?? "",
           scoreConfig: scEdit?.config ?? "",

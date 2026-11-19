@@ -40,6 +40,7 @@ import {
   getTourRanking,
   getTourVideosPage,
   getTournamentDetail,
+  resolveTourIdParam,
 } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
@@ -53,9 +54,9 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const compId = parseInt(id, 10);
-  if (!compId) return { title: "比赛" };
-  const c = await getTournamentDetail(compId);
+  const resolved = await resolveTourIdParam(id);
+  if (!resolved) return { title: "比赛" };
+  const c = await getTournamentDetail(resolved);
   return { title: c ? `${c.name}` : "比赛" };
 }
 
@@ -68,8 +69,10 @@ export default async function CompetitionDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const compId = parseInt(id, 10);
-  if (!Number.isInteger(compId) || compId <= 0) notFound();
+  // 代号寻址（2026-11-19 张老师定）：/tournaments/<alias> 与 /tournaments/<id> 等价，
+  // 代号优先（gsc13 → 比赛 21），避免裸 id 链接
+  const compId = await resolveTourIdParam(id);
+  if (!compId) notFound();
 
   const session = await getSession();
   const now = Math.floor(Date.now() / 1000);

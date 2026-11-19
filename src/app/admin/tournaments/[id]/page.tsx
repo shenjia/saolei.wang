@@ -210,7 +210,16 @@ export default async function AdminCompetitionDetailPage({
               </>,
             )}
             {info("简称", comp.shortName)}
+            {info("比赛代号", <span className="mono">{comp.alias || "—"}</span>)}
             {info("比赛标识", <span className="mono">{comp.code || "—"}</span>)}
+            {
+              info(
+                "计时模式",
+                (comp.windowHours ?? 0) > 0
+                  ? `个人计时（任选 ${comp.windowHours} 小时窗口）`
+                  : "统一计时（全员同期开闭）"
+              )
+            }
             {info("起止时间", `${cstStr(Number(comp.startTime))} ~ ${cstStr(Number(comp.endTime))}（北京）`)}
             {info("比赛级别", levels.map((l) => LEVEL_NAMES[l]).join("、"))}
             {info("成绩计算方式", scoreModeDesc(comp.scoreMode, comp.scoreConfig))}

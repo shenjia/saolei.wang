@@ -15,7 +15,9 @@ export interface TourFormRow {
   id: number;
   name: string;
   shortName: string;
-  code: string; // 比赛标识（""=未设置）
+  code: string; // 统一比赛标识（""=未设置，比赛开始后自动生成不可改）
+  alias: string; // 比赛代号（""=未设置；用于详情页链接 /tournaments/<alias>）
+  windowHours: number; // 个人计时窗口小时数（0=统一计时集体赛）
   startTime: string; // "YYYY-MM-DD HH:mm"
   endTime: string;
   rules: string;
@@ -34,7 +36,7 @@ function cstInput(sec: number): string {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 
-const EMPTY = { name: "", shortName: "", code: "", startTime: "", endTime: "", rules: "", creatorId: "", prizeTotal: "", prizePlan: "" };
+const EMPTY = { name: "", shortName: "", code: "", alias: "", startTime: "", endTime: "", rules: "", creatorId: "", prizeTotal: "", prizePlan: "" };
 
 /** 新建默认起止时间（张老师 2026-11-13：当天北京 20:00 起，7 日后 20:00 止） */
 function defaultTimeInput(offsetDays: number): string {
@@ -53,6 +55,12 @@ export function TournamentForm() {
   const [levels, setLevels] = useState<string[]>([...ALL_LEVELS]);
   // 成绩计算方式（张老师 2026-11-13 四期：创建/编辑时配置，后续可扩更多方式）
   const [scoreMode, setScoreMode] = useState("");
+  // 计时模式（张老师 2026-11-19 定）：all=统一计时（全员同期开闭）/ per=个人计时
+  // （选手在比赛范围内任选窗口手动开赛）；per 需填小时数（默认 2）
+  const [timingMode, setTimingMode] = useState<"all" | "per">("all");
+  const [windowHours, setWindowHours] = useState("2");
+  // 比赛代号（alias）：默认用于详情页链接 /tournaments/<alias>，避免裸 id
+  const [alias, setAlias] = useState("");
   const [topn, setTopn] = useState({ beg: "1", int: "1", exp: "1" });
   // sum_topn 各级别保底成绩（秒；张老师 2026-11-18 定，默认初10/中60/高240，盘数不足按此补足）
   const [floor, setFloor] = useState({ beg: "10", int: "60", exp: "240" });
@@ -79,6 +87,7 @@ export function TournamentForm() {
         name: d.name,
         shortName: d.shortName,
         code: d.code ?? "",
+        alias: d.alias ?? "",
         startTime: cstInput(d.startSec),
         endTime: cstInput(d.endSec),
         rules: d.rules,
@@ -88,6 +97,9 @@ export function TournamentForm() {
       });
       setLevels(d.levels.length ? [...ALL_LEVELS].filter((a) => d.levels.includes(a)) : [...ALL_LEVELS]);
       setScoreMode(d.scoreMode ?? "");
+      setTimingMode(d.windowHours > 0 ? "per" : "all");
+      setWindowHours(d.windowHours > 0 ? String(d.windowHours) : "2");
+      setAlias(d.alias ?? "");
       setTopn({
         beg: String(d.scoreConf?.beg ?? 1),
         int: String(d.scoreConf?.int ?? 1),
@@ -117,6 +129,9 @@ export function TournamentForm() {
     setValues({ ...EMPTY, ...newDefaults() });
     setLevels([...ALL_LEVELS]);
     setScoreMode("");
+    setTimingMode("all");
+    setWindowHours("2");
+    setAlias("");
     setTopn({ beg: "1", int: "1", exp: "1" });
     setFloor({ beg: "10", int: "60", exp: "240" });
     setTarget("");
@@ -151,6 +166,16 @@ export function TournamentForm() {
     if (!values.shortName.trim()) return toast("请填写比赛简称（3-4 字）", "error");
     const code = values.code.trim();
     if (code && !/^[0-9A-Za-z]{1,10}$/.test(code)) return toast("比赛标识应为 1-10 位数字或大小写字母", "error");
+    // 计时模式参数（张老师 2026-11-19 定）：个人计时需 1-168 小时（1 小时~7 天）
+    const wh = timingMode === "per" ? parseInt(windowHours, 10) : 0;
+    if (timingMode === "per" && (!Number.isInteger(wh) || wh < 1 || wh > 168)) {
+      return toast("个人计时窗口应为 1-168 小时（1 小时 ~ 7 天）", "error");
+    }
+    // 比赛代号（alias）：可留空；填写则 2-20 位字母数字/下划线/连字符
+    const aliasTrim = alias.trim();
+    if (aliasTrim && !/^[0-9A-Za-z_-]{2,20}$/.test(aliasTrim)) {
+      return toast("比赛代号应为 2-20 位字母、数字、下划线或连字符", "error");
+    }
     if (!values.startTime || !values.endTime) return toast("请填写起止时间", "error");
     if (values.endTime <= values.startTime) return toast("结束时间必须晚于开始时间", "error");
     if (!values.rules.trim()) return toast("请填写比赛规则", "error");
@@ -204,6 +229,8 @@ export function TournamentForm() {
                 levels,
                 scoreMode,
                 scoreConfig,
+                alias: aliasTrim,
+                windowHours: wh,
               }
             : {
                 op: "tournament.add",
@@ -219,6 +246,8 @@ export function TournamentForm() {
                 levels,
                 scoreMode,
                 scoreConfig,
+                alias: aliasTrim,
+                windowHours: wh,
               }
         ),
       });
@@ -294,12 +323,12 @@ export function TournamentForm() {
           编辑模式回填当前标识，改了才更新、不动原值 */}
       <div style={{ ...twoCol, alignItems: "end" }}>
         <label style={labelStyle}>
-          比赛标识（可留空）
+          统一比赛标识（可留空，比赛开始后不可更改）
           <div style={{ display: "flex", gap: 8 }}>
             <input
               className="admin_input"
               maxLength={10}
-              placeholder="留空则不设置"
+              placeholder="留空则比赛开始时自动生成"
               value={values.code}
               onChange={(e) => set("code", e.target.value)}
               style={{ flex: 1 }}
@@ -315,6 +344,45 @@ export function TournamentForm() {
             </button>
           </div>
         </label>
+        <label style={labelStyle}>
+          比赛代号（可留空，用作链接 /tournaments/代号）
+          <input
+            className="admin_input"
+            maxLength={20}
+            placeholder="如：gsc14"
+            value={alias}
+            onChange={(e) => setAlias(e.target.value)}
+          />
+        </label>
+      </div>
+
+      {/* 计时模式（张老师 2026-11-19 定）：统一计时=全员同期开闭（现状）；
+          个人计时=选手在比赛范围内任选窗口手动开赛，窗口时长默认 2 小时 */}
+      <div style={labelStyle}>
+        计时模式
+        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2", cursor: "pointer" }}>
+            <input type="radio" checked={timingMode === "all"} onChange={() => setTimingMode("all")} />
+            统一计时（全员同期开始同期结束）
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2", cursor: "pointer" }}>
+            <input type="radio" checked={timingMode === "per"} onChange={() => setTimingMode("per")} />
+            个人计时（任选时间窗口）
+          </label>
+          {timingMode === "per" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2" }}>
+              窗口时长
+              <input
+                className="admin_input"
+                style={{ width: 64 }}
+                inputMode="numeric"
+                value={windowHours}
+                onChange={(e) => setWindowHours(e.target.value)}
+              />
+              小时（默认 2）
+            </span>
+          )}
+        </div>
       </div>
 
       <div style={twoCol}>

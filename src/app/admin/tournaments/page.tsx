@@ -173,6 +173,8 @@ export default async function AdminCompetitionsPage({
                           name: r.name,
                           shortName: r.shortName,
                           code: r.code ?? "",
+                          alias: r.alias ?? "",
+                          windowHours: r.windowHours ?? 0,
                           rules: r.rules,
                           creatorId: Number(r.creatorId),
                           prizeTotal: r.prizeTotal,

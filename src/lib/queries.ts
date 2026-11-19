@@ -97,7 +97,7 @@ export interface NewsItem {
   /** 关注/取关动态的被关注人（2026-11-18）：渲染「关注了 XX」用，其余类型 null */
   followee: (UserBrief & { title: string; classic: { name: string; color: string } | null }) | null;
   /** 报名参赛动态的比赛主体（2026-11-19 type=58）：渲染「报名参加了 FFFFF」可点跳详情页，其余类型 null */
-  tour: { name: string; shortName: string; start: number; end: number } | null;
+  tour: { name: string; shortName: string; alias: string; start: number; end: number } | null;
 }
 
 export interface RankingUser extends UserBrief {
@@ -707,7 +707,7 @@ export async function getNews(opts: {
   }
   // 报名参赛动态（type=58，2026-11-19）：reference=比赛 id，批量带出比赛主体
   // （全称/简称/起止时刻）供渲染「报名参加了 FFFFF」可点跳详情页
-  const tourMap = new Map<number, { name: string; shortName: string; start: number; end: number }>();
+  const tourMap = new Map<number, { name: string; shortName: string; alias: string; start: number; end: number }>();
   {
     const tourRefs = [
       ...new Set(
@@ -720,12 +720,13 @@ export async function getNews(opts: {
     if (tourRefs.length) {
       const tours = await prisma.tournament.findMany({
         where: { id: { in: tourRefs.map(BigInt) } },
-        select: { id: true, name: true, shortName: true, startTime: true, endTime: true },
+        select: { id: true, name: true, shortName: true, alias: true, startTime: true, endTime: true },
       });
       for (const t of tours) {
         tourMap.set(N(t.id), {
           name: t.name,
           shortName: t.shortName,
+          alias: t.alias ?? "",
           start: Number(t.startTime),
           end: Number(t.endTime),
         });

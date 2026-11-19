@@ -106,6 +106,7 @@ export async function genUniqueTourCode(): Promise<string> {
 
 export interface TourRow {
   id: string;
+  alias: string; // 比赛代号（""=未设置；详情页链接优先用 /tournaments/<alias>，2026-11-19）
   name: string;
   shortName: string;
   status: TournamentStatus;
@@ -232,6 +233,7 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
     const cid = c.id.toString();
     return {
       id: cid,
+      alias: c.alias ?? "",
       name: c.name,
       shortName: c.shortName,
       status: tourStatus(c.startTime, c.endTime, now),
@@ -437,6 +439,26 @@ export async function ensureTourLifecycleEvents(
       select: { id: true },
     });
     if (!hit) await addTourEvent(Number(c.id), TOUR_EVENT_STARTED);
+    // 统一标识自动生成（2026-11-19 张老师定：比赛开始时标识还留空则随机生成）。
+    // 5 位数字+大小写字母（同后台 genUniqueTourCode 形态），唯一索引兜底重试。
+    // 只在「进行中」首次发现时生成一次：已生成（code 非空）即跳过，恒定 O(1)。
+    const comp = await prisma.tournament.findUnique({
+      where: { id: cid },
+      select: { code: true },
+    });
+    if (comp && !comp.code) {
+      const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+      for (let attempt = 0; attempt < 5; attempt++) {
+        let code = "";
+        for (let i = 0; i < 5; i++) code += CHARS[Math.floor(Math.random() * CHARS.length)];
+        try {
+          await prisma.tournament.update({ where: { id: cid }, data: { code } });
+          break;
+        } catch {
+          // P2002 唯一冲突 → 重抽
+        }
+      }
+    }
   }
   if (now >= end) {
     const hit = await prisma.tournamentEvent.findFirst({
@@ -1039,6 +1061,18 @@ export async function getTourVideosPage(
 // ---------- 详情（2026-11-13 二期：/tournaments/[id]）----------
 
 /** 单场比赛完整行（与列表 TourRow 同构，详情页顶部板块复用 TourBlock 渲染） */
+/** 详情页路由参数解析（2026-11-19 张老师定）：/tournaments/<id> 或 /tournaments/<alias>。
+ *  纯数字 → 按 id；否则按比赛代号 alias 查（gsc13 → 21）；查不到 → null（notFound）。 */
+export async function resolveTourIdParam(raw: string): Promise<number | null> {
+  const n = parseInt(raw, 10);
+  if (/^\d+$/.test(raw) && Number.isInteger(n) && n > 0) return n;
+  const hit = await prisma.tournament.findUnique({
+    where: { alias: raw },
+    select: { id: true },
+  });
+  return hit ? Number(hit.id) : null;
+}
+
 export async function getTournamentDetail(
   id: number,
   uid?: number
@@ -1120,6 +1154,7 @@ export async function getTournamentDetail(
     : null;
   return {
     id: c.id.toString(),
+    alias: c.alias ?? "",
     name: c.name,
     shortName: c.shortName,
     status: tourStatus(c.startTime, c.endTime, now),
