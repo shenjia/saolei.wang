@@ -68,6 +68,9 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
     /** 录像评论动态：楼主名快照（2026-10-22 写入点起有） */
     vn?: string;
   };
+  // BV 收集动态（type=57，2026-11-19）：kind=first 首收（绿✓下标）/ kind=pb 破本BV最好成绩
+  const isBv = news.type === NEWS_TYPE.BV_RECORD;
+  const bvFirst = isBv && d.kind === "first";
   const authorCells = news.author && (
     <>
       <AvatarCell id={news.author.id} name={news.author.chineseName} englishName={news.author.englishName} sex={news.author.sex} className="author" gender="small" link />
@@ -126,6 +129,40 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
           <>
             {authorCells}
             <em>正式入伍，开始扫雷生涯！</em>
+          </>
+        )}
+        {isBv && news.author && (
+          <>
+            {authorCells}
+            {/* 文案（2026-11-19 张老师定）：「刷新了初级40BV时间纪录 x.xxx」——
+                首收也是「刷新了」（首盘即该 BV 时间纪录，本就是从无到有的刷新） */}
+            刷新了
+            <span className="record person">
+              {LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}
+              BV
+            </span>
+            时间纪录
+            {bvFirst ? (
+              /* 首收：成绩后绿色 ✓ 下标（同录像列表本BV标记 .mk 绿色 #a6e22e 语言） */
+              <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
+                {formatScore("time", d.cr!)}
+                <i className="bv_check" aria-label="首次收集本BV">✓</i>
+              </Link>
+            ) : (
+              /* 破 PB：金色提升值，同首页破纪录动态形态（DeltaArrow 时间▼=更快）。
+                  or 缺失（脏数据防御）按 0 兜底——delta 显示本盘成绩绝对值，箭头方向语义不变 */
+              <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
+                {formatScore("time", d.cr!)}
+              </Link>
+            )}
+            {!bvFirst && (
+              <span className="record_extra">
+                <span className="delta">
+                  <DeltaArrow dir="down" />
+                  {formatDelta("time", d.or ?? 0, d.cr ?? 0)}
+                </span>
+              </span>
+            )}
           </>
         )}
         {news.type === NEWS_TYPE.PERSON_RECORD && news.author && (
@@ -310,7 +347,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
         )}
         {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
             渲染块移除——details 的 ti/cond 字段随存量行一并消失 */}
-        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56].includes(news.type) && (
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56, 57].includes(news.type) && (
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>

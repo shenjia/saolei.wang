@@ -387,9 +387,12 @@ function newsFeedSqlParts(opts: NewsFeedSqlOpts): { conds: string[]; params: unk
     conds.push(`n.type IN (${opts.types.map((t) => Number(t)).join(",")})`);
   } else if (opts.home) {
     const marks = NEWS_RECORD_FIRST_MARKS.map((m) => `n.details_data LIKE '%${m}%'`).join(" OR ");
+    const bvMarks = NEWS_BV_FIRST_MARKS.map((m) => `n.details_data LIKE '%${m}%'`).join(" OR ");
     conds.push(
       `n.type IN (${NEWS_HOME_TYPES.map(Number).join(",")})` +
-        ` AND NOT (n.type = ${NEWS_TYPE.PERSON_RECORD} AND (${marks} OR n.exp_time = 0 OR n.ranked = 0))`
+        ` AND NOT (n.type = ${NEWS_TYPE.PERSON_RECORD} AND (${marks} OR n.exp_time = 0 OR n.ranked = 0))` +
+        // BV 收集动态首收行（kind=first）不进首页（2026-11-19；破 PB 行不受限，与 Prisma 路径同义）
+        ` AND NOT (n.type = ${NEWS_TYPE.BV_RECORD} AND (${bvMarks}))`
     );
   } else if (opts.level) {
     conds.push(`n.type IN (${NEWS_LEVEL_TYPES.join(",")})`);
@@ -451,6 +454,12 @@ function feedTypeFilter(opts: {
   return { type: { notIn: NEWS_FEED_EXCLUDED } };
 }
 
+/** BV 收集动态（type=57，2026-11-19）首收行（kind=first）在 details_data 里的双落库形态：
+ *  新写入行 JSON.stringify → "kind":"first"；补发脚本/防御兜底或字符串序列化 → "kind": "first"。
+ *  home 口径据此排除首收（量大不值得放首页，张老师 2026-11-19 定：
+ *  只破 PB「刷新了」进首页、首收「✓」不进），渲染层同判一致 */
+export const NEWS_BV_FIRST_MARKS: string[] = ['"kind":"first"', '"kind": "first"'];
+
 /** 首页新闻流类型过滤（2026-10-25 张老师定，2026-10-26 扩口径）：NEWS_HOME_TYPES 白名单内，
  *  再排除破纪录动态（type=20）中的两类：
  *  ① 首创行 or=0 渲染「创造了」——成绩不值得放首页（10-25 原口径）；
@@ -460,17 +469,26 @@ function feedTypeFilter(opts: {
  *    本过滤是首页内容闸不是军衔口径，ranked=0 排除口径保留不变。
  *  or=0 落库两种形态（新行数字 "or":0 / 同步存量行字符串 "or":"0"，渲染层 "0">0 同判 false），
  *  details_data 是 VarChar 无法做 JSON 路径过滤，用 contains 双标记匹配（形态普查 2026-10-25 全覆盖）。
+ *  2026-11-19 BV 收集动态（type=57）纳入白名单：排除首收行（kind=first 双形态 contains），
+ *  破 PB 行「刷新了」照常进首页（张老师定：同「刷新了」口径）。
  *  getNews / getNewsPage / getNewsCount 三处 home 分支共用，保证行集与计数严格一致 */
 function homeNewsTypeFilter() {
+  const bvFirst = NEWS_BV_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } }));
   return {
     type: { in: NEWS_HOME_TYPES },
     NOT: {
-      type: NEWS_TYPE.PERSON_RECORD,
       OR: [
-        ...NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
-        // 未入榜/无高级成绩快照（news 表 exp_time/ranked 列，写入时定值；首页内容闸，非军衔口径）
-        { expTime: BigInt(0) },
-        { ranked: BigInt(0) },
+        {
+          type: NEWS_TYPE.PERSON_RECORD,
+          OR: [
+            ...NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
+            // 未入榜/无高级成绩快照（news 表 exp_time/ranked 列，写入时定值；首页内容闸，非军衔口径）
+            { expTime: BigInt(0) },
+            { ranked: BigInt(0) },
+          ],
+        },
+        // BV 收集动态首收行（kind=first）：不进首页（破 PB 行不受此条限制）
+        { type: NEWS_TYPE.BV_RECORD, OR: bvFirst },
       ],
     },
   };

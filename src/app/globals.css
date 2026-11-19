@@ -5317,6 +5317,25 @@ body #page.ranking_old .ranking_box {
   color: #a6e22e;
 }
 
+/* BV 收集动态绿✓下标（2026-11-19 张老师需求 type=57 kind=first）：
+   「刷新了初级40BV时间纪录 x.xxx」成绩尾部挂小号绿✓，
+   绝对定位在数字右下不占排版——形态同录像列表本BV标记 .bv_marked .mk
+   （首收绿 #a6e22e，globals.css 14719 行单一数据源），此处显式落同色。
+   首收无提升值（无旧纪录），✓ 即视觉终点；破 PB 行不出✓（走金色 delta 提升）。 */
+#news a.score.record_score .bv_check {
+  position: absolute;
+  margin-left: 2px;
+  bottom: -0.35em;
+  font-style: normal;
+  font-weight: bold;
+  font-size: 0.75em;
+  color: #a6e22e;
+  pointer-events: none;
+}
+#news a.score.record_score {
+  position: relative; /* ✓ 下标的定位锚（record_score 原无定位，就地补） */
+}
+
 /* 当选每日一星动态（2026-10-25 张老师定）：文案金色（#fdc61d 全站金牌色，与 .score 成绩金同源）。
    news_star 挂在 <em> 上——其余类型的 em 是常规斜体灰，本类型用 (1,2,1) 提权盖过 */
 #news .table td em.news_star {

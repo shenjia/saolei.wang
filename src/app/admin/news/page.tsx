@@ -28,6 +28,7 @@ const TYPE_NAMES: Record<number, string> = {
   [NEWS_TYPE.AVATAR]: "更换头像",
   [NEWS_TYPE.COMMENT]: "评论",
   [NEWS_TYPE.STAR]: "每日一星",
+  [NEWS_TYPE.BV_RECORD]: "BV收集",
 };
 
 const TYPE_OPTIONS: [string, string][] = [

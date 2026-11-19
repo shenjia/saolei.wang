@@ -507,6 +507,9 @@ export async function reviewVideo(
               // 2026-10-22：录像评论动态（kind=video 的 type=52）一并撤下——
               // 评论行已级联删除，动态再挂着就是「评论了一盘录像」挂空链
               NEWS_TYPE.COMMENT,
+              // BV 收集动态（2026-11-19 type=57）一并撤下：屏蔽后不挂空链。
+              // 翻案（0→20）走 REVIEWED 分支存在性检查自动补发
+              NEWS_TYPE.BV_RECORD,
             ],
           },
         },
@@ -606,6 +609,52 @@ export async function reviewVideo(
           max_3bv = GREATEST(max_3bv, VALUES(max_3bv)),
           update_time = VALUES(update_time)
       `;
+
+      // BV 收集动态（2026-11-19 张老师需求 type=57）：过审时按 video.first_bv/pb_bv
+      // 发布「刷新了初级40BV时间纪录 x.xxx」——首收（kind=first）带绿✓、
+      // 破本BV最好成绩（kind=pb）带金色提升值（同破纪录动态形态）。
+      // 时间取录像上传时间（同 PERSON_RECORD 口径）；不进个人主页级别/阶段筛选
+      // （不在 NEWS_LEVEL_TYPES / stage SQL 未含 57，天然排除）。
+      // 本BV标记与 type=20 纪录动态完全独立（时间链 vs 收集链），互不影响。
+      // 发布前存在性检查（reference+type 唯一语义）：重审翻案（0→20）重走本分支时
+      // 幂等，不重复发；NF 交互说明：本BV池查询不分 NF（video_info 无 NF 维度，
+      // upload 路由同口径），NF 盘破同池纪录同样发（链语义以 real_time 为准）。
+      if ((video.firstBv === 1 || video.pbBv === 1) && !rv.noRecord) {
+        const existing = await tx.news.findFirst({
+          where: { reference: BigInt(videoId), type: NEWS_TYPE.BV_RECORD },
+          select: { id: true },
+        });
+        if (!existing) {
+          // 破 PB 行的旧纪录值：上传落库时未存——按上传序取池内前序最好成绩
+          //（同 user+level+board_3bv、status<>0、上传时间早于本盘的 MIN(real_time)）。
+          // 与 first_bv/pb_bv 判定同源同口径（upload 路由 prevAgg 的时序版）。
+          // 平手盘（prevBest===timeMs，pb_bv=0）与首收行不进此查询
+          let bvPrev = 0;
+          if (video.pbBv === 1) {
+            const prevRows = await tx.$queryRaw<{ mt: number | null }[]>`
+              SELECT MIN(vi.real_time) AS mt
+              FROM video v2
+              JOIN video_info vi ON vi.id = v2.id
+              WHERE v2.\`user\` = ${BigInt(rv.user)}
+                AND v2.level = ${rv.level}
+                AND vi.board_3bv = ${rv.board3bv}
+                AND v2.status <> ${VIDEO_STATUS.BANNED}
+                AND (v2.create_time < ${BigInt(rv.createTime)}
+                  OR (v2.create_time = ${BigInt(rv.createTime)} AND v2.id < ${BigInt(videoId)}))
+            `;
+            bvPrev = prevRows[0]?.mt ?? 0;
+          }
+          const bvKind = video.firstBv === 1 ? "first" : "pb";
+          await publishNews({
+            tx,
+            type: NEWS_TYPE.BV_RECORD,
+            userId: rv.user,
+            reference: rv.id,
+            details: { lv: rv.level, kind: bvKind, or: bvPrev, cr: rv.realTime, bv: rv.board3bv },
+            createTime: rv.createTime,
+          });
+        }
+      }
     }
   });
 

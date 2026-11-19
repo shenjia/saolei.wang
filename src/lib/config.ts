@@ -502,6 +502,9 @@ export const NEWS_TYPE = {
   STAR: 54, // 当选每日一星（2026-10-25 恢复：评选落库时发金色动态）
   FOLLOW: 55, // 关注了XX（2026-11-18 张老师需求：仅「关注的人的动态」筛选可见，首页不进）
   UNFOLLOW: 56, // 取关了XX（同上）
+  BV_RECORD: 57, // BV 收集动态（2026-11-19 张老师需求：「刷新了初级40BV时间纪录 x.xx」，
+                 // kind=first 带绿色 ✓ 下标 / kind=pb 带金色提升值（同破纪录动态）；
+                 // 过审时发布（review.ts），时间取录像上传时间）
 } as const;
 
 /** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻）
@@ -519,6 +522,9 @@ export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
   NEWS_TYPE.STAR, // 当选每日一星（2026-10-25：金色动态上首页新闻流）
+  NEWS_TYPE.BV_RECORD, // BV 收集动态（2026-11-19）：仅破 PB（kind=pb）进首页新闻流；
+  // 首收（kind=first）量大且价值低（同首创纪录行 or=0 不进首页先例），
+  // home 过滤口径在 queries.ts homeNewsTypeFilter（kind 双形态 contains）
 ];
 
 /** 「创造了」首创行（or=0）在 details_data 里的两种落库形态：
