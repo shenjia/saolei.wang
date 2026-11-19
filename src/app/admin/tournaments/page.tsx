@@ -213,9 +213,11 @@ export default async function AdminCompetitionsPage({
         <AdminPager base="/admin/tournaments" params={{ st: st || undefined }} page={safePage} total={rows.length} pageSize={PAGE_SIZE} />
       </AdminCard>
 
-      <AdminCard title="发起比赛">
+      {/* 表单卡标题在 TournamentForm 内部管理（2026-11-19 张老师定：编辑态自动改
+          「编辑比赛信息」并滚动到表单，提交后回滚「发起比赛」） */}
+      <AdminCard>
         <div className="admin_note" style={{ marginBottom: 10 }}>
-          起止时间按北京时间填写；比赛标识默认留空，可手填或点「随机生成」（5 位，全库唯一）。
+          起止时间按北京时间填写；统一比赛标识默认留空（比赛开始时自动生成，开始后不可更改）。
           成绩采集与奖金发放为下一期功能。
         </div>
         <TournamentForm />

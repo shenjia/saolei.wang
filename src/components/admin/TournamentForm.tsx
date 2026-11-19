@@ -112,7 +112,9 @@ export function TournamentForm() {
         exp: String(Math.round((d.scoreConf?.floor?.exp ?? 240000) / 1000)),
       });
       setTarget(d.scoreConf?.target != null ? String(d.scoreConf.target) : "");
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // 滚动到表单（2026-11-19 张老师定：点编辑后自动跳到表单，表单在上/清单在下的布局里
+      // 清单可能很长，不滚用户看不到已进入编辑态）
+      document.getElementById("tour_form")?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     window.addEventListener("sl-comp-edit", onEdit);
     return () => window.removeEventListener("sl-comp-edit", onEdit);
@@ -269,12 +271,18 @@ export function TournamentForm() {
 
   return (
     <form
+      id="tour_form"
       style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" }}
       onSubmit={(e) => {
         e.preventDefault();
         if (!busy) void submit();
       }}
     >
+      {/* 表单标题（2026-11-19 张老师定）：发起「发起比赛」/编辑「编辑比赛信息」，
+          提交成功 reset 回滚「发起比赛」 */}
+      <h3 style={{ margin: 0, fontSize: 16, color: "#f8f8f2" }}>
+        {editing ? "编辑比赛信息" : "发起比赛"}
+      </h3>
       {editing && (
         <div style={{ color: "#e6b422", fontSize: 13 }}>
           正在编辑比赛 #{editing.id}（{editing.name}）{" "}
