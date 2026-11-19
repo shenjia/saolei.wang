@@ -31,6 +31,7 @@ import { AvatarImg } from "./AvatarImg";
 import { DefaultAvatar } from "./DefaultAvatar";
 import { RadarChart } from "./RadarChart";
 import { VsHistBlock } from "./VsHistBlock";
+import { AvatarFollowBtn } from "./AvatarFollowBtn";
 import { AREA_OVERSEAS, areaDisplay } from "@/lib/config";
 import type { RadarPoint } from "@/lib/radar";
 import type { VsHistRow } from "@/lib/vs";
@@ -54,6 +55,9 @@ export interface VsPickPlayer {
   areaRank: number | null;
   natRank: number | null;
   radar: RadarPoint[];
+  /** 观看者是否已关注该玩家（2026-11-19 张老师：竞技场卡片头像也出关注按钮）；
+   *  服务端装配传入（登录者非本人才有意义），换人后由 /api/vs/player 带回 */
+  viewerFollowing?: boolean;
 }
 
 // 防短期重复（2026-11-13 张老师定，localStorage 方案不建服务端流水表）：
@@ -253,8 +257,11 @@ function VsSearch({
  *  accent（2026-11-12 张老师）：右侧对手卡固定玫红实力图（与对决页 VsPanel 右卡
  *  同款 #e34f8c），不再是默认蓝、等进了对决页才变红；左卡缺省＝主页同款青蓝。
  *  hint（2026-11-14 张老师）：首次引导态——X 金底脉冲常显（含触屏），点一次即写
- *  localStorage 永不再提示（由调用方传 hint=未点过 && 本卡该高亮）。 */
-function VsCard({ p, accent, onSwap, hint = false }: { p: VsPickPlayer; accent?: string; onSwap: () => void; hint?: boolean }) {
+ *  localStorage 永不再提示（由调用方传 hint=未点过 && 本卡该高亮）。
+ *  viewerFollowing（2026-11-19 张老师）：头像 hover 关注按钮初始态——卡上玩家
+ *  非登录者本人时渲染（看自己不出），与对决页/侧栏卡片同一套 AvatarFollowBtn。 */
+function VsCard({ p, accent, onSwap, hint = false, meId }: { p: VsPickPlayer; accent?: string; onSwap: () => void; hint?: boolean; /** 登录者 id：卡上玩家=本人则不渲染关注按钮 */ meId: number }) {
+  const own = p.id === meId;
   return (
     <div className="box vs_panel">
       {onSwap && (
@@ -276,27 +283,33 @@ function VsCard({ p, accent, onSwap, hint = false }: { p: VsPickPlayer; accent?:
       <div className="user_card">
         <div className="ucd_top">
           <div className="ucd_left">
-            <Link
-              className="avatar_link"
-              href={`/user/${p.id}`}
-              target="_blank"
-              prefetch={false}
-              title={`进入 ${p.name} 的地盘`}
-            >
-              {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档，与玩家卡片同款） */}
-              {p.avatarIsDefault ? (
-                <DefaultAvatar sex={p.sex} size="mid" className="ucd_avatar" alt={p.name} />
-              ) : (
-                /* 有头像：mid 档 WebP，缺档 onError 回退原图（2026-11-13 35193 破图教训：
-                   生产 mid 档生成失败 404，裸 <img> 直接破图） */
-                <AvatarImg
-                  src={p.avatarUrl}
-                  fallback={p.avatarOrigUrl}
-                  className="ucd_avatar"
-                  alt={p.name}
-                />
+            <span className="fol_wrap ucd_fol_wrap">
+              <Link
+                className="avatar_link"
+                href={`/user/${p.id}`}
+                target="_blank"
+                prefetch={false}
+                title={`进入 ${p.name} 的地盘`}
+              >
+                {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档，与玩家卡片同款） */}
+                {p.avatarIsDefault ? (
+                  <DefaultAvatar sex={p.sex} size="mid" className="ucd_avatar" alt={p.name} />
+                ) : (
+                  /* 有头像：mid 档 WebP，缺档 onError 回退原图（2026-11-13 35193 破图教训：
+                     生产 mid 档生成失败 404，裸 <img> 直接破图） */
+                  <AvatarImg
+                    src={p.avatarUrl}
+                    fallback={p.avatarOrigUrl}
+                    className="ucd_avatar"
+                    alt={p.name}
+                  />
+                )}
+              </Link>
+              {/* 关注按钮（2026-11-19 张老师：竞技场头像处补齐全站关注入口）：hover 浮现，看自己不渲染 */}
+              {!own && (
+                <AvatarFollowBtn uid={p.id} sex={p.sex} loggedIn={meId > 0} following={!!p.viewerFollowing} />
               )}
-            </Link>
+            </span>
           </div>
           <div className="ucd_right">
             <p className="ucd_name">
@@ -655,7 +668,7 @@ export function VsPickArena({
     <>
       <div id="vs_pick_hero">
       {left ? (
-        <VsCard p={left} hint={swapHint} onSwap={() => clearSlot("left")} />
+        <VsCard p={left} hint={swapHint} onSwap={() => clearSlot("left")} meId={me.id} />
       ) : (
         <VsEmptySlot onPick={(u) => void pick("left", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}
@@ -724,7 +737,7 @@ export function VsPickArena({
         </div>
       </div>
       {right ? (
-        <VsCard p={right} accent="#e34f8c" onSwap={() => clearSlot("right")} />
+        <VsCard p={right} accent="#e34f8c" onSwap={() => clearSlot("right")} meId={me.id} />
       ) : (
         <VsEmptySlot onPick={(u) => void pick("right", u)} suggestSelf={selfOnBoard ? null : selfSuggest} />
       )}

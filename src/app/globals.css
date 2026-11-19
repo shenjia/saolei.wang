@@ -18184,6 +18184,20 @@ body #header .nav li a.vs_new_hint,
   display: block;
 }
 
+/* PK 对决页/竞技场面板（.vs_panel）：头像 112px（移动端）或 72px（PC 默认），
+   关注按钮跟随用户主页大头像档（24px 高/13px 字）——2026-11-19 张老师补关注入口。
+   fol_wrap 接管 ucd_left 原锚（block 与 flex/grid 布局兼容） */
+.vs_panel .ucd_left .fol_wrap {
+  display: block;
+}
+.vs_panel .ucd_left .fol_wrap .fol_btn {
+  height: 24px;
+  line-height: 22px;
+  font-size: 13px;
+  padding: 0 14px;
+  border-radius: 3px;
+}
+
 /* 每日一星：star_left 原本是 50% 宽的 Link；fol_wrap 接管 50% 宽、Link 铺满其内 */
 #daily_star .star_left_wrap {
   display: block;

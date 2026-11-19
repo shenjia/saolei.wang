@@ -38,8 +38,10 @@ import { DefaultAvatar } from "@/components/DefaultAvatar";
 import { RadarChart } from "@/components/RadarChart";
 import { VsScoreBoard } from "@/components/VsScoreBoard";
 import { VsSwapX } from "@/components/VsSwapX";
+import { AvatarFollowBtn } from "@/components/AvatarFollowBtn";
 import type { VsPickPlayer } from "@/components/VsPick";
 import { getHeaderUser } from "@/lib/usercard";
+import { followingSet } from "@/lib/follow";
 
 const LEVEL_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
 /** 级别标准配色：初绿 / 中橙 / 高黄（与 3BV 收集等板块同源） */
@@ -223,7 +225,8 @@ function VsLevelBox({ pk, name1, name2 }: { pk: VsLevelPk; name1: string; name2:
     swapHref：给「换人」X 按钮（2026-11-11 14:38 张老师：对决页左右卡片 hover
     也可换人）——复用竞技场 .vs_swap 骑线样式（.vs_panel hover 显隐同款），
     点击回竞技场并保留另一侧玩家（href 由调用方按保留侧拼好）。 */
-function VsPanel({ p, accent, swapHref, side }: { p: VsPlayer; accent?: string; swapHref?: string; side?: "l" | "r" }) {
+function VsPanel({ p, accent, swapHref, side, viewerId, viewerFollowing }: { p: VsPlayer; accent?: string; swapHref?: string; side?: "l" | "r"; /** 观看者 id（0=未登录）：非本人头像 hover 出关注按钮（2026-11-19 张老师） */ viewerId?: number; /** 观看者是否已关注该玩家（按钮初始态） */ viewerFollowing?: boolean }) {
+  const own = viewerId === p.id;
   return (
     <div className="box vs_panel">
       {swapHref && side && (
@@ -234,27 +237,33 @@ function VsPanel({ p, accent, swapHref, side }: { p: VsPlayer; accent?: string; 
       <div className="user_card">
         <div className="ucd_top">
           <div className="ucd_left">
-            <Link
-              className="avatar_link"
-              href={`/user/${p.id}`}
-              target="_blank"
-              prefetch={false}
-              title={`进入 ${p.name} 的地盘`}
-            >
-              {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档，与玩家卡片同款），
-                  旧版称号仍 no.jpg（2026-11-11）；有头像走 mid 档 WebP，缺档 onError 回退原图
-                  （2026-11-13 35193 破图教训：生产 mid 档生成失败 404，裸 <img> 直接破图） */}
-              {p.avatarIsDefault ? (
-                <DefaultAvatar sex={p.sex} size="mid" className="ucd_avatar" alt={p.name} />
-              ) : (
-                <AvatarImg
-                  src={p.avatarUrl}
-                  fallback={p.avatarOrigUrl}
-                  className="ucd_avatar"
-                  alt={p.name}
-                />
+            <span className="fol_wrap ucd_fol_wrap">
+              <Link
+                className="avatar_link"
+                href={`/user/${p.id}`}
+                target="_blank"
+                prefetch={false}
+                title={`进入 ${p.name} 的地盘`}
+              >
+                {/* 无头像：军衔制下按性别给军装默认头像（72px 位走 mid 档，与玩家卡片同款），
+                    旧版称号仍 no.jpg（2026-11-11）；有头像走 mid 档 WebP，缺档 onError 回退原图
+                    （2026-11-13 35193 破图教训：生产 mid 档生成失败 404，裸 <img> 直接破图） */}
+                {p.avatarIsDefault ? (
+                  <DefaultAvatar sex={p.sex} size="mid" className="ucd_avatar" alt={p.name} />
+                ) : (
+                  <AvatarImg
+                    src={p.avatarUrl}
+                    fallback={p.avatarOrigUrl}
+                    className="ucd_avatar"
+                    alt={p.name}
+                  />
+                )}
+              </Link>
+              {/* 关注按钮（2026-11-19 张老师：对决页头像处补齐全站关注入口）：hover 头像浮现，看自己不渲染 */}
+              {!own && (
+                <AvatarFollowBtn uid={p.id} sex={p.sex} loggedIn={(viewerId ?? 0) > 0} following={!!viewerFollowing} />
               )}
-            </Link>
+            </span>
           </div>
           <div className="ucd_right">
             {/* 姓名 + 性别 + 军衔：与侧栏卡片同一套 AvatarCell + TitleBadge 组件 */}
@@ -401,6 +410,11 @@ export async function VsDuelView({
   if (!data) notFound();
   const { p1, p2, levels, recRows, rec1, rec2, bv1, bv2, preComment, preTone, postComment } = data;
 
+  // 观看者对双方的关注态（2026-11-19 张老师：对决页头像处补关注按钮）——
+  // histUid=登录者（旁观者/对决双方本人），一次批量查两个目标；换人回竞技场后
+  // 卡片按钮初始态由 /api/follow/status 客户端补查（与关注列表翻页同模式）
+  const folSet = await followingSet(histUid, [uid1, uid2]);
+
   const total1 = rec1 + bv1;
   const total2 = rec2 + bv2;
   const winner = total1 === total2 ? 0 : total1 > total2 ? 1 : 2;
@@ -514,10 +528,10 @@ export async function VsDuelView({
         hist={{ rows: hist.rows, total: hist.total, pageSize: hist.pageSize }}
         histHidden={histHidden}
         leftPanel={
-          <VsPanel p={p1} side="l" swapHref={`/vs?/${uid2}`} />
+          <VsPanel p={p1} side="l" swapHref={`/vs?/${uid2}`} viewerId={histUid} viewerFollowing={folSet.has(uid1)} />
         }
         rightPanel={
-          <VsPanel p={p2} accent="#e34f8c" side="r" swapHref={`/vs/${uid1}`} />
+          <VsPanel p={p2} accent="#e34f8c" side="r" swapHref={`/vs/${uid1}`} viewerId={histUid} viewerFollowing={folSet.has(uid2)} />
         }
         below={below}
       />

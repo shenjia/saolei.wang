@@ -91,11 +91,12 @@ export default async function VsArenaPage({ params, searchParams }: VsArenaProps
 
   // 竞技场：URL 里已有的 id 服务端预取卡片（查无此人按空位处理，URL 随客户端自愈）；
   // 裸 /vs 空入口（无任何 id）由服务端预填自己（张老师 13:38：vs入口进来就自动填上自己的ID）
+  // 2026-11-19：预取带 viewerId——卡片头像关注按钮初始态服务端算好
   const me = await getVsPickPlayer(session.uid);
   if (!me) notFound();
   const [initialLeft, initialRight, hist] = await Promise.all([
-    l ? getVsPickPlayer(l) : null,
-    qr ? getVsPickPlayer(qr) : null,
+    l ? getVsPickPlayer(l, session.uid) : null,
+    qr ? getVsPickPlayer(qr, session.uid) : null,
     // 「历史对决」板块数据（2026-11-13 张老师定口径：＝登录者**发起**的所有
     // 对决——访问即发起，指定 A、B 两人 PK 的旁观对决也算）——恒按登录者查
     getVsHistory(session.uid, 1, 10),
