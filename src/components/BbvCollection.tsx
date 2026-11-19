@@ -23,6 +23,12 @@
 // 点击提示（2026-10-20 张老师要求）；未收集的格子显示「暂无录像」。
 // 已收集方格点击跳该 3BV 定向录像列表 /video?author=..&level=..&3bv=..&order=time
 // （2026-10-20 张老师需求：筛该玩家该级别该 3BV 全部录像，默认按成绩升序）。
+// 2026-11-19 补 prefetch={false}（e77f131 判例同款，BUG 修复）：收集墙几十个格子
+// 全是同一 pathname /video 的不同 searchParams，生产模式 Link 自动预取会把每个定向
+// 视图的 RSC payload 全量拉进客户端 Router Cache；点导航「录像」时 Next 16 客户端
+// 先用缓存段渲染，页签标题被污染成「XXX的初级录像（3BV=N）| 扫雷网」（服务端本次
+// 响应实际是干净的 /video，已用无头浏览器抓包实证）。dev 模式预取是 no-op 故只在线上
+// 必现。同时省 nginx/ESA 配额——预取的几十个定向视图几乎不会被点开。
 // 除两个内联脚本外无客户端 JS、无 hydration、无 API 路由。
 
 import Link from "next/link";
@@ -157,6 +163,7 @@ export function BbvCollection({
                     key={b}
                     className={`sq on ${gradeTone(cell.grade)}`}
                     href={`/video?author=${userId}&level=${level}&3bv=${b}&order=time`}
+                    prefetch={false}
                   >
                     {tip}
                   </Link>
