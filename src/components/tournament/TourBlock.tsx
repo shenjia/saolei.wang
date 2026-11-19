@@ -56,9 +56,9 @@ export function TourBlock({
       {/* 标题行：标题+状态标签左，总奖金右（2026-11-18 起止日期移图表下方「比赛时间」行） */}
       <div className="comp_head">
         <div className="comp_title_group">
-          {/* 标题恒金色（2026-11-19 张老师定：不论状态，详情页/列表页一致）；
-              链接优先比赛代号（2026-11-19：/tournaments/<alias> 避免裸 id） */}
-          <h3 className="comp_name on">
+          {/* 标题颜色（2026-11-19 张老师定）：详情页恒金色；列表页已结束亮灰、
+              其余金色。链接优先比赛代号（2026-11-19：/tournaments/<alias> 避免裸 id） */}
+          <h3 className={"comp_name" + (detail || c.status !== "ended" ? " on" : "")}>
             <Link className="comp_name_link" href={`/tournaments/${c.alias || c.id}`}>
               {c.name}
             </Link>

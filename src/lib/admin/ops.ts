@@ -1852,9 +1852,10 @@ async function dispatch(
         if (typeof aliasIn === "object" && aliasIn && "error" in aliasIn) return { ok: false, error: aliasIn.error };
         const next = aliasIn === null ? null : (aliasIn as string);
         if (next !== row.alias) {
+          // 代号有变化才查重（2026-11-19 张老师反馈：未变化时也被「已被自己占用」误拦）
           if (next) {
-            const dup = await prisma.tournament.findUnique({ where: { alias: next }, select: { id: true } });
-            if (dup && Number(dup.id) !== id) return { ok: false, error: `比赛代号 ${next} 已被 #${dup.id} 占用` };
+            const dup = await prisma.tournament.findFirst({ where: { alias: next, id: { not: BigInt(id) } }, select: { id: true } });
+            if (dup) return { ok: false, error: `比赛代号 ${next} 已被 #${dup.id} 占用` };
           }
           aliasUpdate = next;
         }

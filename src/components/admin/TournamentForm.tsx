@@ -68,7 +68,7 @@ export function TournamentForm() {
   const [busy, setBusy] = useState(false);
   // 随机生成标识中（防连点）
   const [genning, setGenning] = useState(false);
-  const [editing, setEditing] = useState<TourFormRow | null>(null);
+  const [editing, setEditing] = useState<(TourFormRow & { startSec?: number }) | null>(null);
 
   const set = (k: keyof typeof EMPTY, v: string) => setValues((s) => ({ ...s, [k]: v }));
   const toggleLevel = (lv: string) =>
@@ -340,12 +340,15 @@ export function TournamentForm() {
               value={values.code}
               onChange={(e) => set("code", e.target.value)}
               style={{ flex: 1 }}
+              // 比赛开始后不可更改（2026-11-19 张老师定）：输入框直接禁用
+              disabled={!!editing && typeof editing.startSec === "number" && Date.now() / 1000 >= editing.startSec}
+              title={editing && typeof editing.startSec === "number" && Date.now() / 1000 >= editing.startSec ? "比赛已开始，标识不可更改" : undefined}
             />
             <button
               type="button"
               className="admin_btn sm"
               onClick={() => void genCode()}
-              disabled={genning}
+              disabled={genning || (!!editing && typeof editing.startSec === "number" && Date.now() / 1000 >= editing.startSec)}
               title="随机生成 5 位数字+大小写字母标识（自动避开已占用的）"
             >
               {genning ? "生成中…" : "随机生成"}
