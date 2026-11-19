@@ -5325,24 +5325,23 @@ body #page.ranking_old .ranking_box {
   color: #a6e22e;
 }
 
-/* BV 收集动态绿✓下标（2026-11-19 张老师需求 type=57 kind=first）：
-   「刷新了中级 41 bv时间纪录 x.xxx」成绩尾部挂小号绿✓，
-   绝对定位在数字右下不占排版——形态同录像列表本BV标记 .bv_marked .mk
-   （首收绿 #a6e22e，globals.css 14719 行单一数据源），此处显式落同色。
+/* BV 收集动态绿✓（2026-11-19 张老师需求 type=57 kind=first）：
+   「刷新了高级 106 BV时间纪录 37.580✓」成绩尾部挂小号绿✓——
+   颜色同录像列表本BV标记 .bv_marked .mk（首收绿 #a6e22e 单一数据源）。
+   ⚠️ 2026-11-19 张老师报告「✓ 不显示」根因：legacy #news .table td a.score 带
+   overflow:hidden（标题裁断用），✓ 原用绝对定位 bottom:-0.35em 沉到链接盒外被整体裁掉
+   （HTML 在、渲染不可见）。修复=✓ 改行内正常排列（display:inline-block 微缩 +
+   vertical-align 基线下沉模拟下标），不再依赖 absolute，overflow 裁不到。
    首收无提升值（无旧纪录），✓ 即视觉终点；破 PB 行不出✓（走金色 delta 提升）。
-   三轮补充：BV 数字 .bv_num 亮灰加粗（#b1b1a4 同 record_score 新成绩灰） */
+   BV 数字 .bv_num 亮灰加粗（#b1b1a4 同 record_score 新成绩灰） */
 #news a.score.record_score .bv_check {
-  position: absolute;
-  margin-left: 2px;
-  bottom: -0.35em;
+  display: inline-block;
   font-style: normal;
   font-weight: bold;
-  font-size: 0.75em;
+  font-size: 0.72em;
   color: #a6e22e;
-  pointer-events: none;
-}
-#news a.score.record_score {
-  position: relative; /* ✓ 下标的定位锚（record_score 原无定位，就地补） */
+  margin-left: 1px;
+  vertical-align: -0.18em; /* 下标观感：基线轻微下沉（行内排列，不触 overflow 裁剪） */
 }
 #news .record .bv_num {
   color: #b1b1a4;
@@ -18107,10 +18106,8 @@ body #header .nav li a.vs_new_hint,
   font-size: 11px;
   white-space: nowrap;
   border-radius: 2px;
-  /* 默认亮灰（2026-11-19 11:03 张老师定：关注按钮默认不该是绿色大色块，
-     hover 才亮出绿色）。已关注/未关注同一基态，由下方 hover 分色 */
-  border: 1px solid #8f8f84;
-  background: #77776c;
+  border: 1px solid #2d9f6e;
+  background: #3fae74;
   /* ⚠️ legacy 全局 button 带 background-image 深色渐变 + filter 渐变滤镜——
      不清掉它们会盖在 background 色上（hover 时全站 button:hover 深色渐变
      再压上来显黑底，2026-11-19 00:04 张老师报「hover 变黑底」根因） */
@@ -18130,25 +18127,29 @@ body #header .nav li a.vs_new_hint,
   visibility: visible;
   pointer-events: auto;
 }
-/* hover 亮灰提亮一档（未关注态纯灰无动作暗示已弃——绿=可关注的行动色，
-   只出现在 hover。2026-11-19 11:03 张老师定） */
+/* 未关注态 hover：绿色加亮一档（2026-11-19 00:04 张老师：hover 必须比未 hover 醒目） */
 .fol_btn:hover {
-  border-color: #a3a396;
-  background: #8e8e81;
-  color: #fff;
-}
-/* 未关注态 hover：亮绿（行动色，可关注暗示只在此刻出现） */
-.fol_btn:not(.is_fol):hover {
   border-color: #4cc98a;
   background: #52c687;
   color: #fff;
 }
-/* 已关注态 hover：红色（取消关注危险动作预览，与未关注 hover 分色）。
-   !important 压 legacy 全站 button:hover 深色渐变（2026-11-19 00:04 判例） */
+/* 已关注态：灰胶囊；hover 提亮（灰→亮灰）。11:53 张老师回退 11:03 亮灰基态
+   （「亮灰不好看，还是变回原来的绿色」）——未关注=绿、已关注=灰的分色恢复；
+   组件层 btn_hover（按钮自身 hover）仍变红——「取消关注」危险动作预览语义保留 */
+.fol_btn.is_fol {
+  border-color: #6b6b62;
+  background: #55554e;
+  color: #f0f0ea;
+}
 .fol_btn.is_fol:hover {
-  border-color: #a83a32 !important;
-  background: #c0392b !important;
-  color: #fff !important;
+  border-color: #8f8f84;
+  background: #6e6e66;
+  color: #fff;
+}
+.fol_btn.is_fol.btn_hover {
+  border-color: #a83a32;
+  background: #c0392b;
+  color: #fff;
 }
 .fol_btn:disabled {
   opacity: 0.6;
@@ -18262,7 +18263,7 @@ body #header .nav li a.vs_new_hint,
   font-size: 12px;
 }
 /* 操作列按钮：常显（非 hover 形态——按钮本身就在「操作」列，无需浮现）；
-   配色基态/hover 分色与全站 .fol_btn 同一口径（默认亮灰/hover 分绿红） */
+   配色与全站 .fol_btn 同一口径（未关注绿 / 已关注灰） */
 #follow_list .fol_op_btn {
   position: static;
   transform: none;
