@@ -111,13 +111,23 @@ export default async function VideoViewPage({
   // 比赛标识匹配（2026-11-18 张老师需求）：录像内嵌 race_identifier 与比赛 code 一致时，
   // meta 区显示比赛简称（链详情页）；未匹配/未设置标识的比赛保持只显示原标识文本。
   // 比赛量小（十场量级）且 code 有唯一索引，单次查询开销可忽略。
+  // 2026-11-19 张老师需求：挂接关系（video.tournament_id）优先——上传自动分拣
+  // （签名末尾命中，race 为 NULL）与后台手动挂接的录像同样要显示比赛链接；
+  // race 反查仅作未挂接盘的兜底。
+  const linkedComp = video.tournamentId
+    ? await prisma.tournament.findUnique({
+        where: { id: BigInt(video.tournamentId) },
+        select: { id: true, shortName: true },
+      })
+    : null;
   const raceComp =
-    video.race
+    !linkedComp && video.race
       ? await prisma.tournament.findUnique({
           where: { code: video.race },
           select: { id: true, shortName: true },
         })
       : null;
+  const raceCompShown = linkedComp ?? raceComp;
 
   const level = video.level as VideoLevel;
   const scores = videoScores(video.board3bv, video.realTime, level);
@@ -415,13 +425,15 @@ export default async function VideoViewPage({
                 </span>
                 {/* 比赛标识（2026-11-14 张老师需求）：evf race_identifier / rmv token
                     段提取落库，仅非空时展示——历史存量与站内生成的 evf 恒 NULL 不渲染。
-                    2026-11-18：标识匹配到比赛时显示简称并链接详情页，未匹配保持原样 */}
-                {video.race && (
+                    2026-11-18：标识匹配到比赛时显示简称并链接详情页，未匹配保持原样。
+                    2026-11-19：挂接关系（tournament_id）优先，race 反查兜底——
+                    签名末尾命中自动挂接（race 为 NULL）的盘同样显示比赛链接 */}
+                {(raceCompShown || video.race) && (
                   <span className="race_name">
                     比赛
-                    {raceComp ? (
-                      <Link href={`/tournaments/${raceComp.id}`} prefetch={false}>
-                        {raceComp.shortName}
+                    {raceCompShown ? (
+                      <Link href={`/tournaments/${raceCompShown.id}`} prefetch={false}>
+                        {raceCompShown.shortName}
                       </Link>
                     ) : (
                       <em>{video.race}</em>

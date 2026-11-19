@@ -2142,6 +2142,11 @@ export interface VideoDetail extends VideoListItem {
   /** 比赛标识（2026-11-14 张老师需求）：evf race_identifier / rmv token 段；
    *  NULL=文件无此字段或历史存量——详情页仅在非空时展示「比赛 xxx」 */
   race: string | null;
+  /** 所属比赛（2026-11-19 张老师需求）：video.tournament_id——上传自动分拣
+   *  （matchTourByRace，race 精确或签名末尾命中）或后台手动挂接落库的权威关系；
+   *  详情页「比赛」栏按它优先取比赛（历史盘 race 为 NULL 但签名命中挂接的
+   *  也要显示比赛链接），race 为空的挂接盘由此兜出 */
+  tournamentId: number | null;
   reviewUser: number | null;
   reviewTime: number | null;
   reviewer: UserBrief | null;
@@ -2200,6 +2205,7 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     fileVer: N(info.updateTime),
     signature: info.signature,
     race: info.race,
+    tournamentId: v.tournamentId ? N(v.tournamentId) : null,
     clicks: stat?.clicks ?? 0,
     comments: stat?.comments ?? 0,
     downloads: stat?.downloads ?? 0,
