@@ -1852,7 +1852,7 @@ async function dispatch(
       // 比赛代号（alias）：参数缺省=保持原值；填写则 2-20 位字母数字/_/-，查重
       let aliasUpdate: string | null | undefined = undefined;
       if (p.alias !== undefined) {
-        const aliasIn = await parseCompAlias(p.alias);
+        const aliasIn = await parseCompAlias(p.alias, id); // 传 excludeId：查重排除自己（未变化时内部查到自己也报占用的根因）
         if (typeof aliasIn === "object" && aliasIn && "error" in aliasIn) return { ok: false, error: aliasIn.error };
         const next = aliasIn === null ? null : (aliasIn as string);
         if (next !== row.alias) {
