@@ -291,9 +291,13 @@ async function dispatch(
       const ts = BigInt(now());
       let bannedVideos = 0;
       if (toBool(p.banVideos)) {
-        // 连坐：待审(10)/已通过(20) → 0，status_bak 记原值供解禁恢复；单独屏蔽(0) 的不动
+        // 连坐：待审(10)/已通过(20) → 0，status_bak 记原值供解禁恢复；单独屏蔽(0) 的不动。
+        // 审核人=执行封禁的管理员（2026-11-19 张老师定：谁封账号，连坐录像的审核人就填谁；
+        // review_time 同步落——审核列表「审核人」列不再显示 —）。review_user 用 COALESCE
+        // 保持「保留原值」语义兼容可能的人工审核史。
         const r = await prisma.$executeRaw`
-          UPDATE video SET status_bak = status, status = ${VIDEO_STATUS.BANNED}, update_time = ${ts}
+          UPDATE video SET status_bak = status, status = ${VIDEO_STATUS.BANNED}, update_time = ${ts},
+            review_user = COALESCE(review_user, ${BigInt(actor.uid)}), review_time = COALESCE(review_time, ${ts})
           WHERE user = ${BigInt(id)} AND status IN (${VIDEO_STATUS.NORMAL}, ${VIDEO_STATUS.REVIEWED})`;
         bannedVideos = Number(r);
       }
