@@ -47,20 +47,33 @@ export default async function AdminCompetitionsPage({
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const now = Math.floor(Date.now() / 1000);
-  const [all, counts, videoCounts] = await Promise.all([
+  const [all, videoCounts, videoHolders] = await Promise.all([
     prisma.tournament.findMany({ orderBy: { startTime: "asc" } }),
-    prisma.tournamentEntry.groupBy({ by: ["tournamentId"], _count: { tournamentId: true } }),
     // 挂接录像数（口径与详情页统计一致：tournamentId 挂接 + 未屏蔽 status!=0）
     prisma.video.groupBy({
       by: ["tournamentId"],
       where: { tournamentId: { not: null }, status: { not: 0 } },
       _count: { tournamentId: true },
     }),
+    // 参赛人数原料（2026-11-19 张老师反馈后台显示 0）：前台详情页口径＝挂接录像
+    // 持有者数（distinct user，getTourDetailStats 同源）——历届金羊杯为导入的
+    // 已结束比赛、报名表恒空，按报名数统计恒 0；本行只取挂接录像的 user 列
+    prisma.video.findMany({
+      where: { tournamentId: { not: null }, status: { not: 0 } },
+      select: { tournamentId: true, user: true },
+    }),
   ]);
-  const countMap = new Map(counts.map((c) => [c.tournamentId.toString(), c._count.tournamentId]));
   const videoMap = new Map(
     videoCounts.filter((v) => v.tournamentId !== null).map((v) => [v.tournamentId!.toString(), v._count.tournamentId]),
   );
+  // 参赛人数：先按比赛聚合 distinct 持有者（与 getTourDetailStats.entries 同口径）
+  const holderMap = new Map<string, Set<string>>();
+  for (const v of videoHolders) {
+    const key = v.tournamentId!.toString();
+    let set = holderMap.get(key);
+    if (!set) holderMap.set(key, (set = new Set()));
+    set.add(v.user.toString());
+  }
 
   // 发起人姓名一次取齐（发起人为后台填写，量小；查无此人兜底显示 #ID）
   const creatorIds = [...new Set(all.map((r) => r.creatorId.toString()))];
@@ -140,7 +153,7 @@ export default async function AdminCompetitionsPage({
                     <td className="sub">{r.shortName}</td>
                     <td className="mono sub">{r.code || "—"}</td>
                     <td className="sub">{creatorMap.get(r.creatorId.toString()) ?? `#${r.creatorId}`}</td>
-                    <td className="c">{countMap.get(r.id.toString()) ?? 0}</td>
+                    <td className="c">{holderMap.get(r.id.toString())?.size ?? 0}</td>
                     <td className="c">{videoMap.get(r.id.toString()) ?? 0}</td>
                     <td className="c" style={{ color: "#fdc61a" }}>¥{r.prizeTotal.toLocaleString("en-US")}</td>
                     <td className="mono" style={{ whiteSpace: "nowrap" }}>
