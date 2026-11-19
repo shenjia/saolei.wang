@@ -18107,8 +18107,10 @@ body #header .nav li a.vs_new_hint,
   font-size: 11px;
   white-space: nowrap;
   border-radius: 2px;
-  border: 1px solid #2d9f6e;
-  background: #3fae74;
+  /* 默认亮灰（2026-11-19 11:03 张老师定：关注按钮默认不该是绿色大色块，
+     hover 才亮出绿色）。已关注/未关注同一基态，由下方 hover 分色 */
+  border: 1px solid #8f8f84;
+  background: #77776c;
   /* ⚠️ legacy 全局 button 带 background-image 深色渐变 + filter 渐变滤镜——
      不清掉它们会盖在 background 色上（hover 时全站 button:hover 深色渐变
      再压上来显黑底，2026-11-19 00:04 张老师报「hover 变黑底」根因） */
@@ -18128,28 +18130,25 @@ body #header .nav li a.vs_new_hint,
   visibility: visible;
   pointer-events: auto;
 }
-/* 未关注态 hover：绿色加亮一档（2026-11-19 00:04 张老师：hover 必须比未 hover 醒目） */
+/* hover 亮灰提亮一档（未关注态纯灰无动作暗示已弃——绿=可关注的行动色，
+   只出现在 hover。2026-11-19 11:03 张老师定） */
 .fol_btn:hover {
+  border-color: #a3a396;
+  background: #8e8e81;
+  color: #fff;
+}
+/* 未关注态 hover：亮绿（行动色，可关注暗示只在此刻出现） */
+.fol_btn:not(.is_fol):hover {
   border-color: #4cc98a;
   background: #52c687;
   color: #fff;
 }
-/* 已关注态：灰胶囊；hover 提亮（灰→亮灰，比未 hover 醒目；22:38 张老师定加亮不变灰）。
-   组件层 btn_hover（按钮自身 hover）仍变红——「取消关注」危险动作预览语义保留 */
-.fol_btn.is_fol {
-  border-color: #6b6b62;
-  background: #55554e;
-  color: #f0f0ea;
-}
+/* 已关注态 hover：红色（取消关注危险动作预览，与未关注 hover 分色）。
+   !important 压 legacy 全站 button:hover 深色渐变（2026-11-19 00:04 判例） */
 .fol_btn.is_fol:hover {
-  border-color: #8f8f84;
-  background: #6e6e66;
-  color: #fff;
-}
-.fol_btn.is_fol.btn_hover {
-  border-color: #a83a32;
-  background: #c0392b;
-  color: #fff;
+  border-color: #a83a32 !important;
+  background: #c0392b !important;
+  color: #fff !important;
 }
 .fol_btn:disabled {
   opacity: 0.6;
@@ -18194,8 +18193,8 @@ body #header .nav li a.vs_new_hint,
   display: block;
 }
 
-/* 关注/粉丝列表页（2026-11-18 22:32 双栏定版；23:42 五改四列表格形态）：
-   主栏列表（表头 姓名/军衔/关注时间/操作 + PageSlider 标准翻页）+ 右栏玩家卡片。
+/* 关注/粉丝列表页（2026-11-18 22:32 双栏定版；2026-11-19 11:03 六改三列表格形态）：
+   主栏列表（表头 姓名/关注时间/操作 + PageSlider 标准翻页）+ 右栏玩家卡片。
    几何与账户设置族同款（288 侧栏 / 盒内容 210）。 */
 #page #follow_list > li.sidebar {
   width: 288px;
@@ -18221,26 +18220,26 @@ body #header .nav li a.vs_new_hint,
   padding: 3px 8px;
   vertical-align: middle;
 }
+/* 姓名列（2026-11-19 11:03 张老师：头像/姓名与军衔文字同字号——
+   此列表军衔 em 走 legacy 基础规则 16px（14px 规则只挂 #home/#news/录像表），
+   列 font-size 即定 16px，头像/姓名 1em 联动同大；军衔列已去，徽章跟随行内） */
 #follow_list .fol_name_cell {
   white-space: nowrap;
+  font-size: 16px;
 }
 #follow_list .fol_inline_wrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-/* 头像对齐排行榜规格（2026-11-19 00:59 张老师：13px，ranking_avatar 同款） */
 #follow_list .fol_avatar {
-  width: 13px;
-  height: 13px;
+  width: 1em;
+  height: 1em;
   display: block;
   border-radius: 2px;
 }
 #follow_list .fol_name {
-  font-size: 14px;
-}
-#follow_list .fol_title_cell {
-  white-space: nowrap;
+  font-size: 1em;
 }
 #follow_list .fol_time {
   width: 130px;
@@ -18248,7 +18247,8 @@ body #header .nav li a.vs_new_hint,
   color: #75715e;
   font-size: 12px;
 }
-/* 操作列按钮：常显（非 hover 形态——按钮本身就在「操作」列，无需浮现） */
+/* 操作列按钮：常显（非 hover 形态——按钮本身就在「操作」列，无需浮现）；
+   配色基态/hover 分色与全站 .fol_btn 同一口径（默认亮灰/hover 分绿红） */
 #follow_list .fol_op_btn {
   position: static;
   transform: none;

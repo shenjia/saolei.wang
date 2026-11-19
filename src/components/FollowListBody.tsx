@@ -1,7 +1,8 @@
-// 关注/粉丝列表行（2026-11-18 需求 4，23:42 张老师五改）：
-// 表头「姓名、军衔、关注时间、操作」四列；姓名列=头像+姓名+性别（军衔徽章紧随其后，
-// 与姓名列同单元格呈跟随形态）；操作列=关注按钮（显示逻辑同头像 hover 钮：
-// 已关注亮灰/hover 变红取消，未关注绿）。取消关注后行实时消失（客户端就地移除）。
+// 关注/粉丝列表行（2026-11-18 需求 4，23:42 五改；2026-11-19 11:03 六改）：
+// 表头「姓名、关注时间、操作」三列（军衔列已去——徽章跟随姓名行内呈现，11:03 张老师定）；
+// 姓名列=头像+姓名+性别+军衔徽章（头像/姓名/军衔文字同字号）；
+// 操作列=关注按钮（逻辑同头像 hover 钮：默认亮灰，未关注 hover 变绿，
+// 已关注 hover 变红且文案切「取消关注」）。取消关注后行实时消失（客户端就地移除）。
 // 关注时间=「XXX关注」相对时间（hover 气泡绝对时间到秒，1 年以上显式精确到分钟）。
 // 标题（共XX人）下标由页面 h1 渲染（FollowListFeed 传 total）。
 
@@ -35,7 +36,6 @@ export function FollowListBody({
       <thead>
         <tr>
           <th>姓名</th>
-          <th>军衔</th>
           <th>关注时间</th>
           <th>操作</th>
         </tr>
@@ -52,7 +52,7 @@ export function FollowListBody({
         ))}
         {visible.length === 0 && (
           <tr>
-            <td colSpan={4} className="text">
+            <td colSpan={3} className="text">
               还没有记录。
             </td>
           </tr>
@@ -78,7 +78,8 @@ function FollowRow({
   const real = avatarUrl.startsWith("/uploads/avatar/") || avatarUrl.startsWith("http");
   return (
     <tr>
-      {/* 姓名列：头像+姓名+性别+军衔徽章（性别标记后，23:42 张老师定跟随形态） */}
+      {/* 姓名列：头像+姓名+性别+军衔徽章（2026-11-19 11:03 张老师定：
+          头像/姓名与军衔文字同字号，徽章跟随行内呈现，不设独立列） */}
       <td className="fol_name_cell">
         <span className="fol_wrap fol_inline_wrap">
           <Link
@@ -106,10 +107,6 @@ function FollowRow({
           <TitleBadge title={row.title} classic={row.classic} link />
         </span>
       </td>
-      {/* 军衔列：徽章独立呈现（跟随形态的备选口径——两处同源同徽章，列宽保证表头语义） */}
-      <td className="fol_title_cell">
-        <TitleBadge title={row.title} classic={row.classic} link />
-      </td>
       {/* 关注时间：相对时间（hover 气泡绝对时间到秒），1 年以上显式精确到分钟 */}
       <td className="fol_time">
         <RelTime time={row.createTime} max={TIME_YEAR} format="Y-n-j H:i" />
@@ -130,7 +127,8 @@ function FollowRow({
   );
 }
 
-/** 操作列按钮：AvatarFollowBtn 同逻辑，取消成功后回调 onRemoved 让行实时消失 */
+/** 操作列按钮：AvatarFollowBtn 同款（默认亮灰/未关注 hover 变绿/已关注 hover 变红
+ * 且文案切「取消关注」——危险动作预览语义保留），取消成功后回调 onRemoved 让行实时消失 */
 function FollowOpBtn({
   uid,
   sex,
@@ -146,6 +144,7 @@ function FollowOpBtn({
 }) {
   const [isFol, setIsFol] = useState(following);
   const [busy, setBusy] = useState(false);
+  const [hoverBtn, setHoverBtn] = useState(false);
   async function act() {
     if (busy) return;
     if (!loggedIn) {
@@ -183,13 +182,15 @@ function FollowOpBtn({
       type="button"
       className={`fol_btn fol_op_btn${isFol ? " is_fol" : ""}`}
       disabled={busy}
+      onMouseEnter={() => setHoverBtn(true)}
+      onMouseLeave={() => setHoverBtn(false)}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
         void act();
       }}
     >
-      {isFol ? "取消关注" : sex ? "+关注他" : "+关注她"}
+      {isFol ? (hoverBtn ? "取消关注" : "✓已关注") : sex ? "+关注他" : "+关注她"}
     </button>
   );
 }

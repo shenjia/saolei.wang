@@ -1,6 +1,8 @@
-// 头像 hover 关注按钮（2026-11-18 张老师需求 1）：悬停头像时在头像正下边缘浮现
-// 按钮胶囊；已关注=亮灰「✓已关注」、hover 按钮变红「取消关注」、点击取关；
-// 未关注=绿色「+关注他/她」、点击关注。登录态与初始已关注态由服务端 props 传入，
+// 头像 hover 关注按钮（2026-11-18 张老师需求 1；2026-11-19 11:03 配色改版）：
+// 悬停头像时在头像正下边缘浮现按钮胶囊；默认亮灰（已关注/未关注同基态）——
+// 未关注 hover 变绿「+关注他/她」（绿=行动色只出现在 hover）、点击关注；
+// 已关注显示「✓已关注」、hover 按钮变红「取消关注」、点击取关。
+// 登录态与初始已关注态由服务端 props 传入，
 // 点击走 /api/follow（POST），成功后按钮就地切换状态（关注/取关动态已在服务端落库）。
 //
 // 用法：<AvatarFollowBtn uid={id} name={...} sex={1} loggedIn={...} following={...} />
@@ -28,7 +30,6 @@ export function AvatarFollowBtn({
 }) {
   const [isFol, setIsFol] = useState(following);
   const [busy, setBusy] = useState(false);
-  const [hoverBtn, setHoverBtn] = useState(false);
 
   async function act() {
     if (busy) return;
@@ -61,17 +62,15 @@ export function AvatarFollowBtn({
   return (
     <button
       type="button"
-      className={`fol_btn${isFol ? " is_fol" : ""}${hoverBtn && isFol ? " btn_hover" : ""}`}
+      className={`fol_btn${isFol ? " is_fol" : ""}`}
       disabled={busy}
-      onMouseEnter={() => setHoverBtn(true)}
-      onMouseLeave={() => setHoverBtn(false)}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
         void act();
       }}
     >
-      {isFol ? (hoverBtn ? "取消关注" : "✓已关注") : sex ? "+关注他" : "+关注她"}
+      {isFol ? "✓已关注" : sex ? "+关注他" : "+关注她"}
     </button>
   );
 }
