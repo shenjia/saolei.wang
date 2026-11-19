@@ -513,6 +513,7 @@ export function AdminReviewList({
               <ReviewRow
                 key={v.id}
                 video={v}
+                pending={status === VIDEO_STATUS.NORMAL}
                 showPick={pickable(v)}
                 picked={picked.has(v.id)}
                 onToggle={() => toggle(v.id)}
@@ -534,7 +535,7 @@ export function AdminReviewList({
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={15}>
+                <td colSpan={status === VIDEO_STATUS.NORMAL ? 15 : 14}>
                   <div className="admin_empty">该状态下没有录像</div>
                 </td>
               </tr>
@@ -548,6 +549,7 @@ export function AdminReviewList({
 
 function ReviewRow({
   video: v,
+  pending,
   showPick,
   picked,
   onToggle,
@@ -555,6 +557,8 @@ function ReviewRow({
   onPlay,
 }: {
   video: AdminVideoRow;
+  /** 是否待审视图：待审才渲染行首勾选/锁列（与表头同口径，否则行比表头多一列错位） */
+  pending: boolean;
   showPick: boolean;
   picked: boolean;
   onToggle: () => void;
@@ -571,19 +575,20 @@ function ReviewRow({
       : undefined;
   return (
     <tr style={rowStyle}>
-      {showPick ? (
-        <td className="c">
-          <input
-            type="checkbox"
-            checked={picked}
-            onChange={onToggle}
-            style={{ width: 14, height: 14 }}
-            aria-label={`选择录像 ${v.id}`}
-          />
-        </td>
-      ) : (
-        <td className="c sub" title="需核定：只能逐条手审">🔒</td>
-      )}
+      {pending &&
+        (showPick ? (
+          <td className="c">
+            <input
+              type="checkbox"
+              checked={picked}
+              onChange={onToggle}
+              style={{ width: 14, height: 14 }}
+              aria-label={`选择录像 ${v.id}`}
+            />
+          </td>
+        ) : (
+          <td className="c sub" title="需核定：只能逐条手审">🔒</td>
+        ))}
       <td className="c">
         <Link className="link" href={`/video/${v.id}`} target="_blank" prefetch={false}>
           {v.id}
