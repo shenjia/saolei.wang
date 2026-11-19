@@ -5326,10 +5326,11 @@ body #page.ranking_old .ranking_box {
 }
 
 /* BV 收集动态绿✓下标（2026-11-19 张老师需求 type=57 kind=first）：
-   「刷新了初级40BV时间纪录 x.xxx」成绩尾部挂小号绿✓，
+   「刷新了中级 41 bv时间纪录 x.xxx」成绩尾部挂小号绿✓，
    绝对定位在数字右下不占排版——形态同录像列表本BV标记 .bv_marked .mk
    （首收绿 #a6e22e，globals.css 14719 行单一数据源），此处显式落同色。
-   首收无提升值（无旧纪录），✓ 即视觉终点；破 PB 行不出✓（走金色 delta 提升）。 */
+   首收无提升值（无旧纪录），✓ 即视觉终点；破 PB 行不出✓（走金色 delta 提升）。
+   三轮补充：BV 数字 .bv_num 亮灰加粗（#b1b1a4 同 record_score 新成绩灰） */
 #news a.score.record_score .bv_check {
   position: absolute;
   margin-left: 2px;
@@ -5342,6 +5343,10 @@ body #page.ranking_old .ranking_box {
 }
 #news a.score.record_score {
   position: relative; /* ✓ 下标的定位锚（record_score 原无定位，就地补） */
+}
+#news .record .bv_num {
+  color: #b1b1a4;
+  font-weight: bold;
 }
 
 /* 当选每日一星动态（2026-10-25 张老师定）：文案金色（#fdc61d 全站金牌色，与 .score 成绩金同源）。
