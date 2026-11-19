@@ -134,18 +134,18 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
         {isBv && news.author && (
           <>
             {authorCells}
-            {/* 文案（2026-11-19 三轮张老师定）：「刷新了中级 41 bv时间纪录 9.537」——
-                3BV 数字嵌在级别名后、左右各一空格、亮灰加粗（.bv_num #b1b1a4，
-                同 record_score 新成绩灰），「中级 … bv时间纪录」整体 .record person
-                同样式（BV 小写）；成绩数字前保留空格（{" "} 显式补，JSX 换行空白剥离）；
-                首收也是「刷新了」（首盘即该 bv 时间纪录） */}
+            {/* 文案（2026-11-19 四轮张老师定）：「刷新了中级 41 BV时间纪录 9.537」——
+                3BV 数字嵌在级别名后、左右各一空格、亮灰加粗（.bv_num #b1b1a4），
+                「中级 … BV时间纪录」整体 .record person 同样式（BV 大写，四轮回改）；
+                成绩数字前保留空格（{" "} 显式补，JSX 换行空白剥离）；
+                首收也是「刷新了」（首盘即该 BV 时间纪录） */}
             刷新了
             <span className="record person">
               {LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}
               {" "}
               <b className="bv_num">{d.bv ?? ""}</b>
               {" "}
-              bv时间纪录
+              BV时间纪录
             </span>
             {" "}
             {bvFirst ? (
@@ -358,7 +358,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             {authorCells}报名参加了
             {news.tour ? (
               <Link
-                href={`/tournaments/${news.reference}`}
+                href={`/tournaments/${news.tour.alias || news.reference}`}
                 target="_blank"
                 prefetch={false}
                 className="score news_article"
