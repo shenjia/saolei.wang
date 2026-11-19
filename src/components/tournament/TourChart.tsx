@@ -29,7 +29,7 @@ export interface CompChartPoint {
   classic?: { name: string; color: string } | null;
 }
 
-export function TourChart({ points }: { points: CompChartPoint[] }) {
+export function TourChart({ points, myUid }: { points: CompChartPoint[]; myUid?: number }) {
   const [hover, setHover] = useState<number | null>(null);
   if (points.length === 0) return null;
 
@@ -43,6 +43,9 @@ export function TourChart({ points }: { points: CompChartPoint[] }) {
 
   const x = (rank: number) => PAD_L + ((maxRank - rank) / Math.max(maxRank - 1, 1)) * (W - PAD_L - PAD_R);
   const y = (score: number) => PAD_T + ((score - lo) / Math.max(hi - lo, 1e-9)) * (H - PAD_T - PAD_B);
+
+  // 我的位置（2026-11-19 张老师定：参赛且在榜 → 绿点 + 1px 绿垂线拉到标尺）
+  const my = myUid ? points.find((p) => p.uid === myUid) : undefined;
 
   // y 标尺刻度：4 条均分（数字右侧，无轴名）
   const ticks = Array.from({ length: 4 }, (_, i) => lo + ((hi - lo) * i) / 3);
@@ -88,6 +91,20 @@ export function TourChart({ points }: { points: CompChartPoint[] }) {
             {r}
           </text>
         ))}
+        {/* 我的位置：绿点 + 1px 绿垂线拉到底部标尺（2026-11-19 张老师定） */}
+        {my && (
+          <>
+            <line
+              x1={x(my.rank)}
+              y1={y(my.score)}
+              x2={x(my.rank)}
+              y2={H - PAD_B}
+              stroke="#a6e22e"
+              strokeWidth="1"
+            />
+            <circle cx={x(my.rank)} cy={y(my.score)} r="4" fill="#a6e22e" stroke="#1e1f1c" strokeWidth="1.5" />
+          </>
+        )}
         {/* hover 点高亮（金色实心，仅 hover 时出现） */}
         {hp && (
           <circle cx={x(hp.rank)} cy={y(hp.score)} r="4" fill="#fdc61a" stroke="#1e1f1c" strokeWidth="1.5" />

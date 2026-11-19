@@ -260,11 +260,36 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
     return b.end - a.end; // 已结束：最近的在前
   });
 
+  // 列表页图表数据（2026-11-19 张老师问「比赛列表为什么没显示图表」）：
+  // 当前页每场已开赛的比赛取排名前 30 散点（带我的名次标记数据），并行拉取
   const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / size));
   const p = Math.min(Math.max(page, 1), totalPages);
+  const pageRows = rows.slice((p - 1) * size, p * size);
+  const chartTargets = pageRows.filter((r) => r.status !== "upcoming");
+  const chartList = await Promise.all(chartTargets.map((r) => getTourRanking(Number(r.id), 30)));
+  const chartMap = new Map<string, { rank: number; score: number; name?: string; uid?: number; englishName?: string; sex?: number; title?: string; classic?: { name: string; color: string } | null }[]>();
+  chartTargets.forEach((r, i) => {
+    chartMap.set(
+      r.id,
+      chartList[i].map((x) => ({
+        rank: x.rank,
+        score: x.time / 1000,
+        name: x.name,
+        uid: x.uid,
+        englishName: x.englishName,
+        sex: x.sex,
+        title: x.title,
+        classic: x.classic,
+      })),
+    );
+  });
+  for (const r of pageRows) {
+    r.chartPoints = chartMap.get(r.id) ?? [];
+  }
+
   return {
-    rows: rows.slice((p - 1) * size, p * size),
+    rows: pageRows,
     total,
     page: p,
     pageSize: size,

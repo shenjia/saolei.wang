@@ -102,7 +102,7 @@ export default async function CompetitionDetailPage({
         <li className="main">
           {/* 顶部板块：与列表页同一 TourBlock，detail 形态——标题恢复首页标准 26px、
               无「开赛」按钮（五轮 20:13，入口移右栏「开始比赛」双钮） */}
-          <TourBlock c={c} now={now} loggedIn={!!session} detail />
+          <TourBlock c={c} now={now} loggedIn={!!session} detail myUid={session?.uid} />
 
           {/* 动态板块：标准翻页组件 = 首页同款 PageSlider（五轮 20:31 张老师定，
               client 壳 TourEventsFeed——换页走 URL、加载更多走 API 前缀整批替换）。

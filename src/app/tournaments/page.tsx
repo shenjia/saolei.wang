@@ -56,6 +56,7 @@ export default async function CompetitionsPage({
             initialTotalPages={data.totalPages}
             now={now}
             loggedIn={!!session}
+            myUid={session?.uid}
           />
         </li>
 

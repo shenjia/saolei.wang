@@ -23,6 +23,7 @@ export function TourListFeed({
   initialTotalPages,
   now,
   loggedIn,
+  myUid,
 }: {
   initialRows: TourRow[];
   initialPage: number;
@@ -30,6 +31,8 @@ export function TourListFeed({
   initialTotalPages: number;
   now: number;
   loggedIn: boolean;
+  /** 观看者 uid（图表「我的位置」绿点标记，2026-11-19 张老师定） */
+  myUid?: number;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<TourRow[]>(initialRows);
@@ -77,7 +80,7 @@ export function TourListFeed({
   return (
     <>
       {rows.map((c) => (
-        <TourBlock key={c.id} c={c} now={now} loggedIn={loggedIn} />
+        <TourBlock key={c.id} c={c} now={now} loggedIn={loggedIn} myUid={myUid} />
       ))}
       {/* 通用翻页器（PageSlider）：单页也渲染（single 态全灰），换页走 URL、加载更多走 API */}
       <div className="list_footer">

@@ -38,6 +38,7 @@ export function TourBlock({
   now,
   loggedIn,
   detail,
+  myUid,
 }: {
   c: TourRow;
   now: number;
@@ -47,6 +48,8 @@ export function TourBlock({
       历史上曾区分 22px 小两号，五轮 20:13 后仅用于关闭「进行中」钮（该钮七轮已退役），
       现仅保留参数位（详情页右栏「开始比赛」双钮仍由页面自身渲染） */
   detail?: boolean;
+  /** 观看者 uid（2026-11-19 张老师定：参赛且在榜 → 图表绿点+垂线标记我的位置） */
+  myUid?: number;
 }) {
   return (
     <div className="box comp_item">
@@ -101,7 +104,7 @@ export function TourBlock({
               {c.bestLine.title && <TitleBadge title={c.bestLine.title} link />}
               <span className="rec_meta">　创造于 {fmtBestAt(c.bestLine.at)}</span>
             </div>
-            <TourChart points={c.chartPoints} />
+            <TourChart points={c.chartPoints} myUid={myUid} />
           </div>
         ) : c.status === "upcoming" ? (
           <span className="comp_chart_empty">尚未开始</span>
