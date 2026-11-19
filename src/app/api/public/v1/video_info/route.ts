@@ -1,0 +1,109 @@
+// 公开 API · 录像详情（2026-10-24）
+// GET /api/public/v1/video_info?id=1,2,3（逗号分隔，最多 50 个）
+// 鉴权：X-Api-Key（lib/partner.ts），限速按 key 各自配置（默认 60 次/分，0=不限）。
+//
+// 返回录像全部**已落盘公开字段**（video + video_info + video_metrics 落盘部分），
+// 含 userId / userName（原 partner 草案 videos 接口不含逐盘指标，本接口补齐）。
+// 只出口站内公开展示口径：屏蔽(0)录像 404 不返回；待审(10)/已通过(20)可查
+// （status 字段如实返回，2026-10-23 张老师定的前台口径：待审即上传即可见）。
+// fileUrl：前台同款文件下载地址（/video/download/{id}，2026-11-09 张老师指令：
+// 静态 URL /videos/… 不应暴露，改走前台下载口——下载计数与前台按钮同口径）。
+// 隐私不出：审核人 reviewUser 等；filepath 一律不出（不 SELECT）。
+
+import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
+import { usersByIds } from "@/lib/queries";
+import { MIN_3BV_FOR_3BVS, VIDEO_LEVELS, type VideoLevel } from "@/lib/config";
+
+export async function GET(req: Request) {
+  const partner = await requirePartnerEx(req);
+  if (!partner) return unauthorized();
+  if (!partnerRateLimit(partner, "pub-video-info")) return rateLimited(partner.ratePerMin);
+
+  const p = new URL(req.url).searchParams;
+  const ids = (p.get("id") ?? "")
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .slice(0, 50);
+  if (!ids.length) {
+    return NextResponse.json({ error: "bad_request", message: "需提供 id 参数（逗号分隔的录像 ID，最多 50 个）" }, { status: 400 });
+  }
+
+  // video + video_info + video_metrics 三表 LEFT JOIN：metrics 缺行（未跑批/重放失败）给 null
+  const rows = await prisma.$queryRaw<
+    {
+      id: bigint; level: string; user: bigint; hash: string; status: number;
+      create_time: bigint; review_time: bigint | null;
+      real_time: number; board_3bv: number; noflag: number; no_record: number;
+      software: string; version: string; signature: string;
+      cl: number | null; cl_left: number | null; cl_right: number | null;
+      cl_double: number | null; ce: number | null; path: number | null;
+      ioe: number | null; stnb: number | null;
+    }[]
+  >`
+    SELECT v.id, v.level, v.user, v.hash, v.status, v.create_time, v.review_time,
+           vi.real_time, vi.board_3bv, vi.noflag, vi.no_record, vi.software, vi.version, vi.signature,
+           m.cl, m.cl_left, m.cl_right, m.cl_double, m.ce, m.path, m.ioe, m.stnb
+    FROM video v
+    JOIN video_info vi ON vi.id = v.id
+    LEFT JOIN video_metrics m ON m.id = v.id
+    WHERE v.id IN (${Prisma.join(ids)}) AND v.status <> 0`;
+
+  const authors = await usersByIds([...new Set(rows.map((r) => Number(r.user)))]);
+
+  // 文件域名：SITE_URL 优先（生产切换主域时配 https://saolei.wang），未配时退请求 origin（本地 dev 可用）
+  const base = process.env.SITE_URL ?? new URL(req.url).origin;
+
+  const items = rows.map((r) => {
+    const brief = authors.get(Number(r.user));
+    const bv = Number(r.board_3bv);
+    const rt = Number(r.real_time);
+    // 运气盘（no_record=1，2026-11-02）与 3BV 低于 MIN_3BV_FOR_3BVS 同口径记负值
+    // （与 video_list 完全一致，消费方按负值识别「成绩不被承认」）
+    const sign =
+      rt > 0 && Number(r.no_record) === 0 && bv >= MIN_3BV_FOR_3BVS[r.level as VideoLevel] ? 1 : -1;
+    return {
+      id: Number(r.id),
+      level: (VIDEO_LEVELS as readonly string[]).includes(r.level) ? r.level : r.level,
+      userId: Number(r.user),
+      userName: brief?.chineseName ?? "?",
+      hash: r.hash,
+      status: Number(r.status), // 10=待审 20=已通过（屏蔽 0 不返回）
+      uploadTime: Number(r.create_time),
+      reviewTime: r.review_time ? Number(r.review_time) : 0,
+      realTime: rt,
+      board3bv: bv,
+      "3bvs": rt > 0 ? sign * Math.round((bv * 1000000) / rt) : 0,
+      nf: Number(r.noflag) === 1,
+      // 运气盘（2026-11-02 张老师定）：上传时低于级别 3BV 下限（初 2/中 30/高 100），
+      // 允许上传但所有成绩不被站内承认（3bvs 记负值同口径），不入排行/纪录
+      noRecord: Number(r.no_record) === 1,
+      // 前台同款文件下载地址（/video/download/{id}；不暴露 /videos 静态 URL。
+      // GET 即下载文件本体 application/octet-stream，每次访问计一次下载（同前台按钮口径））
+      fileUrl: `${base}/video/download/${Number(r.id)}`,
+      software: r.software,
+      version: r.version,
+      // 玩家标识（录像内嵌签名，站内「录像标识」版块口径）
+      signature: r.signature,
+      // 重放指标（video_metrics 落盘部分；缺行=null）
+      metrics: r.cl === null ? null : {
+        cl: Number(r.cl),
+        clLeft: Number(r.cl_left),
+        clRight: Number(r.cl_right),
+        clDouble: Number(r.cl_double),
+        ce: Number(r.ce),
+        path: Number(r.path),
+        ioe: Number(r.ioe),
+        stnb: Number(r.stnb),
+      },
+    };
+  });
+
+  return NextResponse.json({
+    generatedAt: Math.floor(Date.now() / 1000),
+    items,
+  });
+}

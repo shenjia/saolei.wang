@@ -1,0 +1,466 @@
+#!/usr/bin/env bash
+#
+# server-release.sh — 服务器端发布脚本（由 GitHub Actions 通过 SSH 调用）
+#
+# B1 架构（2026-09-27 起）：构建在 GitHub Actions 完成，本脚本只做：
+#   pnpm install（生产依赖）→ prisma generate → prisma db push → pm2 重启备槽
+#   → 健康检查 → 切 nginx 主备 → 终检（失败自动回滚）
+# B2 单活模式（2026-10-22 起）：发布成功后 pm2 stop 旧主力槽，常驻只留一个 Next 实例。
+# B3 双活模式（2026-11-08 起，替代单活）：旧主力槽保持运行做 nginx backup 真兜底——
+#   2026-11-07 全站 502 事故证明「backup 槽停止 + max_fails=1」会把主力单次抖动放大成全站 502。
+#   代价：常驻两个 Next 实例（~1.1GB），需 2026-11-08 服务器升配配合。
+#
+# ⚠️ 本脚本绝不运行 next build（旧机教训：服务器 build 触发 SWC 崩溃 + OOM + 内核 hang）
+# ⚠️ CI 只构建一次（标准 .next，Turbopack 二次构建会互删产物），rsync 到 .next-release/；
+#    本脚本负责把它复制成本次备槽目录（.next-blue / .next-green）
+#
+# 槽位固定: blue=saolei@3100(.next-blue)  green=saolei-green@3102(.next-green)
+# upstream 配置: ~/nginx-upstream/saolei-upstream.conf
+#   （/etc/nginx/conf.d/saolei-upstream.conf 是指向它的软链，root 一次性配置）
+set -euo pipefail
+
+# ---------- 配置 ----------
+DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$DEPLOY_DIR"
+
+NGINX_BIN="/usr/sbin/nginx"
+NGINX_UPSTREAM_CONF="$HOME/nginx-upstream/saolei-upstream.conf"
+# 权威对局服务（双实例热备）：a=3104 / b=3105，active 标记与 Next 同套路
+NGINX_AUTH_CONF="$HOME/nginx-upstream/authority-upstream.conf"
+HEALTH_PATH="/api/health"
+HEALTH_TIMEOUT=90
+
+export CI=true
+
+# ---------- 颜色输出 ----------
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+info()  { echo -e "${BLUE}[RELEASE]${NC} $1"; }
+ok()    { echo -e "${GREEN}[RELEASE]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[RELEASE]${NC} $1"; }
+fail()  { echo -e "${RED}[RELEASE]${NC} $1"; exit 1; }
+
+# ---------- 槽位定义 ----------
+slot_app()   { [[ $1 == blue ]] && echo saolei || echo saolei-green; }
+slot_port()  { [[ $1 == blue ]] && echo 3100 || echo 3102; }
+slot_dir()   { [[ $1 == blue ]] && echo .next-blue || echo .next-green; }
+
+# ---------- 权威对局槽位（a/b 双实例热备，2026-10-27） ----------
+auth_app()   { [[ $1 == a ]] && echo saolei-authority-a || echo saolei-authority-b; }
+auth_port()  { [[ $1 == a ]] && echo 3104 || echo 3105; }
+read_auth_active() { grep -oE 'active: (a|b)' "$NGINX_AUTH_CONF" | head -1 | awk '{print $2}'; }
+write_auth_upstream() {
+  local active=$1 standby
+  if [[ $active == a ]]; then standby=b; else standby=a; fi
+  cat > "$NGINX_AUTH_CONF.tmp" <<EOF
+# 此文件由 scripts/server-release.sh 自动管理，勿手动修改
+# active: $active
+upstream authority_upstream {
+    server 127.0.0.1:$(auth_port "$active") max_fails=3 fail_timeout=10s;        # $active (active)
+    server 127.0.0.1:$(auth_port "$standby") backup max_fails=3 fail_timeout=10s; # $standby (standby)
+}
+EOF
+  cat "$NGINX_AUTH_CONF.tmp" > "$NGINX_AUTH_CONF"   # cp 保 inode（软链不换）
+  rm -f "$NGINX_AUTH_CONF.tmp"
+}
+
+# ---------- 前置检查 ----------
+[[ -f .env ]] || fail "缺少 .env 文件（服务器上应已配置好，rsync 已排除不覆盖）"
+command -v pnpm >/dev/null 2>&1 || fail "pnpm 未安装"
+[[ -f "$NGINX_UPSTREAM_CONF" ]] || fail "缺少 $NGINX_UPSTREAM_CONF（nginx upstream 配置）"
+# authority upstream 自举（新环境/首次部署）：文件不存在就按 a 槽初始化。
+# ⚠️ 还需 root 一次性建软链 /etc/nginx/conf.d/authority-upstream.conf → 本文件，
+#    否则 nginx 不认 authority_upstream（只有 warning，WS 会 502）。
+if [[ ! -f "$NGINX_AUTH_CONF" ]]; then
+  info "初始化 $NGINX_AUTH_CONF（默认 active=a）"
+  mkdir -p "$(dirname "$NGINX_AUTH_CONF")"
+  write_auth_upstream a
+fi
+[[ -d .next-release/server/app ]] || fail "CI 构建产物缺失（.next-release 无 server/app）——CI 构建或 rsync 步骤未完成?"
+
+# ---------- 读取当前主力槽 ----------
+read_active() { grep -oE 'active: (blue|green)' "$NGINX_UPSTREAM_CONF" | head -1 | awk '{print $2}'; }
+ACTIVE="$(read_active)"
+[[ "$ACTIVE" == blue || "$ACTIVE" == green ]] || ACTIVE=blue
+if [[ "$ACTIVE" == blue ]]; then STANDBY=green; else STANDBY=blue; fi
+S_APP="$(slot_app "$STANDBY")"; S_PORT="$(slot_port "$STANDBY")"; S_DIR="$(slot_dir "$STANDBY")"
+A_APP="$(slot_app "$ACTIVE")"
+
+info "当前主力: $ACTIVE  → 本次发布备槽: $STANDBY (app=$S_APP port=$S_PORT dir=$S_DIR)"
+
+# ---------- 生成 upstream 配置（$1 = 主力色） ----------
+# max_fails=3 fail_timeout=10s（2026-11-08 加固）：nginx 默认 max_fails=1，主力槽单次
+# connection reset 即被全站拉黑 10s（备槽若又不在 = 「no live upstreams」全站 502，
+# 2026-11-07 11:33–12:35 事故根因之一）。改为 3 次失败才拉黑，单次抖动只损失单个请求。
+write_upstream() {
+  local active=$1
+  local primary_line backup_line
+  if [[ $active == blue ]]; then
+    primary_line="server 127.0.0.1:3100 max_fails=3 fail_timeout=10s;"
+    backup_line="server 127.0.0.1:3102 backup max_fails=3 fail_timeout=10s;"
+  else
+    primary_line="server 127.0.0.1:3102 max_fails=3 fail_timeout=10s;"
+    backup_line="server 127.0.0.1:3100 backup max_fails=3 fail_timeout=10s;"
+  fi
+  cat > "$NGINX_UPSTREAM_CONF.tmp" <<EOF
+# 此文件由 scripts/server-release.sh 自动管理，勿手动修改
+# active: $active
+upstream saolei_upstream {
+    $primary_line        # $active (active)
+    $backup_line         # $([[ $active == blue ]] && echo green || echo blue) (standby)
+}
+EOF
+  cat "$NGINX_UPSTREAM_CONF.tmp" > "$NGINX_UPSTREAM_CONF"   # cp 保 inode（软链不换）
+  rm -f "$NGINX_UPSTREAM_CONF.tmp"
+}
+
+# ---------- 等待健康检查（$1=端口） ----------
+wait_healthy() {
+  local port=$1 label=$2
+  info "健康检查 http://127.0.0.1:$port$HEALTH_PATH ..."
+  local deadline=$((SECONDS + HEALTH_TIMEOUT))
+  until curl -sf --max-time 5 "http://127.0.0.1:$port$HEALTH_PATH" >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      fail "$label 健康检查超时（${HEALTH_TIMEOUT}s）。请检查: pm2 logs $S_APP --lines 50"
+    fi
+    sleep 2
+  done
+  ok "$label 健康 ✓"
+}
+
+# ---------- 依赖安装（仅生产依赖；nice 降载保险仍保留） ----------
+info "安装生产依赖 (pnpm install --frozen-lockfile --prod)..."
+nice -n 19 ionice -c3 pnpm install --frozen-lockfile --prod
+
+# ---------- 生成 Prisma Client ----------
+info "生成 Prisma Client..."
+pnpm exec prisma generate
+
+# ---------- 同步数据库 schema ----------
+# 约定：schema.prisma 的加法改动（加列/加表/加索引）随部署自动应用。
+# 破坏性改动（删列/删表/缩类型）会让 db push 要求 --accept-data-loss 而报错退出 →
+#   部署中止，属预期保护：必须人工确认后手动执行，不允许部署链路静默删数据。
+info "同步数据库 schema (prisma db push)..."
+pnpm exec prisma db push --skip-generate
+
+# ---------- 生成备槽构建产物 ----------
+# CI 的单一 .next 产物复制成本次备槽目录。B3 双活下备槽也常驻运行并写缓存，
+# 直接 rm 会与缓存文件创建竞争（2026-11-08 实测 Directory not empty），先暂停备槽；
+# 当前主力槽不受影响，后面的 delete+start 会重新拉起备槽并加载新 env。
+if pm2 describe "$S_APP" >/dev/null 2>&1; then
+  info "暂停备槽 $S_APP，避免替换 $S_DIR 时缓存写入竞争..."
+  pm2 stop "$S_APP" >/dev/null
+fi
+info "复制 CI 构建产物 → 备槽 ${S_DIR}..."
+rm -rf "$S_DIR"
+cp -a .next-release "$S_DIR"
+[[ -f "$S_DIR/BUILD_ID" ]] || fail "复制后 $S_DIR/BUILD_ID 缺失（CI 产物不完整）"
+
+# ---------- 旧哈希静态资源并集（2026-10-28 蓝绿切换 404 窗口修复） ----------
+# 跨切换窗口的页面加载：HTML（no-store）刚从旧槽拿到、引用旧内容哈希的
+# /_next/static/chunks/*.css|js，下一毫秒请求已被 nginx 路由到新槽 → 404
+# （实测单日 1219 次，含真实玩家；症状＝globals.css 全丢、首页军衔徽章巨型化）。
+# 文件名全是内容哈希、永不冲突，把旧主力槽 static/ 并集拷进新槽即可让旧哈希
+# 永久可取（顺带修复部署后老页面站内跳转 JS 404）。单槽 static 仅 ~2.3MB。
+A_DIR="$(slot_dir "$ACTIVE")"
+if [[ -d "$A_DIR/static" ]]; then
+  cp -a "$A_DIR/static/." "$S_DIR/static/"
+  info "已并集旧槽 $A_DIR/static → $S_DIR/static（旧哈希资源跨发布可取）"
+fi
+
+# ---------- 共享 unstable_cache（2026-10-28 张老师定） ----------
+# CI 产物 rsync 排除了 cache/，运行时缓存本就每槽从零重建——此前每次发布都把
+# unstable_cache 文件缓存清零，聚合查询（BV 1.6s/STNB/news count 等）被迫全部
+# 冷启动（10-27 部署 79 次时 BV 聚合跑了 156 次，而 1h 缓存理论上限只有 ~48 次）。
+# 方案：两槽的 <distDir>/cache 软链到共享目录 .next-shared-cache/，切槽不清缓存。
+# 本项目 unstable_cache 全部走 TTL/revalidate 过期 + 键名带版本号（如 bv-collection-v6，
+# 改查询逻辑即升版本），**无 ISR**（全项目无 export const revalidate）——跨 build
+# 共享不存在 stale 风险；cacheHandler 未配置 = 默认文件系统 handler，直接可用。
+SHARED_CACHE_DIR="$DEPLOY_DIR/.next-shared-cache"
+link_shared_cache() {
+  local slot_dir=$1
+  rm -rf "${slot_dir:?}/cache"
+  mkdir -p "$SHARED_CACHE_DIR"
+  ln -s "$SHARED_CACHE_DIR" "${slot_dir}/cache"
+}
+link_shared_cache "$S_DIR"
+info "已软链 ${S_DIR}/cache → .next-shared-cache（unstable_cache 跨发布保留）"
+
+# ---------- 修复 @prisma/client stub（rsync 软链实体化坑，2026-09-28） ----------
+# 本地 .next/node_modules/@prisma/client-<hash> 是指向 pnpm store 的软链，
+# require 链经它解析到 .pnpm/.../node_modules/.prisma/client（prisma generate 产物）。
+# rsync -a 会跟随软链把 stub 传成实体目录——实体 stub 里没有 .prisma，
+# next start 时 "Cannot find module '.prisma/client/default'" 全站 500。
+# 服务器上重新把 stub 换成软链，指向本机 pnpm store 里的真实 client：
+fix_prisma_stub() {
+  local slot_dir=$1
+  local stub_dir="$slot_dir/node_modules/@prisma"
+  local real_client
+  real_client="$(readlink -f /home/deploy/saolei.wang/node_modules/.pnpm/@prisma+client@*/node_modules/@prisma/client)"
+  [[ -d "$real_client" ]] || fail "找不到服务器上的 @prisma/client 实体（pnpm install 未完成？）"
+  local stub_name
+  stub_name="$(ls "$stub_dir" 2>/dev/null | grep -E '^client-' | head -1)"
+  [[ -n "$stub_name" ]] || { info "槽位无 prisma stub（纯静态页？跳过）"; return 0; }
+  if [[ ! -L "$stub_dir/$stub_name" ]]; then
+    rm -rf "$stub_dir/$stub_name"
+    ln -s "$real_client" "$stub_dir/$stub_name"
+    info "已将 $stub_name stub 换回软链 → $real_client"
+  fi
+}
+fix_prisma_stub "$S_DIR"
+
+# ---------- 启动/更新权威对局服务 ----------
+# 2026-11-08 北京 active 拆到独立服务器：.env 配 AUTHORITY_URL_A 后，网站发布
+# 绝不再轮换/重建本机 a，也不许把 nginx 写回 127.0.0.1:3104。这里只检查
+# 双端健康，保持当前 active 不动；主备切换由独立迁移/发布步骤显式执行，
+# 避免新 Next 尚未加载 AUTHORITY_URL_A 时就提前把新局切走。
+REMOTE_AUTH_A="$(sed -n 's/^AUTHORITY_URL_A=//p' .env | tail -n 1)"
+if [[ -n "$REMOTE_AUTH_A" ]]; then
+  [[ "$REMOTE_AUTH_A" =~ ^http://[0-9.]+:[0-9]+$ ]] || fail "AUTHORITY_URL_A 仅支持内网 http://IP:端口（当前值不合法）"
+  info "北京 authority a 为独立节点 ${REMOTE_AUTH_A}，本机仅保留 backup b；当前 active=$(read_auth_active) 保持不变"
+  if ! curl -sf --max-time 5 "$REMOTE_AUTH_A/health" >/dev/null 2>&1; then
+    warn "远端 authority a 暂不健康；保持 nginx 当前主备，不自动切流"
+  fi
+  pm2 describe saolei-authority-b >/dev/null 2>&1 || fail "本机 authority backup b 不存在"
+  curl -sf --max-time 5 http://127.0.0.1:3105/health >/dev/null 2>&1 || fail "本机 authority backup b 不健康，禁止发布期间改动它"
+else
+# 以下为本机 a/b 双实例模式（未配置 AUTHORITY_URL_A 时沿用）。
+# 2026-10-27 改「双实例热备」（张老师定，替代单实例排空）：
+# 对局状态在各自进程内存、两槽互不可见 → 不做负载均衡，做热备切换：
+#   ① 重建备槽（delete+start：pm2 restart 不重读 ecosystem env，且要加载新代码）
+#   ② 备槽健康 → 切 nginx（只影响新连接；已建立的 WS 由旧 worker 继续服务到断开）
+#   ③ 老槽等存量局打完（active=0，上限 10min）→ 重建待命（下轮它就是备槽）
+# 全程不拒新局、不弹「正在重启」；老槽重建前它的对局已打完，玩家无感。
+# drain 开关保留作紧急维护闸（带 8 分钟 TTL 自动复位），发布流程不再使用。
+#
+# 2026-11-02 增「指纹跳过」（张老师提出）：权威代码变更频率很低，而无条件轮换
+# 要等老槽存量局清零（最长 600s），平时 CI 不该陪绑。server.mjs 自包含
+# （仅依赖 node 内置 + ws 包 + <deploy>/.env 启动补 env），指纹 = server.mjs 哈希
+# + .env 哈希 + ws 版本 + ecosystem 两个 authority app 配置（含 env）。
+# 指纹未变且双槽健在 → 完全跳过轮换（不重建、不切 nginx、无清局等待）。
+# 指纹状态存 $HOME（仓库外，CI rsync --delete 碰不到）。
+AUTH_ACTIVE="$(read_auth_active)"
+if [[ "$AUTH_ACTIVE" != a && "$AUTH_ACTIVE" != b ]]; then AUTH_ACTIVE=a; fi
+if [[ "$AUTH_ACTIVE" == a ]]; then AUTH_STANDBY=b; else AUTH_STANDBY=a; fi
+SA_APP="$(auth_app "$AUTH_STANDBY")"; SA_PORT="$(auth_port "$AUTH_STANDBY")"
+AA_APP="$(auth_app "$AUTH_ACTIVE")";  AA_PORT="$(auth_port "$AUTH_ACTIVE")"
+
+# 旧单实例（单实例时期的 saolei-authority，占着 3104）只做**探测**，删除必须等
+# 切流之后——先删会造成 3104 空窗、nginx 主备都连不上（首次迁移的 502 陷阱）。
+LEGACY_AUTH=0
+if pm2 describe saolei-authority >/dev/null 2>&1; then LEGACY_AUTH=1; fi
+if (( LEGACY_AUTH == 1 )); then
+  warn "检测到旧单实例 saolei-authority（占 3104）——先切流到 $AUTH_STANDBY，再迁移"
+fi
+
+AUTH_STATE_FILE="$HOME/.authority-fingerprint"
+# 指纹计算失败（理论上不该发生）降级为空串 → 不匹配 → 走全量轮换，绝不中止发布
+AUTH_FINGERPRINT="$(
+  {
+    sha256sum "$DEPLOY_DIR/src/core/scripts/authority/server.mjs" | awk '{print $1}'
+    sha256sum "$DEPLOY_DIR/.env" | awk '{print $1}'
+    node -p "require('$DEPLOY_DIR/node_modules/ws/package.json').version" 2>/dev/null || echo "ws-version-unknown"
+    node -p "JSON.stringify(require('$DEPLOY_DIR/ecosystem.config.js').apps.filter(function(a){return /^saolei-authority-[ab]$/.test(a.name)}))" 2>/dev/null || echo "ecosystem-read-failed"
+  } | sha256sum | awk '{print $1}'
+)" || AUTH_FINGERPRINT=""
+
+AUTH_SKIP=0
+if [[ "$LEGACY_AUTH" == 0 ]] \
+   && [[ -f "$AUTH_STATE_FILE" ]] \
+   && [[ "$(cat "$AUTH_STATE_FILE" 2>/dev/null || true)" == "$AUTH_FINGERPRINT" ]] \
+   && pm2 describe "$AA_APP" >/dev/null 2>&1 \
+   && pm2 describe "$SA_APP" >/dev/null 2>&1 \
+   && curl -sf --max-time 5 "http://127.0.0.1:$AA_PORT/health" >/dev/null 2>&1 \
+   && curl -sf --max-time 5 "http://127.0.0.1:$SA_PORT/health" >/dev/null 2>&1; then
+  AUTH_SKIP=1
+fi
+
+if (( AUTH_SKIP == 1 )); then
+  info "权威对局: server.mjs/.env/ws/ecosystem 指纹未变且双槽健在 → 跳过轮换（active=$AUTH_ACTIVE 不动，无清局等待）"
+else
+info "权威对局: active=$AUTH_ACTIVE($AA_PORT) → 本次切到 $AUTH_STANDBY($SA_PORT)"
+
+# ---------- ① 重建备槽 ----------
+if pm2 describe "$SA_APP" >/dev/null 2>&1; then
+  info "重建 $SA_APP（delete+start，加载新代码与新 ecosystem env）..."
+  pm2 delete "$SA_APP" >/dev/null 2>&1 || true
+fi
+pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$SA_APP"
+AUTH_DEADLINE=$((SECONDS + 60))
+while :; do
+  if curl -sf --max-time 5 "http://127.0.0.1:$SA_PORT/health" >/dev/null 2>&1; then break; fi
+  if (( SECONDS >= AUTH_DEADLINE )); then
+    fail "备槽权威服务健康检查超时（60s）。请检查: pm2 logs $SA_APP --lines 50"
+  fi
+  sleep 2
+done
+ok "备槽 $AUTH_STANDBY 权威服务健康 ✓"
+
+# ---------- ② 切 nginx（只影响新连接） ----------
+info "切换权威 WS 流量: $AUTH_ACTIVE → $AUTH_STANDBY ..."
+write_auth_upstream "$AUTH_STANDBY"
+sudo -n "$NGINX_BIN" -t || fail "nginx 校验失败，未切权威槽（线上仍由 $AUTH_ACTIVE 服务）"
+sudo -n "$NGINX_BIN" -s reload
+sleep 1
+
+# ---------- ③ 老槽等存量局打完再重建 ----------
+# 此刻老槽已不接新连接（nginx 已切走），它的玩家继续打完手里的局；
+# 不 POST /drain —— 那只会让 backup 兜底路径也开不了新局，没有收益。
+if (( LEGACY_AUTH == 1 )); then
+  # 首次迁移：3104 被旧单实例占着，它不接新连接了（nginx 已切到 $AUTH_STANDBY），
+  # 直接换成正式 a 槽。旧进程里的存量局会断（一次性代价）——客户端重连到新槽后
+  # resume 失败会提示重开一局。
+  warn "迁移旧单实例 → 正式槽 $AA_APP（此刻流量已在 $AUTH_STANDBY，无空窗）"
+  pm2 delete saolei-authority >/dev/null 2>&1 || true
+else
+  AUTH_WAITED=0
+  AUTH_WAIT_START=$SECONDS
+  AUTH_DEADLINE=$((SECONDS + 600))
+  while :; do
+    A_ACTIVE_NOW=$(curl -sf --max-time 3 "http://127.0.0.1:$AA_PORT/health" 2>/dev/null | grep -oE '"active":[0-9]+' | grep -oE '[0-9]+' || true)
+    if [ -z "$A_ACTIVE_NOW" ]; then A_ACTIVE_NOW=0; fi
+    if [ "$A_ACTIVE_NOW" -eq 0 ]; then break; fi
+    if (( SECONDS >= AUTH_DEADLINE )); then
+      warn "老槽仍有 $A_ACTIVE_NOW 局进行中，等待超时（10min）——重建会作废这些局"
+      break
+    fi
+    if (( AUTH_WAITED == 0 )); then
+      info "老槽还有 $A_ACTIVE_NOW 局在打，等打完再重建（最多 10 分钟；这期间新局已走备槽，玩家无感）..."
+      AUTH_WAITED=1
+    fi
+    # 每 30s 打一次进度行（2026-10-28 实证：CI 侧 Azure NAT 4 分钟空闲掐 TCP，
+    # 静默等待会杀死发布 SSH——双保险，客户端另有 ServerAliveInterval=20）
+    AUTH_TICK=$(( ${AUTH_TICK:-0} + 1 ))
+    if (( AUTH_TICK % 6 == 0 )); then
+      info "等待老槽清局中... ${A_ACTIVE_NOW} 局在打（已等 $((SECONDS - AUTH_WAIT_START))s / 上限 600s）"
+    fi
+    sleep 5
+  done
+fi
+info "重建老槽 $AA_APP（加载新代码，转待命）..."
+pm2 delete "$AA_APP" >/dev/null 2>&1 || true
+pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$AA_APP"
+AUTH_DEADLINE=$((SECONDS + 60))
+while :; do
+  if curl -sf --max-time 5 "http://127.0.0.1:$AA_PORT/health" >/dev/null 2>&1; then break; fi
+  if (( SECONDS >= AUTH_DEADLINE )); then
+    fail "老槽权威服务重建后健康检查超时（60s）。请检查: pm2 logs $AA_APP --lines 50"
+  fi
+  sleep 2
+done
+ok "权威对局双槽就绪 ✓ active=$AUTH_STANDBY"
+
+# 轮换成功才落指纹：失败路径（fail 退出）不落，下次发布自动重试轮换
+printf '%s\n' "$AUTH_FINGERPRINT" > "$AUTH_STATE_FILE"
+fi
+fi
+
+# ---------- 重启备槽实例 ----------
+# 备槽是 nginx backup（双活下常驻运行，但几乎不接流量——仅主力失败时兜底）。
+# ⚠️ 2026-10-27 生产事故教训：
+# pm2 restart **不重读 ecosystem.config.js 的新 env**（RANKED_MODE_OPEN 加进
+# ecosystem 后，老进程 restart 仍是旧 env——排名入口在生产消失 22 分钟）。
+# 所以仍 delete + start 重建：重建窗口内 backup 短暂不可用（此时 nginx 指向主力槽，
+# 无流量损失），且保证每次发布后两槽都是最新 ecosystem env。
+if pm2 describe "$S_APP" >/dev/null 2>&1; then
+  info "重建 $S_APP（delete+start，确保加载最新 ecosystem env）..."
+  pm2 delete "$S_APP" >/dev/null 2>&1
+  pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$S_APP"
+else
+  info "首次启动 $S_APP ..."
+  pm2 start "$DEPLOY_DIR/ecosystem.config.js" --only "$S_APP"
+fi
+
+# ---------- 备槽健康检查 ----------
+wait_healthy "$S_PORT" "$STANDBY 槽"
+
+# ---------- 预热一级页面（切流前，直连备槽端口） ----------
+# 新槽的 .next/cache 是冷的（CI 产物 rsync 排除了 cache/），切流后并发首访会各自做冷
+# 缓存重建——最重的 BV 全量聚合（30 万行，约 1s）叠并发即打满 5 条 Prisma 连接池（P1017）。
+# 这里在切流**之前**串行预热一遍：此时线上仍由旧槽服务，对访客零影响；切流时缓存已热。
+# 失败只告警——预热是优化手段，不该有能力阻断发布。清单见 scripts/preheat.sh。
+bash "$DEPLOY_DIR/scripts/preheat.sh" "$S_PORT" || warn "预热脚本异常（不阻断发布）"
+
+# ---------- 页缓存预热器（2026-11-09 匿名扫雷闸配套） ----------
+# nginx 页缓存（saolei_pages）常暖进程：307 不落缓存，匿名流量无法回填过期条目，
+# 由本进程持通行证 cookie 周期回源保关键列表页恒命中（详见 scripts/preheat-pages.mjs）。
+# 脚本随部署同步，此处重启加载新版；首次部署自动拉起。
+if pm2 describe "saolei-preheat" >/dev/null 2>&1; then
+  pm2 restart "saolei-preheat" >/dev/null
+else
+  pm2 start "$DEPLOY_DIR/scripts/preheat-pages.mjs" --name saolei-preheat >/dev/null
+fi
+
+# ---------- 切换 nginx 主备（平滑 reload，不断连接） ----------
+info "切换 nginx 主力: $ACTIVE → $STANDBY ..."
+write_upstream "$STANDBY"
+sudo -n "$NGINX_BIN" -t || fail "nginx 配置校验失败，未 reload（线上仍由 $ACTIVE 服务）"
+sudo -n "$NGINX_BIN" -s reload
+sleep 1
+
+# ---------- 终检（本机直连新主力；失败自动回滚） ----------
+final_check() {
+  # 主域 saolei.wang（2026-10-25 切换；勿用 new.*——它已 301 归一化，探测会打到 301 上，
+  # curl -sf 对 301 返回 0 → 永远「通过」，探测不到真实上游）
+  curl -sf --max-time 10 --resolve "saolei.wang:443:127.0.0.1" "https://saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
+  curl -sf --max-time 10 --resolve "saolei.wang:80:127.0.0.1" "http://saolei.wang$HEALTH_PATH" >/dev/null 2>&1 && return 0
+  return 1
+}
+if final_check; then
+  ok "经 nginx 终检通过 ✓  新主力: $STANDBY"
+  # ---------- 双活模式（2026-11-08，替代 B2 单活）----------
+  # 2026-11-07 11:33–12:35 全站 502 事故后改为双活：发布成功后旧主力槽**不再 stop**，
+  # 继续跑旧版本代码作为 nginx backup 真兜底（~550MB，张老师升配服务器后内存充裕）。
+  # 旧槽磁盘上的 .next-<旧色> 产物不会被本次发布覆盖（发布只重建备槽 dir），旧代码完整可跑。
+  # 手工回滚仍可用：pm2 delete 新槽 → 恢复旧槽为主力（write_upstream + reload）。
+  info "双活模式: 旧主力槽 $A_APP 保持运行，作为 backup 兜底"
+else
+  warn "终检失败！自动回滚到 $ACTIVE ..."
+  write_upstream "$ACTIVE"
+  sudo -n "$NGINX_BIN" -t && sudo -n "$NGINX_BIN" -s reload
+  # 双活：回滚不停刚拉起的新槽，保留它作为 backup（旧槽已恢复主力服务）
+  warn "已回滚到 $ACTIVE，新槽 $S_APP 保留为 backup。请查: pm2 logs $S_APP --lines 50 / pm2 ls"
+  exit 1
+fi
+
+pm2 save
+
+# ---------- authority 心跳监控 cron 安装（2026-10-27 张老师要求）----------
+# 每分钟探测 /health：进程消失→pm2 start；连续 2 次不可达→pm2 restart。
+# 幂等安装（grep 防重复行）。
+CRON_LINE="* * * * * $DEPLOY_DIR/scripts/authority-healthcheck.sh >> /tmp/authority-healthcheck.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "authority-healthcheck.sh"); then
+  (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
+  ok "已安装 authority 心跳监控 cron（每分钟）"
+fi
+
+# ---------- 实力图 distribution 每日重算（2026-11-08 张老师要求）----------
+# 23 档名次阈值每天 00:30 全量重算并追加快照；radar.ts 5 分钟 TTL 自动接手，无需重启双槽。
+DIST_CRON_LINE="30 0 * * * cd $DEPLOY_DIR && /usr/bin/env -u NODE_OPTIONS node scripts/reset-distribution.mjs --apply >> /home/deploy/logs/distribution.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "reset-distribution.mjs"); then
+  (crontab -l 2>/dev/null; echo "$DIST_CRON_LINE") | crontab -
+  ok "已安装 distribution 每日重算 cron（00:30）"
+fi
+
+# ---------- 开源扫雷网录像同步（2026-11-10 建；2026-11-17 拆成扫描器 + 下载器）----------
+# 拆分原因（张老师 2026-11-17 定）：单脚本「列表+下载」串行跑时，大积压用户会把整轮配额吃光，
+# 后面的用户连列表都拉不到，新上传录像要等队头几千盘清完才被扫到。拆开后：
+#   扫描器 —— 每 10 分钟穿越全部 consent=1 用户，只登记台账（列表限速 1/2s），不下载、不占下载位；
+#   下载器 —— 每 2 分钟消费台账 state=0 队列，脚本内 12.5s 打点 = 连续 4.8 盘/分（对方上限 5/分）。
+# 各自 flock -n 防重入；两条任务互不阻塞，扫描永远不会被下载积压拖住。
+# 先清掉旧单脚本的 crontab 行（否则新旧同跑会争抢下载位）。
+if crontab -l 2>/dev/null | grep -qF "openms-sync-all.ts"; then
+  crontab -l 2>/dev/null | grep -vF "openms-sync-all.ts" | crontab -
+  ok "已移除旧 openms-sync-all cron（已拆分为 scan + download）"
+fi
+OPENMS_SCAN_CRON="*/10 * * * * cd $DEPLOY_DIR && /usr/bin/flock -n /tmp/openms-scan.lock /usr/bin/env -u NODE_OPTIONS node --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-scan.ts --apply >> /home/deploy/logs/openms-scan.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "openms-scan.ts"); then
+  (crontab -l 2>/dev/null; echo "$OPENMS_SCAN_CRON") | crontab -
+  ok "已安装开源扫雷网扫描器 cron（每 10 分钟）"
+fi
+OPENMS_DL_CRON="*/2 * * * * cd $DEPLOY_DIR && /usr/bin/flock -n /tmp/openms-download.lock /usr/bin/env -u NODE_OPTIONS node --experimental-transform-types --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-download.ts --apply --max-downloads 10 >> /home/deploy/logs/openms-download.log 2>&1"
+if ! (crontab -l 2>/dev/null | grep -qF "openms-download.ts"); then
+  (crontab -l 2>/dev/null; echo "$OPENMS_DL_CRON") | crontab -
+  ok "已安装开源扫雷网下载器 cron（每 2 分钟）"
+fi
+
+ok "发布完成 ✓  $(date '+%Y-%m-%d %H:%M:%S')  (next active=$STANDBY, 旧主力 $A_APP 保持运行兜底; authority active=$(read_auth_active))"

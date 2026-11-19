@@ -1,0 +1,495 @@
+// 旧站（2008 ASP 版 saolei.wang / saolei.net）URL → 新站 301 永久跳转
+// 背景（2026-09-25 张老师要求）：论坛文章等旧地址 http://www.saolei.wang/BBS/Title.asp?Id=9786
+// 被搜索引擎和外部帖子大量引用，上线新站后若不跳转，文章内容会「丢」。
+//
+// 方案：Next 16 proxy.ts（middleware 改名而来，见 node_modules/next/dist/docs）
+//   统一在请求进入路由前做 301。所有跳转用「相对 Location」——
+//   nginx 反代下 NextResponse.redirect(new URL(path, req.url)) 会把浏览器甩到内部
+//   localhost:3100（req.url 是内部地址），见项目记忆「route handler 重定向坑」。
+//
+// 旧站 URL 特征：
+//   - 路径大小写不敏感（IIS）：/bbs/title.asp 与 /BBS/Title.asp 等价 → 全部小写后匹配
+//   - 查询串 GBK 编码（ASP 站点 charset=gb2312）：如 /Ranking/Ranking_Areas.asp?Area=<GBK>
+//     NextRequest.searchParams 按 UTF-8 解码会得到乱码 → 对含中文的参数做 GBK 回退解码
+//   - 分页参数 Page、排序参数 By、目标 Id：能映射的尽量透传
+
+import { NextResponse, type NextRequest } from "next/server";
+import { canUseRsc } from "@/lib/bot-challenge";
+import { apiKeyAllowsDownload } from "@/lib/partner";
+
+export const config = {
+  // 拦截旧站路径。三类：
+  // ① .asp/.asa 页面（含任意大小写组合）：
+  //    实测坑：matcher 对扩展名大小写敏感——/bbs/title.ASP 不命中 .asp 小写 matcher
+  //    直接 404（外链存在大写扩展名形态）；path-to-regexp 不支持内联标志 (?i)
+  //    （Invalid group）、不允许捕获组——只能用字符类实现大小写无关；
+  //    .asa 是 ASP 配置文件（Global.asa 等），一并接住防 404
+  // ② 裸目录（/BBS /Video …）：必须用旧站原样 CamelCase——小写 /bbs /video 是
+  //    新站自己的路由，拦了会无限重定向；旧站外链由站内链接生成，均为原样大小写
+  // ③ 旧站静态资源热链（/Models/** /Download/** /Play/**）：论坛外链图片/下载直链，
+  //    新站静态树在 /models /download /play（Linux 生产环境大小写敏感，须改写）
+  matcher: [
+    // 全站 RSC 入口；普通 HTML、静态文件与 API 不因这两条额外进入 proxy。
+    { source: "/:path*", has: [{ type: "header", key: "rsc" }] },
+    { source: "/:path*", has: [{ type: "query", key: "_rsc" }] },
+    "/video",
+    "/((?:.*\\.[aA][sS][pP]))",
+    "/((?:.*\\.[aA][sS][aA]))",
+    "/BBS",
+    "/Video/:path*",
+    "/Player",
+    "/Ranking",
+    "/News",
+    "/Message",
+    "/About",
+    "/Download/:path*",
+    "/Guide",
+    "/Help",
+    "/Hero",
+    "/Team",
+    "/World",
+    "/Update",
+    "/History",
+    "/Online",
+    "/Main",
+    "/Play/:path*",
+    "/Models/:path*",
+    "/Software/:path*",
+    // 新站文档兜底（2026-11-09 张老师定：匿名穿透页缓存的 GET 走扫雷验证）：
+    // 负向前瞻剔除系统/静态/豁免路径——API、WS、Next 资源、录像/上传/图片/样式/脚本
+    // 静态树、旧站静态目标（小写）、验证页自身、账号与激活链路、爬虫文件。
+    // 其余页面文档请求一律进 proxy 参与匿名闸判定（登录态/有通行证无感放行）。
+    // 2026-11-09 补 icon.svg/apple-icon.png：metadata 图标也是 Next 路由（非 public 静态树），
+    // 漏豁免会被匿名闸 307 到验证页 → 页头 logo 裂图（匿名访客首访必现，登录/有通行证正常）。
+    // 2026-11-11 图标改造后 icon.svg/favicon.ico 落 public/，icon-dev.svg/png 在 /icons/ 下
+    // ——三者虽同属 public 静态树，仍保留显式豁免（icons/ 整目录豁免，防 dev 图标被匿名闸 307）。
+    // 2026-11-09 补 openms-logo.svg：绑定授权页示意图的合作站 LOGO（public 静态树），同理无需过闸。
+    // 2026-11-09 补 page/api：开放 API 说明页（footer 链接 + 外部开发者从搜索引擎直达），
+    // 目标读者就是机器人/第三方服务，过扫雷闸自相矛盾，直接豁免。
+    // 2026-11-09 补 page/download：软件下载页（/download 301 落点，游客免费资源获取设闸自断
+    // 入口——小写 /download/** 旧站 .zip/.exe 直链静态树本就有豁免，勿混淆）。
+    // 2026-11-18 补 online：练习页（旧站外链 /Online、/online/game.asp 都 301 落这里）对游客弹
+    // 「扫雷验证」自相矛盾——文档 307 与 RSC 403 弹窗闸一并豁免，子路径同步覆盖。
+    "/((?!api/|ws/|_next/|videos/|uploads/|images/|icons/|styles/|scripts/|models/|download/|play/|software/|bot/challenge|page/api|page/download|online|account|active|favicon\\.ico|icon\\.svg|apple-icon\\.png|openms-logo\\.svg|robots\\.txt|sitemap).*)",
+  ],
+};
+
+/** 取查询参数（大小写不敏感，旧站 ASP Request() 即如此）：
+ *  UTF-8 正常解码优先，含非 Latin-1 字符时回退 GBK 解码 */
+function param(req: NextRequest, name: string): string | undefined {
+  const lower = name.toLowerCase();
+  let key: string | null = null;
+  let v: string | null = null;
+  for (const [k, val] of req.nextUrl.searchParams.entries()) {
+    if (k.toLowerCase() === lower) {
+      key = k;
+      v = val;
+      break;
+    }
+  }
+  if (v == null || v === "") return undefined;
+  // 检查 UTF-8 解码是否产生了「替换符/非 Latin-1」——GBK 中文按 UTF-8 解必乱
+  const broken = [...v].some((ch) => {
+    const c = ch.codePointAt(0)!;
+    return c > 0xff || c === 0xfffd;
+  });
+  if (!broken) return v;
+  // 从原始查询串手工按字节切分（searchParams 已把 %XX 解好，但解错了码）。
+  // 注意 raw[0] 形如 "Area=%D5%E3%BD%AD"——去掉「key=」前缀须从首个 = 之后切
+  const raw = req.nextUrl.search.match(new RegExp(`[?&]${key}=[^&]*`, "i"));
+  if (!raw) return v;
+  try {
+    // 手工 percent-decode 回原始字节（decodeURIComponent 会按 UTF-8 解 GBK 字节直接抛异常）
+    const hex = raw[0].slice(raw[0].indexOf("=") + 1);
+    const bytes: number[] = [];
+    for (let i = 0; i < hex.length; i++) {
+      if (hex[i] === "%" && /^[0-9a-f]{2}$/i.test(hex.slice(i + 1, i + 3))) {
+        bytes.push(parseInt(hex.slice(i + 1, i + 3), 16));
+        i += 2;
+      } else bytes.push(hex.charCodeAt(i) & 0xff);
+    }
+    return new TextDecoder("gbk").decode(new Uint8Array(bytes));
+  } catch {
+    return v;
+  }
+}
+
+/** 301 响应。
+ *  必须用绝对 URL：Next 16 proxy 管线会 new URL(location) 解析 Location，
+ *  相对路径直接 ERR_INVALID_URL（route handler 里可行的相对 Location 写法在这里 500）。
+ *  绝对地址取 nginx 传来的 Host / X-Forwarded-Proto（dev=dev.saolei.wang，生产=线上域名），
+ *  不用 req.url（那是内部 localhost:3100，会泄内部 host，见项目记忆重定向坑）。 */
+function movedTo(req: NextRequest, location: string, status = 301): NextResponse {
+  const host = req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") ?? "http";
+  const base = host ? `${proto}://${host}` : req.url;
+  return NextResponse.redirect(new URL(location, base), status);
+}
+
+/** 数字参数解析（Id/Page/Rank 等），非法返回 undefined */
+function num(v: string | undefined): number | undefined {
+  if (v == null) return undefined;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/** 旧排行 By 列名（Player_Beg_Time_Score 形态）→ 新 by 参数（beg_time 形态） */
+function legacyRankingBy(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  const m = v.match(/^Player_(Beg|Int|Exp|Sum)_(Time|3BVS)_Score$/i);
+  if (!m) return undefined;
+  return `${m[1].toLowerCase()}_${m[2].toLowerCase().replace("3bvs", "3bvs")}`;
+}
+
+/** 保留 Page 参数（新站 ranking/area/grow/click/bbs 详情等仍认 page） */
+function withPage(base: string, page: number | undefined, extra?: Record<string, string | undefined>): string {
+  const qs = new URLSearchParams();
+  if (extra) for (const [k, v] of Object.entries(extra)) if (v != null && v !== "") qs.set(k, v);
+  if (page != null && page > 1) qs.set("page", String(page));
+  const s = qs.toString();
+  return s ? `${base}?${s}` : base;
+}
+
+export async function proxy(req: NextRequest) {
+  const url = req.nextUrl;
+  const isRsc = req.headers.get("rsc") === "1" || url.searchParams.has("_rsc");
+  if (isRsc) {
+    const path = url.pathname;
+    // API、WS、静态资源有自己鉴权/缓存口径，不能套页面 RSC 通行证。
+    // /page/api 开放 API 说明页已过闸豁免（见 matcher 注释），RSC 导航同步放行。
+    // /page/download 软件下载页同批豁免（2026-11-09），切页导航同步放行。
+    // /online 练习页豁免（2026-11-18 张老师定）：扫雷站的练习页不该弹扫雷验证
+    // （RSC 403 即 JS 弹窗闸）——游客软导航直达即玩，与 matcher 豁免配套。
+    if (path.startsWith("/api/") || path.startsWith("/ws/") || path.startsWith("/_next/") || path.startsWith("/videos/") || path.startsWith("/page/api") || path.startsWith("/page/download") || path === "/online" || path.startsWith("/online/")) {
+      return NextResponse.next();
+    }
+    if (!canUseRsc(req)) {
+      return NextResponse.json(
+        { error: "minesweeper challenge required" },
+        { status: 403, headers: { "x-saolei-challenge": "minesweeper", "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.next();
+  }
+  // IIS 路径大小写不敏感，统一小写匹配
+  const path = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  const q = (n: string) => param(req, n);
+  const id = () => num(q("id"));
+  const page = () => num(q("page"));
+
+  // ---------- 旧站形态判定（大小写敏感，勿动）----------
+  // .asp/.asa 后缀，或旧站 CamelCase 目录前缀——小写同名路径（/bbs /video /ranking…）
+  // 是新站自己的路由，绝不能当旧站处理（原 matcher 只拦 CamelCase，扩兜底后须在此区分）
+  const LEGACY_PREFIXES = [
+    "/BBS", "/Video", "/Player", "/Ranking", "/News", "/Message", "/About",
+    "/Download", "/Guide", "/Help", "/Hero", "/Team", "/World", "/Update",
+    "/History", "/Online", "/Main", "/Play", "/Models", "/Software",
+  ];
+  const isLegacyUrl = /\.(asp|asa)$/i.test(url.pathname) ||
+    LEGACY_PREFIXES.some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`));
+
+  // ---------- 新站文档：匿名扫雷闸（2026-11-09 张老师定） ----------
+  // 「所有穿透页缓存又未登录的请求启用验证」：能到达 proxy 即 nginx 页缓存未命中
+  // （命中缓存的请求根本不进 Next），登录态/2h 通行证（canUseRsc）直接放行。
+  // 覆盖此前仅 RSC 层 + /video?author|3bv 设闸的缺口——/bbs 等文档遍历曾完全绕过验证。
+  // 非 GET（表单提交等）不拦；豁免路径见 config.matcher 负向前瞻（登录/激活/静态/爬虫文件）。
+  // 首页永不设闸（2026-11-09 张老师补充：游客必须始终有免费入口；且 307 不落 nginx
+  // 缓存，设闸会让首页缓存过期后无法被匿名流量回填——豁免后游客流量可自愈缓存）。
+  // 裸 /download（2026-11-09 张老师指令豁免软件下载页）：不匹配 matcher 的 download/
+  // （带斜缀，旧站直链静态树）也不在 LEGACY_PREFIXES（那是 CamelCase /Download），
+  // 会先被闸拦、永远走不到 bareDirs 的 301——闸前显式 301 到已豁免的 /page/download。
+  if (url.pathname === "/download") {
+    return movedTo(req, "/page/download");
+  }
+  if (!isLegacyUrl) {
+    if (req.method === "GET" && url.pathname !== "/" && !canUseRsc(req)) {
+      // 2026-11-11 张老师指令：/video/download/:id（公开 API fileUrl 落点，
+      // /api/public/v1/video_info 返回的下载地址）只对带有效 X-Api-Key 的请求放行
+      // ——第三方程序拿 URL 直接 GET，无 cookie、无爬虫 UA 豁免，过闸即 307 死循环。
+      // key 校验走 api_key 表/env 草案（用量记 endpoint=download，见 lib/partner.ts）；
+      // 前台真人游客不受影响（能开录像详情页即已过闸/有通行证，cookie 随请求下发）。
+      if (url.pathname.startsWith("/video/download/") && (await apiKeyAllowsDownload(req))) {
+        return NextResponse.next();
+      }
+      const next = `${url.pathname}${url.search}`;
+      return movedTo(req, `/bot/challenge?next=${encodeURIComponent(next)}`, 307);
+    }
+    return NextResponse.next();
+  }
+
+  // ---------- 裸目录路径（旧站目录浏览形态 /BBS /Video 等，外链与手输常见） ----------
+  // matcher 已按旧站 CamelCase 原样拦截（小写是新站路由不能拦），这里小写后归一分发
+  const bareDirs: Record<string, string> = {
+    "/bbs": "/bbs",
+    "/video": "/video",
+    "/player": "/ranking",
+    "/ranking": "/ranking",
+    "/news": "/",
+    "/message": "/message",
+    "/about": "/page/about",
+    "/download": "/page/download",
+    "/guide": "/page/guide",
+    "/help": "/page/help",
+    "/team": "/team",
+    "/hero": "/titles",
+    "/world": "/titles",
+    "/update": "/page/history",
+    "/history": "/page/history",
+    "/online": "/online",
+    "/main": "/",
+  };
+  if (path in bareDirs) return movedTo(req, bareDirs[path]);
+
+  // ---------- 旧站静态资源热链 ----------
+  // /Models/Images/**（论坛帖 [img] 热链）→ /models/images/**（树已全小写化）
+  if (path.startsWith("/models/")) {
+    return movedTo(req, `/models${url.pathname.slice("/models".length)}`.toLowerCase());
+  }
+  // /Download/**（旧下载直链 .zip/.exe）→ /download/**（文件名保持原大小写）
+  if (path.startsWith("/download/")) {
+    return movedTo(req, `/download${url.pathname.slice("/download".length)}`);
+  }
+  // /Software/Download/**（2008 前旧路径）→ /download/**
+  if (path.startsWith("/software/download/")) {
+    return movedTo(req, `/download${url.pathname.slice("/software/download".length)}`);
+  }
+  // /Play/**（flop-player 播放器静态文件）→ /play/**（文件名保持原大小写）
+  if (path.startsWith("/play/")) {
+    return movedTo(req, `/play${url.pathname.slice("/play".length)}`);
+  }
+
+  // ---------- BBS 论坛 ----------
+  // /BBS/Title.asp?Id=9786 → /bbs/9786（张老师点名的核心案例）
+  if (path === "/bbs/title.asp") {
+    const n = id();
+    // Page 透传：新站 /bbs/[id] 认 ?page=（回复分页）
+    return movedTo(req, n ? withPage(`/bbs/${n}`, page()) : "/bbs");
+  }
+  // 板块列表：BBS_All=全部 BBS_Notice=公告 BBS_Skill=技术 BBS_Other=杂谈 BBS_Ask=问答
+  // BBS_Hot=热门(无对应→全部) BBS_My=我的主题(需登录,无对应→全部) Index=全部
+  const bbsBoards: Record<string, string | undefined> = {
+    "/bbs/index.asp": undefined,
+    "/bbs/index_new.asp": undefined,
+    "/bbs/bbs_all.asp": undefined,
+    "/bbs/bbs_notice.asp": "0",
+    "/bbs/bbs_skill.asp": "1",
+    "/bbs/bbs_other.asp": "2",
+    "/bbs/bbs_ask.asp": "3",
+    "/bbs/bbs_hot.asp": undefined,
+    "/bbs/bbs_my.asp": undefined,
+    "/bbs/index_nice.asp": "nice",
+  };
+  if (path in bbsBoards) {
+    const b = bbsBoards[path]!;
+    if (b === "nice") return movedTo(req, withPage("/bbs", undefined, { order: "nice" }));
+    return movedTo(req, withPage("/bbs", page(), b ? { board: b } : undefined));
+  }
+  if (path === "/bbs/post.asp") return movedTo(req, "/bbs/post");
+  if (path === "/bbs/edit.asp" || path === "/bbs/edit_box.asp") {
+    const n = id();
+    return movedTo(req, n ? `/bbs/edit/${n}` : "/bbs");
+  }
+  // 回复/删帖/移动等操作半页与「我的主题/精华」列表 → 主题详情或版块列表
+  if (path === "/bbs/reply.asp" || path === "/bbs/reply_box.asp") {
+    const n = id();
+    return movedTo(req, n ? `/bbs/${n}` : "/bbs");
+  }
+  if (path === "/bbs/del.asp" || path === "/bbs/move.asp" || path === "/bbs/my_new.asp" || path === "/bbs/my_nice.asp") {
+    const n = id();
+    return movedTo(req, n ? `/bbs/${n}` : "/bbs");
+  }
+  if (path === "/bbs/index_nice_new.asp") return movedTo(req, withPage("/bbs", undefined, { order: "nice" }));
+
+  // ---------- Video 录像 ----------
+  if (path === "/video/show.asp") {
+    const n = id();
+    return movedTo(req, n ? `/video/${n}` : "/video");
+  }
+  // Video_All=全部 Video_Beg/Int/Exp=级别 Video_Hot=热门(无对应→全部)
+  // My/My_Beg/My_Int/My_Exp=我的（Id=玩家）→ /video?author=Id&level=
+  if (path === "/video/index.asp" || path === "/video/video_all.asp" || path === "/video/video_hot.asp" || path === "/video/new_index.asp") {
+    return movedTo(req, withPage("/video", undefined, undefined));
+  }
+  const videoLevels: Record<string, string> = {
+    "/video/video_beg.asp": "beg",
+    "/video/video_int.asp": "int",
+    "/video/video_exp.asp": "exp",
+  };
+  if (path in videoLevels) {
+    return movedTo(req, withPage("/video", undefined, { level: videoLevels[path] }));
+  }
+  if (path === "/video/my.asp" || path === "/video/new_man.asp") {
+    const n = id();
+    return movedTo(req, n ? `/user/${n}` : "/video");
+  }
+  if (path === "/video/my_beg.asp" || path === "/video/my_int.asp" || path === "/video/my_exp.asp") {
+    const n = id();
+    const level = path.endsWith("my_beg.asp") ? "beg" : path.endsWith("my_int.asp") ? "int" : "exp";
+    return movedTo(req, n ? withPage("/video", undefined, { author: String(n), level }) : "/video");
+  }
+  if (path === "/video/upload.asp" || path === "/video/upload_input.asp" || path === "/video/upload_select.asp" || path === "/video/upload_select_list.asp" || path === "/video/upload_ok.asp") {
+    return movedTo(req, "/video/upload");
+  }
+  // 审核/冻结半页（Check/Freeze/Satus/UnFreeze）→ 录像详情或列表；New_Hero/New_Index=新版录像频道首页
+  if (path === "/video/check.asp" || path === "/video/freeze.asp" || path === "/video/satus.asp") {
+    const n = id();
+    return movedTo(req, n ? `/video/${n}` : "/video");
+  }
+  if (path === "/video/comment_list.asp") {
+    const n = id();
+    return movedTo(req, n ? `/video/${n}` : "/video");
+  }
+  // 旧录像文件直链（2013 版起的 hash 路径）：/videos/... 已有 catch-all 路由，不在此处理；
+  // 2008 早期路径 /Video/Mvf/70/xxx.mvf → /videos/Mvf/70/xxx.mvf
+  if (path.startsWith("/video/mvf/")) {
+    return movedTo(req, `/videos${url.pathname.slice("/video/mvf".length)}`);
+  }
+
+  // ---------- Player 玩家 ----------
+  if (path === "/player/index.asp" || path === "/player/show.asp" || path === "/player/info.asp" || path === "/player/poster.asp" || path === "/player/main.asp") {
+    const n = id();
+    return movedTo(req, n ? `/user/${n}` : "/ranking");
+  }
+  if (path === "/player/star.asp") {
+    // 每日一星已下线（2026-10-13）→ 跳玩家详情或首页
+    const n = id();
+    return movedTo(req, n ? `/user/${n}` : "/");
+  }
+  if (path === "/player/random.asp") return movedTo(req, "/user/random");
+  if (path === "/player/history_list.asp" || path === "/player/history_add.asp" || path === "/player/history_edit.asp") {
+    const n = id();
+    return movedTo(req, n ? `/user/${n}` : "/ranking");
+  }
+  if (path === "/player/login.asp") return movedTo(req, "/account/login");
+  if (path === "/player/register.asp" || path === "/player/register_input.asp" || path === "/player/register_text.asp" || path === "/player/register_ok.asp") {
+    return movedTo(req, "/account/register");
+  }
+  if (path === "/player/password.asp" || path === "/player/password_id.asp" || path === "/player/password_input.asp" || path === "/player/password_ok.asp" || path === "/player/password_fail.asp") {
+    return movedTo(req, "/account/forgot");
+  }
+  if (path === "/player/manage.asp" || path === "/player/do_manage.asp" || path === "/player/do_manage_other.asp" || path === "/player/do.asp" || path === "/player/edit.asp" || path === "/player/more.asp" || path === "/player/satus.asp") {
+    return movedTo(req, "/account/profile");
+  }
+  if (path === "/player/search.asp" || path === "/player/search_result.asp" || path === "/player/search_result_list.asp") {
+    return movedTo(req, "/ranking");
+  }
+
+  // ---------- Ranking 排行 ----------
+  if (path === "/ranking/index.asp" || path === "/ranking/ranking_all.asp") {
+    return movedTo(req, withPage("/ranking", page(), { by: legacyRankingBy(q("by")) }));
+  }
+  if (path === "/ranking/ranking_nf.asp") {
+    return movedTo(req, withPage("/ranking", page(), { view: "nf", by: legacyRankingBy(q("by")) }));
+  }
+  if (path === "/ranking/ranking_hero.asp") {
+    // 神界榜已并入主榜（编制 41 人）→ 主榜按总计时间
+    return movedTo(req, withPage("/ranking", page(), { by: "sum_time" }));
+  }  if (path === "/ranking/ranking_man.asp" || path === "/ranking/top10_hero.asp") {
+    // 雷神殿已于 2026-10-13 下线 → 落军衔体系页
+    return movedTo(req, "/titles");
+  }
+  if (path === "/ranking/ranking_grow.asp" || path === "/ranking/top10_grow.asp") {
+    // 2026-11-08 URI 统一：进步榜并入 /ranking?view=grow
+    return movedTo(req, withPage("/ranking", page(), { view: "grow" }));
+  }
+  if (path === "/ranking/ranking_click.asp") {
+    // 人气排行已于 2026-09-27 按张老师要求移除（个人地盘的人气计数仍在），旧链接落主榜
+    return movedTo(req, "/ranking");
+  }
+  if (path === "/ranking/top10_man.asp") {
+    // 旧站十大元帅 Top10（按 Player_Rank 排序，Player_IsHero='0'）→ 主榜
+    return movedTo(req, "/ranking");
+  }
+  if (path === "/ranking/ranking_area.asp") {
+    // 2026-11-08 URI 统一：地区榜并入 /ranking?view=area
+    return movedTo(req, "/ranking?view=area");
+  }
+  if (path === "/ranking/ranking_areas.asp") {
+    const area = q("area");
+    return movedTo(req, withPage("/ranking", page(), { view: "area", ...(area ? { name: area } : {}) }));
+  }
+  if (path === "/ranking/top10_world.asp" || path === "/ranking/top10_world_help.asp") {
+    return movedTo(req, "/ranking?view=world");
+  }
+  if (path === "/ranking/goto.asp" || path === "/ranking/goto_list.asp") {
+    // 名次直达（跳到对应玩家/页）——新站无此交互，落主榜
+    return movedTo(req, "/ranking");
+  }
+  if (path === "/ranking/refresh.asp" || path === "/ranking/refresh_fail.asp" || path === "/ranking/action/goto_check_action.asp") {
+    return movedTo(req, "/ranking");
+  }
+
+  // ---------- News 动态 ----------
+  if (path === "/news/index.asp" || path === "/news/my.asp" || path === "/news/my_beg.asp" || path === "/news/my_int.asp" || path === "/news/my_exp.asp") {
+    const n = id();
+    return movedTo(req, n ? `/user/${n}` : "/");
+  }
+  if (path === "/news/hero.asp" || path === "/news/man.asp") {
+    return movedTo(req, "/");
+  }
+
+  // ---------- Message 站内信 ----------
+  if (path === "/message/box.asp" || path === "/message/list.asp" || path === "/message/notice.asp" || path === "/message/broad.asp" || path === "/message/broad_doing.asp") {
+    return movedTo(req, "/message");
+  }
+  if (path === "/message/show.asp") {
+    // 2026-10-17 读信详情页下线（列表直显全文），旧链一律归到消息列表
+    return movedTo(req, "/message");
+  }
+  if (path === "/message/send.asp") {
+    const n = id();
+    return movedTo(req, n ? `/message?to=${n}` : "/message");
+  }
+
+  // ---------- 静态页 ----------
+  if (path === "/about/index.asp") return movedTo(req, "/page/about");
+  if (path === "/about/donate.asp") return movedTo(req, "/page/donate");
+  if (path === "/about/team.asp") return movedTo(req, "/team");
+  if (path === "/download/index.asp") return movedTo(req, "/page/download");
+  if (path === "/guide/index.asp") return movedTo(req, "/page/guide");
+  if (path === "/update/index.asp" || path === "/update/update.asp") return movedTo(req, "/page/history");
+  if (path === "/history/2006.asp" || path === "/history/2007.asp" || path === "/history/2008.asp" || path === "/history/button.asp") {
+    return movedTo(req, "/page/history");
+  }
+  if (path === "/world/index.asp" || path === "/world/world.asp" || path === "/world/hero.asp") return movedTo(req, "/titles");
+
+  // Hero 雷神殿（已于 2026-10-13 下线）→ 军衔体系页
+  if (path === "/hero/index.asp") return movedTo(req, "/titles");
+
+  // Team 管理团队
+  if (path === "/team/index.asp") return movedTo(req, "/team");
+
+  // ---------- Help 帮助 ----------
+  const helpMap: Record<string, string> = {
+    "/help/why.asp": "/page/help/why",
+    "/help/grow.asp": "/page/help/grow",
+    "/help/word.asp": "/page/help/word",
+    "/help/video.asp": "/page/help/video",
+    "/help/upload_rule.asp": "/page/help/upload",
+    "/help/upload_3bv.asp": "/page/help/upload",
+    "/help/freeze.asp": "/page/help/freeze",
+    "/help/star.asp": "/page/help",
+    "/help/question.asp": "/page/help/clone-faq",
+    "/help/email.asp": "/page/help/email",
+    "/help/bbs.asp": "/page/help/bbs",
+    "/help/image.asp": "/page/help/avatar",
+    "/help/ranking.asp": "/page/help",
+    "/help/list.asp": "/page/help",
+    "/help/title.asp": "/page/help",
+  };
+  if (path in helpMap) return movedTo(req, helpMap[path]);
+
+  // ---------- 杂项 ----------
+  if (path === "/index.asp" || path === "/main/index.asp" || path === "/main/satus.asp" || path === "/maintenance.asp") {
+    return movedTo(req, "/");
+  }
+  if (path === "/title.asp") return movedTo(req, "/"); // 根目录 Title.asp=2008 录像迁移工具页
+  if (path === "/online/game.asp" || path === "/online/game" || path === "/online/index.asp") {
+    return movedTo(req, "/online"); // 旧在线 Java 扫雷 → 新练习页（2026-10-15 练习页已上线）
+  }
+  if (path === "/error.asp" || path === "/error(source).asp") return movedTo(req, "/");
+  if (path === "/try.asp") return movedTo(req, "/");
+
+  // 兜底：未识别的 .asp → 首页（内容不丢，但无精确对应）
+  return movedTo(req, "/");
+}

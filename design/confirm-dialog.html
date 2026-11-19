@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通用确认浮窗（ConfirmDialog）高保真稿</title>
+<style>
+  /* ===== 站内环境还原（legacy-2013 + globals 视觉）===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #272822;
+    font-family: "微软雅黑", Arial, "宋体";
+    font-size: 14px; line-height: 21px;
+    color: #636359;
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+  }
+  .note { max-width: 760px; margin: 0 auto 36px; color: #939387; font-size: 13px; line-height: 22px; }
+  .note h1 { font-size: 22px; color: #f8f8f2; margin-bottom: 8px; letter-spacing: .3px; }
+  .note b { color: #a6e22e; font-weight: normal; }
+  .note .rule { color: #75715e; margin-top: 6px; }
+
+  .scene { max-width: 760px; margin: 0 auto 60px; }
+  .scene > h2 { font-size: 15px; color: #b1b1a4; margin-bottom: 14px; font-weight: 600; }
+  .scene > h2 em { font-style: normal; color: #75715e; font-size: 12px; font-weight: normal; margin-left: 8px; }
+
+  /* 场景底：模拟页面已有内容被遮罩压暗 */
+  .stage {
+    position: relative;
+    background: #1e1f1a;
+    border-radius: 10px;
+    border: 1px solid #33322c;
+    min-height: 300px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    padding: 24px;
+  }
+  .stage .ghost { position: absolute; inset: 24px; opacity: .35; pointer-events: none; }
+  .stage .ghost p { color: #636359; font-size: 13px; line-height: 26px; }
+  .stage .ghost .bar { height: 10px; background: #33322c; border-radius: 4px; margin-bottom: 12px; }
+
+  /* ===== 通用确认浮窗：遮罩 + 暗玻璃面板（同登录/纪事浮窗一脉）===== */
+  .confirm_overlay {
+    position: absolute; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .confirm_dialog {
+    position: relative;
+    width: 360px; max-width: calc(100% - 40px);
+    padding: 22px 26px 20px;
+    background: rgba(39, 40, 34, 0.92);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    backdrop-filter: blur(16px) saturate(1.15);
+    border-radius: 14px;
+    box-shadow:
+      inset 0 1px 0 rgba(248, 248, 242, 0.1),
+      inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+      0 32px 64px -16px rgba(0, 0, 0, 0.8),
+      0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+  .confirm_close {
+    position: absolute; top: 10px; right: 14px;
+    font-size: 18px; line-height: 1; color: #75715e;
+    text-decoration: none;
+  }
+  .confirm_close:hover { color: #a6e22e; }
+  .confirm_dialog h1 {
+    font-size: 16px; font-weight: 600; letter-spacing: .3px;
+    color: #f8f8f2; margin: 0;
+  }
+  .confirm_dialog .confirm_desc {
+    margin-top: 10px;
+    color: #b1b1a4; font-size: 14px; line-height: 22px;
+    white-space: pre-line;
+  }
+  .confirm_dialog .confirm_desc em { font-style: normal; color: #f92672; }
+  .confirm_ops { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+  /* legacy .button.small 还原 */
+  .button {
+    display: inline-block;
+    border: 1px #49483e solid; border-radius: 5px;
+    background-color: #434239;
+    background-image: linear-gradient(top, #49483e, #3b3a32);
+    color: #636359;
+    font-family: "微软雅黑", Arial, "宋体";
+    font-size: 16px; line-height: 24px; padding: 4px 12px;
+    cursor: pointer;
+  }
+  .button:hover { color: #a6e22e; background-color: #46453c; }
+  .button.active { color: #8ac21b; }
+  .button.active:hover { color: #a6e22e; }
+  .button.danger { color: #e60657; }
+  .button.danger:hover { color: #a6e22e; }
+
+  /* 排版说明表 */
+  .spec { max-width: 760px; margin: 0 auto; color: #939387; font-size: 13px; line-height: 24px; border-top: 1px dashed #33322c; padding-top: 24px; }
+  .spec h2 { font-size: 15px; color: #b1b1a4; margin-bottom: 10px; font-weight: 600; }
+  .spec code { background: #33322c; color: #a6e22e; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  .spec ul { list-style: none; }
+  .spec li::before { content: "· "; color: #75715e; }
+</style>
+</head>
+<body>
+
+<div class="note">
+  <h1>通用确认浮窗 · 高保真稿</h1>
+  <p>替换前台所有 <b>window.confirm 系统模态框</b>：遮罩 + 暗玻璃面板与登录浮窗、纪事浮窗同一脉（.history_overlay/.history_dialog 同款视觉），按钮沿用 legacy .button.small。ESC / 点遮罩 / 右上角 × = 取消，确认按钮带自动聚焦。做成通用组件 <b>confirmDialog()</b>，Promise 返回布尔值，以后新确认操作一行接入。</p>
+  <p class="rule">后台管理页（/admin）现有确认保持不动，不在本次范围。</p>
+</div>
+
+<!-- 场景一：普通确认（清空消息） -->
+<div class="scene">
+  <h2>① 普通确认 · 消息页「清空消息」<em>confirmText 提示后果，普通绿色确认键</em></h2>
+  <div class="stage">
+    <div class="ghost">
+      <div class="bar" style="width: 40%"></div>
+      <div class="bar" style="width: 85%"></div>
+      <div class="bar" style="width: 70%"></div>
+      <div class="bar" style="width: 82%"></div>
+      <div class="bar" style="width: 55%"></div>
+      <p>…消息列表被遮罩压暗…</p>
+    </div>
+    <div class="confirm_overlay">
+      <div class="confirm_dialog">
+        <a class="confirm_close" href="javascript:void(0)">×</a>
+        <h1>清空消息</h1>
+        <p class="confirm_desc">确定清空所有消息吗？此操作不可恢复。</p>
+        <div class="confirm_ops">
+          <button class="button">取消</button>
+          <button class="button active">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 场景二：危险确认（删录像） -->
+<div class="scene">
+  <h2>② 危险确认 · 录像页「删除」<em>danger 红字确认键，后果描述里关键字段标红</em></h2>
+  <div class="stage">
+    <div class="ghost">
+      <div class="bar" style="width: 52%"></div>
+      <div class="bar" style="width: 78%"></div>
+      <div class="bar" style="width: 64%"></div>
+      <div class="bar" style="width: 86%"></div>
+      <div class="bar" style="width: 48%"></div>
+      <p>…录像详情被遮罩压暗…</p>
+    </div>
+    <div class="confirm_overlay">
+      <div class="confirm_dialog">
+        <a class="confirm_close" href="javascript:void(0)">×</a>
+        <h1>删除录像</h1>
+        <p class="confirm_desc">确认彻底删除录像 <em>#338799</em>？<br>删除后该录像及其全部评论、相关动态将一并消失，<em>不可恢复</em>。</p>
+        <div class="confirm_ops">
+          <button class="button">取消</button>
+          <button class="button danger">删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 场景三：长文本确认（全站广播） -->
+<div class="scene">
+  <h2>③ 带内容预览 · 全站广播<em>确认前回显将要发出的内容</em></h2>
+  <div class="stage">
+    <div class="ghost">
+      <div class="bar" style="width: 66%"></div>
+      <div class="bar" style="width: 44%"></div>
+      <div class="bar" style="width: 80%"></div>
+      <div class="bar" style="width: 58%"></div>
+      <p>…消息页被遮罩压暗…</p>
+    </div>
+    <div class="confirm_overlay">
+      <div class="confirm_dialog">
+        <a class="confirm_close" href="javascript:void(0)">×</a>
+        <h1>全站广播</h1>
+        <p class="confirm_desc">确定向全站所有用户广播吗？<br><br>今晚 21:00 直播间开讲新盘反演，欢迎围观。</p>
+        <div class="confirm_ops">
+          <button class="button">取消</button>
+          <button class="button active">确定广播</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="spec">
+  <h2>接入清单（前台全部替换，后台不动）</h2>
+  <ul>
+    <li>消息页「清空消息」/「全站广播」→ MessageForms.tsx</li>
+    <li>论坛「删除主题」/「删除回复」→ BbsOps.tsx</li>
+    <li>个人主页「删除纪事」→ HistoryBox.tsx</li>
+    <li>录像详情页「删除」（屏蔽盘自助删除）→ VideoSelfDeleteButton.tsx</li>
+    <li>审核页「屏蔽 / 恢复录像」→ ReviewButtons.tsx</li>
+  </ul>
+  <h2 style="margin-top:18px">组件约定</h2>
+  <ul>
+    <li><code>confirmDialog({ title, message, confirmText?, danger? })</code> → <code>Promise&lt;boolean&gt;</code>，await 后再执行原逻辑，调用侧零状态</li>
+    <li>挂载方式同 ToastHost：layout 挂一次 <code>&lt;ConfirmHost /&gt;</code>，全站可用</li>
+    <li>打开时锁页面滚动；ESC / 遮罩 / × = 取消；确认键自动聚焦（回车即确认）</li>
+    <li>样式新增 <code>.confirm_overlay / .confirm_dialog</code>（globals.css），不碰 legacy 文件</li>
+  </ul>
+</div>
+
+</body>
+</html>

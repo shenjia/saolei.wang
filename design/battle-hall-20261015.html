@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>对战功能（设计方案稿 · 4 视图）| 扫雷网</title>
+<style>
+/* ===== 站点基础样式（摘自 globals.css / legacy-2013.css，设计稿内联，与线上一致） ===== */
+body{margin:0;padding:45px 0 0;background:#272822;color:#636359;font-family:"微软雅黑",Arial,"宋体";font-size:14px;line-height:21px}
+a{color:#b1b1a4;text-decoration:none;cursor:pointer}
+a:hover{color:#a6e22e}
+ul{margin:0;padding:0;list-style:none}
+div,h1,h2,h3,p,td,span{color:#636359}
+#header{z-index:900;position:fixed;top:0;left:0;right:0;background:#151515;border-bottom:1px #49483e solid}
+#header .wrapper{max-width:960px;height:44px;margin:0 auto;padding:0 15px}
+#header .logo{float:left}
+#header .logo a{display:block}
+#header .logo a h1{float:left;margin:0;color:#eee;font-size:22px;line-height:44px;font-weight:bold}
+#header .logo a h2{float:left;margin:0 0 0 5px;color:#b1b1a4;font-size:15px;line-height:44px;font-weight:normal}
+#header .logo a img.logo_icon{float:left;border-radius:6px;width:26px;height:26px;margin:9px 8px 0 0;display:block}
+#header .nav{float:right}
+#header .nav li{float:left}
+#header .nav li a{display:block;padding:0 12px;color:#b1b1a4;font-size:15px;line-height:44px}
+#header .nav li a:hover,#header .nav li a.current{color:#a6e22e}
+#page{max-width:960px;margin:20px auto;padding:0 15px}
+.box{background:#3b3a32;border:1px #49483e solid;box-shadow:2px 2px 5px rgba(0,0,0,0.25);border-radius:10px;padding:20px 20px 30px}
+h1{margin:0 0 19.5px;color:#fdc61a;font-size:26px;line-height:39px;text-shadow:0 2px 2px rgba(0,0,0,0.25)}
+h2,h3{color:#b1b1a4;font-size:20px;line-height:30px}
+.page_head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:10px}
+.page_head .page_title{margin:0;flex:none}
+.ranking_tabs{border-bottom:1px solid #49483e;display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px}
+.ranking_tabs a,.ranking_tabs span{color:#939387;padding:9px 18px;font-size:15px;display:block;position:relative}
+.ranking_tabs span.current{color:#f8f8f2;font-weight:bold}
+.ranking_tabs span.current:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:#fdc61a}
+.ranking_tabs a:hover{color:#a6e22e}
+table{width:100%;border-collapse:collapse}
+.ranking_table th{padding:6px 8px;color:#75715e;font-size:14px;line-height:21px;text-align:left;background:#49483e;font-weight:normal}
+.ranking_table td{padding:6px 8px;font-size:14px;line-height:21px;border-bottom:1px solid #403f37}
+.ranking_table tbody tr:hover td{background:#49483e}
+.ranking_table td.c{text-align:center}
+.ranking_table td.r{text-align:right}
+#footer{max-width:960px;margin:30px auto;padding:15px;color:#75715e;font-size:13px;border-top:1px solid #49483e}
+#footer .wrapper{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px}
+
+/* ===== 提案稿专用：视图切换 / 说明条 ===== */
+.switcher{margin:0 0 14px}
+.switcher a{display:inline-block;padding:6px 16px;margin-right:6px;background:#3b3a32;border:1px solid #49483e;border-radius:6px;color:#939387;font-size:14px}
+.switcher a:hover{color:#a6e22e}
+.switcher a.current{background:#49483e;color:#fdc61a;font-weight:bold}
+.view{display:none}
+.view.on{display:block}
+.note{margin:14px 0 0;padding:10px 14px;background:#33322a;border-left:3px solid #fd971f;color:#939387;font-size:13px;line-height:20px}
+.note b{color:#fd971f;font-weight:bold}
+.note .k{color:#a6e22e}
+.anno{display:inline-block;margin:0 4px;padding:1px 7px;border:1px solid #656355;border-radius:3px;background:#49483e;color:#fd971f;font-size:12px;font-weight:bold;line-height:18px;vertical-align:middle}
+
+/* ===== 对战通用：按钮 / 徽章 / 头像 ===== */
+.btn{display:inline-block;padding:7px 18px;border:1px solid #656355;border-radius:5px;background:#49483e;color:#f8f8f2;font-size:14px;line-height:20px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#5a594a;color:#a6e22e}
+.btn.primary{background:#4b5320;border-color:#6e7a2c;color:#a6e22e;font-weight:bold}
+.btn.primary:hover{background:#5c6728;color:#fdc61a}
+.btn.ghost{background:transparent;color:#939387}
+.btn.ghost:hover{color:#f92672;border-color:#f92672}
+.badge{display:inline-block;padding:1px 7px;border:1px solid #656355;border-radius:3px;background:#49483e;color:#939387;font-size:12px;font-weight:bold;line-height:18px}
+.badge.wait{color:#fd971f}
+.badge.live{color:#a6e22e}
+.badge.full{color:#75715e}
+.badge.lock{color:#ae81ff}
+.avatar{width:34px;height:34px;border:1px solid #656355;border-radius:5px;background:#272822;display:inline-block;vertical-align:middle;text-align:center;line-height:34px;color:#75715e;font-size:11px}
+.avatar.lg{width:56px;height:56px;line-height:56px;font-size:14px}
+
+/* ===== 视图 1：大厅 ===== */
+.hall_top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.me_stat{color:#75715e;font-size:13px;line-height:30px}
+.me_stat b{color:#fdc61a;font-size:15px}
+.room_name{color:#f8f8f2;font-weight:bold}
+.room_name:hover{color:#a6e22e}
+td.host a{color:#b1b1a4}
+td.host a:hover{color:#a6e22e}
+.join_btn{display:inline-block;padding:3px 12px;border:1px solid #656355;border-radius:4px;background:#49483e;color:#939387;font-size:13px;line-height:20px}
+.join_btn:hover{background:#4b5320;border-color:#6e7a2c;color:#a6e22e}
+.join_btn.dim{color:#75715e}
+.join_btn.dim:hover{background:#49483e;border-color:#656355;color:#75715e}
+
+/* ===== 视图 2：房间等待 ===== */
+.room_head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.room_code{color:#75715e;font-size:13px}
+.room_code b{color:#fdc61a;font-size:18px;letter-spacing:2px}
+.copy_btn{margin-left:8px;padding:2px 10px;border:1px solid #656355;border-radius:4px;background:transparent;color:#939387;font-size:12px;cursor:pointer;font-family:inherit}
+.copy_btn:hover{color:#a6e22e;border-color:#6e7a2c}
+.vs_area{display:flex;align-items:stretch;justify-content:center;gap:0;margin:18px 0 10px}
+.vs_card{flex:1 1 0;max-width:300px;background:#33322a;border:1px solid #49483e;border-radius:10px;padding:18px 14px;text-align:center}
+.vs_card.empty{border-style:dashed}
+.vs_card .nm{margin-top:8px;color:#f8f8f2;font-size:16px;font-weight:bold}
+.vs_card .sub{margin-top:4px;color:#75715e;font-size:13px}
+.vs_card .sub b{color:#fdc61a}
+.vs_card .ready{margin-top:10px;display:inline-block;padding:3px 14px;border-radius:12px;font-size:13px;line-height:20px}
+.vs_card .ready.on{background:#4b5320;color:#a6e22e}
+.vs_card .ready.off{background:#403f37;color:#75715e}
+.vs_mid{flex:0 0 auto;align-self:center;padding:0 22px;text-align:center}
+.vs_mid .v{color:#fd971f;font-size:30px;font-weight:bold;line-height:36px;text-shadow:0 2px 2px rgba(0,0,0,0.25)}
+.vs_mid .cd{margin-top:2px;color:#75715e;font-size:12px;line-height:18px}
+.quick_phrases{margin-top:12px;padding-top:12px;border-top:1px solid #403f37}
+.quick_phrases .lbl{color:#75715e;font-size:13px;margin-right:10px}
+.quick_phrases a{display:inline-block;margin:0 6px 6px 0;padding:4px 12px;border:1px solid #49483e;border-radius:14px;background:#33322a;color:#939387;font-size:13px}
+.quick_phrases a:hover{color:#a6e22e;border-color:#6e7a2c}
+.room_actions{margin-top:16px;text-align:center}
+.room_actions .btn{margin:0 6px}
+.opt_row{margin-top:14px;padding:12px 14px;background:#33322a;border-radius:8px;color:#75715e;font-size:13px;line-height:24px}
+.opt_row .t{color:#939387;font-weight:bold;margin-right:10px}
+
+/* ===== 视图 3：对战中 ===== */
+.battle_bar{display:flex;align-items:center;gap:0;background:#33322a;border:1px solid #49483e;border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.bside{flex:1 1 0;display:flex;align-items:center;gap:10px;min-width:0}
+.bside.r{flex-direction:row-reverse;text-align:right}
+.bside .meta{min-width:0}
+.bside .meta .nm{color:#f8f8f2;font-size:15px;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bside .meta .tm{color:#fdc61a;font-size:13px;font-family:Arial}
+.bside .meta .tm.opp{color:#939387}
+.bar_mid{flex:0 0 auto;padding:0 18px;text-align:center}
+.bar_mid .v{color:#fd971f;font-size:26px;font-weight:bold;line-height:30px}
+.bar_mid .s{color:#75715e;font-size:12px}
+.pbar{margin-top:5px;height:6px;background:#272822;border:1px solid #49483e;border-radius:3px;overflow:hidden}
+.pbar i{display:block;height:100%;background:#a6e22e}
+.pbar.oppo i{background:#66d9ef}
+.play_area{display:flex;gap:16px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+.gwrap{background:silver;border:3px solid;border-color:#fff #7b7b7b #7b7b7b #fff;padding:9px;display:inline-block;box-sizing:border-box}
+.gwrap .cap{margin-bottom:6px;color:#3b3a32;font-size:13px;font-weight:bold;text-shadow:none}
+#board table,#mboard table{border-collapse:collapse;width:auto}
+#board td{width:15px;height:15px;border:1px solid;border-color:#fff #7b7b7b #7b7b7b #fff;background:silver;text-align:center;line-height:13px;font-size:11px;font-family:Arial;font-weight:bold;text-shadow:none;cursor:default}
+#board td.o{border:1px solid #a9a9a9;background:#d6d6cf}
+#board td.f{color:#f92672}
+#board td.m{background:#3b3a32}
+.n1{color:#0000fe}.n2{color:#008000}.n3{color:#fe0000}.n4{color:#000081}.n5{color:#810000}.n6{color:#008081}.n7{color:#000000}.n8{color:#808080}
+.mirror{padding:10px;border:1px solid #49483e;border-radius:8px;background:#33322a;text-align:center}
+.mirror .mt{color:#939387;font-size:13px;margin-bottom:8px}
+.mirror .mt b{color:#fd971f}
+#mboard table{border-collapse:collapse}
+#mboard td{width:7px;height:7px;border:1px solid;border-color:#fff #7b7b7b #7b7b7b #fff;background:silver}
+#mboard td.o{border:1px solid #a9a9a9;background:#d6d6cf}
+.mirror .st{margin-top:8px;color:#75715e;font-size:12px;line-height:18px}
+
+/* ===== 视图 4：结算 ===== */
+.result_head{text-align:center;padding:6px 0 14px}
+.result_head .big{font-size:36px;line-height:44px;font-weight:bold;text-shadow:0 2px 2px rgba(0,0,0,0.25)}
+.result_head .big.win{color:#fdc61a}
+.result_head .big.lose{color:#9a998d}
+.result_head .sub{margin-top:4px;color:#75715e;font-size:14px}
+.vs_table{margin:0 auto;max-width:520px}
+.vs_table th{background:#49483e;color:#75715e;font-size:14px;font-weight:normal;padding:6px 10px;text-align:left}
+.vs_table td{padding:7px 10px;border-bottom:1px solid #403f37;font-size:14px;color:#b1b1a4}
+.vs_table td.lbl{color:#75715e;width:110px}
+.vs_table td.w{color:#a6e22e;font-weight:bold}
+.elo_row{margin:18px 0 4px;text-align:center;color:#939387;font-size:15px}
+.elo_row b{color:#fdc61a;font-size:20px}
+.elo_row .up{color:#a6e22e;font-weight:bold}
+.elo_row .down{color:#f92672;font-weight:bold}
+.result_actions{margin-top:18px;text-align:center}
+.result_actions .btn{margin:0 6px}
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="wrapper">
+    <div class="logo"><a href="#"><img class="logo_icon" src="/icon.svg" alt="" width="26" height="26"><h1>扫雷网</h1><h2>Saolei.wang</h2></a></div>
+    <div class="nav"><ul id="header_nav">
+      <li><a href="#">首页</a></li><li><a href="#">排行</a></li><li><a href="#">录像</a></li>
+      <li><a href="#">论坛</a></li><li><a href="#">教程</a></li><li><a href="#">练习</a></li>
+      <li><a class="current" href="#">对战</a></li><li><a href="#">军衔</a></li>
+    </ul></div>
+  </div>
+</div>
+
+<div id="page">
+  <div class="switcher">
+    <a class="sw current" data-v="hall">① 对战大厅</a>
+    <a class="sw" data-v="room">② 房间等待</a>
+    <a class="sw" data-v="play">③ 对战中</a>
+    <a class="sw" data-v="result">④ 结算</a>
+  </div>
+
+  <!-- ========== 视图 1：对战大厅 ========== -->
+  <div class="view on" id="v-hall">
+    <div class="box">
+      <div class="page_head">
+        <h1 class="page_title">对战</h1>
+        <div class="hall_top">
+          <span class="me_stat">我的战绩 · ELO <b>1218</b> · 12 胜 8 负 · 胜率 60%</span>
+          <button class="btn primary">+ 创建房间</button>
+        </div>
+      </div>
+      <div class="ranking_tabs" style="margin-bottom:12px">
+        <span class="current">全部</span><a>初级</a><a>中级</a><a>高级</a><a>自定义</a><a>我的房间</a>
+      </div>
+      <table class="ranking_table">
+        <tr><th>房间名</th><th>房主</th><th>级别</th><th>模式</th><th class="c">人数</th><th class="c">状态</th><th class="r">操作</th></tr>
+        <tbody>
+          <tr>
+            <td><a class="room_name">5 分钟速攻房 · 来就干</a></td>
+            <td class="host"><a>张三</a></td>
+            <td><span class="badge">中级</span></td><td>NF</td>
+            <td class="c">1/2</td><td class="c"><span class="badge wait">等待中</span></td>
+            <td class="r"><a class="join_btn">进入</a></td>
+          </tr>
+          <tr>
+            <td><a class="room_name">新手友好，勿喷</a> <span class="badge lock">🔒 私</span></td>
+            <td class="host"><a>李四</a></td>
+            <td><span class="badge">初级</span></td><td>旗</td>
+            <td class="c">1/2</td><td class="c"><span class="badge wait">等待中</span></td>
+            <td class="r"><a class="join_btn">需房间码</a></td>
+          </tr>
+          <tr>
+            <td><a class="room_name">高级 · 神仙打架</a></td>
+            <td class="host"><a>雷神王五</a></td>
+            <td><span class="badge">高级</span></td><td>NF</td>
+            <td class="c">2/2</td><td class="c"><span class="badge live">进行中</span></td>
+            <td class="r"><a class="join_btn">观战</a></td>
+          </tr>
+          <tr>
+            <td><a class="room_name">周末班内联机赛 · 第 3 场</a></td>
+            <td class="host"><a>赵老师</a></td>
+            <td><span class="badge">自定义 16×30</span></td><td>旗</td>
+            <td class="c">3/4</td><td class="c"><span class="badge wait">等待中</span></td>
+            <td class="r"><a class="join_btn">进入</a></td>
+          </tr>
+          <tr>
+            <td><a class="room_name">约战 · 只打有线</a></td>
+            <td class="host"><a>摸鱼的小陈</a></td>
+            <td><span class="badge">中级</span></td><td>旗</td>
+            <td class="c">2/2</td><td class="c"><span class="badge full">已满</span></td>
+            <td class="r"><a class="join_btn dim">观战</a></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">
+        <b>技术口径</b> · 大厅列表走 <span class="k">2 秒轮询</span>（版本号 / 增量拉取），不引入 WebSocket，天然兼容 pm2 蓝绿双槽。
+        <b>私建房</b> · 🔒 房间不进公开匹配池，只能凭房间码进入。
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 视图 2：房间等待 ========== -->
+  <div class="view" id="v-room">
+    <div class="box">
+      <div class="room_head">
+        <div>
+          <h1 style="margin:0">5 分钟速攻房 · 来就干</h1>
+          <div class="room_code">房间码 <b>A3B7</b><button class="copy_btn">复制邀请</button> · 中级 · NF 模式 · 3 局 2 胜（可选）</div>
+        </div>
+        <div><span class="badge wait" style="font-size:13px">等待中 1/2</span></div>
+      </div>
+      <div class="vs_area">
+        <div class="vs_card">
+          <span class="avatar lg">头像</span>
+          <div class="nm">张三</div>
+          <div class="sub">军衔 · <b>少尉</b> · ELO <b>1218</b></div>
+          <div class="sub">房主</div>
+          <div class="ready on">已准备</div>
+        </div>
+        <div class="vs_mid">
+          <div class="v">VS</div>
+          <div class="cd">同盘开局 · 服务端下发种子</div>
+        </div>
+        <div class="vs_card empty">
+          <span class="avatar lg">空位</span>
+          <div class="nm">等待对手…</div>
+          <div class="sub">分享房间码 <b>A3B7</b> 邀请好友</div>
+          <div class="ready off">未准备</div>
+        </div>
+      </div>
+      <div class="opt_row">
+        <div><span class="t">级别</span> 初级 · 中级 · <b style="color:#a6e22e">高级</b> · 自定义　<span class="anno">仅房主可改</span></div>
+        <div><span class="t">模式</span> NF（禁旗）· 旗　<span class="t" style="margin-left:14px">局制</span> 单局 · 3 局 2 胜</div>
+        <div><span class="t">隐私</span> 公开 / 私密（房间码）　<span class="t" style="margin-left:14px">超时</span> 等待 5 分钟未开始自动解散</div>
+      </div>
+      <div class="quick_phrases">
+        <span class="lbl">快捷短语</span>
+        <a>大家好</a><a>ready</a><a>gg</a><a>再来一局</a><a>稍等一下</a><a>手滑了</a>
+        <span class="anno" style="margin-left:8px">不做自由输入</span>
+      </div>
+      <div class="room_actions">
+        <button class="btn primary">准备</button>
+        <button class="btn">邀请好友</button>
+        <button class="btn ghost">退出房间</button>
+      </div>
+      <div class="note">
+        <b>合规口径</b> · 房间内<span class="k">仅预设短语</span>（不开放自由文本输入），因此不产生新的 UGC 发布面，无需接内容审核，也避开「即时通讯/私聊」监管口径。
+        <b>取消捷径</b> · 同盘通过服务端种子下发、客户端确定性重建实现——双方拿到同一副盘面。
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 视图 3：对战中 ========== -->
+  <div class="view" id="v-play">
+    <div class="box">
+      <div class="battle_bar">
+        <div class="bside">
+          <span class="avatar">头像</span>
+          <div class="meta">
+            <div class="nm">我 · 张三</div>
+            <div class="tm">12.34 ″ · 18/32 已开</div>
+            <div class="pbar"><i style="width:56%"></i></div>
+          </div>
+        </div>
+        <div class="bar_mid">
+          <div class="v">VS</div>
+          <div class="s">高级 · NF</div>
+        </div>
+        <div class="bside r">
+          <span class="avatar">头像</span>
+          <div class="meta">
+            <div class="nm">雷神王五</div>
+            <div class="tm opp">13.02 ″ · 15/32 已开</div>
+            <div class="pbar oppo"><i style="width:47%"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="play_area">
+        <div class="gwrap">
+          <div class="cap">我的盘面 · 高级 16×30</div>
+          <div id="board"></div>
+        </div>
+        <div class="mirror">
+          <div class="mt">对手盘面镜像 <b>延迟 ≈1.5 秒</b></div>
+          <div id="mboard"></div>
+          <div class="st">对手中途踩雷 / 断线：<br>10 秒无心跳即判负</div>
+        </div>
+      </div>
+
+      <div class="quick_phrases" style="text-align:center">
+        <a>gg</a><a>手滑了</a><a>666</a><a>再来一局</a>
+      </div>
+
+      <div class="note">
+        <b>同步口径</b> · 客户端每 <span class="k">800ms 批量打包</span>本轮点击事件上报 → 服务端 → 对手轮询拉取后回放。每人 ~1.25 req/s，MySQL 无压力；对手盘是「延迟 1.5 秒左右的跳帧镜像」，双方进度条实时性无损。
+        <b>判负</b> · 踩雷 / 未完成 / 断线超时三种失手判负，先完成者胜。
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 视图 4：结算 ========== -->
+  <div class="view" id="v-result">
+    <div class="box">
+      <div class="result_head">
+        <div class="big win">胜利</div>
+        <div class="sub">高级 · NF · 对手未完成</div>
+      </div>
+      <table class="vs_table">
+        <tr><th>项目</th><th>我 · 张三</th><th>雷神王五</th></tr>
+        <tr><td class="lbl">用时</td><td class="w">31.27″</td><td>未完成</td></tr>
+        <tr><td class="lbl">3BV</td><td>105</td><td>62 / 105</td></tr>
+        <tr><td class="lbl">3BV/s</td><td class="w">3.358</td><td>—</td></tr>
+        <tr><td class="lbl">完成度</td><td>100%</td><td>59%</td></tr>
+        <tr><td class="lbl">评级</td><td><span class="badge" style="color:#fdc61a">S</span></td><td><span class="badge">—</span></td></tr>
+      </table>
+      <div class="elo_row">ELO <b>1218</b> <span class="up">+12 → 1230</span></div>
+      <div class="result_actions">
+        <button class="btn primary">再来一局</button>
+        <button class="btn">查看回放</button>
+        <button class="btn ghost">返回大厅</button>
+      </div>
+      <div class="note">
+        <b>隔离口径</b> · 对战成绩用<span class="k">独立 ELO 积分</span>，<b>不写入正式排行 / 军衔 / 纪录体系</b>（那边走录像上传 + 审核），以此把作弊动机压到最低。
+        <b>红线</b> · ELO <span class="k">不可兑换、不可交易、无现实价值</span>，一碰「兑换/抽奖」就转为赌博监管口径。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="footer"><div class="wrapper"><div>© 2026 扫雷网 Saolei.wang</div><div>对战功能 · 设计方案稿</div></div></div>
+
+<script>
+/* 视图切换 */
+document.querySelectorAll('.switcher .sw').forEach(function(a){
+  a.onclick = function(){
+    document.querySelectorAll('.switcher .sw').forEach(function(x){ x.classList.remove('current'); });
+    document.querySelectorAll('.view').forEach(function(x){ x.classList.remove('on'); });
+    a.classList.add('current');
+    document.getElementById('v-' + a.dataset.v).classList.add('on');
+  };
+});
+/* 我的棋盘：16×30 随机开合（示意用） */
+(function(){
+  var W=30,H=16,n=[1,2,3,4,5,6,7,8];
+  var t='<table>';
+  for(var y=0;y<H;y++){ t+='<tr>';
+    for(var x=0;x<W;x++){ var r=Math.random()*100|0;
+      if(r<46) t+='<td class="o"></td>';
+      else if(r<53){ var d=n[r%8]; t+='<td class="o n'+d+'">'+d+'</td>'; }
+      else if(r<58) t+='<td class="f">⚑</td>';
+      else t+='<td></td>';
+    }
+    t+='</tr>';
+  }
+  document.getElementById('board').innerHTML=t+'</table>';
+  /* 对手镜像：16×30 缩半 */
+  var m='<table>';
+  for(var y2=0;y2<H;y2++){ m+='<tr>';
+    for(var x2=0;x2<W;x2++) m += (Math.random()*100|0)<47 ? '<td class="o"></td>' : '<td></td>';
+    m+='</tr>';
+  }
+  document.getElementById('mboard').innerHTML=m+'</table>';
+})();
+</script>
+</body>
+</html>

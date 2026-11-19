@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>提供赞助（重设计方案稿）| 扫雷网</title>
+<style>
+/* ===== 站点基础样式（摘自 globals.css / legacy-2013.css，设计稿内联，与线上一致） ===== */
+body{margin:0;padding:45px 0 0;background:#272822;color:#636359;font-family:"微软雅黑",Arial,"宋体";font-size:14px;line-height:21px}
+a{color:#b1b1a4;text-decoration:none;cursor:pointer}
+a:hover{color:#a6e22e}
+ul{margin:0;padding:0;list-style:none}
+div,h1,h2,h3,p,td,span,em{color:#636359}
+#header{z-index:900;position:fixed;top:0;left:0;right:0;background:#151515;border-bottom:1px #49483e solid}
+#header .wrapper{max-width:960px;height:44px;margin:0 auto;padding:0 15px}
+#header .logo{float:left}
+#header .logo a h1{float:left;margin:0;color:#eee;font-size:22px;line-height:44px;font-weight:bold}
+#header .logo a h2{float:left;margin:0 0 0 5px;color:#b1b1a4;font-size:15px;line-height:44px;font-weight:normal}
+#header .logo a img.logo_icon{float:left;border-radius:6px;width:26px;height:26px;margin:9px 8px 0 0;display:block}
+#header .nav{float:right}
+#header .nav li{float:left}
+#header .nav li a{display:block;padding:0 12px;color:#b1b1a4;font-size:15px;line-height:44px}
+#header .nav li a:hover,#header .nav li a.current{color:#a6e22e}
+#page{max-width:960px;margin:20px auto;padding:0 15px}
+#page.narrow{max-width:720px}
+.box{background:#3b3a32;border:1px #49483e solid;box-shadow:2px 2px 5px rgba(0,0,0,.25);border-radius:10px;padding:20px 20px 30px}
+h1{margin:0 0 19.5px;color:#fdc61a;font-size:26px;line-height:39px;text-shadow:0 2px 2px rgba(0,0,0,.25)}
+h2{margin:19.5px 0 9.75px;color:#b1b1a4;font-size:20px;line-height:30px}
+p{margin:9.75px 0}
+em{font-style:normal;color:#a6e22e}
+#footer{max-width:960px;margin:30px auto;padding:15px;color:#75715e;font-size:13px;border-top:1px solid #49483e}
+#footer .wrapper{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px}
+
+/* ===== 赞助页专用 ===== */
+.intro{margin:0 0 6px}
+.pay_row{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0 6px}
+.pay_card{flex:1 1 240px;max-width:300px;background:#33322a;border:1px solid #49483e;border-radius:10px;padding:18px 16px 16px;text-align:center}
+.pay_card .pay_name{font-size:16px;font-weight:bold;line-height:24px}
+.pay_card.wechat .pay_name{color:#7dc94b}
+.pay_card.alipay .pay_name{color:#5aa7d6}
+.pay_card .qr{width:210px;height:210px;margin:12px auto 0;border:2px dashed #656355;border-radius:10px;background:#272822;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+.pay_card .qr .qr_mark{width:54px;height:54px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:bold}
+.pay_card.wechat .qr .qr_mark{color:#7dc94b;border:2px solid #4b5320}
+.pay_card.alipay .qr .qr_mark{color:#5aa7d6;border:2px solid #2d4a63}
+.pay_card .qr .qr_tip{color:#75715e;font-size:13px;line-height:20px}
+.pay_card .pay_hint{margin-top:10px;color:#75715e;font-size:13px;line-height:20px}
+.pay_alone{margin:12px 0 0;text-align:center;color:#75715e;font-size:13px}
+.ol{margin:9.75px 0;padding-left:0;list-style:none;counter-reset:li}
+.ol li{position:relative;padding-left:26px;margin:6px 0;counter-increment:li}
+.ol li:before{content:counter(li)"、";position:absolute;left:0;color:#75715e}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="wrapper">
+    <div class="logo"><a href="#">
+      <img class="logo_icon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Crect width='26' height='26' rx='5' fill='%23a6e22e'/%3E%3Ccircle cx='9' cy='10' r='2.2' fill='%23272822'/%3E%3Ccircle cx='17' cy='10' r='2.2' fill='%23272822'/%3E%3Crect x='7' y='16' width='12' height='2.4' rx='1.2' fill='%23272822'/%3E%3C/svg%3E" alt="">
+      <h1>扫雷网</h1><h2>Saolei.wang</h2>
+    </a></div>
+    <ul class="nav">
+      <li><a href="#">首页</a></li>
+      <li><a href="#">排行</a></li>
+      <li><a href="#">录像</a></li>
+      <li><a href="#">论坛</a></li>
+    </ul>
+  </div>
+</div>
+
+<div id="page" class="narrow">
+  <div class="box text">
+    <h1>提供赞助</h1>
+    <p class="intro">
+      本站一直由站长张砷镓进行独立维护。希望有经济能力的雷友对本站进行赞助，使本站能维持运行，并不断发展。
+    </p>
+
+    <div class="pay_row">
+      <div class="pay_card wechat">
+        <div class="pay_name">微信收款</div>
+        <div class="qr">
+          <div class="qr_mark">微</div>
+          <div class="qr_tip">微信收款码<br>（此处放入收款码图片）</div>
+        </div>
+        <div class="pay_hint">微信「扫一扫」即可赞助</div>
+      </div>
+      <div class="pay_card alipay">
+        <div class="pay_name">支付宝收款</div>
+        <div class="qr">
+          <div class="qr_mark">支</div>
+          <div class="qr_tip">支付宝收款码<br>（此处放入收款码图片）</div>
+        </div>
+        <div class="pay_hint">支付宝「扫一扫」即可赞助</div>
+      </div>
+    </div>
+    <p class="pay_alone">支付宝账号：<em>137516@qq.com</em>（也可转账，请注明「扫雷网+用户ID」）</p>
+
+    <h2>【赞助用途】</h2>
+    <ol class="ol">
+      <li>服务器租赁及域名等基本费用</li>
+      <li>比赛奖金</li>
+      <li>外包程序开发</li>
+    </ol>
+
+    <h2>【注意事项】</h2>
+    <ol class="ol">
+      <li>赞助应在不影响生活质量的情况下，量力而行。建议在校学生在工作后再进行赞助！</li>
+      <li>请在付款说明中注明「扫雷网+用户ID」（如：扫雷网 54），否则款项将流失，无法计入赞助。</li>
+      <li>日后本站推出收费项目（如 VIP 会员）时，将对赞助用户充值对应的金额，如果不填写 ID 则视为匿名赞助，放弃日后等额充值的权利。</li>
+      <li>请不要将赞助金额发布在论坛或 QQ 群中，如需核实款项请和站长张砷镓联系。</li>
+    </ol>
+  </div>
+</div>
+
+<div id="footer">
+  <div class="wrapper">
+    <span>扫雷网 Saolei.wang</span>
+    <span>陕ICP备08100290号</span>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BBS 所见即所得编辑器 · 设计方案 V3（存储仍为 UBB，兼容旧帖）</title>
+<link href="/styles/legacy-2013.css" rel="stylesheet">
+<style>
+  /* ============================================================
+     色板：严格沿用 2013 Monokai（零新色）
+     ============================================================ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "微软雅黑", "Microsoft YaHei", Arial, "宋体", sans-serif;
+    background: #1c1c17;
+    color: #b1b1a4;
+    padding: 36px 28px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .phead { border-bottom: 1px solid #33322b; padding-bottom: 20px; margin-bottom: 28px; }
+  .phead h1 { font-size: 21px; font-weight: 600; color: #f8f8f2; }
+  .phead h1 b { color: #fdc61a; font-weight: 600; }
+  .phead p { font-size: 13px; color: #75715e; margin-top: 8px; line-height: 1.9; }
+  .phead p b { color: #a6e22e; font-weight: 400; }
+
+  .stage-title { font-size: 13px; color: #75715e; letter-spacing: 2px; margin: 34px 0 14px; }
+  .stage-title b { color: #a6e22e; font-weight: 400; }
+
+  .site-bg { background: #272822; border-radius: 12px; padding: 28px; }
+  .page { width: 660px; margin: 0 auto; }
+
+  /* ---------- 工具栏：独立按钮条（与画布分离，独立组件，三场景复用） ---------- */
+  .wys_toolbar {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 6px;
+    background: #33332e;
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    position: relative;
+    flex-wrap: wrap;
+  }
+  .wbtn {
+    height: 24px;
+    min-width: 34px;
+    padding: 0 9px;
+    background: #49483e;
+    border: 1px solid #636359;
+    border-radius: 3px;
+    color: #b1b1a4;
+    font-size: 12px;
+    line-height: 22px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .wbtn:hover { background: #555550; color: #f8f8f2; border-color: #75715e; }
+  .wbtn:active { background: #272822; }
+  .wbtn.t-title { color: #f8f8f2; font-weight: bold; }
+  .wbtn.t-sign  { color: #e6db74; }
+  .wbtn.t-signest { color: #e6db74; font-weight: bold; }
+  .wbtn.t-b { color: #b1b1a4; font-weight: bold; }
+  .wbtn .bico { height: 14px; width: 14px; display: inline-block; }
+
+  /* 编辑画布：观感沿用站内 textarea */
+  .wys {
+    display: block;
+    width: 100%;
+    min-height: 300px;
+    max-height: 420px;
+    overflow-y: auto;
+    background: #272822;
+    color: #f8f8f2;
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.8;
+    word-break: break-all;
+    outline: none;
+    caret-color: #fdc61a;
+  }
+  .wys:focus { border-color: #8ac21b; }
+  .wys:empty::before { content: attr(data-ph); color: #75715e; }
+  .wys .line { min-height: 25px; }
+  .wys .line.mine-line { line-height: 16px; min-height: 16px; }
+  .wys img[data-face] { height: 20px; width: 20px; vertical-align: middle; }
+  .wys img[data-mine] { height: 16px; width: 16px; vertical-align: middle; }
+  .wys .Title { font-weight: bold; color: #f8f8f2; }
+  .wys .Sign { color: #e6db74; }
+  .wys .Signest { font-weight: bold; color: #e6db74; }
+  .wys blockquote { border-left: 3px solid #49483e; margin: 6px 0; padding: 4px 10px; color: #a59f85; }
+
+  /* 弹层面板 */
+  .wpop {
+    position: absolute;
+    top: 32px;
+    z-index: 30;
+    background: #3b3a32;
+    border: 1px solid #636359;
+    border-radius: 4px;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.45);
+    padding: 6px;
+  }
+  .wpop_grid { display: flex; flex-wrap: wrap; gap: 3px; max-width: 268px; }
+  .wpop img { width: 24px; height: 24px; cursor: pointer; display: block; }
+  .wpop.mines img { width: 16px; height: 16px; }
+  .wpop img:hover { background: #555550; border-radius: 2px; }
+  .wpop .wpop_tip {
+    font-size: 11px; color: #75715e; padding: 4px 2px 2px;
+    border-top: 1px solid #49483e; margin-top: 5px; line-height: 1.6;
+  }
+
+  /* 贴图弹层：本地上传 + 外链 */
+  .wpop.imgsup { width: 300px; }
+  .wup_area {
+    display: block;
+    border: 1px dashed #636359;
+    border-radius: 4px;
+    padding: 14px 10px;
+    text-align: center;
+    font-size: 12px;
+    color: #939387;
+    cursor: pointer;
+    line-height: 1.8;
+  }
+  .wup_area:hover { border-color: #8ac21b; color: #a6e22e; }
+  .wup_area b { color: #f8f8f2; font-weight: 400; }
+  .wlink_row { display: flex; gap: 5px; margin-top: 6px; }
+  .wlink_row input {
+    flex: 1;
+    background: #272822;
+    color: #f8f8f2;
+    border: 1px solid #49483e;
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 12px;
+    min-width: 0;
+  }
+  .wlink_row button {
+    background: #49483e;
+    border: 1px solid #636359;
+    border-radius: 3px;
+    color: #b1b1a4;
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  .wlink_row button:hover { color: #f8f8f2; background: #555550; }
+
+  /* 底部：UBB 源码 + 服务端渲染预览 */
+  .wys_foot { margin-top: 8px; }
+  .wys_foot .wfoot_head { font-size: 11px; color: #75715e; margin-bottom: 4px; }
+  .wys_foot .wfoot_head b { color: #a6e22e; font-weight: 400; }
+  .wsrc_toggle {
+    background: none; border: none; color: #75715e; font-size: 11px;
+    cursor: pointer; text-decoration: underline; padding: 0; margin-left: 8px;
+  }
+  .wsrc_toggle:hover { color: #a6e22e; }
+  .wsrc {
+    display: none;
+    background: #23231d;
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: #939387;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 4px;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+  .wsrc.show { display: block; }
+  .wpreview {
+    background: #272822;
+    border: 1px dashed #49483e;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #bbbbbb;
+    word-break: break-all;
+    min-height: 44px;
+  }
+  .wpreview img { vertical-align: middle; }
+  .wpreview .mine-map { line-height: 16px; }
+  .wpreview .mine-map img { vertical-align: top; }
+
+  /* toast */
+  .wtoast {
+    position: fixed;
+    left: 50%;
+    bottom: 40px;
+    transform: translateX(-50%);
+    background: #3b3a32;
+    border: 1px solid #8ac21b;
+    color: #a6e22e;
+    font-size: 13px;
+    padding: 8px 18px;
+    border-radius: 4px;
+    z-index: 99;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .wtoast.show { opacity: 1; }
+
+  .submit_row { margin-top: 14px; font-size: 13px; color: #75715e; text-align: center; }
+  /* 主提交按钮：复刻登录弹窗 .lp_submit（globals.css #account_login .lp_submit 同款黄色按钮） */
+  .btn_main {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    padding: 0 32px;
+    border: 0;
+    border-radius: 9px;
+    background: linear-gradient(180deg, #ffd23e, #f0b70a);
+    color: #2b2a20;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+    line-height: 1;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px -8px rgba(253, 198, 29, 0.55);
+    transition: box-shadow 0.15s, filter 0.15s;
+  }
+  .btn_main:hover { filter: brightness(1.06); box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 10px 22px -8px rgba(253,198,29,0.6); }
+  .btn_main:active { filter: brightness(0.96); box-shadow: inset 0 2px 4px rgba(0,0,0,0.28); }
+  .btn_ghost {
+    height: 26px; padding: 0 12px;
+    background: #49483e; border: 1px solid #636359; border-radius: 3px;
+    color: #b1b1a4; font-size: 12px; cursor: pointer;
+  }
+  .btn_ghost:hover { background: #555550; color: #f8f8f2; }
+
+  /* 版块分类：站内同款下划线筛选器（globals.css body .tabs + .news_head 紧凑布局），
+     tabs 紧挨标题右侧（不居右），整行底距保持 19.5px 节奏（同首页「新闻/录像」标题行） */
+  .post_head {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-bottom: 19.5px;
+  }
+  .post_head h1 { margin: 0; }
+  .board_tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    border-bottom: 1px solid #49483e;
+  }
+  .board_tab {
+    position: relative;
+    display: inline-block;
+    padding: 7px 14px;
+    font-style: normal;
+    font-size: 14px;
+    line-height: 21px;
+    color: #939387;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .board_tab:hover { color: #a6e22e; }
+  .board_tab.on { color: #fdc61a; font-weight: bold; cursor: default; }
+  .board_tab::after {
+    content: "";
+    position: absolute;
+    left: 14px; right: 14px; bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .board_tab.on::after { background: #fdc61d; }
+  .board_tab:hover::after { background: #49483e; }
+  .board_tab.on:hover::after { background: #fdc61d; }
+
+  /* 录像评论：纯文本多行输入（不做富文本） */
+  .comment_form textarea {
+    display: block;
+    width: 100%;
+    min-height: 72px;
+    background: #272822;
+    color: #f8f8f2;
+    border: 1px solid #49483e;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.7;
+    outline: none;
+    resize: vertical;
+  }
+  .comment_form textarea:focus { border-color: #8ac21b; }
+
+  /* 表单其他行 */
+  .frow { margin-bottom: 12px; font-size: 14px; color: #939387; }
+  .frow input[type=text] {
+    width: 100%; background: #272822; color: #f8f8f2;
+    border: 1px solid #49483e; border-radius: 4px; padding: 6px 8px;
+  }
+  .frow select { background: #272822; color: #f8f8f2; border: 1px solid #49483e; padding: 4px; }
+
+  table.decision { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12.5px; }
+  table.decision th, table.decision td {
+    border: 1px solid #33322b; padding: 7px 12px; text-align: left; line-height: 1.7;
+  }
+  table.decision th { background: #23231d; color: #fdc61a; font-weight: 600; }
+  table.decision td { color: #b1b1a4; }
+  table.decision td.k { color: #8ac21b; white-space: nowrap; }
+  table.decision td.x { color: #f92672; white-space: nowrap; }
+  table.decision td i { font-style: normal; color: #75715e; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="phead">
+    <h1>BBS <b>所见即所得编辑器</b> V3（存储仍是 UBB，旧帖全兼容）</h1>
+    <p>
+      本轮按反馈调整：<b>工具栏独立成条</b>（独立组件，发帖/回帖/评论复用）；最前新增<b>「正文」按钮</b>（一键清除所选的全部样式）；
+      <b>链接/贴图/摆雷</b>按钮带图标；去掉分割线与提示文案；<b>贴图支持本地上传</b>——前端自动压缩至 200K 内再传服务器（本稿以本地预览模拟回链）。
+    </p>
+  </div>
+
+  <div class="stage-title">STAGE 1 · <b>发帖 / 编辑主题</b>（含旧帖载入演示）</div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box">
+        <div class="post_head">
+          <h1>发布主题</h1>
+          <div class="board_tabs">
+            <button class="board_tab" data-board="0">公告</button>
+            <button class="board_tab" data-board="1">技术</button>
+            <button class="board_tab on" data-board="2">杂谈</button>
+            <button class="board_tab" data-board="3">问答</button>
+          </div>
+        </div>
+        <p class="frow"><input type="text" placeholder="主题标题（100 字以内）"></p>
+
+        <div class="wys_wrap" id="w1">
+          <div class="wys_toolbar">
+            <button class="wbtn" data-act="clear">正文</button>
+            <button class="wbtn t-title" data-act="wrap" data-tag="Title">标题</button>
+            <button class="wbtn t-sign" data-act="wrap" data-tag="Sign">醒目</button>
+            <button class="wbtn t-signest" data-act="wrap" data-tag="Signest">加亮</button>
+            <button class="wbtn t-b" data-act="wrap" data-tag="b">加粗</button>
+            <button class="wbtn" data-act="link">🔗 链接</button>
+            <button class="wbtn" data-act="img">🖼️ 贴图</button>
+            <button class="wbtn" data-act="pop" data-pop="faces">表情</button>
+            <button class="wbtn" data-act="pop" data-pop="mines"><img class="bico" src="/images/mine/Mine.gif" alt="">摆雷</button>
+          </div>
+          <div class="wys" contenteditable="true" data-ph="直接输入正文，工具栏可插入表情与雷图" spellcheck="false"></div>
+          <pre class="wsrc" style="display:none"></pre>
+          <p class="submit_row">
+            <button class="btn_main">发布主题</button>
+            <button class="btn_ghost load-old">载入一篇 2009 年旧帖（含 &lt;br&gt; / [&amp;nbsp;] 老格式）</button>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-title">STAGE 2 · <b>回帖</b>（同款编辑器）</div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box">
+        <h2 style="font-size:20px;color:#b1b1a4">回复主题</h2>
+        <div class="wys_wrap" id="w2">
+          <div class="wys_toolbar">
+            <button class="wbtn" data-act="clear">正文</button>
+            <button class="wbtn t-title" data-act="wrap" data-tag="Title">标题</button>
+            <button class="wbtn t-sign" data-act="wrap" data-tag="Sign">醒目</button>
+            <button class="wbtn t-signest" data-act="wrap" data-tag="Signest">加亮</button>
+            <button class="wbtn t-b" data-act="wrap" data-tag="b">加粗</button>
+            <button class="wbtn" data-act="link">🔗 链接</button>
+            <button class="wbtn" data-act="img">🖼️ 贴图</button>
+            <button class="wbtn" data-act="pop" data-pop="faces">表情</button>
+            <button class="wbtn" data-act="pop" data-pop="mines"><img class="bico" src="/images/mine/Mine.gif" alt="">摆雷</button>
+          </div>
+          <div class="wys" contenteditable="true" data-ph="直接输入回复内容" spellcheck="false"></div>
+          <pre class="wsrc" style="display:none"></pre>
+          <p class="submit_row"><button class="btn_main">回复</button></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-title">STAGE 3 · <b>录像评论</b>（纯文本，不做富文本）</div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box comment_form">
+        <textarea rows="3" maxlength="100" placeholder="我来说两句…（纯文本，上限 100 字）"></textarea>
+        <p class="submit_row"><button class="btn_main">发表评论</button></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-title">STAGE 4 · <b>本轮改动与说明</b></div>
+  <table class="decision">
+    <tr><th>改动</th><th>说明</th></tr>
+    <tr><td class="k">版块分类 = 下划线筛选器</td><td>四个标签 + 底下通栏横线（站内 .tabs 同款），<b>紧挨「发布主题」标题右侧</b>（同首页「新闻/录像」标题行布局，不居右两端对齐）；<b>默认杂谈</b>。排序分身份：管理员=公告/技术/杂谈/问答，普通用户=杂谈/技术/问答；编辑旧帖选中原板块</td></tr>
+    <tr><td class="k">标题输入框</td><td>100% 宽度，与下方画布左右边缘对齐</td></tr>
+    <tr><td class="k">画布高度</td><td>发帖/回帖画布加高一倍（300px 起步），发表长文章不再局促</td></tr>
+    <tr><td class="k">发布按钮居中</td><td>提交行 text-align:center，黄色主按钮居中</td></tr>
+    <tr><td class="k">录像评论 = 纯文本</td><td>不做富文本（与 2008 版定位一致）；多行 textarea、上限 100 字</td></tr>
+    <tr><td class="k">表情更新</td><td>表情弹层加「经典 / 新版」切换：经典=现有 QQ 系 gif；新版=<b>Microsoft Fluent 动画表情</b>（官方 fluentui-emoji-animated，MIT 许可，256px APNG 转 48px gif，30 个语义对应原 QQ 槽位）。UBB 标记兼容扩展：[face]Nn[/face]=新版，[face]N[/face]=经典——旧帖标记不变</td></tr>
+    <tr><td class="k">去掉服务端渲染模块</td><td>画布内即最终效果（同一套白名单转换），双预览冗余已移除</td></tr>
+    <tr><td class="k">发布主题按钮</td><td>复刻登录弹窗 .lp_submit 黄色按钮（linear-gradient(180deg,#ffd23e,#f0b70a)、深字 #2b2a20、40px 高、9px 圆角、内高光+黄投影、hover 提亮不位移）</td></tr>
+    <tr><td class="k">工具栏独立成条</td><td>按钮组与画布视觉分离，各自独立边框圆角；实现为独立组件 <i>EditorToolbar</i>，三场景复用</td></tr>
+    <tr><td class="k">「正文」按钮</td><td>清除所选部分的全部样式：标题/醒目/加亮/加粗/斜体/下划线全部拍平，<b>链接退化为纯文字</b>；表情、雷图等图片内容保留（它们是内容不是样式）</td></tr>
+    <tr><td class="k">按钮图标</td><td>链接 🔗、贴图 🖼️、摆雷用站内真雷图小图标（/images/mine/Mine.gif）；无分割线、无提示文案</td></tr>
+    <tr><td class="k">贴图 = 本地上传 + 压缩</td><td>选本地图片 → 前端 canvas 压缩（长边 1600→640 逐档缩、JPEG 质量 0.85→0.35 逐档降，直到 ≤200K）→ 上传服务器 → 回链插入画布。GIF 不做有损压缩：≤200K 直传，超限提示手动压缩。透明图填正文底色后转 JPEG。弹层底部保留「外链」输入框</td></tr>
+    <tr><td class="k">本稿限制</td><td>上传服务器一步在稿内以 blob 本地预览模拟（toast 显示压缩前后体积）；实施时新增上传接口（登录态 + 白名单类型 + 服务端二次限 200K）</td></tr>
+  </table>
+  <table class="decision">
+    <tr><th>兼容点（不变）</th><th>处理</th></tr>
+    <tr><td class="k">存储仍是 UBB</td><td>提交时画布序列化回 UBB，2.8 万存量帖零迁移，服务端渲染管线零改动</td></tr>
+    <tr><td class="k">旧帖老格式</td><td>载入时归一化（&lt;br&gt;→换行、[&amp;nbsp;]→[ ]），提交产出标准 UBB</td></tr>
+    <tr><td class="k">粘贴富文本</td><td>只取纯文本入画布</td></tr>
+    <tr><td class="k">摆雷拼图</td><td>纯雷图行画布内自动 16px 紧行距；面板开启时小键盘直输</td></tr>
+  </table>
+
+</div>
+
+<div class="wtoast" id="wtoast"></div>
+<input type="file" id="wpick" accept="image/*" style="display:none">
+
+<script>
+/* ================= mini UBB → HTML（服务端同规则；编辑器版带 data-* 便于回序列化） ================= */
+function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+var MINE_MAP={" ":"Blank",".":"Black","Q":"Block","!":"Flag","?":"Mark","-":"Num","+":"IsMine","*":"Mine"};
+
+function ubbToEditorHtml(raw){
+  var t=raw.replace(/<br\s*\/?>/gi,"\n").replace(/\[&nbsp;\]/gi,"[ ]").replace(/&nbsp;/gi,"\u00a0");
+  t=escapeHtml(t);
+  t=t.replace(/\[Title\]/gi,"<span class=\"Title\">").replace(/\[\/Title\]/gi,"</span>")
+     .replace(/\[Sign\]/gi,"<span class=\"Sign\">").replace(/\[\/Sign\]/gi,"</span>")
+     .replace(/\[Signest\]/gi,"<span class=\"Signest\">").replace(/\[\/Signest\]/gi,"</span>")
+     .replace(/\[b\]/gi,"<strong>").replace(/\[\/b\]/gi,"</strong>")
+     .replace(/\[quote\]/gi,"<blockquote>").replace(/\[\/quote\]/gi,"</blockquote>");
+  t=t.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi,'<img src="$1">');
+  t=t.replace(/\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi,'<a href="$1">$2</a>');
+  t=t.replace(/\[face\](\d{1,2}n?)\[\/face\]/gi,function(_,n){
+    var isNew=/n$/.test(n),id=parseInt(n,10);
+    id=Math.min(29,id);
+    return '<img src="'+(isNew?"/design-faces-v2/"+id+".gif":"/images/face/"+id+".gif")+'" data-face="'+id+(isNew?"n":"")+'">';
+  });
+  var i,keys=["0","1","2","3","4","5","6","7","8"].concat(Object.keys(MINE_MAP));
+  for(i=0;i<keys.length;i++)(function(k){
+    var name=(k>="0"&&k<="8")?k:MINE_MAP[k];
+    t=t.split("["+k+"]").join('<img src="/images/mine/'+name.toLowerCase()+'.gif" data-mine="'+k+'">');
+  })(keys[i]);
+  t=t.replace(/\t/g,"\u00a0\u00a0\u00a0\u00a0");
+  return t.split("\n").map(function(line){
+    var imgs=line.match(/<img[^>]*>/g)||[];
+    var rest=line.replace(/<img[^>]*>/g,"");
+    var mineOnly=imgs.length>0&&imgs.every(function(x){return x.indexOf("data-mine=")>-1;})&&/^\s*$/.test(rest);
+    return '<div class="line'+(mineOnly?" mine-line":"")+'">'+line+"</div>";
+  }).join("");
+}
+
+/* 画布 DOM → UBB（白名单序列化；未知节点拍平为文本） */
+function serializeInline(nodes){
+  var out="";
+  nodes.forEach(function(n){
+    if(n.nodeType===3){out+=n.nodeValue;return;}
+    if(n.nodeType!==1)return;
+    var tag=n.tagName,inner=function(){return serializeInline(Array.prototype.slice.call(n.childNodes));};
+    if(tag==="BR"){out+="\n";return;}
+    if(tag==="DIV"||tag==="P"){out+=inlineOfBlock(n)+"\n";return;}
+    if(tag==="BLOCKQUOTE"){out+="[quote]"+inner()+"[/quote]";return;}
+    if(tag==="SPAN"){
+      var c=n.className;
+      if(c==="Title")out+="[Title]"+inner()+"[/Title]";
+      else if(c==="Sign")out+="[Sign]"+inner()+"[/Sign]";
+      else if(c==="Signest")out+="[Signest]"+inner()+"[/Signest]";
+      else out+=inner();
+      return;
+    }
+    if(tag==="STRONG"||tag==="B"){var sb=inner();if(sb!=="")out+="[b]"+sb+"[/b]";return;}
+    if(tag==="EM"||tag==="I"){var si=inner();if(si!=="")out+="[i]"+si+"[/i]";return;}
+    if(tag==="U"){var su=inner();if(su!=="")out+="[u]"+su+"[/u]";return;}
+    if(tag==="A"){out+="[url "+n.getAttribute("href")+"]"+inner()+"[/url]";return;}
+    if(tag==="IMG"){
+      if(n.dataset.face!=null)out+="[face]"+n.dataset.face+"[/face]"; /* N 或 Nn(新版) */
+      else if(n.dataset.mine!=null)out+="["+n.dataset.mine+"]";
+      else out+="[img]"+n.getAttribute("src")+"[/img]";
+      return;
+    }
+    out+=inner();
+  });
+  return out;
+}
+function inlineOfBlock(el){return serializeInline(Array.prototype.slice.call(el.childNodes)).replace(/\n$/,"");}
+function getUBB(ed){
+  return serializeInline(Array.prototype.slice.call(ed.childNodes)).replace(/\n+$/,"");
+}
+
+/* 服务端渲染预览（与服务端 ubb() 同规则，含 mine-map 分组） */
+function ubbRender(raw){
+  var normalized=raw.replace(/<br\s*\/?>/gi,"\n").replace(/\[&nbsp;\]/gi,"[ ]").replace(/&nbsp;/gi,"\u00a0");
+  var text=escapeHtml(normalized);
+  text=text.replace(/\[Title\]/gi,'<span class="Title">').replace(/\[\/Title\]/gi,"</span>")
+    .replace(/\[Sign\]/gi,'<span class="Sign">').replace(/\[\/Sign\]/gi,"</span>")
+    .replace(/\[Signest\]/gi,'<span class="Signest">').replace(/\[\/Signest\]/gi,"</span>")
+    .replace(/\[b\]/gi,"<strong>").replace(/\[\/b\]/gi,"</strong>");
+  text=text.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi,'<img src="$1">');
+  text=text.replace(/\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi,'<a href="$1" target="_blank">$2</a>');
+  text=text.replace(/\[face\](\d{1,2}n?)\[\/face\]/gi,function(_,n){var isNew=/n$/.test(n);var id=Math.min(29,parseInt(n,10));return '<img src="'+(isNew?"/design-faces-v2/"+id+".gif":"/images/face/"+id+".gif")+'">';});
+  var i;for(i=0;i<=8;i++)text=text.split("["+i+"]").join('<img src="/images/mine/'+i+'.gif">');
+  for(var k in MINE_MAP)text=text.split("["+k+"]").join('<img src="/images/mine/'+MINE_MAP[k].toLowerCase()+'.gif">');
+  var out=text.replace(/\t/g,"&nbsp;&nbsp;&nbsp;&nbsp;").replace(/\r?\n/g,"<br>");
+  var isMineOnly=function(line){return line.length>0&&/^(\s|<img src="\/images\/mine\/[^"]*">)+$/.test(line);};
+  var parts=out.split(/(<br\s*\/?>)/),result="",buf=[];
+  var flush=function(){if(buf.length){result+='<div class="mine-map">'+buf.join("")+'</div>';buf=[];}};
+  parts.forEach(function(p,i2){
+    if(isMineOnly(p)){buf.push(p);return;}
+    if(/^<br\s*\/?>$/.test(p)&&buf.length&&isMineOnly(parts[i2+1]||"")){buf.push(p);return;}
+    flush();result+=p;
+  });
+  flush();
+  return result;
+}
+
+/* ================= toast ================= */
+var wtoastEl=document.getElementById("wtoast"),wtoastTimer=null;
+function wtoast(msg){
+  wtoastEl.textContent=msg;
+  wtoastEl.classList.add("show");
+  clearTimeout(wtoastTimer);
+  wtoastTimer=setTimeout(function(){wtoastEl.classList.remove("show");},2600);
+}
+
+/* ================= 图片压缩（目标 ≤200K） ================= */
+function decodeImage(file){
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file);
+    var im=new Image();
+    im.onload=function(){res({im:im,url:url});};
+    im.onerror=rej;
+    im.src=url;
+  });
+}
+async function compressToBudget(file,budget){
+  budget=budget||204800;
+  var d=await decodeImage(file);
+  var im=d.im;
+  var dims=[1600,1280,1024,800,640];
+  var qs=[0.85,0.75,0.65,0.55,0.45,0.35];
+  var last=null;
+  for(var i=0;i<dims.length;i++){
+    var scale=Math.min(1,dims[i]/Math.max(im.width,im.height));
+    var w=Math.max(1,Math.round(im.width*scale)),h=Math.max(1,Math.round(im.height*scale));
+    var c=document.createElement("canvas");c.width=w;c.height=h;
+    var ctx=c.getContext("2d");
+    ctx.fillStyle="#3b3a32";ctx.fillRect(0,0,w,h);
+    ctx.drawImage(im,0,0,w,h);
+    for(var j=0;j<qs.length;j++){
+      var blob=await new Promise(function(r2){c.toBlob(r2,"image/jpeg",qs[j]);});
+      last={blob:blob,w:w,h:h,q:qs[j]};
+      if(blob.size<=budget){URL.revokeObjectURL(d.url);return last;}
+    }
+  }
+  URL.revokeObjectURL(d.url);
+  return last;
+}
+
+/* ================= 编辑器装配 ================= */
+var CURRENT_EDITOR=null; /* 贴图上传目标 */
+
+function buildWys(root, initialUbb){
+  var toolbar=root.querySelector(".wys_toolbar");
+  var ed=root.querySelector(".wys");
+  var src=root.querySelector(".wsrc");
+  var pop=null,popName=null;
+
+  function loadUbb(text){ ed.innerHTML=ubbToEditorHtml(text); onInput(); }
+  root.loadUbb=loadUbb;
+
+  function refreshPanes(){
+    var ub=getUBB(ed);
+    if(src)src.textContent=ub===""?"（空）":ub;
+  }
+
+  function retagMineLines(){
+    Array.prototype.forEach.call(ed.children,function(bl){
+      if(bl.tagName!=="DIV")return;
+      var hasMine=false,only=true;
+      Array.prototype.forEach.call(bl.childNodes,function(n){
+        if(n.nodeType===3){if(!/^\s*$/.test(n.nodeValue))only=false;return;}
+        if(n.tagName==="BR")return;
+        if(n.tagName==="IMG"&&n.dataset.mine!=null){hasMine=true;return;}
+        only=false;
+      });
+      bl.classList.toggle("mine-line",hasMine&&only);
+    });
+  }
+
+  function onInput(){ retagMineLines(); refreshPanes(); }
+  ed.addEventListener("input",onInput);
+
+  function closePop(){if(pop){pop.remove();pop=null;popName=null;}}
+
+  function insertNodeAtCaret(node){
+    ed.focus();
+    var sel=window.getSelection();
+    if(!sel.rangeCount){ed.appendChild(node);}
+    else{
+      var r=sel.getRangeAt(0);
+      r.deleteContents();
+      r.insertNode(node);
+      var after=document.createRange();
+      after.setStartAfter(node);after.collapse(true);
+      sel.removeAllRanges();sel.addRange(after);
+    }
+    onInput();
+  }
+
+  function wrapSelection(tag,cls){
+    ed.focus();
+    var sel=window.getSelection();
+    if(!sel.rangeCount)return;
+    var r=sel.getRangeAt(0);
+    var frag=r.extractContents();
+    var el;
+    if(tag==="span"){el=document.createElement("span");el.className=cls;}
+    else el=document.createElement(tag);
+    el.appendChild(frag);
+    r.insertNode(el);
+    var after=document.createRange();
+    after.setStartAfter(el);after.collapse(true);
+    sel.removeAllRanges();sel.addRange(after);
+    onInput();
+  }
+
+  /* 正文：清除所选全部样式与链接（图片保留）。
+     先把选区向外扩张——被完全覆盖的格式容器圈进选区，避免「清完文字又插回原容器」 */
+  function isFmt(el){
+    return el&&el.nodeType===1&&el!==ed&&/^(SPAN|STRONG|B|EM|I|U|A|BLOCKQUOTE)$/.test(el.tagName);
+  }
+  function clearFormat(){
+    ed.focus();
+    var sel=window.getSelection();
+    if(!sel.rangeCount)return;
+    var r=sel.getRangeAt(0);
+    /* 起点上爬：选区从容器首个孩子开头开始 → 圈进该容器 */
+    var sp=r.startContainer.nodeType===3?r.startContainer.parentElement:r.startContainer;
+    while(isFmt(sp)){
+      var first=sp.firstChild;
+      var okS=(r.startContainer===first&&r.startOffset===0)||(r.startContainer===sp&&r.startOffset===0);
+      if(!okS)break;
+      r.setStart(sp.parentNode,Array.prototype.indexOf.call(sp.parentNode.childNodes,sp));
+      sp=sp.parentElement;
+    }
+    /* 终点上爬：选区到容器最后一个孩子结尾 → 圈进该容器 */
+    var ep=r.endContainer.nodeType===3?r.endContainer.parentElement:r.endContainer;
+    while(isFmt(ep)){
+      var last=ep.lastChild;
+      if(!last)break;
+      var endLen=last.nodeType===3?last.length:last.childNodes.length;
+      var okE=(r.endContainer===last&&r.endOffset===endLen)||(r.endContainer===ep&&r.endOffset===ep.childNodes.length);
+      if(!okE)break;
+      r.setEnd(ep.parentNode,Array.prototype.indexOf.call(ep.parentNode.childNodes,ep)+1);
+      ep=ep.parentElement;
+    }
+    sel.removeAllRanges();sel.addRange(r);
+    var frag=r.extractContents();
+    var wrappers=frag.querySelectorAll("span,strong,b,em,i,u,a,blockquote");
+    Array.prototype.forEach.call(wrappers,function(w){
+      while(w.firstChild)w.parentNode.insertBefore(w.firstChild,w);
+      w.remove();
+    });
+    var holder=document.createElement("div");
+    holder.appendChild(frag);
+    var out=document.createDocumentFragment();
+    while(holder.firstChild)out.appendChild(holder.firstChild);
+    r.insertNode(out);
+    onInput();
+  }
+
+  function makePop(name){
+    var div=document.createElement("div");
+    div.className="wpop"+(name==="mines"?" mines":"")+(name==="imgs"?" imgsup":"");
+    if(name==="faces"){
+      div.style.maxWidth="292px";
+      /* 版本切换：v1 = 站内 QQ 系 gif；v2 = Fluent 动画（48px gif，design/faces-v2） */
+      var fv=window.__faceVer||"v2";
+      var sw=document.createElement("div");sw.className="wpop_tip wpop_sw";
+      sw.style.cssText="border:0;margin:0 0 5px;padding:0";
+      sw.innerHTML='<button class="wbtn wbtn_sw" data-fv="v1">经典</button> <button class="wbtn wbtn_sw" data-fv="v2">新版</button>';
+      var grid=document.createElement("div");grid.className="wpop_grid";
+      function fill(version){
+        grid.innerHTML="";
+        for(var i=1;i<=30;i++)(function(i){
+          var img=document.createElement("img");
+          img.src=version==="v1"?("/images/face/"+i+".gif"):("/design-faces-v2/"+i+".gif");
+          img.onclick=function(){
+            var im=document.createElement("img");
+            im.src=img.src;
+            im.dataset.face=String(i)+(version==="v2"?"n":"");
+            insertNodeAtCaret(im);closePop();
+          };
+          grid.appendChild(img);
+        })(i);
+        sw.querySelectorAll(".wbtn_sw").forEach(function(b){
+          b.style.color=(b.dataset.fv===version)?"#fdc61a":"";
+          b.style.fontWeight=(b.dataset.fv===version)?"bold":"";
+        });
+        window.__faceVer=version;
+      }
+      sw.addEventListener("click",function(e){
+        var b=e.target.closest(".wbtn_sw");
+        if(b)fill(b.dataset.fv);
+      });
+      div.appendChild(sw);div.appendChild(grid);
+      var tip=document.createElement("div");tip.className="wpop_tip";
+      tip.textContent="点击插入表情（新版为 Microsoft Fluent 动画，MIT）";
+      div.appendChild(tip);
+      fill(fv);
+    }else if(name==="mines"){
+      div.style.maxWidth="300px";
+      var grid2=document.createElement("div");grid2.className="wpop_grid";
+      var specs=[[".","分割使用"],[" ","小键盘[0]"],["Q","小键盘[.]"],["1","小键盘[1]"],["2","小键盘[2]"],["3","小键盘[3]"],["4","小键盘[4]"],["5","小键盘[5]"],["6","小键盘[6]"],["7","小键盘[7]"],["8","小键盘[8]"],["*","小键盘[*]"],["+","小键盘[+]"],["!","小键盘[9]"],["?","小键盘[/]"],["-","小键盘[-]"]];
+      specs.forEach(function(s){
+        var img=document.createElement("img");
+        img.src="/images/mine/"+MINE_MAP[s[0]]+".gif";
+        img.title=s[1];
+        img.onclick=function(){
+          var im=document.createElement("img");
+          im.src=img.src;im.dataset.mine=s[0];
+          insertNodeAtCaret(im);
+        };
+        grid2.appendChild(img);
+      });
+      var tip2=document.createElement("div");tip2.className="wpop_tip";
+      tip2.textContent="面板开启时可用小键盘直接摆雷";
+      div.appendChild(grid2);div.appendChild(tip2);
+    }else if(name==="imgs"){
+      var area=document.createElement("div");
+      area.className="wup_area";
+      area.innerHTML="🖼️ <b>点击选择本地图片</b><br>自动压缩至 200K 内上传服务器";
+      area.onclick=function(){ CURRENT_EDITOR=api; document.getElementById("wpick").click(); };
+      div.appendChild(area);
+      var linkRow=document.createElement("div");linkRow.className="wlink_row";
+      var inp=document.createElement("input");
+      inp.placeholder="或输入图片链接 http(s)://";
+      var btn=document.createElement("button");
+      btn.textContent="插入";
+      btn.onclick=function(){
+        var v=inp.value.trim();
+        if(!v)return;
+        var im=document.createElement("img");
+        im.src=v;
+        insertNodeAtCaret(im);
+        closePop();
+      };
+      linkRow.appendChild(inp);linkRow.appendChild(btn);
+      div.appendChild(linkRow);
+      var tip3=document.createElement("div");tip3.className="wpop_tip";
+      tip3.textContent="本稿上传以本地预览模拟（toast 显示压缩体积）；实施时走上传接口";
+      div.appendChild(tip3);
+    }
+    return div;
+  }
+
+  /* mousedown 阻止抢焦点，保住画布选区 */
+  toolbar.addEventListener("mousedown",function(e){
+    if(e.target.closest(".wbtn"))e.preventDefault();
+  });
+  toolbar.addEventListener("click",function(e){
+    var btn=e.target.closest(".wbtn");
+    if(!btn)return;
+    var act=btn.dataset.act;
+    if(act==="clear"){clearFormat();closePop();return;}
+    if(act==="wrap"){
+      var map={Title:["span","Title"],Sign:["span","Sign"],Signest:["span","Signest"],b:["strong",null]};
+      var m=map[btn.dataset.tag];
+      wrapSelection(m[0],m[1]);closePop();return;
+    }
+    if(act==="link"){
+      var link=prompt("请输入网页链接，例如：https://www.saolei.wang/","https://");
+      if(link&&link!=="https://"){
+        var a=document.createElement("a");
+        a.href=link;a.textContent=link;
+        insertNodeAtCaret(a);
+      }
+      return;
+    }
+    if(act==="img"){
+      var name2="imgs";
+      if(popName===name2){closePop();return;}
+      closePop();
+      pop=makePop(name2);
+      pop.style.left=btn.offsetLeft+"px";
+      toolbar.appendChild(pop);
+      popName=name2;
+      ed.focus();
+      return;
+    }
+    if(act==="pop"){
+      var name=btn.dataset.pop;
+      if(popName===name){closePop();return;}
+      closePop();
+      pop=makePop(name);
+      pop.style.left=btn.offsetLeft+"px";
+      toolbar.appendChild(pop);
+      popName=name;
+      ed.focus();
+    }
+  });
+
+  var api={
+    ed:ed,
+    insertUploaded:function(blobUrl){
+      var im=document.createElement("img");
+      im.src=blobUrl;
+      insertNodeAtCaret(im);
+      closePop();
+    }
+  };
+  root.api=api;
+
+  /* 小键盘摆雷（面板开启时拦截） */
+  var KEYMAP={96:" ",110:"Q",97:"1",98:"2",99:"3",100:"4",101:"5",102:"6",103:"7",104:"8",106:"*",105:"!",111:"?",109:"-",107:"+"};
+  ed.addEventListener("keydown",function(e){
+    if(popName==="mines"&&KEYMAP[e.keyCode]){
+      e.preventDefault();
+      var im=document.createElement("img");
+      im.src="/images/mine/"+MINE_MAP[KEYMAP[e.keyCode]].toLowerCase()+".gif";
+      im.dataset.mine=KEYMAP[e.keyCode];
+      insertNodeAtCaret(im);
+    }
+  });
+
+  /* 粘贴：只取纯文本 */
+  ed.addEventListener("paste",function(e){
+    e.preventDefault();
+    var text=(e.clipboardData||window.clipboardData).getData("text/plain");
+    if(!text)return;
+    if(!document.execCommand||!document.execCommand("insertText",false,text)){
+      var tn=document.createTextNode(text);
+      insertNodeAtCaret(tn);
+    }
+  });
+
+  /* 面板外点击收起 */
+  document.addEventListener("click",function(e){
+    if(pop&&!pop.contains(e.target)&&!e.target.closest(".wbtn"))closePop();
+  });
+
+  /* 源码节点仅隐藏保留（调试/测试用），无开合交互 */
+  if(initialUbb)loadUbb(initialUbb);else refreshPanes();
+}
+
+/* 版块标签切换（互斥，默认杂谈） */
+document.querySelectorAll(".board_tabs").forEach(function(group){
+  group.addEventListener("click",function(e){
+    var tab=e.target.closest(".board_tab");
+    if(!tab)return;
+    group.querySelectorAll(".board_tab").forEach(function(t){t.classList.remove("on");});
+    tab.classList.add("on");
+  });
+});
+
+/* 装配三台 */
+buildWys(document.getElementById("w1"),
+  "[Title]摆雷演示[/Title]\n试试在下一行继续拼雷图：\n[1][ ][*][ ][2][!][ ][3][Q][.]\n[.][.][4][ ][ ][5][ ][ ][ ][ ]\n选中一段文字再点「醒目」，然后用「正文」一键还原[face]5[/face]");
+buildWys(document.getElementById("w2"),"回帖也用同款编辑器[face]2[/face]");
+
+/* 旧帖载入演示 */
+var OLD_POST="[Title]2009 年比赛记录[/Title]<br>\n[&nbsp;][1][&nbsp;][*][&nbsp;][2][&nbsp;][!][&nbsp;][3][&nbsp;][4]<br>\n[Sign]黄字[/Sign] 与 [Signest]黄粗[/Signest] [face]8[/face]<br>\n[url http://www.saolei.net/]旧站链接[/url]";
+document.querySelector("#w1 .load-old").addEventListener("click",function(){
+  document.getElementById("w1").loadUbb(OLD_POST);
+});
+
+/* 贴图上传（共享 input）：压缩 → blob 预览模拟服务器回链 */
+document.getElementById("wpick").addEventListener("change",async function(){
+  var file=this.files&&this.files[0];
+  var target=CURRENT_EDITOR;
+  if(!file||!target)return;
+  try{
+    if(file.type==="image/gif"){
+      if(file.size>204800){wtoast("GIF 超过 200K（"+(file.size/1024).toFixed(0)+"K），请先手动压缩");return;}
+      target.insertUploaded(URL.createObjectURL(file));
+      wtoast("GIF "+(file.size/1024).toFixed(0)+"K，无需压缩，已插入");
+      return;
+    }
+    var r=await compressToBudget(file,204800);
+    target.insertUploaded(URL.createObjectURL(r.blob));
+    wtoast("已压缩 "+(file.size/1024).toFixed(0)+"K → "+(r.blob.size/1024).toFixed(0)+"K（"+r.w+"×"+r.h+"，JPEG q"+r.q+"），已插入");
+  }catch(err){
+    wtoast("图片读取失败");
+  }
+});
+</script>
+</body>
+</html>

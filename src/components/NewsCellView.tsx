@@ -1,0 +1,359 @@
+// 动态单元格（展示部分，客户端可用）——军衔称号由服务端预算好以 title 传入
+// 移植 views/news/_cell、_newbie、_person_record
+// 2026-09-24 新增类型渲染：上传录像 VIDEO / 加入扫雷网 JOIN / 更换头像 AVATAR / 论坛文章 ARTICLE / 评论 COMMENT
+// 2026-10-15 破纪录动态按行自适应：显示宽度不够放下一行时隐藏尾部段避免换行（张老师要求）
+// 2026-10-16 破纪录动态改版（张老师定）：新成绩提到箭头前（金粗可点不变），箭头后改放绝对提升值（方案 B）
+
+"use client";
+
+import { useEffect, useRef } from "react";
+import Link from "next/link";
+import { LEVEL_NAMES, NEWS_TYPE, ORDER_NAMES, TITLES, TITLE_CLASSES, TITLE_CLASS_COLORS, TITLE_THRESHOLDS, type Level } from "@/lib/config";
+import { score3bvs, scoreTime, TIME_YEAR, isRecent } from "@/lib/format";
+import { RelTime } from "./RelTime";
+import type { NewsItem } from "@/lib/queries";
+import { AvatarCell, TitleBadge } from "./Cells";
+import { DeltaArrow } from "./RankingRows";
+
+function formatScore(order: string, value: number): string {
+  return order === "time" ? scoreTime(value) : score3bvs(value);
+}
+
+/** 提升值（2026-10-16 破纪录动态改版，张老师定）：|新-旧| 绝对量，正负号由箭头方向表达
+    （五轮：去括号去+-，值前放小三角箭头）；时间与 3BV/s 均 3 位小数（2026-11-05 与全站 scoreTime 升级口径同步） */
+function formatDelta(order: string, oldScore: number, newScore: number): string {
+  const dv = Math.abs(newScore - oldScore);
+  return (dv / 1000).toFixed(3);
+}
+
+/** 高级时间破纪录突破整数大关（SUB30~SUB100，2026-10-16 张老师定；2026-10-25 张老师定 SUB60 以下改 5s 一档）：
+    60~100 每 10s 一档、55~30 每 5s 一档，取本条已跨过的大关中最深一档（一次跨多档时显示与成绩一致的最深档）。
+    只认高级时间纪录（军衔口径只看高级时间）；首创行旧成绩为 0，天然不出标签 */
+function subMilestone(od: string | undefined, lv: string | undefined, oldMs: number, newMs: number): number | null {
+  if (od !== "time" || lv !== "exp") return null;
+  const oldSec = oldMs / 1000;
+  const newSec = newMs / 1000;
+  for (let g = 30; g <= 100; g += 5) {
+    if (g > 60 && g % 10 !== 0) continue; // 60 以上只留 10s 档（60/70/80/90/100）
+    if (oldSec >= g && newSec < g) return g; // 升序遍历，首个命中即最深跨档
+  }
+  return null;
+}
+
+/** SUB 大关标签颜色 = 该秒数对应军衔档的文字色（SUB40→元帅金、SUB50→少将亮橙、SUB60→少校暗橙…）。
+    从 TITLE_THRESHOLDS 找第一个 ≥ 大关值的军衔，经 TITLE_CLASSES → TITLE_CLASS_COLORS 取色
+    （与军衔体系单一数据源，改阈值/配色自动跟走）。
+    注意与 assess.ts title() 同口径：总司令不占阈值档位，thresholds[i] 对应 TITLES[i + 1]
+    （2026-10-28 修 off-by-one：原 TITLES[i] 错取高一档军衔色，SUB80 少尉绿 → 应为上士灰） */
+function subGateColor(gateSec: number): string {
+  const i = TITLE_THRESHOLDS.findIndex((t) => t >= gateSec * 1000);
+  const title = i >= 0 ? TITLES[i + 1] : TITLES[TITLES.length - 1];
+  return TITLE_CLASS_COLORS[TITLE_CLASSES[title] ?? ""] ?? "#b1b1a4";
+}
+
+export function NewsCellView({ news, title, classic }: { news: NewsItem; title: string; classic?: { name: string; color: string } | null }) {
+  const d = news.details as {
+    lv?: string;
+    od?: string;
+    or?: number;
+    cr?: number;
+    tm?: number;
+    bv?: number;
+    t?: string;
+    kind?: string;
+    /** 评论动态的目标内容 id（2026-10-15 写入点起有；同步存量行无——渲染退避只跳文章） */
+    cid?: number;
+    /** 录像评论动态：NF 快照（1=NF；2026-10-22 写入点起有） */
+    nf?: number;
+    /** 录像评论动态：楼主名快照（2026-10-22 写入点起有） */
+    vn?: string;
+  };
+  // BV 收集动态（type=57，2026-11-19）：kind=first 首收（绿✓下标）/ kind=pb 破本BV最好成绩
+  const isBv = news.type === NEWS_TYPE.BV_RECORD;
+  const bvFirst = isBv && d.kind === "first";
+  const authorCells = news.author && (
+    <>
+      <AvatarCell id={news.author.id} name={news.author.chineseName} englishName={news.author.englishName} sex={news.author.sex} className="author" gender="small" link />
+      <TitleBadge title={title} classic={classic} link />
+    </>
+  );
+  // 关注/取关动态（2026-11-18）：被关注人（news.reference）批量带出为 news.followee，
+  // 渲染「关注了/取关了 XX」；followee 缺失（脏数据防御）按 reference 直链兜底
+  const isFollowType = news.type === NEWS_TYPE.FOLLOW || news.type === NEWS_TYPE.UNFOLLOW;
+  const followee = news.followee;
+  // SUB 大关（null = 本条不显示标签）：刷新纪录才判（首创行 or=0 旧成绩为大关外，天然 null）
+  const subGate = subMilestone(d.od, d.lv, d.or ?? 0, d.cr ?? 0);
+
+  // 破纪录行按行自适应（2026-10-15）：离屏克隆整格内容量单行宽度，放不下则隐藏箭头+提升值。
+  // 克隆用 absolute+nowrap，不参与表格布局（table-layout:auto 改真节点会牵动整表列宽抖动）；
+  // 行宽变化（窗口缩放/翻页换列宽）由 ResizeObserver 兜底重测
+  const cellRef = useRef<HTMLTableCellElement>(null);
+  const extraRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const cell = cellRef.current;
+    const extra = extraRef.current;
+    if (!cell || !extra) return;
+
+    const evaluate = () => {
+      const ghost = document.createElement("span");
+      ghost.style.position = "absolute";
+      ghost.style.visibility = "hidden";
+      ghost.style.whiteSpace = "nowrap";
+      for (const node of Array.from(cell.childNodes)) ghost.appendChild(node.cloneNode(true));
+      // 始终按完整内容（含箭头+提升值）量宽：克隆会带上隐藏时的 inline display:none
+      const ghostExtra = ghost.querySelector(".record_extra") as HTMLElement | null;
+      if (ghostExtra) ghostExtra.style.display = "";
+      cell.appendChild(ghost);
+      const cs = getComputedStyle(cell);
+      const avail = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const overflow = ghost.offsetWidth > avail + 1;
+      ghost.remove();
+      extra.style.display = overflow ? "none" : "";
+    };
+
+    evaluate();
+    const ro = new ResizeObserver(evaluate);
+    ro.observe(cell);
+    // 字体晚到会改变文字宽度，加载完再校一次
+    document.fonts?.ready.then(evaluate);
+    return () => {
+      ro.disconnect();
+      extra.style.display = "";
+    };
+  }, []);
+
+  return (
+    <tr>
+      <td ref={cellRef}>
+        {news.type === NEWS_TYPE.NEWBIE && news.author && (
+          <>
+            {authorCells}
+            <em>正式入伍，开始扫雷生涯！</em>
+          </>
+        )}
+        {isBv && news.author && (
+          <>
+            {authorCells}
+            {/* 文案（2026-11-19 张老师定）：「刷新了初级40BV时间纪录 x.xxx」——
+                首收也是「刷新了」（首盘即该 BV 时间纪录，本就是从无到有的刷新） */}
+            刷新了
+            <span className="record person">
+              {LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}
+              BV
+            </span>
+            时间纪录
+            {bvFirst ? (
+              /* 首收：成绩后绿色 ✓ 下标（同录像列表本BV标记 .mk 绿色 #a6e22e 语言） */
+              <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
+                {formatScore("time", d.cr!)}
+                <i className="bv_check" aria-label="首次收集本BV">✓</i>
+              </Link>
+            ) : (
+              /* 破 PB：金色提升值，同首页破纪录动态形态（DeltaArrow 时间▼=更快）。
+                  or 缺失（脏数据防御）按 0 兜底——delta 显示本盘成绩绝对值，箭头方向语义不变 */
+              <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
+                {formatScore("time", d.cr!)}
+              </Link>
+            )}
+            {!bvFirst && (
+              <span className="record_extra">
+                <span className="delta">
+                  <DeltaArrow dir="down" />
+                  {formatDelta("time", d.or ?? 0, d.cr ?? 0)}
+                </span>
+              </span>
+            )}
+          </>
+        )}
+        {news.type === NEWS_TYPE.PERSON_RECORD && news.author && (
+          <>
+            {authorCells}
+            {(d.or ?? 0) > 0 ? "刷新了" : "创造了"}
+            <span className="record person">
+              {LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}
+              {/* od 非法时按 3bvs 兜底显示（历史脏数据防御） */}
+              {(d.od ?? "") === "time" ? ORDER_NAMES.time : ORDER_NAMES["3bvs"]}
+            </span>
+            {/* 新成绩配色（2026-10-16 四轮张老师试色）：亮灰 #b1b1a4 加粗（record_score），
+                提升值金 #fdc61a——颜色对调试验轮；「创造了」首创行同亮灰保持一致。
+                首创行此前 2026-10-14 曾定金色，如要回退只改本注释与 CSS 即可 */}
+            {(d.or ?? 0) > 0 ? (
+              <>
+                {/* 2026-10-16 张老师定：新成绩在前可点，后跟绝对提升值
+                    （formatDelta：时间负=更快、3BV/s +=更高；三轮已去箭头） */}
+                <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
+                  {formatScore(d.od ?? "time", d.cr!)}
+                </Link>
+                {/* record_extra：宽度不够时整段隐藏（提升值），只留新成绩避免换行。
+                    五轮张老师定：去括号去+-，值前放箭头小三角（时间▼=数值下降即更快、3BV/s ▲=更高），
+                    颜色继承 .delta 金色，与排行页升降列同款箭头件 */}
+                <span className="record_extra" ref={extraRef}>
+                  <span className="delta">
+                    <DeltaArrow dir={(d.od ?? "time") === "time" ? "down" : "up"} />
+                    {formatDelta(d.od ?? "time", d.or!, d.cr!)}
+                  </span>
+                  {/* SUB 大关标签（2026-10-16 张老师定；2026-10-25 SUB60 以下改 5s 一档）：
+                      高级时间破纪录跨过整数大关时显示（≥60 每 10s、<60 每 5s 一档），
+                      形态同首页论坛新帖 board_tag 徽章，字色 inline 按军衔档色传入；
+                      置于 record_extra 内，窄屏自适应隐藏时与提升值一起收起 */}
+                  {subGate && (
+                    <span className="sub_tag" style={{ color: subGateColor(subGate) }}>
+                      SUB {subGate}
+                    </span>
+                  )}
+                </span>
+              </>
+            ) : (
+              <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">
+                {formatScore(d.od ?? "time", d.cr!)}
+              </Link>
+            )}
+          </>
+        )}
+        {news.type === NEWS_TYPE.VIDEO && news.author && (
+          <>
+            {authorCells}
+            上传了
+            <span className="record person">{LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}录像</span>
+            <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score">
+              {scoreTime(d.tm ?? 0)}
+            </Link>
+          </>
+        )}
+        {news.type === NEWS_TYPE.JOIN && news.author && (
+          <>
+            {authorCells}
+            <em>加入扫雷网，成为雷界一员！</em>
+          </>
+        )}
+        {news.type === NEWS_TYPE.AVATAR && news.author && (
+          <>
+            {authorCells}
+            <em>更换了头像</em>
+          </>
+        )}
+        {news.type === NEWS_TYPE.ARTICLE && news.author && (
+          <>
+            {authorCells}
+            发表了
+            <Link
+              href={`/bbs/${news.reference}`}
+              target="_blank" prefetch={false}
+              className="score news_article"
+              title={d.t ?? undefined}
+            >
+              《{d.t ?? "未命名"}》
+            </Link>
+          </>
+        )}
+        {news.type === NEWS_TYPE.COMMENT && news.author && (
+          <>
+            {authorCells}
+            {d.kind === "bbs" ? (
+              <>
+                评论了文章
+                {/* 2026-10-22 张老师要求：点击直达该条评论（不只跳文章）——
+                    ?reply=<cid> 由详情页定位到楼层所在页 + 锚点滚动高亮；
+                    存量无 cid 行不带参数，退回只跳文章 */}
+                <Link
+                  href={d.cid ? `/bbs/${news.reference}?reply=${d.cid}#reply-${d.cid}` : `/bbs/${news.reference}`}
+                  target="_blank" prefetch={false}
+                  className="score news_article"
+                  title={d.t ?? undefined}
+                >
+                  《{d.t ?? "未命名"}》
+                </Link>
+              </>
+            ) : (
+              <>
+                {/* 2026-10-22 张老师四轮：「录像」回到「评论了」后面
+                    （评论了录像 迈克尔的高级40.44NF）；成绩色弃金（legacy .score 金是
+                    破纪录行口径），改录像列表页三级灰度（beg #999994 / int #bbbbaf /
+                    exp #ddddcf，同 .video_table td.score.lv_* 单一数据源 LEVEL_CLS 口径），
+                    hover 保持全站绿；上标问题由 news_vscore 的 inline+baseline 解决（三轮） */}
+                {/* 五轮（同日张老师反馈）：「录像」与楼主名之间补空隙——JSX 换行空白会被
+                    剥离，需显式 {" "}（同 bbs 页 authorCells 与后续文字的分隔手法） */}
+                评论了录像{" "}
+                {d.lv || d.tm ? (
+                  <>
+                    {news.videoOwner ? (
+                      <>
+                        <AvatarCell
+                          id={news.videoOwner.id}
+                          name={news.videoOwner.chineseName}
+                          englishName={news.videoOwner.englishName}
+                          sex={news.videoOwner.sex}
+                          className="author"
+                          gender="small"
+                          link
+                        />
+                        <TitleBadge
+                          title={news.videoOwner.titles?.m ?? ""}
+                          classic={news.videoOwner.titles?.c ?? null}
+                          link
+                        />
+                        的
+                      </>
+                    ) : d.vn ? (
+                      <span className="record person">{d.vn}的</span>
+                    ) : null}
+                    <span className="record person">
+                      {LEVEL_NAMES[(d.lv ?? "") as Level] ?? d.lv}
+                    </span>
+                    <Link
+                      href={`/video/${news.reference}`}
+                      target="_blank" prefetch={false}
+                      className={`score news_vscore lv_${d.lv ?? ""}`}
+                    >
+                      {formatScore("time", d.tm ?? 0)}
+                    </Link>
+                    {d.nf ? <span className="news_nf">NF</span> : null}
+                  </>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
+        {news.type === NEWS_TYPE.STAR && news.author && (
+          <>
+            {authorCells}
+            <em className="news_star">当选了每日一星！</em>
+          </>
+        )}
+        {/* 关注/取关动态（2026-11-18）：「关注了/取关了 + 被关注人」，仅「关注」筛选可见 */}
+        {isFollowType && news.author && (
+          <>
+            {authorCells}
+            {news.type === NEWS_TYPE.FOLLOW ? "关注了" : "取关了"}
+            {followee ? (
+              <>
+                <AvatarCell
+                  id={followee.id}
+                  name={followee.chineseName}
+                  englishName={followee.englishName}
+                  sex={followee.sex}
+                  className="author"
+                  gender="small"
+                  link
+                />
+                <TitleBadge title={followee.title ?? ""} classic={followee.classic ?? null} link />
+              </>
+            ) : (
+              <Link href={`/user/${news.reference}`} target="_blank" prefetch={false} className="score news_article">
+                #{news.reference}
+              </Link>
+            )}
+          </>
+        )}
+        {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
+            渲染块移除——details 的 ti/cond 字段随存量行一并消失 */}
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56, 57].includes(news.type) && (
+          <em>{JSON.stringify(news.details)}</em>
+        )}
+      </td>
+      <td className={"time " + (isRecent(news.createTime) ? "time--recent" : "time--old")}>
+        <RelTime time={news.createTime} max={TIME_YEAR} format="Y-n-j" />
+      </td>
+    </tr>
+  );
+}

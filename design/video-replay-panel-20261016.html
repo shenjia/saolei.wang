@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>录像页回放：左侧数据面板 + 进度控制条（设计稿）| 扫雷网</title>
+<style>
+/* ===== 站点基础样式（摘自 globals.css / legacy-2013.css，设计稿内联） ===== */
+body{margin:0;padding:45px 0 0;background:#2e2e26;color:#b1b1a4;font:14px/1.6 Arial,Helvetica,sans-serif}
+a{color:#b1b1a4;text-decoration:none}
+a:hover{color:#a6e22e}
+ul{margin:0;padding:0;list-style:none}
+#header{z-index:900;position:fixed;top:0;left:0;right:0;background:#151515;border-bottom:1px #49483e solid}
+#header .wrapper{max-width:960px;height:44px;margin:0 auto;padding:0 15px;line-height:44px;color:#eee;font-size:22px;font-weight:bold}
+#page{margin:0 auto;width:960px}
+.two_columns{display:flex;gap:20px}
+.two_columns li.main{width:660px}
+.two_columns li.sidebar{width:280px}
+.box{background:#3b3a32;border:1px #656355 solid;box-shadow:2px 2px 5px rgba(0,0,0,.25);border-radius:10px;padding:30px;margin:16px 8px;text-shadow:0 2px 2px rgba(0,0,0,.25)}
+h1{margin:0;color:#e8e8e0;font-size:24px}
+h1 em{font-style:normal;font-family:"Courier New",monospace;font-weight:bold;color:#fdc61d}
+h1 ins{text-decoration:none;color:#fdc61a;font-size:16px;margin-left:4px}
+h2{margin:8px 0 12px;font-size:14px;font-weight:normal;color:#939387}
+h2 em{font-style:normal;font-family:"Courier New",monospace;font-weight:bold;color:#d6d6c8;margin:0 2px 0 4px}
+h2 span{margin-right:18px}
+.info p{margin:0 0 8px;color:#939387;font-size:14px}
+.info hr{border:0;border-top:1px solid #49483e;margin:14px 0}
+.counters span{margin-right:18px}
+.counters em{font-style:normal;font-family:"Courier New",monospace;font-size:20px;color:#d6d6c8;margin-left:4px}
+.button{display:inline-flex;align-items:center;gap:6px;background:#33322b;border:1px solid #49483e;border-radius:6px;color:#b1b1a4;padding:6px 14px;font-size:14px;margin-right:8px;cursor:pointer}
+.button:hover{border-color:#a6e22e;color:#a6e22e}
+
+/* ===== 棋盘（size16 规则原样移植，素材地址绝对化到 dev） ===== */
+.board{display:inline-block;border:1px #49483e solid;border-top-color:#7f7f7f;border-left-color:#7f7f7f;border-right-color:#fff;border-bottom-color:#fff;vertical-align:top}
+.board.size16{border-width:2px;background:url(https://dev.saolei.wang/images/common/board16x16.gif?v=5) repeat}
+.board table{border-collapse:collapse}
+.board.size16 td{width:16px;height:16px;min-width:16px;background:url(https://dev.saolei.wang/images/common/block16x16.png?v=5) no-repeat left top}
+.board.size16 td.b0{background-position:0 0}
+.board.size16 td.b1{background-position:0 -16px}
+.board.size16 td.b2{background-position:0 -32px}
+.board.size16 td.b3{background-position:0 -48px}
+.board.size16 td.b4{background-position:0 -64px}
+.board.size16 td.b5{background-position:0 -80px}
+.board.size16 td.b6{background-position:0 -96px}
+.board.size16 td.b7{background-position:0 -112px}
+.board.size16 td.b8{background-position:0 -128px}
+.board.size16 td.bb{background-position:0 -144px}
+.board.size16 td.bf{background-position:0 -160px}
+
+/* ===== 详情页既有布局：playable / play_board（globals.css 现行规则） ===== */
+.playable{position:relative;display:flow-root}
+.play_board{position:relative;float:left;margin:5px 20px 20px 0;cursor:pointer}
+#video_view .play_board .board{margin:0}
+
+/* ===== 新增①：左侧数据面板（复用练习页 greport 形态，规则 1:1 摘自
+        #online_play .greport 一组；锚在 .playable、贴棋盘左缘外 14px） ===== */
+.replay_panel{position:absolute;right:calc(100% + 14px);top:5px;width:192px;background:#49483e;border:1px solid #656355;border-radius:6px;padding:8px 12px;z-index:5;box-shadow:0 4px 16px rgba(0,0,0,.4);text-align:left}
+/* 集成口径：面板自然高略高于「棋盘+控制条」整块时，按练习页 syncReportZoom 同思路
+   整体 zoom 封顶（顶底与棋盘整块对齐）；窄盘（初级）右侧空间富余则维持 1x */
+.replay_panel .gr_title{font-size:12px;font-weight:bold;color:#e8e8e0;padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid #656355}
+.replay_panel table{border-collapse:collapse;margin:0 -6px}
+.replay_panel td{font:11px/15px Arial,Helvetica,sans-serif;color:#939387;padding:1px 5px;text-align:left;white-space:nowrap}
+.replay_panel td+td{padding-left:8px;text-align:right;color:#e8e8e0}
+.replay_panel tr{cursor:help}
+.replay_panel tr:hover td{background:#5c5b4e;color:#f8f8f2}
+.replay_panel tr:hover td:first-child{border-radius:3px 0 0 3px}
+.replay_panel tr:hover td:last-child{border-radius:0 3px 3px 0}
+.replay_panel td.gv{position:relative}
+.replay_panel td.gv .tip{display:none;position:absolute;left:calc(100% + 11px);top:50%;transform:translateY(-50%);z-index:10;width:max-content;max-width:220px;white-space:normal;background:#272822;color:#f8f8f2;border:1px solid #656355;border-radius:4px;padding:5px 8px;font:11px/15px Arial,Helvetica,sans-serif;text-align:left;box-shadow:0 4px 12px rgba(0,0,0,.45)}
+.replay_panel td.gv .tip::before{content:"";position:absolute;right:100%;top:50%;margin-top:-5px;border:5px solid transparent;border-right-color:#272822}
+.replay_panel tr:hover td.gv .tip{display:block}
+
+/* ===== 新增②：回放控制条（翻页控件卡片风格：#33322b 底 + #49483e 边 + 6px 圆角，
+        进度填充/滑块用页码 current 的金黄 #fdc61d） ===== */
+.replay_bar{display:flex;align-items:center;gap:8px;margin-top:8px;clear:both}
+.rb_btn{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border:1px solid #49483e;border-radius:6px;background:#33322b;color:#b1b1a4;cursor:pointer}
+.rb_btn:hover{border-color:#a6e22e;color:#a6e22e;background:#3b3a32}
+.rb_btn svg{display:block}
+.rb_time{flex:0 0 auto;min-width:44px;font:12px "Courier New",monospace;color:#939387;text-align:center}
+.rb_track{position:relative;flex:1 1 auto;height:34px;border:1px solid #49483e;border-radius:6px;background:#33322b;cursor:pointer}
+.rb_track:hover{border-color:#656355}
+.rb_rail{position:absolute;left:10px;right:10px;top:50%;height:8px;margin-top:-4px;border-radius:4px;background:#26261f}
+.rb_fill{position:absolute;left:0;top:0;height:8px;border-radius:4px;background:#fdc61d}
+.rb_thumb{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:1px solid #8a6d1a;border-radius:4px;background:#fdc61d;box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:grab}
+.rb_thumb:active{cursor:grabbing}
+
+/* ===== 回放光标（练习页/VideoReplay 现行贴图） ===== */
+.replay_cursor{position:absolute;z-index:30;pointer-events:none}
+
+/* ===== 稿件说明区 ===== */
+.notes{max-width:960px;margin:24px auto 60px;padding:0 8px}
+.notes h3{color:#e8e8e0;font-size:16px;border-bottom:1px solid #49483e;padding-bottom:6px}
+.notes li{margin:4px 0;color:#939387;font-size:13px}
+.states{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+.state_row{display:flex;align-items:center;gap:16px}
+.state_label{flex:0 0 150px;font-size:13px;color:#b1b1a4}
+.state_demo{flex:1 1 auto;display:flex;align-items:center;gap:8px;max-width:480px}
+</style>
+</head>
+<body>
+
+<div id="header"><div class="wrapper">扫雷网</div></div>
+
+<div id="page">
+<ul class="two_columns">
+<li class="main">
+  <div class="video_cell box">
+    <h1>高级 <em>62.24</em>秒</h1>
+    <h2>
+      <span class="board_3bv">3BV<em>151</em></span>
+      <span class="score_3bvs">3BV/s<em>2.42</em></span>
+    </h2>
+    <div class="info">
+      <div class="playable">
+        <!-- ① 左侧数据面板：回放开始时弹出，实时刷新（练习页「数据统计」同款同口径） -->
+        <div class="replay_panel">
+          <div class="gr_title">数据统计</div>
+          <table>
+            <tr><td>RTime</td><td class="gv">24.310 (25)<span class="tip">本局实际用时（秒），括号内为按秒进位的录像计分时间</span></td></tr>
+            <tr><td>Est RTime</td><td class="gv">58.230 (59)<span class="tip">按完成度折算的估算用时 = 实际用时 × 3BV ÷ 已完成 3BV</span></td></tr>
+            <tr><td>3BV</td><td class="gv">63/151<span class="tip">盘面理论最少点击次数（Bechtel 基准值），显示为 已完成 / 全盘总量</span></td></tr>
+            <tr><td>3BV/s</td><td class="gv">2.592<span class="tip">每秒完成的 3BV 数 = 已完成 3BV ÷ 实际用时，衡量操作效率</span></td></tr>
+            <tr><td>Ops</td><td class="gv">4/9<span class="tip">开空区域（opening）的完成数 / 全盘总数</span></td></tr>
+            <tr><td>Isls</td><td class="gv">5/12<span class="tip">孤立数字块（island）的完成数 / 全盘总数</span></td></tr>
+            <tr><td>Left</td><td class="gv">38@1.563<span class="tip">左键点击次数 @ 每秒点击频率</span></td></tr>
+            <tr><td>Right</td><td class="gv">29@1.192<span class="tip">右键点击次数 @ 每秒点击频率</span></td></tr>
+            <tr><td>Double</td><td class="gv">12@0.494<span class="tip">左右同按（和弦双击）次数 @ 每秒频率</span></td></tr>
+            <tr><td>Ce</td><td class="gv">61@2.510<span class="tip">有效点击次数（真正开出新格或完成 3BV 的点击）@ 每秒频率</span></td></tr>
+            <tr><td>Cl</td><td class="gv">79@3.249<span class="tip">总点击次数（左键 + 右键 + 双击）@ 每秒频率</span></td></tr>
+            <tr><td>IOE</td><td class="gv">0.797<span class="tip">效率指数 = 已完成 3BV ÷ 总点击次数</span></td></tr>
+            <tr><td>ThrP</td><td class="gv">1.033<span class="tip">吞吐效率 = 已完成 3BV ÷ 有效点击次数</span></td></tr>
+            <tr><td>Corr</td><td class="gv">0.772<span class="tip">准确率 = 有效点击 ÷ 总点击次数</span></td></tr>
+            <tr><td>Path</td><td class="gv">8742<span class="tip">鼠标移动路径的欧氏距离总和（像素）</span></td></tr>
+            <tr><td>Flags</td><td class="gv">29<span class="tip">玩家实际插旗数量（胜利时自动补的旗不计）</span></td></tr>
+            <tr><td>RQP</td><td class="gv">22.412<span class="tip">性价比 = 估算用时 × (估算用时 + 1) ÷ 3BV</span></td></tr>
+            <tr><td>QG</td><td class="gv">3.917<span class="tip">质量分 = 实际用时 ^ 1.7 ÷ 已完成 3BV</span></td></tr>
+            <tr><td>STNB</td><td class="gv">184.6<span class="tip">无猜综合评分（按难度与完成度归一化，越大越好）</span></td></tr>
+          </table>
+        </div>
+
+        <div class="play_board" title="点击退出回放">
+          <div class="board exp size16" id="board"><table cellPadding="0" cellSpacing="0"><tbody id="gtbody"></tbody></table></div>
+          <!-- ② 回放控制条：暂停/播放 + 可拖拽进度（翻页控件卡片风格） -->
+          <div class="replay_bar">
+            <button type="button" class="rb_btn" title="暂停">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            </button>
+            <span class="rb_time">24.31</span>
+            <div class="rb_track" title="拖动跳转进度">
+              <div class="rb_rail"><div class="rb_fill" style="width:39%"></div></div>
+              <div class="rb_thumb" style="left:39%"></div>
+            </div>
+            <span class="rb_time">62.24</span>
+          </div>
+          <!-- 回放光标（flop 同款箭头） -->
+          <div class="replay_cursor" style="left:281.5px;top:120.8px">
+            <svg viewBox="0 0 120 190" width="12" height="19" aria-hidden="true"><polygon points="119.72,127.46 70.38,127.46 90.64,168.68 61.19,183.61 38.59,137.28 5.00,170.04 5.00,12.12" fill="#F0F0EA" stroke="#3a3a30" stroke-width="10" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+      <p>
+        <span style="color:#d6d6c8">张三</span>
+        <span style="margin-left:12px">上传于<em style="font-style:normal">3 天前</em></span>
+      </p>
+      <p><span>软件<em style="font-style:normal">Arbiter 0.52.3</em></span></p>
+      <hr />
+      <button type="button" class="button">重播</button>
+      <a class="button">下载</a>
+      <p class="counters" style="margin-top:12px">
+        <span>点击<em>1204</em></span><span>评论<em>8</em></span><span>下载<em>95</em></span>
+      </p>
+    </div>
+  </div>
+</li>
+<li class="sidebar">
+  <div class="box" style="min-height:200px">
+    <h2 style="color:#b1b1a4;font-size:20px;margin:0 0 12px">录像评级</h2>
+    <div style="text-align:center;color:#5d5c4f">（右栏原样，不受影响）</div>
+  </div>
+</li>
+</ul>
+</div>
+
+<div class="notes">
+  <h3>交互口径（稿件说明）</h3>
+  <ul>
+    <li>数据面板：点「播放」进入回放时在棋盘左侧弹出，随回放实时刷新（行集/口径/悬浮气泡与练习页「数据统计」完全同款）；Esc / 点棋盘 / 停止退出回放时一并撤下。宽度与棋盘+控制条整块等高（过高按练习页 syncReportZoom 思路整体缩放封顶，本稿 exp 盘约 0.88x）。</li>
+    <li>控制条：仅在回放中出现，位于棋盘正下方、与棋盘同宽。暂停/播放按钮 + 进度条沿用翻页控件卡片风格（#33322b 底 / #49483e 边 / 6px 圆角），进度填充与滑块用页码 current 的金黄 #fdc61d。</li>
+    <li>进度条：可拖拽跳转（拖动中实时预览盘面，松手定位）；点轨道任意位置也可跳转。左侧当前时间 / 右侧总时间（秒，两位小数）。</li>
+    <li>暂停：再点变播放（三角图标）；播完停在终局，按钮回到「播放」态（此时点播放=从头重播，与现有「重播」按钮语义一致）。</li>
+    <li>其余退出路径不变：Esc / 点击棋盘退出回放并恢复静态终局图。</li>
+  </ul>
+  <h3 style="margin-top:22px">控制条状态细节</h3>
+  <div class="states">
+    <div class="state_row">
+      <span class="state_label">播放中（按钮=暂停）</span>
+      <div class="state_demo">
+        <button type="button" class="rb_btn" title="暂停"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button>
+        <span class="rb_time">24.31</span>
+        <div class="rb_track"><div class="rb_rail"><div class="rb_fill" style="width:39%"></div></div><div class="rb_thumb" style="left:39%"></div></div>
+        <span class="rb_time">62.24</span>
+      </div>
+    </div>
+    <div class="state_row">
+      <span class="state_label">已暂停（按钮=播放）</span>
+      <div class="state_demo">
+        <button type="button" class="rb_btn" title="播放"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z"/></svg></button>
+        <span class="rb_time">24.31</span>
+        <div class="rb_track"><div class="rb_rail"><div class="rb_fill" style="width:39%"></div></div><div class="rb_thumb" style="left:39%"></div></div>
+        <span class="rb_time">62.24</span>
+      </div>
+    </div>
+    <div class="state_row">
+      <span class="state_label">按钮 hover（绿描边，同翻页 hover）</span>
+      <div class="state_demo">
+        <button type="button" class="rb_btn" style="border-color:#a6e22e;color:#a6e22e;background:#3b3a32" title="暂停"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button>
+        <span class="rb_time">24.31</span>
+        <div class="rb_track"><div class="rb_rail"><div class="rb_fill" style="width:39%"></div></div><div class="rb_thumb" style="left:39%"></div></div>
+        <span class="rb_time">62.24</span>
+      </div>
+    </div>
+    <div class="state_row">
+      <span class="state_label">已播完（停在终局）</span>
+      <div class="state_demo">
+        <button type="button" class="rb_btn" title="播放"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 4.8v14.4c0 .9 1 1.45 1.76.96l9.6-7.2a1.14 1.14 0 0 0 0-1.92l-9.6-7.2A1.14 1.14 0 0 0 7 4.8z"/></svg></button>
+        <span class="rb_time">62.24</span>
+        <div class="rb_track"><div class="rb_rail"><div class="rb_fill" style="width:100%"></div></div><div class="rb_thumb" style="left:100%"></div></div>
+        <span class="rb_time">62.24</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* 棋盘 mock：固定种子布雷 + 从 (4,6) flood 一片开区 + 4 面旗，模拟回放中盘面 */
+(function(){
+  const W=30,H=16,N=W*H;
+  function mul32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  const rnd=mul32(20261016);
+  const mines=new Uint8Array(N);
+  const prot=(x,y)=>x>=2&&x<=9&&y>=3&&y<=8; // 开局保护域
+  const pool=[];
+  for(let i=0;i<N;i++){const x=i%W,y=(i/W)|0;if(!prot(x,y))pool.push(i);}
+  for(let m=0;m<99;m++){const k=(rnd()*pool.length)|0;const t=pool[m];pool[m]=pool[k];pool[k]=t;}
+  for(let m=0;m<99;m++)mines[pool[m]]=1;
+  const nums=new Uint8Array(N);
+  for(let i=0;i<N;i++){if(mines[i])continue;const x=i%W,y=(i/W)|0;let c=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const nx=x+dx,ny=y+dy;
+      if(nx>=0&&nx<W&&ny>=0&&ny<H&&mines[ny*W+nx])c++;}
+    nums[i]=c;}
+  const opened=new Uint8Array(N);
+  const st=[6*W+4];
+  while(st.length){const c=st.pop();if(opened[c]||mines[c])continue;opened[c]=1;
+    if(nums[c]===0){const x=c%W,y=(c/W)|0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=x+dx,ny=y+dy;
+        if(nx>=0&&nx<W&&ny>=0&&ny<H&&!opened[ny*W+nx])st.push(ny*W+nx);}}}
+  /* 旗：挑 4 颗未开区旁的雷 */
+  let flagged=0;
+  for(let i=0;i<N&&flagged<4;i++){if(mines[i]&&!opened[i]){opened[i]=2;flagged++;}}
+  const tb=document.getElementById("gtbody");
+  for(let y=0;y<H;y++){const tr=document.createElement("tr");
+    for(let x=0;x<W;x++){const td=document.createElement("td");const s=opened[y*W+x];
+      td.className=s===1?("b"+nums[y*W+x]):s===2?"bf":"bb";tr.appendChild(td);}
+    tb.appendChild(tr);}
+})();
+</script>
+</body>
+</html>

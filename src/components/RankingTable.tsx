@@ -1,0 +1,56 @@
+// 全级别排行表（服务端渲染形态，移植 2008 版 Ranking_All 的表格编排）：
+// 排名 | 姓名 | 军衔 | 初级 3BV/s | 中级 3BV/s | 高级 3BV/s | 总计 3BV/s | 升降
+// 2026-09-24「加载更多」改造：行/列渲染抽到 RankingRows 与客户端 RankingFeed 共享，
+// 本组件保留给 /area 等服务端分页场景；列头点击切换排序列；升降列仅 sum_time 显示。
+
+import type { RankingRow } from "@/lib/queries";
+import { title as assessTitle } from "@/lib/assess";
+import { getThunderKingThreshold } from "@/lib/title-system";
+import type { RankingBy } from "@/lib/config";
+import { RankingHead, RankingRowLine, RankingEmpty } from "./RankingRows";
+
+export async function RankingTable({
+  rows,
+  by,
+  base,
+  params,
+  deltas,
+  hlUid,
+}: {
+  rows: RankingRow[];
+  by: RankingBy;
+  /** 列头排序链接的 base 与固定参数（view/nf、area 等） */
+  base: string;
+  params: Record<string, string | number | undefined>;
+  /** 日升降（仅 by=sum_time 时传入并显示升降列） */
+  deltas?: Map<number, number | null>;
+  /** 搜索定位落地行 id（whereami 302 携带 hl=<uid>，SSR 即高亮，2026-10-14 地区内页搜索） */
+  hlUid?: number;
+}) {
+  const showDelta = by === "sum_time" && deltas !== undefined;
+  // 军衔 SUB 制按高级时间评定（2026-10-13）；NF 榜行数据本身来自 NF 表，exp_time 同样是 NF 口径，
+  // 但军衔应按主榜评定——getRankingTable 已把主榜成绩回填进 overall（NF 时），此处优先主榜值；
+  // 2026-11-06 总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
+  const kingTh = await getThunderKingThreshold();
+  const titles = await Promise.all(
+    rows.map((u) => assessTitle(u.overallExpTime ?? u.scores.exp_time, kingTh))
+  );
+  return (
+    <table cellPadding={0} cellSpacing={0} className="ranking_table">
+      <RankingHead by={by} base={base} params={params} showDelta={showDelta} />
+      <tbody>
+        {rows.map((u, i) => (
+          <RankingRowLine
+            key={u.id}
+            row={{ ...u, title: titles[i] }}
+            by={by}
+            delta={deltas?.get(u.id)}
+            showDelta={showDelta}
+            hl={u.id === hlUid}
+          />
+        ))}
+        {rows.length === 0 && <RankingEmpty showDelta={showDelta} />}
+      </tbody>
+    </table>
+  );
+}

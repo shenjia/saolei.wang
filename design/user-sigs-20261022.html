@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>用户个人资料「标识」版块设计稿 2026-10-22</title>
+<style>
+  /* ===== 站点环境还原（暗色 Monokai / legacy-2013 关键规则） ===== */
+  * { margin: 0; padding: 0; }
+  ul { list-style: none; }
+  body {
+    background: #272822;
+    font-family: "微软雅黑", Arial, "宋体";
+    color: #636359;
+    font-size: 14px;
+    line-height: 21px;
+    padding: 40px 24px;
+  }
+  .page_title { color: #fdc61a; font-size: 26px; line-height: 39px; margin-bottom: 8px; }
+  .page_note { color: #75715e; font-size: 14px; margin-bottom: 30px; }
+  .page_note b { color: #b1b1a4; font-weight: normal; }
+  .row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+  .demo { width: 222px; }
+  .demo .caption { color: #a6e22e; font-size: 13px; padding: 0 8px 8px; }
+
+  /* ===== 侧栏 profile box（192px 总宽，精确还原 legacy-2013.css） ===== */
+  .box {
+    width: 192px;
+    background: #3b3a32;
+    border: 1px #656355 solid;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.25);
+    border-radius: 10px;
+    padding: 30px;
+    margin: 8px 0;
+    text-shadow: 0 2px 2px rgba(0,0,0,0.25);
+    box-sizing: border-box;
+  }
+  .profile h2 { float: left; margin: 0 0 15px; color: #fdc61a; font-size: 26px; line-height: 39px; font-weight: normal; }
+  .profile .id { float: right; line-height: 39px; color: #636359; }
+  .profile .id em { padding: 0 5px; font-style: normal; color: #939387; }
+  .profile .form { clear: both; width: 100%; border-collapse: collapse; }
+  .profile hr { clear: both; border: 0; border-top: 1px solid #49483e; margin: 0 0 10px; width: 100%; }
+  .form th {
+    padding: .5em 1em .5em 0;
+    color: #75715e; font-size: 16px; line-height: 24px;
+    font-weight: normal;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: right; border: 0; vertical-align: top;
+  }
+  .form td { position: relative; padding: .5em 0; color: #939387; font-size: 16px; line-height: 24px; vertical-align: top; }
+
+  /* ===== 新增：标识列表（本稿核心） ===== */
+  .sig_list { list-style: none; }
+  .sig_list li { color: #939387; font-size: 16px; line-height: 24px; word-break: break-all; }
+  .sig_more {
+    display: inline-block;
+    min-width: 34px; height: 34px; line-height: 32px;
+    padding: 0 10px; margin-top: 6px;
+    border: 1px solid #49483e; border-radius: 6px;
+    background: #33322b;
+    color: #b1b1a4; font-size: 14px; font-family: inherit;
+    text-align: center; cursor: pointer;
+  }
+  .sig_more:hover { border-color: #a6e22e; color: #a6e22e; background: #3b3a32; }
+</style>
+</head>
+<body>
+  <div class="page_title">用户主页 · 个人资料「标识」版块</div>
+  <div class="page_note">
+    位置：侧栏「个人资料」box 内，资料表格（昵称/爱好/QQ/鼠标/鼠标垫）末尾追加一行；
+    一个标识一行，最多显示 3 条，超出时显示「…」按钮（翻页控件同款卡片样式），
+    点击后<b>就地展开全部</b>（按钮消失，不再收起）。
+    数据源 user_sig（录像标识文字，上传录像时注册），按注册顺序（id 升序）排列。
+  </div>
+
+  <div class="row">
+    <!-- 状态一：4 条标识，默认收起（可交互演示：点击 … 展开） -->
+    <div class="demo">
+      <div class="caption">① 默认态 · 徐顺飞（4 条）：显示前 3 条 + 「…」按钮<br>→ 按钮可点，点击看展开效果</div>
+      <div class="box profile">
+        <h2>个人资料</h2>
+        <span class="id">ID.<em>62</em></span>
+        <hr>
+        <table class="form">
+          <tr><th>昵称</th><td>飞飞</td></tr>
+          <tr><th>爱好</th><td>扫雷</td></tr>
+          <tr>
+            <th>标识</th>
+            <td>
+              <ul class="sig_list" id="sigList1">
+                <li>ShunFeiXu</li>
+                <li>ShunFei Xu</li>
+                <li>ShunfeiXu</li>
+                <li style="display:none">Shunfei Xu</li>
+                <li style="display:none"><button class="sig_more" style="display:none">…</button></li>
+                <li><button class="sig_more" onclick="expandSigs(this)" title="显示全部标识">…</button></li>
+              </ul>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 状态二：展开后（静态展示终态） -->
+    <div class="demo">
+      <div class="caption">② 展开后 · 全部 4 条，按钮消失</div>
+      <div class="box profile">
+        <h2>个人资料</h2>
+        <span class="id">ID.<em>62</em></span>
+        <hr>
+        <table class="form">
+          <tr><th>昵称</th><td>飞飞</td></tr>
+          <tr><th>爱好</th><td>扫雷</td></tr>
+          <tr>
+            <th>标识</th>
+            <td>
+              <ul class="sig_list">
+                <li>ShunFeiXu</li>
+                <li>ShunFei Xu</li>
+                <li>ShunfeiXu</li>
+                <li>Shunfei Xu</li>
+              </ul>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 状态三：单条标识（大多数用户，无按钮） -->
+    <div class="demo">
+      <div class="caption">③ ≤3 条 · 尹欣（1 条）：无「…」按钮<br>（全站 10118 个有标识用户中位数即 1 条）</div>
+      <div class="box profile">
+        <h2>个人资料</h2>
+        <span class="id">ID.<em>629</em></span>
+        <hr>
+        <table class="form">
+          <tr><th>QQ</th><td>10001</td></tr>
+          <tr>
+            <th>标识</th>
+            <td>
+              <ul class="sig_list">
+                <li>Yin Xin</li>
+              </ul>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="page_note" style="margin-top:30px">
+    边界说明：极端用户（如 #20823 有 181 条标识）展开后侧栏会很长——用户主动点击才展开，可接受；
+    仅 1 条空标识（历史脏数据）实现时过滤不显示；无任何标识的用户不显示「标识」行；
+    有标识但没填资料字段的老用户，个人资料 box 会因标识而显示（ID + 标识行）。
+  </div>
+
+<script>
+  // 交互演示：点击 … 就地展开剩余标识，按钮消失
+  function expandSigs(btn) {
+    var list = document.getElementById('sigList1');
+    var lis = list.children;
+    for (var i = 0; i < lis.length; i++) lis[i].style.display = '';
+    btn.parentNode.style.display = 'none';
+  }
+</script>
+</body>
+</html>

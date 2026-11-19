@@ -1,0 +1,74 @@
+"use client";
+
+// 管理后台 · 录像审核播放器
+// 2026-10-26 起所有格式统一交给 Flop Player，不再先走前台自研解析/回放。
+// 两个后台列表的所有直接播放入口都汇聚到本组件；每次 target 变化即重新起播，
+// 同一录像关闭后再次点击也会生成新 target，可正常反复进入。
+
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { FlopPlayer, playFlop } from "../FlopPlayer";
+import { postOp } from "./AdminAction";
+import type { VideoLevel } from "@/lib/config";
+
+export interface AdminPlayerTarget {
+  id: number;
+  level: VideoLevel;
+  /** video_info.filepath（/2026/01/05/xxx.mvf 形态） */
+  filepath: string;
+  /** 库内权威用时 ms（列表展示保留；Flop Player 从文件读取播放数据） */
+  realTime: number;
+  /** 玩家名（列表展示保留） */
+  player: string;
+}
+
+export function AdminVideoPlayer({
+  target,
+  onClose,
+  onWatched,
+}: {
+  target: AdminPlayerTarget | null;
+  /** 保留既有调用方签名；关闭由 Flop Player 的 X / Esc / 暗区统一处理 */
+  onClose: () => void;
+  /** markWatched 落库成功后回调（列表即时把该行按钮置「已看」，2026-10-27） */
+  onWatched?: (id: number) => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  /* onWatched/onClose 是父组件每次渲染都新建的内联函数——若进 effect 依赖，
+     列表任何一次重渲染（markWatched 回调、待审数轮询、router.refresh）都会
+     重跑本 effect → playFlop 重调 → 播放器复位回「加载中」→ 闪烁循环，
+     且反复 markWatched POST 会打爆 nginx general 档（burst=20）出 429
+     （2026-10-28 347943 实测）。改 ref 持有，effect 只跟 target 走。 */
+  const watchedRef = useRef(onWatched);
+  watchedRef.current = onWatched;
+  /* rAF 异步置位，避免 effect 内同步 setState 级联渲染 */
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    // 等 iframe 挂载后再起播：页面刚打开就首点播放时，不能让请求早于
+    // FlopPlayer 的 window.flop 初始化而丢失。
+    if (!mounted || !target) return;
+    /* ⚠️ 后台播放走 /api/admin/video-file/<id>.<ext>（2026-10-28，347943 案续）：
+       站内生成的录像可能被服务端原地修补（时间倒流钳制），而 nginx 对 /videos/
+       下发 30d 缓存——审核播放必须拿磁盘当前版。不能用 ?t= 穿透：flop 取扩展名
+       是 lastIndexOf(".") 截取，查询串会拼进扩展名直接报「请选择一个
+       evf/avf/mvf/rmv/rawvf 文件」。API 路由 URL 以真实扩展名结尾 + no-store。 */
+    const ext = target.filepath.slice(target.filepath.lastIndexOf(".") + 1);
+    playFlop(`/api/admin/video-file/${target.id}.${ext}`);
+    // 打开审核播放即记「已观看」，上报成功回调列表即时刷新「已看」态；
+    // 失败不打扰播放（刷新页面后 watched 仍以库内为准）。
+    const watched = target.id;
+    void postOp("video.markWatched", { id: watched })
+      .then((res) => {
+        if (res.ok) watchedRef.current?.(watched);
+      })
+      .catch(() => undefined);
+  }, [mounted, target]);
+
+  // 首次打开后 iframe 常驻，后续 target 变化直接复用； flop 自带未就绪补播队列。
+  if (!mounted) return null;
+  return createPortal(<FlopPlayer />, document.body);
+}

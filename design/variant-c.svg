@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs>
+<radialGradient id="cball" cx="42%" cy="36%" r="78%">
+  <stop offset="0%" stop-color="#1e1e1e"/>
+  <stop offset="55%" stop-color="#080808"/>
+  <stop offset="100%" stop-color="#000000"/>
+</radialGradient>
+<linearGradient id="cbadge" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0%" stop-color="#3d3d3d"/>
+  <stop offset="100%" stop-color="#2b2b2b"/>
+</linearGradient>
+<filter id="csoft" x="-40%" y="-40%" width="180%" height="180%">
+  <feGaussianBlur stdDeviation="1.7"/>
+</filter>
+</defs>
+<rect width="64" height="64" fill="#323232"/>
+<circle cx="32" cy="32" r="24.6" fill="none" stroke="#fff" stroke-width="5" opacity="0.32" filter="url(#csoft)"/><circle cx="32" cy="32" r="24.6" fill="none" stroke="#fff" stroke-width="1.7" opacity="0.96"/>
+<path d="M29.3 11 L30.7 3.2 Q32 1.4 33.3 3.2 L34.7 11 Z" fill="#fff" transform="rotate(0 32 32)"/><path d="M29.3 11 L30.7 3.2 Q32 1.4 33.3 3.2 L34.7 11 Z" fill="#fff" transform="rotate(90 32 32)"/><path d="M29.3 11 L30.7 3.2 Q32 1.4 33.3 3.2 L34.7 11 Z" fill="#fff" transform="rotate(180 32 32)"/><path d="M29.3 11 L30.7 3.2 Q32 1.4 33.3 3.2 L34.7 11 Z" fill="#fff" transform="rotate(270 32 32)"/><path d="M29.4 11 L30.75 5.7 Q32 4.1 33.25 5.7 L34.6 11 Z" fill="#fff" transform="rotate(45 32 32)"/><path d="M29.4 11 L30.75 5.7 Q32 4.1 33.25 5.7 L34.6 11 Z" fill="#fff" transform="rotate(135 32 32)"/><path d="M29.4 11 L30.75 5.7 Q32 4.1 33.25 5.7 L34.6 11 Z" fill="#fff" transform="rotate(225 32 32)"/><path d="M29.4 11 L30.75 5.7 Q32 4.1 33.25 5.7 L34.6 11 Z" fill="#fff" transform="rotate(315 32 32)"/>
+<circle cx="32" cy="32" r="23.4" fill="url(#cball)"/>
+<circle cx="32" cy="32" r="24.6" fill="none" stroke="#fff" stroke-width="1.7" opacity="0.96"/>
+<rect x="20.4" y="20.4" width="5.2" height="5.2" rx="1.2" fill="#fff"/>
+</svg>

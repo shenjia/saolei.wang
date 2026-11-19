@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BBS 富文本编辑器 · 设计方案（复用于评论）</title>
+<link href="/styles/legacy-2013.css" rel="stylesheet">
+<style>
+  /* ============================================================
+     色板：严格沿用 2013 Monokai（零新色）
+     #272822 页底 / #3b3a32 面板 / #49483e 分隔 / #636359 描边
+     #939387 表单文 / #b1b1a4 次文 / #75715e 弱文 / #f8f8f2 主文
+     #fdc61a 主黄 / #a6e22e 绿 / #f92672 红 / #e6db74 旧黄
+     ============================================================ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "微软雅黑", "Microsoft YaHei", Arial, "宋体", sans-serif;
+    background: #1c1c17;
+    color: #b1b1a4;
+    padding: 36px 28px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .phead { border-bottom: 1px solid #33322b; padding-bottom: 20px; margin-bottom: 28px; }
+  .phead h1 { font-size: 21px; font-weight: 600; color: #f8f8f2; }
+  .phead h1 b { color: #fdc61a; font-weight: 600; }
+  .phead p { font-size: 13px; color: #75715e; margin-top: 8px; line-height: 1.9; }
+  .phead p b { color: #a6e22e; font-weight: 400; }
+
+  .stage-title { font-size: 13px; color: #75715e; letter-spacing: 2px; margin: 34px 0 14px; }
+  .stage-title b { color: #a6e22e; font-weight: 400; }
+
+  /* ============ 站点真实环境（.box 等类来自 legacy-2013.css） ============ */
+  .site-bg { background: #272822; border-radius: 12px; padding: 28px; }
+  .page { width: 660px; margin: 0 auto; }
+
+  /* ---------- 富文本编辑器 ---------- */
+  .rt_editor { width: 100%; }
+  /* 工具栏 */
+  .rt_toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    background: #33332e;
+    border: 1px solid #49483e;
+    border-bottom: 0;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+  }
+  .rt_btn {
+    height: 22px;
+    min-width: 34px;
+    padding: 0 8px;
+    background: #49483e;
+    border: 1px solid #636359;
+    border-radius: 3px;
+    color: #b1b1a4;
+    font-size: 12px;
+    line-height: 20px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .rt_btn:hover { background: #555550; color: #f8f8f2; border-color: #75715e; }
+  .rt_btn:active { background: #272822; }
+  /* 语义按钮直接用 2008 版配色语义：标题=白粗、醒目/加亮=黄、加粗=灰粗 */
+  .rt_btn.t-title { color: #f8f8f2; font-weight: bold; }
+  .rt_btn.t-sign  { color: #e6db74; }
+  .rt_btn.t-signest { color: #e6db74; font-weight: bold; }
+  .rt_btn.t-b { color: #b1b1a4; font-weight: bold; }
+  .rt_sep { width: 1px; height: 16px; background: #49483e; margin: 0 2px; }
+  .rt_toolbar .rt_hint { margin-left: auto; font-size: 11px; color: #75715e; padding-right: 4px; }
+
+  /* 输入区（textarea 沿用站内表单观感） */
+  .rt_editor textarea {
+    display: block;
+    width: 100%;
+    min-height: 132px;
+    background: #272822;
+    color: #f8f8f2;
+    border: 1px solid #49483e;
+    border-radius: 0 0 4px 4px;
+    padding: 8px;
+    font-size: 14px;
+    line-height: 1.7;
+    resize: vertical;
+  }
+  .rt_editor textarea:focus { outline: none; border-color: #8ac21b; }
+
+  /* 弹层面板（表情/摆雷）：挂在对应按钮下方，绝对定位 */
+  .rt_pop {
+    position: absolute;
+    top: 30px;
+    z-index: 30;
+    background: #3b3a32;
+    border: 1px solid #636359;
+    border-radius: 4px;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.45);
+    padding: 6px;
+  }
+  .rt_pop_faces { left: 0; width: 266px; }
+  .rt_pop_mines { left: 46px; width: 308px; }
+  .rt_pop_grid { display: flex; flex-wrap: wrap; gap: 3px; }
+  .rt_pop img { width: 24px; height: 24px; cursor: pointer; display: block; }
+  .rt_pop.mines img { width: 16px; height: 16px; }
+  .rt_pop img:hover { background: #555550; border-radius: 2px; }
+  .rt_pop .rt_pop_tip {
+    font-size: 11px;
+    color: #75715e;
+    padding: 4px 2px 2px;
+    border-top: 1px solid #49483e;
+    margin-top: 5px;
+    line-height: 1.6;
+  }
+
+  /* 预览区 */
+  .rt_preview_wrap { margin-top: 8px; }
+  .rt_preview_head {
+    font-size: 11px;
+    color: #75715e;
+    margin-bottom: 4px;
+  }
+  .rt_preview_head b { color: #a6e22e; font-weight: 400; }
+  .rt_preview {
+    background: #272822;
+    border: 1px dashed #49483e;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #bbbbbb;
+    word-break: break-all;
+    min-height: 44px;
+  }
+  .rt_preview img { vertical-align: middle; }
+  .rt_preview .mine-map { line-height: 16px; }
+  .rt_preview .mine-map img { vertical-align: top; }
+
+  /* 评论场景（更小尺寸变体） */
+  .comment_form { margin-top: 4px; }
+  .comment_form .rt_editor textarea { min-height: 64px; }
+  .comment_form .rt_btn { height: 20px; min-width: 28px; font-size: 11px; padding: 0 6px; line-height: 18px; }
+  .comment_form .rt_pop img { width: 20px; height: 20px; }
+  .comment_form .rt_pop.mines img { width: 16px; height: 16px; }
+
+  .submit_row { margin-top: 8px; font-size: 13px; color: #75715e; }
+  .btn_main {
+    height: 26px;
+    padding: 0 18px;
+    background: #fdc61d;
+    border: 1px solid #fdc61d;
+    border-radius: 3px;
+    color: #333;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn_main:hover { background: #fdd84d; }
+
+  /* 设计说明表 */
+  table.decision { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12.5px; }
+  table.decision th, table.decision td {
+    border: 1px solid #33322b; padding: 7px 12px; text-align: left; line-height: 1.7;
+  }
+  table.decision th { background: #23231d; color: #fdc61a; font-weight: 600; }
+  table.decision td { color: #b1b1a4; }
+  table.decision td.k { color: #8ac21b; white-space: nowrap; }
+  table.decision td i { font-style: normal; color: #75715e; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="phead">
+    <h1>BBS <b>富文本编辑器</b>设计方案（评论复用）</h1>
+    <p>
+      沿用 2008 版「工具栏 + UBB 标记」的模式：<b>数据层仍是 UBB 文本</b>（与 2.8 万存量帖完全兼容），
+      编辑器提供按钮一键插入、选中包裹、弹层面板、小键盘摆雷与实时预览，无需手打标签。
+      语义配色对应 2008 版：标题=白粗（[Title]）、醒目/加亮=黄（[Sign]/[Signest]）、加粗=[b]。
+    </p>
+  </div>
+
+  <div class="stage-title">STAGE 1 · <b>发帖 / 编辑主题（PostForm）</b></div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box">
+        <h1>发布主题</h1>
+        <p class="text" style="margin-bottom:12px">板块：
+          <select><option>技术</option><option>杂谈</option><option>问答</option></select>
+        </p>
+        <p style="margin-bottom:12px"><input type="text" placeholder="主题标题（100 字以内）" style="width:92%;background:#272822;color:#f8f8f2;border:1px solid #49483e;padding:6px"></p>
+
+        <div class="rt_editor" id="ed1">
+          <div class="rt_toolbar" data-pop="keep">
+            <button class="rt_btn t-title" data-act="wrap" data-tag="Title">标题</button>
+            <button class="rt_btn t-sign" data-act="wrap" data-tag="Sign">醒目</button>
+            <button class="rt_btn t-signest" data-act="wrap" data-tag="Signest">加亮</button>
+            <button class="rt_btn t-b" data-act="wrap" data-tag="b">加粗</button>
+            <span class="rt_sep"></span>
+            <button class="rt_btn" data-act="link">链接</button>
+            <button class="rt_btn" data-act="img">贴图</button>
+            <span class="rt_sep"></span>
+            <button class="rt_btn" data-act="pop" data-pop="faces">表情</button>
+            <button class="rt_btn" data-act="pop" data-pop="mines">摆雷</button>
+            <span class="rt_hint">选中文字后点按钮可包裹</span>
+          </div>
+          <textarea placeholder="支持 UBB 标记，工具栏可一键插入" spellcheck="false">[Title]摆雷演示[/Title]
+试试用工具栏的「摆雷」继续拼图：
+[1][ ][*][ ][2][!][ ][3][Q][.]
+选中一段文字再点「醒目」看看效果[face]5[/face]</textarea>
+          <div class="rt_preview_wrap">
+            <div class="rt_preview_head"><b>实时预览</b>（发表后的实际效果）</div>
+            <div class="rt_preview"></div>
+          </div>
+          <p class="submit_row"><button class="btn_main">发布主题</button>　支持 UBB：[b] [url] [img] [face] [1]-[8] 等扫雷符号</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-title">STAGE 2 · <b>回帖（ReplyForm，同款编辑器）</b></div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box">
+        <h2 style="font-size:20px;color:#b1b1a4">回复主题</h2>
+        <div class="rt_editor" id="ed2">
+          <div class="rt_toolbar">
+            <button class="rt_btn t-title" data-act="wrap" data-tag="Title">标题</button>
+            <button class="rt_btn t-sign" data-act="wrap" data-tag="Sign">醒目</button>
+            <button class="rt_btn t-signest" data-act="wrap" data-tag="Signest">加亮</button>
+            <button class="rt_btn t-b" data-act="wrap" data-tag="b">加粗</button>
+            <span class="rt_sep"></span>
+            <button class="rt_btn" data-act="link">链接</button>
+            <button class="rt_btn" data-act="img">贴图</button>
+            <span class="rt_sep"></span>
+            <button class="rt_btn" data-act="pop" data-pop="faces">表情</button>
+            <button class="rt_btn" data-act="pop" data-pop="mines">摆雷</button>
+          </div>
+          <textarea placeholder="支持 UBB：[b]粗体[/b] [url 地址]文字[/url] [img]图址[/img] [face]0[/face] [1]-[8][!][?] 扫雷符号" spellcheck="false">回帖也用同款编辑器[face]2[/face]</textarea>
+          <div class="rt_preview_wrap">
+            <div class="rt_preview_head"><b>实时预览</b>（回复后的实际效果）</div>
+            <div class="rt_preview"></div>
+          </div>
+          <p class="submit_row"><button class="btn_main">回复</button></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-title">STAGE 3 · <b>录像评论（CommentForm，紧凑变体 + 实时预览行内化）</b></div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box comment_form">
+        <div class="rt_editor" id="ed3">
+          <div class="rt_toolbar">
+            <button class="rt_btn t-sign" data-act="wrap" data-tag="Sign">醒目</button>
+            <button class="rt_btn t-b" data-act="wrap" data-tag="b">加粗</button>
+            <span class="rt_sep"></span>
+            <button class="rt_btn" data-act="pop" data-pop="faces">表情</button>
+            <button class="rt_btn" data-act="pop" data-pop="mines">摆雷</button>
+            <span class="rt_hint">上限 100 字</span>
+          </div>
+          <textarea placeholder="我来说两句…" spellcheck="false">这盘 [3][2][*] 首尾精彩，节奏太顶了[face]13[/face]</textarea>
+          <div class="rt_preview_wrap">
+            <div class="rt_preview" style="min-height:28px"></div>
+          </div>
+          <p class="submit_row"><button class="btn_main">发表评论</button></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-title">STAGE 4 · <b>功能与映射说明</b></div>
+  <table class="decision">
+    <tr><th>能力</th><th>操作</th><th>产物（UBB）</th><th>渲染来源</th></tr>
+    <tr><td class="k">标题</td><td>选中文字点按钮 → 包裹</td><td><i>[Title]…[/Title]</i></td><td>白粗（.Title 2008 版章节标题）</td></tr>
+    <tr><td class="k">醒目</td><td>选中包裹</td><td><i>[Sign]…[/Sign]</i></td><td>黄字（.Sign）</td></tr>
+    <tr><td class="k">加亮</td><td>选中包裹</td><td><i>[Signest]…[/Signest]</i></td><td>黄字加粗（.Signest，2008 版「加亮」= 强醒目）</td></tr>
+    <tr><td class="k">加粗</td><td>选中包裹</td><td><i>[b]…[/b]</i></td><td>strong</td></tr>
+    <tr><td class="k">表情</td><td>弹层 30 格点选</td><td><i>[face]N[/face]</i></td><td>/images/face/N.gif</td></tr>
+    <tr><td class="k">摆雷</td><td>弹层 16 符号；面板开启时小键盘直接输入</td><td><i>[1]-[8] [!] [?] [*] …</i></td><td>/images/mine/*.gif，连续纯雷图行自动拼图</td></tr>
+    <tr><td class="k">链接/贴图</td><td>prompt 输入地址</td><td><i>[url 地址]文字[/url]</i> / <i>[img]地址[/img]</i></td><td>a / img</td></tr>
+    <tr><td class="k">实时预览</td><td>输入即刷新（与服务端 ubb() 同一白名单规则）</td><td>—</td><td>发表前所见即所得</td></tr>
+  </table>
+
+</div>
+
+<script>
+/* ---------- 迷你 UBB 渲染（与服务端 lib/bbs.ts ubb() 同规则，用于预览） ---------- */
+function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+var MINE_MAP={" ":"Blank",".":"Black","Q":"Block","!":"Flag","?":"Mark","-":"Num","+":"IsMine","*":"Mine"};
+function ubb(raw){
+  var normalized=raw.replace(/<br\s*\/?>/gi,"\n").replace(/\[&nbsp;\]/gi,"[ ]").replace(/&nbsp;/gi,"\u00a0");
+  var text=escapeHtml(normalized);
+  text=text.replace(/\[Title\]/gi,'<span class="Title">').replace(/\[\/Title\]/gi,"</span>")
+    .replace(/\[Sign\]/gi,'<span class="Sign">').replace(/\[\/Sign\]/gi,"</span>")
+    .replace(/\[Signest\]/gi,'<span class="Signest">').replace(/\[\/Signest\]/gi,"</span>")
+    .replace(/\[b\]/gi,"<strong>").replace(/\[\/b\]/gi,"</strong>")
+    .replace(/\[i\]/gi,"<em>").replace(/\[\/i\]/gi,"</em>")
+    .replace(/\[u\]/gi,"<u>").replace(/\[\/u\]/gi,"</u>");
+  text=text.replace(/\[img\]([^\[\]]+?)\[\/img\]/gi,'<img align="top" src="$1">');
+  text=text.replace(/\[url\s+([^\[\]\s]+?)\]([^\[\]]*?)\[\/url\]/gi,'<a href="$1" target="_blank" rel="noreferrer">$2</a>');
+  text=text.replace(/\[url\]([^\[\]]+?)\[\/url\]/gi,'<a href="$1" target="_blank" rel="noreferrer">$1</a>');
+  text=text.replace(/\[face\](\d{1,2})\[\/face\]/gi,function(_,n){return '<img src="/images/face/'+Math.min(29,parseInt(n,10))+'.gif" alt="">';});
+  for(var i=0;i<=8;i++) text=text.split("["+i+"]").join('<img src="/images/mine/'+i+'.gif" alt="'+i+'">');
+  for(var k in MINE_MAP) text=text.split("["+k+"]").join('<img src="/images/mine/'+MINE_MAP[k].toLowerCase()+'.gif" alt="">');
+  var out=text.replace(/\t/g,"&nbsp;&nbsp;&nbsp;&nbsp;").replace(/\r?\n/g,"<br>");
+  var isMineOnly=function(line){return line.length>0&&/^(\s|<img src="\/images\/mine\/[^"]*" alt="[^"]*">)+$/.test(line);};
+  var parts=out.split(/(<br\s*\/?>)/),result="",buf=[];
+  var flush=function(){if(buf.length){result+='<div class="mine-map">'+buf.join("")+'</div>';buf=[];}};
+  parts.forEach(function(p,i){
+    if(isMineOnly(p)){buf.push(p);return;}
+    if(/^<br\s*\/?>$/.test(p)&&buf.length&&isMineOnly(parts[i+1]||"")){buf.push(p);return;}
+    flush();result+=p;
+  });
+  flush();
+  return result;
+}
+
+/* ---------- 编辑器装配 ---------- */
+function buildEditor(root){
+  var toolbar=root.querySelector(".rt_toolbar");
+  var ta=root.querySelector("textarea");
+  var preview=root.querySelector(".rt_preview");
+  var compact=root.closest(".comment_form")!=null;
+  var pop=null, popName=null;
+
+  function renderPreview(){ if(preview) preview.innerHTML=ubb(ta.value); }
+
+  function closePop(){ if(pop){pop.remove();pop=null;popName=null;} }
+
+  function insertAt(text, selStartOffset, selEndOffset){
+    var start=ta.selectionStart, end=ta.selectionEnd;
+    ta.focus();
+    ta.setRangeText(text,start,end,"end");
+    if(selStartOffset!=null){
+      var ns=start+selStartOffset, ne=start+selEndOffset;
+      ta.setSelectionRange(ns,ne);
+    }
+    ta.dispatchEvent(new Event("input",{bubbles:true}));
+  }
+
+  function wrapSelection(tag){
+    var start=ta.selectionStart, end=ta.selectionEnd;
+    var sel=ta.value.substring(start,end);
+    ta.focus();
+    ta.setRangeText("["+tag+"]"+sel+"[/"+tag+"]",start,end,"end");
+    var open="["+tag+"]";
+    ta.setSelectionRange(start+open.length,start+open.length+sel.length);
+    ta.dispatchEvent(new Event("input",{bubbles:true}));
+  }
+
+  function makePop(name){
+    var div=document.createElement("div");
+    div.className="rt_pop "+(name==="mines"?"mines":"")+(name==="faces"?" rt_pop_faces":" rt_pop_mines");
+    var grid=document.createElement("div"); grid.className="rt_pop_grid";
+    if(name==="faces"){
+      for(var i=1;i<=30;i++)(function(i){
+        var img=document.createElement("img");
+        img.src="/images/face/"+i+".gif";
+        img.onclick=function(){ insertAt("[face]"+i+"[/face]"); closePop(); };
+        grid.appendChild(img);
+      })(i);
+      var tip=document.createElement("div"); tip.className="rt_pop_tip";
+      tip.textContent="点击插入表情 [face]N[/face]";
+      div.appendChild(grid); div.appendChild(tip);
+    } else {
+      var specs=[[".","分割使用"],[" ","小键盘[0]"],["Q","小键盘[.]"],["1","小键盘[1]"],["2","小键盘[2]"],["3","小键盘[3]"],["4","小键盘[4]"],["5","小键盘[4]"],["6","小键盘[6]"],["7","小键盘[7]"],["8","小键盘[8]"],["*","小键盘[*]"],["+","小键盘[+]"],["!","小键盘[9]"],["?","小键盘[/]"],["-","小键盘[-]"]];
+      specs.forEach(function(s){
+        var img=document.createElement("img");
+        img.src="/images/mine/"+(MINE_MAP[s[0]]||s[0])+".gif";
+        img.title=s[1];
+        img.onclick=function(){ insertAt("["+s[0]+"]"); };
+        grid.appendChild(img);
+      });
+      var tip=document.createElement("div"); tip.className="rt_pop_tip";
+      tip.textContent="面板开启时可用小键盘直接摆雷，点雷图外或再点「摆雷」收起";
+      div.appendChild(grid); div.appendChild(tip);
+    }
+    return div;
+  }
+
+  toolbar.addEventListener("click",function(e){
+    var btn=e.target.closest(".rt_btn");
+    if(!btn) return;
+    var act=btn.dataset.act;
+    if(act==="wrap"){ wrapSelection(btn.dataset.tag); closePop(); return; }
+    if(act==="link"){
+      var link=prompt("请输入网页链接，例如：http://www.saolei.wang/","http://");
+      if(link&&link!=="http://") insertAt("[url "+link+"]"+link+"[/url]");
+      return;
+    }
+    if(act==="img"){
+      var src=prompt("请输入图片链接，例如：http://xxx.com/1.jpg","http://");
+      if(src&&src!=="http://") insertAt("[img]"+src+"[/img]");
+      return;
+    }
+    if(act==="pop"){
+      var name=btn.dataset.pop;
+      if(popName===name){ closePop(); return; }
+      closePop();
+      pop=makePop(name);
+      if(name==="faces") pop.style.left=(btn.offsetLeft)+"px";
+      else pop.style.left=Math.min(btn.offsetLeft, toolbar.offsetWidth-320)+"px";
+      toolbar.appendChild(pop);
+      popName=name;
+      ta.focus();
+    }
+  });
+
+  /* 小键盘摆雷（面板开启时拦截，同 2008 版 KeyDown） */
+  var KEYMAP={96:" ",110:"Q",97:"1",98:"2",99:"3",100:"4",101:"5",102:"6",103:"7",104:"8",106:"*",105:"!",111:"?",109:"-",107:"+"};
+  ta.addEventListener("keydown",function(e){
+    if(popName==="mines" && KEYMAP[e.keyCode]){
+      e.preventDefault();
+      insertAt("["+KEYMAP[e.keyCode]+"]");
+    }
+  });
+
+  /* 面板外点击收起 */
+  document.addEventListener("click",function(e){
+    if(pop && !pop.contains(e.target) && !e.target.closest(".rt_btn")) closePop();
+  });
+
+  ta.addEventListener("input",renderPreview);
+  renderPreview();
+}
+
+document.querySelectorAll(".rt_editor").forEach(buildEditor);
+</script>
+</body>
+</html>

@@ -1,0 +1,728 @@
+// 用户主页：成绩总表 + 最新动态 + 个人资料（移植 views/user/view）
+// 访问即计人气（移植 2008 版 Player_Info 的 Click 计数）
+// 2026-09-23 首个版块布局（张老师要求）：左侧正方形照片（OAuth 头像 →
+//   /images/player/{id}.jpg → 默认头像）；全国/省份排名两行置于右上角
+//   军衔徽章上方，居中显示
+// 2026-09-24 二轮（张老师要求）：动态标题改「动态」、筛选器收进标题行右侧；
+//   无上传录像隐藏「实力」雷达；统计数字默认亮灰、今日数据黄色高亮
+// 2026-09-26（张老师要求）：纪事上方新增「录像」版块（加载更多翻页），
+//   标题行右上角「上传录像」按钮（仅本人可见）
+
+import { existsSync } from "node:fs";
+import path from "node:path";
+import type { Metadata } from "next";
+import { Fragment, type ReactNode } from "react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import {
+  getUserRanks,
+  getVideoList,
+  type BbvCell,
+} from "@/lib/queries";
+import { getUserRecordCurves } from "@/lib/records";
+// 60s 打包缓存（2026-11-10 张老师定，方案 A）：14 趟 session 无关查询的
+// 打包入口（lib/userpage.ts），本人视角 fresh 直查绕过
+import { getUserPageData } from "@/lib/userpage";
+import ClickTracker from "@/components/ClickTracker";
+import {
+  VIDEO_LEVELS,
+  parseVideoListOrder,
+  parseVideoListDir,
+  LEVELS,
+  LEVEL_NAMES,
+  TITLE_COLORS,
+  USER_NEWS_NUMBER,
+  USER_VIDEO_NUMBER,
+  AREA_OVERSEAS,
+  areaDisplay,
+  type Level,
+  type VideoLevel,
+  type VideoListOrder,
+  type VideoListDir,
+} from "@/lib/config";
+import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
+import { UserVideoSection } from "@/components/UserVideoSection";
+import { HistoryBox } from "@/components/HistoryBox";
+import { RadarChart } from "@/components/RadarChart";
+import { Score3bvs, ScoreTime } from "@/components/Cells";
+import { RankLabel } from "@/components/RankLabel";
+import { UserRecordsSection } from "@/components/UserRecordsSection";
+import type { MetricSectionData } from "@/components/RecordsCurves";
+import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
+import { formatDate } from "@/lib/format";
+import { donateYuanPlain } from "@/lib/donate";
+import { ageOf, constellationText } from "@/lib/birth";
+import { resolveAvatarUrl, AVATAR_REVIEW_STATUS, DEFAULT_AVATAR } from "@/lib/avatar";
+import { DefaultAvatar } from "@/components/DefaultAvatar";
+import { dualTitles } from "@/lib/title-system";
+import { prisma } from "@/lib/db";
+import { SelfAvatar } from "@/components/SelfAvatar";
+import { SendMessageButton } from "@/components/SendMessageButton";
+// ⚠️ DEV-ONLY（2026-11-10）：PK 入口仅 dev 验收用，未获口头确认绝不 push（上线铁律）
+import { VsButton } from "@/components/VsButton";
+import { BbvCollection } from "@/components/BbvCollection";
+import { UserSigs } from "@/components/UserSigs";
+// 关注系统（2026-11-18）：头像 hover 关注按钮 + 主页统计行
+import { AvatarFollowBtn } from "@/components/AvatarFollowBtn";
+import { followCounts, isFollowing } from "@/lib/follow";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * 页面标题（2026-10-13 张老师要求）：玩家姓名（拼音）| 扫雷网，
+ * 与页面上 <h1>姓名</h1><h2>(拼音)</h2> 的展示口径一致。
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const userId = parseInt((await params).id, 10);
+  if (!userId) return {};
+  const u = await prisma.user.findUnique({
+    where: { id: BigInt(userId) },
+    select: { chineseName: true, englishName: true },
+  });
+  if (!u) return {};
+  const pinyin = u.englishName.trim();
+  return { title: `${u.chineseName}${pinyin ? `(${pinyin})` : ""}` };
+}
+
+const PROFILE_FIELDS: [string, string][] = [
+  ["nickname", "昵称"],
+  ["interest", "爱好"],
+  ["qq", "QQ"],
+  ["mouse", "鼠标"],
+  ["pad", "鼠标垫"],
+];
+
+/** 「纪录」板块筛选命名（2026-11-06）：级别口径与纪录页同款；图表小标题
+ *  沿用纪录页「XX纪录」命名（指标 tab 标签 Time/3BV/s/STNB 在组件内定义） */
+const RECORD_LEVEL_NAMES: Record<string, string> = {
+  total: "总计",
+  beg: "初级",
+  int: "中级",
+  exp: "高级",
+};
+const RECORD_METRIC_NAMES: Record<string, string> = {
+  time: "Time纪录",
+  "3bvs": "3BV/s纪录",
+  stnb: "STNB纪录",
+};
+
+/** 录像版块级别筛选 tabs（2026-09-27 张老师要求，与动态筛选同款 ranking_tabs 大号版）；
+ *  2026-10-16 移入客户端壳 UserVideoSection（就地切换不导航），此处不再需要 */
+
+/**
+ * 统计盒行（2026-10-13 张老师要求，样式与首页/录像页「数据统计」统一）：
+ * 标签 | 数值（右对齐） | 今日增量（绿色括号，左对齐；无新增留空）。
+ */
+function StatRow({
+  label,
+  children,
+  today,
+}: {
+  label: string;
+  children: ReactNode;
+  today?: number;
+}) {
+  const hasDelta = today !== undefined && today > 0;
+  return (
+    <tr>
+      <td>{label}</td>
+      <td className="num">{children}</td>
+      <td className="delta">{hasDelta ? `（+${today}）` : ""}</td>
+    </tr>
+  );
+}
+
+export default async function UserViewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const { id } = await params;
+  const sp = await searchParams;
+  const userId = parseInt(id, 10);
+  if (!userId) notFound();
+
+  // 录像版块级别筛选（URL 即状态，与 /video 列表页同语义；链接整页刷新）
+  const level = (VIDEO_LEVELS as readonly string[]).includes(sp.level ?? "")
+    ? (sp.level as VideoLevel)
+    : "all";
+  // 录像版块排序（2026-10-16 张老师要求）：与 /video 列表页同语义——表头点击排序
+  // （成绩/3BV/3BV/s/评论/点击/上传时间），默认上传时间（id）且不高亮；
+  // 方向（2026-10-23 升降序切换）：非法/缺省回退该列默认方向
+  const order: VideoListOrder = parseVideoListOrder(sp.order);
+  const dir: VideoListDir = parseVideoListDir(sp.dir, order);
+  // 显式态（2026-10-23）：URL 带 order（含 id）/dir——「上传时间」列高亮出箭头
+  const videoSortExplicit = sp.order !== undefined || sp.dir !== undefined;
+  // 录像版块搜索（2026-10-20 张老师要求：上传按钮换搜索框）：时间成绩/3BV 精确查询，
+  // 与 /video 同语义（互斥三选一，本页 author 恒为 userId）
+  const time = sp.time?.trim() || undefined;
+  const bv = sp["3bv"]?.trim() || undefined;
+  // 录像版块 NF 筛选开关（2026-10-20）：URL nf=1 开启，默认关
+  const nf = sp.nf === "1";
+  // 收集墙配色（2026-10-27 张老师要求筛选器改链接）：URL ?bbv=pb 明确指定时服务端
+  // 直接渲染该配色（链接可中键新开/F5 不断链）；无参数时默认 3bv，客户端按 localStorage 校正
+  const bbvMode: "3bv" | "pb" = sp.bbv === "pb" ? "pb" : "3bv";
+
+  // session 提前取（2026-10-23）：本人主页录像版块要放行自己的屏蔽盘（includeBanned），
+  // 判定 isSelf 须在 getVideoList 之前
+  const session = await getSession();
+  const isSelf = !!session && session.uid === userId;
+
+  // 60s 打包缓存（2026-11-10，方案 A）：14 趟 session/URL 无关查询一次取齐
+  // （detail/clicks/news/history/todayVideos/activity/actIndex/practiceWins/
+  //  bbv/radar/activeRadar/donate/sigs/kingTh）；本人视角 fresh 直查绕缓存——
+  // 改资料/传头像/新录像统计即时可见（张老师口径：自己看自己不走缓存）。
+  // 不打包：ranks（600s per-user 缓存）、curves（24h per-user 缓存）、
+  // getVideoList（URL 参数键空间无界）、avatarReview（仅本人查，fresh 路径覆盖）
+  const bundle = await getUserPageData(userId, isSelf);
+  if (!bundle) notFound();
+  const {
+    detail,
+    clicks,
+    news,
+    newsTotal,
+    history,
+    todayVideos,
+    activity,
+    actIndex,
+    todayAct,
+    practiceWins,
+    bbvRanges,
+    bbvCells,
+    donateCents,
+    kingTh,
+    radar,
+    activeRadar,
+    sigs,
+  } = bundle;
+  // 收集墙 Map 重组（缓存摊平形态 → 组件原签名）
+  const bbvCollection: Record<VideoLevel, Map<number, BbvCell>> = {
+    beg: new Map(bbvCells.beg),
+    int: new Map(bbvCells.int),
+    exp: new Map(bbvCells.exp),
+  };
+
+  const userVideos = await getVideoList({
+    level, order, dir, author: userId, time, bv, nf,
+    page: 1, pageSize: USER_VIDEO_NUMBER,
+    ...(isSelf ? { includeBanned: true } : {}),
+  });
+
+  // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）——
+  // 阈值 kingTh 随打包缓存带出（60s 内滞后，与全站 60s 缓存口径一致）
+  const feed: NewsFeedItem[] = news.map((n) => ({
+    news: n,
+    // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime), kingTh),
+    classic: n.authorTitles?.c ?? null,
+  }));
+
+  const { user, info, scores } = detail;
+  // 「纪录」板块（2026-11-06）：个人纪录进步历程 12 条曲线（3 指标×4 级别）+
+  // 每 BV 纪录墙（2026-11-16 张老师需求，同缓存带出 walls），
+  // uid 参与缓存 key 每人一份 24h TTL（lib/records.ts），无点时整块隐藏
+  const { curves: userCurves, walls: userRecordWalls } = await getUserRecordCurves(userId);
+  // 名次（已有 per-user 600s 缓存 user-ranks-v3，不并入打包）
+  const ranks = await getUserRanks(userId);
+
+  // 「纪录」板块数据组装（2026-11-06）：12 条曲线 → 3 指标板块 × 4 级别点集。
+  // 点的创造者恒为本人（n/en/s 取 detail）；军衔 hover 必须是「传那盘录像时」的
+  // 军衔（2026-11-06 张老师指正）——每点用曲线数据层带回的 video 行内上传时刻
+  // 快照（et/rk）dualTitles 批量换算，绝不能用当前 user_scores 快照（那会让
+  // 整条曲线 hover 全显示最新军衔，就显示不出进步过程了）；全部无点时整块隐藏
+  // 六维全 0 也恒显示（22:30 张老师定「全零还是显示吧」）：全 0 六轴全 F 贴心不隐藏
+  const recordPts = userCurves.flatMap((c) => c.points);
+  const recordPairs = await dualTitles(
+    recordPts.map((p) => ({ userId, expTime: p.et, ranked: p.rk === 1, sex: user.sex }))
+  );
+  const recordPairByPoint = new Map(recordPts.map((p, i) => [p, recordPairs[i]]));
+  const recordSections: MetricSectionData[] = (["time", "3bvs", "stnb"] as const).map((metric) => ({
+    metric,
+    metricName: RECORD_METRIC_NAMES[metric],
+    levels: (["total", "beg", "int", "exp"] as const).map((lv) => ({
+      level: lv,
+      levelName: RECORD_LEVEL_NAMES[lv],
+      points: (userCurves.find((c) => c.metric === metric && c.level === lv)?.points ?? []).map((p) => ({
+        v: p.vid,
+        u: userId,
+        n: user.chineseName,
+        en: user.englishName,
+        s: user.sex,
+        x: p.ct,
+        y: p.val,
+        t: recordPairByPoint.get(p) ?? { m: "", c: null },
+      })),
+    })),
+  }));
+  const hasRecordCurves = recordSections.some((s) => s.levels.some((l) => l.points.length > 0));
+
+  // 是不是「我自己的主页」——决定头像能不能点（2026-09-24 张老师需求：
+  // 点击直接弹上传窗口 + 方形裁剪预览 + 待审气泡）
+  // （isSelf 判定已提前到 Promise.all 之前，2026-10-23 屏蔽盘放行需要）
+
+  // 只有自己的主页才需要查「有没有头像在审」（头像下方的「审核中」气泡），
+  // 别人的主页不多跑这一趟查询
+  const latestAvatarReview = isSelf
+    ? await prisma.avatarReview.findFirst({
+        where: { user: BigInt(userId) },
+        orderBy: { id: "desc" },
+        select: { status: true },
+      })
+    : null;
+  const avatarPending = latestAvatarReview?.status === AVATAR_REVIEW_STATUS.PENDING;
+
+  // 关注系统（2026-11-18）：头像 hover 关注按钮初始态 + 主页统计行粉丝/关注数。
+  // 每请求直查（计数走索引 count，量级 <1ms×2；已关注判定唯一索引点查）
+  const [fc, viewerFollowing] = await Promise.all([
+    followCounts(userId),
+    session && !isSelf ? isFollowing(session.uid, userId) : Promise.resolve(false),
+  ]);
+
+  // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
+  // 2026-10-22「标识」行（user_sig 录像标识文字）也算可展示内容——
+  // 有标识但没填资料的老用户，个人资料版块同样显示
+  // 2026-11-03 生日也算（填了生日就显示「年龄」「星座」两个独立行）
+  // 2026-11-04 显示年龄与星座开关：账户设置关闭后视为未填，
+  //   两个独立行与「版块是否显示」判定一并隐藏（账户设置页/后台玩家详情不受影响）
+  // 2026-11-10 张老师：开关分拆为年龄（ageHidden）/星座（constellationHidden）两个独立开关
+  const age = user.ageHidden ? null : ageOf(info?.birthday);
+  const constellation = user.constellationHidden ? null : constellationText(info?.birthday);
+  const hasProfileFields =
+    (!!info && PROFILE_FIELDS.some(([key]) => !!info[key as keyof typeof info])) ||
+    age !== null ||
+    constellation !== null;
+
+  // 标识列表 sigs 由打包缓存带出（lib/userpage.ts，原 prisma.userSig.findMany 已迁入）
+  const showProfile = hasProfileFields || sigs.length > 0;
+
+  // 照片优先级：新版上传头像（/uploads/avatar/…）→ OAuth 头像外链（http 开头）
+  // → 老用户本地照片墙（头像实体为 /images/player/{id}.jpg，以文件存在为准）→ 默认头像
+  // （2026-11-11 张老师定：默认图与玩家卡片/每日一星统一并轨 no.jpg；
+  //   军衔制下按性别给军装默认头像，旧版称号观看者仍 no.jpg）
+  const hasWallPhoto = existsSync(path.join(process.cwd(), "public", "images", "player", `${userId}.jpg`));
+  const photo = resolveAvatarUrl(
+    user.avatar,
+    hasWallPhoto ? `/images/player/${userId}.jpg` : DEFAULT_AVATAR,
+  );
+  const photoImg =
+    photo === DEFAULT_AVATAR ? (
+      <DefaultAvatar sex={user.sex} size="big" className="avatar" alt={user.chineseName} />
+    ) : (
+      <img className="avatar" src={photo} alt={user.chineseName} />
+    );
+
+  // 「实力」标题问号：与每日一星同图标同气泡；主栏/侧栏两处响应式副本共用。
+  const ratingHelpLink = (
+    <Link
+      className="star_help"
+      href="/page/rating"
+      target="_blank"
+      prefetch={false}
+      data-tip="点击查看评级标准"
+      aria-label="点击查看评级标准"
+    >
+      <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.4" />
+        <path d="M7.6 8a2.5 2.5 0 1 1 3.4 2.33c-.7.28-1 .77-1 1.47v.3" strokeLinecap="round" />
+        <circle cx="10" cy="14.6" r="0.9" fill="currentColor" stroke="none" />
+      </svg>
+    </Link>
+  );
+
+  return (
+    <div id="page" className="two_columns">
+    {/* 人气异步上报（2026-11-09）：见组件注释——渲染期计数已剥离，服务端闸门不变 */}
+    <ClickTracker userId={userId} source="home" />
+    <ul id="user_view">
+      <li className="main">
+        <div className="info box">
+          {/* 自己的主页：头像可点，点击直接弹文件选择 + 方形裁剪浮窗（不跳账号中心）。
+              别人的主页保持原样（裸 <img>，无链接无蒙层），不改动既有 DOM 与样式。 */}
+          {isSelf ? (
+            <SelfAvatar
+              src={photo}
+              alt={user.chineseName}
+              pending={avatarPending}
+              // ⚠️ 只在解析后确实落到默认图时才传 defaultSex（2026-11-11 修复：
+              //   此前无条件传 sex，军衔制下 SelfAvatar 会拿军装默认头像顶掉
+              //   真实上传头像——自己看自己主页头像「消失」，人神体系正常）。
+              //   与 account/profile 的 isDefaultAvatar 门控同语义。
+              defaultSex={photo === DEFAULT_AVATAR ? user.sex : undefined}
+            />
+          ) : (
+            <span className="fol_wrap">
+              {photoImg}
+              {/* 关注按钮（2026-11-18）：hover 头像浮现正下边缘；自己看自己不渲染 */}
+              <AvatarFollowBtn uid={userId} sex={user.sex} loggedIn={!!session} following={viewerFollowing} />
+            </span>
+          )}
+          <h1>{user.chineseName}</h1>
+          <h2>({user.englishName})</h2>
+          <span className={`gender big ${user.sex ? "male" : "female"}`}></span>
+          {/* 2026-10-13 张老师定稿：原「发消息」灰色大按钮改为性别图标右侧的对话气泡小按钮，
+              点击弹带遮罩的发信浮窗（输入框同录像评论），成功后屏中弹「发送成功」气泡 */}
+          {/* 十二轮（2026-10-25）：按钮常驻——未登录/看自己灰置 + hover 提示 */}
+          <SendMessageButton to={userId} name={user.chineseName} authorId={session?.uid ?? 0} sex={user.sex} />
+          <div className="info_body">
+            <table className="scores" cellPadding={0} cellSpacing={0}>
+              <tbody>
+                {LEVELS.map((level: Level) => {
+                  const timeRec = scores[`${level}_time`];
+                  const bvsRec = scores[`${level}_3bvs`];
+                  return (
+                    <tr key={level}>
+                      <th>{LEVEL_NAMES[level]}</th>
+                      <td>
+                        <ScoreTime
+                          score={timeRec?.score ?? null}
+                          videoId={timeRec?.videoId ?? null}
+                          date={timeRec?.date ?? null}
+                          className={level}
+                        />
+                      </td>
+                      <td>
+                        <Score3bvs
+                          score={bvsRec?.score ?? null}
+                          videoId={bvsRec?.videoId ?? null}
+                          date={bvsRec?.date ?? null}
+                          className={level}
+                          allowZero={level === "beg"}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* 军衔大徽章区（绝对定位 .info 右上角）。⚠️ 必须是 .info 直接子元素、
+              不能放进 .info_body：info_body 带 container-type: inline-size（11-04
+              容器查询锚点），老 Blink（OPPO 自带浏览器等 Chromium 105~127）会把
+              containment 当 abs 包含块 → 徽章相对 info_body 定位，整个砸在成绩表
+              上（2026-11-07 张老师报手机端称号版式乱根因）；新 Blink/WebKit 无此
+              行为。挪出后包含块恒为 .info(position:relative)，全引擎一致。 */}
+          <div className="rank_label">
+            {/* Phase 5 双体系：跟随观看者切换（旧体系=大号彩字无徽章） */}
+            <RankLabel
+              militaryTitle={detail.title}
+              militaryColor={TITLE_COLORS[detail.title]}
+              classic={detail.classicTitle}
+            />
+            {/* 封禁用户（2026-10-16 张老师要求）：不参与排行，原排名位置显示红色
+                「此用户已被封禁」；军衔徽章照常认定保留（上方 RankLabel 不受影响）；
+                海外玩家（外国人）：显示「海外第 X 名」（组内名次，2026-10-15 张老师要求，
+                口径与地区榜海外条目同构），不显示全国名次；无成绩保留灰「海外玩家」；
+                省份排名在上、全国排名在下（数字一般更小，09-24 张老师要求）。
+                2026-11-10 张老师要求：未入排行者（无成绩 getUserRanks=null）也渲染
+                两行灰占位「未加入地区排行 / 未加入全国排行」（与侧栏卡片同口径）；
+                海外识别兜底 user.area（无成绩外国人 getUserRanks 返 null，同卡片逻辑） */}
+            {user.status !== 0 ? (
+              <div className="ranks">
+                <span className="rank_line ranks_banned">此用户已被封禁</span>
+              </div>
+            ) : (ranks?.area ?? user.area) === AREA_OVERSEAS ? (
+              <div className="ranks">
+                {ranks?.areaPos != null ? (
+                  <span className="rank_line">
+                    海外第 <em>{ranks.areaPos}</em> 名
+                  </span>
+                ) : (
+                  <span className="rank_line ranks_overseas">海外玩家</span>
+                )}
+              </div>
+            ) : (
+              <div className="ranks">
+                {ranks?.areaPos != null ? (
+                  <span className="rank_line">
+                    {areaDisplay(ranks.area)}第 <em>{ranks.areaPos}</em> 名
+                  </span>
+                ) : (
+                  <span className="rank_line ranks_null">未加入地区排行</span>
+                )}
+                {ranks ? (
+                  <span className="rank_line">
+                    全国第 <em>{ranks.national}</em> 名
+                  </span>
+                ) : (
+                  <span className="rank_line ranks_null">未加入全国排行</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        {/* 2026-10-13 张老师要求：窄屏（≤880 单列化）时「实力」「活跃」雷达移到玩家面板下、
+            动态上——主栏这两份副本桌面端 display:none，≤880 显示并隐藏侧栏原件
+            （globals.css .radar_main 规则）。
+            2026-11-10 张老师要求：两图并排一行（实力左、活跃右），.radar_pair 包裹转 flex；
+            桌面两子盒都隐藏，包裹层不渲染任何东西。 */}
+        <div className="radar_pair">
+          {detail.stat &&
+            detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
+              <div className="radar box radar_main">
+                {/* VS 入口（2026-11-10 张老师要求）：实力板块右上角，桌面/移动双副本同款 */}
+                <VsButton to={userId} viewerId={session?.uid ?? 0} sex={user.sex} />
+                <h2>实力{ratingHelpLink}</h2>
+                <RadarChart data={radar} />
+              </div>
+            )}
+          {/* 「活跃」雷达（2026-11-10 张老师需求）：实力板块右侧并排；六维=活跃排行六个
+              数据列（初中高盘数/观看/评论/登录，近 7 日快照），按列名次 23 档评级，无活跃值恒 F。
+              与「实力」同款双副本机制：本份主栏副本桌面 display:none（globals.css .radar_main
+              规则对 #user_view 通用），≤880 单列化时在玩家面板下方亮起、侧栏原件隐藏；
+              六维全 0 也恒显示（22:30 张老师定） */}
+          <div className="radar box radar_main">
+            <h2>活跃</h2>
+            <RadarChart data={activeRadar} accent="#a6e22e" />
+          </div>
+        </div>
+        {/* 「纪录」板块（2026-11-06 张老师需求，11-37 二改：放动态板块上面）——个人纪录进步历程，
+            级别筛选靠 title（默认总计）+ 指标筛选靠右（默认 Time），图表复刻
+            /records 页 ChartCard；无任何个人纪录点时整块隐藏 */}
+        {hasRecordCurves && (
+          <UserRecordsSection sections={recordSections} walls={userRecordWalls} ranges={bbvRanges} />
+        )}
+        {news.length > 0 && (
+          <div id="news" className="box">
+            {/* 2026-09-27 张老师要求：动态/录像/纪事板块标题与其他页面同款 26px 大字，
+                走首页「录像」同款 .gray 灰色次级样式（页面唯一黄 h1 是用户名）。
+                此前 09-24 二轮的「h2 20px 灰不变大」已被本要求取代 */}
+            <NewsFeed
+              title={<h1 className="gray">动态</h1>}
+              initial={feed}
+              userId={userId}
+              pageSize={USER_NEWS_NUMBER}
+              initialHasMore={news.length === USER_NEWS_NUMBER}
+              initialTotal={newsTotal}
+            />
+          </div>
+        )}
+        {/* 2026-09-26 张老师要求：纪事上方新增「录像」版块（本人录像，「加载更多」走列表模式翻页）。
+            2026-09-27 二轮：加 全部/初级/中级/高级 级别筛选；标题与筛选器居中对齐（与动态版块同款编排）。
+            2026-10-16 张老师要求：切级别/点表头排序就地生效不导航不跳顶（客户端壳，URL 仍即状态）。
+            2026-10-20 张老师要求：右上角「上传录像」按钮换成搜索框（成绩/3BV/ID 查询）
+            + NF 筛选开关；key=time-bv-nf——搜索软导航改变三项时强制重挂载换服务端数据
+            （就地切级别/排序/NF 不动这三项，key 稳定不重挂载，与 VideoListSection 同法） */}
+        <UserVideoSection
+          key={`${time ?? ""}-${bv ?? ""}-${nf ? "1" : ""}`}
+          userId={userId}
+          initial={userVideos.videos}
+          total={userVideos.total}
+          pageSize={userVideos.pageSize}
+          level={level}
+          order={order}
+          dir={dir}
+          explicit={videoSortExplicit}
+          time={time}
+          bv={bv}
+          nf={nf}
+          self={isSelf}
+        />
+        <HistoryBox userId={userId} items={history} editable={session?.uid === userId} />
+      </li>
+      <li className="sidebar">
+        {/* 2026-09-24 张老师要求：没有上传过录像的玩家不显示「实力」雷达板块。
+            VS 入口（2026-11-10 张老师要求）：实力板块右上角，与主栏副本同款 */}
+        {detail.stat &&
+          detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
+            <div className="radar box">
+              <VsButton to={userId} viewerId={session?.uid ?? 0} sex={user.sex} />
+              <h2>实力{ratingHelpLink}</h2>
+              <RadarChart data={radar} />
+            </div>
+          )}
+        {/* 「活跃」雷达侧栏原件（2026-11-10）：全 0 也恒显示（22:30 张老师定）；≤880 由 .radar_main 副本接管 */}
+        <div className="radar box">
+            <h2>活跃</h2>
+            <RadarChart data={activeRadar} accent="#a6e22e" />
+          </div>
+        {/* 2026-10-13 张老师方案：侧栏「3BV 收集」版块（设计稿 v3 已确认），
+            位置在实力雷达之下、个人资料之上；显示条件与雷达一致（有上传过录像才显示） */}
+        {detail.stat &&
+          detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos > 0 && (
+            <BbvCollection
+              userId={userId}
+              ranges={bbvRanges}
+              collected={bbvCollection}
+              initialMode={bbvMode}
+            />
+          )}
+        {showProfile && (
+          <div className="profile box">
+          <h2>个人资料</h2>
+          <span className="id">
+            ID.<em>{user.id}</em>
+          </span>
+          <hr />
+          <table className="form">
+            <tbody>
+              {/* 昵称没填但填了生日：年龄/星座两行顶到最前（2026-11-03 张老师：星座独立成行） */}
+              {!info?.nickname && age !== null && (
+                <tr>
+                  <th>年龄</th>
+                  <td>{age}</td>
+                </tr>
+              )}
+              {!info?.nickname && constellation && (
+                <tr>
+                  <th>星座</th>
+                  <td>{constellation}</td>
+                </tr>
+              )}
+              {PROFILE_FIELDS.map(([key, label]) => {
+                const value = info?.[key as keyof NonNullable<typeof info>];
+                if (!value) return null;
+                return (
+                  <Fragment key={key}>
+                    <tr>
+                      <th>{label}</th>
+                      <td>{value}</td>
+                    </tr>
+                    {/* 年龄 / 星座（2026-11-03 张老师二改）：昵称行下各占独立一行 */}
+                    {key === "nickname" && age !== null && (
+                      <tr>
+                        <th>年龄</th>
+                        <td>{age}</td>
+                      </tr>
+                    )}
+                    {key === "nickname" && constellation && (
+                      <tr>
+                        <th>星座</th>
+                        <td>{constellation}</td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+              {/* 标识（user_sig 录像标识文字，2026-10-22 张老师要求）：
+                  小字号 12px 尽量不换行；超过 3 条「…」按钮就地展开 */}
+              {sigs.length > 0 && (
+                <tr>
+                  <th>标识</th>
+                  <td>
+                    <UserSigs items={sigs} />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          </div>
+        )}
+        {detail.stat && (
+          <div className="box stats_box">
+            <h2>数据统计</h2>
+            {/* 2026-10-13 张老师要求：与首页/录像页「数据统计」统一——数字亮灰加粗右对齐，
+                今日新增独立成列（绿色括号，左对齐），无新增不显示。
+                2026-11-02 张老师反馈：补 cellPadding/cellSpacing=0（全站其他表都有，
+                独漏本表——浏览器默认 border-spacing 2px 让 hover 行背景被列间细线隔断） */}
+            <table className="table full" cellPadding={0} cellSpacing={0}>
+              <tbody>
+                <StatRow label="累计人气" today={clicks.today}>
+                  <em>{clicks.total}</em>
+                </StatRow>
+
+                {/* 粉丝数量 / 关注数量（2026-11-18 需求 4；00:52 张老师定挪到累计人气下面）：
+                    点击进对应列表，按关注时间倒序。仅对方公开列表时给链接（隐私开关
+                    follow_list_hidden / follower_list_hidden）；本人看自己恒可点
+                    （自己看自己的隐藏列表无意义） */}
+                <StatRow label="粉丝数量" today={fc.followersToday}>
+                  {isSelf || !detail.user.followerListHidden ? (
+                    <Link href={`/user/${userId}/followers`} target="_blank" prefetch={false}>
+                      <em>{fc.followers}</em>
+                    </Link>
+                  ) : (
+                    <em>{fc.followers}</em>
+                  )}
+                </StatRow>
+                <StatRow label="关注数量" today={fc.followingToday}>
+                  {isSelf || !detail.user.followListHidden ? (
+                    <Link href={`/user/${userId}/following`} target="_blank" prefetch={false}>
+                      <em>{fc.following}</em>
+                    </Link>
+                  ) : (
+                    <em>{fc.following}</em>
+                  )}
+                </StatRow>
+                <StatRow label="初级录像" today={todayVideos.beg}>
+                  <Link href={`/video?author=${userId}&level=beg`} target="_blank" prefetch={false}>
+                    <em>{detail.stat.begVideos}</em>
+                  </Link>
+                </StatRow>
+                <StatRow label="中级录像" today={todayVideos.int}>
+                  <Link href={`/video?author=${userId}&level=int`} target="_blank" prefetch={false}>
+                    <em>{detail.stat.intVideos}</em>
+                  </Link>
+                </StatRow>
+                <StatRow label="高级录像" today={todayVideos.exp}>
+                  <Link href={`/video?author=${userId}&level=exp`} target="_blank" prefetch={false}>
+                    <em>{detail.stat.expVideos}</em>
+                  </Link>
+                </StatRow>
+                <StatRow label="录像总数" today={todayVideos.total}>
+                  <Link href={`/video?author=${userId}`} target="_blank" prefetch={false}>
+                    <em>{detail.stat.begVideos + detail.stat.intVideos + detail.stat.expVideos}</em>
+                  </Link>
+                </StatRow>
+                {/* 2026-11-02 张老师要求：录像总数下新增「练习盘数」，括号内今日练习；
+                    2026-11-06 改按完成口径（尝试可以刷，完成需要付出努力）；
+                    数据源 practice_daily 落盘（/online 每局上报，含排行局），不加链接 */}
+                <StatRow label="练习盘数" today={practiceWins.today}>
+                  <em>{practiceWins.total}</em>
+                </StatRow>
+                {/* 2026-10-13 张老师要求：新增发表文章（论坛主题）/ 发表评论两行，
+                    口径与首页「数据统计」的论坛主题/录像评论一致（2026-10-22 首页行名更新） */}
+                <StatRow label="发表文章" today={activity.postsToday}>
+                  <em>{activity.posts}</em>
+                </StatRow>
+                <StatRow label="发表评论" today={activity.commentsToday}>
+                  <em>{activity.comments}</em>
+                </StatRow>
+                {/* 2026-11-08 张老师要求：发表评论下新增「活跃指数」——近 7 日活跃值合计
+                    （练习 3BV 计点＋录像级别加权＋评论×1＋登录点；发表文章不计——避免灌水），
+                    hover 显示构成明细；读每分钟重算的活跃快照（user_activity_snapshot）。
+                    2026-11-10 登录点并入：每日访问雷网记 1 点（user_daily_visit 打卡）。
+                    2026-11-11 张老师定：加今日增量（绿括号与其他行统一），数据源与首页/
+                    练习页统一走 getRankedToday（打包内 todayAct，loginFromTable 口径） */}
+                <StatRow label="活跃指数" today={todayAct}>
+                  <em
+                    className="green"
+                    title={`近7日：练习 ${actIndex.practice} ＋ 录像 ${actIndex.videos} ＋ 评论 ${actIndex.comments}×1 ＋ 登录 ${actIndex.login}×1 ＋ 观看 ${actIndex.watch}×1`}
+                  >
+                    {actIndex.total}
+                  </em>
+                </StatRow>
+                {/* 2026-11-02 张老师要求：发表评论下新增「赞助金额」（金色）；
+                    没赞助过不显示；ID 1 显示 max(−结余, 0)（查询见上方 donateCents） */}
+                {donateCents > 0 && (
+                  <StatRow label="赞助金额">
+                    {/* 点击跳赞助页 /page/donate（2026-11-02 张老师要求）；
+                        同盒录像数行同款新标签 + prefetch=false（_blank 必关预取铁律） */}
+                    <Link href="/page/donate" target="_blank" prefetch={false}>
+                      {/* 金色例外类 donate_amt（globals.css，压过统计盒数字亮灰规则） */}
+                      <em className="donate_amt">{donateYuanPlain(donateCents)}</em>
+                    </Link>
+                  </StatRow>
+                )}
+                {/* 2026-10-28 张老师要求：末尾补 注册时间 / 最近登录（yyyy-mm-dd）；
+                    lastLoginTime=0（从未登录过）显示 — */}
+                <StatRow label="注册时间">
+                  <em>{formatDate(user.createTime, "Y-m-d")}</em>
+                </StatRow>
+                <StatRow label="最近登录">
+                  <em>{user.lastLoginTime > 0 ? formatDate(user.lastLoginTime, "Y-m-d") : "—"}</em>
+                </StatRow>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </li>
+    </ul>
+    </div>
+  );
+}

@@ -1,0 +1,431 @@
+// 录像列表页「加载更多 + 页码滑条」交互（2026-09-24 张老师要求：/video 老式翻页改加载更多；
+// 2026-10-14 加滑条翻页 + 递增批量，同 RankingFeed 语义，设计稿 design/page-slider-v1.html v1.4）：
+// 页码语义（与 getVideoList 一致：level/order/author/time 全筛选组合），复用 VideoRows 行渲染；
+// 底部两行（上=PageSlider 滑条，下=按钮+总数），滑条换页严格一页、缓存回跳零请求、
+// 松手立即加载（在途请求序号作废）；加载更多按整页批量 +20→+40→+80→+100 封顶。
+// 筛选切换仍走链接整页刷新（URL 即状态，保留分享语义）。
+// 2026-10-15：query 增 time（时间成绩搜索）；headSort 有值时表头渲染排序链接（仅 /video 列表页）。
+// 2026-10-16（张老师要求）：新增 client 模式（用户主页录像版块）——切级别、点表头排序
+// 就地拉 /api/video/more 第 1 页整表替换，不导航不跳顶（与首页切换筛选同体验）；
+// URL 用 history.replaceState 同步（不产生历史记录、不触发 RSC、不计主页人气），
+// head 渲染位随内部筛选状态实时重渲染（tabs 高亮/链接实时更新）。
+// 2026-10-16 晚：/video 列表页也切换 client 模式（张老师拍板「切换」）——级别 tabs 收进
+// 客户端壳 VideoListSection（页头+搜索框一起就地重渲染）；搜索框（author/time 筛选）
+// 仍走软导航，由 key=author-time 强制重挂载换入服务端新数据（client 内部状态随之归位）。
+// 2026-10-20（张老师需求）：NF 筛选开关（默认关，开启只显示 NF 录像）——curNf 就地
+// 切换（同级别/排序通道重拉第 1 页），URL 同步 nf=1（默认关不带参）。三处入口：
+// /video 列表页页头、用户主页录像版块、首页录像区（首页走 VideoFeed 自己的通道）。
+
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { flushSync } from "react-dom";
+import type { VideoListItem } from "@/lib/queries";
+import { VIDEO_LIST_DEFAULT_DIR, type VideoListOrder, type VideoListDir } from "@/lib/config";
+import { VideoHead, VideoRowLine, type VideoHighlight } from "./VideoRows";
+import { PageSlider, nextBatchSize, PageCache } from "./PageSlider";
+import { captureViewportAnchor, restoreViewportAnchor } from "./useNoJump";
+
+/** client 模式 head 渲染位上下文：当前筛选状态 + 就地切换动作 */
+export interface VideoListHeadCtx {
+  level: string;
+  order: VideoListOrder;
+  /** 排序方向（2026-10-23 升降序切换） */
+  dir: VideoListDir;
+  /** NF 筛选开关（2026-10-20）：开启=只显示 NF 录像 */
+  nf: boolean;
+  setLevel: (lv: string) => void;
+  setOrder: (o: VideoListOrder, dir: VideoListDir) => void;
+  setNf: (on: boolean) => void;
+}
+
+export function VideoListFeed({
+  initial,
+  total,
+  pageSize,
+  query,
+  headSort,
+  client = false,
+  head,
+  noSort3bv,
+  hideIoe,
+}: {
+  initial: VideoListItem[];
+  /** 当前筛选条件下的录像总数 */
+  total: number;
+  pageSize: number;
+  /** 筛选参数（level/order/dir/author/time/3bv/nf；client 模式下仅作初始值）。
+   *  explicit：URL 是否显式带 order/dir（显式态「上传时间」列也高亮出箭头；
+   *  页面层从 searchParams 判定后传入——order 归一后恒有值，此处不能自行推断） */
+  query: {
+    level: string;
+    order: string;
+    dir?: string;
+    explicit?: boolean;
+    author?: number;
+    time?: string;
+    bv?: string;
+    nf?: boolean;
+    /** 屏蔽盘放行（2026-10-23）：本人主页传 true——翻页/就地重拉带 banned=1，
+     *  服务端铁闸校验请求者 == author 才生效 */
+    includeBanned?: boolean;
+  };
+  /** 表头排序（/video：Link 导航；client 模式：href 仅作中键/新标签兜底，左键就地排序）。
+   *  authorInLinks：client 模式兜底链接是否携带 author（/video 的 author 是真实筛选必须带；
+   *  用户主页 author 隐含在路径 /user/{id}，默认剥掉） */
+  headSort?: { base: string; order: VideoListOrder; authorInLinks?: boolean };
+  /** 客户端筛选/排序模式（2026-10-16 用户主页）：切级别与表头排序就地生效不导航 */
+  client?: boolean;
+  /** head 渲染位（client 模式）：渲染在表格上方，随内部筛选状态实时重渲染 */
+  head?: (ctx: VideoListHeadCtx) => ReactNode;
+  /** 3BV 列禁排序（2026-10-20 定向视图：整列同值排序无意义），透传 VideoHead.noSort3bv */
+  noSort3bv?: boolean;
+  /** 去掉 IOE 列（2026-10-28 张老师需求：用户主页录像版块；/video 列表页保持全列），
+   *  透传 VideoHead/VideoRowLine.hideIoe，空态 colSpan 随列数联动 */
+  hideIoe?: boolean;
+}) {
+  const [items, setItems] = useState(initial);
+  const [hasMore, setHasMore] = useState(initial.length < total);
+  const [loading, setLoading] = useState(false);
+  const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，2026-10-14）
+
+  // ---- 客户端筛选状态（client 模式可就地切换；非 client 恒等于服务端 query）----
+  const [curLevel, setCurLevel] = useState(query.level);
+  // 排序显式态（2026-10-23 升降序切换）：URL 显式带 order（含 id 或 dir）才算显式——
+  // 显式态下「上传时间」列也高亮出箭头；默认进页（无参数）id 列纯文本（张老师 2026-10-15 口径）
+  const [curOrder, setCurOrder] = useState<VideoListOrder>(
+    (query.order as VideoListOrder) || "id"
+  );
+  const [curDir, setCurDir] = useState<VideoListDir>(
+    query.dir === "asc" || query.dir === "desc"
+      ? query.dir
+      : VIDEO_LIST_DEFAULT_DIR[(query.order as VideoListOrder) || "id"]
+  );
+  const [curExplicit, setCurExplicit] = useState(
+    query.explicit ?? false
+  );
+  // NF 筛选（2026-10-20）：默认关；开启只显示 NF 录像（与级别/排序同通道就地重拉）
+  const [curNf, setCurNf] = useState(!!query.nf);
+  // 条件总数：client 模式切级别后随接口返回更新（total prop 只代表服务端初始条件）
+  const [curTotal, setCurTotal] = useState(total);
+  // 排序命中列高亮：显式态含 id（上传时间列金色），默认态 id 不高亮（2026-10-15 扩展；
+  // 2026-10-23 id 列纳入升降序切换体系）
+  const highlight: VideoHighlight | undefined = curExplicit || curOrder !== "id" ? curOrder : undefined;
+
+  // ---- 滑条窗口状态（2026-10-14）----
+  const tableRef = useRef<HTMLTableElement>(null);
+  // 窗口起点必须显式跟踪（2026-10-16 修复「跳远页后拖不回第 1 页」）：滑条跳远页后
+  // items 整表替换成第 p 页，若仍按「winStart=1、winEnd=items.length/pageSize」推窗口，
+  // 拖回第 1 页会被误判为「窗口内滚动」只滚不换，表格停在远页数据。
+  const [winStart, setWinStart] = useState(1);
+  const winEnd = Math.max(winStart, Math.ceil(items.length / pageSize)); // 已加载窗口末页
+  const [curPage, setCurPage] = useState(1);
+  const pageCache = useRef(new PageCache<VideoListItem[]>());
+  const reqSeq = useRef(0);
+  const maxPage = Math.max(1, Math.ceil(curTotal / pageSize));
+
+  useEffect(() => {
+    // 初始页（可能不满一页）入缓存
+    pageCache.current.set(1, initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function moreUrl(page: number, size?: number) {
+    const qs = new URLSearchParams({ level: curLevel, order: curOrder, page: String(page) });
+    // 方向参数（2026-10-23）：非该列默认方向才带（默认方向省参，与 URL 即状态口径一致）
+    if (curDir !== VIDEO_LIST_DEFAULT_DIR[curOrder]) qs.set("dir", curDir);
+    if (query.author) qs.set("author", String(query.author));
+    if (query.time) qs.set("time", query.time);
+    if (query.bv) qs.set("3bv", query.bv);
+    if (curNf) qs.set("nf", "1");
+    if (query.includeBanned) qs.set("banned", "1");
+    // 每页条数：递增批量（首击=一页 base），默认与初始页一致（列表页 20 / 用户主页 20）
+    qs.set("size", String(size ?? pageSize));
+    return `/api/video/more?${qs}`;
+  }
+
+  /** URL 即状态（client 模式）：replaceState 同步 level/order/dir（默认值删参）。
+   *  必须把当前 history.state 原样传回（它带 __NA/_N 内部标记）：Next 16 的 app-router
+   *  patch 了 window.history.replaceState——外部调用若不带内部标记会 dispatch ACTION_RESTORE
+   *  并异步把视口滚到该 URL 的缓存滚动位（实测表现为「切筛选/排序后页面跳顶」）；
+   *  带标记则直接透传原生 replaceState，Router 零介入、零滚动（2026-10-16 实证） */
+  function syncUrl(next: {
+    level?: string;
+    order?: VideoListOrder;
+    dir?: VideoListDir;
+    explicit?: boolean;
+    nf?: boolean;
+  }) {
+    const url = new URL(window.location.href);
+    if (next.level !== undefined) url.searchParams.set("level", next.level);
+    if (next.order !== undefined) {
+      // 显式 id 态（表头点了「上传时间」）保留 order=id 进 URL；回到默认则删参
+      if (next.order === "id" && next.explicit) url.searchParams.set("order", "id");
+      else if (next.order === "id") url.searchParams.delete("order");
+      else url.searchParams.set("order", next.order);
+    }
+    if (next.dir !== undefined) {
+      // 方向省参口径：列默认方向不带 dir（显式 id 态 order=id&dir=desc 双省参回纯默认）
+      if (next.order !== undefined) {
+        if (next.dir === VIDEO_LIST_DEFAULT_DIR[next.order] && !(next.order === "id" && next.explicit))
+          url.searchParams.delete("dir");
+        else url.searchParams.set("dir", next.dir);
+      } else if (next.dir === VIDEO_LIST_DEFAULT_DIR[curOrder]) url.searchParams.delete("dir");
+      else url.searchParams.set("dir", next.dir);
+    }
+    if (next.nf !== undefined) {
+      if (next.nf) url.searchParams.set("nf", "1");
+      else url.searchParams.delete("nf");
+    }
+    window.history.replaceState(window.history.state, "", url);
+  }
+
+  /** 就地重拉第 1 页（client 模式切级别/切排序共用）：整表替换 + 分页状态归零 +
+   *  视口锚定（captureViewportAnchor 保滚动位置，切换不跳动）。
+   *  opt.nf（2026-10-20 二轮）：NF 开关走乐观更新——点击立即 setCurNf + syncUrl
+   *  （按钮即时变高亮、URL 即时同步），数据回来再整表替换；失败静默回滚开关态。
+   *  （NF 查询在服务端需 join video_info 过滤，冷时几百毫秒，不能让按钮等它） */
+  async function refetchFirstPage(
+    nextLevel: string,
+    nextOrder: VideoListOrder,
+    nextDir: VideoListDir,
+    nextNf: boolean,
+    opt?: { nfOptimistic?: boolean }
+  ) {
+    if (loading) return;
+    const seq = ++reqSeq.current;
+    setLoading(true);
+    if (opt?.nfOptimistic) {
+      setCurNf(nextNf);
+      syncUrl({ nf: nextNf });
+    }
+    try {
+      const qs = new URLSearchParams({
+        level: nextLevel,
+        order: nextOrder,
+        page: "1",
+        size: String(pageSize),
+      });
+      if (nextDir !== VIDEO_LIST_DEFAULT_DIR[nextOrder]) qs.set("dir", nextDir);
+      if (query.author) qs.set("author", String(query.author));
+      if (query.time) qs.set("time", query.time);
+      if (query.bv) qs.set("3bv", query.bv);
+      if (nextNf) qs.set("nf", "1");
+      if (query.includeBanned) qs.set("banned", "1");
+      const res = await fetch(`/api/video/more?${qs}`);
+      if (!res.ok) throw new Error("加载失败");
+      const data = (await res.json()) as { videos: VideoListItem[]; total: number };
+      if (seq !== reqSeq.current) return;
+      pageCache.current = new PageCache<VideoListItem[]>();
+      pageCache.current.set(1, data.videos);
+      const anchor = captureViewportAnchor(tableRef.current);
+      flushSync(() => {
+        setItems(data.videos);
+        setWinStart(1);
+        setCurPage(1);
+        setBatchStep(0);
+        setCurLevel(nextLevel);
+        setCurOrder(nextOrder);
+        setCurDir(nextDir);
+        // 表头点击排序恒为显式态（2026-10-23）：含 id 列（上传时间）也进入箭头体系
+        setCurExplicit(true);
+        setCurNf(nextNf);
+        setCurTotal(data.total);
+        setHasMore(data.videos.length < data.total);
+      });
+      restoreViewportAnchor(tableRef.current, anchor);
+      // 显式 id 态（表头点了「上传时间」）order=id 进 URL；默认方向省 dir
+      syncUrl({ level: nextLevel, order: nextOrder, dir: nextDir, explicit: true, nf: nextNf });
+    } catch {
+      /* 网络异常静默：可重试；NF 乐观更新回滚开关态与 URL（表格数据未变） */
+      if (opt?.nfOptimistic) {
+        setCurNf(!nextNf);
+        syncUrl({ nf: !nextNf });
+      }
+    } finally {
+      if (seq === reqSeq.current) setLoading(false);
+    }
+  }
+
+  const changeLevel = (lv: string) => {
+    if (lv !== curLevel) refetchFirstPage(lv, curOrder, curDir, curNf);
+  };
+  // 表头排序（2026-10-23 升降序切换）：同列反向 / 切列取目标方向（VideoHead 计算好传入）
+  const changeOrder = (o: VideoListOrder, dir: VideoListDir) => {
+    if (o === curOrder && dir === curDir) return;
+    refetchFirstPage(curLevel, o, dir, curNf);
+  };
+  const changeNf = (on: boolean) => {
+    if (on !== curNf) refetchFirstPage(curLevel, curOrder, curDir, on, { nfOptimistic: true });
+  };
+
+  async function loadMore() {
+    if (loading || !hasMore) return;
+    setLoading(true);
+    const seq = ++reqSeq.current;
+    try {
+      // 请求页 ceil 语义（2026-11-12 修复重叠 BUG）：翻页整表替换后窗口可能不满一页
+      //（尾页残页），floor 会把请求页锚回当前页自己——追加重复数据；ceil 满页时
+      // 与 floor 同值（零回归），不满页时正确指向下一页。同 NewsFeed。
+      const page = winStart + Math.ceil(items.length / pageSize);
+      const size = nextBatchSize(batchStep, pageSize);
+      const res = await fetch(moreUrl(page, size));
+      if (!res.ok) throw new Error("加载失败");
+      const data = (await res.json()) as { videos: VideoListItem[]; hasMore: boolean };
+      if (seq !== reqSeq.current) return;
+      if (!data.videos.length) {
+        setHasMore(false);
+        return;
+      }
+      const prevCount = items.length;
+      // 加载即翻页（2026-11-12 张老师定）：点「···」后当前页码 +1 指向新加载的
+      // 首个新页，并滚动定位到新页首行（同 NewsFeed，否则页码停在原页、点 ▶
+      // 只滚不翻页）。
+      flushSync(() => {
+        setItems((prev) => [...prev, ...data.videos]);
+      });
+      const tr = tableRef.current?.tBodies[0]?.children[prevCount] as HTMLElement | undefined;
+      tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+      setCurPage(page);
+      // 新覆盖的整页入缓存
+      const totalNow = prevCount + data.videos.length;
+      for (let pg = Math.floor(prevCount / pageSize); pg < Math.ceil(totalNow / pageSize); pg++) {
+        const from = pg * pageSize;
+        const to = from + pageSize;
+        if (from >= prevCount && to <= totalNow) {
+          pageCache.current.set(winStart + pg, data.videos.slice(from - prevCount, to - prevCount));
+        }
+      }
+      setBatchStep((s) => s + 1);
+      setHasMore(data.hasMore);
+    } catch {
+      /* 网络异常静默：按钮可重试 */
+    } finally {
+      if (seq === reqSeq.current) setLoading(false);
+    }
+  }
+
+  /** 滑条换页（严格一页语义）：窗口内滚动定位 / 缓存零请求 / 拉一页替换 */
+  async function gotoPage(p: number) {
+    if (loading) return;
+    p = Math.min(maxPage, Math.max(1, p));
+    if (p === curPage) return;
+    if (p >= winStart && p <= winEnd) {
+      const first = (p - winStart) * pageSize;
+      if (items[first]) {
+        setCurPage(p);
+        // 滚到该页首行（录像行无 id_ 锚点，用表格行定位）
+        const tr = tableRef.current?.tBodies[0]?.children[first] as HTMLElement | undefined;
+        tr?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "center" });
+        return;
+      }
+    }
+    setCurPage(p);
+    const cached = pageCache.current.get(p);
+    if (cached) {
+      const anchor = captureViewportAnchor(tableRef.current);
+      flushSync(() => {
+        setItems(cached);
+        setWinStart(p);
+      });
+      restoreViewportAnchor(tableRef.current, anchor);
+      setBatchStep(0);
+      // hasMore 页码口径（2026-11-12 修复重叠 BUG，同 NewsFeed）：原 cached.length < curTotal
+      // 把不满尾页误判成「还有更多」，点更多会把尾页追加到自己后面——数据重叠
+      setHasMore(p * pageSize < curTotal);
+      return;
+    }
+    const seq = ++reqSeq.current;
+    setLoading(true);
+    try {
+      const res = await fetch(moreUrl(p));
+      if (!res.ok) throw new Error("加载失败");
+      const data = (await res.json()) as { videos: VideoListItem[]; hasMore: boolean };
+      if (seq !== reqSeq.current) return;
+      if (!data.videos.length) {
+        setHasMore(false);
+        return;
+      }
+      pageCache.current.set(p, data.videos);
+      const anchor = captureViewportAnchor(tableRef.current);
+      flushSync(() => {
+        setItems(data.videos);
+        setWinStart(p);
+      });
+      restoreViewportAnchor(tableRef.current, anchor);
+      setBatchStep(0);
+      // 整表替换后窗口=1 页；还有更多可由滑条或「加载更多」继续（序列已重置为首击=一页）
+      setHasMore(p * pageSize < curTotal);
+    } catch {
+      /* 失败静默，重试可再拖 */
+    } finally {
+      if (seq === reqSeq.current) setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      {head &&
+        head({
+          level: curLevel,
+          order: curOrder,
+          dir: curDir,
+          nf: curNf,
+          setLevel: changeLevel,
+          setOrder: changeOrder,
+          setNf: changeNf,
+        })}
+      <table ref={tableRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table">
+        <VideoHead
+          noSort3bv={noSort3bv}
+          hideIoe={hideIoe}
+          sort={
+            headSort
+              ? {
+                  base: headSort.base,
+                  // client 模式兜底链接：author 按 authorInLinks 决定（用户主页剥掉，/video 保留）
+                  params: client
+                    ? {
+                        level: curLevel,
+                        author: headSort.authorInLinks ? query.author : undefined,
+                        time: query.time,
+                        "3bv": query.bv,
+                        nf: curNf ? "1" : undefined,
+                      }
+                    : { level: curLevel, author: query.author, time: query.time, "3bv": query.bv },
+                  order: curOrder,
+                  dir: curDir,
+                  explicit: curExplicit,
+                }
+              : undefined
+          }
+          onSort={client ? changeOrder : undefined}
+        />
+        <tbody>
+          {items.map((v) => (
+            <VideoRowLine key={v.id} video={v} highlight={highlight} hideIoe={hideIoe} />
+          ))}
+          {items.length === 0 && (
+            <tr>
+              {/* 列数联动（2026-10-29）：+1 软件列——hideIoe 时 8+1=9、全列 10 */}
+              <td colSpan={hideIoe ? 9 : 10} style={{ textAlign: "center" }}>
+                暂无数据
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="list_footer">
+        <PageSlider
+          page={curPage}
+          pages={maxPage}
+          loading={loading}
+          onGoto={gotoPage}
+          hasMore={hasMore}
+          onMore={loadMore}
+        />
+      </div>
+    </>
+  );
+}

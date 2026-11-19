@@ -1,0 +1,75 @@
+// 后台操作日志（2026-09-24）：管理端一切写操作留痕，落 admin_log 表
+
+import { prisma } from "@/lib/db";
+
+export interface AdminLogInput {
+  /** 操作人 user.id */
+  user: number;
+  /** 动作标识，见 OP_LABELS */
+  action: string;
+  /** 目标类型：user / video / comment / bbs_post / bbs_reply / news / message / rank */
+  target?: string;
+  targetId?: number;
+  /** 人类可读描述（日志列表直接展示） */
+  detail?: string;
+  ip?: string;
+}
+
+/** 动作 → 中文名（日志页展示；未登记的动作用原始标识兜底） */
+export const OP_LABELS: Record<string, string> = {
+  "user.ban": "封禁玩家",
+  "user.unban": "解封玩家",
+  "user.setRole": "调整玩家角色",
+  "user.setTrusted": "设置可信用户组",
+  // 低信任组动作标签（2026-10-27 张老师定）：日志页动作列不再裸显英文标识
+  "user.setLowTrust": "设置低信任用户组",
+  "user.clearCheatPenalty": "移出低信任用户组",
+  "user.resetPassword": "重置玩家密码",
+  "user.delete": "删除玩家",
+  "user.merge": "账户合并",
+  "user.editProfile": "修改玩家资料",
+  "video.review": "审核录像",
+  "video.batchReview": "批量审核录像",
+  "video.markWatched": "标记已观看",
+  "video.delete": "删除录像",
+  "comment.setStatus": "处理评论",
+  "comment.selfDelete": "前台删除评论",
+  "bbs.setPost": "调整主题属性",
+  "bbs.editPost": "编辑主题",
+  "bbs.editReply": "编辑回复",
+  "bbs.deletePost": "删除主题",
+  "bbs.deleteReply": "删除回复",
+  "bbs.setReplyStatus": "处理回复",
+  "news.delete": "删除动态",
+  "user.sendSystemMessage": "发送系统消息",
+  "message.broadcast": "群发站内信",
+  "rank.snapshot": "生成排行快照",
+  "avatar.review": "审核玩家头像",
+  "site.setMaintenance": "维护模式开关",
+  "apikey.create": "签发 API key",
+  "apikey.revoke": "吊销 API key",
+  "apikey.restore": "恢复 API key",
+};
+
+export function opLabel(action: string): string {
+  return OP_LABELS[action] ?? action;
+}
+
+/** 写日志（失败不阻断主流程——日志永远不该把正常操作带崩） */
+export async function logAdmin(input: AdminLogInput): Promise<void> {
+  try {
+    await prisma.adminLog.create({
+      data: {
+        user: BigInt(input.user),
+        action: input.action,
+        target: input.target ?? "",
+        targetId: BigInt(input.targetId ?? 0),
+        detail: (input.detail ?? "").slice(0, 500),
+        ip: (input.ip ?? "").slice(0, 39),
+        createTime: BigInt(Math.floor(Date.now() / 1000)),
+      },
+    });
+  } catch {
+    /* 忽略 */
+  }
+}

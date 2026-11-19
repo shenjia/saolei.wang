@@ -1,0 +1,120 @@
+// 管理后台 · 排行与荣誉（2026-09-24）
+// 排行快照（进步榜数据源）、称号阈值体系——主站展示层的「数据地基」。
+// 2026-10-13 张老师要求：每日一星功能整体下线，相关卡片与操作已移除。
+
+import Link from "next/link";
+import { getSession } from "@/lib/auth";
+import { getSnapshotHealth, getTitleThresholds } from "@/lib/admin/stats";
+import { AdminAction } from "@/components/admin/AdminAction";
+import { AdminCard, Kpi } from "@/components/admin/Widgets";
+import { TitleBadge } from "@/components/Cells";
+import { TITLE_COLORS } from "@/lib/config";
+import { formatDate, scoreTime } from "@/lib/format";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "排行与荣誉 | 管理后台" };
+
+export default async function AdminRankPage() {
+  const [snapshot, titles, session] = await Promise.all([
+    getSnapshotHealth(),
+    getTitleThresholds(),
+    getSession(),
+  ]);
+  void session;
+
+  const totalRanked = titles?.rows.reduce((s, r) => s + r.count, 0) ?? 0;
+
+  return (
+    <>
+      <div className="admin_page_head">
+        <h1>排行与荣誉</h1>
+        <span className="sub">榜单地基数据的体检与人工干预</span>
+        <div className="right">
+          <Link className="admin_btn" href="/ranking" target="_blank" prefetch={false}>
+            前台排行榜
+          </Link>
+          <Link className="admin_btn" href="/ranking?view=grow" target="_blank" prefetch={false}>
+            进步榜
+          </Link>
+        </div>
+      </div>
+
+      <div className="admin_kpis">
+        <Kpi
+          label="今日排行快照"
+          value={snapshot.todayDone ? "已生成" : "未生成"}
+          tone={snapshot.todayDone ? "green" : "red"}
+          foot={`最新快照日期 ${snapshot.latest}`}
+        />
+        <Kpi label="快照累计天数" value={snapshot.days} unit="天" tone="cyan" foot="进步榜有效数据天数" />
+        <Kpi label="上榜玩家" value={totalRanked} tone="yellow" foot="有高级成绩（SUB 称号制）" />
+        <Kpi label="最高称号" value={titles?.rows[0]?.count ?? 0} unit="人大元帅" tone="purple" foot="SUB35 绝对阈值制" />
+      </div>
+
+      <AdminCard title="排行快照">
+        <div className="admin_note" style={{ marginBottom: 12 }}>
+          进步榜与排行榜升降列靠预计算的 <code>delta</code>（30 天窗口内最早快照名次 − 今日名次）驱动，
+          数据源是 <code>rank_snapshot</code> 表（每人一行，ranks JSON 滚动 31 天）。
+          快照每天 0:05 定时刷新（cron），页面访问惰性兜底；若发现进步榜整页空白或名次异常，先在这里重算。
+        </div>
+        <div className="admin_ops">
+          <AdminAction
+            op="rank.snapshot"
+            label="立即重算今日快照"
+            variant="primary"
+            sm={false}
+            confirm="重算会覆盖今日已生成的快照（按当前 user_scores 重新计算名次），确认执行？"
+          />
+          <Link className="admin_btn" href="/admin/stats">
+            查看快照健康度明细
+          </Link>
+        </div>
+      </AdminCard>
+
+      <AdminCard title="称号阈值体系" tight more={titles ? `颁布于 ${formatDate(titles.createTime, "Y-n-j")}` : "无分布数据"}>
+        <div className="admin_scroll">
+          <table className="admin_table">
+            <thead>
+              <tr>
+                <th className="c">序</th>
+                <th>称号</th>
+                <th className="num">高级时间上限（秒）</th>
+                <th className="num">当前人数</th>
+                <th className="c">徽章</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(titles?.rows ?? []).map((r, i) => (
+                <tr key={r.title}>
+                  <td className="c sub">{i + 1}</td>
+                  <td style={{ color: TITLE_COLORS[r.title] ?? "#b1b1a4" }}>{r.title}</td>
+                  <td className="num">{r.threshold ? scoreTime(r.threshold) : "无上限"}</td>
+                  <td className="num">{r.count.toLocaleString("zh-CN")}</td>
+                  <td className="c">
+                    <TitleBadge title={r.title} />
+                  </td>
+                </tr>
+              ))}
+              {(!titles || titles.rows.length === 0) && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="admin_empty">distribution 表没有称号阈值数据</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </AdminCard>
+
+      <AdminCard title="说明">
+        <div className="admin_note">
+          · 2026-10-13 起军衔按<strong>高级时间绝对阈值（SUB 制）</strong>评定（SUB35=大元帅…300+=新兵；2026-11-03 士兵段扩五档：上等兵&lt;120s、一等兵&lt;150s、二等兵&lt;200s、列兵&lt;300s），阈值存于代码常量 <code>TITLE_THRESHOLDS</code>，改阈值需发版。<br />
+          · <code>distribution</code> 表不再驱动军衔（评级 grade/percent 阈值仍读它，按总计时间的旧军衔数据保留作历史参考）。<br />
+          · 无高级成绩的玩家统一显示「预备役」。<br />
+          · 每日一星已于 2026-10-13 下线（star 表保留历史数据，不再读写）。
+        </div>
+      </AdminCard>
+    </>
+  );
+}

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>封禁弹窗·勾选框视觉强化稿 20261022</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #2e2f28;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 60px;
+    padding: 40px 20px;
+    flex-wrap: wrap;
+  }
+  .stage-label {
+    position: absolute;
+    top: 8px;
+    left: 14px;
+    font-size: 12px;
+    color: #75715e;
+    letter-spacing: 1px;
+  }
+  .stage {
+    position: relative;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 14px;
+    padding: 44px 18px 18px;
+  }
+
+  /* ===== 弹窗本体（现状配色，与线上 globals.css 一致） ===== */
+  .ban_dialog {
+    box-sizing: border-box;
+    width: 420px;
+    max-width: calc(100vw - 40px);
+    padding: 22px 26px 20px;
+    background: rgba(39, 40, 34, 0.92);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    backdrop-filter: blur(16px) saturate(1.15);
+    border-radius: 14px;
+    box-shadow:
+      inset 0 1px 0 rgba(248, 248, 242, 0.1),
+      inset 0 0 0 1px rgba(248, 248, 242, 0.07),
+      0 32px 64px -16px rgba(0, 0, 0, 0.8),
+      0 2px 8px rgba(0, 0, 0, 00.4);
+  }
+  .ban_dialog h1 {
+    font-size: 16px; font-weight: 600; color: #f8f8f2; margin: 0 0 10px;
+  }
+  .ban_desc {
+    font-size: 13px; color: #939387; line-height: 1.7; margin: 0 0 16px;
+  }
+  .ban_label { font-size: 13px; color: #c2c2b8; margin-bottom: 8px; }
+  .ban_dur { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .ban_dur_opt {
+    font-size: 13px; padding: 5px 12px; border-radius: 6px;
+    border: 1px solid #49483e; background: transparent; color: #939387;
+    cursor: pointer; white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .ban_dur_opt.on {
+    color: #f92672; border-color: #f92672; background: rgba(249, 38, 114, 0.08);
+  }
+  .ban_hint {
+    font-size: 12px; color: #75715e; line-height: 1.6; margin: 0 0 18px 0;
+  }
+  .ban_ops { display: flex; justify-content: flex-end; gap: 10px; }
+  .btn {
+    font-size: 13px; padding: 6px 16px; border-radius: 6px; cursor: pointer;
+    border: 1px solid #49483e; background: transparent; color: #c2c2b8;
+  }
+  .btn.danger {
+    color: #fff; border-color: #f92672; background: #f92672;
+  }
+
+  /* ===== 勾选框区域 ===== */
+  /* 现状（左）：与普通文字混排 */
+  .cur .ban_check {
+    display: flex; gap: 8px; align-items: flex-start;
+    font-size: 13px; color: #c2c2b8; line-height: 1.7;
+    cursor: pointer; margin-bottom: 6px;
+  }
+  .cur .ban_check input { margin-top: 4px; accent-color: #f92672; }
+  .cur .ban_check b { color: #f8f8f2; }
+
+  /* 方案（右）：独立卡片 + 高亮描边 + 加粗提问式文案 */
+  .new .ban_check {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(249, 38, 114, 0.45);
+    background: rgba(249, 38, 114, 0.07);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .new .ban_check:hover { border-color: rgba(249, 38, 114, 0.8); }
+  .new .ban_check input { margin-top: 3px; accent-color: #f92672; width: 15px; height: 15px; }
+  .new .ban_check .q {
+    font-size: 13px; font-weight: 600; color: #f8f8f2; line-height: 1.6;
+  }
+  .new .ban_check .sub {
+    display: block; font-weight: 400; font-size: 12px; color: #939387; margin-top: 2px;
+  }
+  .new .ban_check b { color: #f92672; font-weight: 700; }
+
+  .caption {
+    width: 100%; text-align: center; color: #75715e; font-size: 13px; margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage cur">
+  <span class="stage-label">现状（线上 2026-10-16 版）</span>
+  <div class="ban_dialog">
+    <h1>封禁账号</h1>
+    <p class="ban_desc">玩家「温启华」（#18765）封禁后无法登录、不参与排行，已有成绩保留。</p>
+    <div class="ban_label">封禁时长</div>
+    <div class="ban_dur">
+      <button class="ban_dur_opt">一天</button>
+      <button class="ban_dur_opt">一周</button>
+      <button class="ban_dur_opt">一月</button>
+      <button class="ban_dur_opt">一年</button>
+      <button class="ban_dur_opt on">永久</button>
+    </div>
+    <label class="ban_check">
+      <input type="checkbox">
+      <span>同时封禁该玩家发表的 <b>16</b> 部录像（全站隐藏；解禁时自动恢复，单独屏蔽的不受影响）</span>
+    </label>
+    <p class="ban_hint">选择时限时，到期自动解禁并恢复连坐录像；选「永久」则只能手动解封。</p>
+    <div class="ban_ops">
+      <button class="btn">取消</button>
+      <button class="btn danger">确认封禁</button>
+    </div>
+  </div>
+</div>
+
+<div class="stage new">
+  <span class="stage-label">方案：卡片式勾选 + 提问式文案</span>
+  <div class="ban_dialog">
+    <h1>封禁账号</h1>
+    <p class="ban_desc">玩家「温启华」（#18765）封禁后无法登录、不参与排行，已有成绩保留。</p>
+    <div class="ban_label">封禁时长</div>
+    <div class="ban_dur">
+      <button class="ban_dur_opt">一天</button>
+      <button class="ban_dur_opt">一周</button>
+      <button class="ban_dur_opt">一月</button>
+      <button class="ban_dur_opt">一年</button>
+      <button class="ban_dur_opt on">永久</button>
+    </div>
+    <label class="ban_check">
+      <input type="checkbox">
+      <span>
+        <span class="q">是否一并封禁 TA 的 <b>16</b> 部录像？</span>
+        <span class="sub">勾选后录像全站隐藏，解禁时自动恢复；不勾则录像不受影响。</span>
+      </span>
+    </label>
+    <p class="ban_hint">选择时限时，到期自动解禁并恢复连坐录像；选「永久」则只能手动解封。</p>
+    <div class="ban_ops">
+      <button class="btn">取消</button>
+      <button class="btn danger">确认封禁</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

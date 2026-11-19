@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>用户主页「实力」雷达 · hover 气泡高保真稿（2026-10-14）</title>
+<style>
+  body { background: #272822; margin: 0; padding: 40px; font-family: "微软雅黑", Arial, "宋体"; }
+  .note { color: #75715e; font-size: 13px; line-height: 22px; margin-bottom: 24px; }
+  .note b { color: #b1b1a4; font-weight: normal; }
+  .row { display: flex; gap: 24px; align-items: flex-start; }
+  .cap { color: #939387; font-size: 13px; margin-top: 12px; width: 272px; }
+  .cap em { color: #a6e22e; font-style: normal; }
+
+  /* ===== 侧栏「实力」盒（legacy-2013 同款几何：盒内容 210，雷达 234 出血） ===== */
+  .box {
+    box-sizing: content-box;
+    width: 210px;
+    padding: 16px 30px 26px;
+    background: #33322b;
+    border-radius: 8px;
+  }
+  .box h2 { margin: 0 0 15px; color: #b1b1a4; font-size: 20px; line-height: 30px; text-shadow: 0 2px 2px rgba(0,0,0,.25); }
+  .radar_wrap { position: relative; width: 234px; margin: 0 -12px; }
+  .radar_wrap svg { display: block; width: 100%; height: auto; }
+
+  /* ===== 新增：hover 气泡（视觉与录像分析 vr_tip 完全同款） ===== */
+  .u_tip {
+    position: absolute;
+    z-index: 20;
+    padding: 4px 9px;
+    background: #1e1f1c;
+    border: 1px solid #49483e;
+    border-radius: 3px;
+    color: #b1b1a4;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: nowrap;
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  }
+  .u_tip em { font-style: normal; color: #f8f8f2; font-weight: bold; padding: 0 1px; }
+</style>
+</head>
+<body>
+  <div class="note">
+    用户主页「实力」雷达 hover 气泡 · 高保真稿（2026-10-14）<br>
+    气泡视觉与录像详情页「录像分析」hover 气泡完全同款（#1e1f1c 底 / 圆角 3 / 12px）；文案按张老师要求「超过 xx% 的玩家」。<br>
+    定位锚在<b>标签</b>（等级+维度名两行）上：上半区标签 → 气泡弹在标签下方；下半区标签 → 自动翻到上方（否则出盒）；左右贴边横向钳位。
+  </div>
+  <div class="row" id="row"></div>
+
+<script>
+const SIZE = 222, CENTER = 111, RADIUS = 68, LABEL_RADIUS = 88;
+const GRID_RINGS = [15, 35, 50, 60, 70, 80, 90, 100];
+const GRID_COLOR = "#565549", GRID_OUTER_COLOR = "#6a685c";
+const GRADE_COLORS = { SSS:"#E6DB74", SS:"#E6DB74", S:"#E6DB74", A:"#ff0080", B:"#df00a6", C:"#bf00cc", D:"#a000e5", E:"#8000ff", F:"#6600cc" };
+const UNKNOWN_COLOR = "#636359";
+const gradeColor = g => GRADE_COLORS[g.replace(/[+-]$/, "")] ?? UNKNOWN_COLOR;
+const f = v => Math.round(v * 100) / 100;
+function polar(i, n, r) { const a = Math.PI * 2 * i / n - Math.PI / 2; return [f(CENTER + r * Math.cos(a)), f(CENTER + r * Math.sin(a))]; }
+function polygonPoints(n, r) { return Array.from({ length: n }, (_, i) => polar(i, n, r).join(",")).join(" "); }
+function wedgePath(i, n) {
+  const step = Math.PI * 2 / n;
+  const a0 = Math.PI * 2 * i / n - Math.PI / 2 - step / 2, a1 = a0 + step, r = SIZE;
+  return `M ${CENTER} ${CENTER} L ${f(CENTER + r * Math.cos(a0))} ${f(CENTER + r * Math.sin(a0))} A ${r} ${r} 0 0 1 ${f(CENTER + r * Math.cos(a1))} ${f(CENTER + r * Math.sin(a1))} Z`;
+}
+
+// data: [name, grade, percent, score]
+const SAMPLE = [
+  ["总计时间",   "A+", 82, "55.42"],
+  ["高级时间",   "A",  75, "44.21"],
+  ["中级时间",   "S-", 79, "10.50"],
+  ["初级时间",   "A+", 86, "0.71"],
+  ["总计3BV/s", "S-", 78, "14.432"],
+  ["高级3BV/s", "A",  71, "3.770"],
+  ["中级3BV/s", "S-", 77, "4.397"],
+  ["初级3BV/s", "SS-", 89, "6.265"],
+];
+// 样本三：初级成绩缺失（grade = "?"）
+const SAMPLE_NULL = SAMPLE.map((d, i) => i === 3 ? ["初级时间", "?", 0, "无"] : d);
+
+function radarSVG(data, hoverIdx) {
+  const n = data.length;
+  const pts = data.map((d, i) => polar(i, n, (d[2] / 100) * RADIUS));
+  let s = "";
+  for (const p of GRID_RINGS)
+    s += `<polygon points="${polygonPoints(n, (p / 100) * RADIUS)}" fill="none" stroke="${p === 100 ? GRID_OUTER_COLOR : GRID_COLOR}" stroke-width="${p === 100 ? 1.2 : 0.7}"/>`;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = polar(i, n, RADIUS);
+    s += `<line x1="${CENTER}" y1="${CENTER}" x2="${x}" y2="${y}" stroke="${GRID_COLOR}" stroke-width="0.7"/>`;
+  }
+  s += `<polygon points="${pts.map(p => p.join(",")).join(" ")}" fill="rgba(102,217,239,0.18)" stroke="#66d9ef" stroke-width="1.5" stroke-linejoin="round"/>`;
+  for (let i = 0; i < n; i++) {
+    const active = i === hoverIdx;
+    const [x, y] = pts[i];
+    const [lx, ly] = polar(i, n, LABEL_RADIUS);
+    s += `<g style="cursor:pointer">`;
+    s += `<path d="${wedgePath(i, n)}" fill="transparent" pointer-events="all"/>`;
+    s += `<circle cx="${x}" cy="${y}" r="${active ? 4 : 2.5}" fill="${active ? "#9cecff" : "#66d9ef"}" style="transition:r .15s ease,fill .15s ease;${active ? "filter:drop-shadow(0 0 4px #66d9ef)" : ""}"/>`;
+    s += `<text x="${lx}" y="${ly - 2}" text-anchor="middle" style="transform-box:fill-box;transform-origin:center;transform:${active ? "scale(1.25)" : "none"};transition:transform .15s ease">` +
+         `<tspan fill="${gradeColor(data[i][1])}" font-size="13" font-weight="bold">${data[i][1]}</tspan>` +
+         `<tspan x="${lx}" dy="13" fill="${active ? "#a6e22e" : "#8a8878"}" font-size="8">${data[i][0]}</tspan></text>`;
+    s += `</g>`;
+  }
+  return `<svg viewBox="0 0 ${SIZE} ${SIZE}" role="img" aria-label="实力雷达图">${s}</svg>`;
+}
+
+function tipHTML(d) {
+  if (d[1] === "?") return `暂无成绩`;
+  return `超过 <em>${d[2]}%</em> 的玩家`;
+}
+
+function renderSample(data, hoverIdx, caption) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<div class="box"><h2>实力</h2><div class="radar_wrap">${radarSVG(data, hoverIdx)}<div class="u_tip" id="tip"></div></div></div><div class="cap">${caption}</div>`;
+  document.getElementById("row").appendChild(wrap);
+  // 气泡定位：锚在标签点；标签在上半区 → 气泡弹下方；下半区 → 翻上方；横向钳位不出盒
+  const tip = wrap.querySelector("#tip");
+  tip.innerHTML = tipHTML(data[hoverIdx]);
+  const n = data.length;
+  const [lx, ly] = polar(hoverIdx, n, LABEL_RADIUS);
+  const below = ly < SIZE * 0.55;
+  tip.style.left = `${Math.min(Math.max((lx / SIZE) * 100, 24), 76)}%`;
+  tip.style.top = `${(ly / SIZE) * 100}%`;
+  tip.style.transform = below ? "translate(-50%, 24px)" : "translate(-50%, calc(-100% - 22px))";
+}
+
+renderSample(SAMPLE, 0, "样本一：hover 顶部标签「A+ 初级时间」→ 气泡弹在<em>标签下方</em>（百分比 = 该维度全服百分位）");
+renderSample(SAMPLE, 4, "样本二：hover 底部标签「S- 总计3BV/s」→ 自动<em>翻到标签上方</em>，不出盒");
+renderSample(SAMPLE_NULL, 3, "样本三：某维度无成绩（grade「?」）→ 气泡显示<em>「暂无成绩」</em>，不显示 0%");
+</script>
+</body>
+</html>

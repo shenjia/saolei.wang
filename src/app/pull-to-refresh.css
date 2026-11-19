@@ -1,0 +1,81 @@
+/* ---------- standalone 模拟下拉刷新（2026-11-10 张老师报） ----------
+   iOS「添加到主屏幕」后以 standalone 打开，系统不再提供 Safari 的下拉刷新：
+   顶部只剩橡皮筋回弹（截图里拉出一大块黑底），拉多远都不会重载页面。
+   PullToRefresh.tsx 只在 standalone + 触屏下接管顶部下拉手势：阻止原生回弹、
+   body 整页随手指下移、在露出的顶部区域显示刷新指示器，松手过阈值后
+   location.reload()。普通 Safari 不启用（保留系统原生 PTR）；?ptr=1 可强制
+   启用便于真机 / 无头验证。
+   独立成文件（与 admin.css 同例）：globals.css 是多人并行编辑的大文件，
+   本次功能不往里追加，保证改动可原子提交、可单独回退。
+   ① 指示器 fixed 且 top 为负：body 带 transform 时 fixed 的包含块变成 body，
+      它就跟着整页一起下移，从屏幕上边缘滑入露出的黑区——与原生 PTR 同观感；
+      手势结束立刻撤掉 transform，fixed 顶栏 / 浮层零副作用；
+   ② pointer-events:none + aria-hidden：纯装饰，不拦触点、不进无障碍树；
+   ③ 颜色沿用 2013 Monokai 色板（#a6e22e / #33322b / #49483e / #cfcfc4）。 */
+html.ptr_standalone,
+html.ptr_standalone body {
+  /* 兜底：iOS 16+ / Chrome 断掉根滚动的越界回弹链，避免与自定义位移叠加 */
+  overscroll-behavior-y: contain;
+}
+#ptr_indicator {
+  position: fixed;
+  top: -72px; /* JS 内联同值覆盖，见 PullToRefresh.tsx INDICATOR_H */
+  height: 72px;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end; /* 内容沉底：滑入时贴在页面顶边上，避开状态栏文字 */
+  justify-content: center;
+  padding-bottom: 6px;
+  pointer-events: none;
+  opacity: 0;
+  color: #a6e22e;
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#ptr_indicator .ptr_chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #49483e;
+  border-radius: 999px;
+  background: rgba(38, 38, 31, 0.94);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  color: #cfcfc4;
+  white-space: nowrap;
+}
+#ptr_indicator.is_ready .ptr_chip {
+  border-color: #a6e22e;
+  color: #e8e8e0;
+}
+#ptr_indicator .ptr_arrow {
+  display: inline-flex;
+  color: #a6e22e; /* JS 按进度设 rotate：下拉朝下 → 过阈值朝上 */
+}
+#ptr_indicator .ptr_spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(166, 226, 46, 0.25);
+  border-top-color: #a6e22e;
+  border-radius: 50%;
+}
+#ptr_indicator.is_refreshing .ptr_arrow {
+  display: none;
+}
+#ptr_indicator.is_refreshing .ptr_spinner {
+  display: inline-block;
+  animation: ptr_spin 0.7s linear infinite;
+}
+@keyframes ptr_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

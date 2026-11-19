@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>列表翻页滑条 + 递增加载更多 · 高保真交互稿 v1</title>
+<style>
+/* ============ 基础（对齐站内 Monokai 深色） ============ */
+* { box-sizing: border-box; }
+html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; padding: 32px 20px 80px;
+  background: #272822; color: #b1b1a4;
+  font-family: "微软雅黑", Arial, "宋体"; font-size: 14px; line-height: 21px;
+}
+.wrap { max-width: 980px; margin: 0 auto; }
+h1 { color: #fdc61a; font-size: 22px; line-height: 32px; margin: 0 0 6px; }
+h2 { color: #b1b1a4; font-size: 17px; line-height: 26px; margin: 40px 0 10px; }
+h2 .tag { color: #75715e; font-size: 13px; font-weight: normal; margin-left: 8px; }
+p.sub { color: #75715e; font-size: 13px; margin: 0 0 20px; }
+a { color: #a6e22e; text-decoration: none; }
+em { font-style: normal; }
+
+/* 说明卡 */
+.note {
+  background: #1e1f1c; border: 1px solid #49483e; border-radius: 6px;
+  padding: 14px 18px; margin: 14px 0; font-size: 13px; line-height: 22px;
+}
+.note.warn { border-color: #8f7f00; background: rgba(253,198,26,0.06); }
+.note.warn b { color: #fdc61a; }
+.note ul { margin: 6px 0 0; padding-left: 20px; }
+.note li { margin: 3px 0; }
+kbd {
+  background: #3e3d32; border: 1px solid #5b584a; border-radius: 3px;
+  padding: 0 5px; font-size: 12px; color: #e6db74; font-family: Consolas, monospace;
+}
+
+/* ============ 演示面板（模拟站内卡片） ============ */
+.demo {
+  background: #1e1f1c; border: 1px solid #49483e; border-radius: 8px;
+  padding: 18px 20px 14px; margin: 16px 0 34px;
+}
+.demo .caption { font-size: 12px; color: #75715e; margin: 0 0 12px; }
+.demo .caption b { color: #939387; font-weight: normal; }
+
+/* 模拟排行表 */
+table.rk { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.rk th, table.rk td { padding: 5px 8px; font-size: 13px; text-align: left; }
+table.rk th { color: #75715e; font-weight: normal; border-bottom: 1px solid #49483e; }
+table.rk td { color: #bbbbbb; border-bottom: 1px solid #2f302a; }
+table.rk td.rank { color: #939387; width: 90px; }
+table.rk td.name a { color: #e5e5d0; }
+table.rk td.name a:hover { color: #a6e22e; }
+table.rk tr.hl td { background: rgba(253,198,26,0.07); }
+table.rk tr.hl td.rank { color: #fdc61a; }
+.faderow { text-align: center; color: #75715e; font-size: 12px; padding: 6px 0; }
+
+/* ============ 新组件：列表页脚（滑条 + 加载更多） ============ */
+.list_footer { margin-top: 12px; }
+
+/* ---- 页码滑条 page_slider ---- */
+.page_slider {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0 10px; user-select: none;
+  --ps-track: #3e3d32;      /* 轨道底 */
+  --ps-loaded: #5b7a2e;     /* 已加载区段（暗一档的绿，避免喧宾夺主） */
+  --ps-thumb: #fdc61a;      /* 拇指（金黄=当前页，与站内当前态一致） */
+}
+.ps_btn {
+  flex: 0 0 auto; width: 24px; height: 24px; line-height: 22px;
+  background: #49483e; color: #cfcdc0; border: 0; border-radius: 4px;
+  font-size: 11px; cursor: pointer; text-align: center; padding: 0;
+}
+.ps_btn:hover:not(:disabled) { background: #5b584a; color: #f8f8f2; }
+.ps_btn:active:not(:disabled) { transform: translateY(1px); }
+.ps_btn:disabled { opacity: .35; cursor: default; }
+
+.ps_rail { flex: 1 1 auto; position: relative; height: 24px; cursor: pointer; touch-action: none; }
+.ps_track {
+  position: absolute; left: 7px; right: 7px; top: 9px; height: 6px;
+  background: var(--ps-track); border-radius: 3px; overflow: hidden;
+}
+.ps_fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: var(--ps-loaded); border-radius: 3px;
+  transition: width .18s ease;
+}
+.ps_thumb {
+  position: absolute; top: 4px; width: 16px; height: 16px; margin-left: -8px;
+  background: var(--ps-thumb); border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(253,198,26,0.18);
+  transition: left .15s ease, transform .12s ease;
+}
+.page_slider.dragging .ps_thumb { transform: scale(1.25); transition: none; }
+.page_slider.dragging .ps_fill { transition: none; }
+
+/* 页码标签（右端常态；拖动时升级为大号气泡） */
+.ps_label {
+  flex: 0 0 auto; min-width: 96px; text-align: right;
+  font-size: 12px; color: #939387; font-family: Consolas, "微软雅黑", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.ps_label b { color: #fdc61a; font-weight: normal; }
+
+/* 拖动气泡：悬于拇指上方 */
+.ps_bubble {
+  position: absolute; bottom: 26px; transform: translateX(-50%);
+  background: #3e3d32; border: 1px solid #fdc61a; border-radius: 5px;
+  color: #fdc61a; font-size: 14px; line-height: 20px; padding: 2px 10px;
+  white-space: nowrap; pointer-events: none; opacity: 0;
+  font-family: Consolas, "微软雅黑", monospace; font-variant-numeric: tabular-nums;
+  transition: opacity .12s;
+  z-index: 5;
+}
+.ps_bubble::after {
+  content: ""; position: absolute; left: 50%; bottom: -4px; margin-left: -3px;
+  border: 3px solid transparent; border-top-color: #fdc61a;
+}
+.page_slider.dragging .ps_bubble { opacity: 1; }
+
+/* 加载中提示（请求在途时） */
+.ps_pending {
+  position: absolute; right: 0; top: -14px; font-size: 11px; color: #75715e;
+  display: none;
+}
+.page_slider.pending .ps_pending { display: block; }
+
+/* ---- 加载更多（沿用现有 more_loader 布局，按钮文案升级） ---- */
+.more_loader {
+  clear: both; display: flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 6px 0 4px;
+}
+.more_loader .button {
+  background: #49483e; color: #cfcdc0; border: 0; border-radius: 3px;
+  padding: 4px 14px; font-size: 13px; cursor: pointer; line-height: 20px;
+}
+.more_loader .button:hover:not(:disabled) { background: #5b584a; color: #f8f8f2; }
+.more_loader .button:disabled { opacity: .6; cursor: default; }
+.more_loader .total_count { font-size: 13px; color: #75715e; }
+.more_loader .total_count em { color: #b1b1a4; }
+.loader_hint { font-size: 13px; color: #939387; }
+
+/* ============ 移动端演示 ============ */
+.phone {
+  width: 390px; max-width: 100%; margin: 0 auto;
+  border: 8px solid #0d0e0c; border-radius: 26px; overflow: hidden;
+  background: #272822; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.phone .demo { margin: 0; border: 0; border-radius: 0; }
+
+/* 状态回显（演示用，非组件） */
+.statebox {
+  margin-top: 10px; padding: 8px 12px; background: #272822;
+  border: 1px dashed #49483e; border-radius: 5px;
+  font-size: 12px; color: #75715e; font-family: Consolas, monospace; line-height: 20px;
+}
+.statebox .k { color: #939387; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>列表翻页滑条 + 递增「加载更多」· 高保真交互稿 v1.4</h1>
+<p class="sub">2026-10-14 · 诉求：用户反馈需要翻到很后面甚至最后一页；张老师：① 加载更多递增批量（首击一页，之后翻倍，100 封顶）② 排行/录像/论坛加滑条分页，拖拽翻页 <b style="color:#fdc61a">③ 松手立即加载（v1.4 去掉 250ms 防抖）④ 换页严格每次只拉一页，绝不多拉</b>。<b style="color:#fdc61a">设计稿 · 交互全部可试，未写一行站内代码</b></p>
+
+<div class="note warn">
+<b>核心设计决策（请确认）</b>
+<ul>
+<li><b>滑条换页 = 严格一页</b>（张老师 2026-10-14 定）：拖到已加载窗口<b>之外</b>的页 → <b>松手立即加载</b>固定一页（排行/录像/BV 榜 20 条、论坛 19 条）整表替换，绝不多拉、绝不 gap 补拉；拖到已加载窗口<b>之内</b>的页 → 平滑滚动定位，零请求。最近翻过的页留缓存（≤30 页），回跳零请求。DOM 恒定，翻多深都不膨胀。<b>去掉防抖的代价</b>：快速连拖可能并发多个请求——用请求序号作废在途响应（只认最后一次松手），真实实现配 AbortController 取消在途 fetch。</li>
+<li><b>递增批量</b>：「加载更多」= 在当前窗口末尾追加，批量按整页取：20/页 → <b>+20 → +40 → +80 → +100</b> 封顶（4 页）；19/页 → +19 → +38 → +76 → +95；15/页（动态）→ +15 → +30 → +60 → +100。首击=一页，与首屏语义衔接；换页（窗口重置）后序列从头计。按钮直接标注本次批量。</li>
+<li><b>两者共存</b>：加载更多扩窗（表格向下长），滑条拇指=当前浏览页、暗绿填充=已加载窗口跨度。右侧保留「剩余 N 条」。</li>
+<li><b>覆盖范围</b>：排行榜、BV 收集榜（505 页）、进步榜、录像列表、论坛列表五处。评论区/动态等小列表只改批量序列、不加滑条。</li>
+</ul>
+</div>
+
+<h2>场景 A · 排行榜（190 页，3800 位）<span class="tag">拖滑条 / 点箭头 / 点轨道 / 键盘 ←→ Home End</span></h2>
+<div class="demo" id="demoA">
+  <p class="caption"><b>演示数据。</b>暗绿 = 已加载窗口；拇指 = 当前浏览页。试试：① 拖滑条翻页（<b>松手立即加载</b>，窗口外严格拉一页 20 条整表替换）② 一口气拖到 150 页（行号直接变 2981，DOM 不膨胀）③ 拖回已加载窗口内（平滑滚动定位，零请求）④ 连点「加载更多」看批量递增 +20→+40→+80→+100、表格向下长 ⑤ 点轨道空白/箭头/键盘 ←→ Home End ⑥ 快速来回连拖——只认最后一次松手，旧请求作废</p>
+  <table class="rk">
+    <thead><tr><th>排名</th><th>姓名</th><th>军衔</th><th>成绩</th><th>3BV/s</th><th style="text-align:right">上传时间</th></tr></thead>
+    <tbody id="rowsA"></tbody>
+  </table>
+  <div class="list_footer">
+    <div class="page_slider" id="sliderA" tabindex="0" role="slider" aria-label="页码">
+      <button class="ps_btn" data-step="-1">◀</button>
+      <div class="ps_rail">
+        <div class="ps_track"><div class="ps_fill"></div></div>
+        <div class="ps_thumb"></div>
+        <div class="ps_bubble">第 1 页</div>
+        <div class="ps_pending">加载中…</div>
+      </div>
+      <button class="ps_btn" data-step="1">▶</button>
+      <span class="ps_label">第 <b>1</b> / 190 页</span>
+    </div>
+    <div class="more_loader">
+      <button class="button" id="moreA">加载更多</button>
+      <span class="total_count" id="countA"></span>
+      <span class="loader_hint" id="hintA"></span>
+    </div>
+  </div>
+  <div class="statebox" id="stateA"></div>
+</div>
+
+<h2>场景 B · 论坛列表（18 页，340 帖）<span class="tag">页数少的形态 + 论坛版增量序列 19→+38→+76→+100</span></h2>
+<div class="demo" id="demoB">
+  <table class="rk">
+    <thead><tr><th>主题</th><th>作者</th><th style="text-align:right">评论 / 阅读</th><th style="text-align:right">最后回复</th></tr></thead>
+    <tbody id="rowsB"></tbody>
+  </table>
+  <div class="list_footer">
+    <div class="page_slider" id="sliderB" tabindex="0" role="slider" aria-label="页码">
+      <button class="ps_btn" data-step="-1">◀</button>
+      <div class="ps_rail">
+        <div class="ps_track"><div class="ps_fill"></div></div>
+        <div class="ps_thumb"></div>
+        <div class="ps_bubble">第 1 页</div>
+        <div class="ps_pending">加载中…</div>
+      </div>
+      <button class="ps_btn" data-step="1">▶</button>
+      <span class="ps_label">第 <b>1</b> / 18 页</span>
+    </div>
+    <div class="more_loader">
+      <button class="button" id="moreB">加载更多</button>
+      <span class="total_count" id="countB"></span>
+      <span class="loader_hint" id="hintB"></span>
+    </div>
+  </div>
+</div>
+
+<h2>场景 C · 移动端 390px<span class="tag">箭头贴边、气泡加大、滑条占满剩余宽</span></h2>
+<div class="phone">
+  <div class="demo">
+    <table class="rk">
+      <thead><tr><th>排名</th><th>姓名</th><th>成绩</th></tr></thead>
+      <tbody id="rowsC"></tbody>
+    </table>
+    <div class="list_footer">
+      <div class="page_slider" id="sliderC" tabindex="0" role="slider" aria-label="页码">
+        <button class="ps_btn" data-step="-1">◀</button>
+        <div class="ps_rail">
+          <div class="ps_track"><div class="ps_fill"></div></div>
+          <div class="ps_thumb"></div>
+          <div class="ps_bubble">第 1 页</div>
+          <div class="ps_pending">加载中…</div>
+        </div>
+        <button class="ps_btn" data-step="1">▶</button>
+        <span class="ps_label" style="min-width:78px">第 <b>1</b> / 170 页</span>
+      </div>
+      <div class="more_loader">
+        <button class="button">加载更多 +40</button>
+        <span class="total_count">剩余 <em>3380</em> 个</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>实现注记（确认后落地）</h2>
+<div class="note">
+<ul>
+<li><b>组件</b>：新建 <code>PageSlider.tsx</code>（滑条）+ 五处 Feed 底部改 <code>list_footer</code> 两行结构；pointer events，<b>松手立即加载</b>（无防抖），在途请求 AbortController 取消 + 序号门槛只认最后一次。无 JS 时滑条隐藏、加载更多照常（渐进增强）。</li>
+<li><b>请求语义</b>：换页 = 既有 <code>/api/*/more?page=N</code> 原样复用（每页固定 20/19 条，<b>查询层零改动</b>）；窗口内跳页滚动定位零请求；最近 30 页 LRU 缓存回跳零请求。「加载更多」批量按整页取（+20→+40→+80→+100 / 19 制→+95 / 15 制→+100），需 more 接口放宽 size 上限（50→100），一次性拉 [winEnd+1, winEnd+n] 各页（并发拉页模式站内已有先例）。</li>
+<li><b>URL 不写 page</b>：保持「URL 即筛选状态」现状，翻页为客户端状态（BV 榜 ?page= 深链落地兼容保留）；换页后滚动回表格顶部、加载更多保持原位。</li>
+<li><b>性能红线</b>：单请求 ≤100 行；换页后 DOM 恒定 = 1 页 × 20 行；缓存 LRU ≤30 页；加载最多次连点后 DOM ≤ 100 行追加段 × n（与现状加载更多一致，用户主动行为）。</li>
+</ul>
+</div>
+
+</div>
+
+<script>
+/* ================= 演示数据与渲染 ================= */
+const NAMES = ["张三","李四","王五","赵六","钱七","孙八","周九","吴十","郑十一","冯十二","陈十三","楚十四","卫十五","蒋十六","沈十七","韩十八","杨十九","朱二十"];
+const TITLES = ["列兵","上等兵","下士","中士","上士","少尉","中尉","上尉","少校","中校","上校","大校","少将","中将","上将","大将","元帅","雷神"];
+function fmtTime(ms){ const s=Math.floor(ms/1000); return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }
+function rnd(seed){ let x=Math.sin(seed)*10000; return x-Math.floor(x); }
+
+function rankRow(absRank,i,hl){
+  const r=absRank;
+  return `<tr${hl?` class="hl"`:""}><td class="rank">第 ${r} 位</td><td class="name"><a href="#">${NAMES[(r*7)%18]}${r%3?"":"·"+r}</a></td><td>${TITLES[Math.min(17,Math.floor(rnd(r)*8)+Math.floor(r/220))]}</td><td>${fmtTime(30000+rnd(r+1)*300000)}</td><td>${(0.8+rnd(r+2)*2.2).toFixed(2)}</td><td style="text-align:right;color:#75715e">2026-${String(1+Math.floor(rnd(r+3)*9)).padStart(2,"0")}-${String(1+Math.floor(rnd(r+4)*28)).padStart(2,"0")}</td></tr>`;
+}
+function bbsRow(absIdx,i){
+  const r=absIdx;
+  return `<tr><td><a href="#" style="color:#e5e5d0">${["关于新版本录像分析功能的一点想法","高级 3BV/s 世界纪录讨论","求一个稳定的经典风格扫雷下载","新手提问：首点必是空的原理是什么","分享我用 python 统计的 500 局数据","纪念：第一次 sub40 中级！"][r%6]}${r}</a></td><td>${NAMES[r%18]}</td><td style="text-align:right">${Math.floor(rnd(r)*40)} / ${Math.floor(rnd(r+9)*900)}</td><td style="text-align:right;color:#75715e">10-14 2${r%10}:${String(Math.floor(rnd(r)*6))}${Math.floor(rnd(r+5)*9)}</td></tr>`;
+}
+
+/* ================= 滑条 + 窗口逻辑（演示版，真实实现为 React 组件） ================= */
+/* 松手立即加载（2026-10-14 张老师定，去掉 250ms 防抖）：
+   快速连拖的并发保护 = 请求序号 reqSeq，只认最后一次松手的响应（真实实现 AbortController） */
+let REQ_SEQ = 0;
+
+function createList(opts){
+  // opts: sliderEl, rowsEl, pages, pageSize, mode("rank"|"bbs"), moreBtn, countEl, hintEl, stateEl
+  const S = opts.sliderEl, rail = S.querySelector(".ps_rail");
+  const fill = S.querySelector(".ps_fill"), thumb = S.querySelector(".ps_thumb");
+  const bubble = S.querySelector(".ps_bubble"), pending = S.querySelector(".ps_pending");
+  const label = S.querySelector(".ps_label b");
+  const btnPrev = S.querySelector('[data-step="-1"]'), btnNext = S.querySelector('[data-step="1"]');
+
+  let pages = opts.pages, pageSize = opts.pageSize, total = pages * pageSize;
+  let winStart = 1, winEnd = 1;   // 已加载窗口 [winStart, winEnd]（初始 = 第 1 页）
+  let cur = 1;                    // 当前浏览页
+  let cache = new Map([[1,true]]); // 最近翻过的页缓存（回跳零请求，LRU ≤30）
+  let batchStep = 0;              // 递增序号：首击=1 页，之后倍增封顶
+  let loading = false;
+
+  const series = opts.series; // e.g. [40,80,100] —— 首击(=一页)之后的倍增序列
+  const nextBatch = () => batchStep === 0 ? pageSize : (batchStep <= series.length ? series[batchStep-1] : series[series.length-1]);
+
+  function pageToPct(p){ return pages<=1 ? 0 : (p-1)/(pages-1)*100; }
+  function pctToPage(x){ return Math.min(pages, Math.max(1, Math.round(x/100*(pages-1))+1)); }
+
+  function render(skipRows){
+    // 暗绿 = 已加载窗口 [winStart, winEnd]；拇指 = 当前浏览页
+    fill.style.left = pageToPct(winStart) + "%";
+    fill.style.width = Math.max(0, pageToPct(winEnd) - pageToPct(winStart)) + "%";
+    thumb.style.left = `calc(7px + (100% - 14px) * ${pageToPct(cur)/100})`;
+    label.textContent = cur;
+    btnPrev.disabled = cur<=1; btnNext.disabled = cur>=pages;
+    if(opts.moreBtn){
+      opts.moreBtn.textContent = loading ? "加载中…" : (winEnd>=pages ? "" : `加载更多 +${nextBatch()}`);
+      opts.moreBtn.disabled = loading || winEnd>=pages;
+      opts.moreBtn.style.display = winEnd>=pages ? "none" : "";
+    }
+    if(opts.countEl){
+      const remain = total - (winEnd - winStart + 1) * pageSize;
+      opts.countEl.innerHTML = remain>0 ? `剩余 <em>${remain}</em> ${opts.unit}` : `共 <em>${total}</em> ${opts.unit}`;
+    }
+    if(!skipRows) renderRows();
+    if(opts.stateEl){
+      opts.stateEl.innerHTML =
+        `<span class="k">窗口</span> [${winStart}–${winEnd}] / ${pages} 页 · ` +
+        `<span class="k">当前页</span> ${cur} · ` +
+        `<span class="k">缓存</span> ${cache.size} 页 · ` +
+        `<span class="k">下次批量</span> +${nextBatch()}`;
+    }
+  }
+
+  function renderRows(){
+    const tb = opts.rowsEl; const from = (winStart-1)*pageSize;
+    const count = (winEnd - winStart + 1) * pageSize;
+    let html = "";
+    for(let i=0;i<count;i++){
+      html += opts.mode==="bbs" ? bbsRow(from+i+1,i) : rankRow(from+i+1,i);
+    }
+    tb.innerHTML = html;
+  }
+
+  function fakeLoad(ms){ return new Promise(r=>setTimeout(r,ms)); }
+  function touchCache(p){
+    cache.set(p,true);
+    if(cache.size > 30) cache.delete(cache.keys().next().value); // LRU 粗略实现
+  }
+
+  /* 换页（严格一页语义，张老师 2026-10-14 定；松手立即加载）：
+     · 窗口外 → 只拉固定一页整表替换（窗口=[p,p]，表格回单页高度）
+     · 窗口内 → 平滑滚动到该页行，零请求
+     · 缓存命中（最近 30 页内翻过）→ 整表替换但零请求
+     · 在途请求作废：快速连拖只认最后一次（reqSeq 门槛） */
+  let mySeq = 0;
+  async function gotoPage(p){
+    p = Math.min(pages, Math.max(1, p));
+    if(p === cur) return;
+    if(p >= winStart && p <= winEnd){
+      // 窗口内：滚动定位（真实实现 scrollIntoView；演示稿直接高亮该页首行）
+      cur = p; render();
+      const tr = opts.rowsEl.children[(p-winStart)*pageSize];
+      if(tr){ tr.classList.add("hl"); setTimeout(()=>tr.classList.remove("hl"),900); }
+      if(opts.hintEl){ opts.hintEl.textContent = "第 "+p+" 页（已加载）"; setTimeout(()=>opts.hintEl.textContent="",1500); }
+      return;
+    }
+    mySeq = ++REQ_SEQ; // 本次换页的序号（组件实例内自增；作废更早的在途请求）
+    const fromCache = cache.has(p);
+    if(!fromCache){
+      S.classList.add("pending");
+      await fakeLoad(220 + Math.random()*260); // 模拟请求（真实实现是 fetch 一页）
+      S.classList.remove("pending");
+    }
+    if(mySeq !== REQ_SEQ) return; // 已有更新的松手/换页，丢弃本次响应
+    touchCache(p);
+    cur = p; winStart = p; winEnd = p; batchStep = 0; // 窗口重置，批量序列从头计
+    render();
+    if(opts.hintEl){ opts.hintEl.textContent = `已翻到第 ${p} 页${fromCache?"（缓存）":""}`; setTimeout(()=>opts.hintEl.textContent="",1600); }
+  }
+
+  /* 拖拽 */
+  let dragging = false, preview = 1;
+  function pageFromEvent(e){
+    const rect = rail.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    return pctToPage(x*100);
+  }
+  rail.addEventListener("pointerdown", e=>{
+    dragging = true; S.classList.add("dragging");
+    rail.setPointerCapture(e.pointerId);
+    preview = pageFromEvent(e);
+    bubble.textContent = `第 ${preview} 页`;
+    bubble.style.left = `calc(7px + (100% - 14px) * ${pageToPct(preview)/100})`;
+  });
+  rail.addEventListener("pointermove", e=>{
+    if(!dragging) return;
+    preview = pageFromEvent(e);
+    bubble.textContent = `第 ${preview} 页`;
+    bubble.style.left = `calc(7px + (100% - 14px) * ${pageToPct(preview)/100})`;
+  });
+  rail.addEventListener("pointerup", e=>{
+    if(!dragging) return;
+    dragging = false; S.classList.remove("dragging");
+    gotoPage(preview); // 松手立即加载（无防抖）
+  });
+  rail.addEventListener("pointercancel", ()=>{ dragging=false; S.classList.remove("dragging"); });
+
+  /* 箭头 ±1 页 */
+  btnPrev.addEventListener("click", ()=>gotoPage(cur-1));
+  btnNext.addEventListener("click", ()=>gotoPage(cur+1));
+
+  /* 键盘 */
+  S.addEventListener("keydown", e=>{
+    if(e.key==="ArrowLeft"){ e.preventDefault(); gotoPage(cur-1); }
+    else if(e.key==="ArrowRight"){ e.preventDefault(); gotoPage(cur+1); }
+    else if(e.key==="Home"){ e.preventDefault(); gotoPage(1); }
+    else if(e.key==="End"){ e.preventDefault(); gotoPage(pages); }
+  });
+
+  /* 加载更多：在窗口末尾按递增批量追加整页（首击=1 页，倍增封顶 100） */
+  if(opts.moreBtn) opts.moreBtn.addEventListener("click", async ()=>{
+    if(loading) return; loading = true; render(true);
+    await fakeLoad(300);
+    const end = Math.min(pages, winEnd + Math.ceil(nextBatch()/pageSize));
+    for(let k=winEnd+1;k<=end;k++) touchCache(k);
+    winEnd = end; batchStep++; loading=false; render();
+  });
+
+  render();
+}
+
+/* 场景 A：排行榜 190 页（真实 total=3800 位 / pageSize=20） */
+createList({ sliderEl:document.getElementById("sliderA"), rowsEl:document.getElementById("rowsA"),
+  pages:190, pageSize:20, mode:"rank", series:[40,80,100], unit:"位",
+  moreBtn:document.getElementById("moreA"), countEl:document.getElementById("countA"),
+  hintEl:document.getElementById("hintA"), stateEl:document.getElementById("stateA") });
+
+/* 场景 B：论坛 18 页（340 帖 / pageSize=19） */
+createList({ sliderEl:document.getElementById("sliderB"), rowsEl:document.getElementById("rowsB"),
+  pages:18, pageSize:19, mode:"bbs", series:[38,76,100], unit:"帖",
+  moreBtn:document.getElementById("moreB"), countEl:document.getElementById("countB"),
+  hintEl:document.getElementById("hintB") });
+
+/* 场景 C：移动端录像 170 页（静态演示） */
+createList({ sliderEl:document.getElementById("sliderC"), rowsEl:document.getElementById("rowsC"),
+  pages:170, pageSize:20, mode:"rank", series:[40,80,100], unit:"个" });
+</script>
+</body>
+</html>

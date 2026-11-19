@@ -1,0 +1,306 @@
+// 首页：新闻 + 录像 + 入伍新兵 + 排行前十（移植 views/home/index）
+// 2026-09-24 张老师要求：「雷界快讯」更名「动态」并缩减到 15 条；其下新增录像版块
+// （15 条按上传时间倒序，带级别选择器与底部「加载更多」，交互与新闻版块同构）；
+// 右栏顶部「每日一星」「我的地盘」卡片均已撤下（后者 2026-09-24 张老师明示永久废弃：
+// 该板块今后不再使用，直接删除，不再因登录态切换）。
+// 2026-10-13 张老师要求：右栏顺序调整为 入伍新兵 → 论坛新帖 → 排行前十 → 站点统计
+// （排行前十 从栏首移至论坛新帖之下；原名「十大元帅」更名，末列由时间改为「所在地区」）。
+// 二轮定名：版块标题定为「新闻」「录像」，录像标题走灰色次级样式（字号保持 legacy 26px）。
+// 2026-10-13 张老师要求：每日一星功能整体下线（评选触发一并移除）。
+// 2026-10-25 张老师定新版口径恢复：少将及以上 ∪ 30 天名次进步者，排除近 30 日当选，
+// 右栏「入伍新兵」上方展示（版式沿用 09 版卡片）。
+// 2026-10-15 张老师要求：按钮文案「开一局」→「开始练习」；「国内TOP10」→「排行前十」；
+// 移动端（≤880 单列带）「开始练习」改为页面顶部大按钮（新闻上方，高度 2 倍、字体图标加大，
+// 桌面版侧栏按钮与置顶版并存、由 CSS 按断点显隐）。
+// 2026-10-22 张老师要求：管理员登录态在侧栏「开始练习」按钮下方显示待审录像数
+// （数字金色）+「去审核」小按钮直达 /admin/review；待审清零时不渲染。
+// 2026-10-22 张老师要求：「开始练习」按钮下方新增「今日练习」板块——「今日已练习
+// xxx/yyy 局」（xxx=我的局数绿显）+灰字「xx位雷友参与」+走势图铺满模块宽
+// （2026-11-11 改版：只画我的活跃值，近 7 天），
+// 口径与后台仪表盘「今日练习」KPI 一致（practice_log，含踩雷局与游客局）。
+
+// 2026-11-01 张老师要求：登录态桌面侧栏「开始练习」宽度缩到 61.8%（黄金分割），
+// 右侧补绿色按钮跳 /video/upload；未登录保持原全宽按钮。
+// 二轮反馈修正：高度/字号/图标恢复原版（等比缩 61.8% 后太矮、字太小），仅缩宽度。
+// 三轮反馈修正：右钮文案定「上传录像」、文字黑色。
+// 四轮反馈修正：文案「上传录像」→「录像」，前置黑色上传图标（currentColor 随字色 #333）。
+// 移动端置顶大按钮不参与（仍由 #play_entry_top 全宽接管，上传走顶栏菜单）。
+
+// 2026-11-09 张老师要求：管理员审核提醒升级「一键过 / 需手审」双按钮（ReviewEntry 客户端组件，
+// 计数按分拣池 getPoolCounts 拆分）——免核定池（绿钮）在首页就地批量过审不必进后台，
+// 需核定池（玫瑰红钮）仍进后台逐条手审；一键过完成后气泡提示 + 板块按剩余手审数更新/消失。
+// 2026-11-11 张老师要求：「今日练习」底部趋势曲线改为只显示自己的活跃值曲线
+// （原黄/绿双线=全网/我的练习次数撤下；活跃值五源分日聚合，口径与活跃榜 active_points
+// 同源；末点=今日实时活跃值；未登录不渲染图表）。
+
+import Link from "next/link";
+import {
+  getHomeNews,
+  getHomeNewsCount,
+  getHomeVideoFeedCount,
+  getHomeVideoFeedPage,
+  getHotVideos,
+  getNewbies,
+} from "@/lib/queries";
+import { getPoolCounts } from "@/lib/admin/data";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { EmailBindNotice } from "@/components/EmailBindNotice";
+import { UpdateNotice } from "@/components/UpdateNotice";
+import { HOME_NEWS_NUMBER, HOME_VIDEO_NUMBER, isManager } from "@/lib/config";
+import { TIME_NEVER, isRecent } from "@/lib/format";
+import { RelTime } from "@/components/RelTime";
+import { NewsFeed, type NewsFeedItem } from "@/components/NewsFeed";
+import { VideoFeed } from "@/components/VideoFeed";
+import { AvatarCell, TitleBadge } from "@/components/Cells";
+import { BbsLatestFeed } from "@/components/BbsLatest";
+import { DailyStar } from "@/components/DailyStar";
+import { SystemText } from "@/components/SystemText";
+import { SiteStats } from "@/components/SiteStats";
+import { FlopSprites } from "@/components/FlopSprites";
+import { VideoHot } from "@/components/VideoHot";
+import { PracticeToday } from "@/components/PracticeToday";
+import { ReviewEntry } from "@/components/ReviewEntry";
+import { getPracticeToday, getRankedToday } from "@/lib/practice";
+import { getSiteUpdates } from "@/lib/site-updates";
+import { getFeedSalts } from "@/lib/feedsalt";
+import { title as assessTitle, recordNewsExpTime } from "@/lib/assess";
+import { getThunderKingThreshold } from "@/lib/title-system";
+
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  // 邮箱绑定提醒（2026-10-15）：登录且未绑定已验证邮箱 → 遮罩浮层（2026-10-16 改版）
+  const session = await getSession();
+  let showEmailNotice = false;
+  if (session) {
+    const auth = await prisma.userAuth.findUnique({
+      where: { id: BigInt(session.uid) },
+      select: { emailVerified: true },
+    });
+    showEmailNotice = !auth || Number(auth.emailVerified) === 0;
+  }
+
+  // 登录态实时盐（2026-11-09 张老师需求）：已登录访问首页时，动态流/录像发现流不走
+  // 5 分钟缓存——盐=内容水位探测（feedsalt，亚毫秒探测+5s 微缓存），内容无变化命中
+  // 同键热缓存（零开销），有新内容换键阻塞重建一次，登录即所见即所得。
+  // 访客（未登录）盐为空串，键空间与预热体系完全一致，路径零变化。
+  const salts = await getFeedSalts();
+
+  const [news, newbies, hot, newsTotal, videos, videoTotal, updates] = await Promise.all([
+    getHomeNews(salts.news),
+    getNewbies(salts.news),
+    // 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块，数据源原 /video 右栏同款；
+    // 2026-10-22 张老师要求：10 → 9，少占一个位置；
+    // 同日再调：论坛新帖 6 → 5 腾位置，热门录像 9 → 10 收回；
+    // 2026-10-25 张老师要求：10 → 8，减 2 个席位对冲主栏新闻/录像各 +2；
+    // 2026-10-26 更名回「热门录像」，改按近 30 天点击 + 他人有效评论排序）
+    // 席位数收敛在 getHotVideos 签名默认值（config.HOME_HOT_VIDEO_NUMBER），与预热注册天然同参
+    getHotVideos(),
+    // 首页新闻流总数（仅 NEWS_HOME_TYPES 口径；注册/头像/发帖/评论动态不进首页）
+    getHomeNewsCount(salts.news),
+    // 首页「最新录像」发现流（2026-10-23 起走去重口径：首页 feed 与 /api/video/more
+    // feedPage 分支共用 getVideoFeedPage 的 (用户,级别) 配额 + 纪录盘保位；翻页 API 同源）
+    // 首页参数收敛在 getHomeVideoFeedPage/getHomeVideoFeedCount 零参包装（queries.ts 单点维护）
+    // 2026-11-09：登录态传盐实时化（访客空盐=原键）
+    getHomeVideoFeedPage(salts.video),
+    getHomeVideoFeedCount(salts.video),
+    // 更新历史（2026-11-06 更新通告浮层；同日五轮张老师要求：未登录也弹，恒取）
+    getSiteUpdates(),
+  ]);
+  // 2026-11-06 张老师定：总司令=动态阈值档（快照快于阈值即评定，不再按身份特判）
+  const kingTh = await getThunderKingThreshold();
+  const feed: NewsFeedItem[] = news.map((n) => ({
+    news: n,
+    // 2026-10-28 张老师定：破纪录动态若产生军衔变化（从无到有/从低到高）按新军衔显示
+    title: assessTitle(recordNewsExpTime(n.expTime, n.details, n.videoRealTime), kingTh),
+    classic: n.authorTitles?.c ?? null,
+  }));
+  // 入伍新兵按发布者实时高级时间评军衔（2026-10-13 SUB 制）
+  const newbieRows = newbies.map((n) => ({
+    ...n,
+    title: assessTitle(n.expTime, kingTh),
+    classic: n.authorTitles?.c ?? null,
+  }));
+
+  // 审核联动重挂载签名（2026-11-09 张老师需求：一键过后首页录像流/新闻流自动更新）。
+  // 客户端 Feed 的 initial 态不随 router.refresh 重置（软导航铁律），服务端重渲再新鲜
+  // 也到不了已挂载的列表——以内容签名作 key：内容无变化时 key 稳定（翻页/筛选态保留），
+  // 审核改变行状态（✓ 下标）或流成员（新动态/屏蔽出流）时 key 变化强制重挂载吃新数据。
+  // 2026-11-09 登录态实时盐：盐已让 SSR 每次拿到最新行集，签名 key 机制保留兜底
+  // （访客路径审核联动依旧依赖它）。
+  const newsFeedKey = news.map((n) => String(n.id)).join("-");
+  const videoFeedKey = videos.map((v) => `${v.id}:${v.status}`).join("-");
+
+  // 待审录像分池计数（2026-10-22 张老师要求：仅管理员登录态查一次；
+  // 2026-11-09 张老师要求拆免核定/需核定双池——免核定可首页一键过，见 ReviewEntry；
+  // 2026-11-10 张老师要求：管理员登录态恒挂载 ReviewEntry（初值 0 也挂），组件内
+  // 每 60s 轮询分池计数自动显隐——停在首页不必手动刷新，有新待审自动出现）
+  const isMgr = !!session && isManager(session.role);
+  const poolCounts = isMgr ? await getPoolCounts() : { exempt: 0, need: 0 };
+
+  // 今日练习（2026-10-22 张老师要求）：「开始练习」上方板块，
+  // 口径与后台仪表盘「今日练习」KPI 一致；未登录 mine=0 只显示全站口径。
+  // 首行统计（2026-11-08 张老师改版）：登录恒下发（含活跃值），未登录 null 不渲染——
+  // 原口径仅今日玩过排行模式才下发（2026-10-28），活跃值入行后改登录恒显
+  const [practice, rankedToday] = await Promise.all([
+    getPracticeToday(session?.uid),
+    session ? getRankedToday(session.uid) : Promise.resolve(null),
+  ]);
+
+  return (
+    <>
+    {/* 邮箱绑定提醒浮层（2026-10-16 张老师改版：提醒条 → 遮罩浮层 + 以后再说 24h）。
+        渲染在 #page 之外：≤605px #page 有整页 zoom，fixed 遮罩做在里面会缩放失真 */}
+    {showEmailNotice && <EmailBindNotice />}
+    {/* 更新通告浮层（2026-11-06 张老师要求；同日演进：标题「最近更新」、首屏 10 条
+        + 「···加载更多」递增 +10、五轮起未登录也弹——uid=0 组件内只给登录提示）：
+        有更新历史才挂载；渲染在 #page 外同邮箱提醒口径 */}
+    {updates.length > 0 && <UpdateNotice updates={updates} uid={session?.uid ?? 0} />}
+    <div id="page" className="two_columns">
+    <ul id="home">
+      <li className="main">
+        {/* 移动端（≤880 单列带）置顶「开始练习」大按钮：高度翻倍（总高 100 CSS px）、
+            字号 26px、图标 36px；桌面隐藏（display:none），侧栏小按钮照旧（2026-10-15 张老师要求）。
+            注：≤605 视口有整页 zoom（0.65~0.94 档），渲染尺寸同比例缩放 */}
+        <Link id="play_entry_top" href="/online">
+          <svg viewBox="0 0 260 260" width="36" height="36" aria-hidden="true">
+            <use href="#face-flat" />
+          </svg>
+          <span>开始练习</span>
+        </Link>
+        {/* 今日练习（2026-10-22 五轮张老师要求）：移动端副本，置于置顶「开始练习」大按钮下方、
+            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我的活跃值曲线（2026-11-11 改版） */}
+        <PracticeToday
+          prefix="practice_today_top"
+          rankedToday={rankedToday}
+          mineWon={practice.mineWon}
+          mine={practice.mine}
+          netWon={practice.todayWon}
+          net={practice.today}
+          users={practice.todayUsers}
+          actTrend={practice.mineActTrend}
+          logged={!!session}
+        />
+        {/* 管理员待审提示行（2026-10-22）：移动端副本（桌面隐藏），紧贴置顶大按钮下方。
+            2026-11-09 升级一键过/需手审双按钮，桌面与移动同组件两处挂载；
+            2026-11-10 起管理员登录态恒挂载（初值 0 组件自隐），轮询自动显隐 */}
+        {isMgr && <ReviewEntry mobile exempt={poolCounts.exempt} need={poolCounts.need} />}
+        <div id="news" className="box">
+          <NewsFeed
+            key={newsFeedKey}
+            title="新闻"
+            homeOnly
+            initial={feed}
+            pageSize={HOME_NEWS_NUMBER}
+            initialHasMore={news.length === HOME_NEWS_NUMBER}
+            initialTotal={newsTotal}
+            viewerId={session?.uid ?? 0}
+          />
+        </div>
+        <div id="video" className="box">
+          <VideoFeed
+            key={videoFeedKey}
+            title="录像"
+            titleClassName="gray"
+            initial={videos}
+            pageSize={HOME_VIDEO_NUMBER}
+            initialHasMore={videos.length === HOME_VIDEO_NUMBER}
+            initialTotal={videoTotal}
+            viewerId={session?.uid ?? 0}
+          />
+        </div>
+      </li>
+      <li className="sidebar">
+        {/* 「开始练习」按钮（2026-10-14 张老师定）：扁平笑脸银灰样式、与侧栏板块同宽，
+            位于入伍新兵之上；为腾出其高度，论坛新帖由 8 条减为 6 条，保持左右栏底部基本对齐。
+            仅桌面（≥881）显示；移动端由主栏顶部 #play_entry_top 接管（2026-10-15） */}
+        <FlopSprites />
+        {/* 2026-11-01 张老师要求：登录态一行双钮——「开始练习」55% +「传录像」45%，
+            右钮（绿色+上传图标）跳 /video/upload；未登录保持原全宽钮。
+            演进：等比缩 61.8% 太矮字太小→恢复原版高度只缩宽度→50% 对半分→
+            2026-11-02 定稿：55/45 分 + 绿色版样式 + 指定 PNG 图标 + 文案「传录像」 */}
+        {session ? (
+          <div id="play_row">
+            <Link id="play_entry" href="/online">
+              <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
+                <use href="#face-flat" />
+              </svg>
+              <span>开始练习</span>
+            </Link>
+            <Link id="upload_entry" href="/video/upload">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/upload-folder-icon.png" alt="" width={24} />
+              <span>传录像</span>
+            </Link>
+          </div>
+        ) : (
+          <Link id="play_entry" href="/online">
+            <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
+              <use href="#face-flat" />
+            </svg>
+            <span>开始练习</span>
+          </Link>
+        )}
+        {/* 今日练习（2026-10-22 五轮张老师要求）：桌面侧栏副本，置于「开始练习」按钮下方、
+            管理员审核提醒行上方。完成/尝试双口径 + 胜率 + 我的活跃值曲线（2026-11-11 改版） */}
+        <PracticeToday
+          prefix="practice_today"
+          rankedToday={rankedToday}
+          mineWon={practice.mineWon}
+          mine={practice.mine}
+          netWon={practice.todayWon}
+          net={practice.today}
+          users={practice.todayUsers}
+          actTrend={practice.mineActTrend}
+          logged={!!session}
+        />
+        {/* 管理员待审提示行（2026-10-22 张老师要求）：2026-11-09 升级一键过/需手审双按钮
+            （计数金色 + 绿钮免核定池就地批量过审 + 玫瑰红钮直达后台需核定池）；
+            2026-11-10 起管理员登录态恒挂载（初值 0 组件自隐），每 60s 轮询自动显隐 */}
+        {isMgr && <ReviewEntry exempt={poolCounts.exempt} need={poolCounts.need} />}
+        {/* 每日一星（2026-10-25 恢复）：评选在 getTodayStar 内完成（无今日行才选），
+            首页首访即触发的旧模式不复活——右栏展示于入伍新兵之上 */}
+        <DailyStar />
+        <div id="newbie" className="box">
+          {/* 板块名随观看者称号体系切换：军衔制「入伍新兵」/ 旧版「新人报到」（2026-10-18 张老师定） */}
+          <h2>
+            <SystemText m="入伍新兵" c="新人报到" />
+          </h2>
+          <table cellPadding={0} cellSpacing={0} className="table full">
+            <tbody>
+              {newbieRows.map((n) => (
+                <tr key={n.id}>
+                  <td className="user">
+                    {n.author && (
+                      <AvatarCell
+                        id={n.author.id}
+                        name={n.author.chineseName}
+                        englishName={n.author.englishName}
+                        sex={n.author.sex}
+                        gender="small"
+                        link
+                      />
+                    )}
+                    <TitleBadge title={n.title} classic={n.classic} link />
+                  </td>
+                  <td className={"time " + (isRecent(n.createTime) ? "time--recent" : "time--old")}>
+                    <RelTime time={n.createTime} max={TIME_NEVER} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <BbsLatestFeed />
+        {/* 热门录像（2026-10-20 张老师要求：替换原「排行前十」板块；样式沿用 VideoHot
+            原 /video 右栏同款紧凑行。原 #top 排行前十板块与 getTopUsers 查询一并撤下；
+            2026-10-26 更名回「热门录像」，口径改为近 30 天点击 + 他人有效评论综合热度） */}
+        <VideoHot videos={hot} />
+        <SiteStats />
+      </li>
+    </ul>
+    </div>
+    </>
+  );
+}

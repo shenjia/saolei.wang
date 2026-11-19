@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后台审核页 · 自动分拣改造高保真稿（2026-10-19）</title>
+<style>
+  /* 与 admin.css 同源：底 #272822 / 面板 #2d2d29 / 描边 #49483e / 绿 #a6e22e / 橙 #f79646 / 红 #f92672 / 青 #66d9ef */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #272822; color: #b1b1a4;
+    font: 13px/1.6 "微软雅黑", Arial, "宋体";
+    padding: 24px;
+  }
+  .page { max-width: 1280px; margin: 0 auto; }
+  .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  .head h1 { font-size: 20px; color: #eeeeee; }
+  .head .sub { color: #75715e; font-size: 12px; }
+  .head .right { margin-left: auto; }
+  .btn {
+    display: inline-block; padding: 5px 14px; border: 1px solid #49483e; border-radius: 5px;
+    color: #b1b1a4; font-size: 13px; cursor: pointer; background: #2d2d29; text-decoration: none;
+  }
+  .btn:hover { color: #eeeeee; border-color: #75715e; }
+  .btn.primary { background: rgba(166,226,46,.12); color: #a6e22e; border-color: rgba(166,226,46,.4); }
+  .btn.danger { background: rgba(249,38,114,.1); color: #f92672; border-color: rgba(249,38,114,.4); }
+  .btn.sm { padding: 2px 10px; font-size: 12px; }
+
+  /* KPI 行 */
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi { background: #2d2d29; border: 1px solid #49483e; border-radius: 6px; padding: 10px 14px; }
+  .kpi .v { font-size: 20px; font-weight: 700; color: #eeeeee; }
+  .kpi .v.g { color: #a6e22e; } .kpi .v.o { color: #f79646; } .kpi .v.r { color: #f92672; } .kpi .v.c { color: #66d9ef; } .kpi .v.y { color: #fdc61d; }
+  .kpi .l { font-size: 11px; color: #75715e; margin-top: 2px; }
+
+  .card { background: #2d2d29; border: 1px solid #49483e; border-radius: 8px; margin-bottom: 16px; }
+  .card .ttl { padding: 10px 16px; border-bottom: 1px solid #49483e; display: flex; align-items: center; gap: 10px; }
+  .card .ttl b { color: #eeeeee; font-size: 14px; }
+  .card .ttl .sub { color: #75715e; font-size: 12px; }
+  .card .inner { padding: 12px 16px; }
+
+  /* 分拣池页签 */
+  .pooltabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .pooltab {
+    padding: 7px 18px; border-radius: 6px; border: 1px solid #49483e; background: #2d2d29;
+    color: #939387; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  }
+  .pooltab:hover { color: #eeeeee; }
+  .pooltab.on-green { background: rgba(166,226,46,.12); color: #a6e22e; border-color: rgba(166,226,46,.4); }
+  .pooltab.on-orange { background: rgba(247,150,70,.12); color: #f79646; border-color: rgba(247,150,70,.4); }
+  .pooltab .n {
+    font-size: 11px; background: #1e1f1c; border-radius: 9px; padding: 0 7px; line-height: 17px;
+    color: #b1b1a4;
+  }
+  .pooltab.on-green .n { color: #a6e22e; }
+  .pooltab.on-orange .n { color: #f79646; }
+  .pooltab .hot { background: #f92672; color: #fff; }
+
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 7px 10px; color: #75715e; font-weight: 600; border-bottom: 1px solid #49483e; white-space: nowrap; }
+  td { padding: 7px 10px; border-bottom: 1px solid #363530; vertical-align: middle; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .c { text-align: center; } .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  a { color: #66d9ef; text-decoration: none; } a:hover { text-decoration: underline; }
+  .strong { color: #eeeeee; }
+
+  /* 触发原因标签 */
+  .rtag {
+    display: inline-block; font-size: 11px; line-height: 18px; padding: 0 8px; border-radius: 3px;
+    margin: 1px 2px 1px 0; white-space: nowrap;
+  }
+  .rtag.cheat { background: rgba(249,38,114,.14); color: #f92672; border: 1px solid rgba(249,38,114,.45); }
+  .rtag.val { background: rgba(102,217,239,.1); color: #66d9ef; border: 1px solid rgba(102,217,239,.35); }
+  .rtag.trust { background: rgba(174,129,255,.12); color: #ae81ff; border: 1px solid rgba(174,129,255,.4); }
+  .rtag.sys { background: rgba(117,113,94,.18); color: #939387; border: 1px solid rgba(117,113,94,.45); }
+
+  /* 疑似作弊行高亮 */
+  tr.cheat td { background: rgba(249,38,114,.05); }
+  tr.cheat:hover td { background: rgba(249,38,114,.09); }
+
+  .tag { display: inline-block; font-size: 11px; line-height: 18px; padding: 0 7px; border-radius: 3px; }
+  .tag.ok { background: rgba(166,226,46,.12); color: #a6e22e; }
+  .tag.wait { background: rgba(253,198,29,.12); color: #fdc61d; }
+  .tag.ban { background: rgba(117,113,94,.2); color: #939387; }
+  .tag.info { background: rgba(102,217,239,.1); color: #66d9ef; }
+
+  .filterbar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid #49483e; font-size: 12.5px; }
+  .filterbar label { color: #939387; display: inline-flex; align-items: center; gap: 5px; }
+  .filterbar .spacer { flex: 1; }
+  .filterbar .label { color: #75715e; }
+
+  .note { background: #1e1f1c; border: 1px solid #49483e; border-radius: 6px; padding: 10px 14px; font-size: 12.5px; color: #939387; line-height: 1.9; }
+  .note b { color: #e6db74; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 2px; font-size: 12px; color: #939387; align-items: center; }
+
+  .empty { text-align: center; color: #75715e; padding: 30px 0; }
+  .checkbox { width: 14px; height: 14px; }
+  .foot { margin-top: 20px; color: #63635a; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="head">
+    <h1>审核管理</h1>
+    <span class="sub">机器只分拣、不审批 · 通过永远由管理员手动执行</span>
+    <div class="right"><a class="btn" href="#">前台审核页</a></div>
+  </div>
+
+  <!-- KPI 行：新增分拣两个 KPI（绿色免核定 / 橙色需核定） -->
+  <div class="kpis">
+    <div class="kpi"><div class="v o">6</div><div class="l">待审核 · 需核定（只能手审）</div></div>
+    <div class="kpi"><div class="v g">128</div><div class="l">待审核 · 免核定（可一键过）</div></div>
+    <div class="kpi"><div class="v r">2</div><div class="l">疑似作弊（多重命中置顶）</div></div>
+    <div class="kpi"><div class="v c">94%</div><div class="l">本周免核定占比</div></div>
+    <div class="kpi"><div class="v">3.1%</div><div class="l">本周 STNB 线命中</div></div>
+    <div class="kpi"><div class="v">16 分钟</div><div class="l">平均审核耗时</div></div>
+  </div>
+
+  <!-- 分拣池页签（状态页签之外的新维度：待审核页内按 auto_flag 分池） -->
+  <div class="pooltabs">
+    <div class="pooltab on-green">🟢 免核定池 <span class="n">128</span></div>
+    <div class="pooltab on-orange">🟠 需核定池 <span class="n">6</span><span class="n hot">2 疑作弊</span></div>
+    <div class="pooltab">全部待审 <span class="n">134</span></div>
+    <div class="pooltab">已通过 <span class="n">307,490</span></div>
+    <div class="pooltab">已屏蔽 <span class="n">1,285</span></div>
+  </div>
+
+  <!-- ============ 免核定池 ============ -->
+  <div class="card">
+    <div class="filterbar">
+      <label><input type="checkbox" class="checkbox" checked> 全选本页</label>
+      <span class="label">已选 3 条（本页 20 条 / 共 128 条）</span>
+      <span class="spacer"></span>
+      <button class="btn primary">✓ 批量通过选中（3）</button>
+      <button class="btn danger">批量屏蔽选中</button>
+    </div>
+    <div class="inner">
+      <table>
+        <thead><tr>
+          <th style="width:34px"></th>
+          <th class="c">ID</th><th>玩家</th><th class="c">级别</th>
+          <th class="num">时间</th><th class="num">3BV/s</th><th class="num">3BV</th>
+          <th class="c">玩法</th><th>软件</th><th class="c">下载</th><th>上传时间</th><th>操作</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="c"><input type="checkbox" class="checkbox" checked></td>
+            <td class="c"><a href="#">345012</a></td>
+            <td><a href="#">周科小号</a></td>
+            <td class="c"><span class="tag info">高级</span></td>
+            <td class="num strong">1:46.44</td><td class="num">0.931</td><td class="num">99</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td style="color:#75715e">Arbiter 0.52</td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-19 14:02</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <tr>
+            <td class="c"><input type="checkbox" class="checkbox" checked></td>
+            <td class="c"><a href="#">345009</a></td>
+            <td><a href="#">王炜</a></td>
+            <td class="c"><span class="tag info">初级</span></td>
+            <td class="num strong">2.31</td><td class="num">4.28</td><td class="num">10</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td style="color:#75715e">Clone 0.97</td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-19 12:47</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <tr>
+            <td class="c"><input type="checkbox" class="checkbox" checked></td>
+            <td class="c"><a href="#">345003</a></td>
+            <td><a href="#">张砷镓</a></td>
+            <td class="c"><span class="tag info">中级</span></td>
+            <td class="num strong">22.08</td><td class="num">2.21</td><td class="num">49</td>
+            <td class="c"><span class="tag info">NF</span></td>
+            <td style="color:#75715e">Arbiter 0.52</td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-19 09:15</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <tr>
+            <td class="c"><input type="checkbox" class="checkbox"></td>
+            <td class="c"><a href="#">344998</a></td>
+            <td><a href="#">钟言</a></td>
+            <td class="c"><span class="tag info">高级</span></td>
+            <td class="num strong">3:12.70</td><td class="num">0.528</td><td class="num">102</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td style="color:#75715e">Arbiter 0.52</td>
+            <td class="c"><span class="tag wait">未下载 ⬇</span></td>
+            <td style="color:#75715e">10-19 08:33</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="foot" style="padding:8px 2px 0">—— 免核定池：零触发器命中（press/STNB/cls/点击数全过），仍需下载确认后批量通过 ——</div>
+    </div>
+  </div>
+
+  <!-- ============ 需核定池 ============ -->
+  <div class="card">
+    <div class="ttl">
+      <b>🟠 需核定池</b>
+      <span class="sub">任一触发器命中 · 只能逐条手审（无勾选框）· 按命中数降序，疑似作弊置顶</span>
+    </div>
+    <div class="inner">
+      <table>
+        <thead><tr>
+          <th class="c">ID</th><th>玩家</th><th class="c">级别</th>
+          <th class="num">时间</th><th class="num">3BV/s</th><th class="num">STNB</th>
+          <th class="c">press</th><th class="c">玩法</th>
+          <th>触发原因</th><th class="c">下载</th><th>上传时间</th><th>操作</th>
+        </tr></thead>
+        <tbody>
+          <!-- 疑似作弊：多重命中置顶 + 红底 -->
+          <tr class="cheat">
+            <td class="c"><a href="#">345006</a></td>
+            <td><a href="#">某新用户</a></td>
+            <td class="c"><span class="tag info">高级</span></td>
+            <td class="num strong">38.20</td><td class="num">3.99</td><td class="num" style="color:#f92672">163.2</td>
+            <td class="num" style="color:#f92672">31ms</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td>
+              <span class="rtag cheat">press 31ms</span><span class="rtag cheat">STNB 163</span><span class="rtag cheat">cls 11.2</span>
+            </td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-19 13:58</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <tr class="cheat">
+            <td class="c"><a href="#">345001</a></td>
+            <td><a href="#">窦何</a></td>
+            <td class="c"><span class="tag info">初级</span></td>
+            <td class="num strong">1.02</td><td class="num">9.71</td><td class="num" style="color:#f92672">228</td>
+            <td class="num" style="color:#f92672">28ms</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td>
+              <span class="rtag cheat">press 28ms</span><span class="rtag cheat">STNB 228</span><span class="rtag trust">低信任</span>
+            </td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-19 11:20</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <!-- 高价值：单命中 -->
+          <tr>
+            <td class="c"><a href="#">344996</a></td>
+            <td><a href="#">38632502</a></td>
+            <td class="c"><span class="tag info">高级</span></td>
+            <td class="num strong">41.66</td><td class="num">3.89</td><td class="num" style="color:#f79646">155.8</td>
+            <td class="num" style="color:#939387">72ms</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td>
+              <span class="rtag val">STNB 156</span><span class="rtag val">破纪录</span>
+            </td>
+            <td class="c"><span class="tag wait">未下载 ⬇</span></td>
+            <td style="color:#75715e">10-19 10:44</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <tr>
+            <td class="c"><a href="#">344990</a></td>
+            <td><a href="#">胡韬</a></td>
+            <td class="c"><span class="tag info">中级</span></td>
+            <td class="num strong">10.34</td><td class="num">4.41</td><td class="num" style="color:#f79646">167.1</td>
+            <td class="num" style="color:#939387">66ms</td>
+            <td class="c"><span class="tag info">NF</span></td>
+            <td>
+              <span class="rtag val">STNB 167</span><span class="rtag val">TOP 榜</span>
+            </td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-19 09:02</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <tr>
+            <td class="c"><a href="#">344987</a></td>
+            <td><a href="#">胡韬</a></td>
+            <td class="c"><span class="tag info">初级</span></td>
+            <td class="num strong">1.78</td><td class="num">6.24</td><td class="num">98</td>
+            <td class="num" style="color:#f79646">43ms</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td>
+              <span class="rtag cheat">press 43ms</span>
+            </td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-19 08:50</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+          <tr>
+            <td class="c"><a href="#">344971</a></td>
+            <td><a href="#">新兵甲</a></td>
+            <td class="c"><span class="tag info">高级</span></td>
+            <td class="num strong">2:51.09</td><td class="num">0.61</td><td class="num">18</td>
+            <td class="num" style="color:#939387">89ms</td>
+            <td class="c"><span style="color:#939387">标雷</span></td>
+            <td>
+              <span class="rtag trust">首次入伍</span>
+            </td>
+            <td class="c"><span class="tag ok">已下载</span></td>
+            <td style="color:#75715e">10-18 22:17</td>
+            <td><a class="btn sm" href="#">下载</a> <button class="btn sm primary">通过</button> <button class="btn sm danger">屏蔽</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="foot" style="padding:8px 2px 0">
+        —— press 列＝全盘左键按下→松开平均时长（分级线：初 45 / 中 56 / 高 60ms，红色为命中）——
+      </div>
+    </div>
+  </div>
+
+  <!-- 触发分布 -->
+  <div class="card">
+    <div class="ttl"><b>本周分拣触发分布</b><span class="sub">免核定 94%（604/642）· 需核定 6%（38/642）</span></div>
+    <div class="inner">
+      <div class="legend">
+        <span class="rtag cheat">press ≤阈值</span> 12 条
+        <span style="color:#49483e">|</span>
+        <span class="rtag val">STNB 分位</span> 20 条
+        <span style="color:#49483e">|</span>
+        <span class="rtag cheat">cls&gt;10</span> 2 条
+        <span style="color:#49483e">|</span>
+        <span class="rtag val">破纪录</span> 9 条
+        <span style="color:#49483e">|</span>
+        <span class="rtag val">TOP 榜</span> 4 条
+        <span style="color:#49483e">|</span>
+        <span class="rtag val">首次入伍</span> 6 条
+        <span style="color:#49483e">|</span>
+        <span class="rtag trust">低信任</span> 3 条
+        <span style="color:#49483e">|</span>
+        <span class="rtag sys">分拣失败</span> 1 条
+      </div>
+      <div class="note" style="margin-top:8px">
+        <b>审核规则</b>（机器只分拣，不审批）：<br>
+        · <b>免核定池</b>＝press / STNB / cls / path / 点击数五类触发器零命中 → 可批量一键通过（仍需先下载，防盲审照旧）；<br>
+        · <b>需核定池</b>＝任一触发器命中 → 只能逐条手审，勾选框隐藏、批量 API 服务端拒绝；<br>
+        · <b>疑似作弊</b>＝≥2 个「cheat 类」触发器（press/cls/path/点击数）同时命中 → 置顶红底；破纪录/TOP 榜/入伍为「价值类」命中，不参与作弊置顶；<br>
+        · 触发原因仅后台展示，玩家端任何页面不可见。
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    高保真稿 v1 · 2026-10-19 · 与 design/video-auto-review-20261019.html（机制方案 v2）配套 · 数据为演示样例
+  </div>
+
+</div>
+</body>
+</html>

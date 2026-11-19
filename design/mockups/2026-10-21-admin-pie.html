@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后台仪表盘 · 饼图改版稿（2026-10-21）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #272822;
+    font-family: "微软雅黑", Arial, "宋体";
+    color: #b1b1a4;
+    padding: 18px 20px 60px;
+  }
+  .page_head { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .page_head h1 { color: #eeeeee; font-size: 20px; line-height: 30px; }
+  .page_head .sub { color: #75715e; font-size: 13px; line-height: 26px; }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.c2 { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+
+  .card {
+    background: #2d2d29;
+    border: 1px solid #49483e;
+    border-radius: 10px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,.25);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .card > h2 {
+    padding: 11px 16px;
+    background: #26261f;
+    border-bottom: 1px solid #49483e;
+    color: #e6db74;
+    font-size: 15px;
+    line-height: 22px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .card > h2 .more { margin-left: auto; color: #75715e; font-size: 12px; font-weight: normal; }
+  .card .body { padding: 14px 16px; }
+
+  .hint { color: #75715e; font-size: 12px; line-height: 20px; }
+  .hint b { color: #f79646; font-weight: normal; }
+  .hint code { background:#26261f; border:1px solid #49483e; border-radius:4px; padding:0 5px; color:#e6db74; font-family:Menlo,Consolas,monospace; font-size:12px; }
+
+  /* ---------- donut 布局 ---------- */
+  .donut { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  .donut svg { width: 168px; height: 168px; flex: 0 0 168px; }
+  .donut .ring { transition: stroke-width .12s ease, opacity .12s ease; cursor: pointer; }
+  .donut .ring.dim { opacity: .28; }
+  .legend { display: flex; flex-direction: column; gap: 8px; font-size: 13px; min-width: 200px; flex: 1; }
+  .lrow {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 8px; border-radius: 6px; cursor: pointer;
+    transition: background .12s;
+  }
+  .lrow:hover, .lrow.hot { background: #33322b; }
+  .lrow .chip { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 10px; }
+  .lrow .name { color: #939387; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lrow .val { color: #e6db74; font-variant-numeric: tabular-nums; }
+  .lrow .pct { color: #75715e; font-size: 12px; width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* 旧版实心饼图（对照组，按线上 Charts.tsx Pie 复刻） */
+  .oldpie { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .oldlegend { display: flex; flex-direction: column; gap: 7px; font-size: 13px; min-width: 130px; }
+  .oldrow { display: flex; align-items: center; gap: 7px; }
+  .oldrow .chip { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 9px; }
+  .oldrow .name { color: #939387; flex: 1; }
+  .oldrow .val { color: #b1b1a4; font-variant-numeric: tabular-nums; }
+  .oldrow .pct { color: #75715e; font-size: 12px; width: 46px; text-align: right; }
+
+  .compare-tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .compare-tags span { font-size:12px; padding:1px 8px; border-radius:9px; border:1px solid; }
+  .tag-ok { background: rgba(166,226,46,.14); color:#a6e22e; border-color: rgba(166,226,46,.35); }
+  .tag-warn { background: rgba(247,150,70,.14); color:#f79646; border-color: rgba(247,150,70,.35); }
+  .tag-info { background: rgba(102,217,239,.14); color:#66d9ef; border-color: rgba(102,217,239,.35); }
+  .tag-plain { background:#33322b; color:#939387; border-color:#49483e; }
+</style>
+</head>
+<body>
+
+<div class="page_head">
+  <h1>后台仪表盘 · 饼图改版稿</h1>
+  <span class="sub">2026-10-21 · 新增「称号体系偏好」统计卡 + Pie 组件升级（环形 + 图例联动 + 小项合并）· 数据为本地库真实分布</span>
+</div>
+
+<!-- ============ 1. 新卡片：称号体系偏好 ============ -->
+<div class="card">
+  <h2>称号体系偏好 <span class="more">user_info.title_pref · 10 分钟缓存 · 未登录/未设置默认渲染军衔制</span></h2>
+  <div class="body">
+    <div class="donut" id="titleDonut"></div>
+    <div class="hint" style="margin-top:12px">
+      口径：只统计 <code>user_info</code> 有行的账号（资料保存过才会建行）；「军衔制」含默认值——玩家未主动设置也是军衔口径，因此旧版占比即<b>主动切换旧版称号</b>的玩家比例。
+    </div>
+  </div>
+</div>
+
+<!-- ============ 2. 新旧对比：设备分布 ============ -->
+<div class="grid c2">
+  <div class="card" style="margin-bottom:0">
+    <h2>设备分布 · 现状（实心 Pie）</h2>
+    <div class="body">
+      <div class="oldpie">
+        <svg viewBox="0 0 140 140" width="132" height="132">
+          <path d="M 70 70 L 70 18 A 52 52 0 1 1 44.39 121.5 Z" fill="#a6e22e" stroke="#272822"/>
+          <path d="M 70 70 L 44.39 121.5 A 52 52 0 0 1 17.11 63.72 Z" fill="#66d9ef" stroke="#272822"/>
+          <path d="M 70 70 L 17.11 63.72 A 52 52 0 0 1 50.16 20.17 Z" fill="#e6db74" stroke="#272822"/>
+          <path d="M 70 70 L 50.16 20.17 A 52 52 0 0 1 70 18 Z" fill="#f79646" stroke="#272822"/>
+          <text x="70" y="66" font-size="19" font-weight="bold" fill="#eeeeee" text-anchor="middle">11,199</text>
+          <text x="70" y="83" font-size="10" fill="#75715e" text-anchor="middle">访问 PV</text>
+        </svg>
+        <div class="oldlegend">
+          <div class="oldrow"><span class="chip" style="background:#a6e22e"></span><span class="name">桌面</span><span class="val">7,589</span><span class="pct">67.8%</span></div>
+          <div class="oldrow"><span class="chip" style="background:#66d9ef"></span><span class="name">手机</span><span class="val">2,849</span><span class="pct">25.4%</span></div>
+          <div class="oldrow"><span class="chip" style="background:#e6db74"></span><span class="name">平板</span><span class="val">453</span><span class="pct">4.0%</span></div>
+          <div class="oldrow"><span class="chip" style="background:#f79646"></span><span class="name">未知</span><span class="val">308</span><span class="pct">2.8%</span></div>
+        </div>
+      </div>
+      <div class="compare-tags" style="margin-top:12px">
+        <span class="tag-warn">实心笨重</span><span class="tag-warn">图例无联动</span><span class="tag-warn">小项贴边挤压</span><span class="tag-plain">图例只有 1 位小数</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:0">
+    <h2>设备分布 · 升级后（环形 Donut）</h2>
+    <div class="body">
+      <div class="donut" id="deviceDonut"></div>
+      <div class="compare-tags" style="margin-top:12px">
+        <span class="tag-ok">环形更透气</span><span class="tag-ok">悬浮图例联动高亮</span><span class="tag-ok">中心汇总</span><span class="tag-info">百分比 2 位小数</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 3. 升级后：软件分布（小项合并示例） ============ -->
+<div class="card">
+  <h2>录像软件分布 · 升级后 <span class="more">小于 0.5% 自动并入「其他」（Vienna 261 部 = 0.09%）</span></h2>
+  <div class="body">
+    <div class="donut" id="softwareDonut"></div>
+  </div>
+</div>
+
+<script>
+// ---- 升级版 Donut 渲染（与 Charts.tsx 同思路：纯 SVG、Monokai 色板） ----
+const COLORS = ["#a6e22e", "#66d9ef", "#e6db74", "#f79646", "#ae81ff", "#f92672", "#b1b1a4", "#7dd3fc"];
+
+function renderDonut(el, items, centerLabel, smallNote) {
+  const total = items.reduce((s, i) => s + i.value, 0);
+  // 小于 0.5% 的段并入「其他」（保证视觉可见性；两项同小也合并，颜色固定灰）
+  let list = items.filter((i) => i.value / total >= 0.005);
+  const smallSum = items.filter((i) => i.value / total < 0.005).reduce((s, i) => s + i.value, 0);
+  if (smallSum > 0) list.push({ label: "其他（<0.5% 合计）", value: smallSum, merged: true });
+
+  const R = 62, C = 2 * Math.PI * R, SW = 20;
+  let acc = 0;
+  const segs = list.map((it, idx) => {
+    const frac = it.value / total;
+    const seg = { ...it, idx, frac, offset: -acc * C, len: frac * C };
+    acc += frac;
+    return seg;
+  });
+
+  const fmt = (n) => n.toLocaleString("zh-CN");
+  const pct = (f) => (f * 100).toFixed(2) + "%";
+
+  el.innerHTML = `
+    <svg viewBox="0 0 168 168" role="img" aria-label="占比">
+      <circle cx="84" cy="84" r="${R}" fill="none" stroke="#3a3a32" stroke-width="${SW}"/>
+      ${segs.map((s) => `
+        <circle class="ring" data-idx="${s.idx}" cx="84" cy="84" r="${R}" fill="none"
+          stroke="${s.merged ? "#6c6c61" : COLORS[s.idx % COLORS.length]}" stroke-width="${SW}"
+          stroke-dasharray="${s.len - 2} ${C - s.len + 2}" stroke-dashoffset="${s.offset + 1}"/>`).join("")}
+      <text class="c-total" x="84" y="80" font-size="20" font-weight="bold" fill="#eeeeee" text-anchor="middle">${fmt(total)}</text>
+      <text x="84" y="99" font-size="11" fill="#75715e" text-anchor="middle">${centerLabel}</text>
+    </svg>
+    <div class="legend">
+      ${segs.map((s) => `
+        <div class="lrow" data-idx="${s.idx}">
+          <span class="chip" style="background:${s.merged ? "#6c6c61" : COLORS[s.idx % COLORS.length]}"></span>
+          <span class="name">${s.label}</span>
+          <span class="val">${fmt(s.value)}</span>
+          <span class="pct">${pct(s.frac)}</span>
+        </div>`).join("")}
+      ${smallNote ? `<div class="hint" style="margin-top:2px">${smallNote}</div>` : ""}
+    </div>`;
+
+  // 图例 ↔ 扇区 联动高亮
+  const rows = el.querySelectorAll(".lrow");
+  const rings = el.querySelectorAll(".ring");
+  const highlight = (idx) => {
+    rows.forEach((r) => r.classList.toggle("hot", r.dataset.idx === String(idx)));
+    rings.forEach((g) => {
+      g.classList.toggle("dim", g.dataset.idx !== String(idx));
+      g.setAttribute("stroke-width", g.dataset.idx === String(idx) ? SW + 5 : SW);
+    });
+  };
+  const clear = () => {
+    rows.forEach((r) => r.classList.remove("hot"));
+    rings.forEach((g) => { g.classList.remove("dim"); g.setAttribute("stroke-width", SW); });
+  };
+  [...rows, ...rings].forEach((n) => {
+    n.addEventListener("mouseenter", () => highlight(Number(n.dataset.idx)));
+    n.addEventListener("mouseleave", clear);
+  });
+}
+
+// 1) 称号体系偏好（本地库真实分布：m=34966 / c=1）
+renderDonut(
+  document.getElementById("titleDonut"),
+  [
+    { label: "军衔制（默认）", value: 34966 },
+    { label: "旧版称号（雷帝/雷圣/…/布衣）", value: 1 },
+  ],
+  "已存偏好玩家",
+  ""
+);
+
+// 2) 设备分布（近 30 天 PV）
+renderDonut(
+  document.getElementById("deviceDonut"),
+  [
+    { label: "桌面", value: 7589 },
+    { label: "手机", value: 2849 },
+    { label: "平板", value: 453 },
+    { label: "未知", value: 308 },
+  ],
+  "访问 PV（30 天）",
+  ""
+);
+
+// 3) 软件分布（Vienna 0.09% < 0.5% → 自动并入「其他」）
+renderDonut(
+  document.getElementById("softwareDonut"),
+  [
+    { label: "Arbiter", value: 251889 },
+    { label: "Clone", value: 56604 },
+    { label: "Vienna", value: 261 },
+  ],
+  "录像总数",
+  "其他 = Vienna 261 部（0.09%，避免扇区细成一条缝）"
+);
+</script>
+</body>
+</html>

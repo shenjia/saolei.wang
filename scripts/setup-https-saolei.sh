@@ -1,0 +1,487 @@
+#!/usr/bin/env bash
+#
+# setup-https-saolei.sh — saolei HTTPS 配置（root 执行）
+#
+# 用法: sudo bash /home/deploy/setup-https-saolei.sh
+#
+# 动作:
+#   1. acme.sh http-01 签发三域名 SAN 证书（new / www / 裸域 saolei.wang；
+#      webroot=/home/deploy/acme-www，与 nginx conf 的 /.well-known/acme-challenge/
+#      location 对应；已签发则等价于续期检查）
+#   2. install-cert 到 /etc/nginx/ssl/saolei/（与 acme 目录解耦，续期后自动 reload nginx）
+#   3. 重写 ~/nginx-conf/saolei.conf：80 留 acme 验证 + 301 到 https；新增 443 server 块
+#      （裸域主站；www/new 别名各自独立 server 块 301 到裸域——2026-10-30 修复 www 自跳转死循环）
+#   4. nginx -t && nginx -s reload
+#
+# ============ 正式切换 www.saolei.wang 操作手册（2026-10-15） ============
+# 前置（张老师在控制台/后台操作，缺一不可）：
+#   a. DNS：www.saolei.wang 与 saolei.wang 的 A 记录 → 60.205.137.210
+#      （旧站 123.56.177.46 已 502，直接切；TTL 建议提前调短到 600）
+#   b. QQ互联控制台：回调域名白名单加 www.saolei.wang（回调路径 /api/auth/qq/callback）
+#   c. 微信开放平台「网站应用」：授权回调域改为 www.saolei.wang（/api/auth/wechat/callback）
+#   d. SMTP_* 五个环境变量补进 .env（邮箱找回密码）
+# 切换顺序：
+#   1. 先跑本脚本（DNS 生效后 http-01 才能验证 www/裸域；new 已在服、即时通过）
+#   2. 改 /home/deploy/saolei.wang/.env 的 SITE_URL=https://www.saolei.wang
+#   3. 蓝绿重启（两槽都要吃到新 env）：pm2 restart saolei saolei-green --update-env
+#   4. 核验：https://www.saolei.wang 200、QQ/微信扫码登录走通、找回密码邮件到信、
+#      sitemap.xml 域名已是 www、/Online/game.asp 等旧 URL 301 正常
+#   5. /page/history 登记一条「正式启用 www.saolei.wang 域名」
+# 回滚：DNS 切回 123.56.177.46 即恢复旧域名口径（新站不受影响，new.* 始终可用）
+# ========================================================================
+
+set -euo pipefail
+
+ACME="/root/.acme.sh/acme.sh"
+DOMAINS=(new.saolei.wang www.saolei.wang saolei.wang)
+WEBROOT="/home/deploy/acme-www"
+CONF="/home/deploy/nginx-conf/saolei.conf"
+CERT_DIR="/etc/nginx/ssl/saolei"
+
+[[ -x "$ACME" ]] || { echo "[fail] acme.sh 不存在: $ACME"; exit 1; }
+[[ -f "$CONF" ]] || { echo "[fail] nginx conf 不存在: $CONF"; exit 1; }
+
+# nginx worker 以 user nginx 运行，须能穿越 /home/deploy 才能读到 webroot 验证文件；
+# deploy home 默认 700 → acme http-01 验证全 403（2026-09-26 实测踩坑）。
+# o+x 仅允许穿越目录、不开放列目录/读内容，幂等无害
+chmod o+x /home/deploy
+
+# 预检：三个域名都必须解析到本机公网 IP，否则 http-01 必挂（DNS 没切就先别跑）
+# 坑（2026-10-25 实证）：set -euo pipefail 下「command_sub=$(dig|grep|tail)」任一环失败
+# 会直接 abort 整个脚本（本机没装 dig 时必炸），必须给管道兜 || true；ifconfig.me 从
+# Aliyun 内网常被 reset，本机 IP 优先走 metadata 服务
+echo "[0/3] DNS 预检（须全部指向本机）..."
+HOST_IP=$( (curl -s --max-time 5 http://100.100.100.200/latest/meta-data/eipv4 || curl -s --max-time 5 ifconfig.me || true) | tr -d '[:space:]' )
+for D in "${DOMAINS[@]}"; do
+  RESOLVED=""
+  if command -v dig >/dev/null 2>&1; then
+    RESOLVED=$( (dig +short "$D" @223.5.5.5 2>/dev/null || true) | grep -E '^[0-9.]+$' | tail -1 || true )
+  fi
+  [[ -n "$RESOLVED" ]] || RESOLVED=$( (getent hosts "$D" 2>/dev/null || true) | awk '{print $1}' | tail -1 || true )
+  echo "  $D -> ${RESOLVED:-未解析}"
+  if [[ -n "$HOST_IP" && "$RESOLVED" != "$HOST_IP" ]]; then
+    echo "[fail] $D 未指向本机（$HOST_IP），先完成 DNS 切换再跑本脚本"
+    exit 1
+  fi
+done
+
+echo "[1/3] acme.sh 签发 SAN 证书：${DOMAINS[*]}（http-01, webroot=$WEBROOT, CA=Let's Encrypt）..."
+# --server letsencrypt：复用 01xue 证书同款 LE 账户（account.conf 已注册），
+# 避开 acme.sh 3.x 默认 ZeroSSL 需要额外注册的不确定性
+ISSUE_ARGS=(); for D in "${DOMAINS[@]}"; do ISSUE_ARGS+=(-d "$D"); done
+"$ACME" --issue -w "$WEBROOT" --server letsencrypt "${ISSUE_ARGS[@]}" 2>&1 | tail -4
+# | tail 会吞签发失败退出码，须用 PIPESTATUS 显式判败（否则带着坏证书继续安装）
+[[ ${PIPESTATUS[0]} -eq 0 ]] || { echo "[fail] 证书签发失败，见上方输出"; exit 1; }
+
+echo "[2/3] 安装证书到 $CERT_DIR 并挂续期 reload..."
+mkdir -p "$CERT_DIR"
+"$ACME" --install-cert -d "${DOMAINS[0]}" \
+  --fullchain-file "$CERT_DIR/fullchain.pem" \
+  --key-file "$CERT_DIR/key.pem" \
+  --reloadcmd "nginx -s reload" >/dev/null
+chmod 644 "$CERT_DIR/fullchain.pem"
+chmod 600 "$CERT_DIR/key.pem"
+
+echo "[3/3] 重写 nginx conf（80 跳转 + 443）并 reload..."
+cp "$CONF" "$CONF.pre-san.bak"
+cat > "$CONF" <<'NGINXEOF'
+# saolei.wang 三域名（new / www / 裸域）— 新版扫雷网（Next.js 蓝绿双槽 @ saolei_upstream）
+# 由 scripts/setup-https-saolei.sh 生成。手工改动会被脚本覆盖。
+# 站点主域名 = saolei.wang 裸域（SITE_URL 同口径）；www / new.* 均为别名，80/443 整体 301 到裸域。
+
+log_format spider_saolei '$http_x_forwarded_for - $time_iso8601 "$request" $status $body_bytes_sent '
+                  '"$http_referer" rt=$request_time "$http_user_agent"';
+
+# ========== 反爬（2026-10-21）==========
+# map / limit_req_zone 定义在 /etc/nginx/conf.d/00-saolei-antibot.conf（软链到
+# /home/deploy/nginx-conf/00-saolei-antibot.conf，root-antibot-setup.sh 安装）。
+# 本脚本重写本文件时，server 块内的挂载点（if 403 / limit_req）必须原样保留。
+#
+# 2026-10-23 限速豁免（静态资源）：limit_req 原挂 server 顶层，一次页面加载
+# （HTML+JS chunk+CSS+头像 30-50 请求）叠加 Link prefetch 即打满 burst=20 → 玩家
+# 切排行 tab 连点出 429。开源 nginx 无 limit_req off 参数——改为把 general 限速
+# 下沉到 443 的动态 location /（只管 HTML/RSC/API）；静态 location 各自成块
+# 不带 limit_req，天然不限速。/videos/ 档不变。
+
+# ========== new.* 过渡域 301 归一化（2026-10-25 张老师指令）==========
+# new.saolei.wang 整体 301 到主域 saolei.wang（裸域）；80 块保留 acme 验证目录
+# （SAN 证书续期 http-01 会打三个域名，挑战请求不能跟着 301 走，留原地 200 最稳）
+server {
+    listen 80;
+    server_name new.saolei.wang;
+    location /.well-known/acme-challenge/ {
+        root /home/deploy/acme-www;
+    }
+    # UA 黑名单（2026-11-04）：别名域跳转块也挂——11-03 meta-webindexer 4.4 万次
+    # 全部打在 www/new 跳转块吃 301（主域黑名单管不到这里）。80 块的 if 必须放
+    # location / 内：server 级 if 在 rewrite 阶段先于 location 匹配执行，会把
+    # acme 挑战请求一并 403（证书续期会炸）。443 块无 acme location 不受影响。
+    location / {
+        if ($saolei_bad_ua) { return 403; }
+        return 301 https://saolei.wang$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name new.saolei.wang;
+    ssl_certificate     /etc/nginx/ssl/saolei/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/saolei/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    if ($saolei_bad_ua) { return 403; }
+    return 301 https://saolei.wang$request_uri;
+}
+
+# ========== www 301 归一化到裸域（2026-10-30 修复 www 死循环）==========
+# 原状：www 与裸域共服一个 server 块，80 块 return 301 https://$host 对 www
+# 而言＝301 到自己；ESA 边缘缓存该自跳转 301（30 天）→ www 无限重定向。
+# 拆独立块显式跳裸域（与 new.* 同模式）；80 块保留 acme 验证目录
+# （SAN 证书续期 http-01 会打 www，挑战请求不能跟着 301 走）。
+server {
+    listen 80;
+    server_name www.saolei.wang;
+    access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
+    client_max_body_size 30m;
+
+    # 301 不进 CDN 长缓存（2026-10-30 教训：ESA 把自跳转 301 缓存了 30 天）
+    add_header Cache-Control "no-cache" always;
+
+    # acme http-01 验证目录（证书续期也要走这里，不能跟着 301 走）
+    location /.well-known/acme-challenge/ {
+        root /home/deploy/acme-www;
+    }
+
+    # UA 黑名单（2026-11-04，同 new 80 块）：if 放 location / 内保 acme 挑战不被 403
+    location / {
+        if ($saolei_bad_ua) { return 403; }
+        return 301 https://saolei.wang$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name www.saolei.wang;
+    access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
+
+    ssl_certificate     /etc/nginx/ssl/saolei/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/saolei/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+    # 301 不进 CDN 长缓存（2026-10-30 教训：ESA 把自跳转 301 缓存了 30 天）
+    add_header Cache-Control "no-cache" always;
+    if ($saolei_bad_ua) { return 403; }
+    return 301 https://saolei.wang$request_uri;
+}
+
+server {
+    listen 80;
+    server_name saolei.wang;
+    access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
+    client_max_body_size 30m;
+
+    # acme http-01 验证目录（证书续期也要走这里，不能跟着 301 走）
+    location /.well-known/acme-challenge/ {
+        root /home/deploy/acme-www;
+    }
+
+    location / {
+        return 301 https://saolei.wang$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name saolei.wang;
+    access_log /home/deploy/nginx-logs/saolei.access.log spider_saolei;
+    client_max_body_size 30m;
+
+    ssl_certificate     /etc/nginx/ssl/saolei/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/saolei/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+
+    # ========== 反爬（2026-10-21，定义见 00-saolei-antibot.conf）==========
+    # UA 黑名单（空 UA / 脚本库 UA）直接 403；搜索引擎 bot 与 curl 不在黑名单
+    if ($saolei_bad_ua) { return 403; }
+    # 注意：general 限速不在此挂载（2026-10-23 下沉到 443 的动态 location /，
+    # 见下方——server 顶层挂载会把 JS chunk/头像等静态请求也计入 burst，玩家
+    # 切排行 tab 连点即 429；/videos/ 档仍在专属 location 内挂载）
+
+    # ========== 静态缓存（2026-10-20）==========
+    # 背景：Next 代理对 public/ 资源一律 max-age=0 每请求回源验证；这里按类型直读磁盘。
+    # ^~ 前缀优先于下方正则，防止误劫持。
+
+    # Next 构建产物：自带 Cache-Control immutable 一年，原样转发即可
+    location ^~ /_next/ {
+        proxy_pass http://saolei_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # 运行时上传（头像）由 nginx 直读磁盘：Next 生产模式 public/ 是构建期快照，
+    # 运行期新增文件不经 nginx 读不到（01xue 同款坑）。URL 可能固定复用 → 只给 7d
+    location ^~ /uploads/ {
+        alias /home/deploy/saolei.wang/public/uploads/;
+        expires 7d;
+        access_log off;
+    }
+
+    # 论坛外链图本地化 WebP（2026-10-22，gitignore 不入库、部署 rsync --delete 不碰，
+    # 运行期由 scripts/sync/bbs-img-localize.py 落盘；内容寻址不可变 → 长缓存）
+    location ^~ /bbs-img/ {
+        alias /home/deploy/saolei.wang/public/bbs-img/;
+        expires 30d;
+        access_log off;
+    }
+
+    # 旧站迁移用户照片（/images/player/{id}.jpg，gitignore 不入库，运行期补文件同样需要直读）
+    location ^~ /images/player/ {
+        alias /home/deploy/saolei.wang/public/images/player/;
+        expires 7d;
+        access_log off;
+    }
+
+    # 录像实体文件（/videos/** gitignore 不入库，单独 rsync，部署 --delete 不碰）
+    location ^~ /videos/ {
+        # 录像文件带宽保护：56 万文件，狂抓打爆带宽（2026-10-21）。
+        # videos 档在本 location 内独立挂载（general 已下沉到动态 location /，两档不叠加）
+        limit_req zone=saolei_videos burst=6 nodelay;
+        alias /home/deploy/saolei.wang/videos/;
+        expires 30d;
+        # 流量测算（2026-10-29）：独立日志观察回放量，为 CDN 选型提供数据；
+        # 主日志曾因 access_log off 对 videos 全盲
+        access_log /home/deploy/nginx-logs/saolei-videos.access.log spider_saolei;
+    }
+
+    # 唯一生效样式文件（改动相对频繁，部署即变）：短缓存，隔天全网可见
+    location = /styles/legacy-2013.css {
+        root /home/deploy/saolei.wang/public;
+        expires 1d;
+        access_log off;
+    }
+
+    # Next metadata 图标（编译产物在 src/app/，磁盘 public/ 没有）→ 交回 Next 处理
+    location = /icon.svg       { proxy_pass http://saolei_upstream; }
+    location = /favicon.ico    { proxy_pass http://saolei_upstream; }
+    location = /apple-icon.png { proxy_pass http://saolei_upstream; }
+
+    # 排名模式权威对局 WS：走 authority_upstream 双实例热备（2026-10-27）。
+    # active/backup 与 Next 的 saolei_upstream 同套路，由 release 脚本改写 + reload；
+    # reload 只影响新连接，已建立的 WS 由旧 worker 继续服务到断开。
+    # 多地域探测端点（2026-10-28）：免 limit_req 直返——/api/ping 原走 location /
+    # 受 saolei_general 限速，浏览密集时 429 会把北京从选路探测里误杀（客户端
+    # 非 200/404 即抛错剔除该节点），把用户偏向香港节点；204 与香港 Caddy 静态
+    # 返回对等，保探测公平
+    # 质询页整页缓存（2026-11-13：next 参数改客户端解析后页面纯静态）。
+    # 缓存键不含查询串——bot 的 next 参数组合爆炸（日 22 万请求数百种参数），
+    # 动态 location / 的键含 $request_uri，60s 窗口形同虚设全 MISS 回源；
+    # 键收敛到 $uri 后全站每 60s 最多回源一次。响应头给 public,max-age=3600
+    # 供浏览器/ESA 边缘缓存。POST 验证接口 /api/bot/challenge 不受影响（POST
+    # 走动态 location / 的 method bypass）。
+    location = /bot/challenge {
+        limit_req zone=saolei_general burst=20 nodelay;
+        set $page_cache_bypass $saolei_method_bypass;
+        if ($http_cookie ~ saolei_session) { set $page_cache_bypass "cookie"; }
+        if ($http_rsc) { set $page_cache_bypass "rsc"; }
+        if ($http_next_router_prefetch) { set $page_cache_bypass "rsc"; }
+        proxy_cache_bypass $page_cache_bypass;
+        proxy_no_cache $page_cache_bypass $upstream_http_set_cookie;
+        proxy_ignore_headers Cache-Control Expires Set-Cookie;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "public, max-age=3600" always;
+        proxy_cache saolei_pages;
+        proxy_cache_key "$scheme://$host$uri";
+        proxy_cache_valid 200 1h;
+        proxy_cache_valid 404 10s;
+        proxy_cache_valid 500 502 503 504 5s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 5s;
+        add_header X-Cache-Status $upstream_cache_status always;
+        # 过期先回旧页（STALE 秒回）、后台静默重建（2026-11-16）：质询页 1h TTL，
+        # 到期后 bot 请求不再阻塞等待渲染，也无空窗
+        proxy_cache_background_update on;
+        proxy_pass http://saolei_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location = /api/ping {
+        access_log off;
+        return 204;
+    }
+
+    location = /ws/online/ranked {
+        proxy_pass http://authority_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # 其余 public 静态（logo/表情/军衔图/下载包/皮肤包/练习页 js+css 等）：
+    # 均为构建期快照、部署才变 → 长缓存。URL 路径与 public/ 下相对路径一致，用 root 直读
+    location ~* \.(gif|jpe?g|png|svg|ico|webp|css|js|woff2?|ttf|eot|zip|rar|7z|apk|exe|mp3|wav)$ {
+        root /home/deploy/saolei.wang/public;
+        expires 30d;
+        access_log off;
+    }
+
+    # ========== 静态缓存段结束 ==========
+
+    # ========== L7 攻击闸门（2026-11-09 应急，一一/巡检会话；模板同步待办）==========
+    # 攻击画像：11 万分布式消费级 IP、轮换 Chrome UA、专打 /user/<id>?order/dir/level
+    # 随机参数组合穿透缓存；攻击请求 100% 无 Referer（实测 4361/4361）。
+    # 闸门：/user/<id> 带查询参数 且 无 Referer → 444（断连不回包）。
+    # 注意：nginx location 只匹配不含查询串的 URI，是否带参数须用 $args 判断。
+    # 真实用户路径不受影响：站内点排序必带 Referer；外部分享裸链无参数。
+    location ~ ^/user/[0-9]+$ {
+        set $ddos_gate "";
+        if ($http_referer = "") { set $ddos_gate "noref"; }
+        if ($args != "") { set $ddos_gate "${ddos_gate}_args"; }
+        if ($ddos_gate = "noref_args") { return 444; }
+        limit_req zone=saolei_general burst=20 nodelay;
+
+        # 游客整页缓存（同 location / 的配置——本 location 优先级更高，/user/<id>
+        # 请求全部落在这里，必须同样挂缓存；攻击者带参数请求已被上方 444 拦截，
+        # 到达此处的游客请求吃 60s 缓存，Node 只需每 uid 每分钟渲染一次）
+        set $page_cache_bypass $saolei_method_bypass;
+        if ($http_cookie ~ saolei_session) { set $page_cache_bypass "cookie"; }
+        if ($args ~ _rsc=) { set $page_cache_bypass "rsc"; }
+        if ($http_rsc) { set $page_cache_bypass "rsc"; }
+        if ($http_next_router_prefetch) { set $page_cache_bypass "rsc"; }
+        if ($request_uri ~ ^/api/) { set $page_cache_bypass "api"; }
+        proxy_cache_bypass $page_cache_bypass;
+        proxy_no_cache $page_cache_bypass $upstream_http_set_cookie;
+        proxy_ignore_headers Cache-Control Expires Set-Cookie;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        proxy_cache saolei_pages;
+        proxy_cache_key "$scheme://$host$request_uri";
+        proxy_cache_valid 200 60s;
+        proxy_cache_valid 301 302 10m;
+        proxy_cache_valid 404 10s;
+        proxy_cache_valid 500 502 503 504 5s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 5s;
+        add_header X-Cache-Status $upstream_cache_status always;
+        # 过期先回旧页（STALE 秒回）、后台静默重建（2026-11-16）：游客/爬虫请求
+        # 到期瞬间不再撞 307 闸，也无 60s 过期空窗
+        proxy_cache_background_update on;
+
+        proxy_pass http://saolei_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location / {
+        # general 限速下沉至此（2026-10-23）：只管动态路径（HTML/RSC/API）；
+        # 静态 location 各自成块不带 limit_req 即天然不限速（server 顶层挂载会把
+        # JS chunk/头像也算进 burst，玩家切排行 tab 连点即 429）
+        limit_req zone=saolei_general burst=20 nodelay;
+
+        # ===== 游客整页缓存（2026-11-09，zone 定义见 00-saolei-pagecache.conf）=====
+        # bypass 判据（proxy_cache_bypass/proxy_no_cache 语义：参数非空且非 "0" 即
+        # 触发；空串 = 放行缓存）。四类不放行：非 GET（map）、带 saolei_session
+        # cookie（登录用户实时）、?_rsc=（RSC 流式响应非 HTML）、/api/ 前缀。
+        # 另有 $upstream_http_set_cookie 非空不落盘（上游种 cookie 的响应不缓存）。
+        set $page_cache_bypass $saolei_method_bypass;
+        if ($http_cookie ~ saolei_session) { set $page_cache_bypass "cookie"; }
+        if ($args ~ _rsc=) { set $page_cache_bypass "rsc"; }
+        if ($http_rsc) { set $page_cache_bypass "rsc"; }
+        if ($http_next_router_prefetch) { set $page_cache_bypass "rsc"; }
+        if ($request_uri ~ ^/api/) { set $page_cache_bypass "api"; }
+        proxy_cache_bypass $page_cache_bypass;
+        proxy_no_cache $page_cache_bypass $upstream_http_set_cookie;
+        # Next 全部响应带 Cache-Control: private, no-cache, no-store——nginx 默认
+        # 尊重源站拒绝落盘。缓存安全性已由 bypass 判据（cookie/_rsc/api）+ 不缓存
+        # Set-Cookie 响应保证，此处显式忽略源站 no-store 由 nginx 接管缓存生命周期。
+        proxy_ignore_headers Cache-Control Expires Set-Cookie;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+        proxy_cache saolei_pages;
+        proxy_cache_key "$scheme://$host$request_uri";
+        proxy_cache_valid 200 60s;
+        proxy_cache_valid 301 302 10m;
+        proxy_cache_valid 404 10s;
+        proxy_cache_valid 500 502 503 504 5s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 5s;
+        add_header X-Cache-Status $upstream_cache_status always;
+        # 过期先回旧页（STALE 秒回）、后台静默重建（2026-11-16）：游客页缓存到期瞬间不
+        # 再撞 307 闸（原 40s preheat 每 80s 有 20s 空窗）；间隔放宽 59s，空窗由本指令兜底
+        proxy_cache_background_update on;
+
+        proxy_pass http://saolei_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINXEOF
+
+# ── conf.d 软链自愈（2026-10-29）────────────────────────────────────────────
+# 2026-10-27/28 期间 /etc/nginx/conf.d/saolei.conf 软链断裂成独立真身文件，导致
+# ~/nginx-conf 副本与 nginx 实际加载内容脱节（改副本不生效的事故根源）。此处把
+# 软链恢复：真身唯一化到 ~/nginx-conf/saolei.conf（本脚本刚生成的最新内容），
+# 断裂遗留的 /etc 普通文件先备份再移除。幂等：已是软链则直接跳过。
+ETC_CONF="/etc/nginx/conf.d/saolei.conf"
+if [[ -L "$ETC_CONF" ]]; then
+  echo "  [skip] $ETC_CONF 已是软链 -> $(readlink "$ETC_CONF")"
+else
+  if [[ -f "$ETC_CONF" ]]; then
+    cp "$ETC_CONF" "${ETC_CONF}.broken-symlink.bak.$(date +%Y%m%d%H%M%S)"
+    echo "  [bak] 断裂真身已备份: ${ETC_CONF}.broken-symlink.bak.*"
+    rm -f "$ETC_CONF"
+  fi
+  ln -s "$CONF" "$ETC_CONF"
+  echo "  [ok] $ETC_CONF -> $CONF（软链已恢复）"
+fi
+
+# 权威对局 upstream（双实例热备，2026-10-27）：文件本身由 scripts/server-release.sh
+# 改写（active/backup），这里只保证 conf.d 软链存在 + 首次初始化，否则 nginx 报
+# unknown upstream "authority_upstream"（WS 直接 502）
+AUTH_UP="/home/deploy/nginx-upstream/authority-upstream.conf"
+if [[ ! -f "$AUTH_UP" ]]; then
+  mkdir -p /home/deploy/nginx-upstream
+  cat > "$AUTH_UP" <<'AUTHEOF'
+# 此文件由 scripts/server-release.sh 自动管理，勿手动修改
+# active: a
+upstream authority_upstream {
+    server 127.0.0.1:3104;        # a (active)
+    server 127.0.0.1:3105 backup; # b (standby)
+}
+AUTHEOF
+  chown deploy:deploy "$AUTH_UP"
+fi
+ln -sf "$AUTH_UP" /etc/nginx/conf.d/authority-upstream.conf
+
+nginx -t
+nginx -s reload
+echo "[ok] HTTPS 就绪 → https://saolei.wang  （80 端口已整体 301 到 https；new.* 过渡域已 301 到主域）"

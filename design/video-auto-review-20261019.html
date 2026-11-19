@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>录像自动分拣机制 · 策划方案 v2（已并入 10-19 拍板）</title>
+<style>
+  :root {
+    --bg: #1e1f1c; --panel: #272822; --panel2: #2d2e27; --line: #3b3a32;
+    --fg: #f8f8f2; --dim: #75715e; --green: #a6e22e; --yellow: #e6db74;
+    --orange: #f79646; --red: #f92672; --cyan: #66d9ef; --purple: #ae81ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 14px/1.75 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 40px 16px 80px;
+  }
+  .page { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  h1 .tag { font-size: 12px; color: var(--bg); background: var(--green); border-radius: 3px; padding: 2px 8px; vertical-align: middle; margin-left: 10px; letter-spacing: 1px; }
+  h1 .tag2 { font-size: 12px; color: var(--bg); background: var(--dim); border-radius: 3px; padding: 2px 8px; vertical-align: middle; margin-left: 6px; }
+  .subtitle { color: var(--dim); font-size: 13px; margin-bottom: 24px; }
+  h2 { font-size: 18px; color: var(--cyan); margin: 38px 0 12px; padding-left: 10px; border-left: 3px solid var(--cyan); }
+  h2 .no { color: var(--dim); font-weight: normal; margin-right: 6px; }
+  h3 { font-size: 15px; margin: 18px 0 8px; color: var(--yellow); }
+  p { margin: 8px 0; color: #d7d3c8; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 20px; margin: 14px 0; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+  .kpi .v { font-size: 22px; font: 700 22px/1.3 inherit; }
+  .kpi .l { font-size: 12px; color: var(--dim); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; background: var(--panel); border-radius: 6px; overflow: hidden; }
+  th { background: var(--panel2); color: var(--dim); text-align: left; padding: 8px 12px; font-weight: 600; white-space: nowrap; }
+  td { padding: 8px 12px; border-top: 1px solid var(--line); vertical-align: top; color: #d7d3c8; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .g { color: var(--green); } .y { color: var(--yellow); } .o { color: var(--orange); }
+  .r { color: var(--red); } .c { color: var(--cyan); } .p { color: var(--purple); } .dim { color: var(--dim); }
+  b { color: var(--fg); }
+  .pill { display: inline-block; border-radius: 10px; padding: 0 9px; font-size: 12px; line-height: 20px; white-space: nowrap; }
+  .pill.green { background: rgba(166,226,46,.14); color: var(--green); border: 1px solid rgba(166,226,46,.4); }
+  .pill.orange { background: rgba(247,150,70,.14); color: var(--orange); border: 1px solid rgba(247,150,70,.4); }
+  .pill.red { background: rgba(249,38,114,.14); color: var(--red); border: 1px solid rgba(249,38,114,.4); }
+  .pill.cyan { background: rgba(102,217,239,.12); color: var(--cyan); border: 1px solid rgba(102,217,239,.35); }
+  .pill.grey { background: rgba(117,113,94,.15); color: var(--dim); border: 1px solid rgba(117,113,94,.4); }
+  .flow { display: flex; flex-direction: column; gap: 0; align-items: stretch; margin: 16px 0; }
+  .fnode { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 10px 16px; display: flex; align-items: center; gap: 14px; }
+  .fnode .step { flex: 0 0 200px; font-weight: 700; }
+  .fnode .desc { color: #d7d3c8; font-size: 13px; }
+  .farrow { text-align: center; color: var(--dim); font-size: 12px; line-height: 22px; }
+  .fnode.red { border-color: rgba(249,38,114,.5); }
+  .fnode.green { border-color: rgba(166,226,46,.5); }
+  .fnode.orange { border-color: rgba(247,150,70,.5); }
+  .lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; }
+  .lane { border-radius: 6px; padding: 12px 14px; border: 1px solid var(--line); background: var(--panel); }
+  .lane .lt { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  .lane.red { border-color: rgba(249,38,114,.5); } .lane.red .lt { color: var(--red); }
+  .lane.green { border-color: rgba(166,226,46,.5); } .lane.green .lt { color: var(--green); }
+  .lane.orange { border-color: rgba(247,150,70,.5); } .lane.orange .lt { color: var(--orange); }
+  .lane .ld { font-size: 12px; color: #c5c1b6; line-height: 1.6; }
+  ul, ol { margin: 8px 0 8px 22px; color: #d7d3c8; }
+  li { margin: 4px 0; }
+  .note { background: rgba(230,219,116,.06); border: 1px solid rgba(230,219,116,.25); border-radius: 6px; padding: 10px 14px; font-size: 13px; margin: 12px 0; color: #d7d3c8; }
+  .note b { color: var(--yellow); }
+  .warn { background: rgba(249,38,114,.06); border: 1px solid rgba(249,38,114,.3); border-radius: 6px; padding: 10px 14px; font-size: 13px; margin: 12px 0; color: #d7d3c8; }
+  .warn b { color: var(--red); }
+  code { background: var(--panel2); border-radius: 3px; padding: 1px 6px; font-size: 12.5px; color: var(--yellow); font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .strike { text-decoration: line-through; opacity: .55; }
+  .foot { margin-top: 50px; color: var(--dim); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>录像自动分拣机制 <span class="tag">v2 定稿</span><span class="tag2">已并入 10-19 拍板</span></h1>
+<div class="subtitle">saolei.wang · 2026-10-19 15:23 · v1 讨论稿四点拍板 + press-release 触发器已全部落实，本稿为待实施版</div>
+
+<div class="note" style="border-color: rgba(166,226,46,.35);">
+<b>拍板落实（v1 → v2 变更）</b>：
+① <span class="strike">绝对时间线触发器</span> <b class="g">删除</b>（张老师：时间线并不重要）；
+② <span class="strike">新用户首录像特殊处理</span> <b class="g">删除</b>；
+③ <b class="g">不存在机器自动过审</b>——所有录像必须由管理员手动通过。机器只做「分拣」：无需人工核定的进「一键通过池」（批量组），需要人工核定的只能逐条手审；
+④ 转人工原因<b class="g">只在后台显示，玩家不可见</b>。
+新增核心触发器（张老师 15:23 补充）：<b>press-release 平均时长 ≤0.06s → 人审</b>（事件流指纹，直击机器生成录像）。
+</div>
+
+<h2><span class="no">00</span>新机制一览（30 秒版）</h2>
+
+<div class="flow">
+  <div class="fnode red"><div class="step r">① 上传硬校验</div><div class="desc">现状不动：格式 / 大小 / md5 去重 / 版本 / 胜局判定 / 3BV 下限 / 签名敏感词——不合规直接拒收</div></div>
+  <div class="farrow">│ 落库 status=10</div>
+  <div class="fnode"><div class="step c">② 机器分拣（新）</div><div class="desc">after() 异步跑触发器组（指标计算 ~2.4ms/盘 + press-release 重放），每盘打标：<b>免核定 / 需核定 + 原因码</b>。分拣失败 = 需核定（永不静默放行）</div></div>
+  <div class="farrow">│ 管理员后台待审队列（按标注分组）</div>
+  <div class="fnode green"><div class="step g">③a 免核定池</div><div class="desc">零触发器命中 → 进入「一键通过」批量组。<b>通过动作仍是管理员手动执行</b>（现有批量通过按钮，一次点掉一整批）；防盲审下载检查照旧</div></div>
+  <div class="fnode orange"><div class="step o">③b 需核定池</div><div class="desc">任一触发器命中 → <b>只能逐条手审</b>（不进批量组）。行内显示触发原因标签，疑似作弊（多重命中）置顶 + 红标</div></div>
+  <div class="farrow">│ 手动通过 / 屏蔽（现有 reviewVideo 管线：成绩 / 动态 / 3BV / 指标补算）—— 现状不动</div>
+  <div class="fnode"><div class="step">④ 成绩管线</div><div class="desc">与今天完全一致：手动通过走全量成绩管线。机器永不触碰 status</div></div>
+</div>
+
+<h2><span class="no">01</span>为什么删时间线是对的（留档说明）</h2>
+<p>时间线本质是「成绩好不好」的代理指标，与 STNB 分位高度重叠（快成绩必然高 STNB）；而机器该干的活是识别<b>异常</b>而不是识别<b>优秀</b>。v2 保留的触发器全部指向两类硬信号：</p>
+<ul>
+  <li><b>物理指纹</b>：press-release 时长、cls 手速、path 行程——机器生成的事件流在这些维度上与人类分布完全分离；</li>
+  <li><b>价值信号</b>：STNB 分位、破纪录、进 TOP 榜——决定哪些盘值得人眼看一眼。</li>
+</ul>
+
+<h2><span class="no">02</span>触发器规则表（v2 定稿）</h2>
+<p>任一命中 → 需核定（只能手审）。全部不命中 → 免核定池（可批量一键通过）。</p>
+
+<h3>2.1 核心触发器：press-release 时长（新增，张老师定）</h3>
+<table>
+  <tr><th>项</th><th>规则</th><th>说明</th></tr>
+  <tr><td>判定口径</td><td>全盘左键按下→松开的<b>平均时长 ≤ 60ms</b>（lc/lr 配对，时间序自然配对）</td><td>人类真实分布（120 盘抽样实测）：平均 59~150ms、中位 80ms；机器生成流贴近 0（脚本无需「按住」）</td></tr>
+  <tr><td>守卫条件</td><td>配对数 ≥ <b>30</b>（初级局点击太少噪声大）</td><td>实测初级 1~2s 局只有 2~21 次配对，n&lt;30 分布不稳，不判</td></tr>
+  <tr><td>右键变体</td><td>右键平均 ≤ 60ms 且配对数 ≥ 30 → 同样命中</td><td>标雷手速快的真人可能贴线，故右键单独算、不与左键合并</td></tr>
+  <tr><td>实测误落</td><td class="g">exp 层 60 盘 3 盘贴线（60/59/61ms，皆为 STNB 100+ 高手局，本来就该复核）</td><td>贴线者与「高价值」触发器天然重叠——误落成本≈0</td></tr>
+</table>
+<div class="note"><b>引擎事实</b>：AVF 时间戳 10ms 粒度、MVF 1ms；配对口径与回放引擎/统计引擎同一状态机（replay-core 全站唯一事实源）。video_metrics 六维指标不含此项，需分拣时现算（~2ms/盘，可接受）。</div>
+
+<h3>2.2 物理合理性（沿用 v1，指标已在库）</h3>
+<table>
+  <tr><th>信号</th><th>阈值</th><th class="num">2026 年命中</th><th>说明</th></tr>
+  <tr><td>手速 cls</td><td>&gt; 10 次/秒</td><td class="num">10 / 9,837</td><td>全站真实 max 7.77（高级）</td></tr>
+  <tr><td>行程 path</td><td>= 0 且点击 &gt; 20</td><td class="num">0</td><td>无移动连点 = 脚本特征</td></tr>
+  <tr><td>每击行程 ppc</td><td>&lt; 0.5 格/击 且点击 &gt; 50</td><td class="num">影子期校准</td><td>几乎原地连开</td></tr>
+  <tr><td>点击数下限</td><td>cl &lt; bbbv × 0.8</td><td class="num">影子期校准</td><td>开完 3BV 的最少操作都不够</td></tr>
+  <tr><td>首击延迟</td><td>&lt; 0.1s</td><td class="num">影子期校准</td><td>瞬时首击疑似预制盘脚本</td></tr>
+</table>
+
+<h3>2.3 价值信号（沿用 v1）</h3>
+<table>
+  <tr><th>信号</th><th>阈值</th><th class="num">2026 年命中</th><th>说明</th></tr>
+  <tr><td>STNB 分位</td><td>初 &gt; 205 / 中 &gt; 160 / 高 &gt; 150（flag 与 NF 同线）</td><td class="num">306 / 9,837（3.1%）</td><td>各级别 p99 定标；NF 与 flag 同线（NF 样本 3.7 万、STNB 常数已按级别归一）</td></tr>
+  <tr><td>个人破纪录</td><td>刷新该用户任一级别 time / 3bvs 最好成绩</td><td class="num">并入 STNB 高分区</td><td>破纪录动态发布前需人确认</td></tr>
+  <tr><td>级别 TOP 榜</td><td>时间进 TOP100 或 3bvs 进 TOP10</td><td class="num">并入 STNB 高分区</td><td>上榜成绩代表站点公信力</td></tr>
+  <tr><td>首次入伍</td><td>该用户三级成绩将首次齐全</td><td class="num">并入 STNB 高分区</td><td>入伍动态全站可见</td></tr>
+</table>
+
+<h3>2.4 信任分（简化：只降不升）</h3>
+<table>
+  <tr><th>信任级</th><th>条件</th><th>效果</th></tr>
+  <tr><td class="dim">0 默认</td><td>所有人</td><td>标准阈值</td></tr>
+  <tr><td class="r">-1 存疑</td><td>名下有被屏蔽录像 或 账号曾被封</td><td><b>一律需核定</b>（永不进免核定池），且置顶展示</td></tr>
+</table>
+<p class="dim">v1 的 +1 信任加速删除——机器不自动过后，放宽阈值只影响进哪个池子，意义骤减；保留 -1 一刀切（有历史问题的账号全部人工看）。</p>
+
+<h2><span class="no">03</span>预期分流（按 2026 年真实上传回测）</h2>
+
+<div class="kpis">
+  <div class="kpi"><div class="v g">~94%</div><div class="l">免核定池（可批量一键过）</div></div>
+  <div class="kpi"><div class="v o">~6%</div><div class="l">需核定（只能手审）</div></div>
+  <div class="kpi"><div class="v">~1,000/月</div><div class="l">上传量（不变）</div></div>
+  <div class="kpi"><div class="v c">~2 条/天</div><div class="l">需核定手审量（估）</div></div>
+</div>
+
+<table>
+  <tr><th>触发器</th><th class="num">2026 命中</th><th class="num">占比</th><th>动作</th></tr>
+  <tr><td>press-release ≤60ms（估）</td><td class="num">~50</td><td class="num">~0.5%</td><td>手审 + 疑似作弊标记</td></tr>
+  <tr><td>STNB 分位（初205/中160/高150）</td><td class="num">306</td><td class="num">3.1%</td><td>手审（高价值复核）</td></tr>
+  <tr><td>cls &gt; 10</td><td class="num">10</td><td class="num">~0.1%</td><td>手审 + 疑似作弊标记</td></tr>
+  <tr><td>破纪录 / TOP 榜 / 首次入伍</td><td class="num">并入 STNB 高分区</td><td class="num">—</td><td>手审（高价值复核）</td></tr>
+  <tr><td>低信任（有屏蔽/封禁史）</td><td class="num">按账号实时算</td><td class="num">—</td><td>手审 + 置顶</td></tr>
+  <tr><td><b>合计需核定</b></td><td class="num"><b>~600/年</b></td><td class="num"><b>~6%</b></td><td><b>每天约 2 条手审</b></td></tr>
+</table>
+<p class="dim">v1 的 71% 自动过率口径已作废（机器不再执行通过）。新口径下管理员工作量 = 每天一两次批量一键过 + 每天约 2 条带原因标签的手审（疑似作弊置顶）。</p>
+
+<h2><span class="no">04</span>后台界面改造（P2，先出高保真稿）</h2>
+<div class="card">
+  <p><b>待审队列按标注分组</b>：</p>
+  <ul>
+    <li><span class="pill green">免核定</span> 默认队列视图——勾选 → 批量通过（现有功能，防盲审下载检查照旧）</li>
+    <li><span class="pill orange">需核定</span> <b>隐藏勾选框</b>，行内显示触发原因标签（如 <code>press≤60ms</code> / <code>STNB 175</code> / <code>破纪录</code> / <code>低信任</code>），疑似作弊（多重命中）置顶 + 红标</li>
+    <li>KPI 行新增：<b>免核定池大小</b> / <b>需核定数</b> / <b>分拣触发分布</b>（本周 STNB 命中 n 条、press 命中 n 条…）</li>
+  </ul>
+  <p><b>玩家端零变化</b>：详情页、列表、动态、榜单不出现任何「机器判定」痕迹（拍板④）。</p>
+</div>
+
+<h2><span class="no">05</span>数据与代码落点</h2>
+<table>
+  <tr><th>项</th><th>方案</th></tr>
+  <tr><td>schema</td><td>Video 加两列：<code>auto_flag tinyint</code>（0=需核定 1=免核定 2=分拣失败按需核定）、<code>auto_reason int</code>（位码：bit0 press / bit1 STNB / bit2 cls / bit3 path·ppc / bit4 点击数 / bit5 首击 / bit6 破纪录 / bit7 TOP榜 / bit8 入伍 / bit9 低信任）。<b>只加列不建表</b>（生产 db push 铁律）</td></tr>
+  <tr><td>判档纯函数</td><td><code>src/lib/video-triage.ts</code>（新）——输入 parsed+metrics+信任查询结果，输出 {免核定, 原因码}；阈值常量集中一处</td></tr>
+  <tr><td>触发点</td><td>upload route 的 after()（与 ensureVideoMetrics 并排）；同步管线过来的录像由跑批脚本补判（scripts/video-triage-backfill.ts）</td></tr>
+  <tr><td>审核动作</td><td><b>零改动</b>——reviewVideo / 批量审核 API 原样（通过永远是管理员手动）；仅查询侧加 auto_flag 过滤与排序</td></tr>
+  <tr><td>后台 UI</td><td>AdminReviewList 按标注分组 + 原因标签列；UI 铁律：先出 design/ 高保真稿确认再动代码</td></tr>
+</table>
+
+<h2><span class="no">06</span>实施顺序（更新）</h2>
+<table>
+  <tr><th>阶段</th><th>内容</th><th>估时</th></tr>
+  <tr><td class="c">P0 定标回测</td><td>全量重放 2026 年 9,837 盘算 press-release 分布（含初级局 n&lt;30 守卫验证）+ ppc/点击数/首击三信号影子校准 → 阈值定稿</td><td>1 天</td></tr>
+  <tr><td class="c">P1 影子期</td><td>上线分拣写 auto_flag/auto_reason，<b>不分组</b>（后台仍一锅出）；观察一周对答案</td><td>3 天开发 + 1 周</td></tr>
+  <tr><td class="g">P2 分组生效</td><td>后台按免核定/需核定分组展示 + 需核定隐藏勾选（服务端同时强制：批量 API 拒绝需核定 id）</td><td>1 天</td></tr>
+  <tr><td class="y">P3 打磨</td><td>KPI 触发分布、审核员工作量、置顶逻辑打磨；存量 4 条待审人工清掉</td><td>2 天</td></tr>
+</table>
+
+<h2><span class="no">07</span>风险与对策（v2）</h2>
+<table>
+  <tr><th>风险</th><th>对策</th></tr>
+  <tr><td class="r">免核定池混进作弊录像被一键通过</td><td>触发器组合专打「机器特征」（press/cls/path）与「高价值」（STNB/榜单），作弊冲榜必踩价值线；且<b>通过动作终究是管理员手动</b>，真人工把关最后防线在；漏网后续可超管重审 + 屏蔽次优顶替（管线现成）</td></tr>
+  <tr><td class="r">press ≤60ms 误伤真人极速手</td><td>实测贴线者全部是 STNB 100+ 高手（本来就在需核定池里）；n≥30 守卫保护初级短局；阈值可调（0.05s/0.07s 均在人类 p5 以下安全区）</td></tr>
+  <tr><td class="r">分拣 after() 失败</td><td>失败即需核定（auto_flag=2），绝不静默进免核定池</td></tr>
+  <tr><td class="r">作弊者针对性绕过（伪造 press 时长）</td><td>press 只是多维之一：cls/path/ppc/首击仍在；且「绕过指纹」本身需要在生成器里精细模拟人类分布，门槛大幅抬高</td></tr>
+  <tr><td class="r">同步管线的旧录像没有 auto_flag</td><td>跑批补判（存量 30 万盘 × 2.4ms ≈ 12 分钟，后台跑）</td></tr>
+</table>
+
+<div class="foot">
+  定标数据：本地库 video/video_metrics 实测 + 120 盘抽样重放（2026-10-19）。press-release 抽样实测：人类左键 avg 59~150ms / p50 80ms，60ms 线 exp 层误落 3/60 且全为高手局。<br>
+  v1（2026-10-19 11:03 讨论稿）已废弃部分：时间线触发器、新用户首录像、机器自动过审。本 v2 与四点拍板 + press-release 触发器一致，待确认后先出后台高保真稿（UI 铁律）再动代码。
+</div>
+
+</div>
+</body>
+</html>

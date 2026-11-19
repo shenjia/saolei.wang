@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>排行 NF 开关（高保真设计稿）</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 28px 0 60px; background: #21222c; color: #f8f8f2; font: 13px/1.6 "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+a { text-decoration: none; }
+button { font-family: inherit; }
+#page { width: 80%; min-width: 760px; max-width: 1180px; margin: 0 auto; }
+.box { background: #3b3a32; border: 1px solid #656355; box-shadow: 2px 2px 5px rgba(0,0,0,.25); border-radius: 10px; padding: 14px 10px; }
+.page_head { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 10px; }
+.page_title { flex: none; margin: 0; color: #939387; font-size: 20px; font-weight: normal; line-height: 32px; }
+.ranking_nav { display: flex; flex: 1 0 fit-content; align-items: flex-end; justify-content: space-between; min-width: fit-content; margin: 0; }
+.ranking_left { display: flex; align-items: flex-end; gap: 10px; }
+.ranking_tabs { display: flex; align-items: flex-end; gap: 4px; border-bottom: 1px solid #49483e; }
+.ranking_tabs a, .ranking_tabs span { position: relative; display: block; padding: 9px 18px; color: #939387; font-size: 15px; cursor: pointer; }
+.ranking_tabs a:hover { color: #a6e22e; }
+.ranking_tabs .current { color: #fdc61d; font-weight: bold; cursor: default; }
+.ranking_tabs a::after, .ranking_tabs span::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: transparent; }
+.ranking_tabs .current::after { background: #fdc61d; }
+.ranking_tabs a:hover::after { background: #49483e; }
+.goto_form { position: relative; display: flex; align-items: center; padding-bottom: 5px; margin-left: auto; }
+.goto_search { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #656355; border-radius: 15px; background: #272822; color: #939387; }
+.goto_search input { width: 120px; padding: 4px 0; border: 0; outline: 0; background: none; color: #f8f8f2; font-size: 14px; }
+.goto_search input::placeholder { color: #75715e; }
+.nf_toggle { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 30px; height: 30px; margin: 0 0 1px; padding: 0; border: 1px solid #656355; border-radius: 5px; background: #49483e; color: #b1b1a4; cursor: pointer; font: bold 12px/1 Arial, Helvetica, sans-serif; letter-spacing: .5px; }
+.nf_toggle:hover { color: #e8e8e0; border-color: #939387; }
+.nf_toggle.active { color: #fdc61d; border-color: #fdc61d; }
+.nf_toggle:disabled, .nf_toggle:disabled:hover { border-color: #555449; background: #414037; color: #636359; cursor: not-allowed; }
+.nf_toggle .tip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 5; padding: 5px 10px; border: 1px solid #656355; border-radius: 5px; background: #272822; box-shadow: 0 4px 12px rgba(0,0,0,.45); color: #f8f8f2; white-space: nowrap; pointer-events: none; font: 12px/18px Arial, "PingFang SC", sans-serif; letter-spacing: normal; }
+.nf_toggle .tip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #656355; }
+.nf_toggle:hover .tip, .nf_toggle:focus-visible .tip { display: block; }
+.ranking_table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ranking_table th { padding: 6px 2px 4px; border-bottom: 1px solid #49483e; color: #939387; font-size: 12px; font-weight: normal; text-align: center; white-space: nowrap; }
+.ranking_table th a { color: #b1b1a4; }
+.ranking_table th a.current { color: #fdc61d; font-weight: bold; }
+.ranking_table th small { display: block; color: #636359; font-weight: normal; }
+.ranking_table td { height: 29px; padding: 0 2px; color: #b1b1a4; text-align: center; white-space: nowrap; }
+.ranking_table tbody tr:hover { background: rgba(255,255,255,.05); }
+.ranking_table td.rank { color: #939387; font-weight: bold; }
+.ranking_table td.rank em { color: #fdc61d; font-style: normal; }
+.ranking_table td.name { text-align: left; }
+.ranking_table td.name a { color: #f8f8f2; }
+.gender { display: inline-block; width: 8px; height: 8px; margin-left: 7px; border-radius: 50%; background: #66d9ef; vertical-align: 0; }
+.miltitle { color: #e6db74; }
+.pbar { position: relative; display: inline-block; width: 118px; height: 15px; overflow: hidden; border-radius: 3px; background: #272822; vertical-align: middle; }
+.pfill { position: absolute; inset: 0 auto 0 0; border-radius: 3px 0 0 3px; }
+.ptext { position: absolute; inset: 0; color: #f8f8f2; font-size: 11px; line-height: 15px; text-shadow: 0 1px 2px rgba(0,0,0,.7); letter-spacing: .5px; }
+.c_beg .pfill { background: #a6e22e; } .c_int .pfill { background: #fd971f; } .c_exp .pfill { background: #e6db74; } .c_sum .pfill { background: #b1b1a4; }
+.more_loader { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 0 4px; color: #636359; font-size: 12px; }
+.button { padding: 4px 14px; border: 0; border-radius: 4px; background: #a6e22e; color: #272822; font-size: 13px; }
+.design_note { width: 80%; max-width: 1180px; margin: 12px auto 0; color: #75715e; font-size: 12px; text-align: right; }
+@media (max-width: 1000px) {
+  #page { width: 96%; min-width: 0; }
+  .ranking_nav { flex-basis: 100%; }
+  .ranking_tabs a, .ranking_tabs span { padding-left: 12px; padding-right: 12px; }
+  .ranking_tabs a::after, .ranking_tabs span::after { left: 12px; right: 12px; }
+  .goto_search input { width: 90px; }
+  .design_note { width: 96%; }
+}
+</style>
+</head>
+<body>
+<div id="page" class="main ranking_old">
+  <div class="box ranking_box">
+    <div class="page_head">
+      <h1 class="page_title" id="pageTitle">BV排行</h1>
+      <div class="ranking_nav">
+        <div class="ranking_left">
+          <div class="ranking_tabs" id="tabs">
+            <a data-view="all">雷界</a><span class="current" data-view="bv">BV</span><a data-view="stnb">STNB</a><a data-view="grow">进步</a><a data-view="area">地区</a><a data-view="world">世界</a>
+          </div>
+          <button type="button" class="nf_toggle active" id="nfToggle" aria-pressed="true">NF<span class="tip" id="nfTip">只统计 NF 录像</span></button>
+        </div>
+        <div class="goto_form">
+          <span class="goto_search">
+            <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="9.4" y1="9.4" x2="13" y2="13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <input type="text" placeholder="姓名或ID">
+          </span>
+        </div>
+      </div>
+    </div>
+    <table class="ranking_table">
+      <thead><tr><th>排名</th><th style="text-align:left">姓名</th><th>军衔</th><th><a>初级</a><small>2 – 54</small></th><th><a>中级</a><small>30 – 133</small></th><th><a>高级</a><small>100 – 271</small></th><th><a class="current">总计</a><small>326</small></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="more_loader"><button class="button">加载更多</button><span>还有 10,075 位</span></div>
+  </div>
+</div>
+<div class="design_note">设计稿可点击榜别与 NF 开关；进步／地区／世界榜展示禁用态。</div>
+<script>
+const names = ["冯小峰", "毛涤尘", "王瑞霖", "郭锦洋", "林锦帆", "方任斌", "鞠泽恩", "韩笑", "陈尧钧", "李浩宇"];
+const titles = ["上校", "少将", "大元帅", "元帅", "元帅", "元帅", "大元帅", "少将", "元帅", "少将"];
+const supported = new Set(["all", "bv", "stnb"]);
+const labels = { all: "雷界排行", bv: "BV排行", stnb: "STNB排行", grow: "进步排行", area: "地区排行", world: "世界排行" };
+let view = new URLSearchParams(location.search).get("view") || "bv";
+let nf = new URLSearchParams(location.search).get("nf") !== "0";
+if (!supported.has(view)) nf = false;
+const rows = document.getElementById("rows");
+names.forEach((name, i) => {
+  const beg = 47 - i, inter = 90 - i * 2, exp = 147 - i * 3, total = beg + inter + exp;
+  rows.insertAdjacentHTML("beforeend", `<tr><td class="rank">第 <em>${i + 1}</em> 位</td><td class="name"><a>${name}</a><span class="gender"></span></td><td class="miltitle">${titles[i]}</td>${bar("beg", beg, 50)}${bar("int", inter, 104)}${bar("exp", exp, 172)}${bar("sum", total, 326)}</tr>`);
+});
+function bar(level, value, den) { return `<td><span class="pbar c_${level}"><span class="pfill" style="width:${(value / den * 100).toFixed(1)}%"></span><span class="ptext">${value}/${den}</span></span></td>`; }
+function render() {
+  document.getElementById("pageTitle").textContent = labels[view];
+  document.querySelectorAll("[data-view]").forEach(el => {
+    const on = el.dataset.view === view;
+    el.outerHTML = `<${on ? "span" : "a"} data-view="${el.dataset.view}"${on ? ' class="current"' : ""}>${el.textContent}</${on ? "span" : "a"}>`;
+  });
+  const toggle = document.getElementById("nfToggle");
+  toggle.classList.toggle("active", nf);
+  toggle.disabled = !supported.has(view);
+  toggle.setAttribute("aria-pressed", String(nf));
+  document.getElementById("nfTip").textContent = supported.has(view) ? (nf ? "只统计 NF 录像" : "开启后只统计 NF 录像") : "该榜不支持 NF 筛选";
+  document.querySelectorAll("[data-view]").forEach(el => el.addEventListener("click", () => {
+    view = el.dataset.view;
+    if (!supported.has(view)) nf = false;
+    render();
+  }));
+}
+document.getElementById("nfToggle").addEventListener("click", () => { if (supported.has(view)) { nf = !nf; render(); } });
+render();
+</script>
+</body>
+</html>

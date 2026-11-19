@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>管理后台入口图标设计稿 · 2026-10-15</title>
+<style>
+  body{background:#272822;margin:0;padding:40px 0 80px;font-family:"微软雅黑",Arial,"宋体";color:#636359;font-size:14px;line-height:21px}
+  .design_wrap{width:960px;margin:0 auto;padding:0 15px;box-sizing:border-box}
+  h3{color:#eee;font-size:16px;margin:28px 0 12px}
+  .note{color:#939387;font-size:13px;line-height:22px;margin:6px 0 14px}
+  .note b{color:#b1b1a4}
+
+  /* ===== 1:1 复刻顶栏（样式从 legacy-2013.css + globals.css 原样摘录） ===== */
+  #header{background:#151515;border-bottom:1px #49483e solid;position:relative}
+  .wrapper{height:44px;max-width:960px;margin:0 auto;padding:0 15px;display:flow-root;box-sizing:border-box}
+  .logo h1{float:left;color:#eeeeee;font-size:22px;line-height:44px;margin:0}
+  .logo h2{float:left;margin:0 0 0 5px;color:#b1b1a4;font-size:14px;line-height:44px;font-weight:normal}
+  .logo_icon{float:left;display:block;width:26px;height:26px;margin:9px 8px 0 0;border-radius:6px;background:#a6e22e}
+  .nav ul{float:right;margin:10px 0 0;padding:0;list-style:none}
+  .nav li{float:left;padding:0 5px}
+  .nav li a{color:#939387;font-size:15px;line-height:44px;text-decoration:none}
+  .nav li a:hover{color:#a6e22e}
+  .nav .popMenu{position:relative}
+  .nav .popMenu:hover{background:#3b3a32}
+  .nav .popMenu .menu{border:1px #49483e solid;background:#3b3a32;position:absolute;left:0;top:44px;min-width:104px;list-style:none;margin:0;padding:0;display:none}
+  .nav .popMenu:hover .menu{display:block}
+  .nav .popMenu .menu li{float:none;box-sizing:border-box;height:32px;padding:0 10px;width:100%;white-space:nowrap}
+  .nav .popMenu .menu li a{font-size:14px;line-height:32px;color:#b1b1a4;display:block}
+  .nav .popMenu .menu li a:hover{color:#a6e22e}
+  .um_trigger{display:flex;align-items:center;height:44px;font-size:15px;color:#939387}
+  .popMenu:hover .um_trigger{color:#b1b1a4}
+  .um_avatar{display:block;width:28px;height:28px;border-radius:50%;object-fit:cover;margin-right:6px;background:#3b3a32}
+  .um_name{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .um_icon{vertical-align:-2px;margin-right:7px;flex:none}
+
+  /* 图标默认灰、hover 绿——与线上一致，由 a 的 color 继承（currentColor） */
+  .icon_svg{width:14px;height:14px;vertical-align:-2px;margin-right:7px}
+
+  /* ===== 方案展示区 ===== */
+  .cmp_row{display:flex;gap:28px;align-items:flex-start}
+  .cmp_card{border:1px solid #49483e;background:#1e1f1c;border-radius:4px;padding:20px 24px;flex:1}
+  .cmp_card h4{color:#eee;font-size:15px;margin:0 0 6px}
+  .cmp_card .pros{color:#939387;font-size:13px;line-height:21px;margin:0}
+  .big_icons{display:flex;gap:34px;align-items:center;margin:6px 0 16px;padding:14px 18px;border:1px dashed #49483e;border-radius:4px;background:#272822}
+  .big_icons .cell{display:flex;flex-direction:column;align-items:center;gap:8px;color:#939387;font-size:12px}
+  .big_icons svg{width:44px;height:44px;color:#b1b1a4}
+  .big_icons .cell:hover svg{color:#a6e22e}
+  .tag{display:inline-block;font-size:12px;color:#a6e22e;border:1px solid #49483e;border-radius:3px;padding:1px 8px;margin-left:8px;vertical-align:1px}
+</style>
+</head>
+<body>
+<div class="design_wrap">
+
+  <h3>管理后台入口 · 图标设计稿（2026-10-15）</h3>
+  <p class="note">
+    需求：管理员登录后，首页头像下拉菜单出现「<b>管理后台</b>」入口。<br>
+    插入位置：<b>账户管理</b> 与 <b>退出登录</b> 之间（管理功能归组，退出永远垫底）；权限：<b>isManager（role 10/100）可见</b>，普通玩家不渲染。<br>
+    图标规格与现有四枚一致：14px、线宽 1.6、圆角线帽、currentColor（灰 #b1b1a4 → hover 绿 #a6e22e）。下面顶栏为 1:1 样式复刻，悬停可见真实 hover 效果。
+  </p>
+
+  <div id="header">
+    <div class="wrapper">
+      <div class="logo">
+        <span class="logo_icon"></span>
+        <h1>扫雷网</h1>
+        <h2>Saolei.wang</h2>
+      </div>
+      <div class="nav">
+        <ul>
+          <li><a href="#">首页</a></li>
+          <li><a href="#">排行</a></li>
+          <li><a href="#">录像</a></li>
+          <li><a href="#">论坛</a></li>
+          <li><a href="#">教程</a></li>
+          <li><a href="#">练习</a></li>
+          <li><a href="#">军衔</a></li>
+          <li><a href="#">下载</a></li>
+          <li class="popMenu">
+            <a href="#" class="um_trigger">
+              <img class="um_avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect width='56' height='56' fill='%2349483e'/%3E%3Ccircle cx='28' cy='22' r='10' fill='%23b1b1a4'/%3E%3Cpath d='M8 52c2-12 10-18 20-18s18 6 20 18' fill='%23b1b1a4'/%3E%3C/svg%3E" alt="">
+              <span class="um_name">张砷镓</span>
+            </a>
+            <ul class="menu">
+              <li><a href="#">
+                <svg class="icon_svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="4.2" r="2.4"/><path d="M2.4 12.2c0.6-2.6 2.4-3.8 4.6-3.8s4 1.2 4.6 3.8"/></svg>
+                个人主页</a></li>
+              <li><a href="#">
+                <svg class="icon_svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10.5V3.5M4 6l3-2.8 3 2.8"/><path d="M2.5 12h9"/></svg>
+                上传录像</a></li>
+              <li><a href="#">
+                <svg class="icon_svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.1"/><path d="M7 1.8v1.8M7 10.4v1.8M2.24 4.4l1.56 0.9M10.2 8.7l1.56 0.9M2.24 9.6l1.56-0.9M10.2 5.3l1.56-0.9"/></svg>
+                账户管理</a></li>
+              <li><a href="#">
+                <svg class="icon_svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="2.2" width="9.6" height="9.6" rx="1.6"/><path d="M7 2.2v9.6M2.2 7h9.6"/><rect x="8.1" y="3.5" width="2.4" height="2.4" rx="0.5" fill="currentColor" stroke="none"/></svg>
+                管理后台</a></li>
+              <li><a href="#">
+                <svg class="icon_svg" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12H3.2C2.8 12 2.5 11.7 2.5 11.3V2.7C2.5 2.3 2.8 2 3.2 2H6"/><path d="M9 4.2L11.8 7 9 9.8M4.8 7h7"/></svg>
+                退出登录</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:10px">▲ 1:1 复刻：悬停头像展开下拉，「管理后台」为方案 A 图标；每行悬停可见灰→绿变色。移动版 MobileNav 下拉同款图标，不再另出稿。</p>
+
+  <h3>两个图标方案对比（44px 放大）</h3>
+  <div class="cmp_row">
+    <div class="cmp_card">
+      <h4>方案 A：仪表盘象限<span class="tag">推荐</span></h4>
+      <div class="big_icons">
+        <div class="cell">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="2.2" width="9.6" height="9.6" rx="1.6"/><path d="M7 2.2v9.6M2.2 7h9.6"/><rect x="8.1" y="3.5" width="2.4" height="2.4" rx="0.5" fill="currentColor" stroke="none"/></svg>
+          灰态
+        </div>
+        <div class="cell">
+          <svg viewBox="0 0 14 14" fill="none" stroke="#a6e22e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="2.2" width="9.6" height="9.6" rx="1.6"/><path d="M7 2.2v9.6M2.2 7h9.6"/><rect x="8.1" y="3.5" width="2.4" height="2.4" rx="0.5" fill="#a6e22e" stroke="none"/></svg>
+          hover 绿
+        </div>
+      </div>
+      <p class="pros">外框 + 十字分成四格，右上格实心方块代表数据卡片——后台首页就是仪表盘（统计图表墙），语义最直接；且与齿轮（账户管理）、小人、箭头零混淆。</p>
+    </div>
+    <div class="cmp_card">
+      <h4>方案 B：盾牌对勾</h4>
+      <div class="big_icons">
+        <div class="cell">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.8l4.2 1.6v3.4c0 2.8-1.8 4.4-4.2 5.4-2.4-1-4.2-2.6-4.2-5.4V3.4z"/><path d="M5 6.9l1.5 1.5 2.6-2.8"/></svg>
+          灰态
+        </div>
+      </div>
+      <p class="pros">盾牌 + 对勾：管理、守护、审核语义。视觉更「威严」，但与站内既有图标语言（工具/功能向）稍偏，实心面积大、14px 下略重。</p>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:18px">落地清单（待张老师拍板后执行）：① MenuIcons.tsx 加 IconAdmin；② layout.tsx 与 MobileNav.tsx 各加一条 isManager 可见的「管理后台」菜单项（MobileNav 需把 role 传进 props）；③ 无新增 CSS。</p>
+
+</div>
+</body>
+</html>

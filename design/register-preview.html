@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>注册页 · 设计方案（参考 2008/2013 旧版）</title>
+<style>
+  /* ============================================================
+     色板：严格沿用 2013 Monokai（零新色）
+     #272822 页底 / #3b3a32 面板 / #49483e 分隔 / #636359 描边
+     #939387 表单文 / #b1b1a4 次文 / #75715e 弱文 / #f8f8f2 主文
+     #fdc61a 主黄 / #a6e22e 绿 / #f92672 红 / #8ac21b 焦点绿
+     ============================================================ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "微软雅黑", "Microsoft YaHei", Arial, "宋体", sans-serif;
+    background: #1c1c17;
+    color: #b1b1a4;
+    padding: 36px 28px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  /* ---------- 设计说明页头 ---------- */
+  .phead { border-bottom: 1px solid #33322b; padding-bottom: 20px; margin-bottom: 28px; }
+  .phead h1 { font-size: 21px; font-weight: 600; color: #f8f8f2; }
+  .phead h1 b { color: #fdc61a; font-weight: 600; }
+  .phead p { font-size: 13px; color: #75715e; margin-top: 8px; line-height: 1.9; }
+
+  /* ---------- 字段取舍表 ---------- */
+  table.decision { width: 100%; border-collapse: collapse; margin-bottom: 36px; font-size: 12.5px; }
+  table.decision th, table.decision td {
+    border: 1px solid #33322b; padding: 7px 12px; text-align: left; line-height: 1.7;
+  }
+  table.decision th { background: #23231d; color: #fdc61a; font-weight: 600; }
+  table.decision td { color: #b1b1a4; }
+  table.decision td.k { color: #8ac21b; white-space: nowrap; }
+  table.decision td.x { color: #f92672; white-space: nowrap; }
+  table.decision td i { font-style: normal; color: #75715e; }
+
+  .stage-title { font-size: 13px; color: #75715e; letter-spacing: 2px; margin: 34px 0 14px; }
+  .stage-title b { color: #a6e22e; font-weight: 400; }
+
+  /* ============================================================
+     以下为「页面上真实效果」的高保真还原（样式值取自 legacy-2013.css）
+     ============================================================ */
+  .site-bg { background: #272822; border-radius: 12px; padding: 28px; }
+  .page { width: 640px; margin: 0 auto; }
+
+  /* .box —— 站点通用卡片 */
+  .box {
+    background: #3b3a32; border: 1px solid #49483e; border-radius: 10px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.25);
+    padding: 30px; text-shadow: 0 2px 2px rgba(0,0,0,0.25);
+  }
+  .box h1 {
+    color: #fdc61a; font-size: 26px; line-height: 39px; font-weight: 400;
+    margin-bottom: 19.5px;
+  }
+  .box p.note { font-size: 14px; line-height: 24px; color: #939387; margin-bottom: 16px; }
+  .box p.note b { color: #f8f8f2; font-weight: 400; }
+  .box p.note em { color: #fdc61a; font-style: normal; }
+
+  /* 注册必读条款（继承 2008 版 Register.asp 六条） */
+  .rules {
+    border: 1px solid #49483e; border-radius: 6px; background: #33322b;
+    padding: 12px 16px; margin-bottom: 22px;
+  }
+  .rules ol { list-style: none; counter-reset: r; }
+  .rules li {
+    counter-increment: r; position: relative; padding-left: 22px;
+    font-size: 13px; line-height: 1.9; color: #939387;
+  }
+  .rules li::before { content: counter(r) "、"; position: absolute; left: 0; color: #75715e; }
+  .rules li b { color: #f8f8f2; font-weight: 400; }
+  .rules li em { color: #f92672; font-style: normal; }
+  .rules li a { color: #a6e22e; }
+
+  /* table.form —— 2013 版注册表单结构 */
+  table.form { width: 100%; border-collapse: collapse; }
+  table.form td { padding: 6px 0; vertical-align: middle; font-size: 14px; }
+  table.form td.label {
+    width: 88px; text-align: right; color: #939387; padding-right: 12px; white-space: nowrap;
+  }
+  table.form input[type="text"],
+  table.form input[type="password"] {
+    border: 1px solid #636359; background: #151515;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.25);
+    color: #939387; font-size: 16px; line-height: 24px; padding: 4px;
+    outline: 0; border-radius: 0; width: 240px;
+    font-family: inherit;
+  }
+  table.form tr.focus input { border-color: #8ac21b !important; background: #272822 !important; color: #8ac21b !important; }
+  table.form tr.error input { border-color: #f92672 !important; background: #272822 !important; color: #f92672 !important; }
+  .hintMessage { color: #a6e22e; font-size: 13px; line-height: 36px; padding-left: 8px; }
+  .hintMessage em { color: #fdc61a; font-style: normal; margin: 0 4px; }
+  .errorMessage { color: #f92672; font-size: 13px; line-height: 36px; padding-left: 8px; }
+
+  /* 性别单选（radioButton 外观近似还原，原站用雪碧图） */
+  .radioButton {
+    display: inline-block; height: 32px; line-height: 32px; cursor: pointer;
+    color: #939387; font-size: 16px; padding: 0 14px 0 30px; position: relative; user-select: none;
+  }
+  .radioButton::before {
+    content: ""; position: absolute; left: 4px; top: 8px;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid #636359; background: #151515;
+  }
+  .radioButton.on { color: #a6e22e; }
+  .radioButton.on::after {
+    content: ""; position: absolute; left: 8px; top: 12px;
+    width: 7px; height: 7px; border-radius: 50%; background: #a6e22e;
+  }
+
+  /* 地区下拉（legacy select 样式） */
+  table.form select {
+    border: 1px solid #636359; background: #939387;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.25);
+    color: #151515; font-size: 16px; line-height: 24px; padding: 4px;
+    font-family: inherit; width: 130px;
+  }
+
+  hr.down { border: 0; border-top: 1px solid #49483e; margin: 20px 0; }
+
+  /* .button —— 站点通用按钮 */
+  .button {
+    display: inline-block; border: 1px solid #49483e; border-radius: 5px;
+    background: linear-gradient(top, #49483e, #3b3a32);
+    color: #b1b1a4; font-size: 20px; line-height: 30px; padding: 8px 24px;
+    text-shadow: 0 2px 2px rgba(0,0,0,0.25);
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.25);
+    cursor: pointer; margin-right: 8px; text-decoration: none;
+  }
+  .button.active { color: #8ac21b; }
+  .button:hover { color: #a6e22e; }
+
+  .login-link { font-size: 13px; color: #75715e; margin-left: 6px; }
+  .login-link a { color: #a6e22e; }
+
+  /* ---------- 成功态样张 ---------- */
+  .ok-flash { color: #fdc61a; font-size: 22px; line-height: 34px; margin-bottom: 14px; }
+  .ok-text { font-size: 14px; line-height: 26px; color: #939387; margin-bottom: 20px; }
+  .ok-text b { color: #a6e22e; font-weight: 400; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="phead">
+    <h1>注册页 · 设计方案 <b>/account/register</b></h1>
+    <p>
+      流程骨架取 <b style="color:#a6e22e">2008 ASP 版</b>（注册必读 → 填写信息 → 注册成功），字段与校验取 <b style="color:#a6e22e">2013 PHP 版</b>（RegisterForm），
+      视觉沿用 legacy-2013.css 的 .box / table.form / .hintMessage / .errorMessage / .button，零新色。<br>
+      落库沿用新站既有约定：username=邮箱、md5(密码+salt)、事务内 user / user_auth / user_stat 同 id 创建（同扫码注册），注册成功即自动登录。
+    </p>
+  </div>
+
+  <!-- ============ 字段取舍 ============ -->
+  <table class="decision">
+    <tr><th style="width:130px">字段</th><th style="width:70px">取舍</th><th>说明（来源 / 校验）</th></tr>
+    <tr><td>电子邮箱</td><td class="k">保留</td><td>2013 版即登录名（username=email，新站登录/找回密码同口径）；格式校验，全站唯一 <i>(注册后不可更改)</i></td></tr>
+    <tr><td>登录密码</td><td class="k">保留</td><td>2013 规则：6~20 位；落库 md5(密码+salt)，兼容全部老账号</td></tr>
+    <tr><td>重复密码</td><td class="k">保留</td><td>2008 版有、2013 版砍了——建议保留，防手误（两次不一致即报错）</td></tr>
+    <tr><td>中文姓名</td><td class="k">保留</td><td>实名制核心：2~6 个汉字（2013 校验），注册后不可更改</td></tr>
+    <tr><td>姓名拼音</td><td class="k">保留</td><td>每字首字母大写空格分隔（如 Zhang Shen Jia），且字数须与中文姓名一致（2013 校验）</td></tr>
+    <tr><td>性别</td><td class="k">保留</td><td>男/女单选，默认男（两版一致，注册后不可更改）</td></tr>
+    <tr><td>所在地区</td><td class="k">保留</td><td>34 个省级下拉（2008 列表，含 香港/澳门/台湾），地区榜 /area 依赖此字段</td></tr>
+    <tr><td>登录名称（英文ID）</td><td class="x">砍掉</td><td>2008 的 3~12 位英文数字 ID；2013 起已改为「邮箱即登录名」，新站 user_auth.username 存邮箱</td></tr>
+    <tr><td>网名</td><td class="x">砍掉</td><td>2008 可选项；新站对应 user_info.nickname，注册后可在账号中心补填，不挡注册流程</td></tr>
+    <tr><td>密码提示问题/答案</td><td class="x">砍掉</td><td>2008 密保问答已被「邮箱找回密码」替代（password-reset.ts 既定方针）</td></tr>
+    <tr><td>录像标识文字</td><td class="x">砍掉</td><td>2008 三步流程的第二步；新站改为上传录像时按 user_sig 绑定校验，注册环节不强制（降低注册门槛）</td></tr>
+  </table>
+
+  <!-- ============ 样张一：注册表单页 ============ -->
+  <div class="stage-title">样张 1 / 3 ─ <b>注册表单页</b>（默认态 + 焦点态 + 错误态同框展示）</div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box">
+        <h1>注册</h1>
+
+        <!-- 注册必读（2008 版 Register.asp 六条，第 4 条补 mvf） -->
+        <div class="rules">
+          <ol>
+            <li><b>必须使用</b><em>真实姓名</em><b>注册，每人只能注册一个用户。</b></li>
+            <li><b>未用实名注册者所上传录像，一律不审核通过。</b></li>
+            <li>如发现注册信息不实，管理员有权封停或删除该用户。</li>
+            <li>本网站只接受 <a href="#">Minesweeper Arbiter</a> 录制的 avf / mvf 格式录像。</li>
+            <li>录像上传后需经管理员审核后方可生效。</li>
+            <li>如发现用户伪造录像，将立刻删除该用户所有信息。</li>
+          </ol>
+        </div>
+
+        <table class="form">
+          <!-- 默认态 -->
+          <tr>
+            <td class="label">电子邮箱</td>
+            <td>
+              <input type="text" value=""><span class="hintMessage">请输入常用邮箱作为登录名<em>(注册后不可更改)</em></span>
+            </td>
+          </tr>
+          <tr>
+            <td class="label">登录密码</td>
+            <td>
+              <input type="password" value=""><span class="hintMessage">请输入 6~20 位密码</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="label">重复密码</td>
+            <td>
+              <input type="password" value=""><span class="hintMessage">请再次输入密码</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="label">中文姓名</td>
+            <td>
+              <input type="text" value="张砷镓"><span class="hintMessage">本站要求实名注册<em>(注册后不可更改)</em></span>
+            </td>
+          </tr>
+          <!-- 焦点态：绿框 -->
+          <tr class="focus">
+            <td class="label">姓名拼音</td>
+            <td>
+              <input type="text" value="Zhang Shen Jia"><span class="hintMessage">字与字空格分隔、首字母大写，如：<em>Zhang Shen Jia</em></span>
+            </td>
+          </tr>
+          <tr>
+            <td class="label">性　　别</td>
+            <td>
+              <span class="radioButton on">男</span><span class="radioButton">女</span>
+              <span class="hintMessage"><em>(注册后不可更改)</em></span>
+            </td>
+          </tr>
+          <tr>
+            <td class="label">所在地区</td>
+            <td>
+              <select>
+                <option>北京</option><option>上海</option><option>天津</option><option>重庆</option>
+                <option>安徽</option><option>福建</option><option>甘肃</option><option>广东</option>
+                <option>广西</option><option>贵州</option><option>海南</option><option>河北</option>
+                <option>河南</option><option>黑龙江</option><option>湖北</option><option>湖南</option>
+                <option>吉林</option><option>江苏</option><option>江西</option><option>辽宁</option>
+                <option>内蒙古</option><option>宁夏</option><option>青海</option><option>山东</option>
+                <option>山西</option><option selected>陕西</option><option>四川</option><option>西藏</option>
+                <option>新疆</option><option>云南</option><option>浙江</option>
+                <option>香港</option><option>澳门</option><option>台湾</option><option>海外</option>
+              </select>
+            </td>
+          </tr>
+        </table>
+
+        <hr class="down"/>
+        <a class="button active" href="#">完成注册</a>
+        <span class="login-link">已有账号？<a href="#">马上登录</a></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 样张二：校验失败 ============ -->
+  <div class="stage-title">样张 2 / 3 ─ <b>提交校验失败</b>（错误字段红框 + 行内错误文案，样式即 legacy .errorMessage）</div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box">
+        <h1>注册</h1>
+        <table class="form">
+          <tr class="error">
+            <td class="label">电子邮箱</td>
+            <td>
+              <input type="text" value="zhangsan@qq.com"><span class="errorMessage">该邮箱已经被注册！</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="label">登录密码</td>
+            <td>
+              <input type="password" value="12345678"><span class="hintMessage">请输入 6~20 位密码</span>
+            </td>
+          </tr>
+          <tr class="error">
+            <td class="label">重复密码</td>
+            <td>
+              <input type="password" value="12345679"><span class="errorMessage">两次输入的密码不一致！</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="label">中文姓名</td>
+            <td>
+              <input type="text" value="张三"><span class="hintMessage">本站要求实名注册<em>(注册后不可更改)</em></span>
+            </td>
+          </tr>
+          <tr class="error">
+            <td class="label">姓名拼音</td>
+            <td>
+              <input type="text" value="Zhang San Feng"><span class="errorMessage">拼音和姓名字数不同！</span>
+            </td>
+          </tr>
+        </table>
+        <hr class="down"/>
+        <a class="button active" href="#">完成注册</a>
+        <span class="login-link">已有账号？<a href="#">马上登录</a></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 样张三：注册成功 ============ -->
+  <div class="stage-title">样张 3 / 3 ─ <b>注册成功</b>（2008 Register_OK.asp 文案骨架，自动登录后引导）</div>
+  <div class="site-bg">
+    <div class="page">
+      <div class="box">
+        <h1>注册成功</h1>
+        <div class="ok-flash">张砷镓（Zhang Shen Jia），注册成功了，恭喜您！</div>
+        <p class="ok-text">
+          您已自动登录。上传录像前，请先在 Minesweeper Arbiter 中按 <b>F5</b> 设置您的录像标识文字（建议使用姓名拼音，如 <b>Zhang Shen Jia</b>），
+          上传时系统会按标识文字核对录像归属。
+        </p>
+        <a class="button active" href="#">如何加入排行</a>
+        <a class="button" href="#">返回首页</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

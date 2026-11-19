@@ -1,0 +1,553 @@
+// 玩家对战 PK 页（/vs/[id]）数据层（2026-11-09 张老师需求）。
+// 左侧恒为发起者（当前登录用户），右侧为被挑战者；数据全部复用既有口径：
+//   · 卡片/名次/成绩：getUserCard（与用户主页、侧栏卡片同源）
+//   · 每 BV 最快时间：getUser3bvCollection（收集墙口径：status<>0，封禁连坐保留）
+//   · 实力雷达：getRadarData（23 档显式名次档）
+//
+// 得分规则（张老师 2026-11-09 定，2026-11-10 23:50 改口径，2026-11-12 10:26 改纪录权重，
+// 2026-11-14 13:42 再改平局口径：纪录平局各得权重一半、BV 平局各得 0.5）：
+//   「初中高级纪录胜一局3/5/7分，平各得一半；BV胜一局计1分，独有计0.25分，平各得0.5」——
+//   · 纪录 9 行（时间/3BV/s/STNB）：优者拿该级权重 REC_WEIGHT（初级3/中级5/高级7），
+//     双有打平各得 REC_TIE_RATIO × 权重（初级1.5 / 中级2.5 / 高级3.5）；
+//   · BV 格：每胜一局固定 1 分（BV_WIN_SCORE，不按级别加权），打平各得 BV_TIE_SCORE（0.5 分）；
+//   · 独有一律 0.25 分（纪录与 BV 同口径）。
+//   · 总得分 = 纪录得分 + 三级别 BV 得分。
+//
+// ⚠️ 本模块依赖 prisma / next/cache，仅可被服务端引用（页面/RSC），
+//    不得进客户端 bundle（与 lib/queries 同一约束）。
+
+import { getUserCard, type UserCardData } from "./usercard";
+import { getUser3bvCollection, getLevel3bvRanges, getStnbProfiles, type BbvCell, type StnbProfile } from "./queries";
+import { getRadarData, type RadarPoint } from "./radar";
+import { LEVEL_MIN_3BV, UNREACHABLE_3BV, type VideoLevel } from "./config";
+import { score3bvs, scoreTime } from "./format";
+import { Prisma } from "@prisma/client";
+import { prisma } from "./db";
+import { title as militaryTitle } from "./assess";
+import { getThunderKingThreshold } from "./title-system";
+
+const VIDEO_LEVELS: VideoLevel[] = ["beg", "int", "exp"];
+const LEVEL_AXIS_CN: Record<string, string> = { beg: "初级", int: "中级", exp: "高级" };
+/** 纪录计分权重（2026-11-12 10:26 张老师改口径）：
+ *  初级时间/3BVs/STNB 每项 3 分，中级每项 5 分，高级每项 7 分。 */
+const REC_WEIGHT: Record<string, number> = { beg: 3, int: 5, exp: 7 };
+/** BV 格每胜一局固定 1 分（2026-11-10 23:50 张老师：BV 不按级别加权） */
+const BV_WIN_SCORE = 1;
+/** BV 打平各得 0.5 分（2026-11-14 张老师改口径：原平局各 0 分） */
+const BV_TIE_SCORE = 0.5;
+/** 独有固定 0.25 分（2026-11-10 23:00 张老师：不再按级别权重折算） */
+const SOLO_SCORE = 0.25;
+/** 纪录平局得分比例（2026-11-14 13:42 张老师改口径：平局各得该级权重的一半，
+ *  即初级 1.5 / 中级 2.5 / 高级 3.5；上一版「各 1 分」弃用） */
+const REC_TIE_RATIO = 0.5;
+
+/** 格子归属：p1=左侧玩家胜 / p2=右侧玩家胜 / u1、u2=单方独有 / tie=平局 / none=双方都没有（空格） */
+export type VsOutcome = "p1" | "p2" | "tie" | "u1" | "u2" | "none";
+
+export interface VsCell {
+  bv: number;
+  out: VsOutcome;
+  /** 双方该 BV 最快时间（毫秒；独有侧为 null） */
+  t1: number | null;
+  t2: number | null;
+  /** 双方该 BV 最快成绩录像 id（0=无；2026-11-11 张老师：有录像的格子可点进录像页） */
+  v1: number;
+  v2: number;
+}
+
+export interface VsBand {
+  lo: number;
+  hi: number;
+  /** 该段内全部格子（按 bv 升序；渲染时按五类归属重排：我胜/我独有/都没有/对方独有/对方胜） */
+  cells: VsCell[];
+  s1: number;
+  s2: number;
+}
+
+export interface VsLevelPk {
+  level: VideoLevel;
+  bands: VsBand[];
+  /** 收集 BV 数（双方） */
+  cnt1: number;
+  cnt2: number;
+  total1: number;
+  total2: number;
+  /** 对抗格数（双有）/ 胜 / 平 / 独有 */
+  contest: number;
+  win1: number;
+  win2: number;
+  tie: number;
+  u1: number;
+  u2: number;
+  /** 「都没有」空格数（含 0/1 与 50/52/53 补位空格，均不画成绩不计分） */
+  none: number;
+}
+
+// 2026-11-10 20:46 张老师：去掉所有饼图（纪录比较 + 三个级别板块各一个），
+// 故 VsPie 接口、扇区配色常量、各级饼图数据与记录胜/平计数一并移除；
+// 格子归属配色集中在 page.tsx 的 CELL_BG / CELL_FG，不再有第二套配色来源。
+
+export interface VsRecRow {
+  label: string;
+  s1: string;
+  s2: string;
+  mark: VsOutcome | "none";
+  /** 该行双方实际得分（2026-11-12 10:27 张老师：行左右加得分列——胜方玩家色
+   *  显示该级权重 3/5/7，平局行两侧各得权重一半（1.5/2.5/3.5），独有行 0.25，
+   *  失败/空行 0；逐行求和＝rec1/rec2） */
+  pts1: number;
+  pts2: number;
+  /** 双方该纪录对应录像 id（0=无；2026-11-11 张老师：纪录成绩格可点进录像页） */
+  v1: number;
+  v2: number;
+}
+
+export interface VsPlayer {
+  id: number;
+  name: string;
+  en: string;
+  sex: number;
+  /** 头像 URL（mid 160px WebP 档；缺档时靠 avatarOrigUrl onError 回退，2026-11-13） */
+  avatarUrl: string;
+  /** 头像原图 URL（分档 WebP 缺档回退目标；与 usercard.avatarOrigUrl 同口径） */
+  avatarOrigUrl: string;
+  /** 无头像（走默认图）：军衔制下按性别渲染军装默认头像（2026-11-11） */
+  avatarIsDefault: boolean;
+  militaryTitle: string;
+  /** 旧版称号备选（TitleBadge classic 双体系渲染，与玩家卡片一致） */
+  classicTitle: { name: string; color: string } | null;
+  area: string;
+  areaRank: number | null;
+  natRank: number | null;
+  scores: Record<string, { score: number | null }>;
+  radar: RadarPoint[];
+}
+
+export interface VsData {
+  p1: VsPlayer;
+  p2: VsPlayer;
+  levels: VsLevelPk[];
+  /** 记录比拼行 + 记录得分 */
+  recRows: VsRecRow[];
+  rec1: number;
+  rec2: number;
+  /** BV 总分（三级别合计） */
+  bv1: number;
+  bv2: number;
+  /** 战前预估评价：STNB 硬指标 0.8 + BV 收集数 0.2 综合（2026-11-19 改口径），
+   *  绝不碰 PK 记录/BV 得分（张老师 2026-11-10：不要剧透结果） */
+  preComment: string;
+  /** 战前评价色调（2026-11-10）：占优=adv 绿 / 不利=dis 玫瑰红 / 势均力敌=even 金 */
+  preTone: PreTone;
+  /** 赛后评价：按总得分相对差距 × 我方胜负，四档 + 平局兜底 */
+  postComment: string;
+}
+
+/** 战前评价色调：adv=占优（绿）/ dis=不利（玫瑰红）/ even=势均力敌（金） */
+export type PreTone = "adv" | "dis" | "even";
+
+/** 战前预估（2026-11-19 张老师定稿口径）：**STNB 硬指标 0.8 + BV 收集数 0.2 综合**。
+ *  背景（两轮返工判例）：v1 纯 STNB 一刀切——17068 vs 31660 STNB 相对差仅 3.2%
+ *  （判势均力敌）实际比分比例 0.577（差距明显档）；v2 加「录像积累量」0.5——
+ *  孙明诺 vs 张神镓反向翻车：895 盘 vs 649 盘（练得多但天花板低）把 33% 的 STNB
+ *  差距对冲成 3.3%，又判势均力敌——盘数可刷、与实力弱相关，录像量口径废弃。
+ *  BV 收集数（getUser3bvCollection 三级格数合计）是「家底广度」的贴身代理：
+ *  收集格越全 → 记录/BV 得分面越宽，与比分生成机制直接相关且难刷。
+ *  综合指数 = 0.8×STNB 份额 + 0.2×BV 份额（各按双方最大值归一到 0~1）；
+ *  某分量双方全 0 时退化为另一分量全权。相对差 = (高-低)/高（与赛后评价同款
+ *  分母）：
+ *    ≤ 10% →「势均力敌的对抗」(even 金)
+ *    ≤ 20% →「稍占上风的对抗」/「略处下风的对抗」(adv 绿 / dis 玫瑰红)
+ *    ≤ 30% →「明显优势的对抗」/「明显劣势的对抗」(adv / dis)
+ *    > 30% →「毫无悬念的碾压」/「毫无胜算的对抗」(adv / dis)
+ *  综合指数与 PK 记录/BV 得分不是一套口径，故不剧透结果。
+ *  双方 STNB 与 BV 数都为 0 时不下判断，给中性档。 */
+export function preMatchAssessment(stnb1: number, stnb2: number, bv1: number, bv2: number): { text: string; tone: PreTone } {
+  const snMax = Math.max(stnb1, stnb2);
+  const bvMax = Math.max(bv1, bv2);
+  if (snMax <= 0 && bvMax <= 0) return { text: "势均力敌的对抗", tone: "even" };
+  // 份额权重：可用分量各按 0.8/0.2，退化为单分量时归一到全权
+  const wSn = snMax > 0 ? 0.8 : 0;
+  const wBv = bvMax > 0 ? 0.2 : 0;
+  const wSum = wSn + wBv;
+  const idx = (sn: number, bv: number) =>
+    (wSn * (snMax > 0 ? sn / snMax : 0) + wBv * (bvMax > 0 ? bv / bvMax : 0)) / wSum;
+  const i1 = idx(stnb1, bv1);
+  const i2 = idx(stnb2, bv2);
+  const hi = Math.max(i1, i2);
+  const lo = Math.min(i1, i2);
+  if (hi <= 0) return { text: "势均力敌的对抗", tone: "even" };
+  const diff = (hi - lo) / hi;
+  // 以我方(p1)视角判定：i1 ≥ i2 即我方占优（含相等，相等必落 even 档）
+  const mine = i1 >= i2;
+  if (diff <= 0.1) return { text: "势均力敌的对抗", tone: "even" };
+  if (diff <= 0.2) {
+    return mine
+      ? { text: "稍占上风的对抗", tone: "adv" }
+      : { text: "略处下风的对抗", tone: "dis" };
+  }
+  // 2026-11-11 张老师：加一档 20%~30%「明显优势/明显劣势」，>30% 才是碾压
+  if (diff <= 0.3) {
+    return mine
+      ? { text: "明显优势的对抗", tone: "adv" }
+      : { text: "明显劣势的对抗", tone: "dis" };
+  }
+  return mine
+    ? { text: "毫无悬念的碾压", tone: "adv" }
+    : { text: "毫无胜算的对抗", tone: "dis" };
+}
+
+/** 赛后评价（2026-11-11 张老师改口径）：不再用 0.4 相对差一刀切，改按**实际比分
+ *  比例（低分/高分）**分四档：
+ *    < 0.5  → 绝对碾压
+ *    < 0.75 → 差距明显
+ *    < 0.9  → 略占上风
+ *    ≥ 0.9  → 势均力敌
+ *  每档按我方（p1=登录者）胜负给对应文案；平局单独兜底。 */
+export function postMatchComment(t1: number, t2: number): string {
+  if (t1 === t2) return "棋逢对手，平分秋色！";
+  const hi = Math.max(t1, t2);
+  const lo = Math.min(t1, t2);
+  const ratio = hi > 0 ? lo / hi : 1;
+  if (ratio < 0.5) return t1 > t2 ? "赢得太轻松了，还是换个对手吧！" : "毫无还手之力，还是换个对手吧！";
+  if (ratio < 0.75) return t1 > t2 ? "优势明显，赢得干脆利落！" : "差距明显，还需继续苦练！";
+  if (ratio < 0.9) return t1 > t2 ? "略占上风，有惊无险拿下！" : "稍逊一筹，去刷几个纪录吧！";
+  return t1 > t2 ? "双方势均力敌，你略胜一筹！" : "双方势均力敌，可惜就差一点点！";
+}
+
+/** 战前预估独立计算（十轮 14:38 张老师：竞技场匹配成功后要**立刻**显示预测评价
+ *  → /api/vs/pre 供竞技场在双方就位时即时调用；对决页 getVsData 复用同一口径）。
+ *  与 getVsData 内联版完全同源：STNB（去初级，中+高之和）0.8 + BV 收集数 0.2。
+ *  BV 数走 getUser3bvCollection（收集墙口径，与页面 BV 对抗格完全同源）；
+ *  STNB 走 60s 缓存，重复调用代价可忽略。 */
+export async function getPreAssessment(id1: number, id2: number): Promise<{ text: string; tone: PreTone }> {
+  const [stnbProfiles, col1, col2] = await Promise.all([
+    getStnbProfiles([id1, id2]),
+    getUser3bvCollection(id1),
+    getUser3bvCollection(id2),
+  ]);
+  const STNB_ZERO: StnbProfile = { beg: 0, int: 0, exp: 0, total: 0, videos: { beg: 0, int: 0, exp: 0 } };
+  const s1 = stnbProfiles.get(id1) ?? STNB_ZERO;
+  const s2 = stnbProfiles.get(id2) ?? STNB_ZERO;
+  const bvcnt = (m: Record<VideoLevel, Map<number, BbvCell>>) =>
+    (["beg", "int", "exp"] as const).reduce((sum, lv) => sum + m[lv].size, 0);
+  return preMatchAssessment(s1.int + s1.exp, s2.int + s2.exp, bvcnt(col1), bvcnt(col2));
+}
+
+/** 历史对决（2026-11-11 14:38 张老师需求）：对决页分割线下「历史对决」板块——
+ *  当前登录用户**发起**的最近对决记录（2026-11-13 口径：发起者＝访问对决页的
+ *  本人，**不一定是参赛双方**——指定 A、B 两人 PK 的旁观对决同样计入；落库见
+ *  recordVsDuel，查询恒按 initiator_id=session.uid），格式参考后台对决统计
+ *  （时间/参赛双方/比分/胜负结果），行 hover 出「回看」跳该行两玩家对决页；
+ *  底部标准翻页控件（每页 10 条，由调用方传 page）。 */
+export interface VsHistRow {
+  id: number;
+  /** 发起时刻 Unix 秒 */
+  time: number;
+  u1: number; n1: string; // 参赛方1（页面左）
+  u2: number; n2: string; // 参赛方2（页面右）
+  /** 性别（user.sex，1=男）——名字后缀图标（2026-11-11 15:48 张老师：与玩家卡片同渲染） */
+  sex1: number; sex2: number;
+  /** 英文名（AvatarCell 气泡用；空串=气泡只显示 #ID 姓名） */
+  en1: string; en2: string;
+  /** 军衔（user_scores.exp_time 快照评定，同后台口径）——TitleBadge */
+  t1: string; t2: string;
+  /** 比分（null=历史回填行未算） */
+  s1: number | null; s2: number | null;
+  /** 1=左方(user_id)胜 2=右方(target_id)胜 0=平；null=未算 */
+  result: number | null;
+}
+
+export async function getVsHistory(
+  uid: number,
+  page = 1,
+  pageSize = 10
+): Promise<{ rows: VsHistRow[]; total: number; pageSize: number }> {
+  const offset = (Math.max(1, page) - 1) * pageSize;
+  // 展示名表达式（中文名优先 → 英文名 → #id；与 admin/vsstats 同款口径，alias 固定 ua/ub）
+  const NAME_A = `COALESCE(NULLIF(ua.chinese_name, ''), NULLIF(ua.english_name, ''), CONCAT('#', ua.id))`;
+  const NAME_B = `COALESCE(NULLIF(ub.chinese_name, ''), NULLIF(ub.english_name, ''), CONCAT('#', ub.id))`;
+  const [rows, cnt, kTh] = await Promise.all([
+    prisma
+      .$queryRaw<{
+        id: bigint; create_time: bigint; u1: bigint; u2: bigint;
+        s1: number | null; s2: number | null; result: number | null;
+        n1: string; n2: string; sex1: number; sex2: number;
+        en1: string; en2: string; exp1: unknown; exp2: unknown;
+      }[]>(
+        Prisma.sql`
+          SELECT d.id, d.create_time, d.user_id AS u1, d.target_id AS u2, d.s1, d.s2, d.result,
+                 ${Prisma.raw(NAME_A)} AS n1, ${Prisma.raw(NAME_B)} AS n2,
+                 ua.sex AS sex1, ub.sex AS sex2, ua.english_name AS en1, ub.english_name AS en2,
+                 sa.exp_time AS exp1, sb.exp_time AS exp2
+          FROM vs_duel d
+          JOIN \`user\` ua ON ua.id = d.user_id
+          JOIN \`user\` ub ON ub.id = d.target_id
+          LEFT JOIN \`user_scores\` sa ON sa.id = d.user_id
+          LEFT JOIN \`user_scores\` sb ON sb.id = d.target_id
+          WHERE d.initiator_id = ${BigInt(uid)}
+          ORDER BY d.create_time DESC LIMIT ${pageSize} OFFSET ${offset}
+        `
+      )
+      .catch(() => []),
+    prisma
+      .$queryRaw<{ c: bigint }[]>(
+        Prisma.sql`SELECT COUNT(*) AS c FROM vs_duel WHERE initiator_id = ${BigInt(uid)}`
+      )
+      .then((r) => N(r[0]?.c))
+      .catch(() => 0),
+    // 总司令动态阈值（军衔评定与全站/后台同口径，单次查询）
+    getThunderKingThreshold(),
+  ]);
+  return {
+    total: cnt,
+    pageSize,
+    rows: rows.map((r) => ({
+      id: N(r.id),
+      time: N(r.create_time),
+      u1: N(r.u1), n1: r.n1,
+      u2: N(r.u2), n2: r.n2,
+      sex1: N(r.sex1), sex2: N(r.sex2),
+      en1: r.en1 ?? "", en2: r.en2 ?? "",
+      // 军衔按 user_scores.exp_time 快照评定（毫秒；与后台 duelUser 同款 militaryTitle(exp, kTh)）
+      t1: militaryTitle(r.exp1 === null || r.exp1 === undefined ? null : Number(r.exp1), kTh),
+      t2: militaryTitle(r.exp2 === null || r.exp2 === undefined ? null : Number(r.exp2), kTh),
+      s1: r.s1 === null ? null : Number(r.s1),
+      s2: r.s2 === null ? null : Number(r.s2),
+      result: r.result === null ? null : N(r.result),
+    })),
+  };
+}
+
+function toVsPlayer(card: UserCardData, radar: RadarPoint[]): VsPlayer {
+  return {
+    id: card.id,
+    name: card.chineseName,
+    en: card.englishName,
+    sex: card.sex,
+    avatarUrl: card.avatarUrl,
+    avatarOrigUrl: card.avatarOrigUrl,
+    avatarIsDefault: card.avatarIsDefault,
+    militaryTitle: card.militaryTitle,
+    classicTitle: card.classicTitle,
+    area: card.area,
+    areaRank: card.areaPos,
+    natRank: card.rank,
+    scores: Object.fromEntries(
+      Object.entries(card.scores).map(([k, v]) => [k, { score: v.score }])
+    ),
+    radar,
+  };
+}
+
+/** 段划分（2026-11-10 21:13 张老师）：初级从 0 起整十段（0/1 低于下限，
+ *  作为「都没有」空格补进首段，让首行也是 10 格）；中/高级从下限所在十位段起。 */
+function bandsFor(level: VideoLevel, maxBv: number): [number, number][] {
+  const bands: [number, number][] = [];
+  if (level === "beg") {
+    for (let s = 0; s <= maxBv; s += 10) bands.push([s, s + 9]);
+  } else {
+    const start = Math.floor(LEVEL_MIN_3BV[level] / 10) * 10;
+    for (let s = start; s <= maxBv; s += 10) bands.push([s, s + 9]);
+  }
+  return bands;
+}
+
+function computeLevelPk(level: VideoLevel, b1: Map<number, BbvCell>, b2: Map<number, BbvCell>, range: { min: number; max: number } | undefined): VsLevelPk {
+  // 格子全序列（2026-11-10 21:13 张老师）：初级区间补齐 0/1（低于下限）与
+  // 50/52/53（数学不可达）——这些值不再跳过，而是画成「都没有」的空格，
+  // 归到每行中间的「都没有」区域，用来把首段/末段尽量填满；它们不计分。
+  // 中/高级无此类补位值，仍按 [min,max] 全整数序列。
+  const dead = new Set(UNREACHABLE_3BV[level] ?? []);
+  const all: number[] = [];
+  if (range) {
+    const lo = level === "beg" ? 0 : range.min;
+    for (let b = lo; b <= range.max; b++) all.push(b);
+  }
+  // 兜底：区间缺失（level3bvRange 表缺行）时退回双方并集
+  if (!all.length) {
+    const union = [...new Set([...b1.keys(), ...b2.keys()])].sort((x, y) => x - y);
+    all.push(...union);
+  }
+  const pk: VsLevelPk = {
+    level, bands: [], cnt1: b1.size, cnt2: b2.size,
+    total1: 0, total2: 0, contest: 0, win1: 0, win2: 0, tie: 0, u1: 0, u2: 0, none: 0,
+  };
+  for (const [lo, hi] of bandsFor(level, all[all.length - 1])) {
+    const band: VsBand = { lo, hi, cells: [], s1: 0, s2: 0 };
+    for (const bv of all) {
+      if (bv < lo || bv > hi) continue;
+      // 低于下限（初级 0/1）与数学不可达（初级 50/52/53）＝补位空格：
+      // 强制按「都没有」处理，即使历史数据里偶然有该 BV 也不参与比拼/计分
+      const blank = dead.has(bv) || bv < LEVEL_MIN_3BV[level];
+      const c1 = blank ? null : b1.get(bv);
+      const c2 = blank ? null : b2.get(bv);
+      const t1 = c1?.bestTime ?? null;
+      const t2 = c2?.bestTime ?? null;
+      const v1 = c1?.bestVideo ?? 0;
+      const v2 = c2?.bestVideo ?? 0;
+      let out: VsOutcome;
+      if (blank) { out = "none"; pk.none++; }
+      else if (t1 !== null && t2 !== null) {
+        pk.contest++;
+        if (t1 < t2) { out = "p1"; pk.win1++; band.s1 += BV_WIN_SCORE; }
+        else if (t2 < t1) { out = "p2"; pk.win2++; band.s2 += BV_WIN_SCORE; }
+        else { out = "tie"; pk.tie++; band.s1 += BV_TIE_SCORE; band.s2 += BV_TIE_SCORE; } // 平局各 0.5 分（2026-11-14 张老师定）
+      } else if (t1 !== null) { out = "u1"; pk.u1++; band.s1 += SOLO_SCORE; }
+      else if (t2 !== null) { out = "u2"; pk.u2++; band.s2 += SOLO_SCORE; }
+      else { out = "none"; pk.none++; } // 双方都没有：空格，不计分
+      band.cells.push({ bv, out, t1, t2, v1, v2 });
+    }
+    if (band.cells.length) pk.bands.push(band);
+    pk.total1 += band.s1;
+    pk.total2 += band.s2;
+  }
+  return pk;
+}
+
+/**
+ * 组装 PK 全量数据。任一方玩家不存在返回 null（页面 notFound）。
+ * 复杂度：两次 getUser3bvCollection（各一条窗口函数查询）+ 两次雷达数据 +
+ * 一次 STNB 榜 60s 缓存全量数组读取（getStnbProfiles），与用户主页单页同量级，
+ * 直接实时算、不做额外缓存（PK 页低频访问）。
+ */
+export async function getVsData(id1: number, id2: number): Promise<VsData | null> {
+  const [card1, card2] = await Promise.all([getUserCard(id1), getUserCard(id2)]);
+  if (!card1 || !card2) return null;
+
+  const [col1, col2, radar1, radar2, ranges, stnbProfiles] = await Promise.all([
+    getUser3bvCollection(id1),
+    getUser3bvCollection(id2),
+    // 没上传过录像的玩家无雷达（与主页「实力」板块同门槛），给空数组
+    card1.hasVideos ? getRadarData(card1.scores) : Promise.resolve([]),
+    card2.hasVideos ? getRadarData(card2.scores) : Promise.resolve([]),
+    getLevel3bvRanges(),
+    // 纪录板块三行 STNB 取自 STNB 榜 60s 缓存（战前预估另走 getPreAssessment，同源）
+    getStnbProfiles([id1, id2]),
+  ]);
+
+  const levels = VIDEO_LEVELS.map((lv) => computeLevelPk(lv, col1[lv], col2[lv], ranges[lv]));
+
+  // 各项纪录比拼（2026-11-10 22:02 张老师）：按级别分组，每组「时间 / 3BV/s / STNB」
+  // 共 9 行；去掉原「总计时间 / 总计 3BV/s」两行（规则里没有总计项），STNB 取 STNB
+  // 榜该级历史最高（0＝无有效成绩，显示「—」，数值越高越好，与 3BV/s 同向）。
+  // 计分按 2026-11-14 13:42 口径：纪录优者拿级别权重（3/5/7）、双有平各得权重一半
+  // （1.5/2.5/3.5）、独有一律 0.25 分（BV 格每胜 1 分、平各 0.5 分，不按级别加权）
+  const STNB_ZERO: StnbProfile = { beg: 0, int: 0, exp: 0, total: 0, videos: { beg: 0, int: 0, exp: 0 } };
+  const stnb1 = stnbProfiles.get(id1) ?? STNB_ZERO;
+  const stnb2 = stnbProfiles.get(id2) ?? STNB_ZERO;
+  let rec1 = 0;
+  let rec2 = 0;
+  const recRows: VsRecRow[] = (["beg", "int", "exp"] as const).flatMap((lv) =>
+    (["time", "3bvs", "stnb"] as const).map((order) => {
+      const raw1 = order === "stnb" ? stnb1[lv] : card1.scores[`${lv}_${order}`]?.score ?? null;
+      const raw2 = order === "stnb" ? stnb2[lv] : card2.scores[`${lv}_${order}`]?.score ?? null;
+      // 0 / null 一律视为无成绩（STNB 榜 0＝该级无有效成绩，与旧真值判断同义）
+      const v1 = raw1 && raw1 > 0 ? raw1 : null;
+      const v2 = raw2 && raw2 > 0 ? raw2 : null;
+      let mark: VsRecRow["mark"] = "none";
+      if (v1 !== null && v2 !== null) {
+        mark = v1 === v2 ? "tie" : order === "time" ? (v1 < v2 ? "p1" : "p2") : (v1 > v2 ? "p1" : "p2");
+      } else if (v1 !== null) mark = "p1";
+      else if (v2 !== null) mark = "p2";
+      // 计分（2026-11-14 13:42）：纪录优者拿该级权重 3/5/7、双有平各得权重一半、独有一律 0.25 分
+      const w = REC_WEIGHT[lv];
+      const score =
+        v1 !== null && v2 !== null ? (mark === "tie" ? w * REC_TIE_RATIO : w) : SOLO_SCORE;
+      if (mark === "p1") rec1 += score;
+      else if (mark === "p2") rec2 += score;
+      else if (mark === "tie") { rec1 += score; rec2 += score; }
+      // 逐行得分（2026-11-12 10:27 张老师：行两端得分列用；平局行两侧各显示权重一半）
+      const pts1 = mark === "p1" || mark === "tie" ? score : 0;
+      const pts2 = mark === "p2" || mark === "tie" ? score : 0;
+      const fmt = (v: number | null) => {
+        if (v === null) return "—";
+        if (order === "stnb") return v.toFixed(1); // 与 STNB 榜 / 录像详情页同为 1 位小数
+        return (order === "time" ? scoreTime(v) : score3bvs(v)) || "—";
+      };
+      // 纪录对应录像 id（2026-11-11 张老师：纪录成绩格可点进录像页）：
+      // time/3bvs 六项来自 user_scores 的 *_video 列（UserCardScore.videoId），
+      // STNB 三行来自 user_stnb_best.best_video（getStnbProfiles.videos）
+      const rec1v =
+        order === "stnb" ? stnb1.videos[lv] : card1.scores[`${lv}_${order}`]?.videoId ?? 0;
+      const rec2v =
+        order === "stnb" ? stnb2.videos[lv] : card2.scores[`${lv}_${order}`]?.videoId ?? 0;
+      return {
+        label: `${LEVEL_AXIS_CN[lv]}${order === "time" ? "时间" : order === "3bvs" ? " 3BV/s" : " STNB"}`,
+        s1: fmt(v1),
+        s2: fmt(v2),
+        mark,
+        pts1,
+        pts2,
+        v1: rec1v,
+        v2: rec2v,
+      };
+    })
+  );
+
+  const bv1 = levels.reduce((s, l) => s + l.total1, 0);
+  const bv2 = levels.reduce((s, l) => s + l.total2, 0);
+  // 战前预估（2026-11-19 张老师定稿口径）：独立函数 getPreAssessment——
+  // STNB（去初级，中+高之和）0.8 + BV 收集数 0.2 综合，竞技场 /api/vs/pre 同源复用
+  const pre = await getPreAssessment(id1, id2);
+
+  return {
+    p1: toVsPlayer(card1, radar1),
+    p2: toVsPlayer(card2, radar2),
+    levels,
+    recRows,
+    rec1,
+    rec2,
+    bv1,
+    bv2,
+    // 2026-11-11 张老师：预测/终局评价正文前后加中文引号「“”」
+    preComment: `“${pre.text}”`,
+    preTone: pre.tone,
+    postComment: `“${postMatchComment(rec1 + bv1, rec2 + bv2)}”`,
+  };
+}
+
+// ---------- 渲染辅助（纯函数，供页面组件用） ----------
+
+// ---------- 对决记录落库（2026-11-11 张老师定） ----------
+// /vs/:id 页每次有效访问落一行 vs_duel（比分/结果为本次渲染快照）；
+// 同一 (发起者, 参赛双方) 10 分钟窗口去重——刷新/反复打开不重复计数。
+// 2026-11-13 张老师定口径：发起者＝访问对决页的登录者，**不一定是参赛双方**——
+// 指定 A、B 两人 PK（旁观访问）同样落一行、进发起者自己的「历史对决」；
+// user_id/target_id=参赛双方（页面左/右），result 1=左方胜 2=右方胜 0=平。
+// 每个登录访客各自落行（A 访问记 initiator=A，B 随后访问再记 initiator=B）。
+// 失败静默：统计缺一行可接受，绝不能影响 PK 页渲染。
+
+const N = (v: unknown): number => Number(v ?? 0);
+
+export async function recordVsDuel(
+  initiatorId: number,
+  uid1: number,
+  uid2: number,
+  s1: number,
+  s2: number
+): Promise<void> {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const recent = await prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT COUNT(*) AS n FROM vs_duel
+      WHERE initiator_id = ${BigInt(initiatorId)}
+        AND user_id = ${BigInt(uid1)} AND target_id = ${BigInt(uid2)}
+        AND create_time >= ${now - 600}
+    `;
+    if (N(recent[0]?.n) > 0) return;
+    await prisma.vsDuel.create({
+      data: {
+        initiatorId: BigInt(initiatorId),
+        userId: BigInt(uid1),
+        targetId: BigInt(uid2),
+        s1,
+        s2,
+        result: s1 === s2 ? 0 : s1 > s2 ? 1 : 2,
+        createTime: BigInt(now),
+      },
+    });
+  } catch {
+    /* ignore：对决统计缺一行可接受 */
+  }
+}
