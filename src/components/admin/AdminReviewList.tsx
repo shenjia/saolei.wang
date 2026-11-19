@@ -504,6 +504,7 @@ export function AdminReviewList({
               <th className="c">分拣</th>
               <th className="c">播放</th>
               <th className="c">状态</th>
+              <th>审核人</th>
               <th>上传时间</th>
               <th>操作</th>
             </tr>
@@ -535,7 +536,7 @@ export function AdminReviewList({
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={status === VIDEO_STATUS.NORMAL ? 15 : 14}>
+                <td colSpan={status === VIDEO_STATUS.NORMAL ? 16 : 15}>
                   <div className="admin_empty">该状态下没有录像</div>
                 </td>
               </tr>
@@ -664,6 +665,7 @@ function ReviewRow({
       <td className="c">
         <StatusTag status={v.status} />
       </td>
+      <td className="sub">{v.reviewer?.chineseName ?? "—"}</td>
       <td className="sub">{v.createTime ? <RelTime time={v.createTime} /> : "—"}</td>
       <td className="ops">
         <a className="admin_btn sm" href={`/video/download/${v.id}`} title="下载录像文件（兜底：播放器放不了的格式用这个）">
