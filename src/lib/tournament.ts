@@ -269,10 +269,12 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
   const chartTargets = pageRows.filter((r) => r.status !== "upcoming");
   const chartList = await Promise.all(chartTargets.map((r) => getTourRanking(Number(r.id), 30)));
   const chartMap = new Map<string, { rank: number; score: number; name?: string; uid?: number; englishName?: string; sex?: number; title?: string; classic?: { name: string; color: string } | null }[]>();
+  const bestMap = new Map<string, TourRow["bestLine"]>();
   chartTargets.forEach((r, i) => {
+    const list = chartList[i];
     chartMap.set(
       r.id,
-      chartList[i].map((x) => ({
+      list.map((x) => ({
         rank: x.rank,
         score: x.time / 1000,
         name: x.name,
@@ -283,9 +285,25 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
         classic: x.classic,
       })),
     );
+    const first = list[0];
+    bestMap.set(
+      r.id,
+      first
+        ? {
+            score: first.time,
+            name: first.name,
+            englishName: first.englishName,
+            sex: first.sex,
+            title: first.title,
+            uid: first.uid,
+            at: 0, // 列表形态不查「创造于」精确时刻（多一次查询单场比赛），渲染端 at=0 时不显示时刻段
+          }
+        : null,
+    );
   });
   for (const r of pageRows) {
     r.chartPoints = chartMap.get(r.id) ?? [];
+    r.bestLine = bestMap.get(r.id) ?? null;
   }
 
   return {

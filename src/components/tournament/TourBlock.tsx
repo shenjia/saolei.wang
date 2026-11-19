@@ -102,7 +102,8 @@ export function TourBlock({
                 gender="small"
               />
               {c.bestLine.title && <TitleBadge title={c.bestLine.title} link />}
-              <span className="rec_meta">　创造于 {fmtBestAt(c.bestLine.at)}</span>
+              {/* at>0 才显示「创造于」（列表形态为省查询不取精确时刻） */}
+              {!!c.bestLine.at && <span className="rec_meta">　创造于 {fmtBestAt(c.bestLine.at)}</span>}
             </div>
             <TourChart points={c.chartPoints} myUid={myUid} />
           </div>
