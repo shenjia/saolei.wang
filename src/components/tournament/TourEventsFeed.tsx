@@ -120,8 +120,8 @@ export function TourEventsFeed({
                       非首次成绩动态后跟提升幅度（金色▼差值，同首页新闻破纪录） */}
                   {e.type === 4 && (
                     <>
-                      {e.count > 1 && <span className="comp_ev_count">×{e.count}</span>}
-                      {/* 成绩不可点（张老师 2026-11-19 反馈）：纯文本亮灰加粗 */}
+                      {/* 成绩不可点（张老师 2026-11-19 反馈）：纯文本亮灰加粗；
+                          ×N 盘数标注废弃（2026-11-19 张老师定：无信息量） */}
                       {e.totalMs !== null && (
                         <b className="comp_ev_total">{scoreTime(e.totalMs)}</b>
                       )}

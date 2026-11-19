@@ -540,11 +540,22 @@ export async function getTourEventsPage(
   };
   const rows: Row[] = [];
   // 成绩合并行 + 提升幅度（与该玩家上一批的总成绩比）
+  // 2026-11-19 张老师定：成绩不变不发动态——该批上传后总成绩与上一批相同（无新有效成绩
+  // 或新盘都没进各级别最好 N 局）则整行吞掉；×N 盘数标注废弃（没有信息量）
   const lastTotalBy = new Map<number, number | null>();
   for (const m of merged) {
     const key = `${m.userId}@${m.lastTime}`;
     const prog = progressBy.get(key)!;
     const prev = lastTotalBy.get(m.userId);
+    const firstEver = prev === undefined;
+    const improved =
+      prog.total !== null && (firstEver || prev === null || prog.total < prev);
+    if (!improved) {
+      // 成绩不变/退步（理论上不会退）→ 不发动态行；仍要维护 lastTotal 口径
+      if (!firstEver) lastTotalBy.set(m.userId, prog.total ?? prev ?? null);
+      else lastTotalBy.set(m.userId, prog.total);
+      continue;
+    }
     rows.push({
       sortKey: m.lastTime,
       type: TOUR_EVENT_SCORE,
