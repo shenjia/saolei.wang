@@ -134,14 +134,17 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
         {isBv && news.author && (
           <>
             {authorCells}
-            {/* 文案（2026-11-19 张老师定）：「刷新了初级40BV时间纪录 x.xxx」——
-                首收也是「刷新了」（首盘即该 BV 时间纪录，本就是从无到有的刷新） */}
+            {/* 文案（2026-11-19 二轮张老师定）：「刷新了中级40BV时间纪录 9.537」——
+                3BV 具体数字嵌在级别名后（details.bv），「中级40BV时间纪录」整体同一样式
+                （.record person，与 type=20 纪录行同款）；成绩数字前保留空格（{" "}
+                显式补，JSX 换行空白会被剥离）；首收也是「刷新了」（首盘即该 BV 时间纪录） */}
             刷新了
             <span className="record person">
               {LEVEL_NAMES[(d.lv ?? "sum") as Level] ?? d.lv}
-              BV
+              {d.bv ?? ""}
+              BV时间纪录
             </span>
-            时间纪录
+            {" "}
             {bvFirst ? (
               /* 首收：成绩后绿色 ✓ 下标（同录像列表本BV标记 .mk 绿色 #a6e22e 语言） */
               <Link href={`/video/${news.reference}`} target="_blank" prefetch={false} className="score record_score">

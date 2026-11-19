@@ -522,9 +522,8 @@ export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
   NEWS_TYPE.STAR, // 当选每日一星（2026-10-25：金色动态上首页新闻流）
-  NEWS_TYPE.BV_RECORD, // BV 收集动态（2026-11-19）：仅破 PB（kind=pb）进首页新闻流；
-  // 首收（kind=first）量大且价值低（同首创纪录行 or=0 不进首页先例），
-  // home 过滤口径在 queries.ts homeNewsTypeFilter（kind 双形态 contains）
+  // BV 收集动态（57）不进首页（2026-11-19 张老师修正：原定「破PB进/首收不进」
+  // 推翻——只进个人主页动态流和关注流；homeNewsTypeFilter 的 57 排除分支已随迁删除）
 ];
 
 /** 「创造了」首创行（or=0）在 details_data 里的两种落库形态：
