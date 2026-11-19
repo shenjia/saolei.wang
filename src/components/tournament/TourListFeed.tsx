@@ -65,7 +65,8 @@ export function TourListFeed({
 
   function gotoPage(p: number) {
     startTransition(() => {
-      router.push(p <= 1 ? "/tournaments" : `/tournaments?page=${p}`);
+      // scroll:false（useNoJump 铁律）：同页参数导航不滚顶，保持阅读位置
+      router.push(p <= 1 ? "/tournaments" : `/tournaments?page=${p}`, { scroll: false });
     });
   }
 
