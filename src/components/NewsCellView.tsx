@@ -348,9 +348,31 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             )}
           </>
         )}
+        {/* 报名参赛动态（type=58，2026-11-19 张老师需求）：「报名参加了 FFFFF」——
+            FFFFF=比赛全称可点跳详情页；个人主页「动态」+关注流可见 */}
+        {news.type === NEWS_TYPE.TOUR_JOIN && news.author && (
+          <>
+            {authorCells}报名参加了
+            {news.tour ? (
+              <Link
+                href={`/tournaments/${news.reference}`}
+                target="_blank"
+                prefetch={false}
+                className="score news_article"
+                title={news.tour.name}
+              >
+                {news.tour.name}
+              </Link>
+            ) : (
+              <Link href={`/tournaments/${news.reference}`} target="_blank" prefetch={false} className="score news_article">
+                #{news.reference}
+              </Link>
+            )}
+          </>
+        )}
         {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
             渲染块移除——details 的 ti/cond 字段随存量行一并消失 */}
-        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56, 57].includes(news.type) && (
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56, 57, 58].includes(news.type) && (
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>

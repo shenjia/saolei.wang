@@ -27,6 +27,7 @@ import { TourEventsFeed } from "@/components/tournament/TourEventsFeed";
 import { TourVideosFeed } from "@/components/tournament/TourVideosFeed";
 import { TourBlock } from "@/components/tournament/TourBlock";
 import { WindowPlayBox } from "@/components/tournament/WindowPlayBox";
+import { SignupEntryBox } from "@/components/tournament/SignupEntryBox";
 import { VideoSearch } from "@/components/VideoSearch";
 import { scoreTime } from "@/lib/format";
 import { LEVEL_NAMES, type Level } from "@/lib/config";
@@ -156,11 +157,14 @@ export default async function CompetitionDetailPage({
         </li>
 
         <li className="sidebar">
-          {/* 登录态：双钮行按比赛形态分流（2026-11-19 张老师定）：
-              · 窗口赛（windowHours>0）→ WindowPlayBox（未开赛单按钮+确认窗；已开赛
-                个人标识+进入比赛/传录像双钮+倒计时色阶）
-              · 集体赛 → 原双钮行（/online?c=比赛ID 新标签页比赛模式 + 传录像）
-              已结束比赛不显示（张老师 2026-11-18 详情页反馈）。
+          {/* 登录态：按钮区按状态分流（2026-11-19 早张老师定）：
+              · 已结束 → 不显示任何按钮
+              · 窗口赛（windowHours>0）进行中 → WindowPlayBox（未开赛单按钮+确认窗；
+                已开赛个人标识+进入比赛/传录像双钮+倒计时色阶）
+              · 集体赛：已开始且已报名 → 「进入比赛、传录像」双钮（原 #play_row）；
+                未开始或未报名 → 「报名参赛」单按钮（风格同首页开始练习，图标=_PERSON
+                旗标；已报名未开赛变绿色「已报名参赛」不可点）+ 下方倒计时
+                「距离开赛还有…/距离比赛结束还有…」
               FlopSprites 提供 #face-flat 笑脸 symbol（纯 0×0 贴图库，无视觉占位） */}
           {session && c.status !== "ended" && (
             <>
@@ -172,13 +176,13 @@ export default async function CompetitionDetailPage({
                   compEnd={c.end}
                   session0={c.mySession}
                 />
-              ) : (
+              ) : myResult?.joined && c.status === "active" ? (
                 <div id="play_row">
                   <Link id="play_entry" href={`/online?c=${compId}`} target="_blank">
                     <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
                       <use href="#face-flat" />
                     </svg>
-                    <span>开始比赛</span>
+                    <span>进入比赛</span>
                   </Link>
                   <Link id="upload_entry" href="/video/upload" target="_blank">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -186,6 +190,14 @@ export default async function CompetitionDetailPage({
                     <span>传录像</span>
                   </Link>
                 </div>
+              ) : (
+                <SignupEntryBox
+                  compId={compId}
+                  status={c.status}
+                  joined={!!myResult?.joined}
+                  start={c.start}
+                  end={c.end}
+                />
               )}
             </>
           )}
@@ -266,15 +278,23 @@ export default async function CompetitionDetailPage({
             )}
           </div>
 
-          {/* 数据统计（本比赛口径） */}
+          {/* 数据统计（本比赛口径。张老师 2026-11-19 定：报名人数与参赛人数分开统计——
+              报名人数为 0 整行不显示（历届导入的旧比赛无报名数据，不存在统计误差）；
+              参赛人数＝实际传了录像的持有者数） */}
           <div className="box comp_stats">
             <h2>数据统计</h2>
+            {dstats.registrations > 0 && (
+              <div className="comp_stat_row">
+                <span>报名人数</span>
+                <b>{dstats.registrations}</b>
+              </div>
+            )}
             <div className="comp_stat_row">
               <span>参赛人数</span>
               <b>{dstats.entries}</b>
             </div>
             <div className="comp_stat_row">
-              <span>录像数量</span>
+              <span>参赛录像</span>
               <b>{dstats.videos}</b>
             </div>
             <div className="comp_stat_row">

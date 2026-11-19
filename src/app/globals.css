@@ -17489,9 +17489,29 @@ body #header .nav li a.vs_new_hint,
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
 .comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
+/* 报名参赛盒（2026-11-19 张老师定）：集体赛详情页右栏——按钮风格同首页开始练习
+   #play_entry（银灰凸起边框），已报名态绿色不可点；下方倒计时灰字 */
+.signup_entry_box { display: flex; flex-direction: column; gap: 8px; margin: 16px 8px; width: 272px; }
+.signup_entry_btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 10px 0;
+  background: silver; border: 3px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+  color: #333; font-size: 18px; font-weight: bold; cursor: pointer;
+  font-family: inherit;
+}
+.signup_entry_btn:hover:not(:disabled) { color: #000; }
+.signup_entry_btn:active:not(:disabled) { border-color: #7b7b7b #fff #fff #7b7b7b; }
+.signup_entry_btn.joined {
+  background: linear-gradient(#8fd855, #5cb830);
+  border-color: #c8f0a0 #3a8020 #3a8020 #c8f0a0;
+  color: #fff; cursor: default; opacity: 0.9;
+}
+.signup_countdown { margin: 0; font-size: 13px; color: #939387; text-align: center; }
+.signup_countdown span { color: #b1b1a4; font-weight: 700; }
+
 /* 窗口赛开赛盒（2026-11-19 张老师定）：详情页右栏 */
-.win_play_box { display: flex; flex-direction: column; gap: 10px; }
-.win_start_btn {
+.win_play_box { display: flex; flex-direction: column; gap: 10px; }.win_start_btn {
   display: block; width: 100%; padding: 10px 0;
   background: #3e3d32; border: 1px solid #49483e; border-radius: 6px;
   color: #a6e22e; font-size: 15px; font-weight: 700; cursor: pointer;

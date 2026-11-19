@@ -10,6 +10,8 @@ import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { addTourEvent, TOUR_EVENT_PLAYER_JOIN, tourStatus } from "@/lib/tournament";
+import { publishNews } from "@/lib/news";
+import { NEWS_TYPE } from "@/lib/config";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -60,6 +62,16 @@ export async function POST(req: Request) {
 
   // 「玩家报名参加」动态（2026-11-13 二期：详情页动态板块）
   await addTourEvent(Number(comp.id), TOUR_EVENT_PLAYER_JOIN, session.uid);
+
+  // 个人动态 type=58「报名参加了 FFFFF」（2026-11-19 张老师需求）：FFFFF=比赛全称
+  // 可点跳详情页（reference=比赛 id，渲染端批量带出 tournament 主体）；
+  // 仅个人主页「动态」+关注流可见（不进 NEWS_HOME_TYPES）；关注者可见由关注流
+  // 「关注目标全部动态」口径天然覆盖
+  await publishNews({
+    type: NEWS_TYPE.TOUR_JOIN,
+    userId: session.uid,
+    reference: Number(comp.id),
+  });
 
   return NextResponse.json({ ok: true });
 }
