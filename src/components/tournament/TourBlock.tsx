@@ -85,7 +85,9 @@ export function TourBlock({
 
       {/* 纪录图表（2026-11-19 凌晨张老师定：严格复刻纪录页 rec_card——深底 #1e1f1c、
           金线+下方阴影、右标尺、hover 气泡）——上部「最好成绩」行严格复刻 rec_head：
-          元帅金大数字 + 性别 + 军衔徽章；未开始/无成绩保持占位文案 */}
+          元帅金大数字 + 性别 + 军衔徽章。
+          2026-11-19 早张老师定：无数据比赛也渲染同款卡片占位（同样式的深底空卡），
+          中间「尚无成绩数据」，不再是裸文本——视觉上与有数据的比赛一致 */}
       <div className="comp_chart">
         {c.status !== "upcoming" && c.chartPoints.length > 0 && c.bestLine ? (
           <div className="rec_card comp_chart_body">
@@ -107,10 +109,16 @@ export function TourBlock({
             </div>
             <TourChart points={c.chartPoints} myUid={myUid} />
           </div>
-        ) : c.status === "upcoming" ? (
-          <span className="comp_chart_empty">尚未开始</span>
         ) : (
-          <span className="comp_chart_empty">暂无成绩数据</span>
+          <div className="rec_card comp_chart_body">
+            <div className="rec_head">
+              <span className="rec_name">最好成绩：</span>
+              <span className="rec_meta">
+                {c.status === "upcoming" ? "尚未开始" : "尚无成绩数据"}
+              </span>
+            </div>
+            <div className="comp_chart_placeholder">尚无成绩数据</div>
+          </div>
         )}
       </div>
 
