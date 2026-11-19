@@ -17449,10 +17449,10 @@ body #header .nav li a.vs_new_hint,
 .comp_chart_body { width: 100%; }
 .comp_chart_body .rec_chart { cursor: default; }
 /* 无数据占位形态（2026-11-19 早张老师定：与有数据比赛同款 rec_card 卡片，
-   图表区域高度撑起 + 居中「尚无成绩数据」） */
+   左上角不放「最好成绩」标题行——只有居中占位文案，稍大 16px） */
 .comp_chart_placeholder {
-  height: 176px; display: flex; align-items: center; justify-content: center;
-  color: #75715e; font-size: 14px;
+  height: 196px; display: flex; align-items: center; justify-content: center;
+  color: #75715e; font-size: 16px;
 }
 /* 气泡值行字号配色（2026-11-19 凌晨张老师定：rec_tip b 全金 16px 过大——
    值行整体 14px 亮灰，仅名次数字元帅金，「第/位」亮灰） */
@@ -17480,14 +17480,20 @@ body #header .nav li a.vs_new_hint,
 .comp_meta { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 2px 16px; margin-top: 10px; font-size: 13px; color: #b1b1a4; }
 .comp_meta b { color: #f8f8f2; font-weight: 700; }
 /* 比赛标识整段加粗高亮（张老师 15:14 二轮定：包含括号和简称部分） */
-.comp_meta b.comp_code_all { font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
 .comp_meta em { font-style: normal; color: #939387; font-size: 12px; margin-left: 2px; }
 /* 比赛时间行（2026-11-18 晚定：从信息行拆出单独一行在下） */
 .comp_time_line { margin-top: 6px; font-size: 13px; color: #b1b1a4; }
 
-/* 比赛级别亮灰纯文本（2026-11-18 晚张老师定：圆角彩色标签退役）——
-   亮灰 #f8f8f2 加粗（与标识同级强调），级别名间留间距 */
-.comp_lv_plain { color: #f8f8f2; font-weight: 700; margin-left: 4px; }
+/* 比赛级别纯文本（2026-11-19 早张老师定：级别色渲染不加粗——
+   初级绿 #a6e22e / 中级橙 #f79646 / 高级金 #fdc61a，同纪录页曲线配色） */
+.comp_lv_plain { font-weight: 400; margin-left: 4px; }
+.comp_lv_plain.comp_lv_beg { color: #a6e22e; }
+.comp_lv_plain.comp_lv_int { color: #f79646; }
+.comp_lv_plain.comp_lv_exp { color: #fdc61a; }
+/* 比赛标识（2026-11-19 早张老师定）：已开始亮灰、未开始暗灰「待定」；
+   不再显示括号简称 */
+.comp_meta b.comp_code_started { color: #b1b1a4; font-family: Menlo, Consolas, "Courier New", monospace; letter-spacing: 1px; }
+.comp_meta b.comp_code_pending { color: #75715e; }
 /* 发起人行七轮 03:10 整块下线（张老师定「隐藏发起人」），.comp_creator 样式一并清除 */
 .comp_rules { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: #b1b1a4; }
 

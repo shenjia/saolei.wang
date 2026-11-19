@@ -111,36 +111,37 @@ export function TourBlock({
           </div>
         ) : (
           <div className="rec_card comp_chart_body">
-            <div className="rec_head">
-              <span className="rec_name">最好成绩：</span>
-              <span className="rec_meta">
-                {c.status === "upcoming" ? "尚未开始" : "尚无成绩数据"}
-              </span>
+            {/* 2026-11-19 早张老师定：占位卡左上角不显示「最好成绩」，只留居中文案（稍大） */}
+            <div className="comp_chart_placeholder">
+              {c.status === "upcoming" ? "尚未开始" : "尚无成绩数据"}
             </div>
-            <div className="comp_chart_placeholder">尚无成绩数据</div>
           </div>
         )}
       </div>
 
-      {/* 信息行（2026-11-18 晚张老师定：比赛级别+比赛标识一行在上，比赛时间一行在下；
-          级别标签亮灰（原绿/橙/金圆角标签退役）；标识整段加粗高亮含括号与简称，
-          未设置（空）时不渲染） */}
+      {/* 信息行（2026-11-19 早张老师定：级别用级别色绿/橙/金不加粗；
+          标识不带括号简称——已开始亮灰、未开始暗灰「待定」） */}
       <div className="comp_meta">
         <span className="comp_levels">
           比赛级别：
           {c.levels.map((l) => (
-            <span key={l} className="comp_lv_plain">
+            <span key={l} className={"comp_lv_plain comp_lv_" + l}>
               {LEVEL_NAMES[l]}
             </span>
           ))}
         </span>
-        {c.code && (
+        {c.status === "upcoming" ? (
           <span className="comp_code">
             比赛标识：
-            <b className="comp_code_all">
-              {c.code}({c.shortName})
-            </b>
+            <b className="comp_code_pending">待定</b>
           </span>
+        ) : (
+          c.code && (
+            <span className="comp_code">
+              比赛标识：
+              <b className="comp_code_started">{c.code}</b>
+            </span>
+          )
         )}
       </div>
       <div className="comp_time_line">
