@@ -383,19 +383,21 @@ export const TOUR_EVENT_SCORE = 4; // 玩家更新成绩
 export const TOUR_EVENT_ENDED = 5; // 比赛正式结束
 
 /** 动态事件文案（type → 展示文本；主体玩家名由行渲染拼接）。
-    详情页 RSC 与 TourEventsFeed 客户端壳共用（2026-11-13 五轮翻页改版） */
+    详情页 RSC 与 TourEventsFeed 客户端壳共用（2026-11-13 五轮翻页改版）。
+    2026-11-19 张老师定：type=1 报名开始动态废弃（存量不再展示——渲染端过滤，
+    写入点保留类型编号存档）；「正式」两字去掉（「比赛开始/比赛结束」）。 */
 export function compEventText(type: number): string {
   switch (type) {
     case TOUR_EVENT_JOIN_OPEN:
-      return "报名开始";
+      return "报名开始"; // 废弃类型：渲染端已过滤不再展示（存量数据仍在库）
     case TOUR_EVENT_PLAYER_JOIN:
       return "报名参加了比赛";
     case TOUR_EVENT_STARTED:
-      return "比赛正式开始";
+      return "比赛开始";
     case TOUR_EVENT_SCORE:
       return "更新了成绩";
     case TOUR_EVENT_ENDED:
-      return "比赛正式结束";
+      return "比赛结束";
     default:
       return "";
   }
@@ -481,9 +483,10 @@ export async function getTourEventsPage(
 ): Promise<{ rows: TourEventRow[]; total: number; page: number; pageSize: number }> {
   const cid = BigInt(tournamentId);
   // 全量取出本比赛动态（比赛量级十场、单场动态几千条，内存归并最直白；
-  // 跨批合并/总成绩进度都无法在 SQL 一层表达）
+  // 跨批合并/总成绩进度都无法在 SQL 一层表达）。
+  // 2026-11-19 张老师定：type=1 报名开始动态废弃——查询层直接排除（每场一条无信息量）
   const all = await prisma.tournamentEvent.findMany({
-    where: { tournamentId: cid },
+    where: { tournamentId: cid, type: { not: TOUR_EVENT_JOIN_OPEN } },
     orderBy: [{ createTime: "asc" }, { id: "asc" }],
   });
   const scoreEv = all.filter((e) => e.type === TOUR_EVENT_SCORE);
