@@ -8,11 +8,14 @@ import { prisma } from "@/lib/db";
 import { tourStatus, parseScoreConfig } from "@/lib/tournament";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { RowEditButton } from "@/components/admin/RowEditButton";
-import { AdminCard } from "@/components/admin/Widgets";
+import { AdminCard, AdminPager } from "@/components/admin/Widgets";
 import { TournamentForm } from "@/components/admin/TournamentForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "比赛管理 | 管理后台" };
+
+/** 清单分页：每页最多 10 场（2026-11-19 张老师需求） */
+const PAGE_SIZE = 10;
 
 type StatusKey = ReturnType<typeof tourStatus>;
 
@@ -41,6 +44,7 @@ export default async function AdminCompetitionsPage({
 }) {
   const sp = await searchParams;
   const st = sp.st === "active" || sp.st === "upcoming" || sp.st === "ended" ? sp.st : "";
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const now = Math.floor(Date.now() / 1000);
   const [all, counts, videoCounts] = await Promise.all([
@@ -75,6 +79,10 @@ export default async function AdminCompetitionsPage({
     return Number(b.startTime) - Number(a.startTime);
   });
   const rows = st ? sorted.filter((r) => tourStatus(r.startTime, r.endTime, now) === st) : sorted;
+  // 分页：筛选后切片，页码越界兜底回最后一页
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <>
@@ -82,7 +90,7 @@ export default async function AdminCompetitionsPage({
         <h1>比赛管理</h1>
         <span className="sub">
           前台 <a href="/tournaments" target="_blank" rel="noopener noreferrer">saolei.wang/tournaments</a>{" "}
-          展示同一份数据 · 共 {rows.length} 场
+          展示同一份数据 · 共 {rows.length} 场 · 每页 {PAGE_SIZE} 场
         </span>
       </div>
 
@@ -117,7 +125,7 @@ export default async function AdminCompetitionsPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {pageRows.map((r) => {
                 const stKey = tourStatus(r.startTime, r.endTime, now);
                 return (
                   <tr key={r.id.toString()}>
@@ -171,7 +179,7 @@ export default async function AdminCompetitionsPage({
                   </tr>
                 );
               })}
-              {rows.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr>
                   <td colSpan={11}>
                     <div className="admin_empty">
@@ -183,6 +191,8 @@ export default async function AdminCompetitionsPage({
             </tbody>
           </table>
         </div>
+        {/* 分页（2026-11-19 张老师需求：每页最多 10 场；复用后台标准 AdminPager，保留 st 筛选参数） */}
+        <AdminPager base="/admin/tournaments" params={{ st: st || undefined }} page={safePage} total={rows.length} pageSize={PAGE_SIZE} />
       </AdminCard>
 
       <AdminCard title="发起比赛">
