@@ -308,11 +308,14 @@ function newsLevelFilter(level: string) {
  *  details_data 的 lv 串匹配、不限类型，于是用户主页「初级」tab 里冒出
  *  「评论了录像 岳慎哲 的 初级 1.74NF」（张老师 2026-10-27 报告）。
  *  级别 tab 的语义＝该用户在该级别的成绩动态（旧站 News_My_Beg/Int/Exp 也只列破纪录），
- *  评论一律不在其内（要看去「全部」或「论坛」）。地区/全国纪录同为成绩类，一并保留口径。 */
+ *  评论一律不在其内（要看去「全部」或「论坛」）。地区/全国纪录同为成绩类，一并保留口径。
+ *  2026-11-19 张老师定：BV 收集动态（57，details 自带 lv）纳入级别筛选——
+ *  「高级」tab 应能看到该级别的 BV 时间纪录动态。 */
 const NEWS_LEVEL_TYPES: number[] = [
   NEWS_TYPE.PERSON_RECORD,
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
+  NEWS_TYPE.BV_RECORD,
 ];
 
 /**
