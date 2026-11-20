@@ -176,18 +176,29 @@ export async function getSumTimeDeltas(ids: number[]): Promise<Map<number, numbe
   });
   for (const r of rows) {
     const d = N(r.delta);
+    const ranks = (r.ranks ?? {}) as Record<string, number>;
     // ① 进榜首日（base=今日，旧键淘汰后窗口内无其他快照）
     if (r.baseDate === today) {
       map.set(N(r.user), null);
       continue;
     }
-    // ② 新用户：基准=进榜首日快照 → 有提升显示提升值，持平/下降显示「新」
-    if (r.baseDate === dateStr(new Date(N(r.createTime) * 1000))) {
+    // ② 新用户：基准=进榜首日快照 → 有提升显示提升值，持平/下降显示「新」。
+    //    ⚠️ 2026-11-20 事故修正：create_time=行首次 INSERT 日，但 10-22 重构上线首刷把当时
+    //    全部在榜玩家（7372 行）批量 INSERT——create_time 全=10-22，语义失真。30 天窗口
+    //    滚到 11-20 时恰保留 10-22 为最早键（k > 今日−30 的严格大于临界点），这批行
+    //    base_date=create_time 日期全体命中本条件 → 排行榜一夜全变「新」。
+    //    判据补「键数 < 30」：连续在榜满窗恒 30 键（每日 +1 剔 1），10-22 首刷批今天恰
+    //    30 键 → 走 ③ 恢复真实 ↑/→/↓；真·当日 INSERT 的新用户键数 <30 照常命中。
+    //    （边界：进榜第 30 天的新用户键数=30，这一天按 ③ 显示 ↑/→/↓——次日本就走 ③，
+    //    仅口径前移一天，可接受。）
+    if (
+      r.baseDate === dateStr(new Date(N(r.createTime) * 1000)) &&
+      Object.keys(ranks).length < 30
+    ) {
       map.set(N(r.user), d > 0 ? d : null);
       continue;
     }
     // ③ 老用户；今日未刷新（cron 失败且惰性兜底前的短暂窗口）按持平 0 处理
-    const ranks = (r.ranks ?? {}) as Record<string, number>;
     map.set(N(r.user), ranks[today] === undefined ? 0 : d);
   }
   return map;
