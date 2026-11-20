@@ -3623,6 +3623,12 @@ export function ReplayFullscreen({
     if (!rows || !cols) return;
     const cursor = host.querySelector<HTMLElement>(".replay_cursor");
     if (cursor) cursor.style.display = "none";
+    /* 重开路径防双引擎（2026-11-20 张老师录像报障）：NF 切换重开经 startPlayRef
+       直进本函数，旧引擎若不先销毁，其 setInterval 计时与事件监听全部存活，
+       与新引擎双写同一 LED 时间条/统计面板（RTime 乱跳且倒退＝双计时波形）。
+       enterPlay 重开同款口径——先 destroy 再建新 */
+    playRef.current?.destroy();
+    playRef.current = null;
     playRef.current = runPlayGame({
       boardHost: host,
       tbody,
