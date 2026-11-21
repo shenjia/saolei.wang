@@ -17545,7 +17545,7 @@ body #header .nav li a.vs_new_hint,
   background: silver; border: 3px solid;
   border-color: #fff #7b7b7b #7b7b7b #fff;
   color: #333; font-size: 18px; font-weight: bold; cursor: pointer;
-  font-family: inherit;
+  font-family: inherit; text-shadow: none;
 }
 .signup_entry_btn:hover:not(:disabled) {
   color: #fff;
@@ -17581,7 +17581,6 @@ body #header .nav li a.vs_new_hint,
 }
 .win_start_btn:active:not(:disabled) { border-color: #55801a #c4e88a #c4e88a #55801a; }
 .win_start_btn:disabled { opacity: 0.6; cursor: default; }
-.win_start_btn img { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.4)); }
 .win_race_row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .win_race_label { color: #75715e; font-size: 13px; }
 .win_race {
