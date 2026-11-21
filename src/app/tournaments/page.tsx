@@ -50,6 +50,10 @@ export default async function CompetitionsPage({
           {/* 通用「加载更多+滑轨」翻页器（张老师三轮定）：客户端壳接 PageSlider，
               首屏服务端渲染，换页走 URL、加载更多走 /api/tournament/list */}
           <TourListFeed
+            // key=页码重挂载（2026-11-21 张老师报「翻页无效」）：客户端壳 useState 接
+            // 服务端初值，换页 RSC 重渲染时 props 更新但 state 不重置——列表永远停在
+            // 首屏那 5 行。与 ranking 页三处 key={含 page} 同判例（ui-conventions 铁律）。
+            key={page}
             initialRows={data.rows}
             initialPage={data.page}
             initialTotal={data.total}

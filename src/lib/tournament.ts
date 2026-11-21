@@ -363,7 +363,14 @@ export interface TourGlobalStats {
 export async function getTourGlobalStats(): Promise<TourGlobalStats> {
   const [tournaments, participants, prizeAgg, videos] = await Promise.all([
     prisma.tournament.count(),
-    prisma.tournamentEntry.groupBy({ by: ["userId"], where: {} }).then((g) => g.length),
+    // 参赛人数=实际传过比赛录像的去重用户（2026-11-21 张老师报「参赛人数怎么可能是 0」）：
+    // 报名表 11-13 才上线（历届 GSC 全是 0 行），历史参赛者只存在于 video.competition_id
+    // 挂接——与详情页 getTourDetailStats 的 entries 口径一致（distinct 持有者）。
+    prisma.video.findMany({
+      where: { tournamentId: { not: null }, status: { not: 0 } },
+      select: { user: true },
+      distinct: ["user"],
+    }).then((rows) => rows.length),
     prisma.tournament.aggregate({ _sum: { prizeTotal: true } }),
     // 挂接到比赛的录像数（2026-11-13 二期起有真实数据源：后台手动挂接）
     prisma.video.count({ where: { tournamentId: { not: null }, status: { not: 0 } } }),
