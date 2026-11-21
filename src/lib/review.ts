@@ -293,7 +293,8 @@ async function syncUserStatVideoCount(
 // · 慢路径（仅乱序审触发）：重放范围=单玩家单级别，单表索引扫描千行级 ~1ms +
 //   该玩家纪录动态 diff（纪录动态数=改进次数，几十行量级）。与全站录像总量无关。
 // 口径：与原发布逻辑一致——严格更优才成点（平手不发），首点 or=0（首创「创造了」）；
-// 已知近似：补发的缺失点快照 exp_time 取当下值（历史精确快照不可重建，仅影响行内称号徽章）。
+// 补发的缺失点快照 exp_time 按补发点 ct 重放高级 running best（2026-11-21 改，
+// 原取当下值会把未来军衔写进历史行——/user/25669「元帅 SUB45」判例）。
 // 2026-11-21 脏数据治理：重放源 JOIN video_info 带出 board_3bv，3bvs 链加级别限界判定
 // （初 10 / 中高 4，MIN_3BV_FOR_3BVS）——此前老站迁移的 video_scores 低限界正值脏行
 // （10-16 清零未覆盖）被当合法纪录点，重放把「初级3BVS纪录」伪动态补发回 news。
@@ -312,12 +313,13 @@ export async function hasLaterRecordNews(tx: Tx, userId: number, createTime: num
   return row !== null;
 }
 
-/** 按上传序重放该玩家该级别纪录链，与 PERSON_RECORD 动态对齐（删/补/修 or）。 */
+/** 按上传序重放该玩家该级别纪录链，与 PERSON_RECORD 动态对齐（删/补/修 or）。
+ *  snapshot 参数已废弃（2026-11-21 补发点快照改按 ct 重放，见 ⑤），保留签名兼容旧调用。 */
 export async function syncRecordNewsChain(
   tx: Tx,
   userId: number,
   level: VideoLevel,
-  snapshot: { expTime: number }
+  _snapshot?: { expTime: number }
 ): Promise<void> {
   // ① 重放数据源：该玩家该级别全部已过审成绩（屏蔽的已从本表删除，天然排除）。
   // JOIN video_info 取 board_3bv 做 3BV/s 限界判定（2026-11-21 脏数据治理）：
@@ -371,9 +373,28 @@ export async function syncRecordNewsChain(
   // ④ 删：不在期望点集的（历史乱序审产出的伪点 / 撤点残留）
   const delIds = mine.filter((r) => !desired.has(`${r.det.od}:${r.ref}`)).map((r) => BigInt(r.id));
   if (delIds.length) await tx.news.deleteMany({ where: { id: { in: delIds } } });
-  // ⑤ 改/补：or 链修正 + 缺失点补发（快照取传入 expTime，近似口径见文件头说明）
+  // ⑤ 改/补：or 链修正 + 缺失点补发（快照按补发点的 ct 重放高级 running best，
+  // 2026-11-21 张老师报障 /user/25669「元帅 SUB45」：原取传入 snapshot.expTime=
+  // 屏蔽后的当下值，未来/当下军衔被写进历史动态行）。流水基底=video_scores_exp
+  // 全表该用户（非只本级别——军衔只看高级时间，任何级别的过审时刻都可能改变它）。
+  // 重放口径与 lib/titlesnapshots.replayExpBest 一致：严格早于补发点 ct。
   const u = await tx.user.findUnique({ where: { id: BigInt(userId) }, select: { status: true } });
   const ranked = BigInt(u?.status === 0 ? 1 : 0);
+  const expFlows = await tx.$queryRaw<{ st: number; ct: bigint }[]>`
+    SELECT score_time st, create_time ct FROM video_scores_exp
+    WHERE user = ${BigInt(userId)} AND score_time > 0
+  `;
+  const expBest = expFlows
+    .map((f) => ({ ct: Number(f.ct), st: Number(f.st) }))
+    .sort((a, b) => a.ct - b.ct);
+  const replayBestAt = (ct: number): number => {
+    let best = 0;
+    for (const f of expBest) {
+      if (f.ct >= ct) break;
+      if (best === 0 || f.st < best) best = f.st;
+    }
+    return best;
+  };
   for (const [key, pt] of desired) {
     const idx = key.indexOf(":");
     const od = key.slice(0, idx);
@@ -395,7 +416,7 @@ export async function syncRecordNewsChain(
         data: {
           type: NEWS_TYPE.PERSON_RECORD,
           user: BigInt(userId),
-          expTime: BigInt(snapshot.expTime),
+          expTime: BigInt(replayBestAt(pt.ct)),
           ranked,
           reference: BigInt(vid),
           detailsData: JSON.stringify({ lv: level, od, or: pt.or, cr: pt.cr, nf: 0 }),
@@ -631,6 +652,10 @@ export async function reviewVideo(
       // 时间取录像上传时间（同 PERSON_RECORD 口径）；不进个人主页级别/阶段筛选
       // （不在 NEWS_LEVEL_TYPES / stage SQL 未含 57，天然排除）。
       // 本BV标记与 type=20 纪录动态完全独立（时间链 vs 收集链），互不影响。
+      // 快照（2026-11-21 张老师报障 /user/25669）：createTime 回写为上传时刻后，
+      // 快照也必须按「上传时刻」取——publishNews 缺省取当下值，批量补审时（上传时刻
+      // 远早于审核时刻）军衔徽章会显示成审核时的军衔而非当时军衔。此处在事务内
+      // 按上传时刻重放 video_scores_exp running best 显式传入。
       // 发布前存在性检查（reference+type 唯一语义）：重审翻案（0→20）重走本分支时
       // 幂等，不重复发；NF 交互说明：本BV池查询不分 NF（video_info 无 NF 维度，
       // upload 路由同口径），NF 盘破同池纪录同样发（链语义以 real_time 为准）。
@@ -660,10 +685,17 @@ export async function reviewVideo(
             bvPrev = prevRows[0]?.mt ?? 0;
           }
           const bvKind = video.firstBv === 1 ? "first" : "pb";
+          const bvSnapRows = await tx.$queryRaw<{ best: number | null }[]>`
+            SELECT MIN(score_time) AS best FROM video_scores_exp
+            WHERE user = ${BigInt(rv.user)} AND score_time > 0
+              AND create_time < ${BigInt(rv.createTime)}
+          `;
+          const bvSnap = bvSnapRows[0]?.best ?? 0;
           await publishNews({
             tx,
             type: NEWS_TYPE.BV_RECORD,
             userId: rv.user,
+            expTimeOverride: bvSnap,
             reference: rv.id,
             details: { lv: rv.level, kind: bvKind, or: bvPrev, cr: rv.realTime, bv: rv.board3bv },
             createTime: rv.createTime,
