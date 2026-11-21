@@ -548,6 +548,9 @@ export async function getTourEventsPage(
       includeLevels: true,
     },
   });
+  // 窗口赛判定（2026-11-21 二次修正）：windowHours>0 **且存在个人会话记录**才按
+  // 会话窗过滤——历届导入的旧比赛 window_hours 带着历史默认值 2，但会话表恒空，
+  // 按会话窗过滤会把全部录像判窗外＝排行榜/图表/动态全空（金羊杯事故）。
   const sessWhere = compRow?.windowHours
     ? await prisma.tournamentWindowSession.findMany({
         where: { tournamentId: cid },
@@ -555,6 +558,7 @@ export async function getTourEventsPage(
       })
     : [];
   const sessByUser = new Map(sessWhere.map((s) => [Number(s.userId), s]));
+  const useSessWindow = !!compRow?.windowHours && sessWhere.length > 0;
   const vids = uids.length
     ? await prisma.video.findMany({
         where: {
@@ -565,7 +569,7 @@ export async function getTourEventsPage(
         select: { id: true, user: true, level: true, createTime: true },
       })
     : [];
-  const vidsInWindow = compRow?.windowHours
+  const vidsInWindow = useSessWindow
     ? vids.filter((v) => {
         const s = sessByUser.get(Number(v.user));
         const t = Number(v.createTime);
@@ -621,7 +625,7 @@ export async function getTourEventsPage(
   const BATCH_WINDOW_SEC = 600;
   type Merged = {
     userId: number;
-    /** 行时刻 = 批内最新事件时刻 */
+    /** 行时刻 = 批内新盘最大上传时刻（无新盘回退批末事件时刻） */
     createTime: number;
     /** 批内事件数（动态条数） */
     evCount: number;
@@ -631,6 +635,8 @@ export async function getTourEventsPage(
     firstTime: number;
     /** 批末事件时刻 */
     lastTime: number;
+    /** 行展示时刻 = 批内新盘最大上传时间（张老师 2026-11-21 定） */
+    rowTime: number;
     minId: number;
   };
   const merged: Merged[] = [];
@@ -645,20 +651,24 @@ export async function getTourEventsPage(
         cur.evCount += 1;
       } else {
         if (cur) merged.push(cur);
-        cur = { userId: uid, createTime: t, evCount: 1, batchVideoIds: [], firstTime: t, lastTime: t, minId: Number(e.id) };
+        cur = { userId: uid, createTime: t, evCount: 1, batchVideoIds: [], firstTime: t, lastTime: t, rowTime: t, minId: Number(e.id) };
       }
     }
     if (cur) merged.push(cur);
   }
   // 批内新盘：该玩家录像中上传时刻 ∈ (上一批 lastTime, 本批 lastTime]
+  // 2026-11-21 张老师定（二次反馈）：成绩动态行时刻=**批内新盘的最大上传时间**
+  // （补挂场景事件写入时刻没有意义；无新盘的批次回退事件时刻）
   for (const m of merged) {
     const prev = merged.find((x) => x.userId === m.userId && x.lastTime < m.lastTime);
     const from = prev ? prev.lastTime : m.firstTime - BATCH_WINDOW_SEC - 1;
     const pool = vidsByUser.get(m.userId) ?? [];
-    m.batchVideoIds = pool
-      .filter((v) => Number(v.createTime) > from && Number(v.createTime) <= m.lastTime)
-      .map((v) => Number(v.id));
+    const inBatch = pool.filter((v) => Number(v.createTime) > from && Number(v.createTime) <= m.lastTime);
+    m.batchVideoIds = inBatch.map((v) => Number(v.id));
     m.minId = Math.min(m.minId, ...m.batchVideoIds.slice(0, 1), m.minId);
+    m.rowTime = inBatch.length
+      ? Math.max(...inBatch.map((v) => Number(v.createTime)))
+      : m.lastTime;
   }
   // 总成绩进度：截至每批 lastTime 的录像按比赛设定算总分（含收录级别闸门）
   const tourLevels = (compRow?.includeLevels ?? "beg,int,exp")
@@ -733,10 +743,10 @@ export async function getTourEventsPage(
       continue;
     }
     rows.push({
-      sortKey: m.lastTime,
+      sortKey: m.rowTime,
       type: TOUR_EVENT_SCORE,
       userId: m.userId,
-      createTime: m.lastTime,
+      createTime: m.rowTime,
       evCount: m.evCount,
       minId: m.minId,
       total: prog.total,
@@ -855,7 +865,9 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
   const desc = conf?.desc ?? false;
   // 时间过滤口径（2026-11-21 张老师反馈 niu1 排行榜/图表为空）：集体赛（windowHours=0）
   // **不做上传时间过滤**——管理员挂接即视为参赛成绩（历史盘窗外补挂同样有效）；
-  // 窗口赛按玩家各自的个人会话窗口收录像（upload route 挂接时已按会话窗校验）
+  // 窗口赛（windowHours>0 且存在个人会话记录）按玩家各自的会话窗口收录像。
+  // ⚠️ 会话表为空的 windowHours>0 比赛（历届导入带默认值 2）按集体赛处理，
+  // 否则全部录像被判窗外＝金羊杯排行榜/图表清空事故
   const sessionWindows = comp.windowHours
     ? await prisma.tournamentWindowSession.findMany({
         where: { tournamentId: BigInt(compId) },
@@ -863,6 +875,7 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
       })
     : [];
   const sessByUser = new Map(sessionWindows.map((s) => [Number(s.userId), s]));
+  const useSessWindow = !!comp.windowHours && sessionWindows.length > 0;
   const rows = await prisma.video.findMany({
     where: {
       tournamentId: BigInt(compId),
@@ -870,7 +883,7 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
     },
     select: { id: true, user: true, level: true, createTime: true },
   });
-  const inWindow = comp.windowHours
+  const inWindow = useSessWindow
     ? rows.filter((r) => {
         const s = sessByUser.get(Number(r.user));
         const t = Number(r.createTime);
@@ -1051,14 +1064,15 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
   const metric = conf?.metric ?? "time";
   const desc = conf?.desc ?? false;
   // 时间过滤口径与 getTourRanking 完全同源（2026-11-21 niu1）：集体赛不限上传时刻，
-  // 窗口赛按玩家个人会话窗口判窗
-  const mySess = comp?.windowHours
-    ? await prisma.tournamentWindowSession.findFirst({
-        where: { tournamentId: BigInt(compId), userId: BigInt(uid) },
-        select: { startTime: true, endTime: true },
-        orderBy: { endTime: "desc" },
-      })
-    : null;
+  // 窗口赛（windowHours>0 且有会话记录）按玩家个人会话窗口判窗
+  const mySess =
+    comp?.windowHours && (await prisma.tournamentWindowSession.count({ where: { tournamentId: BigInt(compId) } })) > 0
+      ? await prisma.tournamentWindowSession.findFirst({
+          where: { tournamentId: BigInt(compId), userId: BigInt(uid) },
+          select: { startTime: true, endTime: true },
+          orderBy: { endTime: "desc" },
+        })
+      : null;
   // Video/VideoInfo 无 relation，成绩字段分表取（同 getTourRanking）
   const rows = await prisma.video.findMany({
     where: {
@@ -1068,10 +1082,10 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
     },
     select: { id: true, createTime: true },
   });
-  const myRows = comp?.windowHours
+  const myRows = mySess
     ? rows.filter((r) => {
         const t = Number(r.createTime);
-        return mySess ? t >= Number(mySess.startTime) && t <= Number(mySess.endTime) : false;
+        return t >= Number(mySess.startTime) && t <= Number(mySess.endTime);
       })
     : rows;
   const myInfos = await prisma.videoInfo.findMany({
@@ -1126,7 +1140,7 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
         })
       : [];
     const sessBy = new Map(allSessions.map((s) => [Number(s.userId), s]));
-    const all = comp?.windowHours
+    const all = allSessions.length > 0
       ? allVideos.filter((r) => {
           const s = sessBy.get(Number(r.user));
           const t = Number(r.createTime);
