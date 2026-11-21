@@ -1,23 +1,32 @@
 "use client";
 
 // 窗口赛开赛盒（2026-11-19 张老师定，详情页右栏）：
-// · windowHours>0 且比赛进行中：
-//   - 未开赛 → 单按钮「开始比赛（总计 X 小时）」→ confirmDialog「确定要开始计时出吗？
-//     / 中途不可停表，到时间自动结束比赛」→ POST /api/tournament/start →
-//     生成个人标识显示 + 复制剪贴板 + 绿气泡「个人比赛标识：xxx （已复制到剪贴板）」
-//   - 已开赛 → 显示个人标识 + 「进入比赛」「传录像」双钮 + 倒计时
+// · 未开赛（upcoming）→ 复用集体赛「报名参赛」盒 SignupEntryBox（2026-11-21
+//   张老师定：未开赛不该露「开始比赛」——开始按钮样式同首页开始练习银灰凸起），
+//   报名态/倒计时/报名接口与集体赛完全同口径（join 只认未开始，窗口赛通用）
+// · 已开赛（active）：
+//   - 未开个人窗口 → 单按钮「开始比赛（总计 X 小时）」（样式同首页开始练习）→
+//     confirmDialog「确定要开始计时出吗？/ 中途不可停表，到时间自动结束比赛」→
+//     POST /api/tournament/start → 生成个人标识显示 + 复制剪贴板 +
+//     绿气泡「个人比赛标识：xxx （已复制到剪贴板）」
+//   - 已开窗口 → 显示个人标识 + 「进入比赛」「传录像」双钮 + 倒计时
 //     「比赛剩余时间：xx天xx小时xx分钟」——>1h 绿 / ≤30min 黄 / ≤10min 玫瑰红
 // · 集体赛（windowHours=0）走原 #play_row 双钮（页面自身渲染，本组件不渲染）
 
 import { useEffect, useState } from "react";
 import { confirmDialog } from "@/components/Confirm";
 import { toast } from "@/components/Toast";
+import { SignupEntryBox } from "./SignupEntryBox";
 
 export function WindowPlayBox({
   compId,
   windowHours,
   compEnd,
   session0,
+  status,
+  joined,
+  start,
+  end,
 }: {
   compId: number;
   windowHours: number;
@@ -25,6 +34,14 @@ export function WindowPlayBox({
   compEnd: number;
   /** 初始会话（SSR 已开赛时服务端带出；null=未开赛） */
   session0: { race: string; start: number; end: number } | null;
+  /** 比赛状态（2026-11-21 张老师定：未开赛显示「报名参赛」而非「开始比赛」） */
+  status: "upcoming" | "active" | "ended";
+  /** 是否已报名（未开赛时报名盒初始态） */
+  joined: boolean;
+  /** 比赛开始时刻（报名盒倒计时用） */
+  start: number;
+  /** 比赛结束时刻（报名盒倒计时用） */
+  end: number;
 }) {
   const [sess, setSess] = useState(session0);
   const [starting, setStarting] = useState(false);
@@ -37,7 +54,21 @@ export function WindowPlayBox({
 
   if (windowHours <= 0) return null;
 
-  async function start() {
+  // 未开赛：报名参赛盒（2026-11-21 张老师定——「开始比赛」只有已开赛才有意义，
+  // 且按钮样式同首页开始练习银灰凸起 #play_entry 口径）
+  if (status === "upcoming") {
+    return (
+      <SignupEntryBox
+        compId={compId}
+        status="upcoming"
+        joined={joined}
+        start={start}
+        end={end}
+      />
+    );
+  }
+
+  async function startRace() {
     const ok = await confirmDialog({
       title: "开始比赛",
       message: "确定要开始计时出吗？\n中途不可停表，到时间自动结束比赛",
@@ -92,7 +123,10 @@ export function WindowPlayBox({
   if (!sess) {
     return (
       <div className="win_play_box">
-        <button className="win_start_btn" onClick={start} disabled={starting}>
+        <button className="win_start_btn" onClick={startRace} disabled={starting}>
+          <svg viewBox="40 40 180 180" width="24" height="24" aria-hidden="true">
+            <use href="#face-flat" />
+          </svg>
           开始比赛（总计 {windowHours} 小时）
         </button>
       </div>

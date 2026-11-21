@@ -185,6 +185,10 @@ export default async function CompetitionDetailPage({
                   windowHours={c.windowHours}
                   compEnd={c.end}
                   session0={c.mySession}
+                  status={c.status}
+                  joined={!!myResult?.joined}
+                  start={c.start}
+                  end={c.end}
                 />
               ) : myResult?.joined && c.status === "active" ? (
                 <div id="play_row">
