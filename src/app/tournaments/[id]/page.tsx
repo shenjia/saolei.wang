@@ -31,6 +31,7 @@ import { SignupEntryBox } from "@/components/tournament/SignupEntryBox";
 import { VideoSearch } from "@/components/VideoSearch";
 import { scoreTime } from "@/lib/format";
 import { LEVEL_NAMES, type Level } from "@/lib/config";
+import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
 import {
   ensureTourLifecycleEvents,
   fmtPrize,
@@ -40,6 +41,7 @@ import {
   getTourRanking,
   getTourVideosPage,
   getTournamentDetail,
+  parseScoreConfig,
   resolveTourIdParam,
 } from "@/lib/tournament";
 
@@ -99,6 +101,9 @@ export default async function CompetitionDetailPage({
       ? prisma.user.findUnique({ where: { id: BigInt(vAuthor) }, select: { chineseName: true } })
       : Promise.resolve(null),
   ]);
+  // 计分数据项（2026-11-21 多数据项）：详情页成绩展示按项格式化
+  const tourMetric: TourMetricKey = parseScoreConfig(c.scoreMode, c.scoreConfig)?.metric ?? "time";
+  const tourDesc = parseScoreConfig(c.scoreMode, c.scoreConfig)?.desc ?? false;
 
   return (
     <div id="page" className="two_columns comp_page">
@@ -118,6 +123,8 @@ export default async function CompetitionDetailPage({
             <TourEventsFeed
               key={`ep${ep}-vp${vp}`}
               compId={compId}
+              scoreMetric={tourMetric}
+              scoreDesc={tourDesc}
               initialRows={events.rows}
               initialPage={events.page}
               initialTotal={events.total}
@@ -224,7 +231,7 @@ export default async function CompetitionDetailPage({
               </div>
               <div className="comp_stat_row">
                 <span>最好成绩</span>
-                <b>{myResult.bestTime === null ? "—" : scoreTime(myResult.bestTime)}</b>
+                <b>{myResult.bestTime === null ? "—" : fmtTourScore(tourMetric, myResult.bestTime)}</b>
               </div>
               <div className="comp_stat_row">
                 <span>当前名次</span>
@@ -234,7 +241,8 @@ export default async function CompetitionDetailPage({
           )}
 
           {/* 排行榜（2026-11-18 晚张老师定：小字紧凑同热门录像；成绩 hover 出气泡
-              展示计算过程——各级别分色、保底直接写在过程中，无单独 *N 标注） */}
+              展示计算过程——各级别分色、保底直接写在过程中，无单独 *N 标注。
+              2026-11-21 多数据项：成绩格式化与保底单位按比赛 metric 折算） */}
           <div className="box comp_stats">
             <h2>排行榜</h2>
             {ranking.length > 0 ? (
@@ -247,8 +255,10 @@ export default async function CompetitionDetailPage({
                             const lvName =
                               seg.lv in LEVEL_NAMES ? LEVEL_NAMES[seg.lv as Level] : seg.lv;
                             const fillPart =
-                              seg.fill > 0 ? `+${seg.fill}×保底${seg.floorMs / 1000}s` : "";
-                            return `${lvName}${seg.n}盘 ${scoreTime(seg.real)}s${fillPart ? ` ${fillPart}` : ""}`;
+                              seg.fill > 0 && seg.floorScore > 0
+                                ? `+${seg.fill}×保底${fmtTourScore(tourMetric, seg.floorScore)}`
+                                : "";
+                            return `${lvName}${seg.n}盘 ${fmtTourScore(tourMetric, seg.real)}${fillPart ? ` ${fillPart}` : ""}`;
                           })
                           .join("\n")
                       : "";
@@ -270,7 +280,7 @@ export default async function CompetitionDetailPage({
                         href={r.videoId ? `/video/${r.videoId}` : `/user/${r.uid}`}
                         data-tip={calcTip || undefined}
                       >
-                        {scoreTime(r.time)}
+                        {fmtTourScore(tourMetric, r.time)}
                       </Link>
                     </li>
                   );

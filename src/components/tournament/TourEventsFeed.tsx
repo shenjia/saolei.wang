@@ -19,7 +19,7 @@ import { AvatarCell } from "@/components/Cells";
 import { TitleBadge } from "@/components/TitleBadge";
 import { DeltaArrow } from "@/components/RankingRows";
 import { compEventText, type TourEventRow } from "@/lib/tournament";
-import { scoreTime } from "@/lib/format";
+import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
 import { replaceWithoutJump } from "@/components/useNoJump";
 
 export function TourEventsFeed({
@@ -31,6 +31,9 @@ export function TourEventsFeed({
   /** 录像板块当前页码（URL ?page=，换动态页时带上不丢对方状态） */
   videosPage,
   pageSize,
+  /** 计分数据项与方向（2026-11-21 多数据项：成绩格式化 + 提升箭头方向） */
+  scoreMetric,
+  scoreDesc,
 }: {
   compId: number;
   initialRows: TourEventRow[];
@@ -39,6 +42,8 @@ export function TourEventsFeed({
   initialTotalPages: number;
   videosPage: number;
   pageSize: number;
+  scoreMetric: TourMetricKey;
+  scoreDesc: boolean;
 }) {
   const router = useRouter();
   const listRef = useRef<HTMLUListElement>(null);
@@ -116,20 +121,28 @@ export function TourEventsFeed({
                     compEventText(e.type)
                   )}
                   {/* 成绩动态（2026-11-18 深夜四轮定）：整段比赛同人成绩动态并成一行——
-                      ×N=盘数；成绩亮灰=当时比赛总成绩（各级别最好N局+保底）；
-                      非首次成绩动态后跟提升幅度（金色▼差值，同首页新闻破纪录） */}
+                      成绩亮灰=当时比赛总成绩；提升箭头方向按比赛 metric/desc 解释
+                      （2026-11-21：desc=true 越大越好 → 提升显示 ▲+差值） */}
                   {e.type === 4 && (
                     <>
                       {/* 成绩不可点（张老师 2026-11-19 反馈）：纯文本亮灰加粗；
                           ×N 盘数标注废弃（2026-11-19 张老师定：无信息量） */}
                       {e.totalMs !== null && (
-                        <b className="comp_ev_total">{scoreTime(e.totalMs)}</b>
+                        <b className="comp_ev_total">{fmtTourScore(scoreMetric, e.totalMs)}</b>
                       )}
-                      {e.prevTotalMs !== null && e.totalMs !== null && e.totalMs < e.prevTotalMs && (
-                        <span className="delta">
-                          <DeltaArrow dir="down" />
-                          {((e.prevTotalMs - e.totalMs) / 1000).toFixed(3)}
-                        </span>
+                      {e.prevTotalMs !== null && e.totalMs !== null && (
+                        <>
+                          {scoreDesc ? e.totalMs > e.prevTotalMs : e.totalMs < e.prevTotalMs ? (
+                            <span className="delta">
+                              <DeltaArrow dir={scoreDesc ? "up" : "down"} />
+                              {Math.abs(e.totalMs - e.prevTotalMs) / 1000 <= 0
+                                ? "0"
+                                : (Math.abs(e.totalMs - e.prevTotalMs) / 1000)
+                                    .toFixed(3)
+                                    .replace(/\.?0+$/, "")}
+                            </span>
+                          ) : null}
+                        </>
                       )}
                     </>
                   )}

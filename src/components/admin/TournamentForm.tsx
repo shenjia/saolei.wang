@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toast";
+import { TOUR_METRICS, TOUR_METRIC_KEYS, type TourMetricKey } from "@/lib/tour-metric";
 
 export interface TourFormRow {
   id: number;
@@ -27,6 +28,8 @@ export interface TourFormRow {
   levels: string[]; // 收录录像级别（beg/int/exp 子集）
   scoreMode: string; // ""=未配置 / sum_topn / target_diff
   scoreConf: (Record<string, number> & { floor?: Record<string, number> }) | null; // 解析后的计算参数（未配置 null）
+  scoreMetric?: string; // 计分数据项（2026-11-21 多数据项改造；旧配置缺省 time）
+  scoreDesc?: boolean; // 方向（desc=true 越大越好；旧配置缺省按项默认）
 }
 
 /** 库里 Unix 秒 → datetime-local input 值（北京时间 YYYY-MM-DDTHH:mm） */
@@ -55,6 +58,9 @@ export function TournamentForm() {
   const [levels, setLevels] = useState<string[]>([...ALL_LEVELS]);
   // 成绩计算方式（张老师 2026-11-13 四期：创建/编辑时配置，后续可扩更多方式）
   const [scoreMode, setScoreMode] = useState("");
+  // 计分数据项与方向（张老师 2026-11-21 定：六项可选 + 越大/越小越好）
+  const [scoreMetric, setScoreMetric] = useState<TourMetricKey>("time");
+  const [scoreDesc, setScoreDesc] = useState(false);
   // 计时模式（张老师 2026-11-19 定）：all=统一计时（全员同期开闭）/ per=个人计时
   // （选手在比赛范围内任选窗口手动开赛）；per 需填小时数（默认 2）
   const [timingMode, setTimingMode] = useState<"all" | "per">("all");
@@ -100,16 +106,31 @@ export function TournamentForm() {
       setTimingMode(d.windowHours > 0 ? "per" : "all");
       setWindowHours(d.windowHours > 0 ? String(d.windowHours) : "2");
       setAlias(d.alias ?? "");
+      // 计分数据项与方向回显（2026-11-21 多数据项：编辑行带 scoreMetric/scoreDesc；
+      // 旧记录缺省回 time/项默认方向）
+      const m = (d.scoreMetric ?? "time") as TourMetricKey;
+      setScoreMetric(TOUR_METRIC_KEYS.includes(m) ? m : "time");
+      setScoreDesc(
+        d.scoreDesc !== undefined ? d.scoreDesc : (TOUR_METRICS[m]?.defaultDesc ?? false),
+      );
+      // 取局数回显：scoreConf 为 parseScoreConfig 的嵌套结构 {topn:{beg..},floor:{beg..}}；
+      // 兼容旧平铺形态 {beg:..}（直接挂顶层）——两形态都读
+      const rawTopn = (d.scoreConf as Record<string, unknown>) ?? {};
+      const topnSrc = (rawTopn.topn ?? rawTopn) as Record<string, number>;
       setTopn({
-        beg: String(d.scoreConf?.beg ?? 1),
-        int: String(d.scoreConf?.int ?? 1),
-        exp: String(d.scoreConf?.exp ?? 1),
+        beg: String(topnSrc?.beg ?? 1),
+        int: String(topnSrc?.int ?? 1),
+        exp: String(topnSrc?.exp ?? 1),
       });
-      // 保底回显（floor 毫秒 → 秒；旧配置无 floor 回默认值）
+      // 保底回显（floor 毫秒/×1000 域 → 人类单位；旧配置无 floor 回默认值）。
+      // time 惯例默认 10s/60s/240s；其余项无合理通配默认回 0（=不补保底，0 恒填）
+      const floorSrc = (rawTopn.floor ?? {}) as Record<string, number>;
+      const floorDefaults: Record<string, number> =
+        m === "time" ? { beg: 10000, int: 60000, exp: 240000 } : { beg: 0, int: 0, exp: 0 };
       setFloor({
-        beg: String(Math.round((d.scoreConf?.floor?.beg ?? 10000) / 1000)),
-        int: String(Math.round((d.scoreConf?.floor?.int ?? 60000) / 1000)),
-        exp: String(Math.round((d.scoreConf?.floor?.exp ?? 240000) / 1000)),
+        beg: String(Math.round((floorSrc?.beg ?? floorDefaults.beg) / 1000)),
+        int: String(Math.round((floorSrc?.int ?? floorDefaults.int) / 1000)),
+        exp: String(Math.round((floorSrc?.exp ?? floorDefaults.exp) / 1000)),
       });
       setTarget(d.scoreConf?.target != null ? String(d.scoreConf.target) : "");
       // 滚动到表单（2026-11-19 张老师定：点编辑后自动跳到表单，表单在上/清单在下的布局里
@@ -131,6 +152,8 @@ export function TournamentForm() {
     setValues({ ...EMPTY, ...newDefaults() });
     setLevels([...ALL_LEVELS]);
     setScoreMode("");
+    setScoreMetric("time");
+    setScoreDesc(false);
     setTimingMode("all");
     setWindowHours("2");
     setAlias("");
@@ -184,73 +207,59 @@ export function TournamentForm() {
     if (!/^\d+$/.test(values.creatorId.trim())) return toast("请填写发起人 ID（纯数字 UID）", "error");
     if (!/^\d+$/.test(values.prizeTotal.trim())) return toast("总奖金应为非负整数（元）", "error");
     if (levels.length === 0) return toast("请至少勾选一个比赛级别", "error");
-    // 成绩计算方式参数校验（null=配置非法，""=未配置）
+    // 成绩计算方式参数校验（null=配置非法，""=未配置）。
+    // 2026-11-21 多数据项：metric/desc 一并落库；保底/目标单位跟随数据项
+    // （time=秒，3bv/crossings=个/次，效率项=值），内部统一 ×1000 转 score 域
     let scoreConfig = "";
     if (scoreMode === "sum_topn") {
       const conf: Record<string, number> = {};
-      const floorMs: Record<string, number> = {};
+      const floorScore: Record<string, number> = {};
       let any = false;
       for (const lv of ALL_LEVELS) {
         const v = topn[lv].trim();
         if (!/^\d+$/.test(v) || parseInt(v, 10) > 99) return toast(`${LEVEL_LABELS[lv]}取局数应为 0-99 整数`, "error");
         conf[lv] = parseInt(v, 10);
         if (conf[lv] > 0) any = true;
-        // 保底成绩（秒→毫秒；张老师 2026-11-18 定：盘数不足按保底补足，默认初10/中60/高240）
+        // 保底成绩（人类单位 → score 域 ×1000；0=不补保底，合法）
         const fv = floor[lv].trim();
-        if (!/^\d+(\.\d+)?$/.test(fv) || parseFloat(fv) <= 0)
-          return toast(`${LEVEL_LABELS[lv]}保底成绩应为正数（秒）`, "error");
-        floorMs[lv] = Math.round(parseFloat(fv) * 1000);
+        if (!/^\d+(\.\d+)?$/.test(fv) || parseFloat(fv) < 0)
+          return toast(`${LEVEL_LABELS[lv]}保底成绩应为非负数（${TOUR_METRICS[scoreMetric].unit}）`, "error");
+        floorScore[lv] = Math.round(parseFloat(fv) * 1000);
       }
       if (!any) return toast("成绩加总至少有一个级别取局数大于 0", "error");
-      scoreConfig = JSON.stringify({ ...conf, floor: floorMs });
+      scoreConfig = JSON.stringify({ metric: scoreMetric, desc: scoreDesc, ...conf, floor: floorScore });
     } else if (scoreMode === "target_diff") {
       const n = Number(target.trim());
-      if (!target.trim() || !Number.isFinite(n) || n <= 0) return toast("目标成绩应为正数（秒，如 8.88）", "error");
-      scoreConfig = JSON.stringify({ target: n });
+      if (!target.trim() || !Number.isFinite(n) || n <= 0)
+        return toast(`目标成绩应为正数（${TOUR_METRICS[scoreMetric].unit}）`, "error");
+      scoreConfig = JSON.stringify({ metric: scoreMetric, desc: scoreDesc, target: n });
     }
 
     setBusy(true);
     try {
+      const payload = {
+        name: values.name,
+        shortName: values.shortName,
+        code,
+        startTime: values.startTime.replace("T", " "),
+        endTime: values.endTime.replace("T", " "),
+        rules: values.rules,
+        creatorId: values.creatorId,
+        prizeTotal: values.prizeTotal,
+        prizePlan: values.prizePlan,
+        levels,
+        scoreMode,
+        scoreConfig,
+        scoreMetric,
+        scoreDesc,
+        alias: aliasTrim,
+        windowHours: wh,
+      };
       const res = await fetch("/api/admin/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          editing
-            ? {
-                op: "tournament.edit",
-                id: editing.id,
-                name: values.name,
-                shortName: values.shortName,
-                code,
-                startTime: values.startTime.replace("T", " "),
-                endTime: values.endTime.replace("T", " "),
-                rules: values.rules,
-                creatorId: values.creatorId,
-                prizeTotal: values.prizeTotal,
-                prizePlan: values.prizePlan,
-                levels,
-                scoreMode,
-                scoreConfig,
-                alias: aliasTrim,
-                windowHours: wh,
-              }
-            : {
-                op: "tournament.add",
-                name: values.name,
-                shortName: values.shortName,
-                code,
-                startTime: values.startTime.replace("T", " "),
-                endTime: values.endTime.replace("T", " "),
-                rules: values.rules,
-                creatorId: values.creatorId,
-                prizeTotal: values.prizeTotal,
-                prizePlan: values.prizePlan,
-                levels,
-                scoreMode,
-                scoreConfig,
-                alias: aliasTrim,
-                windowHours: wh,
-              }
+          editing ? { op: "tournament.edit", id: editing.id, ...payload } : { op: "tournament.add", ...payload },
         ),
       });
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
@@ -448,19 +457,52 @@ export function TournamentForm() {
       </div>
 
       {/* 成绩计算方式（张老师 2026-11-13 四期：创建/编辑时配置，可扩展更多方式）——
-          决定玩家列表「当前成绩」怎么算：sum_topn=各级别最好 N 局 time 加总；
-          target_diff=与指定 time 的最小误差（越小越好） */}
+          2026-11-21 多数据项改造：数据项六选一 + 方向可选，保底/目标单位跟随数据项 */}
       <div style={labelStyle}>
-        成绩计算方式（决定玩家「当前成绩」怎么算，均为越小越好）
-        <select
-          className="admin_input"
-          value={scoreMode}
-          onChange={(e) => setScoreMode(e.target.value)}
-        >
-          <option value="">未配置（暂不计成绩）</option>
-          <option value="sum_topn">成绩加总（各级别最好 N 局 time 求和）</option>
-          <option value="target_diff">目标成绩求差（与指定 time 的最小误差）</option>
-        </select>
+        成绩计算方式（决定玩家「当前成绩」怎么算）
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <select
+            className="admin_input"
+            style={{ width: 300 }}
+            value={scoreMode}
+            onChange={(e) => setScoreMode(e.target.value)}
+          >
+            <option value="">未配置（暂不计成绩）</option>
+            <option value="sum_topn">成绩加总（各级别最好 N 局求和）</option>
+            <option value="target_diff">目标成绩求差（与指定目标的最小误差）</option>
+          </select>
+          {scoreMode && (
+            <select
+              className="admin_input"
+              style={{ width: 180 }}
+              value={scoreMetric}
+              onChange={(e) => {
+                const m = e.target.value as TourMetricKey;
+                setScoreMetric(m);
+                setScoreDesc(TOUR_METRICS[m].defaultDesc); // 切数据项重置为默认方向
+              }}
+              title="计分数据项（录像的哪个指标参与计算）"
+            >
+              {TOUR_METRIC_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {TOUR_METRICS[k].name}
+                </option>
+              ))}
+            </select>
+          )}
+          {scoreMode && (
+            <select
+              className="admin_input"
+              style={{ width: 140 }}
+              value={scoreDesc ? "desc" : "asc"}
+              onChange={(e) => setScoreDesc(e.target.value === "desc")}
+              title="成绩方向：加总时取「最好」的含义；求差仅影响展示语义"
+            >
+              <option value="asc">越小越好</option>
+              <option value="desc">越大越好</option>
+            </select>
+          )}
+        </div>
         {scoreMode === "sum_topn" && (
           <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
             {ALL_LEVELS.map((lv) => (
@@ -479,23 +521,23 @@ export function TournamentForm() {
                   className="admin_input"
                   style={{ width: 72 }}
                   inputMode="decimal"
-                  title="保底成绩（秒，盘数不足按此补足）"
+                  title={`保底成绩（${TOUR_METRICS[scoreMetric].unit}，盘数不足按此补足；0=不补保底）`}
                   value={floor[lv]}
                   onChange={(e) => setFloor((s) => ({ ...s, [lv]: e.target.value }))}
                 />
-                秒保底
+                保底
               </span>
             ))}
           </div>
         )}
         {scoreMode === "target_diff" && (
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#f8f8f2", marginTop: 4 }}>
-            目标 time（秒）
+            目标 {TOUR_METRICS[scoreMetric].name}（{TOUR_METRICS[scoreMetric].unit}）
             <input
               className="admin_input"
               style={{ width: 100 }}
               inputMode="decimal"
-              placeholder="如：8.88"
+              placeholder={scoreMetric === "time" ? "如：8.88" : ""}
               value={target}
               onChange={(e) => setTarget(e.target.value)}
             />

@@ -21,10 +21,16 @@ import {
   fmtPrize,
   type TourRow,
 } from "@/lib/tournament";
+import { fmtTourScore, TOUR_METRICS } from "@/lib/tour-metric";
 import { LEVEL_NAMES } from "@/lib/config";
 import { AvatarCell } from "@/components/Cells";
 import { TitleBadge } from "@/components/TitleBadge";
 import { TourChart } from "./TourChart";
+
+/** 图表标尺小数位：3bv/crossings 整数，其余 3 位（2026-11-21 多数据项） */
+function chartDigits(metric: TourRow["scoreMetric"]): number {
+  return TOUR_METRICS[metric]?.digits ?? 3;
+}
 
 /** 「创造于」时刻 → YYYY-MM-DD HH:mm（北京时间；图表行专用，站内其余处走 RelTime） */
 function fmtBestAt(sec: number): string {
@@ -95,7 +101,7 @@ export function TourBlock({
           <div className="rec_card comp_chart_body">
             <div className="rec_head">
               <span className="rec_name">最好成绩：</span>
-              <b className="rec_val">{(c.bestLine.score / 1000).toFixed(3)}</b>
+              <b className="rec_val">{fmtTourScore(c.scoreMetric, c.bestLine.score)}</b>
               <span className="rec_meta">　</span>
               <AvatarCell
                 id={c.bestLine.uid}
@@ -109,7 +115,7 @@ export function TourBlock({
               {/* at>0 才显示「创造于」（列表形态为省查询不取精确时刻） */}
               {!!c.bestLine.at && <span className="rec_meta">　创造于 {fmtBestAt(c.bestLine.at)}</span>}
             </div>
-            <TourChart points={c.chartPoints} myUid={myUid} />
+            <TourChart points={c.chartPoints} myUid={myUid} desc={c.scoreDesc} digits={chartDigits(c.scoreMetric)} />
           </div>
         ) : (
           <div className="rec_card comp_chart_body">

@@ -19,7 +19,7 @@ const PAD_B = 30;
 
 export interface CompChartPoint {
   rank: number; // 1 = 第一名
-  score: number; // 成绩（秒，越小越好）
+  score: number; // 成绩（score 域 ÷1000，2026-11-21 起按比赛 metric 格式化显示）
   name?: string;
   /** hover 气泡用（2026-11-19 凌晨定）：创造者展示信息 */
   uid?: number;
@@ -29,7 +29,19 @@ export interface CompChartPoint {
   classic?: { name: string; color: string } | null;
 }
 
-export function TourChart({ points, myUid }: { points: CompChartPoint[]; myUid?: number }) {
+export function TourChart({
+  points,
+  myUid,
+  desc = false,
+  digits = 3,
+}: {
+  points: CompChartPoint[];
+  myUid?: number;
+  /** desc=true 越大越好：第一名（rank 1）画在最高处——Y 轴翻转（2026-11-21 多数据项） */
+  desc?: boolean;
+  /** 标尺小数位：3bv/crossings 整数，其余 3 位 */
+  digits?: number;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   if (points.length === 0) return null;
 
@@ -38,11 +50,15 @@ export function TourChart({ points, myUid }: { points: CompChartPoint[]; myUid?:
   const sMin = Math.min(...scores);
   const sMax = Math.max(...scores);
   const sPad = Math.max((sMax - sMin) * 0.1, 1);
-  const lo = sMin - sPad;
-  const hi = sMax + sPad;
-
+  // 「好」的一端画在上方：asc（越小越好）好成绩=小值在上（lo 映射高处）；
+  // desc（越大越好）好成绩=大值在上（hi 映射高处）
+  const lo = desc ? sMin - sPad : sMin - sPad;
+  const hi = desc ? sMax + sPad : sMax + sPad;
   const x = (rank: number) => PAD_L + ((maxRank - rank) / Math.max(maxRank - 1, 1)) * (W - PAD_L - PAD_R);
-  const y = (score: number) => PAD_T + ((score - lo) / Math.max(hi - lo, 1e-9)) * (H - PAD_T - PAD_B);
+  const y = (score: number) => {
+    const ratio = (score - lo) / Math.max(hi - lo, 1e-9);
+    return PAD_T + (desc ? 1 - ratio : ratio) * (H - PAD_T - PAD_B);
+  };
 
   // 我的位置（2026-11-19 张老师定：参赛且在榜 → 绿点 + 1px 绿垂线拉到标尺）
   const my = myUid ? points.find((p) => p.uid === myUid) : undefined;
@@ -66,6 +82,8 @@ export function TourChart({ points, myUid }: { points: CompChartPoint[]; myUid?:
   // left 按 SVG viewBox 坐标折算容器百分比，随点移动；右半区自动翻转到点左侧防溢出）
   const tipLeftPct = hp ? (x(hp.rank) / W) * 100 : 0;
   const flip = hp ? x(hp.rank) > W * 0.6 : false;
+  // 标尺刻度格式（2026-11-21：按比赛 metric 精度——3bv/crossings 整数，其余 3 位小数）
+  const fmtTick = (v: number) => (digits === 0 ? String(Math.round(v)) : v.toFixed(digits));
 
   return (
     <div className="comp_chart_plot" style={{ position: "relative" }}>
@@ -80,10 +98,10 @@ export function TourChart({ points, myUid }: { points: CompChartPoint[]; myUid?:
           fillOpacity="0.13"
         />
         <path d={line} fill="none" stroke="#fdc61a" strokeWidth="2" strokeLinejoin="round" />
-        {/* 成绩标尺（右侧数字） */}
+        {/* 成绩标尺（右侧数字，按 metric 精度格式化） */}
         {ticks.map((t, i) => (
           <text key={`r${i}`} x={W - PAD_R + 8} y={y(t) + 3} fontSize="10" fill="#75715e" textAnchor="start">
-            {t.toFixed(0)}
+            {fmtTick(t)}
           </text>
         ))}
         {rankTicks.map((r) => (
@@ -141,7 +159,7 @@ export function TourChart({ points, myUid }: { points: CompChartPoint[]; myUid?:
           </div>
           <div className="row">
             <span>成绩</span>
-            <b className="comp_tip_val">{hp.score.toFixed(3)}</b>
+            <b className="comp_tip_val">{digits === 0 ? String(Math.round(hp.score)) : hp.score.toFixed(digits)}</b>
           </div>
           <div className="row">
             <span>创造者</span>

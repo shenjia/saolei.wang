@@ -182,6 +182,8 @@ export default async function AdminCompetitionsPage({
                           levels: r.includeLevels.split(","),
                           scoreMode: r.scoreMode,
                           scoreConf: parseScoreConfig(r.scoreMode, r.scoreConfig),
+                          scoreMetric: parseScoreConfig(r.scoreMode, r.scoreConfig)?.metric ?? "time",
+                          scoreDesc: parseScoreConfig(r.scoreMode, r.scoreConfig)?.desc,
                           startSec: Number(r.startTime),
                           endSec: Number(r.endTime),
                         }}

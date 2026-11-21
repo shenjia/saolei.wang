@@ -70,9 +70,13 @@ function parseIncludeLevels(v: unknown): string {
   return (picked.length ? picked : VALID).join(",");
 }
 
-/** 成绩计算方式落库校验（张老师 2026-11-13 四期）：返回 [mode, configJSON] 或 null=非法。
- *  sum_topn={"beg":n,"int":n,"exp":n}（n 0-99，至少一个>0）；target_diff={"target":秒>0}；
- *  mode=""（未配置）合法。 */
+/** 成绩计算方式落库校验（张老师 2026-11-13 四期；2026-11-21 多数据项改造）：
+ *  返回 [mode, configJSON] 或 null=非法。
+ *  sum_topn={"metric":..,"desc":..,"beg":n,...,"floor":{"beg":x,...}}
+ *  （n 0-99 至少一个>0；floor 与 metric 同单位的 score 域值 ×1000，0=不补保底；
+ *  ⚠️ 客户端 config 已含 metric/desc 与 floor，服务端校验后**原样落库**——
+ *  历史版本曾在此重建 config 丢掉 floor，导致保底永远不生效）；target_diff
+ *  ={"metric":..,"desc":..,"target":正数}；mode=""（未配置）合法。 */
 function parseScoreConf(
   v: unknown
 ): { mode: string; config: string } | { error: string } | null {
@@ -99,12 +103,35 @@ function parseScoreConf(
       if (n > 0) any = true;
     }
     if (!any) return { error: "成绩加总至少有一个级别取局数大于 0" };
-    return { mode, config: JSON.stringify(conf) };
+    // floor：客户端传入的保底（score 域）原样带上；测试脚本直传对象可能缺 floor → 补 0（不补保底）
+    const rawFloor = (o.floor ?? {}) as Record<string, unknown>;
+    const floor: Record<string, number> = {};
+    for (const lv of ["beg", "int", "exp"]) {
+      const f = Number(rawFloor[lv]);
+      floor[lv] = Number.isFinite(f) && f >= 0 ? Math.round(f) : 0;
+    }
+    return {
+      mode,
+      config: JSON.stringify({
+        metric: String(o.metric ?? p.scoreMetric ?? "time"),
+        desc: typeof o.desc === "boolean" ? o.desc : p.scoreDesc === true,
+        ...conf,
+        floor,
+      }),
+    };
   }
   if (mode === "target_diff") {
-    const t = Number((raw as Record<string, unknown>)?.target);
-    if (!Number.isFinite(t) || t <= 0) return { error: "目标成绩应为正数（秒）" };
-    return { mode, config: JSON.stringify({ target: t }) };
+    const o = (raw ?? {}) as Record<string, unknown>;
+    const t = Number(o.target);
+    if (!Number.isFinite(t) || t <= 0) return { error: "目标成绩应为正数" };
+    return {
+      mode,
+      config: JSON.stringify({
+        metric: String(o.metric ?? p.scoreMetric ?? "time"),
+        desc: typeof o.desc === "boolean" ? o.desc : p.scoreDesc === true,
+        target: t,
+      }),
+    };
   }
   return { error: "未知的成绩计算方式" };
 }

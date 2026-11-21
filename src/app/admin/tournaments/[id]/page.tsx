@@ -11,11 +11,11 @@ import { prisma } from "@/lib/db";
 import {
   tourStatus,
   computePlayerScores,
-  fmtScoreMs,
-  parsePrizePlan,
   parseScoreConfig,
+  parsePrizePlan,
   scoreModeDesc,
 } from "@/lib/tournament";
+import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
 import { dualTitles } from "@/lib/title-system";
 import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
 import { scoreTime } from "@/lib/format";
@@ -40,6 +40,11 @@ const STATUS_LABEL = { active: "进行中", upcoming: "未开始", ended: "已�
 const STATUS_COLOR = { active: "#a6e22e", upcoming: "#fdc61a", ended: "#939387" } as const;
 
 const PAGE_SIZE = 20;
+
+/** 方向提示短语（成绩口径脚注） */
+function metricDirNote(metric: TourMetricKey, desc: boolean): string {
+  return desc ? "该数据项越大越好" : "该数据项越小越好";
+}
 
 export default async function AdminCompetitionDetailPage({
   params,
@@ -89,6 +94,32 @@ export default async function AdminCompetitionDetailPage({
     select: { id: true, realTime: true, board3bv: true, noRecord: true },
   });
   const infoMap = new Map(infos.map((i) => [i.id, i]));
+  // 计分数据项取值（2026-11-21 多数据项）：metric 解析 + 按项取数（3bvs/ioe/thrp/cp 走 video_metrics）
+  const tourConf = parseScoreConfig(comp.scoreMode, comp.scoreConfig);
+  const metric: TourMetricKey = tourConf?.metric ?? "time";
+  const desc = tourConf?.desc ?? false;
+  const needsMetrics = metric !== "time" && metric !== "3bv";
+  const metricsRows = needsMetrics
+    ? await prisma.videoMetrics.findMany({
+        where: { id: { in: allVideos.map((v) => v.id) } },
+        select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
+      })
+    : [];
+  const metricsMap = new Map(metricsRows.map((m) => [m.id, m]));
+  const metricValueOf = (vid: bigint): number => {
+    if (metric === "time") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.realTime : 0;
+    }
+    if (metric === "3bv") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.board3bv * 1000 : 0;
+    }
+    const m = metricsMap.get(vid);
+    if (!m) return 0;
+    const raw = metric === "3bvs" ? m.bvs : metric === "ioe" ? m.ioe : metric === "thrp" ? m.thrp : m.cp;
+    return raw > 0 ? raw * 1000 : 0;
+  };
 
   // 玩家集合 = 有录像挂在本比赛的 distinct user（报名未传录像的不在此列）
   const uids = [...new Set(allVideos.map((v) => v.user))];
@@ -118,7 +149,7 @@ export default async function AdminCompetitionDetailPage({
   );
   const titleMap = new Map(uids.map((u, i) => [Number(u), titlePairs[i]]));
 
-  // 玩家成绩：只认未屏蔽录像（computePlayerScores 内部再滤 real_time/no_record）
+  // 玩家成绩：只认未屏蔽录像（computePlayerScores 内部再滤 value/no_record）
   // 成绩口径（张老师 2026-11-18）：只计上传时间在比赛窗口内的录像（窗口外补传盘不计）
   const scoreMap = computePlayerScores(
     comp.scoreMode,
@@ -133,12 +164,12 @@ export default async function AdminCompetitionDetailPage({
       .map((v) => ({
         user: v.user,
         level: v.level,
-        realTime: infoMap.get(v.id)?.realTime ?? 0,
+        value: metricValueOf(v.id),
         noRecord: infoMap.get(v.id)?.noRecord ?? false,
       })),
   );
 
-  // 玩家列表：有成绩在前（越小越好），无成绩按 UID 排后；内存切页（比赛规模小）
+  // 玩家列表：有成绩在前（按比赛方向排序），无成绩按 UID 排后；内存切页（比赛规模小）
   const playerRows = [...uids.map(Number)]
     .map((uid) => ({
       uid,
@@ -151,7 +182,7 @@ export default async function AdminCompetitionDetailPage({
       score: scoreMap.get(uid)?.score ?? null,
     }))
     .sort((a, b) => {
-      if (a.score != null && b.score != null) return a.score - b.score;
+      if (a.score != null && b.score != null) return desc ? b.score - a.score : a.score - b.score;
       if (a.score != null) return -1;
       if (b.score != null) return 1;
       return a.uid - b.uid;
@@ -357,7 +388,7 @@ export default async function AdminCompetitionDetailPage({
                   <td className="c">{p.videoCount}</td>
                   <td className="num strong">
                     {p.score != null ? (
-                      fmtScoreMs(p.score)
+                      fmtTourScore(metric, p.score)
                     ) : (
                       <span style={{ color: "#939387" }}>—</span>
                     )}
@@ -379,7 +410,8 @@ export default async function AdminCompetitionDetailPage({
         )}
         {comp.scoreMode && (
           <div className="admin_note" style={{ marginTop: 8 }}>
-            成绩口径：{scoreModeDesc(comp.scoreMode, comp.scoreConfig)}——只认未屏蔽、非运气盘录像，越小越好。
+            成绩口径：{scoreModeDesc(comp.scoreMode, comp.scoreConfig)}——只认未屏蔽、非运气盘录像，
+            {metricDirNote(metric, desc)}。
           </div>
         )}
       </AdminCard>
