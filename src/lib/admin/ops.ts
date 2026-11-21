@@ -1166,10 +1166,25 @@ async function dispatch(
          poolAll 服务端只取 autoFlag=1；ids 模式非免核定已被上面闸门整体拒绝。
          批量屏蔽不跳过（下架是重动作，仍要求看过）。 */
       const skipWatch = status === VIDEO_STATUS.REVIEWED;
-      for (const id of targetIds) {
-        const r = await reviewVideo(actor.uid, actor.role, id, status, { skipWatchCheck: skipWatch });
-        if (r.ok) done++;
-        else errors.push(`#${id}: ${r.error}`);
+      /* 分批过审（2026-11-22 张老师定：一次 100 条）——11-21 22:11 批量过审 6000+ 条与
+         每分钟活跃快照重建（useractivity.ts 的 INSERT...SELECT 单事务全量替换）撞车，
+         慢日志实证锁链：快照 INSERT 排队 50.4s、练习上报 8 条排队 17-47s、登录心跳
+         3 条排队 20-48s，全部贴着 innodb_lock_wait_timeout=50 上限——批量过审的连续
+         X 锁流让刷新事务排队满 50s，刷新持有的锁又反过来堵住前台小事务，22 时慢查询
+         翻倍。每批之间停 1s 给分钟刷新与后台指标队列（ensureVideoMetrics 串行队列，
+         与批量循环分连接并发跑、同样在抢 user_stnb_best 行锁）留出排队清空窗口。
+         reviewVideo 本身逐条独立小事务，分批只改变调用节奏，不改变任何一条的
+         审核语义与 done/errors 聚合口径。 */
+      const BATCH_CHUNK = 100;
+      for (let i = 0; i < targetIds.length; i += BATCH_CHUNK) {
+        for (const id of targetIds.slice(i, i + BATCH_CHUNK)) {
+          const r = await reviewVideo(actor.uid, actor.role, id, status, { skipWatchCheck: skipWatch });
+          if (r.ok) done++;
+          else errors.push(`#${id}: ${r.error}`);
+        }
+        if (i + BATCH_CHUNK < targetIds.length) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
       if (!done) return { ok: false, error: errors[0] ?? "全部失败" };
       // 屏蔽分流的写回（语义同单条）：勾选＝屏蔽史自然入组（零写入）；未勾选＝非成员写豁免
