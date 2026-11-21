@@ -187,20 +187,32 @@ fix_sharp_deps() {
   local slot_dir=$1
   local pnpm_nm="$DEPLOY_DIR/node_modules/.pnpm"
   local copied=0
-  for dep in \
-    "@img+colour@" \
-    "@img+sharp-libvips-linux-x64@" \
-    "@img+sharp-linux-x64@" \
-    "detect-libc@" \
-    "semver@7"; do
+  # ⚠️ 三个 @img/* 包的 .pnpm 内层目录都叫 @img/<pkg>，必须逐包拷到
+  # slot @img/<pkg>——整目录判断「@img 已存在就跳过」会漏掉平台二进制
+  # （2026-11-21 实证：只拷进 colour → Could not load the "sharp" module）
+  local dep_pkgs=(
+    "@img+colour@:colour"
+    "@img+sharp-libvips-linux-x64@:sharp-libvips-linux-x64"
+    "@img+sharp-linux-x64@:sharp-linux-x64"
+    "detect-libc@:detect-libc"
+    "semver@7:semver"
+  )
+  for spec in "${dep_pkgs[@]}"; do
+    local pdir="${spec%%:*}" dep_name="${spec##*:}"
+    # scoped 包的 .pnpm 内层路径是 node_modules/@img/<name>，非 scoped 是 node_modules/<name>
+    local inner="${dep_name}"
+    [[ "$pdir" == @img* ]] && inner="@img/${dep_name}"
     local src_dir
-    src_dir="$(ls -d "$pnpm_nm"/${dep}*/node_modules/* 2>/dev/null | head -1)"
+    src_dir="$(ls -d "$pnpm_nm"/${pdir}*/node_modules/${inner} 2>/dev/null | head -1)"
     [[ -d "$src_dir" ]] || continue
-    local dep_name
-    dep_name="$(basename "$src_dir")"
-    [[ -d "$slot_dir/node_modules/$dep_name" && ! -L "$slot_dir/node_modules/$dep_name" ]] && continue
-    rm -rf "$slot_dir/node_modules/$dep_name"
-    cp -rL "$src_dir" "$slot_dir/node_modules/$dep_name"
+    local dst="$slot_dir/node_modules/${dep_name}"
+    if [[ "$pdir" == @img* ]]; then
+      dst="$slot_dir/node_modules/@img/${dep_name}"
+    fi
+    [[ -d "$dst" && ! -L "$dst" ]] && continue
+    mkdir -p "$(dirname "$dst")"
+    rm -rf "$dst"
+    cp -rL "$src_dir" "$dst"
     copied=$((copied + 1))
   done
   # ⚠️ 不能写 `[[ $copied -gt 0 ]] && info`：copied=0 时短路返回 1，set -e 会
