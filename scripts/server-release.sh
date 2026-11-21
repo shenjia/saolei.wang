@@ -239,7 +239,13 @@ fix_sharp_deps() {
     cp -rL "$src_dir" "$slot_dir/node_modules/$dep_name"
     copied=$((copied + 1))
   done
-  [[ $copied -gt 0 ]] && info "已补拷 sharp 运行时依赖 ×$copied → $slot_dir/node_modules"
+  # ⚠️ 不能写 `[[ $copied -gt 0 ]] && info`：copied=0 时短路返回 1，set -e 会
+  # 杀掉整个发布脚本（2026-11-21 run 44854547870 实证：backup 槽依赖已齐时
+  # 发布在补链后立即 exit 1）
+  if [[ $copied -gt 0 ]]; then
+    info "已补拷 sharp 运行时依赖 ×$copied → $slot_dir/node_modules"
+  fi
+  return 0
 }
 fix_sharp_deps "$S_DIR"
 # 双活 backup（旧主力槽）同样补链：它还在跑、同样会接到头像上传请求
