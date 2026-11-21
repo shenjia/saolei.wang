@@ -656,19 +656,24 @@ export async function getTourEventsPage(
     }
     if (cur) merged.push(cur);
   }
-  // 批内新盘：该玩家录像中上传时刻 ∈ (上一批 lastTime, 本批 lastTime]
-  // 2026-11-21 张老师定（二次反馈）：成绩动态行时刻=**批内新盘的最大上传时间**
-  // （补挂场景事件写入时刻没有意义；无新盘的批次回退事件时刻）
-  for (const m of merged) {
-    const prev = merged.find((x) => x.userId === m.userId && x.lastTime < m.lastTime);
-    const from = prev ? prev.lastTime : m.firstTime - BATCH_WINDOW_SEC - 1;
-    const pool = vidsByUser.get(m.userId) ?? [];
-    const inBatch = pool.filter((v) => Number(v.createTime) > from && Number(v.createTime) <= m.lastTime);
-    m.batchVideoIds = inBatch.map((v) => Number(v.id));
-    m.minId = Math.min(m.minId, ...m.batchVideoIds.slice(0, 1), m.minId);
-    m.rowTime = inBatch.length
-      ? Math.max(...inBatch.map((v) => Number(v.createTime)))
-      : m.lastTime;
+  // 批内新盘（2026-11-21 张老师二次反馈改口径）：**截至本批事件时刻**该玩家的
+  // 全部录像中，总成绩进度**尚未计入**的盘（=本批新纳入的盘），行展示时刻=这批
+  // 新盘的最大上传时间——批量补挂时挂接事件时刻远晚于录像上传时刻（600 秒
+  // 连传窗口罩不住），按「进度差集」取盘才能把新盘找全；无新盘回退批末事件时刻。
+  {
+    const countedBy = new Map<number, Set<number>>(); // uid → 已计入总成绩的盘 id 集
+    for (const m of merged) {
+      const seen = countedBy.get(m.userId) ?? new Set<number>();
+      const pool = vidsByUser.get(m.userId) ?? [];
+      const upto = pool.filter((v) => Number(v.createTime) <= m.lastTime);
+      m.batchVideoIds = upto.filter((v) => !seen.has(Number(v.id))).map((v) => Number(v.id));
+      for (const v of m.batchVideoIds) seen.add(v);
+      countedBy.set(m.userId, seen);
+      m.minId = Math.min(m.minId, ...m.batchVideoIds.slice(0, 1), m.minId);
+      m.rowTime = m.batchVideoIds.length
+        ? Math.max(...pool.filter((v) => m.batchVideoIds.includes(Number(v.id))).map((v) => Number(v.createTime)))
+        : m.lastTime;
+    }
   }
   // 总成绩进度：截至每批 lastTime 的录像按比赛设定算总分（含收录级别闸门）
   const tourLevels = (compRow?.includeLevels ?? "beg,int,exp")
