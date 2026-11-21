@@ -17547,7 +17547,11 @@ body #header .nav li a.vs_new_hint,
   color: #333; font-size: 18px; font-weight: bold; cursor: pointer;
   font-family: inherit;
 }
-.signup_entry_btn:hover:not(:disabled) { color: #000; }
+.signup_entry_btn:hover:not(:disabled) {
+  color: #fff;
+  background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
+  border-color: #c4e88a #55801a #55801a #c4e88a;
+}
 .signup_entry_btn:active:not(:disabled) { border-color: #7b7b7b #fff #fff #7b7b7b; }
 .signup_entry_btn.joined {
   background: linear-gradient(#8fd855, #5cb830);
@@ -17570,9 +17574,14 @@ body #header .nav li a.vs_new_hint,
   color: #333; font-size: 18px; font-weight: bold; cursor: pointer;
   font-family: inherit; text-shadow: none;
 }
-.win_start_btn:hover:not(:disabled) { color: #000; }
-.win_start_btn:active:not(:disabled) { border-color: #7b7b7b #fff #fff #7b7b7b; }
+.win_start_btn:hover:not(:disabled) {
+  color: #fff;
+  background: #8ac21b linear-gradient(to bottom, #8ac21b, #6da116);
+  border-color: #c4e88a #55801a #55801a #c4e88a;
+}
+.win_start_btn:active:not(:disabled) { border-color: #55801a #c4e88a #c4e88a #55801a; }
 .win_start_btn:disabled { opacity: 0.6; cursor: default; }
+.win_start_btn img { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.4)); }
 .win_race_row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .win_race_label { color: #75715e; font-size: 13px; }
 .win_race {

@@ -67,9 +67,8 @@ export function SignupEntryBox({
     return (
       <div className="signup_entry_box">
         <button className="signup_entry_btn joined" disabled>
-          <svg viewBox="40 40 180 180" width="24" height="24" aria-hidden="true">
-            <use href="#face-flat" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/signup-icon.png" alt="" width={24} height={24} />
           已报名参赛
         </button>
         {status === "upcoming" && (
@@ -87,9 +86,8 @@ export function SignupEntryBox({
   return (
     <div className="signup_entry_box">
       <button className="signup_entry_btn" onClick={signup} disabled={submitting}>
-        <svg viewBox="40 40 180 180" width="24" height="24" aria-hidden="true">
-          <use href="#face-flat" />
-        </svg>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/signup-icon.png" alt="" width={24} height={24} />
         报名参赛
       </button>
       <p className="signup_countdown">

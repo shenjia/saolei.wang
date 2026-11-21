@@ -124,9 +124,8 @@ export function WindowPlayBox({
     return (
       <div className="win_play_box">
         <button className="win_start_btn" onClick={startRace} disabled={starting}>
-          <svg viewBox="40 40 180 180" width="24" height="24" aria-hidden="true">
-            <use href="#face-flat" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/signup-icon.png" alt="" width={24} height={24} />
           开始比赛（总计 {windowHours} 小时）
         </button>
       </div>
