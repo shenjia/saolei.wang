@@ -29,7 +29,7 @@ import { refreshUserStnb, refreshUserStnbNf } from "./userstnb";
 import { applyRankScoreChange } from "./userrank";
 import { LEVEL_NAMES } from "./config";
 import { scoreTime } from "./format";
-import { syncTitleSnapshots } from "./titlesnapshots";
+import { syncTitleSnapshots, recheckVideoSnapshotsAlongUpload } from "./titlesnapshots";
 
 type Tx = Prisma.TransactionClient;
 
@@ -566,6 +566,14 @@ export async function reviewVideo(
       // 屏蔽分支无需特判：运气盘从无成绩行，deleteMany/OnRemove 天然 no-op
       await upsertVideoScores(tx, rv, false);
       const { original, updated } = await userScoresOnInsert(tx, rv, false);
+      // 行内军衔快照过审时刻重写（2026-11-21 张老师定，起因 /user/35193 同批多录像
+      // 只有破纪录那盘显新军衔）：video.exp_time 语义从「上传时刻」改为「过审时刻」的
+      // user_scores.exp_time——同审核周期过审的录像统一显过审时军衔，与动态体系同口径。
+      // 并沿上传序做前缀 min 钳制（recheckVideoSnapshotsAlongUpload）：乱序审（快成绩
+      // 后传先审/慢成绩先传后审）时，「只写当下值」会让后传的录像显旧军衔而先传的显新
+      // 军衔＝新录像军衔比旧录像还低，前缀 min 根治。
+      // 运气盘不走本分支（无成绩不入军衔评定），保持上传快照原样。
+      await recheckVideoSnapshotsAlongUpload(tx, rv.user);
       // 名次落盘（2026-10-22 张老师定）：破纪录 sum_time 变小 / 首次入伍进榜，增量搬位
       await applyRankScoreChange(tx, rv.user, original.sumTime ?? 0, updated.sumTime ?? 0);
       if (rv.noflag) {
