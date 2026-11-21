@@ -773,7 +773,16 @@ export async function getTourEventsPage(
       prevTotal: null,
     });
   }
-  rows.sort((a, b) => b.sortKey - a.sortKey || b.minId - a.minId);
+  rows.sort((a, b) => {
+    // 生命周期动态钉死时间线首尾（2026-11-22 张老师定）：「比赛结束」恒最顶、
+    // 「比赛开始」恒最底——成绩动态按时间倒序排在中间。补挂场景成绩上传时刻
+    // 晚于比赛结束时刻，纯 sortKey 排序会把结束动态压到成绩行下面（niu1 判例）。
+    const aPinned = a.type === TOUR_EVENT_ENDED ? 2 : a.type === TOUR_EVENT_STARTED ? 0 : 1;
+    const bPinned = b.type === TOUR_EVENT_ENDED ? 2 : b.type === TOUR_EVENT_STARTED ? 0 : 1;
+    if (aPinned !== bPinned) return bPinned - aPinned;
+    if (aPinned !== 1) return 0; // 钉死行内部不再排序（每场各最多一条）
+    return b.sortKey - a.sortKey || b.minId - a.minId;
+  });
   const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const p = Math.min(Math.max(page, 1), totalPages);
