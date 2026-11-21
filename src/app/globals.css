@@ -10036,6 +10036,49 @@ button.msg_cancel:hover {
   min-width: 4.5ch;
   text-align: right;
 }
+/* ---- 比例滑杆「格子尺寸」气泡（2026-11-21 张老师需求）----
+   拖动/hover 滑杆时跟随滑块显示「格子尺寸：??px」（16px 基础格 × 倍率），
+   样式与列表页码气泡 ps_bubble 同款（深底金边圆角 + 底部小三角指滑块）。
+   挂在 .gs_zoom / .cus_row_zoom 行内（行 relative），left 由 JS 按滑块位置写；
+   .dragging 类挂滑杆 input 上（hover 或拖动中），随类显隐+0.12s 淡入淡出。
+   ⚠️ 浮窗（.gsettings/.cus_dialog）无 overflow 裁剪，气泡 bottom 26px 露在
+   行上方浮窗内，不溢出视口（行位于浮窗上部，上方是浮窗自身的 padding 区） */
+#online_play .gs_zoom,
+#online_play .cus_dialog .cus_row_zoom {
+  position: relative;
+}
+#online_play .zoom_bubble {
+  position: absolute;
+  bottom: 26px;
+  transform: none; /* left 由 JS 直接写行内坐标，不再用 translateX(-50%)——两端钳制后偏移已并入 left */
+  background: #3e3d32;
+  border: 1px solid #fdc61a;
+  border-radius: 5px;
+  color: #fdc61a;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 2px 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  font-family: Consolas, "微软雅黑", monospace;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.12s;
+  z-index: 5;
+}
+#online_play .zoom_bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  margin-left: -3px;
+  border: 3px solid transparent;
+  border-top-color: #fdc61a;
+}
+#online_play .gs_zoom input.dragging ~ .zoom_bubble,
+#online_play .cus_dialog .cus_row_zoom input.dragging ~ .zoom_bubble {
+  opacity: 1;
+}
 /* ===== 全站滑条自绘（2026-10-14 张老师定稿）=====
    填充 #8ac21b（legacy 按钮活跃绿，比 hover 亮绿压暗一档，大面积不刺眼）
    + 滑块 #a6e22e（站内 hover 活跃绿）+ 轨道底 #49483e。
