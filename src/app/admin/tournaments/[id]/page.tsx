@@ -149,24 +149,34 @@ export default async function AdminCompetitionDetailPage({
   );
   const titleMap = new Map(uids.map((u, i) => [Number(u), titlePairs[i]]));
 
-  // 玩家成绩：只认未屏蔽录像（computePlayerScores 内部再滤 value/no_record）
-  // 成绩口径（张老师 2026-11-18）：只计上传时间在比赛窗口内的录像（窗口外补传盘不计）
+  // 玩家成绩：只认未屏蔽录像（computePlayerScores 内部再滤 value/no_record）。
+  // 成绩口径（2026-11-21 niu1 与前台同源）：集体赛不限上传时刻（挂接即有效），
+  // 窗口赛按个人会话窗过滤；计分层按比赛收录级别闸门（未收录级别不参与、不补保底）
+  const sessRows = comp.windowHours
+    ? await prisma.tournamentWindowSession.findMany({
+        where: { tournamentId: BigInt(id) },
+        select: { userId: true, startTime: true, endTime: true },
+      })
+    : [];
+  const sessBy = new Map(sessRows.map((s) => [Number(s.userId), s]));
   const scoreMap = computePlayerScores(
     comp.scoreMode,
     comp.scoreConfig,
     allVideos
-      .filter(
-        (v) =>
-          v.status !== 0 &&
-          v.createTime >= comp.startTime &&
-          v.createTime <= comp.endTime,
-      )
+      .filter((v) => {
+        if (v.status === 0) return false;
+        if (!comp.windowHours) return true;
+        const s = sessBy.get(Number(v.user));
+        const t = Number(v.createTime);
+        return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
+      })
       .map((v) => ({
         user: v.user,
         level: v.level,
         value: metricValueOf(v.id),
         noRecord: infoMap.get(v.id)?.noRecord ?? false,
       })),
+    comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean),
   );
 
   // 玩家列表：有成绩在前（按比赛方向排序），无成绩按 UID 排后；内存切页（比赛规模小）
