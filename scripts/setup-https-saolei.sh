@@ -225,11 +225,26 @@ server {
     }
 
     # 运行时上传（头像）由 nginx 直读磁盘：Next 生产模式 public/ 是构建期快照，
-    # 运行期新增文件不经 nginx 读不到（01xue 同款坑）。URL 可能固定复用 → 只给 7d
+    # 运行期新增文件不经 nginx 读不到（01xue 同款坑）。URL 可能固定复用 → 只给 7d。
+    # 404 兜底（2026-11-21，21275 头像案）：三档小图缺档（如 sharp 依赖损坏期间
+    # 生成的头像）时 try_files 落 @uploads_fallback——rewrite 剥 /uploads/ 前缀后
+    # break 转发 /api/uploads-fallback/<kind>/<size>/<name>.<ext>，Next 侧同步吐
+    # 原图 + after() 后台重建三档；重建完成后 CDN/浏览器按短缓存切回本 location 正版。
     location ^~ /uploads/ {
-        alias /home/deploy/saolei.wang/public/uploads/;
+        root /home/deploy/saolei.wang/public;
         expires 7d;
         access_log off;
+        try_files $uri @uploads_fallback;
+    }
+    location @uploads_fallback {
+        # 打回动态 location /（API 走代理），rewrite 后 URI 形如 /api/uploads-fallback/avatar/mid/x.webp
+        rewrite ^/uploads/(.*)$ /api/uploads-fallback/$1 break;
+        proxy_pass http://saolei_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
     # 论坛外链图本地化 WebP（2026-10-22，gitignore 不入库、部署 rsync --delete 不碰，

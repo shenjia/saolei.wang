@@ -208,6 +208,43 @@ fix_prisma_stub() {
 }
 fix_prisma_stub "$S_DIR"
 
+# ---------- sharp vendored 运行时依赖补链（2026-11-21 21275 头像案根治） ----------
+# Turbopack build 把 sharp vendor 拷贝成 .next-release/node_modules/sharp-<hash>/，
+# 但只拷包本体不带运行时依赖（@img/* 平台二进制、detect-libc、semver）→ 槽内
+# dynamic import('sharp') 报 ERR_MODULE_NOT_FOUND，头像三档 WebP 全部静默生成失败。
+# 2026-11-12 的修复加在了 server-deploy.sh（兜底脚本）里，CI 主链路（本脚本）没修，
+# 之后每次发布 rm+cp 重建槽位都把缺陷带回来（11-15/11-20 日志持续报错即此）。
+# 修复：cp 复制槽位后，从 pnpm 依赖目录把缺的运行时依赖实体拷进槽位 node_modules。
+# 注意用 cp -rL 而非 ln -s：.next-release 经 rsync 软链实体化（prisma stub 同坑），
+# 软链指向 .pnpm store 虽然同机可用，但实体拷贝与产物自包含语义一致、更稳。
+fix_sharp_deps() {
+  local slot_dir=$1
+  local pnpm_nm="$DEPLOY_DIR/node_modules/.pnpm"
+  local copied=0
+  # sharp 的直接运行时依赖（package.json dependencies）+ 平台二进制三件套
+  for dep in \
+    "@img+colour@" \
+    "@img+sharp-libvips-linux-x64@" \
+    "@img+sharp-linux-x64@" \
+    "detect-libc@" \
+    "semver@7"; do
+    local src_dir
+    src_dir="$(ls -d "$pnpm_nm"/${dep}*/node_modules/* 2>/dev/null | head -1)"
+    [[ -d "$src_dir" ]] || continue
+    local dep_name
+    dep_name="$(basename "$src_dir")"
+    # 已是实体目录（上次补过）就跳过；软链或缺失才补
+    [[ -d "$slot_dir/node_modules/$dep_name" && ! -L "$slot_dir/node_modules/$dep_name" ]] && continue
+    rm -rf "$slot_dir/node_modules/$dep_name"
+    cp -rL "$src_dir" "$slot_dir/node_modules/$dep_name"
+    copied=$((copied + 1))
+  done
+  [[ $copied -gt 0 ]] && info "已补拷 sharp 运行时依赖 ×$copied → $slot_dir/node_modules"
+}
+fix_sharp_deps "$S_DIR"
+# 双活 backup（旧主力槽）同样补链：它还在跑、同样会接到头像上传请求
+fix_sharp_deps "$A_DIR"
+
 # ---------- 启动/更新权威对局服务 ----------
 # 2026-11-08 北京 active 拆到独立服务器：.env 配 AUTHORITY_URL_A 后，网站发布
 # 绝不再轮换/重建本机 a，也不许把 nginx 写回 127.0.0.1:3104。这里只检查

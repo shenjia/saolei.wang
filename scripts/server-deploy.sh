@@ -174,23 +174,41 @@ if [[ -d "$A_DIR/static" ]]; then
   info "已并集旧槽 $A_DIR/static → $S_DIR/static（旧哈希资源跨发布可取）"
 fi
 
-# ---------- sharp vendored 运行时依赖补链（2026-11-12 每日一星头像档位 404 修复） ----------
+# ---------- sharp vendored 运行时依赖补链（2026-11-21 21275 头像案根治） ----------
 # Turbopack build 把 serverExternalPackages 名单内的包（sharp 在 Next 内置自动名单里）
 # vendor 拷贝到 <distDir>/node_modules/<pkg>-<hash>/，但只拷包本体、不带运行时依赖
 # （@img/* 平台二进制、detect-libc、semver）→ 运行时 dynamic import sharp 报
 # ERR_MODULE_NOT_FOUND（Cannot find package '@img/colour'），头像三档 WebP 生成
 # 全部静默失败（上传 route 对小图生成 catch 不阻塞），mid/big 档 404 前端裂图。
-# 修复：build 后从 pnpm 依赖目录把 sharp 的运行时依赖 symlink 进槽位 node_modules。
-# ln -sfn 幂等：依赖已在（上次部署补过）时原样覆盖，无副作用。
-SHARP_PNPM_DIR="$(ls -d "$DEPLOY_DIR"/node_modules/.pnpm/sharp@*/node_modules 2>/dev/null | head -1)"
-if [[ -n "$SHARP_PNPM_DIR" ]]; then
-  for dep in @img detect-libc semver; do
-    [[ -e "$SHARP_PNPM_DIR/$dep" ]] && ln -sfn "$SHARP_PNPM_DIR/$dep" "${S_DIR}/node_modules/$dep"
+# ⚠️ 2026-11-12 首版修复只加在本脚本（服务器兜底构建），CI 主链路 server-release.sh
+# 没修 → 每次发布槽位被 rm+cp 重建，缺陷回归（11-15/11-20 生产日志持续报错实证）。
+# 现两脚本同步为 cp -rL 实体拷贝（release 版与本函数逻辑一致，改一处必须同步另一处）。
+fix_sharp_deps() {
+  local slot_dir=$1
+  local pnpm_nm="$DEPLOY_DIR/node_modules/.pnpm"
+  local copied=0
+  for dep in \
+    "@img+colour@" \
+    "@img+sharp-libvips-linux-x64@" \
+    "@img+sharp-linux-x64@" \
+    "detect-libc@" \
+    "semver@7"; do
+    local src_dir
+    src_dir="$(ls -d "$pnpm_nm"/${dep}*/node_modules/* 2>/dev/null | head -1)"
+    [[ -d "$src_dir" ]] || continue
+    local dep_name
+    dep_name="$(basename "$src_dir")"
+    [[ -d "$slot_dir/node_modules/$dep_name" && ! -L "$slot_dir/node_modules/$dep_name" ]] && continue
+    rm -rf "$slot_dir/node_modules/$dep_name"
+    cp -rL "$src_dir" "$slot_dir/node_modules/$dep_name"
+    copied=$((copied + 1))
   done
-  info "已补链 sharp 运行时依赖（@img/detect-libc/semver）→ ${S_DIR}/node_modules"
-else
-  warn "未找到 pnpm sharp 依赖目录，跳过补链——上传头像的 WebP 档位生成会失败，请检查 sharp 安装"
-fi
+  [[ $copied -gt 0 ]] && info "已补拷 sharp 运行时依赖 ×$copied → $slot_dir/node_modules"
+}
+fix_sharp_deps "$S_DIR"
+# 双活 backup（旧主力槽）同样补链：它还在跑、同样会接到头像上传请求
+# （A_DIR 已在上方「旧哈希静态资源并集」段赋值）
+fix_sharp_deps "$A_DIR"
 
 # ---------- 共享 unstable_cache（2026-10-28，与 server-release.sh 同方案） ----------
 # 服务器兜底构建同样把 <distDir>/cache 软链到共享目录，切槽不清缓存（详见 release 脚本注释）。
