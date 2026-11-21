@@ -14,6 +14,7 @@ import { ensureVideoMetrics } from "./videometrics";
 import {
   isManager,
   LEVEL_MIN_3BV,
+  MIN_3BV_FOR_3BVS,
   NEWS_TYPE,
   USER_ROLE,
   VIDEO_STATUS,
@@ -293,6 +294,9 @@ async function syncUserStatVideoCount(
 //   该玩家纪录动态 diff（纪录动态数=改进次数，几十行量级）。与全站录像总量无关。
 // 口径：与原发布逻辑一致——严格更优才成点（平手不发），首点 or=0（首创「创造了」）；
 // 已知近似：补发的缺失点快照 exp_time 取当下值（历史精确快照不可重建，仅影响行内称号徽章）。
+// 2026-11-21 脏数据治理：重放源 JOIN video_info 带出 board_3bv，3bvs 链加级别限界判定
+// （初 10 / 中高 4，MIN_3BV_FOR_3BVS）——此前老站迁移的 video_scores 低限界正值脏行
+// （10-16 清零未覆盖）被当合法纪录点，重放把「初级3BVS纪录」伪动态补发回 news。
 
 /** 乱序检测：该玩家是否已有「上传时间不早于本录像」的纪录动态。命中＝本录像按上传序
  *  插在已有纪录链中间，逐条发布会倒挂 → 走全量重放对齐。[user, create_time] 索引点查。 */
@@ -315,13 +319,23 @@ export async function syncRecordNewsChain(
   level: VideoLevel,
   snapshot: { expTime: number }
 ): Promise<void> {
-  // ① 单表重放数据源：该玩家该级别全部已过审成绩（屏蔽的已从本表删除，天然排除）
-  const rows = await videoScoresTable(tx, level, false).findMany({
-    where: { user: BigInt(userId) },
-    select: { id: true, scoreTime: true, score3bvs: true, createTime: true },
-  });
+  // ① 重放数据源：该玩家该级别全部已过审成绩（屏蔽的已从本表删除，天然排除）。
+  // JOIN video_info 取 board_3bv 做 3BV/s 限界判定（2026-11-21 脏数据治理）：
+  // 历史脏行（老站迁移 3BV<10 但 score_3bvs>0 正值，10-16 限界收紧时清零未覆盖
+  // video_scores 存量）曾被本重放当合法纪录点，把「初级3BVS纪录」伪动态补发回 news。
+  // 现按现行记分口径过滤：3bvs 链只认 board_3bv ≥ MIN_3BV_FOR_3BVS（初 10 / 中高 4）；
+  // score_3bvs=0 的行（含低限界清零行）天然不进链。time 链不受限界约束。
+  const b3Min = MIN_3BV_FOR_3BVS[level];
+  const rows = await tx.$queryRaw<
+    { id: bigint; t: number; b: number; b3: number; ct: bigint }[]
+  >`
+    SELECT vs.id, vs.score_time t, vs.score_3bvs b, vi.board_3bv b3, vs.create_time ct
+    FROM video_scores_${Prisma.raw(level)} vs
+    JOIN video_info vi ON vi.id = vs.id
+    WHERE vs.user = ${BigInt(userId)}
+  `;
   const evs = rows
-    .map((r) => ({ id: Number(r.id), t: r.scoreTime, b: r.score3bvs, ct: Number(r.createTime) }))
+    .map((r) => ({ id: Number(r.id), t: Number(r.t), b: Number(r.b), b3: Number(r.b3), ct: Number(r.ct) }))
     .sort((a, b) => a.ct - b.ct || a.id - b.id);
   // ② 重放两条链：key=`${od}:${vid}`，与原发布口径一致（严格更优、首点 or=0）
   const desired = new Map<string, { or: number; cr: number; ct: number }>();
@@ -332,7 +346,8 @@ export async function syncRecordNewsChain(
       desired.set(`time:${e.id}`, { or: prevT, cr: e.t, ct: e.ct });
       prevT = e.t;
     }
-    if (e.b > 0 && e.b > prevB) {
+    // 3bvs 链：board_3bv 过级别限界才认（脏正值行不上链；score_3bvs=0 行天然排除）
+    if (e.b > 0 && e.b3 >= b3Min && e.b > prevB) {
       desired.set(`3bvs:${e.id}`, { or: prevB, cr: e.b, ct: e.ct });
       prevB = e.b;
     }
