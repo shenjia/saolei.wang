@@ -27,7 +27,7 @@ import { rankEnter, rankLeave, safeRankOp, applyRankAreaChange } from "@/lib/use
 import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
 import { normalizeSiteUpdateDate } from "@/lib/site-updates";
-import { genUniqueTourCode, addTourEvent, TOUR_EVENT_JOIN_OPEN, TOUR_EVENT_SCORE } from "@/lib/tournament";
+import { genUniqueTourCode, addTourEvent, ensureTourEntry, TOUR_EVENT_JOIN_OPEN, TOUR_EVENT_SCORE } from "@/lib/tournament";
 
 /** 比赛标识参数校验（2026-11-18 张老师需求）：默认留空（null=不设置/保持不变）；
  *  手填时 1-10 位数字+大小写字母（与列宽 varchar(10) 一致），全库查重防撞（唯一索引兜底） */
@@ -1282,7 +1282,12 @@ async function dispatch(
         where: { id: BigInt(id) },
         data: { tournamentId: BigInt(rawComp) },
       });
-      if (changed) await addTourEvent(rawComp, TOUR_EVENT_SCORE, Number(video.user));
+      if (changed) {
+        // 挂接即补报名（2026-11-22 张老师定「有成绩就该有报名记录」）：统一计时赛
+        // 补报名动态与成绩动态同秒、id 更小 → 先报名、再成绩
+        await ensureTourEntry(rawComp, Number(video.user));
+        await addTourEvent(rawComp, TOUR_EVENT_SCORE, Number(video.user));
+      }
       return {
         ok: true,
         message: changed
@@ -2022,6 +2027,8 @@ async function dispatch(
         }
         await prisma.video.update({ where: { id: v.id }, data: { tournamentId: compBig } });
         if (v.tournamentId) moved++;
+        // 挂接即补报名（2026-11-22 同口径）；幂等，同一玩家多条录像只补一次
+        await ensureTourEntry(compId, Number(v.user));
         await addTourEvent(compId, TOUR_EVENT_SCORE, Number(v.user));
       }
       const parts: string[] = [`已收录 ${matched.length - already} 条录像`];

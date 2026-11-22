@@ -20,7 +20,7 @@ import { replayEvents } from "@/lib/videoradar";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { RANKED_SOFTWARE } from "@/lib/evfwrite";
 import { evfSignature } from "@/core/src/lib/evf-sign";
-import { addTourEvent, TOUR_EVENT_SCORE, matchTourByRace } from "@/lib/tournament";
+import { addTourEvent, TOUR_EVENT_SCORE, matchTourByRace, ensureTourEntry } from "@/lib/tournament";
 import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, UNREACHABLE_3BV, type VideoLevel } from "@/lib/config";
 import { getUser3bvCollection } from "@/lib/queries";
@@ -369,8 +369,24 @@ export async function uploadVideo(
     return fail("录像保存失败", 500);
   }
 
-  // 比赛挂接成功 → 「玩家更新成绩」动态（2026-11-13 二期：详情页动态板块）
+  // 比赛挂接成功 → 「玩家更新成绩」动态（2026-11-13 二期：详情页动态板块）。
+  // 挂接前先 ensureTourEntry（2026-11-22 张老师定「有成绩就该有报名记录」）：
+  // · 窗口赛（race 命中个人会话）＝点开始比赛时就该报上名，补报名动态取窗口
+  //   start_time——race 分支只可能命中窗口会话（个人标识每人不同，不会撞 code）；
+  // · 统一计时赛（code/签名后缀命中）＝首盘挂接即视为报名，补写报名动态与成绩
+  //   动态同秒、id 更小 → 详情页动态「先报名、再成绩」，个人动态 58 同序。
   if (compAttach) {
+    let windowStartSec: number | undefined;
+    if (parsed.race) {
+      const sess = await prisma.tournamentWindowSession.findUnique({
+        where: { race: parsed.race },
+        select: { tournamentId: true, startTime: true },
+      });
+      if (sess && Number(sess.tournamentId) === Number(compAttach.id)) {
+        windowStartSec = Number(sess.startTime);
+      }
+    }
+    await ensureTourEntry(Number(compAttach.id), session.uid, { windowStartSec });
     await addTourEvent(Number(compAttach.id), TOUR_EVENT_SCORE, session.uid);
   }
 

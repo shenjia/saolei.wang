@@ -11,6 +11,8 @@
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { getVideosByIds, type VideoListItem } from "@/lib/queries";
+import { publishNews } from "@/lib/news";
+import { NEWS_TYPE } from "@/lib/config";
 import { dualTitles } from "@/lib/title-system";
 import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
 
@@ -455,15 +457,69 @@ export function compEventText(type: number): string {
 export async function addTourEvent(
   tournamentId: number,
   type: number,
-  userId = 0
+  userId = 0,
+  /** 缺省=现在；存量/补报名回溯场景传业务时刻（2026-11-22 挂接补报名） */
+  createTimeSec?: number
 ): Promise<void> {
   await prisma.tournamentEvent.create({
     data: {
       tournamentId: BigInt(tournamentId),
       type,
       userId: BigInt(userId),
-      createTime: BigInt(Math.floor(Date.now() / 1000)),
+      createTime: BigInt(createTimeSec ?? Math.floor(Date.now() / 1000)),
     },
+  });
+}
+
+/**
+ * 挂接补报名（2026-11-22 张老师定口径）：有成绩就该有报名记录。
+ * · 窗口赛（windowHours>0）＝点「开始比赛」拿到个人标识时就补报名——报名动态
+ *   createTime 取窗口会话 start_time（报名动作的真实时刻）；
+ * · 统一计时赛（windowHours=0）＝第一个挂接成功的录像时补报名——先写报名动态
+ *   再写成绩动态（报名 createTime=挂接时刻，与成绩动态同秒，排序 (createTime,id)
+ *   天然保证报名行在前；个人动态 type=58 同理）。
+ * 幂等：唯一索引 (competition_id,user_id) 兜底，已报名直接返回；补写动态亦只在
+ * 真正新建报名行时发生（已报名者重复挂接不会刷报名动态）。
+ * 三处调用：上传自动挂接 / 后台单条挂接 / 后台批量挂接。先查后插 + catch 吸收
+ * P2002 并发双挂，调用方无需 try。
+ */
+export async function ensureTourEntry(
+  tournamentId: number,
+  userId: number,
+  opts?: { /** 窗口赛传窗口开始时刻；统一计时赛不传=现在 */
+    windowStartSec?: number;
+  }
+): Promise<void> {
+  const entryTime = BigInt(opts?.windowStartSec ?? Math.floor(Date.now() / 1000));
+  const existed = await prisma.tournamentEntry.findUnique({
+    where: {
+      tournamentId_userId: {
+        tournamentId: BigInt(tournamentId),
+        userId: BigInt(userId),
+      },
+    },
+    select: { id: true },
+  });
+  if (existed) return; // 已报名：幂等返回，不刷动态
+  try {
+    await prisma.tournamentEntry.create({
+      data: {
+        tournamentId: BigInt(tournamentId),
+        userId: BigInt(userId),
+        createTime: entryTime,
+      },
+    });
+  } catch {
+    return; // P2002 并发双挂：另一请求已补，本请求不重复写动态
+  }
+  // 比赛动态 type=2「报名参加了比赛」（详情页动态板块）
+  await addTourEvent(tournamentId, TOUR_EVENT_PLAYER_JOIN, userId, Number(entryTime));
+  // 个人动态 type=58「报名参加了 XXX」（个人主页+关注流；reference=比赛 id）
+  await publishNews({
+    type: NEWS_TYPE.TOUR_JOIN,
+    userId,
+    reference: tournamentId,
+    createTime: Number(entryTime),
   });
 }
 
