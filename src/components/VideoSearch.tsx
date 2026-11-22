@@ -19,7 +19,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   LEVEL_NAMES,
   parseVideoTimeWindow,
@@ -94,6 +94,9 @@ export function VideoSearch({
   userId?: number;
 }) {
   const router = useRouter();
+  // 比赛范围模式跳回本详情页用当前 pathname（2026-11-22：代号 URL 进入后搜索，
+  // push /tournaments/<id> 会改 pathname → ScrollReset 滚顶；顺带保住地址形态）
+  const pathname = usePathname();
   const isUser = scope === "user";
   const isTour = scope === "tour";
   const [q, setQ] = useState(
@@ -228,14 +231,17 @@ export function VideoSearch({
     if (isTour) {
       // 比赛范围模式（2026-11-18 深夜张老师定）：作者/成绩互斥，跳回本详情页
       // vauthor/vtime/3bv 参数（录像板块按比赛范围过滤）。
-      // 2026-11-22 补 3bv：原只带 vauthor/vtime，选「3BV N」项参数被静默丢弃
+      // 2026-11-22 补 3bv：原只带 vauthor/vtime，选「3BV N」项参数被静默丢弃。
+      // base 用当前 pathname（2026-11-22 第一次翻页跳动同因）：代号 URL 进入时
+      // push /tournaments/<id> 会让 pathname 变化 → ScrollReset 滚顶
       router.push(
-        buildUrl(`/tournaments/${tourId}`, {
+        buildUrl(pathname, {
           vauthor: params.author,
           vtime: params.time,
           "3bv": params.bv,
           page: undefined,
-        })
+        }),
+        { scroll: false }
       );
       return;
     }

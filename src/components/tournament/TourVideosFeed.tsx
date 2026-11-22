@@ -13,7 +13,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { VideoHead, VideoRowLine } from "@/components/VideoRows";
 import { VideoSearch } from "@/components/VideoSearch";
@@ -73,6 +73,10 @@ export function TourVideosFeed({
   searchAuthorName?: string;
 }) {
   const router = useRouter();
+  // 软导航沿用当前真实 pathname（2026-11-22 张老师报「第一次翻页跳动」根因修复，
+  // 同 TourEventsFeed）：代号 URL 进入时 push /tournaments/<id> 会让 pathname 变化，
+  // ScrollReset 按「跨页导航」滚顶——第一翻跳、之后不跳
+  const pathname = usePathname();
   const listRef = useRef<HTMLTableElement>(null);
   const [videos, setVideos] = useState<VideoListItem[]>(initialVideos);
   const [total, setTotal] = useState(initialTotal);
@@ -105,7 +109,7 @@ export function TourVideosFeed({
     if (vAuthor) params.vauthor = String(vAuthor);
     if (vTime) params.vtime = vTime;
     if (vBv != null) params["3bv"] = String(vBv);
-    return [`/tournaments/${compId}`, params];
+    return [pathname, params];
   }
 
   /** 跳转 URL 字符串版（tabs/换页用） */
@@ -217,7 +221,9 @@ export function TourVideosFeed({
             hideIoe
             tourMetric={tourMetric}
             sort={{
-              base: `/tournaments/${compId}`,
+              // base 必须用当前 pathname（2026-11-22 同上）：onSort 缺席兜底走真实链接
+              // 时地址形态不变；纯路径要求见 VideoHead 内部 buildUrl 注释
+              base: pathname,
               params: {
                 ...(eventsPage > 1 ? { ep: String(eventsPage) } : {}),
                 ...(level !== "all" ? { level } : {}),

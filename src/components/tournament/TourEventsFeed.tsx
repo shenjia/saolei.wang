@@ -12,7 +12,7 @@
 
 import Link from "next/link";
 import { useState, useTransition, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { RelTime } from "@/components/RelTime";
 import { AvatarCell } from "@/components/Cells";
@@ -47,6 +47,11 @@ export function TourEventsFeed({
   scoreDesc: boolean;
 }) {
   const router = useRouter();
+  // 翻页沿用当前真实 pathname（2026-11-22 张老师报「第一次翻页跳动」）：
+  // 代号 URL（/tournaments/gsc19）进入时 push /tournaments/<id> 会让 pathname
+  // gsc19→27 变化，ScrollReset 按「跨页导航」滚顶——第一翻跳、之后不跳的根因。
+  // 同页翻页绝不能改 pathname（useNoJump.md 铁律）；顺带保住用户进来的地址形态
+  const pathname = usePathname();
   const listRef = useRef<HTMLUListElement>(null);
   const [rows, setRows] = useState<TourEventRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
@@ -86,7 +91,7 @@ export function TourEventsFeed({
       // scroll:false 拦 Next 滚顶 + ScrollReset 已修同页参数变化不滚顶；
       // 不做主动锚定——板块在视口内时原地替换即可（浏览器 scroll anchoring 保持视觉位置）
       router.push(
-        `/tournaments/${compId}?page=${videosPage}${p > 1 ? `&ep=${p}` : ""}`,
+        `${pathname}?page=${videosPage}${p > 1 ? `&ep=${p}` : ""}`,
         { scroll: false }
       );
     });
