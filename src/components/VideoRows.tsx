@@ -338,6 +338,22 @@ export function VideoRowLine({
             ✕
           </span>
         )}
+        {/* 2026-11-22 张老师需求：已挂接比赛（video.tournament_id）的参赛录像，
+            成绩后金色「赛」下标（格式同 NF 小标；有 NF 时排在 NF 后面——
+            下标链顺序 NF → ✓/✕ → 赛）。hover 朝上气泡显比赛全称，
+            点击新标签打开比赛详情页 /tournaments/:id；样式见 globals.css .tour_mark */}
+        {v.tournamentId && v.tournamentName && (
+          <Link
+            href={`/tournaments/${v.tournamentId}`}
+            target="_blank"
+            prefetch={false}
+            className="tour_mark"
+            data-tip={v.tournamentName}
+            aria-label={`参赛录像：${v.tournamentName}`}
+          >
+            赛
+          </Link>
+        )}
       </td>
       {/* 本BV标记（2026-10-28 张老师需求）：首收=小数点角标 / PB=小数点角标（黄色），
           绝对定位在数字右侧不占排版；hover 数字高亮 + 气泡（样式见 globals.css .bv_marked）。

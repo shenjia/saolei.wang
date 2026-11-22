@@ -153,6 +153,12 @@ export interface VideoListItem {
   /** 运气盘/不记成绩（2026-11-02 张老师定）：上传时低于级别 3BV 下限（初 2/中 30/高 100），
    *  所有成绩（时间/3BV/s/STNB）划掉展示、不入排行/纪录/聚合；历史录像恒 false */
   noRecord: boolean;
+  /** 所属比赛 id（2026-11-22 张老师需求）：video.tournament_id 挂接权威关系；
+   *  null=未挂接比赛。列表行「赛」金色下标跳转 /tournaments/:id 用 */
+  tournamentId: number | null;
+  /** 所属比赛全称（2026-11-22）：「赛」下标 hover 气泡文案；null=未挂接或挂接 id
+   *  悬空（理论不存在，挂接入口保证）。与 tournamentId 同真同假 */
+  tournamentName: string | null;
 }
 
 // ---------- 通用 ----------
@@ -2145,6 +2151,16 @@ export async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
+  // 「赛」下标（2026-11-22 张老师需求）：批量带出挂接比赛的全称（每页比赛数极少，
+  // IN 点查 PK 开销可忽略）；悬空 id（理论不存在）降级为不带标记
+  const tourIds = [...new Set(videos.map((v) => (v.tournamentId ? N(v.tournamentId) : 0)))].filter(Boolean);
+  const tourNames = tourIds.length
+    ? await prisma.tournament.findMany({
+        where: { id: { in: tourIds.map(BigInt) } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const tourNameMap = new Map(tourNames.map((t) => [N(t.id), t.name]));
   const infoMap = new Map(infos.map((i) => [N(i.id), i]));
   const statMap = new Map(stats.map((s) => [N(s.id), s]));
   const metricMap = new Map(metrics.map((m) => [N(m.id), m]));
@@ -2198,6 +2214,8 @@ export async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       firstBv: v.firstBv === 1,
       pbBv: v.pbBv === 1,
       noRecord: info.noRecord,
+      tournamentId: v.tournamentId ? N(v.tournamentId) : null,
+      tournamentName: v.tournamentId ? tourNameMap.get(N(v.tournamentId)) ?? null : null,
     });
   }
   return result;
@@ -2293,6 +2311,9 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     firstBv: v.firstBv === 1,
     pbBv: v.pbBv === 1,
     noRecord: info.noRecord,
+    // tournamentId 已在上方返回（挂接比赛权威关系）；列表新字段 tournamentName
+    // 详情页不消费（详情页全称走「比赛」栏自身查询），置 null
+    tournamentName: null,
     fromSite: fromKey ? { name: fromKey.name, logo: fromKey.logo } : null,
   };
 }

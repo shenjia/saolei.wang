@@ -88,6 +88,8 @@ interface ReviewVideo {
   /** 运气盘（2026-11-02 张老师定）：上传时低于级别 3BV 下限，不记成绩——
    *  过审时不入 video_scores、user_scores、名次、纪录动态、STNB 榜（video_info.no_record） */
   noRecord: boolean;
+  /** 所属比赛 id（2026-11-22）：VideoListItem 新增字段，审核侧读盘载荷同步带上（此流程不消费） */
+  tournamentId: number | null;
 }
 
 /** VideoScores::update —— 把录像写入对应级别成绩表 */
@@ -444,6 +446,7 @@ async function loadReviewVideo(tx: Tx, id: number): Promise<ReviewVideo | null> 
     board3bv: info.board3bv,
     realTime: info.realTime,
     noRecord: info.noRecord,
+    tournamentId: v.tournamentId ? Number(v.tournamentId) : null,
   };
 }
 

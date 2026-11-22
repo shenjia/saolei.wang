@@ -7949,6 +7949,53 @@ body #video_list .score_3bvs a:hover em {
 #page .video_table td.score.current .banned {
   color: #e60657;
 }
+/* 参赛「赛」金色下标（2026-11-22 张老师需求）：已挂接比赛（video.tournament_id）的录像，
+   成绩后金色「赛」小字（格式同 .nf 黄小字语言：margin 6px / 11px / 金色）；
+   下标链顺序 NF → ✓/✕ → 赛。整字链接进比赛详情页（新标签）。
+   颜色恒金不随行 hover 级别色变（同 NF 在 tr:hover 下保持金的语义，
+   链接必须单独立 a.tour_mark 规则压过 tr:hover td.score.lv_* a 与 a:hover 全局绿） */
+.video_table td.score a.tour_mark {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: normal;
+  color: #fdc61d;
+}
+#page .video_table td.score a.tour_mark,
+#page .video_table td.score a.tour_mark:hover,
+#page .video_table tbody tr:hover td.score.lv_beg a.tour_mark,
+#page .video_table tbody tr:hover td.score.lv_int a.tour_mark,
+#page .video_table tbody tr:hover td.score.lv_exp a.tour_mark,
+#page .video_table td.score.current a.tour_mark {
+  color: #fdc61d;
+}
+/* 比赛全称气泡（2026-11-22）：hover「赛」朝上方弹出（2026-11-11 张老师定：新气泡一律朝上），
+   复用站内 data-tip 暗底气泡语言（餐券/复用 del[data-tip] 同款配色 #1e1f1c）；
+   白名单 long-name 单行 nowrap——列表气泡均为短文案，比赛全称过长溢出可接受 */
+.video_table td.score a.tour_mark {
+  position: relative;
+}
+.video_table td.score a.tour_mark::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 155%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+.video_table td.score a.tour_mark:hover::after {
+  opacity: 1;
+}
 /* 划线成绩深灰（2026-10-28 张老师要求）：低于限界不被承认的 3BV/s / STNB（del），
    与正常数字同用 td 默认 #939387 难区分，改深灰 #636359 对齐详情页/用户卡片的
    划线语言（legacy #page .score_3bvs del 同色）。排序命中列整列黄语义保留
