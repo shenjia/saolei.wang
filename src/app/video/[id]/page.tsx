@@ -427,9 +427,7 @@ export default async function VideoViewPage({
                     段提取落库，仅非空时展示——历史存量与站内生成的 evf 恒 NULL 不渲染。
                     2026-11-18：标识匹配到比赛时显示简称并链接详情页，未匹配保持原样。
                     2026-11-19：挂接关系（tournament_id）优先，race 反查兜底——
-                    签名末尾命中自动挂接（race 为 NULL）的盘同样显示比赛链接。
-                    2026-11-22：未匹配形态不再原样展示——标识划掉+暗灰示意无效，
-                    hover 气泡（朝上）说明「未识别到对应比赛」 */}
+                    签名末尾命中自动挂接（race 为 NULL）的盘同样显示比赛链接 */}
                 {(raceCompShown || video.race) && (
                   <span className="race_name">
                     比赛
@@ -438,9 +436,7 @@ export default async function VideoViewPage({
                         {raceCompShown.shortName}
                       </Link>
                     ) : (
-                      <em className="race_unmatched" data-tip="未识别到对应比赛">
-                        {video.race}
-                      </em>
+                      <em>{video.race}</em>
                     )}
                   </span>
                 )}
