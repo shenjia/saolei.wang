@@ -28,9 +28,7 @@ const getSignupPlayers = unstable_cache(
 
 /** 比赛模式下发给客户端的比赛上下文（2026-11-22 扩展张老师需求）：
  *  end=比赛结束时刻（秒；标题行倒计时用）；scoreSnapshot=本人总分快照（标题行
- *  「成绩」行用，null=暂无成绩）；metric=计分项（成绩数值格式化）；
- *  topn=各级别取盘数（底部级别统计区格子数，sum_topn 配置；0/缺失=该级别不收）；
- *  includeLevels=比赛收录级别（底部统计区只渲染这些级别，与算分口径同源） */
+ *  「成绩」行用，null=暂无成绩）；metric=计分项（成绩数值格式化） */
 export interface OnlineCompParam {
   /** 进行中比赛（?c= 合法时）；code=比赛标识，2026-11-18 起可空（未设置=不附加标识）；
    *  race=窗口赛个人标识（2026-11-19，?race= 传入，优先注入结算 EVF） */
@@ -41,28 +39,10 @@ export interface OnlineCompParam {
     race?: string | null;
     end: number;
     metric: TourMetricKey;
-    topn: Record<string, number>;
-    includeLevels: string[];
-    scoreSnapshot: { score: number; rank: number; calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] } | null;
+    scoreSnapshot: { score: number; calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] } | null;
   } | null;
   /** ?c= 指向的比赛无效（不存在/未开始/已结束）时的人话提示 */
   compError: string | null;
-}
-
-/** 从 score_config 抽下发字段（topn/includeLevels——底部级别统计区渲染参数）；
- *  scoreConfig 解析失败回退空（客户端不渲染统计区，不炸） */
-function compExtraOf(scoreConfig: string): { topn: Record<string, number>; includeLevels: string[] } {
-  try {
-    const o = JSON.parse(scoreConfig || "{}") as Record<string, unknown>;
-    const topn: Record<string, number> = {};
-    for (const lv of ["beg", "int", "exp"]) {
-      const n = Number(o[lv]);
-      if (Number.isFinite(n) && n > 0) topn[lv] = Math.floor(n);
-    }
-    return { topn, includeLevels: [] };
-  } catch {
-    return { topn: {}, includeLevels: [] };
-  }
 }
 
 /** 解析 ?c= 比赛参数（2026-11-13 二期）：无参数=普通练习；非法=红色气泡文案。
@@ -78,14 +58,13 @@ async function resolveCompParam(
   }
   const c = await prisma.tournament.findUnique({
     where: { id: BigInt(cid) },
-    select: { id: true, shortName: true, code: true, startTime: true, endTime: true, scoreMode: true, scoreConfig: true, includeLevels: true },
+    select: { id: true, shortName: true, code: true, startTime: true, endTime: true, scoreMode: true, scoreConfig: true },
   });
   if (!c) return { comp: null, compError: "比赛不存在" };
   const now = Math.floor(Date.now() / 1000);
   if (now < Number(c.startTime)) return { comp: null, compError: `「${c.shortName}」尚未开始` };
   if (now >= Number(c.endTime)) return { comp: null, compError: `「${c.shortName}」已结束` };
   const snapshot = uid ? await getMyScoreSnapshot(cid, uid) : null;
-  const extra = compExtraOf(c.scoreConfig);
   return {
     comp: {
       id: Number(c.id),
@@ -95,8 +74,6 @@ async function resolveCompParam(
       // metric=计分数据项 key（score_config.metric；scoreMode 是计算方式 sum_topn
       // 不是数据项——首次实现误发 scoreMode 致 fmtTourScore 崩，2026-11-22 修）
       metric: parseTourMetric(JSON.parse(c.scoreConfig || "{}").metric),
-      topn: extra.topn,
-      includeLevels: (c.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
       scoreSnapshot: snapshot,
     },
     compError: null,
@@ -120,14 +97,13 @@ async function resolveRaceParam(
   if (now > Number(sess.endTime)) return null; // 会话过期，标识失效
   const c = await prisma.tournament.findUnique({
     where: { id: sess.tournamentId },
-    select: { id: true, shortName: true, code: true, endTime: true, scoreConfig: true, includeLevels: true },
+    select: { id: true, shortName: true, code: true, endTime: true, scoreConfig: true },
   });
   if (!c || now >= Number(c.endTime)) return null;
   const snapshot = await getMyScoreSnapshot(Number(c.id), uid, {
     start: Number(sess.startTime),
     end: Number(sess.endTime),
   });
-  const extra = compExtraOf(c.scoreConfig);
   return {
     comp: {
       id: Number(c.id),
@@ -137,8 +113,6 @@ async function resolveRaceParam(
       end: Number(sess.endTime),
       // metric=计分数据项 key（同 resolveCompParam，scoreConfig.metric）
       metric: parseTourMetric(JSON.parse(c.scoreConfig || "{}").metric),
-      topn: extra.topn,
-      includeLevels: (c.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
       scoreSnapshot: snapshot,
     },
   };
