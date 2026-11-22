@@ -78,7 +78,7 @@ export default async function CompetitionsPage({
             <div className="box comp_stats">
               <h2>参赛记录</h2>
               <div className="comp_stat_row">
-                <span>参加比赛次数</span>
+                <span>参赛次数</span>
                 <b>{mstats.joined}</b>
               </div>
               <div className="comp_stat_row">
@@ -92,20 +92,39 @@ export default async function CompetitionsPage({
             </div>
           )}
 
-          {/* 全网统计（全站口径，未登录也显示） */}
+          {/* 全网统计（全站口径，未登录也显示）。
+              2026-11-22 张老师定：数字亮灰（.comp_stat_row b 统一改色）+
+              今日有更新加绿色括号增量（形态与首页数据统计一致——delta>0 才显示，
+              全站今日增量统一绿色 .stat_today）。口径：动态事件表当日写入量——
+              比赛个数=type1（发起）、参赛人数=type2 去重人、录像数量=type4 行数 */}
           <div className="box comp_stats">
             <h2>数据统计</h2>
             <div className="comp_stat_row">
               <span>比赛个数</span>
-              <b>{gstats.tournaments}</b>
+              <b>
+                {gstats.tournaments}
+                {gstats.tournamentsToday > 0 && (
+                  <span className="stat_today">（+{gstats.tournamentsToday}）</span>
+                )}
+              </b>
             </div>
             <div className="comp_stat_row">
               <span>参赛人数</span>
-              <b>{gstats.participants}</b>
+              <b>
+                {gstats.participants}
+                {gstats.participantsToday > 0 && (
+                  <span className="stat_today">（+{gstats.participantsToday}）</span>
+                )}
+              </b>
             </div>
             <div className="comp_stat_row">
               <span>录像数量</span>
-              <b>{gstats.videos}</b>
+              <b>
+                {gstats.videos}
+                {gstats.videosToday > 0 && (
+                  <span className="stat_today">（+{gstats.videosToday}）</span>
+                )}
+              </b>
             </div>
             <div className="comp_stat_row">
               <span>累计奖金</span>
