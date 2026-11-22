@@ -47,7 +47,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const TOUR_EVENT_PAGE_SIZE = 20;
+const TOUR_EVENT_PAGE_SIZE = 15;
 const COMP_VIDEO_PAGE_SIZE = 20;
 /* 计算过程气泡级别配色（2026-11-22 张老师定）：初级绿/中级橙/高级金，同 .comp_lv_plain */
 const LV_TIP_COLOR: Record<string, string> = {
