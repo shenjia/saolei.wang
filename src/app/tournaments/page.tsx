@@ -34,9 +34,16 @@ export default async function CompetitionsPage({
   const now = Math.floor(Date.now() / 1000);
 
   const data = await getTournamentPage(page, session?.uid);
-  // 惰性补写本页可见比赛的「正式开始 / 正式结束」动态（详情页渲染期同样兜底）
+  // 惰性补写本页可见比赛的「正式开始 / 正式结束」动态（详情页渲染期同样兜底）；
+  // 窗口赛补写需 scoreMode/scoreConfig/includeLevels → getTournamentPage 行不带，
+  // 完赛补写函数内部自行查库，只透传 windowHours 判窗
   await Promise.all(
-    data.rows.map((c) => ensureTourLifecycleEvents({ id: c.id, startTime: c.start, endTime: c.end }, now))
+    data.rows.map((c) =>
+      ensureTourLifecycleEvents(
+        { id: c.id, startTime: c.start, endTime: c.end, windowHours: c.windowHours },
+        now
+      )
+    )
   );
   const [gstats, mstats] = await Promise.all([
     getTourGlobalStats(),

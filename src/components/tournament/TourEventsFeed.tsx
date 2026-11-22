@@ -99,12 +99,13 @@ export function TourEventsFeed({
             <li key={e.id} className="comp_ev_row">
               <span className="comp_ev_main">
                 {/* 事件主体玩家（2026-11-18 晚张老师定：人名+性别+军衔同首页动态——
-                    AvatarCell gender=small + TitleBadge；全站事件 1/3/5 无主体不渲染） */}
-                {e.userName && e.userId ? (
+                    AvatarCell gender=small + TitleBadge；全站事件 1/3/5 无主体不渲染；
+                    type=6 完赛事件带玩家主体+最终成绩，2026-11-22） */}
+                {(e.userName && e.userId) || e.type === 6 ? (
                   <>
                     <AvatarCell
-                      id={e.userId}
-                      name={e.userName}
+                      id={e.userId ?? 0}
+                      name={e.userName ?? ""}
                       englishName={e.englishName}
                       sex={e.sex}
                       gender="small"
@@ -117,6 +118,15 @@ export function TourEventsFeed({
                   {/* 官方事件（报名开始/正式开始/正式结束）金色渲染（张老师 2026-11-18 晚定） */}
                   {e.type === 1 || e.type === 3 || e.type === 5 ? (
                     <b className="comp_ev_official">{compEventText(e.type)}</b>
+                  ) : e.type === 6 ? (
+                    /* 窗口赛完赛事件（2026-11-22 张老师定）：「已完赛」金色（同官方事件）+
+                       最终成绩亮灰加粗——窗口结束时刻惰性补写，动态行带该玩家个人总分 */
+                    <>
+                      <b className="comp_ev_finished">{compEventText(e.type)}</b>
+                      {e.totalMs !== null && (
+                        <b className="comp_ev_finish_score">{fmtTourScore(scoreMetric, e.totalMs)}</b>
+                      )}
+                    </>
                   ) : e.type === 4 ? (
                     /* 成绩动态动作文本暗灰（2026-11-22 张老师定）：
                        与亮灰加粗的成绩数值区分层级，只弱化动作、数值仍突出 */

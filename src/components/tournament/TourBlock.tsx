@@ -150,7 +150,9 @@ export function TourBlock({
           c.mySession ? (
             <span className="comp_code">
               比赛标识：
-              <b className="comp_code_started">{c.mySession.race}</b>
+              <b className="comp_code_started" title={c.mySession.finished ? "个人比赛窗口已结束（已完赛）" : "上传录像时此标识自动挂接本比赛"}>
+                {c.mySession.race}
+              </b>
             </span>
           ) : c.status === "ended" ? (
             c.code && (

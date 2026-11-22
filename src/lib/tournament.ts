@@ -125,8 +125,10 @@ export interface TourRow {
   levels: Level[]; // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
   /** 自选窗口时长（小时，0=同期集体赛；>0=窗口赛，张老师 2026-11-19） */
   windowHours: number;
-  /** 我的进行中窗口会话（窗口赛已手动开赛；null=未开赛/无窗口） */
-  mySession: { race: string; start: number; end: number } | null;
+  /** 我的进行中窗口会话（窗口赛已手动开赛；null=未开赛/无窗口）。
+   *  2026-11-22 起 finished=true 表示该窗口已结束（「一人一赛只能开一次」——
+   *  右栏显示「已完赛」不可再开赛；历史双会话取最早一次） */
+  mySession: { race: string; start: number; end: number; finished: boolean } | null;
   creatorId: number; // 发起人（图表下方玩家卡片式名字展示：性别+军衔）
   creatorEnglishName: string;
   creatorSex: number;
@@ -331,16 +333,28 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
   if (uid) {
     const pageWindowIds = pageRows.filter((r) => r.windowHours > 0).map((r) => BigInt(r.id));
     if (pageWindowIds.length) {
-      const nowB = BigInt(now);
+      // 取全部历史会话（不限进行中）：一人一赛只能开一次（2026-11-22），
+      // 最早一次=本人参赛窗口；已结束的窗口 finished=true（列表行用于展示态判断）
       const sessions = await prisma.tournamentWindowSession.findMany({
-        where: { tournamentId: { in: pageWindowIds }, userId: BigInt(uid), endTime: { gt: nowB } },
+        where: { tournamentId: { in: pageWindowIds }, userId: BigInt(uid) },
         select: { tournamentId: true, race: true, startTime: true, endTime: true },
-        orderBy: { endTime: "desc" },
+        orderBy: { startTime: "asc" },
       });
-      const sessMap = new Map(sessions.map((s) => [s.tournamentId.toString(), s]));
+      const sessMap = new Map<string, (typeof sessions)[number]>();
+      for (const s of sessions) {
+        const key = s.tournamentId.toString();
+        if (!sessMap.has(key)) sessMap.set(key, s); // startTime asc → 首个=最早窗口
+      }
       for (const r of pageRows) {
         const s = sessMap.get(r.id);
-        if (s) r.mySession = { race: s.race, start: Number(s.startTime), end: Number(s.endTime) };
+        if (s) {
+          r.mySession = {
+            race: s.race,
+            start: Number(s.startTime),
+            end: Number(s.endTime),
+            finished: Number(s.endTime) <= now,
+          };
+        }
       }
     }
   }
@@ -431,6 +445,7 @@ export const TOUR_EVENT_PLAYER_JOIN = 2; // 玩家报名参加
 export const TOUR_EVENT_STARTED = 3; // 比赛正式开始
 export const TOUR_EVENT_SCORE = 4; // 玩家更新成绩
 export const TOUR_EVENT_ENDED = 5; // 比赛正式结束
+export const TOUR_EVENT_FINISHED = 6; // 玩家完赛（窗口赛个人窗口结束，2026-11-22 张老师定）
 
 /** 动态事件文案（type → 展示文本；主体玩家名由行渲染拼接）。
     详情页 RSC 与 TourEventsFeed 客户端壳共用（2026-11-13 五轮翻页改版）。
@@ -448,6 +463,8 @@ export function compEventText(type: number): string {
       return "更新了成绩";
     case TOUR_EVENT_ENDED:
       return "比赛结束";
+    case TOUR_EVENT_FINISHED:
+      return "已完赛";
     default:
       return "";
   }
@@ -527,9 +544,25 @@ export async function ensureTourEntry(
  * 惰性补写「比赛正式开始 / 比赛正式结束」动态：now 越过起止时刻且该事件尚不存在时补一条。
  * 列表页与详情页渲染期各调一次（行数 ≤ 页内比赛数，两次 findFirst 走 (tournament_id,id)
  * 索引，开销可忽略）——不依赖定时器，重启/停机不漏事件。
+ * 2026-11-22 张老师定：窗口赛（windowHours>0）个人窗口结束再补「玩家完赛」动态
+ * （比赛侧 type=6「已完赛」+ 个人侧 type=59「已完赛！最终成绩：xxx」）——惰性补写：
+ * 个人窗口 endTime < now 且该玩家尚无 type=6 事件时补。「一人一赛只能开一次」
+ * （2026-11-22 防御）保证每玩家至多一个窗口=至多一条完赛动态。最终成绩=个人窗口内
+ * computePlayerScores 总分口径（与排行榜/我的成绩同源）；无有效成绩只补比赛侧动态、
+ * 个人动态照发但不带成绩数值。完赛动态 createTime 锚定窗口 endTime（同「比赛开始/
+ * 结束」展示时刻锚定口径：事件补写时刻没有意义，业务时刻才是真相）。
  */
 export async function ensureTourLifecycleEvents(
-  c: { id: bigint | number | string; startTime: bigint | number; endTime: bigint | number },
+  c: {
+    id: bigint | number | string;
+    startTime: bigint | number;
+    endTime: bigint | number;
+    /** 完赛动态补写所需字段（调用方传全量行即可；缺省跳过完赛补写） */
+    windowHours?: bigint | number | null;
+    scoreMode?: string;
+    scoreConfig?: string;
+    includeLevels?: string;
+  },
   now: number
 ): Promise<void> {
   const cid = BigInt(c.id);
@@ -569,6 +602,99 @@ export async function ensureTourLifecycleEvents(
     });
     if (!hit) await addTourEvent(Number(c.id), TOUR_EVENT_ENDED);
   }
+  // 窗口赛完赛动态补写（2026-11-22 张老师定，惰性）：全部已过期且尚无 type=6 的
+  // 个人会话一次循环补齐。⚠️ 分支条件只看 windowHours>0——个人窗口结束通常早于
+  // 比赛整场结束（本地验证实证：比赛 11-27 才结束，玩家窗口今天凌晨已完），
+  // 若叠加 now>=end 会把完赛动态憋到比赛结束才发；已过期会话查询本身就筛掉了
+  // 进行中的窗口。行数=参赛窗口数（十量级），每轮两条 INSERT 可忽略。
+  if (Number(c.windowHours ?? 0) > 0) {
+    const sessions = await prisma.tournamentWindowSession.findMany({
+      where: { tournamentId: cid, endTime: { lt: BigInt(now) } },
+      select: { id: true, userId: true, startTime: true, endTime: true },
+      orderBy: { id: "asc" },
+    });
+    const doneSet = new Set(
+      (
+        await prisma.tournamentEvent.findMany({
+          where: { tournamentId: cid, type: TOUR_EVENT_FINISHED },
+          select: { userId: true },
+        })
+      ).map((e) => e.userId.toString()),
+    );
+    for (const s of sessions) {
+      if (doneSet.has(s.userId.toString())) continue;
+      // 个人窗口内录像按比赛口径算总分（排行榜同源；窗口过滤与 getTourRanking 一致）
+      const vids = await prisma.video.findMany({
+        where: {
+          tournamentId: cid,
+          user: s.userId,
+          status: { not: 0 },
+          createTime: { gte: s.startTime, lte: s.endTime },
+        },
+        select: { id: true, user: true, level: true, createTime: true },
+      });
+      const score = vids.length ? await computeWindowScore(cid, s.userId, vids, c) : null;
+      await addTourEvent(Number(c.id), TOUR_EVENT_FINISHED, Number(s.userId), Number(s.endTime));
+      await publishNews({
+        type: NEWS_TYPE.TOUR_FINISH,
+        userId: Number(s.userId),
+        reference: Number(c.id),
+        createTime: Number(s.endTime),
+        ...(score !== null ? { details: { score } } : {}),
+      });
+    }
+  }
+}
+
+/** 窗口赛个人总分（完赛动态用）：与 getTourRanking / getTourMyResult 完全同口径——
+ *  比赛收录级别闸门 + computePlayerScores（score 域：time=毫秒，其余 ×1000）。
+ *  无有效成绩返回 null。 */
+async function computeWindowScore(
+  cid: bigint,
+  uid: bigint,
+  vids: { id: bigint; level: string }[],
+  c: { scoreMode?: string; scoreConfig?: string; includeLevels?: string }
+): Promise<number | null> {
+  const metric = parseScoreConfig(c.scoreMode ?? "", c.scoreConfig ?? "")?.metric ?? "time";
+  const infos = await prisma.videoInfo.findMany({
+    where: { id: { in: vids.map((v) => v.id) } },
+    select: { id: true, realTime: true, board3bv: true, noRecord: true },
+  });
+  const infoMap = new Map(infos.map((i) => [i.id, i]));
+  const needsMetrics = metric !== "time" && metric !== "3bv";
+  const metricsRows = needsMetrics
+    ? await prisma.videoMetrics.findMany({
+        where: { id: { in: vids.map((v) => v.id) } },
+        select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
+      })
+    : [];
+  const metricsMap = new Map(metricsRows.map((m) => [m.id, m]));
+  const valueOf = (vid: bigint): number => {
+    if (metric === "time") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.realTime : 0;
+    }
+    if (metric === "3bv") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.board3bv * 1000 : 0;
+    }
+    const m = metricsMap.get(vid);
+    if (!m) return 0;
+    const raw = metric === "3bvs" ? m.bvs : metric === "ioe" ? m.ioe : metric === "thrp" ? m.thrp : m.cp;
+    return raw > 0 ? raw * 1000 : 0;
+  };
+  const scores = computePlayerScores(
+    c.scoreMode ?? "",
+    c.scoreConfig ?? "",
+    vids.map((v) => ({
+      user: uid,
+      level: v.level,
+      value: valueOf(v.id),
+      noRecord: infoMap.get(v.id)?.noRecord ?? false,
+    })),
+    (c.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  return scores.get(Number(uid))?.score ?? null;
 }
 
 export interface TourEventRow {
@@ -802,6 +928,40 @@ export async function getTourEventsPage(
     }));
   const type3At = compRow ? Number(compRow.startTime) : 0;
   const type5At = compRow ? Number(compRow.endTime) : 0;
+  // type=6 完赛行的最终成绩（窗口总分）：按个人会话窗现算（computeWindowScore 同口径）。
+  // 会话表一次带出按 uid 索引；仅完赛行触发逐人计算（十量级，可忽略）
+  const finishSessions = compRow?.windowHours
+    ? await prisma.tournamentWindowSession.findMany({
+        where: { tournamentId: cid },
+        select: { userId: true, startTime: true, endTime: true },
+      })
+    : [];
+  const finishSessByUser = new Map(finishSessions.map((s) => [Number(s.userId), s]));
+  const finishScoreCache = new Map<number, number | null>();
+  const finishScoreFor = async (uid: number): Promise<number | null> => {
+    if (!finishSessByUser.has(uid)) return null;
+    if (finishScoreCache.has(uid)) return finishScoreCache.get(uid)!;
+    const s = finishSessByUser.get(uid)!;
+    const wv = await prisma.video.findMany({
+      where: {
+        tournamentId: cid,
+        user: BigInt(uid),
+        status: { not: 0 },
+        createTime: { gte: s.startTime, lte: s.endTime },
+      },
+      select: { id: true, level: true },
+    });
+    const score = wv.length
+      ? await computeWindowScore(
+          cid,
+          BigInt(uid),
+          wv,
+          { scoreMode: compRow?.scoreMode, scoreConfig: compRow?.scoreConfig, includeLevels: compRow?.includeLevels },
+        )
+      : null;
+    finishScoreCache.set(uid, score);
+    return score;
+  };
   type Row = {
     sortKey: number;
     type: number;
@@ -852,7 +1012,10 @@ export async function getTourEventsPage(
       createTime: o.type === TOUR_EVENT_STARTED ? type3At : o.type === TOUR_EVENT_ENDED ? type5At : o.createTime,
       evCount: o.evCount,
       minId: o.minId,
-      total: null,
+      // type=6 完赛事件带最终成绩（窗口总分，补写时按会话窗口现算落 details？
+      // ——不落库，此处按「该玩家截至窗口结束」总分现算：与成绩进度同池不同窗，
+      // 完赛动态成绩=个人窗口内总分（排行榜同源），见 computeWindowScore 同口径
+      total: o.type === TOUR_EVENT_FINISHED ? await finishScoreFor(o.userId) : null,
       batchBest: null,
       prevTotal: null,
     });
@@ -1100,18 +1263,8 @@ export async function matchTourByRace(
   // 窗口赛个人会话判据（2026-11-19 张老师定）：race 命中一个**未过期**的个人会话
   // 且上传时刻落在该会话窗口内 → 挂接该比赛；过期会话标识失效不再录入
   if (race) {
-    const sess = await prisma.tournamentWindowSession.findUnique({
-      where: { race },
-      select: { tournamentId: true, startTime: true, endTime: true },
-    });
-    if (
-      sess &&
-      sess.endTime > nowB && // 会话未过期（标识失效判据）
-      sess.startTime <= ts &&
-      ts <= sess.endTime // 上传时刻在个人窗口内
-    ) {
-      return Number(sess.tournamentId);
-    }
+    const sess = await matchSession(race, ts, nowB);
+    if (sess) return sess;
   }
   // 窗口条件对象（race 分支不带 code 条件，签名分支在外面拼）
   const windowWhere = {
@@ -1128,7 +1281,14 @@ export async function matchTourByRace(
   }
   const sig = signature.trim();
   if (!sig) return null;
-  // 签名后缀命中（同一窗口判据）
+  // 签名后缀命中个人会话（2026-11-22 408465 案张老师定）：Arbiter 的 AVF 格式
+  // 没有 race 字段，窗口赛玩家只能把个人标识（如 5VDLRP）写进署名末尾参加——
+  // 判据与 race 字段完全同构（未过期会话 + 上传时刻在个人窗口内），挂在比赛
+  // 共享 code 匹配**之前**（个人标识全局唯一，精确度高于 code 后缀，防二者
+  // 恰好同时命中时错挂集体赛）。窗口赛计分按各玩家自己的会话窗过滤
+  // （computePlayerScores），冒用他人窗口标识无计分收益，防冒充面不变。
+  const sessHit = await matchSession(sig, ts, nowB);
+  if (sessHit) return sessHit;
   const candidates = await prisma.tournament.findMany({
     where: { ...windowWhere, code: { not: null } },
     select: { id: true, code: true },
@@ -1136,6 +1296,29 @@ export async function matchTourByRace(
   });
   for (const c of candidates) {
     if (c.code && sig.endsWith(c.code)) return Number(c.id);
+  }
+  return null;
+}
+
+/** 个人会话标识判据（共用）：race 命中**未过期**会话且上传时刻在会话窗内 → 返回比赛 id。
+ *  抽出复用于两个入口（2026-11-22 408465 案张老师定）：race 字段（EVF 内嵌）+
+ *  签名末尾（Arbiter AVF 无 race 字段，窗口赛玩家只能把个人标识写进署名末尾）。 */
+async function matchSession(
+  race: string,
+  ts: bigint,
+  nowB: bigint
+): Promise<number | null> {
+  const sess = await prisma.tournamentWindowSession.findUnique({
+    where: { race },
+    select: { tournamentId: true, startTime: true, endTime: true },
+  });
+  if (
+    sess &&
+    sess.endTime > nowB && // 会话未过期（标识失效判据）
+    sess.startTime <= ts &&
+    ts <= sess.endTime // 上传时刻在个人窗口内
+  ) {
+    return Number(sess.tournamentId);
   }
   return null;
 }
@@ -1508,16 +1691,20 @@ export async function getTournamentDetail(
     prizeLines: parsePrizePlan(c.prizePlan),
     code: c.code ?? "",
     windowHours: c.windowHours ?? 0,
-    // 我的进行中窗口（窗口赛已手动开赛；登录态查询）
+    // 我的窗口（窗口赛已手动开赛；登录态查询）。2026-11-22 张老师定「一人一赛只能开
+    // 一次」：取最早一次会话为本人参赛窗口（18875 双会话事故前的存量行兼容——
+    // 历史双会话只会把成绩窗判给错误窗口，展示/计分恒认首次开赛窗口）；
+    // finished=该窗口已结束（右栏显示「已完赛」不可再开赛）
     mySession: uid
       ? await (async () => {
-          const nowB = BigInt(now);
           const s = await prisma.tournamentWindowSession.findFirst({
-            where: { tournamentId: c.id, userId: BigInt(uid), endTime: { gt: nowB } },
+            where: { tournamentId: c.id, userId: BigInt(uid) },
             select: { race: true, startTime: true, endTime: true },
-            orderBy: { endTime: "desc" },
+            orderBy: { startTime: "asc" },
           });
-          return s ? { race: s.race, start: Number(s.startTime), end: Number(s.endTime) } : null;
+          return s
+            ? { race: s.race, start: Number(s.startTime), end: Number(s.endTime), finished: Number(s.endTime) <= now }
+            : null;
         })()
       : null,
     entryCount,

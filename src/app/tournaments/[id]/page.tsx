@@ -121,8 +121,20 @@ export default async function CompetitionDetailPage({
   const c = await getTournamentDetail(compId, session?.uid);
   if (!c) notFound();
 
-  // 惰性补写「正式开始 / 正式结束」动态（列表页渲染期已兜底，这里再兜一层）
-  await ensureTourLifecycleEvents({ id: c.id, startTime: c.start, endTime: c.end }, now);
+  // 惰性补写「正式开始 / 正式结束」动态（列表页渲染期已兜底，这里再兜一层）；
+  // 窗口赛完赛动态（type=6）同函数惰性补写（计分口径字段全量行直传）
+  await ensureTourLifecycleEvents(
+    {
+      id: c.id,
+      startTime: c.start,
+      endTime: c.end,
+      windowHours: c.windowHours,
+      scoreMode: c.scoreMode,
+      scoreConfig: c.scoreConfig,
+      includeLevels: c.levels.length ? c.levels.join(",") : undefined,
+    },
+    now
+  );
 
   const ep = Math.max(parseInt(sp.ep ?? "1", 10) || 1, 1);
   const vp = Math.max(parseInt(sp.page ?? "1", 10) || 1, 1);

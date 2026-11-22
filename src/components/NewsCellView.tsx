@@ -14,6 +14,7 @@ import { RelTime } from "./RelTime";
 import type { NewsItem } from "@/lib/queries";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { DeltaArrow } from "./RankingRows";
+import { fmtTourScore } from "@/lib/tour-metric";
 
 function formatScore(order: string, value: number): string {
   return order === "time" ? scoreTime(value) : score3bvs(value);
@@ -373,9 +374,38 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             )}
           </>
         )}
+        {/* 窗口赛完赛动态（type=59，2026-11-22 张老师需求）：「已完赛！最终成绩：xxx」——
+            成绩=个人窗口内比赛总分（score 域），按比赛计分项格式化（fmtTourScore）；
+            无有效成绩时不带成绩段。个人主页「动态」+关注流可见 */}
+        {news.type === NEWS_TYPE.TOUR_FINISH && news.author && (
+          <>
+            {authorCells}
+            已完赛！{typeof news.details.score === "number" && news.tour ? (
+              <>
+                最终成绩：
+                <b className="news_finish_score">{fmtTourScore(news.tour.metric, news.details.score)}</b>
+              </>
+            ) : null}
+            {news.tour ? (
+              <Link
+                href={`/tournaments/${news.tour.alias || news.reference}`}
+                target="_blank"
+                prefetch={false}
+                className="score news_article"
+                title={news.tour.name}
+              >
+                {news.tour.name}
+              </Link>
+            ) : (
+              <Link href={`/tournaments/${news.reference}`} target="_blank" prefetch={false} className="score news_article">
+                #{news.reference}
+              </Link>
+            )}
+          </>
+        )}
         {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
             渲染块移除——details 的 ti/cond 字段随存量行一并消失 */}
-        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56, 57, 58].includes(news.type) && (
+        {![0, 10, 20, 21, 22, 30, 40, 50, 51, 52, 54, 55, 56, 57, 58, 59].includes(news.type) && (
           <em>{JSON.stringify(news.details)}</em>
         )}
       </td>

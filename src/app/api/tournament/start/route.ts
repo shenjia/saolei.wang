@@ -2,7 +2,9 @@
 // 仅 windowHours>0 且已开赛（start≤now<end）的比赛可手动开赛：
 // · 生成个人随机标识 race（6 位大写字母数字，全局唯一，冲突重试）
 // · 个人窗口 = [now, min(now + windowHours*3600, comp.end)]——窗口整体钳在比赛范围内
-// · 一人一比赛同时只有一个进行中窗口（已有未过期会话 → 直接返回它，幂等）
+// · **一人一比赛只能开赛一次（2026-11-22 张老师定，18875 双会话事故）**：已存在
+//   任意历史会话（含已过期）一律拒绝——原口径「有进行中会话就复用」挡不住
+//   窗口结束后再点「开始比赛」开出第二个窗口（旧成绩按新窗口判窗全部消失）。
 // · 防连点：unique(tournamentId, userId, startTime) 兜底
 // 标识一旦过期即失效：上传挂接判据只认 endTime>now 的会话（matchTourByRace 扩展）。
 
@@ -54,20 +56,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "比赛已结束" }, { status: 400 });
   }
 
-  // 幂等：已有进行中会话直接返回
-  const existed = await prisma.tournamentWindowSession.findFirst({
-    where: { tournamentId: comp.id, userId: BigInt(session.uid), endTime: { gt: BigInt(now) } },
+  // 一次开赛铁律（2026-11-22 张老师定）：任意历史会话存在即拒绝（含已过期），
+  // 绝不生成第二个窗口。进行中会话返回其信息（幂等，防连点双开）；
+  // 已过期会话=已完赛，明确报错不可重开。
+  const anySession = await prisma.tournamentWindowSession.findFirst({
+    where: { tournamentId: comp.id, userId: BigInt(session.uid) },
     select: { race: true, startTime: true, endTime: true },
-    orderBy: { endTime: "desc" },
+    orderBy: { startTime: "desc" },
   });
-  if (existed) {
-    return NextResponse.json({
-      ok: true,
-      race: existed.race,
-      start: Number(existed.startTime),
-      end: Number(existed.endTime),
-      reused: true,
-    });
+  if (anySession) {
+    if (anySession.endTime > BigInt(now)) {
+      // 进行中：直接返回现有会话（幂等）
+      return NextResponse.json({
+        ok: true,
+        race: anySession.race,
+        start: Number(anySession.startTime),
+        end: Number(anySession.endTime),
+        reused: true,
+      });
+    }
+    return NextResponse.json(
+      { ok: false, error: "你已完成本场比赛，不能再次开赛" },
+      { status: 400 }
+    );
   }
 
   const race = await genRace();
@@ -92,20 +103,26 @@ export async function POST(req: Request) {
       reused: false,
     });
   } catch {
-    // 并发连点撞唯一索引 → 读回已存在会话
+    // 并发连点撞唯一索引 → 读回已存在会话（含历史会话：有人抢在前面开成了）
     const again = await prisma.tournamentWindowSession.findFirst({
-      where: { tournamentId: comp.id, userId: BigInt(session.uid), endTime: { gt: BigInt(now) } },
+      where: { tournamentId: comp.id, userId: BigInt(session.uid) },
       select: { race: true, startTime: true, endTime: true },
-      orderBy: { endTime: "desc" },
+      orderBy: { startTime: "desc" },
     });
     if (again) {
-      return NextResponse.json({
-        ok: true,
-        race: again.race,
-        start: Number(again.startTime),
-        end: Number(again.endTime),
-        reused: true,
-      });
+      if (again.endTime > BigInt(now)) {
+        return NextResponse.json({
+          ok: true,
+          race: again.race,
+          start: Number(again.startTime),
+          end: Number(again.endTime),
+          reused: true,
+        });
+      }
+      return NextResponse.json(
+        { ok: false, error: "你已完成本场比赛，不能再次开赛" },
+        { status: 400 }
+      );
     }
     return NextResponse.json({ ok: false, error: "开赛失败，请重试" }, { status: 500 });
   }

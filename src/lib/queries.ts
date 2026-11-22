@@ -51,6 +51,8 @@ import {
 } from "./config";
 import { publishNews } from "./news";
 import { rebuildUserRanksOnce } from "./userrank";
+import { parseScoreConfig } from "./tournament";
+import type { TourMetricKey } from "./tour-metric";
 import { decodeLegacyEntities, scoreTime, videoCommentNotice } from "./format";
 import { liftExpiredBans } from "./ban";
 import { AVATAR_UPLOAD_PREFIX } from "./avatar";
@@ -96,8 +98,18 @@ export interface NewsItem {
   videoOwner: (UserBrief & { titles: TitlePair | null }) | null;
   /** 关注/取关动态的被关注人（2026-11-18）：渲染「关注了 XX」用，其余类型 null */
   followee: (UserBrief & { title: string; classic: { name: string; color: string } | null }) | null;
-  /** 报名参赛动态的比赛主体（2026-11-19 type=58）：渲染「报名参加了 FFFFF」可点跳详情页，其余类型 null */
-  tour: { name: string; shortName: string; alias: string; start: number; end: number } | null;
+  /** 报名/完赛动态的比赛主体（2026-11-19 type=58 / 2026-11-22 type=59）：渲染
+   *  「报名参加了 FFFFF」/「已完赛！最终成绩：xxx」可点跳详情页，其余类型 null；
+   *  metric/desc 供完赛成绩按比赛计分项格式化 */
+  tour: {
+    name: string;
+    shortName: string;
+    alias: string;
+    start: number;
+    end: number;
+    metric: TourMetricKey;
+    desc: boolean;
+  } | null;
 }
 
 export interface RankingUser extends UserBrief {
@@ -708,14 +720,17 @@ export async function getNews(opts: {
       });
     }
   }
-  // 报名参赛动态（type=58，2026-11-19）：reference=比赛 id，批量带出比赛主体
-  // （全称/简称/起止时刻）供渲染「报名参加了 FFFFF」可点跳详情页
-  const tourMap = new Map<number, { name: string; shortName: string; alias: string; start: number; end: number }>();
+  // 报名/完赛动态（type=58/59）：reference=比赛 id，批量带出比赛主体
+  // （全称/简称/起止时刻 + 计分口径——type=59「已完赛！最终成绩」按比赛 metric 格式化）
+  const tourMap = new Map<
+    number,
+    { name: string; shortName: string; alias: string; start: number; end: number; metric: TourMetricKey; desc: boolean }
+  >();
   {
     const tourRefs = [
       ...new Set(
         rows
-          .filter((r) => r.type === NEWS_TYPE.TOUR_JOIN)
+          .filter((r) => r.type === NEWS_TYPE.TOUR_JOIN || r.type === NEWS_TYPE.TOUR_FINISH)
           .map((r) => N(r.reference))
           .filter((v) => v > 0)
       ),
@@ -723,15 +738,18 @@ export async function getNews(opts: {
     if (tourRefs.length) {
       const tours = await prisma.tournament.findMany({
         where: { id: { in: tourRefs.map(BigInt) } },
-        select: { id: true, name: true, shortName: true, alias: true, startTime: true, endTime: true },
+        select: { id: true, name: true, shortName: true, alias: true, startTime: true, endTime: true, scoreMode: true, scoreConfig: true },
       });
       for (const t of tours) {
+        const conf = parseScoreConfig(t.scoreMode, t.scoreConfig);
         tourMap.set(N(t.id), {
           name: t.name,
           shortName: t.shortName,
           alias: t.alias ?? "",
           start: Number(t.startTime),
           end: Number(t.endTime),
+          metric: conf?.metric ?? "time",
+          desc: conf?.desc ?? false,
         });
       }
     }
@@ -761,7 +779,7 @@ export async function getNews(opts: {
       videoOwner: owner,
       followee,
       tour:
-        r.type === NEWS_TYPE.TOUR_JOIN && N(r.reference) > 0
+        (r.type === NEWS_TYPE.TOUR_JOIN || r.type === NEWS_TYPE.TOUR_FINISH) && N(r.reference) > 0
           ? tourMap.get(N(r.reference)) ?? null
           : null,
     };
