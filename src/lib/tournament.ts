@@ -580,6 +580,16 @@ export async function ensureTourEntry(
  * 个人动态照发但不带成绩数值。完赛动态 createTime 锚定窗口 endTime（同「比赛开始/
  * 结束」展示时刻锚定口径：事件补写时刻没有意义，业务时刻才是真相）。
  */
+/** 惰性补写结果（2026-11-23 定时任务用）：started/ended=本轮新补的开始/结束事件；
+ *  finishEvents=新补的比赛侧完赛事件（type=6）数；finishNews=新发的个人完赛动态
+ *  （type=59）数——>0 时调用方（定时任务）可据此触发首页缓存刷新等后续动作。 */
+export interface TourLifecyclePatchResult {
+  started: boolean;
+  ended: boolean;
+  finishEvents: number;
+  finishNews: number;
+}
+
 export async function ensureTourLifecycleEvents(
   c: {
     id: bigint | number | string;
@@ -592,16 +602,21 @@ export async function ensureTourLifecycleEvents(
     includeLevels?: string;
   },
   now: number
-): Promise<void> {
+): Promise<TourLifecyclePatchResult> {
   const cid = BigInt(c.id);
   const start = Number(c.startTime);
   const end = Number(c.endTime);
+  // 补写计数（2026-11-23 定时任务用：finishNews>0 表示本轮新发了个人完赛动态）
+  const result: TourLifecyclePatchResult = { started: false, ended: false, finishEvents: 0, finishNews: 0 };
   if (now >= start) {
     const hit = await prisma.tournamentEvent.findFirst({
       where: { tournamentId: cid, type: TOUR_EVENT_STARTED },
       select: { id: true },
     });
-    if (!hit) await addTourEvent(Number(c.id), TOUR_EVENT_STARTED);
+    if (!hit) {
+      await addTourEvent(Number(c.id), TOUR_EVENT_STARTED);
+      result.started = true;
+    }
     // 统一标识自动生成（2026-11-19 张老师定：比赛开始时标识还留空则随机生成）。
     // 5 位数字+大小写字母（同后台 genUniqueTourCode 形态），唯一索引兜底重试。
     // 只在「进行中」首次发现时生成一次：已生成（code 非空）即跳过，恒定 O(1)。
@@ -628,7 +643,10 @@ export async function ensureTourLifecycleEvents(
       where: { tournamentId: cid, type: TOUR_EVENT_ENDED },
       select: { id: true },
     });
-    if (!hit) await addTourEvent(Number(c.id), TOUR_EVENT_ENDED);
+    if (!hit) {
+      await addTourEvent(Number(c.id), TOUR_EVENT_ENDED);
+      result.ended = true;
+    }
   }
   // 窗口赛完赛动态补写（2026-11-22 张老师定，惰性）：全部已过期且尚无 type=6 的
   // 个人会话一次循环补齐。⚠️ 分支条件只看 windowHours>0——个人窗口结束通常早于
@@ -678,6 +696,7 @@ export async function ensureTourLifecycleEvents(
       });
       const win = vids.length ? await computeWindowScore(cid, s.userId, vids, scoreMeta) : null;
       await addTourEvent(Number(c.id), TOUR_EVENT_FINISHED, Number(s.userId), Number(s.endTime));
+      result.finishEvents += 1;
       // 完赛动态落库（2026-11-22 首页口径改造）：
       // · 有成绩（含保底补足的总分）→ details={score, floorOnly}——floorOnly=true 表示
       //   总分全是保底凑的（实盘 0 局），渲染照常带成绩但首页新闻流按此标记过滤；
@@ -693,9 +712,11 @@ export async function ensureTourLifecycleEvents(
           createTime: Number(s.endTime),
           details: { score: win.score, floorOnly: win.floorOnly },
         });
+        result.finishNews += 1;
       }
     }
   }
+  return result;
 }
 
 /** 窗口赛个人总分（完赛动态用）：与 getTourRanking / getTourMyResult 完全同口径——
