@@ -25,10 +25,11 @@ import pymysql
 
 
 def connect():
-    """连接约定同 fix-record-ban-snapshots.py：SAOLEI_DB_* env（本地默认 root@localhost）。"""
+    """连接约定同 scripts/sync/*.py：SAOLEI_DB_HOST/PORT/USER/PASSWORD/NAME env
+    （本地默认 root@localhost 免密；生产走 SAOLEI_DB_PASSWORD）。"""
     host = os.environ.get("SAOLEI_DB_HOST", "localhost")
     user = os.environ.get("SAOLEI_DB_USER", "root")
-    password = os.environ.get("SAOLEI_DB_PASS", "")
+    password = os.environ.get("SAOLEI_DB_PASSWORD", "")
     name = os.environ.get("SAOLEI_DB_NAME", "saolei")
     port = int(os.environ.get("SAOLEI_DB_PORT", "3306"))
     return pymysql.connect(
