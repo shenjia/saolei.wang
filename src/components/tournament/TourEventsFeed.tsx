@@ -20,6 +20,7 @@ import { TitleBadge } from "@/components/TitleBadge";
 import { DeltaArrow } from "@/components/RankingRows";
 import { compEventText, type TourEventRow } from "@/lib/tournament";
 import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
+import { TourCalcTip } from "@/components/tournament/TourCalcTip";
 import { replaceWithoutJump } from "@/components/useNoJump";
 
 export function TourEventsFeed({
@@ -119,17 +120,13 @@ export function TourEventsFeed({
                   {e.type === 1 || e.type === 3 || e.type === 5 ? (
                     <b className="comp_ev_official">{compEventText(e.type)}</b>
                   ) : e.type === 6 ? (
-                    /* 窗口赛完赛事件（2026-11-22 张老师定）：「已完赛」金色（同官方事件）+
-                       「最终成绩」暗灰标签 + 成绩亮灰加粗——窗口结束时刻惰性补写，
-                       动态行带该玩家个人总分 */
+                    /* 窗口赛完赛事件（2026-11-22 张老师定）：「已完赛」金色（同官方事件）；
+                       「最终成绩」标签+成绩数字拆到行右独立列（2026-11-22 气泡改造，
+                       见下方 comp_ev_score 注释——原省略号容器会裁掉气泡）；
+                       无有效成绩（totalMs=null）标签与数字一并不出（同原口径） */
                     <>
                       <b className="comp_ev_finished">{compEventText(e.type)}</b>
-                      {e.totalMs !== null && (
-                        <>
-                          <span className="comp_ev_finish_label">最终成绩</span>
-                          <b className="comp_ev_finish_score">{fmtTourScore(scoreMetric, e.totalMs)}</b>
-                        </>
-                      )}
+                      {e.totalMs !== null && <span className="comp_ev_finish_label">最终成绩</span>}
                     </>
                   ) : e.type === 4 ? (
                     /* 成绩动态动作文本暗灰（2026-11-22 张老师定）：
@@ -138,34 +135,42 @@ export function TourEventsFeed({
                   ) : (
                     compEventText(e.type)
                   )}
-                  {/* 成绩动态（2026-11-18 深夜四轮定）：整段比赛同人成绩动态并成一行——
-                      成绩亮灰=当时比赛总成绩；提升箭头方向按比赛 metric/desc 解释
-                      （2026-11-21：desc=true 越大越好 → 提升显示 ▲+差值） */}
-                  {e.type === 4 && (
+                  {/* 成绩数字+提升幅度拆到行右独立列（2026-11-22 气泡改造），此处不再渲染 */}
+                </span>
+              </span>
+              {/* 成绩数字独立列（2026-11-22 张老师需求「动态每条成绩数字 hover 出计算过程
+                  气泡，同排行榜前10；包括最终成绩数字」）：
+                  原先成绩在 comp_ev_main（overflow:hidden 省略号容器）内会被裁掉，
+                  拆出来放 flex 兄弟列——顺带根治窄屏下省略号吃掉成绩数字的问题。
+                  锚点类 comp_score_tip 复用排行榜既有 CSS 触发组（position:relative +
+                  hover 时气泡 display:flex），气泡 absolute 上方弹出、pointer-events:none。
+                  · type=4：当时比赛总成绩 + 提升幅度（方向按比赛 metric/desc 解释）；
+                  · type=6：个人窗口内最终成绩（完赛快照）。
+                  calc=computePlayerScores 产出的各级别明细，无成绩（totalMs=null）不挂。 */}
+              {(e.type === 4 || e.type === 6) && e.totalMs !== null ? (
+                <span className="comp_ev_score">
+                  <b className={"comp_score_tip " + (e.type === 4 ? "comp_ev_total" : "comp_ev_finish_score")}>
+                    {fmtTourScore(scoreMetric, e.totalMs)}
+                    {e.calc && e.calc.length > 0 && (
+                      <TourCalcTip calc={e.calc} metric={scoreMetric} score={e.totalMs} />
+                    )}
+                  </b>
+                  {e.type === 4 && e.prevTotalMs !== null && (
                     <>
-                      {/* 成绩不可点（张老师 2026-11-19 反馈）：纯文本亮灰加粗；
-                          ×N 盘数标注废弃（2026-11-19 张老师定：无信息量） */}
-                      {e.totalMs !== null && (
-                        <b className="comp_ev_total">{fmtTourScore(scoreMetric, e.totalMs)}</b>
-                      )}
-                      {e.prevTotalMs !== null && e.totalMs !== null && (
-                        <>
-                          {scoreDesc ? e.totalMs > e.prevTotalMs : e.totalMs < e.prevTotalMs ? (
-                            <span className="delta">
-                              <DeltaArrow dir={scoreDesc ? "up" : "down"} />
-                              {Math.abs(e.totalMs - e.prevTotalMs) / 1000 <= 0
-                                ? "0"
-                                : (Math.abs(e.totalMs - e.prevTotalMs) / 1000)
-                                    .toFixed(3)
-                                    .replace(/\.?0+$/, "")}
-                            </span>
-                          ) : null}
-                        </>
-                      )}
+                      {scoreDesc ? e.totalMs > e.prevTotalMs : e.totalMs < e.prevTotalMs ? (
+                        <span className="delta">
+                          <DeltaArrow dir={scoreDesc ? "up" : "down"} />
+                          {Math.abs(e.totalMs - e.prevTotalMs) / 1000 <= 0
+                            ? "0"
+                            : (Math.abs(e.totalMs - e.prevTotalMs) / 1000)
+                                .toFixed(3)
+                                .replace(/\.?0+$/, "")}
+                        </span>
+                      ) : null}
                     </>
                   )}
                 </span>
-              </span>
+              ) : null}
               <span className="comp_ev_time">
                 <RelTime time={e.createTime} />
               </span>

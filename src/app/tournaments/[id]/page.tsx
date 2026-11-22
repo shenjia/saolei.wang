@@ -31,6 +31,7 @@ import { SignupEntryBox } from "@/components/tournament/SignupEntryBox";
 import { scoreTime } from "@/lib/format";
 import { LEVEL_NAMES, VIDEO_LEVELS, parseVideoListOrder, parseVideoListDir, type Level, type VideoLevel, type VideoListOrder, type VideoListDir } from "@/lib/config";
 import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
+import { TourCalcTip } from "@/components/tournament/TourCalcTip";
 import {
   ensureTourLifecycleEvents,
   fmtPrize,
@@ -48,46 +49,6 @@ export const dynamic = "force-dynamic";
 
 const TOUR_EVENT_PAGE_SIZE = 15;
 const COMP_VIDEO_PAGE_SIZE = 20;
-/* 计算过程气泡级别配色（2026-11-22 张老师定）：初级绿/中级橙/高级金，同 .comp_lv_plain */
-const LV_TIP_COLOR: Record<string, string> = {
-  beg: "comp_calc_beg",
-  int: "comp_calc_int",
-  exp: "comp_calc_exp",
-};
-
-/** 计算过程气泡（2026-11-22 张老师需求：右栏「成绩」板块的最好成绩 hover 也出
- *  同款气泡）——排行榜与我的成绩两处共用；各级别一行、级别名绿/橙/金，
- *  末行总计金色，保底直接写在过程中。渲染结构同 .comp_calc 实元素气泡。 */
-function TourCalcTip({
-  calc,
-  metric,
-  score,
-}: {
-  calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
-  metric: TourMetricKey;
-  score: number;
-}) {
-  return (
-    <span className="comp_calc">
-      {calc.map((seg) => {
-        const lvName = seg.lv in LEVEL_NAMES ? LEVEL_NAMES[seg.lv as Level] : seg.lv;
-        const fillPart =
-          seg.fill > 0 && seg.floorScore > 0
-            ? ` +${seg.fill}×保底${fmtTourScore(metric, seg.floorScore)}`
-            : "";
-        return (
-          <span key={seg.lv} className="comp_calc_row">
-            <i className={"comp_calc_lv" + (seg.lv in LV_TIP_COLOR ? ` ${LV_TIP_COLOR[seg.lv]}` : "")}>
-              {lvName}
-            </i>
-            {`${seg.n}盘 ${fmtTourScore(metric, seg.real)}${fillPart}`}
-          </span>
-        );
-      })}
-      <span className="comp_calc_row comp_calc_total">总计 {fmtTourScore(metric, score)}</span>
-    </span>
-  );
-}
 
 export async function generateMetadata({
   params,

@@ -17709,12 +17709,19 @@ body #header .nav li a.nav_tour_upcoming:hover,
    与亮灰加粗的成绩数值拉开层级，数值仍是行内视觉重心 */
 .comp_ev_score_action { color: #939387; }
 /* 成绩动态具体数值（2026-11-18 深夜四轮定）：总成绩亮灰加粗（同首页新闻破纪录新成绩）、
-   盘数 ×N 暗灰小字、提升幅度金色（delta 同首页 #fdc61a 带小三角） */
+   盘数 ×N 暗灰小字、提升幅度金色（delta 同首页 #fdc61a 带小三角）。
+   2026-11-22 气泡改造：数值已拆到 comp_ev_score 独立列，margin-left 置 0（行 gap 承担） */
 .comp_ev_count { color: #939387; margin-left: 4px; }
-.comp_ev_total { color: #b1b1a4; font-weight: 700; margin-left: 4px; text-decoration: none; }
+.comp_ev_total { color: #b1b1a4; font-weight: 700; margin-left: 0; text-decoration: none; }
 .comp_ev_total:hover { color: #a6e22e; }
 .comp_ev_row .delta { color: #fdc61a; font-size: 13px; margin-left: 4px; }
 .comp_ev_row .delta svg.d_arrow { display: inline-block; vertical-align: -1px; margin-right: 2px; }
+/* 成绩数字独立列（2026-11-22 张老师需求「动态每条成绩数字 hover 出计算过程气泡，
+   同排行榜前10；包括最终成绩数字」）：type=4/6 的成绩数字+提升幅度从 comp_ev_main
+   （overflow:hidden 省略号容器）拆出成 flex 兄弟列——气泡不被裁、窄屏省略号
+   只截文本段；flex-shrink:0 保成绩永完整可见。 */
+.comp_ev_score { flex-shrink: 0; white-space: nowrap; }
+.comp_ev_score .delta { display: inline-block; }
 /* 个人动态「已完赛{简称}！最终成绩为 xxx」（type=59，2026-11-22 19:41 张老师定）：
    ①简称保持正文观感——回 td 基准 14px、去加粗（legacy #news .score 是 16px bold，
      news_article 只改了色，简称会跟着变 16px 粗体，需 (1,4,0) 提权压回）；
@@ -17736,8 +17743,10 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_finished { color: #fdc61a; font-weight: 700; }
 /* 完赛事件「最终成绩」标签（type=6，2026-11-22 张老师定）：暗灰弱化、数值亮灰加粗 */
 .comp_ev_finish_label { color: #939387; margin-left: 4px; }
-/* 完赛事件附带的最终成绩数值：亮灰加粗（同 .comp_ev_total 口径） */
-.comp_ev_finish_score { color: #b1b1a4; font-weight: 700; margin-left: 4px; }
+/* 完赛事件附带的最终成绩数值：亮灰加粗（同 .comp_ev_total 口径）。
+   2026-11-22 气泡改造：数值已拆到 comp_ev_score 独立列，margin-left 失去
+   「与标签同段」语义；左距改由行 gap 10px 承担，置 0 免双重间距 */
+.comp_ev_finish_score { color: #b1b1a4; font-weight: 700; margin-left: 0; }
 /* 动态行军衔徽章小号（2026-11-18 晚定：同首页动态行紧凑排布） */
 .comp_ev_row .title { font-size: 12px; line-height: 18px; margin-right: 4px; }
 .comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; }
