@@ -1596,10 +1596,13 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
 }
 
 /** 比赛窗口内全部参赛录像的算分底座（2026-11-22 练习页比赛模式两行统计需求）：
- *  窗口赛按 sessWin（调用方已校验归属）否则全局窗（集体赛不过滤/有会话记录的
- *  窗口赛按各玩家会话窗，getTourRanking 同判据）；返回全量 PlayerScore Map +
- *  本人明细——SSR 快照（getMyScoreSnapshot）与传盘后刷新接口（my-score route）
- *  共用，保证两路分数/名次口径恒一致。 */
+ *  判窗与 getTourRanking 完全同源（集体赛不过滤；窗口赛按**各玩家自己的**会话窗
+ *  收录像）——sessWin 只是本人窗口的权威注入（race 归属调用方已校验），仅覆盖
+ *  本人 uid 的判窗，绝不把本人窗套到全量行集上（2026-11-22 排名虚高 bug：旧写法
+ *  拿本人窗滤了所有玩家的录像，全量 Map 只剩窗口重叠者，标题行「第 2」vs 详情页
+ *  「第 18」案）；返回全量 PlayerScore Map + 本人明细——SSR 快照
+ *  （getMyScoreSnapshot）与传盘后刷新接口（my-score route）共用，保证两路
+ *  分数/名次口径恒一致。 */
 export async function getMyScoreValues(
   compId: number,
   uid: number,
@@ -1623,31 +1626,34 @@ export async function getMyScoreValues(
   if (!comp) return null;
   const conf = parseScoreConfig(comp.scoreMode ?? "", comp.scoreConfig ?? "");
   if (!conf) return null;
-  // 判窗：调用方传了会话窗直接用；否则窗口赛有会话记录时按各玩家会话窗
-  //（getTourRanking 同判据——集体赛不过滤）
+  // 判窗（getTourRanking 完全同源）：窗口赛有会话记录时**每个玩家按自己的会话窗**
+  // 收录像；sessWin=本人窗口的权威注入（?race= 调用方已校验归属），只覆盖本人
+  // uid 的窗——全量算分（名次分母）绝不能拿本人窗滤别人（2026-11-22 排名虚高案）
   const rows = await prisma.video.findMany({
     where: { tournamentId: BigInt(compId), status: { not: 0 } },
     select: { id: true, user: true, level: true, createTime: true },
   });
   let inWin = rows;
-  if (sessWin) {
+  // 会话窗全量拉取只看 windowHours（sessWin 场景同样需要别人的窗——本人窗由
+  // sessWin 覆盖，绝不能因此短路掉全量会话查询，否则别人全部判窗外名次恒 1）
+  const sessionWindows = comp.windowHours
+    ? await prisma.tournamentWindowSession.findMany({
+        where: { tournamentId: BigInt(compId) },
+        select: { userId: true, startTime: true, endTime: true },
+      })
+    : [];
+  if (sessWin || sessionWindows.length > 0) {
+    const sessBy = new Map<number, { s: number; e: number }>(
+      sessionWindows.map((s) => [Number(s.userId), { s: Number(s.startTime), e: Number(s.endTime) }])
+    );
     inWin = rows.filter((r) => {
+      const uidN = Number(r.user);
+      // 本人：调用方注入的权威窗优先（唯一会话由 start 路由「一次开赛铁律」保证）
+      const w = uidN === uid && sessWin ? { s: sessWin.start, e: sessWin.end } : sessBy.get(uidN);
+      if (!w) return false;
       const t = Number(r.createTime);
-      return t >= sessWin.start && t <= sessWin.end;
+      return t >= w.s && t <= w.e;
     });
-  } else if (comp.windowHours) {
-    const sessionWindows = await prisma.tournamentWindowSession.findMany({
-      where: { tournamentId: BigInt(compId) },
-      select: { userId: true, startTime: true, endTime: true },
-    });
-    if (sessionWindows.length > 0) {
-      const sessBy = new Map(sessionWindows.map((s) => [Number(s.userId), s]));
-      inWin = rows.filter((r) => {
-        const s = sessBy.get(Number(r.user));
-        const t = Number(r.createTime);
-        return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
-      });
-    }
   }
   const levelMap = new Map(inWin.map((r) => [r.id, r.level]));
   const infos = await prisma.videoInfo.findMany({
