@@ -117,6 +117,10 @@ export function TourEventsFeed({
                   {/* 官方事件（报名开始/正式开始/正式结束）金色渲染（张老师 2026-11-18 晚定） */}
                   {e.type === 1 || e.type === 3 || e.type === 5 ? (
                     <b className="comp_ev_official">{compEventText(e.type)}</b>
+                  ) : e.type === 4 ? (
+                    /* 成绩动态动作文本暗灰（2026-11-22 张老师定）：
+                       与亮灰加粗的成绩数值区分层级，只弱化动作、数值仍突出 */
+                    <span className="comp_ev_score_action">{compEventText(e.type)}</span>
                   ) : (
                     compEventText(e.type)
                   )}

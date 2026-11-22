@@ -17657,6 +17657,9 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_user { color: #f8f8f2; font-weight: 700; text-decoration: none; margin-right: 4px; }
 .comp_ev_user:hover { color: #a6e22e; }
 .comp_ev_text { color: #b1b1a4; }
+/* 成绩动态动作文本（「更新了成绩」）暗灰（2026-11-22 张老师定）：
+   与亮灰加粗的成绩数值拉开层级，数值仍是行内视觉重心 */
+.comp_ev_score_action { color: #939387; }
 /* 成绩动态具体数值（2026-11-18 深夜四轮定）：总成绩亮灰加粗（同首页新闻破纪录新成绩）、
    盘数 ×N 暗灰小字、提升幅度金色（delta 同首页 #fdc61a 带小三角） */
 .comp_ev_count { color: #939387; margin-left: 4px; }
