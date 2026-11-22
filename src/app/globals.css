@@ -17925,6 +17925,20 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_section h2 { margin: 0 0 10px; }
 .comp_section .comp_video_table { margin: 0 -8px; width: calc(100% + 16px); }
 .comp_section_empty { color: #75715e; font-size: 13px; line-height: 22px; padding: 6px 0; }
+/* 移动端（≤768，2026-11-23 张老师报「筛选器不见了/表格挤出容器」）：
+   病灶＝录像表自然宽 890（.video_table 移动端 min-width）在 .comp_section 内溢出，
+   桌面端负 margin 出血（margin 0 -8px + width calc(100%+16px)）又把溢出恶化；
+   且若横滑容器是整个 .comp_section，滑表格右列时「录像」标题+tabs+搜索框+翻页
+   会被一起滚出左缘（张老师截图「筛选器不见了」的真正机制）。
+   修复：TSX 侧表格外包一层 .comp_video_scroll 只滑表格；此处撤出血、恢复普通块级流 */
+@media (max-width: 768px) {
+  .comp_section .comp_video_table { margin: 0; width: 100%; }
+}
+/* 横滑包裹层：仅窄屏生效（桌面 .comp_video_table 的负出血直接贴卡片内缘） */
+.comp_video_scroll { }
+@media (max-width: 768px) {
+  .comp_video_scroll { overflow-x: auto; }
+}
 
 /* 比赛计分项列（2026-11-22 张老师需求：计分项非 time/3bv/s/stnb 时录像表 3BV/s+STNB
    两列替换为一列——惜步杯显 Crossings）。数字加粗与数字列同语言，表头居中由 th.c 覆盖 */

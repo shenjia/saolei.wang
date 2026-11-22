@@ -216,7 +216,11 @@ export function TourVideosFeed({
         </div>
       </div>
       {videos.length > 0 ? (
-        <table ref={listRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table comp_video_table">
+        /* 窄屏横滑包裹层（2026-11-23 移动端修复）：只包表格不包标题行——
+           横滑容器若是整个 .comp_section，滑表格右列时「录像」标题+级别 tabs+搜索框
+           会一起滚出左缘（张老师截图「筛选器不见了」根因）；翻页滑条同样保持固定 */
+        <div className="comp_video_scroll">
+          <table ref={listRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table comp_video_table">
           <VideoHead
             hideIoe
             tourMetric={tourMetric}
@@ -247,7 +251,8 @@ export function TourVideosFeed({
               <VideoRowLine key={v.id} video={v} hideIoe tourMetric={tourMetric} highlight={order !== "id" ? order : undefined} />
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       ) : (
         <div className="comp_section_empty">
           {level !== "all" ? `该级别还没有参赛录像` : "还没有参赛录像"}
