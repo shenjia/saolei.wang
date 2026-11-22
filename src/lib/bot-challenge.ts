@@ -137,8 +137,12 @@ function validSession(req: NextRequest): boolean {
  * 2026-11-22 补 QQ 卡片抓取器（QQEX/QQWebContentView/QQAppId）：QQ 转发链接时卡片
  * 爬虫跟进匿名闸 307 落在 /bot/challenge（QQ 爬虫不跟跳转也不存 cookie），卡片标题
  * 读成「扫雷验证 | 扫雷网…」——张老师截图实证 /user/2418。出口 221.195.236.x 腾讯段，
- * 量小可信，豁免后卡片读回真实页面 title。 */
-const SEO_BOT_UA_RE = /Googlebot|Bingbot|Baiduspider|Sogou|YisouSpider|QQEX|QQWebContentView|QQAppId/i;
+ * 量小可信，豁免后卡片读回真实页面 title。
+ * 2026-11-22 补 MicroMessenger（张老师指令）：微信转发卡片爬虫与内置浏览器 UA 全系
+ * 带 MicroMessenger（卡片爬虫老版本形态 MicroMessenger/6.x、WebView MicroMessenger/8.x、
+ * QQ+微信双标签裸词形态），一个 token 全覆盖。副作用＝微信内打开站点的真人也免验证
+ * ——张老师知悉拍板（微信是分享拉新入口，给真人弹扫雷验证弊大于利）。 */
+const SEO_BOT_UA_RE = /Googlebot|Bingbot|Baiduspider|Sogou|YisouSpider|QQEX|QQWebContentView|QQAppId|MicroMessenger/i;
 
 export function canUseRsc(req: NextRequest): boolean {
   if (SEO_BOT_UA_RE.test(req.headers.get("user-agent") ?? "")) return true;
