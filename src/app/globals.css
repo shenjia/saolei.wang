@@ -17433,6 +17433,25 @@ body #header .nav li a.vs_new_hint,
   color: #a6e22e;
 }
 
+/* 「比赛」导航状态色（2026-11-22 张老师需求）：有进行中比赛绿 / 只有未开始金；
+   服务端 getTourNavStatus 判定（60s 缓存），桌面/移动共用类名。
+   特异性压过导航基础灰（桌面 body #header .nav li a 96 行 / 移动端 .mn_menu li a
+   7218 行）；hover 统一转绿（金/绿 hover 同色零跳变，同 vs_new_hint 判例） */
+body #header .nav li a.nav_tour_active,
+.mn_menu li a.nav_tour_active {
+  color: #a6e22e;
+}
+body #header .nav li a.nav_tour_upcoming,
+.mn_menu li a.nav_tour_upcoming {
+  color: #fdc61a;
+}
+body #header .nav li a.nav_tour_active:hover,
+body #header .nav li a.nav_tour_upcoming:hover,
+.mn_menu li a.nav_tour_active:hover,
+.mn_menu li a.nav_tour_upcoming:hover {
+  color: #a6e22e;
+}
+
 /* ==================== 比赛页（2026-11-13 张老师需求） ====================
    版式：#page.two_columns 双栏壳。左=比赛列表（一比赛一 .box）+ Pager；
    右=玩家卡片 +「我的统计」（登录态）+「全网统计」。

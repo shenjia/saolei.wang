@@ -37,8 +37,9 @@ const SITE_LINKS: { href: string; label: string; loginOnly?: boolean }[] = [
   { href: "/ranking", label: "排行" },
   { href: "/video", label: "录像" },
   { href: "/online", label: "练习" },
-  // 比赛（/tournaments，2026-11-13 张老师需求公开页）：先隐藏入口，数据处理完再显示（把上行注释解开即可）
-  // { href: "/tournaments", label: "比赛" },
+  // 比赛（/tournaments，2026-11-13 张老师需求公开页）；2026-11-22 起显示，
+  // 着色由 layout 服务端传入 tourNav（进行中绿/未开始金，见 mn_site 渲染处）
+  { href: "/tournaments", label: "比赛" },
   { href: "/vs", label: "胜负", loginOnly: true },
   { href: "/bbs", label: "论坛" },
   { href: "/page/guide", label: "教程" },
@@ -68,7 +69,14 @@ function useOutsideClose(onClose: () => void) {
   return ref;
 }
 
-export function MobileNav({ user }: { user: MobileNavUser | null }) {
+export function MobileNav({
+  user,
+  tourNav,
+}: {
+  user: MobileNavUser | null;
+  /** header「比赛」导航态（2026-11-22 张老师需求）：layout 服务端传入，着色同桌面 */
+  tourNav?: "active" | "upcoming" | null;
+}) {
   const [siteOpen, setSiteOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const siteRef = useOutsideClose(() => setSiteOpen(false));
@@ -120,7 +128,13 @@ export function MobileNav({ user }: { user: MobileNavUser | null }) {
                 <Link
                   prefetch={false}
                   href={l.href}
-                  className={l.href === "/vs" && vsNew ? "vs_new_hint" : undefined}
+                  className={
+                    l.href === "/tournaments" && tourNav
+                      ? `nav_tour_${tourNav}`
+                      : l.href === "/vs" && vsNew
+                        ? "vs_new_hint"
+                        : undefined
+                  }
                   onClick={l.href === "/vs" ? dismissVsNew : undefined}
                 >
                   {l.href === "/titles" ? <SystemText /> : l.label}

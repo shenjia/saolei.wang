@@ -9,6 +9,7 @@
 // · 成绩采集为下一期口径：本期图表无数据源，渲染占位；全网统计「录像数量」恒 0。
 
 import { prisma } from "@/lib/db";
+import { unstable_cache } from "next/cache";
 import { getVideosByIds, type VideoListItem } from "@/lib/queries";
 import { dualTitles } from "@/lib/title-system";
 import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
@@ -393,6 +394,33 @@ export async function getTourMyStats(uid: number): Promise<TourMyStats> {
   const joined = await prisma.tournamentEntry.count({ where: { userId: BigInt(uid) } });
   return { joined, bestRank: null, prize: 0 }; // TODO 成绩采集期接入：bestRank / prize
 }
+
+/** header「比赛」导航态（2026-11-22 张老师需求）：全站顶栏入口着色——
+ *  有进行中比赛 → 绿；无进行中但有未开始 → 金；都没有 → 正常灰。
+ *  只查进行时间段内的行（startTime/endTime 有联合索引），判定在 JS 侧完成 */
+export async function getTourNavStatus(): Promise<"active" | "upcoming" | null> {
+  return fetchTourNavStatus();
+}
+
+const fetchTourNavStatus = unstable_cache(
+  async (): Promise<"active" | "upcoming" | null> => {
+    const now = Math.floor(Date.now() / 1000);
+    // 进行中（now ∈ [start,end)）∪ 24h 内将开赛/已完赛的行都命不中的空区间查询——
+    // 大部分时间命中 0 行，索引 (startTime,endTime) 覆盖
+    const rows = await prisma.tournament.findMany({
+      where: { startTime: { lte: now }, endTime: { gt: now } },
+      select: { id: true },
+    });
+    if (rows.length > 0) return "active";
+    const upcoming = await prisma.tournament.findFirst({
+      where: { startTime: { gt: now } },
+      select: { id: true },
+    });
+    return upcoming ? "upcoming" : null;
+  },
+  ["tour-nav-status-v1"],
+  { revalidate: 60 } // 分钟级状态变化足够；全站顶栏共用，避免每请求打 DB
+);
 
 // ---------- 动态（2026-11-13 二期：详情页「动态」板块）----------
 
