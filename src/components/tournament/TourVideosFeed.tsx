@@ -156,60 +156,59 @@ export function TourVideosFeed({
     });
   }
 
-  /** 级别筛选 tabs（仅比赛收录级别，全部 + 各级别）。19:24 张老师反馈「筛选器跑
-   *  第二行，应在『录像』右边同行」——变量化后由父层经 render-prop 放进
-   *  comp_sec_head 标题行（h2 与搜索框之间），不在壳内独立成行 */
+  /** 级别筛选 tabs（仅比赛收录级别，全部 + 各级别）。
+   *  20:01 张老师定「紧靠 Title，跟首页录像区筛选一样」——弃 ul.tabs 小版式，
+   *  改首页 .news_tabs.ranking_tabs 大号版同构（div 内平铺 a/span.current，
+   *  底部细线 9px 18px 内距），紧贴 h2 右侧（comp_sec_head flex-end 底线对齐） */
   const levelTabs =
     levels.length > 0 ? (
-      <ul className="tabs comp_video_tabs" data-name="level">
+      <div className="news_tabs ranking_tabs">
         {[["all", "全部"] as [string, string], ...levels.map((l) => [l, LEVEL_LABELS[l]] as [string, string])].map(
           ([value, label]) =>
             value === level ? (
-              <li key={value} className="current">
-                <em className="active">{label}</em>
-              </li>
+              <span key={value} className="current">
+                {label}
+              </span>
             ) : (
-              <li key={value}>
-                <a
-                  href={tourUrl({ level: value })}
-                  onClick={(e) => {
-                    // 就地软导航（RSC 换入服务端新数据，页码归 1）；修饰键/中键走真实链接兜底
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-                    e.preventDefault();
-                    startTransition(() => {
-                      router.push(tourUrl({ level: value }), { scroll: false });
-                    });
-                  }}
-                >
-                  {label}
-                </a>
-              </li>
+              <a
+                key={value}
+                href={tourUrl({ level: value })}
+                onClick={(e) => {
+                  // 就地软导航（RSC 换入服务端新数据，页码归 1）；修饰键/中键走真实链接兜底
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  startTransition(() => {
+                    router.push(tourUrl({ level: value }), { scroll: false });
+                  });
+                }}
+              >
+                {label}
+              </a>
             )
         )}
-      </ul>
+      </div>
     ) : null;
 
   return (
     <>
-      {/* 标题行（19:24 张老师定：tabs 与「录像」同行——h2 左、tabs+搜索框右一组）。
+      {/* 标题行（20:01 张老师定：tabs 紧靠「录像」标题，同首页 .news_head 形态——
+          h2 左、tabs 挨着、搜索框贴行尾；flex-end 底线对齐）。
           RSC 禁函数传参（render-prop 500 实证），标题行整个搬进本 client 壳；
           VideoSearch 同为 client 组件直接渲染，回显数据由页面 props 传入 */}
       <div className="comp_sec_head">
         <h2>录像</h2>
-        <div className="comp_head_right">
-          {levelTabs}
-          <div className="video_search">
-            <VideoSearch
-              scope="tour"
-              tourId={compId}
-              level=""
-              order="id"
-              author={vAuthor}
-              authorName={searchAuthorName ?? ""}
-              time={vTime}
-              bv={vBv != null ? String(vBv) : undefined}
-            />
-          </div>
+        {levelTabs}
+        <div className="video_search">
+          <VideoSearch
+            scope="tour"
+            tourId={compId}
+            level=""
+            order="id"
+            author={vAuthor}
+            authorName={searchAuthorName ?? ""}
+            time={vTime}
+            bv={vBv != null ? String(vBv) : undefined}
+          />
         </div>
       </div>
       {videos.length > 0 ? (
