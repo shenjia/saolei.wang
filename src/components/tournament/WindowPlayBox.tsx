@@ -125,7 +125,7 @@ export function WindowPlayBox({
       <div className="win_play_box">
         <button className="win_start_btn" onClick={startRace} disabled={starting}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/stopwatch-icon.png" alt="" width={22} height={22} />
+          <img src="/images/stopwatch-icon.png" alt="" width={28} height={28} />
           开始比赛<span className="win_hours_sub">（总计 {windowHours} 小时）</span>
         </button>
       </div>
