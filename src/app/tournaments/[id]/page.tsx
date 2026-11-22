@@ -56,6 +56,40 @@ const LV_TIP_COLOR: Record<string, string> = {
   exp: "comp_calc_exp",
 };
 
+/** 计算过程气泡（2026-11-22 张老师需求：右栏「成绩」板块的最好成绩 hover 也出
+ *  同款气泡）——排行榜与我的成绩两处共用；各级别一行、级别名绿/橙/金，
+ *  末行总计金色，保底直接写在过程中。渲染结构同 .comp_calc 实元素气泡。 */
+function TourCalcTip({
+  calc,
+  metric,
+  score,
+}: {
+  calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
+  metric: TourMetricKey;
+  score: number;
+}) {
+  return (
+    <span className="comp_calc">
+      {calc.map((seg) => {
+        const lvName = seg.lv in LEVEL_NAMES ? LEVEL_NAMES[seg.lv as Level] : seg.lv;
+        const fillPart =
+          seg.fill > 0 && seg.floorScore > 0
+            ? ` +${seg.fill}×保底${fmtTourScore(metric, seg.floorScore)}`
+            : "";
+        return (
+          <span key={seg.lv} className="comp_calc_row">
+            <i className={"comp_calc_lv" + (seg.lv in LV_TIP_COLOR ? ` ${LV_TIP_COLOR[seg.lv]}` : "")}>
+              {lvName}
+            </i>
+            {`${seg.n}盘 ${fmtTourScore(metric, seg.real)}${fillPart}`}
+          </span>
+        );
+      })}
+      <span className="comp_calc_row comp_calc_total">总计 {fmtTourScore(metric, score)}</span>
+    </span>
+  );
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -227,7 +261,11 @@ export default async function CompetitionDetailPage({
           {session && <UserPanel userId={session.uid} hideRadar />}
 
           {/* 成绩（登录态；三轮定「我的成绩」→「成绩」，标题 h2 与站内右栏板块一致）。
-              未报名不显示（张老师 2026-11-18 详情页反馈） */}
+              未报名不显示（张老师 2026-11-18 详情页反馈）。
+              最好成绩（2026-11-22 张老师定）：展示比赛总分（原单盘最好口径与排行榜
+              排序值/名次对不上，且图表头部「最好成绩」本就是总分口径），hover 出与
+              排行榜完全一致的计算过程气泡（复用 .comp_rank_time:hover .comp_calc 触发，
+              锚点加 comp_score_tip 类保持同款样式） */}
           {session && myResult?.joined && (
             <div className="box comp_stats">
               <h2>成绩</h2>
@@ -241,7 +279,16 @@ export default async function CompetitionDetailPage({
               </div>
               <div className="comp_stat_row">
                 <span>最好成绩</span>
-                <b>{myResult.bestTime === null ? "—" : fmtTourScore(tourMetric, myResult.bestTime)}</b>
+                {myResult.score === null ? (
+                  <b>—</b>
+                ) : (
+                  <b className="comp_score_tip">
+                    {fmtTourScore(tourMetric, myResult.score)}
+                    {myResult.calc && (
+                      <TourCalcTip calc={myResult.calc} metric={tourMetric} score={myResult.score} />
+                    )}
+                  </b>
+                )}
               </div>
               <div className="comp_stat_row">
                 <span>当前名次</span>
@@ -279,29 +326,7 @@ export default async function CompetitionDetailPage({
                         href={r.videoId ? `/video/${r.videoId}` : `/user/${r.uid}`}
                       >
                         {fmtTourScore(tourMetric, r.time)}
-                        {r.calc && r.calc.length > 0 && (
-                          <span className="comp_calc">
-                            {r.calc.map((seg) => {
-                              const lvName =
-                                seg.lv in LEVEL_NAMES ? LEVEL_NAMES[seg.lv as Level] : seg.lv;
-                              const fillPart =
-                                seg.fill > 0 && seg.floorScore > 0
-                                  ? ` +${seg.fill}×保底${fmtTourScore(tourMetric, seg.floorScore)}`
-                                  : "";
-                              return (
-                                <span key={seg.lv} className="comp_calc_row">
-                                  <i className={"comp_calc_lv" + (seg.lv in LV_TIP_COLOR ? ` ${LV_TIP_COLOR[seg.lv]}` : "")}>
-                                    {lvName}
-                                  </i>
-                                  {`${seg.n}盘 ${fmtTourScore(tourMetric, seg.real)}${fillPart}`}
-                                </span>
-                              );
-                            })}
-                            <span className="comp_calc_row comp_calc_total">
-                              总计 {fmtTourScore(tourMetric, r.time)}
-                            </span>
-                          </span>
-                        )}
+                        {r.calc && r.calc.length > 0 && <TourCalcTip calc={r.calc} metric={tourMetric} score={r.time} />}
                       </Link>
                     </li>
                   );

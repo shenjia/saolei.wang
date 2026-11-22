@@ -1144,12 +1144,21 @@ export interface TourMyResult {
   joined: boolean;
   videos: number; // 我的参赛录像数
   bestTime: number | null; // 我的最好单盘（score 域，按 metric/方向取「最好」）
+  /** 我的比赛总分（2026-11-22 张老师定：「最好成绩」行改总分口径，与排行榜/名次同源；
+   *  null=无有效成绩。sum_topn=各级别最好 N 局加总+保底；target_diff=最小误差） */
+  score: number | null;
+  /** 总分计算过程（getTourMyResult 同款结构，hover 气泡逐行展示；target_diff 为 null） */
+  calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] | null;
+  /** 各级别补保底局数（气泡「含保底」语境备用，本页未用） */
+  filled: Record<string, number>;
   rank: number | null; // 在最新排名中的名次（全量排名内）
 }
 
 /** 我在这场比赛的成绩（详情页「我的成绩」板块）。
  *  成绩口径（张老师 2026-11-18）：bestTime=窗口内最好一局（单盘口径，按比赛
- *  metric/方向取「最好」）；rank=按比赛设定总分口径的名次（与排行榜同口径）。 */
+ *  metric/方向取「最好」）；score/rank=按比赛设定总分口径（与排行榜完全同源，
+ *  同一 computePlayerScores 实例结果——2026-11-22 起「最好成绩」行展示 score 而非
+ *  bestTime，单盘口径与总分气泡「总计」对不上且与图表头部「最好成绩」相悖）。 */
 export async function getTourMyResult(compId: number, uid: number): Promise<TourMyResult> {
   const joined = await prisma.tournamentEntry.findFirst({
     where: { tournamentId: BigInt(compId), userId: BigInt(uid) },
@@ -1221,6 +1230,7 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
     if (bestTime === null || (desc ? v > bestTime : v < bestTime)) bestTime = v;
   }
   let rank: number | null = null;
+  let myScore: PlayerScore | null = null;
   if (bestTime !== null) {
     // 名次按比赛设定总分（getTourRanking 全量版）：取全部玩家的 computePlayerScores，
     // desc=true 时「更好」= 严格更大，否则严格更小。
@@ -1290,11 +1300,25 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
       (comp?.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
     );
     const mine = scores.get(uid);
-    rank = mine
-      ? 1 + [...scores.values()].filter((s) => (desc ? s.score > mine.score : s.score < mine.score)).length
-      : null;
+    if (mine) {
+      // 2026-11-22 张老师定：「最好成绩」行展示比赛总分（同排行榜排序口径），
+      // hover 气泡展示与排行榜完全一致的计算过程（calc 由 computePlayerScores 产出）
+      myScore = mine;
+      rank =
+        1 + [...scores.values()].filter((s) => (desc ? s.score > mine.score : s.score < mine.score)).length;
+    } else {
+      rank = null;
+    }
   }
-  return { joined: !!joined, videos: myRows.length, bestTime, rank };
+  return {
+    joined: !!joined,
+    videos: myRows.length,
+    bestTime,
+    score: myScore ? myScore.score : null,
+    calc: myScore && myScore.calc.length > 0 ? myScore.calc : null,
+    filled: myScore?.filled ?? {},
+    rank,
+  };
 }
 
 /** 比赛详情页统计（张老师 2026-11-19 定：报名人数与参赛人数分开统计，不冲突）——

@@ -17696,9 +17696,12 @@ body #header .nav li a.nav_tour_upcoming:hover,
    2026-11-22 张老师定改实元素 .comp_calc（原 attr(data-tip) 纯文本气泡无宽度约束，
    在窄成绩锚点上被压成一字竖条，且 attr() 无法逐行着色）——结构同 .pt_bubble 先例：
    链接内嵌气泡壳，absolute 上方右对齐弹出；各级别一行 nowrap，级别名绿/橙/金，
-   末行「总计」上加分隔线、数据亮灰 #b1b1a4（2026-11-22 二轮张老师定：金色太跳） */
-.comp_rank_time { position: relative; }
-.comp_rank_time .comp_calc {
+   末行「总计」上加分隔线、数据亮灰 #b1b1a4（2026-11-22 二轮张老师定：金色太跳）。
+   锚点两处（2026-11-22 三轮）：排行榜 .comp_rank_time + 右栏「成绩」最好成绩
+   .comp_score_tip——气泡壳/hover 触发/箭头对两锚点选择器组同时生效 */
+.comp_rank_time, .comp_score_tip { position: relative; }
+.comp_rank_time .comp_calc,
+.comp_score_tip .comp_calc {
   position: absolute; bottom: calc(100% + 8px); right: -6px;
   display: none; flex-direction: column; gap: 2px;
   background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px;
@@ -17706,8 +17709,10 @@ body #header .nav li a.nav_tour_upcoming:hover,
   font-weight: 400; text-align: left; white-space: nowrap;
   pointer-events: none; z-index: 950; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
 }
-.comp_rank_time:hover .comp_calc { display: flex; }
-.comp_rank_time .comp_calc::before {
+.comp_rank_time:hover .comp_calc,
+.comp_score_tip:hover .comp_calc { display: flex; }
+.comp_rank_time .comp_calc::before,
+.comp_score_tip .comp_calc::before {
   content: ""; position: absolute; top: 100%; right: 14px; margin-top: -5px;
   border: 5px solid transparent; border-top-color: #49483e;
 }
