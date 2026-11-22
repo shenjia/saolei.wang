@@ -64,23 +64,40 @@ const ORDER_BY = ORDER === "newest"
   ? [{ uploadTime: "desc" as const }, { videoId: "desc" as const }]
   : [{ uploadTime: "asc" as const }, { videoId: "asc" as const }];
 
+/** 取待下载项：state=0、不在失败冷却期内，按 --order 排序（默认新盘优先）。
+ *  ⚠️ 游标分批（2026-11-22 生产首跑实证）：一次性 take N×6 的「候选池」防不住
+ *  队头被单个超额用户的窗口内条目整段霸住（deferred=60 / handled=0 实录）——
+ *  历史存量积压 9.4 万盘会被堵死饿死。改为游标分页：defer 的条目只推游标、
+ *  不占本轮下载位，一直向队列深处找可下载项；游标走索引序（uploadTime, videoId）
+ *  与 ORDER_BY 同构，绝不做 filesort。 */
 type QueueRow = {
   videoId: bigint; saoleiId: bigint; profile: number; uploadTime: bigint; attempts: number;
 };
 
-/** 取下一批待下载项：state=0、不在失败冷却期内，按 --order 排序（默认新盘优先）。
- *  候选池取 limit×QUOTA_POOL_FACTOR 深度：防止单个超额用户的窗口内条目霸住队头，
- *  把后面其他用户的新盘全堵在本轮之外（2026-11-22 配额闸引入）。 */
-const QUOTA_POOL_FACTOR = 6;
-async function takeQueue(limit: number): Promise<QueueRow[]> {
+/** 单批扫描深度：每批尽量小，批内过滤 defer 后继续翻页，直到凑满可下载项或扫完队列 */
+const SCAN_BATCH = 60;
+/** defer 累计护栏：整轮 defer 超过此值说明队列被超额用户大面积霸占，提前收口防扫描失控 */
+const DEFER_GUARD = 200;
+
+async function takeQueueBatch(after: QueueRow | null, limit: number): Promise<QueueRow[]> {
   const cutoff = BigInt(Math.floor(Date.now() / 1000) - COOLDOWN_SEC);
+  const newest = ORDER === "newest";
+  const op = newest ? "lt" : "gt";
   return prisma.openmsVideoMap.findMany({
     where: {
       state: MAP_PENDING,
       OR: [{ attempts: 0 }, { updateTime: { lt: cutoff } }],
+      ...(after
+        ? {
+            OR: [
+              { uploadTime: { [op]: after.uploadTime } },
+              { uploadTime: after.uploadTime, videoId: newest ? { lt: after.videoId } : { gt: after.videoId } },
+            ],
+          }
+        : {}),
     },
     orderBy: ORDER_BY,
-    take: limit * QUOTA_POOL_FACTOR,
+    take: limit,
     select: { videoId: true, saoleiId: true, profile: true, uploadTime: true, attempts: true },
   });
 }
@@ -148,18 +165,10 @@ async function main() {
     void force;
   };
 
-  try {
-    const queue = DRY_IDS.length ? await takeByIds(DRY_IDS) : await takeQueue(MAX_DOWNLOADS);
-    if (!queue.length) {
-      log("  队列空（或待处理项全在失败冷却期内），本轮不下载");
-      await endRun(RUN_DONE, { handled: 0, ok: 0, skip: 0, retry: 0, gaveUp: 0 }, null);
-      closed = true;
-      return;
-    }
-    log(`  待下载 ${queue.length} 条（${ORDER === "newest" ? "新盘优先" : "老盘优先"}）首 #${queue[0].videoId} → 末 #${queue[queue.length - 1].videoId}`);
-
+  /** 处理一批队列条目：配额闸 → 下载导入 → 落定台账 */
+  const processQueue = async (queue: QueueRow[]): Promise<void> => {
     for (const item of queue) {
-      if (handled >= MAX_DOWNLOADS) break;
+      if (handled >= MAX_DOWNLOADS) return;
       const row: Row = { id: Number(item.videoId), uploadSec: Number(item.uploadTime), saoleiId: Number(item.saoleiId) };
       const link = { user: Number(item.saoleiId), profile: item.profile };
       currentUser = link.user;
@@ -168,7 +177,8 @@ async function main() {
 
       // 配额闸：仅对窗口内条目生效（窗口外历史存量不占额、永不受闸）。
       // defer 语义 = 留在 state=0 队列、attempts 不动、不写失败冷却——下轮 cron 自动重试；
-      // 不消耗对方站的下载预算（判在下载之前）。绝不走 retry 通道（4 次即永久放弃）。
+      // 不消耗对方站的下载预算（判在下载之前）、不占本轮下载位（游标继续向深处找）。
+      // 绝不走 retry 通道（4 次即永久放弃）。
       if (APPLY && withinQuotaWindow(item.uploadTime, quotaSince)) {
         const left = await quotaGate.remaining(link.user);
         if (left <= 0) {
@@ -214,6 +224,31 @@ async function main() {
       }
       if (out.kind !== "retry") await recordMap(row, link, out, item.attempts);
       await beat(true);
+    }
+  };
+
+  try {
+    if (DRY_IDS.length) {
+      await processQueue(await takeByIds(DRY_IDS));
+    } else {
+      // 游标分批扫描：defer 只推游标不占下载位，向队列深处找可下载项（防超额用户霸队头饿死积压）
+      let cursor: QueueRow | null = null;
+      let scannedAll = false;
+      while (handled < MAX_DOWNLOADS && stats.deferred < DEFER_GUARD && !scannedAll) {
+        const batch = await takeQueueBatch(cursor, SCAN_BATCH);
+        if (!batch.length) { scannedAll = true; break; }
+        cursor = batch[batch.length - 1];
+        await processQueue(batch);
+      }
+    }
+    if (handled === 0 && stats.deferred === 0) {
+      log("  队列空（或待处理项全在失败冷却期内），本轮不下载");
+      await endRun(RUN_DONE, { handled: 0, ok: 0, skip: 0, retry: 0, gaveUp: 0 }, null);
+      closed = true;
+      return;
+    }
+    if (stats.deferred >= DEFER_GUARD) {
+      log(`  ⚠ 本轮 defer 累计 ${stats.deferred} 条达护栏，提前收口（队列被超额用户大面积霸占）`);
     }
 
     log(`[openms-download] done in ${((Date.now() - t0) / 1000).toFixed(1)}s ` +
