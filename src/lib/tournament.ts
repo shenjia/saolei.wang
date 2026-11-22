@@ -1328,7 +1328,8 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
 /** 按比赛标识匹配比赛（张老师 2026-11-18 晚定：**严格时间窗口**）——
  *  无论 race 命中还是签名末尾命中，都要求上传时间落在比赛窗口内：
  *  时间过后玩家会忘了改标识，race 命中不能豁免窗口。
- *  race 精确优先，退签名末尾；都不在窗内 → 不绑定。 */
+ *  race 精确优先，退签名末尾（全等 → 「玩家名+标识」后缀枚举，2026-11-22
+ *  411431 案）；都不在窗内 → 不绑定。 */
 export async function matchTourByRace(
   race: string | null | undefined,
   signature: string,
@@ -1365,6 +1366,20 @@ export async function matchTourByRace(
   // （computePlayerScores），冒用他人窗口标识无计分收益，防冒充面不变。
   const sessHit = await matchSession(sig, ts, nowB);
   if (sessHit) return sessHit;
+  // 签名「玩家名+个人标识」形态（2026-11-22 411431 案张老师定）：元扫雷等外部
+  // 软件署名末尾是「名字 空格 标识」（如 "Wang Zi Cheng Yao Y3AQWS"），上面的
+  // 全等查不到——再按会话表**实际 race 值**做签名后缀匹配（表极小=窗口赛玩家
+  // 数级、race 唯一索引覆盖；个人标识全局唯一故无歧义）。命中后走同一窗口闸
+  // （未过期+上传时刻在窗内），判据与集体赛 code endsWith 同构；全部候选都
+  // 过不了窗口闸则继续往下走集体赛匹配。标识写在签名中间的形态不认（末尾口径）。
+  try {
+    const races = await prisma.tournamentWindowSession.findMany({ select: { race: true } });
+    for (const r of races) {
+      if (!sig.endsWith(r.race)) continue;
+      const hit = await matchSession(r.race, ts, nowB);
+      if (hit) return hit;
+    }
+  } catch { /* 后缀匹配失败不阻断，继续集体赛 code 匹配 */ }
   const candidates = await prisma.tournament.findMany({
     where: { ...windowWhere, code: { not: null } },
     select: { id: true, code: true },
