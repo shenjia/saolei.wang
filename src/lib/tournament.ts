@@ -382,14 +382,20 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
 
 export interface TourGlobalStats {
   tournaments: number; // 比赛个数（全站）
+  tournamentsToday: number; // 今日新增比赛数（动态 type=1 当日写入量）
   participants: number; // 参赛人数（去重用户）
+  participantsToday: number; // 今日新增参赛者（动态 type=2 当日去重人数）
   videos: number; // 录像数量（成绩采集下一期接入，恒 0）
+  videosToday: number; // 今日新增录像（动态 type=4 当日合并行去重比赛——行数口径）
   prizeTotal: number; // 累计奖金（全站总奖金之和）
 }
 
 export async function getTourGlobalStats(): Promise<TourGlobalStats> {
-  const [tournaments, participants, prizeAgg, videos] = await Promise.all([
+  const dayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+  const [tournaments, tournamentsToday, participants, todayJoiners, prizeAgg, videos, todayVideoComps] = await Promise.all([
     prisma.tournament.count(),
+    // 今日新增比赛数：动态 type=1（报名开始，发起比赛时写入一条/场）
+    prisma.tournamentEvent.count({ where: { type: 1, createTime: { gte: dayStart } } }),
     // 参赛人数=实际传过比赛录像的去重用户（2026-11-21 张老师报「参赛人数怎么可能是 0」）：
     // 报名表 11-13 才上线（历届 GSC 全是 0 行），历史参赛者只存在于 video.competition_id
     // 挂接——与详情页 getTourDetailStats 的 entries 口径一致（distinct 持有者）。
@@ -398,14 +404,26 @@ export async function getTourGlobalStats(): Promise<TourGlobalStats> {
       select: { user: true },
       distinct: ["user"],
     }).then((rows) => rows.length),
+    // 今日新增参赛者：动态 type=2（玩家报名参加）当日写入的去重用户
+    prisma.tournamentEvent.findMany({
+      where: { type: 2, createTime: { gte: dayStart }, userId: { not: BigInt(0) } },
+      select: { userId: true },
+      distinct: ["userId"],
+    }).then((rows) => rows.length),
     prisma.tournament.aggregate({ _sum: { prizeTotal: true } }),
     // 挂接到比赛的录像数（2026-11-13 二期起有真实数据源：后台手动挂接）
     prisma.video.count({ where: { tournamentId: { not: null }, status: { not: 0 } } }),
+    // 今日新增录像：动态 type=4（玩家更新成绩）当日合并行数（该玩家该时刻一批
+    // 可能多盘——事件行数≈「有更新」次数，与首页「今日有新增才显示」的语义一致）
+    prisma.tournamentEvent.count({ where: { type: 4, createTime: { gte: dayStart } } }),
   ]);
   return {
     tournaments,
+    tournamentsToday,
     participants,
+    participantsToday: todayJoiners,
     videos,
+    videosToday: todayVideoComps,
     prizeTotal: prizeAgg._sum.prizeTotal ?? 0,
   };
 }
@@ -1658,7 +1676,33 @@ export async function getMyScoreValues(
     vids,
     (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
   );
-  const mine = scores.get(uid);
+  let mine = scores.get(uid);
+  /* 纯保底补算（2026-11-22 张老师定「保底成绩也应该显示成绩和排名」）：
+     computePlayerScores 只为有有效录像的玩家产出（byUserLevel 遍历 valid）——
+     报名/开赛但 0 有效盘的玩家不在 Map，标题行显「—」。本人无 Map 行时按
+     同一公式就地补算全保底总分（fill=n×floorScore 逐级别加总），只补本人
+     一行、不进全量 Map（排行榜现口径「无有效录像不上榜」不动）；名次由
+     调用方（my-score 路由）拿此分数与全量 Map 严格比较得出。 */
+  if (!mine) {
+    const includeLevels = (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean);
+    let sum = 0;
+    const parts: Record<string, number> = {};
+    const filled: Record<string, number> = {};
+    const calc: PlayerScore["calc"] = [];
+    let any = false;
+    for (const lv of ["beg", "int", "exp"] as const) {
+      const n = conf.topn[lv] ?? 0;
+      if (n <= 0 || !includeLevels.includes(lv)) continue;
+      const floorScore = conf.floor[lv] ?? 0;
+      const fill = floorScore > 0 ? n : 0; // 无保底配置的级别无从补（fill=0 与主算分一致）
+      parts[lv] = 0;
+      filled[lv] = fill;
+      sum += fill * floorScore;
+      calc.push({ lv, n, real: 0, fill, floorScore });
+      if (n > 0) any = true;
+    }
+    if (any) mine = { score: sum, parts, filled, calc };
+  }
   return {
     values,
     scores,
@@ -1669,19 +1713,28 @@ export async function getMyScoreValues(
 }
 
 /** 练习页比赛模式标题行「成绩」行数据（2026-11-22 张老师需求）：本人总分快照
- *  （SSR 下发用，不算名次）；无成绩返回 null。getMyScoreValues 薄封装。 */
+ *  + 当前名次（SSR 下发首屏即显，不等 30s tick——张老师 22:37 截图反馈「纯保底
+ *  也应该显示排名」实测是首屏窗口缺排名）。无成绩返回 null。getMyScoreValues
+ *  薄封装；名次口径与 my-score 接口同源（榜内严格更好人数+1）。 */
 export async function getMyScoreSnapshot(
   compId: number,
   uid: number,
   sessWin?: { start: number; end: number } | null
 ): Promise<{
   score: number;
+  rank: number;
   calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
   filled: Record<string, number>;
 } | null> {
   const r = await getMyScoreValues(compId, uid, sessWin);
   if (!r?.mine) return null;
-  return { score: r.mine.score, calc: r.mine.calc, filled: r.mine.filled };
+  const comp = await prisma.tournament.findUnique({
+    where: { id: BigInt(compId) },
+    select: { scoreMode: true, scoreConfig: true },
+  });
+  const desc = comp ? parseScoreConfig(comp.scoreMode, comp.scoreConfig)?.desc ?? false : false;
+  const rank = 1 + [...r.scores.values()].filter((s) => (desc ? s.score > r.mine!.score : s.score < r.mine!.score)).length;
+  return { score: r.mine.score, rank, calc: r.mine.calc, filled: r.mine.filled };
 }
 
 /** 比赛破纪录预演（2026-11-22 张老师需求：练习页比赛模式「完成一盘→破纪录气泡」）：

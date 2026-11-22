@@ -12501,6 +12501,14 @@ html.op-fakefs #header {
 #online_play .op_comp_score .op_comp_none {
   color: #b1b1a4;
 }
+/* 比赛模式「自定义」筛选隐藏（2026-11-22 张老师定「去掉自定义筛选」）：
+   首建 JSX 内联 display:none，但 reset() 切级别时 outerHTML 重建 tabs 会丢内联
+   样式——重建路径统一挂 comp_hidden 类，这里 CSS 兜底（特异性压 .ranking_tabs a），
+   双保险保证任何渲染路径下都不复活。键盘 4 入口 openCusDialog 已有 comp 拦截 */
+#online_play .ranking_tabs a.comp_hidden,
+#online_play .ranking_tabs span.comp_hidden {
+  display: none !important;
+}
 /* 倒计时行：.win_countdown（14px bold）+ 本页 22px 行高对齐成绩行；
    颜色内联注入（绿/黄/玫瑰红色阶），此处只管布局 */
 #online_play .op_comp_countdown {
@@ -12513,68 +12521,106 @@ html.op-fakefs #header {
     display: none; /* 窄屏与原统计区同口径隐藏 */
   }
 }
-/* 比赛模式底部「级别统计区」（2026-11-22 张老师需求二轮；三轮定稿单行横排）：
-   接管 BV 收集墙容器（#bv_wall，入册/宽度锁定/全屏形态设施全部复用）——
-   各收录级别**并在一行**，段间 28px 间隔（张老师 21:37 定「并在一行显示，
-   中间做合理间隔」）。每段：「初级  5盘52 +4x保底100  ■■■□□」——级别名
-   级别三色、盘数成绩正文亮灰、保底段亮灰（张老师指定）、格子从左到右按
-   已传盘数点亮（级别三色）。容器居中、宽度自适应内容 */
+/* 比赛模式底部「级别统计区」（2026-11-22 张老师需求，八轮定稿 22:31）：
+   接管 BV 收集墙容器（#bv_wall，入册设施复用）——三个级别各在**独立灰色框**
+   内并排一行（框间 12px）。每框内部横排：「初级」级别名同色圆角矩形（当前=填充）→
+   点亮格 →「x / y盘」盘数（格子右侧、/左右空格、x 级别色加粗）→
+   得分「0+3x保底100」（盘数右侧；0 盘也显示算 0，实盘分亮灰正文、保底段更暗）。
+   放不下 flex-wrap 折行兜底 */
 #online_play .bvwall.comp_mode {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: 28px;
+  gap: 12px;
   flex-wrap: wrap;
-  /* 宽度自适应内容但锁进银框渲染宽（--bw-maxw 复用收集墙锁定机制）；
-     放不下时 flex-wrap 折行兜底（高级 topn 大时整段较宽） */
   width: fit-content;
-  max-width: var(--bw-maxw, 100%);
+  max-width: 100%;
+  /* 收集墙容器自带底色/描边/padding（.bvwall 基础样式）——统计区只是借宿，
+     不保留外层视觉（张老师 22:24「外面又有一层框」）：显式清零 */
+  background: none;
+  border: none;
+  padding: 0;
+  box-shadow: none;
   opacity: 1; /* 比赛统计区不做 50% 半透明（收集墙的局中 dim 语义不适用） */
   margin: 6px auto 0; /* 收集墙同款居中落位 */
 }
+/* 每级别独立灰色框（张老师定）：深底细描边圆角卡，内部横排单行 */
 #online_play .bvwall.comp_mode .bw_comp_row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+  padding: 7px 10px;
+  background: rgba(39, 40, 34, 0.55);
+  border: 1px solid #3e3d32;
+  border-radius: 5px;
 }
-#online_play .bvwall.comp_mode .bw_comp_head {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 52px; /* 级别名列对齐（初级/中级/高级两字+当前徽标） */
-}
+/* 级别名圆角矩形包裹：默认=透明底+级别色描边+级别色字；
+   当前级别（.current）=同色填充+深底字——一眼看出正在玩的级别 */
 #online_play .bvwall.comp_mode .bw_comp_name {
   font-size: 12px;
   font-weight: bold;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
 }
-/* 级别名三色（同收集墙 data-lv 配色表：初绿/中橙/高黄） */
 #online_play .bvwall.comp_mode .bw_comp_row[data-lv="beg"] .bw_comp_name {
   color: #a6e22e;
+  border-color: rgba(166, 226, 46, 0.45);
 }
 #online_play .bvwall.comp_mode .bw_comp_row[data-lv="int"] .bw_comp_name {
   color: #fd971f;
+  border-color: rgba(253, 151, 31, 0.45);
 }
 #online_play .bvwall.comp_mode .bw_comp_row[data-lv="exp"] .bw_comp_name {
   color: #e6db74;
+  border-color: rgba(230, 219, 116, 0.45);
 }
-/* 当前级别徽标（小号描边灰字，提示正在玩的级别行） */
-#online_play .bvwall.comp_mode .bw_comp_cur {
-  font-size: 10px;
-  color: #939387;
-  border: 1px solid #49483e;
-  border-radius: 3px;
-  padding: 0 4px;
-  line-height: 14px;
+/* 当前级别：级别名同色填充框 */
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="beg"].current .bw_comp_name {
+  background: #a6e22e;
+  color: #272822;
+  border-color: #a6e22e;
 }
-/* 「5盘52」正文：盘数与成绩亮灰（数字不强调——强调留给顶部总计） */
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="int"].current .bw_comp_name {
+  background: #fd971f;
+  color: #272822;
+  border-color: #fd971f;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="exp"].current .bw_comp_name {
+  background: #e6db74;
+  color: #272822;
+  border-color: #e6db74;
+}
+/* 盘数「x / y盘」（格子右侧）：x=已完成盘数（级别色加粗）、/ 左右空格由文本自带、
+   「y盘」亮灰；得分「0+3x保底100」（盘数右侧）：实盘分正文亮灰、保底段更暗 */
+#online_play .bvwall.comp_mode .bw_comp_count,
 #online_play .bvwall.comp_mode .bw_comp_text {
   font-size: 12px;
   color: #b1b1a4;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: baseline;
 }
-/* 「+4x保底100」段：亮灰（张老师指定）——弱于正文 */
+#online_play .bvwall.comp_mode .bw_comp_count .bw_comp_done {
+  font-style: normal;
+  font-weight: bold;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="beg"] .bw_comp_done {
+  color: #a6e22e;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="int"] .bw_comp_done {
+  color: #fd971f;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="exp"] .bw_comp_done {
+  color: #e6db74;
+}
+#online_play .bvwall.comp_mode .bw_comp_count .bw_comp_req {
+  color: #b1b1a4;
+}
+/* 得分段内「+3x保底100」：暗灰（张老师指定）——弱于实盘分 */
 #online_play .bvwall.comp_mode .bw_comp_text .bw_fill {
   color: #636359;
 }
@@ -17811,7 +17857,10 @@ body #header .nav li a.nav_tour_upcoming:hover,
    即 .box 默认（padding 30px / 盒宽 210）+ h2 legacy 盒标题（20px 灰），无私有覆盖 */
 
 .comp_stat_row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; line-height: 28px; color: #b1b1a4; }
-.comp_stat_row b { color: #f8f8f2; font-weight: 700; }
+/* 数值亮灰（2026-11-22 张老师定：白 #f8f8f2 太刺眼，与首页数据统计数值同色）；
+   今日增量绿色括号 .stat_today（全站统一色 #a6e22e，同首页统计形态） */
+.comp_stat_row b { color: #b1b1a4; font-weight: 700; }
+.comp_stat_row b .stat_today { color: #a6e22e; font-weight: 700; margin-left: 2px; }
 #page.comp_page .gold { color: #fdc61a; }
 /* 我的状态四态（2026-11-22 张老师需求）：未报名亮灰/已报名绿/比赛中绿/已完赛金，
    配色同全站级别色系（同 .comp_status_tag 与 .comp_lv_plain） */
