@@ -762,6 +762,40 @@ body #video_view .video_cell .race_name em {
   margin-left: 6px;
 }
 
+/* 未匹配比赛标识（2026-11-22 张老师需求）：标识文本划掉+暗灰示意「无效」，
+   hover 弹气泡「未识别到对应比赛」（朝上，视觉同军衔/相对时间标准气泡）。
+   ⚠️ legacy .race_name em{color:#939387} 在 globals 之后加载，须 body 前缀
+   (0,3,1) + 类名提权压过；气泡定位基准必须落在 em 自身（relative），缺了会
+   以更外层定位祖先为基准乱飘（玩家名气泡同坑，2026-10-29 判例） */
+body #video_view .video_cell .race_name em.race_unmatched {
+  position: relative;
+  color: #75715e;
+  text-decoration: line-through;
+  cursor: default;
+}
+body #video_view .video_cell .race_name em.race_unmatched::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1f1c;
+  color: #f8f8f2;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 9999;
+}
+body #video_view .video_cell .race_name em.race_unmatched:hover::after {
+  opacity: 1;
+}
+
 /* 录像详情页状态标签（2026-10-23 张老师需求）：
    ①待审核（st10）橙色——legacy 的 .status.st10 是绿（.video_cell .status.st10 (0,3,0)
    且 legacy 后加载），须 body 前缀 (0,3,1) 压过；橙色取中级色 #f79646（站点标准橙档）
