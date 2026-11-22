@@ -182,10 +182,17 @@ export function WindowPlayBox({
         </b>
       </div>
       <div id="play_row">
+        {/* 图标同首页「开始练习/传录像」与集体赛双钮口径（2026-11-22 张老师要求）：
+            笑脸用 FlopSprites #face-flat（详情页侧栏已挂 FlopSprites，symbol 可用） */}
         <a id="play_entry" href={`/online?race=${sess.race}`} target="_blank" rel="noreferrer">
+          <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
+            <use href="#face-flat" />
+          </svg>
           <span>进入比赛</span>
         </a>
         <a id="upload_entry" href="/video/upload" target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/upload-folder-icon.png" alt="" width={24} />
           <span>传录像</span>
         </a>
       </div>

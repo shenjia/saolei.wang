@@ -15,6 +15,8 @@ import CoreOnlinePage from "@/core/src/app/online/page";
 import SignupInvite from "@/components/SignupInvite";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getMyScoreSnapshot } from "@/lib/tournament";
+import { parseTourMetric, type TourMetricKey } from "@/lib/tour-metric";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +26,31 @@ const getSignupPlayers = unstable_cache(
   { revalidate: 3600 }
 );
 
+/** 比赛模式下发给客户端的比赛上下文（2026-11-22 扩展张老师需求）：
+ *  end=比赛结束时刻（秒；标题行倒计时用）；scoreSnapshot=本人总分快照（标题行
+ *  「成绩」行用，null=暂无成绩）；metric=计分项（成绩数值格式化） */
 export interface OnlineCompParam {
   /** 进行中比赛（?c= 合法时）；code=比赛标识，2026-11-18 起可空（未设置=不附加标识）；
    *  race=窗口赛个人标识（2026-11-19，?race= 传入，优先注入结算 EVF） */
-  comp: { id: number; shortName: string; code: string | null; race?: string | null } | null;
+  comp: {
+    id: number;
+    shortName: string;
+    code: string | null;
+    race?: string | null;
+    end: number;
+    metric: TourMetricKey;
+    scoreSnapshot: { score: number; calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] } | null;
+  } | null;
   /** ?c= 指向的比赛无效（不存在/未开始/已结束）时的人话提示 */
   compError: string | null;
 }
 
-/** 解析 ?c= 比赛参数（2026-11-13 二期）：无参数=普通练习；非法=红色气泡文案 */
-async function resolveCompParam(raw: string | undefined): Promise<OnlineCompParam> {
+/** 解析 ?c= 比赛参数（2026-11-13 二期）：无参数=普通练习；非法=红色气泡文案。
+ *  2026-11-22 扩展：下发 end（倒计时）+ 本人成绩快照（标题行成绩行，张老师需求） */
+async function resolveCompParam(
+  raw: string | undefined,
+  uid: number | undefined
+): Promise<OnlineCompParam> {
   const cid = parseInt(raw ?? "", 10);
   if (!raw || !Number.isInteger(cid) || cid <= 0) {
     // 带了 c 但不是合法数字 → 按不存在处理；不带 c → 普通练习
@@ -41,17 +58,32 @@ async function resolveCompParam(raw: string | undefined): Promise<OnlineCompPara
   }
   const c = await prisma.tournament.findUnique({
     where: { id: BigInt(cid) },
-    select: { id: true, shortName: true, code: true, startTime: true, endTime: true },
+    select: { id: true, shortName: true, code: true, startTime: true, endTime: true, scoreMode: true, scoreConfig: true },
   });
   if (!c) return { comp: null, compError: "比赛不存在" };
   const now = Math.floor(Date.now() / 1000);
   if (now < Number(c.startTime)) return { comp: null, compError: `「${c.shortName}」尚未开始` };
   if (now >= Number(c.endTime)) return { comp: null, compError: `「${c.shortName}」已结束` };
-  return { comp: { id: Number(c.id), shortName: c.shortName, code: c.code }, compError: null };
+  const snapshot = uid ? await getMyScoreSnapshot(cid, uid) : null;
+  return {
+    comp: {
+      id: Number(c.id),
+      shortName: c.shortName,
+      code: c.code,
+      end: Number(c.endTime),
+      // metric=计分数据项 key（score_config.metric；scoreMode 是计算方式 sum_topn
+      // 不是数据项——首次实现误发 scoreMode 致 fmtTourScore 崩，2026-11-22 修）
+      metric: parseTourMetric(JSON.parse(c.scoreConfig || "{}").metric),
+      scoreSnapshot: snapshot,
+    },
+    compError: null,
+  };
 }
 
 /** 解析 ?race= 窗口赛个人标识（2026-11-19 张老师定）：标识须命中当前登录玩家
- *  一个未过期的窗口会话 → 返回该比赛与标识；未登录/无会话/过期 → null（普通比赛模式降级） */
+ *  一个未过期的窗口会话 → 返回该比赛与标识；未登录/无会话/过期 → null（普通比赛模式降级）。
+ *  2026-11-22 张老师定：race 命中即**完整比赛模式**（同 ?c= 口径——标题简称/
+ *  隐藏不可用钮/自定义 tab）+ 下发个人窗口 end 与本人成绩快照 */
 async function resolveRaceParam(
   raw: string | undefined,
   uid: number | undefined
@@ -65,10 +97,25 @@ async function resolveRaceParam(
   if (now > Number(sess.endTime)) return null; // 会话过期，标识失效
   const c = await prisma.tournament.findUnique({
     where: { id: sess.tournamentId },
-    select: { id: true, shortName: true, code: true, endTime: true },
+    select: { id: true, shortName: true, code: true, endTime: true, scoreConfig: true },
   });
   if (!c || now >= Number(c.endTime)) return null;
-  return { comp: { id: Number(c.id), shortName: c.shortName, code: c.code, race: sess.race } };
+  const snapshot = await getMyScoreSnapshot(Number(c.id), uid, {
+    start: Number(sess.startTime),
+    end: Number(sess.endTime),
+  });
+  return {
+    comp: {
+      id: Number(c.id),
+      shortName: c.shortName,
+      code: c.code,
+      race: sess.race,
+      end: Number(sess.endTime),
+      // metric=计分数据项 key（同 resolveCompParam，scoreConfig.metric）
+      metric: parseTourMetric(JSON.parse(c.scoreConfig || "{}").metric),
+      scoreSnapshot: snapshot,
+    },
+  };
 }
 
 export async function generateMetadata({
@@ -77,9 +124,14 @@ export async function generateMetadata({
   searchParams: Promise<Record<string, string | undefined>>;
 }): Promise<Metadata> {
   const sp = await searchParams;
-  const { comp } = await resolveCompParam(sp.c);
-  // 比赛模式标签页标题＝比赛简称（张老师 15:14 定「Title 由练习变成比赛简称」）
-  return { title: comp ? comp.shortName : "练习" };
+  const session = await getSession();
+  const uid = session?.uid;
+  // 标签页标题同页面口径（张老师 15:14 定「Title 由练习变成比赛简称」）：
+  // ?race= 命中本人未过期会话 → 同样换简称（2026-11-22 张老师要求）
+  const [, raceHit] = await Promise.all([resolveCompParam(sp.c, uid), resolveRaceParam(sp.race, uid)]);
+  if (raceHit?.comp) return { title: raceHit.comp.shortName };
+  const base = await resolveCompParam(sp.c, uid);
+  return { title: base.comp ? base.comp.shortName : "练习" };
 }
 
 export default async function OnlinePage({
@@ -89,9 +141,10 @@ export default async function OnlinePage({
 }) {
   const sp = await searchParams;
   const session = await getSession();
+  const uid = session?.uid;
   const [base, raceHit] = await Promise.all([
-    resolveCompParam(sp.c),
-    resolveRaceParam(sp.race, session?.uid),
+    resolveCompParam(sp.c, uid),
+    resolveRaceParam(sp.race, uid),
   ]);
   // 窗口赛个人标识优先（?race= 命中本人未过期会话）
   const comp = raceHit?.comp ?? base.comp;

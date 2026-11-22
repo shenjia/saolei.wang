@@ -1544,6 +1544,85 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
   };
 }
 
+/** 练习页比赛模式标题行「成绩」行数据（2026-11-22 张老师需求）：轻量版总分快照——
+ *  不跑全量排名（不算名次/不取他人录像），只算本人 calc/score；无成绩返回 null。
+ *  数据口径与 getTourMyResult 相同（computePlayerScores 同一实例；窗口赛按本人
+ *  会话窗过滤——会话由 ?race= 解析处传入，此处不重复查）。 */
+export async function getMyScoreSnapshot(
+  compId: number,
+  uid: number,
+  sessWin?: { start: number; end: number } | null
+): Promise<{ score: number; calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] } | null> {
+  const comp = await prisma.tournament.findUnique({
+    where: { id: BigInt(compId) },
+    select: { scoreMode: true, scoreConfig: true, includeLevels: true, windowHours: true },
+  });
+  if (!comp) return null;
+  // 窗口赛判窗兜底：调用方没传会话窗（集体赛路径理论上不走本函数）时按库内
+  // 本人会话取（与 getTourMyResult 同源判据），有会话记录才按窗过滤
+  let win = sessWin ?? null;
+  if (!win && comp.windowHours) {
+    const hasSess = await prisma.tournamentWindowSession.count({ where: { tournamentId: BigInt(compId) } });
+    if (hasSess > 0) {
+      const s = await prisma.tournamentWindowSession.findFirst({
+        where: { tournamentId: BigInt(compId), userId: BigInt(uid) },
+        select: { startTime: true, endTime: true },
+        orderBy: { endTime: "desc" },
+      });
+      if (s) win = { start: Number(s.startTime), end: Number(s.endTime) };
+    }
+  }
+  const rows = await prisma.video.findMany({
+    where: { tournamentId: BigInt(compId), user: BigInt(uid), status: { not: 0 } },
+    select: { id: true, level: true, createTime: true },
+  });
+  const inWin = win ? rows.filter((r) => Number(r.createTime) >= win.start && Number(r.createTime) <= win.end) : rows;
+  if (!inWin.length) return null;
+  const infos = await prisma.videoInfo.findMany({
+    where: { id: { in: inWin.map((r) => r.id) } },
+    select: { id: true, realTime: true, board3bv: true, noRecord: true },
+  });
+  const infoMap = new Map(infos.map((i) => [i.id, i]));
+  const conf = parseScoreConfig(comp.scoreMode ?? "", comp.scoreConfig ?? "");
+  if (!conf) return null;
+  const needsMetrics = conf.metric !== "time" && conf.metric !== "3bv";
+  const metrics = needsMetrics
+    ? await prisma.videoMetrics.findMany({
+        where: { id: { in: inWin.map((r) => r.id) } },
+        select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
+      })
+    : [];
+  const metricMap = new Map(metrics.map((m) => [m.id, m]));
+  const valueOf = (vid: bigint): number => {
+    if (conf.metric === "time") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.realTime : 0;
+    }
+    if (conf.metric === "3bv") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.board3bv * 1000 : 0;
+    }
+    const m = metricMap.get(vid);
+    if (!m) return 0;
+    const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
+    return raw > 0 ? raw * 1000 : 0;
+  };
+  const scores = computePlayerScores(
+    comp.scoreMode ?? "",
+    comp.scoreConfig ?? "",
+    inWin.map((r) => ({
+      user: uid,
+      level: r.level,
+      value: valueOf(r.id),
+      noRecord: infoMap.get(r.id)?.noRecord ?? false,
+    })),
+    (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  const mine = scores.get(uid);
+  if (!mine) return null;
+  return { score: mine.score, calc: mine.calc };
+}
+
 /** 比赛详情页统计（张老师 2026-11-19 定：报名人数与参赛人数分开统计，不冲突）——
  *  registrations=报名人数（tournament_entry 去重 user；为 0 时前台整行不显示，
  *  历届导入的旧比赛不存在统计误差）；entries=参赛人数＝实际传了录像的持有者数
