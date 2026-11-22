@@ -28,7 +28,6 @@ import { TourVideosFeed } from "@/components/tournament/TourVideosFeed";
 import { TourBlock } from "@/components/tournament/TourBlock";
 import { WindowPlayBox } from "@/components/tournament/WindowPlayBox";
 import { SignupEntryBox } from "@/components/tournament/SignupEntryBox";
-import { VideoSearch } from "@/components/VideoSearch";
 import { scoreTime } from "@/lib/format";
 import { LEVEL_NAMES, VIDEO_LEVELS, parseVideoListOrder, parseVideoListDir, type Level, type VideoLevel, type VideoListOrder, type VideoListDir } from "@/lib/config";
 import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
@@ -211,28 +210,11 @@ export default async function CompetitionDetailPage({
           </div>
 
           {/* 录像板块：本比赛全部参赛录像，默认上传时间逆序（新在前，2026-11-22 张老师定）、不去重；行渲染与首页录像流同源。
-              2026-11-22 张老师需求：标题行下加级别筛选 tabs（仅比赛收录级别，全部+各级别）；
-              表头可点击排序（成绩/3BV/计分项等，同 /video 列表交互，惜步杯按 crossings 排）。
-              标准翻页组件同上（client 壳 TourVideosFeed）；
-              key=page+筛选/排序：软导航改变筛选维度时强制重挂载换入服务端新数据（铁律）。
-              右上角搜索框（2026-11-18 深夜张老师定：同录像页，限本比赛范围——
-              VideoSearch scope=tour 跳 vauthor/vtime，作者与成绩互斥） */}
+              2026-11-22 张老师需求：级别筛选 tabs 与表头排序（惜步杯按 crossings 排）。
+              19:24 张老师定：tabs 与「录像」同行——标题行整个搬进壳组件渲染
+              （RSC 禁函数传参，render-prop 方案 500 实证作废），搜索框同搬（client 壳直渲）。
+              key=page+筛选/排序：软导航改变筛选维度时强制重挂载换入服务端新数据（铁律） */}
           <div className="box comp_section">
-            <div className="comp_sec_head">
-              <h2>录像</h2>
-              <div className="video_search">
-                <VideoSearch
-                  scope="tour"
-                  tourId={compId}
-                  level=""
-                  order="id"
-                  author={vAuthor}
-                  authorName={searchUser?.chineseName ?? ""}
-                  time={vTimeRaw || undefined}
-                  bv={vBvRaw || undefined}
-                />
-              </div>
-            </div>
             <TourVideosFeed
               key={`vp${vp}-ep${ep}-va${vAuthor ?? 0}-vt${vTimeRaw}-vb${vBv ?? ""}-lv${videoLevel}-od${videoOrder}-dr${videoDir}`}
               compId={compId}
@@ -251,6 +233,7 @@ export default async function CompetitionDetailPage({
               vAuthor={vAuthor}
               vTime={vTimeRaw || undefined}
               vBv={vBv}
+              searchAuthorName={searchUser?.chineseName ?? ""}
             />
           </div>
         </li>

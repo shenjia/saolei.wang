@@ -16,6 +16,7 @@ import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { VideoHead, VideoRowLine } from "@/components/VideoRows";
+import { VideoSearch } from "@/components/VideoSearch";
 import { VIDEO_LIST_DEFAULT_DIR, type VideoLevel, type VideoListOrder, type VideoListDir } from "@/lib/config";
 import type { VideoListItem } from "@/lib/queries";
 import type { TourMetricKey } from "@/lib/tour-metric";
@@ -45,6 +46,8 @@ export function TourVideosFeed({
   vAuthor,
   vTime,
   vBv,
+  /** 搜索框回显（标题行搬进壳后 VideoSearch 由本组件直接渲染——同为 client 组件无 RSC 边界） */
+  searchAuthorName,
 }: {
   compId: number;
   initialVideos: VideoListItem[];
@@ -66,6 +69,8 @@ export function TourVideosFeed({
   vAuthor?: number;
   vTime?: string;
   vBv?: number;
+  /** 搜索框作者筛选回显姓名（空串=无筛选） */
+  searchAuthorName?: string;
 }) {
   const router = useRouter();
   const listRef = useRef<HTMLTableElement>(null);
@@ -151,37 +156,62 @@ export function TourVideosFeed({
     });
   }
 
+  /** 级别筛选 tabs（仅比赛收录级别，全部 + 各级别）。19:24 张老师反馈「筛选器跑
+   *  第二行，应在『录像』右边同行」——变量化后由父层经 render-prop 放进
+   *  comp_sec_head 标题行（h2 与搜索框之间），不在壳内独立成行 */
+  const levelTabs =
+    levels.length > 0 ? (
+      <ul className="tabs comp_video_tabs" data-name="level">
+        {[["all", "全部"] as [string, string], ...levels.map((l) => [l, LEVEL_LABELS[l]] as [string, string])].map(
+          ([value, label]) =>
+            value === level ? (
+              <li key={value} className="current">
+                <em className="active">{label}</em>
+              </li>
+            ) : (
+              <li key={value}>
+                <a
+                  href={tourUrl({ level: value })}
+                  onClick={(e) => {
+                    // 就地软导航（RSC 换入服务端新数据，页码归 1）；修饰键/中键走真实链接兜底
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                    e.preventDefault();
+                    startTransition(() => {
+                      router.push(tourUrl({ level: value }), { scroll: false });
+                    });
+                  }}
+                >
+                  {label}
+                </a>
+              </li>
+            )
+        )}
+      </ul>
+    ) : null;
+
   return (
     <>
-      {/* 级别筛选 tabs（2026-11-22 张老师需求：仅比赛收录级别，全部 + 各级别；样式同 /video 页头 ul.tabs） */}
-      {levels.length > 0 && (
-        <ul className="tabs comp_video_tabs" data-name="level">
-          {[["all", "全部"] as [string, string], ...levels.map((l) => [l, LEVEL_LABELS[l]] as [string, string])].map(
-            ([value, label]) =>
-              value === level ? (
-                <li key={value} className="current">
-                  <em className="active">{label}</em>
-                </li>
-              ) : (
-                <li key={value}>
-                  <a
-                    href={tourUrl({ level: value })}
-                    onClick={(e) => {
-                      // 就地软导航（RSC 换入服务端新数据，页码归 1）；修饰键/中键走真实链接兜底
-                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-                      e.preventDefault();
-                      startTransition(() => {
-                        router.push(tourUrl({ level: value }), { scroll: false });
-                      });
-                    }}
-                  >
-                    {label}
-                  </a>
-                </li>
-              )
-          )}
-        </ul>
-      )}
+      {/* 标题行（19:24 张老师定：tabs 与「录像」同行——h2 左、tabs+搜索框右一组）。
+          RSC 禁函数传参（render-prop 500 实证），标题行整个搬进本 client 壳；
+          VideoSearch 同为 client 组件直接渲染，回显数据由页面 props 传入 */}
+      <div className="comp_sec_head">
+        <h2>录像</h2>
+        <div className="comp_head_right">
+          {levelTabs}
+          <div className="video_search">
+            <VideoSearch
+              scope="tour"
+              tourId={compId}
+              level=""
+              order="id"
+              author={vAuthor}
+              authorName={searchAuthorName ?? ""}
+              time={vTime}
+              bv={vBv != null ? String(vBv) : undefined}
+            />
+          </div>
+        </div>
+      </div>
       {videos.length > 0 ? (
         <table ref={listRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table comp_video_table">
           <VideoHead
