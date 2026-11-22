@@ -345,6 +345,12 @@ export default async function CompetitionDetailPage({
               <span>参赛人数</span>
               <b>{dstats.entries}</b>
             </div>
+            {/* 完赛人数（2026-11-22 张老师需求）：所有级别录像数量都满足要求、
+                无任何保底成绩的人数——filled 全 0 口径，见 getTourDetailStats */}
+            <div className="comp_stat_row">
+              <span>完赛人数</span>
+              <b>{dstats.finishers}</b>
+            </div>
             <div className="comp_stat_row">
               <span>参赛录像</span>
               <b>{dstats.videos}</b>

@@ -5,11 +5,12 @@
 
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { tourStatus, parseScoreConfig } from "@/lib/tournament";
+import { tourStatus, parseScoreConfig, getTourFinishersBulk } from "@/lib/tournament";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { RowEditButton } from "@/components/admin/RowEditButton";
 import { AdminCard, AdminPager } from "@/components/admin/Widgets";
 import { TournamentForm } from "@/components/admin/TournamentForm";
+import { FinisherListPopover } from "@/components/admin/FinisherListPopover";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "比赛管理 | 管理后台" };
@@ -98,6 +99,20 @@ export default async function AdminCompetitionsPage({
   const safePage = Math.min(page, pageCount);
   const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
+  // 完赛统计（2026-11-22 张老师需求）：当前页批量算（getTourFinishersBulk 与详情页
+  // 同口径），完赛名单玩家中文名一次取齐供弹层显示
+  const finisherMap = await getTourFinishersBulk(pageRows.map((r) => Number(r.id)));
+  const finisherUids = [...new Set([...finisherMap.values()].flat().map((n) => BigInt(n)))];
+  const finisherUsers = finisherUids.length
+    ? await prisma.user.findMany({
+        where: { id: { in: finisherUids } },
+        select: { id: true, chineseName: true, englishName: true },
+      })
+    : [];
+  const finisherNameMap = new Map(
+    finisherUsers.map((u) => [Number(u.id), u.chineseName || (u.englishName ? `@${u.englishName}` : `UID ${u.id}`)]),
+  );
+
   return (
     <>
       <div className="admin_page_head">
@@ -132,6 +147,7 @@ export default async function AdminCompetitionsPage({
                 <th>发起人</th>
                 <th className="c">报名人数</th>
                 <th className="c">参赛人数</th>
+                <th className="c">完赛人数</th>
                 <th className="c">参赛录像</th>
                 <th className="c">总奖金</th>
                 <th>开始时间（北京）</th>
@@ -157,6 +173,13 @@ export default async function AdminCompetitionsPage({
                     <td className="sub">{creatorMap.get(r.creatorId.toString()) ?? `#${r.creatorId}`}</td>
                     <td className="c">{regMap.get(r.id.toString()) ?? 0}</td>
                     <td className="c">{holderMap.get(r.id.toString())?.size ?? 0}</td>
+                    {/* 完赛人数：可点击弹名单（赞助按完赛名单发放，2026-11-22 张老师需求） */}
+                    <td className="c">
+                      <FinisherListPopover
+                        count={(finisherMap.get(Number(r.id)) ?? []).length}
+                        names={(finisherMap.get(Number(r.id)) ?? []).map((uid) => finisherNameMap.get(uid) ?? `UID ${uid}`)}
+                      />
+                    </td>
                     <td className="c">{videoMap.get(r.id.toString()) ?? 0}</td>
                     <td className="c" style={{ color: "#fdc61a" }}>¥{r.prizeTotal.toLocaleString("en-US")}</td>
                     <td className="mono" style={{ whiteSpace: "nowrap" }}>
@@ -201,7 +224,7 @@ export default async function AdminCompetitionsPage({
               })}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={12}>
+                  <td colSpan={13}>
                     <div className="admin_empty">
                       {st ? "该状态下暂无比赛" : "还没有比赛，用下方表单发起第一场"}
                     </div>

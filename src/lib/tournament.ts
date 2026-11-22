@@ -1559,47 +1559,66 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
   };
 }
 
-/** 练习页比赛模式标题行「成绩」行数据（2026-11-22 张老师需求）：轻量版总分快照——
- *  不跑全量排名（不算名次/不取他人录像），只算本人 calc/score；无成绩返回 null。
- *  数据口径与 getTourMyResult 相同（computePlayerScores 同一实例；窗口赛按本人
- *  会话窗过滤——会话由 ?race= 解析处传入，此处不重复查）。 */
-export async function getMyScoreSnapshot(
+/** 比赛窗口内全部参赛录像的算分底座（2026-11-22 练习页比赛模式两行统计需求）：
+ *  窗口赛按 sessWin（调用方已校验归属）否则全局窗（集体赛不过滤/有会话记录的
+ *  窗口赛按各玩家会话窗，getTourRanking 同判据）；返回全量 PlayerScore Map +
+ *  本人明细——SSR 快照（getMyScoreSnapshot）与传盘后刷新接口（my-score route）
+ *  共用，保证两路分数/名次口径恒一致。 */
+export async function getMyScoreValues(
   compId: number,
   uid: number,
   sessWin?: { start: number; end: number } | null
-): Promise<{ score: number; calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] } | null> {
+): Promise<{
+  /** vid → metric 值（score 域；供调试/复核用，客户端不消费） */
+  values: Map<string, number>;
+  /** 全部玩家算分结果（getTourRanking 同一实例口径） */
+  scores: Map<number, PlayerScore>;
+  /** 本人 PlayerScore（无有效成绩=undefined） */
+  mine: PlayerScore | undefined;
+  /** 本人 calc 过程（mine 存在时空数组也直传） */
+  calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
+  /** 本人各级别补保底局数 */
+  filled: Record<string, number>;
+} | null> {
   const comp = await prisma.tournament.findUnique({
     where: { id: BigInt(compId) },
     select: { scoreMode: true, scoreConfig: true, includeLevels: true, windowHours: true },
   });
   if (!comp) return null;
-  // 窗口赛判窗兜底：调用方没传会话窗（集体赛路径理论上不走本函数）时按库内
-  // 本人会话取（与 getTourMyResult 同源判据），有会话记录才按窗过滤
-  let win = sessWin ?? null;
-  if (!win && comp.windowHours) {
-    const hasSess = await prisma.tournamentWindowSession.count({ where: { tournamentId: BigInt(compId) } });
-    if (hasSess > 0) {
-      const s = await prisma.tournamentWindowSession.findFirst({
-        where: { tournamentId: BigInt(compId), userId: BigInt(uid) },
-        select: { startTime: true, endTime: true },
-        orderBy: { endTime: "desc" },
+  const conf = parseScoreConfig(comp.scoreMode ?? "", comp.scoreConfig ?? "");
+  if (!conf) return null;
+  // 判窗：调用方传了会话窗直接用；否则窗口赛有会话记录时按各玩家会话窗
+  //（getTourRanking 同判据——集体赛不过滤）
+  const rows = await prisma.video.findMany({
+    where: { tournamentId: BigInt(compId), status: { not: 0 } },
+    select: { id: true, user: true, level: true, createTime: true },
+  });
+  let inWin = rows;
+  if (sessWin) {
+    inWin = rows.filter((r) => {
+      const t = Number(r.createTime);
+      return t >= sessWin.start && t <= sessWin.end;
+    });
+  } else if (comp.windowHours) {
+    const sessionWindows = await prisma.tournamentWindowSession.findMany({
+      where: { tournamentId: BigInt(compId) },
+      select: { userId: true, startTime: true, endTime: true },
+    });
+    if (sessionWindows.length > 0) {
+      const sessBy = new Map(sessionWindows.map((s) => [Number(s.userId), s]));
+      inWin = rows.filter((r) => {
+        const s = sessBy.get(Number(r.user));
+        const t = Number(r.createTime);
+        return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
       });
-      if (s) win = { start: Number(s.startTime), end: Number(s.endTime) };
     }
   }
-  const rows = await prisma.video.findMany({
-    where: { tournamentId: BigInt(compId), user: BigInt(uid), status: { not: 0 } },
-    select: { id: true, level: true, createTime: true },
-  });
-  const inWin = win ? rows.filter((r) => Number(r.createTime) >= win.start && Number(r.createTime) <= win.end) : rows;
-  if (!inWin.length) return null;
+  const levelMap = new Map(inWin.map((r) => [r.id, r.level]));
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: inWin.map((r) => r.id) } },
     select: { id: true, realTime: true, board3bv: true, noRecord: true },
   });
   const infoMap = new Map(infos.map((i) => [i.id, i]));
-  const conf = parseScoreConfig(comp.scoreMode ?? "", comp.scoreConfig ?? "");
-  if (!conf) return null;
   const needsMetrics = conf.metric !== "time" && conf.metric !== "3bv";
   const metrics = needsMetrics
     ? await prisma.videoMetrics.findMany({
@@ -1622,45 +1641,238 @@ export async function getMyScoreSnapshot(
     const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
     return raw > 0 ? raw * 1000 : 0;
   };
+  const values = new Map<string, number>();
+  const vids = inWin.map((r) => {
+    const v = valueOf(r.id);
+    values.set(r.id.toString(), v);
+    return {
+      user: r.user,
+      level: levelMap.get(r.id) ?? "",
+      value: v,
+      noRecord: infoMap.get(r.id)?.noRecord ?? false,
+    };
+  });
   const scores = computePlayerScores(
     comp.scoreMode ?? "",
     comp.scoreConfig ?? "",
-    inWin.map((r) => ({
-      user: uid,
-      level: r.level,
-      value: valueOf(r.id),
-      noRecord: infoMap.get(r.id)?.noRecord ?? false,
-    })),
+    vids,
     (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
   );
   const mine = scores.get(uid);
-  if (!mine) return null;
-  return { score: mine.score, calc: mine.calc };
+  return {
+    values,
+    scores,
+    mine,
+    calc: mine ? mine.calc : [],
+    filled: mine ? mine.filled : {},
+  };
+}
+
+/** 练习页比赛模式标题行「成绩」行数据（2026-11-22 张老师需求）：本人总分快照
+ *  （SSR 下发用，不算名次）；无成绩返回 null。getMyScoreValues 薄封装。 */
+export async function getMyScoreSnapshot(
+  compId: number,
+  uid: number,
+  sessWin?: { start: number; end: number } | null
+): Promise<{
+  score: number;
+  calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
+  filled: Record<string, number>;
+} | null> {
+  const r = await getMyScoreValues(compId, uid, sessWin);
+  if (!r?.mine) return null;
+  return { score: r.mine.score, calc: r.mine.calc, filled: r.mine.filled };
 }
 
 /** 比赛详情页统计（张老师 2026-11-19 定：报名人数与参赛人数分开统计，不冲突）——
  *  registrations=报名人数（tournament_entry 去重 user；为 0 时前台整行不显示，
  *  历届导入的旧比赛不存在统计误差）；entries=参赛人数＝实际传了录像的持有者数
- *  （distinct user）；videos=参赛录像数（挂接且未屏蔽） */
+ *  （distinct user）；videos=参赛录像数（挂接且未屏蔽）；
+ *  finishers=完赛人数（2026-11-22 张老师需求）：所有级别录像数量都满足要求、
+ *  无任何保底成绩的人数——按 computePlayerScores 批量算分后数 filled 全 0 的玩家
+ *  （sum_topn=各级别有效录像数 ≥ N；target_diff 无级别数量要求，有有效成绩即算）。
+ *  收录窗口与时间过滤判据与 getTourRanking 同源（集体赛不过滤；窗口赛有会话记录时
+ *  按各玩家会话窗收录像）。 */
 export async function getTourDetailStats(
   compId: number
-): Promise<{ registrations: number; entries: number; videos: number }> {
-  const [regRows, holders] = await Promise.all([
+): Promise<{ registrations: number; entries: number; videos: number; finishers: number }> {
+  const comp = await prisma.tournament.findUnique({
+    where: { id: BigInt(compId) },
+    select: { scoreMode: true, scoreConfig: true, includeLevels: true, windowHours: true },
+  });
+  const [regRows, rows] = await Promise.all([
     prisma.tournamentEntry.findMany({
       where: { tournamentId: BigInt(compId) },
       select: { userId: true },
     }),
     prisma.video.findMany({
       where: { tournamentId: BigInt(compId), status: { not: 0 } },
-      select: { user: true },
+      select: { id: true, user: true, level: true, createTime: true },
     }),
   ]);
-  const videos = holders.length;
+  // 完赛人数：有比赛计分配置才算（无配置=0）
+  const conf = comp ? parseScoreConfig(comp.scoreMode ?? "", comp.scoreConfig ?? "") : null;
+  let finishers = 0;
+  if (comp && conf) {
+    const sessionWindows = comp.windowHours
+      ? await prisma.tournamentWindowSession.findMany({
+          where: { tournamentId: BigInt(compId) },
+          select: { userId: true, startTime: true, endTime: true },
+        })
+      : [];
+    const sessByUser = new Map(sessionWindows.map((s) => [Number(s.userId), s]));
+    const useSessWindow = !!comp.windowHours && sessionWindows.length > 0;
+    const inWin = useSessWindow
+      ? rows.filter((r) => {
+          const s = sessByUser.get(Number(r.user));
+          const t = Number(r.createTime);
+          return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
+        })
+      : rows;
+    const levelMap = new Map(inWin.map((r) => [r.id, r.level]));
+    const infos = await prisma.videoInfo.findMany({
+      where: { id: { in: inWin.map((r) => r.id) } },
+      select: { id: true, realTime: true, board3bv: true, noRecord: true },
+    });
+    const infoMap = new Map(infos.map((i) => [i.id, i]));
+    const needsMetrics = conf.metric !== "time" && conf.metric !== "3bv";
+    const metrics = needsMetrics
+      ? await prisma.videoMetrics.findMany({
+          where: { id: { in: inWin.map((r) => r.id) } },
+          select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
+        })
+      : [];
+    const metricMap = new Map(metrics.map((m) => [m.id, m]));
+    const valueOf = (vid: bigint): number => {
+      if (conf.metric === "time") {
+        const info = infoMap.get(vid);
+        return info && !info.noRecord ? info.realTime : 0;
+      }
+      if (conf.metric === "3bv") {
+        const info = infoMap.get(vid);
+        return info && !info.noRecord ? info.board3bv * 1000 : 0;
+      }
+      const m = metricMap.get(vid);
+      if (!m) return 0;
+      const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
+      return raw > 0 ? raw * 1000 : 0;
+    };
+    const scores = computePlayerScores(
+      comp.scoreMode ?? "",
+      comp.scoreConfig ?? "",
+      inWin.map((r) => ({
+        user: r.user,
+        level: levelMap.get(r.id) ?? "",
+        value: valueOf(r.id),
+        noRecord: infoMap.get(r.id)?.noRecord ?? false,
+      })),
+      (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
+    );
+    // 完赛判定核心（filled 全 0，见 finisherUidsOf）
+    finishers = finisherUidsOf(conf, scores).length;
+  }
   return {
     registrations: new Set(regRows.map((r) => r.userId.toString())).size,
-    entries: new Set(holders.map((h) => h.user.toString())).size,
-    videos,
+    entries: new Set(rows.map((r) => r.user.toString())).size,
+    videos: rows.length,
+    finishers,
   };
+}
+
+/** 完赛判定核心（2026-11-22 张老师需求）：所有计分级别录像数量都满足要求、
+ *  无任何保底成绩的玩家 uid 列表——sum_topn 按 filled 全 0 判（收录级别之外的
+ *  级别不参与计分，filled 无该项视为满足）；target_diff 无级别数量要求，
+ *  有有效成绩即算（topn 为空 → every 恒真）。 */
+function finisherUidsOf(conf: ParsedScoreConfig, scores: Map<number, PlayerScore>): number[] {
+  const topnLevels = (["beg", "int", "exp"] as const).filter((lv) => (conf.topn[lv] ?? 0) > 0);
+  const list: number[] = [];
+  for (const [uid, s] of scores) {
+    if (topnLevels.every((lv) => (s.filled[lv] ?? 0) === 0)) list.push(uid);
+  }
+  return list;
+}
+
+/** 后台比赛清单批量完赛统计（2026-11-22 张老师需求）：返回 Map<compId, 完赛 uid 列表>。
+ *  与 getTourDetailStats.finishers 同口径（finisherUidsOf）；一次取齐比赛/录像/
+ *  会话/明细四表后按比赛分组算分，当前页 10 场共 5 个查询，不逐场 N×5。 */
+export async function getTourFinishersBulk(
+  compIds: number[]
+): Promise<Map<number, number[]>> {
+  const out = new Map<number, number[]>();
+  if (compIds.length === 0) return out;
+  const bigIds = [...new Set(compIds)].map((n) => BigInt(n));
+  const [comps, vids, sessions] = await Promise.all([
+    prisma.tournament.findMany({
+      where: { id: { in: bigIds } },
+      select: { id: true, scoreMode: true, scoreConfig: true, includeLevels: true, windowHours: true },
+    }),
+    prisma.video.findMany({
+      where: { tournamentId: { in: bigIds }, status: { not: 0 } },
+      select: { id: true, tournamentId: true, user: true, level: true, createTime: true },
+    }),
+    prisma.tournamentWindowSession.findMany({
+      where: { tournamentId: { in: bigIds } },
+      select: { tournamentId: true, userId: true, startTime: true, endTime: true },
+    }),
+  ]);
+  const infos = await prisma.videoInfo.findMany({
+    where: { id: { in: vids.map((v) => v.id) } },
+    select: { id: true, realTime: true, board3bv: true, noRecord: true },
+  });
+  const infoMap = new Map(infos.map((i) => [i.id, i]));
+  const metrics = vids.length
+    ? await prisma.videoMetrics.findMany({
+        where: { id: { in: vids.map((v) => v.id) } },
+        select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
+      })
+    : [];
+  const metricMap = new Map(metrics.map((m) => [m.id, m]));
+  for (const comp of comps) {
+    const conf = parseScoreConfig(comp.scoreMode, comp.scoreConfig);
+    if (!conf) {
+      out.set(Number(comp.id), []);
+      continue;
+    }
+    // 时间过滤判据与 getTourRanking 同源：集体赛不过滤；窗口赛有会话记录时按各玩家会话窗
+    const compSess = sessions.filter((s) => String(s.tournamentId) === String(comp.id));
+    const useSess = !!comp.windowHours && compSess.length > 0;
+    const sessBy = new Map(compSess.map((s) => [Number(s.userId), s]));
+    const inWin = useSess
+      ? vids.filter((r) => {
+          if (String(r.tournamentId) !== String(comp.id)) return false;
+          const s = sessBy.get(Number(r.user));
+          const t = Number(r.createTime);
+          return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
+        })
+      : vids.filter((r) => String(r.tournamentId) === String(comp.id));
+    const valueOf = (vid: bigint): number => {
+      if (conf.metric === "time") {
+        const info = infoMap.get(vid);
+        return info && !info.noRecord ? info.realTime : 0;
+      }
+      if (conf.metric === "3bv") {
+        const info = infoMap.get(vid);
+        return info && !info.noRecord ? info.board3bv * 1000 : 0;
+      }
+      const m = metricMap.get(vid);
+      if (!m) return 0;
+      const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
+      return raw > 0 ? raw * 1000 : 0;
+    };
+    const scores = computePlayerScores(
+      comp.scoreMode,
+      comp.scoreConfig,
+      inWin.map((r) => ({
+        user: r.user,
+        level: r.level,
+        value: valueOf(r.id),
+        noRecord: infoMap.get(r.id)?.noRecord ?? false,
+      })),
+      (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
+    );
+    out.set(Number(comp.id), finisherUidsOf(conf, scores));
+  }
+  return out;
 }
 
 /** 比赛录像分页（详情页「录像」板块）：默认按上传时间逆序（新在前，2026-11-22 张老师定），

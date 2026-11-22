@@ -12471,44 +12471,37 @@ html.op-fakefs #header {
     display: none; /* 窄屏随完成统计一起隐藏 */
   }
 }
-/* 比赛模式标题行两行统计（2026-11-22 张老师需求，替代 BV/PB/活跃/完成/胜率）：
-   第一行「成绩」=本人总分快照（级别名分色：初级绿 #a6e22e / 中级橙 #f79646 /
-   高级金 #fdc61a，同详情页 .comp_calc 气泡判例；总计亮灰加粗），第二行
-   「比赛剩余时间」倒计时（复用 WindowPlayBox 的 .win_countdown 行高字号，
-   颜色由 paintCompStats 按剩余分钟内联：>30min 绿 / ≤30min 黄 / ≤10min 玫瑰红）。
+/* 比赛模式标题行两行统计（2026-11-22 张老师需求，二轮同日改版）：
+   第一行「总计成绩 xxxx 排名第 x 位」——成绩数字绿 #a6e22e、排名数字金 #fdc61a，
+   正文亮灰；无成绩显「总计成绩 —」。第二行「比赛剩余时间」倒计时（复用
+   WindowPlayBox 的 .win_countdown 行高字号，颜色由 paintCompStats 按剩余分钟
+   内联：>30min 绿 / ≤30min 黄 / ≤10min 玫瑰红）。
    容器沿用 .op_stats 绝对定位几何（标题行水平中点），仅内容换血；
    ≤880px 与原统计区同口径隐藏（空间不够可隐藏，张老师 2026-10-23 定） */
 #online_play .op_comp_score {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 10px;
+  gap: 6px;
   font-size: 13px;
   line-height: 22px;
   color: #b1b1a4;
   white-space: nowrap;
 }
-#online_play .op_comp_score .op_comp_lv {
-  color: #b1b1a4;
+#online_play .op_comp_score .op_comp_scorenum {
+  color: #a6e22e; /* 成绩数字绿（张老师定） */
+  font-size: 16px;
+  font-weight: bold;
 }
-#online_play .op_comp_score .op_comp_lv.op_comp_beg {
-  color: #a6e22e;
-}
-#online_play .op_comp_score .op_comp_lv.op_comp_int {
-  color: #f79646;
-}
-#online_play .op_comp_score .op_comp_lv.op_comp_exp {
-  color: #fdc61a;
-}
-#online_play .op_comp_score .op_comp_total {
-  color: #b1b1a4;
+#online_play .op_comp_score .op_comp_rank {
+  color: #fdc61a; /* 排名数字金（张老师定） */
   font-size: 16px;
   font-weight: bold;
 }
 #online_play .op_comp_score .op_comp_none {
   color: #b1b1a4;
 }
-/* 倒计时行：.win_countdown（13px bold）+ 本页 22px 行高对齐成绩行；
+/* 倒计时行：.win_countdown（14px bold）+ 本页 22px 行高对齐成绩行；
    颜色内联注入（绿/黄/玫瑰红色阶），此处只管布局 */
 #online_play .op_comp_countdown {
   margin: 0;
@@ -12519,6 +12512,81 @@ html.op-fakefs #header {
   #online_play .op_comp_countdown {
     display: none; /* 窄屏与原统计区同口径隐藏 */
   }
+}
+/* 比赛模式底部「级别统计区」（2026-11-22 张老师需求二轮；三轮定稿单行横排）：
+   接管 BV 收集墙容器（#bv_wall，入册/宽度锁定/全屏形态设施全部复用）——
+   各收录级别**并在一行**，段间 28px 间隔（张老师 21:37 定「并在一行显示，
+   中间做合理间隔」）。每段：「初级  5盘52 +4x保底100  ■■■□□」——级别名
+   级别三色、盘数成绩正文亮灰、保底段亮灰（张老师指定）、格子从左到右按
+   已传盘数点亮（级别三色）。容器居中、宽度自适应内容 */
+#online_play .bvwall.comp_mode {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  flex-wrap: wrap;
+  /* 宽度自适应内容但锁进银框渲染宽（--bw-maxw 复用收集墙锁定机制）；
+     放不下时 flex-wrap 折行兜底（高级 topn 大时整段较宽） */
+  width: fit-content;
+  max-width: var(--bw-maxw, 100%);
+  opacity: 1; /* 比赛统计区不做 50% 半透明（收集墙的局中 dim 语义不适用） */
+  margin: 6px auto 0; /* 收集墙同款居中落位 */
+}
+#online_play .bvwall.comp_mode .bw_comp_row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+#online_play .bvwall.comp_mode .bw_comp_head {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 52px; /* 级别名列对齐（初级/中级/高级两字+当前徽标） */
+}
+#online_play .bvwall.comp_mode .bw_comp_name {
+  font-size: 12px;
+  font-weight: bold;
+}
+/* 级别名三色（同收集墙 data-lv 配色表：初绿/中橙/高黄） */
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="beg"] .bw_comp_name {
+  color: #a6e22e;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="int"] .bw_comp_name {
+  color: #fd971f;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="exp"] .bw_comp_name {
+  color: #e6db74;
+}
+/* 当前级别徽标（小号描边灰字，提示正在玩的级别行） */
+#online_play .bvwall.comp_mode .bw_comp_cur {
+  font-size: 10px;
+  color: #939387;
+  border: 1px solid #49483e;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 14px;
+}
+/* 「5盘52」正文：盘数与成绩亮灰（数字不强调——强调留给顶部总计） */
+#online_play .bvwall.comp_mode .bw_comp_text {
+  font-size: 12px;
+  color: #b1b1a4;
+  white-space: nowrap;
+}
+/* 「+4x保底100」段：亮灰（张老师指定）——弱于正文 */
+#online_play .bvwall.comp_mode .bw_comp_text .bw_fill {
+  color: #636359;
+}
+/* 格子：复用收集墙 .bw_sq 10px 方格基座，点亮色按行 data-lv 走级别三色 */
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="beg"] .bw_sq.on {
+  background: #a6e22e;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="int"] .bw_sq.on {
+  background: #fd971f;
+}
+#online_play .bvwall.comp_mode .bw_comp_row[data-lv="exp"] .bw_sq.on {
+  background: #e6db74;
 }
 /* 全屏态（2026-10-23 张老师定）：统计与游戏区域水平居中——全屏宿主铺满视口，
    棋盘 gwrap 在 #game_area 内 text-align:center 居中（中心＝视口中线）。
@@ -13896,6 +13964,25 @@ html.op-fakefs #header {
 .ban_check span {
   flex: 1;
   min-width: 0;
+}
+/* 完赛名单弹层（2026-11-22 后台比赛清单）：.ban_dialog 内滚动名单，人多时双列排布 */
+.finisher_list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: #c2c2b8;
+  line-height: 2;
+  column-width: 130px;
+  column-gap: 18px;
+}
+.finisher_list li {
+  break-inside: avoid;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* 弹窗渲染在 td.ops（nowrap）内会继承不换行导致文案顶出（2026-10-16 实证），强制恢复 */
 .ban_dialog,
