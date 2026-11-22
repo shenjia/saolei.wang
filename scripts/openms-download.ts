@@ -18,6 +18,14 @@
 //   查询时跳过「最近 --cooldown 秒内失败过」的行，避免同一条坏盘连续霸占每分钟的下载位。
 //   累计失败 (1+max-retries) 次后落定 state=3 放弃并移出队列。
 //
+// 【配额闸】（2026-11-22 张老师定「7 日内的占配额，超了留在队列等配额恢复」）
+//   窗口内条目（upload_time ≥ max(now−7d, WEEKLY_QUOTA_EPOCH)，与 countWeeklyUploads
+//   的 create_time 口径一致——导入行 create_time = 对方原始上传时间）导入前查用户
+//   剩余每周额度（sumDonateCents→weeklyUploadLimit，与上传路由同源）；≤0 则 defer：
+//   留在 state=0、attempts 不动、不进失败冷却，下轮 cron 自动重试，窗口滑出旧盘后
+//   自然恢复导入。窗口外历史存量不占额、永不受闸。defer 绝不进 retry 通道
+//   （retry 4 次即永久放弃，配额等待是天级，会错杀）。
+//
 // 【用法】（项目根目录，默认 dry-run，必须 --apply 才写库）
 //   env -u NODE_OPTIONS node --experimental-transform-types \
 //     --import ./scripts/sync/ts-extension-loader.mjs scripts/openms-download.ts \
@@ -27,8 +35,9 @@
 // 【生产 crontab】scripts/server-release.sh 幂等注册，每 2 分钟一轮（flock 防重入）。
 
 import { prisma } from "@/lib/db";
+import { countWeeklyUploads, weeklyUploadLimit, sumDonateCents, WEEKLY_QUOTA_EPOCH } from "@/core/src/lib/anticheat";
 import {
-  arg, log, cfg, importOne, recordMap,
+  arg, log, cfg, importOne, recordMap, deferQuota,
   startRun, writeRun, endRun, finishOnError,
   MAP_PENDING, RUN_DONE, RUN_PARTIAL,
   type Row, type Outcome,
@@ -59,7 +68,10 @@ type QueueRow = {
   videoId: bigint; saoleiId: bigint; profile: number; uploadTime: bigint; attempts: number;
 };
 
-/** 取下一批待下载项：state=0、不在失败冷却期内，按 --order 排序（默认新盘优先） */
+/** 取下一批待下载项：state=0、不在失败冷却期内，按 --order 排序（默认新盘优先）。
+ *  候选池取 limit×QUOTA_POOL_FACTOR 深度：防止单个超额用户的窗口内条目霸住队头，
+ *  把后面其他用户的新盘全堵在本轮之外（2026-11-22 配额闸引入）。 */
+const QUOTA_POOL_FACTOR = 6;
 async function takeQueue(limit: number): Promise<QueueRow[]> {
   const cutoff = BigInt(Math.floor(Date.now() / 1000) - COOLDOWN_SEC);
   return prisma.openmsVideoMap.findMany({
@@ -68,7 +80,7 @@ async function takeQueue(limit: number): Promise<QueueRow[]> {
       OR: [{ attempts: 0 }, { updateTime: { lt: cutoff } }],
     },
     orderBy: ORDER_BY,
-    take: limit,
+    take: limit * QUOTA_POOL_FACTOR,
     select: { videoId: true, saoleiId: true, profile: true, uploadTime: true, attempts: true },
   });
 }
@@ -81,6 +93,34 @@ async function takeByIds(ids: number[]): Promise<QueueRow[]> {
   });
 }
 
+/** 配额闸（2026-11-22 张老师定「7 日内的占配额，超了留在队列等配额恢复」）：
+ *  站内限额 countWeeklyUploads/weeklyUploadLimit 同源复用（与上传路由、上传页配额行
+ *  三处一致，禁单边漂移）。每用户每轮只查一次库；consume 在本轮成功导入一条后
+ *  扣减缓存额度，防止同一轮对同一用户连环超灌。 */
+async function makeQuotaGate() {
+  const cache = new Map<number, number>();
+  return {
+    remaining: async (uid: number): Promise<number> => {
+      const hit = cache.get(uid);
+      if (hit !== undefined) return hit;
+      const [limit, used] = await Promise.all([sumDonateCents(uid).then(weeklyUploadLimit), countWeeklyUploads(uid)]);
+      const left = limit - used;
+      cache.set(uid, left);
+      return left;
+    },
+    consume: (uid: number): void => {
+      const hit = cache.get(uid);
+      if (hit !== undefined) cache.set(uid, hit - 1);
+    },
+  };
+}
+
+/** 判断台账条目是否落在限额计数窗口内（与 countWeeklyUploads 的 create_time 过滤同口径：
+ *  导入行 create_time = 对方站原始上传时间 uploadTime）。窗口外的历史存量不占额、不受闸。 */
+function withinQuotaWindow(uploadTime: bigint, since: number): boolean {
+  return Number(uploadTime) >= since;
+}
+
 async function main() {
   const t0 = Date.now();
   log(`[openms-download] start ${APPLY ? "APPLY" : "DRY-RUN"} max-downloads=${MAX_DOWNLOADS} min-gap=${cfg.downloadGapMs}ms cooldown=${COOLDOWN_SEC}s max-retries=${cfg.maxRetries} order=${ORDER}`);
@@ -89,15 +129,17 @@ async function main() {
     minGapMs: cfg.downloadGapMs, listGapMs: 0, maxRetries: cfg.maxRetries,
   }, APPLY);
 
-  const stats = { ok: 0, skip: 0, retry: 0, gaveUp: 0 };
+  const stats = { ok: 0, skip: 0, retry: 0, gaveUp: 0, deferred: 0 };
   let handled = 0;
   let lastError: string | null = null;
   let currentUser = 0, currentProfile = 0, currentVideoId = 0;
   let closed = false;
+  const quotaGate = await makeQuotaGate();
+  const quotaSince = Math.max(Math.floor(Date.now() / 1000) - 7 * 86400, WEEKLY_QUOTA_EPOCH);
 
   const beat = async (force = false) => {
     await writeRun({
-      handled, ok: stats.ok, skip: stats.skip, retry: stats.retry, gaveUp: stats.gaveUp,
+      handled, ok: stats.ok, skip: stats.skip + stats.deferred, retry: stats.retry, gaveUp: stats.gaveUp,
       users: currentUser > 0 ? 1 : 0,
       currentUser: BigInt(currentUser), currentProfile,
       currentVideoId: BigInt(currentVideoId),
@@ -124,6 +166,19 @@ async function main() {
       currentProfile = link.profile;
       currentVideoId = row.id;
 
+      // 配额闸：仅对窗口内条目生效（窗口外历史存量不占额、永不受闸）。
+      // defer 语义 = 留在 state=0 队列、attempts 不动、不写失败冷却——下轮 cron 自动重试；
+      // 不消耗对方站的下载预算（判在下载之前）。绝不走 retry 通道（4 次即永久放弃）。
+      if (APPLY && withinQuotaWindow(item.uploadTime, quotaSince)) {
+        const left = await quotaGate.remaining(link.user);
+        if (left <= 0) {
+          stats.deferred++;
+          log(`  ⏸ 开源 #${row.id} 用户 ${link.user} 本周配额已满，留队等待滚动窗口恢复`);
+          await deferQuota(row, link);
+          continue;
+        }
+      }
+
       if (!APPLY) {
         log(`  [dry] 开源 #${row.id} 上传于 ${new Date(row.uploadSec * 1000).toISOString()} → 用户 ${link.user}（无 --apply 不下载）`);
         handled++;
@@ -140,6 +195,8 @@ async function main() {
       handled++;
       if (out.kind === "ok") {
         stats.ok++;
+        // 本轮内同步扣减缓存额度，防止同一轮对同一用户连环超灌
+        if (withinQuotaWindow(item.uploadTime, quotaSince)) quotaGate.consume(link.user);
         log(`  ✓ 开源 #${row.id} → 雷网 #${out.videoId} @${row.uploadSec}`);
       } else if (out.kind === "skip") {
         stats.skip++;
@@ -160,10 +217,10 @@ async function main() {
     }
 
     log(`[openms-download] done in ${((Date.now() - t0) / 1000).toFixed(1)}s ` +
-        `handled=${handled} ok=${stats.ok} skip=${stats.skip} retry=${stats.retry} gaveUp=${stats.gaveUp}` +
+        `handled=${handled} ok=${stats.ok} skip=${stats.skip} retry=${stats.retry} gaveUp=${stats.gaveUp} deferred=${stats.deferred}` +
         (APPLY ? "" : "（dry-run：未下载、未落库、未写 run 表）"));
     await endRun(lastError ? RUN_PARTIAL : RUN_DONE, {
-      handled, ok: stats.ok, skip: stats.skip, retry: stats.retry, gaveUp: stats.gaveUp,
+      handled, ok: stats.ok, skip: stats.skip + stats.deferred, retry: stats.retry, gaveUp: stats.gaveUp,
     }, lastError);
     closed = true;
   } finally {

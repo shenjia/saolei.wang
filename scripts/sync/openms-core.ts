@@ -407,6 +407,30 @@ export async function registerScanned(
   return { fresh: fresh.length, seen: rows.length - fresh.length };
 }
 
+/** 配额等待（2026-11-22 张老师定）：该用户本周手动上传额度已满，7 日内新盘暂缓导入。
+ *  与 retry 不同——不累加 attempts、绝不落定放弃；窗口滚动滑出旧盘后，后续 cron
+ *  自然捞起导入。只写 reason 供后台/台账区分「卡配额」与「卡失败」。 */
+export async function deferQuota(
+  row: Row,
+  link: { user: number; profile: number },
+): Promise<void> {
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const conclusion = {
+    state: MAP_PENDING,
+    reason: "该用户本周上传额度已满，等待滚动窗口恢复（不占重试次数）".slice(0, 250),
+    updateTime: now,
+  };
+  await prisma.openmsVideoMap.upsert({
+    where: { videoId: BigInt(row.id) },
+    create: {
+      videoId: BigInt(row.id), saoleiId: BigInt(link.user), profile: link.profile,
+      uploadTime: BigInt(row.uploadSec), scanTime: now,
+      ...conclusion,
+    },
+    update: conclusion,
+  });
+}
+
 /** 落定结论：成功/明确拒收写终态；临时失败累加 attempts，超过上限落定「放弃」。
  *  返回 gaveUp=true 表示本条已耗尽重试。 */
 export async function recordMap(
