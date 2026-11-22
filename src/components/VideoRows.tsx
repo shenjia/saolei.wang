@@ -324,24 +324,10 @@ export function VideoRowLine({
             NF
           </span>
         )}
-        {/* 2026-10-23 张老师需求：已审核（status=20）录像成绩后加绿色 ✓ 下标
-            （待审 10 放行进前台后区分已审/未审；NF 标记存在时排在 NF 后面） */}
-        {v.status === 20 && (
-          <span className="reviewed" title="已通过审核">
-            ✓
-          </span>
-        )}
-        {/* 2026-10-23 张老师需求：屏蔽盘（status=0，仅本人主页可见）同位置红 ✕
-            （替代 ✓ 的位置语义：此录像已被屏蔽，详情页可自助删除） */}
-        {v.status === 0 && (
-          <span className="banned" title="该录像已被屏蔽">
-            ✕
-          </span>
-        )}
         {/* 2026-11-22 张老师需求：已挂接比赛（video.tournament_id）的参赛录像，
-            成绩后金色「赛」下标（格式同 NF 小标；有 NF 时排在 NF 后面——
-            下标链顺序 NF → ✓/✕ → 赛）。hover 朝上气泡显比赛全称，
-            点击新标签打开比赛详情页 /tournaments/:id；样式见 globals.css .tour_mark */}
+            成绩后金色「赛」下标（格式同 NF 小标）。hover 朝上气泡显比赛全称，
+            点击新标签打开比赛详情页 /tournaments/:id；样式见 globals.css .tour_mark。
+            2026-11-22 晚张老师定：下标链顺序 NF → 赛 → ✓/✕——审核状态标记永远最后 */}
         {v.tournamentId && v.tournamentName && (
           <Link
             href={`/tournaments/${v.tournamentId}`}
@@ -353,6 +339,21 @@ export function VideoRowLine({
           >
             赛
           </Link>
+        )}
+        {/* 2026-10-23 张老师需求：已审核（status=20）录像成绩后加绿色 ✓ 下标
+            （待审 10 放行进前台后区分已审/未审）。2026-11-22 晚张老师定：
+            ✓ 恒在下标链最后（NF/赛之后），不放在「赛」前面 */}
+        {v.status === 20 && (
+          <span className="reviewed" title="已通过审核">
+            ✓
+          </span>
+        )}
+        {/* 2026-10-23 张老师需求：屏蔽盘（status=0，仅本人主页可见）红 ✕
+            （与 ✓ 同位置语义：此录像已被屏蔽，详情页可自助删除）——审核状态组恒最后 */}
+        {v.status === 0 && (
+          <span className="banned" title="该录像已被屏蔽">
+            ✕
+          </span>
         )}
       </td>
       {/* 本BV标记（2026-10-28 张老师需求）：首收=小数点角标 / PB=小数点角标（黄色），
