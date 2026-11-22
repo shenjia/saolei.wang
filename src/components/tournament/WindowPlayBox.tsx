@@ -11,6 +11,8 @@
 //     绿气泡「个人比赛标识：xxx （已复制到剪贴板）」
 //   - 已开窗口 → 显示个人标识 + 「进入比赛」「传录像」双钮 + 倒计时
 //     「比赛剩余时间：xx天xx小时xx分钟」——>1h 绿 / ≤30min 黄 / ≤10min 玫瑰红
+//   - 个人窗口已结束（finished，2026-11-22 张老师定 18875 事故）→ 银灰「已完赛」
+//     不可点击；一人一赛只能开一次（服务端同步防御）
 // · 集体赛（windowHours=0）走原 #play_row 双钮（页面自身渲染，本组件不渲染）
 
 import { useEffect, useState } from "react";
@@ -32,8 +34,9 @@ export function WindowPlayBox({
   windowHours: number;
   /** 比赛结束时刻（窗口钳制上界） */
   compEnd: number;
-  /** 初始会话（SSR 已开赛时服务端带出；null=未开赛） */
-  session0: { race: string; start: number; end: number } | null;
+  /** 初始会话（SSR 已开赛时服务端带出；null=未开赛）。
+   *  finished=true=个人窗口已结束（「已完赛」态，2026-11-22） */
+  session0: { race: string; start: number; end: number; finished: boolean } | null;
   /** 比赛状态（2026-11-21 张老师定：未开赛显示「报名参赛」而非「开始比赛」） */
   status: "upcoming" | "active" | "ended";
   /** 是否已报名（未开赛时报名盒初始态） */
@@ -86,13 +89,16 @@ export function WindowPlayBox({
         race?: string;
         start?: number;
         end?: number;
+        reused?: boolean;
         error?: string;
       };
       if (!data.ok || !data.race) {
         toast(data.error ?? "开赛失败", "error");
+        // 已完赛被服务端拒绝：本地置为已完赛态（按钮转「已完赛」）
+        if (data.error?.includes("完赛")) setSess((s) => (s ? { ...s, finished: true } : s));
         return;
       }
-      const s = { race: data.race, start: data.start ?? 0, end: data.end ?? 0 };
+      const s = { race: data.race, start: data.start ?? 0, end: data.end ?? 0, finished: false };
       setSess(s);
       // 标识复制到剪贴板（非安全上下文降级：只显示不复制）
       let copied = false;
@@ -112,7 +118,9 @@ export function WindowPlayBox({
 
   // 倒计时文案与色阶
   const now = Math.floor(Date.now() / 1000);
-  const remain = sess ? Math.max(sess.end - now, 0) : 0;
+  // 完赛判定：SSR 快照 finished 或客户端倒计时归零（tick 每 30s 刷新触发重渲染）
+  const isFinished = !!sess && (sess.finished || sess.end <= now);
+  const remain = sess && !isFinished ? Math.max(sess.end - now, 0) : 0;
   const d = Math.floor(remain / 86400);
   const h = Math.floor((remain % 86400) / 3600);
   const m = Math.floor((remain % 3600) / 60);
@@ -121,6 +129,15 @@ export function WindowPlayBox({
   const color = remainMin <= 10 ? "#f92672" : remainMin <= 30 ? "#e6c07b" : "#a6e22e";
 
   if (!sess) {
+    // 未开个人窗口：按钮下挂比赛结束倒计时（2026-11-22 张老师定）——
+    // 提示还剩多久不能开赛；色阶同已开窗口态（>1h 绿 / ≤30min 黄 / ≤10min 玫瑰红）
+    const compRemain = Math.max(compEnd - now, 0);
+    const cd = Math.floor(compRemain / 86400);
+    const ch = Math.floor((compRemain % 86400) / 3600);
+    const cm = Math.floor((compRemain % 3600) / 60);
+    const compRemainMin = compRemain / 60;
+    const compColor =
+      compRemainMin <= 10 ? "#f92672" : compRemainMin <= 30 ? "#e6c07b" : "#a6e22e";
     return (
       <div className="win_play_box">
         <button className="win_start_btn" onClick={startRace} disabled={starting}>
@@ -128,6 +145,27 @@ export function WindowPlayBox({
           <img src="/images/stopwatch-icon.png" alt="" width={28} height={28} />
           开始比赛<span className="win_hours_sub">（总计 {windowHours} 小时）</span>
         </button>
+        <p className="win_countdown" style={{ color: compColor }}>
+          距离比赛结束还有：
+          <span suppressHydrationWarning>
+            {cd > 0 ? `${cd}天` : ""}
+            {ch}小时{cm}分钟
+          </span>
+        </p>
+      </div>
+    );
+  }
+  // 个人窗口已结束：银灰「已完赛」不可点击（2026-11-22 张老师定 18875 事故——
+  // 窗口结束后绝不能再开赛；服务端 start 接口同步拒绝）
+  if (isFinished) {
+    return (
+      <div className="win_play_box">
+        <button className="win_start_btn win_finished_btn" disabled>
+          <span>已完赛</span>
+        </button>
+        <p className="win_countdown" style={{ color: "#939387" }}>
+          比赛时间已结束
+        </p>
       </div>
     );
   }
