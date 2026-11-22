@@ -305,6 +305,9 @@ export function assertVideoLevel(v: string): VideoLevel {
 // comments/clicks=评论/点击（降序，多在前）
 // 2026-10-20 张老师需求：新增 ioe/stnb（效率/判雷，video_metrics 指标列，降序大在前，
 // 无指标行的录像不参与排序——老录像跑批已全量覆盖，仅个别解析失败/屏蔽盘缺行）
+// 2026-11-22 张老师需求：新增 crossings/thrp（比赛计分项排序——惜步杯录像区表头
+// Crossings 列可点击按 crossings 排；video_metrics.cp/thrp 列，crossings 越少越好升序、
+// thrp 越大越好降序；仅比赛详情页录像区使用，/video 列表页无此两列不受影响）
 export const VIDEO_LIST_ORDERS = [
   "id",
   "time",
@@ -314,6 +317,8 @@ export const VIDEO_LIST_ORDERS = [
   "stnb",
   "comments",
   "clicks",
+  "crossings",
+  "thrp",
 ] as const;
 export type VideoListOrder = (typeof VIDEO_LIST_ORDERS)[number];
 
@@ -336,6 +341,8 @@ export const VIDEO_LIST_DEFAULT_DIR: Record<VideoListOrder, VideoListDir> = {
   stnb: "desc",
   comments: "desc",
   clicks: "desc",
+  crossings: "asc",
+  thrp: "desc",
 };
 
 /** URL dir 参数解析：非法/缺省回退该列默认方向 */

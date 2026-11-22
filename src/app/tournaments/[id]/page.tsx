@@ -30,7 +30,7 @@ import { WindowPlayBox } from "@/components/tournament/WindowPlayBox";
 import { SignupEntryBox } from "@/components/tournament/SignupEntryBox";
 import { VideoSearch } from "@/components/VideoSearch";
 import { scoreTime } from "@/lib/format";
-import { LEVEL_NAMES, type Level } from "@/lib/config";
+import { LEVEL_NAMES, VIDEO_LEVELS, parseVideoListOrder, parseVideoListDir, type Level, type VideoLevel, type VideoListOrder, type VideoListDir } from "@/lib/config";
 import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
 import {
   ensureTourLifecycleEvents,
@@ -143,9 +143,28 @@ export default async function CompetitionDetailPage({
   const vAuthor = Math.max(parseInt(sp.vauthor ?? "", 10) || 0, 0) || undefined;
   const vTimeRaw = (sp.vtime ?? "").trim();
   const vTime = vTimeRaw && Number.isFinite(Number(vTimeRaw)) && Number(vTimeRaw) > 0 ? Number(vTimeRaw) : undefined;
+  // 录像区级别筛选与表头排序（2026-11-22 张老师需求）：level 仅收比赛收录级别
+  // （非法值回全部）；order/dir 同 /video 列表口径（表头点击切换，缺省=上传时间倒序）
+  const levelRaw = sp.level ?? "";
+  const videoLevel: VideoLevel | "all" = (VIDEO_LEVELS as readonly string[]).includes(levelRaw)
+    ? (levelRaw as VideoLevel)
+    : "all";
+  const videoOrder: VideoListOrder = parseVideoListOrder(sp.order);
+  const videoDir: VideoListDir = parseVideoListDir(sp.dir, videoOrder);
+  const videoExplicit = sp.order !== undefined || sp.dir !== undefined;
+  // 比赛收录级别钳到录像三级别（Level 含 sum，但录像级别只有初/中/高——防御性过滤）
+  const tourVideoLevels = c.levels.filter((l): l is VideoLevel =>
+    (VIDEO_LEVELS as readonly string[]).includes(l)
+  );
   const [events, videos, ranking, dstats, myResult, searchUser] = await Promise.all([
     getTourEventsPage(compId, ep, TOUR_EVENT_PAGE_SIZE),
-    getTourVideosPage(compId, vp, COMP_VIDEO_PAGE_SIZE, { author: vAuthor, time: vTime }),
+    getTourVideosPage(compId, vp, COMP_VIDEO_PAGE_SIZE, {
+      author: vAuthor,
+      time: vTime,
+      level: videoLevel === "all" ? undefined : videoLevel,
+      order: videoOrder,
+      dir: videoDir,
+    }),
     getTourRanking(compId, 10),
     getTourDetailStats(compId),
     session ? getTourMyResult(compId, session.uid) : Promise.resolve(null),
@@ -186,8 +205,11 @@ export default async function CompetitionDetailPage({
             />
           </div>
 
-          {/* 录像板块：本比赛全部参赛录像，上传时间逆序（新在前，2026-11-22 张老师定）、不去重；行渲染与首页录像流同源。
-              标准翻页组件同上（client 壳 TourVideosFeed）；key=page 同上铁律。
+          {/* 录像板块：本比赛全部参赛录像，默认上传时间逆序（新在前，2026-11-22 张老师定）、不去重；行渲染与首页录像流同源。
+              2026-11-22 张老师需求：标题行下加级别筛选 tabs（仅比赛收录级别，全部+各级别）；
+              表头可点击排序（成绩/3BV/计分项等，同 /video 列表交互，惜步杯按 crossings 排）。
+              标准翻页组件同上（client 壳 TourVideosFeed）；
+              key=page+筛选/排序：软导航改变筛选维度时强制重挂载换入服务端新数据（铁律）。
               右上角搜索框（2026-11-18 深夜张老师定：同录像页，限本比赛范围——
               VideoSearch scope=tour 跳 vauthor/vtime，作者与成绩互斥） */}
           <div className="box comp_section">
@@ -206,7 +228,7 @@ export default async function CompetitionDetailPage({
               </div>
             </div>
             <TourVideosFeed
-              key={`vp${vp}-ep${ep}-va${vAuthor ?? 0}-vt${vTimeRaw}`}
+              key={`vp${vp}-ep${ep}-va${vAuthor ?? 0}-vt${vTimeRaw}-lv${videoLevel}-od${videoOrder}-dr${videoDir}`}
               compId={compId}
               initialVideos={videos.videos}
               initialPage={videos.page}
@@ -215,6 +237,11 @@ export default async function CompetitionDetailPage({
               eventsPage={events.page}
               pageSize={COMP_VIDEO_PAGE_SIZE}
               tourMetric={tourMetric}
+              levels={tourVideoLevels}
+              level={videoLevel}
+              order={videoOrder}
+              dir={videoDir}
+              explicit={videoExplicit}
             />
           </div>
         </li>

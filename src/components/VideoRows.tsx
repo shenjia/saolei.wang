@@ -212,9 +212,13 @@ export function VideoHead({
         <th className="c bv">{noSort3bv ? "3BV" : col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
         {/* 2026-11-22 比赛计分项列：tourMetric 非 time/3bv/s/stnb 时，3BV/s 与 STNB
             两列一起去掉、换为一列「比赛计分项」（惜步杯显示 Crossings；thrp/ioe 同理）。
-            比赛录像区恒 hideIoe（无 IOE 列），swap 列落位在 3BV 原两列的位置 */}
+            比赛录像区恒 hideIoe（无 IOE 列），swap 列落位在 3BV 原两列的位置。
+            2026-11-22 张老师需求：该列可点击排序（惜步杯按 crossings 排——按成绩排序
+            需求落点），方向语义按列名取 VIDEO_LIST_DEFAULT_DIR（crossings 少在前） */}
         {tourMetric && !hideMetricSwap(tourMetric) ? (
-          <th className="c tourmetric">{TOUR_METRIC_SHORT[tourMetric]}</th>
+          <th className="c tourmetric">
+            {col(tourMetric, TOUR_METRIC_SHORT[tourMetric], tourMetricSortTitle(tourMetric))}
+          </th>
         ) : (
           <th className="c bvs">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
         )}
@@ -250,6 +254,14 @@ export function VideoHead({
  *  惜步杯应显示 crossings 列）。time/3bv 本就有独立列（成绩/3BV），3bvs 即 3BV/s 列 */
 function hideMetricSwap(metric: TourMetricKey): boolean {
   return metric === "time" || metric === "3bvs" || metric === "3bv";
+}
+
+/** 计分项 swap 列的排序提示文案（2026-11-22 可点击排序）：VideoListOrder 与
+ *  TourMetricKey 同名同义（crossings/thrp/ioe），方向语义同 VIDEO_LIST_DEFAULT_DIR */
+function tourMetricSortTitle(metric: TourMetricKey): string {
+  if (metric === "crossings") return "按跨格数排列（少在前）";
+  if (metric === "thrp") return "按 ThrP 吞吐效率排列（大在前）";
+  return "按效率 IOE 排列（大在前）";
 }
 
 /** 比赛计分项单行值（tourMetric swap 列渲染）：VideoListItem 各指标字段 → 格式化文本。
@@ -347,9 +359,12 @@ export function VideoRowLine({
         )}
       </td>
       {/* 2026-11-22 比赛录像区列替换：计分项 ioe/thrp/crossings 时 3BV/s+STNB 两格
-          减为一格计分项值（表头同步单列，行/表头格数保持一致） */}
+          减为一格计分项值（表头同步单列，行/表头格数保持一致）。
+          2026-11-22 张老师需求：表头可排序后行格同步支持排序命中高亮（highlight） */}
       {tourMetric && !hideMetricSwap(tourMetric) ? (
-        <td className="c_3bvs tourmetric c">{tourMetricCellText(v, tourMetric)}</td>
+        <td className={`c_3bvs tourmetric c${highlight === tourMetric ? " current" : ""}`}>
+          {tourMetricCellText(v, tourMetric)}
+        </td>
       ) : (
         <>
           <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>

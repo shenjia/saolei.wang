@@ -1,9 +1,18 @@
 // 比赛参赛录像分页 API（GET /api/tournament/[id]/videos?page=1&size=20）
 // 2026-11-13 五轮：详情页录像板块换 PageSlider，client 壳「加载更多」走本接口
-// （前缀整批替换语义：page=1&size=N 取上传时间逆序最新 N 条，与 TourListFeed 同口径）。
+// （前缀整批替换语义：page=1&size=N 取当前排序下最新 N 条，与 TourListFeed 同口径）。
+// 2026-11-22 张老师需求：透传级别筛选（level）与表头排序（order/dir）——
+// 「加载更多」取的是当前筛选+排序下的前缀，与页面 RSC 首屏数据同源同序。
 
 import { NextResponse } from "next/server";
 import { getTourVideosPage } from "@/lib/tournament";
+import {
+  VIDEO_LEVELS,
+  VIDEO_LIST_ORDERS,
+  type VideoLevel,
+  type VideoListOrder,
+  type VideoListDir,
+} from "@/lib/config";
 
 export async function GET(
   req: Request,
@@ -18,8 +27,20 @@ export async function GET(
   const sp = new URL(req.url).searchParams;
   const page = Math.max(parseInt(sp.get("page") ?? "1", 10) || 1, 1);
   const size = Math.min(Math.max(parseInt(sp.get("size") ?? "20", 10) || 20, 1), 100);
+  // 级别筛选（2026-11-22）：非法值忽略（回全部级别）
+  const levelRaw = sp.get("level") ?? "";
+  const level: VideoLevel | undefined = (VIDEO_LEVELS as readonly string[]).includes(levelRaw)
+    ? (levelRaw as VideoLevel)
+    : undefined;
+  // 表头排序（2026-11-22）：非法值回默认 id；dir 非法回该列默认方向
+  const orderRaw = sp.get("order") ?? "";
+  const order: VideoListOrder = (VIDEO_LIST_ORDERS as readonly string[]).includes(orderRaw)
+    ? (orderRaw as VideoListOrder)
+    : "id";
+  const dirRaw = sp.get("dir");
+  const dir: VideoListDir | undefined = dirRaw === "asc" || dirRaw === "desc" ? dirRaw : undefined;
 
-  const data = await getTourVideosPage(compId, page, size);
+  const data = await getTourVideosPage(compId, page, size, { level, order, dir });
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   return NextResponse.json({ ok: true, ...data, totalPages });
 }

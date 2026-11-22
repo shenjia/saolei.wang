@@ -14,7 +14,17 @@ import { getVideosByIds, type VideoListItem } from "@/lib/queries";
 import { publishNews } from "@/lib/news";
 import { NEWS_TYPE } from "@/lib/config";
 import { dualTitles } from "@/lib/title-system";
-import { LEVELS, LEVEL_NAMES, type Level } from "@/lib/config";
+import {
+  LEVELS,
+  LEVEL_NAMES,
+  VIDEO_LIST_DEFAULT_DIR,
+  assertVideoLevel,
+  MIN_3BV_FOR_3BVS,
+  type Level,
+  type VideoLevel,
+  type VideoListOrder,
+  type VideoListDir,
+} from "@/lib/config";
 
 export type TournamentStatus = "upcoming" | "active" | "ended";
 
@@ -1544,8 +1554,12 @@ export async function getTourDetailStats(
   };
 }
 
-/** 比赛录像分页（详情页「录像」板块）：按上传时间逆序（新在前，2026-11-22 张老师定），
- *  展示形式与首页录像流一致（VideoRows 行渲染），但按比赛过滤、不去重 */
+/** 比赛录像分页（详情页「录像」板块）：默认按上传时间逆序（新在前，2026-11-22 张老师定），
+ *  展示形式与首页录像流一致（VideoRows 行渲染），但按比赛过滤、不去重。
+ *  2026-11-22 张老师需求：支持级别筛选（仅比赛收录级别，初/中/高级）与表头排序
+ *  （成绩/3BV/计分项等，同 /video 列表口径——time 排序滤运气盘、3bvs/stnb 限界、
+ *  comments/clicks 仅 >0）。查询从 Prisma findMany 改统一 join raw SQL：
+ *  排序键分布在 video_info/video_metrics/video_stat 三张表，Prisma 无跨表 orderBy */
 export async function getTourVideosPage(
   compId: number,
   page: number,
@@ -1557,39 +1571,125 @@ export async function getTourVideosPage(
     time?: number;
     /** 3BV 搜索（整数） */
     bv?: number;
+    /** 级别筛选（2026-11-22 张老师需求）：仅比赛收录级别，缺省=全部级别 */
+    level?: VideoLevel;
+    /** 表头排序（2026-11-22 张老师需求）：缺省=id（上传时间倒序）；dir 缺省=该列默认方向 */
+    order?: VideoListOrder;
+    dir?: VideoListDir;
   }
 ): Promise<{ videos: VideoListItem[]; total: number; page: number; pageSize: number }> {
-  const base: Record<string, unknown> = { tournamentId: BigInt(compId), status: { not: 0 } };
-  if (opts?.author) base.user = BigInt(opts.author);
-  // 成绩/3BV 搜索需要关联 video_info——先按 info 表筛 id（同 /video 列表口径）
-  let idFilter: bigint[] | null = null;
-  if (opts?.time || opts?.bv) {
-    const infoWhere: Record<string, unknown> = {};
-    if (opts.time) infoWhere.realTime = { gte: Math.round(opts.time * 1000) };
-    if (opts.bv) infoWhere.board3bv = { gte: opts.bv };
-    const hits = await prisma.videoInfo.findMany({
-      where: infoWhere,
-      select: { id: true },
-    });
-    idFilter = hits.map((h) => h.id);
-    base.id = { in: idFilter };
+  const level = opts?.level;
+  const order: VideoListOrder = opts?.order ?? "id";
+  const dir: VideoListDir = opts?.dir ?? VIDEO_LIST_DEFAULT_DIR[order];
+  const asc = dir === "asc";
+  const D = asc ? "ASC" : "DESC";
+  const hasSearch = !!(opts?.time || opts?.bv);
+  // 默认排序（id=上传时间序）且无成绩/3BV 搜索：Prisma 原路径（video 表直查，行为不变）。
+  // 带搜索时走下方 join 路径——旧实现「videoInfo.findMany 取 id → IN 过滤」在搜索命中
+  // 行数多时超 MySQL 65535 占位符上限直接 500（Prepared statement contains too many
+  // placeholders），2026-11-22 本地 vtime=12 实证；搜索条件下沉 join 后自然消除
+  if (order === "id" && !hasSearch) {
+    const base: Record<string, unknown> = { tournamentId: BigInt(compId), status: { not: 0 } };
+    if (opts?.author) base.user = BigInt(opts.author);
+    if (level) base.level = level;
+    const where = base as { tournamentId: bigint; status: { not: 0 } };
+    const total = await prisma.video.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const p = Math.min(Math.max(page, 1), totalPages);
+    const ids =
+      total === 0
+        ? []
+        : (
+            await prisma.video.findMany({
+              where,
+              select: { id: true },
+              orderBy: [{ createTime: D.toLowerCase() as "asc" | "desc" }, { id: D.toLowerCase() as "asc" | "desc" }],
+              skip: (p - 1) * pageSize,
+              take: pageSize,
+            })
+          ).map((r) => Number(r.id));
+    return { videos: await getVideosByIds(ids), total, page: p, pageSize };
   }
-  const where = base as { tournamentId: bigint; status: { not: 0 } };
-  const total = await prisma.video.count({ where });
+
+  // 其余排序：统一 join（同 getVideoList videoListConds 口径）——
+  // 驱动表恒 video（比赛范围小，无需 FORCE INDEX 优化），按排序键选 join 表
+  const needVi = order === "time" || order === "3bv" || order === "3bvs" || order === "stnb" || order === "crossings" || order === "thrp";
+  const needVs = order === "comments" || order === "clicks";
+  const needVm = order === "ioe" || order === "stnb" || order === "crossings" || order === "thrp";
+  // 裸拼 SQL 护栏 v2：值一律 ? 占位符（compId/author/level/time/bv 均为运行期值）；
+  // 标识符（列名/ASC·DESC）才是插值合法域——assertVideoLevel 只作运行时白名单断言
+  const conds: string[] = [
+    // 列名暂留 competition_id（2026-11-18 competition→tournament 改名未 RENAME，schema 注释同口径）
+    `v.competition_id = ?`,
+    `v.status <> 0`,
+  ];
+  const condVals: (string | number | bigint)[] = [compId];
+  if (opts?.author) {
+    conds.push(`v.user = ?`);
+    condVals.push(BigInt(opts.author));
+  }
+  if (level) {
+    conds.push(`v.level = ?`);
+    condVals.push(assertVideoLevel(level));
+  }
+  if (opts?.time) {
+    conds.push(`vi.real_time >= ?`);
+    condVals.push(Math.round(opts.time * 1000));
+  }
+  if (opts?.bv) {
+    conds.push(`vi.board_3bv >= ?`);
+    condVals.push(opts.bv);
+  }
+  // 排序口径同 /video 列表（2026-11-22 比赛录像区沿用）：
+  // time/3bvs/stnb 排序滤运气盘（no_record=1 成绩划线无效）；3bvs/stnb 排序限界内才有效；
+  // comments/clicks 排序仅出 >0 的行（同 /video 原 >0 过滤口径）
+  if (order === "time" || order === "3bvs" || order === "stnb") {
+    conds.push(`vi.real_time > 0`, `vi.no_record = 0`);
+  }
+  if (order === "3bvs" || order === "stnb") {
+    conds.push(
+      `vi.board_3bv >= CASE v.level WHEN 'beg' THEN ${MIN_3BV_FOR_3BVS.beg} WHEN 'int' THEN ${MIN_3BV_FOR_3BVS.int} ELSE ${MIN_3BV_FOR_3BVS.exp} END`
+    );
+  }
+  if (order === "comments") conds.push(`vs.comments > 0`);
+  if (order === "clicks") conds.push(`vs.clicks > 0`);
+  const joins = `FROM video v JOIN video_info vi ON vi.id = v.id${
+    needVs ? " JOIN video_stat vs ON vs.id = v.id" : ""
+  }${needVm ? " JOIN video_metrics vm ON vm.id = v.id" : ""}`;
+  const orderBy =
+    order === "id"
+      ? `v.create_time ${D}` // id+搜索路径：上传时间序（同 /video 默认排序口径）
+      : order === "time"
+        ? `vi.real_time ${D}`
+        : order === "3bv"
+          ? `vi.board_3bv ${D}`
+          : order === "3bvs"
+            ? `(vi.board_3bv * 1000000 / vi.real_time) ${D}`
+            : order === "ioe"
+              ? `vm.ioe ${D}`
+              : order === "stnb"
+                ? `vm.stnb ${D}`
+                : order === "crossings"
+                  ? `vm.cp ${D}`
+                  : order === "thrp"
+                    ? `vm.thrp ${D}`
+                    : `vs.comments ${D}`; // comments（clicks 由下方同式覆盖）
+  const orderExpr = order === "clicks" ? `vs.clicks ${D}` : orderBy;
+  const whereSql = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+
+  const totalRows = await prisma.$queryRawUnsafe<{ c: bigint }[]>(
+    `SELECT COUNT(*) AS c ${joins} ${whereSql}`,
+    ...condVals
+  );
+  const total = Number(totalRows[0]?.c ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const p = Math.min(Math.max(page, 1), totalPages);
-  const ids =
-    total === 0
-      ? []
-      : (
-          await prisma.video.findMany({
-            where,
-            select: { id: true },
-            orderBy: [{ createTime: "desc" }, { id: "desc" }],
-            skip: (p - 1) * pageSize,
-            take: pageSize,
-          })
-        ).map((r) => Number(r.id));
+  // LIMIT/OFFSET 为服务端整数（pageSize 常量、p 经 clamp），插值合法域
+  const idRows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(
+    `SELECT v.id AS id ${joins} ${whereSql} ORDER BY ${orderExpr}, v.id ${D} LIMIT ${pageSize} OFFSET ${(p - 1) * pageSize}`,
+    ...condVals
+  );
+  const ids = idRows.map((r) => Number(r.id));
   return { videos: await getVideosByIds(ids), total, page: p, pageSize };
 }
 
