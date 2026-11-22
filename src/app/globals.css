@@ -17695,8 +17695,12 @@ body #header .nav li a.nav_tour_upcoming:hover,
 /* 动态行：主体（玩家名 + 动作文）左，相对时间右 */
 .comp_events { margin: 0; padding: 0; list-style: none; }
 /* 动态行（2026-11-19 凌晨张老师定：正文字号与首页新闻一致——legacy #news .table td
-   14px/30px 口径，弃 13px 小字） */
-.comp_ev_row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; line-height: 30px; border-bottom: 1px dashed #3e3d32; }
+   14px/30px 口径，弃 13px 小字）。
+   2026-11-22 二次调整（张老师「成绩跟左边文本靠在一起，空格间距」）：
+   去 space-between（它把成绩列均分悬在行中间）——main 收缩为内容宽、成绩列
+   紧跟其后（margin-left 4px=一个空格）、时间列 margin-left:auto 贴右；
+   窄屏时 main（min-width:0）被压缩出省略号，成绩/时间 flex-shrink:0 完整可见 */
+.comp_ev_row { display: flex; align-items: baseline; gap: 10px; font-size: 14px; line-height: 30px; border-bottom: 1px dashed #3e3d32; }
 .comp_ev_row:last-child { border-bottom: 0; }
 .comp_ev_main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comp_ev_user { color: #f8f8f2; font-weight: 700; text-decoration: none; margin-right: 4px; }
@@ -17713,11 +17717,12 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_total:hover { color: #a6e22e; }
 .comp_ev_row .delta { color: #fdc61a; font-size: 13px; margin-left: 4px; }
 .comp_ev_row .delta svg.d_arrow { display: inline-block; vertical-align: -1px; margin-right: 2px; }
-/* 成绩数字独立列（2026-11-22 张老师需求「动态每条成绩数字 hover 出计算过程气泡，
-   同排行榜前10；包括最终成绩数字」）：type=4/6 的成绩数字+提升幅度从 comp_ev_main
-   （overflow:hidden 省略号容器）拆出成 flex 兄弟列——气泡不被裁、窄屏省略号
-   只截文本段；flex-shrink:0 保成绩永完整可见。 */
-.comp_ev_score { flex-shrink: 0; white-space: nowrap; }
+/* 成绩数字列（2026-11-22 张老师需求「动态每条成绩数字 hover 出计算过程气泡，
+   同排行榜前10；包括最终成绩数字」）：type=4/6 的成绩数字+提升幅度放独立 flex 列
+   ——气泡不被 comp_ev_main 的 overflow:hidden 裁掉。二次调整（张老师「跟左边
+   文本靠在一起」）：不吸行中、紧跟文本段后（margin-left 4px=一个空格间距）。
+   flex-shrink:0 保成绩永完整可见。 */
+.comp_ev_score { flex-shrink: 0; white-space: nowrap; margin-left: 4px; }
 .comp_ev_score .delta { display: inline-block; }
 /* 比赛/完赛动态里比赛名保持正文观感（type=58 报名全称 + type=59 完赛简称共用，
    2026-11-22 20:04 张老师定）：回 td 基准 14px、去加粗——legacy #news .score 是
@@ -17746,7 +17751,7 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_finish_score { color: #b1b1a4; font-weight: 700; margin-left: 0; }
 /* 动态行军衔徽章小号（2026-11-18 晚定：同首页动态行紧凑排布） */
 .comp_ev_row .title { font-size: 12px; line-height: 18px; margin-right: 4px; }
-.comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; }
+.comp_ev_time { color: #939387; font-size: 12px; flex-shrink: 0; margin-left: auto; }
 
 /* 详情页标题大字号（五轮 20:13 曾区分 26px；七轮 03:10 起列表页标题也恢复
    26px/39px（.comp_name 基准已改），本覆写冗余删除；
