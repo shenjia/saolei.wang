@@ -518,7 +518,8 @@ export const NEWS_TYPE = {
   TOUR_FINISH: 59, // 窗口赛完赛（2026-11-22 张老师需求：「已完赛！最终成绩：xxx」；
                  // reference=比赛 id；details.score=总分 score 域值（毫秒/×1000），
                  // 渲染按比赛 metric 格式化；个人窗口结束惰性补写，createTime=窗口结束时刻；
-                 // 仅个人主页「动态」+关注流，不进首页）
+                 // 2026-11-22 张老师再定：进首页新闻流（NEWS_HOME_TYPES），
+                 // 个人主页「动态」+关注流照旧）
 } as const;
 
 /** 首页「新闻」流可见的动态类型（2026-09-24 张老师定：注册/头像/发帖/评论动态只上个人主页，不进首页新闻）
@@ -536,6 +537,8 @@ export const NEWS_HOME_TYPES: number[] = [
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
   NEWS_TYPE.STAR, // 当选每日一星（2026-10-25：金色动态上首页新闻流）
+  NEWS_TYPE.TOUR_FINISH, // 窗口赛完赛（2026-11-22 张老师定：应进首页新闻流——
+  // 比赛成绩与破纪录同属「战报」性质；报名动态（58）仍只进个人主页+关注流）
   // BV 收集动态（57）不进首页（2026-11-19 张老师修正：原定「破PB进/首收不进」
   // 推翻——只进个人主页动态流和关注流；homeNewsTypeFilter 的 57 排除分支已随迁删除）
 ];

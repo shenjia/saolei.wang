@@ -17779,11 +17779,15 @@ body #header .nav li a.nav_tour_upcoming:hover,
 /* 比赛/完赛动态里比赛名保持正文观感（type=58 报名全称 + type=59 完赛简称共用，
    2026-11-22 20:04 张老师定）：回 td 基准 14px、去加粗——legacy #news .score 是
    16px bold，news_article 只改了色，比赛名会跟着变 16px 粗体，需 (1,4,0) 提权压回。
+   行高 24px→20px（2026-11-22 20:50 张老师报告「比赛链接行高应为 20px 与正文一致」：
+   legacy #news .score 还带 line-height:24px，此前只压了字号字重漏了行高；
+   20px = 行盒 30px 内正文实际字形行距口径，同 user_card scores th 判例）。
    成绩数值 news_finish_score 与破纪录动态数字同字号（16px bold 显式声明），
    色同破纪录新成绩亮灰 */
 #news .table td a.score.news_finish_comp {
   font-size: 14px;
   font-weight: normal;
+  line-height: 20px;
 }
 #news .table td .news_finish_score {
   color: #b1b1a4;

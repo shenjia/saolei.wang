@@ -285,7 +285,9 @@ export async function getHomeNews(salt = "", limit = HOME_NEWS_NUMBER): Promise<
 // 盐进键（keyArgs）：键空间有界——盐只随真实内容变化，无法被请求参数伪造
 const fetchHomeNewsCached = unstable_cache(
   async (salt: string, limit: number) => getNews({ limit, home: true }),
-  ["home-news-live-v1"],
+  // v2：2026-11-22 home 白名单扩入完赛动态（NEWS_TYPE.TOUR_FINISH，张老师定）——
+  // 改 home 口径必须升版本换键，否则旧缓存条目（无 59 行）最长 5 分钟不更新
+  ["home-news-live-v2"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
@@ -944,6 +946,8 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  // v10：2026-11-22 home 白名单扩入完赛动态（NEWS_TYPE.TOUR_FINISH，张老师定）——
+  //  行集与计数口径同变，换键防旧计数（少了 59 行）最长 5 分钟不更新。
   // v9：2026-10-31 阶段档改按「有效评定时间」分档（快照与关联录像 real_time 取优，
   //  与徽章 recordNewsExpTime 同口径，张老师报告张子豪 69.89 破纪录动态档错位）。
   // v8：2026-10-29 阶段档排除「当选每日一星」动态（STAR 只进「全部」tab，张老师定）。
@@ -953,7 +957,7 @@ const fetchNewsCountNoUser = unstable_cache(
   // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
-  ["news-count-v9"],
+  ["news-count-v10"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
@@ -961,7 +965,8 @@ const fetchNewsCountNoUser = unstable_cache(
 const fetchNewsCountLive = unstable_cache(
   async (salt: string, opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) =>
     getNewsCountImpl(opts),
-  ["news-count-live-v1"],
+  // v2 与 fetchNewsCountNoUser v10 同步（home 白名单扩入 59）
+  ["news-count-live-v2"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 

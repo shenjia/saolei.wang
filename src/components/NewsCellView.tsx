@@ -378,7 +378,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
         {/* 窗口赛完赛动态（type=59，2026-11-22 张老师五轮定稿）：「已完赛{简称}！最终成绩为 xxx」——
             xxx=个人窗口内比赛总分（score 域），按比赛计分项格式化（fmtTourScore）；
             简称可点跳详情页（title 带全称）；无有效成绩时不带成绩段。
-            个人主页「动态」+关注流可见 */}
+            个人主页「动态」+关注流+首页新闻流可见（2026-11-22 进 NEWS_HOME_TYPES） */}
         {news.type === NEWS_TYPE.TOUR_FINISH && news.author && (
           <>
             {authorCells}
