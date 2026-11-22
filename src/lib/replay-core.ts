@@ -239,6 +239,20 @@ export function replayCounts(
 
   for (const e of events) {
     if (over) break;
+    // 哨兵事件（盘外统一收敛点，语义同 VideoReplay.tsx isSentinelPx）：行程/跨格
+    // **彻底透明**——不计、不跨、锚点保留（411177 案，2026-11-22 张老师报 crossings
+    // 面板 1013 vs 落库 2479）。此前本函数只防 rmv 大哨兵（下方 px<60000 阈值，
+    // 2026-10-23 259991 案），本站 evf 的哨兵 (W*16,H*16)（healLostGesture 自愈补录，
+    // 355154 案上线）远小于阈值——照旧进坐标链：「进段」0.5px 光栅化直线横跨整盘
+    // 逐格 +1（411177 的 38 段虚增 730）、「出段」断链后重起每段无脑 +1（虚增 737），
+    // 411177 实测 1013+730+737=2480≈2479。正确口径=前端 VideoReplay（355571 案已改）
+    // 与 ms-toollib last_in_board_pos_path 同款：哨兵只是键态闭合补录，无位移语义，
+    // 「出去又回来」零行程零跨格。⚠️ 哨兵只跳过下面的坐标链块，**键态推进照常**——
+    // 哨兵 lr/rr 正是清 lp/rp 的事件（healLostGesture 语义），跳过会让后续 rc 被
+    // 卡死的 lp 吞掉、chord 误判提前踩雷终局（第一版踩过：cl 416→116、solvedBv 156→45）。
+    // rmv 大哨兵同样落进本分支（语义等价，一并治）。
+    const sent = e.px >= W * 16 && e.py >= H * 16;
+    if (!sent) {
     // 鼠标行程：所有带像素坐标的事件按时间序累加欧氏距离（flop mouseMove 同款）。
     // rmv 哨兵坐标豁免：Vienna 格式在窗口失焦等场景写 ~6552x 的哨兵值（2026-10-23
     // 实证 259991 库存 path 8249 格 vs 真实 55 格，133/261 条 rmv 的 path 被污染）——
@@ -277,6 +291,7 @@ export function replayCounts(
       lastY = null;
       lastCell = -1;
     }
+    } // !sent 哨兵透明块收口（键态推进继续往下走）
     if (e.ev === "mt") {
       marks = !marks;
       continue;
