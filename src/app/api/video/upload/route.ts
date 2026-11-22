@@ -225,11 +225,17 @@ export async function uploadVideo(
      超限录像先判「是否破本人当前排行纪录（time/3bvs/stnb 任一，FL/NF 分池）」，
      破了就放行，否则原样 429。只对比个人纪录，不做全站对比、不含 BV 级 PB
      （2026-11-18 张老师定稿）。运气盘（noRecord=1，3BV 低于级别下限）不进纪录链，不豁免。
+     参赛录像豁免（2026-11-22 张老师定）：比赛标识匹配且在有效期内的录像不受上传
+     数量限制——上方 matchTourByRace 三路命中（race=未过期个人会话且上传时刻在
+     个人窗口内 / race=进行中比赛 code / 签名末尾=code，均自带起止有效期判定）
+     即 compAttach 非空即豁免；匹配失败（null）照常吃闸，保守不放开。参赛录像
+     既免拦截也不计数（countWeeklyUploads 已排除 competition_id 非空行，
+     2026-11-22 与排名局同口径），竞赛期批量上传不吃正常额度。
      排名局（rankedInternal）本就不占额度，跳过闸。低信任 24h≤5 闸不豁免，在上方。 */
   const donateCents = await sumDonateCents(session.uid);
   const weeklyLimit = weeklyUploadLimit(donateCents);
   const used = await countWeeklyUploads(session.uid);
-  if (!options?.rankedInternal && used >= weeklyLimit) {
+  if (!options?.rankedInternal && !compAttach && used >= weeklyLimit) {
     const exemption = noRecord
       ? { exempt: false, personal: [] as string[] }
       : await checkRecordExempt(session.uid, level, parsed.noflag, parsed.bbbv ?? 0, parsed.timeMs);

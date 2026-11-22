@@ -624,7 +624,7 @@ export function UploadForm({ initialRemaining }: { initialRemaining: number }) {
                 zIndex: 10,
               }}
             >
-              本周额度已用完，破纪录（时间/3BV/s/STNB）录像仍可上传
+              本周额度已用完，破纪录（时间/3BV/s/STNB）、参赛录像仍可上传
               <span
                 style={{
                   position: "absolute",
