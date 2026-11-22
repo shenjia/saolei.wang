@@ -387,7 +387,7 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                 href={`/tournaments/${news.tour.alias || news.reference}`}
                 target="_blank"
                 prefetch={false}
-                className="score news_article"
+                className="score news_article news_finish_comp"
                 title={news.tour.name}
               >
                 {news.tour.shortName}

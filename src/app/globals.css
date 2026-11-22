@@ -17715,9 +17715,21 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_total:hover { color: #a6e22e; }
 .comp_ev_row .delta { color: #fdc61a; font-size: 13px; margin-left: 4px; }
 .comp_ev_row .delta svg.d_arrow { display: inline-block; vertical-align: -1px; margin-right: 2px; }
-/* 个人动态「已完赛{简称}！最终成绩为 xxx」数值（type=59，2026-11-22 五轮定稿）：
-   同破纪录新成绩亮灰加粗；四轮的 news_finish_label 标签类随文案改回废弃 */
-#news .table td .news_finish_score { color: #b1b1a4; font-weight: 700; margin-left: 4px; }
+/* 个人动态「已完赛{简称}！最终成绩为 xxx」（type=59，2026-11-22 19:41 张老师定）：
+   ①简称保持正文观感——回 td 基准 14px、去加粗（legacy #news .score 是 16px bold，
+     news_article 只改了色，简称会跟着变 16px 粗体，需 (1,4,0) 提权压回）；
+   ②成绩数值与破纪录动态数字同字号（legacy 16px bold 显式声明，防继承漂移），
+     色同破纪录新成绩亮灰 */
+#news .table td a.score.news_finish_comp {
+  font-size: 14px;
+  font-weight: normal;
+}
+#news .table td .news_finish_score {
+  color: #b1b1a4;
+  font-size: 16px;
+  font-weight: bold;
+  margin-left: 4px;
+}
 /* 官方事件金色（2026-11-18 晚张老师定：报名开始/正式开始/正式结束） */
 .comp_ev_official { color: #fdc61a; font-weight: 700; }
 /* 窗口赛完赛事件（type=6「已完赛」2026-11-22）：同官方事件金色 */
