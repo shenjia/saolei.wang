@@ -14,6 +14,11 @@
 // · 标题行不再显示起止日期，改图表下方「比赛时间：11月11日 ~ 12月3日」一行；
 // · 「收录级别」更名「比赛级别」；
 // · 比赛标识空（未设置）时整行不展示——后台支持手动设置标识后，空标识是常态。
+//
+// 2026-11-22 张老师需求（窗口赛标识口径）：
+// · 窗口赛（windowHours>0）不走全局标识：个人未开窗口显示「开赛后生成个人标识」；
+//   已开窗口（mySession）显示个人会话标识（上传挂接只认它）；个人窗口已结束
+//   （比赛未结束）仍显示全局 code 存档（空则不显示整行）。
 
 import Link from "next/link";
 import {
@@ -128,7 +133,10 @@ export function TourBlock({
       </div>
 
       {/* 信息行（2026-11-19 早张老师定：级别用级别色绿/橙/金不加粗；
-          标识不带括号简称——已开始亮灰、未开始暗灰「待定」） */}
+          标识不带括号简称——已开始亮灰、未开始暗灰「待定」；
+          2026-11-22 张老师需求：窗口赛（个人计时）统一标识无意义——
+          未开个人窗口显示「开赛后生成个人标识」，开赛后显示个人会话标识
+          （上传挂接只认它，同右栏 WindowPlayBox）；已结束回退全局标识存档） */}
       <div className="comp_meta">
         <span className="comp_levels">
           比赛级别：
@@ -138,7 +146,26 @@ export function TourBlock({
             </span>
           ))}
         </span>
-        {c.status === "upcoming" ? (
+        {c.windowHours > 0 ? (
+          c.mySession ? (
+            <span className="comp_code">
+              比赛标识：
+              <b className="comp_code_started">{c.mySession.race}</b>
+            </span>
+          ) : c.status === "ended" ? (
+            c.code && (
+              <span className="comp_code">
+                比赛标识：
+                <b className="comp_code_started">{c.code}</b>
+              </span>
+            )
+          ) : (
+            <span className="comp_code">
+              比赛标识：
+              <b className="comp_code_pending">开赛后生成个人标识</b>
+            </span>
+          )
+        ) : c.status === "upcoming" ? (
           <span className="comp_code">
             比赛标识：
             <b className="comp_code_pending">待定</b>
