@@ -17600,8 +17600,9 @@ body #header .nav li a.nav_tour_upcoming:hover,
 }
 .win_start_btn:active:not(:disabled) { border-color: #55801a #c4e88a #c4e88a #55801a; }
 .win_start_btn:disabled { opacity: 0.6; cursor: default; }
-/* 「总计 X 小时」小字下标（2026-11-22 张老师定：主文案同字号，括号部分缩小） */
-.win_start_btn .win_hours_sub { font-size: 13px; font-weight: bold; }
+/* 「总计 X 小时」小字下标（2026-11-22 张老师定：主文案同字号，括号部分缩小；
+   13:12 二轮反馈：图标加大 28px、括号与主文案空隙收紧——负 margin 抵掉 flex gap 的一半） */
+.win_start_btn .win_hours_sub { font-size: 13px; font-weight: bold; margin-left: -5px; }
 .win_race_row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .win_race_label { color: #75715e; font-size: 13px; }
 .win_race {
@@ -17692,7 +17693,7 @@ body #header .nav li a.nav_tour_upcoming:hover,
    2026-11-22 张老师定改实元素 .comp_calc（原 attr(data-tip) 纯文本气泡无宽度约束，
    在窄成绩锚点上被压成一字竖条，且 attr() 无法逐行着色）——结构同 .pt_bubble 先例：
    链接内嵌气泡壳，absolute 上方右对齐弹出；各级别一行 nowrap，级别名绿/橙/金，
-   末行「总计」金色 #fdc61a */
+   末行「总计」上加分隔线、数据亮灰 #b1b1a4（2026-11-22 二轮张老师定：金色太跳） */
 .comp_rank_time { position: relative; }
 .comp_rank_time .comp_calc {
   position: absolute; bottom: calc(100% + 8px); right: -6px;
@@ -17712,7 +17713,7 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_calc_beg { color: #a6e22e; }
 .comp_calc_int { color: #f79646; }
 .comp_calc_exp { color: #fdc61a; }
-.comp_calc_total { color: #fdc61a; margin-top: 3px; }
+.comp_calc_total { color: #b1b1a4; margin-top: 4px; padding-top: 4px; border-top: 1px solid #49483e; }
 
 /* 后台录像管理「比赛」列挂接控件 */
 .comp_attach_on { display: inline-flex; align-items: center; gap: 6px; }
