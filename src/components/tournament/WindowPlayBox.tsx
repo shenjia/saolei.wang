@@ -6,7 +6,8 @@
 //   报名态/倒计时/报名接口与集体赛完全同口径（join 只认未开始，窗口赛通用）
 // · 已开赛（active）：
 //   - 未开个人窗口 → 单按钮「开始比赛（总计 X 小时）」（样式同首页开始练习）→
-//     confirmDialog「确定要开始计时出吗？/ 中途不可停表，到时间自动结束比赛」→
+//     confirmDialog「确定要开始计时吗？/ 中途不可停表，到时间自动结束比赛」
+//     （确认键「开始计时」，双钮居中、确认居左，2026-11-22 张老师定）→
 //     POST /api/tournament/start → 生成个人标识显示 + 复制剪贴板 +
 //     绿气泡「个人比赛标识：xxx （已复制到剪贴板）」
 //   - 已开窗口 → 显示个人标识 + 「进入比赛」「传录像」双钮 + 倒计时
@@ -74,7 +75,10 @@ export function WindowPlayBox({
   async function startRace() {
     const ok = await confirmDialog({
       title: "开始比赛",
-      message: "确定要开始计时出吗？\n中途不可停表，到时间自动结束比赛",
+      message: "确定要开始计时吗？\n中途不可停表，到时间自动结束比赛",
+      // 确认键改「开始计时」居左、双钮整体居中（2026-11-22 张老师定）
+      confirmText: "开始计时",
+      centerActions: true,
     });
     if (!ok) return;
     setStarting(true);
