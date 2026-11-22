@@ -353,7 +353,8 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
           </>
         )}
         {/* 报名参赛动态（type=58，2026-11-19 张老师需求）：「报名参加了 FFFFF」——
-            FFFFF=比赛全称可点跳详情页；个人主页「动态」+关注流可见 */}
+            FFFFF=比赛全称可点跳详情页；个人主页「动态」+关注流可见。
+            2026-11-22 20:04 张老师定：全称同完赛简称压回正文观感（news_finish_comp） */}
         {news.type === NEWS_TYPE.TOUR_JOIN && news.author && (
           <>
             {authorCells}报名参加了
@@ -362,13 +363,13 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
                 href={`/tournaments/${news.tour.alias || news.reference}`}
                 target="_blank"
                 prefetch={false}
-                className="score news_article"
+                className="score news_article news_finish_comp"
                 title={news.tour.name}
               >
                 {news.tour.name}
               </Link>
             ) : (
-              <Link href={`/tournaments/${news.reference}`} target="_blank" prefetch={false} className="score news_article">
+              <Link href={`/tournaments/${news.reference}`} target="_blank" prefetch={false} className="score news_article news_finish_comp">
                 #{news.reference}
               </Link>
             )}

@@ -17574,20 +17574,17 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_chart_empty { color: #75715e; font-size: 14px; padding: 8px; }
 .comp_chart_svg { display: block; }
 
-/* 板块标题行（标题+右上角搜索框，2026-11-18 深夜定：录像区搜索同录像页页头形态） */
-.comp_sec_head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+/* 板块标题行（标题+右上角搜索框，2026-11-18 深夜定：录像区搜索同录像页页头形态）。
+   20:01 张老师定：级别 tabs 紧靠标题（同首页 .news_head 形态）——flex-end 底线对齐
+   （ranking_tabs 底部细线与 h2 文字底齐平），搜索框贴行尾 */
+.comp_sec_head { display: flex; justify-content: flex-start; align-items: flex-end; flex-wrap: wrap; gap: 4px 6px; }
 .comp_sec_head h2 { margin: 0; }
 /* 板块标题与主标题同字号（2026-11-19 凌晨张老师定：动态/录像 h2 26px/39px，同 comp_name） */
 .comp_sec_head h2,
 .comp_section h2 { font-size: 26px; line-height: 39px; color: #b1b1a4; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.25); }
-.comp_sec_head .video_search { flex-shrink: 0; }
-/* 录像区级别筛选 tabs（2026-11-22 张老师需求：仅比赛收录级别，全部+各级别）。
-   19:24 张老师定：不独立成行——进 comp_sec_head 标题行右侧（tabs+搜索框一组），
-   tabs 字号压到 15px 适配 h2 行高；原 .comp_video_tabs 上边距规则废弃 */
-.comp_head_right { display: flex; align-items: center; gap: 18px; margin-left: 24px; }
-.comp_head_right .comp_video_tabs { margin: 0; font-size: 15px; }
-.comp_head_right .comp_video_tabs li a,
-.comp_head_right .comp_video_tabs li em { font-size: 15px; }
+.comp_sec_head .video_search { flex-shrink: 0; margin-left: auto; padding-bottom: 5px; }
+/* 录像区级别 tabs（20:01 同首页大号版 .news_tabs.ranking_tabs：无额外边距，
+   由 comp_sec_head gap 管间距；20:01 前的 comp_head_right/comp_video_tabs 小版式废弃） */
 
 /* 信息行（2026-11-18 晚张老师定）：比赛级别+比赛标识一行在上（space-between 底对齐，
    窄屏换行兜底 flex-wrap），比赛时间单独一行在下；
@@ -17722,11 +17719,11 @@ body #header .nav li a.nav_tour_upcoming:hover,
    只截文本段；flex-shrink:0 保成绩永完整可见。 */
 .comp_ev_score { flex-shrink: 0; white-space: nowrap; }
 .comp_ev_score .delta { display: inline-block; }
-/* 个人动态「已完赛{简称}！最终成绩为 xxx」（type=59，2026-11-22 19:41 张老师定）：
-   ①简称保持正文观感——回 td 基准 14px、去加粗（legacy #news .score 是 16px bold，
-     news_article 只改了色，简称会跟着变 16px 粗体，需 (1,4,0) 提权压回）；
-   ②成绩数值与破纪录动态数字同字号（legacy 16px bold 显式声明，防继承漂移），
-     色同破纪录新成绩亮灰 */
+/* 比赛/完赛动态里比赛名保持正文观感（type=58 报名全称 + type=59 完赛简称共用，
+   2026-11-22 20:04 张老师定）：回 td 基准 14px、去加粗——legacy #news .score 是
+   16px bold，news_article 只改了色，比赛名会跟着变 16px 粗体，需 (1,4,0) 提权压回。
+   成绩数值 news_finish_score 与破纪录动态数字同字号（16px bold 显式声明），
+   色同破纪录新成绩亮灰 */
 #news .table td a.score.news_finish_comp {
   font-size: 14px;
   font-weight: normal;
