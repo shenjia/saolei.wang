@@ -17909,6 +17909,9 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_total { color: #b1b1a4; font-weight: 700; margin-left: 0; text-decoration: none; }
 .comp_ev_total:hover { color: #a6e22e; }
 .comp_ev_row .delta { color: #fdc61a; font-size: 13px; margin-left: 4px; }
+/* 成绩下降幅度（2026-11-22 张老师定 crossings1 张一零判例「成绩下降也发动态」）：
+   反向灰箭头——灰 #939387 同动作文本层级，与金色提升箭头拉开语义 */
+.comp_ev_row .delta.worse { color: #939387; }
 .comp_ev_row .delta svg.d_arrow { display: inline-block; vertical-align: -1px; margin-right: 2px; }
 /* 成绩数字列（2026-11-22 张老师需求「动态每条成绩数字 hover 出计算过程气泡，
    同排行榜前10；包括最终成绩数字」）：type=4/6 的成绩数字+提升幅度放独立 flex 列

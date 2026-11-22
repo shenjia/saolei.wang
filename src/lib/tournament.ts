@@ -1043,18 +1043,21 @@ export async function getTourEventsPage(
   };
   const rows: Row[] = [];
   // 成绩合并行 + 提升幅度（与该玩家上一批的总成绩比）
-  // 2026-11-19 张老师定：成绩不变不发动态——该批上传后总成绩与上一批相同（无新有效成绩
-  // 或新盘都没进各级别最好 N 局）则整行吞掉；×N 盘数标注废弃（没有信息量）
+  // 2026-11-19 张老师定：成绩持平不发动态（新盘没进各级别最好 N 局=总分不变，无信息量）；
+  // 2026-11-22 张老师定（crossings1 张一零判例「不应该吞动态」）：成绩**下降也发**——
+  // 只有总分与上一批持平或本批无有效成绩才吞行；下降行 prevTotal 带旧总分，
+  // 前端按 metric 方向渲染反向灰箭头（.delta.worse）
   const lastTotalBy = new Map<number, number | null>();
   for (const m of merged) {
     const key = `${m.userId}@${m.lastTime}`;
     const prog = progressBy.get(key)!;
     const prev = lastTotalBy.get(m.userId);
     const firstEver = prev === undefined;
-    const improved =
-      prog.total !== null && (firstEver || prev === null || prog.total < prev);
-    if (!improved) {
-      // 成绩不变/退步（理论上不会退）→ 不发动态行；仍要维护 lastTotal 口径
+    const changed =
+      prog.total !== null &&
+      (firstEver || prev === null || prog.total !== prev);
+    if (!changed) {
+      // 总分持平/本批无有效成绩 → 不发动态行；仍要维护 lastTotal 口径
       if (!firstEver) lastTotalBy.set(m.userId, prog.total ?? prev ?? null);
       else lastTotalBy.set(m.userId, prog.total);
       continue;

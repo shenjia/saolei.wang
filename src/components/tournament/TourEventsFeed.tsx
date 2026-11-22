@@ -162,9 +162,21 @@ export function TourEventsFeed({
                   </b>
                   {e.type === 4 && e.prevTotalMs !== null && (
                     <>
+                      {/* 提升箭头按 metric 方向（desc=true 越大越好→up，否则 down）；
+                          2026-11-22 张老师定（crossings1 张一零判例）：成绩下降也发动态——
+                          下降行渲染反向灰箭头（.delta.worse），数字与气泡照常 */}
                       {scoreDesc ? e.totalMs > e.prevTotalMs : e.totalMs < e.prevTotalMs ? (
                         <span className="delta">
                           <DeltaArrow dir={scoreDesc ? "up" : "down"} />
+                          {Math.abs(e.totalMs - e.prevTotalMs) / 1000 <= 0
+                            ? "0"
+                            : (Math.abs(e.totalMs - e.prevTotalMs) / 1000)
+                                .toFixed(3)
+                                .replace(/\.?0+$/, "")}
+                        </span>
+                      ) : scoreDesc ? e.totalMs < e.prevTotalMs : e.totalMs > e.prevTotalMs ? (
+                        <span className="delta worse">
+                          <DeltaArrow dir={scoreDesc ? "down" : "up"} />
                           {Math.abs(e.totalMs - e.prevTotalMs) / 1000 <= 0
                             ? "0"
                             : (Math.abs(e.totalMs - e.prevTotalMs) / 1000)
