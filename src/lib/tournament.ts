@@ -660,13 +660,22 @@ export async function ensureTourLifecycleEvents(
       });
       const win = vids.length ? await computeWindowScore(cid, s.userId, vids, scoreMeta) : null;
       await addTourEvent(Number(c.id), TOUR_EVENT_FINISHED, Number(s.userId), Number(s.endTime));
-      await publishNews({
-        type: NEWS_TYPE.TOUR_FINISH,
-        userId: Number(s.userId),
-        reference: Number(c.id),
-        createTime: Number(s.endTime),
-        ...(win?.score !== null && win?.score !== undefined ? { details: { score: win.score } } : {}),
-      });
+      // 完赛动态落库（2026-11-22 首页口径改造）：
+      // · 有成绩（含保底补足的总分）→ details={score, floorOnly}——floorOnly=true 表示
+      //   总分全是保底凑的（实盘 0 局），渲染照常带成绩但首页新闻流按此标记过滤；
+      // · 无成绩（win=null 或 score=null，杨鼎判例：窗口内一盘有效录像都没有）
+      //   → 个人动态不再发（比赛侧 type=6 事件照写）——此前发 details={} 的
+      //   「已完赛{简称}！」空行没有信息量，个人页/关注流也不需要它。
+      //   存量 details={} 行由 scripts/backfill-finish-flooronly.py 回填标记/删除。
+      if (win?.score !== null && win?.score !== undefined) {
+        await publishNews({
+          type: NEWS_TYPE.TOUR_FINISH,
+          userId: Number(s.userId),
+          reference: Number(c.id),
+          createTime: Number(s.endTime),
+          details: { score: win.score, floorOnly: win.floorOnly },
+        });
+      }
     }
   }
 }
@@ -680,7 +689,7 @@ async function computeWindowScore(
   uid: bigint,
   vids: { id: bigint; level: string }[],
   c: { scoreMode?: string; scoreConfig?: string; includeLevels?: string }
-): Promise<{ score: number | null; calc: PlayerScore["calc"] | null }> {
+): Promise<{ score: number | null; calc: PlayerScore["calc"] | null; floorOnly: boolean }> {
   const metric = parseScoreConfig(c.scoreMode ?? "", c.scoreConfig ?? "")?.metric ?? "time";
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: vids.map((v) => v.id) } },
@@ -721,7 +730,13 @@ async function computeWindowScore(
     (c.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
   );
   const mine = scores.get(Number(uid));
-  return { score: mine?.score ?? null, calc: mine?.calc.length ? mine.calc : null };
+  // 纯保底判定（2026-11-22 张老师定：完赛动态全是保底凑的分不进首页新闻流）：
+  // sum_topn 下所有收录级别的实盘局数 real=0（一盘有效录像都没有，总分全靠保底凑）；
+  // target_diff 无保底语义恒 false；无成绩（mine 缺失）按 false（无成绩走 score=null 口径）
+  const floorOnly = mine
+    ? mine.calc.length > 0 && mine.calc.every((c) => c.real === 0 && c.fill > 0)
+    : false;
+  return { score: mine?.score ?? null, calc: mine?.calc.length ? mine.calc : null, floorOnly };
 }
 
 export interface TourEventRow {

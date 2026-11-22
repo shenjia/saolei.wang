@@ -285,9 +285,9 @@ export async function getHomeNews(salt = "", limit = HOME_NEWS_NUMBER): Promise<
 // 盐进键（keyArgs）：键空间有界——盐只随真实内容变化，无法被请求参数伪造
 const fetchHomeNewsCached = unstable_cache(
   async (salt: string, limit: number) => getNews({ limit, home: true }),
-  // v2：2026-11-22 home 白名单扩入完赛动态（NEWS_TYPE.TOUR_FINISH，张老师定）——
-  // 改 home 口径必须升版本换键，否则旧缓存条目（无 59 行）最长 5 分钟不更新
-  ["home-news-live-v2"],
+  // v3：2026-11-22 home 口径排除完赛纯保底动态（floorOnly 标记，张老师定）——
+  // 改 home 口径必须升版本换键，否则旧缓存条目（含纯保底行）最长 5 分钟不更新
+  ["home-news-live-v3"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
@@ -411,9 +411,13 @@ function newsFeedSqlParts(opts: NewsFeedSqlOpts): { conds: string[]; params: unk
     conds.push(`n.type IN (${opts.types.map((t) => Number(t)).join(",")})`);
   } else if (opts.home) {
     const marks = NEWS_RECORD_FIRST_MARKS.map((m) => `n.details_data LIKE '%${m}%'`).join(" OR ");
+    // 完赛纯保底排除（2026-11-22 张老师定，与 homeNewsTypeFilter 同口径）：
+    // type=59 且 details 带 floorOnly:true（双形态 LIKE）不上首页
+    const floorMarks = NEWS_FINISH_FLOOR_MARKS.map((m) => `n.details_data LIKE '%${m}%'`).join(" OR ");
     conds.push(
       `n.type IN (${NEWS_HOME_TYPES.map(Number).join(",")})` +
-        ` AND NOT (n.type = ${NEWS_TYPE.PERSON_RECORD} AND (${marks} OR n.exp_time = 0 OR n.ranked = 0))`
+        ` AND NOT (n.type = ${NEWS_TYPE.PERSON_RECORD} AND (${marks} OR n.exp_time = 0 OR n.ranked = 0))` +
+        ` AND NOT (n.type = ${NEWS_TYPE.TOUR_FINISH} AND (${floorMarks}))`
     );
   } else if (opts.level) {
     conds.push(`n.type IN (${NEWS_LEVEL_TYPES.join(",")})`);
@@ -489,17 +493,29 @@ export const NEWS_BV_FIRST_MARKS: string[] = ['"kind":"first"', '"kind": "first"
  *    本过滤是首页内容闸不是军衔口径，ranked=0 排除口径保留不变。
  *  or=0 落库两种形态（新行数字 "or":0 / 同步存量行字符串 "or":"0"，渲染层 "0">0 同判 false），
  *  details_data 是 VarChar 无法做 JSON 路径过滤，用 contains 双标记匹配（形态普查 2026-10-25 全覆盖）。
- *  getNews / getNewsPage / getNewsCount 三处 home 分支共用，保证行集与计数严格一致 */
+ *  getNews / getNewsPage / getNewsCount 三处 home 分支共用，保证行集与计数严格一致。
+ *  2026-11-22 张老师定：完赛动态（type=59）纯保底成绩（floorOnly=true，总分全是
+ *  保底凑的、实盘 0 局）不进首页——同破纪录「创造了」逻辑，没含金量的战报不上首页；
+ *  个人主页/关注流照常显示。floorOnly 由写入点落 details（backfill 脚本回填存量）。 */
+const NEWS_FINISH_FLOOR_MARKS: string[] = ['"floorOnly":true', '"floorOnly": true'];
+
 function homeNewsTypeFilter() {
   return {
     type: { in: NEWS_HOME_TYPES },
     NOT: {
-      type: NEWS_TYPE.PERSON_RECORD,
       OR: [
-        ...NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
-        // 未入榜/无高级成绩快照（news 表 exp_time/ranked 列，写入时定值；首页内容闸，非军衔口径）
-        { expTime: BigInt(0) },
-        { ranked: BigInt(0) },
+        {
+          type: NEWS_TYPE.PERSON_RECORD,
+          OR: [
+            ...NEWS_RECORD_FIRST_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
+            // 未入榜/无高级成绩快照（news 表 exp_time/ranked 列，写入时定值；首页内容闸，非军衔口径）
+            { expTime: BigInt(0) },
+            { ranked: BigInt(0) },
+          ],
+        },
+        // 完赛纯保底动态（type=59 floorOnly=true 双形态 LIKE；杨鼎判例「已完赛但
+        // 无任何成绩」的空 details 行已由写入点停止产生，存量由回填脚本删除）
+        ...NEWS_FINISH_FLOOR_MARKS.map((mark) => ({ detailsData: { contains: mark } })),
       ],
     },
   };
@@ -946,6 +962,7 @@ async function getNewsCountImpl(opts: {
 // 带 userId 的组合每用户一档、键空间无界，直查不走缓存（用户页另有索引兜底）。
 const fetchNewsCountNoUser = unstable_cache(
   async (opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) => getNewsCountImpl(opts),
+  // v11：2026-11-22 home 口径排除完赛纯保底动态（floorOnly 标记，张老师定）。
   // v10：2026-11-22 home 白名单扩入完赛动态（NEWS_TYPE.TOUR_FINISH，张老师定）——
   //  行集与计数口径同变，换键防旧计数（少了 59 行）最长 5 分钟不更新。
   // v9：2026-10-31 阶段档改按「有效评定时间」分档（快照与关联录像 real_time 取优，
@@ -957,7 +974,7 @@ const fetchNewsCountNoUser = unstable_cache(
   // v4：缓存 60s → 5min（2026-10-26 慢 SQL 巡检）。home 口径 10-25 上线首创行（or=0）双 LIKE
   // 排除后无法走索引，news 22.8 万行 count 全扫 avg 1.25s × 258 次/日（上线前基线 3 次/日）。
   // total 仅用于页码滑条 maxPage 与 hasMore，滞后 5 分钟无感（新动态多一页晚 5 分钟可翻）
-  ["news-count-v10"],
+  ["news-count-v11"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
@@ -965,8 +982,8 @@ const fetchNewsCountNoUser = unstable_cache(
 const fetchNewsCountLive = unstable_cache(
   async (salt: string, opts: Omit<Parameters<typeof getNewsCountImpl>[0], "userId">) =>
     getNewsCountImpl(opts),
-  // v2 与 fetchNewsCountNoUser v10 同步（home 白名单扩入 59）
-  ["news-count-live-v2"],
+  // v3 与 fetchNewsCountNoUser v11 同步（home 排除完赛纯保底）
+  ["news-count-live-v3"],
   { revalidate: REVALIDATE_HOME_CACHE, tags: ["home-news"] }
 );
 
