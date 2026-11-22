@@ -17813,6 +17813,12 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_stat_row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; line-height: 28px; color: #b1b1a4; }
 .comp_stat_row b { color: #f8f8f2; font-weight: 700; }
 #page.comp_page .gold { color: #fdc61a; }
+/* 我的状态四态（2026-11-22 张老师需求）：未报名亮灰/已报名绿/比赛中绿/已完赛金，
+   配色同全站级别色系（同 .comp_status_tag 与 .comp_lv_plain） */
+.comp_stat_row b.comp_mystate_none { color: #b1b1a4; }
+.comp_stat_row b.comp_mystate_joined { color: #a6e22e; }
+.comp_stat_row b.comp_mystate_playing { color: #a6e22e; }
+.comp_stat_row b.comp_mystate_finished { color: #fdc61a; }
 
 /* ==================== 比赛详情页（2026-11-13 二期：/tournaments/[id]） ==================== */
 

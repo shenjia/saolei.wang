@@ -141,6 +141,23 @@ export default async function CompetitionDetailPage({
   const tourMetric: TourMetricKey = parseScoreConfig(c.scoreMode, c.scoreConfig)?.metric ?? "time";
   const tourDesc = parseScoreConfig(c.scoreMode, c.scoreConfig)?.desc ?? false;
 
+  // 「我的状态」四态判定（2026-11-22 张老师需求）：未报名/已报名/比赛中/已完赛。
+  // 已完赛=比赛整体结束，或窗口赛个人窗口已结束（finished 快照或 end 已过，同
+  // WindowPlayBox isFinished 口径）；比赛中=集体赛已开赛，或窗口赛已开个人窗口
+  // 且未结束；已报名=已报名但未开赛（集体赛 upcoming）/未开个人窗口（窗口赛）
+  const myState = !myResult?.joined
+    ? "none"
+    : c.status === "ended" ||
+        (c.windowHours > 0 && !!c.mySession && (c.mySession.finished || c.mySession.end <= now))
+      ? "finished"
+      : c.windowHours > 0
+        ? c.mySession
+          ? "playing"
+          : "joined"
+        : c.status === "active"
+          ? "playing"
+          : "joined";
+
   return (
     <div id="page" className="two_columns comp_page">
       {/* comp_detail：详情页专用钩子——主栏顶部留白（三轮 16:40 张老师定「主板块贴 header 不对」） */}
@@ -254,39 +271,51 @@ export default async function CompetitionDetailPage({
           {session && <UserPanel userId={session.uid} hideRadar />}
 
           {/* 成绩（登录态；三轮定「我的成绩」→「成绩」，标题 h2 与站内右栏板块一致）。
-              未报名不显示（张老师 2026-11-18 详情页反馈）。
-              最好成绩（2026-11-22 张老师定）：展示比赛总分（原单盘最好口径与排行榜
+              2026-11-22 张老师需求：报名状态改「我的状态」四态（未报名亮灰/已报名绿/
+              比赛中绿/已完赛金）——未报名也要显示状态行，故板块改登录即渲染；
+              未报名时不渲染成绩/名次等行（无数据无意义）。
+              我的成绩（2026-11-22 张老师定）：展示比赛总分（原单盘最好口径与排行榜
               排序值/名次对不上，且图表头部「最好成绩」本就是总分口径），hover 出与
               排行榜完全一致的计算过程气泡（复用 .comp_rank_time:hover .comp_calc 触发，
-              锚点加 comp_score_tip 类保持同款样式） */}
-          {session && myResult?.joined && (
+              锚点加 comp_score_tip 类保持同款样式）；我的名次数字金色 */}
+          {session && (
             <div className="box comp_stats">
               <h2>成绩</h2>
               <div className="comp_stat_row">
-                <span>报名状态</span>
-                <b>{myResult.joined ? "已报名" : "未报名"}</b>
+                <span>我的状态</span>
+                <b className={"comp_mystate_" + myState}>
+                  {myState === "none" ? "未报名" : myState === "joined" ? "已报名" : myState === "playing" ? "比赛中" : "已完赛"}
+                </b>
               </div>
-              <div className="comp_stat_row">
-                <span>参赛录像</span>
-                <b>{myResult.videos}</b>
-              </div>
-              <div className="comp_stat_row">
-                <span>最好成绩</span>
-                {myResult.score === null ? (
-                  <b>—</b>
-                ) : (
-                  <b className="comp_score_tip">
-                    {fmtTourScore(tourMetric, myResult.score)}
-                    {myResult.calc && (
-                      <TourCalcTip calc={myResult.calc} metric={tourMetric} score={myResult.score} />
+              {myResult?.joined && (
+                <>
+                  <div className="comp_stat_row">
+                    <span>参赛录像</span>
+                    <b>{myResult.videos}</b>
+                  </div>
+                  <div className="comp_stat_row">
+                    <span>我的成绩</span>
+                    {myResult.score === null ? (
+                      <b>—</b>
+                    ) : (
+                      <b className="comp_score_tip">
+                        {fmtTourScore(tourMetric, myResult.score)}
+                        {myResult.calc && (
+                          <TourCalcTip calc={myResult.calc} metric={tourMetric} score={myResult.score} />
+                        )}
+                      </b>
                     )}
-                  </b>
-                )}
-              </div>
-              <div className="comp_stat_row">
-                <span>当前名次</span>
-                <b>{myResult.rank === null ? "—" : `第 ${myResult.rank} 名`}</b>
-              </div>
+                  </div>
+                  <div className="comp_stat_row">
+                    <span>我的名次</span>
+                    {myResult.rank === null ? (
+                      <b>—</b>
+                    ) : (
+                      <b className="gold">第 {myResult.rank} 名</b>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
