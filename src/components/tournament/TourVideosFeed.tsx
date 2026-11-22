@@ -42,6 +42,9 @@ export function TourVideosFeed({
   order,
   dir,
   explicit,
+  vAuthor,
+  vTime,
+  vBv,
 }: {
   compId: number;
   initialVideos: VideoListItem[];
@@ -57,6 +60,12 @@ export function TourVideosFeed({
   order: VideoListOrder;
   dir: VideoListDir;
   explicit: boolean;
+  /** 录像区搜索态（2026-11-22 张老师报「搜一个人再翻页变全部录像」bug）：
+   *  vauthor/vtime/3bv 与级别/排序同为筛选维度——翻页/切级别/表头排序/
+   *  加载更多必须透传，否则 URL 丢参回全部录像。author 与 time/3bv 互斥（搜索框口径） */
+  vAuthor?: number;
+  vTime?: string;
+  vBv?: number;
 }) {
   const router = useRouter();
   const listRef = useRef<HTMLTableElement>(null);
@@ -87,6 +96,10 @@ export function TourVideosFeed({
     const dirVal =
       (extra.dir ?? dir) !== VIDEO_LIST_DEFAULT_DIR[orderNow] ? (extra.dir ?? dir) : undefined;
     if (dirVal) params.dir = dirVal;
+    // 搜索态透传（2026-11-22 翻页丢筛选 bug 修复）：author 与 time/3bv 互斥（VideoSearch 口径）
+    if (vAuthor) params.vauthor = String(vAuthor);
+    if (vTime) params.vtime = vTime;
+    if (vBv != null) params["3bv"] = String(vBv);
     return [`/tournaments/${compId}`, params];
   }
 
@@ -109,6 +122,10 @@ export function TourVideosFeed({
       if (level !== "all") params.set("level", level);
       if (order !== "id") params.set("order", order);
       if (dir !== VIDEO_LIST_DEFAULT_DIR[order]) params.set("dir", dir);
+      // 搜索态透传（2026-11-22 翻页丢筛选 bug 修复，author 与 time/3bv 互斥）
+      if (vAuthor) params.set("vauthor", String(vAuthor));
+      if (vTime) params.set("vtime", vTime);
+      if (vBv != null) params.set("3bv", String(vBv));
       const res = await fetch(`/api/tournament/${compId}/videos?${params.toString()}`, {
         cache: "no-store",
       });
@@ -172,7 +189,14 @@ export function TourVideosFeed({
             tourMetric={tourMetric}
             sort={{
               base: `/tournaments/${compId}`,
-              params: { ...(eventsPage > 1 ? { ep: String(eventsPage) } : {}), ...(level !== "all" ? { level } : {}) },
+              params: {
+                ...(eventsPage > 1 ? { ep: String(eventsPage) } : {}),
+                ...(level !== "all" ? { level } : {}),
+                // 搜索态透传（修饰键/中键走真实链接的兜底路径也不能丢筛选）
+                ...(vAuthor ? { vauthor: String(vAuthor) } : {}),
+                ...(vTime ? { vtime: vTime } : {}),
+                ...(vBv != null ? { "3bv": String(vBv) } : {}),
+              },
               order,
               dir,
               explicit,

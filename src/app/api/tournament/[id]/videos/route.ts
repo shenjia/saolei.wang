@@ -39,8 +39,23 @@ export async function GET(
     : "id";
   const dirRaw = sp.get("dir");
   const dir: VideoListDir | undefined = dirRaw === "asc" || dirRaw === "desc" ? dirRaw : undefined;
+  // 搜索态透传（2026-11-22 张老师报「搜一个人再翻页变全部录像」bug）：作者/成绩/3BV，
+  // 语义同页面（author 与 time/3bv 互斥；time 输入格式同 /video 如 16.6）
+  const vAuthor = Math.max(parseInt(sp.get("vauthor") ?? "", 10) || 0, 0) || undefined;
+  const vTimeRaw = (sp.get("vtime") ?? "").trim();
+  const vTime =
+    vTimeRaw && Number.isFinite(Number(vTimeRaw)) && Number(vTimeRaw) > 0 ? Number(vTimeRaw) : undefined;
+  const vBvRaw = (sp.get("3bv") ?? "").trim();
+  const vBv = vBvRaw && /^\d+$/.test(vBvRaw) ? parseInt(vBvRaw, 10) : undefined;
 
-  const data = await getTourVideosPage(compId, page, size, { level, order, dir });
+  const data = await getTourVideosPage(compId, page, size, {
+    level,
+    order,
+    dir,
+    author: vAuthor,
+    time: vTime,
+    bv: vBv,
+  });
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   return NextResponse.json({ ok: true, ...data, totalPages });
 }

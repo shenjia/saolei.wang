@@ -227,11 +227,13 @@ export function VideoSearch({
     toastLoading();
     if (isTour) {
       // 比赛范围模式（2026-11-18 深夜张老师定）：作者/成绩互斥，跳回本详情页
-      // vauthor/vtime 参数（录像板块按比赛范围过滤）
+      // vauthor/vtime/3bv 参数（录像板块按比赛范围过滤）。
+      // 2026-11-22 补 3bv：原只带 vauthor/vtime，选「3BV N」项参数被静默丢弃
       router.push(
         buildUrl(`/tournaments/${tourId}`, {
           vauthor: params.author,
           vtime: params.time,
+          "3bv": params.bv,
           page: undefined,
         })
       );

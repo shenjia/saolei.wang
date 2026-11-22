@@ -143,6 +143,10 @@ export default async function CompetitionDetailPage({
   const vAuthor = Math.max(parseInt(sp.vauthor ?? "", 10) || 0, 0) || undefined;
   const vTimeRaw = (sp.vtime ?? "").trim();
   const vTime = vTimeRaw && Number.isFinite(Number(vTimeRaw)) && Number(vTimeRaw) > 0 ? Number(vTimeRaw) : undefined;
+  // 3BV 搜索（2026-11-22 修翻页丢筛选时补齐：VideoSearch 比赛模式支持「3BV N」项，
+  // URL 3bv=N；author 与 time/3bv 互斥口径不变）
+  const vBvRaw = (sp["3bv"] ?? "").trim();
+  const vBv = vBvRaw && /^\d+$/.test(vBvRaw) ? parseInt(vBvRaw, 10) : undefined;
   // 录像区级别筛选与表头排序（2026-11-22 张老师需求）：level 仅收比赛收录级别
   // （非法值回全部）；order/dir 同 /video 列表口径（表头点击切换，缺省=上传时间倒序）
   const levelRaw = sp.level ?? "";
@@ -161,6 +165,7 @@ export default async function CompetitionDetailPage({
     getTourVideosPage(compId, vp, COMP_VIDEO_PAGE_SIZE, {
       author: vAuthor,
       time: vTime,
+      bv: vBv,
       level: videoLevel === "all" ? undefined : videoLevel,
       order: videoOrder,
       dir: videoDir,
@@ -224,11 +229,12 @@ export default async function CompetitionDetailPage({
                   author={vAuthor}
                   authorName={searchUser?.chineseName ?? ""}
                   time={vTimeRaw || undefined}
+                  bv={vBvRaw || undefined}
                 />
               </div>
             </div>
             <TourVideosFeed
-              key={`vp${vp}-ep${ep}-va${vAuthor ?? 0}-vt${vTimeRaw}-lv${videoLevel}-od${videoOrder}-dr${videoDir}`}
+              key={`vp${vp}-ep${ep}-va${vAuthor ?? 0}-vt${vTimeRaw}-vb${vBv ?? ""}-lv${videoLevel}-od${videoOrder}-dr${videoDir}`}
               compId={compId}
               initialVideos={videos.videos}
               initialPage={videos.page}
@@ -242,6 +248,9 @@ export default async function CompetitionDetailPage({
               order={videoOrder}
               dir={videoDir}
               explicit={videoExplicit}
+              vAuthor={vAuthor}
+              vTime={vTimeRaw || undefined}
+              vBv={vBv}
             />
           </div>
         </li>
