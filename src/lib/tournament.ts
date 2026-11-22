@@ -607,7 +607,22 @@ export async function ensureTourLifecycleEvents(
   // 比赛整场结束（本地验证实证：比赛 11-27 才结束，玩家窗口今天凌晨已完），
   // 若叠加 now>=end 会把完赛动态憋到比赛结束才发；已过期会话查询本身就筛掉了
   // 进行中的窗口。行数=参赛窗口数（十量级），每轮两条 INSERT 可忽略。
+  // ⚠️ 计分口径（scoreMode/scoreConfig/includeLevels）绝不信任调用方传参——
+  // 列表页调用不带这些字段（生产实证：先访问列表页触发的补写全部 details={}，
+  // metric 回退 time 算不出 crossings 总分），缺哪个字段此处自查库兜底。
   if (Number(c.windowHours ?? 0) > 0) {
+    const needScoreMeta = !c.scoreMode || !c.scoreConfig || !c.includeLevels;
+    const compMeta = needScoreMeta
+      ? await prisma.tournament.findUnique({
+          where: { id: cid },
+          select: { scoreMode: true, scoreConfig: true, includeLevels: true },
+        })
+      : null;
+    const scoreMeta = {
+      scoreMode: c.scoreMode || compMeta?.scoreMode,
+      scoreConfig: c.scoreConfig || compMeta?.scoreConfig,
+      includeLevels: c.includeLevels || compMeta?.includeLevels,
+    };
     const sessions = await prisma.tournamentWindowSession.findMany({
       where: { tournamentId: cid, endTime: { lt: BigInt(now) } },
       select: { id: true, userId: true, startTime: true, endTime: true },
@@ -633,7 +648,7 @@ export async function ensureTourLifecycleEvents(
         },
         select: { id: true, user: true, level: true, createTime: true },
       });
-      const score = vids.length ? await computeWindowScore(cid, s.userId, vids, c) : null;
+      const score = vids.length ? await computeWindowScore(cid, s.userId, vids, scoreMeta) : null;
       await addTourEvent(Number(c.id), TOUR_EVENT_FINISHED, Number(s.userId), Number(s.endTime));
       await publishNews({
         type: NEWS_TYPE.TOUR_FINISH,
