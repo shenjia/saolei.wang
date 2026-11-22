@@ -133,8 +133,12 @@ function validSession(req: NextRequest): boolean {
  * 源站，掉进匿名闸 307 循环过不了（canUseRsc 只认 session/通行证 cookie，不认 UA）。
  * 名单与 nginx-antibot.conf 的 UA 白名单保持一致（googleother/applebot 等在黑名单，
  * 明确不豁免）。UA 可伪造：伪造者流量直达源站，由 nginx limit_req + 闸外层消化，
- * 量级可控——攻击期权衡接受（详见当日日志 09:03 段）。 */
-const SEO_BOT_UA_RE = /Googlebot|Bingbot|Baiduspider|Sogou|YisouSpider/i;
+ * 量级可控——攻击期权衡接受（详见当日日志 09:03 段）。
+ * 2026-11-22 补 QQ 卡片抓取器（QQEX/QQWebContentView/QQAppId）：QQ 转发链接时卡片
+ * 爬虫跟进匿名闸 307 落在 /bot/challenge（QQ 爬虫不跟跳转也不存 cookie），卡片标题
+ * 读成「扫雷验证 | 扫雷网…」——张老师截图实证 /user/2418。出口 221.195.236.x 腾讯段，
+ * 量小可信，豁免后卡片读回真实页面 title。 */
+const SEO_BOT_UA_RE = /Googlebot|Bingbot|Baiduspider|Sogou|YisouSpider|QQEX|QQWebContentView|QQAppId/i;
 
 export function canUseRsc(req: NextRequest): boolean {
   if (SEO_BOT_UA_RE.test(req.headers.get("user-agent") ?? "")) return true;
