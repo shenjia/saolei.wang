@@ -17600,6 +17600,8 @@ body #header .nav li a.nav_tour_upcoming:hover,
 }
 .win_start_btn:active:not(:disabled) { border-color: #55801a #c4e88a #c4e88a #55801a; }
 .win_start_btn:disabled { opacity: 0.6; cursor: default; }
+/* 「总计 X 小时」小字下标（2026-11-22 张老师定：主文案同字号，括号部分缩小） */
+.win_start_btn .win_hours_sub { font-size: 13px; font-weight: bold; }
 .win_race_row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .win_race_label { color: #75715e; font-size: 13px; }
 .win_race {
