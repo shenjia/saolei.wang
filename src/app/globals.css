@@ -17649,6 +17649,10 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_section h2 { margin: 0 0 10px; }
 .comp_section .comp_video_table { margin: 0 -8px; width: calc(100% + 16px); }
 .comp_section_empty { color: #75715e; font-size: 13px; line-height: 22px; padding: 6px 0; }
+/* 比赛计分项列（2026-11-22 张老师需求：计分项非 time/3bv/s/stnb 时录像表 3BV/s+STNB
+   两列替换为一列——惜步杯显 Crossings）。数字加粗与数字列同语言，表头居中由 th.c 覆盖 */
+.comp_video_table td.tourmetric { font-weight: bold; }
+
 
 /* 动态行：主体（玩家名 + 动作文）左，相对时间右 */
 .comp_events { margin: 0; padding: 0; list-style: none; }

@@ -20,6 +20,7 @@ import {
   type VideoListDir,
 } from "@/lib/config";
 import { score3bvs, scoreTime, videoScores, TIME_YEAR, isRecent } from "@/lib/format";
+import { TOUR_METRIC_SHORT, type TourMetricKey } from "@/lib/tour-metric";
 import { RelTime } from "./RelTime";
 import { AvatarCell, TitleBadge } from "./Cells";
 import { buildUrl } from "./Pager";
@@ -141,17 +142,22 @@ export interface VideoSortSpec {
  *  修饰键点击/中键仍走真实链接（新标签打开该排序的 URL，URL 即状态兜底）。
  *  2026-10-23 升降序切换：onSort 带方向——同列再点反向（箭头高亮换向），切列取该列默认方向。
  *  noSort3bv（2026-10-20 定向视图）：3BV 列禁排序（整列同值无意义），渲染纯文本。
- *  hideIoe（2026-10-28 张老师需求）：首页/用户主页去掉 IOE 列（/video 列表页保持全列） */
+ *  hideIoe（2026-10-28 张老师需求）：首页/用户主页去掉 IOE 列（/video 列表页保持全列）
+ *  tourMetric（2026-11-22 张老师需求）：比赛录像区专用——计分项非 time/3bv/s/stnb
+ *  时（这三项现有列已覆盖），3BV/s 与 STNB 两列合并替换为一列「比赛计分项」
+ *  （惜步杯显示 Crossings；thrp/ioe 同理）。仅表头+行渲染换列，其余列不动 */
 export function VideoHead({
   sort,
   onSort,
   noSort3bv,
   hideIoe,
+  tourMetric,
 }: {
   sort?: VideoSortSpec;
   onSort?: (order: VideoListOrder, dir: VideoListDir) => void;
   noSort3bv?: boolean;
   hideIoe?: boolean;
+  tourMetric?: TourMetricKey;
 }) {
   // 各列排序链接（order/dir 进 URL：显式态才带——默认排序 URL 省略 order）
   function col(order: VideoListOrder, label: string, title: string) {
@@ -204,11 +210,20 @@ export function VideoHead({
             th 上的 bv/bvs/ioe/stnb 区分类名（2026-10-28）：移动端 #video/#user_videos
             需要单独放行 3BV/s 列（globals.css 媒体查询按类名定向隐藏） */}
         <th className="c bv">{noSort3bv ? "3BV" : col("3bv", "3BV", "按 3BV 排列（大在前）")}</th>
-        <th className="c bvs">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
+        {/* 2026-11-22 比赛计分项列：tourMetric 非 time/3bv/s/stnb 时，3BV/s 与 STNB
+            两列一起去掉、换为一列「比赛计分项」（惜步杯显示 Crossings；thrp/ioe 同理）。
+            比赛录像区恒 hideIoe（无 IOE 列），swap 列落位在 3BV 原两列的位置 */}
+        {tourMetric && !hideMetricSwap(tourMetric) ? (
+          <th className="c tourmetric">{TOUR_METRIC_SHORT[tourMetric]}</th>
+        ) : (
+          <th className="c bvs">{col("3bvs", "3BV/s", "按 3BV/s 排列（快在前）")}</th>
+        )}
         {/* 2026-10-20 张老师需求：新增 IOE（效率）/STNB（判雷）指标列，可点击排序；
             2026-10-28 hideIoe（张老师需求）：首页/用户主页不输出 IOE 列 */}
         {!hideIoe && <th className="c ioe">{col("ioe", "IOE", "按效率 IOE 排列（大在前）")}</th>}
-        <th className="c stnb">{col("stnb", "STNB", "按判雷 STNB 排列（大在前）")}</th>
+        {!(tourMetric && !hideMetricSwap(tourMetric)) && (
+          <th className="c stnb">{col("stnb", "STNB", "按判雷 STNB 排列（大在前）")}</th>
+        )}
         <th>
           {/* 评论/点击同列两个独立排序入口（张老师要求均可触发排序） */}
           {sort ? (
@@ -229,18 +244,38 @@ export function VideoHead({
   );
 }
 
+/** 3BV/s 列保持还是省去（2026-11-22 比赛录像区口径）：比赛计分项是 3bvs/time/3bv
+ *  时保持默认列（3BV/s 与 STNB 列照旧）；是 ioe/thrp/crossings 时 3BV/s+STNB 两列
+ *  合并替换为「比赛计分项」一列——与计分无关的两列没有存在价值（张老师需求：
+ *  惜步杯应显示 crossings 列）。time/3bv 本就有独立列（成绩/3BV），3bvs 即 3BV/s 列 */
+function hideMetricSwap(metric: TourMetricKey): boolean {
+  return metric === "time" || metric === "3bvs" || metric === "3bv";
+}
+
+/** 比赛计分项单行值（tourMetric swap 列渲染）：VideoListItem 各指标字段 → 格式化文本。
+ *  惜步杯 crossings → cp 整数；thrp → 3 位小数；ioe 走行内已有 ioe 字段。 */
+function tourMetricCellText(v: VideoListItem, metric: TourMetricKey): string {
+  if (metric === "crossings") return v.cp != null && v.cp > 0 ? String(v.cp) : "-";
+  if (metric === "thrp") return v.thrp != null && v.thrp > 0 ? v.thrp.toFixed(3) : "-";
+  return v.ioe != null && v.ioe > 0 ? v.ioe.toFixed(3) : "-";
+}
+
 /** 单行（<tr>），列宽/配色见 globals.css 的 .video_table
  *  highlight：排序命中列整列黄（2026-09-27 起按成绩/按3BV/s，2026-10-15 扩展全部排序列；
  *  默认排序（上传时间）不高亮——张老师要求）。
- *  hideIoe（2026-10-28）：与 VideoHead 同开关——不输出 IOE 单元格（首页/用户主页） */
+ *  hideIoe（2026-10-28）：与 VideoHead 同开关——不输出 IOE 单元格（首页/用户主页）
+ *  tourMetric（2026-11-22）：比赛录像区计分项——非 time/3bv/s/stnb 时 3BV/s+STNB
+ *  两格合并替换为一格计分项值（表头 VideoHead 同判定） */
 export function VideoRowLine({
   video: v,
   highlight,
   hideIoe,
+  tourMetric,
 }: {
   video: VideoListItem;
   highlight?: VideoHighlight;
   hideIoe?: boolean;
+  tourMetric?: TourMetricKey;
 }) {
   const scores = videoScores(v.board3bv, v.realTime, v.level as VideoLevel);
   const lvCls = LEVEL_CLS[v.level as VideoLevel] ?? "";
@@ -311,50 +346,58 @@ export function VideoRowLine({
           v.board3bv
         )}
       </td>
-      <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>
-        {scores["3bvs"] > 0 && !v.noRecord ? (
-          score3bvs(scores["3bvs"])
-        ) : (
-          // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页）；
-          // 运气盘即使 3BV/s 值达标也整个划线（2026-11-02）
-          <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
-            {score3bvs(Math.abs(scores["3bvs"]))}
-          </del>
-        )}
-      </td>
-      {/* 指标列（2026-10-20）：IOE 3 位小数 / STNB 1 位小数（与雷达口径一致，
-          见 videoscore BASE_METRICS digits）；无指标行（个别老盘解析失败）显 -。
-          hover 气泡说明指标含义。hideIoe（2026-10-28）：首页/用户主页不输出 */}
-      {!hideIoe && (
-        <td className={`c_3bvs ioe c${highlight === "ioe" ? " current" : ""}`}>
-          {v.ioe != null ? (
-            <span data-tip="IOE 效率：每点击换回的 3BV" aria-label="IOE 效率">
-              {v.ioe.toFixed(3)}
-            </span>
-          ) : (
-            <span title="该录像暂无分析数据">-</span>
+      {/* 2026-11-22 比赛录像区列替换：计分项 ioe/thrp/crossings 时 3BV/s+STNB 两格
+          减为一格计分项值（表头同步单列，行/表头格数保持一致） */}
+      {tourMetric && !hideMetricSwap(tourMetric) ? (
+        <td className="c_3bvs tourmetric c">{tourMetricCellText(v, tourMetric)}</td>
+      ) : (
+        <>
+          <td className={`c_3bvs bvs c${highlight === "3bvs" ? " current" : ""}`}>
+            {scores["3bvs"] > 0 && !v.noRecord ? (
+              score3bvs(scores["3bvs"])
+            ) : (
+              // 无效成绩 hover 弹自定义气泡（2026-10-13 张老师要求，同录像详情页）；
+              // 运气盘即使 3BV/s 值达标也整个划线（2026-11-02）
+              <del data-tip={INVALID_3BVS_TIP} aria-label={INVALID_3BVS_TIP}>
+                {score3bvs(Math.abs(scores["3bvs"]))}
+              </del>
+            )}
+          </td>
+          {/* 指标列（2026-10-20）：IOE 3 位小数 / STNB 1 位小数（与雷达口径一致，
+              见 videoscore BASE_METRICS digits）；无指标行（个别老盘解析失败）显 -。
+              hover 气泡说明指标含义。hideIoe（2026-10-28）：首页/用户主页不输出 */}
+          {!hideIoe && (
+            <td className={`c_3bvs ioe c${highlight === "ioe" ? " current" : ""}`}>
+              {v.ioe != null ? (
+                <span data-tip="IOE 效率：每点击换回的 3BV" aria-label="IOE 效率">
+                  {v.ioe.toFixed(3)}
+                </span>
+              ) : (
+                <span title="该录像暂无分析数据">-</span>
+              )}
+            </td>
           )}
-        </td>
+          <td className={`c_3bvs stnb c${highlight === "stnb" ? " current" : ""}`}>
+            {/* 2026-10-22 张老师定：初级 3BV<10（MIN_3BV_FOR_3BVS，中/高级上传下限本就
+                高于 4）的 STNB 与 3BV/s 同口径划线不承认——运气盘虚高值（如 3BV=2 的
+                4316）不当真成绩展示，也不参与排行（排行侧限界 2026-10-20 已上线）；
+                2026-11-02 运气盘（noRecord）无论 3BV 多大都整个划线 */}
+            {v.stnb != null ? (
+              v.board3bv >= MIN_3BV_FOR_3BVS[v.level as VideoLevel] && !v.noRecord ? (
+                <span data-tip="STNB 判雷：综合评分（越高越强）" aria-label="STNB 判雷">
+                  {v.stnb.toFixed(1)}
+                </span>
+              ) : (
+                <del data-tip={INVALID_STNB_TIP} aria-label={INVALID_STNB_TIP}>
+                  {v.stnb.toFixed(1)}
+                </del>
+              )
+            ) : (
+              <span title="该录像暂无分析数据">-</span>
+            )}
+          </td>
+        </>
       )}
-      <td className={`c_3bvs stnb c${highlight === "stnb" ? " current" : ""}`}>
-        {/* 2026-10-22 张老师定：初级 3BV<10（MIN_3BV_FOR_3BVS，中/高级上传下限本就
-            高于 4）的 STNB 与 3BV/s 同口径划线不承认——运气盘虚高值（如 3BV=2 的
-            4316）不当真成绩展示，也不参与排行（排行侧限界 2026-10-20 已上线）；
-            2026-11-02 运气盘（noRecord）无论 3BV 多大都整个划线 */}
-        {v.stnb != null ? (
-          v.board3bv >= MIN_3BV_FOR_3BVS[v.level as VideoLevel] && !v.noRecord ? (
-            <span data-tip="STNB 判雷：综合评分（越高越强）" aria-label="STNB 判雷">
-              {v.stnb.toFixed(1)}
-            </span>
-          ) : (
-            <del data-tip={INVALID_STNB_TIP} aria-label={INVALID_STNB_TIP}>
-              {v.stnb.toFixed(1)}
-            </del>
-          )
-        ) : (
-          <span title="该录像暂无分析数据">-</span>
-        )}
-      </td>
       <td className="counters">
         {/* 评论/点击分别包一层，排序命中时只黄对应数字（2026-10-15） */}
         <em className={highlight === "comments" ? "current" : undefined}>{v.comments}</em>

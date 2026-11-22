@@ -141,6 +141,11 @@ export interface VideoListItem {
   ioe: number | null;
   /** 判雷指标 STNB（video_metrics.stnb，无指标行为 null——2026-10-20 列表列显示用） */
   stnb: number | null;
+  /** 吞吐效率 ThrP（video_metrics.thrp，缺行/null——比赛录像区计分项列用，
+   *  2026-11-22 张老师需求：计分项非 time/3bv/s/stnb 时以该列替换 3BV/s+STNB） */
+  thrp: number | null;
+  /** 跨格数 crossings（video_metrics.cp，缺行/null——同上，计分项列显示用） */
+  cp: number | null;
   /** 本BV标记（2026-10-28 张老师需求）：首次收集本 BV（3BV 数后小数点角标） */
   firstBv: boolean;
   /** 本BV标记：打破本 BV 个人最好成绩（3BV 数后下标感叹号角标） */
@@ -2111,9 +2116,10 @@ export async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
     prisma.videoInfo.findMany({ where: { id: { in: bigIds } } }),
     prisma.videoStat.findMany({ where: { id: { in: bigIds } } }),
     // 2026-10-20 列表 IOE/STNB 列：批量补指标（缺行=无指标，显示 -）
+    // 2026-11-22 扩 thrp/cp：比赛录像区计分项列（crossings/thrp）显示用
     prisma.videoMetrics.findMany({
       where: { id: { in: bigIds } },
-      select: { id: true, ioe: true, stnb: true },
+      select: { id: true, ioe: true, stnb: true, thrp: true, cp: true },
     }),
   ]);
   const authors = await usersByIds(videos.map((v) => N(v.user)));
@@ -2165,6 +2171,8 @@ export async function getVideosByIds(ids: number[]): Promise<VideoListItem[]> {
       authorClassic: p?.c ?? null,
       ioe: m ? m.ioe : null,
       stnb: m ? m.stnb : null,
+      thrp: m ? m.thrp : null,
+      cp: m ? m.cp : null,
       firstBv: v.firstBv === 1,
       pbBv: v.pbBv === 1,
       noRecord: info.noRecord,
@@ -2206,9 +2214,10 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     prisma.user.findUnique({ where: { id: v.user } }),
     v.reviewUser ? prisma.user.findUnique({ where: { id: v.reviewUser } }) : null,
     // 2026-10-20 VideoListItem 扩 ioe/stnb：详情页顺带补指标行（缺行=null）
+    // 2026-11-22 扩 thrp/cp：比赛录像区计分项列显示用
     prisma.videoMetrics.findUnique({
       where: { id: v.id },
-      select: { ioe: true, stnb: true },
+      select: { ioe: true, stnb: true, thrp: true, cp: true },
     }),
     // 外站同步来源（2026-11-07）：站点名+LOGO 供详情页「上传于」后灰度小图标展示
     v.fromSite
@@ -2257,6 +2266,8 @@ export async function getVideoDetail(id: number): Promise<VideoDetail | null> {
     authorClassic: p?.c ?? null,
     ioe: metrics ? metrics.ioe : null,
     stnb: metrics ? metrics.stnb : null,
+    thrp: metrics ? metrics.thrp : null,
+    cp: metrics ? metrics.cp : null,
     firstBv: v.firstBv === 1,
     pbBv: v.pbBv === 1,
     noRecord: info.noRecord,

@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { PageSlider, nextBatchSize } from "@/components/PageSlider";
 import { VideoHead, VideoRowLine } from "@/components/VideoRows";
 import type { VideoListItem } from "@/lib/queries";
+import type { TourMetricKey } from "@/lib/tour-metric";
 import { replaceWithoutJump } from "@/components/useNoJump";
 
 export function TourVideosFeed({
@@ -25,6 +26,9 @@ export function TourVideosFeed({
   /** 动态板块当前页码（URL ?ep=，换录像页时带上不丢对方状态） */
   eventsPage,
   pageSize,
+  /** 比赛计分项（2026-11-22 张老师需求）：非 time/3bv/s/stnb 时录像表 3BV/s+STNB
+   *  两列替换为一列计分项（惜步杯=Crossings）；缺省=time 行为不变 */
+  tourMetric,
 }: {
   compId: number;
   initialVideos: VideoListItem[];
@@ -33,6 +37,7 @@ export function TourVideosFeed({
   initialTotalPages: number;
   eventsPage: number;
   pageSize: number;
+  tourMetric?: TourMetricKey;
 }) {
   const router = useRouter();
   const listRef = useRef<HTMLTableElement>(null);
@@ -82,10 +87,10 @@ export function TourVideosFeed({
     <>
       {videos.length > 0 ? (
         <table ref={listRef} cellPadding={0} cellSpacing={0} className="ranking_table video_table comp_video_table">
-          <VideoHead hideIoe />
+          <VideoHead hideIoe tourMetric={tourMetric} />
           <tbody>
             {videos.map((v) => (
-              <VideoRowLine key={v.id} video={v} hideIoe />
+              <VideoRowLine key={v.id} video={v} hideIoe tourMetric={tourMetric} />
             ))}
           </tbody>
         </table>

@@ -45,6 +45,17 @@ export const TOUR_METRICS: Record<TourMetricKey, TourMetricDef> = {
 /** 全部数据项 key（按注册表顺序） */
 export const TOUR_METRIC_KEYS = Object.keys(TOUR_METRICS) as TourMetricKey[];
 
+/** 表头短标签（比赛录像区计分项列头用；name 是全名——表头空间有限沿用
+ *  3BV/s / IOE / STNB 同款短英文风格，2026-11-22 张老师需求） */
+export const TOUR_METRIC_SHORT: Record<TourMetricKey, string> = {
+  time: "Time",
+  "3bvs": "3BV/s",
+  ioe: "IOE",
+  thrp: "ThrP",
+  crossings: "Crossings",
+  "3bv": "3BV",
+};
+
 /** 解析数据项 key（非法回退 time，兼容旧配置无 metric 字段） */
 export function parseTourMetric(v: unknown): TourMetricKey {
   const s = String(v ?? "time");

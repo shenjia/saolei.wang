@@ -214,6 +214,7 @@ export default async function CompetitionDetailPage({
               initialTotalPages={Math.max(1, Math.ceil(videos.total / COMP_VIDEO_PAGE_SIZE))}
               eventsPage={events.page}
               pageSize={COMP_VIDEO_PAGE_SIZE}
+              tourMetric={tourMetric}
             />
           </div>
         </li>
