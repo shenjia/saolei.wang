@@ -10,8 +10,10 @@ const nextConfig: NextConfig = {
 
   // dev 预览走 nginx 反代 https://dev.saolei.wang：
   // 不加此项时 next dev 会以 Origin 不匹配拒绝 /_next/hmr 的 WebSocket 握手（返回 Unauthorized），
-  // Turbopack dev 客户端连不上 HMR 会卡住水合，页面所有交互（登录 tab 切换等）全部失效
-  allowedDevOrigins: ["dev.saolei.wang"],
+  // Turbopack dev 客户端连不上 HMR 会卡住水合，页面所有交互（登录 tab 切换等）全部失效。
+  // 127.0.0.1 直连场景（无头验证/接口调试）同样需要放行（2026-11-22 实证：直连时
+  // HMR 被阻 → React 全程不水合，effect 不执行，页面成死壳）
+  allowedDevOrigins: ["dev.saolei.wang", "127.0.0.1"],
 
   // 旧站 301 跳转（src/proxy.ts）需要看到「客户端发来的原始 URL」：
   // 默认 Next 会规范化 URL，旧站 GBK 编码的查询串（如 ?Area=%C9%CF%BA%A3=上海）
