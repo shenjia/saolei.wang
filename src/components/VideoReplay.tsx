@@ -1255,10 +1255,17 @@ export function runReplay(opts: {
         let ly = gFromY;
         const pushPt = (k: number, isEnd: boolean) => {
           const p = evs[k];
-          /* 哨兵＝无真实位置语义（355571）：即时落盘不挂航点，末点也不收——
-             光标落点由 finalize 的 interpCursor 锚定哨兵前真实位置 */
+          /* 哨兵＝无真实位置语义（355571）：不挂航点（光标不滑向哨兵），但**绝不能
+             imm 提前落盘**——哨兵点击（盘外 lr/rr，411177 案：38 哨兵含 12 点击）
+             与其配对按下事件（rc/lc）必须保持时间序。曾把哨兵归 imm 立即落盘，拖动
+             进度条逐帧 seek 时哨兵 rr 先于还在航点上的 rc 落盘 → rp 悬空，后续键态
+             多米诺错位（chord 误判把雷当开格点下去→踩雷终局渲染）。挂到**最后一个
+             已收集航点的批次**＝落盘时机不早于其前驱非哨兵事件；光标滑抵该航点时
+             批内按索引序落盘（哨兵对光标透明，位置无影响）。尚无航点（前驱全是
+             哨兵/(0,0)）时退回 imm——此时无序可乱。 */
           if (isSentinelPx(p.px, p.py, cols, rows) || (p.px === 0 && p.py === 0 && !isEnd)) {
-            imm.push(k);
+            if (wpEv.length) wpEv[wpEv.length - 1].push(k);
+            else imm.push(k);
             return;
           }
           if (p.px !== lx || p.py !== ly) {
@@ -1267,6 +1274,9 @@ export function runReplay(opts: {
             lx = p.px;
             ly = p.py;
           } else if (wpEv.length) {
+            /* 同位（与光标当前位一致）也挂最后航点批次（411177 同源）：imm 提前
+               落盘会乱序到前一批航点之前（前批尚未滑抵时）——同位落盘无视觉差，
+               键态顺序才是命门。 */
             wpEv[wpEv.length - 1].push(k);
           } else {
             imm.push(k);
