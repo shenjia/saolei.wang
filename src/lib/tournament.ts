@@ -658,14 +658,14 @@ export async function ensureTourLifecycleEvents(
         },
         select: { id: true, user: true, level: true, createTime: true },
       });
-      const score = vids.length ? await computeWindowScore(cid, s.userId, vids, scoreMeta) : null;
+      const win = vids.length ? await computeWindowScore(cid, s.userId, vids, scoreMeta) : null;
       await addTourEvent(Number(c.id), TOUR_EVENT_FINISHED, Number(s.userId), Number(s.endTime));
       await publishNews({
         type: NEWS_TYPE.TOUR_FINISH,
         userId: Number(s.userId),
         reference: Number(c.id),
         createTime: Number(s.endTime),
-        ...(score !== null ? { details: { score } } : {}),
+        ...(win?.score !== null && win?.score !== undefined ? { details: { score: win.score } } : {}),
       });
     }
   }
@@ -673,13 +673,14 @@ export async function ensureTourLifecycleEvents(
 
 /** 窗口赛个人总分（完赛动态用）：与 getTourRanking / getTourMyResult 完全同口径——
  *  比赛收录级别闸门 + computePlayerScores（score 域：time=毫秒，其余 ×1000）。
- *  无有效成绩返回 null。 */
+ *  无有效成绩 score=null。calc=计算过程明细（2026-11-22 动态成绩气泡用；
+ *  同一次 computePlayerScores 本就产出，一起返回零额外成本）。 */
 async function computeWindowScore(
   cid: bigint,
   uid: bigint,
   vids: { id: bigint; level: string }[],
   c: { scoreMode?: string; scoreConfig?: string; includeLevels?: string }
-): Promise<number | null> {
+): Promise<{ score: number | null; calc: PlayerScore["calc"] | null }> {
   const metric = parseScoreConfig(c.scoreMode ?? "", c.scoreConfig ?? "")?.metric ?? "time";
   const infos = await prisma.videoInfo.findMany({
     where: { id: { in: vids.map((v) => v.id) } },
@@ -719,7 +720,8 @@ async function computeWindowScore(
     })),
     (c.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
   );
-  return scores.get(Number(uid))?.score ?? null;
+  const mine = scores.get(Number(uid));
+  return { score: mine?.score ?? null, calc: mine?.calc.length ? mine.calc : null };
 }
 
 export interface TourEventRow {
@@ -741,6 +743,10 @@ export interface TourEventRow {
   batchBestMs: number | null;
   /** type=4 合并行：上一行总成绩（提升方向按比赛 metric/desc 解释；null=首次成绩动态） */
   prevTotalMs: number | null;
+  /** 计算过程明细（2026-11-22 张老师需求：动态成绩数字 hover 出计算过程气泡，
+   *  与排行榜前10同款）——type=4/6 行带（computePlayerScores.calc 原样透传，
+   *  本来就算出只是此前丢弃，服务端零新增计算）；null=不挂气泡 */
+  calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] | null;
 }
 
 /** 比赛动态分页（2026-11-18 深夜张老师四轮定版）：
@@ -915,7 +921,7 @@ export async function getTourEventsPage(
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const progressBy = new Map<string, { total: number | null; batchBest: number | null }>();
+  const progressBy = new Map<string, { total: number | null; batchBest: number | null; calc: PlayerScore["calc"] | null }>();
   for (const m of merged) {
     const pool = vidsByUser.get(m.userId) ?? [];
     const upto = pool.filter((v) => Number(v.createTime) <= m.lastTime);
@@ -936,6 +942,7 @@ export async function getTourEventsPage(
     progressBy.set(`${m.userId}@${m.lastTime}`, {
       total: mine ? mine.score : null,
       batchBest: batchVals.length ? (tourConf?.desc ? Math.max(...batchVals) : Math.min(...batchVals)) : null,
+      calc: mine ? mine.calc : null,
     });
   }
   // 官方/报名事件行也并入时间线（与合并后的成绩行一起排序）。
@@ -962,10 +969,12 @@ export async function getTourEventsPage(
       })
     : [];
   const finishSessByUser = new Map(finishSessions.map((s) => [Number(s.userId), s]));
-  const finishScoreCache = new Map<number, number | null>();
-  const finishScoreFor = async (uid: number): Promise<number | null> => {
-    if (!finishSessByUser.has(uid)) return null;
-    if (finishScoreCache.has(uid)) return finishScoreCache.get(uid)!;
+  // 完赛行成绩+计算过程（2026-11-22 动态气泡）：一次 computeWindowScore 同时拿两样，
+  // 按 uid 缓存避免同玩家多行重复查询
+  const finishWinCache = new Map<number, { score: number | null; calc: PlayerScore["calc"] | null }>();
+  const finishWinFor = async (uid: number): Promise<{ score: number | null; calc: PlayerScore["calc"] | null }> => {
+    if (!finishSessByUser.has(uid)) return { score: null, calc: null };
+    if (finishWinCache.has(uid)) return finishWinCache.get(uid)!;
     const s = finishSessByUser.get(uid)!;
     const wv = await prisma.video.findMany({
       where: {
@@ -976,16 +985,16 @@ export async function getTourEventsPage(
       },
       select: { id: true, level: true },
     });
-    const score = wv.length
+    const win = wv.length
       ? await computeWindowScore(
           cid,
           BigInt(uid),
           wv,
           { scoreMode: compRow?.scoreMode, scoreConfig: compRow?.scoreConfig, includeLevels: compRow?.includeLevels },
         )
-      : null;
-    finishScoreCache.set(uid, score);
-    return score;
+      : { score: null, calc: null };
+    finishWinCache.set(uid, win);
+    return win;
   };
   type Row = {
     sortKey: number;
@@ -997,6 +1006,7 @@ export async function getTourEventsPage(
     total: number | null;
     batchBest: number | null;
     prevTotal: number | null;
+    calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] | null;
   };
   const rows: Row[] = [];
   // 成绩合并行 + 提升幅度（与该玩家上一批的总成绩比）
@@ -1026,6 +1036,7 @@ export async function getTourEventsPage(
       total: prog.total,
       batchBest: prog.batchBest,
       prevTotal: prev === undefined ? null : prev,
+      calc: prog.calc,
     });
     lastTotalBy.set(m.userId, prog.total);
   }
@@ -1040,9 +1051,12 @@ export async function getTourEventsPage(
       // type=6 完赛事件带最终成绩（窗口总分，补写时按会话窗口现算落 details？
       // ——不落库，此处按「该玩家截至窗口结束」总分现算：与成绩进度同池不同窗，
       // 完赛动态成绩=个人窗口内总分（排行榜同源），见 computeWindowScore 同口径
-      total: o.type === TOUR_EVENT_FINISHED ? await finishScoreFor(o.userId) : null,
+      total: o.type === TOUR_EVENT_FINISHED ? (await finishWinFor(o.userId)).score : null,
       batchBest: null,
       prevTotal: null,
+      // 完赛行也挂计算过程气泡（2026-11-22 张老师需求「包括最终成绩数字」）：
+      // computeWindowScore 内部本就产出 calc，同次计算透传（无成绩/未参赛=null 不挂）
+      calc: o.type === TOUR_EVENT_FINISHED ? (await finishWinFor(o.userId)).calc : null,
     });
   }
   rows.sort((a, b) => {
@@ -1104,6 +1118,7 @@ export async function getTourEventsPage(
         totalMs: r.total,
         batchBestMs: r.batchBest,
         prevTotalMs: r.prevTotal,
+        calc: r.calc,
       };
     }),
     total,
