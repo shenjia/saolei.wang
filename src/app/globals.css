@@ -17649,10 +17649,10 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_section h2 { margin: 0 0 10px; }
 .comp_section .comp_video_table { margin: 0 -8px; width: calc(100% + 16px); }
 .comp_section_empty { color: #75715e; font-size: 13px; line-height: 22px; padding: 6px 0; }
+
 /* 比赛计分项列（2026-11-22 张老师需求：计分项非 time/3bv/s/stnb 时录像表 3BV/s+STNB
    两列替换为一列——惜步杯显 Crossings）。数字加粗与数字列同语言，表头居中由 th.c 覆盖 */
 .comp_video_table td.tourmetric { font-weight: bold; }
-
 
 /* 动态行：主体（玩家名 + 动作文）左，相对时间右 */
 .comp_events { margin: 0; padding: 0; list-style: none; }
@@ -17674,12 +17674,15 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_total:hover { color: #a6e22e; }
 .comp_ev_row .delta { color: #fdc61a; font-size: 13px; margin-left: 4px; }
 .comp_ev_row .delta svg.d_arrow { display: inline-block; vertical-align: -1px; margin-right: 2px; }
-/* 个人动态「已完赛！最终成绩」数值（type=59，2026-11-22）：同破纪录新成绩亮灰加粗 */
+/* 个人动态「已完赛！最终成绩」数值（type=59，2026-11-22）：数值同破纪录新成绩亮灰加粗；
+   三轮文案改「已完赛{简称}！最终成绩为 xxx」后 label 类废弃不再使用 */
 #news .table td .news_finish_score { color: #b1b1a4; font-weight: 700; margin-left: 4px; }
 /* 官方事件金色（2026-11-18 晚张老师定：报名开始/正式开始/正式结束） */
 .comp_ev_official { color: #fdc61a; font-weight: 700; }
 /* 窗口赛完赛事件（type=6「已完赛」2026-11-22）：同官方事件金色 */
 .comp_ev_finished { color: #fdc61a; font-weight: 700; }
+/* 完赛事件「最终成绩」标签（type=6，2026-11-22 张老师定）：暗灰弱化、数值亮灰加粗 */
+.comp_ev_finish_label { color: #939387; margin-left: 4px; }
 /* 完赛事件附带的最终成绩数值：亮灰加粗（同 .comp_ev_total 口径） */
 .comp_ev_finish_score { color: #b1b1a4; font-weight: 700; margin-left: 4px; }
 /* 动态行军衔徽章小号（2026-11-18 晚定：同首页动态行紧凑排布） */
