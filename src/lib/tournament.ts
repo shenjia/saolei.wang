@@ -1346,7 +1346,7 @@ export async function getTourDetailStats(
   };
 }
 
-/** 比赛录像分页（详情页「录像」板块）：按时间正序（早在前，张老师 14:45 口径「按时间顺序」），
+/** 比赛录像分页（详情页「录像」板块）：按上传时间逆序（新在前，2026-11-22 张老师定），
  *  展示形式与首页录像流一致（VideoRows 行渲染），但按比赛过滤、不去重 */
 export async function getTourVideosPage(
   compId: number,
@@ -1387,7 +1387,7 @@ export async function getTourVideosPage(
           await prisma.video.findMany({
             where,
             select: { id: true },
-            orderBy: [{ createTime: "asc" }, { id: "asc" }],
+            orderBy: [{ createTime: "desc" }, { id: "desc" }],
             skip: (p - 1) * pageSize,
             take: pageSize,
           })

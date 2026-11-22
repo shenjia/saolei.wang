@@ -1,6 +1,6 @@
 // 比赛参赛录像分页 API（GET /api/tournament/[id]/videos?page=1&size=20）
 // 2026-11-13 五轮：详情页录像板块换 PageSlider，client 壳「加载更多」走本接口
-// （前缀整批替换语义：page=1&size=N 取时间正序前 N 条，与 TourListFeed 同口径）。
+// （前缀整批替换语义：page=1&size=N 取上传时间逆序最新 N 条，与 TourListFeed 同口径）。
 
 import { NextResponse } from "next/server";
 import { getTourVideosPage } from "@/lib/tournament";

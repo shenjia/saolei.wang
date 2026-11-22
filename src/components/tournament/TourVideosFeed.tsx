@@ -4,7 +4,7 @@
 // 语义（与 TourListFeed / 首页 VideoFeed 同口径）：
 // · 滑轨/◀▶ 换页 → router.push(?page=N&ep=动态页码)，URL 即状态、RSC 重渲染；
 // · 「···加载更多」→ GET /api/tournament/[id]/videos?page=1&size=前缀长度
-//   （录像时间正序、新录像追加尾部，前缀锚定无重复无跳行）；hasMore 按「已加载 < total」判；
+//   （录像上传时间逆序、新录像锚定头部，前缀取最新 N 条无重复无跳行）；hasMore 按「已加载 < total」判；
 // · 行渲染复用 VideoRows（与首页录像流同源）；首屏数据由服务端 RSC 传入。
 
 "use client";
