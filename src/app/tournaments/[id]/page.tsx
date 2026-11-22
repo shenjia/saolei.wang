@@ -343,13 +343,13 @@ export default async function CompetitionDetailPage({
                         className="comp_rank_name"
                       />
                       <TitleBadge title={r.title} classic={r.classic} />
-                      <Link
-                        className="comp_rank_time"
-                        href={r.videoId ? `/video/${r.videoId}` : `/user/${r.uid}`}
-                      >
+                      {/* 2026-11-23 张老师定：成绩数字只 hover 出计算过程气泡，点击不跳转
+                          （原 Link 跳录像/个人页废除）；锚点类沿用 comp_rank_time 样式 +
+                          comp_score_tip hover 触发组 */}
+                      <b className="comp_rank_time comp_score_tip">
                         {fmtTourScore(tourMetric, r.time)}
                         {r.calc && r.calc.length > 0 && <TourCalcTip calc={r.calc} metric={tourMetric} score={r.time} />}
-                      </Link>
+                      </b>
                     </li>
                   );
                 })}
