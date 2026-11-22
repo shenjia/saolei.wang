@@ -77,6 +77,13 @@ export interface RankedEvfInput {
    *  TOUR_EVF_PROGRAM（"Saolei.wang Tournament"，原 Competition 2026-11-18 改名）绕开排名闸；
    *  evf.ts 归一时未匹配站名前缀，Program 原样入库，checkProgramVersion 未知软件放行 */
   programLabel?: string;
+  /** 比赛标识（2026-11-22 修，25669 案）：写入 EVF race_identifier 头字段。
+   *  窗口赛个人标识（comp.race）——下载 EVF 手动上传与排名局服务端生成两路都靠
+   *  它挂接比赛（matchTourByRace 先查 tournament_window_session）；此前该字段硬编码
+   *  空串，race 只拼进签名末尾，而签名后缀分支只匹配比赛 code，个人标识永不命中
+   *  → 站内在线玩的窗口赛录像从未自动挂接（元扫雷等外部软件自带 race 字段不受影响）。
+   *  缺省空串＝非比赛局（同旧口径）。 */
+  raceIdentifier?: string;
   /** 导出语义校验的权威原始流（2026-11-08，353969 案）。
    *  缺省与 events 相同；若 events 经过 canonicalize/repair 等预处理，必须在这里
    *  另传预处理前的原始流，防止拿已经转换坏的结果自证正确。只参与校验，不写文件；
@@ -197,7 +204,7 @@ function encodeRankedEvf(input: RankedEvfInput): Uint8Array {
   u64(Math.round((endMs ?? 0) * 1000));
   cstr(`${input.programLabel ?? RANKED_SOFTWARE} ${input.clientVersion ?? RANKED_CLIENT_VERSION_DEFAULT}`);
   cstr(input.player ?? "");
-  cstr(""); // race identifier
+  cstr(input.raceIdentifier ?? ""); // race identifier（2026-11-22 修：此前硬编码空串，见 RankedEvfInput.raceIdentifier）
   cstr(input.uniqueIdentifier ?? "");
   u16(0); // 设备 UUID 长度＝0（本站不留设备指纹；唯一性由 uniqueIdentifier/gameId 承担）
 
