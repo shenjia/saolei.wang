@@ -7,10 +7,14 @@
 //   窗口结束后再点「开始比赛」开出第二个窗口（旧成绩按新窗口判窗全部消失）。
 // · 防连点：unique(tournamentId, userId, startTime) 兜底
 // 标识一旦过期即失效：上传挂接判据只认 endTime>now 的会话（matchTourByRace 扩展）。
+// 开赛即补报名（2026-11-22 张老师定口径「有成绩就该有报名记录」的前置闸）：
+// 创建窗口会话成功后立即 ensureTourEntry——报名动态 createTime=窗口 start_time。
+// 此前只建会话不报名，玩家点开赛但尚未上传录像期间无任何报名动态（35598 案）。
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { ensureTourEntry } from "@/lib/tournament";
 
 const RACE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去 I/O/0/1 易混字符
 
@@ -66,7 +70,10 @@ export async function POST(req: Request) {
   });
   if (anySession) {
     if (anySession.endTime > BigInt(now)) {
-      // 进行中：直接返回现有会话（幂等）
+      // 进行中：直接返回现有会话（幂等）；顺带幂等补报名（防存量会话无报名行）
+      await ensureTourEntry(id, session.uid, {
+        windowStartSec: Number(anySession.startTime),
+      });
       return NextResponse.json({
         ok: true,
         race: anySession.race,
@@ -95,6 +102,8 @@ export async function POST(req: Request) {
         createTime: BigInt(now),
       },
     });
+    // 开赛即补报名：报名行+比赛动态 type=2+个人动态 type=58，报名时间=窗口 start_time
+    await ensureTourEntry(id, session.uid, { windowStartSec: start });
     return NextResponse.json({
       ok: true,
       race: created.race,
