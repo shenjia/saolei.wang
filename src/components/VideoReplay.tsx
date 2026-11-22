@@ -1762,9 +1762,13 @@ function runPlayGame(opts: {
     const scale = rect.width / (cols * 16);
     const mx = (e.clientX - rect.left) / scale;
     const my = (e.clientY - rect.top) / scale;
-    if (lastMX !== null && lastMY !== null) {
-      playPathPx += Math.hypot(mx - lastMX, my - lastMY);
-      const steps = Math.max(1, Math.ceil(Math.hypot(mx - lastMX, my - lastMY) * 2));
+    /* 首格点开起算（2026-11-22 张老师定）：开局前的移动不进行程/跨格——
+       练习页 recordMv !started 不录 mv 同口径（事件流里开局前轨迹天然不存在）。
+       未开局只跟进锚点（lastMX/lastCell 贴住当前位），开局后第一段从首击格起算 */
+    if (started && lastMX !== null && lastMY !== null) {
+      const seg = Math.hypot(mx - lastMX, my - lastMY);
+      playPathPx += seg;
+      const steps = Math.max(1, Math.ceil(seg * 2));
       let prevCell = playLastCell;
       for (let t = 0; t <= steps; t++) {
         const px = lastMX + ((mx - lastMX) * t) / steps;
