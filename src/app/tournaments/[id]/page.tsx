@@ -49,6 +49,12 @@ export const dynamic = "force-dynamic";
 
 const TOUR_EVENT_PAGE_SIZE = 20;
 const COMP_VIDEO_PAGE_SIZE = 20;
+/* 计算过程气泡级别配色（2026-11-22 张老师定）：初级绿/中级橙/高级金，同 .comp_lv_plain */
+const LV_TIP_COLOR: Record<string, string> = {
+  beg: "comp_calc_beg",
+  int: "comp_calc_int",
+  exp: "comp_calc_exp",
+};
 
 export async function generateMetadata({
   params,
@@ -246,26 +252,15 @@ export default async function CompetitionDetailPage({
 
           {/* 排行榜（2026-11-18 晚张老师定：小字紧凑同热门录像；成绩 hover 出气泡
               展示计算过程——各级别分色、保底直接写在过程中，无单独 *N 标注。
-              2026-11-21 多数据项：成绩格式化与保底单位按比赛 metric 折算） */}
+              2026-11-21 多数据项：成绩格式化与保底单位按比赛 metric 折算。
+              2026-11-22 张老师定：气泡改实元素（原 attr(data-tip) 纯文本在窄成绩锚点
+              上被压成一字竖条，且无法逐行着色）——各级别一行、级别名绿/橙/金，
+              末行总计金色。结构同 .pt_bubble 实元素气泡先例） */}
           <div className="box comp_stats">
             <h2>排行榜</h2>
             {ranking.length > 0 ? (
               <ol className="comp_rank">
                 {ranking.map((r) => {
-                  const calcTip =
-                    r.calc && r.calc.length > 0
-                      ? r.calc
-                          .map((seg) => {
-                            const lvName =
-                              seg.lv in LEVEL_NAMES ? LEVEL_NAMES[seg.lv as Level] : seg.lv;
-                            const fillPart =
-                              seg.fill > 0 && seg.floorScore > 0
-                                ? `+${seg.fill}×保底${fmtTourScore(tourMetric, seg.floorScore)}`
-                                : "";
-                            return `${lvName}${seg.n}盘 ${fmtTourScore(tourMetric, seg.real)}${fillPart ? ` ${fillPart}` : ""}`;
-                          })
-                          .join("\n")
-                      : "";
                   return (
                     <li key={r.uid} className="comp_rank_row">
                       <span className={"comp_rank_no" + (r.rank <= 3 ? " top" : "")}>{r.rank}</span>
@@ -282,9 +277,31 @@ export default async function CompetitionDetailPage({
                       <Link
                         className="comp_rank_time"
                         href={r.videoId ? `/video/${r.videoId}` : `/user/${r.uid}`}
-                        data-tip={calcTip || undefined}
                       >
                         {fmtTourScore(tourMetric, r.time)}
+                        {r.calc && r.calc.length > 0 && (
+                          <span className="comp_calc">
+                            {r.calc.map((seg) => {
+                              const lvName =
+                                seg.lv in LEVEL_NAMES ? LEVEL_NAMES[seg.lv as Level] : seg.lv;
+                              const fillPart =
+                                seg.fill > 0 && seg.floorScore > 0
+                                  ? ` +${seg.fill}×保底${fmtTourScore(tourMetric, seg.floorScore)}`
+                                  : "";
+                              return (
+                                <span key={seg.lv} className="comp_calc_row">
+                                  <i className={"comp_calc_lv" + (seg.lv in LV_TIP_COLOR ? ` ${LV_TIP_COLOR[seg.lv]}` : "")}>
+                                    {lvName}
+                                  </i>
+                                  {`${seg.n}盘 ${fmtTourScore(tourMetric, seg.real)}${fillPart}`}
+                                </span>
+                              );
+                            })}
+                            <span className="comp_calc_row comp_calc_total">
+                              总计 {fmtTourScore(tourMetric, r.time)}
+                            </span>
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );
