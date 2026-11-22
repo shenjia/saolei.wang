@@ -17674,8 +17674,9 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_total:hover { color: #a6e22e; }
 .comp_ev_row .delta { color: #fdc61a; font-size: 13px; margin-left: 4px; }
 .comp_ev_row .delta svg.d_arrow { display: inline-block; vertical-align: -1px; margin-right: 2px; }
-/* 个人动态「已完赛！最终成绩」数值（type=59，2026-11-22）：数值同破纪录新成绩亮灰加粗；
-   三轮文案改「已完赛{简称}！最终成绩为 xxx」后 label 类废弃不再使用 */
+/* 个人动态「已完赛！最终成绩」标签与数值（type=59，2026-11-22）：标签暗灰弱化
+   （同 .comp_ev_finish_label 口径），数值同破纪录新成绩亮灰加粗 */
+#news .table td .news_finish_label { color: #939387; margin-left: 4px; }
 #news .table td .news_finish_score { color: #b1b1a4; font-weight: 700; margin-left: 4px; }
 /* 官方事件金色（2026-11-18 晚张老师定：报名开始/正式开始/正式结束） */
 .comp_ev_official { color: #fdc61a; font-weight: 700; }

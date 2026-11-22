@@ -120,11 +120,15 @@ export function TourEventsFeed({
                     <b className="comp_ev_official">{compEventText(e.type)}</b>
                   ) : e.type === 6 ? (
                     /* 窗口赛完赛事件（2026-11-22 张老师定）：「已完赛」金色（同官方事件）+
-                       最终成绩亮灰加粗——窗口结束时刻惰性补写，动态行带该玩家个人总分 */
+                       「最终成绩」暗灰标签 + 成绩亮灰加粗——窗口结束时刻惰性补写，
+                       动态行带该玩家个人总分 */
                     <>
                       <b className="comp_ev_finished">{compEventText(e.type)}</b>
                       {e.totalMs !== null && (
-                        <b className="comp_ev_finish_score">{fmtTourScore(scoreMetric, e.totalMs)}</b>
+                        <>
+                          <span className="comp_ev_finish_label">最终成绩</span>
+                          <b className="comp_ev_finish_score">{fmtTourScore(scoreMetric, e.totalMs)}</b>
+                        </>
                       )}
                     </>
                   ) : e.type === 4 ? (

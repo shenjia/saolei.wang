@@ -374,14 +374,20 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
             )}
           </>
         )}
-        {/* 窗口赛完赛动态（type=59，2026-11-22 张老师需求，三轮改文案）：
-            「已完赛{简称}！最终成绩为 xxx」——xxx=个人窗口内比赛总分（score 域），
-            按比赛计分项格式化（fmtTourScore）；比赛简称可点跳详情页（title 带全称）；
+        {/* 窗口赛完赛动态（type=59，2026-11-22 张老师需求）：「已完赛！最终成绩 xxxx 比赛简称」——
+            「最终成绩」暗灰标签（.news_finish_label），成绩=个人窗口内比赛总分（score 域），
+            按比赛计分项格式化（fmtTourScore）；比赛名带出的是简称（shortName）可点跳详情页；
             无有效成绩时不带成绩段。个人主页「动态」+关注流可见 */}
         {news.type === NEWS_TYPE.TOUR_FINISH && news.author && (
           <>
             {authorCells}
-            已完赛
+            已完赛！
+            {typeof news.details.score === "number" && news.tour ? (
+              <>
+                <span className="news_finish_label">最终成绩</span>
+                <b className="news_finish_score">{fmtTourScore(news.tour.metric, news.details.score)}</b>
+              </>
+            ) : null}
             {news.tour ? (
               <Link
                 href={`/tournaments/${news.tour.alias || news.reference}`}
@@ -392,14 +398,11 @@ export function NewsCellView({ news, title, classic }: { news: NewsItem; title: 
               >
                 {news.tour.shortName}
               </Link>
-            ) : null}
-            ！
-            {typeof news.details.score === "number" && news.tour ? (
-              <>
-                最终成绩为
-                <b className="news_finish_score">{fmtTourScore(news.tour.metric, news.details.score)}</b>
-              </>
-            ) : null}
+            ) : (
+              <Link href={`/tournaments/${news.reference}`} target="_blank" prefetch={false} className="score news_article">
+                #{news.reference}
+              </Link>
+            )}
           </>
         )}
         {/* 晋升动态（type=53）已于 2026-10-17 张老师要求整体下线（存量已删、不再产生）；
