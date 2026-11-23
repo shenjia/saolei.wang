@@ -17869,7 +17869,15 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .win_start_btn:disabled { opacity: 0.6; cursor: default; }
 /* 「已完赛」按钮（2026-11-22 张老师定 18875 事故）：银灰平实态、禁用不可点——
    与可点的「开始比赛」凸起绿框明确区分 */
-.win_start_btn.win_finished_btn { opacity: 0.55; }
+/* hover 无状态变化（2026-11-23 张老师报）：legacy 裸 button:hover(0,1,1) 会把 disabled
+   按钮也染成暗底绿字（同 lp_submit_btn 踩坑）；此处 (0,2,0) 压过之，锁回银灰底/深字/
+   原边框，background 简写一并清掉 legacy 的多层渐变 background-image */
+.win_start_btn.win_finished_btn {
+  opacity: 0.55;
+  background: silver;
+  color: #333;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+}
 /* 「总计 X 小时」小字下标（2026-11-22 张老师定：主文案同字号，括号部分缩小；
    13:12 二轮反馈：图标加大 28px、括号与主文案空隙收紧——负 margin 抵掉 flex gap 的一半） */
 .win_start_btn .win_hours_sub { font-size: 13px; font-weight: bold; margin-left: -5px; }

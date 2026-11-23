@@ -311,7 +311,10 @@ export default async function CompetitionDetailPage({
                     {myResult.rank === null ? (
                       <b>—</b>
                     ) : (
-                      <b className="gold">第 {myResult.rank} 名</b>
+                      /* 2026-11-23 张老师定：只有名次数字金色，「第/名」保持亮灰 */
+                      <b>
+                        第 <span className="gold">{myResult.rank}</span> 名
+                      </b>
                     )}
                   </div>
                 </>
