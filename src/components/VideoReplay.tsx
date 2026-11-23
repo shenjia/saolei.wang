@@ -1015,6 +1015,15 @@ export function runReplay(opts: {
     moveCursor(0, 0);
     onButtons?.(false, false);
   }
+  /* 静止期判据（2026-11-23 张老师报「鼠标完全不动但指针仍在缓慢移动」）：
+     flop 的光标只由 MouseMove 驱动（bundle：gameMousePoints 仅在 MouseMove 时 push，
+     静止期完全不动），而本引擎旧 interpCursor 把任意相邻事件间都当移动做时间插值——
+     长静止期（点击后到下一次 mv）光标就会持续漂移（900116 首击后 2.68s 从 (8,5)
+     漂到 (10,9)）。间隔 > 阈值视为鼠标已静止：钉在 prev 不插值，事件真正发生时
+     applyEv 的 moveCursor 瞬时跳到新坐标（flop 离散语义）。
+     阈值 20csec=200ms：全库事件间隔 p95=120ms / p99=340ms，>200ms 仅 2.2%
+     且绝大多数是真实停顿，不会误伤正常移动段。 */
+  const IDLE_GAP_CSEC = 20;
   /* 光标插值（练习页同款，治一顿一顿）：每帧在「最近已应用事件」与「下一事件」间线性补间。
      胜局后定格：evIdx 仍会推进过胜局后残余事件，但插值不再跟随（终点语义） */
   function interpCursor(csec: number) {
@@ -1032,6 +1041,12 @@ export function runReplay(opts: {
       return;
     }
     if (!next) {
+      moveCursor(prev.px, prev.py);
+      return;
+    }
+    // 静止期（相邻事件间隔 > 200ms）：鼠标并未移动，光标钉在 prev 不插值，
+    // 与 flop 一致；否则会在这段时间里缓慢漂向 next 坐标（张老师 900116 报障）
+    if (next.csec - prev.csec > IDLE_GAP_CSEC) {
       moveCursor(prev.px, prev.py);
       return;
     }
